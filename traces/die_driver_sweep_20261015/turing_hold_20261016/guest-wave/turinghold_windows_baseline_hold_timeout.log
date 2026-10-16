@@ -1,0 +1,151 @@
+WINDOWS_WAVE_START label=baseline source=05442b10c97977809f09f5c4947deb0aed910e01 host=595.91.07 expected_windows=32.0.15.8088 public_abi=580.65.06 2026-10-16T03:14:51+00:00
+WIN_DIE_START kf3=05442b10 checkout=05442b10c guest_driver=580.65.06 gpu=NVIDIA GeForce RTX 2060 SUPER xid_before=7 2026-10-16T03:14:52+00:00
+[win_die] QEMU 50785 kf3 05442b10 run /root/win/codex-tu106hold
+ACTUAL_PROCESS_RECEIPT {"actual_KF3_environment": {"KF3_ASYNC_PREEMPT": "1", "KF3_DEFERRED_API": "1", "KF3_DISPLAY_CAPS_PROBE": "1", "KF3_DISPLAY_CTRL_PROBE": "1", "KF3_DISPLAY_ILUT_OFFSET_256": "1", "KF3_DISPLAY_IMP_ENABLE": "1", "KF3_DISPLAY_LUT_MIRROR": "1", "KF3_DISPLAY_SDR_COLOR": "1", "KF3_GFX_POOL_PROBE": "1", "KF3_KERNEL_GR_CE": "1", "KF3_KERNEL_GR_WORK": "1", "KF3_MEMORY_LIST_PROBE": "1", "KF3_PREEMPT_BIND_PROBE": "1", "KF3_SW_RUNLIST_HOST_OWNED": "1", "KF3_SW_RUNLIST_PROBE": "1", "KF3_TRANSLATED_CE_RELAY": "1", "KF3_WIN_TWIN_DEFAPI_OBJECT": "1", "KF3_WIN_USER_CHANNELS_PASSTHROUGH": "1", "KF3_ZCULL_BIND_PROBE": "1"}, "binary_revision": "05442b10", "binary_sha256": "0a60d176cfd0ba8d55fc8cc2d148d9a8b2ef1167e9763da65ba396d4592c3300", "expected_windows_driver": "32.0.15.8088", "guest_public_abi": "580.65.06", "host_driver": "595.91.07", "pid": 50785, "source_revision": "05442b10c97977809f09f5c4947deb0aed910e01"}
+[win_die] QGA answers 2026-10-16T03:15:43+00:00
+#< CLIXML
+<Objs Version="IP_REDACTED" xmlns="http://schemas.microsoft.com/powershell/2004/04"><Obj S="progress" RefId="0"><TN RefId="0"><T>System.Management.Automation.PSCustomObject</T><T>System.Object</T></TN><MS><I64 N="SourceId">1</I64><PR N="Record"><AV>Preparing modules for first use.</AV><AI>0</AI><Nil /><PI>-1</PI><PC>-1</PC><T>Completed</T><SR>-1</SR><SD> </SD></PR></MS></Obj><Obj S="progress" RefId="1"><TNRef RefId="0" /><MS><I64 N="SourceId">1</I64><PR N="Record"><AV>Preparing modules for first use.</AV><AI>0</AI><Nil /><PI>-1</PI><PC>-1</PC><T>Completed</T><SR>-1</SR><SD> </SD></PR></MS></Obj><Obj S="progress" RefId="2"><TNRef RefId="0" /><MS><I64 N="SourceId">2</I64><PR N="Record"><AV>Get-PnpDeviceProperty -InstanceId $id -KeyName $k -ErrorAction SilentlyContinue).Data }</AV><AI>569636455</AI><Nil /><PI>-1</PI><PC>100</PC><T>Completed</T><SR>0</SR><SD>2/2 completed</SD></PR></MS></Obj><Obj S="progress" RefId="3"><TNRef RefId="0" /><MS><I64 N="SourceId">3</I64><PR N="Record"><AV>Get-PnpDeviceProperty -InstanceId $id -KeyName $k -ErrorAction SilentlyContinue).Data }</AV><AI>902848628</AI><Nil /><PI>-1</PI><PC>100</PC><T>Completed</T><SR>0</SR><SD>2/2 completed</SD></PR></MS></Obj><Obj S="progress" RefId="4"><TNRef RefId="0" /><MS><I64 N="SourceId">1</I64><PR N="Record"><AV>Preparing modules for first use.</AV><AI>0</AI><Nil /><PI>-1</PI><PC>-1</PC><T>Completed</T><SR>-1</SR><SD> </SD></PR></MS></Obj><Obj S="progress" RefId="5"><TNRef RefId="0" /><MS><I64 N="SourceId">4</I64><PR N="Record"><AV>Get-PnpDeviceProperty -InstanceId $id -KeyName $k -ErrorAction SilentlyContinue).Data }</AV><AI>833110922</AI><Nil /><PI>-1</PI><PC>100</PC><T>Completed</T><SR>0</SR><SD>2/2 completed</SD></PR></MS></Obj><Obj S="progress" RefId="6"><TNRef RefId="0" /><MS><I64 N="SourceId">5</I64><PR N="Record"><AV>Get-PnpDevice -InstanceId $id</AV><AI>1108172667</AI><Nil /><PI>-1</PI><PC>100</PC><T>Completed</T><SR>0</SR><SD>1/1 completed</SD></PR></MS></Obj><Obj S="progress" RefId="7"><TNRef RefId="0" /><MS><I64 N="SourceId">6</I64><PR N="Record"><AV>Get-PnpDeviceProperty -InstanceId $id -KeyName $k -ErrorAction SilentlyContinue).Data }</AV><AI>173153579</AI><Nil /><PI>-1</PI><PC>100</PC><T>Completed</T><SR>0</SR><SD>2/2 completed</SD></PR></MS></Obj><Obj S="progress" RefId="8"><TNRef RefId="0" /><MS><I64 N="SourceId">7</I64><PR N="Record"><AV>Get-PnpDeviceProperty -InstanceId $id -KeyName $k -ErrorAction SilentlyContinue).Data }</AV><AI>1828498549</AI><Nil /><PI>-1</PI><PC>100</PC><T>Completed</T><SR>0</SR><SD>2/2 completed</SD></PR></MS></Obj></Objs>BIND before hw=VEN_10DE&DEV_1F06&SUBSYS_652019DA&REV_A1 status=Error problem=CM_PROB_FAILED_POST_START driverkey={4d36e968-e325-11ce-bfc1-08002be10318}\0002 inf=oem3.inf
+BIND driverstore nv_disp INFs: 1 nv_dispi.inf_amd64_fe5f369669db2f36
+BIND inf nv_dispi.inf_amd64_fe5f369669db2f36\nv_dispi.inf lists DEV_1F06
+BIND pnputil: Microsoft PnP Utility
+BIND pnputil: 
+BIND pnputil: Adding driver package:  nv_dispi.inf
+BIND pnputil: Driver package added successfully. (Already exists in the system)
+BIND pnputil: Published Name:         oem3.inf
+BIND pnputil: Driver package is up-to-date on device: PCI\VEN_10DE&DEV_1F06&SUBSYS_652019DA&REV_A1\3&267a616a&0&30
+BIND pnputil: Driver package installed on device: PCI\VEN_10DE&DEV_2786&SUBSYS_40EE1458&REV_A1\3&267a616a&0&30
+BIND pnputil: 
+BIND pnputil: Total driver packages:  1
+BIND pnputil: Added driver packages:  1
+BIND pnputil rc=0
+BIND after status=Error problem=CM_PROB_FAILED_POST_START class=Display name='NVIDIA GeForce RTX 2060 SUPER' driverkey={4d36e968-e325-11ce-bfc1-08002be10318}\0002 inf=oem3.inf ver=32.0.15.8088
+BIND FLAG {4d36e968-e325-11ce-bfc1-08002be10318}\0002 EnableGpuFirmware=1
+BIND DONE
+WIN_DIE_START kf3=05442b10 checkout=05442b10c guest_driver=580.65.06 gpu=NVIDIA GeForce RTX 2060 SUPER xid_before=7 2026-10-16T03:17:09+00:00
+[win_die] QEMU 51068 kf3 05442b10 run /root/win/codex-tu106hold
+ACTUAL_PROCESS_RECEIPT {"actual_KF3_environment": {"KF3_ASYNC_PREEMPT": "1", "KF3_DEFERRED_API": "1", "KF3_DISPLAY_CAPS_PROBE": "1", "KF3_DISPLAY_CTRL_PROBE": "1", "KF3_DISPLAY_ILUT_OFFSET_256": "1", "KF3_DISPLAY_IMP_ENABLE": "1", "KF3_DISPLAY_LUT_MIRROR": "1", "KF3_DISPLAY_SDR_COLOR": "1", "KF3_GFX_POOL_PROBE": "1", "KF3_KERNEL_GR_CE": "1", "KF3_KERNEL_GR_WORK": "1", "KF3_MEMORY_LIST_PROBE": "1", "KF3_PREEMPT_BIND_PROBE": "1", "KF3_SW_RUNLIST_HOST_OWNED": "1", "KF3_SW_RUNLIST_PROBE": "1", "KF3_TRANSLATED_CE_RELAY": "1", "KF3_WIN_TWIN_DEFAPI_OBJECT": "1", "KF3_WIN_USER_CHANNELS_PASSTHROUGH": "1", "KF3_ZCULL_BIND_PROBE": "1"}, "binary_revision": "05442b10", "binary_sha256": "0a60d176cfd0ba8d55fc8cc2d148d9a8b2ef1167e9763da65ba396d4592c3300", "expected_windows_driver": "32.0.15.8088", "guest_public_abi": "580.65.06", "host_driver": "595.91.07", "pid": 51068, "source_revision": "05442b10c97977809f09f5c4947deb0aed910e01"}
+[win_die] QGA answers 2026-10-16T03:18:10+00:00
+#< CLIXML
+<Objs Version="IP_REDACTED" xmlns="http://schemas.microsoft.com/powershell/2004/04"><Obj S="progress" RefId="0"><TN RefId="0"><T>System.Management.Automation.PSCustomObject</T><T>System.Object</T></TN><MS><I64 N="SourceId">1</I64><PR N="Record"><AV>Preparing modules for first use.</AV><AI>0</AI><Nil /><PI>-1</PI><PC>-1</PC><T>Completed</T><SR>-1</SR><SD> </SD></PR></MS></Obj><Obj S="progress" RefId="1"><TNRef RefId="0" /><MS><I64 N="SourceId">1</I64><PR N="Record"><AV>Preparing modules for first use.</AV><AI>0</AI><Nil /><PI>-1</PI><PC>-1</PC><T>Completed</T><SR>-1</SR><SD> </SD></PR></MS></Obj></Objs>WIN_PROBE_DIRECTORY_READY=1
+QGA_PUT bytes=592402 sha256=2e672bc737a1c6c2332c8b7499cd5459a629d191b27ac4dd9a04a3254c821835
+QGA_PUT bytes=271546 sha256=eba68ac8f92cf1d65793a6df70d62624d33a8479b3137a45d07d7fd093d79798
+QGA_PUT bytes=273538 sha256=5df837a1914b0fef34e724605b0494c95788a5676f1420863a441a923d0f3f87
+QGA_PUT bytes=276446 sha256=00e69ceb25d4d3af697a79a1bf133fc5f02f5e9125eefde288fa371d856cdef8
+WIN_ACCEPT_START 2026-10-16T03:18:47.7366676Z
+{"Name":"NVIDIA GeForce RTX 2060 SUPER","DriverVersion":"32.0.15.8088","Status":"OK","ConfigManagerErrorCode":0}
+WIN_DESKTOP dwm=1 explorer=1
+ok   cuInit(0)
+ok   cuDeviceGetCount(&n)
+devices=1
+ok   cuDeviceGet(&d,0)
+ok   cuDeviceGetName(nm,256,d)
+name=NVIDIA GeForce RTX 2060 SUPER
+ok   cuDeviceGetAttribute(&maj,CU_DEVICE_ATTRIBUTE_COMPUTE_CAPABILITY_MAJOR,d)
+ok   cuDeviceGetAttribute(&min,CU_DEVICE_ATTRIBUTE_COMPUTE_CAPABILITY_MINOR,d)
+compute=7.5
+ok   cuDeviceTotalMem(&tot,d)
+totalMem=3835 MiB
+ok   cuCtxCreate(&ctx,0,d)
+CTX OK
+ok   cuMemAlloc(&dp,4096)
+MEMALLOC OK 0x605400000
+ok   cuMemcpyHtoD(dp,&hv,4)
+ok   cuMemcpyDtoH(&rv,dp,4)
+CE rv=0xabcd1234 want=0xabcd1234 -> PASS
+DONE
+WIN_CUDA cup2 rc=0
+ok   cuInit(0)
+ok   cuDeviceGetCount(&n)
+ok   cuDeviceGet(&d,0)
+ok   cuCtxCreate(&ctx,0,d)
+CTX OK
+PTX_TARGET=sm_75 (device cc 7.5)
+ok   cuModuleLoadData(&mod,PTX)
+MODULE OK
+ok   cuModuleGetFunction(&fn,mod,"k")
+FUNC OK
+ok   cuMemAlloc(&d_in,4)
+ok   cuMemAlloc(&d_out,4)
+MEMALLOC in=0x605400000 out=0x605400200
+ok   cuMemcpyHtoD(d_in,&hv,4)
+ok   cuMemsetD32(d_out,0,1)
+ok   cuLaunchKernel(fn, 1,1,1, 1,1,1, 0, 0, args, 0)
+LAUNCH OK
+ok   cuCtxSynchronize()
+SYNC OK
+ok   cuMemcpyDtoH(&rv,d_out,4)
+KERNEL rv=43 want=43 -> PASS
+DONE
+WIN_CUDA cup3 rc=0
+ok   cuInit(0)
+ok   cuDeviceGetCount(&nd)
+ok   cuDeviceGet(&d,0)
+ok   cuCtxCreate(&ctx,0,d)
+CTX OK
+PTX_TARGET=sm_75 (device cc 7.5)
+ok   cuModuleLoadData(&mod,PTX)
+MODULE OK
+ok   cuModuleGetFunction(&fn,mod,"mm")
+FUNC OK
+CUP8 matmul N=2048  per-matrix=16 MiB  device=48 MiB
+ok   cuMemAlloc(&dA,sz)
+ok   cuMemAlloc(&dB,sz)
+ok   cuMemAlloc(&dC,sz)
+MEMALLOC A=0x605400000 B=0x606400000 C=0x607400000
+ok   cuMemcpyHtoD(dA,hA,sz)
+ok   cuMemcpyHtoD(dB,hB,sz)
+ok   cuMemsetD32(dC,0,(size_t)N*N)
+LAUNCH grid=(128,128) block=(16,16)
+ok   cuLaunchKernel(fn, g,g,1, 16,16,1, 0,0, args,0)
+LAUNCH OK
+ok   cuCtxSynchronize()
+SYNC OK
+ok   cuMemcpyDtoH(hC,dC,sz)
+CUP8 RESULT N=2048 bad=0 maxerr=0 C[0]=2048(exp 2048) -> PASS
+CUP8 VERDICT: PASS (host GR matmul byte-exact at scale)
+DONE
+WIN_CUDA cup8 rc=0
+KFDX start api=d3d11 iters=20 any_vendor=0
+KFDX ok CreateDXGIFactory1
+KFDX adapter index=0 vendor=0x10de device=0x1f06 luid=0x00000000_0x0000562a dedicated_mb=3727 software=0 name="NVIDIA GeForce RTX 2060 SUPER"
+KFDX adapter index=1 vendor=0x1414 device=0x008c luid=0x00000000_0x000060c2 dedicated_mb=0 software=1 name="Microsoft Basic Render Driver"
+KFDX selected "NVIDIA GeForce RTX 2060 SUPER"
+KFDX ok D3D11CreateDevice(hardware, chosen adapter)
+KFDX feature_level 0xb100
+KFDX ok compile cs_5_0
+KFDX ok CreateComputeShader
+KFDX ok CreateUnorderedAccessView
+KFDX compute iters=20 bad=0 ms=188
+KFDX ok compute shader result matches (UAV readback)
+KFDX ok compile vs_5_0/ps_5_0
+KFDX ok Map staging texture
+KFDX pixel 64,127,191,255
+KFDX ok draw result matches (centre pixel 64,128,191,255)
+KFDX RESULT OK api=d3d11 adapter="NVIDIA GeForce RTX 2060 SUPER"
+WIN_D3D d3d11 rc=0
+KFDX start api=d3d12 iters=20 any_vendor=0
+KFDX ok CreateDXGIFactory1
+KFDX adapter index=0 vendor=0x10de device=0x1f06 luid=0x00000000_0x0000562a dedicated_mb=3727 software=0 name="NVIDIA GeForce RTX 2060 SUPER"
+KFDX adapter index=1 vendor=0x1414 device=0x008c luid=0x00000000_0x000060c2 dedicated_mb=0 software=1 name="Microsoft Basic Render Driver"
+KFDX selected "NVIDIA GeForce RTX 2060 SUPER"
+KFDX ok D3D12CreateDevice(chosen adapter)
+KFDX feature_level 0xc200
+KFDX vidmem budget_mb=3168 usage_mb=6
+KFDX ok DIRECT
+KFDX ok DIRECT queue fence Signal/Wait x3
+KFDX ok COPY
+KFDX ok COPY queue fence Signal/Wait x3
+KFDX ok compile cs_5_0
+KFDX ok serialize root signature
+KFDX ok CreateRootSignature
+KFDX ok CreateComputePipelineState
+KFDX compute iters=20 bad=0 fence_wait_ok=1 ms=187
+KFDX ok compute queue fence completed
+KFDX ok compute shader result matches (UAV copy-back)
+KFDX RESULT OK api=d3d12 adapter="NVIDIA GeForce RTX 2060 SUPER"
+WIN_D3D d3d12 rc=0
+WIN_TDR_SINCE_BOOT=0
+WIN_ACCEPT_EXIT rc=0 2026-10-16T03:19:24.4866436Z
+[win_die] shot /root/win/codex-tu106hold/shots/baseline-before-hold.ppm.gz 2026-10-16T03:19:26+00:00
+qga-exec: timeout
+WINDOWS_WAVE_EXIT rc=124 2026-10-16T03:24:50+00:00

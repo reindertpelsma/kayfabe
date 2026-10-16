@@ -1,5 +1,38 @@
 # Status and handoff — where kayfabe v3 stands, and how to resume
 
+## UPDATE 2026-10-16 03:42 UTC — Turing native reference green; guest hold retry queued
+
+Correction to the 02:16 entry: fresh unprivileged RM probe verifies TU106
+(arch 0x160, impl 0x6), UID 65534 / CapEff 0, host 595.91.07. Native Linux
+raw suite 30/30, no recoveries; baseline native gates 9/9 plus gate10 pass.
+Event candidate's first gate8 run failed: the gate harness required a callback
+fd wake although production already polls GPU events after bounded waits.
+Clean PR19 2bf43d609 corrects that harness; integrated 5b523ed5 now passes
+9/9 plus gate10, all 12 USER births. Event-poll collection is measured with
+zero callback fd wakes. Focused harness tests and explicit gate8 build pass.
+
+Windows baseline 05442b10: actual 32.0.15.8088, Code0, DWM/Explorer,
+CUDA3, D3D11/12 and zero System4101 TDR in the short check pass. First QGA
+handshake failure before drvbind is preserved. The subsequent requested
+seven-minute hold was truncated by qmp.py's default 300-second deadline;
+NO seven-minute guest pass is claimed. Negative logs are preserved. Each
+owned VM was stopped QGA -> ACPI -> exact PID TERM as needed, without KILL.
+
+Clean PR13 now includes explicit validated QGA deadlines: f52b2388d fails
+before the fix, 8aa16cd64 passes all eight CPU tests. Baseline integration
+ca0ad248 rebuild finished 03:40:53; fresh Windows hold retry is running as
+QEMU52347 with actual process/source/host/guest/env/SHA receipt. Product
+code remains baseline C57E/shared semaphore, no walk-event change. R34 A/B
+is queued after that guest passes and stops, with original depth and 180s.
+No R34 result yet. Safe harness 59a290a0f avoids SIGKILL/broad process kills;
+code-only draft PR20 contains the two failing-first lifecycle fixtures.
+
+Evidence: traces/die_driver_sweep_20261015/turing_hold_20261016/guest-wave/.
+Only own rental56180232 remains, timer2167738 at04:11:46 UTC, hard cap
+04:16:45. Original lease/rate unchanged. Campaign compute ceiling4.38USD
+plus unbilled transfers. Owner GPU/VM untouched; no family complete.
+
+
 ## UPDATE 2026-10-16 02:16UTC — native Turing seven-minute reference PASS, restore preparation queued
 
 Owned56180232 native actual580.88/Code0 passes CUDA3/D3D11+12 both before/after

@@ -1,0 +1,38 @@
+SUITE_STARTED=2026-10-16T02:41:57Z bin=/root/kayfabe/target/release/kayfabe-rm-ladder gpu=0 arm_timeout=180 uid=0
+=== RMLADDER SUITE — 30 arms, gpu 0, 180s each, recover=modprobe ===
+ARM                          VERDICT      last line
+--concurrency                PASS         done
+--timer                      PASS         done — timer probe only
+--engines                    PASS         done
+--doorbell-census            PASS         done — doorbell census only
+--gpu-info-sweep             PASS         done — gpu-info sweep only
+--bus-info-sweep             PASS         done — bus-info sweep only
+--gpga-reserve-probe         PASS         GPGA_PROBE=(P) ★ reserved 7680 MiB and measured the read cost
+--atomics-probe              PASS         done — atomics probe only
+--pce-mask-probe             PASS         done — pce-mask probe only
+--dictated-ring              PASS         done — dictated-ring probe only
+--dictated-ring-negative     PASS         done — dictated-ring negative control only
+--late-map-race              PASS         done — late-map race only
+--blockage-coverage          PASS         done — blockage-coverage probe only
+--uvm-invalidate             PASS         done — uvm-invalidate probe only
+--uvm-mean                   PASS         done — w392d mean client only
+--alias-two-vas              PASS         done — w379/w381 mapping-plane rungs only
+--alias-unmap-observe        PASS         done — w379/w381 mapping-plane rungs only
+--map-propagation            PASS         done — w379/w381 mapping-plane rungs only
+--missing-page-fault         PASS         done — w379/w381 mapping-plane rungs only
+--map-stress                 PASS         done — w379/w381 mapping-plane rungs only
+--rpc-mixed-allocs           PASS         done — w379/w381 mapping-plane rungs only
+--cross-client-leak          PASS         done — w379/w381 mapping-plane rungs only
+--concurrent-fuzz            PASS         done — w385 concurrent fuzz only
+--defer-liveness             PASS         done — w289 defer-liveness rung only
+--guest-ram-pin              PASS         done — guest-RAM pin probe only
+--guest-ring-channel         PASS         done — guest-ring channel probe only
+--executor-vas               PASS         done — executor-VAS probe only
+--ce-client                  PASS         done — raw CE client only (ALL ARMS MET)
+--ce-client-guest-ram        PASS         R34_OUTCOME=(P)
+--bar1-crossing              PASS         done — bar1-crossing probe only
+
+SUITE_ARMS=30 SUITE_PASS=30 SUITE_FAIL=0 SUITE_TIMEOUT=0 SUITE_UNMEASURED=0
+SUITE_RECOVERIES=0 SUITE_RECOVERED=0  (attempts > recovered ⇒ the wedge SURVIVES a guest driver reload ⇒ the leaked state is ours, not the guest RM's)
+SUITE_LOGDIR=/root/prov/turinghold_native_raw
+SUITE_RC=0

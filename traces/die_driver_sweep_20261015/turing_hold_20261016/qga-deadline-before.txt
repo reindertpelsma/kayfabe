@@ -1,0 +1,69 @@
+.qga-exec: timeout
+F.FFFFFF....
+======================================================================
+FAIL: test_cli_deadline_allows_a_seven_minute_probe (test_qga_exec.GuestExecTests.test_cli_deadline_allows_a_seven_minute_probe)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/workspace/codex/qga-result-recovery/scripts/bench/tests/test_qga_exec.py", line 45, in test_cli_deadline_allows_a_seven_minute_probe
+    self.assertEqual(rc, 7)
+    ~~~~~~~~~~~~~~~~^^^^^^^
+AssertionError: 124 != 7
+
+======================================================================
+FAIL: test_invalid_cli_deadline_never_launches (test_qga_exec.GuestExecTests.test_invalid_cli_deadline_never_launches) (value='nan')
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/workspace/codex/qga-result-recovery/scripts/bench/tests/test_qga_exec.py", line 56, in test_invalid_cli_deadline_never_launches
+    self.assertEqual(rc, 2)
+    ~~~~~~~~~~~~~~~~^^^^^^^
+AssertionError: <MagicMock name='qga_exec()' id='124505506926944'> != 2
+
+======================================================================
+FAIL: test_invalid_cli_deadline_never_launches (test_qga_exec.GuestExecTests.test_invalid_cli_deadline_never_launches) (value='inf')
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/workspace/codex/qga-result-recovery/scripts/bench/tests/test_qga_exec.py", line 56, in test_invalid_cli_deadline_never_launches
+    self.assertEqual(rc, 2)
+    ~~~~~~~~~~~~~~~~^^^^^^^
+AssertionError: <MagicMock name='qga_exec()' id='124505506927952'> != 2
+
+======================================================================
+FAIL: test_invalid_cli_deadline_never_launches (test_qga_exec.GuestExecTests.test_invalid_cli_deadline_never_launches) (value='0')
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/workspace/codex/qga-result-recovery/scripts/bench/tests/test_qga_exec.py", line 56, in test_invalid_cli_deadline_never_launches
+    self.assertEqual(rc, 2)
+    ~~~~~~~~~~~~~~~~^^^^^^^
+AssertionError: <MagicMock name='qga_exec()' id='124505506928960'> != 2
+
+======================================================================
+FAIL: test_invalid_cli_deadline_never_launches (test_qga_exec.GuestExecTests.test_invalid_cli_deadline_never_launches) (value='-1')
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/workspace/codex/qga-result-recovery/scripts/bench/tests/test_qga_exec.py", line 56, in test_invalid_cli_deadline_never_launches
+    self.assertEqual(rc, 2)
+    ~~~~~~~~~~~~~~~~^^^^^^^
+AssertionError: <MagicMock name='qga_exec()' id='124505506929968'> != 2
+
+======================================================================
+FAIL: test_invalid_cli_deadline_never_launches (test_qga_exec.GuestExecTests.test_invalid_cli_deadline_never_launches) (value='3601')
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/workspace/codex/qga-result-recovery/scripts/bench/tests/test_qga_exec.py", line 56, in test_invalid_cli_deadline_never_launches
+    self.assertEqual(rc, 2)
+    ~~~~~~~~~~~~~~~~^^^^^^^
+AssertionError: <MagicMock name='qga_exec()' id='124505506930976'> != 2
+
+======================================================================
+FAIL: test_invalid_cli_deadline_never_launches (test_qga_exec.GuestExecTests.test_invalid_cli_deadline_never_launches) (value='bad')
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/workspace/codex/qga-result-recovery/scripts/bench/tests/test_qga_exec.py", line 56, in test_invalid_cli_deadline_never_launches
+    self.assertEqual(rc, 2)
+    ~~~~~~~~~~~~~~~~^^^^^^^
+AssertionError: <MagicMock name='qga_exec()' id='124505506931984'> != 2
+
+----------------------------------------------------------------------
+Ran 8 tests in 1.012s
+
+FAILED (failures=7)
