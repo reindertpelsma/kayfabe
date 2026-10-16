@@ -1,5 +1,27 @@
 # Status and handoff — where kayfabe v3 stands, and how to resume
 
+## UPDATE 2026-10-16 23:40UTC — AD102 Linux590 fullsuite PASS; planned same-box native581 reference
+
+Only56302930ACTIVE/timer2571615 at00:46UTC/hard00:51UTC2026-10-17 unchanged.
+Exact9d/privatecc2a Linux590 raw30/CUDA4/gfx5+10nativehashes/brokerPASS.
+FinalmodesetY/590module+libcuda/kernel6.8.0-142 verified; Cinnamon1Xorg1NVIDIA,
+SHM1920/11708colors,guestXid0flip0/host10→10,162USERappbirths/0HBwarnings,
+18STALL/10nvAssert limitations. Safeownedstop23:36:40, allCPU/GPUcontrollersdone.
+FirstheadlessS1FAILmodesetNbutCUDA4/10hashesPASS; firstpreparedreadinesscheck
+unprivsysfsPermissionDeniedbeforeapps, thensudo readonlycheck fixed. Bothnegativesretained.
+TS/ad102_second_builds_20261016/linux590_apps/RESULT.md +36screenedtextartifacts.
+
+Windows5818151/GSP1/P19/5809402Code43confirmed; onlynewrefusedclassB297 first_seq216,
+sourceexact58088probe-cell excludes581. INFERREDcausecandidate, notproof. Native581
+nextwithinremaininglease: privatepinnedwindows-on-vast derivative uses signed58151
+andprebuiltCUDAprobes(noCUDAtoolkit), read-onlyrender/syntaxchecks passed. Require
+allLinuxtextPUSHED/noQEMU BEFOREreimage. PreserveexpectednativeWindowsSSHpublichostkey
+fromauthenticatedoldLinux BEFOREreboot/newaliasStrictHostKeyCheckingyes. Nativebudget
+until00:30, textexportthenretirebefore00:40/original00:46timer. NoLinuxreturnneeded.
+Rawlogs/imagesonrental will beerasedbyconversion; exportedtext+hashmanifest retained.
+No instanceextension/newrental; ownerGPU/VM/checkout untouched. No familycomplete.
+
+
 ## UPDATE 2026-10-16 23:23UTC — AD102 Windows581 recovery verifies Code43; Linux590 fat prep next
 
 Only own56302930ACTIVE, originaltimer00:46/hard00:51UTC2026-10-17 unchanged.

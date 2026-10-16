@@ -84,3 +84,15 @@ WIN_GUEST_DRIVER=580.94.02
 Only screenedtext returns. Images/executables/rawframes remain on rental. Text normalizes
 CRLF/trailingwhitespace and identifiers; manifestSHA/size refers to raw rental files.
 Originaltimer00:46UTC/hard00:51UTC2026-10-17 remains armed. No familycomplete.
+
+Additional measured candidate23:40UTC: comparing all refusalkeys (notonlyfn76)
+finds newfn103/B297 refusal. ExactQEMUreason: software-runlist probe: unsupported
+driver cell, first_seq216. The passing580connectedtrace serves B297. Source
+kf-abi/src/sw_runlist_generated.rs contains an exact580.65.06/580.88 diagnosticcell
+only; it explicitly says the classID is not OGKM-defined. INFERRED H-W2-SW:
+this refusal may explain the new581abort. Falsifier: native581 does not use the
+same publicallocation shape/identity, or a legitimately measured exactcell still
+leaves the abort unchanged. Do not copy a neighboringcell or invent an ack.
+Native/VFIO581measurement is next; public nvos.h supplies layout, native trace
+must establish the newdriver cell. No newclosed-PE interface extraction orproduct
+change has been made from this hypothesis.

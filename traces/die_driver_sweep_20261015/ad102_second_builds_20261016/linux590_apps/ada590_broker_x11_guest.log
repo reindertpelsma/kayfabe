@@ -1,0 +1,13 @@
+CINNAMON 1 XORG 1
+ACTUAL_LIBCUDA=/usr/lib/x86_64-linux-gnu/libcuda.so.590.48.01 ACTUAL_KERNEL=6.8.0-142-generic
+NVIDIA GeForce RTX 4090, 590.48.01, 127 MiB
+OpenGL vendor string: NVIDIA Corporation
+OpenGL renderer string: NVIDIA GeForce RTX 4090/PCIe/SSE2
+Running synchronized to the vertical refresh.  The framerate should be
+approximately the same as the monitor refresh rate.
+297 frames in 5.0 seconds = 59.302 FPS
+298 frames in 5.0 seconds = 59.442 FPS
+299 frames in 5.0 seconds = 59.722 FPS
+VKCUBE rc=124
+GUEST_DMESG flip_timeouts=0 nvassert=10 xid=0
+GUEST_DONE
