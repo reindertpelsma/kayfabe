@@ -141,6 +141,12 @@ fn scan_refusal_detail(l: &kf_chan::user_scan::Located, words: &[u32], base: usi
     )
 }
 
+/// SCRATCH d3d11-gap R2: `KF3_FAST_SEG=1` publishes a scan-off segment inline. Read once.
+fn fast_seg() -> bool {
+    static F: std::sync::OnceLock<bool> = std::sync::OnceLock::new();
+    *F.get_or_init(|| std::env::var("KF3_FAST_SEG").is_ok_and(|v| v == "1"))
+}
+
 /// SCRATCH d3d11-gap: `KF3_LAZY_OBSERVE` (turns between private-USERD reads; 1 = every turn). Read once.
 fn lazy_observe() -> u64 {
     static N: std::sync::OnceLock<u64> = std::sync::OnceLock::new();
@@ -1720,6 +1726,33 @@ impl Pump {
                     use std::sync::atomic::Ordering::Relaxed;
                     lc.scanoff_skipped.fetch_add(1, Relaxed);
                     lc.scanoff_skipped_bytes.fetch_add(len as u64, Relaxed);
+                }
+                // SCRATCH d3d11-gap R2 (`KF3_FAST_SEG=1`): the scan-off segment is published right here, with exactly the admissions and the write
+                // `segment_turn` would make for an empty-word segment (no Segment value, no scan clone, no second dispatch). Same behaviour, fewer steps.
+                // With fewer than 2 private credits it falls back to the ordinary path (which owns the credit wait).
+                if fast_seg() && self.trace.is_none() && self.fetch.available() >= 2 {
+                    let generation = self.generation;
+                    self.publish(
+                        me,
+                        r,
+                        Some(&software),
+                        ring.as_ref(),
+                        Some(&source),
+                        Some(&pb),
+                        |pump, storage| {
+                            let (slot, put) = pump
+                                .fetch
+                                .publish(Some((generation, guest_get)))
+                                .map_err(str::to_owned)?;
+                            storage.write_user_gp(slot, entry)?;
+                            storage.publish_put(put)
+                        },
+                    )?;
+                    self.source_admitted = true;
+                    self.cursor = guest_get;
+                    self.unnotified = true;
+                    self.again = true;
+                    return Ok(true);
                 }
                 self.segment = Some(Segment {
                     ring,
