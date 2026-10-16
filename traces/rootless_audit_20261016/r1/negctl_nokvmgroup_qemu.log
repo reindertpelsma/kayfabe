@@ -1,0 +1,2 @@
+2026-10-16T17:42:44.115299Z qemu-system-x86_64: Could not access KVM kernel module: No such file or directory
+2026-10-16T17:42:44.115336Z qemu-system-x86_64: failed to initialize kvm: No such file or directory

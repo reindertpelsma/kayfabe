@@ -1,0 +1,149 @@
+== date 2026-10-16T20:16:08+02:00
+-- processes owned by kfrootless
+(end)
+-- any qemu / broker left
+(end)
+-- files owned by uid 1002 outside /home/kfrootless (all local fs incl. tmpfs)
+/home/kfrootless
+(end)
+-- sockets / listeners owned by uid 1002
+0
+0
+-- root-owned changes since 2026-10-16 19:26:00 in system dirs (excludes /data /home /root /proc /sys /dev/pts)
+/etc
+/etc/passwd
+/etc/gshadow
+/etc/cups
+/etc/cups/subscriptions.conf
+/etc/subuid
+/etc/subgid
+/etc/shadow
+/etc/group
+/var/tmp
+/var/lib/docker/image/identity-cache.db
+/var/lib/update-notifier/fsck-at-reboot
+/var/lib/smartmontools
+/var/lib/smartmontools/smartd.Samsung_SSD_870_EVO_2TB-S754NX0Y906511A.ata.state~
+/var/lib/smartmontools/smartd.Samsung_SSD_870_EVO_2TB-S754NX0Y906511A.ata.state
+/var/lib/smartmontools/attrlog.Samsung_SSD_870_EVO_2TB-S754NX0Y906511A.ata.csv
+/var/lib/NetworkManager
+/var/lib/NetworkManager/internal-f6b3e1c9-8004-3a8a-8e6d-c79a7e6a7204-enp11s0.lease
+(end)
+-- /var/log / journal growth attributable? (files changed)
+/var/log/auth.log
+/var/log/kern.log
+/var/log/syslog
+/var/log/cups/access_log
+/var/log/sysstat/sa16
+/var/log/journal/1385cec42d45440db1fd3b0a772b4eae/system.journal
+-- /tmp and /run top-level listing (non-session)
+drwxrwxrwt root root 8940 Oct 16 20:09 .
+drwxr-xr-x root root 4096 Oct 9 20:59 ..
+-r--r--r-- ubuntu ubuntu 11 Oct 13 21:52 .X0-lock
+-r--r--r-- ubuntu ubuntu 11 Oct 13 21:52 .X1-lock
+drwxrwxrwt root root 40 Oct 9 19:38 .XIM-unix
+-rw-r--r-- root root 6788 Oct 14 02:26 EvsC.tsv
+-rw-r--r-- root root 10266 Oct 15 17:55 V3_MINECRAFT_TDR_BISECT_20261015.md
+drwxr-xr-x root root 60 Oct 13 14:27 __pycache__
+-rw-r--r-- root root 5968 Oct 11 15:04 a
+-rw-r--r-- root root 280 Oct 11 03:19 allcmds.txt
+-rw-r--r-- root root 500 Oct 9 21:49 anal.sh
+-rw-r--r-- root root 1413 Oct 9 21:49 anal2.sh
+-rw-r--r-- root root 265 Oct 9 22:58 anal237.sh
+-rw-r--r-- root root 1676 Oct 11 02:27 argv621.txt
+-rw-r--r-- root root 6695 Oct 15 15:47 au.png
+-rw-r--r-- root root 1895 Oct 13 16:04 autounattend.xml
+-rw-r--r-- root root 6234 Oct 11 15:04 b
+-rw-r--r-- root root 399 Oct 11 00:56 b1.sh
+-rw-r--r-- root root 865 Oct 15 01:08 bad.patch
+-rw-r--r-- root root 6202 Oct 10 20:17 bars.mp4
+-rw-r--r-- root root 6236 Oct 11 15:04 c
+-rw------- root root 0 Oct 15 17:51 cc1Avu5M
+-rw------- root root 0 Oct 15 17:51 ccV00Cls
+-rw------- root root 0 Oct 15 17:51 ccgbn4e0
+-rw------- root root 0 Oct 15 17:51 cckYzirk
+-rw-r--r-- root root 14206 Oct 15 16:11 check.out
+-rw-r--r-- root root 961847 Oct 15 16:32 claude-2990.png
+-rw-r--r-- root root 6220817 Oct 15 16:32 claude-2990.ppm
+-rw-r--r-- root root 387 Oct 13 23:39 claude-agent-census-capA.anomalies.tsv
+-rw-r--r-- root root 16236 Oct 13 23:39 claude-agent-census-capA.controls.tsv
+-rw-r--r-- root root 910 Oct 13 23:39 claude-agent-census-capA.functions.tsv
+-rw-r--r-- root root 66592 Oct 13 23:39 claude-agent-census-capA.json
+drwxr-xr-x root root 100 Oct 13 23:03 claude-census-target
+-rw-r--r-- root root 1898466 Oct 15 14:58 claude-cstat.tmp
+-rw-r--r-- root root 13914 Oct 15 12:57 claude-cursor2-makecheck.log
+-rw-r--r-- root root 13840 Oct 15 14:31 claude-cursor2-mc.log
+-rw-r--r-- root root 2172 Oct 15 13:03 claude-cursor2-msg.txt
+-rw-r--r-- root root 1647 Oct 15 14:31 claude-cursor2-msgA.txt
+-rw-r--r-- root root 1571 Oct 15 14:34 claude-cursor2-msgB.txt
+-rw-r--r-- root root 2133 Oct 15 15:05 claude-cursor2-msgC.txt
+lttng-ust-wait-8-1000
+total 0
+drwxr-xr-x  2 root root    0 Oct  9 19:38 .
+drwxr-xr-x 21 root root 5360 Oct 15 22:26 ..
+-- modules
+nvidia_drm 147456 2
+nvidia_uvm 2088960 0
+nvidia_modeset 1789952 2
+nvidia 15114240 15
+vfio_pci 20480 0
+vfio_pci_core 102400 1
+vfio_iommu_type1 49152 0
+vfio 77824 3
+iommufd 135168 1
+kvm_amd 262144 0
+kvm 1527808 1
+-- hugepages
+HugePages_Total:       0
+Hugetlb:               0 kB
+-- sysctl sample
+vm.unprivileged_userfaultfd=0
+kernel.unprivileged_userns_clone=1
+kernel.apparmor_restrict_unprivileged_userns=1
+kernel.io_uring_disabled=0
+kernel.perf_event_paranoid=4
+kernel.yama.ptrace_scope=1
+vm.nr_hugepages=0
+vm.overcommit_memory=0
+vm.max_map_count=1048576
+kernel.unprivileged_bpf_disabled=2
+-- udev rules / modprobe.d / limits changed since 2026-10-16 19:26:00
+(end)
+-- device node modes (unchanged vs R0?)
+crw-rw---- root:kvm /dev/kvm
+crw-rw-rw- root:root /dev/nvidiactl
+crw-rw-rw- root:root /dev/nvidia0
+crw-rw-rw- root:root /dev/nvidia-uvm
+crw-rw---- root:kvm /dev/udmabuf
+crw------- root:root /dev/userfaultfd
+crw-rw-rw- root:root /dev/vfio/vfio
+# group: kvm
+user::rw-
+user:ubuntu:rw-
+group::rw-
+-- cgroups: any kfrootless / kayfabe cgroup
+(end)
+-- nvidia
+NVIDIA GeForce RTX 4070, 595.91.07, 10 MiB, Enabled, P8
+../../../../bus/pci/drivers/nvidia
+-- Xid count (dmesg)
+84
+-- gnome-shell / gdm same pids
+3506731
+2438
+-- user home footprint
+3.5G	/home/kfrootless
+980K	/home/kfrootless/.nv
+/home/kfrootless
+/home/kfrootless/bench
+/home/kfrootless/run.lock
+/home/kfrootless/.bash_logout
+/home/kfrootless/stubbin
+/home/kfrootless/stubbin/cargo
+/home/kfrootless/v3_gates_user.log
+/home/kfrootless/st_user.txt
+/home/kfrootless/.bashrc
+/home/kfrootless/.profile
+/home/kfrootless/.nv
+/home/kfrootless/.nv/ComputeCache
+/home/kfrootless/win

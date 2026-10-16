@@ -1,0 +1,103 @@
+pid=2320704 2026-10-16T20:19:38+02:00
+    PID USER       UID     ELAPSED CMD
+2320704 kfrootl+  1002       00:48 /data/claude-rootless/inst/bin/qemu-system-x86_64 -name rootless-audit-1002 -nodefaults -no-user-config -machine pc,accel=kvm
+Uid:	1002	1002	1002	1002
+Gid:	1002	1002	1002	1002
+Groups:	991 
+VmLck:	       0 kB
+VmPin:	       0 kB
+VmRSS:	 3681616 kB
+Threads:	37
+CapInh:	0000000000000000
+CapPrm:	0000000000000000
+CapEff:	0000000000000000
+CapBnd:	000001ffffffffff
+CapAmb:	0000000000000000
+NoNewPrivs:	0
+Seccomp:	0
+Seccomp_filters:	0
+--- limits
+Max processes             106358               106358               processes 
+Max open files            524288               524288               files     
+Max locked memory         8388608              8388608              bytes     
+--- fd targets (count)
+     77 anon_inode
+     50 /dev/nvidia0
+      8 pipe:
+      7 
+      4 /dev/nvidiactl
+      2 /memfd:kayfabe-display-frame
+      2 /home/kfrootless/win/fd1/qemu.log
+      2 /dmabuf:
+      2 /dev/nvidia-uvm
+      1 anon_inode:kvm-vm
+      1 anon_inode:kvm-vcpu:7
+      1 anon_inode:kvm-vcpu:6
+      1 anon_inode:kvm-vcpu:5
+      1 anon_inode:kvm-vcpu:4
+      1 anon_inode:kvm-vcpu:3
+      1 anon_inode:kvm-vcpu:2
+      1 anon_inode:kvm-vcpu:1
+      1 anon_inode:kvm-vcpu:0
+      1 anon_inode:kvm-vcpu-stats:7
+      1 anon_inode:kvm-vcpu-stats:6
+      1 anon_inode:kvm-vcpu-stats:5
+      1 anon_inode:kvm-vcpu-stats:4
+      1 anon_inode:kvm-vcpu-stats:3
+      1 anon_inode:kvm-vcpu-stats:2
+      1 anon_inode:kvm-vcpu-stats:1
+      1 anon_inode:kvm-vcpu-stats:0
+      1 /var/lib/kf-windows-20261005/win11-full/kfwin11-tools.iso
+      1 /var/lib/kf-windows-20261005/win11-full-b/windows11.qcow2
+      1 /var/lib/kf-windows-20261005/appmatrix/image/kfapps.iso
+      1 /usr/share/OVMF/OVMF_CODE_4M.fd
+      1 /memfd:memory-backend-memfd
+      1 /memfd:kf3-scratch-pramin
+      1 /memfd:kf3-scratch-bar2
+      1 /memfd:kf3-scratch-bar1
+      1 /memfd:displaysurface
+      1 /home/kfrootless/win/u0.qcow2
+      1 /home/kfrootless/win/fd1/serial.log
+      1 /home/kfrootless/win/fd1.vars.fd
+      1 /home/kfrootless/win/fd1.qcow2
+      1 /dev/null
+      1 /dev
+--- fds on /dev, /sys, /proc, /home
+      1 /dev
+      1 /dev/null
+     50 /dev/nvidia0
+      4 /dev/nvidiactl
+      2 /dev/nvidia-uvm
+      1 /home/kfrootless/win/fd1.qcow2
+      2 /home/kfrootless/win/fd1/qemu.log
+      1 /home/kfrootless/win/fd1/serial.log
+      1 /home/kfrootless/win/fd1.vars.fd
+      1 /home/kfrootless/win/u0.qcow2
+      1 /var/lib/kf-windows-20261005/appmatrix/image/kfapps.iso
+      1 /var/lib/kf-windows-20261005/win11-full-b/windows11.qcow2
+      1 /var/lib/kf-windows-20261005/win11-full/kfwin11-tools.iso
+--- any vfio/dri/udmabuf/uffd/hugetlb/mem fd or map
+lrwx------+1 kfrootless kfrootless 64 Oct 16 20:19 117 -> /dev/udmabuf
+(end)
+--- mappings of /dev nodes
+      7 /dev/nvidia0
+     45 /dev/nvidiactl
+      2 /dev/nvidia-uvm
+     11 /dev/zero
+--- all threads CapEff
+     37 CapEff:	0000000000000000
+--- children / net listeners of uid 1002
+u_str LISTEN 0      1                     /home/kfrootless/win/fd1/qmp.sock 40937530            * 0    users:(("qemu-system-x86",pid=2320704
+u_str LISTEN 0      1                     /home/kfrootless/win/fd1/qga.sock 40937531            * 0    users:(("qemu-system-x86",pid=2320704
+u_seq LISTEN 0      128                     @cuda-uvmfd-4026531836-2320704@ 40941569            * 0    users:(("qemu-system-x86",pid=2320704
+--- broker process
+2320698 sh -c tail -f /dev/null | exec "$0" --socket "$1" --backend test --persist --verbose --title rootless-
+2320700 tail -f /dev/null
+2320701 /data/claude-rootless/inst/bin/nvkvm-display-broker --socket /home/kfrootless/win/fd1/display.sock --b
+2320704 /data/claude-rootless/inst/bin/qemu-system-x86_64 -name rootless-audit-1002 -nodefaults -no-user-confi
+--- cgroup / ns
+0::/user.slice/user-0.slice/session-161292.scope
+user:[4026531837]
+mnt:[4026531832]
+--- AppArmor
+unconfined

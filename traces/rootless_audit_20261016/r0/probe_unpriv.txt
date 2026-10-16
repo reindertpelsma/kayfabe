@@ -1,0 +1,45 @@
+### kfrootless (groups: kfrootless, kvm)
+userfaultfd(plain)                            EPERM
+userfaultfd(USER_MODE_ONLY)                   ok
+io_uring_setup                                ok
+open /dev/udmabuf                             ok
+open /dev/kvm                                 ok
+open /dev/nvidiactl                           ok
+open /dev/nvidia0                             ok
+open /dev/nvidia-uvm                          ok
+open /dev/userfaultfd                         EACCES
+open /dev/vfio/vfio                           ok
+open /dev/hugepages                           ok
+open /dev/dri/renderD129                      EACCES
+open /dev/dri/card1                           EACCES
+open /dev/mem                                 EACCES
+mmap(1MiB MAP_LOCKED)                         ok
+mmap(64MiB MAP_LOCKED, memlock=8MiB)          EAGAIN
+memfd_create                                  ok
+unshare(CLONE_NEWUSER)                        ok
+uid 1002 groups [991] CapEff 0000000000000000
+### root, for contrast
+userfaultfd(plain)                            ok
+userfaultfd(USER_MODE_ONLY)                   ok
+io_uring_setup                                ok
+open /dev/udmabuf                             ok
+open /dev/kvm                                 ok
+open /dev/nvidiactl                           ok
+open /dev/nvidia0                             ok
+open /dev/nvidia-uvm                          ok
+open /dev/userfaultfd                         ok
+open /dev/vfio/vfio                           ok
+open /dev/hugepages                           ok
+open /dev/dri/renderD129                      ok
+open /dev/dri/card1                           ok
+open /dev/mem                                 ok
+mmap(1MiB MAP_LOCKED)                         ok
+mmap(64MiB MAP_LOCKED, memlock=8MiB)          ok
+memfd_create                                  ok
+unshare(CLONE_NEWUSER)                        ok
+uid 0 groups [0] CapEff 000001ffffffffff
+### host sysctls
+fs.protected_regular = 2
+vm.unprivileged_userfaultfd = 0
+kernel.io_uring_disabled = 0
+kernel.apparmor_restrict_unprivileged_userns = 1

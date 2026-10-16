@@ -1,0 +1,181 @@
+ROOTLESS AUDIT: does kayfabe run as an unprivileged user with only /dev/kvm?
+
+STATUS: RESEARCH, 2026-10-16 (measured on the trusted host: one revision, one GPU, one distro).
+Claim under test (owner): "kayfabe runs as an unprivileged user with only /dev/kvm access: no root, no VFIO rebind, no kernel
+module or driver install, the host keeps its GPU and desktop, and uninstalling is deleting one folder."
+Labels: MEASURED = observed in a run of this audit. INFERRED = reasoned, not run.
+
+VERDICT IN ONE PARAGRAPH
+The claim, never tested before, holds on the tested configuration. A throwaway user with groups "kfrootless, kvm" and nothing else
+(CapEff = 0, RLIMIT_MEMLOCK = 8 MiB, no sudo) ran the kf3 Linux fast suite 30/30, the nine kf-gate binaries plus gate 10 (9/9 and
+PASS), and a Windows 11 guest on the stock Windows driver through Unigine Heaven D3D11: 94.05 and 91.05 fps against 92.90 and
+93.27 fps for root with the same binary and flags (-0.6 % on the mean, inside a 3.3 % run-to-run spread). The product asked for no
+capability: the only host-log lines that differ between the root and the user runs are the "cap_sys_admin=cleared-for-call /
+not-held" note itself. Nothing was left on the host outside the user's home. Three qualifiers: (1) "only /dev/kvm" is true because
+NVIDIA's stock install makes /dev/nvidia* mode 0666 (measured here, inferred for other distros); (2) the host desktop here renders
+on the AMD iGPU, so "the desktop keeps the NVIDIA GPU" was NOT tested; (3) a real desktop window needs the desktop user itself,
+which no other uid can reach (measured EACCES). Seven small defects/dependencies were found (section 4); none needs root at run time.
+
+SETUP (MEASURED)
+Host root@172.22.1.20, Ubuntu 26.04, kernel 7.0.0-34, stock nvidia-dkms-595-open 595.91.07, RTX 4070 (AD104); every run printed
+"kf-host: host tier: stock". Product = qemu-system-x86_64 of kf3 revision 0a746117 (sha256 0445f3d69d3a5d43...f128c5a8, byte-identical to
+kf3-bins/0a746117), installed read-only in one folder (/data/claude-rootless/inst: bin/qemu-system-x86_64, bin/nvkvm-display-broker,
+share/qemu/, 104 MB). User: useradd -m -G kvm kfrootless (uid 1002), started with setpriv --reuid --regid --groups=kvm env -i, so no
+root environment leaks in. Pre-registration: PREREG.md (written after the read-only recon R0, before any run).
+
+1. CLAIM TABLE
+claim                      verdict            evidence (files in this directory)
+no root                    PASS (MEASURED)    r1/caps_us1.txt: 30 of 30 fast-suite QEMUs Uid 1002, CapEff 0000000000000000.
+                           for lanes run      r2/win_fdaudit_user.txt: Windows QEMU, all 37 threads CapEff 0, Seccomp 0, no children.
+                                              r1/user_strace2_summary.txt: 0 EPERM/EACCES in 5 arms; failing-ioctl set identical to
+                                              root's (r1/root_strace2_summary.txt). Lanes not run: section 5.
+no VFIO rebind             PASS (MEASURED)    GPU bound to "nvidia" during guests (r2/gpu_liveness_during_user_guest.txt); vfio_pci
+                                              refcount 0 before and after (r0/r0_recon_before.txt vs r3/r3_after_runs.txt); no
+                                              /dev/vfio or /dev/dri fd (r2/win_fdaudit_user.txt) and no such open in
+                                              r0/root_strace_summary.txt. IOMMU is on here (31 groups) but unused; IOMMU-off not
+                                              tested (INFERRED fine).
+no kernel module/driver    PASS (MEASURED)    lsmod identical before/after (nvidia refcount 15, nvidia_uvm 0, kvm 1); no udev,
+                                              modprobe.d, limits or sysctl change (r3/r3_after_runs.txt). Stock host driver, no
+                                              patched tier. One-time admin step: the user must be in group kvm, or the logind ACL
+                                              does it for the seat user (user:ubuntu:rw- is already on /dev/kvm and /dev/udmabuf).
+host keeps GPU and desktop PARTIAL            While a user guest ran Heaven (nvidia-smi 83 % util, QEMU 8858 MiB), nvidia-smi,
+                                              vulkaninfo and eglinfo as the desktop user listed the RTX 4070 and created a GL context
+                                              on it; same gnome-shell pid throughout; Xid count 84 before and after; VRAM back to 10
+                                              MiB, P8 afterwards. BUT the desktop here is composited by the Ryzen iGPU
+                                              (/etc/udev/rules.d/61-kayfabe-igpu-primary.rules makes mutter ignore the NVIDIA card).
+                                              A desktop on the NVIDIA card sharing 12 GiB with a ~9 GiB guest is NOT tested.
+uninstall = delete a folder PASS, 2 footprints (MEASURED) r3/r3_after_runs.txt: no file owned by uid 1002 outside /home/kfrootless; nothing
+                                              in /tmp /run /dev/shm /var/tmp; no cgroup, socket or process left. Outside the install
+                                              folder: ~/.nv/ComputeCache (libcuda, 980 KB, in the user's home) and whichever run
+                                              directory the user picks. /tmp/kayfabe-fastguest.lock is a harness file.
+needs only /dev/kvm        PARTIAL (MEASURED  r0/probe_unpriv.txt: as kfrootless /dev/kvm and /dev/udmabuf open (group kvm),
+                           on this host)      /dev/nvidiactl, /dev/nvidia0, /dev/nvidia-uvm open (0666, NVIDIA default);
+                                              /dev/userfaultfd, /dev/dri/*, /dev/mem EACCES (never opened by the product).
+                                              Negative control without group kvm: r1/negctl_nokvmgroup_qemu.log. /dev/kvm is the only
+                                              group-gated node. A hardened NVIDIA node policy (NVreg_DeviceFileMode, group video)
+                                              would add that group (INFERRED). /dev/dri/render* (group render) is wanted by the
+                                              optional GPU-copy rung of the real broker window (kf-qemu/src/gpucopy.rs): NOT tested.
+
+2. WHAT WAS RUN
+R0 recon (read-only). r0/r0_recon_before.txt: /dev/kvm root:kvm 0660 + ACL; /dev/nvidia* 0666; /dev/udmabuf root:kvm 0660 from the
+stock rule 50-udev-default.rules:125; /dev/userfaultfd 0600 root; /dev/dri/* video/render 0660; RLIMIT_MEMLOCK 8 MiB
+(DefaultLimitMEMLOCK=8388608); vm.unprivileged_userfaultfd=0; io_uring and user namespaces open to an ordinary user
+(r0/probe_unpriv.txt); hugepages 0; fs.protected_regular=2.
+strace -f of a root fast guest (r0/root_strace_summary.txt): the QEMU opens /dev/kvm, /dev/nvidiactl (25x), /dev/nvidia0 (13x),
+/dev/nvidia-uvm (2x), reads /proc/driver/nvidia/* and /sys/bus/pci/devices/0000:01:00.0/{class,device,resource,...}, opens
+$HOME/.nv/ComputeCache (libcuda) and memfds. RM calls are the stock escapes on /dev/nvidiactl and /dev/nvidia0: NV_ESC_RM_CONTROL
+0x2a (349x in the --timer arm), RM_ALLOC 0x2b, RM_FREE 0x29, RM_MAP_MEMORY_DMA 0x57, RM_UNMAP_MEMORY_DMA 0x58 (names as in
+crates/kf-linux-raw), plus 0x4e, 0x4f, 0x27 and 0xc8..0xf0 (not decoded here) and the UVM escapes. No CAP_ check is visible outside
+RM. The process calls capget/capset (the CAP_SYS_ADMIN bracket around channel births) and raises RLIMIT_NOFILE soft to hard
+(1024 -> 524288). It never calls userfaultfd, io_uring_setup, perf_event_open, bpf, mount, unshare or mlock*, and maps nothing
+MAP_LOCKED or hugetlb.
+
+R1 Linux, as kfrootless.
+- Smallest lane (--timer) PASS in 5 s. fast_suite.sh us1 180: 30 PASS, 0 FAIL, 0 CRASH, 0 NOTRUN in 3 min 52 s
+  (r1/fast_suite_user.out). Same suite as root, same binary: 30/30 (r1/fast_suite_root.out). Summed raw client time 67.3 s (user)
+  vs 66.6 s (root); per arm within about 1 s (largest: ce-client-guest-ram 20.78 s vs 20.15 s).
+- Privilege record per arm (r1/cmp_root_vs_user_suite.txt): 175 channel births over the suite, all PRIVILEGED_CHANNEL=0
+  privilege=USER; the set of REFUSED / "refused by" / PRIVILEGED lines is identical for root and user in all 30 arms. So the root runs
+  the project always did were not hiding a privileged control: the host controls the product asks are all unprivileged (the one
+  known privileged control, GR_GET_PHYS_GPC_MASK 0x20801232, is by design not asked; traces/real_ad104 measured it refused 0x1b to a
+  client without CAP_SYS_ADMIN, in 2026-09-26).
+- strace -f of five arms as root and as user (r1/*_strace2_summary.txt): same open set, same failing-ioctl set, 0 EPERM/EACCES as user.
+- v3_gates.sh: root and user both "pass=9 fail=0 gate10=PASS", births 12/12 USER, refused 0 (r1/v3_gates_*.log; normalised
+  comparison r1/gates_normalized_*.txt: only the cap note differs). The user run needed a stub cargo (F4).
+- RLIMIT_MEMLOCK did not matter: during --ce-client-guest-ram and --guest-ram-pin (2 GiB guest RAM pinned through the nvidia
+  driver) VmLck = 0 kB and VmPin = 0 kB over 24 samples (r1/pinwatch.txt) and both arms PASS. The limit is live: a 64 MiB MAP_LOCKED
+  mmap returns EAGAIN for this user (r0/probe_unpriv.txt).
+
+R2 Windows, as kfrootless. scripts/bench/rootless/win_launch.sh replicates the production QEMU line of windows_broker.sh (production
+flag list, 8 vCPU, 16 GiB, fb 8192 MiB, BAR1 8 GiB, hv_* CPU) and starts the display broker as the same uid with --backend test (no
+compositor needed). Image: overlay of win11-full-b/windows11.qcow2 in the user's home; Heaven was installed once through the kfagent
+channel (the guest sees no CD-ROM in this image, so the installer was served over the slirp loopback) into a staged overlay u0;
+every run uses a fresh overlay backed by u0. Runs alternate user, root, user, root:
+
+ run  uid   CapEff  Heaven D3D11 FPS   min     max     score
+ u1   1002   0       94.05              17.61   212.41  2369.20
+ r1   0      full    92.90              20.81   173.93  2340.26
+ u2   1002   0       91.05              20.11   177.00  2293.58
+ r2   0      full    93.27              21.11   179.23  2349.37
+ mean: user 92.55, root 93.09 (-0.6 %); spread over the four runs 3.3 %.
+
+All four ran the full in-app benchmark (260.6 s of benchmark time, about 288 s wall). 76 channel births per run, all USER; the REFUSED
+line sets of u1/r1 and u2/r2 are identical except the cap note (r2/*/norm_*.txt). The expected ~100 fps was not reproduced (about 93 for
+both uids); it is the same binary and flags for both, so the root-vs-user comparison stands, and the cause (revision, test-backend
+broker, cold first launch per fresh overlay) was not investigated. The broker received 17 246 attach/commit frames in u1; the user
+QEMU opened /dev/udmabuf and sent LINEAR dma-bufs ("kf3: broker: /dev/udmabuf opened"), which works with group kvm only. The guest
+sees the RTX 4070, driver 580.88, 8192 MiB.
+Display broker / desktop session, unprivileged: not needed for the test backend. For a real window the broker must run in the desktop
+session: /run/user/1000 is 0700 and /tmp/.X11-unix/X0 is srwxrwxr-x ubuntu:ubuntu; as kfrootless connect() to the Wayland socket and to
+both X sockets returns EACCES (MEASURED). The natural unprivileged deployment is the desktop user itself running QEMU and broker
+(the peer policy admits QEMU's effective uid, V3_DISPLAY.md 8.5, so same-uid needs no extra property); a different uid needs a
+desktop-side grant (an ACL on the runtime dir), a user action, not a root install. A real Wayland window as the desktop user was NOT
+run (it would put a window on the owner's screen).
+
+3. FOOTPRINT (R3)  r3/r3_after_runs.txt, after 60 fast-suite boots, 9 gates, 4 Heaven runs and 2 more Windows boots
+No process of uid 1002 and no qemu or broker left. No file owned by uid 1002 outside /home/kfrootless (find / -xdev -uid 1002 plus
+/tmp /run /dev/shm /var/tmp /dev explicitly). No unix or TCP listener of the user. No cgroup named for the user or product (the
+processes ran in the launching session's scope; a PAM login would make a user-1002.slice that logind creates and removes: INFERRED).
+HugePages_Total 0, Hugetlb 0 kB. lsmod unchanged. udev rules, modprobe.d, security/limits, sysctl.d, systemd units: no change since
+the start. Device node modes and the /dev/kvm ACL unchanged; sysctl sample unchanged. nvidia-smi 10 MiB, P8, no compute app; Xid
+count 84 before and after (pre-dating the audit); gnome-shell and gdm3 pids unchanged. System-dir changes since 19:26 are the
+useradd itself (/etc/passwd group shadow gshadow subuid subgid, reverted by userdel) and unrelated services (cups, smartmontools,
+NetworkManager, docker). User-home footprint besides run data: ~/.nv/ComputeCache (980 KB; CUDA_CACHE_PATH redirects it).
+The "before" side is r0/r0_recon_before.txt (modules, mounts, sysctls, devices, nvidia-smi); it did not include a file listing, so
+the "no stray file" result rests on ownership (uid 1002) and mtime (since 19:26) searches, not on a before/after file diff.
+
+4. FINDINGS: PRIVILEGE DEPENDENCIES AND DEFECTS
+id  finding                                                                                  severity  fix (non-privileged)                         effort
+F1  run_fast_guest.sh does "exec 9>/tmp/kayfabe-fastguest.lock"; the first (root) run         low       default KF_LOCK to                           S
+    created it 0644 root, so another uid gets "Permission denied" and the script aborts       (harness) ${XDG_RUNTIME_DIR:-/tmp}/kayfabe-$UID-...;
+    ("flock: 9: Bad file descriptor"). Even mode 0666 would fail under fs.protected_regular=2           keep a shared lock only where cross-uid
+    (sticky /tmp). Evidence: r1/f1_default_lock_eacces.txt. Work-around used: outer                      serialization is wanted, opened read-only
+    "flock -o /tmp/kayfabe-fastguest.lock" plus KF_LOCK=<private file>.                                  for flock
+F2  Not self-contained: the QEMU needs ../share/qemu (bios-256k.bin, vgabios, kvmvapic,       medium    install layout bin/ + share/qemu/ + broker;   S
+    linuxboot_dma, efi roms) and kf3-bins/<rev>/ holds dangling symlinks into                 for "one  cp -L at build_kf3.sh install
+    /var/lib/kf-windows-20261005/qemu-build-kf3 ("could not load PC BIOS 'bios-256k.bin'"     folder"
+    until the data dir was copied; first two launches of this audit).
+F3  libcuda writes $HOME/.nv/ComputeCache and probes /dev/shm/cuda_injection_path_shm and     info      document; CUDA_CACHE_PATH / CUDA_CACHE_DISABLE S
+    /tmp/nvidia-mps/control (all ENOENT).                                                               inside the install folder if literal
+F4  v3_gates.sh runs cargo build under pipefail: with no toolchain in PATH it prints          low (dev) SKIP_BUILD=1; git -c safe.directory=*;        S
+    BUILD=FAIL and exits; git fails in a worktree whose gitdir is under /root, so the                    take the revision from KAYFABE_REV.txt
+    user run's log has "HEAD=" empty (a bench claim without its revision).
+F5  Asset modes: Linux guest vmlinuz 0600 root, /var/lib/vast-windows-test-media 0700,        low       ship guest assets readable, or in the         S
+    OVMF_VARS.fd 0600. A user cannot read them until they are copied.                        (deploy)  user's tree
+F6  For a user outside group kvm QEMU says "Could not access KVM kernel module: No such file  low (UX) pre-flight in the launcher naming the node and S
+    or directory" although open(/dev/kvm) returns EACCES (r1/negctl_nokvmgroup_qemu.log).               the group; why errno is stale not investigated
+F7  RLIMIT_NOFILE: the VMM raises soft to hard (1024 -> 524288). Heaviest tested process held  info      document the minimum                          S
+    about 170 fds, so it fits under 1024; a small hard limit would constrain the ioeventfd lanes (INFERRED beyond this host).
+No finding needs root at run time. Needing root only if the admin's defaults differ from Ubuntu 26.04 + stock NVIDIA: group
+membership for /dev/kvm (one time, or the logind ACL), /dev/nvidia* modes, /dev/dri/render* for the optional GPU-copy rung.
+
+5. NOT TESTED
+Fat-guest lanes (cuda_ladder.sh, app matrix, llm_parity.sh, gfx_suite.sh, video_lane.sh); the Linux broker_lane.sh / interactive.sh
+with a real compositor window and the GPU-copy rung (needs /dev/dri/renderD*: EACCES for a plain user here); a desktop composited on
+the NVIDIA GPU; an IOMMU-off host; another distro or a hardened NVIDIA node policy; a host with a patched NVIDIA tier (H1..H7 of
+V3_HOST_PATCH_LIST.md); building the product as a non-root user; a PAM/systemd login session for the user (su -l gives nofile
+1024/524288, memlock 8192 KiB, the same limits as measured); more than one GPU; long soak. The Windows runs used the broker test
+backend, not a window, and no PresentMon.
+
+6. HYPOTHESES VS FALSIFIERS (PREREG.md)
+H1 devices: confirmed (kvm, nvidiactl, nvidia0, nvidia-uvm; udmabuf only with a broker; no dri, vfio, uffd, pagemap). H2 unprivileged
+RM: confirmed for the lanes run (no refusal differs from root, no INSUFFICIENT_PERMISSIONS). H3 memlock: confirmed. H4
+udmabuf/hugetlb/uffd: confirmed. H5 smallest lane with unchanged scripts: PARTLY FALSIFIED (lock file needed a private KF_LOCK, F1;
+install needed the data dir, F2). H6 gates identical: confirmed after a stub cargo (F4). H7 CapEff 0: confirmed (30 fast-suite QEMUs, the strace/pinwatch/sample boots, and 6 Windows QEMUs; every one read 0). H8 fast suite 30/30: confirmed. H9 Windows within 5 %: confirmed (-0.6 %, spread 3.3 %); no desktop needed with the test
+backend. H10 footprint: confirmed except ~/.nv and the shared harness lock.
+
+7. REPRODUCTION AND CLEAN-UP
+Scripts in scripts/bench/rootless/ (paths are the audit host's /data/claude-rootless): as_user.sh, u_fast.sh, u_suite.sh, r_suite.sh,
+cmp_suites.py, watch_caps.sh, pinwatch.sh, qemu-strace + strace_sum.py, win_launch.sh, win_session.sh, win_heaven.sh, chain_win.sh,
+win_fdaudit.sh, gpu_liveness.sh, r3_audit.sh, r0_recon.sh, probe_unpriv.py. All GPU/VM jobs ran under
+"flock -o /tmp/kayfabe-fastguest.lock". Raw logs over 1 MB are gzipped on the host at /data/claude-rootless/raw_* (strace of the root
+timer run and of five arms for root and user; per-arm qemu logs of both suites; Windows qemu logs of the four Heaven runs).
+End state: see section 8.
+
+8. END STATE
+After the last run: the install folder /data/claude-rootless/inst was deleted (rm -rf), user kfrootless removed with its home
+(userdel -r; /etc/passwd group shadow gshadow subuid subgid hold no entry; group kvm is empty again, as at the start), the httpd and
+every helper process stopped, the shared lock free, no qemu left. r3/r3_after_cleanup.txt: lsmod identical to the start (nvidia 15114240
+refcount 15, nvidia_uvm 0, kvm 1), nvidia-smi 10 MiB P8 driver bound to nvidia, Xid count 84, gnome-shell pid unchanged, no file or
+directory owned by uid or gid 1002 anywhere on / . Evidence kept on the host: /data/claude-rootless/raw_* and /data/claude-rootless/ev.
+Overlays, the cargo target, the bench copies and the worktree were deleted after the push.

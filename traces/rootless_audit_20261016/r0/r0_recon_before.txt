@@ -1,0 +1,208 @@
+== date 2026-10-16T19:26:27+02:00
+Linux claude 7.0.0-34-generic #34-Ubuntu SMP PREEMPT_DYNAMIC Wed Sep  2 14:29:37 UTC 2026 x86_64 GNU/Linux
+BOOT_IMAGE=/boot/vmlinuz-7.0.0-34-generic root=UUID=77103a77-2d23-40dc-ba47-3a30af21e268 ro quiet splash crashkernel=2G-4G:320M,4G-32G:512M,32G-64G:1024M,64G-128G:2048M,128G-:4096M
+== device modes
+drwxr-xr-x       3 root root        140 Oct 15 22:26 /dev/dri
+drwxr-xr-x       2 root root        120 Oct 15 22:26 /dev/dri/by-path
+crw-rw----+      1 root video  226,   0 Oct 13 21:52 /dev/dri/card0
+crw-rw----+      1 root video  226,   1 Oct 15 22:26 /dev/dri/card1
+crw-rw----+      1 root render 226, 128 Oct 15 22:26 /dev/dri/renderD128
+crw-rw----+      1 root render 226, 129 Oct 13 21:53 /dev/dri/renderD129
+crw-rw-rw-       1 root root    10, 229 Oct  9 19:38 /dev/fuse
+drwxr-xr-x       2 root root          0 Oct  9 19:38 /dev/hugepages
+crw-rw----+      1 root kvm     10, 232 Oct 16 18:20 /dev/kvm
+crw-rw-rw-       1 root root    10, 200 Oct  9 19:38 /dev/net/tun
+drwxr-xr-x       2 root root         80 Oct 11 03:02 /dev/nvidia-caps
+crw-rw-rw-       1 root root   195, 254 Oct  9 19:38 /dev/nvidia-modeset
+crw-rw-rw-       1 root root   507,   0 Oct 11 03:02 /dev/nvidia-uvm
+crw-rw-rw-       1 root root   507,   1 Oct 11 03:02 /dev/nvidia-uvm-tools
+crw-rw-rw-       1 root root   195,   0 Oct  9 19:38 /dev/nvidia0
+crw-rw-rw-       1 root root   195, 255 Oct  9 19:38 /dev/nvidiactl
+drwxrwxrwt       2 root root         60 Oct 15 16:10 /dev/shm
+crw-rw----+      1 root kvm     10, 259 Oct 13 21:52 /dev/udmabuf
+crw-------       1 root root    10, 257 Oct  9 19:38 /dev/userfaultfd
+drwxr-xr-x       2 root root         60 Oct 15 22:26 /dev/vfio
+crw-rw-rw-       1 root root    10, 196 Oct 11 02:34 /dev/vfio/vfio
+crw-rw----       1 root kvm     10, 238 Oct  9 19:38 /dev/vhost-net
+crw-rw----       1 root kvm     10, 241 Oct  9 19:38 /dev/vhost-vsock
+total 0
+cr-------- 1 root root 236, 1 Oct 11 03:02 nvidia-cap1
+cr--r--r-- 1 root root 236, 2 Oct 11 03:02 nvidia-cap2
+kvm:x:991:
+video:x:44:
+render:x:990:
+== udev rules mentioning nvidia/kvm
+/etc/udev/rules.d/70-snap.desktop-security-center.rules
+/etc/udev/rules.d/70-snap.thunderbird.rules
+/etc/udev/rules.d/61-kayfabe-igpu-primary.rules
+/etc/udev/rules.d/70-snap.prompting-client.rules
+/etc/udev/rules.d/70-snap.firefox.rules
+/etc/udev/rules.d/70-snap.snapd-desktop-integration.rules
+/etc/udev/rules.d/70-snap.firmware-updater.rules
+/etc/udev/rules.d/70-snap.snap-store.rules
+/usr/lib/udev/rules.d/71-nvidia.rules
+/usr/lib/udev/rules.d/50-udev-default.rules
+/usr/lib/udev/rules.d/30-discrete-gpu.rules
+/usr/lib/udev/rules.d/70-uaccess.rules
+/usr/lib/udev/rules.d/71-u-d-c-gpu-detection.rules
+/lib/udev/rules.d/71-nvidia.rules
+/lib/udev/rules.d/50-udev-default.rules
+/lib/udev/rules.d/30-discrete-gpu.rules
+/lib/udev/rules.d/70-uaccess.rules
+/lib/udev/rules.d/71-u-d-c-gpu-detection.rules
+== modprobe nvidia options
+options nvidia_drm modeset=1
+
+options nvidia NVreg_PreserveVideoMemoryAllocations=1
+options nvidia NVreg_TemporaryFilePath=/var
+ModifyDeviceFiles: 1
+DeviceFileUID: 0
+DeviceFileGID: 0
+DeviceFileMode: 438
+PreserveVideoMemoryAllocations: 1
+DynamicPowerManagement: 3
+DynamicPowerManagementVideoMemoryThreshold: 200
+OpenRmEnableUnsupportedGpus: 1
+RegistryDwords: ""
+RegistryDwordsPerDevice: ""
+TemporaryFilePath: "/var"
+== memlock / limits
+max locked memory           (kbytes, -l) 8192
+open files                          (-n) 1024
+max user processes                  (-u) 106358
+virtual memory              (kbytes, -v) unlimited
+10-coredump-debian.conf
+10-gamemode.conf
+25-pw-rlimits.conf
+*               soft    core            0
+root            soft    core            0
+*               hard    core            infinity
+root            hard    core            infinity
+@gamemode - nice -10
+@pipewire   - rtprio  95
+@pipewire   - nice    -19
+@pipewire   - memlock 4194304
+DefaultLimitNOFILE=524288
+DefaultLimitMEMLOCK=8388608
+DefaultTasksMax=31907
+70196
+max
+== sysctls
+vm.unprivileged_userfaultfd=0
+kernel.unprivileged_userns_clone=1
+kernel.apparmor_restrict_unprivileged_userns=1
+user.max_user_namespaces=106358
+kernel.io_uring_disabled=0
+kernel.perf_event_paranoid=4
+kernel.yama.ptrace_scope=1
+vm.nr_hugepages=0
+vm.overcommit_memory=0
+vm.max_map_count=1048576
+kernel.unprivileged_bpf_disabled=2
+fs.file-max=9223372036854775807
+kernel.kptr_restrict=1
+vm.mmap_min_addr=65536
+== hugetlb / memfd
+AnonHugePages:         0 kB
+ShmemHugePages:        0 kB
+FileHugePages:      8192 kB
+HugePages_Total:       0
+HugePages_Free:        0
+HugePages_Rsvd:        0
+HugePages_Surp:        0
+Hugepagesize:       2048 kB
+Hugetlb:               0 kB
+tmpfs on /run type tmpfs (rw,nosuid,nodev,size=6291408k,nr_inodes=819200,mode=755,inode64)
+tmpfs on /dev/shm type tmpfs (rw,nosuid,nodev,inode64,usrquota)
+cgroup2 on /sys/fs/cgroup type cgroup2 (rw,nosuid,nodev,noexec,relatime,nsdelegate,memory_recursiveprot,memory_hugetlb_accounting)
+hugetlbfs on /dev/hugepages type hugetlbfs (rw,nosuid,nodev,relatime,pagesize=2M)
+tmpfs on /tmp type tmpfs (rw,nosuid,nodev,nr_inodes=1048576,inode64,usrquota)
+Filesystem      Size  Used Avail Use% Mounted on
+tmpfs            15G  4.0K   15G   1% /dev/shm
+tmpfs            15G  1.5G   14G  10% /tmp
+tmpfs           6.0G  4.3M  6.0G   1% /run
+tmpfs           3.0G   88K  3.0G   1% /run/user/1000
+always [madvise] never
+always within_size advise [never] deny force
+== kvm / iommu
+1
+cat: /sys/module/kvm_intel/parameters/nested: No such file or directory
+nvidia_drm            147456  2
+nvidia_uvm           2088960  0
+nvidia_modeset       1789952  2 nvidia_drm
+nvidia              15114240  15 nvidia_uvm,nvidia_modeset
+vfio_pci               20480  0
+vfio_pci_core         102400  1 vfio_pci
+vfio_iommu_type1       49152  0
+vfio                   77824  3 vfio_pci_core,vfio_iommu_type1,vfio_pci
+iommufd               135168  1 vfio
+kvm_amd               262144  0
+kvm                  1527808  1 kvm_amd
+irqbypass              16384  2 vfio_pci_core,kvm
+drm_ttm_helper         20480  2 amdgpu,nvidia_drm
+video                  77824  2 amdgpu,nvidia_modeset
+31
+01:00.0 VGA compatible controller [0300]: NVIDIA Corporation AD104 [GeForce RTX 4070] [10de:2786] (rev a1)
+	Subsystem: Gigabyte Technology Co., Ltd Device [1458:40ee]
+	Kernel driver in use: nvidia
+	Kernel modules: nvidiafb, nouveau, nvidia_drm, nvidia
+== lsm
+lockdown,capability,landlock,yama,apparmor,ima,evmapparmor module is loaded.
+245 profiles are loaded.
+165 profiles are in enforce mode.
+/data/claude-rootless/r0.sh: line 28: sestatus: command not found
+== display/session
+SESSION  UID USER   SEAT  LEADER  CLASS         TTY  IDLE SINCE
+ 131372 1000 ubuntu seat0 3505687 user          tty2 no   -
+ 131373 1000 ubuntu -     3506189 manager       -    no   -
+ 145712    0 root   -     95666   user          -    no   -
+ 147322    0 root   -     285480  user          -    no   -
+ 148934    0 root   -     508302  user          -    no   -
+ 149946    0 root   -     780400  user          -    no   -
+ 161037    0 root   -     2287331 user          -    no   -
+  16371    0 root   -     1580177 manager-early -    no   -
+  24739    0 root   -     2057537 user          -    no   -
+  25425    0 root   -     2100198 user          -    no   -
+  25673    0 root   -     2116733 user          -    no   -
+  28916    0 root   -     2320892 user          -    no   -
+  29157    0 root   -     2335895 user          -    no   -
+  29415    0 root   -     2346722 user          -    no   -
+  33018    0 root   -     2676639 user          -    no   -
+  33222    0 root   -     2689039 user          -    no   -
+  33463    0 root   -     2723221 user          -    no   -
+  33701    0 root   -     2772501 user          -    no   -
+
+18 sessions listed.
+   2438 root     gdm3
+  92604 ubuntu   Xwayland
+3505687 root     gdm-session-wor
+3506443 ubuntu   gdm-wayland-ses
+3506731 ubuntu   gnome-shell
+3506848 ubuntu   gnome-shell-cal
+total 0
+drwxr-xr-x  4 root   root     80 Oct 13 21:53 .
+drwxr-xr-x 47 root   root   1240 Oct 16 19:26 ..
+drwx------ 15 root   root    380 Oct 15 15:47 0
+drwx------ 21 ubuntu ubuntu  680 Oct 16 00:41 1000
+X0
+X1
+== nvidia-smi
+name, driver_version, pci.bus_id, memory.used [MiB], display_active, persistence_mode, compute_mode
+NVIDIA GeForce RTX 4070, 595.91.07, 00000000:01:00.0, 10 MiB, Enabled, Disabled, Default
+pid, process_name
+== caps of root shell
+CapInh:	0000000000000000
+CapPrm:	000001ffffffffff
+CapEff:	000001ffffffffff
+CapBnd:	000001ffffffffff
+CapAmb:	0000000000000000
+== existing lock/leftovers
+ls: cannot access '/run/kayfabe*': No such file or directory
+-rw-r--r-- 1 root root         0 Oct 13 19:29 /tmp/kayfabe-fastguest.lock
+-rw-r--r-- 1 root root 116354633 Oct 13 11:41 /tmp/kayfabe-int-master.bundle
+
+/dev/shm:
+total 0
+drwxrwxrwt  2 root   root     60 Oct 15 16:10 .
+drwxr-xr-x 21 root   root   5360 Oct 15 22:26 ..
+-rw-r-----  1 ubuntu ubuntu 4096 Oct 13 21:52 lttng-ust-wait-8-1000

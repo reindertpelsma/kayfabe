@@ -1,0 +1,62 @@
+pid=2290782 date=2026-10-16T19:30:44+02:00
+    PID USER       UID   GID     ELAPSED CMD
+2290782 kfrootl+  1002  1002       00:03 /data/claude-rootless/inst/bin/qemu-system-x86_64 -name kf-fastguest -object memory-backend-memfd,id=ram0,size=2048M,share=on -machine q35,accel=kvm,memory-bac
+Name:	qemu-system-x86
+Uid:	1002	1002	1002	1002
+Gid:	1002	1002	1002	1002
+Groups:	991 
+VmLck:	       0 kB
+VmPin:	       0 kB
+VmRSS:	 3556988 kB
+Threads:	17
+CapInh:	0000000000000000
+CapPrm:	0000000000000000
+CapEff:	0000000000000000
+CapBnd:	000001ffffffffff
+CapAmb:	0000000000000000
+NoNewPrivs:	0
+Seccomp:	0
+Seccomp_filters:	0
+--- limits
+Max processes             106358               106358               processes 
+Max open files            524288               524288               files     
+Max locked memory         8388608              8388608              bytes     
+--- fds
+      1  
+    107 -> anon_inode:[eventfd]
+      6 -> anon_inode:[eventpoll]
+      1 -> anon_inode:kvm-vcpu:0
+      1 -> anon_inode:kvm-vcpu:1
+      1 -> anon_inode:kvm-vcpu:2
+      1 -> anon_inode:kvm-vcpu-stats:0
+      1 -> anon_inode:kvm-vcpu-stats:1
+      1 -> anon_inode:kvm-vcpu-stats:2
+      1 -> anon_inode:kvm-vm
+      1 -> anon_inode:[signalfd]
+      1 -> /dev
+      1 -> /dev/kvm 
+     35 -> /dev/nvidia0
+      3 -> /dev/nvidiactl
+      2 -> /dev/nvidia-uvm
+      2 -> /home/kfrootless/bench/fast_u2_qemu.log
+      1 -> /home/kfrootless/bench/fast_u2_serial.log
+      1 -> /home/kfrootless/bench/fast_u2_ttyS0.log
+      1 -> /home/kfrootless/run.lock
+      3 -> /memfd:displaysurface
+      1 -> /memfd:kf3-scratch-bar1
+      1 -> /memfd:kf3-scratch-bar2
+      1 -> /memfd:kf3-scratch-pramin
+      1 -> /memfd:memory-backend-memfd
+      2 -> pipe:[40824634]
+      2 -> pipe:[40824635]
+      1 -> pipe:[40839236]
+      2 -> pipe:[40839308]
+      2 -> pipe:[40839309]
+      1 -> socket:[40824631] 
+--- all threads Cap
+17 CapEff: 0000000000000000
+--- children
+--- cgroup
+0::/user.slice/user-0.slice/session-161075.scope
+--- ns
+   cgroup -> cgroup:[4026531835] ipc -> ipc:[4026531839] mnt -> mnt:[4026531832] net -> net:[4026531833] pid -> pid:[4026531836] pid_for_children -> pid:[4026531836] time -> time:[4026531834] time_for_children -> time:[4026531834] user -> user:[4026531837] uts -> uts:[4026531838] 

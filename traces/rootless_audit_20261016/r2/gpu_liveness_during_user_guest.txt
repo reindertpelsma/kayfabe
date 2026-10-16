@@ -1,0 +1,46 @@
+== 2026-10-16T20:05:55+02:00
+-- nvidia-smi
+NVIDIA GeForce RTX 4070, 595.91.07, 9012 MiB, 83 %, Enabled, P2
+2315332, /data/claude-rootless/inst/bin/qemu-system-x86_64, 8858 MiB
+-- driver bound
+../../../../bus/pci/drivers/nvidia
+-- lsmod (nvidia/vfio)
+nvidia_drm 147456 2
+nvidia_uvm 2088960 8
+nvidia_modeset 1789952 2
+nvidia 15114240 481
+vfio_pci 20480 0
+vfio_pci_core 102400 1
+vfio_iommu_type1 49152 0
+vfio 77824 3
+kvm_amd 262144 10
+kvm 1527808 9
+-- gnome-shell
+3506731 /usr/bin/gnome-shell --mode=ubuntu
+3506848 /usr/libexec/gnome-shell-calendar-server
+    PID ELAPSED %CPU
+3506731  252776  0.9
+-- vulkaninfo as desktop user (ubuntu)
+GPU0:
+	driverVersion      = 595.91.7.0
+	deviceType         = PHYSICAL_DEVICE_TYPE_DISCRETE_GPU
+	deviceName         = NVIDIA GeForce RTX 4070
+GPU1:
+	driverVersion      = 26.0.8
+	deviceType         = PHYSICAL_DEVICE_TYPE_INTEGRATED_GPU
+	deviceName         = AMD Ryzen 9 7900 12-Core Processor (RADV RAPHAEL_MENDOCINO)
+GPU2:
+	driverVersion      = 26.0.8
+	deviceType         = PHYSICAL_DEVICE_TYPE_CPU
+	deviceName         = llvmpipe (LLVM 21.1.8, 256 bits)
+-- eglinfo (nvidia device) as ubuntu
+EGL vendor string: NVIDIA
+OpenGL core profile renderer: NVIDIA GeForce RTX 4070/PCIe/SSE2
+OpenGL compatibility profile renderer: NVIDIA GeForce RTX 4070/PCIe/SSE2
+OpenGL ES profile renderer: NVIDIA GeForce RTX 4070/PCIe/SSE2
+EGL vendor string: Mesa Project
+OpenGL core profile renderer: AMD Ryzen 9 7900 12-Core Processor (radeonsi, raphael_mendocino, ACO, DRM 3.64, 7.0.0-34-generic)
+OpenGL compatibility profile renderer: AMD Ryzen 9 7900 12-Core Processor (radeonsi, raphael_mendocino, ACO, DRM 3.64, 7.0.0-34-generic)
+OpenGL ES profile renderer: AMD Ryzen 9 7900 12-Core Processor (radeonsi, raphael_mendocino, ACO, DRM 3.64, 7.0.0-34-generic)
+-- Xid count
+84

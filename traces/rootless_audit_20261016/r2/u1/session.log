@@ -1,0 +1,3 @@
+SESSION_START 2026-10-16T19:50:36+02:00 mode=user run=/home/kfrootless/win/u1
+WIN_STARTED uid=1002 qpid=2311055 run=/home/kfrootless/win/u1 2026-10-16T19:50:39+02:00
+SESSION_EXIT qemu-gone 2026-10-16T19:56:48+02:00

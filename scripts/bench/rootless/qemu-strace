@@ -1,0 +1,4 @@
+#!/bin/bash
+exec strace -f --seccomp-bpf -y -tt -s 48 -o "${STRACE_OUT:?}" \
+  -e trace=openat,open,ioctl,mmap,socket,connect,bind,memfd_create,mlock,mlock2,mlockall,userfaultfd,io_uring_setup,unshare,setns,prctl,capget,capset,execve,ptrace,setrlimit,prlimit64,sched_setscheduler,sched_setaffinity,mbind,set_mempolicy,process_vm_readv,pidfd_open,pidfd_getfd,kcmp,perf_event_open,bpf,mount,setuid,setgid \
+  /data/claude-rootless/inst/bin/qemu-system-x86_64 "$@"

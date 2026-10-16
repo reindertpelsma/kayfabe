@@ -1,0 +1,99 @@
+      1 CHECK a_piece_of_a_batch_unmaps_alone PASS unmapped=N unmap_verbs=N booked=N frees=N
+      1 CHECK bytes_copied_by_engine PASS N copies x N words, N wrong
+      1 CHECK ce_intr_arm_work_completes PASS Submitted { wakes: N, early_wakes: N, seen_at_wake: true, event_us: N, ce_released: true, fence_landed: true }
+      3 CHECK channel_retired_and_released PASS chN: GP_GET=N sem=N (in guest RAM at the SCATTERED page, written by the engine through the batch)
+      4 CHECK copyN_completes_by_event PASS Submitted { wakes: N, early_wakes: N, seen_at_wake: true, event_us: N, ce_released: true, fence_landed: true }
+      2 CHECK copyN_follows_the_remap PASS DATA_C == DATA_A pattern
+      2 CHECK copyN_lands_where_the_guest_mapped_it PASS DATA_B == DATA_A pattern
+      1 CHECK engine_ran_the_guest_ring_unparsed PASS N virtual copies through the mirrored process VAS
+      1 CHECK every_added_page_is_a_one_run_diff PASS N of N
+      1 CHECK every_copy_landed PASS N of N wrong []
+      2 CHECK every_ring_was_inline PASS N of N took another arm
+      1 CHECK fb_to_sysmem_by_engine PASS guest-RAM R_DST == SRC pattern
+      1 CHECK fill_zeroed_by_engine PASS FILL all zero (was NxAB)
+      2 CHECK first_publish_maps_the_guest_ranges PASS N runs mapped (want N coalesced)
+      1 CHECK forwarded_per_token PASS fetched=N submissions=N
+      1 CHECK gp_get_authored_on_completion PASS guest GP_GET=N
+      1 CHECK gr_ran_the_guest_ring_unparsed PASS N INM literal writes through the mirrored process VAS
+      1 CHECK guest_semaphore_written_natively PASS sem=NxNcNbN want=NxNcNbN
+      2 CHECK hardware_advanced_the_guest_gp_get PASS guest USERD GP_GET=N (written by the engine, not by us)
+      1 CHECK hole_remapped_reads PASS page N re-mapped
+      1 CHECK hostile_entry_not_retired PASS guest GP_GET=N
+      1 CHECK hostile_entry_refused_by_name PASS Err(Ring(Rewrite { gp: N, why: PeerOperand }))
+      1 CHECK hostile_rings_produce_no_action PASS N of N
+      1 CHECK kernel_vas_published_as_sysmem PASS N runs (sysmem rows), want N
+      1 CHECK kernel_vas_published PASS N runs
+      1 CHECK no_channel_died PASS 
+      1 CHECK none_arm_work_completes PASS Submitted { wakes: N, early_wakes: N, seen_at_wake: false, event_us: N, ce_released: true, fence_landed: true }
+      2 CHECK no_worker_ever_saw_the_token PASS bits=[] wake_seq=N
+      1 CHECK nsi_completion_seen_at_wake PASS N/N fences read AT a wake; early_wakes=N; us pN=N pN=N max=N
+      2 CHECK old_target_untouched PASS DATA_B still zero
+      1 CHECK phys_copy_by_engine PASS DST == SRC pattern
+      1 CHECK preempted_twin_still_schedulable PASS sem=NxN (want NxN)
+      1 CHECK preempt_of_a_stopped_group PASS Ok(())
+      1 CHECK preempt_verb_unprivileged PASS NVANC PREEMPT(bWait=N) on our own group: Ok(()) (N us)
+      2 CHECK process_vas_mirrored PASS diff_runs=N mapped=N refused=N
+      1 CHECK pump_never_contended PASS N contended serves
+      2 CHECK remap_reconciles PASS mapped=N unmapped=N
+      1 CHECK remnant_left_reads PASS page N after unmapping page N
+      1 CHECK remnant_right_reads PASS page N after unmapping page N
+      1 CHECK reserve_aligned_holds_exactly PASS NVN map one page past an aligned N KiB reservation: Ok(N)
+      1 CHECK reserve_aligned_maps_whole PASS N KiB mapped through the aligned reservation: Ok(N)
+      1 CHECK reserve_small_accepted PASS N/N accepted, small ones [Accepted, Accepted, Accepted, Accepted, Accepted] ⇒ Expected (Expected = ≥ N of N accepted; AllRefused = all N refused with a host-RM refusal status; anything else, a transport error included, FAILS)
+      1 CHECK restarted_twin_runs_again PASS sem=NxN (want NxN)
+      1 CHECK restart_verbs_unprivileged PASS DISABLE_CHANNELS(enable) + GPFIFO_SCHEDULE(true): Ok(()) (N us)
+      2 CHECK rm_adopted_the_guest_userd PASS the poisoned block is zeroed ⇒ it IS the twin's USERD
+      1 CHECK scattered_sysmem_rows_placed_as_one_batch PASS batches=N batched_runs=N map_verbs=N fallbacks=N None
+      1 CHECK split_walked_once_on_a_worker PASS walks=[Some(N)]
+      1 CHECK split_walked_the_named_root PASS walks=[Some(N)] root=NxN
+      1 CHECK stopped_twin_runs_no_new_work PASS work queued + rung after the stop: sem=NxN (want NxN = untouched)
+      1 CHECK stop_verbs_unprivileged PASS DISABLE_CHANNELS(disable) + GPFIFO_SCHEDULE(false) on our own twin: Ok(()) (N us)
+      1 CHECK sysmem_to_fb_by_engine PASS DSTN == guest-RAM R_SRC pattern
+      1 CHECK teardown_is_ranges_and_frees_the_batch PASS unmapped=N ranges=N unmap_verbs=N booked=N frees=N rows_left=N
+      1 CHECK the_diff_does_not_grow_with_the_space PASS gpu pN N us @N rows -> N us @N rows
+      1 CHECK translated_never_forged PASS forged=N poisoned=N (§N: the GPU writes a Translated completion)
+      2 CHECK unchanged_tables_change_nothing PASS diff_runs=N mapped=N unmapped=N
+      1 CHECK va_free_after PASS NVN map at the freed VA: Ok(N)
+      2 CHECK verN_all_pdb_reconciles_every_rooted_space PASS applied=[(VasKey(N), N, N), (VasKey(N), N, N)] second_resolves=Some((false, N))
+      2 CHECK verN_a_rearmed_trigger_is_superseded_not_cleared PASS published=N superseded=N cleared=N
+      2 CHECK verN_completion_arrived_as_an_fd_wake PASS walk wakes=N collected=N
+      4 CHECK verN_copyN_completes_by_event PASS Submitted { wakes: N, early_wakes: N, seen_at_wake: true, event_us: N, ce_released: true, fence_landed: true }
+      2 CHECK verN_copyN_follows_the_remap PASS DATA_C == DATA_A pattern, DATA_B still zero
+      2 CHECK verN_copyN_lands_where_the_guest_mapped_it PASS DATA_B == DATA_A pattern
+      2 CHECK verN_every_host_op_ran_while_the_guest_saw_busy PASS stats=VaStats { walks_submitted: N, walks_reconciled: N, walks_refused: N, spaces_reconciled: N, mapped: N, unmapped: N, batches: N, batched_runs: N, range_unmaps: N, batch_fallbacks: N, remade_unchanged_pages: N, linked_failed: N, host_invalidates: N, cleared: N, superseded: N, already_idle: N, named_missed: N, cleared_over_absent: N, unreconciled: N, refusals: [], submit_ns_max: N, clipped_bytes: N, timing: VaTiming { invals: N, inval_ns: N, inval_ns_max: N, walks: N, walk_ns: N, gpu_us: N, plan_ns: N, apply_ns: N, leaves_last: N, host_calls: N }, splits: N, split_missed: N, held: N, vmm_overlaps: N, deferred_clears: N, usermode_trapped: N, usermode_unmirrored: N, partial: N, no_slot: N, walk_refused_spaces: N, budget_refused_runs: N, splits_unsettled: N, priv_withheld: N, priv_withheld_bytes: N, priv_mirrored: N, sked_placed: N, carve_gpu: N, carve_kernel: N, carve_cpu: N, carve_clipped_bytes: N, sked_held: N }
+      2 CHECK verN_first_invalidate_maps_the_guest_ranges PASS mapped=N (want N coalesced) cleared=N stats=VaStats { walks_submitted: N, walks_reconciled: N, walks_refused: N, spaces_reconciled: N, mapped: N, unmapped: N, batches: N, batched_runs: N, range_unmaps: N, batch_fallbacks: N, remade_unchanged_pages: N, linked_failed: N, host_invalidates: N, cleared: N, superseded: N, already_idle: N, named_missed: N, cleared_over_absent: N, unreconciled: N, refusals: [], submit_ns_max: N, clipped_bytes: N, timing: VaTiming { invals: N, inval_ns: N, inval_ns_max: N, walks: N, walk_ns: N, gpu_us: N, plan_ns: N, apply_ns: N, leaves_last: N, host_calls: N }, splits: N, split_missed: N, held: N, vmm_overlaps: N, deferred_clears: N, usermode_trapped: N, usermode_unmirrored: N, partial: N, no_slot: N, walk_refused_spaces: N, budget_refused_runs: N, splits_unsettled: N, priv_withheld: N, priv_withheld_bytes: N, priv_mirrored: N, sked_placed: N, carve_gpu: N, carve_kernel: N, carve_cpu: N, carve_clipped_bytes: N, sked_held: N }
+      2 CHECK verN_gpu_diff_is_the_model_diff PASS N walks, N runs compared, N mismatching entries, verdicts failed=N held=N permission edits=N
+      1 CHECK verN_growth_gpu_diff_is_the_model_diff PASS N walks, N runs compared, N mismatching entries, verdicts failed=N held=N permission edits=N
+      1 CHECK verN_growth_settled_slots_are_quiet_and_closed PASS quiet=true closed=true
+      1 CHECK verN_growth_slots_actually_grew PASS walk pool N runs, slot pool N runs (N free), max per space N, slots held N, grows N, retries N, ceilings N, largest slot N, largest walk N
+      1 CHECK verN_keyall_gpu_diff_is_the_model_diff PASS N walks, N runs compared, N mismatching entries, verdicts failed=N held=N permission edits=N
+      1 CHECK verN_keyall_settled_slots_are_quiet_and_closed PASS quiet=true closed=true
+      2 CHECK verN_level_move_known_positive_empty_level_unmaps_all PASS N UNMAP of N placements (N runs)
+      2 CHECK verN_level_move_to_fbN_is_quiet PASS first walk N MAP runs (model N, all MAP true); settled quiet true; after the move N runs (N UNMAP), refusals=N mask=NxN
+      2 CHECK verN_named_missed_is_counted_and_cleared_without_a_walk PASS named_missed N->N walks N->N
+      2 CHECK verN_nothing_refused PASS refusals=[]
+      2 CHECK verN_remap_reconciles_before_the_clear PASS mapped=N unmapped=N cleared=N
+      2 CHECK verN_settled_slots_are_quiet_and_closed PASS quiet=true closed=true
+      2 CHECK verN_the_walk_never_blocked_its_submitter PASS cuCtxSynchronize calls=N; walks still on the GPU when submit returned: N/N (submit_ns=[N, N, N, N, N] gpu_us=[N, N, N, N, N])
+      2 CHECK verN_trigger_trap_is_under_the_ceiling PASS worst trigger trap N us
+      2 CHECK verN_vcpu_saw_the_clear PASS spin N us, published N
+      1 CHECK virtual_copy_after_split PASS DSTN == NEW pattern (read through VA_NEW)
+      1 CHECK whole_read_before PASS page N via the reservation
+      1 CHECK windows_distinct PASS fb=NxNfffffN ram=NxNffffecN
+     10 GATEN_VERDICT=PASS
+      2 kf-host: channel birth h=NxcafeNa engine=NxN reply_flags=NxN PRIVILEGED_CHANNEL=N privilege=USER cap_sys_admin=not-held
+      3 kf-host: channel birth h=NxcafeNb engine=NxN reply_flags=NxN PRIVILEGED_CHANNEL=N privilege=USER cap_sys_admin=not-held
+      1 kf-host: channel birth h=NxcafeNc engine=NxN reply_flags=NxN PRIVILEGED_CHANNEL=N privilege=USER cap_sys_admin=not-held
+      1 kf-host: channel birth h=NxcafeNd engine=NxN reply_flags=NxN PRIVILEGED_CHANNEL=N privilege=USER cap_sys_admin=not-held
+      1 kf-host: channel birth h=NxcafeNe engine=NxN reply_flags=NxN PRIVILEGED_CHANNEL=N privilege=USER cap_sys_admin=not-held
+      3 kf-host: channel birth h=NxcafeN engine=NxN reply_flags=NxN PRIVILEGED_CHANNEL=N privilege=USER cap_sys_admin=not-held
+      1 kf-host: channel birth h=NxcafeNf engine=NxN reply_flags=NxN PRIVILEGED_CHANNEL=N privilege=USER cap_sys_admin=not-held
+      1 kfN: ring REFUSED segment gp N va NxN (N words) PeerOperand; first words: N N NcN N
+      1 MEASURE publish_at_split diff_runs=N mapped=N unmapped=N refused=N us=N
+      1 MEASURE publish_boot diff_runs=N mapped=N unmapped=N refused=N us=N
+      2 MEASURE publish_first diff_runs=N mapped=N unmapped=N refused=N invalidated=true gpu_us=N us=N
+      2 MEASURE publish_remap diff_runs=N mapped=N unmapped=N refused=N invalidated=true gpu_us=N us=N
+      2 MEASURE publish_unchanged diff_runs=N mapped=N unmapped=N refused=N invalidated=false gpu_us=N us=N
+      1 MEASURE reserve_flat_fb_alias NxN+NxNefcN (N.N GiB): refused NoMemory — the per-N-MiB-leaf fallback applies
+      1 MICRO_RESERVE_VERDICT arm=reserve PASS
+      1 VN_GATES_BIRTHS births=N user=N refused=N ok=N

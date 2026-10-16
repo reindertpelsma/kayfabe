@@ -1,0 +1,5 @@
+== kf3 binary: /data/claude-rootless/inst/bin/qemu-system-x86_64 (rev unknown)
+/data/claude-rootless/wt/scripts/fastguest/run_fast_guest.sh: line 65: /tmp/kayfabe-fastguest.lock: Permission denied
+== serializing on /tmp/kayfabe-fastguest.lock (GPU runs are strictly serial)
+flock: 9: Bad file descriptor
+run_fast_guest: could not take the run lock

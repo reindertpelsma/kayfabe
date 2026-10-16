@@ -1,0 +1,28 @@
+Fri Oct 16 07:28:42 PM CEST 2026
+== kf3 binary: /data/claude-rootless/bin/qemu-strace (rev 0a746117)
+== serializing on /tmp/kayfabe-fastguest.lock (GPU runs are strictly serial)
+== arms: --timer,--probe-launch-dma   budget: 170s   self-deadline: 166000ms   trace: ring
+== qemu:  /data/claude-rootless/bin/qemu-strace  (built 2026-10-16 19:28:42)
+== device(s): -device kf3-gpu,fb-mb=8192,bar1-size=134217728,bar2-size=33554432,id=kf0
+== console: hvc (console=ttyS0 console=hvc0)
+=== FAST GUEST r0root — 5s of a 170s budget, qemu rc=0 ===
+    FASTGUEST: up 2.02s
+    FASTGUEST: switch_root prepared in 0.3s
+    FASTGUEST: up 2.38s
+    FASTGUEST: root is a real mount (switch_root done) — the isolate sandbox can pivot_root
+    FASTGUEST: insmod nvidia.ko ok
+    FASTGUEST: insmod nvidia-uvm.ko ok
+    FASTGUEST: insmod wmi.ko ok
+    FASTGUEST: insmod video.ko ok
+    FASTGUEST: insmod nvidia-modeset.ko ok
+    FASTGUEST: nodes /dev/nvidia-caps/nvidia-cap1 /dev/nvidia-uvm /dev/nvidia-uvm-tools /dev/nvidia0 /dev/nvidiactl  /dev/nvidia-caps: nvidia-cap1 
+    FASTGUEST: ready 2.55s
+    FASTGUEST: arms --timer --probe-launch-dma  deadline 165s (budget 170s, 2s already spent booting)
+    FASTGUEST: client rc=0 at 3.40s
+    FASTGUEST: DONE
+== hardware: 0 doorbell(s) forwarded across 0 guest token(s); 0 stranded, 0 declared by the operand gate
+FAST_VERDICT=PASS (5s)
+
+real	0m6.812s
+user	0m3.621s
+sys	0m3.808s

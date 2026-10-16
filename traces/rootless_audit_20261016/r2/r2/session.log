@@ -1,0 +1,3 @@
+SESSION_START 2026-10-16T20:09:14+02:00 mode=root run=/data/claude-rootless/win-root/r2
+WIN_STARTED uid=0 qpid=2317557 run=/data/claude-rootless/win-root/r2 2026-10-16T20:09:17+02:00
+SESSION_EXIT qemu-gone 2026-10-16T20:15:23+02:00
