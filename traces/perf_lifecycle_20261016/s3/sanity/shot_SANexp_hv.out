@@ -1,0 +1,7 @@
+pushed
+KFPLAUNCH ok mode=interactive user=kayfabe-windows\kfadmin
+START 15:00:34.621 user=kfadmin session=1
+SHOT screen=1536x864 mean_luma=153 std_luma=85.7 distinct_4bit_colours=231
+SHOT_DONE
+END 15:00:34.931
+

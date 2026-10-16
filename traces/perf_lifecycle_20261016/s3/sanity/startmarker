@@ -1,0 +1,3 @@
+HV_START sanexp_d3d11 direct3d11 2026-10-16T16:57:16+02:00 xid_before=81
+HV_EXIT sanexp_d3d11 rc=0 2026-10-16T17:02:28+02:00 xid_after=81
+events: gpu_driver=0 other=2 (153/4101 in last 9 min), host xid delta 0
