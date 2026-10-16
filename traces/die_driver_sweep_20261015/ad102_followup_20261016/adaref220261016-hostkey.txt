@@ -1,0 +1,2 @@
+Cloud-init regenerated the initial host key at16:04:18UTC. Final ED25519 key matched authenticated own-instance provider serial console and live SSH fingerprint.
+SHA256:sPaK01jfte8XPp+eWGSMZd/OTB+G3qOVDcqv+MN1UD0

@@ -112,3 +112,16 @@ deadline. No usable SSH, actual die identification, native suite or guest suite
 was obtained. Retirement and filtered startup text are saved under
 provider_startup_failures_20261016/. API absence was checked before cancelling
 the exact owned timer. Machine146370 is excluded from subsequent searches.
+
+## Verified AD102 missing lanes and passing display reference, 2026-10-16 16:03UTC
+
+| Instance | GPU | USD/hour incl150GB | StartUTC | StopUTC | Purpose | Ceiling |
+|---|---|---:|---|---|---|---|
+|56267214|RTX4090 / AD102, unprivileged RM verified|0.61|2026-10-16T16:03:21.897190+00:00|ACTIVE; own timer2396076 at18:58:22/hard19:03:21|A1Linux595broker/A2Windows580hold/passing Ada display trace for B1|max3h1.83USD; campaign ceiling7.20USD+transfers|
+
+MEASURED: verified offer48798435/machine43132, single GPU. Actual146GiB root,
+KVM,30logical CPUs,24389MiB RAM. Cloud-init regenerated its initial SSH host key;
+the final key was verified against this owned instance's provider console before
+pinning. Fresh UID65534/CapEff0 RM probe reports arch0x190/impl2 AD102 and stock
+595.91.07. Native gates9/9 plus gate10 PASS,12/12USER births at16:10:50UTC.
+Private binary2feb22a9 built16:11:25UTC. No guest pass is claimed yet.
