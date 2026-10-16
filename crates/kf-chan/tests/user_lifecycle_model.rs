@@ -77,6 +77,8 @@ pub const V_TRANSITION: u32 = 1 << 9;
 pub const V_DEADLOCK: u32 = 1 << 10;
 pub const V_LOST: u32 = 1 << 11;
 pub const V_ENTRY_REFUSED: u32 = 1 << 12;
+/// REVIEW: a host marker published while the HARDWARE's view of the private stream has a packet open.
+pub const V_MARKER_IN_PACKET: u32 = 1 << 13;
 
 pub fn viol_names(v: u32) -> Vec<&'static str> {
     let mut out = Vec::new();
@@ -114,6 +116,7 @@ pub fn viol_names(v: u32) -> Vec<&'static str> {
             "I6 (a terminal state with covered work unrelayed and no timer)",
         ),
         (V_LOST, "I2 (covered entries not all relayed)"),
+        (V_MARKER_IN_PACKET, "MARKER_IN_PACKET (a host marker lands inside an open guest packet)"),
         (
             V_ENTRY_REFUSED,
             "ENTRY_REFUSED (inspect_entry refused the loaded value)",
@@ -212,6 +215,7 @@ struct ModelEnv {
     pb_reads: u32,
     priv_entries: u32,
     src_entries: u32,
+    hw_scan: Scan,
 }
 
 impl ModelEnv {
@@ -266,6 +270,40 @@ impl Env for ModelEnv {
         words
     }
     fn publish(&mut self, p: Pub) {
+        // REVIEW: the hardware parses the private stream as ONE packet stream across segments.
+        let hw_words = |env: &Self, raw: u64| -> Vec<u32> {
+            entry_id(raw)
+                .and_then(|id| env.ges.get(usize::from(id)).copied().flatten())
+                .map(|g| g.words())
+                .unwrap_or_default()
+        };
+        match p {
+            Pub::Guest { stored, .. } | Pub::Staged { tested: stored } => {
+                let words = hw_words(self, stored);
+                let mut at = 0usize;
+                loop {
+                    match self.hw_scan.segment(words.get(at..).unwrap_or(&[]), sw) {
+                        Ok(Some(t)) => {
+                            at += t.end;
+                            if at >= words.len() {
+                                break;
+                            }
+                        }
+                        Ok(None) => break,
+                        Err(_) => {
+                            self.hw_scan = Scan::default();
+                            break;
+                        }
+                    }
+                }
+            }
+            Pub::Marker(_) => {
+                if self.hw_scan.carried().is_some() {
+                    self.viol |= V_MARKER_IN_PACKET;
+                }
+            }
+            Pub::Barrier => {}
+        }
         if let Pub::Guest {
             tested,
             stored,
@@ -387,6 +425,7 @@ impl Clone for World {
                 pb_reads: self.env.pb_reads,
                 priv_entries: self.env.priv_entries,
                 src_entries: self.env.src_entries,
+                hw_scan: self.env.hw_scan.clone(),
             },
         }
     }
@@ -452,6 +491,7 @@ impl World {
                 pb_reads: 0,
                 priv_entries: cfg.priv_entries,
                 src_entries: cfg.src_entries,
+                hw_scan: Scan::default(),
             },
         }
     }
@@ -759,6 +799,7 @@ fn empty_env() -> ModelEnv {
         pb_reads: 0,
         priv_entries: 4,
         src_entries: 4,
+        hw_scan: Scan::default(),
     }
 }
 
@@ -2008,4 +2049,164 @@ fn d_the_recorded_edge_ring_shape_behind_unreached_sync_waits_is_not_read_early_
     cfg.max_states = 8_000_000;
     let r = assert_clean(&cfg, "d-edge-shape");
     assert_eq!(r.modes, HashSet::from([Mode::Window]));
+}
+
+
+// ---- PHASE 1b (independent review, 2026-10-16): the hardware's view of the private stream
+//
+// `ModelEnv::hw_scan` re-parses everything the relay publishes as ONE packet stream across entries (what the
+// PBDMA does). `V_MARKER_IN_PACKET` = a host marker was published while that parse has a packet open.
+
+/// SetObj; a submission with a SYNC_WAIT entry and a packet that SPANS two entries (the Windows driver splits
+/// big inline uploads this way, measured); the registration arrives anywhere; the guest publishes after the
+/// reply. D1: the base places the seeded barrier + marker at whatever entry boundary the worker is at when it
+/// sees the epoch move, which can be inside the packet.
+fn d1_script() -> Vec<Op> {
+    vec![
+        Op::Push(ge(0, Kind::SetObj)),
+        Op::SetPut,
+        Op::Ring,
+        Op::Push(p(1).sync()),
+        Op::Push(ge(2, Kind::OpenHead)),
+        Op::Push(ge(3, Kind::OpenTail)),
+        Op::Push(p(4)),
+        Op::SetPut,
+        Op::Ring,
+        Op::Register,
+        Op::AwaitReply,
+        Op::Push(p(5).post()),
+        Op::SetPut,
+        Op::Ring,
+    ]
+}
+
+#[test]
+fn d1_a_registration_inside_a_submission_never_puts_a_host_marker_inside_a_guest_packet() {
+    let mut cfg = Cfg::new(spec(d1_script(), &[0, 1, 2, 3, 4, 5]));
+    cfg.kind = Registration::Other;
+    let r = assert_clean(&cfg, "d1-within-submission");
+    assert!(r.to_window_fresh_max >= 1, "some interleaving flips a Pointer channel");
+}
+
+/// The reviewer's scenario as written: the SUBMISSION itself (a `GP_PUT` value) ends inside an open packet.
+/// Assumption P2' (a driver does not end a submission inside a packet) is what the anchor design rests on; this
+/// test documents what happens when it is false: the marker lands in the packet. Not a defect of the machine;
+/// the falsifier is the Scan-mode counter `put_boundary_open_scan` on the app matrix.
+#[test]
+fn p2prime_a_submission_that_ends_inside_a_packet_is_the_documented_residual_risk() {
+    let script = vec![
+        Op::Push(ge(0, Kind::SetObj)),
+        Op::SetPut,
+        Op::Ring,
+        Op::Push(p(1).sync()),
+        Op::Push(ge(2, Kind::OpenHead)),
+        Op::SetPut,
+        Op::Ring,
+        Op::Register,
+        Op::AwaitReply,
+        Op::Push(ge(3, Kind::OpenTail).post()),
+        Op::Push(p(4).post()),
+        Op::SetPut,
+        Op::Ring,
+    ];
+    let mut cfg = Cfg::new(spec(script, &[0, 1, 2, 3, 4]));
+    cfg.kind = Registration::Other;
+    let r = explore(&cfg);
+    println!("p2prime: {} states viol={:?}", r.states, viol_names(r.viol));
+    assert!(
+        r.viol & V_MARKER_IN_PACKET != 0,
+        "expected the residual-risk violation to stay reachable (it documents the assumption)"
+    );
+}
+
+#[test]
+fn d2_data_that_looks_like_the_trigger_inside_a_packet_of_one_submission_is_never_a_trigger() {
+    // [INC sub0 x3 header] | [h(6,0x200,1) HANDLE 7] in ONE submission: scanned from the flip between the two
+    // entries (the base) the second is a trigger: the registration is consumed wrongly.
+    let script = vec![
+        Op::Push(ge(0, Kind::SetObj)),
+        Op::SetPut,
+        Op::Ring,
+        Op::Push(ge(1, Kind::FalseHead)),
+        Op::Push(ge(2, Kind::FalseTail)),
+        Op::SetPut,
+        Op::Ring,
+        Op::Register,
+        Op::AwaitReply,
+        Op::Push(p(3).post()),
+        Op::SetPut,
+        Op::Ring,
+    ];
+    let mut cfg = Cfg::new(spec(script, &[0, 1, 2, 3]));
+    cfg.kind = Registration::Other;
+    let r = assert_clean(&cfg, "d2-false-trigger");
+    assert_eq!(r.triggers_found_max, 0, "no interleaving may find a trigger in packet data");
+    assert_eq!(r.modes, HashSet::from([Mode::Window]), "the registration is still live");
+}
+
+#[test]
+fn d2_the_tail_of_a_packet_inside_one_submission_is_never_refused_by_a_window() {
+    // [OpenHead] | [words that do not decode as a header]: scanned with fresh state (the base) the tail refuses.
+    let script = vec![
+        Op::Push(ge(0, Kind::SetObj)),
+        Op::SetPut,
+        Op::Ring,
+        Op::Push(ge(1, Kind::OpenHead)),
+        Op::Push(ge(2, Kind::OpenTailBad)),
+        Op::SetPut,
+        Op::Ring,
+        Op::Register,
+        Op::AwaitReply,
+        Op::Push(p(3).post()),
+        Op::SetPut,
+        Op::Ring,
+    ];
+    let mut cfg = Cfg::new(spec(script, &[0, 1, 2, 3]));
+    cfg.kind = Registration::Other;
+    let r = assert_clean(&cfg, "d2-tail-refused");
+    assert_eq!(r.window_fresh_errors_max, 0);
+}
+
+/// T2: a1 with the SYNC_WAIT as a LENGTH-0 control entry (the Edge / Win11 shape).
+#[test]
+fn t2_a1_with_a_length0_sync_wait_never_reads_the_late_pushbuffer_early() {
+    let script = vec![
+        Op::Push(ge(0, Kind::SetObj)),
+        Op::SetPut,
+        Op::Ring,
+        Op::Push(p(1).acq(0)),
+        Op::Push(ge(2, Kind::Nop).sync()),
+        Op::SetPut,
+        Op::Ring,
+        Op::Register,
+        Op::AwaitReply,
+        Op::Push(p(3).late().post()),
+        Op::SetPut,
+        Op::Ring,
+        Op::Fill(3),
+        Op::Release(0),
+    ];
+    let mut cfg = Cfg::new(spec(script, &[0, 1, 2, 3]));
+    cfg.kind = Registration::Other;
+    let r = assert_clean(&cfg, "t2-len0-sync");
+    assert!(r.seeded_max >= 1, "the length-0 SYNC_WAIT seeds the window's gate");
+}
+
+/// D3: batches of one entry, each rung; the private ring is small. Pointer mode places a batch marker at every
+/// `GP_PUT` boundary, so the freed credit is announced by an interrupt and the run is live with NO look at all
+/// (no bounded spin, no engine-event guess, no 50 ms backstop).
+#[test]
+fn d3_pointer_mode_batch_ends_announce_freed_credit_by_an_event_with_no_look() {
+    let mut script = vec![Op::Push(ge(0, Kind::SetObj)), Op::SetPut, Op::Ring];
+    let mut expected = vec![0u8];
+    for id in 1..=6u8 {
+        script.extend([Op::Push(p(id)), Op::SetPut, Op::Ring]);
+        expected.push(id);
+    }
+    let mut cfg = Cfg::new(spec(script, &expected));
+    cfg.priv_entries = 4;
+    cfg.looks = false;
+    cfg.max_states = 8_000_000;
+    let r = assert_clean(&cfg, "d3-batch-ends");
+    assert_eq!(r.modes, HashSet::from([Mode::Pointer]));
 }
