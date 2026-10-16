@@ -1,0 +1,17 @@
+windows build                26100          Microsoft Windows 11 Enterprise LTSC Evaluation
+secure boot                  n/a            legacy BIOS or not supported (fine)
+testsigning                  off            bcdedit /set {current} testsigning on needs Secure Boot off
+VBS / HVCI                   0 / 0          2 running = VBS on; 2 in services = HVCI (test signing still loads, see doc)
+nvidia gpu                   DEV_2F04       driver 32.0.15.8088, status OK
+gsp                          (see nvidia-smi -q) GSP Firmware Version must not be N/A for queues to exist
+free disk C: (MiB)           120354         a capture of a boot is tens of MiB
+RAM (MiB)                    25682          the RAM scan fallback reads all of it once per pass
+The operation completed successfully.
+testsigning is on for the NEXT boot. Reboot yourself, then run -Action Install.
+{"State":3}
+NATIVE_DESKTOP_AUTOLOGON_QUEUED=1
+NATIVE_DESKTOP_REBOOT_QUEUED utc=2026-10-16T14:04:29.2523090Z
+NATIVE_TESTSIGN_DESKTOP_REBOOT_QUEUED=1
+#< CLIXML
+<Objs Version="IP_REDACTED" xmlns="http://schemas.microsoft.com/powershell/2004/04"><Obj S="progress" RefId="0"><TN RefId="0"><T>System.Management.Automation.PSCustomObject</T><T>System.Object</T></TN><MS><I64 N="SourceId">1</I64><PR N="Record"><AV>Preparing modules for first use.</AV><AI>0</AI><Nil /><PI>-1</PI><PC>-1</PC><T>Completed</T><SR>-1</SR><SD> </SD></PR></MS></Obj><Obj S="progress" RefId="1"><TNRef RefId="0" /><MS><I64 N="SourceId">2</I64><PR N="Record"><AV>Preparing modules for first use.</AV><AI>0</AI><Nil /><PI>-1</PI><PC>-1</PC><T>Completed</T><SR>-1</SR><SD> </SD></PR></MS></Obj><Obj S="progress" RefId="2"><TNRef RefId="0" /><MS><I64 N="SourceId">2</I64><PR N="Record"><AV>Preparing modules for first use.</AV><AI>0</AI><Nil /><PI>-1</PI><PC>-1</PC><T>Completed</T><SR>-1</SR><SD> </SD></PR></MS></Obj><Obj S="progress" RefId="3"><TNRef RefId="0" /><MS><I64 N="SourceId">2</I64><PR N="Record"><AV>Preparing modules for first use.</AV><AI>0</AI><Nil /><PI>-1</PI><PC>-1</PC><T>Completed</T><SR>-1</SR><SD> </SD></PR></MS></Obj><Obj S="progress" RefId="4"><TNRef RefId="0" /><MS><I64 N="SourceId">4</I64><PR N="Record"><AV>Get-ScheduledTask VastWindowsSetup | Select-Object State | ConvertTo-Json -Compress</AV><AI>1410875670</AI><Nil /><PI>-1</PI><PC>100</PC><T>Completed</T><SR>0</SR><SD>1/1 completed</SD></PR></MS></Obj></Objs>
+REMOTE_EXIT_RC=0

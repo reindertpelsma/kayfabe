@@ -1,5 +1,36 @@
 # Status and handoff — where kayfabe v3 stands, and how to resume
 
+## UPDATE 2026-10-16 14:17 UTC — GB205 native Windows580 stock hold passes; GSP mode next
+
+Native LTSC26100/580.88 actual32.0.15.8088 Code0, CUDA cup2/3/8 and hardware
+D3D11/12 before/after hold PASS;420.32s/14D3D rounds/0System4101TDR with
+DWM+Explorer PASS. Completed reference reports GSP N/A; GSP-enabled stock
+check is separately RUNNING (no queue replay). Caps fixed-aperture read passes:
+all127 nonzero words equal Linux595 on this sameGB205,0x00c102. Initial
+collector-option rejection preserved; matching caps module32973658a substituted
+and stopped before workloads. Native pages are oracles only.
+
+Code-only draftPR24 source5b8dd3a5f adds separate measuredGB205580/595 rows,
+192disp CPU pass/2ignored after test-first row-missing failures. Keep this topic
+UNINTEGRATED until guest baseline trace, so a one-word A/B is meaningful.
+Hardware baseline BW source remains304ca9adb code plus later docs/test comments;
+latest docs17fef1443 before this note. Windows580 guest onGB205 stillUNRUN.
+
+B4/A3 Windows610.88 public prerequisite ANSWERED: official610.57.04 header
+WindowsCL38566155 versus LinuxCL38610010; compiled current product explicitly
+refuses ChangelistsDiffer. No ABI override/hardware run/counting transientWU
+install. Evidence driver610_public_abi_20261016/RESULT.md and primary URLs.
+
+Only own56246613 active, original timer2319249 at15:35:50UTC/hard15:40:48.
+After GSP check save/push native text, then armLinuxreturn and verify final
+Ubuntu22; stage own bwbatch_linux.sh/provision_box and rebuild595gates/private
+QEMU. Push own trusted14GBWindowsbase concurrently with CPU setup, wait before
+GPU timing. Prepared local scripts bwbatch20261016_linux_return.py and
+push_windows_bwbatch20261016.sh; add own restored alias first. No agents,
+ownerGPU/VM untouched. Campaign ceiling5.09USD+transfers. Full-family acceptance
+and multi-build Windows acceptance remain incomplete.
+
+
 ## UPDATE 2026-10-16 13:44 UTC — GB205 B3 normal logging/raw30 pass; Windows reference next
 
 MEASURED source304ca9adb10528ac73d809636174625199f40ba1: native gates9/9,
