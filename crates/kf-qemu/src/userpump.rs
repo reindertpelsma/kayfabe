@@ -1636,15 +1636,26 @@ impl Pump {
             if scan_off {
                 // EXPERIMENT ONLY (scratch, never for merge): no pushbuffer byte is read or scanned.
                 let len = usize::try_from(descriptor.len_bytes).map_err(|_| "USER_RING_PB_SIZE")?;
-                let pb = userread::unread(
-                    &r.mirror.rows,
-                    &r.mirror.log,
-                    me.ram,
-                    self.ram_generation,
-                    descriptor.gpu_va,
-                    len,
-                )
-                .map_err(|e| source_error(e, "USER_RING_SOURCE"))?;
+                let pb = if crate::lifecycle::scan_off_mode() == 3 {
+                    // mode 3: read it exactly as the scanning path does, then drop the bytes unscanned
+                    self.snapshot_at(
+                        crate::lifecycle::Site::Pb,
+                        me,
+                        r,
+                        descriptor.gpu_va,
+                        len,
+                    )?
+                } else {
+                    userread::unread(
+                        &r.mirror.rows,
+                        &r.mirror.log,
+                        me.ram,
+                        self.ram_generation,
+                        descriptor.gpu_va,
+                        len,
+                    )
+                    .map_err(|e| source_error(e, "USER_RING_SOURCE"))?
+                };
                 let software = software_snapshot(me, r)?;
                 if let Some(lc) = &self.lc {
                     use std::sync::atomic::Ordering::Relaxed;

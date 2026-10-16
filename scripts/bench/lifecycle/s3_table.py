@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""s3_table.py : S3 table from /data/claude-perf2/ev/heaven/s3{ctl,exp}{1..3}_{d3d11,gl}.out (+ s3pure*). Medians, spreads, ratios."""
+"""s3_table.py : S3 table from /data/claude-perf2/ev/heaven/s3{ctl,exp}{1..3}_{d3d11,gl}.out (+ m2pure*). Medians, spreads, ratios."""
 import re, os, sys, statistics as st, subprocess
 EV = "/data/claude-perf2/ev/heaven"
 def fps(label):
@@ -17,7 +17,7 @@ def block(prefixes, api):
     return out
 for api in ("d3d11", "gl"):
     print(f"== {api}")
-    res = block({"ctl": "s3ctl", "exp": "s3exp"}, api)
+    res = block({"ctl": "m2ctl", "exp": "m2exp"}, api)
     meds = {}
     for arm, vals in res.items():
         xs = [v for _, v in vals if v]
@@ -28,7 +28,7 @@ for api in ("d3d11", "gl"):
             print(f"     median {m:.2f} spread {sp:.1f}% n={len(xs)}")
     if len(meds) == 2:
         print(f"  exp/ctl = {meds['exp'] / meds['ctl']:.4f}  ({(meds['exp'] / meds['ctl'] - 1) * 100:+.1f}%)")
-    pure = {a: fps(f"s3pure{a}_{api}") for a in ("ctl", "exp")}
+    pure = {a: fps(f"m2pure{a}_{api}") for a in ("ctl", "exp")}
     if any(pure.values()):
         print(f"  pure (no counters, 1 run each): {pure}", end="")
         if all(pure.values()):

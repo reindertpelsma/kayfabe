@@ -49,12 +49,15 @@ pub(crate) fn on() -> bool {
 /// EXPERIMENT ONLY (`KF3_SCAN_OFF_AFTER_5080`, scratch, never for merge): stop reading pushbuffers once the
 /// channel has seen its 5080 SET_OBJECT. Mode 1: from then on, always (the registration window is NOT handled:
 /// the first FIFO_UPDATE_CHANNEL_INFO trigger reaches the hardware unscanned). Mode 2: also scan while a
-/// FIFO_UPDATE_CHANNEL_INFO registration is pending (the lifecycle plan's registration window).
+/// FIFO_UPDATE_CHANNEL_INFO registration is pending (the lifecycle plan's registration window). Mode 3: as mode 2,
+/// but the pushbuffer IS read (the same snapshot, BAR1 copies included) and then dropped unscanned -- it separates the
+/// cost of reading from the cost of scanning.
 pub(crate) fn scan_off_mode() -> u8 {
     static M: OnceLock<u8> = OnceLock::new();
     *M.get_or_init(|| match std::env::var("KF3_SCAN_OFF_AFTER_5080").as_deref() {
         Ok("1") => 1,
         Ok("2") => 2,
+        Ok("3") => 3,
         _ => 0,
     })
 }
