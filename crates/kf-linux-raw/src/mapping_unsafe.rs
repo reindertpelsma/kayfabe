@@ -1219,9 +1219,21 @@ impl VolatileRegion {
             // `target_feature` helpers; the 16-byte alignment check gates the streaming loads.
             unsafe {
                 let src = self.map.base.as_ptr().add(start);
-                if kind == 1 && (src as usize) % 16 == 0 && std::arch::is_x86_feature_detected!("sse4.1") {
-                    stream_copy_sse41(src, dst.as_mut_ptr(), dst.len());
-                    return Ok(());
+                if kind == 1 && std::arch::is_x86_feature_detected!("sse4.1") {
+                    if (src as usize) % 16 == 0 {
+                        stream_copy_sse41(src, dst.as_mut_ptr(), dst.len());
+                        return Ok(());
+                    }
+                    // unaligned start: stream whole 16-byte blocks that cover the range, then slice
+                    let head = (src as usize) % 16;
+                    let total = (head + dst.len() + 15) & !15;
+                    let a_start = start - head;
+                    if bounds::checked_span(self.map.len_bytes(), HostOffset::new(a_start as u64), total as u64, "aligned bulk read length").is_ok() {
+                        let mut tmp = vec![0u8; total];
+                        stream_copy_sse41(self.map.base.as_ptr().add(a_start), tmp.as_mut_ptr(), total);
+                        dst.copy_from_slice(&tmp[head..head + dst.len()]);
+                        return Ok(());
+                    }
                 }
                 if kind == 2 && std::arch::is_x86_feature_detected!("avx2") {
                     wide_copy_avx2(src, dst.as_mut_ptr(), dst.len());

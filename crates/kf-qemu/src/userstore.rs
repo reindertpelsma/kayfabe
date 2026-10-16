@@ -393,9 +393,15 @@ impl Host for Native {
     fn copy(&self, view: &NativeView, off: u64, bytes: &mut [u8]) -> Result<(), Refusal> {
         let cpu = view.cpu.as_ref().ok_or(Refusal::Store)?;
         let t0 = crate::lifecycle::on().then(std::time::Instant::now);
-        let r = cpu
-            .copy_out(HostOffset::new(off), bytes)
-            .map_err(|_| Refusal::Store);
+        // EXPERIMENT ONLY (`KF3_BAR1_STREAM_LOAD=1`, scratch, never for merge): MOVNTDQA streaming loads.
+        static STREAM: std::sync::OnceLock<bool> = std::sync::OnceLock::new();
+        let stream = *STREAM.get_or_init(|| std::env::var("KF3_BAR1_STREAM_LOAD").is_ok_and(|v| v == "1"));
+        let r = if stream {
+            cpu.copy_out_wide(HostOffset::new(off), bytes, 1)
+        } else {
+            cpu.copy_out(HostOffset::new(off), bytes)
+        }
+        .map_err(|_| Refusal::Store);
         if let Some(t0) = t0 {
             crate::lifecycle::note_vram(
                 bytes.len(),
