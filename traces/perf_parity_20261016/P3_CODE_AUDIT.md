@@ -52,3 +52,18 @@ write. This checks CPU-writer freshness; it does not establish GPU-writer cohere
 Intel documents the WC temporary streaming buffers and ordering requirements in the
 [MOVNTDQA entry of the Intel SDM, volume 2](https://cdrdv2-public.intel.com/671110/325383-sdm-vol-2abcd.pdf).
 The fences are part of the timed candidate, and the entire addition remains feature gated.
+
+The optional `--gpu-freshness` control maps the probe's private 64 KiB allocation in
+its own GPU VA space and uses the existing USER copy-engine HostRing. The engine copies
+changing source patterns to the destination, then writes its real RELEASE_WFI fence.
+Current copy and vector candidates are compared against the expected bytes for
+64/256/416/4096-byte aligned and unaligned reads. The source receives a sysmembar and
+VIDEO_MEMORY invalidation using the public ctrl2080fb.h aperture definition (595.84).
+Those control calls are outside the timed reads. A fence timeout or baseline-copy mismatch
+invalidates the GPU control; a candidate byte mismatch rejects that candidate.
+The probe compiles, but this GPU control has not yet run. No production reader uses it.
+
+Remaining measurement scope: record host clocks during the bare-host probe; idle P-state
+latencies must not be silently substituted for the earlier Heaven-loaded measurements.
+The later per-frame table needs new view-copy timing counters on its own built source;
+the approximately 867 reads / 232 KiB / 3.7 ms values remain inherited 0a746117 evidence.

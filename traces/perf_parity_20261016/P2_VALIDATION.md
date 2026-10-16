@@ -109,3 +109,21 @@ The launch explicitly selects `store-view-full=off` for WINDOWED and `on` for FU
 all other guest/GPU settings match the copied Heaven harness. Host driver 595.91.07,
 Windows guest driver 580.88 (actual guest nvidia-smi; the wire QOM property is 580.65.06).
 Three runs per API and mode are in progress. No host stress runs overlap these timings.
+
+Final adapter CPU checks, 4b2c2878 runtime code: 776 tests passed across kf-chan,
+kf-linux-raw and kf-qemu, including four deferred-adapter cases and the Loom model;
+two long tests are run separately. This aggregate uses the successful kf-chan portion
+of `p2-final-touched-tests.log` and the complete `p2-final-after-devnull-repair.log`.
+The initial combined command failed three existing descriptor tests because the dev box's
+`/dev/null` was a regular tmpfs file (0:0), rather than char 1:3. Its bytes were preserved
+privately and the canonical device was restored atomically at 03:35 CEST. The affected
+raw crate and the previously skipped QEMU crate were then run successfully. The host's
+`/dev/null` was already correct. No code was changed to suppress these assertions, and
+this environment repair is not counted as a Linux guest lane result.
+
+Heaven D3D11 on clean c66ac9de, three repetitions: WINDOWED 111.491/114.807/113.364 FPS
+(median 113.364); FULL 110.297/113.638/113.890 FPS (median 113.638). FULL/WINDOWED is
+1.0024x, failing the preregistered >10% speedup criterion. Both are approximately 34.4%
+of the inherited same-image VFIO median 330.05 FPS. The new WINDOWED median is 16.1%
+above the inherited 0a746117 median 97.65; a fresh baseline control is required before
+attributing that difference to this change. No new native timing was collected.

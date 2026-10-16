@@ -88,10 +88,152 @@ fn verify_freshness(region: &VolatileRegion, cache: CpuViewCache) -> Result<(), 
             }
         }
     }
-    println!("READ_COST_FRESHNESS cache={cache:?} turns=128 writer=CPU result=PASS GPU_writer=NOT_TESTED");
+    println!(
+        "READ_COST_FRESHNESS cache={cache:?} turns=128 writer=CPU result=PASS GPU_writer=NOT_TESTED"
+    );
+    Ok(())
+}
+/// Existing USER copy-engine ring, with one private allocation mapped in its own
+/// VA space. Only its real GPU fence authorizes reading the changed destination.
+fn verify_gpu_freshness(
+    rm: &HostRm,
+    memory: u32,
+    region: &VolatileRegion,
+    cache: CpuViewCache,
+) -> Result<(), String> {
+    use kf_abi::submit::{SET_OBJECT, ce, method_header_inc};
+    let space = rm
+        .alloc_vaspace()
+        .map_err(|e| format!("GPU space: {e:?}"))?;
+    let va = match rm.map(
+        space,
+        memory,
+        kf_host::MapBacking::Dedicated,
+        0,
+        LENGTH,
+        None,
+        false,
+    ) {
+        Ok(va) => va,
+        Err(e) => {
+            rm.free_vaspace(space);
+            return Err(format!("GPU map: {e:?}"));
+        }
+    };
+    let mut ring = match kf_chan::host::HostRing::new(rm, space) {
+        Ok(ring) => ring,
+        Err(e) => {
+            let _ = rm.unmap(space, va, false);
+            rm.free_vaspace(space);
+            return Err(e);
+        }
+    };
+    let result: Result<(), String> = (|| {
+        ring.channel().assert_user().map_err(str::to_owned)?;
+        for bytes in [64usize, 256, 416, 4096] {
+            for turn in 0..32u64 {
+                let n = bytes + 8;
+                let source = 32768u64;
+                assert!(source + n as u64 <= LENGTH && n as u64 <= source);
+                let mut want = Vec::with_capacity(n);
+                for at in (0..n).step_by(8) {
+                    let value =
+                        pattern_word(at as u64) ^ (turn + 1).wrapping_mul(0x0303_0303_0303_0303);
+                    region
+                        .store_u64(HostOffset::new(source + at as u64), value)
+                        .map_err(|e| format!("{e:?}"))?;
+                    want.extend(value.to_le_bytes());
+                }
+                region.bench_data_fence();
+                // ctrl2080fb.h (595.84): aperture 0 is VIDEO_MEMORY. This
+                // correctness control invalidates cached GPU source data after
+                // CPU stores; these RM calls are outside all timed read cases.
+                rm.fb_flush()
+                    .map_err(|e| format!("GPU source sysmembar: {e:?}"))?;
+                rm.flush_gpu_cache(0, false, true)
+                    .map_err(|e| format!("GPU source invalidate: {e:?}"))?;
+                let src = va.checked_add(source).ok_or("GPU source wraps")?;
+                let h = |method, count| method_header_inc(0, method, count).ok_or("GPU header");
+                let words = [
+                    h(SET_OBJECT, 1)?,
+                    rm.ce_class_id(),
+                    h(ce::OFFSET_IN_UPPER, 4)?,
+                    (src >> 32) as u32,
+                    src as u32,
+                    (va >> 32) as u32,
+                    va as u32,
+                    h(ce::LINE_LENGTH_IN, 2)?,
+                    n as u32,
+                    1,
+                    h(ce::LAUNCH_DMA, 1)?,
+                    ce::LAUNCH_TRANSFER_NON_PIPELINED
+                        | ce::LAUNCH_FLUSH_ENABLE
+                        | ce::LAUNCH_SRC_PITCH
+                        | ce::LAUNCH_DST_PITCH
+                        | ce::LAUNCH_SRC_VIRTUAL
+                        | ce::LAUNCH_DST_VIRTUAL,
+                ];
+                ring.push(&words)?.map_err(|_| "GPU copy ring busy")?;
+                let seq = ring.fence(rm)?.map_err(|_| "GPU fence ring busy")?;
+                let deadline = Instant::now() + std::time::Duration::from_secs(2);
+                while ring.completed()? != seq {
+                    if Instant::now() >= deadline {
+                        return Err("GPU freshness fence timeout".into());
+                    }
+                    std::thread::sleep(std::time::Duration::from_micros(10));
+                }
+                for kind in [
+                    None,
+                    Some(DataReadKind::Scalar8),
+                    Some(DataReadKind::Simd16),
+                    Some(DataReadKind::Simd32),
+                    Some(DataReadKind::Inflight16),
+                    Some(DataReadKind::Stream16),
+                ] {
+                    if matches!(kind, Some(DataReadKind::Stream16))
+                        && !matches!(cache, CpuViewCache::WriteCombining)
+                    {
+                        continue;
+                    }
+                    for off in [0usize, 3] {
+                        if off != 0 && matches!(kind, Some(DataReadKind::Stream16)) {
+                            continue;
+                        }
+                        let mut out = vec![0; bytes];
+                        match kind {
+                            None => region.copy_out(HostOffset::new(off as u64), &mut out),
+                            Some(kind) => {
+                                region.bench_copy_data(HostOffset::new(off as u64), &mut out, kind)
+                            }
+                        }
+                        .map_err(|e| format!("GPU freshness {kind:?}: {e:?}"))?;
+                        if out != want[off..off + bytes] {
+                            return Err(format!(
+                                "GPU freshness mismatch cache={cache:?} kind={kind:?} bytes={bytes} offset={off} turn={turn}"
+                            ));
+                        }
+                    }
+                }
+            }
+        }
+        Ok(())
+    })();
+    rm.free_channel(ring.channel())
+        .map_err(|e| format!("GPU channel cleanup: {e:?}"))?;
+    if ring.release(rm).is_some_and(|s| s.contains("REFUSED")) {
+        return Err("GPU ring cleanup refused".into());
+    }
+    rm.unmap(space, va, false)
+        .map_err(|e| format!("GPU unmap: {e:?}"))?;
+    rm.free_vaspace(space);
+    result?;
+    println!(
+        "READ_COST_GPU_FRESHNESS cache={cache:?} turns_per_size=32 sizes=64,256,416,4096 result=PASS fence=GPU_RELEASE_WFI"
+    );
     Ok(())
 }
 fn main() -> Result<(), String> {
+    let gpu_freshness = std::env::args().any(|a| a == "--gpu-freshness");
     let dev = DevDir::open(c"/dev").map_err(|e| format!("{e:?}"))?;
     let rm = HostRm::open(&dev, kf_arch::ids::GpuId(0), &kf_chip::choose_host_classes)
         .map_err(|e| e.to_string())?;
@@ -99,7 +241,7 @@ fn main() -> Result<(), String> {
         .alloc_device_local(LENGTH)
         .map_err(|e| format!("{e:?}"))?;
     println!(
-        "READ_COST_START driver={} iterations={REPS} bytes={LENGTH} pid={} uid={}",
+        "READ_COST_START driver={} iterations={REPS} bytes={LENGTH} pid={} uid={} gpu_freshness={gpu_freshness}",
         rm.driver_version(),
         std::process::id(),
         std::env::var("USER").unwrap_or_default()
@@ -136,7 +278,16 @@ fn main() -> Result<(), String> {
                 HostPageSize::query(),
             )
             .map_err(|e| format!("{e:?}"))?;
+            for off in (0..LENGTH).step_by(8) {
+                region
+                    .store_u64(HostOffset::new(off), pattern_word(off))
+                    .map_err(|e| format!("{e:?}"))?;
+            }
+            region.bench_data_fence();
             verify_freshness(&region, cache)?;
+            if gpu_freshness {
+                verify_gpu_freshness(&rm, memory, &region, cache)?;
+            }
             for off in (0..LENGTH).step_by(8) {
                 region
                     .store_u64(HostOffset::new(off), pattern_word(off))
