@@ -156,7 +156,7 @@ fn every_word_names_its_tier() {
 /// branch). Unmeasured dies get the clean authored page, and say what is missing.
 #[test]
 fn an_unmeasured_die_gets_the_clean_page_and_the_notice_never_a_neighbours_row() {
-    for (row, die) in [(&ADA, AD106), (&ADA, AD103), (&AMPERE, GA104), (&TURING, Die { architecture: 0x160, implementation: 4 }), (&BLACKWELL_GB20X, Die { implementation: 5, ..GB206 })] {
+    for (row, die) in [(&ADA, AD106), (&ADA, AD103), (&AMPERE, GA104), (&TURING, Die { architecture: 0x160, implementation: 4 }), (&BLACKWELL_GB20X, Die { implementation: 3, ..GB206 })] {
         let d = go(row, die, true, true, BRANCH);
         assert_eq!(d.page.word(0x00c), 0, "{die:?} must not receive AD104's word");
         assert_eq!(d.unmeasured.len(), 1, "{die:?}");
@@ -368,7 +368,8 @@ fn the_gb206_580_caps_word_requires_its_own_native_measurement() {
         assert_eq!(d.page.word(0x00c), 0);
         assert_eq!(d.unmeasured.len(), 1);
     }
-    for implementation in [0x2, 0x3, 0x5] {
+    // GB205 now has its own independently measured580 row; GB202/203 remain unmeasured.
+    for implementation in [0x2, 0x3] {
         let die = Die { implementation, ..GB206 };
         let d = go(&BLACKWELL_GB20X, die, true, true, "580");
         assert_eq!(d.page.word(0x00c), 0, "a neighbouring die cannot borrow the row");
