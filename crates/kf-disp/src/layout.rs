@@ -76,11 +76,17 @@ impl Layouts {
 /// The layouts for a guest driver version, or `None` when this tree has not derived them.
 #[must_use]
 pub fn for_version(version: &str) -> Option<&'static Layouts> {
+    static V580_94_02: OnceLock<Layouts> = OnceLock::new();
+
     static V580_159_04: OnceLock<Layouts> = OnceLock::new();
     static V580_65_06: OnceLock<Layouts> = OnceLock::new();
     static V590_48_01: OnceLock<Layouts> = OnceLock::new();
     static V595_91_07: OnceLock<Layouts> = OnceLock::new();
     match version {
+        "580.94.02" => Some(
+            V580_94_02.get_or_init(|| Layouts::parse(include_str!("../data/layouts-580.94.02.tsv"))),
+        ),
+
         "580.159.04" => Some(
             V580_159_04
                 .get_or_init(|| Layouts::parse(include_str!("../data/layouts-580.159.04.tsv"))),
