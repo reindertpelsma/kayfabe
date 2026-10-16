@@ -87,6 +87,12 @@ impl Scan {
         })
     }
 
+    /// MEASUREMENT ONLY (perf lifecycle campaign): whether some software-class subchannel (>= 5) is
+    /// bound, by a scanned SET_OBJECT, to an object `software` accepts (the channel's 5080).
+    pub fn software_bound(&self, software: impl Fn(u32) -> bool) -> bool {
+        self.bindings[5..].iter().any(|v| *v != 0 && software(*v))
+    }
+
     /// Whether the metadata is between complete method packets. This is not
     /// evidence that hardware executed the same bytes or completed engine work.
     pub fn at_boundary(&self) -> bool {

@@ -3290,6 +3290,20 @@ impl ChanPlane {
         }
     }
 
+    /// MEASUREMENT ONLY (perf lifecycle campaign): the defapi registry's counters, one bounded string.
+    pub(crate) fn lifecycle_registry_stats(&self) -> String {
+        self.defapi_reg.get().map_or_else(
+            || "absent".to_string(),
+            |r| {
+                let (live, st) = r.stats();
+                format!(
+                    "live={live} registered={} looked_up={} unknown={} removed={} implicit_deletes={} refused={} fifo_update_refused={}",
+                    st.registered, st.looked_up, st.unknown, st.removed, st.implicit_deletes, st.refused, st.fifo_update_refused
+                )
+            },
+        )
+    }
+
     /// Whether the USER ring measurement trace is on (`KF3_USER_RING_TRACE`).
     pub fn user_ring_tracing(&self) -> bool {
         userpump::tracing()
@@ -3313,6 +3327,11 @@ impl ChanPlane {
     /// `(translated, passthrough, other, last other value)`.
     pub(crate) fn doorbell_census_now(&self) -> [u64; 4] {
         std::array::from_fn(|i| self.db_census[i].load(Ordering::Relaxed))
+    }
+
+    /// MEASUREMENT ONLY: the defapi registry (the pump reads pending registrations from it).
+    pub(crate) fn lifecycle_registry(&self) -> Option<&Arc<kf_rm::defapi::Registry>> {
+        self.defapi_reg.get()
     }
 
     /// Doorbells counted on guest token `idx` ([`Self::note_queued`]).

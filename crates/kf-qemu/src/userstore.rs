@@ -391,11 +391,18 @@ impl Host for Native {
         Ok(())
     }
     fn copy(&self, view: &NativeView, off: u64, bytes: &mut [u8]) -> Result<(), Refusal> {
-        view.cpu
-            .as_ref()
-            .ok_or(Refusal::Store)?
+        let cpu = view.cpu.as_ref().ok_or(Refusal::Store)?;
+        let t0 = crate::lifecycle::on().then(std::time::Instant::now);
+        let r = cpu
             .copy_out(HostOffset::new(off), bytes)
-            .map_err(|_| Refusal::Store)
+            .map_err(|_| Refusal::Store);
+        if let Some(t0) = t0 {
+            crate::lifecycle::note_vram(
+                bytes.len(),
+                u64::try_from(t0.elapsed().as_nanos()).unwrap_or(u64::MAX),
+            );
+        }
+        r
     }
 }
 

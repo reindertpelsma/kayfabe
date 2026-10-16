@@ -25,6 +25,7 @@ pub mod gpucopy;
 pub mod gpuuid;
 pub mod hostfacts;
 pub mod latejoin;
+pub(crate) mod lifecycle;
 pub mod mem;
 pub mod prof;
 pub mod raw_unsafe;

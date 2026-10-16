@@ -3396,6 +3396,7 @@ impl Device {
     pub fn stop(&self) {
         // ★ 2026-10-14: the USER-ring event loop's bounded counters, one line (always; a backstop
         // that found work is the bug counter -- `docs/design/V3_USER_RING_EVENT_LOOP_20261014.md` §3.6).
+        crate::lifecycle::dump(self.chans, "final");
         let rs = &self.chans.relay_stats;
         if rs.gates.load(Ordering::Relaxed) + rs.markers.load(Ordering::Relaxed) > 0 {
             eprintln!("kf3: USER_RING_LOOP SUMMARY {}", rs.summary());
@@ -3835,13 +3836,20 @@ impl Device {
     /// off this is one cached flag load on the doorbell path.
     fn note_worker_doorbell(&self, value: u32) {
         // Measurement only (`KF3_USER_RING_TRACE`): nothing decides on these counts.
-        if !self.chans.user_ring_tracing() {
+        let lc = crate::lifecycle::on();
+        if !lc && !self.chans.user_ring_tracing() {
             return;
         }
         let tok = self.plane.token_index.of_doorbell(value);
         let route = tok
             .and_then(|t| self.plane.tokens.get(t as usize))
             .map(|w| w.load().route);
+        if lc {
+            crate::lifecycle::note_doorbell(matches!(route, Some(Route::Translated)));
+        }
+        if !self.chans.user_ring_tracing() {
+            return;
+        }
         if let (Some(tok), Some(Route::Translated)) = (tok, route) {
             self.chans.note_queued(tok);
         }

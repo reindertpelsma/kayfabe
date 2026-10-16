@@ -434,6 +434,10 @@ pub(super) struct Pump {
     sync_carried: u64,
     /// Measurement only ([`trace_dir`]).
     pub(super) trace: Option<Box<Trace>>,
+    /// MEASUREMENT ONLY (perf lifecycle campaign): counters, and the channel's lifecycle state.
+    lc: Option<Arc<crate::lifecycle::Chan>>,
+    lc_bound: bool,
+    lc_sw_guest: Option<u32>,
 }
 
 struct Segment {
@@ -508,6 +512,9 @@ impl Pump {
             grace_was_retrying: false,
             sync_carried: 0,
             trace: trace_dir().map(|_| Box::new(Trace::new())),
+            lc: crate::lifecycle::new_chan(key),
+            lc_bound: false,
+            lc_sw_guest: None,
         })
     }
     pub(super) fn release(&mut self) -> Result<(), String> {
@@ -550,7 +557,69 @@ impl Pump {
             .map_err(|e| format!("USER_RING_SOURCE_CLEANUP {e:?}"))
     }
 
+    /// MEASUREMENT ONLY: the channel's lifecycle class now: 0 = its 5080 SET_OBJECT not yet seen by the
+    /// committed scan state, 1 = seen and no FIFO_UPDATE_CHANNEL_INFO registration pending, 2 = seen and
+    /// one is registered and not yet executed.
+    fn lc_class(&mut self, me: &ChanPlane, r: &userrelay::Record) -> usize {
+        if !self.lc_bound {
+            if let Ok(Some(sw)) = software_snapshot(me, r) {
+                self.lc_sw_guest = Some(sw.guest);
+                if self.scan.software_bound(|v| sw.matches(v)) {
+                    self.lc_bound = true;
+                }
+            }
+            if !self.lc_bound {
+                return 0;
+            }
+        }
+        let pending = match (me.lifecycle_registry(), self.lc_sw_guest) {
+            (Some(reg), Some(h)) => {
+                reg.pending_kinds(kf_rm::defapi::ObjKey {
+                    client: r.key.0,
+                    object: h,
+                })
+                .0
+            }
+            _ => false,
+        };
+        if pending { 2 } else { 1 }
+    }
+
     fn snapshot(
+        &mut self,
+        me: &ChanPlane,
+        r: &userrelay::Record,
+        va: u64,
+        bytes: usize,
+    ) -> Turn<Snapshot<'static>> {
+        self.snapshot_at(crate::lifecycle::Site::Other, me, r, va, bytes)
+    }
+
+    fn snapshot_at(
+        &mut self,
+        site: crate::lifecycle::Site,
+        me: &ChanPlane,
+        r: &userrelay::Record,
+        va: u64,
+        bytes: usize,
+    ) -> Turn<Snapshot<'static>> {
+        let Some(lc) = self.lc.clone() else {
+            return self.snapshot_plain(me, r, va, bytes);
+        };
+        let class = self.lc_class(me, r);
+        if matches!(site, crate::lifecycle::Site::Pb) && class == 0 {
+            lc.pb_reads_before_5080
+                .fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+        }
+        let _ = crate::lifecycle::tl_take();
+        let t0 = std::time::Instant::now();
+        let out = self.snapshot_plain(me, r, va, bytes);
+        let ns = u64::try_from(t0.elapsed().as_nanos()).unwrap_or(u64::MAX);
+        lc.record(site, class, bytes, out.is_ok(), ns, crate::lifecycle::tl_take());
+        out
+    }
+
+    fn snapshot_plain(
         &mut self,
         me: &ChanPlane,
         r: &userrelay::Record,
@@ -1264,7 +1333,21 @@ impl Pump {
         use kf_chan::user_loop::Need;
         self.need = Need::Idle;
         self.again = false;
+        crate::lifecycle::tick(me);
         let out = self.turn_body(me, r);
+        if let Some(lc) = &self.lc {
+            use std::sync::atomic::Ordering::Relaxed;
+            lc.turns.fetch_add(1, Relaxed);
+            match &out {
+                Ok(true) => {
+                    lc.turns_published.fetch_add(1, Relaxed);
+                }
+                Err(Failure::Retry) => {
+                    lc.turns_retry.fetch_add(1, Relaxed);
+                }
+                _ => {}
+            }
+        }
         match &out {
             Ok(_) if self.again => self.need = Need::Again,
             Err(Failure::Retry) => self.need = Need::Contended,
@@ -1380,7 +1463,7 @@ impl Pump {
                 .checked_mul(8)
                 .and_then(|off| r.source.0.checked_add(off))
                 .ok_or("USER_RING_GP_ADDRESS")?;
-            let source = self.snapshot(me, r, va, 8)?;
+            let source = self.snapshot_at(crate::lifecycle::Site::Gp, me, r, va, 8)?;
             let entry = u64::from_le_bytes(
                 source
                     .bytes
@@ -1398,6 +1481,22 @@ impl Pump {
                         self.cursor, r.source.1
                     )
                 })?;
+            if let Some(lc) = &self.lc {
+                use std::sync::atomic::Ordering::Relaxed;
+                let len0 = matches!(descriptor, kf_chan::user_stream::Source::Nop);
+                lc.gp_entries.fetch_add(1, Relaxed);
+                if len0 {
+                    lc.gp_len0.fetch_add(1, Relaxed);
+                }
+                if entry >> 63 & 1 == 1 {
+                    lc.gp_sync.fetch_add(1, Relaxed);
+                    if len0 {
+                        lc.gp_sync_len0.fetch_add(1, Relaxed);
+                    } else {
+                        lc.gp_sync_len.fetch_add(1, Relaxed);
+                    }
+                }
+            }
             let guest_get =
                 self.cursor.checked_add(1).ok_or("USER_RING_CURSOR")? & (r.source.1 - 1);
             // ★★ 2026-10-14 — GP_ENTRY1_SYNC_WAIT (public dev_pbdma.ref "NV_PPBDMA_GP_ENTRY1_SYNC":
@@ -1529,7 +1628,43 @@ impl Pump {
             let kf_chan::user_stream::Source::Segment(descriptor) = descriptor else {
                 return Err("USER_RING_GP_FORMAT".into());
             };
-            let pb = self.snapshot(
+            let scan_off = crate::lifecycle::scan_off() && self.lc_class(me, r) >= 1;
+            if scan_off {
+                // EXPERIMENT ONLY (scratch, never for merge): no pushbuffer byte is read or scanned.
+                let len = usize::try_from(descriptor.len_bytes).map_err(|_| "USER_RING_PB_SIZE")?;
+                let pb = userread::unread(
+                    &r.mirror.rows,
+                    &r.mirror.log,
+                    me.ram,
+                    self.ram_generation,
+                    descriptor.gpu_va,
+                    len,
+                )
+                .map_err(|e| source_error(e, "USER_RING_SOURCE"))?;
+                let software = software_snapshot(me, r)?;
+                if let Some(lc) = &self.lc {
+                    use std::sync::atomic::Ordering::Relaxed;
+                    lc.scanoff_skipped.fetch_add(1, Relaxed);
+                    lc.scanoff_skipped_bytes.fetch_add(len as u64, Relaxed);
+                }
+                self.segment = Some(Segment {
+                    ring,
+                    software,
+                    source,
+                    pb,
+                    entry,
+                    words: Vec::new(),
+                    patched: Vec::new(),
+                    at: 0,
+                    generation: self.generation,
+                    guest_get,
+                    rare: false,
+                    staged: false,
+                    wait: None,
+                });
+            } else {
+            let pb = self.snapshot_at(
+                crate::lifecycle::Site::Pb,
                 me,
                 r,
                 descriptor.gpu_va,
@@ -1591,6 +1726,10 @@ impl Pump {
                 }
             }
             let (patched, rare) = planned?;
+            if rare && let Some(lc) = &self.lc {
+                lc.rare_segments
+                    .fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+            }
             self.segment = Some(Segment {
                 ring,
                 software,
@@ -1606,6 +1745,7 @@ impl Pump {
                 staged: false,
                 wait: None,
             });
+            }
         }
         let mut segment = self.segment.take().ok_or("USER_RING_SEGMENT_ABSENT")?;
         let outcome = self.segment_turn(me, r, native, &mut segment);
@@ -2185,6 +2325,18 @@ impl Pump {
             entry,
         };
         me.defapi_triggers.fetch_add(1, Ordering::Relaxed);
+        if let Some(lc) = &self.lc {
+            use kf_abi::defapi::Bundle as B;
+            let c = match &plan.bundle {
+                B::UpdateChannelInfo(_) => &lc.trig_update_channel_info,
+                B::InvalidateTlb { .. } => &lc.trig_invalidate_tlb,
+                B::InitializeCtx { .. } | B::PromoteCtx { .. } | B::EvictCtx { .. } => {
+                    &lc.trig_context
+                }
+                _ => &lc.trig_other,
+            };
+            c.fetch_add(1, Ordering::Relaxed);
+        }
         let outcome = match plan.bundle {
             kf_abi::defapi::Bundle::UpdateChannelInfo(update) => self.migrate(me, r, update),
             kf_abi::defapi::Bundle::InvalidateTlb { .. } => {
@@ -2342,6 +2494,9 @@ impl Pump {
                 .map_err(|e| source_error(e, "USER_RING_MIGRATION_ADMISSION"))
             })
             .map_err(|e| access_error(e, "USER_RING_MIGRATION_USERD_ADMISSION"))??;
+        if let Some(lc) = &self.lc {
+            lc.migrated.fetch_add(1, Ordering::Relaxed);
+        }
         eprintln!(
             "kf3: USER_RING_MIGRATED {:#x}:{:#x} source={:#x}x{} generation={generation}; private native ring/USERD unchanged; no host migration verb",
             r.key.0, r.key.1, u.gpfifo_va, u.entries

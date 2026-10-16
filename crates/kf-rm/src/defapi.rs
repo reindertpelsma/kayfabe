@@ -424,6 +424,20 @@ impl Registry {
             .unwrap_or_default()
     }
 
+    /// MEASUREMENT ONLY (perf lifecycle campaign): whether `key` holds a registered, not yet
+    /// executed FIFO_UPDATE_CHANNEL_INFO entry, and how many registered entries it holds.
+    #[must_use]
+    pub fn pending_kinds(&self, key: ObjKey) -> (bool, usize) {
+        self.st().objects.get(&key).map_or((false, 0), |t| {
+            (
+                t.entries.values().any(|e| {
+                    !e.executed && matches!(e.decoded, kf_abi::defapi::Bundle::UpdateChannelInfo(_))
+                }),
+                t.entries.len(),
+            )
+        })
+    }
+
     /// `NumWaitingOnTLBFlush` of `key`.
     #[must_use]
     pub fn waiting_tlb(&self, key: ObjKey) -> u32 {

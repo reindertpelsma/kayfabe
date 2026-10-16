@@ -316,6 +316,9 @@ pub(crate) fn snapshot<'a>(
                 if !b.mem.read_into(pos, &mut dest[copied..copied + n]) {
                     return Err(Refusal::Topology);
                 }
+                if crate::lifecycle::on() {
+                    crate::lifecycle::note_ram(n);
+                }
                 copied += n;
             }
         }
@@ -323,6 +326,41 @@ pub(crate) fn snapshot<'a>(
     }
     Ok(Snapshot {
         bytes: out,
+        epoch,
+        rows: Arc::downgrade(rows),
+        spans,
+        va,
+        end,
+        ram,
+        generation,
+        pieces: PIECES,
+    })
+}
+
+/// EXPERIMENT ONLY (`KF3_SCAN_OFF_AFTER_5080`, scratch, never for merge): the same row/RAM-topology
+/// admission as [`snapshot`] WITHOUT reading a byte or arming a view. The returned snapshot has no
+/// bytes; its `admit` still re-resolves the exact span before a publication.
+pub(crate) fn unread<'a>(
+    rows: &PlacedRows,
+    log: &RowsLog,
+    ram: &'a RamMap,
+    generation: u64,
+    va: u64,
+    bytes: usize,
+) -> Result<Snapshot<'a>, Refusal> {
+    if bytes == 0 || bytes > MAX_BYTES || va.checked_add(bytes as u64).is_none() {
+        return Err(Refusal::Bounds);
+    }
+    let end = va + bytes as u64;
+    let first = try_read(rows)?;
+    let epoch = log.epoch();
+    let spans = resolve(&first, va, end, PIECES)?;
+    drop(first);
+    if generation == 0 || ram.generation.load(Ordering::Relaxed) != generation {
+        return Err(Refusal::Topology);
+    }
+    Ok(Snapshot {
+        bytes: Vec::new(),
         epoch,
         rows: Arc::downgrade(rows),
         spans,
