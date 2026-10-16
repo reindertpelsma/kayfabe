@@ -148,6 +148,49 @@ fn trace_dir() -> Option<&'static std::path::Path> {
     })
     .as_deref()
 }
+/// ★ 2026-10-16 (PHASE 1c, second review N2) MEASUREMENT CLASS — `KF3_LIFECYCLE_MODE`
+/// (`default` | `always_scan` | `no_pointer_markers` | `no_anchored_windows`, see
+/// `kf_chan::user_lifecycle::LifecycleMode` and the design document). Never needed to boot: unset means `default`
+/// (the lifecycle fully on), an unknown value is reported loudly and also means `default`. Read ONCE, when the first
+/// relay is created, never per turn.
+fn lifecycle_mode() -> kf_chan::user_lifecycle::LifecycleMode {
+    static MODE: std::sync::OnceLock<kf_chan::user_lifecycle::LifecycleMode> =
+        std::sync::OnceLock::new();
+    *MODE.get_or_init(|| {
+        let (mode, note) = parse_lifecycle_mode(
+            std::env::var(kf_chan::user_lifecycle::LifecycleMode::ENV)
+                .ok()
+                .as_deref(),
+        );
+        eprintln!(
+            "kf3: USER_RING_LIFECYCLE_MODE {}{}",
+            mode.name(),
+            note.map_or_else(String::new, |n| format!(" ({n})"))
+        );
+        mode
+    })
+}
+/// The mode a `KF3_LIFECYCLE_MODE` value selects, and the loud note for a value that names none.
+fn parse_lifecycle_mode(
+    value: Option<&str>,
+) -> (kf_chan::user_lifecycle::LifecycleMode, Option<String>) {
+    use kf_chan::user_lifecycle::LifecycleMode;
+    match value {
+        None | Some("") => (LifecycleMode::Default, None),
+        Some(v) => LifecycleMode::parse(v).map_or_else(
+            || {
+                (
+                    LifecycleMode::Default,
+                    Some(format!(
+                        "UNKNOWN value {v:?} of {}: running the default; known values: default, always_scan, no_pointer_markers, no_anchored_windows",
+                        LifecycleMode::ENV
+                    )),
+                )
+            },
+            |m| (m, Some(format!("selected by {}", LifecycleMode::ENV))),
+        ),
+    }
+}
 const TRACE_HISTORY: usize = 64;
 const TRACE_WORDS: usize = 16384;
 /// Per-channel cap on the words the history retains (1 MiB).
@@ -897,7 +940,7 @@ impl Pump {
             source_admitted: false,
             core: kf_chan::user_turn::Relay::new(
                 kf_chan::user_storage::ENTRIES,
-                kf_chan::user_lifecycle::Lifecycle::new(),
+                kf_chan::user_lifecycle::Lifecycle::new().with_mode(lifecycle_mode()),
                 scan,
             )
             .map_err(str::to_owned)?,
@@ -3314,5 +3357,36 @@ mod tests {
             1,
             "one machine per pump"
         );
+    }
+    /// PHASE 1c (review 2, N2): `KF3_LIFECYCLE_MODE` selects the measurement-class mode; nothing about it is required
+    /// to boot (unset, empty and unknown values all run the default, the last one loudly).
+    #[test]
+    fn the_lifecycle_mode_variable_selects_a_mode_and_an_unknown_value_runs_the_default_loudly() {
+        use kf_chan::user_lifecycle::LifecycleMode as M;
+        assert_eq!(parse_lifecycle_mode(None), (M::Default, None));
+        assert_eq!(parse_lifecycle_mode(Some("")), (M::Default, None));
+        for m in M::ALL {
+            assert_eq!(parse_lifecycle_mode(Some(m.name())).0, m);
+        }
+        let (m, note) = parse_lifecycle_mode(Some("always-scan"));
+        assert_eq!(m, M::Default);
+        assert!(note.is_some_and(|n| n.contains("UNKNOWN") && n.contains("always_scan")));
+    }
+
+    /// The mode is read once (a process-wide `OnceLock`) by the relay's birth, never by a turn: the variable's name
+    /// occurs in one function, and that function is called from `Pump::new` only.
+    #[test]
+    fn the_lifecycle_mode_is_read_once_at_relay_creation_and_never_per_turn() {
+        let pump = include_str!("userpump.rs");
+        let pump = pump.split("#[cfg(test)]").next().unwrap();
+        assert_eq!(pump.matches("LifecycleMode::ENV").count(), 3, "read + two notes, all in one place");
+        assert_eq!(pump.matches("std::sync::OnceLock<kf_chan::user_lifecycle::LifecycleMode>").count(), 1);
+        assert_eq!(pump.matches("lifecycle_mode()").count(), 2, "its definition and the one call");
+        let birth = pump.split("pub(super) fn new(me: &ChanPlane").nth(1).unwrap();
+        let birth = birth.split("pub(super) fn release").next().unwrap();
+        assert!(birth.contains("with_mode(lifecycle_mode())"), "the call is in Pump::new");
+        let turn = pump.split("fn turn_body(").nth(1).unwrap();
+        let turn = turn.split("/// Measurement only: the final scan refusal").next().unwrap();
+        assert!(!turn.contains("lifecycle_mode") && !turn.contains("env::var"), "no read per turn");
     }
 }

@@ -29,7 +29,7 @@
 mod support;
 
 use kf_chan::user_gate::MARK_TAG;
-use kf_chan::user_lifecycle::{Lifecycle, Mode, Transition, next};
+use kf_chan::user_lifecycle::{Lifecycle, LifecycleMode, Mode, Transition, next};
 use kf_chan::user_scan::Scan;
 use std::collections::{HashSet, VecDeque};
 use std::hash::{Hash, Hasher};
@@ -173,6 +173,8 @@ pub struct Cfg {
     pub looks: bool,
     pub pop_depth: usize,
     pub always_scan: bool,
+    /// PHASE 1c: the measurement-class mode (`KF3_LIFECYCLE_MODE`).
+    pub mode: LifecycleMode,
     pub max_states: usize,
 }
 impl Cfg {
@@ -188,6 +190,7 @@ impl Cfg {
             looks: true,
             pop_depth: usize::MAX,
             always_scan: false,
+            mode: LifecycleMode::Default,
             max_states: 4_000_000,
         }
     }
@@ -452,7 +455,7 @@ impl World {
         let life = if cfg.always_scan {
             Lifecycle::always_scan()
         } else {
-            Lifecycle::new()
+            Lifecycle::new().with_mode(cfg.mode)
         };
         let scan = Scan::for_subdevice(1).expect("sub-device");
         let mut relay = Relay::new(cfg.priv_entries, life, scan, cfg.glue);
@@ -845,6 +848,10 @@ pub struct Report {
     pub straddles_scan_max: u64,
     pub binding_changed_max: u64,
     pub entries_pointer_max: u64,
+    pub put_boundaries_scan_max: u64,
+    pub put_boundary_open_scan_max: u64,
+    pub pointer_markers_max: u64,
+    pub pointer_carried_no_marker_max: u64,
 }
 
 pub fn explore(cfg: &Cfg) -> Report {
@@ -878,6 +885,13 @@ pub fn explore(cfg: &Cfg) -> Report {
         rep.straddles_scan_max = rep.straddles_scan_max.max(c.straddles_scan);
         rep.binding_changed_max = rep.binding_changed_max.max(c.window_binding_changed);
         rep.entries_pointer_max = rep.entries_pointer_max.max(c.entries_pointer);
+        rep.put_boundaries_scan_max = rep.put_boundaries_scan_max.max(c.put_boundaries_scan);
+        rep.put_boundary_open_scan_max =
+            rep.put_boundary_open_scan_max.max(c.put_boundary_open_scan);
+        rep.pointer_markers_max = rep.pointer_markers_max.max(c.pointer_markers);
+        rep.pointer_carried_no_marker_max = rep
+            .pointer_carried_no_marker_max
+            .max(c.pointer_carried_no_marker);
         rep.carried_ungated = rep.carried_ungated.max(w.env.carried_ungated);
         rep.retries_max = rep.retries_max.max(w.env.retries);
         rep.entry_refused = rep.entry_refused.max(w.env.entry_refused);
@@ -2241,4 +2255,127 @@ fn d3_a_credit_stall_inside_a_packet_never_gets_a_marker() {
     cfg.max_states = 8_000_000;
     let r = assert_clean(&cfg, "d3-stall-in-packet");
     assert_eq!(r.modes, HashSet::from([Mode::Pointer]));
+}
+
+// ---- PHASE 1c (second review N2): the measurement-class modes (`KF3_LIFECYCLE_MODE`). Each has an observable
+// difference the model checks over every interleaving, and no mode loses, duplicates or reorders an entry.
+
+fn p2prime_script() -> Vec<Op> {
+    vec![
+        Op::Push(ge(0, Kind::SetObj)),
+        Op::SetPut,
+        Op::Ring,
+        Op::Push(p(1).sync()),
+        Op::Push(ge(2, Kind::OpenHead)),
+        Op::SetPut, // GP_PUT ends INSIDE a packet, long after the binding
+        Op::Ring,
+        Op::Push(ge(3, Kind::OpenTail)),
+        Op::SetPut,
+        Op::Ring,
+    ]
+}
+
+#[test]
+fn m1_default_reads_no_pushbuffer_after_the_binding_and_always_scan_reads_every_one() {
+    let (script, expected) = batch_ends_script(3);
+    let mut cfg = Cfg::new(spec(script, &expected));
+    let d = assert_clean(&cfg, "m1-default");
+    assert_eq!(
+        d.pb_reads_max, 1,
+        "default: only the SET_OBJECT segment is ever read"
+    );
+    assert_eq!(d.modes, HashSet::from([Mode::Pointer]));
+    assert!(d.entries_pointer_max >= 1);
+    cfg.mode = LifecycleMode::AlwaysScan;
+    let a = assert_clean(&cfg, "m1-always-scan");
+    assert!(
+        a.pb_reads_max >= 4,
+        "always_scan: every entry's pushbuffer is read (a credit stall may read one again): {}",
+        a.pb_reads_max
+    );
+    assert_eq!(a.pointer_markers_max, 0);
+    assert_eq!(a.modes, HashSet::from([Mode::Scan]), "never leaves Scan");
+    assert_eq!(a.entries_pointer_max, 0);
+    assert_eq!(a.to_pointer_max, 0);
+}
+
+#[test]
+fn m1_always_scan_measures_a_gp_put_boundary_inside_a_packet_on_the_whole_run_default_cannot() {
+    // The submission [1, 2:OpenHead] ends inside a packet AFTER the software object is bound. The default machine is
+    // in Pointer mode by then and has no parser state to look at; always_scan sees it (put_boundary_open_scan).
+    let mut cfg = Cfg::new(spec(p2prime_script(), &[0, 1, 2, 3]));
+    let d = explore(&cfg);
+    assert_eq!(d.put_boundary_open_scan_max, 0, "invisible in default mode");
+    assert!(
+        d.viol & V_MARKER_IN_PACKET != 0,
+        "and in default mode the Pointer batch-end marker lands in that packet (P2' false): the hazard the mode measures"
+    );
+    cfg.mode = LifecycleMode::AlwaysScan;
+    let a = assert_clean(&cfg, "m1-always-scan-boundaries");
+    assert!(
+        a.put_boundary_open_scan_max >= 1,
+        "some interleaving reaches the open boundary with the parser state known"
+    );
+    assert!(a.put_boundaries_scan_max > d.put_boundaries_scan_max);
+}
+
+#[test]
+fn m1_always_scan_with_a_registration_and_a_ring_switch_still_relays_everything_in_order() {
+    for kind in [Registration::Migrate, Registration::Other] {
+        let mut cfg = flip(kind);
+        cfg.mode = LifecycleMode::AlwaysScan;
+        let r = assert_clean(&cfg, &format!("m1-always-scan-flip-{kind:?}"));
+        assert_eq!(r.modes, HashSet::from([Mode::Scan]), "{kind:?}");
+        assert_eq!(r.triggers_found_max, 1);
+    }
+}
+
+fn batch_ends_script(n: u8) -> (Vec<Op>, Vec<u8>) {
+    let mut script = vec![Op::Push(ge(0, Kind::SetObj)), Op::SetPut, Op::Ring];
+    let mut expected = vec![0u8];
+    for id in 1..=n {
+        script.extend([Op::Push(p(id)), Op::SetPut, Op::Ring]);
+        expected.push(id);
+    }
+    (script, expected)
+}
+
+#[test]
+fn m1_no_pointer_markers_places_no_marker_in_pointer_mode_and_the_wake_falls_back_to_a_look() {
+    // d3 (a 4-slot guest ring that fills): Pointer-mode batch-end markers announce the pops with NO look. Without them
+    // the run is live only with a look (the bounded spin / the counted backstop), and the wake is counted.
+    let (script, expected) = batch_ends_script(4);
+    let mut cfg = Cfg::new(spec(script, &expected));
+    cfg.src_entries = 4;
+    cfg.priv_entries = 8;
+    cfg.max_states = 8_000_000;
+    cfg.looks = false;
+    let d = assert_clean(&cfg, "m1-markers-default");
+    assert!(
+        d.pointer_markers_max >= 1,
+        "default: Pointer markers are placed"
+    );
+    cfg.mode = LifecycleMode::NoPointerMarkers;
+    cfg.looks = false;
+    let n = assert_found(&cfg, "m1-no-pointer-markers-no-looks", V_DEADLOCK);
+    assert_eq!(n.pointer_markers_max, 0, "no marker in Pointer mode");
+    cfg.looks = true;
+    let n = assert_clean(&cfg, "m1-no-pointer-markers-looks");
+    assert_eq!(n.pointer_markers_max, 0);
+    assert!(
+        n.pointer_carried_no_marker_max >= 1,
+        "the wake that has no marker is counted (loud)"
+    );
+    assert_eq!(n.modes, HashSet::from([Mode::Pointer]));
+}
+
+#[test]
+fn m1_no_anchored_windows_is_the_phase_1_start_and_puts_the_marker_inside_the_packet() {
+    // d1: a registration inside a submission whose packet spans two entries. Anchored (default) is clean; the PHASE 1
+    // start at the entry that sees the registration lands the seeded gate inside the packet.
+    let mut cfg = Cfg::new(spec(d1_script(), &[0, 1, 2, 3, 4, 5]));
+    cfg.kind = Registration::Other;
+    assert_clean(&cfg, "m1-anchored");
+    cfg.mode = LifecycleMode::NoAnchoredWindows;
+    assert_found(&cfg, "m1-no-anchored-windows", V_MARKER_IN_PACKET);
 }

@@ -30,6 +30,51 @@ pub enum Start {
     Fresh,
 }
 
+/// ★ 2026-10-16 (PHASE 1c, second review N2). The measurement-class switch of the lifecycle, read ONCE from the
+/// environment variable [`LifecycleMode::ENV`] when a relay is created (never per turn, never required to boot; an
+/// unknown value is reported loudly and means [`LifecycleMode::Default`]).
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash)]
+pub enum LifecycleMode {
+    /// The lifecycle fully on: Scan, Pointer (with markers at observed `GP_PUT` boundaries), anchored Windows.
+    #[default]
+    Default,
+    /// The machine never leaves Scan: the base revision's behaviour (every entry's pushbuffer is read and scanned) with
+    /// ALL 1b counters on, so `put_boundary_open_scan` measures assumption P2' on the whole run, not only on the setup
+    /// stretch before the first `SET_OBJECT`.
+    AlwaysScan,
+    /// Pointer mode places no markers (the wake is the bounded spin / the counted backstop); anchored Windows stay.
+    NoPointerMarkers,
+    /// A Window starts at the first entry that sees the registration (PHASE 1 behaviour), not at the anchor.
+    NoAnchoredWindows,
+}
+
+impl LifecycleMode {
+    /// The environment variable.
+    pub const ENV: &'static str = "KF3_LIFECYCLE_MODE";
+    /// Every mode, for tests and the documentation.
+    pub const ALL: [Self; 4] = [
+        Self::Default,
+        Self::AlwaysScan,
+        Self::NoPointerMarkers,
+        Self::NoAnchoredWindows,
+    ];
+    /// The value of [`Self::ENV`] that selects this mode.
+    #[must_use]
+    pub const fn name(self) -> &'static str {
+        match self {
+            Self::Default => "default",
+            Self::AlwaysScan => "always_scan",
+            Self::NoPointerMarkers => "no_pointer_markers",
+            Self::NoAnchoredWindows => "no_anchored_windows",
+        }
+    }
+    /// The mode a value names (`None` for an unknown name).
+    #[must_use]
+    pub fn parse(value: &str) -> Option<Self> {
+        Self::ALL.into_iter().find(|m| m.name() == value)
+    }
+}
+
 /// The only way to read a pushbuffer: obtained from a [`Plan::Scan`].
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub struct ScanPermit(());
@@ -361,7 +406,7 @@ pub struct Lifecycle {
     start: Option<Start>,
     counts: Counts,
     reported: Counts,
-    legacy: bool,
+    kind: LifecycleMode,
     live: u32,
     live_known: bool,
     seen_epoch: u64,
@@ -421,7 +466,7 @@ impl Lifecycle {
             start: None,
             counts: Counts::default(),
             reported: Counts::default(),
-            legacy: false,
+            kind: LifecycleMode::Default,
             live: 0,
             live_known: false,
             seen_epoch: 0,
@@ -446,10 +491,17 @@ impl Lifecycle {
     /// The base revision's behaviour: scan every entry for ever. For differential tests.
     #[must_use]
     pub fn always_scan() -> Self {
-        Self {
-            legacy: true,
-            ..Self::new()
-        }
+        Self::new().with_mode(LifecycleMode::AlwaysScan)
+    }
+    /// The same machine under a measurement-class mode ([`LifecycleMode`]).
+    #[must_use]
+    pub fn with_mode(self, kind: LifecycleMode) -> Self {
+        Self { kind, ..self }
+    }
+    /// The mode this machine runs under.
+    #[must_use]
+    pub fn lifecycle_mode(&self) -> LifecycleMode {
+        self.kind
     }
     /// A machine with a deliberate defect.
     #[cfg(feature = "lifecycle-mutants")]
@@ -466,7 +518,7 @@ impl Lifecycle {
     pub fn state_key(&self, relayed: u64) -> String {
         let ahead = |v: u64| v.saturating_sub(relayed);
         format!(
-            "{:?}|{:?}|{}|{}|{}|{:?}|{}|{}|{}|{}|{:?}|{}|{}",
+            "{:?}|{:?}|{}|{}|{}|{:?}|{}|{}|{}|{}|{:?}|{}|{}|{:?}",
             self.mode,
             self.start,
             self.live,
@@ -479,7 +531,8 @@ impl Lifecycle {
             ahead(self.safe_end),
             self.next_boundary.map(ahead).filter(|d| *d > 0),
             u8::from(self.here == Some(relayed)),
-            self.post_switch
+            self.post_switch,
+            self.kind
         )
     }
     /// The current mode.
@@ -528,7 +581,7 @@ impl Lifecycle {
             self.counts.after_teardown += 1;
             return Plan::Stop;
         }
-        if self.legacy {
+        if self.kind == LifecycleMode::AlwaysScan {
             return scan_plan(false, false);
         }
         if !self.live_known || o.epoch != self.seen_epoch {
@@ -569,11 +622,14 @@ impl Lifecycle {
                         self.go(Mode::Scan, Cause::Registration);
                         return scan_plan(false, false);
                     }
+                    // `NoAnchoredWindows` (measurement class): the PHASE 1 start, at the entry that sees the registration
+                    let unanchored = self.kind == LifecycleMode::NoAnchoredWindows;
                     #[cfg(feature = "lifecycle-mutants")]
-                    let at_anchor =
-                        o.abs >= self.safe_end || self.mutant == Some(Mutant::AnchorIgnored);
+                    let at_anchor = o.abs >= self.safe_end
+                        || unanchored
+                        || self.mutant == Some(Mutant::AnchorIgnored);
                     #[cfg(not(feature = "lifecycle-mutants"))]
-                    let at_anchor = o.abs >= self.safe_end;
+                    let at_anchor = o.abs >= self.safe_end || unanchored;
                     if at_anchor {
                         self.go(Mode::Window, Cause::Registration);
                         self.start = Some(Start::Fresh);
@@ -635,7 +691,14 @@ impl Lifecycle {
     /// The entry was published.
     pub fn forwarded(&mut self, abs: u64, raw: u64) {
         match self.mode {
-            Mode::Scan => self.counts.entries_scan += 1,
+            Mode::Scan => {
+                self.counts.entries_scan += 1;
+                // `AlwaysScan` never opens a Window, so the entries after a source switch are counted here
+                if self.post_switch > 0 {
+                    self.post_switch -= 1;
+                    self.counts.post_switch_scanned += 1;
+                }
+            }
             Mode::Pointer => {
                 self.counts.entries_pointer += 1;
                 self.pointer_stretch += 1;
@@ -746,7 +809,7 @@ impl Lifecycle {
                 if self.mutant == Some(Mutant::PointerNoMarkers) {
                     return false;
                 }
-                if self.here == Some(relayed) {
+                if self.kind != LifecycleMode::NoPointerMarkers && self.here == Some(relayed) {
                     true
                 } else {
                     self.counts.pointer_carried_no_marker += 1;
@@ -793,7 +856,7 @@ impl Lifecycle {
     /// Window may end: a detection aid for the cursor semantics at the switch (design D5), never an edge of the
     /// table.
     pub fn source_switched(&mut self) {
-        if self.mode == Mode::Window {
+        if self.mode == Mode::Window || self.kind == LifecycleMode::AlwaysScan {
             self.post_switch = POST_SWITCH_SCAN;
         }
     }
@@ -1475,6 +1538,140 @@ mod tests {
                 }
             }
             let _ = windows;
+        }
+    }
+
+    /// PHASE 1c (review 2, N2): the mode names are the documented ones; an unknown name is not a mode.
+    #[test]
+    fn the_measurement_mode_names_parse_exactly() {
+        for m in LifecycleMode::ALL {
+            assert_eq!(LifecycleMode::parse(m.name()), Some(m));
+        }
+        assert_eq!(
+            LifecycleMode::parse("default"),
+            Some(LifecycleMode::Default)
+        );
+        assert_eq!(
+            LifecycleMode::parse("always_scan"),
+            Some(LifecycleMode::AlwaysScan)
+        );
+        assert_eq!(
+            LifecycleMode::parse("no_pointer_markers"),
+            Some(LifecycleMode::NoPointerMarkers)
+        );
+        assert_eq!(
+            LifecycleMode::parse("no_anchored_windows"),
+            Some(LifecycleMode::NoAnchoredWindows)
+        );
+        for bad in ["", "Default", "always-scan", "scan", " default"] {
+            assert_eq!(LifecycleMode::parse(bad), None, "{bad:?}");
+        }
+        assert_eq!(Lifecycle::new().lifecycle_mode(), LifecycleMode::Default);
+    }
+
+    /// `always_scan`: the machine never leaves Scan, plans a scan for every entry, and every 1b counter keeps running
+    /// for the whole run (the P2' falsifier included).
+    #[test]
+    fn always_scan_never_leaves_scan_and_measures_the_boundaries_of_the_whole_run() {
+        let mut d = Lifecycle::new();
+        let mut a = Lifecycle::new().with_mode(LifecycleMode::AlwaysScan);
+        for l in [&mut d, &mut a] {
+            // the software object is bound at entry 0
+            l.entry(&obs(0, 0x10, 0, B), || 0);
+            l.forwarded(0, 0x10);
+        }
+        assert_eq!(d.mode(), Mode::Pointer);
+        assert_eq!(a.mode(), Mode::Scan, "never leaves Scan");
+        for abs in 1..6u64 {
+            assert_eq!(d.entry(&obs(abs, 0x10, 0, B), || 0), Plan::Forward);
+            assert!(
+                matches!(a.entry(&obs(abs, 0x10, 0, B), || 0), Plan::Scan { .. }),
+                "entry {abs} is scanned"
+            );
+            d.forwarded(abs, 0x10);
+            a.forwarded(abs, 0x10);
+        }
+        // a registration changes nothing in always_scan
+        assert!(matches!(
+            a.entry(&obs(6, 0x10, 1, B), || 1),
+            Plan::Scan { restart: false, .. }
+        ));
+        assert_eq!((a.mode(), a.counts().to_window_fresh), (Mode::Scan, 0));
+        // GP_PUT boundaries with a packet open, long after the binding: counted only by always_scan
+        a.observe_put(9, 9, Some(true));
+        d.observe_put(9, 9, None); // Pointer mode knows no parser state
+        assert_eq!(
+            (
+                a.counts().put_boundaries_scan,
+                a.counts().put_boundary_open_scan
+            ),
+            (1, 1)
+        );
+        assert_eq!(
+            (
+                d.counts().put_boundaries_scan,
+                d.counts().put_boundary_open_scan
+            ),
+            (0, 0),
+            "the default mode cannot see a boundary after Scan ended: the reason for the mode"
+        );
+        // a source switch is still bookkept (8 entries are counted after it)
+        a.source_switched();
+        for abs in 7..20u64 {
+            a.entry(&obs(abs, 0x10, 1, B), || 1);
+            a.forwarded(abs, 0x10);
+        }
+        assert_eq!(a.counts().post_switch_scanned, u64::from(POST_SWITCH_SCAN));
+        assert_eq!(a.counts().entries_scan, 1 + 5 + 13);
+    }
+
+    /// `no_pointer_markers`: a marker is never placed in Pointer mode, even at an observed `GP_PUT` boundary; Scan and
+    /// Window keep their markers; the wake it cannot announce is counted (loud).
+    #[test]
+    fn no_pointer_markers_places_none_in_pointer_mode_but_keeps_the_rest() {
+        for mode in [LifecycleMode::Default, LifecycleMode::NoPointerMarkers] {
+            let mut l = Lifecycle::new().with_mode(mode);
+            assert!(
+                l.marker_possible(false, 0),
+                "Scan: a marker when no packet is open"
+            );
+            l.entry(&obs(0, 0, 0, 1 << 6), || 0);
+            l.observe_put(1, 1, None);
+            let possible = l.marker_possible(false, 1);
+            assert_eq!(possible, mode == LifecycleMode::Default, "{mode:?}");
+            assert_eq!(
+                l.counts().pointer_carried_no_marker,
+                u64::from(mode == LifecycleMode::NoPointerMarkers),
+                "{mode:?}: the wake that has no marker is counted"
+            );
+            // a Window still places markers (parser state known)
+            l.entry(&obs(1, 0, 1, B), || 1);
+            assert_eq!(l.mode(), Mode::Window);
+            assert!(l.marker_possible(false, 1), "{mode:?}: Window");
+        }
+    }
+
+    /// `no_anchored_windows`: a Window starts at the entry that sees the registration (PHASE 1), not at the anchor.
+    #[test]
+    fn no_anchored_windows_starts_the_window_at_the_entry_that_sees_the_registration() {
+        for mode in [LifecycleMode::Default, LifecycleMode::NoAnchoredWindows] {
+            let mut l = Lifecycle::new().with_mode(mode);
+            let o = |abs: u64, put_abs: u64, epoch: u64| Obs {
+                put_abs,
+                ..obs(abs, 0x10, epoch, B)
+            };
+            l.entry(&o(0, 6, 0), || 0);
+            l.forwarded(0, 0x10);
+            let plan = l.entry(&o(1, 6, 1), || 1);
+            if mode == LifecycleMode::NoAnchoredWindows {
+                assert!(matches!(plan, Plan::Scan { restart: true, .. }));
+                assert_eq!(l.mode(), Mode::Window);
+                assert_eq!(l.counts().anchor_forwarded, 0);
+            } else {
+                assert_eq!(plan, Plan::Forward, "below the anchor");
+                assert_eq!(l.mode(), Mode::Pointer);
+                assert_eq!(l.counts().anchor_forwarded, 1);
+            }
         }
     }
 

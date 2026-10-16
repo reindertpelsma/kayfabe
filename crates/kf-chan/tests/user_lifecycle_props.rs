@@ -21,7 +21,7 @@
 mod support;
 
 use kf_chan::user_gate::MARK_TAG;
-use kf_chan::user_lifecycle::{Lifecycle, Mode};
+use kf_chan::user_lifecycle::{Lifecycle, LifecycleMode, Mode};
 use kf_chan::user_scan::Scan;
 use std::collections::{HashMap, VecDeque};
 use support::*;
@@ -388,14 +388,20 @@ pub fn drive(sim: &mut Sim, relay: &mut Relay, max_turns: usize) -> usize {
 }
 
 pub fn new_relay(priv_entries: u32, always_scan: bool) -> Relay {
-    let life = if always_scan {
-        Lifecycle::always_scan()
-    } else {
-        Lifecycle::new()
-    };
+    new_relay_mode(
+        priv_entries,
+        if always_scan {
+            LifecycleMode::AlwaysScan
+        } else {
+            LifecycleMode::Default
+        },
+    )
+}
+
+pub fn new_relay_mode(priv_entries: u32, mode: LifecycleMode) -> Relay {
     Relay::new(
         priv_entries,
-        life,
+        Lifecycle::new().with_mode(mode),
         Scan::for_subdevice(1).unwrap(),
         Glue::from_env(),
     )
@@ -408,8 +414,28 @@ pub fn run_stream(
     entries: u32,
     priv_entries: u32,
 ) -> (Out, Relay) {
+    run_stream_mode(
+        stream,
+        sched,
+        if always_scan {
+            LifecycleMode::AlwaysScan
+        } else {
+            LifecycleMode::Default
+        },
+        entries,
+        priv_entries,
+    )
+}
+
+pub fn run_stream_mode(
+    stream: &[Ge],
+    sched: &[Sched],
+    mode: LifecycleMode,
+    entries: u32,
+    priv_entries: u32,
+) -> (Out, Relay) {
     let mut sim = Sim::new(entries, priv_entries, stream, sched.to_vec());
-    let mut relay = new_relay(priv_entries, always_scan);
+    let mut relay = new_relay_mode(priv_entries, mode);
     drive(&mut sim, &mut relay, 200_000);
     sim.out.dead |= relay.dead;
     (sim.out, relay)
@@ -497,6 +523,70 @@ fn g2_without_a_registration_the_forwarded_entries_are_bit_identical_to_always_s
             "seed {seed}: the lifecycle reads less"
         );
     }
+}
+
+/// PHASE 1c (review 2, N2): every measurement-class mode forwards exactly the guest's entries (bit-exact, in order,
+/// none lost or duplicated) and each shows its own observable difference: `default` and `no_anchored_windows` read no
+/// pushbuffer in Pointer mode, `always_scan` reads every entry and never leaves Scan, `no_pointer_markers` is the
+/// default minus the Pointer-mode markers (the wake falls back to a look).
+#[test]
+fn modes_every_mode_forwards_the_same_entries_and_each_has_its_observable_difference() {
+    let mut default_markers = 0;
+    for seed in 0..120u64 {
+        let mut rng = Rng::new(seed ^ 0x5eed);
+        let n = 8 + rng.below(80) as usize;
+        let stream = gen_stream(&mut rng, n, true, false);
+        let ring = 16 << rng.below(3);
+        let expect: Vec<u64> = stream.iter().map(Ge::raw).collect();
+        let nonnop = stream.iter().filter(|g| g.kind != Kind::Nop).count() as u64;
+        let mut by_mode = Vec::new();
+        for mode in LifecycleMode::ALL {
+            let (out, relay) = run_stream_mode(&stream, &[], mode, ring, 8);
+            assert!(!out.dead, "seed {seed} {mode:?}: dead");
+            assert_eq!(
+                out.forwarded, expect,
+                "seed {seed} {mode:?}: bit-exact, in order"
+            );
+            assert_eq!(out.beyond_put, 0, "seed {seed} {mode:?}: I8");
+            assert_eq!(out.pb_reads_in_pointer, 0, "seed {seed} {mode:?}: G1");
+            match mode {
+                LifecycleMode::AlwaysScan => {
+                    assert_eq!(relay.life.mode(), Mode::Scan, "seed {seed}");
+                    assert_eq!(
+                        u64::from(out.pb_reads),
+                        nonnop,
+                        "seed {seed}: every entry is read"
+                    );
+                    assert_eq!(relay.life.counts().entries_pointer, 0);
+                }
+                _ => {
+                    assert_eq!(relay.life.mode(), Mode::Pointer, "seed {seed} {mode:?}");
+                    assert!(u64::from(out.pb_reads) < nonnop, "seed {seed} {mode:?}");
+                }
+            }
+            by_mode.push((mode, out.markers, relay.life.counts().pointer_markers));
+        }
+        let get = |m: LifecycleMode| by_mode.iter().find(|x| x.0 == m).copied().unwrap();
+        assert_eq!(
+            get(LifecycleMode::NoPointerMarkers).2,
+            0,
+            "seed {seed}: no Pointer marker in no_pointer_markers"
+        );
+        assert_eq!(
+            get(LifecycleMode::AlwaysScan).2,
+            0,
+            "seed {seed}: nor in always_scan (it never leaves Scan)"
+        );
+        assert!(
+            get(LifecycleMode::Default).1 >= get(LifecycleMode::NoPointerMarkers).1,
+            "seed {seed}: the default places at least the markers the reduced mode does"
+        );
+        default_markers += get(LifecycleMode::Default).2;
+    }
+    assert!(
+        default_markers > 0,
+        "the default mode places Pointer markers (otherwise the comparison above proves nothing)"
+    );
 }
 
 /// Register when `at` entries were forwarded (the flip: entry `at` is the first one loaded after it); the trigger
