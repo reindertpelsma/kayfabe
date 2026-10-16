@@ -1,5 +1,23 @@
 # Status and handoff — where kayfabe v3 stands, and how to resume
 
+## UPDATE 2026-10-16 23:00UTC — AD102 three single-row ablations complete
+
+Only56302930 ACTIVE; original00:46UTC timer/hard00:51UTC2026-10-17 unchanged.
+Same stopped580verifiedpayload parent/freshsiblings/P19/no tracing, actual8088/GSP1.
+Reference9d PASS. Removeonlycaps00c(a52494d4): Code0 but DWM0Explorer0 at bothcensus/
+acceptance, appsUNRUN/desktopFAIL; absent-rownotice present, boundednegative, stop22:54:18.
+Removeonly2801(a7509bf3) PASS CUDA3/DX11+12beforeafter/nonblank78756colors/0TDR/hostXid5→5,
+stop22:56:37. Removeonly2806(003ad0e7) samePASS/78755colors, stop22:58:57.
+Each LPWR refusal actuallyobserved in cumulativecensus x1; repeatedlogsnotextrarequests.
+Individual-necessity falsifier FIRED for both LPWR rows, notcaps00c. No joint-removal or
+otherdie/build conclusion and no productrow removed. TS/ad102_second_builds_20261016/
+windows580_ablations/RESULT.md +38screenedartifacts. Firstreal581installer sibling
+nowbooting common9d/P19/58065 before actual8151/GSP1/cold5809402/420sacceptance.
+Linux590queue104416 waits Windowscomplete, fat590queue104757 waits raw590/noGPUoverlap.
+Read-onlymarket22:51 foundAD106/4060Ti offer54573432machine38151; notrented, othersearched
+5070/3070/2060Sempty. Requote onlyafter currentretirement; no second concurrentrental.
+
+
 ## UPDATE 2026-10-16 22:49UTC — exact9d AD102 Windows580 fresh reference PASS
 
 Only own56302930 ACTIVE; originaltimer00:46UTC/hard00:51UTC2026-10-17 unchanged.

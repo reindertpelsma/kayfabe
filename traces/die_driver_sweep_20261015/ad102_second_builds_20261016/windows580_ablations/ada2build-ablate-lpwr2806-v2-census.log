@@ -1,0 +1,10 @@
+GUEST_PROGRAM_STARTED ada2build_census8088.ps1 pid=7676
+ACTUAL_OS edition=EnterpriseSEval build=26100 ubr=1742
+DISPLAY_CENSUS_START 2026-10-16T22:57:50.7228722Z
+{"pci":"VEN_10DE\u0026DEV_2684","class_gsp":1,"driver_version":"32.0.15.8088","status_flags":25190410,"problem":0}
+DISPLAY_CENSUS_DESKTOP dwm=1 explorer=1
+DISPLAY_CENSUS_END problem=0 2026-10-16T22:57:51.3614606Z
+
+#< CLIXML
+<Objs Version="1.1.0.1" xmlns="http://schemas.microsoft.com/powershell/2004/04"><Obj S="progress" RefId="0"><TN RefId="0"><T>System.Management.Automation.PSCustomObject</T><T>System.Object</T></TN><MS><I64 N="SourceId">1</I64><PR N="Record"><AV>Preparing modules for first use.</AV><AI>0</AI><Nil /><PI>-1</PI><PC>-1</PC><T>Completed</T><SR>-1</SR><SD> </SD></PR></MS></Obj><Obj S="progress" RefId="1"><TNRef RefId="0" /><MS><I64 N="SourceId">1</I64><PR N="Record"><AV>Preparing modules for first use.</AV><AI>0</AI><Nil /><PI>-1</PI><PC>-1</PC><T>Completed</T><SR>-1</SR><SD> </SD></PR></MS></Obj></Objs>
+GUEST_PROGRAM_EXIT ada2build_census8088.ps1 code=0

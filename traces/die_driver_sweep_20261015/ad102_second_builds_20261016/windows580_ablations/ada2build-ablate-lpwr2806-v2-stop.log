@@ -1,0 +1,4 @@
+unix:/root/win/codex-ada2build/qmp.sock,server=on,wait=off
+STOP_START pid=107848 2026-10-16T22:58:43+00:00
+OWN_STOP_COMPLETE=1
+STOP_EXIT rc=0 2026-10-16T22:58:57+00:00

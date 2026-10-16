@@ -51,19 +51,65 @@
     "sha256": "1ea9fbf3a99319d8e9de26a178b1c1fa070c865c4eaa1abf4bafeda491b5b2be"
   },
   {
+    "name": "ada2build-ablate-lpwr2806-v2-shot-summary.json",
+    "bytes": 201,
+    "sha256": "a00a3808f5a7c4cc8583992846fb5fb524ccf9aec4bc633d150e03fe37b265a5"
+  },
+  {
+    "name": "ada2build-ablate-lpwr2806-v2-qemu.log",
+    "bytes": 1457732,
+    "sha256": "cbe299df177f0ca20417401a038fab23dcc0276fe26e02e9602e67c4698ec1eb",
+    "excerpt_only": true
+  },
+  {
     "name": "ada2build-ablate-caps00c-v2-qemu.log",
     "bytes": 753591,
     "sha256": "8aa71848a50cd9985cebe66dabfbe501ad866897311dbb4146bd440d4364cebe"
   },
   {
+    "name": "ada2build-ablate-lpwr2801-v2-process-receipt.json",
+    "bytes": 2956,
+    "sha256": "a82bf9ed1841821603cea1a3d6f7e8c194fff29a190b69c325aff92851e40217"
+  },
+  {
+    "name": "ada2build-ablate-lpwr2806-v2-accept.log",
+    "bytes": 9889,
+    "sha256": "2c6e164611bee474c5a441fcb90971baff776e35764faa027562417d12d06f47"
+  },
+  {
+    "name": "ada2build-ablate-lpwr2801-v2-flags.txt",
+    "bytes": 542,
+    "sha256": "1ea9fbf3a99319d8e9de26a178b1c1fa070c865c4eaa1abf4bafeda491b5b2be"
+  },
+  {
+    "name": "ada2build-ablate-lpwr2806-v2-host-xids.after.txt",
+    "bytes": 1125,
+    "sha256": "92e461c0250aa0c63018b363b62653f0b5d3f3177b71d43a8ee045ee140cd109"
+  },
+  {
     "name": "ada2build-ablate-lpwr2801-v2-accept.log",
-    "bytes": 78,
-    "sha256": "ab463495c74ac4412d6213e0f474c431261c2308bdfc58c995f0f82e53e75ccb"
+    "bytes": 9911,
+    "sha256": "3ff05c5da8b01ae4f6831905342e2e6248b09e3adb465c0c6a729eeda349f2ff"
+  },
+  {
+    "name": "ada2build-ablate-lpwr2801-v2-stop.log",
+    "bytes": 168,
+    "sha256": "36b1bdc8f77be284dcb9a97ca2757ad742afb19f3dd2a8226116cc9e5d129ec4"
   },
   {
     "name": "ada2build-ablate-lpwr2801-v2-census.log",
     "bytes": 1048,
     "sha256": "eb1da59baf2c1f39910cfdfd32782e88119dde399f75c7f80abfab6bb326c0b1"
+  },
+  {
+    "name": "ada2build-ablate-lpwr2806-v2-census.log",
+    "bytes": 1048,
+    "sha256": "bba7f33ed632ac3bd05bf3e42d0025d036b87fdc499c86c970221d878a70f36a"
+  },
+  {
+    "name": "ada2build-ablate-lpwr2806-v2-process-receipt.json",
+    "bytes": 2956,
+    "sha256": "c7a10b2c541e4d86dddb8a586f55593e3b20774d3ec200ecd55764be490ff4c2"
   },
   {
     "name": "ada2build-ablate-caps00c-v2-process-receipt.json",
@@ -76,14 +122,40 @@
     "sha256": "9192aba1e5f575f83773cf6c7f966b1e41bb1f7b817995cc886434bd907d0689"
   },
   {
+    "name": "ada2build-ablate-lpwr2806-v2-host-xids.before.txt",
+    "bytes": 1125,
+    "sha256": "92e461c0250aa0c63018b363b62653f0b5d3f3177b71d43a8ee045ee140cd109"
+  },
+  {
     "name": "ada2build-ablate-caps00c-v2-stop.log",
     "bytes": 171,
     "sha256": "72054a8cf5baeb5201030d84c8ca3d6dfc8eebbc66a7452278ca5c2636eedc09"
   },
   {
+    "name": "ada2build-ablate-lpwr2801-v2-qemu.log",
+    "bytes": 1414278,
+    "sha256": "8682ba32e92bd717b4fbb077441a0b8a76f3b27ea3231661135b37f3b3dfa9cf",
+    "excerpt_only": true
+  },
+  {
     "name": "ada2build-ablate-caps00c-v2-host-xids.before.txt",
     "bytes": 1125,
     "sha256": "92e461c0250aa0c63018b363b62653f0b5d3f3177b71d43a8ee045ee140cd109"
+  },
+  {
+    "name": "ada2build-ablate-lpwr2806-v2-flags.txt",
+    "bytes": 542,
+    "sha256": "1ea9fbf3a99319d8e9de26a178b1c1fa070c865c4eaa1abf4bafeda491b5b2be"
+  },
+  {
+    "name": "ada2build-ablate-lpwr2801-v2-shot-summary.json",
+    "bytes": 201,
+    "sha256": "1c8c70a78965b96dc933e7be361bf7c410d83935ceb5d5f40bb3ff8cb829fd6c"
+  },
+  {
+    "name": "ada2build-ablate-lpwr2806-v2-stop.log",
+    "bytes": 168,
+    "sha256": "720cdc5e57b588a693b6f6c095c6dd329ca0beed1283a0cb637922f3161969dd"
   },
   {
     "name": "ada2build-ablate-lpwr2801-v2-host-xids.before.txt",
@@ -94,6 +166,11 @@
     "name": "ada2build-ablate-caps00c-v2-census.log",
     "bytes": 1048,
     "sha256": "8c842dcc6d3a8a0633a19d3ef1d5921bb52738bb31209a3dc6f8450afe1fd872"
+  },
+  {
+    "name": "ada2build-ablate-lpwr2801-v2-host-xids.after.txt",
+    "bytes": 1125,
+    "sha256": "92e461c0250aa0c63018b363b62653f0b5d3f3177b71d43a8ee045ee140cd109"
   },
   {
     "name": "ada2build_stage_nvidia.log",
@@ -112,7 +189,7 @@
   },
   {
     "name": "ada2build_resume_windows_v2.log",
-    "bytes": 5690,
-    "sha256": "e07ed9ec24797243b399080ae9353ee30b5ccac3dbe53e84a5c90e0aa0ace1a4"
+    "bytes": 8802,
+    "sha256": "525f234fe189686f37e793eaacb9c67d8ce9d05eeec0a6edf4d7109722b9502d"
   }
 ]
