@@ -108,6 +108,8 @@ type A3 = [[AtomicU64; 3]; 3];
 #[derive(Default)]
 pub(crate) struct Chan {
     pub key: (u32, u32),
+    /// SCRATCH: the last committed SET_OBJECT statistics of this channel's scan.
+    pub setobj: Mutex<kf_chan::user_scan::SetObjStats>,
     calls: A3,
     errs: A3,
     bytes: A3,
@@ -361,6 +363,24 @@ pub(crate) fn dump(me: &super::chan::ChanPlane, why: &str) {
     eprintln!("kf3: LIFECYCLE t={t:.1} wall={wall:.1} {why} {}", me.gap_line());
     eprintln!("kf3: LIFECYCLE t={t:.1} wall={wall:.1} {why} cw {}", credit_line());
     for c in &chans {
+        let so = c.setobj.lock().map(|g| g.clone()).unwrap_or_default();
+        if so.total > 0 {
+            eprintln!(
+                "kf3: LIFECYCLE_SETOBJ t={t:.1} wall={wall:.1} {why} {:#x}:{:#x} set_object_total={} set_object_per_sub={:?} set_object_after_first_per_sub={:?} set_object_same_resend={} set_object_different={} set_object_5080_extra_sub={} set_object_late_first_idx={} set_object_late_count={} set_object_late_idx={:?} set_object_distinct={:x?}",
+                c.key.0,
+                c.key.1,
+                so.total,
+                so.per_sub,
+                so.rebind_per_sub,
+                so.same_resend,
+                so.different,
+                so.extra_sub_5080,
+                so.late_first_idx.map_or(-1, |x| x as i64),
+                so.late_count,
+                so.late_idx,
+                so.distinct
+            );
+        }
         let pb_post: u64 = (1..3).map(|k| g(&c.calls[1][k])).sum();
         let vc_post: u64 = (1..3).map(|k| g(&c.vram_copies[1][k])).sum();
         let pb_pre = g(&c.calls[1][0]);

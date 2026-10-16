@@ -2157,6 +2157,15 @@ impl Pump {
             .map_err(|e| format!("USER_RING_DOORBELL_UNCERTAIN {e:?}").into())
     }
 
+    /// SCRATCH measurement: copy the committed scan's SET_OBJECT statistics to the lifecycle channel record.
+    fn note_setobj(&self) {
+        if let Some(lc) = &self.lc {
+            if let Ok(mut g) = lc.setobj.lock() {
+                *g = self.scan.set_obj_stats().clone();
+            }
+        }
+    }
+
     fn segment_turn(
         &mut self,
         me: &ChanPlane,
@@ -2202,6 +2211,9 @@ impl Pump {
             return Ok((false, true));
         }
         let mut next = self.scan.clone();
+        if let Some(lc) = &self.lc {
+            next.set_entry_idx(lc.gp_entries.load(std::sync::atomic::Ordering::Relaxed));
+        }
         let trigger = next
             .segment(s.words.get(s.at..).ok_or("USER_RING_SCAN_BOUND")?, |v| {
                 s.software.as_ref().is_some_and(|sw| sw.matches(v))
@@ -2240,6 +2252,7 @@ impl Pump {
             });
             self.source_admitted = true;
             self.scan = next;
+            self.note_setobj();
             self.cursor = s.guest_get;
             self.unnotified = true;
             return Ok((true, true));
@@ -2325,6 +2338,7 @@ impl Pump {
         }
         s.staged = true;
         self.scan = next;
+        self.note_setobj();
         s.wait = Some(Wait {
             witness: self.marks.issued(),
             trigger,

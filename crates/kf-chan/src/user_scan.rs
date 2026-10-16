@@ -11,6 +11,37 @@ pub struct Scan {
     bindings: [u32; 8],
     pending: Option<(MethodHeader, usize)>,
     subdevice: Option<Subdevice>,
+    /// SCRATCH d3d11-gap (measurement only, `KF3_LIFECYCLE_COUNT`): SET_OBJECT statistics, committed with the scan state so a discarded
+    /// (retried / refused) scan never double counts. Nothing decides on it.
+    set_obj: SetObjStats,
+    entry_idx: u64,
+}
+
+/// SCRATCH measurement: every SET_OBJECT (method 0) the scan executed on this channel.
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+pub struct SetObjStats {
+    /// All SET_OBJECTs.
+    pub total: u64,
+    /// Per subchannel.
+    pub per_sub: [u64; 8],
+    /// Rebinds (a SET_OBJECT on a subchannel that already had one) per subchannel.
+    pub rebind_per_sub: [u64; 8],
+    /// Rebind with the same data word as the current binding.
+    pub same_resend: u64,
+    /// Rebind with a different data word.
+    pub different: u64,
+    /// The software (5080) object bound on a second subchannel.
+    pub extra_sub_5080: u64,
+    /// First distinct data words (at most 8).
+    pub distinct: Vec<u32>,
+    /// SET_OBJECTs after the 20th GP entry of the channel.
+    pub late_count: u64,
+    /// Entry index of the first of those.
+    pub late_first_idx: Option<u64>,
+    /// Entry indexes of the first 16 late ones.
+    pub late_idx: Vec<u64>,
+    first: [bool; 8],
+    sw_mask: u8,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -70,6 +101,16 @@ pub enum Refusal {
 }
 
 impl Scan {
+    /// SCRATCH measurement: the GP entry number of the channel the next scanned segment belongs to.
+    pub fn set_entry_idx(&mut self, idx: u64) {
+        self.entry_idx = idx;
+    }
+    /// SCRATCH measurement: the SET_OBJECT statistics.
+    #[must_use]
+    pub fn set_obj_stats(&self) -> &SetObjStats {
+        &self.set_obj
+    }
+
     /// Native SUBDEVICE_ID bit, validated and explicitly authored at channel birth.
     /// Public C56F DMA_SUBDEVICE_MASK is15:4 (12bits); this is channel configuration.
     /// Unknown identity retains the default scanner's named refusal.
@@ -259,6 +300,34 @@ impl Scan {
             .ok_or(Refusal::MethodOverflow)?;
         let sub = h.subchannel as usize;
         if method == 0 {
+            let st = &mut self.set_obj;
+            st.total += 1;
+            st.per_sub[sub] += 1;
+            if st.first[sub] {
+                st.rebind_per_sub[sub] += 1;
+                if self.bindings[sub] == data {
+                    st.same_resend += 1;
+                } else {
+                    st.different += 1;
+                }
+            }
+            st.first[sub] = true;
+            if st.distinct.len() < 8 && !st.distinct.contains(&data) {
+                st.distinct.push(data);
+            }
+            if software(data) {
+                if st.sw_mask & !(1u8 << sub) != 0 {
+                    st.extra_sub_5080 += 1;
+                }
+                st.sw_mask |= 1u8 << sub;
+            }
+            if self.entry_idx > 20 {
+                st.late_count += 1;
+                st.late_first_idx.get_or_insert(self.entry_idx);
+                if st.late_idx.len() < 16 {
+                    st.late_idx.push(self.entry_idx);
+                }
+            }
             self.bindings[sub] = data;
         }
         // Public dev_ram.ref/dev_pbdma.ref: fixed C56F runlist mapping sends
