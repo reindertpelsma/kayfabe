@@ -1,0 +1,3 @@
+HV_START m3ctl_gl opengl 2026-10-16T17:24:35+02:00 xid_before=81
+HV_EXIT m3ctl_gl rc=0 2026-10-16T17:29:47+02:00 xid_after=81
+events: gpu_driver=0 other=1 (153/4101 in last 9 min), host xid delta 0

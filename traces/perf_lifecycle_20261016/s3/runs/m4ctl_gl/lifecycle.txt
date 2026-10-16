@@ -1,0 +1,5 @@
+Traceback (most recent call last):
+  File "/data/claude-perf2/wt/scripts/bench/lifecycle/lc_report.py", line 8, in <module>
+    log, hout, fps = sys.argv[1], sys.argv[2], float(sys.argv[3])
+                                               ~~~~~^^^^^^^^^^^^^
+ValueError: could not convert string to float: 'm4ctl_gl:'

@@ -14,3 +14,15 @@ m2purectl_d3d11        fps=   99.78 min=  27.05 max= 208.91 frames=26009 gpu_uti
 m2purectl_gl           fps=  233.19 min=  44.71 max= 495.30 frames=60775 gpu_util=87.4 pwr=141 sm_mhz=2850 mem_mhz=10251 w0_cpu_s=145 w1_cpu_s=158 events: gpu_driver=0 other=1 (153/4101 in last 9 min), host xid delta 0
 m2pureexp_d3d11        fps=  193.81 min=  30.70 max= 462.29 frames=50497 gpu_util=94.9 pwr=124 sm_mhz=2858 mem_mhz=10251 w0_cpu_s=157 w1_cpu_s=159 events: gpu_driver=0 other=2 (153/4101 in last 9 min), host xid delta 0
 m2pureexp_gl           fps=  341.75 min=  40.44 max= 800.53 frames=89066 gpu_util=93.8 pwr=176 sm_mhz=2847 mem_mhz=10251 w0_cpu_s=138 w1_cpu_s=169 events: gpu_driver=0 other=1 (153/4101 in last 9 min), host xid delta 0
+m3a_d3d11              fps=  103.98 min=  21.25 max= 222.63 frames=27102 gpu_util=77.3 pwr=95 sm_mhz=2865 mem_mhz=10251 w0_cpu_s=149 w1_cpu_s=150 events: gpu_driver=0 other=2 (153/4101 in last 9 min), host xid delta 0
+m3a_gl                 fps=  334.17 min=  45.49 max= 758.08 frames=87092 gpu_util=95.9 pwr=175 sm_mhz=2849 mem_mhz=10251 w0_cpu_s=143 w1_cpu_s=164 events: gpu_driver=0 other=1 (153/4101 in last 9 min), host xid delta 0
+m3b_d3d11              fps=  102.53 min=  30.70 max= 222.99 frames=26723 gpu_util=77.2 pwr=93 sm_mhz=2865 mem_mhz=10251 w0_cpu_s=149 w1_cpu_s=150 events: gpu_driver=0 other=2 (153/4101 in last 9 min), host xid delta 0
+m3b_gl                 fps=  323.84 min=  35.83 max= 570.49 frames=84397 gpu_util=93.2 pwr=171 sm_mhz=2848 mem_mhz=10251 w0_cpu_s=143 w1_cpu_s=165 events: gpu_driver=0 other=1 (153/4101 in last 9 min), host xid delta 0
+m3ctl_d3d11            fps=  100.00 min=  27.27 max= 209.48 frames=26061 gpu_util=77.5 pwr=92 sm_mhz=2865 mem_mhz=10251 w0_cpu_s=150 w1_cpu_s=150 events: gpu_driver=0 other=2 (153/4101 in last 9 min), host xid delta 0
+m3ctl_gl               fps=  228.06 min=  29.01 max= 490.07 frames=59438 gpu_util=86.9 pwr=140 sm_mhz=2850 mem_mhz=10251 w0_cpu_s=148 w1_cpu_s=159 events: gpu_driver=0 other=1 (153/4101 in last 9 min), host xid delta 0
+m4a_d3d11              fps=  133.31 min=  23.91 max= 315.44 frames=34741 gpu_util=86.9 pwr=103 sm_mhz=2858 mem_mhz=10251 w0_cpu_s=150 w1_cpu_s=153 events: gpu_driver=0 other=2 (153/4101 in last 9 min), host xid delta 0
+m4a_gl                 fps=  212.01 min=  38.78 max= 488.07 frames=55258 gpu_util=84.2 pwr=134 sm_mhz=2851 mem_mhz=10251 w0_cpu_s=148 w1_cpu_s=155 events: gpu_driver=0 other=1 (153/4101 in last 9 min), host xid delta 0
+m4b_d3d11              fps=  138.55 min=  27.73 max= 309.08 frames=36116 gpu_util=87.2 pwr=106 sm_mhz=2865 mem_mhz=10251 w0_cpu_s=146 w1_cpu_s=150 events: gpu_driver=3 other=5 (153/4101 in last 9 min), host xid delta 0
+m4b_gl                 fps=  222.32 min=  43.86 max= 484.38 frames=57942 gpu_util=85.3 pwr=138 sm_mhz=2850 mem_mhz=10251 w0_cpu_s=146 w1_cpu_s=158 events: gpu_driver=0 other=1 (153/4101 in last 9 min), host xid delta 0
+m4ctl_d3d11            fps=   97.60 min=  28.70 max= 203.50 frames=25441 gpu_util=76.3 pwr=91 sm_mhz=2865 mem_mhz=10251 w0_cpu_s=147 w1_cpu_s=150 events: gpu_driver=0 other=2 (153/4101 in last 9 min), host xid delta 0
+m4ctl_gl: no result

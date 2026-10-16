@@ -1,0 +1,13 @@
+== d3d11
+  ctl (28a0ee9c, counters)                       m2ctl1=100.41, m2ctl2=90.903, m2ctl3=95.6811  median 95.68
+  ctl (db8817ac, counters)                       m3ctl=100.002  median 100.00
+  ctl (stream binary, counters)                  m4ctl=97.6009  median 97.60
+  mode 2: scan off, no reads                     m2exp1=188.995, m2exp2=186.42, m2exp3=188.754  median 188.75
+  mode 3: BAR1/RAM read, dropped unscanned       m3a=103.976, m3b=102.533  median 103.25
+  stream loads (KF3_BAR1_STREAM_LOAD=1), scan on m4a=133.31, m4b=138.551  median 135.93
+== gl
+  ctl (28a0ee9c, counters)                       m2ctl1=210.733, m2ctl2=224.247, m2ctl3=216.725  median 216.72
+  ctl (db8817ac, counters)                       m3ctl=228.06  median 228.06
+  mode 2: scan off, no reads                     m2exp1=338.222, m2exp2=326.962, m2exp3=361.787  median 338.22
+  mode 3: BAR1/RAM read, dropped unscanned       m3a=334.174, m3b=323.838  median 329.01
+  stream loads (KF3_BAR1_STREAM_LOAD=1), scan on m4a=212.012, m4b=222.32  median 217.17

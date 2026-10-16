@@ -1,0 +1,34 @@
+START 15:11:53.412 user=kfadmin session=1
+PRE guest_cpu_pct=0.2
+LAUNCH 15:11:55.697 -project_name Heaven -data_path ../ -engine_config ../data/heaven_4.0.cfg -system_script heaven/unigine.cpp -sound_app null -video_app opengl -video_multisample 0 -video_fullscreen
+RESULT_FOUND=True alive=True elapsed_s=291
+HLOG 15:11:55 Loading "opengl32.dll"...
+HLOG 15:11:56 Features: OpenGL Direct3D9 Direct3D11 OpenAL XAudio2 XPad360 Joystick Flash Editor
+HLOG 15:11:56 OpenGL vendor:   NVIDIA Corporation
+HLOG 15:11:56 OpenGL renderer: NVIDIA GeForce RTX 4070/PCIe/SSE2
+HLOG 15:11:56 OpenGL version:  3.2.0 NVIDIA 580.88
+HLOG 15:11:56 OpenGL flags:    Core Profile
+HLOG 15:11:56 Found required GL_ARB_map_buffer_range
+HLOG 15:11:56 Found required GL_ARB_vertex_array_object
+HLOG 15:11:56 Found required GL_ARB_draw_instanced
+HLOG 15:11:56 Found required GL_ARB_draw_elements_base_vertex
+HLOG 15:11:56 Found required GL_ARB_transform_feedback
+HLOG 15:11:56 Found required GL_ARB_half_float_vertex
+HLOG 15:11:56 Found required GL_ARB_half_float_pixel
+HLOG 15:11:56 Found required GL_ARB_framebuffer_object
+HLOG 15:11:56 Found required GL_ARB_texture_multisample
+HLOG 15:11:56 Found required GL_ARB_uniform_buffer_object
+HLOG 15:11:56 Found required GL_ARB_geometry_shader4
+HLOG 15:11:56 Found optional GL_ARB_blend_func_extended
+HLOG 15:11:56 Found optional GL_ARB_tessellation_shader
+HLOG 15:11:56 Found optional GL_ARB_shader_bit_encoding
+HLOG 15:11:56 Found optional GL_ARB_sample_shading
+HLOG 15:11:56 Found optional GL_ARB_compute_shader
+HLOG 15:11:56 Found optional GL_ARB_gpu_shader5
+HLOG 15:11:56 Found optional GL_EXT_texture_compression_s3tc
+HLOG 15:11:56 Found optional GL_ARB_texture_compression_rgtc
+HLOG 15:11:56 Unigine Heaven Benchmark 4.0 (4.0)
+HLOG 15:12:25 Benchmark running
+HLOG 15:16:46 Benchmark results:
+HLOG 15:16:46 Time:    260.61915:16:46 Frames:    8709215:16:46 FPS:    334.17415:16:46 Min FPS:    45.494715:16:46 Max FPS:    758.07915:16:46 Score:    8417.84
+END 15:16:50.891
