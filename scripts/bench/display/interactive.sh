@@ -15,7 +15,8 @@
 # kernel console, then nvidia-drm's console and the Cinnamon desktop (Xorg, the stock NVIDIA driver).
 #
 # env: KF3_REV (kf3 binary revision under $BENCH/kf3-bins; default: the newest built ancestor of this
-#   checkout's HEAD), KF_IMG (the guest disk; default $WORK/desktop.qcow2), KF_RAM_MB (8192),
+#   checkout's HEAD), KF_IMG (the guest disk; default $WORK/desktop.qcow2),
+#   KF_BASE_GUEST_IMG (prep's backing disk; default $BENCH/guest.qcow2), KF_RAM_MB (8192),
 #   KF_FB_MB (the kf3 store, 8192; a smaller one beside another VM on the same card),
 #   KF_SMP (6), KF_GUEST_DRIVER (580.159.04; the disk's exact public ABI, independent of the host),
 #   KF_EXTRA_QEMU (more QEMU args), BROKER_ARGS (more broker flags), KF_BROKER_BACKEND
@@ -30,6 +31,7 @@ BENCH=${BENCH_DIR:-/workspace/bench}
 WORK=${KF_INTERACTIVE_DIR:-/var/lib/kf-windows-20261005/broker-interactive}
 B=${BROKER_BIN:-/opt/nvkvm-broker/nvkvm-display-broker}
 IMG=${KF_IMG:-$WORK/desktop.qcow2}
+BASE_IMG=${KF_BASE_GUEST_IMG:-$BENCH/guest.qcow2}
 LOCK=${KF_LOCK:-/tmp/kayfabe-fastguest.lock}
 PIDF=$WORK/qemu.pid
 RECEIPT=$WORK/qemu-owned.json
@@ -213,7 +215,8 @@ EOF
     say "broker $(cat /opt/nvkvm-broker/REV): $(grep -A4 'backends:' "/opt/nvkvm-broker/make-$REV.log" | tr -s ' ' | tr '\n' ' ')"
     if [ -e "$IMG" ]; then say "guest disk $IMG exists — kept (delete it to provision again)"; exit 0; fi
     session || die "no graphical session on seat0 (needed for the display-broker-uid)"
-    qemu-img create -q -f qcow2 -b "$BENCH/guest.qcow2" -F qcow2 "$IMG" || die "qemu-img"
+    [ -f "$BASE_IMG" ] || die "no guest backing disk at $BASE_IMG"
+    qemu-img create -q -f qcow2 -b "$BASE_IMG" -F qcow2 "$IMG" || die "qemu-img"
     pick_qemu
     RUN=$WORK/prep-$(date +%Y%m%d-%H%M%S); mkdir -p "$RUN"
     qemu_args "$RUN"
