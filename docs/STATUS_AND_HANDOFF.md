@@ -1,5 +1,34 @@
 # Status and handoff — where kayfabe v3 stands, and how to resume
 
+## UPDATE 2026-10-16 13:30 UTC — GB205 B3 console ablation measured; first clock candidate falsified
+
+Fresh GB205 arch0x1b0/impl5 confirmed unprivileged on own56246613. Linux595
+native concurrency PASS4s and native gates9/9+gate10PASS. Same QEMU99ce8207c,
+same thin595 initrd, actual KF3 env{}: loglevel6 TIMEOUT180s; loglevel3 PASS18s.
+The B3 console falsifier did not fire here; GB206 remains unverified for this fix.
+First candidate277e5d895 (PTIMER selector) also TIMEOUT180s with doubled-offset
+warnings: hardware falsifier FIRED despite CPU tests. Both clocks contain the
+offset. Do not describe PR23 as hardware-green or ship quiet logging as a fix.
+
+Second failing-first regressiondeff13df8 models the public595 fn72
+sysTimerOffsetNs value and exact heartbeat formula. Fixe0b4c28e6 passes290
+kf-qemu CPU tests; integrated hardware source304ca9adb is building/running.
+It uses the existing bounded fn72 cell/current compiled ABI, subtracting
+separately rounded milliseconds with u32 wrap; no per-die value or host action
+from guest state. Gates9 then private build/raw/thin rebuild precede normal
+loglevel6 concurrency at180s; full raw30 runs only if no heartbeat warnings.
+Evidence blackwell_5070/linux595_20261016/RESULT.md and actual process receipts.
+DraftPR23 https://github.com/reindertpelsma/kayfabe/pull/23; no master merge.
+
+Actual GPU PCI2f04 is present in public Windows580.88 nv_dispi.inf (installer
+SHA90c49f925b41ee062e02cc8094a16b6d057abfde4e85235a76d63ffe267f63a9).
+New-die Windows reference and all Windows acceptance UNRUN. Native hardware
+has no exposed IOMMU groups, so use the Windows-on-Vast direct reference rather
+than assuming nested VFIO is available. Save screened text BEFORE disk reimage.
+Only own56246613 active, original timer2319249 at15:35:50UTC; hard15:40:48.
+Max lease0.73USD/campaign ceiling5.09USD+transfers. OwnerGPU/VM untouched.
+
+
 ## UPDATE 2026-10-16 12:42UTC — bounded reply diagnostic green, next Blackwell rental starting
 
 CleanPR22source4d83e661f (test-firsta2373bd9c, initialbe7fffaaa) all54GSP CPU

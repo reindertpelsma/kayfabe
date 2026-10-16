@@ -1,0 +1,9 @@
+B3_OFFSET_START 2026-10-16T13:28:43+00:00
+From https://github.com/reindertpelsma/kayfabe
+ * branch                codex/sweep-blackwell-20261015 -> FETCH_HEAD
+   277e5d895..304ca9adb  codex/sweep-blackwell-20261015 -> origin/codex/sweep-blackwell-20261015
+Updating 277e5d895..304ca9adb
+Fast-forward
+ crates/kf-qemu/src/device.rs    |  27 +++++--
+ crates/kf-qemu/src/heartbeat.rs | 164 ++++++++++++++++++++++++++--------------
+ 2 files changed, 129 insertions(+), 62 deletions(-)

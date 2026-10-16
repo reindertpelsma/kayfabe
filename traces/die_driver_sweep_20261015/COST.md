@@ -60,7 +60,7 @@ turing_hold_20261016/retirement.txt. Screenshots/executables were not returned.
 
 | Instance | GPU | USD/hour | StartUTC | StopUTC | Purpose | Ceiling |
 |---|---|---:|---|---|---|---|
-|56246613|RTX5070, exactdie pending unprivilegedRM|0.2416666667|2026-10-16T12:40:48.060853+00:00 conservative requesttime|ACTIVE, timer2319249 at15:35:50UTC; hardcap15:40:48UTC|B3first, newdie nativeWindows reference/B4 while GB206KVM unavailable|max3h0.73USD; campaign ceiling5.09USD+unbilledtransfers|
+|56246613|RTX5070 / GB205 (unprivileged RM confirmed)|0.2416666667|2026-10-16T12:40:48.060853+00:00 conservative requesttime|ACTIVE, timer2319249 at15:35:50UTC; hardcap15:40:48UTC|B3first, newdie nativeWindows reference/B4 while GB206KVM unavailable|max3h0.73USD; campaign ceiling5.09USD+unbilledtransfers|
 
 MEASURED APIaccount IDs[] before creation; only own new56246613 may be retired.
 Immediately armed175minute timer. Offer54561458/machine153389 advertises16CPU,
@@ -70,3 +70,8 @@ or pass carried across. GB206Code43 remains red. Step0alignment is complete;
 newcode-onlyPR21 and22 staydraft, no owner/master merge. Shared ownerGPU/VM
 unused; trustedCPU54GSPtests at most2jobs, rentalbinary built onrental because
 trustedhostUbuntu26.04/glibc2.43 cannot promise Ubuntu22.04runtime compatibility.
+
+Update13:30UTC: measured GB205 arch0x1b0/impl5, UID65534/CapEff0. Stock595
+native gates9+10/concurrency pass. B3 normal180s timeout versus quiet18s pass;
+first PTIMER-selector candidate failed180s too. Corrected fn72-offset candidate
+304ca9adb running. ActualPCI2f04 matches public580.88INF. Windows suites UNRUN.

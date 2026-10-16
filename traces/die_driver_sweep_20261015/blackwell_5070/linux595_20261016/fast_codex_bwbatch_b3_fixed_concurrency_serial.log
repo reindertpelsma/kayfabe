@@ -1,0 +1,11 @@
+[    1.619999] device-mapper: core: CONFIG_IMA_DISABLE_HTABLE is disabled. Duplicate IMA measurements will not be recorded in the IMA log.
+[    1.628453] platform eisa.0: EISA: Cannot allocate resource for mainboard
+[    1.633518] platform eisa.0: Cannot allocate resource for EISA slot 1
+[    1.638628] platform eisa.0: Cannot allocate resource for EISA slot 2
+[    1.643834] platform eisa.0: Cannot allocate resource for EISA slot 3
+[    1.649453] platform eisa.0: Cannot allocate resource for EISA slot 4
+[    1.652691] platform eisa.0: Cannot allocate resource for EISA slot 5
+[    1.655915] platform eisa.0: Cannot allocate resource for EISA slot 6
+[    1.659117] platform eisa.0: Cannot allocate resource for EISA slot 7
+[    1.662939] platform eisa.0: Cannot allocate resource for EISA slot 8
+[    1.667133] amd_pstate: the _CPC object is not present in SBIOS or ACPI disabled

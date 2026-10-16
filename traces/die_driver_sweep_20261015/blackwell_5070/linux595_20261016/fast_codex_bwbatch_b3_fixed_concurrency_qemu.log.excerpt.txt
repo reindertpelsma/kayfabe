@@ -1,0 +1,83 @@
+RAW_REMAINS_RENTAL_ONLY
+bytes=1773813 sha256=5d98026efb8113a50937820d99d82c6bec7f5770592ea68123dcf3989647dd96
+heartbeat_lines=0 formula_lines=0
+kf-host: host tier: stock
+kf3: host facts: GSS 0x2080a028 [(0, 1), (8, 1), (c, 100000), (20c, 100000)]: the background probe was refused or changed the answer — zero-probe bytes only
+kf3: host facts: GSS 0x2080a028 [(0, 1), (8, 1), (c, 1), (20c, 1)]: the background probe was refused or changed the answer — zero-probe bytes only
+kf-host: HOST-ABI REFUSED control 0x2080852e: host control 0x2080852e has no public header (zero request measured NV_OK on AD103 575.51.03 and GSP 580.65.05; INVALID_ARGUMENT at 595.91.07); its layout at host driver 595.91.07 was never measured
+kf3: host facts: GSS 0x2080852e [] refused by the host (HostRefusal { status: None, detail: "Other(19314)" }) — not served
+kf-host: HOST-ABI REFUSED control 0x2080853a: host control 0x2080853a has no public header (zero request measured NV_OK on AD103 575.51.03 and GSP 580.65.05; INVALID_ARGUMENT at 595.91.07); its layout at host driver 595.91.07 was never measured
+kf3: host facts: GSS 0x2080853a [] refused by the host (HostRefusal { status: None, detail: "Other(19314)" }) — not served
+kf-host: HOST-ABI REFUSED control 0x2080a618: host control 0x2080a618 has no public header (zero request measured NV_OK on AD103 575.51.03 and GSP 580.65.05; INVALID_ARGUMENT at 595.91.07); its layout at host driver 595.91.07 was never measured
+kf3: host facts: GSS 0x2080a618 [] refused by the host (HostRefusal { status: None, detail: "Other(19314)" }) — not served
+kf-host: HOST-ABI REFUSED control 0x2080852e: host control 0x2080852e has no public header (zero request measured NV_OK on AD103 575.51.03 and GSP 580.65.05; INVALID_ARGUMENT at 595.91.07); its layout at host driver 595.91.07 was never measured
+kf3: host facts: GSS 0x2080852e [] refused by the host (HostRefusal { status: None, detail: "Other(19314)" }) — not served
+kf-host: HOST-ABI REFUSED control 0x2080853a: host control 0x2080853a has no public header (zero request measured NV_OK on AD103 575.51.03 and GSP 580.65.05; INVALID_ARGUMENT at 595.91.07); its layout at host driver 595.91.07 was never measured
+kf3: host facts: GSS 0x2080853a [] refused by the host (HostRefusal { status: None, detail: "Other(19314)" }) — not served
+kf-host: HOST-ABI REFUSED control 0x2080a618: host control 0x2080a618 has no public header (zero request measured NV_OK on AD103 575.51.03 and GSP 580.65.05; INVALID_ARGUMENT at 595.91.07); its layout at host driver 595.91.07 was never measured
+kf3: host facts: GSS 0x2080a618 [] refused by the host (HostRefusal { status: None, detail: "Other(19314)" }) — not served
+kf-host: HOST-ABI REFUSED control 0x2080853b: host control 0x2080853b has no row in kf_abi::hostabi::HOST_CONTROLS, and host driver 595.91.07 is outside the interval the host encoders were written for — its layout is unknown
+kf3: host facts: GSS 0x2080853b [(4, 1)] refused by the host (HostRefusal { status: None, detail: "Other(19314)" }) — not served
+kf-host: HOST-ABI REFUSED control 0x2080852a: : body is 1716 bytes, its layout is 1784
+kf3: host facts: GSS 0x2080852a [] refused by the host (HostRefusal { status: None, detail: "Other(19314)" }) — not served
+kf-host: HOST-ABI REFUSED control 0x2080a618: host control 0x2080a618 has no public header (zero request measured NV_OK on AD103 575.51.03 and GSP 580.65.05; INVALID_ARGUMENT at 595.91.07); its layout at host driver 595.91.07 was never measured
+kf3: host facts: GSS 0x2080a618 [] refused by the host (HostRefusal { status: None, detail: "Other(19314)" }) — not served
+kf-host: HOST-ABI REFUSED control 0x2080a618: host control 0x2080a618 has no public header (zero request measured NV_OK on AD103 575.51.03 and GSP 580.65.05; INVALID_ARGUMENT at 595.91.07); its layout at host driver 595.91.07 was never measured
+kf3: host facts: GSS 0x2080a618 [] refused by the host (HostRefusal { status: None, detail: "Other(19314)" }) — not served
+kf-host: HOST-ABI REFUSED control 0x2080852e: host control 0x2080852e has no public header (zero request measured NV_OK on AD103 575.51.03 and GSP 580.65.05; INVALID_ARGUMENT at 595.91.07); its layout at host driver 595.91.07 was never measured
+kf3: host facts: GSS 0x2080852e [] refused by the host (HostRefusal { status: None, detail: "Other(19314)" }) — not served
+kf3: host facts: FIFO latency buffers (engine, gp, pb) from the host: [(1, 3a0, a700), (9, 3a0, a700), (d, 60, 1300), (10, 60, 1300), (13, 40, 100), (1b, 40, 100), (22, 40, 100), (33, 40, 100)]
+kf3: channel budget 1789 per runlist (Derived; derived default 1789, host limit 2045; the count the guest is told AND the enforced cap, refused by name past it — property channel-budget, docs/design/V3_CHANNEL_BUDGET.md)
+kf3: ⚠ gpu-uuid=auto: this VM has no identity (no vm-id= and no QEMU -uuid), so there is nothing stable to derive from; using a RANDOM UUID for this boot. Give the VM `-uuid <uuid>` (or vm-id=) for a UUID that is stable across boots.
+kf3: guest GPU UUID GPU-REDACTED (gpu-uuid=auto, basis RandomNoVmId, devfn 0x18)
+kf3: permission policy: READ_ONLY+VOLATILE carried to the host map, PRIVILEGED leaves withheld from user twins, ATOMIC_DISABLE not carried (KF3_CARRY_ATOMIC_DISABLE=1 enables it once fault delivery exists) (key_perm=0x68)
+kf-cuda: cuda thread posture thread=kf3-cuda-walk cap_sys_admin=cleared-for-thread-life (libcuda's channels from this thread, and from threads it starts, are created without CAP_SYS_ADMIN)
+kf-cuda: cuda thread posture thread=kf3-cuda-store cap_sys_admin=cleared-for-thread-life (libcuda's channels from this thread, and from threads it starts, are created without CAP_SYS_ADMIN)
+kf3: host GPU minor=0 bdf=0000:00:08.0 gpuId=0x8 rm_device_instance=0 cuda_device="NVIDIA GeForce RTX 5070" store=8192 MiB
+kf3: guest driver 595.91.07 (guest-driver=); measured ABI: static-info Unencoded, element Pre610, init-args NineField, rm-control params@40, vgx Some((45, 3))
+kf3: native timer BAR0=0x9000, read-only 4096-byte mapping, host/guest layout TimerLayout { register_bytes: 1044, time_low: 1024, time_high: 1040 }
+kf3: P1+P2 T-space ON: built at prewarm (hardwired, OWNER_RULINGS §AB; docs/design/V3_P1P2_TSPACE.md); mirrors carry no window and no ring; host channel births require USER replies
+kf3: channel plane: Translated rings on host COPY4 (engine 0xd); completions on FIFO_EVENT_MTHD + CE4
+kf3: interrupt plane: host non-stall events -> guest vectors [GR0->Some(0) CE0->Some(0) CE4->Some(1) CE7->Some(2) NVENC0->Some(4) NVDEC0->Some(3) OFA->Some(5)]
+kf3: non-stall relay (owner ruling 2026-10-08): every host edge -> the guest vector of every event this guest ARMED, never dropped; FIFO_EVENT_MTHD -> a vector no armed engine shares, else GR0 vector Some(0) (relay=on, pacing=off; KF3_PT_NSI_RELAY / KF3_PT_NSI_MIN_INTERVAL_US)
+W349REFUSE zbc defaults (zbc.color) die=GB205: zbc.color: unmeasured on GB205 branch 0 (measured on: AD102/*, AD103/*, AD104/*, AD106/*, GA102/*, GA104/*, GA106/*, GB202/*, GB203/*, GB206/*, TU102/*, TU106/*, TU116/*) — refused, a neighbour's row is never served; the ZBC table starts EMPTY (valid=0, nothing claimed)
+kayfabe: HELD-REPLY fn=RmControl depth=1 — this map reply WAITS for its rows
+kf3: GSP rpc RmControl seq=10244
+kf3: VasKey(13965662525190963392) mirror space=0xcafe0014: windows=none rings=none (recycled)
+kayfabe: HELD-REPLY-POSTED n=1 — their rows are on the host now
+kf3: GSP rpc Free seq=10245
+kf3: GSP rpc RmAlloc seq=10246
+kf3: GSP rpc Free seq=10247
+kf-rm: chanlink: FERMI_VASPACE_A 0xc1d0000f:0xcafe00e0 under 0xcafe0001 (device default for it: 0xcafe0004) VAS-FACTS index=Some(0) flags=Some(0) bigPageSize=Some(0) vaBase(lo32)=Some(0) vaSize(lo32)=Some(0)
+kf-rm: chanlink: VAS-DECL 0xc1d0000f:0xcafe00e0 vaBase=0x0 vaSize=0x0 end=None shared_management=false
+kf3: GSP rpc RmAlloc seq=10248
+kayfabe: HELD-REPLY fn=RmControl depth=1 — this map reply WAITS for its rows
+kf3: GSP rpc RmControl seq=10249
+kf3: VasKey(13965662512306061536) mirror space=0xcafe0035: windows=none rings=none (recycled)
+kayfabe: HELD-REPLY-POSTED n=1 — their rows are on the host now
+kf3: GSP rpc RmAlloc seq=10250
+kf3: GSP rpc RmAlloc seq=10251
+kf-rm: chanlink: FERMI_VASPACE_A 0xc1d00011:0xcafe00cc under 0xcafe0001 (device default for it: 0xcafe0004) VAS-FACTS index=Some(0) flags=Some(0) bigPageSize=Some(0) vaBase(lo32)=Some(0) vaSize(lo32)=Some(0)
+kf-rm: chanlink: VAS-DECL 0xc1d00011:0xcafe00cc vaBase=0x0 vaSize=0x0 end=None shared_management=false
+kf3: GSP rpc RmAlloc seq=10252
+kayfabe: HELD-REPLY fn=RmControl depth=1 — this map reply WAITS for its rows
+kf3: GSP rpc RmControl seq=10253
+kf3: VasKey(13965662520895996108) mirror space=0xcafe002f: windows=none rings=none (recycled)
+kayfabe: HELD-REPLY-POSTED n=1 — their rows are on the host now
+kf3: GSP rpc Free seq=10254
+kf3: GSP rpc Free seq=10255
+kf3: GSP rpc RmAlloc seq=10256
+kf-rm: chanlink: FERMI_VASPACE_A 0xc1d00010:0xcafe00cc under 0xcafe0001 (device default for it: 0xcafe0004) VAS-FACTS index=Some(0) flags=Some(0) bigPageSize=Some(0) vaBase(lo32)=Some(0) vaSize(lo32)=Some(0)
+kf-rm: chanlink: VAS-DECL 0xc1d00010:0xcafe00cc vaBase=0x0 vaSize=0x0 end=None shared_management=false
+kf3: GSP rpc RmAlloc seq=10257
+kayfabe: HELD-REPLY fn=RmControl depth=1 — this map reply WAITS for its rows
+kf3: GSP rpc RmControl seq=10258
+kf3: VasKey(13965662516601028812) mirror space=0xcafe002a: windows=none rings=none (recycled)
+kayfabe: HELD-REPLY-POSTED n=1 — their rows are on the host now
+kf3: GSP rpc Free seq=10259
+kf3: GSP rpc RmAlloc seq=10260
+kf3: GSP rpc Free seq=10261
+kf3: GSP rpc Free seq=10262
+kf3: GSP rpc Free seq=10263
+kf3: GSP rpc Free seq=10264
+2026-10-16T13:23:35.319569Z qemu-system-x86_64: terminating on signal 15 from pid 129212 (timeout)

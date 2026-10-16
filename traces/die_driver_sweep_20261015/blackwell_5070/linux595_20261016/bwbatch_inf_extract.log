@@ -1,0 +1,68 @@
+
+7-Zip [64] 16.02 : Copyright (c) 1999-2016 Igor Pavlov : 2016-05-21
+p7zip Version 16.02 (locale=C.UTF-8,Utf16=on,HugeFiles=on,64 bits,15 CPUs AMD Ryzen 9 5950X 16-Core Processor             (A20F10),ASM,AES-NI)
+
+Scanning the drive for archives:
+1 file, 890807536 bytes (850 MiB)
+
+Extracting archive: /root/nvidia58088.exe
+--
+Path = /root/nvidia58088.exe
+Type = PE
+Physical Size = 890807536
+CPU = x86
+Characteristics = Executable 32-bit NoRelocs
+Created = 2025-07-03 13:32:18
+Headers Size = 1024
+Checksum = 890847160
+Name = PackageLauncher.exe
+Image Size = 1118208
+Section Alignment = 4096
+File Alignment = 512
+Code Size = 681984
+Initialized Data Size = 428544
+Uninitialized Data Size = 0
+Linker Version = 14.29
+OS Version = 6.0
+Image Version = 0.0
+Subsystem Version = 6.0
+Subsystem = Windows GUI
+DLL Characteristics = NX-Compatible TerminalServerAware
+Stack Reserve = 1048576
+Stack Commit = 4096
+Heap Reserve = 1048576
+Heap Commit = 4096
+Image Base = 4194304
+Comment = FileVersion: IP_REDACTED
+FileVersion: 1.0.15
+ProductVersion: IP_REDACTED
+ProductVersion: 1.0.15
+CompanyName: NVIDIA Corporation
+FileDescription: NVIDIA Package Launcher
+InternalName: PackageLauncher
+LegalCopyright: Copyright © 2011-2025 NVIDIA Corporation
+OriginalFilename: PackageLauncher.exe
+PrivateBuild: June 06, 2025
+ProductName: NVIDIA Package Launcher
+----
+Path = [0]
+Size = 889699024
+Packed Size = 889699024
+Virtual Size = 889699024
+Offset = 1098752
+--
+Path = [0]
+Type = 7z
+Offset = 1572
+Physical Size = 889697448
+Tail Size = 4
+Headers Size = 16626
+Method = LZMA2:26 LZMA:20 BCJ2
+Solid = +
+Blocks = 2
+
+Everything is Ok
+
+Files: 113
+Size:       817997243
+Compressed: 890807536

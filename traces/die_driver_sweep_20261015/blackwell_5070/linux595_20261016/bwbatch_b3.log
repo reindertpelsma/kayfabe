@@ -1,0 +1,30 @@
+B3_QUEUE_START 2026-10-16T12:54:04+00:00
+NVIDIA GeForce RTX 5070, 595.91.07
+88efe02727e35ac2d4a323107de6ffd62c59d91f3b3d277f9bd70c9d1b0cac7e  /workspace/bench/kf3-bins/99ce8207/qemu-system-x86_64
+0db4104321bc9f38d73d7e54e80902646a93547702f3218deb14295bebd4c0bf  target/release/kayfabe-rm-ladder
+780c24bc5f0d3597d59e75983157c9cb977bc6f99b3224b9b14b596773188caa  /workspace/bench/fastguest595/initrd.cpio.gz
+H_B3_BEFORE_RUN: console-storm hypothesis; falsifier=quiet595stillTIMEOUT180s; nativefirst, samebinary/sameinitrd, onlyloglevelchange; freshdie must not be reported as GB206 evidence
+NATIVE_CONCURRENCY_START source=99ce8207cf51124c8198b97c9c066a7c49fbffd7 host=595.91.07 2026-10-16T12:54:05+00:00
+NATIVE_CONCURRENCY_EXIT rc=0 2026-10-16T12:54:09+00:00
+B3_CELL_START label=noisy source=99ce8207cf51124c8198b97c9c066a7c49fbffd7 host=595.91.07 guest=595.91.07 flags=none budget180 2026-10-16T12:54:09+00:00
+FAST_SUITE_STARTED=2026-10-16T12:54:09+00:00 arms=1 budget=180s
+rev=99ce8207c
+ARM                          VERDICT   secs  why
+--concurrency                TIMEOUT   181s  budget 180s exceeded — a timeout IS a crash
+FAST_CELL_ARM arm=concurrency verdict=TIMEOUT secs=181 client_ms=?
+
+FAST_SUITE_PASS=0 FAST_SUITE_FAIL=0 FAST_SUITE_CRASH=1 NOTRUN=0 ARMS=1
+FAST_SUITE_RC=1
+B3_CELL_EXIT label=noisy rc=1 2026-10-16T12:57:10+00:00
+B3_CELL_START label=quiet source=99ce8207cf51124c8198b97c9c066a7c49fbffd7 host=595.91.07 guest=595.91.07 flags=none budget180 2026-10-16T12:57:10+00:00
+FAST_SUITE_STARTED=2026-10-16T12:57:10+00:00 arms=1 budget=180s
+rev=99ce8207c
+ARM                          VERDICT   secs  why
+--concurrency                PASS      18s   18s
+FAST_CELL_ARM arm=concurrency verdict=PASS secs=18 client_ms=7140
+
+FAST_SUITE_PASS=1 FAST_SUITE_FAIL=0 FAST_SUITE_CRASH=0 NOTRUN=0 ARMS=1
+FAST_SUITE_RC=0
+B3_CELL_EXIT label=quiet rc=0 2026-10-16T12:57:28+00:00
+B3_AB_COMPLETE 2026-10-16T12:57:28+00:00
+B3_EXIT rc=0 2026-10-16T12:57:28+00:00
