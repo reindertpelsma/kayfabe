@@ -1932,6 +1932,48 @@ mod tests {
         }
     }
 
+    /// PHASE 1c item 3 (review 2, mutant A): leaving a Window re-anchors Pointer mode at the exit turn's `GP_PUT`. A
+    /// registration seen at the very next entry (no clean Pointer turn in between) must not open the second Window
+    /// inside the submission the exit turn belongs to.
+    #[test]
+    fn the_second_window_of_a_channel_is_anchored_at_the_gp_put_of_the_turn_that_left_the_first() {
+        let mut l = Lifecycle::new();
+        let o = |abs: u64, put_abs: u64, epoch: u64| Obs {
+            put_abs,
+            ..obs(abs, 0x10, epoch, B)
+        };
+        l.entry(&o(0, 1, 0), || 0); // bound: Pointer, first anchor 1
+        l.forwarded(0, 0x10);
+        for abs in 1..3u64 {
+            l.entry(&o(abs, abs + 1, 1), || 1); // first registration
+        }
+        assert_eq!(l.mode(), Mode::Window);
+        l.forwarded(2, 0x10);
+        // the registration is gone, the relay is quiescent: the exit turn reads GP_PUT = 9 (a submission 3..9)
+        assert_eq!(l.entry(&o(3, 9, 2), || 0), Plan::Forward);
+        assert_eq!(l.mode(), Mode::Pointer);
+        assert_eq!(
+            l.safe_end, 9,
+            "the exit re-anchors at the exit turn's GP_PUT"
+        );
+        l.forwarded(3, 0x10);
+        // a second registration at the very next entry, inside that submission
+        for abs in 4..9u64 {
+            assert_eq!(
+                l.entry(&o(abs, 9, 3), || 1),
+                Plan::Forward,
+                "entry {abs} is below the anchor: forwarded unscanned"
+            );
+            l.forwarded(abs, 0x10);
+            assert_eq!(l.mode(), Mode::Pointer, "entry {abs}");
+        }
+        assert!(matches!(
+            l.entry(&o(9, 12, 3), || 1),
+            Plan::Scan { restart: true, .. }
+        ));
+        assert_eq!((l.mode(), l.counts().to_window_fresh), (Mode::Window, 2));
+    }
+
     // ---- PHASE 1c item 2: the ring-full anchor guard, the P2' latch, the notices
 
     fn full(abs: u64, put_abs: u64, epoch: u64) -> Obs {

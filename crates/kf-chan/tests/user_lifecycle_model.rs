@@ -2488,13 +2488,19 @@ fn l1_once_an_open_boundary_was_seen_no_marker_ever_lands_in_a_packet_and_nothin
         viol_names(r.viol),
         viol_names(r.viol_latched)
     );
-    assert!(r.latched_states > 0, "some interleaving sees the open boundary in Scan");
+    assert!(
+        r.latched_states > 0,
+        "some interleaving sees the open boundary in Scan"
+    );
     assert_eq!(
         r.viol_latched, 0,
         "in every latched interleaving: no marker in a packet, no loss, no duplicate, no deadlock (a look is allowed): {:?}",
         r.first
     );
-    assert_eq!(r.latched_markers_max, 0, "no Pointer marker after the latch");
+    assert_eq!(
+        r.latched_markers_max, 0,
+        "no Pointer marker after the latch"
+    );
     assert!(
         r.latched_carried_max > 0,
         "and the wakes it cannot announce are counted (loud)"
@@ -2545,5 +2551,48 @@ fn l1_latched_markers_off_the_wake_is_a_look_and_without_looks_the_run_deadlocks
         without.viol_latched & !V_DEADLOCK,
         0,
         "and nothing else goes wrong"
+    );
+}
+
+// ---- PHASE 1c item 3 (review 2, mutant A): the SECOND window of a channel is anchored at its own GP_PUT.
+
+/// Two consecutive windows: the first registration's trigger drains it, the second registration arrives while the
+/// submission that holds a packet spanning two entries (head with a SYNC_WAIT, tail) is half relayed. The first window
+/// leaves Pointer mode with a new anchor (the exit turn's GP_PUT, the submission's end); a second window that started at
+/// the next entry instead would put its seeded gate marker between the head and the tail.
+fn second_window_script() -> Vec<Op> {
+    vec![
+        Op::Push(ge(0, Kind::SetObj)),
+        Op::Push(p(1)),
+        Op::SetPut,
+        Op::Ring,
+        Op::Register,
+        Op::AwaitReply,
+        Op::Push(ge(2, Kind::Trig { migrate: false }).post()),
+        Op::SetPut,
+        Op::Ring,
+        Op::Push(ge(3, Kind::OpenHead).sync()),
+        Op::Push(ge(4, Kind::OpenTail)),
+        Op::Push(p(5)),
+        Op::SetPut,
+        Op::Ring,
+        Op::Register,
+        Op::AwaitReply,
+        Op::Push(p(6).post()),
+        Op::SetPut,
+        Op::Ring,
+    ]
+}
+
+#[test]
+fn a_second_window_of_the_same_channel_starts_at_its_own_anchor_never_inside_a_submission() {
+    let mut cfg = Cfg::new(spec(second_window_script(), &[0, 1, 2, 3, 4, 5, 6]));
+    cfg.kind = Registration::Other;
+    cfg.max_states = 8_000_000;
+    let r = assert_clean(&cfg, "second-window");
+    assert!(
+        r.to_window_fresh_max >= 2,
+        "some interleaving opens two Fresh windows on the channel: {}",
+        r.to_window_fresh_max
     );
 }

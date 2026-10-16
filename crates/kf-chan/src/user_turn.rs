@@ -421,6 +421,32 @@ impl Relay {
         self.life.sync_set_objects(t.software_binds, t.rebinds);
     }
 
+    /// ★ PHASE 1c (review 2, mutant W). The channel's guest ring was switched (ring growth): the decision and every field
+    /// it touches live HERE, in production code the GPU-free suites run (the pump's `migrate` calls this and nothing
+    /// else for it). The new ring starts at slot 0 with the generation `generation`; the private ring and its native
+    /// GET are untouched; the guest's `GP_GET` is taken to be 0 until [`Relay::new_ring_get`] says otherwise; and the
+    /// lifecycle keeps a Window open over the new ring's first entries ([`Lifecycle::source_switched`]).
+    pub fn switch_source(&mut self, generation: u64) {
+        self.generation = generation;
+        self.cursor = 0;
+        self.grace.clear();
+        self.guest_get = None;
+        self.written_get = 0;
+        self.life.source_switched();
+    }
+
+    /// The new ring's USERD shows `get` as the guest's `GP_GET` at the switch. A nonzero value contradicts the
+    /// reset-to-0 cursor (counted, `switch_cursor_mismatch`; returns `true` so the owner can log it) and is what the
+    /// guest sees from now on.
+    pub fn new_ring_get(&mut self, get: u32) -> bool {
+        if get == 0 {
+            return false;
+        }
+        self.life.switch_cursor_mismatch();
+        self.written_get = get;
+        true
+    }
+
     /// No turn is running.
     #[must_use]
     pub fn idle(&self) -> bool {

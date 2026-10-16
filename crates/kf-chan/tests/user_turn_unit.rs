@@ -665,3 +665,87 @@ fn a_packet_open_at_gp_put_in_scan_mode_is_reported_with_the_packet_and_switches
         "no marker inside the open packet (Scan mode already refused it)"
     );
 }
+
+// ---- PHASE 1c item 3 (review 2, mutant W): the ring switch is production code, not pump code
+
+/// Drive a relay into a Window (a registration seen, the anchor reached).
+fn window_relay(io: &mut Mock) -> Relay {
+    let mut r = pointer_relay(io);
+    io.epoch = 1;
+    io.live = 1;
+    for slot in 2..8u32 {
+        io.put_entry(slot, &ge(20 + slot as u8, Kind::Plain));
+        io.put = slot + 1;
+        turn(&mut r, io).unwrap();
+        if r.life.mode() == Mode::Window {
+            return r;
+        }
+    }
+    panic!(
+        "the registration never opened a Window: {:?}",
+        r.life.mode()
+    );
+}
+
+#[test]
+fn switch_source_installs_the_new_ring_and_keeps_the_window_open_over_its_first_entries() {
+    let mut io = Mock::new(16);
+    let mut r = window_relay(&mut io);
+    r.written_get = 7;
+    r.guest_get = Some((r.generation, 5));
+    let gen_before = r.generation;
+    io.live = 0;
+    io.epoch = 2; // the trigger consumed the registration
+    r.switch_source(gen_before + 1);
+    assert_eq!(r.generation, gen_before + 1);
+    assert_eq!(r.cursor, 0, "the new ring starts at slot 0");
+    assert_eq!(
+        r.written_get, 0,
+        "the guest's GET in the new USERD is taken to be 0"
+    );
+    assert_eq!(r.guest_get, None, "no write-back of the old ring is owed");
+    assert!(!r.grace.retrying());
+    // the registry is empty and the relay quiescent, yet the Window holds for POST_SWITCH_SCAN entries of the new ring
+    let n = u64::from(kf_chan::user_lifecycle::POST_SWITCH_SCAN);
+    for slot in 0..n as u32 {
+        io.put_entry(slot, &ge(40 + slot as u8, Kind::Plain));
+        io.put = slot + 1;
+        turn(&mut r, &mut io).unwrap();
+        assert_eq!(r.life.mode(), Mode::Window, "entry {slot} of the new ring");
+    }
+    assert_eq!(r.life.counts().post_switch_scanned, n);
+    io.put_entry(n as u32, &ge(60, Kind::Plain));
+    io.put = n as u32 + 1;
+    turn(&mut r, &mut io).unwrap();
+    assert_eq!(r.life.mode(), Mode::Pointer, "then it may end");
+}
+
+#[test]
+fn a_switch_outside_a_window_resets_the_cursor_but_scans_nothing_extra() {
+    let mut io = Mock::new(16);
+    let mut r = pointer_relay(&mut io);
+    r.switch_source(2);
+    assert_eq!((r.generation, r.cursor, r.written_get), (2, 0, 0));
+    io.put_entry(0, &ge(70, Kind::Plain));
+    io.put = 1;
+    io.calls.clear();
+    turn(&mut r, &mut io).unwrap();
+    assert_eq!(r.life.mode(), Mode::Pointer);
+    assert!(!io.calls.iter().any(|c| matches!(c, Call::ReadPb(_))));
+    assert_eq!(r.life.counts().post_switch_scanned, 0);
+}
+
+#[test]
+fn a_nonzero_guest_get_in_the_new_userd_contradicts_the_reset_and_is_what_the_guest_sees() {
+    let mut io = Mock::new(16);
+    let mut r = pointer_relay(&mut io);
+    r.switch_source(2);
+    assert!(!r.new_ring_get(0), "GP_GET 0 agrees with reset-to-0");
+    assert_eq!(r.life.counts().switch_cursor_mismatch, 0);
+    assert!(
+        r.new_ring_get(5),
+        "a nonzero GP_GET is reported to the owner"
+    );
+    assert_eq!(r.life.counts().switch_cursor_mismatch, 1);
+    assert_eq!(r.written_get, 5);
+}

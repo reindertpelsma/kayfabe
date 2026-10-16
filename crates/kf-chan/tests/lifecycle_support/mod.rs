@@ -658,15 +658,12 @@ impl Relay {
                 let s = self.staged.take().expect("staged");
                 env.executed(s.migrate);
                 if s.migrate {
-                    self.core.generation += 1;
-                    self.core.cursor = match self.cursor_after_switch {
-                        Cursor::Zero => 0,
-                        Cursor::Keep => self.core.cursor,
-                    };
-                    self.core.grace.clear();
-                    self.core.guest_get = None;
-                    self.core.written_get = 0;
-                    self.core.life.source_switched();
+                    // the production switch (the pump's `migrate` calls the same method)
+                    let keep = self.core.cursor;
+                    self.core.switch_source(self.core.generation + 1);
+                    if self.cursor_after_switch == Cursor::Keep {
+                        self.core.cursor = keep;
+                    }
                     env.event(Ev::Switched);
                 }
                 self.core.again = true;

@@ -45,6 +45,26 @@ impl Software {
         value == crate::defapi::NV50_DEFERRED_API_CLASS || value == u32::from(self.number)
     }
 }
+/// The registry key of a channel's 5080 software object: the channel's CLIENT and the OBJECT's own guest handle
+/// (never the channel's handle: the registrations of the deferred API belong to the object).
+fn software_key(client: u32, sw: &Software) -> kf_rm::defapi::ObjKey {
+    kf_rm::defapi::ObjKey {
+        client,
+        object: sw.guest,
+    }
+}
+/// The live registrations of the channel's software object (what decides whether a Window opens): 0 when the VM has
+/// no registry or the channel no software object. Takes the registry lock; call it only when the epoch moved.
+fn live_registrations(
+    reg: Option<&kf_rm::defapi::Registry>,
+    client: u32,
+    sw: Option<&Software>,
+) -> u32 {
+    match (reg, sw) {
+        (Some(reg), Some(sw)) => reg.live_count(software_key(client, sw)),
+        _ => 0,
+    }
+}
 fn same_software(a: &Option<Software>, b: &Option<Software>) -> bool {
     match (a, b) {
         (None, None) => true,
@@ -729,13 +749,11 @@ impl kf_chan::user_turn::Io for PumpIo<'_> {
         self.me.defapi_reg.get().map_or(0, |reg| reg.epoch())
     }
     fn registry_live(&mut self) -> u32 {
-        match (self.me.defapi_reg.get(), self.sw.as_ref()) {
-            (Some(reg), Some(sw)) => reg.live_count(kf_rm::defapi::ObjKey {
-                client: self.r.key.0,
-                object: sw.guest,
-            }),
-            _ => 0,
-        }
+        live_registrations(
+            self.me.defapi_reg.get().map(AsRef::as_ref),
+            self.r.key.0,
+            self.sw.as_ref(),
+        )
     }
     fn software(&mut self, refresh: bool) -> Turn<kf_chan::user_turn::SwView> {
         if refresh && let Ok(Some(sw)) = software_snapshot(self.me, self.r) {
@@ -2298,10 +2316,7 @@ impl Pump {
         if !sw.matches(call.value) {
             return false;
         }
-        let key = kf_rm::defapi::ObjKey {
-            client: r.key.0,
-            object: sw.guest,
-        };
+        let key = software_key(r.key.0, &sw);
         reg.lookup(key, call.data)
             .is_ok_and(|e| matches!(e.decoded, kf_abi::defapi::Bundle::UpdateChannelInfo(_)))
     }
@@ -2341,11 +2356,7 @@ impl Pump {
         let sw = software_snapshot(me, r)?
             .filter(|sw| sw.matches(call.value))
             .ok_or("USER_RING_SOFTWARE_OBJECT_GONE")?;
-        let handle = sw.guest;
-        let key = kf_rm::defapi::ObjKey {
-            client: r.key.0,
-            object: handle,
-        };
+        let key = software_key(r.key.0, &sw);
         let entry = reg
             .lookup(key, call.data)
             .map_err(|e| format!("USER_RING_UNREGISTERED_API {e:#x}"))?;
@@ -2503,13 +2514,10 @@ impl Pump {
                     r.userd = userrelay::UserdSource::Registered(userd.clone());
                     r.source = (u.gpfifo_va, u.entries);
                     t.ring_at = (u.gpfifo_va, u.entries, None);
-                    self.core.generation = generation;
                     self.source_admitted = false;
-                    self.core.cursor = 0;
-                    self.core.grace.clear();
-                    self.core.guest_get = None;
-                    // the guest's GP_GET in the new USERD is read below; the ring looks empty until then
-                    self.core.written_get = 0;
+                    // generation, cursor 0, grace, pending write-back, the guest's GET and the lifecycle's post-switch
+                    // scan: ONE production call (`kf_chan::user_turn::Relay::switch_source`, GPU-free tests)
+                    self.core.switch_source(generation);
                 })
                 .map_err(|e| source_error(e, "USER_RING_MIGRATION_ADMISSION"))
             })
@@ -2518,19 +2526,16 @@ impl Pump {
             "kf3: USER_RING_MIGRATED {:#x}:{:#x} source={:#x}x{} generation={generation}; private native ring/USERD unchanged; no host migration verb",
             r.key.0, r.key.1, u.gpfifo_va, u.entries
         );
-        // ★ PHASE 1b (review D5): the first entries of the new ring are scanned before the Window may end, and a
-        // nonzero GP_GET in the NEW USERD (the guest's own statement of where its ring stands) contradicts the
-        // reset-to-0 cursor loudly.
-        self.core.life.source_switched();
+        // ★ PHASE 1b (review D5): the first entries of the new ring are scanned before the Window may end (done by
+        // `switch_source` above), and a nonzero GP_GET in the NEW USERD (the guest's own statement of where its ring
+        // stands) contradicts the reset-to-0 cursor loudly.
         {
             let mut b = [0u8; 4];
             if r.userd
                 .read(me, r.key, &r.allocation, kf_abi::submit::USERD_GP_GET, &mut b)
                 .is_ok()
-                && u32::from_le_bytes(b) != 0
+                && self.core.new_ring_get(u32::from_le_bytes(b))
             {
-                self.core.life.switch_cursor_mismatch();
-                self.core.written_get = u32::from_le_bytes(b);
                 eprintln!(
                     "kf3: USER_RING_SWITCH_CURSOR_MISMATCH {:#x}:{:#x} the new ring's USERD shows GP_GET={} at the switch; the relay resets its cursor to 0 (reset-to-0 is contradicted for this growth)",
                     r.key.0,
@@ -3465,5 +3470,147 @@ mod tests {
         for line in ["USER_RING_PUT_BOUNDARY_OPEN", "USER_RING_WINDOW_FRESH", "USER_RING_POINTER_MARKERS_LATCHED_OFF"] {
             assert_eq!(pump.matches(line).count(), 1, "{line} is printed in one place");
         }
+    }
+    // ---- PHASE 1c (review 2, mutants R and W): the two pump lines that decide whether a Window ever opens
+
+    fn test_software(guest: u32) -> Software {
+        Software {
+            guest,
+            number: 1,
+            live: Arc::new(AtomicBool::new(true)),
+            ready: Arc::new(AtomicBool::new(true)),
+        }
+    }
+    fn register_on(reg: &kf_rm::defapi::Registry, key: kf_rm::defapi::ObjKey, handle: u32) {
+        use kf_abi::defapi::{Control, DefApiAbi, Form};
+        let abi = DefApiAbi::at(kf_abi::DriverVersion {
+            major: 580,
+            minor: 65,
+            patch: 6,
+        })
+        .unwrap();
+        let mut p = vec![0u8; 584];
+        p[0..4].copy_from_slice(&handle.to_le_bytes());
+        p[4..8].copy_from_slice(&abi.cmds.update_channel_info.to_le_bytes());
+        assert_eq!(
+            kf_rm::defapi::serve(reg, &abi, key, Control::Register(Form::V1), &p, |_| false),
+            0
+        );
+    }
+
+    /// R: a live registration of the channel's SOFTWARE object is what opens a Window. It is keyed by the channel's
+    /// client and the OBJECT's guest handle -- not the channel's own handle, not another client's object.
+    #[test]
+    fn a_live_registration_of_the_channels_software_object_is_counted_and_nothing_else_is() {
+        use kf_rm::defapi::{Bounds, ObjKey, Registry};
+        const CLIENT: u32 = 0xc1d0_0015;
+        const CHANNEL: u32 = 0xff04_0001;
+        const OBJECT: u32 = 0xff1f_e010;
+        let reg = Registry::new(Bounds::default());
+        let sw = test_software(OBJECT);
+        assert_eq!(live_registrations(Some(&reg), CLIENT, Some(&sw)), 0, "nothing registered");
+        register_on(&reg, ObjKey { client: CLIENT, object: OBJECT }, 0x4000_0001);
+        assert_eq!(
+            live_registrations(Some(&reg), CLIENT, Some(&sw)),
+            1,
+            "a registration on the software object opens the Window"
+        );
+        register_on(&reg, ObjKey { client: CLIENT, object: OBJECT }, 0x4000_0002);
+        assert_eq!(live_registrations(Some(&reg), CLIENT, Some(&sw)), 2);
+        // registrations on the CHANNEL's handle, on another client's object and on another object are not this object's
+        register_on(&reg, ObjKey { client: CLIENT, object: CHANNEL }, 0x4000_0003);
+        register_on(&reg, ObjKey { client: CLIENT + 1, object: OBJECT }, 0x4000_0004);
+        register_on(&reg, ObjKey { client: CLIENT, object: OBJECT + 1 }, 0x4000_0005);
+        assert_eq!(live_registrations(Some(&reg), CLIENT, Some(&sw)), 2);
+        // the channel's own handle is not the software object (a mutant keyed by it would see exactly 1 here)
+        let channel_as_object = test_software(CHANNEL);
+        assert_eq!(live_registrations(Some(&reg), CLIENT, Some(&channel_as_object)), 1);
+        // no registry, or no software object: nothing to open a Window for
+        assert_eq!(live_registrations(None, CLIENT, Some(&sw)), 0);
+        assert_eq!(live_registrations(Some(&reg), CLIENT, None), 0);
+        assert_eq!(software_key(CLIENT, &sw), ObjKey { client: CLIENT, object: OBJECT });
+    }
+
+    /// R, second angle: the key of a software object is built in ONE place and every reader of the registry uses it
+    /// (the epoch count the Window flips on, the trigger peek, the trigger lookup).
+    #[test]
+    fn every_registry_lookup_of_the_software_object_goes_through_software_key() {
+        let pump = include_str!("userpump.rs");
+        let pump = pump.split("#[cfg(test)]").next().unwrap();
+        assert_eq!(
+            pump.matches("object: sw.guest").count(),
+            1,
+            "the key is built only in software_key, from the OBJECT's handle"
+        );
+        assert!(!pump.contains("object: self.r.key") && !pump.contains("object: r.key"));
+        assert_eq!(pump.matches("software_key(").count(), 4, "its definition and three readers");
+    }
+
+    fn registry_live_body() -> String {
+        let pump = include_str!("userpump.rs");
+        let pump = pump.split("#[cfg(test)]").next().unwrap();
+        let live = pump.split("fn registry_live(&mut self)").nth(1).unwrap();
+        live.split("fn software(&mut self, refresh").next().unwrap().to_owned()
+    }
+
+    /// R, third angle: `registry_live` hands the channel's CLIENT and its software object to the one counting function.
+    #[test]
+    fn registry_live_counts_the_software_objects_registrations_for_the_channels_client() {
+        let live = registry_live_body();
+        assert!(
+            live.contains("live_registrations(")
+                && live.contains("self.r.key.0,")
+                && live.contains("self.sw.as_ref()"),
+            "{live}"
+        );
+    }
+
+    /// R, fourth angle: the channel's own handle (`key.1`) is never what the registry is asked about.
+    #[test]
+    fn registry_live_never_asks_the_registry_about_the_channels_own_handle() {
+        assert!(!registry_live_body().contains("key.1"));
+    }
+
+    /// W: a ring growth goes through ONE production call that also keeps the lifecycle's post-switch scan; the pump's
+    /// `migrate` makes that call inside the admission that switches the source, and writes none of those fields itself.
+    #[test]
+    fn migrate_switches_the_relay_through_switch_source_and_nothing_else_touches_its_fields() {
+        let pump = include_str!("userpump.rs");
+        let pump = pump.split("#[cfg(test)]").next().unwrap();
+        let migrate = pump.split("    fn migrate(").nth(1).unwrap();
+        let migrate = migrate.split("\n}\n").next().unwrap();
+        assert_eq!(migrate.matches("self.core.switch_source(generation);").count(), 1);
+        assert_eq!(migrate.matches("self.core.new_ring_get(").count(), 1);
+        for banned in [
+            "self.core.generation =",
+            "self.core.cursor =",
+            "self.core.guest_get =",
+            "self.core.written_get =",
+            "self.core.grace.clear()",
+        ] {
+            assert!(
+                !migrate.contains(banned),
+                "migrate must not write {banned}: it is Relay::switch_source / new_ring_get"
+            );
+        }
+        for banned in ["life.source_switched", "life.switch_cursor_mismatch"] {
+            assert!(!pump.contains(banned), "the pump must not call {banned}: Relay::switch_source / new_ring_get do");
+        }
+    }
+
+    /// W, second angle: the call sits inside the admission that switches the source (after the new source is installed,
+    /// before the `USER_RING_MIGRATED` line), so it cannot be skipped by an early return of the closure.
+    #[test]
+    fn the_switch_call_is_inside_the_admission_that_installs_the_new_source() {
+        let pump = include_str!("userpump.rs");
+        let pump = pump.split("#[cfg(test)]").next().unwrap();
+        let migrate = pump.split("    fn migrate(").nth(1).unwrap();
+        let migrate = migrate.split("\n}\n").next().unwrap();
+        let installed = migrate.find("r.source = (u.gpfifo_va, u.entries);").unwrap();
+        let call = migrate.find("self.core.switch_source(generation);").unwrap();
+        let logged = migrate.find("USER_RING_MIGRATED").unwrap();
+        assert!(installed < call && call < logged, "install < switch_source < MIGRATED line");
+        let admit = migrate.find("ring.admit(|| {").unwrap();
+        assert!(admit < installed);
     }
 }
