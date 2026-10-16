@@ -179,16 +179,19 @@ static int setup(void) {
   NV_MEMORY_VIRTUAL_ALLOCATION_PARAMS mv; memset(&mv, 0, sizeof mv); mv.hVASpace = hVAS;
   hVirt = rm_alloc("virtual", hDevice, NV01_MEMORY_VIRTUAL, &mv, sizeof mv, &st); if (!hVirt) return -1;
   hRing = alloc_vidmem("ring", RING_BYTES, 0x10000, &st); if (!hRing) return -1;
-  /* error notifier: system memory (16 B x 2 used; one page) */
-  {
+  /* error notifier: vidmem by default (same path as the ring); SETOBJ_NOTIF=sys selects system memory */
+  if (getenv("SETOBJ_NOTIF") && !strcmp(getenv("SETOBJ_NOTIF"), "sys")) {
     NV_MEMORY_ALLOCATION_PARAMS p; memset(&p, 0, sizeof p);
     p.owner = g_hClient; p.attr = 1u << 25 /* LOCATION_PCI */; p.size = 0x1000; p.alignment = 0x1000;
     hNotif = rm_alloc("notifier(sys)", hDevice, NV01_MEMORY_SYSTEM, &p, sizeof p, &st);
-    if (!hNotif) return -1;
+  } else {
+    hNotif = alloc_vidmem("notifier(vid)", 0x10000, 0x10000, &st);
   }
+  if (!hNotif) return -1;
   ring = map_cpu("ring", hRing, RING_BYTES, &st); if (!ring) return -1;
-  notifp = map_cpu("notifier", hNotif, 0x1000, &st); if (!notifp) return -1;
-  memset((void *)ring, 0, RING_BYTES); memset((void *)notifp, 0, 0x1000);
+  notifp = map_cpu("notifier", hNotif, 0x10000, &st);
+  if (!notifp) say("OBS", "notifier not CPU-mappable (status 0x%x): D2 will read as unavailable", st);
+  memset((void *)ring, 0, RING_BYTES); if (notifp) memset((void *)notifp, 0, 0x10000);
   NVOS46_PARAMETERS dm; memset(&dm, 0, sizeof dm);
   dm.hClient = g_hClient; dm.hDevice = hDevice; dm.hDma = hVirt; dm.hMemory = hRing; dm.length = RING_BYTES;
   int rc = ioctl(g_ctl, _IOWR(NV_IOCTL_MAGIC, NV_ESC_RM_MAP_MEMORY_DMA_, NVOS46_PARAMETERS), &dm);
@@ -202,20 +205,26 @@ static int setup(void) {
   NV_CHANNEL_ALLOC_PARAMS cp; memset(&cp, 0, sizeof cp);
   cp.hObjectError = hNotif; cp.gpFifoOffset = ringVA + GP_OFF; cp.gpFifoEntries = GP_ENTRIES;
   cp.hUserdMemory[0] = hRing; cp.userdOffset[0] = USERD_OFF; cp.engineType = NV2080_ENGINE_TYPE_GRAPHICS;
-  hChan = rm_alloc("channel", hTSG, AMPERE_CHANNEL_GPFIFO_A, &cp, sizeof cp, &st); if (!hChan) return -1;
+  hChan = rm_alloc("channel", hTSG, AMPERE_CHANNEL_GPFIFO_A, &cp, sizeof cp, &st);
+  if (!hChan) {
+    say("OBS", "channel alloc with error notifier FAILED (0x%x): retrying WITHOUT a notifier (D2 unavailable)", st);
+    cp.hObjectError = 0; hNotif = 0;
+    hChan = rm_alloc("channel(no notifier)", hTSG, AMPERE_CHANNEL_GPFIFO_A, &cp, sizeof cp, &st);
+    if (!hChan) return -1;
+  }
   NVA06F_CTRL_BIND_PARAMS bp; memset(&bp, 0, sizeof bp); bp.engineType = NV2080_ENGINE_TYPE_GRAPHICS;
   if (rm_control("BIND", hTSG, NVA06C_CTRL_CMD_BIND, &bp, sizeof bp)) return -1;
   NVC36F_CTRL_CMD_GPFIFO_GET_WORK_SUBMIT_TOKEN_PARAMS tk; memset(&tk, 0, sizeof tk);
   if (rm_control("WORK_SUBMIT_TOKEN", hChan, NVC36F_CTRL_CMD_GPFIFO_GET_WORK_SUBMIT_TOKEN, &tk, sizeof tk)) return -1;
   token = tk.workSubmitToken;
   hUsermode = rm_alloc("usermode", hSub, AMPERE_USERMODE_A, NULL, 0, &st); if (!hUsermode) return -1;
-  {
-    /* the doorbell window is mapped through the SUBDEVICE */
+  usermode = map_cpu("usermode(hDevice)", hUsermode, 0x10000, &st);
+  if (!usermode) {
     uint32_t saved = hDevice; hDevice = hSub;
-    usermode = map_cpu("usermode", hUsermode, 0x10000, &st);
+    usermode = map_cpu("usermode(hSubDevice)", hUsermode, 0x10000, &st);
     hDevice = saved;
-    if (!usermode) return -1;
   }
+  if (!usermode) return -1;
   return 0;
 }
 
@@ -280,6 +289,7 @@ static int wait_sem(int slot, uint32_t payload, int ms) {
 }
 static uint32_t notif_status(char *buf, size_t n) {
   volatile notif_t *nt = (volatile notif_t *)notifp;
+  if (!hNotif || !notifp) { snprintf(buf, n, "(no notifier)"); return 0; }
   uint32_t bad = 0;
   buf[0] = 0;
   for (int i = 0; i < 2; i++) {
@@ -354,11 +364,13 @@ static int reach(const char *label, unsigned sub, uint32_t *objs, const char **n
 /* ------------------------------------------------------------------ cases */
 static void do_compute(void) {
   uint32_t st;
+  if (hCompute) return;
   hCompute = rm_alloc("compute ADA_COMPUTE_A", hChan, ADA_COMPUTE_A, NULL, 0, &st);
   if (!hCompute) say("RES", "compute alloc FAILED status=0x%x", st);
 }
 static void do_3d(void) {
   uint32_t st;
+  if (h3d) return;
   h3d = rm_alloc("3d ADA_A", hChan, ADA_A, NULL, 0, &st);
   if (!h3d) say("RES", "3d alloc FAILED status=0x%x", st);
 }
@@ -518,6 +530,8 @@ int main(int argc, char **argv) {
   if (argc < 2) { fprintf(stderr, "usage: %s <case> [rep]\n", argv[0]); return 2; }
   say("OBS", "START case=%s rep=%s pid=%d comm=setobj_probe", argv[1], argc > 2 ? argv[2] : "0", g_pid);
   if (setup()) { say("OBS", "SETUP-FAIL (see RM lines above)"); return 3; }
+  do_compute();
+  if (strstr(argv[1], "_3d")) do_3d();
   if (sched()) { say("OBS", "SCHEDULE-FAIL"); return 3; }
   say("OBS", "channel scheduled: hClient=0x%x hChan=0x%x token=0x%x ringVA=0x%llx", g_hClient, hChan, token, (unsigned long long)ringVA);
   int r = case_run(argv[1]);
