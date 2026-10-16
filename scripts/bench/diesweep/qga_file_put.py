@@ -17,11 +17,53 @@ if not 0 < p.stat().st_size <= 4 * 1024 * 1024:
 data = p.read_bytes()
 if len(data) > 4 * 1024 * 1024 or len(destination) > 1024:
     raise SystemExit('REFUSED size changed or destination too long')
-s = socket.socket(socket.AF_UNIX)
-s.settimeout(15)
-s.connect(sock_path)
-f = s.makefile('rwb', buffering=0)
 deadline = time.monotonic() + 120
+
+def synced_connection():
+    for attempt in range(4):
+        session = socket.socket(socket.AF_UNIX)
+        reader = None
+        try:
+            remaining = deadline - time.monotonic()
+            if remaining <= 0:
+                raise TimeoutError('QGA synchronization deadline exceeded')
+            session.settimeout(min(15, remaining))
+            session.connect(sock_path)
+            reader = session.makefile('rwb', buffering=0)
+            token = secrets.randbelow(1 << 31)
+            session.sendall(b'\xff' + json.dumps({'execute':'guest-sync','arguments':{'id':token}}).encode() + b'\n')
+            for _ in range(64):
+                remaining = deadline - time.monotonic()
+                if remaining <= 0:
+                    raise TimeoutError('QGA synchronization deadline exceeded')
+                session.settimeout(min(15, remaining))
+                raw = reader.readline(32769)
+                if not raw:
+                    raise EOFError('agent closed during synchronization')
+                if not raw.endswith(b'\n') or len(raw) > 32768:
+                    raise RuntimeError('REFUSED oversized/incomplete QGA sync reply')
+                try:
+                    reply = json.loads(raw)
+                except ValueError:
+                    continue
+                if isinstance(reply, dict) and reply.get('return') == token:
+                    return session, reader
+            raise RuntimeError('QGA sync did not echo the token within64replies')
+        except (OSError, EOFError):
+            if reader is not None:
+                reader.close()
+            session.close()
+            if attempt == 3 or time.monotonic() >= deadline:
+                raise
+            print(f'QGA_SYNC_RECONNECT attempt={attempt+1}; no file command was sent')
+        except BaseException:
+            if reader is not None:
+                reader.close()
+            session.close()
+            raise
+    raise RuntimeError('QGA synchronization attempts exhausted')
+
+s, f = synced_connection()
 
 def call(command, args):
     remaining = deadline - time.monotonic()
@@ -43,24 +85,6 @@ def call(command, args):
 
 handle = None
 try:
-    token = secrets.randbelow(1 << 31)
-    s.sendall(b'\xff' + json.dumps({'execute':'guest-sync','arguments':{'id':token}}).encode() + b'\n')
-    for _ in range(64):
-        remaining = deadline - time.monotonic()
-        if remaining <= 0:
-            raise TimeoutError('QGA synchronization deadline exceeded')
-        s.settimeout(min(15, remaining))
-        raw = f.readline(32769)
-        if not raw.endswith(b'\n') or len(raw) > 32768:
-            raise RuntimeError('REFUSED oversized/incomplete QGA sync reply')
-        try:
-            reply = json.loads(raw)
-        except ValueError:
-            continue
-        if isinstance(reply, dict) and reply.get('return') == token:
-            break
-    else:
-        raise RuntimeError('QGA sync did not echo the token within64replies')
     handle = call('guest-file-open', {'path': destination, 'mode': 'wb'})
     if type(handle) is not int or not 0 <= handle < (1 << 63):
         handle = None
