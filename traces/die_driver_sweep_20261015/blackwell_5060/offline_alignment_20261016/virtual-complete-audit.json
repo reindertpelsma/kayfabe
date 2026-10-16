@@ -1,0 +1,43 @@
+{
+  "old_rows": 382,
+  "complete_rows": 385,
+  "extra_calls": [
+    {
+      "full_ordinal": 212,
+      "function": 4,
+      "line": 1106
+    },
+    {
+      "full_ordinal": 218,
+      "function": 4,
+      "line": 1132
+    },
+    {
+      "full_ordinal": 384,
+      "function": 47,
+      "line": 1823
+    }
+  ],
+  "before_unload": {
+    "ordinal": "383",
+    "function": "76",
+    "kind": "RmControl",
+    "rpc_sequence": "0",
+    "control_or_class": "0x20800afe",
+    "trace_result": "none",
+    "effective_result": "0x56",
+    "legacy_ordinal": "381",
+    "source_line": "1819"
+  },
+  "unload": {
+    "function": "47",
+    "kind": "UnloadingGuestDriver",
+    "rpc_sequence": "0",
+    "control_or_class": "-",
+    "trace_result": "0x0",
+    "effective_result": "0x0",
+    "ordinal": "384",
+    "legacy_ordinal": "-",
+    "source_line": "1823"
+  }
+}
