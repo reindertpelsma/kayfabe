@@ -2,6 +2,12 @@
 
 STATUS: RESEARCH, 2026-10-16 02:15 CEST. PARTIAL: merge approval is not established.
 
+Follow-up control during P2 validation, 02:37-02:39: interactive.sh actually selected
+0a746117 because clearing KF3_* also cleared its build selector. Preserved only as a baseline
+control (`/data/codex-perf/logs/p1-interactive-control/`), not attributed to the shared-view build.
+Guest NVIDIA renderer 580.159.04 and glxgears completed, with no captured Xid/Flip timeout/BUG/WARNING.
+The next shared-view run asserts the executable path before grading. Cursor/input checks remain ungraded.
+
 Target source `0a74611734dc91c78c86ff39ed9f06d866072ac4`, clean independent host
 checkout `/data/codex-perf/base`. Host RTX 4070, driver 595.91.07.
 
