@@ -181,7 +181,7 @@ Retirement receipt: blackwell_5060/display_phase_20261016/retirement.json.
 
 |Instance|GPU|USD/hour incl150GB|StartUTC|StopUTC|Purpose|Ceiling|
 |---|---|---:|---|---|---|---|
-|56302930|RTX4090 advertised, AD102 proof pending|0.61|2026-10-16T21:51:00.774332UTC|ACTIVE, originaltimer00:46UTC/hard00:51UTC2026-10-17|A3Windows581.51/Linux590; A4AD102three-row ablations|max1.83USD; campaignceil10.60USD+transfers|
+|56302930|RTX4090 actualAD102/PCI2684/KVM/root146GiB|0.61|2026-10-16T21:51:00.774332UTC|ACTIVE, originaltimer00:46UTC/hard00:51UTC2026-10-17|A3Windows581.51/Linux590; A4AD102three-row ablations|max1.83USD; campaignceil10.60USD+transfers|
 
 Prior own56286918retired/APIabsence21:32:48 beforecreation. PublicSSHkeyattached,
 timer2571615armed immediately. NoBlackwell5070contract created: preparedofferdisappeared.

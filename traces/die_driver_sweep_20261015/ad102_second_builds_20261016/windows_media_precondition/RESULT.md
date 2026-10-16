@@ -2,6 +2,19 @@
 
 **STATUS: LIVE, 2026-10-16 22:43UTC. Harness failure measured; second-driver GPU validation UNRUN.**
 
+
+Correction 2026-10-16 22:46UTC: the first manual four-probe command acknowledged bytes but Bash escaped
+its filename variable, creating a literal filename instead of cup2/3/8/DXprobe. The readonly
+inventory identified this, but a negated grep in the first continuation was exempt from Bash
+errexit and failed to stop it. Fresh reference acceptance then failed on a missing cup3.exe
+BEFORE any GPU probe ran. The controller was interrupted and its owned VM stopped without
+SIGKILL; this attempt is harness failure and is excluded from row-ablation conclusions.
+The NVIDIA218chunk stage independently completed successfully in94.709s, using Python argv.
+Corrected probe staging now uses Python PureWindowsPath+subprocess argv and the verifier throws
+on any missing file. V2controller queues after verified old-controller/VM exit, stages probes
+into a separate repair sibling, then freezes a new verifiedpayload parent for all fourtests.
+No installer has yet started. Earlier continuation description is superseded by this correction.
+
 Own56302930, actualAD102/PCI2684, native595.91.07. Source9d6f210ba/privatebinary
 cc2a86a6dec3ec6bed91d9cd6e1963a1deadf2d75a768e9e3dada91559e34668.
 Original fresh baseline guest actual580.88/32.0.15.8088/GSP1/Code0/DWM1/Explorer1,

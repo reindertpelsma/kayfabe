@@ -1,18 +1,31 @@
 # Die × driver campaign, 2026-10-15
 
-**STATUS: LIVE, 2026-10-16 21:13 UTC.** Current steering is
+**STATUS: LIVE, 2026-10-16 22:44UTC.** Current steering is
 `/root/codex_prompt_dies_20261016.md`; earlier campaign prompts remain binding.
-Latest Blackwell follow-up: [B2 tiling](blackwell_5060/display_phase_20261016/second_attempt/b2_tiles/RESULT.md), [Windows CMC negative](blackwell_5060/display_phase_20261016/second_attempt/cmc_probe/RESULT.md). GB206595raw30 now PASS f8485f6db,10startupHB0 warnings remain. Linux580 modes now validate36d134bc5, but desktop stays FAIL (blackframe/fliptimeout). Windows580 remains Code43 at teardown277 after display and CMC probes. Only own56286918 remains active until its original22:06UTC timer; exact candidate raw regression running,595CUDA/gfx queued. Campaign ceiling9.23USD plus transfers. Earlier completed wave: [AD102 follow-up](ad102_followup_20261016/RESULT.md).
-Linux595 raw30/30 and broker, Windows580421second hold and Blender CUDA/Edge
-short apps pass. Startup heartbeat0 and broker latency warnings remain explicit.
-The passing Ada trace reaches C3700201 without the native-headless four-query
-batch; [comparison](ad102_followup_20261016/passing_windows_display_trace/RESULT.md).
-Blackwell Windows GB206 remains Code43, GB205 guest Windows UNRUN; GA104 Windows
-remains UNVERIFIED QGA/binding, not an established init stall. No family complete.
-Second Windows581.51 has [public ABI/package prerequisites](driver58151_public_abi_20261016/RESULT.md)
-but no hardware run. Prior Ada rentals are retired; current ownership/cost is stated above. Small code PRs remain draft against the owner's topic
-branch, no master merge. Base and older results below are historical context;
-this dated correction supersedes their stale pending/next-work wording.
+GB206 exact e1bd2df4d Linux595 raw30/CUDA4/graphics5+10native-matching hashes PASS;
+595broker UNRUN. Linux580 one derived tiling group validates modes but desktop
+remains FAIL (blackframe/fliptimeout). Windows580 remains Code43 after both display
+and CMC probes, teardown277/unload384 unchanged; B1/B2 time-boxes exhausted.
+[Raw](blackwell_5060/display_phase_20261016/second_attempt/cmc_probe/linux595_regression/RESULT.md),
+[applications](blackwell_5060/display_phase_20261016/second_attempt/linux595_apps/RESULT.md).
+That rental56286918 was retired/API-absent21:32:48UTC.
+
+Only own56302930 ACTIVE: actualAD102/PCI2684/native595, original timer00:46UTC/hard00:51UTC
+2026-10-17, campaignceiling10.60USD+transfers. Exact9d6f210ba native595gates/CUDA4 and
+raw30 at180PASS, startupHB0warnings1606/0nonzeroHBformula warnings; readiness gap remains.
+[Raw result](ad102_second_builds_20261016/linux595_regression/RESULT.md).
+Second Windows581.51 has publicABI580.94.02/package prerequisites, but hardwareacceptance
+UNRUN. IDE/USB CD delivery failed before installation. Bounded QGA staging delivered all218
+NVIDIA chunks; a shell quoting error wrote probe filenames literally, interrupting the first
+reference/ablation attempt. No GPU failure inferred from absentprobes. Verification and staging
+fixed; continuationV2 waits safeoldstop then repairs/freezes an identical verifiedpayloadparent
+before freshP19 reference+threeone-rowablations and the first real581install/coldacceptance.
+[Harness evidence](ad102_second_builds_20261016/windows_media_precondition/RESULT.md).
+Linux590 stillUNRUN. Existing [Ada follow-up](ad102_followup_20261016/RESULT.md) remains
+Linux595broker PASS, Windows580421s0TDR/BlenderCUDA/Edge short PASS. All Windows acceptance
+uses printedP19 flags. GA104Windows UNVERIFIED QGA/binding; TU106R34 timeout180 remains.
+No familycomplete. SmallcodePRs DRAFT againstowner topic; no master merge.
+This correction supersedes stale ownership/queued-work wording below.
 Initial base: origin/claude/gpu-types-20261015 plus cursor fix2f99e673d;
 initial combined product revision23585a319.
 
@@ -51,7 +64,7 @@ not prove the remaining dies in its family.
 | Turing | TU106 Windows580 Code0/DWM/CUDA3/D3D11+12/zeroTDR and Linux580 Cinnamon/OpenGL/X11broker PASS at8e3a9d32; Linux580 CUDA4 beforefix PASS/raw29 of30 before/afterfix (R34timeout180s) | incomplete: required Linux raw pass and several actual driver builds remain |
 | Ampere | GA104 Linux580 broad pass; Linux595 raw pass; Windows580 UNVERIFIED after QGA timeouts; actual binding not established | incomplete |
 | Ada | AD102 Linux580 raw30/CUDA4/graphics10+broker and Windows580 Code0/DWM/CUDA3/D3D11+12/zeroTDR pass; Linux595 raw30/CUDA4/graphics10+broker pass; Windows580421second hold and BlenderCUDA/Edge short pass | incomplete: several driver builds and other dies remain unverified |
-| Blackwell | GB206 Linux580 raw30/CUDA4/headlessgfx5+10hashes PASS atc2092cf7; desktopFAIL (one derived group now validates modes, but blackframe/fliptimeout); GB206 Linux595raw30/30 fixed clock with10startupwarnings; GB205 fixed-clock595raw30 with startup warnings; nativeWindows580 PASS; GB206kayfabeWindows580 Code43, GB205guestWindowsUNRUN | incomplete: initialization fix, broker/graphics and several actual builds remain |
+| Blackwell | GB206 Linux580 raw30/CUDA4/headlessgfx5+10hashes PASS atc2092cf7; desktopFAIL (one derived group now validates modes, but blackframe/fliptimeout); GB206 Linux595 raw30/30/CUDA4/graphics5+10hashes exacte1bd; thisrerun0HBwarnings, prior10startupHB0 remain; GB205 fixed-clock595raw30 with startup warnings; nativeWindows580 PASS; GB206kayfabeWindows580 Code43, GB205guestWindowsUNRUN | incomplete: initialization fix, broker/graphics and several actual builds remain |
 
 Rental56076314 retired12:40:19UTC; native Windows installation completion
 was never verified there. AD10256096336 retired/absence verified15:39:44UTC.
