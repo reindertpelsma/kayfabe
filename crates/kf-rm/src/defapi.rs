@@ -414,6 +414,20 @@ impl Registry {
         }
     }
 
+    /// ★ 2026-10-16 (`V3_USER_RING_LIFECYCLE_20261016.md` §1.1): the monotone epoch of the set of live
+    /// entries. STUB (tests-first commit).
+    #[must_use]
+    pub fn epoch(&self) -> u64 {
+        0
+    }
+
+    /// ★ 2026-10-16: the number of live entries of `key`, whatever their kind and state.
+    /// STUB (tests-first commit).
+    #[must_use]
+    pub fn live_count(&self, _key: ObjKey) -> u32 {
+        0
+    }
+
     /// The live entries of `key`, in handle order (tests, the log).
     #[must_use]
     pub fn entries(&self, key: ObjKey) -> Vec<Entry> {
@@ -783,5 +797,114 @@ mod tests {
         assert_eq!(r.stats().0, 2);
         assert_eq!(r.stats().1.destroyed, 2);
         assert_eq!(reg(&r, 1, 0, 0), NV_OK, "a re-created object starts empty");
+    }
+
+    /// ★ 2026-10-16: the epoch moves exactly when the set of live entries changes, and an entry is
+    /// visible to `live_count` by the time the epoch that announces it is.
+    #[test]
+    fn the_epoch_counts_changes_of_the_live_set_and_nothing_else() {
+        let r = Registry::new(Bounds::default());
+        let e0 = r.epoch();
+        assert_eq!(r.live_count(OBJ), 0);
+        // a refused registration changes nothing
+        assert_eq!(reg(&r, 0, 0x2080_012d, 0), NV_ERR_INVALID_OBJECT_HANDLE);
+        assert_eq!(r.epoch(), e0);
+        assert_eq!(reg(&r, 0x4000_0002, 0x2080_012d, 0), NV_OK);
+        assert!(r.epoch() > e0);
+        assert_eq!(r.live_count(OBJ), 1);
+        // a duplicate is refused
+        let e1 = r.epoch();
+        assert_eq!(reg(&r, 0x4000_0002, 0x2080_012d, 0), NV_ERR_INVALID_OBJECT_HANDLE);
+        assert_eq!(r.epoch(), e1);
+        // lookups, stats and entries() do not move it
+        let _ = r.lookup(OBJ, 0x4000_0002);
+        let _ = r.lookup(OBJ, 0x4000_0009);
+        let _ = (r.stats(), r.entries(OBJ), r.waiting_tlb(OBJ));
+        assert_eq!(r.epoch(), e1);
+        // executing an implicit entry deletes it: a change
+        r.executed(OBJ, 0x4000_0002, false);
+        assert!(r.epoch() > e1);
+        assert_eq!(r.live_count(OBJ), 0);
+        // executing an EXPLICIT entry deletes nothing: the live set (and so the epoch) is unchanged
+        assert_eq!(reg(&r, 7, 0x2080_012b, 1), NV_OK);
+        let e2 = r.epoch();
+        r.executed(OBJ, 7, false);
+        assert_eq!(r.epoch(), e2);
+        assert_eq!(r.live_count(OBJ), 1, "an executed explicit entry is still live");
+        // REMOVE_API of an absent handle is a refusal and changes nothing
+        assert_eq!(r.remove(OBJ, 99), NV_ERR_GENERIC);
+        assert_eq!(r.epoch(), e2);
+        assert_eq!(r.remove(OBJ, 7), NV_OK);
+        assert!(r.epoch() > e2);
+        assert_eq!(r.live_count(OBJ), 0);
+    }
+
+    #[test]
+    fn prune_and_clear_life_move_the_epoch_only_when_they_drop_entries() {
+        let r = Registry::new(Bounds::default());
+        let e = r.epoch();
+        r.prune(|_| true);
+        assert_eq!(r.clear_life(), 0);
+        assert_eq!(r.epoch(), e, "nothing to drop");
+        assert_eq!(reg(&r, 0x4000_0002, 0x2080_012d, 0), NV_OK);
+        let e1 = r.epoch();
+        r.prune(|_| true);
+        assert_eq!(r.epoch(), e1, "the object is alive");
+        r.prune(|_| false);
+        assert!(r.epoch() > e1);
+        assert_eq!(r.live_count(OBJ), 0);
+        assert_eq!(reg(&r, 0x4000_0002, 0x2080_012d, 0), NV_OK);
+        let e2 = r.epoch();
+        assert_eq!(r.clear_life(), 1);
+        assert!(r.epoch() > e2);
+        assert_eq!(r.live_count(OBJ), 0);
+    }
+
+    #[test]
+    fn live_count_is_per_object_and_counts_every_bundle_kind() {
+        let r = Registry::new(Bounds::default());
+        let other = ObjKey {
+            client: OBJ.client,
+            object: 0xff1f_e011,
+        };
+        let abi = abi();
+        for (i, cmd) in [abi.cmds.update_channel_info, abi.cmds.invalidate_tlb, 0xdead_beef]
+            .into_iter()
+            .enumerate()
+        {
+            assert_eq!(reg(&r, 0x4000_0002 + i as u32, cmd, 0), NV_OK);
+        }
+        assert_eq!(
+            serve(&r, &abi, other, Control::Register(Form::V1), &params(5, 0, 0), |_| false),
+            NV_OK
+        );
+        assert_eq!((r.live_count(OBJ), r.live_count(other)), (3, 1));
+    }
+
+    /// The order the worker relies on: the worker loads the epoch (acquire) and THEN counts. A
+    /// registrar that bumped the epoch before the entry was visible would let it read an old count.
+    #[test]
+    fn a_reader_that_sees_an_epoch_sees_every_registration_it_announces() {
+        let r = std::sync::Arc::new(Registry::new(Bounds {
+            per_object: 1 << 20,
+            per_client: 1 << 20,
+            per_vm: 1 << 20,
+        }));
+        let n = 20_000u32;
+        let writer = {
+            let r = r.clone();
+            std::thread::spawn(move || {
+                for h in 0..n {
+                    assert_eq!(reg(&r, 0x4000_0000 + h, 0x2080_012d, 2), NV_OK);
+                }
+            })
+        };
+        while !writer.is_finished() {
+            let e = r.epoch();
+            let c = r.live_count(OBJ);
+            assert!(u64::from(c) >= e, "epoch {e} announced more entries than the {c} visible");
+        }
+        writer.join().unwrap();
+        assert!(r.epoch() >= u64::from(n), "every registration moved the epoch");
     }
 }

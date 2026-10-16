@@ -87,6 +87,20 @@ impl Scan {
         })
     }
 
+    /// Subchannels (bit n, n >= 5) on which a scanned SET_OBJECT bound an object `software` accepts.
+    /// STUB (tests-first commit).
+    pub fn software_mask(&self, _software: impl Fn(u32) -> bool) -> u8 {
+        0
+    }
+
+    /// The scan after an UNSCANNED stretch (Pointer mode): the bindings are kept, the packet in
+    /// progress is forgotten and the sub-device mask state returns to its birth value.
+    /// STUB (tests-first commit).
+    #[must_use]
+    pub fn fresh_resume(&self) -> Self {
+        self.clone()
+    }
+
     /// Whether the metadata is between complete method packets. This is not
     /// evidence that hardware executed the same bytes or completed engine work.
     pub fn at_boundary(&self) -> bool {
@@ -271,7 +285,7 @@ impl Scan {
 
 /// Paired private-GP fetch receipts. These retire descriptors/source GP slots,
 /// never pushbuffer bytes, engine operands, or GPU work.
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct Fetch {
     entries: u32,
     issued: u64,
@@ -758,5 +772,43 @@ mod tests {
         assert_eq!(f.observe(put).unwrap(), vec![]);
         assert_eq!(f.observe(0), Err("USER_FETCH_UNISSUED_GET"));
         assert_eq!(f.publish(None), Err("USER_FETCH_SEQUENCE"));
+    }
+
+    #[test]
+    fn software_mask_names_the_subchannels_bound_to_the_software_object() {
+        let mut s = Scan::default();
+        assert_eq!(s.software_mask(|v| v == 0x5080), 0);
+        s.segment(&[h(6, 0, 1).unwrap(), 0x5080, h(2, 0, 1).unwrap(), 0x5080], |v| v == 0x5080)
+            .unwrap();
+        assert_eq!(s.software_mask(|v| v == 0x5080), 1 << 6, "sub 2 is a hardware subchannel");
+        s.segment(&[h(7, 0, 1).unwrap(), 0x5080], |v| v == 0x5080).unwrap();
+        assert_eq!(s.software_mask(|v| v == 0x5080), (1 << 6) | (1 << 7));
+        s.segment(&[h(6, 0, 1).unwrap(), 0xc7c0], |v| v == 0x5080).unwrap();
+        assert_eq!(s.software_mask(|v| v == 0x5080), 1 << 7, "rebound to another class");
+        assert_eq!(s.software_mask(|_| false), 0);
+    }
+
+    #[test]
+    fn a_fresh_resume_keeps_the_bindings_and_forgets_the_open_packet_and_the_mask_state() {
+        let mut s = Scan::for_subdevice(1).unwrap();
+        s.segment(&[h(6, 0, 1).unwrap(), 0x5080], |v| v == 0x5080).unwrap();
+        s.segment(&[0x20000 | (4 << 4), 0x10000, h(1, 0x1b0, 3).unwrap(), 7], |v| v == 0x5080)
+            .unwrap();
+        assert!(!s.at_boundary());
+        let f = s.fresh_resume();
+        assert!(f.at_boundary(), "the packet in progress is forgotten");
+        assert_eq!(f.software_mask(|v| v == 0x5080), 1 << 6, "bindings kept");
+        // the mask is active again (birth state): a trigger scans as a trigger
+        let mut f2 = f.clone();
+        let t = f2
+            .segment(&[h(6, 0x200, 1).unwrap(), 27], |v| v == 0x5080)
+            .unwrap()
+            .unwrap();
+        assert_eq!(t.call.data, 27);
+        // nothing stored: a USE with nothing stored is refused as it is at birth
+        let mut f3 = f.clone();
+        assert_eq!(f3.segment(&[0x30000], |v| v == 0x5080), Err(Refusal::SubDeviceMask(0x30000)));
+        // and the original is unchanged
+        assert!(!s.at_boundary());
     }
 }
