@@ -82,7 +82,7 @@ Final56246613: provider153389 went offline during native Linux restoration after
 
 | Instance | GPU | USD/hour incl150GB | StartUTC | StopUTC | Purpose | Ceiling |
 |---|---|---:|---|---|---|---|
-|56261059|RTX4090, exactdie pending unprivilegedRM|0.5083333333|2026-10-16T15:05:43.770452+00:00|ACTIVE; timer2383207 at18:00:44/hard18:05:43|A1Linux595broker/A2Windows580hold and Ada passing display-subtree reference for Blackwell|max3h1.53USD; campaign ceiling6.38USD+transfers|
+|56261059|RTX4090, exactdie pending unprivilegedRM|0.5083333333|2026-10-16T15:05:43.770452+00:00|destroyed/absence verified15:41:34UTC; timer2383207 canceled after absence|A1Linux595broker/A2Windows580hold and Ada passing display-subtree reference for Blackwell|35m50s; compute ceiling0.31USD; campaign ceiling5.16USD+transfers|
 
 Prior own56246613 absence verified14:42:21 before creation. Single-GPU
 unverified offer56242118/machine154064 advertises24CPU/48263MiBRAM/719GBdisk;
@@ -91,3 +91,18 @@ consumer offer in narrow and wide/default/no-default searches; do not widen to
 P100/RTX6000D. Earlier provider153389 is excluded. Own startup deadline15min;
 original timer stays. Native Windows reference already exists per AD102; do not
 repeat green native installs. Validate native Linux on this box before guest work.
+
+Final56261059: VM never reached SSH/KVM within the15min startup deadline,
+controller exited15:20:51. No hardware test or exact die measurement ran.
+Contract destroyed/absence verified15:41:34, timer canceled after absence.
+
+| Instance | GPU | USD/hour | StartUTC | StopUTC | Purpose | Ceiling |
+|---|---|---:|---|---|---|---|
+|56265118|4xRTX4060Ti advertised; GPU0 only; exactdie pending|pendingAPI actual rate; offer0.6947222222|2026-10-16T15:44:50.024520+00:00|ACTIVE; timer2392895 at18:39:50/hard18:44:50|A4 secondAda die, serial native/guest suites on GPU0 only|max3h provisional2.25USD; campaign ceiling7.41USD+transfers|
+
+Verified offer51136946/machine146370,vms_enabled=true, advertises80CPU/
+386836MiBRAM/3186GBfree disk;150GBrequested. GPU0/BDF is selected explicitly;
+no workload is assigned to the other three GPUs. New bootstrap fixes shell
+precondition/launch fail-fast before launch and caps startup at15min. No native
+or guest fact may be claimed until its own command completes. No data/values
+are borrowed across Ada dies. Prior56261059 absence precedes this creation.
