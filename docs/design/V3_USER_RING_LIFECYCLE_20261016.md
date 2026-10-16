@@ -179,8 +179,45 @@ deliberate defect and lists the failing tests. Machine mutants are `kf_chan::use
 transliteration of the turn (`KF_LIFECYCLE_GLUE_MUTANT`; the transliteration in `tests/lifecycle_support/mod.rs` uses the REAL `Lifecycle`, `SyncGate`, `Marks`, `Grace`,
 `Scan`, `Fetch`, `inspect_entry`, but the pump's I/O is abstracted: a mapping by line is in its comments).
 
-MUTATION_TABLE_PLACEHOLDER
+Result of the last run (baseline green; every one of the 16 deliberate defects is caught; none survived, so no test had to be added after the run):
+
+| mutation | invariant / suspect | failing tests (count: names) |
+|---|---|---|
+| `machine_pointer_scans`: Pointer mode plans a scan (a pushbuffer is read in Pointer) | I1 | 45: `a1_a_full_ring_lap_in_pointer_mode_does_not_revive_a_stale_gate_proof`, `a1_a_registration_right_after_a_forwarded_sync_wait_never_scans_the_late_pushbuffer`, `a2_an_open_packet_carried_across_the_mode_switch_is_dropped_and_a_later_window_starts_fresh`, and 3 more |
+| `machine_no_seed`: a Fresh window never seeds its gate | I3 / A1 | 5: `a1_a_registration_right_after_a_forwarded_sync_wait_never_scans_the_late_pushbuffer`, `b_extra_and_coalesced_doorbells_during_a_draining_gate_change_nothing`, `i3_the_same_stream_with_the_guest_free_to_publish_b_early_is_found`, and 2 more |
+| `machine_forget_sync`: Pointer mode forgets the SYNC_WAIT it forwarded | I3 / A1 | 7: `a1_a_registration_right_after_a_forwarded_sync_wait_never_scans_the_late_pushbuffer`, `b_extra_and_coalesced_doorbells_during_a_draining_gate_change_nothing`, `b_the_monotone_entry_counter_survives_the_u32_boundary`, and 3 more |
+| `machine_pointer_to_scan`: a registration in Pointer mode moves the channel back to Scan | I5 | 28: `a1_a_full_ring_lap_in_pointer_mode_does_not_revive_a_stale_gate_proof`, `a1_a_registration_right_after_a_forwarded_sync_wait_never_scans_the_late_pushbuffer`, `a2_an_open_packet_carried_across_the_mode_switch_is_dropped_and_a_later_window_starts_fresh`, and 3 more |
+| `machine_revive_after_teardown`: a teardown does not stop the machine | A7 | 2: `a7_teardown_at_any_instant_stops_the_private_ring_for_good`, `teardown_is_terminal_and_a_late_event_cannot_revive_the_channel` |
+| `machine_exit_ignores_live`: a Window ends when quiescent whatever the registry says | I4 | 31: `a1_a_full_ring_lap_in_pointer_mode_does_not_revive_a_stale_gate_proof`, `a1_a_registration_right_after_a_forwarded_sync_wait_never_scans_the_late_pushbuffer`, `a2_an_open_packet_carried_across_the_mode_switch_is_dropped_and_a_later_window_starts_fresh`, and 3 more |
+| `machine_mask_frozen`: a Window never notices a moved software binding | A6 / P1 | 2: `a6_a_rebind_inside_a_window_is_seen_and_counted_and_the_new_binding_is_used`, `a_changed_software_binding_inside_a_window_is_counted` |
+| `glue_epoch_before_put`: registry epoch loaded before GP_PUT and the entry | I4 / A3 | 21: `a1_a_full_ring_lap_in_pointer_mode_does_not_revive_a_stale_gate_proof`, `a1_a_registration_right_after_a_forwarded_sync_wait_never_scans_the_late_pushbuffer`, `a2_an_open_packet_carried_across_the_mode_switch_is_dropped_and_a_later_window_starts_fresh`, and 3 more |
+| `glue_double_fetch`: a second load of the entry is what gets stored | I7 / A4 | 1: `a4_one_dword_changing_between_the_loads_never_stores_a_value_other_than_the_tested_one` |
+| `glue_no_gate_reset`: the SyncGate is not reset at a Fresh restart (stale proof one ring lap later) | I3 / A1 | 1: `a1_a_full_ring_lap_in_pointer_mode_does_not_revive_a_stale_gate_proof` |
+| `glue_flip_at_put`: the flip boundary is a re-read of GP_PUT, not the cursor | I4 / A3 | 25: `a1_a_full_ring_lap_in_pointer_mode_does_not_revive_a_stale_gate_proof`, `a1_a_registration_right_after_a_forwarded_sync_wait_never_scans_the_late_pushbuffer`, `a2_an_open_packet_carried_across_the_mode_switch_is_dropped_and_a_later_window_starts_fresh`, and 3 more |
+| `glue_ignore_seed`: the seeded gate is ignored at window start | I3 / A1 | 4: `a1_a_registration_right_after_a_forwarded_sync_wait_never_scans_the_late_pushbuffer`, `b_extra_and_coalesced_doorbells_during_a_draining_gate_change_nothing`, `i3_the_same_stream_with_the_guest_free_to_publish_b_early_is_found`, and 1 more |
+| `glue_ignore_events`: the worker never looks at its waits on an event (only a timer would) | I6 | 1: `i6_every_announced_wait_is_woken_by_an_event_with_no_look_and_no_timer` |
+| `glue_drop_flip_entry`: the first entry of a Fresh window is skipped | I2 | 28: `a1_a_full_ring_lap_in_pointer_mode_does_not_revive_a_stale_gate_proof`, `a1_a_registration_right_after_a_forwarded_sync_wait_never_scans_the_late_pushbuffer`, `a2_an_open_packet_carried_across_the_mode_switch_is_dropped_and_a_later_window_starts_fresh`, and 3 more |
+| `glue_skip_validation`: an entry inspect_entry refused is forwarded anyway | A4 | 3: `a4_every_single_bit_flip_of_a_valid_entry_is_refused_by_name_or_forwarded_validated`, `a4_hostile_entries_never_panic_and_never_store_an_unvalidated_value`, `a4_one_dword_changing_between_the_loads_never_stores_a_value_other_than_the_tested_one` |
+| `glue_bound_without_datum`: a SET_OBJECT header (datum unscanned) counts as the binding | A2 | 1: `a2_the_binding_packet_split_across_two_entries_switches_to_pointer_after_the_datum` |
 
 ## 9. Results (GPU-free, `cargo test --release`)
 
-RESULTS_PLACEHOLDER
+| crate | base (`0a7461173`) | this branch | new |
+|---|---|---|---|
+| `kf-chan` lib | 142 | 166 | `user_lifecycle` 22 (machine, counters, transition table, G4 source pin, reused key), `user_scan` +2 (`software_mask`, `fresh_resume`) |
+| `kf-chan` tests | 150 | 150 + 63 (+3 ignored OPEN) | `user_lifecycle_model` 44 (+3 ignored), `user_lifecycle_props` 17, `user_lifecycle_stress` 2 |
+| `kf-rm` lib | 150 | 154 | registry `epoch` / `live_count`: 4 (one is a two-thread ordering test) |
+| `kf-trap` lib | 80 | 86 | `inline_plan` 5 + 1 loom model (PHASE 2 protocol, model level only) |
+| `kf-qemu` lib | 270 | 271 | the G3 structural pin |
+
+All green with `cargo test --release` (the interleaving model needs `--release`: 44 tests in about 30 s; the 3 OPEN tests are `#[ignore]` with the
+expected-versus-observed text). Failing-first: against the stub machine (= the base behaviour, every entry scanned) 22 `kf-chan` lib tests, 4 `kf-rm` tests,
+21 of 32 model tests and 4 of 5 props tests failed (commit `de719e337`); the tests added afterwards (A-items, mutants, corpus, stress) are validated by the mutation table
+above instead. Clippy: no warning or error of the new code in `kf-chan`, `kf-trap`, `kf-rm`, `kf-qemu` (kf-qemu has 91 pre-existing denied-lint errors: the base is not clippy-clean there).
+Soak: 10.7 M entries over 3 092 streams in 2 s (`KF3_STRESS_SECS` longer); stress: 6.6 M entries and 242 k staged triggers with a concurrent registrar, 137 k hostile turns
+with 464 channels killed by their own hostile entries and no violation of I7.
+
+What is NOT covered (honest list): the pump itself (`Pump::turn_body`) cannot run GPU-free, so the model and the property tests drive a line-for-line transliteration that uses the
+same machine and the same scan / gate primitives (G3, the compile and the structural pin cover the wiring only); a real hold of the registration reply (PHASE 2); inline vCPU
+copying (only the `inline_plan` model); BAR1 read volume (G1 in bytes) and every performance claim; any Linux or Windows guest; the cursor semantics of the source switch.
+

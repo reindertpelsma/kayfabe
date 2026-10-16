@@ -135,11 +135,30 @@ impl Counts {
     #[must_use]
     pub fn since(&self, prev: &Counts) -> Counts {
         counts_since!(
-            self, prev, entries_scan, entries_pointer, entries_window, to_pointer, to_window_exact,
-            to_window_fresh, to_pointer_from_window, restarts, seeded_gates, segments_scan,
-            segments_window, straddles_scan, straddles_window, window_fresh_start_parse_error,
-            window_binding_changed, window_unscanned_long, pb_bytes_scan, pb_bytes_window,
-            window_bar1_bytes, pointer_pb_read_violation, scan_no_software, after_teardown
+            self,
+            prev,
+            entries_scan,
+            entries_pointer,
+            entries_window,
+            to_pointer,
+            to_window_exact,
+            to_window_fresh,
+            to_pointer_from_window,
+            restarts,
+            seeded_gates,
+            segments_scan,
+            segments_window,
+            straddles_scan,
+            straddles_window,
+            window_fresh_start_parse_error,
+            window_binding_changed,
+            window_unscanned_long,
+            pb_bytes_scan,
+            pb_bytes_window,
+            window_bar1_bytes,
+            pointer_pb_read_violation,
+            scan_no_software,
+            after_teardown
         )
     }
 }
@@ -186,10 +205,27 @@ macro_rules! lifecycle_stats {
     };
 }
 lifecycle_stats!(
-    entries_scan, entries_pointer, entries_window, to_pointer, to_window_exact, to_window_fresh,
-    to_pointer_from_window, restarts, seeded_gates, segments_scan, segments_window, straddles_scan,
-    straddles_window, window_fresh_start_parse_error, window_binding_changed, window_unscanned_long,
-    pb_bytes_scan, pb_bytes_window, window_bar1_bytes, pointer_pb_read_violation, scan_no_software,
+    entries_scan,
+    entries_pointer,
+    entries_window,
+    to_pointer,
+    to_window_exact,
+    to_window_fresh,
+    to_pointer_from_window,
+    restarts,
+    seeded_gates,
+    segments_scan,
+    segments_window,
+    straddles_scan,
+    straddles_window,
+    window_fresh_start_parse_error,
+    window_binding_changed,
+    window_unscanned_long,
+    pb_bytes_scan,
+    pb_bytes_window,
+    window_bar1_bytes,
+    pointer_pb_read_violation,
+    scan_no_software,
     after_teardown
 );
 
@@ -492,7 +528,8 @@ impl Lifecycle {
             Mode::Window => {
                 self.counts.entries_window += 1;
                 self.window_entries += 1;
-                self.counts.window_entries_max = self.counts.window_entries_max.max(self.window_entries);
+                self.counts.window_entries_max =
+                    self.counts.window_entries_max.max(self.window_entries);
             }
             Mode::Dead => self.counts.after_teardown += 1,
         }
@@ -550,7 +587,10 @@ impl Lifecycle {
             Mode::Pointer | Mode::Dead => {
                 // a permit exists only for a scan plan; reaching here is a bug (the mutant PointerScans):
                 // loud in a debug build, a counter in release (G1: `pushbuffer_bytes_read == 0` in Pointer)
-                debug_assert!(self.mode != Mode::Pointer, "pushbuffer read in Pointer mode");
+                debug_assert!(
+                    self.mode != Mode::Pointer,
+                    "pushbuffer read in Pointer mode"
+                );
                 self.counts.pointer_pb_read_violation += 1;
             }
         }
@@ -641,7 +681,10 @@ mod tests {
         let mut l = Lifecycle::new();
         assert_eq!(l.mode(), Mode::Scan);
         for i in 0..5 {
-            assert!(matches!(l.entry(&obs(i, 0x1000, 0, 0), || 0), Plan::Scan { .. }));
+            assert!(matches!(
+                l.entry(&obs(i, 0x1000, 0, 0), || 0),
+                Plan::Scan { .. }
+            ));
             l.forwarded(i, 0x1000);
         }
         assert_eq!(l.mode(), Mode::Scan);
@@ -662,7 +705,11 @@ mod tests {
     fn a_registration_live_when_the_binding_is_seen_continues_the_scan_as_an_exact_window() {
         let mut l = Lifecycle::new();
         let p = l.entry(&obs(0, 0x1000, 3, 1 << 6), || 2);
-        assert_eq!(scan(p), (false, false), "no restart, no seed: the parser state is exact");
+        assert_eq!(
+            scan(p),
+            (false, false),
+            "no restart, no seed: the parser state is exact"
+        );
         assert_eq!((l.mode(), l.start()), (Mode::Window, Some(Start::Exact)));
         assert_eq!(l.counts().to_window_exact, 1);
     }
@@ -672,7 +719,10 @@ mod tests {
         let mut l = Lifecycle::new();
         l.entry(&obs(0, 0, 0, 1 << 6), || 0);
         for i in 1..1000 {
-            assert_eq!(l.entry(&obs(i, 0x2000 + i, 0, B), || panic!("no epoch change")), Plan::Forward);
+            assert_eq!(
+                l.entry(&obs(i, 0x2000 + i, 0, B), || panic!("no epoch change")),
+                Plan::Forward
+            );
             l.forwarded(i, 0x2000 + i);
         }
         assert_eq!(l.counts().entries_pointer, 999);
@@ -685,7 +735,11 @@ mod tests {
         assert_eq!(l.entry(&obs(1, 0x10, 0, B), || 0), Plan::Forward);
         l.forwarded(1, 0x10);
         let p = l.entry(&obs(2, 0x20, 1, B), || 1);
-        assert_eq!(scan(p), (true, false), "restart once; nothing to seed without an unproven SYNC_WAIT");
+        assert_eq!(
+            scan(p),
+            (true, false),
+            "restart once; nothing to seed without an unproven SYNC_WAIT"
+        );
         assert_eq!((l.mode(), l.start()), (Mode::Window, Some(Start::Fresh)));
         assert_eq!(l.counts().to_window_fresh, 1);
         assert_eq!(l.live(), 1);
@@ -705,7 +759,10 @@ mod tests {
                 Plan::Forward
             );
         }
-        assert_eq!(asked, 49, "the registry is consulted once per epoch change, never otherwise");
+        assert_eq!(
+            asked, 49,
+            "the registry is consulted once per epoch change, never otherwise"
+        );
         assert_eq!(l.mode(), Mode::Pointer);
     }
 
@@ -742,7 +799,11 @@ mod tests {
         assert_eq!(l.outstanding_sync(), Some(1));
         l.entry(&obs(3 * 32768, SYNC | 0x40, 0, B), || 0);
         l.forwarded(3 * 32768, SYNC | 0x40);
-        assert_eq!(l.outstanding_sync(), Some(3 * 32768), "the newest one, as a u64");
+        assert_eq!(
+            l.outstanding_sync(),
+            Some(3 * 32768),
+            "the newest one, as a u64"
+        );
     }
 
     #[test]
@@ -767,7 +828,10 @@ mod tests {
         let mut l = Lifecycle::new();
         l.entry(&obs(0, 0, 1, 1 << 6), || 1);
         for i in 1..200_000u64 {
-            assert!(matches!(l.entry(&obs(i, 0x10, 1, 1 << 6), || panic!("epoch unchanged")), Plan::Scan { .. }));
+            assert!(matches!(
+                l.entry(&obs(i, 0x10, 1, 1 << 6), || panic!("epoch unchanged")),
+                Plan::Scan { .. }
+            ));
             l.forwarded(i, 0x10);
         }
         assert_eq!(l.mode(), Mode::Window);
@@ -794,9 +858,15 @@ mod tests {
         l.entry(&obs(0, 0, 0, 1 << 6), || 0);
         for round in 0..100u64 {
             let e = round * 2 + 1;
-            assert!(matches!(l.entry(&obs(10 * round + 1, 0, e, B), || 1), Plan::Scan { restart: true, .. }));
+            assert!(matches!(
+                l.entry(&obs(10 * round + 1, 0, e, B), || 1),
+                Plan::Scan { restart: true, .. }
+            ));
             l.restarted();
-            assert_eq!(l.entry(&obs(10 * round + 2, 0, e + 1, B), || 0), Plan::Forward);
+            assert_eq!(
+                l.entry(&obs(10 * round + 2, 0, e + 1, B), || 0),
+                Plan::Forward
+            );
         }
         assert_eq!(l.counts().to_window_fresh, 100);
         assert_eq!(l.counts().to_pointer_from_window, 100);
@@ -820,7 +890,11 @@ mod tests {
         use Mode::*;
         assert_eq!(next(Scan, SoftwareBound), Some(Pointer));
         assert_eq!(next(Scan, SoftwareBoundRegistered), Some(Window));
-        assert_eq!(next(Scan, Registration), None, "a Scan that has not bound yet keeps scanning anyway");
+        assert_eq!(
+            next(Scan, Registration),
+            None,
+            "a Scan that has not bound yet keeps scanning anyway"
+        );
         assert_eq!(next(Pointer, Registration), Some(Window));
         assert_eq!(next(Window, RegistryDrained), Some(Pointer));
         for m in [Scan, Pointer, Window, Dead] {
@@ -828,7 +902,13 @@ mod tests {
         }
         // nothing else: in particular no way back to Scan, and nothing leaves Dead
         for m in [Scan, Pointer, Window, Dead] {
-            for c in [SoftwareBound, SoftwareBoundRegistered, Registration, RegistryDrained, Teardown] {
+            for c in [
+                SoftwareBound,
+                SoftwareBoundRegistered,
+                Registration,
+                RegistryDrained,
+                Teardown,
+            ] {
                 if let Some(to) = next(m, c) {
                     assert_ne!(to, Scan, "{m:?} {c:?}");
                     if m == Dead {
@@ -867,15 +947,22 @@ mod tests {
     fn pushbuffer_reads_are_counted_per_mode_with_the_window_bar1_share() {
         let mut l = Lifecycle::new();
         let p = l.entry(&obs(0, 0, 0, 0), || 0);
-        let Plan::Scan { permit, .. } = p else { panic!() };
+        let Plan::Scan { permit, .. } = p else {
+            panic!()
+        };
         l.note_pb_read(&permit, 100, false);
         l.entry(&obs(1, 0, 1, 1 << 6), || 1);
         let p = l.entry(&obs(1, 0, 1, 1 << 6), || 1);
-        let Plan::Scan { permit, .. } = p else { panic!() };
+        let Plan::Scan { permit, .. } = p else {
+            panic!()
+        };
         l.note_pb_read(&permit, 40, true);
         l.note_pb_read(&permit, 8, false);
         let c = l.counts();
-        assert_eq!((c.pb_bytes_scan, c.pb_bytes_window, c.window_bar1_bytes), (100, 48, 40));
+        assert_eq!(
+            (c.pb_bytes_scan, c.pb_bytes_window, c.window_bar1_bytes),
+            (100, 48, 40)
+        );
     }
 
     #[test]
@@ -884,13 +971,19 @@ mod tests {
         l.entry(&obs(0, 0, 0, 0), || 0);
         l.segment_scanned(true);
         l.segment_scanned(false);
-        assert_eq!((l.counts().segments_scan, l.counts().straddles_scan), (2, 1));
+        assert_eq!(
+            (l.counts().segments_scan, l.counts().straddles_scan),
+            (2, 1)
+        );
         // bind with a registration live: an EXACT window; a refusal there is not a fresh-start error
         l.entry(&obs(1, 0, 1, 1 << 6), || 1);
         l.scan_refused();
         assert_eq!(l.counts().window_fresh_start_parse_error, 0);
         l.segment_scanned(true);
-        assert_eq!((l.counts().segments_window, l.counts().straddles_window), (1, 1));
+        assert_eq!(
+            (l.counts().segments_window, l.counts().straddles_window),
+            (1, 1)
+        );
 
         let mut f = Lifecycle::new();
         f.entry(&obs(0, 0, 0, 1 << 6), || 0);
@@ -916,7 +1009,11 @@ mod tests {
         l.entry(&obs(2, 0, 1, 1 << 6), || 1);
         assert_eq!(l.counts().window_binding_changed, 0);
         l.entry(&obs(3, 0, 1, 1 << 7), || 1);
-        assert_eq!(l.counts().window_binding_changed, 1, "5080 moved to another subchannel");
+        assert_eq!(
+            l.counts().window_binding_changed,
+            1,
+            "5080 moved to another subchannel"
+        );
         l.entry(&obs(4, 0, 1, 0), || 1);
         assert_eq!(l.counts().window_binding_changed, 2, "5080 unbound");
     }
@@ -938,7 +1035,10 @@ mod tests {
         assert!(l.marker_possible(false));
         assert!(!l.marker_possible(true), "a packet is open");
         l.entry(&obs(0, 0, 0, 1 << 6), || 0);
-        assert!(!l.marker_possible(false), "Pointer mode has no parser state");
+        assert!(
+            !l.marker_possible(false),
+            "Pointer mode has no parser state"
+        );
         l.entry(&obs(1, 0, 1, B), || 1);
         assert!(l.marker_possible(false));
     }
@@ -961,14 +1061,28 @@ mod tests {
     fn the_machine_names_no_clock_no_sleep_and_no_poll() {
         let text = include_str!("user_lifecycle.rs");
         let prod = text.split("#[cfg(test)]\nmod tests").next().unwrap();
-        for banned in ["Instant", "SystemTime", "Duration", "sleep", "poll(", "Poll", "tick", "timeout", "thread::"] {
-            assert!(!prod.contains(banned), "the lifecycle machine must not mention {banned}");
+        for banned in [
+            "Instant",
+            "SystemTime",
+            "Duration",
+            "sleep",
+            "poll(",
+            "Poll",
+            "tick",
+            "timeout",
+            "thread::",
+        ] {
+            assert!(
+                !prod.contains(banned),
+                "the lifecycle machine must not mention {banned}"
+            );
         }
     }
 
     /// A7: a reused channel key gets a NEW machine; it knows nothing of the old life's epoch, mode or SYNC_WAIT.
     #[test]
-    fn a_fresh_channel_on_a_reused_key_reads_the_registry_once_whatever_the_epoch_and_starts_in_scan() {
+    fn a_fresh_channel_on_a_reused_key_reads_the_registry_once_whatever_the_epoch_and_starts_in_scan()
+     {
         let mut old = Lifecycle::new();
         old.entry(&obs(0, 0, 0, B), || 0);
         old.forwarded(0, SYNC | 1);
@@ -977,7 +1091,10 @@ mod tests {
         old.teardown();
         // the key is reused: a brand new machine, the registry epoch is far ahead
         let mut fresh = Lifecycle::new();
-        assert_eq!((fresh.mode(), fresh.outstanding_sync(), fresh.live()), (Mode::Scan, None, 0));
+        assert_eq!(
+            (fresh.mode(), fresh.outstanding_sync(), fresh.live()),
+            (Mode::Scan, None, 0)
+        );
         let mut asked = 0;
         for i in 0..10 {
             fresh.entry(&obs(i, 0, 1000, 0), || {

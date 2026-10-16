@@ -9,7 +9,13 @@
 //! `Wait`; only the I/O (`Pump::snapshot`, `publish`, the USERD accesses) and the lock handling are
 //! abstracted. A turn is split into micro-steps so that a driver may run any other actor between any
 //! two of them (the guest changes ONE dword at any instant, the registry epoch moves, the PBDMA pops).
-#![allow(dead_code, clippy::too_many_lines, clippy::type_complexity, missing_docs, clippy::collapsible_if)]
+#![allow(
+    dead_code,
+    clippy::too_many_lines,
+    clippy::type_complexity,
+    missing_docs,
+    clippy::collapsible_if
+)]
 
 use kf_abi::submit::{gp_entry, method_header_inc};
 use kf_chan::user_gate::{Gate, Grace, Marks, SyncGate};
@@ -629,8 +635,7 @@ impl Relay {
             Phase::PbRead => {
                 let permit = self.permit.take().expect("permit");
                 let words = env.read_pb(self.raw);
-                self.life
-                    .note_pb_read(&permit, words.len() * 4, false);
+                self.life.note_pb_read(&permit, words.len() * 4, false);
                 self.words = words;
                 self.scanned_this = true;
                 self.phase = Phase::ScanStep;
@@ -677,8 +682,7 @@ impl Relay {
                 self.publish_guest(env, entries, true);
                 self.scan = self.next_scan.clone();
                 if !nop {
-                    self.life
-                        .segment_scanned(self.scan.carried().is_some());
+                    self.life.segment_scanned(self.scan.carried().is_some());
                 }
                 self.phase = Phase::Idle;
             }
@@ -698,8 +702,7 @@ impl Relay {
                 let (n, _) = self.marks.issue().expect("markers");
                 self.publish(env, Pub::Marker(n));
                 self.scan = self.next_scan.clone();
-                self.life
-                    .segment_scanned(self.scan.carried().is_some());
+                self.life.segment_scanned(self.scan.carried().is_some());
                 self.life.forwarded(self.abs, self.raw);
                 self.abs += 1;
                 self.cursor = guest_get;
@@ -772,7 +775,8 @@ impl Relay {
             // the wrong definition of "published after the flip": everything up to a re-read of GP_PUT
             if let Plan::Scan { restart: true, .. } = plan {
                 let put = env.gp_put();
-                self.until_abs = self.abs + u64::from(put.wrapping_sub(self.cursor) & (entries - 1));
+                self.until_abs =
+                    self.abs + u64::from(put.wrapping_sub(self.cursor) & (entries - 1));
             }
             if self.abs < self.until_abs && self.life.mode() == Mode::Window {
                 plan = Plan::Forward;

@@ -10,7 +10,12 @@
 //! stream without a registration; with a registration they are the same entries with the trigger staged
 //! at the same position and the source switched at the same position, PROVIDED the flip does not fall
 //! inside an open packet (assumption P2). Seeds are printed on failure.
-#![allow(dead_code, missing_docs, clippy::too_many_lines, clippy::needless_range_loop)]
+#![allow(
+    dead_code,
+    missing_docs,
+    clippy::too_many_lines,
+    clippy::needless_range_loop
+)]
 
 #[path = "lifecycle_support/mod.rs"]
 mod support;
@@ -50,8 +55,13 @@ impl Rng {
 #[derive(Clone, Debug)]
 pub enum Sched {
     /// A registration is applied when `at` guest entries have been forwarded.
-    Register { at: u64, migrate: bool },
-    Remove { at: u64 },
+    Register {
+        at: u64,
+        migrate: bool,
+    },
+    Remove {
+        at: u64,
+    },
 }
 impl Sched {
     fn at(&self) -> u64 {
@@ -147,7 +157,10 @@ impl Sim {
             self.put_local[r] = (self.put_local[r] + 1) % self.entries;
             self.pending[r].pop_front();
             // a ring-growth trigger is the LAST entry of its ring: the guest continues in the new one
-            if entry_id(raw).and_then(|i| self.defs.get(&i)).is_some_and(|g| g.kind == Kind::Trig { migrate: true }) {
+            if entry_id(raw)
+                .and_then(|i| self.defs.get(&i))
+                .is_some_and(|g| g.kind == Kind::Trig { migrate: true })
+            {
                 self.held[r] = true;
             }
         }
@@ -326,7 +339,12 @@ pub fn new_relay(priv_entries: u32, always_scan: bool) -> Relay {
     } else {
         Lifecycle::new()
     };
-    Relay::new(priv_entries, life, Scan::for_subdevice(1).unwrap(), Glue::from_env())
+    Relay::new(
+        priv_entries,
+        life,
+        Scan::for_subdevice(1).unwrap(),
+        Glue::from_env(),
+    )
 }
 
 pub fn run_stream(
@@ -368,7 +386,11 @@ pub fn gen_stream(rng: &mut Rng, n: usize, straddles: bool, bad_tails: bool) -> 
             v.push(if rng.chance(40) { g.sync() } else { g });
         } else if straddles && roll < 24 && v.len() + 2 <= n {
             v.push(ge(181, Kind::OpenHead));
-            let t = if bad_tails { ge(183, Kind::OpenTailBad) } else { ge(182, Kind::OpenTail) };
+            let t = if bad_tails {
+                ge(183, Kind::OpenTailBad)
+            } else {
+                ge(182, Kind::OpenTail)
+            };
             v.push(if rng.chance(30) { t.sync() } else { t });
         } else {
             let g = ge(next_plain(&mut plain), Kind::Plain);
@@ -382,7 +404,10 @@ pub fn gen_stream(rng: &mut Rng, n: usize, straddles: bool, bad_tails: bool) -> 
 pub fn flip_inside_open_packet(stream: &[Ge], index: usize) -> bool {
     index > 0
         && index < stream.len()
-        && matches!(stream[index - 1].kind, Kind::OpenHead | Kind::SetObjHead | Kind::FalseHead | Kind::TrigHead)
+        && matches!(
+            stream[index - 1].kind,
+            Kind::OpenHead | Kind::SetObjHead | Kind::FalseHead | Kind::TrigHead
+        )
 }
 
 // ------------------------------------------------------------------------------------------------
@@ -397,7 +422,12 @@ fn g2_without_a_registration_the_forwarded_entries_are_bit_identical_to_always_s
         let ring = 16 << rng.below(3);
         let (old, _) = run_stream(&stream, &[], true, ring, 8);
         let (new, relay) = run_stream(&stream, &[], false, ring, 8);
-        assert!(!old.dead && !new.dead, "seed {seed}: dead {} {}", old.dead, new.dead);
+        assert!(
+            !old.dead && !new.dead,
+            "seed {seed}: dead {} {}",
+            old.dead,
+            new.dead
+        );
         assert_eq!(
             old.forwarded.len(),
             stream.len(),
@@ -408,14 +438,21 @@ fn g2_without_a_registration_the_forwarded_entries_are_bit_identical_to_always_s
         assert_eq!(new.forwarded, expect, "seed {seed}: bit-exact");
         assert_eq!(new.pb_reads_in_pointer, 0, "seed {seed}: G1");
         assert!(matches!(relay.life.mode(), Mode::Pointer), "seed {seed}");
-        assert!(new.pb_reads < old.pb_reads, "seed {seed}: the lifecycle reads less");
+        assert!(
+            new.pb_reads < old.pb_reads,
+            "seed {seed}: the lifecycle reads less"
+        );
     }
 }
 
 /// Register when `at` entries were forwarded (the flip: entry `at` is the first one loaded after it); the trigger
 /// is inserted at the first packet boundary at or after `at` (never inside an OpenHead/OpenTail pair).
 /// Returns the schedule, the flip index and the trigger index.
-fn plan_registration(rng: &mut Rng, stream: &mut Vec<Ge>, migrate: bool) -> (Vec<Sched>, usize, usize) {
+fn plan_registration(
+    rng: &mut Rng,
+    stream: &mut Vec<Ge>,
+    migrate: bool,
+) -> (Vec<Sched>, usize, usize) {
     let at = 2 + rng.below((stream.len() as u64).saturating_sub(5).max(1)) as usize;
     let at = at.min(stream.len() - 1);
     let mut t = at;
@@ -423,11 +460,19 @@ fn plan_registration(rng: &mut Rng, stream: &mut Vec<Ge>, migrate: bool) -> (Vec
         t += 1;
     }
     stream.insert(t, ge(190, Kind::Trig { migrate }).post());
-    (vec![Sched::Register { at: at as u64, migrate }], at, t)
+    (
+        vec![Sched::Register {
+            at: at as u64,
+            migrate,
+        }],
+        at,
+        t,
+    )
 }
 
 #[test]
-fn g2_with_a_registration_at_any_flip_position_that_is_not_inside_a_packet_the_cycle_is_identical() {
+fn g2_with_a_registration_at_any_flip_position_that_is_not_inside_a_packet_the_cycle_is_identical()
+{
     let mut checked = 0;
     for seed in 0..400u64 {
         let mut rng = Rng::new(0x1000 + seed);
@@ -444,19 +489,26 @@ fn g2_with_a_registration_at_any_flip_position_that_is_not_inside_a_packet_the_c
         let (old, _) = run_stream(&stream, &sched, true, ring, 8);
         let (new, relay) = run_stream(&stream, &sched, false, ring, 8);
         assert!(!old.dead && !new.dead, "seed {seed}: dead");
-        assert_eq!(old.forwarded, new.forwarded, "seed {seed}: forwarded entries");
+        assert_eq!(
+            old.forwarded, new.forwarded,
+            "seed {seed}: forwarded entries"
+        );
         assert_eq!(old.staged, new.staged, "seed {seed}: trigger position");
         assert_eq!(old.switches, new.switches, "seed {seed}: switch position");
         assert_eq!(new.unscanned_while_live, 0, "seed {seed}: I4");
         assert_eq!(new.staged, vec![k], "seed {seed}: the trigger was staged");
-        assert!(matches!(relay.life.mode(), Mode::Pointer), "seed {seed}: back to Pointer");
+        assert!(
+            matches!(relay.life.mode(), Mode::Pointer),
+            "seed {seed}: back to Pointer"
+        );
         checked += 1;
     }
     assert!(checked > 200, "enough streams exercised: {checked}");
 }
 
 #[test]
-fn g2_p2_every_difference_between_the_lifecycle_and_always_scan_is_explained_by_a_flip_inside_a_packet() {
+fn g2_p2_every_difference_between_the_lifecycle_and_always_scan_is_explained_by_a_flip_inside_a_packet()
+ {
     // Streams WITH straddles whose tails do not decode as headers (a fresh scan refuses them) and flips
     // anywhere: a difference may appear only where the flip falls between an OpenHead and its OpenTail, and
     // then the lifecycle counts it (`window_fresh_start_parse_error`). This is the P2 measurement.
@@ -470,14 +522,20 @@ fn g2_p2_every_difference_between_the_lifecycle_and_always_scan_is_explained_by_
         let in_packet = k > 0 && k < stream.len() && matches!(stream[k - 1].kind, Kind::OpenHead);
         let (old, _) = run_stream(&stream, &sched, true, 64, 8);
         let (new, relay) = run_stream(&stream, &sched, false, 64, 8);
-        assert!(!old.dead, "seed {seed}: the base never refuses a valid stream");
+        assert!(
+            !old.dead,
+            "seed {seed}: the base never refuses a valid stream"
+        );
         let same = old.forwarded == new.forwarded && old.staged == new.staged && !new.dead;
         if in_packet {
             inside += 1;
         }
         if !same {
             differ += 1;
-            assert!(in_packet, "seed {seed}: a difference with the flip on a boundary (k={k})");
+            assert!(
+                in_packet,
+                "seed {seed}: a difference with the flip on a boundary (k={k})"
+            );
             assert!(
                 relay.life.counts().window_fresh_start_parse_error >= 1,
                 "seed {seed}: the difference is not counted"
@@ -485,8 +543,13 @@ fn g2_p2_every_difference_between_the_lifecycle_and_always_scan_is_explained_by_
             assert!(new.dead, "seed {seed}");
         }
     }
-    println!("g2-p2: {differ} streams differ, all with the flip inside an open packet ({inside} such flips)");
-    assert!(differ > 0, "the generator must reach a flip inside a packet at least once");
+    println!(
+        "g2-p2: {differ} streams differ, all with the flip inside an open packet ({inside} such flips)"
+    );
+    assert!(
+        differ > 0,
+        "the generator must reach a flip inside a packet at least once"
+    );
 }
 
 // ------------------------------------------------------------------------------------------------
@@ -501,7 +564,11 @@ fn g1_pointer_mode_reads_no_pushbuffer_byte_over_a_long_stream_and_the_counters_
     let c = relay.life.counts();
     assert_eq!(c.pointer_pb_read_violation, 0);
     assert!(c.entries_pointer >= 1990, "{}", c.entries_pointer);
-    assert!(c.pb_bytes_scan <= 64, "only the Scan phase read: {}", c.pb_bytes_scan);
+    assert!(
+        c.pb_bytes_scan <= 64,
+        "only the Scan phase read: {}",
+        c.pb_bytes_scan
+    );
     assert_eq!(c.pb_bytes_window, 0);
     assert_eq!(c.window_bar1_bytes, 0);
     assert_eq!(c.window_unscanned_long, 0);
@@ -558,20 +625,36 @@ fn a4_every_single_bit_flip_of_a_valid_entry_is_refused_by_name_or_forwarded_val
             drive(&mut sim, &mut relay, 20);
             assert!(sim.out.max_steps_per_turn <= 16, "bounded work");
             assert_eq!(sim.out.pb_reads_in_pointer, 0, "bit {bit} of {base:#x}");
-            let valid_now = kf_chan::user_stream::inspect_entry(raw, kf_chan::user_storage::MAX_SOURCE_BYTES).is_ok();
+            let valid_now =
+                kf_chan::user_stream::inspect_entry(raw, kf_chan::user_storage::MAX_SOURCE_BYTES)
+                    .is_ok();
             if valid_now {
                 forwarded += 1;
                 // forwarded exactly as flipped (after the SetObj entry), never a different value
-                assert_eq!(sim.out.forwarded.last().copied(), Some(raw), "bit {bit} of {base:#x}");
+                assert_eq!(
+                    sim.out.forwarded.last().copied(),
+                    Some(raw),
+                    "bit {bit} of {base:#x}"
+                );
             } else {
                 refused += 1;
-                assert!(relay.dead && relay.refused_entry == 1, "bit {bit} of {base:#x}: named refusal");
-                assert_eq!(sim.out.forwarded.len(), 2, "nothing unvalidated was stored (only SetObj and the first entry)");
+                assert!(
+                    relay.dead && relay.refused_entry == 1,
+                    "bit {bit} of {base:#x}: named refusal"
+                );
+                assert_eq!(
+                    sim.out.forwarded.len(),
+                    2,
+                    "nothing unvalidated was stored (only SetObj and the first entry)"
+                );
             }
             assert_eq!(sim.out.torn, 0);
         }
     }
-    assert!(refused > 50 && forwarded > 50, "refused {refused} forwarded {forwarded}");
+    assert!(
+        refused > 50 && forwarded > 50,
+        "refused {refused} forwarded {forwarded}"
+    );
 }
 
 #[test]
@@ -586,7 +669,8 @@ fn a4_hostile_entries_never_panic_and_never_store_an_unvalidated_value() {
         drive(&mut sim, &mut relay, 50);
         for f in sim.out.forwarded.iter().skip(2) {
             assert!(
-                kf_chan::user_stream::inspect_entry(*f, kf_chan::user_storage::MAX_SOURCE_BYTES).is_ok(),
+                kf_chan::user_stream::inspect_entry(*f, kf_chan::user_storage::MAX_SOURCE_BYTES)
+                    .is_ok(),
                 "round {round}: stored an entry inspect_entry refuses: {f:#x}"
             );
         }
@@ -637,8 +721,15 @@ fn a2_set_object_at_every_dword_position_switches_after_the_segment_that_commits
                 assert!(!relay.dead, "{tag}");
                 assert_eq!(sim.out.forwarded, expect, "{tag}: bit-exact");
                 assert_eq!(relay.life.mode(), Mode::Pointer, "{tag}");
-                assert_eq!(sim.out.pb_reads, 1, "{tag}: only the binding segment was read");
-                assert_eq!(relay.life.counts().straddles_scan, u64::from(open_tail), "{tag}");
+                assert_eq!(
+                    sim.out.pb_reads, 1,
+                    "{tag}: only the binding segment was read"
+                );
+                assert_eq!(
+                    relay.life.counts().straddles_scan,
+                    u64::from(open_tail),
+                    "{tag}"
+                );
             }
         }
     }
@@ -647,8 +738,13 @@ fn a2_set_object_at_every_dword_position_switches_after_the_segment_that_commits
 #[test]
 fn a2_a_header_in_one_entry_and_the_datum_in_the_next_commits_only_with_the_second() {
     let mut scan = Scan::for_subdevice(1).unwrap();
-    scan.segment(&[kf_abi::submit::method_header_inc(6, 0, 1).unwrap()], sw).unwrap();
-    assert_eq!(scan.software_mask(sw), 0, "the datum has not arrived: not bound, and a packet is open");
+    scan.segment(&[kf_abi::submit::method_header_inc(6, 0, 1).unwrap()], sw)
+        .unwrap();
+    assert_eq!(
+        scan.software_mask(sw),
+        0,
+        "the datum has not arrived: not bound, and a packet is open"
+    );
     assert!(!scan.at_boundary());
     scan.segment(&[SW], sw).unwrap();
     assert_eq!(scan.software_mask(sw), 1 << 6);
@@ -694,19 +790,36 @@ fn b_ten_thousand_cycles_with_ring_growth_never_stick_and_never_lose_an_entry() 
             grown += 1;
             sim.next_size = sizes[(grown + 1) % 3];
         }
-        if (sim.out.forwarded.len() >= stream.len() && sim.live == 0 && relay.idle()) || relay.dead {
+        if (sim.out.forwarded.len() >= stream.len() && sim.live == 0 && relay.idle()) || relay.dead
+        {
             break;
         }
     }
     assert!(!relay.dead, "dead");
-    assert_eq!(sim.out.forwarded.len(), stream.len(), "every entry relayed exactly once");
+    assert_eq!(
+        sim.out.forwarded.len(),
+        stream.len(),
+        "every entry relayed exactly once"
+    );
     assert_eq!(sim.out.switches.len(), cycles, "one switch per cycle");
     assert_eq!(sim.out.unscanned_while_live, 0);
     assert_eq!(relay.life.mode(), Mode::Pointer);
     let c = relay.life.counts();
-    assert_eq!(c.to_window_fresh + c.to_window_exact, cycles as u64, "{c:?}");
-    assert_eq!(c.to_pointer_from_window + c.to_pointer, cycles as u64 + 1, "{c:?}");
-    assert!(relay.marks.issued() > 65_536, "the 16-bit marker count wrapped: {}", relay.marks.issued());
+    assert_eq!(
+        c.to_window_fresh + c.to_window_exact,
+        cycles as u64,
+        "{c:?}"
+    );
+    assert_eq!(
+        c.to_pointer_from_window + c.to_pointer,
+        cycles as u64 + 1,
+        "{c:?}"
+    );
+    assert!(
+        relay.marks.issued() > 65_536,
+        "the 16-bit marker count wrapped: {}",
+        relay.marks.issued()
+    );
     assert_eq!(relay.marks.issued(), relay.marks.seen());
     assert_eq!(relay.fetch.issued(), relay.fetch.fetched());
     assert_eq!(relay.life.live(), 0);
@@ -727,7 +840,10 @@ fn b_the_monotone_entry_counter_survives_the_u32_boundary() {
     assert_eq!(sim.out.forwarded.len(), stream.len());
     assert!(relay.abs > u64::from(u32::MAX));
     // the recorded SYNC_WAIT index is a u64 across the boundary
-    let o = relay.life.outstanding_sync().expect("a SYNC_WAIT was forwarded in Pointer mode");
+    let o = relay
+        .life
+        .outstanding_sync()
+        .expect("a SYNC_WAIT was forwarded in Pointer mode");
     assert!(o > u64::from(u32::MAX) - 10 && o < relay.abs);
 }
 
@@ -770,8 +886,16 @@ fn soak_millions_of_entries_many_laps_and_registrations_keep_every_invariant() {
         }
         assert_eq!(out.unscanned_while_live, 0, "seed {seed}");
         assert_eq!(out.torn, 0, "seed {seed}");
-        assert_eq!(relay.marks.issued(), relay.marks.seen(), "seed {seed}: markers");
-        assert_eq!(relay.fetch.issued(), relay.fetch.fetched(), "seed {seed}: private ring drained");
+        assert_eq!(
+            relay.marks.issued(),
+            relay.marks.seen(),
+            "seed {seed}: markers"
+        );
+        assert_eq!(
+            relay.fetch.issued(),
+            relay.fetch.fetched(),
+            "seed {seed}: private ring drained"
+        );
         assert_eq!(relay.life.counts().pointer_pb_read_violation, 0);
         total += out.forwarded.len() as u64;
     }
@@ -783,7 +907,8 @@ fn soak_millions_of_entries_many_laps_and_registrations_keep_every_invariant() {
 // the real corpus
 
 fn corpus_dir() -> std::path::PathBuf {
-    std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../traces/user_ring_scan_20261014")
+    std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("../../traces/user_ring_scan_20261014")
 }
 
 /// `(entry, words, carried_out_is_open)` of every history segment of a refusal trace, in cursor order,
@@ -811,7 +936,9 @@ fn parse_history(text: &str) -> Vec<(u64, Vec<u32>, bool)> {
                     .map(str::to_owned)
             };
             let cursor: u32 = field("cursor=").and_then(|v| v.parse().ok()).unwrap_or(0);
-            let entry = field("entry=0x").and_then(|v| u64::from_str_radix(&v, 16).ok()).unwrap_or(0);
+            let entry = field("entry=0x")
+                .and_then(|v| u64::from_str_radix(&v, 16).ok())
+                .unwrap_or(0);
             let open = field("carried_out=").is_some_and(|v| v != "none");
             let len: u32 = field("words=").and_then(|v| v.parse().ok()).unwrap_or(0);
             if cursor == last_cursor {
@@ -895,26 +1022,48 @@ fn corpus_the_recorded_streams_replay_identically_through_the_base_and_the_lifec
                 p2_cases += 1;
                 if !same {
                     p2_differ += 1;
-                    assert!(relay_new.life.counts().window_fresh_start_parse_error > 0 || sim_new.out.triggers_found != sim_old.out.triggers_found, "{name} k={k}: unexplained difference");
+                    assert!(
+                        relay_new.life.counts().window_fresh_start_parse_error > 0
+                            || sim_new.out.triggers_found != sim_old.out.triggers_found,
+                        "{name} k={k}: unexplained difference"
+                    );
                 }
             } else {
-                assert!(same, "{name} k={k}: the base and the lifecycle differ with the flip on a boundary: old {:?} new {:?}", sim_old.out, sim_new.out);
+                assert!(
+                    same,
+                    "{name} k={k}: the base and the lifecycle differ with the flip on a boundary: old {:?} new {:?}",
+                    sim_old.out, sim_new.out
+                );
             }
         }
     }
-    println!("corpus: {segments} recorded segments, {open} end inside an open packet; {cases} replays, {p2_cases} flips inside an open packet ({p2_differ} differ)");
+    println!(
+        "corpus: {segments} recorded segments, {open} end inside an open packet; {cases} replays, {p2_cases} flips inside an open packet ({p2_differ} differ)"
+    );
     assert!(segments > 100 && cases > 100);
 }
 
 /// A Sim whose pushbuffer words are the recorded ones: entry 0 binds, entries 1.. are the recorded segments,
 /// and a registration fires after `k` forwarded entries with a trigger as the next entry.
 fn corpus_sim(words: &[Vec<u32>], raws: &[u64], k: usize) -> Sim {
-    let mut sim = Sim::new(256, 8, &[], vec![Sched::Register { at: k as u64 + 1, migrate: false }]);
-    let mut all: Vec<(u64, Vec<u32>)> = vec![(ge(250, Kind::SetObj).raw(), ge(250, Kind::SetObj).words())];
+    let mut sim = Sim::new(
+        256,
+        8,
+        &[],
+        vec![Sched::Register {
+            at: k as u64 + 1,
+            migrate: false,
+        }],
+    );
+    let mut all: Vec<(u64, Vec<u32>)> =
+        vec![(ge(250, Kind::SetObj).raw(), ge(250, Kind::SetObj).words())];
     for (i, (w, r)) in words.iter().zip(raws).enumerate() {
         all.push((*r, w.clone()));
         if i + 1 == k {
-            all.push((ge(190, Kind::Trig { migrate: false }).raw(), ge(190, Kind::Trig { migrate: false }).words()));
+            all.push((
+                ge(190, Kind::Trig { migrate: false }).raw(),
+                ge(190, Kind::Trig { migrate: false }).words(),
+            ));
         }
     }
     sim.defs.insert(250, ge(250, Kind::SetObj));
@@ -933,12 +1082,25 @@ const GRAVITY_TRIGGER: [u32; 4] = [0x8000_c01e, 0x8000_c009, 0x2001_c080, 0x4000
 #[test]
 fn corpus_the_gravitymark_late_fifo_trigger_words_are_a_trigger_after_two_immediate_methods() {
     let mut scan = Scan::for_subdevice(1).unwrap();
-    scan.segment(&[kf_abi::submit::method_header_inc(6, 0, 1).unwrap(), SW], sw).unwrap();
-    let t = scan.segment(&GRAVITY_TRIGGER, sw).unwrap().expect("the registered trigger");
-    assert_eq!((t.start, t.end, t.call.data, t.call.method), (2, 4, 0x4000_002c, 0x200));
+    scan.segment(
+        &[kf_abi::submit::method_header_inc(6, 0, 1).unwrap(), SW],
+        sw,
+    )
+    .unwrap();
+    let t = scan
+        .segment(&GRAVITY_TRIGGER, sw)
+        .unwrap()
+        .expect("the registered trigger");
+    assert_eq!(
+        (t.start, t.end, t.call.data, t.call.method),
+        (2, 4, 0x4000_002c, 0x200)
+    );
     // the same words with the scan restarted fresh (a Window after Pointer mode) at the segment boundary
     let mut fresh = scan.fresh_resume();
-    let t = fresh.segment(&GRAVITY_TRIGGER, sw).unwrap().expect("found by a fresh scan too");
+    let t = fresh
+        .segment(&GRAVITY_TRIGGER, sw)
+        .unwrap()
+        .expect("found by a fresh scan too");
     assert_eq!((t.start, t.end), (2, 4));
 }
 
@@ -948,7 +1110,8 @@ fn corpus_a_gravitymark_ring_growth_replays_identically_through_the_base_and_the
     // at every position before the trigger: the lifecycle stages the same trigger at the same position and
     // switches the source at the same place as the base.
     for k in 2..24usize {
-        let mut sim_words: Vec<(u64, Vec<u32>)> = vec![(ge(250, Kind::SetObj).raw(), ge(250, Kind::SetObj).words())];
+        let mut sim_words: Vec<(u64, Vec<u32>)> =
+            vec![(ge(250, Kind::SetObj).raw(), ge(250, Kind::SetObj).words())];
         for i in 0..30usize {
             let g = ge(1 + i as u8, Kind::Plain);
             sim_words.push((g.raw(), g.words()));
@@ -956,9 +1119,20 @@ fn corpus_a_gravitymark_ring_growth_replays_identically_through_the_base_and_the
         let trig_raw = kf_abi::submit::gp_entry(seg_va(190), 16).unwrap();
         sim_words.insert(k, (trig_raw, GRAVITY_TRIGGER.to_vec()));
         let mk = || {
-            let mut sim = Sim::new(256, 8, &[], vec![Sched::Register { at: k as u64, migrate: true }]);
+            let mut sim = Sim::new(
+                256,
+                8,
+                &[],
+                vec![Sched::Register {
+                    at: k as u64,
+                    migrate: true,
+                }],
+            );
             sim.defs.insert(190, ge(190, Kind::Trig { migrate: true }));
-            sim.custom = sim_words.iter().map(|(r, w)| (*r & !SYNC, w.clone())).collect();
+            sim.custom = sim_words
+                .iter()
+                .map(|(r, w)| (*r & !SYNC, w.clone()))
+                .collect();
             for (r, _) in &sim_words {
                 sim.pending[0].push_back(*r);
             }
@@ -970,12 +1144,19 @@ fn corpus_a_gravitymark_ring_growth_replays_identically_through_the_base_and_the
         drive(&mut a, &mut ra, 100_000);
         drive(&mut b, &mut rb, 100_000);
         assert!(!a.out.dead && !b.out.dead, "k={k}");
-        assert_eq!(a.out.staged, vec![k], "k={k}: the base stages the trigger at its position");
+        assert_eq!(
+            a.out.staged,
+            vec![k],
+            "k={k}: the base stages the trigger at its position"
+        );
         assert_eq!(a.out.forwarded, b.out.forwarded, "k={k}");
         assert_eq!(a.out.staged, b.out.staged, "k={k}");
         assert_eq!(a.out.switches, b.out.switches, "k={k}");
         assert_eq!(b.out.unscanned_while_live, 0, "k={k}");
-        assert!(b.out.pb_reads < a.out.pb_reads, "k={k}: the lifecycle reads fewer pushbuffers");
+        assert!(
+            b.out.pb_reads < a.out.pb_reads,
+            "k={k}: the lifecycle reads fewer pushbuffers"
+        );
     }
 }
 
@@ -1007,7 +1188,11 @@ fn corpus_p2_is_contradicted_by_the_recorded_segments_that_end_inside_an_open_pa
         let text = std::fs::read_to_string(&path).unwrap();
         let mut last_cursor = String::new();
         for line in text.lines().filter(|l| l.starts_with("-- seq=")) {
-            let cursor = line.split_whitespace().find(|t| t.starts_with("cursor=")).unwrap_or("").to_owned();
+            let cursor = line
+                .split_whitespace()
+                .find(|t| t.starts_with("cursor="))
+                .unwrap_or("")
+                .to_owned();
             if cursor == last_cursor {
                 continue;
             }
@@ -1020,5 +1205,8 @@ fn corpus_p2_is_contradicted_by_the_recorded_segments_that_end_inside_an_open_pa
     }
     println!("p2-corpus: {open} of {segments} recorded segments end inside an open packet");
     assert!(segments > 150, "{segments}");
-    assert!(open >= 40, "P2 is contradicted by the recorded streams: {open} of {segments}");
+    assert!(
+        open >= 40,
+        "P2 is contradicted by the recorded streams: {open} of {segments}"
+    );
 }

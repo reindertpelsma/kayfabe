@@ -17,7 +17,13 @@
 //! the PBDMA executes exactly the guest's entries in order, I3 no stale read (the model's `STALE`), I4 no
 //! entry published after a registration's reply is forwarded unscanned, I5 only listed transitions, I6
 //! liveness with time forbidden, I7 value tested == value stored while the guest changes ONE dword.
-#![allow(clippy::too_many_lines, clippy::needless_range_loop, dead_code, missing_docs, clippy::collapsible_if)]
+#![allow(
+    clippy::too_many_lines,
+    clippy::needless_range_loop,
+    dead_code,
+    missing_docs,
+    clippy::collapsible_if
+)]
 
 #[path = "lifecycle_support/mod.rs"]
 mod support;
@@ -75,19 +81,43 @@ pub const V_ENTRY_REFUSED: u32 = 1 << 12;
 pub fn viol_names(v: u32) -> Vec<&'static str> {
     let mut out = Vec::new();
     for (bit, name) in [
-        (V_STALE, "STALE (I3: a pushbuffer read before the guest wrote it)"),
+        (
+            V_STALE,
+            "STALE (I3: a pushbuffer read before the guest wrote it)",
+        ),
         (V_I1, "I1 (a pushbuffer read in Pointer mode)"),
-        (V_I4, "I4 (an entry published after the reply was forwarded unscanned)"),
+        (
+            V_I4,
+            "I4 (an entry published after the reply was forwarded unscanned)",
+        ),
         (V_TORN, "I7 (the value stored is not the value tested)"),
-        (V_ORDER, "I2 (the PBDMA executed something other than the guest's entries in order)"),
-        (V_UNSCANNED_TRIGGER, "UNSCANNED_TRIGGER (the hardware executed a trigger nobody scanned)"),
-        (V_REFUSED, "REFUSED (the scan refused a segment for good: the channel is dead)"),
+        (
+            V_ORDER,
+            "I2 (the PBDMA executed something other than the guest's entries in order)",
+        ),
+        (
+            V_UNSCANNED_TRIGGER,
+            "UNSCANNED_TRIGGER (the hardware executed a trigger nobody scanned)",
+        ),
+        (
+            V_REFUSED,
+            "REFUSED (the scan refused a segment for good: the channel is dead)",
+        ),
         (V_PUT_BOUND, "PUT_BOUND (hostile GP_PUT refused)"),
-        (V_AFTER_TEARDOWN, "AFTER_TEARDOWN (the private ring grew after the channel was freed)"),
+        (
+            V_AFTER_TEARDOWN,
+            "AFTER_TEARDOWN (the private ring grew after the channel was freed)",
+        ),
         (V_TRANSITION, "I5 (a transition outside the table)"),
-        (V_DEADLOCK, "I6 (a terminal state with covered work unrelayed and no timer)"),
+        (
+            V_DEADLOCK,
+            "I6 (a terminal state with covered work unrelayed and no timer)",
+        ),
         (V_LOST, "I2 (covered entries not all relayed)"),
-        (V_ENTRY_REFUSED, "ENTRY_REFUSED (inspect_entry refused the loaded value)"),
+        (
+            V_ENTRY_REFUSED,
+            "ENTRY_REFUSED (inspect_entry refused the loaded value)",
+        ),
     ] {
         if v & bit != 0 {
             out.push(name);
@@ -501,7 +531,8 @@ impl World {
                         ok = false; // the ring is full: the guest waits for the GP_GET write-back
                     } else {
                         let raw = g.raw();
-                        w.env.rings[r][self.put_local[r] as usize] = (raw as u32, (raw >> 32) as u32);
+                        w.env.rings[r][self.put_local[r] as usize] =
+                            (raw as u32, (raw >> 32) as u32);
                         w.put_local[r] = (self.put_local[r] + 1) % cfg.src_entries;
                         w.pushed.push(g.id);
                         if !g.late {
@@ -544,7 +575,12 @@ impl World {
                         w.env.guest_get[1] = self.env.guest_get[0];
                     }
                 }
-                Op::Mutate { ring, slot, hi, xor } => {
+                Op::Mutate {
+                    ring,
+                    slot,
+                    hi,
+                    xor,
+                } => {
                     let s = &mut w.env.rings[ring][slot as usize % n];
                     if hi {
                         s.1 ^= xor;
@@ -674,8 +710,10 @@ impl World {
                     let sat = w.relay.wait_satisfied(&mut env);
                     // a gate / batch is still draining but the PBDMA has popped more entries than the guest's
                     // GP_GET shows: the look rings the relay only to write GP_GET back (`pop_writebacks`)
-                    let pops = matches!(w.relay.waiting, Some(kf_chan::user_loop::Wait::Marker { .. }))
-                        && env.hw_get_unseen(&w.relay);
+                    let pops = matches!(
+                        w.relay.waiting,
+                        Some(kf_chan::user_loop::Wait::Marker { .. })
+                    ) && env.hw_get_unseen(&w.relay);
                     w.env = env;
                     if sat {
                         w.relay.waiting = None;
@@ -772,10 +810,14 @@ pub fn explore(cfg: &Cfg) -> Report {
         );
         rep.modes_seen.insert(w.relay.life.mode());
         let c = w.relay.life.counts();
-        rep.window_fresh_errors_max = rep.window_fresh_errors_max.max(c.window_fresh_start_parse_error);
+        rep.window_fresh_errors_max = rep
+            .window_fresh_errors_max
+            .max(c.window_fresh_start_parse_error);
         rep.straddles_window_max = rep.straddles_window_max.max(c.straddles_window);
         rep.to_window_fresh_max = rep.to_window_fresh_max.max(c.to_window_fresh);
-        rep.to_pointer_max = rep.to_pointer_max.max(c.to_pointer + c.to_pointer_from_window);
+        rep.to_pointer_max = rep
+            .to_pointer_max
+            .max(c.to_pointer + c.to_pointer_from_window);
         rep.seeded_max = rep.seeded_max.max(c.seeded_gates);
         rep.restarts_max = rep.restarts_max.max(c.restarts);
         rep.pb_reads_max = rep.pb_reads_max.max(w.env.pb_reads);
@@ -798,7 +840,9 @@ pub fn explore(cfg: &Cfg) -> Report {
             let ex = &w.env.executed;
             if w.done(cfg) || cfg.spec.may_block {
                 if !cfg.spec.hostile && !w.torn_down {
-                    if ex.len() < cfg.spec.must_relay || ex[..] != cfg.spec.expected[..ex.len().min(cfg.spec.expected.len())] {
+                    if ex.len() < cfg.spec.must_relay
+                        || ex[..] != cfg.spec.expected[..ex.len().min(cfg.spec.expected.len())]
+                    {
                         // a missing or reordered tail at a terminal state: lost work with no timer
                         if !(cfg.spec.may_block && !w.done(cfg)) {
                             viol |= V_DEADLOCK;
@@ -908,7 +952,11 @@ fn steady() -> Spec {
 fn i1_a_bound_channel_with_no_registration_reads_no_pushbuffer_after_the_binding() {
     let cfg = Cfg::new(steady());
     let r = assert_clean(&cfg, "steady");
-    assert_eq!(r.modes, HashSet::from([Mode::Pointer]), "every terminal state is Pointer");
+    assert_eq!(
+        r.modes,
+        HashSet::from([Mode::Pointer]),
+        "every terminal state is Pointer"
+    );
     // only the Scan phase reads: the SET_OBJECT segment (and the entries before the worker saw it bound)
     assert!(r.pb_reads_max <= 4, "pb reads: {}", r.pb_reads_max);
 }
@@ -966,12 +1014,24 @@ fn i4_no_entry_published_after_the_reply_is_forwarded_before_a_window_scanned_it
         let r = assert_clean(&cfg, &format!("flip-{kind:?}"));
         // every interleaving ends back in Pointer with the registration consumed
         assert_eq!(r.modes, HashSet::from([Mode::Pointer]), "{kind:?}");
-        assert!(r.modes_seen.contains(&Mode::Window), "the Window was entered");
-        assert!(r.to_window_fresh_max >= 1, "some interleaving flips a Pointer channel (Fresh)");
+        assert!(
+            r.modes_seen.contains(&Mode::Window),
+            "the Window was entered"
+        );
+        assert!(
+            r.to_window_fresh_max >= 1,
+            "some interleaving flips a Pointer channel (Fresh)"
+        );
         if kind == Registration::Migrate {
-            assert_eq!(r.switched_terminals, r.terminals, "the source switched in every run");
+            assert_eq!(
+                r.switched_terminals, r.terminals,
+                "the source switched in every run"
+            );
         }
-        assert!(r.triggers_found_max == 1, "exactly one trigger is ever found");
+        assert!(
+            r.triggers_found_max == 1,
+            "exactly one trigger is ever found"
+        );
     }
 }
 
@@ -1004,10 +1064,13 @@ fn i4_a_trigger_published_before_the_reply_may_reach_the_hardware_unscanned_and_
     let mut cfg = Cfg::new(spec(script, &[0, 1, 2]));
     cfg.kind = Registration::Other;
     let r = explore(&cfg);
-    println!("hostile-early-trigger: {} states, {:?}", r.states, viol_names(r.viol));
+    println!(
+        "hostile-early-trigger: {} states, {:?}",
+        r.states,
+        viol_names(r.viol)
+    );
     assert_eq!(
-        r.viol,
-        V_UNSCANNED_TRIGGER,
+        r.viol, V_UNSCANNED_TRIGGER,
         "only the unscanned trigger, no other violation: {:?}",
         r.first
     );
@@ -1074,8 +1137,15 @@ fn a1_a_registration_right_after_a_forwarded_sync_wait_never_scans_the_late_push
     let mut cfg = Cfg::new(spec(a1_script(), &[0, 1, 2, 3]));
     cfg.kind = Registration::Other;
     let r = assert_clean(&cfg, "a1");
-    assert!(r.seeded_max >= 1, "some interleaving seeds the window's gate from Pointer mode");
-    assert_eq!(r.modes, HashSet::from([Mode::Window]), "no trigger: the Window stays open");
+    assert!(
+        r.seeded_max >= 1,
+        "some interleaving seeds the window's gate from Pointer mode"
+    );
+    assert_eq!(
+        r.modes,
+        HashSet::from([Mode::Window]),
+        "no trigger: the Window stays open"
+    );
 }
 
 #[test]
@@ -1159,8 +1229,14 @@ fn a2_the_binding_packet_split_across_two_entries_switches_to_pointer_after_the_
     cfg.kind = Registration::Other;
     let r = assert_clean(&cfg, "a2-split-binding");
     assert_eq!(r.modes, HashSet::from([Mode::Pointer]));
-    assert_eq!(r.straddles_scan_max, 1, "exactly the header-only segment ends open");
-    assert_eq!(r.triggers_found_max, 1, "the trigger is found: the binding was learned from the split packet");
+    assert_eq!(
+        r.straddles_scan_max, 1,
+        "exactly the header-only segment ends open"
+    );
+    assert_eq!(
+        r.triggers_found_max, 1,
+        "the trigger is found: the binding was learned from the split packet"
+    );
 }
 
 #[test]
@@ -1192,9 +1268,15 @@ fn a2_an_open_packet_carried_across_the_mode_switch_is_dropped_and_a_later_windo
          ({:?})",
         r.first
     );
-    assert_eq!(r.window_fresh_errors_max, 1, "counted exactly once per entry, retries included");
+    assert_eq!(
+        r.window_fresh_errors_max, 1,
+        "counted exactly once per entry, retries included"
+    );
     assert!(r.scan_refused >= 1);
-    assert!(r.retries_max >= 1, "the refusal is retried like today's scanner refusal before it is final");
+    assert!(
+        r.retries_max >= 1,
+        "the refusal is retried like today's scanner refusal before it is final"
+    );
 }
 
 #[test]
@@ -1239,14 +1321,23 @@ fn a4_one_dword_changing_between_the_loads_never_stores_a_value_other_than_the_t
             Op::Push(p(1)),
             Op::SetPut,
             Op::Ring,
-            Op::Mutate { ring: 0, slot: 1, hi, xor },
+            Op::Mutate {
+                ring: 0,
+                slot: 1,
+                hi,
+                xor,
+            },
         ];
         let mut s = spec(script, &[0, 1]);
         s.hostile = true;
         let mut cfg = Cfg::new(s);
         cfg.max_states = 2_000_000;
         let r = explore(&cfg);
-        println!("a4 hi={hi} xor={xor:#x}: {} states {:?}", r.states, viol_names(r.viol));
+        println!(
+            "a4 hi={hi} xor={xor:#x}: {} states {:?}",
+            r.states,
+            viol_names(r.viol)
+        );
         assert_eq!(r.viol & V_TORN, 0, "hi={hi} xor={xor:#x}: {:?}", r.first);
         assert_eq!(r.viol & V_I1, 0);
     }
@@ -1349,7 +1440,11 @@ fn a5_a_trigger_shaped_packet_on_the_wrong_subchannel_is_not_a_trigger() {
     cfg.kind = Registration::Other;
     let r = assert_clean(&cfg, "a5-wrong-sub");
     assert_eq!(r.triggers_found_max, 0);
-    assert_eq!(r.modes, HashSet::from([Mode::Window]), "no trigger: the Window stays open");
+    assert_eq!(
+        r.modes,
+        HashSet::from([Mode::Window]),
+        "no trigger: the Window stays open"
+    );
 }
 
 #[test]
@@ -1368,9 +1463,20 @@ fn a5_a_trigger_split_over_two_entries_is_refused_like_today() {
     let mut cfg = Cfg::new(spec(script, &[0, 1, 2]));
     cfg.kind = Registration::Other;
     let r = explore(&cfg);
-    println!("a5-split-trigger: {} states {:?}", r.states, viol_names(r.viol));
-    assert!(r.viol & V_REFUSED != 0, "the software packet split across segments is refused: {:?}", r.first);
-    assert_eq!(r.window_fresh_errors_max, 0, "a refusal in a Window that is not a fresh start is not counted as one");
+    println!(
+        "a5-split-trigger: {} states {:?}",
+        r.states,
+        viol_names(r.viol)
+    );
+    assert!(
+        r.viol & V_REFUSED != 0,
+        "the software packet split across segments is refused: {:?}",
+        r.first
+    );
+    assert_eq!(
+        r.window_fresh_errors_max, 0,
+        "a refusal in a Window that is not a fresh start is not counted as one"
+    );
 }
 
 #[test]
@@ -1413,8 +1519,16 @@ fn a5_a_flip_inside_a_packet_whose_data_looks_like_the_trigger_consumes_the_regi
     let mut cfg = Cfg::new(spec(script, &[0, 1, 2]));
     cfg.kind = Registration::Other;
     let r = explore(&cfg);
-    println!("a5-false-positive: {} states {:?} triggers_found_max={}", r.states, viol_names(r.viol), r.triggers_found_max);
-    assert!(r.triggers_found_max >= 1, "some flip makes the data a trigger");
+    println!(
+        "a5-false-positive: {} states {:?} triggers_found_max={}",
+        r.states,
+        viol_names(r.viol),
+        r.triggers_found_max
+    );
+    assert!(
+        r.triggers_found_max >= 1,
+        "some flip makes the data a trigger"
+    );
 }
 
 // ---- A6: subchannel rebind after the binding
@@ -1437,7 +1551,10 @@ fn a6_a_rebind_inside_a_window_is_seen_and_counted_and_the_new_binding_is_used()
     let mut cfg = Cfg::new(spec(script, &[0, 1, 2, 3]));
     cfg.kind = Registration::Other;
     let r = assert_clean(&cfg, "a6-in-window");
-    assert!(r.binding_changed_max >= 1, "the moved binding is counted (P1 falsifier)");
+    assert!(
+        r.binding_changed_max >= 1,
+        "the moved binding is counted (P1 falsifier)"
+    );
     assert_eq!(r.triggers_found_max, 1);
 }
 
@@ -1534,7 +1651,12 @@ fn b_registration_racing_remove_and_teardown_loses_and_duplicates_nothing() {
     s.hostile = true;
     let cfg = Cfg::new(s);
     let r = explore(&cfg);
-    assert_eq!(r.viol & (V_AFTER_TEARDOWN | V_TORN | V_I1 | V_TRANSITION), 0, "{:?}", r.first);
+    assert_eq!(
+        r.viol & (V_AFTER_TEARDOWN | V_TORN | V_I1 | V_TRANSITION),
+        0,
+        "{:?}",
+        r.first
+    );
 }
 
 /// The guest prepares the new ring (and its USERD) BEFORE the trigger entry becomes visible: the order a
@@ -1717,7 +1839,12 @@ fn mutant_a_second_load_of_the_entry_stores_a_value_that_was_not_tested() {
         Op::Push(p(1)),
         Op::SetPut,
         Op::Ring,
-        Op::Mutate { ring: 0, slot: 1, hi: true, xor: 1 << 31 },
+        Op::Mutate {
+            ring: 0,
+            slot: 1,
+            hi: true,
+            xor: 1 << 31,
+        },
     ];
     let mut s = spec(script, &[0, 1]);
     s.hostile = true;
@@ -1749,7 +1876,11 @@ fn mutant_dropping_the_first_entry_of_a_fresh_window_loses_an_entry() {
     let mut cfg = flip(Registration::Other);
     cfg.glue.drop_flip_entry = true;
     let r = explore(&cfg);
-    assert!(r.viol & (V_DEADLOCK | V_ORDER) != 0, "{:?}", viol_names(r.viol));
+    assert!(
+        r.viol & (V_DEADLOCK | V_ORDER) != 0,
+        "{:?}",
+        viol_names(r.viol)
+    );
 }
 
 #[test]

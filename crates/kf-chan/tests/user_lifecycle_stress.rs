@@ -14,7 +14,12 @@
 //!    dword of random slots and rewrites `GP_PUT` at random while the worker runs. Asserts I7 (the stored
 //!    value is the tested value, one consistent pair of dwords the guest really wrote, and passes
 //!    `inspect_entry`), no panic, bounded work per turn, and no pushbuffer read in Pointer mode (I1).
-#![allow(dead_code, missing_docs, clippy::too_many_lines, clippy::collapsible_if)]
+#![allow(
+    dead_code,
+    missing_docs,
+    clippy::too_many_lines,
+    clippy::collapsible_if
+)]
 
 #[path = "lifecycle_support/mod.rs"]
 mod support;
@@ -109,7 +114,11 @@ impl Env for ThreadEnv {
     }
     fn hw_reference(&mut self) -> u32 {
         let m = self.sh.markers.load(Ordering::Acquire);
-        if m == 0 { 0 } else { MARK_TAG | (m as u32 & 0xffff) }
+        if m == 0 {
+            0
+        } else {
+            MARK_TAG | (m as u32 & 0xffff)
+        }
     }
     fn read_pb(&mut self, raw: u64) -> Vec<u32> {
         self.sh.pb_reads.fetch_add(1, Ordering::Relaxed);
@@ -126,7 +135,8 @@ impl Env for ThreadEnv {
     fn publish(&mut self, p: Pub) {
         if let Pub::Guest { tested, stored, .. } = p {
             if tested != stored {
-                self.sh.violation(format!("I7: tested {tested:#x} stored {stored:#x}"));
+                self.sh
+                    .violation(format!("I7: tested {tested:#x} stored {stored:#x}"));
             }
         }
         if let Pub::Marker(_) = p {
@@ -162,7 +172,17 @@ fn stress_secs() -> f64 {
         .unwrap_or(2.0)
 }
 
-fn run_relay_until(sh: &Arc<Shared>, relay: &mut Relay, env: &mut ThreadEnv, should_stop: impl Fn() -> bool) -> u64 {
+/// A hard bound on every wait of a test, so that a defective relay FAILS the test instead of hanging it.
+fn hard_deadline(secs: f64) -> std::time::Instant {
+    std::time::Instant::now() + std::time::Duration::from_secs_f64(secs + 8.0)
+}
+
+fn run_relay_until(
+    sh: &Arc<Shared>,
+    relay: &mut Relay,
+    env: &mut ThreadEnv,
+    should_stop: impl Fn() -> bool,
+) -> u64 {
     let mut turns = 0u64;
     while !should_stop() && !relay.dead {
         relay.claim();
@@ -189,20 +209,31 @@ fn a_well_behaved_guest_with_concurrent_registrations_loses_and_duplicates_nothi
     let sh = Shared::new();
     let secs = stress_secs();
     let deadline = std::time::Instant::now() + std::time::Duration::from_secs_f64(secs);
+    let hard = hard_deadline(secs);
     let sent = Arc::new(Mutex::new(Vec::<u64>::new())); // raw of every entry the guest published, in order
     let post_marks = Arc::new(Mutex::new(Vec::<(usize, bool)>::new())); // (index, published while a registration was live)
     let done = Arc::new(AtomicBool::new(false));
-    let mut relay = Relay::new(8, Lifecycle::new(), Scan::for_subdevice(1).unwrap(), Glue::default());
-    let mut env = ThreadEnv { sh: sh.clone(), mode: Mode::Scan };
+    let mut relay = Relay::new(
+        8,
+        Lifecycle::new(),
+        Scan::for_subdevice(1).unwrap(),
+        Glue::default(),
+    );
+    let mut env = ThreadEnv {
+        sh: sh.clone(),
+        mode: Mode::Scan,
+    };
     let turns = std::thread::scope(|s| {
         let guest = {
-            let (sh, sent, post_marks, done) = (sh.clone(), sent.clone(), post_marks.clone(), done.clone());
+            let (sh, sent, post_marks, done) =
+                (sh.clone(), sent.clone(), post_marks.clone(), done.clone());
+            let hard = hard;
             s.spawn(move || {
                 let mut put = 0u32;
                 let mut push = |raw: u64, live_at_publish: bool, sh: &Shared| {
                     // wait for ring space (the relay writes GP_GET back)
                     while (put + 1) % N == sh.guest_get.load(Ordering::Acquire) {
-                        if sh.stop.load(Ordering::Relaxed) {
+                        if sh.stop.load(Ordering::Relaxed) || std::time::Instant::now() > hard {
                             return;
                         }
                         std::thread::yield_now();
@@ -233,6 +264,11 @@ fn a_well_behaved_guest_with_concurrent_registrations_loses_and_duplicates_nothi
                         push(ge(190, Kind::Trig { migrate: false }).raw(), true, &sh);
                         // wait until the relay consumed it (the model's guest would continue; this keeps live bounded)
                         while sh.live.load(Ordering::Acquire) > 0 && !sh.stop.load(Ordering::Relaxed) {
+                            if std::time::Instant::now() > hard {
+                                sh.violation("the registration was never consumed: the trigger was not staged".into());
+                                sh.stop.store(true, Ordering::Relaxed);
+                                break;
+                            }
                             std::thread::yield_now();
                         }
                     }
@@ -241,16 +277,23 @@ fn a_well_behaved_guest_with_concurrent_registrations_loses_and_duplicates_nothi
             })
         };
         let t = run_relay_until(&sh, &mut relay, &mut env, || {
-            done.load(Ordering::Acquire) && relay_idle_and_drained(&sh)
+            (done.load(Ordering::Acquire) && relay_idle_and_drained(&sh))
+                || sh.stop.load(Ordering::Relaxed)
         });
         sh.stop.store(true, Ordering::Relaxed);
         guest.join().unwrap();
         t
     });
     // drain what is left
-    let mut env2 = ThreadEnv { sh: sh.clone(), mode: relay.life.mode() };
+    let mut env2 = ThreadEnv {
+        sh: sh.clone(),
+        mode: relay.life.mode(),
+    };
     let start = std::time::Instant::now();
-    while relay.cursor != sh.put.load(Ordering::Acquire) && start.elapsed().as_secs() < 5 && !relay.dead {
+    while relay.cursor != sh.put.load(Ordering::Acquire)
+        && start.elapsed().as_secs() < 5
+        && !relay.dead
+    {
         relay.claim();
         while !relay.idle() {
             relay.step(&mut env2);
@@ -274,7 +317,12 @@ fn a_well_behaved_guest_with_concurrent_registrations_loses_and_duplicates_nothi
             _ => {}
         }
     }
-    assert_eq!(forwarded.len(), sent.len(), "every entry forwarded exactly once ({} turns)", turns);
+    assert_eq!(
+        forwarded.len(),
+        sent.len(),
+        "every entry forwarded exactly once ({} turns)",
+        turns
+    );
     assert_eq!(forwarded, sent, "in order, bit-exact");
     assert!(staged > 10, "registrations were exercised: {staged}");
     // I4: entries published while a registration was live were scanned
@@ -287,7 +335,9 @@ fn a_well_behaved_guest_with_concurrent_registrations_loses_and_duplicates_nothi
                 // the registration may already have been consumed by the time it was forwarded
                 // only if the relay consumed it: that needs the trigger staged first, which is later in the
                 // stream than these entries, so this is a violation
-                panic!("entry {idx} was published after a registration's reply and forwarded unscanned");
+                panic!(
+                    "entry {idx} was published after a registration's reply and forwarded unscanned"
+                );
             }
             if marks[idx].1 {
                 checked += 1;
@@ -299,7 +349,10 @@ fn a_well_behaved_guest_with_concurrent_registrations_loses_and_duplicates_nothi
     }
     assert!(checked > 10, "post-reply entries checked: {checked}");
     assert_eq!(sh.pb_reads_in_pointer.load(Ordering::Relaxed), 0);
-    println!("stress(well-behaved): {} entries, {staged} triggers staged, {checked} post-reply entries scanned", sent.len());
+    println!(
+        "stress(well-behaved): {} entries, {staged} triggers staged, {checked} post-reply entries scanned",
+        sent.len()
+    );
 }
 
 fn relay_idle_and_drained(sh: &Shared) -> bool {
@@ -330,7 +383,11 @@ fn a_hostile_writer_rewrites_ring_entries_and_gp_put_while_the_worker_runs() {
                         0 | 1 => {
                             // a valid-looking entry
                             let g = ge(1 + (next() % 100) as u8, Kind::Plain);
-                            let raw = if next() % 4 == 0 { g.sync().raw() } else { g.raw() };
+                            let raw = if next() % 4 == 0 {
+                                g.sync().raw()
+                            } else {
+                                g.raw()
+                            };
                             sh.write_slot(slot, raw);
                         }
                         2 => {
@@ -348,7 +405,9 @@ fn a_hostile_writer_rewrites_ring_entries_and_gp_put_while_the_worker_runs() {
                         }
                         3 => sh.write_slot(slot, ge(0, Kind::SetObj).raw()),
                         4 => sh.write_slot(slot, ge(1 + (next() % 100) as u8, Kind::Nop).raw()),
-                        _ => sh.put.store((next() % u64::from(N)) as u32, Ordering::Release),
+                        _ => sh
+                            .put
+                            .store((next() % u64::from(N)) as u32, Ordering::Release),
                     }
                     if next().is_multiple_of(64) {
                         // let the writer run ahead of the reader sometimes
@@ -361,8 +420,16 @@ fn a_hostile_writer_rewrites_ring_entries_and_gp_put_while_the_worker_runs() {
         let mut max_steps = 0;
         while std::time::Instant::now() < deadline {
             // a fresh channel after every refusal (a hostile entry kills only its own channel)
-            let mut relay = Relay::new(8, Lifecycle::new(), Scan::for_subdevice(1).unwrap(), Glue::default());
-            let mut env = ThreadEnv { sh: sh.clone(), mode: Mode::Scan };
+            let mut relay = Relay::new(
+                8,
+                Lifecycle::new(),
+                Scan::for_subdevice(1).unwrap(),
+                Glue::default(),
+            );
+            let mut env = ThreadEnv {
+                sh: sh.clone(),
+                mode: Mode::Scan,
+            };
             sh.log.lock().unwrap().clear();
             sh.markers.store(0, Ordering::Release);
             let mut guard = 0u64;
@@ -390,10 +457,18 @@ fn a_hostile_writer_rewrites_ring_entries_and_gp_put_while_the_worker_runs() {
                 if let Pub::Guest { tested, stored, .. } = p {
                     assert_eq!(tested, stored, "I7");
                     assert!(
-                        kf_chan::user_stream::inspect_entry(*stored, kf_chan::user_storage::MAX_SOURCE_BYTES).is_ok(),
+                        kf_chan::user_stream::inspect_entry(
+                            *stored,
+                            kf_chan::user_storage::MAX_SOURCE_BYTES
+                        )
+                        .is_ok(),
                         "stored an entry the validation refuses: {stored:#x}"
                     );
-                    assert!(all_lo.contains(&(*stored as u32)) && all_hi.contains(&((*stored >> 32) as u32)), "a stored dword the guest never wrote: {stored:#x}");
+                    assert!(
+                        all_lo.contains(&(*stored as u32))
+                            && all_hi.contains(&((*stored >> 32) as u32)),
+                        "a stored dword the guest never wrote: {stored:#x}"
+                    );
                 }
             }
             if relay.dead {
@@ -407,7 +482,14 @@ fn a_hostile_writer_rewrites_ring_entries_and_gp_put_while_the_worker_runs() {
     });
     let v = sh.violations.lock().unwrap().clone();
     assert!(v.is_empty(), "violations: {v:?}");
-    assert_eq!(sh.pb_reads_in_pointer.load(Ordering::Relaxed), 0, "I1 under attack");
-    println!("stress(hostile): {total_turns} turns, {} channels killed by their own hostile entries", deaths.load(Ordering::Relaxed));
+    assert_eq!(
+        sh.pb_reads_in_pointer.load(Ordering::Relaxed),
+        0,
+        "I1 under attack"
+    );
+    println!(
+        "stress(hostile): {total_turns} turns, {} channels killed by their own hostile entries",
+        deaths.load(Ordering::Relaxed)
+    );
     assert!(total_turns > 1000);
 }

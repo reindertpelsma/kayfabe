@@ -18,6 +18,10 @@ TESTS=(--lib --test user_lifecycle_model --test user_lifecycle_props --test user
 
 run_one() { # name, "VAR=value" or ""
   local name=$1 envset=$2
+  if [ "${RESUME:-0}" = 1 ] && [ -f "$OUT/$name.failing" ]; then
+    printf '%s\t(resumed: %s failing)\n' "$name" "$(wc -l <"$OUT/$name.failing")"
+    return
+  fi
   if [ -n "$envset" ]; then
     env "$envset" cargo test -j2 --release --no-fail-fast -p kf-chan --features lifecycle-mutants "${TESTS[@]}" >"$OUT/$name.log" 2>&1
   else
