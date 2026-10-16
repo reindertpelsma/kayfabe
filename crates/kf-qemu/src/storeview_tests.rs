@@ -392,3 +392,75 @@ fn concurrent_hostile_evictions_leave_a_live_owners_last_window() {
     assert_eq!(victim.live(), 1);
     assert_eq!(t.live(), 1);
 }
+
+#[test]
+#[ignore = "explicit read-path scaling report"]
+fn read_path_scaling() {
+    let secs = std::env::var("KF3_STORE_SCALE_SECS")
+        .ok()
+        .and_then(|v| v.parse().ok())
+        .unwrap_or(3);
+    for shared in [true, false] {
+        for threads in [1usize, 2, 4, 8, 16, 32] {
+            let t = Arc::new(Windowed::new(Arc::new(Stub::default()), 32 * WINDOW, 32).unwrap());
+            let owner = Arc::new(Owner::default());
+            for i in 0..threads {
+                ready(&t, &owner, i as u64 * WINDOW);
+            }
+            let barrier = Arc::new(std::sync::Barrier::new(threads + 1));
+            let until = Instant::now() + Duration::from_secs(secs);
+            let mut jobs = Vec::new();
+            for i in 0..threads {
+                let t = t.clone();
+                let barrier = barrier.clone();
+                jobs.push(std::thread::spawn(move || {
+                    let off = if shared { 0 } else { i as u64 * WINDOW };
+                    let mut good = 0u64;
+                    let mut retries = 0u64;
+                    let mut samples = Vec::new();
+                    let mut out = [0; 64];
+                    barrier.wait();
+                    while Instant::now() < until {
+                        let start = Instant::now();
+                        let r = t.read(off, &mut out);
+                        let ns = start.elapsed().as_nanos() as u64;
+                        match r {
+                            Ok(()) => {
+                                for (k, b) in out.iter().enumerate() {
+                                    assert_eq!(*b, pattern(off + k as u64));
+                                }
+                                good += 1;
+                                if samples.len() < 8192 && good % 32 == 0 {
+                                    samples.push(ns);
+                                }
+                            }
+                            Err(Error::Retry) => retries += 1,
+                            Err(e) => panic!("scaling read {e:?}"),
+                        }
+                    }
+                    (good, retries, samples)
+                }));
+            }
+            let start = Instant::now();
+            barrier.wait();
+            let mut good = 0u64;
+            let mut retries = 0u64;
+            let mut samples = Vec::new();
+            for job in jobs {
+                let (g, r, s) = job.join().unwrap();
+                good += g;
+                retries += r;
+                samples.extend(s);
+            }
+            let elapsed = start.elapsed().as_secs_f64();
+            samples.sort_unstable();
+            assert!(good > 0);
+            let p50 = samples[samples.len() / 2];
+            let p99 = samples[samples.len() * 99 / 100];
+            eprintln!(
+                "STORE_SCALE threads={threads} shared_span={shared} bytes=64 seconds={elapsed:.3} good={good} retries={retries} reads_per_s={:.0} p50_ns={p50} p99_ns={p99}; pattern-verified RAM stub, timer and verification overhead included in throughput",
+                good as f64 / elapsed
+            );
+        }
+    }
+}

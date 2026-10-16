@@ -69,6 +69,8 @@
 /* 30 (2026-10-15, claude/perf-fix-20261015, docs/design/V3_WINDOWS_PERF_20261015.md): kf3_realize gains
  * user_view_keep (the user-view-keep property: CPU views of the store each USER-ring channel keeps armed;
  * 0 = the default, 16) after channel_budget. */
+/* 31 (2026-10-16): explicit store_view_full (default off), global store_view_windows;
+ * user_view_keep is retired, accepted with a diagnostic. */
 #define KF3_ABI 31
 #define KF3_BROKER_ON 1u
 #define KF3_BROKER_VRAM_AUTO 0u
