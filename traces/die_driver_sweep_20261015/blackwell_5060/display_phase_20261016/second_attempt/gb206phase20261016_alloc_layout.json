@@ -1,0 +1,72 @@
+{
+  "pio": {
+    "size": 16,
+    "classes": [
+      50810,
+      51834
+    ],
+    "fields": {
+      "channelInstance": [
+        0,
+        4
+      ],
+      "hObjectNotify": [
+        4,
+        4
+      ],
+      "pControl": [
+        8,
+        8
+      ]
+    }
+  },
+  "dma": {
+    "size": 40,
+    "classes": [
+      50811,
+      50813,
+      50814,
+      51835,
+      51837,
+      51838
+    ],
+    "fields": {
+      "channelInstance": [
+        0,
+        4
+      ],
+      "hObjectBuffer": [
+        4,
+        4
+      ],
+      "hObjectNotify": [
+        8,
+        4
+      ],
+      "offset": [
+        12,
+        4
+      ],
+      "pControl": [
+        16,
+        8
+      ],
+      "flags": [
+        24,
+        4
+      ],
+      "channelPBSize": [
+        28,
+        4
+      ],
+      "subDeviceId": [
+        32,
+        4
+      ]
+    }
+  },
+  "abi": "580.65.06",
+  "source": "NVIDIA/open-gpu-kernel-modules:580.65.06 nvos.h and class headers",
+  "nvos_sha256": "07f9f453afbf080750663abc9e04e2d3b55500887303ba03bd6855916d2405bd",
+  "ogkm_revision": "307159f2623d3bf45feb9177bd2da52ffbc5ddf9"
+}

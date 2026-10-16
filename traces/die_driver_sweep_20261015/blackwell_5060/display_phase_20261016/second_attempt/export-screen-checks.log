@@ -1,0 +1,4 @@
+Public580.65.06 headers compiled locally; PIO16bytes/DMA40bytes, field offsets and class IDs emitted by compiler.
+Synthetic pointer0xfeeddeadbeefcafe absent from serialized result; pControl_nonzero boolean only.
+Truncated params, serialized flag and unrelated class0080 rejected. PASS4checks.
+No opaque body or pointer value returned. Source code/layout JSON retained; executable stays on developer machine.

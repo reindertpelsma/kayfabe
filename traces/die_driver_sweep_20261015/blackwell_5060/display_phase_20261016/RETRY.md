@@ -18,3 +18,12 @@ Native gates9/9+gate10PASS19:27:50UTC,12/12USER births. Privatef8485f6d QEMU
 build finished19:28:50UTC. Root595caps page saved as an oracle only. Thirteen
 Windows chunks copied; full-image integrity check remains pending at this note.
 Linux595raw/Windowson-off/candidate stillUNRUN; no unsupported-family fallback.
+
+MEASURED19:33UTC: complete Windows image SHA matches539aaad2...044b,
+Linux setup exits0 at19:29:44. Serial GPU controller91843started19:30:40,
+native CUDA4 and Linux595raw30 are running. Windows on/off follows only after
+raw teardown and no-QEMU check. Root/rental source remainsf8485f6db; no cargo
+builds or source fetches during timed work. Structured display allocation export
+uses compiler-derived public580.65.06 PIO/DMA fields and class IDs, redacts
+pControl values, rejects serialized/truncated/unrelated allocations; no raw
+allocation/Other4 bodies return. Four synthetic screening assertions pass.
