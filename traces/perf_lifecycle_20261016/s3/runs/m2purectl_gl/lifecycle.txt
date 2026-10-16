@@ -1,0 +1,1 @@
+no LIFECYCLE dumps in /tmp/collect_M2purectl.log

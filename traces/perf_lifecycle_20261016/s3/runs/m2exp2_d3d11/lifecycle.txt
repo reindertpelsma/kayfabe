@@ -1,0 +1,49 @@
+window: f9+8..f9+255 -> dumps wall 1792158764.8 .. 1792159014.8 (250.0 s); 131 dumps total; frames in window ~ 46605 at 186.42 fps
+
+== reads by site and lifecycle class (per second | per frame)
+site:class                      calls/f       KB/f    ramKB/f   vramKB/f  vcopies/f    vram_us/f   total_us/f
+gp_entry:post5080_nopend         1692.3       13.2       13.2        0.0        0.0          0.0        388.9
+gp_entry:post5080_regpend           0.0        0.0        0.0        0.0        0.0          0.0          0.0
+gp_entry:pre5080                    0.0        0.0        0.0        0.0        0.0          0.0          0.0
+pushbuffer:post5080_regpend         0.0        0.0        0.0        0.0        0.0          0.0          0.0
+pushbuffer:pre5080                  0.0        0.0        0.0        0.0        0.0          0.0          0.0
+
+== HA: BAR1 pushbuffer copies by class (window total 0, 0.0 per frame)
+  pre5080                     0    0.0%
+  post5080_nopend             0    0.0%
+  post5080_regpend            0    0.0%
+
+== pushbuffer length buckets (calls | vram copies), whole window
+  post5080_regpend {'le16': (0, 0), 'le32': (0, 0), 'le64': (0, 0), 'le128': (0, 0), 'le256': (0, 0), 'le416': (0, 0), 'le1024': (0, 0), 'gt1024': (0, 0)}
+  pre5080 {'le16': (0, 0), 'le32': (0, 0), 'le64': (20, 0), 'le128': (1, 0), 'le256': (0, 0), 'le416': (8, 0), 'le1024': (0, 0), 'gt1024': (4, 0)}
+
+== GP entries (window total | per frame)
+  gp_entries             78867455    1692.25
+  len0                    2757102      59.16
+  sync_wait                445855       9.57
+  sync_wait_len0           445855       9.57
+  sync_wait_len_gt0             0       0.00
+  sync_wait share of GP entries: 0.57%
+
+== loop counters (window total | per frame | per second)
+  turns                          79374172    1703.13     317496.7
+  turns_published                78482915    1684.00     313931.7
+  turns_retry                      705189      15.13       2820.8
+  rare_segments                         0       0.00          0.0
+  trig_update_channel_info              0       0.00          0.0
+  trig_invalidate_tlb                   0       0.00          0.0
+  trig_context                          0       0.00          0.0
+  trig_other                            0       0.00          0.0
+  ring_migrated                         0       0.00          0.0
+  pb_reads_before_5080                 33       0.00          0.1
+  scanoff_skipped                75912723    1628.85     303650.9
+  scanoff_skipped_bytes       20797944872  446259.95   83191779.5
+  doorbells_translated             246854       5.30        987.4
+  doorbells_other                       0       0.00          0.0
+  registry (end): live=0 registered=70 looked_up=71 unknown=0 removed=0 implicit_deletes=70 refused=0 fifo_update_refused=0
+  registry (start): live=0 registered=61 looked_up=62 unknown=0 removed=0 implicit_deletes=61 refused=0 fifo_update_refused=0
+
+== relay_stats (end) : wakes(doorbell=214263 event=552570 spin=1429734 backstop=1722) backstop_found(work=0 carried=0 contended=0 put_ahead=4) event_without_progress=98604 gates=209710 carried_ungated=0 credit_waits=20 contended_turns=850503 pop_writebacks=42191 markers=55604 drain_us_log2=[1, 330, 37780, 54752, 37199, 22109, 22053, 22657, 8634, 3767, 370, 45, 4, 1, 2, 6]
+== relay_stats (start): wakes(doorbell=66322 event=85517 spin=136686 backstop=1717) backstop_found(work=0 carried=0 contended=0 put_ahead=0) event_without_progress=10878 gates=20289 carried_ungated=0 credit_waits=0 contended_turns=75962 pop_writebacks=5184 markers=6442 drain_us_log2=[0, 12, 2296, 3491, 3946, 3839, 2861, 2141, 1102, 530, 45, 20, 2, 1, 0, 3]
+
+== wakes in window: {'doorbell': (147941, 3.17, '/frame'), 'event': (467053, 10.02, '/frame'), 'spin': (1293048, 27.74, '/frame'), 'backstop': (5, 0.0, '/frame')}

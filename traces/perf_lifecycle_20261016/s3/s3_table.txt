@@ -1,0 +1,14 @@
+== d3d11
+  ctl: m2ctl1_d3d11=100.41, m2ctl2_d3d11=90.903, m2ctl3_d3d11=95.6811
+     median 95.68 spread 9.9% n=3
+  exp: m2exp1_d3d11=188.995, m2exp2_d3d11=186.42, m2exp3_d3d11=188.754
+     median 188.75 spread 1.4% n=3
+  exp/ctl = 1.9727  (+97.3%)
+  pure (no counters, 1 run each): {'ctl': 99.7837, 'exp': 193.806}  exp/ctl = 1.9423
+== gl
+  ctl: m2ctl1_gl=210.733, m2ctl2_gl=224.247, m2ctl3_gl=216.725
+     median 216.72 spread 6.2% n=3
+  exp: m2exp1_gl=338.222, m2exp2_gl=326.962, m2exp3_gl=361.787
+     median 338.22 spread 10.3% n=3
+  exp/ctl = 1.5606  (+56.1%)
+  pure (no counters, 1 run each): {'ctl': 233.189, 'exp': 341.748}  exp/ctl = 1.4655

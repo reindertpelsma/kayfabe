@@ -1,0 +1,51 @@
+window: f9+8..f9+254 -> dumps wall 1792159544.0 .. 1792159789.0 (245.0 s); 129 dumps total; frames in window ~ 23442 at 95.68 fps
+
+== reads by site and lifecycle class (per second | per frame)
+site:class                      calls/f       KB/f    ramKB/f   vramKB/f  vcopies/f    vram_us/f   total_us/f
+gp_entry:post5080_nopend         1719.5       13.4       13.4        0.0        0.0          0.0        388.9
+gp_entry:post5080_regpend           0.0        0.0        0.0        0.0        0.0          0.0          0.0
+gp_entry:pre5080                    0.0        0.0        0.0        0.0        0.0          0.0          0.0
+pushbuffer:post5080_nopend       1646.8      437.7      191.8      245.9      931.4       4169.1       4543.1
+pushbuffer:post5080_regpend         0.0        0.0        0.0        0.0        0.0          0.0          0.0
+pushbuffer:pre5080                  0.0        0.0        0.0        0.0        0.0          0.0          0.0
+
+== HA: BAR1 pushbuffer copies by class (window total 21834112, 931.4 per frame)
+  pre5080                     0    0.0%
+  post5080_nopend      21834112  100.0%
+  post5080_regpend            0    0.0%
+
+== pushbuffer length buckets (calls | vram copies), whole window
+  post5080_nopend {'le16': (103, 0), 'le32': (106, 0), 'le64': (6796199, 0), 'le128': (4134201, 1041483), 'le256': (16567106, 12590310), 'le416': (9195757, 8202317), 'le1024': (1170056, 0), 'gt1024': (740093, 2)}
+  post5080_regpend {'le16': (0, 0), 'le32': (0, 0), 'le64': (0, 0), 'le128': (0, 0), 'le256': (0, 0), 'le416': (0, 0), 'le1024': (0, 0), 'gt1024': (0, 0)}
+  pre5080 {'le16': (0, 0), 'le32': (0, 0), 'le64': (5, 0), 'le128': (0, 0), 'le256': (0, 0), 'le416': (2, 0), 'le1024': (0, 0), 'gt1024': (4, 0)}
+
+== GP entries (window total | per frame)
+  gp_entries             40306948    1719.46
+  len0                    1703316      72.66
+  sync_wait                255629      10.90
+  sync_wait_len0           255629      10.90
+  sync_wait_len_gt0             0       0.00
+  sync_wait share of GP entries: 0.63%
+
+== loop counters (window total | per frame | per second)
+  turns                          40650606    1734.12     165920.8
+  turns_published                40053136    1708.63     163482.2
+  turns_retry                      492979      21.03       2012.2
+  rare_segments                         0       0.00          0.0
+  trig_update_channel_info              0       0.00          0.0
+  trig_invalidate_tlb                   0       0.00          0.0
+  trig_context                          0       0.00          0.0
+  trig_other                            0       0.00          0.0
+  ring_migrated                         0       0.00          0.0
+  pb_reads_before_5080                 11       0.00          0.0
+  scanoff_skipped                       0       0.00          0.0
+  scanoff_skipped_bytes                 0       0.00          0.0
+  doorbells_translated             151535       6.46        618.5
+  doorbells_other                       0       0.00          0.0
+  registry (end): live=0 registered=65 looked_up=66 unknown=0 removed=0 implicit_deletes=65 refused=0 fifo_update_refused=0
+  registry (start): live=0 registered=61 looked_up=62 unknown=0 removed=0 implicit_deletes=61 refused=0 fifo_update_refused=0
+
+== relay_stats (end) : wakes(doorbell=151248 event=374897 spin=919122 backstop=1887) backstop_found(work=0 carried=0 contended=0 put_ahead=3) event_without_progress=72675 gates=131421 carried_ungated=0 credit_waits=0 contended_turns=581014 pop_writebacks=15461 markers=54308 drain_us_log2=[0, 181, 19606, 38208, 23719, 12640, 16369, 16536, 2563, 1391, 127, 48, 22, 3, 4, 4]
+== relay_stats (start): wakes(doorbell=58643 event=69986 spin=83712 backstop=1887) backstop_found(work=0 carried=0 contended=0 put_ahead=3) event_without_progress=7489 gates=13041 carried_ungated=0 credit_waits=0 contended_turns=51460 pop_writebacks=1970 markers=6062 drain_us_log2=[0, 8, 1544, 3076, 2304, 1643, 1996, 1467, 624, 281, 46, 20, 22, 3, 4, 2]
+
+== wakes in window: {'doorbell': (92605, 3.95, '/frame'), 'event': (304911, 13.01, '/frame'), 'spin': (835410, 35.64, '/frame'), 'backstop': (0, 0.0, '/frame')}
