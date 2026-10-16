@@ -2,6 +2,18 @@
 
 **STATUS: RESEARCH, 2026-10-16. Written before new rental and hardware runs.**
 
+**Native precondition result, 2026-10-16 02:06UTC:** actual580.88/Code0,
+CUDA3/D3D11+12/zero short-window TDR oracle passes. The first420second hold
+fails at its initial DWM/Explorer precheck, before timing starts. Preserve
+native-first/ output; no seven-minute result is inferred. Windows Update
+transiently installed591.86 before pinned580 completed; no591 suite was run.
+The full CUDA toolkit finished before the setup-stop check and is installed;
+it was not omitted. The completed own setup task is disabled. Native autologon
+was configured with a fresh rental-only credential, never printed or returned,
+and own native reboot queued02:05:28UTC. Replay1 requires actual580/Code0 and
+real DWM/Explorer before oracle→unchanged420second hold→oracle. Missing
+desktop/TDR/probe/driver failures still fail; no relaxed criterion.
+
 **Hold definition, 2026-10-16 01:37UTC, before the run:** hold.ps1 keeps
 adapter Code0, actual580.88, DWM and Explorer for at least420seconds, checking
 hardware D3D11/12 every30seconds and a readable System log for4101TDRs.

@@ -1,5 +1,34 @@
 # Status and handoff — where kayfabe v3 stands, and how to resume
 
+## UPDATE 2026-10-16 02:06UTC — native Turing GPU oracle passes; desktop precheck repaired
+
+Own56180232 only, timer2167738 unchanged04:11:46UTC/hard04:16:45UTC. Native
+Windows26100 first installed591.86 through WindowsUpdate; no591 suite claim.
+Pinned actual32.0.15.8088 nowCode0. CUDA3/D3D11+12/0TDRshort/native postdriver
+checks PASS at02:02:01UTC. Toolkit completed naturally before the setup-stop
+check; state.cuda/complete True, taskVastWindowsSetup nowDisabled. No claim
+that toolkit was omitted. Update-service stopping was not persistent, policy
+set and actual driver rechecked. No guest or new RM-die tuple result yet.
+
+First native hold failed before timing: DWM/Explorer desktop missing. Negative
+output archivednative-first/, old orchestrator/session65120 exited1. Native
+autologon configured with a fresh on-rental-only credential, never returned;
+own reboot queued02:05:28. New controller turinghold20261016_native_replay1.py
+keeps distinct outputprefix, requires healthy580+real DWM/Explorer, then repeats
+oracle→420secondhold→oracle once. No criterion/budget relaxation. Preserve
+all results before Linuxreimage. Original stage/session84523 alreadyexit0.
+
+Clean event PR19 source0ec93e643 fullGPU-free DONE:3236pass/0fail/14existing
+ignored,22crates/207groups/exit0. Evidence fbd09e630 pushed, no CPU rerun needed.
+Prepared event runtime branchcodex/sweep-turing-event-20261016 ef4fce21f,
+/workspace/codex/turing-event-hw, fourR34file-only delta frombaselinefbd09e630;
+allproduct crates/qemu exactly match historicalffd72e3d4. Baseline retains
+C57E+USER_RING fixes and QGA recovery six testsPASS. Both source branches
+pushed. Windows seven-minute guesthold/R34event/gates/raw/broker stillUNRUN.
+Future Linux-return bootstrap remainsNOTLAUNCHED; wait native replayPASS,
+save text, then scheduledreturnpreparation/taskexit0/ownreboot/finalUbuntu.
+Trusted ownerGPU/VM untouched. Campaign compute ceiling4.38USD plus transfers.
+
 ## UPDATE 2026-10-16 01:37 UTC — Turing native installation queued, clean event tests running
 
 Only own56180232, original timer2167738 unchanged04:11:46UTC/hardcap04:16:45UTC.
