@@ -44,3 +44,11 @@ Cheap subsequent CPU-only candidates: avoid allocating/copying `patched` for an 
 segment (stage_plan currently copies every Vec before knowing rare=false); avoid rescanning
 an ordinary immutable snapshot twice. These save RAM/CPU work, not the measured BAR1 bytes.
 They require transaction/parser tests and per-stage timing before a speedup claim.
+
+Offline probe ordering update (02:55 CEST): `Stream16` includes MFENCE before and after
+its read batch. Initialization also uses MFENCE rather than a release-only fence. The probe
+changes the first cache line 128 times and checks each available strategy after every CPU
+write. This checks CPU-writer freshness; it does not establish GPU-writer coherence.
+Intel documents the WC temporary streaming buffers and ordering requirements in the
+[MOVNTDQA entry of the Intel SDM, volume 2](https://cdrdv2-public.intel.com/671110/325383-sdm-vol-2abcd.pdf).
+The fences are part of the timed candidate, and the entire addition remains feature gated.

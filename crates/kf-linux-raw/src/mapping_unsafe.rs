@@ -1037,6 +1037,14 @@ unsafe impl Send for VolatileRegion {}
 unsafe impl Sync for VolatileRegion {}
 
 impl VolatileRegion {
+    /// Full CPU memory barrier for the offline WC data probe. A release fence
+    /// alone does not order a subsequent device-memory load after WC stores.
+    #[cfg(all(feature = "bench-data-read", target_arch = "x86_64"))]
+    pub fn bench_data_fence(&self) {
+        // SAFETY: MFENCE is available on every x86_64 CPU and has no operands.
+        unsafe { core::arch::asm!("mfence", options(nostack, preserves_flags)) };
+    }
+
     /// Map `len` bytes of `backing` as a hardware-shared region, requiring cache policy
     /// `cache`. Read-write; use [`Self::map_read_only`] for a hardware register page whose
     /// contents the CPU must never change.
@@ -2521,6 +2529,10 @@ impl VolatileRegion {
                     required: 16,
                 });
             }
+            // Intel SDM MOVNTDQA: temporary WC streaming buffers need MFENCE
+            // ordering when another agent may modify the source. Include the
+            // fence cost in this experiment rather than time stale reuse.
+            self.bench_data_fence();
         }
         // SAFETY: complete bounds check above; mapping is live for &self and
         // dst is a disjoint safe mutable slice. No references into device memory.
@@ -2570,6 +2582,9 @@ impl VolatileRegion {
                     }
                 }
             }
+        }
+        if matches!(kind, DataReadKind::Stream16) {
+            self.bench_data_fence();
         }
         Ok(())
     }

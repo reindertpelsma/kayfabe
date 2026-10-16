@@ -53,6 +53,44 @@ fn measure(
     );
     Ok(())
 }
+fn verify_freshness(region: &VolatileRegion, cache: CpuViewCache) -> Result<(), String> {
+    for turn in 0..128u64 {
+        let mut want = Vec::new();
+        for off in (0..64u64).step_by(8) {
+            let value = pattern_word(off) ^ turn.wrapping_mul(0x0101_0101_0101_0101);
+            region
+                .store_u64(HostOffset::new(off), value)
+                .map_err(|e| format!("{e:?}"))?;
+            want.extend(value.to_le_bytes());
+        }
+        region.bench_data_fence();
+        for kind in [
+            DataReadKind::Scalar8,
+            DataReadKind::Simd16,
+            DataReadKind::Simd32,
+            DataReadKind::Inflight16,
+            DataReadKind::Stream16,
+        ] {
+            let mut out = [0u8; 64];
+            match region.bench_copy_data(HostOffset::new(0), &mut out, kind) {
+                Ok(()) => assert_eq!(
+                    out.as_slice(),
+                    want,
+                    "freshness cache={cache:?} kind={kind:?} turn={turn}"
+                ),
+                Err(_)
+                    if matches!(kind, DataReadKind::Stream16)
+                        && !matches!(cache, CpuViewCache::WriteCombining) =>
+                {
+                    ()
+                }
+                Err(e) => return Err(format!("freshness {kind:?}: {e:?}")),
+            }
+        }
+    }
+    println!("READ_COST_FRESHNESS cache={cache:?} turns=128 writer=CPU result=PASS GPU_writer=NOT_TESTED");
+    Ok(())
+}
 fn main() -> Result<(), String> {
     let dev = DevDir::open(c"/dev").map_err(|e| format!("{e:?}"))?;
     let rm = HostRm::open(&dev, kf_arch::ids::GpuId(0), &kf_chip::choose_host_classes)
@@ -98,12 +136,13 @@ fn main() -> Result<(), String> {
                 HostPageSize::query(),
             )
             .map_err(|e| format!("{e:?}"))?;
+            verify_freshness(&region, cache)?;
             for off in (0..LENGTH).step_by(8) {
                 region
                     .store_u64(HostOffset::new(off), pattern_word(off))
                     .map_err(|e| format!("{e:?}"))?;
             }
-            kf_linux_raw::release_fence();
+            region.bench_data_fence();
             println!(
                 "READ_COST_MAP_LIVE cache={cache:?} flags={:#x}; requested cache hint, effective PAT requires observer",
                 cache.flags()
