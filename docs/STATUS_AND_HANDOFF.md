@@ -1,5 +1,29 @@
 # Status and handoff — where kayfabe v3 stands, and how to resume
 
+## UPDATE 2026-10-16 02:16UTC — native Turing seven-minute reference PASS, restore preparation queued
+
+Owned56180232 native actual580.88/Code0 passes CUDA3/D3D11+12 both before/after
+and desktop hold421.03seconds,13 repeatedD3D11+12 rounds,zeroSystem4101TDRs.
+Whole replay/controller34697 exits0 at02:15:00UTC. Text saved/pushed under
+turing_hold_20261016/native-replay1/ and NATIVE_RESULT.md; first precondition
+failure remainsnative-first/. Fresh RM die tuple still pending; no PCI-derived
+die fact registered. NativeGSP firmware N/A; this is stock GPU-work acceptance,
+not a GSP trace or nestedWindows/family/multiple-driver pass.
+
+Linux-return preparation now queued by local controller/session21543, output
+/workspace/codex/turinghold20261016-linux-return-prepare.txt. Poll scheduled
+CodexLinuxReturn State/LastTaskResult; reboot only after result0. Prepared
+Linuxbootstrap /workspace/codex/turinghold20261016_linux_bootstrap.py still
+NOTLAUNCHED until preparation/reboot. Wait finalUbuntu22, not Alpine; pin new
+ownfinalkey, install595.91.07 open, derive UID65534/CapEff0 tuple, then build
+baseline and event variants with separate Cargo targets and actual process
+env/source/binary/host+guest build receipts. No cargo during GPUtiming.
+
+Timer2167738 unchanged04:11:46UTC/hard04:16:45UTC, one own rental only. Owner
+GPU/VM untouched; campaign conservative ceiling4.38USD plus transfers. Clean
+eventPR19 CPU3236/0/14 done, no repeat. Eventef4fce21f and baselineproduct8e3
+remain unmeasured in this fresh guest; W3 Windowshold and R34 at180s required.
+
 ## UPDATE 2026-10-16 02:06UTC — native Turing GPU oracle passes; desktop precheck repaired
 
 Own56180232 only, timer2167738 unchanged04:11:46UTC/hard04:16:45UTC. Native
