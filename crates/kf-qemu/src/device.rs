@@ -2031,7 +2031,10 @@ impl Device {
             if prof {
                 self.prof.vamgr.busy(tw.saturating_sub(va_busy_from));
             }
-            let got = poller.wait(&mut ready, PollTimeout::Millis(50));
+            let got = poller.wait(
+                &mut ready,
+                PollTimeout::Millis(m.walker().kernel.completion_poll_ms()),
+            );
             if prof {
                 va_busy_from = crate::prof::now_ns();
                 self.prof
