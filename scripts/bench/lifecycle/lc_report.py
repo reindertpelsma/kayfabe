@@ -1,11 +1,21 @@
 #!/usr/bin/env python3
-"""lc_report.py QEMU_LOG F9_EPOCH FPS [W0 W1] : table of the `kf3: LIFECYCLE` counters between two dumps
-inside the benchmark window [f9+W0, f9+W1] (defaults 20 .. 250 s). Output is text for the report."""
+"""lc_report.py QEMU_LOG HEAVEN_OUT FPS [TRIM_START TRIM_END] : table of the `kf3: LIFECYCLE` counters between two dumps
+inside the benchmark window taken from Heaven's own log lines ("Benchmark running" .. "Benchmark results", guest UTC clock,
+trimmed by TRIM_START / TRIM_END seconds; defaults 8 / 6). Output is text for the report."""
 import re, sys, json, ast
 
-log, f9, fps = sys.argv[1], float(sys.argv[2]), float(sys.argv[3])
-W0 = float(sys.argv[4]) if len(sys.argv) > 4 else 20.0
-W1 = float(sys.argv[5]) if len(sys.argv) > 5 else 250.0
+import datetime
+log, hout, fps = sys.argv[1], sys.argv[2], float(sys.argv[3])
+T0 = float(sys.argv[4]) if len(sys.argv) > 4 else 8.0
+T1 = float(sys.argv[5]) if len(sys.argv) > 5 else 6.0
+txt = open(hout, errors="replace").read().replace("&nbsp;", " ")
+def hms(m):
+    h, mi, se = map(int, m.groups()); d = datetime.datetime.now(datetime.timezone.utc).replace(hour=h, minute=mi, second=se, microsecond=0)
+    return d.timestamp()
+mrun = re.search(r"(\d\d):(\d\d):(\d\d) Benchmark running", txt)
+mres = re.search(r"(\d\d):(\d\d):(\d\d) Benchmark results", txt)
+bstart, bend = hms(mrun), hms(mres)
+f9, W0, W1 = bstart, T0, (bend - bstart) - T1
 kv = re.compile(r'(\w+)=(\[[^\]]*\]|\S+)')
 dumps = {}  # wall -> {key: {field: value}}
 for line in open(log, errors="replace"):
