@@ -5,8 +5,9 @@
 //! This gate drives the same planes the way the guest will: a **vCPU thread** writes the three
 //! `MMU_INVALIDATE` registers into a [`kf_trap::InvalidatePort`] (PDB lo, PDB hi, TRIGGER) and
 //! then spin-reads the trigger exactly as `kgmmuCheckPendingInvalidates` does; the **VA-manager
-//! thread** (this one) waits in `epoll` on two fds only — the request notifier and the walk
-//! kernel's completion eventfd — and runs [`kf_mem::vasmgr::VaManager`]. No QEMU, no guest.
+//! thread** (this one) waits in `epoll` on the request and bring-up completion fds, and
+//! polls a pending GPU event at the walker's bounded interval, as the production VA worker
+//! does. It runs [`kf_mem::vasmgr::VaManager`]. No QEMU, no guest.
 //!
 //! Asserted, per format (VER2 = Turing..Ada, VER3 = Hopper/Blackwell — every family first-class):
 //! - **(i) ordering**: every host map/unmap/invalidate of the reconcile ran while the guest's
@@ -23,7 +24,8 @@
 //! - **(v) `ALL_PDB`**: reconciles every rooted space;
 //! - **the walk never blocked its submitter**: zero `cuCtxSynchronize` calls across the run, the
 //!   GPU itself (`cuEventQuery`) reports walks still in flight at the instant `submit` returned,
-//!   and every completion arrived as a readiness wake on the walker's fd. The submit cost is MEASURED against
+//!   and completion is collected only through the GPU-event predicate. FD wakes remain
+//!   measured, but the repeated host callback is no longer required. The submit cost is MEASURED against
 //!   the port map's 50 µs budget (a measurement, not a verdict: the launch count is ~25).
 //!
 //! ⊘ **UNRUN** as committed (w826): written and compiled on a machine with no GPU. Its first run
@@ -255,6 +257,7 @@ fn vcpu(
 struct Round {
     saw: VcpuSaw,
     walk_wakes: u32,
+    completion_polls: u32,
     collected: u32,
     applied: Vec<(VasKey, usize, usize)>,
     superseded: u64,
@@ -293,8 +296,12 @@ fn round(
             }
             let mut ready = ReadyTokens::new();
             poller
-                .wait(&mut ready, PollTimeout::Millis(20))
+                .wait(
+                    &mut ready,
+                    PollTimeout::Millis(m.walker().inner.kernel.completion_poll_ms()),
+                )
                 .map_err(|e| format!("epoll: {e:?}"))?;
+            let mut walk_woke = false;
             for t in ready.iter() {
                 if t == TOKEN_REQ {
                     let _ = req_wake.drain();
@@ -303,13 +310,20 @@ fn round(
                     }
                 } else if t == TOKEN_WALK {
                     out.walk_wakes += 1;
-                    let r = m.on_walk_ready(port.trigger());
-                    if r.collected {
-                        out.collected += 1;
-                    }
-                    for (k, a) in r.applied {
-                        out.applied.push((k, a.mapped, a.unmapped));
-                    }
+                    walk_woke = true;
+                }
+            }
+            // A replayed walk has no callback notification. Query its real GPU
+            // event even after a timeout; VaManager preserves report validation,
+            // mapping-before-clear ordering and the actual copy-engine proof.
+            if walk_woke || m.in_flight() {
+                out.completion_polls += 1;
+                let r = m.on_walk_ready(port.trigger());
+                if r.collected {
+                    out.collected += 1;
+                }
+                for (k, a) in r.applied {
+                    out.applied.push((k, a.mapped, a.unmapped));
                 }
             }
         }
@@ -465,12 +479,12 @@ fn phase(
     );
     l.check(
         if v3 {
-            "ver3_completion_arrived_as_an_fd_wake"
+            "ver3_completion_observed_from_gpu_event"
         } else {
-            "ver2_completion_arrived_as_an_fd_wake"
+            "ver2_completion_observed_from_gpu_event"
         },
-        r1.collected == 1 && r1.walk_wakes >= 1,
-        format!("walk wakes={} collected={}", r1.walk_wakes, r1.collected),
+        r1.collected == 1 && r1.completion_polls >= 1,
+        format!("event polls={} fd wakes={} collected={}", r1.completion_polls, r1.walk_wakes, r1.collected),
     );
 
     // (i) the CE copy, issued now that the trigger has cleared.
