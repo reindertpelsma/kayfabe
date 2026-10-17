@@ -1,0 +1,14 @@
+Mutation check of crates/kf-chan/tests/user_lazy_model.rs (12 tests, all pass on the unmutated tree). Each rule broken once, tests run
+(`cargo test -p kf-chan --test user_lazy_model`, dev box, nice 5), source restored afterwards. MEASURED (test results below).
+
+rule broken (file)                                                             | killed by (failing tests)
+cache never invalidated: generation key ignored (user_lazy.rs PutCache::select)| a_ring_generation_switch_invalidates_the_cache_even_for_a_lower_put; put_cache_every_reachable_state_keeps_i8_order_and_the_doorbell_contract  (2 failed)
+idle on a cached read: cache returned when cursor == cached PUT (select)       | a_cached_put_is_never_used_when_the_cursor_has_reached_it; put_cache_every_reachable_state_...; wrap_around_is_handled_in_modular_arithmetic  (3 failed)
+must_observe ignores prev_waiting (liveness)                                   | must_observe_is_forced_by_waiting_open_segment_low_credit_and_interval_one; sync_wait_stream_is_safe_and_live_even_when_the_periodic_look_never_fires; sync_wait_stream_is_safe_and_live_with_the_production_interval  (3 failed)
+must_observe ignores the credit floor (full-ring deadlock)                     | must_observe_is_forced_by_waiting_open_segment_low_credit_and_interval_one  (1 failed; only the predicate test covers it, the model uses 10,000 credits)
+SyncGate releases one marker early (user_gate.rs; a REFERENCE trusted too soon)| stale_reference_never_releases_a_gate_early; both sync_wait_stream_* tests  (3 failed)
+Marks::peek bound loosened (user_gate.rs; a future/garbage REFERENCE trusted)  | FIRST RUN: not killed (the test only used valid words) -> test added (a word naming a marker never issued must imply no progress) -> stale_reference_never_releases_a_gate_early  (1 failed)
+Fetch::available over-counts credits (user_scan.rs; stale credits over-counted)| stale_get_never_yields_more_credits_than_the_real_ring_has  (1 failed)
+
+The put_cache exploration visits 2,260 reachable states (ring of 4 slots, 7 entries per generation, up to 2 migrations to lower PUTs) and checks, from every
+state, that a bounded drain relays every published entry (no lost wakeup), in order, once.
