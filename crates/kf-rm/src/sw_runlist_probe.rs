@@ -28,12 +28,14 @@ pub struct Declaration {
 pub(crate) struct Probe {
     logged: AtomicU8,
     driver: DriverAbiTable,
+    allocation: Option<sw_runlist::AllocationCell>,
     identity: Arc<AtomicBool>,
     engines: [u32; kf_abi::gspstaticinfo::ENGINE_CAPS_WORDS],
 }
 
 pub(crate) struct IdentityObserver {
     driver: DriverAbiTable,
+    allocation: Option<sw_runlist::AllocationCell>,
     identity: Arc<AtomicBool>,
     observed: u8,
 }
@@ -42,17 +44,25 @@ impl Probe {
     pub(crate) fn new(
         driver: DriverAbiTable,
         engines: [u32; kf_abi::gspstaticinfo::ENGINE_CAPS_WORDS],
+        die: kf_chip::DieId,
     ) -> (Self, IdentityObserver) {
         let identity = Arc::new(AtomicBool::new(false));
+        let allocation = sw_runlist::allocation_cell(
+            driver.driver_version(),
+            die.architecture,
+            die.implementation,
+        );
         (
             Self {
                 logged: AtomicU8::new(0),
                 driver,
+                allocation,
                 identity: identity.clone(),
                 engines,
             },
             IdentityObserver {
                 driver,
+                allocation,
                 identity,
                 observed: 0,
             },
@@ -68,7 +78,8 @@ impl Probe {
             return None;
         }
         let decode = || {
-            let cell = sw_runlist::cell(self.driver.driver_version())
+            let cell = self
+                .allocation
                 .filter(|c| c.class == req.class)
                 .ok_or_else(|| refusal("software-runlist probe: unsupported driver cell"))?;
             if !self.identity.load(Ordering::Relaxed) {
@@ -134,7 +145,8 @@ impl Probe {
 impl CommandPolicy for IdentityObserver {
     fn respond(&mut self, cmd: &RpcCommand) -> Option<Reply> {
         if cmd.function == RpcFunction::SetGuestSystemInfo {
-            let admitted = sw_runlist::cell(self.driver.driver_version())
+            let admitted = self
+                .allocation
                 .is_some_and(|c| c.matches_identity(&cmd.payload))
                 && kf_abi::guestsysinfo::decode_declared_vgx(&cmd.payload).ok()
                     == self.driver.vgx_version();
@@ -339,7 +351,7 @@ mod tests {
     ) -> (Probe, IdentityObserver, RpcCommand) {
         let mut engines = [0; kf_abi::gspstaticinfo::ENGINE_CAPS_WORDS];
         engines[0] = 1 << kf_abi::submit::ENGINE_TYPE_GRAPHICS;
-        let (probe, mut observer) = Probe::new(driver, engines);
+        let (probe, mut observer) = Probe::new(driver, engines, kf_chip::DieId::new(0x190, 2));
         observer.respond(&identity_for(driver, windows_name));
         // Independent nvos.h layout: engineId@0, maxTSGs@4, qosIntrEnableMask@8.
         let mut p = vec![0; 44];
@@ -736,6 +748,113 @@ mod tests {
             assert!(observer.request_observation(&control).is_none());
         }
         assert_eq!(host_owned.answered(), 0);
+    }
+
+    #[test]
+    fn windows_581_measured_binding_refuses_other_dies_and_builds() {
+        let driver = windows_581_driver();
+        let (_, _, cmd) = fixture_for(driver, "581.51");
+        let mut engines = [0; kf_abi::gspstaticinfo::ENGINE_CAPS_WORDS];
+        engines[0] = 1 << kf_abi::submit::ENGINE_TYPE_GRAPHICS;
+        for (architecture, implementation) in [
+            (0x190, 3),
+            (0x190, 4),
+            (0x190, 6),
+            (0x170, 4),
+            (0x160, 6),
+            (0x1b0, 6),
+            (0, 0),
+        ] {
+            let (probe, mut observer) = Probe::new(
+                driver,
+                engines,
+                kf_chip::DieId::new(architecture, implementation),
+            );
+            observer.respond(&identity_for(driver, "581.51"));
+            assert!(
+                probe.decode(&cmd).unwrap().is_err(),
+                "{architecture:#x}/{implementation}"
+            );
+        }
+        for (version, name) in [("580.82.07", "581.18"), ("580.95.05", "581.42")] {
+            let driver =
+                *kf_abi::versions::table_for(kf_abi::DriverVersion::parse(version).unwrap())
+                    .unwrap();
+            let (probe, _, cmd) = fixture_for(driver, name);
+            assert!(probe.decode(&cmd).unwrap().is_err(), "{version}/{name}");
+        }
+    }
+
+    #[test]
+    fn windows_581_preserves_identity_parameter_and_logging_guards() {
+        use kf_abi::guestsysinfo::*;
+        let driver = windows_581_driver();
+        let (probe, mut observer, cmd) = fixture_for(driver, "581.51");
+        for off in [
+            VGX_MAJOR_OFF,
+            GUEST_DRIVER_VERSION_OFF,
+            GUEST_VERSION_OFF,
+            GUEST_CL_NUM_OFF,
+        ] {
+            let mut bad = identity_for(driver, "581.51");
+            bad.payload[off] ^= 1;
+            observer.respond(&bad);
+            assert!(probe.decode(&cmd).unwrap().is_err(), "identity field {off}");
+            observer.respond(&identity_for(driver, "581.51"));
+            assert!(probe.decode(&cmd).unwrap().is_ok());
+        }
+        observer.respond(&identity());
+        assert!(
+            probe.decode(&cmd).unwrap().is_err(),
+            "older Windows identity"
+        );
+        observer.respond(&command(RpcFunction::SetGuestSystemInfo, vec![]));
+        assert!(probe.decode(&cmd).unwrap().is_err(), "truncated identity");
+        observer.respond(&identity_for(driver, "581.51"));
+        for (off, value) in [
+            (20, 0u32),
+            (20, 11),
+            (20, 13),
+            (20, u32::MAX),
+            (24, 1),
+            (24, 2),
+            (24, u32::MAX),
+            (32, 0),
+            (32, 9),
+            (32, u32::MAX),
+            (36, 1),
+            (40, 1),
+            (0, 0),
+            (8, 0),
+            (8, 1),
+            (8, 3),
+        ] {
+            let mut bad = cmd.clone();
+            bad.payload[off..off + 4].copy_from_slice(&value.to_le_bytes());
+            assert!(
+                probe.decode(&bad).unwrap().is_err(),
+                "parameter {off}={value}"
+            );
+        }
+        let mut truncated = cmd.clone();
+        truncated.payload.pop();
+        assert!(
+            probe.decode(&truncated).unwrap().is_err(),
+            "parameters must actually be delivered"
+        );
+        // Windows can underdeclare the RPC envelope. The allocation's public
+        // paramsSize still bounds its window in the physically delivered bytes.
+        truncated.delivered = cmd.payload.clone();
+        assert!(probe.decode(&truncated).unwrap().is_ok());
+        truncated.delivered.extend_from_slice(&[0xff; 32]);
+        assert!(
+            probe.decode(&truncated).unwrap().is_ok(),
+            "ignore bytes after paramsSize"
+        );
+        for _ in 0..100 {
+            assert!(probe.decode(&cmd).unwrap().is_ok());
+        }
+        assert_eq!(probe.logged.load(Ordering::Relaxed), 16);
     }
 
     #[test]
