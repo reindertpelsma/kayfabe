@@ -3361,9 +3361,9 @@ impl Device {
                         // A newer frame exists (the mailbox copies the newest, once per tick);
                         // completing the flip releases the buffer it replaced, so its items wait for
                         // the copy that was in flight at this latch, which read that buffer, and for
-                        // nothing else (the colour experiment keeps the old rule, see the function)
-                        scan.on_window_latched(dp.sdr_color.is_some());
-                        if dp.sdr_color.is_none() {
+                        // nothing else (the colour path too: its LUT context DMAs are resolved at copy time and a refusal there is console-only)
+                        scan.on_flip_latched();
+                        {
                             // the delay between latch and copy is up to a tick: resolve the window's
                             // context DMA NOW, as the first copy after a latch always did, so a guest
                             // that unbinds it before the copy (NVKMS's teardown) is still resolved
@@ -4386,17 +4386,6 @@ impl ScanState {
     fn on_console_tick(&mut self, armed: bool) {
         if armed {
             self.mailbox.tick();
-        }
-    }
-
-    /// ★ §AK: a flip of the shown head latched. The colour experiment (`sdr_color`) resolves its LUT context DMAs at
-    /// copy time and keeps the old rule: the flip's items wait for its own copy, which is wanted at once.
-    fn on_window_latched(&mut self, sdr_color: bool) {
-        if sdr_color {
-            self.barrier = self.started + 1;
-            self.want = true;
-        } else {
-            self.on_flip_latched();
         }
     }
 
@@ -5979,16 +5968,11 @@ mod tests {
         assert_eq!(scan.begin_copy(false), 2);
         assert!(!scan.want && !scan.mailbox.pending() && !scan.mailbox.due(false));
         assert_eq!(scan.mailbox.copies, 1);
-        // the colour rule: its own copy, wanted at once; the normal rule: nothing to wait for
-        scan.on_window_latched(true);
-        assert_eq!((scan.barrier, scan.want), (3, true));
-        assert_eq!(
-            scan.mailbox.latched, 1,
-            "the colour experiment bypasses the mailbox"
-        );
+        // one rule for every window flip, colour path included (hitch-20261017): nothing in flight, nothing to
+        // wait for, and the latched frame waits for the mailbox's copy (never "its own copy, wanted at once")
         scan.barrier = 0;
         scan.want = false;
-        scan.on_window_latched(false);
+        scan.on_flip_latched();
         assert_eq!(
             (scan.barrier, scan.want, scan.mailbox.latched),
             (0, false, 2)
@@ -6001,7 +5985,7 @@ mod tests {
     /// Each tick sees a flip latch just BEFORE it (an immediate flip) and one AT it (the vsync flip of the same frame,
     /// kms = 2 x tear) — the production order with the colour path on (`KF3_DISPLAY_SDR_COLOR=1`), where the
     /// colour rule wanted a copy of its own at every latch (`want`), outside the mailbox: two copies per tick,
-    /// the measured `copies > tick + 2` seconds. EXPECTED RED on the commit that adds it; green with the next.
+    /// the measured `copies > tick + 2` seconds. Red on 54266072 (400 copies in 200 ticks: the colour rule), green once the colour path completes flips by the mailbox rule.
     #[test]
     fn copies_started_in_n_ticks_never_exceed_n_plus_1_on_any_latch_path() {
         const N: u64 = 200;
@@ -6014,10 +5998,10 @@ mod tests {
             }
         };
         for _ in 0..N {
-            scan.on_window_latched(true); // the immediate flip, between ticks
+            scan.on_flip_latched(); // the immediate flip, between ticks
             serve(&mut scan, &mut copies);
             scan.on_console_tick(true); // the tick: one copy credit
-            scan.on_window_latched(true); // the vsync flip latched at the tick
+            scan.on_flip_latched(); // the vsync flip latched at the tick
             serve(&mut scan, &mut copies);
         }
         assert!(
@@ -6056,7 +6040,7 @@ mod tests {
             assert_eq!(hits(&format!("let x = {planted};")), vec![planted]);
         }
         for needed in [
-            "scan.on_window_latched(dp.sdr_color.is_some())",
+            "scan.on_flip_latched()",
             "scan.on_console_tick(",
             "self.mailbox.tick()",
             "scan.mailbox.due(",
