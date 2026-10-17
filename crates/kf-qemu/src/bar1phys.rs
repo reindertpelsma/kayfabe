@@ -169,9 +169,41 @@ pub fn bounded(n: u64, max: u64, family: &str) -> bool {
 /// again (`kf_mem::cpuwin::CpuWindow::reseed`) — unless the window changed since the request was
 /// noticed (`at_change`, its change count then): an RM took BAR1 back first, and its placements
 /// win. The log line, or `None` for a window that never had a boot framebuffer (`gop=off`).
+///
+/// ⊘ This does not scrub; production calls [`restore_physical_view_scrubbed`].
 pub fn restore_physical_view<V: kf_mem::cpuwin::ViewOps>(
     w: &kf_mem::cpuwin::CpuWindow<V>,
     at_change: u64,
+) -> Option<String> {
+    restore_physical_view_scrubbed(w, at_change, &mut |_, _| Ok(()))
+}
+
+/// ★★ [`restore_physical_view`], with the boot framebuffer's store range ZEROED (`scrub(store_off,
+/// len)`, GPU work on the VA thread) BEFORE the seed is placed again (2026-10-18, branch
+/// `claude/bootlayer-20261018`).
+///
+/// Why here, and why in this order. While the guest's RM ran, its GPU work wrote ordinary vidmem
+/// into store `[0, G)` (the RM heap's region 0 is `[0, carve)` unless the guest reserved a console,
+/// `kf_chip::bar0::fb_layout`), and the guest's CPU writes to BAR1 `[0, G)` went to scratch (the
+/// seed retired at its first BAR1 change). What the monitor shows after the unload is store `[0, G)`
+/// — the RM's data, drawn as pixels (`[measured, run 3081, 2026-10-18]` the old life's last frame).
+/// Zeroing it here is ordered before the seed by construction: until `reseed` places the view, no
+/// guest CPU write reaches the store range, so a console that redraws after the unload (efifb,
+/// simpledrm, Windows' basic display) can never be wiped by this zero.
+///
+/// - The seed is ALREADY placed (no RM ever took BAR1): the guest's firmware console is writing
+///   the store right now — nothing is scrubbed.
+/// - BAR1 changed after the request (an RM holds BAR1 again): nothing is scrubbed — that is a new
+///   RM life, and it owns the range.
+/// - The reseed is REFUSED because guest placements still overlap the range (`[measured]` every
+///   Windows life of run 3081): the range IS scrubbed all the same — nothing reaches the store
+///   through BAR1 `[0, G)` then, and the monitor still shows the store as the boot layer.
+/// - A refused scrub does not stop the reseed (the guest's console must return, the guest owns this
+///   memory anyway): it is said in the line.
+pub fn restore_physical_view_scrubbed<V: kf_mem::cpuwin::ViewOps>(
+    w: &kf_mem::cpuwin::CpuWindow<V>,
+    at_change: u64,
+    scrub: &mut dyn FnMut(u64, u64) -> Result<(), String>,
 ) -> Option<String> {
     let (at, store_off, len) = w.boot_range()?;
     let now = w.changes();
@@ -182,7 +214,10 @@ pub fn restore_physical_view<V: kf_mem::cpuwin::ViewOps>(
             now.wrapping_sub(at_change)
         ));
     }
-    Some(match w.reseed() {
+    // RED STEP (tests first): the scrub is not wired yet.
+    let _ = &scrub;
+    let scrubbed: Option<Result<(), String>> = None;
+    let line = match w.reseed() {
         Ok(kf_mem::cpuwin::Reseed::Placed { life }) => format!(
             "BAR1 back to its physical view: [{at:#x}, +{len:#x}) shows store [{store_off:#x}, +{len:#x}) \
              again (seed life {life}) — the guest's RM gave BAR1 up"
@@ -192,6 +227,11 @@ pub fn restore_physical_view<V: kf_mem::cpuwin::ViewOps>(
         ),
         Ok(kf_mem::cpuwin::Reseed::NoBootFramebuffer) => return None,
         Err(e) => format!("BAR1's physical view REFUSED: {e}"),
+    };
+    Some(match scrubbed {
+        None => line,
+        Some(Ok(())) => format!("{line}; boot framebuffer store [{store_off:#x}, +{len:#x}) scrubbed first"),
+        Some(Err(e)) => format!("{line}; boot framebuffer scrub REFUSED: {e}"),
     })
 }
 
@@ -366,6 +406,171 @@ mod tests {
         assert!(bounded(1, 2, "test"));
         assert!(!bounded(2, 2, "test"));
         assert!(!bounded(3, 2, "test"));
+    }
+
+    // ── 2026-10-18 (branch claude/bootlayer-20261018): the boot range is scrubbed BEFORE the seed ──
+
+    use std::cell::RefCell;
+    use std::rc::Rc;
+
+    /// A host that logs every placement, so a test can order the scrub against the seed.
+    struct LogHost(Rc<RefCell<Vec<String>>>);
+    impl kf_mem::cpuwin::ViewOps for LogHost {
+        type View = u64;
+        fn arm_store(&self, off: u64, _len: u64) -> Result<u64, String> {
+            Ok(off)
+        }
+        fn place_view(&self, at: u64, len: u64, _v: &u64) -> Result<(), String> {
+            self.0.borrow_mut().push(format!("place {at:#x}+{len:#x}"));
+            Ok(())
+        }
+        fn place_ram(&self, _at: u64, _len: u64, _off: u64) -> Result<(), String> {
+            Ok(())
+        }
+        fn sink(&self, _at: u64, _len: u64) -> Result<(), String> {
+            Ok(())
+        }
+        fn release(&self, _v: u64) -> Result<(), String> {
+            Ok(())
+        }
+    }
+
+    /// `one_life`, over a [`LogHost`]; the log is cleared once the life is over.
+    fn logged_life() -> (
+        kf_mem::cpuwin::CpuWindow<LogHost>,
+        Rc<RefCell<Vec<String>>>,
+    ) {
+        use kf_mem::ledger::{Desired, MapTarget};
+        let log = Rc::new(RefCell::new(Vec::new()));
+        let w = kf_mem::cpuwin::CpuWindow::new(LogHost(log.clone()), 128 << 20);
+        w.seed(0, 0, G).unwrap();
+        let console = Desired {
+            va: 0,
+            len: G,
+            off: 0,
+            ram: false,
+            kind: 0,
+            perm: kf_host::MapPerm::READ_WRITE,
+            leaf: 0,
+        };
+        w.map(&console, false).unwrap();
+        w.invalidate().unwrap();
+        w.unmap(0, false).unwrap();
+        w.invalidate().unwrap();
+        log.borrow_mut().clear();
+        (w, log)
+    }
+
+    /// ★ THE ORDER: the zero is issued, and complete (it returns), before the seed is placed — so
+    /// no console write that follows the unload can ever be wiped by it.
+    #[test]
+    fn the_boot_range_is_scrubbed_before_the_seed_returns() {
+        let (w, log) = logged_life();
+        let l2 = log.clone();
+        let line = restore_physical_view_scrubbed(&w, w.changes(), &mut |off, len| {
+            l2.borrow_mut().push(format!("zero {off:#x}+{len:#x}"));
+            Ok(())
+        })
+        .expect("a line");
+        assert_eq!(
+            *log.borrow(),
+            vec![format!("zero 0x0+{G:#x}"), format!("place 0x0+{G:#x}")],
+            "{line}"
+        );
+        assert!(line.contains("scrubbed first"), "{line}");
+        assert_eq!(w.seeded(), Some((0, 0, G)));
+    }
+
+    /// `[measured]` run 3081: every Windows unload found 56 guest placements still over BAR1
+    /// `[0, G)` and the re-seed was REFUSED. The monitor still shows the store, so the store is
+    /// still scrubbed — nothing reaches it through BAR1 `[0, G)` while those placements stand.
+    #[test]
+    fn a_refused_reseed_still_scrubs_the_store() {
+        use kf_mem::ledger::{Desired, MapTarget};
+        let log = Rc::new(RefCell::new(Vec::new()));
+        let w = kf_mem::cpuwin::CpuWindow::new(LogHost(log.clone()), 128 << 20);
+        w.seed(0, 0, G).unwrap();
+        let mine = Desired {
+            va: 0,
+            len: 0x10000,
+            off: 0x1_ea32_0000,
+            ram: false,
+            kind: 0,
+            perm: kf_host::MapPerm::READ_WRITE,
+            leaf: 0,
+        };
+        w.map(&mine, false).unwrap();
+        w.invalidate().unwrap();
+        let mut zeroed = Vec::new();
+        let line = restore_physical_view_scrubbed(&w, w.changes(), &mut |o, l| {
+            zeroed.push((o, l));
+            Ok(())
+        })
+        .expect("a line");
+        assert!(line.contains("REFUSED") && line.contains("scrubbed first"), "{line}");
+        assert_eq!(zeroed, vec![(0, G)]);
+        assert_eq!(w.seeded(), None, "the guest's placements still win");
+    }
+
+    /// A seed that is still placed (no RM ever took BAR1) is the firmware console's live
+    /// framebuffer: scrubbing it would wipe what the guest is drawing.
+    #[test]
+    fn a_seed_that_is_still_placed_is_never_scrubbed() {
+        let w = kf_mem::cpuwin::CpuWindow::new(Host, 128 << 20);
+        w.seed(0, 0, G).unwrap();
+        let mut zeroed = 0;
+        let line = restore_physical_view_scrubbed(&w, w.changes(), &mut |_, _| {
+            zeroed += 1;
+            Ok(())
+        })
+        .expect("a line");
+        assert_eq!(zeroed, 0, "{line}");
+        assert!(line.contains("already shows"), "{line}");
+    }
+
+    /// An RM that took BAR1 again before the VA thread got to the request owns the range.
+    #[test]
+    fn a_bar1_change_after_the_request_never_scrubs() {
+        let w = one_life();
+        let mut zeroed = 0;
+        let line = restore_physical_view_scrubbed(&w, w.changes() - 1, &mut |_, _| {
+            zeroed += 1;
+            Ok(())
+        })
+        .expect("a line");
+        assert_eq!(zeroed, 0, "{line}");
+        assert!(line.contains("NOT restored"), "{line}");
+    }
+
+    /// A scrub the host refuses does not stop the console coming back (the guest owns this memory
+    /// either way); it is said in the line, never silent.
+    #[test]
+    fn a_refused_scrub_is_named_and_the_seed_still_returns() {
+        let w = one_life();
+        let line = restore_physical_view_scrubbed(&w, w.changes(), &mut |_, _| {
+            Err("cuMemsetD8: out of memory".to_string())
+        })
+        .expect("a line");
+        assert!(
+            line.contains("scrub REFUSED") && line.contains("cuMemsetD8"),
+            "{line}"
+        );
+        assert_eq!(w.seeded(), Some((0, 0, G)));
+    }
+
+    /// `gop=off`: no boot range, no scrub, no line.
+    #[test]
+    fn without_a_boot_framebuffer_the_scrub_is_never_asked() {
+        let w = kf_mem::cpuwin::CpuWindow::new(Host, 128 << 20);
+        let mut asked = false;
+        assert_eq!(
+            restore_physical_view_scrubbed(&w, 0, &mut |_, _| {
+                asked = true;
+                Ok(())
+            }),
+            None
+        );
+        assert!(!asked);
     }
 
     /// `gop=off`: a window that never had a seed says nothing and does nothing.
