@@ -1258,3 +1258,20 @@ worker-only submission and command inspection from birth, the owner answered:
 - This authorizes development of the revised design, not a compatibility claim.
   Native cursor, lifetime and ordering semantics still require evidence, bounded
   models, independent review and exact-revision Linux/Windows hardware tests.
+
+## §AJ. The broker owns the whole cursor plane, including true XOR inversion; kayfabe composes no cursor, 2026-10-17
+
+**STATUS: LIVE, 2026-10-17 (owner, in the coordinator session; recorded by the cursor-xor agent).**
+
+- **D2.** An XOR cursor (the Windows I-beam, an inverting cursor) is composed BY THE BROKER as a true inversion of the pixels under it. The approximation (black fill, white
+  outline, `nb_cursor_xor_approx`) is a stopgap and the fallback when composing is impossible (e.g. the frame is not readable), logged once. Kayfabe keeps sending the
+  inversion mask with `CURSOR_F_XOR`; composition does not move back into kayfabe.
+- **Kayfabe composes no cursor at all.** The pre-stream composing path (the XOR compose kernel, hiding the host pointer while an XOR cursor was composed, the COMPOSED/REFUSED
+  cursor logic in kayfabe's display code) is the wrong direction and is to be DELETED, not kept as the fallback. This **supersedes** the sentence in
+  `V3_BROKER_ROADMAP_20261015.md` section A ("the old composing path stays as the fallback ... until the owner decides to delete it": the owner has decided) and the
+  "stays the whole story for a broker that does not advertise the stream" sentence of `V3_DISPLAY_CURSOR_FORMATS.md` §8; both are corrected in place.
+- A broker without `CAP_CURSOR_STREAM` running on a test VM (it was kept only because it worked) is not the design. After the deletion such a broker shows the guest's own cursor
+  or none; kayfabe never composes.
+- The deletion is a separate change with its own tests and a Linux broker retest (list: `V3_BROKER_XOR_CURSOR_20261017.md` §6). This task did not delete code.
+- D3 (same day): the cursor is oversized on the owner's screen; the size rule and fix: `V3_BROKER_XOR_CURSOR_20261017.md` §1.
+

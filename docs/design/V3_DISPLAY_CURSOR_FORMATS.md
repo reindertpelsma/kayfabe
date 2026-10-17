@@ -106,6 +106,14 @@ REFUSED` line.
 
 ## 8. The cursor stream: the broker draws the cursor in every mode (2026-10-15, branch `claude/cursor-hover-20261015`)
 
+**CORRECTED 2026-10-17 (owner D2 + `OWNER_RULINGS.md` §AJ), above the text it corrects.** (1) "The broker always draws the substitute: opaque black fill, one-pixel
+opaque white outline" is a STOPGAP: the owner requires a TRUE inversion composed by the broker (`V3_BROKER_XOR_CURSOR_20261017.md`: options, the built pure compose
+function `nb_cursor_xor_apply` / `nb_cursor_xor_patch` whose semantics are the retired kernel's `below ^ (mask & 0x00ffffff)`, and why the mechanism is not built yet).
+(2) "It does NOT supersede §4 ... that stays the whole story for a broker that does not advertise the stream" is **superseded**: the composing path (§4, and the
+composing paragraph of §5–§7) is to be deleted, not kept as the fallback. (3) The cursor surface size is `image x the frame fit` in surface-local pixels, the output scale only
+chooses `wl_surface.set_buffer_scale` (no viewport on cursor surfaces), one function for hover and grab.
+
+
 **STATUS: BUILT, GPU-FREE-TESTED; live validation OWED (Windows VM with this broker: hover, grab, the I-beam; the
 Linux broker retest the owner's rule requires).** It does NOT supersede §4 (the composing of XOR cursors into the
 frame): that stays the whole story for a broker that does not advertise the stream.
