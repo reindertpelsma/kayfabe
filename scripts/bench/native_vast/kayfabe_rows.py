@@ -14,6 +14,8 @@ for f in sorted(glob.glob(os.path.join(d, "*.dmon"))):
         continue
     ts = re.search(r"HLOG (\d\d:\d\d:\d\d)", t)
     m = ts and re.search(r"(?<!Min )(?<!Max )FPS:\s+([\d.]+?)" + ts.group(1), t)  # Heaven glues the line's timestamp to each number
+    if not m:  # the perf-gap .sum files carry clean numbers (no glued timestamps)
+        m = re.search(r"(?<!Min )(?<!Max )FPS:\s+([\d.]+)\s+Min", t)
     if not m:
         continue
     r = analyze(f, float(m.group(1)), n)

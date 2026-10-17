@@ -1,0 +1,8 @@
+d1    d3d11 fps  131.09 min  16.93 max  329.43 P   97.9W sm%  35.7 mem%   8.6 smMHz   2730 memMHz  10501 rx    198 tx    37 MB/s  J/f 0.747  gpu_ms/f 2.72  pcie_MB/f 1.79  W/sm% 2.74
+d2    d3d11 fps  134.83 min  17.79 max  305.20 P   94.1W sm%  33.7 mem%   8.4 smMHz   2610 memMHz  10501 rx    196 tx    41 MB/s  J/f 0.698  gpu_ms/f 2.50  pcie_MB/f 1.75  W/sm% 2.79
+g1    gl    fps  133.12 min   9.48 max  246.12 P  104.7W sm%  41.4 mem%   9.5 smMHz   2715 memMHz  10501 rx    203 tx    36 MB/s  J/f 0.786  gpu_ms/f 3.11  pcie_MB/f 1.79  W/sm% 2.53
+g2    gl    fps  132.32 min  22.18 max  238.80 P   94.3W sm%  37.8 mem%   7.6 smMHz   2550 memMHz  10501 rx    213 tx    37 MB/s  J/f 0.713  gpu_ms/f 2.85  pcie_MB/f 1.89  W/sm% 2.50
+warm  d3d11 fps  143.68 min  17.56 max  369.51 P  104.2W sm%  35.1 mem%   7.7 smMHz   2730 memMHz  10501 rx    235 tx    42 MB/s  J/f 0.726  gpu_ms/f 2.44  pcie_MB/f 1.93  W/sm% 2.97
+MEDIAN d3d11 {"fps": 132.96, "power_w": 96.0, "sm_pct": 34.7, "mem_pct": 8.5, "sm_mhz_med": 2670.0, "mem_mhz_med": 10501.0, "pcie_rx_mbs": 196.8, "pcie_tx_mbs": 38.7, "j_per_frame": 0.7222, "gpu_ms_per_frame": 2.612, "frame_ms": 7.5225, "pcie_mb_per_frame": 1.7717, "w_per_sm_pct": 2.766, "fps_per_w": 1.386, "temp_c_med": 49.5, "n": 2}
+MEDIAN gl {"fps": 132.7205, "power_w": 99.5, "sm_pct": 39.6, "mem_pct": 8.55, "sm_mhz_med": 2632.5, "mem_mhz_med": 10501.0, "pcie_rx_mbs": 207.8, "pcie_tx_mbs": 36.4, "j_per_frame": 0.7494, "gpu_ms_per_frame": 2.981, "frame_ms": 7.535, "pcie_mb_per_frame": 1.8401, "w_per_sm_pct": 2.513, "fps_per_w": 1.3375, "temp_c_med": 49.5, "n": 2}
+RATIOS D3D11/GL {"r_fps": 1.002, "r_E": 0.964, "r_G": 0.876, "r_P": 0.963, "r_W": 1.101}

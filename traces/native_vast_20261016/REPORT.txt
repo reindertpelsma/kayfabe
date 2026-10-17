@@ -1,42 +1,107 @@
-NATIVE VAST REFERENCE (Heaven 4.0, Windows) - STOPPED BEFORE RENTING
-Branch claude/native-vast-20261016, date 2026-10-16.
+NATIVE WINDOWS HEAVEN 4.0 REFERENCE ON A VAST GPU (D3D11 vs OpenGL) - REPORT
+Branch claude/native-vast-20261016. Written 2026-10-17T00:35Z. Owner pause received: no further measurement; boxes torn down.
 
-RESULT: no measurement was made and no instance was created. Reason: the task says to STOP when no
-4070-class KVM offer exists, and none does.
+SHORT ANSWER
+The one box that worked (RTX 4070 Ti Super, 4 vCPU) is CPU-BOUND in both APIs: Heaven's main render thread sits at 98-103% of one core
+(MEASURED, per-thread sampling), the GPU is 35-40% busy, D3D11 and OpenGL both give about 133 fps. So it does NOT reproduce the "native D3D11
+about 330 fps, GPU-bound" reference, and absolute fps, watts, W/util and J/frame from it must not be compared with kayfabe's GPU-bound runs.
+What does transfer is the shape per API (ratios). Kayfabe's D3D11 is slow in a way native D3D11 is not:
+  GPU-busy time per frame, D3D11 / OpenGL:  native 0.88   kayfabe scan-off 1.78   (kayfabe/native double ratio 2.0)   [MEASURED, ratios]
+  fps D3D11 / OpenGL:                        native 1.00   kayfabe scan-off 0.56
+  J/frame D3D11 / OpenGL:                    native 0.96   kayfabe scan-off 1.25
+  PCIe MB/frame D3D11 / OpenGL:              native 0.96   kayfabe 1.57 (D3D11 scan-off vs GL scan-on; see limits)
+Native D3D11 costs about the same GPU time per frame as native OpenGL; kayfabe's D3D11 costs about twice as much GPU time per frame relative to its
+OpenGL, while OpenGL matches. That points at GPU-side work inflated by running under kayfabe (INFERRED: the open list already in the lifecycle
+report: 4 KiB PTEs, no compression, ...), not at relay latency or power. A GPU-bound native run on a fast-CPU box is still missing (see RESUME).
 
-Offer search, 2026-10-16T21:56Z (vastai search offers, no default filters, num_gpus=1
-vms_enabled=true rentable=true; 53 rentable KVM single-GPU offers; full list in
-OFFERS_20261016T2156Z.txt):
-- RTX 4070 (AD104), RTX 4070 Super (AD104), RTX 4070 Ti (AD104): ZERO rentable KVM offers.
-  Offers for these cards exist only as listings that are not rentable now (already rented) or as
-  non-KVM container offers. The windows-on-vast installer (bin456789/reinstall) needs a KVM VM and
-  erases the boot disk, so container offers cannot run it.
-  Non-KVM, rentable RTX 4070 containers (unusable for this): 16213981 0.176 USD/h, 45498591 0.135,
-  53613016 0.335, 54968172 0.401.
-- Nearest KVM alternatives (all with a different die, hence a different comparison):
-  * RTX 4070 Ti Super (Vast name "RTX 4070S Ti"; AD103, 16 GB, not the AD104 die): 53719523 at
-    0.291 USD/h (Bulgaria, EPYC 7642, reliability 0.76, pcie_bw 6.2) and 55828515 at 0.576 USD/h
-    (Wisconsin, Ryzen 9 7945HX, reliability 0.99, pcie_bw 25.1).
-  * RTX 4080 Super (AD103): 56294112 at 0.415 USD/h (Australia, i7-12700F).
-  * RTX 4000 Ada (AD104-based workstation card): 36173718 at 0.201 USD/h (Hungary).
-  * RTX 3070 (GA104): 32999051 at 0.101 USD/h. RTX 3090: 35376205 at 0.148 USD/h.
-  The die of the 4070 Ti Super is not the 4070's, so it is not "acceptable" under the task's
-  same-die rule; I did not decide that for the owner.
+WHAT WAS RENTED (all mine; only my own ids touched; 56302930 is Codex's and was not touched)
+- 56303758  offer 55828515 (RTX 4070 Ti Super, Wisconsin, 0.576 USD/h + disk)  2026-10-16T21:58:49Z - 22:06:30Z  "GPU error, unable to start
+            instance" (README failure mode); destroyed by id. Offer reliability later fell to 0.917 (so it no longer met the >= 0.95 rule).
+- 56304662  offer 54598994 (RTX 4070 Ti Super, EPYC 7702P, Arizona, reliability 0.995, 0.335 USD/h incl. 150 GB disk)  22:06:57Z - 23:24:11Z.
+            The fallback rule (cheapest rentable AD103/AD104-class offer, reliability >= 0.95). Windows SSH up 22:25Z, driver+CUDA done 22:35Z.
+- 56313924  offer 56294112 (RTX 4080 Super, i7-12700F, Australia, 0.469 USD/h incl. disk)  23:24:21Z - 00:29:07Z. Chosen to get a faster CPU after
+            box 1 proved CPU-bound (the 4080 Super is also AD103; the coordinator's fallback class). reinstall reached "Windows Boot Manager" at
+            about 23:37Z, but Windows SSH never answered (connection refused on the direct port and on the vast proxy for 52 more minutes; the serial
+            console printed nothing after the boot-manager line). Torn down at the owner pause. Failure mode UNKNOWN (no console access).
+- Cost (estimate from rate x time, no billing readout): 0.08 + 0.43 + 0.51 = about 1.0 USD of the 8 USD budget.
+- Teardown VERIFIED 2026-10-17T00:29:07Z: `vastai show instances` lists exactly [56302930] (not mine). 56303758, 56304662 and 56313924 are gone.
+  The sleeper that would have destroyed 56313924 at 3 h is moot (instance already gone). No secrets were put on any box; the lab-account password
+  was random, lived only in the scratchpad, and died with the box. Windows SSH host keys were pinned from the serial console before first login.
 
-Decision needed from the owner: (a) wait and re-poll for a 4070/4070S/4070 Ti KVM offer, (b) accept
-the RTX 4070 Ti Super (53719523 is cheapest but its reliability is 0.76; 55828515 is 0.576 USD/h and
-reliable; both fit the 0.6 USD/h cap only if the price holds), or (c) accept the RTX 4000 Ada (same
-AD104 family but a 130 W workstation board with a different power limit, which would distort the
-power comparison, so not recommended). Any substitute makes SM count, memory clock and power limit
-SKU effects (INFERRED), as PREREG.md already says.
+BOX 1 IDENTITY (MEASURED)
+GPU NVIDIA GeForce RTX 4070 Ti SUPER (AD103, PCI 10de:2705, subsystem 19da:5712), 66 SMs (cuDeviceGetAttribute), 256-bit, L2 48 MiB, memory clock
+10501 MHz (21 Gbps; the owner's 4070: 46 SMs, 192-bit, 10251 MHz in kayfabe's dmon), max SM clock 3105 MHz, power limit 285 W (fixed), 16 GiB, VBIOS
+95.03.45.c0.30, driver 580.88 (WDDM), CUDA 13.0.48. PCIe: gen4 x8 under load, gen1 x8 at idle (P8); the card reports max gen4 x16 (the VM presents
+x8). Clock event reasons: none active under load in 4 of 4 snapshots (no power cap, no thermal slowdown); pstate P0 under load, P8 idle, 4-5 W idle.
+CPU: AMD EPYC 7702P, 4 vCPUs (NUMBER_OF_PROCESSORS=4, reported 2.0 GHz), 50.3 GB RAM, QEMU i440FX VM, hypervisor present. Windows 11 Enterprise LTSC
+2024 Evaluation build 26100. Power plan: High performance (image default). HwSchMode: absent (system default). Game Mode (GameBar) keys: unset.
+Display: the NVIDIA GPU drives a virtual 1024x768 "Default Monitor" at first; set to 1920x1080@60 (displaymode.ps1, CDS_UPDATEREGISTRY) before all runs. dwm.exe
+and the apps are on the NVIDIA adapter (nvidia-smi process list), display_active Enabled. Windows autologon (recipe from the codex diesweep phase1) + a
+scheduled task with /IT puts Heaven in the interactive session 1. OOBE privacy page had to be clicked through first (the first warm-up, 10 min, ran behind
+it and never started the benchmark; kept under runs/failed_oobe).
+Heaven: Unigine_Heaven-4.0.exe from https://assets.unigine.com/d/Unigine_Heaven-4.0.exe, 259,708,359 bytes, sha256
+497865a09af205a7d2e8812bfc2dd54870216cc1e95541b63cef89a4433b0e5f (computed on the dev box AND on the box; equals the sha in the kayfabe app matrix manifest).
+Installed with the same Inno switches as the kayfabe harness. Arguments (same as origin/claude/perf-win-20261015 heaven.ps1.in): 
+ -project_name Heaven -data_path ../ -engine_config ../data/heaven_4.0.cfg -system_script heaven/unigine.cpp -sound_app null -video_app {direct3d11|opengl}
+ -video_multisample 0 -video_fullscreen 0 -video_mode -1 -video_width 1920 -video_height 1080 -extern_define RELEASE,QUALITY_ULTRA
+The benchmark is started in-app (click, F9), 260.6 s. The Heaven window is windowed (client 1920x1080, outer 1926x1100 with title bar). A GDI screenshot
+shows the title bar and a black client area, so whether the swap chain was flip-model/overlay is INFERRED (not measured; no PresentMon).
+D3D11 device string "NVIDIA GeForce RTX 4070 Ti SUPER"; OpenGL vendor NVIDIA ("Unknown NVidia GPU" is Heaven's own old string table, harmless).
 
-Prepared, not yet run: plan in PREREG.md. Reviewed (read, not executed): windows-on-vast install.sh
-(onstart script, pinned reinstall revision 80c3d5e1, erases the whole boot disk, then installs
-Windows 11 Enterprise LTSC 2024 Evaluation, OpenSSH, NVIDIA 580.88 and CUDA 13.0.48; SSH as user
-"vast" with the account's public key). The Vast account already has an SSH key registered.
-Not yet read: the codex sweep branches and the kayfabe perf harness Heaven arguments; they are needed
-only if a box is rented.
+RESULTS, BOX 1 (MEASURED; 1 warm-up D3D11 + 2 runs per API interleaved D3D11/GL/D3D11/GL, not 3: the third pair was dropped to rent the fast-CPU box)
+ run  api    fps    min    max   power  sm%  mem%  smMHz memMHz  rx/tx MB/s   J/frame gpu-ms/frame pcieMB/frame
+ warm d3d11 143.68  17.6  369.5  104.2W 35.1  7.7  2730  10501  235/42       0.726   2.44        1.93
+ d1   d3d11 131.09  16.9  329.4   97.9W 35.7  8.6  2730  10501  198/37       0.747   2.72        1.79
+ g1   gl     133.12   9.5  246.1  104.7W 41.4  9.5  2715  10501  203/36       0.786   3.11        1.79
+ d2   d3d11 134.83  17.8  305.2   94.1W 33.7  8.4  2610  10501  196/41       0.698   2.50        1.75
+ g2   gl     132.32  22.2  238.8   94.3W 37.8  7.6  2550  10501  213/37       0.713   2.85        1.89
+ (frames 34,177-37,453 per run, scores 3302-3396 for D3D11 and 3333-3353 for GL; 260.6 s each; whole-run dmon, `nvidia-smi dmon -s pucvmet -d 1 -o T`.)
+ Window = first to last 1 Hz sample with sm% >= 50, trimmed 3 s each end; the same rule on kayfabe's host dmon logs.
+ Medians (warm-up excluded): D3D11 132.96 fps, 96.0 W, sm 34.7%, 0.722 J/frame, 2.61 GPU-ms/frame, 1.77 PCIe MB/frame, W per sm% 2.77, fps/W 1.39.
+                             GL     132.72 fps,  99.5 W, sm 39.6%, 0.749 J/frame, 2.98 GPU-ms/frame, 1.84 PCIe MB/frame, W per sm% 2.51, fps/W 1.34.
+ CPU-bound evidence (MEASURED, threadcpu.ps1, 10 s in steady state): D3D11: one Heaven thread 98.3% of a core, next 45.5%; GL: one thread 103.1%, next
+ 19.7%; all 4 vCPUs 50-66% busy. Run-to-run spread of fps: D3D11 131-144 (9% incl. warm-up), GL 132-133.
 
-Cost: 0.00 USD. Instance ids created: none. Teardown: nothing to tear down.
-`vastai show instances` at 2026-10-16T21:5xZ lists exactly one instance, 56302930 (RTX 4090,
-label codex-ada-two-builds-20261016), which is not mine and was not touched.
+NATIVE (BOX 1) VS KAYFABE SCAN-OFF, RATIOS (compare_output.txt is the full table; kayfabe inputs are existing evidence, read-only from the host)
+ kayfabe scan-off = lifecycle campaign runs m2exp1-3 (mode 2, counters on), host dmon: D3D11 median 188.75 fps, 121.6 W, sm 93.8%, 0.647 J/frame,
+ 4.98 GPU-ms/frame; GL 338.22 fps, 174.7 W, sm 94.6%, 0.517 J/frame, 2.80 GPU-ms/frame. PCIe/frame for kayfabe comes from the perf-gap runs that have the
+ rx/tx columns: pfm, pfm2 (scan-off D3D11) 6.6 MB/frame; the only complete GL runs with PCIe (pfc, pn2, pr1) are SCAN-ON: 4.2 MB/frame (pfm_gl was cut
+ short by a guest event). So kayfabe PCIe MB/frame: about 3.7x native for D3D11, 2.3x for GL, and the D3D11/GL ratio 1.57 mixes scan-off and scan-on.
+ r_fps = fps D3D11/GL:           native 1.002      kayfabe 0.558
+ r_E   = J/frame D3D11/GL:       native 0.964      kayfabe 1.253
+ r_G   = GPU-ms/frame D3D11/GL:  native 0.876      kayfabe 1.783
+ r_P   = PCIe MB/frame D3D11/GL: native 0.963      kayfabe 1.573 (mixed scan state)
+ r_W   = (W/sm%) D3D11/GL:       native 1.101      kayfabe 0.701
+HYPOTHESES (PREREG.md, ratio-form addendum; MEASURED vs INFERRED marked)
+ HN1r held on its face, NOT interpretable. Native W per sm% (D3D11) is 2.77 vs kayfabe 1.30 (2.1x, falsifier "within 15%" not hit). But the native GPU is 35%
+   busy: power is not proportional to sm% (idle floor, clocks, memory activity), so W/sm% is not comparable between a 35% and a 94% busy GPU. Secondary
+   prediction "J/frame about equal": native 0.722 vs kayfabe 0.647 (+12%, inside 25%) for D3D11, but native GL 0.749 vs kayfabe GL 0.517; the native J/frame
+   here is inflated by waiting for the CPU. r_E says kayfabe's D3D11 spends 25% more energy per frame than its GL, native 4% less.
+ HN2 mostly held: native r_P = 0.96, inside [0.5, 2]. The kayfabe half ("differs, outside the band") is NOT supported: its r_P is 1.57, inside, with the
+   mixed scan state. Absolute PCIe per frame is the clearer signal: kayfabe moves 2.3-3.7x the bytes per frame that native does (INFERRED: partly the
+   host-side relay's own traffic, partly the card's x16 vs x8 link; not separated here).
+ HN3r not falsified but uninformative: native r_fps = 1.00 (band 0.92-1.02), falsifier "< 0.9" not hit; however both APIs are capped by one CPU thread, so
+   this says nothing on whether 330/342 fps was setup-local. A GPU-bound native run is required to judge it.
+ HN4 NOT RUN (a HAGS/Game Mode/power plan A/B on a CPU-bound box would measure nothing).
+SKU-versus-kayfabe confounds (all INFERRED): 66 vs 46 SMs, 256-bit vs 192-bit, 285 W vs 200 W limit, x8 link, 4 slow vCPUs vs a fast desktop CPU, the QEMU VM
+around the native Windows (kvm exits for BAR0 etc. are cheap here because nothing is trapped but it is still a VM), Defender on, 60 Hz virtual display.
+The GPU-busy-time ratio is the least SKU-sensitive number, and it is the one that separates kayfabe from native (2.0x).
+
+LIMITS (read before quoting)
+- 2 runs per API, not 3; one warm-up. - GPU util (sm%) is "any kernel running", so under CPU starvation it overstates work; use it for ratios only.
+- No GPU-bound native datapoint; the 330/342 fps local figures remain inherited, not re-measured. - Box 2 (4080 Super, fast CPU) never became reachable.
+- kayfabe GL PCIe is scan-on (no complete scan-off GL run has the PCIe columns).
+
+RESUME HERE
+Done: scripts (scripts/bench/native_vast/: setup_native.ps1, displaymode.ps1, itask.ps1, heaven_job.ps1, launch_run.ps1, run_matrix.sh, threadcpu.ps1, sysinfo.ps1,
+uiclick.ps1, analyze.py, summarize.py, kayfabe_rows.py, compare.py); evidence in this directory (runs/<label>/{dmon.txt,events.txt,heaven_log.html,smi_*,shot_*.png},
+system/, kayfabe/ (copied dmon+fps of the kayfabe runs), kayfabe_rows.jsonl, box1_summary.{txt,json}, compare_output.txt). Not done: GPU-bound native run, third run
+per API, HN4 A/B, box 2.
+Rerun: rent a KVM offer (vms_enabled=true rentable=true, 150 GB) with docker.io/vastai/kvm:ubuntu_cli_22.04-2025-05-16 --ssh --direct --onstart <windows-on-vast
+install.sh (sha256 ac7faa15a606116ea162b2df95af9a5f7a163f0436989cfda92f2b7ab3e65af0, commit 93b65b33)>; take the Windows host key from `vastai logs <id>` ("Save this
+WINDOWS SSH HOST KEY") and pin it; ssh as `vast`; Windows is up 18-30 min after the rental (box 2 never came up). Then: scp the scripts to C:\bench; if
+Invoke-WebRequest stalls on the Heaven download use curl.exe (it took 15 s); run setup_native.ps1 -Pw <random>; reboot (autologon); set the registry
+DisablePrivacyExperience=1 and click through the OOBE privacy page (uiclick.ps1, "Next" at 1442,848 twice); itask.ps1 -Script C:\bench\displaymode.ps1 -ScriptArgs -Set;
+check `nvidia-smi` PCIe/SM facts with sysinfo.ps1; run scripts/bench/native_vast/run_matrix.sh <outdir> (W and SSHCFG env point at the ssh wrapper). Choose a box with
+a fast, many-core CPU first (check threadcpu.ps1: a Heaven thread at ~100% means CPU-bound). Costs about 0.35-0.65 USD/h; teardown by id.
+Lessons: pkill/pgrep -f patterns that appear in the same command line kill your own shell; use the [x]pattern trick in a command of its own.
