@@ -1,0 +1,7 @@
+[2026-10-17T03:15:15Z] OVERLAY_CREATED disk/main.qcow2 over base.qcow2
+[2026-10-17T03:15:15Z] waiting for the GPU lock /tmp/kayfabe-fastguest.lock (GPU work is strictly serial)
+[2026-10-17T03:15:15Z] WINVM_RUN_START tag=ampere580_stage repo_rev=9d6f210b kf3=on qemu=/root/ampere595_win_qemu.py host_driver=595.91.07 overlay=main arm=A guest_driver=580.65.06 gop_efi=/workspace/ampere-winvm/secureboot/kf-gop.9d6f210b.signed.efi sha256(gop_efi)=9fc7e97630b7061f
+[2026-10-17T03:15:15Z] kf3 device: kf3-gpu,fb-mb=4096,bar1-size=134217728,bar2-size=33554432,display=on,gop=on,gop-efi=/workspace/ampere-winvm/secureboot/kf-gop.9d6f210b.signed.efi,id=kf0,guest-driver=580.65.06
+[2026-10-17T03:15:16Z] QEMU_START tag=ampere580_stage boot=1 pid=106866 log=logs/ampere580_stage_b1_qemu.log
+[2026-10-17T03:29:03Z] WINVM_BOOT_END boot=1 rc=0 reason=guest-shutdown kf3_lines=593 host_xid=0
+[2026-10-17T03:29:03Z] WINVM_RUN_END tag=ampere580_stage boots=1 reason=guest-shutdown

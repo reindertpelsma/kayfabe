@@ -45,7 +45,7 @@ PR31DRAFT vocabulary aloneinsufficient;610.88exactpublicABI stillUNSUPPORTED/noo
 GB206 e1bdLinux595raw30/CUDA4/headlessgraphics10nativehashesPASS;595brokerUNRUN.
 Linux580onegroupfixesmodesbutdesktopFAILblackframe/fliptimeout; Windows580Code43after
 boundeddisplay/CMCprobes. GB205native580and595rawpass, guestWindowsUNRUN. GA104Windows
-UNVERIFIEDQGA/binding; TU106LinuxR34timeout180remains, Windows580holdPASS. No familycomplete.
+UNVERIFIEDbinding: freshLTSC/QGA PASS, setupattemptincomplete/BasicDisplay; TU106LinuxR34timeout180remains, Windows580holdPASS. No familycomplete.
 Theseupdates supersede stale ownership/queued-work wording below; codePRsremainDRAFT
 againstowner topic andmaster/ownerGPU/VM/checkout remainuntouched.
 Initial base: origin/claude/gpu-types-20261015 plus cursor fix2f99e673d;
@@ -134,7 +134,7 @@ not prove the remaining dies in its family.
 | Family | This campaign | Full family acceptance |
 |---|---|---|
 | Turing | TU106 Windows580 Code0/DWM/CUDA3/D3D11+12/zeroTDR and Linux580 Cinnamon/OpenGL/X11broker PASS at8e3a9d32; Linux580 CUDA4 beforefix PASS/raw29 of30 before/afterfix (R34timeout180s) | incomplete: required Linux raw pass and several actual driver builds remain |
-| Ampere | GA104 Linux580 broad pass; Linux595 raw30/CUDA4/gfx10/broker PASS (27STALL/9nvAssert); Windows580 UNVERIFIED after QGA timeouts; actual binding not established | incomplete |
+| Ampere | GA104 Linux580 broad pass; Linux595 raw30/CUDA4/gfx10/broker PASS (27STALL/9nvAssert); Windows580 UNVERIFIED: freshLTSC/QGA PASS; incomplete setup leaves BasicDisplay10.0.26100.1; noCode0/43 measured | incomplete |
 | Ada | AD102 Linux580 raw30/CUDA4/graphics10+broker and Windows580 Code0/DWM/CUDA3/D3D11+12/zeroTDR pass; Linux595 raw30/CUDA4/graphics10+broker pass; Linux590raw30/CUDA4/gfx10/brokerPASS; Windows580421secondhold/BlenderCUDA/EdgePASS; Windows581guestCode43/nativesameboardPASS | incomplete: Windows581Code43; furtherWindowsbuilds and otherdies remain unverified |
 | Blackwell | GB206 Linux580 raw30/CUDA4/headlessgfx5+10hashes PASS atc2092cf7; desktopFAIL (one derived group now validates modes, but blackframe/fliptimeout); GB206 Linux595 raw30/30/CUDA4/graphics5+10hashes exacte1bd; thisrerun0HBwarnings, prior10startupHB0 remain; GB205 fixed-clock595raw30 with startup warnings; nativeWindows580 PASS; GB206kayfabeWindows580 Code43, GB205guestWindowsUNRUN | incomplete: initialization fix, broker/graphics and several actual builds remain |
 

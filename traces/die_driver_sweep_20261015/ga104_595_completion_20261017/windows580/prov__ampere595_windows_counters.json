@@ -1,0 +1,13 @@
+{
+  "samples": 410,
+  "phases": {
+    "Cold": 410
+  },
+  "maxima": {
+    "trapped": 0,
+    "applied": 0,
+    "refused": 0,
+    "serviced": 0
+  },
+  "limit": "Periodic counters only, not a full RPC trace; no installer stage/cause inferred from substring counts."
+}

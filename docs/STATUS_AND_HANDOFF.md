@@ -1,5 +1,20 @@
 # Status and handoff — where kayfabe v3 stands, and how to resume
 
+## Update 2026-10-17 03:58UTC — GA104 Windows binding UNVERIFIED; all own GPU work stopped
+
+Only56326220 ACTIVE/quiescent pendingthistextPUSH+retirement; manualtarget04:15UTC,
+originaltimer2714225/04:25:28UTC unchanged/allAPIabsent05:00UTC. WindowsstockbaselinePASS,
+GPUstagingQGA/P19 measured, program4196timeout600s; before-launchmarker03:22:52,
+scriptfailure03:28:54, noactualchildPID/exit. RecoveryfoundBasicDisplay10.0.26100.1,
+refusedreplay, stopped03:40:14/QMPquit. Noactual8088/Code0or43/apps/hold claim.
+410GPUCold samples/maxtrapped0; hostXid10→10 exact. NativeGA104580 remainsUNRUN;
+nextnative/VFIO reference orverifiedNVIDIA image + existingINF/GSP-before-first-start flow.
+CPUbenchbudget candidate900s vs measured315+child360+margin30: beforeFAIL/afterPASS,
+hardwareUNRUN. Markerproveslaunchboundary, notchildcreation; earlier hypothesiscorrected.
+Allsource/logs in ga104_595_completion_20261017/{windows580,installer_budget_cpu}/.
+Linux595raw30/CUDA4/gfx10/brokerPASS/27STALL9nvAssert retained. No familycomplete,
+no595rowto580/no capturedpage; no sharedhost/master. D1-D6open. Turing offersremainempty.
+
 ## Update 2026-10-17 03:34UTC — GA104 Windows install incomplete; ONE saved-state recovery
 
 Only56326220 ACTIVE; originaltimer04:25:28UTC unchanged. New manualretirementtarget

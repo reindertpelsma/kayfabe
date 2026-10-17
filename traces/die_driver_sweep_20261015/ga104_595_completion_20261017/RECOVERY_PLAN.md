@@ -1,4 +1,9 @@
-STATUS: LIVE, 2026-10-17 03:34UTC. ONE controlled recovery after incomplete installer program.
+STATUS: ANSWERED, 2026-10-17 03:34UTC. ONE controlled recovery after incomplete installer program.
+
+Correction2026-10-17: before-launchmarker presence proves the launch boundary, not child
+creation; it makes retryunsafe. Recoveryrefusedreplay and stopped; actualbindingBasicDisplay.
+The original hypothesis/falsifier below overstated what markerpresence alone could prove.
+Final evidence windows580/RESULT.md; native580/actualNVIDIA acceptance remainUNRUN.
 
 MEASURED: fresh stockLTSC baseline PASS; GPUstaging106866 QGAready03:17:13/P19 exact.
 Original guest program4196 exceeded600s03:27:38, outcomeUNVERIFIED. Owned shutdown

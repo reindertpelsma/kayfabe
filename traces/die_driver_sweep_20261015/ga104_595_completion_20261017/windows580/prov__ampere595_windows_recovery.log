@@ -1,0 +1,12 @@
+2026-10-17T03:36:01.518597+00:00 RECOVERY_START H-preinstaller: original setup never launched; falsifier durable before-launch marker or actual8088 binding. No installer replay if either exists. Batch cached-package and required stored-class GSP1 setup; one cold acceptance only.
+[2026-10-17T03:36:01Z] detached: tag=ampere580_recoverstock, log logs/ampere580_recoverstock_run.log (stdout logs/ampere580_recoverstock_run.out)
+2026-10-17T03:37:49.500945+00:00 STOCK_RECOVERY_QGA_READY
+2026-10-17T03:37:49.501171+00:00 PS_START ampere59520261017_recovery_inspect
+2026-10-17T03:38:13.729377+00:00 PS_EXIT ampere59520261017_recovery_inspect rc=0
+2026-10-17T03:38:13.733160+00:00 RECOVERY_OUTCOME RuntimeError setup previously started but binding incomplete; refuse installer replay
+2026-10-17T03:38:13.735651+00:00 OWNED_STOP_START
+[2026-10-17T03:38:13Z] stopping ampere580 (pid 108218)
+[2026-10-17T03:40:14Z] still running: QMP quit
+[2026-10-17T03:40:14Z] stopped
+2026-10-17T03:40:14.783717+00:00 OWNED_STOP_END
+2026-10-17T03:40:14.791673+00:00 RECOVERY_EXIT; one recovery complete, no further boot loop

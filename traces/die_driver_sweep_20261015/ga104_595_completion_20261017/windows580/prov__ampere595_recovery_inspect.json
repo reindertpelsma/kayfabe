@@ -1,0 +1,27 @@
+{
+  "service_gsp": 1,
+  "files": [
+    {
+      "bytes": 890807536,
+      "name": "driver58088.exe"
+    },
+    {
+      "bytes": 602624,
+      "name": "7zr.exe"
+    },
+    {
+      "bytes": 661656,
+      "name": "nvidia58088\\setup.exe"
+    }
+  ],
+  "nvidia_stored_devices": [
+    {
+      "pci": "VEN_10DE&DEV_2484",
+      "class_gsp_after": 1,
+      "class_gsp_before": null,
+      "version": "10.0.26100.1"
+    }
+  ],
+  "installer_exit_marker": true,
+  "installer_started": true
+}
