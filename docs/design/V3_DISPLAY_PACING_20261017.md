@@ -2,7 +2,7 @@
 
 **STATUS: LIVE, 2026-10-17.** Phase 1 (§4–§6) is BUILT on `claude/display-pacing-20261017` (cut from `claude/tear-gate-exp-20261017`
 `ec42327f0` = `integration/prod-candidate-3-20261017` + the `KF3_TEAR_GATE` measurement flag), GPU-free tested, **NOT RUN ON A BOX**.
-Phases 2 and 3 (§8) are DESIGN-ONLY. The owner's decisions are `OWNER_RULINGS.md` §AK (they amend §M D1). The mechanism this
+Phase 2 (§11: the broker as tick source, lock-step frame requests) is BUILT on `claude/display-tick-20261017`, GPU-free tested, **NOT RUN ON A BOX**. Phase 3 (§8) is DESIGN-ONLY. The owner's decisions are `OWNER_RULINGS.md` §AK (they amend §M D1). The mechanism this
 replaces is `V3_DISPLAY.md` §8.16 (corrected in place).
 
 Labels: **MEASURED** = a test run of this branch (the model, §2) or a number the owner quoted from his live run; **CODE READ** = read in
@@ -297,7 +297,7 @@ planted known-positive), and W7–W9 are each pinned by the one behaviour test o
 
 ## 8. Later phases (DESIGN-ONLY; nothing here is built)
 
-**Phase 2 — the broker as tick source.** A capability bit in the broker protocol (a new `CAP_*` next to `CAP_RELEASE`, advertised by a
+**Phase 2 — the broker as tick source.** ⊘ **SUPERSEDED 2026-10-17 by §11** (the wire, the lock step and the enforcement are decided and built there; this paragraph is the earlier sketch, kept for the record). A capability bit in the broker protocol (a new `CAP_*` next to `CAP_RELEASE`, advertised by a
 broker that can report its presenter's refresh) and a `TICK` message from the broker at the **presenter's** refresh (the host compositor's
 frame callback / `presented` feedback), carrying the presentation timestamp and sequence. The relay turns it into
 `Pacer::broker_tick(head, now)` — the entry point and the pure state machine of §5 already exist; the worker needs only the call. The
@@ -306,7 +306,7 @@ surface that does not commit; an occluded or minimised surface goes silent — w
 The broker decimates to the guest mode's period (§5). Timestamps: the guest's vblank timestamp stays kayfabe's monotonic stamp; the
 presentation timestamp is for phase alignment only.
 
-**Phase 2b — credit-based lock step (decision (b)).** The tick credit of §6.3 is the place a broker credit plugs in: the broker sends a
+**Phase 2b — credit-based lock step (decision (b)).** ⊘ **SUPERSEDED by §11** (built together with phase 2). The tick credit of §6.3 is the place a broker credit plugs in: the broker sends a
 frame request only after it received (and released) the previous frame; the mailbox's `tick()` becomes "a request arrived", `due` stays the
 same. The ring's RELEASE already tells kayfabe which frames the broker holds. Nothing in phase 1 prevents this: the copy count is already
 bounded by credits (ticks), the rule of §6.1 does not mention the tick, and a stale credit is harmless (bounded to one).
@@ -342,3 +342,149 @@ Fullscreen Unigine Heaven D3D11 on the Windows guest, the prod-candidate flags, 
 - The worker's wiring (`display.rs`) is tested through `ScanState::on_flip_latched`/`flip_pending`/`reset_life` and a source scan, not
   against a GPU; the eager context-DMA resolution runs only with a GPU.
 - Phase 2/3 are designs; the 24 Hz margin of the 50 ms silence is 8 ms.
+
+## 11. Phase 2 — the broker as tick source, lock-step frame requests (2026-10-17, branch `claude/display-tick-20261017`)
+
+**STATUS: LIVE (design and code), GPU-free tested, NOT RUN ON A BOX.** Owner decisions: `OWNER_RULINGS.md` §AK (a)–(d) and §AL (kayfabe enforces the lock step; the flip system is testable locally).
+Labels as above. **What this does NOT claim:** phase 1 could only reproduce 60 flips/s, not the owner's 30 (§2); the two-flips-per-frame cause is INFERRED. Nothing in this phase is
+evidence that the broker tick lifts fullscreen from 30 fps. Only the hardware run (§11.9) can show it.
+
+### 11.1 What is decided
+
+1. **One new capability bit, one opt-in, one event, one command.** The broker advertises `CAP_TICK`; the VMM opts in with `CMD_CAPS`; only then does the broker send `EV_TICK`, and only then does
+   it expect `CMD_NO_CHANGE` / a sequence on `COMMIT`. Nothing else on the wire changes.
+2. **The broker is the tick source when it speaks; the free clock otherwise.** `EV_TICK` is a heartbeat on EVERY (decimated) host refresh while the window is visible; the VMM feeds it to
+   `Pacer::broker_tick` (§5) for the head the broker shows. 50 ms without one hands the head back to the clock (`BROKER_SILENCE_NS`); the next one hands it back. The guest's vblank is never gated.
+3. **Lock step is a REQUEST per frame.** `TICK.WANT_FRAME` opens request `R = tick_seq`; kayfabe answers it with exactly one `COMMIT` carrying `seq = R`, or one `NO_CHANGE(R)`; the broker opens the next
+   request only after the answer AND after the answered frame was presented (or discarded) by the compositor, or after a timeout. A frame desync cannot happen: a frame is either the answer to the
+   open request or it is not sent.
+4. **Kayfabe enforces; it never trusts the broker's timing (§AL).** §11.4.
+5. **Old and new degrade to today's behaviour** (§11.2 matrix); an old broker, an old VMM, a broker without a bit, headless: the free clock and the legacy credit, bit-identical counters (tested).
+
+### 11.2 The wire (the broker's `broker/common/nvkvm_broker_proto.h` is the one copy; `kf-broker/src/wire.rs` mirrors it, `tests/proto_mirror.rs` compares)
+
+Bit 12 is `CAP_CURSOR_STREAM`, 11 `CAP_DEVICE`, 10 `CAP_CURSOR`; **bit 13 is the next free** (checked: no other `1u << 13` in `broker/` or `crates/kf-broker`).
+
+| item | value | meaning |
+|---|---|---|
+| `NVKVM_BROKER_CAP_TICK` | HELLO `w1` bit 13 | this backend can report the display's refresh (`EV_TICK`) and runs lock-step requests. Set only by a backend that has what it needs: Wayland with `wp_presentation` or frame callbacks, and the test backend. **X11 does not set it** (no refresh feedback it can commit against: clock only) |
+| `NVKVM_BROKER_CLIENT_TICK` | `CMD_CAPS.width` bit 1 | the VMM understands `EV_TICK` and will answer requests. Sent only when HELLO had `CAP_TICK` |
+| `CMD_CAPS.height` | 0, or 24..=75 | with `CLIENT_TICK` only: the most Hz the VMM's vblank may run at (`display-max-fps`, else 75: D3). 0 = 75. Anything else, or `height != 0` without `CLIENT_TICK`: framing violation |
+| `NVKVM_BROKER_EV_TICK` | event type **18** | below |
+| `NVKVM_BROKER_CMD_NO_CHANGE` | command type **8** | below |
+| `COMMIT.seq` | (was "advisory, logged only") | with `CLIENT_TICK`: the request answered; 0 = unsolicited |
+
+**`EV_TICK`** (24 bytes, an overlay like the clipboard's, `struct nvkvm_broker_tick_pkt`):
+
+```text
+ off size field
+  0   u16  type        = 18
+  2   u16  flags       = the mirrored F_GRABBED|F_FOCUSED|F_FULLSCREEN, exactly as on every packet
+  4   u32  seq         = the connection's packet counter (as on every packet; NOT the tick number)
+  8   u32  tick_seq    = the tick number: first tick 1, +1 per EMITTED tick, wraps skipping 0
+ 12   u32  refresh_word= bits 0..27  refresh_ns (the DECIMATED period: host period x div; 0 = unknown, else 1_000_000..=268_435_455)
+                         bit 28 TICK_F_WANT_FRAME  (this tick opens request tick_seq)
+                         bit 29 TICK_F_CLOCK_ONLY  (present_ns is the broker's CLOCK_MONOTONIC when it LEARNED of the refresh
+                                                    (frame callback, or feedback on another clock), not the compositor's timestamp)
+                         bits 30..31 reserved, zero (nonzero: framing violation, the VMM disconnects)
+ 16   u64  present_ns  = CLOCK_MONOTONIC ns of the presentation (w0 = low, w1 = high), non-decreasing
+```
+(`tick_seq` u32 instead of the brief's u64: 24 bytes cannot hold a u64 sequence, a u64 timestamp, the refresh and the flags. A u32 at 240 Hz wraps in 207 days; every comparison is
+wrapping and only needs "newer than"; 0 is never a tick, so 0 can mean "none".)
+
+**`CMD_NO_CHANGE`** (40 bytes, the standard command record): `type = 8`, `width = R` (the request answered, `!= 0`), every other field zero, no fd. **`COMMIT`** with `CLIENT_TICK`: `seq = R`; ATTACH's `seq` stays advisory.
+
+**Bounds and violations (hostile broker, hostile VMM; no length field anywhere, so nothing is read past 24 / 40 bytes).**
+
+| who checks | what | verdict |
+|---|---|---|
+| VMM (`kf-broker` relay) | `EV_TICK` without having sent `CLIENT_TICK`; reserved flag bits; `tick_seq == 0`; `refresh_ns` set and outside 1 ms..268 ms; a descriptor on an event (already) | violation: the VMM drops the connection (`lost`, reconnect with backoff) |
+| VMM | `tick_seq` not newer than the last (duplicate, stale, reordered) | dropped and counted (`ticks_stale`); not a violation (a proxy may reorder; nothing is acted on) |
+| VMM | `present_ns` goes backwards | counted (`ts_backwards`), the tick is processed (the timestamp is statistics and phase only) |
+| VMM | a gap in `tick_seq` | counted (`ticks_missed` += gap); fine (the broker coalesces, §11.3) |
+| broker | `CMD_NO_CHANGE` / `COMMIT.seq != 0` / `CAPS.height != 0` without `CLIENT_TICK` | violation (like an unknown command) |
+| broker | `NO_CHANGE.width == 0`, or a request id the broker never issued (newer than the last tick sent) | violation |
+| broker | `COMMIT.seq` issued but not the open request (late, a timed-out request, a duplicate) | the frame IS presented (dropping visible content is worse), counted `late_replies`, the open request stays open |
+| broker | `COMMIT.seq == 0` in tick mode | presented, counted `unsolicited` (a replay frame, a VMM that ignored the credit); never closes a request |
+| broker | `NO_CHANGE` for a stale / duplicate request | ignored, counted `late_replies` |
+| broker | a flood of any of the above | the existing command-rate limiter (`rate_count`) and the work budget apply unchanged |
+
+**Degradation matrix.** (broker, VMM) → behaviour:
+(old, old) and (old, new): no `CAP_TICK`, the VMM never opts in, no `EV_TICK`, the VMM's free clock and the legacy credit (`EV_FRAME`/`RELEASE`/100 ms backstop) — exactly today.
+(new, old): the old VMM ignores bit 13, sends `CAPS` without `CLIENT_TICK`; the broker sends no `EV_TICK`, expects no sequence (it is `seq`-tolerant: `COMMIT.seq` of an old VMM is advisory) — today's exchange, including `EV_FRAME`.
+(new, new): tick mode. The broker keeps sending `EV_FRAME` (the VMM ignores it while ticks are live, and uses it again in fallback).
+An old broker given `CAPS.width` with an unknown bit would store it (`caps_seen`) harmlessly; the VMM never sends it to one.
+
+**Broker's TX queue.** `EV_TICK` is not unbounded: at most ONE un-sent tick without `WANT_FRAME` is queued (a newer one replaces it; `ticks_coalesced`), and a `WANT_FRAME` tick is never dropped
+(there is at most one open request). The ring's 512 packets and 4-packet reserve are untouched.
+
+### 11.3 The broker (C): decisions are pure functions, backends are thin
+
+Pure (`broker/nb_tick.c`, table-tested with mutants, `test/test_tick.c`):
+- `nb_tick_div(host_period_ns, guest_max_hz)` = `max(1, ceil(host_hz / guest_max_hz))`, `guest_max_hz = min(client cap, 75)`: 60→1, 75→1, 100→2, 120→2, 144→2, 165→3, 240→4. The ticks are every
+  `div`-th host refresh and the mode the broker advertises (`EV_SURFACE.w0`, under `--refresh auto`) is **`host_mhz / div`** (144 Hz host → a 72 Hz mode, 2:1). Under `--refresh <fixed>` /
+  `none` the advertised rate is not the host's: `div = max(1, round(host_hz / mode_hz))` (`none`: 60). 75 Hz (D3) is NOT lifted.
+- `nb_tick_want(state, now)`: `WANT_FRAME` iff no request is open and no answered frame is un-presented; or the open request is `REQ_TIMEOUT_NS` (100 ms) old; or an answered frame has waited
+  `REQ_TIMEOUT_NS` for its presentation feedback (counted `present_timeouts`).
+- `nb_tick_answer(state, seq)` → ANSWERS_OPEN / LATE / VIOLATION; `nb_tick_presented(state)`.
+Core (`nvkvm_broker.c`): `nb_sink_refresh(sink, present_ns, refresh_ns, flags)` is the one entry a backend calls per host refresh: it decimates, decides `WANT_FRAME`, emits `EV_TICK`. A priming `EV_TICK`
+(`WANT_FRAME`, `CLOCK_ONLY`) goes out when the VMM opts in, like the priming `EV_FRAME`.
+
+Wayland (`nb_session_wl.c`): `wp_presentation.feedback` + `wl_surface.frame` on every commit; `presented` → `nb_sink_refresh` (compositor timestamp, `clock_id` checked: not `CLOCK_MONOTONIC` ⇒ `CLOCK_ONLY`)
+and `nb_sink_presented`; `discarded` → `nb_sink_presented` too (the frame is gone, the request must not wait); with no `wp_presentation`, `frame_done` stands in (`CLOCK_ONLY`, a documented loss: the instant is
+when the callback arrived, not when the display scanned out). **Commit every refresh:** the wl_surface protocol text says a frame callback is *requested* by `frame` and "takes effect on the next
+`wl_surface.commit`"; it only says a server "should avoid signaling the frame callbacks if the surface is not visible in any way" and does not promise one for a commit without damage, so the
+claim "an empty commit still gets a callback" is NOT in the protocol text. §11.8 records what was MEASURED on `mutter --headless` and which variant the broker commits (empty / 1x1 damage on the
+current buffer). Occluded or minimised: callbacks stop, `EV_TICK` stops, the VMM's 50 ms fallback runs the clock, the legacy credit sends a frame every 100 ms; the guest sees an uninterrupted
+vblank (§5) — nothing freezes. Monitor move / refresh change: the next `presented` carries the new `refresh`; `div` is recomputed, decimation restarts, `EV_SURFACE` is re-sent with the new mode rate (the existing
+`wl_report_surface(force)` path), and the VMM `retime`s (§5). Fullscreen: nothing special — the same feedback; `F_FULLSCREEN` stays mirrored.
+
+### 11.4 Kayfabe enforces the lock step and never trusts the broker's timing (§AL)
+
+Two small pure machines, both table-tested, both used by the real code and by the harness (§11.7):
+
+**`kf_broker::ticks::Requests`** (the relay, one per connection; main loop thread) — the wire half:
+- R1 a tick whose `tick_seq` is not newer than the last is **dropped and counted**; nothing is acted on.
+- R2 a `WANT_FRAME` tick opens request R **only if** none is open; if one is open, the new one REPLACES it (the broker timed out) and `credits_coalesced += 1`: **at most ONE open request**.
+- R3 a frame is sent only while a request is open, spends it (exactly one `COMMIT` per request, `seq = R`), and a second ready frame waits. No frame without a credit; no more than one per credit.
+- R4 `NO_CHANGE(R)` is sent when R is open at a LATER tick and nothing is ready, held or owed (an idle guest): it closes R. The mailbox's credit on the worker is not touched.
+- R5 **in-flight bound:** committed-not-released frames are at most `HELD_CAP` = 2 (the ring's existing, named bound); a third ready frame waits (`blocked`).
+- R6 **tick-live** = ticks negotiated ∧ a tick arrived within `BROKER_SILENCE_MS` (50). Not live: the legacy credit decides (frames at the `EV_FRAME`/`RELEASE`/100 ms rule) and an open request is
+  still answered by the next frame. Live again: the requests decide.
+
+**`kf_disp::lockstep::CreditGate`** (the worker, per shown head) — the vblank/copy half:
+- G1 an event with a `tick_seq` not newer than the last is dropped and counted (defense in depth: the relay already did).
+- G2 a `WANT_FRAME` whose tick the double-tick guard SWALLOWED (closer than P/2 to the previous tick) is **deferred**: it becomes usable at `last_tick + P/2`, never before; a tick that arrives
+  inside the guard never makes kayfabe go faster (§5), and its credit is acted on after the guard.
+- G3 a credit arriving while a copy is in flight or a credit is already held is **coalesced**: `Mailbox.credit` is a bool (at most ONE pending credit), the extra is counted (`credits_coalesced`) and
+  dropped. N ticks while the copy runs → one frame afterwards.
+- G4 the copy starts only when `Mailbox::due` (frame waiting ∧ credit ∧ no copy in flight, §6.3): never earlier than the credit, never before the previous copy completed, never without a free ring
+  slot (no slot: skipped, counted — the frame stays pending for the next credit).
+- G5 **the immediate flip is untouched.** A credit gates the COPY (the host's view) and nothing else: a flip latches and completes at once whether or not a credit exists (§6.1 stays: its
+  completion waits for the copy in flight at its latch, and for nothing else). This is asserted by the harness (an immediate flip never parks, never waits for a credit) and by a mutant that makes
+  it wait.
+- G6 the worker reads ticks through `TickShare` (below), which holds the LATEST tick plus the newest unconsumed `WANT` request: a flood leaves the worker one vblank per pass (no catch-up burst) and
+  at most one credit; the dropped ticks are counted (`ticks_coalesced`).
+Flood bound, summarised: the vblank rate ≤ 1 per P/2 (the guard), copies ≤ 1 per accepted credit, frames on the wire ≤ 1 per open request and ≤ 2 unreleased, pending credits ≤ 1, the TX queue ≤ 2 ticks.
+A hostile or flooding broker costs counted dropped ticks and nothing else.
+
+**The cross-thread share** (`kf_broker::ticks::TickShare`, lock-free, no lock waited on between the relay on QEMU's main loop and the display worker): a single-writer seqlock for the latest
+tick `(count, tick_seq, present_ns, refresh_ns, flags)`, one `AtomicU32` for the newest unconsumed `WANT` request (the relay stores, the worker swaps it out), the connection epoch, and the worker's
+wake `Notifier` (one eventfd write per tick, ≤ 240/s). The worker feeds `Pacer::broker_tick(shown_head, now)` and `CreditGate`; other heads keep their free clocks.
+
+### 11.5 The handoff, as the guest and the status line see it
+
+Unchanged from §5 (the state machine is phase 1's; this phase only feeds it): the first accepted broker tick hands the head to the broker; silence ≥ 50 ms hands it back on the broker's phase grid; a tick
+closer than P/2 is swallowed. **One log line per tick-source change** (the existing `tick source -> BROKER|FREE-RUNNING clock`, ≤ 32) and one relay line per tick-negotiation change (`broker ticks: ON (...)`/`OFF (...)`),
+never per tick. Counters (all bounded `u64`, in the status line `broker[...]`/`disp[...]`): `ticks` (accepted from the wire), `ticks_stale`, `ticks_missed`, `ticks_coalesced` (worker took the latest of
+several), `want_ticks`, `credits_coalesced`, `credits_deferred` (guard), `frames_sent_on_credit`, `no_change_sent`, `skipped_no_slot` (counted by the worker), `silence_fallbacks` (= `ho=`'s second
+number), `handoffs_to_broker` (= `ho=`'s first), `req_open_blocked` (a ready frame waited for a request), `ts_backwards`.
+
+### 11.6 What does not change
+
+Immediate flips (§AK(a)), the buffer-reuse rule (§6.1), the mailbox (§6.3), `over` (§6.4), the XOR/cursor code, D3 (75 Hz), the kayfabe-* crates, Linux / Translated paths, the legacy broker
+protocol for old peers. No flag is required to boot; nothing is a measurement flag.
+
+### 11.7–11.9 Tests, results, the live checklist
+
+Filled in below as the work lands (§11.7 tests and mutants; §11.8 what was measured on a real headless compositor; §11.9 the owner's hardware checklist and what is unverified).
