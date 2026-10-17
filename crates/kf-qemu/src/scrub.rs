@@ -10,8 +10,16 @@
 //! | cause | when | scope |
 //! |---|---|---|
 //! | [`Cause::Realize`] | VM start, before the guest can run | the whole store (nothing of kayfabe's exists yet) |
-//! | [`Cause::Reset`] | device reset / guest reboot, stage Memory, vCPUs paused | the guest heap `[0, carve)` — the firmware carve-out above it is kayfabe's and survives (see below) |
-//! | [`Cause::Teardown`] | the VA thread's exit, before the store is freed | the whole store (nothing of kayfabe's is needed any more) |
+//! | [`Cause::Reset`] | a guest REBOOT (a system reset from QEMU's main loop), stage Memory, vCPUs paused | the guest heap `[0, carve)` — the firmware carve-out above it is kayfabe's and survives (see below) |
+//!
+//! **By trust boundary** (owner decision, 2026-10-18): only an event after which a NEW OS instance
+//! or a new VM can follow scrubs. [`decide`] is the table; in-guest events (RM unload, the
+//! basic-display -> NVIDIA handoff, a bus reset the guest itself issued, an S3 wake) keep the same OS
+//! and the same root, which can already read all of its own vidmem. **Teardown does not scrub**: the
+//! store is freed to the host driver, and that freed vidmem is scrubbed before an unrelated process
+//! can get it — an ACCEPTED PREMISE (owner, 2026-10-18), not verified by us. VM start scrubs whatever
+//! the host hands over, so a previous QEMU that crashed before any teardown is covered whether or
+//! not the host driver scrubbed.
 //!
 //! **What survives a reset** (kayfabe-owned, `kf_chip::bar0::FbLayout`): the firmware carve-out
 //! `[carve, fb_length)`. Inside it, OUR two root pages (`bar1_pde_base`, `bar2_pde_base`) are
@@ -42,10 +50,8 @@ pub const CHUNK: u64 = 256 << 20;
 pub enum Cause {
     /// VM start, before any guest instruction runs.
     Realize,
-    /// Device reset or guest reboot (stage Memory).
+    /// A guest reboot: the memory stage of a system reset.
     Reset,
-    /// The device is going away; the store is about to be freed.
-    Teardown,
 }
 
 /// ★ What happened to the guest's video memory's trust boundary (the owner's table,
@@ -68,25 +74,38 @@ pub enum Event {
     DriverUnload,
     /// The basic display (firmware GOP) handing over to the guest NVIDIA driver in a running OS.
     DisplayHandoff,
-    /// The VM is going away; the store is about to be freed.
+    /// The VM is going away; the store is freed to the host driver (accepted premise, owner: it
+    /// scrubs freed vidmem before another process can get it).
     VmTeardown,
 }
 
 /// ★ THE TABLE: does `event` scrub the whole guest-allocatable store, and with which scope?
 #[must_use]
 pub fn decide(event: Event) -> Option<Cause> {
-    let _ = event;
-    // RED STEP (tests first)
-    None
+    match event {
+        Event::VmStart => Some(Cause::Realize),
+        Event::GuestReboot => Some(Cause::Reset),
+        // the same OS and the same root keep running: it can read its own vidmem already; and the
+        // host driver scrubs what the store frees (see the module docs for what is proved)
+        Event::S3Wake
+        | Event::GuestBusReset
+        | Event::DriverUnload
+        | Event::DisplayHandoff
+        | Event::VmTeardown => None,
+    }
 }
 
 /// The [`Event`] a QEMU reset request is, from what the device sees: where QEMU asked from (a vCPU
 /// thread: `current_cpu != NULL`, so the guest's own act) and the reset type (`RESET_TYPE_WAKEUP`).
 #[must_use]
 pub fn event_of_reset(from_vcpu: bool, wake: bool) -> Event {
-    let _ = (from_vcpu, wake);
-    // RED STEP (tests first)
-    Event::DriverUnload
+    if wake {
+        Event::S3Wake
+    } else if from_vcpu {
+        Event::GuestBusReset
+    } else {
+        Event::GuestReboot
+    }
 }
 
 /// The ranges to zero, as `(offset, length)`, sorted, non-overlapping, non-empty.
@@ -124,7 +143,7 @@ impl Plan {
 #[must_use]
 pub fn plan(layout: &FbLayout, cause: Cause, boot: Option<(u64, u64)>) -> Plan {
     let mut want: Vec<(u64, u64)> = match cause {
-        Cause::Realize | Cause::Teardown => vec![(0, layout.fb_length)],
+        Cause::Realize => vec![(0, layout.fb_length)],
         // the guest heap: below the carve-out, whatever console a guest reserves inside it (a
         // reserved console region is still guest-written memory)
         Cause::Reset => vec![(0, layout.carve())],
@@ -368,16 +387,14 @@ mod tests {
         }
     }
 
-    /// VM start and teardown: nothing of kayfabe's exists (yet / any more) — the whole store.
+    /// VM start: nothing of kayfabe's exists yet — the whole store, whatever a previous process left.
     #[test]
-    fn realize_and_teardown_scrub_the_whole_store() {
+    fn vm_start_scrubs_the_whole_store() {
         let l = layout();
-        for cause in [Cause::Realize, Cause::Teardown] {
-            let mut m = Model::filled(l.fb_length);
-            let n = run(&plan(&l, cause, None), &mut m, &AtomicU64::new(0)).expect("scrubbed");
-            assert_eq!(n, l.fb_length, "{cause:?}");
-            assert!(m.dirty.is_empty(), "{cause:?}: {:x?}", m.dirty);
-        }
+        let mut m = Model::filled(l.fb_length);
+        let n = run(&plan(&l, Cause::Realize, None), &mut m, &AtomicU64::new(0)).expect("scrubbed");
+        assert_eq!(n, l.fb_length);
+        assert!(m.dirty.is_empty(), "{:x?}", m.dirty);
     }
 
     /// The boot framebuffer is inside the heap: asking for it too never zeroes anything twice, and
@@ -471,14 +488,14 @@ mod tests {
         assert_eq!(plan(&l, Cause::Reset, Some((0, 0))), plan(&l, Cause::Reset, None));
     }
 
-    /// ★ THE OWNER'S TABLE, event -> scrub?: VM start, guest reboot and VM teardown scrub (a new OS
-    /// or a new VM can follow); everything inside a running OS does not.
+    /// ★ THE OWNER'S TABLE, event -> scrub?: VM start and guest reboot scrub (a new OS can follow);
+    /// everything inside a running OS does not, and teardown leaves it to the host driver.
     #[test]
     fn the_scrub_table_follows_the_trust_boundary() {
         let table = [
             (Event::VmStart, Some(Cause::Realize)),
             (Event::GuestReboot, Some(Cause::Reset)),
-            (Event::VmTeardown, Some(Cause::Teardown)),
+            (Event::VmTeardown, None),
             (Event::S3Wake, None),
             (Event::GuestBusReset, None),
             (Event::DriverUnload, None),

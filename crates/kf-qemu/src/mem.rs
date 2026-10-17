@@ -2183,6 +2183,9 @@ pub struct Inbox {
     /// ★ 2026-10-03 (B5, `V3_DISPLAY.md` §4.11.13): how many times the guest's RM gave BAR1 up
     /// (the drainer bumps it; the VA thread re-seeds the boot framebuffer when it moved).
     bar1_physical: AtomicU64,
+    /// ★ 2026-10-18: the next memory stage scrubs the whole guest heap (a NEW OS follows: set by the
+    /// reset's trigger, taken by the VA thread; deliberately NOT cleared by [`Inbox::reset_life`]).
+    full_scrub: std::sync::atomic::AtomicBool,
     /// ★ P1+P2 review fix (2026-10-04, §3.5): the VA thread has a walk in flight or pending, or an
     /// armed invalidate — published by it at the end of every loop ([`Inbox::set_walk_busy`]).
     walk_busy: std::sync::atomic::AtomicBool,
@@ -2215,6 +2218,7 @@ impl Inbox {
             split_results: Mutex::new(std::collections::HashMap::new()),
             next_ticket: AtomicU64::new(1),
             bar1_physical: AtomicU64::new(0),
+            full_scrub: std::sync::atomic::AtomicBool::new(false),
             walk_busy: std::sync::atomic::AtomicBool::new(false),
             walk_waiters: Mutex::new(Vec::new()),
             life_reset: crate::reset::Ack::default(),
@@ -2295,6 +2299,17 @@ impl Inbox {
     pub fn request_bar1_physical(&self) {
         self.bar1_physical.fetch_add(1, Ordering::AcqRel);
         let _ = self.wake.signal();
+    }
+
+    /// ★ 2026-10-18: the reset's trigger — a NEW OS follows, the memory stage scrubs the heap.
+    pub fn set_full_scrub(&self) {
+        self.full_scrub.store(true, Ordering::SeqCst);
+        let _ = self.wake.signal();
+    }
+
+    /// The VA thread: is a full scrub owed (read once; the caller keeps it owed until it succeeds)?
+    pub fn take_full_scrub(&self) -> bool {
+        self.full_scrub.swap(false, Ordering::SeqCst)
     }
 
     /// The VA thread: how many such requests were made so far.
@@ -3153,7 +3168,8 @@ pub fn reset_memory_life(
     m: &mut Manager,
     plane: &MemPlane,
     rm: &'static HostRm,
-) -> (String, bool) {
+    full_scrub: bool,
+) -> MemoryReset {
     let abandoned = plane.port.reset();
     plane.reset_pramin();
     let mut retired = 0usize;
@@ -3174,6 +3190,31 @@ pub fn reset_memory_life(
         .target(K_BAR1)
         .and_then(Target::cpu_window)
         .and_then(CpuWindow::boot_range);
+    // ★ 2026-10-18 (`crate::scrub`): a NEW OS follows (a system reset) — every guest-allocatable
+    // byte is zeroed on the GPU and the completion awaited, here, with the vCPUs paused and the
+    // gate closed. A refusal is returned to the caller, which keeps the gate closed.
+    let scrub: Result<Option<(u64, u128)>, String> = if full_scrub {
+        let t0 = std::time::Instant::now();
+        match kf_chip::bar0::fb_layout(plane.fb_len) {
+            None => Err("no store layout".to_string()),
+            Some(layout) => {
+                let p = crate::scrub::plan(
+                    &layout,
+                    crate::scrub::Cause::Reset,
+                    boot.map(|(_, off, len)| (off, len)),
+                );
+                crate::scrub::run(
+                    &p,
+                    &mut crate::scrub::WalkZeroer(&m.walker().kernel),
+                    &std::sync::atomic::AtomicU64::new(0),
+                )
+                .map(|n| Some((n, t0.elapsed().as_millis())))
+                .map_err(|e| e.to_string())
+            }
+        }
+    } else {
+        Ok(None)
+    };
     let mut zero_refused = Vec::new();
     {
         let k = &m.walker().kernel;
@@ -3222,6 +3263,11 @@ pub fn reset_memory_life(
     let mirrors_left = plane.mirrors.lock().map_or(usize::MAX, |mm| mm.len());
     // ★ 2026-10-18: the boot framebuffer was zeroed with no refusal — the boot layer may be shown.
     let boot_zeroed = zero_refused.is_empty();
+    let scrub_text = match &scrub {
+        Ok(None) => String::new(),
+        Ok(Some((n, ms))) => format!("; NEW OS: guest heap scrubbed on the GPU ({n} bytes, completed in {ms} ms)"),
+        Err(e) => format!("; NEW OS: {e}"),
+    };
     let line = format!(
         "device reset: memory plane — invalidate {}, PRAMIN scratch, {retired} VA space(s) retired, {} KEPT{}{}, mirrors left {mirrors_left}; roots and boot framebuffer zeroed{}; {}",
         if abandoned { "abandoned (armed)" } else { "idle" },
@@ -3234,8 +3280,24 @@ pub fn reset_memory_life(
             format!(" (REFUSED: {})", zero_refused.join("; "))
         },
         windows.join("; ")
-    );
-    (line, boot_zeroed)
+    ) + &scrub_text;
+    MemoryReset {
+        line,
+        boot_zeroed,
+        scrub: scrub.map(|_| ()),
+    }
+}
+
+/// What the memory stage of a device reset did.
+#[derive(Debug)]
+pub struct MemoryReset {
+    /// The boot log's line.
+    pub line: String,
+    /// The boot framebuffer's zero was accepted (the boot layer may be shown again).
+    pub boot_zeroed: bool,
+    /// `Err`: a scrub a NEW OS needed was refused or incomplete — the store is NOT clean, the reset
+    /// must not be acknowledged and the guest's next life must not start.
+    pub scrub: Result<(), String>,
 }
 
 fn retire_mirror(m: &mut Manager, plane: &MemPlane, rm: &'static HostRm, key: VasKey) -> String {

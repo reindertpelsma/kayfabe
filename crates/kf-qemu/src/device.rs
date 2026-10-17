@@ -552,6 +552,25 @@ impl Device {
             kernel
                 .import_store(export_fd, fb_length)
                 .map_err(|e| format!("store import into the walker: {e}"))?;
+            // ★★ 2026-10-18 (`crate::scrub`, VM START): the WHOLE store is zeroed on the GPU, and the
+            // completion awaited, before anything else touches it and long before the guest can
+            // run — nothing a previous process (a QEMU that crashed before any teardown, another
+            // user of these VRAM pages) left is ever visible to this guest. Refuses the VM by name.
+            {
+                let t0 = std::time::Instant::now();
+                let whole = fb_layout(fb_length).ok_or("store layout")?;
+                let plan = crate::scrub::plan(&whole, crate::scrub::Cause::Realize, None);
+                let n = crate::scrub::run(
+                    &plan,
+                    &mut crate::scrub::WalkZeroer(&kernel),
+                    &std::sync::atomic::AtomicU64::new(0),
+                )
+                .map_err(|e| format!("VM start refused, the store is not clean: {e}"))?;
+                eprintln!(
+                    "kf3: store scrubbed at VM start: {n} bytes zeroed on the GPU, completion awaited, {} ms",
+                    t0.elapsed().as_millis()
+                );
+            }
             // ★ Our two roots, zeroed on the GPU (the pages are ours: no CPU read, no guest table).
             let zero = vec![0u8; kf_chip::bar0::ROOT_PAGE_BYTES as usize];
             for root in roots {
@@ -1985,6 +2004,8 @@ impl Device {
         // request's notice (a change since means an RM took BAR1 again first). Two log families,
         // each with its own bound: what the boot range shows (a line only when it changes), and the
         // re-seeds.
+        let mut full_scrub_owed = false;
+        let mut scrub_failures = 0u64;
         let mut bar1_phys = crate::bar1phys::PhysicalViewDue::default();
         // ★ 2026-10-18: the seed placed -> retired edge taints the boot range (`crate::bootclean`)
         let mut seed_watch = crate::bootclean::SeedWatch::default();
@@ -2048,6 +2069,8 @@ impl Device {
             // — polled, never waited for — and only then is the plane reset. No statement of the
             // old life is applied but its `Retire`s.
             if let Some(epoch) = self.mem.inbox.life_reset.owed() {
+                // a scrub a NEW OS needs stays owed until it SUCCEEDS (a refused one is retried)
+                full_scrub_owed |= self.mem.inbox.take_full_scrub();
                 let _ = m.abandon_life();
                 if m.in_flight() {
                     let _ = m.on_walk_ready(trigger);
@@ -2080,8 +2103,23 @@ impl Device {
                         self.mem.inbox.user_va.serve(&m, self.rm);
                         served += 1;
                     }
-                    let (line, boot_zeroed) =
-                        crate::mem::reset_memory_life(&mut m, &self.mem, self.rm);
+                    let mr = crate::mem::reset_memory_life(&mut m, &self.mem, self.rm, full_scrub_owed);
+                    let (line, boot_zeroed) = (mr.line, mr.boot_zeroed);
+                    // ★ FAIL CLOSED: a scrub a new OS needed was refused or incomplete — the store is
+                    // not clean. The reset is NOT acknowledged (the gate stays closed, the vCPUs
+                    // wait out the main loop's bounded wait and the guest's next life does not
+                    // start on this store) and the stage is retried at the next loop pass.
+                    if let Err(why) = mr.scrub {
+                        scrub_failures = scrub_failures.saturating_add(1);
+                        if crate::reset::loud(scrub_failures) {
+                            eprintln!(
+                                "kf3: mem t={:.3}s device reset #{epoch} REFUSED, attempt {scrub_failures}: {why} — the store is NOT clean: the reset gate stays closed and the next guest life is NOT started; retrying",
+                                self.born.elapsed().as_secs_f64()
+                            );
+                        }
+                        continue;
+                    }
+                    full_scrub_owed = false;
                     // ★ 2026-10-18: the boot layer is shown again only once the boot framebuffer's
                     // zero COMPLETED (the display worker skips it while the range is tainted).
                     if boot_zeroed && let Some(dp) = self.display {
@@ -3747,6 +3785,11 @@ impl crate::reset::Owners for Device {
     }
 
     fn begin_memory(&self, epoch: u64) {
+        // ★ 2026-10-18 (`crate::scrub`): a system reset from QEMU's main loop is a NEW OS — the
+        // memory stage scrubs the guest heap. A guest-issued bus reset and an S3 wake are not.
+        if self.reset.take_new_os() {
+            self.mem.inbox.set_full_scrub();
+        }
         self.mem.inbox.life_reset.request(epoch);
         let _ = self.mem.inbox.wake.signal();
     }

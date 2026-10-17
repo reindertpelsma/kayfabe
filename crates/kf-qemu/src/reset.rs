@@ -267,7 +267,10 @@ impl Reset {
     /// Any other request marks the run cold BEFORE it is counted, so the run that covers it
     /// never keeps a life ([`Owners::reset_drainer_state`]).
     pub fn request_typed(&self, from_vcpu: bool, wake: bool) -> u64 {
-        // RED STEP (tests first): the new-OS mark is not recorded yet.
+        if crate::scrub::decide(crate::scrub::event_of_reset(from_vcpu, wake)).is_some() {
+            // a NEW OS follows: set BEFORE the request is counted, like the cold mark
+            self.new_os_pending.store(true, Ordering::SeqCst);
+        }
         let c = if from_vcpu { &self.from_vcpu } else { &self.from_main };
         c.fetch_add(1, Ordering::Relaxed);
         if wake {
