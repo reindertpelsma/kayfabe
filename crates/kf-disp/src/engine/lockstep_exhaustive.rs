@@ -47,7 +47,9 @@ use crate::lockstep::CreditGate;
 use crate::pace::{Mailbox, Pacer, flip_completion_need};
 use crate::tick::{BROKER_SILENCE_NS, GUARD_DEN, GUARD_NUM, Handoff, Source, seq_newer};
 use kf_broker::slots::HELD_CAP;
-use kf_broker::ticks::{BROKER_SILENCE_MS, FrameGate, Requests, TickVerdict, frame_gate, tick_live};
+use kf_broker::ticks::{
+    BROKER_SILENCE_MS, FrameGate, Requests, TickVerdict, frame_gate, tick_live,
+};
 use kf_broker::wire::TickPkt;
 use std::collections::{HashMap, VecDeque};
 use std::hash::{Hash, Hasher};
@@ -307,7 +309,11 @@ impl World {
                 ms
             ));
         }
-        let label = if self.negotiated { open.unwrap_or(0) } else { 0 };
+        let label = if self.negotiated {
+            open.unwrap_or(0)
+        } else {
+            0
+        };
         if label != 0 {
             if label == self.obs.last_label {
                 return Err(format!("request {label} answered by a SECOND frame"));
@@ -593,7 +599,10 @@ impl World {
         }
         // 4. the ticks: vblank, the vsync flip latches, a free tick grants a credit by itself
         for t in ticks {
-            let src = self.pacer.source(0).map(crate::tick::TickSource::last_tick_ns);
+            let src = self
+                .pacer
+                .source(0)
+                .map(crate::tick::TickSource::last_tick_ns);
             let stamp = src.flatten().unwrap_or(now);
             if t.seq != self.obs.last_vblank + 1 {
                 return Err(format!(
@@ -689,7 +698,9 @@ impl World {
                 return Err("a copy started without a credit".into());
             }
             let Some(slot) = self.free_slot() else {
-                return Err("no free ring slot for a copy (a held slot would be overwritten)".into());
+                return Err(
+                    "no free ring slot for a copy (a held slot would be overwritten)".into(),
+                );
             };
             self.obs.credits_avail -= 1;
             if self.obs.credits_avail < 0 {
@@ -944,9 +955,13 @@ impl World {
         if let Some(since) = self.obs.ready_since_ms
             && self.ready.is_some()
             && (self.held.len() as u32) < HELD_CAP
-            && self.last_rx_ms.is_none_or(|r| self.ms() > r + BROKER_SILENCE_MS)
+            && self
+                .last_rx_ms
+                .is_none_or(|r| self.ms() > r + BROKER_SILENCE_MS)
             && self.ms() > since + BACKSTOP_MS + BROKER_SILENCE_MS + 2
-            && self.last_rx_ms.is_none_or(|r| self.ms() > r + BACKSTOP_MS + BROKER_SILENCE_MS + 2)
+            && self
+                .last_rx_ms
+                .is_none_or(|r| self.ms() > r + BACKSTOP_MS + BROKER_SILENCE_MS + 2)
         {
             return Err(format!(
                 "a frame is STUCK in the ring for {} ms behind a silent broker",
@@ -961,7 +976,11 @@ impl World {
                 self.obs.offered, c.ticks, c.ticks_stale
             ));
         }
-        if c.want_ticks != c.frames_on_credit + c.no_change_sent + c.credits_coalesced + u64::from(self.reqs.open().is_some())
+        if c.want_ticks
+            != c.frames_on_credit
+                + c.no_change_sent
+                + c.credits_coalesced
+                + u64::from(self.reqs.open().is_some())
         {
             return Err(format!(
                 "wants {} != frames {} + no_change {} + replaced {} + open {:?}",
@@ -979,7 +998,11 @@ impl World {
         {
             return Err(format!(
                 "gate wants {} != granted {} + replaced {} + stale {} + pending {pending} + reset {}",
-                self.obs.gate_wants, g.granted, g.credits_coalesced, g.stale_credits, self.obs.reset_dropped
+                self.obs.gate_wants,
+                g.granted,
+                g.credits_coalesced,
+                g.stale_credits,
+                self.obs.reset_dropped
             ));
         }
         // 4. a copy needs a credit: copies <= credits that reached the mailbox
@@ -1013,7 +1036,11 @@ impl World {
             relo(bs),
         ]);
         let (gl, gr, gp) = self.gate.probe_state();
-        k.extend([sq(gl), sq(gr), gp.map_or(i64::MIN, |(r, a)| base - i64::from(r) + rel(a) * 1_000_003)]);
+        k.extend([
+            sq(gl),
+            sq(gr),
+            gp.map_or(i64::MIN, |(r, a)| base - i64::from(r) + rel(a) * 1_000_003),
+        ]);
         let (rl, ro, rf, ra, rs) = self.reqs.probe_state();
         k.extend([
             sq(rl),
@@ -1036,7 +1063,8 @@ impl World {
             sq(self.share.want),
             sq(Some(self.share.latest_seq)),
             self.inflight.map_or(i64::MIN, |i| {
-                rel(i.at) + 7 * i64::try_from(self.latches - i.reads.map_or(0, |r| r + 1)).unwrap_or(0)
+                rel(i.at)
+                    + 7 * i64::try_from(self.latches - i.reads.map_or(0, |r| r + 1)).unwrap_or(0)
             }),
             self.inflight.map_or(i64::MIN, |i| i.slot as i64),
             i64::from(self.pending_vsync),
@@ -1059,17 +1087,25 @@ impl World {
             k.push((self.commits - f.commit_no).min(3) as i64);
         }
         k.push(-8);
-        k.push(
-            self.last_commit
-                .map_or(-1, |f| self.held.iter().position(|h| h.id == f.id).map_or(-2, |p| p as i64)),
-        );
+        k.push(self.last_commit.map_or(-1, |f| {
+            self.held
+                .iter()
+                .position(|h| h.id == f.id)
+                .map_or(-2, |p| p as i64)
+        }));
         k.push(sq(self.b_last.map(|(s, _)| s)));
         k.push(i64::from(self.b_last.is_some_and(|(_, w)| w)));
         k.push(sq(self.obs.newest_want));
-        k.push(i64::from(self.obs.last_label != 0 && Some(self.obs.last_label) == self.reqs.open()));
+        k.push(i64::from(
+            self.obs.last_label != 0 && Some(self.obs.last_label) == self.reqs.open(),
+        ));
         k.push(sq(Some(self.obs.last_label).filter(|l| *l != 0)));
         k.push(sq(self.obs.last_acc_relay));
-        k.push(self.obs.last_answer_ms.map_or(i64::MIN, |t| (self.ms() as i64 - t as i64).min(200)));
+        k.push(
+            self.obs
+                .last_answer_ms
+                .map_or(i64::MIN, |t| (self.ms() as i64 - t as i64).min(200)),
+        );
         k.push(i64::from(self.obs.fallbacks.min(2) as u8));
         k.push(self.obs.events_since_fallback.min(3) as i64);
         k.push(i64::from(self.obs.to_broker.min(2) as u8));
@@ -1099,21 +1135,37 @@ enum L {
     FlipImm,
     FlipVsync,
     /// A fresh tick (skipping `skip` numbers).
-    Tick { skip: u32, want: bool },
+    Tick {
+        skip: u32,
+        want: bool,
+    },
     Dup,
     Stale,
     /// `n` fresh ticks in one instant.
-    Burst { n: u32, want: bool },
+    Burst {
+        n: u32,
+        want: bool,
+    },
     /// Ticks at `mult` times the refresh for `ms` milliseconds.
-    Rate { mult: u32, ms: u64, want: bool },
+    Rate {
+        mult: u32,
+        ms: u64,
+        want: bool,
+    },
     Release,
     EvFrame,
     Reconnect,
     Flap(u8),
 }
 
-const TW: L = L::Tick { skip: 0, want: true };
-const TN: L = L::Tick { skip: 0, want: false };
+const TW: L = L::Tick {
+    skip: 0,
+    want: true,
+};
+const TN: L = L::Tick {
+    skip: 0,
+    want: false,
+};
 
 #[derive(Debug)]
 struct Explored {
@@ -1258,15 +1310,33 @@ fn lockstep_exhaustive_hostile_and_floods() {
     let letters = [
         TW,
         TN,
-        L::Tick { skip: 3, want: true },
+        L::Tick {
+            skip: 3,
+            want: true,
+        },
         L::Dup,
         L::Stale,
         L::Burst { n: 10, want: true },
         L::Burst { n: 100, want: true },
-        L::Burst { n: 1000, want: false },
-        L::Rate { mult: 10, ms: 40, want: true },
-        L::Rate { mult: 100, ms: 20, want: false },
-        L::Rate { mult: 1000, ms: 8, want: true },
+        L::Burst {
+            n: 1000,
+            want: false,
+        },
+        L::Rate {
+            mult: 10,
+            ms: 40,
+            want: true,
+        },
+        L::Rate {
+            mult: 100,
+            ms: 20,
+            want: false,
+        },
+        L::Rate {
+            mult: 1000,
+            ms: 8,
+            want: true,
+        },
         L::FlipImm,
         L::Reconnect,
         L::Release,
@@ -1283,7 +1353,10 @@ fn lockstep_exhaustive_the_sequence_wrap() {
     let letters = [
         TW,
         TN,
-        L::Tick { skip: 1, want: true },
+        L::Tick {
+            skip: 1,
+            want: true,
+        },
         L::Dup,
         L::Stale,
         L::FlipImm,
@@ -1315,14 +1388,43 @@ fn lockstep_exhaustive_held_cap_is_two() {
 #[test]
 #[ignore = "deep: minutes"]
 fn lockstep_exhaustive_deep_frames() {
-    let l = [L::FlipImm, L::FlipVsync, TW, TN, L::Release, L::EvFrame, L::AdvCopy(0), L::AdvCopy(-1), L::AdvGuard(0), L::Adv(P), L::AdvNext];
+    let l = [
+        L::FlipImm,
+        L::FlipVsync,
+        TW,
+        TN,
+        L::Release,
+        L::EvFrame,
+        L::AdvCopy(0),
+        L::AdvCopy(-1),
+        L::AdvGuard(0),
+        L::Adv(P),
+        L::AdvNext,
+    ];
     run("deep frames", &root(true, 1), &l, 10);
 }
 
 #[test]
 #[ignore = "deep: minutes"]
 fn lockstep_exhaustive_deep_time_and_silence() {
-    let l = [TW, TN, L::FlipImm, L::FlipVsync, L::AdvSilence(-1), L::AdvSilence(0), L::AdvSilence(1), L::AdvGuard(-1), L::AdvGuard(0), L::AdvCopy(0), L::Adv(10 * MS), L::Adv(200 * MS), L::Adv(2_000 * MS), L::Adv(10_000 * MS), L::Flap(0), L::Flap(1)];
+    let l = [
+        TW,
+        TN,
+        L::FlipImm,
+        L::FlipVsync,
+        L::AdvSilence(-1),
+        L::AdvSilence(0),
+        L::AdvSilence(1),
+        L::AdvGuard(-1),
+        L::AdvGuard(0),
+        L::AdvCopy(0),
+        L::Adv(10 * MS),
+        L::Adv(200 * MS),
+        L::Adv(2_000 * MS),
+        L::Adv(10_000 * MS),
+        L::Flap(0),
+        L::Flap(1),
+    ];
     run("deep time_and_silence", &root(true, 1), &l, 8);
 }
 
@@ -1337,8 +1439,12 @@ fn lockstep_exhaustive_deep_time_and_silence() {
 #[test]
 fn lockstep_exhaustive_a_reconnect_without_a_gate_reset_drops_the_new_connections_ticks() {
     let w = root(false, 1);
-    let c = explore(&w, &[TW, L::Burst { n: 5, want: false }, L::Reconnect, L::Adv(MS)], 4)
-        .expect_err("the gap must be found");
+    let c = explore(
+        &w,
+        &[TW, L::Burst { n: 5, want: false }, L::Reconnect, L::Adv(MS)],
+        4,
+    )
+    .expect_err("the gap must be found");
     assert!(c.why.contains("dropped tick"), "{c:?}");
     assert!(c.path.contains(&L::Reconnect), "{c:?}");
     eprintln!("lockstep_exhaustive FINDING 1: {c:?}");
@@ -1423,28 +1529,52 @@ fn lockstep_exhaustive_floods_are_bounded_and_counted() {
             // 160 ms of a 16 ms display: 10 refreshes at most (+ the guard's slack); a 1000x flood
             // for 16 ms offers 1000 ticks and the vblank still ticked at most 2x per period
             let allowed = ms * MS / GUARD + 2;
-            assert!(ticks <= allowed, "x{mult} want={want}: {ticks} vblanks > {allowed}");
+            assert!(
+                ticks <= allowed,
+                "x{mult} want={want}: {ticks} vblanks > {allowed}"
+            );
             let c = w.reqs.c;
             assert_eq!(c.ticks + c.ticks_stale, w.obs.offered);
             // at most one frame per request, and one copy per credit
             assert!(w.obs.copies <= w.mailbox.copies + 1, "copies");
-            assert!(w.obs.commits <= c.want_ticks + 1, "commits {} > wants {}", w.obs.commits, c.want_ticks);
+            assert!(
+                w.obs.commits <= c.want_ticks + 1,
+                "commits {} > wants {}",
+                w.obs.commits,
+                c.want_ticks
+            );
             eprintln!(
                 "lockstep_exhaustive flood x{mult} want={want}: offered {} vblanks {ticks} wants {} replaced {} frames {} copies {} \
                  gate(granted {} replaced {} coalesced_ticks {})",
-                w.obs.offered, c.want_ticks, c.credits_coalesced, c.frames_on_credit, w.obs.copies,
-                w.gate.c.granted, w.gate.c.credits_coalesced, w.gate.c.ticks_coalesced
+                w.obs.offered,
+                c.want_ticks,
+                c.credits_coalesced,
+                c.frames_on_credit,
+                w.obs.copies,
+                w.gate.c.granted,
+                w.gate.c.credits_coalesced,
+                w.gate.c.ticks_coalesced
             );
         }
     }
     // a burst of 1000 ticks in ONE instant: one vblank, one credit, one frame
     let mut w = root(true, 1);
     w.apply(L::FlipImm).unwrap();
-    w.apply(L::Burst { n: 1000, want: true }).unwrap();
+    w.apply(L::Burst {
+        n: 1000,
+        want: true,
+    })
+    .unwrap();
     assert_eq!(w.obs.ticks, 1, "one vblank for a burst");
     assert_eq!(w.reqs.c.want_ticks, 1000);
-    assert_eq!(w.reqs.c.credits_coalesced, 999, "999 requests replaced, one open (or spent)");
-    assert_eq!(w.gate.c.ticks_coalesced, 999, "the worker took the latest of 1000");
+    assert_eq!(
+        w.reqs.c.credits_coalesced, 999,
+        "999 requests replaced, one open (or spent)"
+    );
+    assert_eq!(
+        w.gate.c.ticks_coalesced, 999,
+        "the worker took the latest of 1000"
+    );
     assert_eq!(w.gate.c.granted, 1);
     assert_eq!(w.obs.copies, 1);
 }
@@ -1454,7 +1584,15 @@ fn lockstep_exhaustive_floods_are_bounded_and_counted() {
 /// is taken exactly when due, the handoff back happens ONCE, the stale numbers are ignored.
 #[test]
 fn lockstep_exhaustive_stalls_resume_cleanly() {
-    for (stall_ms, falls) in [(10u64, false), (49, false), (50, true), (51, true), (200, true), (2_000, true), (10_000, true)] {
+    for (stall_ms, falls) in [
+        (10u64, false),
+        (49, false),
+        (50, true),
+        (51, true),
+        (200, true),
+        (2_000, true),
+        (10_000, true),
+    ] {
         let mut w = root(true, 1);
         w.apply(TW).unwrap();
         w.apply(L::Adv(P)).unwrap();
@@ -1463,7 +1601,10 @@ fn lockstep_exhaustive_stalls_resume_cleanly() {
         let last_event = w.now;
         w.apply(L::Adv(stall_ms * MS)).unwrap();
         let fell = w.pacer.source(0).unwrap().source() == Source::Free;
-        assert_eq!(fell, falls, "stall {stall_ms} ms (edge: the fallback is AT 50 ms)");
+        assert_eq!(
+            fell, falls,
+            "stall {stall_ms} ms (edge: the fallback is AT 50 ms)"
+        );
         let ticks_during = w.obs.ticks;
         // it resumes: two stale ticks and a duplicate, then fresh ones, then releases
         w.apply(L::Stale).unwrap();
@@ -1476,9 +1617,16 @@ fn lockstep_exhaustive_stalls_resume_cleanly() {
         w.apply(L::Release).unwrap();
         let (to_b, to_f) = w.pacer.source(0).unwrap().handoffs();
         let expect = if falls { (2, 1) } else { (1, 0) };
-        assert_eq!((to_b, to_f), expect, "stall {stall_ms} ms: handoffs (to broker, back to free)");
+        assert_eq!(
+            (to_b, to_f),
+            expect,
+            "stall {stall_ms} ms: handoffs (to broker, back to free)"
+        );
         assert_eq!(w.pacer.source(0).unwrap().source(), Source::Broker);
-        assert!(w.reqs.c.ticks_stale >= 2, "the stale numbers were dropped and counted");
+        assert!(
+            w.reqs.c.ticks_stale >= 2,
+            "the stale numbers were dropped and counted"
+        );
         assert!(w.now > last_event + stall_ms * MS);
         eprintln!(
             "lockstep_exhaustive stall {stall_ms} ms: fell back {fell}, vblanks during/after {ticks_during}/{}, handoffs {to_b}/{to_f}, stale {}",
@@ -1498,8 +1646,13 @@ fn lockstep_exhaustive_flapping_does_not_flap_the_source() {
             w.apply(L::Flap(kind)).unwrap();
         }
         let (a, b) = w.pacer.source(0).unwrap().handoffs();
-        eprintln!("lockstep_exhaustive flap kind {kind}: 180 ticks offered, source changes {a}+{b}");
-        assert!(a + b <= 8, "kind {kind}: {a}+{b} source changes for 180 ticks");
+        eprintln!(
+            "lockstep_exhaustive flap kind {kind}: 180 ticks offered, source changes {a}+{b}"
+        );
+        assert!(
+            a + b <= 8,
+            "kind {kind}: {a}+{b} source changes for 180 ticks"
+        );
         assert_eq!(w.obs.to_broker + w.obs.to_free, a + b);
     }
 }
@@ -1517,7 +1670,11 @@ fn lockstep_exhaustive_a_broker_that_never_releases_deadlocks_nothing() {
         w.apply(L::Adv(P)).unwrap();
     }
     assert!(w.held.len() <= 2);
-    assert!(w.obs.flips >= 6, "flips complete without a single RELEASE: {}", w.obs.flips);
+    assert!(
+        w.obs.flips >= 6,
+        "flips complete without a single RELEASE: {}",
+        w.obs.flips
+    );
     w.apply(L::Adv(2_000 * MS)).unwrap();
     assert!(w.held.len() <= 2);
 }
@@ -1539,7 +1696,11 @@ fn lockstep_exhaustive_every_letter_runs() {
         L::Dup,
         L::Stale,
         L::Burst { n: 3, want: true },
-        L::Rate { mult: 10, ms: 20, want: true },
+        L::Rate {
+            mult: 10,
+            ms: 20,
+            want: true,
+        },
         L::Release,
         L::EvFrame,
         L::Reconnect,
@@ -1571,7 +1732,11 @@ fn lockstep_exhaustive_finding_3_a_flood_makes_copies_exceed_vblanks() {
         let mut n = 0;
         while w.now + step <= end {
             w.apply(L::Adv(step)).unwrap();
-            w.apply(L::Tick { skip: 0, want: true }).unwrap();
+            w.apply(L::Tick {
+                skip: 0,
+                want: true,
+            })
+            .unwrap();
             if n % 3 == 0 {
                 w.apply(L::FlipImm).unwrap();
             }
@@ -1580,16 +1745,26 @@ fn lockstep_exhaustive_finding_3_a_flood_makes_copies_exceed_vblanks() {
         out.push((mult, w.obs.ticks, w.obs.copies, w.reqs.c.frames_on_credit));
         eprintln!(
             "lockstep_exhaustive FINDING 3 x{mult}: vblanks {} copies {} frames {} wants {} gate granted {}",
-            w.obs.ticks, w.obs.copies, w.reqs.c.frames_on_credit, w.reqs.c.want_ticks, w.gate.c.granted
+            w.obs.ticks,
+            w.obs.copies,
+            w.reqs.c.frames_on_credit,
+            w.reqs.c.want_ticks,
+            w.gate.c.granted
         );
-        assert!(w.reqs.c.frames_on_credit <= 3, "frames stay bounded: one per request, 2 in flight");
+        assert!(
+            w.reqs.c.frames_on_credit <= 3,
+            "frames stay bounded: one per request, 2 in flight"
+        );
     }
     // at the display's own rate (and at 2x) copies follow the flips; under a flood they run past the vblanks
     for (mult, vbl, copies, _) in &out {
         if *mult <= 2 {
             assert!(copies <= vbl, "x{mult}: {copies} copies > {vbl} vblanks");
         } else {
-            assert!(*copies > *vbl, "x{mult}: copies {copies} no longer exceed vblanks {vbl}: the gate was fixed, flip this test");
+            assert!(
+                *copies > *vbl,
+                "x{mult}: copies {copies} no longer exceed vblanks {vbl}: the gate was fixed, flip this test"
+            );
         }
     }
 }
@@ -1616,7 +1791,11 @@ enum ReqPick {
 
 #[derive(Clone, Copy, Debug)]
 enum GateOp {
-    Ev { seq: SeqPick, req: ReqPick, emitted: bool },
+    Ev {
+        seq: SeqPick,
+        req: ReqPick,
+        emitted: bool,
+    },
     Poll(u64),
 }
 
@@ -1659,7 +1838,12 @@ fn lockstep_exhaustive_the_gate_against_an_oracle() {
             }
         }
     }
-    for t in [GATE_LAST_TICK + GATE_GUARD - 1, GATE_LAST_TICK + GATE_GUARD, GATE_STAMP - 1, GATE_STAMP] {
+    for t in [
+        GATE_LAST_TICK + GATE_GUARD - 1,
+        GATE_LAST_TICK + GATE_GUARD,
+        GATE_STAMP - 1,
+        GATE_STAMP,
+    ] {
         ops.push(GateOp::Poll(t));
     }
     fn go(
@@ -1735,8 +1919,22 @@ fn lockstep_exhaustive_the_gate_against_an_oracle() {
             *n += 1;
             let c = g.c;
             assert_eq!(
-                (c.stale, c.stale_credits, c.credits_coalesced, c.credits_deferred, c.granted, c.ticks_coalesced),
-                (o.stale, o.stale_credits, o.coalesced, o.deferred, o.granted, o.ticks_coalesced),
+                (
+                    c.stale,
+                    c.stale_credits,
+                    c.credits_coalesced,
+                    c.credits_deferred,
+                    c.granted,
+                    c.ticks_coalesced
+                ),
+                (
+                    o.stale,
+                    o.stale_credits,
+                    o.coalesced,
+                    o.deferred,
+                    o.granted,
+                    o.ticks_coalesced
+                ),
                 "{op:?}"
             );
             assert_eq!(g.pending(), o.pending, "{op:?}");
@@ -1744,8 +1942,18 @@ fn lockstep_exhaustive_the_gate_against_an_oracle() {
         }
     }
     let mut n = 0;
-    go(&ops, 4, &CreditGate::new(), &GateOracle::default(), None, &mut n);
-    eprintln!("lockstep_exhaustive gate oracle: {n} operations, {} letters, depth 4", ops.len());
+    go(
+        &ops,
+        4,
+        &CreditGate::new(),
+        &GateOracle::default(),
+        None,
+        &mut n,
+    );
+    eprintln!(
+        "lockstep_exhaustive gate oracle: {n} operations, {} letters, depth 4",
+        ops.len()
+    );
 }
 
 #[derive(Clone, Copy, Debug)]
@@ -1781,7 +1989,13 @@ fn lockstep_exhaustive_the_request_book_against_an_oracle() {
             ops.push(ReqOp::Tick(s, w));
         }
     }
-    ops.extend([ReqOp::Spend, ReqOp::Idle(true), ReqOp::Idle(false), ReqOp::Adv(1), ReqOp::Adv(20)]);
+    ops.extend([
+        ReqOp::Spend,
+        ReqOp::Idle(true),
+        ReqOp::Idle(false),
+        ReqOp::Adv(1),
+        ReqOp::Adv(20),
+    ]);
     let gap = (P / 2_000_000).max(1);
     fn go(
         ops: &[ReqOp],
@@ -1855,7 +2069,14 @@ fn lockstep_exhaustive_the_request_book_against_an_oracle() {
             *n += 1;
             let c = r.c;
             assert_eq!(
-                (c.ticks, c.ticks_stale, c.want_ticks, c.credits_coalesced, c.frames_on_credit, c.no_change_sent),
+                (
+                    c.ticks,
+                    c.ticks_stale,
+                    c.want_ticks,
+                    c.credits_coalesced,
+                    c.frames_on_credit,
+                    c.no_change_sent
+                ),
                 (o.ticks, o.stale, o.wants, o.replaced, o.frames, o.no_change),
                 "{op:?}"
             );
@@ -1864,6 +2085,18 @@ fn lockstep_exhaustive_the_request_book_against_an_oracle() {
         }
     }
     let mut n = 0;
-    go(&ops, 5, &Requests::new(), &ReqOracle::default(), None, 100, gap, &mut n);
-    eprintln!("lockstep_exhaustive request-book oracle: {n} operations, {} letters, depth 5", ops.len());
+    go(
+        &ops,
+        5,
+        &Requests::new(),
+        &ReqOracle::default(),
+        None,
+        100,
+        gap,
+        &mut n,
+    );
+    eprintln!(
+        "lockstep_exhaustive request-book oracle: {n} operations, {} letters, depth 5",
+        ops.len()
+    );
 }
