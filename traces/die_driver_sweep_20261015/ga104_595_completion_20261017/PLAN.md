@@ -36,3 +36,13 @@ push and retirement verification time; target manual retirement30minutes before 
 No master merges, draft topic PRs only; D1-D6 remain open. Prior campaign compute ceiling
 10.50USD+transfers/40USD. Stop before spending beyond the remaining budget. No family
 acceptance or new hardware pass is claimed in this plan.
+
+Optional M2 within the same lease, only after the serial Linux595 batch completes:
+fetch pinned official Windows11EnterpriseLTSC2024Evaluation/virtio/OpenSSH/NVIDIA580.88
+media onto the rental. Fetch is GPU-free; no shared-host image/credential is used.
+If sufficient lease time remains, build a fresh stock-VGA unattended baseline and
+verify QGA/actual binding before any Code0/desktop claim. No installer replay after
+an uncertain outcome. This is conditional preparation, Windows hardware remainsUNRUN.
+Falsifier: no QGA-reachable verified driver binding after the bounded cold boot, or
+an actual nonzero adapter code. The nineteen owner flags must be asserted for any
+Kayfabe Windows result. A nativeLinux595 caps value cannot silently fill a580row.
