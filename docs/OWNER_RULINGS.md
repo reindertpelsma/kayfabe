@@ -1274,4 +1274,8 @@ worker-only submission and command inspection from birth, the owner answered:
   or none; kayfabe never composes.
 - The deletion is a separate change with its own tests and a Linux broker retest (list: `V3_BROKER_XOR_CURSOR_20261017.md` §6). This task did not delete code.
 - D3 (same day): the cursor is oversized on the owner's screen; the size rule and fix: `V3_BROKER_XOR_CURSOR_20261017.md` §1.
+- **D2 refinement (2026-10-17, relayed by the coordinator; binding).** The owner prefers to avoid the wl_shm tier and any unnecessary CPU copy of large frames in the present path, and to use GPU APIs when composing if that is possible.
+  Built accordingly: the broker's XOR composing does not depend on the shm tier (it reads only the cursor's rows of a sealed memfd or of a LINEAR system-memory dma-buf; tiled or device-memory frames fall back to the approximation,
+  logged once per change); a GPU path was evaluated and not built (`V3_BROKER_XOR_CURSOR_20261017.md` §8: it would put EGL/Vulkan and a vendor driver into the privileged broker; owner decision if it is ever wanted).
+  The wl_shm presentation after a broker restart was a false trip of the VMM's acknowledgement detector, not a display refusal: `V3_BROKER_PRESENT_TIER_20261017.md`.
 

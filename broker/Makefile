@@ -37,6 +37,7 @@ CFLAGS  += -std=gnu11 -Wall -Wextra -Wno-unused-parameter \
 LDFLAGS += -Wl,-z,relro,-z,now
 
 OBJS = nvkvm_broker.o nb_common.o nb_cursor.o nb_geom.o nb_placeholder.o \
+       nb_frame.o nb_xor.o \
        nb_session_x11.o nb_session_wl.o nb_session_test.o
 
 # The broker -- and only the broker -- may start one helper thread: the one
@@ -124,7 +125,7 @@ GBM_LIBS   = $(shell $(PKG_CONFIG) --libs gbm)
 endif
 
 .SECONDARY:
-.PHONY: all install clean report check check-sanitize
+.PHONY: all install clean report check check-sanitize check-probe
 all: report $(BIN) $(TESTCLIENT) $(RELAY) $(if $(HAVE_GBM),$(DMASRC),)
 
 report:
@@ -192,6 +193,13 @@ test-cursor: test/test_cursor.c nb_cursor.c nvkvm_broker.h \
              common/nvkvm_broker_proto.h
 	$(CC) $(CFLAGS) -o $@ test/test_cursor.c nb_cursor.c $(LDFLAGS)
 
+# The XOR cursor: the decision table, the placement, the frame reader and the
+# compose driver, linked from the SAME objects the broker links.  Pure plus a
+# sealed memfd (and a udmabuf where the box has one): no compositor, no GPU.
+test-xor: test/test_xor.c nb_xor.c nb_frame.c nb_cursor.c nvkvm_broker.h \
+          common/nvkvm_broker_proto.h
+	$(CC) $(CFLAGS) -o $@ test/test_xor.c nb_xor.c nb_frame.c nb_cursor.c $(LDFLAGS)
+
 # The suggested-width rule and the proven-geometry set, linked from the SAME
 # nb_geom.c the broker links (pure: nothing to stub).
 test-geom: test/test_geom.c nb_geom.c nvkvm_broker.h \
@@ -202,15 +210,24 @@ test-geom: test/test_geom.c nb_geom.c nvkvm_broker.h \
 # (test/stall_fuse.py: mount(2) as root, fusermount3 otherwise -- package
 # fuse3).  Where FUSE is unusable that case prints SKIP; NB_REQUIRE_FUSE=1,
 # as CI sets it, makes that a failure instead.
-check: all test-utf8 test-cursor test-geom
+check: all test-utf8 test-cursor test-geom test-xor
 	./test-utf8
 	./test-cursor
 	./test-geom
+	./test-xor
+	python3 test/mutate_xor.py
 	bash selftest.sh
 	python3 test/test_adopted_socket.py ./$(BIN)
 	python3 test/test_clipboard.py ./$(BIN)
 	python3 test/test_lifecycle.py ./$(BIN)
 	python3 test/test_cursor.py ./$(BIN)
+	python3 test/test_xor.py ./$(BIN)
+
+# The probe window against a REAL compositor (mutter --headless, software
+# renderer) and real udmabuf dma-bufs; exits 77 (skip) when either is missing.
+# Not part of `check`: it needs a compositor, and it takes ~15 s.
+check-probe: $(BIN)
+	python3 test/test_probe.py ./$(BIN)
 
 # Keep the sanitizer invocation reproducible locally and in CI.  A clean
 # rebuild matters here: mixing instrumented and ordinary objects links fine
@@ -226,5 +243,5 @@ install: $(BIN)
 
 clean:
 	rm -f $(BIN) $(TESTCLIENT) $(RELAY) $(DMASRC) *.o *.d \
-	      *-client-protocol.h *-protocol.c test-utf8 test-cursor \
+	      *-client-protocol.h *-protocol.c test-utf8 test-cursor test-geom test-xor \
 	      test/utf8_extracted.inc

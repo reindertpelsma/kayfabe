@@ -7,9 +7,10 @@ Rule for every item: **VMM-agnostic** (kayfabe's logic sits in `kf-disp` / `kf-b
 **Inferred / open** = marked as such.
 
 ## A. Cursor owned by the broker (IN PROGRESS, agent on branch `claude/cursor-hover-20261015`, host `/data/claude-cursor2/wt`)
+**2026-10-17 (later): the true XOR inversion is BUILT** (`claude/cursor-xor-wire-20261017`, `V3_BROKER_XOR_CURSOR_20261017.md` §7-§9): the broker reads only the cursor's rows of the frame it presents (sealed memfd or a LINEAR system-memory dma-buf) and shows `below ^ colour` as an overlay patch committed with the frame; the approximation is the logged fallback; live look owed. The kayfabe-side deletion (that doc §6) may proceed.
 **STATUS: CORRECTED 2026-10-17 (owner decisions D2 and the composing ruling, `OWNER_RULINGS.md` §AJ).** Two sentences below are superseded:
 (1) "the broker approximates (black fill, white outline)" — **the broker must compose a TRUE inversion of what is under an XOR cursor**; the approximation is a
-stopgap/fallback only (options, the pure compose function and the plan: `V3_BROKER_XOR_CURSOR_20261017.md`; the on-screen mechanism awaits an owner choice);
+stopgap/fallback only (options, the pure compose function and the plan: `V3_BROKER_XOR_CURSOR_20261017.md`; the on-screen mechanism is now built, see the line above);
 (2) "the old composing path stays as the fallback for older brokers until the owner decides to delete it" — **the owner has decided: kayfabe composes NO cursor, the
 old path is to be deleted** (deletion list in the same doc, §6; a broker without `CAP_CURSOR_STREAM` then shows the guest's own cursor or none). Also 2026-10-17: the
 cursor surface size rule is one pure function for hover and grab (surface-local size = image x the frame fit, output scale only chooses `buffer_scale`).
