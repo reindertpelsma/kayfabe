@@ -37,7 +37,7 @@ CFLAGS  += -std=gnu11 -Wall -Wextra -Wno-unused-parameter \
 LDFLAGS += -Wl,-z,relro,-z,now
 
 OBJS = nvkvm_broker.o nb_common.o nb_cursor.o nb_geom.o nb_placeholder.o \
-       nb_frame.o nb_xor.o \
+       nb_frame.o nb_xor.o nb_tick.o \
        nb_session_x11.o nb_session_wl.o nb_session_test.o
 
 # The broker -- and only the broker -- may start one helper thread: the one
@@ -125,7 +125,7 @@ GBM_LIBS   = $(shell $(PKG_CONFIG) --libs gbm)
 endif
 
 .SECONDARY:
-.PHONY: all install clean report check check-sanitize check-probe
+.PHONY: all install clean report check check-sanitize check-probe check-tick-probe
 all: report $(BIN) $(TESTCLIENT) $(RELAY) $(if $(HAVE_GBM),$(DMASRC),)
 
 report:
@@ -200,6 +200,12 @@ test-xor: test/test_xor.c nb_xor.c nb_frame.c nb_cursor.c nvkvm_broker.h \
           common/nvkvm_broker_proto.h
 	$(CC) $(CFLAGS) -o $@ test/test_xor.c nb_xor.c nb_frame.c nb_cursor.c $(LDFLAGS)
 
+# The display tick's decisions (EV_TICK, the lock-step requests, decimation),
+# linked from the SAME nb_tick.o the broker links (pure: nothing to stub).
+test-tick: test/test_tick.c nb_tick.c nvkvm_broker.h \
+           common/nvkvm_broker_proto.h
+	$(CC) $(CFLAGS) -o $@ test/test_tick.c nb_tick.c $(LDFLAGS)
+
 # The suggested-width rule and the proven-geometry set, linked from the SAME
 # nb_geom.c the broker links (pure: nothing to stub).
 test-geom: test/test_geom.c nb_geom.c nvkvm_broker.h \
@@ -210,18 +216,21 @@ test-geom: test/test_geom.c nb_geom.c nvkvm_broker.h \
 # (test/stall_fuse.py: mount(2) as root, fusermount3 otherwise -- package
 # fuse3).  Where FUSE is unusable that case prints SKIP; NB_REQUIRE_FUSE=1,
 # as CI sets it, makes that a failure instead.
-check: all test-utf8 test-cursor test-geom test-xor
+check: all test-utf8 test-cursor test-geom test-xor test-tick
 	./test-utf8
 	./test-cursor
 	./test-geom
 	./test-xor
+	./test-tick
 	python3 test/mutate_xor.py
+	python3 test/mutate_tick.py
 	bash selftest.sh
 	python3 test/test_adopted_socket.py ./$(BIN)
 	python3 test/test_clipboard.py ./$(BIN)
 	python3 test/test_lifecycle.py ./$(BIN)
 	python3 test/test_cursor.py ./$(BIN)
 	python3 test/test_xor.py ./$(BIN)
+	python3 test/test_tick.py ./$(BIN)
 
 # The probe window against a REAL compositor (mutter --headless, software
 # renderer) and real udmabuf dma-bufs; exits 77 (skip) when either is missing.
@@ -243,5 +252,5 @@ install: $(BIN)
 
 clean:
 	rm -f $(BIN) $(TESTCLIENT) $(RELAY) $(DMASRC) *.o *.d \
-	      *-client-protocol.h *-protocol.c test-utf8 test-cursor test-geom test-xor \
+	      *-client-protocol.h *-protocol.c test-utf8 test-cursor test-geom test-xor test-tick \
 	      test/utf8_extracted.inc

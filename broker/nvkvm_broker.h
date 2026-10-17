@@ -630,6 +630,91 @@ void nb_refused_add(struct nb_refused *r, uint32_t fourcc, uint64_t modifier);
 bool nb_refused_has(const struct nb_refused *r, uint32_t fourcc,
                     uint64_t modifier);
 
+/* ── the display tick: EV_TICK and the lock-step frame requests ──────────────
+ *
+ * PURE decisions (nb_tick.c, test/test_tick.c): nothing here does I/O, reads a
+ * clock or knows a backend.  Time is passed in; the core feeds it the time of
+ * the event (CLOCK_MONOTONIC ns) and the test backend a virtual clock, so every
+ * rule below is table-testable to the nanosecond.  See
+ * docs/design/V3_DISPLAY_PACING_20261017.md section 11.
+ */
+
+/* The slack, in millihertz, a host rate may exceed the VMM's cap by and still
+ * be undivided: an output whose nominal rate is 75.2 Hz (a 75 Hz mode, as the
+ * display reports it) must not become 37.6 Hz. */
+#define NB_TICK_HZ_SLACK_MHZ 500u
+
+struct nb_tick {
+    bool     on;             /* negotiated: the VMM sent CLIENT_TICK          */
+    unsigned cap_hz;         /* the VMM's cap, 0 = NVKVM_BROKER_GUEST_MAX_HZ  */
+    uint32_t last_seq;       /* the last tick_seq emitted, 0 = none yet       */
+    uint32_t open_req;       /* the open request (a tick_seq), 0 = none       */
+    uint64_t open_since_ns;
+    bool     unpresented;    /* an answered frame the display has not shown   */
+    uint64_t unpresented_since_ns;
+    unsigned div, phase;     /* decimation: every div-th feedback ticks       */
+    bool     have_accept;
+    uint64_t last_accept_ns; /* the last feedback that was accepted           */
+    uint64_t last_present_ns;/* the last present_ns put on the wire           */
+    bool     have_real;
+    uint64_t last_real_ns;   /* the last compositor timestamp accepted        */
+    uint64_t now_ns;         /* the time of the latest event the core saw     */
+    /* counters, for the one line at detach and the test backend's stats */
+    uint64_t n_feedback, n_ticks, n_want, n_fast, n_decimated;
+    uint64_t n_req_timeouts, n_present_timeouts;
+    uint64_t n_answered, n_no_change, n_late, n_unsolicited;
+    uint64_t n_coalesced;
+};
+
+/* What nb_tick_refresh() decided to put on the wire. */
+struct nb_tick_out {
+    uint32_t tick_seq;
+    uint32_t refresh_word;   /* period | NVKVM_BROKER_TICK_F_*                */
+    uint64_t present_ns;
+};
+
+/* How a reply (COMMIT.seq, or NO_CHANGE) relates to the requests. */
+enum nb_tick_ans {
+    NB_TICK_ANS_OPEN,        /* it answers the open request: that is closed   */
+    NB_TICK_ANS_LATE,        /* issued, but not open (timed out, answered)    */
+    NB_TICK_ANS_UNSOLICITED, /* seq 0 on a COMMIT                             */
+    NB_TICK_ANS_VIOLATION    /* never issued / 0 on NO_CHANGE                 */
+};
+
+void nb_tick_reset(struct nb_tick *t, bool on, unsigned cap_hz);
+/* The tick_seq after `seq`: +1, wrapping 0xffffffff to 1 (0 is never a tick). */
+uint32_t nb_tick_next_seq(uint32_t seq);
+/* Is `a` newer than `b` in wrapping 32-bit order? */
+bool nb_tick_seq_newer(uint32_t a, uint32_t b);
+/* The divisor: ceil(host rate / the cap) with NB_TICK_HZ_SLACK_MHZ of slack
+ * (--refresh auto); round(host / mode) for a fixed rate (--refresh <hz>); and
+ * 60 Hz for --refresh none.  1 when the host period is unknown. */
+unsigned nb_tick_div(uint64_t host_period_ns, unsigned cap_hz, int hz_mode,
+                     unsigned fixed_mhz);
+/* The mode rate to advertise in EV_SURFACE under --refresh auto: host/div. */
+unsigned nb_tick_mode_mhz(unsigned host_mhz, unsigned div);
+/* WANT_FRAME at `now`?  No request open and no answered frame un-presented;
+ * or the open request / the un-presented frame is NVKVM_BROKER_TICK_REQ_TIMEOUT_NS
+ * old.  (A pure read.) */
+bool nb_tick_want(const struct nb_tick *t, uint64_t now_ns);
+/* ONE display refresh feedback.  Returns true and fills *o when a tick is to be
+ * sent: never more than one per call, never for a duplicate or too-fast
+ * feedback (closer than half a host period to the last accepted one), only
+ * every div-th accepted feedback.  `flags` are NVKVM_BROKER_TICK_F_CLOCK_ONLY. */
+bool nb_tick_refresh(struct nb_tick *t, uint64_t now_ns, uint64_t present_ns,
+                     uint64_t host_period_ns, uint32_t flags, int hz_mode,
+                     unsigned fixed_mhz, struct nb_tick_out *o);
+/* The tick sent when the VMM opts in: WANT_FRAME, CLOCK_ONLY. */
+void nb_tick_prime(struct nb_tick *t, uint64_t now_ns, struct nb_tick_out *o);
+/* A COMMIT (is_commit) or NO_CHANGE with request number `req`. */
+enum nb_tick_ans nb_tick_answer(struct nb_tick *t, uint32_t req, bool is_commit,
+                                uint64_t now_ns);
+/* The display showed (or discarded) the answered frame. */
+void nb_tick_presented(struct nb_tick *t);
+/* The TX queue's rule: a queued tick without WANT_FRAME may be replaced by a
+ * newer tick; one with it never. */
+bool nb_tick_may_replace(uint32_t queued_refresh_word);
+
 /* ── the policy core ─────────────────────────────────────────────────────── */
 struct nb_session;
 
@@ -798,6 +883,9 @@ struct nb_sink {
      * once per pair, not once per frame.  Same lifetime as fmt_refused.
      */
     struct nb_refused fmt_told;
+
+    /* The display tick (EV_TICK / lock-step requests): connection state. */
+    struct nb_tick tick;
 };
 
 void nb_sink_init(struct nb_sink *s, struct nb_session *sess);
@@ -876,6 +964,24 @@ void nb_sink_format_refused(struct nb_sink *s, uint32_t fourcc, uint64_t mod,
 void nb_sink_surface(struct nb_sink *s, unsigned w, unsigned h,
                      unsigned refresh_mhz);
 void nb_sink_frame(struct nb_sink *s);
+/*
+ * The display refreshed (a wp_presentation `presented`, or the frame callback
+ * that stands in for it): `present_ns` is CLOCK_MONOTONIC ns, `host_period_ns`
+ * the output's nominal period (0 = unknown), `flags` NVKVM_BROKER_TICK_F_CLOCK_ONLY
+ * when present_ns is not the compositor's timestamp.  The CORE decides what goes
+ * on the wire (decimation, WANT_FRAME, the rate rules): a backend just reports
+ * every feedback it gets, once.  A no-op with no client or one that did not opt
+ * in.  Returns whether a tick was queued.
+ */
+bool nb_sink_refresh(struct nb_sink *s, uint64_t now_ns, uint64_t present_ns,
+                     uint64_t host_period_ns, uint32_t flags);
+/* The display showed (or discarded) the frame the VMM last COMMITted. */
+void nb_sink_presented(struct nb_sink *s);
+/* Did the VMM opt in to ticks?  The mode rate the broker advertises follows. */
+bool nb_sink_tick_on(const struct nb_sink *s);
+/* The EV_SURFACE rate for a host rate of `host_mhz`, after the tick divisor. */
+unsigned nb_sink_mode_mhz(const struct nb_sink *s, unsigned host_mhz,
+                          uint64_t host_period_ns);
 void nb_sink_release(struct nb_sink *s, uint64_t buf_id);
 /* The user closed the display.  Reports it to the client and returns; the
  * client decides what that means for the VM.  Returns false when nobody is
