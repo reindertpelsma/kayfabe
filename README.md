@@ -31,8 +31,19 @@ Master is not the newest code: the latest Windows performance work lives on bran
 
   Other window sizes and quality settings give different numbers (an older run at 1280x720, High, measured 271 fps in OpenGL).
   The experimental build skips reading the guest's command buffers once a channel is set up. Details and limits: [`traces/perf_status_20261017/`](traces/perf_status_20261017/README.md).
-  On Linux guests, large GPU kernels and copies run at host speed (matrix multiply 0.997, llama.cpp prompt processing 0.998, token generation 0.88 of host,
-  on a rented nested box at older revisions; [`details`](docs/design/V3_LINUX_PERF_BASELINE_6692e621.md)).
+
+- **Linux guests run CUDA at host speed** for large work (rented RTX 3060 box that is itself a VM, older revisions; [details](docs/design/V3_LINUX_PERF_BASELINE_6692e621.md)):
+
+  | workload | host | guest | guest / host |
+  |---|---|---|---|
+  | matrix multiply (N=2048) | 786 GFLOPS | 784 GFLOPS | 0.997 |
+  | llama.cpp Qwen2.5-1.5B Q4, prompt processing | | | 0.998 |
+  | llama.cpp, token generation | | | 0.877 |
+  | device-to-device copy (32 MB) | 327 GB/s | 322 GB/s | 0.98 |
+  | app matrix, 65 apps (sum of per-app seconds) | 1075 s | 1193 s | 61 pass, 1.11x the time |
+
+  The cost is in many small launches: eager PyTorch decoding runs at 0.29 of host speed, creating a CUDA context takes about 8 times longer, and NVENC 1080p
+  reached 0.72 (older box). The same set on the home RTX 4070 without nesting has not been run yet.
 
 ## What runs today
 
