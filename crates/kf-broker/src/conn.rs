@@ -2306,12 +2306,34 @@ impl<L: Link> Relay<L> {
                     self.flush_owed(now, host);
                 }
                 self.maybe_no_change(now, host);
+                self.dump_ring("a request was replaced unanswered: the broker's timeout");
             }
+        }
+    }
+
+    /// ★ MEASUREMENT: print the lock-step event ring when a dump was asked for (an observed request timeout, or the ticks
+    /// going silent). Rate limited by the ring; never changes behaviour.
+    fn dump_ring(&mut self, why: &str) {
+        let Some(lines) = self
+            .conn
+            .as_mut()
+            .and_then(|c| c.tick.as_mut())
+            .and_then(|t| t.reqs.ring.take_dump(why))
+        else {
+            return;
+        };
+        for l in lines {
+            say!("{l}");
         }
     }
 
     /// Say it once when the ticks go live or silent (never per tick), and count it.
     fn note_tick_live(&mut self, now: u64) {
+        self.note_tick_live_inner(now);
+        self.dump_ring("the ticks went silent: the 50 ms fallback");
+    }
+
+    fn note_tick_live_inner(&mut self, now: u64) {
         let live = self.tick_live_at(now);
         let Some(tc) = self.conn.as_mut().and_then(|c| c.tick.as_mut()) else {
             return;
@@ -2320,6 +2342,7 @@ impl<L: Link> Relay<L> {
             return;
         }
         tc.live = live;
+        tc.reqs.note_live(live);
         // ★ one line per change, and a broker that flaps around 50 ms is said four times and then
         // every 256th (the counters count every change)
         if live {
@@ -2353,6 +2376,9 @@ impl<L: Link> Relay<L> {
             .and_then(|c| c.tick.as_ref())
             .and_then(|t| t.reqs.idle_request(nothing, now))
         else {
+            if let Some(t) = self.conn.as_mut().and_then(|c| c.tick.as_mut()) {
+                t.reqs.note_declined(!nothing);
+            }
             return;
         };
         match self.send(&Cmd::no_change(r), None, Rung::Shm) {

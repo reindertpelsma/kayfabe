@@ -116,6 +116,122 @@ pub enum TickVerdict {
     },
 }
 
+
+/// ★ MEASUREMENT ONLY (hitch investigation, 2026-10-17; behaviour-neutral, never required, no lock, no allocation after the first
+/// [`RING_CAP`] events): the last events of the lock step as the relay saw them, with monotonic microseconds, dumped as one
+/// group of log lines when the broker's request timeout was OBSERVED (a new `WANT_FRAME` replaced an unanswered open request) or
+/// the ticks went SILENT (the 50 ms fallback). It answers "what was the relay doing when it did not answer".
+pub const RING_CAP: usize = 48;
+
+/// What a ring entry records (`a`/`b` name the numbers per kind).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum EvKind {
+    /// A fresh tick: `a` = tick number, `b` = 1 when it carries `WANT_FRAME`.
+    Tick,
+    /// A stale tick dropped: `a` = its number.
+    Stale,
+    /// A request opened: `a` = its number.
+    Opened,
+    /// An UNANSWERED open request `a` was replaced by `b` (the broker's timeout, observed).
+    Superseded,
+    /// A frame was sent on request `a`.
+    Spent,
+    /// `NO_CHANGE` was sent for request `a`.
+    NoChange,
+    /// A ready frame found no request open.
+    Blocked,
+    /// An open request `a` was not answered with `NO_CHANGE`: `b` = 1 a frame is ready or owed, 2 too soon.
+    Declined,
+    /// Ticks went silent (`b` = 0) or live again (`b` = 1).
+    Live,
+}
+
+/// One entry.
+#[derive(Debug, Clone, Copy)]
+pub struct RingEv {
+    /// Microseconds since the ring was created.
+    pub t_us: u64,
+    /// What happened.
+    pub kind: EvKind,
+    /// First number.
+    pub a: u32,
+    /// Second number.
+    pub b: u32,
+}
+
+/// The bounded ring. `Clone` copies the entries (a book is cloned only by the exhaustive model).
+#[derive(Debug, Clone)]
+pub struct EventRing {
+    buf: Vec<RingEv>,
+    next: usize,
+    base: std::time::Instant,
+    pending: bool,
+    /// Dumps taken so far.
+    pub dumps: u32,
+}
+
+impl Default for EventRing {
+    fn default() -> Self {
+        EventRing {
+            buf: Vec::new(),
+            next: 0,
+            base: std::time::Instant::now(),
+            pending: false,
+            dumps: 0,
+        }
+    }
+}
+
+impl EventRing {
+    /// Record one event.
+    pub fn push(&mut self, kind: EvKind, a: u32, b: u32) {
+        let t_us = u64::try_from(self.base.elapsed().as_micros()).unwrap_or(u64::MAX);
+        let ev = RingEv { t_us, kind, a, b };
+        if self.buf.len() < RING_CAP {
+            if self.buf.capacity() == 0 {
+                self.buf.reserve_exact(RING_CAP);
+            }
+            self.buf.push(ev);
+        } else {
+            self.buf[self.next] = ev;
+            self.next = (self.next + 1) % RING_CAP;
+        }
+    }
+
+    /// Ask for a dump at the next [`EventRing::take_dump`].
+    pub fn request_dump(&mut self) {
+        self.pending = true;
+    }
+
+    /// The entries, oldest first.
+    #[must_use]
+    pub fn events(&self) -> Vec<RingEv> {
+        let mut v = Vec::with_capacity(self.buf.len());
+        v.extend_from_slice(&self.buf[self.next..]);
+        v.extend_from_slice(&self.buf[..self.next]);
+        v
+    }
+
+    /// The pending dump as text lines (oldest first, times relative to the newest entry), rate limited: the first 6, then
+    /// every 64th. `None` when none is pending or it is rate limited.
+    pub fn take_dump(&mut self, why: &str) -> Option<Vec<String>> {
+        if !std::mem::take(&mut self.pending) {
+            return None;
+        }
+        self.dumps += 1;
+        if self.dumps > 6 && self.dumps % 64 != 0 {
+            return None;
+        }
+        let ev = self.events();
+        let last = ev.last().map_or(0, |e| e.t_us);
+        let mut out = vec![format!("lock-step event ring #{} ({why}), last {} events, newest at 0:", self.dumps, ev.len())];
+        for e in &ev {
+            out.push(format!("  {:>9} us  {:?} a={} b={}", i128::from(e.t_us) - i128::from(last), e.kind, e.a, e.b));
+        }
+        Some(out)
+    }
+}
+
 /// ★ The relay's request book for one connection.
 #[derive(Debug, Clone, Default)]
 pub struct Requests {
@@ -132,6 +248,8 @@ pub struct Requests {
     ticks_since_open: u32,
     /// The counters.
     pub c: TickCounters,
+    /// ★ MEASUREMENT: the last events of the lock step ([`EventRing`]).
+    pub ring: EventRing,
 }
 
 impl Requests {
@@ -171,6 +289,7 @@ impl Requests {
     pub fn on_tick(&mut self, t: &TickPkt) -> TickVerdict {
         if self.last_seq.is_some_and(|l| !seq_newer(t.tick_seq, l)) {
             self.c.ticks_stale += 1;
+            self.ring.push(EvKind::Stale, t.tick_seq, 0);
             return TickVerdict::Stale;
         }
         // numbers skipped between two ticks; the wrap past 0 is not a skipped tick (0 is never sent)
@@ -193,13 +312,17 @@ impl Requests {
         );
         self.c.ticks += 1;
         self.refresh_ns = t.refresh_ns;
+        self.ring.push(EvKind::Tick, t.tick_seq, u32::from(t.want));
         self.ticks_since_open = self.ticks_since_open.saturating_add(1);
         let mut opened = false;
         if t.want {
             self.c.want_ticks += 1;
-            if self.open.is_some() {
+            if let Some(old) = self.open {
                 self.c.credits_coalesced += 1;
+                self.ring.push(EvKind::Superseded, old, t.tick_seq);
+                self.ring.request_dump();
             }
+            self.ring.push(EvKind::Opened, t.tick_seq, 0);
             self.open = Some(t.tick_seq);
             self.ticks_since_open = 0;
             opened = true;
@@ -211,7 +334,8 @@ impl Requests {
     /// must wait).
     pub fn spend(&mut self, now_ms: u64) -> Option<u32> {
         let r = self.open.take();
-        if r.is_some() {
+        if let Some(n) = r {
+            self.ring.push(EvKind::Spent, n, 0);
             self.c.frames_on_credit += 1;
             self.last_answer_ms = Some(now_ms);
         }
@@ -220,6 +344,7 @@ impl Requests {
 
     /// A ready frame found no request open.
     pub fn blocked(&mut self) {
+        self.ring.push(EvKind::Blocked, self.open.unwrap_or(0), 0);
         self.c.req_open_blocked += 1;
     }
 
@@ -250,9 +375,28 @@ impl Requests {
         })
     }
 
+    /// ★ MEASUREMENT: the open request was NOT answered `NO_CHANGE` although a later tick came: `ready` = a frame is ready
+    /// or owed (the frame path should be answering), else the answer gap has not passed.
+    pub fn note_declined(&mut self, ready: bool) {
+        if let Some(n) = self.open
+            && self.ticks_since_open >= 1
+        {
+            self.ring.push(EvKind::Declined, n, if ready { 1 } else { 2 });
+        }
+    }
+
+    /// ★ MEASUREMENT: ticks went live (`true`) or silent (`false`); silence asks for a dump.
+    pub fn note_live(&mut self, live: bool) {
+        self.ring.push(EvKind::Live, self.open.unwrap_or(0), u32::from(live));
+        if !live {
+            self.ring.request_dump();
+        }
+    }
+
     /// `NO_CHANGE` for the open request went out at `now_ms`.
     pub fn no_change_done(&mut self, now_ms: u64) {
-        if self.open.take().is_some() {
+        if let Some(n) = self.open.take() {
+            self.ring.push(EvKind::NoChange, n, 0);
             self.c.no_change_sent += 1;
             self.last_answer_ms = Some(now_ms);
         }
@@ -412,6 +556,41 @@ mod tests {
             clock_only: false,
             present_ns: present,
         }
+    }
+
+    /// ★ MEASUREMENT: the event order of an OBSERVED broker request timeout, clock-free — request 5 opens, a frame is never
+    /// sent and no `NO_CHANGE` goes out, a newer `WANT_FRAME` (6) replaces it: the ring holds the order and a dump is due once;
+    /// silence asks for a dump too; the ring stays bounded.
+    #[test]
+    fn the_ring_records_an_unanswered_request_replaced_and_dumps_once() {
+        let mut r = Requests::new();
+        r.on_tick(&tick(5, true, 10));
+        r.on_tick(&tick(6, false, 20));
+        r.note_declined(true);
+        assert!(r.ring.take_dump("x").is_none(), "no timeout seen yet: no dump");
+        r.on_tick(&tick(7, true, 30)); // the broker timed 5 out and opened 7
+        let kinds: Vec<EvKind> = r.ring.events().iter().map(|e| e.kind).collect();
+        assert_eq!(
+            kinds,
+            vec![
+                EvKind::Tick,
+                EvKind::Opened,
+                EvKind::Tick,
+                EvKind::Declined, // the later tick found a ready frame unsent and no NO_CHANGE: the stall under study
+                EvKind::Tick,
+                EvKind::Superseded,
+                EvKind::Opened
+            ]
+        );
+        let d = r.ring.take_dump("request timeout observed").expect("one dump is due");
+        assert!(d.iter().any(|l| l.contains("Superseded a=5 b=7")), "{d:?}");
+        assert!(r.ring.take_dump("again").is_none(), "one dump per cause");
+        r.note_live(false);
+        assert!(r.ring.take_dump("silent").is_some());
+        for i in 0..500u32 {
+            r.on_tick(&tick(100 + i, false, 40 + u64::from(i)));
+        }
+        assert_eq!(r.ring.events().len(), RING_CAP);
     }
 
     /// The whole decision table of the request book, one row per rule R1–R4.
