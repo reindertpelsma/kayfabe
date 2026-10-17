@@ -16,20 +16,27 @@ Fresh stock-VGA LTSC baseline supervisor95215 waits for this evidence PUSH+remot
 Linux apps95214 finishedrc0. Windows580 actualbinding still UNVERIFIED/UNRUN.
 No shared-host use. D1-D6open/no mastermerge. Evidence ga104_595_completion_20261017/.
 
-## Active wave 2026-10-17 — owned GA104 Linux595 completion
+## Active wave 2026-10-17 — GA104 Linux595 complete; Windows baseline installing
 
-Only own rental **56326220** is active (machine56506), created01:30:28UTC.
-Timer2714225 was armed immediately for **04:25:28UTC / 06:25:28CEST**;
-manual retirement target03:55UTC, with API absence required before05:00UTC/07:00CEST.
-Own receipt and queued hypotheses are in `ga104_595_completion_20261017/`.
-Preflight verified KVM,138GBfree root,49GiBRAM and9logicalCPU; actual die/595/native
-workloads remain pending. Source9d6f210ba is built on the rental, with a fresh595 fat
-guest from public packages. No shared-host access. Root build PID1595; serial queue
-V2 PID15243. The first queue was stopped before any GPU workload to correct its
-native scoreboard path; no workload/installer replay. Official pinned Windows media
-fetch is GPU-free optional preparation; no Windows binding/result is claimed.
-Current M1/M3 falsifiers and limits: [plan](../traces/die_driver_sweep_20261015/ga104_595_completion_20261017/PLAN.md).
+Only own56326220/machine56506 ACTIVE, native unprivileged die GA104arch170/impl4.
+Created01:30:28UTC; originaltimer2714225 at04:25:28UTC/06:25:28CEST unchanged,
+manualtarget03:55UTC, absoluteall-rentAPIabsence05:00UTC/07:00CEST.
+Native595 gates9/9+10/CUDA4/raw30; exact9d guest595 raw30/CUDA4/gfx5/all10nativehashes/
+Cinnamon-Xorg-NVIDIA/nonblankX11SHM PASS. Retain raw246zero-heartbeat warnings and
+app27displaySTALL/9nvAssert; guestappXid0/flip0/host10→10. Full evidence PUSHae9474804;
+bounded Windows recipes PUSHa2690c1d2 and ls-remote==local verified.
+Fresh stock-VGA LTSC baseline95215/installer QEMU102761 started02:40:12UTC;
+noGPUdevice present, disk stillwriting and screenreportsInstallingWindows. No Windows
+adapter/binding result yet. Windows cell supervisor103294 waits verifiedbaseline;
+actual580.88/service+classGSP1/cold580.65.06/P19/Code+apps+420hold required.
+Same private QEMUcc2a, persistentUUID/TPM/OVMF, signedsetup ONCE, bounded QGA status-only
+reconnects, readonly pinned payloadISO. Private passwords/keys/images remain onrental.
+No shared-host access atall, no master merge; D1-D6open/no familycomplete.
+NativeWindowsGA104 remainsUNRUN; a595caps scalar does not fill a580row. No captured page.
+[Plan](../traces/die_driver_sweep_20261015/ga104_595_completion_20261017/PLAN.md).
 Previous no-active statements below are historical and superseded by this ownership.
+
+
 
 
 ## Update 2026-10-17 01:26 UTC — coordinator addendum applied; no active rental

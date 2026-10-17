@@ -200,9 +200,10 @@ newreceipt/timer andliveprice/PCI/KVM/diskchecks.
 
 | Instance | GPU | USD/hour incl150GB | StartUTC | StopUTC | Purpose | Ceiling |
 |---|---|---:|---|---|---|---|
-|56326220|RTX3070 advertised; exactdie pending unprivilegedRM|0.1555555556|2026-10-17T01:30:28.677605+00:00|ACTIVE; timer2714225 target2026-10-17T04:25:28.677605+00:00; hard05:00UTC|M1 nativecaps/M3 Linux595CUDA,gfx,broker; exact9d6f210ba|<=0.46USD at175minutes; campaign<=10.96USD+transfers if fulltimer|
+|56326220|RTX3070/GA104arch170impl4 unprivilegedRMverified|0.1555555556|2026-10-17T01:30:28.677605+00:00|ACTIVE; timer2714225 target2026-10-17T04:25:28.677605+00:00; hard05:00UTC|M1 nativecaps/M3 Linux595CUDA,gfx,broker; exact9d6f210ba|<=0.46USD at175minutes; campaign<=10.96USD+transfers if fulltimer|
 
 All prior campaign-owned IDs were checked absent before creation; other account
 instances were not acted on. Immediately armed175minute timer and attached only
-the publicSSHkey. Fifteen-minute startup/KVM/rootcapacity gates and native
-MC_GET_ARCH_INFO remain pending; no hardware pass is claimed. No shared-host use.
+the publicSSHkey. Startup/KVM/rootcapacity passed; native unprivileged MC_GET_ARCH_INFO proves GA104.
+Exact9d Linux595 native+guest raw/CUDA/gfx/broker functional acceptance PASS (warnings retained).
+FreshstockLTSC baseline active; Windows adapter/binding stillUNVERIFIED. No shared-host use.
