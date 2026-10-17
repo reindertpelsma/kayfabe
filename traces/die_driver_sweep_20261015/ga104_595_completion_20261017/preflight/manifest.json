@@ -3,30 +3,56 @@
     "name": "ampere595_preflight.log",
     "raw_bytes": 410,
     "raw_sha256": "56cb4d91cd468105ab7cc21e7e848cde322f1eb61d8af1d2ee4256f20e18d56d",
-    "sanitized_sha256": "56cb4d91cd468105ab7cc21e7e848cde322f1eb61d8af1d2ee4256f20e18d56d"
+    "sanitized_sha256": "56cb4d91cd468105ab7cc21e7e848cde322f1eb61d8af1d2ee4256f20e18d56d",
+    "sanitization": "UUID/MAC redaction and line-ending/trailing-space normalization only"
   },
   {
     "name": "ampere595_source",
     "raw_bytes": 41,
     "raw_sha256": "48fea04ffd418f458b8272325217075b7b6b29a6455e9935551da1d99a8b226c",
-    "sanitized_sha256": "48fea04ffd418f458b8272325217075b7b6b29a6455e9935551da1d99a8b226c"
+    "sanitized_sha256": "48fea04ffd418f458b8272325217075b7b6b29a6455e9935551da1d99a8b226c",
+    "sanitization": "UUID/MAC redaction and line-ending/trailing-space normalization only"
   },
   {
     "name": "ampere595_die.log",
     "raw_bytes": 209,
     "raw_sha256": "b7e1ffe6d7e67933a33778e24fedc2eaeba9e74af43abf4a85b66816fcc84a29",
-    "sanitized_sha256": "b7e1ffe6d7e67933a33778e24fedc2eaeba9e74af43abf4a85b66816fcc84a29"
+    "sanitized_sha256": "b7e1ffe6d7e67933a33778e24fedc2eaeba9e74af43abf4a85b66816fcc84a29",
+    "sanitization": "UUID/MAC redaction and line-ending/trailing-space normalization only"
   },
   {
     "name": "ampere595_native_caps.txt",
     "raw_bytes": 2363,
     "raw_sha256": "0d8671c91c61cb163b98b115a9569e5d1450a00ab9b03fedd9cb4394bea5777f",
-    "sanitized_sha256": "0d8671c91c61cb163b98b115a9569e5d1450a00ab9b03fedd9cb4394bea5777f"
+    "sanitized_sha256": "0d8671c91c61cb163b98b115a9569e5d1450a00ab9b03fedd9cb4394bea5777f",
+    "sanitization": "UUID/MAC redaction and line-ending/trailing-space normalization only"
   },
   {
     "name": "ampere595_native_caps.err",
     "raw_bytes": 0,
     "raw_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
-    "sanitized_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    "sanitized_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "sanitization": "UUID/MAC redaction and line-ending/trailing-space normalization only"
+  },
+  {
+    "name": "ampere595_gates.log",
+    "raw_bytes": 25002,
+    "raw_sha256": "eb32eac99feed883f3b29328f1f0776104fb887898fa4411707f7396aa3ab38c",
+    "sanitized_sha256": "174e75c5d8ba725754229f170ebf86584ed9f6947a31ceb913185111836aebaa",
+    "sanitization": "UUID/MAC redaction and line-ending/trailing-space normalization only"
+  },
+  {
+    "name": "ampere595_gates_wrapper.log",
+    "raw_bytes": 25002,
+    "raw_sha256": "eb32eac99feed883f3b29328f1f0776104fb887898fa4411707f7396aa3ab38c",
+    "sanitized_sha256": "174e75c5d8ba725754229f170ebf86584ed9f6947a31ceb913185111836aebaa",
+    "sanitization": "UUID/MAC redaction and line-ending/trailing-space normalization only"
+  },
+  {
+    "name": "ampere595_driver.log",
+    "raw_bytes": 4371,
+    "raw_sha256": "f4908ea0de8ede1b8b6bcb477c63f61a3ba17e4fb03bdf98fbdb84a357c9740f",
+    "sanitized_sha256": "df4302d8b0d50ab766b4ee3f0354cf412c05694fa85a081dc655bebc069fd73c",
+    "sanitization": "UUID/MAC redaction and line-ending/trailing-space normalization only"
   }
 ]
