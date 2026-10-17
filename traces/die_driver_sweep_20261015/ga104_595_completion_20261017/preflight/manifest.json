@@ -1,0 +1,14 @@
+[
+  {
+    "name": "ampere595_preflight.log",
+    "raw_bytes": 410,
+    "raw_sha256": "56cb4d91cd468105ab7cc21e7e848cde322f1eb61d8af1d2ee4256f20e18d56d",
+    "sanitized_sha256": "56cb4d91cd468105ab7cc21e7e848cde322f1eb61d8af1d2ee4256f20e18d56d"
+  },
+  {
+    "name": "ampere595_source",
+    "raw_bytes": 41,
+    "raw_sha256": "48fea04ffd418f458b8272325217075b7b6b29a6455e9935551da1d99a8b226c",
+    "sanitized_sha256": "48fea04ffd418f458b8272325217075b7b6b29a6455e9935551da1d99a8b226c"
+  }
+]

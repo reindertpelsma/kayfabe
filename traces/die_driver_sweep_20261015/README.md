@@ -33,6 +33,22 @@ againstowner topic andmaster/ownerGPU/VM/checkout remainuntouched.
 Initial base: origin/claude/gpu-types-20261015 plus cursor fix2f99e673d;
 initial combined product revision23585a319.
 
+## Active wave 2026-10-17 — owned GA104 Linux595 completion
+
+Only own rental **56326220** is active (machine56506), created01:30:28UTC.
+Timer2714225 was armed immediately for **04:25:28UTC / 06:25:28CEST**;
+manual retirement target03:55UTC, with API absence required before05:00UTC/07:00CEST.
+Own receipt and queued hypotheses are in `ga104_595_completion_20261017/`.
+Preflight verified KVM,138GBfree root,49GiBRAM and9logicalCPU; actual die/595/native
+workloads remain pending. Source9d6f210ba is built on the rental, with a fresh595 fat
+guest from public packages. No shared-host access. Root build PID1595; serial queue
+V2 PID15243. The first queue was stopped before any GPU workload to correct its
+native scoreboard path; no workload/installer replay. Official pinned Windows media
+fetch is GPU-free optional preparation; no Windows binding/result is claimed.
+Current M1/M3 falsifiers and limits: [plan](ga104_595_completion_20261017/PLAN.md).
+Previous no-active statements below are historical and superseded by this ownership.
+
+
 ## Update 2026-10-17 01:26 UTC — coordinator addendum applied; no active rental
 
 MEASURED: live API reconfirms own56302930 absent. Retirement was **02:40 CEST /
