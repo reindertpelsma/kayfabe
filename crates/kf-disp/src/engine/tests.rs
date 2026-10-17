@@ -4,10 +4,10 @@
 use super::*;
 use crate::class::{self, put};
 
-const CORE: u32 = 0xC67D;
-const WIN: u32 = 0xC67E;
+pub(super) const CORE: u32 = 0xC67D;
+pub(super) const WIN: u32 = 0xC67E;
 const IMM: u32 = 0xC67B;
-const CLIENT: u32 = 0xc1d0_0015;
+pub(super) const CLIENT: u32 = 0xc1d0_0015;
 
 fn t() -> &'static ClassTable {
     class::for_version("580.159.04").unwrap()
@@ -17,7 +17,7 @@ fn classes() -> Classes {
     Classes::of(&kf_chip::display::AMPERE)
 }
 
-fn engine() -> Engine {
+pub(super) fn engine() -> Engine {
     let r = Regs::for_ip("580.159.04", 0x0401_0000).unwrap();
     Engine::new(
         Vocab::resolve(t(), &classes(), &r).expect("GA10x vocabulary"),
@@ -26,26 +26,26 @@ fn engine() -> Engine {
     )
 }
 
-fn m(cl: u32, n: &str) -> u32 {
+pub(super) fn m(cl: u32, n: &str) -> u32 {
     t().v(cl, n).unwrap_or_else(|| panic!("NV{cl:04X}_{n}"))
 }
-fn ma(cl: u32, n: &str, i: u32) -> u32 {
+pub(super) fn ma(cl: u32, n: &str, i: u32) -> u32 {
     t().a(cl, n, i)
         .unwrap_or_else(|| panic!("NV{cl:04X}_{n}({i})"))
 }
-fn fl(cl: u32, n: &str) -> (u8, u8) {
+pub(super) fn fl(cl: u32, n: &str) -> (u8, u8) {
     t().f(cl, n).unwrap_or_else(|| panic!("NV{cl:04X}_{n}"))
 }
 
 /// A NVKMS-style stream: every method with its own one-word header.
-struct Ring {
-    words: Vec<u32>,
+pub(super) struct Ring {
+    pub(super) words: Vec<u32>,
 }
 impl Ring {
-    fn new() -> Ring {
+    pub(super) fn new() -> Ring {
         Ring { words: Vec::new() }
     }
-    fn m(&mut self, method: u32, data: u32) -> &mut Ring {
+    pub(super) fn m(&mut self, method: u32, data: u32) -> &mut Ring {
         self.words.push((1 << 18) | method);
         self.words.push(data);
         self
@@ -60,11 +60,11 @@ impl Ring {
     }
 }
 
-fn all_ok(_: &Acquire) -> bool {
+pub(super) fn all_ok(_: &Acquire) -> bool {
     true
 }
 
-fn pb() -> Option<PbLoc> {
+pub(super) fn pb() -> Option<PbLoc> {
     Some(PbLoc {
         sysmem: true,
         addr: 0x1000_0000,
@@ -1547,7 +1547,7 @@ fn flip(r: &mut Ring, mode: u32, with: u32) {
 }
 
 /// Head 0 lit (1080p60) with windows 0 and 1 on it; the core's ring for later updates.
-fn lit(e: &mut Engine) -> Ring {
+pub(super) fn lit(e: &mut Engine) -> Ring {
     e.alloc(ChannelKind::Core, 0, CLIENT, 1, pb(), 0);
     e.alloc(ChannelKind::Window, 0, CLIENT, 1, pb(), 0);
     e.alloc(ChannelKind::Window, 1, CLIENT, 1, pb(), 0);

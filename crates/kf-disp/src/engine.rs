@@ -2261,3 +2261,5 @@ fn interlock_set(v: &Vocab, c: &Chan, update: u32) -> ChanSet {
 
 #[cfg(test)]
 mod tests;
+#[cfg(test)]
+mod pacing_model;
