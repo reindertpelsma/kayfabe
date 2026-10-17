@@ -307,7 +307,8 @@ int nb_tick_stats_format(char *buf, size_t n, uint64_t t_ms, const struct nb_tic
                      "stats t=%llu feedbacks=%llu ticks=%llu want_ticks=%llu commit=%llu no_change=%llu timeouts=%llu "
                      "late=%llu unsolicited=%llu present_timeouts=%llu coalesced=%llu "
                      "gap_max_us=%llu gaps33=%llu discarded=%llu ans_max_us=%llu ans_mean_us=%llu "
-                     "pres_max_us=%llu pres_mean_us=%llu loop_late_max_us=%llu loop_work_max_us=%llu",
+                     "pres_max_us=%llu pres_mean_us=%llu loop_late_max_us=%llu loop_work_max_us=%llu "
+                     "gaps50=%llu gaps100=%llu new=%llu repeat=%llu cgap_max_us=%llu cg33=%llu cg50=%llu cg100=%llu",
                      (unsigned long long)t_ms,
                      (unsigned long long)delta_u64(now->feedback, prev->feedback),
                      (unsigned long long)delta_u64(now->ticks, prev->ticks),
@@ -326,7 +327,11 @@ int nb_tick_stats_format(char *buf, size_t n, uint64_t t_ms, const struct nb_tic
                      (unsigned long long)(w->pres_max_ns / 1000),
                      (unsigned long long)(w->pres_n ? w->pres_sum_ns / w->pres_n / 1000 : 0),
                      (unsigned long long)(w->loop_late_max_ns / 1000),
-                     (unsigned long long)(w->loop_work_max_ns / 1000));
+                     (unsigned long long)(w->loop_work_max_ns / 1000),
+                     (unsigned long long)w->gaps50, (unsigned long long)w->gaps100,
+                     (unsigned long long)w->new_n, (unsigned long long)w->repeat_n,
+                     (unsigned long long)(w->cgap_max_ns / 1000), (unsigned long long)w->cg33,
+                     (unsigned long long)w->cg50, (unsigned long long)w->cg100);
     return (k > 0 && (size_t)k < n) ? k : 0;
 }
 
@@ -355,6 +360,12 @@ void nb_tick_win_gap(struct nb_tick *t, uint64_t gap_ns)
     if (gap_ns > 33000000ull) {
         t->win.gap33++;
     }
+    if (gap_ns > 50000000ull) {
+        t->win.gaps50++;
+    }
+    if (gap_ns > 100000000ull) {
+        t->win.gaps100++;
+    }
 }
 
 void nb_tick_win_loop(struct nb_tick *t, uint64_t late_ns, uint64_t work_ns)
@@ -367,3 +378,23 @@ void nb_tick_win_loop(struct nb_tick *t, uint64_t late_ns, uint64_t work_ns)
     }
 }
 
+void nb_tick_content_present(struct nb_tick *t, uint64_t present_ns, bool new_content)
+{
+    if (!new_content) {
+        t->win.repeat_n++;
+        return;
+    }
+    t->win.new_n++;
+    if (t->have_content && present_ns > t->last_content_ns) {
+        uint64_t g = present_ns - t->last_content_ns;
+
+        if (g > t->win.cgap_max_ns) {
+            t->win.cgap_max_ns = g;
+        }
+        t->win.cg33 += g > 33000000ull;
+        t->win.cg50 += g > 50000000ull;
+        t->win.cg100 += g > 100000000ull;
+    }
+    t->have_content = true;
+    t->last_content_ns = present_ns;
+}

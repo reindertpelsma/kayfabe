@@ -600,9 +600,23 @@ static void test_stats(void)
     nb_tick_win_loop(&ST, 3000000ull, 9000000ull);
     nb_tick_win_loop(&ST, 1000000ull, 2000000ull);
     CHECK(ST.win.loop_late_max_ns == 3000000ull && ST.win.loop_work_max_ns == 9000000ull, "win: loop maxima");
+    /* new-content presents: gaps between consecutive NEW presents only; repeats are counted and never close a gap */
+    nb_tick_content_present(&ST, 1000000000ull, true);
+    nb_tick_content_present(&ST, 1016000000ull, false);
+    nb_tick_content_present(&ST, 1032000000ull, false);
+    nb_tick_content_present(&ST, 1060000000ull, true);   /* 60 ms after the previous NEW one */
+    nb_tick_content_present(&ST, 1070000000ull, true);   /* 10 ms */
+    nb_tick_content_present(&ST, 1200000000ull, true);   /* 130 ms */
+    CHECK(ST.win.new_n == 4 && ST.win.repeat_n == 2, "content: new and repeat counts");
+    CHECK(ST.win.cgap_max_ns == 130000000ull && ST.win.cg33 == 2 && ST.win.cg50 == 2 && ST.win.cg100 == 1,
+          "content: gap max and thresholds (%llu %llu %llu %llu)", (unsigned long long)ST.win.cgap_max_ns,
+          (unsigned long long)ST.win.cg33, (unsigned long long)ST.win.cg50, (unsigned long long)ST.win.cg100);
+    nb_tick_win_gap(&ST, 120000000ull);
+    CHECK(ST.win.gaps50 == 1 && ST.win.gaps100 == 1, "win: refresh gaps over 50 / 100 ms");
     nb_tick_snap_take(&ST, &a);
     nb_tick_snap_take(&ST, &b);
-    CHECK(nb_tick_stats_format(buf, sizeof(buf), 5, &a, &b, &ST.win) > 0 && strstr(buf, "gap_max_us=50000 gaps33=2 discarded=1 ans_max_us=4000 ans_mean_us=4000 pres_max_us=17000 pres_mean_us=9000 loop_late_max_us=3000 loop_work_max_us=9000") != NULL, "win: line is '%s'", buf);
+    CHECK(nb_tick_stats_format(buf, sizeof(buf), 5, &a, &b, &ST.win) > 0 && strstr(buf, " new=4 repeat=2 cgap_max_us=130000 cg33=2 cg50=2 cg100=1") != NULL, "content line is '%s'", buf);
+    CHECK(nb_tick_stats_format(buf, sizeof(buf), 5, &a, &b, &ST.win) > 0 && strstr(buf, "gap_max_us=120000 gaps33=3 discarded=1 ans_max_us=4000 ans_mean_us=4000 pres_max_us=17000 pres_mean_us=9000 loop_late_max_us=3000 loop_work_max_us=9000") != NULL, "win: line is '%s'", buf);
     CHECK(nb_tick_stats_format(buf, 20, 1, &a, &b, &ST.win) == 0, "stats: a small buffer yields nothing, never a overrun");
     CHECK(nb_tick_stats_format(buf, sizeof(buf), 1, &b, &b, &ST.win) > 0 && strstr(buf, "ticks=0 ") != NULL, "stats: no change, zero deltas");
     CHECK(nb_tick_stats_format(buf, sizeof(buf), 1, &b, &a, &ST.win) > 0 && strstr(buf, "feedbacks=0 ") != NULL, "stats: a reset never underflows");
