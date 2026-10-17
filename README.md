@@ -21,16 +21,17 @@ Master is not the newest code: the latest Windows performance work lives on bran
 
 - **Nothing is patched.** No host or guest driver or kernel is modified; the guest uses NVIDIA's own installer.
 - **The guest is treated as hostile.** Every host action is authored by kayfabe from a few unprivileged verbs, never forwarded from guest bytes.
-- **Near-native speed is within reach.** On the same RTX 4070, Unigine Heaven in a Windows guest (1080p, Ultra):
+- **Near-native speed is within reach.** On the same RTX 4070, Unigine Heaven 4.0 in a Windows guest (1920x1080 windowed, Ultra, 260 s runs, Heaven's own score):
 
   | | Direct3D 11 | OpenGL |
   |---|---|---|
-  | native Windows (VFIO, earlier campaign) | 330 fps | 342 fps |
-  | kayfabe, production path | 89 to 102 fps | 211 to 233 fps |
-  | kayfabe, experimental build (not on master) | 296 to 299 fps | 353 to 359 fps |
+  | native Windows (VFIO, measured 2026-10-15) | 330 fps | 342 fps |
+  | kayfabe, production path | 89 to 102 fps | 212 to 233 fps |
+  | kayfabe, experimental build | 296 to 299 fps | 338 to 362 fps |
 
-  The experimental build skips reading the guest's command buffers once a channel is set up. It is research code, run on Heaven only; the safe version of the
-  same idea is still being validated. Details and limits: [`traces/perf_status_20261017/`](traces/perf_status_20261017/README.md).
+  Other window sizes and quality settings give different numbers (an older run at 1280x720, High, measured 271 fps in OpenGL).
+  The experimental build skips reading the guest's command buffers once a channel is set up. It is research code, run on Heaven only, and not merged yet;
+  the safe version of the same idea is still being validated. Details and limits: [`traces/perf_status_20261017/`](traces/perf_status_20261017/README.md).
   On Linux guests, large GPU kernels and copies run at host speed (matrix multiply 0.997, llama.cpp prompt processing 0.998, token generation 0.88 of host,
   on a rented nested box at older revisions; [`details`](docs/design/V3_LINUX_PERF_BASELINE_6692e621.md)).
 
