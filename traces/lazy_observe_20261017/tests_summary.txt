@@ -1,0 +1,40 @@
+Running unittests src/lib.rs (/data/codex-lazy-observe/test-target/release/deps/kf_chan-f6cc2223d93f2309)
+test result: ok. 142 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+Running tests/channel_formats_vs_ogkm.rs (/data/codex-lazy-observe/test-target/release/deps/channel_formats_vs_ogkm-82a3b41b31e5c7af)
+test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+Running tests/dbfast_bench.rs (/data/codex-lazy-observe/test-target/release/deps/dbfast_bench-6c0a8470f2f71d4b)
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+Running tests/dbfast_exhaust.rs (/data/codex-lazy-observe/test-target/release/deps/dbfast_exhaust-99610073d5db3613)
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.10s
+Running tests/dbfast_kvm.rs (/data/codex-lazy-observe/test-target/release/deps/dbfast_kvm-f0a8b5a1f79b3344)
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.17s
+Running tests/notifiers_vs_ogkm.rs (/data/codex-lazy-observe/test-target/release/deps/notifiers_vs_ogkm-e67e63356ec30a9c)
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+Running tests/ring.rs (/data/codex-lazy-observe/test-target/release/deps/ring-cc2263bb66b3fd81)
+test result: ok. 12 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+Running tests/tmode.rs (/data/codex-lazy-observe/test-target/release/deps/tmode-bdc2d57d7c4e0329)
+test result: ok. 23 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+Running tests/translated_rewrite.rs (/data/codex-lazy-observe/test-target/release/deps/translated_rewrite-9981015a2c3469ed)
+test result: ok. 18 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+Running tests/user_consumption_model.rs (/data/codex-lazy-observe/test-target/release/deps/user_consumption_model-4ef398aac07acae9)
+test capacity_is_trusted_bounded_and_keeps_one_empty_slot ... FAILED
+test result: FAILED. 7 passed; 1 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+Running tests/user_gate_rules.rs (/data/codex-lazy-observe/test-target/release/deps/user_gate_rules-a06175a706a59a56)
+test result: ok. 9 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.16s
+Running tests/user_lazy_model.rs (/data/codex-lazy-observe/test-target/release/deps/user_lazy_model-2238cdf3f3075c4c)
+test result: ok. 17 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+Running tests/user_loop_model.rs (/data/codex-lazy-observe/test-target/release/deps/user_loop_model-94bc4abc81a6a04d)
+test result: ok. 37 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 28.97s
+Running tests/user_progress_model.rs (/data/codex-lazy-observe/test-target/release/deps/user_progress_model-b389ed3206f87bd0)
+test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+Running tests/user_ring_model.rs (/data/codex-lazy-observe/test-target/release/deps/user_ring_model-a7febc8b8c69c227)
+test capacity_is_bounded_and_keeps_one_slot_empty ... ok
+test result: ok. 7 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+Running tests/user_stream_model.rs (/data/codex-lazy-observe/test-target/release/deps/user_stream_model-e21836a68ebca563)
+test result: ok. 18 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+Doc-tests kf_chan
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+put_cache exploration: 2461 reachable states
+full_suite_exit=101
+lazy_model_exit=0
+TOTAL passed=308 failed=1 ignored=0

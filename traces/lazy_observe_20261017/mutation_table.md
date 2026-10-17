@@ -1,0 +1,17 @@
+| Mutation | Result | Failing tests |
+| --- | --- | --- |
+| generation ignored | KILLED | a_ring_generation_switch_invalidates_the_cache_even_for_a_lower_put, put_cache_every_reachable_state_keeps_i8_order_and_the_doorbell_contract |
+| idle on cached PUT | KILLED | a_cached_put_is_never_used_when_the_cursor_has_reached_it, put_advancing_behind_the_cache_drains_every_identity_before_fresh_idle, put_cache_every_reachable_state_keeps_i8_order_and_the_doorbell_contract, wrap_around_is_handled_in_modular_arithmetic |
+| explicit invalidation omitted | KILLED | a_ring_generation_switch_invalidates_the_cache_even_for_a_lower_put |
+| wait observation omitted | KILLED | a_full_private_ring_recovers_without_any_periodic_observation, must_observe_is_forced_by_waiting_open_segment_low_credit_and_interval_one, sync_wait_stream_is_safe_and_live_with_the_production_interval, sync_wait_stream_is_safe_and_live_even_when_the_periodic_look_never_fires, long_sync_wait_streams_with_lazy_observation_never_read_late_bytes_early |
+| open-segment observation omitted | KILLED | a_full_private_ring_recovers_without_any_periodic_observation, must_observe_is_forced_by_waiting_open_segment_low_credit_and_interval_one |
+| low-credit observation omitted | KILLED | a_full_private_ring_recovers_without_any_periodic_observation, must_observe_is_forced_by_waiting_open_segment_low_credit_and_interval_one |
+| one excess credit | KILLED | a_full_private_ring_recovers_without_any_periodic_observation, n_one_matches_an_independent_eager_fifo_and_reference_oracle, stale_get_is_conservative_across_many_wraps_and_receipts_are_exact, stale_get_never_yields_more_credits_than_the_real_ring_has |
+| REFERENCE gate one marker early | KILLED | long_sync_wait_streams_with_lazy_observation_never_read_late_bytes_early, sync_wait_stream_is_safe_and_live_even_when_the_periodic_look_never_fires, stale_reference_never_releases_a_gate_early, sync_wait_stream_is_safe_and_live_with_the_production_interval |
+| unissued REFERENCE trusted | KILLED | stale_reference_never_releases_a_gate_early |
+| N=1 observation omitted | KILLED | must_observe_is_forced_by_waiting_open_segment_low_credit_and_interval_one, n_equals_one_is_bit_identical_to_the_reference_relay, n_one_matches_an_independent_eager_fifo_and_reference_oracle |
+
+Restored source SHA256:
+- `user_lazy.rs`: `a9e7fd812e38923c9dfc0e08ee65699ebaf30c61f9df23d87d9b390f9674aff8`
+- `user_scan.rs`: `b2731b5b7223b9bb500b5f68ab54e37bc0eaee5f50a3ac7d41f86488bf0df81d`
+- `user_gate.rs`: `7ad79dec3d19e674d1be0d2fbd5cb153d4ca6fee01a3fd7d9085cccd1b1c872c`

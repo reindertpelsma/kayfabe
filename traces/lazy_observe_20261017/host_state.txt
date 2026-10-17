@@ -1,0 +1,11 @@
+Final host verification (read-only)
+2026-10-17T03:36:52+02:00
+QEMU / display broker processes: none
+Session helper jobs: none
+GPU: NVIDIA GeForce RTX 4070, 595.91.07, 00000000:01:00.0, 10 MiB
+GPU PCI driver: 0000:01:00.0 -> nvidia
+fastguest lock: free (probe exit 0, released)
+Kernel journal since 03:25 CEST: Xid entries=0, OOM entries=0
+Owned Vast instances: none (no rentals created; other sessions untouched)
+QEMU/broker/GPU jobs created by this session: none
+Session Cargo target directory removed: True

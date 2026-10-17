@@ -1,5 +1,18 @@
 # Status and handoff — where kayfabe v3 stands, and how to resume
 
+## UPDATE 2026-10-17 — lazy-observe review stopped before hardware
+
+Branch `codex/lazy-observe-20261017`, based on gap head `890c6643c`.
+[Report](../traces/lazy_observe_20261017/REPORT.md): 17 lazy tests pass;
+10 functional mutants killed; full release kf-chan suite 308 passed / 1 failed.
+Inherited capacity test rejects 1024 while scratch MAX_ENTRIES is 65536.
+Code review also found idle backstop GP_PUT reads that ring the relay token
+(`userpump.rs:3001`), conflicting with the owner's no-polling rule.
+Stopped under the explicit instruction; no production redesign or hardware run.
+Split arms/N ladder/OpenGL remain unrun; no FPS or carrier conclusion.
+Resume by resolving both stop findings and passing the package gate first.
+No instance owned, no VM/broker started; final host verification is in the report.
+
 ## UPDATE 2026-10-15 - the display broker now lives in this repo; broker roadmap (cursor stream, control CLI with screendump/input, headless streaming, clipboard, ACPI, audio)
 
 `broker/` (from nvkvm-pv `badf2d7`, the revision in use; see `broker/IMPORTED.md`) is the broker to change from now on (branch

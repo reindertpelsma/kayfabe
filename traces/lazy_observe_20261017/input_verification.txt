@@ -1,0 +1,5 @@
+Inputs: Cargo.toml, Cargo.lock, every crates/**/*.rs and crates/**/Cargo.toml
+Compared files=928 mismatches=0
+manifest_sha256=441fc2efeeb93a3a8db0d2e770eec770d5aaa38428650eb20d964ba8bf985960
+rustc 1.99.0 (b940084d7 2026-09-28)
+cargo 1.99.0 (5f94df478 2026-08-27)

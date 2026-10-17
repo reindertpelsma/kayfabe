@@ -488,17 +488,23 @@ fn random_step(state: &mut u64) -> u64 {
 fn put_advancing_behind_the_cache_drains_every_identity_before_fresh_idle() {
     let mut s = Sys::new(true);
     let mut identities = Vec::new();
+    let mut slots = [None; R as usize];
     for lap in 0..4 {
         // Publish two, relay one, then advance PUT while the cache still covers
         // the second. Absolute counts deliberately cross the four-slot wrap.
-        s.written += 2;
+        for _ in 0..2 {
+            slots[(s.written % R) as usize] = Some(s.written);
+            s.written += 1;
+        }
         s.put = s.written;
         s.rung = s.put;
         s.woken = true;
         let before = s.consumed;
+        assert_eq!(slots[s.cursor() as usize], Some(before));
         s.turn().unwrap();
         identities.push(before);
         let cached = s.cache.select(true, s.generation, s.cursor()).unwrap();
+        slots[(s.written % R) as usize] = Some(s.written);
         s.written += 1;
         s.put = s.written;
         s.rung = s.put; // the LAST doorbell; no later wake is supplied
@@ -508,6 +514,7 @@ fn put_advancing_behind_the_cache_drains_every_identity_before_fresh_idle() {
             let loaded = s.cache.select(true, s.generation, cursor).unwrap_or(s.put % R);
             assert!(dist(cursor, loaded) > 0);
             assert!(dist(cursor, loaded) <= s.put - s.consumed);
+            assert_eq!(slots[cursor as usize], Some(s.consumed));
             identities.push(s.consumed);
             s.turn().unwrap();
         }
@@ -607,8 +614,7 @@ fn n_one_matches_an_independent_eager_fifo_and_reference_oracle() {
         assert_eq!(got, expected);
         observed_get = real_get;
         // The eager oracle knows absolute hardware progress independently of
-        // Marks and Fetch. Guest GP_GET write-back is the last returned receipt.
-        assert_eq!(got.last().copied(), expected.last().copied());
+        // Marks and Fetch. Receipt equality also checks guest GET write-back.
         assert_eq!(f.available() as usize, 127 - pending.len());
         let word = if real_ref == 0 { 0 } else { Marks::value(real_ref) };
         assert_eq!(m.observe(word), real_ref);
