@@ -115,3 +115,13 @@ error named) or silent-wrong-result (REJECTED). 5 rounds or 6 h from the first k
 Mode 2 implements the intended lifecycle in scratch form; the correctness EVIDENCE is Heaven only (one ring-growth registration/trigger per session, 7,372 window reads, no Xid);
 not exercised: other trigger kinds (TLB-invalidate, context), GravityMark growth, back-to-back registrations; window start uses stale parser state (the production lifecycle anchors it at a GP_PUT, assumption P2').
 Native reference: when `claude/native-vast-20261016` REPORT.txt exists it supplies the native column (different SKU, INFERRED); the local VFIO detach is NOT done.
+
+## Addendum D (2026-10-17 ~02:30; coordinator/owner item: split the two halves of the lazy-observe bundle; written BEFORE the split runs)
+Z16 (`KF3_LAZY_OBSERVE=16`) bundles (A) the cached guest GP_PUT (re-read only when the cursor reached it) and (B) the private-USERD observation every 16th turn (GP_GET + REFERENCE
+loads, guest GP_GET write-back). Measured so far (a-boots, binary 134dcb54): none 196.2/193.1/202.2, A+B 299.1/296.5/299.2. Two env switches now exist (binary built from commit 4b4f629b0):
+`KF3_PUT_CACHE=1` (A alone) and `KF3_LAZY_OBSERVE=16` (B alone; A+B = both). Arms, same flags otherwise (counters on, scan-off mode 2, 260 s Heaven D3D11), interleaved:
+SA (A only) x2, SB (B only) x2, SN (none) x1, SAB (A+B) x1.
+Falsifiers: A is NOT the carrier if A alone <= ~220 fps; B is NOT the carrier if B alone <= ~220 fps. If both alone are <= 220 the gain needs the combination (interaction).
+My prediction (made from the profile, INFERRED): B alone carries most of it (it removes the guest USERD GP_GET write-back 21.5%, the private loads ~6%, Fetch::observe 10%), A alone smaller (the GP_PUT read 10.7%).
+Then an N ladder (4, 16, 64) for the carrying arm. Gate on every arm: score, Xid, 153/4101, screenshot statistics, REFUSED lines, counters (observes, BAR1 store loads, PUT reads, GET write-backs).
+Tests of the extracted rules: `crates/kf-chan/tests/user_lazy_model.rs` (12 tests), mutation table in `mutation_table.txt`.
