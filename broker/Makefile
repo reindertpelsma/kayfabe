@@ -232,11 +232,27 @@ check: all test-utf8 test-cursor test-geom test-xor test-tick
 	python3 test/test_xor.py ./$(BIN)
 	python3 test/test_tick.py ./$(BIN)
 
+# NOT SHIPPED: the instrument that measured what a Wayland client must commit
+# each refresh to keep getting frame callbacks and presentation feedback
+# (test/wl_tick_probe.c; results in docs/design/V3_DISPLAY_PACING_20261017.md
+# section 11.8).
+ifneq ($(HAVE_WL),)
+wl-tick-probe: test/wl_tick_probe.c $(WL_OBJS) $(WL_HDRS)
+	$(CC) $(CFLAGS) -o $@ test/wl_tick_probe.c $(WL_OBJS) $(LDFLAGS) $(LIBS)
+endif
+
 # The probe window against a REAL compositor (mutter --headless, software
 # renderer) and real udmabuf dma-bufs; exits 77 (skip) when either is missing.
 # Not part of `check`: it needs a compositor, and it takes ~15 s.
 check-probe: $(BIN)
 	python3 test/test_probe.py ./$(BIN)
+
+# The tick pump against a REAL compositor (mutter --headless): ticks flow at the
+# refresh rate through the real backend and the real socket, requests open and
+# close, and stop when the window stops committing.  Exits 77 (skip) when mutter
+# is missing.  Not part of `check`: it needs a compositor and takes ~20 s.
+check-tick-probe: $(BIN)
+	python3 test/test_tickpump.py ./$(BIN)
 
 # Keep the sanitizer invocation reproducible locally and in CI.  A clean
 # rebuild matters here: mixing instrumented and ordinary objects links fine
@@ -251,6 +267,6 @@ install: $(BIN)
 	install -m 0755 $(BIN) $(DESTDIR)$(PREFIX)/bin/$(BIN)
 
 clean:
-	rm -f $(BIN) $(TESTCLIENT) $(RELAY) $(DMASRC) *.o *.d \
+	rm -f $(BIN) $(TESTCLIENT) $(RELAY) $(DMASRC) wl-tick-probe test-tick *.o *.d \
 	      *-client-protocol.h *-protocol.c test-utf8 test-cursor test-geom test-xor test-tick \
 	      test/utf8_extracted.inc
