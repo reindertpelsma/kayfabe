@@ -488,12 +488,14 @@ mod tests {
         assert_eq!(plan(&l, Cause::Reset, Some((0, 0))), plan(&l, Cause::Reset, None));
     }
 
-    /// ★ THE OWNER'S TABLE, event -> scrub?: VM start and guest reboot scrub (a new OS can follow);
-    /// everything inside a running OS does not, and teardown leaves it to the host driver.
+    /// ★ THE OWNER'S TABLE, event -> scrub?: only a guest REBOOT scrubs — the one place the SAME
+    /// process reuses the SAME store for a new OS. VM start and teardown are the host's process
+    /// isolation (a fresh process gets a fresh store; a dead one's is the host driver's), and
+    /// everything inside a running OS keeps its own root.
     #[test]
     fn the_scrub_table_follows_the_trust_boundary() {
         let table = [
-            (Event::VmStart, Some(Cause::Realize)),
+            (Event::VmStart, None),
             (Event::GuestReboot, Some(Cause::Reset)),
             (Event::VmTeardown, None),
             (Event::S3Wake, None),
