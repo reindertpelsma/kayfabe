@@ -1224,6 +1224,39 @@ mod tests {
         assert_eq!(p.source(0).unwrap().handoffs(), (0, 0));
     }
 
+    /// ★ The guard's edge, through the pacer: an event exactly half a period after the last tick is a tick, one
+    /// nanosecond earlier is not; and a new period returns a broker-ticked head to the free clock (the broker's
+    /// next event takes it back). (Mutations: `<=` for `<`; `retime` keeping the source.)
+    #[test]
+    fn the_guard_edge_and_a_new_period_through_the_pacer() {
+        let guard = 16_666_666 / 2;
+        let mut p = Pacer::new(60);
+        p.on_heads(&[head(0, 16_666_666)], 0);
+        assert_eq!(p.due(16_666_666).len(), 1);
+        assert_eq!(
+            p.broker_tick(0, 16_666_666 + guard - 1),
+            None,
+            "1 ns inside"
+        );
+        let mut p = Pacer::new(60);
+        p.on_heads(&[head(0, 16_666_666)], 0);
+        p.due(16_666_666);
+        assert!(
+            p.broker_tick(0, 16_666_666 + guard).is_some(),
+            "on the edge"
+        );
+        assert_eq!(p.source(0).unwrap().source(), Source::Broker);
+        // a slower mode while the broker ticks: back on the free clock, one new period from now
+        let a = p.on_heads(&[head(0, 40_000_000)], 30_000_000);
+        assert!(a[0].rearmed);
+        assert_eq!(p.source(0).unwrap().source(), Source::Free);
+        assert_eq!(p.next_ns(), Some(30_000_000 + 40_000_000));
+        assert_eq!(
+            p.due(70_000_000).first().map(|t| t.from),
+            Some(Source::Free)
+        );
+    }
+
     /// The vblank number goes on counting across an idle spell and a re-arm (the guest-visible counter
     /// never goes back), and a broker event for an idle head is nothing.
     #[test]
@@ -1279,6 +1312,43 @@ mod tests {
         );
         let t = p.due(next).pop().unwrap();
         assert_eq!((t.seq, t.from), (3, Source::Free));
+    }
+
+    /// ★ §AK: a tearing present is never over, however many; the published frames are judged against the fastest
+    /// head's tick. (Mutations: tearing presents counted; `copies` never judged; judged against the slowest head.)
+    #[test]
+    fn tearing_presents_are_exempt_and_copies_are_judged() {
+        let p = cap_period_ns(60);
+        let mut periods = [0; MAX_HEADS];
+        periods[0] = p;
+        periods[1] = 3 * p; // a slower head: the copies are judged against the faster one
+        let mut m = Meter::default();
+        let mut c = [HeadCounts::default(); MAX_HEADS];
+        m.sample(0, &c, &periods, 0, 0);
+        // 63 presents of which 3 tear are 60 bounded ones: inside; 500 immediate flips: still inside
+        c[0] = HeadCounts {
+            ticks: 60,
+            presents: 563,
+            tearing: 503,
+            vblirq: 0,
+        };
+        let w = m.sample(1_000_000_000, &c, &periods, 60, 0).unwrap();
+        assert_eq!(
+            (w.over_heads, w.over_copies, m.over),
+            (0, false, 0),
+            "{w:?}"
+        );
+        // 64 published frames in a second: over (62 allowed), though no head's presents are
+        let w = m.sample(2_000_000_000, &c, &periods, 124, 0).unwrap();
+        assert_eq!((w.over_heads, w.over_copies, m.over), (0, true, 1), "{w:?}");
+        // 63 NON-tearing presents are over
+        c[0].presents += 63;
+        let w = m.sample(3_000_000_000, &c, &periods, 184, 0).unwrap();
+        assert_eq!(
+            (w.over_heads, w.over_copies, m.over),
+            (1, false, 2),
+            "{w:?}"
+        );
     }
 
     /// The status fragment names the cap, each armed head, the rates and `over`.

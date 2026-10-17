@@ -504,6 +504,26 @@ mod tests {
         }
     }
 
+    /// ★ A clock that goes BACK (a skewed or hostile caller; a re-arm with an old reading) never takes the
+    /// tick's timestamp back: the guest-visible time is non-decreasing. After a broker tick at 100 ms, a
+    /// re-arm with `now` = 50 ms and a free tick at 50 ms + 2 P are stamped no earlier than 100 ms.
+    /// (Mutation: `stamp = now`.)
+    #[test]
+    fn a_clock_that_goes_back_does_not_take_the_stamp_back() {
+        let mut s = broker_at(100_000_000);
+        assert!(s.retime(50_000_000, 2 * P));
+        let (e, _) = s.due(50_000_000 + 2 * P);
+        let e = e.expect("the re-armed clock ticks");
+        assert_eq!(e.from, Source::Free);
+        assert_eq!(
+            e.stamp_ns,
+            100_000_000,
+            "not 50 ms + 2P = {}",
+            50_000_000 + 2 * P
+        );
+        assert_eq!(e.seq, 2);
+    }
+
     /// The constants are what the design says: 50 ms, one half, and the slowest legal tick (24 Hz)
     /// still speaks inside the silence with margin.
     #[test]

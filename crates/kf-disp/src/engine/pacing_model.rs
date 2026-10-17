@@ -234,6 +234,10 @@ impl Model {
             _ => self.mailbox.due(self.inflight.is_some()),
         };
         if start {
+            assert!(
+                self.inflight.is_none() || self.rule == Worker::MailboxIgnoringInflight,
+                "one copy at a time, on the plane's own stream"
+            );
             self.started += 1;
             self.copies += 1;
             self.want = false;

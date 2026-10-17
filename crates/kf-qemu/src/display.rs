@@ -3256,18 +3256,13 @@ impl Device {
                     if let Some(Shown::Armed(c)) = &shown
                         && let Some(so) = c.layers.iter().find(|l| l.window == *window)
                     {
-                        if dp.sdr_color.is_some() {
-                            // the colour experiment resolves its LUT contexts at copy time: it keeps
-                            // the old rule (the flip's items wait for its own copy) until validated
-                            scan.barrier = scan.started + 1;
-                            scan.want = true;
-                        } else {
-                            // ★ §AK: the flip is NOT parked and does NOT wait for a tick or for its own
-                            // copy. A newer frame exists (the mailbox copies the newest, once per tick);
-                            // completing the flip releases the buffer it replaced, so its items wait for
-                            // the copy that was in flight at this latch, which read that buffer, and
-                            // for nothing else.
-                            scan.on_flip_latched();
+                        // ★ §AK: the flip is NOT parked and does NOT wait for a tick or for its own copy.
+                        // A newer frame exists (the mailbox copies the newest, once per tick);
+                        // completing the flip releases the buffer it replaced, so its items wait for
+                        // the copy that was in flight at this latch, which read that buffer, and for
+                        // nothing else (the colour experiment keeps the old rule, see the function)
+                        scan.on_window_latched(dp.sdr_color.is_some());
+                        if dp.sdr_color.is_none() {
                             // the delay between latch and copy is up to a tick: resolve the window's
                             // context DMA NOW, as the first copy after a latch always did, so a guest
                             // that unbinds it before the copy (NVKMS's teardown) is still resolved
@@ -3321,8 +3316,8 @@ impl Device {
                 scan.serve_now(dp);
             }
             // ★ §AK: the shown head's tick allows ONE flip copy (of the newest latched frame)
-            if console_tick && matches!(shown, Some(Shown::Armed(_))) {
-                scan.mailbox.tick();
+            if console_tick {
+                scan.on_console_tick(matches!(shown, Some(Shown::Armed(_))));
             }
             if (scan.want || scan.mailbox.due(scan.inflight.is_some())) && scan.inflight.is_none() {
                 scan.start(&mut io, &engine, shown.as_ref(), cursor.as_ref(), false);
@@ -4250,6 +4245,35 @@ impl ScanState {
         }
     }
 
+    /// ★ §AK: copy `started + 1` begins. A FLIP-class copy (`check` false) reads the newest state, so it serves the
+    /// wanted copy, the pending latched frame and the tick's credit; a non-flip check serves none of them.
+    fn begin_copy(&mut self, check: bool) -> u64 {
+        if !check {
+            self.want = false;
+            self.mailbox.copied();
+        }
+        self.started += 1;
+        self.started
+    }
+
+    /// ★ §AK: the shown head ticked (`armed`: what the console shows is a guest scanout) — one flip copy is allowed.
+    fn on_console_tick(&mut self, armed: bool) {
+        if armed {
+            self.mailbox.tick();
+        }
+    }
+
+    /// ★ §AK: a flip of the shown head latched. The colour experiment (`sdr_color`) resolves its LUT context DMAs at
+    /// copy time and keeps the old rule: the flip's items wait for its own copy, which is wanted at once.
+    fn on_window_latched(&mut self, sdr_color: bool) {
+        if sdr_color {
+            self.barrier = self.started + 1;
+            self.want = true;
+        } else {
+            self.on_flip_latched();
+        }
+    }
+
     /// ★ §AK: a flip of the shown head latched. A newer frame exists; the flip's completion items
     /// (queued next, with [`ScanState::barrier`]) wait for the copy in flight now — the one that read
     /// the buffer this flip replaces — and for nothing else
@@ -4725,13 +4749,7 @@ impl ScanState {
             self.serve_now(io.dp);
             return;
         }
-        if !check {
-            self.want = false;
-            // a flip-class copy reads the newest state: it serves the pending frame and the tick's credit
-            self.mailbox.copied();
-        }
-        self.started += 1;
-        let n = self.started;
+        let n = self.begin_copy(check);
         let req = self.nonflip.snapshot();
         let t0 = Instant::now();
         let dp = io.dp;
@@ -5766,6 +5784,44 @@ mod tests {
         );
     }
 
+    /// ★ §AK: the worker's copy bookkeeping. A flip-class copy serves the wanted copy, the pending latched frame
+    /// and the tick's credit; a non-flip check serves none of them. The shown head's tick grants a copy only
+    /// while a guest scanout is shown. The colour experiment keeps the old rule (its own copy, wanted at once);
+    /// everything else waits for the copy in flight only. (Mutations: `begin_copy` not spending the mailbox, or
+    /// spending it for a check; a tick granting a credit for a boot picture; the colour rule dropped.)
+    #[test]
+    fn a_flip_copy_serves_the_pending_frame_and_a_check_does_not() {
+        let mut scan = ScanState::default();
+        scan.mailbox.latch();
+        scan.want = true;
+        assert_eq!(scan.begin_copy(true), 1, "a check is copy 1");
+        assert!(
+            scan.want && scan.mailbox.pending(),
+            "a check serves nothing"
+        );
+        scan.on_console_tick(false);
+        assert!(!scan.mailbox.due(false), "no credit for a boot picture");
+        scan.on_console_tick(true);
+        assert!(scan.mailbox.due(false));
+        assert_eq!(scan.begin_copy(false), 2);
+        assert!(!scan.want && !scan.mailbox.pending() && !scan.mailbox.due(false));
+        assert_eq!(scan.mailbox.copies, 1);
+        // the colour rule: its own copy, wanted at once; the normal rule: nothing to wait for
+        scan.on_window_latched(true);
+        assert_eq!((scan.barrier, scan.want), (3, true));
+        assert_eq!(
+            scan.mailbox.latched, 1,
+            "the colour experiment bypasses the mailbox"
+        );
+        scan.barrier = 0;
+        scan.want = false;
+        scan.on_window_latched(false);
+        assert_eq!(
+            (scan.barrier, scan.want, scan.mailbox.latched),
+            (0, false, 2)
+        );
+    }
+
     /// ★ §AK: the worker no longer carries the D1 gate or its measurement flag, parks no flip for a
     /// tick, and wires the mailbox exactly once each way: a latch of the shown window calls
     /// `on_flip_latched` (not the old `started + 1` barrier), the shown head's tick grants a copy, and
@@ -5795,27 +5851,26 @@ mod tests {
             assert_eq!(hits(&format!("let x = {planted};")), vec![planted]);
         }
         for needed in [
-            "scan.on_flip_latched()",
-            "scan.mailbox.tick()",
+            "scan.on_window_latched(dp.sdr_color.is_some())",
+            "scan.on_console_tick(",
+            "self.mailbox.tick()",
             "scan.mailbox.due(",
+            "self.begin_copy(check)",
             "self.mailbox.copied()",
-            "flip_completion_need(",
+            "self.barrier = flip_completion_need(",
+            "self.mailbox.pending()",
+            "scan.flip_pending()",
             "pacer.take_handoffs()",
         ] {
             assert!(code.contains(needed), "the worker no longer calls {needed}");
         }
-        // the latch of the shown window sets the old barrier only for the colour experiment
+        // the latch of the shown window sets no barrier of its own: the rule is one function
         let latch = code
             .split("if let Effect::Latched { window } = &e")
             .nth(1)
             .unwrap();
         let latch = latch.split("queue.push_back").next().unwrap();
-        assert_eq!(
-            latch.matches("scan.barrier = scan.started + 1;").count(),
-            1,
-            "{latch}"
-        );
-        assert!(latch.contains("dp.sdr_color.is_some()"));
+        assert!(!latch.contains("barrier"), "{latch}");
     }
 
     fn map() -> RegMap {
