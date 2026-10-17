@@ -3520,8 +3520,55 @@ mod tests {
         let after = pump.split("fn gp_put(&mut self) -> Turn<Option<u32>> {").nth(1).unwrap();
         let gp_put = after.split("fn begin_entry").next().unwrap();
         assert!(io.contains("fn walk_busy(&mut self) -> bool"), "the gate is the Io's");
+        assert!(
+            io.contains("me.inbox.walk_busy()") && io.contains("wait_walk(r.idx)") && io.contains("return true;"),
+            "and it reports the walk after registering the wait"
+        );
         assert!(!gp_put.contains("walk_busy"), "gp_put no longer checks it: the relay does, before the cache");
     }
+    /// Retiring a pump goes through the relay (`Relay::retire`: the cache is dropped and the machine torn down); the pump
+    /// does not tear the machine down itself.
+    #[test]
+    fn release_retires_the_relay_through_relay_retire() {
+        let pump = include_str!("userpump.rs");
+        let pump = pump.split("#[cfg(test)]").next().unwrap();
+        assert_eq!(pump.matches("self.core.retire()").count(), 1);
+        assert_eq!(pump.matches("life.teardown()").count(), 0, "only the relay tears its machine down");
+    }
+
+    /// The per-relay lazy counters reach the VM-wide ones every 256th turn (a relay that lives for minutes must not keep
+    /// them to itself until retire).
+    #[test]
+    fn turn_folds_the_lazy_counters_into_the_vm_wide_ones() {
+        let pump = include_str!("userpump.rs");
+        let pump = pump.split("#[cfg(test)]").next().unwrap();
+        assert_eq!(pump.matches("self.core.lazy.flush_due()").count(), 1);
+        assert_eq!(pump.matches("me.relay_stats.lazy.add(").count(), 1);
+    }
+
+    /// The mapping-walk gate keeps its two halves: the wait is registered (so the VA thread rings the token when the walk
+    /// lands) and the relay is told to read nothing.
+    #[test]
+    fn the_walk_gate_registers_the_wait_and_tells_the_relay_to_stop() {
+        let pump = include_str!("userpump.rs");
+        let pump = pump.split("#[cfg(test)]").next().unwrap();
+        let gate = pump.split("fn walk_busy(&mut self) -> bool {").nth(1).unwrap();
+        let gate = gate.split("fn gp_put").next().unwrap();
+        assert!(gate.contains("me.inbox.walk_busy()"));
+        assert!(gate.contains("me.inbox.wait_walk(r.idx);"));
+        assert!(gate.contains("return true;"));
+    }
+
+    /// No lazy switch is read inside `turn()` (the pump's per-turn function).
+    #[test]
+    fn turn_reads_no_lazy_switch() {
+        let pump = include_str!("userpump.rs");
+        let pump = pump.split("#[cfg(test)]").next().unwrap();
+        let turn = pump.split("fn turn(&mut self, me: &ChanPlane").nth(1).unwrap();
+        let turn = turn.split("fn report_lifecycle_notices").next().unwrap();
+        assert!(!turn.contains("ENV_PUT_CACHE") && !turn.contains("ENV_LAZY_OBSERVE") && !turn.contains("env::var"));
+    }
+
     /// PHASE 1c (review 2, N2): `KF3_LIFECYCLE_MODE` selects the measurement-class mode; nothing about it is required
     /// to boot (unset, empty and unknown values all run the default, the last one loudly).
     #[test]

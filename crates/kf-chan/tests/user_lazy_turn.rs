@@ -884,6 +884,29 @@ fn b_the_guard_does_nothing_when_the_ring_is_not_full() {
     assert_eq!(r.lazy.counts.obs_forced_ring_full, 0);
 }
 
+#[test]
+fn b_an_open_segment_is_counted_as_its_own_reason_on_every_turn_and_never_skipped() {
+    let mut io = Mock::new(64, 512);
+    let mut r = pointer_relay(&mut io, on());
+    r.segment_pending = true;
+    let before = r.lazy.counts;
+    for _ in 0..40 {
+        r.claim();
+        r.step(&mut io).unwrap();
+        r.step(&mut io).unwrap();
+        assert_eq!(r.step(&mut io).unwrap(), Step::Segment);
+        r.phase = Phase::Idle;
+    }
+    assert_eq!(
+        r.lazy.counts.obs_skipped, before.obs_skipped,
+        "no turn skipped its look"
+    );
+    assert_eq!(
+        r.lazy.counts.obs_forced_open_segment - before.obs_forced_open_segment,
+        40
+    );
+}
+
 // ------------------------------------------------------------------------------------------------
 // invalidation by reason, counters
 

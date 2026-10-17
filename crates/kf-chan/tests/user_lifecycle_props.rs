@@ -139,6 +139,9 @@ pub struct Sim {
     pub observed: usize,
     /// Lazy-observe tests: the private ring is consumed at `rate` entries per turn instead of at once (`None`).
     pub rate: Option<usize>,
+    /// ... but only every `rate_div`-th turn (0 or 1: every turn).
+    pub rate_div: usize,
+    ticks: usize,
     hw_pos: usize,
     marker_at: Vec<usize>,
     /// Counts of the reads the relay made.
@@ -199,6 +202,8 @@ impl Sim {
             observed: usize::MAX,
             trace: 0xcbf2_9ce4_8422_2325,
             rate: None,
+            rate_div: 1,
+            ticks: 0,
             hw_pos: 0,
             marker_at: Vec::new(),
             reads_put: 0,
@@ -215,7 +220,10 @@ impl Sim {
     /// The PBDMA consumes `rate` more private entries (lag mode only).
     fn tick(&mut self) {
         if let Some(r) = self.rate {
-            self.hw_pos = (self.hw_pos + r).min(self.log_len);
+            self.ticks += 1;
+            if self.ticks.is_multiple_of(self.rate_div.max(1)) {
+                self.hw_pos = (self.hw_pos + r).min(self.log_len);
+            }
         }
     }
 
@@ -2377,4 +2385,66 @@ fn lazy_d6_a_turn_that_skipped_its_look_and_saw_a_full_guest_ring_is_followed_by
         }
     }
     assert!(checked > 50, "the scenario happens: {checked}");
+}
+
+#[test]
+fn lazy_a_refused_entry_ends_the_relay_and_a_retire_drops_what_was_cached() {
+    // refusal = the guest's channel is reset: the cache goes with the relay
+    let stream: Vec<Ge> = std::iter::once(ge(0, Kind::SetObj))
+        .chain((1..40).map(|i| ge(i, Kind::Plain)))
+        .collect();
+    let mut sim = Sim::new(64, 256, &stream, vec![]);
+    let mut relay = new_relay(256, false).with_lazy(kf_chan::user_lazy::LazyConfig::ON);
+    drive(&mut sim, &mut relay, 10_000);
+    assert!(!relay.dead);
+    assert!(
+        relay.lazy.cached().is_some(),
+        "Pointer mode left a remembered GP_PUT"
+    );
+    // the next entry the guest publishes is invalid (a reserved bit): refused by name
+    let slot = relay.cursor;
+    sim.rings[sim.src].insert(slot, ge(2, Kind::Plain).raw() | (1 << 40));
+    sim.put[sim.src] = (slot + 1) % 64;
+    relay.claim();
+    while !relay.idle() {
+        relay.step(&mut sim);
+    }
+    assert!(relay.dead, "the relay stopped");
+    assert_eq!(relay.lazy.cached(), None);
+    assert_eq!(relay.lazy.counts.inval_reset, 1);
+
+    // retire = the channel was freed
+    let mut sim = Sim::new(64, 256, &stream, vec![]);
+    let mut relay = new_relay(256, false).with_lazy(kf_chan::user_lazy::LazyConfig::ON);
+    drive(&mut sim, &mut relay, 10_000);
+    assert!(relay.lazy.cached().is_some());
+    relay.retire();
+    assert_eq!(relay.lazy.cached(), None);
+    assert_eq!(relay.lazy.counts.inval_retire, 1);
+    assert_eq!(relay.life.mode(), Mode::Dead);
+}
+
+#[test]
+fn lazy_a_slow_pbdma_and_a_small_private_ring_run_on_the_credit_floor_without_stalling() {
+    // 128 private entries: the credit count crosses the floor of 64 whenever the PBDMA lags; each such turn looks, so the
+    // stale count never hides a credit that exists, and the run neither stalls nor loses an entry
+    let mut low = 0;
+    for seed in 0..40u64 {
+        let mut rng = Rng::new(0x1A2E_6000 + seed);
+        let n = 300 + rng.below(200) as usize;
+        let stream = gen_stream(&mut rng, n, false, false);
+        let mut sim = Sim::new(512, 128, &stream, vec![]);
+        sim.rate = Some(1);
+        sim.rate_div = 3;
+        let mut relay = new_relay(128, false).with_lazy(kf_chan::user_lazy::LazyConfig::ON);
+        drive(&mut sim, &mut relay, 400_000);
+        assert!(!relay.dead, "seed {seed}");
+        assert_eq!(
+            sim.out.forwarded.len(),
+            stream.len(),
+            "seed {seed}: nothing stalled or lost"
+        );
+        low += relay.lazy.counts.obs_forced_low_credit;
+    }
+    assert!(low > 100, "the credit floor really forced looks: {low}");
 }

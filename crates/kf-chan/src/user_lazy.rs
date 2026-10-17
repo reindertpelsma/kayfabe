@@ -665,6 +665,65 @@ mod tests {
     }
 
     #[test]
+    fn a_look_clears_the_wait_latch_and_the_relay_goes_back_to_skipping() {
+        let mut l = Lazy::new(LazyConfig::ON);
+        let mut looks = Vec::new();
+        for t in 0..40u64 {
+            l.turn_start(Mode::Pointer);
+            let look = l.observe_decision(Mode::Pointer, 512, 500, false, false);
+            if look {
+                l.observed();
+            }
+            if t == 3 {
+                l.wait_set();
+            }
+            looks.push(look);
+        }
+        // turn_no 1..=40: a look at the wait (turn 5 = the turn after `wait_set` at 4), then at the interval only
+        let n = looks.iter().filter(|x| **x).count();
+        assert!(looks[4], "the turn after a wait looks");
+        assert!(
+            !looks[5] && !looks[6] && !looks[7],
+            "and then it skips again: {looks:?}"
+        );
+        assert!(n <= 4, "wait + two interval looks at most: {looks:?}");
+        assert_eq!(l.counts.obs_forced_wait, 1);
+    }
+
+    #[test]
+    fn an_open_segment_is_its_own_reason_and_beats_credit_and_interval() {
+        let mut l = Lazy::new(LazyConfig::ON);
+        for _ in 0..40 {
+            l.turn_start(Mode::Pointer);
+            assert!(l.observe_decision(Mode::Pointer, 512, 500, true, false));
+            l.observed();
+        }
+        assert_eq!(l.counts.obs_forced_open_segment, 40);
+        assert_eq!(l.counts.obs_skipped, 0);
+    }
+
+    #[test]
+    fn low_credit_is_its_own_reason_and_looks_on_every_turn() {
+        let mut l = Lazy::new(LazyConfig::ON);
+        for _ in 0..40 {
+            l.turn_start(Mode::Pointer);
+            assert!(l.observe_decision(Mode::Pointer, 512, CREDIT_FLOOR - 1, false, false));
+            l.observed();
+        }
+        assert_eq!(l.counts.obs_forced_low_credit, 40);
+        l.turn_start(Mode::Pointer);
+        // at the floor the periodic rule applies again
+        let mut skipped = 0;
+        for _ in 0..8 {
+            l.turn_start(Mode::Pointer);
+            if !l.observe_decision(Mode::Pointer, 512, CREDIT_FLOOR, false, false) {
+                skipped += 1;
+            }
+        }
+        assert!(skipped >= 6, "{skipped}");
+    }
+
+    #[test]
     fn the_counters_account_for_every_turn() {
         let mut l = Lazy::new(LazyConfig::ON);
         for t in 0..100u64 {

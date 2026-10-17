@@ -137,10 +137,7 @@ fn rings_during_every_pass_are_never_lost_even_across_the_fairness_bound() {
     r.ring();
     let mut put = 1;
     let mut visits = 0;
-    loop {
-        let Claim::Won(_) = r.tok.claim() else {
-            break;
-        };
+    while let Claim::Won(_) = r.tok.claim() {
         visits += 1;
         let mut rounds = 0;
         loop {
