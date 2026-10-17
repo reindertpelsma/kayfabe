@@ -1,0 +1,7 @@
+CINNAMON 0 XORG 0
+NVIDIA GeForce RTX 5060, 580.159.04, 1 MiB
+Error: unable to open display :0
+Error: couldn't open display :0
+VKCUBE rc=1
+GUEST_DMESG flip_timeouts=0 nvassert=50 xid=0
+GUEST_DONE

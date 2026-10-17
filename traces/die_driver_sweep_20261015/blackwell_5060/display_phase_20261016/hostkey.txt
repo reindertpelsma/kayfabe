@@ -1,0 +1,2 @@
+Cloud-init regenerated the initial SSH key. Final ED25519 fingerprint matched authenticated own-instance provider console and live ssh-keyscan before pinning.
+SHA256:l1hQLK6Mnqb4k7VHb6El+WdKXGJ4Qh3W1+8lCuH34ac

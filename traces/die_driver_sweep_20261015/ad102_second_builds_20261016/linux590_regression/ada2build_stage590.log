@@ -1,0 +1,23 @@
+[2026-10-16T23:08:41+00:00] stage 590.48.01: clone ogkm 590.48.01
+Note: switching to '2ccbad25e1af6a6ee6f38cf569f89f8b65d658ab'.
+
+You are in 'detached HEAD' state. You can look around, make experimental
+changes and commit them, and you can discard any commits you make in this
+state without impacting any branches by switching back to a branch.
+
+If you want to create a new branch to retain commits you create, you may
+do so (now or later) by using -c with the switch command. Example:
+
+  git switch -c <new-branch-name>
+
+Or undo this operation with:
+
+  git switch -
+
+Turn off this advice by setting config variable advice.detachedHead to false
+
+[2026-10-16T23:08:46+00:00] stage 590.48.01: make modules against 6.8.0-59-generic (-j4, CC=x86_64-linux-gnu-gcc-12)
+[2026-10-16T23:10:02+00:00] stage 590.48.01: modules ✔ version=590.48.01 vermagic=6.8.0-59-generic
+[2026-10-16T23:10:02+00:00] stage 590.48.01: download https://us.download.nvidia.com/XFree86/Linux-x86_64/590.48.01/NVIDIA-Linux-x86_64-590.48.01.run
+[2026-10-16T23:10:15+00:00] stage 590.48.01: firmware ✔ gsp_ga10x.bin gsp_tu10x.bin
+[2026-10-16T23:10:16+00:00] stage 590.48.01: STAGED ✔ /workspace/drivers/590.48.01

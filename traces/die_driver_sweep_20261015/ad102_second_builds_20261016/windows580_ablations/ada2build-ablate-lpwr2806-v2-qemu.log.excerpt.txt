@@ -1,0 +1,344 @@
+kf-host: host tier: stock
+kf3: host facts: GSS 0x2080a028 [(0, 1), (8, 1), (c, 100000), (20c, 100000)]: the background probe was refused or changed the answer — zero-probe bytes only
+kf3: host facts: GSS 0x2080a028 [(0, 1), (8, 1), (c, 1), (20c, 1)]: the background probe was refused or changed the answer — zero-probe bytes only
+kf-host: HOST-ABI REFUSED control 0x2080852e: host control 0x2080852e has no public header (zero request measured NV_OK on AD103 575.51.03 and GSP 580.65.05; INVALID_ARGUMENT at 595.91.07); its layout at host driver 595.91.07 was never measured
+kf3: host facts: GSS 0x2080852e [] refused by the host (HostRefusal { status: None, detail: "Other(19314)" }) — not served
+kf-host: HOST-ABI REFUSED control 0x2080853a: host control 0x2080853a has no public header (zero request measured NV_OK on AD103 575.51.03 and GSP 580.65.05; INVALID_ARGUMENT at 595.91.07); its layout at host driver 595.91.07 was never measured
+kf3: host facts: GSS 0x2080853a [] refused by the host (HostRefusal { status: None, detail: "Other(19314)" }) — not served
+kf-host: HOST-ABI REFUSED control 0x2080a618: host control 0x2080a618 has no public header (zero request measured NV_OK on AD103 575.51.03 and GSP 580.65.05; INVALID_ARGUMENT at 595.91.07); its layout at host driver 595.91.07 was never measured
+kf3: host facts: GSS 0x2080a618 [] refused by the host (HostRefusal { status: None, detail: "Other(19314)" }) — not served
+kf-host: HOST-ABI REFUSED control 0x2080852e: host control 0x2080852e has no public header (zero request measured NV_OK on AD103 575.51.03 and GSP 580.65.05; INVALID_ARGUMENT at 595.91.07); its layout at host driver 595.91.07 was never measured
+kf3: host facts: GSS 0x2080852e [] refused by the host (HostRefusal { status: None, detail: "Other(19314)" }) — not served
+kf-host: HOST-ABI REFUSED control 0x2080853a: host control 0x2080853a has no public header (zero request measured NV_OK on AD103 575.51.03 and GSP 580.65.05; INVALID_ARGUMENT at 595.91.07); its layout at host driver 595.91.07 was never measured
+kf3: host facts: GSS 0x2080853a [] refused by the host (HostRefusal { status: None, detail: "Other(19314)" }) — not served
+kf-host: HOST-ABI REFUSED control 0x2080a618: host control 0x2080a618 has no public header (zero request measured NV_OK on AD103 575.51.03 and GSP 580.65.05; INVALID_ARGUMENT at 595.91.07); its layout at host driver 595.91.07 was never measured
+kf3: host facts: GSS 0x2080a618 [] refused by the host (HostRefusal { status: None, detail: "Other(19314)" }) — not served
+kf-host: HOST-ABI REFUSED control 0x2080853b: host control 0x2080853b has no row in kf_abi::hostabi::HOST_CONTROLS, and host driver 595.91.07 is outside the interval the host encoders were written for — its layout is unknown
+kf3: host facts: GSS 0x2080853b [(4, 1)] refused by the host (HostRefusal { status: None, detail: "Other(19314)" }) — not served
+kf-host: HOST-ABI REFUSED control 0x2080852a: : body is 1716 bytes, its layout is 1784
+kf3: host facts: GSS 0x2080852a [] refused by the host (HostRefusal { status: None, detail: "Other(19314)" }) — not served
+kf-host: HOST-ABI REFUSED control 0x2080a618: host control 0x2080a618 has no public header (zero request measured NV_OK on AD103 575.51.03 and GSP 580.65.05; INVALID_ARGUMENT at 595.91.07); its layout at host driver 595.91.07 was never measured
+kf3: host facts: GSS 0x2080a618 [] refused by the host (HostRefusal { status: None, detail: "Other(19314)" }) — not served
+kf-host: HOST-ABI REFUSED control 0x2080a618: host control 0x2080a618 has no public header (zero request measured NV_OK on AD103 575.51.03 and GSP 580.65.05; INVALID_ARGUMENT at 595.91.07); its layout at host driver 595.91.07 was never measured
+kf3: host facts: GSS 0x2080a618 [] refused by the host (HostRefusal { status: None, detail: "Other(19314)" }) — not served
+kf-host: HOST-ABI REFUSED control 0x2080852e: host control 0x2080852e has no public header (zero request measured NV_OK on AD103 575.51.03 and GSP 580.65.05; INVALID_ARGUMENT at 595.91.07); its layout at host driver 595.91.07 was never measured
+kf3: host facts: GSS 0x2080852e [] refused by the host (HostRefusal { status: None, detail: "Other(19314)" }) — not served
+kf3: host facts: FIFO latency buffers (engine, gp, pb) from the host: [(1, 240, 2880), (9, 240, 2880), (a, 240, 2000), (b, 20, e00), (c, 20, e00), (13, 20, 80), (1c, 20, 80), (1d, 20, 80), (22, 20, 80), (33, 20, 80)]
+kf3: channel budget 1789 per runlist (Derived; derived default 1789, host limit 2045; the count the guest is told AND the enforced cap, refused by name past it — property channel-budget, docs/design/V3_CHANNEL_BUDGET.md)
+kf3: guest GPU UUID GPU-REDACTED (gpu-uuid=auto, basis Auto, devfn 0x30)
+kf3: permission policy: READ_ONLY+VOLATILE carried to the host map, PRIVILEGED leaves withheld from user twins, ATOMIC_DISABLE not carried (KF3_CARRY_ATOMIC_DISABLE=1 enables it once fault delivery exists) (key_perm=0x68)
+kf-cuda: cuda thread posture thread=kf3-cuda-walk cap_sys_admin=cleared-for-thread-life (libcuda's channels from this thread, and from threads it starts, are created without CAP_SYS_ADMIN)
+kf-cuda: cuda thread posture thread=kf3-cuda-store cap_sys_admin=cleared-for-thread-life (libcuda's channels from this thread, and from threads it starts, are created without CAP_SYS_ADMIN)
+kf3: host GPU minor=0 bdf=0000:00:07.0 gpuId=0x7 rm_device_instance=0 cuda_device="NVIDIA GeForce RTX 4090" store=4096 MiB
+kf3: guest driver 580.65.06 (guest-driver=); measured ABI: static-info Pre610, element Pre610, init-args FourField, rm-control params@40, vgx Some((43, 19))
+kf3: native timer BAR0=0x9000, read-only 4096-byte mapping, host/guest layout TimerLayout { register_bytes: 1044, time_low: 1024, time_high: 1040 }
+kf3: P1+P2 T-space ON: built at prewarm (hardwired, OWNER_RULINGS §AB; docs/design/V3_P1P2_TSPACE.md); mirrors carry no window and no ring; host channel births require USER replies
+kf3: channel plane: Translated rings on host COPY2 (engine 0xb); completions on FIFO_EVENT_MTHD + CE2
+kf3: interrupt plane: host non-stall events -> guest vectors [GR0->Some(0) CE0->Some(0) CE1->Some(0) CE2->Some(1) CE3->Some(2) NVENC1->Some(4) NVENC2->Some(5) NVDEC0->Some(3) OFA->Some(6)]
+kf3: non-stall relay (owner ruling 2026-10-08): every host edge -> the guest vector of every event this guest ARMED, never dropped; FIFO_EVENT_MTHD -> a vector no armed engine shares, else GR0 vector Some(0) (relay=on, pacing=off; KF3_PT_NSI_RELAY / KF3_PT_NSI_MIN_INTERVAL_US)
+kf3: display plane ON — virtual NVDisplay for AD102 AD103 AD104 AD106 AD107 (IP 0x04040000, display class 0xc770, 4 heads)
+kf3: display: EXPERIMENT KF3_DISPLAY_LUT_MIRROR=1 — MIRROR accepted on DIRECT ILUT/OLUT where no negative input can reach it
+kf3: display: EXPERIMENT KF3_DISPLAY_ILUT_OFFSET_256=1 — SET_OFFSET_ILUT read in 256-byte units (as OLUT/TMO)
+kf3: display: caps page derived — 44 words: 43 T1 rule, 1 T3 measured (0 unmeasured)
+kf3: display: monitor 1920x1080 at 60000 mHz, range max 75 Hz, EDID fnv1a64=c9dcbb394c28b1c7 (display-max-fps 0)
+kf-cuda: cuda thread posture thread=kf3-cuda-disp cap_sys_admin=cleared-for-thread-life (libcuda's channels from this thread, and from threads it starts, are created without CAP_SYS_ADMIN)
+kf3: display plane built — derived registers, caps page, engine vocabulary, GPU context on 0000:00:07.0
+kf-rm: EXPERIMENT software-runlist allocation metadata only; native backing and scheduling are NOT implemented
+kf-rm: KF3_SW_RUNLIST_HOST_OWNED=1: software-runlist submits answered NV_OK and ignored; kernel channels scheduled at birth — AWAITING OWNER CONFIRMATION
+kf-rm: PROBE KF3_PREEMPT_BIND_PROBE=1: GR_CTXSW_PREEMPTION_BIND answered NV_OK, NOTHING bound on the host (H-preempt-bind probe, not a shipped behaviour)
+kf-rm: PROBE KF3_ZCULL_BIND_PROBE=1: a cross-client GR_CTXSW_ZCULL_BIND answered NV_OK, NOTHING bound on the host (probe, not a shipped behaviour)
+kf-rm: PROBE KF3_DISPLAY_CTRL_PROBE=1: six NV0073 controls answered NV_OK with the request echoed (H-modeset probe, not a shipped behaviour)
+kf-rm: EXPERIMENT contiguous SYSRAM descriptors backed by checked guest RAM; no scheduling
+kf-rm: EXPERIMENT virtual GfxP pool sizing enabled; lifecycle is not implemented
+kf-rm: display: PROBE KF3_DISPLAY_IMP_ENABLE=1 — IMP_SET_GET_PARAMETER GET IMP_ENABLE answered TRUE (real-GPU answer; IS_MODE_POSSIBLE already says possible)
+kf3: PRAMIN scratch: tile 0x100000 x 1 over 0x100000 (host RAM bound 0x100000)
+kf3: BAR1 scratch: tile 0x200000 x 64 over 0x8000000 (host RAM bound 0x200000)
+kf3: BAR2 scratch: tile 0x200000 x 16 over 0x2000000 (host RAM bound 0x200000)
+kf3: scratch host-RAM bound 0x500000 for this device (PRAMIN 0x100000 + BAR1 0x200000 + BAR2 0x200000); whole-window scratch would have allowed 0xa100000
+kf3: boot display ON — option ROM 9728 bytes (10de:2684, KFGP BAR1 +0x0, 1920x1080 pitch 7680, G = 0x7f0000); BAR1 [0, G) seeded with store [0, G), zeroed on the GPU; kf-gop UNSIGNED (embedded)
+kf3: P4 memory plane: store 4096 MiB (imported into the walker), walker pools 236 MiB of host GPU memory (walk pool 1048576 runs, slot pool 2097152 runs (2097152 free), max per space 1048576, slots held 0, grows 0, retries 0, ceilings 0, largest slot 0, largest walk 0), roots bar1=0xf1cac000 bar2=0xf3392000, PRAMIN one map+mmap per move, trigger @0xb830b0
+kf-cuda: cuda thread posture thread=kf3-vamgr cap_sys_admin=cleared-for-thread-life (libcuda's channels from this thread, and from threads it starts, are created without CAP_SYS_ADMIN)
+kf-cuda: cuda thread posture thread=kf3-display cap_sys_admin=cleared-for-thread-life (libcuda's channels from this thread, and from threads it starts, are created without CAP_SYS_ADMIN)
+kf3: display: compose kernel self-test PASSED
+kf3: display worker up — engine 4 heads / 8 windows, caps page published
+kf3: display: display-max-fps unset — every head's vblank tick is capped at 75 Hz; copies without a flip are made at the console head's tick, while watched, and sent only when the frame's checksum changed
+kf3: display: boot layer — store [0, 0x7e9000) as 1920x1080 pitch 7680, shown until the guest arms a head
+qemu-system-x86_64: -device kf3-gpu,fb-mb=4096,bar1-size=134217728,bar2-size=33554432,display=on,gop=on,guest-driver=580.65.06,bus=pci.0,addr=0x6,id=kf0: info: kf3: boot display option ROM registered: 9728 bytes in a 16384-byte ROM BAR
+qemu-system-x86_64: -device kf3-gpu,fb-mb=4096,bar1-size=134217728,bar2-size=33554432,display=on,gop=on,guest-driver=580.65.06,bus=pci.0,addr=0x6,id=kf0: info: kf3: display console registered (head 0 of kf0)
+qemu-system-x86_64: -device kf3-gpu,fb-mb=4096,bar1-size=134217728,bar2-size=33554432,display=on,gop=on,guest-driver=580.65.06,bus=pci.0,addr=0x6,id=kf0: info: kf3: family=Ada phase=Cold trapped=0 applied=0 refused=0 serviced=0 ram_refused=0 unshadowed_writes=0 read_exits=0 last_off=0x0 mem[inval=0 walks=0/0 cleared=0 superseded=0 named_missed=0 unreconciled=0 absent_cleared=0 mapped=0 unmapped=0 clipped=0x0 held=0 vmm_overlaps=0 priv_withheld=0 priv_withheld_bytes=0x0 priv_mirrored=0 sked=0/0held carve_gpu=0 carve_kernel=0 carve_cpu=0 carve_clipped=0x0 fn70=0 roots=0 root_moves=0 stmts=0/0 refused=0 pramin_repoints=0 pramin_miss=0 last_miss=0x0 pramin_worst_us=0 (map 0 mmap 0) pramin_maps=0 pramin_mmaps=0 pramin_kept=0 pramin_kept_now=0 window_advice_refused=0 inline_opens=0 reaped=0 cache_ops=0 sysmembars=0 root_unsets=0] mirrors=0 reused=0 prewarmed=0 mirror_avg_us=0 mirror_max_us=0 vat[invals=0 arrive->clear_avg_us=0 max_us=0 walks=0 walk_avg_us=0 gpu_avg_us=0 plan_avg_us=0 apply_avg_us=0 leaves=0 host_calls=0] chan[births=0 pt_births=0 acts=0/0refused birth_refused_cap=0 worst_act_us=0 nsi=[] pt_nsi=[fifo_edges=0 fifo_raised=0 fifo_armed=0 sticky=0x0 kernel_nonstall_registered=0 arm_clears=0 os_event_overflowed=0 kernel_nonstall_overflowed=0 edges=0 not_armed=0 unvectored=0 relay_off=0 relay=on pacing=off refused=0  ] served=0 parks=2 host_rings=0 contended=0 poisoned=0 tokens=[]] views[armed=3 released=0 refused=0 held=3] rc[armed=0 unarmed=0 wakes=0 seen=0 posted=0] inca[strict=yes counted=0 heap_out=0 rows_inexact=0] tspace[built=not-yet twin_refused=0 tspace_refused=0 slots_leaked=0 twin_freeing=0] irq[writes=0 raised=0 held=0 oor=0] disp[writes=0 puts=0 methods=0 updates=0 notifies=0 releases=0 vblanks=0 irqs=0 exceptions=0 refused=0 scanouts=0 scanout_refused=0 scanout_avg_us=0 scanout_max_us=0] scanout_no_slot=0 scanout_d2h=0 scanout_pack=0 pack_skipped=0 display_vram_mib=0 host_cursor_reads=0 host_cursor_refused=0 console_windows_left_out=0 console_copies_skipped=0 boot[frames=0 retired=no] dbfast[off regs=0 placed=0/0 sites=0 doorbells=0 wakes=0 rang=0 handed=0 absorbed=0 refused(budget=0 kvm=0 enospc=0 eexist=0 fd=0) deassign_failed=0 ack_timeouts=0 double=0 stale=0 empty=0 polls=0/0 max_batch=0 wake_to_deliver[n=0 p50=0.0us p99=0.0us max=0.0us] ack_wait[n=0 p50=0.0us p99=0.0us max=0.0us]] unserviced=[] gsp_refusals[total=0 distinct=0 []] (BAR0 pieces=7)
+kf3: device reset #1 COMPLETE — the device is as realize left it; guest writes accepted again (dropped while in reset: 0)
+kf3: device reset #1 complete before the vCPUs resume (the main loop waited 0 us)
+kf3: display: +50 ms the console shows the BOOT layer (store 0x0, 1920x1080) (core channel FREE)
+kf3: family=Ada phase=Cold trapped=0 applied=0 refused=0 serviced=0 ram_refused=0 unshadowed_writes=0 read_exits=0 last_off=0x0 mem[inval=0 walks=0/0 cleared=0 superseded=0 named_missed=0 unreconciled=0 absent_cleared=0 mapped=0 unmapped=0 clipped=0x0 held=0 vmm_overlaps=0 priv_withheld=0 priv_withheld_bytes=0x0 priv_mirrored=0 sked=0/0held carve_gpu=0 carve_kernel=0 carve_cpu=0 carve_clipped=0x0 fn70=0 roots=0 root_moves=0 stmts=0/0 refused=0 pramin_repoints=0 pramin_miss=0 last_miss=0x0 pramin_worst_us=0 (map 0 mmap 0) pramin_maps=0 pramin_mmaps=0 pramin_kept=0 pramin_kept_now=0 window_advice_refused=0 inline_opens=0 reaped=0 cache_ops=0 sysmembars=0 root_unsets=0] mirrors=0 reused=0 prewarmed=0 mirror_avg_us=0 mirror_max_us=0 vat[invals=0 arrive->clear_avg_us=0 max_us=0 walks=0 walk_avg_us=0 gpu_avg_us=0 plan_avg_us=0 apply_avg_us=0 leaves=0 host_calls=0] chan[births=0 pt_births=0 acts=0/0refused birth_refused_cap=0 worst_act_us=0 nsi=[] pt_nsi=[fifo_edges=0 fifo_raised=0 fifo_armed=0 sticky=0x0 kernel_nonstall_registered=0 arm_clears=0 os_event_overflowed=0 kernel_nonstall_overflowed=0 edges=0 not_armed=0 unvectored=0 relay_off=0 relay=on pacing=off refused=0  ] served=0 parks=82 host_rings=0 contended=0 poisoned=0 tokens=[]] views[armed=3 released=0 refused=0 held=3] rc[armed=0 unarmed=0 wakes=0 seen=0 posted=0] inca[strict=yes counted=0 heap_out=0 rows_inexact=0] tspace[built=not-yet twin_refused=0 tspace_refused=0 slots_leaked=0 twin_freeing=0] irq[writes=0 raised=0 held=0 oor=0] disp[writes=0 puts=0 methods=0 updates=0 notifies=0 releases=0 vblanks=0 irqs=0 exceptions=0 refused=0 scanouts=0 scanout_refused=0 scanout_avg_us=0 scanout_max_us=0] scanout_no_slot=0 scanout_d2h=0 scanout_pack=0 pack_skipped=0 display_vram_mib=0 host_cursor_reads=0 host_cursor_refused=0 console_windows_left_out=0 console_copies_skipped=0 boot[frames=0 retired=no] dbfast[off regs=0 placed=0/0 sites=0 doorbells=0 wakes=0 rang=0 handed=0 absorbed=0 refused(budget=0 kvm=0 enospc=0 eexist=0 fd=0) deassign_failed=0 ack_timeouts=0 double=0 stale=0 empty=0 polls=0/0 max_batch=0 wake_to_deliver[n=0 p50=0.0us p99=0.0us max=0.0us] ack_wait[n=0 p50=0.0us p99=0.0us max=0.0us]] unserviced=[] gsp_refusals[total=0 distinct=0 []] reset[req=1 (main=1 vcpu=0 wake=0) done=1 kept=0 pristine=1 waits_timed_out=0 stage=Idle dropped=0]
+kf3: guest-RAM object 0xcafe0012 over 0x200000000 bytes of the guest memfd
+kf3: mem t=3.235s tspace space=0xcafe0013 fb=0x120000000+0xefbe0000 ram=0x20fbe0000+0x200000000 (obj 0xcafe0012) rings=0xff00000000+0x100000000 build_us=136288 fb_pages=2M:0xefa00000+4K:0x1e0000
+kf3: mem t=3.236s [1/3] prewarm: spare host space 0xcafe0016 ready before the guest runs — windows=none (vaspace 1507 us, ram_obj 0 us, total 1508 us)
+kf3: PT-NSI host CE3 notifier wake #1: NotArmed (vector Some(2), live twins 0)
+kf3: PT-NSI host FIFO_EVENT_MTHD edge #1: NotArmed (guest armed=false, vector None)
+kf3: mem t=3.287s [2/3] prewarm: spare host space 0xcafe001b ready before the guest runs — w
+[oversize raw omitted]
+or its rows
+kf3: GSP rpc RmAlloc seq=0
+kf3: act USER ring software object: USER_RING_5080 admitted own 0xc1d0008f:0xff1fe450, classID1 host 0xcafe090a; no host registrations (250 us, off the GSP lock)
+kayfabe: HELD-REPLY-POSTED n=1 — their rows are on the host now
+kayfabe: HELD-REPLY fn=RmAlloc depth=1 — this map reply WAITS for its rows
+kf3: GSP rpc RmAlloc seq=0
+kf3: act engine object: 0xc1d0008f:0xff1fe474 class 0xc7b5 (DmaCopy) on twin host 0x4f -> host object 0xcafe090b (215 us, off the GSP lock)
+kayfabe: HELD-REPLY-POSTED n=1 — their rows are on the host now
+kf3: GSP rpc RmControl seq=0
+kf3: GSP rpc RmControl seq=0
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 0 }
+kayfabe: HELD-REPLY fn=RmAlloc depth=1 — this map reply WAITS for its rows
+kf3: GSP rpc RmAlloc seq=0
+kf3: act engine object: 0xc1d0008f:0xff1fe472 class 0xc9c0 (Compute) on twin host 0x4f -> host object 0xcafe090c (1293 us, off the GSP lock)
+kayfabe: HELD-REPLY-POSTED n=1 — their rows are on the host now
+kf3: GSP rpc RmControl seq=0
+kf-rm: chanlink: CLASSIFY 0xc1d0008f:0xff0e0103 USER WORK -> Passthrough (subcontext and a process other than the kernel driver's)
+kf-rm: chanlink: CHAN-FACTS 0xc1d0008f:0xff0e0103 parent=0xff0e0000 class=0xc56f engine=Some(1) flags=0x80205130 hVASpace=0x0 ctxShare=0xff0e0201 vas=0xc1d00087:Some(ff000850) tsg=Some(ff0e0000) device=0xff020000 kernel=true privilege=Some(ChannelPrivilege { level: 2, uvm_owned: false }) internalFlags=Some(16) ProcessID=Some(1ec4) SubProcessID=Some(0) kernel_pid_decl=false hObjectError=Some(0) hObjectBuffer=Some(0) gpFifoOffset=0xa425000 gpFifoEntries=8192 hUserdMemory0=Some(ff00a006) userd=Some(Sysmem { base: 239601c00, size: 200 }) hPhysChannelGroup=Some(0) subDeviceId=Some(0)
+kayfabe: HELD-REPLY fn=RmAlloc depth=1 — this map reply WAITS for its rows
+kf3: GSP rpc RmAlloc seq=0
+kf3: USER_RING_PREPARE elapsed_us=82 ok=true
+kf3: USER_RING_INIT phase=2 elapsed_us=30
+kf-host: channel birth h=0xcafe0911 engine=0x1 reply_flags=0x00000080 PRIVILEGED_CHANNEL=0 privilege=USER cap_sys_admin=cleared-for-call
+kf3: act Windows USER ring birth: Windows USER ring chan 0xc1d0008f:0xff0e0103 BORN USER private-read-only-ring token 0x29 host 0x50; OWN VAS; worker-only; source=0xa425000x8192 declared_subdevice=Some(0) native_scan_subdevice=0x1 (1265 us, off the GSP lock)
+kayfabe: HELD-REPLY-POSTED n=1 — their rows are on the host now
+kayfabe: HELD-REPLY fn=RmAlloc depth=1 — this map reply WAITS for its rows
+kf3: GSP rpc RmAlloc seq=0
+kf3: act USER ring software object: USER_RING_5080 admitted own 0xc1d0008f:0xff1fe470, classID1 host 0xcafe0912; no host registrations (216 us, off the GSP lock)
+kayfabe: HELD-REPLY-POSTED n=1 — their rows are on the host now
+kayfabe: HELD-REPLY fn=RmAlloc depth=1 — this map reply WAITS for its rows
+kf3: GSP rpc RmAlloc seq=0
+kf3: act engine object: 0xc1d0008f:0xff1fe494 class 0xc7b5 (DmaCopy) on twin host 0x50 -> host object 0xcafe0913 (230 us, off the GSP lock)
+kayfabe: HELD-REPLY-POSTED n=1 — their rows are on the host now
+kf3: GSP rpc RmControl seq=0
+kf3: GSP rpc RmControl seq=0
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 0 }
+kayfabe: HELD-REPLY fn=RmAlloc depth=1 — this map reply WAITS for its rows
+kf3: GSP rpc RmAlloc seq=0
+kf3: act engine object: 0xc1d0008f:0xff1fe492 class 0xc9c0 (Compute) on twin host 0x50 -> host object 0xcafe0914 (515 us, off the GSP lock)
+kayfabe: HELD-REPLY-POSTED n=1 — their rows are on the host now
+kf3: GSP rpc RmControl seq=0
+kf3: GSP rpc RmAlloc seq=0
+kf-rm: chanlink: CLASSIFY 0xc1d0008f:0xff0e0104 USER WORK -> Passthrough (subcontext and a process other than the kernel driver's)
+kf-rm: chanlink: CHAN-FACTS 0xc1d0008f:0xff0e0104 parent=0xff0e0000 class=0xc56f engine=Some(1) flags=0x80205230 hVASpace=0x0 ctxShare=0xff0e0202 vas=0xc1d00087:Some(ff000850) tsg=Some(ff0e0000) device=0xff020000 kernel=true privilege=Some(ChannelPrivilege { level: 2, uvm_owned: false }) internalFlags=Some(16) ProcessID=Some(1ec4) SubProcessID=Some(0) kernel_pid_decl=false hObjectError=Some(0) hObjectBuffer=Some(0) gpFifoOffset=0x49bb000 gpFifoEntries=8192 hUserdMemory0=Some(ff00a007) userd=Some(Sysmem { base: 239601e00, size: 200 }) hPhysChannelGroup=Some(0) subDeviceId=Some(0)
+kayfabe: HELD-REPLY fn=RmAlloc depth=1 — this map reply WAITS for its rows
+kf3: GSP rpc RmAlloc seq=0
+kf3: USER_RING_PREPARE elapsed_us=115 ok=true
+kf3: USER_RING_INIT phase=2 elapsed_us=22
+kf-host: channel birth h=0xcafe0930 engine=0x1 reply_flags=0x00000080 PRIVILEGED_CHANNEL=0 privilege=USER cap_sys_admin=cleared-for-call
+kf3: act Windows USER ring birth: Windows USER ring chan 0xc1d0008f:0xff0e0104 BORN USER private-read-only-ring token 0x2a host 0x51; OWN VAS; worker-only; source=0x49bb000x8192 declared_subdevice=Some(0) native_scan_subdevice=0x1 (2147 us, off the GSP lock)
+kayfabe: HELD-REPLY-POSTED n=1 — their rows are on the host now
+kayfabe: HELD-REPLY fn=RmAlloc depth=1 — this map reply WAITS for its rows
+kf3: GSP rpc RmAlloc seq=0
+kf3: act USER ring software object: USER_RING_5080 admitted own 0xc1d0008f:0xff1fe490, classID1 host 0xcafe0931; no host registrations (253 us, off the GSP lock)
+kayfabe: HELD-REPLY-POSTED n=1 — their rows are on the host now
+kayfabe: HELD-REPLY fn=RmAlloc depth=1 — this map reply WAITS for its rows
+kf3: GSP rpc RmAlloc seq=0
+kf3: act engine object: 0xc1d0008f:0xff1fe4b4 class 0xc7b5 (DmaCopy) on twin host 0x51 -> host object 0xcafe0932 (214 us, off the GSP lock)
+kayfabe: HELD-REPLY-POSTED n=1 — their rows are on the host now
+kf3: GSP rpc RmControl seq=0
+kf3: GSP rpc RmControl seq=0
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 0 }
+kayfabe: HELD-REPLY fn=RmAlloc depth=1 — this map reply WAITS for its rows
+kf3: GSP rpc RmAlloc seq=0
+kf3: act engine object: 0xc1d0008f:0xff1fe4b2 class 0xc9c0 (Compute) on twin host 0x51 -> host object 0xcafe0933 (1222 us, off the GSP lock)
+kayfabe: HELD-REPLY-POSTED n=1 — their rows are on the host now
+kf3: GSP rpc RmControl seq=0
+kf3: mem t=125.159s BAR1 boot framebuffer [0x0, +0x7f0000) after BAR1 change #262: guest views [(0, 10000, Some(ead20000)), (10000, 10000, Some(ead30000)), (20000, 10000, Some(ead40000)), (30000, 80000, Some(ead50000)), (b0000, 80000, Some(eadd0000)), (130000, 80000, Some(eae50000)), (1b0000, 80000, Some(eaed0000)), (230000, 1000, Some(eaf50000)), (231000, 1000, Some(eaf50000)), (232000, 1000, Some(eaf50000)), (233000, 1000, Some(eaf50000)), (234000, 1000, Some(eaf50000)), (235000, 1000, Some(eaf50000)), (236000, 1000, Some(eaf50000)), (237000, 1000, Some(eaf50000)), (238000, 1000, Some(eaf50000)), (239000, 1000, Some(eaf50000)), (23a000, 1000, Some(eaf50000)), (23b000, 1000, Some(eaf50000)), (23c000, 1000, Some(eaf50000)), (23d000, 1000, Some(eaf50000)), (23e000, 1000, Some(eaf50000)), (23f000, 1000, Some(eaf50000)), (240000, 21000, Some(eaf60000)), (261000, f000, Some(eaf60000)), (270000, 11000, Some(eaf90000)), (281000, f000, Some(eaf90000)), (290000, 9000, Some(eafb0000)), (299000, 7000, Some(eafb0000)), (2a0000, 1000, Some(eafc0000)), (2a1000, 1000, Some(eafc0000)), (2a2000, 1000, Some(eafc0000)), (2a3000, 1000, Some(eafc0000)), (2a4000, 1000, Some(eafc0000)), (2a5000, 1000, Some(eafc0000)), (2a6000, 1000, Some(eafc0000)), (2a7000, 1000, Some(eafc0000)), (2a8000, 1000, Some(eafc0000)), (2a9000, 1000, Some(eafc0000)), (2aa000, 1000, Some(eafc0000)), (2ab000, 1000, Some(eafc0000)), (2ac000, 1000, Some(eafc0000)), (2ad000, 1000, Some(eafc0000)), (2ae000, 1000, Some(eafc0000)), (2af000, 1000, Some(eafc0000)), (2b0000, 10000, Some(eafd0000)), (2c0000, 2000, Some(eafe0000)), (2c2000, 2000, Some(eafe0000)), (2c4000, 2000, Some(eafe0000)), (2c6000, 2000, Some(eafe0000)), (2c8000, 2000, Some(eafe0000)), (2ca000, 2000, Some(eafe0000)), (2cc000, 2000, Some(eafe0000)), (2ce000, 2000, Some(eafe0000)), (2d0000, 8f000, Some(eb010000)), (35f000, 1000, Some(eb010000)), (360000, 90000, Some(b6f0000)), (3f0000, 10000, Some(4e0000)), (400000, 10000, Some(4e0000)), (410000, 10000, Some(4e0000)), (420000, 10000, Some(7f0000)), (430000, 10000, Some(7f0000)), (440000, 10000, Some(7f0000)), (490000, 10000, Some(b6e0000)), (4a0000, 10000, Some(b6d0000)), (4b0000, 10000, Some(b6c0000)), (4c0000, 10000, Some(b6b0000)), (4d0000, 10000, Some(b6a0000)), (4e0000, 10000, Some(b690000)), (4f0000, 10000, Some(b680000)), (500000, 10000, Some(b670000)), (510000, 10000, Some(b20000)), (520000, 10000, Some(b10000))]; 0x300000 bytes show SCRATCH
+kf3: mem t=125.165s BAR1 boot framebuffer [0x0, +0x7f0000) after BAR1 change #263: guest views [(0, 10000, Some(ead20000)), (10000, 10000, Some(ead30000)), (20000, 10000, Some(ead40000)), (30000, 80000, Some(ead50000)), (b0000, 80000, Some(eadd0000)), (130000, 80000, Some(eae50000)), (1b0000, 80000, Some(eaed0000)), (230000, 1000, Some(eaf50000)), (231000, 1000, Some(eaf50000)), (232000, 1000, Some(eaf50000)), (233000, 1000, Some(eaf50000)), (234000, 1000, Some(eaf50000)), (235000, 1000, Some(eaf50000)), (236000, 1000, Some(eaf50000)), (237000, 1000, Some(eaf50000)), (238000, 1000, Some(eaf50000)), (239000, 1000, Some(eaf50000)), (23a000, 1000, Some(eaf50000)), (23b000, 1000, Some(eaf50000)), (23c000, 1000, Some(eaf50000)), (23d000, 1000, Some(eaf50000)), (23e000, 1000, Some(eaf50000)), (23f000, 1000, Some(eaf50000)), (240000, 21000, Some(eaf60000)), (261000, f000, Some(eaf60000)), (270000, 11000, Some(eaf90000)), (281000, f000, Some(eaf90000)), (290000, 9000, Some(eafb0000)), (299000, 7000, Some(eafb0000)), (2a0000, 1000, Some(eafc0000)), (2a1000, 1000, Some(eafc0000)), (2a2000, 1000, Some(eafc0000)), (2a3000, 1000, Some(eafc0000)), (2a4000, 1000, Some(eafc0000)), (2a5000, 1000, Some(eafc0000)), (2a6000, 1000, Some(eafc0000)), (2a7000, 1000, Some(eafc0000)), (2a8000, 1000, Some(eafc0000)), (2a9000, 1000, Some(eafc0000)), (2aa000, 1000, Some(eafc0000)), (2ab000, 1000, Some(eafc0000)), (2ac000, 1000, Some(eafc0000)), (2ad000, 1000, Some(eafc0000)), (2ae000, 1000, Some(eafc0000)), (2af000, 1000, Some(eafc0000)), (2b0000, 10000, Some(eafd0000)), (2c0000, 2000, Some(eafe0000)), (2c2000, 2000, Some(eafe0000)), (2c4000, 2000, Some(eafe0000)), (2c6000, 2000, Some(eafe0000)), (2c8000, 2000, Some(eafe0000)), (2ca000, 2000, Some(eafe0000)), (2cc000, 2000, Some(eafe0000)), (2ce000, 2000, Some(eafe0000)), (2d0000, 8f000, Some(eb010000)), (35f000, 1000, Some(eb010000)), (360000, 90000, Some(b6f0000)), (3f0000, 10000, Some(4e0000)), (400000, 10000, Some(4e0000)), (410000, 10000, Some(4e0000)), (420000, 10000, Some(7f0000)), (430000, 10000, Some(7f0000)), (440000, 10000, Some(7f0000)), (450000, 10000, Some(7f0000)), (490000, 10000, Some(b6e0000)), (4a0000, 10000, Some(b6d0000)), (4b0000, 10000, Some(b6c0000)), (4c0000, 10000, Some(b6b0000)), (4d0000, 10000, Some(b6a0000)), (4e0000, 10000, Some(b690000)), (4f0000, 10000, Some(b680000)), (500000, 10000, Some(b670000)), (510000, 10000, Some(b20000)), (520000, 10000, Some(b10000))]; 0x2f0000 bytes show SCRATCH
+kf3: mem t=125.169s BAR1 boot framebuffer [0x0, +0x7f0000) after BAR1 change #264: guest views [(0, 10000, Some(ead20000)), (10000, 10000, Some(ead30000)), (20000, 10000, Some(ead40000)), (30000, 80000, Some(ead50000)), (b0000, 80000, Some(eadd0000)), (130000, 80000, Some(eae50000)), (1b0000, 80000, Some(eaed0000)), (230000, 1000, Some(eaf50000)), (231000, 1000, Some(eaf50000)), (232000, 1000, Some(eaf50000)), (233000, 1000, Some(eaf50000)), (234000, 1000, Some(eaf50000)), (235000, 1000, Some(eaf50000)), (236000, 1000, Some(eaf50000)), (237000, 1000, Some(eaf50000)), (238000, 1000, Some(eaf50000)), (239000, 1000, Some(eaf50000)), (23a000, 1000, Some(eaf50000)), (23b000, 1000, Some(eaf50000)), (23c000, 1000, Some(eaf50000)), (23d000, 1000, Some(eaf50000)), (23e000, 1000, Some(eaf50000)), (23f000, 1000, Some(eaf50000)), (240000, 21000, Some(eaf60000)), (261000, f000, Some(eaf60000)), (270000, 11000, Some(eaf90000)), (281000, f000, Some(eaf90000)), (290000, 9000, Some(eafb0000)), (299000, 7000, Some(eafb0000)), (2a0000, 1000, Some(eafc0000)), (2a1000, 1000, Some(eafc0000)), (2a2000, 1000, Some(eafc0000)), (2a3000, 1000, Some(eafc0000)), (2a4000, 1000, Some(eafc0000)), (2a5000, 1000, Some(eafc0000)), (2a6000, 1000, Some(eafc0000)), (2a7000, 1000, Some(eafc0000)), (2a8000, 1000, Some(eafc0000)), (2a9000, 1000, Some(eafc0000)), (2aa000, 1000, Some(eafc0000)), (2ab000, 1000, Some(eafc0000)), (2ac000, 1000, Some(eafc0000)), (2ad000, 1000, Some(eafc0000)), (2ae000, 1000, Some(eafc0000)), (2af000, 1000, Some(eafc0000)), (2b0000, 10000, Some(eafd0000)), (2c0000, 2000, Some(eafe0000)), (2c2000, 2000, Some(eafe0000)), (2c4000, 2000, Some(eafe0000)), (2c6000, 2000, Some(eafe0000)), (2c8000, 2000, Some(eafe0000)), (2ca000, 2000, Some(eafe0000)), (2cc000, 2000, Some(eafe0000)), (2ce000, 2000, Some(eafe0000)), (2d0000, 8f000, Some(eb010000)), (35f000, 1000, Some(eb010000)), (360000, 90000, Some(b6f0000)), (3f0000, 10000, Some(4e0000)), (400000, 10000, Some(4e0000)), (410000, 10000, Some(4e0000)), (420000, 10000, Some(7f0000)), (430000, 10000, Some(7f0000)), (440000, 10000, Some(7f0000)), (450000, 10000, Some(7f0000)), (460000, 10000, Some(7f0000)), (490000, 10000, Some(b6e0000)), (4a0000, 10000, Some(b6d0000)), (4b0000, 10000, Some(b6c0000)), (4c0000, 10000, Some(b6b0000)), (4d0000, 10000, Some(b6a0000)), (4e0000, 10000, Some(b690000)), (4f0000, 10000, Some(b680000)), (500000, 10000, Some(b670000)), (510000, 10000, Some(b20000)), (520000, 10000, Some(b10000))]; 0x2e0000 bytes show SCRATCH
+kf3: mem t=125.174s BAR1 boot framebuffer [0x0, +0x7f0000) after BAR1 change #265: guest views [(0, 10000, Some(ead20000)), (10000, 10000, Some(ead30000)), (20000, 10000, Some(ead40000)), (30000, 80000, Some(ead50000)), (b0000, 80000, Some(eadd0000)), (130000, 80000, Some(eae50000)), (1b0000, 80000, Some(eaed0000)), (230000, 1000, Some(eaf50000)), (231000, 1000, Some(eaf50000)), (232000, 1000, Some(eaf50000)), (233000, 1000, Some(eaf50000)), (234000, 1000, Some(eaf50000)), (235000, 1000, Some(eaf50000)), (236000, 1000, Some(eaf50000)), (237000, 1000, Some(eaf50000)), (238000, 1000, Some(eaf50000)), (239000, 1000, Some(eaf50000)), (23a000, 1000, Some(eaf50000)), (23b000, 1000, Some(eaf50000)), (23c000, 1000, Some(eaf50000)), (23d000, 1000, Some(eaf50000)), (23e000, 1000, Some(eaf50000)), (23f000, 1000, Some(eaf50000)), (240000, 21000, Some(eaf60000)), (261000, f000, Some(eaf60000)), (270000, 11000, Some(eaf90000)), (281000, f000, Some(eaf90000)), (290000, 9000, Some(eafb0000)), (299000, 7000, Some(eafb0000)), (2a0000, 1000, Some(eafc0000)), (2a1000, 1000, Some(eafc0000)), (2a2000, 1000, Some(eafc0000)), (2a3000, 1000, Some(eafc0000)), (2a4000, 1000, Some(eafc0000)), (2a5000, 1000, Some(eafc0000)), (2a6000, 1000, Some(eafc0000)), (2a7000, 1000, Some(eafc0000)), (2a8000, 1000, Some(eafc0000)), (2a9000, 1000, Some(eafc0000)), (2aa000, 1000, Some(eafc0000)), (2ab000, 1000, Some(eafc0000)), (2ac000, 1000, Some(eafc0000)), (2ad000, 1000, Some(eafc0000)), (2ae000, 1000, Some(eafc0000)), (2af000, 1000, Some(eafc0000)), (2b0000, 10000, Some(eafd0000)), (2c0000, 2000, Some(eafe0000)), (2c2000, 2000, Some(eafe0000)), (2c4000, 2000, Some(eafe0000)), (2c6000, 2000, Some(eafe0000)), (2c8000, 2000, Some(eafe0000)), (2ca000, 2000, Some(eafe0000)), (2cc000, 2000, Some(eafe0000)), (2ce000, 2000, Some(eafe0000)), (2d0000, 8f000, Some(eb010000)), (35f000, 1000, Some(eb010000)), (360000, 90000, Some(b6f0000)), (3f0000, 10000, Some(4e0000)), (400000, 10000, Some(4e0000)), (410000, 10000, Some(4e0000)), (420000, 10000, Some(7f0000)), (430000, 10000, Some(7f0000)), (440000, 10000, Some(7f0000)), (450000, 10000, Some(7f0000)), (460000, 10000, Some(7f0000)), (470000, 10000, Some(7f0000)), (490000, 10000, Some(b6e0000)), (4a0000, 10000, Some(b6d0000)), (4b0000, 10000, Some(b6c0000)), (4c0000, 10000, Some(b6b0000)), (4d0000, 10000, Some(b6a0000)), (4e0000, 10000, Some(b690000)), (4f0000, 10000, Some(b680000)), (500000, 10000, Some(b670000)), (510000, 10000, Some(b20000)), (520000, 10000, Some(b10000))]; 0x2d0000 bytes show SCRATCH
+kf3: mem t=125.180s BAR1 boot framebuffer [0x0, +0x7f0000) after BAR1 change #266: guest views [(0, 10000, Some(ead20000)), (10000, 10000, Some(ead30000)), (20000, 10000, Some(ead40000)), (30000, 80000, Some(ead50000)), (b0000, 80000, Some(eadd0000)), (130000, 80000, Some(eae50000)), (1b0000, 80000, Some(eaed0000)), (230000, 1000, Some(eaf50000)), (231000, 1000, Some(eaf50000)), (232000, 1000, Some(eaf50000)), (233000, 1000, Some(eaf50000)), (234000, 1000, Some(eaf50000)), (235000, 1000, Some(eaf50000)), (236000, 1000, Some(eaf50000)), (237000, 1000, Some(eaf50000)), (238000, 1000, Some(eaf50000)), (239000, 1000, Some(eaf50000)), (23a000, 1000, Some(eaf50000)), (23b000, 1000, Some(eaf50000)), (23c000, 1000, Some(eaf50000)), (23d000, 1000, Some(eaf50000)), (23e000, 1000, Some(eaf50000)), (23f000, 1000, Some(eaf50000)), (240000, 21000, Some(eaf60000)), (261000, f000, Some(eaf60000)), (270000, 11000, Some(eaf90000)), (281000, f000, Some(eaf90000)), (290000, 9000, Some(eafb0000)), (299000, 7000, Some(eafb0000)), (2a0000, 1000, Some(eafc0000)), (2a1000, 1000, Some(eafc0000)), (2a2000, 1000, Some(eafc0000)), (2a3000, 1000, Some(eafc0000)), (2a4000, 1000, Some(eafc0000)), (2a5000, 1000, Some(eafc0000)), (2a6000, 1000, Some(eafc0000)), (2a7000, 1000, Some(eafc0000)), (2a8000, 1000, Some(eafc0000)), (2a9000, 1000, Some(eafc0000)), (2aa000, 1000, Some(eafc0000)), (2ab000, 1000, Some(eafc0000)), (2ac000, 1000, Some(eafc0000)), (2ad000, 1000, Some(eafc0000)), (2ae000, 1000, Some(eafc0000)), (2af000, 1000, Some(eafc0000)), (2b0000, 10000, Some(eafd0000)), (2c0000, 2000, Some(eafe0000)), (2c2000, 2000, Some(eafe0000)), (2c4000, 2000, Some(eafe0000)), (2c6000, 2000, Some(eafe0000)), (2c8000, 2000, Some(eafe0000)), (2ca000, 2000, Some(eafe0000)), (2cc000, 2000, Some(eafe0000)), (2ce000, 2000, Some(eafe0000)), (2d0000, 8f000, Some(eb010000)), (35f000, 1000, Some(eb010000)), (360000, 90000, Some(b6f0000)), (3f0000, 10000, Some(4e0000)), (400000, 10000, Some(4e0000)), (410000, 10000, Some(4e0000)), (420000, 10000, Some(7f0000)), (430000, 10000, Some(7f0000)), (440000, 10000, Some(7f0000)), (450000, 10000, Some(7f0000)), (460000, 10000, Some(7f0000)), (470000, 10000, Some(7f0000)), (480000, 10000, Some(7f0000)), (490000, 10000, Some(b6e0000)), (4a0000, 10000, Some(b6d0000)), (4b0000, 10000, Some(b6c0000)), (4c0000, 10000, Some(b6b0000)), (4d0000, 10000, Some(b6a0000)), (4e0000, 10000, Some(b690000)), (4f0000, 10000, Some(b680000)), (500000, 10000, Some(b670000)), (510000, 10000, Some(b20000)), (520000, 10000, Some(b10000))]; 0x2c0000 bytes show SCRATCH
+kf3: GSP rpc RmControl seq=0
+kf-rm: PROBE KF3_ZCULL_BIND_PROBE 0x20801208 from client=0xc1d00002 names hClient=0xc1d0008f hChannel=0xff040025 va=0x0 mode=1: NV_OK, request echoed, NOTHING bound on the host — a probe #28
+kf3: GSP rpc RmControl seq=0
+kayfabe: HELD-REPLY fn=Free depth=1 — this map reply WAITS for its rows
+kf3: GSP rpc Free seq=0
+kf3: act free: 0xc1d0008f:0xff1fe032: engine object host 0xcafe0905 freed (506 us, off the GSP lock)
+kayfabe: HELD-REPLY-POSTED n=1 — their rows are on the host now
+kayfabe: HELD-REPLY fn=Free depth=1 — this map reply WAITS for its rows
+kf3: GSP rpc Free seq=0
+kf3: act free: 0xc1d0008f:0xff1fe026: engine object host 0xcafe0904 freed (368 us, off the GSP lock)
+kayfabe: HELD-REPLY-POSTED n=1 — their rows are on the host now
+kayfabe: HELD-REPLY fn=Free depth=1 — this map reply WAITS for its rows
+kf3: GSP rpc Free seq=0
+kf3: act free: 0xc1d0008f:0xff1fe034: engine object host 0xcafe0901 freed (297 us, off the GSP lock)
+kayfabe: HELD-REPLY-POSTED n=1 — their rows are on the host now
+kayfabe: HELD-REPLY fn=Free depth=1 — this map reply WAITS for its rows
+kf3: GSP rpc Free seq=0
+kf3: act free: 0xc1d0008f:0xff1fe01a: engine object host 0xcafe0902 freed (333 us, off the GSP lock)
+kayfabe: HELD-REPLY-POSTED n=1 — their rows are on the host now
+kayfabe: HELD-REPLY fn=Free depth=1 — this map reply WAITS for its rows
+kf3: GSP rpc Free seq=0
+kf3: act free: 0xc1d0008f:0xff1fe02c: engine object host 0xcafe0903 freed (354 us, off the GSP lock)
+kayfabe: HELD-REPLY-POSTED n=1 — their rows are on the host now
+kf3: GSP rpc Free seq=0
+kayfabe: HELD-REPLY fn=Free depth=1 — this map reply WAITS for its rows
+kf3: GSP rpc Free seq=0
+kf3: DOORBELL-LEDGER tok=0x00000027 route=passthrough rung=0 emulated=0 forwarded=0 host=0x4e trap=0 fast=0
+kf3: act free: 0xc1d0008f:0xff040025: passthrough 0xc1d0008f:0xff040025 token 0x27 host 0x4e objects=0 ctx=CtxBind { initialized: 4, va_bound: 2684, bound: true, promotes: 4, evicts: 0 } freed (1699 us, off the GSP lock)
+kayfabe: HELD-REPLY-POSTED n=1 — their rows are on the host now
+kf3: GSP rpc RmControl seq=0
+kayfabe: HELD-REPLY fn=Free depth=1 — this map reply WAITS for its rows
+kf3: GSP rpc Free seq=0
+kf3: act free: 0xc1d0008f:0xff1fe472: engine object host 0xcafe090c freed (445 us, off the GSP lock)
+kayfabe: HELD-REPLY-POSTED n=1 — their rows are on the host now
+kayfabe: HELD-REPLY fn=Free depth=1 — this map reply WAITS for its rows
+kf3: GSP rpc Free seq=0
+kf3: act free: 0xc1d0008f:0xff1fe474: engine object host 0xcafe090b freed (286 us, off the GSP lock)
+kayfabe: HELD-REPLY-POSTED n=1 — their rows are on the host now
+kf3: GSP rpc Free seq=0
+kayfabe: HELD-REPLY fn=Free depth=1 — this map reply WAITS for its rows
+kf3: GSP rpc Free seq=0
+kf3: DOORBELL-LEDGER tok=0x00000028 route=passthrough rung=0 emulated=0 forwarded=0 host=0x4f trap=0 fast=0
+kf3: act free: 0xc1d0008f:0xff0e0102: passthrough 0xc1d0008f:0xff0e0102 token 0x28 host 0x4f objects=0 ctx=CtxBind { initialized: 0, va_bound: 0, bound: false, promotes: 0, evicts: 0 } freed (953 us, off the GSP lock)
+kayfabe: HELD-REPLY-POSTED n=1 — their rows are on the host now
+kf3: GSP rpc RmControl seq=0
+kayfabe: HELD-REPLY fn=Free depth=1 — this map reply WAITS for its rows
+kf3: GSP rpc Free seq=0
+kf3: act free: 0xc1d0008f:0xff1fe492: engine object host 0xcafe0914 freed (380 us, off the GSP lock)
+kayfabe: HELD-REPLY-POSTED n=1 — their rows are on the host now
+kayfabe: HELD-REPLY fn=Free depth=1 — this map reply WAITS for its rows
+kf3: GSP rpc Free seq=0
+kf3: act free: 0xc1d0008f:0xff1fe494: engine object host 0xcafe0913 freed (285 us, off the GSP lock)
+kayfabe: HELD-REPLY-POSTED n=1 — their rows are on the host now
+kf3: GSP rpc Free seq=0
+kayfabe: HELD-REPLY fn=Free depth=1 — this map reply WAITS for its rows
+kf3: GSP rpc Free seq=0
+kf3: DOORBELL-LEDGER tok=0x00000029 route=passthrough rung=0 emulated=0 forwarded=0 host=0x50 trap=0 fast=0
+kf3: act free: 0xc1d0008f:0xff0e0103: passthrough 0xc1d0008f:0xff0e0103 token 0x29 host 0x50 objects=0 ctx=CtxBind { initialized: 0, va_bound: 0, bound: false, promotes: 0, evicts: 0 } freed (1538 us, off the GSP lock)
+kayfabe: HELD-REPLY-POSTED n=1 — their rows are on the host now
+kf3: GSP rpc RmControl seq=0
+kf-rm: DEFERRED-API 0x50800101 on 0xc1d00015:0xff1fe010 hApiHandle=0x40000044 cmd=0x2080012c psz=584 -> 0x0
+kf3: GSP rpc RmControl seq=0
+kf3: act deferred API context: EvictCtx { engine_type: 1, h_client: 3251634311, chid: 42, chan_client: 3251634319, object: 4279107584 } on 0xc1d0008f:0xff0e0000 -> Windows user-work Passthrough twin(s) [51]: host channel(s) off the runlist, context UNBOUND (owner ruling B / §U / §V) (229 us, off the GSP lock)
+kayfabe: HELD-REPLY fn=Free depth=1 — this map reply WAITS for its rows
+kf3: GSP rpc Free seq=0
+kf3: act free: 0xc1d0008f:0xff1fe4b2: engine object host 0xcafe0933 freed (399 us, off the GSP lock)
+kayfabe: HELD-REPLY-POSTED n=1 — their rows are on the host now
+kayfabe: HELD-REPLY fn=Free depth=1 — this map reply WAITS for its rows
+kf3: GSP rpc Free seq=0
+kf3: act free: 0xc1d0008f:0xff1fe4b4: engine object host 0xcafe0932 freed (284 us, off the GSP lock)
+kayfabe: HELD-REPLY-POSTED n=1 — their rows are on the host now
+kf3: GSP rpc Free seq=0
+kayfabe: HELD-REPLY fn=Free depth=1 — this map reply WAITS for its rows
+kf3: GSP rpc Free seq=0
+kf3: DOORBELL-LEDGER tok=0x0000002a route=passthrough rung=0 emulated=0 forwarded=0 host=0x51 trap=0 fast=0
+kf3: act free: 0xc1d0008f:0xff0e0104: passthrough 0xc1d0008f:0xff0e0104 token 0x2a host 0x51 objects=0 ctx=CtxBind { initialized: 0, va_bound: 0, bound: false, promotes: 0, evicts: 1 } freed (1461 us, off the GSP lock)
+kayfabe: HELD-REPLY-POSTED n=1 — their rows are on the host now
+kf3: GSP rpc Free seq=0
+kf3: GSP rpc Free seq=0
+kf3: GSP rpc Free seq=0
+kf3: GSP rpc Free seq=0
+kf3: GSP rpc Free seq=0
+kf3: GSP rpc Free seq=0
+kf3: GSP rpc Free seq=0
+kf3: GSP rpc Free seq=0
+kf3: GSP rpc Free seq=0
+kayfabe: HELD-REPLY fn=Free depth=1 — this map reply WAITS for its rows
+kf3: GSP rpc Free seq=0
+kf3: act free: 0xc1d0008c:0xff1fe034: engine object host 0xcafe0890 freed (294 us, off the GSP lock)
+kayfabe: HELD-REPLY-POSTED n=1 — their rows are on the host now
+kf3: GSP rpc Free seq=0
+kayfabe: HELD-REPLY fn=Free depth=1 — this map reply WAITS for its rows
+kf3: GSP rpc Free seq=0
+kf3: DOORBELL-LEDGER tok=0x00000826 route=passthrough rung=0 emulated=0 forwarded=0 host=0x1004d trap=0 fast=0
+kf3: act free: 0xc1d0008c:0xff040024: passthrough 0xc1d0008c:0xff040024 token 0x826 host 0x1004d objects=0 ctx=CtxBind { initialized: 0, va_bound: 0, bound: false, promotes: 0, evicts: 0 } freed (1265 us, off the GSP lock)
+kayfabe: HELD-REPLY-POSTED n=1 — their rows are on the host now
+kf3: GSP rpc Free seq=0
+kf3: GSP rpc Free seq=0
+kf3: GSP rpc Free seq=0
+kf3: GSP rpc Free seq=0
+kf3: GSP rpc Free seq=0
+kf3: GSP rpc Free seq=0
+W343GSSCENSUS cmd=0x00809908 params_size=16 params_at=40 payload_len=56
+kf3: GSP rpc RmControl seq=0
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 0 }
+kf3: GSP rpc RmControl seq=0
+kayfabe: HELD-REPLY fn=Free depth=1 — this map reply WAITS for its rows
+kf3: GSP rpc Free seq=0
+kf3: act free: 0xc1d0008b:0xff1fe034: engine object host 0xcafe0884 freed (322 us, off the GSP lock)
+kayfabe: HELD-REPLY-POSTED n=1 — their rows are on the host now
+kf3: GSP rpc Free seq=0
+kayfabe: HELD-REPLY fn=Free depth=1 — this map reply WAITS for its rows
+kf3: GSP rpc Free seq=0
+kf3: DOORBELL-LEDGER tok=0x00001025 route=passthrough rung=0 emulated=0 forwarded=0 host=0x2004c trap=0 fast=0
+kf3: act free: 0xc1d0008b:0xff040023: passthrough 0xc1d0008b:0xff040023 token 0x1025 host 0x2004c objects=0 ctx=CtxBind { initialized: 0, va_bound: 0, bound: false, promotes: 0, evicts: 0 } freed (1308 us, off the GSP lock)
+kayfabe: HELD-REPLY-POSTED n=1 — their rows are on the host now
+kf3: GSP rpc Free seq=0
+kf3: GSP rpc Free seq=0
+kf3: GSP rpc Free seq=0
+kf3: GSP rpc Free seq=0
+kf3: GSP rpc Free seq=0
+kf3: GSP rpc Free seq=0
+kf3: GSP rpc RmControl seq=0
+kf-rm: PROBE KF3_ZCULL_BIND_PROBE 0x20801208 from client=0xc1d00002 names hClient=0xc1d00089 hChannel=0xff040014 va=0x0 mode=1: NV_OK, request echoed, NOTHING bound on the host — a probe #29
+kf3: GSP rpc RmControl seq=0
+kf3: GSP rpc RmControl seq=0
+kf-rm: DEFERRED-API 0x50800101 on 0xc1d00015:0xff1fe010 hApiHandle=0x40000045 cmd=0x2080012c psz=584 -> 0x0
+kf3: GSP rpc RmControl seq=0
+kf3: act deferred API context: EvictCtx { engine_type: 1, h_client: 3251634311, chid: 22, chan_client: 3251634313, object: 4279107584 } on 0xc1d00089:0xff0e0000 -> Windows user-work Passthrough twin(s) [3d]: host channel(s) off the runlist, context UNBOUND (owner ruling B / §U / §V) (221 us, off the GSP lock)
+kayfabe: HELD-REPLY fn=Free depth=1 — this map reply WAITS for its rows
+kf3: GSP rpc Free seq=0
+kf3: act free: 0xc1d00089:0xff1fe032: engine object host 0xcafe0876 freed (406 us, off the GSP lock)
+kayfabe: HELD-REPLY-POSTED n=1 — their rows are on the host now
+kayfabe: HELD-REPLY fn=Free depth=1 — this map reply WAITS for its rows
+kf3: GSP rpc Free seq=0
+kf3: act free: 0xc1d00089:0xff1fe026: engine object host 0xcafe0875 freed (341 us, off the GSP lock)
+kayfabe: HELD-REPLY-POSTED n=1 — their rows are on the host now
+kayfabe: HELD-REPLY fn=Free depth=1 — this map reply WAITS for its rows
+kf3: GSP rpc Free seq=0
+kf3: act free: 0xc1d00089:0xff1fe034: engine object host 0xcafe0872 freed (289 us, off the GSP lock)
+kayfabe: HELD-REPLY-POSTED n=1 — their rows are on the host now
+kayfabe: HELD-REPLY fn=Free depth=1 — this map reply WAITS for its rows
+kf3: GSP rpc Free seq=0
+kf3: act free: 0xc1d00089:0xff1fe01a: engine object host 0xcafe0873 freed (359 us, off the GSP lock)
+kayfabe: HELD-REPLY-POSTED n=1 — their rows are on the host now
+kayfabe: HELD-REPLY fn=Free depth=1 — this map reply WAITS for its rows
+kf3: GSP rpc Free seq=0
+kf3: act free: 0xc1d00089:0xff1fe02c: engine object host 0xcafe0874 freed (345 us, off the GSP lock)
+kayfabe: HELD-REPLY-POSTED n=1 — their rows are on the host now
+kf3: GSP rpc Free seq=0
+kayfabe: HELD-REPLY fn=Free depth=1 — this map reply WAITS for its rows
+kf3: GSP rpc Free seq=0
+kf3: DOORBELL-LEDGER tok=0x00000016 route=passthrough rung=0 emulated=0 forwarded=0 host=0x3d trap=0 fast=0
+kf3: act free: 0xc1d00089:0xff040014: passthrough 0xc1d00089:0xff040014 token 0x16 host 0x3d objects=0 ctx=CtxBind { initialized: 4, va_bound: 0, bound: false, promotes: 4, evicts: 1 } freed (1445 us, off the GSP lock)
+kayfabe: HELD-REPLY-POSTED n=1 — their rows are on the host now
+kf3: GSP rpc Free seq=0
+kf3: GSP rpc Free seq=0
+kf3: GSP rpc Free seq=0
+kf3: GSP rpc Free seq=0
+kf3: GSP rpc Free seq=0
+kf3: GSP rpc Free seq=0
+kf3: GSP rpc Free seq=0
+kf3: GSP rpc RmControl seq=0
+kayfabe: HELD-REPLY fn=Free depth=1 — this map reply WAITS for its rows
+kf3: GSP rpc Free seq=0
+kf3: act free: 0xc1d0008a:0xff1fe034: engine object host 0xcafe087d freed (304 us, off the GSP lock)
+kayfabe: HELD-REPLY-POSTED n=1 — their rows are on the host now
+kf3: GSP rpc Free seq=0
+kayfabe: HELD-REPLY fn=Free depth=1 — this map reply WAITS for its rows
+kf3: GSP rpc Free seq=0
+kf3: DOORBELL-LEDGER tok=0x00001018 route=passthrough rung=0 emulated=0 forwarded=0 host=0x2003f trap=0 fast=0
+kf3: act free: 0xc1d0008a:0xff040016: passthrough 0xc1d0008a:0xff040016 token 0x1018 host 0x2003f objects=0 ctx=CtxBind { initialized: 0, va_bound: 0, bound: false, promotes: 0, evicts: 0 } freed (1268 us, off the GSP lock)
+kayfabe: HELD-REPLY-POSTED n=1 — their rows are on the host now
+kf3: GSP rpc Free seq=0
+kf3: GSP rpc Free seq=0
+kf3: GSP rpc Free seq=0
+kf3: GSP rpc Free seq=0
+kf3: GSP rpc Free seq=0
+kf3: GSP rpc Free seq=0
+kf3: mem t=125.531s BAR1 boot framebuffer [0x0, +0x7f0000) after BAR1 change #267: guest views [(0, 10000, Some(ead20000)), (10000, 10000, Some(ead30000)), (20000, 10000, Some(ead40000)), (30000, 80000, Some(ead50000)), (b0000, 80000, Some(eadd0000)), (130000, 80000, Some(eae50000)), (1b0000, 80000, Some(eaed0000)), (230000, 1000, Some(eaf50000)), (231000, 1000, Some(eaf50000)), (232000, 1000, Some(eaf50000)), (233000, 1000, Some(eaf50000)), (234000, 1000, Some(eaf50000)), (235000, 1000, Some(eaf50000)), (236000, 1000, Some(eaf50000)), (237000, 1000, Some(eaf50000)), (238000, 1000, Some(eaf50000)), (239000, 1000, Some(eaf50000)), (23a000, 1000, Some(eaf50000)), (23b000, 1000, Some(eaf50000)), (23c000, 1000, Some(eaf50000)), (23d000, 1000, Some(eaf50000)), (23e000, 1000, Some(eaf50000)), (23f000, 1000, Some(eaf50000)), (240000, 21000, Some(eaf60000)), (261000, f000, Some(eaf60000)), (270000, 11000, Some(eaf90000)), (281000, f000, Some(eaf90000)), (290000, 9000, Some(eafb0000)), (299000, 7000, Some(eafb0000)), (2a0000, 1000, Some(eafc0000)), (2a1000, 1000, Some(eafc0000)), (2a2000, 1000, Some(eafc0000)), (2a3000, 1000, Some(eafc0000)), (2a4000, 1000, Some(eafc0000)), (2a5000, 1000, Some(eafc0000)), (2a6000, 1000, Some(eafc0000)), (2a7000, 1000, Some(eafc0000)), (2a8000, 1000, Some(eafc0000)), (2a9000, 1000, Some(eafc0000)), (2aa000, 1000, Some(eafc0000)), (2ab000, 1000, Some(eafc0000)), (2ac000, 1000, Some(eafc0000)), (2ad000, 1000, Some(eafc0000)), (2ae000, 1000, Some(eafc0000)), (2af000, 1000, Some(eafc0000)), (2b0000, 10000, Some(eafd0000)), (2c0000, 2000, Some(eafe0000)), (2c2000, 2000, Some(eafe0000)), (2c4000, 2000, Some(eafe0000)), (2c6000, 2000, Some(eafe0000)), (2c8000, 2000, Some(eafe0000)), (2ca000, 2000, Some(eafe0000)), (2cc000, 2000, Some(eafe0000)), (2ce000, 2000, Some(eafe0000)), (2d0000, 8f000, Some(eb010000)), (35f000, 1000, Some(eb010000))]; 0x490000 bytes show SCRATCH
+kf3: GSP rpc Free seq=0
+kf3: GSP rpc Free seq=0
+kf3: GSP rpc Free seq=0
+kf3: GSP rpc Free seq=0
+kf3: GSP rpc Free seq=0
+kf3: GSP rpc Free seq=0
+kf3: GSP rpc Free seq=0
+kf3: GSP rpc Free seq=0
+kf3: GSP rpc Free seq=0
+kf3: GSP rpc Free seq=0
+kf3: GSP rpc Free seq=0
+kf3: display fps[cap=75(unset) h0[armed=60.000 tick=60.96 clamped=0 late_max_us=2824 kms=2.9 tear=0.0 held=1 core_imm=1 vblirq=0.0] copies=2.9 checks=0.0 same=0 ondemand=0 over=0]
+kf3: PT-NSI host CE3 notifier wake #1024: Raise(2) (vector Some(2), live twins 9)

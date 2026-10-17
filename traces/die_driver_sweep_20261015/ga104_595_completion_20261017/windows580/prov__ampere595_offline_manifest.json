@@ -1,0 +1,29 @@
+[
+  {
+    "path": "ProgramData/KayfabeSweep/driver58088.exit",
+    "exported_file": "ampere595_offline_driver58088.exit",
+    "observed_bytes": 52,
+    "exported_bytes": 52,
+    "source_complete": true,
+    "source_sha256": "d4ac66ce1f4d9f8b98ede6256c7a7a030f7ad1942147335b923d41960d23230a",
+    "excerpt_only": false
+  },
+  {
+    "path": "ProgramData/KayfabeSweep/driver58088.started",
+    "exported_file": "ampere595_offline_driver58088.started",
+    "observed_bytes": 30,
+    "exported_bytes": 30,
+    "source_complete": true,
+    "source_sha256": "8fe8b0110901f32e7bb79bdc459688107f568ec7c2069af4028f041633dfd3fb",
+    "excerpt_only": false
+  },
+  {
+    "path": "Windows/INF/setupapi.dev.log",
+    "exported_file": "ampere595_offline_setupapi.dev.log",
+    "observed_bytes": 30653,
+    "exported_bytes": 30653,
+    "source_complete": true,
+    "source_sha256": "d5af66f553fc97cf3f96b9c8bfe5cc0407b68ff7486988d5aaa3cf240cc0eb8b",
+    "excerpt_only": false
+  }
+]

@@ -1,0 +1,3 @@
+VFIO GSP writer wrap/caps/drain/error test passed
+VFIO GSP writer wrap/caps/drain/error test passed
+writer JSONL framing, sequence, checksum, SHA256 and footer verified

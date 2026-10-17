@@ -1,0 +1,17 @@
+WINDOWS_APPS_WAVE_START source=77a72da9eb4d3f4e694fbb449d75e5fe3926b28c 2026-10-16T18:24:17+00:00
+ACTUAL_PROCESS_RECEIPT {"actual_KF3_environment": {"KF3_ASYNC_PREEMPT": "1", "KF3_DEFERRED_API": "1", "KF3_DISPLAY_CAPS_PROBE": "1", "KF3_DISPLAY_CTRL_PROBE": "1", "KF3_DISPLAY_ILUT_OFFSET_256": "1", "KF3_DISPLAY_IMP_ENABLE": "1", "KF3_DISPLAY_LUT_MIRROR": "1", "KF3_DISPLAY_SDR_COLOR": "1", "KF3_GFX_POOL_PROBE": "1", "KF3_KERNEL_GR_CE": "1", "KF3_KERNEL_GR_WORK": "1", "KF3_MEMORY_LIST_PROBE": "1", "KF3_PREEMPT_BIND_PROBE": "1", "KF3_SW_RUNLIST_HOST_OWNED": "1", "KF3_SW_RUNLIST_PROBE": "1", "KF3_TRANSLATED_CE_RELAY": "1", "KF3_WIN_TWIN_DEFAPI_OBJECT": "1", "KF3_WIN_USER_CHANNELS_PASSTHROUGH": "1", "KF3_ZCULL_BIND_PROBE": "1"}, "binary_revision": "77a72da9", "binary_sha256": "e9744a23ab38ff45afbf788d9e426d71913d1f1e6954fa1ea0da1ea1920b25a6", "expected_windows_driver": "32.0.15.8088", "guest_public_abi": "580.65.06", "host_driver": "595.91.07", "pid": 110241, "source_revision": "77a72da9eb4d3f4e694fbb449d75e5fe3926b28c"}
+Traceback (most recent call last):
+  File "/root/kayfabe/scripts/bench/windows/qmp.py", line 250, in <module>
+    sys.exit(main(sys.argv))
+  File "/root/kayfabe/scripts/bench/windows/qmp.py", line 244, in main
+    return qga_exec(sock, rest[0], rest[1:], timeout=timeout)
+  File "/root/kayfabe/scripts/bench/windows/qmp.py", line 168, in qga_exec
+    s, f = qga_open(sock, timeout=30.0)
+  File "/root/kayfabe/scripts/bench/windows/qmp.py", line 147, in qga_open
+    r = recv(f)
+  File "/root/kayfabe/scripts/bench/windows/qmp.py", line 47, in recv
+    line = f.readline()
+  File "/usr/lib/python3.10/socket.py", line 705, in readinto
+    return self._sock.recv_into(b)
+TimeoutError: timed out
+WINDOWS_APPS_WAVE_EXIT rc=1 2026-10-16T18:25:02+00:00

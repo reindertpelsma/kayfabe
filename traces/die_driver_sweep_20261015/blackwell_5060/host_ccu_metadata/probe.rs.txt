@@ -1,0 +1,76 @@
+//! Measurement only. Public595.91.07 ctrlcbca.h layout is compiler-derived below.
+//! SUBSCRIBE on a non-MIG CCU is metadata-only in kernel_ccu_api.c: no mapping
+//! or stream-state call. Only run on the owned idle GB206 rental, unprivileged.
+use kf_host::HostRm;
+use kf_linux_raw::DevDir;
+const CLASS: u32 = 0xcbca;
+const CONTROL: u32 = 0xcbca0101;
+const SIZE: usize = 16;
+const BUFFER: usize = 0;
+const BLOCK: usize = 8;
+const TRAILER: u32 = 8;
+fn main() {
+    let s = std::fs::read_to_string("/proc/self/status").expect("process posture");
+    let uid = s.lines().find(|l| l.starts_with("Uid:")).expect("uid");
+    let cap = s
+        .lines()
+        .find(|l| l.starts_with("CapEff:"))
+        .expect("capabilities");
+    println!("CCU_PROBE_START {uid} {cap}");
+    let caps = u64::from_str_radix(cap.split_whitespace().nth(1).unwrap(), 16).unwrap();
+    assert_eq!(caps, 0, "probe requires no effective capabilities");
+    assert_ne!(
+        uid.split_whitespace().nth(1),
+        Some("0"),
+        "probe requires non-root uid"
+    );
+    let dev = DevDir::open(c"/dev").unwrap();
+    let rm = HostRm::open(&dev, kf_harness::gate_gpu(), &kf_chip::choose_host_classes).unwrap();
+    println!(
+        "CCU_HOST driver={} arch={:?}",
+        rm.driver_version(),
+        rm.arch_info()
+    );
+    assert_eq!(
+        rm.driver_version(),
+        "595.91.07",
+        "wire compiled for exact host tag"
+    );
+    let derived = kf_abi::generated::matrix::CLASS_IDS_NV_COUNTER_COLLECTION_UNIT
+        .at_u32(rm.host_abi().version())
+        .unwrap()
+        .unwrap();
+    assert_eq!(
+        derived, CLASS,
+        "independent ABI matrix and compiler must agree"
+    );
+    let object = match rm.raw_alloc(rm.subdevice_handle(), rm.mint(), CLASS, None, &mut []) {
+        Ok(h) => h,
+        Err(e) => {
+            println!("CCU_ALLOC_REFUSED {e:?}\nCCU_PROBE_EXIT result=NO_FACT");
+            return;
+        }
+    };
+    let mut params = vec![0u8; SIZE];
+    match rm.raw_control_opaque(object, CONTROL, &mut params) {
+        Ok(0) => {
+            let block = u32::from_le_bytes(params[BLOCK..BLOCK + 4].try_into().unwrap());
+            let buffer = u64::from_le_bytes(params[BUFFER..BUFFER + 8].try_into().unwrap());
+            println!("CCU_METADATA buffer_bytes={buffer} counter_block_bytes={block}");
+            // Public595.91.07 kccuGetBufSize_GB100: devBufSize=2*(sampleSize-sizeof(NvU64)).
+            // An inverse candidate, not a guest ABI fact until compared with its oracle.
+            if block > 0 && block % 2 == 0 {
+                let sample = (block / 2).checked_add(TRAILER).unwrap();
+                println!(
+                    "CCU_SAMPLE_CANDIDATE bytes={sample} derivation=counterBlockSize/2+sizeof(NvU64)"
+                );
+            } else {
+                println!("CCU_BAD_BLOCK_SIZE no_sample_fact=1");
+            }
+        }
+        Ok(st) => println!("CCU_CONTROL_REFUSED status={st:#x} no_sample_fact=1"),
+        Err(e) => println!("CCU_CONTROL_ERROR {e:?} no_sample_fact=1"),
+    }
+    println!("CCU_FREE {:?}", rm.free(object));
+    println!("CCU_PROBE_EXIT result=MEASURED");
+}

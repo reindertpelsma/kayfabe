@@ -1,0 +1,18 @@
+CONTROLLER_START 2026-10-15T23:38:12.889879+00:00
+RAW_CAPTURE phase=seed580 bytes=19329312 sha256=fad77ecd473320fca549b8d5d3d20648b827fec61e4ad7f8923c41fea250a3ca
+RAW_CAPTURE phase=revisit580 bytes=19477184 sha256=d359fa548f496998d4fd45aca23a4fb64c54ad9484ade8e45fe3fe67cf81be83
+RAW_CAPTURE phase=seedwindow580 bytes=14525664 sha256=55660da1a5c33376b11ab5821ea348733b3b04dfd00b14080b60844d52879b63
+RAW_CAPTURE phase=revisitwindow580 bytes=46710336 sha256=b5f264924ea9d57532c53f591d8881c198f9bd8096049ffc7ee0a3beb23fa8d1
+{"Name":"NVIDIA GeForce RTX 5060","DriverVersion":"32.0.15.8088","ConfigManagerErrorCode":0,"Status":"OK"}
+
+SERVICE_NAME: KayfabeWinCapture
+        TYPE               : 1  KERNEL_DRIVER
+        STATE              : 1  STOPPED
+        WIN32_EXIT_CODE    : 0  (0x0)
+        SERVICE_EXIT_CODE  : 0  (0x0)
+        CHECKPOINT         : 0x0
+        WAIT_HINT          : 0x0
+NATIVE_REFERENCE_QUIESCENT=1
+#< CLIXML
+<Objs Version="1.1.0.1" xmlns="http://schemas.microsoft.com/powershell/2004/04"><Obj S="progress" RefId="0"><TN RefId="0"><T>System.Management.Automation.PSCustomObject</T><T>System.Object</T></TN><MS><I64 N="SourceId">1</I64><PR N="Record"><AV>Preparing modules for first use.</AV><AI>0</AI><Nil /><PI>-1</PI><PC>-1</PC><T>Completed</T><SR>-1</SR><SD> </SD></PR></MS></Obj><Obj S="progress" RefId="1"><TNRef RefId="0" /><MS><I64 N="SourceId">1</I64><PR N="Record"><AV>Preparing modules for first use.</AV><AI>0</AI><Nil /><PI>-1</PI><PC>-1</PC><T>Completed</T><SR>-1</SR><SD> </SD></PR></MS></Obj><Obj S="progress" RefId="2"><TNRef RefId="0" /><MS><I64 N="SourceId">1</I64><PR N="Record"><AV>Preparing modules for first use.</AV><AI>0</AI><Nil /><PI>-1</PI><PC>-1</PC><T>Completed</T><SR>-1</SR><SD> </SD></PR></MS></Obj></Objs>
+CONTROLLER_EXIT_RC=0 UTC=2026-10-15T23:38:15.012019+00:00

@@ -1,0 +1,15 @@
+{
+  "id": 56326220,
+  "offer": 56311549,
+  "machine_id": 56506,
+  "gpu_advertised": "RTX3070, GA104 still unverified",
+  "created_epoch_conservative": 1792200628.6776052,
+  "start_utc": "2026-10-17T01:30:28.677605+00:00",
+  "max_minutes": 175,
+  "timer_target_utc": "2026-10-17T04:25:28.677605+00:00",
+  "night_hard_deadline_utc": "2026-10-17T05:00:00+00:00",
+  "offer_dph": 0.13407407407407407,
+  "purpose": "M1 native595caps/M3 guest595CUDA4,gfx,broker; exact9d6f210ba; no shared-host use",
+  "timer_pid": 2714225,
+  "quoted_dph": 0.15555555555555556
+}

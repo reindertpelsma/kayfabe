@@ -1,0 +1,18 @@
+WIN_DIE_START kf3=7d1be888 checkout=7d1be8882 guest_driver=580.65.06 gpu=NVIDIA GeForce RTX 4090 xid_before=5 2026-10-16T16:33:20+00:00
+WIN_DIE_START kf3=7d1be888 checkout=7d1be8882 guest_driver=580.65.06 gpu=NVIDIA GeForce RTX 4090 xid_before=5 2026-10-16T16:35:54+00:00
+WIN_DIE_EXIT qemu-gone 2026-10-16T16:35:55+00:00 xid_after=5
+WIN_DIE_EXIT qemu-gone 2026-10-16T16:37:49+00:00 xid_after=5
+WIN_DIE_START kf3=7d1be888 checkout=7d1be8882 guest_driver=580.65.06 gpu=NVIDIA GeForce RTX 4090 xid_before=5 2026-10-16T16:44:06+00:00
+WIN_DIE_EXIT qemu-gone 2026-10-16T16:45:51+00:00 xid_after=5
+WIN_DIE_START kf3=7d1be888 checkout=7d1be8882 guest_driver=580.65.06 gpu=NVIDIA GeForce RTX 4090 xid_before=5 2026-10-16T16:48:04+00:00
+WIN_DIE_START kf3=7d1be888 checkout=7d1be8882 guest_driver=580.65.06 gpu=NVIDIA GeForce RTX 4090 xid_before=5 2026-10-16T16:59:03+00:00
+WIN_DIE_EXIT qemu-gone 2026-10-16T16:59:05+00:00 xid_after=5
+WIN_DIE_EXIT qemu-gone 2026-10-16T17:08:28+00:00 xid_after=5
+WIN_DIE_START kf3=6265b980 checkout=6265b980f guest_driver=580.65.06 gpu=NVIDIA GeForce RTX 4090 xid_before=5 2026-10-16T17:48:02+00:00
+WIN_DIE_EXIT qemu-gone 2026-10-16T17:58:52+00:00 xid_after=5
+WIN_DIE_START kf3=77a72da9 checkout=77a72da9e guest_driver=580.65.06 gpu=NVIDIA GeForce RTX 4090 xid_before=5 2026-10-16T18:16:14+00:00
+WIN_DIE_EXIT qemu-gone 2026-10-16T18:20:29+00:00 xid_after=5
+WIN_DIE_START kf3=77a72da9 checkout=77a72da9e guest_driver=580.65.06 gpu=NVIDIA GeForce RTX 4090 xid_before=5 2026-10-16T18:23:17+00:00
+WIN_DIE_EXIT qemu-gone 2026-10-16T18:25:02+00:00 xid_after=5
+WIN_DIE_START kf3=77a72da9 checkout=77a72da9e guest_driver=580.65.06 gpu=NVIDIA GeForce RTX 4090 xid_before=5 2026-10-16T18:35:12+00:00
+WIN_DIE_EXIT qemu-gone 2026-10-16T18:38:57+00:00 xid_after=5

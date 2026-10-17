@@ -1,0 +1,20 @@
+{
+  "time_utc": "2026-10-17T01:47:10.389983+00:00",
+  "product_revision": "9d6f210ba1dc6ab0edbc49ff265101091e8b08f1",
+  "tool_source_commit": "886f885c5ffaa9cb49df6058b1b05af61c32371c",
+  "tool_source_sha256": "ba80b57d4c53d5669ac4d760e506d586c6f02042d8815579c3364bd849d78fc3",
+  "oracle_sha256": "0d8671c91c61cb163b98b115a9569e5d1450a00ab9b03fedd9cb4394bea5777f",
+  "driver": "595.91.07",
+  "architecture": "0x170",
+  "implementation": 4,
+  "die": "GA104",
+  "caps_class": "0xc673",
+  "oracle_bytes": 4096,
+  "oracle_nonzero_words": 95,
+  "derived_equality": false,
+  "differing_words": 97,
+  "native_decisive_word": "0x00000100",
+  "shipped_decisive_word": "0x00000000",
+  "new_product_row_added": false,
+  "neighbor_or_windows580_branch_assumption": false
+}

@@ -122,6 +122,7 @@ pub mod fault;
 pub mod large;
 pub mod ram;
 pub mod refusal;
+mod replytrace;
 pub mod ring;
 pub mod rpc;
 pub mod seq;

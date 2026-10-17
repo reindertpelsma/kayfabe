@@ -1,0 +1,23 @@
+{
+  "caps00c": {
+    "branch": "codex/ad102-ablate-caps00c-20261016",
+    "source_revision": "a52494d487e2ff3068cbae60e3ff1fe422ff281d",
+    "file": "crates/kf-disp/data/caps_measured.tsv",
+    "removed_rows": 1,
+    "falsifier": "With only this row removed, adapter Code0/desktop/CUDA/D3D still pass; then the row was not required for this tested build/profile."
+  },
+  "lpwr2801": {
+    "branch": "codex/ad102-ablate-lpwr2801-20261016",
+    "source_revision": "a7509bf3d33a6986874beae0d03c95e6ef0efe19",
+    "file": "crates/kf-rm/data/measured_constants.tsv",
+    "removed_rows": 1,
+    "falsifier": "With only this row removed, adapter Code0/desktop/CUDA/D3D still pass; then the row was not required for this tested build/profile."
+  },
+  "lpwr2806": {
+    "branch": "codex/ad102-ablate-lpwr2806-20261016",
+    "source_revision": "003ad0e749eede980723cc64b9107a1d747b9cc7",
+    "file": "crates/kf-rm/data/measured_constants.tsv",
+    "removed_rows": 1,
+    "falsifier": "With only this row removed, adapter Code0/desktop/CUDA/D3D still pass; then the row was not required for this tested build/profile."
+  }
+}

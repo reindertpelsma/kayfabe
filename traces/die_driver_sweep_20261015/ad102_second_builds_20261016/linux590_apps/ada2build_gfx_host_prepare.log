@@ -1,0 +1,5 @@
+NEEDRESTART-SVC: systemd-udevd.service
+NEEDRESTART-SVC: user@0.service
+NEEDRESTART-SVC: user@0.service
+BUILD_GFX_OK ba6b9be88d18
+[2026-10-16T23:24:32+00:00] GFX_HOST_PROVISIONED=yes

@@ -1,0 +1,41 @@
+FFF
+======================================================================
+FAIL: test_acpi_shutdown_precedes_term (__main__.Stop.test_acpi_shutdown_precedes_term)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/workspace/codex/interactive-stop/scripts/bench/tests/test_interactive_stop.py", line 86, in test_acpi_shutdown_precedes_term
+    self.run_fixture('acpi')
+    ~~~~~~~~~~~~~~~~^^^^^^^^
+  File "/workspace/codex/interactive-stop/scripts/bench/tests/test_interactive_stop.py", line 45, in run_fixture
+    self.assertEqual(record.returncode, 0, record.stderr)
+    ~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: 2 != 0 : b"/usr/bin/python3: can't open file '/workspace/codex/interactive-stop/scripts/bench/display/owned_qemu.py': [Errno 2] No such file or directory\n"
+
+======================================================================
+FAIL: test_reused_pid_identity_is_refused_without_a_signal (__main__.Stop.test_reused_pid_identity_is_refused_without_a_signal)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/workspace/codex/interactive-stop/scripts/bench/tests/test_interactive_stop.py", line 89, in test_reused_pid_identity_is_refused_without_a_signal
+    self.run_fixture('mismatch')
+    ~~~~~~~~~~~~~~~~^^^^^^^^^^^^
+  File "/workspace/codex/interactive-stop/scripts/bench/tests/test_interactive_stop.py", line 45, in run_fixture
+    self.assertEqual(record.returncode, 0, record.stderr)
+    ~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: 2 != 0 : b"/usr/bin/python3: can't open file '/workspace/codex/interactive-stop/scripts/bench/display/owned_qemu.py': [Errno 2] No such file or directory\n"
+
+======================================================================
+FAIL: test_term_allows_cleanup_longer_than_the_old_two_seconds (__main__.Stop.test_term_allows_cleanup_longer_than_the_old_two_seconds)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/workspace/codex/interactive-stop/scripts/bench/tests/test_interactive_stop.py", line 83, in test_term_allows_cleanup_longer_than_the_old_two_seconds
+    self.run_fixture('term')
+    ~~~~~~~~~~~~~~~~^^^^^^^^
+  File "/workspace/codex/interactive-stop/scripts/bench/tests/test_interactive_stop.py", line 45, in run_fixture
+    self.assertEqual(record.returncode, 0, record.stderr)
+    ~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: 2 != 0 : b"/usr/bin/python3: can't open file '/workspace/codex/interactive-stop/scripts/bench/display/owned_qemu.py': [Errno 2] No such file or directory\n"
+
+----------------------------------------------------------------------
+Ran 3 tests in 9.210s
+
+FAILED (failures=3)

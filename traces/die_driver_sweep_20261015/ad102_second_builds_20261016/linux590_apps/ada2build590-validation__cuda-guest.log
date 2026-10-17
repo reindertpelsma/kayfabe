@@ -1,0 +1,222 @@
+ACTUAL_GUEST_DRIVER=590.48.01
+ACTUAL_GUEST_KERNEL=6.8.0-142-generic
+ACTUAL_LIBCUDA=/usr/lib/x86_64-linux-gnu/libcuda.so.590.48.01
+CUDA_RUNG_START=cup2 2026-10-16T23:26:00+00:00
+ok   cuInit(0)
+ok   cuDeviceGetCount(&n)
+devices=1
+ok   cuDeviceGet(&d,0)
+ok   cuDeviceGetName(nm,256,d)
+name=NVIDIA GeForce RTX 4090
+ok   cuDeviceGetAttribute(&maj,CU_DEVICE_ATTRIBUTE_COMPUTE_CAPABILITY_MAJOR,d)
+ok   cuDeviceGetAttribute(&min,CU_DEVICE_ATTRIBUTE_COMPUTE_CAPABILITY_MINOR,d)
+compute=8.9
+ok   cuDeviceTotalMem(&tot,d)
+totalMem=3784 MiB
+ok   cuCtxCreate(&ctx,0,d)
+CTX OK
+ok   cuMemAlloc(&dp,4096)
+MEMALLOC OK 0x7e824cc00000
+ok   cuMemcpyHtoD(dp,&hv,4)
+ok   cuMemcpyDtoH(&rv,dp,4)
+CE rv=0xabcd1234 want=0xabcd1234 -> PASS
+DONE
+CUDA_RUNG_EXIT=cup2 rc=0 2026-10-16T23:26:02+00:00
+CUDA_CELL rung=cup2 verdict=PASS
+CUDA_RUNG_START=cup3 2026-10-16T23:26:02+00:00
+ok   cuInit(0)
+ok   cuDeviceGetCount(&n)
+ok   cuDeviceGet(&d,0)
+ok   cuCtxCreate(&ctx,0,d)
+CTX OK
+PTX_TARGET=sm_86 (device cc 8.9)
+ok   cuModuleLoadData(&mod,PTX)
+MODULE OK
+ok   cuModuleGetFunction(&fn,mod,"k")
+FUNC OK
+ok   cuMemAlloc(&d_in,4)
+ok   cuMemAlloc(&d_out,4)
+MEMALLOC in=0x7d59c2c00000 out=0x7d59c2c00200
+ok   cuMemcpyHtoD(d_in,&hv,4)
+ok   cuMemsetD32(d_out,0,1)
+ok   cuLaunchKernel(fn, 1,1,1, 1,1,1, 0, 0, args, 0)
+LAUNCH OK
+ok   cuCtxSynchronize()
+SYNC OK
+ok   cuMemcpyDtoH(&rv,d_out,4)
+KERNEL rv=43 want=43 -> PASS
+DONE
+CUDA_RUNG_EXIT=cup3 rc=0 2026-10-16T23:26:03+00:00
+CUDA_CELL rung=cup3 verdict=PASS
+CUDA_RUNG_START=cup8 2026-10-16T23:26:03+00:00
+ok   cuInit(0)
+ok   cuDeviceGetCount(&nd)
+ok   cuDeviceGet(&d,0)
+ok   cuCtxCreate(&ctx,0,d)
+CTX OK
+PTX_TARGET=sm_86 (device cc 8.9)
+ok   cuModuleLoadData(&mod,PTX)
+MODULE OK
+ok   cuModuleGetFunction(&fn,mod,"mm")
+FUNC OK
+CUP8 matmul N=2048  per-matrix=16 MiB  device=48 MiB
+ok   cuMemAlloc(&dA,sz)
+ok   cuMemAlloc(&dB,sz)
+ok   cuMemAlloc(&dC,sz)
+MEMALLOC A=0x7eab44c00000 B=0x7eab24000000 C=0x7eab25000000
+ok   cuMemcpyHtoD(dA,hA,sz)
+ok   cuMemcpyHtoD(dB,hB,sz)
+ok   cuMemsetD32(dC,0,(size_t)N*N)
+LAUNCH grid=(128,128) block=(16,16)
+ok   cuLaunchKernel(fn, g,g,1, 16,16,1, 0,0, args,0)
+LAUNCH OK
+ok   cuCtxSynchronize()
+SYNC OK
+ok   cuMemcpyDtoH(hC,dC,sz)
+CUP8 RESULT N=2048 bad=0 maxerr=0 C[0]=2048(exp 2048) -> PASS
+CUP8 VERDICT: PASS (host GR matmul byte-exact at scale)
+DONE
+CUDA_RUNG_EXIT=cup8 rc=0 2026-10-16T23:26:05+00:00
+CUDA_CELL rung=cup8 verdict=PASS
+CUDA_RUNG_START=cup8bench 2026-10-16T23:26:05+00:00
+BENCH_BUILD sizes=[16,2048] iters=20 batch=10 verify_every=1 nolaunch=0
+BENCH_W320 batch_sweep=[] batch_reps=5 ctx_flags=0x0 hostmem=0
+BENCH_W322 alloc=[vram] bw=[] bw_iters=7 bw_target_mib=256 bw_only=0 bw_reps=0
+BENCH_TSTATE_AVAILABLE=yes cpu_ms=1.612474 nvcsw=0
+BENCH_CLOCK_ORIGIN mono_ms=18225.802 real_ms=1792193165845.238
+BENCH_MODE=MEASURE
+ok   cuInit(0)
+BENCH_INIT_MS=338.33
+ok   cuDeviceGetCount(&nd)
+ok   cuDeviceGet(&d,0)
+BENCH_DEVICE=[NVIDIA GeForce RTX 4090]
+ok   cuCtxCreate_v2(&ctx,CTXFLAGS,d)
+BENCH_CTX_MS=241.26
+PTX_TARGET=sm_86 (device cc 8.9)
+PTX_TARGET=sm_86 (device cc 8.9)
+ok   cuModuleLoadData(&mod,PTX)
+BENCH_MODULE_MS=54.67
+ok   cuModuleGetFunction(&fn,mod,"mm")
+
+BENCH_SIZE_BEGIN N=16 per_matrix_MiB=0 device_MiB=0
+B16_ALLOC_MS=1.38
+B16_PTRS=A:0x789624c00000,B:0x789624c00400,C:0x789624c00800
+B16_H2D_MS=0.11  (2 x 0 MiB)
+B16_GRID=(1,1)x(16,16)
+ITER N=16 i=0 launch_ms=0.032 submit_ms=0.030 sync_ms=0.002 t0_mono_ms=18861.694 sub_cpu_ms=0.032 syn_cpu_ms=0.002 syn_offcpu_ms=0.000 syn_nvcsw=0 syn_nivcsw=0 syn_utime_ms=0.000 syn_stime_ms=0.002 verified=yes bad=0
+ITER N=16 i=1 launch_ms=0.022 submit_ms=0.020 sync_ms=0.002 t0_mono_ms=18861.771 sub_cpu_ms=0.021 syn_cpu_ms=0.002 syn_offcpu_ms=0.000 syn_nvcsw=0 syn_nivcsw=0 syn_utime_ms=0.000 syn_stime_ms=0.002 verified=yes bad=0
+ITER N=16 i=2 launch_ms=0.018 submit_ms=0.016 sync_ms=0.002 t0_mono_ms=18861.831 sub_cpu_ms=0.018 syn_cpu_ms=0.002 syn_offcpu_ms=0.000 syn_nvcsw=0 syn_nivcsw=0 syn_utime_ms=0.000 syn_stime_ms=0.001 verified=yes bad=0
+ITER N=16 i=3 launch_ms=0.018 submit_ms=0.016 sync_ms=0.002 t0_mono_ms=18861.888 sub_cpu_ms=0.018 syn_cpu_ms=0.002 syn_offcpu_ms=0.000 syn_nvcsw=0 syn_nivcsw=0 syn_utime_ms=0.000 syn_stime_ms=0.001 verified=yes bad=0
+ITER N=16 i=4 launch_ms=0.018 submit_ms=0.016 sync_ms=0.002 t0_mono_ms=18861.945 sub_cpu_ms=0.017 syn_cpu_ms=0.002 syn_offcpu_ms=0.000 syn_nvcsw=0 syn_nivcsw=0 syn_utime_ms=0.000 syn_stime_ms=0.002 verified=yes bad=0
+ITER N=16 i=5 launch_ms=0.019 submit_ms=0.017 sync_ms=0.002 t0_mono_ms=18862.056 sub_cpu_ms=0.018 syn_cpu_ms=0.002 syn_offcpu_ms=0.000 syn_nvcsw=0 syn_nivcsw=0 syn_utime_ms=0.000 syn_stime_ms=0.002 verified=yes bad=0
+ITER N=16 i=6 launch_ms=0.018 submit_ms=0.016 sync_ms=0.002 t0_mono_ms=18862.114 sub_cpu_ms=0.018 syn_cpu_ms=0.002 syn_offcpu_ms=0.000 syn_nvcsw=0 syn_nivcsw=0 syn_utime_ms=0.000 syn_stime_ms=0.002 verified=yes bad=0
+ITER N=16 i=7 launch_ms=0.018 submit_ms=0.016 sync_ms=0.002 t0_mono_ms=18862.172 sub_cpu_ms=0.017 syn_cpu_ms=0.002 syn_offcpu_ms=0.000 syn_nvcsw=0 syn_nivcsw=0 syn_utime_ms=0.000 syn_stime_ms=0.002 verified=yes bad=0
+ITER N=16 i=8 launch_ms=0.018 submit_ms=0.016 sync_ms=0.002 t0_mono_ms=18862.228 sub_cpu_ms=0.017 syn_cpu_ms=0.002 syn_offcpu_ms=0.000 syn_nvcsw=0 syn_nivcsw=0 syn_utime_ms=0.000 syn_stime_ms=0.002 verified=yes bad=0
+ITER N=16 i=9 launch_ms=0.018 submit_ms=0.016 sync_ms=0.002 t0_mono_ms=18862.284 sub_cpu_ms=0.017 syn_cpu_ms=0.002 syn_offcpu_ms=0.000 syn_nvcsw=0 syn_nivcsw=0 syn_utime_ms=0.000 syn_stime_ms=0.002 verified=yes bad=0
+ITER N=16 i=10 launch_ms=0.018 submit_ms=0.016 sync_ms=0.002 t0_mono_ms=18862.340 sub_cpu_ms=0.017 syn_cpu_ms=0.002 syn_offcpu_ms=0.000 syn_nvcsw=0 syn_nivcsw=0 syn_utime_ms=0.000 syn_stime_ms=0.002 verified=yes bad=0
+ITER N=16 i=11 launch_ms=0.018 submit_ms=0.016 sync_ms=0.002 t0_mono_ms=18862.396 sub_cpu_ms=0.017 syn_cpu_ms=0.002 syn_offcpu_ms=0.000 syn_nvcsw=0 syn_nivcsw=0 syn_utime_ms=0.000 syn_stime_ms=0.002 verified=yes bad=0
+ITER N=16 i=12 launch_ms=0.018 submit_ms=0.016 sync_ms=0.002 t0_mono_ms=18862.451 sub_cpu_ms=0.017 syn_cpu_ms=0.002 syn_offcpu_ms=0.000 syn_nvcsw=0 syn_nivcsw=0 syn_utime_ms=0.000 syn_stime_ms=0.002 verified=yes bad=0
+ITER N=16 i=13 launch_ms=0.018 submit_ms=0.016 sync_ms=0.002 t0_mono_ms=18862.507 sub_cpu_ms=0.017 syn_cpu_ms=0.002 syn_offcpu_ms=0.000 syn_nvcsw=0 syn_nivcsw=0 syn_utime_ms=0.000 syn_stime_ms=0.002 verified=yes bad=0
+ITER N=16 i=14 launch_ms=0.018 submit_ms=0.016 sync_ms=0.002 t0_mono_ms=18862.563 sub_cpu_ms=0.017 syn_cpu_ms=0.002 syn_offcpu_ms=0.000 syn_nvcsw=0 syn_nivcsw=0 syn_utime_ms=0.000 syn_stime_ms=0.002 verified=yes bad=0
+ITER N=16 i=15 launch_ms=0.018 submit_ms=0.016 sync_ms=0.002 t0_mono_ms=18862.625 sub_cpu_ms=0.018 syn_cpu_ms=0.002 syn_offcpu_ms=0.000 syn_nvcsw=0 syn_nivcsw=0 syn_utime_ms=0.000 syn_stime_ms=0.002 verified=yes bad=0
+ITER N=16 i=16 launch_ms=0.018 submit_ms=0.016 sync_ms=0.002 t0_mono_ms=18862.697 sub_cpu_ms=0.018 syn_cpu_ms=0.002 syn_offcpu_ms=0.000 syn_nvcsw=0 syn_nivcsw=0 syn_utime_ms=0.000 syn_stime_ms=0.002 verified=yes bad=0
+ITER N=16 i=17 launch_ms=0.018 submit_ms=0.016 sync_ms=0.002 t0_mono_ms=18862.755 sub_cpu_ms=0.017 syn_cpu_ms=0.002 syn_offcpu_ms=0.000 syn_nvcsw=0 syn_nivcsw=0 syn_utime_ms=0.000 syn_stime_ms=0.002 verified=yes bad=0
+ITER N=16 i=18 launch_ms=0.020 submit_ms=0.018 sync_ms=0.002 t0_mono_ms=18862.811 sub_cpu_ms=0.020 syn_cpu_ms=0.002 syn_offcpu_ms=0.000 syn_nvcsw=0 syn_nivcsw=0 syn_utime_ms=0.000 syn_stime_ms=0.002 verified=yes bad=0
+ITER N=16 i=19 launch_ms=0.018 submit_ms=0.016 sync_ms=0.002 t0_mono_ms=18862.869 sub_cpu_ms=0.017 syn_cpu_ms=0.002 syn_offcpu_ms=0.000 syn_nvcsw=0 syn_nivcsw=0 syn_utime_ms=0.000 syn_stime_ms=0.002 verified=yes bad=0
+
+B16_N=16
+B16_ITERS=20
+B16_FIRST_MS=0.032
+B16_MEDIAN_MS=0.018
+B16_P90_MS=0.019
+B16_MIN_MS=0.018
+B16_MAX_MS=0.022
+B16_MEAN_MS=0.018
+B16_GFLOPS=0.456
+B16_BATCH=10
+B16_BATCH_TOTAL_MS=0.197
+B16_BATCH_PER_LAUNCH_MS=0.020
+B16_BATCH_GFLOPS=0.416
+B16_BATCH_BAD=0
+B16_H2D_MS=0.111
+B16_D2H_MED_MS=0.017
+B16_ALLOC_MS2=1.383
+B16_SUBMIT_MED_MS=0.016
+B16_SYNC_MED_MS=0.002
+B16_SYNC_CPU_MED_MS=0.002
+B16_SYNC_OFFCPU_MED_MS=0.000
+B16_SYNC_NVCSW_MED=0.0
+B16_SUBMIT_CPU_MED_MS=0.017
+B16_SUBMIT_MAX_MS=0.020
+B16_SYNC_MAX_MS=0.002
+B16_WINDOW_MONO_MS=18861.694..18862.887
+B16_BAD=0
+B16_MAXERR=0
+BSUM N=16 iters=20 first_ms=0.032 med_ms=0.018 p90_ms=0.019 min_ms=0.018 max_ms=0.022 gflops=0.456 batch_per_launch_ms=0.020 batch_gflops=0.416 h2d_ms=0.111 d2h_med_ms=0.017 submit_med_ms=0.016 sync_med_ms=0.002 sync_cpu_med_ms=0.002 sync_offcpu_med_ms=0.000 sync_nvcsw_med=0.0 submit_cpu_med_ms=0.017 bad=0 maxerr=0
+BENCH_SIZE_END N=16
+
+BENCH_SIZE_BEGIN N=2048 per_matrix_MiB=16 device_MiB=48
+B2048_ALLOC_MS=3.75
+B2048_PTRS=A:0x789624c00000,B:0x789604000000,C:0x789605000000
+B2048_H2D_MS=2.78  (2 x 16 MiB)
+B2048_GRID=(128,128)x(16,16)
+ITER N=2048 i=0 launch_ms=3.565 submit_ms=0.020 sync_ms=3.545 t0_mono_ms=18882.295 sub_cpu_ms=0.022 syn_cpu_ms=3.545 syn_offcpu_ms=0.000 syn_nvcsw=0 syn_nivcsw=0 syn_utime_ms=1.027 syn_stime_ms=2.518 verified=yes bad=0
+ITER N=2048 i=1 launch_ms=3.556 submit_ms=0.019 sync_ms=3.536 t0_mono_ms=18958.695 sub_cpu_ms=0.021 syn_cpu_ms=3.536 syn_offcpu_ms=0.000 syn_nvcsw=0 syn_nivcsw=0 syn_utime_ms=1.971 syn_stime_ms=1.565 verified=yes bad=0
+ITER N=2048 i=2 launch_ms=3.552 submit_ms=0.017 sync_ms=3.535 t0_mono_ms=18966.435 sub_cpu_ms=0.019 syn_cpu_ms=3.535 syn_offcpu_ms=0.000 syn_nvcsw=0 syn_nivcsw=0 syn_utime_ms=2.033 syn_stime_ms=1.502 verified=yes bad=0
+ITER N=2048 i=3 launch_ms=3.552 submit_ms=0.017 sync_ms=3.535 t0_mono_ms=18974.160 sub_cpu_ms=0.018 syn_cpu_ms=3.535 syn_offcpu_ms=0.000 syn_nvcsw=0 syn_nivcsw=0 syn_utime_ms=3.535 syn_stime_ms=0.000 verified=yes bad=0
+ITER N=2048 i=4 launch_ms=3.552 submit_ms=0.017 sync_ms=3.535 t0_mono_ms=18981.904 sub_cpu_ms=0.019 syn_cpu_ms=3.535 syn_offcpu_ms=0.000 syn_nvcsw=0 syn_nivcsw=0 syn_utime_ms=2.014 syn_stime_ms=1.522 verified=yes bad=0
+ITER N=2048 i=5 launch_ms=3.553 submit_ms=0.017 sync_ms=3.536 t0_mono_ms=18989.617 sub_cpu_ms=0.019 syn_cpu_ms=3.535 syn_offcpu_ms=0.000 syn_nvcsw=0 syn_nivcsw=0 syn_utime_ms=1.956 syn_stime_ms=1.579 verified=yes bad=0
+ITER N=2048 i=6 launch_ms=3.555 submit_ms=0.017 sync_ms=3.538 t0_mono_ms=18997.349 sub_cpu_ms=0.018 syn_cpu_ms=3.538 syn_offcpu_ms=0.000 syn_nvcsw=0 syn_nivcsw=0 syn_utime_ms=2.049 syn_stime_ms=1.488 verified=yes bad=0
+ITER N=2048 i=7 launch_ms=3.561 submit_ms=0.017 sync_ms=3.544 t0_mono_ms=19005.124 sub_cpu_ms=0.019 syn_cpu_ms=3.544 syn_offcpu_ms=0.000 syn_nvcsw=0 syn_nivcsw=0 syn_utime_ms=2.736 syn_stime_ms=0.808 verified=yes bad=0
+ITER N=2048 i=8 launch_ms=3.556 submit_ms=0.018 sync_ms=3.539 t0_mono_ms=19012.885 sub_cpu_ms=0.019 syn_cpu_ms=3.539 syn_offcpu_ms=0.000 syn_nvcsw=0 syn_nivcsw=0 syn_utime_ms=2.947 syn_stime_ms=0.593 verified=yes bad=0
+ITER N=2048 i=9 launch_ms=3.556 submit_ms=0.018 sync_ms=3.538 t0_mono_ms=19020.689 sub_cpu_ms=0.019 syn_cpu_ms=3.538 syn_offcpu_ms=0.000 syn_nvcsw=0 syn_nivcsw=0 syn_utime_ms=0.945 syn_stime_ms=2.593 verified=yes bad=0
+ITER N=2048 i=10 launch_ms=3.552 submit_ms=0.017 sync_ms=3.535 t0_mono_ms=19028.412 sub_cpu_ms=0.018 syn_cpu_ms=3.535 syn_offcpu_ms=0.000 syn_nvcsw=0 syn_nivcsw=0 syn_utime_ms=0.066 syn_stime_ms=3.469 verified=yes bad=0
+ITER N=2048 i=11 launch_ms=3.553 submit_ms=0.017 sync_ms=3.536 t0_mono_ms=19036.168 sub_cpu_ms=0.018 syn_cpu_ms=3.536 syn_offcpu_ms=0.000 syn_nvcsw=0 syn_nivcsw=0 syn_utime_ms=1.067 syn_stime_ms=2.469 verified=yes bad=0
+ITER N=2048 i=12 launch_ms=3.551 submit_ms=0.017 sync_ms=3.534 t0_mono_ms=19043.867 sub_cpu_ms=0.018 syn_cpu_ms=3.534 syn_offcpu_ms=0.000 syn_nvcsw=0 syn_nivcsw=0 syn_utime_ms=2.938 syn_stime_ms=0.596 verified=yes bad=0
+ITER N=2048 i=13 launch_ms=3.555 submit_ms=0.020 sync_ms=3.535 t0_mono_ms=19051.588 sub_cpu_ms=0.023 syn_cpu_ms=3.535 syn_offcpu_ms=0.000 syn_nvcsw=0 syn_nivcsw=0 syn_utime_ms=1.934 syn_stime_ms=1.601 verified=yes bad=0
+ITER N=2048 i=14 launch_ms=3.551 submit_ms=0.017 sync_ms=3.535 t0_mono_ms=19059.318 sub_cpu_ms=0.018 syn_cpu_ms=3.535 syn_offcpu_ms=0.000 syn_nvcsw=0 syn_nivcsw=0 syn_utime_ms=0.078 syn_stime_ms=3.457 verified=yes bad=0
+ITER N=2048 i=15 launch_ms=3.565 submit_ms=0.022 sync_ms=3.543 t0_mono_ms=19067.058 sub_cpu_ms=0.024 syn_cpu_ms=3.543 syn_offcpu_ms=0.000 syn_nvcsw=0 syn_nivcsw=0 syn_utime_ms=1.748 syn_stime_ms=1.794 verified=yes bad=0
+ITER N=2048 i=16 launch_ms=3.553 submit_ms=0.017 sync_ms=3.536 t0_mono_ms=19074.797 sub_cpu_ms=0.018 syn_cpu_ms=3.536 syn_offcpu_ms=0.000 syn_nvcsw=0 syn_nivcsw=0 syn_utime_ms=1.927 syn_stime_ms=1.609 verified=yes bad=0
+ITER N=2048 i=17 launch_ms=3.551 submit_ms=0.017 sync_ms=3.534 t0_mono_ms=19082.537 sub_cpu_ms=0.018 syn_cpu_ms=3.534 syn_offcpu_ms=0.000 syn_nvcsw=0 syn_nivcsw=0 syn_utime_ms=1.923 syn_stime_ms=1.610 verified=yes bad=0
+ITER N=2048 i=18 launch_ms=3.552 submit_ms=0.017 sync_ms=3.535 t0_mono_ms=19090.258 sub_cpu_ms=0.019 syn_cpu_ms=3.535 syn_offcpu_ms=0.000 syn_nvcsw=0 syn_nivcsw=0 syn_utime_ms=1.087 syn_stime_ms=2.447 verified=yes bad=0
+ITER N=2048 i=19 launch_ms=3.552 submit_ms=0.017 sync_ms=3.535 t0_mono_ms=19097.960 sub_cpu_ms=0.019 syn_cpu_ms=3.535 syn_offcpu_ms=0.000 syn_nvcsw=0 syn_nivcsw=0 syn_utime_ms=0.000 syn_stime_ms=3.535 verified=yes bad=0
+
+B2048_N=2048
+B2048_ITERS=20
+B2048_FIRST_MS=3.565
+B2048_MEDIAN_MS=3.553
+B2048_P90_MS=3.556
+B2048_MIN_MS=3.551
+B2048_MAX_MS=3.565
+B2048_MEAN_MS=3.554
+B2048_GFLOPS=4835.872
+B2048_BATCH=10
+B2048_BATCH_TOTAL_MS=35.439
+B2048_BATCH_PER_LAUNCH_MS=3.544
+B2048_BATCH_GFLOPS=4847.697
+B2048_BATCH_BAD=0
+B2048_H2D_MS=2.777
+B2048_D2H_MED_MS=1.297
+B2048_ALLOC_MS2=3.748
+B2048_SUBMIT_MED_MS=0.017
+B2048_SYNC_MED_MS=3.535
+B2048_SYNC_CPU_MED_MS=3.535
+B2048_SYNC_OFFCPU_MED_MS=0.000
+B2048_SYNC_NVCSW_MED=0.0
+B2048_SUBMIT_CPU_MED_MS=0.019
+B2048_SUBMIT_MAX_MS=0.022
+B2048_SYNC_MAX_MS=3.544
+B2048_WINDOW_MONO_MS=18882.295..19101.512
+B2048_BAD=0
+B2048_MAXERR=0
+BSUM N=2048 iters=20 first_ms=3.565 med_ms=3.553 p90_ms=3.556 min_ms=3.551 max_ms=3.565 gflops=4835.872 batch_per_launch_ms=3.544 batch_gflops=4847.697 h2d_ms=2.777 d2h_med_ms=1.297 submit_med_ms=0.017 sync_med_ms=3.535 sync_cpu_med_ms=3.535 sync_offcpu_med_ms=0.000 sync_nvcsw_med=0.0 submit_cpu_med_ms=0.019 bad=0 maxerr=0
+BENCH_SIZE_END N=2048
+BENCH_CLOCK_END mono_ms=19149.752 real_ms=1792193166769.188
+
+BENCH_SIZES_DONE=2
+BENCH_TOTAL_BAD=0
+BENCH_VERDICT: PASS (every timed iteration verified)
+DONE
+CUDA_RUNG_EXIT=cup8bench rc=0 2026-10-16T23:26:06+00:00
+CUDA_CELL rung=cup8bench verdict=PASS
+CUDA590_LADDER=PASS

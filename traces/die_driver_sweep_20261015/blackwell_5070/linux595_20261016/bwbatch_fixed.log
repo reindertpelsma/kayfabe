@@ -1,0 +1,28 @@
+B3_FIXED_START 2026-10-16T13:19:42+00:00
+From https://github.com/reindertpelsma/kayfabe
+ * branch                codex/sweep-blackwell-20261015 -> FETCH_HEAD
+   99ce8207c..277e5d895  codex/sweep-blackwell-20261015 -> origin/codex/sweep-blackwell-20261015
+Updating 99ce8207c..277e5d895
+Fast-forward
+ crates/kf-host/src/timer.rs              |  3 +-
+ crates/kf-qemu/src/device.rs             | 12 +++--
+ crates/kf-qemu/src/heartbeat.rs          | 79 ++++++++++++++++++++++++++++++++
+ crates/kf-qemu/src/lib.rs                |  2 +
+ docs/STATUS_AND_HANDOFF.md               | 38 +++++++++++++++
+ traces/die_driver_sweep_20261015/COST.md | 15 ++++++
+ 6 files changed, 144 insertions(+), 5 deletions(-)
+ create mode 100644 crates/kf-qemu/src/heartbeat.rs
+27acce400423d698caf548139ae1a07a156b5d1d2f615c2418cbaca79b78c45f  /workspace/bench/kf3-bins/277e5d89/qemu-system-x86_64
+0db4104321bc9f38d73d7e54e80902646a93547702f3218deb14295bebd4c0bf  target/release/kayfabe-rm-ladder
+7bd12895c73a7f720d84ed362b61c75b6b38282661102043e88c9a060e3b9017  /workspace/bench/fastguest595/initrd.cpio.gz
+H_B3_FIX_BEFORE_RUN: sample validated guest native timer; falsifier=normal-loglevel6 still has heartbeat timeout formula or concurrency exceeds unchanged180s; drainer cadence unchanged, no logging suppression
+FAST_SUITE_STARTED=2026-10-16T13:20:35+00:00 arms=1 budget=180s
+rev=277e5d895
+ARM                          VERDICT   secs  why
+--concurrency                TIMEOUT   180s  budget 180s exceeded — a timeout IS a crash
+FAST_CELL_ARM arm=concurrency verdict=TIMEOUT secs=180 client_ms=?
+
+FAST_SUITE_PASS=0 FAST_SUITE_FAIL=0 FAST_SUITE_CRASH=1 NOTRUN=0 ARMS=1
+FAST_SUITE_RC=1
+B3_FIXED_CELL_EXIT rc=1 2026-10-16T13:23:35+00:00
+B3_FIXED_EXIT rc=1 2026-10-16T13:23:35+00:00

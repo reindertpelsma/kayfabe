@@ -1,0 +1,111 @@
+# Own disposable instance56302930 only. H-A3-SW is recorded in PLAN.md before this run.
+$ErrorActionPreference='Stop'
+$ProgressPreference='SilentlyContinue'
+$root='C:\ProgramData\KayfabeSweep'
+Set-Location $root
+$null=& icacls.exe $root /inheritance:r /grant:r '*S-1-5-18:(OI)(CI)F' '*S-1-5-32-544:(OI)(CI)F'
+if($LASTEXITCODE) { throw 'Private capture-directory ACL failed' }
+"NATIVE_TRACE_START $([DateTime]::UtcNow.ToString('o'))"
+'NATIVE_ONLY kf3_revision=N/A guest_driver=N/A host_windows_driver=32.0.15.8151 decode_tag=580.94.02'
+$envs=@(Get-ChildItem Env: | Where-Object Name -like 'KF3_*')
+"NATIVE_INHERITED_KF3_ENV_COUNT=$($envs.Count)"
+if($envs.Count) { throw 'Unexpected KF3 environment in native reference' }
+$hashes=@{
+ 'gsp581\kfwc.sys'='62e89c6dd256ec56c4b951c1d40faa485d1e2919756b36bda0449ca1f539f530'
+ 'gsp581\kfwc_collect.exe'='b7732d2edb0845f9d319d0dd2669474ff7cb7bec1adc54c10f261bd97c427acf'
+ 'gsp581\sequence.exe'='1f5442d0fb220e9494b73441192aa9fc9b0f7539bfbc59b93377133b315ae82b'
+ 'kf-census.exe'='c2119cc04ee54dde8e056d84fce78178f21634f1477e69f2b4fa8e9acbc46118'
+}
+foreach($n in $hashes.Keys) {
+ if((Get-FileHash -Algorithm SHA256 -LiteralPath $n).Hash.ToLower() -ne $hashes[$n]) { throw "Tool hash mismatch:$n" }
+ "NATIVE_TRACE_HASH_OK=$n"
+}
+function Healthy {
+ $a=@(Get-CimInstance Win32_VideoController | Where-Object PNPDeviceID -like 'PCI\VEN_10DE*')
+ if($a.Count -ne 1 -or $a[0].DriverVersion -ne '32.0.15.8151' -or $a[0].ConfigManagerErrorCode -ne 0) { throw 'Expected actual native581.51 Code0' }
+ $a | Select-Object Name,DriverVersion,ConfigManagerErrorCode,Status | ConvertTo-Json -Compress
+}
+Healthy
+& .\install.ps1 -Action Preflight
+if(!(Get-Service KayfabeWinCapture -ErrorAction SilentlyContinue)) {
+ & .\install.ps1 -Action Install -Build "$root\gsp581"
+}
+$svc=Get-Service KayfabeWinCapture
+if($svc.Status -ne 'Running') { throw 'Measurement service must remain loaded throughout replay' }
+& .\gsp581\kfwc_collect.exe --status
+if($LASTEXITCODE) { throw 'Collector initial status failed' }
+$gpu=@(Get-PnpDevice -PresentOnly -Class Display | Where-Object InstanceId -like 'PCI\VEN_10DE*')
+if($gpu.Count -ne 1) { throw 'Need exactly one owned NVIDIA display adapter' }
+$gpu=$gpu[0]
+$key=(Get-PnpDeviceProperty -InstanceId $gpu.InstanceId -KeyName DEVPKEY_Device_Driver).Data
+Set-ItemProperty "HKLM:\SYSTEM\CurrentControlSet\Control\Class\$key" -Name EnableGpuFirmware -Type DWord -Value 1
+Set-ItemProperty 'HKLM:\SYSTEM\CurrentControlSet\Services\nvlddmkm' -Name EnableGpuFirmware -Type DWord -Value 1
+function Capture([string]$name,[bool]$enable) {
+ $dir=Join-Path $root $name
+ if(Test-Path $dir) { throw 'Capture destination exists; no automatic replay' }
+ if(@(Get-Process kfwc_collect -ErrorAction SilentlyContinue).Count) { throw 'Overlapping collector refused' }
+ New-Item -Type Directory $dir | Out-Null
+ $collectorArgs=@($dir,'--seconds','120','--decode-tag','580.94.02')
+ $p=Start-Process "$root\gsp581\kfwc_collect.exe" -ArgumentList $collectorArgs -RedirectStandardOutput "$dir\collector.out" -RedirectStandardError "$dir\collector.err" -PassThru
+ $null=$p.Handle
+ Start-Sleep 2
+ if($p.HasExited) { throw 'Collector exited before enabling/restarting GPU' }
+ "CAPTURE_START name=$name pid=$($p.Id) module_rev=1d302de82 scan=1 mailbox=1 seconds=120 $([DateTime]::UtcNow.ToString('o'))"
+ if($enable) { & pnputil.exe /enable-device $gpu.InstanceId | Out-File "$dir\enable.private.log" }
+ else { & pnputil.exe /restart-device $gpu.InstanceId | Out-File "$dir\restart.private.log" }
+ if($LASTEXITCODE) { throw 'Owned NVIDIA enable/restart failed' }
+ Start-Sleep 15
+ Healthy
+ $gsp=(& nvidia-smi.exe -q | Select-String 'GSP Firmware Version').ToString()
+ $gsp
+ if($LASTEXITCODE -ne 0 -or $gsp -notmatch '580\.94\.01') { throw 'Required native58151 GSP firmware is not active' }
+ & .\native_oracle.ps1 | Tee-Object "$dir\native-oracle.txt"
+ if(!$p.WaitForExit(150000)) { throw 'Collector exceeded bounded deadline' }
+ $p.Refresh()
+ "COLLECTOR_EXIT name=$name rc=$($p.ExitCode) $([DateTime]::UtcNow.ToString('o'))"
+ Get-Content "$dir\collector.out"
+ Get-Content "$dir\collector.err"
+ if($null -eq $p.ExitCode -or $p.ExitCode -ne 0) { throw 'Collector did not establish file/END success' }
+ & .\kf-census.exe --ogkm-tag 580.94.02 --out "$dir\all" "$dir\capture.kfgspcap" | Out-File "$dir\census-summary.txt"
+ $census=$LASTEXITCODE
+ $seq=Start-Process "$root\gsp581\sequence.exe" -ArgumentList @('580.94.02',"$dir\capture.kfgspcap") -RedirectStandardOutput "$dir\sequence.tsv" -RedirectStandardError "$dir\sequence.result.txt" -PassThru
+ $null=$seq.Handle
+ if(!$seq.WaitForExit(60000)) { throw 'Sequence metadata export timed out' }
+ $seq.Refresh()
+ "DECODE_EXIT name=$name census=$census sequence=$($seq.ExitCode)"
+ if($census -notin @(0,1) -or $null -eq $seq.ExitCode -or $seq.ExitCode -notin @(0,1)) { throw 'Decoder/exporter failed to run' }
+ Get-Content "$dir\census-summary.txt"
+ Get-Content "$dir\sequence.result.txt"
+ $cell=Get-Content -Raw "$dir\cell.json" | ConvertFrom-Json
+ $cell | ConvertTo-Json -Depth 8 | Set-Content "$dir\cell-readable.json"
+ "CAPTURE_STATS name=$name $($cell.stats | ConvertTo-Json -Compress)"
+ "CAPTURE_DISCOVERY name=$name method=$($cell.discovery.method)"
+ if(!$enable) {
+  # A late first prefix is EXPECTED here; it is only a cache seed.
+  "SEED_ONLY complete_native_reference=0 census=$census"
+  return
+ }
+ if($census -ne 0 -or $null -eq $seq.ExitCode -or $seq.ExitCode -ne 0) { throw 'Complete-reference decoder/oracle gate failed' }
+ if($cell.stats.messages_cmd -lt 100 -or $cell.stats.messages_status -lt 100 -or $cell.stats.attaches -ne 1 -or $cell.discovery.method -ne 3) { throw 'No single early method3 boot with meaningful traffic' }
+ foreach($n in 'lost_messages_exact','seq_gap_messages','lapped_messages','loss_records','torn_reads','invalid_elements','sink_dropped','records_refused','unsupported') {
+  if($null -eq $cell.stats.$n -or $cell.stats.$n -ne 0) { throw "Complete-reference counter failed:$n" }
+ }
+ $rows=Import-Csv -Delimiter "`t" "$dir\sequence.tsv"
+ foreach($d in 'cmd','status') {
+  $first=@($rows | Where-Object dir -eq $d)[0]
+  if(!$first -or $first.element_sequence -ne '0') { throw "Missing sequence-zero prefix:$d" }
+ }
+ 'NATIVE_COMPLETE_PREFIX_PASS=1'
+}
+Capture 'seed58151' $false
+& pnputil.exe /disable-device $gpu.InstanceId | Out-File "$root\disable.private.log"
+if($LASTEXITCODE) { throw 'Owned NVIDIA disable failed' }
+Start-Sleep 3
+$problem=(Get-PnpDeviceProperty -InstanceId $gpu.InstanceId -KeyName DEVPKEY_Device_ProblemCode).Data
+if($problem -ne 22) { throw 'Replay requires disabled owned NVIDIA adapter' }
+if((Get-Service KayfabeWinCapture).Status -ne 'Running') { throw 'Module/cache must survive disable' }
+Capture 'revisit58151' $true
+Healthy
+& .\install.ps1 -Action Stop
+if((Get-Service KayfabeWinCapture).Status -ne 'Stopped') { throw 'Capture module not stopped' }
+"NATIVE_TRACE_EXIT rc=0 $([DateTime]::UtcNow.ToString('o'))"

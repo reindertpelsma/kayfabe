@@ -1,0 +1,5 @@
+START source=9d6f210ba1dc6ab0edbc49ff265101091e8b08f1 host=595.91.07 guest590.48.01 2026-10-16T23:29:11+00:00
+BROKER_ACTUAL_PROCESS_RECEIPT {"pid": 145344, "source_revision": "9d6f210ba1dc6ab0edbc49ff265101091e8b08f1", "binary_sha256": "cc2a86a6dec3ec6bed91d9cd6e1963a1deadf2d75a768e9e3dada91559e34668", "host_driver": "595.91.07", "guest_public_abi": "590.48.01", "actual_KF3_environment": {"KF3_REV": "9d6f210b"}, "harness_selector_note": "KF3_REV selects the private binary; no other KF3 variable is set."}
+PROFILE_FIX_HYPOTHESIS modesetN was the only readiness failure; falsifier=Y stillfails/contentmismatch/blankbroker
+cat: /sys/module/nvidia_drm/parameters/modeset: Permission denied
+EXIT rc=1 2026-10-16T23:33:07+00:00

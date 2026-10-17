@@ -1,0 +1,26 @@
+START source=9d6f210ba1dc6ab0edbc49ff265101091e8b08f1 host=595.91.07 guest595.91.07 2026-10-17T02:17:04+00:00
+BROKER_ACTUAL_PROCESS_RECEIPT {"pid": 101104, "source_revision": "9d6f210ba1dc6ab0edbc49ff265101091e8b08f1", "binary_sha256": "cc2a86a6dec3ec6bed91d9cd6e1963a1deadf2d75a768e9e3dada91559e34668", "host_driver": "595.91.07", "guest_public_abi": "595.91.07", "actual_KF3_environment": {"KF3_REV": "9d6f210b"}, "harness_selector_note": "KF3_REV selects the private binary; no other KF3 variable is set."}
+M3_HYPOTHESIS configured_modesetY supports595apps; falsifier=readiness/contentmismatch/blankbroker
+GFX595_NATIVE_PARITY_PASS {"EGLR_HASH_A": "2a4db0673ee94aaf", "EGLR_HASH_B": "238bd6f6f74e5280", "EGLR_HASH_Z": "d26f0e8bbed2b9bf", "GLXR_HASH_A": "2a4db0673ee94aaf", "GLXR_HASH_B": "238bd6f6f74e5280", "GLXR_HASH_Z": "d26f0e8bbed2b9bf", "VKC_HASH": "9ef8f95225b2291f", "VKR_HASH_A": "2a4db0673ee94aaf", "VKR_HASH_B": "a74a7e3fdf3af27b", "VKR_HASH_Z": "0f85f96d2be8e557"}
+GFX595_ACCEPTANCE_PASS=1
+CINNAMON 1 XORG 1
+ACTUAL_LIBCUDA=/usr/lib/x86_64-linux-gnu/libcuda.so.595.91.07 ACTUAL_KERNEL=6.8.0-142-generic
+NVIDIA GeForce RTX 3070, 595.91.07, 108 MiB
+OpenGL vendor string: NVIDIA Corporation
+OpenGL renderer string: NVIDIA GeForce RTX 3070/PCIe/SSE2
+Running synchronized to the vertical refresh.  The framerate should be
+approximately the same as the monitor refresh rate.
+290 frames in 5.0 seconds = 57.812 FPS
+296 frames in 5.0 seconds = 59.189 FPS
+300 frames in 5.0 seconds = 59.844 FPS
+VKCUBE rc=124
+GUEST_DMESG flip_timeouts=0 nvassert=9 xid=0
+GUEST_DONE
+nvkvm-broker: shm tier: not requiring DRI3 or Present (frames arrive as shared memory and are put on screen with core PutImage)
+nvkvm-broker: shm tier: advertising no dma-buf format (frames are shared memory), so no modifier query is made
+X11_WINDOW width=1920 height=1080 colors=9855 sha256=b1188fa17b17116a42de683506994f27606a9b70b96c6ad0948dd8192acee20c
+X11_PRESENTATION_CHECKED=1
+DISPLAY_STALLS=27
+HOST_XID before=10 after=10
+BROKER_DESKTOP_VERDICT=PASS host595.91.07 guest595.91.07
+EXIT rc=0 2026-10-17T02:27:12+00:00

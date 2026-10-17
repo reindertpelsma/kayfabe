@@ -1,0 +1,65 @@
+{
+  "faults": [
+    {
+      "pid": 89289,
+      "arm": "defer-liveness",
+      "basis": "native negative-arm log time window plus explicit intentional fault kind/addresses; no independent native child-PID receipt",
+      "kernel_seconds": 896.151096
+    },
+    {
+      "pid": 89289,
+      "arm": "defer-liveness",
+      "basis": "native negative-arm log time window plus explicit intentional fault kind/addresses; no independent native child-PID receipt",
+      "kernel_seconds": 899.210653
+    },
+    {
+      "pid": 89289,
+      "arm": "defer-liveness",
+      "basis": "native negative-arm log time window plus explicit intentional fault kind/addresses; no independent native child-PID receipt",
+      "kernel_seconds": 902.216018
+    },
+    {
+      "pid": 89289,
+      "arm": "defer-liveness",
+      "basis": "native negative-arm log time window plus explicit intentional fault kind/addresses; no independent native child-PID receipt",
+      "kernel_seconds": 905.273179
+    },
+    {
+      "pid": 89329,
+      "arm": "missing-page-fault",
+      "basis": "native negative-arm log time window plus explicit intentional fault kind/addresses; no independent native child-PID receipt",
+      "kernel_seconds": 909.393584
+    },
+    {
+      "pid": 90894,
+      "arm": "defer-liveness",
+      "basis": "actual QEMU PID/process receipt",
+      "kernel_seconds": 1149.321088
+    },
+    {
+      "pid": 90894,
+      "arm": "defer-liveness",
+      "basis": "actual QEMU PID/process receipt",
+      "kernel_seconds": 1152.501556
+    },
+    {
+      "pid": 90894,
+      "arm": "defer-liveness",
+      "basis": "actual QEMU PID/process receipt",
+      "kernel_seconds": 1155.523935
+    },
+    {
+      "pid": 90894,
+      "arm": "defer-liveness",
+      "basis": "actual QEMU PID/process receipt",
+      "kernel_seconds": 1158.720229
+    },
+    {
+      "pid": 91720,
+      "arm": "missing-page-fault",
+      "basis": "actual QEMU PID/process receipt",
+      "kernel_seconds": 1282.889277
+    }
+  ],
+  "limits": "Native mapping is time+fault-kind/address correlation, not a child-PID receipt. Guest mapping is direct actual-PID receipt."
+}

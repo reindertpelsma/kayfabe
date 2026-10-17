@@ -1,0 +1,7 @@
+journal_rc=0
+XID_COUNT=5
+Oct 15 21:51:55 ubuntu kernel: NVRM: Xid (PCI:0000:00:07): 31, pid=59108, name=qemu-system-x86, channel 0x0000000a, intr 00000000. MMU Fault: ENGINE CE0 HUBCLIENT_CE1 faulted @ 0x60_00010000. Fault is of type FAULT_PTE ACCESS_TYPE_VIRT_READ
+Oct 15 21:51:58 ubuntu kernel: NVRM: Xid (PCI:0000:00:07): 31, pid=59108, name=qemu-system-x86, channel 0x0000000a, intr 00000000. MMU Fault: ENGINE CE0 HUBCLIENT_CE1 faulted @ 0x62_00010000. Fault is of type FAULT_PTE ACCESS_TYPE_VIRT_READ
+Oct 15 21:52:01 ubuntu kernel: NVRM: Xid (PCI:0000:00:07): 31, pid=59108, name=qemu-system-x86, channel 0x0000000b, intr 00000000. MMU Fault: ENGINE CE0 HUBCLIENT_CE1 faulted @ 0x62_00010000. Fault is of type FAULT_PTE ACCESS_TYPE_VIRT_READ
+Oct 15 21:52:05 ubuntu kernel: NVRM: Xid (PCI:0000:00:07): 31, pid=59108, name=qemu-system-x86, channel 0x0000000a, intr 00000000. MMU Fault: ENGINE CE0 HUBCLIENT_CE1 faulted @ 0x64_00010000. Fault is of type FAULT_PTE ACCESS_TYPE_VIRT_READ
+Oct 15 21:53:54 ubuntu kernel: NVRM: Xid (PCI:0000:00:07): 31, pid=60042, name=qemu-system-x86, channel 0x0000000b, intr 00000000. MMU Fault: ENGINE CE0 HUBCLIENT_CE1 faulted @ 0xa_11000000. Fault is of type FAULT_PDE ACCESS_TYPE_VIRT_WRITE

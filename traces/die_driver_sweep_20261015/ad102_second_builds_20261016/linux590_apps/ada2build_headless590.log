@@ -1,0 +1,7 @@
+HEADLESS590_START 9d6f210ba1dc6ab0edbc49ff265101091e8b08f1 2026-10-16T23:25:44Z
+OWNED_QEMU_RECORDED pid=143977
+HEADLESS590_CLEAN_STOP 0 2026-10-16T23:26:36Z
+Traceback (most recent call last):
+  File "/root/ada2build_headless590.py", line 69, in <module>
+    assert all('GFX_S'+str(i)+'=PASS' in graphics for i in range(1,6)),'graphics step failed'
+AssertionError: graphics step failed

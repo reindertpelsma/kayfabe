@@ -1,0 +1,7 @@
+ADA2BUILD_RAW_START source=9d6f210ba1dc6ab0edbc49ff265101091e8b08f1 2026-10-16T22:13:53+00:00
+cc2a86a6dec3ec6bed91d9cd6e1963a1deadf2d75a768e9e3dada91559e34668  /workspace/bench/kf3-bins/9d6f210b/qemu-system-x86_64
+0db4104321bc9f38d73d7e54e80902646a93547702f3218deb14295bebd4c0bf  target/release/kayfabe-rm-ladder
+7c5af639b8bacb83b0b548328ad9ec959beb885da55aeffc14433b561afd2597  /workspace/bench/fastguest595/initrd.cpio.gz
+LINUX595_RAW30_START actual_KF3={} normal6 budget180 2026-10-16T22:13:55+00:00
+LINUX595_RAW30_COMPLETE 2026-10-16T22:20:03+00:00
+ADA2BUILD_RAW_EXIT rc=0 2026-10-16T22:20:03+00:00

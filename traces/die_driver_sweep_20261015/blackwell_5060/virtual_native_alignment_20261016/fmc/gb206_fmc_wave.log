@@ -1,0 +1,11 @@
+FMC_WAVE_START 2026-10-16T00:59:57+00:00
+WIN_DIE_START kf3=3934a089 checkout=3934a0895 guest_driver=580.65.06 gpu=NVIDIA GeForce RTX 5060 xid_before=0 2026-10-16T00:59:57+00:00
+[win_die] QEMU 42721 kf3 3934a089 run /root/win/codex-gb206trace
+ACTUAL_PROCESS_RECEIPT {"actual_KF3_environment": {"KF3_ASYNC_PREEMPT": "1", "KF3_DEFERRED_API": "1", "KF3_DISPLAY_CAPS_PROBE": "1", "KF3_DISPLAY_CTRL_PROBE": "1", "KF3_DISPLAY_ILUT_OFFSET_256": "1", "KF3_DISPLAY_IMP_ENABLE": "1", "KF3_DISPLAY_LUT_MIRROR": "1", "KF3_DISPLAY_SDR_COLOR": "1", "KF3_GFX_POOL_PROBE": "1", "KF3_KERNEL_GR_CE": "1", "KF3_KERNEL_GR_WORK": "1", "KF3_MEMORY_LIST_PROBE": "1", "KF3_PREEMPT_BIND_PROBE": "1", "KF3_RPC_TRACE": "1", "KF3_SW_RUNLIST_HOST_OWNED": "1", "KF3_SW_RUNLIST_PROBE": "1", "KF3_TRANSLATED_CE_RELAY": "1", "KF3_WIN_TWIN_DEFAPI_OBJECT": "1", "KF3_WIN_USER_CHANNELS_PASSTHROUGH": "1", "KF3_ZCULL_BIND_PROBE": "1"}, "binary_revision": "3934a089", "binary_sha256": "f38954e683908c3a8fe94a85f88f4b664aa0e24a03803dd3f00f42f1cca2d18f", "expected_windows_driver": "32.0.15.8088", "guest_public_abi": "580.65.06", "host_driver": "595.91.07", "pid": 42721, "profile": "production flags plus bounded observer/RPC diagnostics", "source_revision": "3934a089550c8f6673d1bb26f8c0670e4385fa41"}
+[win_die] QGA answers 2026-10-16T01:01:48+00:00
+c3b0be1f50c711eb77810c3b5a50b3647184fe0e9a171a86d3b495a067648cda  /root/win/codex-gb206trace/gsp-fmc-42721.jsonl
+FMC_SEQUENCE_EXIT=1 FMC_CENSUS_EXIT=1
+SEQUENCE_ORACLE_OK=false anomalies=109 unbalanced_controls=39 messages=[387, 385]
+FMC_FOOTER {"capture_complete": false, "driver_stats": {"attached_tables": 1, "bootstrap_attempts": 2, "buffered_bytes": 0, "dropped": 0, "invalid_bootstrap": 0, "invalid_elements": 5953, "invalid_headers": 0, "limited": false, "mapping_changed": 0, "read_failures": 0, "recorded": 772, "sequence_gaps": 0, "triggers": 468, "uninitialized_headers": 1, "unstable_snapshots": 0}, "file_export_complete": true, "kind": "footer", "omitted_records": 0, "records": 772, "source_bytes": 468776, "source_records": 772}
+FMC_WAVE_COMPLETE 2026-10-16T01:06:20+00:00
+FMC_WAVE_EXIT rc=0 2026-10-16T01:06:20+00:00

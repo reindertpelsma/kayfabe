@@ -1,0 +1,26 @@
+/workspace/codex/rpc-alignment/tools/tests/test_align_metadata.py:40: ResourceWarning: unclosed file <_io.TextIOWrapper name='/tmp/tmpapd2fwoa/out.tsv' mode='r' encoding='UTF-8'>
+  rows = list(csv.DictReader(paths[2].open(), delimiter="\t")) if paths[2].exists() else []
+ResourceWarning: Enable tracemalloc to get the object allocation traceback
+./workspace/codex/rpc-alignment/tools/tests/test_align_metadata.py:40: ResourceWarning: unclosed file <_io.TextIOWrapper name='/tmp/tmpt30c1xnz/out.tsv' mode='r' encoding='UTF-8'>
+  rows = list(csv.DictReader(paths[2].open(), delimiter="\t")) if paths[2].exists() else []
+ResourceWarning: Enable tracemalloc to get the object allocation traceback
+./workspace/codex/rpc-alignment/tools/tests/test_align_metadata.py:40: ResourceWarning: unclosed file <_io.TextIOWrapper name='/tmp/tmpom0h4ppg/out.tsv' mode='r' encoding='UTF-8'>
+  rows = list(csv.DictReader(paths[2].open(), delimiter="\t")) if paths[2].exists() else []
+ResourceWarning: Enable tracemalloc to get the object allocation traceback
+../workspace/codex/rpc-alignment/tools/tests/test_align_metadata.py:40: ResourceWarning: unclosed file <_io.TextIOWrapper name='/tmp/tmp5cz4vvgi/out.tsv' mode='r' encoding='UTF-8'>
+  rows = list(csv.DictReader(paths[2].open(), delimiter="\t")) if paths[2].exists() else []
+ResourceWarning: Enable tracemalloc to get the object allocation traceback
+./workspace/codex/rpc-alignment/tools/tests/test_align_metadata.py:40: ResourceWarning: unclosed file <_io.TextIOWrapper name='/tmp/tmp9cfxg6j3/out.tsv' mode='r' encoding='UTF-8'>
+  rows = list(csv.DictReader(paths[2].open(), delimiter="\t")) if paths[2].exists() else []
+ResourceWarning: Enable tracemalloc to get the object allocation traceback
+./workspace/codex/rpc-alignment/tools/tests/test_align_metadata.py:40: ResourceWarning: unclosed file <_io.TextIOWrapper name='/tmp/tmp8g6pwb4y/out.tsv' mode='r' encoding='UTF-8'>
+  rows = list(csv.DictReader(paths[2].open(), delimiter="\t")) if paths[2].exists() else []
+ResourceWarning: Enable tracemalloc to get the object allocation traceback
+./workspace/codex/rpc-alignment/tools/tests/test_align_metadata.py:40: ResourceWarning: unclosed file <_io.TextIOWrapper name='/tmp/tmpgg2kulqw/out.tsv' mode='r' encoding='UTF-8'>
+  rows = list(csv.DictReader(paths[2].open(), delimiter="\t")) if paths[2].exists() else []
+ResourceWarning: Enable tracemalloc to get the object allocation traceback
+..
+----------------------------------------------------------------------
+Ran 9 tests in 0.332s
+
+OK

@@ -1,0 +1,128 @@
+{
+  "serial_files": 30,
+  "heartbeat_formula_lines": 1418,
+  "nonzero_arms": [
+    {
+      "serial": "fast_codex_adaref2_full595_alias-two-vas_serial.log",
+      "heartbeat_formula_lines": 44
+    },
+    {
+      "serial": "fast_codex_adaref2_full595_alias-unmap-observe_serial.log",
+      "heartbeat_formula_lines": 22
+    },
+    {
+      "serial": "fast_codex_adaref2_full595_atomics-probe_serial.log",
+      "heartbeat_formula_lines": 52
+    },
+    {
+      "serial": "fast_codex_adaref2_full595_bar1-crossing_serial.log",
+      "heartbeat_formula_lines": 48
+    },
+    {
+      "serial": "fast_codex_adaref2_full595_blockage-coverage_serial.log",
+      "heartbeat_formula_lines": 70
+    },
+    {
+      "serial": "fast_codex_adaref2_full595_bus-info-sweep_serial.log",
+      "heartbeat_formula_lines": 44
+    },
+    {
+      "serial": "fast_codex_adaref2_full595_ce-client-guest-ram_serial.log",
+      "heartbeat_formula_lines": 50
+    },
+    {
+      "serial": "fast_codex_adaref2_full595_ce-client_serial.log",
+      "heartbeat_formula_lines": 44
+    },
+    {
+      "serial": "fast_codex_adaref2_full595_concurrency_serial.log",
+      "heartbeat_formula_lines": 54
+    },
+    {
+      "serial": "fast_codex_adaref2_full595_concurrent-fuzz_serial.log",
+      "heartbeat_formula_lines": 58
+    },
+    {
+      "serial": "fast_codex_adaref2_full595_cross-client-leak_serial.log",
+      "heartbeat_formula_lines": 56
+    },
+    {
+      "serial": "fast_codex_adaref2_full595_defer-liveness_serial.log",
+      "heartbeat_formula_lines": 42
+    },
+    {
+      "serial": "fast_codex_adaref2_full595_dictated-ring-negative_serial.log",
+      "heartbeat_formula_lines": 32
+    },
+    {
+      "serial": "fast_codex_adaref2_full595_dictated-ring_serial.log",
+      "heartbeat_formula_lines": 68
+    },
+    {
+      "serial": "fast_codex_adaref2_full595_doorbell-census_serial.log",
+      "heartbeat_formula_lines": 46
+    },
+    {
+      "serial": "fast_codex_adaref2_full595_engines_serial.log",
+      "heartbeat_formula_lines": 40
+    },
+    {
+      "serial": "fast_codex_adaref2_full595_executor-vas_serial.log",
+      "heartbeat_formula_lines": 50
+    },
+    {
+      "serial": "fast_codex_adaref2_full595_gpga-reserve-probe_serial.log",
+      "heartbeat_formula_lines": 40
+    },
+    {
+      "serial": "fast_codex_adaref2_full595_gpu-info-sweep_serial.log",
+      "heartbeat_formula_lines": 46
+    },
+    {
+      "serial": "fast_codex_adaref2_full595_guest-ram-pin_serial.log",
+      "heartbeat_formula_lines": 46
+    },
+    {
+      "serial": "fast_codex_adaref2_full595_guest-ring-channel_serial.log",
+      "heartbeat_formula_lines": 56
+    },
+    {
+      "serial": "fast_codex_adaref2_full595_late-map-race_serial.log",
+      "heartbeat_formula_lines": 52
+    },
+    {
+      "serial": "fast_codex_adaref2_full595_map-propagation_serial.log",
+      "heartbeat_formula_lines": 60
+    },
+    {
+      "serial": "fast_codex_adaref2_full595_map-stress_serial.log",
+      "heartbeat_formula_lines": 50
+    },
+    {
+      "serial": "fast_codex_adaref2_full595_missing-page-fault_serial.log",
+      "heartbeat_formula_lines": 52
+    },
+    {
+      "serial": "fast_codex_adaref2_full595_pce-mask-probe_serial.log",
+      "heartbeat_formula_lines": 48
+    },
+    {
+      "serial": "fast_codex_adaref2_full595_rpc-mixed-allocs_serial.log",
+      "heartbeat_formula_lines": 68
+    },
+    {
+      "serial": "fast_codex_adaref2_full595_timer_serial.log",
+      "heartbeat_formula_lines": 32
+    },
+    {
+      "serial": "fast_codex_adaref2_full595_uvm-invalidate_serial.log",
+      "heartbeat_formula_lines": 4
+    },
+    {
+      "serial": "fast_codex_adaref2_full595_uvm-mean_serial.log",
+      "heartbeat_formula_lines": 44
+    }
+  ],
+  "zero_heartbeat_lines": 1418,
+  "nonzero_heartbeat_lines": 0
+}

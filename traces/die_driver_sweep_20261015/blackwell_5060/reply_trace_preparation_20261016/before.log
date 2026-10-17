@@ -1,0 +1,224 @@
+warning: missing documentation for a function
+    --> crates/kf-util/src/lock.rs:1150:5
+     |
+1150 |     pub fn note_wait(rank: LockRank, d: Duration) {
+     |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+     |
+     = note: requested on the command line with `-W missing-docs`
+
+warning: missing documentation for a function
+    --> crates/kf-util/src/lock.rs:1432:5
+     |
+1432 |     pub fn note_hold(rank: LockRank, d: Duration) {
+     |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: missing documentation for a function
+   --> crates/kf-util/src/lockwitness.rs:193:5
+    |
+193 |     pub fn is_vcpu() -> bool {
+    |     ^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: `kf-util` (lib) generated 3 warnings
+warning: missing documentation for a method
+   --> crates/kf-arch/src/gsp.rs:842:5
+    |
+842 | /     fn on_read(
+843 | |         &self,
+844 | |         _model: &dyn GspModel,
+845 | |         _bar: u8,
+...   |
+848 | |         _state: &ArchBootState,
+849 | |     ) -> Option<u64> {
+    | |____________________^
+    |
+    = note: requested on the command line with `-W missing-docs`
+
+warning: missing documentation for a method
+   --> crates/kf-arch/src/gsp.rs:971:5
+    |
+971 |     fn libos_region_layout(&self) -> LibosRegionLayout;
+    |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: `kf-arch` (lib) generated 2 warnings
+warning: missing documentation for a struct field
+  --> crates/kf-abi/src/chanbudget.rs:90:18
+   |
+90 |     NoChannels { engine: u32 },
+   |                  ^^^^^^^^^^^
+   |
+   = note: requested on the command line with `-W missing-docs`
+
+warning: missing documentation for a struct field
+  --> crates/kf-abi/src/chanbudget.rs:92:20
+   |
+92 |     BelowMinimum { asked: u32 },
+   |                    ^^^^^^^^^^
+
+warning: missing documentation for a struct field
+  --> crates/kf-abi/src/chanbudget.rs:94:18
+   |
+94 |     AboveLimit { asked: u32, limit: u32, engine: u32, total: u32, in_use: u32 },
+   |                  ^^^^^^^^^^
+
+warning: missing documentation for a struct field
+  --> crates/kf-abi/src/chanbudget.rs:94:30
+   |
+94 |     AboveLimit { asked: u32, limit: u32, engine: u32, total: u32, in_use: u32 },
+   |                              ^^^^^^^^^^
+
+warning: missing documentation for a struct field
+  --> crates/kf-abi/src/chanbudget.rs:94:42
+   |
+94 |     AboveLimit { asked: u32, limit: u32, engine: u32, total: u32, in_use: u32 },
+   |                                          ^^^^^^^^^^^
+
+warning: missing documentation for a struct field
+  --> crates/kf-abi/src/chanbudget.rs:94:55
+   |
+94 |     AboveLimit { asked: u32, limit: u32, engine: u32, total: u32, in_use: u32 },
+   |                                                       ^^^^^^^^^^
+
+warning: missing documentation for a struct field
+  --> crates/kf-abi/src/chanbudget.rs:94:67
+   |
+94 |     AboveLimit { asked: u32, limit: u32, engine: u32, total: u32, in_use: u32 },
+   |                                                                   ^^^^^^^^^^^
+
+warning: missing documentation for a struct field
+  --> crates/kf-abi/src/chanbudget.rs:96:19
+   |
+96 |     HostTooFull { derived: u32, engine: u32, total: u32, in_use: u32 },
+   |                   ^^^^^^^^^^^^
+
+warning: missing documentation for a struct field
+  --> crates/kf-abi/src/chanbudget.rs:96:33
+   |
+96 |     HostTooFull { derived: u32, engine: u32, total: u32, in_use: u32 },
+   |                                 ^^^^^^^^^^^
+
+warning: missing documentation for a struct field
+  --> crates/kf-abi/src/chanbudget.rs:96:46
+   |
+96 |     HostTooFull { derived: u32, engine: u32, total: u32, in_use: u32 },
+   |                                              ^^^^^^^^^^
+
+warning: missing documentation for a struct field
+  --> crates/kf-abi/src/chanbudget.rs:96:58
+   |
+96 |     HostTooFull { derived: u32, engine: u32, total: u32, in_use: u32 },
+   |                                                          ^^^^^^^^^^^
+
+warning: `kf-abi` (lib) generated 11 warnings
+   Compiling kf-gsp v0.1.0 (/data/codex/reply-body-trace/crates/kf-gsp)
+warning: missing documentation for a method
+    --> crates/kf-gsp/src/boot.rs:2772:5
+     |
+2772 |     pub fn release_held(&mut self, ram: &mut dyn GuestRam) -> Result<usize, GspFault> {
+     |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+     |
+     = note: requested on the command line with `-W missing-docs`
+
+warning: missing documentation for a method
+    --> crates/kf-gsp/src/boot.rs:2890:5
+     |
+2890 | /     pub fn post_event(
+2891 | |         &mut self,
+2892 | |         ram: &mut dyn GuestRam,
+2893 | |         rpc: &OutgoingRpc,
+2894 | |     ) -> Result<(), GspFault> {
+     | |_____________________________^
+
+warning: `kf-gsp` (lib test) generated 2 warnings
+warning: `kf-gsp` (lib) generated 2 warnings (2 duplicates)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.40s
+     Running unittests src/lib.rs (/data/codex/target-reply-body-trace/debug/deps/kf_gsp-aff95870c55561f9)
+
+running 54 tests
+test boot::a_reply_whose_status_is_a_host_act::a_chain_reports_the_link_that_deferred ... ok
+test boot::a_reply_whose_status_is_a_host_act::a_refused_alloc_carries_its_status_in_the_params ... ok
+test boot::a_reply_whose_status_is_a_host_act::a_succeeded_act_under_a_refused_reply_runs_its_undo_once ... ok
+test boot::a_reply_whose_status_is_a_host_act::a_deferred_is_pending_until_resolved_and_the_first_resolution_wins ... ok
+test boot::a_life_ends_and_the_next_one_boots::a_suspended_processor_services_no_doorbell_and_reads_no_ram ... ok
+test boot::a_life_ends_and_the_next_one_boots::a_falcon_life_waits_for_its_teardown_ucode ... ok
+test boot::a_life_ends_and_the_next_one_boots::an_fsp_life_halts_itself_and_the_next_open_boots ... ok
+test boot::a_reply_whose_status_is_a_host_act::a_reply_patch_lands_only_on_success_and_only_inside_the_reply ... ok
+test boot::device_reset_from_every_phase::a_reset_of_a_device_nothing_ever_touched_changes_nothing ... ok
+test boot::device_reset_from_every_phase::reply_body_trace_fixture ... ok
+test boot::device_reset_from_every_phase::s3_resume::a_resume_step_with_nothing_saved_reads_no_ram_and_changes_nothing ... ok
+test boot::a_retry_after_a_failed_boot_reads_its_own_frts_command::the_command_read_for_a_start_is_served_while_wpr2_is_up_and_dropped_when_it_comes_down ... ok
+test boot::fn72_is_kept_for_fn65::fn72_lands_in_the_cell_and_is_never_answered ... ok
+test boot::fn72_is_kept_for_fn65::the_cell_survives_a_device_reset_and_the_next_life_replaces_it ... ok
+test boot::fn72_is_kept_for_fn65::without_a_cell_fn72_changes_nothing ... ok
+test boot::holding_a_reply_until_the_refresh_lands::a_chain_of_non_holders_holds_nothing ... ok
+test boot::holding_a_reply_until_the_refresh_lands::a_holding_link_ahead_of_the_answerer_still_holds ... ok
+test boot::holding_a_reply_until_the_refresh_lands::a_policy_that_says_nothing_never_holds ... ok
+test large::tests::a_refused_answer_is_refused_in_every_fragment ... ok
+test large::tests::an_alloc_memory_head_with_a_declared_length_is_joined ... ok
+test large::tests::an_uncommitted_step_is_replayable ... ok
+test large::tests::hostile_large_messages_are_refused_by_name ... ok
+test large::tests::small_controls_and_stray_continuations_are_not_large ... ok
+test boot::device_reset_from_every_phase::reply_body_diagnostics_are_disabled_by_default ... ok
+test boot::device_reset_from_every_phase::s3_resume::a_firmware_halted_pm_suspend_is_resumable_too ... ok
+test refusal::tests::ok_is_not_a_refusal ... ok
+test large::tests::split_and_reassembly_round_trip_a_610_sm_order_control ... ok
+test refusal::tests::rows_are_keyed_on_function_detail_and_status ... ok
+test sysinfo::tests::a_later_fn72_replaces_the_cell_and_clones_share_it ... ok
+test sysinfo::tests::an_oversized_body_is_cut_to_the_bound_and_its_length_kept ... ok
+test sysinfo::tests::the_bound_is_the_largest_struct_in_the_matrix ... ok
+test refusal::tests::the_cap_bounds_storage_but_not_the_counts ... ok
+test boot::device_reset_from_every_phase::s3_resume::a_resume_without_a_wake_reset_restores_the_binding_too ... ok
+test sysinfo::tests::the_nocat_line_reads_the_flag_at_the_drivers_layout ... ok
+test boot::device_reset_from_every_phase::posted_reply_body_is_logged_once_and_failed_post_is_absent ... FAILED
+test boot::device_reset_from_every_phase::s3_resume::a_cold_boot_after_the_wake_discards_the_saved_life ... ok
+test boot::device_reset_from_every_phase::s3_resume::a_saved_binding_reads_no_ram_until_the_resume ... ok
+test boot::a_retry_after_a_failed_boot_reads_its_own_frts_command::the_frts_offset_is_read_from_the_command_and_only_from_an_acceptable_one ... ok
+test boot::device_reset_from_every_phase::s3_resume::a_pm_suspended_life_survives_the_wake_reset_and_resumes_without_a_publish ... ok
+test boot::device_reset_from_every_phase::a_life_ended_by_booter_unload_resets_to_a_fresh_device ... ok
+test boot::device_reset_from_every_phase::s3_resume::only_a_halted_pm_suspend_is_kept_by_a_wake_reset ... ok
+test boot::device_reset_from_every_phase::a_reset_value_is_fresh_field_by_field ... ok
+test boot::device_reset_from_every_phase::s3_resume::three_suspend_resume_cycles_keep_one_stream ... ok
+test boot::device_reset_from_every_phase::s3_resume::a_large_alloc_memory_is_joined_and_answered_once_at_its_head ... ok
+test boot::device_reset_from_every_phase::a_device_reset_from_every_phase_keeps_the_system_info_cell_and_nothing_else ... ok
+test boot::device_reset_from_every_phase::a_device_reset_from_every_phase_is_e11_and_a_fresh_device ... ok
+test boot::device_reset_from_every_phase::every_driver_reaches_its_phase_with_the_live_state_it_claims ... ok
+test boot::device_reset_from_every_phase::a_reset_straight_after_a_reset_is_e11_again_and_still_fresh ... ok
+test boot::device_reset_from_every_phase::a_second_life_after_a_reset_is_a_first_life_on_the_fsp_regime ... ok
+test boot::device_reset_from_every_phase::a_second_life_after_a_reset_is_a_first_life_on_the_falcon_regime ... ok
+test boot::device_reset_from_every_phase::large_reply_dumps_obey_both_per_record_and_total_byte_limits ... FAILED
+test boot::device_reset_from_every_phase::a_second_life_after_a_reset_is_a_first_life_with_a_system_info_cell ... ok
+test boot::device_reset_from_every_phase::guest_reset_does_not_rearm_the_reply_record_budget ... FAILED
+test boot::device_reset_from_every_phase::fifty_boot_and_reset_cycles_leave_nothing_behind ... ok
+
+failures:
+
+---- boot::device_reset_from_every_phase::posted_reply_body_is_logged_once_and_failed_post_is_absent stdout ----
+
+thread 'boot::device_reset_from_every_phase::posted_reply_body_is_logged_once_and_failed_post_is_absent' (2161310) panicked at crates/kf-gsp/src/boot.rs:4156:9:
+assertion `left == right` failed: capture only the successfully posted a58 reply
+  left: 0
+ right: 1
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+
+---- boot::device_reset_from_every_phase::large_reply_dumps_obey_both_per_record_and_total_byte_limits stdout ----
+
+thread 'boot::device_reset_from_every_phase::large_reply_dumps_obey_both_per_record_and_total_byte_limits' (2161309) panicked at crates/kf-gsp/src/boot.rs:4169:9:
+assertion `left == right` failed: 256KiB total at4096bytes per record
+  left: 0
+ right: 64
+
+---- boot::device_reset_from_every_phase::guest_reset_does_not_rearm_the_reply_record_budget stdout ----
+
+thread 'boot::device_reset_from_every_phase::guest_reset_does_not_rearm_the_reply_record_budget' (2161308) panicked at crates/kf-gsp/src/boot.rs:4163:9:
+assertion `left == right` failed
+  left: 0
+ right: 512
+
+
+failures:
+    boot::device_reset_from_every_phase::guest_reset_does_not_rearm_the_reply_record_budget
+    boot::device_reset_from_every_phase::large_reply_dumps_obey_both_per_record_and_total_byte_limits
+    boot::device_reset_from_every_phase::posted_reply_body_is_logged_once_and_failed_post_is_absent
+
+test result: FAILED. 51 passed; 3 failed; 0 ignored; 0 measured; 0 filtered out; finished in 1.67s
+
+error: test failed, to rerun pass `-p kf-gsp --lib`

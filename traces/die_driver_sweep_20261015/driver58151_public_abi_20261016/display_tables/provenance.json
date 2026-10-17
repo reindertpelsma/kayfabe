@@ -1,0 +1,23 @@
+{
+  "source": "NVIDIA/open-gpu-kernel-modules",
+  "tag": "580.94.02",
+  "commit": "a86526f4e235ae3d9e2842a11a3bb11db77450d8",
+  "windows_twin": "581.51 / VK580_65-5 / CL36629274",
+  "artifacts": {
+    "classes-580.94.02.tsv": {
+      "bytes": 347091,
+      "sha256": "6ab49087e00604ab902275372dd06dc38077f2f8b8e71d60c311cfbffe038b71"
+    },
+    "layouts-580.94.02.tsv": {
+      "bytes": 18002,
+      "sha256": "95d9822b4cf6c46bd622040d208b17e0b3f935dc3dd34bb87e75bf19dbaaff35"
+    },
+    "regs-580.94.02.tsv": {
+      "bytes": 17812,
+      "sha256": "61ecb5124c000dd3abee3b62ad94b60e446cf93cef56ec8190555012ad18582c"
+    }
+  },
+  "derivation": "Public headers compiled by the three derive_display scripts; no captured page or neighboring ABI",
+  "layouts_reproducibility": "Clean topic generator reproduces layouts byte for byte",
+  "hardware": "UNRUN"
+}

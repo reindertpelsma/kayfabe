@@ -1,0 +1,11 @@
+WINDOWS_APPS_WAVE_START source=6265b980f985aab4d6cbb6f0cbbb97e818f4d90f 2026-10-16T17:58:17+00:00
+ACTUAL_PROCESS_RECEIPT {"actual_KF3_environment": {"KF3_ASYNC_PREEMPT": "1", "KF3_DEFERRED_API": "1", "KF3_DISPLAY_CAPS_PROBE": "1", "KF3_DISPLAY_CTRL_PROBE": "1", "KF3_DISPLAY_ILUT_OFFSET_256": "1", "KF3_DISPLAY_IMP_ENABLE": "1", "KF3_DISPLAY_LUT_MIRROR": "1", "KF3_DISPLAY_SDR_COLOR": "1", "KF3_GFX_POOL_PROBE": "1", "KF3_KERNEL_GR_CE": "1", "KF3_KERNEL_GR_WORK": "1", "KF3_MEMORY_LIST_PROBE": "1", "KF3_PREEMPT_BIND_PROBE": "1", "KF3_SW_RUNLIST_HOST_OWNED": "1", "KF3_SW_RUNLIST_PROBE": "1", "KF3_TRANSLATED_CE_RELAY": "1", "KF3_WIN_TWIN_DEFAPI_OBJECT": "1", "KF3_WIN_USER_CHANNELS_PASSTHROUGH": "1", "KF3_ZCULL_BIND_PROBE": "1"}, "binary_revision": "6265b980", "binary_sha256": "e9744a23ab38ff45afbf788d9e426d71913d1f1e6954fa1ea0da1ea1920b25a6", "expected_windows_driver": "32.0.15.8088", "guest_public_abi": "580.65.06", "host_driver": "595.91.07", "pid": 108157, "source_revision": "6265b980f985aab4d6cbb6f0cbbb97e818f4d90f"}
+QGA_PUT bytes=1491 sha256=7300be6bddab6bbc1d9a49097e893d2bb96bba73b6d4c59146ee1406d5135e6a
+QGA_PUT bytes=6183 sha256=1ed4091dad9efbf0cafc6a3c470a145463231a1453fad970be42122cee6cad65
+QGA_PUT bytes=3447 sha256=b8ef03b4dac4b4d1841b7d464891dfd5030a1afb506f9fd2b91914638c6f041c
+QGA_PUT bytes=247 sha256=32a72ba0eecd98b7cb2ee0755397867dc26b60c729bb0fe1e2f691384fa9146f
+Traceback (most recent call last):
+  File "/root/adaref2_stage_parts.py", line 28, in <module>
+    out.write(result.stdout+result.stderr);raise RuntimeError(f'chunk{index} outcome failed; no automatic replay')
+RuntimeError: chunk13 outcome failed; no automatic replay
+WINDOWS_APPS_WAVE_EXIT rc=1 2026-10-16T17:58:49+00:00

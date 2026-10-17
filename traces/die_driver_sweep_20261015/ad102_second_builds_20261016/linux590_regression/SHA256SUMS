@@ -1,0 +1,5 @@
+0f659f6b3ee587182dbe567e075e1d99300915f4abd2d7016bf9fc9898d67902  modules/nvidia-modeset.ko
+8f612c3e571820debcbb9e3b4ba46267235d72332253ee7fac2eef1a008a1973  modules/nvidia-uvm.ko
+270de70e8e8f83f89e093f8c4f251fa3ce62594de24dfbf9daa5f0b36a390294  modules/nvidia.ko
+f2a98f2fc8236f5c3f988674722af8bce8e856d1307945e4f561e6068d4ba8bf  firmware/nvidia/590.48.01/gsp_ga10x.bin
+8c8292254df1d049aab89ea82a087d39cb697abd8dc1fa33877be57ea98c2f59  firmware/nvidia/590.48.01/gsp_tu10x.bin

@@ -1,0 +1,4 @@
+version=595.91.07
+image=/workspace/bench/guest-595.91.07.qcow2
+base=/workspace/bench/guest.qcow2
+staged=2026-10-16T21:25:12+00:00

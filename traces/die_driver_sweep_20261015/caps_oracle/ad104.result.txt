@@ -1,0 +1,2 @@
+EXACT_NATIVE_PAGE_EQUAL=false differing_words=100
+EXIT_RC=1

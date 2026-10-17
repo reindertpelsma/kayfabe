@@ -1,0 +1,5 @@
+unix:/root/win/codex-gb206/qmp.sock,server=on,wait=off
+STOP_START pid=57308 2026-10-15T21:44:23+00:00
+{}
+STOP_COMPLETE=1
+EXIT rc=0 2026-10-15T21:46:34+00:00

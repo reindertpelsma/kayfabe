@@ -1,0 +1,140 @@
+CINNAMON 0 XORG 0
+NVIDIA GeForce RTX 5060 Ti, 580.159.04, 1 MiB
+Error: unable to open display :0
+XORG_LOG_BEGIN
+[    42.928] 
+X.Org X Server 1.21.1.11
+X Protocol Version 11, Revision 0
+[    42.928] Current Operating System: Linux ubuntu 6.8.0-142-generic #142-Ubuntu SMP PREEMPT_DYNAMIC Wed Sep  2 14:24:27 UTC 2026 x86_64
+[    42.928] Kernel command line: BOOT_IMAGE=/vmlinuz-6.8.0-142-generic root=UUID=UUID-REDACTED ro console=tty1 console=ttyS0 nvidia-drm.modeset=1 nvidia-drm.fbdev=1
+[    42.928] xorg-server 2:21.1.12-1ubuntu1.8 (For technical support please see http://www.ubuntu.com/support) 
+[    42.928] Current version of pixman: 0.42.2
+[    42.928] 	Before reporting problems, check http://wiki.x.org
+	to make sure that you have the latest version.
+[    42.928] Markers: (--) probed, (**) from config file, (==) default setting,
+	(++) from command line, (!!) notice, (II) informational,
+	(WW) warning, (EE) error, (NI) not implemented, (??) unknown.
+[    42.928] (==) Log file: "/var/log/Xorg.0.log", Time: Fri Oct 16 20:37:26 2026
+[    42.928] (==) Using config file: "/etc/X11/xorg.conf"
+[    42.928] (==) Using system config directory "/usr/share/X11/xorg.conf.d"
+[    42.928] (==) ServerLayout "kf3"
+[    42.928] (**) |-->Screen "kf3-screen" (0)
+[    42.928] (**) |   |-->Monitor "<default monitor>"
+[    42.929] (**) |   |-->Device "kf3-gpu"
+[    42.929] (==) No monitor specified for screen "kf3-screen".
+	Using a default monitor configuration.
+[    42.929] (**) Allowing byte-swapped clients
+[    42.929] (==) Automatically adding devices
+[    42.929] (==) Automatically enabling devices
+[    42.929] (==) Automatically adding GPU devices
+[    42.929] (==) Automatically binding GPU devices
+[    42.929] (==) Max clients allowed: 256, resource mask: 0x1fffff
+[    42.929] (WW) The directory "/usr/share/fonts/X11/cyrillic" does not exist.
+[    42.929] 	Entry deleted from font path.
+[    42.929] (WW) The directory "/usr/share/fonts/X11/100dpi/" does not exist.
+[    42.929] 	Entry deleted from font path.
+[    42.929] (WW) The directory "/usr/share/fonts/X11/75dpi/" does not exist.
+[    42.929] 	Entry deleted from font path.
+[    42.929] (WW) The directory "/usr/share/fonts/X11/100dpi" does not exist.
+[    42.929] 	Entry deleted from font path.
+[    42.929] (WW) The directory "/usr/share/fonts/X11/75dpi" does not exist.
+[    42.929] 	Entry deleted from font path.
+[    42.929] (==) FontPath set to:
+	/usr/share/fonts/X11/misc,
+	/usr/share/fonts/X11/Type1,
+	built-ins
+[    42.929] (==) ModulePath set to "/usr/lib/xorg/modules"
+[    42.929] (II) The server relies on udev to provide the list of input devices.
+	If no devices become available, reconfigure udev or disable AutoAddDevices.
+[    42.929] (II) Loader magic: 0x590221046020
+[    42.929] (II) Module ABI versions:
+[    42.929] 	X.Org ANSI C Emulation: 0.4
+[    42.929] 	X.Org Video Driver: 25.2
+[    42.929] 	X.Org XInput driver : 24.4
+[    42.929] 	X.Org Server Extension : 10.0
+[    42.931] (++) using VT number 7
+
+[    42.931] (II) systemd-logind: logind integration requires -keeptty and -keeptty was not provided, disabling logind integration
+[    42.932] (II) xfree86: Adding drm device (/dev/dri/card1)
+[    42.932] (II) Platform probe for /sys/devices/pci0000:00/0000:00:02.0/drm/card1
+[    42.944] (--) PCI:*(0@0:2:0) 10de:2d04:1462:5362 rev 161, Mem @ 0xc0000000/67108864, 0x800000000/134217728, 0x808000000/33554432, 0xc4000000/16384, BIOS @ 0x????????/131072
+[    42.944] (II) LoadModule: "glx"
+[    42.944] (II) Loading /usr/lib/xorg/modules/extensions/libglx.so
+[    42.946] (II) Module glx: vendor="X.Org Foundation"
+[    42.946] 	compiled for 1.21.1.11, module version = 1.0.0
+[    42.946] 	ABI class: X.Org Server Extension, version 10.0
+[    42.946] (II) LoadModule: "nvidia"
+[    42.946] (II) Loading /usr/lib/xorg/modules/drivers/nvidia_drv.so
+[    42.947] (II) Module nvidia: vendor="NVIDIA Corporation"
+[    42.947] 	compiled for 1.6.99.901, module version = 1.0.0
+[    42.947] 	Module class: X.Org Video Driver
+[    42.947] (II) NVIDIA dlloader X Driver  580.159.04  Wed Apr 29 17:01:30 UTC 2026
+[    42.947] (II) NVIDIA Unified Driver for all Supported NVIDIA GPUs
+[    42.947] (II) Loading sub module "fb"
+[    42.947] (II) LoadModule: "fb"
+[    42.947] (II) Module "fb" already built-in
+[    42.947] (II) Loading sub module "wfb"
+[    42.947] (II) LoadModule: "wfb"
+[    42.948] (II) Loading /usr/lib/xorg/modules/libwfb.so
+[    42.948] (II) Module wfb: vendor="X.Org Foundation"
+[    42.948] 	compiled for 1.21.1.11, module version = 1.0.0
+[    42.948] 	ABI class: X.Org ANSI C Emulation, version 0.4
+[    42.949] (II) NVIDIA(0): Creating default Display subsection in Screen section
+	"kf3-screen" for depth/fbbpp 24/32
+[    42.949] (==) NVIDIA(0): Depth 24, (==) framebuffer bpp 32
+[    42.949] (==) NVIDIA(0): RGB weight 888
+[    42.949] (==) NVIDIA(0): Default visual is TrueColor
+[    42.949] (==) NVIDIA(0): Using gamma correction (1.0, 1.0, 1.0)
+[    42.949] (**) NVIDIA(0): Enabling 2D acceleration
+[    42.949] (II) Loading sub module "glxserver_nvidia"
+[    42.949] (II) LoadModule: "glxserver_nvidia"
+[    42.949] (II) Loading /usr/lib/xorg/modules/extensions/libglxserver_nvidia.so
+[    42.970] (II) Module glxserver_nvidia: vendor="NVIDIA Corporation"
+[    42.970] 	compiled for 1.6.99.901, module version = 1.0.0
+[    42.970] 	Module class: X.Org Server Extension
+[    42.970] (II) NVIDIA GLX Module  580.159.04  Wed Apr 29 17:07:05 UTC 2026
+[    42.970] (II) NVIDIA: The X server supports PRIME Render Offload.
+[    42.977] (EE) NVIDIA(GPU-REDACTED): Failed to get virtual display support info.
+[    42.977] (--) NVIDIA(0): Valid display device(s) on GPU-REDACTED at PCI:0:2:0
+[    42.977] (--) NVIDIA(0):     DFP-0
+[    43.011] (II) NVIDIA(0): NVIDIA GPU NVIDIA GeForce RTX 5060 Ti (GB206-A) at PCI:0:2:0
+[    43.012] (II) NVIDIA(0):     (GPU-REDACTED)
+[    43.012] (--) NVIDIA(0): Memory: 4194304 kBytes
+[    43.012] (--) NVIDIA(0): VideoBIOS: 98.06.4e.40.c5
+[    43.012] (II) NVIDIA(0): Detected PCI Express Link width: 8X
+[    43.016] (--) NVIDIA(GPU-REDACTED): KFB kayfabe (DFP-0): connected
+[    43.016] (--) NVIDIA(GPU-REDACTED): KFB kayfabe (DFP-0): Internal TMDS
+[    43.016] (--) NVIDIA(GPU-REDACTED): KFB kayfabe (DFP-0): 165.0 MHz maximum pixel clock
+[    43.016] (--) NVIDIA(GPU-REDACTED): 
+[    43.142] (EE) NVIDIA(GPU-REDACTED): Unable to add conservative default mode "nvidia-auto-select".
+[    43.142] (EE) NVIDIA(GPU-REDACTED): Unable to add "nvidia-auto-select" mode to ModePool.
+[    43.142] (==) NVIDIA(0): 
+[    43.142] (==) NVIDIA(0): No modes were requested; the default mode "nvidia-auto-select"
+[    43.142] (==) NVIDIA(0):     will be used as the requested mode.
+[    43.142] (==) NVIDIA(0): 
+[    43.142] (WW) NVIDIA(0): No valid modes for "DFP-0:nvidia-auto-select"; removing.
+[    43.142] (WW) NVIDIA(0): 
+[    43.142] (WW) NVIDIA(0): Unable to validate any modes; falling back to the default mode
+[    43.142] (WW) NVIDIA(0):     "nvidia-auto-select".
+[    43.142] (WW) NVIDIA(0): 
+[    43.142] (WW) NVIDIA(0): No valid modes for "DFP-0:nvidia-auto-select"; removing.
+[    43.142] (EE) NVIDIA(0): Unable to use default mode "nvidia-auto-select".
+[    43.142] (EE) NVIDIA(0): Failing initialization of X screen
+[    43.155] (II) UnloadModule: "nvidia"
+[    43.155] (II) UnloadSubModule: "glxserver_nvidia"
+[    43.155] (II) Unloading glxserver_nvidia
+[    43.155] (II) UnloadSubModule: "wfb"
+[    43.155] (EE) Screen(s) found, but none have a usable configuration.
+[    43.155] (EE) 
+Fatal server error:
+[    43.155] (EE) no screens found(EE) 
+[    43.155] (EE) 
+Please consult the The X.Org Foundation support 
+	 at http://wiki.x.org
+ for help. 
+[    43.155] (EE) Please also check the log file at "/var/log/Xorg.0.log" for additional information.
+[    43.155] (EE) 
+[    43.155] (EE) Server terminated with error (1). Closing log file.
+XORG_LOG_END
+GUEST_DMESG flip_timeouts=0 nvassert=34 xid=0
+GUEST_DONE

@@ -1,0 +1,17 @@
+{
+  "owned_id": 56302930,
+  "destroy_requested_utc": "2026-10-17T00:40:16.762515+00:00",
+  "api_absent_verified_utc": "2026-10-17T00:40:19.025981+00:00",
+  "timer_pid": 2571615,
+  "timer_cancelled": true,
+  "all_explicit_native_gpu_jobs_quiescent_before_destroy": true,
+  "evidence_pushed_revision": "8d2cb7cf9",
+  "timer_cancelled_utc": "2026-10-17T00:43:02.456251+00:00",
+  "owned_timer_child_pids_cancelled": [
+    2571618
+  ],
+  "compute_seconds_conservative": 10159,
+  "quoted_usd_per_hour_including_disk": 0.61,
+  "compute_usd_ceiling": 1.73,
+  "campaign_retired_compute_usd_ceiling": 10.5
+}

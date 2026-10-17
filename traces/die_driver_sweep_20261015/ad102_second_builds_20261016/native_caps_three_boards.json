@@ -1,0 +1,21 @@
+{
+  "observations": [
+    {
+      "source": "ad102_4090/native-module-caps-580.txt",
+      "nonzero_words": 99,
+      "sha256_4096": "7cc7a2692d92d155e3c50a0f9554671feffdc63e043925084239ff1bee8f0c55"
+    },
+    {
+      "source": "ad102_followup_20261016/adaref2_native_caps.txt",
+      "nonzero_words": 99,
+      "sha256_4096": "7cc7a2692d92d155e3c50a0f9554671feffdc63e043925084239ff1bee8f0c55"
+    },
+    {
+      "source": "ad102_second_builds_20261016/linux595_regression/ada2build_native_caps.txt",
+      "nonzero_words": 99,
+      "sha256_4096": "7cc7a2692d92d155e3c50a0f9554671feffdc63e043925084239ff1bee8f0c55"
+    }
+  ],
+  "all4096_equal": true,
+  "inference_limit": "Observed equality on three owned AD102 boards across Windows580/Linux595 only; no branch wildcard or Ada family rule. Native page is a test oracle, never injected as a product page."
+}

@@ -1,0 +1,362 @@
+[
+  {
+    "name": "prov__ampere595_apps_queue.log",
+    "raw_bytes": 309,
+    "raw_sha256": "2932f3919536c0a0106e1579008c4509b2128c8e8046c4ca72ee021b4ebae2b4",
+    "excerpt_only": false,
+    "counts": {
+      "PRIVILEGED_CHANNEL=0 privilege=USER": 0,
+      "heartbeat": 0,
+      "heartbeat=0": 0,
+      "Xid": 0,
+      "nvAssert": 0,
+      "CUDA": 0,
+      "FAST_VERDICT": 0,
+      "FASTGUEST: client": 0,
+      "guest refused": 0
+    },
+    "exported_sha256": "2932f3919536c0a0106e1579008c4509b2128c8e8046c4ca72ee021b4ebae2b4"
+  },
+  {
+    "name": "prov__amp595_broker_x11_validating_v2.log",
+    "raw_bytes": 2093,
+    "raw_sha256": "12a92e193160bb880839abc29b530499934f27f896ecd629efb89bdf4634abc0",
+    "excerpt_only": false,
+    "counts": {
+      "PRIVILEGED_CHANNEL=0 privilege=USER": 0,
+      "heartbeat": 0,
+      "heartbeat=0": 0,
+      "Xid": 0,
+      "nvAssert": 0,
+      "CUDA": 1,
+      "FAST_VERDICT": 0,
+      "FASTGUEST: client": 0,
+      "guest refused": 0
+    },
+    "exported_sha256": "12a92e193160bb880839abc29b530499934f27f896ecd629efb89bdf4634abc0"
+  },
+  {
+    "name": "prov__amp595_cuda_profile_corrected.log",
+    "raw_bytes": 14522,
+    "raw_sha256": "4c1f896334aeb4c12aa1c2e65e2229ef5e6ec4260cdcd998a4715ae8e869a10b",
+    "excerpt_only": false,
+    "counts": {
+      "PRIVILEGED_CHANNEL=0 privilege=USER": 0,
+      "heartbeat": 0,
+      "heartbeat=0": 0,
+      "Xid": 0,
+      "nvAssert": 0,
+      "CUDA": 14,
+      "FAST_VERDICT": 0,
+      "FASTGUEST: client": 0,
+      "guest refused": 0
+    },
+    "exported_sha256": "4c1f896334aeb4c12aa1c2e65e2229ef5e6ec4260cdcd998a4715ae8e869a10b"
+  },
+  {
+    "name": "prov__amp595_gfx_profile_corrected.log",
+    "raw_bytes": 5859,
+    "raw_sha256": "292959749ab8fb42440a5b9f5980fd8945b4fb76644788de68a1a7b9d1c87a29",
+    "excerpt_only": false,
+    "counts": {
+      "PRIVILEGED_CHANNEL=0 privilege=USER": 0,
+      "heartbeat": 0,
+      "heartbeat=0": 0,
+      "Xid": 0,
+      "nvAssert": 0,
+      "CUDA": 0,
+      "FAST_VERDICT": 0,
+      "FASTGUEST: client": 0,
+      "guest refused": 0
+    },
+    "exported_sha256": "b678e4f65f461fb84be1145d7e90b1048c3406c126700eff179b6e80f0ee76ea"
+  },
+  {
+    "name": "prov__ampere595595_native_gfx.log",
+    "raw_bytes": 5643,
+    "raw_sha256": "e9d522cbac358ebd4acad0f3afa25453dcf6fb67d07b70c4656161a928e67af2",
+    "excerpt_only": false,
+    "counts": {
+      "PRIVILEGED_CHANNEL=0 privilege=USER": 0,
+      "heartbeat": 0,
+      "heartbeat=0": 0,
+      "Xid": 0,
+      "nvAssert": 0,
+      "CUDA": 0,
+      "FAST_VERDICT": 0,
+      "FASTGUEST: client": 0,
+      "guest refused": 0
+    },
+    "exported_sha256": "754a72436d411a95d87707afb4327a05ead1f4be9312dcd7ae97a25a6f696a4f"
+  },
+  {
+    "name": "prov__amp595_broker_x11_guest.log",
+    "raw_bytes": 565,
+    "raw_sha256": "1f088a5769255417375c6b6441e351d172c0e3a417ea71fbebbfa5f8fb14694c",
+    "excerpt_only": false,
+    "counts": {
+      "PRIVILEGED_CHANNEL=0 privilege=USER": 0,
+      "heartbeat": 0,
+      "heartbeat=0": 0,
+      "Xid": 0,
+      "nvAssert": 0,
+      "CUDA": 1,
+      "FAST_VERDICT": 0,
+      "FASTGUEST: client": 0,
+      "guest refused": 0
+    },
+    "exported_sha256": "1f088a5769255417375c6b6441e351d172c0e3a417ea71fbebbfa5f8fb14694c"
+  },
+  {
+    "name": "prov__amp595_broker_xids.before.txt",
+    "raw_bytes": 2257,
+    "raw_sha256": "812666d0cce9808266ca9f80887725924415b73c97d366e40d7720480392e3b4",
+    "excerpt_only": false,
+    "counts": {
+      "PRIVILEGED_CHANNEL=0 privilege=USER": 0,
+      "heartbeat": 0,
+      "heartbeat=0": 0,
+      "Xid": 10,
+      "nvAssert": 0,
+      "CUDA": 0,
+      "FAST_VERDICT": 0,
+      "FASTGUEST: client": 0,
+      "guest refused": 0
+    },
+    "exported_sha256": "812666d0cce9808266ca9f80887725924415b73c97d366e40d7720480392e3b4"
+  },
+  {
+    "name": "prov__amp595_broker_xids.after.txt",
+    "raw_bytes": 2257,
+    "raw_sha256": "812666d0cce9808266ca9f80887725924415b73c97d366e40d7720480392e3b4",
+    "excerpt_only": false,
+    "counts": {
+      "PRIVILEGED_CHANNEL=0 privilege=USER": 0,
+      "heartbeat": 0,
+      "heartbeat=0": 0,
+      "Xid": 10,
+      "nvAssert": 0,
+      "CUDA": 0,
+      "FAST_VERDICT": 0,
+      "FASTGUEST: client": 0,
+      "guest refused": 0
+    },
+    "exported_sha256": "812666d0cce9808266ca9f80887725924415b73c97d366e40d7720480392e3b4"
+  },
+  {
+    "name": "prov__amp595_gfx_profile.log",
+    "raw_bytes": 157,
+    "raw_sha256": "602cafb1ab883b981a9fa41efc022cb61ee1463df9e7fcbad1da9cdbc0901892",
+    "excerpt_only": false,
+    "counts": {
+      "PRIVILEGED_CHANNEL=0 privilege=USER": 0,
+      "heartbeat": 0,
+      "heartbeat=0": 0,
+      "Xid": 0,
+      "nvAssert": 0,
+      "CUDA": 0,
+      "FAST_VERDICT": 0,
+      "FASTGUEST: client": 0,
+      "guest refused": 0
+    },
+    "exported_sha256": "5d4d0ef25b9e5cdcaaf4a6b97e6fb5380279691fe8f85730daa43ead2cf16273"
+  },
+  {
+    "name": "prov__amp595_broker_x11_prep.log",
+    "raw_bytes": 591,
+    "raw_sha256": "2f61fbf182e859fa33e647510c3ac18396be1742fe9a88af2712f252b368386f",
+    "excerpt_only": false,
+    "counts": {
+      "PRIVILEGED_CHANNEL=0 privilege=USER": 0,
+      "heartbeat": 0,
+      "heartbeat=0": 0,
+      "Xid": 0,
+      "nvAssert": 0,
+      "CUDA": 0,
+      "FAST_VERDICT": 0,
+      "FASTGUEST: client": 0,
+      "guest refused": 0
+    },
+    "exported_sha256": "748b8b48c4da162bf3a3261cb589dfd9500b6a254b7c0e0ee4d63d71c75553aa"
+  },
+  {
+    "name": "prov__amp595_broker_x11_run.log",
+    "raw_bytes": 1987,
+    "raw_sha256": "5932ac23763917c8c1ac5abce8489265a0cb5ac1250ae40cb73040fb262f1031",
+    "excerpt_only": false,
+    "counts": {
+      "PRIVILEGED_CHANNEL=0 privilege=USER": 0,
+      "heartbeat": 0,
+      "heartbeat=0": 0,
+      "Xid": 0,
+      "nvAssert": 0,
+      "CUDA": 0,
+      "FAST_VERDICT": 0,
+      "FASTGUEST: client": 0,
+      "guest refused": 0
+    },
+    "exported_sha256": "97937b67c34e3066f7e24b2f2866db0b463e39713ca426ee4cde23f587e73047"
+  },
+  {
+    "name": "prov__amp595_broker_x11_stop.log",
+    "raw_bytes": 22,
+    "raw_sha256": "c6755be38ac253e346b255c88c756e0c9d4827413a96cc9690845fd444ef8358",
+    "excerpt_only": false,
+    "counts": {
+      "PRIVILEGED_CHANNEL=0 privilege=USER": 0,
+      "heartbeat": 0,
+      "heartbeat=0": 0,
+      "Xid": 0,
+      "nvAssert": 0,
+      "CUDA": 0,
+      "FAST_VERDICT": 0,
+      "FASTGUEST: client": 0,
+      "guest refused": 0
+    },
+    "exported_sha256": "c6755be38ac253e346b255c88c756e0c9d4827413a96cc9690845fd444ef8358"
+  },
+  {
+    "name": "prov__amp595_poweroff.log",
+    "raw_bytes": 0,
+    "raw_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "excerpt_only": false,
+    "counts": {
+      "PRIVILEGED_CHANNEL=0 privilege=USER": 0,
+      "heartbeat": 0,
+      "heartbeat=0": 0,
+      "Xid": 0,
+      "nvAssert": 0,
+      "CUDA": 0,
+      "FAST_VERDICT": 0,
+      "FASTGUEST: client": 0,
+      "guest refused": 0
+    },
+    "exported_sha256": "01ba4719c80b6fe911b091a7c05124b64eeece964e09c058ef8f9805daca546b"
+  },
+  {
+    "name": "prov__ampere595_gfx_host_prepare.log",
+    "raw_bytes": 182,
+    "raw_sha256": "93d94498cc4eb1ac8fae559470868dcf56b965fbb0597ea7b09d000788d19613",
+    "excerpt_only": false,
+    "counts": {
+      "PRIVILEGED_CHANNEL=0 privilege=USER": 0,
+      "heartbeat": 0,
+      "heartbeat=0": 0,
+      "Xid": 0,
+      "nvAssert": 0,
+      "CUDA": 0,
+      "FAST_VERDICT": 0,
+      "FASTGUEST: client": 0,
+      "guest refused": 0
+    },
+    "exported_sha256": "93d94498cc4eb1ac8fae559470868dcf56b965fbb0597ea7b09d000788d19613"
+  },
+  {
+    "name": "prov__ampere595_gfx_guest_prepare.log",
+    "raw_bytes": 1357,
+    "raw_sha256": "196de9e0d2d1d443dafe7a76bcd8149d4dc6ac33b1e491203aed203b4d739679",
+    "excerpt_only": false,
+    "counts": {
+      "PRIVILEGED_CHANNEL=0 privilege=USER": 0,
+      "heartbeat": 0,
+      "heartbeat=0": 0,
+      "Xid": 0,
+      "nvAssert": 0,
+      "CUDA": 0,
+      "FAST_VERDICT": 0,
+      "FASTGUEST: client": 0,
+      "guest refused": 0
+    },
+    "exported_sha256": "d0e77dfb89c60d6768da0e4c4f81d40901f677030ef1fec4586f6a6be07b2785"
+  },
+  {
+    "name": "prov__ampere595_fat_prepare.log",
+    "raw_bytes": 3110,
+    "raw_sha256": "f57eb0440fde49dcf381ffb2086d5dab7353c2a196da9c4928ed87940952f941",
+    "excerpt_only": false,
+    "counts": {
+      "PRIVILEGED_CHANNEL=0 privilege=USER": 0,
+      "heartbeat": 0,
+      "heartbeat=0": 0,
+      "Xid": 0,
+      "nvAssert": 0,
+      "CUDA": 0,
+      "FAST_VERDICT": 0,
+      "FASTGUEST: client": 0,
+      "guest refused": 0
+    },
+    "exported_sha256": "2420a5905c0ec6d06095bf2da76a55a56ae820df7abc830f731660181f4398d4"
+  },
+  {
+    "name": "broker__qemu.log",
+    "raw_bytes": 1513782,
+    "raw_sha256": "02b02671df0983ca327164f943c0639c68c01d96ae956d530ba92cb9f80aa737",
+    "excerpt_only": true,
+    "counts": {
+      "PRIVILEGED_CHANNEL=0 privilege=USER": 162,
+      "heartbeat": 0,
+      "heartbeat=0": 0,
+      "Xid": 0,
+      "nvAssert": 0,
+      "CUDA": 8,
+      "FAST_VERDICT": 0,
+      "FASTGUEST: client": 0,
+      "guest refused": 0
+    },
+    "exported_sha256": "36d3ba395930d0c0d85641c69627ce42d77685af3dab49e21eea43b4ff21d265"
+  },
+  {
+    "name": "broker__serial.log",
+    "raw_bytes": 152560,
+    "raw_sha256": "fbb8bc1e500d0bbb5276e22d8192335d4c1cf331d40be97ebf3bae238c08ca28",
+    "excerpt_only": false,
+    "counts": {
+      "PRIVILEGED_CHANNEL=0 privilege=USER": 0,
+      "heartbeat": 798,
+      "heartbeat=0": 0,
+      "Xid": 0,
+      "nvAssert": 9,
+      "CUDA": 0,
+      "FAST_VERDICT": 0,
+      "FASTGUEST: client": 0,
+      "guest refused": 0
+    },
+    "exported_sha256": "eace5cd54c5d1868b8f81c1da28f8ac7b995aa1b5b1c286fd736e0797d0665e4"
+  },
+  {
+    "name": "broker__broker.log",
+    "raw_bytes": 1782,
+    "raw_sha256": "32bdf676cae70473f108a54a2c7194b1e1c782cba6fc9fce2f41c03fbde97837",
+    "excerpt_only": false,
+    "counts": {
+      "PRIVILEGED_CHANNEL=0 privilege=USER": 0,
+      "heartbeat": 0,
+      "heartbeat=0": 0,
+      "Xid": 0,
+      "nvAssert": 0,
+      "CUDA": 0,
+      "FAST_VERDICT": 0,
+      "FASTGUEST: client": 0,
+      "guest refused": 0
+    },
+    "exported_sha256": "32bdf676cae70473f108a54a2c7194b1e1c782cba6fc9fce2f41c03fbde97837"
+  },
+  {
+    "name": "broker__actual-process-receipt.json",
+    "raw_bytes": 1834,
+    "raw_sha256": "ba9e6a3917c4e156c6595a091a882333af03197bcdd5de902eba98906d804795",
+    "excerpt_only": false,
+    "counts": {
+      "PRIVILEGED_CHANNEL=0 privilege=USER": 0,
+      "heartbeat": 0,
+      "heartbeat=0": 0,
+      "Xid": 0,
+      "nvAssert": 0,
+      "CUDA": 0,
+      "FAST_VERDICT": 0,
+      "FASTGUEST: client": 0,
+      "guest refused": 0
+    },
+    "exported_sha256": "7bd2f7aec77c7d0c25a6ffc466f050c02ef838fa8ca959f5b8c474fe46a73b4e"
+  }
+]

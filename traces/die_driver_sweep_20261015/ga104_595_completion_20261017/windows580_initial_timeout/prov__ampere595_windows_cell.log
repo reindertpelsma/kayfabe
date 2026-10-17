@@ -1,0 +1,14 @@
+2026-10-17T02:43:36.314031+00:00 WINDOWS_CELL_QUEUED M2 hypothesis: verified580.88/GSP1 coldboot reaches Code0/CUDA/D3D/hold; falsifier any nonzero Code, missing desktop, probe failure or TDR
+2026-10-17T03:15:14.218730+00:00 BASELINE_VERIFIED_STOCK_ONLY
+[2026-10-17T03:15:15Z] detached: tag=ampere580_stage, log logs/ampere580_stage_run.log (stdout logs/ampere580_stage_run.out)
+2026-10-17T03:17:13.087822+00:00 QGA_READY ampere580_stage
+2026-10-17T03:17:13.088305+00:00 PS_START ampere595_private_autologon
+2026-10-17T03:17:37.570633+00:00 PS_EXIT ampere595_private_autologon rc=0
+2026-10-17T03:17:37.571046+00:00 PS_START ampere59520261017_install58088
+2026-10-17T03:27:38.304734+00:00 PS_EXIT ampere59520261017_install58088 rc=1
+2026-10-17T03:27:38.304928+00:00 WINDOWS_CELL_OUTCOME RuntimeError PowerShell result incomplete/failed: ampere59520261017_install58088; never replay installer
+2026-10-17T03:27:38.311645+00:00 OWNED_STOP_START
+[2026-10-17T03:27:38Z] stopping ampere580 (pid 106866)
+[2026-10-17T03:29:05Z] stopped
+2026-10-17T03:29:05.584512+00:00 OWNED_STOP_END
+2026-10-17T03:29:05.584761+00:00 WINDOWS_CELL_EXIT; inspect actual census and acceptance artifacts

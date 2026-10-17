@@ -1,0 +1,10 @@
+{
+  "windows580_source": "die_driver_sweep_20261015/ad102_4090/native-module-caps-580.txt",
+  "linux595_source": "adaref2_native_caps.txt",
+  "windows580_nonzero_words": 99,
+  "linux595_nonzero_words": 99,
+  "windows580_sha256_4096": "7cc7a2692d92d155e3c50a0f9554671feffdc63e043925084239ff1bee8f0c55",
+  "linux595_sha256_4096": "7cc7a2692d92d155e3c50a0f9554671feffdc63e043925084239ff1bee8f0c55",
+  "differences": [],
+  "inference_limit": "Exact observed AD102 pages on two owned boards and two branches; no branch wildcard or family compression inferred."
+}

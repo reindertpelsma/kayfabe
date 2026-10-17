@@ -1,0 +1,45 @@
+RESUME_WINDOWS_START 2026-10-16T22:45:32+00:00
+Previous HEAD position was a52494d48 diagnostic: ablate only AD102580 caps00c row
+HEAD is now at 9d6f210ba integrate: add exact public580.94.02 display ABI for the second Windows build
+WIN_DIE_START kf3=9d6f210b checkout=9d6f210ba guest_driver=580.65.06 gpu=NVIDIA GeForce RTX 4090 xid_before=5 2026-10-16T22:45:32+00:00
+[win_die] QEMU 103644 kf3 9d6f210b run /root/win/codex-ada2build
+ACTUAL_PROCESS_RECEIPT {"actual_KF3_environment": {"KF3_ASYNC_PREEMPT": "1", "KF3_DEFERRED_API": "1", "KF3_DISPLAY_CAPS_PROBE": "1", "KF3_DISPLAY_CTRL_PROBE": "1", "KF3_DISPLAY_ILUT_OFFSET_256": "1", "KF3_DISPLAY_IMP_ENABLE": "1", "KF3_DISPLAY_LUT_MIRROR": "1", "KF3_DISPLAY_SDR_COLOR": "1", "KF3_GFX_POOL_PROBE": "1", "KF3_KERNEL_GR_CE": "1", "KF3_KERNEL_GR_WORK": "1", "KF3_MEMORY_LIST_PROBE": "1", "KF3_PREEMPT_BIND_PROBE": "1", "KF3_SW_RUNLIST_HOST_OWNED": "1", "KF3_SW_RUNLIST_PROBE": "1", "KF3_TRANSLATED_CE_RELAY": "1", "KF3_WIN_TWIN_DEFAPI_OBJECT": "1", "KF3_WIN_USER_CHANNELS_PASSTHROUGH": "1", "KF3_ZCULL_BIND_PROBE": "1"}, "binary_revision": "9d6f210b", "binary_sha256": "cc2a86a6dec3ec6bed91d9cd6e1963a1deadf2d75a768e9e3dada91559e34668", "expected_windows_driver": "32.0.15.8088", "guest_public_abi": "580.65.06", "host_driver": "595.91.07", "pid": 103644, "source_revision": "9d6f210ba1dc6ab0edbc49ff265101091e8b08f1"}
+[win_die] QGA answers 2026-10-16T22:46:22+00:00
+HEAD is now at 9d6f210ba integrate: add exact public580.94.02 display ABI for the second Windows build
+WIN_DIE_START kf3=9d6f210b checkout=9d6f210ba guest_driver=580.65.06 gpu=NVIDIA GeForce RTX 4090 xid_before=5 2026-10-16T22:46:40+00:00
+[win_die] QEMU 104030 kf3 9d6f210b run /root/win/codex-ada2build
+ACTUAL_PROCESS_RECEIPT {"actual_KF3_environment": {"KF3_ASYNC_PREEMPT": "1", "KF3_DEFERRED_API": "1", "KF3_DISPLAY_CAPS_PROBE": "1", "KF3_DISPLAY_CTRL_PROBE": "1", "KF3_DISPLAY_ILUT_OFFSET_256": "1", "KF3_DISPLAY_IMP_ENABLE": "1", "KF3_DISPLAY_LUT_MIRROR": "1", "KF3_DISPLAY_SDR_COLOR": "1", "KF3_GFX_POOL_PROBE": "1", "KF3_KERNEL_GR_CE": "1", "KF3_KERNEL_GR_WORK": "1", "KF3_MEMORY_LIST_PROBE": "1", "KF3_PREEMPT_BIND_PROBE": "1", "KF3_SW_RUNLIST_HOST_OWNED": "1", "KF3_SW_RUNLIST_PROBE": "1", "KF3_TRANSLATED_CE_RELAY": "1", "KF3_WIN_TWIN_DEFAPI_OBJECT": "1", "KF3_WIN_USER_CHANNELS_PASSTHROUGH": "1", "KF3_ZCULL_BIND_PROBE": "1"}, "binary_revision": "9d6f210b", "binary_sha256": "cc2a86a6dec3ec6bed91d9cd6e1963a1deadf2d75a768e9e3dada91559e34668", "expected_windows_driver": "32.0.15.8088", "guest_public_abi": "580.65.06", "host_driver": "595.91.07", "pid": 104030, "source_revision": "9d6f210ba1dc6ab0edbc49ff265101091e8b08f1"}
+[win_die] QGA answers 2026-10-16T22:47:40+00:00
+HOST_ACCEPT_ELAPSED phase=reference580-v2 seconds=56
+[win_die] shot /root/win/codex-ada2build/shots/reference580-v2.ppm.gz 2026-10-16T22:48:41+00:00
+WINDOWS_CELL_EXIT phase=reference580-v2 rc=0 2026-10-16T22:49:00+00:00
+Previous HEAD position was 9d6f210ba integrate: add exact public580.94.02 display ABI for the second Windows build
+HEAD is now at a52494d48 diagnostic: ablate only AD102580 caps00c row
+WIN_DIE_START kf3=a52494d4 checkout=a52494d48 guest_driver=580.65.06 gpu=NVIDIA GeForce RTX 4090 xid_before=5 2026-10-16T22:49:00+00:00
+[win_die] QEMU 104916 kf3 a52494d4 run /root/win/codex-ada2build
+ACTUAL_PROCESS_RECEIPT {"actual_KF3_environment": {"KF3_ASYNC_PREEMPT": "1", "KF3_DEFERRED_API": "1", "KF3_DISPLAY_CAPS_PROBE": "1", "KF3_DISPLAY_CTRL_PROBE": "1", "KF3_DISPLAY_ILUT_OFFSET_256": "1", "KF3_DISPLAY_IMP_ENABLE": "1", "KF3_DISPLAY_LUT_MIRROR": "1", "KF3_DISPLAY_SDR_COLOR": "1", "KF3_GFX_POOL_PROBE": "1", "KF3_KERNEL_GR_CE": "1", "KF3_KERNEL_GR_WORK": "1", "KF3_MEMORY_LIST_PROBE": "1", "KF3_PREEMPT_BIND_PROBE": "1", "KF3_SW_RUNLIST_HOST_OWNED": "1", "KF3_SW_RUNLIST_PROBE": "1", "KF3_TRANSLATED_CE_RELAY": "1", "KF3_WIN_TWIN_DEFAPI_OBJECT": "1", "KF3_WIN_USER_CHANNELS_PASSTHROUGH": "1", "KF3_ZCULL_BIND_PROBE": "1"}, "binary_revision": "a52494d4", "binary_sha256": "a5669211fc8da5f29940a107ca2f32c66ce126ba7ffb8f13bb939826aa2aaea4", "expected_windows_driver": "32.0.15.8088", "guest_public_abi": "580.65.06", "host_driver": "595.91.07", "pid": 104916, "source_revision": "a52494d487e2ff3068cbae60e3ff1fe422ff281d"}
+[win_die] QGA answers 2026-10-16T22:51:50+00:00
+WINDOWS_CELL_EXIT phase=ablate-caps00c-v2 rc=1 2026-10-16T22:54:18+00:00
+Previous HEAD position was a52494d48 diagnostic: ablate only AD102580 caps00c row
+HEAD is now at a7509bf3d diagnostic: ablate only AD102580 lpwr2801 row
+WIN_DIE_START kf3=a7509bf3 checkout=a7509bf3d guest_driver=580.65.06 gpu=NVIDIA GeForce RTX 4090 xid_before=5 2026-10-16T22:54:18+00:00
+[win_die] QEMU 106792 kf3 a7509bf3 run /root/win/codex-ada2build
+ACTUAL_PROCESS_RECEIPT {"actual_KF3_environment": {"KF3_ASYNC_PREEMPT": "1", "KF3_DEFERRED_API": "1", "KF3_DISPLAY_CAPS_PROBE": "1", "KF3_DISPLAY_CTRL_PROBE": "1", "KF3_DISPLAY_ILUT_OFFSET_256": "1", "KF3_DISPLAY_IMP_ENABLE": "1", "KF3_DISPLAY_LUT_MIRROR": "1", "KF3_DISPLAY_SDR_COLOR": "1", "KF3_GFX_POOL_PROBE": "1", "KF3_KERNEL_GR_CE": "1", "KF3_KERNEL_GR_WORK": "1", "KF3_MEMORY_LIST_PROBE": "1", "KF3_PREEMPT_BIND_PROBE": "1", "KF3_SW_RUNLIST_HOST_OWNED": "1", "KF3_SW_RUNLIST_PROBE": "1", "KF3_TRANSLATED_CE_RELAY": "1", "KF3_WIN_TWIN_DEFAPI_OBJECT": "1", "KF3_WIN_USER_CHANNELS_PASSTHROUGH": "1", "KF3_ZCULL_BIND_PROBE": "1"}, "binary_revision": "a7509bf3", "binary_sha256": "41f6df0efb8eebacca7e1578a9cc118ece46d580deacb9f582cb1e4b0dcab7d5", "expected_windows_driver": "32.0.15.8088", "guest_public_abi": "580.65.06", "host_driver": "595.91.07", "pid": 106792, "source_revision": "a7509bf3d33a6986874beae0d03c95e6ef0efe19"}
+[win_die] QGA answers 2026-10-16T22:55:19+00:00
+HOST_ACCEPT_ELAPSED phase=ablate-lpwr2801-v2 seconds=58
+[win_die] shot /root/win/codex-ada2build/shots/ablate-lpwr2801-v2.ppm.gz 2026-10-16T22:56:24+00:00
+WINDOWS_CELL_EXIT phase=ablate-lpwr2801-v2 rc=0 2026-10-16T22:56:37+00:00
+Previous HEAD position was a7509bf3d diagnostic: ablate only AD102580 lpwr2801 row
+HEAD is now at 003ad0e74 diagnostic: ablate only AD102580 lpwr2806 row
+WIN_DIE_START kf3=003ad0e7 checkout=003ad0e74 guest_driver=580.65.06 gpu=NVIDIA GeForce RTX 4090 xid_before=5 2026-10-16T22:56:37+00:00
+[win_die] QEMU 107848 kf3 003ad0e7 run /root/win/codex-ada2build
+ACTUAL_PROCESS_RECEIPT {"actual_KF3_environment": {"KF3_ASYNC_PREEMPT": "1", "KF3_DEFERRED_API": "1", "KF3_DISPLAY_CAPS_PROBE": "1", "KF3_DISPLAY_CTRL_PROBE": "1", "KF3_DISPLAY_ILUT_OFFSET_256": "1", "KF3_DISPLAY_IMP_ENABLE": "1", "KF3_DISPLAY_LUT_MIRROR": "1", "KF3_DISPLAY_SDR_COLOR": "1", "KF3_GFX_POOL_PROBE": "1", "KF3_KERNEL_GR_CE": "1", "KF3_KERNEL_GR_WORK": "1", "KF3_MEMORY_LIST_PROBE": "1", "KF3_PREEMPT_BIND_PROBE": "1", "KF3_SW_RUNLIST_HOST_OWNED": "1", "KF3_SW_RUNLIST_PROBE": "1", "KF3_TRANSLATED_CE_RELAY": "1", "KF3_WIN_TWIN_DEFAPI_OBJECT": "1", "KF3_WIN_USER_CHANNELS_PASSTHROUGH": "1", "KF3_ZCULL_BIND_PROBE": "1"}, "binary_revision": "003ad0e7", "binary_sha256": "afb9804fd21c3d634b3745be900262da038b5c943af2787e3df2b7fdc2c18ea7", "expected_windows_driver": "32.0.15.8088", "guest_public_abi": "580.65.06", "host_driver": "595.91.07", "pid": 107848, "source_revision": "003ad0e749eede980723cc64b9107a1d747b9cc7"}
+[win_die] QGA answers 2026-10-16T22:57:47+00:00
+HOST_ACCEPT_ELAPSED phase=ablate-lpwr2806-v2 seconds=51
+[win_die] shot /root/win/codex-ada2build/shots/ablate-lpwr2806-v2.ppm.gz 2026-10-16T22:58:43+00:00
+WINDOWS_CELL_EXIT phase=ablate-lpwr2806-v2 rc=0 2026-10-16T22:58:57+00:00
+Previous HEAD position was 003ad0e74 diagnostic: ablate only AD102580 lpwr2806 row
+HEAD is now at 9d6f210ba integrate: add exact public580.94.02 display ABI for the second Windows build
+WIN_DIE_START kf3=9d6f210b checkout=9d6f210ba guest_driver=580.65.06 gpu=NVIDIA GeForce RTX 4090 xid_before=5 2026-10-16T22:58:57+00:00
+[win_die] QEMU 108803 kf3 9d6f210b run /root/win/codex-ada2build
+ACTUAL_PROCESS_RECEIPT {"actual_KF3_environment": {"KF3_ASYNC_PREEMPT": "1", "KF3_DEFERRED_API": "1", "KF3_DISPLAY_CAPS_PROBE": "1", "KF3_DISPLAY_CTRL_PROBE": "1", "KF3_DISPLAY_ILUT_OFFSET_256": "1", "KF3_DISPLAY_IMP_ENABLE": "1", "KF3_DISPLAY_LUT_MIRROR": "1", "KF3_DISPLAY_SDR_COLOR": "1", "KF3_GFX_POOL_PROBE": "1", "KF3_KERNEL_GR_CE": "1", "KF3_KERNEL_GR_WORK": "1", "KF3_MEMORY_LIST_PROBE": "1", "KF3_PREEMPT_BIND_PROBE": "1", "KF3_SW_RUNLIST_HOST_OWNED": "1", "KF3_SW_RUNLIST_PROBE": "1", "KF3_TRANSLATED_CE_RELAY": "1", "KF3_WIN_TWIN_DEFAPI_OBJECT": "1", "KF3_WIN_USER_CHANNELS_PASSTHROUGH": "1", "KF3_ZCULL_BIND_PROBE": "1"}, "binary_revision": "9d6f210b", "binary_sha256": "cc2a86a6dec3ec6bed91d9cd6e1963a1deadf2d75a768e9e3dada91559e34668", "expected_windows_driver": "32.0.15.8088", "guest_public_abi": "580.65.06", "host_driver": "595.91.07", "pid": 108803, "source_revision": "9d6f210ba1dc6ab0edbc49ff265101091e8b08f1"}

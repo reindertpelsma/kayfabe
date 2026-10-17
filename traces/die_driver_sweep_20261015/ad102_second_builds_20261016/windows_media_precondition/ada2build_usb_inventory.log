@@ -1,0 +1,10 @@
+GUEST_PROGRAM_STARTED ada2build_usb_inventory.ps1 pid=5948
+Microsoft PnP Utility
+
+Scanning for device hardware changes.
+Scan complete.
+
+DRIVE root=C:\ type=Fixed ready=True
+
+
+GUEST_PROGRAM_EXIT ada2build_usb_inventory.ps1 code=0

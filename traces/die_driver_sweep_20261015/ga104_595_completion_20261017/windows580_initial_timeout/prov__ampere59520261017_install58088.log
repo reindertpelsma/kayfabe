@@ -1,0 +1,5 @@
+GUEST_PROGRAM_STARTED ampere59520261017_install58088.ps1 pid=4196
+Traceback (most recent call last):
+  File "/root/ampere59520261017_ps.py", line 59, in <module>
+    raise TimeoutError('outcome pending; do not replay guest program')
+TimeoutError: outcome pending; do not replay guest program

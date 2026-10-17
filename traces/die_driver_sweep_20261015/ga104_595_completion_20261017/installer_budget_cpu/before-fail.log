@@ -1,0 +1,14 @@
+F
+======================================================================
+FAIL: test_parent_allows_measured_preparation_child_wait_and_capture (__main__.InstallerEnvelope.test_parent_allows_measured_preparation_child_wait_and_capture)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/workspace/codex/ampere59520261017_test_installer_budget.py", line 17, in test_parent_allows_measured_preparation_child_wait_and_capture
+    self.assertGreaterEqual(budget,required,f'parent {budget}s cuts measured {prep:.3f}s preparation + {child}s child wait + capture margin; need >={required}s')
+    ~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: 600 not greater than or equal to 705 : parent 600s cuts measured 314.825s preparation + 360.0s child wait + capture margin; need >=705s
+
+----------------------------------------------------------------------
+Ran 1 test in 0.003s
+
+FAILED (failures=1)

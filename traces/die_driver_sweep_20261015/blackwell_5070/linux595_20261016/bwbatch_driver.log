@@ -1,0 +1,36 @@
+DRIVER_SWAP_START 2026-10-16T12:45:29+00:00
+before: NVRM version: NVIDIA UNIX x86_64 Kernel Module  575.51.03  Wed Apr 16 14:22:51 UTC 2025
+downloading https://us.download.nvidia.com/XFree86/Linux-x86_64/595.91.07/NVIDIA-Linux-x86_64-595.91.07.run
+-rw-r--r-- 1 root root 423651201 Oct 16 12:45 /root/NVIDIA-Linux-x86_64-595.91.07.run
+waiting for dpkg lock (0s):                      root      23154 F.... apt-get
+waiting for dpkg lock (60s):                      root      23154 F.... apt-get
+dpkg lock free after 110s
+held packages: <none>
+holds remaining after unhold: 0  ⇒ MUST be 0
+modules still loaded: 0
+driver packages to purge: libnvidia-cfg1-580:amd64 libnvidia-compute-575:amd64 libnvidia-compute-580:amd64 libnvidia-decode-580:amd64 libnvidia-egl-gbm1:amd64 libnvidia-egl-wayland1:amd64 libnvidia-egl-xcb1:amd64 libnvidia-egl-xlib1:amd64 libnvidia-encode-580:amd64 libnvidia-fbc1-580:amd64 libnvidia-gl-580:amd64 libnvidia-gpucomp-580:amd64 nvidia-compute-utils-575:amd64 nvidia-dkms-575:amd64 nvidia-dkms-580-open:amd64 nvidia-driver-580-open:amd64 nvidia-firmware-580:amd64 nvidia-kernel-common-575:amd64 nvidia-kernel-common-580:amd64 nvidia-kernel-source-580-open:amd64 nvidia-modprobe:amd64 nvidia-persistenced:amd64 nvidia-settings:amd64 xserver-xorg-video-nvidia-580:amd64 
+NEEDRESTART-SVC: systemd-networkd.service
+NEEDRESTART-SVC: systemd-resolved.service
+NEEDRESTART-SVC: systemd-timesyncd.service
+NEEDRESTART-SVC: systemd-udevd.service
+NEEDRESTART-SVC: user@0.service
+purge_rc=0  nvidia driver packages remaining: 0  ⇒ MUST be 0
+KERNEL_CC=x86_64-linux-gnu-gcc-12 (/usr/bin/x86_64-linux-gnu-gcc-12) for kernel 6.8.0-59-generic
+Verifying archive integrity... OK
+Uncompressing NVIDIA Accelerated Graphics Driver for Linux-x86_64 595.91.07...................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................
+
+WARNING: This NVIDIA driver package includes Vulkan components, but no Vulkan ICD loader was detected on this system. The NVIDIA Vulkan ICD will not function without the loader. Most distributions package the Vulkan loader; try installing the "vulkan-loader", "vulkan-icd-loader", or "libvulkan1" package.
+
+
+WARNING: Unable to determine the path to install the libglvnd EGL vendor library config files. Check that you have pkg-config and the libglvnd development libraries installed, or specify a path with --glvnd-egl-config-path.
+
+installer_rc_IGNORED_ON_PURPOSE=0
+after: NVRM version: NVIDIA UNIX Open Kernel Module for x86_64  595.91.07  Release Build  (dvs-builder@U22-I3-B08-02-2)  Wed Jul 29 03:01:16 UTC 2026
+modinfo: version:        595.91.07 license:        Dual MIT/GPL 
+OPEN_MODULE=yes
+VERSION_MATCH=yes (595.91.07)
+open /dev/nvidiactl: OK
+open /dev/nvidia0: OK
+open /dev/nvidia-uvm: OK
+NVIDIA GeForce RTX 5070, 595.91.07
+DRIVER_SWAP_DONE rc=0 2026-10-16T12:49:53+00:00

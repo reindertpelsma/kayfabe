@@ -1,0 +1,68 @@
+[
+  {
+    "name": "adaref2_persistent_apps.log",
+    "bytes": 17066,
+    "sha256": "fbb839120e462e951a6a91261a1b8f2f760b8baf2ceb74459c103f2c03d18d43",
+    "export": "screened complete text"
+  },
+  {
+    "name": "adaref2_windows_apps_stage.log",
+    "bytes": 14743,
+    "sha256": "090b417682515d06066a3d06b51c128dc98b4c14df4ec910ae394c388bf22d34",
+    "export": "screened complete text"
+  },
+  {
+    "name": "adaref2_windows_apps_stage_sync_failure.log",
+    "bytes": 2221,
+    "sha256": "532aa6e6a3e5d4d56dd29899889ae254003da21f6f99588a1234df42771e7858",
+    "export": "screened complete text"
+  },
+  {
+    "name": "adaref2_windows_apps_null_exitcode.log",
+    "bytes": 12957,
+    "sha256": "e3c7a3d18ab136247db330ed22bf8830621fddc4d7344d03e6bc68233e389ae8",
+    "export": "screened complete text"
+  },
+  {
+    "name": "adaref2_windows_apps_wave_sync_failure.log",
+    "bytes": 1715,
+    "sha256": "0222064db19d9162754628b3014422d377e71e4b3adb5ce2591c8acb2edb9d08",
+    "export": "screened complete text"
+  },
+  {
+    "name": "adaref2_apps_exitcode_retry.log",
+    "bytes": 277,
+    "sha256": "b480024ecd181177233b6fe4e94df1b8c8fb2b724330eb43c91a59f837d6cf2a",
+    "export": "screened complete text"
+  },
+  {
+    "name": "adaref2_windows_apps_wave.log",
+    "bytes": 1777,
+    "sha256": "30aada4e9cee9cb9c9fd958fba39cab21a72878159e045c172be8347792adc67",
+    "export": "screened complete text"
+  },
+  {
+    "name": "adaref2_stop_77a72da9.log",
+    "bytes": 166,
+    "sha256": "1209ecd5f4823af7936706b260d75c120ddd5271425d9f746500be6989446ad9",
+    "export": "screened complete text"
+  },
+  {
+    "name": "process-receipt-110767.json",
+    "bytes": 2946,
+    "sha256": "5dfc25f78f366b23073a8ca0d638246751d0de64d82a643edab04a7e8b2e55dc",
+    "export": "screened complete text"
+  },
+  {
+    "name": "flags.txt",
+    "bytes": 542,
+    "sha256": "1ea9fbf3a99319d8e9de26a178b1c1fa070c865c4eaa1abf4bafeda491b5b2be",
+    "export": "screened complete text"
+  },
+  {
+    "name": "marker.txt",
+    "bytes": 1773,
+    "sha256": "4102e318fcd366b0eca0b61f4eded94331e618c97745ebfbc4f9414f63abd9b6",
+    "export": "screened complete text"
+  }
+]

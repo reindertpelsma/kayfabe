@@ -1,0 +1,7 @@
+CCU_PROBE_START Uid:	65534	65534	65534	65534 CapEff:	0000000000000000
+kf-host: host tier: stock
+CCU_HOST driver=595.91.07 arch=(432, 6, 161)
+CCU_METADATA buffer_bytes=34981 counter_block_bytes=34960
+CCU_SAMPLE_CANDIDATE bytes=17488 derivation=counterBlockSize/2+sizeof(NvU64)
+CCU_FREE Err(Other(19271))
+CCU_PROBE_EXIT result=MEASURED

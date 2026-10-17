@@ -1,0 +1,24 @@
+B3_OFFSET_START 2026-10-16T13:28:43+00:00
+From https://github.com/reindertpelsma/kayfabe
+ * branch                codex/sweep-blackwell-20261015 -> FETCH_HEAD
+   277e5d895..304ca9adb  codex/sweep-blackwell-20261015 -> origin/codex/sweep-blackwell-20261015
+Updating 277e5d895..304ca9adb
+Fast-forward
+ crates/kf-qemu/src/device.rs    |  27 +++++--
+ crates/kf-qemu/src/heartbeat.rs | 164 ++++++++++++++++++++++++++--------------
+ 2 files changed, 129 insertions(+), 62 deletions(-)
+2cc299c67b35241d7b8b5692a5b062eef02fbc1e3125975bf64512b988e64903  /workspace/bench/kf3-bins/304ca9ad/qemu-system-x86_64
+0db4104321bc9f38d73d7e54e80902646a93547702f3218deb14295bebd4c0bf  target/release/kayfabe-rm-ladder
+da4e9bb3486f4ed3aeffc6a01b2cb92aedb6c1e1599726c84bb7db6420ffea15  /workspace/bench/fastguest595/initrd.cpio.gz
+H_B3_FIX_BEFORE_RUN: subtract exact guest fn72 sysTimerOffsetNs from the validated native system timer; falsifier=normal-loglevel6 still has heartbeat timeout formula or concurrency exceeds unchanged180s; drainer cadence unchanged, no logging suppression
+FAST_SUITE_STARTED=2026-10-16T13:29:33+00:00 arms=1 budget=180s
+rev=304ca9adb
+ARM                          VERDICT   secs  why
+--concurrency                NOTRUN    -s    no FAST_VERDICT line — a precondition refused before the arm ran
+FAST_CELL_ARM arm=concurrency verdict=NOTRUN secs=- client_ms=?
+
+FAST_SUITE_PASS=0 FAST_SUITE_FAIL=0 FAST_SUITE_CRASH=0 NOTRUN=1 ARMS=1
+FAST_SUITE_RC=2
+⊘ 1 arm(s) NEVER RAN — this is not a measurement. Fix the precondition and re-run.
+B3_OFFSET_CELL_EXIT rc=2 2026-10-16T13:29:33+00:00
+B3_OFFSET_EXIT rc=1 2026-10-16T13:29:33+00:00

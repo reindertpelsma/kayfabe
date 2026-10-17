@@ -1,0 +1,121 @@
+/workspace/codex/rpc-alignment/tools/tests/test_align_metadata.py:40: ResourceWarning: unclosed file <_io.TextIOWrapper name='/tmp/tmpq4dgzgpl/out.tsv' mode='r' encoding='UTF-8'>
+  rows = list(csv.DictReader(paths[2].open(), delimiter="\t")) if paths[2].exists() else []
+ResourceWarning: Enable tracemalloc to get the object allocation traceback
+E/workspace/codex/rpc-alignment/tools/tests/test_align_metadata.py:40: ResourceWarning: unclosed file <_io.TextIOWrapper name='/tmp/tmpt7f3ho5d/out.tsv' mode='r' encoding='UTF-8'>
+  rows = list(csv.DictReader(paths[2].open(), delimiter="\t")) if paths[2].exists() else []
+ResourceWarning: Enable tracemalloc to get the object allocation traceback
+F/workspace/codex/rpc-alignment/tools/tests/test_align_metadata.py:40: ResourceWarning: unclosed file <_io.TextIOWrapper name='/tmp/tmp282c943q/out.tsv' mode='r' encoding='UTF-8'>
+  rows = list(csv.DictReader(paths[2].open(), delimiter="\t")) if paths[2].exists() else []
+ResourceWarning: Enable tracemalloc to get the object allocation traceback
+FF/workspace/codex/rpc-alignment/tools/tests/test_align_metadata.py:40: ResourceWarning: unclosed file <_io.TextIOWrapper name='/tmp/tmpn4ku931p/out.tsv' mode='r' encoding='UTF-8'>
+  rows = list(csv.DictReader(paths[2].open(), delimiter="\t")) if paths[2].exists() else []
+ResourceWarning: Enable tracemalloc to get the object allocation traceback
+E/workspace/codex/rpc-alignment/tools/tests/test_align_metadata.py:40: ResourceWarning: unclosed file <_io.TextIOWrapper name='/tmp/tmptqimsu7m/out.tsv' mode='r' encoding='UTF-8'>
+  rows = list(csv.DictReader(paths[2].open(), delimiter="\t")) if paths[2].exists() else []
+ResourceWarning: Enable tracemalloc to get the object allocation traceback
+FF/workspace/codex/rpc-alignment/tools/tests/test_align_metadata.py:40: ResourceWarning: unclosed file <_io.TextIOWrapper name='/tmp/tmp50h4kpx1/out.tsv' mode='r' encoding='UTF-8'>
+  rows = list(csv.DictReader(paths[2].open(), delimiter="\t")) if paths[2].exists() else []
+ResourceWarning: Enable tracemalloc to get the object allocation traceback
+E/workspace/codex/rpc-alignment/tools/tests/test_align_metadata.py:40: ResourceWarning: unclosed file <_io.TextIOWrapper name='/tmp/tmph396lv0z/out.tsv' mode='r' encoding='UTF-8'>
+  rows = list(csv.DictReader(paths[2].open(), delimiter="\t")) if paths[2].exists() else []
+ResourceWarning: Enable tracemalloc to get the object allocation traceback
+F
+======================================================================
+ERROR: test_a_missing_reply_is_unknown_not_success (test_align_metadata.AlignmentTests.test_a_missing_reply_is_unknown_not_success)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/workspace/codex/rpc-alignment/tools/tests/test_align_metadata.py", line 94, in test_a_missing_reply_is_unknown_not_success
+    self.assertEqual(rows[0]["effective_status_equal"], "unknown")
+                     ~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^
+KeyError: 'effective_status_equal'
+
+======================================================================
+ERROR: test_envelope_and_body_status_are_preserved_separately (test_align_metadata.AlignmentTests.test_envelope_and_body_status_are_preserved_separately)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/workspace/codex/rpc-alignment/tools/tests/test_align_metadata.py", line 77, in test_envelope_and_body_status_are_preserved_separately
+    self.assertEqual(rows[0]["native_envelope"], "0x0")
+                     ~~~~~~~^^^^^^^^^^^^^^^^^^^
+KeyError: 'native_envelope'
+
+======================================================================
+ERROR: test_repeated_api_keys_are_marked_ambiguous (test_align_metadata.AlignmentTests.test_repeated_api_keys_are_marked_ambiguous)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/workspace/codex/rpc-alignment/tools/tests/test_align_metadata.py", line 87, in test_repeated_api_keys_are_marked_ambiguous
+    self.assertEqual([r["api_key_repeated"] for r in rows], ["1", "1"])
+                      ~^^^^^^^^^^^^^^^^^^^^
+KeyError: 'api_key_repeated'
+
+======================================================================
+FAIL: test_alignment_continues_after_native_selected_call_500 (test_align_metadata.AlignmentTests.test_alignment_continues_after_native_selected_call_500)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/workspace/codex/rpc-alignment/tools/tests/test_align_metadata.py", line 49, in test_alignment_continues_after_native_selected_call_500
+    self.assertEqual(len(matched), 1)
+    ~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^
+AssertionError: 0 != 1
+
+======================================================================
+FAIL: test_all_calls_and_both_unmatched_sides_remain_visible (test_align_metadata.AlignmentTests.test_all_calls_and_both_unmatched_sides_remain_visible)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/workspace/codex/rpc-alignment/tools/tests/test_align_metadata.py", line 60, in test_all_calls_and_both_unmatched_sides_remain_visible
+    self.assertEqual([r["virtual_ordinal"] for r in rows if r["virtual_ordinal"] != "-"],
+    ~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+                     ["0", "1", "2", "3"])
+                     ^^^^^^^^^^^^^^^^^^^^^
+AssertionError: Lists differ: ['0'] != ['0', '1', '2', '3']
+
+Second list contains 3 additional elements.
+First extra element 1:
+'1'
+
+- ['0']
++ ['0', '1', '2', '3']
+
+======================================================================
+FAIL: test_duplicate_command_ordinal_is_rejected (test_align_metadata.AlignmentTests.test_duplicate_command_ordinal_is_rejected)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/workspace/codex/rpc-alignment/tools/tests/test_align_metadata.py", line 114, in test_duplicate_command_ordinal_is_rejected
+    self.assertEqual(result.returncode, 2)
+    ~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: 1 != 2
+
+======================================================================
+FAIL: test_numeric_key_spelling_does_not_create_a_divergence (test_align_metadata.AlignmentTests.test_numeric_key_spelling_does_not_create_a_divergence)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/workspace/codex/rpc-alignment/tools/tests/test_align_metadata.py", line 70, in test_numeric_key_spelling_does_not_create_a_divergence
+    self.assertEqual(len(rows), 1)
+    ~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^
+AssertionError: 0 != 1
+
+======================================================================
+FAIL: test_pretty_to_pretty_supports_an_ada_display_reference (test_align_metadata.AlignmentTests.test_pretty_to_pretty_supports_an_ada_display_reference)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/workspace/codex/rpc-alignment/tools/tests/test_align_metadata.py", line 108, in test_pretty_to_pretty_supports_an_ada_display_reference
+    self.assertEqual(result.returncode, 0, result.stderr)
+    ~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: 1 != 0 : Traceback (most recent call last):
+  File "/workspace/codex/rpc-alignment/tools/align_metadata.py", line 24, in <module>
+    if r['dir'] == 'status' and int(r['function'], 0) < 0x1000:
+       ~^^^^^^^
+KeyError: 'dir'
+
+
+======================================================================
+FAIL: test_successful_reply_key_conflict_is_rejected (test_align_metadata.AlignmentTests.test_successful_reply_key_conflict_is_rejected)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/workspace/codex/rpc-alignment/tools/tests/test_align_metadata.py", line 100, in test_successful_reply_key_conflict_is_rejected
+    self.assertEqual(result.returncode, 2)
+    ~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: 0 != 2
+
+----------------------------------------------------------------------
+Ran 9 tests in 0.383s
+
+FAILED (failures=6, errors=3)

@@ -1,0 +1,194 @@
+{
+  "first_positional_on_off_difference": 17,
+  "on_window": [
+    {
+      "ordinal": "15",
+      "function": "76",
+      "kind": "RmControl",
+      "rpc_sequence": "0",
+      "control_or_class": "0x20801803",
+      "trace_result": "0x0",
+      "effective_result": "unknown"
+    },
+    {
+      "ordinal": "16",
+      "function": "76",
+      "kind": "RmControl",
+      "rpc_sequence": "0",
+      "control_or_class": "0x20800a4b",
+      "trace_result": "0x0",
+      "effective_result": "unknown"
+    },
+    {
+      "ordinal": "17",
+      "function": "103",
+      "kind": "RmAlloc",
+      "rpc_sequence": "0",
+      "control_or_class": "0x0000",
+      "trace_result": "0x0",
+      "effective_result": "unknown"
+    },
+    {
+      "ordinal": "18",
+      "function": "103",
+      "kind": "RmAlloc",
+      "rpc_sequence": "0",
+      "control_or_class": "0x0080",
+      "trace_result": "0x0",
+      "effective_result": "unknown"
+    },
+    {
+      "ordinal": "19",
+      "function": "103",
+      "kind": "RmAlloc",
+      "rpc_sequence": "0",
+      "control_or_class": "0x2080",
+      "trace_result": "0x0",
+      "effective_result": "unknown"
+    },
+    {
+      "ordinal": "20",
+      "function": "103",
+      "kind": "RmAlloc",
+      "rpc_sequence": "0",
+      "control_or_class": "0x0073",
+      "trace_result": "0x0",
+      "effective_result": "unknown"
+    },
+    {
+      "ordinal": "21",
+      "function": "76",
+      "kind": "RmControl",
+      "rpc_sequence": "0",
+      "control_or_class": "0x20800af3",
+      "trace_result": "0x0",
+      "effective_result": "unknown"
+    }
+  ],
+  "off_window": [
+    {
+      "ordinal": "15",
+      "function": "76",
+      "kind": "RmControl",
+      "rpc_sequence": "0",
+      "control_or_class": "0x20801803",
+      "trace_result": "0x0",
+      "effective_result": "unknown"
+    },
+    {
+      "ordinal": "16",
+      "function": "76",
+      "kind": "RmControl",
+      "rpc_sequence": "0",
+      "control_or_class": "0x20800a4b",
+      "trace_result": "none",
+      "effective_result": "unknown"
+    },
+    {
+      "ordinal": "17",
+      "function": "76",
+      "kind": "RmControl",
+      "rpc_sequence": "0",
+      "control_or_class": "0x20800af3",
+      "trace_result": "0x0",
+      "effective_result": "unknown"
+    },
+    {
+      "ordinal": "18",
+      "function": "76",
+      "kind": "RmControl",
+      "rpc_sequence": "0",
+      "control_or_class": "0x20800aac",
+      "trace_result": "0x0",
+      "effective_result": "unknown"
+    },
+    {
+      "ordinal": "19",
+      "function": "76",
+      "kind": "RmControl",
+      "rpc_sequence": "0",
+      "control_or_class": "0x20800a61",
+      "trace_result": "0x0",
+      "effective_result": "unknown"
+    },
+    {
+      "ordinal": "20",
+      "function": "76",
+      "kind": "RmControl",
+      "rpc_sequence": "0",
+      "control_or_class": "0x20800a61",
+      "trace_result": "0x0",
+      "effective_result": "unknown"
+    },
+    {
+      "ordinal": "21",
+      "function": "76",
+      "kind": "RmControl",
+      "rpc_sequence": "0",
+      "control_or_class": "0x20800a61",
+      "trace_result": "0x0",
+      "effective_result": "unknown"
+    }
+  ],
+  "first_policy_result_difference_same_key": {
+    "ordinal": 16,
+    "control": "0x20800a4b",
+    "on": "0x0",
+    "off": "none",
+    "effective_wire_status": "unknown"
+  },
+  "off_last_RmAlloc": {
+    "ordinal": "276",
+    "function": "103",
+    "kind": "RmAlloc",
+    "rpc_sequence": "0",
+    "control_or_class": "0xcfb0",
+    "trace_result": "0x56",
+    "effective_result": "unknown"
+  },
+  "off_after_last_RmAlloc": [
+    {
+      "ordinal": "277",
+      "function": "10",
+      "kind": "Free",
+      "rpc_sequence": "0",
+      "control_or_class": "-",
+      "trace_result": "0x0",
+      "effective_result": "unknown"
+    },
+    {
+      "ordinal": "278",
+      "function": "10",
+      "kind": "Free",
+      "rpc_sequence": "0",
+      "control_or_class": "-",
+      "trace_result": "0x0",
+      "effective_result": "unknown"
+    },
+    {
+      "ordinal": "279",
+      "function": "10",
+      "kind": "Free",
+      "rpc_sequence": "0",
+      "control_or_class": "-",
+      "trace_result": "0x0",
+      "effective_result": "unknown"
+    },
+    {
+      "ordinal": "280",
+      "function": "10",
+      "kind": "Free",
+      "rpc_sequence": "0",
+      "control_or_class": "-",
+      "trace_result": "0x0",
+      "effective_result": "unknown"
+    }
+  ],
+  "teardown_start": {
+    "on": 277,
+    "off": 277,
+    "on_predecessor": "RmAllocCA7A NV_OK@276",
+    "off_predecessor": "RmAllocCFB0 NV_ERR_NOT_SUPPORTED@276"
+  },
+  "prompt_rank1_literal_falsifier": "FIRED for teardown start; final fn47ordinal differs. Different paths prevent asserting common causal wall."
+}

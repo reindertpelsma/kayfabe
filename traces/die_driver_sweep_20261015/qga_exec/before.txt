@@ -1,0 +1,87 @@
+EE.E
+======================================================================
+ERROR: test_agent_error_does_not_turn_into_success_or_poll_forever (scripts.bench.tests.test_qga_exec.GuestExecTests.test_agent_error_does_not_turn_into_success_or_poll_forever)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/workspace/codex/blackwell-hw/scripts/bench/tests/test_qga_exec.py", line 49, in test_agent_error_does_not_turn_into_success_or_poll_forever
+    rc, sends, opens, _ = self.run_exec([
+                          ~~~~~~~~~~~~~^^
+        {"return": {"pid": 73}},
+        ^^^^^^^^^^^^^^^^^^^^^^^^
+        {"error": {"class": "GenericError", "desc": "unknown pid"}},
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    ])
+    ^^
+  File "/workspace/codex/blackwell-hw/scripts/bench/tests/test_qga_exec.py", line 28, in run_exec
+    result = qmp.qga_exec("fixture.sock", "probe.exe", ["--check"], timeout)
+  File "/workspace/codex/blackwell-hw/scripts/bench/windows/qmp.py", line 168, in qga_exec
+    st = recv(f).get("return", {})
+         ~~~~^^^
+  File "/usr/lib/python3.14/unittest/mock.py", line 1176, in __call__
+    return self._mock_call(*args, **kwargs)
+           ~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^
+  File "/usr/lib/python3.14/unittest/mock.py", line 1180, in _mock_call
+    return self._execute_mock_call(*args, **kwargs)
+           ~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^
+  File "/usr/lib/python3.14/unittest/mock.py", line 1243, in _execute_mock_call
+    result = next(effect)
+StopIteration
+
+======================================================================
+ERROR: test_deadline_expires_during_reconnection (scripts.bench.tests.test_qga_exec.GuestExecTests.test_deadline_expires_during_reconnection)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/workspace/codex/blackwell-hw/scripts/bench/tests/test_qga_exec.py", line 59, in test_deadline_expires_during_reconnection
+    rc, sends, _, _ = self.run_exec([
+                      ~~~~~~~~~~~~~^^
+        {"return": {"pid": 73}}, socket.timeout("delayed agent"),
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    ], opens=[(Mock(), Mock()), socket.timeout("still unavailable")])
+    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/workspace/codex/blackwell-hw/scripts/bench/tests/test_qga_exec.py", line 28, in run_exec
+    result = qmp.qga_exec("fixture.sock", "probe.exe", ["--check"], timeout)
+  File "/workspace/codex/blackwell-hw/scripts/bench/windows/qmp.py", line 168, in qga_exec
+    st = recv(f).get("return", {})
+         ~~~~^^^
+  File "/usr/lib/python3.14/unittest/mock.py", line 1176, in __call__
+    return self._mock_call(*args, **kwargs)
+           ~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^
+  File "/usr/lib/python3.14/unittest/mock.py", line 1180, in _mock_call
+    return self._execute_mock_call(*args, **kwargs)
+           ~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^
+  File "/usr/lib/python3.14/unittest/mock.py", line 1245, in _execute_mock_call
+    raise result
+TimeoutError: delayed agent
+
+======================================================================
+ERROR: test_status_timeout_reconnects_to_the_same_process (scripts.bench.tests.test_qga_exec.GuestExecTests.test_status_timeout_reconnects_to_the_same_process)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/workspace/codex/blackwell-hw/scripts/bench/tests/test_qga_exec.py", line 33, in test_status_timeout_reconnects_to_the_same_process
+    rc, sends, opens, output = self.run_exec([
+                               ~~~~~~~~~~~~~^^
+        {"return": {"pid": 73}}, socket.timeout("delayed agent"),
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+        {"return": {"exited": True, "exitcode": 7, "out-data": encoded}},
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    ])
+    ^^
+  File "/workspace/codex/blackwell-hw/scripts/bench/tests/test_qga_exec.py", line 28, in run_exec
+    result = qmp.qga_exec("fixture.sock", "probe.exe", ["--check"], timeout)
+  File "/workspace/codex/blackwell-hw/scripts/bench/windows/qmp.py", line 168, in qga_exec
+    st = recv(f).get("return", {})
+         ~~~~^^^
+  File "/usr/lib/python3.14/unittest/mock.py", line 1176, in __call__
+    return self._mock_call(*args, **kwargs)
+           ~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^
+  File "/usr/lib/python3.14/unittest/mock.py", line 1180, in _mock_call
+    return self._execute_mock_call(*args, **kwargs)
+           ~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^
+  File "/usr/lib/python3.14/unittest/mock.py", line 1245, in _execute_mock_call
+    raise result
+TimeoutError: delayed agent
+
+----------------------------------------------------------------------
+Ran 4 tests in 0.006s
+
+FAILED (errors=3)

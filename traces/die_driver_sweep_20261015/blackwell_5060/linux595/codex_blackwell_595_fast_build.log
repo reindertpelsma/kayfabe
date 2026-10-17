@@ -1,0 +1,13 @@
+== HOST MODE: kernel 6.8.0-138-generic, modules from /lib/modules/6.8.0-138-generic
+== modules taken from the host (with closure): 6
+==   ecc.ko
+==   nvidia.ko
+==   nvidia-uvm.ko
+==   wmi.ko
+==   video.ko
+==   nvidia-modeset.ko
+== firmware taken from the host: 2 file(s)
+== GUEST DRIVER 595.91.07 (verified from the packed module; /workspace/bench/fastguest-595/driver.STAGED)
+== built: /workspace/bench/fastguest-595/vmlinuz  15M
+== built: /workspace/bench/fastguest-595/initrd.cpio.gz  109M
+== kernel release: 6.8.0-138-generic

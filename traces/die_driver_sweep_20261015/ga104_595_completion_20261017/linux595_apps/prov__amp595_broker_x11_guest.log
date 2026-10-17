@@ -1,0 +1,13 @@
+CINNAMON 1 XORG 1
+ACTUAL_LIBCUDA=/usr/lib/x86_64-linux-gnu/libcuda.so.595.91.07 ACTUAL_KERNEL=6.8.0-142-generic
+NVIDIA GeForce RTX 3070, 595.91.07, 108 MiB
+OpenGL vendor string: NVIDIA Corporation
+OpenGL renderer string: NVIDIA GeForce RTX 3070/PCIe/SSE2
+Running synchronized to the vertical refresh.  The framerate should be
+approximately the same as the monitor refresh rate.
+290 frames in 5.0 seconds = 57.812 FPS
+296 frames in 5.0 seconds = 59.189 FPS
+300 frames in 5.0 seconds = 59.844 FPS
+VKCUBE rc=124
+GUEST_DMESG flip_timeouts=0 nvassert=9 xid=0
+GUEST_DONE

@@ -1,0 +1,50 @@
+FFFFF.
+======================================================================
+FAIL: test_595_guest_selects_595_even_with_an_independent_host (__main__.GuestDriver.test_595_guest_selects_595_even_with_an_independent_host)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/workspace/codex/broker-guest-driver/scripts/bench/tests/test_interactive_guest_driver.py", line 41, in test_595_guest_selects_595_even_with_an_independent_host
+    self.assertIn(b'guest-driver=595.91.07,', result.stdout)
+    ~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: b'guest-driver=595.91.07,' not found in b'-name\x00kayfabe-interactive\x00-object\x00memory-backend-memfd,id=ram0,size=8192M,share=on\x00-machine\x00q35,accel=kvm,memory-backend=ram0\x00-m\x008192\x00-cpu\x00host\x00-smp\x006\x00-drive\x00if=pflash,format=raw,unit=0,readonly=on,file=/usr/share/OVMF/OVMF_CODE_4M.fd\x00-drive\x00if=pflash,format=raw,unit=1,file=/fixture/run/ovmf_vars.fd\x00-drive\x00if=virtio,file=/fixture/guest.qcow2,format=qcow2\x00-netdev\x00tap,id=n0,ifname=nvktap0,script=no,downscript=no\x00-device\x00virtio-net-pci,netdev=n0,mac=52:54:00:12:34:56,romfile=\x00-vga\x00none\x00-device\x00kf3-gpu,id=kf0,guest-driver=580.159.04,fb-mb=8192,bar1-size=134217728,bar2-size=33554432,display=on,gop=on,x11-dispsw=on,display-broker=/fixture/display.sock,display-broker-uid=1234\x00-device\x00virtio-keyboard-pci\x00-device\x00virtio-tablet-pci,display=kf0,head=0\x00-device\x00virtio-mouse-pci\x00-display\x00none\x00-msg\x00timestamp=on\x00-serial\x00file:/fixture/run/serial.log\x00-monitor\x00unix:/fixture/run/qemu.mon,server,nowait\x00'
+
+======================================================================
+FAIL: test_a_driver_cannot_inject_another_qom_property (__main__.GuestDriver.test_a_driver_cannot_inject_another_qom_property) (driver='')
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/workspace/codex/broker-guest-driver/scripts/bench/tests/test_interactive_guest_driver.py", line 48, in test_a_driver_cannot_inject_another_qom_property
+    self.assertEqual(result.returncode, 2, result.stdout + result.stderr)
+    ~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: 0 != 2 : b'-name\x00kayfabe-interactive\x00-object\x00memory-backend-memfd,id=ram0,size=8192M,share=on\x00-machine\x00q35,accel=kvm,memory-backend=ram0\x00-m\x008192\x00-cpu\x00host\x00-smp\x006\x00-drive\x00if=pflash,format=raw,unit=0,readonly=on,file=/usr/share/OVMF/OVMF_CODE_4M.fd\x00-drive\x00if=pflash,format=raw,unit=1,file=/fixture/run/ovmf_vars.fd\x00-drive\x00if=virtio,file=/fixture/guest.qcow2,format=qcow2\x00-netdev\x00tap,id=n0,ifname=nvktap0,script=no,downscript=no\x00-device\x00virtio-net-pci,netdev=n0,mac=52:54:00:12:34:56,romfile=\x00-vga\x00none\x00-device\x00kf3-gpu,id=kf0,guest-driver=580.159.04,fb-mb=8192,bar1-size=134217728,bar2-size=33554432,display=on,gop=on,x11-dispsw=on,display-broker=/fixture/display.sock,display-broker-uid=1234\x00-device\x00virtio-keyboard-pci\x00-device\x00virtio-tablet-pci,display=kf0,head=0\x00-device\x00virtio-mouse-pci\x00-display\x00none\x00-msg\x00timestamp=on\x00-serial\x00file:/fixture/run/serial.log\x00-monitor\x00unix:/fixture/run/qemu.mon,server,nowait\x00'
+
+======================================================================
+FAIL: test_a_driver_cannot_inject_another_qom_property (__main__.GuestDriver.test_a_driver_cannot_inject_another_qom_property) (driver='595.91.07,display=off')
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/workspace/codex/broker-guest-driver/scripts/bench/tests/test_interactive_guest_driver.py", line 48, in test_a_driver_cannot_inject_another_qom_property
+    self.assertEqual(result.returncode, 2, result.stdout + result.stderr)
+    ~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: 0 != 2 : b'-name\x00kayfabe-interactive\x00-object\x00memory-backend-memfd,id=ram0,size=8192M,share=on\x00-machine\x00q35,accel=kvm,memory-backend=ram0\x00-m\x008192\x00-cpu\x00host\x00-smp\x006\x00-drive\x00if=pflash,format=raw,unit=0,readonly=on,file=/usr/share/OVMF/OVMF_CODE_4M.fd\x00-drive\x00if=pflash,format=raw,unit=1,file=/fixture/run/ovmf_vars.fd\x00-drive\x00if=virtio,file=/fixture/guest.qcow2,format=qcow2\x00-netdev\x00tap,id=n0,ifname=nvktap0,script=no,downscript=no\x00-device\x00virtio-net-pci,netdev=n0,mac=52:54:00:12:34:56,romfile=\x00-vga\x00none\x00-device\x00kf3-gpu,id=kf0,guest-driver=580.159.04,fb-mb=8192,bar1-size=134217728,bar2-size=33554432,display=on,gop=on,x11-dispsw=on,display-broker=/fixture/display.sock,display-broker-uid=1234\x00-device\x00virtio-keyboard-pci\x00-device\x00virtio-tablet-pci,display=kf0,head=0\x00-device\x00virtio-mouse-pci\x00-display\x00none\x00-msg\x00timestamp=on\x00-serial\x00file:/fixture/run/serial.log\x00-monitor\x00unix:/fixture/run/qemu.mon,server,nowait\x00'
+
+======================================================================
+FAIL: test_a_driver_cannot_inject_another_qom_property (__main__.GuestDriver.test_a_driver_cannot_inject_another_qom_property) (driver='595.91.07 extra')
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/workspace/codex/broker-guest-driver/scripts/bench/tests/test_interactive_guest_driver.py", line 48, in test_a_driver_cannot_inject_another_qom_property
+    self.assertEqual(result.returncode, 2, result.stdout + result.stderr)
+    ~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: 0 != 2 : b'-name\x00kayfabe-interactive\x00-object\x00memory-backend-memfd,id=ram0,size=8192M,share=on\x00-machine\x00q35,accel=kvm,memory-backend=ram0\x00-m\x008192\x00-cpu\x00host\x00-smp\x006\x00-drive\x00if=pflash,format=raw,unit=0,readonly=on,file=/usr/share/OVMF/OVMF_CODE_4M.fd\x00-drive\x00if=pflash,format=raw,unit=1,file=/fixture/run/ovmf_vars.fd\x00-drive\x00if=virtio,file=/fixture/guest.qcow2,format=qcow2\x00-netdev\x00tap,id=n0,ifname=nvktap0,script=no,downscript=no\x00-device\x00virtio-net-pci,netdev=n0,mac=52:54:00:12:34:56,romfile=\x00-vga\x00none\x00-device\x00kf3-gpu,id=kf0,guest-driver=580.159.04,fb-mb=8192,bar1-size=134217728,bar2-size=33554432,display=on,gop=on,x11-dispsw=on,display-broker=/fixture/display.sock,display-broker-uid=1234\x00-device\x00virtio-keyboard-pci\x00-device\x00virtio-tablet-pci,display=kf0,head=0\x00-device\x00virtio-mouse-pci\x00-display\x00none\x00-msg\x00timestamp=on\x00-serial\x00file:/fixture/run/serial.log\x00-monitor\x00unix:/fixture/run/qemu.mon,server,nowait\x00'
+
+======================================================================
+FAIL: test_a_driver_cannot_inject_another_qom_property (__main__.GuestDriver.test_a_driver_cannot_inject_another_qom_property) (driver='latest')
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/workspace/codex/broker-guest-driver/scripts/bench/tests/test_interactive_guest_driver.py", line 48, in test_a_driver_cannot_inject_another_qom_property
+    self.assertEqual(result.returncode, 2, result.stdout + result.stderr)
+    ~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: 0 != 2 : b'-name\x00kayfabe-interactive\x00-object\x00memory-backend-memfd,id=ram0,size=8192M,share=on\x00-machine\x00q35,accel=kvm,memory-backend=ram0\x00-m\x008192\x00-cpu\x00host\x00-smp\x006\x00-drive\x00if=pflash,format=raw,unit=0,readonly=on,file=/usr/share/OVMF/OVMF_CODE_4M.fd\x00-drive\x00if=pflash,format=raw,unit=1,file=/fixture/run/ovmf_vars.fd\x00-drive\x00if=virtio,file=/fixture/guest.qcow2,format=qcow2\x00-netdev\x00tap,id=n0,ifname=nvktap0,script=no,downscript=no\x00-device\x00virtio-net-pci,netdev=n0,mac=52:54:00:12:34:56,romfile=\x00-vga\x00none\x00-device\x00kf3-gpu,id=kf0,guest-driver=580.159.04,fb-mb=8192,bar1-size=134217728,bar2-size=33554432,display=on,gop=on,x11-dispsw=on,display-broker=/fixture/display.sock,display-broker-uid=1234\x00-device\x00virtio-keyboard-pci\x00-device\x00virtio-tablet-pci,display=kf0,head=0\x00-device\x00virtio-mouse-pci\x00-display\x00none\x00-msg\x00timestamp=on\x00-serial\x00file:/fixture/run/serial.log\x00-monitor\x00unix:/fixture/run/qemu.mon,server,nowait\x00'
+
+----------------------------------------------------------------------
+Ran 3 tests in 0.027s
+
+FAILED (failures=5)

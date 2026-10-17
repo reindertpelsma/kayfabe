@@ -153,10 +153,10 @@ fn every_word_names_its_tier() {
 }
 
 /// OWNER_RULINGS §AH: a value measured on one die is never served to another die (or another driver
-/// branch). Every other die gets the clean authored page, and says what is missing.
+/// branch). Unmeasured dies get the clean authored page, and say what is missing.
 #[test]
 fn an_unmeasured_die_gets_the_clean_page_and_the_notice_never_a_neighbours_row() {
-    for (row, die) in [(&ADA, AD106), (&ADA, AD103), (&AMPERE, GA104), (&TURING, Die { architecture: 0x160, implementation: 4 }), (&BLACKWELL_GB20X, GB206)] {
+    for (row, die) in [(&ADA, AD106), (&ADA, AD103), (&AMPERE, GA104), (&TURING, Die { architecture: 0x160, implementation: 4 }), (&BLACKWELL_GB20X, Die { implementation: 5, ..GB206 })] {
         let d = go(row, die, true, true, BRANCH);
         assert_eq!(d.page.word(0x00c), 0, "{die:?} must not receive AD104's word");
         assert_eq!(d.unmeasured.len(), 1, "{die:?}");
@@ -351,6 +351,27 @@ fn the_tu106_580_caps_word_has_its_own_native_measurement() {
     for branch in ["570", "595"] {
         let d = go(&TURING, TU106, true, true, branch);
         assert_eq!(d.page.word(0x00c), 0);
+        assert_eq!(d.unmeasured.len(), 1);
+    }
+}
+
+#[test]
+fn the_gb206_580_caps_word_requires_its_own_native_measurement() {
+    let d = go(&BLACKWELL_GB20X, GB206, true, true, "580");
+    assert_eq!(d.page.word(0x00c), 0x102);
+    assert!(d.unmeasured.is_empty());
+    let p = d.provenance.iter().find(|p| p.offset == 0x00c).unwrap();
+    assert_eq!(p.tier, Tier::Measured);
+    assert!(p.why.contains("GB206") && p.why.contains("580.88"), "{}", p.why);
+    for branch in ["570", "590", "595"] {
+        let d = go(&BLACKWELL_GB20X, GB206, true, true, branch);
+        assert_eq!(d.page.word(0x00c), 0);
+        assert_eq!(d.unmeasured.len(), 1);
+    }
+    for implementation in [0x2, 0x3, 0x5] {
+        let die = Die { implementation, ..GB206 };
+        let d = go(&BLACKWELL_GB20X, die, true, true, "580");
+        assert_eq!(d.page.word(0x00c), 0, "a neighbouring die cannot borrow the row");
         assert_eq!(d.unmeasured.len(), 1);
     }
 }

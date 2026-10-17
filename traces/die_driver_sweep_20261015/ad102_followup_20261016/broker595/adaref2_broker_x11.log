@@ -1,0 +1,22 @@
+START source=6265b980f985aab4d6cbb6f0cbbb97e818f4d90f host=595.91.07 guest595.91.07 2026-10-16T17:34:49+00:00
+BROKER_ACTUAL_PROCESS_RECEIPT {"pid": 107693, "source_revision": "6265b980f985aab4d6cbb6f0cbbb97e818f4d90f", "binary_sha256": "e9744a23ab38ff45afbf788d9e426d71913d1f1e6954fa1ea0da1ea1920b25a6", "host_driver": "595.91.07", "guest_public_abi": "595.91.07", "actual_KF3_environment": {"KF3_REV": "6265b980"}, "harness_selector_note": "KF3_REV selects the private binary; no other KF3 variable is set."}
+CINNAMON 1 XORG 1
+NVIDIA GeForce RTX 4090, 595.91.07, 56 MiB
+OpenGL vendor string: NVIDIA Corporation
+OpenGL renderer string: NVIDIA GeForce RTX 4090/PCIe/SSE2
+Running synchronized to the vertical refresh.  The framerate should be
+approximately the same as the monitor refresh rate.
+280 frames in 5.0 seconds = 55.991 FPS
+300 frames in 5.0 seconds = 59.809 FPS
+300 frames in 5.0 seconds = 59.993 FPS
+VKCUBE rc=127
+GUEST_DMESG flip_timeouts=0 nvassert=9 xid=0
+GUEST_DONE
+nvkvm-broker: shm tier: not requiring DRI3 or Present (frames arrive as shared memory and are put on screen with core PutImage)
+nvkvm-broker: shm tier: advertising no dma-buf format (frames are shared memory), so no modifier query is made
+X11_WINDOW width=1920 height=1080 colors=13506 sha256=e800943763caa9c9a873451f56cbcccdbd7d76f9cb8dde3971639cd10b685eb9
+X11_PRESENTATION_CHECKED=1
+DISPLAY_STALLS=9
+HOST_XID before=5 after=5
+BROKER_DESKTOP_VERDICT=PASS host595.91.07 guest595.91.07
+EXIT rc=0 2026-10-16T17:37:30+00:00

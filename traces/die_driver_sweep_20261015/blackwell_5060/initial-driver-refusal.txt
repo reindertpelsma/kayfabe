@@ -1,0 +1,8 @@
+Controller diagnostic,2026-10-15 around19:24UTC, own56141654.
+PCI00:07.0 VGA10de:2d05; initialstockimage loaded a proprietary module.
+Bounded dmesg excerpt measured before any native installation:
+NVRM: The NVIDIA GPU0000:00:07.0 (PCI ID:10de:2d05) installed in this system requires use of the NVIDIA open kernel modules.
+NVRM: RmInitAdapter failed! (0x22:0x56:884)
+nvidia-smi: No devices were found (exit6).
+This is an initialimage/module configuration finding, not a hardware limit.
+Linux native reference will run after restoration with stock595 open modules.

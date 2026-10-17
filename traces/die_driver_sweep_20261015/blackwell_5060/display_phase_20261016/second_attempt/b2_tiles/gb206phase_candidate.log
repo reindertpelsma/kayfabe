@@ -1,0 +1,8 @@
+CANDIDATE_START 2026-10-16T20:40:58+00:00
+B2_FALSIFIER_BEFORE_RUN=Linux modes still invalid with the derived tile/assignment group; stop after this one group. Windows boundary is recorded separately, not a claimed cause.
+Previous HEAD position was f8485f6db evidence: AD102 Windows CUDA Blender and hardware Edge pass; retire owned lease
+HEAD is now at 36d134bc5 derive: extend virtual-tiling fields to registered590 and595 ABI layouts
+CANDIDATE_PRIVATE_READY source=36d134bc578b052072718573cff19fa2cb08388b 2026-10-16T20:41:42+00:00
+B2_LINUX_GROUP_EXIT rc=1 2026-10-16T20:43:28+00:00
+WINDOWS_GROUP_DIAGNOSTIC_COMPLETE 2026-10-16T20:47:44+00:00
+CANDIDATE_EXIT rc=1 2026-10-16T20:47:44+00:00

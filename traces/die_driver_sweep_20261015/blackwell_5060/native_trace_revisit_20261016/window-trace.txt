@@ -1,0 +1,326 @@
+CONTROLLER_START 2026-10-15T23:31:38.220932+00:00
+WINDOW_REPLAY_CONTROLLER_START 2026-10-15T23:31:39.9040502Z
+
+SERVICE_NAME: KayfabeWinCapture
+        TYPE               : 1  KERNEL_DRIVER
+        STATE              : 1  STOPPED
+        WIN32_EXIT_CODE    : 0  (0x0)
+        SERVICE_EXIT_CODE  : 0  (0x0)
+        CHECKPOINT         : 0x0
+        WAIT_HINT          : 0x0
+[SC] DeleteService SUCCESS
+Service removed. The test certificate and the testsigning boot option remain; use -Action Cleanup and bcdedit /set {current} testsigning off.
+NATIVE_TRACE_START 2026-10-15T23:31:40.1493752Z
+NATIVE_ONLY kf3_revision=N/A guest_driver=N/A host_windows_driver=32.0.15.8088 decode_tag=580.65.06
+NATIVE_INHERITED_KF3_ENV_COUNT=0
+NATIVE_TRACE_HASH_OK=caps\sequence.exe
+NATIVE_TRACE_HASH_OK=caps\kfwc.sys
+NATIVE_TRACE_HASH_OK=kf-census.exe
+NATIVE_TRACE_HASH_OK=caps\kfwc_collect.exe
+{"Name":"NVIDIA GeForce RTX 5060","DriverVersion":"32.0.15.8088","ConfigManagerErrorCode":0,"Status":"OK"}
+windows build                26100          Microsoft Windows 11 Enterprise LTSC Evaluation
+secure boot                  off
+testsigning                  on             bcdedit /set {current} testsigning on needs Secure Boot off
+VBS / HVCI                   0 / 0          2 running = VBS on; 2 in services = HVCI (test signing still loads, see doc)
+nvidia gpu                   DEV_2D05       driver 32.0.15.8088, status OK
+gsp                          (see nvidia-smi -q) GSP Firmware Version must not be N/A for queues to exist
+free disk C: (MiB)           119705         a capture of a boot is tens of MiB
+RAM (MiB)                    51480          the RAM scan fallback reads all of it once per pass
+signed with                  Set-AuthenticodeSignature status Valid
+[SC] CreateService SUCCESS
+
+SERVICE_NAME: KayfabeWinCapture
+        TYPE               : 1  KERNEL_DRIVER
+        STATE              : 4  RUNNING
+                                (STOPPABLE, NOT_PAUSABLE, IGNORES_SHUTDOWN)
+        WIN32_EXIT_CODE    : 0  (0x0)
+        SERVICE_EXIT_CODE  : 0  (0x0)
+        CHECKPOINT         : 0x0
+        WAIT_HINT          : 0x0
+        PID                : 0
+        FLAGS              :
+Loaded. Certificate thumbprint (keep for -Action Cleanup): E4292A020E7B4C35AD419840A975C4FA7EA56151
+Next: kfwc_collect.exe C:\traces\run1 --seconds 600   (the folder must exist and be empty)
+{"driver_abi":3,"running":0}
+CAPTURE_START name=seedwindow580 pid=2756 module_rev=631f087e3 scan=1 mailbox=1 seconds=60 2026-10-15T23:31:43.7528614Z
+SEED_PASSIVE_EXISTING_GSP=1
+{"Name":"NVIDIA GeForce RTX 5060","DriverVersion":"32.0.15.8088","ConfigManagerErrorCode":0,"Status":"OK"}
+    GSP Firmware Version                  : 580.65.05
+NATIVE_ORACLE_START 2026-10-15T23:31:59.1356659Z
+{"Name":"NVIDIA GeForce RTX 5060","DriverVersion":"32.0.15.8088","Status":"OK","ConfigManagerErrorCode":0}
+NATIVE_PROBE_HASH_OK=cuda\cup3.exe
+NATIVE_PROBE_HASH_OK=kf_dxprobe.exe
+NATIVE_PROBE_HASH_OK=cuda\cup2.exe
+NATIVE_PROBE_HASH_OK=cuda\cup8.exe
+NATIVE_SYSTEM_LOG_READABLE=1
+NVIDIA GeForce RTX 5060, 580.88, WDDM, 8151 MiB
+
+    GSP Firmware Version                  : 580.65.05
+ok   cuInit(0)
+ok   cuDeviceGetCount(&n)
+devices=1
+ok   cuDeviceGet(&d,0)
+ok   cuDeviceGetName(nm,256,d)
+name=NVIDIA GeForce RTX 5060
+ok   cuDeviceGetAttribute(&maj,CU_DEVICE_ATTRIBUTE_COMPUTE_CAPABILITY_MAJOR,d)
+ok   cuDeviceGetAttribute(&min,CU_DEVICE_ATTRIBUTE_COMPUTE_CAPABILITY_MINOR,d)
+compute=12.0
+ok   cuDeviceTotalMem(&tot,d)
+totalMem=7816 MiB
+ok   cuCtxCreate(&ctx,0,d)
+CTX OK
+ok   cuMemAlloc(&dp,4096)
+MEMALLOC OK 0x1106800000
+ok   cuMemcpyHtoD(dp,&hv,4)
+ok   cuMemcpyDtoH(&rv,dp,4)
+CE rv=0xabcd1234 want=0xabcd1234 -> PASS
+DONE
+NATIVE_CUDA cup2 rc=0
+ok   cuInit(0)
+ok   cuDeviceGetCount(&n)
+ok   cuDeviceGet(&d,0)
+ok   cuCtxCreate(&ctx,0,d)
+CTX OK
+PTX_TARGET=sm_86 (device cc 12.0)
+ok   cuModuleLoadData(&mod,PTX)
+MODULE OK
+ok   cuModuleGetFunction(&fn,mod,"k")
+FUNC OK
+ok   cuMemAlloc(&d_in,4)
+ok   cuMemAlloc(&d_out,4)
+MEMALLOC in=0x1106800000 out=0x1106800200
+ok   cuMemcpyHtoD(d_in,&hv,4)
+ok   cuMemsetD32(d_out,0,1)
+ok   cuLaunchKernel(fn, 1,1,1, 1,1,1, 0, 0, args, 0)
+LAUNCH OK
+ok   cuCtxSynchronize()
+SYNC OK
+ok   cuMemcpyDtoH(&rv,d_out,4)
+KERNEL rv=43 want=43 -> PASS
+DONE
+NATIVE_CUDA cup3 rc=0
+ok   cuInit(0)
+ok   cuDeviceGetCount(&nd)
+ok   cuDeviceGet(&d,0)
+ok   cuCtxCreate(&ctx,0,d)
+CTX OK
+PTX_TARGET=sm_86 (device cc 12.0)
+ok   cuModuleLoadData(&mod,PTX)
+MODULE OK
+ok   cuModuleGetFunction(&fn,mod,"mm")
+FUNC OK
+CUP8 matmul N=2048  per-matrix=16 MiB  device=48 MiB
+ok   cuMemAlloc(&dA,sz)
+ok   cuMemAlloc(&dB,sz)
+ok   cuMemAlloc(&dC,sz)
+MEMALLOC A=0x1106800000 B=0x1107800000 C=0x1108800000
+ok   cuMemcpyHtoD(dA,hA,sz)
+ok   cuMemcpyHtoD(dB,hB,sz)
+ok   cuMemsetD32(dC,0,(size_t)N*N)
+LAUNCH grid=(128,128) block=(16,16)
+ok   cuLaunchKernel(fn, g,g,1, 16,16,1, 0,0, args,0)
+LAUNCH OK
+ok   cuCtxSynchronize()
+SYNC OK
+ok   cuMemcpyDtoH(hC,dC,sz)
+CUP8 RESULT N=2048 bad=0 maxerr=0 C[0]=2048(exp 2048) -> PASS
+CUP8 VERDICT: PASS (host GR matmul byte-exact at scale)
+DONE
+NATIVE_CUDA cup8 rc=0
+KFDX start api=d3d11 iters=20 any_vendor=0
+KFDX ok CreateDXGIFactory1
+KFDX adapter index=0 vendor=0x10de device=0x2d05 luid=0x00000000_0x00093235 dedicated_mb=7575 software=0 name="NVIDIA GeForce RTX 5060"
+KFDX adapter index=1 vendor=0x1414 device=0x008c luid=0x00000000_0x00007375 dedicated_mb=0 software=1 name="Microsoft Basic Render Driver"
+KFDX selected "NVIDIA GeForce RTX 5060"
+KFDX ok D3D11CreateDevice(hardware, chosen adapter)
+KFDX feature_level 0xb100
+KFDX ok compile cs_5_0
+KFDX ok CreateComputeShader
+KFDX ok CreateUnorderedAccessView
+KFDX compute iters=20 bad=0 ms=16
+KFDX ok compute shader result matches (UAV readback)
+KFDX ok compile vs_5_0/ps_5_0
+KFDX ok Map staging texture
+KFDX pixel 64,127,191,255
+KFDX ok draw result matches (centre pixel 64,128,191,255)
+KFDX RESULT OK api=d3d11 adapter="NVIDIA GeForce RTX 5060"
+NATIVE_D3D d3d11 rc=0
+KFDX start api=d3d12 iters=20 any_vendor=0
+KFDX ok CreateDXGIFactory1
+KFDX adapter index=0 vendor=0x10de device=0x2d05 luid=0x00000000_0x00093235 dedicated_mb=7575 software=0 name="NVIDIA GeForce RTX 5060"
+KFDX adapter index=1 vendor=0x1414 device=0x008c luid=0x00000000_0x00007375 dedicated_mb=0 software=1 name="Microsoft Basic Render Driver"
+KFDX selected "NVIDIA GeForce RTX 5060"
+KFDX ok D3D12CreateDevice(chosen adapter)
+KFDX feature_level 0xc200
+KFDX vidmem budget_mb=6807 usage_mb=6
+KFDX ok DIRECT
+KFDX ok DIRECT queue fence Signal/Wait x3
+KFDX ok COPY
+KFDX ok COPY queue fence Signal/Wait x3
+KFDX ok compile cs_5_0
+KFDX ok serialize root signature
+KFDX ok CreateRootSignature
+KFDX ok CreateComputePipelineState
+KFDX compute iters=20 bad=0 fence_wait_ok=1 ms=0
+KFDX ok compute queue fence completed
+KFDX ok compute shader result matches (UAV copy-back)
+KFDX RESULT OK api=d3d12 adapter="NVIDIA GeForce RTX 5060"
+NATIVE_D3D d3d12 rc=0
+NATIVE_TDR_COUNT=0
+NATIVE_POST_DRIVER580_CODE0=1
+NATIVE_ORACLE_EXIT rc=0 2026-10-15T23:32:01.7995282Z
+COLLECTOR_EXIT name=seedwindow580 rc=0 2026-10-15T23:32:41.7941510Z
+records 2849 (bind 2, elements 2844, loss 0/0/2), end yes, file check ok
+DECODE_EXIT name=seedwindow580 census=1 sequence=1
+kf-census: ogkm 580.65.06, 1 sources, 1411 cmd + 1421 status messages, 68 controls
+oracle: FAIL, 4 anomalies
+  prefix_missing                2  e.g. src0: rec2 Cmd q(0x1,0x0): first sequence is 9623, not 0
+  capture_loss                  2  e.g. src0: record 1 LossUnknown q1 Cmd at entry 31: unknown number of entries lost
+  missing messages (sum of forward gaps): 19312
+pairing: 0 controls with unanswered requests or orphan replies; rpc.sequence non-zero on 0 messages
+SEQUENCE_ORACLE_OK=false anomalies=4 unbalanced_controls=0 messages=[1411, 1421]
+CAPTURE_STATS name=seedwindow580 {"steps":31648,"attaches":1,"detaches":1,"messages_cmd":1411,"messages_status":1421,"lost_messages_exact":0,"seq_gap_messages":0,"lapped_messages":0,"loss_records":2,"torn_reads":0,"invalid_elements":0,"unsupported":0,"read_failures":0,"resyncs":2,"sink_dropped":0,"records_refused":0}
+CAPTURE_DISCOVERY name=seedwindow580 {"method":2,"layout":1,"bar0":3,"gpu_count":1,"mailbox_reads":1392,"mailbox_status":2,"scan_bytes":3321823232,"scan_passes":0,"scan_candidates":3,"scan_backoff_resets":1,"scan_backoff_ticks":17897725}
+SEED_ONLY complete_native_reference=0 census=1
+CAPTURE_START name=revisitwindow580 pid=5088 module_rev=631f087e3 scan=1 mailbox=1 seconds=120 2026-10-15T23:32:48.3978934Z
+{"Name":"NVIDIA GeForce RTX 5060","DriverVersion":"32.0.15.8088","ConfigManagerErrorCode":0,"Status":"OK"}
+    GSP Firmware Version                  : 580.65.05
+NATIVE_ORACLE_START 2026-10-15T23:33:04.0738899Z
+{"Name":"NVIDIA GeForce RTX 5060","DriverVersion":"32.0.15.8088","Status":"OK","ConfigManagerErrorCode":0}
+NATIVE_PROBE_HASH_OK=cuda\cup3.exe
+NATIVE_PROBE_HASH_OK=kf_dxprobe.exe
+NATIVE_PROBE_HASH_OK=cuda\cup2.exe
+NATIVE_PROBE_HASH_OK=cuda\cup8.exe
+NATIVE_SYSTEM_LOG_READABLE=1
+NVIDIA GeForce RTX 5060, 580.88, WDDM, 8151 MiB
+    GSP Firmware Version                  : 580.65.05
+ok   cuInit(0)
+ok   cuDeviceGetCount(&n)
+devices=1
+ok   cuDeviceGet(&d,0)
+ok   cuDeviceGetName(nm,256,d)
+name=NVIDIA GeForce RTX 5060
+ok   cuDeviceGetAttribute(&maj,CU_DEVICE_ATTRIBUTE_COMPUTE_CAPABILITY_MAJOR,d)
+ok   cuDeviceGetAttribute(&min,CU_DEVICE_ATTRIBUTE_COMPUTE_CAPABILITY_MINOR,d)
+compute=12.0
+ok   cuDeviceTotalMem(&tot,d)
+totalMem=7816 MiB
+ok   cuCtxCreate(&ctx,0,d)
+CTX OK
+ok   cuMemAlloc(&dp,4096)
+MEMALLOC OK 0x1106800000
+ok   cuMemcpyHtoD(dp,&hv,4)
+ok   cuMemcpyDtoH(&rv,dp,4)
+CE rv=0xabcd1234 want=0xabcd1234 -> PASS
+DONE
+NATIVE_CUDA cup2 rc=0
+ok   cuInit(0)
+ok   cuDeviceGetCount(&n)
+ok   cuDeviceGet(&d,0)
+ok   cuCtxCreate(&ctx,0,d)
+CTX OK
+PTX_TARGET=sm_86 (device cc 12.0)
+ok   cuModuleLoadData(&mod,PTX)
+MODULE OK
+ok   cuModuleGetFunction(&fn,mod,"k")
+FUNC OK
+ok   cuMemAlloc(&d_in,4)
+ok   cuMemAlloc(&d_out,4)
+MEMALLOC in=0x1106800000 out=0x1106800200
+ok   cuMemcpyHtoD(d_in,&hv,4)
+ok   cuMemsetD32(d_out,0,1)
+ok   cuLaunchKernel(fn, 1,1,1, 1,1,1, 0, 0, args, 0)
+LAUNCH OK
+ok   cuCtxSynchronize()
+SYNC OK
+ok   cuMemcpyDtoH(&rv,d_out,4)
+KERNEL rv=43 want=43 -> PASS
+DONE
+NATIVE_CUDA cup3 rc=0
+ok   cuInit(0)
+ok   cuDeviceGetCount(&nd)
+ok   cuDeviceGet(&d,0)
+ok   cuCtxCreate(&ctx,0,d)
+CTX OK
+PTX_TARGET=sm_86 (device cc 12.0)
+ok   cuModuleLoadData(&mod,PTX)
+MODULE OK
+ok   cuModuleGetFunction(&fn,mod,"mm")
+FUNC OK
+CUP8 matmul N=2048  per-matrix=16 MiB  device=48 MiB
+ok   cuMemAlloc(&dA,sz)
+ok   cuMemAlloc(&dB,sz)
+ok   cuMemAlloc(&dC,sz)
+MEMALLOC A=0x1106800000 B=0x1107800000 C=0x1108800000
+ok   cuMemcpyHtoD(dA,hA,sz)
+ok   cuMemcpyHtoD(dB,hB,sz)
+ok   cuMemsetD32(dC,0,(size_t)N*N)
+LAUNCH grid=(128,128) block=(16,16)
+ok   cuLaunchKernel(fn, g,g,1, 16,16,1, 0,0, args,0)
+LAUNCH OK
+ok   cuCtxSynchronize()
+SYNC OK
+ok   cuMemcpyDtoH(hC,dC,sz)
+CUP8 RESULT N=2048 bad=0 maxerr=0 C[0]=2048(exp 2048) -> PASS
+CUP8 VERDICT: PASS (host GR matmul byte-exact at scale)
+DONE
+NATIVE_CUDA cup8 rc=0
+KFDX start api=d3d11 iters=20 any_vendor=0
+KFDX ok CreateDXGIFactory1
+KFDX adapter index=0 vendor=0x10de device=0x2d05 luid=0x00000000_0x00b3b784 dedicated_mb=7575 software=0 name="NVIDIA GeForce RTX 5060"
+KFDX adapter index=1 vendor=0x1414 device=0x008c luid=0x00000000_0x00007375 dedicated_mb=0 software=1 name="Microsoft Basic Render Driver"
+KFDX selected "NVIDIA GeForce RTX 5060"
+KFDX ok D3D11CreateDevice(hardware, chosen adapter)
+KFDX feature_level 0xb100
+KFDX ok compile cs_5_0
+KFDX ok CreateComputeShader
+KFDX ok CreateUnorderedAccessView
+KFDX compute iters=20 bad=0 ms=0
+KFDX ok compute shader result matches (UAV readback)
+KFDX ok compile vs_5_0/ps_5_0
+KFDX ok Map staging texture
+KFDX pixel 64,127,191,255
+KFDX ok draw result matches (centre pixel 64,128,191,255)
+KFDX RESULT OK api=d3d11 adapter="NVIDIA GeForce RTX 5060"
+NATIVE_D3D d3d11 rc=0
+KFDX start api=d3d12 iters=20 any_vendor=0
+KFDX ok CreateDXGIFactory1
+KFDX adapter index=0 vendor=0x10de device=0x2d05 luid=0x00000000_0x00b3b784 dedicated_mb=7575 software=0 name="NVIDIA GeForce RTX 5060"
+KFDX adapter index=1 vendor=0x1414 device=0x008c luid=0x00000000_0x00007375 dedicated_mb=0 software=1 name="Microsoft Basic Render Driver"
+KFDX selected "NVIDIA GeForce RTX 5060"
+KFDX ok D3D12CreateDevice(chosen adapter)
+KFDX feature_level 0xc200
+KFDX vidmem budget_mb=6807 usage_mb=6
+KFDX ok DIRECT
+KFDX ok DIRECT queue fence Signal/Wait x3
+KFDX ok COPY
+KFDX ok COPY queue fence Signal/Wait x3
+KFDX ok compile cs_5_0
+KFDX ok serialize root signature
+KFDX ok CreateRootSignature
+KFDX ok CreateComputePipelineState
+KFDX compute iters=20 bad=0 fence_wait_ok=1 ms=15
+KFDX ok compute queue fence completed
+KFDX ok compute shader result matches (UAV copy-back)
+KFDX RESULT OK api=d3d12 adapter="NVIDIA GeForce RTX 5060"
+NATIVE_D3D d3d12 rc=0
+NATIVE_TDR_COUNT=0
+NATIVE_POST_DRIVER580_CODE0=1
+NATIVE_ORACLE_EXIT rc=0 2026-10-15T23:33:06.4407354Z
+COLLECTOR_EXIT name=revisitwindow580 rc=0 2026-10-15T23:34:46.4568182Z
+records 9708 (bind 2, elements 9705, loss 0/0/0), end yes, file check ok
+DECODE_EXIT name=revisitwindow580 census=0 sequence=0
+kf-census: ogkm 580.65.06, 1 sources, 4807 cmd + 4872 status messages, 218 controls
+oracle: PASS (no gap, no parse failure, no trailing bytes, no unknown function)
+pairing: 0 controls with unanswered requests or orphan replies; rpc.sequence non-zero on 0 messages
+SEQUENCE_ORACLE_OK=true anomalies=0 unbalanced_controls=0 messages=[4807, 4872]
+CAPTURE_STATS name=revisitwindow580 {"steps":83840,"attaches":1,"detaches":1,"messages_cmd":4807,"messages_status":4872,"lost_messages_exact":0,"seq_gap_messages":0,"lapped_messages":0,"loss_records":0,"torn_reads":0,"invalid_elements":0,"unsupported":0,"read_failures":0,"resyncs":2,"sink_dropped":0,"records_refused":0}
+CAPTURE_DISCOVERY name=revisitwindow580 {"method":4,"layout":1,"bar0":3,"gpu_count":1,"mailbox_reads":244,"mailbox_status":2,"scan_bytes":7517241344,"scan_passes":0,"scan_candidates":1,"scan_backoff_resets":3,"scan_backoff_ticks":17897725}
+NATIVE_COMPLETE_PREFIX_PASS=1
+{"Name":"NVIDIA GeForce RTX 5060","DriverVersion":"32.0.15.8088","ConfigManagerErrorCode":0,"Status":"OK"}
+NATIVE_TRACE_EXIT rc=0 2026-10-15T23:34:47.2745699Z
+
+
+#< CLIXML
+<Objs Version="1.1.0.1" xmlns="http://schemas.microsoft.com/powershell/2004/04"><Obj S="progress" RefId="0"><TN RefId="0"><T>System.Management.Automation.PSCustomObject</T><T>System.Object</T></TN><MS><I64 N="SourceId">1</I64><PR N="Record"><AV>Preparing modules for first use.</AV><AI>0</AI><Nil /><PI>-1</PI><PC>-1</PC><T>Completed</T><SR>-1</SR><SD> </SD></PR></MS></Obj><Obj S="progress" RefId="1"><TNRef RefId="0" /><MS><I64 N="SourceId">2</I64><PR N="Record"><AV>Preparing modules for first use.</AV><AI>0</AI><Nil /><PI>-1</PI><PC>-1</PC><T>Completed</T><SR>-1</SR><SD> </SD></PR></MS></Obj><Obj S="progress" RefId="2"><TNRef RefId="0" /><MS><I64 N="SourceId">7</I64><PR N="Record"><AV>Get-PnpDevice -PresentOnly -Class Display | Where-Object InstanceId -like 'PCI\VEN_10DE*')</AV><AI>1096374019</AI><Nil /><PI>-1</PI><PC>100</PC><T>Completed</T><SR>0</SR><SD>1/1 completed</SD></PR></MS></Obj><Obj S="progress" RefId="3"><TNRef RefId="0" /><MS><I64 N="SourceId">8</I64><PR N="Record"><AV>Get-PnpDeviceProperty -InstanceId $gpu.InstanceId -KeyName DEVPKEY_Device_Driver).Data</AV><AI>1664680790</AI><Nil /><PI>-1</PI><PC>100</PC><T>Completed</T><SR>0</SR><SD>2/2 completed</SD></PR></MS></Obj><Obj S="progress" RefId="4"><TNRef RefId="0" /><MS><I64 N="SourceId">10</I64><PR N="Record"><AV>Get-PnpDeviceProperty -InstanceId $gpu.InstanceId -KeyName DEVPKEY_Device_ProblemCode).Data</AV><AI>1342325499</AI><Nil /><PI>-1</PI><PC>100</PC><T>Completed</T><SR>0</SR><SD>2/2 completed</SD></PR></MS></Obj></Objs>
+CONTROLLER_EXIT_RC=0 UTC=2026-10-15T23:34:47.100507+00:00

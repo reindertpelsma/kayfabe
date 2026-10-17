@@ -1,0 +1,13 @@
+{
+  "linux_tag": "610.57.04",
+  "linux_cl": 38610010,
+  "linux_branch": "rel/gpu_drv/r610/r610_85-4",
+  "win_name": "610.88",
+  "win_cl": 38566155,
+  "win_branch": "r610_85-151",
+  "source_url": "https://raw.githubusercontent.com/NVIDIA/open-gpu-kernel-modules/610.57.04/src/common/inc/nvBldVer.h",
+  "header_sha256": "cd1c4b7200250abb5b06029151e772489f006609ba8061741cd2a20eec5ac770",
+  "release_notes_url": "https://docs.nvidia.com/datacenter/tesla/tesla-release-notes-610-57-04/index.html",
+  "probe_source": "kf_abi::windows_twin::linux_twin; no override",
+  "same_source_snapshot": false
+}

@@ -875,6 +875,8 @@ impl CommandPolicy for PolicyChain {
 /// process**, with no QEMU restart and no bench slot.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct GspFsm {
+    // Lifetime budget survives guest device resets; host option only.
+    reply_body_trace: crate::replytrace::ReplyBodyTrace,
     /// ★★★★★ **w432 — HOW MANY COMMAND DOORBELLS ARE WAITING FOR A WORKER.**
     ///
     /// `[measured]` servicing the GSP command queue is the **worst trap in the device**:
@@ -1109,6 +1111,7 @@ impl GspFsm {
     #[must_use]
     pub fn new(abi: GspAbi) -> GspFsm {
         GspFsm {
+            reply_body_trace: crate::replytrace::ReplyBodyTrace::from_host_env(),
             pending_command_doorbells: 0,
             held: Vec::new(),
             refusals: crate::refusal::RefusalLedger::new(),
@@ -1225,8 +1228,10 @@ impl GspFsm {
         // ⊘ w472b's fix (carrying a `defer_commands` flag across the reset) is gone with the flag:
         // deferral is structural in v3, so a reset cannot disarm it.
         let system_info = self.system_info.take();
+        let body_trace = std::mem::take(&mut self.reply_body_trace);
         *self = GspFsm::new(self.abi);
         self.system_info = system_info;
+        self.reply_body_trace = body_trace;
         Transition::E11
     }
 
@@ -2660,6 +2665,14 @@ impl GspFsm {
             b.stat.free_cache = free - elements;
         }
         self.swgen0_pending = true;
+        // AFTER successful queue publication and any held-reply patch. Never
+        // records a failed/full-queue attempt; it cannot alter the posted RPC.
+        if let Some(record) =
+            self.reply_body_trace
+                .posted(&self.abi, rpc, self.stat_seq.wrapping_sub(1))
+        {
+            eprintln!("{record}");
+        }
         Ok(())
     }
 
@@ -4100,6 +4113,130 @@ mod device_reset_from_every_phase {
         sent_sysinfo: bool,
     }
 
+    // GPU-free child fixture exercises the real queue publication path. Process-local
+    // environment avoids unsafe set_var and races between parallel Rust tests.
+    #[test]
+    fn reply_body_trace_fixture() {
+        let Ok(mode) = std::env::var("KF_POST_TRACE_FIXTURE") else {
+            return;
+        };
+        let after = AfterSuspend::AwaitsTeardownUcode;
+        let mut d = Dev::life(GspFsm::new(abi()), after);
+        d.start_with_frts();
+        d.firmware_loaded();
+        d.publish();
+        let w = d.fsm.abi.driver.rm_control_wire();
+        let params = if mode == "large" { 5000 } else { 4 };
+        let selector: u32 = if mode == "large" {
+            0x0073_0245
+        } else {
+            0x2080_0a58
+        };
+        let mut payload = vec![0; w.params_off + params];
+        payload[8..12].copy_from_slice(&selector.to_le_bytes());
+        payload[w.params_size_off..w.params_size_off + 4]
+            .copy_from_slice(&(params as u32).to_le_bytes());
+        payload[w.params_off..].fill(0xab);
+        let rpc = OutgoingRpc {
+            function: 76,
+            sequence: 9,
+            rpc_result: 0,
+            rpc_result_private: 0,
+            payload,
+        };
+        // A failed publication must not consume a record or report a sent body.
+        let queue = std::mem::replace(&mut d.fsm.queue, QueueState::Unbound);
+        assert!(d.fsm.post(&mut d.ram, &rpc).is_err());
+        d.fsm.queue = queue;
+        // Board/static-info replies and unrelated controls must remain outside
+        // the fixed display diagnostic allowlist, even with capture enabled.
+        let mut outside = rpc.clone();
+        outside.function = 65;
+        d.guest_drains_status();
+        d.fsm.post(&mut d.ram, &outside).unwrap();
+        outside.function = 76;
+        outside.payload[8..12].copy_from_slice(&0x2080_0a89u32.to_le_bytes());
+        d.guest_drains_status();
+        d.fsm.post(&mut d.ram, &outside).unwrap();
+        let count = match mode.as_str() {
+            "reset" => 514,
+            "large" => 100,
+            _ => 1,
+        };
+        for i in 0..count {
+            if mode == "reset" && i == 512 {
+                d.fsm.device_reset();
+                d = Dev::life(d.fsm, after);
+                d.start_with_frts();
+                d.firmware_loaded();
+                d.publish();
+            }
+            d.guest_drains_status();
+            d.fsm
+                .post(&mut d.ram, &rpc)
+                .expect("fixture reply fits the ring");
+        }
+    }
+
+    fn reply_body_fixture_output(mode: &str, enabled: bool) -> Vec<String> {
+        let mut child = std::process::Command::new(std::env::current_exe().unwrap());
+        child
+            .args([
+                "reply_body_trace_fixture",
+                "--nocapture",
+                "--test-threads=1",
+            ])
+            .env("KF_POST_TRACE_FIXTURE", mode);
+        if enabled {
+            child.env("KF3_RPC_BODY_TRACE", "1");
+        } else {
+            child.env_remove("KF3_RPC_BODY_TRACE");
+        }
+        let output = child.output().unwrap();
+        assert!(
+            output.status.success(),
+            "{}",
+            String::from_utf8_lossy(&output.stderr)
+        );
+        String::from_utf8_lossy(&output.stderr)
+            .lines()
+            .filter(|l| l.starts_with("kf-gsp: reply-body "))
+            .map(str::to_owned)
+            .collect()
+    }
+
+    #[test]
+    fn posted_reply_body_is_logged_once_and_failed_post_is_absent() {
+        let rows = reply_body_fixture_output("one", true);
+        assert_eq!(
+            rows.len(),
+            1,
+            "capture only the successfully posted a58 reply"
+        );
+        assert!(rows[0].contains("selector=0x20800a58"));
+        assert!(rows[0].ends_with("abababab"));
+    }
+
+    #[test]
+    fn guest_reset_does_not_rearm_the_reply_record_budget() {
+        assert_eq!(reply_body_fixture_output("reset", true).len(), 512);
+    }
+
+    #[test]
+    fn large_reply_dumps_obey_both_per_record_and_total_byte_limits() {
+        let rows = reply_body_fixture_output("large", true);
+        assert_eq!(rows.len(), 64, "256KiB total at4096bytes per record");
+        for row in rows {
+            assert!(row.contains("saved=4096 truncated=1"));
+            assert_eq!(row.split("body=").last().unwrap().len(), 8192);
+        }
+    }
+
+    #[test]
+    fn reply_body_diagnostics_are_disabled_by_default() {
+        assert!(reply_body_fixture_output("one", false).is_empty());
+    }
+
     impl Dev {
         /// A guest life with its queues laid out in fresh RAM, against `fsm`.
         fn life(fsm: GspFsm, after: AfterSuspend) -> Dev {
@@ -4566,6 +4703,7 @@ mod device_reset_from_every_phase {
         let mut d = drive(BootPhase::Running, true, None);
         d.fsm.device_reset();
         let GspFsm {
+            reply_body_trace,
             pending_command_doorbells,
             held,
             refusals,
@@ -4597,6 +4735,7 @@ mod device_reset_from_every_phase {
             system_info,
         } = d.fsm;
         let GspFsm {
+            reply_body_trace: bt0,
             pending_command_doorbells: p0,
             held: h0,
             refusals: r0,
@@ -4627,6 +4766,9 @@ mod device_reset_from_every_phase {
             frts_offset: fo0,
             system_info: si0,
         } = GspFsm::new(abi());
+        // Default-off diagnostic state remains empty; enabled budget survival
+        // is covered separately by guest_reset_does_not_rearm_the_reply_record_budget.
+        assert_eq!(reply_body_trace, bt0);
         assert_eq!(pending_command_doorbells, p0);
         assert_eq!(held, h0);
         assert_eq!(refusals, r0);
@@ -4901,7 +5043,10 @@ mod device_reset_from_every_phase {
         fn a_pm_suspended_life_survives_the_wake_reset_and_resumes_without_a_publish() {
             let mut d = suspended(true);
             let (stat_seq, cmd_seq) = (d.fsm.stat_seq, d.fsm.command_seq());
-            assert!(stat_seq > 0 && cmd_seq > 0, "the streams moved before the suspend");
+            assert!(
+                stat_seq > 0 && cmd_seq > 0,
+                "the streams moved before the suspend"
+            );
             let wp = stat_wp(&mut d);
             let hdr_before = {
                 let mut b = vec![0u8; 32];
@@ -4924,14 +5069,19 @@ mod device_reset_from_every_phase {
             assert!(out.contains("E15"), "{out}");
             assert!(!out.contains("E6"), "a resume never publishes: {out}");
             assert_eq!(d.fsm.phase(), BootPhase::Booted);
-            assert!(d.fsm.observe().riscv_active, "kflcnIsRiscvActive after Booter Load");
+            assert!(
+                d.fsm.observe().riscv_active,
+                "kflcnIsRiscvActive after Booter Load"
+            );
             assert!(!d.fsm.resumable(), "the saved life is consumed");
 
             // GSP_INIT_DONE at the stream's next sequence number, in the slot after the last reply
             assert_eq!(stat_wp(&mut d), (wp + 1) % COUNT as u32);
             assert_eq!(stat_seq_at(&mut d, u64::from(wp)), stat_seq);
             let mut hdr_after = vec![0u8; 32];
-            d.ram.read(REGION + STAT_OFF, &mut hdr_after).expect("mapped");
+            d.ram
+                .read(REGION + STAT_OFF, &mut hdr_after)
+                .expect("mapped");
             assert_eq!(
                 hdr_after[..16],
                 hdr_before[..16],
@@ -4948,7 +5098,10 @@ mod device_reset_from_every_phase {
             assert!(out.contains("Running"), "{out}");
             assert_eq!(d.fsm.phase(), BootPhase::Running);
             assert_eq!(d.fsm.command_seq(), cmd_seq + 1);
-            assert_eq!(stat_seq_at(&mut d, u64::from((wp + 1) % COUNT as u32)), stat_seq + 1);
+            assert_eq!(
+                stat_seq_at(&mut d, u64::from((wp + 1) % COUNT as u32)),
+                stat_seq + 1
+            );
         }
 
         /// The same life suspended and resumed three times in one boot.
@@ -4971,7 +5124,11 @@ mod device_reset_from_every_phase {
                 assert!(d.ring().contains("E7"), "cycle {cycle}");
                 assert_eq!(d.fsm.phase(), BootPhase::Running, "cycle {cycle}");
                 assert_eq!(d.fsm.command_seq(), cmd_seq + 1, "cycle {cycle}");
-                assert_eq!(d.fsm.stat_seq, stat_seq + 2, "cycle {cycle}: INIT_DONE + reply");
+                assert_eq!(
+                    d.fsm.stat_seq,
+                    stat_seq + 2,
+                    "cycle {cycle}: INIT_DONE + reply"
+                );
                 d.guest_drains_status();
             }
         }
@@ -5054,8 +5211,7 @@ mod device_reset_from_every_phase {
             assert_eq!(f.wake_reset(), Some(Transition::E14));
             f.note_command_doorbells(1);
             assert!(
-                f.service_one_deferred_command(&mut ram, &mut Live)
-                    .is_ok(),
+                f.service_one_deferred_command(&mut ram, &mut Live).is_ok(),
                 "Cold after the wake: E12, zero reads"
             );
         }
@@ -5067,8 +5223,8 @@ mod device_reset_from_every_phase {
             d.ram
                 .read(REGION + STAT_OFF + ELEM + slot * ELEM, &mut first)
                 .expect("mapped");
-            let len = peek_len(&abi.element, &first, ELEM as u32, abi.element_size_max)
-                .expect("a reply");
+            let len =
+                peek_len(&abi.element, &first, ELEM as u32, abi.element_size_max).expect("a reply");
             let seq = peek_seq_num(&abi.element, &first).expect("seq");
             let m = decode_message(&abi.element, &first, len, seq, &abi.driver).expect("decodes");
             (
@@ -5098,7 +5254,13 @@ mod device_reset_from_every_phase {
                 abi.element_size_max as usize - abi.element.hdr_size() - crate::large::RPC_HEADER;
             let pages = head_len / 8 + 10;
             let mut body = vec![0u8; 56 + pages * 8];
-            for (off, v) in [(0usize, 1u32), (4, 2), (8, 0x77), (12, 0x81), (40, pages as u32)] {
+            for (off, v) in [
+                (0usize, 1u32),
+                (4, 2),
+                (8, 0x77),
+                (12, 0x81),
+                (40, pages as u32),
+            ] {
                 body[off..off + 4].copy_from_slice(&v.to_le_bytes());
             }
             assert_eq!(cell.declared_len(&body[..head_len]), Some(body.len()));
@@ -5108,14 +5270,21 @@ mod device_reset_from_every_phase {
             let wp = stat_wp(&mut d);
             let out = d.ring();
             assert!(out.contains("Ok"), "{out}");
-            assert_eq!(stat_wp(&mut d), (wp + 1) % COUNT as u32, "exactly one reply");
+            assert_eq!(
+                stat_wp(&mut d),
+                (wp + 1) % COUNT as u32,
+                "exactly one reply"
+            );
             assert_eq!(reply_at(&mut d, u64::from(wp)), (4, head_seq, 0, 0));
             // the stream goes on: the next command is answered at its own sequence
             d.guest_drains_status();
             let next_seq = 100 + d.guest_seq;
             d.send(abi.rpc.codes.free, vec![0; 16]);
             d.ring();
-            assert_eq!(reply_at(&mut d, u64::from((wp + 1) % COUNT as u32)).1, next_seq);
+            assert_eq!(
+                reply_at(&mut d, u64::from((wp + 1) % COUNT as u32)).1,
+                next_seq
+            );
         }
 
         /// The FSP regime's firmware halts itself at fn 47 (E13); the device decodes the body

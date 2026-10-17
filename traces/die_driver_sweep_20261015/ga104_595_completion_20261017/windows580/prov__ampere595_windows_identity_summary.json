@@ -1,0 +1,15 @@
+{
+  "same_vm_uuid_in_retained_actual_receipts": true,
+  "receipts": [
+    {
+      "receipt": "ampere595_windows_stock_process_receipt.json",
+      "vm_uuid_sha256": "12d3ce19b67ea91681101261f9601302caaacb4dcaa5a638356b2c5beae4b0f7"
+    },
+    {
+      "receipt": "ampere595_ampere580_stage_receipt.json",
+      "vm_uuid_sha256": "12d3ce19b67ea91681101261f9601302caaacb4dcaa5a638356b2c5beae4b0f7"
+    }
+  ],
+  "tpm_public_ek_baseline": "8cedf4ace24b16d788480379093f092b490c24af45db394b0bccfdef0a39ab39",
+  "cold_gpu_TPM_comparison": "UNRUN; no accepted NVIDIA cold boot"
+}

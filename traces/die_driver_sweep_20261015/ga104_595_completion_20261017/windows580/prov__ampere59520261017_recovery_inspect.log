@@ -1,0 +1,6 @@
+GUEST_PROGRAM_STARTED ampere59520261017_recovery_inspect.ps1 pid=380
+RECOVERY_INSPECT_JSON={"service_gsp":1,"files":[{"bytes":890807536,"name":"driver58088.exe"},{"bytes":602624,"name":"7zr.exe"},{"bytes":661656,"name":"nvidia58088\\setup.exe"}],"nvidia_stored_devices":[{"pci":"VEN_10DE\u0026DEV_2484","class_gsp_after":1,"class_gsp_before":null,"version":"10.0.26100.1"}],"installer_exit_marker":true,"installer_started":true}
+
+#< CLIXML
+<Objs Version="1.1.0.1" xmlns="http://schemas.microsoft.com/powershell/2004/04"><Obj S="progress" RefId="0"><TN RefId="0"><T>System.Management.Automation.PSCustomObject</T><T>System.Object</T></TN><MS><I64 N="SourceId">1</I64><PR N="Record"><AV>Preparing modules for first use.</AV><AI>0</AI><Nil /><PI>-1</PI><PC>-1</PC><T>Completed</T><SR>-1</SR><SD> </SD></PR></MS></Obj><Obj S="progress" RefId="1"><TNRef RefId="0" /><MS><I64 N="SourceId">1</I64><PR N="Record"><AV>Preparing modules for first use.</AV><AI>0</AI><Nil /><PI>-1</PI><PC>-1</PC><T>Completed</T><SR>-1</SR><SD> </SD></PR></MS></Obj></Objs>
+GUEST_PROGRAM_EXIT ampere59520261017_recovery_inspect.ps1 code=0

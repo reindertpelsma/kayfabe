@@ -1,0 +1,567 @@
+HOLD_ADAPTER driver=32.0.15.8088 code=0 dwm=1 explorer=1
+HOLD_START utc=2026-10-16T14:09:47.5197916Z requested_seconds=420 repeated_d3d_probes=1
+KFDX start api=d3d11 iters=20 any_vendor=0
+KFDX ok CreateDXGIFactory1
+KFDX adapter index=0 vendor=0x10de device=0x2f04 luid=0x00000000_0x00006131 dedicated_mb=11855 software=0 name="NVIDIA GeForce RTX 5070"
+KFDX adapter index=1 vendor=0x1414 device=0x008c luid=0x00000000_0x000072f6 dedicated_mb=0 software=1 name="Microsoft Basic Render Driver"
+KFDX selected "NVIDIA GeForce RTX 5070"
+KFDX ok D3D11CreateDevice(hardware, chosen adapter)
+KFDX feature_level 0xb100
+KFDX ok compile cs_5_0
+KFDX ok CreateComputeShader
+KFDX ok CreateUnorderedAccessView
+KFDX compute iters=20 bad=0 ms=0
+KFDX ok compute shader result matches (UAV readback)
+KFDX ok compile vs_5_0/ps_5_0
+KFDX ok Map staging texture
+KFDX pixel 64,127,191,255
+KFDX ok draw result matches (centre pixel 64,128,191,255)
+KFDX RESULT OK api=d3d11 adapter="NVIDIA GeForce RTX 5070"
+HOLD_D3D round=1 api=d3d11 rc=0 elapsed=0.35
+KFDX start api=d3d12 iters=20 any_vendor=0
+KFDX ok CreateDXGIFactory1
+KFDX adapter index=0 vendor=0x10de device=0x2f04 luid=0x00000000_0x00006131 dedicated_mb=11855 software=0 name="NVIDIA GeForce RTX 5070"
+KFDX adapter index=1 vendor=0x1414 device=0x008c luid=0x00000000_0x000072f6 dedicated_mb=0 software=1 name="Microsoft Basic Render Driver"
+KFDX selected "NVIDIA GeForce RTX 5070"
+KFDX ok D3D12CreateDevice(chosen adapter)
+KFDX feature_level 0xc200
+KFDX vidmem budget_mb=11087 usage_mb=6
+KFDX ok DIRECT
+KFDX ok DIRECT queue fence Signal/Wait x3
+KFDX ok COPY
+KFDX ok COPY queue fence Signal/Wait x3
+KFDX ok compile cs_5_0
+KFDX ok serialize root signature
+KFDX ok CreateRootSignature
+KFDX ok CreateComputePipelineState
+KFDX compute iters=20 bad=0 fence_wait_ok=1 ms=15
+KFDX ok compute queue fence completed
+KFDX ok compute shader result matches (UAV copy-back)
+KFDX RESULT OK api=d3d12 adapter="NVIDIA GeForce RTX 5070"
+HOLD_D3D round=1 api=d3d12 rc=0 elapsed=0.91
+HOLD_ADAPTER driver=32.0.15.8088 code=0 dwm=1 explorer=1
+KFDX start api=d3d11 iters=20 any_vendor=0
+KFDX ok CreateDXGIFactory1
+KFDX adapter index=0 vendor=0x10de device=0x2f04 luid=0x00000000_0x00006131 dedicated_mb=11855 software=0 name="NVIDIA GeForce RTX 5070"
+KFDX adapter index=1 vendor=0x1414 device=0x008c luid=0x00000000_0x000072f6 dedicated_mb=0 software=1 name="Microsoft Basic Render Driver"
+KFDX selected "NVIDIA GeForce RTX 5070"
+KFDX ok D3D11CreateDevice(hardware, chosen adapter)
+KFDX feature_level 0xb100
+KFDX ok compile cs_5_0
+KFDX ok CreateComputeShader
+KFDX ok CreateUnorderedAccessView
+KFDX compute iters=20 bad=0 ms=16
+KFDX ok compute shader result matches (UAV readback)
+KFDX ok compile vs_5_0/ps_5_0
+KFDX ok Map staging texture
+KFDX pixel 64,127,191,255
+KFDX ok draw result matches (centre pixel 64,128,191,255)
+KFDX RESULT OK api=d3d11 adapter="NVIDIA GeForce RTX 5070"
+HOLD_D3D round=2 api=d3d11 rc=0 elapsed=31.28
+KFDX start api=d3d12 iters=20 any_vendor=0
+KFDX ok CreateDXGIFactory1
+KFDX adapter index=0 vendor=0x10de device=0x2f04 luid=0x00000000_0x00006131 dedicated_mb=11855 software=0 name="NVIDIA GeForce RTX 5070"
+KFDX adapter index=1 vendor=0x1414 device=0x008c luid=0x00000000_0x000072f6 dedicated_mb=0 software=1 name="Microsoft Basic Render Driver"
+KFDX selected "NVIDIA GeForce RTX 5070"
+KFDX ok D3D12CreateDevice(chosen adapter)
+KFDX feature_level 0xc200
+KFDX vidmem budget_mb=11087 usage_mb=6
+KFDX ok DIRECT
+KFDX ok DIRECT queue fence Signal/Wait x3
+KFDX ok COPY
+KFDX ok COPY queue fence Signal/Wait x3
+KFDX ok compile cs_5_0
+KFDX ok serialize root signature
+KFDX ok CreateRootSignature
+KFDX ok CreateComputePipelineState
+KFDX compute iters=20 bad=0 fence_wait_ok=1 ms=16
+KFDX ok compute queue fence completed
+KFDX ok compute shader result matches (UAV copy-back)
+KFDX RESULT OK api=d3d12 adapter="NVIDIA GeForce RTX 5070"
+HOLD_D3D round=2 api=d3d12 rc=0 elapsed=31.84
+HOLD_ADAPTER driver=32.0.15.8088 code=0 dwm=1 explorer=1
+KFDX start api=d3d11 iters=20 any_vendor=0
+KFDX ok CreateDXGIFactory1
+KFDX adapter index=0 vendor=0x10de device=0x2f04 luid=0x00000000_0x00006131 dedicated_mb=11855 software=0 name="NVIDIA GeForce RTX 5070"
+KFDX adapter index=1 vendor=0x1414 device=0x008c luid=0x00000000_0x000072f6 dedicated_mb=0 software=1 name="Microsoft Basic Render Driver"
+KFDX selected "NVIDIA GeForce RTX 5070"
+KFDX ok D3D11CreateDevice(hardware, chosen adapter)
+KFDX feature_level 0xb100
+KFDX ok compile cs_5_0
+KFDX ok CreateComputeShader
+KFDX ok CreateUnorderedAccessView
+KFDX compute iters=20 bad=0 ms=16
+KFDX ok compute shader result matches (UAV readback)
+KFDX ok compile vs_5_0/ps_5_0
+KFDX ok Map staging texture
+KFDX pixel 64,127,191,255
+KFDX ok draw result matches (centre pixel 64,128,191,255)
+KFDX RESULT OK api=d3d11 adapter="NVIDIA GeForce RTX 5070"
+HOLD_D3D round=3 api=d3d11 rc=0 elapsed=62.21
+KFDX start api=d3d12 iters=20 any_vendor=0
+KFDX ok CreateDXGIFactory1
+KFDX adapter index=0 vendor=0x10de device=0x2f04 luid=0x00000000_0x00006131 dedicated_mb=11855 software=0 name="NVIDIA GeForce RTX 5070"
+KFDX adapter index=1 vendor=0x1414 device=0x008c luid=0x00000000_0x000072f6 dedicated_mb=0 software=1 name="Microsoft Basic Render Driver"
+KFDX selected "NVIDIA GeForce RTX 5070"
+KFDX ok D3D12CreateDevice(chosen adapter)
+KFDX feature_level 0xc200
+KFDX vidmem budget_mb=11087 usage_mb=6
+KFDX ok DIRECT
+KFDX ok DIRECT queue fence Signal/Wait x3
+KFDX ok COPY
+KFDX ok COPY queue fence Signal/Wait x3
+KFDX ok compile cs_5_0
+KFDX ok serialize root signature
+KFDX ok CreateRootSignature
+KFDX ok CreateComputePipelineState
+KFDX compute iters=20 bad=0 fence_wait_ok=1 ms=16
+KFDX ok compute queue fence completed
+KFDX ok compute shader result matches (UAV copy-back)
+KFDX RESULT OK api=d3d12 adapter="NVIDIA GeForce RTX 5070"
+HOLD_D3D round=3 api=d3d12 rc=0 elapsed=62.76
+HOLD_ADAPTER driver=32.0.15.8088 code=0 dwm=1 explorer=1
+KFDX start api=d3d11 iters=20 any_vendor=0
+KFDX ok CreateDXGIFactory1
+KFDX adapter index=0 vendor=0x10de device=0x2f04 luid=0x00000000_0x00006131 dedicated_mb=11855 software=0 name="NVIDIA GeForce RTX 5070"
+KFDX adapter index=1 vendor=0x1414 device=0x008c luid=0x00000000_0x000072f6 dedicated_mb=0 software=1 name="Microsoft Basic Render Driver"
+KFDX selected "NVIDIA GeForce RTX 5070"
+KFDX ok D3D11CreateDevice(hardware, chosen adapter)
+KFDX feature_level 0xb100
+KFDX ok compile cs_5_0
+KFDX ok CreateComputeShader
+KFDX ok CreateUnorderedAccessView
+KFDX compute iters=20 bad=0 ms=15
+KFDX ok compute shader result matches (UAV readback)
+KFDX ok compile vs_5_0/ps_5_0
+KFDX ok Map staging texture
+KFDX pixel 64,127,191,255
+KFDX ok draw result matches (centre pixel 64,128,191,255)
+KFDX RESULT OK api=d3d11 adapter="NVIDIA GeForce RTX 5070"
+HOLD_D3D round=4 api=d3d11 rc=0 elapsed=93.14
+KFDX start api=d3d12 iters=20 any_vendor=0
+KFDX ok CreateDXGIFactory1
+KFDX adapter index=0 vendor=0x10de device=0x2f04 luid=0x00000000_0x00006131 dedicated_mb=11855 software=0 name="NVIDIA GeForce RTX 5070"
+KFDX adapter index=1 vendor=0x1414 device=0x008c luid=0x00000000_0x000072f6 dedicated_mb=0 software=1 name="Microsoft Basic Render Driver"
+KFDX selected "NVIDIA GeForce RTX 5070"
+KFDX ok D3D12CreateDevice(chosen adapter)
+KFDX feature_level 0xc200
+KFDX vidmem budget_mb=11087 usage_mb=6
+KFDX ok DIRECT
+KFDX ok DIRECT queue fence Signal/Wait x3
+KFDX ok COPY
+KFDX ok COPY queue fence Signal/Wait x3
+KFDX ok compile cs_5_0
+KFDX ok serialize root signature
+KFDX ok CreateRootSignature
+KFDX ok CreateComputePipelineState
+KFDX compute iters=20 bad=0 fence_wait_ok=1 ms=16
+KFDX ok compute queue fence completed
+KFDX ok compute shader result matches (UAV copy-back)
+KFDX RESULT OK api=d3d12 adapter="NVIDIA GeForce RTX 5070"
+HOLD_D3D round=4 api=d3d12 rc=0 elapsed=93.67
+HOLD_ADAPTER driver=32.0.15.8088 code=0 dwm=1 explorer=1
+KFDX start api=d3d11 iters=20 any_vendor=0
+KFDX ok CreateDXGIFactory1
+KFDX adapter index=0 vendor=0x10de device=0x2f04 luid=0x00000000_0x00006131 dedicated_mb=11855 software=0 name="NVIDIA GeForce RTX 5070"
+KFDX adapter index=1 vendor=0x1414 device=0x008c luid=0x00000000_0x000072f6 dedicated_mb=0 software=1 name="Microsoft Basic Render Driver"
+KFDX selected "NVIDIA GeForce RTX 5070"
+KFDX ok D3D11CreateDevice(hardware, chosen adapter)
+KFDX feature_level 0xb100
+KFDX ok compile cs_5_0
+KFDX ok CreateComputeShader
+KFDX ok CreateUnorderedAccessView
+KFDX compute iters=20 bad=0 ms=15
+KFDX ok compute shader result matches (UAV readback)
+KFDX ok compile vs_5_0/ps_5_0
+KFDX ok Map staging texture
+KFDX pixel 64,127,191,255
+KFDX ok draw result matches (centre pixel 64,128,191,255)
+KFDX RESULT OK api=d3d11 adapter="NVIDIA GeForce RTX 5070"
+HOLD_D3D round=5 api=d3d11 rc=0 elapsed=124.11
+KFDX start api=d3d12 iters=20 any_vendor=0
+KFDX ok CreateDXGIFactory1
+KFDX adapter index=0 vendor=0x10de device=0x2f04 luid=0x00000000_0x00006131 dedicated_mb=11855 software=0 name="NVIDIA GeForce RTX 5070"
+KFDX adapter index=1 vendor=0x1414 device=0x008c luid=0x00000000_0x000072f6 dedicated_mb=0 software=1 name="Microsoft Basic Render Driver"
+KFDX selected "NVIDIA GeForce RTX 5070"
+KFDX ok D3D12CreateDevice(chosen adapter)
+KFDX feature_level 0xc200
+KFDX vidmem budget_mb=11087 usage_mb=6
+KFDX ok DIRECT
+KFDX ok DIRECT queue fence Signal/Wait x3
+KFDX ok COPY
+KFDX ok COPY queue fence Signal/Wait x3
+KFDX ok compile cs_5_0
+KFDX ok serialize root signature
+KFDX ok CreateRootSignature
+KFDX ok CreateComputePipelineState
+KFDX compute iters=20 bad=0 fence_wait_ok=1 ms=16
+KFDX ok compute queue fence completed
+KFDX ok compute shader result matches (UAV copy-back)
+KFDX RESULT OK api=d3d12 adapter="NVIDIA GeForce RTX 5070"
+HOLD_D3D round=5 api=d3d12 rc=0 elapsed=124.68
+HOLD_ADAPTER driver=32.0.15.8088 code=0 dwm=1 explorer=1
+KFDX start api=d3d11 iters=20 any_vendor=0
+KFDX ok CreateDXGIFactory1
+KFDX adapter index=0 vendor=0x10de device=0x2f04 luid=0x00000000_0x00006131 dedicated_mb=11855 software=0 name="NVIDIA GeForce RTX 5070"
+KFDX adapter index=1 vendor=0x1414 device=0x008c luid=0x00000000_0x000072f6 dedicated_mb=0 software=1 name="Microsoft Basic Render Driver"
+KFDX selected "NVIDIA GeForce RTX 5070"
+KFDX ok D3D11CreateDevice(hardware, chosen adapter)
+KFDX feature_level 0xb100
+KFDX ok compile cs_5_0
+KFDX ok CreateComputeShader
+KFDX ok CreateUnorderedAccessView
+KFDX compute iters=20 bad=0 ms=16
+KFDX ok compute shader result matches (UAV readback)
+KFDX ok compile vs_5_0/ps_5_0
+KFDX ok Map staging texture
+KFDX pixel 64,127,191,255
+KFDX ok draw result matches (centre pixel 64,128,191,255)
+KFDX RESULT OK api=d3d11 adapter="NVIDIA GeForce RTX 5070"
+HOLD_D3D round=6 api=d3d11 rc=0 elapsed=155.05
+KFDX start api=d3d12 iters=20 any_vendor=0
+KFDX ok CreateDXGIFactory1
+KFDX adapter index=0 vendor=0x10de device=0x2f04 luid=0x00000000_0x00006131 dedicated_mb=11855 software=0 name="NVIDIA GeForce RTX 5070"
+KFDX adapter index=1 vendor=0x1414 device=0x008c luid=0x00000000_0x000072f6 dedicated_mb=0 software=1 name="Microsoft Basic Render Driver"
+KFDX selected "NVIDIA GeForce RTX 5070"
+KFDX ok D3D12CreateDevice(chosen adapter)
+KFDX feature_level 0xc200
+KFDX vidmem budget_mb=11087 usage_mb=6
+KFDX ok DIRECT
+KFDX ok DIRECT queue fence Signal/Wait x3
+KFDX ok COPY
+KFDX ok COPY queue fence Signal/Wait x3
+KFDX ok compile cs_5_0
+KFDX ok serialize root signature
+KFDX ok CreateRootSignature
+KFDX ok CreateComputePipelineState
+KFDX compute iters=20 bad=0 fence_wait_ok=1 ms=16
+KFDX ok compute queue fence completed
+KFDX ok compute shader result matches (UAV copy-back)
+KFDX RESULT OK api=d3d12 adapter="NVIDIA GeForce RTX 5070"
+HOLD_D3D round=6 api=d3d12 rc=0 elapsed=155.57
+HOLD_ADAPTER driver=32.0.15.8088 code=0 dwm=1 explorer=1
+KFDX start api=d3d11 iters=20 any_vendor=0
+KFDX ok CreateDXGIFactory1
+KFDX adapter index=0 vendor=0x10de device=0x2f04 luid=0x00000000_0x00006131 dedicated_mb=11855 software=0 name="NVIDIA GeForce RTX 5070"
+KFDX adapter index=1 vendor=0x1414 device=0x008c luid=0x00000000_0x000072f6 dedicated_mb=0 software=1 name="Microsoft Basic Render Driver"
+KFDX selected "NVIDIA GeForce RTX 5070"
+KFDX ok D3D11CreateDevice(hardware, chosen adapter)
+KFDX feature_level 0xb100
+KFDX ok compile cs_5_0
+KFDX ok CreateComputeShader
+KFDX ok CreateUnorderedAccessView
+KFDX compute iters=20 bad=0 ms=15
+KFDX ok compute shader result matches (UAV readback)
+KFDX ok compile vs_5_0/ps_5_0
+KFDX ok Map staging texture
+KFDX pixel 64,127,191,255
+KFDX ok draw result matches (centre pixel 64,128,191,255)
+KFDX RESULT OK api=d3d11 adapter="NVIDIA GeForce RTX 5070"
+HOLD_D3D round=7 api=d3d11 rc=0 elapsed=185.94
+KFDX start api=d3d12 iters=20 any_vendor=0
+KFDX ok CreateDXGIFactory1
+KFDX adapter index=0 vendor=0x10de device=0x2f04 luid=0x00000000_0x00006131 dedicated_mb=11855 software=0 name="NVIDIA GeForce RTX 5070"
+KFDX adapter index=1 vendor=0x1414 device=0x008c luid=0x00000000_0x000072f6 dedicated_mb=0 software=1 name="Microsoft Basic Render Driver"
+KFDX selected "NVIDIA GeForce RTX 5070"
+KFDX ok D3D12CreateDevice(chosen adapter)
+KFDX feature_level 0xc200
+KFDX vidmem budget_mb=11087 usage_mb=6
+KFDX ok DIRECT
+KFDX ok DIRECT queue fence Signal/Wait x3
+KFDX ok COPY
+KFDX ok COPY queue fence Signal/Wait x3
+KFDX ok compile cs_5_0
+KFDX ok serialize root signature
+KFDX ok CreateRootSignature
+KFDX ok CreateComputePipelineState
+KFDX compute iters=20 bad=0 fence_wait_ok=1 ms=16
+KFDX ok compute queue fence completed
+KFDX ok compute shader result matches (UAV copy-back)
+KFDX RESULT OK api=d3d12 adapter="NVIDIA GeForce RTX 5070"
+HOLD_D3D round=7 api=d3d12 rc=0 elapsed=186.59
+HOLD_ADAPTER driver=32.0.15.8088 code=0 dwm=1 explorer=1
+KFDX start api=d3d11 iters=20 any_vendor=0
+KFDX ok CreateDXGIFactory1
+KFDX adapter index=0 vendor=0x10de device=0x2f04 luid=0x00000000_0x00006131 dedicated_mb=11855 software=0 name="NVIDIA GeForce RTX 5070"
+KFDX adapter index=1 vendor=0x1414 device=0x008c luid=0x00000000_0x000072f6 dedicated_mb=0 software=1 name="Microsoft Basic Render Driver"
+KFDX selected "NVIDIA GeForce RTX 5070"
+KFDX ok D3D11CreateDevice(hardware, chosen adapter)
+KFDX feature_level 0xb100
+KFDX ok compile cs_5_0
+KFDX ok CreateComputeShader
+KFDX ok CreateUnorderedAccessView
+KFDX compute iters=20 bad=0 ms=15
+KFDX ok compute shader result matches (UAV readback)
+KFDX ok compile vs_5_0/ps_5_0
+KFDX ok Map staging texture
+KFDX pixel 64,127,191,255
+KFDX ok draw result matches (centre pixel 64,128,191,255)
+KFDX RESULT OK api=d3d11 adapter="NVIDIA GeForce RTX 5070"
+HOLD_D3D round=8 api=d3d11 rc=0 elapsed=217
+KFDX start api=d3d12 iters=20 any_vendor=0
+KFDX ok CreateDXGIFactory1
+KFDX adapter index=0 vendor=0x10de device=0x2f04 luid=0x00000000_0x00006131 dedicated_mb=11855 software=0 name="NVIDIA GeForce RTX 5070"
+KFDX adapter index=1 vendor=0x1414 device=0x008c luid=0x00000000_0x000072f6 dedicated_mb=0 software=1 name="Microsoft Basic Render Driver"
+KFDX selected "NVIDIA GeForce RTX 5070"
+KFDX ok D3D12CreateDevice(chosen adapter)
+KFDX feature_level 0xc200
+KFDX vidmem budget_mb=11087 usage_mb=6
+KFDX ok DIRECT
+KFDX ok DIRECT queue fence Signal/Wait x3
+KFDX ok COPY
+KFDX ok COPY queue fence Signal/Wait x3
+KFDX ok compile cs_5_0
+KFDX ok serialize root signature
+KFDX ok CreateRootSignature
+KFDX ok CreateComputePipelineState
+KFDX compute iters=20 bad=0 fence_wait_ok=1 ms=16
+KFDX ok compute queue fence completed
+KFDX ok compute shader result matches (UAV copy-back)
+KFDX RESULT OK api=d3d12 adapter="NVIDIA GeForce RTX 5070"
+HOLD_D3D round=8 api=d3d12 rc=0 elapsed=217.58
+HOLD_ADAPTER driver=32.0.15.8088 code=0 dwm=1 explorer=1
+KFDX start api=d3d11 iters=20 any_vendor=0
+KFDX ok CreateDXGIFactory1
+KFDX adapter index=0 vendor=0x10de device=0x2f04 luid=0x00000000_0x00006131 dedicated_mb=11855 software=0 name="NVIDIA GeForce RTX 5070"
+KFDX adapter index=1 vendor=0x1414 device=0x008c luid=0x00000000_0x000072f6 dedicated_mb=0 software=1 name="Microsoft Basic Render Driver"
+KFDX selected "NVIDIA GeForce RTX 5070"
+KFDX ok D3D11CreateDevice(hardware, chosen adapter)
+KFDX feature_level 0xb100
+KFDX ok compile cs_5_0
+KFDX ok CreateComputeShader
+KFDX ok CreateUnorderedAccessView
+KFDX compute iters=20 bad=0 ms=15
+KFDX ok compute shader result matches (UAV readback)
+KFDX ok compile vs_5_0/ps_5_0
+KFDX ok Map staging texture
+KFDX pixel 64,127,191,255
+KFDX ok draw result matches (centre pixel 64,128,191,255)
+KFDX RESULT OK api=d3d11 adapter="NVIDIA GeForce RTX 5070"
+HOLD_D3D round=9 api=d3d11 rc=0 elapsed=248
+KFDX start api=d3d12 iters=20 any_vendor=0
+KFDX ok CreateDXGIFactory1
+KFDX adapter index=0 vendor=0x10de device=0x2f04 luid=0x00000000_0x00006131 dedicated_mb=11855 software=0 name="NVIDIA GeForce RTX 5070"
+KFDX adapter index=1 vendor=0x1414 device=0x008c luid=0x00000000_0x000072f6 dedicated_mb=0 software=1 name="Microsoft Basic Render Driver"
+KFDX selected "NVIDIA GeForce RTX 5070"
+KFDX ok D3D12CreateDevice(chosen adapter)
+KFDX feature_level 0xc200
+KFDX vidmem budget_mb=11087 usage_mb=6
+KFDX ok DIRECT
+KFDX ok DIRECT queue fence Signal/Wait x3
+KFDX ok COPY
+KFDX ok COPY queue fence Signal/Wait x3
+KFDX ok compile cs_5_0
+KFDX ok serialize root signature
+KFDX ok CreateRootSignature
+KFDX ok CreateComputePipelineState
+KFDX compute iters=20 bad=0 fence_wait_ok=1 ms=0
+KFDX ok compute queue fence completed
+KFDX ok compute shader result matches (UAV copy-back)
+KFDX RESULT OK api=d3d12 adapter="NVIDIA GeForce RTX 5070"
+HOLD_D3D round=9 api=d3d12 rc=0 elapsed=248.59
+HOLD_ADAPTER driver=32.0.15.8088 code=0 dwm=1 explorer=1
+KFDX start api=d3d11 iters=20 any_vendor=0
+KFDX ok CreateDXGIFactory1
+KFDX adapter index=0 vendor=0x10de device=0x2f04 luid=0x00000000_0x00006131 dedicated_mb=11855 software=0 name="NVIDIA GeForce RTX 5070"
+KFDX adapter index=1 vendor=0x1414 device=0x008c luid=0x00000000_0x000072f6 dedicated_mb=0 software=1 name="Microsoft Basic Render Driver"
+KFDX selected "NVIDIA GeForce RTX 5070"
+KFDX ok D3D11CreateDevice(hardware, chosen adapter)
+KFDX feature_level 0xb100
+KFDX ok compile cs_5_0
+KFDX ok CreateComputeShader
+KFDX ok CreateUnorderedAccessView
+KFDX compute iters=20 bad=0 ms=15
+KFDX ok compute shader result matches (UAV readback)
+KFDX ok compile vs_5_0/ps_5_0
+KFDX ok Map staging texture
+KFDX pixel 64,127,191,255
+KFDX ok draw result matches (centre pixel 64,128,191,255)
+KFDX RESULT OK api=d3d11 adapter="NVIDIA GeForce RTX 5070"
+HOLD_D3D round=10 api=d3d11 rc=0 elapsed=279
+KFDX start api=d3d12 iters=20 any_vendor=0
+KFDX ok CreateDXGIFactory1
+KFDX adapter index=0 vendor=0x10de device=0x2f04 luid=0x00000000_0x00006131 dedicated_mb=11855 software=0 name="NVIDIA GeForce RTX 5070"
+KFDX adapter index=1 vendor=0x1414 device=0x008c luid=0x00000000_0x000072f6 dedicated_mb=0 software=1 name="Microsoft Basic Render Driver"
+KFDX selected "NVIDIA GeForce RTX 5070"
+KFDX ok D3D12CreateDevice(chosen adapter)
+KFDX feature_level 0xc200
+KFDX vidmem budget_mb=11087 usage_mb=6
+KFDX ok DIRECT
+KFDX ok DIRECT queue fence Signal/Wait x3
+KFDX ok COPY
+KFDX ok COPY queue fence Signal/Wait x3
+KFDX ok compile cs_5_0
+KFDX ok serialize root signature
+KFDX ok CreateRootSignature
+KFDX ok CreateComputePipelineState
+KFDX compute iters=20 bad=0 fence_wait_ok=1 ms=0
+KFDX ok compute queue fence completed
+KFDX ok compute shader result matches (UAV copy-back)
+KFDX RESULT OK api=d3d12 adapter="NVIDIA GeForce RTX 5070"
+HOLD_D3D round=10 api=d3d12 rc=0 elapsed=279.53
+HOLD_ADAPTER driver=32.0.15.8088 code=0 dwm=1 explorer=1
+KFDX start api=d3d11 iters=20 any_vendor=0
+KFDX ok CreateDXGIFactory1
+KFDX adapter index=0 vendor=0x10de device=0x2f04 luid=0x00000000_0x00006131 dedicated_mb=11855 software=0 name="NVIDIA GeForce RTX 5070"
+KFDX adapter index=1 vendor=0x1414 device=0x008c luid=0x00000000_0x000072f6 dedicated_mb=0 software=1 name="Microsoft Basic Render Driver"
+KFDX selected "NVIDIA GeForce RTX 5070"
+KFDX ok D3D11CreateDevice(hardware, chosen adapter)
+KFDX feature_level 0xb100
+KFDX ok compile cs_5_0
+KFDX ok CreateComputeShader
+KFDX ok CreateUnorderedAccessView
+KFDX compute iters=20 bad=0 ms=15
+KFDX ok compute shader result matches (UAV readback)
+KFDX ok compile vs_5_0/ps_5_0
+KFDX ok Map staging texture
+KFDX pixel 64,127,191,255
+KFDX ok draw result matches (centre pixel 64,128,191,255)
+KFDX RESULT OK api=d3d11 adapter="NVIDIA GeForce RTX 5070"
+HOLD_D3D round=11 api=d3d11 rc=0 elapsed=309.89
+KFDX start api=d3d12 iters=20 any_vendor=0
+KFDX ok CreateDXGIFactory1
+KFDX adapter index=0 vendor=0x10de device=0x2f04 luid=0x00000000_0x00006131 dedicated_mb=11855 software=0 name="NVIDIA GeForce RTX 5070"
+KFDX adapter index=1 vendor=0x1414 device=0x008c luid=0x00000000_0x000072f6 dedicated_mb=0 software=1 name="Microsoft Basic Render Driver"
+KFDX selected "NVIDIA GeForce RTX 5070"
+KFDX ok D3D12CreateDevice(chosen adapter)
+KFDX feature_level 0xc200
+KFDX vidmem budget_mb=11087 usage_mb=6
+KFDX ok DIRECT
+KFDX ok DIRECT queue fence Signal/Wait x3
+KFDX ok COPY
+KFDX ok COPY queue fence Signal/Wait x3
+KFDX ok compile cs_5_0
+KFDX ok serialize root signature
+KFDX ok CreateRootSignature
+KFDX ok CreateComputePipelineState
+KFDX compute iters=20 bad=0 fence_wait_ok=1 ms=16
+KFDX ok compute queue fence completed
+KFDX ok compute shader result matches (UAV copy-back)
+KFDX RESULT OK api=d3d12 adapter="NVIDIA GeForce RTX 5070"
+HOLD_D3D round=11 api=d3d12 rc=0 elapsed=310.47
+HOLD_ADAPTER driver=32.0.15.8088 code=0 dwm=1 explorer=1
+KFDX start api=d3d11 iters=20 any_vendor=0
+KFDX ok CreateDXGIFactory1
+KFDX adapter index=0 vendor=0x10de device=0x2f04 luid=0x00000000_0x00006131 dedicated_mb=11855 software=0 name="NVIDIA GeForce RTX 5070"
+KFDX adapter index=1 vendor=0x1414 device=0x008c luid=0x00000000_0x000072f6 dedicated_mb=0 software=1 name="Microsoft Basic Render Driver"
+KFDX selected "NVIDIA GeForce RTX 5070"
+KFDX ok D3D11CreateDevice(hardware, chosen adapter)
+KFDX feature_level 0xb100
+KFDX ok compile cs_5_0
+KFDX ok CreateComputeShader
+KFDX ok CreateUnorderedAccessView
+KFDX compute iters=20 bad=0 ms=0
+KFDX ok compute shader result matches (UAV readback)
+KFDX ok compile vs_5_0/ps_5_0
+KFDX ok Map staging texture
+KFDX pixel 64,127,191,255
+KFDX ok draw result matches (centre pixel 64,128,191,255)
+KFDX RESULT OK api=d3d11 adapter="NVIDIA GeForce RTX 5070"
+HOLD_D3D round=12 api=d3d11 rc=0 elapsed=340.86
+KFDX start api=d3d12 iters=20 any_vendor=0
+KFDX ok CreateDXGIFactory1
+KFDX adapter index=0 vendor=0x10de device=0x2f04 luid=0x00000000_0x00006131 dedicated_mb=11855 software=0 name="NVIDIA GeForce RTX 5070"
+KFDX adapter index=1 vendor=0x1414 device=0x008c luid=0x00000000_0x000072f6 dedicated_mb=0 software=1 name="Microsoft Basic Render Driver"
+KFDX selected "NVIDIA GeForce RTX 5070"
+KFDX ok D3D12CreateDevice(chosen adapter)
+KFDX feature_level 0xc200
+KFDX vidmem budget_mb=11087 usage_mb=6
+KFDX ok DIRECT
+KFDX ok DIRECT queue fence Signal/Wait x3
+KFDX ok COPY
+KFDX ok COPY queue fence Signal/Wait x3
+KFDX ok compile cs_5_0
+KFDX ok serialize root signature
+KFDX ok CreateRootSignature
+KFDX ok CreateComputePipelineState
+KFDX compute iters=20 bad=0 fence_wait_ok=1 ms=15
+KFDX ok compute queue fence completed
+KFDX ok compute shader result matches (UAV copy-back)
+KFDX RESULT OK api=d3d12 adapter="NVIDIA GeForce RTX 5070"
+HOLD_D3D round=12 api=d3d12 rc=0 elapsed=341.42
+HOLD_ADAPTER driver=32.0.15.8088 code=0 dwm=1 explorer=1
+KFDX start api=d3d11 iters=20 any_vendor=0
+KFDX ok CreateDXGIFactory1
+KFDX adapter index=0 vendor=0x10de device=0x2f04 luid=0x00000000_0x00006131 dedicated_mb=11855 software=0 name="NVIDIA GeForce RTX 5070"
+KFDX adapter index=1 vendor=0x1414 device=0x008c luid=0x00000000_0x000072f6 dedicated_mb=0 software=1 name="Microsoft Basic Render Driver"
+KFDX selected "NVIDIA GeForce RTX 5070"
+KFDX ok D3D11CreateDevice(hardware, chosen adapter)
+KFDX feature_level 0xb100
+KFDX ok compile cs_5_0
+KFDX ok CreateComputeShader
+KFDX ok CreateUnorderedAccessView
+KFDX compute iters=20 bad=0 ms=0
+KFDX ok compute shader result matches (UAV readback)
+KFDX ok compile vs_5_0/ps_5_0
+KFDX ok Map staging texture
+KFDX pixel 64,127,191,255
+KFDX ok draw result matches (centre pixel 64,128,191,255)
+KFDX RESULT OK api=d3d11 adapter="NVIDIA GeForce RTX 5070"
+HOLD_D3D round=13 api=d3d11 rc=0 elapsed=371.78
+KFDX start api=d3d12 iters=20 any_vendor=0
+KFDX ok CreateDXGIFactory1
+KFDX adapter index=0 vendor=0x10de device=0x2f04 luid=0x00000000_0x00006131 dedicated_mb=11855 software=0 name="NVIDIA GeForce RTX 5070"
+KFDX adapter index=1 vendor=0x1414 device=0x008c luid=0x00000000_0x000072f6 dedicated_mb=0 software=1 name="Microsoft Basic Render Driver"
+KFDX selected "NVIDIA GeForce RTX 5070"
+KFDX ok D3D12CreateDevice(chosen adapter)
+KFDX feature_level 0xc200
+KFDX vidmem budget_mb=11087 usage_mb=6
+KFDX ok DIRECT
+KFDX ok DIRECT queue fence Signal/Wait x3
+KFDX ok COPY
+KFDX ok COPY queue fence Signal/Wait x3
+KFDX ok compile cs_5_0
+KFDX ok serialize root signature
+KFDX ok CreateRootSignature
+KFDX ok CreateComputePipelineState
+KFDX compute iters=20 bad=0 fence_wait_ok=1 ms=16
+KFDX ok compute queue fence completed
+KFDX ok compute shader result matches (UAV copy-back)
+KFDX RESULT OK api=d3d12 adapter="NVIDIA GeForce RTX 5070"
+HOLD_D3D round=13 api=d3d12 rc=0 elapsed=372.3
+HOLD_ADAPTER driver=32.0.15.8088 code=0 dwm=1 explorer=1
+KFDX start api=d3d11 iters=20 any_vendor=0
+KFDX ok CreateDXGIFactory1
+KFDX adapter index=0 vendor=0x10de device=0x2f04 luid=0x00000000_0x00006131 dedicated_mb=11855 software=0 name="NVIDIA GeForce RTX 5070"
+KFDX adapter index=1 vendor=0x1414 device=0x008c luid=0x00000000_0x000072f6 dedicated_mb=0 software=1 name="Microsoft Basic Render Driver"
+KFDX selected "NVIDIA GeForce RTX 5070"
+KFDX ok D3D11CreateDevice(hardware, chosen adapter)
+KFDX feature_level 0xb100
+KFDX ok compile cs_5_0
+KFDX ok CreateComputeShader
+KFDX ok CreateUnorderedAccessView
+KFDX compute iters=20 bad=0 ms=0
+KFDX ok compute shader result matches (UAV readback)
+KFDX ok compile vs_5_0/ps_5_0
+KFDX ok Map staging texture
+KFDX pixel 64,127,191,255
+KFDX ok draw result matches (centre pixel 64,128,191,255)
+KFDX RESULT OK api=d3d11 adapter="NVIDIA GeForce RTX 5070"
+HOLD_D3D round=14 api=d3d11 rc=0 elapsed=402.62
+KFDX start api=d3d12 iters=20 any_vendor=0
+KFDX ok CreateDXGIFactory1
+KFDX adapter index=0 vendor=0x10de device=0x2f04 luid=0x00000000_0x00006131 dedicated_mb=11855 software=0 name="NVIDIA GeForce RTX 5070"
+KFDX adapter index=1 vendor=0x1414 device=0x008c luid=0x00000000_0x000072f6 dedicated_mb=0 software=1 name="Microsoft Basic Render Driver"
+KFDX selected "NVIDIA GeForce RTX 5070"
+KFDX ok D3D12CreateDevice(chosen adapter)
+KFDX feature_level 0xc200
+KFDX vidmem budget_mb=11087 usage_mb=6
+KFDX ok DIRECT
+KFDX ok DIRECT queue fence Signal/Wait x3
+KFDX ok COPY
+KFDX ok COPY queue fence Signal/Wait x3
+KFDX ok compile cs_5_0
+KFDX ok serialize root signature
+KFDX ok CreateRootSignature
+KFDX ok CreateComputePipelineState
+KFDX compute iters=20 bad=0 fence_wait_ok=1 ms=16
+KFDX ok compute queue fence completed
+KFDX ok compute shader result matches (UAV copy-back)
+KFDX RESULT OK api=d3d12 adapter="NVIDIA GeForce RTX 5070"
+HOLD_D3D round=14 api=d3d12 rc=0 elapsed=403.15
+HOLD_ADAPTER driver=32.0.15.8088 code=0 dwm=1 explorer=1
+HOLD_ADAPTER driver=32.0.15.8088 code=0 dwm=1 explorer=1
+HOLD_TDR_COUNT=0 elapsed_seconds=420.32 rounds=14
+HOLD_EXIT rc=0 utc=2026-10-16T14:16:47.8500810Z
+
+REMOTE_EXIT_RC=0

@@ -1,0 +1,7 @@
+{
+  "windows58151_nonzero_words": 99,
+  "sha256_4096": "7cc7a2692d92d155e3c50a0f9554671feffdc63e043925084239ff1bee8f0c55",
+  "all4096_equal_prior_Windows580_and_Linux595": true,
+  "word_0x00c": "0x00000100",
+  "limit": "Observed AD102 equality only; no wildcard/family compression inferred."
+}

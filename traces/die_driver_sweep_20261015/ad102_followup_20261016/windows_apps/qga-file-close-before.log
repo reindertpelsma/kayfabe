@@ -1,0 +1,14 @@
+F
+======================================================================
+FAIL: test_uncertain_close_is_not_replayed_on_the_same_handle (__main__.FilePut.test_uncertain_close_is_not_replayed_on_the_same_handle)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/workspace/codex/qga-file-stage/scripts/bench/tests/test_qga_file_put.py", line 95, in test_uncertain_close_is_not_replayed_on_the_same_handle
+    self.assertEqual(observed['closes'],1)
+    ~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: 2 != 1
+
+----------------------------------------------------------------------
+Ran 1 test in 0.142s
+
+FAILED (failures=1)

@@ -1,0 +1,12 @@
+[
+  {
+    "file": "cpu-tests.log",
+    "bytes": 128151,
+    "sha256": "71e5e0dd9c3aa6c8c45118ef7f3b8a4cdd88111b23f4883ac3e3aa354aae554f"
+  },
+  {
+    "file": "failing-first.log",
+    "bytes": 7632,
+    "sha256": "b9156c1936a00ece16e19c75abe8e9b417769fd187a1f0e0580b2a439d79d935"
+  }
+]

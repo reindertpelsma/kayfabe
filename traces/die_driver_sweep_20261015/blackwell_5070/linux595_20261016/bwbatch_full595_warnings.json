@@ -1,0 +1,50 @@
+{
+  "fast_codex_bwbatch_full595_bar1-crossing_serial.log": {
+    "heartbeat_timeout_formula_count": 4,
+    "examples": [
+      "[    7.861422] NVRM: GPU0 _kgspIsHeartbeatTimedOut: Heartbeat timed out, currentTimeMs 1156592278 heartbeat 0 heartbeatWithOffsetMs 1156592305 diff 4294967269 timeout 5200",
+      "[    7.868925] NVRM: GPU0 _kgspIsHeartbeatTimedOut: Heartbeat timed out, currentTimeMs 1156592285 heartbeat 0 heartbeatWithOffsetMs 1156592305 diff 4294967276 timeout 5200",
+      "[    7.876502] NVRM: GPU0 _kgspIsHeartbeatTimedOut: Heartbeat timed out, currentTimeMs 1156592293 heartbeat 0 heartbeatWithOffsetMs 1156592305 diff 4294967284 timeout 5200",
+      "[    7.883970] NVRM: GPU0 _kgspIsHeartbeatTimedOut: Heartbeat timed out, currentTimeMs 1156592300 heartbeat 0 heartbeatWithOffsetMs 1156592305 diff 4294967291 timeout 5200"
+    ],
+    "actual_nvrm_xids": []
+  },
+  "fast_codex_bwbatch_full595_atomics-probe_serial.log": {
+    "heartbeat_timeout_formula_count": 46,
+    "examples": [
+      "[    8.413564] NVRM: GPU0 _kgspIsHeartbeatTimedOut: Heartbeat timed out, currentTimeMs 1156604468 heartbeat 0 heartbeatWithOffsetMs 1156604832 diff 4294966932 timeout 5200",
+      "[    8.421088] NVRM: GPU0 _kgspIsHeartbeatTimedOut: Heartbeat timed out, currentTimeMs 1156604476 heartbeat 0 heartbeatWithOffsetMs 1156604832 diff 4294966940 timeout 5200",
+      "[    8.756442] NVRM: GPU0 _kgspIsHeartbeatTimedOut: Heartbeat timed out, currentTimeMs 1156604811 heartbeat 0 heartbeatWithOffsetMs 1156604832 diff 4294967275 timeout 5200",
+      "[    8.763818] NVRM: GPU0 _kgspIsHeartbeatTimedOut: Heartbeat timed out, currentTimeMs 1156604819 heartbeat 0 heartbeatWithOffsetMs 1156604832 diff 4294967283 timeout 5200"
+    ],
+    "actual_nvrm_xids": []
+  },
+  "fast_codex_bwbatch_full595_uvm-mean_serial.log": {
+    "heartbeat_timeout_formula_count": 1,
+    "examples": [
+      "[    8.138990] NVRM: GPU0 _kgspIsHeartbeatTimedOut: Heartbeat timed out, currentTimeMs 1156459593 heartbeat 0 heartbeatWithOffsetMs 1156459594 diff 4294967295 timeout 5200",
+      "[    8.138990] NVRM: GPU0 _kgspIsHeartbeatTimedOut: Heartbeat timed out, currentTimeMs 1156459593 heartbeat 0 heartbeatWithOffsetMs 1156459594 diff 4294967295 timeout 5200"
+    ],
+    "actual_nvrm_xids": []
+  },
+  "fast_codex_bwbatch_full595_ce-client-guest-ram_serial.log": {
+    "heartbeat_timeout_formula_count": 13,
+    "examples": [
+      "[    8.380331] NVRM: GPU0 _kgspIsHeartbeatTimedOut: Heartbeat timed out, currentTimeMs 1156532693 heartbeat 0 heartbeatWithOffsetMs 1156532787 diff 4294967202 timeout 5200",
+      "[    8.387995] NVRM: GPU0 _kgspIsHeartbeatTimedOut: Heartbeat timed out, currentTimeMs 1156532701 heartbeat 0 heartbeatWithOffsetMs 1156532787 diff 4294967210 timeout 5200",
+      "[    8.463952] NVRM: GPU0 _kgspIsHeartbeatTimedOut: Heartbeat timed out, currentTimeMs 1156532777 heartbeat 0 heartbeatWithOffsetMs 1156532787 diff 4294967286 timeout 5200",
+      "[    8.471714] NVRM: GPU0 _kgspIsHeartbeatTimedOut: Heartbeat timed out, currentTimeMs 1156532784 heartbeat 0 heartbeatWithOffsetMs 1156532787 diff 4294967293 timeout 5200"
+    ],
+    "actual_nvrm_xids": []
+  },
+  "fast_codex_bwbatch_full595_cross-client-leak_serial.log": {
+    "heartbeat_timeout_formula_count": 10,
+    "examples": [
+      "[    7.807191] NVRM: GPU0 _kgspIsHeartbeatTimedOut: Heartbeat timed out, currentTimeMs 1156686921 heartbeat 0 heartbeatWithOffsetMs 1156687261 diff 4294966956 timeout 5200",
+      "[    7.814190] NVRM: GPU0 _kgspIsHeartbeatTimedOut: Heartbeat timed out, currentTimeMs 1156686928 heartbeat 0 heartbeatWithOffsetMs 1156687261 diff 4294966963 timeout 5200",
+      "[    7.863571] NVRM: GPU0 _kgspIsHeartbeatTimedOut: Heartbeat timed out, currentTimeMs 1156686977 heartbeat 0 heartbeatWithOffsetMs 1156687261 diff 4294967012 timeout 5200",
+      "[    7.870458] NVRM: GPU0 _kgspIsHeartbeatTimedOut: Heartbeat timed out, currentTimeMs 1156686984 heartbeat 0 heartbeatWithOffsetMs 1156687261 diff 4294967019 timeout 5200"
+    ],
+    "actual_nvrm_xids": []
+  }
+}

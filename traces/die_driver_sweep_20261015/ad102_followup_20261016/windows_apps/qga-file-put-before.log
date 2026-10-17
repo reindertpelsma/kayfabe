@@ -1,0 +1,14 @@
+F...
+======================================================================
+FAIL: test_fresh_sync_discards_stale_error_and_garbage_before_writing (__main__.FilePut.test_fresh_sync_discards_stale_error_and_garbage_before_writing)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/workspace/codex/qga-file-stage/scripts/bench/tests/test_qga_file_put.py", line 62, in test_fresh_sync_discards_stale_error_and_garbage_before_writing
+    self.assertEqual(result.returncode,0,result.stdout+result.stderr)
+    ~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: 1 != 0 : b'Traceback (most recent call last):\n  File "/workspace/codex/qga-file-stage/scripts/bench/diesweep/qga_file_put.py", line 36, in <module>\n    if call(\'guest-sync\', {\'id\': token}) != token:\n       ~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File "/workspace/codex/qga-file-stage/scripts/bench/diesweep/qga_file_put.py", line 30, in call\n    raise RuntimeError(\'QGA request failed: \' + command)\nRuntimeError: QGA request failed: guest-sync\n'
+
+----------------------------------------------------------------------
+Ran 4 tests in 0.461s
+
+FAILED (failures=1)

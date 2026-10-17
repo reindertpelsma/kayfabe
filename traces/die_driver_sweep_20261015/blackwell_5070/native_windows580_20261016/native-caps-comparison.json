@@ -1,0 +1,14 @@
+{
+  "die": "GB205",
+  "architecture": "0x1b0",
+  "implementation": "0x5",
+  "actual_pci": "0x2f04",
+  "linux_driver": "595.91.07",
+  "windows_driver": "32.0.15.8088",
+  "linux_nonzero_words": 127,
+  "windows_nonzero_words": 127,
+  "complete_4096_byte_page_equal": true,
+  "word_0x00c_windows580": "0x102",
+  "branch_compression_performed": false,
+  "page_injection_or_product_table": false
+}

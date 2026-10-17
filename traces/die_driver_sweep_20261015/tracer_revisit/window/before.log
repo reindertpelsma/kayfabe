@@ -1,0 +1,45 @@
+make: Entering directory '/workspace/codex/windows-capture-revisit/tools/windows-capture/tests'
+mkdir -p /workspace/codex/test-tracer-window
+cc -std=c99 -O1 -g -Wall -Wextra -Werror -Wshadow -Wno-unused-function -I../lib -fsanitize=address,undefined -fno-sanitize-recover=undefined test_main.c ../lib/kfwc_record.c ../lib/kfwc_elem.c ../lib/kfwc_discover.c ../lib/kfwc_engine.c -o /workspace/codex/test-tracer-window/test_main
+/workspace/codex/test-tracer-window/test_main
+  FAIL test_main.c:637 [recent_moved_table_early] h.e->state == KFWC_ST_ATTACHED && h.e->stats.method == 4
+  FAIL test_main.c:638 [recent_moved_table_early] h.e->bind.table_pa == next.table_pa
+  FAIL test_main.c:654 [recent_window_expires] h.e->stats.scan_bytes > 0 && h.e->stats.scan_bytes <= 3u * 4096u
+ok   record_format
+ok   file_header
+ok   elements
+ok   mailbox_ok
+ok   mailbox_failures
+ok   scan_signature_false_positives
+ok   walker_basic_pre610
+ok   walker_basic_610
+ok   walker_late_attach_prefix
+ok   walker_wrapped_ring
+ok   walker_lost_messages_lapped
+ok   walker_seq_gap_and_wraparound
+ok   walker_empty_then_history
+ok   walker_unpublished_and_budget
+ok   walker_status_header_pending
+ok   scan_discovery_rate_limited
+ok   recent_empty_epoch
+FAIL recent_moved_table_early
+FAIL recent_window_expires
+ok   recent_sequence_zero_prefix
+ok   recent_stale_and_partial_epochs
+ok   recent_requires_scan_and_ram_validation
+ok   recent_seed_requires_wrapped_queues
+ok   recent_corrupt_prefix_is_refused
+ok   scan_gated_by_mailbox
+ok   events_and_mailbox_cross_check
+ok   detach_and_reattach
+ok   corrupt_and_torn
+ok   unsupported_cc_copied_raw
+ok   sink_full_is_announced
+ok   read_only_surface
+ok   ram_range_discipline
+ok   layout_autodetect_and_pin
+ok   scan_backoff
+ok   end_record
+test_main: 33/35 tests passed, 387 checks, 3 failed
+make: *** [Makefile:12: test] Error 1
+make: Leaving directory '/workspace/codex/windows-capture-revisit/tools/windows-capture/tests'

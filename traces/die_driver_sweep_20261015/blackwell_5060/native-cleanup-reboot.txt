@@ -1,0 +1,9 @@
+{"Driver":"oem13.inf","ClassName":"Display","ProviderName":"NVIDIA","Version":"32.0.16.1088"}
+Microsoft PnP Utility
+
+Driver package deleted successfully.
+UNUSED_WU610_PACKAGE_REMOVED_NO_UNINSTALL_NO_FORCE=1
+POST_CLEANUP_ACTUAL580_CODE0=1
+NATIVE_NORMAL_REBOOT_QUEUED=1
+
+CONTROLLER_RC=0

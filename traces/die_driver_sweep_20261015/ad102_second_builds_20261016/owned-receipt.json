@@ -1,0 +1,12 @@
+{
+  "id": 56302930,
+  "offer": 48798407,
+  "machine_id": 42612,
+  "gpu": "RTX4090 advertised; actual AD102/PCI pending unprivileged proof",
+  "created_epoch_conservative": 1792187460.774332,
+  "start_utc": "2026-10-16T21:51:00.774332+00:00",
+  "offer_dph": 0.5616666666666668,
+  "purpose": "A3 AD102 Windows58151/Linux590 and A4 three-row ablations; public ABI9d6f210ba; B4marketempty",
+  "quoted_dph": 0.6100000000000001,
+  "timer_pid": 2571615
+}

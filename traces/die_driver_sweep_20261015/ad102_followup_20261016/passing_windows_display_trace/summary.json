@@ -1,0 +1,112 @@
+{
+  "source_log": "adaref2_windows_diagnostic_qemu.log",
+  "source_bytes": 3338626,
+  "source_sha256": "ef2c4c8555f670ca2c0ea3cb31a29fd44e8ae21895a3503a9a16221b3b3bd151",
+  "policy_metadata_commands": 3166,
+  "prefix_commands_exported": 1000,
+  "metadata_quota_notices": 0,
+  "metadata_truncated": false,
+  "public_posted_body_records": 77,
+  "opaque_or_alloc_body_records_omitted": 435,
+  "critical": {
+    "0x73010c": {
+      "count": 26,
+      "first_ordinals": [
+        550,
+        551,
+        552,
+        553,
+        556,
+        557,
+        558,
+        559,
+        1033,
+        1037,
+        1038,
+        1039,
+        1044,
+        1045,
+        1047,
+        1048
+      ],
+      "policy_results": {
+        "0x0": 26
+      },
+      "scope": "all captured policy metadata; after the quota notice is unknown"
+    },
+    "0xc3700201": {
+      "count": 1,
+      "first_ordinals": [
+        282
+      ],
+      "policy_results": {
+        "0x0": 1
+      },
+      "scope": "all captured policy metadata; after the quota notice is unknown"
+    },
+    "0x20800a89": {
+      "count": 0,
+      "first_ordinals": [],
+      "policy_results": {},
+      "scope": "all captured policy metadata; after the quota notice is unknown"
+    },
+    "0x20800ab2": {
+      "count": 0,
+      "first_ordinals": [],
+      "policy_results": {},
+      "scope": "all captured policy metadata; after the quota notice is unknown"
+    },
+    "0x20800ab4": {
+      "count": 0,
+      "first_ordinals": [],
+      "policy_results": {},
+      "scope": "all captured policy metadata; after the quota notice is unknown"
+    },
+    "0xcbcb": {
+      "count": 0,
+      "first_ordinals": [],
+      "policy_results": {},
+      "scope": "all captured policy metadata; after the quota notice is unknown"
+    },
+    "0x20802801": {
+      "count": 1,
+      "first_ordinals": [
+        149
+      ],
+      "policy_results": {
+        "0x0": 1
+      },
+      "scope": "all captured policy metadata; after the quota notice is unknown"
+    },
+    "0x20802806": {
+      "count": 1,
+      "first_ordinals": [
+        160
+      ],
+      "policy_results": {
+        "0x0": 1
+      },
+      "scope": "all captured policy metadata; after the quota notice is unknown"
+    },
+    "0xca70": {
+      "count": 0,
+      "first_ordinals": [],
+      "policy_results": {},
+      "scope": "all captured policy metadata; after the quota notice is unknown"
+    },
+    "0xca7a": {
+      "count": 0,
+      "first_ordinals": [],
+      "policy_results": {},
+      "scope": "all captured policy metadata; after the quota notice is unknown"
+    }
+  },
+  "status_limit": "trace_result is the policy envelope before held actions resolve; effective_result stays unknown. Actual posted display statuses are in the separate screened body log.",
+  "body_limit": "Only function76 NV0073 and20800a58 bodies exported. Alloc and Other4 bytes remain on rental.",
+  "alignment_limit": "Prefix0..999 is an explicit comparable initialization phase; full metadata stays on rental.",
+  "original_export_body_counts": {
+    "selected": 78,
+    "omitted": 434
+  },
+  "private_probe_7302a3_body_excluded_from_public_artifact": 1
+}

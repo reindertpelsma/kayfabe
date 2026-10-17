@@ -1,0 +1,8 @@
+FAST_SUITE_STARTED=2026-10-16T12:54:09+00:00 arms=1 budget=180s
+rev=99ce8207c
+ARM                          VERDICT   secs  why
+--concurrency                TIMEOUT   181s  budget 180s exceeded — a timeout IS a crash
+FAST_CELL_ARM arm=concurrency verdict=TIMEOUT secs=181 client_ms=?
+
+FAST_SUITE_PASS=0 FAST_SUITE_FAIL=0 FAST_SUITE_CRASH=1 NOTRUN=0 ARMS=1
+FAST_SUITE_RC=1

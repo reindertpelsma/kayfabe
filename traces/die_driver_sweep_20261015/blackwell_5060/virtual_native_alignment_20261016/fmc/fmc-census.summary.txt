@@ -1,0 +1,6 @@
+kf-census: ogkm 580.65.06, 1 sources, 387 cmd + 385 status messages, 114 controls
+oracle: FAIL, 109 anomalies
+  trailing_bytes               60  e.g. src0: rec8 Cmd: 232 bytes carried, declared length rounds to 112
+  control_extra_bytes          49  e.g. src0: rec27 Status cmd 0x0: declares 0 param bytes, message carries 1056
+  missing messages (sum of forward gaps): 0
+pairing: 39 controls with unanswered requests or orphan replies; rpc.sequence non-zero on 0 messages

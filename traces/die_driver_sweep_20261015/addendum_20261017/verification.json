@@ -1,0 +1,32 @@
+{
+  "checked_utc": "2026-10-17T01:24:25.883497+00:00",
+  "owned_instance_id": 56302930,
+  "present_in_live_api": false,
+  "prior_api_absent_verified_utc": "2026-10-17T00:40:19.025981+00:00",
+  "prior_api_absent_verified_cest": "2026-10-17T02:40:19.025981+02:00",
+  "coordinator_observation_cest": "2026-10-17T02:30:00+02:00",
+  "coordinator_observation_utc": "2026-10-17T00:30:00+00:00",
+  "new_all_rentals_absent_deadline_utc": "2026-10-17T05:00:00+00:00",
+  "new_all_rentals_absent_deadline_cest": "2026-10-17T07:00:00+02:00",
+  "remote_heads_checked": [
+    {
+      "branch": "codex/sweep-blackwell-20261015",
+      "local_and_ls_remote_head": "b5a33bd86beb7d5a6f1fa650211f4b00ac9e865a",
+      "clean": true
+    },
+    {
+      "branch": "codex/runlist-581-allocation-20261017",
+      "local_and_ls_remote_head": "90364d9d86a634f6319352f42549cacaa77ed9e7",
+      "clean": true
+    }
+  ],
+  "new_instances_created": [],
+  "new_instances_destroyed": [],
+  "new_rental_cost_usd": 0,
+  "readonly_turing_market_queries": {
+    "RTX_2060S": 0,
+    "RTX_2060": 0,
+    "RTX_2070": 0
+  },
+  "limits": "Market result is only the filtered offer snapshot, not a claim of no possible Turing provider or a hardware limit."
+}

@@ -101,7 +101,7 @@ wait-qga)
 ps)
     [ -f "${2:-}" ] || die "ps FILE.ps1"
     enc=$(iconv -f utf-8 -t utf-16le < "$2" | base64 -w0)
-    timeout "${3:-300}" python3 "$QMP" "$RUN/qga.sock" qga-exec powershell.exe -NoProfile -ExecutionPolicy Bypass -EncodedCommand "$enc"; exit $? ;;
+    timeout "${3:-300}" python3 "$QMP" "$RUN/qga.sock" qga-exec "--timeout=${3:-300}" powershell.exe -NoProfile -ExecutionPolicy Bypass -EncodedCommand "$enc"; exit $? ;;
 shot)
     n=${2:-shot}
     python3 "$QMP" "$RUN/qmp.sock" cmd screendump "{\"filename\":\"$RUN/shots/$n.ppm\",\"device\":\"${WIN_SHOT_DEV:-kf0}\"}" > /dev/null \
