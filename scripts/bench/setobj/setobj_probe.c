@@ -454,7 +454,7 @@ static int case_run(const char *c) {
     return 0;
   }
   /* ---- S2 family ---- */
-  if (!strncmp(c, "s2", 2) && strcmp(c, "s2e5") && strcmp(c, "s2e7") && strncmp(c, "s2e_hw", 6)) {
+  if (!strncmp(c, "s2", 2) && strncmp(c, "s2e", 3) && strcmp(c, "s2f") && strcmp(c, "s2g")) {
     int withr = c[strlen(c) - 1] == 'r';
     char base[16]; strncpy(base, c, sizeof base - 1); base[sizeof base - 1] = 0;
     if (withr) base[strlen(base) - 1] = 0;
@@ -507,6 +507,22 @@ static int case_run(const char *c) {
     uint32_t v = enc ? (cidA | (0x1fu << 16)) : cidA;
     pb_reset(); pb_set_object(k, v); step(enc ? "SO(hw k,A with ENGINE_SW bits)" : "SO(hw k,A plain classID)");
     pb_reset(); step("tail");
+    return 0;
+  }
+  /* ---- stale / nonexistent software classID on 6 (added after the first runs; NOT YET RUN) ---- */
+  if (!strcmp(c, "s2f")) {                /* SO(6,A) after A was freed (stale id) */
+    do_compute();
+    A = alloc_sw("A", &cidA); if (!A) return 1;
+    pb_reset(); pb_set_object(6, cidA); pb_sw(6, 0x100, 0); step("SO(6,A) + NOP (first work)");
+    rm_free("A (bound on sub6)", hChan, A);
+    pb_reset(); pb_set_object(6, cidA); pb_sw(6, 0x100, 0); step("SO(6, stale classID of the freed A)");
+    return 0;
+  }
+  if (!strcmp(c, "s2g")) {                /* SO(6, 99): a classID no object ever had */
+    do_compute();
+    A = alloc_sw("A", &cidA); if (!A) return 1;
+    pb_reset(); pb_set_object(6, cidA); pb_sw(6, 0x100, 0); step("SO(6,A) + NOP (first work)");
+    pb_reset(); pb_set_object(6, 99); pb_sw(6, 0x100, 0); step("SO(6, 99): nonexistent software classID");
     return 0;
   }
   /* ---- encodings on 6 ---- */
