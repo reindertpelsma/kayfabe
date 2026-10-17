@@ -180,13 +180,13 @@ bool nb_tick_refresh(struct nb_tick *t, uint64_t now_ns, uint64_t present_ns,
             t->n_fast++;
             return false;
         }
-        if (t->have_real) {
-            nb_tick_win_gap(t, present_ns - t->last_real_ns);   /* the compositor's own spacing */
-        }
         t->have_real = true;
         t->last_real_ns = present_ns;
-    } else if (t->have_accept) {
-        nb_tick_win_gap(t, now_ns - t->last_accept_ns);         /* no timestamp: the arrival spacing */
+    }
+    /* ★ MEASUREMENT: the spacing of ACCEPTED refreshes by arrival time - one clock domain (the pump's ticks carry the broker's own
+     * clock, a frame's carry the compositor's, so present_ns deltas across the two are not a spacing) */
+    if (t->have_accept) {
+        nb_tick_win_gap(t, now_ns - t->last_accept_ns);
     }
     t->have_accept = true;
     t->last_accept_ns = now_ns;
