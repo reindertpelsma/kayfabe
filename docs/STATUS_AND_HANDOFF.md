@@ -1,5 +1,31 @@
 # Status and handoff — where kayfabe v3 stands, and how to resume
 
+## UPDATE 2026-10-17 00:44UTC — wave complete and only56302930 retired; no active own rental
+
+Only56302930 destroyed/APIabsent00:40:19UTC afterallnativeGPU/observerjobsquiescent,
+Windowsownedshutdown00:39:54 andtextPUSH8d2cb7cf9. Timer2571615/verifiedsleepchild
+canceledAFTERabsence00:43:02.10159sec/0.61h/ceil1.73USD; retiredcampaign10.50+transfers.
+No ownrentalACTIVE; doNOTSSHretiredaliases. Allrawimages/capturesnowgone, fullmetadata
+TSVs<1MiB/controlcensuses/scalarcaps+oracles+hashmanifests retainedinTS.
+
+Verifiedlatest: common9d AD102590raw30/CUDA4/gfx5+10nativehashes/brokerPASS,
+Win580P19referencePASS, A4caps00cabsencefailsdesktop/LPWR2801and2806individualremovalsPASS.
+Win581guest8151/GSP1/5809402/P19Code43. Sameboardnative581GSP5809401/Code0/CUDA3/DX11+12
+beforeafter420.59s14round0TDRPASS. NativeB2974allocs+4status0/size12eachtrace; virtual
+first_seq216refusal exact58088cellonly. LeadingcandidateINFERRED, no newack/PEextraction.
+TwoNativeGSPstreams sequence0/loss0/parse0/pairingPASS usingexact5809402publicdecoder.
+OriginalwrapperFAILmethod3requirement, AD102actualmethod1—preservefailure, nofakegreen.
+Nativecaps99words/all4096equalpriorWin580/Linux595/no familywildcard. PR31DRAFTnegative.
+
+NEXTCPU: derive exactWindows581probe-cell schemas frompublic58094+nativefacts,
+failingtestsfirst, preserveunsupportedneighbor/identity/flagsguards; no oldPErowcopy
+orpretendallparametersverified. Hardwareafternewsourcegates/privatebuild; no familycomplete.
+A4newAD106offer54573432machine38151wasavailable22:51(notpurchased); livequote/probeagain
+beforeanyrent. GB205/GA104/TU106otherqueuedcellsremain. B1GB2062leasesexhausted/B2ONEgroupdone,
+no3rdGB206walllease. T1one100usVAeventwait+secondphysicalTuringstillUNRUN; frozen180unchanged.
+Ownercheckout/master/172.22.1.20GPU/VM untouched. Newrent onlyownreceipt/onebox/3h/newtimer.
+
+
 ## UPDATE 2026-10-17 00:38UTC — nativeAD102581 GSP/420s PASS and nativeB297 shape confirmed
 
 ONLY own56302930 ACTIVE/quiescent, nativeWindows afterLinuxevidencePUSHED8402bb1d2;

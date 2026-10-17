@@ -61,3 +61,10 @@ the virtualabort; no newproductionack/class row was added in thiswave.
 Finalnative3151/Code0, observermoduleStopped, no nativeprobe/collector process active
 atselectedstatus00:24:02. Originaltimer00:46UTC/hard00:51UTC unchanged. Export/push
 then retireONLY56302930, APIabsence beforecanceling exactownedtimer. No familycomplete.
+
+RETIREMENT MEASURED: nativeworkload/observer quiescence checked again and ownedWindows
+shutdown queued00:39:54UTC. Only56302930 destroyed/APIabsenceverified00:40:19UTC,
+then exactownedtimer2571615 anditsverifiedsleepchild canceled00:43:02. Rawcapture/
+images erasedbyretirement; allcitedtext/metadata pushed8d2cb7cf9 beforeteardown.
+Leaseconservative10159seconds/0.61USDh computeceiling1.73USD, campaign10.50USD+transfers.
+No active own rental. FullWindows581guestacceptance still FAIL/Code43; nofamilycomplete.

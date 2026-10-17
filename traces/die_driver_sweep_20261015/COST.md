@@ -181,8 +181,17 @@ Retirement receipt: blackwell_5060/display_phase_20261016/retirement.json.
 
 |Instance|GPU|USD/hour incl150GB|StartUTC|StopUTC|Purpose|Ceiling|
 |---|---|---:|---|---|---|---|
-|56302930|RTX4090 actualAD102/PCI2684/KVM/root146GiB|0.61|2026-10-16T21:51:00.774332UTC|ACTIVE, originaltimer00:46UTC/hard00:51UTC2026-10-17|A3Windows581.51/Linux590; A4AD102three-row ablations|max1.83USD; campaignceil10.60USD+transfers|
+|56302930|RTX4090 actualAD102/PCI2684/KVM/root146GiB|0.61|2026-10-16T21:51:00.774332UTC|RETIRED/APIabsent2026-10-17T00:40:19UTC; timer2571615 canceledafterabsence|A3Windows581.51/Linux590; A4AD102three-row ablations|10159sec/computeceil1.73USD; retiredcampaign10.50USD+transfers|
 
 Prior own56286918retired/APIabsence21:32:48 beforecreation. PublicSSHkeyattached,
 timer2571615armed immediately. NoBlackwell5070contract created: preparedofferdisappeared.
 Own onlythisnewID; allotheraccountinstancesareuntouched. Startup15minKVM/disk/actualGPUchecks.
+
+Final56302930: exact9d AD102595/590raw30, threeWindows580one-rowablations,
+590CUDA4/gfx5+10nativehashes/CinnamonSHM PASS, Windows581guestCode43,
+sameboardnative581GSP/420.59s0TDR PASS andnativeB29712byteallocationmetadata.
+AllGPUjobs/observerstopped andtextPUSHED beforeAPIabsence00:40:19UTC2026-10-17.
+OnlythisIDdestroyed; exacttimer2571615 checked/canceledAFTERabsence00:43:02UTC.
+Computeconservative10159s at0.61/h incldisk ceil1.73USD; retiredtotal10.50USD+transfers.
+No ownrentalactive. No thirdGB206B1lease; anynextlease onlyafterthisverifiedabsence,
+newreceipt/timer andliveprice/PCI/KVM/diskchecks.
