@@ -825,9 +825,13 @@ fn credit_wait(cfg: &Cfg, n: &mut World) {
         }
     }
     let need = if n.ch[c].marker_event {
-        Need::Marker { target: n.ch[c].refs_issued }
+        Need::Marker {
+            target: n.ch[c].refs_issued,
+        }
     } else {
-        Need::Popped { target: n.ch[c].fetched + 1 }
+        Need::Popped {
+            target: n.ch[c].fetched + 1,
+        }
     };
     finish(cfg, n, need);
 }
@@ -864,7 +868,10 @@ fn peek(n: &mut World, c: usize, why: ul::Peek, spin: u8, polls_put: bool) -> bo
     }
     if let Some(w) = ch.waiting {
         let pops = (ch.userd_get as u64) > ch.fetched;
-        if !w.satisfied(ch.ref_visible, ch.userd_get as u64) && pops && matches!(w, Wait::Marker { .. }) {
+        if !w.satisfied(ch.ref_visible, ch.userd_get as u64)
+            && pops
+            && matches!(w, Wait::Marker { .. })
+        {
             // still draining, but pops the guest's GP_GET has not shown yet: write them back
             n.ring(c, cause);
             return true;
@@ -941,7 +948,13 @@ fn worker_steps(cfg: &Cfg, w: &World, out: &mut Vec<Step>) {
             n.spin_left -= 1;
             let mut any = false;
             for c in 0..n.ch.len() {
-                any |= peek(&mut n, c, ul::Peek::Spin, cfg.spin, cfg.m.backstop_polls_put);
+                any |= peek(
+                    &mut n,
+                    c,
+                    ul::Peek::Spin,
+                    cfg.spin,
+                    cfg.m.backstop_polls_put,
+                );
             }
             if any {
                 n.spin_left = cfg.spin;
@@ -988,7 +1001,13 @@ fn worker_steps(cfg: &Cfg, w: &World, out: &mut Vec<Step>) {
                 n.parked = false;
                 n.efd = false;
                 for c in 0..n.ch.len() {
-                    peek(&mut n, c, ul::Peek::Backstop, cfg.spin, cfg.m.backstop_polls_put);
+                    peek(
+                        &mut n,
+                        c,
+                        ul::Peek::Backstop,
+                        cfg.spin,
+                        cfg.m.backstop_polls_put,
+                    );
                 }
                 n.pc = Pc::Top0;
                 out.push(step("w:wake(backstop)", n));
@@ -1016,7 +1035,13 @@ fn worker_steps(cfg: &Cfg, w: &World, out: &mut Vec<Step>) {
                 c.ev = false;
             }
             for c in 0..n.ch.len() {
-                peek(&mut n, c, ul::Peek::Event, cfg.spin, cfg.m.backstop_polls_put);
+                peek(
+                    &mut n,
+                    c,
+                    ul::Peek::Event,
+                    cfg.spin,
+                    cfg.m.backstop_polls_put,
+                );
             }
             n.spin_left = cfg.spin;
             n.pc = Pc::Top0;
@@ -1124,7 +1149,9 @@ fn turn_step(cfg: &Cfg, w: &World, stage: u8, out: &mut Vec<Step>) {
                 } else if design && ch.fetched < ch.issued {
                     // published work in flight: the last marker's processing frees the guest's ring
                     let need = if ch.marker_event {
-                        Need::Marker { target: ch.refs_issued }
+                        Need::Marker {
+                            target: ch.refs_issued,
+                        }
                     } else {
                         Need::Popped { target: ch.issued }
                     };
@@ -1152,7 +1179,11 @@ fn turn_step(cfg: &Cfg, w: &World, stage: u8, out: &mut Vec<Step>) {
             let raw = if e.sync { 1u64 << 63 } else { 0 };
             // The proof the gate waits on. Design: markers PROCESSED (USERD.REFERENCE). Today: GP_GET
             // (`fetch.fetched()`), the retired proof -- and the `get_proof` mutant of the design.
-            let proof = if design && !cfg.m.get_proof { ch.ref_seen } else { ch.fetched };
+            let proof = if design && !cfg.m.get_proof {
+                ch.ref_seen
+            } else {
+                ch.fetched
+            };
             // a SYNC_WAIT entry behind an open packet cannot be gated (no witness fits): Design reads it at once
             let ungated = design && e.sync && ch.open && !cfg.m.bytes_witness;
             let mut gate = ch.gate.0;
@@ -1186,15 +1217,21 @@ fn turn_step(cfg: &Cfg, w: &World, stage: u8, out: &mut Vec<Step>) {
                         m.publish(P::Barrier, None);
                         m.publish(P::Witness { bytes: true }, None);
                         m.refs_issued += 1;
-                        m.gate.0.published(if cfg.policy == Policy::Design && !cfg.m.get_proof {
-                            m.refs_issued
-                        } else {
-                            m.issued
-                        });
+                        m.gate
+                            .0
+                            .published(if cfg.policy == Policy::Design && !cfg.m.get_proof {
+                                m.refs_issued
+                            } else {
+                                m.issued
+                            });
                         m.gate_target = m.refs_issued;
                         m.unnotified = false;
                         m.marker_event = true;
-                        let t = if cfg.policy == Policy::Design { m.gate_target } else { m.issued };
+                        let t = if cfg.policy == Policy::Design {
+                            m.gate_target
+                        } else {
+                            m.issued
+                        };
                         finish(cfg, &mut n, Need::Marker { target: t });
                         out.push(step("w:T4 gate: barrier+marker", n));
                     }
@@ -1750,11 +1787,17 @@ fn rejected(f: &[(&'static str, String)], failing: &[(&str, &str)]) {
         .iter()
         .map(|(n, r)| {
             let why = failing.iter().find(|(m, _)| m == n).map_or("", |(_, w)| *w);
-            assert!(why.is_empty() || r.contains(why), "{n}: expected {why:?} in\n{r}");
+            assert!(
+                why.is_empty() || r.contains(why),
+                "{n}: expected {why:?} in\n{r}"
+            );
             (*n, why)
         })
         .collect();
-    assert_eq!(got, failing, "the retired loop is rejected at exactly these scenarios");
+    assert_eq!(
+        got, failing,
+        "the retired loop is rejected at exactly these scenarios"
+    );
 }
 
 /// ★ RULE 1: correctness must not depend on timing. With timers that never fire (no tick, no park
@@ -1859,7 +1902,13 @@ fn the_retired_gp_get_proof_read_a_pushbuffer_before_the_drain() {
 #[test]
 fn design_a_sync_wait_behind_an_open_packet_is_read_ungated_and_needs_no_wake() {
     let chans = vec![spec(
-        vec![Push(seg(1).acq(0).open()), Push(seg(2).sync()), SetPut, Ring, Release(0)],
+        vec![
+            Push(seg(1).acq(0).open()),
+            Push(seg(2).sync()),
+            SetPut,
+            Ring,
+            Release(0),
+        ],
         vec![1, 2],
         2,
     )];
@@ -1879,7 +1928,12 @@ fn design_a_sync_wait_behind_an_open_packet_cannot_protect_late_bytes() {
     finds("design/carried-late", &cfg, 0, &["STALE_READ"]);
     // the mutant that puts a marker inside the open packet is the original Xid-32 PBENTRY
     cfg.m.bytes_witness = true;
-    finds("design/carried-marker-in-packet", &cfg, 0, &["BYTES_IN_OPEN_PACKET", "STALE_READ"]);
+    finds(
+        "design/carried-marker-in-packet",
+        &cfg,
+        0,
+        &["BYTES_IN_OPEN_PACKET", "STALE_READ"],
+    );
 }
 
 /// ★ A lost / never-armed interrupt: progress comes only from the backstop, and every firing that
@@ -2181,7 +2235,11 @@ fn retire_in_gate_without_timers_terminates_for_both_policies() {
         ];
         let mut cfg = Cfg::new(policy, chans);
         cfg.timers = false;
-        holds(&format!("{policy:?}/retire-no-timers"), &cfg, V_TIMER_TURN | V_STALE);
+        holds(
+            &format!("{policy:?}/retire-no-timers"),
+            &cfg,
+            V_TIMER_TURN | V_STALE,
+        );
     }
 }
 
@@ -2221,7 +2279,11 @@ fn a_stuck_gate_does_not_starve_a_neighbouring_channel() {
     for policy in [Policy::Today, Policy::Design] {
         let mut cfg = Cfg::new(policy, s_two_channels_one_gated_forever());
         cfg.timers = false;
-        holds(&format!("{policy:?}/neighbour"), &cfg, V_TIMER_TURN | V_STALE);
+        holds(
+            &format!("{policy:?}/neighbour"),
+            &cfg,
+            V_TIMER_TURN | V_STALE,
+        );
     }
 }
 
@@ -2247,7 +2309,16 @@ fn migration_executes_each_entry_exactly_once_in_order() {
             // (the lagging variant runs a smaller migration: timers + backstop multiply the states)
             let scenario = if lag {
                 vec![spec(
-                    vec![Push(seg(1)), Push(trigger(2)), SetPut, Ring, UseNew, Push(seg(3)), SetPut, Ring],
+                    vec![
+                        Push(seg(1)),
+                        Push(trigger(2)),
+                        SetPut,
+                        Ring,
+                        UseNew,
+                        Push(seg(3)),
+                        SetPut,
+                        Ring,
+                    ],
                     vec![1, 2, 3],
                     3,
                 )]
@@ -2278,7 +2349,12 @@ fn the_retired_loop_migrated_without_timers_only_when_no_gate_was_involved() {
     holds("retired/migration", &cfg, 0);
     let mut cfg = Cfg::new(Policy::Today, s_migration_gated());
     cfg.timers = false;
-    finds("retired/migration-gated", &cfg, 0, &["DEADLOCK", "STALE_READ"]);
+    finds(
+        "retired/migration-gated",
+        &cfg,
+        0,
+        &["DEADLOCK", "STALE_READ"],
+    );
 }
 
 // ------------------------------------------------------------------------------------------------
@@ -2305,10 +2381,10 @@ fn the_design_exploration_reaches_every_race_it_claims_to_cover() {
         "w:spin peek",                    // the bounded spin
         "w:T4 gate: wait",                // a turn that finds the gate still draining
         "w:T4 gate: barrier+marker",
-        "w:T5 no credit",                     // private-ring credit shortage
-        "w:T2 idle: publish marker",          // the batch's completion marker
-        "w:T0 record busy",                   // the act thread holds the record
-        "w:T1b write guest GP_GET",           // the guest's GP_GET write-back
+        "w:T5 no credit",            // private-ring credit shortage
+        "w:T2 idle: publish marker", // the batch's completion marker
+        "w:T0 record busy",          // the act thread holds the record
+        "w:T1b write guest GP_GET",  // the guest's GP_GET write-back
         "env0:unlock",
     ] {
         assert!(all.contains(needle), "never reached: {needle:?}");

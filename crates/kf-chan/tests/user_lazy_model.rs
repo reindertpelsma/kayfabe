@@ -65,7 +65,17 @@ fn dist(from: u32, to: u32) -> u32 {
 
 impl Sys {
     fn new(enabled: bool) -> Self {
-        Sys { generation: 1, written: 0, put: 0, rung: 0, consumed: 0, woken: false, cache: PutCache::default(), enabled, migrations: 0 }
+        Sys {
+            generation: 1,
+            written: 0,
+            put: 0,
+            rung: 0,
+            consumed: 0,
+            woken: false,
+            cache: PutCache::default(),
+            enabled,
+            migrations: 0,
+        }
     }
     fn cursor(&self) -> u32 {
         self.consumed % R
@@ -81,7 +91,10 @@ impl Sys {
         self.cache.record(self.generation, put_m);
         // I8: the PUT in hand is never beyond the real PUT, measured from the cursor.
         if dist(cursor, put_m) > dist(cursor, self.put % R) {
-            return Err(format!("I8: cached PUT {put_m} beyond real PUT {} (cursor {cursor})", self.put % R));
+            return Err(format!(
+                "I8: cached PUT {put_m} beyond real PUT {} (cursor {cursor})",
+                self.put % R
+            ));
         }
         if put_m == cursor {
             if !fresh {
@@ -92,7 +105,10 @@ impl Sys {
         }
         // The entry at the cursor must be one the guest published before the PUT in hand was read.
         if self.consumed >= self.put {
-            return Err(format!("read an entry at/after the loaded PUT (consumed {} put {})", self.consumed, self.put));
+            return Err(format!(
+                "read an entry at/after the loaded PUT (consumed {} put {})",
+                self.consumed, self.put
+            ));
         }
         self.consumed += 1;
         Ok(())
@@ -161,7 +177,10 @@ impl Sys {
             return Err("relay still woken after the bounded drain (livelock)".into());
         }
         if s.consumed != s.put {
-            return Err(format!("LOST WAKEUP: relay idle with consumed {} < published {}", s.consumed, s.put));
+            return Err(format!(
+                "LOST WAKEUP: relay idle with consumed {} < published {}",
+                s.consumed, s.put
+            ));
         }
         Ok(())
     }
@@ -197,7 +216,10 @@ fn explore(enabled: bool) -> Result<usize, String> {
 fn put_cache_every_reachable_state_keeps_i8_order_and_the_doorbell_contract() {
     let n = explore(true).unwrap();
     eprintln!("put_cache exploration: {n} reachable states");
-    assert!(n > 500, "the exploration must not be vacuous (states = {n})");
+    assert!(
+        n > 500,
+        "the exploration must not be vacuous (states = {n})"
+    );
 }
 
 #[test]
@@ -209,7 +231,11 @@ fn put_cache_disabled_is_the_reference_behaviour() {
 fn a_cached_put_is_never_used_when_the_cursor_has_reached_it() {
     let mut c = PutCache::default();
     c.record(1, 5);
-    assert_eq!(c.select(true, 1, 5), None, "cursor == cached PUT forces a fresh read");
+    assert_eq!(
+        c.select(true, 1, 5),
+        None,
+        "cursor == cached PUT forces a fresh read"
+    );
     assert_eq!(c.select(true, 1, 3), Some(5));
     assert_eq!(c.select(false, 1, 3), None, "disabled never selects");
 }
@@ -219,7 +245,11 @@ fn a_ring_generation_switch_invalidates_the_cache_even_for_a_lower_put() {
     let mut c = PutCache::default();
     c.record(1, 3);
     assert_eq!(c.select(true, 1, 0), Some(3));
-    assert_eq!(c.select(true, 2, 0), None, "new generation: never the old PUT");
+    assert_eq!(
+        c.select(true, 2, 0),
+        None,
+        "new generation: never the old PUT"
+    );
     c.record(2, 1); // the migrated ring's PUT is LOWER than the old one
     assert_eq!(c.select(true, 2, 0), Some(1));
     c.invalidate();
@@ -243,19 +273,36 @@ fn wrap_around_is_handled_in_modular_arithmetic() {
 fn must_observe_is_forced_by_waiting_open_segment_low_credit_and_interval_one() {
     for turn in 0..100u64 {
         for interval in [1u64, 2, 16, 4096] {
-            assert!(must_observe(turn, interval, true, 10_000, false), "prev_waiting forces a look (liveness)");
-            assert!(must_observe(turn, interval, false, 10_000, true), "an open segment forces a look");
-            assert!(must_observe(turn, interval, false, CREDIT_FLOOR - 1, false), "low credits force a look (no deadlock on a full ring)");
+            assert!(
+                must_observe(turn, interval, true, 10_000, false),
+                "prev_waiting forces a look (liveness)"
+            );
+            assert!(
+                must_observe(turn, interval, false, 10_000, true),
+                "an open segment forces a look"
+            );
+            assert!(
+                must_observe(turn, interval, false, CREDIT_FLOOR - 1, false),
+                "low credits force a look (no deadlock on a full ring)"
+            );
         }
-        assert!(must_observe(turn, 1, false, 10_000, false), "interval 1 = today's behaviour: every turn");
-        assert!(must_observe(turn, 0, false, 10_000, false), "interval 0 is treated as 1");
+        assert!(
+            must_observe(turn, 1, false, 10_000, false),
+            "interval 1 = today's behaviour: every turn"
+        );
+        assert!(
+            must_observe(turn, 0, false, 10_000, false),
+            "interval 0 is treated as 1"
+        );
     }
 }
 
 #[test]
 fn must_observe_without_a_reason_looks_once_per_interval() {
     for interval in [2u64, 4, OBSERVE_INTERVAL, 64] {
-        let looks = (1..=1024u64).filter(|&t| must_observe(t, interval, false, 10_000, false)).count() as u64;
+        let looks = (1..=1024u64)
+            .filter(|&t| must_observe(t, interval, false, 10_000, false))
+            .count() as u64;
         assert_eq!(looks, 1024 / interval, "interval {interval}");
     }
 }
@@ -275,8 +322,14 @@ fn stale_get_never_yields_more_credits_than_the_real_ring_has() {
                         f.available()
                     };
                     let truth = entries - 1 - issued + real; // free slots given the pops that REALLY happened
-                    assert!(mk(stale) <= mk(real), "entries {entries} issued {issued} real {real} stale {stale}");
-                    assert!(mk(real) <= truth && mk(stale) <= truth, "credits above the real ring's free slots: entries {entries} issued {issued} real {real} stale {stale}");
+                    assert!(
+                        mk(stale) <= mk(real),
+                        "entries {entries} issued {issued} real {real} stale {stale}"
+                    );
+                    assert!(
+                        mk(real) <= truth && mk(stale) <= truth,
+                        "credits above the real ring's free slots: entries {entries} issued {issued} real {real} stale {stale}"
+                    );
                 }
             }
         }
@@ -299,7 +352,11 @@ fn stale_reference_never_releases_a_gate_early() {
                 let ga = a.entry(raw, 1, 3, stale);
                 let gb = b.entry(raw, 1, 3, real);
                 if ga == Gate::Proceed {
-                    assert_eq!(gb, Gate::Proceed, "stale released early: witness {witness} stale {stale} real {real}");
+                    assert_eq!(
+                        gb,
+                        Gate::Proceed,
+                        "stale released early: witness {witness} stale {stale} real {real}"
+                    );
                     assert!(stale >= witness);
                 }
                 if gb == Gate::Wait {
@@ -315,9 +372,17 @@ fn stale_reference_never_releases_a_gate_early() {
             m.issue().unwrap();
         }
         for future in issued + 1..=issued + 6 {
-            assert_eq!(m.peek(Marks::value(future)), m.seen(), "a marker not yet issued must not count (issued {issued}, word names {future})");
+            assert_eq!(
+                m.peek(Marks::value(future)),
+                m.seen(),
+                "a marker not yet issued must not count (issued {issued}, word names {future})"
+            );
         }
-        assert_eq!(m.peek(0x1234_5678), m.seen(), "an untagged word implies no progress");
+        assert_eq!(
+            m.peek(0x1234_5678),
+            m.seen(),
+            "an untagged word implies no progress"
+        );
     }
     // Marks::peek of a stale REFERENCE word never implies more progress than a fresher word.
     for issued in 1..=6u64 {
@@ -354,7 +419,18 @@ struct GateSys {
 impl GateSys {
     fn new(entries: Vec<bool>, interval: u64) -> Self {
         let n = entries.len();
-        GateSys { entries, k: 0, gate: SyncGate::default(), marks: Marks::default(), real_processed: 0, witness_of: vec![None; n], prev_waiting: true, turn_no: 0, interval, reads: vec![] }
+        GateSys {
+            entries,
+            k: 0,
+            gate: SyncGate::default(),
+            marks: Marks::default(),
+            real_processed: 0,
+            witness_of: vec![None; n],
+            prev_waiting: true,
+            turn_no: 0,
+            interval,
+            reads: vec![],
+        }
     }
     fn env_process_marker(&mut self) -> bool {
         if self.real_processed < self.marks.issued() {
@@ -368,17 +444,31 @@ impl GateSys {
             return Ok(false);
         }
         self.turn_no += 1;
-        if must_observe(self.turn_no, self.interval, self.prev_waiting, 10_000, false) {
-            let word = if self.real_processed == 0 { 0 } else { Marks::value(self.real_processed) };
+        if must_observe(
+            self.turn_no,
+            self.interval,
+            self.prev_waiting,
+            10_000,
+            false,
+        ) {
+            let word = if self.real_processed == 0 {
+                0
+            } else {
+                Marks::value(self.real_processed)
+            };
             self.marks.observe(word);
         }
         let raw = if self.entries[self.k] { 1u64 << 63 } else { 0 };
         match self.gate.entry(raw, 1, self.k as u32, self.marks.seen()) {
             Gate::Proceed => {
                 if self.entries[self.k] {
-                    let w = self.witness_of[self.k].ok_or("sync entry read without a published gate")?;
+                    let w = self.witness_of[self.k]
+                        .ok_or("sync entry read without a published gate")?;
                     if self.real_processed < w {
-                        return Err(format!("entry {} read before its gate marker ran (real {} < witness {w})", self.k, self.real_processed));
+                        return Err(format!(
+                            "entry {} read before its gate marker ran (real {} < witness {w})",
+                            self.k, self.real_processed
+                        ));
                     }
                 }
                 self.reads.push(self.k);
@@ -407,7 +497,11 @@ fn gate_explore(entries: Vec<bool>, interval: u64, depth: usize) {
                 break;
             }
         }
-        assert_eq!(t.reads, (0..t.entries.len()).collect::<Vec<_>>(), "liveness: every entry read, in order, once (interval {interval})");
+        assert_eq!(
+            t.reads,
+            (0..t.entries.len()).collect::<Vec<_>>(),
+            "liveness: every entry read, in order, once (interval {interval})"
+        );
         if depth == 0 {
             return;
         }
@@ -511,7 +605,10 @@ fn put_advancing_behind_the_cache_drains_every_identity_before_fresh_idle() {
         assert_eq!(s.cache.select(true, s.generation, s.cursor()), Some(cached));
         for _ in 0..2 {
             let cursor = s.cursor();
-            let loaded = s.cache.select(true, s.generation, cursor).unwrap_or(s.put % R);
+            let loaded = s
+                .cache
+                .select(true, s.generation, cursor)
+                .unwrap_or(s.put % R);
             assert!(dist(cursor, loaded) > 0);
             assert!(dist(cursor, loaded) <= s.put - s.consumed);
             assert_eq!(slots[cursor as usize], Some(s.consumed));
@@ -554,7 +651,10 @@ fn stale_get_is_conservative_across_many_wraps_and_receipts_are_exact() {
             assert_eq!(f.fetched(), observed);
             assert_eq!(f.issued(), issued);
         }
-        assert!(issued > u64::from(entries) * 10, "must exercise repeated wraps");
+        assert!(
+            issued > u64::from(entries) * 10,
+            "must exercise repeated wraps"
+        );
     }
 }
 
@@ -608,18 +708,33 @@ fn n_one_matches_an_independent_eager_fifo_and_reference_oracle() {
         if event & 8 != 0 && real_ref < issued_marks {
             real_ref += 1;
         }
-        assert!(must_observe(turn, 1, event & 16 != 0, f.available(), event & 32 != 0));
+        assert!(must_observe(
+            turn,
+            1,
+            event & 16 != 0,
+            f.available(),
+            event & 32 != 0
+        ));
         let got = f.observe((real_get % 128) as u32).unwrap();
-        let expected: Vec<_> = (observed_get..real_get).map(|_| pending.pop_front().unwrap()).collect();
+        let expected: Vec<_> = (observed_get..real_get)
+            .map(|_| pending.pop_front().unwrap())
+            .collect();
         assert_eq!(got, expected);
         observed_get = real_get;
         // The eager oracle knows absolute hardware progress independently of
         // Marks and Fetch. Receipt equality also checks guest GET write-back.
         assert_eq!(f.available() as usize, 127 - pending.len());
-        let word = if real_ref == 0 { 0 } else { Marks::value(real_ref) };
+        let word = if real_ref == 0 {
+            0
+        } else {
+            Marks::value(real_ref)
+        };
         assert_eq!(m.observe(word), real_ref);
     }
-    assert!(issued > 10_000 && real_ref > 65_536, "exercise GET and REFERENCE wraps");
+    assert!(
+        issued > 10_000 && real_ref > 65_536,
+        "exercise GET and REFERENCE wraps"
+    );
 }
 
 #[test]

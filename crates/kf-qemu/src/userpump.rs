@@ -211,6 +211,27 @@ fn parse_lifecycle_mode(
         ),
     }
 }
+/// ★ 2026-10-17 MEASUREMENT CLASS (default ON, never needed to boot) -- lazy observe, `kf_chan::user_lazy`:
+/// `KF3_PUT_CACHE=0` turns the guest `GP_PUT` cache (A) off, `KF3_LAZY_OBSERVE=0` turns the lazy private-`USERD` look (B)
+/// off, so that the split arms run from one binary. Anything else (including unset) leaves the rule on; the interval is the
+/// constant `kf_chan::user_lazy::OBSERVE_INTERVAL`. Read ONCE, when the first relay is created, never per turn. The rules
+/// act only in Pointer mode of this (Windows USER-ring) relay.
+fn lazy_config() -> kf_chan::user_lazy::LazyConfig {
+    use kf_chan::user_lazy::{ENV_LAZY_OBSERVE, ENV_PUT_CACHE, LazyConfig};
+    static CFG: std::sync::OnceLock<LazyConfig> = std::sync::OnceLock::new();
+    *CFG.get_or_init(|| {
+        let (a, b) = (
+            std::env::var(ENV_PUT_CACHE).ok(),
+            std::env::var(ENV_LAZY_OBSERVE).ok(),
+        );
+        let cfg = LazyConfig::from_switches(a.as_deref(), b.as_deref());
+        eprintln!(
+            "kf3: USER_RING_LAZY_OBSERVE_MODE put_cache={} observe_interval={} ({ENV_PUT_CACHE}={a:?} {ENV_LAZY_OBSERVE}={b:?})",
+            cfg.put_cache, cfg.interval
+        );
+        cfg
+    })
+}
 const TRACE_HISTORY: usize = 64;
 const TRACE_WORDS: usize = 16384;
 /// Per-channel cap on the words the history retains (1 MiB).
@@ -664,12 +685,16 @@ impl kf_chan::user_turn::Io for PumpIo<'_> {
     fn max_entry_bytes(&mut self) -> u64 {
         userread::MAX_BYTES as u64
     }
-    fn gp_put(&mut self) -> Turn<Option<u32>> {
+    fn walk_busy(&mut self) -> bool {
         let (me, r) = (self.me, self.r);
         if me.inbox.walk_busy() {
             me.inbox.wait_walk(r.idx);
-            return Ok(None);
+            return true;
         }
+        false
+    }
+    fn gp_put(&mut self) -> Turn<Option<u32>> {
+        let (me, r) = (self.me, self.r);
         // Doorbells counted BEFORE the PUT read (measurement only today).
         self.aux.doorbells = me.queued(r.idx);
         let mut put = [0u8; 4];
@@ -963,7 +988,8 @@ impl Pump {
                     .with_latch(me.relay_stats.life.latch.clone()),
                 scan,
             )
-            .map_err(str::to_owned)?,
+            .map_err(str::to_owned)?
+            .with_lazy(lazy_config()),
             shadow: userrelay::shadow_enabled()
                 .then(|| super::usershadow::Shadow::new(subdevice_id)),
             key,
@@ -974,7 +1000,7 @@ impl Pump {
             trace: trace_dir().map(|_| Box::new(Trace::new())),
         })
     }
-    pub(super) fn release(&mut self) -> Result<(), String> {
+    pub(super) fn release(&mut self, stats: &kf_chan::user_loop::Stats) -> Result<(), String> {
         {
             let c = self.core.life.counts();
             if c.entries_scan.saturating_add(c.entries_pointer).saturating_add(c.entries_window) != 0 {
@@ -985,7 +1011,17 @@ impl Pump {
                 );
             }
         }
-        self.core.life.teardown();
+        self.core.retire();
+        // ★ lazy observe: the remaining counters join the VM-wide ones; ONE line per relay, at retire
+        let lazy = self.core.lazy.take_delta();
+        stats.lazy.add(&lazy);
+        if self.core.lazy.counts.turns != 0 {
+            eprintln!(
+                "kf3: USER_RING_LAZY_OBSERVE {:x?} {}",
+                self.key,
+                self.core.lazy.counts.summary()
+            );
+        }
         if self.aux.sync_carried != 0 {
             eprintln!(
                 "kf3: USER_RING_SYNC_CARRIED SUMMARY {:#x}:{:#x} sync_wait_entries_behind_an_open_packet_read_ungated={}",
@@ -1798,6 +1834,10 @@ impl Pump {
                     .life
                     .window_max(self.core.life.counts().window_entries_max);
             }
+        }
+        // lazy observe: fold the plain per-relay counters into the VM-wide atomics every 256th turn (and at retire)
+        if self.core.lazy.flush_due() {
+            me.relay_stats.lazy.add(&self.core.lazy.take_delta());
         }
         match &out {
             Ok(_) if self.core.again => self.core.need = Need::Again,
@@ -3399,6 +3439,88 @@ mod tests {
             1,
             "one machine per pump"
         );
+    }
+    // ---- 2026-10-17: lazy observe (rules A and B, `kf_chan::user_lazy`) in the Windows USER-ring relay only
+
+    /// D2: lazy observe lives in the pure relay of the Windows USER-ring pump. Linux passthrough, Translated, Emulated and
+    /// the USERD relay never name it.
+    #[test]
+    fn lazy_observe_is_reachable_only_from_the_windows_user_ring_pump() {
+        let others: [(&str, &str); 7] = [
+            ("kf-qemu/chan.rs", include_str!("chan.rs")),
+            ("kf-qemu/twin.rs", include_str!("twin.rs")),
+            ("kf-qemu/userbirth.rs", include_str!("userbirth.rs")),
+            ("kf-chan/passthrough.rs", include_str!("../../kf-chan/src/passthrough.rs")),
+            ("kf-chan/translated.rs", include_str!("../../kf-chan/src/translated.rs")),
+            ("kf-chan/tmode.rs", include_str!("../../kf-chan/src/tmode.rs")),
+            ("kf-chan/userd_relay.rs", include_str!("../../kf-chan/src/userd_relay.rs")),
+        ];
+        for (name, text) in others {
+            assert!(
+                !text.contains("user_lazy") && !text.contains("with_lazy"),
+                "{name} must not use lazy observe"
+            );
+        }
+        let relay = include_str!("userrelay.rs");
+        assert!(!relay.contains("user_lazy") && !relay.contains("with_lazy"), "only the pump configures it");
+        let pump = include_str!("userpump.rs");
+        let pump = pump.split("#[cfg(test)]").next().unwrap();
+        assert_eq!(pump.matches(".with_lazy(").count(), 1, "one relay constructor, one opt-in");
+    }
+
+    /// D3: `KF3_PUT_CACHE` / `KF3_LAZY_OBSERVE` (default ON, measurement class) are read ONCE, by the relay's birth, never
+    /// by a turn; the interval is the constant, not a variable.
+    #[test]
+    fn the_lazy_observe_switches_are_read_once_at_relay_creation_and_never_per_turn() {
+        let pump = include_str!("userpump.rs");
+        let pump = pump.split("#[cfg(test)]").next().unwrap();
+        assert_eq!(pump.matches("std::env::var(ENV_PUT_CACHE)").count(), 1);
+        assert_eq!(pump.matches("std::env::var(ENV_LAZY_OBSERVE)").count(), 1);
+        assert_eq!(pump.matches("std::sync::OnceLock<LazyConfig>").count(), 1);
+        assert_eq!(pump.matches("lazy_config()").count(), 2, "its definition and the one call");
+        let birth = pump.split("pub(super) fn new(me: &ChanPlane").nth(1).unwrap();
+        let birth = birth.split("pub(super) fn release").next().unwrap();
+        assert!(birth.contains(".with_lazy(lazy_config())"), "the call is in Pump::new");
+        let turns = pump.split("fn turn(&mut self, me: &ChanPlane").nth(1).unwrap();
+        let turns = turns.split("/// Measurement only: the final scan refusal").next().unwrap();
+        assert!(
+            !turns.contains("lazy_config") && !turns.contains("env::var") && !turns.contains("ENV_"),
+            "no read per turn"
+        );
+        // and the pure relay never touches the environment either (kf-chan pins the same from its side)
+        for src in [
+            include_str!("../../kf-chan/src/user_lazy.rs"),
+            include_str!("../../kf-chan/src/user_turn.rs"),
+        ] {
+            assert!(!src.contains("std::env") && !src.contains("env::var("));
+        }
+    }
+
+    /// D5 and the walk gate: the counters reach the VM-wide stats every 256th turn and at retire (one line per relay), the
+    /// retire hook is the relay's, and the mapping-walk gate has ONE implementation that the cached and the fresh `GP_PUT`
+    /// paths both pass through (the relay asks `Io::walk_busy` before consulting the cache).
+    #[test]
+    fn the_pump_wires_the_lazy_counters_the_retire_hook_and_the_walk_gate() {
+        let pump = include_str!("userpump.rs");
+        let pump = pump.split("#[cfg(test)]").next().unwrap();
+        let turn = pump.split("fn turn(&mut self, me: &ChanPlane").nth(1).unwrap();
+        let turn = turn.split("fn turn_body(").next().unwrap();
+        for needle in ["self.core.lazy.flush_due()", "me.relay_stats.lazy.add(", "take_delta()"] {
+            assert!(turn.contains(needle), "turn() must call {needle}");
+        }
+        let release = pump.split("pub(super) fn release(").nth(1).unwrap();
+        let release = release.split("fn ").next().unwrap();
+        for needle in ["self.core.retire();", "stats.lazy.add(", "USER_RING_LAZY_OBSERVE"] {
+            assert!(release.contains(needle), "release() must contain {needle}");
+        }
+        assert!(!release.contains("life.teardown"), "the relay's retire() tears the machine down");
+        assert_eq!(pump.matches("\"kf3: USER_RING_LAZY_OBSERVE {").count(), 1, "one line per relay, in one place");
+        let io = pump.split("impl kf_chan::user_turn::Io for PumpIo").nth(1).unwrap();
+        let io = io.split("fn begin_entry").next().unwrap();
+        let after = pump.split("fn gp_put(&mut self) -> Turn<Option<u32>> {").nth(1).unwrap();
+        let gp_put = after.split("fn begin_entry").next().unwrap();
+        assert!(io.contains("fn walk_busy(&mut self) -> bool"), "the gate is the Io's");
+        assert!(!gp_put.contains("walk_busy"), "gp_put no longer checks it: the relay does, before the cache");
     }
     /// PHASE 1c (review 2, N2): `KF3_LIFECYCLE_MODE` selects the measurement-class mode; nothing about it is required
     /// to boot (unset, empty and unknown values all run the default, the last one loudly).

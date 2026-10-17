@@ -232,6 +232,9 @@ pub struct Stats {
     /// ★ 2026-10-16: the USER-ring lifecycle's counters (`crate::user_lifecycle`), printed on their own
     /// line (`USER_RING_LIFECYCLE SUMMARY`).
     pub life: crate::user_lifecycle::LifecycleStats,
+    /// ★ 2026-10-17: lazy observe's counters (`crate::user_lazy`), printed on their own line
+    /// (`USER_RING_LAZY_OBSERVE SUMMARY`).
+    pub lazy: crate::user_lazy::LazyStats,
 }
 
 impl Stats {
@@ -325,9 +328,18 @@ mod tests {
     #[test]
     fn no_look_touches_a_relay_with_no_demand_and_no_wait() {
         for why in [Peek::Spin, Peek::Event, Peek::Backstop] {
-            assert!(!look_needed(why, false, false), "{why:?} must leave an idle relay alone");
-            assert!(look_needed(why, true, false), "{why:?}: demand left behind is a reason");
-            assert!(look_needed(why, false, true), "{why:?}: a recorded wait is a reason");
+            assert!(
+                !look_needed(why, false, false),
+                "{why:?} must leave an idle relay alone"
+            );
+            assert!(
+                look_needed(why, true, false),
+                "{why:?}: demand left behind is a reason"
+            );
+            assert!(
+                look_needed(why, false, true),
+                "{why:?}: a recorded wait is a reason"
+            );
             assert!(look_needed(why, true, true));
         }
     }

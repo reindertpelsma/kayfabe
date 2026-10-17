@@ -838,7 +838,7 @@ impl ChanPlane {
             let Ok(mut r) = record.lock() else { return };
             r.retired = true;
             record.cancel();
-            let sources_ok = r.pump.as_mut().is_none_or(|p| match p.release() {
+            let sources_ok = r.pump.as_mut().is_none_or(|p| match p.release(&self.relay_stats) {
                 Ok(()) => true,
                 Err(why) => {
                     eprintln!("kf3: {why}; source views retained until session close");
@@ -876,6 +876,9 @@ impl ChanPlane {
                     eprintln!("kf3: USER_RING_LOOP SUMMARY (all relays gone, #{n}) {}", self.relay_stats.summary());
                     if self.relay_stats.life.any() {
                         eprintln!("kf3: USER_RING_LIFECYCLE SUMMARY (all relays gone, #{n}) {}", self.relay_stats.life.summary());
+                    }
+                    if self.relay_stats.lazy.any() {
+                        eprintln!("kf3: USER_RING_LAZY_OBSERVE SUMMARY (all relays gone, #{n}) {}", self.relay_stats.lazy.summary());
                     }
                     eprintln!("kf3: {}", crate::userstore::summary());
                 }
@@ -915,7 +918,7 @@ impl ChanPlane {
             let Ok(mut r) = record.lock() else { return };
             r.retired = true;
             record.cancel();
-            let sources_ok = r.pump.as_mut().is_none_or(|p| match p.release() {
+            let sources_ok = r.pump.as_mut().is_none_or(|p| match p.release(&self.relay_stats) {
                 Ok(()) => true,
                 Err(why) => {
                     eprintln!("kf3: {why}; source views retained until session close");

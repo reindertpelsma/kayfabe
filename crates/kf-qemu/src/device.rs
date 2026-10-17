@@ -3400,6 +3400,9 @@ impl Device {
         if rs.life.any() {
             eprintln!("kf3: USER_RING_LIFECYCLE SUMMARY {}", rs.life.summary());
         }
+        if rs.lazy.any() {
+            eprintln!("kf3: USER_RING_LAZY_OBSERVE SUMMARY {}", rs.lazy.summary());
+        }
         if rs.gates.load(Ordering::Relaxed) + rs.markers.load(Ordering::Relaxed) > 0 {
             eprintln!("kf3: USER_RING_LOOP SUMMARY {}", rs.summary());
             eprintln!("kf3: {}", crate::userstore::summary());
