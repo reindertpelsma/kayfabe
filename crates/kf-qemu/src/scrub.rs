@@ -48,6 +48,47 @@ pub enum Cause {
     Teardown,
 }
 
+/// ★ What happened to the guest's video memory's trust boundary (the owner's table,
+/// 2026-10-18). The rule is **scrub by trust boundary**: only an event after which a NEW OS
+/// instance or a new VM can follow scrubs. An in-guest event keeps the same OS and the same root,
+/// which can read all of its own vidmem already (the guest driver owns scrubbing on allocation; a
+/// real GPU does not scrub there either).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Event {
+    /// The VM starts; the only event that also covers a previous QEMU that died before teardown.
+    VmStart,
+    /// The machine's system reset from QEMU's main loop: a guest reboot, the reset button, a
+    /// bugcheck or triple-fault reset, QMP `system_reset` — a new OS instance follows.
+    GuestReboot,
+    /// The platform's S3 wake: the same OS resumes a PM-suspended RM life.
+    S3Wake,
+    /// A bus reset delivered on a vCPU thread (a bridge's secondary-bus reset, the guest's own act).
+    GuestBusReset,
+    /// fn 47 `UNLOADING_GUEST_DRIVER` without a PM transition: the guest RM unloads.
+    DriverUnload,
+    /// The basic display (firmware GOP) handing over to the guest NVIDIA driver in a running OS.
+    DisplayHandoff,
+    /// The VM is going away; the store is about to be freed.
+    VmTeardown,
+}
+
+/// ★ THE TABLE: does `event` scrub the whole guest-allocatable store, and with which scope?
+#[must_use]
+pub fn decide(event: Event) -> Option<Cause> {
+    let _ = event;
+    // RED STEP (tests first)
+    None
+}
+
+/// The [`Event`] a QEMU reset request is, from what the device sees: where QEMU asked from (a vCPU
+/// thread: `current_cpu != NULL`, so the guest's own act) and the reset type (`RESET_TYPE_WAKEUP`).
+#[must_use]
+pub fn event_of_reset(from_vcpu: bool, wake: bool) -> Event {
+    let _ = (from_vcpu, wake);
+    // RED STEP (tests first)
+    Event::DriverUnload
+}
+
 /// The ranges to zero, as `(offset, length)`, sorted, non-overlapping, non-empty.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Plan {
@@ -428,5 +469,34 @@ mod tests {
     fn an_empty_boot_range_adds_nothing() {
         let l = layout();
         assert_eq!(plan(&l, Cause::Reset, Some((0, 0))), plan(&l, Cause::Reset, None));
+    }
+
+    /// ★ THE OWNER'S TABLE, event -> scrub?: VM start, guest reboot and VM teardown scrub (a new OS
+    /// or a new VM can follow); everything inside a running OS does not.
+    #[test]
+    fn the_scrub_table_follows_the_trust_boundary() {
+        let table = [
+            (Event::VmStart, Some(Cause::Realize)),
+            (Event::GuestReboot, Some(Cause::Reset)),
+            (Event::VmTeardown, Some(Cause::Teardown)),
+            (Event::S3Wake, None),
+            (Event::GuestBusReset, None),
+            (Event::DriverUnload, None),
+            (Event::DisplayHandoff, None),
+        ];
+        for (e, want) in table {
+            assert_eq!(decide(e), want, "{e:?}");
+        }
+    }
+
+    /// ★ What the device can tell apart: QEMU's main loop (vCPUs paused) is a system reset — a new
+    /// OS — a vCPU thread is the guest's own bus reset, and RESET_TYPE_WAKEUP is the S3 resume
+    /// (`kf3.c: kf3_device_reset(s->h, current_cpu != NULL, type == RESET_TYPE_WAKEUP)`).
+    #[test]
+    fn a_reset_request_is_classified_by_where_it_came_from() {
+        assert_eq!(event_of_reset(false, false), Event::GuestReboot);
+        assert_eq!(event_of_reset(true, false), Event::GuestBusReset);
+        assert_eq!(event_of_reset(false, true), Event::S3Wake);
+        assert_eq!(event_of_reset(true, true), Event::S3Wake, "a wake is a wake");
     }
 }

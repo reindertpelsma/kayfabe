@@ -218,6 +218,10 @@ pub struct Reset {
     /// ★ 2026-10-14: a request that was NOT the platform's S3 wake arrived since the last run's
     /// Drainer stage read it — such a run never keeps a life. Set BEFORE the request is counted.
     cold_pending: std::sync::atomic::AtomicBool,
+    /// ★ 2026-10-18: a request that a NEW OS follows (a system reset from the main loop:
+    /// [`crate::scrub::decide`]) arrived since the memory stage last asked — the run scrubs the
+    /// guest's vidmem. Set BEFORE the request is counted, like the cold mark.
+    new_os_pending: std::sync::atomic::AtomicBool,
     /// Wake requests (status line) and runs that kept a PM-suspended life.
     from_wake: AtomicU64,
     kept: AtomicU64,
@@ -239,6 +243,12 @@ pub enum Waited {
 }
 
 impl Reset {
+    /// ★ 2026-10-18: did a request since the last call mean a NEW OS instance (so the memory stage
+    /// scrubs the guest's vidmem)? Read once per run, by the memory stage's trigger.
+    pub fn take_new_os(&self) -> bool {
+        self.new_os_pending.swap(false, Ordering::SeqCst)
+    }
+
     /// ★ The main loop's call (QEMU's Resettable hold phase): close the gate and count a request.
     /// Returns the request's number. Never waits; the caller wakes the drainer.
     pub fn request(&self) -> u64 {
@@ -257,6 +267,7 @@ impl Reset {
     /// Any other request marks the run cold BEFORE it is counted, so the run that covers it
     /// never keeps a life ([`Owners::reset_drainer_state`]).
     pub fn request_typed(&self, from_vcpu: bool, wake: bool) -> u64 {
+        // RED STEP (tests first): the new-OS mark is not recorded yet.
         let c = if from_vcpu { &self.from_vcpu } else { &self.from_main };
         c.fetch_add(1, Ordering::Relaxed);
         if wake {
@@ -928,6 +939,23 @@ mod tests {
             assert_eq!(o.dirty.get(), 0);
         }
         assert_eq!(r.completed(), 50);
+    }
+
+    /// ★ 2026-10-18: only a system reset from the main loop is a new OS; a vCPU's bus reset and the
+    /// S3 wake are not (the table: [`crate::scrub::decide`]).
+    #[test]
+    fn only_a_system_reset_from_the_main_loop_marks_a_new_os() {
+        let r = Reset::default();
+        r.request_typed(true, false); // a bus reset on a vCPU thread
+        assert!(!r.take_new_os(), "the guest's own bus reset keeps the OS");
+        r.request_typed(false, true); // the S3 wake
+        assert!(!r.take_new_os(), "an S3 wake resumes the same OS");
+        r.request_typed(false, false); // QEMU's system reset: reboot, reset button, triple fault
+        assert!(r.take_new_os(), "a system reset is a new OS");
+        assert!(!r.take_new_os(), "read once");
+        r.request_typed(true, false);
+        r.request_typed(false, false);
+        assert!(r.take_new_os(), "any system reset among the requests marks the run");
     }
 
     /// ★ The machine's own reset at start-up (and a reset straight after a reset): no guest access
