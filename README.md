@@ -49,7 +49,9 @@ Master is not the newest code: the latest Windows performance work lives on bran
 
 - **Windows 11:** Minecraft, Unigine Heaven (Direct3D 11 and OpenGL), GravityMark (Direct3D 12 and Vulkan), Edge with 4K60 hardware-decoded video
   ([matrix](traces/win11_userring_20261014/matrix-eb9f2aa3-20261014-2321.md)). Reported by the owner, evidence not yet committed: SolidWorks, Blender.
-- **Linux:** the 30-arm test suite passes, a desktop with display and suspend/resume, CUDA applications (61 of 65 in an earlier run).
+- **Linux:** the 30-arm test suite passes; a desktop with display, 3 of 3 suspend/resume cycles; gates 9/9 on the real GPU.
+- **CUDA applications on Linux:** 61 of 65 apps pass (CUDA samples, PyTorch, Hugging Face generation, llama.cpp), plus 6 of 6 stream probes and 100 processes in one boot;
+  outputs match bare metal (earlier run, rented RTX 3060; [matrix](docs/design/V3_APP_MATRIX.md)). The 4 failures use unified (UVM) memory paging and fail loudly.
 - Verified on an RTX 4070 (AD104); other dies are partly tested ([`docs/STATUS_DETAIL.md`](docs/STATUS_DETAIL.md)).
 
 **Not finished:** Windows sleep/wake does not survive; Edge can reset after 7 to 16 minutes of playback; other GPU dies need more work under Windows; the
