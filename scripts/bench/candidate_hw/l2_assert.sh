@@ -2,10 +2,10 @@
 # l2_assert.sh : for every QEMU the sampler saw, assert binary path/revision/sha256, host and guest driver, KF3_* environment.
 D=/data/claude-candhw; EV=$D/ev; B=$D/bench
 hostdrv=$(cat /sys/module/nvidia/version)
-declare -A WANT_SHA=( [e1e9947c]=eab8c9c778fa0ccbd6d278636fd6f7e9a3ba815f332677466b11b31f48a96092 [0a746117]=0445f3d69d3a5d436ed89600b3dc095c681062ea8630ab5b6b5efe52f128c5a8 )
+declare -A WANT_SHA=( [525d7d7a]=01b1e5ea71ea2c203785f517257042d69db2c40e76747346ea7e983945e0b315 [0a746117]=0445f3d69d3a5d436ed89600b3dc095c681062ea8630ab5b6b5efe52f128c5a8 )
 fail=0
 echo "host driver (live): $hostdrv   gpu: $(nvidia-smi --query-gpu=name,driver_version --format=csv,noheader)"
-for spec in "l2 lc1b e1e9947c" "l2 lc1b2 e1e9947c" "l2 lc1b3 e1e9947c" "l2 base1 0a746117" "l2 base2 0a746117"; do
+for spec in "l2 cand1 525d7d7a" "l2 cand2 525d7d7a" "l2 cand3 525d7d7a" "l2 base1 0a746117" "l2 base2 0a746117"; do
   set -- $spec; f=$EV/$1/qemus_$2.txt; rev=$3
   n=$(grep -c '^QEMU' $f)
   paths=$(grep '^QEMU' $f | sed 's/.*exe=\([^ ]*\).*/\1/' | sort -u | tr '\n' ' ')
@@ -18,7 +18,7 @@ for spec in "l2 lc1b e1e9947c" "l2 lc1b2 e1e9947c" "l2 lc1b3 e1e9947c" "l2 base1
   echo "tag=$2 rev=$rev QEMUs=$n exe=[$paths] sha256=[${shas:0:16}..] uid=[$uids] KF3_vars=[${kf3:-none}] env=[$envset] guest_driver(arms)=[$guest] ASSERT=$([ $ok = 1 ] && echo OK || echo FAIL)"
   [ $ok = 1 ] || fail=1
 done
-for t in lcb0 lcb1 lcb2 lcb3 lcb4 lcb5 lcb6 lcb7 lcb8 lcb9; do
+for t in b1; do
   f=$EV/l3/qemus_$t.txt; rev=$(grep -o 'kf3=[0-9a-f]*' $EV/l3/l3_$t.txt | head -1 | cut -d= -f2)
   paths=$(grep '^QEMU' $f | sed 's/.*exe=\([^ ]*\).*/\1/' | sort -u | tr '\n' ' '); shas=$(grep '^QEMU' $f | sed 's/.*sha256=\([0-9a-f]*\).*/\1/' | sort -u | tr '\n' ' ')
   kf3=$(grep '  env:' $f | grep -o 'KF3_[A-Z0-9_]*=[^ ]*' | sort -u | tr '\n' ' '); dev=$(grep '  device=' $f | sed 's/.*device=//' | cut -c1-200)

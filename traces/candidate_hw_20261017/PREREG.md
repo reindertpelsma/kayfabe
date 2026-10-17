@@ -48,3 +48,19 @@ were taken at 16 GiB: that difference is a stated confounder, INFERRED to be sma
 
 ## Not in scope
 No merge, no source change (a mechanical one-liner only if a bug blocks the run, flagged), no fat-guest lanes, no app matrix beyond Heaven, no native reference run.
+
+## Addendum 1 (written 2026-10-17 about 18:14 CEST, after the first three D3D11 results were read, before any control-arm boot)
+
+Read so far (MEASURED, Windows boots P1, BO1, AO1 of the main list; details in the report): P1 D3D11 248.2 fps / OpenGL 273.7; BO1 (`KF3_PUT_CACHE=0`) 247.7 / 274.8;
+AO1 (`KF3_LAZY_OBSERVE=0`, D3D11 only so far) 215.0. So W-a is in its "partial loss" band (220 to 280), W-c (OpenGL below 320) is FIRED for P1 and BO1, and the
+counters of the big D3D11 relay show `obs_skipped/turns` 0.795 (P1) and 0.817 (BO1), below the 0.85 of W-g, with `obs_forced_low_credit` 14 % and 12 % of the turns.
+The matrix is not changed. Because the shortfall against the scratch numbers has two possible causes that the matrix alone cannot separate (the port, or today's
+environment: 12 GiB guest instead of 16 GiB, this harness, this host state), a CONTROL is added from the same harness and the same guest overlay, using the owner's
+known-good binary `134dcb54` (scratch scan-off + lazy observe, the configuration that measured 297):
+
+| id | boot | prediction | falsifier |
+|---|---|---|---|
+| H-C1 | `C1`, `C2`: 134dcb54 with `KF3_SCAN_OFF_AFTER_5080=2 KF3_LAZY_OBSERVE=16 KF3_LIFECYCLE_COUNT=1 KF3_LIFECYCLE_PERIOD_S=5` (the flags of the owner's run 3002) | if the shortfall is environmental, D3D11 lands at or below 270; if it is the port, at or above 285 | between 270 and 285 is inconclusive and is reported as such |
+| H-C2 | `CM2`: 134dcb54 with `KF3_SCAN_OFF_AFTER_5080=2` only (no lazy): reproduces the scratch 196 (193 to 202) if the harness is faithful | outside 175 to 215 means this harness or host does not reproduce the scratch baseline, and every comparison with the scratch numbers is void |
+
+These boots come after the main list, are not part of the candidate verdict, and are labelled CONTROL in the report. If time runs out they are the first to be dropped.

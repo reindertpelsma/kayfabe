@@ -1,0 +1,8 @@
+P1|525d7d7a||shot|wayland|noreset
+BO1|525d7d7a|KF3_PUT_CACHE=0|shot|wayland|noreset
+AO1|525d7d7a|KF3_LAZY_OBSERVE=0|shot|wayland|noreset
+OFF1|525d7d7a|KF3_PUT_CACHE=0 KF3_LAZY_OBSERVE=0|shot|wayland|noreset
+P2|525d7d7a||shot|wayland|noreset
+BO2|525d7d7a|KF3_PUT_CACHE=0|shot|wayland|noreset
+AO2|525d7d7a|KF3_LAZY_OBSERVE=0|shot|wayland|noreset
+OFF2|525d7d7a|KF3_PUT_CACHE=0 KF3_LAZY_OBSERVE=0|shot|wayland|noreset

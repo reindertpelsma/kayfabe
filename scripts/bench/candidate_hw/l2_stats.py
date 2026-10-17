@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""l2_stats.py: paired statistics of the fast-suite client times. A = e1e9947c (A1 first/cold, A2, A3), B = 0a746117 (B1, B2)."""
+"""l2_stats.py: paired statistics of the fast-suite client times. A = the candidate 525d7d7a (A1 first/cold, A2, A3), B = 0a746117 (B1, B2)."""
 import re, sys, statistics as st
 def load(p):
     d = {}
@@ -8,7 +8,7 @@ def load(p):
         if m: d[m[1]] = float(m[4])
     return d
 D = sys.argv[1]
-A = [load(f"{D}/{t}_suite.out") for t in ("lc1b", "lc1b2", "lc1b3")]
+A = [load(f"{D}/{t}_suite.out") for t in ("cand1", "cand2", "cand3")]
 B = [load(f"{D}/{t}_suite.out") for t in ("base1", "base2")]
 arms = list(A[0])
 print("%-22s %8s %8s %8s | %8s %8s | %7s %7s %s" % ("arm", "A1", "A2", "A3", "B1", "B2", "A23avg", "Bavg", "dA23-B (ms, %)  within-B spread"))
