@@ -1,3 +1,7 @@
+**STATUS: LIVE (lazy observe, production port, GPU-free; NOT run on hardware), 2026-10-17.** Branch `claude/lazy-prod-20261017` (from PHASE 1c `736c097d4`) ports the scratch "lazy observe" (a cache of the guest `GP_PUT`, rule A, and a lazy look at the
+private `USERD`, rule B; scratch D3D11 196 -> 299 fps) onto the production Windows USER-ring relay, with the doorbell contract (no idle `GP_PUT` poll) brought over from `codex/doorbell-contract-20261017`. **Read section 0c first; its hardware checklist is the check to run.**
+Corrected in place below: invariant I8 ("`GP_PUT` is loaded once per turn" is now "at most once"; Pointer mode may use an earlier read), and the section 10 / 9 totals.
+
 **STATUS: LIVE (PHASE 1c, worker-only, GPU-free), 2026-10-16.** PHASE 1c (branch `claude/win-lifecycle-p1c-20261016`, from `claude/win-lifecycle-p1b-20261016` `4ab092324`) answers the SECOND independent review
 (Opus 5.5, same day; section 0b): the P2' assumption became a steady-state one, so it gets switches, log lines and a VM-wide guard; the three mutants that survived are killed; a stale boundary across a ring switch is fixed.
 Still NOT validated on hardware. **Read sections 0b and 0a first; the hardware report checklist is section 10.**
@@ -32,6 +36,174 @@ passthrough"); while a registration is live scan again (**Window**) until the tr
 Scope. Only Windows USER-work channels the relay carries today (`userrelay::enabled`, sysmem USERD, private GPFIFO/USERD). Linux guests, Translated and
 Emulated channels and vidmem-USERD channels never get a `Lifecycle` (G3; `userpump::tests::the_lifecycle_is_reachable_only_from_the_windows_user_ring_pump`
 pins that no other source file names it and that the pump has exactly one constructor call, in the Windows birth).
+
+## 0c. Lazy observe (production), 2026-10-17
+
+Branch `claude/lazy-prod-20261017` (from `claude/win-lifecycle-p1c-20261016` `736c097d4`). Labels: **[measured]** = a GPU-free test run named here, or a scratch hardware number
+quoted from its report; **[read]** = code; **[inferred]** = reasoning. Nothing here has run on hardware.
+
+### What and why
+
+At ~1,700 GP entries per Heaven D3D11 frame the relay's per-entry turn spent most of its CPU on four accessors that almost never change anything: the guest `GP_PUT` read, the private
+`USERD` observation (`GP_GET`, `REFERENCE`: two loads through the store view), the guest `GP_GET` write-back and `Fetch::observe`. **[measured, scratch `claude/d3d11-gap-20261016`,
+`traces/d3d11_gap_20261016/REPORT.txt`, Heaven D3D11, run totals]**: private-`USERD` observations 189.8 M -> 12.9 M, guest `GP_PUT` reads 189.3 M -> 0.29 M, guest `GP_GET` write-backs 77.6 M -> 6.3 M,
+and fps 196.2 -> 299.1 (median of 3, +52.4 %, no Xid, no 153 / 4101). That run had A and B together; their separate contributions were never measured (the split arms
+`KF3_PUT_CACHE` / `KF3_LAZY_OBSERVE` exist for exactly that, below).
+
+* **A, the `GP_PUT` cache.** Remember the `GP_PUT` a turn read, keyed by the ring generation, and use it for later turns until the cursor reaches it; then read fresh.
+* **B, the lazy private-`USERD` look.** Read `GP_GET` / `REFERENCE` (and write the guest's `GP_GET` back) only every `OBSERVE_INTERVAL = 16`-th turn, or on the turn after the relay ended
+  waiting, or when private credits are below 64, or while a split segment is open, or (D6, new here) on the turn after a skipped turn saw the guest ring full.
+
+### Where it lives (design decisions D1 - D6, settled by the owner / coordinator)
+
+* **D1.** In `kf_chan`: the pure predicates and the per-relay state are `kf_chan::user_lazy` (`must_observe`, `observe_reason`, `PutCache`, `Lazy`); the relay consults them INSIDE
+  `kf_chan::user_turn::Relay` (`Phase::Obs`, `put_step`), so the model, property and stress suites that drive the real turn drive them. `userpump.rs` supplies `Io::walk_busy` (moved out of
+  `gp_put`, because the cached path must keep the mapping-walk gate) and the two switches; it adds no rule of its own. `Relay::new` leaves both rules OFF (so that every pre-existing test keeps its meaning);
+  `Relay::with_lazy` opts in and the pump calls it exactly once (pinned).
+* **D2.** Active ONLY in **Pointer** mode of the Windows USER-ring relay. Scan and Window turns always read fresh: `Lazy::a_active` / `b_active` test the mode. The cache is dropped (and counted by reason) at
+  EVERY mode change (checked at the start of every turn against the mode the cache was filled in), at every ring migration (`Relay::switch_source`, also for a new ring with a LOWER `GP_PUT`), when a refusal
+  ends the relay (channel reset) and at retire (`Relay::retire`, called by `Pump::release`). Linux, Translated, Emulated and the USERD relay never name the module (pinned, `lazy_observe_is_reachable_only_from_the_windows_user_ring_pump`).
+* **D3.** Default ON. `OBSERVE_INTERVAL = 16` is a named constant. Measurement switches, read ONCE when the first relay is created (`OnceLock`, never per turn), logged as `USER_RING_LAZY_OBSERVE_MODE`:
+  `KF3_PUT_CACHE=0` turns A off, `KF3_LAZY_OBSERVE=0` turns B off; anything else (including unset) leaves the rule on; no value changes the interval. **Class M (measurement); required to boot: no.**
+  Fate: hardwire ON and delete both once the split arms are measured. Both are in `docs/design/V3_FLAG_INVENTORY.md`.
+* **D4.** No `GP_PUT` polling and no timer carries correctness (below).
+* **D5.** Counters: section "Counters".
+* **D6.** The guest-visible `GP_GET` write-back may lag; the guard and its argument are below.
+
+### Rule A, precisely
+
+`PutCache::select(generation, cursor)` returns the remembered `GP_PUT` only if it was recorded in the same ring generation **and the cursor has not reached it**; `Relay::put_step` records every fresh read in Pointer mode and
+asks `Io::walk_busy` BEFORE it consults the cache. Consequences, each tested:
+
+1. *I8 holds with the value in use.* An entry strictly before a `GP_PUT` the relay loaded was published by the guest before that load, a `GP_PUT` only advances within a ring generation (a cooperative guest; a hostile one can
+   rewrite it, and then the relay is no worse off than eager: it still reads only the slot at the cursor, validates the 8-byte snapshot it took, and refuses a value outside the ring by name), and the guest's `GP_GET`
+   is ours (we write it back), so a slot the relay has not read cannot be overwritten by a cooperative guest. No slot at or beyond the loaded `GP_PUT` is ever read. *(Correction of I8 below: "loaded once per turn" is now "at most once".)*
+2. *"Nothing to do" is decided only on a fresh read.* A cache hit has `put != cursor` by construction, so `end_batch`, the idle decision and the batch marker are reached only through a fresh read.
+3. *Nothing waits on the cache.* The doorbell contract is unchanged: the last doorbell covers every `GP_PUT` write before it; the relay loops until its cursor equals the `GP_PUT` it LOADED; a doorbell that arrives during a
+   pass makes another pass. The cache never delays the discovery of work, because the only moment it could hide work (the cursor at the cached value) is the moment it is not used.
+4. *The Window anchor.* The anchor of a Window is the `GP_PUT` of the newest turn whose registry observation showed no live registration (section 0a). A cached value was read EARLIER than that turn's epoch load, so
+   "read before the registration's reply" still holds, and a lower anchor can only start the Window earlier (it scans more). After the flip the cache is dropped on the first Window turn and every Window turn reads fresh. **[measured]**
+   `lazy_a_registration_at_every_position_keeps_i4_with_the_cache_on` (400 streams x 2 configurations, I4 and identical staging / switch positions), `a_every_mode_change_drops_the_cache_and_the_window_reads_fresh`, the model's flip scenarios with lazy ON.
+
+### Rule B, precisely, and why a stale view is harmless
+
+A skipped turn does not call `Io::hw_words` and therefore neither observes the private ring nor writes the guest's `GP_GET` back (a write-back that is already OWED, because an earlier write failed on a busy lock, is still retried by `Phase::Wb`).
+
+* *A stale `GP_GET` only lowers credit.* `Fetch::available` counts issued entries not yet seen popped; fewer observed pops means fewer credits, never more (tests: `b_a_skipped_observation_never_over_counts_credit_*`, `user_lazy_model.rs` `stale_get_never_yields_more_credits_than_the_real_ring_has`).
+  A relay with fewer than `CREDIT_FLOOR = 64` credits observes on EVERY turn, so every credit-stall decision (`credit_need`, the `available() < 2` checks) is taken on a fresh view: if the real credit is below 2 the stale one is below 64.
+* *A stale `REFERENCE` only delays a gate release.* `SyncGate` releases when the processed marker count reaches the witness; `Marks::peek` never implies progress that has not happened. While a gate is draining
+  (`SyncGate::waiting`) the relay is in `Need::Marker` and observes on every turn (user_lazy_model `stale_reference_never_releases_a_gate_early`, `sync_wait_stream_is_safe_and_live_*`; the model's `a1_*` / `t2_*` scenarios with lazy ON).
+* *Waits.* **D4: a stale read can never be the only thing standing between a wait and its release.** Every wait the relay creates passes through `Relay::set_need`, which latches `Lazy::wait_pending`; the next turn observes
+  whatever the interval says, and the latch is cleared only by an observation. The wake of a wait is never the relay's own view: it is the marker interrupt, or the worker's LOOK (`ChanPlane::user_ring_peek_one`), which
+  reads the private `GP_GET` and `REFERENCE` itself (fresh) and rings the relay when the wait is satisfied or when the PBDMA has popped more than the guest's `GP_GET` shows (`pop_writebacks`). A wait that is already satisfied
+  by the time a stale turn creates it (the pops happened between the last look and this turn) is found by the first bounded spin look (`wake_spin`; the satisfied check reads the private words fresh), not by the 50 ms backstop and not by a timer; that costs one extra turn, never a lost wake. (If the spin budget is spent before the pops happen, the wait is found by the marker interrupt exactly as under eager observation.)
+  An idle decision (`Need::Idle`) needs `fetched == issued`: with a stale view that can only be true when it is true.
+* *Open segment.* While the pump holds a split segment (`segment_pending`) every turn observes.
+* *Scan and Window.* B does not apply: unconditional observation (`obs_unconditional`).
+
+### D6: the guest-visible `GP_GET` write-back may lag; the guard
+
+The guest ring can look full to the guest only because the guest reads the `GP_GET` the relay last wrote (`written_get`); with B that value can be older than the PBDMA's progress. Definition: with `E` the guest ring's slots and `N = 16`,
+the **effective interval** is `K = min(N, max(1, E / 2))` (`user_lazy::effective_interval`); the relay relays at most ONE guest entry per turn, so between two observations it consumes at most `K` slots, never more than half a ring.
+
+1. The guest's view is never older than `K` relay turns: observation (and with it the write-back) happens on every turn of Scan / Window, on the turn after every wait, when credits are below 64, while a segment is open, and at the latest every `K`-th turn.
+2. The guard: a turn that SKIPPED its look and read a `GP_PUT` showing the guest ring full (`put + 1 == written_get`, the guest may be blocked on exactly the write-back this turn did not make) sets a flag; the NEXT turn observes (`obs_forced_ring_full`).
+   From the moment the relay itself sees the ring full the guest's wait is as long as under eager observation (one turn). With A the relay sees "full" only at a fresh read (the cursor reaching the cached value), so the unconditional bound is the interval.
+3. The relay cannot go idle with the guest still waiting: a turn that finds `GP_PUT == cursor` takes the end-of-batch decision on a fresh `GP_PUT`; with anything in flight it ends in `Need::Marker` / `Need::Popped`, which forces the next look (D4), and the worker's look rings it as soon as the pops are visible. So there is no state in which the
+   relay has no backlog, has not written back what it has seen, and nothing will make it look.
+4. *A guest blocked on a full ring behind its OWN gate still makes progress.* The relay is in `Need::Marker` (the gate waits for the marker, which waits for the PBDMA, which waits for the guest's acquire), every turn observes and writes
+   back, and the worker's look rings the relay for pops the guest's `GP_GET` does not show yet (`pop_writebacks`); the pops counted by that look use `Fetch::fetched`, which can only be staler than the PBDMA, so it rings at least as often as before and
+   one forced observation brings the view up to date.
+5. *Small rings.* `K <= E / 2`, and `K = 1` (eager) for `E <= 3`; no ring size makes the argument fail. **[measured]** `b_the_interval_never_exceeds_half_a_small_guest_ring` (rings of 4, 8, 16, 32),
+   `lazy_d6_a_guest_with_a_full_ring_sees_a_get_no_staler_than_the_base_plus_the_interval` (rings 8 - 128 against the OFF relay on the same streams: the worst extra staleness was 15 entries = `N - 1`, the bound),
+   `lazy_d6_a_turn_that_skipped_its_look_and_saw_a_full_guest_ring_is_followed_by_a_look`, `lazy_every_consumed_entry_reaches_the_guests_gp_get_even_with_a_lagging_pbdma`, model `lazy_a_guest_ring_full_of_work_is_written_back_in_every_interleaving`.
+
+What B costs, stated: under steady Pointer-mode streaming the guest sees its `GP_GET` up to `K` turns late (about 16 x 3 us at the scratch per-entry cost of 3.05 us); a guest that fills its ring in that time waits for the next write-back.
+The scratch measurement ran with a guest ring of 32,768+ entries and never saw it; the guest driver chooses the ring size (`K` is `N` for any ring of 32 entries or more), so the hardware check looks at `credit_waits`, the fps and `obs_forced_ring_full`.
+
+### Counters (bounded atomics in `relay_stats.lazy`; plain per-relay integers folded in every 256th turn and at retire; ONE line per relay at retire, `USER_RING_LAZY_OBSERVE <key> ...`, and one VM-wide `USER_RING_LAZY_OBSERVE SUMMARY`)
+
+| counter | meaning |
+|---|---|
+| `turns` | turns begun (every `Phase::Obs`) |
+| `put_cache_hits` | turns that used the cached `GP_PUT` (A) |
+| `put_fresh_reads` | turns that read `GP_PUT` from the guest `USERD` (any mode) |
+| `obs_skipped` | turns that skipped the private-`USERD` look (B) |
+| `obs_unconditional` | turns that looked because B does not apply (Scan / Window, or B off) |
+| `obs_forced_wait` / `_low_credit` / `_open_segment` / `_ring_full` / `_interval` | B looked, by the FIRST reason that applied in this order: wait, open segment, low credit, ring full (D6), interval |
+| `inval_mode_change` / `_migration` / `_reset` / `_retire` | the cache was dropped (counted only when something was cached) |
+
+Relationships that must hold (tested): `turns == obs_skipped + obs_unconditional + obs_forced_*`; `put_cache_hits + put_fresh_reads <= turns` (a turn that ends at the mapping-walk gate or on a `GP_PUT` outside the ring uses neither; `==` otherwise).
+
+### Hardware checklist (nothing below has been run)
+
+**Linux gates (must be unchanged; the code is unreachable from a Linux guest).** `scripts/bench/v3_gates.sh` 9/9, `KF_DEVICE=kf3 scripts/fastguest/fast_suite.sh <tag> 180` 30/30. Expectation: identical to the p1c baseline; there is no `USER_RING_LAZY_OBSERVE_MODE` line (the line is printed when the first Windows
+USER-ring relay is created) and no `USER_RING_LAZY_OBSERVE` line. **Falsifier: any Linux result lower than the p1c baseline, or any lazy line in a Linux-only run.**
+
+**Windows Heaven (D3D11 first, then OpenGL; default profile, then `KF3_PUT_CACHE=0` and `KF3_LAZY_OBSERVE=0` arms from the same binary).** Read, in order, from the `USER_RING_LAZY_OBSERVE` lines and the existing lifecycle lines:
+1. `USER_RING_LAZY_OBSERVE_MODE put_cache=true observe_interval=16`.
+2. The identity `turns == obs_skipped + obs_unconditional + obs_forced_*`.
+3. Pointer-mode streaming (D3D11 Heaven is almost all Pointer): `put_cache_hits / turns` above 0.95 (scratch: GP_PUT reads fell to 0.15 % of turns); `obs_skipped / turns` above 0.85 and `obs_forced_interval` about `turns / 16`;
+   `obs_forced_wait` of the order of the marker count (`pointer_markers`); `obs_forced_low_credit` and `obs_forced_ring_full` near 0 (a large `obs_forced_ring_full` means the guest ring is small enough for D6 to matter: report it with the fps).
+4. `inval_mode_change` about `2 x to_window_fresh` (Pointer -> Window and back; Heaven has one ring growth), `inval_migration` equal to the number of `USER_RING_MIGRATED` lines at most, `inval_reset == 0`, `inval_retire` at most 1 per channel.
+5. Unchanged from the p1c checklist (section 10), all still 0: `put_boundary_open_*`, `window_fresh_start_parse_error`, `anchor_stale_start`, `switch_cursor_mismatch`, `pointer_pb_read_violation`; relay `backstop_found_work` 0 (a rise would mean a wake the stale view hid);
+   `credit_waits` and `pointer_backstop` not above the p1c baseline.
+6. fps: **D3D11 about 297 - 299 (scratch A+B 299.1, n = 3); a result of about 220 or less means the port lost the gain** (the p1c lifecycle alone was 196.2). The split arms say which rule carries it.
+   OpenGL must not drop (scratch OpenGL scan-off 338 - 359 without lazy). No Xid, no guest `nvlddmkm` 153, no `Display` 4101.
+
+### Tests (GPU-free; `cargo test --release -p kf-chan -p kf-rm -p kf-trap -p kf-qemu`)
+
+* `kf-chan/tests/user_lazy_turn.rs` (26): the real `Relay` over a recording `Io`: A (hits, cursor == cached, fresh-only idle, Scan / Window fresh, every mode change, stale cache after a Window, migration to a lower `GP_PUT`, mapping walk, out-of-range `GP_PUT`),
+  B (interval, off = every turn, after a wait, while waiting, credit floor, open segment, over-count, write-back lag, small rings, D6 guard), retire / reset, counter identities, no environment access.
+* `user_lifecycle_props.rs` (+9): **`lazy_off_is_bit_identical_to_the_base_relay_over_a_long_randomised_sequence`** (600 streams, 167,887 turns, 158,636 entries, every `Io` call hashed; the golden was computed on the UNCHANGED relay and is checked for
+  `Relay::new`, `LazyConfig::OFF`, both switches `0`, and interval 1 / 0 with the cache off; the ON configurations must differ), ON-versus-OFF forwarding identity over 4 configurations x 300 streams x all four lifecycle modes x lagging PBDMA, write-back liveness,
+  D6 bounds, I8 with poison above `GP_PUT`, hostile `GP_PUT`, I4 at every flip, 8 post-switch scanned entries per ring switch.
+* `user_lifecycle_model.rs` (+6): the registration cycle with and without a ring switch, each rule alone, the SYNC_WAIT scenario, a full guest ring, all in every interleaving with lazy ON; plus a child run of 33 existing scenarios with `KF_TEST_LAZY=1` (every `Cfg::new` opts in).
+* `user_lifecycle_stress.rs` (+2): real threads, well-behaved guest with concurrent registrations (default interval: 9.5 M entries bit-exact, 8.3 M cache hits, 8.1 M skipped looks, 29 k D6 forced looks in one run) and the hostile writer.
+* `user_lazy_model.rs` (17, from the doorbell-contract lineage): the abstract predicates; `user_lazy.rs` unit tests (+5); `kf-qemu` pins (+3): reachability, the switches read once, the counters / retire hook / walk gate wiring.
+
+### Mutation table (`scripts/lazy_mutation_check.py`; full names in `traces/lazy_prod_20261017/mutation_table.md`)
+
+25 exact-text mutants of production source; the unmutated suites are green first; EVERY mutant is killed by at least two tests (3 first had one kill and `pump_walk_gate_dropped` first survived; each got a second test and was re-run). Suites per mutant: kf-chan lib,
+`user_lazy_turn`, `user_lazy_model`, `user_lifecycle_props`, `user_lifecycle_stress`, `user_turn_unit`, `user_gate_rules`, the `lazy_` model tests (the 33-scenario child run is unmutated-only); the kf-qemu mutants add the kf-qemu lib. `idle_on_a_cached_read` also HANGS a stress test (killed by the 900 s limit, counted as a kill).
+
+| mutant | what is broken | tests failing | some of them |
+|---|---|---|---|
+| `no_invalidate_on_mode_change` | the cache is not dropped when the lifecycle mode changes | 8 | `a_a_stale_cache_from_before_a_window_is_never_used_after_it`, `a_every_mode_change_drops_the_cache_and_the_window_reads_fresh`, `lazy_a_guest_ring_full_of_work_is_written_back_in_every_interleaving` ... |
+| `cache_survives_migration` | the cache survives a ring migration (no invalidation, and the generation key is ignored) | 4 | `a_a_ring_migration_drops_the_cache_even_when_the_new_ring_has_a_lower_put`, `a_ring_generation_switch_invalidates_the_cache_even_for_a_lower_put`, `put_cache_every_reachable_state_keeps_i8_order_and_the_doorbell_contract` ... |
+| `idle_on_a_cached_read` | a cached PUT is used even when the cursor has reached it (idle / end_batch on a cached value) | 23 | `TIMEOUT:lazy_a_well_behaved_guest_with_concurrent_registrations_loses_and_duplicates_nothing`, `a_a_cached_put_is_never_used_when_the_cursor_has_reached_it_and_idle_happens_only_on_a_fresh_read`, `a_a_stale_cache_from_before_a_window_is_never_used_after_it` ... |
+| `stale_credits_over_counted` | Fetch::available counts one credit too many | 8 | `a_full_private_ring_recovers_without_any_periodic_observation`, `n_one_matches_an_independent_eager_fifo_and_reference_oracle`, `stale_get_is_conservative_across_many_wraps_and_receipts_are_exact` ... |
+| `low_credit_never_forces_a_look` | the credit floor never forces an observation (the stale count is trusted at any level) | 3 | `b_fewer_than_the_credit_floor_forces_a_look_every_turn`, `lazy_a_slow_pbdma_and_a_small_private_ring_run_on_the_credit_floor_without_stalling`, `user_lazy::tests::low_credit_is_its_own_reason_and_looks_on_every_turn` |
+| `stale_reference_trusted` | a SYNC_WAIT gate is released one marker early (a stale REFERENCE would be trusted as progress) | 8 | `a_retried_turn_at_the_same_gated_entry_publishes_one_barrier`, `a_zero_length_sync_wait_entry_is_gated`, `lazy_a_registration_after_a_forwarded_sync_wait_never_scans_the_late_pushbuffer` ... |
+| `unissued_reference_trusted` | Marks::peek believes a REFERENCE that names markers not issued yet | 2 | `stale_reference_never_releases_a_gate_early`, `user_gate::tests::marks_count_only_tagged_references_and_extend_the_sixteen_bit_count` |
+| `b_skips_while_a_wait_is_pending` | a pending wait / draining gate no longer forces the look | 4 | `b_a_turn_after_a_wait_always_observes`, `b_a_wait_forces_a_look_on_every_turn_until_it_is_over`, `lazy_every_consumed_entry_reaches_the_guests_gp_get_even_with_a_lagging_pbdma` ... |
+| `wait_never_latched` | the relay does not remember that it ended a turn waiting | 4 | `b_a_turn_after_a_wait_always_observes`, `b_a_wait_forces_a_look_on_every_turn_until_it_is_over`, `lazy_every_consumed_entry_reaches_the_guests_gp_get_even_with_a_lagging_pbdma` ... |
+| `open_segment_does_not_force` | an open segment no longer forces the look | 3 | `b_an_open_segment_forces_a_look`, `b_an_open_segment_is_counted_as_its_own_reason_on_every_turn_and_never_skipped`, `user_lazy::tests::an_open_segment_is_its_own_reason_and_beats_credit_and_interval` |
+| `interval_never_fires` | the periodic look never fires | 7 | `b_a_skipped_observation_never_over_counts_credit_and_the_next_look_catches_up`, `b_the_guests_gp_get_write_back_lags_by_at_most_the_interval`, `b_the_interval_never_exceeds_half_a_small_guest_ring` ... |
+| `interval_not_capped_by_the_guest_ring` | the interval is not capped at half the guest ring | 2 | `b_the_interval_never_exceeds_half_a_small_guest_ring`, `user_lazy::tests::the_interval_never_exceeds_half_the_guest_ring` |
+| `no_ring_full_guard` | a skipped turn that saw the guest ring full does not force the next look (D6) | 2 | `b_d6_a_guest_ring_that_looks_full_is_written_back_by_the_very_next_turn`, `lazy_d6_a_turn_that_skipped_its_look_and_saw_a_full_guest_ring_is_followed_by_a_look` |
+| `window_uses_the_cache` | rule A applies in every mode (a Window / Scan turn may use or fill the cache) | 3 | `a_every_mode_change_drops_the_cache_and_the_window_reads_fresh`, `a_scan_and_window_turns_always_read_gp_put_fresh`, `user_lazy::tests::rule_a_applies_in_pointer_mode_only` |
+| `b_applies_in_every_mode` | rule B applies in every mode (a Scan / Window turn may skip its look) | 2 | `a_every_mode_change_drops_the_cache_and_the_window_reads_fresh`, `a_scan_and_window_turns_always_read_gp_put_fresh` |
+| `observed_keeps_the_wait_flag` | an observation does not clear the wait latch (every later turn looks) | 2 | `lazy_a_well_behaved_guest_with_concurrent_registrations_loses_and_duplicates_nothing`, `user_lazy::tests::a_look_clears_the_wait_latch_and_the_relay_goes_back_to_skipping` |
+| `walk_gate_after_the_cache_is_dropped` | the relay no longer asks Io::walk_busy before reading | 2 | `a_walk_in_progress_ends_the_turn_before_any_read_even_with_a_valid_cache`, `x_the_walk_check_runs_before_the_cache_is_consulted_and_is_not_counted_as_a_put_use` |
+| `refusal_keeps_the_cache` | a refusal (channel reset) does not drop the cache | 2 | `lazy_a_refused_entry_ends_the_relay_and_a_retire_drops_what_was_cached`, `x_retire_and_a_refusal_drop_the_cache_and_count_their_reason` |
+| `retire_keeps_the_cache` | retire does not drop the cache | 2 | `lazy_a_refused_entry_ends_the_relay_and_a_retire_drops_what_was_cached`, `x_retire_and_a_refusal_drop_the_cache_and_count_their_reason` |
+| `switches_read_per_turn` | the environment is read inside the turn | 2 | `chan::userpump::tests::the_lazy_observe_switches_are_read_once_at_relay_creation_and_never_per_turn`, `x_the_lazy_state_does_not_touch_the_environment` |
+| `pump_never_opts_in` | the pump never calls with_lazy (production would run eager) | 2 | `chan::userpump::tests::lazy_observe_is_reachable_only_from_the_windows_user_ring_pump`, `chan::userpump::tests::the_lazy_observe_switches_are_read_once_at_relay_creation_and_never_per_turn` |
+| `pump_switch_read_in_the_turn` | the pump reads KF3_PUT_CACHE inside turn() | 2 | `chan::userpump::tests::the_lazy_observe_switches_are_read_once_at_relay_creation_and_never_per_turn`, `chan::userpump::tests::turn_reads_no_lazy_switch` |
+| `pump_walk_gate_dropped` | the pump's Io::walk_busy never reports a walk | 2 | `chan::userpump::tests::the_pump_wires_the_lazy_counters_the_retire_hook_and_the_walk_gate`, `chan::userpump::tests::the_walk_gate_registers_the_wait_and_tells_the_relay_to_stop` |
+| `release_does_not_retire` | Pump::release no longer calls Relay::retire | 2 | `chan::userpump::tests::release_retires_the_relay_through_relay_retire`, `chan::userpump::tests::the_pump_wires_the_lazy_counters_the_retire_hook_and_the_walk_gate` |
+| `pump_counters_never_flushed` | the per-turn flush of the lazy counters is gone | 2 | `chan::userpump::tests::the_pump_wires_the_lazy_counters_the_retire_hook_and_the_walk_gate`, `chan::userpump::tests::turn_folds_the_lazy_counters_into_the_vm_wide_ones` |
+
+The owner's list maps to: cache never invalidated on a mode flip = `no_invalidate_on_mode_change`; cache survives migration = `cache_survives_migration` (the generation key is ignored too: it would also miss by generation); idle on a cached read = `idle_on_a_cached_read`; stale credits over-counted = `stale_credits_over_counted` and `low_credit_never_forces_a_look`; stale REFERENCE trusted = `stale_reference_trusted`, `unissued_reference_trusted`; B skip while a wait is pending = `b_skips_while_a_wait_is_pending`, `wait_never_latched`; Window flip uses the cache = `window_uses_the_cache`; switches read per turn = `switches_read_per_turn`, `pump_switch_read_in_the_turn`.
+
+### Not covered / honest limits
+
+* The pump's `PumpIo` accessors and `segment_turn` are still not driven GPU-free (only pinned); `Io::walk_busy` moved from `gp_put` into its own method and is pinned, not run.
+* The lazy tests drive `Relay`, not `Pump::turn`; the counter flush and the retire line are pinned by source text.
+* The simulators consume the private ring at a fixed rate; a PBDMA that stalls for a long time is covered by the lagging-PBDMA tests, not by a real GPU.
+* Rule A relies on a cooperative guest advancing `GP_PUT` monotonically within a ring generation; for a hostile guest the argument is "no worse than eager", which the hostile-writer stress and `lazy_a_hostile_gp_put_*` exercise but cannot prove.
+* The performance claim (+52 %) is scratch, with A and B together, and has NOT been reproduced on the production relay.
 
 ## 0b. PHASE 1c: what the second review found and what changed (2026-10-16)
 
@@ -158,7 +330,13 @@ The OPEN test `i6_open_pointer_mode_credit_waits_need_no_look` stays ignored for
 
 ### Invariant I8 (added 2026-10-16, owner)
 
-Within a turn the relay reads NO ring entry at an index at or beyond the `GP_PUT` it loaded in that turn (`GP_PUT` is loaded ONCE per turn), and no pushbuffer
+**★ CORRECTION, 2026-10-17 (lazy observe, section 0c): "`GP_PUT` is loaded ONCE per turn" below is superseded for Pointer mode.** A turn loads `GP_PUT` AT MOST once; with rule A it may load none and use the value a EARLIER turn of the same ring generation loaded
+(Pointer mode only; Scan and Window turns still load exactly once). The invariant is unchanged in substance: no ring entry at or beyond the `GP_PUT` IN USE is read (the cursor reaching the cached value forces a fresh load), the value in use was loaded by the relay and
+never exceeds the guest's real `GP_PUT` for a cooperative guest, and the stub ring / store in every driver now checks that a turn that loaded no `GP_PUT` used one that is a value the guest wrote at or below its current `GP_PUT`
+(`Env::cached_put_ok`, `Ev::BeyondPut`). The falsifier "a second `GP_PUT` load in a turn" stands.
+
+
+Within a turn the relay reads NO ring entry at an index at or beyond the `GP_PUT` it loaded in that turn (`GP_PUT` is loaded ONCE per turn [⊘ at most once, 2026-10-17: see the correction above]), and no pushbuffer
 for an entry it did not load in that turn; entries below `GP_PUT` but behind an unreached SYNC_WAIT are not read until the SyncGate's witness proves the
 hardware reached it (I3). Window anchors are only `GP_PUT` values the worker has already read. Falsifier: any read at an index `>=` the loaded `GP_PUT`
 (cyclic distance 0), a second `GP_PUT` load in a turn, or a pushbuffer read for a value other than the entry loaded. Guards: the stub ring / store in every
@@ -248,7 +426,7 @@ turn, exactly as in Scan mode (batching several per turn would cut the per-entry
 | I4 | no entry published after a registration's reply is forwarded before a Window scanned it | a post-reply entry forwarded unscanned while a registration is live | model `i4_*`, `a3_*`, `a5_*`, `b_*`; props `g2_*`; stress `a_well_behaved_guest_*` | glue `epoch_before_put`, `flip_at_put`; machine `exit_ignores_live` |
 | I5 | transitions only via the listed events | a (mode, cause) pair outside `next()` changes the mode | unit `the_transition_table_is_exactly_the_documented_one`; every model state checks it (`V_TRANSITION`) | machine `pointer_to_scan` |
 | I6 | no progress depends on time | a terminal state with covered work unrelayed when the model has no timer step | every model test; `i6_*`; unit `the_machine_names_no_clock_no_sleep_and_no_poll` | glue `ignore_events` |
-| I8 | (1b) nothing at or beyond the `GP_PUT` loaded in the turn is read; `GP_PUT` is loaded once per turn; a pushbuffer only for the entry loaded; Window anchors are only `GP_PUT` values already read | any read at cyclic distance 0 from the loaded `GP_PUT`, a second `GP_PUT` load, a pushbuffer for another value | stub ring / store `Ev::BeyondPut` in every driver (model bit `V_BEYOND_PUT` in every scenario); model `i8_*`; props `i8_*`; stress hostile writer; unit `the_anchor_is_always_*` | source `core_reads_beyond_put` |
+| I8 | (1b) nothing at or beyond the `GP_PUT` loaded in the turn is read; `GP_PUT` is loaded once per turn [⊘ at most once since 2026-10-17: Pointer mode may use an earlier read of the same generation, section 0c]; a pushbuffer only for the entry loaded; Window anchors are only `GP_PUT` values already read | any read at cyclic distance 0 from the loaded `GP_PUT`, a second `GP_PUT` load, a pushbuffer for another value | stub ring / store `Ev::BeyondPut` in every driver (model bit `V_BEYOND_PUT` in every scenario); model `i8_*`; props `i8_*`; stress hostile writer; unit `the_anchor_is_always_*` | source `core_reads_beyond_put` |
 | I7 | the value tested is the value stored | a stored value differing from the loaded one while the guest changes ONE dword at any instant | model `a4_*`; props `a4_*` (every bit flip); stress hostile writer | glue `double_fetch`, `skip_validation` |
 
 Suspects A1..A7 of the appendix map to `a1_*`..`a7_*` (A1 `a1_*`; A2 `a2_*`; A3 `a3_*`, `mutant_*gp_put*`; A4 `a4_*`; A5 `a5_*`; A6 `a6_*`; A7 `a7_*`,
@@ -474,12 +652,18 @@ after a ring switch (D5); the sequential simulator is now a cooperative guest (e
 while a registration is live only for `post` entries (entries below the anchor are legitimately unscanned); `g2_p2_*` became `g2_p2prime_*` (identical to always-scan
 when submissions end on packet boundaries; counted when they do not).
 
+**Lazy observe (2026-10-17, branch `claude/lazy-prod-20261017`): 1 690 passed, 0 failed, 3 ignored OPEN (+87 over the p1c base `736c097d4`, 1 603), `cargo test --release -j2 -p kf-chan -p kf-rm -p kf-trap -p kf-qemu`.** Per target: kf-chan lib 188 -> 198 (+10: `user_lazy` unit tests 9, `look_needed` 1),
+`user_lazy_turn` 27 (new), `user_lazy_model` 17 (new, doorbell-contract lineage), `user_lifecycle_model` 57 -> 63 (+3 ignored unchanged), `user_lifecycle_props` 27 -> 38, `user_lifecycle_stress` 2 -> 4, `user_loop_model` 37 -> 38, kf-trap `doorbell_contract` 5 (new), kf-qemu lib 280 -> 287 (+7 pins),
+`doorbell_no_put_poll` 1 (new); kf-rm unchanged. The model file takes about 4 minutes (the child run of 33 scenarios with `KF_TEST_LAZY=1` is about 2 of them).
+
 What is NOT covered (honest list): the staged trigger path and the publication of a SCANNED segment (`Pump::segment_turn`: still pump code; the tests drive a
 stand-in); the pump's wiring of `PumpIo` (compiles, the 271 `kf-qemu` tests pass, G3 pin; no GPU-free harness for the real accessors); a real hold of the
 registration reply (PHASE 2); inline vCPU copying; BAR1 read volume and every performance claim; any Linux or Windows guest; **P2' itself** (the Scan-mode
 counters are the falsifier); the cursor semantics of the source switch; `kf_trap::inline_plan` (question 11).
 
 ## 10. Hardware report checklist (PHASE 1c; what to read after a run, and in which order)
+
+**Added 2026-10-17: lazy observe has its own checklist (section 0c, "Hardware checklist") and the run order below gains its split arms; read the `USER_RING_LAZY_OBSERVE_MODE` line first. The sanity and must-be-0 lists below are unchanged and still apply with lazy observe ON.**
 
 Read after every Windows run, from the `kf3: USER_RING_LIFECYCLE SUMMARY` line (device stop), the per-channel `USER_RING_LIFECYCLE` lines (relay release), the lines named in section 0b, the relay stats
 line, the host `dmesg` and the guest System log. Record the revision of the binary (`kf3-bins/<rev>/`) and `USER_RING_LIFECYCLE_MODE` with the report.
@@ -507,6 +691,12 @@ line, the host `dmesg` and the guest System log. Record the revision of the bina
 
 ## 11. Debt left by 1c
 
+**Added 2026-10-17 (lazy observe):**
+* `KF3_PUT_CACHE` / `KF3_LAZY_OBSERVE` are measurement switches (default ON). After the split arms (none / A / B / A+B) are measured on the production relay, hardwire ON, delete both flags and the `LazyConfig` switch parsing, and make `Relay::new` ON (today it is OFF so that every older test keeps its meaning; the pump opts in exactly once, pinned).
+* The effective interval `min(16, E / 2)` and the D6 guard are reasoning plus GPU-free tests; whether `obs_forced_ring_full` matters for the real Windows guest ring is a hardware question.
+* The identity `put_cache_hits + put_fresh_reads <= turns` and the per-reason look counters exist only in `relay_stats.lazy` and the per-relay retire line; the periodic lifecycle tick does not print them.
+* `docs/RELEASE_CLEANUP_LEDGER.md` is not on this base; the first two bullets belong there once it is merged.
+
 * `docs/RELEASE_CLEANUP_LEDGER.md` is not on this base (it is on `claude/release-ledger-20261016`); the entries below belong there once merged.
 * `KF3_LIFECYCLE_MODE` is a measurement flag with four values. Once P2' is measured on the app matrix, the choice of the shipped behaviour should be hardwired (no flag) and the unused modes deleted; the VM-wide latch stays as the runtime guard.
 * The ring-full anchor refusal can leave a Window starting at an entry that is not a known `GP_PUT` boundary (`anchor_stale_start`). A better fallback (for example delaying the Window to the first boundary the scan returns to) is open; it needs the hardware counters first.
@@ -523,5 +713,9 @@ State: all four must-fix items of the 1c brief are implemented and pushed on `cl
 | 2 log lines + guard | done: three log lines, ring-full anchor guard, VM-wide latch, the P1 SET_OBJECT tally (coordinator addition) |
 | 3 mutants A, W, R | done: each caught by 2 or more tests; the new pump wiring is still pinned by single source-text tests (section 8b) |
 | 4 stale boundary + tautology | done |
+
+**Lazy observe (2026-10-17) leaves, in order:** (A) Linux gates on the host, unchanged expectations: `scripts/bench/v3_gates.sh` (9/9), `scripts/bench/build_kf3.sh`, rebuild the raw client and the fast guest, `KF_DEVICE=kf3 scripts/fastguest/fast_suite.sh <tag> 180` (30/30); there must be no lazy line in a Linux-only run.
+(B) Windows Heaven on the production profile with the new binary (`kf3-bins/<rev>/`): `REV=<rev> APPS="heaven_d3d11_win heaven_gl_win" bash scripts/bench/windows/regress_matrix.sh` (it prints the relay counters per app at guest reboot; read the `USER_RING_LAZY_OBSERVE` lines of the QEMU stderr as well), then the split arms from the SAME binary by setting
+`KF3_PUT_CACHE=0` (B only), `KF3_LAZY_OBSERVE=0` (A only) and both (the p1c lifecycle alone, expected about 196 fps D3D11) in the launch environment (how `launch-2990.sh` forwards variables was not read here; confirm with the `USER_RING_LAZY_OBSERVE_MODE` line). Section 0c lists the counter relationships and the fps falsifier (D3D11 about 297 expected, about 220 or less = the port lost the gain).
 
 Next, in order: (1) second tests for the 12 single-catch mutants of section 8b; (2) the Linux gates (`v3_gates.sh` 9/9, `fast_suite.sh` 30/30) on the host, which this work never touched; (3) the Windows run order of section 10, Heaven first; (4) merge `claude/release-ledger-20261016` and move section 11 into the ledger.
