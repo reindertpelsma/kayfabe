@@ -1713,18 +1713,15 @@ fn lockstep_exhaustive_every_letter_runs() {
     }
 }
 
-/// ★ FINDING 3. A broker flooding ticks (>= 10x the refresh) with `WANT_FRAME` while the guest flips
-/// makes the COPY rate exceed the vblank rate: a tick the double-tick guard swallows still carries a
-/// credit that the gate defers to the guard's edge (G2), and the next accepted tick brings its own — two
-/// credits per guard interval, so about two copies per accepted tick (66-79 copies against 40 vblanks in
-/// 320 ms, every 3rd millisecond-step flipping). Frames to the broker stay bounded (2 in flight, one per
-/// request), the vblank stays at the guard's cap (2x the mode), and nothing blocks; but "too fast never
-/// makes kayfabe go faster" is not true of the COPY. The fix is the gate's: a swallowed tick's credit
-/// should wait for the next ACCEPTED tick and coalesce into its credit (copies <= vblanks). This test
-/// pins today's behaviour; when the gate is fixed it fails and its assertion flips.
+/// ★ FINDING 3 (FIXED). A broker flooding ticks (>= 10x the refresh) with `WANT_FRAME` while the guest
+/// flips used to make the COPY rate exceed the vblank rate: a tick the double-tick guard swallows
+/// carried a credit that the gate deferred to the guard's edge (G2), and the next accepted tick brought
+/// its own — two credits per guard interval, so about two copies per accepted tick (66-79 copies against
+/// 40 vblanks in 320 ms). The gate now carries a swallowed tick's credit to the next ACCEPTED tick and
+/// coalesces it into that tick's credit: copies <= vblanks at every flood rate. (The vblank itself stays
+/// at the guard's cap, 2x the mode, as designed in phase 1.) Mutation: the old deferral.
 #[test]
-fn lockstep_exhaustive_finding_3_a_flood_makes_copies_exceed_vblanks() {
-    let mut out = Vec::new();
+fn lockstep_exhaustive_a_flood_cannot_make_copies_exceed_vblanks() {
     for mult in [1u32, 2, 10, 100, 1000] {
         let mut w = root(true, 1);
         let step = P / u64::from(mult);
@@ -1742,9 +1739,8 @@ fn lockstep_exhaustive_finding_3_a_flood_makes_copies_exceed_vblanks() {
             }
             n += 1;
         }
-        out.push((mult, w.obs.ticks, w.obs.copies, w.reqs.c.frames_on_credit));
         eprintln!(
-            "lockstep_exhaustive FINDING 3 x{mult}: vblanks {} copies {} frames {} wants {} gate granted {}",
+            "lockstep_exhaustive FINDING 3 (fixed) x{mult}: vblanks {} copies {} frames {} wants {} gate granted {}",
             w.obs.ticks,
             w.obs.copies,
             w.reqs.c.frames_on_credit,
@@ -1752,20 +1748,15 @@ fn lockstep_exhaustive_finding_3_a_flood_makes_copies_exceed_vblanks() {
             w.gate.c.granted
         );
         assert!(
-            w.reqs.c.frames_on_credit <= 3,
+            w.obs.copies <= w.obs.ticks,
+            "x{mult}: {} copies > {} vblanks",
+            w.obs.copies,
+            w.obs.ticks
+        );
+        assert!(
+            w.reqs.c.frames_on_credit <= w.obs.ticks,
             "frames stay bounded: one per request, 2 in flight"
         );
-    }
-    // at the display's own rate (and at 2x) copies follow the flips; under a flood they run past the vblanks
-    for (mult, vbl, copies, _) in &out {
-        if *mult <= 2 {
-            assert!(copies <= vbl, "x{mult}: {copies} copies > {vbl} vblanks");
-        } else {
-            assert!(
-                *copies > *vbl,
-                "x{mult}: copies {copies} no longer exceed vblanks {vbl}: the gate was fixed, flip this test"
-            );
-        }
     }
 }
 
@@ -1874,6 +1865,10 @@ fn lockstep_exhaustive_the_gate_against_an_oracle() {
                     if fresh {
                         o.last_seq = Some(s);
                         o.ticks_coalesced += 2;
+                        // G2: an accepted tick releases the credit a swallowed one left behind
+                        if let (Some(st), Some((r, u64::MAX))) = (em, o.pending) {
+                            o.pending = Some((r, st));
+                        }
                         if let Some(r) = want {
                             if o.last_req.is_none_or(|l| newer(r, l)) {
                                 o.last_req = Some(r);
@@ -1884,7 +1879,7 @@ fn lockstep_exhaustive_the_gate_against_an_oracle() {
                                     Some(st) => st,
                                     None => {
                                         o.deferred += 1;
-                                        GATE_LAST_TICK + GATE_GUARD
+                                        u64::MAX
                                     }
                                 };
                                 o.pending = Some((r, at));

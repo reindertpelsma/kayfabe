@@ -6,8 +6,10 @@
 //! display worker may act on it:
 //!
 //! - **G1** an event whose number is not newer than the last is dropped and counted;
-//! - **G2** a credit whose tick the double-tick guard SWALLOWED is deferred to the guard's edge — never
-//!   acted on early (the broker cannot make kayfabe copy faster than it can tick);
+//! - **G2** a credit whose tick the double-tick guard SWALLOWED is deferred to the NEXT ACCEPTED tick and
+//!   coalesces into it — never acted on early, and never in addition to that tick's own credit (the
+//!   broker cannot make kayfabe copy faster than it can tick: copies <= vblanks, found by the
+//!   exhaustive model's flood: with a deferral to the guard's edge a flood gave two credits per tick);
 //! - **G3** credits COALESCE: at most one is pending in the gate and at most one in the
 //!   [`crate::pace::Mailbox`]; the extras are counted and dropped, never queued;
 //! - **G5** the gate decides nothing about FLIPS: an immediate flip latches and completes at once
@@ -20,6 +22,9 @@ use crate::tick::seq_newer;
 
 /// ★ The most credits pending in the gate (and, after [`CreditGate::poll`], in the mailbox).
 pub const MAX_PENDING_CREDITS: usize = 1;
+
+/// The usable-at time of a credit carried from a swallowed tick: it waits for the next accepted tick.
+const AWAIT_TICK: u64 = u64::MAX;
 
 /// Counters of the gate (bounded `u64`).
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
@@ -43,7 +48,8 @@ pub struct GateCounters {
 pub struct CreditGate {
     last_seq: Option<u32>,
     last_req: Option<u32>,
-    /// `(request, usable at ns)`.
+    /// `(request, usable at ns)`; [`AWAIT_TICK`] = carried from a swallowed tick, released by the next
+    /// accepted one.
     pending: Option<(u32, u64)>,
     /// The counters.
     pub c: GateCounters,
@@ -100,6 +106,10 @@ impl CreditGate {
         }
         self.last_seq = Some(tick_seq);
         self.c.ticks_coalesced += coalesced;
+        // G2: an ACCEPTED tick releases the credit a swallowed one left behind (at this tick's stamp)
+        if let (Some(stamp), Some((r, AWAIT_TICK))) = (emitted, self.pending) {
+            self.pending = Some((r, stamp));
+        }
         let Some(req) = want else { return true };
         if self.last_req.is_some_and(|l| !seq_newer(req, l)) {
             self.c.stale_credits += 1;
@@ -113,9 +123,10 @@ impl CreditGate {
             Some(stamp) => stamp,
             None => {
                 self.c.credits_deferred += 1;
-                last_tick_ns.map_or(0, |t| t.saturating_add(guard_ns))
+                AWAIT_TICK
             }
         };
+        let _ = (last_tick_ns, guard_ns); // (kept for the callers: the deferral no longer needs them)
         self.pending = Some((req, at));
         true
     }
@@ -134,7 +145,9 @@ impl CreditGate {
     /// When the pending credit becomes usable (the worker wakes for it).
     #[must_use]
     pub fn next_ns(&self) -> Option<u64> {
-        self.pending.map(|(_, at)| at)
+        self.pending
+            .map(|(_, at)| at)
+            .filter(|at| *at != AWAIT_TICK)
     }
 
     /// A guest life ended / the connection changed: nothing pends, numbers start over.
@@ -165,26 +178,43 @@ mod tests {
         assert!(!g.on_tick(0xffff_ffff, 0, Some(9), Some(200), Some(100), G));
         assert_eq!((g.c.stale, g.c.stale_credits), (2, 2));
         assert_eq!(g.pending(), None);
-        // G2: a swallowed tick's credit waits for the guard's edge, not for the next tick
+        // G2: a swallowed tick's credit waits for the NEXT ACCEPTED tick (not for a time of its own)
         assert!(g.on_tick(2, 0, Some(2), None, Some(1_000), G));
         assert_eq!(g.c.credits_deferred, 1);
         assert_eq!(
-            g.poll(1_000 + G - 1),
+            g.poll(u64::MAX - 1),
             None,
-            "inside the guard: not acted on"
+            "a swallowed tick's credit is not usable by itself"
         );
-        assert_eq!(g.next_ns(), Some(1_000 + G));
-        assert_eq!(g.poll(1_000 + G), Some(2), "at the edge");
+        assert_eq!(g.next_ns(), None, "and the worker does not wake for it");
+        assert!(
+            g.on_tick(3, 0, None, Some(1_000 + G), Some(1_000), G),
+            "the next accepted tick ..."
+        );
+        assert_eq!(g.poll(1_000 + G - 1), None);
+        assert_eq!(
+            g.poll(1_000 + G),
+            Some(2),
+            "... releases it, at that tick's stamp"
+        );
+        // and it coalesces with that tick's own credit: still ONE
+        assert!(g.on_tick(4, 0, Some(4), None, Some(1_000), G));
+        assert!(g.on_tick(5, 0, Some(5), Some(9_000), Some(1_000), G));
+        assert_eq!(
+            g.c.credits_coalesced, 1,
+            "the carried credit and the tick's own: one"
+        );
+        assert_eq!(g.poll(9_000), Some(5));
         // G3: a second credit while one pends replaces it: ONE pending, the extra counted
-        assert!(g.on_tick(3, 0, Some(3), Some(5_000), Some(1_000), G));
-        assert!(g.on_tick(4, 0, Some(4), Some(6_000), Some(5_000), G));
-        assert_eq!(g.c.credits_coalesced, 1);
-        assert_eq!(g.pending(), Some((4, 6_000)), "the newest request wins");
+        assert!(g.on_tick(6, 0, Some(6), Some(10_000), Some(9_000), G));
+        assert!(g.on_tick(7, 0, Some(7), Some(11_000), Some(10_000), G));
+        assert_eq!(g.c.credits_coalesced, 2);
+        assert_eq!(g.pending(), Some((7, 11_000)), "the newest request wins");
         // a request that is not newer than the last is dropped, the tick still counts
-        assert!(g.on_tick(5, 0, Some(4), Some(7_000), Some(6_000), G));
+        assert!(g.on_tick(8, 0, Some(7), Some(12_000), Some(11_000), G));
         assert_eq!(g.c.stale_credits, 3);
         // coalesced ticks are counted from the gap
-        assert!(g.on_tick(9, 3, None, Some(8_000), Some(7_000), G));
+        assert!(g.on_tick(12, 3, None, Some(13_000), Some(12_000), G));
         assert_eq!(g.c.ticks_coalesced, 3);
         // reset forgets numbers (a new connection starts at 1 again)
         g.reset();

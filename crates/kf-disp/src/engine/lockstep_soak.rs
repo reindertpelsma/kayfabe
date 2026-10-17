@@ -2013,8 +2013,8 @@ impl World {
             self.fail("the socket buffer grew past its bound");
         }
         drop(w);
-        if self.mdl.copies > self.free_ticks + self.distinct_polled {
-            let (c, f, d) = (self.mdl.copies, self.free_ticks, self.distinct_polled);
+        if self.mdl.copies > self.free_ticks + self.gate.c.granted {
+            let (c, f, d) = (self.mdl.copies, self.free_ticks, self.gate.c.granted);
             self.fail(&format!(
                 "{c} copies but only {f} free-clock ticks and {d} distinct broker credits: a copy ran without a credit"
             ));
