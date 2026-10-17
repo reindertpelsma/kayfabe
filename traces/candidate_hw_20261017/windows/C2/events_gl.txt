@@ -1,0 +1,4 @@
+EVTDONE
+HV_START c2_gl opengl 2026-10-17T19:53:20+02:00 xid_before=162
+HV_EXIT c2_gl rc=0 2026-10-17T19:58:36+02:00 xid_after=162
+events: gpu_driver=0 other=1 (153/4101 in last 9 min), host xid delta 0

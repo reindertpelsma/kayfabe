@@ -1,0 +1,60 @@
+== kernel/driver
+6.8.0-142-generic
+NVRM version: NVIDIA UNIX Open Kernel Module for x86_64  580.159.04  Release Build  (dvs-builder@U22-I3-AF04-09-6)  Wed Apr 29 17:15:53 UTC 2026
+GCC version:  gcc version 13.3.0 (Ubuntu 13.3.0-6ubuntu2~24.04.1) 
+NVIDIA GeForce RTX 4070, 580.159.04, 8192 MiB, [N/A]
+== KMS
+modeset=Y fbdev=Y
+card1
+card1-DVI-D-1
+renderD128
+version
+/sys/class/drm/card1-DVI-D-1 status=connected mode0=1920x1080
+[    0.000000] Command line: BOOT_IMAGE=/vmlinuz-6.8.0-142-generic root=UUID=REDACTED ro console=tty1 console=ttyS0 nvidia-drm.modeset=1 nvidia-drm.fbdev=1
+[    0.090358] Kernel command line: BOOT_IMAGE=/vmlinuz-6.8.0-142-generic root=UUID=REDACTED ro console=tty1 console=ttyS0 nvidia-drm.modeset=1 nvidia-drm.fbdev=1
+[    0.846847] [drm] Initialized simpledrm 1.0.0 20200625 for simple-framebuffer.0 on minor 0
+[    0.867878] simple-framebuffer simple-framebuffer.0: [drm] fb0: simpledrmdrmfb frame buffer device
+[    2.869977] [drm] [nvidia-drm] [GPU ID 0x00000002] Loading driver
+[    3.596127] [drm] Initialized nvidia-drm 0.0.0 20160202 for 0000:00:02.0 on minor 1
+[    3.620370] fbcon: nvidia-drmdrmfb (fb0) is primary device
+[    3.643791] nvidia 0000:00:02.0: [drm] fb0: nvidia-drmdrmfb frame buffer device
+== desktop
+1595 cinnamon --replace
+1630 /usr/bin/nemo-desktop
+986 /usr/sbin/lightdm
+1216 lightdm --session-child 13 16
+1006 /usr/lib/xorg/Xorg -core :0 -seat seat0 -auth /var/run/lightdm/root/:0 -nolisten tcp vt7 -novtswitch
+vendor string:    The X.Org Foundation
+    GLX
+    NV-GLX
+  dimensions:    1920x1080 pixels (250x252 millimeters)
+Screen 0: minimum 8 x 8, current 1920 x 1080, maximum 32767 x 32767
+DVI-D-0 connected primary 1920x1080+0+0 (normal left inverted right x axis y axis) 508mm x 285mm
+   1920x1080     60.00*+
+   1680x1050     59.95  
+== window manager
+_NET_SUPPORTING_WM_CHECK(WINDOW): window id # 0x2000006
+_NET_ACTIVE_WINDOW(WINDOW): window id # 0x0
+== glxgears
+/usr/bin/glxgears
+/usr/bin/glxinfo
+GL_RENDERER   = NVIDIA GeForce RTX 4070/PCIe/SSE2
+GL_VERSION    = 4.6.0 NVIDIA 580.159.04
+GL_VENDOR     = NVIDIA Corporation
+300 frames in 5.0 seconds = 59.912 FPS
+218 frames in 5.0 seconds = 43.461 FPS
+300 frames in 5.0 seconds = 59.999 FPS
+== guest dmesg issues
+[    3.224935] NVRM: tmrSetCurrentTime_GV100: ERROR: Write to PTIMER attempted even though Level 0 PLM is disabled.
+[    3.226585] NVRM: nvAssertFailedNoLog: Assertion failed: 0 @ timer_gv100.c:80
+[    3.239358] NVRM: nvAssertOkFailedNoLog: Assertion failed: Call not supported [NV_ERR_NOT_SUPPORTED] (0x00000056) returned from pRmApi->Control(pRmApi, pGpu->hInternalClient, pGpu->hInternalSubdevice, NV2080_CTRL_CMD_INTERNAL_INIT_USER_SHARED_DATA, &params, sizeof(params)) @ gpu_user_shared_data.c:233
+[    3.243093] NVRM: nvAssertOkFailedNoLog: Assertion failed: Call not supported [NV_ERR_NOT_SUPPORTED] (0x00000056) returned from pRmApi->Control(pRmApi, pGpu->hInternalClient, pGpu->hInternalSubdevice, NV2080_CTRL_CMD_INTERNAL_USER_SHARED_DATA_SET_DATA_POLL, &params, sizeof(params)) @ gpu_user_shared_data.c:268
+[    3.252792] NVRM: kperfGpuBoostSyncStateInit_IMPL: Failed to read Sync Gpu Boost init state, status=0x56
+[    3.255208] NVRM: kperfGpuBoostSyncStateInit_IMPL: Failed to read Sync Gpu Boost init state, status=0x56
+[    3.258124] NVRM: nvAssertOkFailedNoLog: Assertion failed: Call not supported [NV_ERR_NOT_SUPPORTED] (0x00000056) returned from pRmApi->Control(pRmApi, pGpu->hInternalClient, pGpu->hInternalSubdevice, NV2080_CTRL_CMD_INTERNAL_CE_GET_PCE_CONFIG_FOR_LCE_TYPE, &pceConfigParams, sizeof(pceConfigParams)) @ kernel_ce.c:1020
+[    3.262008] NVRM: nvAssertOkFailedNoLog: Assertion failed: Call not supported [NV_ERR_NOT_SUPPORTED] (0x00000056) returned from kceGetPceConfigForLceType(pGpu, pKCe, NV2080_CTRL_CE_LCE_TYPE_DECOMP, &numPcesPerLce, &numLces, &supportedPceMask, &supportedLceMask, &pcesPerHshub) @ kernel_ce_gp100.c:62
+[    3.483940] NVRM: nvCheckOkFailedNoLog: Check failed: Call not supported [NV_ERR_NOT_SUPPORTED] (0x00000056) returned from kgrobjPromoteContext(pGpu, pKernelGraphicsObject, pKernelGraphics) @ kernel_graphics_object.c:224
+[    3.491423] NVRM: nvAssertOkFailedNoLog: Assertion failed: Call not supported [NV_ERR_NOT_SUPPORTED] (0x00000056) returned from pRmApi->AllocWithHandle(pRmApi, hClientId, hChannelId, hObj3D, classNum, NULL, 0) @ kernel_graphics.c:2519
+== screenshot
+0
+== guest done

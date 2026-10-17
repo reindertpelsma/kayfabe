@@ -1,0 +1,13 @@
+SUITE_START tag=cand3 rev=525d7d7a 2026-10-17T17:23:44+02:00
+SUITE_EXIT tag=cand3 rc=0 2026-10-17T17:27:22+02:00
+STATE post_cand3 2026-10-17T17:27:23+02:00
+xid_count=162
+driver=595.91.07 NVRM version: NVIDIA UNIX Open Kernel Module for x86_64  595.91.07  Release Build  (dvs-builder@U22-I3-B08-02-2)  Wed Ju
+NVIDIA GeForce RTX 4070, 595.91.07, 10 MiB, P0
+qemu_procs=0
+lsmod nvidia_uvm 2088960 0
+lsmod nvidia 15114240 28
+lsmod vfio_pci 20480 0
+lsmod kvm 1527808 1
+lock_holders: 
+XID_NEW_LINES=5

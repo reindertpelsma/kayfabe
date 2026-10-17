@@ -1,0 +1,56 @@
+2026-10-17T16:57:41+02:00
+2770388 /var/lib/kf-windows-20261005/kf3-bins/134dcb54/qemu-system-x86_64 -name boundary-kayfabe-3002 -nodefaults -no-us
+2770389 bash -c while kill -0 2770388 2>/dev/null; do sleep 5; done; echo "WINDOWS_EXIT qemu-gone $(date -Is) xid_after=
+2784883 bash -c mkdir -p /data/claude-candhw/ev/l0; cd /data/claude-candhw/ev/l0 { date -Is; pgrep -af boundary-kayfabe-
+2784885 bash -c mkdir -p /data/claude-candhw/ev/l0; cd /data/claude-candhw/ev/l0 { date -Is; pgrep -af boundary-kayfabe-
+QP=2770388
+KF3_REV=134dcb54
+WIN_REUSE=1
+WIN_BAR1=8589934592
+WIN_FLAGS=KF3_SCAN_OFF_AFTER_5080=2 KF3_LAZY_OBSERVE=16 KF3_LIFECYCLE_COUNT=1 KF3_LIFECYCLE_PERIOD_S=5
+WIN_DROP=KF3_TIMER_MAP
+WIN_TRACE=0
+WIN_NET_RESTRICT=off
+WIN_FB_MB=8192
+WIN_TITLE=kayfabe Windows 11 (run 3002, 134dcb54)
+WIN_GSP_OBSERVER=0
+WIN_MAX_SECONDS=0
+WIN_RAM_MB=12288
+WIN_CPU=host,-vmx,migratable=off,+invtsc,hv_relaxed,hv_vapic,hv_spinlocks=0x1fff,hv_vpindex,hv_runtime,hv_time,hv_synic,hv_stimer,hv_tlbflush,hv_ipi,hv_frequencies
+KF3_WIN_USER_CHANNELS_PASSTHROUGH=1
+KF3_WIN_TWIN_DEFAPI_OBJECT=1
+KF3_KERNEL_GR_CE=1
+KF3_KERNEL_GR_WORK=1
+KF3_TRANSLATED_CE_RELAY=1
+KF3_DEFERRED_API=1
+KF3_PREEMPT_BIND_PROBE=1
+KF3_DISPLAY_IMP_ENABLE=1
+KF3_DISPLAY_CTRL_PROBE=1
+KF3_ZCULL_BIND_PROBE=1
+KF3_SW_RUNLIST_HOST_OWNED=1
+KF3_ASYNC_PREEMPT=1
+KF3_GFX_POOL_PROBE=1
+KF3_SW_RUNLIST_PROBE=1
+KF3_MEMORY_LIST_PROBE=1
+KF3_DISPLAY_SDR_COLOR=1
+KF3_DISPLAY_CAPS_PROBE=1
+KF3_DISPLAY_LUT_MIRROR=1
+KF3_DISPLAY_ILUT_OFFSET_256=1
+KF3_SCAN_OFF_AFTER_5080=2
+KF3_LAZY_OBSERVE=16
+KF3_LIFECYCLE_COUNT=1
+KF3_LIFECYCLE_PERIOD_S=5
+                     USER        PID ACCESS COMMAND
+/tmp/kayfabe-fastguest.lock:
+                     root      2770325 f.... flock
+some avg10=0.00 avg60=0.00 avg300=0.00 total=2300750534
+full avg10=0.00 avg60=0.00 avg300=0.00 total=2295456786
+               total        used        free      shared  buff/cache   available
+Mem:           30719       21158         554       14235       23503        9561
+Swap:              0           0           0
+ 16:57:41 up 7 days, 21:19, 20 users,  load average: 1.71, 1.62, 1.67
+  │ hover = absolute USB tablet; CTRL+ALT+G grab (PS/2 relative mouse); CTRL+ALT+F fullscreen
+  │ guest PowerShell as SYSTEM: scripts/bench/windows/qga_run_ps.py 3002 <file.ps1>
+  │ stop: /data/claude-gap/broker_gap.sh stop 3002
+  └────────────────────────────────────────────────────────────────────────────────────────────┘
+OWNER_SESSION_READY=2026-10-17T16:14:47+02:00 run=3002 rev=134dcb54 install=win11x64.iso qpid=2770388

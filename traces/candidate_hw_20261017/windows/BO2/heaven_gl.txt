@@ -1,0 +1,36 @@
+START 16:49:22.072 user=kfadmin session=1
+PRE guest_cpu_pct=1.1
+LAUNCH 16:49:24.353 -project_name Heaven -data_path ../ -engine_config ../data/heaven_4.0.cfg -system_script heaven/unigine.cpp -sound_app null -video_app opengl -video_multisample 0 -video_fullscreen
+RESULT_FOUND=True alive=True elapsed_s=291
+HLOG 16:49:24 Loading "opengl32.dll"...
+HLOG 16:49:24 Features: OpenGL Direct3D9 Direct3D11 OpenAL XAudio2 XPad360 Joystick Flash Editor
+HLOG 16:49:24 OpenGL vendor:   NVIDIA Corporation
+HLOG 16:49:24 OpenGL renderer: NVIDIA GeForce RTX 4070/PCIe/SSE2
+HLOG 16:49:24 OpenGL version:  3.2.0 NVIDIA 580.88
+HLOG 16:49:24 OpenGL flags:    Core Profile
+HLOG 16:49:24 Found required GL_ARB_map_buffer_range
+HLOG 16:49:24 Found required GL_ARB_vertex_array_object
+HLOG 16:49:24 Found required GL_ARB_draw_instanced
+HLOG 16:49:24 Found required GL_ARB_draw_elements_base_vertex
+HLOG 16:49:24 Found required GL_ARB_transform_feedback
+HLOG 16:49:24 Found required GL_ARB_half_float_vertex
+HLOG 16:49:24 Found required GL_ARB_half_float_pixel
+HLOG 16:49:24 Found required GL_ARB_framebuffer_object
+HLOG 16:49:24 Found required GL_ARB_texture_multisample
+HLOG 16:49:24 Found required GL_ARB_uniform_buffer_object
+HLOG 16:49:24 Found required GL_ARB_geometry_shader4
+HLOG 16:49:24 Found optional GL_ARB_blend_func_extended
+HLOG 16:49:24 Found optional GL_ARB_tessellation_shader
+HLOG 16:49:24 Found optional GL_ARB_shader_bit_encoding
+HLOG 16:49:24 Found optional GL_ARB_sample_shading
+HLOG 16:49:24 Found optional GL_ARB_compute_shader
+HLOG 16:49:24 Found optional GL_ARB_gpu_shader5
+HLOG 16:49:24 Found optional GL_EXT_texture_compression_s3tc
+HLOG 16:49:24 Found optional GL_ARB_texture_compression_rgtc
+HLOG 16:49:25 Unigine Heaven Benchmark 4.0 (4.0)
+HLOG 16:49:54 Benchmark running
+HLOG 16:54:15 Benchmark results:
+HLOG 16:54:15 Time:    260.62416:54:15 Frames:    7161916:54:15 FPS:    274.79816:54:15 Min FPS:    45.408416:54:15 Max FPS:    561.90616:54:15 Score:    6922.15
+END 16:54:19.535
+events: gpu_driver=0 other=1 (153/4101 in last 9 min), host xid delta 0
+HLOG  Time:    260.624 Frames:    71619 FPS:    274.798 Min FPS:    45.4084 Max FPS:    561.906 Score:    6922.15

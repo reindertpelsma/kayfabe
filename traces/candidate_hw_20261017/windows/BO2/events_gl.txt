@@ -1,0 +1,4 @@
+EVTDONE
+HV_START bo2_gl opengl 2026-10-17T18:49:16+02:00 xid_before=162
+HV_EXIT bo2_gl rc=0 2026-10-17T18:54:32+02:00 xid_after=162
+events: gpu_driver=0 other=1 (153/4101 in last 9 min), host xid delta 0

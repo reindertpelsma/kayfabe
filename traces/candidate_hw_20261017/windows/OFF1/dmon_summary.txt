@@ -1,0 +1,2 @@
+dmon_d3d11 rows=270 avg_power_w=156.5 avg_sm_pct=97.5
+dmon_gl rows=275 avg_power_w=190.5 avg_sm_pct=99.2

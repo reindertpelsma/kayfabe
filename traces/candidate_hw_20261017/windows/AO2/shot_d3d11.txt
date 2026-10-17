@@ -1,0 +1,2 @@
+SHOT screen=1536x864 mean_luma=23.8 std_luma=47.2 distinct_4bit_colours=49
+SHOT_DONE

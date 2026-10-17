@@ -1,0 +1,5 @@
+EVT 153 17:33:35 Microsoft-Windows-Kernel-Boot
+EVTDONE
+HV_START cm2_d3d11 direct3d11 2026-10-17T19:35:15+02:00 xid_before=162
+HV_EXIT cm2_d3d11 rc=0 2026-10-17T19:40:24+02:00 xid_after=162
+events: gpu_driver=0 other=2 (153/4101 in last 9 min), host xid delta 0

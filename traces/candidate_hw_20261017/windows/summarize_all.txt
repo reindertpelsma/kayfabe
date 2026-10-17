@@ -1,0 +1,195 @@
+=== P1
+env: ['/var/lib/kf-windows-20261005/kf3-bins/525d7d7a/qemu-system-x86_64'] sha256=01b1e5ea71ea2c20... no PUT_CACHE/LAZY_OBSERVE/LIFECYCLE/SCAN variable set ['WIN_BAR1=8589934592', 'WIN_FB_MB=8192', 'WIN_RAM_MB=12288']
+d3d11 {"time": 260.594, "frames": 64676, "fps": 248.187, "minfps": 54.663, "maxfps": 550.353, "score": 6251.83, "gpu_events": 0, "boot_events": 2, "power_w": 172.6, "sm_pct": 94.4, "dmon_s": 272}
+gl {"time": 260.626, "frames": 71330, "fps": 273.687, "minfps": 44.5549, "maxfps": 558.71, "score": 6894.18, "gpu_events": 0, "boot_events": 1, "power_w": 189.3, "sm_pct": 98.7, "dmon_s": 274}
+xid: XID_JOURNAL tag=P1 qpid=2863352 lines=0 for_this_qemu=0 2026-10-17T17:50:34+02:00
+shot: ['SHOT screen=1536x864 mean_luma=69.6 std_luma=59.2 distinct_4bit_colours=144']
+mode lines: ['kf3: USER_RING_LIFECYCLE_MODE default', 'kf3: USER_RING_LAZY_OBSERVE_MODE put_cache=true observe_interval=16 (KF3_PUT_CACHE=None KF3_LAZY_OBSERVE=None)']
+REFUSED lines: 0 | LATCHED_OFF: 0 | PUT_BOUNDARY_OPEN: 0 | MIGRATED: 1 | WINDOW_FRESH: 1
+big relay d3d11 c1d0009a:ff040029 mode=Pointer turns=121611305
+  lazy: put_cache_hits=121494331 put_fresh_reads=101674 obs_skipped=96694544 obs_unconditional=8264 obs_forced_wait=970619 obs_forced_low_credit=17492713 obs_forced_open_segment=0 obs_forced_ring_full=0 obs_forced_interval=6445165 inval_mode_change=1 inval_migration=0 inval_reset=0 inval_retire=1
+  identity turns == skipped+unconditional+forced_*: True (121611305 vs 121611305); hits+fresh <= turns: True
+  put_cache_hits/turns=0.99904  obs_skipped/turns=0.7951  forced_low_credit/turns=0.1438  forced_interval/(turns/16)=0.848  forced_wait/pointer_markers=280.4
+  section-11 must-be-0: {'put_boundary_open_scan': 0, 'put_boundary_open_window': 0, 'window_fresh_start_parse_error': 0, 'switch_cursor_mismatch': 0, 'pointer_pb_read_violation': 0, 'window_binding_changed': 0, 'anchor_stale_start': 0, 'pointer_markers_latched_off': 0, 'after_teardown': 0} ALL_ZERO
+  lifecycle: {'entries_scan': 17, 'entries_pointer': 120455239, 'entries_window': 7618, 'to_window_fresh': 1, 'restarts': 1, 'pointer_markers': 3462, 'pointer_carried_no_marker': 171616, 'pointer_backstop': 0, 'pointer_backstop_loud': 0, 'anchor_refused_ring_full': 0, 'post_switch_scanned': 8, 'set_object_5080_total': 1, 'set_object_5080_rebinds': 0}
+big relay gl c1d000c7:ff040029 mode=Pointer turns=73378166
+  lazy: put_cache_hits=73144325 put_fresh_reads=225482 obs_skipped=47276317 obs_unconditional=16 obs_forced_wait=1541684 obs_forced_low_credit=21409580 obs_forced_open_segment=0 obs_forced_ring_full=0 obs_forced_interval=3150569 inval_mode_change=0 inval_migration=0 inval_reset=0 inval_retire=1
+  identity turns == skipped+unconditional+forced_*: True (73378166 vs 73378166); hits+fresh <= turns: True
+  put_cache_hits/turns=0.99681  obs_skipped/turns=0.6443  forced_low_credit/turns=0.2918  forced_interval/(turns/16)=0.687  forced_wait/pointer_markers=377.2
+  section-11 must-be-0: {'put_boundary_open_scan': 0, 'put_boundary_open_window': 0, 'window_fresh_start_parse_error': 0, 'switch_cursor_mismatch': 0, 'pointer_pb_read_violation': 0, 'window_binding_changed': 0, 'anchor_stale_start': 0, 'pointer_markers_latched_off': 0, 'after_teardown': 0} ALL_ZERO
+  lifecycle: {'entries_scan': 13, 'entries_pointer': 71713785, 'entries_window': 0, 'to_window_fresh': 0, 'restarts': 0, 'pointer_markers': 4087, 'pointer_carried_no_marker': 409386, 'pointer_backstop': 0, 'pointer_backstop_loud': 0, 'anchor_refused_ring_full': 0, 'post_switch_scanned': 0, 'set_object_5080_total': 1, 'set_object_5080_rebinds': 0}
+other relays: 79 lines, identity/inval_reset violations: none; sum of forced_ring_full over all: 0
+=== P2
+env: ['/var/lib/kf-windows-20261005/kf3-bins/525d7d7a/qemu-system-x86_64'] sha256=01b1e5ea71ea2c20... no PUT_CACHE/LAZY_OBSERVE/LIFECYCLE/SCAN variable set ['WIN_BAR1=8589934592', 'WIN_FB_MB=8192', 'WIN_RAM_MB=12288']
+d3d11 {"time": 260.631, "frames": 64244, "fps": 246.494, "minfps": 40.6702, "maxfps": 553.074, "score": 6209.19, "gpu_events": 3, "boot_events": 5, "power_w": 171.5, "sm_pct": 93.7, "dmon_s": 271}
+gl {"time": 260.628, "frames": 71797, "fps": 275.477, "minfps": 45.1011, "maxfps": 575.896, "score": 6939.26, "gpu_events": 0, "boot_events": 1, "power_w": 190.1, "sm_pct": 99.3, "dmon_s": 272}
+xid: XID_JOURNAL tag=P2 qpid=2890552 lines=0 for_this_qemu=0 2026-10-17T18:42:02+02:00
+shot: ['SHOT screen=1536x864 mean_luma=151.6 std_luma=38.1 distinct_4bit_colours=284']
+mode lines: ['kf3: USER_RING_LIFECYCLE_MODE default', 'kf3: USER_RING_LAZY_OBSERVE_MODE put_cache=true observe_interval=16 (KF3_PUT_CACHE=None KF3_LAZY_OBSERVE=None)']
+REFUSED lines: 0 | LATCHED_OFF: 0 | PUT_BOUNDARY_OPEN: 0 | MIGRATED: 1 | WINDOW_FRESH: 1
+big relay d3d11 c1d000d6:ff04001f mode=Pointer turns=121861677
+  lazy: put_cache_hits=121772518 put_fresh_reads=74053 obs_skipped=96444031 obs_unconditional=8026 obs_forced_wait=841877 obs_forced_low_credit=18139083 obs_forced_open_segment=0 obs_forced_ring_full=0 obs_forced_interval=6428660 inval_mode_change=1 inval_migration=0 inval_reset=0 inval_retire=1
+  identity turns == skipped+unconditional+forced_*: True (121861677 vs 121861677); hits+fresh <= turns: True
+  put_cache_hits/turns=0.99927  obs_skipped/turns=0.7914  forced_low_credit/turns=0.1488  forced_interval/(turns/16)=0.844  forced_wait/pointer_markers=401.7
+  section-11 must-be-0: {'put_boundary_open_scan': 0, 'put_boundary_open_window': 0, 'window_fresh_start_parse_error': 0, 'switch_cursor_mismatch': 0, 'pointer_pb_read_violation': 0, 'window_binding_changed': 0, 'anchor_stale_start': 0, 'pointer_markers_latched_off': 0, 'after_teardown': 0} ALL_ZERO
+  lifecycle: {'entries_scan': 17, 'entries_pointer': 120832442, 'entries_window': 7780, 'to_window_fresh': 1, 'restarts': 1, 'pointer_markers': 2096, 'pointer_carried_no_marker': 177016, 'pointer_backstop': 0, 'pointer_backstop_loud': 0, 'anchor_refused_ring_full': 0, 'post_switch_scanned': 8, 'set_object_5080_total': 1, 'set_object_5080_rebinds': 0}
+big relay gl c1d0010b:ff04001f mode=Pointer turns=73916414
+  lazy: put_cache_hits=73795246 put_fresh_reads=112988 obs_skipped=45673925 obs_unconditional=16 obs_forced_wait=2064704 obs_forced_low_credit=23133784 obs_forced_open_segment=0 obs_forced_ring_full=0 obs_forced_interval=3043985 inval_mode_change=0 inval_migration=0 inval_reset=0 inval_retire=1
+  identity turns == skipped+unconditional+forced_*: True (73916414 vs 73916414); hits+fresh <= turns: True
+  put_cache_hits/turns=0.99836  obs_skipped/turns=0.6179  forced_low_credit/turns=0.3130  forced_interval/(turns/16)=0.659  forced_wait/pointer_markers=746.5
+  section-11 must-be-0: {'put_boundary_open_scan': 0, 'put_boundary_open_window': 0, 'window_fresh_start_parse_error': 0, 'switch_cursor_mismatch': 0, 'pointer_pb_read_violation': 0, 'window_binding_changed': 0, 'anchor_stale_start': 0, 'pointer_markers_latched_off': 0, 'after_teardown': 0} ALL_ZERO
+  lifecycle: {'entries_scan': 13, 'entries_pointer': 71734703, 'entries_window': 0, 'to_window_fresh': 0, 'restarts': 0, 'pointer_markers': 2766, 'pointer_carried_no_marker': 462084, 'pointer_backstop': 0, 'pointer_backstop_loud': 0, 'anchor_refused_ring_full': 0, 'post_switch_scanned': 0, 'set_object_5080_total': 1, 'set_object_5080_rebinds': 0}
+other relays: 103 lines, identity/inval_reset violations: none; sum of forced_ring_full over all: 0
+=== BO1
+env: ['/var/lib/kf-windows-20261005/kf3-bins/525d7d7a/qemu-system-x86_64'] sha256=01b1e5ea71ea2c20... ['KF3_PUT_CACHE=0'] ['WIN_BAR1=8589934592', 'WIN_FB_MB=8192', 'WIN_RAM_MB=12288']
+d3d11 {"time": 260.624, "frames": 64568, "fps": 247.744, "minfps": 57.0485, "maxfps": 550.416, "score": 6240.67, "gpu_events": 0, "boot_events": 2, "power_w": 171.7, "sm_pct": 95.5, "dmon_s": 273}
+gl {"time": 260.627, "frames": 71630, "fps": 274.838, "minfps": 44.5123, "maxfps": 558.289, "score": 6923.16, "gpu_events": 0, "boot_events": 1, "power_w": 190.0, "sm_pct": 98.5, "dmon_s": 275}
+xid: XID_JOURNAL tag=BO1 qpid=2869600 lines=0 for_this_qemu=0 2026-10-17T18:03:28+02:00
+shot: ['SHOT screen=1536x864 mean_luma=112.4 std_luma=36 distinct_4bit_colours=193']
+mode lines: ['kf3: USER_RING_LIFECYCLE_MODE default', 'kf3: USER_RING_LAZY_OBSERVE_MODE put_cache=false observe_interval=16 (KF3_PUT_CACHE=Some("0") KF3_LAZY_OBSERVE=None)']
+REFUSED lines: 0 | LATCHED_OFF: 0 | PUT_BOUNDARY_OPEN: 0 | MIGRATED: 2 | WINDOW_FRESH: 2
+big relay d3d11 c1d00098:ff040029 mode=Pointer turns=122156458
+  lazy: put_cache_hits=0 put_fresh_reads=121993345 obs_skipped=99743604 obs_unconditional=2333 obs_forced_wait=746318 obs_forced_low_credit=15015807 obs_forced_open_segment=0 obs_forced_ring_full=0 obs_forced_interval=6648396 inval_mode_change=0 inval_migration=0 inval_reset=0 inval_retire=0
+  identity turns == skipped+unconditional+forced_*: True (122156458 vs 122156458); hits+fresh <= turns: True
+  put_cache_hits/turns=0.00000  obs_skipped/turns=0.8165  forced_low_credit/turns=0.1229  forced_interval/(turns/16)=0.871  forced_wait/pointer_markers=384.7
+  section-11 must-be-0: {'put_boundary_open_scan': 0, 'put_boundary_open_window': 0, 'window_fresh_start_parse_error': 0, 'switch_cursor_mismatch': 0, 'pointer_pb_read_violation': 0, 'window_binding_changed': 0, 'anchor_stale_start': 0, 'pointer_markers_latched_off': 0, 'after_teardown': 0} ALL_ZERO
+  lifecycle: {'entries_scan': 17, 'entries_pointer': 121166413, 'entries_window': 2187, 'to_window_fresh': 1, 'restarts': 1, 'pointer_markers': 1940, 'pointer_carried_no_marker': 149392, 'pointer_backstop': 0, 'pointer_backstop_loud': 0, 'anchor_refused_ring_full': 0, 'post_switch_scanned': 8, 'set_object_5080_total': 1, 'set_object_5080_rebinds': 0}
+big relay gl c1d000c5:ff040029 mode=Pointer turns=73932242
+  lazy: put_cache_hits=0 put_fresh_reads=73848907 obs_skipped=47992002 obs_unconditional=462 obs_forced_wait=1716979 obs_forced_low_credit=21024223 obs_forced_open_segment=0 obs_forced_ring_full=0 obs_forced_interval=3198576 inval_mode_change=0 inval_migration=0 inval_reset=0 inval_retire=0
+  identity turns == skipped+unconditional+forced_*: True (73932242 vs 73932242); hits+fresh <= turns: True
+  put_cache_hits/turns=0.00000  obs_skipped/turns=0.6491  forced_low_credit/turns=0.2844  forced_interval/(turns/16)=0.692  forced_wait/pointer_markers=208.4
+  section-11 must-be-0: {'put_boundary_open_scan': 0, 'put_boundary_open_window': 0, 'window_fresh_start_parse_error': 0, 'switch_cursor_mismatch': 0, 'pointer_pb_read_violation': 0, 'window_binding_changed': 0, 'anchor_stale_start': 0, 'pointer_markers_latched_off': 0, 'after_teardown': 0} ALL_ZERO
+  lifecycle: {'entries_scan': 13, 'entries_pointer': 72056767, 'entries_window': 21, 'to_window_fresh': 1, 'restarts': 1, 'pointer_markers': 8239, 'pointer_carried_no_marker': 398748, 'pointer_backstop': 0, 'pointer_backstop_loud': 0, 'anchor_refused_ring_full': 0, 'post_switch_scanned': 8, 'set_object_5080_total': 1, 'set_object_5080_rebinds': 0}
+other relays: 79 lines, identity/inval_reset violations: none; sum of forced_ring_full over all: 0
+=== BO2
+env: ['/var/lib/kf-windows-20261005/kf3-bins/525d7d7a/qemu-system-x86_64'] sha256=01b1e5ea71ea2c20... ['KF3_PUT_CACHE=0'] ['WIN_BAR1=8589934592', 'WIN_FB_MB=8192', 'WIN_RAM_MB=12288']
+d3d11 {"time": 260.629, "frames": 63558, "fps": 243.864, "minfps": 52.1632, "maxfps": 529.281, "score": 6142.94, "gpu_events": 0, "boot_events": 2, "power_w": 170.3, "sm_pct": 95.3, "dmon_s": 275}
+gl {"time": 260.624, "frames": 71619, "fps": 274.798, "minfps": 45.4084, "maxfps": 561.906, "score": 6922.15, "gpu_events": 0, "boot_events": 1, "power_w": 189.8, "sm_pct": 99.0, "dmon_s": 271}
+xid: XID_JOURNAL tag=BO2 qpid=2896826 lines=0 for_this_qemu=0 2026-10-17T18:55:01+02:00
+shot: ['SHOT screen=1536x864 mean_luma=72 std_luma=49.6 distinct_4bit_colours=194']
+mode lines: ['kf3: USER_RING_LIFECYCLE_MODE default', 'kf3: USER_RING_LAZY_OBSERVE_MODE put_cache=false observe_interval=16 (KF3_PUT_CACHE=Some("0") KF3_LAZY_OBSERVE=None)']
+REFUSED lines: 0 | LATCHED_OFF: 0 | PUT_BOUNDARY_OPEN: 0 | MIGRATED: 1 | WINDOW_FRESH: 1
+big relay d3d11 c1d0009a:ff040029 mode=Pointer turns=120088091
+  lazy: put_cache_hits=0 put_fresh_reads=119904708 obs_skipped=99392989 obs_unconditional=3818 obs_forced_wait=532994 obs_forced_low_credit=13533512 obs_forced_open_segment=0 obs_forced_ring_full=0 obs_forced_interval=6624778 inval_mode_change=0 inval_migration=0 inval_reset=0 inval_retire=0
+  identity turns == skipped+unconditional+forced_*: True (120088091 vs 120088091); hits+fresh <= turns: True
+  put_cache_hits/turns=0.00000  obs_skipped/turns=0.8277  forced_low_credit/turns=0.1127  forced_interval/(turns/16)=0.883  forced_wait/pointer_markers=203.4
+  section-11 must-be-0: {'put_boundary_open_scan': 0, 'put_boundary_open_window': 0, 'window_fresh_start_parse_error': 0, 'switch_cursor_mismatch': 0, 'pointer_pb_read_violation': 0, 'window_binding_changed': 0, 'anchor_stale_start': 0, 'pointer_markers_latched_off': 0, 'after_teardown': 0} ALL_ZERO
+  lifecycle: {'entries_scan': 17, 'entries_pointer': 119291415, 'entries_window': 3471, 'to_window_fresh': 1, 'restarts': 1, 'pointer_markers': 2620, 'pointer_carried_no_marker': 123509, 'pointer_backstop': 0, 'pointer_backstop_loud': 0, 'anchor_refused_ring_full': 0, 'post_switch_scanned': 8, 'set_object_5080_total': 1, 'set_object_5080_rebinds': 0}
+big relay gl c1d000c7:ff040029 mode=Pointer turns=73136398
+  lazy: put_cache_hits=0 put_fresh_reads=73059131 obs_skipped=47031581 obs_unconditional=16 obs_forced_wait=1449461 obs_forced_low_credit=21520930 obs_forced_open_segment=0 obs_forced_ring_full=0 obs_forced_interval=3134410 inval_mode_change=0 inval_migration=0 inval_reset=0 inval_retire=0
+  identity turns == skipped+unconditional+forced_*: True (73136398 vs 73136398); hits+fresh <= turns: True
+  put_cache_hits/turns=0.00000  obs_skipped/turns=0.6431  forced_low_credit/turns=0.2943  forced_interval/(turns/16)=0.686  forced_wait/pointer_markers=350.1
+  section-11 must-be-0: {'put_boundary_open_scan': 0, 'put_boundary_open_window': 0, 'window_fresh_start_parse_error': 0, 'switch_cursor_mismatch': 0, 'pointer_pb_read_violation': 0, 'window_binding_changed': 0, 'anchor_stale_start': 0, 'pointer_markers_latched_off': 0, 'after_teardown': 0} ALL_ZERO
+  lifecycle: {'entries_scan': 13, 'entries_pointer': 71532636, 'entries_window': 0, 'to_window_fresh': 0, 'restarts': 0, 'pointer_markers': 4140, 'pointer_carried_no_marker': 410189, 'pointer_backstop': 0, 'pointer_backstop_loud': 0, 'anchor_refused_ring_full': 0, 'post_switch_scanned': 0, 'set_object_5080_total': 1, 'set_object_5080_rebinds': 0}
+other relays: 79 lines, identity/inval_reset violations: none; sum of forced_ring_full over all: 0
+=== AO1
+env: ['/var/lib/kf-windows-20261005/kf3-bins/525d7d7a/qemu-system-x86_64'] sha256=01b1e5ea71ea2c20... ['KF3_LAZY_OBSERVE=0'] ['WIN_BAR1=8589934592', 'WIN_FB_MB=8192', 'WIN_RAM_MB=12288']
+d3d11 {"time": 260.628, "frames": 56043, "fps": 215.03, "minfps": 35.0803, "maxfps": 502.919, "score": 5416.61, "gpu_events": 0, "boot_events": 2, "power_w": 160.6, "sm_pct": 97.8, "dmon_s": 272}
+gl {"time": 260.628, "frames": 71743, "fps": 275.27, "minfps": 44.5277, "maxfps": 567.371, "score": 6934.06, "gpu_events": 0, "boot_events": 1, "power_w": 190.0, "sm_pct": 99.3, "dmon_s": 275}
+xid: XID_JOURNAL tag=AO1 qpid=2877423 lines=0 for_this_qemu=0 2026-10-17T18:16:25+02:00
+shot: ['SHOT screen=1536x864 mean_luma=31.7 std_luma=44.8 distinct_4bit_colours=45']
+mode lines: ['kf3: USER_RING_LIFECYCLE_MODE default', 'kf3: USER_RING_LAZY_OBSERVE_MODE put_cache=true observe_interval=1 (KF3_PUT_CACHE=None KF3_LAZY_OBSERVE=Some("0"))']
+REFUSED lines: 0 | LATCHED_OFF: 0 | PUT_BOUNDARY_OPEN: 0 | MIGRATED: 1 | WINDOW_FRESH: 1
+big relay d3d11 c1d00098:ff040028 mode=Pointer turns=103486122
+  lazy: put_cache_hits=103421091 put_fresh_reads=36938 obs_skipped=0 obs_unconditional=103486122 obs_forced_wait=0 obs_forced_low_credit=0 obs_forced_open_segment=0 obs_forced_ring_full=0 obs_forced_interval=0 inval_mode_change=1 inval_migration=0 inval_reset=0 inval_retire=1
+  identity turns == skipped+unconditional+forced_*: True (103486122 vs 103486122); hits+fresh <= turns: True
+  put_cache_hits/turns=0.99937  obs_skipped/turns=0.0000  forced_low_credit/turns=0.0000  forced_interval/(turns/16)=0.000  forced_wait/pointer_markers=0.0
+  section-11 must-be-0: {'put_boundary_open_scan': 0, 'put_boundary_open_window': 0, 'window_fresh_start_parse_error': 0, 'switch_cursor_mismatch': 0, 'pointer_pb_read_violation': 0, 'window_binding_changed': 0, 'anchor_stale_start': 0, 'pointer_markers_latched_off': 0, 'after_teardown': 0} ALL_ZERO
+  lifecycle: {'entries_scan': 17, 'entries_pointer': 103217044, 'entries_window': 7207, 'to_window_fresh': 1, 'restarts': 1, 'pointer_markers': 317, 'pointer_carried_no_marker': 33453, 'pointer_backstop': 0, 'pointer_backstop_loud': 0, 'anchor_refused_ring_full': 0, 'post_switch_scanned': 8, 'set_object_5080_total': 1, 'set_object_5080_rebinds': 0}
+big relay gl c1d000cd:ff040028 mode=Pointer turns=73389819
+  lazy: put_cache_hits=73300317 put_fresh_reads=81878 obs_skipped=0 obs_unconditional=73389819 obs_forced_wait=0 obs_forced_low_credit=0 obs_forced_open_segment=0 obs_forced_ring_full=0 obs_forced_interval=0 inval_mode_change=0 inval_migration=0 inval_reset=0 inval_retire=1
+  identity turns == skipped+unconditional+forced_*: True (73389819 vs 73389819); hits+fresh <= turns: True
+  put_cache_hits/turns=0.99878  obs_skipped/turns=0.0000  forced_low_credit/turns=0.0000  forced_interval/(turns/16)=0.000  forced_wait/pointer_markers=0.0
+  section-11 must-be-0: {'put_boundary_open_scan': 0, 'put_boundary_open_window': 0, 'window_fresh_start_parse_error': 0, 'switch_cursor_mismatch': 0, 'pointer_pb_read_violation': 0, 'window_binding_changed': 0, 'anchor_stale_start': 0, 'pointer_markers_latched_off': 0, 'after_teardown': 0} ALL_ZERO
+  lifecycle: {'entries_scan': 13, 'entries_pointer': 72157667, 'entries_window': 0, 'to_window_fresh': 0, 'restarts': 0, 'pointer_markers': 1548, 'pointer_carried_no_marker': 276870, 'pointer_backstop': 0, 'pointer_backstop_loud': 0, 'anchor_refused_ring_full': 0, 'post_switch_scanned': 0, 'set_object_5080_total': 1, 'set_object_5080_rebinds': 0}
+other relays: 78 lines, identity/inval_reset violations: none; sum of forced_ring_full over all: 0
+=== AO2
+env: ['/var/lib/kf-windows-20261005/kf3-bins/525d7d7a/qemu-system-x86_64'] sha256=01b1e5ea71ea2c20... ['KF3_LAZY_OBSERVE=0'] ['WIN_BAR1=8589934592', 'WIN_FB_MB=8192', 'WIN_RAM_MB=12288']
+d3d11 {"time": 260.582, "frames": 55679, "fps": 213.672, "minfps": 40.2692, "maxfps": 501.966, "score": 5382.4, "gpu_events": 0, "boot_events": 2, "power_w": 160.0, "sm_pct": 96.6, "dmon_s": 275}
+gl {"time": 260.627, "frames": 71606, "fps": 274.745, "minfps": 27.9923, "maxfps": 569.086, "score": 6920.84, "gpu_events": 0, "boot_events": 1, "power_w": 190.3, "sm_pct": 99.4, "dmon_s": 272}
+xid: XID_JOURNAL tag=AO2 qpid=2902718 lines=0 for_this_qemu=0 2026-10-17T19:07:51+02:00
+shot: ['SHOT screen=1536x864 mean_luma=23.8 std_luma=47.2 distinct_4bit_colours=49']
+mode lines: ['kf3: USER_RING_LIFECYCLE_MODE default', 'kf3: USER_RING_LAZY_OBSERVE_MODE put_cache=true observe_interval=1 (KF3_PUT_CACHE=None KF3_LAZY_OBSERVE=Some("0"))']
+REFUSED lines: 0 | LATCHED_OFF: 0 | PUT_BOUNDARY_OPEN: 0 | MIGRATED: 1 | WINDOW_FRESH: 1
+big relay d3d11 c1d00098:ff040029 mode=Pointer turns=102851759
+  lazy: put_cache_hits=102792613 put_fresh_reads=34144 obs_skipped=0 obs_unconditional=102851759 obs_forced_wait=0 obs_forced_low_credit=0 obs_forced_open_segment=0 obs_forced_ring_full=0 obs_forced_interval=0 inval_mode_change=1 inval_migration=0 inval_reset=0 inval_retire=1
+  identity turns == skipped+unconditional+forced_*: True (102851759 vs 102851759); hits+fresh <= turns: True
+  put_cache_hits/turns=0.99942  obs_skipped/turns=0.0000  forced_low_credit/turns=0.0000  forced_interval/(turns/16)=0.000  forced_wait/pointer_markers=0.0
+  section-11 must-be-0: {'put_boundary_open_scan': 0, 'put_boundary_open_window': 0, 'window_fresh_start_parse_error': 0, 'switch_cursor_mismatch': 0, 'pointer_pb_read_violation': 0, 'window_binding_changed': 0, 'anchor_stale_start': 0, 'pointer_markers_latched_off': 0, 'after_teardown': 0} ALL_ZERO
+  lifecycle: {'entries_scan': 17, 'entries_pointer': 102572186, 'entries_window': 4448, 'to_window_fresh': 1, 'restarts': 1, 'pointer_markers': 328, 'pointer_carried_no_marker': 33169, 'pointer_backstop': 0, 'pointer_backstop_loud': 0, 'anchor_refused_ring_full': 0, 'post_switch_scanned': 8, 'set_object_5080_total': 1, 'set_object_5080_rebinds': 0}
+big relay gl c1d000cd:ff04002f mode=Pointer turns=72957583
+  lazy: put_cache_hits=72823779 put_fresh_reads=126540 obs_skipped=0 obs_unconditional=72957583 obs_forced_wait=0 obs_forced_low_credit=0 obs_forced_open_segment=0 obs_forced_ring_full=0 obs_forced_interval=0 inval_mode_change=0 inval_migration=0 inval_reset=0 inval_retire=1
+  identity turns == skipped+unconditional+forced_*: True (72957583 vs 72957583); hits+fresh <= turns: True
+  put_cache_hits/turns=0.99817  obs_skipped/turns=0.0000  forced_low_credit/turns=0.0000  forced_interval/(turns/16)=0.000  forced_wait/pointer_markers=0.0
+  section-11 must-be-0: {'put_boundary_open_scan': 0, 'put_boundary_open_window': 0, 'window_fresh_start_parse_error': 0, 'switch_cursor_mismatch': 0, 'pointer_pb_read_violation': 0, 'window_binding_changed': 0, 'anchor_stale_start': 0, 'pointer_markers_latched_off': 0, 'after_teardown': 0} ALL_ZERO
+  lifecycle: {'entries_scan': 13, 'entries_pointer': 71501209, 'entries_window': 0, 'to_window_fresh': 0, 'restarts': 0, 'pointer_markers': 2704, 'pointer_carried_no_marker': 273276, 'pointer_backstop': 0, 'pointer_backstop_loud': 0, 'anchor_refused_ring_full': 0, 'post_switch_scanned': 0, 'set_object_5080_total': 1, 'set_object_5080_rebinds': 0}
+other relays: 82 lines, identity/inval_reset violations: none; sum of forced_ring_full over all: 0
+=== OFF1
+env: ['/var/lib/kf-windows-20261005/kf3-bins/525d7d7a/qemu-system-x86_64'] sha256=01b1e5ea71ea2c20... ['KF3_LAZY_OBSERVE=0', 'KF3_PUT_CACHE=0'] ['WIN_BAR1=8589934592', 'WIN_FB_MB=8192', 'WIN_RAM_MB=12288']
+d3d11 {"time": 260.632, "frames": 53477, "fps": 205.182, "minfps": 37.383, "maxfps": 390.337, "score": 5168.54, "gpu_events": 0, "boot_events": 2, "power_w": 156.5, "sm_pct": 97.5, "dmon_s": 270}
+gl {"time": 260.629, "frames": 71909, "fps": 275.906, "minfps": 45.2515, "maxfps": 557.309, "score": 6950.07, "gpu_events": 0, "boot_events": 1, "power_w": 190.5, "sm_pct": 99.2, "dmon_s": 275}
+xid: XID_JOURNAL tag=OFF1 qpid=2884125 lines=0 for_this_qemu=0 2026-10-17T18:29:17+02:00
+shot: ['SHOT screen=1536x864 mean_luma=155.9 std_luma=82.9 distinct_4bit_colours=259']
+mode lines: ['kf3: USER_RING_LIFECYCLE_MODE default', 'kf3: USER_RING_LAZY_OBSERVE_MODE put_cache=false observe_interval=1 (KF3_PUT_CACHE=Some("0") KF3_LAZY_OBSERVE=Some("0"))']
+REFUSED lines: 0 | LATCHED_OFF: 0 | PUT_BOUNDARY_OPEN: 0 | MIGRATED: 1 | WINDOW_FRESH: 1
+big relay d3d11 c1d0009a:ff040029 mode=Pointer turns=98634434
+  lazy: put_cache_hits=0 put_fresh_reads=98421120 obs_skipped=0 obs_unconditional=98634434 obs_forced_wait=0 obs_forced_low_credit=0 obs_forced_open_segment=0 obs_forced_ring_full=0 obs_forced_interval=0 inval_mode_change=0 inval_migration=0 inval_reset=0 inval_retire=0
+  identity turns == skipped+unconditional+forced_*: True (98634434 vs 98634434); hits+fresh <= turns: True
+  put_cache_hits/turns=0.00000  obs_skipped/turns=0.0000  forced_low_credit/turns=0.0000  forced_interval/(turns/16)=0.000  forced_wait/pointer_markers=0.0
+  section-11 must-be-0: {'put_boundary_open_scan': 0, 'put_boundary_open_window': 0, 'window_fresh_start_parse_error': 0, 'switch_cursor_mismatch': 0, 'pointer_pb_read_violation': 0, 'window_binding_changed': 0, 'anchor_stale_start': 0, 'pointer_markers_latched_off': 0, 'after_teardown': 0} ALL_ZERO
+  lifecycle: {'entries_scan': 17, 'entries_pointer': 98259769, 'entries_window': 3916, 'to_window_fresh': 1, 'restarts': 1, 'pointer_markers': 295, 'pointer_carried_no_marker': 24033, 'pointer_backstop': 0, 'pointer_backstop_loud': 0, 'anchor_refused_ring_full': 0, 'post_switch_scanned': 8, 'set_object_5080_total': 1, 'set_object_5080_rebinds': 0}
+big relay gl c1d000cf:ff040029 mode=Pointer turns=73862995
+  lazy: put_cache_hits=0 put_fresh_reads=73775803 obs_skipped=0 obs_unconditional=73862995 obs_forced_wait=0 obs_forced_low_credit=0 obs_forced_open_segment=0 obs_forced_ring_full=0 obs_forced_interval=0 inval_mode_change=0 inval_migration=0 inval_reset=0 inval_retire=0
+  identity turns == skipped+unconditional+forced_*: True (73862995 vs 73862995); hits+fresh <= turns: True
+  put_cache_hits/turns=0.00000  obs_skipped/turns=0.0000  forced_low_credit/turns=0.0000  forced_interval/(turns/16)=0.000  forced_wait/pointer_markers=0.0
+  section-11 must-be-0: {'put_boundary_open_scan': 0, 'put_boundary_open_window': 0, 'window_fresh_start_parse_error': 0, 'switch_cursor_mismatch': 0, 'pointer_pb_read_violation': 0, 'window_binding_changed': 0, 'anchor_stale_start': 0, 'pointer_markers_latched_off': 0, 'after_teardown': 0} ALL_ZERO
+  lifecycle: {'entries_scan': 13, 'entries_pointer': 72354091, 'entries_window': 0, 'to_window_fresh': 0, 'restarts': 0, 'pointer_markers': 1909, 'pointer_carried_no_marker': 266373, 'pointer_backstop': 0, 'pointer_backstop_loud': 0, 'anchor_refused_ring_full': 0, 'post_switch_scanned': 0, 'set_object_5080_total': 1, 'set_object_5080_rebinds': 0}
+other relays: 79 lines, identity/inval_reset violations: none; sum of forced_ring_full over all: 0
+=== OFF2
+env: ['/var/lib/kf-windows-20261005/kf3-bins/525d7d7a/qemu-system-x86_64'] sha256=01b1e5ea71ea2c20... ['KF3_LAZY_OBSERVE=0', 'KF3_PUT_CACHE=0'] ['WIN_BAR1=8589934592', 'WIN_FB_MB=8192', 'WIN_RAM_MB=12288']
+d3d11 {"time": 260.621, "frames": 53398, "fps": 204.887, "minfps": 31.7264, "maxfps": 462.34, "score": 5161.11, "gpu_events": 0, "boot_events": 2, "power_w": 156.5, "sm_pct": 97.5, "dmon_s": 270}
+gl {"time": 260.625, "frames": 71263, "fps": 273.431, "minfps": 45.8567, "maxfps": 552.071, "score": 6887.72, "gpu_events": 0, "boot_events": 1, "power_w": 189.4, "sm_pct": 98.7, "dmon_s": 276}
+xid: XID_JOURNAL tag=OFF2 qpid=2908616 lines=0 for_this_qemu=0 2026-10-17T19:20:38+02:00
+shot: ['SHOT screen=1536x864 mean_luma=74 std_luma=59 distinct_4bit_colours=180']
+mode lines: ['kf3: USER_RING_LIFECYCLE_MODE default', 'kf3: USER_RING_LAZY_OBSERVE_MODE put_cache=false observe_interval=1 (KF3_PUT_CACHE=Some("0") KF3_LAZY_OBSERVE=Some("0"))']
+REFUSED lines: 0 | LATCHED_OFF: 0 | PUT_BOUNDARY_OPEN: 0 | MIGRATED: 1 | WINDOW_FRESH: 1
+big relay d3d11 c1d00098:ff040029 mode=Pointer turns=98703857
+  lazy: put_cache_hits=0 put_fresh_reads=98495322 obs_skipped=0 obs_unconditional=98703857 obs_forced_wait=0 obs_forced_low_credit=0 obs_forced_open_segment=0 obs_forced_ring_full=0 obs_forced_interval=0 inval_mode_change=0 inval_migration=0 inval_reset=0 inval_retire=0
+  identity turns == skipped+unconditional+forced_*: True (98703857 vs 98703857); hits+fresh <= turns: True
+  put_cache_hits/turns=0.00000  obs_skipped/turns=0.0000  forced_low_credit/turns=0.0000  forced_interval/(turns/16)=0.000  forced_wait/pointer_markers=0.0
+  section-11 must-be-0: {'put_boundary_open_scan': 0, 'put_boundary_open_window': 0, 'window_fresh_start_parse_error': 0, 'switch_cursor_mismatch': 0, 'pointer_pb_read_violation': 0, 'window_binding_changed': 0, 'anchor_stale_start': 0, 'pointer_markers_latched_off': 0, 'after_teardown': 0} ALL_ZERO
+  lifecycle: {'entries_scan': 17, 'entries_pointer': 98332917, 'entries_window': 3502, 'to_window_fresh': 1, 'restarts': 1, 'pointer_markers': 382, 'pointer_carried_no_marker': 22691, 'pointer_backstop': 0, 'pointer_backstop_loud': 0, 'anchor_refused_ring_full': 0, 'post_switch_scanned': 8, 'set_object_5080_total': 1, 'set_object_5080_rebinds': 0}
+big relay gl c1d000cd:ff040029 mode=Pointer turns=72946035
+  lazy: put_cache_hits=0 put_fresh_reads=72856061 obs_skipped=0 obs_unconditional=72946035 obs_forced_wait=0 obs_forced_low_credit=0 obs_forced_open_segment=0 obs_forced_ring_full=0 obs_forced_interval=0 inval_mode_change=0 inval_migration=0 inval_reset=0 inval_retire=0
+  identity turns == skipped+unconditional+forced_*: True (72946035 vs 72946035); hits+fresh <= turns: True
+  put_cache_hits/turns=0.00000  obs_skipped/turns=0.0000  forced_low_credit/turns=0.0000  forced_interval/(turns/16)=0.000  forced_wait/pointer_markers=0.0
+  section-11 must-be-0: {'put_boundary_open_scan': 0, 'put_boundary_open_window': 0, 'window_fresh_start_parse_error': 0, 'switch_cursor_mismatch': 0, 'pointer_pb_read_violation': 0, 'window_binding_changed': 0, 'anchor_stale_start': 0, 'pointer_markers_latched_off': 0, 'after_teardown': 0} ALL_ZERO
+  lifecycle: {'entries_scan': 13, 'entries_pointer': 71567055, 'entries_window': 0, 'to_window_fresh': 0, 'restarts': 0, 'pointer_markers': 4435, 'pointer_carried_no_marker': 266893, 'pointer_backstop': 0, 'pointer_backstop_loud': 0, 'anchor_refused_ring_full': 0, 'post_switch_scanned': 0, 'set_object_5080_total': 1, 'set_object_5080_rebinds': 0}
+other relays: 79 lines, identity/inval_reset violations: none; sum of forced_ring_full over all: 0
+=== C1
+env: ['/var/lib/kf-windows-20261005/kf3-bins/134dcb54/qemu-system-x86_64'] sha256=9818b7aec63d1fc1... ['KF3_LAZY_OBSERVE=16', 'KF3_LIFECYCLE_COUNT=1', 'KF3_LIFECYCLE_PERIOD_S=5', 'KF3_SCAN_OFF_AFTER_5080=2'] ['WIN_BAR1=8589934592', 'WIN_FB_MB=8192', 'WIN_RAM_MB=12288']
+d3d11 {"time": 260.64, "frames": 60794, "fps": 233.249, "minfps": 35.0564, "maxfps": 523.795, "score": 5875.55, "gpu_events": 0, "boot_events": 2, "power_w": 166.4, "sm_pct": 97.6, "dmon_s": 270}
+gl {"time": 260.619, "frames": 69773, "fps": 267.721, "minfps": 40.7011, "maxfps": 552.661, "score": 6743.89, "gpu_events": 0, "boot_events": 1, "power_w": 187.4, "sm_pct": 98.2, "dmon_s": 271}
+xid: XID_JOURNAL tag=C1 qpid=2914450 lines=0 for_this_qemu=0 2026-10-17T19:33:28+02:00
+shot: ['SHOT screen=1536x864 mean_luma=13.6 std_luma=48.6 distinct_4bit_colours=35']
+mode lines: []
+REFUSED lines: 0 | LATCHED_OFF: 0 | PUT_BOUNDARY_OPEN: 0 | MIGRATED: 1 | WINDOW_FRESH: 0
+other relays: 0 lines, identity/inval_reset violations: none; sum of forced_ring_full over all: 0
+=== CM2
+env: ['/var/lib/kf-windows-20261005/kf3-bins/134dcb54/qemu-system-x86_64'] sha256=9818b7aec63d1fc1... ['KF3_LIFECYCLE_COUNT=1', 'KF3_LIFECYCLE_PERIOD_S=5', 'KF3_SCAN_OFF_AFTER_5080=2'] ['WIN_BAR1=8589934592', 'WIN_FB_MB=8192', 'WIN_RAM_MB=12288']
+d3d11 {"time": 260.636, "frames": 46299, "fps": 177.639, "minfps": 32.1959, "maxfps": 397.227, "score": 4474.72, "gpu_events": 0, "boot_events": 2, "power_w": 143.8, "sm_pct": 96.8, "dmon_s": 269}
+gl {"time": 260.626, "frames": 70134, "fps": 269.098, "minfps": 44.998, "maxfps": 543.1, "score": 6778.58, "gpu_events": 0, "boot_events": 1, "power_w": 188.3, "sm_pct": 98.9, "dmon_s": 273}
+xid: XID_JOURNAL tag=CM2 qpid=2927396 lines=0 for_this_qemu=0 2026-10-17T19:46:07+02:00
+shot: ['SHOT screen=1536x864 mean_luma=81.2 std_luma=59.9 distinct_4bit_colours=174']
+mode lines: []
+REFUSED lines: 0 | LATCHED_OFF: 0 | PUT_BOUNDARY_OPEN: 0 | MIGRATED: 1 | WINDOW_FRESH: 0
+other relays: 0 lines, identity/inval_reset violations: none; sum of forced_ring_full over all: 0
+=== C2
+env: ['/var/lib/kf-windows-20261005/kf3-bins/134dcb54/qemu-system-x86_64'] sha256=9818b7aec63d1fc1... ['KF3_LAZY_OBSERVE=16', 'KF3_LIFECYCLE_COUNT=1', 'KF3_LIFECYCLE_PERIOD_S=5', 'KF3_SCAN_OFF_AFTER_5080=2'] ['WIN_BAR1=8589934592', 'WIN_FB_MB=8192', 'WIN_RAM_MB=12288']
+d3d11 {"time": 260.62, "frames": 61681, "fps": 236.67, "minfps": 59.8461, "maxfps": 518.398, "score": 5961.71, "gpu_events": 0, "boot_events": 2, "power_w": 168.0, "sm_pct": 97.8, "dmon_s": 273}
+gl {"time": 260.625, "frames": 70763, "fps": 271.513, "minfps": 42.3628, "maxfps": 589.471, "score": 6839.42, "gpu_events": 0, "boot_events": 1, "power_w": 188.3, "sm_pct": 99.0, "dmon_s": 274}
+xid: XID_JOURNAL tag=C2 qpid=2933205 lines=0 for_this_qemu=0 2026-10-17T19:59:02+02:00
+shot: ['SHOT screen=1536x864 mean_luma=20.1 std_luma=47.6 distinct_4bit_colours=43']
+mode lines: []
+REFUSED lines: 0 | LATCHED_OFF: 0 | PUT_BOUNDARY_OPEN: 0 | MIGRATED: 1 | WINDOW_FRESH: 0
+other relays: 0 lines, identity/inval_reset violations: none; sum of forced_ring_full over all: 0

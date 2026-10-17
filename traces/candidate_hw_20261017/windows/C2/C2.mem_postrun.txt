@@ -1,0 +1,8 @@
+MEMREC post_run_C2 2026-10-17T19:58:39+02:00 epoch=1792259919.517658096
+MEMREC free:                total        used        free      shared  buff/cache   available
+MEMREC free: Mem:           30719       21036        1620       14248       22590        9683
+MEMREC free: Swap:              0           0           0
+MEMREC meminfo: MemFree:         1659256 kB MemAvailable:    9916284 kB Cached:         21251452 kB SwapTotal:             0 kB SwapFree:              0 kB Dirty:               496 kB Shmem:          14590332 kB 
+MEMREC psi.memory: some avg10=0.00 avg60=0.00 avg300=0.03 total=2305744433
+MEMREC psi.memory: full avg10=0.00 avg60=0.00 avg300=0.03 total=2300447358
+MEMREC vmstat: workingset_refault_anon 7871971 workingset_refault_file 261115060 pswpin 7891195 pswpout 6718870 pgmajfault 7909979 
