@@ -1,0 +1,30 @@
+NATIVE_TRACE_SELECTED_STATUS 2026-10-17T00:24:02.0177685Z
+PHASE_STATS name=seed58151 method=1 {"messages_cmd":5074,"messages_status":5097,"attaches":1,"lost_messages_exact":0,"seq_gap_messages":0,"lapped_messages":0,"loss_records":0,"torn_reads":0,"invalid_elements":0,"sink_dropped":0,"records_refused":0,"unsupported":0}
+SUMMARY phase=seed58151 file=sequence.result.txt
+SEQUENCE_ORACLE_OK=true anomalies=0 unbalanced_controls=0 messages=[5074, 5097]
+SUMMARY phase=seed58151 file=census-summary.txt
+kf-census: ogkm 580.94.02, 1 sources, 5074 cmd + 5097 status messages, 211 controls
+oracle: PASS (no gap, no parse failure, no trailing bytes, no unknown function)
+pairing: 0 controls with unanswered requests or orphan replies; rpc.sequence non-zero on 10142 messages
+FIRST_SEQUENCE phase=seed58151 dir=cmd seq=0 function=0x48
+FIRST_SEQUENCE phase=seed58151 dir=status seq=0 function=0x1002
+B297_COUNT phase=seed58151 count=8
+[{"ordinal":"4487","dir":"cmd","element_sequence":"2245","function":"0x67","rpc_result":"0xffffffff","kind":"alloc","control_or_class":"0xb297","control_status":"-","declared_params_bytes":"12","decode":"ok"},{"ordinal":"4497","dir":"cmd","element_sequence":"2246","function":"0x67","rpc_result":"0xffffffff","kind":"alloc","control_or_class":"0xb297","control_status":"-","declared_params_bytes":"12","decode":"ok"},{"ordinal":"4500","dir":"status","element_sequence":"2248","function":"0x67","rpc_result":"0x0","kind":"alloc","control_or_class":"0xb297","control_status":"-","declared_params_bytes":"12","decode":"ok"},{"ordinal":"4501","dir":"status","element_sequence":"2249","function":"0x67","rpc_result":"0x0","kind":"alloc","control_or_class":"0xb297","control_status":"-","declared_params_bytes":"12","decode":"ok"},{"ordinal":"4507","dir":"cmd","element_sequence":"2253","function":"0x67","rpc_result":"0xffffffff","kind":"alloc","control_or_class":"0xb297","control_status":"-","declared_params_bytes":"12","decode":"ok"},{"ordinal":"4508","dir":"cmd","element_sequence":"2254","function":"0x67","rpc_result":"0xffffffff","kind":"alloc","control_or_class":"0xb297","control_status":"-","declared_params_bytes":"12","decode":"ok"},{"ordinal":"4515","dir":"status","element_sequence":"2256","function":"0x67","rpc_result":"0x0","kind":"alloc","control_or_class":"0xb297","control_status":"-","declared_params_bytes":"12","decode":"ok"},{"ordinal":"4516","dir":"status","element_sequence":"2257","function":"0x67","rpc_result":"0x0","kind":"alloc","control_or_class":"0xb297","control_status":"-","declared_params_bytes":"12","decode":"ok"}]
+RAW_CAPTURE phase=seed58151 bytes=48745408 sha256=a219fb06bdccb39c427e72ab1935483a05d27af612d2d22883168517b39e89a6
+PHASE_STATS name=revisit58151 method=1 {"messages_cmd":5005,"messages_status":5028,"attaches":1,"lost_messages_exact":0,"seq_gap_messages":0,"lapped_messages":0,"loss_records":0,"torn_reads":0,"invalid_elements":0,"sink_dropped":0,"records_refused":0,"unsupported":0}
+SUMMARY phase=revisit58151 file=sequence.result.txt
+SEQUENCE_ORACLE_OK=true anomalies=0 unbalanced_controls=0 messages=[5005, 5028]
+SUMMARY phase=revisit58151 file=census-summary.txt
+kf-census: ogkm 580.94.02, 1 sources, 5005 cmd + 5028 status messages, 210 controls
+oracle: PASS (no gap, no parse failure, no trailing bytes, no unknown function)
+pairing: 0 controls with unanswered requests or orphan replies; rpc.sequence non-zero on 10004 messages
+FIRST_SEQUENCE phase=revisit58151 dir=cmd seq=0 function=0x48
+FIRST_SEQUENCE phase=revisit58151 dir=status seq=0 function=0x1002
+B297_COUNT phase=revisit58151 count=8
+[{"ordinal":"4488","dir":"cmd","element_sequence":"2245","function":"0x67","rpc_result":"0xffffffff","kind":"alloc","control_or_class":"0xb297","control_status":"-","declared_params_bytes":"12","decode":"ok"},{"ordinal":"4489","dir":"cmd","element_sequence":"2246","function":"0x67","rpc_result":"0xffffffff","kind":"alloc","control_or_class":"0xb297","control_status":"-","declared_params_bytes":"12","decode":"ok"},{"ordinal":"4498","dir":"status","element_sequence":"2248","function":"0x67","rpc_result":"0x0","kind":"alloc","control_or_class":"0xb297","control_status":"-","declared_params_bytes":"12","decode":"ok"},{"ordinal":"4505","dir":"cmd","element_sequence":"2253","function":"0x67","rpc_result":"0xffffffff","kind":"alloc","control_or_class":"0xb297","control_status":"-","declared_params_bytes":"12","decode":"ok"},{"ordinal":"4506","dir":"status","element_sequence":"2249","function":"0x67","rpc_result":"0x0","kind":"alloc","control_or_class":"0xb297","control_status":"-","declared_params_bytes":"12","decode":"ok"},{"ordinal":"4513","dir":"cmd","element_sequence":"2254","function":"0x67","rpc_result":"0xffffffff","kind":"alloc","control_or_class":"0xb297","control_status":"-","declared_params_bytes":"12","decode":"ok"},{"ordinal":"4516","dir":"status","element_sequence":"2256","function":"0x67","rpc_result":"0x0","kind":"alloc","control_or_class":"0xb297","control_status":"-","declared_params_bytes":"12","decode":"ok"},{"ordinal":"4517","dir":"status","element_sequence":"2257","function":"0x67","rpc_result":"0x0","kind":"alloc","control_or_class":"0xb297","control_status":"-","declared_params_bytes":"12","decode":"ok"}]
+RAW_CAPTURE phase=revisit58151 bytes=48224928 sha256=8fbc7225591f90041a19f3cffeb8e8290638dcd55b33a5ec536bc652951c1b2a
+{"Name":"NVIDIA GeForce RTX 4090","DriverVersion":"32.0.15.8151","ConfigManagerErrorCode":0}
+MODULE_STATUS=Stopped
+NATIVE_REFERENCE_QUIESCENT=1
+
+SSH_EXIT=0

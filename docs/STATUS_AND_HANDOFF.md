@@ -1,5 +1,32 @@
 # Status and handoff — where kayfabe v3 stands, and how to resume
 
+## UPDATE 2026-10-17 00:38UTC — nativeAD102581 GSP/420s PASS and nativeB297 shape confirmed
+
+ONLY own56302930 ACTIVE/quiescent, nativeWindows afterLinuxevidencePUSHED8402bb1d2;
+originaltimer2571615 at00:46UTC/hard00:51UTC unchanged. RetireNOW afterthisevidencePUSH,
+verifyAPIabsence THENcancel exacttimer. Nativealiascodex-ada2build-native581-56302930,
+oldLinuxaliasintentionallyobsolete/newnativekeypinnedbeforetransition. NoLinuxreturn.
+
+Actual3151/581.51/Code0/GSP580.94.01: CUDA3+HW DX11/12 beforeafter420.59s/14roundhold,
+0readableSystem4101, DWMExplorer present PASS. Thussameboard Kayfabe581Code43iscompatgap,
+notunsupportedphysicaldriver. Newnativecaps99words/all4096equal priorWin580/Linux595,
+0x00c100/nofamilywildcard. WrongoldDesktop580checkandqueue-onlycapsbundle failures
+retained asprecondition/tool errors; correctedonlythose, noinstallerreplay.
+Two120sNativeGSPcaptures exact5809402decoder:5074/5097 and5005/5028 cmd/status,
+firstseq0both/alllossgapstornunsupported0/oracle+pairingPASS. Copiedwrapper FAILedonly
+Blackwell-specificmethod3gate; AD102method1streams independentlycomplete, doNOTclaimwrapperPASS.
+Eachnativecapture4B297allocs+4status0 replies, size12/seq2245,2246,2253,2254.
+Virtual581first_seq216B297unsupported-driver-cell remains INFERREDrootcausecandidate;
+publicnvoslayout/nativeID+size confirmfacts, parameter/controlsemantics notallverified.
+No guessednewrow/ack orclosedPEextraction. Nativeheadlessinvaliddisplay-subtreereference.
+FullmetadataTSVs<1MiB/controlcensuses andselectedstats exported; raw48MBcaptures stay
+onrental/destroyatretirement, privateverbosebodydata NEVERreturns. TS/ad102_second_builds_20261016/
+native_windows58151/RESULT.md. Allnativeobservers/GPUprobeprocessesstopped, moduleStopped.
+Next: exactWindows581probe-cell derivation/tests frompublic58094 + measuredfacts, then
+freshhardware; A4newAD106 marketcandidate maystillavailable, but nosecondrentalbeforeabsence.
+LinuxAD102580/590/595functionalsetsPASS; Windows580PASS/581FAIL; nofamilycomplete.
+
+
 ## UPDATE 2026-10-16 23:40UTC — AD102 Linux590 fullsuite PASS; planned same-box native581 reference
 
 Only56302930ACTIVE/timer2571615 at00:46UTC/hard00:51UTC2026-10-17 unchanged.

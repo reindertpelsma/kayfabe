@@ -1,0 +1,11 @@
+READONLY_TRANSIENT_NATIVE_VERSION 2026-10-16T23:56:29.7854273Z
+{"Name":"NVIDIA GeForce RTX 4090","DriverVersion":"32.0.15.8151","ConfigManagerErrorCode":0}
+NVIDIA GeForce RTX 4090, 581.51, WDDM, 24564 MiB
+SMI_QUERY_RC=0
+
+    GSP Firmware Version                  : N/A
+SMI_GSP_QUERY_RC=0
+
+
+
+SSH_EXIT=0

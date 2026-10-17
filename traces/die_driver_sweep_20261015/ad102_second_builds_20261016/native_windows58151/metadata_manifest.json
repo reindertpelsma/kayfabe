@@ -1,0 +1,50 @@
+[
+  {
+    "raw_bytes": 707516,
+    "name": "seed58151__sequence.tsv",
+    "excerpt_only": false,
+    "raw_sha256": "f2d2cab982964fcf367bad7ce5b8ac964664ba2717ceea6f05653c5b5857c0b3"
+  },
+  {
+    "raw_bytes": 20493,
+    "name": "seed58151__all.controls.tsv",
+    "excerpt_only": false,
+    "raw_sha256": "43d799af2512732e581b8b90c895967db40d97c4dd9b04483222534d431917a9"
+  },
+  {
+    "raw_bytes": 973,
+    "name": "seed58151__all.functions.tsv",
+    "excerpt_only": false,
+    "raw_sha256": "b805746d0b8ca213d4271bb0ea964b2a119b1e4cdd4067bb81069e6d7e26068d"
+  },
+  {
+    "raw_bytes": 25,
+    "name": "seed58151__all.anomalies.tsv",
+    "excerpt_only": false,
+    "raw_sha256": "2eb168ff5f366099b36c3beb8b38a87da61022e11ff6074ee3bf0787312d46fb"
+  },
+  {
+    "raw_bytes": 697551,
+    "name": "revisit58151__sequence.tsv",
+    "excerpt_only": false,
+    "raw_sha256": "ba81e37f8129a49ed2d9fa297bed800d3e192c984949c177afa577fe2540af30"
+  },
+  {
+    "raw_bytes": 20411,
+    "name": "revisit58151__all.controls.tsv",
+    "excerpt_only": false,
+    "raw_sha256": "d0c5a3e5890c3c825e14075ee9ddc0a3f09bf90c9dd361c4db0f6c3344de7d48"
+  },
+  {
+    "raw_bytes": 973,
+    "name": "revisit58151__all.functions.tsv",
+    "excerpt_only": false,
+    "raw_sha256": "ac7b639f00df61ae18ca635cb2355c35739b762e420b796e4f753bc45a63531d"
+  },
+  {
+    "raw_bytes": 25,
+    "name": "revisit58151__all.anomalies.tsv",
+    "excerpt_only": false,
+    "raw_sha256": "2eb168ff5f366099b36c3beb8b38a87da61022e11ff6074ee3bf0787312d46fb"
+  }
+]

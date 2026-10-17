@@ -1,0 +1,62 @@
+[
+  {
+    "name": "ada2build20261016-native-queue.log",
+    "raw_bytes": 305,
+    "raw_sha256": "66649dd3b988c494efe10e71691846f46747146b9bbfe7a2f2ea0e5d15962d65"
+  },
+  {
+    "name": "ada2build20261016-native-stage.log",
+    "raw_bytes": 1727,
+    "raw_sha256": "199425029df70a5fc544057b2919129928dd2e35eb79bd3f792abb6520220dbb"
+  },
+  {
+    "name": "ada2build20261016-native-orchestrate.log",
+    "raw_bytes": 1044,
+    "raw_sha256": "3c9199824c75cceaed67fef4bbe223e7580e8c54e82fe3a2fad17f9e8c03bf2b"
+  },
+  {
+    "name": "ada2build20261016-recovery-native-orchestrate.log",
+    "raw_bytes": 507,
+    "raw_sha256": "760decf1f30679ec695f9e183a2d073d62491f00609afd08a91f02777ff38c55"
+  },
+  {
+    "name": "ada2build20261016-native-validate.log",
+    "raw_bytes": 580,
+    "raw_sha256": "0b4627a85d0ea33cc1175e78f3d76e0195540856d91fb598168990e858aad393"
+  },
+  {
+    "name": "ada2build20261016-native-preflight.txt",
+    "raw_bytes": 1008,
+    "raw_sha256": "e2767b3f818256e987d9eb8a60bd7738cb19041d78bcadd40cd0edcd1faf5556"
+  },
+  {
+    "name": "ada2build20261016-native-transient-version.txt",
+    "raw_bytes": 302,
+    "raw_sha256": "af2ef526ffd8b9cf20d29a499cf3536b4e1172c21250298b2f11b6ac2c0a14a0"
+  },
+  {
+    "name": "ada2build20261016-native-oracle-before.txt",
+    "raw_bytes": 4266,
+    "raw_sha256": "ea0eed00e877d7e1020c38b282585d2a0c1f241e8c85bc16fcd4f15a08331ec0"
+  },
+  {
+    "name": "ada2build20261016-native-hold.txt",
+    "raw_bytes": 27048,
+    "raw_sha256": "e6e0872e2d34edc9e70dc38ee9972741a346326d20837a45baa7f804b360f2f1"
+  },
+  {
+    "name": "ada2build20261016-native-oracle-after.txt",
+    "raw_bytes": 4265,
+    "raw_sha256": "5101f81148557eae7147f1379d0bfc678da28ca072142b67a8362b70e055e8a2"
+  },
+  {
+    "name": "ada2build20261016-recovery-native-gsp-and-driver.txt",
+    "raw_bytes": 1007,
+    "raw_sha256": "ba9d4456a541d0c2594b703c9ae9c53702ccf65c1b76261d84a81fbd77619df1"
+  },
+  {
+    "name": "ada2build20261016-recovery-native-caps58151.txt",
+    "raw_bytes": 2484,
+    "raw_sha256": "fc8a178ab49644fede6eb3883fef748a91cce268d7e4b7cb804eacbd8209ca5a"
+  }
+]
