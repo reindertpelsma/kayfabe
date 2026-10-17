@@ -38,7 +38,7 @@ use kf_cuda::display::{ComposeLayer, DisplayGpu, Frame};
 use kf_disp::engine::{Acquire, Composition, Effect, Engine, PbLoc, ScanVocab, Vocab};
 use kf_disp::inst::{CtxDma, Layout, Target};
 use kf_disp::model::{ChannelKind, Statement, Waker};
-use kf_disp::pace::{HeadCounts, Meter, NonFlip, Pacer, Sent};
+use kf_disp::pace::{HeadCounts, Mailbox, Meter, NonFlip, Pacer, Sent, flip_completion_need};
 use kf_disp::ports::{EventReg, Ports};
 use kf_disp::regs::Regs;
 use kf_disp::scanout::{LayerPlan, ScanFormats};
@@ -2061,13 +2061,6 @@ impl DisplayPlane {
         } else {
             Engine::new(vocab, row.heads, row.windows)
         };
-        // MEASUREMENT (2026-10-17, never required to boot, default unchanged): `KF3_TEAR_GATE=0` turns the
-        // D1 tearing-flip gate off (OWNER_RULINGS section M D1), to test whether it is what holds exclusive-
-        // fullscreen D3D11 at 30 fps. Read once here.
-        if std::env::var("KF3_TEAR_GATE").is_ok_and(|v| v == "0") {
-            engine.tear_gate = false;
-            eprintln!("kf3: MEASUREMENT KF3_TEAR_GATE=0: the D1 tearing-flip gate is OFF");
-        }
         let scan = ScanVocab::resolve(t, classes.window, classes.window_imm, classes.core);
         let formats = ScanFormats::resolve(t, classes.window);
         let cursor_vocab = kf_disp::engine::CursorVocab::resolve(t, classes.core, classes.cursor);
@@ -2670,6 +2663,7 @@ impl Device {
         let mut stall_reported: std::collections::HashSet<(u32, u32)> =
             std::collections::HashSet::new();
         let mut stall_logged = 0u32;
+        let mut handoff_lines = 0u32;
         // ★ the last effects the plane performed (notifier writes, releases, latches), for the STALL report
         let mut fx_ring: VecDeque<(u64, &'static str, u32, u32, u64, u64, bool)> = VecDeque::new();
         let mut fx_seq = 0u64;
@@ -3000,6 +2994,26 @@ impl Device {
                 counts[h].ticks += 1;
                 ticked |= 1 << h;
             }
+            // ★ §AK: who ticks a head changed (phase 2: the broker speaks, or has been silent for
+            // `kf_disp::tick::BROKER_SILENCE_NS`) — one line per handoff, bounded
+            for (h, ho, at) in pacer.take_handoffs() {
+                if handoff_lines < 32 {
+                    handoff_lines += 1;
+                    eprintln!(
+                        "kf3: display: +{} ms head {h} tick source -> {} ({})",
+                        at / 1_000_000,
+                        match ho {
+                            kf_disp::tick::Handoff::ToBroker => "BROKER",
+                            kf_disp::tick::Handoff::ToFree => "FREE-RUNNING clock",
+                        },
+                        match ho {
+                            kf_disp::tick::Handoff::ToBroker => "a broker tick event arrived",
+                            kf_disp::tick::Handoff::ToFree =>
+                                "no broker tick event within the silence deadline",
+                        }
+                    );
+                }
+            }
             // 4b. ★ a loud, bounded STALL report (2026-10-10, runs 400/401: an overlay-plane flip never
             // completed after ~10 min of playback and the guest declared a TDR 2 s later): when an
             // update has been parked at its UPDATE for over a second, name what it waits for,
@@ -3240,10 +3254,26 @@ impl Device {
                     scan.latched.forget(*window);
                     scan.colors.forget_window(*window as usize);
                     if let Some(Shown::Armed(c)) = &shown
-                        && c.layers.iter().any(|l| l.window == *window)
+                        && let Some(so) = c.layers.iter().find(|l| l.window == *window)
                     {
-                        scan.barrier = scan.started + 1;
-                        scan.want = true;
+                        if dp.sdr_color.is_some() {
+                            // the colour experiment resolves its LUT contexts at copy time: it keeps
+                            // the old rule (the flip's items wait for its own copy) until validated
+                            scan.barrier = scan.started + 1;
+                            scan.want = true;
+                        } else {
+                            // ★ §AK: the flip is NOT parked and does NOT wait for a tick or for its own
+                            // copy. A newer frame exists (the mailbox copies the newest, once per tick);
+                            // completing the flip releases the buffer it replaced, so its items wait for
+                            // the copy that was in flight at this latch, which read that buffer, and
+                            // for nothing else.
+                            scan.on_flip_latched();
+                            // the delay between latch and copy is up to a tick: resolve the window's
+                            // context DMA NOW, as the first copy after a latch always did, so a guest
+                            // that unbinds it before the copy (NVKMS's teardown) is still resolved
+                            let so = *so;
+                            scan.resolve_now(&mut io, &so);
+                        }
                     }
                 }
                 queue.push_back(Queued {
@@ -3290,14 +3320,18 @@ impl Device {
                 // nothing can be copied: the frame the console has is the answer
                 scan.serve_now(dp);
             }
-            if scan.want && scan.inflight.is_none() {
+            // ★ §AK: the shown head's tick allows ONE flip copy (of the newest latched frame)
+            if console_tick && matches!(shown, Some(Shown::Armed(_))) {
+                scan.mailbox.tick();
+            }
+            if (scan.want || scan.mailbox.due(scan.inflight.is_some())) && scan.inflight.is_none() {
                 scan.start(&mut io, &engine, shown.as_ref(), cursor.as_ref(), false);
             } else if scan.nonflip.due(
                 console_tick,
                 watched,
                 scan.active,
                 scan.inflight.is_none(),
-                scan.want || scan.barrier > scan.started,
+                scan.flip_pending(),
             ) {
                 scan.start(&mut io, &engine, shown.as_ref(), cursor.as_ref(), true);
             }
@@ -3560,6 +3594,7 @@ impl Device {
                     cap_hz: cap,
                     window: Some(w),
                     over: meter.over,
+                    skipped: scan.mailbox.skipped,
                     same: dp.counters.same.load(o),
                     ondemand: dp.counters.ondemand.load(o),
                     ..kf_disp::pace::Status::default()
@@ -3571,7 +3606,8 @@ impl Device {
                             period_ns: slot.period_ns,
                             raster_ns: slot.raster_ns,
                             late_max_us: pacer.late_max_ns(h) / 1000,
-                            held: p.tear_held,
+                            source: pacer.source(h).map(|t| t.source()),
+                            handoffs: pacer.source(h).map_or((0, 0), |t| t.handoffs()),
                             core_imm: p.core_imm,
                         };
                     }
@@ -3897,9 +3933,13 @@ struct ScanState {
     done: u64,
     /// The copy number items queued now wait for.
     barrier: u64,
-    /// A FLIP-class copy is wanted (a flip of the console window, a change of what is shown) —
-    /// made at once and always sent. ★ Copies without a flip are [`ScanState::nonflip`]'s (§8.16).
+    /// A FLIP-class copy is wanted (a change of what is shown, a modeset, a colour program) — made
+    /// at once and always sent. ★ Copies without a flip are [`ScanState::nonflip`]'s (§8.16).
     want: bool,
+    /// ★ §AK: the flips of the shown head. A latch marks a newer frame; one copy per tick copies the
+    /// newest ([`kf_disp::pace::Mailbox`]); the flip itself completes at once, or — buffer-reuse
+    /// rule — when the copy that was in flight at its latch is done ([`flip_completion_need`]).
+    mailbox: Mailbox,
     /// The console showed a surface at the last pass (non-flip checks run only then).
     active: bool,
     /// The copy in flight.
@@ -4172,6 +4212,7 @@ impl ScanState {
         debug_assert!(self.inflight.is_none());
         self.barrier = self.started;
         self.done = self.started;
+        self.mailbox.reset_life();
         self.want = true;
         self.active = false;
         self.idle_at = None;
@@ -4207,6 +4248,32 @@ impl ScanState {
             }
             Some(_) => false,
         }
+    }
+
+    /// ★ §AK: a flip of the shown head latched. A newer frame exists; the flip's completion items
+    /// (queued next, with [`ScanState::barrier`]) wait for the copy in flight now — the one that read
+    /// the buffer this flip replaces — and for nothing else
+    /// ([`kf_disp::pace::flip_completion_need`], the buffer-reuse rule).
+    fn on_flip_latched(&mut self) {
+        self.mailbox.latch();
+        self.barrier = flip_completion_need(self.barrier, self.inflight.as_ref().map(|f| f.n));
+    }
+
+    /// ★ §AK: window `so` just latched — resolve its context DMA now (the first copy after a latch
+    /// resolves it afresh; with the copy up to a tick away, a guest that unbinds the context DMA
+    /// before the copy must still find it resolved). A refusal is never kept ([`LatchedDmas`]): the
+    /// copy tries again.
+    fn resolve_now(&mut self, io: &mut Io<'_>, so: &kf_disp::engine::Scanout) {
+        let _ = self
+            .latched
+            .resolve(so, || io.resolve(so.client, so.handle, so.chn));
+    }
+
+    /// Is a FLIP-class copy waiting — a change of what is shown, a barrier the next copy serves, or a
+    /// latched frame the mailbox has not copied? It publishes the newer frame anyway, so a non-flip
+    /// check yields to it.
+    fn flip_pending(&self) -> bool {
+        self.want || self.barrier > self.started || self.mailbox.pending()
     }
 
     /// ★ Copy `n` is over (published, found unchanged, refused, or given up): the completions
@@ -4295,7 +4362,7 @@ impl ScanState {
         }
         let digest = ScanState::digest_of(io, &f);
         if f.phase == Phase::Check {
-            if self.want || self.barrier > self.started {
+            if self.flip_pending() {
                 self.finish(dp, f.n, f.req);
                 return;
             }
@@ -4660,6 +4727,8 @@ impl ScanState {
         }
         if !check {
             self.want = false;
+            // a flip-class copy reads the newest state: it serves the pending frame and the tick's credit
+            self.mailbox.copied();
         }
         self.started += 1;
         let n = self.started;
@@ -5629,6 +5698,124 @@ mod tests {
         ] {
             assert!(code.contains(needed), "the worker no longer calls {needed}");
         }
+    }
+
+    /// ★ §AK: the worker's flip rules. A flip's latch queues its completions behind the copy in flight
+    /// at that moment (the buffer-reuse rule) and behind nothing when none is in flight; the frame it
+    /// latched is a pending flip copy until a flip-class copy starts (any: it reads the newest state);
+    /// a second latch before that replaces the first; a guest life's end forgets the pending frame.
+    /// (Mutations: `on_flip_latched` leaving the barrier alone; `flip_completion_need` returning the
+    /// floor only; `flip_pending` ignoring the mailbox; the old `started + 1`.)
+    #[test]
+    fn a_flip_waits_for_the_copy_in_flight_and_a_latched_frame_is_a_pending_copy() {
+        let flight = |n| Inflight {
+            color: false,
+            n,
+            phase: Phase::Send,
+            slot: 0,
+            wh: (1920, 1080),
+            t0: Instant::now(),
+            vram: None,
+            d2h: true,
+            cursor: false,
+            req: 0,
+            summed: false,
+            boot: false,
+        };
+        let mut scan = ScanState::default();
+        assert!(!scan.flip_pending());
+        // no copy in flight: the completion waits for nothing (copy 0 is done by definition)
+        scan.on_flip_latched();
+        assert_eq!(scan.barrier, 0, "nothing in flight, nothing to wait for");
+        assert!(scan.flip_pending() && scan.mailbox.pending());
+        // copy 4 starts and serves the pending frame
+        scan.started = 4;
+        scan.mailbox.copied();
+        scan.inflight = Some(flight(4));
+        assert!(!scan.flip_pending());
+        // a flip latches under it: its items wait for copy 4 — not for copy 5 (its own)
+        scan.on_flip_latched();
+        assert_eq!(scan.barrier, 4);
+        assert_eq!(scan.mailbox.latched, 2);
+        assert!(
+            scan.flip_pending(),
+            "the frame it latched waits for its copy"
+        );
+        // and a second flip before the copy replaces the first, unseen; the barrier never lowers
+        scan.on_flip_latched();
+        assert_eq!((scan.barrier, scan.mailbox.skipped), (4, 1));
+        scan.done = 4;
+        scan.inflight = None;
+        scan.on_flip_latched();
+        assert_eq!(
+            scan.barrier, 4,
+            "no copy in flight: the floor stays, nothing newer is waited for"
+        );
+        // a modeset/colour barrier ahead of the queue is kept
+        scan.barrier = scan.started + 1;
+        scan.inflight = Some(flight(4));
+        scan.on_flip_latched();
+        assert_eq!(scan.barrier, 5);
+        // a life's end forgets the pending frame
+        scan.inflight = None;
+        scan.reset_life();
+        assert!(!scan.mailbox.pending());
+        assert!(
+            scan.flip_pending(),
+            "reset_life wants a copy of what the new life shows"
+        );
+    }
+
+    /// ★ §AK: the worker no longer carries the D1 gate or its measurement flag, parks no flip for a
+    /// tick, and wires the mailbox exactly once each way: a latch of the shown window calls
+    /// `on_flip_latched` (not the old `started + 1` barrier), the shown head's tick grants a copy, and
+    /// a copy starts when the mailbox says so. Known-positive: the scanner finds each pattern in a
+    /// planted line. (Mutations: the flag back; the old barrier back; `mailbox.tick()` dropped.)
+    #[test]
+    fn the_worker_is_wired_to_the_mailbox_and_has_no_tear_gate() {
+        let src = include_str!("display.rs");
+        let code: String = src
+            .split("#[cfg(test)]")
+            .next()
+            .unwrap()
+            .lines()
+            .map(|l| l.split("//").next().unwrap())
+            .collect::<Vec<_>>()
+            .join("\n");
+        let banned = ["tear_gate", "KF3_TEAR_GATE", "tear_held", "held: p."];
+        let hits = |text: &str| -> Vec<&str> {
+            banned
+                .iter()
+                .copied()
+                .filter(|b| text.contains(b))
+                .collect()
+        };
+        assert_eq!(hits(&code), Vec::<&str>::new());
+        for planted in banned {
+            assert_eq!(hits(&format!("let x = {planted};")), vec![planted]);
+        }
+        for needed in [
+            "scan.on_flip_latched()",
+            "scan.mailbox.tick()",
+            "scan.mailbox.due(",
+            "self.mailbox.copied()",
+            "flip_completion_need(",
+            "pacer.take_handoffs()",
+        ] {
+            assert!(code.contains(needed), "the worker no longer calls {needed}");
+        }
+        // the latch of the shown window sets the old barrier only for the colour experiment
+        let latch = code
+            .split("if let Effect::Latched { window } = &e")
+            .nth(1)
+            .unwrap();
+        let latch = latch.split("queue.push_back").next().unwrap();
+        assert_eq!(
+            latch.matches("scan.barrier = scan.started + 1;").count(),
+            1,
+            "{latch}"
+        );
+        assert!(latch.contains("dp.sdr_color.is_some()"));
     }
 
     fn map() -> RegMap {

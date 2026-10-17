@@ -1336,9 +1336,7 @@ fn a_head_composes_its_windows_back_to_front() {
     let front = window(0xb0, 0, 250, 250);
     e.step(3, &back.bytes(), back.put(), &mut all_ok);
     e.step(4, &front.bytes(), front.put(), &mut all_ok);
-    // ★ D1 (`display-max-fps`): the second tearing flip on head 1 waits for the head's tick
-    assert!(e.waiting(4));
-    e.vblank(1, &mut all_ok);
+    // ★ §AK (was D1: "the second tearing flip on head 1 waits for the head's tick"): it latches at once
     assert!(!e.waiting(4));
     let mut imm = Ring::new();
     imm.m(ma(IMM, "SET_POINT_OUT", 0), (50 << 16) | 100)
@@ -1570,60 +1568,69 @@ fn latched(s: &Step) -> Vec<u32> {
         .collect()
 }
 
-/// ★ D1 (`display-max-fps`, owner decision of 2026-10-04): a TEARING flip on an active head that
-/// already presented since the head's tick waits for the next tick — so async flips are bounded by
-/// the cap too; the first one after a tick still latches at once (it tears as asked). Another
-/// head's tick releases nothing. Known-positive: with the gate off (the mutation) the second flip
-/// latches at once, as before the gate.
+/// ★ §AK (owner decision (a) of 2026-10-17, which REPLACES D1): a TEARING (immediate) flip latches
+/// and completes AT ONCE, however many the guest sends between two ticks — the tick no longer bounds
+/// them (the copies are bounded instead, `pace::Mailbox`). Every one is a present and a tearing present;
+/// none waits; a vblank has nothing of theirs to latch. (Replaces `a_second_tearing_flip_waits_for_the_vblank`.
+/// Mutation: the gate back — a second flip after a present parks — fails this at the second flip.)
 #[test]
-fn a_second_tearing_flip_waits_for_the_vblank() {
-    assert!(engine().tear_gate, "on by default (D1)");
-    for gate in [true, false] {
-        let mut e = engine();
-        e.tear_gate = gate;
-        lit(&mut e);
-        let mut w = Ring::new();
+fn an_immediate_flip_latches_at_once_however_many_come_between_ticks() {
+    let mut e = engine();
+    lit(&mut e);
+    let mut w = Ring::new();
+    for n in 1..=50u64 {
         flip(&mut w, 1, 0);
         let s = e.step(1, &w.bytes(), w.put(), &mut all_ok);
-        assert_eq!(
-            latched(&s),
-            vec![0],
-            "gate {gate}: the first latches at once"
-        );
-        flip(&mut w, 1, 0);
-        let s = e.step(1, &w.bytes(), w.put(), &mut all_ok);
-        if !gate {
-            assert_eq!(latched(&s), vec![0], "without the gate it latches at once");
-            assert_eq!(e.pace[0].tear_held, 0);
-            assert_eq!(e.pace[0].presents, 2);
-            continue;
-        }
-        assert!(s.effects.is_empty(), "{:?}", s.effects);
-        assert!(e.waiting(1));
-        assert_eq!(e.pace[0].tear_held, 1);
-        assert!(e.vblank(1, &mut all_ok).effects.is_empty(), "head 1's tick");
-        assert_eq!(latched(&e.vblank(0, &mut all_ok)), vec![0], "head 0's tick");
-        assert!(!e.waiting(1));
-        // presented again at that tick: the next waits again
-        flip(&mut w, 1, 0);
-        assert!(
-            e.step(1, &w.bytes(), w.put(), &mut all_ok)
-                .effects
-                .is_empty()
-        );
-        assert_eq!(e.pace[0].tear_held, 2);
-        // a tick with nothing presented since: the parked one latches, then one at once again
-        e.vblank(0, &mut all_ok);
-        e.vblank(0, &mut all_ok);
-        flip(&mut w, 1, 0);
-        assert_eq!(
-            latched(&e.step(1, &w.bytes(), w.put(), &mut all_ok)),
-            vec![0]
-        );
-        assert_eq!(e.pace[0].presents, 4);
-        assert_eq!(e.pace[0].tearing, 4);
-        assert_eq!(e.pace[1], PaceCounts::default(), "nothing on head 1");
+        assert_eq!(latched(&s), vec![0], "flip {n} latches at once");
+        assert!(!e.waiting(1), "flip {n} waits for nothing");
+        assert_eq!(e.pace[0].presents, n);
+        assert_eq!(e.pace[0].tearing, n);
     }
+    // a tick: nothing of theirs is left to latch, and the next flip is still immediate
+    assert!(e.vblank(0, &mut all_ok).effects.is_empty());
+    flip(&mut w, 1, 0);
+    assert_eq!(
+        latched(&e.step(1, &w.bytes(), w.put(), &mut all_ok)),
+        vec![0]
+    );
+    assert_eq!(e.pace[1], PaceCounts::default(), "nothing on head 1");
+}
+
+/// ★ §AK: a NON-tearing flip still waits for its tick, and an immediate flip after it does not wait
+/// for anything — including the tick the non-tearing one is parked for. A group that mixes a tearing
+/// window with a non-tearing one on the same head waits with the non-tearing one (it is a vsync
+/// update). (Replaces the gate's "first after a tick" rule, which no longer exists.)
+#[test]
+fn a_vsync_flip_waits_for_its_tick_and_an_immediate_one_beside_it_does_not() {
+    let mut e = engine();
+    lit(&mut e);
+    let (mut w0, mut w1) = (Ring::new(), Ring::new());
+    flip(&mut w0, 0, 0);
+    assert!(
+        e.step(1, &w0.bytes(), w0.put(), &mut all_ok)
+            .effects
+            .is_empty()
+    );
+    assert!(e.waiting(1), "the vsync flip is parked for head 0's tick");
+    // an immediate flip on the other window of the same head latches at once, the parked one stays
+    flip(&mut w1, 1, 0);
+    let s = e.step(2, &w1.bytes(), w1.put(), &mut all_ok);
+    assert_eq!(latched(&s), vec![1], "the immediate flip does not wait");
+    assert!(e.waiting(1));
+    assert!(e.vblank(1, &mut all_ok).effects.is_empty(), "head 1's tick");
+    assert_eq!(latched(&e.vblank(0, &mut all_ok)), vec![0], "head 0's tick");
+    assert_eq!((e.pace[0].presents, e.pace[0].tearing), (2, 1));
+    // one group: a tearing window and a non-tearing window, interlocked — a vsync update
+    flip(&mut w0, 1, 1 << 1);
+    flip(&mut w1, 0, 1 << 0);
+    e.step(1, &w0.bytes(), w0.put(), &mut all_ok);
+    assert!(
+        e.step(2, &w1.bytes(), w1.put(), &mut all_ok)
+            .effects
+            .is_empty()
+    );
+    assert_eq!(latched(&e.vblank(0, &mut all_ok)), vec![0, 1]);
+    assert_eq!((e.pace[0].presents, e.pace[0].tearing), (3, 2));
 }
 
 /// ★ `presents` counts LATCHES, once per head per latch: two windows of one head latched together
