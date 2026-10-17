@@ -1207,6 +1207,9 @@ impl World {
                             "NO_CHANGE({label}) answers no open request (open before: {exp_before:?}, opened: {wants:?})"
                         ));
                     }
+                    if self.ring.broker_ready().is_some() {
+                        self.fail(&format!("NO_CHANGE({label}) while a frame is ready for the broker: the request would be wasted"));
+                    }
                     if fresh.len() == 1 && wants.first() == Some(&label) && exp_before != Some(label) {
                         self.fail(&format!("NO_CHANGE({label}) at the very tick that opened it"));
                     }

@@ -65,6 +65,7 @@ struct Shared {
     worker_fallbacks: AtomicU64,
     connections: AtomicU64,
     relay_lost: AtomicU64,
+    relay_dropped: AtomicU64,
     max_gap_ms: AtomicU64,
     max_flip_ms: AtomicU64,
     frames_published: AtomicU64,
@@ -339,7 +340,10 @@ fn broker_thread(
                     on_cmd(&mut b, &sh, &ring, cmd, now);
                 }
             }
-            // compositor: presentation and releases
+            // compositor: presentation and releases (a broker that stopped READING still releases)
+            if b.never_read {
+                release_old(&mut b, &ring, now);
+            }
             if b.unpresented.is_some_and(|t| now >= t) {
                 b.unpresented = None;
             }
@@ -417,6 +421,28 @@ fn emit_tick(b: &mut BrokerEnd, sh: &Shared, scn: &Scn, now: Instant, rng: &mut 
     let _ = rng;
 }
 
+/// The compositor releases every held frame but the newest, a little later.
+fn release_old(b: &mut BrokerEnd, ring: &FrameRing, now: Instant) {
+    let held = ring.held_mask();
+    let mut newest: Option<(u64, usize)> = None;
+    for j in 0..ring.slots() {
+        if held & (1 << j) != 0 {
+            let s = ring.geometry(j).serial;
+            if newest.is_none_or(|(ns, _)| s > ns) {
+                newest = Some((s, j));
+            }
+        }
+    }
+    for j in 0..ring.slots() {
+        if held & (1 << j) != 0 && Some(j) != newest.map(|n| n.1) {
+            if let Some(f) = ring.fds(j) {
+                b.released.push((now + Duration::from_millis(3), f.memfd_id()));
+            }
+        }
+    }
+
+}
+
 fn on_cmd(b: &mut BrokerEnd, sh: &Shared, ring: &FrameRing, cmd: Cmd, now: Instant) {
     match cmd.ty {
         CMD_WINDOW | CMD_ATTACH => {}
@@ -456,24 +482,7 @@ fn on_cmd(b: &mut BrokerEnd, sh: &Shared, ring: &FrameRing, cmd: Cmd, now: Insta
                 }
             }
             b.unpresented = Some(now + Duration::from_micros(1000 + (b.pkt_seq as u64 % 4) * 1000));
-            // the compositor releases every held frame but the newest, a little later
-            let held = ring.held_mask();
-            let mut newest: Option<(u64, usize)> = None;
-            for j in 0..ring.slots() {
-                if held & (1 << j) != 0 {
-                    let s = ring.geometry(j).serial;
-                    if newest.is_none_or(|(ns, _)| s > ns) {
-                        newest = Some((s, j));
-                    }
-                }
-            }
-            for j in 0..ring.slots() {
-                if held & (1 << j) != 0 && Some(j) != newest.map(|n| n.1) {
-                    if let Some(f) = ring.fds(j) {
-                        b.released.push((now + Duration::from_millis(3), f.memfd_id()));
-                    }
-                }
-            }
+            release_old(b, ring, now);
             let _ = &b.reported_released;
         }
         CMD_NO_CHANGE => {
@@ -554,6 +563,8 @@ fn relay_thread(
             sh.relay_lost.fetch_add(1, Ordering::Relaxed);
         }
         was_conn = c;
+        let c = relay.counters();
+        sh.relay_dropped.fetch_max(c.dropped + c.uncommitted, Ordering::Relaxed);
         let held = u64::from(ring.held_mask().count_ones());
         sh.max_held.fetch_max(held, Ordering::Relaxed);
         if held > 2 {
@@ -981,11 +992,14 @@ fn lockstep_threads_silence_and_return() {
 #[test]
 fn lockstep_threads_broker_never_reads() {
     let mut scn = Scn::new("lockstep_threads_broker_never_reads");
+    // a request on every tick keeps the relay sending, so the kernel socket buffer really fills
+    scn.always_want = true;
     scn.timeline = vec![(300, Act::NeverRead(true))];
-    scn.min_ms = 3000;
+    scn.min_ms = 4000;
     let r = run(scn.clone());
     check(&r, &scn);
     report(&r, &scn);
+    assert!(r.sh.relay_dropped.load(Ordering::Relaxed) > 0, "the socket buffer must really have filled (a send met EAGAIN and the frame was dropped and counted)");
 }
 
 /// A partial packet and then nothing: the relay drops the connection at its read deadline (500 ms),
