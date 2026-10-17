@@ -465,8 +465,10 @@ Two small pure machines, both table-tested, both used by the real code and by th
 
 **`kf_disp::lockstep::CreditGate`** (the worker, per shown head) — the vblank/copy half:
 - G1 an event with a `tick_seq` not newer than the last is dropped and counted (defense in depth: the relay already did).
-- G2 a `WANT_FRAME` whose tick the double-tick guard SWALLOWED (closer than P/2 to the previous tick) is **deferred**: it becomes usable at `last_tick + P/2`, never before; a tick that arrives
-  inside the guard never makes kayfabe go faster (§5), and its credit is acted on after the guard.
+- G2 a `WANT_FRAME` whose tick the double-tick guard SWALLOWED (closer than P/2 to the previous tick) is **carried to the NEXT ACCEPTED tick and coalesces into that tick's own credit** — never acted on early, and never in addition
+  to the next tick's credit. ⊘ CORRECTED by the exhaustive model's flood (finding F3, §11.7): the first design deferred it to the guard's edge `last_tick + P/2`, which with the next accepted tick's own credit gave TWO credits per
+  guard interval and made the COPY rate exceed the vblank rate (66–79 copies against 40 vblanks). Now copies ≤ vblanks. A swallowed tick's credit has no time of its own, so the worker does not wake for it; if the broker goes silent
+  the fallback clock's ticks grant credits as in phase 1.
 - G3 a credit arriving while a copy is in flight or a credit is already held is **coalesced**: `Mailbox.credit` is a bool (at most ONE pending credit), the extra is counted (`credits_coalesced`) and
   dropped. N ticks while the copy runs → one frame afterwards.
 - G4 the copy starts only when `Mailbox::due` (frame waiting ∧ credit ∧ no copy in flight, §6.3): never earlier than the credit, never before the previous copy completed, never without a free ring
@@ -498,6 +500,115 @@ number), `handoffs_to_broker` (= `ho=`'s first), `req_open_blocked` (a ready fra
 Immediate flips (§AK(a)), the buffer-reuse rule (§6.1), the mailbox (§6.3), `over` (§6.4), the XOR/cursor code, D3 (75 Hz), the kayfabe-* crates, Linux / Translated paths, the legacy broker
 protocol for old peers. No flag is required to boot; nothing is a measurement flag.
 
-### 11.7–11.9 Tests, results, the live checklist
+### 11.7 Tests, results, mutants (GPU-free; every number MEASURED on the dev box, `cargo test --release`, 4 cores)
 
-Filled in below as the work lands (§11.7 tests and mutants; §11.8 what was measured on a real headless compositor; §11.9 the owner's hardware checklist and what is unverified).
+**Counts.** `cargo test --release -p kf-disp -p kf-broker -p kf-qemu`: **640 passed / 8 ignored on the phase-1 base `dd19a9147` → 707 passed / 12 ignored** (kf-disp lib 185 → 229, `kf-disp/tests/lockstep_threads.rs` +7,
+kf-broker lib 50 → 51 and `relay_machine` +8, `proto_mirror` +1, kf-qemu lib 290 → 291); 0 failed. The ignored: the two 10 M-flip / deep-exploration runs, `broker_ticks_e2e` (needs the broker binary) and
+the earlier ignored loopbacks. Broker C: `make check` 245 → 365 PASS lines (new: `test-tick` 566 195 checks, `mutate_tick.py` 28 mutants all killed by >= 2 distinct failing checks, `test_tick.py` 122 PASS over the real socket);
+`make check-sanitize` green (ASan+UBSan, 0 reports); `make check-tick-probe` (real `mutter --headless`) passes. rustfmt is clean on every file this branch wrote; clippy reports nothing on the changed lines.
+
+**The pure units** (table-tested, `kf_broker::ticks`, `kf_disp::{tick,lockstep,pace}`): `Requests` (R1–R4, R8), `frame_gate`/`tick_live` (every input combination), `TickShare` (latest tick, newest request, wake), `CreditGate`
+(G1–G3 rows with exact counters), `Mailbox::grant`, `TickSource` flap damping (`probation_gaps` 1, 2, 4, 8; 55 ms gaps → one fallback in all; 40/60 → at most 6 changes in 400 events), the wire (`Pkt::tick`, `Cmd::*`, offsets from the compiled
+header, `seq_newer` around the wrap), the relay against a scripted link (`relay_machine`: opt-in only when both sides can, one frame per request with `COMMIT.seq`, `NO_CHANGE` at a later tick and paced, stale/violation rows,
+50 ms live / 51 ms silent, read deadline 499/500 ms, a 1000-tick flood read 64 per turn with exact conservation, an old broker gives bit-identical wire records and counters).
+**The relay against the REAL broker** (`broker_ticks_e2e`, `--backend test`, real unix socket): 63 ticks, 33 requests, 2 frames on credit, 30 `NO_CHANGE`, 0 stale/late/unsolicited, 0 violations, silence → fallback → resume with no flap.
+
+**Harness (A): the exhaustive bounded model** (`kf_disp::engine::lockstep_exhaustive`, 18 tests + 2 ignored deeper runs; 3 s for the module). Depth-first over every ordering of an alphabet of (time advance to a boundary, action, worker pass),
+visited set over time-normalised state. Real components: `Pacer`/`TickSource`, `CreditGate`, `Mailbox`, `flip_completion_need`, `Requests`, `frame_gate`, `tick_live`; modelled around them: the relay's glue, the share, the worker pass, the ring.
+
+| exploration | depth | letters | states | transitions |
+|---|---|---|---|---|
+| frames (flip imm/vsync, tick W/N, release, EV_FRAME, copy end exactly / -1 ns, guard edge, P) | 8 | 11 | 806 057 | 2 211 902 |
+| time_and_silence (silence edge -1 ns/0/+1 ns, 10/200 ms, flap 55 and 40/60) | 6 | 14 | 516 297 | 1 017 114 |
+| hostile_and_floods (skip/dup/stale seq, bursts of 10/100/1000 in ONE instant, sustained 10x/100x/1000x, reconnect) | 5 | 17 | 34 630 | 82 620 |
+| long_stalls (2 s, 10 s then stale/dup/fresh) | 5 | 10 | 1 520 | 5 250 |
+| sequence_wrap | 6 | 10 | 9 514 | 27 920 |
+| three_frames (in-flight pipeline) | 10 | 5 | 26 943 | 70 950 |
+| oracles: `CreditGate` 1 727 604 operations (36 letters, depth 4); `Requests` 402 233 (13 letters, depth 5) | | | | |
+
+Invariants after every step: no immediate flip parked and none waits for a credit; no frame without a credit and exactly one per request (checked independently of `frame_gate`); one copy at a time and only on an unspent
+credit; ≤ 2 frames in flight (literal 2) and a free slot always; no double tick inside the guard, the vblank +1 and never stalled more than 50 ms + P + guard; the buffer-reuse rule; request numbers strictly increasing across the wrap;
+a hand-back after a fallback needs ≥ 2 events; counter conservation; `NO_CHANGE` only at a later tick, never with a frame ready, never sooner than the answer gap; a ready frame is never stuck behind a silent broker.
+
+**Harness (B): the seeded soak** (`lockstep_soak`, 22 tests + one `#[ignore]` long soak; real `Engine` for every flip and vblank, real `Pacer`/`CreditGate`/`Mailbox`, the real `Relay` over a real `FrameRing` and `TickShare`, a scripted adversarial fake
+broker that validates every command; injected clock, replayable: `KF_SOAK_SEED=<n>`; a failure prints scenario, seed, time, the invariant and the last 192 events). 50 seeds (0..49) per scenario, **≥ 100 000 flips per scenario**, about 10 s wall for the file:
+
+| scenario | flips | note |
+|---|---|---|
+| 1 guest faster than refresh, immediate | 100 000 | 362–856 flips/s per seed while the display ticks at 60 |
+| 2 two flips per frame (imm + vsync) | 100 000 | ≈ 120 flips/s, vsync-bound |
+| 3 broker steady at refresh | 100 000 | jittered, exact counters |
+| 4 floods 10x/100x/1000x, with/without WANT, steady and burst-32, other kinds interleaved | 100 000 + 6 constant combinations | see flood table |
+| 5 early / duplicate / stale / reordered / dropped / backwards | 100 000 | stale counted exactly |
+| 6 silence 49–1000 ms and return, copies 6–20 ms in flight | 189 777 | stale burst after |
+| 7 headless / broker never connects | bit-identical to phase 1's `pacing_model::run` over 18 configurations | flips, presents, tearing, copies, ticks, skipped/s, worst flip, handoffs all `==` (f64) |
+| 8 crash / socket full / SIGSTOP + down | 255 463 | ≥ 5 connections per seed |
+| 9 hostile framing (reserved bits, seq 0, refresh < 1 ms, EV_TICK without opt-in, fd on the stream) | 194 664 | 600 violations sent, 600 connections dropped, the guest never stopped |
+| adversarial scheduler (everything at once) | 100 000 | 354 connections, 528 fallbacks, 65 285 stale ticks, 111 359 coalesced credits |
+| stalls 1–8 (below) | 100 000–333 893 each | |
+| **long soak** (`#[ignore]`) | **10 000 000** over 50 seeds (200 000 each), 109 938 simulated s, 139 316 863 steps | **PASSED** on the final code: 32 827 connections, 54 836 fallbacks, 7.0 M stale ticks, 11.6 M coalesced credits, 28.8 M budget hits, 197 175 `NO_CHANGE`, 332 s wall |
+
+**Floods (explicit).** Model/soak, 50 seeds × 12 s of simulated time per combination, the relay loop modelled busy (one turn per 5 ms): TICK at **10x** (600/s offered): 603 accepted/s, vblank 79.4–79.7/s;
+**100x** (6000/s): 6003 accepted, vblank 80.8–81.1/s, 949 076 credits coalesced; **1000x** (60 000/s): 17.6 k accepted/s, 1.67–1.70 M socket-full drops at the broker side, vblank 99.4/s, 700 209 credits coalesced; bursts of 32 and 200
+in the same runs; per-turn packets never above 64; at most one open request; counters exact (relay `ticks + stale` == pushed). Exhaustive model: a burst of 1000 ticks in ONE instant → 1 vblank, 1000 wants, 999 replaced, the worker took the latest
+of 1000, 1 grant, 1 copy. Broker C side (virtual clock, 60 Hz): 600/6000/60 000 feedbacks → 100/118/120 ticks emitted, 500/5882/59 880 dropped as too fast, 98/116/118 coalesced in the TX queue; 20 bursts × 1000 at one instant → 20 ticks;
+a peer that NEVER reads, 6 000 000 feedbacks → queue 3 packets, broker still answering; RELEASE/FOCUS/DEVICE/FRAME interleaved with ticks: all arrive, in order. Real threads over a real socket (7 tests, 1000 flips each, 6.1 s): flood bursts of
+100/300/1000 per refresh, 54 876 ticks, max relay turn 64 packets; the socket buffer really fills when the broker never reads and no thread blocks. **The vblank under a flood is 79–99/s against a 60 Hz mode: the phase-1 guard (P/2) caps it at 2x;
+"never faster" holds up to that cap, not beyond (limitation L2 below).** After the fix of finding F3 below the COPY rate never exceeds the vblank rate at any flood rate (tested).
+
+**Stalls (explicit).** Durations 10, 49, 50, 51, 200 ms, 2 s, 10 s, in the exhaustive model and soak: (1) broker stops READING but still ticks: 770 frames dropped and counted, 2226 full sends, source stays the broker, vblank unaffected; a broker that
+never reads from t = 0 or from 1 s: replay fails the attempt / frames owed, no thread blocks; (2) broker stops ticking but reads: fallback at exactly 50 ms (49 ms none), 835 unsolicited frames on the legacy credit, no frame without a credit while live;
+(3) broker never RELEASEs a slot (300 ms–6 s): held ≤ 2, 15 219 `blocked`, 234 reclaimed after 1 s, the held slot never overwritten, no deadlock; (4) partial packet then nothing: dropped at 500–505 ms, loudly; one that completes in time is fine;
+(5) resume with a burst of 24 stale ticks (WANT set) and stale releases: stale counted exactly, no backlog replay, handoff back once (handoffs exactly (1 + f, f)); (6) flapping 49/51, 55, 40/60, 48–52 ms: ≤ 6 source changes per 10 s run
+(limit 14); the relay logs a flap four times and then every 256th; (7) SIGSTOP 10 s and a hung broker for 30 s: `silence_fallbacks == 1`, handoffs (1,1) or (2,1), log line `SILENT for 50 ms`, the guest runs on the clock indefinitely;
+(8) stall during a credit wait with a copy 10–25 ms in flight and an immediate flip: it never waits longer than copy + wake + 2 ms. (A real SIGSTOP of a real broker was driven only against mutter: ticks stop, resume at once, §11.8.)
+
+**Mutants** (each = one textual replacement, the named suites run, the file restored; `scripts/mutate/lockstep_mutants.py --suite must`, extras in `lockstep_extra_{a,b}.py`):
+MUTTABLE
+
+**Findings the harness made, and what was done** (each is a test that stays):
+- **F1 (defect, FIXED).** A new broker connection restarts the tick numbers at 1; the worker's `CreditGate` kept the old last number and called every new tick stale (the lock step silently off for as long as the old connection had been up). Fix: `TickShare`
+  epoch bumped at each tick-negotiated connection (`new_connection`), the worker resets the gate when it changes. Found independently by the exhaustive model (depth 3) and the soak (scenario 8); the test that pins the unfixed behaviour is kept as a proof the harness sees it.
+- **F2 (FIXED).** An owed frame (ATTACH met a full socket) could be completed later with `COMMIT.seq 0` while ticks were live. Now `flush_owed` waits for an open request while live and the next request flushes it; asserted `owed_unsolicited == 0` in 50 seeds and in the 10 M run.
+- **F3 (FIXED).** A tick flood made the COPY rate exceed the vblank rate (66–79 copies against 40 vblanks in 320 ms): a swallowed tick's credit was deferred to the guard edge and the next accepted tick brought its own. Now the swallowed tick's credit is carried to the NEXT ACCEPTED tick and coalesces into its credit
+  (§11.4 G2 corrected above): copies ≤ vblanks at every flood rate.
+- **F4 (PARTLY).** The relay's live/silent had no damping: 11 726 log lines in 50 runs with 51 ms gaps. The log is now rate-limited (4, then every 256th); the counters count every change; the relay's frame gate itself still toggles request/legacy per
+  tick for such a broker (benign: each ready frame goes under exactly one of two bounded rules). The tick SOURCE is damped (flap damping above).
+- **F5 (limits, not defects).** The strict "vblank never stalls more than 50 ms + P" has a counterexample: an event swallowed by the guard still proves the broker alive, so the next vblank came 71 ms after the last tick (bound held: 50 ms + P + guard = 74.7 ms).
+  A strict bound would measure the silence from the last EMITTED tick (a behaviour change, not made; owner's call).
+
+**Limitations, stated plainly (L1–L4).** L1 *What these harnesses cannot show:* real compositor timing (the fake broker's presentation delays are random numbers; occlusion, monitor change, fullscreen and direct scanout are not modelled in A/B; §11.8 has the headless-mutter
+measurements), GPU copy cost and contention (the copy is a duration), what Windows really sends (the guest is a model: one flip outstanding, immediate or alternating), `display.rs` itself (the worker pass in A/B is a copy of its logic, guarded by a source scan;
+the thread run has no `Engine`), the lock-free `TickShare` memory ordering under a real model checker, and depth beyond the stated bounds (the exploration is exhaustive over each alphabet to its depth, not a proof). L2 *Known cap:* the vblank under a flood is at most 2x the mode (the P/2 guard);
+tightening it toward 1x would swallow legitimately early ticks of a jittery compositor. L3 *The 30 fps question* is untouched by this phase's evidence (see the top of §11). L4 The relay's silence rule is whole milliseconds.
+
+### 11.8 What was MEASURED on a real compositor (headless; the C side)
+
+`mutter 50.1 --headless`, virtual 1024x768 monitor, software renderer (`broker/test/wl_tick_probe.c`, not shipped; 4 s per row): the protocol text does NOT promise a frame callback for a commit without damage, so the claim "an empty commit still gets a callback" was tested.
+Variant 0 = no attach, no damage; 1 = `damage_buffer(0,0,1,1)` on the buffer already attached; 2 = re-attach the same buffer with full damage. Driven by `presented`:
+
+| variant | commits | frame_cb | presented | discarded | result |
+|---|---|---|---|---|---|
+| 0 empty commit | 32 | 32 | 17 | 14 | a callback **at once** (7 000+/s when each callback commits again) and `discarded` **at once**: no timestamp, not paced to the refresh. **Cannot be the pump** |
+| 1 **1x1 damage** | 241 | 240 | 240 | 0 | exactly 60.00/s, mean 16.666 ms, max 17.3 ms, 0 discards. **This is what the broker commits** (least intrusive that works) |
+| 2 re-attach + damage | 242 | 241 | 241 | 0 | 60.25/s |
+
+Through the real broker over a real socket on mutter: 181 ticks in 3 s (60.3 Hz), spacing 16.67 ms, compositor stamps 16.666 ms apart, not `CLOCK_ONLY` (`clock_id` 1), no `tick_seq` gaps, ≤ 1 request per 100 ms with nobody answering, ticks wanting 100 % when
+answered at once, `NO_CHANGE` → a request on nearly every tick. Minimising the window: `presented` stops after the window animation, later feedbacks are `discarded` at once → ticks stop → the VMM's 50 ms fallback; a 250 ms watchdog commit restarts the pump (4 commits/s while hidden);
+SIGSTOP/SIGCONT of the compositor: ticks stop, resume at once. `weston --backend=headless`: clock `CLOCK_MONOTONIC_RAW` (stamped `CLOCK_ONLY` on receipt), a real presented interval of 25 ms (40 Hz) against a nominal 16.67 ms: the tick rate follows what the compositor really does. `sway`/wlroots headless:
+like mutter, `refresh` 0 (unknown) handled (period word 0, divisor 1). **NOT verified:** a real GNOME session on a real GPU (direct scanout of a re-committed scanned-out buffer is UNMEASURED: `zero_copy` stayed 0 in every software run), occlusion by another window, a monitor move or refresh change
+(the re-divide and re-advertise code is exercised with a 144 → 60 Hz switch on the test backend only), fullscreen, fractional scale, `wp_presentation` absent (the frame-callback fallback is compiled and CODE READ only), X11 (does not advertise the bit).
+
+### 11.9 The owner's hardware checklist (nothing here has been run on a box)
+
+Run: fullscreen Unigine Heaven D3D11 on the Windows guest, the prod-candidate flags, the broker built from this branch (`/data/claude-cursor5/`) on the owner's GNOME session.
+
+1. **Handshake.** Broker log: `capabilities 0x...` with bit 13 (0x2000) set; relay log (qemu.log): `broker ticks: ON (...)`. Kayfabe status `broker[... ]` followed by `tick[on=1 live=1 ...]`. If `on=0`: the broker is old, X11, or has no presentation support: the clock alone, i.e. phase-1 behaviour.
+2. **Who ticks.** The kf3 per-second line `h0[... src=broker ho=1/0]` while the Heaven window is visible and not occluded; the display line `tick source -> BROKER` once. `ho` second number and `tick[silence_fallbacks=N]` must stay 0 on a steady run; `tick[ticks_stale]`, `ts_backwards` 0.
+3. **Counters expected in fullscreen** (to be compared with phase 1, `tick`/`copies` are the host-refresh-bound numbers): `tick` = the host refresh divided by `div` (60 on a 60 Hz output, 72 on a 144 Hz one), `copies` <= `tick`, `over=0`, `lock[... granted ~ copies, credits_coalesced small, mailbox_coalesced small, ticks_coalesced 0 or small]`, `tick[frames_on_credit ~ copies, no_change ...]`, `tick[req_blocked]` small. `tear`/`kms` = the guest's flip rate (the number this phase does NOT promise to change).
+4. **The 30 fps question.** If fullscreen still reads ~30: collect `KF3_DISPLAY_TRACE=1` (bounded) as in section 9; this phase is not evidence either way.
+5. **Occlude / minimise the broker window for 2 s, then restore:** the guest keeps running (Windows: no display-driver reset); display line `tick source -> FREE-RUNNING clock` then `-> BROKER`; relay lines `broker ticks: SILENT ...` then `LIVE`. Frames continue at the legacy 100 ms backstop while hidden.
+6. **SIGSTOP the broker for 5 s and SIGCONT:** same, no guest reset; after SIGCONT the stale burst is dropped (`tick[ticks_stale]` may rise by the burst, never a backlog replay).
+7. **Monitor move / refresh change** (60 <-> 144/165 Hz): broker log `host output refresh ...`, new `EV_SURFACE` mode rate = host/div; the guest re-modes once; `ho` may step once (the retime), not per tick.
+8. **If the picture stalls:** look at (a) `tick[live=0]` with `src=free`: the broker's ticks stopped (its window hidden/occluded, compositor not committing): frames then go every 100 ms; (b) `tick[req_blocked]` rising with `live=1` and `frames_on_credit` flat: requests are not opening (the broker is not receiving or not presenting: its log line `present_timeouts`); (c) `tick[partial_timeouts]`; (d) `kf3: broker:` lines `PROTOCOL VIOLATION`. Restart only the broker (`/data/claude-cursor5/` binary), never the VM; the relay reconnects by itself.
+9. **Regression** (CLAUDE.md): Linux guest with the broker (`broker_lane.sh`, `interactive.sh`): cursor and typing responsive, no `Flip event timeout`; headless (no broker): `src=free ho=0/0`, counters as phase 1.
