@@ -148,13 +148,13 @@ pub(super) struct Report {
 }
 
 /// A ring buffer the model appends methods to (NVKMS's JUMP-to-0 wrap at the end).
-struct Writer {
-    ring: Vec<u32>,
-    off: usize,
+pub(super) struct Writer {
+    pub(super) ring: Vec<u32>,
+    pub(super) off: usize,
 }
 
 impl Writer {
-    fn new() -> Writer {
+    pub(super) fn new() -> Writer {
         Writer {
             ring: vec![0; 1024],
             off: 0,
@@ -162,7 +162,7 @@ impl Writer {
     }
 
     /// Continue after the methods already in `r`.
-    fn after(r: &Ring) -> Writer {
+    pub(super) fn after(r: &Ring) -> Writer {
         let mut w = Writer::new();
         w.ring[..r.words.len()].copy_from_slice(&r.words);
         w.off = r.words.len() * 4;
@@ -170,7 +170,7 @@ impl Writer {
     }
 
     /// Append `methods`; returns the ring's bytes and the new PUT.
-    fn push(&mut self, methods: &[(u32, u32)]) -> (Vec<u8>, u32) {
+    pub(super) fn push(&mut self, methods: &[(u32, u32)]) -> (Vec<u8>, u32) {
         if self.off + methods.len() * 8 > 4040 {
             self.ring[self.off / 4] = 1 << 29; // JUMP 0
             self.off = 0;
@@ -188,24 +188,24 @@ impl Writer {
 }
 
 /// The worker's copy and completion bookkeeping (`kf-qemu` `ScanState`), per [`Worker`] rule.
-struct Model {
-    rule: Worker,
-    mailbox: Mailbox,
-    started: u64,
-    done: u64,
-    barrier: u64,
-    want: bool,
+pub(super) struct Model {
+    pub(super) rule: Worker,
+    pub(super) mailbox: Mailbox,
+    pub(super) started: u64,
+    pub(super) done: u64,
+    pub(super) barrier: u64,
+    pub(super) want: bool,
     /// `(copy number, completes at, the flip index it reads)`.
-    inflight: Option<(u64, u64, Option<u64>)>,
+    pub(super) inflight: Option<(u64, u64, Option<u64>)>,
     /// `(needs copy, the latch index if it is a window latch)`.
-    queue: VecDeque<(u64, Option<u64>)>,
-    copies: u64,
-    latches: u64,
-    violations: u64,
+    pub(super) queue: VecDeque<(u64, Option<u64>)>,
+    pub(super) copies: u64,
+    pub(super) latches: u64,
+    pub(super) violations: u64,
 }
 
 impl Model {
-    fn new(rule: Worker) -> Model {
+    pub(super) fn new(rule: Worker) -> Model {
         Model {
             rule,
             mailbox: Mailbox::default(),
@@ -222,7 +222,7 @@ impl Model {
     }
 
     /// The step's effects, queued in order with the barrier the rule gives them.
-    fn effects(&mut self, step: &Step) {
+    pub(super) fn effects(&mut self, step: &Step) {
         for e in &step.effects {
             let idx = matches!(e, Effect::Latched { .. }).then(|| {
                 self.latches += 1;
@@ -246,12 +246,12 @@ impl Model {
         }
     }
 
-    fn tick(&mut self) {
+    pub(super) fn tick(&mut self) {
         self.mailbox.tick();
     }
 
     /// Start a copy if one is due.
-    fn pass(&mut self, now: u64, copy_ns: u64) {
+    pub(super) fn pass(&mut self, now: u64, copy_ns: u64) {
         let start = match self.rule {
             Worker::Legacy => self.want && self.inflight.is_none(),
             _ => self.mailbox.due(self.inflight.is_some()),
@@ -271,7 +271,7 @@ impl Model {
     }
 
     /// The copy completes at `now`.
-    fn complete(&mut self, now: u64, copy_ns: u64) -> u32 {
+    pub(super) fn complete(&mut self, now: u64, copy_ns: u64) -> u32 {
         if let Some((n, at, _)) = self.inflight
             && now >= at
         {
@@ -285,7 +285,7 @@ impl Model {
 
     /// Publish what is no longer waiting: how many LATCHES went out. A latch releases the buffer of
     /// the flip before it: a copy still reading that buffer is a violation.
-    fn publish(&mut self) -> u32 {
+    pub(super) fn publish(&mut self) -> u32 {
         let mut published = 0;
         while self
             .queue
