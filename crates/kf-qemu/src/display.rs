@@ -2053,7 +2053,7 @@ impl DisplayPlane {
             .map_err(|e| format!("display=on: the display plane's GPU context on {bdf}: {e}"))?;
         gpu.import_store(store_fd, store_bytes)
             .map_err(|e| format!("display=on: store import into the display context: {e}"))?;
-        let engine = if constructor_probe {
+        let mut engine = if constructor_probe {
             eprintln!(
                 "kf3: EXPERIMENT display constructor probe: TMO advertised, ILUT surface loading={ilut_constructor_probe}, TMO surface loading={tmo_surface_constructor_probe}, OLUT surface loading={olut_constructor_probe}; ALL display methods refused before execution"
             );
@@ -2061,6 +2061,13 @@ impl DisplayPlane {
         } else {
             Engine::new(vocab, row.heads, row.windows)
         };
+        // MEASUREMENT (2026-10-17, never required to boot, default unchanged): `KF3_TEAR_GATE=0` turns the
+        // D1 tearing-flip gate off (OWNER_RULINGS section M D1), to test whether it is what holds exclusive-
+        // fullscreen D3D11 at 30 fps. Read once here.
+        if std::env::var("KF3_TEAR_GATE").is_ok_and(|v| v == "0") {
+            engine.tear_gate = false;
+            eprintln!("kf3: MEASUREMENT KF3_TEAR_GATE=0: the D1 tearing-flip gate is OFF");
+        }
         let scan = ScanVocab::resolve(t, classes.window, classes.window_imm, classes.core);
         let formats = ScanFormats::resolve(t, classes.window);
         let cursor_vocab = kf_disp::engine::CursorVocab::resolve(t, classes.core, classes.cursor);
