@@ -1,5 +1,21 @@
 # Status and handoff — where kayfabe v3 stands, and how to resume
 
+## Update 2026-10-17 02:44 UTC — GA104 Linux595 raw and applications PASS
+
+Only own56326220 ACTIVE; unchanged timer2714225 at04:25:28UTC/06:25:28CEST,
+manual retirement target03:55UTC; all rentals APIabsent before05:00UTC/07:00CEST.
+Exact9d6f210ba/privatecc2a: native gates9/9+10/CUDA4/raw30; guest raw30/30
+normalconsole6/frozen180/actualKF3{},161USER/90CUDApostures/30receipts PASS.
+246raw heartbeat warnings allzero/zerooffset remain. Ten deliberate fault Xids
+are attributed with direct guest PID receipts and native time+fault-kind correlation.
+Guest595 CUDA4/gfx5+10nativehashes/broker PASS02:27:12; Cinnamon1Xorg1/NVIDIA,
+1920x1080/9855colors, guestXid0/flip0/host10→10,162USER/0HBwarnings. Retain
+27displaySTALL and9nvAssert. No warningfree/familycompletion claim.
+M1native595caps95NZ/0xc100/97worddiff; no captured page/new measured row shipped.
+Fresh stock-VGA LTSC baseline supervisor95215 waits for this evidence PUSH+remoteverify;
+Linux apps95214 finishedrc0. Windows580 actualbinding still UNVERIFIED/UNRUN.
+No shared-host use. D1-D6open/no mastermerge. Evidence ga104_595_completion_20261017/.
+
 ## Active wave 2026-10-17 — owned GA104 Linux595 completion
 
 Only own rental **56326220** is active (machine56506), created01:30:28UTC.

@@ -1,0 +1,26 @@
+[
+  {
+    "file": "cup2.exe",
+    "sha256": "eba68ac8f92cf1d65793a6df70d62624d33a8479b3137a45d07d7fd093d79798",
+    "bytes": 271546,
+    "source": "existing locally built public CUDA/DirectX validation probes; same pins as AD102580 acceptance"
+  },
+  {
+    "file": "cup3.exe",
+    "sha256": "5df837a1914b0fef34e724605b0494c95788a5676f1420863a441a923d0f3f87",
+    "bytes": 273538,
+    "source": "existing locally built public CUDA/DirectX validation probes; same pins as AD102580 acceptance"
+  },
+  {
+    "file": "cup8.exe",
+    "sha256": "00e69ceb25d4d3af697a79a1bf133fc5f02f5e9125eefde288fa371d856cdef8",
+    "bytes": 276446,
+    "source": "existing locally built public CUDA/DirectX validation probes; same pins as AD102580 acceptance"
+  },
+  {
+    "file": "kf_dxprobe.exe",
+    "sha256": "2e672bc737a1c6c2332c8b7499cd5459a629d191b27ac4dd9a04a3254c821835",
+    "bytes": 592402,
+    "source": "existing locally built public CUDA/DirectX validation probes; same pins as AD102580 acceptance"
+  }
+]

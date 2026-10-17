@@ -1,0 +1,2990 @@
+[
+  {
+    "name": "prov__ampere595_native_raw.log",
+    "raw_bytes": 5843,
+    "raw_sha256": "f006d3d89a125541feab9faa428e9baca302febbbeafa62f27e34a7b89a21d21",
+    "excerpt_only": false,
+    "counts": {
+      "PRIVILEGED_CHANNEL=0 privilege=USER": 0,
+      "heartbeat": 0,
+      "heartbeat=0": 0,
+      "Xid": 0,
+      "nvAssert": 0,
+      "CUDA": 0,
+      "FAST_VERDICT": 0,
+      "FASTGUEST: client": 0,
+      "guest refused": 0
+    },
+    "exported_sha256": "08959721cdc8209acfa8a14d3e23e6b964a3eb9dd109662a2cdb62ec3d61e5b1"
+  },
+  {
+    "name": "prov__ampere595_native_cuda.log",
+    "raw_bytes": 2379,
+    "raw_sha256": "4c9261a1257e5efd799106730ff3c24f5f3b83c4b80f875266b5a16055be96fb",
+    "excerpt_only": false,
+    "counts": {
+      "PRIVILEGED_CHANNEL=0 privilege=USER": 0,
+      "heartbeat": 0,
+      "heartbeat=0": 0,
+      "Xid": 0,
+      "nvAssert": 0,
+      "CUDA": 2,
+      "FAST_VERDICT": 0,
+      "FASTGUEST: client": 0,
+      "guest refused": 0
+    },
+    "exported_sha256": "4c9261a1257e5efd799106730ff3c24f5f3b83c4b80f875266b5a16055be96fb"
+  },
+  {
+    "name": "prov__ampere595_full_suite.log",
+    "raw_bytes": 3764,
+    "raw_sha256": "7e21fe26bd7ee1b066f88fe7c71beecc2ba414d00ff5459c7b5efc10497df5ce",
+    "excerpt_only": false,
+    "counts": {
+      "PRIVILEGED_CHANNEL=0 privilege=USER": 0,
+      "heartbeat": 0,
+      "heartbeat=0": 0,
+      "Xid": 0,
+      "nvAssert": 0,
+      "CUDA": 0,
+      "FAST_VERDICT": 0,
+      "FASTGUEST: client": 0,
+      "guest refused": 0
+    },
+    "exported_sha256": "7e21fe26bd7ee1b066f88fe7c71beecc2ba414d00ff5459c7b5efc10497df5ce"
+  },
+  {
+    "name": "prov__ampere595_births.log",
+    "raw_bytes": 21032,
+    "raw_sha256": "5863919a74cab4170928a9ca90ca233228c8e3843f841700b829c64c3084b6db",
+    "excerpt_only": false,
+    "counts": {
+      "PRIVILEGED_CHANNEL=0 privilege=USER": 1,
+      "heartbeat": 0,
+      "heartbeat=0": 0,
+      "Xid": 0,
+      "nvAssert": 0,
+      "CUDA": 0,
+      "FAST_VERDICT": 0,
+      "FASTGUEST: client": 0,
+      "guest refused": 0
+    },
+    "exported_sha256": "5863919a74cab4170928a9ca90ca233228c8e3843f841700b829c64c3084b6db"
+  },
+  {
+    "name": "prov__ampere595_queue.log",
+    "raw_bytes": 655,
+    "raw_sha256": "c86400385633c0b04b9091eb7379734cae8c8942d1aed5b37bb6325f5c7a0171",
+    "excerpt_only": false,
+    "counts": {
+      "PRIVILEGED_CHANNEL=0 privilege=USER": 0,
+      "heartbeat": 0,
+      "heartbeat=0": 0,
+      "Xid": 0,
+      "nvAssert": 0,
+      "CUDA": 0,
+      "FAST_VERDICT": 0,
+      "FASTGUEST: client": 0,
+      "guest refused": 0
+    },
+    "exported_sha256": "c86400385633c0b04b9091eb7379734cae8c8942d1aed5b37bb6325f5c7a0171"
+  },
+  {
+    "name": "prov__ampere595_fast_build.log",
+    "raw_bytes": 526,
+    "raw_sha256": "4ae656eafc1c24c37d7cfcf6a8f1dbc7a36555e7a15306111005506245215b7b",
+    "excerpt_only": false,
+    "counts": {
+      "PRIVILEGED_CHANNEL=0 privilege=USER": 0,
+      "heartbeat": 0,
+      "heartbeat=0": 0,
+      "Xid": 0,
+      "nvAssert": 0,
+      "CUDA": 0,
+      "FAST_VERDICT": 0,
+      "FASTGUEST: client": 0,
+      "guest refused": 0
+    },
+    "exported_sha256": "4ae656eafc1c24c37d7cfcf6a8f1dbc7a36555e7a15306111005506245215b7b"
+  },
+  {
+    "name": "prov__ampere595_windows_fetch.log",
+    "raw_bytes": 22135,
+    "raw_sha256": "265f3993721e025067e7fce452d2a828c0b33523321f4a5e676725a65f17c245",
+    "excerpt_only": false,
+    "counts": {
+      "PRIVILEGED_CHANNEL=0 privilege=USER": 0,
+      "heartbeat": 0,
+      "heartbeat=0": 0,
+      "Xid": 0,
+      "nvAssert": 0,
+      "CUDA": 0,
+      "FAST_VERDICT": 0,
+      "FASTGUEST: client": 0,
+      "guest refused": 0
+    },
+    "exported_sha256": "c9ce698629f69d086b858429842969dea418240d2b28859e5c04f10626cb87dd"
+  },
+  {
+    "name": "prov__ampere595_fat_prepare_v1_prework.log",
+    "raw_bytes": 892,
+    "raw_sha256": "732bda5a35210fd2f60fcf871a7e266e33b7578ea0bbbb41a4d28ebfefb2e58b",
+    "excerpt_only": false,
+    "counts": {
+      "PRIVILEGED_CHANNEL=0 privilege=USER": 0,
+      "heartbeat": 0,
+      "heartbeat=0": 0,
+      "Xid": 0,
+      "nvAssert": 0,
+      "CUDA": 0,
+      "FAST_VERDICT": 0,
+      "FASTGUEST: client": 0,
+      "guest refused": 0
+    },
+    "exported_sha256": "f1957dc9986eecb8462904627c7012133691da6afbac64cd6573dc695ca4a026"
+  },
+  {
+    "name": "prov__ampere595_windows_fetch_v1_prestart.log",
+    "raw_bytes": 48,
+    "raw_sha256": "fe30000f0707a546ca35dcd55ba73cebbe00cf3f31e3470a9a2fb7cc4014453f",
+    "excerpt_only": false,
+    "counts": {
+      "PRIVILEGED_CHANNEL=0 privilege=USER": 0,
+      "heartbeat": 0,
+      "heartbeat=0": 0,
+      "Xid": 0,
+      "nvAssert": 0,
+      "CUDA": 0,
+      "FAST_VERDICT": 0,
+      "FASTGUEST: client": 0,
+      "guest refused": 0
+    },
+    "exported_sha256": "fe30000f0707a546ca35dcd55ba73cebbe00cf3f31e3470a9a2fb7cc4014453f"
+  },
+  {
+    "name": "prov__ampere595_host_xids_afterraw.log",
+    "raw_bytes": 2257,
+    "raw_sha256": "812666d0cce9808266ca9f80887725924415b73c97d366e40d7720480392e3b4",
+    "excerpt_only": false,
+    "counts": {
+      "PRIVILEGED_CHANNEL=0 privilege=USER": 0,
+      "heartbeat": 0,
+      "heartbeat=0": 0,
+      "Xid": 10,
+      "nvAssert": 0,
+      "CUDA": 0,
+      "FAST_VERDICT": 0,
+      "FASTGUEST: client": 0,
+      "guest refused": 0
+    },
+    "exported_sha256": "812666d0cce9808266ca9f80887725924415b73c97d366e40d7720480392e3b4"
+  },
+  {
+    "name": "bench__codex_ampere595_full_suite.out",
+    "raw_bytes": 3764,
+    "raw_sha256": "7e21fe26bd7ee1b066f88fe7c71beecc2ba414d00ff5459c7b5efc10497df5ce",
+    "excerpt_only": false,
+    "counts": {
+      "PRIVILEGED_CHANNEL=0 privilege=USER": 0,
+      "heartbeat": 0,
+      "heartbeat=0": 0,
+      "Xid": 0,
+      "nvAssert": 0,
+      "CUDA": 0,
+      "FAST_VERDICT": 0,
+      "FASTGUEST: client": 0,
+      "guest refused": 0
+    },
+    "exported_sha256": "7e21fe26bd7ee1b066f88fe7c71beecc2ba414d00ff5459c7b5efc10497df5ce"
+  },
+  {
+    "name": "bench__cl_codex_ampere595_native_host.out",
+    "raw_bytes": 1726,
+    "raw_sha256": "fb1fac0deae5a16399d074687d3248d114503548b29de496c05986d246062fe4",
+    "excerpt_only": false,
+    "counts": {
+      "PRIVILEGED_CHANNEL=0 privilege=USER": 0,
+      "heartbeat": 0,
+      "heartbeat=0": 0,
+      "Xid": 0,
+      "nvAssert": 0,
+      "CUDA": 2,
+      "FAST_VERDICT": 0,
+      "FASTGUEST: client": 0,
+      "guest refused": 0
+    },
+    "exported_sha256": "fb1fac0deae5a16399d074687d3248d114503548b29de496c05986d246062fe4"
+  },
+  {
+    "name": "bench__cl_codex_ampere595_native_host_cup2_1.log",
+    "raw_bytes": 541,
+    "raw_sha256": "a4dc52c1283f422861e45f8fe8ce96003757ea8f355c92dd9fd01d0e9540228b",
+    "excerpt_only": false,
+    "counts": {
+      "PRIVILEGED_CHANNEL=0 privilege=USER": 0,
+      "heartbeat": 0,
+      "heartbeat=0": 0,
+      "Xid": 0,
+      "nvAssert": 0,
+      "CUDA": 0,
+      "FAST_VERDICT": 0,
+      "FASTGUEST: client": 0,
+      "guest refused": 0
+    },
+    "exported_sha256": "a4dc52c1283f422861e45f8fe8ce96003757ea8f355c92dd9fd01d0e9540228b"
+  },
+  {
+    "name": "bench__cl_codex_ampere595_native_host_cup3_1.log",
+    "raw_bytes": 546,
+    "raw_sha256": "6d4ec46f7db85896c84bdb67383c871a26429ccabae874d2e5a5e6fd0a9d1673",
+    "excerpt_only": false,
+    "counts": {
+      "PRIVILEGED_CHANNEL=0 privilege=USER": 0,
+      "heartbeat": 0,
+      "heartbeat=0": 0,
+      "Xid": 0,
+      "nvAssert": 0,
+      "CUDA": 0,
+      "FAST_VERDICT": 0,
+      "FASTGUEST: client": 0,
+      "guest refused": 0
+    },
+    "exported_sha256": "6d4ec46f7db85896c84bdb67383c871a26429ccabae874d2e5a5e6fd0a9d1673"
+  },
+  {
+    "name": "bench__cl_codex_ampere595_native_host_cup8_1.log",
+    "raw_bytes": 804,
+    "raw_sha256": "a7cd2e4f292baa293c4b7b96dba412175f3be159e482b67b22620b964ece68c9",
+    "excerpt_only": false,
+    "counts": {
+      "PRIVILEGED_CHANNEL=0 privilege=USER": 0,
+      "heartbeat": 0,
+      "heartbeat=0": 0,
+      "Xid": 0,
+      "nvAssert": 0,
+      "CUDA": 0,
+      "FAST_VERDICT": 0,
+      "FASTGUEST: client": 0,
+      "guest refused": 0
+    },
+    "exported_sha256": "a7cd2e4f292baa293c4b7b96dba412175f3be159e482b67b22620b964ece68c9"
+  },
+  {
+    "name": "bench__cl_codex_ampere595_native_host_cup8bench_1.log",
+    "raw_bytes": 12030,
+    "raw_sha256": "1d964e0a5e2a6deaa3b4ab1d04b2807109ea69198b90f8dbbf72dddbfe6cf465",
+    "excerpt_only": false,
+    "counts": {
+      "PRIVILEGED_CHANNEL=0 privilege=USER": 0,
+      "heartbeat": 0,
+      "heartbeat=0": 0,
+      "Xid": 0,
+      "nvAssert": 0,
+      "CUDA": 0,
+      "FAST_VERDICT": 0,
+      "FASTGUEST: client": 0,
+      "guest refused": 0
+    },
+    "exported_sha256": "1d964e0a5e2a6deaa3b4ab1d04b2807109ea69198b90f8dbbf72dddbfe6cf465"
+  },
+  {
+    "name": "bench__codex_ampere595_native_alias-two-vas.log",
+    "raw_bytes": 2711,
+    "raw_sha256": "d98afbf40f1c2d6bbe6845125b63a087ece8fc5ea481757750a1f34c5571e4a9",
+    "excerpt_only": false,
+    "counts": {
+      "PRIVILEGED_CHANNEL=0 privilege=USER": 0,
+      "heartbeat": 0,
+      "heartbeat=0": 0,
+      "Xid": 0,
+      "nvAssert": 0,
+      "CUDA": 0,
+      "FAST_VERDICT": 0,
+      "FASTGUEST: client": 0,
+      "guest refused": 0
+    },
+    "exported_sha256": "d98afbf40f1c2d6bbe6845125b63a087ece8fc5ea481757750a1f34c5571e4a9"
+  },
+  {
+    "name": "bench__codex_ampere595_native_alias-unmap-observe.log",
+    "raw_bytes": 2639,
+    "raw_sha256": "61c9051bb7cf9c985c1591fcd4d2f7a8ba4e40b272e12dc7c6f1cfd24e8fbed3",
+    "excerpt_only": false,
+    "counts": {
+      "PRIVILEGED_CHANNEL=0 privilege=USER": 0,
+      "heartbeat": 0,
+      "heartbeat=0": 0,
+      "Xid": 0,
+      "nvAssert": 0,
+      "CUDA": 0,
+      "FAST_VERDICT": 0,
+      "FASTGUEST: client": 0,
+      "guest refused": 0
+    },
+    "exported_sha256": "61c9051bb7cf9c985c1591fcd4d2f7a8ba4e40b272e12dc7c6f1cfd24e8fbed3"
+  },
+  {
+    "name": "bench__codex_ampere595_native_atomics-probe.log",
+    "raw_bytes": 3705,
+    "raw_sha256": "06ff76b08e4ddf390d52f4dba3cae32dcccd259b810cf6e9320d495077827f4f",
+    "excerpt_only": false,
+    "counts": {
+      "PRIVILEGED_CHANNEL=0 privilege=USER": 0,
+      "heartbeat": 0,
+      "heartbeat=0": 0,
+      "Xid": 0,
+      "nvAssert": 0,
+      "CUDA": 0,
+      "FAST_VERDICT": 0,
+      "FASTGUEST: client": 0,
+      "guest refused": 0
+    },
+    "exported_sha256": "06ff76b08e4ddf390d52f4dba3cae32dcccd259b810cf6e9320d495077827f4f"
+  },
+  {
+    "name": "bench__codex_ampere595_native_bar1-crossing.log",
+    "raw_bytes": 2704,
+    "raw_sha256": "b504272d7ef520699fcdebc0d50dfb84906ecd22b1185fc971d76ad2646237e5",
+    "excerpt_only": false,
+    "counts": {
+      "PRIVILEGED_CHANNEL=0 privilege=USER": 0,
+      "heartbeat": 0,
+      "heartbeat=0": 0,
+      "Xid": 0,
+      "nvAssert": 0,
+      "CUDA": 0,
+      "FAST_VERDICT": 0,
+      "FASTGUEST: client": 0,
+      "guest refused": 0
+    },
+    "exported_sha256": "b504272d7ef520699fcdebc0d50dfb84906ecd22b1185fc971d76ad2646237e5"
+  },
+  {
+    "name": "bench__codex_ampere595_native_blockage-coverage.log",
+    "raw_bytes": 2734,
+    "raw_sha256": "32f8a80570045515a0672514b570e8871cad34289727e618c4e345725e9049bd",
+    "excerpt_only": false,
+    "counts": {
+      "PRIVILEGED_CHANNEL=0 privilege=USER": 0,
+      "heartbeat": 0,
+      "heartbeat=0": 0,
+      "Xid": 0,
+      "nvAssert": 0,
+      "CUDA": 0,
+      "FAST_VERDICT": 0,
+      "FASTGUEST: client": 0,
+      "guest refused": 0
+    },
+    "exported_sha256": "32f8a80570045515a0672514b570e8871cad34289727e618c4e345725e9049bd"
+  },
+  {
+    "name": "bench__codex_ampere595_native_bus-info-sweep.log",
+    "raw_bytes": 7270,
+    "raw_sha256": "fc831cf3ba9afc78d62c0eb33501758fd18edf2e08d781f78de705bee626d901",
+    "excerpt_only": false,
+    "counts": {
+      "PRIVILEGED_CHANNEL=0 privilege=USER": 0,
+      "heartbeat": 0,
+      "heartbeat=0": 0,
+      "Xid": 0,
+      "nvAssert": 0,
+      "CUDA": 0,
+      "FAST_VERDICT": 0,
+      "FASTGUEST: client": 0,
+      "guest refused": 0
+    },
+    "exported_sha256": "40f554b1983111cdace31866b2cc62ca63e32f6f34c52202d8d038ace0d8db79"
+  },
+  {
+    "name": "bench__codex_ampere595_native_ce-client-guest-ram.log",
+    "raw_bytes": 1066,
+    "raw_sha256": "02085724e7d4ffec23dfbf8eeaebc494db386b53f0b31345d0b01455baad0bbd",
+    "excerpt_only": false,
+    "counts": {
+      "PRIVILEGED_CHANNEL=0 privilege=USER": 0,
+      "heartbeat": 0,
+      "heartbeat=0": 0,
+      "Xid": 0,
+      "nvAssert": 0,
+      "CUDA": 0,
+      "FAST_VERDICT": 0,
+      "FASTGUEST: client": 0,
+      "guest refused": 0
+    },
+    "exported_sha256": "02085724e7d4ffec23dfbf8eeaebc494db386b53f0b31345d0b01455baad0bbd"
+  },
+  {
+    "name": "bench__codex_ampere595_native_ce-client.log",
+    "raw_bytes": 12825,
+    "raw_sha256": "910f5d0e3ce3f7d5505b1b5fc606f1b9799acd018f7843f44dcf7ad9039c4599",
+    "excerpt_only": false,
+    "counts": {
+      "PRIVILEGED_CHANNEL=0 privilege=USER": 0,
+      "heartbeat": 0,
+      "heartbeat=0": 0,
+      "Xid": 2,
+      "nvAssert": 0,
+      "CUDA": 0,
+      "FAST_VERDICT": 0,
+      "FASTGUEST: client": 0,
+      "guest refused": 0
+    },
+    "exported_sha256": "910f5d0e3ce3f7d5505b1b5fc606f1b9799acd018f7843f44dcf7ad9039c4599"
+  },
+  {
+    "name": "bench__codex_ampere595_native_concurrency.log",
+    "raw_bytes": 4215,
+    "raw_sha256": "b98cdab8b97c12af9bd2fd4f982e2d914ec943c103c2c7736c942953aa4f81d3",
+    "excerpt_only": false,
+    "counts": {
+      "PRIVILEGED_CHANNEL=0 privilege=USER": 0,
+      "heartbeat": 0,
+      "heartbeat=0": 0,
+      "Xid": 0,
+      "nvAssert": 0,
+      "CUDA": 0,
+      "FAST_VERDICT": 0,
+      "FASTGUEST: client": 0,
+      "guest refused": 0
+    },
+    "exported_sha256": "b98cdab8b97c12af9bd2fd4f982e2d914ec943c103c2c7736c942953aa4f81d3"
+  },
+  {
+    "name": "bench__codex_ampere595_native_concurrent-fuzz.log",
+    "raw_bytes": 148030,
+    "raw_sha256": "d9293d6e1699d91b37f5b1c90e909db489c1859bb7d44f627a6a37d5b30dd54b",
+    "excerpt_only": false,
+    "counts": {
+      "PRIVILEGED_CHANNEL=0 privilege=USER": 0,
+      "heartbeat": 0,
+      "heartbeat=0": 0,
+      "Xid": 0,
+      "nvAssert": 0,
+      "CUDA": 0,
+      "FAST_VERDICT": 0,
+      "FASTGUEST: client": 0,
+      "guest refused": 0
+    },
+    "exported_sha256": "d9293d6e1699d91b37f5b1c90e909db489c1859bb7d44f627a6a37d5b30dd54b"
+  },
+  {
+    "name": "bench__codex_ampere595_native_cross-client-leak.log",
+    "raw_bytes": 3189,
+    "raw_sha256": "33d35f4a41f599d852068c40bdcce48025d35583e5432d235b35b6a8caffb248",
+    "excerpt_only": false,
+    "counts": {
+      "PRIVILEGED_CHANNEL=0 privilege=USER": 0,
+      "heartbeat": 0,
+      "heartbeat=0": 0,
+      "Xid": 0,
+      "nvAssert": 0,
+      "CUDA": 0,
+      "FAST_VERDICT": 0,
+      "FASTGUEST: client": 0,
+      "guest refused": 0
+    },
+    "exported_sha256": "33d35f4a41f599d852068c40bdcce48025d35583e5432d235b35b6a8caffb248"
+  },
+  {
+    "name": "bench__codex_ampere595_native_defer-liveness.log",
+    "raw_bytes": 14220,
+    "raw_sha256": "a83471f93528d965f47db182ee39a714bc87bed30fecc322c9eebcf41cbc905d",
+    "excerpt_only": false,
+    "counts": {
+      "PRIVILEGED_CHANNEL=0 privilege=USER": 0,
+      "heartbeat": 0,
+      "heartbeat=0": 0,
+      "Xid": 3,
+      "nvAssert": 0,
+      "CUDA": 0,
+      "FAST_VERDICT": 0,
+      "FASTGUEST: client": 0,
+      "guest refused": 0
+    },
+    "exported_sha256": "696cf28daf1cc3dfcdb465bf19f796e72e1cf75c38761d9dd3f8dc7a8132a035"
+  },
+  {
+    "name": "bench__codex_ampere595_native_dictated-ring-negative.log",
+    "raw_bytes": 695,
+    "raw_sha256": "ff73adf4826c28367d33e0440221e8cdf82425094e4c5a35c8e5748dff27f267",
+    "excerpt_only": false,
+    "counts": {
+      "PRIVILEGED_CHANNEL=0 privilege=USER": 0,
+      "heartbeat": 0,
+      "heartbeat=0": 0,
+      "Xid": 0,
+      "nvAssert": 0,
+      "CUDA": 0,
+      "FAST_VERDICT": 0,
+      "FASTGUEST: client": 0,
+      "guest refused": 0
+    },
+    "exported_sha256": "ff73adf4826c28367d33e0440221e8cdf82425094e4c5a35c8e5748dff27f267"
+  },
+  {
+    "name": "bench__codex_ampere595_native_dictated-ring.log",
+    "raw_bytes": 1105,
+    "raw_sha256": "2e5f57c6d1e911c0da9fd584413c2c2c60abb24175de925cac7d1b077b2930b7",
+    "excerpt_only": false,
+    "counts": {
+      "PRIVILEGED_CHANNEL=0 privilege=USER": 0,
+      "heartbeat": 0,
+      "heartbeat=0": 0,
+      "Xid": 0,
+      "nvAssert": 0,
+      "CUDA": 0,
+      "FAST_VERDICT": 0,
+      "FASTGUEST: client": 0,
+      "guest refused": 0
+    },
+    "exported_sha256": "2e5f57c6d1e911c0da9fd584413c2c2c60abb24175de925cac7d1b077b2930b7"
+  },
+  {
+    "name": "bench__codex_ampere595_native_doorbell-census.log",
+    "raw_bytes": 1619,
+    "raw_sha256": "268d6a6409e0c8c426caf472aa63913d41b9c9ad9e6bb412a0b0a6e481e7dc34",
+    "excerpt_only": false,
+    "counts": {
+      "PRIVILEGED_CHANNEL=0 privilege=USER": 0,
+      "heartbeat": 0,
+      "heartbeat=0": 0,
+      "Xid": 0,
+      "nvAssert": 0,
+      "CUDA": 0,
+      "FAST_VERDICT": 0,
+      "FASTGUEST: client": 0,
+      "guest refused": 0
+    },
+    "exported_sha256": "268d6a6409e0c8c426caf472aa63913d41b9c9ad9e6bb412a0b0a6e481e7dc34"
+  },
+  {
+    "name": "bench__codex_ampere595_native_engines.log",
+    "raw_bytes": 4611,
+    "raw_sha256": "516ff3a9dce903ee9a572fab311f469028f04ca5a582fc13288710d6fbe17fdf",
+    "excerpt_only": false,
+    "counts": {
+      "PRIVILEGED_CHANNEL=0 privilege=USER": 0,
+      "heartbeat": 0,
+      "heartbeat=0": 0,
+      "Xid": 0,
+      "nvAssert": 0,
+      "CUDA": 0,
+      "FAST_VERDICT": 0,
+      "FASTGUEST: client": 0,
+      "guest refused": 0
+    },
+    "exported_sha256": "516ff3a9dce903ee9a572fab311f469028f04ca5a582fc13288710d6fbe17fdf"
+  },
+  {
+    "name": "bench__codex_ampere595_native_executor-vas.log",
+    "raw_bytes": 2008,
+    "raw_sha256": "63495461cbf779d65b5751d7b4b404267da3820ce7afa4836046e71fb7a585aa",
+    "excerpt_only": false,
+    "counts": {
+      "PRIVILEGED_CHANNEL=0 privilege=USER": 0,
+      "heartbeat": 0,
+      "heartbeat=0": 0,
+      "Xid": 0,
+      "nvAssert": 0,
+      "CUDA": 0,
+      "FAST_VERDICT": 0,
+      "FASTGUEST: client": 0,
+      "guest refused": 0
+    },
+    "exported_sha256": "63495461cbf779d65b5751d7b4b404267da3820ce7afa4836046e71fb7a585aa"
+  },
+  {
+    "name": "bench__codex_ampere595_native_gpga-reserve-probe.log",
+    "raw_bytes": 1654,
+    "raw_sha256": "288e3b8b9d8d56041e995d2160c2e20a1a80ccd958c261974c29ba3478e04e8b",
+    "excerpt_only": false,
+    "counts": {
+      "PRIVILEGED_CHANNEL=0 privilege=USER": 0,
+      "heartbeat": 0,
+      "heartbeat=0": 0,
+      "Xid": 0,
+      "nvAssert": 0,
+      "CUDA": 0,
+      "FAST_VERDICT": 0,
+      "FASTGUEST: client": 0,
+      "guest refused": 0
+    },
+    "exported_sha256": "288e3b8b9d8d56041e995d2160c2e20a1a80ccd958c261974c29ba3478e04e8b"
+  },
+  {
+    "name": "bench__codex_ampere595_native_gpu-info-sweep.log",
+    "raw_bytes": 5811,
+    "raw_sha256": "ad1735fad72ad1ca8aa253133f770f0dbdc69fcb6a078b7b85dc0a9be9503b16",
+    "excerpt_only": false,
+    "counts": {
+      "PRIVILEGED_CHANNEL=0 privilege=USER": 0,
+      "heartbeat": 0,
+      "heartbeat=0": 0,
+      "Xid": 0,
+      "nvAssert": 0,
+      "CUDA": 0,
+      "FAST_VERDICT": 0,
+      "FASTGUEST: client": 0,
+      "guest refused": 0
+    },
+    "exported_sha256": "7cda880f0b21a790570e4d7e46f821c31692deeed66be4e98bf63bc63325fe24"
+  },
+  {
+    "name": "bench__codex_ampere595_native_guest-ram-pin.log",
+    "raw_bytes": 814,
+    "raw_sha256": "b768434ebb9d807a20a8504ea0704c2f1c9b8bd0762636677da8e3304a6cf0ac",
+    "excerpt_only": false,
+    "counts": {
+      "PRIVILEGED_CHANNEL=0 privilege=USER": 0,
+      "heartbeat": 0,
+      "heartbeat=0": 0,
+      "Xid": 0,
+      "nvAssert": 0,
+      "CUDA": 0,
+      "FAST_VERDICT": 0,
+      "FASTGUEST: client": 0,
+      "guest refused": 0
+    },
+    "exported_sha256": "b768434ebb9d807a20a8504ea0704c2f1c9b8bd0762636677da8e3304a6cf0ac"
+  },
+  {
+    "name": "bench__codex_ampere595_native_guest-ring-channel.log",
+    "raw_bytes": 2200,
+    "raw_sha256": "904cd45c271d1eb5eb9cdf9d50b084232175cec7ad062872399178c5be7de685",
+    "excerpt_only": false,
+    "counts": {
+      "PRIVILEGED_CHANNEL=0 privilege=USER": 0,
+      "heartbeat": 0,
+      "heartbeat=0": 0,
+      "Xid": 0,
+      "nvAssert": 0,
+      "CUDA": 0,
+      "FAST_VERDICT": 0,
+      "FASTGUEST: client": 0,
+      "guest refused": 0
+    },
+    "exported_sha256": "904cd45c271d1eb5eb9cdf9d50b084232175cec7ad062872399178c5be7de685"
+  },
+  {
+    "name": "bench__codex_ampere595_native_late-map-race.log",
+    "raw_bytes": 2199,
+    "raw_sha256": "581192fcf36ac3535343c5f326e123d469604461602622f4c83217e614c0e4f7",
+    "excerpt_only": false,
+    "counts": {
+      "PRIVILEGED_CHANNEL=0 privilege=USER": 0,
+      "heartbeat": 0,
+      "heartbeat=0": 0,
+      "Xid": 0,
+      "nvAssert": 0,
+      "CUDA": 0,
+      "FAST_VERDICT": 0,
+      "FASTGUEST: client": 0,
+      "guest refused": 0
+    },
+    "exported_sha256": "581192fcf36ac3535343c5f326e123d469604461602622f4c83217e614c0e4f7"
+  },
+  {
+    "name": "bench__codex_ampere595_native_map-propagation.log",
+    "raw_bytes": 1597,
+    "raw_sha256": "5533a247018c7b2e068e2ca40ca9de71bf1e207c5acdebfcbea3ea5781f6c2e9",
+    "excerpt_only": false,
+    "counts": {
+      "PRIVILEGED_CHANNEL=0 privilege=USER": 0,
+      "heartbeat": 0,
+      "heartbeat=0": 0,
+      "Xid": 0,
+      "nvAssert": 0,
+      "CUDA": 0,
+      "FAST_VERDICT": 0,
+      "FASTGUEST: client": 0,
+      "guest refused": 0
+    },
+    "exported_sha256": "5533a247018c7b2e068e2ca40ca9de71bf1e207c5acdebfcbea3ea5781f6c2e9"
+  },
+  {
+    "name": "bench__codex_ampere595_native_map-stress.log",
+    "raw_bytes": 52675,
+    "raw_sha256": "f7ac54d839800ef759d79e91931990a307f1b5f3d70ae41a46e48dc35e611d3f",
+    "excerpt_only": false,
+    "counts": {
+      "PRIVILEGED_CHANNEL=0 privilege=USER": 0,
+      "heartbeat": 0,
+      "heartbeat=0": 0,
+      "Xid": 0,
+      "nvAssert": 0,
+      "CUDA": 0,
+      "FAST_VERDICT": 0,
+      "FASTGUEST: client": 0,
+      "guest refused": 0
+    },
+    "exported_sha256": "f7ac54d839800ef759d79e91931990a307f1b5f3d70ae41a46e48dc35e611d3f"
+  },
+  {
+    "name": "bench__codex_ampere595_native_missing-page-fault.log",
+    "raw_bytes": 2461,
+    "raw_sha256": "042c65c447d276a8ec29973726f2785e8fdc802d925da176e107872e33770f5a",
+    "excerpt_only": false,
+    "counts": {
+      "PRIVILEGED_CHANNEL=0 privilege=USER": 0,
+      "heartbeat": 0,
+      "heartbeat=0": 0,
+      "Xid": 1,
+      "nvAssert": 0,
+      "CUDA": 0,
+      "FAST_VERDICT": 0,
+      "FASTGUEST: client": 0,
+      "guest refused": 0
+    },
+    "exported_sha256": "042c65c447d276a8ec29973726f2785e8fdc802d925da176e107872e33770f5a"
+  },
+  {
+    "name": "bench__codex_ampere595_native_pce-mask-probe.log",
+    "raw_bytes": 912,
+    "raw_sha256": "4e041a2a3b1a6fbcccb3452458e3028e50fa4f0c98ebf2eb3e359ef7ece61bbd",
+    "excerpt_only": false,
+    "counts": {
+      "PRIVILEGED_CHANNEL=0 privilege=USER": 0,
+      "heartbeat": 0,
+      "heartbeat=0": 0,
+      "Xid": 0,
+      "nvAssert": 0,
+      "CUDA": 0,
+      "FAST_VERDICT": 0,
+      "FASTGUEST: client": 0,
+      "guest refused": 0
+    },
+    "exported_sha256": "4e041a2a3b1a6fbcccb3452458e3028e50fa4f0c98ebf2eb3e359ef7ece61bbd"
+  },
+  {
+    "name": "bench__codex_ampere595_native_rpc-mixed-allocs.log",
+    "raw_bytes": 11524,
+    "raw_sha256": "e11af1779c9bbc4dabb67bbe9664ff2958c59ff94e3e1068fc2259c004903dc8",
+    "excerpt_only": false,
+    "counts": {
+      "PRIVILEGED_CHANNEL=0 privilege=USER": 0,
+      "heartbeat": 0,
+      "heartbeat=0": 0,
+      "Xid": 0,
+      "nvAssert": 0,
+      "CUDA": 0,
+      "FAST_VERDICT": 0,
+      "FASTGUEST: client": 0,
+      "guest refused": 0
+    },
+    "exported_sha256": "e11af1779c9bbc4dabb67bbe9664ff2958c59ff94e3e1068fc2259c004903dc8"
+  },
+  {
+    "name": "bench__codex_ampere595_native_timer.log",
+    "raw_bytes": 1756,
+    "raw_sha256": "19ddebe3ccd36562be4974cea46f87cfabac218eb19a4cea4f2b46257d98ad38",
+    "excerpt_only": false,
+    "counts": {
+      "PRIVILEGED_CHANNEL=0 privilege=USER": 0,
+      "heartbeat": 0,
+      "heartbeat=0": 0,
+      "Xid": 0,
+      "nvAssert": 0,
+      "CUDA": 0,
+      "FAST_VERDICT": 0,
+      "FASTGUEST: client": 0,
+      "guest refused": 0
+    },
+    "exported_sha256": "19ddebe3ccd36562be4974cea46f87cfabac218eb19a4cea4f2b46257d98ad38"
+  },
+  {
+    "name": "bench__codex_ampere595_native_uvm-invalidate.log",
+    "raw_bytes": 1071,
+    "raw_sha256": "766660acbf075fc35fc97e2d263ca0856391e323f67be8fbab12f447f14ba925",
+    "excerpt_only": false,
+    "counts": {
+      "PRIVILEGED_CHANNEL=0 privilege=USER": 0,
+      "heartbeat": 0,
+      "heartbeat=0": 0,
+      "Xid": 0,
+      "nvAssert": 0,
+      "CUDA": 0,
+      "FAST_VERDICT": 0,
+      "FASTGUEST: client": 0,
+      "guest refused": 0
+    },
+    "exported_sha256": "8dad7b847a9e54dcdfd7c6f685258cce580089c26d0baca37fb9d5faf32c7d39"
+  },
+  {
+    "name": "bench__codex_ampere595_native_uvm-mean.log",
+    "raw_bytes": 15199,
+    "raw_sha256": "09766407ad197b56c15bf7f99334b624344635a6f8282a10e2a168d2865ed4ca",
+    "excerpt_only": false,
+    "counts": {
+      "PRIVILEGED_CHANNEL=0 privilege=USER": 0,
+      "heartbeat": 0,
+      "heartbeat=0": 0,
+      "Xid": 0,
+      "nvAssert": 0,
+      "CUDA": 0,
+      "FAST_VERDICT": 0,
+      "FASTGUEST: client": 0,
+      "guest refused": 0
+    },
+    "exported_sha256": "09766407ad197b56c15bf7f99334b624344635a6f8282a10e2a168d2865ed4ca"
+  },
+  {
+    "name": "bench__fast_codex_ampere595_full_alias-two-vas_serial.log",
+    "raw_bytes": 12192,
+    "raw_sha256": "74417415ff64a26dd51ce0c75a3725298110ecbd6ad3932c1b2443cd388ffc65",
+    "excerpt_only": false,
+    "counts": {
+      "PRIVILEGED_CHANNEL=0 privilege=USER": 0,
+      "heartbeat": 18,
+      "heartbeat=0": 0,
+      "Xid": 0,
+      "nvAssert": 9,
+      "CUDA": 0,
+      "FAST_VERDICT": 0,
+      "FASTGUEST: client": 1,
+      "guest refused": 0
+    },
+    "exported_sha256": "4e46d248269b9071b87638da2d171e55a9779dc89046bea9ea57cc073b7c40fd"
+  },
+  {
+    "name": "bench__fast_codex_ampere595_full_alias-unmap-observe_serial.log",
+    "raw_bytes": 14055,
+    "raw_sha256": "51558a11833720403a6b18720f2f53ba9e11a2d2a665f94343016b6f077982b3",
+    "excerpt_only": false,
+    "counts": {
+      "PRIVILEGED_CHANNEL=0 privilege=USER": 0,
+      "heartbeat": 42,
+      "heartbeat=0": 0,
+      "Xid": 0,
+      "nvAssert": 9,
+      "CUDA": 0,
+      "FAST_VERDICT": 0,
+      "FASTGUEST: client": 1,
+      "guest refused": 0
+    },
+    "exported_sha256": "458905b4c490b2db65b8b3d53abf77aa2894dd625ca3bd5ecc540447541fc159"
+  },
+  {
+    "name": "bench__fast_codex_ampere595_full_atomics-probe_serial.log",
+    "raw_bytes": 13019,
+    "raw_sha256": "096f5ea5fd954b78dea40ff356d514d5bac3be203fecc1afb136af2a43b4ff99",
+    "excerpt_only": false,
+    "counts": {
+      "PRIVILEGED_CHANNEL=0 privilege=USER": 0,
+      "heartbeat": 15,
+      "heartbeat=0": 0,
+      "Xid": 0,
+      "nvAssert": 9,
+      "CUDA": 0,
+      "FAST_VERDICT": 0,
+      "FASTGUEST: client": 1,
+      "guest refused": 0
+    },
+    "exported_sha256": "2c538b7bc855ead32a86f48d11370f7bb6e16f79bbcc87ca3413335cfdbe2bf5"
+  },
+  {
+    "name": "bench__fast_codex_ampere595_full_bar1-crossing_serial.log",
+    "raw_bytes": 13603,
+    "raw_sha256": "c08542ba23e3b9adc6a49b137df9a7989f414ce133800eafce9354aa86bd0334",
+    "excerpt_only": false,
+    "counts": {
+      "PRIVILEGED_CHANNEL=0 privilege=USER": 0,
+      "heartbeat": 42,
+      "heartbeat=0": 0,
+      "Xid": 0,
+      "nvAssert": 9,
+      "CUDA": 0,
+      "FAST_VERDICT": 0,
+      "FASTGUEST: client": 1,
+      "guest refused": 0
+    },
+    "exported_sha256": "3769f583b06f5e5433bdae38d10a5d0e65ac4bf4673325393a070370d12f1ab2"
+  },
+  {
+    "name": "bench__fast_codex_ampere595_full_blockage-coverage_serial.log",
+    "raw_bytes": 11797,
+    "raw_sha256": "244cef38c631564198e1687a0efa2190be820f44f1bee4204a5fc361574a49d8",
+    "excerpt_only": false,
+    "counts": {
+      "PRIVILEGED_CHANNEL=0 privilege=USER": 0,
+      "heartbeat": 12,
+      "heartbeat=0": 0,
+      "Xid": 0,
+      "nvAssert": 9,
+      "CUDA": 0,
+      "FAST_VERDICT": 0,
+      "FASTGUEST: client": 1,
+      "guest refused": 0
+    },
+    "exported_sha256": "14d9bc6327f30826390162203f8926892825f673ffaa52364c399f17f804a919"
+  },
+  {
+    "name": "bench__fast_codex_ampere595_full_bus-info-sweep_serial.log",
+    "raw_bytes": 18692,
+    "raw_sha256": "2b2a40e724f8ef2c02daf0d3f66c6818927cdb2c4acceaf7788f031729b47796",
+    "excerpt_only": false,
+    "counts": {
+      "PRIVILEGED_CHANNEL=0 privilege=USER": 0,
+      "heartbeat": 42,
+      "heartbeat=0": 0,
+      "Xid": 0,
+      "nvAssert": 9,
+      "CUDA": 0,
+      "FAST_VERDICT": 0,
+      "FASTGUEST: client": 1,
+      "guest refused": 0
+    },
+    "exported_sha256": "e758feb1f248cacf81bf4e10ba957407d879c50e0ab76ac30f84bc90644a44f0"
+  },
+  {
+    "name": "bench__fast_codex_ampere595_full_ce-client-guest-ram_serial.log",
+    "raw_bytes": 11529,
+    "raw_sha256": "5b6408a7a2ef2f95a6b926977c9bcec6219eb7354978ff81f3182d4c48fecba2",
+    "excerpt_only": false,
+    "counts": {
+      "PRIVILEGED_CHANNEL=0 privilege=USER": 0,
+      "heartbeat": 30,
+      "heartbeat=0": 0,
+      "Xid": 0,
+      "nvAssert": 9,
+      "CUDA": 0,
+      "FAST_VERDICT": 0,
+      "FASTGUEST: client": 1,
+      "guest refused": 0
+    },
+    "exported_sha256": "0e45d4ff3928081c2a747b40b8f1c0c6f708794198dca31a528ca1dc492e5826"
+  },
+  {
+    "name": "bench__fast_codex_ampere595_full_ce-client_serial.log",
+    "raw_bytes": 22908,
+    "raw_sha256": "8959390398136c8ed781ce9cd8f5c8a0711a14d1fc2a91ede25237349fa52537",
+    "excerpt_only": false,
+    "counts": {
+      "PRIVILEGED_CHANNEL=0 privilege=USER": 0,
+      "heartbeat": 24,
+      "heartbeat=0": 0,
+      "Xid": 2,
+      "nvAssert": 9,
+      "CUDA": 0,
+      "FAST_VERDICT": 0,
+      "FASTGUEST: client": 1,
+      "guest refused": 0
+    },
+    "exported_sha256": "e8b843ba24822674d876d444280421f505fffc229d1472744d6db0c5efc6ad99"
+  },
+  {
+    "name": "bench__fast_codex_ampere595_full_concurrency_serial.log",
+    "raw_bytes": 12772,
+    "raw_sha256": "7e6fcb9738344176e8f1149780572c3352fd2c9220d91614bac5a07dcc9c06ba",
+    "excerpt_only": false,
+    "counts": {
+      "PRIVILEGED_CHANNEL=0 privilege=USER": 0,
+      "heartbeat": 6,
+      "heartbeat=0": 0,
+      "Xid": 0,
+      "nvAssert": 9,
+      "CUDA": 0,
+      "FAST_VERDICT": 0,
+      "FASTGUEST: client": 1,
+      "guest refused": 0
+    },
+    "exported_sha256": "15acadd1c909049d16df5df1b28401ddd24ff8faf5b4bd1498af3270c2c9bfaa"
+  },
+  {
+    "name": "bench__fast_codex_ampere595_full_concurrent-fuzz_serial.log",
+    "raw_bytes": 168610,
+    "raw_sha256": "e752a2a678da3d22590235a56794429b48b4c8252eea0e6e1e2b9528a408d2bf",
+    "excerpt_only": false,
+    "counts": {
+      "PRIVILEGED_CHANNEL=0 privilege=USER": 0,
+      "heartbeat": 6,
+      "heartbeat=0": 0,
+      "Xid": 0,
+      "nvAssert": 9,
+      "CUDA": 0,
+      "FAST_VERDICT": 0,
+      "FASTGUEST: client": 1,
+      "guest refused": 0
+    },
+    "exported_sha256": "53e9c426a27abc708d01f883852e69a499ef1971bc41ee79faec4a9f1e316d8e"
+  },
+  {
+    "name": "bench__fast_codex_ampere595_full_cross-client-leak_serial.log",
+    "raw_bytes": 13664,
+    "raw_sha256": "98cc2665bb25f84c272c8ca3429fd156a11bf1a4d5bad4c592b79fb7c580906c",
+    "excerpt_only": false,
+    "counts": {
+      "PRIVILEGED_CHANNEL=0 privilege=USER": 0,
+      "heartbeat": 30,
+      "heartbeat=0": 0,
+      "Xid": 0,
+      "nvAssert": 9,
+      "CUDA": 0,
+      "FAST_VERDICT": 0,
+      "FASTGUEST: client": 1,
+      "guest refused": 0
+    },
+    "exported_sha256": "79636dd6f930f467a15be0cf4747d75f4f2de79f656453abc7779cd33a9e1e9c"
+  },
+  {
+    "name": "bench__fast_codex_ampere595_full_defer-liveness_serial.log",
+    "raw_bytes": 24274,
+    "raw_sha256": "b0b8440e2761bfce048df8969cb65eb6950e61f0253504b5c04338ac9e96ef62",
+    "excerpt_only": false,
+    "counts": {
+      "PRIVILEGED_CHANNEL=0 privilege=USER": 0,
+      "heartbeat": 24,
+      "heartbeat=0": 0,
+      "Xid": 3,
+      "nvAssert": 9,
+      "CUDA": 0,
+      "FAST_VERDICT": 0,
+      "FASTGUEST: client": 1,
+      "guest refused": 0
+    },
+    "exported_sha256": "9280b45467ebebb056a988e703e86be2f6ffb483c3643ee8dd494b76710a4f50"
+  },
+  {
+    "name": "bench__fast_codex_ampere595_full_dictated-ring-negative_serial.log",
+    "raw_bytes": 9310,
+    "raw_sha256": "89e3b47c100b5b3b28ae5042cc8813087718d82715adca8dd55ca64742d0b536",
+    "excerpt_only": false,
+    "counts": {
+      "PRIVILEGED_CHANNEL=0 privilege=USER": 0,
+      "heartbeat": 6,
+      "heartbeat=0": 0,
+      "Xid": 0,
+      "nvAssert": 9,
+      "CUDA": 0,
+      "FAST_VERDICT": 0,
+      "FASTGUEST: client": 1,
+      "guest refused": 0
+    },
+    "exported_sha256": "0df833953d6efc5a3919635dfacbfae05d8b93e5d2980ea711f9d01a1a9d5214"
+  },
+  {
+    "name": "bench__fast_codex_ampere595_full_dictated-ring_serial.log",
+    "raw_bytes": 10106,
+    "raw_sha256": "7d061d3d06f462eb7ffe6d7b97210553590cee3680117732285539e66e10b8d1",
+    "excerpt_only": false,
+    "counts": {
+      "PRIVILEGED_CHANNEL=0 privilege=USER": 0,
+      "heartbeat": 12,
+      "heartbeat=0": 0,
+      "Xid": 0,
+      "nvAssert": 9,
+      "CUDA": 0,
+      "FAST_VERDICT": 0,
+      "FASTGUEST: client": 1,
+      "guest refused": 0
+    },
+    "exported_sha256": "fde6af3f2d3e9aae41f25d2c577a7d0dbead578f08b6eb391ee316374ee3d377"
+  },
+  {
+    "name": "bench__fast_codex_ampere595_full_doorbell-census_serial.log",
+    "raw_bytes": 42634,
+    "raw_sha256": "462a0210a49177946d9b2ff3dc7695adcd197d24babed2a7cf03e1ab6d212573",
+    "excerpt_only": false,
+    "counts": {
+      "PRIVILEGED_CHANNEL=0 privilege=USER": 0,
+      "heartbeat": 36,
+      "heartbeat=0": 0,
+      "Xid": 0,
+      "nvAssert": 99,
+      "CUDA": 0,
+      "FAST_VERDICT": 0,
+      "FASTGUEST: client": 1,
+      "guest refused": 0
+    },
+    "exported_sha256": "4f2dbf10f9fe715139f1483b624a1d6996cf06ce1a0e699ea52084c3559fa795"
+  },
+  {
+    "name": "bench__fast_codex_ampere595_full_engines_serial.log",
+    "raw_bytes": 21613,
+    "raw_sha256": "883a7b8b9400b7c6c64ab464788dc34366ecf4d287613890c393ff05355e1e41",
+    "excerpt_only": false,
+    "counts": {
+      "PRIVILEGED_CHANNEL=0 privilege=USER": 0,
+      "heartbeat": 42,
+      "heartbeat=0": 0,
+      "Xid": 0,
+      "nvAssert": 26,
+      "CUDA": 0,
+      "FAST_VERDICT": 0,
+      "FASTGUEST: client": 1,
+      "guest refused": 0
+    },
+    "exported_sha256": "a7169621b3ebe0c742cfb2c35406c7adb459dfa0f8b1ffcadd68b90cd1986185"
+  },
+  {
+    "name": "bench__fast_codex_ampere595_full_executor-vas_serial.log",
+    "raw_bytes": 13447,
+    "raw_sha256": "625d02df47080024f751deac43305d69a463e486c7659f1fb00053af4786ac2f",
+    "excerpt_only": false,
+    "counts": {
+      "PRIVILEGED_CHANNEL=0 privilege=USER": 0,
+      "heartbeat": 42,
+      "heartbeat=0": 0,
+      "Xid": 0,
+      "nvAssert": 9,
+      "CUDA": 0,
+      "FAST_VERDICT": 0,
+      "FASTGUEST: client": 1,
+      "guest refused": 0
+    },
+    "exported_sha256": "5013e323e04c76cde18fbade0f74c27e941fc7647ebe8539fea88acfb7dab59b"
+  },
+  {
+    "name": "bench__fast_codex_ampere595_full_gpga-reserve-probe_serial.log",
+    "raw_bytes": 11652,
+    "raw_sha256": "bda4b88a992ed424d1417e12cc1f4c9710dc485ff3bd88bd7c7214a96fd8d146",
+    "excerpt_only": false,
+    "counts": {
+      "PRIVILEGED_CHANNEL=0 privilege=USER": 0,
+      "heartbeat": 24,
+      "heartbeat=0": 0,
+      "Xid": 0,
+      "nvAssert": 9,
+      "CUDA": 0,
+      "FAST_VERDICT": 0,
+      "FASTGUEST: client": 1,
+      "guest refused": 0
+    },
+    "exported_sha256": "ce2b57f85b953f05ec4043d8ec7d9d17e00d203dcb511615d4f712b0b71deecc"
+  },
+  {
+    "name": "bench__fast_codex_ampere595_full_gpu-info-sweep_serial.log",
+    "raw_bytes": 12896,
+    "raw_sha256": "47f1e1bc29b29ab2290d4f972ab9d6c6277d043754b3ff0eec802f8cb6e03811",
+    "excerpt_only": false,
+    "counts": {
+      "PRIVILEGED_CHANNEL=0 privilege=USER": 0,
+      "heartbeat": 3,
+      "heartbeat=0": 0,
+      "Xid": 0,
+      "nvAssert": 9,
+      "CUDA": 0,
+      "FAST_VERDICT": 0,
+      "FASTGUEST: client": 1,
+      "guest refused": 0
+    },
+    "exported_sha256": "30647517ef4bf5fd5d58376a801b79dab0f740da9faa0658893b09100107f638"
+  },
+  {
+    "name": "bench__fast_codex_ampere595_full_guest-ram-pin_serial.log",
+    "raw_bytes": 9855,
+    "raw_sha256": "28551f4faea6f9bcc3322683d76e70c50a2be7b70cce9823bd4e4bb9a53fddd0",
+    "excerpt_only": false,
+    "counts": {
+      "PRIVILEGED_CHANNEL=0 privilege=USER": 0,
+      "heartbeat": 12,
+      "heartbeat=0": 0,
+      "Xid": 0,
+      "nvAssert": 9,
+      "CUDA": 0,
+      "FAST_VERDICT": 0,
+      "FASTGUEST: client": 1,
+      "guest refused": 0
+    },
+    "exported_sha256": "5ea9eb5291a9e46e7d73f7464e166573f2bb934e50168f2ade445f04f93daf74"
+  },
+  {
+    "name": "bench__fast_codex_ampere595_full_guest-ring-channel_serial.log",
+    "raw_bytes": 13645,
+    "raw_sha256": "dfac1c10171081ea051e2d01d2874bfa4102240e0294383c936319fa9b927ed9",
+    "excerpt_only": false,
+    "counts": {
+      "PRIVILEGED_CHANNEL=0 privilege=USER": 0,
+      "heartbeat": 42,
+      "heartbeat=0": 0,
+      "Xid": 0,
+      "nvAssert": 9,
+      "CUDA": 0,
+      "FAST_VERDICT": 0,
+      "FASTGUEST: client": 1,
+      "guest refused": 0
+    },
+    "exported_sha256": "823266cc418c271f1954bbd812a5c638c5074b9340013a30851caad9cddb6248"
+  },
+  {
+    "name": "bench__fast_codex_ampere595_full_late-map-race_serial.log",
+    "raw_bytes": 13610,
+    "raw_sha256": "289513f2eadf07a75b020ceb211bf0bfcdd35cfb0559912915c0fac6e730d99b",
+    "excerpt_only": false,
+    "counts": {
+      "PRIVILEGED_CHANNEL=0 privilege=USER": 0,
+      "heartbeat": 42,
+      "heartbeat=0": 0,
+      "Xid": 0,
+      "nvAssert": 9,
+      "CUDA": 0,
+      "FAST_VERDICT": 0,
+      "FASTGUEST: client": 1,
+      "guest refused": 0
+    },
+    "exported_sha256": "714adb7fa6fa8f332e5899db213acc53453654a18dd1caddac6b532adc08d57d"
+  },
+  {
+    "name": "bench__fast_codex_ampere595_full_map-propagation_serial.log",
+    "raw_bytes": 11198,
+    "raw_sha256": "2ddfde62034243976788cbb5ea9fcae45db3badb256cd952e9fdeb3932124f85",
+    "excerpt_only": false,
+    "counts": {
+      "PRIVILEGED_CHANNEL=0 privilege=USER": 0,
+      "heartbeat": 18,
+      "heartbeat=0": 0,
+      "Xid": 0,
+      "nvAssert": 9,
+      "CUDA": 0,
+      "FAST_VERDICT": 0,
+      "FASTGUEST: client": 1,
+      "guest refused": 0
+    },
+    "exported_sha256": "27e56d30d43de59c277ef28b5dfac8afa4e43745809938e61cfd7a0292f6032a"
+  },
+  {
+    "name": "bench__fast_codex_ampere595_full_map-stress_serial.log",
+    "raw_bytes": 62514,
+    "raw_sha256": "c6d6c7d7d1d859acfc13feec9f3563409809f7b0248636ff37b3b6df1b9f191a",
+    "excerpt_only": false,
+    "counts": {
+      "PRIVILEGED_CHANNEL=0 privilege=USER": 0,
+      "heartbeat": 18,
+      "heartbeat=0": 0,
+      "Xid": 0,
+      "nvAssert": 9,
+      "CUDA": 0,
+      "FAST_VERDICT": 0,
+      "FASTGUEST: client": 1,
+      "guest refused": 0
+    },
+    "exported_sha256": "5f870c1b7af981bee79c666f3b2c0e4d9bb409b1fdbabda5487051d4addc26a5"
+  },
+  {
+    "name": "bench__fast_codex_ampere595_full_missing-page-fault_serial.log",
+    "raw_bytes": 12462,
+    "raw_sha256": "daef77072f26e8cd5cebf070e85c5be42038f1633ddd5e9fec0d38437481fa93",
+    "excerpt_only": false,
+    "counts": {
+      "PRIVILEGED_CHANNEL=0 privilege=USER": 0,
+      "heartbeat": 24,
+      "heartbeat=0": 0,
+      "Xid": 1,
+      "nvAssert": 9,
+      "CUDA": 0,
+      "FAST_VERDICT": 0,
+      "FASTGUEST: client": 1,
+      "guest refused": 0
+    },
+    "exported_sha256": "00f9f388c1ac9ee8216b4f075cf6f7982ccf8e3cf719d80ca3c8e7ebda5f1044"
+  },
+  {
+    "name": "bench__fast_codex_ampere595_full_pce-mask-probe_serial.log",
+    "raw_bytes": 9445,
+    "raw_sha256": "132a10faa4a8b0da03743eedb52347fc6c15721fa66e7bbbc75ee61db268a404",
+    "excerpt_only": false,
+    "counts": {
+      "PRIVILEGED_CHANNEL=0 privilege=USER": 0,
+      "heartbeat": 6,
+      "heartbeat=0": 0,
+      "Xid": 0,
+      "nvAssert": 9,
+      "CUDA": 0,
+      "FAST_VERDICT": 0,
+      "FASTGUEST: client": 1,
+      "guest refused": 0
+    },
+    "exported_sha256": "678f6df4e97ea26c5cf30227d0e02bd4ffb30d6a413487a707e8b26d8f72a967"
+  },
+  {
+    "name": "bench__fast_codex_ampere595_full_rpc-mixed-allocs_serial.log",
+    "raw_bytes": 22482,
+    "raw_sha256": "61199e9daacded81b4ede440981728aa17034f4ce722152f1c3065cece0e36d1",
+    "excerpt_only": false,
+    "counts": {
+      "PRIVILEGED_CHANNEL=0 privilege=USER": 0,
+      "heartbeat": 36,
+      "heartbeat=0": 0,
+      "Xid": 0,
+      "nvAssert": 9,
+      "CUDA": 0,
+      "FAST_VERDICT": 0,
+      "FASTGUEST: client": 1,
+      "guest refused": 0
+    },
+    "exported_sha256": "3f63e7fb7adfa57fd08792dd41f330e1b9cb6161e40c2f63ea80eb7983afefea"
+  },
+  {
+    "name": "bench__fast_codex_ampere595_full_timer_serial.log",
+    "raw_bytes": 12166,
+    "raw_sha256": "132ab0cc58e074f9efa97525a18f33a8340b54ae5c1e68d9a899573c8a0f083d",
+    "excerpt_only": false,
+    "counts": {
+      "PRIVILEGED_CHANNEL=0 privilege=USER": 0,
+      "heartbeat": 30,
+      "heartbeat=0": 0,
+      "Xid": 0,
+      "nvAssert": 9,
+      "CUDA": 0,
+      "FAST_VERDICT": 0,
+      "FASTGUEST: client": 1,
+      "guest refused": 0
+    },
+    "exported_sha256": "9b6b4f32058afd5bc07ad035ea8b12d41f17fc6765f45ce7d182d5e063c1b019"
+  },
+  {
+    "name": "bench__fast_codex_ampere595_full_uvm-invalidate_serial.log",
+    "raw_bytes": 10990,
+    "raw_sha256": "8ff5dd1e1e0c7d5dc93c6c71fa1a54f6d75a851af2802421fd0889033ba4762f",
+    "excerpt_only": false,
+    "counts": {
+      "PRIVILEGED_CHANNEL=0 privilege=USER": 0,
+      "heartbeat": 18,
+      "heartbeat=0": 0,
+      "Xid": 0,
+      "nvAssert": 9,
+      "CUDA": 0,
+      "FAST_VERDICT": 0,
+      "FASTGUEST: client": 1,
+      "guest refused": 0
+    },
+    "exported_sha256": "4f5b208de7ab8311bbf4a588ccc63894805b9d2ce5d7a7a56b524494394b9479"
+  },
+  {
+    "name": "bench__fast_codex_ampere595_full_uvm-mean_serial.log",
+    "raw_bytes": 26759,
+    "raw_sha256": "b544902e7c54f303c32144910d00a00a89f4f325671498fa15e09bcc3f9d973d",
+    "excerpt_only": false,
+    "counts": {
+      "PRIVILEGED_CHANNEL=0 privilege=USER": 0,
+      "heartbeat": 36,
+      "heartbeat=0": 0,
+      "Xid": 0,
+      "nvAssert": 9,
+      "CUDA": 0,
+      "FAST_VERDICT": 0,
+      "FASTGUEST: client": 1,
+      "guest refused": 0
+    },
+    "exported_sha256": "9a4b8d1224b61545da93328fda62c2c465b580f2122265feeb3f3733b67b6e5f"
+  },
+  {
+    "name": "bench__fast_codex_ampere595_full_alias-two-vas_ttyS0.log",
+    "raw_bytes": 9794,
+    "raw_sha256": "bce0994e82ab5ca2a5faa7d133471076a4b6021c50a2d86eefae46def962c267",
+    "excerpt_only": false,
+    "counts": {
+      "PRIVILEGED_CHANNEL=0 privilege=USER": 0,
+      "heartbeat": 18,
+      "heartbeat=0": 0,
+      "Xid": 0,
+      "nvAssert": 9,
+      "CUDA": 0,
+      "FAST_VERDICT": 0,
+      "FASTGUEST: client": 0,
+      "guest refused": 0
+    },
+    "exported_sha256": "9d35804574c4f7135a5df99f95d0a9076f0f3459be88444fa24fe162bce54903"
+  },
+  {
+    "name": "bench__fast_codex_ampere595_full_alias-unmap-observe_ttyS0.log",
+    "raw_bytes": 11734,
+    "raw_sha256": "f1a1a1cf7d6fcef480862bd5013de6e9302370efcdc4555100708623032c62a5",
+    "excerpt_only": false,
+    "counts": {
+      "PRIVILEGED_CHANNEL=0 privilege=USER": 0,
+      "heartbeat": 42,
+      "heartbeat=0": 0,
+      "Xid": 0,
+      "nvAssert": 9,
+      "CUDA": 0,
+      "FAST_VERDICT": 0,
+      "FASTGUEST: client": 0,
+      "guest refused": 0
+    },
+    "exported_sha256": "2a7679f28e1a1f09c65941b2ab27ce3e2ba5eacbdf5581483af80981c9b554d1"
+  },
+  {
+    "name": "bench__fast_codex_ampere595_full_atomics-probe_ttyS0.log",
+    "raw_bytes": 9603,
+    "raw_sha256": "0e2cfc903830b77ff5394833efbdec329fe23852375362c8b6b9c9427f33ac99",
+    "excerpt_only": false,
+    "counts": {
+      "PRIVILEGED_CHANNEL=0 privilege=USER": 0,
+      "heartbeat": 15,
+      "heartbeat=0": 0,
+      "Xid": 0,
+      "nvAssert": 9,
+      "CUDA": 0,
+      "FAST_VERDICT": 0,
+      "FASTGUEST: client": 0,
+      "guest refused": 0
+    },
+    "exported_sha256": "cada577eaede0792d7c1b3d8989bfef4e974f881c651e35f4c5220e6c9d667ef"
+  },
+  {
+    "name": "bench__fast_codex_ampere595_full_bar1-crossing_ttyS0.log",
+    "raw_bytes": 11678,
+    "raw_sha256": "7ecf5131e86bf8d9780893c3f006b926be30685fb154408db5550c5c7f30f1d4",
+    "excerpt_only": false,
+    "counts": {
+      "PRIVILEGED_CHANNEL=0 privilege=USER": 0,
+      "heartbeat": 42,
+      "heartbeat=0": 0,
+      "Xid": 0,
+      "nvAssert": 9,
+      "CUDA": 0,
+      "FAST_VERDICT": 0,
+      "FASTGUEST: client": 0,
+      "guest refused": 0
+    },
+    "exported_sha256": "9079c69fbf8e6dc46a29358cac3df05cf1b88dc6c009c3396fd6a4e540fc2f32"
+  },
+  {
+    "name": "bench__fast_codex_ampere595_full_blockage-coverage_ttyS0.log",
+    "raw_bytes": 9375,
+    "raw_sha256": "73e184be3a3bbfac7a6903cdbaa7fef2da1a07babd0842480e908db704f79b2f",
+    "excerpt_only": false,
+    "counts": {
+      "PRIVILEGED_CHANNEL=0 privilege=USER": 0,
+      "heartbeat": 12,
+      "heartbeat=0": 0,
+      "Xid": 0,
+      "nvAssert": 9,
+      "CUDA": 0,
+      "FAST_VERDICT": 0,
+      "FASTGUEST: client": 0,
+      "guest refused": 0
+    },
+    "exported_sha256": "710e6c242d425c0eab4ef0b72672b07fedf141274d087fddb52a0ee71126b0a1"
+  },
+  {
+    "name": "bench__fast_codex_ampere595_full_bus-info-sweep_ttyS0.log",
+    "raw_bytes": 11724,
+    "raw_sha256": "77dfb6a57003b89ba4fbaedbf5b16a9b74900ea7396c9dea9f4f97fb15325f38",
+    "excerpt_only": false,
+    "counts": {
+      "PRIVILEGED_CHANNEL=0 privilege=USER": 0,
+      "heartbeat": 42,
+      "heartbeat=0": 0,
+      "Xid": 0,
+      "nvAssert": 9,
+      "CUDA": 0,
+      "FAST_VERDICT": 0,
+      "FASTGUEST: client": 0,
+      "guest refused": 0
+    },
+    "exported_sha256": "7895f0f835d974c1988ce8dd8ec2faffd7dc0053ae559d9161ade0db90712813"
+  },
+  {
+    "name": "bench__fast_codex_ampere595_full_ce-client-guest-ram_ttyS0.log",
+    "raw_bytes": 10792,
+    "raw_sha256": "ea614b81c38da4dc22097d37b4702002224891d3ecee6053035af76364735f33",
+    "excerpt_only": false,
+    "counts": {
+      "PRIVILEGED_CHANNEL=0 privilege=USER": 0,
+      "heartbeat": 30,
+      "heartbeat=0": 0,
+      "Xid": 0,
+      "nvAssert": 9,
+      "CUDA": 0,
+      "FAST_VERDICT": 0,
+      "FASTGUEST: client": 0,
+      "guest refused": 0
+    },
+    "exported_sha256": "0f92bc5e181bdda210953461f4eab971e9d6a70cfb9ab9afd40d82b4de76c170"
+  },
+  {
+    "name": "bench__fast_codex_ampere595_full_ce-client_ttyS0.log",
+    "raw_bytes": 10336,
+    "raw_sha256": "f650ff4951280145ca8e6c97d2912575bac123019240ec6cad1dcb62d54566ae",
+    "excerpt_only": false,
+    "counts": {
+      "PRIVILEGED_CHANNEL=0 privilege=USER": 0,
+      "heartbeat": 24,
+      "heartbeat=0": 0,
+      "Xid": 0,
+      "nvAssert": 9,
+      "CUDA": 0,
+      "FAST_VERDICT": 0,
+      "FASTGUEST: client": 0,
+      "guest refused": 0
+    },
+    "exported_sha256": "9bc2525c8cfcf7c916148c0667aa09cfc2f4cd03f45e65ed23250a2bb878c3e4"
+  },
+  {
+    "name": "bench__fast_codex_ampere595_full_concurrency_ttyS0.log",
+    "raw_bytes": 8848,
+    "raw_sha256": "cd71f025b5e5d706d2c03e58ad9277ff7d28a4c9841d86b0d15339ea0370dd83",
+    "excerpt_only": false,
+    "counts": {
+      "PRIVILEGED_CHANNEL=0 privilege=USER": 0,
+      "heartbeat": 6,
+      "heartbeat=0": 0,
+      "Xid": 0,
+      "nvAssert": 9,
+      "CUDA": 0,
+      "FAST_VERDICT": 0,
+      "FASTGUEST: client": 0,
+      "guest refused": 0
+    },
+    "exported_sha256": "9b61b3c34c5265b5d7b3efc96c80ddc9a60b3443017bb7d545c31874662ed05c"
+  },
+  {
+    "name": "bench__fast_codex_ampere595_full_concurrent-fuzz_ttyS0.log",
+    "raw_bytes": 19837,
+    "raw_sha256": "ca6c4231bcb8d09b5cc79afa717c2c809aa531be6e1bacc1fe83f63005c6d2c1",
+    "excerpt_only": false,
+    "counts": {
+      "PRIVILEGED_CHANNEL=0 privilege=USER": 0,
+      "heartbeat": 6,
+      "heartbeat=0": 0,
+      "Xid": 0,
+      "nvAssert": 9,
+      "CUDA": 0,
+      "FAST_VERDICT": 0,
+      "FASTGUEST: client": 0,
+      "guest refused": 0
+    },
+    "exported_sha256": "fa1370cfc3de78629f3769fc87f1ff1b941cd9c9443012ce385b6aabc743417d"
+  },
+  {
+    "name": "bench__fast_codex_ampere595_full_cross-client-leak_ttyS0.log",
+    "raw_bytes": 10788,
+    "raw_sha256": "ea5da987d9a39db41115548cef22b0a6cfa5a0c4f1ae34c655bc87e8f83c3ff3",
+    "excerpt_only": false,
+    "counts": {
+      "PRIVILEGED_CHANNEL=0 privilege=USER": 0,
+      "heartbeat": 30,
+      "heartbeat=0": 0,
+      "Xid": 0,
+      "nvAssert": 9,
+      "CUDA": 0,
+      "FAST_VERDICT": 0,
+      "FASTGUEST: client": 0,
+      "guest refused": 0
+    },
+    "exported_sha256": "4c84bbf94b155c35098cac47478e05cd4cbb4d4fa02e75f3fdd6f943a1a4054f"
+  },
+  {
+    "name": "bench__fast_codex_ampere595_full_defer-liveness_ttyS0.log",
+    "raw_bytes": 10267,
+    "raw_sha256": "83f768ecd9287f46d9682e49612638fe752fd73021379b0417471a67f12d268d",
+    "excerpt_only": false,
+    "counts": {
+      "PRIVILEGED_CHANNEL=0 privilege=USER": 0,
+      "heartbeat": 24,
+      "heartbeat=0": 0,
+      "Xid": 0,
+      "nvAssert": 9,
+      "CUDA": 0,
+      "FAST_VERDICT": 0,
+      "FASTGUEST: client": 0,
+      "guest refused": 0
+    },
+    "exported_sha256": "50db680c633754abd5a429a2f17434bb36e5bbc662924a445f4c187922e90807"
+  },
+  {
+    "name": "bench__fast_codex_ampere595_full_dictated-ring-negative_ttyS0.log",
+    "raw_bytes": 8949,
+    "raw_sha256": "95c5b425a8ba7b8a7fd16462433cd7cd4d8ae323fcce8cee070d924d6ef1e1a6",
+    "excerpt_only": false,
+    "counts": {
+      "PRIVILEGED_CHANNEL=0 privilege=USER": 0,
+      "heartbeat": 6,
+      "heartbeat=0": 0,
+      "Xid": 0,
+      "nvAssert": 9,
+      "CUDA": 0,
+      "FAST_VERDICT": 0,
+      "FASTGUEST: client": 0,
+      "guest refused": 0
+    },
+    "exported_sha256": "1c2900a11ba169dd995244096bc78ae79310cf8410fcdd43e9c8085577e13137"
+  },
+  {
+    "name": "bench__fast_codex_ampere595_full_dictated-ring_ttyS0.log",
+    "raw_bytes": 9323,
+    "raw_sha256": "d52a643c82a7bb42c4bdd702757b79277448d7f8bf21b611701d8de034ac4c58",
+    "excerpt_only": false,
+    "counts": {
+      "PRIVILEGED_CHANNEL=0 privilege=USER": 0,
+      "heartbeat": 12,
+      "heartbeat=0": 0,
+      "Xid": 0,
+      "nvAssert": 9,
+      "CUDA": 0,
+      "FAST_VERDICT": 0,
+      "FASTGUEST: client": 0,
+      "guest refused": 0
+    },
+    "exported_sha256": "7411fe5f42426ac6874173dec2dc5be63018aad16c62b8d3a4fde4566b8ed612"
+  },
+  {
+    "name": "bench__fast_codex_ampere595_full_doorbell-census_ttyS0.log",
+    "raw_bytes": 41389,
+    "raw_sha256": "08f9e88043a29b41a48c796abcd3c79db1cbd06a0d4e003144def0bc2429547e",
+    "excerpt_only": false,
+    "counts": {
+      "PRIVILEGED_CHANNEL=0 privilege=USER": 0,
+      "heartbeat": 36,
+      "heartbeat=0": 0,
+      "Xid": 0,
+      "nvAssert": 99,
+      "CUDA": 0,
+      "FAST_VERDICT": 0,
+      "FASTGUEST: client": 0,
+      "guest refused": 0
+    },
+    "exported_sha256": "3df4bc117c9a2a70a023c52050b2fba1d8edd4a75aaf4b14d04bea0b0e33cf2a"
+  },
+  {
+    "name": "bench__fast_codex_ampere595_full_engines_ttyS0.log",
+    "raw_bytes": 17319,
+    "raw_sha256": "b50ad66b17820a80914cc62b50144a4732643ef28a01737f3fcb0e59f59495e5",
+    "excerpt_only": false,
+    "counts": {
+      "PRIVILEGED_CHANNEL=0 privilege=USER": 0,
+      "heartbeat": 42,
+      "heartbeat=0": 0,
+      "Xid": 0,
+      "nvAssert": 26,
+      "CUDA": 0,
+      "FAST_VERDICT": 0,
+      "FASTGUEST: client": 0,
+      "guest refused": 0
+    },
+    "exported_sha256": "9f1c0ffef976dfd108fbfa96c8da421691210ca90218761ef0a4a5a665e01c89"
+  },
+  {
+    "name": "bench__fast_codex_ampere595_full_executor-vas_ttyS0.log",
+    "raw_bytes": 11755,
+    "raw_sha256": "9cc17f99da49d6608f9e127aa781c03cbea3a72378ecf08fad8ae11fdcde7780",
+    "excerpt_only": false,
+    "counts": {
+      "PRIVILEGED_CHANNEL=0 privilege=USER": 0,
+      "heartbeat": 42,
+      "heartbeat=0": 0,
+      "Xid": 0,
+      "nvAssert": 9,
+      "CUDA": 0,
+      "FAST_VERDICT": 0,
+      "FASTGUEST: client": 0,
+      "guest refused": 0
+    },
+    "exported_sha256": "71dfdd26b751b852962cc8c59fb0cde18c0cacf00e37642aa91f64a57623477a"
+  },
+  {
+    "name": "bench__fast_codex_ampere595_full_gpga-reserve-probe_ttyS0.log",
+    "raw_bytes": 10319,
+    "raw_sha256": "263dbc445077e92ca9e8fdcc413dcc14bb8972234b76983fc8262f8ff24d680c",
+    "excerpt_only": false,
+    "counts": {
+      "PRIVILEGED_CHANNEL=0 privilege=USER": 0,
+      "heartbeat": 24,
+      "heartbeat=0": 0,
+      "Xid": 0,
+      "nvAssert": 9,
+      "CUDA": 0,
+      "FAST_VERDICT": 0,
+      "FASTGUEST: client": 0,
+      "guest refused": 0
+    },
+    "exported_sha256": "2e7ec43b989f980975fe5df23cab6ad109068c7357be43ce0137a621c06729a1"
+  },
+  {
+    "name": "bench__fast_codex_ampere595_full_gpu-info-sweep_ttyS0.log",
+    "raw_bytes": 8619,
+    "raw_sha256": "141d80cc0fa89d242f742d71d8bd0369c4171dda24a630c34c133cfaf6583fd2",
+    "excerpt_only": false,
+    "counts": {
+      "PRIVILEGED_CHANNEL=0 privilege=USER": 0,
+      "heartbeat": 3,
+      "heartbeat=0": 0,
+      "Xid": 0,
+      "nvAssert": 9,
+      "CUDA": 0,
+      "FAST_VERDICT": 0,
+      "FASTGUEST: client": 0,
+      "guest refused": 0
+    },
+    "exported_sha256": "56561fd1dd9f7d23bd9c3fe068552f56e80709edcb046a0da74f1b46c11bc541"
+  },
+  {
+    "name": "bench__fast_codex_ampere595_full_guest-ram-pin_ttyS0.log",
+    "raw_bytes": 9367,
+    "raw_sha256": "d413077675e5d51ca0e7afb9f211e52939049f961d93ef9806b53a9a22e4ec11",
+    "excerpt_only": false,
+    "counts": {
+      "PRIVILEGED_CHANNEL=0 privilege=USER": 0,
+      "heartbeat": 12,
+      "heartbeat=0": 0,
+      "Xid": 0,
+      "nvAssert": 9,
+      "CUDA": 0,
+      "FAST_VERDICT": 0,
+      "FASTGUEST: client": 0,
+      "guest refused": 0
+    },
+    "exported_sha256": "6412d9fb86f4dff491bc448fafb9eb7b4069bad319ef3269a4927da3ec184e31"
+  },
+  {
+    "name": "bench__fast_codex_ampere595_full_guest-ring-channel_ttyS0.log",
+    "raw_bytes": 11771,
+    "raw_sha256": "7c2ad391266a51f0ba1802f3d02bed504ac6e8d8ca4739b01cc0c8888e934eb1",
+    "excerpt_only": false,
+    "counts": {
+      "PRIVILEGED_CHANNEL=0 privilege=USER": 0,
+      "heartbeat": 42,
+      "heartbeat=0": 0,
+      "Xid": 0,
+      "nvAssert": 9,
+      "CUDA": 0,
+      "FAST_VERDICT": 0,
+      "FASTGUEST: client": 0,
+      "guest refused": 0
+    },
+    "exported_sha256": "7a95619b9e8e59938aabdaf0aa610e755d553524ba65098d1682bec5768a1653"
+  },
+  {
+    "name": "bench__fast_codex_ampere595_full_late-map-race_ttyS0.log",
+    "raw_bytes": 11722,
+    "raw_sha256": "fb20024623cfc7fffe22cfcb2b0ce47ca3a41fa4d1b54a2012aedabe21a45601",
+    "excerpt_only": false,
+    "counts": {
+      "PRIVILEGED_CHANNEL=0 privilege=USER": 0,
+      "heartbeat": 42,
+      "heartbeat=0": 0,
+      "Xid": 0,
+      "nvAssert": 9,
+      "CUDA": 0,
+      "FAST_VERDICT": 0,
+      "FASTGUEST: client": 0,
+      "guest refused": 0
+    },
+    "exported_sha256": "168ee7310aa4ba9215b275fd8f816cdf489ce3588d3ea021f8e7baaf2e558e0f"
+  },
+  {
+    "name": "bench__fast_codex_ampere595_full_map-propagation_ttyS0.log",
+    "raw_bytes": 9921,
+    "raw_sha256": "7efa0f9703d4cbb4b7ee85f32d78244531e9150806381c7656ad2035b77498d5",
+    "excerpt_only": false,
+    "counts": {
+      "PRIVILEGED_CHANNEL=0 privilege=USER": 0,
+      "heartbeat": 18,
+      "heartbeat=0": 0,
+      "Xid": 0,
+      "nvAssert": 9,
+      "CUDA": 0,
+      "FAST_VERDICT": 0,
+      "FASTGUEST: client": 0,
+      "guest refused": 0
+    },
+    "exported_sha256": "2b7010fd5e15fd06bb2fb89297d98e741526b07a1d2b40d25cf3dc4ac7a6c02b"
+  },
+  {
+    "name": "bench__fast_codex_ampere595_full_map-stress_ttyS0.log",
+    "raw_bytes": 9788,
+    "raw_sha256": "6ba797d808fac1616d8e9dc5d326b9993b8ca87b8d9b3b4c8b476d85ca845eee",
+    "excerpt_only": false,
+    "counts": {
+      "PRIVILEGED_CHANNEL=0 privilege=USER": 0,
+      "heartbeat": 18,
+      "heartbeat=0": 0,
+      "Xid": 0,
+      "nvAssert": 9,
+      "CUDA": 0,
+      "FAST_VERDICT": 0,
+      "FASTGUEST: client": 0,
+      "guest refused": 0
+    },
+    "exported_sha256": "482b1bbae963d7f8ac0e5f3f56afcfb266db10b49849d18099344d4fd4a69334"
+  },
+  {
+    "name": "bench__fast_codex_ampere595_full_missing-page-fault_ttyS0.log",
+    "raw_bytes": 10319,
+    "raw_sha256": "17e780d3dbab4fbc2ca883a3a4c6e3affcf7557a0a4f11ef14ea0c1f28f28e27",
+    "excerpt_only": false,
+    "counts": {
+      "PRIVILEGED_CHANNEL=0 privilege=USER": 0,
+      "heartbeat": 24,
+      "heartbeat=0": 0,
+      "Xid": 0,
+      "nvAssert": 9,
+      "CUDA": 0,
+      "FAST_VERDICT": 0,
+      "FASTGUEST: client": 0,
+      "guest refused": 0
+    },
+    "exported_sha256": "0f72c6e5c81e600f4abf034ed2eef7bf6d56ab25c0a7c5e27f755de9956f0934"
+  },
+  {
+    "name": "bench__fast_codex_ampere595_full_pce-mask-probe_ttyS0.log",
+    "raw_bytes": 8854,
+    "raw_sha256": "25186d6295ce856017ea967c643ab0f3371e49088a795f94ecd3282c400523a2",
+    "excerpt_only": false,
+    "counts": {
+      "PRIVILEGED_CHANNEL=0 privilege=USER": 0,
+      "heartbeat": 6,
+      "heartbeat=0": 0,
+      "Xid": 0,
+      "nvAssert": 9,
+      "CUDA": 0,
+      "FAST_VERDICT": 0,
+      "FASTGUEST: client": 0,
+      "guest refused": 0
+    },
+    "exported_sha256": "33934cc0efcbf27725fbe3848aa7ecd83b8aa9426ea7e4935d7720f5400ffb6c"
+  },
+  {
+    "name": "bench__fast_codex_ampere595_full_rpc-mixed-allocs_ttyS0.log",
+    "raw_bytes": 11213,
+    "raw_sha256": "3ca10c3737898f95d494ea0a6d88476c6203d4dcdb98291942716418fd94c0cb",
+    "excerpt_only": false,
+    "counts": {
+      "PRIVILEGED_CHANNEL=0 privilege=USER": 0,
+      "heartbeat": 36,
+      "heartbeat=0": 0,
+      "Xid": 0,
+      "nvAssert": 9,
+      "CUDA": 0,
+      "FAST_VERDICT": 0,
+      "FASTGUEST: client": 0,
+      "guest refused": 0
+    },
+    "exported_sha256": "ab8f410fd3c41a882b5f46db06537bab5fc73ccaf959d36c9c2003022977942f"
+  },
+  {
+    "name": "bench__fast_codex_ampere595_full_timer_ttyS0.log",
+    "raw_bytes": 10720,
+    "raw_sha256": "0dc91ec7438fdabb856de720ce0bd3cd4fbdbfe307ae682bd56066942afc7789",
+    "excerpt_only": false,
+    "counts": {
+      "PRIVILEGED_CHANNEL=0 privilege=USER": 0,
+      "heartbeat": 30,
+      "heartbeat=0": 0,
+      "Xid": 0,
+      "nvAssert": 9,
+      "CUDA": 0,
+      "FAST_VERDICT": 0,
+      "FASTGUEST: client": 0,
+      "guest refused": 0
+    },
+    "exported_sha256": "9a55364255c9c2acea9d85d549a0384ffbc7552141b25aef3e6e71ec65c019d6"
+  },
+  {
+    "name": "bench__fast_codex_ampere595_full_uvm-invalidate_ttyS0.log",
+    "raw_bytes": 10233,
+    "raw_sha256": "11312f8f09d9ea125973414206b3bce2246eeba3a1b086a2e05b0c876fde96f1",
+    "excerpt_only": false,
+    "counts": {
+      "PRIVILEGED_CHANNEL=0 privilege=USER": 0,
+      "heartbeat": 18,
+      "heartbeat=0": 0,
+      "Xid": 0,
+      "nvAssert": 9,
+      "CUDA": 0,
+      "FAST_VERDICT": 0,
+      "FASTGUEST: client": 0,
+      "guest refused": 0
+    },
+    "exported_sha256": "d0dc84db09ad0c2e32e5fbdc2b749a8ba777d698d12a68f2307f6a0f11b5e314"
+  },
+  {
+    "name": "bench__fast_codex_ampere595_full_uvm-mean_ttyS0.log",
+    "raw_bytes": 11767,
+    "raw_sha256": "a335ab60d7c436c8ffc1901883d47041981f679e81c045cd6fd7d10f831fa41e",
+    "excerpt_only": false,
+    "counts": {
+      "PRIVILEGED_CHANNEL=0 privilege=USER": 0,
+      "heartbeat": 36,
+      "heartbeat=0": 0,
+      "Xid": 0,
+      "nvAssert": 9,
+      "CUDA": 0,
+      "FAST_VERDICT": 0,
+      "FASTGUEST: client": 0,
+      "guest refused": 0
+    },
+    "exported_sha256": "36a6ec726edb6ae234d59952f4ee63d9ca297f53ad0e669bf30a9906023dafb6"
+  },
+  {
+    "name": "bench__fast_codex_ampere595_full_alias-two-vas_qemu.log",
+    "raw_bytes": 100110,
+    "raw_sha256": "0268f50653723982017944100788ddfd87de662fb73ca51e8ba06fbfdddca513",
+    "excerpt_only": false,
+    "counts": {
+      "PRIVILEGED_CHANNEL=0 privilege=USER": 3,
+      "heartbeat": 0,
+      "heartbeat=0": 0,
+      "Xid": 0,
+      "nvAssert": 0,
+      "CUDA": 0,
+      "FAST_VERDICT": 0,
+      "FASTGUEST: client": 0,
+      "guest refused": 0
+    },
+    "exported_sha256": "d83af1647a2efef74117dd47f8d35eedf85c545870245ad0b604dc6a8a022d97"
+  },
+  {
+    "name": "bench__fast_codex_ampere595_full_alias-unmap-observe_qemu.log",
+    "raw_bytes": 100549,
+    "raw_sha256": "dcec05556d4617ecb30181f22dbf99f631b1b0550d670b5c551a3c2fe5e0c42b",
+    "excerpt_only": false,
+    "counts": {
+      "PRIVILEGED_CHANNEL=0 privilege=USER": 3,
+      "heartbeat": 0,
+      "heartbeat=0": 0,
+      "Xid": 0,
+      "nvAssert": 0,
+      "CUDA": 0,
+      "FAST_VERDICT": 0,
+      "FASTGUEST: client": 0,
+      "guest refused": 0
+    },
+    "exported_sha256": "2cdbaca67069b2a09c53a962392665a4a03f060ccb87c16f4ae1932aa084c912"
+  },
+  {
+    "name": "bench__fast_codex_ampere595_full_atomics-probe_qemu.log",
+    "raw_bytes": 94396,
+    "raw_sha256": "80936dbd7a23f794cd5407a66974117b080180e00d39ceead0cb6be58b054d20",
+    "excerpt_only": false,
+    "counts": {
+      "PRIVILEGED_CHANNEL=0 privilege=USER": 2,
+      "heartbeat": 0,
+      "heartbeat=0": 0,
+      "Xid": 0,
+      "nvAssert": 0,
+      "CUDA": 0,
+      "FAST_VERDICT": 0,
+      "FASTGUEST: client": 0,
+      "guest refused": 0
+    },
+    "exported_sha256": "18785c8987cb20c582ff0538a7631c352b609b90b34fb5493dc71a5310d16fa7"
+  },
+  {
+    "name": "bench__fast_codex_ampere595_full_bar1-crossing_qemu.log",
+    "raw_bytes": 94478,
+    "raw_sha256": "1d3030b4d8610e41f73e4aaa07bdc9aaf696e32766ac2fcac6effdc3a278bbfe",
+    "excerpt_only": false,
+    "counts": {
+      "PRIVILEGED_CHANNEL=0 privilege=USER": 2,
+      "heartbeat": 0,
+      "heartbeat=0": 0,
+      "Xid": 0,
+      "nvAssert": 0,
+      "CUDA": 0,
+      "FAST_VERDICT": 0,
+      "FASTGUEST: client": 0,
+      "guest refused": 0
+    },
+    "exported_sha256": "951153d33c5213a5fb71d1a9ce836c171068bf727c092ac5cd74fd54679c9062"
+  },
+  {
+    "name": "bench__fast_codex_ampere595_full_blockage-coverage_qemu.log",
+    "raw_bytes": 105254,
+    "raw_sha256": "3a283219e367f307ddc858accd4a841327608de7c266ef2e608fe9575c29d843",
+    "excerpt_only": false,
+    "counts": {
+      "PRIVILEGED_CHANNEL=0 privilege=USER": 4,
+      "heartbeat": 0,
+      "heartbeat=0": 0,
+      "Xid": 0,
+      "nvAssert": 0,
+      "CUDA": 0,
+      "FAST_VERDICT": 0,
+      "FASTGUEST: client": 0,
+      "guest refused": 0
+    },
+    "exported_sha256": "1e71cfaa610231b46452cb7adb298d6a3959d9bbdb47052c24b60a2d62dbf2d9"
+  },
+  {
+    "name": "bench__fast_codex_ampere595_full_bus-info-sweep_qemu.log",
+    "raw_bytes": 98054,
+    "raw_sha256": "6842ad57a8f4ba9830dbc86e7d37ad35b0f067ccf660b4e088108502f91d1d56",
+    "excerpt_only": false,
+    "counts": {
+      "PRIVILEGED_CHANNEL=0 privilege=USER": 2,
+      "heartbeat": 0,
+      "heartbeat=0": 0,
+      "Xid": 0,
+      "nvAssert": 0,
+      "CUDA": 0,
+      "FAST_VERDICT": 0,
+      "FASTGUEST: client": 0,
+      "guest refused": 0
+    },
+    "exported_sha256": "2daa52c14f7f839541efc3a1e0d58a9acc8857120e458d56dcf8a0542c9c400c"
+  },
+  {
+    "name": "bench__fast_codex_ampere595_full_ce-client-guest-ram_qemu.log",
+    "raw_bytes": 296106,
+    "raw_sha256": "9de03057da8890020dcc01dfddc37791b20dfcc25aa3786ab33b4a98aa490983",
+    "excerpt_only": false,
+    "counts": {
+      "PRIVILEGED_CHANNEL=0 privilege=USER": 3,
+      "heartbeat": 0,
+      "heartbeat=0": 0,
+      "Xid": 0,
+      "nvAssert": 0,
+      "CUDA": 0,
+      "FAST_VERDICT": 0,
+      "FASTGUEST: client": 0,
+      "guest refused": 0
+    },
+    "exported_sha256": "d99adfa8177f06e40f53b03e5bba1e229d9bdb5fd2929849d95bc38ddfd577ba"
+  },
+  {
+    "name": "bench__fast_codex_ampere595_full_ce-client_qemu.log",
+    "raw_bytes": 103462,
+    "raw_sha256": "07a21087fb5bb49cb96fc067ce20956440a664ac3bf993770f29dbe44aaa2852",
+    "excerpt_only": false,
+    "counts": {
+      "PRIVILEGED_CHANNEL=0 privilege=USER": 3,
+      "heartbeat": 0,
+      "heartbeat=0": 0,
+      "Xid": 0,
+      "nvAssert": 0,
+      "CUDA": 0,
+      "FAST_VERDICT": 0,
+      "FASTGUEST: client": 0,
+      "guest refused": 0
+    },
+    "exported_sha256": "09cbc1344fe72b9d99cc0294e03419a36fe253db0d12c344178bc6d2934528e7"
+  },
+  {
+    "name": "bench__fast_codex_ampere595_full_concurrency_qemu.log",
+    "raw_bytes": 1836464,
+    "raw_sha256": "6529af14caf7f5c9e29f23f6b32dab3233d964ebda1cee21bed52428ab747a72",
+    "excerpt_only": true,
+    "counts": {
+      "PRIVILEGED_CHANNEL=0 privilege=USER": 6,
+      "heartbeat": 0,
+      "heartbeat=0": 0,
+      "Xid": 0,
+      "nvAssert": 0,
+      "CUDA": 0,
+      "FAST_VERDICT": 0,
+      "FASTGUEST: client": 0,
+      "guest refused": 0
+    },
+    "exported_sha256": "53bc8728dd99f6f9c85053cb648e2dbf333febd47b4c754b22cfac80ebe803e0"
+  },
+  {
+    "name": "bench__fast_codex_ampere595_full_concurrent-fuzz_qemu.log",
+    "raw_bytes": 176300,
+    "raw_sha256": "1f06c21d6f60e561ce277548b9fb086acd8eddf36b7a44572624dfafe4bae65f",
+    "excerpt_only": false,
+    "counts": {
+      "PRIVILEGED_CHANNEL=0 privilege=USER": 27,
+      "heartbeat": 0,
+      "heartbeat=0": 0,
+      "Xid": 0,
+      "nvAssert": 0,
+      "CUDA": 0,
+      "FAST_VERDICT": 0,
+      "FASTGUEST: client": 0,
+      "guest refused": 0
+    },
+    "exported_sha256": "7a6e6e1b0a093c3cc2a2a03523761ce73db54ea3af5870a728518909874ac25b"
+  },
+  {
+    "name": "bench__fast_codex_ampere595_full_cross-client-leak_qemu.log",
+    "raw_bytes": 104970,
+    "raw_sha256": "9bae372b7f6ec012ec09fc944fff9b2d0abcd54bf01663e0a5789cde28d17664",
+    "excerpt_only": false,
+    "counts": {
+      "PRIVILEGED_CHANNEL=0 privilege=USER": 4,
+      "heartbeat": 0,
+      "heartbeat=0": 0,
+      "Xid": 0,
+      "nvAssert": 0,
+      "CUDA": 0,
+      "FAST_VERDICT": 0,
+      "FASTGUEST: client": 0,
+      "guest refused": 0
+    },
+    "exported_sha256": "99ee79afcecf4d38bf71e708bcfbad1503b2096c742631714af42a487b7e3a72"
+  },
+  {
+    "name": "bench__fast_codex_ampere595_full_defer-liveness_qemu.log",
+    "raw_bytes": 149869,
+    "raw_sha256": "2688ceec1ee9c25cd11bf0c7d317a34f3cf10a34e1e9314c1e90adaddbb7beff",
+    "excerpt_only": false,
+    "counts": {
+      "PRIVILEGED_CHANNEL=0 privilege=USER": 11,
+      "heartbeat": 0,
+      "heartbeat=0": 0,
+      "Xid": 4,
+      "nvAssert": 0,
+      "CUDA": 0,
+      "FAST_VERDICT": 0,
+      "FASTGUEST: client": 0,
+      "guest refused": 0
+    },
+    "exported_sha256": "83d7e51da2e91604cbb2245dbe78602b4ad0cf5cf984dcde1ca3930874abb69a"
+  },
+  {
+    "name": "bench__fast_codex_ampere595_full_dictated-ring-negative_qemu.log",
+    "raw_bytes": 97973,
+    "raw_sha256": "c65d36d794d57610278f47ed8788dabd25de7010eeaa94320a6508ace9b6548d",
+    "excerpt_only": false,
+    "counts": {
+      "PRIVILEGED_CHANNEL=0 privilege=USER": 2,
+      "heartbeat": 0,
+      "heartbeat=0": 0,
+      "Xid": 0,
+      "nvAssert": 0,
+      "CUDA": 0,
+      "FAST_VERDICT": 0,
+      "FASTGUEST: client": 0,
+      "guest refused": 0
+    },
+    "exported_sha256": "bb7af51bc4cf0869618daffd2c107edcacbcac199a7607b01bff3d0a93a14cae"
+  },
+  {
+    "name": "bench__fast_codex_ampere595_full_dictated-ring_qemu.log",
+    "raw_bytes": 98498,
+    "raw_sha256": "3da0b3b38435d81fc35334052987a2bd296e596e35eabf7f499a1bf99b280d83",
+    "excerpt_only": false,
+    "counts": {
+      "PRIVILEGED_CHANNEL=0 privilege=USER": 3,
+      "heartbeat": 0,
+      "heartbeat=0": 0,
+      "Xid": 0,
+      "nvAssert": 0,
+      "CUDA": 0,
+      "FAST_VERDICT": 0,
+      "FASTGUEST: client": 0,
+      "guest refused": 0
+    },
+    "exported_sha256": "aa4d44a95bfd4f0ffeb4083ba6347afc5bcd10710104b9fbf2010c52e1905e2e"
+  },
+  {
+    "name": "bench__fast_codex_ampere595_full_doorbell-census_qemu.log",
+    "raw_bytes": 158718,
+    "raw_sha256": "b5e7307cc28ac28281ee4c56dcdcd2f7aadfb37359f03e8db14293863d982e91",
+    "excerpt_only": false,
+    "counts": {
+      "PRIVILEGED_CHANNEL=0 privilege=USER": 20,
+      "heartbeat": 0,
+      "heartbeat=0": 0,
+      "Xid": 0,
+      "nvAssert": 0,
+      "CUDA": 0,
+      "FAST_VERDICT": 0,
+      "FASTGUEST: client": 0,
+      "guest refused": 0
+    },
+    "exported_sha256": "7fd4fc9f6967981e0b214cbf997be8c7336417dcebc71b7826f221ef3554bc02"
+  },
+  {
+    "name": "bench__fast_codex_ampere595_full_engines_qemu.log",
+    "raw_bytes": 145400,
+    "raw_sha256": "2e026c7ad3389a63189784b6e54b7d7137177393539ab00f669d40da5137bc46",
+    "excerpt_only": false,
+    "counts": {
+      "PRIVILEGED_CHANNEL=0 privilege=USER": 14,
+      "heartbeat": 0,
+      "heartbeat=0": 0,
+      "Xid": 0,
+      "nvAssert": 0,
+      "CUDA": 0,
+      "FAST_VERDICT": 0,
+      "FASTGUEST: client": 0,
+      "guest refused": 0
+    },
+    "exported_sha256": "b2ba89136151a411deafeb64dca5419b37ee84fcc940dbd52eef0b4b707546ce"
+  },
+  {
+    "name": "bench__fast_codex_ampere595_full_executor-vas_qemu.log",
+    "raw_bytes": 102551,
+    "raw_sha256": "e430137e6a888d15fdd3e76612590d8782598fe07b90dcb2a2833aa0d9ab5fa3",
+    "excerpt_only": false,
+    "counts": {
+      "PRIVILEGED_CHANNEL=0 privilege=USER": 3,
+      "heartbeat": 0,
+      "heartbeat=0": 0,
+      "Xid": 0,
+      "nvAssert": 0,
+      "CUDA": 0,
+      "FAST_VERDICT": 0,
+      "FASTGUEST: client": 0,
+      "guest refused": 0
+    },
+    "exported_sha256": "be895b9e5541b3c53c807a13cf5781492544336c0fb64d2c6fa57b2ce1c8b8a1"
+  },
+  {
+    "name": "bench__fast_codex_ampere595_full_gpga-reserve-probe_qemu.log",
+    "raw_bytes": 142306,
+    "raw_sha256": "eafb08de74c37109f85487d54fcb956d2245f03a4bf19b5d00bb7d444bee99a9",
+    "excerpt_only": false,
+    "counts": {
+      "PRIVILEGED_CHANNEL=0 privilege=USER": 2,
+      "heartbeat": 0,
+      "heartbeat=0": 0,
+      "Xid": 0,
+      "nvAssert": 0,
+      "CUDA": 0,
+      "FAST_VERDICT": 0,
+      "FASTGUEST: client": 0,
+      "guest refused": 0
+    },
+    "exported_sha256": "4c954f48f25734ba4e57ff74065a8e508ca3a9a0c4dc3548078d8d09f4746b09"
+  },
+  {
+    "name": "bench__fast_codex_ampere595_full_gpu-info-sweep_qemu.log",
+    "raw_bytes": 95140,
+    "raw_sha256": "f8bdd3073dd61f4bf8c26ab788187f00f4e3332fec503d31ea94974940b9a833",
+    "excerpt_only": false,
+    "counts": {
+      "PRIVILEGED_CHANNEL=0 privilege=USER": 2,
+      "heartbeat": 0,
+      "heartbeat=0": 0,
+      "Xid": 0,
+      "nvAssert": 0,
+      "CUDA": 0,
+      "FAST_VERDICT": 0,
+      "FASTGUEST: client": 0,
+      "guest refused": 0
+    },
+    "exported_sha256": "002875c23ac3755d694a802da2d4ee26431e48fc0d7e0fb40a277833e1fcb41e"
+  },
+  {
+    "name": "bench__fast_codex_ampere595_full_guest-ram-pin_qemu.log",
+    "raw_bytes": 98229,
+    "raw_sha256": "f285f5eae7eead04d3c06aee630616357f1693a91d78f4a5286b04487be6bd0f",
+    "excerpt_only": false,
+    "counts": {
+      "PRIVILEGED_CHANNEL=0 privilege=USER": 2,
+      "heartbeat": 0,
+      "heartbeat=0": 0,
+      "Xid": 0,
+      "nvAssert": 0,
+      "CUDA": 0,
+      "FAST_VERDICT": 0,
+      "FASTGUEST: client": 0,
+      "guest refused": 0
+    },
+    "exported_sha256": "3b9b7593b33a76ee2735e4828b1a495bca783ccf0ff49961f92c6db3a44a09f2"
+  },
+  {
+    "name": "bench__fast_codex_ampere595_full_guest-ring-channel_qemu.log",
+    "raw_bytes": 100922,
+    "raw_sha256": "3f26992abf46b4573c629f1eb258075fdb2a4591f65724a7ee112e0d1e33633e",
+    "excerpt_only": false,
+    "counts": {
+      "PRIVILEGED_CHANNEL=0 privilege=USER": 4,
+      "heartbeat": 0,
+      "heartbeat=0": 0,
+      "Xid": 0,
+      "nvAssert": 0,
+      "CUDA": 0,
+      "FAST_VERDICT": 0,
+      "FASTGUEST: client": 0,
+      "guest refused": 0
+    },
+    "exported_sha256": "be488ac1ac81c572ddb0e1aec6eacc5b27a3a31602f3da460e44ee7bf9e144d9"
+  },
+  {
+    "name": "bench__fast_codex_ampere595_full_late-map-race_qemu.log",
+    "raw_bytes": 105389,
+    "raw_sha256": "3a6b8a950d615d9eb3b856c45ad5ab42093352a86ae5b73929308f40a979415a",
+    "excerpt_only": false,
+    "counts": {
+      "PRIVILEGED_CHANNEL=0 privilege=USER": 4,
+      "heartbeat": 0,
+      "heartbeat=0": 0,
+      "Xid": 0,
+      "nvAssert": 0,
+      "CUDA": 0,
+      "FAST_VERDICT": 0,
+      "FASTGUEST: client": 0,
+      "guest refused": 0
+    },
+    "exported_sha256": "cc13a1a6fd67ecb469772b4b0bdb49b50503ce809a1cc07d4b6113bc7e6072da"
+  },
+  {
+    "name": "bench__fast_codex_ampere595_full_map-propagation_qemu.log",
+    "raw_bytes": 96274,
+    "raw_sha256": "ea45b2e9fb55311d55daa4a995ebaf5667891011ead4c6df4fcfc1615e387874",
+    "excerpt_only": false,
+    "counts": {
+      "PRIVILEGED_CHANNEL=0 privilege=USER": 2,
+      "heartbeat": 0,
+      "heartbeat=0": 0,
+      "Xid": 0,
+      "nvAssert": 0,
+      "CUDA": 0,
+      "FAST_VERDICT": 0,
+      "FASTGUEST: client": 0,
+      "guest refused": 0
+    },
+    "exported_sha256": "c5503a933f92f7a6a7a857e6c2cb3ed19aa408d1688ccedc61451555bc5fd396"
+  },
+  {
+    "name": "bench__fast_codex_ampere595_full_map-stress_qemu.log",
+    "raw_bytes": 112065,
+    "raw_sha256": "cea43710dcd24deb6d5d02f605410cd1acbcbedf20d6ff2372b4a086a50e82d4",
+    "excerpt_only": false,
+    "counts": {
+      "PRIVILEGED_CHANNEL=0 privilege=USER": 3,
+      "heartbeat": 0,
+      "heartbeat=0": 0,
+      "Xid": 0,
+      "nvAssert": 0,
+      "CUDA": 0,
+      "FAST_VERDICT": 0,
+      "FASTGUEST: client": 0,
+      "guest refused": 0
+    },
+    "exported_sha256": "fb183a4ec32c6e296c00ac683c55972f7dab15b3cb5eb8c2a7331a208fbdbfd5"
+  },
+  {
+    "name": "bench__fast_codex_ampere595_full_missing-page-fault_qemu.log",
+    "raw_bytes": 108141,
+    "raw_sha256": "ca22ce6b3d0fffb63a267cf250bbe5b2ba74ded1bb5606209338f473f38c5e46",
+    "excerpt_only": false,
+    "counts": {
+      "PRIVILEGED_CHANNEL=0 privilege=USER": 4,
+      "heartbeat": 0,
+      "heartbeat=0": 0,
+      "Xid": 1,
+      "nvAssert": 0,
+      "CUDA": 0,
+      "FAST_VERDICT": 0,
+      "FASTGUEST: client": 0,
+      "guest refused": 0
+    },
+    "exported_sha256": "94167d8c20a6b92c415e93d6591a84a7a72d1cbc3ad351a174cb8a82d3275c67"
+  },
+  {
+    "name": "bench__fast_codex_ampere595_full_pce-mask-probe_qemu.log",
+    "raw_bytes": 94256,
+    "raw_sha256": "4f5919c2d1c0fadfc77ac25a57ea036d94be60a57a2b39c21d61d9e63f70fac9",
+    "excerpt_only": false,
+    "counts": {
+      "PRIVILEGED_CHANNEL=0 privilege=USER": 2,
+      "heartbeat": 0,
+      "heartbeat=0": 0,
+      "Xid": 0,
+      "nvAssert": 0,
+      "CUDA": 0,
+      "FAST_VERDICT": 0,
+      "FASTGUEST: client": 0,
+      "guest refused": 0
+    },
+    "exported_sha256": "070c55c96ab3a28525e18d82fd237ccb0107d374607d69fef263f31b06fe0851"
+  },
+  {
+    "name": "bench__fast_codex_ampere595_full_rpc-mixed-allocs_qemu.log",
+    "raw_bytes": 105353,
+    "raw_sha256": "2bcd87f27730b93e7658b44f17fc8a7056541c06d7ea00027ca8a22ccd65940b",
+    "excerpt_only": false,
+    "counts": {
+      "PRIVILEGED_CHANNEL=0 privilege=USER": 3,
+      "heartbeat": 0,
+      "heartbeat=0": 0,
+      "Xid": 0,
+      "nvAssert": 0,
+      "CUDA": 0,
+      "FAST_VERDICT": 0,
+      "FASTGUEST: client": 0,
+      "guest refused": 0
+    },
+    "exported_sha256": "2c1e9b91a37f6e34dc2a5c6d032d1b500eec75b2a8bd7fd4f07e16d93daf79ab"
+  },
+  {
+    "name": "bench__fast_codex_ampere595_full_timer_qemu.log",
+    "raw_bytes": 92750,
+    "raw_sha256": "c6cd8ca9f5c8c1b6eec23ba4f6cc94356a78f674424cff73b32c4f2290379d23",
+    "excerpt_only": false,
+    "counts": {
+      "PRIVILEGED_CHANNEL=0 privilege=USER": 2,
+      "heartbeat": 0,
+      "heartbeat=0": 0,
+      "Xid": 0,
+      "nvAssert": 0,
+      "CUDA": 0,
+      "FAST_VERDICT": 0,
+      "FASTGUEST: client": 0,
+      "guest refused": 0
+    },
+    "exported_sha256": "f289d3feeb37f19d1f0efb21496dfe84fb8755e662ded93dc92e3c514c07ac8a"
+  },
+  {
+    "name": "bench__fast_codex_ampere595_full_uvm-invalidate_qemu.log",
+    "raw_bytes": 119487,
+    "raw_sha256": "29ce23ecdda0eb069b90b805ec3b6177b262a021d6db90426c13b4af6a60bd1b",
+    "excerpt_only": false,
+    "counts": {
+      "PRIVILEGED_CHANNEL=0 privilege=USER": 6,
+      "heartbeat": 0,
+      "heartbeat=0": 0,
+      "Xid": 0,
+      "nvAssert": 0,
+      "CUDA": 0,
+      "FAST_VERDICT": 0,
+      "FASTGUEST: client": 0,
+      "guest refused": 0
+    },
+    "exported_sha256": "257c04af411178348af36acb0fb6df31b5f54617c306db8b8b4cfee62c024f95"
+  },
+  {
+    "name": "bench__fast_codex_ampere595_full_uvm-mean_qemu.log",
+    "raw_bytes": 145664,
+    "raw_sha256": "fbeb19ee9b6910aa55917f7e626250b44b6ba7a2dd3d73d2448895a0408880d4",
+    "excerpt_only": false,
+    "counts": {
+      "PRIVILEGED_CHANNEL=0 privilege=USER": 13,
+      "heartbeat": 0,
+      "heartbeat=0": 0,
+      "Xid": 0,
+      "nvAssert": 0,
+      "CUDA": 0,
+      "FAST_VERDICT": 0,
+      "FASTGUEST: client": 0,
+      "guest refused": 0
+    },
+    "exported_sha256": "8f683ca8d5ff68d4da94d183f35bc666c1c492245c61e95f30f6f5e43ff52d5f"
+  },
+  {
+    "name": "receipts__89546.json",
+    "raw_bytes": 1364,
+    "raw_sha256": "a9af9a861006136c06fceb3b18a9b9af4cd5761c0a52710ec4a94ec860845afe",
+    "excerpt_only": false,
+    "counts": {
+      "PRIVILEGED_CHANNEL=0 privilege=USER": 0,
+      "heartbeat": 0,
+      "heartbeat=0": 0,
+      "Xid": 0,
+      "nvAssert": 0,
+      "CUDA": 0,
+      "FAST_VERDICT": 0,
+      "FASTGUEST: client": 0,
+      "guest refused": 0
+    },
+    "exported_sha256": "a9af9a861006136c06fceb3b18a9b9af4cd5761c0a52710ec4a94ec860845afe"
+  },
+  {
+    "name": "receipts__89686.json",
+    "raw_bytes": 1370,
+    "raw_sha256": "fc212a010efa5f8488e05d573c376f6eecd15cc50223fd4d451edbd31e5bbc67",
+    "excerpt_only": false,
+    "counts": {
+      "PRIVILEGED_CHANNEL=0 privilege=USER": 0,
+      "heartbeat": 0,
+      "heartbeat=0": 0,
+      "Xid": 0,
+      "nvAssert": 0,
+      "CUDA": 0,
+      "FAST_VERDICT": 0,
+      "FASTGUEST: client": 0,
+      "guest refused": 0
+    },
+    "exported_sha256": "fc212a010efa5f8488e05d573c376f6eecd15cc50223fd4d451edbd31e5bbc67"
+  },
+  {
+    "name": "receipts__90045.json",
+    "raw_bytes": 1394,
+    "raw_sha256": "eeac1be695ae8da4eb2fa2153ec9b17c66fa0fc3f2a371b6b0027a61418a208d",
+    "excerpt_only": false,
+    "counts": {
+      "PRIVILEGED_CHANNEL=0 privilege=USER": 0,
+      "heartbeat": 0,
+      "heartbeat=0": 0,
+      "Xid": 0,
+      "nvAssert": 0,
+      "CUDA": 0,
+      "FAST_VERDICT": 0,
+      "FASTGUEST: client": 0,
+      "guest refused": 0
+    },
+    "exported_sha256": "eeac1be695ae8da4eb2fa2153ec9b17c66fa0fc3f2a371b6b0027a61418a208d"
+  },
+  {
+    "name": "receipts__90418.json",
+    "raw_bytes": 1391,
+    "raw_sha256": "f2cdd97a68c23ab120022e7786826f8a05e73d9f498f49d0a23786333f878f38",
+    "excerpt_only": false,
+    "counts": {
+      "PRIVILEGED_CHANNEL=0 privilege=USER": 0,
+      "heartbeat": 0,
+      "heartbeat=0": 0,
+      "Xid": 0,
+      "nvAssert": 0,
+      "CUDA": 0,
+      "FAST_VERDICT": 0,
+      "FASTGUEST: client": 0,
+      "guest refused": 0
+    },
+    "exported_sha256": "f2cdd97a68c23ab120022e7786826f8a05e73d9f498f49d0a23786333f878f38"
+  },
+  {
+    "name": "receipts__90554.json",
+    "raw_bytes": 1391,
+    "raw_sha256": "4cad73ece4c2fdfcde3b3de2bc05904d6224b4337b7dffc27fe71a7406c104f4",
+    "excerpt_only": false,
+    "counts": {
+      "PRIVILEGED_CHANNEL=0 privilege=USER": 0,
+      "heartbeat": 0,
+      "heartbeat=0": 0,
+      "Xid": 0,
+      "nvAssert": 0,
+      "CUDA": 0,
+      "FAST_VERDICT": 0,
+      "FASTGUEST: client": 0,
+      "guest refused": 0
+    },
+    "exported_sha256": "4cad73ece4c2fdfcde3b3de2bc05904d6224b4337b7dffc27fe71a7406c104f4"
+  },
+  {
+    "name": "receipts__90694.json",
+    "raw_bytes": 1382,
+    "raw_sha256": "ad810212d379f704788e4e4f71035501ff57972b58968fea02709b17044f6d3d",
+    "excerpt_only": false,
+    "counts": {
+      "PRIVILEGED_CHANNEL=0 privilege=USER": 0,
+      "heartbeat": 0,
+      "heartbeat=0": 0,
+      "Xid": 0,
+      "nvAssert": 0,
+      "CUDA": 0,
+      "FAST_VERDICT": 0,
+      "FASTGUEST: client": 0,
+      "guest refused": 0
+    },
+    "exported_sha256": "ad810212d379f704788e4e4f71035501ff57972b58968fea02709b17044f6d3d"
+  },
+  {
+    "name": "receipts__90894.json",
+    "raw_bytes": 1391,
+    "raw_sha256": "ce340e407f3a4115609fc25d25ea83b6668210791246605f722930fea4468dac",
+    "excerpt_only": false,
+    "counts": {
+      "PRIVILEGED_CHANNEL=0 privilege=USER": 0,
+      "heartbeat": 0,
+      "heartbeat=0": 0,
+      "Xid": 0,
+      "nvAssert": 0,
+      "CUDA": 0,
+      "FAST_VERDICT": 0,
+      "FASTGUEST: client": 0,
+      "guest refused": 0
+    },
+    "exported_sha256": "ce340e407f3a4115609fc25d25ea83b6668210791246605f722930fea4468dac"
+  },
+  {
+    "name": "receipts__91034.json",
+    "raw_bytes": 1400,
+    "raw_sha256": "dc3231c49b38c3194c404e61a911414cdb9db71173fafecdceea3b7c88a198ac",
+    "excerpt_only": false,
+    "counts": {
+      "PRIVILEGED_CHANNEL=0 privilege=USER": 0,
+      "heartbeat": 0,
+      "heartbeat=0": 0,
+      "Xid": 0,
+      "nvAssert": 0,
+      "CUDA": 0,
+      "FAST_VERDICT": 0,
+      "FASTGUEST: client": 0,
+      "guest refused": 0
+    },
+    "exported_sha256": "dc3231c49b38c3194c404e61a911414cdb9db71173fafecdceea3b7c88a198ac"
+  },
+  {
+    "name": "receipts__91170.json",
+    "raw_bytes": 1388,
+    "raw_sha256": "fdef1858376e3f2fe3c667f8baa2431c1e7b984af8e6b5d3a58241a4bc30eb3b",
+    "excerpt_only": false,
+    "counts": {
+      "PRIVILEGED_CHANNEL=0 privilege=USER": 0,
+      "heartbeat": 0,
+      "heartbeat=0": 0,
+      "Xid": 0,
+      "nvAssert": 0,
+      "CUDA": 0,
+      "FAST_VERDICT": 0,
+      "FASTGUEST: client": 0,
+      "guest refused": 0
+    },
+    "exported_sha256": "fdef1858376e3f2fe3c667f8baa2431c1e7b984af8e6b5d3a58241a4bc30eb3b"
+  },
+  {
+    "name": "receipts__91307.json",
+    "raw_bytes": 1406,
+    "raw_sha256": "176c0b7f584a39d0f10a77e43a285829d019aff4e4fe326a6ed8db05c548ac21",
+    "excerpt_only": false,
+    "counts": {
+      "PRIVILEGED_CHANNEL=0 privilege=USER": 0,
+      "heartbeat": 0,
+      "heartbeat=0": 0,
+      "Xid": 0,
+      "nvAssert": 0,
+      "CUDA": 0,
+      "FAST_VERDICT": 0,
+      "FASTGUEST: client": 0,
+      "guest refused": 0
+    },
+    "exported_sha256": "176c0b7f584a39d0f10a77e43a285829d019aff4e4fe326a6ed8db05c548ac21"
+  },
+  {
+    "name": "receipts__91447.json",
+    "raw_bytes": 1394,
+    "raw_sha256": "aa02fed4f424f9a5031f597935e935c9e32c62975955fd84179bf575c7865482",
+    "excerpt_only": false,
+    "counts": {
+      "PRIVILEGED_CHANNEL=0 privilege=USER": 0,
+      "heartbeat": 0,
+      "heartbeat=0": 0,
+      "Xid": 0,
+      "nvAssert": 0,
+      "CUDA": 0,
+      "FAST_VERDICT": 0,
+      "FASTGUEST: client": 0,
+      "guest refused": 0
+    },
+    "exported_sha256": "aa02fed4f424f9a5031f597935e935c9e32c62975955fd84179bf575c7865482"
+  },
+  {
+    "name": "receipts__91584.json",
+    "raw_bytes": 1388,
+    "raw_sha256": "d6f7381722258807d3ba00f3c22c92bb3e24c1ea7e130cd3feef3331ab1c7ea3",
+    "excerpt_only": false,
+    "counts": {
+      "PRIVILEGED_CHANNEL=0 privilege=USER": 0,
+      "heartbeat": 0,
+      "heartbeat=0": 0,
+      "Xid": 0,
+      "nvAssert": 0,
+      "CUDA": 0,
+      "FAST_VERDICT": 0,
+      "FASTGUEST: client": 0,
+      "guest refused": 0
+    },
+    "exported_sha256": "d6f7381722258807d3ba00f3c22c92bb3e24c1ea7e130cd3feef3331ab1c7ea3"
+  },
+  {
+    "name": "receipts__91720.json",
+    "raw_bytes": 1403,
+    "raw_sha256": "21de591486ad00c44f7384cec93c32eefd8c5e3b1d97d8633f20fae41db1cc2b",
+    "excerpt_only": false,
+    "counts": {
+      "PRIVILEGED_CHANNEL=0 privilege=USER": 0,
+      "heartbeat": 0,
+      "heartbeat=0": 0,
+      "Xid": 0,
+      "nvAssert": 0,
+      "CUDA": 0,
+      "FAST_VERDICT": 0,
+      "FASTGUEST: client": 0,
+      "guest refused": 0
+    },
+    "exported_sha256": "21de591486ad00c44f7384cec93c32eefd8c5e3b1d97d8633f20fae41db1cc2b"
+  },
+  {
+    "name": "receipts__91858.json",
+    "raw_bytes": 1391,
+    "raw_sha256": "543d27e83f6a33e07974528d2ef12868af3d07327610e659810e6b58ae42f14c",
+    "excerpt_only": false,
+    "counts": {
+      "PRIVILEGED_CHANNEL=0 privilege=USER": 0,
+      "heartbeat": 0,
+      "heartbeat=0": 0,
+      "Xid": 0,
+      "nvAssert": 0,
+      "CUDA": 0,
+      "FAST_VERDICT": 0,
+      "FASTGUEST: client": 0,
+      "guest refused": 0
+    },
+    "exported_sha256": "543d27e83f6a33e07974528d2ef12868af3d07327610e659810e6b58ae42f14c"
+  },
+  {
+    "name": "receipts__91998.json",
+    "raw_bytes": 1373,
+    "raw_sha256": "e9365262df323b42e690af163b04162744f23081edba896654ece6f5fc37da13",
+    "excerpt_only": false,
+    "counts": {
+      "PRIVILEGED_CHANNEL=0 privilege=USER": 0,
+      "heartbeat": 0,
+      "heartbeat=0": 0,
+      "Xid": 0,
+      "nvAssert": 0,
+      "CUDA": 0,
+      "FAST_VERDICT": 0,
+      "FASTGUEST: client": 0,
+      "guest refused": 0
+    },
+    "exported_sha256": "e9365262df323b42e690af163b04162744f23081edba896654ece6f5fc37da13"
+  },
+  {
+    "name": "receipts__92135.json",
+    "raw_bytes": 1385,
+    "raw_sha256": "41e4d710b04ea6851152474bb3eda2d855bdddb61f75ddbe8314fbcf756533a2",
+    "excerpt_only": false,
+    "counts": {
+      "PRIVILEGED_CHANNEL=0 privilege=USER": 0,
+      "heartbeat": 0,
+      "heartbeat=0": 0,
+      "Xid": 0,
+      "nvAssert": 0,
+      "CUDA": 0,
+      "FAST_VERDICT": 0,
+      "FASTGUEST: client": 0,
+      "guest refused": 0
+    },
+    "exported_sha256": "41e4d710b04ea6851152474bb3eda2d855bdddb61f75ddbe8314fbcf756533a2"
+  },
+  {
+    "name": "receipts__92331.json",
+    "raw_bytes": 1403,
+    "raw_sha256": "43a20ccf529a58c3ec77540432b1859303a53348b8aadb91850b75c6a2b7d489",
+    "excerpt_only": false,
+    "counts": {
+      "PRIVILEGED_CHANNEL=0 privilege=USER": 0,
+      "heartbeat": 0,
+      "heartbeat=0": 0,
+      "Xid": 0,
+      "nvAssert": 0,
+      "CUDA": 0,
+      "FAST_VERDICT": 0,
+      "FASTGUEST: client": 0,
+      "guest refused": 0
+    },
+    "exported_sha256": "43a20ccf529a58c3ec77540432b1859303a53348b8aadb91850b75c6a2b7d489"
+  },
+  {
+    "name": "receipts__92467.json",
+    "raw_bytes": 1388,
+    "raw_sha256": "5daf8a5a22ee9d82c01d091d71f9aa125d11e569e6f9b4ab5266606d598276c2",
+    "excerpt_only": false,
+    "counts": {
+      "PRIVILEGED_CHANNEL=0 privilege=USER": 0,
+      "heartbeat": 0,
+      "heartbeat=0": 0,
+      "Xid": 0,
+      "nvAssert": 0,
+      "CUDA": 0,
+      "FAST_VERDICT": 0,
+      "FASTGUEST: client": 0,
+      "guest refused": 0
+    },
+    "exported_sha256": "5daf8a5a22ee9d82c01d091d71f9aa125d11e569e6f9b4ab5266606d598276c2"
+  },
+  {
+    "name": "receipts__92607.json",
+    "raw_bytes": 1415,
+    "raw_sha256": "60bf1cb61c34734a63b0d8351c5c91144e1f27d739037f2785122391ba6bf81d",
+    "excerpt_only": false,
+    "counts": {
+      "PRIVILEGED_CHANNEL=0 privilege=USER": 0,
+      "heartbeat": 0,
+      "heartbeat=0": 0,
+      "Xid": 0,
+      "nvAssert": 0,
+      "CUDA": 0,
+      "FAST_VERDICT": 0,
+      "FASTGUEST: client": 0,
+      "guest refused": 0
+    },
+    "exported_sha256": "60bf1cb61c34734a63b0d8351c5c91144e1f27d739037f2785122391ba6bf81d"
+  },
+  {
+    "name": "receipts__92743.json",
+    "raw_bytes": 1376,
+    "raw_sha256": "55787b5bc35ff56a6c8e370fe0bb6982e3c3318c641385d5f0179b371a2247a2",
+    "excerpt_only": false,
+    "counts": {
+      "PRIVILEGED_CHANNEL=0 privilege=USER": 0,
+      "heartbeat": 0,
+      "heartbeat=0": 0,
+      "Xid": 0,
+      "nvAssert": 0,
+      "CUDA": 0,
+      "FAST_VERDICT": 0,
+      "FASTGUEST: client": 0,
+      "guest refused": 0
+    },
+    "exported_sha256": "55787b5bc35ff56a6c8e370fe0bb6982e3c3318c641385d5f0179b371a2247a2"
+  },
+  {
+    "name": "receipts__92879.json",
+    "raw_bytes": 1406,
+    "raw_sha256": "fd0d4a897d97527377316359369f2b9554b91535ca90308363282e0c14f6e677",
+    "excerpt_only": false,
+    "counts": {
+      "PRIVILEGED_CHANNEL=0 privilege=USER": 0,
+      "heartbeat": 0,
+      "heartbeat=0": 0,
+      "Xid": 0,
+      "nvAssert": 0,
+      "CUDA": 0,
+      "FAST_VERDICT": 0,
+      "FASTGUEST: client": 0,
+      "guest refused": 0
+    },
+    "exported_sha256": "fd0d4a897d97527377316359369f2b9554b91535ca90308363282e0c14f6e677"
+  },
+  {
+    "name": "receipts__93081.json",
+    "raw_bytes": 1388,
+    "raw_sha256": "10d352b08349c7e3846b76aa2c8a17d52f69d8c9088afb3e2e021f05c2b6c6d2",
+    "excerpt_only": false,
+    "counts": {
+      "PRIVILEGED_CHANNEL=0 privilege=USER": 0,
+      "heartbeat": 0,
+      "heartbeat=0": 0,
+      "Xid": 0,
+      "nvAssert": 0,
+      "CUDA": 0,
+      "FAST_VERDICT": 0,
+      "FASTGUEST: client": 0,
+      "guest refused": 0
+    },
+    "exported_sha256": "10d352b08349c7e3846b76aa2c8a17d52f69d8c9088afb3e2e021f05c2b6c6d2"
+  },
+  {
+    "name": "receipts__93219.json",
+    "raw_bytes": 1388,
+    "raw_sha256": "ca9cd9aa562e6746773ee851908818c752b6c99711f47cffb1c439acb72956c0",
+    "excerpt_only": false,
+    "counts": {
+      "PRIVILEGED_CHANNEL=0 privilege=USER": 0,
+      "heartbeat": 0,
+      "heartbeat=0": 0,
+      "Xid": 0,
+      "nvAssert": 0,
+      "CUDA": 0,
+      "FAST_VERDICT": 0,
+      "FASTGUEST: client": 0,
+      "guest refused": 0
+    },
+    "exported_sha256": "ca9cd9aa562e6746773ee851908818c752b6c99711f47cffb1c439acb72956c0"
+  },
+  {
+    "name": "receipts__93358.json",
+    "raw_bytes": 1388,
+    "raw_sha256": "92b0d07b8907b2dd5c9dfd7b5d7f1546715a57e077a1cc1cf06e1c7528b9e429",
+    "excerpt_only": false,
+    "counts": {
+      "PRIVILEGED_CHANNEL=0 privilege=USER": 0,
+      "heartbeat": 0,
+      "heartbeat=0": 0,
+      "Xid": 0,
+      "nvAssert": 0,
+      "CUDA": 0,
+      "FAST_VERDICT": 0,
+      "FASTGUEST: client": 0,
+      "guest refused": 0
+    },
+    "exported_sha256": "92b0d07b8907b2dd5c9dfd7b5d7f1546715a57e077a1cc1cf06e1c7528b9e429"
+  },
+  {
+    "name": "receipts__93552.json",
+    "raw_bytes": 1391,
+    "raw_sha256": "cefce7f0c7213c6d44b46dae073cd86be04e3c8e129830b8a75ac00f225d524d",
+    "excerpt_only": false,
+    "counts": {
+      "PRIVILEGED_CHANNEL=0 privilege=USER": 0,
+      "heartbeat": 0,
+      "heartbeat=0": 0,
+      "Xid": 0,
+      "nvAssert": 0,
+      "CUDA": 0,
+      "FAST_VERDICT": 0,
+      "FASTGUEST: client": 0,
+      "guest refused": 0
+    },
+    "exported_sha256": "cefce7f0c7213c6d44b46dae073cd86be04e3c8e129830b8a75ac00f225d524d"
+  },
+  {
+    "name": "receipts__93788.json",
+    "raw_bytes": 1403,
+    "raw_sha256": "5aadf44347adadabf4562948c74be1b4d0346eeab65d644488512c9541714faa",
+    "excerpt_only": false,
+    "counts": {
+      "PRIVILEGED_CHANNEL=0 privilege=USER": 0,
+      "heartbeat": 0,
+      "heartbeat=0": 0,
+      "Xid": 0,
+      "nvAssert": 0,
+      "CUDA": 0,
+      "FAST_VERDICT": 0,
+      "FASTGUEST: client": 0,
+      "guest refused": 0
+    },
+    "exported_sha256": "5aadf44347adadabf4562948c74be1b4d0346eeab65d644488512c9541714faa"
+  },
+  {
+    "name": "receipts__93988.json",
+    "raw_bytes": 1379,
+    "raw_sha256": "15d4e2b7fd8d89f9fd54bb8e0cb555e4fed474c3e2f91e8a6f6f94be6b0e63ee",
+    "excerpt_only": false,
+    "counts": {
+      "PRIVILEGED_CHANNEL=0 privilege=USER": 0,
+      "heartbeat": 0,
+      "heartbeat=0": 0,
+      "Xid": 0,
+      "nvAssert": 0,
+      "CUDA": 0,
+      "FAST_VERDICT": 0,
+      "FASTGUEST: client": 0,
+      "guest refused": 0
+    },
+    "exported_sha256": "15d4e2b7fd8d89f9fd54bb8e0cb555e4fed474c3e2f91e8a6f6f94be6b0e63ee"
+  },
+  {
+    "name": "receipts__94124.json",
+    "raw_bytes": 1394,
+    "raw_sha256": "1bfe2b49fd38a7f825a131d2bba884bac3ade046299d22b95abff737029874c0",
+    "excerpt_only": false,
+    "counts": {
+      "PRIVILEGED_CHANNEL=0 privilege=USER": 0,
+      "heartbeat": 0,
+      "heartbeat=0": 0,
+      "Xid": 0,
+      "nvAssert": 0,
+      "CUDA": 0,
+      "FAST_VERDICT": 0,
+      "FASTGUEST: client": 0,
+      "guest refused": 0
+    },
+    "exported_sha256": "1bfe2b49fd38a7f825a131d2bba884bac3ade046299d22b95abff737029874c0"
+  },
+  {
+    "name": "receipts__94261.json",
+    "raw_bytes": 1400,
+    "raw_sha256": "09fd934347dd285a453b8e777ec607135e0b4b976380dbc8622b028c67a09605",
+    "excerpt_only": false,
+    "counts": {
+      "PRIVILEGED_CHANNEL=0 privilege=USER": 0,
+      "heartbeat": 0,
+      "heartbeat=0": 0,
+      "Xid": 0,
+      "nvAssert": 0,
+      "CUDA": 0,
+      "FAST_VERDICT": 0,
+      "FASTGUEST: client": 0,
+      "guest refused": 0
+    },
+    "exported_sha256": "09fd934347dd285a453b8e777ec607135e0b4b976380dbc8622b028c67a09605"
+  },
+  {
+    "name": "receipts__94401.json",
+    "raw_bytes": 1397,
+    "raw_sha256": "022adf7289a0d80e33e21d85342bc10c7ea083489749e557b5b972a1aca5d8d7",
+    "excerpt_only": false,
+    "counts": {
+      "PRIVILEGED_CHANNEL=0 privilege=USER": 0,
+      "heartbeat": 0,
+      "heartbeat=0": 0,
+      "Xid": 0,
+      "nvAssert": 0,
+      "CUDA": 0,
+      "FAST_VERDICT": 0,
+      "FASTGUEST: client": 0,
+      "guest refused": 0
+    },
+    "exported_sha256": "022adf7289a0d80e33e21d85342bc10c7ea083489749e557b5b972a1aca5d8d7"
+  }
+]

@@ -1,0 +1,6 @@
+[interactive] broker badf2d707da4: nvkvm-display-broker backends:  dma-buf test source : yes (libgbm)  wayland : yes  x11 : yes (dri3+present +xrender scaling and guest cursor) + xi2 raw motion  test : yes (always)
+[interactive] provisioning boot, kf3 9d6f210b (/workspace/bench/kf3-bins/9d6f210b/qemu-system-x86_64)
+OWNED_QEMU_RECORDED pid=100591
+[interactive] provision: APT_RC=0 + echo APT_RC=0 PROVISION_DONE + echo PROVISION_DONE  (log /root/codex-broker-amp595/prep-20261017-021727/provision.log)
+OWNED_QEMU_STOP how=acpi
+[interactive] INTERACTIVE_PREP_EXIT 2026-10-17T02:23:54+00:00

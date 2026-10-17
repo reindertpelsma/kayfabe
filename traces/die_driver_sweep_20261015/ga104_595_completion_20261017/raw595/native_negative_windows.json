@@ -1,0 +1,17 @@
+{
+  "kernel_boot_epoch_floor": 1792200700,
+  "native_negative_arms": [
+    {
+      "arm": "defer-liveness",
+      "log": "/workspace/bench/codex_ampere595_native_defer-liveness.log",
+      "created_epoch_floor": 1792201596,
+      "last_write_epoch": 1792201608.4228222
+    },
+    {
+      "arm": "missing-page-fault",
+      "log": "/workspace/bench/codex_ampere595_native_missing-page-fault.log",
+      "created_epoch_floor": 1792201609,
+      "last_write_epoch": 1792201612.5338402
+    }
+  ]
+}

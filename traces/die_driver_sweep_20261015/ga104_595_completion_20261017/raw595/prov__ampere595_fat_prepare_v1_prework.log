@@ -1,0 +1,13 @@
+== repo: /root/kayfabe  rev: 9d6f210ba integrate: add exact public580.94.02 display ABI for the second Windows build
+[2026-10-17T02:01:34+00:00] BENCH_TREE_START private590 recipe: trackA skipped, exact9d binary already built and gated
+[2026-10-17T02:01:34+00:00] fetching the pinned guest595.91.07 package
+  % Total    % Received % Xferd  Average Speed   Time    Time     Time  Current
+                                 Dload  Upload   Total   Spent    Left  Speed
+
+  0     0    0     0    0     0      0      0 --:--:-- --:--:-- --:--:--     0Warning: Failed to create the file
+Warning: /workspace/drivers/595.91.07/NVIDIA-Linux-x86_64-595.91.07.run.part:
+Warning: No such file or directory
+
+  0  404M    0 15543    0     0  27720      0  4:14:43 --:--:--  4:14:43 27755
+curl: (23) Failure writing output to destination
+[2026-10-17T02:01:35+00:00] ⊘ pinned guest package download failed

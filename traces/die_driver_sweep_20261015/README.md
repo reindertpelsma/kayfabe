@@ -1,5 +1,21 @@
 # Die × driver campaign, 2026-10-15
 
+## Update 2026-10-17 02:44 UTC — GA104 Linux595 raw and applications PASS
+
+Only own56326220 ACTIVE; unchanged timer2714225 at04:25:28UTC/06:25:28CEST,
+manual retirement target03:55UTC; all rentals APIabsent before05:00UTC/07:00CEST.
+Exact9d6f210ba/privatecc2a: native gates9/9+10/CUDA4/raw30; guest raw30/30
+normalconsole6/frozen180/actualKF3{},161USER/90CUDApostures/30receipts PASS.
+246raw heartbeat warnings allzero/zerooffset remain. Ten deliberate fault Xids
+are attributed with direct guest PID receipts and native time+fault-kind correlation.
+Guest595 CUDA4/gfx5+10nativehashes/broker PASS02:27:12; Cinnamon1Xorg1/NVIDIA,
+1920x1080/9855colors, guestXid0/flip0/host10→10,162USER/0HBwarnings. Retain
+27displaySTALL and9nvAssert. No warningfree/familycompletion claim.
+M1native595caps95NZ/0xc100/97worddiff; no captured page/new measured row shipped.
+Fresh stock-VGA LTSC baseline supervisor95215 waits for this evidence PUSH+remoteverify;
+Linux apps95214 finishedrc0. Windows580 actualbinding still UNVERIFIED/UNRUN.
+No shared-host use. D1-D6open/no mastermerge. Evidence ga104_595_completion_20261017/.
+
 **STATUS: LIVE, 2026-10-17 00:44UTC.** Current steering is
 `/root/codex_prompt_dies_20261016.md`; earlier campaign prompts remain binding.
 No own rental active. Latest56302930 retired/APIabsent00:40:19UTC aftertextpush;
@@ -109,7 +125,7 @@ not prove the remaining dies in its family.
 | Family | This campaign | Full family acceptance |
 |---|---|---|
 | Turing | TU106 Windows580 Code0/DWM/CUDA3/D3D11+12/zeroTDR and Linux580 Cinnamon/OpenGL/X11broker PASS at8e3a9d32; Linux580 CUDA4 beforefix PASS/raw29 of30 before/afterfix (R34timeout180s) | incomplete: required Linux raw pass and several actual driver builds remain |
-| Ampere | GA104 Linux580 broad pass; Linux595 raw pass; Windows580 UNVERIFIED after QGA timeouts; actual binding not established | incomplete |
+| Ampere | GA104 Linux580 broad pass; Linux595 raw30/CUDA4/gfx10/broker PASS (27STALL/9nvAssert); Windows580 UNVERIFIED after QGA timeouts; actual binding not established | incomplete |
 | Ada | AD102 Linux580 raw30/CUDA4/graphics10+broker and Windows580 Code0/DWM/CUDA3/D3D11+12/zeroTDR pass; Linux595 raw30/CUDA4/graphics10+broker pass; Linux590raw30/CUDA4/gfx10/brokerPASS; Windows580421secondhold/BlenderCUDA/EdgePASS; Windows581guestCode43/nativesameboardPASS | incomplete: Windows581Code43; furtherWindowsbuilds and otherdies remain unverified |
 | Blackwell | GB206 Linux580 raw30/CUDA4/headlessgfx5+10hashes PASS atc2092cf7; desktopFAIL (one derived group now validates modes, but blackframe/fliptimeout); GB206 Linux595 raw30/30/CUDA4/graphics5+10hashes exacte1bd; thisrerun0HBwarnings, prior10startupHB0 remain; GB205 fixed-clock595raw30 with startup warnings; nativeWindows580 PASS; GB206kayfabeWindows580 Code43, GB205guestWindowsUNRUN | incomplete: initialization fix, broker/graphics and several actual builds remain |
 

@@ -1,0 +1,18 @@
+info  RMLADDER ARGV     = [--gpga-reserve-probe]
+ok    R2 version         = "595.91.07"
+ok    R4 hClient         = 0xc1d00087
+ok    R6 hSubdevice      = 0xcafe0002
+REV_UNDER_TEST=unstamped
+--- GPGA read sweep: 256 MiB object, splitmix64-filled, memcpy per row ---
+kayfabe-isolate: STORE-RESERVE ★ CONTIGUOUS and 1 GiB-ALIGNED, 64 MiB —                  every slice's physical address is `base + offset` with `base ≡ 0`, so a                  FIXED map is congruent at EVERY page size and store slices need no                  small-page pin.
+GPGA_SWEEP copy=       64 B   64 MiB in   7.049 s =>      9.1 MiB/s
+GPGA_SWEEP copy=      512 B   64 MiB in   7.291 s =>      8.8 MiB/s
+GPGA_SWEEP copy=     4096 B   64 MiB in   8.604 s =>      7.4 MiB/s
+GPGA_SWEEP copy=    65536 B   64 MiB in   9.626 s =>      6.6 MiB/s
+GPGA_SWEEP copy=  1048576 B   64 MiB in   7.992 s =>      8.0 MiB/s
+GPGA_SWEEP copy= 16777216 B   64 MiB in   8.600 s =>      7.4 MiB/s
+GPGA_LARGEST_RESERVABLE_MB=7776  (advertised today: 12288)
+kayfabe-isolate: STORE-RESERVE ★ CONTIGUOUS and 1 GiB-ALIGNED, 24 MiB —                  every slice's physical address is `base + offset` with `base ≡ 0`, so a                  FIXED map is congruent at EVERY page size and store slices need no                  small-page pin.
+GPGA_VIDMEM_READ=8.2 MiB/s over 24 MiB in 2915.4 ms  ⇒ a full page-table re-read costs ~2915 ms, and 1178 refreshes would cost ~3434.4 s if NOT promoted
+GPGA_HOSTMEM_READ=3004 MiB/s (the SAME loop over ordinary RAM) ⇒ ratio 365x — if this is fast, the cost is the BUS, not the wrapper
+GPGA_PROBE=(P) ★ reserved 7776 MiB and measured the read cost
