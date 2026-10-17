@@ -147,7 +147,8 @@ fn fast_seg() -> bool {
     *F.get_or_init(|| std::env::var("KF3_FAST_SEG").is_ok_and(|v| v == "1"))
 }
 
-/// SCRATCH d3d11-gap: `KF3_LAZY_OBSERVE` (turns between private-USERD reads; 1 = every turn). Read once.
+/// SCRATCH d3d11-gap call-site switches (read once; the decisions themselves are `kf_chan::user_lazy`, free of the environment):
+/// `KF3_LAZY_OBSERVE=N` observes the private USERD every Nth turn (B, N > 1); `KF3_PUT_CACHE=1` caches the guest GP_PUT (A).
 fn lazy_observe() -> u64 {
     static N: std::sync::OnceLock<u64> = std::sync::OnceLock::new();
     *N.get_or_init(|| {
@@ -157,6 +158,11 @@ fn lazy_observe() -> u64 {
             .filter(|n| (1..=4096).contains(n))
             .unwrap_or(1)
     })
+}
+
+fn put_cache_enabled() -> bool {
+    static F: std::sync::OnceLock<bool> = std::sync::OnceLock::new();
+    *F.get_or_init(|| std::env::var("KF3_PUT_CACHE").is_ok_and(|v| v == "1"))
 }
 
 /// ★ 2026-10-14 MEASUREMENT ONLY — `KF3_USER_RING_TRACE=<dir>` (default off; never needed to boot,
@@ -458,7 +464,7 @@ pub(super) struct Pump {
     /// SCRATCH d3d11-gap: when the current private-ring credit wait began; guest ring backlog (entries ahead of the cursor) at the last turn.
     cw_at: Option<std::time::Instant>,
     turn_no: u64,
-    cached_put: Option<(u64, u32)>,
+    put_cache: kf_chan::user_lazy::PutCache,
     prev_waiting: bool,
     backlog: u32,
     lc_sw_guest: Option<u32>,
@@ -540,7 +546,7 @@ impl Pump {
             lc_bound: false,
             cw_at: None,
             turn_no: 0,
-            cached_put: None,
+            put_cache: kf_chan::user_lazy::PutCache::default(),
             prev_waiting: true,
             backlog: 0,
             lc_sw_guest: None,
@@ -1405,12 +1411,13 @@ impl Pump {
         // SCRATCH d3d11-gap (HG5 causality test, never for merge): `KF3_LAZY_OBSERVE=N` reads the private USERD (GP_GET, REFERENCE: two BAR1/store-view loads)
         // only every Nth turn, or when the previous turn ended waiting, or when credits are low, or while a segment is open. N=1 (default) = today's behaviour.
         self.turn_no = self.turn_no.wrapping_add(1);
-        let lazy_n = lazy_observe();
-        let must = lazy_n <= 1
-            || self.prev_waiting
-            || self.turn_no % lazy_n == 0
-            || self.fetch.available() < 64
-            || self.segment.is_some();
+        let must = kf_chan::user_lazy::must_observe(
+            self.turn_no,
+            lazy_observe(),
+            self.prev_waiting,
+            self.fetch.available(),
+            self.segment.is_some(),
+        );
         if must {
             if crate::lifecycle::on() {
                 crate::lifecycle::OBSERVES.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
@@ -1464,13 +1471,8 @@ impl Pump {
             }
             // Doorbells counted BEFORE the PUT read (measurement only today).
             let doorbells = me.queued(r.idx);
-            // SCRATCH d3d11-gap (HG5 causality test): with KF3_LAZY_OBSERVE > 1 the guest's GP_PUT is re-read only when the cursor has reached the last PUT read
-            // (entries up to a PUT already read stay valid: the guest only moves PUT forward within one generation).
-            let cached = if lazy_observe() > 1 {
-                self.cached_put.filter(|&(g, p)| g == self.generation && p != self.cursor).map(|(_, p)| p)
-            } else {
-                None
-            };
+            // `kf_chan::user_lazy::PutCache`: an entry below a PUT already read stays valid; cursor == cached PUT forces a fresh read.
+            let cached = self.put_cache.select(put_cache_enabled(), self.generation, self.cursor);
             let put = if let Some(p) = cached {
                 p
             } else {
@@ -1495,7 +1497,7 @@ impl Pump {
                     })?;
                 u32::from_le_bytes(put)
             };
-            self.cached_put = Some((self.generation, put));
+            self.put_cache.record(self.generation, put);
             if put >= r.source.1 {
                 return Err("USER_RING_PUT_BOUND".into());
             }

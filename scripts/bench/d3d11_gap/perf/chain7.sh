@@ -27,12 +27,12 @@ one_boot() {   # TAG REV FLAGS HOOK BACKEND RESET
     unset HOOK HDELAY
     case "$hook:$1" in
       present:*) export HOOK="bash $P/kfp.sh pi_${tag}_$1 interactive $P/jobs/presentinfo.ps1 120" HDELAY=120;;
-      shot:d3d11) export HOOK="bash $P/kfp.sh shot_${tag}_d3d11 interactive $P/jobs/shot.ps1.in 150 > ev/heaven/shot_${tag}_d3d11.out 2>&1" HDELAY=130;;
+      shot*:d3d11) export HOOK="bash $P/kfp.sh shot_${tag}_d3d11 interactive $P/jobs/shot.ps1.in 150 > ev/heaven/shot_${tag}_d3d11.out 2>&1" HDELAY=130;;
       perf:*|perfd:d3d11) export HOOK="bash $P/perfall.sh ${tag,,}_$1 30" HDELAY=105;;
     esac
   }
   hk d3d11; bash $P/hv2.sh ${tag,,}_d3d11 direct3d11 > ev/heaven/${tag,,}_d3d11.sum 2>&1
-  if [ "$hook" = nogl ]; then :
+  if [[ "$hook" == *nogl* ]]; then :
   elif grep -q "FPS:" ev/heaven/${tag,,}_d3d11.out 2>/dev/null; then
     hk gl; bash $P/hv2.sh ${tag,,}_gl opengl > ev/heaven/${tag,,}_gl.sum 2>&1
   else echo "NO D3D11 RESULT for $tag: skipping GL"; fi
