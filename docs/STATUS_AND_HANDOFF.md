@@ -1,5 +1,21 @@
 # Status and handoff — where kayfabe v3 stands, and how to resume
 
+## Update 2026-10-17 01:03 UTC — Windows 581 allocation diagnostic prepared
+
+MEASURED: [draft PR46](https://github.com/reindertpelsma/kayfabe/pull/46), code
+`90364d9d8` after failing-first `da63e54eb`, passes 1,382 CPU tests. The new allocation
+entry uses the exact public 580.94.02 layout and our native class/size measurement,
+restricted to AD102 and Windows 581.51. It adds no scheduling acknowledgement or
+normal class capability. Regeneration is byte-identical; unsupported dies/builds
+and malformed inputs refuse. [CPU evidence](../traces/die_driver_sweep_20261015/ad102_second_builds_20261016/runlist581_cpu/RESULT.md).
+
+INFERRED: this should remove the first unsupported-cell refusal, but its hardware
+falsifier remains UNRUN. The measured guest result is still **Windows 581.51 Code 43**;
+native 581.51 on the same board passed. New-build scheduling reply-body semantics
+remain **NOT DERIVABLE** from the retained metadata/public headers. No family is complete.
+No new rental or GPU use; the last rental remains retired and all work is pushed.
+
+
 ## UPDATE 2026-10-17 00:44UTC — wave complete and only56302930 retired; no active own rental
 
 Only56302930 destroyed/APIabsent00:40:19UTC afterallnativeGPU/observerjobsquiescent,
