@@ -147,6 +147,10 @@ struct Obs {
     flips: u64,
     // set when a tick was emitted in the current step
     emitted_now: bool,
+    // copy credits that reached the mailbox and were not yet spent
+    credits_avail: i64,
+    // since when (ms) a frame has waited in the ring's ready slot
+    ready_since_ms: Option<u64>,
 }
 
 #[derive(Clone)]
@@ -292,6 +296,7 @@ impl World {
         let Some(f) = self.ready.take() else {
             return Ok(());
         };
+        self.obs.ready_since_ms = None;
         self.held.push(f);
         // ---- commit
         let live = self.live();
@@ -397,6 +402,9 @@ impl World {
         if self.obs.opened_now {
             return Err("NO_CHANGE sent at the tick that opened the request".into());
         }
+        if self.ready.is_some() {
+            return Err("NO_CHANGE sent while a frame is ready to send".into());
+        }
         let gap = (P / 2_000_000).max(1);
         if self.obs.last_answer_ms.is_some_and(|t| ms < t + gap) {
             return Err(format!(
@@ -459,6 +467,7 @@ impl World {
             let mut f = f;
             f.released = false;
             self.ready = Some(f);
+            self.obs.ready_since_ms = Some(self.ms());
         }
         self.share.want = None;
         if self.c.reset_gate {
@@ -578,7 +587,9 @@ impl World {
                     self.obs.not_before - now
                 ));
             }
+            let had = self.mailbox.credit_held();
             self.mailbox.grant();
+            self.obs.credits_avail += i64::from(!had);
         }
         // 4. the ticks: vblank, the vsync flip latches, a free tick grants a credit by itself
         for t in ticks {
@@ -604,7 +615,9 @@ impl World {
             self.obs.ticks += 1;
             self.obs.emitted_now = true;
             if t.from == Source::Free {
+                let had = self.mailbox.credit_held();
                 self.mailbox.tick();
+                self.obs.credits_avail += i64::from(!had);
             }
             if self.pending_vsync {
                 self.pending_vsync = false;
@@ -638,6 +651,9 @@ impl World {
             let id = self.next_id;
             self.next_id += 1;
             self.front = Some(i.slot);
+            if self.ready.is_none() {
+                self.obs.ready_since_ms = Some(self.ms());
+            }
             self.ready = Some(Frame {
                 id,
                 slot: i.slot,
@@ -675,6 +691,10 @@ impl World {
             let Some(slot) = self.free_slot() else {
                 return Err("no free ring slot for a copy (a held slot would be overwritten)".into());
             };
+            self.obs.credits_avail -= 1;
+            if self.obs.credits_avail < 0 {
+                return Err("a copy started on a credit that was already spent".into());
+            }
             self.started += 1;
             self.obs.copies += 1;
             self.mailbox.copied();
@@ -917,6 +937,21 @@ impl World {
             && self.held.iter().any(|f| f.slot == r.slot)
         {
             return Err("the ready frame shares a slot with a held one".into());
+        }
+        // a ready frame is never stuck behind a SILENT broker: ticks silent (> 50 ms), room to send
+        // (fewer than the cap in flight, or a retained one that yields), and the legacy backstop (100 ms)
+        // has had time — it goes out
+        if let Some(since) = self.obs.ready_since_ms
+            && self.ready.is_some()
+            && (self.held.len() as u32) < HELD_CAP
+            && !(self.negotiated && tick_live(self.last_rx_ms, self.ms()))
+            && self.ms() > since + BACKSTOP_MS + BROKER_SILENCE_MS + 2
+            && self.last_rx_ms.is_none_or(|r| self.ms() > r + BACKSTOP_MS + BROKER_SILENCE_MS + 2)
+        {
+            return Err(format!(
+                "a frame is STUCK in the ring for {} ms behind a silent broker",
+                self.ms() - since
+            ));
         }
         // 10. counters
         let c = self.reqs.c;
@@ -1557,4 +1592,278 @@ fn lockstep_exhaustive_finding_3_a_flood_makes_copies_exceed_vblanks() {
             assert!(*copies > *vbl, "x{mult}: copies {copies} no longer exceed vblanks {vbl}: the gate was fixed, flip this test");
         }
     }
+}
+
+// -------------------------------------------------------------------------------------------------
+// the COMPONENTS against independent oracles, exhaustively over short event sequences (they pin what the
+// composed world cannot reach: a stale event at the gate, every request/NO_CHANGE rule)
+
+#[derive(Clone, Copy, Debug)]
+enum SeqPick {
+    Next,
+    Dup,
+    Old,
+    Skip5,
+}
+
+#[derive(Clone, Copy, Debug)]
+enum ReqPick {
+    None,
+    New,
+    Same,
+    Older,
+}
+
+#[derive(Clone, Copy, Debug)]
+enum GateOp {
+    Ev { seq: SeqPick, req: ReqPick, emitted: bool },
+    Poll(u64),
+}
+
+#[derive(Clone, Default, Debug, PartialEq, Eq)]
+struct GateOracle {
+    last_seq: Option<u32>,
+    last_req: Option<u32>,
+    pending: Option<(u32, u64)>,
+    stale: u64,
+    stale_credits: u64,
+    coalesced: u64,
+    deferred: u64,
+    granted: u64,
+    ticks_coalesced: u64,
+}
+
+const GATE_LAST_TICK: u64 = 1_000;
+const GATE_GUARD: u64 = 8;
+const GATE_STAMP: u64 = 2_000;
+
+fn pick_seq(hi: Option<u32>, p: SeqPick) -> u32 {
+    let h = hi.unwrap_or(0);
+    match p {
+        SeqPick::Next => next_seq(h),
+        SeqPick::Dup => hi.unwrap_or(1),
+        SeqPick::Old => h.wrapping_sub(2).max(1),
+        SeqPick::Skip5 => (0..5).fold(h, |s, _| next_seq(s)),
+    }
+}
+
+/// ★ The gate against its specification (G1-G3), every sequence of up to 4 operations.
+#[test]
+fn lockstep_exhaustive_the_gate_against_an_oracle() {
+    use crate::tick::seq_newer as newer;
+    let mut ops: Vec<GateOp> = Vec::new();
+    for seq in [SeqPick::Next, SeqPick::Dup, SeqPick::Old, SeqPick::Skip5] {
+        for req in [ReqPick::None, ReqPick::New, ReqPick::Same, ReqPick::Older] {
+            for emitted in [true, false] {
+                ops.push(GateOp::Ev { seq, req, emitted });
+            }
+        }
+    }
+    for t in [GATE_LAST_TICK + GATE_GUARD - 1, GATE_LAST_TICK + GATE_GUARD, GATE_STAMP - 1, GATE_STAMP] {
+        ops.push(GateOp::Poll(t));
+    }
+    fn go(
+        ops: &[GateOp],
+        depth: usize,
+        g: &CreditGate,
+        o: &GateOracle,
+        hi: Option<u32>,
+        n: &mut u64,
+    ) {
+        if depth == 0 {
+            return;
+        }
+        for &op in ops {
+            let (mut g, mut o, mut hi2) = (g.clone(), o.clone(), hi);
+            match op {
+                GateOp::Ev { seq, req, emitted } => {
+                    let s = pick_seq(hi, seq);
+                    let want = match req {
+                        ReqPick::None => None,
+                        ReqPick::New => Some(s),
+                        ReqPick::Same => Some(o.last_req.unwrap_or(s)),
+                        ReqPick::Older => Some(o.last_req.unwrap_or(s).wrapping_sub(2).max(1)),
+                    };
+                    let em = emitted.then_some(GATE_STAMP);
+                    // the oracle (G1-G3)
+                    let fresh = o.last_seq.is_none_or(|l| newer(s, l));
+                    if fresh {
+                        o.last_seq = Some(s);
+                        o.ticks_coalesced += 2;
+                        if let Some(r) = want {
+                            if o.last_req.is_none_or(|l| newer(r, l)) {
+                                o.last_req = Some(r);
+                                if o.pending.is_some() {
+                                    o.coalesced += 1;
+                                }
+                                let at = match em {
+                                    Some(st) => st,
+                                    None => {
+                                        o.deferred += 1;
+                                        GATE_LAST_TICK + GATE_GUARD
+                                    }
+                                };
+                                o.pending = Some((r, at));
+                            } else {
+                                o.stale_credits += 1;
+                            }
+                        }
+                    } else {
+                        o.stale += 1;
+                        if want.is_some() {
+                            o.stale_credits += 1;
+                        }
+                    }
+                    let got = g.on_tick(s, 2, want, em, Some(GATE_LAST_TICK), GATE_GUARD);
+                    assert_eq!(got, fresh, "{op:?} seq {s}");
+                    if fresh {
+                        hi2 = Some(hi.map_or(s, |h| if newer(s, h) { s } else { h }));
+                    }
+                }
+                GateOp::Poll(t) => {
+                    let want = match o.pending {
+                        Some((r, at)) if t >= at => {
+                            o.pending = None;
+                            o.granted += 1;
+                            Some(r)
+                        }
+                        _ => None,
+                    };
+                    assert_eq!(g.poll(t), want, "{op:?}");
+                }
+            }
+            *n += 1;
+            let c = g.c;
+            assert_eq!(
+                (c.stale, c.stale_credits, c.credits_coalesced, c.credits_deferred, c.granted, c.ticks_coalesced),
+                (o.stale, o.stale_credits, o.coalesced, o.deferred, o.granted, o.ticks_coalesced),
+                "{op:?}"
+            );
+            assert_eq!(g.pending(), o.pending, "{op:?}");
+            go(ops, depth - 1, &g, &o, hi2, n);
+        }
+    }
+    let mut n = 0;
+    go(&ops, 4, &CreditGate::new(), &GateOracle::default(), None, &mut n);
+    eprintln!("lockstep_exhaustive gate oracle: {n} operations, {} letters, depth 4", ops.len());
+}
+
+#[derive(Clone, Copy, Debug)]
+enum ReqOp {
+    Tick(SeqPick, bool),
+    Spend,
+    Idle(bool),
+    Adv(u64),
+}
+
+#[derive(Clone, Default, Debug)]
+struct ReqOracle {
+    last_seq: Option<u32>,
+    open: Option<u32>,
+    since: u32,
+    last_answer: Option<u64>,
+    wants: u64,
+    replaced: u64,
+    frames: u64,
+    no_change: u64,
+    stale: u64,
+    ticks: u64,
+}
+
+/// ★ The request book against its specification (R1-R4 and the NO_CHANGE pacing), every sequence of up
+/// to 5 operations, the clock moving by 1 ms and 20 ms.
+#[test]
+fn lockstep_exhaustive_the_request_book_against_an_oracle() {
+    use crate::tick::seq_newer as newer;
+    let mut ops: Vec<ReqOp> = Vec::new();
+    for s in [SeqPick::Next, SeqPick::Dup, SeqPick::Old, SeqPick::Skip5] {
+        for w in [false, true] {
+            ops.push(ReqOp::Tick(s, w));
+        }
+    }
+    ops.extend([ReqOp::Spend, ReqOp::Idle(true), ReqOp::Idle(false), ReqOp::Adv(1), ReqOp::Adv(20)]);
+    let gap = (P / 2_000_000).max(1);
+    fn go(
+        ops: &[ReqOp],
+        depth: usize,
+        r: &Requests,
+        o: &ReqOracle,
+        hi: Option<u32>,
+        now: u64,
+        gap: u64,
+        n: &mut u64,
+    ) {
+        if depth == 0 {
+            return;
+        }
+        for &op in ops {
+            let (mut r, mut o, mut hi2, mut now2) = (r.clone(), o.clone(), hi, now);
+            match op {
+                ReqOp::Tick(p, want) => {
+                    let s = pick_seq(hi, p);
+                    let t = TickPkt {
+                        tick_seq: s,
+                        refresh_ns: P as u32,
+                        want,
+                        clock_only: false,
+                        present_ns: 1,
+                    };
+                    let fresh = o.last_seq.is_none_or(|l| newer(s, l));
+                    let v = r.on_tick(&t);
+                    if fresh {
+                        o.last_seq = Some(s);
+                        o.ticks += 1;
+                        o.since = o.since.saturating_add(1);
+                        if want {
+                            o.wants += 1;
+                            if o.open.is_some() {
+                                o.replaced += 1;
+                            }
+                            o.open = Some(s);
+                            o.since = 0;
+                        }
+                        hi2 = Some(hi.map_or(s, |h| if newer(s, h) { s } else { h }));
+                    } else {
+                        o.stale += 1;
+                    }
+                    assert_eq!(matches!(v, TickVerdict::Fresh { .. }), fresh, "{op:?}");
+                }
+                ReqOp::Spend => {
+                    let got = r.spend(now);
+                    let want = o.open.take();
+                    if want.is_some() {
+                        o.frames += 1;
+                        o.last_answer = Some(now);
+                    }
+                    assert_eq!(got, want, "{op:?}");
+                }
+                ReqOp::Idle(nothing) => {
+                    let got = r.idle_request(nothing, now);
+                    let want = o.open.filter(|_| {
+                        nothing && o.since >= 1 && o.last_answer.is_none_or(|t| now >= t + gap)
+                    });
+                    assert_eq!(got, want, "{op:?} at {now}");
+                    if got.is_some() {
+                        r.no_change_done(now);
+                        o.open = None;
+                        o.no_change += 1;
+                        o.last_answer = Some(now);
+                    }
+                }
+                ReqOp::Adv(d) => now2 += d,
+            }
+            *n += 1;
+            let c = r.c;
+            assert_eq!(
+                (c.ticks, c.ticks_stale, c.want_ticks, c.credits_coalesced, c.frames_on_credit, c.no_change_sent),
+                (o.ticks, o.stale, o.wants, o.replaced, o.frames, o.no_change),
+                "{op:?}"
+            );
+            assert_eq!(r.open(), o.open, "{op:?}");
+            go(ops, depth - 1, &r, &o, hi2, now2, gap, n);
+        }
+    }
+    let mut n = 0;
+    go(&ops, 5, &Requests::new(), &ReqOracle::default(), None, 100, gap, &mut n);
+    eprintln!("lockstep_exhaustive request-book oracle: {n} operations, {} letters, depth 5", ops.len());
 }
