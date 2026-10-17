@@ -45,7 +45,12 @@ pub enum FrameGate {
 /// ★ The gate. Ticks negotiated and live: a frame goes only on an OPEN REQUEST; otherwise (no
 /// ticks, or the broker is silent) the legacy credit decides — exactly as before phase 2.
 #[must_use]
-pub fn frame_gate(negotiated: bool, live: bool, open: Option<u32>, legacy_credit: bool) -> FrameGate {
+pub fn frame_gate(
+    negotiated: bool,
+    live: bool,
+    open: Option<u32>,
+    legacy_credit: bool,
+) -> FrameGate {
     if negotiated && live {
         if open.is_some() {
             FrameGate::Send
@@ -157,14 +162,21 @@ impl Requests {
         // numbers skipped between two ticks; the wrap past 0 is not a skipped tick (0 is never sent)
         let missed = self.last_seq.map_or(0, |l| {
             let m = t.tick_seq.wrapping_sub(l).saturating_sub(1);
-            if t.tick_seq < l { m.saturating_sub(1) } else { m }
+            if t.tick_seq < l {
+                m.saturating_sub(1)
+            } else {
+                m
+            }
         });
         self.c.ticks_missed += u64::from(missed);
         self.last_seq = Some(t.tick_seq);
         if self.last_present.is_some_and(|p| t.present_ns < p) {
             self.c.ts_backwards += 1;
         }
-        self.last_present = Some(self.last_present.map_or(t.present_ns, |p| p.max(t.present_ns)));
+        self.last_present = Some(
+            self.last_present
+                .map_or(t.present_ns, |p| p.max(t.present_ns)),
+        );
         self.c.ticks += 1;
         self.refresh_ns = t.refresh_ns;
         self.ticks_since_open = self.ticks_since_open.saturating_add(1);
@@ -202,7 +214,11 @@ impl Requests {
     /// display refreshes.
     #[must_use]
     pub fn answer_gap_ms(&self) -> u64 {
-        let ns = if self.refresh_ns == 0 { 16_666_666 } else { u64::from(self.refresh_ns) };
+        let ns = if self.refresh_ns == 0 {
+            16_666_666
+        } else {
+            u64::from(self.refresh_ns)
+        };
         (ns / 2_000_000).max(1)
     }
 
@@ -375,19 +391,41 @@ mod tests {
         // R3: no request, no spend
         assert_eq!(r.spend(0), None);
         // a tick without WANT opens nothing
-        assert_eq!(r.on_tick(&tick(1, false, 10)), TickVerdict::Fresh { missed: 0, opened: false });
+        assert_eq!(
+            r.on_tick(&tick(1, false, 10)),
+            TickVerdict::Fresh {
+                missed: 0,
+                opened: false
+            }
+        );
         assert_eq!(r.open(), None);
         // R2: WANT opens request = its tick number
-        assert_eq!(r.on_tick(&tick(2, true, 20)), TickVerdict::Fresh { missed: 0, opened: true });
+        assert_eq!(
+            r.on_tick(&tick(2, true, 20)),
+            TickVerdict::Fresh {
+                missed: 0,
+                opened: true
+            }
+        );
         assert_eq!(r.open(), Some(2));
         // R1: a duplicate, an older one and the same number again are dropped and change nothing
         for stale in [2, 1, 0xffff_ffff] {
-            assert_eq!(r.on_tick(&tick(stale, true, 30)), TickVerdict::Stale, "{stale}");
+            assert_eq!(
+                r.on_tick(&tick(stale, true, 30)),
+                TickVerdict::Stale,
+                "{stale}"
+            );
         }
         assert_eq!(r.open(), Some(2), "a stale WANT opens nothing");
         assert_eq!(r.c.ticks_stale, 3);
         // R2: a second WANT replaces the open one; ONE open request, counted
-        assert_eq!(r.on_tick(&tick(5, true, 40)), TickVerdict::Fresh { missed: 2, opened: true });
+        assert_eq!(
+            r.on_tick(&tick(5, true, 40)),
+            TickVerdict::Fresh {
+                missed: 2,
+                opened: true
+            }
+        );
         assert_eq!(r.open(), Some(5));
         assert_eq!((r.c.credits_coalesced, r.c.ticks_missed), (1, 2));
         // R3: a frame spends it, exactly once
@@ -396,23 +434,47 @@ mod tests {
         assert_eq!(r.c.frames_on_credit, 1);
         // R4: NO_CHANGE only at a LATER tick, with nothing to send
         r.on_tick(&tick(6, true, 50));
-        assert_eq!(r.idle_request(true, 100), None, "the tick that opened it is not 'later'");
+        assert_eq!(
+            r.idle_request(true, 100),
+            None,
+            "the tick that opened it is not 'later'"
+        );
         r.on_tick(&tick(7, false, 60));
-        assert_eq!(r.idle_request(false, 100), None, "something ready: not idle");
+        assert_eq!(
+            r.idle_request(false, 100),
+            None,
+            "something ready: not idle"
+        );
         assert_eq!(r.idle_request(true, 100), Some(6));
         // ... but not sooner than half a refresh (8 ms) after the last answer (a frame at 0 ms)
         assert_eq!(r.answer_gap_ms(), 8);
-        assert_eq!(r.idle_request(true, 7), None, "7 ms after the answer: too soon");
+        assert_eq!(
+            r.idle_request(true, 7),
+            None,
+            "7 ms after the answer: too soon"
+        );
         assert_eq!(r.idle_request(true, 8), Some(6));
         r.no_change_done(100);
         assert_eq!((r.open(), r.c.no_change_sent), (None, 1));
         // a backwards timestamp is counted and the tick still counts
-        assert_eq!(r.on_tick(&tick(8, false, 5)), TickVerdict::Fresh { missed: 0, opened: false });
+        assert_eq!(
+            r.on_tick(&tick(8, false, 5)),
+            TickVerdict::Fresh {
+                missed: 0,
+                opened: false
+            }
+        );
         assert_eq!(r.c.ts_backwards, 1);
         // the wrap skips 0: 0xffff_ffff then 1
         let mut w = Requests::new();
         w.on_tick(&tick(u32::MAX, true, 1));
-        assert_eq!(w.on_tick(&tick(1, true, 2)), TickVerdict::Fresh { missed: 0, opened: true });
+        assert_eq!(
+            w.on_tick(&tick(1, true, 2)),
+            TickVerdict::Fresh {
+                missed: 0,
+                opened: true
+            }
+        );
     }
 
     /// The share: the latest tick, coalescing counted from the gap, the newest request kept, one
@@ -428,7 +490,11 @@ mod tests {
         assert_eq!((a.count, a.tick_seq, a.present_ns), (3, 3, 300));
         assert_eq!(a.count - 0 - 1, 2, "two ticks were coalesced into this one");
         assert_eq!(s.snapshot(3), None, "nothing new");
-        assert_eq!(s.take_want(), Some(1), "the WANT of a coalesced tick is NOT lost");
+        assert_eq!(
+            s.take_want(),
+            Some(1),
+            "the WANT of a coalesced tick is NOT lost"
+        );
         assert_eq!(s.take_want(), None, "taken once");
         s.publish(&tick(4, true, 400));
         s.publish(&tick(5, true, 500));
@@ -455,7 +521,11 @@ mod tests {
             (false, false, Some(3), false, WaitCredit),
             (false, false, None, true, Send),
         ] {
-            assert_eq!(frame_gate(neg, live, open, credit), want, "{neg} {live} {open:?} {credit}");
+            assert_eq!(
+                frame_gate(neg, live, open, credit),
+                want,
+                "{neg} {live} {open:?} {credit}"
+            );
         }
         assert!(tick_live(Some(100), 150), "exactly 50 ms is still live");
         assert!(!tick_live(Some(100), 151));

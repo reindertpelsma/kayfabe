@@ -261,7 +261,11 @@ impl TickSource {
                 let stable = self
                     .broker_since_ns
                     .is_some_and(|t| now_ns.saturating_sub(t) >= BROKER_STABLE_NS);
-                self.fallbacks_run = if stable { 1 } else { self.fallbacks_run.saturating_add(1) };
+                self.fallbacks_run = if stable {
+                    1
+                } else {
+                    self.fallbacks_run.saturating_add(1)
+                };
                 self.probe_last_ns = None;
                 self.probe_gaps = 0;
                 self.at_ns = self.grid_after(now_ns);
@@ -454,7 +458,11 @@ mod tests {
         // a broker that speaks again is on PROBATION after its fallback: the first event is not a
         // tick and not a handoff, the second inside the silence's bound takes the source back
         let (e, h) = s.broker_tick(grid + 9_000_000);
-        assert_eq!((e, h, s.probation_events()), (None, None, 1), "probation: event 1");
+        assert_eq!(
+            (e, h, s.probation_events()),
+            (None, None, 1),
+            "probation: event 1"
+        );
         assert_eq!(s.source(), Source::Free);
         let (e, h) = s.broker_tick(grid + 9_000_000 + 20_000_000);
         assert_ticked(e, 3, Source::Broker, 0);
@@ -658,7 +666,10 @@ mod tests {
             now += gap;
         }
         let (a, b) = s.handoffs();
-        assert!(a + b <= 6, "40/60 flapping changed the source {a}+{b} times");
+        assert!(
+            a + b <= 6,
+            "40/60 flapping changed the source {a}+{b} times"
+        );
         // a steady broker is the source for good, and a stable second resets the demand
         let mut s = free();
         let mut now = 1_000_000u64;
@@ -668,11 +679,19 @@ mod tests {
             now += P;
         }
         assert_eq!(s.handoffs(), (1, 0));
-        assert_eq!(s.probation_events(), 0, "no probation for a broker that never fell back");
+        assert_eq!(
+            s.probation_events(),
+            0,
+            "no probation for a broker that never fell back"
+        );
         s.due(now + BROKER_SILENCE_NS); // silence after a stable spell: fallback #1 of a new run
         let (_, h) = s.broker_tick(now + 3 * BROKER_SILENCE_NS);
         assert_eq!(h, None, "event 1 of the probation");
         let (_, h) = s.broker_tick(now + 3 * BROKER_SILENCE_NS + P);
-        assert_eq!(h, Some(Handoff::ToBroker), "one good gap after a stable spell");
+        assert_eq!(
+            h,
+            Some(Handoff::ToBroker),
+            "one good gap after a stable spell"
+        );
     }
 }

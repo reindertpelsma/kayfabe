@@ -913,6 +913,31 @@ pub fn digest(rows: &[u64], w: u32, h: u32) -> u64 {
 }
 
 #[cfg(test)]
+/// ★ Phase 2: a broker credit is held at most ONCE; the extra grants are dropped and counted;
+/// a copy spends it; a flip (latch) neither needs nor spends one.
+#[test]
+fn a_broker_credit_coalesces_to_one_and_a_latch_needs_none() {
+    let mut m = Mailbox::default();
+    m.latch();
+    assert!(!m.due(false), "a frame waits, no credit yet");
+    assert!(m.grant());
+    for _ in 0..5 {
+        assert!(!m.grant(), "a second credit is not queued");
+    }
+    assert_eq!((m.coalesced, m.credit_held()), (5, true));
+    assert!(!m.due(true), "a copy in flight: not yet");
+    assert!(m.due(false));
+    m.copied();
+    assert!(!m.credit_held(), "spent by the copy");
+    m.latch();
+    m.latch();
+    assert_eq!(
+        (m.latched, m.skipped),
+        (3, 1),
+        "latches never wait for a credit"
+    );
+}
+
 mod tests {
     use super::*;
     use crate::tick::Handoff;

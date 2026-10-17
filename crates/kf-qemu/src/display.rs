@@ -5741,6 +5741,52 @@ mod tests {
         c.refresh_drain();
     }
 
+    /// ★ Phase 2 (§11.4): the worker's wiring of the lock step, as a source scan (the loop cannot
+    /// run without a GPU) — the broker's ticks reach the pacer only through the gate's freshness
+    /// check, a broker credit reaches the mailbox only through `CreditGate::poll`, and only a
+    /// FREE-clock tick grants a copy credit by itself. Known-positive on a planted line. The
+    /// constants the broker, the pacer and the relay share are the same numbers.
+    #[test]
+    fn the_worker_feeds_broker_ticks_through_the_gate_only() {
+        let src = include_str!("display.rs");
+        let code: String = src
+            .split("#[cfg(test)]")
+            .next()
+            .unwrap()
+            .lines()
+            .map(|l| l.split("//").next().unwrap())
+            .collect::<Vec<_>>()
+            .join("\n");
+        for needed in [
+            "gate_c.fresh(",
+            "pacer.broker_tick(",
+            "gate_c.on_tick(",
+            "gate_c.poll(",
+            "scan.mailbox.grant()",
+            "ticked_free &",
+            "gate_c.next_ns()",
+            "b.ticks().set_wake(",
+            "b.ticks().set_cap_hz(",
+            "gate_c.reset()",
+        ] {
+            assert!(code.contains(needed), "the worker no longer calls {needed}");
+        }
+        // a broker tick must not grant a copy credit by itself: `on_console_tick` is reached only
+        // through the free-clock mask
+        assert_eq!(code.matches("scan.on_console_tick(").count(), 1, "{code}");
+        assert!(!code.contains("scan.mailbox.tick()"), "no direct tick grant in the worker");
+        // the numbers the broker (the C header), the relay and the pacer share
+        assert_eq!(kf_broker::wire::GUEST_MAX_HZ, kf_disp::pace::MAX_HZ);
+        assert_eq!(kf_broker::wire::GUEST_MIN_HZ, kf_disp::pace::MIN_HZ);
+        assert_eq!(
+            kf_broker::ticks::BROKER_SILENCE_MS * 1_000_000,
+            kf_disp::tick::BROKER_SILENCE_NS
+        );
+        assert_eq!(kf_broker::ticks::MAX_FRAMES_IN_FLIGHT, 2);
+        assert_eq!(kf_disp::lockstep::MAX_PENDING_CREDITS, 1);
+        assert_eq!(kf_broker::ticks::MAX_OPEN_REQUESTS, 1);
+    }
+
     /// ★ §8.16 (the design's test 17): the worker arms vblanks ONLY through the pacer — a source
     /// scan of this file for period arithmetic of its own (the pre-cap `next_vblank` slots, a
     /// `Duration` built from a raster period) and for the copy gates the pacer and `NonFlip`

@@ -70,13 +70,12 @@ use crate::ticks::{
     frame_gate, tick_live,
 };
 use crate::wire::{
-    CAP_CURSOR, CAP_DEVICE, CAP_DMABUF, CAP_FOCUS_EVENTS, CAP_MODIFIERS, CAP_RELEASE, CAP_CURSOR_STREAM,
-    CAP_TICK, EV_TICK,
-    CLOSE_FORCE,
-    CMD_ATTACH, CMD_F_SHM, CMD_SIZE, Cmd, CursorCmd, DEVICE_F_KNOWN, DEVICE_F_RENDER, EV_ABS,
-    EV_BTN, EV_BYE, EV_CLIPBOARD, EV_CLOSE, EV_DEVICE, EV_FOCUS, EV_FORMAT, EV_FRAME, EV_GRAB,
-    EV_HELLO, EV_KEY, EV_POINTER, EV_REL, EV_RELEASE, EV_SURFACE, EV_WHEEL, F_GRABBED, FOURCC_XR24,
-    MOD_INVALID, MOD_LINEAR, PKT_SIZE, PROTO_VERSION, Pkt, fourcc_name,
+    CAP_CURSOR, CAP_CURSOR_STREAM, CAP_DEVICE, CAP_DMABUF, CAP_FOCUS_EVENTS, CAP_MODIFIERS,
+    CAP_RELEASE, CAP_TICK, CLOSE_FORCE, CMD_ATTACH, CMD_F_SHM, CMD_SIZE, Cmd, CursorCmd,
+    DEVICE_F_KNOWN, DEVICE_F_RENDER, EV_ABS, EV_BTN, EV_BYE, EV_CLIPBOARD, EV_CLOSE, EV_DEVICE,
+    EV_FOCUS, EV_FORMAT, EV_FRAME, EV_GRAB, EV_HELLO, EV_KEY, EV_POINTER, EV_REL, EV_RELEASE,
+    EV_SURFACE, EV_TICK, EV_WHEEL, F_GRABBED, FOURCC_XR24, MOD_INVALID, MOD_LINEAR, PKT_SIZE,
+    PROTO_VERSION, Pkt, fourcc_name,
 };
 use kf_linux_raw::Carrier;
 use std::os::fd::BorrowedFd;
@@ -1502,7 +1501,11 @@ impl<L: Link> Relay<L> {
         }
         // ★ phase 2: on a tick connection the COMMIT carries the request it answers (0 = none open:
         // a frame sent in the clock's fallback, 'unsolicited' to the broker)
-        let req = self.conn.as_ref().and_then(|c| c.tick.as_ref()).map_or(0, |t| t.reqs.open().unwrap_or(0));
+        let req = self
+            .conn
+            .as_ref()
+            .and_then(|c| c.tick.as_ref())
+            .map_or(0, |t| t.reqs.open().unwrap_or(0));
         let cmd = if self.ticks_negotiated() {
             Cmd::commit_for(req)
         } else {
@@ -1619,7 +1622,11 @@ impl<L: Link> Relay<L> {
         // ★ phase 2: while the broker's ticks are live a frame goes only on an open REQUEST (one
         // frame per request, no frame without one); in the clock's fallback the legacy credit decides
         let (negotiated, open, credit) = self.conn.as_ref().map_or((false, None, false), |c| {
-            (c.tick.is_some(), c.tick.as_ref().and_then(|t| t.reqs.open()), c.credit)
+            (
+                c.tick.is_some(),
+                c.tick.as_ref().and_then(|t| t.reqs.open()),
+                c.credit,
+            )
         });
         match frame_gate(negotiated, self.tick_live_at(now), open, credit) {
             FrameGate::Send => {}
@@ -2331,7 +2338,11 @@ impl<L: Link> Relay<L> {
             }
             Sent::Full => {}
             Sent::Failed(e) => {
-                self.lost(now, host, &format!("the broker socket failed on NO_CHANGE: {e}"));
+                self.lost(
+                    now,
+                    host,
+                    &format!("the broker socket failed on NO_CHANGE: {e}"),
+                );
             }
         }
     }
@@ -2679,7 +2690,11 @@ impl<L: Link> Relay<L> {
             self.detect(now);
             // ★ phase 2: the broker went silent (or came back) — the legacy credit takes over at
             // once, and a frame waiting for a request is no longer waiting
-            let was = self.conn.as_ref().and_then(|c| c.tick.as_ref()).map(|t| t.live);
+            let was = self
+                .conn
+                .as_ref()
+                .and_then(|c| c.tick.as_ref())
+                .map(|t| t.live);
             self.note_tick_live(now);
             if was == Some(true) && !self.tick_live_at(now) {
                 self.progress(now, host);
@@ -2898,7 +2913,13 @@ impl<L: Link> Relay<L> {
     }
 
     /// Send one cursor op for `want` and book its outcome; whether it was sent (`Done`).
-    fn push_cursor_op(&mut self, now: u64, host: &mut dyn Host, op: CursorOp, want: &CursorWant) -> bool {
+    fn push_cursor_op(
+        &mut self,
+        now: u64,
+        host: &mut dyn Host,
+        op: CursorOp,
+        want: &CursorWant,
+    ) -> bool {
         match self.send_cursor(op, want) {
             Ok(Sent::Done) => {
                 if let Some(c) = self.conn.as_mut() {
@@ -2993,7 +3014,9 @@ impl<L: Link> Relay<L> {
                 // without the capability is a framing violation: never sent)
                 let cmd = if i.is_xor() {
                     if c.caps & CAP_CURSOR_STREAM == 0 {
-                        return Err("an XOR cursor image for a broker without CAP_CURSOR_STREAM".into());
+                        return Err(
+                            "an XOR cursor image for a broker without CAP_CURSOR_STREAM".into()
+                        );
                     }
                     cmd.xor()
                 } else {

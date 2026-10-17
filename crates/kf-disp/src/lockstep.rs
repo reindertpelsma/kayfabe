@@ -160,7 +160,11 @@ mod tests {
         // G2: a swallowed tick's credit waits for the guard's edge, not for the next tick
         assert!(g.on_tick(2, 0, Some(2), None, Some(1_000), G));
         assert_eq!(g.c.credits_deferred, 1);
-        assert_eq!(g.poll(1_000 + G - 1), None, "inside the guard: not acted on");
+        assert_eq!(
+            g.poll(1_000 + G - 1),
+            None,
+            "inside the guard: not acted on"
+        );
         assert_eq!(g.next_ns(), Some(1_000 + G));
         assert_eq!(g.poll(1_000 + G), Some(2), "at the edge");
         // G3: a second credit while one pends replaces it: ONE pending, the extra counted

@@ -3,15 +3,15 @@
 //! invariant of `docs/design/V3_DISPLAY.md` §8.1 and each fix over nvkvm-pv, one test each.
 
 use kf_broker::wire::{
-    CAP_TICK, CLIENT_TICK, CMD_NO_CHANGE, EV_TICK, TickPkt,
-    CAP_DMABUF, CAP_FOCUS_EVENTS, CAP_MODIFIERS, CAP_RELEASE, CMD_ATTACH, CMD_CAPS, CMD_COMMIT,
-    CMD_F_SHM, CMD_QUERY_FORMAT, CMD_SIZE, CMD_WINDOW, Cmd, EV_ABS, EV_BTN, EV_CLOSE, EV_FORMAT,
-    EV_FRAME, EV_GRAB, EV_HELLO, EV_KEY, EV_REL, EV_RELEASE, EV_SURFACE, EV_WHEEL, FOURCC_AR24,
-    FOURCC_XR24, MOD_INVALID, MOD_LINEAR, PKT_SIZE, Pkt,
+    CAP_DMABUF, CAP_FOCUS_EVENTS, CAP_MODIFIERS, CAP_RELEASE, CAP_TICK, CLIENT_TICK, CMD_ATTACH,
+    CMD_CAPS, CMD_COMMIT, CMD_F_SHM, CMD_NO_CHANGE, CMD_QUERY_FORMAT, CMD_SIZE, CMD_WINDOW, Cmd,
+    EV_ABS, EV_BTN, EV_CLOSE, EV_FORMAT, EV_FRAME, EV_GRAB, EV_HELLO, EV_KEY, EV_REL, EV_RELEASE,
+    EV_SURFACE, EV_TICK, EV_WHEEL, FOURCC_AR24, FOURCC_XR24, MOD_INVALID, MOD_LINEAR, PKT_SIZE,
+    Pkt, TickPkt,
 };
 use kf_broker::{
-    TickShare, FrameGeom, FrameRing, Host, Input, Kind, Link, Pointer, Recv, Relay, RelayConfig, Sent,
-    SlotFds, VramFds, VramGeom,
+    FrameGeom, FrameRing, Host, Input, Kind, Link, Pointer, Recv, Relay, RelayConfig, Sent,
+    SlotFds, TickShare, VramFds, VramGeom,
 };
 use kf_linux_raw::{SharedRam, fd_inode};
 use std::cell::RefCell;
@@ -2826,17 +2826,33 @@ fn ticks_are_opted_in_only_when_both_sides_can() {
     let (mut t, _s) = T::with_share();
     t.up_keep(TICK_CAPS);
     let caps = t.sent().last().unwrap().0;
-    assert_eq!((caps.ty, caps.width, caps.height), (CMD_CAPS, CLIENT_TICK, 75), "{caps:?}");
+    assert_eq!(
+        (caps.ty, caps.width, caps.height),
+        (CMD_CAPS, CLIENT_TICK, 75),
+        "{caps:?}"
+    );
     assert!(t.relay.ticks_negotiated());
     // a broker without the bit
     let (mut t, _s) = T::with_share();
     t.up_keep(CAP_RELEASE);
-    assert_eq!((t.sent().last().unwrap().0.width, t.sent().last().unwrap().0.height), (0, 0));
+    assert_eq!(
+        (
+            t.sent().last().unwrap().0.width,
+            t.sent().last().unwrap().0.height
+        ),
+        (0, 0)
+    );
     assert!(!t.relay.ticks_negotiated());
     // an old VMM (no share) against a new broker
     let mut t = T::new(false);
     t.up_keep(TICK_CAPS);
-    assert_eq!((t.sent().last().unwrap().0.width, t.sent().last().unwrap().0.height), (0, 0));
+    assert_eq!(
+        (
+            t.sent().last().unwrap().0.width,
+            t.sent().last().unwrap().0.height
+        ),
+        (0, 0)
+    );
     assert!(!t.relay.ticks_negotiated());
     // the ceiling is told
     let (mut t, s) = T::with_share();
@@ -2856,12 +2872,19 @@ fn one_frame_per_request_and_the_commit_carries_it() {
     assert!(t.relay.tick_live());
     t.publish(64, 64);
     t.frame();
-    assert!(t.commits().is_empty(), "live ticks and no request: the frame waits");
+    assert!(
+        t.commits().is_empty(),
+        "live ticks and no request: the frame waits"
+    );
     assert_eq!(t.relay.tick_counters().req_open_blocked, 1);
     t.tick(1);
     t.tick_pkt(2, true, 200);
     t.read();
-    assert_eq!(t.types(), vec![CMD_WINDOW, CMD_ATTACH, CMD_COMMIT], "the request releases the waiting frame");
+    assert_eq!(
+        t.types(),
+        vec![CMD_WINDOW, CMD_ATTACH, CMD_COMMIT],
+        "the request releases the waiting frame"
+    );
     assert_eq!(t.commits(), vec![2], "COMMIT.seq is the request answered");
     assert_eq!(t.relay.tick_counters().frames_on_credit, 1);
     // a second ready frame needs a second request
@@ -2872,7 +2895,10 @@ fn one_frame_per_request_and_the_commit_carries_it() {
     t.tick(1);
     t.tick_pkt(3, false, 300);
     t.read();
-    assert!(t.commits().is_empty(), "a tick without WANT is only a vblank");
+    assert!(
+        t.commits().is_empty(),
+        "a tick without WANT is only a vblank"
+    );
     t.tick_pkt(4, true, 400);
     t.read();
     assert_eq!(t.commits(), vec![4]);
@@ -2897,7 +2923,10 @@ fn an_idle_request_is_answered_no_change_at_a_later_tick() {
     t.read();
     let s = t.sent();
     assert_eq!(s.len(), 1);
-    assert_eq!((s[0].0.ty, s[0].0.width, s[0].0.height), (CMD_NO_CHANGE, 5, 0));
+    assert_eq!(
+        (s[0].0.ty, s[0].0.width, s[0].0.height),
+        (CMD_NO_CHANGE, 5, 0)
+    );
     assert_eq!(t.relay.tick_counters().no_change_sent, 1);
     t.clear();
     t.tick(10);
@@ -2926,12 +2955,39 @@ fn stale_ticks_are_dropped_and_violations_drop_the_connection() {
     t.read();
     let c = t.relay.tick_counters();
     assert_eq!((c.ticks, c.ticks_stale, c.want_ticks), (1, 3, 1));
-    assert_eq!(share.snapshot(0).unwrap().count, 1, "a stale tick is not published");
+    assert_eq!(
+        share.snapshot(0).unwrap().count,
+        1,
+        "a stale tick is not published"
+    );
     assert!(t.relay.active());
     for (what, p) in [
-        ("seq 0", Pkt { ty: EV_TICK, x: 0, ..Pkt::default() }),
-        ("reserved bit", Pkt { ty: EV_TICK, x: 11, y: (1u32 << 30).cast_signed(), ..Pkt::default() }),
-        ("refresh 5 ns", Pkt { ty: EV_TICK, x: 11, y: 5, ..Pkt::default() }),
+        (
+            "seq 0",
+            Pkt {
+                ty: EV_TICK,
+                x: 0,
+                ..Pkt::default()
+            },
+        ),
+        (
+            "reserved bit",
+            Pkt {
+                ty: EV_TICK,
+                x: 11,
+                y: (1u32 << 30).cast_signed(),
+                ..Pkt::default()
+            },
+        ),
+        (
+            "refresh 5 ns",
+            Pkt {
+                ty: EV_TICK,
+                x: 11,
+                y: 5,
+                ..Pkt::default()
+            },
+        ),
     ] {
         let (mut t, _s) = T::with_share();
         t.up_keep(TICK_CAPS);
@@ -2974,11 +3030,19 @@ fn silence_falls_back_to_the_legacy_credit_and_the_next_tick_resumes() {
     assert!(t.commits().is_empty());
     t.pkt(EV_FRAME, 0, 0, 0, 0);
     t.read();
-    assert_eq!(t.commits(), vec![0], "silent: the frame goes unsolicited, seq 0");
+    assert_eq!(
+        t.commits(),
+        vec![0],
+        "silent: the frame goes unsolicited, seq 0"
+    );
     t.tick_pkt(2, false, 200);
     t.read();
     assert!(t.relay.tick_live());
-    assert_eq!(t.relay.tick_counters().silence_resumes, 2, "the first live tick, and this one");
+    assert_eq!(
+        t.relay.tick_counters().silence_resumes,
+        2,
+        "the first live tick, and this one"
+    );
     let _ = (t.relay.tick_status(), t.relay.status());
 }
 
@@ -2987,7 +3051,12 @@ fn silence_falls_back_to_the_legacy_credit_and_the_next_tick_resumes() {
 fn a_broker_that_stalls_mid_packet_is_dropped_after_the_read_deadline() {
     let (mut t, _s) = T::with_share();
     t.up_keep(TICK_CAPS);
-    let p = Pkt { ty: EV_FOCUS_X, x: 1, ..Pkt::default() }.encode();
+    let p = Pkt {
+        ty: EV_FOCUS_X,
+        x: 1,
+        ..Pkt::default()
+    }
+    .encode();
     t.wire.borrow_mut().inbox.extend(&p[..10]);
     t.read();
     assert!(t.relay.active());
@@ -3031,15 +3100,26 @@ fn a_tick_flood_is_read_within_the_per_turn_budget() {
     let c = t.relay.tick_counters();
     assert_eq!((c.ticks, c.ticks_stale), (1000, 0));
     assert!(c.budget_hits >= 15, "{c:?}");
-    assert_eq!(share.snapshot(0).unwrap().tick_seq, 1000, "one latest tick, however many came");
-    assert_eq!(share.take_want(), Some(994), "ONE pending request, the newest");
+    assert_eq!(
+        share.snapshot(0).unwrap().tick_seq,
+        1000,
+        "one latest tick, however many came"
+    );
+    assert_eq!(
+        share.take_want(),
+        Some(994),
+        "ONE pending request, the newest"
+    );
     assert_eq!(c.want_ticks, 142);
     assert_eq!(
         c.credits_coalesced + c.no_change_sent + 1,
         142,
         "conservation: every request is replaced, answered NO_CHANGE, or the one still open: {c:?}"
     );
-    assert!(c.no_change_sent <= 2, "NO_CHANGE is paced by the refresh, not by the flood: {c:?}");
+    assert!(
+        c.no_change_sent <= 2,
+        "NO_CHANGE is paced by the refresh, not by the flood: {c:?}"
+    );
 }
 
 /// ★ The compatibility pledge: a script against a broker without the bit gives the same wire
@@ -3068,7 +3148,11 @@ fn an_old_broker_gives_bit_identical_records_and_counters() {
     let (mut shared, _s) = T::with_share();
     let b = script(&mut shared);
     let strip = |v: &[(Cmd, Option<u64>)]| v.iter().map(|(c, _)| *c).collect::<Vec<_>>();
-    assert_eq!(strip(&a.0), strip(&b.0), "the wire (descriptor inodes differ per ring)");
+    assert_eq!(
+        strip(&a.0),
+        strip(&b.0),
+        "the wire (descriptor inodes differ per ring)"
+    );
     assert_eq!(a.1, b.1, "the counters");
     assert!(!a.0.is_empty());
 }

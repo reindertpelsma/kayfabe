@@ -552,7 +552,10 @@ impl CursorCmd {
     /// `op` zero. Only for a broker that advertised [`CAP_CURSOR_STREAM`].
     #[must_use]
     pub fn mov(x: i32, y: i32, abs: Option<(i32, i32)>) -> CursorCmd {
-        let c = |v: i32| v.clamp(-(CURSOR_MAX_DIM as i32), MAX_DIM as i32).cast_unsigned();
+        let c = |v: i32| {
+            v.clamp(-(CURSOR_MAX_DIM as i32), MAX_DIM as i32)
+                .cast_unsigned()
+        };
         let (ax, ay) = abs.unwrap_or((0, 0));
         CursorCmd {
             flags: if abs.is_some() { CURSOR_F_ABS } else { 0 },
@@ -750,30 +753,52 @@ mod tests {
         };
         let b = Pkt::tick_pkt(9, F_FOCUSED, &t).encode();
         assert_eq!(&b[0..2], &EV_TICK.to_le_bytes());
-        assert_eq!(&b[2..4], &F_FOCUSED.to_le_bytes(), "the mirrored flags stay the mirrored flags");
+        assert_eq!(
+            &b[2..4],
+            &F_FOCUSED.to_le_bytes(),
+            "the mirrored flags stay the mirrored flags"
+        );
         assert_eq!(&b[8..12], &0xa1b2_c3d4u32.to_le_bytes(), "tick_seq@8");
         assert_eq!(
             &b[12..16],
             &(8_333_333u32 | TICK_F_WANT_FRAME).to_le_bytes(),
             "refresh word@12"
         );
-        assert_eq!(&b[16..24], &0x0123_4567_89ab_cdefu64.to_le_bytes(), "present_ns@16");
+        assert_eq!(
+            &b[16..24],
+            &0x0123_4567_89ab_cdefu64.to_le_bytes(),
+            "present_ns@16"
+        );
         assert_eq!(Pkt::decode(&b).tick(), Ok(t));
         let base = Pkt::tick_pkt(1, 0, &t);
         for (name, bad) in [
             ("seq 0", Pkt { x: 0, ..base }),
-            ("reserved 30", Pkt { y: (base.y.cast_unsigned() | 1 << 30).cast_signed(), ..base }),
-            ("reserved 31", Pkt { y: (base.y.cast_unsigned() | 1 << 31).cast_signed(), ..base }),
             (
-                "refresh 999999 ns",
-                Pkt { y: 999_999, ..base },
+                "reserved 30",
+                Pkt {
+                    y: (base.y.cast_unsigned() | 1 << 30).cast_signed(),
+                    ..base
+                },
             ),
+            (
+                "reserved 31",
+                Pkt {
+                    y: (base.y.cast_unsigned() | 1 << 31).cast_signed(),
+                    ..base
+                },
+            ),
+            ("refresh 999999 ns", Pkt { y: 999_999, ..base }),
         ] {
             assert!(bad.tick().is_err(), "{name}");
         }
         assert!(Pkt { y: 0, ..base }.tick().is_ok(), "refresh 0 = unknown");
         assert!(
-            Pkt { y: TICK_REFRESH_MASK.cast_signed(), ..base }.tick().is_ok(),
+            Pkt {
+                y: TICK_REFRESH_MASK.cast_signed(),
+                ..base
+            }
+            .tick()
+            .is_ok(),
             "the largest refresh"
         );
         // the commands
@@ -798,7 +823,10 @@ mod tests {
         assert!(!seq_newer(5, 5));
         assert!(seq_newer(1, u32::MAX), "1 follows the wrap (0 is skipped)");
         assert!(!seq_newer(u32::MAX, 1));
-        assert!(seq_newer(0x8000_0000, 1), "half the range ahead is still newer");
+        assert!(
+            seq_newer(0x8000_0000, 1),
+            "half the range ahead is still newer"
+        );
         assert!(!seq_newer(0x8000_0001, 1), "more than half is stale");
     }
 }
