@@ -1,3 +1,7 @@
+**STATUS: LIVE (PHASE 1c, worker-only, GPU-free), 2026-10-16.** PHASE 1c (branch `claude/win-lifecycle-p1c-20261016`, from `claude/win-lifecycle-p1b-20261016` `4ab092324`) answers the SECOND independent review
+(Opus 5.5, same day; section 0b): the P2' assumption became a steady-state one, so it gets switches, log lines and a VM-wide guard; the three mutants that survived are killed; a stale boundary across a ring switch is fixed.
+Still NOT validated on hardware. **Read sections 0b and 0a first; the hardware report checklist is section 10.**
+
 **STATUS: LIVE (PHASE 1b, worker-only, GPU-free), 2026-10-16.** PHASE 1b (branch `claude/win-lifecycle-p1b-20261016`, from
 `claude/win-lifecycle-p1-20261016` `6f9163848`) fixes the defects an independent review (Opus 5.5, same day) found in PHASE 1: D1-D6 and T1-T3 of
 section 0a, which CORRECTS sections 1.1, 1.2, 2, 5 (P2), 6, 7 (questions 1-3) and 8-9 below; each corrected passage says so in place. Still NOT validated
@@ -28,6 +32,68 @@ passthrough"); while a registration is live scan again (**Window**) until the tr
 Scope. Only Windows USER-work channels the relay carries today (`userrelay::enabled`, sysmem USERD, private GPFIFO/USERD). Linux guests, Translated and
 Emulated channels and vidmem-USERD channels never get a `Lifecycle` (G3; `userpump::tests::the_lifecycle_is_reachable_only_from_the_windows_user_ring_pump`
 pins that no other source file names it and that the pump has exactly one constructor call, in the Windows birth).
+
+## 0b. PHASE 1c: what the second review found and what changed (2026-10-16)
+
+Labels as in 0a. **[measured]** = reproduced in this branch (the 1b base `4ab092324` for the "reproduced" column) by a named test or run; **[inferred]** = reasoning. The review's own
+labels are kept where they matter. **Corrections to 0a below, in place of the text they correct:** P2' is not a rare window-start assumption but a STEADY-STATE one (every Pointer
+batch-end marker rests on it, several hundred a second in Heaven); the named falsifier (`put_boundary_open_scan`) only saw the short Scan stretch before the first `SET_OBJECT`
+(S1: about 75 entries per channel); and there was no switch to turn the new behaviour off. Both are changed below.
+
+| id | finding (review severity) | reproduced on `4ab092324`? | fixed by | tests that guard it |
+|---|---|---|---|---|
+| N1 | P2' (a `GP_PUT` the guest wrote is a packet boundary) is a steady-state assumption: one violation corrupts the guest channel (HIGH, design) | [inferred] from the code: `end_batch` runs at every caught-up `GP_PUT` in Pointer mode | the VM-wide latch (below): the first packet seen open at a `GP_PUT` boundary switches Pointer markers off for every channel; modes and log lines make it measurable | unit `the_first_packet_open_at_a_gp_put_boundary_switches_pointer_markers_off`, `the_latch_is_vm_wide_and_counted_once`; model `l1_*`; props `latch_*`; Relay unit `a_packet_open_at_gp_put_in_scan_mode_is_reported_*` |
+| N2 | the falsifier cannot falsify P2' where it matters and there is no switch (HIGH for the run plan) | [read] the pump hardwired `Lifecycle::new()` | `KF3_LIFECYCLE_MODE` (below); `always_scan` measures the whole run | unit `always_scan_never_leaves_scan_*`, model `m1_*`, props `modes_*`, kf-qemu `the_lifecycle_mode_*` |
+| N3 | Window -> Pointer re-anchoring untested: mutant A passes all 264 lifecycle tests; the second window opens inside a submission (MEDIUM) | **[measured]** mutant A: kf-chan lib 174, model 47, props 25, stress 2, unit 16 all green (`traces`-free; log `p1c_base_repro.log` in the scratchpad) | tests only (the code was right) | unit `the_second_window_of_a_channel_is_anchored_at_the_gp_put_of_the_turn_that_left_the_first`; model `a_second_window_of_the_same_channel_starts_at_its_own_anchor_never_inside_a_submission` (mutant A reaches `MARKER_IN_PACKET`) |
+| N4 | `next_boundary` survives a ring switch: a marker believed safe at an index no `GP_PUT` of the new ring ever had (LOW) | **[measured]** probe `probe_stale_boundary_after_a_source_switch` FAILED on the base; the Relay-level test authors a marker at the stale index before the fix | `Lifecycle::source_switched` clears `next_boundary`, `here`, `counted` | unit `a_remembered_gp_put_boundary_of_the_old_ring_is_forgotten_at_a_source_switch`, `a_boundary_counted_before_the_switch_*`; Relay unit `the_switch_forgets_the_old_rings_gp_put_boundaries_*` |
+| N5 | tautology assertion `x == x` in `markers_need_a_known_parser_state_or_an_observed_gp_put_boundary` (LOW) | [read] | replaced by both outcomes of a Window `marker_possible` | the same test |
+| W | mutant W: `migrate` drops `source_switched()`: kf-qemu 271/271 (MEDIUM, pump wiring untested) | **[measured]** 271/271 green | the ring switch is production code in `kf_chan::user_turn::Relay::switch_source` / `new_ring_get` (generation, cursor 0, grace, pending write-back, the guest's GET, post-switch scan); the pump's `migrate` calls them and writes none of those fields | Relay units `switch_source_installs_the_new_ring_*`, `a_switch_outside_a_window_*`, `a_nonzero_guest_get_*`; model `i4_*` (its stand-in calls the same method); kf-qemu pins `migrate_switches_the_relay_through_switch_source_*`, `the_switch_call_is_inside_the_admission_*`; hardware: `post_switch_scanned == 8 * USER_RING_MIGRATED` (section 10) |
+| R | mutant R: `registry_live` keyed by the channel instead of the software object: no Window ever opens, kf-qemu 271/271 (MEDIUM) | **[measured]** 271/271 green | `software_key` (the one place an `ObjKey` is built) and `live_registrations` (the count) in `userpump.rs` | kf-qemu `a_live_registration_of_the_channels_software_object_is_counted_and_nothing_else_is` (a real `Registry`: the object, the channel's handle, another client, another object), `every_registry_lookup_of_the_software_object_goes_through_software_key`, `registry_live_counts_the_software_objects_registrations_for_the_channels_client`, `registry_live_never_asks_the_registry_about_the_channels_own_handle` |
+
+### The modes (`KF3_LIFECYCLE_MODE`, measurement class, never required to boot)
+
+Read ONCE, when the first relay is created (a process-wide `OnceLock`; never per turn; logged as `USER_RING_LIFECYCLE_MODE <name>`). Unset or empty = `default`; an unknown value runs
+`default` and says so in that line. Default = the lifecycle fully on.
+
+| value | behaviour | observable difference (test) |
+|---|---|---|
+| `default` | Scan -> Pointer (markers at observed `GP_PUT` boundaries) -> anchored Windows | no pushbuffer read in Pointer (`m1_default_reads_no_pushbuffer_*`, `modes_*`) |
+| `always_scan` | the machine never leaves Scan (the base behaviour); EVERY 1b counter keeps running: `put_boundaries_scan` / `put_boundary_open_scan` over the WHOLE run, `post_switch_scanned`, `switch_cursor_mismatch`, the SET_OBJECT tally | every entry's pushbuffer is read, `put_boundary_open_scan` sees a boundary the default cannot (`m1_always_scan_measures_*`); the open boundary is the exact hazard of the default (`MARKER_IN_PACKET` reachable there, clean here) |
+| `no_pointer_markers` | Pointer mode places no marker (spin / counted backstop wake); anchored Windows stay | `pointer_markers == 0`, the unannounced wakes counted (`pointer_carried_no_marker`); deadlocks without a look, live with one (`m1_no_pointer_markers_*`) |
+| `no_anchored_windows` | a Window starts at the entry that sees the registration (PHASE 1 start) | the seeded gate lands inside a spanning packet (`m1_no_anchored_windows_*`, same shape as `machine_anchor_ignored`) |
+
+### The VM-wide latch (answers the review's "guard")
+
+The first time ANY channel reports a packet open at a `GP_PUT` boundary with the parser state known (Scan, or a Window; Pointer mode cannot see one), Pointer markers are switched
+off for EVERY channel of the VM: one `AtomicBool` (`MarkerLatch`, owned by `LifecycleStats`, one per VM, one-way). Markers are performance, never correctness: with them off the wake is
+the bounded spin / the counted 50 ms backstop (`pointer_carried_no_marker`, `pointer_backstop`), no entry is lost or duplicated (model `l1_*`: every latched interleaving is free of
+`MARKER_IN_PACKET`, loss, duplication and reordering; without a look the full-guest-ring run deadlocks exactly as `no_pointer_markers` does; props `latch_*`: a second channel that never saw an open
+packet loses its Pointer markers too, bit-exact forwarding). Loud: `USER_RING_POINTER_MARKERS_LATCHED_OFF` once per VM, counter `pointer_markers_latched_off` (0 or 1 VM-wide). Anchored
+Windows stay (they have their own counters). **The latch needs an observation:** a guest that only ends submissions inside packets while the channel is in Pointer mode is not detected (the model
+keeps that interleaving reachable on purpose); that is what `always_scan` runs are for.
+
+### Ring-full anchors
+
+A `GP_PUT` read while the guest ring is FULL (`put + 1` equals the `GP_GET` last written back, tracked in `Relay::written_get`; 0 at birth and after a switch) never becomes an anchor
+(`anchor_refused_ring_full`): a driver that fills its ring may have cut a packet to get space, and a full ring is also when Windows grows it. Consequence, stated: if every anchor since the
+last good one was refused, the flip finds `abs > safe_end` and the Window starts at the entry that sees the registration, which is not a known `GP_PUT` boundary; that is counted
+(`anchor_stale_start`, must be 0 in an ordinary run) and reported (`stale_anchor=true`). Markers are NOT refused at a full-ring `GP_PUT` (that is the moment the guest waits for the `GP_GET` write-back and the marker is
+what wakes it; model `d3_*`).
+
+### Log lines (printed by the pump from machine notices; the machine has no I/O)
+
+* `USER_RING_PUT_BOUNDARY_OPEN <key> mode nth cursor_slot put_slot relayed put_abs open_packet`: the first 8 per channel, and every one inside a Window.
+* `USER_RING_WINDOW_FRESH <key> cursor anchor anchor_forwarded seeded stale_anchor first_segment`: one per Pointer -> Window flip; `first_segment` is `Closed`, `EndsOpen`, `Refused` or `None` (the Window ended first).
+* `USER_RING_POINTER_MARKERS_LATCHED_OFF <key> ...`: once per VM.
+* `USER_RING_LIFECYCLE_MODE <name>`: once per process.
+
+### Precondition P1 over a whole run (owner request, additive)
+
+`set_object_5080_total` (per channel, summed VM-wide), `set_object_5080_rebinds` (a SET_OBJECT on a subchannel that held the 5080 software object and bound another class) and
+`set_object_5080_max_per_channel` (VM-wide maximum of the per-channel total) count EVERY scanned `SET_OBJECT` of the 5080 class, not only the first. They are printed in the
+`USER_RING_LIFECYCLE SUMMARY` line and the per-channel `USER_RING_LIFECYCLE` line. The tally lives in `Scan` and commits with the scan (a refused segment is not counted), so it is
+exact for everything the scan saw: the whole run in `always_scan`, only the Scan stretch in the default (Pointer mode cannot see a later rebind by construction; model
+`m2_the_default_machine_cannot_see_a_binding_after_pointer_mode_began` pins the gap). Reading: max per channel 1 and rebinds 0 across the app matrix in `always_scan` is the evidence for assuming P1.
 
 ## 0a. PHASE 1b: what the independent review found and what changed (2026-10-16)
 
@@ -60,6 +126,10 @@ that `GP_PUT` was published before the reply; a cooperative guest publishes a tr
 the worker's `GP_PUT` read and its epoch observation:* that turn sees the bump, so it is not a clean turn and its `GP_PUT` (which may include post-reply entries)
 is never the anchor; the previous clean turn's is. The model explores it (the guest's script steps interleave with every micro-step: `i4_*`, `a3_*`, `flip`).
 Hostile guests: a trigger published before the reply only resets the guest's own channel (unchanged, `i4_a_trigger_published_before_the_reply_*`).
+
+*CORRECTED 1c (second review N1, N2): P2' is a STEADY-STATE assumption, not a window-start one (every Pointer batch-end marker rests on it), and the Scan-mode counters below only see the setup stretch
+before the first `SET_OBJECT`. The decision rule "do not enable Pointer markers / anchored Windows for that workload" is now executable without a rebuild: `KF3_LIFECYCLE_MODE` (section 0b) and a
+VM-wide latch. Measure P2' on the whole run with `KF3_LIFECYCLE_MODE=always_scan`.*
 
 **Assumption P2' [inferred; falsifiable]: a `GP_PUT` value the guest wrote is a packet boundary (a cooperative driver does not leave the GPU waiting inside a
 packet at the end of a submission).** P2 (an ARBITRARY entry boundary is a packet boundary) is contradicted by the traces (section 5); P2' is weaker: the
@@ -195,7 +265,8 @@ a Fresh window, once per entry), `window_binding_changed` (the software binding 
 nothing in a Window is skipped), `pb_bytes_scan/window`, `window_bar1_bytes`, `pointer_pb_read_violation` (must stay 0; also a `debug_assert!`),
 `scan_no_software`, `after_teardown`. **1b adds:** `put_boundaries_scan/window` and `put_boundary_open_scan/window` (the P2' falsifier, uncapped),
 `pointer_markers`, `pointer_carried_no_marker` (loud), `pointer_backstop` and `pointer_backstop_loud`, `anchor_forwarded`, `post_switch_scanned`,
-`switch_cursor_mismatch` (loud), `pointer_binding_unchecked`, `pointer_software_gone`. Existing counters keep their meaning (`carried_ungated` now counts only Scan/Window entries).
+`switch_cursor_mismatch` (loud), `pointer_binding_unchecked`, `pointer_software_gone`. **1c adds:** `anchor_refused_ring_full`, `anchor_stale_start` (must be 0), `pointer_markers_latched_off`
+(0 or 1 VM-wide), `set_object_5080_total`, `set_object_5080_rebinds`, VM-wide `set_object_5080_max_per_channel` (section 0b). Existing counters keep their meaning (`carried_ungated` now counts only Scan/Window entries).
 
 ## 5. Assumptions and what the existing traces say about them
 
@@ -258,7 +329,7 @@ nothing in a Window is skipped), `pb_bytes_scan/window`, `window_bar1_bytes`, `p
 11. **(1b, D6) The PHASE-2 `kf_trap::inline_plan` model neither validates entries (`inspect_entry`) nor consults the lifecycle, the epoch or the registration
     state.** Fine while it is model-only; a MUST-FIX before it is wired: the inline vCPU path must run the same `user_turn::Relay` checks (entry validation, anchor,
     registration state). Not changed in 1b (no inline vCPU wiring).
-12. **(1b) P2' is unmeasured.** The first hardware run reads `put_boundary_open_scan` / `_window` on the app matrix (Heaven, GravityMark, Minecraft, Edge): any
+12. **(1b, 1c) P2' is unmeasured.** (1c: measure it on the whole run with `KF3_LIFECYCLE_MODE=always_scan`; the VM-wide latch limits the damage of a violation seen in Scan or a Window, section 0b.) The first hardware run reads `put_boundary_open_scan` / `_window` on the app matrix (Heaven, GravityMark, Minecraft, Edge): any
     nonzero value means the anchor design must not be enabled for that workload (fallback: the short-entry trigger signature, question 3 (c)).
 13. **(1b) Cursor semantics at the switch stay unmeasured (question 4).** The new loud detector is `switch_cursor_mismatch` (a nonzero `GP_GET` in the new USERD at
     the switch); scanning the first 8 entries catches garbage slots, not valid stale ones.
@@ -315,6 +386,75 @@ scenario (63 failing tests) and, from a different angle, by the unit test `a_tur
 (`mutant_*`), replaced by the table above; the harness knob `ignore_events` (a test of the explorer's teeth) stays with two tests (`i6_a_worker_that_ignores_events_*`,
 `d3_the_same_run_deadlocks_if_the_worker_ignores_events`).
 
+### 8b. PHASE 1c mutation run (2026-10-17, branch head `fb8aedd80`, `scripts/lifecycle_mutation_check.sh`, 57 mutants)
+
+Baseline green. The 27 mutants of the 1b table are re-run (all still caught) and 30 new ones added (the exact mutants of the second review: **A** = `life_no_window_reanchor`, **W** = `pump_w_no_switch` and
+`core_switch_no_post_scan`, **R** = `pump_r_object_is_the_client`, `pump_r_channel_handle`, `pump_r_no_registry`; N4 = `life_stale_boundary`; the modes, the latch, the ring-full guard, the tally, the pump wiring). The first column
+is the mutation, then the number of failing tests (kf-chan: `--lib` and the five lifecycle binaries; `pump_*`: `kf-qemu --lib`), then the first three. `core_drop_flip_entry` and `life_stale_anchor` make `user_turn_unit`
+loop forever; the hung binary was killed by hand, so their counts do not include its tests (a hang is a detection). Mutants A, W and R were all caught by 2 or more tests; **12 new mutants are caught by exactly ONE test**:
+`life_anchor_ignores_full_ring`, `life_stale_start_uncounted`, `life_latch_counted_twice`, `life_open_notices_unbounded`, `core_switch_keeps_pending_get`, `core_new_ring_get_uncounted`, `core_write_back_unrecorded`,
+`pump_w_no_mismatch` and the four pump wiring pins (`pump_no_tally_sync`, `pump_no_notices`, `pump_no_latch`, `pump_mode_ignored`: one source-text pin each, no GPU-free harness exists). They are debt (section 11), not justified.
+
+| mutation | failing tests | first failing |
+|---|---|---|
+| `machine_pointer_scans` | 70 | `a1_a_full_ring_lap_in_pointer_mode_does_not_revive_a_stale_gate_proof`, `a1_a_registration_right_after_a_forwarded_sync_wait_never_scans_the_la`, `a2_an_open_packet_carried_across_the_mode_switch_is_dropped_and_a_late` and 67 more |
+| `machine_no_seed` | 9 | `a1_a_registration_right_after_a_forwarded_sync_wait_never_scans_the_la`, `a_window_that_follows_a_forwarded_sync_wait_gates_its_first_entry_befo`, `b_extra_and_coalesced_doorbells_during_a_draining_gate_change_nothing` and 6 more |
+| `machine_forget_sync` | 11 | `a1_a_registration_right_after_a_forwarded_sync_wait_never_scans_the_la`, `a_window_that_follows_a_forwarded_sync_wait_gates_its_first_entry_befo`, `b_extra_and_coalesced_doorbells_during_a_draining_gate_change_nothing` and 8 more |
+| `machine_pointer_to_scan` | 51 | `a1_a_full_ring_lap_in_pointer_mode_does_not_revive_a_stale_gate_proof`, `a1_a_registration_right_after_a_forwarded_sync_wait_never_scans_the_la`, `a2_an_open_packet_carried_across_the_mode_switch_is_dropped_and_a_late` and 48 more |
+| `machine_revive_after_teardown` | 4 | `a7_teardown_at_any_instant_stops_the_private_ring_for_good`, `a_torn_down_machine_loads_nothing_after_the_plan_and_publishes_nothing`, `d6_a_torn_down_machine_reads_nothing_and_publishes_nothing` and 1 more |
+| `machine_exit_ignores_live` | 38 | `a1_a_full_ring_lap_in_pointer_mode_does_not_revive_a_stale_gate_proof`, `a1_a_registration_right_after_a_forwarded_sync_wait_never_scans_the_la`, `a2_an_open_packet_carried_across_the_mode_switch_is_dropped_and_a_late` and 35 more |
+| `machine_mask_frozen` | 2 | `a6_a_rebind_inside_a_window_is_seen_and_counted_and_the_new_binding_is`, `a_changed_software_binding_inside_a_window_is_counted` |
+| `machine_anchor_ignored` | 15 | `a_second_window_of_the_same_channel_starts_at_its_own_anchor_never_ins`, `d1_a_registration_inside_a_submission_never_puts_a_host_marker_inside_`, `d2_data_that_looks_like_the_trigger_inside_a_packet_of_one_submission_` and 12 more |
+| `machine_pointer_markers_anywhere` | 15 | `a_wake_pointer_mode_cannot_announce_is_counted_loudly_not_hidden`, `d3_a_credit_stall_inside_a_packet_never_gets_a_marker`, `i6_pointer_mode_waits_for_private_ring_credit_are_only_found_by_a_look` and 12 more |
+| `machine_pointer_no_markers` | 16 | `a2_an_open_packet_carried_across_the_mode_switch_is_dropped_and_a_late`, `a_pointer_marker_is_authored_where_the_cursor_reached_gp_put_and_not_m`, `a_wake_pointer_mode_cannot_announce_is_counted_loudly_not_hidden` and 13 more |
+| `core_ignore_seed` | 7 | `a1_a_registration_right_after_a_forwarded_sync_wait_never_scans_the_la`, `a_window_that_follows_a_forwarded_sync_wait_gates_its_first_entry_befo`, `b_extra_and_coalesced_doorbells_during_a_draining_gate_change_nothing` and 4 more |
+| `core_no_gate_reset` | 3 | `a1_a_full_ring_lap_in_pointer_mode_does_not_revive_a_stale_gate_proof`, `a_fresh_window_resets_the_gate_so_a_proof_from_an_earlier_lap_is_gone`, `t3_a_second_window_one_ring_lap_later_gates_its_sync_wait_entry_again` |
+| `core_epoch_before_put` | 31 | `a1_a_full_ring_lap_in_pointer_mode_does_not_revive_a_stale_gate_proof`, `a1_a_registration_right_after_a_forwarded_sync_wait_never_scans_the_la`, `a2_an_open_packet_carried_across_the_mode_switch_is_dropped_and_a_late` and 28 more |
+| `core_double_fetch` | 4 | `a4_one_dword_changing_between_the_loads_never_stores_a_value_other_tha`, `a_hostile_writer_rewrites_ring_entries_and_gp_put_while_the_worker_run`, `a_turn_loads_gp_put_once_then_the_entry_at_the_cursor_then_the_epoch_i` and 1 more |
+| `core_drop_flip_entry` | 36 | `a1_a_full_ring_lap_in_pointer_mode_does_not_revive_a_stale_gate_proof`, `a1_a_registration_right_after_a_forwarded_sync_wait_never_scans_the_la`, `a2_an_open_packet_carried_across_the_mode_switch_is_dropped_and_a_late` and 33 more |
+| `core_skip_validation` | 5 | `a4_every_single_bit_flip_of_a_valid_entry_is_refused_by_name_or_forwar`, `a4_hostile_entries_never_panic_and_never_store_an_unvalidated_value`, `a4_one_dword_changing_between_the_loads_never_stores_a_value_other_tha` and 2 more |
+| `core_bound_without_datum` | 2 | `a2_the_binding_packet_split_across_two_entries_switches_to_pointer_aft`, `the_binding_is_known_only_after_the_datum_not_after_the_set_object_hea` |
+| `core_reads_beyond_put` | 79 | `a1_a_full_ring_lap_in_pointer_mode_does_not_revive_a_stale_gate_proof`, `a1_a_registration_right_after_a_forwarded_sync_wait_never_scans_the_la`, `a2_an_open_packet_carried_across_the_mode_switch_is_dropped_and_a_late` and 76 more |
+| `core_pointer_gone_unchecked` | 2 | `d6_pointer_mode_refuses_a_freed_software_object_like_the_scan_path_and`, `pointer_mode_refuses_a_freed_software_object_and_publishes_nothing_for` |
+| `core_carried_gate_removed` | 2 | `a_sync_wait_entry_behind_an_open_packet_is_read_at_once_and_counted_wi`, `obs_a_sync_wait_behind_an_open_packet_is_read_at_once_and_counted_exac` |
+| `core_no_fresh_resume` | 2 | `a_fresh_window_forgets_a_packet_the_scan_left_open_before_pointer_mode`, `d2_a_packet_left_open_by_the_scan_before_pointer_mode_does_not_swallow` |
+| `life_stale_anchor` | 55 | `a1_a_full_ring_lap_in_pointer_mode_does_not_revive_a_stale_gate_proof`, `a1_a_registration_right_after_a_forwarded_sync_wait_never_scans_the_la`, `a2_an_open_packet_carried_across_the_mode_switch_is_dropped_and_a_late` and 52 more |
+| `life_no_post_switch` | 3 | `i4_no_entry_published_after_the_reply_is_forwarded_before_a_window_sca`, `switch_source_installs_the_new_ring_and_keeps_the_window_open_over_its`, `after_a_source_switch_the_window_stays_open_for_a_bounded_number_of_en` |
+| `life_dead_scans` | 3 | `a_torn_down_machine_loads_nothing_after_the_plan_and_publishes_nothing`, `d6_a_torn_down_machine_reads_nothing_and_publishes_nothing`, `teardown_is_terminal_and_a_late_event_cannot_revive_the_channel` |
+| `life_forget_len0_sync` | 4 | `t2_a1_with_a_length0_sync_wait_never_reads_the_late_pushbuffer_early`, `the_newest_pointer_sync_wait_is_recorded_by_monotone_index_across_ring`, `the_restart_is_requested_until_applied_and_the_seed_until_the_witness_` and 1 more |
+| `life_no_boundary_tracking` | 12 | `a2_an_open_packet_carried_across_the_mode_switch_is_dropped_and_a_late`, `a_pointer_marker_is_authored_where_the_cursor_reached_gp_put_and_not_m`, `d3_pointer_mode_batch_ends_announce_pops_by_an_event_with_no_look` and 9 more |
+| `scan_mask_reset` | 2 | `d4_a_stored_sub_device_mask_is_still_stored_when_a_window_scans_its_us`, `a_fresh_resume_keeps_the_bindings_and_the_mask_state_and_forgets_only_` |
+| `life_no_window_reanchor` | 3 | `a_second_window_of_the_same_channel_starts_at_its_own_anchor_never_ins`, `the_first_anchor_and_the_anchor_after_a_window_also_refuse_a_full_ring`, `the_second_window_of_a_channel_is_anchored_at_the_gp_put_of_the_turn_t` |
+| `life_anchor_ignores_full_ring` | 1 | `the_first_anchor_and_the_anchor_after_a_window_also_refuse_a_full_ring` |
+| `life_pointer_anchor_ignores_full_ring` | 2 | `the_guest_ring_is_full_when_gp_put_leaves_one_slot_before_the_gp_get_t`, `a_gp_put_read_while_the_guest_ring_is_full_is_never_an_anchor` |
+| `life_stale_start_uncounted` | 1 | `a_gp_put_read_while_the_guest_ring_is_full_is_never_an_anchor` |
+| `life_latch_local_ignored` | 4 | `a_packet_open_at_gp_put_in_scan_mode_is_reported_with_the_packet_and_s`, `l1_latched_markers_off_the_wake_is_a_look_and_without_looks_the_run_de`, `l1_once_an_open_boundary_was_seen_no_marker_ever_lands_in_a_packet_and` and 1 more |
+| `life_latch_shared_ignored` | 2 | `latch_an_open_gp_put_boundary_in_one_channel_switches_pointer_markers_`, `the_latch_is_vm_wide_and_counted_once` |
+| `life_open_boundary_not_latched` | 7 | `a_packet_open_at_gp_put_in_scan_mode_is_reported_with_the_packet_and_s`, `l1_latched_markers_off_the_wake_is_a_look_and_without_looks_the_run_de`, `l1_once_an_open_boundary_was_seen_no_marker_ever_lands_in_a_packet_and` and 4 more |
+| `life_latch_counted_twice` | 1 | `the_first_packet_open_at_a_gp_put_boundary_switches_pointer_markers_of` |
+| `life_open_notices_unbounded` | 1 | `put_boundary_open_notices_are_bounded_outside_a_window_and_unbounded_i` |
+| `life_stale_boundary` | 3 | `the_switch_forgets_the_old_rings_gp_put_boundaries_so_no_marker_lands_`, `a_boundary_counted_before_the_switch_does_not_hide_the_new_rings_bound`, `a_remembered_gp_put_boundary_of_the_old_ring_is_forgotten_at_a_source_` |
+| `life_mode_no_pointer_markers_ignored` | 8 | `l1_latched_markers_off_the_wake_is_a_look_and_without_looks_the_run_de`, `l1_once_an_open_boundary_was_seen_no_marker_ever_lands_in_a_packet_and`, `latch_an_open_gp_put_boundary_in_one_channel_switches_pointer_markers_` and 5 more |
+| `life_mode_no_anchored_ignored` | 3 | `m1_no_anchored_windows_is_the_phase_1_start_and_puts_the_marker_inside`, `a_gp_put_read_while_the_guest_ring_is_full_is_never_an_anchor`, `no_anchored_windows_starts_the_window_at_the_entry_that_sees_the_regis` |
+| `life_mode_always_scan_leaves_scan` | 11 | `corpus_a_gravitymark_ring_growth_replays_identically_through_the_base_`, `d4_a_stored_sub_device_mask_is_still_stored_when_a_window_scans_its_us`, `g1_pointer_mode_reads_no_pushbuffer_byte_over_a_long_stream_and_the_co` and 8 more |
+| `core_switch_no_post_scan` | 3 | `i4_no_entry_published_after_the_reply_is_forwarded_before_a_window_sca`, `switch_source_installs_the_new_ring_and_keeps_the_window_open_over_its`, `the_switch_forgets_the_old_rings_gp_put_boundaries_so_no_marker_lands_` |
+| `core_switch_keeps_cursor` | 11 | `a3_the_flip_boundary_is_the_cursor_at_the_entry_not_a_reread_of_gp_put`, `a_switch_outside_a_window_resets_the_cursor_but_scans_nothing_extra`, `b_mismatched_cursor_semantics_lose_entries_and_the_checker_sees_it` and 8 more |
+| `core_switch_keeps_pending_get` | 1 | `switch_source_installs_the_new_ring_and_keeps_the_window_open_over_its` |
+| `core_new_ring_get_uncounted` | 1 | `a_nonzero_guest_get_in_the_new_userd_contradicts_the_reset_and_is_what` |
+| `core_ring_never_full` | 2 | `a_fresh_relay_sees_a_ring_filled_to_the_last_slot_as_full`, `the_guest_ring_is_full_when_gp_put_leaves_one_slot_before_the_gp_get_t` |
+| `core_write_back_unrecorded` | 1 | `the_guest_ring_is_full_when_gp_put_leaves_one_slot_before_the_gp_get_t` |
+| `scan_tally_first_only` | 2 | `m2_always_scan_counts_every_5080_set_object_and_every_rebind_of_the_wh`, `the_tally_counts_every_software_set_object_and_every_rebind_and_commit` |
+| `scan_tally_no_rebind` | 2 | `m2_always_scan_counts_every_5080_set_object_and_every_rebind_of_the_wh`, `the_tally_counts_every_software_set_object_and_every_rebind_and_commit` |
+| `pump_w_no_switch` | 2 | `migrate_switches_the_relay_through_switch_source_and_nothing_else_touc`, `the_switch_call_is_inside_the_admission_that_installs_the_new_source` |
+| `pump_w_no_mismatch` | 1 | `migrate_switches_the_relay_through_switch_source_and_nothing_else_touc` |
+| `pump_r_object_is_the_client` | 2 | `a_live_registration_of_the_channels_software_object_is_counted_and_not`, `every_registry_lookup_of_the_software_object_goes_through_software_key` |
+| `pump_r_channel_handle` | 2 | `registry_live_counts_the_software_objects_registrations_for_the_channe`, `registry_live_never_asks_the_registry_about_the_channels_own_handle` |
+| `pump_r_no_registry` | 2 | `a_live_registration_of_the_channels_software_object_is_counted_and_not`, `every_registry_lookup_of_the_software_object_goes_through_software_key` |
+| `pump_no_tally_sync` | 1 | `the_pump_wires_the_marker_latch_the_notices_and_the_set_object_tally` |
+| `pump_no_notices` | 1 | `the_pump_wires_the_marker_latch_the_notices_and_the_set_object_tally` |
+| `pump_no_latch` | 1 | `the_pump_wires_the_marker_latch_the_notices_and_the_set_object_tally` |
+| `pump_mode_ignored` | 1 | `the_lifecycle_mode_is_read_once_at_relay_creation_and_never_per_turn` |
+
 ## 9. Results (GPU-free, `cargo test --release`)
 
 | crate | base (`0a7461173`) | PHASE 1 (`6f9163848`) | PHASE 1b | new in 1b |
@@ -325,7 +465,7 @@ scenario (63 failing tests) and, from a different angle, by the unit test `a_tur
 | `kf-trap` lib | 80 | 86 | 86 | |
 | `kf-qemu` lib | 270 | 271 | 271 | the pump now runs `kf_chan::user_turn`; the G3 structural pin still holds |
 
-All green with `cargo test --release -p kf-chan -p kf-rm -p kf-trap -p kf-qemu` (1 561 tests, 0 failed, 3 ignored OPEN). The interleaving model needs `--release`: 47
+All green with `cargo test --release -p kf-chan -p kf-rm -p kf-trap -p kf-qemu` (1 561 tests, 0 failed, 3 ignored OPEN). **PHASE 1c: 1 603 passed, 0 failed, 3 ignored OPEN (+42 over 1b), measured at `fb8aedd80`**: kf-chan lib 188 (+14), `user_lifecycle_model` 57 + 3 ignored (+10), `user_lifecycle_props` 27 (+2), `user_lifecycle_stress` 2, `user_turn_unit` 23 (+7), kf-qemu lib 280 (+9), kf-rm 154 and kf-trap 86 unchanged.
 tests in about 2 minutes (the Pointer-mode markers added states; three scenarios were shortened and one limit raised, see the git history of `i1_*`, `a3_*`).
 Failing first (the base `6f9163848` with the new tests, commit `0e209d0c0`): `d1_*`, both `d2_*` and `d3_*` fail; `t2_*` passes on the base and is the test the
 length-0 mutant must fail; `p2prime_*` documents the residual risk. Assertions CHANGED on purpose (the intended behaviour moved, nothing was loosened to hide a
@@ -338,3 +478,50 @@ What is NOT covered (honest list): the staged trigger path and the publication o
 stand-in); the pump's wiring of `PumpIo` (compiles, the 271 `kf-qemu` tests pass, G3 pin; no GPU-free harness for the real accessors); a real hold of the
 registration reply (PHASE 2); inline vCPU copying; BAR1 read volume and every performance claim; any Linux or Windows guest; **P2' itself** (the Scan-mode
 counters are the falsifier); the cursor semantics of the source switch; `kf_trap::inline_plan` (question 11).
+
+## 10. Hardware report checklist (PHASE 1c; what to read after a run, and in which order)
+
+Read after every Windows run, from the `kf3: USER_RING_LIFECYCLE SUMMARY` line (device stop), the per-channel `USER_RING_LIFECYCLE` lines (relay release), the lines named in section 0b, the relay stats
+line, the host `dmesg` and the guest System log. Record the revision of the binary (`kf3-bins/<rev>/`) and `USER_RING_LIFECYCLE_MODE` with the report.
+
+**Must be 0:** `put_boundary_open_scan`, `put_boundary_open_window`, `window_fresh_start_parse_error`, `switch_cursor_mismatch`, `pointer_pb_read_violation`, `window_binding_changed`,
+`after_teardown`, `anchor_stale_start`, `pointer_markers_latched_off`. **Must be absent:** `USER_RING_REFUSED`, `USER_RING_POINTER_MARKERS_LATCHED_OFF`, `USER_RING_PUT_BOUNDARY_OPEN`,
+`USER_RING_SOFTWARE_OBJECT_GONE` outside teardown, host NVRM Xid 13 / 31 / 32 / 43, guest `nvlddmkm` event 153, `Display` 4101.
+
+**Sanity (these must hold; a miss is a bug in the counters or the relay):**
+* `to_window_fresh == restarts` (every Fresh window restarted the parser once); `seeded_gates <= to_window_fresh`.
+* `anchor_forwarded` is the number of entries forwarded unscanned between the registration and the anchor (the `anchor_forwarded` field of `USER_RING_WINDOW_FRESH`); `USER_RING_WINDOW_FRESH` lines == `to_window_fresh`.
+* **`post_switch_scanned == 8 * (number of USER_RING_MIGRATED lines)`** whenever at least 8 entries followed each switch (mutant W: the call that makes it true is `Relay::switch_source`; a missing +8 means the call did not run). Holds in `always_scan` too.
+* `entries_pointer` much larger than `entries_window` in the default mode; in `always_scan` `entries_pointer == 0` and `entries_scan` is every entry.
+* `set_object_5080_max_per_channel == 1` and `set_object_5080_rebinds == 0` in an `always_scan` run is the evidence for assuming P1; any other value is a finding.
+* `anchor_refused_ring_full` is information (how often the guest ring was full at a `GP_PUT`); it explains a nonzero `anchor_stale_start`.
+
+**D3 performance (default mode; the fix of review D3 is only worth keeping if these stay quiet):** `pointer_markers` about the number of doorbell batches; `pointer_carried_no_marker`, `pointer_backstop` and
+`pointer_backstop_loud` about 0 (a rising `pointer_carried_no_marker` with the latch set is the expected cost of the latch); relay `credit_waits` and `backstop_carried` low; fps against the S3 189 / 338 reference.
+
+**Run order (one app at a time, each with the counters above):**
+1. Heaven D3D11 and Heaven OpenGL with everything on (`default`): the S3 scratch build's mode 2 ran both without Xid, which is the only evidence P2' holds for any workload.
+2. Minecraft, Edge, GravityMark each FIRST in `KF3_LIFECYCLE_MODE=always_scan` (the machine never leaves Scan; `put_boundary_open_scan` is measured over the whole run, `put_boundaries_scan` is the denominator).
+3. Enable Pointer markers (the default mode) for an app only if its `put_boundary_open_scan` was 0 over a full `always_scan` run; keep anchored Windows only if in addition `window_fresh_start_parse_error == 0`
+   and every ring growth passed without Xid. If an app shows a nonzero value: run it in `no_pointer_markers` (markers off, anchors on) or `always_scan` and record the open packets from `USER_RING_PUT_BOUNDARY_OPEN`.
+
+## 11. Debt left by 1c
+
+* `docs/RELEASE_CLEANUP_LEDGER.md` is not on this base (it is on `claude/release-ledger-20261016`); the entries below belong there once merged.
+* `KF3_LIFECYCLE_MODE` is a measurement flag with four values. Once P2' is measured on the app matrix, the choice of the shipped behaviour should be hardwired (no flag) and the unused modes deleted; the VM-wide latch stays as the runtime guard.
+* The ring-full anchor refusal can leave a Window starting at an entry that is not a known `GP_PUT` boundary (`anchor_stale_start`). A better fallback (for example delaying the Window to the first boundary the scan returns to) is open; it needs the hardware counters first.
+* Pump wiring is covered by structural pins (source-text tests) and by the production code moved into `kf-chan` (`switch_source`, `new_ring_get`, `software_key`, `live_registrations`); there is still no GPU-free harness for `PumpIo` and `segment_turn`. The pins are single-angle for `pump_no_tally_sync`, `pump_no_notices`, `pump_no_latch` and `pump_mode_ignored` (see the 1c mutation table).
+* The latch needs an observation in Scan or a Window; a guest that only ends submissions inside packets while the channel is in Pointer mode is not detected until `always_scan` is run.
+
+## 12. Resume here (owner pause, 2026-10-17)
+
+State: all four must-fix items of the 1c brief are implemented and pushed on `claude/win-lifecycle-p1c-20261016`; nothing ran on hardware.
+
+| Item | Status |
+|---|---|
+| 1 modes (`KF3_LIFECYCLE_MODE`) | done (`no_anchored_windows` included) |
+| 2 log lines + guard | done: three log lines, ring-full anchor guard, VM-wide latch, the P1 SET_OBJECT tally (coordinator addition) |
+| 3 mutants A, W, R | done: each caught by 2 or more tests; the new pump wiring is still pinned by single source-text tests (section 8b) |
+| 4 stale boundary + tautology | done |
+
+Next, in order: (1) second tests for the 12 single-catch mutants of section 8b; (2) the Linux gates (`v3_gates.sh` 9/9, `fast_suite.sh` 30/30) on the host, which this work never touched; (3) the Windows run order of section 10, Heaven first; (4) merge `claude/release-ledger-20261016` and move section 11 into the ledger.
