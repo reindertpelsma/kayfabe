@@ -101,12 +101,19 @@ fn early_descriptor_credit_cannot_overflow_source_metadata() {
 }
 #[test]
 fn capacity_is_trusted_bounded_and_keeps_one_empty_slot() {
-    for entries in [0, 1, 2, 3, 7, 513, 1024, u32::MAX] {
-        assert!(matches!(
-            Consumption::new(entries, 91),
-            Err(Refusal::Capacity)
-        ));
+    // The bound is the CONSTANT (512 in production, raised in the scratch d3d11-gap lineage): the
+    // refused set follows it instead of hard-coding one value of it.
+    let max = kf_chan::user_consumption::MAX_ENTRIES;
+    for entries in [0, 1, 2, 3, 7, 513, max.saturating_mul(2), max + 1, u32::MAX] {
+        assert!(
+            matches!(Consumption::new(entries, 91), Err(Refusal::Capacity)),
+            "{entries} entries must be refused (max {max})"
+        );
     }
+    assert!(
+        Consumption::new(max, 91).is_ok(),
+        "the maximum itself is accepted"
+    );
     assert!(matches!(Consumption::new(8, 0), Err(Refusal::Lifetime)));
     let mut q = Consumption::new(4, 91).unwrap();
     q.publish(source(1)).unwrap();

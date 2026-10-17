@@ -150,6 +150,8 @@ struct Mutant {
     no_notify: bool,
     /// The RETIRED proof: the gate's marker is "processed" when `GP_GET` has popped past it.
     get_proof: bool,
+    /// The RETIRED idle backstop: read `GP_PUT` and ring the relay when it is ahead of the cursor.
+    backstop_polls_put: bool,
 }
 
 #[derive(Clone, Debug)]
@@ -385,7 +387,7 @@ const V_BACKSTOP_CARRIED: u32 = 1 << 4;
 const V_ORDER: u32 = 1 << 5;
 const V_PARKED_WITH_WORK: u32 = 1 << 6;
 const V_PUT_BOUND: u32 = 1 << 8;
-const V_BACKSTOP_PUT_AHEAD: u32 = 1 << 10;
+const V_PUT_POLL: u32 = 1 << 10;
 const V_BACKSTOP_CONTENDED: u32 = 1 << 11;
 const V_UNBOUNDED: u32 = 1 << 9;
 
@@ -423,8 +425,8 @@ fn viol_names(v: u32) -> Vec<&'static str> {
             "BACKSTOP_CONTENDED (counted apart: the safety net re-rang a relay whose lock was busy)",
         ),
         (
-            V_BACKSTOP_PUT_AHEAD,
-            "BACKSTOP_PUT_AHEAD (counted apart: GP_PUT was ahead of the cursor with no doorbell)",
+            V_PUT_POLL,
+            "PUT_POLL (a timer read GP_PUT and rang the relay: the doorbell contract forbids any GP_PUT poll)",
         ),
         (
             V_UNBOUNDED,
@@ -833,14 +835,15 @@ fn credit_wait(cfg: &Cfg, n: &mut World) {
 /// Production `ChanPlane::user_ring_peek_one` (`userpump.rs`): look at one relay's not-yet-fd
 /// state and ring it if its wait is satisfied, if its lock was busy, or if demand is pending.
 /// The classification of what a BACKSTOP look finds is `kf_chan::user_loop::found`.
-fn peek(n: &mut World, c: usize, why: ul::Peek, spin: u8) -> bool {
+fn peek(n: &mut World, c: usize, why: ul::Peek, spin: u8, polls_put: bool) -> bool {
     let ch = &n.ch[c];
     if !ch.alive() {
         return false;
     }
     let backstop = why == ul::Peek::Backstop;
     let demand = ch.retry;
-    if !demand && ch.waiting.is_none() && !backstop {
+    // the production decision (`kf_chan::user_loop::look_needed`); the retired idle poll is the mutant
+    if !ul::look_needed(why, demand, ch.waiting.is_some()) && !(backstop && polls_put) {
         return false;
     }
     let cause = match why {
@@ -880,10 +883,10 @@ fn peek(n: &mut World, c: usize, why: ul::Peek, spin: u8) -> bool {
             n.ring(c, cause);
             return true;
         }
-    } else if backstop && ch.put[ch.src] != ch.cursor {
-        // GP_PUT ahead of the cursor with no doorbell is NORMAL (the guest is between its PUT write
-        // and its ring); relaying it is harmless and counted apart.
-        n.viol |= V_BACKSTOP_PUT_AHEAD;
+    } else if backstop && polls_put && ch.put[ch.src] != ch.cursor {
+        // MUTANT ONLY: the retired idle GP_PUT poll. GP_PUT ahead of the last doorbell is NORMAL;
+        // only a doorbell announces it, so a timer that reads it and rings is a contract violation.
+        n.viol |= V_PUT_POLL;
         n.ring(c, cause);
         return true;
     }
@@ -938,7 +941,7 @@ fn worker_steps(cfg: &Cfg, w: &World, out: &mut Vec<Step>) {
             n.spin_left -= 1;
             let mut any = false;
             for c in 0..n.ch.len() {
-                any |= peek(&mut n, c, ul::Peek::Spin, cfg.spin);
+                any |= peek(&mut n, c, ul::Peek::Spin, cfg.spin, cfg.m.backstop_polls_put);
             }
             if any {
                 n.spin_left = cfg.spin;
@@ -985,7 +988,7 @@ fn worker_steps(cfg: &Cfg, w: &World, out: &mut Vec<Step>) {
                 n.parked = false;
                 n.efd = false;
                 for c in 0..n.ch.len() {
-                    peek(&mut n, c, ul::Peek::Backstop, cfg.spin);
+                    peek(&mut n, c, ul::Peek::Backstop, cfg.spin, cfg.m.backstop_polls_put);
                 }
                 n.pc = Pc::Top0;
                 out.push(step("w:wake(backstop)", n));
@@ -1013,7 +1016,7 @@ fn worker_steps(cfg: &Cfg, w: &World, out: &mut Vec<Step>) {
                 c.ev = false;
             }
             for c in 0..n.ch.len() {
-                peek(&mut n, c, ul::Peek::Event, cfg.spin);
+                peek(&mut n, c, ul::Peek::Event, cfg.spin, cfg.m.backstop_polls_put);
             }
             n.spin_left = cfg.spin;
             n.pc = Pc::Top0;
@@ -1367,9 +1370,6 @@ fn key(w: &World) -> u128 {
 
 /// Breadth-first over every interleaving. `allow` = violation bits that are counted, not errors.
 fn explore(cfg: &Cfg, allow: u32) -> Result<Explored, Counterexample> {
-    // GP_PUT ahead of the cursor when the backstop fires is information, not an error (see the
-    // backstop step); every other firing that finds work is checked by the caller's `allow`.
-    let allow = allow | V_BACKSTOP_PUT_AHEAD;
     let start = World::new(cfg);
     let mut seen: HashMap<u128, (u128, String)> = HashMap::new();
     let mut q: VecDeque<World> = VecDeque::new();
@@ -2323,20 +2323,36 @@ fn the_design_exploration_reaches_every_race_it_claims_to_cover() {
     assert!(lost.labels.contains("w:wake(backstop)"));
 }
 
-/// `GP_PUT` ahead of the LAST doorbell is normal and nothing is owed for it: with no timer the
-/// worker parks with that entry unrelayed (it is not covered by any ring); the safety net MAY relay
-/// it, and that is the separate, informational `BACKSTOP_PUT_AHEAD` counter -- never an error.
+/// ★ DOORBELL CONTRACT (owner, 2026-10-17). `GP_PUT` ahead of the LAST doorbell is normal and
+/// nothing is owed for it: only a doorbell announces `GP_PUT`. With timers that fire and the
+/// backstop armed, the safety net never reads `GP_PUT` and never rings an idle relay (no
+/// `PUT_POLL`), and the design stays live.
 #[test]
-fn put_ahead_of_the_last_doorbell_is_optional_and_the_backstop_counts_it_apart() {
-    let mut cfg = Cfg::new(Policy::Design, s_put_ahead_unrung());
-    cfg.timers = false;
-    holds("design/put-ahead-unrung", &cfg, 0);
-    cfg.timers = true;
-    cfg.backstop = true;
-    holds("design/put-ahead-unrung/backstop", &cfg, V_BACKSTOP_PUT_AHEAD);
-    // the explorer's blanket allowance is for the PUT_AHEAD bit only; prove it is reachable
-    let r = explore(&cfg, 0).expect("holds");
-    assert!(r.labels.contains("w:wake(backstop)"));
+fn put_ahead_of_the_last_doorbell_is_owed_nothing_and_no_timer_reads_it() {
+    for chans in [s_put_ahead_unrung(), s_put_ahead()] {
+        let mut cfg = Cfg::new(Policy::Design, chans);
+        cfg.timers = false;
+        holds("design/put-ahead-unrung", &cfg, 0);
+        cfg.timers = true;
+        cfg.backstop = true;
+        holds("design/put-ahead-unrung/backstop", &cfg, 0);
+        // the backstop wake itself is reached: it fires, finds nothing owed, and does nothing
+        let r = explore(&cfg, 0).expect("holds");
+        assert!(r.labels.contains("w:wake(backstop)"));
+    }
+}
+
+/// The checker has teeth for it: the RETIRED idle poll (the backstop reads `GP_PUT` and rings the
+/// relay when it is ahead of the cursor) is found.
+#[test]
+fn mutant_the_backstop_polls_gp_put_is_found() {
+    for chans in [s_put_ahead_unrung(), s_put_ahead()] {
+        let mut cfg = Cfg::new(Policy::Design, chans);
+        cfg.m.backstop_polls_put = true;
+        cfg.timers = true;
+        cfg.backstop = true;
+        finds("mutant/backstop_polls_put", &cfg, 0, &["PUT_POLL"]);
+    }
 }
 
 /// Private-ring credit waits when `GP_GET` may NOT run far ahead of processing (depth 1, 3 credits):

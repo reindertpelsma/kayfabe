@@ -2922,7 +2922,8 @@ impl ChanPlane {
         }
         let backstop = why == Peek::Backstop;
         let demand = record.pending();
-        if !demand && !record.is_waiting() && !backstop {
+        // Doorbell contract: no look has a reason to touch an idle relay (no `GP_PUT` poll).
+        if !kf_chan::user_loop::look_needed(why, demand, record.is_waiting()) {
             return false;
         }
         // a relay that keeps finding a busy lock is re-rung by the spin / event looks only a bounded
@@ -2997,23 +2998,6 @@ impl ChanPlane {
             }
             if why == Peek::Event {
                 Stats::bump(&self.relay_stats.event_without_progress);
-            }
-        } else if backstop && p.segment.is_none() {
-            // Information only: GP_PUT ahead of the cursor with no doorbell.
-            let mut put = [0u8; 4];
-            if r.userd
-                .read(
-                    self,
-                    r.key,
-                    &r.allocation,
-                    kf_abi::submit::USERD_GP_PUT,
-                    &mut put,
-                )
-                .is_ok()
-                && u32::from_le_bytes(put) != p.cursor
-            {
-                Stats::bump(&self.relay_stats.backstop_put_ahead);
-                return ring(self);
             }
         }
         if demand && retry_ok {

@@ -189,6 +189,18 @@ window of which the model reaches and the mutant without the comparison (`mutant
 
 ### 3.6 The backstop
 
+**★ CORRECTION, 2026-10-17 (owner ruling; supersedes §3.6's `GP_PUT` read and the "Doorbell-less submission" bullet in §6):** the backstop does
+NOT read `GP_PUT`. The doorbell contract is: the last doorbell covers every `GP_PUT` write before it; nothing else announces `GP_PUT`; the relay loops
+until its cursor equals the `GP_PUT` it loaded; a ring during a pass forces one more pass, repeated until a pass sees no ring; rings coalesce; a ring with
+no work is safe. §3.6 and the bullet below kept an idle `GP_PUT` read on the backstop ("information only") that also rang the relay: that was a `GP_PUT` poll
+in a different place, found by the lazy-observe review (`traces/lazy_observe_20261017/REPORT.md`, stop finding 2). Removed: the read, the
+`backstop_put_ahead` counter, and the model's allowance for it (it is now the violation `PUT_POLL`, with a mutant that must be found). The pure decision is
+`user_loop::look_needed` (a look needs demand or a recorded wait; the kind of look is never a reason). What the backstop may still do: re-look at relays that
+WAIT (`Wait::Popped`, `Wait::Contended`, and a lost marker interrupt, each counted). Pinned by `kf-trap/tests/doorbell_contract.rs` (real token word),
+`kf-qemu/tests/doorbell_no_put_poll.rs`, `kf-chan/tests/user_loop_model.rs` (`put_ahead_of_the_last_doorbell_is_owed_nothing_and_no_timer_reads_it`,
+`mutant_the_backstop_polls_gp_put_is_found`).
+
+
 `BACKSTOP_MS = 50` (the existing `PARK_MS`; unchanged idle wake rate, 20/s, an order below the guest's 2 s TDR
 detection, and the only timer in the loop). A backstop wake peeks every relay's `waiting` and `GP_PUT`. What it
 finds is counted, not hidden: `backstop_found_work` (a satisfied non-carried wait: a lost or never-armed
