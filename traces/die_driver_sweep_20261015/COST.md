@@ -1,6 +1,6 @@
 # Campaign cost and instance ownership
 
-**STATUS: LIVE, 2026-10-16.** Ceiling $40; at most one rental at a time;
+**STATUS: LIVE, 2026-10-17.** Ceiling $40; at most one rental at a time;
 each rental at most three hours. Only the instance IDs listed here were created by this campaign.
 Hourly rates include requested disk as returned by `show instances`.
 Accrued cost is an estimate until account billing is available; transfers may add charges.
@@ -195,3 +195,14 @@ OnlythisIDdestroyed; exacttimer2571615 checked/canceledAFTERabsence00:43:02UTC.
 Computeconservative10159s at0.61/h incldisk ceil1.73USD; retiredtotal10.50USD+transfers.
 No ownrentalactive. No thirdGB206B1lease; anynextlease onlyafterthisverifiedabsence,
 newreceipt/timer andliveprice/PCI/KVM/diskchecks.
+
+## GA104 Linux595 completion, 2026-10-17
+
+| Instance | GPU | USD/hour incl150GB | StartUTC | StopUTC | Purpose | Ceiling |
+|---|---|---:|---|---|---|---|
+|56326220|RTX3070 advertised; exactdie pending unprivilegedRM|0.1555555556|2026-10-17T01:30:28.677605+00:00|ACTIVE; timer2714225 target2026-10-17T04:25:28.677605+00:00; hard05:00UTC|M1 nativecaps/M3 Linux595CUDA,gfx,broker; exact9d6f210ba|<=0.46USD at175minutes; campaign<=10.96USD+transfers if fulltimer|
+
+All prior campaign-owned IDs were checked absent before creation; other account
+instances were not acted on. Immediately armed175minute timer and attached only
+the publicSSHkey. Fifteen-minute startup/KVM/rootcapacity gates and native
+MC_GET_ARCH_INFO remain pending; no hardware pass is claimed. No shared-host use.
