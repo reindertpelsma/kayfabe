@@ -17,7 +17,7 @@ Master is not the newest code: the latest Windows performance work lives on bran
 |---|---|---|---|---|
 | VFIO passthrough | no, one VM owns it | yes | stock | any GPU |
 | NVIDIA vGPU | no, VMs share it, the host does not | yes | vendor vGPU driver | data-centre GPU, licence |
-| API forwarding ([nvkvm-pv](https://github.com/reindertpelsma/nvkvm-pv) / virtio-nvgpu) | yes | no | a custom guest module | any NVIDIA GPU |
+| API forwarding ([nvkvm-pv](https://github.com/reindertpelsma/nvkvm-pv) / virtio-nvgpu) | yes | possible, but fragile for multi-tenant VMs | a custom guest module | any NVIDIA GPU |
 | **kayfabe** | **yes** | **yes, by design (not yet audited)** | **stock, unmodified** | any NVIDIA GPU is the goal; tested on consumer cards (Turing to Blackwell); the open NVIDIA host driver |
 
 - **Nothing is patched.** No host or guest driver or kernel is modified; the guest uses NVIDIA's own installer.
