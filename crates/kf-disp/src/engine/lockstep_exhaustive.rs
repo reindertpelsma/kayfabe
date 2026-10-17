@@ -944,7 +944,7 @@ impl World {
         if let Some(since) = self.obs.ready_since_ms
             && self.ready.is_some()
             && (self.held.len() as u32) < HELD_CAP
-            && !(self.negotiated && tick_live(self.last_rx_ms, self.ms()))
+            && self.last_rx_ms.is_none_or(|r| self.ms() > r + BROKER_SILENCE_MS)
             && self.ms() > since + BACKSTOP_MS + BROKER_SILENCE_MS + 2
             && self.last_rx_ms.is_none_or(|r| self.ms() > r + BACKSTOP_MS + BROKER_SILENCE_MS + 2)
         {
