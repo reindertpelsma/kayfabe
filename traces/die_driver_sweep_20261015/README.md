@@ -33,6 +33,17 @@ againstowner topic andmaster/ownerGPU/VM/checkout remainuntouched.
 Initial base: origin/claude/gpu-types-20261015 plus cursor fix2f99e673d;
 initial combined product revision23585a319.
 
+## Update 2026-10-17 01:26 UTC — coordinator addendum applied; no active rental
+
+MEASURED: live API reconfirms own56302930 absent. Retirement was **02:40 CEST /
+00:40 UTC**, after the coordinator's02:30CEST observation. New rentals tonight must
+be destroyed and verified absent by **07:00 CEST / 05:00 UTC on October17**, as well
+as obeying the existing three-hour cap. All shared-host access waits until the owner
+is awake. D-1..D-6 remain open; no master merge. `git ls-remote` exactly matches the
+clean main evidence and PR46 local heads; this update is pushed and rechecked too.
+No new rental/GPU run or compatibility claim. [Reconciliation evidence](addendum_20261017/RESULT.md).
+
+
 ## Update 2026-10-17 01:03 UTC — Windows 581 allocation diagnostic prepared
 
 MEASURED: [draft PR46](https://github.com/reindertpelsma/kayfabe/pull/46), code

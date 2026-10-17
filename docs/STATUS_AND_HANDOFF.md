@@ -1,5 +1,16 @@
 # Status and handoff — where kayfabe v3 stands, and how to resume
 
+## Update 2026-10-17 01:26 UTC — coordinator addendum applied; no active rental
+
+MEASURED: live API reconfirms own56302930 absent. Retirement was **02:40 CEST /
+00:40 UTC**, after the coordinator's02:30CEST observation. New rentals tonight must
+be destroyed and verified absent by **07:00 CEST / 05:00 UTC on October17**, as well
+as obeying the existing three-hour cap. All shared-host access waits until the owner
+is awake. D-1..D-6 remain open; no master merge. `git ls-remote` exactly matches the
+clean main evidence and PR46 local heads; this update is pushed and rechecked too.
+No new rental/GPU run or compatibility claim. [Reconciliation evidence](../traces/die_driver_sweep_20261015/addendum_20261017/RESULT.md).
+
+
 ## Update 2026-10-17 01:03 UTC — Windows 581 allocation diagnostic prepared
 
 MEASURED: [draft PR46](https://github.com/reindertpelsma/kayfabe/pull/46), code
