@@ -145,6 +145,27 @@ enum {
      * in docs/internal/broker-design.md §3 so it is a decision, not a leak.
      */
     NVKVM_BROKER_EV_DEVICE    = 17,
+    /*
+     * EV_TICK -- THE DISPLAY'S REFRESH, AND THE LOCK-STEP FRAME REQUEST.
+     * Advertised by NVKVM_BROKER_CAP_TICK and sent ONLY to a VMM that opted in
+     * with NVKVM_BROKER_CLIENT_TICK in CMD_CAPS.  Laid over the standard event
+     * packet as struct nvkvm_broker_tick_pkt, below.  One per DECIMATED host
+     * refresh while the window is visible, whether or not anything is wanted:
+     * it is a heartbeat, so a static desktop does not look like a dead broker.
+     *
+     * A tick whose refresh word carries NVKVM_BROKER_TICK_F_WANT_FRAME OPENS
+     * the request numbered tick_seq: the broker has received (and the
+     * compositor has presented or discarded) the previous frame and can take
+     * the next one.  The VMM answers it with exactly one COMMIT whose `seq` is
+     * that number, or with one CMD_NO_CHANGE naming it.  The broker never has
+     * more than one request open, and opens the next only after the answer
+     * (and, for a frame, its presentation) or after
+     * NVKVM_BROKER_TICK_REQ_TIMEOUT_NS.
+     *
+     * The VMM is the side that must not trust this: a broker tick at the wrong
+     * moment, out of sequence or in a flood is the VMM's to ignore and count.
+     */
+    NVKVM_BROKER_EV_TICK      = 18,
 };
 
 /* EV_DEVICE.x */
@@ -277,6 +298,17 @@ enum {
                                                  * when its answer is "unknown"
                                                  * -- so "too old to say" and
                                                  * "could not tell" differ     */
+#define NVKVM_BROKER_CAP_TICK         (1u << 13)/* this backend reports the display's
+                                                 * refresh (EV_TICK) and runs the
+                                                 * lock-step frame requests.  The
+                                                 * broker sends EV_TICK only after
+                                                 * the VMM replied CMD_CAPS with
+                                                 * NVKVM_BROKER_CLIENT_TICK; an
+                                                 * older VMM ignores this bit and
+                                                 * gets exactly today's exchange.
+                                                 * Clear (an older broker, or the
+                                                 * X11 backend) => the VMM keeps
+                                                 * its own clock and EV_FRAME     */
 
 /* BYE reason codes. */
 enum {
@@ -335,6 +367,58 @@ struct nvkvm_broker_clip_pkt {
     uint8_t  data[NVKVM_BROKER_CLIP_PKT_BYTES];
 };
 
+/*
+ * EV_TICK laid over the standard event packet: same 24 bytes, same
+ * type/flags/seq in the same places, so a receiver that does not know the type
+ * still skips a whole, well-formed message.
+ *
+ *   flags        the mirrored NVKVM_BROKER_F_* state, as on every packet
+ *   seq          the connection's PACKET counter (NOT the tick number)
+ *   tick_seq     the tick number: the first tick is 1, +1 per EMITTED tick,
+ *                wrapping from 0xffffffff to 1 -- 0 is never a tick, so 0 can
+ *                mean "none" in a reply.  A request is named by the tick_seq
+ *                of the tick that opened it.
+ *   refresh_word bits 0..27   the DECIMATED period in nanoseconds (the host
+ *                             period x the divisor), 0 = unknown, else
+ *                             NVKVM_BROKER_TICK_REFRESH_MIN_NS..MASK
+ *                bit 28       NVKVM_BROKER_TICK_F_WANT_FRAME
+ *                bit 29       NVKVM_BROKER_TICK_F_CLOCK_ONLY
+ *                bits 30..31  reserved, must be zero (a violation otherwise)
+ *   present_ns   CLOCK_MONOTONIC nanoseconds of the presentation, never
+ *                decreasing on a connection
+ *
+ * A packed word rather than a separate flags field, as the clipboard packs its
+ * byte count and its end marker into `info`: 24 bytes cannot hold a 64-bit
+ * sequence, a 64-bit timestamp, the refresh and the flags.
+ */
+struct nvkvm_broker_tick_pkt {
+    uint16_t type;          /* NVKVM_BROKER_EV_TICK                           */
+    uint16_t flags;         /* mirrored state                                 */
+    uint32_t seq;           /* packet counter                                 */
+    uint32_t tick_seq;      /* the tick number (never 0)                      */
+    uint32_t refresh_word;  /* period ns | NVKVM_BROKER_TICK_F_*              */
+    uint64_t present_ns;    /* CLOCK_MONOTONIC ns                             */
+};
+
+#define NVKVM_BROKER_TICK_REFRESH_MASK    0x0fffffffu
+#define NVKVM_BROKER_TICK_REFRESH_MIN_NS  1000000u
+#define NVKVM_BROKER_TICK_F_WANT_FRAME    (1u << 28)
+/* present_ns is when the broker LEARNED of the refresh (a frame callback, or
+ * feedback on a clock other than CLOCK_MONOTONIC), not the compositor's own
+ * presentation timestamp. */
+#define NVKVM_BROKER_TICK_F_CLOCK_ONLY    (1u << 29)
+#define NVKVM_BROKER_TICK_F_RESERVED      0xc0000000u
+/* A request left unanswered this long is dead and the next one may open; an
+ * answered frame whose presentation feedback has not come in this long counts
+ * as presented.  (Windows resets its display driver after ~2 s without a flip
+ * completion; this is far inside it.) */
+#define NVKVM_BROKER_TICK_REQ_TIMEOUT_NS  100000000u
+/* The most Hz the VMM's virtual monitor carries (kayfabe's EDID range, D3 --
+ * kf_disp::pace::MAX_HZ) and the least (MIN_HZ).  The broker decimates the
+ * host refresh so the tick rate is at most the VMM's cap. */
+#define NVKVM_BROKER_GUEST_MAX_HZ         75u
+#define NVKVM_BROKER_GUEST_MIN_HZ         24u
+
 /* ── VMM → broker: commands ──────────────────────────────────────────────── */
 
 #define NVKVM_BROKER_CMD_SIZE      40u
@@ -352,6 +436,8 @@ enum {
      * no descriptor; every descriptor field must be zero.  Split from ATTACH
      * because a compositor distinguishes "the content changed" from "the
      * frame is finished", and committing a half-drawn buffer is visible.
+     * `seq` is the request answered when the VMM opted in with
+     * NVKVM_BROKER_CLIENT_TICK, and advisory otherwise.
      */
     NVKVM_BROKER_CMD_COMMIT = 2,
     /*
@@ -374,7 +460,8 @@ enum {
     NVKVM_BROKER_CMD_CLIPBOARD = 4,
     /*
      * CAPS — what the VMM can do, sent once after connecting.  `width` carries
-     * NVKVM_BROKER_CLIENT_* bits; every other field must be zero.
+     * NVKVM_BROKER_CLIENT_* bits; every other field must be zero -- except
+     * `height` with NVKVM_BROKER_CLIENT_TICK (see there).
      *
      * It exists so "clipboard is enabled but nothing happens" can be told
      * apart from "the guest has no clipboard agent".  Those have completely
@@ -445,6 +532,16 @@ enum {
      * on HIDE/SHOW -- are violations, like everywhere else.
      */
     NVKVM_BROKER_CMD_CURSOR = 7,
+    /*
+     * NO_CHANGE -- the VMM's answer to a frame request when the picture did not
+     * change.  `width` is the request number being answered (a tick_seq of a
+     * WANT_FRAME tick, never 0); every other field must be zero; no fd.  Only
+     * valid on a connection whose CMD_CAPS carried NVKVM_BROKER_CLIENT_TICK
+     * (otherwise a framing violation, like an unknown type).  A request the
+     * broker never issued is a violation; one it issued that is no longer open
+     * (timed out and replaced, or answered already) is ignored and counted.
+     */
+    NVKVM_BROKER_CMD_NO_CHANGE = 8,
 };
 
 /* NVKVM_BROKER_CMD_CURSOR `op`. */
@@ -488,6 +585,14 @@ enum {
 
 /* NVKVM_BROKER_CMD_CAPS `width` bits. */
 #define NVKVM_BROKER_CLIENT_CLIPBOARD (1u << 0)
+/* The VMM understands EV_TICK and will answer the frame requests it opens.
+ * Only sent when HELLO carried NVKVM_BROKER_CAP_TICK.  With it, CMD_CAPS.height
+ * is the most Hz the VMM's vblank may run at: 0 (= NVKVM_BROKER_GUEST_MAX_HZ),
+ * or NVKVM_BROKER_GUEST_MIN_HZ..NVKVM_BROKER_GUEST_MAX_HZ; anything else, or a
+ * non-zero height without this bit, is a framing violation.  With it,
+ * COMMIT.seq names the request answered (0 = unsolicited: a replay frame, or a
+ * VMM that had no credit); ATTACH.seq stays advisory. */
+#define NVKVM_BROKER_CLIENT_TICK      (1u << 1)
 
 /*
  * Explicitly laid out so every field is naturally aligned and the struct is
@@ -630,6 +735,17 @@ struct nvkvm_broker_cursor_cmd {
 #if defined(__STDC_VERSION__) && __STDC_VERSION__ >= 201112L
 _Static_assert(sizeof(struct nvkvm_broker_pkt) == NVKVM_BROKER_PKT_SIZE,
                "nvkvm_broker_pkt must be exactly 24 bytes");
+_Static_assert(sizeof(struct nvkvm_broker_tick_pkt) == NVKVM_BROKER_PKT_SIZE,
+               "tick_pkt must be exactly the event packet size");
+_Static_assert(offsetof(struct nvkvm_broker_tick_pkt, tick_seq) == 8 &&
+               offsetof(struct nvkvm_broker_tick_pkt, refresh_word) == 12 &&
+               offsetof(struct nvkvm_broker_tick_pkt, present_ns) == 16,
+               "tick_pkt field offsets are part of the wire");
+_Static_assert((NVKVM_BROKER_TICK_REFRESH_MASK &
+                (NVKVM_BROKER_TICK_F_WANT_FRAME |
+                 NVKVM_BROKER_TICK_F_CLOCK_ONLY |
+                 NVKVM_BROKER_TICK_F_RESERVED)) == 0,
+               "the refresh bits and the flag bits must not overlap");
 _Static_assert(sizeof(struct nvkvm_broker_cmd) == NVKVM_BROKER_CMD_SIZE,
                "nvkvm_broker_cmd must be exactly 40 bytes");
 /* The clipboard overlays MUST be the same size as what they overlay, or the

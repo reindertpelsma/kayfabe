@@ -11,3 +11,5 @@ test-xor
 test-geom
 test/utf8_extracted.inc
 *.d
+test-tick
+wl-tick-probe

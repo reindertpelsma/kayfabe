@@ -196,6 +196,38 @@ composing the cursor into the frame as it always did (the Wayland and test
 backends advertise it; the X11 backend does not, see the log line at start).
 `MOVE` and `F_XOR` without the capability are framing violations.
 
+### The display tick and lock-step frame requests (`CAP_TICK`)
+
+A VMM that sees `CAP_TICK` (HELLO bit 13) may reply `CMD_CAPS` with
+`CLIENT_TICK` (bit 1; `height` = the most Hz its virtual monitor carries, 0 =
+75). From then on this program sends `EV_TICK` once per (decimated) display
+refresh while the window is shown, whether or not anything is wanted, so the
+VMM's emulated vblank can follow the host's real refresh (it falls back to its
+own clock after 50 ms of silence, and takes the ticks again when they resume).
+A tick carrying `WANT_FRAME` opens one request, numbered by its `tick_seq`; the
+VMM answers it with exactly one `COMMIT` whose `seq` is that number, or one
+`CMD_NO_CHANGE`; the next request opens only after the answer **and** the
+frame's presentation (or after 100 ms). Nothing is sent to a VMM that did not
+opt in: it gets today's exchange. The decisions are pure and table-tested
+(`nb_tick.c`, `test/test_tick.c`, 28 mutants in `test/mutate_tick.py`); the
+real-socket tests are `test/test_tick.py` (floods, hostile replies, a peer that
+never reads) and, against a real compositor, `make check-tick-probe`.
+`docs/design/V3_DISPLAY_PACING_20261017.md` section 11 is the design.
+
+* The host refresh is divided so the tick never runs faster than the VMM's cap:
+  144 Hz host -> every 2nd feedback, and (`--refresh auto`) the mode the guest is
+  told is 72 Hz. A feedback closer than half a host period to the last accepted
+  one, a duplicate timestamp, or a backwards clock ticks nothing.
+* Wayland: `wp_presentation` feedback is the tick; the pump is a 1x1-damage
+  re-commit of the buffer already attached (an empty commit gets a frame callback
+  at once and a `discarded` feedback, never a timestamp: MEASURED on mutter and
+  wlroots), driven by the `presented` it produced, restarted by a 250 ms watchdog
+  after the window was hidden. Without `wp_presentation` the frame callback stands
+  in (`CLOCK_ONLY`). X11 does not advertise the bit.
+* The test backend's clock is virtual (stdin: `t <present_ns> <refresh_ns>`,
+  `F <n> <refresh_ns> <step_ns>`, `P`, `N <ns>`, `S`); `NB_TEST_NO_TICK=1` plays a
+  broker that predates the bit.
+
 ### Putting the socket into a container
 
 The broker socket is the **only** display-related thing the VMM needs. Bind-mount
