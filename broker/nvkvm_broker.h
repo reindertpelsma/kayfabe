@@ -335,6 +335,29 @@ void nb_cursor_device_geom(const struct nb_cursor *c, uint32_t num_x,
                            uint32_t den_x, uint32_t num_y, uint32_t den_y,
                            uint32_t scale_120, uint32_t max,
                            struct nb_cursor_geom *out);
+/*
+ * THE SIZE OF A CURSOR SURFACE (Wayland hover pointer and grab overlay both).
+ *
+ *   g       the cursor in SURFACE-LOCAL (logical) pixels: image_dim * fit, where
+ *           fit = num/den is the frame's own scale (window logical px per guest
+ *           px).  This is the unit wl_pointer.set_cursor's hot spot and a
+ *           subsurface's position are in.  The OUTPUT scale is not a factor.
+ *   scale   wl_surface.set_buffer_scale: ceil(scale_120 / 120), 1..4.
+ *   bw, bh  the buffer: exactly g * scale, so the surface is buffer / scale = g
+ *           with NO viewport (a compositor need not honour wp_viewport on a
+ *           cursor-role surface; buffer_scale is the universal path).
+ *
+ * A scale_120 below 120 (0 = unknown) is 1; bw, bh <= max_buf.
+ */
+#define NB_CURSOR_SURFACE_MAX_BUF 1024u
+struct nb_cursor_surface {
+    struct nb_cursor_geom g;
+    uint32_t scale, bw, bh;
+};
+void nb_cursor_surface_geom(const struct nb_cursor *c, uint32_t num_x,
+                            uint32_t den_x, uint32_t num_y, uint32_t den_y,
+                            uint32_t scale_120, uint32_t max_buf,
+                            struct nb_cursor_surface *out);
 /* Nearest-neighbour scale of the defined image into dst[0 .. dw*dh), packed.
  * dw, dh must be >= 1. */
 void nb_cursor_scale(const struct nb_cursor *c, uint32_t *dst, uint32_t dw,

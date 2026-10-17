@@ -181,7 +181,7 @@ struct nb_wl_buf {
  * core's validated copy, scaled here.
  */
 #define NB_GC_SLOTS     2
-#define NB_GC_SLOT_PX   ((size_t)NB_CURSOR_SCALED_MAX * NB_CURSOR_SCALED_MAX)
+#define NB_GC_SLOT_PX   ((size_t)NB_CURSOR_SURFACE_MAX_BUF * NB_CURSOR_SURFACE_MAX_BUF)
 #define NB_GC_SLOT_BYTES (NB_GC_SLOT_PX * 4u)
 
 struct nb_wl;
@@ -468,20 +468,19 @@ struct nb_wl {
     const struct nb_cursor *gcur;
     struct wl_surface      *gc_surf;
     /*
-     * HiDPI: the cursor buffer is rendered in DEVICE pixels (gc_bgeom) and
-     * this viewport brings it to the LOGICAL size (gc_geom), so a scale-2
-     * output shows the guest's own pixels instead of a logical-size image the
-     * compositor then magnifies.  NULL without wp_viewporter, in which case
-     * the buffer IS the logical size, as before.
+     * HiDPI: the cursor buffer is gc_bgeom = gc_geom x ceil(output scale)
+     * pixels and wl_surface.set_buffer_scale(k) makes the surface gc_geom, in
+     * LOGICAL pixels.  No wp_viewport on a cursor-role surface (2026-10-17):
+     * the logical size is the frame fit alone and must not depend on the
+     * compositor honouring a viewport there; see nb_cursor_surface_geom().
      */
-    struct wp_viewport     *gc_vp;
     struct wl_shm_pool     *gc_pool;
     uint32_t               *gc_px;      /* NB_GC_SLOTS slots, mapped      */
     struct nb_wl_gcslot     gc_slot[NB_GC_SLOTS];
     bool                    gc_valid;   /* gc_surf holds gc_gen at gc_geom */
     uint64_t                gc_gen;
     struct nb_cursor_geom   gc_geom;    /* logical: size and hot spot     */
-    struct nb_cursor_geom   gc_bgeom;   /* the buffer, in device pixels   */
+    struct nb_cursor_geom   gc_bgeom;   /* the buffer: logical x buffer_scale */
     bool                    gc_on;      /* the content's cursor IS gc_surf */
     bool                    gc_starved; /* a re-render waits on a release  */
     bool                    gc_broken;  /* allocation failed: show none    */
@@ -492,12 +491,11 @@ struct nb_wl {
      * an overlay -- a wl_subsurface of the content surface placed above it, so
      * the dma-buf frame is never touched -- at the last MOVE, scaled with the
      * frame exactly as the host-pointer image is (gc_scale_now), the image
-     * rendered in device pixels with a viewport down to logical size.  Hover
+     * rendered at logical x buffer_scale pixels (same rule as hover).  Hover
      * does not use it: there the host pointer is the guest's.
      */
     struct wl_surface      *ov_surf;
     struct wl_subsurface   *ov_sub;
-    struct wp_viewport     *ov_vp;
     struct wl_shm_pool     *ov_pool;
     uint32_t               *ov_px;
     struct nb_wl_gcslot     ov_slot[NB_GC_SLOTS];
@@ -2121,12 +2119,11 @@ static void gc_scale_now(const struct nb_wl *w, uint32_t *nx, uint32_t *dx,
 }
 
 /*
- * `g`: the cursor in LOGICAL pixels -- its size on screen and the hot spot
- * wl_pointer.set_cursor takes.  `b`: the buffer to render it into.  Without a
- * viewport for the cursor surface, or at an output scale of 1, the two are the
- * same.  With one, `b` is the same cursor in DEVICE pixels (the output scale
- * folded in, wp_fractional_scale_v1's preferred scale), so the image keeps the
- * detail the output can show and the viewport takes it to `g`'s size.
+ * `g`: the cursor in LOGICAL (surface-local) pixels: image x the frame's fit,
+ * and nothing else -- the hot spot wl_pointer.set_cursor takes and the size a
+ * subsurface occupies.  `b`: the buffer to render it into, g x k with k =
+ * ceil(output scale): wl_surface.set_buffer_scale(k) turns it back into g.
+ * The OUTPUT scale is never a factor of g (nb_cursor_surface_geom(), tested).
  *
  * The hot spot stays a LOGICAL integer: set_cursor's hotspot is an int in
  * surface coordinates, so on a scale-2 output it can sit up to one device
@@ -2137,15 +2134,16 @@ static void gc_geom_now(const struct nb_wl *w, struct nb_cursor_geom *g,
                         struct nb_cursor_geom *b)
 {
     uint32_t nx, dx, ny, dy;
+    struct nb_cursor_surface sf;
 
     gc_scale_now(w, &nx, &dx, &ny, &dy);
-    nb_cursor_scaled_geom(w->gcur, nx, dx, ny, dy, NB_CURSOR_SCALED_MAX, g);
-    if (w->gc_vp) {
-        nb_cursor_device_geom(w->gcur, nx, dx, ny, dy, w->scale_120,
-                              NB_CURSOR_SCALED_MAX, b);
-    } else {
-        *b = *g;
-    }
+    nb_cursor_surface_geom(w->gcur, nx, dx, ny, dy, w->scale_120,
+                           NB_CURSOR_SURFACE_MAX_BUF, &sf);
+    *g = sf.g;
+    b->w = sf.bw;
+    b->h = sf.bh;
+    b->hot_x = sf.g.hot_x * sf.scale;
+    b->hot_y = sf.g.hot_y * sf.scale;
 }
 
 static bool gc_geom_eq(const struct nb_cursor_geom *a,
@@ -2225,11 +2223,6 @@ static bool gc_ensure(struct nb_wl *w)
     for (i = 0; i < NB_GC_SLOTS; i++) {
         w->gc_slot[i].w = w;
     }
-    /* Optional: without it the buffer is drawn at the logical size, which is
-     * what every compositor without wp_viewporter got before. */
-    if (w->viewporter) {
-        w->gc_vp = wp_viewporter_get_viewport(w->viewporter, w->gc_surf);
-    }
     return true;
 
 broken:
@@ -2295,8 +2288,8 @@ static bool gc_render(struct nb_wl *w)
         wl_buffer_destroy(w->gc_slot[slot].buf);
         w->gc_slot[slot].buf = NULL;
     }
-    /* b.w, b.h <= NB_CURSOR_SCALED_MAX, so this fits the slot by construction
-     * (nb_cursor_device_geom() guarantees it; test_cursor.c checks it) -- and
+    /* b.w, b.h <= NB_CURSOR_SURFACE_MAX_BUF, so this fits the slot by construction
+     * (nb_cursor_surface_geom() guarantees it; test_cursor.c checks it) -- and
      * is checked again here, where the write is, so no later change to the
      * geometry code can make it a write past the slot. */
     if (b.w == 0 || b.h == 0 || (size_t)b.w * b.h > NB_GC_SLOT_PX) {
@@ -2315,16 +2308,8 @@ static bool gc_render(struct nb_wl *w)
     wl_buffer_add_listener(buf, &gc_buf_listener, &w->gc_slot[slot]);
     w->gc_slot[slot].buf = buf;
     w->gc_slot[slot].busy = true;
-    if (w->gc_vp) {
-        /* Unset when the buffer already IS the logical size: a viewport
-         * scaling by exactly one is still a viewport. */
-        if (b.w == g.w && b.h == g.h) {
-            wp_viewport_set_destination(w->gc_vp, -1, -1);
-        } else {
-            wp_viewport_set_destination(w->gc_vp, (int32_t)g.w,
-                                        (int32_t)g.h);
-        }
-    }
+    /* surface = buffer / k = g: the universal HiDPI cursor path, no viewport */
+    wl_surface_set_buffer_scale(w->gc_surf, (int32_t)(b.w / g.w));
     wl_surface_attach(w->gc_surf, buf, 0, 0);
     wl_surface_damage_buffer(w->gc_surf, 0, 0, (int32_t)b.w, (int32_t)b.h);
     wl_surface_commit(w->gc_surf);
@@ -2333,8 +2318,8 @@ static bool gc_render(struct nb_wl *w)
     w->gc_geom = g;
     w->gc_bgeom = b;
     if (nb_verbose) {
-        nb_log("cursor: host pointer image %ux%u (buffer %ux%u), hot spot %u,%u of the "
-               "guest's %u,%u, frame fit %d/%d, output scale %u/120", g.w, g.h, b.w, b.h,
+        nb_log("cursor: host pointer image %ux%u (buffer %ux%u, buffer_scale %u), hot spot %u,%u of the "
+               "guest's %u,%u, frame fit %d/%d, output scale %u/120", g.w, g.h, b.w, b.h, b.w / g.w,
                g.hot_x, g.hot_y, c->hot_x, c->hot_y, w->fit_w, w->buf_w, w->scale_120);
     }
     return true;
@@ -2381,19 +2366,11 @@ static const struct wl_buffer_listener ov_buf_listener = {
     .release = ov_buf_release,
 };
 
+/* The grab overlay and the hover pointer are ONE size: the same function. */
 static void ov_geom_now(const struct nb_wl *w, struct nb_cursor_geom *g,
                         struct nb_cursor_geom *b)
 {
-    uint32_t nx, dx, ny, dy;
-
-    gc_scale_now(w, &nx, &dx, &ny, &dy);
-    nb_cursor_scaled_geom(w->gcur, nx, dx, ny, dy, NB_CURSOR_SCALED_MAX, g);
-    if (w->ov_vp) {
-        nb_cursor_device_geom(w->gcur, nx, dx, ny, dy, w->scale_120,
-                              NB_CURSOR_SCALED_MAX, b);
-    } else {
-        *b = *g;
-    }
+    gc_geom_now(w, g, b);
 }
 
 /* The surface, its subsurface, its (empty) input region and its pool: once. */
@@ -2450,9 +2427,6 @@ static bool ov_ensure(struct nb_wl *w)
     if (none) {
         wl_surface_set_input_region(w->ov_surf, none);
         wl_region_destroy(none);
-    }
-    if (w->viewporter) {
-        w->ov_vp = wp_viewporter_get_viewport(w->viewporter, w->ov_surf);
     }
     return true;
 
@@ -2543,13 +2517,7 @@ static void ov_refresh(struct nb_wl *w)
         wl_buffer_add_listener(buf, &ov_buf_listener, &w->ov_slot[slot]);
         w->ov_slot[slot].buf = buf;
         w->ov_slot[slot].busy = true;
-        if (w->ov_vp) {
-            if (b.w == g.w && b.h == g.h) {
-                wp_viewport_set_destination(w->ov_vp, -1, -1);
-            } else {
-                wp_viewport_set_destination(w->ov_vp, (int32_t)g.w, (int32_t)g.h);
-            }
-        }
+        wl_surface_set_buffer_scale(w->ov_surf, (int32_t)(b.w / g.w));
         wl_surface_attach(w->ov_surf, buf, 0, 0);
         wl_surface_damage_buffer(w->ov_surf, 0, 0, (int32_t)b.w, (int32_t)b.h);
         w->ov_valid = true;
@@ -2585,10 +2553,6 @@ static void ov_drop(struct nb_wl *w)
             w->ov_slot[i].buf = NULL;
         }
         w->ov_slot[i].busy = false;
-    }
-    if (w->ov_vp) {
-        wp_viewport_destroy(w->ov_vp);
-        w->ov_vp = NULL;
     }
     if (w->ov_sub) {
         wl_subsurface_destroy(w->ov_sub);
@@ -2639,10 +2603,6 @@ static void gc_drop(struct nb_wl *w)
     if (w->gc_pool) {
         wl_shm_pool_destroy(w->gc_pool);
         w->gc_pool = NULL;
-    }
-    if (w->gc_vp) {
-        wp_viewport_destroy(w->gc_vp);
-        w->gc_vp = NULL;
     }
     if (w->gc_surf) {
         wl_surface_destroy(w->gc_surf);

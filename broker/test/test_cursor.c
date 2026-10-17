@@ -485,6 +485,149 @@ static void test_device_geom(void)
 }
 
 /*
+ * THE SIZE RULE of a cursor surface (hover pointer and grab overlay alike).
+ *
+ * A guest cursor pixel is one GUEST FRAME pixel.  The frame is shown at
+ * `fit` logical pixels per guest pixel (fit_w / buf_w), so the cursor's
+ * SURFACE-LOCAL size -- the unit wl_pointer.set_cursor's hot spot and a
+ * subsurface's position use -- is  image_dim * fit,  and nothing else: the
+ * output scale is NOT a factor of it.  The output scale only decides how many
+ * BUFFER pixels carry those logical pixels: wl_surface.set_buffer_scale is an
+ * integer k and the surface is buffer / k, so the buffer is  logical * k  with
+ * k = ceil(scale), and on screen the cursor measures logical * scale PHYSICAL
+ * pixels  (= image_dim * fit * scale: the frame's own magnification).
+ */
+struct surf_case {
+    const char *name;
+    uint32_t w, h;                  /* the guest image */
+    uint32_t fit_num, fit_den;      /* fit_w / buf_w (both axes) */
+    uint32_t scale_120;
+    uint32_t want_lw, want_lh;      /* surface-local (logical) size */
+    uint32_t want_k;
+};
+
+static void check_surface(const struct surf_case *t)
+{
+    static const uint8_t px[256 * 1024];
+    struct nb_cursor_surface s;
+    double phys, want_phys;
+    double sc = (t->scale_120 < 120 ? 120 : t->scale_120) / 120.0;
+
+    nb_cursor_load(&cur, px, t->w, t->h, t->w * 4, 0, 0);
+    memset(&s, 0xa5, sizeof s);
+    nb_cursor_surface_geom(&cur, t->fit_num, t->fit_den, t->fit_num,
+                           t->fit_den, t->scale_120, NB_CURSOR_SURFACE_MAX_BUF,
+                           &s);
+    CHECK(s.g.w == t->want_lw && s.g.h == t->want_lh,
+          "%s: logical %ux%u, want %ux%u", t->name, s.g.w, s.g.h, t->want_lw,
+          t->want_lh);
+    CHECK(s.scale == t->want_k, "%s: buffer_scale %u, want %u", t->name,
+          s.scale, t->want_k);
+    CHECK(s.bw == s.g.w * s.scale && s.bh == s.g.h * s.scale,
+          "%s: the buffer %ux%u is not logical x scale (wl_surface would "
+          "raise invalid_size)", t->name, s.bw, s.bh);
+    /* On screen, in PHYSICAL pixels: the frame's magnification of the image,
+     * within the rounding of one logical pixel. */
+    phys = (double)s.g.w * sc;
+    want_phys = (double)t->w * t->fit_num / t->fit_den * sc;
+    CHECK(phys > want_phys - 1.5 * sc && phys < want_phys + 1.5 * sc,
+          "%s: on screen %.1f physical px, the frame magnifies the image to "
+          "%.1f", t->name, phys, want_phys);
+}
+
+static void test_surface_geom(void)
+{
+    static const struct surf_case cases[] = {
+        /* THE OWNER'S SCREEN (broker log, run 3001): a 256x256 cursor image,
+         * guest frame 2048 wide shown in 1915 logical pixels, output 1.5:
+         * logical 239 (= 256*1915/2048), buffer 478 at buffer_scale 2.
+         * 239 logical = 358.5 physical = 256 guest px * 1.4004. */
+        {"owner: fit 1915/2048 scale 1.5", 256, 256, 1915, 2048, 180, 239, 239, 2},
+        {"owner: window grown, fit 2446/2048", 256, 256, 2446, 2048, 180, 306, 306, 2},
+        /* fit < 1 / fit == 1 / fit > 1, every output scale */
+        {"fit 0.5 scale 1.0", 32, 32, 1, 2, 120, 16, 16, 1},
+        {"fit 0.5 scale 1.25", 32, 32, 1, 2, 150, 16, 16, 2},
+        {"fit 0.5 scale 1.5", 32, 32, 1, 2, 180, 16, 16, 2},
+        {"fit 0.5 scale 2.0", 32, 32, 1, 2, 240, 16, 16, 2},
+        {"fit 1 scale 1.0", 32, 32, 1, 1, 120, 32, 32, 1},
+        {"fit 1 scale 1.25", 32, 32, 1, 1, 150, 32, 32, 2},
+        {"fit 1 scale 1.5", 32, 32, 1, 1, 180, 32, 32, 2},
+        {"fit 1 scale 2.0", 32, 32, 1, 1, 240, 32, 32, 2},
+        {"fit 1.5 scale 1.0", 32, 32, 3, 2, 120, 48, 48, 1},
+        {"fit 1.5 scale 1.5", 32, 32, 3, 2, 180, 48, 48, 2},
+        {"fit 2 scale 2.0", 32, 32, 2, 1, 240, 64, 64, 2},
+        /* the hover pointer of a 2x HiDPI guest shown 1:2 (finding 7) */
+        {"HiDPI: 32px cursor, frame 3840 in 1920 logical, scale 2", 32, 32, 1920,
+         3840, 240, 16, 16, 2},
+        /* a non-square image keeps its aspect */
+        {"I-beam-like 12x24", 12, 24, 3, 2, 180, 18, 36, 2},
+        /* unknown / below-1 scale is 1 */
+        {"scale unknown (0)", 32, 32, 1, 1, 0, 32, 32, 1},
+        {"scale below 1", 32, 32, 1, 1, 60, 32, 32, 1},
+    };
+    struct nb_cursor_surface a, b;
+    static const uint8_t px[256 * 1024];
+    unsigned i, bad = 0;
+
+    for (i = 0; i < sizeof cases / sizeof cases[0]; i++) {
+        check_surface(&cases[i]);
+    }
+
+    /* The output scale is NOT a factor of the logical size: the same frame fit
+     * at 1.0 and at 2.0 gives the same surface-local cursor (a double-scaling
+     * regression multiplies it). */
+    nb_cursor_load(&cur, px, 256, 256, 1024, 14, 15);
+    nb_cursor_surface_geom(&cur, 1915, 2048, 1155, 1155, 120,
+                           NB_CURSOR_SURFACE_MAX_BUF, &a);
+    nb_cursor_surface_geom(&cur, 1915, 2048, 1155, 1155, 240,
+                           NB_CURSOR_SURFACE_MAX_BUF, &b);
+    CHECK(a.g.w == b.g.w && a.g.h == b.g.h && a.g.hot_x == b.g.hot_x &&
+          a.g.hot_y == b.g.hot_y,
+          "the output scale changed the logical size (%u -> %u): double "
+          "scaling", a.g.w, b.g.w);
+    CHECK(b.bw == 2 * a.bw, "scale 2 carries it in twice the buffer pixels");
+
+    /* The hot spot is logical and inside the surface; it follows the fit. */
+    nb_cursor_surface_geom(&cur, 1915, 2048, 1915, 2048, 180,
+                           NB_CURSOR_SURFACE_MAX_BUF, &a);
+    CHECK(a.g.hot_x == 14 * 1915 / 2048 + 1 || a.g.hot_x == 14 * 1915 / 2048,
+          "hot x %u follows the fit", a.g.hot_x);
+
+    /* RESIZE: a window resize is a new fit and a new size, nothing sticky. */
+    nb_cursor_surface_geom(&cur, 1000, 2048, 1000, 2048, 180,
+                           NB_CURSOR_SURFACE_MAX_BUF, &a);
+    nb_cursor_surface_geom(&cur, 2000, 2048, 2000, 2048, 180,
+                           NB_CURSOR_SURFACE_MAX_BUF, &b);
+    CHECK(a.g.w == 125 && b.g.w == 250, "resize: %u -> %u (want 125 -> 250)",
+          a.g.w, b.g.w);
+
+    /* Bounds: whatever comes in, the buffer fits a slot, is exactly logical x
+     * scale, and the hot spot is inside the surface. */
+    for (i = 0; i < 40000; i++) {
+        uint32_t sw = 1 + (i * 2654435761u) % 256u;
+        uint32_t sh = 1 + (i * 40503u) % 256u;
+
+        nb_cursor_load(&cur, px, sw, sh, sw * 4, (i * 7u) % sw, (i * 13u) % sh);
+        nb_cursor_surface_geom(&cur, 1 + (i * 977u) % 8192u,
+                               1 + (i * 331u) % 8192u, 1 + (i * 619u) % 8192u,
+                               1 + (i * 113u) % 8192u, (i * 37u) % 4000u,
+                               NB_CURSOR_SURFACE_MAX_BUF, &a);
+        if (a.g.w < 1 || a.g.h < 1 || a.scale < 1 || a.scale > 4 ||
+            a.bw != a.g.w * a.scale || a.bh != a.g.h * a.scale ||
+            a.bw > NB_CURSOR_SURFACE_MAX_BUF ||
+            a.bh > NB_CURSOR_SURFACE_MAX_BUF || a.g.hot_x >= a.g.w ||
+            a.g.hot_y >= a.g.h) {
+            bad++;
+        }
+    }
+    CHECK(bad == 0, "%u cursor surfaces outside the bounds", bad);
+    nb_cursor_surface_geom(&cur, 0xffffffffu, 1, 0xffffffffu, 1, 0xffffffffu,
+                           NB_CURSOR_SURFACE_MAX_BUF, &a);
+    CHECK(a.bw <= NB_CURSOR_SURFACE_MAX_BUF && a.scale == 4 &&
+          a.bw == a.g.w * 4, "absurd factor and scale: clamped, not wrapped");
+}
+
+/*
  * PUBLISHING (finding 3) is a copy: the published cursor must be the image as
  * it was, unaffected by the next load into the pending one -- which is the
  * whole point of having two.
@@ -1124,6 +1267,7 @@ int main(void)
     test_hot_pixel();
     test_hot_sweep();
     test_device_geom();
+    test_surface_geom();
     test_copy();
     test_wanted();
     test_fuzz();

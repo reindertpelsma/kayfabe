@@ -466,6 +466,36 @@ void nb_cursor_device_geom(const struct nb_cursor *c, uint32_t num_x,
                      (uint64_t)num_y * s, (uint64_t)den_y * 120u, max, out);
 }
 
+void nb_cursor_surface_geom(const struct nb_cursor *c, uint32_t num_x,
+                            uint32_t den_x, uint32_t num_y, uint32_t den_y,
+                            uint32_t scale_120, uint32_t max_buf,
+                            struct nb_cursor_surface *out)
+{
+    uint32_t k, max_logical;
+
+    /* ceil(scale/1.0), the smallest integer buffer_scale that loses no detail
+     * the output can show; below 1 (or unknown) is 1; 4 is past any display. */
+    if (scale_120 > 4u * 120u) {
+        scale_120 = 4u * 120u;
+    }
+    k = (scale_120 + 119u) / 120u;
+    if (k < 1u) {
+        k = 1u;
+    }
+    if (max_buf == 0) {
+        max_buf = 1;
+    }
+    max_logical = max_buf / k;
+    if (max_logical < 1u) {
+        max_logical = 1u;
+    }
+    /* The logical size is the frame fit alone: image_dim * num / den. */
+    nb_cursor_scaled_geom(c, num_x, den_x, num_y, den_y, max_logical, &out->g);
+    out->scale = k;
+    out->bw = out->g.w * k;
+    out->bh = out->g.h * k;
+}
+
 void nb_cursor_scale(const struct nb_cursor *c, uint32_t *dst, uint32_t dw,
                      uint32_t dh)
 {
