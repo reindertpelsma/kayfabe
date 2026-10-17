@@ -30,7 +30,7 @@
 use crate::raw_unsafe::{BrokerHooks, QemuSink};
 use kf_broker::{
     ConsoleCursor, ConsoleCursorUpdate, CursorShare, FrameRing, Input, InputPolicy, InstallRefusal,
-    Relay, RelayConfig, ShownFrame, SlotFds, UnixLink,
+    Relay, RelayConfig, ShownFrame, SlotFds, TickShare, UnixLink,
 };
 
 /// The relay with what the main loop drives it with: the C device's hooks, the VM-lifetime input
@@ -61,6 +61,8 @@ pub struct BrokerSeat {
     relay: Mutex<Option<Seated>>,
     /// ★ §O: the guest's cursor between the worker and the relay.
     cursor: Arc<CursorShare>,
+    /// ★ Phase 2: the relay's ticks and requests, for the display worker (lock-free).
+    ticks: Arc<TickShare>,
     /// ★ §8.13: the same cursor for QEMU's own console while the broker hovers, and the C
     /// device's cursor verbs (from [`BrokerSeat::start`]) — the main loop only (the console's
     /// `gfx_update`, each pump), so the lock is never contended; it is `try_lock`ed.
@@ -105,6 +107,7 @@ impl BrokerSeat {
             udmabuf,
             relay: Mutex::new(None),
             cursor: Arc::new(CursorShare::new()),
+            ticks: Arc::new(TickShare::new()),
             console: Mutex::new((ConsoleCursor::default(), None)),
             was_active: std::sync::atomic::AtomicBool::new(false),
         })
@@ -137,6 +140,13 @@ impl BrokerSeat {
     #[must_use]
     pub fn cursor(&self) -> &CursorShare {
         &self.cursor
+    }
+
+    /// ★ **Worker** (and the relay): the tick share — the broker's refresh events and frame
+    /// requests, read by the worker without a lock (`V3_DISPLAY_PACING_20261017.md` §11).
+    #[must_use]
+    pub fn ticks(&self) -> &TickShare {
+        &self.ticks
     }
 
     /// ★ **Worker**: a broker frame of at least `cap` bytes — whole host pages
@@ -268,7 +278,8 @@ impl BrokerSeat {
             self.ring.clone(),
             UnixLink,
         )
-        .with_cursor(self.cursor.clone());
+        .with_cursor(self.cursor.clone())
+        .with_ticks(self.ticks.clone());
         relay.start(now_ms, &mut hooks);
         if let Ok(mut c) = self.console.try_lock() {
             c.1 = Some(sink);
@@ -336,7 +347,15 @@ impl BrokerSeat {
         match self.relay.try_lock() {
             Ok(g) => g.as_ref().map_or_else(
                 || "broker[not started]".into(),
-                |s| format!("{} {}", s.relay.status(), s.policy.status()),
+                |s| {
+                    let t = s.relay.tick_status();
+                    format!(
+                        "{} {}{}{t}",
+                        s.relay.status(),
+                        s.policy.status(),
+                        if t.is_empty() { "" } else { " " }
+                    )
+                },
             ),
             Err(_) => "broker[busy]".into(),
         }

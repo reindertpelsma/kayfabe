@@ -1303,3 +1303,16 @@ the display plane.
   re-aligned to the broker's.
 - **(d) Later phases (design only, not built):** the broker as tick source over the broker protocol (a capability bit; presentation feedback; commit every refresh so frame callbacks
   keep coming); an HDMI-over-TMDS virtual connector to lift the 75 Hz EDID cap and the 165 MHz DVI pixel clock (§M D3).
+
+## §AL. Kayfabe enforces the lock step and never trusts the broker's timing; the flip system is testable locally, 2026-10-17
+
+**STATUS: LIVE, 2026-10-17 (owner, via the coordinator; recorded by the phase-2 agent).** Design and code: `docs/design/V3_DISPLAY_PACING_20261017.md` §11. Binding on the broker-as-tick-source work (§AK (b)–(d)).
+
+- **Kayfabe enforces.** A broker tick / `WANT_FRAME` that arrives at the wrong moment (early: the previous copy or send still in flight, inside the half-period guard, out of sequence) is not acted on then; kayfabe acts
+  when the lock-step state allows (copy finished, slot free, sequence matches) — after the right moment, never before. Too-fast broker events never make kayfabe go faster and never build a backlog: credits coalesce
+  (at most one pending, extras counted and dropped), the vblank is capped by the double-tick guard, frames in flight are bounded by a named constant with a test. A flooding or hostile broker costs counted, dropped ticks.
+- **The guest's immediate flips are still never parked and never wait for a credit.** The rule governs the kayfabe→broker frame stream and the vblank clock only; the 50 ms silence fallback still applies.
+- **Local tests of the whole flip path**, GPU-free: an exhaustive bounded model, a seeded soak (>= 100 000 flips per scenario over >= 50 seeds, an ignored 10 M-flip run), a real-socket run with a fake broker, floods of every
+  kind, and broker STALLS (silence, partial messages, a slot never released, flapping around 50 ms, SIGSTOP); mutants of the harness itself. The harness's limits are stated in the doc (§11.7).
+- (Added by the agent, flagged for the owner: after a fallback to the clock the broker takes the tick back only after proving itself — one good gap, then 2, 4, 8 — so a broker flapping around 50 ms cannot flap the source
+  per tick; decision (c)'s "the first broker event takes it back at once" holds for a broker that never fell back. §11.5.)

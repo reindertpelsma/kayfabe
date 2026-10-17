@@ -38,6 +38,7 @@ use kf_cuda::display::{ComposeLayer, DisplayGpu, Frame};
 use kf_disp::engine::{Acquire, Composition, Effect, Engine, PbLoc, ScanVocab, Vocab};
 use kf_disp::inst::{CtxDma, Layout, Target};
 use kf_disp::model::{ChannelKind, Statement, Waker};
+use kf_disp::lockstep::CreditGate;
 use kf_disp::pace::{HeadCounts, Mailbox, Meter, NonFlip, Pacer, Sent, flip_completion_need};
 use kf_disp::ports::{EventReg, Ports};
 use kf_disp::regs::Regs;
@@ -2653,6 +2654,15 @@ impl Device {
         let cap = kf_disp::pace::cap_hz(dp.max_fps);
         let mut pacer = Pacer::new(cap);
         let mut meter = Meter::default();
+        // ★ phase 2 (`V3_DISPLAY_PACING_20261017.md` §11): the broker's ticks and requests come from
+        // the relay through a lock-free share; the gate decides when a request may be acted on
+        let mut gate_c = CreditGate::new();
+        let mut tick_seen = 0u64;
+        let mut shown_head: Option<u32> = None;
+        if let Some(b) = dp.broker.as_ref() {
+            b.ticks().set_wake(dp.wake.clone());
+            b.ticks().set_cap_hz(cap);
+        }
         // per head: ticks, and ticks with the guest's vblank interrupt enabled (presents: the engine)
         let mut counts = [HeadCounts::default(); MAX_HEADS];
         let mut fps_printed: Option<(Instant, String)> = None;
@@ -2737,6 +2747,9 @@ impl Device {
             if let Some(t) = scan.idle_at {
                 deadline = deadline.min(t);
             }
+            if let Some(t) = gate_c.next_ns() {
+                deadline = deadline.min(clock + Duration::from_nanos(t));
+            }
             if let Some(t) = gate.deadline() {
                 deadline = deadline.min(t);
             }
@@ -2771,6 +2784,7 @@ impl Device {
                 queue.clear();
                 gate = crate::vblankgate::VblankGate::default();
                 pacer = Pacer::new(cap);
+                gate_c.reset();
                 edge_frame = [0u32; MAX_HEADS];
                 cursor_seen = [0u32; MAX_HEADS];
                 published_get = [u32::MAX; kf_disp::ports::NUM_CHANNELS];
@@ -2974,7 +2988,39 @@ impl Device {
             // 4. vblanks whose time has come — each head's CAPPED tick (§8.16), from the pacer
             let mut raised = false;
             let mut ticked = 0u32;
-            for t in pacer.due(ns(Instant::now())) {
+            // ★ phase 2: heads whose tick came from the FREE clock — only those grant a copy credit
+            // by themselves; a broker tick grants one only when it carries a request
+            let mut ticked_free = 0u32;
+            let now_ns = ns(Instant::now());
+            let mut due_ticks = pacer.due(now_ns);
+            if let Some(b) = dp.broker.as_ref()
+                && let Some(snap) = b.ticks().snapshot(tick_seen)
+            {
+                let coalesced = snap.count.saturating_sub(tick_seen + 1);
+                tick_seen = snap.count;
+                let want = b.ticks().take_want();
+                let t = if gate_c.fresh(snap.tick_seq) {
+                    shown_head.and_then(|h| pacer.broker_tick(h, now_ns))
+                } else {
+                    None
+                };
+                let (last, guard) = shown_head
+                    .and_then(|h| pacer.source(h as usize))
+                    .map_or((None, 0), |s| (s.last_tick_ns(), s.guard_ns()));
+                gate_c.on_tick(
+                    snap.tick_seq,
+                    coalesced,
+                    want,
+                    t.map(|_| now_ns),
+                    last,
+                    guard,
+                );
+                due_ticks.extend(t);
+            }
+            if gate_c.poll(now_ns).is_some() {
+                scan.mailbox.grant();
+            }
+            for t in due_ticks {
                 let h = t.head as usize;
                 if h >= dp.map.heads as usize {
                     continue;
@@ -2993,6 +3039,9 @@ impl Device {
                     .wrapping_add(1);
                 counts[h].ticks += 1;
                 ticked |= 1 << h;
+                if t.from == kf_disp::tick::Source::Free {
+                    ticked_free |= 1 << h;
+                }
             }
             // ★ §AK: who ticks a head changed (phase 2: the broker speaks, or has been silent for
             // `kf_disp::tick::BROKER_SILENCE_NS`) — one line per handoff, bounded
@@ -3153,6 +3202,10 @@ impl Device {
                 held.preserved = None;
             }
             let shown = choose_shown(console, dp.boot.as_ref(), boot_done, &held);
+            shown_head = match &shown {
+                Some(Shown::Armed(c)) if c.head < 32 => Some(c.head),
+                _ => None,
+            };
             match &shown {
                 Some(Shown::Armed(c)) => held.scanned = Some((c.width, c.height)),
                 // only the composition shown right before a preserving free is kept
@@ -3316,8 +3369,13 @@ impl Device {
                 scan.serve_now(dp);
             }
             // ★ §AK: the shown head's tick allows ONE flip copy (of the newest latched frame)
-            if console_tick {
-                scan.on_console_tick(matches!(shown, Some(Shown::Armed(_))));
+            // (a BROKER tick grants its copy credit through the gate, above; only a free-clock tick
+            // grants one by itself)
+            if match &shown {
+                Some(Shown::Armed(c)) => c.head < 32 && ticked_free & (1 << c.head) != 0,
+                _ => false,
+            } {
+                scan.on_console_tick(true);
             }
             if (scan.want || scan.mailbox.due(scan.inflight.is_some())) && scan.inflight.is_none() {
                 scan.start(&mut io, &engine, shown.as_ref(), cursor.as_ref(), false);
@@ -3592,6 +3650,18 @@ impl Device {
                     skipped: scan.mailbox.skipped,
                     same: dp.counters.same.load(o),
                     ondemand: dp.counters.ondemand.load(o),
+                    lock: dp.broker.as_ref().map(|_| kf_disp::pace::LockStatus {
+                        ticks_coalesced: gate_c.c.ticks_coalesced,
+                        credits_coalesced: gate_c.c.credits_coalesced,
+                        mailbox_coalesced: scan.mailbox.coalesced,
+                        credits_deferred: gate_c.c.credits_deferred,
+                        granted: gate_c.c.granted,
+                        stale: gate_c.c.stale + gate_c.c.stale_credits,
+                        probation: (0..MAX_HEADS)
+                            .filter_map(|h| pacer.source(h))
+                            .map(kf_disp::tick::TickSource::probation_events)
+                            .sum(),
+                    }),
                     ..kf_disp::pace::Status::default()
                 };
                 for (h, hs) in st.heads.iter_mut().enumerate() {

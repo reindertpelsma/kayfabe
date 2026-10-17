@@ -65,8 +65,13 @@
 
 use crate::cursor::{BrokerCursor, CursorMode, CursorOp, CursorShare, CursorWant, PointerAbs};
 use crate::slots::{FrameRing, Kind, MAX_SLOTS, Take};
+use crate::ticks::{
+    BROKER_SILENCE_MS, FrameGate, PARTIAL_READ_MS, Requests, TickCounters, TickShare, TickVerdict,
+    frame_gate, tick_live,
+};
 use crate::wire::{
     CAP_CURSOR, CAP_DEVICE, CAP_DMABUF, CAP_FOCUS_EVENTS, CAP_MODIFIERS, CAP_RELEASE, CAP_CURSOR_STREAM,
+    CAP_TICK, EV_TICK,
     CLOSE_FORCE,
     CMD_ATTACH, CMD_F_SHM, CMD_SIZE, Cmd, CursorCmd, DEVICE_F_KNOWN, DEVICE_F_RENDER, EV_ABS,
     EV_BTN, EV_BYE, EV_CLIPBOARD, EV_CLOSE, EV_DEVICE, EV_FOCUS, EV_FORMAT, EV_FRAME, EV_GRAB,
@@ -472,6 +477,20 @@ struct Conn<S> {
     last_abs: Option<(i32, i32, i32, i32)>,
     /// ★ §8.19: input received while grabbed, logged once a second (`grab_log`).
     grab_counts: GrabCounts,
+    /// ★ Phase 2: the tick state, `Some` once this connection opted in (`CAPS` with `CLIENT_TICK`).
+    tick: Option<TickConn>,
+    /// ★ When the packet now partly read (`rxlen > 0`) began, for the read deadline.
+    partial_since: Option<u64>,
+}
+
+/// ★ Phase 2: one connection's tick state (`docs/design/V3_DISPLAY_PACING_20261017.md` §11).
+#[derive(Debug, Default)]
+struct TickConn {
+    reqs: Requests,
+    /// When the last FRESH tick arrived.
+    last_rx_ms: Option<u64>,
+    /// Whether ticks were live at the last look (a change is one log line, never one per tick).
+    live: bool,
 }
 
 /// ★ §8.19: what the broker sent while grabbed, in one logging interval — the instrument for "is an
@@ -646,6 +665,11 @@ pub struct Relay<L: Link> {
     /// 2026-10-04). A descriptor's kind cannot change while it is open, and a new backing has a new
     /// identity, so it is checked again.
     carrier_ok: [[Option<u64>; 4]; MAX_SLOTS],
+    /// ★ Phase 2: the share the display worker reads ticks from; `None` = never opt in (an old
+    /// VMM's behaviour: the free clock and the legacy credit).
+    ticks: Option<Arc<TickShare>>,
+    /// Tick counters of connections that ended (the live one's are added on read).
+    tick_total: TickCounters,
 }
 
 macro_rules! say {
@@ -725,7 +749,74 @@ impl<L: Link> Relay<L> {
             cursor: None,
             carrier_refusal: None,
             carrier_ok: [[None; 4]; MAX_SLOTS],
+            ticks: None,
+            tick_total: TickCounters::default(),
         }
+    }
+
+    /// ★ Phase 2: give the relay the tick share it and the display worker meet in. Without it the
+    /// relay never opts in to ticks.
+    #[must_use]
+    pub fn with_ticks(mut self, share: Arc<TickShare>) -> Relay<L> {
+        self.ticks = Some(share);
+        self
+    }
+
+    /// ★ The tick counters, over every connection so far.
+    #[must_use]
+    pub fn tick_counters(&self) -> TickCounters {
+        let mut t = self.tick_total;
+        if let Some(c) = self.conn.as_ref().and_then(|c| c.tick.as_ref()) {
+            t = add_ticks(t, c.reqs.c);
+        }
+        t
+    }
+
+    /// Whether tick frames are negotiated on the live connection.
+    #[must_use]
+    pub fn ticks_negotiated(&self) -> bool {
+        self.conn.as_ref().is_some_and(|c| c.tick.is_some())
+    }
+
+    /// ★ Whether the broker's ticks are LIVE now: negotiated, and one arrived within
+    /// [`BROKER_SILENCE_MS`].
+    #[must_use]
+    pub fn tick_live(&self) -> bool {
+        self.tick_live_at(self.now_ms)
+    }
+
+    fn tick_live_at(&self, now: u64) -> bool {
+        self.conn
+            .as_ref()
+            .and_then(|c| c.tick.as_ref())
+            .is_some_and(|t| tick_live(t.last_rx_ms, now))
+    }
+
+    /// One status fragment of the tick path (empty without a share).
+    #[must_use]
+    pub fn tick_status(&self) -> String {
+        if self.ticks.is_none() {
+            return String::new();
+        }
+        let c = self.tick_counters();
+        format!(
+            "tick[on={} live={} ticks={} stale={} missed={} backwards={} want={} credits_coalesced={} frames_on_credit={} no_change={} req_blocked={} silence_fallbacks={} resumes={} partial_timeouts={} budget_hits={}]",
+            u8::from(self.ticks_negotiated()),
+            u8::from(self.tick_live()),
+            c.ticks,
+            c.ticks_stale,
+            c.ticks_missed,
+            c.ts_backwards,
+            c.want_ticks,
+            c.credits_coalesced,
+            c.frames_on_credit,
+            c.no_change_sent,
+            c.req_open_blocked,
+            c.silence_fallbacks,
+            c.silence_resumes,
+            c.partial_timeouts,
+            c.budget_hits
+        )
     }
 
     /// ★ §O: give the relay the cursor share it and the display worker meet in. Without it a
@@ -938,6 +1029,8 @@ impl<L: Link> Relay<L> {
             cursor: CursorConn::default(),
             last_abs: None,
             grab_counts: GrabCounts::default(),
+            tick: None,
+            partial_since: None,
         });
         host.watch(fd, true, false);
     }
@@ -946,6 +1039,12 @@ impl<L: Link> Relay<L> {
     /// the next connection's replay frame when nothing newer is ready.
     fn close(&mut self, host: &mut dyn Host) {
         let Some(c) = self.conn.take() else { return };
+        if let Some(t) = c.tick.as_ref() {
+            self.tick_total = add_ticks(self.tick_total, t.reqs.c);
+        }
+        if let Some(sh) = &self.ticks {
+            sh.clear();
+        }
         // no connection, no GPU-copy demand: the worker stops packing at its next frame
         self.ring.set_want_vram(false);
         // ★ §O: and no host cursor — the worker composes the cursor again from its next frame
@@ -1401,8 +1500,19 @@ impl<L: Link> Relay<L> {
         if !self.ring.broker_backed(slot) {
             return None;
         }
-        let r = self.send(&Cmd::commit(), None, Rung::Shm);
+        // ★ phase 2: on a tick connection the COMMIT carries the request it answers (0 = none open:
+        // a frame sent in the clock's fallback, 'unsolicited' to the broker)
+        let req = self.conn.as_ref().and_then(|c| c.tick.as_ref()).map_or(0, |t| t.reqs.open().unwrap_or(0));
+        let cmd = if self.ticks_negotiated() {
+            Cmd::commit_for(req)
+        } else {
+            Cmd::commit()
+        };
+        let r = self.send(&cmd, None, Rung::Shm);
         if r == Sent::Done {
+            if let Some(t) = self.conn.as_mut().and_then(|c| c.tick.as_mut()) {
+                let _ = t.reqs.spend();
+            }
             self.commits += 1;
             self.counters.sent += 1;
             let rung = self.held[slot].map(|h| h.rung);
@@ -1506,8 +1616,22 @@ impl<L: Link> Relay<L> {
                 c.want_write = false;
             }
         }
-        if !self.conn.as_ref().is_some_and(|c| c.credit) {
-            return;
+        // ★ phase 2: while the broker's ticks are live a frame goes only on an open REQUEST (one
+        // frame per request, no frame without one); in the clock's fallback the legacy credit decides
+        let (negotiated, open, credit) = self.conn.as_ref().map_or((false, None, false), |c| {
+            (c.tick.is_some(), c.tick.as_ref().and_then(|t| t.reqs.open()), c.credit)
+        });
+        match frame_gate(negotiated, self.tick_live_at(now), open, credit) {
+            FrameGate::Send => {}
+            FrameGate::WaitRequest => {
+                if self.ring.broker_ready().is_some()
+                    && let Some(t) = self.conn.as_mut().and_then(|c| c.tick.as_mut())
+                {
+                    t.reqs.blocked();
+                }
+                return;
+            }
+            FrameGate::WaitCredit => return,
         }
         let j = match self.ring.take_broker() {
             Take::Empty => return,
@@ -1797,8 +1921,25 @@ impl<L: Link> Relay<L> {
                 (Step::Window | Step::Attach | Step::Commit, None) => (Sent::Done, Step::Caps),
                 // CAPS last: no clipboard (bit 0 clear)
                 (Step::Caps, _) => {
-                    let r = self.send(&Cmd::caps(0), None, Rung::Shm);
+                    // ★ phase 2: opt in to ticks only with a share attached and a broker that
+                    // advertised CAP_TICK; otherwise the old CAPS(0), byte for byte
+                    let tick_hz = self
+                        .ticks
+                        .as_ref()
+                        .filter(|_| self.conn.as_ref().is_some_and(|c| c.caps & CAP_TICK != 0))
+                        .map(|s| s.cap_hz());
+                    let caps = tick_hz.map_or_else(|| Cmd::caps(0), Cmd::caps_tick);
+                    let r = self.send(&caps, None, Rung::Shm);
                     if r == Sent::Done {
+                        if tick_hz.is_some()
+                            && let Some(c) = self.conn.as_mut()
+                        {
+                            c.tick = Some(TickConn::default());
+                            say!(
+                                "broker ticks: ON (the broker's refresh drives the guest's vblank while it speaks; \
+                                 frames go one per request; {BROKER_SILENCE_MS} ms of silence hands the vblank back to the clock)"
+                            );
+                        }
                         self.activate(now, host);
                         return;
                     }
@@ -1871,6 +2012,11 @@ impl<L: Link> Relay<L> {
                 }
             }
         }
+        // ★ the per-turn message budget ([`READ_BATCH`] packets): what is still in the socket stays
+        // there for the next turn (level-triggered readiness), counted
+        if filled >= budget && end.is_none() {
+            self.tick_total.budget_hits += 1;
+        }
         // the carried partial packet, then whole packets; a new partial is carried again
         let mut at = 0usize;
         while at < filled {
@@ -1880,9 +2026,11 @@ impl<L: Link> Relay<L> {
             c.rxlen += n;
             at += n;
             if c.rxlen < PKT_SIZE {
+                c.partial_since.get_or_insert(now);
                 break;
             }
             c.rxlen = 0;
+            c.partial_since = None;
             let p = Pkt::decode(&c.rx);
             self.counters.packets += 1;
             self.handle(now, host, &p, out, cap);
@@ -2042,6 +2190,7 @@ impl<L: Link> Relay<L> {
                 }
                 self.progress(now, host);
             }
+            EV_TICK => self.on_tick_pkt(now, host, p),
             EV_RELEASE => self.release(now, host, p.wide()),
             EV_FORMAT => self.format(now, host, p),
             EV_CLOSE => {
@@ -2101,6 +2250,89 @@ impl<L: Link> Relay<L> {
                 since: if grabbed { now.max(1) } else { 0 },
                 ..GrabCounts::default()
             };
+        }
+    }
+
+    /// ★ Phase 2: an `EV_TICK`. Framing violations drop the connection; a stale number is dropped
+    /// and counted and acted on in no way; a fresh one is published to the display worker, may open
+    /// a request (releasing a ready frame), and may close an idle one with `NO_CHANGE`.
+    fn on_tick_pkt(&mut self, now: u64, host: &mut dyn Host, p: &Pkt) {
+        if self.conn.as_ref().is_none_or(|c| c.tick.is_none()) {
+            return self.lost(
+                now,
+                host,
+                "PROTOCOL VIOLATION: the broker sent EV_TICK without being asked (no CLIENT_TICK)",
+            );
+        }
+        let t = match p.tick() {
+            Ok(t) => t,
+            Err(e) => return self.lost(now, host, &format!("PROTOCOL VIOLATION: {e}")),
+        };
+        let Some(tc) = self.conn.as_mut().and_then(|c| c.tick.as_mut()) else {
+            return;
+        };
+        match tc.reqs.on_tick(&t) {
+            TickVerdict::Stale => {}
+            TickVerdict::Fresh { .. } => {
+                tc.last_rx_ms = Some(now);
+                self.note_tick_live(now);
+                if let Some(sh) = &self.ticks {
+                    sh.publish(&t);
+                }
+                self.progress(now, host);
+                self.maybe_no_change(now, host);
+            }
+        }
+    }
+
+    /// Say it once when the ticks go live or silent (never per tick), and count it.
+    fn note_tick_live(&mut self, now: u64) {
+        let live = self.tick_live_at(now);
+        let Some(tc) = self.conn.as_mut().and_then(|c| c.tick.as_mut()) else {
+            return;
+        };
+        if tc.live == live {
+            return;
+        }
+        tc.live = live;
+        if live {
+            tc.reqs.c.silence_resumes += 1;
+            say!(
+                "broker ticks: LIVE ({} resume(s)) — frames go one per request again",
+                tc.reqs.c.silence_resumes
+            );
+        } else {
+            tc.reqs.c.silence_fallbacks += 1;
+            say!(
+                "broker ticks: SILENT for {BROKER_SILENCE_MS} ms ({} fallback(s)) — the free clock drives the guest's vblank and frames use the legacy credit",
+                tc.reqs.c.silence_fallbacks
+            );
+        }
+    }
+
+    /// ★ R4: the open request is idle at a later tick: `NO_CHANGE`, non-blocking (a full socket
+    /// retries at the next tick).
+    fn maybe_no_change(&mut self, now: u64, host: &mut dyn Host) {
+        let nothing = self.ring.broker_ready().is_none()
+            && self.conn.as_ref().is_some_and(|c| c.owed.is_none());
+        let Some(r) = self
+            .conn
+            .as_ref()
+            .and_then(|c| c.tick.as_ref())
+            .and_then(|t| t.reqs.idle_request(nothing))
+        else {
+            return;
+        };
+        match self.send(&Cmd::no_change(r), None, Rung::Shm) {
+            Sent::Done => {
+                if let Some(t) = self.conn.as_mut().and_then(|c| c.tick.as_mut()) {
+                    t.reqs.no_change_done();
+                }
+            }
+            Sent::Full => {}
+            Sent::Failed(e) => {
+                self.lost(now, host, &format!("the broker socket failed on NO_CHANGE: {e}"));
+            }
         }
     }
 
@@ -2445,6 +2677,31 @@ impl<L: Link> Relay<L> {
                 self.progress(now, host);
             }
             self.detect(now);
+            // ★ phase 2: the broker went silent (or came back) — the legacy credit takes over at
+            // once, and a frame waiting for a request is no longer waiting
+            let was = self.conn.as_ref().and_then(|c| c.tick.as_ref()).map(|t| t.live);
+            self.note_tick_live(now);
+            if was == Some(true) && !self.tick_live_at(now) {
+                self.progress(now, host);
+            }
+            // ★ the READ DEADLINE: a half-read packet that never completes drops the connection
+            if self.active()
+                && self
+                    .conn
+                    .as_ref()
+                    .and_then(|c| c.partial_since)
+                    .is_some_and(|t| now >= t + PARTIAL_READ_MS)
+            {
+                self.tick_total.partial_timeouts += 1;
+                self.lost(
+                    now,
+                    host,
+                    &format!(
+                        "the display broker stalled mid-packet (a partial event, then nothing for {PARTIAL_READ_MS} ms)"
+                    ),
+                );
+                continue;
+            }
             break;
         }
         // ★ the worker reads this once per frame: pack (or not) for the broker
@@ -2781,10 +3038,34 @@ impl<L: Link> Relay<L> {
             c.dmabuf.trip_at(),
             c.native.backoff_until.filter(|t| *t > self.now_ms),
             c.dmabuf.backoff_until.filter(|t| *t > self.now_ms),
+            c.partial_since.map(|t| t + PARTIAL_READ_MS),
+            c.tick
+                .as_ref()
+                .filter(|t| t.live)
+                .and_then(|t| t.last_rx_ms)
+                .map(|r| r + BROKER_SILENCE_MS + 1),
         ]
         .into_iter()
         .flatten()
         .min()
+    }
+}
+
+fn add_ticks(a: TickCounters, b: TickCounters) -> TickCounters {
+    TickCounters {
+        ticks: a.ticks + b.ticks,
+        ticks_stale: a.ticks_stale + b.ticks_stale,
+        ticks_missed: a.ticks_missed + b.ticks_missed,
+        ts_backwards: a.ts_backwards + b.ts_backwards,
+        want_ticks: a.want_ticks + b.want_ticks,
+        credits_coalesced: a.credits_coalesced + b.credits_coalesced,
+        frames_on_credit: a.frames_on_credit + b.frames_on_credit,
+        no_change_sent: a.no_change_sent + b.no_change_sent,
+        req_open_blocked: a.req_open_blocked + b.req_open_blocked,
+        silence_fallbacks: a.silence_fallbacks + b.silence_fallbacks,
+        silence_resumes: a.silence_resumes + b.silence_resumes,
+        partial_timeouts: a.partial_timeouts + b.partial_timeouts,
+        budget_hits: a.budget_hits + b.budget_hits,
     }
 }
 

@@ -549,6 +549,27 @@ pub struct Status {
     pub same: u64,
     /// Screendump requests served, cumulative.
     pub ondemand: u64,
+    /// ★ Phase 2 (only with a broker): the lock step's counters.
+    pub lock: Option<LockStatus>,
+}
+
+/// ★ The lock step's counters in the status fragment (`lock[...]`; absent without a broker).
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub struct LockStatus {
+    /// Ticks the worker never saw (the relay published several between two passes).
+    pub ticks_coalesced: u64,
+    /// Broker credits replaced in the gate.
+    pub credits_coalesced: u64,
+    /// Broker credits dropped because the mailbox held one.
+    pub mailbox_coalesced: u64,
+    /// Credits deferred by the double-tick guard.
+    pub credits_deferred: u64,
+    /// Credits handed to the mailbox.
+    pub granted: u64,
+    /// Stale events / stale requests dropped.
+    pub stale: u64,
+    /// Broker events swallowed on probation after a fallback, summed over heads.
+    pub probation: u64,
 }
 
 impl Status {
@@ -597,6 +618,19 @@ impl Status {
             self.ondemand,
             self.over
         );
+        if let Some(l) = self.lock {
+            s.pop(); // the closing bracket
+            s += &format!(
+                " lock[ticks_coalesced={} credits_coalesced={} mailbox_coalesced={} credits_deferred={} granted={} stale={} probation={}]]",
+                l.ticks_coalesced,
+                l.credits_coalesced,
+                l.mailbox_coalesced,
+                l.credits_deferred,
+                l.granted,
+                l.stale,
+                l.probation
+            );
+        }
         s
     }
 }
@@ -749,6 +783,8 @@ pub struct Mailbox {
     pub skipped: u64,
     /// Copies this mailbox allowed (every flip-class start), cumulative.
     pub copies: u64,
+    /// ★ Broker credits dropped because one was already held, cumulative.
+    pub coalesced: u64,
 }
 
 impl Mailbox {
@@ -764,6 +800,24 @@ impl Mailbox {
     /// The shown head ticked: one copy is allowed (the credit never exceeds one).
     pub fn tick(&mut self) {
         self.credit = true;
+    }
+
+    /// ★ Phase 2: a broker credit (a `WANT_FRAME` the gate released): one copy is allowed. The
+    /// credit never exceeds ONE — a grant that finds one held is dropped and counted in
+    /// [`Mailbox::coalesced`]. Returns whether it was new.
+    pub fn grant(&mut self) -> bool {
+        if self.credit {
+            self.coalesced += 1;
+            return false;
+        }
+        self.credit = true;
+        true
+    }
+
+    /// Is a copy credit held?
+    #[must_use]
+    pub fn credit_held(&self) -> bool {
+        self.credit
     }
 
     /// Is a latched frame waiting for its copy?

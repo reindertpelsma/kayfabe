@@ -29,6 +29,29 @@ pub const GUARD_NUM: u64 = 1;
 /// See [`GUARD_NUM`].
 pub const GUARD_DEN: u64 = 2;
 
+/// ★ Phase 2 (flap damping): after a fallback to the clock the broker must prove itself before it
+/// takes the tick back — [`probation_gaps`] consecutive gaps between its events, each shorter than
+/// [`BROKER_SILENCE_NS`]. The FIRST fallback needs one good gap (two events), the next in a row two,
+/// then four, then eight (the cap); a broker that held the tick for [`BROKER_STABLE_NS`] starts over.
+/// A broker that flaps around the 50 ms boundary therefore cannot make the source change per tick.
+/// (Owner decision (c), "the first broker tick event hands the tick back", holds for a broker that
+/// never fell back: the very first takeover is at once.)
+pub const BROKER_STABLE_NS: u64 = 1_000_000_000;
+/// The most good gaps a probation asks for.
+pub const MAX_PROBATION_GAPS: u32 = 8;
+
+/// Good gaps the `fallbacks`-th fallback in a row asks for (1, 2, 4, 8, 8, ...).
+#[must_use]
+pub fn probation_gaps(fallbacks: u32) -> u32 {
+    (1u32 << fallbacks.saturating_sub(1).min(3)).min(MAX_PROBATION_GAPS)
+}
+
+/// `tick_seq` `a` is newer than `b` (wrapping; 0 is never a tick number).
+#[must_use]
+pub fn seq_newer(a: u32, b: u32) -> bool {
+    a != b && a.wrapping_sub(b) < 0x8000_0000
+}
+
 /// Who ticks.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Source {
@@ -76,6 +99,15 @@ pub struct TickSource {
     swallowed: u64,
     to_broker: u64,
     to_free: u64,
+    /// Fallbacks in a row without a stable spell between (flap damping).
+    fallbacks_run: u32,
+    /// When the broker last became the source.
+    broker_since_ns: Option<u64>,
+    /// Probation after a fallback: the last event, and the consecutive good gaps so far.
+    probe_last_ns: Option<u64>,
+    probe_gaps: u32,
+    /// Events that arrived on probation (not ticks).
+    probation_events: u64,
 }
 
 impl TickSource {
@@ -94,7 +126,30 @@ impl TickSource {
             swallowed: 0,
             to_broker: 0,
             to_free: 0,
+            fallbacks_run: 0,
+            broker_since_ns: None,
+            probe_last_ns: None,
+            probe_gaps: 0,
+            probation_events: 0,
         }
+    }
+
+    /// Events that arrived while the broker was on probation after a fallback.
+    #[must_use]
+    pub fn probation_events(&self) -> u64 {
+        self.probation_events
+    }
+
+    /// The last tick emitted, by either source.
+    #[must_use]
+    pub fn last_tick_ns(&self) -> Option<u64> {
+        self.last_tick_ns
+    }
+
+    /// The double-tick guard in nanoseconds for the current period.
+    #[must_use]
+    pub fn guard_ns(&self) -> u64 {
+        self.period_ns / GUARD_DEN * GUARD_NUM
     }
 
     /// The tick period.
@@ -151,6 +206,9 @@ impl TickSource {
         self.source = Source::Free;
         self.at_ns = now_ns.saturating_add(period_ns);
         self.last_broker_ns = None;
+        self.fallbacks_run = 0;
+        self.probe_last_ns = None;
+        self.probe_gaps = 0;
         true
     }
 
@@ -199,6 +257,13 @@ impl TickSource {
                 }
                 self.source = Source::Free;
                 self.to_free += 1;
+                // flap damping: a spell shorter than BROKER_STABLE_NS adds to the run
+                let stable = self
+                    .broker_since_ns
+                    .is_some_and(|t| now_ns.saturating_sub(t) >= BROKER_STABLE_NS);
+                self.fallbacks_run = if stable { 1 } else { self.fallbacks_run.saturating_add(1) };
+                self.probe_last_ns = None;
+                self.probe_gaps = 0;
                 self.at_ns = self.grid_after(now_ns);
                 (None, Some(Handoff::ToFree))
             }
@@ -210,10 +275,28 @@ impl TickSource {
     /// after the previous one, from either source. The free clock's pending deadline is dropped by the
     /// switch, so the next tick is the broker's.
     pub fn broker_tick(&mut self, now_ns: u64) -> (Option<Emitted>, Option<Handoff>) {
+        // ★ on probation after a fallback the broker proves itself before it takes the tick back
+        if self.source == Source::Free && self.fallbacks_run > 0 {
+            self.probe_gaps = match self.probe_last_ns {
+                Some(t) if now_ns.saturating_sub(t) < BROKER_SILENCE_NS && now_ns >= t => {
+                    self.probe_gaps + 1
+                }
+                _ => 0,
+            };
+            self.probe_last_ns = Some(now_ns);
+            self.last_broker_ns = Some(now_ns);
+            if self.probe_gaps < probation_gaps(self.fallbacks_run) {
+                self.probation_events += 1;
+                return (None, None);
+            }
+        }
         self.last_broker_ns = Some(now_ns);
         let handoff = (self.source == Source::Free).then(|| {
             self.source = Source::Broker;
             self.to_broker += 1;
+            self.broker_since_ns = Some(now_ns);
+            self.probe_last_ns = None;
+            self.probe_gaps = 0;
             Handoff::ToBroker
         });
         let guard = self.period_ns / GUARD_DEN * GUARD_NUM;
@@ -368,8 +451,12 @@ mod tests {
         assert!(grid > t0 + BROKER_SILENCE_NS && grid <= t0 + BROKER_SILENCE_NS + P);
         assert_eq!(s.due(grid - 1), (None, None));
         assert_ticked(s.due(grid).0, 2, Source::Free, 0);
-        // a broker that speaks again takes the source back at once
+        // a broker that speaks again is on PROBATION after its fallback: the first event is not a
+        // tick and not a handoff, the second inside the silence's bound takes the source back
         let (e, h) = s.broker_tick(grid + 9_000_000);
+        assert_eq!((e, h, s.probation_events()), (None, None, 1), "probation: event 1");
+        assert_eq!(s.source(), Source::Free);
+        let (e, h) = s.broker_tick(grid + 9_000_000 + 20_000_000);
         assert_ticked(e, 3, Source::Broker, 0);
         assert_eq!((h, s.handoffs()), (Some(Handoff::ToBroker), (2, 1)));
 
@@ -445,16 +532,18 @@ mod tests {
                 check(e, &s, &mut ticks);
                 let (e, _) = s.due(at + second + 1);
                 check(e, &s, &mut ticks);
-                // the silence ends exactly as an event arrives
+                // the silence ends exactly as an event arrives (two events: probation after the fallback)
                 let end = at + second + BROKER_SILENCE_NS;
                 let (e, _) = s.broker_tick(end);
                 check(e, &s, &mut ticks);
                 let (e, _) = s.due(end);
                 check(e, &s, &mut ticks);
+                let (e, _) = s.broker_tick(end + 10_000_000);
+                check(e, &s, &mut ticks);
                 assert_eq!(
                     s.source(),
                     Source::Broker,
-                    "the event after the silence took it back"
+                    "the second event after the silence took it back"
                 );
             }
         }
@@ -532,5 +621,58 @@ mod tests {
         assert_eq!((GUARD_NUM, GUARD_DEN), (1, 2));
         let slowest = 1_000_000_000 / u64::from(crate::pace::MIN_HZ);
         assert!(slowest + 8_000_000 <= BROKER_SILENCE_NS, "{slowest}");
+    }
+
+    /// ★ FLAP DAMPING. A broker that speaks around the 50 ms boundary cannot make the source change
+    /// per tick: gaps of 55 ms never regain the tick after the first fallback (one change in all);
+    /// 40/60 alternation never regains it; a pattern with runs of good gaps regains at most while its
+    /// runs are long enough, the demand doubling with every fallback in a row (1, 2, 4, 8 gaps).
+    /// A broker that held the tick for a second starts over. (Mutations: no probation; probation never
+    /// reset by a stable spell; the demand not growing.)
+    #[test]
+    fn a_flapping_broker_does_not_flap_the_source() {
+        assert_eq!(
+            (1..=6).map(probation_gaps).collect::<Vec<_>>(),
+            vec![1, 2, 4, 8, 8, 8]
+        );
+        // 55 ms gaps: one takeover at the start, one fallback, then never again
+        let mut s = free();
+        let mut changes = 0u64;
+        let mut now = 5_000_000u64;
+        for _ in 0..400 {
+            let (_, h) = s.broker_tick(now);
+            changes += u64::from(h.is_some());
+            let (_, h) = s.due(now + 54_999_999);
+            changes += u64::from(h.is_some());
+            now += 55_000_000;
+        }
+        assert_eq!(s.handoffs(), (1, 1), "55 ms gaps: {:?}", s.handoffs());
+        assert_eq!(changes, 2);
+        // 40 / 60 alternating gaps: at most one regain before the run outgrows it
+        let mut s = free();
+        let mut now = 5_000_000u64;
+        for i in 0..400 {
+            s.broker_tick(now);
+            let gap = if i % 2 == 0 { 40_000_000 } else { 60_000_000 };
+            s.due(now + gap.min(50_000_000));
+            now += gap;
+        }
+        let (a, b) = s.handoffs();
+        assert!(a + b <= 6, "40/60 flapping changed the source {a}+{b} times");
+        // a steady broker is the source for good, and a stable second resets the demand
+        let mut s = free();
+        let mut now = 1_000_000u64;
+        for _ in 0..200 {
+            s.broker_tick(now);
+            s.due(now + 1);
+            now += P;
+        }
+        assert_eq!(s.handoffs(), (1, 0));
+        assert_eq!(s.probation_events(), 0, "no probation for a broker that never fell back");
+        s.due(now + BROKER_SILENCE_NS); // silence after a stable spell: fallback #1 of a new run
+        let (_, h) = s.broker_tick(now + 3 * BROKER_SILENCE_NS);
+        assert_eq!(h, None, "event 1 of the probation");
+        let (_, h) = s.broker_tick(now + 3 * BROKER_SILENCE_NS + P);
+        assert_eq!(h, Some(Handoff::ToBroker), "one good gap after a stable spell");
     }
 }
