@@ -125,7 +125,7 @@ GBM_LIBS   = $(shell $(PKG_CONFIG) --libs gbm)
 endif
 
 .SECONDARY:
-.PHONY: all install clean report check check-sanitize check-probe check-tick-probe
+.PHONY: all install clean report check check-sanitize check-probe check-tick-probe mutate-tick-core mutate-tick-core
 all: report $(BIN) $(TESTCLIENT) $(RELAY) $(if $(HAVE_GBM),$(DMASRC),)
 
 report:
@@ -246,6 +246,11 @@ endif
 # Not part of `check`: it needs a compositor, and it takes ~15 s.
 check-probe: $(BIN)
 	python3 test/test_probe.py ./$(BIN)
+
+# The tick wiring in the core, mutated (rebuild + the socket tests per mutant):
+# on demand, not part of `check`.
+mutate-tick-core: $(BIN)
+	python3 test/mutate_tickcore.py
 
 # The tick pump against a REAL compositor (mutter --headless): ticks flow at the
 # refresh rate through the real backend and the real socket, requests open and

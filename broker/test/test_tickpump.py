@@ -247,10 +247,9 @@ def run(sess):
     check(bool(pids), "found the compositor to stop")
     for p in pids:
         os.kill(p, signal.SIGSTOP)
-    time.sleep(0.15)
-    collect(s, 0.0)
+    collect(s, 0.6)                   # whatever was already in flight
     got = collect(s, 1.5)
-    check(len(got) <= 2, "no ticks while the compositor is stopped (got %d)" % len(got))
+    check(len(got) <= 2, "no ticks while the compositor is stopped (got %d in 1.5 s, after 0.6 s of settling)" % len(got))
     for p in pids:
         os.kill(p, signal.SIGCONT)
     t_cont = time.monotonic()
