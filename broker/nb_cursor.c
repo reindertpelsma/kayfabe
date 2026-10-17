@@ -496,6 +496,72 @@ void nb_cursor_surface_geom(const struct nb_cursor *c, uint32_t num_x,
     out->bh = out->g.h * k;
 }
 
+/* Whether mask pixel (ix, iy) lands on the frame at (x, y) + (ix, iy), and where. */
+static bool xor_on_frame(int32_t x, int32_t y, uint32_t ix, uint32_t iy,
+                         uint32_t fw, uint32_t fh, int64_t *fx, int64_t *fy)
+{
+    *fx = (int64_t)x + (int64_t)ix;
+    *fy = (int64_t)y + (int64_t)iy;
+    return *fx >= 0 && *fy >= 0 && *fx < (int64_t)fw && *fy < (int64_t)fh;
+}
+
+size_t nb_cursor_xor_apply(const struct nb_cursor *c, uint32_t *frame,
+                           uint32_t fw, uint32_t fh, size_t stride_px,
+                           int32_t x, int32_t y)
+{
+    size_t n = 0;
+    uint32_t ix, iy;
+
+    if (!c || !c->defined || c->w == 0 || c->h == 0 ||
+        c->w > NVKVM_BROKER_CURSOR_MAX_DIM || c->h > NVKVM_BROKER_CURSOR_MAX_DIM ||
+        !frame || stride_px < fw) {
+        return 0;
+    }
+    for (iy = 0; iy < c->h; iy++) {
+        for (ix = 0; ix < c->w; ix++) {
+            uint32_t m = c->px[(size_t)iy * c->w + ix];
+            int64_t fx, fy;
+
+            if ((m >> 24) == 0 || !xor_on_frame(x, y, ix, iy, fw, fh, &fx, &fy)) {
+                continue;
+            }
+            frame[(size_t)fy * stride_px + (size_t)fx] ^= m & 0x00ffffffu;
+            n++;
+        }
+    }
+    return n;
+}
+
+size_t nb_cursor_xor_patch(const struct nb_cursor *c, const uint32_t *frame,
+                           uint32_t fw, uint32_t fh, size_t stride_px,
+                           int32_t x, int32_t y, uint32_t *out)
+{
+    size_t n = 0;
+    uint32_t ix, iy;
+
+    if (!c || !c->defined || c->w == 0 || c->h == 0 ||
+        c->w > NVKVM_BROKER_CURSOR_MAX_DIM || c->h > NVKVM_BROKER_CURSOR_MAX_DIM ||
+        !frame || !out || stride_px < fw) {
+        return 0;
+    }
+    for (iy = 0; iy < c->h; iy++) {
+        for (ix = 0; ix < c->w; ix++) {
+            uint32_t m = c->px[(size_t)iy * c->w + ix];
+            uint32_t *o = out + (size_t)iy * c->w + ix;
+            int64_t fx, fy;
+
+            if ((m >> 24) == 0 || !xor_on_frame(x, y, ix, iy, fw, fh, &fx, &fy)) {
+                *o = 0;
+                continue;
+            }
+            *o = 0xff000000u |
+                 ((frame[(size_t)fy * stride_px + (size_t)fx] ^ m) & 0x00ffffffu);
+            n++;
+        }
+    }
+    return n;
+}
+
 void nb_cursor_scale(const struct nb_cursor *c, uint32_t *dst, uint32_t dw,
                      uint32_t dh)
 {

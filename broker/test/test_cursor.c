@@ -628,6 +628,210 @@ static void test_surface_geom(void)
 }
 
 /*
+ * THE TRUE XOR COMPOSE (D2).  ORACLE: the retired kayfabe compose kernel,
+ * kf_disp::scanout::compose_reference, XOR branch:  out = below ^ (w &
+ * 0x00ffffff), the top byte kept; its tests: a white opaque pixel inverts, a
+ * clear pixel never flips anything, an all-zero image composes to nothing
+ * (docs/design/V3_DISPLAY_CURSOR_FORMATS.md section 3/4).
+ */
+static struct nb_cursor xcur;
+static uint32_t xframe[16 * 16], xout[16 * 16], xsave[16 * 16];
+
+static void xmask(uint32_t w, uint32_t h)
+{
+    memset(&xcur, 0, sizeof xcur);
+    xcur.w = w;
+    xcur.h = h;
+    xcur.defined = true;
+    xcur.visible = true;
+    xcur.hot_x = w / 2;     /* the hot spot is irrelevant to the compose */
+    xcur.hot_y = h / 2;
+}
+
+static uint32_t kernel_ref(uint32_t below, uint32_t mask_px)
+{
+    return below ^ (mask_px & 0x00ffffffu);     /* compose_reference, XOR */
+}
+
+static void test_xor_compose(void)
+{
+    unsigned i, bad = 0;
+    size_t n;
+
+    /* inverts under white, black and a colour; the colour is per channel */
+    xmask(4, 1);
+    xcur.px[0] = 0xffffffffu;           /* invert everything */
+    xcur.px[1] = 0xff00ff00u;           /* invert green only */
+    xcur.px[2] = 0x00ffffffu;           /* alpha 0: transparent, colour ignored */
+    xcur.px[3] = 0;                     /* nothing */
+    xframe[0] = 0x00ffffffu; xframe[1] = 0x00000000u;
+    xframe[2] = 0x00123456u; xframe[3] = 0x00abcdefu;
+    n = nb_cursor_xor_apply(&xcur, xframe, 4, 1, 4, 0, 0);
+    CHECK(n == 2, "two pixels inverted (%zu)", n);
+    CHECK(xframe[0] == 0x00000000u, "white under white-mask -> black (%08x)", xframe[0]);
+    CHECK(xframe[1] == 0x0000ff00u, "black under green-mask -> green only (%08x)", xframe[1]);
+    CHECK(xframe[2] == 0x00123456u, "alpha 0: untouched (%08x)", xframe[2]);
+    CHECK(xframe[3] == 0x00abcdefu, "empty mask pixel: untouched (%08x)", xframe[3]);
+
+    /* black -> white, colour -> complement, the top byte is kept */
+    xmask(2, 1);
+    xcur.px[0] = xcur.px[1] = 0xffffffffu;
+    xframe[0] = 0x00000000u;
+    xframe[1] = 0xab123456u;
+    nb_cursor_xor_apply(&xcur, xframe, 2, 1, 2, 0, 0);
+    CHECK(xframe[0] == 0x00ffffffu, "black -> white (%08x)", xframe[0]);
+    CHECK(xframe[1] == 0xabedcba9u, "colour -> complement, X/A byte kept (%08x)",
+          xframe[1]);
+
+    /* involution: the same mask twice is the identity */
+    xmask(3, 3);
+    for (i = 0; i < 9; i++) {
+        xcur.px[i] = (i & 1) ? 0xffffffffu : 0;
+        xframe[i] = 0x01010101u * (i + 1);
+        xsave[i] = xframe[i];
+    }
+    nb_cursor_xor_apply(&xcur, xframe, 3, 3, 3, 0, 0);
+    CHECK(memcmp(xframe, xsave, 9 * 4) != 0, "the compose changed something");
+    nb_cursor_xor_apply(&xcur, xframe, 3, 3, 3, 0, 0);
+    CHECK(memcmp(xframe, xsave, 9 * 4) == 0, "XOR twice = identity");
+
+    /* an all-zero mask composes to nothing; so does an undefined cursor */
+    xmask(4, 4);
+    memset(xframe, 0x5a, sizeof xframe);
+    memcpy(xsave, xframe, sizeof xsave);
+    CHECK(nb_cursor_xor_apply(&xcur, xframe, 4, 4, 4, 0, 0) == 0 &&
+          memcmp(xframe, xsave, sizeof xframe) == 0, "an empty mask is nothing");
+    xcur.defined = false;
+    xcur.px[0] = 0xffffffffu;
+    CHECK(nb_cursor_xor_apply(&xcur, xframe, 4, 4, 4, 0, 0) == 0 &&
+          memcmp(xframe, xsave, sizeof xframe) == 0, "an undefined cursor is nothing");
+
+    /* edges: clipped on all four sides, hot spot irrelevant, stride honoured */
+    xmask(4, 4);
+    for (i = 0; i < 16; i++) {
+        xcur.px[i] = 0xffffffffu;
+    }
+    memset(xframe, 0, sizeof xframe);
+    n = nb_cursor_xor_apply(&xcur, xframe, 8, 8, 16, -2, -3);
+    CHECK(n == 2, "top-left clip: 2x1 pixels remain (%zu)", n);
+    CHECK(xframe[0] == 0x00ffffffu && xframe[1] == 0x00ffffffu &&
+          xframe[16] == 0, "top-left clip lands at 0,0 and 1,0 only");
+    memset(xframe, 0, sizeof xframe);
+    n = nb_cursor_xor_apply(&xcur, xframe, 8, 8, 16, 6, 7);
+    CHECK(n == 2, "bottom-right clip: 2x1 pixels remain (%zu)", n);
+    CHECK(xframe[7 * 16 + 6] == 0x00ffffffu && xframe[7 * 16 + 7] == 0x00ffffffu &&
+          xframe[6 * 16 + 6] == 0, "bottom-right clip");
+    CHECK(nb_cursor_xor_apply(&xcur, xframe, 8, 8, 16, 8, 0) == 0 &&
+          nb_cursor_xor_apply(&xcur, xframe, 8, 8, 16, 0, 8) == 0 &&
+          nb_cursor_xor_apply(&xcur, xframe, 8, 8, 16, -4, 0) == 0 &&
+          nb_cursor_xor_apply(&xcur, xframe, 8, 8, 16, 0, -4) == 0 &&
+          nb_cursor_xor_apply(&xcur, xframe, 8, 8, 16, INT32_MIN, INT32_MAX) == 0,
+          "fully outside (incl. extreme positions): nothing");
+    CHECK(nb_cursor_xor_apply(&xcur, xframe, 8, 8, 4, 0, 0) == 0,
+          "a stride shorter than the width is refused");
+
+    /* the patch: opaque inverted pixels where the cursor inverts AND on the
+     * frame, zero elsewhere; the frame is never written */
+    xmask(4, 2);
+    xcur.px[0] = 0xffffffffu;
+    xcur.px[1] = 0xff0000ffu;           /* blue only */
+    xcur.px[5] = 0xffffffffu;
+    for (i = 0; i < 16; i++) {
+        xframe[i] = 0x00102030u + i;
+    }
+    memcpy(xsave, xframe, sizeof xsave);
+    memset(xout, 0xee, sizeof xout);
+    n = nb_cursor_xor_patch(&xcur, xframe, 4, 2, 4, 0, 0, xout);
+    CHECK(n == 3, "three patch pixels (%zu)", n);
+    CHECK(xout[0] == (0xff000000u | (0x00102030u ^ 0x00ffffffu)), "patch 0 %08x", xout[0]);
+    CHECK(xout[1] == (0xff000000u | (0x00102031u ^ 0x000000ffu)), "patch 1 %08x", xout[1]);
+    CHECK(xout[2] == 0 && xout[3] == 0 && xout[4] == 0 && xout[6] == 0 &&
+          xout[7] == 0, "the rest of the patch is transparent");
+    CHECK(xout[5] == (0xff000000u | (0x00102035u ^ 0x00ffffffu)), "patch 5 %08x", xout[5]);
+    CHECK(memcmp(xframe, xsave, sizeof xframe) == 0, "the patch never writes the frame");
+    memset(xout, 0xee, sizeof xout);
+    n = nb_cursor_xor_patch(&xcur, xframe, 4, 2, 4, -1, 0, xout);
+    CHECK(n == 2 && xout[0] == 0 && xout[1] == (0xff000000u | (0x00102030u ^ 0x000000ffu)),
+          "patch clipped at the left edge: %zu, %08x", n, xout[1]);
+
+    /* DIFFERENTIAL vs the kernel formula over random masks, frames, positions:
+     * apply == kernel_ref on every covered pixel, the patch == apply's result */
+    for (i = 0; i < 30000; i++) {
+        uint32_t w = 1 + (i * 7u) % 6, h = 1 + (i * 5u) % 6, k, fx, fy;
+        int32_t px = (int32_t)((i * 2654435761u) % 15u) - 4;
+        int32_t py = (int32_t)((i * 40503u) % 15u) - 4;
+        uint32_t a[16 * 16];
+
+        xmask(w, h);
+        for (k = 0; k < w * h; k++) {
+            uint32_t r = (i + 1) * 2246822519u + k * 3266489917u;
+
+            /* alpha 0xff + colour, or fully transparent: what kayfabe sends */
+            xcur.px[k] = (r & 4u) ? (0xff000000u | ((r >> 8) & 0xffffffu)) : 0;
+        }
+        for (k = 0; k < 16 * 16; k++) {
+            xframe[k] = (i + k) * 2654435761u;
+        }
+        memcpy(a, xframe, sizeof a);
+        nb_cursor_xor_apply(&xcur, a, 16, 16, 16, px, py);
+        nb_cursor_xor_patch(&xcur, xframe, 16, 16, 16, px, py, xout);
+        for (fy = 0; fy < 16; fy++) {
+            for (fx = 0; fx < 16; fx++) {
+                int64_t mx = (int64_t)fx - px, my = (int64_t)fy - py;
+                uint32_t want = xframe[fy * 16 + fx];
+
+                if (mx >= 0 && my >= 0 && mx < (int64_t)w && my < (int64_t)h) {
+                    want = kernel_ref(want, xcur.px[my * w + mx]);
+                    if (xcur.px[my * w + mx] &&
+                        xout[my * w + mx] != (0xff000000u | (want & 0xffffffu))) {
+                        bad++;
+                    }
+                }
+                if (a[fy * 16 + fx] != want) {
+                    bad++;
+                }
+            }
+        }
+    }
+    CHECK(bad == 0, "%u pixels differ from the compose kernel's formula", bad);
+
+    /* a SCALED cursor: composing the 2x nearest-scaled mask onto the 2x frame
+     * is the 2x nearest-scale of composing at 1x (the compositor scaling the
+     * result is the same picture) */
+    {
+        static uint32_t big[4 * 4], small_[2 * 2], sm_ref[2 * 2], scaled[4 * 4];
+        struct nb_cursor m2;
+        unsigned fx, fy;
+
+        xmask(2, 2);
+        xcur.px[0] = 0xffffffffu;
+        xcur.px[3] = 0xff808080u;
+        small_[0] = 0x00112233u; small_[1] = 0x00445566u;
+        small_[2] = 0x00778899u; small_[3] = 0x00aabbccu;
+        memcpy(sm_ref, small_, sizeof small_);
+        nb_cursor_xor_apply(&xcur, sm_ref, 2, 2, 2, 0, 0);
+        nb_cursor_scale(&xcur, scaled, 4, 4);
+        memset(&m2, 0, sizeof m2);
+        m2.w = m2.h = 4;
+        m2.defined = true;
+        memcpy(m2.px, scaled, sizeof scaled);
+        for (fy = 0; fy < 4; fy++) {
+            for (fx = 0; fx < 4; fx++) {
+                big[fy * 4 + fx] = small_[(fy / 2) * 2 + fx / 2];
+            }
+        }
+        nb_cursor_xor_apply(&m2, big, 4, 4, 4, 0, 0);
+        for (fy = 0; fy < 4; fy++) {
+            for (fx = 0; fx < 4; fx++) {
+                CHECK(big[fy * 4 + fx] == sm_ref[(fy / 2) * 2 + fx / 2],
+                      "scaled cursor, pixel %u,%u: %08x vs %08x", fx, fy,
+                      big[fy * 4 + fx], sm_ref[(fy / 2) * 2 + fx / 2]);
+            }
+        }
+    }
+}
+
+/*
  * PUBLISHING (finding 3) is a copy: the published cursor must be the image as
  * it was, unaffected by the next load into the pending one -- which is the
  * whole point of having two.
@@ -1268,6 +1472,7 @@ int main(void)
     test_hot_sweep();
     test_device_geom();
     test_surface_geom();
+    test_xor_compose();
     test_copy();
     test_wanted();
     test_fuzz();

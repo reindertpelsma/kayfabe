@@ -358,6 +358,31 @@ void nb_cursor_surface_geom(const struct nb_cursor *c, uint32_t num_x,
                             uint32_t den_x, uint32_t num_y, uint32_t den_y,
                             uint32_t scale_120, uint32_t max_buf,
                             struct nb_cursor_surface *out);
+/*
+ * THE TRUE XOR (D2, 2026-10-17): the pure compose of an XOR cursor's inversion
+ * mask onto frame pixels.  The mask is what kayfabe sends under CURSOR_F_XOR
+ * (premultiplied ARGB8888, alpha 0xff and the XOR colour where the cursor
+ * inverts, all zero elsewhere): a pixel with alpha != 0 selects, its colour is
+ * px & 0x00ffffff, and  out = below ^ colour  per channel -- the semantics of
+ * the retired kayfabe compose kernel (kf_disp compose_reference: `below ^
+ * (w & 0x00ffffff)`).  A transparent mask pixel never changes anything; the
+ * frame's top byte is untouched.  The mask's top-left sits at (x, y) on the
+ * frame (signed; hot spot irrelevant); everything past the frame is clipped.
+ *
+ * `frame` is fw x fh XRGB/ARGB pixels, `stride_px` pixels per row.
+ *   _apply  inverts in place (a broker-owned copy of the frame).
+ *   _patch  reads the frame and writes the mask-sized `out` (c->w x c->h, tight):
+ *           0xff000000 | (below ^ colour) where the cursor inverts AND the pixel
+ *           is on the frame, 0 elsewhere -- the opaque patch a subsurface shows
+ *           over the unchanged frame.  Never writes `frame`.
+ * Returns the number of frame pixels inverted / patch pixels set.
+ */
+size_t nb_cursor_xor_apply(const struct nb_cursor *c, uint32_t *frame,
+                           uint32_t fw, uint32_t fh, size_t stride_px,
+                           int32_t x, int32_t y);
+size_t nb_cursor_xor_patch(const struct nb_cursor *c, const uint32_t *frame,
+                           uint32_t fw, uint32_t fh, size_t stride_px,
+                           int32_t x, int32_t y, uint32_t *out);
 /* Nearest-neighbour scale of the defined image into dst[0 .. dw*dh), packed.
  * dw, dh must be >= 1. */
 void nb_cursor_scale(const struct nb_cursor *c, uint32_t *dst, uint32_t dw,
