@@ -6,6 +6,26 @@
 //!
 //! The first version of this file (commit `0780de42e`, before the gate was removed) ran the same loop
 //! against the D1 gate: its table is recorded in the design doc §2 as MEASURED on that code.
+//!
+//! ★ TASK 1 (the reproduction), the D1 gate's side — NOT runnable on this code, kept as the record: on
+//! `ec42327f0` / `0780de42e` (gate ON, 60 Hz tick, 2 ms copy, 0.5 ms wake), flips completed per second
+//! against the render time R (MEASURED by this model before the gate was removed):
+//!
+//! ```text
+//! 2 buffers, immediate           gate ON : R 1..14 = 60.0   R16 = 54.0  R18 = 49.0  R20 = 44.5  R25 = 36.2  R33 = 28.0
+//! 2 buffers, immediate           gate OFF: R 1 = 285.8 R 2 = 222.2 R 4 = 153.8 R 8 = 95.2 R12 = 68.8 R14 = 60.8
+//! 3 buffers, immediate           gate ON : R 1..16 = 60.0  R18 = 55.5  R20 = 50.0  R25 = 40.0  R33 = 30.2
+//! 3 buffers, immediate           gate OFF: R 1 = 400.0 R 2 = 400.0 R 4 = 250.0 R 8 = 125.0 R12 = 83.2
+//! 2 buffers, vsync               either  : R 1..14 = 60.0   R16..25 = 30.0   R33 = 20.0
+//! 2 buffers, alternate imm/vsync gate ON : R 1..14 = 60.0 (= 30 frames/s)   R16..20 = 40.0  R25 = 30.0
+//! 2 buffers, alternate imm/vsync gate OFF: R 1..4 = 120.0 (= 60 frames/s)   R8..14 = 60.0
+//! 2 buffers, core every 4        gate ON : R 1..8 = 80.0  (60 + 20 core)    R12 = 68.5  R14 = 60.8
+//! 2 buffers, immediate, acquire  gate ON : R 1..14 = 60.0   R16..25 = 30.0 (the acquire is read only at a tick)   R33 = 20.0
+//! 2 buffers, immediate, acquire  gate OFF: R 1 = 221.0 R 4 = 153.2 R 8 = 95.0
+//! copy sweep, 2 buffers, immediate, R = 4, gate ON: copy 1..12 ms = 60.0 (copies 60);  14 = 54.0;  18 = 44.5;  25 = 33.8;  33 = 26.8 (copies = flips)
+//! ```
+//!
+//! The same loop on the code of this commit is what the tests below run.
 
 use super::tests::{CORE, Ring, WIN, engine, fl, lit, m, ma};
 use super::*;
@@ -483,28 +503,6 @@ pub(super) fn run(cfg: Cfg, broker: Option<Broker>, secs: u64) -> Report {
 fn near(x: f64, y: f64, tol: f64) -> bool {
     (x - y).abs() <= tol
 }
-
-/// ★ TASK 1 (the reproduction), the D1 gate's side — NOT runnable on this code, kept as the record: on
-/// `ec42327f0` / `0780de42e` (gate ON, 60 Hz tick, 2 ms copy, 0.5 ms wake), flips completed per second
-/// against the render time R (MEASURED by this model before the gate was removed):
-///
-/// ```text
-/// 2 buffers, immediate           gate ON : R 1..14 = 60.0   R16 = 54.0  R18 = 49.0  R20 = 44.5  R25 = 36.2  R33 = 28.0
-/// 2 buffers, immediate           gate OFF: R 1 = 285.8 R 2 = 222.2 R 4 = 153.8 R 8 = 95.2 R12 = 68.8 R14 = 60.8
-/// 3 buffers, immediate           gate ON : R 1..16 = 60.0  R18 = 55.5  R20 = 50.0  R25 = 40.0  R33 = 30.2
-/// 3 buffers, immediate           gate OFF: R 1 = 400.0 R 2 = 400.0 R 4 = 250.0 R 8 = 125.0 R12 = 83.2
-/// 2 buffers, vsync               either  : R 1..14 = 60.0   R16..25 = 30.0   R33 = 20.0
-/// 2 buffers, alternate imm/vsync gate ON : R 1..14 = 60.0 (= 30 frames/s)   R16..20 = 40.0  R25 = 30.0
-/// 2 buffers, alternate imm/vsync gate OFF: R 1..4 = 120.0 (= 60 frames/s)   R8..14 = 60.0
-/// 2 buffers, core every 4        gate ON : R 1..8 = 80.0  (60 + 20 core)    R12 = 68.5  R14 = 60.8
-/// 2 buffers, immediate, acquire  gate ON : R 1..14 = 60.0   R16..25 = 30.0 (the acquire is read only at a tick)   R33 = 20.0
-/// 2 buffers, immediate, acquire  gate OFF: R 1 = 221.0 R 4 = 153.2 R 8 = 95.0
-/// copy sweep, 2 buffers, immediate, R = 4, gate ON: copy 1..12 ms = 60.0 (copies 60);  14 = 54.0;  18 = 44.5;  25 = 33.8;  33 = 26.8 (copies = flips)
-/// ```
-///
-/// The same loop on the code of this commit is what the tests below run.
-#[test]
-fn the_old_gate_numbers_are_recorded_here() {}
 
 /// ★ Task 1 on the NEW code (§AK): the gate is gone, the display still ticks at 60. One immediate
 /// flip per frame, 2 buffers, R = 4 ms: at least 200 flips a second; the copies stay at one per tick;

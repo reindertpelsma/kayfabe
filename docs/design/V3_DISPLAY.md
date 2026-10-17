@@ -3595,6 +3595,17 @@ Wayland broker.")
 
 ### 8.16 `display-max-fps` — the configurable frame-rate bound (`OWNER_RULINGS.md` §M; 2026-10-04)
 
+> ⊘ **CORRECTED 2026-10-17 (`OWNER_RULINGS.md` §AK, `V3_DISPLAY_PACING_20261017.md`): D1's tearing-flip gate is REMOVED, and
+> "flip copies are never gated" below is no longer true.** The tick still clamps everything the guest paces by vblank
+> (non-tearing flips, vblank callbacks, the frame counter). But a TEARING (immediate) flip now latches and completes at once, however
+> often the guest sends it: parking the second one for the next tick held the guest's present loop at one flip per tick (Windows 11
+> exclusive fullscreen, Unigine Heaven: ~30 fps against ~200 windowed). The rate is bounded where the guest does not wait, by the
+> COPIES: kayfabe copies the newest latched frame at most once per tick (`pace::Mailbox`), and a flip's completion waits only for the
+> copy in flight at its latch (the buffer-reuse rule, `pace::flip_completion_need`). The status line has no `held` any more; it has
+> `skipped` (latched frames replaced before a copy) and `src=`/`ho=` (who ticks, `V3_DISPLAY_PACING_20261017.md` §5), and `over`
+> judges the published frames and the NON-tearing presents. Who ticks a head is now `kf_disp::tick::TickSource`: the free-running
+> clock described here, plus (phase 2, not built) the broker's events with the clock as fallback.
+
 **STATUS: BUILT IN CODE on `v3-maxfps` (cut from `v3-broker` `82f98f42`), GPU-free tested locally and
 in CI; NOT RUN ON A BOX.** The design was reviewed adversarially before it was built (kept outside
 the repo, as §M says); the owner's decisions of 2026-10-04 are binding over it: D1 tearing flips are
@@ -3629,7 +3640,7 @@ scheduled time (from now when more than a period late — no catch-up burst). Th
 by vblank follows the tick: non-tearing flips (parked for it), NVKMS's vblank callbacks, the
 `RG_DPCA` frame counter and the head-timing interrupt.
 
-**D1, tearing flips.** `Engine::tear_gate` (on by default): a group without the core holding a
+**D1, tearing flips — ⊘ SUPERSEDED 2026-10-17 (see the correction at the top of this section; the text below is what was built on `v3-maxfps` and removed since).** `Engine::tear_gate` (on by default): a group without the core holding a
 tearing (immediate) window on an active head PARKS for the head's next tick when that head already
 presented since its last one; the first after a tick still latches at once. A flip in kayfabe copies
 a finished buffer, so it never tears; the gate is about rate only. Groups holding the core latch at
@@ -3657,8 +3668,8 @@ without a copy the host never sees those writes. The fixed 30 Hz / 4 Hz refresh 
    the console head's next tick with a check that STARTED after the request (at once when nothing
    can be copied), signals a descriptor, and kf3.c shows the newest frame and ends the wait
    (`graphic_hw_update_done`); a 1 s backstop ends it anyway.
-Flip copies are never gated and always sent (the flip is tick-paced already); they record their
-digest, so the next check compares against them. A cursor move makes no copy of its own any more
+⊘ Flip copies are tick-bounded since 2026-10-17 (`pace::Mailbox`: the newest latched frame, once per tick) and always sent; they record their
+digest, so the next check compares against them. (Before: "never gated, the flip is tick-paced already" — true only while the D1 gate parked the flips.) A cursor move makes no copy of its own any more
 (`move_recomposes` is gone): in grab the next tick's check sees the cursor moved; in hover the frame
 composes no cursor, so nothing changes and nothing is sent — §O's "coalesced to the display rate".
 
@@ -3712,7 +3723,7 @@ named test went red, restored; every run, count and command in
 | below 60: no 60 Hz mode, byte 78 = cap | `edid::a_cap_below_60_lists_no_60hz_mode`, `edid::every_authored_edid_honours_its_cap` | range max fixed at 75; extras kept |
 | above 60 the rate yields | `edid::above_60hz_the_rate_yields_not_the_size` | the old shrink loop |
 | the model serves the configured monitor | `kf-rm display::the_model_serves_the_configured_monitor` | `model_for` ignoring the property |
-| D1 gate | `engine::a_second_tearing_flip_waits_for_the_vblank` | gate off by default; `presented` ignored; not cleared at the tick |
+| ⊘ D1 gate (removed 2026-10-17) | was `engine::a_second_tearing_flip_waits_for_the_vblank`; now `engine::an_immediate_flip_latches_at_once_however_many_come_between_ticks` | the gate back |
 | presents per latch, core counted | `engine::presents_count_one_per_latch_including_core_groups` | per window; `core_imm` not counted |
 | F7 unpark | `engine::a_group_parked_on_a_head_that_goes_idle_latches` | no unpark |
 | boot check clock | `kf-qemu display::the_boot_check_clock_ticks_only_while_it_runs` | a clock that runs unwatched |
