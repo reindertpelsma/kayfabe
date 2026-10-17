@@ -134,6 +134,28 @@ impl TickSource {
         }
     }
 
+    /// The decision state, for the exhaustive model's state key (test builds only, read-only):
+    /// `(broker?, at_ns, last_tick_ns, last_broker_ns, stamp_ns, fallbacks_run, probe_gaps,
+    /// probe_last_ns, broker_since_ns)`.
+    #[cfg(test)]
+    #[must_use]
+    #[allow(clippy::type_complexity)]
+    pub(crate) fn probe_state(
+        &self,
+    ) -> (bool, u64, Option<u64>, Option<u64>, u64, u32, u32, Option<u64>, Option<u64>) {
+        (
+            self.source == Source::Broker,
+            self.at_ns,
+            self.last_tick_ns,
+            self.last_broker_ns,
+            self.stamp_ns,
+            self.fallbacks_run,
+            self.probe_gaps,
+            self.probe_last_ns,
+            self.broker_since_ns,
+        )
+    }
+
     /// Events that arrived while the broker was on probation after a fallback.
     #[must_use]
     pub fn probation_events(&self) -> u64 {
