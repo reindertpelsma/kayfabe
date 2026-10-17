@@ -176,6 +176,9 @@ pub struct Cfg {
     /// PHASE 1c: the measurement-class mode (`KF3_LIFECYCLE_MODE`).
     pub mode: LifecycleMode,
     pub max_states: usize,
+    /// ★ 2026-10-17: lazy observe (rules A and B) for the relay under test. `Cfg::new` leaves it OFF unless the
+    /// process runs with `KF_TEST_LAZY=1` (the `lazy_*` re-run of this file's tests, see below).
+    pub lazy: kf_chan::user_lazy::LazyConfig,
 }
 impl Cfg {
     pub fn new(spec: Spec) -> Self {
@@ -192,7 +195,18 @@ impl Cfg {
             always_scan: false,
             mode: LifecycleMode::Default,
             max_states: 4_000_000,
+            lazy: kf_chan::user_lazy::LazyConfig::OFF,
         }
+        .with_env_lazy()
+    }
+    /// `KF_TEST_LAZY=1`: every scenario runs with lazy observe ON (interval 2 so that skipping and looking both happen
+    /// within a short script, a private ring of 128 so that the credit floor does not force every look).
+    fn with_env_lazy(mut self) -> Self {
+        if std::env::var("KF_TEST_LAZY").is_ok_and(|v| v == "1") {
+            self.lazy = kf_chan::user_lazy::LazyConfig::ON.with_interval(2);
+            self.priv_entries = 128;
+        }
+        self
     }
 }
 
@@ -458,7 +472,7 @@ impl World {
             Lifecycle::new().with_mode(cfg.mode)
         };
         let scan = Scan::for_subdevice(1).expect("sub-device");
-        let mut relay = Relay::new(cfg.priv_entries, life, scan, cfg.glue);
+        let mut relay = Relay::new(cfg.priv_entries, life, scan, cfg.glue).with_lazy(cfg.lazy);
         relay.cursor_after_switch = cfg.cursor_relay;
         let n = cfg.src_entries as usize;
         Self {
@@ -860,6 +874,13 @@ pub struct Report {
     pub latched_carried_max: u64,
     pub set_object_total_max: u64,
     pub set_object_rebinds_max: u64,
+    /// ★ lazy observe: the most any state showed of each counter (the scenario really skipped / hit / invalidated).
+    pub lazy_skipped_max: u64,
+    pub lazy_hits_max: u64,
+    pub lazy_forced_wait_max: u64,
+    pub lazy_inval_mode_max: u64,
+    pub lazy_inval_migration_max: u64,
+    pub lazy_fresh_reads_max: u64,
 }
 
 pub fn explore(cfg: &Cfg) -> Report {
@@ -877,6 +898,13 @@ pub fn explore(cfg: &Cfg) -> Report {
             cfg.max_states
         );
         rep.modes_seen.insert(w.relay.life.mode());
+        let lz = w.relay.lazy.counts;
+        rep.lazy_skipped_max = rep.lazy_skipped_max.max(lz.obs_skipped);
+        rep.lazy_hits_max = rep.lazy_hits_max.max(lz.put_cache_hits);
+        rep.lazy_forced_wait_max = rep.lazy_forced_wait_max.max(lz.obs_forced_wait);
+        rep.lazy_inval_mode_max = rep.lazy_inval_mode_max.max(lz.inval_mode_change);
+        rep.lazy_inval_migration_max = rep.lazy_inval_migration_max.max(lz.inval_migration);
+        rep.lazy_fresh_reads_max = rep.lazy_fresh_reads_max.max(lz.put_fresh_reads);
         let c = w.relay.life.counts();
         rep.window_fresh_errors_max = rep
             .window_fresh_errors_max
@@ -2594,5 +2622,173 @@ fn a_second_window_of_the_same_channel_starts_at_its_own_anchor_never_inside_a_s
         r.to_window_fresh_max >= 2,
         "some interleaving opens two Fresh windows on the channel: {}",
         r.to_window_fresh_max
+    );
+}
+
+// ------------------------------------------------------------------------------------------------
+// ★ 2026-10-17 lazy observe ON in the interleaving model (the relay is the production `Relay::with_lazy`)
+
+/// `flip`, with three more Pointer entries in the first batch so that a cached `GP_PUT` is used more than once.
+fn lazy_flip(kind: Registration) -> Cfg {
+    let mut script = vec![
+        Op::Push(ge(0, Kind::SetObj)),
+        Op::Push(p(1)),
+        Op::Push(p(4)),
+        Op::Push(p(5)),
+        Op::SetPut,
+        Op::Ring,
+        Op::Register,
+        Op::AwaitReply,
+        Op::Push(trig(2).post()),
+        Op::SetPut,
+        Op::Ring,
+    ];
+    if kind == Registration::Migrate {
+        script.push(Op::UseNew);
+    }
+    script.extend([Op::Push(p(3).post()), Op::SetPut, Op::Ring]);
+    let mut cfg = Cfg::new(spec(script, &[0, 1, 4, 5, 2, 3]));
+    cfg.kind = kind;
+    cfg
+}
+
+fn lazy_on(mut cfg: Cfg, interval: u64) -> Cfg {
+    cfg.lazy = kf_chan::user_lazy::LazyConfig::ON.with_interval(interval);
+    cfg.priv_entries = 128;
+    cfg
+}
+
+/// The registration cycle (Scan -> Pointer -> Window -> Pointer, and a ring switch) with the cache and the lazy look:
+/// every interleaving of the guest, the drainer, the PBDMA and the worker is clean (I1..I8, no deadlock without a timer),
+/// and the run really skips looks, hits the cache and drops it at the mode change and at the migration.
+#[test]
+fn lazy_the_registration_cycle_with_a_ring_switch_is_clean_in_every_interleaving() {
+    for interval in [2u64, 3] {
+        let cfg = lazy_on(lazy_flip(Registration::Migrate), interval);
+        let r = assert_clean(&cfg, &format!("lazy-flip-migrate-{interval}"));
+        assert_eq!(r.modes, HashSet::from([Mode::Window]));
+        assert_eq!(r.switched_terminals, r.terminals);
+        assert!(
+            r.lazy_skipped_max > 0,
+            "the run skipped private USERD looks"
+        );
+        assert!(r.lazy_hits_max > 0, "the run used a cached GP_PUT");
+        assert!(
+            r.lazy_inval_mode_max > 0,
+            "Pointer -> Window dropped a warm cache"
+        );
+        assert!(r.lazy_forced_wait_max > 0, "a wait forced a look");
+        assert!(r.lazy_fresh_reads_max > 0);
+    }
+}
+
+#[test]
+fn lazy_the_registration_cycle_without_a_ring_switch_returns_to_pointer_in_every_interleaving() {
+    let cfg = lazy_on(lazy_flip(Registration::Other), 2);
+    let r = assert_clean(&cfg, "lazy-flip-other");
+    assert_eq!(r.modes, HashSet::from([Mode::Pointer]));
+    assert!(r.lazy_inval_mode_max > 0);
+    assert!(r.lazy_skipped_max > 0 && r.lazy_hits_max > 0);
+}
+
+/// A: the cache alone (B off), B alone (cache off): each is clean on its own.
+#[test]
+fn lazy_each_rule_alone_is_clean_in_the_registration_cycle() {
+    let mut cfg = lazy_on(lazy_flip(Registration::Migrate), 2);
+    cfg.lazy = cfg.lazy.with_interval(1);
+    let r = assert_clean(&cfg, "lazy-A-only");
+    assert!(r.lazy_hits_max > 0 && r.lazy_skipped_max == 0);
+    let mut cfg = lazy_on(lazy_flip(Registration::Migrate), 2);
+    cfg.lazy = cfg.lazy.with_put_cache(false);
+    let r = assert_clean(&cfg, "lazy-B-only");
+    assert!(r.lazy_hits_max == 0 && r.lazy_skipped_max > 0);
+}
+
+/// SYNC_WAIT gate ordering (a registration right after a forwarded SYNC_WAIT whose acquire is unreleased, a late
+/// pushbuffer behind it): the Window never reads the late bytes early, with stale looks and a cached PUT.
+#[test]
+fn lazy_a_registration_after_a_forwarded_sync_wait_never_scans_the_late_pushbuffer() {
+    let mut cfg = lazy_on(Cfg::new(spec(a1_script(), &[0, 1, 2, 3])), 2);
+    cfg.kind = Registration::Other;
+    let r = assert_clean(&cfg, "lazy-a1");
+    assert!(r.lazy_skipped_max > 0 || r.lazy_hits_max > 0);
+}
+
+/// The guest ring full and waiting for the GP_GET write-back (the D6 hazard) with the guard in the relay.
+#[test]
+fn lazy_a_guest_ring_full_of_work_is_written_back_in_every_interleaving() {
+    let mut cfg = lazy_on(flip(Registration::Other), 2);
+    cfg.src_entries = 4;
+    cfg.max_states = 8_000_000;
+    let r = assert_clean(&cfg, "lazy-guest-ring-full");
+    assert_eq!(r.modes, HashSet::from([Mode::Pointer]));
+}
+
+/// ★ Re-run the model's scenarios with lazy observe ON everywhere (`KF_TEST_LAZY=1` makes `Cfg::new` opt in): the same
+/// binary, a child process, the named tests only (the two biggest scenarios of the file are left out: their state space
+/// doubles with the interval counter; the explicit `lazy_*` tests above cover those shapes at their own size).
+#[test]
+fn lazy_every_other_scenario_of_this_file_also_holds_with_lazy_observe_on() {
+    if std::env::var("KF_TEST_LAZY").is_ok() {
+        return; // the child
+    }
+    let exe = std::env::current_exe().expect("test binary");
+    let names = [
+        "a2_an_open_packet_carried_across_the_mode_switch_is_dropped_and_a_later_window_starts_fresh",
+        "a2_with_every_packet_ended_on_a_boundary_no_flip_position_refuses_anything",
+        "a2_the_binding_packet_split_across_two_entries_switches_to_pointer_after_the_datum",
+        "a4_one_dword_changing_between_the_loads_never_stores_a_value_other_than_the_tested_one",
+        "a5_a_trigger_after_remove_api_reaches_the_hardware_and_is_counted_nothing_wedges",
+        "a5_remove_api_before_the_trigger_then_a_new_registration_runs_one_clean_cycle",
+        "a5_two_registrations_keep_one_window_open_until_both_are_consumed",
+        "a6_a_rebind_inside_a_window_is_seen_and_counted_and_the_new_binding_is_used",
+        "a7_teardown_at_any_instant_stops_the_private_ring_for_good",
+        "b_a_registration_with_a_full_private_ring_still_flips_and_loses_nothing",
+        "b_a_window_that_never_completes_stays_a_window_and_every_entry_is_still_relayed_scanned",
+        "b_extra_and_coalesced_doorbells_during_a_draining_gate_change_nothing",
+        "b_registration_racing_remove_and_teardown_loses_and_duplicates_nothing",
+        "b_reset_to_zero_does_not_depend_on_when_the_guest_prepares_the_new_ring",
+        "a_second_window_of_the_same_channel_starts_at_its_own_anchor_never_inside_a_submission",
+        "b_the_source_switch_loses_and_duplicates_nothing_when_the_new_ring_starts_at_zero",
+        "b_the_source_switch_loses_and_duplicates_nothing_when_the_indices_continue",
+        "d2_data_that_looks_like_the_trigger_inside_a_packet_of_one_submission_is_never_a_trigger",
+        "d3_a_credit_stall_inside_a_packet_never_gets_a_marker",
+        "d1_a_registration_inside_a_submission_never_puts_a_host_marker_inside_a_guest_packet",
+        "d_the_recorded_edge_ring_shape_behind_unreached_sync_waits_is_not_read_early_in_a_window",
+        "i1_a_bound_channel_with_no_registration_reads_no_pushbuffer_after_the_binding",
+        "i3_the_same_stream_with_the_guest_free_to_publish_b_early_is_found",
+        "i4_a_trigger_published_before_the_reply_may_reach_the_hardware_unscanned_and_nothing_wedges",
+        "i4_no_entry_published_after_the_reply_is_forwarded_before_a_window_scanned_it",
+        "i5_the_whole_cycle_uses_only_the_listed_transitions",
+        "i6_a_worker_that_ignores_events_deadlocks_when_time_is_forbidden",
+        "i6_every_announced_wait_is_woken_by_an_event_with_no_look_and_no_timer",
+        "i6_pointer_mode_waits_for_private_ring_credit_are_only_found_by_a_look",
+        "l1_latched_markers_off_the_wake_is_a_look_and_without_looks_the_run_deadlocks_as_counted",
+        "l1_once_an_open_boundary_was_seen_no_marker_ever_lands_in_a_packet_and_nothing_is_lost",
+        "m1_default_reads_no_pushbuffer_after_the_binding_and_always_scan_reads_every_one",
+        "i8_gp_put_advancing_mid_turn_backwards_and_beyond_the_ring_never_reads_beyond_the_value_loaded",
+        "t2_a1_with_a_length0_sync_wait_never_reads_the_late_pushbuffer_early",
+    ];
+    let mut cmd = std::process::Command::new(exe);
+    cmd.env("KF_TEST_LAZY", "1")
+        .arg("--exact")
+        .arg("--test-threads=2");
+    for n in names {
+        cmd.arg(n);
+    }
+    let out = cmd.output().expect("run the child");
+    let text = String::from_utf8_lossy(&out.stdout);
+    let ran = text
+        .lines()
+        .filter(|l| l.starts_with("test ") && l.ends_with("ok"))
+        .count();
+    assert!(
+        out.status.success() && ran == names.len(),
+        "with lazy observe ON: {ran}/{} scenarios passed\n{}",
+        names.len(),
+        text.lines()
+            .filter(|l| l.contains("FAILED") || l.contains("panicked") || l.contains("violations"))
+            .collect::<Vec<_>>()
+            .join("\n")
     );
 }

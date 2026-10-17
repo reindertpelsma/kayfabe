@@ -137,6 +137,29 @@ pub struct Sim {
     pub relayed_seen: u64,
     /// Entries published when the relay last read a caught-up `GP_PUT` (`usize::MAX` = never).
     pub observed: usize,
+    /// Lazy-observe tests: the private ring is consumed at `rate` entries per turn instead of at once (`None`).
+    pub rate: Option<usize>,
+    /// ... but only every `rate_div`-th turn (0 or 1: every turn).
+    pub rate_div: usize,
+    ticks: usize,
+    hw_pos: usize,
+    marker_at: Vec<usize>,
+    /// Counts of the reads the relay made.
+    pub reads_put: u64,
+    pub reads_hw: u64,
+    /// The relay's cursor, set by `drive` before every feed.
+    pub cursor_seen: u32,
+    /// Per turn (when `log_turns`): did it read the private `USERD`, and did the guest ring look full at its `GP_PUT`?
+    pub log_turns: bool,
+    pub turn_log: Vec<(bool, bool)>,
+    hw_flag: bool,
+    /// The most entries the relay had consumed beyond what the guest's `GP_GET` shows, over the feeds that found the
+    /// guest ring full as the guest sees it (the guest waits for a write-back).
+    pub blocked_run: u32,
+    pub blocked_max: u32,
+    /// FNV-1a over EVERY call the relay made on this environment (name, arguments, result): the fingerprint of the
+    /// whole interaction, for the bit-identity test against the base relay.
+    pub trace: u64,
 }
 
 impl Sim {
@@ -177,6 +200,37 @@ impl Sim {
             pauses: Vec::new(),
             relayed_seen: 0,
             observed: usize::MAX,
+            trace: 0xcbf2_9ce4_8422_2325,
+            rate: None,
+            rate_div: 1,
+            ticks: 0,
+            hw_pos: 0,
+            marker_at: Vec::new(),
+            reads_put: 0,
+            reads_hw: 0,
+            blocked_run: 0,
+            blocked_max: 0,
+            cursor_seen: 0,
+            log_turns: false,
+            turn_log: Vec::new(),
+            hw_flag: false,
+        }
+    }
+
+    /// The PBDMA consumes `rate` more private entries (lag mode only).
+    fn tick(&mut self) {
+        if let Some(r) = self.rate {
+            self.ticks += 1;
+            if self.ticks.is_multiple_of(self.rate_div.max(1)) {
+                self.hw_pos = (self.hw_pos + r).min(self.log_len);
+            }
+        }
+    }
+
+    /// Fold one call into the trace.
+    fn mix(&mut self, tag: u64, a: u64, b: u64) {
+        for v in [tag, a, b] {
+            self.trace = (self.trace ^ v).wrapping_mul(0x0000_0100_0000_01b3);
         }
     }
 
@@ -184,6 +238,7 @@ impl Sim {
     fn feed(&mut self) {
         let r = self.src;
         let mut fed = 0usize;
+        let mut blocked = false;
         while let Some(&(raw, post)) = self.pending[r].front() {
             if fed >= self.chunk {
                 break;
@@ -193,6 +248,9 @@ impl Sim {
                 break;
             }
             if self.held[r] || (self.put_local[r] + 1) % self.entries == self.guest_get[r] {
+                if !self.held[r] {
+                    blocked = true;
+                }
                 break;
             }
             if post && !self.in_post {
@@ -215,6 +273,12 @@ impl Sim {
             }
         }
         self.put[r] = self.put_local[r];
+        if blocked {
+            // how many entries the relay has consumed that the guest's `GP_GET` does not show yet, at a moment when the
+            // guest is waiting for exactly that
+            let lag = (self.cursor_seen + self.entries - self.guest_get[r]) % self.entries;
+            self.blocked_max = self.blocked_max.max(lag);
+        }
         if self.poison_above_put {
             // only FREE slots (not yet published by the guest, already consumed by the relay's write-back)
             let free = (self.guest_get[r] + self.entries - self.put_local[r] - 1) % self.entries;
@@ -256,29 +320,61 @@ impl Env for Sim {
         if self.relayed_seen as usize == self.fed_post.len() {
             self.observed = self.fed_post.len();
         }
-        self.put[self.src]
+        let v = self.put[self.src];
+        self.reads_put += 1;
+        self.mix(1, u64::from(v), 0);
+        v
     }
     fn gp_dword(&mut self, slot: u32, hi: bool) -> u32 {
         let raw = self.rings[self.src].get(&slot).copied().unwrap_or(0);
-        if hi { (raw >> 32) as u32 } else { raw as u32 }
+        let v = if hi { (raw >> 32) as u32 } else { raw as u32 };
+        self.mix(2, u64::from(slot) << 1 | u64::from(hi), u64::from(v));
+        v
     }
     fn registry_epoch(&mut self) -> u64 {
-        self.epoch
+        let v = self.epoch;
+        self.mix(3, v, 0);
+        v
     }
     fn registry_live(&mut self) -> u32 {
-        self.live
+        let v = self.live;
+        self.mix(4, u64::from(v), 0);
+        v
     }
     fn hw_get(&mut self) -> u32 {
-        (self.log_len as u32) & (self.priv_entries - 1)
+        self.reads_hw += 1;
+        self.hw_flag = true;
+        let pos = if self.rate.is_some() {
+            self.hw_pos
+        } else {
+            self.log_len
+        };
+        let v = (pos as u32) & (self.priv_entries - 1);
+        self.mix(5, u64::from(v), 0);
+        v
+    }
+    fn cached_put_ok(&mut self, put: u32, cursor: u32) -> bool {
+        // the guest only advances `GP_PUT` within a ring generation: a remembered value is never beyond the real one
+        let n = self.entries;
+        let real = self.put[self.src];
+        put < n && (put.wrapping_sub(cursor) & (n - 1)) <= (real.wrapping_sub(cursor) & (n - 1))
     }
     fn hw_reference(&mut self) -> u32 {
-        if self.markers_done == 0 {
+        let done = if self.rate.is_some() {
+            self.marker_at.iter().filter(|p| **p <= self.hw_pos).count() as u64
+        } else {
+            self.markers_done
+        };
+        let v = if done == 0 {
             0
         } else {
-            MARK_TAG | (self.markers_done as u32 & 0xffff)
-        }
+            MARK_TAG | (done as u32 & 0xffff)
+        };
+        self.mix(6, u64::from(v), 0);
+        v
     }
     fn read_pb(&mut self, raw: u64) -> Vec<u32> {
+        self.mix(7, raw, 0);
         self.out.pb_reads += 1;
         if self.mode_hint == Mode::Pointer {
             self.out.pb_reads_in_pointer += 1;
@@ -290,6 +386,10 @@ impl Env for Sim {
         self.defs[&id].words()
     }
     fn publish(&mut self, p: Pub) {
+        self.mix(8, format!("{p:?}").len() as u64, self.log_len as u64);
+        for b in format!("{p:?}").bytes() {
+            self.mix(9, u64::from(b), 0);
+        }
         self.log_len += 1;
         match p {
             Pub::Guest {
@@ -322,11 +422,13 @@ impl Env for Sim {
             Pub::Barrier => self.out.barriers += 1,
             Pub::Marker(_) => {
                 self.markers_done += 1;
+                self.marker_at.push(self.log_len);
                 self.out.markers += 1;
             }
         }
     }
     fn write_guest_get(&mut self, v: u32) {
+        self.mix(10, u64::from(v), 0);
         self.guest_get[self.src] = v;
     }
     fn trigger_migrates(&mut self, _raw: u64) -> bool {
@@ -352,6 +454,9 @@ impl Env for Sim {
         }
     }
     fn event(&mut self, e: Ev) {
+        for b in format!("{e:?}").bytes() {
+            self.mix(11, u64::from(b), 0);
+        }
         match e {
             Ev::ScanRefused => {
                 self.out.refused_scan += 1;
@@ -369,14 +474,19 @@ impl Env for Sim {
 pub fn drive(sim: &mut Sim, relay: &mut Relay, max_turns: usize) -> usize {
     let mut turns = 0;
     let mut idle_turns = 0;
+    // a lagging PBDMA needs time to catch up with a relay that waits for it
+    let patience = if sim.rate.is_some() { 400 } else { 6 };
     while turns < max_turns {
+        sim.tick();
         sim.apply_sched(relay.relayed);
         sim.relayed_seen = relay.relayed;
+        sim.cursor_seen = relay.cursor;
         sim.feed();
         if relay.dead {
             break;
         }
         let before = (relay.puts, relay.cursor, relay.relayed, relay.generation);
+        sim.hw_flag = false;
         relay.claim();
         let mut steps = 0;
         while !relay.idle() {
@@ -385,16 +495,23 @@ pub fn drive(sim: &mut Sim, relay: &mut Relay, max_turns: usize) -> usize {
             steps += 1;
             assert!(steps < 64, "a turn must be bounded");
         }
+        if sim.log_turns {
+            sim.turn_log.push((sim.hw_flag, relay.put_full));
+        }
         sim.out.max_steps_per_turn = sim.out.max_steps_per_turn.max(steps);
         turns += 1;
         let after = (relay.puts, relay.cursor, relay.relayed, relay.generation);
         if before == after && !relay.again {
             idle_turns += 1;
             // nothing moved: a pending registration that has not fired yet is the only reason to go on
-            if idle_turns > 2 && sim.pending[sim.src].is_empty() && sim.sched.is_empty() {
+            if idle_turns > 2
+                && sim.pending[sim.src].is_empty()
+                && sim.sched.is_empty()
+                && (sim.rate.is_none() || sim.hw_pos >= sim.log_len)
+            {
                 break;
             }
-            if idle_turns > 6 {
+            if idle_turns > patience {
                 break;
             }
         } else {
@@ -1764,4 +1881,570 @@ fn t3_a_second_window_one_ring_lap_later_gates_its_sync_wait_entry_again() {
         out.barriers, 2,
         "window 1's gate of its SYNC_WAIT trigger + window 2's gate of its SYNC_WAIT entry"
     );
+}
+
+// ------------------------------------------------------------------------------------------------
+// ★ 2026-10-17 lazy observe (production port): the OFF configuration IS the base relay
+
+/// A long randomised sequence through `Relay::new` (lazy observe OFF: the constructor every other test uses) must make
+/// EXACTLY the calls the BASE relay (`736c097d4`, before lazy observe existed) made: every `GP_PUT`, entry dword, epoch,
+/// `GP_GET`, `REFERENCE`, publication, write-back and event, in order, with the same arguments and results, and end in the
+/// same state. The golden fingerprint was computed by running THIS test body (unchanged except for the constant) on the
+/// base commit. It covers all four lifecycle modes, registrations with and without ring growth, straddled packets,
+/// SYNC_WAIT entries and partial feeds.
+#[test]
+fn lazy_off_is_bit_identical_to_the_base_relay_over_a_long_randomised_sequence() {
+    use kf_chan::user_lazy::LazyConfig;
+    const GOLDEN: u64 = 9_485_311_700_811_988_868;
+    let (h, turns_total, forwarded_total) = fingerprint(None);
+    assert!(
+        turns_total > 20_000 && forwarded_total > 20_000,
+        "the sequence is long: {turns_total} turns, {forwarded_total} entries"
+    );
+    assert_eq!(h, GOLDEN, "{turns_total} turns, {forwarded_total} entries");
+    // every spelling of "both rules off" is the base: the constant, the switches at 0, interval 1 with the cache off
+    for cfg in [
+        LazyConfig::OFF,
+        LazyConfig::from_switches(Some("0"), Some("0")),
+        LazyConfig::ON.with_put_cache(false).with_interval(1),
+        LazyConfig::ON.with_put_cache(false).with_interval(0),
+    ] {
+        assert_eq!(
+            fingerprint(Some(cfg)).0,
+            GOLDEN,
+            "{cfg:?} is the base relay"
+        );
+    }
+    // the check has teeth: with the rules ON the relay makes different calls (it reads less)
+    assert_ne!(fingerprint(Some(LazyConfig::ON)).0, GOLDEN);
+    assert_ne!(
+        fingerprint(Some(LazyConfig::ON.with_interval(1))).0,
+        GOLDEN,
+        "A alone changes the calls too"
+    );
+}
+
+/// The fingerprint of 600 randomised streams (`cfg` = `None`: `Relay::new` untouched), the turns and the entries relayed.
+fn fingerprint(cfg: Option<kf_chan::user_lazy::LazyConfig>) -> (u64, usize, usize) {
+    const SEEDS: u64 = 600;
+    let mut h: u64 = 0xcbf2_9ce4_8422_2325;
+    let mut turns_total = 0usize;
+    let mut forwarded_total = 0usize;
+    for seed in 0..SEEDS {
+        let mut rng = Rng::new(0xB05E_0000 + seed);
+        let n = 20 + rng.below(480) as usize;
+        let straddles = rng.chance(50);
+        let mut stream = gen_stream(&mut rng, n, straddles, false);
+        let sched = match rng.below(4) {
+            0 => Vec::new(),
+            1 => {
+                let migrate = rng.chance(50);
+                plan_registration(&mut rng, &mut stream, migrate).0
+            }
+            _ => {
+                let count = 1 + rng.below(3) as usize;
+                plan_registrations_spaced(&mut rng, &mut stream, count)
+            }
+        };
+        let ring = 8u32 << rng.below(4);
+        let priv_entries = 8u32 << rng.below(3);
+        let mode = LifecycleMode::ALL[rng.below(LifecycleMode::ALL.len() as u64) as usize];
+        let mut sim = Sim::new(ring, priv_entries, &stream, sched);
+        if rng.chance(60) {
+            sim.chunk = 1 + rng.below(40) as usize;
+        }
+        let mut relay = new_relay_mode(priv_entries, mode);
+        if let Some(cfg) = cfg {
+            relay = relay.with_lazy(cfg);
+        }
+        turns_total += drive(&mut sim, &mut relay, 200_000);
+        forwarded_total += sim.out.forwarded.len();
+        for v in [
+            sim.trace,
+            relay.cursor.into(),
+            relay.relayed,
+            relay.generation,
+            relay.puts,
+            u64::from(relay.dead),
+        ] {
+            h = (h ^ v).wrapping_mul(0x0000_0100_0000_01b3);
+        }
+        for b in format!("{:?}|{}", relay.life.counts(), relay.state_key()).bytes() {
+            h = (h ^ u64::from(b)).wrapping_mul(0x0000_0100_0000_01b3);
+        }
+    }
+    (h, turns_total, forwarded_total)
+}
+
+// ------------------------------------------------------------------------------------------------
+// ★ 2026-10-17 lazy observe ON: the same relay, the same streams
+
+fn lazy_cfgs() -> [kf_chan::user_lazy::LazyConfig; 4] {
+    use kf_chan::user_lazy::LazyConfig;
+    [
+        LazyConfig::ON,
+        LazyConfig::ON.with_interval(2),
+        LazyConfig::ON.with_interval(3).with_put_cache(false),
+        LazyConfig::ON.with_interval(1),
+    ]
+}
+
+/// One stream through an OFF relay and a lazy relay: the world is the same, so what the guest's entries turn into on the
+/// private ring is the same too.
+struct Pair {
+    off: (Out, Relay, u64, u64, u32),
+    on: (Out, Relay, u64, u64, u32),
+}
+
+fn run_pair(
+    stream: &[Ge],
+    sched: &[Sched],
+    mode: LifecycleMode,
+    ring: u32,
+    priv_entries: u32,
+    chunk: usize,
+    rate: Option<usize>,
+    cfg: kf_chan::user_lazy::LazyConfig,
+) -> Pair {
+    let one = |cfg: Option<kf_chan::user_lazy::LazyConfig>| {
+        let mut sim = Sim::new(ring, priv_entries, stream, sched.to_vec());
+        sim.chunk = chunk;
+        sim.rate = rate;
+        let mut relay = new_relay_mode(priv_entries, mode);
+        if let Some(cfg) = cfg {
+            relay = relay.with_lazy(cfg);
+        }
+        drive(&mut sim, &mut relay, 400_000);
+        sim.out.dead |= relay.dead;
+        let (puts, hws, blocked) = (sim.reads_put, sim.reads_hw, sim.blocked_max);
+        (sim.out, relay, puts, hws, blocked)
+    };
+    Pair {
+        off: one(None),
+        on: one(Some(cfg)),
+    }
+}
+
+#[test]
+fn lazy_forwards_exactly_what_the_base_forwards_for_every_mode_stream_and_registration() {
+    let mut put_saved = 0u64;
+    let mut hw_saved = 0u64;
+    let mut checked = 0;
+    for seed in 0..300u64 {
+        let mut rng = Rng::new(0x1A2E_0000 + seed);
+        let n = 20 + rng.below(300) as usize;
+        let straddles = rng.chance(50);
+        let mut stream = gen_stream(&mut rng, n, straddles, false);
+        let sched = match rng.below(3) {
+            0 => Vec::new(),
+            1 => {
+                let migrate = rng.chance(50);
+                plan_registration(&mut rng, &mut stream, migrate).0
+            }
+            _ => {
+                let count = 1 + rng.below(3) as usize;
+                plan_registrations_spaced(&mut rng, &mut stream, count)
+            }
+        };
+        let ring = 16u32 << rng.below(4);
+        let priv_entries = 128u32 << rng.below(3);
+        let mode = LifecycleMode::ALL[rng.below(LifecycleMode::ALL.len() as u64) as usize];
+        let chunk = if rng.chance(50) {
+            1 + rng.below(40) as usize
+        } else {
+            usize::MAX
+        };
+        let rate = if rng.chance(40) {
+            Some(1 + rng.below(3) as usize)
+        } else {
+            None
+        };
+        for cfg in lazy_cfgs() {
+            let p = run_pair(&stream, &sched, mode, ring, priv_entries, chunk, rate, cfg);
+            let ctx = format!(
+                "seed {seed} {cfg:?} mode {mode:?} ring {ring} priv {priv_entries} chunk {chunk} rate {rate:?}"
+            );
+            assert_eq!(p.off.0.dead, p.on.0.dead, "{ctx}: dead");
+            assert_eq!(p.off.0.forwarded, p.on.0.forwarded, "{ctx}: forwarded");
+            assert_eq!(p.off.0.staged, p.on.0.staged, "{ctx}: staged triggers");
+            assert_eq!(p.off.0.switches, p.on.0.switches, "{ctx}: ring switches");
+            assert_eq!(p.on.0.beyond_put, 0, "{ctx}: I8");
+            assert_eq!(p.on.0.torn, 0, "{ctx}: I7");
+            assert_eq!(p.on.0.unscanned_while_live, 0, "{ctx}: I4");
+            assert_eq!(p.on.1.relayed, p.off.1.relayed, "{ctx}");
+            assert_eq!(p.on.1.cursor, p.off.1.cursor, "{ctx}");
+            assert_eq!(p.on.1.generation, p.off.1.generation, "{ctx}");
+            assert_eq!(
+                p.on.1.life.mode(),
+                p.off.1.life.mode(),
+                "{ctx}: the lifecycle ends in the same mode"
+            );
+            let (co, cn) = (p.off.1.life.counts(), p.on.1.life.counts());
+            assert_eq!(
+                (
+                    co.entries_scan,
+                    co.entries_pointer,
+                    co.entries_window,
+                    co.post_switch_scanned
+                ),
+                (
+                    cn.entries_scan,
+                    cn.entries_pointer,
+                    cn.entries_window,
+                    cn.post_switch_scanned
+                ),
+                "{ctx}: the same entries are relayed in the same modes (and 8 per switch)"
+            );
+            assert_eq!(
+                co.pointer_pb_read_violation + cn.pointer_pb_read_violation,
+                0,
+                "{ctx}"
+            );
+            assert!(
+                p.on.2 <= p.off.2 && p.on.3 <= p.off.3,
+                "{ctx}: lazy never reads MORE"
+            );
+            // the cache is only ever filled in Pointer mode
+            let c = p.on.1.lazy.counts;
+            assert_eq!(
+                c.turns,
+                c.obs_skipped
+                    + c.obs_unconditional
+                    + c.obs_forced_wait
+                    + c.obs_forced_low_credit
+                    + c.obs_forced_open_segment
+                    + c.obs_forced_ring_full
+                    + c.obs_forced_interval,
+                "{ctx}: every turn is accounted for"
+            );
+            if cfg == kf_chan::user_lazy::LazyConfig::ON {
+                put_saved += p.off.2 - p.on.2;
+                hw_saved += p.off.3 - p.on.3;
+            }
+            checked += 1;
+        }
+    }
+    assert!(checked >= 1200);
+    assert!(put_saved > 5_000, "rule A saves GP_PUT reads: {put_saved}");
+    assert!(
+        hw_saved > 5_000,
+        "rule B saves private USERD reads: {hw_saved}"
+    );
+}
+
+#[test]
+fn lazy_every_consumed_entry_reaches_the_guests_gp_get_even_with_a_lagging_pbdma() {
+    for seed in 0..120u64 {
+        let mut rng = Rng::new(0x1A2E_1000 + seed);
+        let n = 30 + rng.below(250) as usize;
+        let stream = gen_stream(&mut rng, n, false, false);
+        let ring = 16u32 << rng.below(4);
+        let rate = Some(1 + rng.below(3) as usize);
+        for cfg in lazy_cfgs() {
+            let mut sim = Sim::new(ring, 256, &stream, vec![]);
+            sim.rate = rate;
+            let mut relay = new_relay_mode(256, LifecycleMode::Default).with_lazy(cfg);
+            drive(&mut sim, &mut relay, 400_000);
+            assert!(!relay.dead, "seed {seed} {cfg:?}");
+            assert_eq!(
+                sim.out.forwarded.len(),
+                stream.len(),
+                "seed {seed} {cfg:?}: all relayed"
+            );
+            assert_eq!(
+                sim.guest_get[sim.src], relay.cursor,
+                "seed {seed} {cfg:?} ring {ring}: the guest's GP_GET shows every consumed entry once the PBDMA has caught up"
+            );
+        }
+    }
+}
+
+#[test]
+fn lazy_d6_a_guest_with_a_full_ring_sees_a_get_no_staler_than_the_base_plus_the_interval() {
+    let mut worst_gap = 0;
+    for seed in 0..60u64 {
+        let mut rng = Rng::new(0x1A2E_2000 + seed);
+        let n = 100 + rng.below(300) as usize;
+        let stream = gen_stream(&mut rng, n, false, false);
+        for ring in [8u32, 16, 32, 64, 128] {
+            for cfg in lazy_cfgs() {
+                let p = run_pair(
+                    &stream,
+                    &[],
+                    LifecycleMode::Default,
+                    ring,
+                    256,
+                    usize::MAX,
+                    None,
+                    cfg,
+                );
+                assert!(!p.on.0.dead, "seed {seed}");
+                let (off, on) = (p.off.4, p.on.4);
+                let n = kf_chan::user_lazy::effective_interval(cfg.interval, ring) as u32;
+                assert!(
+                    on <= off + n + 2,
+                    "seed {seed} ring {ring} {cfg:?}: the guest waited on a full ring while the relay was {on} entries ahead of its GP_GET (base: {off}, interval {n})"
+                );
+                worst_gap = worst_gap.max(on.saturating_sub(off));
+            }
+        }
+    }
+    println!(
+        "lazy d6: the guest, blocked on a full ring, saw a GP_GET at most {worst_gap} entries staler than the base"
+    );
+}
+
+#[test]
+fn lazy_i8_entries_just_above_the_gp_put_are_never_read_with_the_cache_on() {
+    for seed in 0..40u64 {
+        let mut rng = Rng::new(seed + 7000);
+        let n = 20 + rng.below(80) as usize;
+        let stream = gen_stream(&mut rng, n, true, false);
+        for chunk in [1usize, 2, 5, usize::MAX] {
+            for cfg in lazy_cfgs() {
+                let mut sim = Sim::new(32, 128, &stream, vec![]);
+                sim.chunk = chunk;
+                sim.poison_above_put = true;
+                let mut relay = new_relay(128, false).with_lazy(cfg);
+                drive(&mut sim, &mut relay, 100_000);
+                assert!(!relay.dead, "seed {seed} chunk {chunk} {cfg:?}");
+                assert_eq!(
+                    sim.out.beyond_put, 0,
+                    "seed {seed} chunk {chunk} {cfg:?}: I8"
+                );
+                let poison = ge(251, Kind::Plain).raw();
+                assert!(
+                    !sim.out.forwarded.contains(&poison),
+                    "seed {seed} chunk {chunk} {cfg:?}: a poisoned slot was forwarded"
+                );
+                let expect: Vec<u64> = stream.iter().map(Ge::raw).collect();
+                assert_eq!(
+                    sim.out.forwarded, expect,
+                    "seed {seed} chunk {chunk} {cfg:?}"
+                );
+            }
+        }
+    }
+}
+
+#[test]
+fn lazy_a_hostile_gp_put_never_reads_a_slot_the_relay_has_no_pointer_to_and_never_panics() {
+    // The guest rewrites GP_PUT to anything (backwards, outside the ring) while the cache is warm. The relay reads only
+    // the slot at its cursor, only below SOME GP_PUT it loaded, and refuses a value outside the ring by name.
+    let stream: Vec<Ge> = std::iter::once(ge(0, Kind::SetObj))
+        .chain((1..40).map(|i| ge(i, Kind::Plain)))
+        .collect();
+    for hostile_put in [0u32, 1, 3, 31, 32, 33, 1000, u32::MAX] {
+        let mut sim = Sim::new(32, 128, &stream, vec![]);
+        sim.chunk = 12;
+        let mut relay = new_relay(128, false).with_lazy(kf_chan::user_lazy::LazyConfig::ON);
+        for _ in 0..6 {
+            sim.tick();
+            sim.feed();
+            relay.claim();
+            while !relay.idle() {
+                relay.step(&mut sim);
+            }
+        }
+        sim.put[sim.src] = hostile_put;
+        for _ in 0..40 {
+            relay.claim();
+            let mut steps = 0;
+            while !relay.idle() {
+                relay.step(&mut sim);
+                steps += 1;
+                assert!(steps < 64);
+            }
+        }
+        if hostile_put >= 32 {
+            assert!(sim.out.dead || relay.dead, "{hostile_put}: refused by name");
+        }
+        assert!(sim.out.forwarded.len() <= stream.len() + 40, "bounded work");
+    }
+}
+
+#[test]
+fn lazy_a_registration_at_every_position_keeps_i4_with_the_cache_on() {
+    // the Window anchor and the cache: whatever the guest published after the reply was scanned, wherever the flip falls
+    let mut flips = 0;
+    for seed in 0..400u64 {
+        let mut rng = Rng::new(0x1A2E_3000 + seed);
+        let n = 12 + rng.below(70) as usize;
+        let mut stream = gen_stream(&mut rng, n, false, false);
+        let migrate = rng.chance(50);
+        let (sched, k, _t) = plan_registration(&mut rng, &mut stream, migrate);
+        let ring = 16u32 << rng.below(3);
+        let chunk = if rng.chance(50) {
+            1 + rng.below(12) as usize
+        } else {
+            usize::MAX
+        };
+        for cfg in [
+            kf_chan::user_lazy::LazyConfig::ON,
+            kf_chan::user_lazy::LazyConfig::ON.with_interval(2),
+        ] {
+            let p = run_pair(
+                &stream,
+                &sched,
+                LifecycleMode::Default,
+                ring,
+                128,
+                chunk,
+                None,
+                cfg,
+            );
+            assert!(!p.on.0.dead, "seed {seed} k {k}");
+            assert_eq!(
+                p.on.0.unscanned_while_live, 0,
+                "seed {seed}: I4 with the cache on"
+            );
+            assert_eq!(p.off.0.forwarded, p.on.0.forwarded, "seed {seed}");
+            assert_eq!(
+                p.off.0.staged, p.on.0.staged,
+                "seed {seed}: the trigger is staged at the same position"
+            );
+            assert_eq!(p.off.0.switches, p.on.0.switches, "seed {seed}");
+            flips += usize::from(p.on.1.life.counts().to_window_fresh > 0);
+        }
+    }
+    assert!(flips > 300, "the flips happened: {flips}");
+}
+
+#[test]
+fn lazy_the_post_switch_scan_is_eight_entries_per_ring_switch_with_lazy_on() {
+    let mut switches = 0;
+    for seed in 0..120u64 {
+        let mut rng = Rng::new(0x1A2E_4000 + seed);
+        let n = 60 + rng.below(80) as usize;
+        let mut stream = gen_stream(&mut rng, n, false, false);
+        let (sched, _, _) = plan_registration(&mut rng, &mut stream, true);
+        for cfg in lazy_cfgs() {
+            let p = run_pair(
+                &stream,
+                &sched,
+                LifecycleMode::Default,
+                64,
+                128,
+                usize::MAX,
+                None,
+                cfg,
+            );
+            let c = p.on.1.life.counts();
+            assert_eq!(p.on.0.switches.len(), p.off.0.switches.len(), "seed {seed}");
+            assert_eq!(
+                c.post_switch_scanned,
+                p.off.1.life.counts().post_switch_scanned,
+                "seed {seed} {cfg:?}"
+            );
+            let after_switch =
+                p.on.0
+                    .switches
+                    .first()
+                    .map_or(0, |at| p.on.0.forwarded.len().saturating_sub(*at));
+            if after_switch > kf_chan::user_lifecycle::POST_SWITCH_SCAN as usize + 2 {
+                assert_eq!(
+                    c.post_switch_scanned,
+                    kf_chan::user_lifecycle::POST_SWITCH_SCAN as u64 * p.on.0.switches.len() as u64,
+                    "seed {seed} {cfg:?}: 8 entries per switch"
+                );
+            }
+            switches += p.on.0.switches.len();
+            // the cache was dropped at the switch, the new ring is read from a fresh GP_PUT
+            assert!(
+                p.on.1.lazy.counts.inval_migration + p.on.1.lazy.counts.inval_mode_change > 0
+                    || !cfg.put_cache,
+                "seed {seed}"
+            );
+        }
+    }
+    assert!(switches > 100);
+}
+
+#[test]
+fn lazy_d6_a_turn_that_skipped_its_look_and_saw_a_full_guest_ring_is_followed_by_a_look() {
+    let mut checked = 0;
+    for seed in 0..60u64 {
+        let mut rng = Rng::new(0x1A2E_5000 + seed);
+        let n = 100 + rng.below(300) as usize;
+        let stream = gen_stream(&mut rng, n, false, false);
+        for ring in [32u32, 64, 128] {
+            let mut sim = Sim::new(ring, 256, &stream, vec![]);
+            sim.log_turns = true;
+            let mut relay = new_relay(256, false).with_lazy(kf_chan::user_lazy::LazyConfig::ON);
+            drive(&mut sim, &mut relay, 400_000);
+            assert!(!relay.dead);
+            for w in sim.turn_log.windows(2) {
+                if !w[0].0 && w[0].1 {
+                    assert!(
+                        w[1].0,
+                        "seed {seed} ring {ring}: full ring seen without a look, and the next turn did not look either"
+                    );
+                    checked += 1;
+                }
+            }
+        }
+    }
+    assert!(checked > 50, "the scenario happens: {checked}");
+}
+
+#[test]
+fn lazy_a_refused_entry_ends_the_relay_and_a_retire_drops_what_was_cached() {
+    // refusal = the guest's channel is reset: the cache goes with the relay
+    let stream: Vec<Ge> = std::iter::once(ge(0, Kind::SetObj))
+        .chain((1..40).map(|i| ge(i, Kind::Plain)))
+        .collect();
+    let mut sim = Sim::new(64, 256, &stream, vec![]);
+    let mut relay = new_relay(256, false).with_lazy(kf_chan::user_lazy::LazyConfig::ON);
+    drive(&mut sim, &mut relay, 10_000);
+    assert!(!relay.dead);
+    assert!(
+        relay.lazy.cached().is_some(),
+        "Pointer mode left a remembered GP_PUT"
+    );
+    // the next entry the guest publishes is invalid (a reserved bit): refused by name
+    let slot = relay.cursor;
+    sim.rings[sim.src].insert(slot, ge(2, Kind::Plain).raw() | (1 << 40));
+    sim.put[sim.src] = (slot + 1) % 64;
+    relay.claim();
+    while !relay.idle() {
+        relay.step(&mut sim);
+    }
+    assert!(relay.dead, "the relay stopped");
+    assert_eq!(relay.lazy.cached(), None);
+    assert_eq!(relay.lazy.counts.inval_reset, 1);
+
+    // retire = the channel was freed
+    let mut sim = Sim::new(64, 256, &stream, vec![]);
+    let mut relay = new_relay(256, false).with_lazy(kf_chan::user_lazy::LazyConfig::ON);
+    drive(&mut sim, &mut relay, 10_000);
+    assert!(relay.lazy.cached().is_some());
+    relay.retire();
+    assert_eq!(relay.lazy.cached(), None);
+    assert_eq!(relay.lazy.counts.inval_retire, 1);
+    assert_eq!(relay.life.mode(), Mode::Dead);
+}
+
+#[test]
+fn lazy_a_slow_pbdma_and_a_small_private_ring_run_on_the_credit_floor_without_stalling() {
+    // 128 private entries: the credit count crosses the floor of 64 whenever the PBDMA lags; each such turn looks, so the
+    // stale count never hides a credit that exists, and the run neither stalls nor loses an entry
+    let mut low = 0;
+    for seed in 0..40u64 {
+        let mut rng = Rng::new(0x1A2E_6000 + seed);
+        let n = 300 + rng.below(200) as usize;
+        let stream = gen_stream(&mut rng, n, false, false);
+        let mut sim = Sim::new(512, 128, &stream, vec![]);
+        sim.rate = Some(1);
+        sim.rate_div = 3;
+        let mut relay = new_relay(128, false).with_lazy(kf_chan::user_lazy::LazyConfig::ON);
+        drive(&mut sim, &mut relay, 400_000);
+        assert!(!relay.dead, "seed {seed}");
+        assert_eq!(
+            sim.out.forwarded.len(),
+            stream.len(),
+            "seed {seed}: nothing stalled or lost"
+        );
+        low += relay.lazy.counts.obs_forced_low_credit;
+    }
+    assert!(low > 100, "the credit floor really forced looks: {low}");
 }

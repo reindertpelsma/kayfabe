@@ -98,6 +98,10 @@ impl Drop for StopOnDrop {
 struct ThreadEnv {
     sh: Arc<Shared>,
     mode: Mode,
+    /// The private ring's entry count (the hardware `GP_GET` word wraps at it).
+    priv_entries: u32,
+    /// The guest only ever advances `GP_PUT` (the well-behaved test): a remembered `GP_PUT` is never beyond the real one.
+    monotone: bool,
 }
 
 impl Env for ThreadEnv {
@@ -119,7 +123,14 @@ impl Env for ThreadEnv {
         self.sh.live.load(Ordering::Acquire)
     }
     fn hw_get(&mut self) -> u32 {
-        (self.sh.log.lock().unwrap().len() as u32) & 7
+        (self.sh.log.lock().unwrap().len() as u32) & (self.priv_entries - 1)
+    }
+    fn cached_put_ok(&mut self, put: u32, cursor: u32) -> bool {
+        if !self.monotone {
+            return true;
+        }
+        let real = self.sh.put.load(Ordering::Acquire);
+        put < N && (put.wrapping_sub(cursor) & (N - 1)) <= (real.wrapping_sub(cursor) & (N - 1))
     }
     fn hw_reference(&mut self) -> u32 {
         let m = self.sh.markers.load(Ordering::Acquire);
@@ -220,6 +231,21 @@ fn run_relay_until(
 
 #[test]
 fn a_well_behaved_guest_with_concurrent_registrations_loses_and_duplicates_nothing() {
+    well_behaved(8, kf_chan::user_lazy::LazyConfig::OFF, 7);
+}
+
+/// ★ 2026-10-17: the same, with lazy observe ON (cache + lazy look) on a private ring big enough for the credit floor to
+/// allow skipping. SYNC_WAIT entries are not in this stream; the gate ordering with stale `REFERENCE`s is covered by the
+/// model (`lazy_a_registration_after_a_forwarded_sync_wait_...`) and `user_lazy_model.rs`.
+#[test]
+fn lazy_a_well_behaved_guest_with_concurrent_registrations_loses_and_duplicates_nothing() {
+    // rare registrations: the relay lives in Pointer mode, where the production interval does its work
+    well_behaved(256, kf_chan::user_lazy::LazyConfig::ON, 211);
+    // frequent registrations: Pointer <-> Window every few entries, the cache dropped at every mode change
+    well_behaved(256, kf_chan::user_lazy::LazyConfig::ON.with_interval(2), 7);
+}
+
+fn well_behaved(priv_entries: u32, lazy: kf_chan::user_lazy::LazyConfig, reg_mod: u32) {
     let sh = Shared::new();
     let secs = stress_secs();
     let deadline = std::time::Instant::now() + std::time::Duration::from_secs_f64(secs);
@@ -228,14 +254,17 @@ fn a_well_behaved_guest_with_concurrent_registrations_loses_and_duplicates_nothi
     let post_marks = Arc::new(Mutex::new(Vec::<(usize, bool)>::new())); // (index, published while a registration was live)
     let done = Arc::new(AtomicBool::new(false));
     let mut relay = Relay::new(
-        8,
+        priv_entries,
         Lifecycle::new(),
         Scan::for_subdevice(1).unwrap(),
         Glue::default(),
-    );
+    )
+    .with_lazy(lazy);
     let mut env = ThreadEnv {
         sh: sh.clone(),
         mode: Mode::Scan,
+        priv_entries,
+        monotone: true,
     };
     let turns = std::thread::scope(|s| {
         let _stop = StopOnDrop(sh.clone());
@@ -267,7 +296,7 @@ fn a_well_behaved_guest_with_concurrent_registrations_loses_and_duplicates_nothi
                         i += 1;
                         push(ge(1 + (i % 100) as u8, Kind::Plain).raw(), false, &sh);
                     }
-                    if i.is_multiple_of(7) {
+                    if i.is_multiple_of(reg_mod) {
                         // REGISTER: the registry changes, then "the reply" (this function returns)
                         sh.live.fetch_add(1, Ordering::AcqRel);
                         sh.epoch.fetch_add(1, Ordering::AcqRel);
@@ -303,6 +332,8 @@ fn a_well_behaved_guest_with_concurrent_registrations_loses_and_duplicates_nothi
     let mut env2 = ThreadEnv {
         sh: sh.clone(),
         mode: relay.life.mode(),
+        priv_entries,
+        monotone: true,
     };
     let start = std::time::Instant::now();
     while relay.cursor != sh.put.load(Ordering::Acquire)
@@ -365,9 +396,19 @@ fn a_well_behaved_guest_with_concurrent_registrations_loses_and_duplicates_nothi
     assert!(checked > 10, "post-reply entries checked: {checked}");
     assert_eq!(sh.pb_reads_in_pointer.load(Ordering::Relaxed), 0);
     println!(
-        "stress(well-behaved): {} entries, {staged} triggers staged, {checked} post-reply entries scanned",
+        "stress(well-behaved, {lazy:?}): {} entries, {staged} triggers staged, {checked} post-reply entries scanned",
         sent.len()
     );
+    if lazy != kf_chan::user_lazy::LazyConfig::OFF {
+        let c = relay.lazy.counts;
+        println!("stress lazy counters: {}", c.summary());
+        assert!(c.put_cache_hits > 100 || lazy.interval == 1, "{c:?}");
+        assert!(c.obs_skipped > 100 || !lazy_b(lazy), "{c:?}");
+    }
+}
+
+fn lazy_b(l: kf_chan::user_lazy::LazyConfig) -> bool {
+    l.interval > 1
 }
 
 fn relay_idle_and_drained(sh: &Shared) -> bool {
@@ -376,6 +417,20 @@ fn relay_idle_and_drained(sh: &Shared) -> bool {
 
 #[test]
 fn a_hostile_writer_rewrites_ring_entries_and_gp_put_while_the_worker_runs() {
+    hostile(8, kf_chan::user_lazy::LazyConfig::OFF);
+}
+
+/// ★ 2026-10-17: the hostile writer against a relay with lazy observe ON. A cached `GP_PUT` is a value the guest once
+/// wrote; the guest rewrites `GP_PUT` backwards and beyond the ring while the cache is warm: the relay still reads only the
+/// slot at its cursor below some `GP_PUT` it loaded, stores only a consistent pair of dwords the guest wrote that passes
+/// the entry validation (I7), reads no pushbuffer in Pointer mode (I1), and refuses a value outside the ring by name.
+#[test]
+fn lazy_a_hostile_writer_rewrites_ring_entries_and_gp_put_while_the_worker_runs() {
+    hostile(256, kf_chan::user_lazy::LazyConfig::ON);
+    hostile(256, kf_chan::user_lazy::LazyConfig::ON.with_interval(2));
+}
+
+fn hostile(priv_entries: u32, lazy: kf_chan::user_lazy::LazyConfig) {
     let sh = Shared::new();
     let secs = stress_secs();
     let deadline = std::time::Instant::now() + std::time::Duration::from_secs_f64(secs);
@@ -449,14 +504,17 @@ fn a_hostile_writer_rewrites_ring_entries_and_gp_put_while_the_worker_runs() {
         while std::time::Instant::now() < deadline {
             // a fresh channel after every refusal (a hostile entry kills only its own channel)
             let mut relay = Relay::new(
-                8,
+                priv_entries,
                 Lifecycle::new(),
                 Scan::for_subdevice(1).unwrap(),
                 Glue::default(),
-            );
+            )
+            .with_lazy(lazy);
             let mut env = ThreadEnv {
                 sh: sh.clone(),
                 mode: Mode::Scan,
+                priv_entries,
+                monotone: false,
             };
             sh.log.lock().unwrap().clear();
             sh.markers.store(0, Ordering::Release);
@@ -516,7 +574,7 @@ fn a_hostile_writer_rewrites_ring_entries_and_gp_put_while_the_worker_runs() {
         "I1 under attack"
     );
     println!(
-        "stress(hostile): {total_turns} turns, {} channels killed by their own hostile entries",
+        "stress(hostile, {lazy:?}): {total_turns} turns, {} channels killed by their own hostile entries",
         deaths.load(Ordering::Relaxed)
     );
     assert!(total_turns > 1000);

@@ -18,6 +18,7 @@
 //! the next turn, exactly as the straight-line code did).
 
 use crate::user_gate::{Gate, Grace, Marks, SyncGate};
+use crate::user_lazy::{Invalidate, Lazy, LazyConfig};
 use crate::user_lifecycle::{GP_SYNC_WAIT, Lifecycle, Mode, Obs, Plan, ScanPermit};
 use crate::user_loop::Need;
 use crate::user_scan::{Fetch, Scan};
@@ -203,6 +204,11 @@ pub trait Io {
     fn src_entries(&mut self) -> u32;
     /// The entry-size budget `inspect_entry` enforces.
     fn max_entry_bytes(&mut self) -> u64;
+    /// A mapping walk the guest asked for has not landed: the wait is registered, end the turn WITHOUT reading anything.
+    /// Asked at the top of every `GP_PUT` decision, cached or fresh (the pump's `Inbox::walk_busy` / `wait_walk`).
+    fn walk_busy(&mut self) -> bool {
+        false
+    }
     /// Read `GP_PUT`. `Ok(None)` = a walk is in progress (the wait is registered; nothing to do now).
     fn gp_put(&mut self) -> Turn<Option<u32>>;
     /// `GP_PUT != cursor`: a new entry is being loaded.
@@ -296,6 +302,9 @@ pub struct Relay {
     pub raw: u64,
     /// The `GP_PUT` value read this turn.
     pub put: u32,
+    /// ★ 2026-10-17: lazy observe (rules A and B, `crate::user_lazy`). `Relay::new` leaves both OFF; the owner opts in with
+    /// [`Relay::with_lazy`].
+    pub lazy: Lazy,
     /// The packet the scan had open when this turn read `GP_PUT` (Scan / Window only): for the owner's
     /// `USER_RING_PUT_BOUNDARY_OPEN` line, valid in the turn that queued that notice.
     pub put_packet: Option<(MethodHeader, usize)>,
@@ -351,6 +360,7 @@ impl Relay {
             puts: 0,
             raw: 0,
             put: 0,
+            lazy: Lazy::new(LazyConfig::OFF),
             put_packet: None,
             written_get: 0,
             next_get: 0,
@@ -367,6 +377,14 @@ impl Relay {
             plan_forward: false,
             permit: None,
         })
+    }
+
+    /// Opt in to lazy observe with `cfg` (the pump passes the production default, `LazyConfig::ON`, unless a measurement
+    /// switch turned a rule off). Call at birth, before the first turn.
+    #[must_use]
+    pub fn with_lazy(mut self, cfg: LazyConfig) -> Self {
+        self.lazy = Lazy::new(cfg);
+        self
     }
 
     /// Everything that decides behaviour, none of the counters (model checking).
@@ -402,7 +420,7 @@ impl Relay {
             u8::from(self.segment_pending),
             self.written_get,
             u8::from(self.put_full),
-        )
+        ) + &self.lazy.key()
     }
 
     /// Start a turn.
@@ -433,6 +451,9 @@ impl Relay {
         self.guest_get = None;
         self.written_get = 0;
         self.life.source_switched();
+        // the new ring may have a LOWER `GP_PUT`: nothing remembered about the old one is valid (it would also miss by
+        // generation, which is belt and braces)
+        self.lazy.invalidate(Invalidate::Migration);
     }
 
     /// The new ring's USERD shows `get` as the guest's `GP_GET` at the switch. A nonzero value contradicts the
@@ -447,6 +468,13 @@ impl Relay {
         true
     }
 
+    /// The channel was freed: the lifecycle machine is torn down (terminal) and nothing cached survives. The pump calls it
+    /// where it used to call `Lifecycle::teardown` itself.
+    pub fn retire(&mut self) {
+        self.lazy.invalidate(Invalidate::Retire);
+        self.life.teardown();
+    }
+
     /// No turn is running.
     #[must_use]
     pub fn idle(&self) -> bool {
@@ -458,6 +486,15 @@ impl Relay {
     pub fn note_relayed(&mut self, entry: u64) {
         self.life.forwarded(self.relayed, entry);
         self.relayed = self.relayed.saturating_add(1);
+    }
+
+    /// The turn ends needing `need`. A WAIT (anything but `Idle` / `Again`) is remembered for lazy observe: the next turn
+    /// reads the private `USERD` whatever the interval says, so a wake never meets a stale view (design doc, D4).
+    fn set_need(&mut self, need: Need) {
+        if !matches!(need, Need::Idle | Need::Again) {
+            self.lazy.wait_set();
+        }
+        self.need = need;
     }
 
     /// The statistics' view of a publication (tests count it).
@@ -475,6 +512,8 @@ impl Relay {
             self.phase = Phase::Idle;
             if matches!(e, Fail::Refused(_)) {
                 self.dead = true;
+                // the relay stops and the guest's channel is reset: nothing remembered survives
+                self.lazy.invalidate(Invalidate::Reset);
             }
         }
         r
@@ -489,12 +528,30 @@ impl Relay {
         match self.phase {
             Phase::Idle => Ok(Step::Idle { submitted: false }),
             Phase::Obs => {
-                let (get, reference) = io.hw_words()?;
-                self.marks.observe(reference);
-                for (generation, get) in self.fetch.observe(get).map_err(str::to_owned)? {
-                    if generation == self.generation {
-                        self.guest_get = Some((generation, get));
+                // ★ lazy observe (B): the private `USERD` is read on every turn unless the relay is in Pointer mode and
+                // nothing forces a look. A stale view only lowers credit and delays gates and write-backs.
+                let mode = self.life.mode();
+                self.lazy.turn_start(mode);
+                let entries = if self.lazy.b_active(mode) {
+                    io.src_entries()
+                } else {
+                    0
+                };
+                if self.lazy.observe_decision(
+                    mode,
+                    entries,
+                    self.fetch.available(),
+                    self.segment_pending,
+                    self.sync.waiting(),
+                ) {
+                    let (get, reference) = io.hw_words()?;
+                    self.marks.observe(reference);
+                    for (generation, get) in self.fetch.observe(get).map_err(str::to_owned)? {
+                        if generation == self.generation {
+                            self.guest_get = Some((generation, get));
+                        }
                     }
+                    self.lazy.observed();
                 }
                 self.phase = Phase::Wb;
                 Ok(Step::More)
@@ -507,7 +564,7 @@ impl Relay {
                             self.guest_get = None;
                         } else {
                             // an admission lock is busy: look again (spin, then the safety net)
-                            self.need = Need::Contended;
+                            self.set_need(Need::Contended);
                             return self.idle_step(false);
                         }
                     } else {
@@ -572,18 +629,38 @@ impl Relay {
     }
 
     fn put_step(&mut self, io: &mut impl Io) -> Turn<Step> {
-        let Some(put) = io.gp_put()? else {
+        // a mapping walk the guest asked for has not landed: read nothing (cached `GP_PUT` or not)
+        if io.walk_busy() {
             return self.idle_step(false);
-        };
-        let entries = io.src_entries();
-        if put >= entries {
-            io.event(Ev::PutBound);
-            return Err("USER_RING_PUT_BOUND".into());
         }
+        let mode = self.life.mode();
+        let entries = io.src_entries();
+        // ★ lazy observe (A): an entry strictly below a `GP_PUT` already read stays valid (Pointer mode only); the cursor
+        // reaching it forces a fresh read, so "nothing to do" is only ever decided on a fresh value.
+        let put = if let Some(put) =
+            self.lazy
+                .put_select(mode, self.generation, self.cursor, entries)
+        {
+            put
+        } else {
+            let Some(put) = io.gp_put()? else {
+                return self.idle_step(false);
+            };
+            if put >= entries {
+                io.event(Ev::PutBound);
+                return Err("USER_RING_PUT_BOUND".into());
+            }
+            self.lazy.put_fresh(mode, self.generation, put, entries);
+            put
+        };
         self.put = put;
         self.put_abs = self.relayed + u64::from(put.wrapping_sub(self.cursor) & (entries - 1));
         // the guest ring is FULL when the value it published leaves one slot before the `GP_GET` it sees
         self.put_full = put.wrapping_add(1) & (entries - 1) == self.written_get;
+        if self.put_full {
+            // D6: the guest may be blocked on the write-back this turn did not make
+            self.lazy.ring_full_seen();
+        }
         let known = matches!(self.life.mode(), Mode::Scan | Mode::Window);
         self.put_packet = known.then(|| self.scan.carried()).flatten();
         let open = known.then(|| self.put_packet.is_some());
@@ -689,9 +766,9 @@ impl Relay {
         match verdict {
             Gate::Wait => {
                 // The marker's interrupt announces it (its processing writes the reference).
-                self.need = Need::Marker {
+                self.set_need(Need::Marker {
                     target: self.gate_target,
-                };
+                });
                 self.idle_step(false)
             }
             Gate::PublishBarrier => {
@@ -708,7 +785,7 @@ impl Relay {
                 self.unnotified = false;
                 self.marker_event = true;
                 io.event(Ev::GatePublished);
-                self.need = Need::Marker { target: count };
+                self.set_need(Need::Marker { target: count });
                 self.idle_step(true)
             }
             Gate::Proceed => {
@@ -826,27 +903,27 @@ impl Relay {
                 // for this work is the spin or the safety net
                 self.unnotified = false;
                 self.marker_event = false;
-                self.need = Need::Popped {
+                self.set_need(Need::Popped {
                     target: self.fetch.issued(),
-                };
+                });
                 return Ok(false);
             }
             if self.fetch.available() >= 1 {
                 self.publish_marker(io)?;
-                self.need = Need::Marker {
+                self.set_need(Need::Marker {
                     target: self.marks.issued(),
-                };
+                });
                 return Ok(true);
             }
-            self.need = Need::Popped {
+            self.set_need(Need::Popped {
                 target: self.fetch.fetched() + 1,
-            };
+            });
             return Ok(false);
         }
         if self.fetch.fetched() < self.fetch.issued() {
             // published work in flight: the last marker's processing frees the guest's ring (the `GP_GET`
             // write-back)
-            self.need = if self.marker_event {
+            let need = if self.marker_event {
                 Need::Marker {
                     target: self.marks.issued(),
                 }
@@ -855,6 +932,7 @@ impl Relay {
                     target: self.fetch.issued(),
                 }
             };
+            self.set_need(need);
         }
         Ok(false)
     }
@@ -881,7 +959,7 @@ impl Relay {
             }
         }
         io.event(Ev::CreditWait);
-        self.need = if marker {
+        let need = if marker {
             Need::Marker {
                 target: self.marks.issued(),
             }
@@ -890,6 +968,7 @@ impl Relay {
                 target: self.fetch.fetched() + 1,
             }
         };
+        self.set_need(need);
         Ok(())
     }
 }

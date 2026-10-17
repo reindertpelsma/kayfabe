@@ -251,6 +251,11 @@ pub trait Env {
     fn software_gone(&self) -> bool {
         false
     }
+    /// ★ lazy observe (A): the relay uses `put` WITHOUT having read `GP_PUT` this turn. Is it a value the guest really
+    /// wrote, that is not beyond the guest's current `GP_PUT` (forward from `cursor`)? Default: not checked.
+    fn cached_put_ok(&mut self, _put: u32, _cursor: u32) -> bool {
+        true
+    }
 }
 
 /// Harness knobs (the production code has no test switches; code mutants are source patches applied by
@@ -336,6 +341,16 @@ impl<E: Env> Io for EnvIo<'_, E> {
         let put = self.env.gp_put();
         self.turn.put = Some(put);
         Ok(Some(put))
+    }
+    fn begin_entry(&mut self, put: u32) {
+        // A turn that did not read `GP_PUT` (rule A) used a remembered one: it must still be a value at or below the
+        // guest's current `GP_PUT`, and it is the `GP_PUT` the I8 bookkeeping holds the loads against.
+        if self.turn.put.is_none() {
+            if !self.env.cached_put_ok(put, self.cursor) {
+                self.env.event(Ev::BeyondPut);
+            }
+            self.turn.put = Some(put);
+        }
     }
     fn load_dword(&mut self, slot: u32, hi: bool) -> Turn<u32> {
         // I8: only the slot at the cursor, and only while the loaded GP_PUT is ahead of it
@@ -460,6 +475,13 @@ impl DerefMut for Relay {
 }
 
 impl Relay {
+    /// Opt the relay under test in to lazy observe (`Relay::new` leaves both rules OFF).
+    #[must_use]
+    pub fn with_lazy(mut self, cfg: kf_chan::user_lazy::LazyConfig) -> Self {
+        self.core = self.core.with_lazy(cfg);
+        self
+    }
+
     pub fn new(priv_entries: u32, life: Lifecycle, scan: Scan, _glue: Glue) -> Self {
         Self {
             core: turn::Relay::new(priv_entries, life, scan).expect("private ring"),
