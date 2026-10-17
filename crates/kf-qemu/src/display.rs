@@ -5995,6 +5995,38 @@ mod tests {
         );
     }
 
+    /// ★ hitch-20261017 — **copies are bound by ticks, whatever the path that wants one.** The phase-1 rule
+    /// (`V3_DISPLAY_PACING` §6.3): the newest latched frame is copied at most once per tick, so in any window of N
+    /// ticks at most N + 1 flip copies start. Clock-free: ticks and latches are events, a copy completes at once.
+    /// Each tick sees a flip latch just BEFORE it (an immediate flip) and one AT it (the vsync flip of the same frame,
+    /// kms = 2 x tear) — the production order with the colour path on (`KF3_DISPLAY_SDR_COLOR=1`), where the
+    /// colour rule wanted a copy of its own at every latch (`want`), outside the mailbox: two copies per tick,
+    /// the measured `copies > tick + 2` seconds. EXPECTED RED on the commit that adds it; green with the next.
+    #[test]
+    fn copies_started_in_n_ticks_never_exceed_n_plus_1_on_any_latch_path() {
+        const N: u64 = 200;
+        let mut scan = ScanState::default();
+        let mut copies = 0u64;
+        let serve = |scan: &mut ScanState, copies: &mut u64| {
+            while (scan.want || scan.mailbox.due(scan.inflight.is_some())) && scan.inflight.is_none() {
+                scan.begin_copy(false);
+                *copies += 1; // the copy completes at once: nothing stays in flight
+            }
+        };
+        for _ in 0..N {
+            scan.on_window_latched(true); // the immediate flip, between ticks
+            serve(&mut scan, &mut copies);
+            scan.on_console_tick(true); // the tick: one copy credit
+            scan.on_window_latched(true); // the vsync flip latched at the tick
+            serve(&mut scan, &mut copies);
+        }
+        assert!(
+            copies <= N + 1,
+            "{copies} flip copies started in {N} ticks (bound {}): a latch path copies outside the tick",
+            N + 1
+        );
+    }
+
     /// ★ §AK: the worker no longer carries the D1 gate or its measurement flag, parks no flip for a
     /// tick, and wires the mailbox exactly once each way: a latch of the shown window calls
     /// `on_flip_latched` (not the old `started + 1` barrier), the shown head's tick grants a copy, and
