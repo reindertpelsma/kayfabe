@@ -7,7 +7,7 @@ set -u
 OUT=$1; shift
 BIN=${SETOBJ_BIN:-/data/claude-setobj/bin/setobj_probe}
 mkdir -p "$OUT"
-echo "JOB_START $(date -Is) pid=$$ n=$#"
+echo "JOB_START $(date -Is) pid=$$ n=$# bin_md5=$(md5sum "$BIN" | cut -c1-12)"
 for cr in "$@"; do
   c=${cr%%:*}; r=${cr##*:}
   s=$(date +%s.%N)

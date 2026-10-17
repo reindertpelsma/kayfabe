@@ -78,7 +78,8 @@ static double now(void) {
 }
 static void say(const char *kind, const char *fmt, ...) {
   char b[1024]; va_list ap; va_start(ap, fmt); vsnprintf(b, sizeof b, fmt, ap); va_end(ap);
-  fprintf(g_out, "%s t=%.3f %s\n", kind, now() - t0, b); fflush(g_out);
+  struct timespec rt; clock_gettime(CLOCK_REALTIME, &rt);
+  fprintf(g_out, "%s t=%.3f e=%ld.%03ld %s\n", kind, now() - t0, (long)rt.tv_sec, rt.tv_nsec / 1000000, b); fflush(g_out);
 }
 
 /* ------------------------------------------------------------------ RM escapes */
@@ -308,6 +309,9 @@ static int step(const char *label) {
   int ok = wait_sem(slot, pay, 3000);
   char nb[200]; uint32_t bad = notif_status(nb, sizeof nb);
   say("RES", "step=%s sem_arrived=%d notifier_error=%u %s", label, ok, bad, nb);
+  usleep(250000);   /* RC / PBDMA faults are asynchronous to the semaphore: look again 250 ms later */
+  char nb2[200]; uint32_t bad2 = notif_status(nb2, sizeof nb2);
+  say("RES", "step=%s +250ms notifier_error=%u %s", label, bad2, nb2);
   pb_reset();
   return ok;
 }
@@ -415,6 +419,14 @@ static int case_run(const char *c) {
     pb_reset(); pb_set_object(1, ADA_COMPUTE_A); pb_set_object(2, ADA_COMPUTE_A); step("SO(1,compute) + SO(2,compute)");
     pb_reset(); pb_cs(2, 20, 0xc0de0003); step("compute report-semaphore on sub2");
     say("RES", "engine_sem slot20=0x%x (expect c0de0003)", *semp(20));
+    return 0;
+  }
+  if (!strncmp(c, "c_hwsub", 7)) {          /* SO(k,compute) on hardware subchannel k alone */
+    int k = c[7] - '0';
+    do_compute();
+    pb_reset(); pb_set_object(k, ADA_COMPUTE_A); step("SO(k,compute)");
+    pb_reset(); pb_cs(k, 20, 0xc0de0100 + k); step("compute report-semaphore on that subchannel");
+    say("RES", "engine_sem slot20=0x%x (0xc0de010%d = engine work executed on hw subchannel %d)", *semp(20), k, k);
     return 0;
   }
   if (!strcmp(c, "r0")) {                   /* oracle self-test */
@@ -535,6 +547,8 @@ int main(int argc, char **argv) {
   if (sched()) { say("OBS", "SCHEDULE-FAIL"); return 3; }
   say("OBS", "channel scheduled: hClient=0x%x hChan=0x%x token=0x%x ringVA=0x%llx", g_hClient, hChan, token, (unsigned long long)ringVA);
   int r = case_run(argv[1]);
+  usleep(1500000);
+  pb_reset(); step("FINAL tail after a 1.5 s settle (is the channel still executing?)");
   say("OBS", "END case=%s rc=%d", argv[1], r);
   return r;
 }
