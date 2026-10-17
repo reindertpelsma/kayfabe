@@ -200,8 +200,11 @@ impl Link for FakeLink {
         if w.never_reads {
             w.full_run += 1;
             w.fulls += 1;
+            // one entry reads at most READ_BATCH packets and each may try a few sends (the frame's
+            // WINDOW / ATTACH, a NO_CHANGE): a few hundred Full results are a batch of tries, an
+            // unbounded count is a send that retries a full socket in a loop
             assert!(
-                w.full_run <= 32,
+                w.full_run <= 512,
                 "the relay retried a full send in a loop ({} Full results in one entry): a send must never block",
                 w.full_run
             );
@@ -778,6 +781,7 @@ struct Out {
     hostile: u64,
     goal: u64,
     last_commit_ns: u64,
+    owed_unsolicited: u64,
     partial_drop_ms: u64,
     long_gaps: u64,
     relay_on: bool,
@@ -857,6 +861,7 @@ struct World {
     defer_ready: Option<(u32, u64)>,
     stepped_same: u32,
     last_turn_ns: u64,
+    last_recovered: u64,
     base: Option<Base>,
     kick_write: bool,
     partial_rest: Option<(Vec<u8>, TickPkt)>,
@@ -969,6 +974,7 @@ impl World {
             defer_ready: None,
             stepped_same: 0,
             last_turn_ns: 0,
+            last_recovered: 0,
             base: None,
             kick_write: false,
             partial_rest: None,
@@ -1107,6 +1113,12 @@ impl World {
         // without a request is wrong only if the ticks were live before AND after — the liveness can
         // change inside one batch of packets
         let live_before = tick_live(self.last_fresh_rx_ms, now_ms);
+        // an OWED frame (its ATTACH met a full socket, perhaps in the clock's fallback) is flushed with
+        // whatever request is open then — none, if the ticks came back since: one frame, ≤ 1 per owed
+        // episode (finding F2 of the report; `recovered` counts the flushes)
+        let recovered = relay.counters().recovered;
+        let owed_flush = recovered > self.last_recovered;
+        self.last_recovered = recovered;
         if !fresh.is_empty() {
             self.last_fresh_rx_ms = Some(now_ms);
         }
@@ -1155,8 +1167,14 @@ impl World {
                             self.fail(&format!("COMMIT.seq {label} on a connection that never opted in"));
                         }
                     } else if label == 0 {
-                        if live && live_before {
-                            self.fail("a frame was sent WITHOUT a credit while the broker's ticks are live (COMMIT.seq 0)");
+                        if live && live_before && owed_flush {
+                            self.out.owed_unsolicited += 1;
+                        } else if live && live_before {
+                            let (c, t) = (relay.counters(), relay.tick_counters());
+                            self.fail(&format!(
+                                "a frame was sent WITHOUT a credit while the broker's ticks are live (COMMIT.seq 0); relay: dropped {} uncommitted {} recovered {} backstops {} blocked {} sent {}; ticks: {t:?}; entry consumed {} ticks, exp_open {exp_before:?}",
+                                c.dropped, c.uncommitted, c.recovered, c.backstops, c.blocked, c.sent, fresh.len()
+                            ));
                         }
                         self.broker.unsolicited += 1;
                     } else {
@@ -2188,6 +2206,13 @@ fn books(o: &Out) {
         o.sim_ns / 1_000_000_000
     );
     if o.relay_on && o.advertised {
+        assert!(
+            o.owed_unsolicited <= o.relay_c.recovered,
+            "seed {}: {} owed frames went out unsolicited while ticks were live, {} owed flushes",
+            o.seed,
+            o.owed_unsolicited,
+            o.relay_c.recovered
+        );
         assert_eq!(
             o.answered, o.relay.frames_on_credit,
             "seed {}: frames answered (broker) vs spent requests (relay)",
@@ -2669,6 +2694,7 @@ fn lockstep_soak_long() {
     let outs = soak("long", |s| {
         let mut sc = adversarial_sc(s);
         sc.flips = per;
+        sc.max_ns = u64::MAX / 4;
         sc
     });
     for o in &outs {
