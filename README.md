@@ -11,7 +11,7 @@ driver as an ordinary RM client. It is written in Rust.
 names its evidence; what is measured is kept apart from what is planned. Long form: [`docs/STATUS_DETAIL.md`](docs/STATUS_DETAIL.md);
 resume point and open decisions: [`docs/STATUS_AND_HANDOFF.md`](docs/STATUS_AND_HANDOFF.md).
 
-> **Master is not the newest code.** The tables below describe master. Since 2026-10-16 the work has moved to branches that are not merged yet: the Windows
+> **Master is not the newest code.** The tables below describe master, except the one section marked experimental. Since 2026-10-16 the work has moved to branches that are not merged yet: the Windows
 > performance work (`claude/win-lifecycle-p1b-20261016`, `claude/d3d11-gap-20261016`, `claude/perf-strategy-20261016`), the GPU die sweep
 > (`codex/sweep-blackwell-20261015` and related `codex/*`), and the release plan (`claude/release-ledger-20261016`). Their results are summarised, with their limits, in
 > [Windows performance, newest measurements](#windows-performance-newest-measurements-experimental-not-on-master) below.
