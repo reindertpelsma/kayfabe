@@ -3237,6 +3237,11 @@ pub fn reset_memory_life(
                 }
                 at = at.saturating_add(n.max(1));
             }
+            // ★ 2026-10-18: the zero above is awaited (a pageable cuMemcpyHtoD may return before the
+            // DMA landed): the boot layer is shown again only after this completed.
+            if let Err(e) = k.sync_store() {
+                zero_refused.push(format!("completion of the boot framebuffer zero: {e}"));
+            }
         }
     }
     let mut windows = Vec::new();

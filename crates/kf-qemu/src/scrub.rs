@@ -5,21 +5,28 @@
 //! STATUS: LIVE (code, GPU-free tested; hardware verification is the checklist in the branch
 //! report). Branch `claude/bootlayer-20261018`.
 //!
-//! The rule, with no policy options: **the whole guest-allocatable store is zeroed** at
+//! The rule, with no policy options: **the whole guest-allocatable store is zeroed when the SAME
+//! process reuses the SAME store for a NEW OS instance** — a guest reboot ([`Cause::Reset`]: a system
+//! reset from QEMU's main loop, stage Memory, vCPUs paused; scope: the guest heap `[0, carve)`, the
+//! firmware carve-out above it is kayfabe's and survives, see below).
 //!
-//! | cause | when | scope |
+//! **Why only there** (owner decision, 2026-10-18, premise OWNER-ACCEPTED, NOT verified by us): the
+//! host driver does not promise zeroed memory, it promises process isolation — any allocation can
+//! only hold stale bytes of the SAME process, never another process's (like anonymous `mmap`). The
+//! one place a stale-bytes leak therefore exists is a reboot of the same VM: the next OS's root could
+//! read the previous OS's vidmem.
+//!
+//! | event | scrub? | already covered by the host's process isolation? |
 //! |---|---|---|
-//! | [`Cause::Realize`] | VM start, before the guest can run | the whole store (nothing of kayfabe's exists yet) |
-//! | [`Cause::Reset`] | a guest REBOOT (a system reset from QEMU's main loop), stage Memory, vCPUs paused | the guest heap `[0, carve)` — the firmware carve-out above it is kayfabe's and survives (see below) |
+//! | VM start (a fresh process, a fresh store) | no — realize still zeroes what kayfabe itself needs zero (the roots, the boot framebuffer `[0, G)`), and awaits that zero's completion | yes (premise); a crashed previous QEMU's store was cleaned by the host on process death |
+//! | guest REBOOT (system reset, main loop) | **yes** | no: same process, same store, a new OS |
+//! | guest-issued bus reset (a vCPU thread), S3 wake | no | n/a — the same OS keeps its own root |
+//! | RM unload, the basic-display -> NVIDIA handoff, a TDR-style reset | no (the boot range is zeroed for the DISPLAY only, see `bar1phys`) | n/a — the same OS can read its own vidmem already; a real GPU does not scrub there |
+//! | VM teardown | no | yes (premise): the store is freed to the host driver |
 //!
-//! **By trust boundary** (owner decision, 2026-10-18): only an event after which a NEW OS instance
-//! or a new VM can follow scrubs. [`decide`] is the table; in-guest events (RM unload, the
-//! basic-display -> NVIDIA handoff, a bus reset the guest itself issued, an S3 wake) keep the same OS
-//! and the same root, which can already read all of its own vidmem. **Teardown does not scrub**: the
-//! store is freed to the host driver, and that freed vidmem is scrubbed before an unrelated process
-//! can get it — an ACCEPTED PREMISE (owner, 2026-10-18), not verified by us. VM start scrubs whatever
-//! the host hands over, so a previous QEMU that crashed before any teardown is covered whether or
-//! not the host driver scrubbed.
+//! A reset is told from a reboot by what the device sees: where QEMU asked from (`current_cpu != NULL`
+//! is a vCPU thread: the guest's own bus reset) and the reset type (`RESET_TYPE_WAKEUP`); see
+//! [`event_of_reset`]. Were they indistinguishable the lazy rule would scrub on every reset.
 //!
 //! **What survives a reset** (kayfabe-owned, `kf_chip::bar0::FbLayout`): the firmware carve-out
 //! `[carve, fb_length)`. Inside it, OUR two root pages (`bar1_pde_base`, `bar2_pde_base`) are
@@ -48,20 +55,18 @@ pub const CHUNK: u64 = 256 << 20;
 /// Why the store is being scrubbed.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Cause {
-    /// VM start, before any guest instruction runs.
-    Realize,
     /// A guest reboot: the memory stage of a system reset.
     Reset,
 }
 
 /// ★ What happened to the guest's video memory's trust boundary (the owner's table,
-/// 2026-10-18). The rule is **scrub by trust boundary**: only an event after which a NEW OS
-/// instance or a new VM can follow scrubs. An in-guest event keeps the same OS and the same root,
-/// which can read all of its own vidmem already (the guest driver owns scrubbing on allocation; a
-/// real GPU does not scrub there either).
+/// 2026-10-18). Only the SAME process reusing the SAME store for a NEW OS instance scrubs (a
+/// reboot); an in-guest event keeps the same OS and the same root, which can read all of its own
+/// vidmem already, and a new process or a freed store is the host driver's process isolation
+/// (owner-accepted premise, not verified by us).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Event {
-    /// The VM starts; the only event that also covers a previous QEMU that died before teardown.
+    /// The VM starts: a fresh process with a fresh store (the host's process isolation).
     VmStart,
     /// The machine's system reset from QEMU's main loop: a guest reboot, the reset button, a
     /// bugcheck or triple-fault reset, QMP `system_reset` — a new OS instance follows.
@@ -79,15 +84,15 @@ pub enum Event {
     VmTeardown,
 }
 
-/// ★ THE TABLE: does `event` scrub the whole guest-allocatable store, and with which scope?
+/// ★ THE TABLE: does `event` scrub the guest-allocatable store, and with which scope?
 #[must_use]
 pub fn decide(event: Event) -> Option<Cause> {
     match event {
-        Event::VmStart => Some(Cause::Realize),
         Event::GuestReboot => Some(Cause::Reset),
-        // the same OS and the same root keep running: it can read its own vidmem already; and the
-        // host driver scrubs what the store frees (see the module docs for what is proved)
-        Event::S3Wake
+        // the same OS and the same root keep running (it can read its own vidmem already), or the
+        // host's process isolation covers it (owner-accepted premise): see the module docs
+        Event::VmStart
+        | Event::S3Wake
         | Event::GuestBusReset
         | Event::DriverUnload
         | Event::DisplayHandoff
@@ -143,7 +148,6 @@ impl Plan {
 #[must_use]
 pub fn plan(layout: &FbLayout, cause: Cause, boot: Option<(u64, u64)>) -> Plan {
     let mut want: Vec<(u64, u64)> = match cause {
-        Cause::Realize => vec![(0, layout.fb_length)],
         // the guest heap: below the carve-out, whatever console a guest reserves inside it (a
         // reserved console region is still guest-written memory)
         Cause::Reset => vec![(0, layout.carve())],
@@ -387,16 +391,6 @@ mod tests {
         }
     }
 
-    /// VM start: nothing of kayfabe's exists yet — the whole store, whatever a previous process left.
-    #[test]
-    fn vm_start_scrubs_the_whole_store() {
-        let l = layout();
-        let mut m = Model::filled(l.fb_length);
-        let n = run(&plan(&l, Cause::Realize, None), &mut m, &AtomicU64::new(0)).expect("scrubbed");
-        assert_eq!(n, l.fb_length);
-        assert!(m.dirty.is_empty(), "{:x?}", m.dirty);
-    }
-
     /// The boot framebuffer is inside the heap: asking for it too never zeroes anything twice, and
     /// a range past the store is clipped to it.
     #[test]
@@ -407,8 +401,8 @@ mod tests {
         // a range the layout does not hold is clipped to the store, never read past it
         let q = plan(&l, Cause::Reset, Some((l.fb_length - 4096, 1 << 20)));
         assert_eq!(q.ranges, vec![(0, l.carve()), (l.fb_length - 4096, 4096)]);
-        let overlap = plan(&l, Cause::Realize, Some((16, 100)));
-        assert_eq!(overlap.ranges, vec![(0, l.fb_length)]);
+        let inside = plan(&l, Cause::Reset, Some((16, 100)));
+        assert_eq!(inside.ranges, vec![(0, l.carve())]);
     }
 
     /// Chunks: bounded, ordered, contiguous, covering the plan exactly.

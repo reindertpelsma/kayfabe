@@ -552,25 +552,6 @@ impl Device {
             kernel
                 .import_store(export_fd, fb_length)
                 .map_err(|e| format!("store import into the walker: {e}"))?;
-            // ★★ 2026-10-18 (`crate::scrub`, VM START): the WHOLE store is zeroed on the GPU, and the
-            // completion awaited, before anything else touches it and long before the guest can
-            // run — nothing a previous process (a QEMU that crashed before any teardown, another
-            // user of these VRAM pages) left is ever visible to this guest. Refuses the VM by name.
-            {
-                let t0 = std::time::Instant::now();
-                let whole = fb_layout(fb_length).ok_or("store layout")?;
-                let plan = crate::scrub::plan(&whole, crate::scrub::Cause::Realize, None);
-                let n = crate::scrub::run(
-                    &plan,
-                    &mut crate::scrub::WalkZeroer(&kernel),
-                    &std::sync::atomic::AtomicU64::new(0),
-                )
-                .map_err(|e| format!("VM start refused, the store is not clean: {e}"))?;
-                eprintln!(
-                    "kf3: store scrubbed at VM start: {n} bytes zeroed on the GPU, completion awaited, {} ms",
-                    t0.elapsed().as_millis()
-                );
-            }
             // ★ Our two roots, zeroed on the GPU (the pages are ours: no CPU read, no guest table).
             let zero = vec![0u8; kf_chip::bar0::ROOT_PAGE_BYTES as usize];
             for root in roots {
@@ -594,6 +575,14 @@ impl Device {
                     at += n;
                 }
             }
+            // ★ 2026-10-18: AWAIT the completion of what was written above. `cuMemcpyHtoD` from
+            // pageable memory may return once the data is staged, before the DMA reached device
+            // memory (the CUDA programming guide's API synchronization behaviour); the display
+            // worker's own context reads the boot range later, and the guest's first BAR1 write
+            // must not be overtaken by a late zero.
+            kernel
+                .sync_store()
+                .map_err(|e| format!("completion of the realize-time zeroing: {e}"))?;
             Ok(kernel)
         })?;
         // The export node stays open for the process (CUDA holds the import).
