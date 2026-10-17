@@ -62,6 +62,14 @@ impl CreditGate {
         self.last_seq.is_none_or(|l| seq_newer(tick_seq, l))
     }
 
+    /// The decision state, for the exhaustive model's state key (test builds only, read-only):
+    /// `(last_seq, last_req, pending)`.
+    #[cfg(test)]
+    #[must_use]
+    pub(crate) fn probe_state(&self) -> (Option<u32>, Option<u32>, Option<(u32, u64)>) {
+        (self.last_seq, self.last_req, self.pending)
+    }
+
     /// The pending credit's request and when it becomes usable.
     #[must_use]
     pub fn pending(&self) -> Option<(u32, u64)> {

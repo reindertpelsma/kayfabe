@@ -148,6 +148,20 @@ impl Requests {
         self.last_seq
     }
 
+    /// The book's decision state, for the exhaustive model's state key (a read-only getter):
+    /// `(last_seq, open, refresh_ns, last_answer_ms, ticks_since_open)`.
+    #[doc(hidden)]
+    #[must_use]
+    pub fn probe_state(&self) -> (Option<u32>, Option<u32>, u32, Option<u64>, u32) {
+        (
+            self.last_seq,
+            self.open,
+            self.refresh_ns,
+            self.last_answer_ms,
+            self.ticks_since_open,
+        )
+    }
+
     /// ★ A tick arrived (already framing-checked by [`Pkt::tick`]).
     pub fn on_tick(&mut self, t: &TickPkt) -> TickVerdict {
         if self.last_seq.is_some_and(|l| !seq_newer(t.tick_seq, l)) {
