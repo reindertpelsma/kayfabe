@@ -502,8 +502,8 @@ protocol for old peers. No flag is required to boot; nothing is a measurement fl
 
 ### 11.7 Tests, results, mutants (GPU-free; every number MEASURED on the dev box, `cargo test --release`, 4 cores)
 
-**Counts.** `cargo test --release -p kf-disp -p kf-broker -p kf-qemu`: **640 passed / 8 ignored on the phase-1 base `dd19a9147` → 707 passed / 12 ignored** (kf-disp lib 185 → 229, `kf-disp/tests/lockstep_threads.rs` +7,
-kf-broker lib 50 → 51 and `relay_machine` +8, `proto_mirror` +1, kf-qemu lib 290 → 291); 0 failed. The ignored: the two 10 M-flip / deep-exploration runs, `broker_ticks_e2e` (needs the broker binary) and
+**Counts.** `cargo test --release -p kf-disp -p kf-broker -p kf-qemu`: **640 passed / 8 ignored on the phase-1 base `dd19a9147` → 708 passed / 12 ignored** (kf-disp lib 185 → 229, `kf-disp/tests/lockstep_threads.rs` +7,
+kf-broker lib 50 → 51 and `relay_machine` +9, `proto_mirror` +1, kf-qemu lib 290 → 291); 0 failed. The ignored: the two 10 M-flip / deep-exploration runs, `broker_ticks_e2e` (needs the broker binary) and
 the earlier ignored loopbacks. Broker C: `make check` 245 → 365 PASS lines (new: `test-tick` 566 195 checks, `mutate_tick.py` 28 mutants all killed by >= 2 distinct failing checks, `test_tick.py` 122 PASS over the real socket);
 `make check-sanitize` green (ASan+UBSan, 0 reports); `make check-tick-probe` (real `mutter --headless`) passes. rustfmt is clean on every file this branch wrote; clippy reports nothing on the changed lines.
 
@@ -564,7 +564,49 @@ never reads from t = 0 or from 1 s: replay fails the attempt / frames owed, no t
 (8) stall during a credit wait with a copy 10–25 ms in flight and an immediate flip: it never waits longer than copy + wake + 2 ms. (A real SIGSTOP of a real broker was driven only against mutter: ticks stop, resume at once, §11.8.)
 
 **Mutants** (each = one textual replacement, the named suites run, the file restored; `scripts/mutate/lockstep_mutants.py --suite must`, extras in `lockstep_extra_{a,b}.py`):
-MUTTABLE
+| mutant | suites that must kill it | final-head run, in that order |
+|---|---|---|
+| credit_check_removed | a b relay | KILLED KILLED KILLED |
+| request_not_replaced (coalescing) | a b relay | KILLED KILLED KILLED |
+| credit_not_consumed (gate) | a b unit | KILLED KILLED KILLED |
+| worker_fallback_removed | a b unit | KILLED KILLED KILLED |
+| relay_silence_removed | a b relay | KILLED KILLED KILLED |
+| buffer_reuse_rule_removed | a b unit | KILLED KILLED KILLED |
+| relay_sequence_check_removed | a b relay | KILLED KILLED KILLED |
+| gate_sequence_check_removed | a b unit | KILLED KILLED KILLED |
+| in_flight_bound_raised | a b relay | KILLED KILLED KILLED |
+| double_tick_guard_removed | a b unit | KILLED KILLED KILLED |
+| swallowed_credit_acts_at_once (guard defer removed) | a b unit | KILLED KILLED KILLED |
+| carried_credit_not_released (the carry removed) | a b unit | KILLED **SURVIVED** KILLED |
+| gate_acts_early | a b unit | KILLED KILLED KILLED |
+| flap_damping_removed | a b unit | KILLED KILLED KILLED |
+| no_change_at_the_opening_tick | a b relay | KILLED KILLED KILLED |
+| read_deadline_removed | b threads relay | KILLED KILLED KILLED |
+| per_turn_budget_removed | b threads relay | KILLED KILLED KILLED |
+| send_blocks_on_full | b threads relay | not re-run on the final head (see the fork runs below) |
+| stale_tick_counts_as_alive | a b relay | a **SURVIVED** (structural, F5: the liveness update lives in conn.rs which A re-implements), b KILLED, relay KILLED (after adding `a_stale_tick_does_not_keep_the_ticks_alive`; first run of the relay suite had it SURVIVE) |
+| want_lost_on_coalesce (share) | b threads relay | not re-run on the final head (see the fork runs below) |
+| a: NO_CHANGE ignores a ready frame | a | KILLED |
+| a: request spent twice (spend does not take) | a | not re-run on the final head (see the fork runs below) |
+| a: vblank number skips (+2) | a | KILLED |
+| a: mailbox ignores the copy in flight | a | not re-run on the final head (see the fork runs below) |
+| a: mailbox keeps its credit after a copy | a | not re-run on the final head (see the fork runs below) |
+| a: silence is 500 ms | a | not re-run on the final head (see the fork runs below) |
+| a: probation never grows (always 1 gap) | a | KILLED |
+| a: NO_CHANGE not paced (answer gap 0) | a | not re-run on the final head (see the fork runs below) |
+| held_slot_overwritten | b threads | KILLED KILLED |
+| no_change_with_a_frame_waiting | b | not re-run on the final head (see the fork runs below) |
+| request_spent_twice | b threads | KILLED KILLED |
+| legacy_credit_used_while_live | b threads | not re-run on the final head (see the fork runs below) |
+| commit_label_dropped | b threads | KILLED KILLED |
+| reserved_tick_bits_accepted | b | not re-run on the final head (see the fork runs below) |
+| tick_seq_zero_accepted | b | KILLED |
+
+Honest accounting: the runs were stopped at the owner's request after the rows above; the rows marked "not re-run" were KILLED in the harness forks' own runs on the previous head (A: all 8 extras and every common mutant of its list except `stale_tick_counts_as_alive`;
+B: 26 of 26 run, 25 killed after two harness fixes, `want_lost_on_coalesce`, `send_blocks_on_full`, `no_change_with_a_frame_waiting`, `legacy_credit_used_while_live`, `reserved_tick_bits_accepted` included) — BEFORE the G2 change of the gate and the F1/F2/F4 fixes; they were not re-run on the final head. Two rows on the final head are not kills:
+**`carried_credit_not_released` survives suite b** (killed by A and by the unit tests; the soak's broker sends a WANT on nearly every tick, so a credit lost at a swallowed tick is replaced by the next tick's own and no soak invariant sees it — a soak invariant "every swallowed WANT is followed by a grant before the next WANT" would close it),
+and **`stale_tick_counts_as_alive` survives suite a** (structural). Broker C mutants: `mutate_tick.py` 28/28 killed (each by ≥ 2 distinct failing checks), `mutate-tick-core` 14 killed (2 reported equivalent by design).
+
 
 **Findings the harness made, and what was done** (each is a test that stays):
 - **F1 (defect, FIXED).** A new broker connection restarts the tick numbers at 1; the worker's `CreditGate` kept the old last number and called every new tick stale (the lock step silently off for as long as the old connection had been up). Fix: `TickShare`
