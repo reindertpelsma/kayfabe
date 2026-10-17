@@ -44,17 +44,10 @@ Master is not the newest code: the latest Windows performance work lives on bran
 **Not finished:** Windows sleep/wake does not survive; Edge can reset after 7 to 16 minutes of playback; other GPU dies need more work under Windows; the
 security model is designed but not audited, so no public binary ships. The full list is in [`docs/STATUS_DETAIL.md`](docs/STATUS_DETAIL.md).
 
-## Try it
+## Trying it
 
-Needs Linux with KVM, the NVIDIA **open** kernel module, QEMU 10.2.4 with the overlay in `qemu/hw/misc/kf3`, and Rust (pinned in `rust-toolchain.toml`).
-
-```sh
-cargo build --workspace --release
-cargo test --release $(ls crates | grep '^kf-' | sed 's/^/-p /')      # GPU-free tests
-bash scripts/bench/v3_gates.sh                                         # on a box with a GPU, no QEMU: expect 9/9
-```
-
-Windows 11 guest: `scripts/bench/windows/win_vm.sh` ([`README`](scripts/bench/windows/README.md)). Renting a test box: [`scripts/bench/box/README.md`](scripts/bench/box/README.md).
+There is no user install path yet; it is still being built. Developers can build from source (`cargo build --workspace --release`; `cargo test` runs without a GPU)
+and follow [`docs/STATUS_AND_HANDOFF.md`](docs/STATUS_AND_HANDOFF.md) and [`scripts/bench/windows/README.md`](scripts/bench/windows/README.md).
 
 ## Learn more
 
