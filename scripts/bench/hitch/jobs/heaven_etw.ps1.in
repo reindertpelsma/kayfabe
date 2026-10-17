@@ -1,0 +1,45 @@
+# job (interactive): Unigine Heaven, @FSNAME@ 1920x1080, API @API@, preset @DEFS@, with a DXGI ETW present trace (per-frame timing). Host sends click + F9 unless DUR>0 (then no benchmark: free-run DUR seconds).
+$u = "C:\kf\apps\heaven\bin"; $lg = "C:\Users\kfadmin\Heaven\log.html"; Remove-Item $lg -ErrorAction SilentlyContinue
+$etl = "$OUT\dxgi.etl"
+logman stop kfdxgi -ets 2>&1 | Out-Null
+$o = logman create trace kfdxgi -p "Microsoft-Windows-DXGI" 0xffffffff 5 -o $etl -ets -bs 1024 -nb 16 64 -max 512 2>&1
+"ETWSTART " + ($o -join ' ')
+$args2 = "-project_name Heaven -data_path ../ -engine_config ../data/heaven_4.0.cfg -system_script heaven/unigine.cpp -sound_app null -video_app @API@ -video_multisample 0 -video_fullscreen @FS@ -video_mode -1 -video_width 1920 -video_height 1080 -extern_define @DEFS@"
+$t0 = Get-Date; "LAUNCH $($t0.ToString('o')) utc=$([DateTime]::UtcNow.ToString('o'))"
+$p = Start-Process "$u\Heaven.exe" -ArgumentList $args2 -WorkingDirectory $u -PassThru
+"HEAVEN_PID $($p.Id)"
+$dur = @DUR@
+$found = $false
+while (((Get-Date) - $t0).TotalSeconds -lt 480 -and -not $p.HasExited) {
+  Start-Sleep -Seconds 2
+  if ($dur -gt 0) { if (((Get-Date) - $t0).TotalSeconds -ge $dur) { break } }
+  elseif ((Test-Path $lg) -and (Select-String -Path $lg -Pattern "Benchmark results" -Quiet)) { $found = $true; break }
+}
+"RESULT_FOUND=$found alive=$(-not $p.HasExited) elapsed_s=$([int]((Get-Date) - $t0).TotalSeconds)"
+Start-Sleep 2
+if (Test-Path $lg) { Get-Content $lg | Where-Object { $_ -match "Benchmark|Time:|Frames:|FPS|Score|Direct3D11 desc" } | ForEach-Object { "HLOG " + ($_ -replace "<[^>]*>","" -replace "&nbsp;"," ") } }
+if (-not $p.HasExited) { $p.Kill() }
+Start-Sleep 2
+logman stop kfdxgi -ets 2>&1 | ForEach-Object { "ETWSTOP " + $_ }
+Set-Location $OUT
+tracerpt $etl -of CSV -o "$OUT\dxgi.csv" -summary "$OUT\dxgi_sum.txt" -y 2>&1 | Select-Object -Last 3 | ForEach-Object { "TRACERPT " + $_ }
+"CSVLINES " + (Get-Content "$OUT\dxgi.csv" | Measure-Object).Count
+Get-Content "$OUT\dxgi_sum.txt" -TotalCount 60 | ForEach-Object { "SUM " + $_ }
+Get-Content "$OUT\dxgi.csv" -TotalCount 6 | ForEach-Object { "CSVHEAD " + $_ }
+# per-frame Present (DXGI events 42 start / 43 stop) of the Heaven pid: "FR <start FILETIME> <dur 100ns>" (UTC FILETIME), plus the guest's wall clock for alignment
+$hp = ('0x{0:X8}' -f $p.Id)
+$st = @{}; $n = 0; $buf = New-Object System.Text.StringBuilder
+foreach ($l in [IO.File]::ReadLines("$OUT\dxgi.csv")) {
+  if (-not $l.StartsWith("Microsoft-Windows-DXGI")) { continue }
+  $c = $l.Split(',')
+  if ($c.Count -lt 17) { continue }
+  $id = $c[2].Trim()
+  if ($id -ne '42' -and $id -ne '43') { continue }
+  if ($c[9].Trim() -ne $hp) { continue }
+  $tid = $c[10].Trim(); $ft = [int64]$c[16].Trim()
+  if ($id -eq '42') { $st[$tid] = $ft }
+  elseif ($st.ContainsKey($tid)) { [void]$buf.AppendLine(("FR {0} {1}" -f $st[$tid], ($ft - $st[$tid]))); $n++ }
+}
+"FRAMES $n pid=$hp guest_utc_now=$([DateTime]::UtcNow.ToString('o')) filetime_now=$([DateTime]::UtcNow.ToFileTimeUtc())"
+$buf.ToString()
+"FRDONE"

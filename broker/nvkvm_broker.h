@@ -132,6 +132,9 @@ struct nb_config {
      * default is to exit: a broker window outliving its VM is a window showing
      * nothing, and the socket is the VMM's to reconnect on. */
     bool persist;
+    /* ★ MEASUREMENT (hitch investigation): print one `stats t=<CLOCK_MONOTONIC ms> ...` line per second of per-second
+     * deltas of the tick counters (--stats-line).  Off by default, never required, no behaviour change. */
+    bool stats_line;
     /* 0 = never scale the guest frame, 1 = always scale it to the window,
      * 2 = auto: 1:1 windowed, scaled to fit in fullscreen.  Default 2. */
     /*
@@ -644,6 +647,16 @@ bool nb_refused_has(const struct nb_refused *r, uint32_t fourcc,
  * display reports it) must not become 37.6 Hz. */
 #define NB_TICK_HZ_SLACK_MHZ 500u
 
+/* ★ MEASUREMENT: the per-second WINDOW of the stats line (reset at every line). */
+struct nb_tick_win {
+    uint64_t gap_max_ns, gap33;          /* max gap between accepted refreshes; gaps > 33 ms             */
+    uint64_t ans_max_ns, ans_sum_ns, ans_n;   /* a request's tick sent -> COMMIT/NO_CHANGE arrived       */
+    uint64_t pres_max_ns, pres_sum_ns, pres_n; /* a COMMIT arrived -> the display showed/discarded it     */
+    uint64_t discarded;                  /* presentation feedbacks the compositor DISCARDED              */
+    uint64_t loop_late_max_ns;           /* poll() slept this much past its timeout                      */
+    uint64_t loop_work_max_ns;           /* the longest time between poll() returning and the next poll()*/
+};
+
 struct nb_tick {
     bool     on;             /* negotiated: the VMM sent CLIENT_TICK          */
     unsigned cap_hz;         /* the VMM's cap, 0 = NVKVM_BROKER_GUEST_MAX_HZ  */
@@ -664,7 +677,31 @@ struct nb_tick {
     uint64_t n_req_timeouts, n_present_timeouts;
     uint64_t n_answered, n_no_change, n_late, n_unsolicited;
     uint64_t n_coalesced;
+    struct nb_tick_win win;      /* ★ MEASUREMENT: see nb_tick_stats_format */
 };
+
+/*
+ * ★ MEASUREMENT: the per-second stats line.  Pure: the time and the counters are arguments.
+ *   nb_tick_snap_take   copies the cumulative counters
+ *   nb_tick_stats_due   true (and advances *next_ns by one period, never in a burst) when `now_ns` reached *next_ns;
+ *                       the first call arms it and returns false
+ *   nb_tick_stats_format writes `stats t=<ms> feedbacks=<d> ticks=<d> want_ticks=<d> commit=<d> no_change=<d>
+ *                       timeouts=<d> late=<d> unsolicited=<d> present_timeouts=<d> coalesced=<d>` (deltas against
+ *                       `prev`) into buf; returns the length, 0 when buf is too small
+ */
+struct nb_tick_snap {
+    uint64_t feedback, ticks, want, answered, no_change, req_timeouts, late, unsolicited, present_timeouts, coalesced;
+};
+void nb_tick_snap_take(const struct nb_tick *t, struct nb_tick_snap *s);
+bool nb_tick_stats_due(uint64_t now_ns, uint64_t *next_ns, uint64_t period_ns);
+int nb_tick_stats_format(char *buf, size_t n, uint64_t t_ms, const struct nb_tick_snap *prev,
+                         const struct nb_tick_snap *now, const struct nb_tick_win *w);
+/* window updaters (pure) */
+void nb_tick_win_gap(struct nb_tick *t, uint64_t gap_ns);
+void nb_tick_win_loop(struct nb_tick *t, uint64_t late_ns, uint64_t work_ns);
+void nb_tick_presented_at(struct nb_tick *t, uint64_t now_ns, bool discarded);
+
+#define NB_TICK_STATS_PERIOD_NS 1000000000ull
 
 /* What nb_tick_refresh() decided to put on the wire. */
 struct nb_tick_out {
@@ -729,6 +766,9 @@ struct nb_sink {
     uint64_t client_generation; /* changes across every attach/detach; async
                                  * backend work must match before delivery    */
     uint32_t seq;
+    /* ★ MEASUREMENT: the per-second stats line's state */
+    struct nb_tick_snap stats_prev;
+    uint64_t            stats_next_ns;
 
     /*
      * The window has been sized once from the guest's own resolution.  After
@@ -985,6 +1025,12 @@ bool nb_sink_refresh(struct nb_sink *s, uint64_t now_ns, uint64_t present_ns,
 void nb_sink_presented(struct nb_sink *s);
 /* Did the VMM opt in to ticks?  The mode rate the broker advertises follows. */
 bool nb_sink_tick_on(const struct nb_sink *s);
+/* ★ MEASUREMENT: emit the per-second stats line if --stats-line is on and one is due (event-driven: called from the tick
+ * and reply paths and from the backend's existing pacing callback; no timer of its own). */
+void nb_sink_stats_poll(struct nb_sink *s);
+/* ★ MEASUREMENT: the compositor DISCARDED a presentation feedback; the event loop's lateness / body time. */
+void nb_sink_note_discarded(struct nb_sink *s);
+void nb_sink_note_loop(struct nb_sink *s, uint64_t late_ns, uint64_t work_ns);
 /* The EV_SURFACE rate for a host rate of `host_mhz`, after the tick divisor. */
 unsigned nb_sink_mode_mhz(const struct nb_sink *s, unsigned host_mhz,
                           uint64_t host_period_ns);

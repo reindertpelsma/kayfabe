@@ -559,6 +559,55 @@ static void test_invariants(void)
     CHECK(T.n_want == issued_want, "run: n_want counts the WANT ticks");
 }
 
+/* ★ MEASUREMENT: the per-second stats line is pure: deltas, one line per period, never a burst, the format is stable. */
+static void test_stats(void)
+{
+    struct nb_tick ST;
+    struct nb_tick_snap a, b;
+    uint64_t next = 0;
+    char buf[400];
+    const uint64_t P = NB_TICK_STATS_PERIOD_NS;
+
+    nb_tick_reset(&ST, true, 60);
+    nb_tick_snap_take(&ST, &a);
+    CHECK(!nb_tick_stats_due(5 * P, &next, P), "stats: the first call only arms");
+    CHECK(next == 6 * P, "stats: armed one period ahead");
+    CHECK(!nb_tick_stats_due(6 * P - 1, &next, P), "stats: not due a ns early");
+    CHECK(nb_tick_stats_due(6 * P, &next, P), "stats: due at the period");
+    CHECK(next == 7 * P, "stats: next is a period later");
+    CHECK(nb_tick_stats_due(20 * P, &next, P) && next == 21 * P, "stats: after a gap one line, then a period from now");
+    CHECK(!nb_tick_stats_due(20 * P + 1, &next, P), "stats: no catch-up burst");
+    ST.n_feedback = 61; ST.n_ticks = 60; ST.n_want = 50; ST.n_answered = 49; ST.n_no_change = 9;
+    ST.n_req_timeouts = 2; ST.n_late = 1; ST.n_unsolicited = 3; ST.n_present_timeouts = 0; ST.n_coalesced = 4;
+    nb_tick_snap_take(&ST, &b);
+    CHECK(nb_tick_stats_format(buf, sizeof(buf), 123456, &a, &b, &ST.win) > 0, "stats: formats");
+    CHECK(strstr(buf, "stats t=123456 feedbacks=61 ticks=60 want_ticks=50 commit=40 no_change=9 timeouts=2 late=1 "
+                      "unsolicited=3 present_timeouts=0 coalesced=4 gap_max_us=0 ") == buf, "stats: line is '%s'", buf);
+    /* the window: gaps, tick->answer and commit->present latencies, discards, loop stalls */
+    nb_tick_reset(&ST, true, 60);
+    nb_tick_win_gap(&ST, 16000000ull);
+    nb_tick_win_gap(&ST, 50000000ull);
+    nb_tick_win_gap(&ST, 34000000ull);
+    CHECK(ST.win.gap_max_ns == 50000000ull && ST.win.gap33 == 2, "win: max gap and gaps over 33 ms");
+    ST.last_seq = 7; ST.open_req = 7; ST.open_since_ns = 1000000000ull;
+    CHECK(nb_tick_answer(&ST, 7, true, 1004000000ull) == NB_TICK_ANS_OPEN, "win: answer");
+    CHECK(ST.win.ans_n == 1 && ST.win.ans_max_ns == 4000000ull, "win: tick->answer latency");
+    nb_tick_presented_at(&ST, 1021000000ull, false);
+    CHECK(ST.win.pres_n == 1 && ST.win.pres_max_ns == 17000000ull && !ST.unpresented, "win: commit->present latency");
+    ST.unpresented = true; ST.unpresented_since_ns = 1030000000ull;
+    nb_tick_presented_at(&ST, 1031000000ull, true);
+    CHECK(ST.win.discarded == 1 && ST.win.pres_n == 2, "win: a discard is counted and ends the wait");
+    nb_tick_win_loop(&ST, 3000000ull, 9000000ull);
+    nb_tick_win_loop(&ST, 1000000ull, 2000000ull);
+    CHECK(ST.win.loop_late_max_ns == 3000000ull && ST.win.loop_work_max_ns == 9000000ull, "win: loop maxima");
+    nb_tick_snap_take(&ST, &a);
+    nb_tick_snap_take(&ST, &b);
+    CHECK(nb_tick_stats_format(buf, sizeof(buf), 5, &a, &b, &ST.win) > 0 && strstr(buf, "gap_max_us=50000 gaps33=2 discarded=1 ans_max_us=4000 ans_mean_us=4000 pres_max_us=17000 pres_mean_us=9000 loop_late_max_us=3000 loop_work_max_us=9000") != NULL, "win: line is '%s'", buf);
+    CHECK(nb_tick_stats_format(buf, 20, 1, &a, &b, &ST.win) == 0, "stats: a small buffer yields nothing, never a overrun");
+    CHECK(nb_tick_stats_format(buf, sizeof(buf), 1, &b, &b, &ST.win) > 0 && strstr(buf, "ticks=0 ") != NULL, "stats: no change, zero deltas");
+    CHECK(nb_tick_stats_format(buf, sizeof(buf), 1, &b, &a, &ST.win) > 0 && strstr(buf, "feedbacks=0 ") != NULL, "stats: a reset never underflows");
+}
+
 int main(void)
 {
     test_div();
@@ -569,6 +618,7 @@ int main(void)
     test_answer();
     test_replace();
     test_invariants();
+    test_stats();
     printf("test_tick: %u checks, %u failed\n", n_checks, n_fail);
     return n_fail ? 1 : 0;
 }
