@@ -415,8 +415,13 @@ wrapping and only needs "newer than"; 0 is never a tick, so 0 can mean "none".)
 (new, new): tick mode. The broker keeps sending `EV_FRAME` (the VMM ignores it while ticks are live, and uses it again in fallback).
 An old broker given `CAPS.width` with an unknown bit would store it (`caps_seen`) harmlessly; the VMM never sends it to one.
 
-**Broker's TX queue.** `EV_TICK` is not unbounded: at most ONE un-sent tick without `WANT_FRAME` is queued (a newer one replaces it; `ticks_coalesced`), and a `WANT_FRAME` tick is never dropped
-(there is at most one open request). The ring's 512 packets and 4-packet reserve are untouched.
+**Broker's TX queue.** ⊘ CORRECTED by the C-side build (a "never dropped WANT" rule lets a peer that stops reading accumulate one WANT tick per 100 ms request timeout until the 512-packet ring
+overflows from ticks alone): a queued, unsent tick is REPLACED by a newer one unless it carries `WANT_FRAME` and the newer does not (the live request exists only in that packet); a NEWER `WANT_FRAME`
+replaces an older queued one (that request is dead: the broker already moved on). The queue therefore holds at most 3 packets however long the peer sleeps (MEASURED, 6 000 000 feedbacks to a peer that never read:
+queue 3 packets, 11 977 ticks emitted, 11 975 coalesced, 5 988 023 dropped as too fast). Further as built: `CAPS` with `CLIENT_TICK` on a broker that did not advertise `CAP_TICK` is a violation; `NO_CHANGE` with any
+other field set, or without `CLIENT_TICK`, or for request 0, is a violation; `CAPS` without `CLIENT_TICK` after one with it withdraws the opt-in (one log line); a feedback is dropped (counted) when it is the same
+instant or earlier than the last accepted, closer than half a HOST period to it, or (compositor timestamps) the same vsync; `EV_SURFACE` is also re-sent on a refresh-only change (before, an equal size returned early and
+dropped it); under `--refresh auto` `EV_SURFACE.w0` is `host_mhz / div` (144 Hz → 72000 mHz, 165 → 55000, 240 → 60000). The ring's 512 packets and 4-packet reserve are untouched.
 
 ### 11.3 The broker (C): decisions are pure functions, backends are thin
 
@@ -432,7 +437,7 @@ Core (`nvkvm_broker.c`): `nb_sink_refresh(sink, present_ns, refresh_ns, flags)` 
 
 Wayland (`nb_session_wl.c`): `wp_presentation.feedback` + `wl_surface.frame` on every commit; `presented` → `nb_sink_refresh` (compositor timestamp, `clock_id` checked: not `CLOCK_MONOTONIC` ⇒ `CLOCK_ONLY`)
 and `nb_sink_presented`; `discarded` → `nb_sink_presented` too (the frame is gone, the request must not wait); with no `wp_presentation`, `frame_done` stands in (`CLOCK_ONLY`, a documented loss: the instant is
-when the callback arrived, not when the display scanned out). **Commit every refresh:** the wl_surface protocol text says a frame callback is *requested* by `frame` and "takes effect on the next
+when the callback arrived, not when the display scanned out). **Commit every refresh (⊘ CORRECTED by the measurement, §11.8: the broker commits 1x1 damage on the buffer already attached, driven by the `presented` it produced; an EMPTY commit gets a callback at once and a `discarded` at once and cannot be the pump):** the wl_surface protocol text says a frame callback is *requested* by `frame` and "takes effect on the next
 `wl_surface.commit`"; it only says a server "should avoid signaling the frame callbacks if the surface is not visible in any way" and does not promise one for a commit without damage, so the
 claim "an empty commit still gets a callback" is NOT in the protocol text. §11.8 records what was MEASURED on `mutter --headless` and which variant the broker commits (empty / 1x1 damage on the
 current buffer). Occluded or minimised: callbacks stop, `EV_TICK` stops, the VMM's 50 ms fallback runs the clock, the legacy credit sends a frame every 100 ms; the guest sees an uninterrupted
@@ -449,6 +454,12 @@ Two small pure machines, both table-tested, both used by the real code and by th
 - R3 a frame is sent only while a request is open, spends it (exactly one `COMMIT` per request, `seq = R`), and a second ready frame waits. No frame without a credit; no more than one per credit.
 - R4 `NO_CHANGE(R)` is sent when R is open at a LATER tick and nothing is ready, held or owed (an idle guest): it closes R. The mailbox's credit on the worker is not touched.
 - R5 **in-flight bound:** committed-not-released frames are at most `HELD_CAP` = 2 (the ring's existing, named bound); a third ready frame waits (`blocked`).
+- R7 **work per turn:** the relay reads at most `READ_BATCH` = 64 packets per turn (the named per-turn message budget); the rest stays in the socket (level-triggered) and is read next turn, counted (`budget_hits`); a vblank
+  or a flip completion never waits behind a flood. **Sending never blocks:** every send is non-blocking; a full socket makes the frame OWED (retried on writability / every 50 ms) and counted (`dropped`, `uncommitted`),
+  a `NO_CHANGE` that meets a full socket is retried at the next tick. **Read deadline:** a partial packet (fewer than 24 bytes) that does not complete within `PARTIAL_READ_MS` = 500 ms drops the connection loudly (`the display
+  broker stalled mid-packet`, `partial_timeouts`), so partial-read state is one 24-byte buffer and a clock, never more. A whole-packet-aligned silence is not a fault: it is the 50 ms fallback's business.
+- R8 **`NO_CHANGE` is paced:** not sooner than half the broker's refresh (≥ 1 ms) after the last answer, so a flood of `WANT_FRAME` ticks cannot make kayfabe answer faster than the display refreshes (the unanswered request is simply
+  replaced by the next; `credits_coalesced`).
 - R6 **tick-live** = ticks negotiated ∧ a tick arrived within `BROKER_SILENCE_MS` (50). Not live: the legacy credit decides (frames at the `EV_FRAME`/`RELEASE`/100 ms rule) and an open request is
   still answered by the next frame. Live again: the requests decide.
 
@@ -474,8 +485,10 @@ wake `Notifier` (one eventfd write per tick, ≤ 240/s). The worker feeds `Pacer
 
 ### 11.5 The handoff, as the guest and the status line see it
 
-Unchanged from §5 (the state machine is phase 1's; this phase only feeds it): the first accepted broker tick hands the head to the broker; silence ≥ 50 ms hands it back on the broker's phase grid; a tick
-closer than P/2 is swallowed. **One log line per tick-source change** (the existing `tick source -> BROKER|FREE-RUNNING clock`, ≤ 32) and one relay line per tick-negotiation change (`broker ticks: ON (...)`/`OFF (...)`),
+§5's state machine, fed by the broker: the first accepted broker tick hands the head to the broker; silence ≥ 50 ms hands it back on the broker's phase grid; a tick closer than P/2 is swallowed.
+**Flap damping (added here, flagged for the owner; `kf_disp::tick`):** after a FALLBACK the broker is on probation — it takes the tick back only after `probation_gaps(k)` consecutive gaps between its events, each shorter than
+50 ms (`k` = fallbacks in a row without a one-second stable spell: 1, 2, 4, 8 gaps, 8 the cap). The first takeover of a broker that never fell back is still at once (decision (c)). A broker that speaks at 55 ms gaps,
+or alternates 40/60 ms, therefore changes the source once or a few times in all, not per tick (tested, the counts in §11.7); events on probation are swallowed (`probation=` in the status) and the clock keeps ticking. **One log line per tick-source change** (the existing `tick source -> BROKER|FREE-RUNNING clock`, ≤ 32) and one relay line per tick-negotiation change (`broker ticks: ON (...)`/`OFF (...)`),
 never per tick. Counters (all bounded `u64`, in the status line `broker[...]`/`disp[...]`): `ticks` (accepted from the wire), `ticks_stale`, `ticks_missed`, `ticks_coalesced` (worker took the latest of
 several), `want_ticks`, `credits_coalesced`, `credits_deferred` (guard), `frames_sent_on_credit`, `no_change_sent`, `skipped_no_slot` (counted by the worker), `silence_fallbacks` (= `ho=`'s second
 number), `handoffs_to_broker` (= `ho=`'s first), `req_open_blocked` (a ready frame waited for a request), `ts_backwards`.
