@@ -18,15 +18,22 @@ SRC = os.path.dirname(HERE)
 
 # (name, file, old, new)
 MUTANTS = [
-    ("a queued tick is never replaced in place", "nvkvm_broker.c",
+    ("[equivalent: backed up by the queue pass] a queued tick is never replaced in place", "nvkvm_broker.c",
      "    if (last != ~0u && !(last == s->tx_tail && s->tx_partial != 0) &&",
      "    if (0 && last != ~0u && !(last == s->tx_tail && s->tx_partial != 0) &&"),
-    ("the queue never drops a superseded tick", "nvkvm_broker.c",
+    ("[equivalent: backed up by the in-place replace] the queue never drops a superseded tick", "nvkvm_broker.c",
      "        if (p->type == NVKVM_BROKER_EV_TICK && here != last_tick &&\n            nb_tick_may_replace(",
      "        if (0 && p->type == NVKVM_BROKER_EV_TICK && here != last_tick &&\n            nb_tick_may_replace("),
     ("a dead WANT tick is kept behind a newer one", "nvkvm_broker.c",
      "        if (p->type == NVKVM_BROKER_EV_TICK && here != last_want &&",
      "        if (0 && p->type == NVKVM_BROKER_EV_TICK && here != last_want &&"),
+    ("neither the in-place replace nor the queue pass drops a tick (they back each other up, "
+     "so each alone is an EQUIVALENT mutant -- see #1 and #2 -- and only both off is a defect)",
+     "nvkvm_broker.c",
+     ["    if (last != ~0u && !(last == s->tx_tail && s->tx_partial != 0) &&",
+      "        if (p->type == NVKVM_BROKER_EV_TICK && here != last_tick &&\n            nb_tick_may_replace("],
+     ["    if (0 && last != ~0u && !(last == s->tx_tail && s->tx_partial != 0) &&",
+      "        if (0 && p->type == NVKVM_BROKER_EV_TICK && here != last_tick &&\n            nb_tick_may_replace("]),
     ("COMMIT.seq is not checked", "nvkvm_broker.c",
      "if (!nb_tick_reply(s, c->seq, true)) {", "if (0) {"),
     ("NO_CHANGE is accepted without the opt-in", "nvkvm_broker.c",
@@ -68,11 +75,15 @@ def main():
                             ignore=shutil.ignore_patterns("*.sock", "__pycache__"))
             path = os.path.join(work, fname)
             text = open(path).read()
-            if text.count(old) != 1:
-                print("  ERROR  #%d %s: mutation text found %d times" % (i, name, text.count(old)))
+            olds = old if isinstance(old, list) else [old]
+            news = new if isinstance(new, list) else [new]
+            if any(text.count(o) != 1 for o in olds):
+                print("  ERROR  #%d %s: mutation text not found exactly once" % (i, name))
                 bad += 1
                 continue
-            open(path, "w").write(text.replace(old, new))
+            for o, n in zip(olds, news):
+                text = text.replace(o, n)
+            open(path, "w").write(text)
             os.utime(path, None)
             r = subprocess.run(["make", "-C", work, "nvkvm-display-broker"],
                                capture_output=True, text=True)
@@ -85,6 +96,10 @@ def main():
                                capture_output=True, text=True, timeout=300)
             fails = [l for l in r.stdout.splitlines() if "FAIL" in l]
             ok = r.returncode != 0
+            if name.startswith("[equivalent"):
+                print("  %s  #%d %s -> %d failing check(s) (expected: redundant by design)"
+                      % ("EQUIVALENT" if not ok else "KILLED", i, name, len(fails)))
+                continue
             print("  %s  #%d %s -> %d failing check(s)%s"
                   % ("KILLED" if ok else "SURVIVED", i, name, len(fails),
                      ("  e.g. " + fails[0].strip()[:90]) if fails else ""))

@@ -247,6 +247,7 @@ def main():
             opt_in(b)
             lock_step(b)
             replies(b)
+            failed_commit(b)
             decimation(b)
             violations(b)
             floods(b)
@@ -373,6 +374,22 @@ def replies(b):
     time.sleep(0.2)
     check(b.stats()["late"] == after["late"] + 1, "a duplicate answer is late")
     check(b.stats()["on"] == 1, "the broker serves on")
+    s.close()
+
+
+def failed_commit(b):
+    print("-- a COMMIT the display could not show answers the request and blocks nothing")
+    t0 = vt(b)
+    s, _ = connect(b, height=75)
+    read_raw(s, 0.2)                  # the priming tick opened request 1
+    s.sendall(commit(1))              # no ATTACH before it: the backend answers -ENOENT
+    time.sleep(0.2)
+    b.feed("t %d %d" % (t0 + P60, P60))
+    t = ticks_of(read_raw(s, 0.3))
+    check(len(t) == 1 and t[0].want,
+          "the very next tick wants a frame again (nothing was shown, nothing to wait for)")
+    st = b.stats()
+    check(st["unpresented"] == 0, "and no frame is waiting for a presentation")
     s.close()
 
 
