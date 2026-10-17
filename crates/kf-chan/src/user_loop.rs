@@ -24,7 +24,8 @@ pub const SPIN: u32 = 64;
 pub const CONTENTION_RETRIES: u32 = SPIN;
 
 /// The worker's longest sleep, and the ONLY timer of the relay: a safety net for a lost or
-/// never-armed interrupt (and the control-witness gates that have none). 50 ms is the old park
+/// never-armed interrupt (and the control-witness gates that have none). It looks only at relays
+/// that WAIT for something or left demand behind; it never reads `GP_PUT` (see [`look_needed`]). 50 ms is the old park
 /// tick, so the idle wake rate does not change (20/s), and it is far below the guest's 2 s timeout
 /// detection. Every firing that finds work is counted ([`Stats`]).
 pub const BACKSTOP_MS: u32 = 50;
@@ -123,6 +124,18 @@ pub const fn may_retry(run: u32, why: Peek) -> bool {
     matches!(why, Peek::Backstop) || run < CONTENTION_RETRIES
 }
 
+/// Whether a look by `why` has any reason to touch a relay at all.
+///
+/// ★ The doorbell contract (owner, 2026-10-17): the last doorbell covers every `GP_PUT` write before
+/// it, and nothing else announces `GP_PUT`. So a look is warranted by exactly two things: demand a
+/// turn left behind (`Cell::retry`, a busy lock or an unfinished act) or a recorded wait. `why` is
+/// deliberately NOT a reason: the backstop timer finding an idle relay must do nothing and read
+/// nothing (no `GP_PUT` poll). The parameter exists so that a test can pin that for every [`Peek`].
+#[must_use]
+pub const fn look_needed(_why: Peek, demand: bool, waiting: bool) -> bool {
+    demand || waiting
+}
+
 /// What a BACKSTOP peek that found a wait satisfied counts as (the model's `BACKSTOP_*` bits).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum Found {
@@ -196,8 +209,6 @@ pub struct Stats {
     pub backstop_carried: AtomicU64,
     /// Backstop peeks that found a contended relay.
     pub backstop_contended: AtomicU64,
-    /// Backstop peeks that found `GP_PUT` ahead of the cursor with no doorbell (information).
-    pub backstop_put_ahead: AtomicU64,
     /// Events after which no wait was satisfied (an interrupt before `GP_GET` was visible, or one
     /// of several markers).
     pub event_without_progress: AtomicU64,
@@ -239,7 +250,7 @@ impl Stats {
         let g = |c: &AtomicU64| c.load(Ordering::Relaxed);
         let drain: Vec<u64> = self.drain.iter().map(g).collect();
         format!(
-            "wakes(doorbell={} event={} spin={} backstop={}) backstop_found(work={} carried={} contended={} put_ahead={}) event_without_progress={} gates={} carried_ungated={} credit_waits={} contended_turns={} pop_writebacks={} markers={} drain_us_log2={drain:?}",
+            "wakes(doorbell={} event={} spin={} backstop={}) backstop_found(work={} carried={} contended={}) event_without_progress={} gates={} carried_ungated={} credit_waits={} contended_turns={} pop_writebacks={} markers={} drain_us_log2={drain:?}",
             g(&self.wake_doorbell),
             g(&self.wake_event),
             g(&self.wake_spin),
@@ -247,7 +258,6 @@ impl Stats {
             g(&self.backstop_found_work),
             g(&self.backstop_carried),
             g(&self.backstop_contended),
-            g(&self.backstop_put_ahead),
             g(&self.event_without_progress),
             g(&self.gates),
             g(&self.carried_ungated),
@@ -308,6 +318,18 @@ mod tests {
         );
         assert!(Wait::Popped { target: 1 }.carried());
         assert!(!Wait::Marker { target: 1 }.carried());
+    }
+
+    /// ★ DOORBELL CONTRACT: no look, of any kind, has a reason to touch an idle relay -- in
+    /// particular the backstop timer never reads `GP_PUT` for one.
+    #[test]
+    fn no_look_touches_a_relay_with_no_demand_and_no_wait() {
+        for why in [Peek::Spin, Peek::Event, Peek::Backstop] {
+            assert!(!look_needed(why, false, false), "{why:?} must leave an idle relay alone");
+            assert!(look_needed(why, true, false), "{why:?}: demand left behind is a reason");
+            assert!(look_needed(why, false, true), "{why:?}: a recorded wait is a reason");
+            assert!(look_needed(why, true, true));
+        }
     }
 
     /// The backstop's classification is the model's: only a satisfied wait an interrupt should have
