@@ -1511,7 +1511,7 @@ impl<L: Link> Relay<L> {
         let r = self.send(&cmd, None, Rung::Shm);
         if r == Sent::Done {
             if let Some(t) = self.conn.as_mut().and_then(|c| c.tick.as_mut()) {
-                let _ = t.reqs.spend();
+                let _ = t.reqs.spend(now);
             }
             self.commits += 1;
             self.counters.sent += 1;
@@ -2319,14 +2319,14 @@ impl<L: Link> Relay<L> {
             .conn
             .as_ref()
             .and_then(|c| c.tick.as_ref())
-            .and_then(|t| t.reqs.idle_request(nothing))
+            .and_then(|t| t.reqs.idle_request(nothing, now))
         else {
             return;
         };
         match self.send(&Cmd::no_change(r), None, Rung::Shm) {
             Sent::Done => {
                 if let Some(t) = self.conn.as_mut().and_then(|c| c.tick.as_mut()) {
-                    t.reqs.no_change_done();
+                    t.reqs.no_change_done(now);
                 }
             }
             Sent::Full => {}

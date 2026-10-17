@@ -117,6 +117,11 @@ pub struct Requests {
     last_seq: Option<u32>,
     last_present: Option<u64>,
     open: Option<u32>,
+    /// The last refresh period a tick carried, ns (0 unknown): the floor of how often an idle
+    /// request is answered.
+    refresh_ns: u32,
+    /// When the last request was answered (a frame or `NO_CHANGE`), ms.
+    last_answer_ms: Option<u64>,
     /// Accepted ticks since the open request opened (the request that is idle at a LATER tick gets
     /// `NO_CHANGE`).
     ticks_since_open: u32,
@@ -161,6 +166,7 @@ impl Requests {
         }
         self.last_present = Some(self.last_present.map_or(t.present_ns, |p| p.max(t.present_ns)));
         self.c.ticks += 1;
+        self.refresh_ns = t.refresh_ns;
         self.ticks_since_open = self.ticks_since_open.saturating_add(1);
         let mut opened = false;
         if t.want {
@@ -175,11 +181,13 @@ impl Requests {
         TickVerdict::Fresh { missed, opened }
     }
 
-    /// ★ A frame is being sent: spend the open request (`None`: no request, the frame must wait).
-    pub fn spend(&mut self) -> Option<u32> {
+    /// ★ A frame is being sent at `now_ms`: spend the open request (`None`: no request, the frame
+    /// must wait).
+    pub fn spend(&mut self, now_ms: u64) -> Option<u32> {
         let r = self.open.take();
         if r.is_some() {
             self.c.frames_on_credit += 1;
+            self.last_answer_ms = Some(now_ms);
         }
         r
     }
@@ -189,18 +197,34 @@ impl Requests {
         self.c.req_open_blocked += 1;
     }
 
-    /// ★ The request to answer `NO_CHANGE`: open at a LATER tick than the one that opened it, with
-    /// nothing ready, held or owed.
+    /// The least time between two answers: half the broker's refresh period (the double-tick
+    /// guard's width), at least 1 ms — a flood of ticks cannot make kayfabe answer faster than the
+    /// display refreshes.
     #[must_use]
-    pub fn idle_request(&self, nothing_to_send: bool) -> Option<u32> {
-        self.open
-            .filter(|_| nothing_to_send && self.ticks_since_open >= 1)
+    pub fn answer_gap_ms(&self) -> u64 {
+        let ns = if self.refresh_ns == 0 { 16_666_666 } else { u64::from(self.refresh_ns) };
+        (ns / 2_000_000).max(1)
     }
 
-    /// `NO_CHANGE` for the open request went out.
-    pub fn no_change_done(&mut self) {
+    /// ★ The request to answer `NO_CHANGE`: open at a LATER tick than the one that opened it, with
+    /// nothing ready, held or owed, and not sooner than [`Requests::answer_gap_ms`] after the last
+    /// answer.
+    #[must_use]
+    pub fn idle_request(&self, nothing_to_send: bool, now_ms: u64) -> Option<u32> {
+        self.open.filter(|_| {
+            nothing_to_send
+                && self.ticks_since_open >= 1
+                && self
+                    .last_answer_ms
+                    .is_none_or(|t| now_ms >= t + self.answer_gap_ms())
+        })
+    }
+
+    /// `NO_CHANGE` for the open request went out at `now_ms`.
+    pub fn no_change_done(&mut self, now_ms: u64) {
         if self.open.take().is_some() {
             self.c.no_change_sent += 1;
+            self.last_answer_ms = Some(now_ms);
         }
     }
 }
@@ -349,7 +373,7 @@ mod tests {
     fn the_request_book_table() {
         let mut r = Requests::new();
         // R3: no request, no spend
-        assert_eq!(r.spend(), None);
+        assert_eq!(r.spend(0), None);
         // a tick without WANT opens nothing
         assert_eq!(r.on_tick(&tick(1, false, 10)), TickVerdict::Fresh { missed: 0, opened: false });
         assert_eq!(r.open(), None);
@@ -367,16 +391,20 @@ mod tests {
         assert_eq!(r.open(), Some(5));
         assert_eq!((r.c.credits_coalesced, r.c.ticks_missed), (1, 2));
         // R3: a frame spends it, exactly once
-        assert_eq!(r.spend(), Some(5));
-        assert_eq!(r.spend(), None);
+        assert_eq!(r.spend(0), Some(5));
+        assert_eq!(r.spend(0), None);
         assert_eq!(r.c.frames_on_credit, 1);
         // R4: NO_CHANGE only at a LATER tick, with nothing to send
         r.on_tick(&tick(6, true, 50));
-        assert_eq!(r.idle_request(true), None, "the tick that opened it is not 'later'");
+        assert_eq!(r.idle_request(true, 100), None, "the tick that opened it is not 'later'");
         r.on_tick(&tick(7, false, 60));
-        assert_eq!(r.idle_request(false), None, "something ready: not idle");
-        assert_eq!(r.idle_request(true), Some(6));
-        r.no_change_done();
+        assert_eq!(r.idle_request(false, 100), None, "something ready: not idle");
+        assert_eq!(r.idle_request(true, 100), Some(6));
+        // ... but not sooner than half a refresh (8 ms) after the last answer (a frame at 0 ms)
+        assert_eq!(r.answer_gap_ms(), 8);
+        assert_eq!(r.idle_request(true, 7), None, "7 ms after the answer: too soon");
+        assert_eq!(r.idle_request(true, 8), Some(6));
+        r.no_change_done(100);
         assert_eq!((r.open(), r.c.no_change_sent), (None, 1));
         // a backwards timestamp is counted and the tick still counts
         assert_eq!(r.on_tick(&tick(8, false, 5)), TickVerdict::Fresh { missed: 0, opened: false });
