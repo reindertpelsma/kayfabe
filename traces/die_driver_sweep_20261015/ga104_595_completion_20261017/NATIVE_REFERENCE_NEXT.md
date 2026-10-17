@@ -2,8 +2,7 @@ STATUS: DESIGN-ONLY, 2026-10-17. Optional native GA104580 reference, not started
 
 Only useful after M2 guest failure AND all Linux/Windows text evidence PUSHED/remoteequal,
 all owned QEMU/GPU jobs stopped, with enough original lease time (latest transition03:10UTC).
-The stock-VGA install is NOT this native reference. No conversion has been authorized by
-an automatic condition; this is a reviewable prepared recipe, not a running erase job.
+The stock-VGA install is NOT this native reference. This is a prepared recipe and remains UNRUN; the cell supervisor cannot start it.
 
 Prepared derivative of own already-validated native581/windows-on-vast93b65b3347601f35f4146602ff85950e389b409f,
 ISC; upstreamreinstall80c3d5e175f39c2d2bbd267cd583842140154140 pinned. Signedofficial580.88

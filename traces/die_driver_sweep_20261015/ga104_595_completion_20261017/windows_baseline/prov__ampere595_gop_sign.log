@@ -1,0 +1,4 @@
+KF_GOP_EXPORT target=x86_64-unknown-uefi bytes=9216 out=/workspace/ampere-winvm/secureboot/kf-gop.9d6f210b.efi
+Signing Unsigned original image
+Signature verification OK
+[2026-10-17T03:15:15Z] KF_GOP_SIGNED /workspace/ampere-winvm/secureboot/kf-gop.9d6f210b.signed.efi sha256=9fc7e97630b7061fca5fa54c641b164cd64062c2c7f7edce240b7f225ae1124f unsigned_sha256=e2616ad8d4cb09da88399218144b6bdea9d2cb3148b701964f926604b7d6dff6

@@ -1,0 +1,47 @@
+[2026-10-17T02:39:14Z] WINVM_INSTALL_START name=ampere580 repo=9d6f210b qemu=/root/ampere595_win_qemu.py host_driver=595.91.07
+[2026-10-17T02:39:14Z] START prereqs
+[2026-10-17T02:39:14Z] EXIT prereqs rc=0
+[2026-10-17T02:39:14Z] START fetch
+[2026-10-17T02:39:49Z] MEDIUM_OK win11_ltsc_2024_eval_x64_en-us.iso sha256=67cec5865eaa037a72ddc633a717a10a2bed50778862267223ddb9c60ef5da68 bytes=5112850432
+[2026-10-17T02:39:56Z] MEDIUM_OK virtio-win-0.1.302.iso sha256=303f7ae40dad495d6ae474fdc571df58958a4dbc5c37a522d80f9a203867949d bytes=877373440
+[2026-10-17T02:39:56Z] MEDIUM_OK OpenSSH-Win64-v10.0.0.0.msi sha256=ddec9c53864280759cf9f74791cefd387100e3946aa849a1c138a4ed1b96b7d9 bytes=6586368
+[2026-10-17T02:40:03Z] MEDIUM_OK 580.88-desktop-win10-win11-64bit-international-dch-whql.exe sha256=90c49f925b41ee062e02cc8094a16b6d057abfde4e85235a76d63ffe267f63a9 bytes=890807536
+[2026-10-17T02:40:03Z] EXIT fetch rc=0
+[2026-10-17T02:40:03Z] START apparmor
+[2026-10-17T02:40:03Z] AppArmor: swtpm may use /workspace/ampere-winvm
+[2026-10-17T02:40:03Z] EXIT apparmor rc=0
+[2026-10-17T02:40:03Z] START secrets
+[2026-10-17T02:40:03Z] generated the Windows password (secrets/win_password, 0600)
+[2026-10-17T02:40:03Z] generated the harness ssh key (secrets/ssh_ed25519)
+[2026-10-17T02:40:03Z] EXIT secrets rc=0
+[2026-10-17T02:40:03Z] START secureboot-key
+[2026-10-17T02:40:04Z] generated this host's kayfabe Secure Boot db key (/workspace/ampere-winvm/secureboot/db.key, never leaves the host)
+[2026-10-17T02:40:04Z] SB_DB_CERT subject=CN = kayfabe GOP db key (ubuntu 2026-10-17) sha256 Fingerprint=MAC_REDACTED:MAC_REDACTED:MAC_REDACTED:MAC_REDACTED:MAC_REDACTED:85:60
+[2026-10-17T02:40:04Z] EXIT secureboot-key rc=0
+[2026-10-17T02:40:04Z] START ovmf-vars
+[2026-10-17T02:40:08Z] VARS_CREATED /workspace/ampere-winvm/ampere580/firmware/OVMF_VARS.fd
+[2026-10-17T02:40:08Z] VARS_DB CN=Microsoft Windows Production PCA 2011; CN=Microsoft Corporation UEFI CA 2011; CN=kayfabe GOP db key (ubuntu 2026-10-17);
+[2026-10-17T02:40:08Z] EXIT ovmf-vars rc=0
+[2026-10-17T02:40:08Z] START tpm-manufacture
+[2026-10-17T02:40:11Z] TPM_MANUFACTURED /workspace/ampere-winvm/ampere580/tpm (5993 bytes of state)
+[2026-10-17T02:40:11Z] EXIT tpm-manufacture rc=0
+[2026-10-17T02:40:11Z] START disk
+[2026-10-17T02:40:11Z] DISK_CREATED base.qcow2 80G
+[2026-10-17T02:40:11Z] EXIT disk rc=0
+[2026-10-17T02:40:11Z] START unattend
+[2026-10-17T02:40:11Z] UNATTEND_ISO secrets/unattend.iso (6985728 bytes; 1 authorized key(s))
+[2026-10-17T02:40:11Z] EXIT unattend rc=0
+[2026-10-17T02:40:11Z] START install-boot
+[2026-10-17T02:40:12Z] QEMU_START tag=install boot=1 pid=102761 log=logs/install_b1_qemu.log
+[2026-10-17T03:12:15Z] INSTALL_BOOT_END rc=0 reason=guest-shutdown
+[2026-10-17T03:12:15Z] EXIT install-boot rc=0
+[2026-10-17T03:12:15Z] START check-boot
+[2026-10-17T03:12:15Z] QEMU_START tag=installcheck boot=1 pid=106260 log=logs/installcheck_b1_qemu.log
+[2026-10-17T03:13:15Z] SSH_UP after 30s
+[2026-10-17T03:13:32Z] first logon said: KF_FIRSTLOGON OK 2026-10-17T03:11:12.1136238+00:00
+[2026-10-17T03:15:11Z] CHECK_BOOT_END rc=0 reason=guest-shutdown check_rc=0
+[2026-10-17T03:15:12Z] EXIT check-boot rc=0
+[2026-10-17T03:15:12Z] START seal
+[2026-10-17T03:15:12Z] SEALED disk/base.qcow2 (0400); unattend.iso (it held the password) deleted; every run uses an overlay
+[2026-10-17T03:15:12Z] EXIT seal rc=0
+[2026-10-17T03:15:12Z] WINVM_INSTALL_DONE name=ampere580

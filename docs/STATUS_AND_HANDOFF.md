@@ -1,5 +1,14 @@
 # Status and handoff — where kayfabe v3 stands, and how to resume
 
+## Update 2026-10-17 03:15UTC — fresh GA104 Windows baseline PASS, GPU staging active
+
+Only own56326220 ACTIVE/originaltimer04:25:28UTC/manual03:55/APIabsence05:00UTC unchanged.
+Fresh LTSC26100 stockVGA installed once, cleanfirstlogonshutdown thenindependentplatformcheck
+WIN_CHECK_DONE fail=0, SecureBoot/TPM2/BitlockerOff/VBS0/Virtio/SSH+QGA PASS. NotGPUacceptance.
+GPU staging nowprivate9d/cc2a/58065.06 withactualP19/19flags confirmed; setup/coldadapter/apps
+remainpending. Baseline terminal text in ga104_595_completion_20261017/windows_baseline/.
+Linux595raw30/CUDA4/gfx10/broker alreadyPUSHED,27STALL/9nvAssert retained. No sharedhost.
+
 ## Update 2026-10-17 02:38 UTC — GA104 Linux595 raw and applications PASS
 
 Only own56326220 ACTIVE; unchanged timer2714225 at04:25:28UTC/06:25:28CEST,

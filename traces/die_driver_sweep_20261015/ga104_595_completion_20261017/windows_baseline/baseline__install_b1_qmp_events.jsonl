@@ -1,0 +1,17 @@
+{"event": "KF_LOGGER_ATTACHED", "timestamp": {"seconds": 1792204812}}
+{"timestamp": {"seconds": 1792204814, "microseconds": 658563}, "event": "RTC_CHANGE", "data": {"offset": 0, "qom-path": "/machine/unattached/device[10]/rtc"}}
+{"timestamp": {"seconds": 1792204822, "microseconds": 834765}, "event": "RTC_CHANGE", "data": {"offset": 0, "qom-path": "/machine/unattached/device[10]/rtc"}}
+{"timestamp": {"seconds": 1792206085, "microseconds": 860974}, "event": "RESET", "data": {"guest": true, "reason": "guest-reset"}}
+{"timestamp": {"seconds": 1792206087, "microseconds": 836328}, "event": "RTC_CHANGE", "data": {"offset": 0, "qom-path": "/machine/unattached/device[10]/rtc"}}
+{"timestamp": {"seconds": 1792206088, "microseconds": 672904}, "event": "RTC_CHANGE", "data": {"offset": 0, "qom-path": "/machine/unattached/device[10]/rtc"}}
+{"timestamp": {"seconds": 1792206235, "microseconds": 988956}, "event": "NIC_RX_FILTER_CHANGED", "data": {"path": "/machine/peripheral-anon/device[1]/virtio-backend"}}
+{"timestamp": {"seconds": 1792206368, "microseconds": 748512}, "event": "RTC_CHANGE", "data": {"offset": -1, "qom-path": "/machine/unattached/device[10]/rtc"}}
+{"timestamp": {"seconds": 1792206368, "microseconds": 758631}, "event": "RTC_CHANGE", "data": {"offset": -1, "qom-path": "/machine/unattached/device[10]/rtc"}}
+{"timestamp": {"seconds": 1792206384, "microseconds": 112884}, "event": "RESET", "data": {"guest": true, "reason": "guest-reset"}}
+{"timestamp": {"seconds": 1792206386, "microseconds": 231931}, "event": "RTC_CHANGE", "data": {"offset": -2, "qom-path": "/machine/unattached/device[10]/rtc"}}
+{"timestamp": {"seconds": 1792206387, "microseconds": 172847}, "event": "RTC_CHANGE", "data": {"offset": -2, "qom-path": "/machine/unattached/device[10]/rtc"}}
+{"timestamp": {"seconds": 1792206444, "microseconds": 448994}, "event": "RTC_CHANGE", "data": {"offset": -1, "qom-path": "/machine/unattached/device[10]/rtc"}}
+{"timestamp": {"seconds": 1792206444, "microseconds": 457387}, "event": "RTC_CHANGE", "data": {"offset": -1, "qom-path": "/machine/unattached/device[10]/rtc"}}
+{"timestamp": {"seconds": 1792206455, "microseconds": 823766}, "event": "RTC_CHANGE", "data": {"offset": -1, "qom-path": "/machine/unattached/device[10]/rtc"}}
+{"timestamp": {"seconds": 1792206455, "microseconds": 824636}, "event": "RTC_CHANGE", "data": {"offset": -1, "qom-path": "/machine/unattached/device[10]/rtc"}}
+{"timestamp": {"seconds": 1792206733, "microseconds": 617244}, "event": "SHUTDOWN", "data": {"guest": true, "reason": "guest-shutdown"}}
