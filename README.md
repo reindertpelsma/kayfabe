@@ -30,8 +30,7 @@ Master is not the newest code: the latest Windows performance work lives on bran
   | kayfabe, experimental build | 296 to 299 fps | 338 to 362 fps |
 
   Other window sizes and quality settings give different numbers (an older run at 1280x720, High, measured 271 fps in OpenGL).
-  The experimental build skips reading the guest's command buffers once a channel is set up. It is research code, run on Heaven only, and not merged yet;
-  the safe version of the same idea is still being validated. Details and limits: [`traces/perf_status_20261017/`](traces/perf_status_20261017/README.md).
+  The experimental build skips reading the guest's command buffers once a channel is set up. Details and limits: [`traces/perf_status_20261017/`](traces/perf_status_20261017/README.md).
   On Linux guests, large GPU kernels and copies run at host speed (matrix multiply 0.997, llama.cpp prompt processing 0.998, token generation 0.88 of host,
   on a rented nested box at older revisions; [`details`](docs/design/V3_LINUX_PERF_BASELINE_6692e621.md)).
 
