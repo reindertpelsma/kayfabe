@@ -3156,3 +3156,22 @@ fn an_old_broker_gives_bit_identical_records_and_counters() {
     assert_eq!(a.1, b.1, "the counters");
     assert!(!a.0.is_empty());
 }
+
+/// ★ A STALE tick proves nothing: a broker that only repeats old numbers does not keep the ticks
+/// live (the relay falls silent 50 ms after the last FRESH tick). (Mutation: a stale tick counts as alive.)
+#[test]
+fn a_stale_tick_does_not_keep_the_ticks_alive() {
+    let (mut t, _s) = T::with_share();
+    t.up_keep(TICK_CAPS);
+    t.tick_pkt(10, false, 100);
+    t.read();
+    assert!(t.relay.tick_live());
+    t.tick(40);
+    t.tick_pkt(10, false, 200); // a duplicate
+    t.tick_pkt(3, true, 300); // an old one
+    t.read();
+    assert_eq!(t.relay.tick_counters().ticks_stale, 2);
+    t.tick(11); // 51 ms after the last fresh tick
+    assert!(!t.relay.tick_live(), "stale ticks are not liveness");
+    assert_eq!(t.relay.tick_counters().silence_fallbacks, 1);
+}
