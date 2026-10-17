@@ -183,6 +183,8 @@ static void nb_client_state_reset(struct nb_sink *s)
     memset(s->key_down, 0, sizeof(s->key_down));
     memset(s->consumed, 0, sizeof(s->consumed));
     s->n_attach = s->n_commit = s->n_reject = 0;
+    s->last_tier = 0;
+    s->n_tier_dmabuf = s->n_tier_shm = 0;
     /*
      * THE GUEST'S CURSOR IS CONNECTION STATE.  A --persist broker must not
      * show the previous VM's pointer image over the next VM's picture, or over
@@ -2135,7 +2137,7 @@ static void nb_cmd_cursor(struct nb_sink *s, const struct nvkvm_broker_cmd *raw,
         if (c.flags & NVKVM_BROKER_CURSOR_F_XOR) {
             /* an XOR cursor: a viewer cannot invert, so the substitute is the
              * broker's to draw, from the mask the VMM sent */
-            if (!nb_cursor_xor_approx(&s->cursor)) {
+            if (!nb_cursor_set_xor(&s->cursor)) {
                 s->cursor.visible = false;  /* inverts nothing: nothing to show */
             }
         }
@@ -2218,6 +2220,41 @@ void nb_sink_device_changed(struct nb_sink *s)
  * no claim on the privileged side's patience, and continuing after a malformed
  * message is how a resync bug becomes a parser bug.
  */
+/*
+ * WHICH CARRIER THE FRAMES ARRIVE IN, said once per change on a connection.
+ *
+ * The Wayland backend used to say "the display refused every dma-buf layout
+ * offered" whenever a shared-memory frame arrived -- and a measured run
+ * (2026-10-17, run 3001) showed the display had refused nothing: the VMM
+ * itself backs its dma-buf rung off (its acknowledgement detector) and sends
+ * F_SHM for a few seconds.  Only the VMM knows why it chose; the broker knows
+ * what it was sent, and what it has actually refused.
+ */
+static void nb_note_tier(struct nb_sink *s, bool is_shm)
+{
+    int tier = is_shm ? 2 : 1;
+
+    if (is_shm) {
+        s->n_tier_shm++;
+    } else {
+        s->n_tier_dmabuf++;
+    }
+    if (s->last_tier == tier) {
+        return;
+    }
+    if (is_shm) {
+        nb_log("frames now arrive as plain shared memory (F_SHM): the VMM chose "
+               "this carrier; this display has refused %u dma-buf layout(s) on "
+               "this connection, and the compositor uploads every frame while it "
+               "lasts%s", (unsigned)s->fmt_refused.n,
+               s->last_tier == 1 ? " (the VMM was on dma-buf before)" : "");
+    } else {
+        nb_log("frames arrive as dma-buf (zero-copy)%s",
+               s->last_tier == 2 ? " again, after shared memory" : "");
+    }
+    s->last_tier = tier;
+}
+
 static void nb_handle_cmd(struct nb_sink *s, const struct nvkvm_broker_cmd *c,
                           int fd)
 {
@@ -2281,6 +2318,7 @@ static void nb_handle_cmd(struct nb_sink *s, const struct nvkvm_broker_cmd *c,
              */
             return;
         }
+        nb_note_tier(s, d.is_shm);
         r = ss->ops->attach(ss, &d);
         close(fd);          /* the backend imported it or it failed; either
                              * way our copy is done — HARDENING 5, fd intake

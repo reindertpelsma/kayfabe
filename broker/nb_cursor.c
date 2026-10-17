@@ -188,6 +188,8 @@ void nb_cursor_load(struct nb_cursor *dst, const uint8_t *src, uint32_t w,
     dst->hot_y = hot_y;
     dst->defined = true;
     dst->visible = true;
+    dst->xor = false;       /* nb_cursor_set_xor() says otherwise, after */
+    dst->bx = dst->by = dst->bw = dst->bh = 0;
     dst->gen++;
 }
 
@@ -315,6 +317,45 @@ next:       ;
     return true;
 }
 
+bool nb_cursor_set_xor(struct nb_cursor *c)
+{
+    uint32_t x, y, x0, y0, x1, y1;
+    size_t n;
+    bool any = false;
+
+    c->xor = false;
+    c->bx = c->by = c->bw = c->bh = 0;
+    if (!c->defined || c->w == 0 || c->h == 0 ||
+        c->w > NVKVM_BROKER_CURSOR_MAX_DIM || c->h > NVKVM_BROKER_CURSOR_MAX_DIM) {
+        return false;
+    }
+    n = (size_t)c->w * c->h;
+    memcpy(c->mask, c->px, n * sizeof c->px[0]);
+    x0 = c->w;
+    y0 = c->h;
+    x1 = y1 = 0;
+    for (y = 0; y < c->h; y++) {
+        for (x = 0; x < c->w; x++) {
+            if ((c->mask[(size_t)y * c->w + x] >> 24) != 0) {
+                any = true;
+                if (x < x0) { x0 = x; }
+                if (y < y0) { y0 = y; }
+                if (x > x1) { x1 = x; }
+                if (y > y1) { y1 = y; }
+            }
+        }
+    }
+    c->xor = true;
+    if (any) {
+        c->bx = x0;
+        c->by = y0;
+        c->bw = x1 - x0 + 1u;
+        c->bh = y1 - y0 + 1u;
+    }
+    /* the approximation replaces px (backends that cannot invert draw it) */
+    return nb_cursor_xor_approx(c) && any;
+}
+
 void nb_cursor_copy(struct nb_cursor *dst, const struct nb_cursor *src)
 {
     size_t n = 0;
@@ -335,6 +376,11 @@ void nb_cursor_copy(struct nb_cursor *dst, const struct nb_cursor *src)
     dst->abs_x = src->abs_x;
     dst->abs_y = src->abs_y;
     dst->abs_valid = src->abs_valid;
+    dst->xor = src->xor;
+    dst->bx = src->bx;
+    dst->by = src->by;
+    dst->bw = src->bw;
+    dst->bh = src->bh;
     /*
      * Only the pixels the image has.  Bounded by the array, not by w*h alone:
      * a struct nobody loaded through nb_cursor_load() must not make this a
@@ -346,6 +392,9 @@ void nb_cursor_copy(struct nb_cursor *dst, const struct nb_cursor *src)
             n = sizeof src->px / sizeof src->px[0];
         }
         memcpy(dst->px, src->px, n * sizeof src->px[0]);
+        if (src->xor) {
+            memcpy(dst->mask, src->mask, n * sizeof src->mask[0]);
+        }
     }
 }
 
@@ -532,22 +581,23 @@ size_t nb_cursor_xor_apply(const struct nb_cursor *c, uint32_t *frame,
     return n;
 }
 
-size_t nb_cursor_xor_patch(const struct nb_cursor *c, const uint32_t *frame,
-                           uint32_t fw, uint32_t fh, size_t stride_px,
-                           int32_t x, int32_t y, uint32_t *out)
+size_t nb_xor_patch_rect(const uint32_t *mask, uint32_t mstride, uint32_t mw,
+                         uint32_t mh, const uint32_t *frame, uint32_t fw,
+                         uint32_t fh, size_t stride_px, int32_t x, int32_t y,
+                         uint32_t *out)
 {
     size_t n = 0;
     uint32_t ix, iy;
 
-    if (!c || !c->defined || c->w == 0 || c->h == 0 ||
-        c->w > NVKVM_BROKER_CURSOR_MAX_DIM || c->h > NVKVM_BROKER_CURSOR_MAX_DIM ||
-        !frame || !out || stride_px < fw) {
+    if (!mask || mw == 0 || mh == 0 || mw > NVKVM_BROKER_CURSOR_MAX_DIM ||
+        mh > NVKVM_BROKER_CURSOR_MAX_DIM || mstride < mw || !frame || !out ||
+        stride_px < fw) {
         return 0;
     }
-    for (iy = 0; iy < c->h; iy++) {
-        for (ix = 0; ix < c->w; ix++) {
-            uint32_t m = c->px[(size_t)iy * c->w + ix];
-            uint32_t *o = out + (size_t)iy * c->w + ix;
+    for (iy = 0; iy < mh; iy++) {
+        for (ix = 0; ix < mw; ix++) {
+            uint32_t m = mask[(size_t)iy * mstride + ix];
+            uint32_t *o = out + (size_t)iy * mw + ix;
             int64_t fx, fy;
 
             if ((m >> 24) == 0 || !xor_on_frame(x, y, ix, iy, fw, fh, &fx, &fy)) {
@@ -562,24 +612,86 @@ size_t nb_cursor_xor_patch(const struct nb_cursor *c, const uint32_t *frame,
     return n;
 }
 
-void nb_cursor_scale(const struct nb_cursor *c, uint32_t *dst, uint32_t dw,
-                     uint32_t dh)
+size_t nb_cursor_xor_patch(const struct nb_cursor *c, const uint32_t *frame,
+                           uint32_t fw, uint32_t fh, size_t stride_px,
+                           int32_t x, int32_t y, uint32_t *out)
+{
+    if (!c || !c->defined) {
+        return 0;
+    }
+    return nb_xor_patch_rect(c->px, c->w, c->w, c->h, frame, fw, fh, stride_px,
+                             x, y, out);
+}
+
+void nb_px_scale(const uint32_t *src, uint32_t sw, uint32_t sh, uint32_t *dst,
+                 uint32_t dw, uint32_t dh)
 {
     uint32_t x, y;
 
-    if (!c->defined || c->w == 0 || c->h == 0 || dw == 0 || dh == 0) {
+    if (!src || !dst || sw == 0 || sh == 0 || dw == 0 || dh == 0) {
         return;
     }
     for (y = 0; y < dh; y++) {
         /* y < dh  ⇒  y*h/dh < h: every source index is in the image. */
-        uint32_t sy = (uint32_t)((uint64_t)y * c->h / dh);
-        const uint32_t *srow = c->px + (size_t)sy * c->w;
+        uint32_t sy = (uint32_t)((uint64_t)y * sh / dh);
+        const uint32_t *srow = src + (size_t)sy * sw;
         uint32_t *drow = dst + (size_t)y * dw;
 
         for (x = 0; x < dw; x++) {
-            drow[x] = srow[(uint64_t)x * c->w / dw];
+            drow[x] = srow[(uint64_t)x * sw / dw];
         }
     }
+}
+
+void nb_px_scale_box(const uint32_t *src, uint32_t sw, uint32_t sh,
+                     uint32_t *dst, uint32_t dw, uint32_t dh)
+{
+    uint32_t x, y;
+
+    if (!src || !dst || sw == 0 || sh == 0 || dw == 0 || dh == 0) {
+        return;
+    }
+    for (y = 0; y < dh; y++) {
+        uint32_t sy0 = (uint32_t)((uint64_t)y * sh / dh);
+        uint32_t sy1 = dh >= sh ? sy0 + 1u
+                                : (uint32_t)(((uint64_t)(y + 1u) * sh + dh - 1u) / dh);
+
+        if (sy1 > sh) { sy1 = sh; }
+        if (sy1 <= sy0) { sy1 = sy0 + 1u; }
+        for (x = 0; x < dw; x++) {
+            uint32_t sx0 = (uint32_t)((uint64_t)x * sw / dw);
+            uint32_t sx1 = dw >= sw ? sx0 + 1u
+                                    : (uint32_t)(((uint64_t)(x + 1u) * sw + dw - 1u) / dw);
+            uint64_t a = 0, r = 0, g = 0, b = 0, n;
+            uint32_t i, j;
+
+            if (sx1 > sw) { sx1 = sw; }
+            if (sx1 <= sx0) { sx1 = sx0 + 1u; }
+            for (j = sy0; j < sy1; j++) {
+                for (i = sx0; i < sx1; i++) {
+                    uint32_t v = src[(size_t)j * sw + i];
+
+                    a += v >> 24;
+                    r += (v >> 16) & 0xffu;
+                    g += (v >> 8) & 0xffu;
+                    b += v & 0xffu;
+                }
+            }
+            n = (uint64_t)(sx1 - sx0) * (sy1 - sy0);
+            dst[(size_t)y * dw + x] =
+                (uint32_t)(((a + n / 2) / n) << 24 | ((r + n / 2) / n) << 16 |
+                           ((g + n / 2) / n) << 8 | ((b + n / 2) / n));
+        }
+    }
+}
+
+void nb_cursor_scale(const struct nb_cursor *c, uint32_t *dst, uint32_t dw,
+                     uint32_t dh)
+{
+    if (!c->defined || c->w == 0 || c->h == 0) {
+        return;
+    }
+    nb_px_scale(c->px, c->w, c->h, dst, dw, dh);
 }
 
 bool nb_cursor_wanted(const struct nb_cursor *c, bool grabbed)

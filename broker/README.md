@@ -176,9 +176,20 @@ frame itself). This program draws it:
   `wl_subsurface`).
 - **XOR cursors** (the Windows text I-beam inverts what is under it, which no
   image can express): the VMM sends the inversion mask with `CURSOR_F_XOR` (alpha
-  `0xff` where it inverts); this program draws opaque black there with a
-  one-pixel opaque white outline, transparent elsewhere, so it reads on dark and
-  light backgrounds. An all-clear mask draws nothing.
+  `0xff` where it inverts).  Where this program can READ the frame it presents it
+  composes the TRUE inversion itself, `below ^ colour` for the mask's pixels only,
+  and shows it as a small overlay patch committed with the frame (a synchronised
+  subsurface); in hover the host pointer is hidden while it is up and comes back
+  the moment it is not.  Readable means a memfd carrying `F_SEAL_SHRINK` (the wl_shm
+  tier) or a LINEAR dma-buf whose exporter is system memory (`udmabuf`, the
+  system dma-heap), mapped read-only and read ONLY for the cursor's rows, bracketed
+  by `DMA_BUF_IOCTL_SYNC` (the one exception to "the broker never touches frame
+  memory", bounded as `nb_frame.c` and the design doc say).  Anything else (a
+  tiled or device-memory dma-buf, a failed mapping) falls back to opaque black
+  with a one-pixel opaque white outline, and the log says which, once per change:
+  `cursor: XOR composed by the broker (...)` / `cursor: XOR approximated ...
+  (frame not readable: <reason>)`.  An all-clear mask draws nothing.
+  `docs/design/V3_BROKER_XOR_CURSOR_20261017.md`.
 
 Backends that cannot overlay do not advertise the bit, and the VMM keeps
 composing the cursor into the frame as it always did (the Wayland and test

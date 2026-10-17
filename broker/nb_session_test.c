@@ -96,6 +96,22 @@ struct nb_test {
     enum nb_cursor_draw shown_draw;
     uint64_t shown_gen;
     int32_t  shown_x, shown_y;
+    /*
+     * THE XOR CURSOR, through the SAME driver the Wayland backend runs
+     * (nb_xor_eval): the frame just attached/committed is opened read-only, the
+     * pointer comes from the `a` and `p` lines (the test window IS the guest
+     * frame, fit 1), and what a real backend would put up is logged.
+     */
+    struct nb_xor_ctx xo;
+    struct nb_frame   pend_frame, shown_frame;
+    struct nb_frame_geom pend_geom, shown_geom;
+    bool     have_shown_frame;
+    bool     ptr_inside;        /* default true: the other tests never say */
+    bool     ptr_known;
+    int32_t  ptr_x, ptr_y;
+    bool     xo_up;             /* an XOR patch is "on screen"             */
+    uint32_t xo_key;
+    int32_t  xo_x, xo_y;
 };
 
 static uint64_t test_now_us(void)
@@ -112,6 +128,115 @@ static uint64_t test_now_us(void)
  * state, which is exactly the call the Wayland and X11 backends make -- so the
  * selftest exercises the policy they run, not a copy of it.
  */
+static uint32_t test_fnv(const uint32_t *px, size_t n)
+{
+    uint32_t h = 2166136261u;
+    size_t i;
+
+    for (i = 0; i < n; i++) {
+        int k;
+
+        for (k = 0; k < 4; k++) {
+            h ^= (px[i] >> (8 * k)) & 0xffu;
+            h *= 16777619u;
+        }
+    }
+    return h;
+}
+
+/*
+ * The XOR cursor, as a real backend would put it up.  Returns true when the
+ * TRUE inversion is what is shown (host pointer hidden, patch on the overlay).
+ * `force` logs the patch even if it is the one already up.  Everything else --
+ * the approximation, the plain cursors -- falls through to the ordinary lines.
+ */
+static bool test_xor_show(struct nb_test *t, bool force)
+{
+    const struct nb_cursor *c = t->cursor;
+    struct nb_xor_view v;
+    struct nb_xor_res r;
+
+    memset(&v, 0, sizeof v);
+    v.cur = c;
+    v.shown_ok = true;
+    v.grabbed = t->grabbed;
+    v.ptr_inside = t->ptr_inside;
+    v.serial_ok = true;
+    v.ptr_known = t->ptr_known;
+    v.ptr_x = t->ptr_x;
+    v.ptr_y = t->ptr_y;
+    if (t->have_shown_frame) {
+        v.frame = &t->shown_frame;
+        v.geom = t->shown_geom;
+        if (v.ptr_x < 0) { v.ptr_x = 0; }
+        if (v.ptr_y < 0) { v.ptr_y = 0; }
+        if (v.ptr_x >= (int32_t)v.geom.w) { v.ptr_x = (int32_t)v.geom.w - 1; }
+        if (v.ptr_y >= (int32_t)v.geom.h) { v.ptr_y = (int32_t)v.geom.h - 1; }
+    }
+    nb_xor_eval(&t->xo, &v, &r);
+    if (r.choice_changed && (r.act.choice == NB_XC_COMPOSED ||
+                             r.act.choice == NB_XC_APPROX)) {
+        char line[256];
+
+        nb_xor_choice_line(&r, v.frame, line, sizeof line);
+        nb_log("TEST %s", line);
+    }
+    if (r.act.ov == NB_XO_XOR) {
+        if (r.npix == 0) {
+            if (t->xo_up || force) {
+                nb_log("TEST cursor: xor patch none (nothing of the cursor is on "
+                       "the frame) host pointer hidden");
+            }
+            t->xo_up = false;
+            nb_xor_detached(&t->xo);
+            t->shown_valid = true;
+            t->shown_draw = NB_CURSOR_NONE;
+            return true;
+        }
+        {
+            uint32_t key = test_fnv(r.px, (size_t)r.pw * r.ph) ^ (r.pw << 8) ^
+                           (r.ph << 20);
+
+            if (force || !t->xo_up || key != t->xo_key || r.tlx != t->xo_x ||
+                r.tly != t->xo_y) {
+                nb_log("TEST cursor: xor patch %ux%u at %d,%d n=%u hash 0x%08x "
+                       "%s host pointer hidden", r.pw, r.ph, r.tlx, r.tly, r.npix,
+                       test_fnv(r.px, (size_t)r.pw * r.ph),
+                       t->grabbed ? "(grab)" : "(hover)");
+                t->xo_key = key;
+                t->xo_x = r.tlx;
+                t->xo_y = r.tly;
+            }
+            if (r.patch_changed) {
+                nb_xor_attached(&t->xo, &r, c->gen);
+            }
+            t->xo_up = true;
+            t->shown_valid = true;
+            t->shown_draw = NB_CURSOR_NONE;
+            t->shown_gen = c->gen;
+            return true;
+        }
+    }
+    if (t->xo_up) {
+        /* the true inversion is gone: whatever is shown now is a new decision */
+        t->xo_up = false;
+        nb_xor_detached(&t->xo);
+        t->shown_valid = false;
+    }
+    return false;
+}
+
+/* The policy, plus the one thing the XOR cursor adds in hover: with the
+ * pointer outside the content the host pointer is not ours to set. */
+static enum nb_cursor_draw test_draw(const struct nb_test *t,
+                                     const struct nb_cursor *c)
+{
+    if (c->xor && !t->grabbed && !t->ptr_inside) {
+        return NB_CURSOR_NONE;
+    }
+    return nb_cursor_policy(c, t->grabbed, true);
+}
+
 static void test_cursor_show(struct nb_test *t)
 {
     const struct nb_cursor *c = t->cursor;
@@ -120,8 +245,11 @@ static void test_cursor_show(struct nb_test *t)
     if (!c) {
         return;
     }
+    if (test_xor_show(t, true)) {
+        return;
+    }
     /* this backend advertises CAP_CURSOR_STREAM: it would overlay under grab */
-    d = nb_cursor_policy(c, t->grabbed, true);
+    d = test_draw(t, c);
     t->shown_valid = true;
     t->shown_draw = d;
     t->shown_gen = c->gen;
@@ -139,7 +267,8 @@ static void test_cursor_show(struct nb_test *t)
     } else {
         nb_log("TEST cursor: none (%s)",
                !c->defined ? "no image" :
-               !c->visible ? "hidden" : "grabbed");
+               !c->visible ? "hidden" :
+               (c->xor && !t->grabbed && !t->ptr_inside) ? "outside" : "grabbed");
     }
 }
 
@@ -157,7 +286,10 @@ static void test_cursor_refresh(struct nb_test *t)
     if (!c) {
         return;
     }
-    d = nb_cursor_policy(c, t->grabbed, true);
+    if (test_xor_show(t, false)) {
+        return;
+    }
+    d = test_draw(t, c);
     if (t->shown_valid && t->shown_draw == d &&
         (d == NB_CURSOR_NONE || t->shown_gen == c->gen) &&
         (d != NB_CURSOR_OVERLAY || (t->shown_x == c->x && t->shown_y == c->y))) {
@@ -173,7 +305,7 @@ static void test_cursor(struct nb_session *s, const struct nb_cursor *cur)
     t->cursor = cur;
     /* a position-only change in hover (MOVE is ignored there) logs nothing: the
      * comparison the real backends make (gc_up_to_date) */
-    if (t->shown_valid && t->shown_draw == NB_CURSOR_POINTER &&
+    if (!t->xo_up && t->shown_valid && t->shown_draw == NB_CURSOR_POINTER &&
         nb_cursor_policy(cur, t->grabbed, true) == NB_CURSOR_POINTER &&
         t->shown_gen == cur->gen &&
         (t->shown_x != cur->x || t->shown_y != cur->y)) {
@@ -246,11 +378,33 @@ static void test_line(struct nb_session *s, struct nb_sink *sink,
     switch (c) {
     case 'k': nb_sink_key(sink, (unsigned)a, b != 0); break;
     case 'b': nb_sink_btn(sink, (unsigned)a, b != 0); break;
-    case 'a': nb_sink_abs(sink, a, b, s->width, s->height); break;
+    case 'a': {
+        struct nb_test *t = s->priv;
+
+        /* the test window is the guest frame, 1:1: the pointer is the pixel */
+        t->ptr_known = true;
+        t->ptr_x = a;
+        t->ptr_y = b;
+        nb_sink_abs(sink, a, b, s->width, s->height);
+        if (t->xo_up || (t->cursor && t->cursor->xor)) {
+            test_cursor_refresh(t);
+        }
+        break;
+    }
     case 'r': nb_sink_rel(sink, a, b); break;
     case 'w': nb_sink_wheel(sink, a, b); break;
     case 'f': nb_sink_focus(sink, a != 0); break;
-    case 'p': nb_sink_pointer(sink, a != 0); break;
+    case 'p': {
+        struct nb_test *t = s->priv;
+
+        nb_sink_pointer(sink, a != 0);
+        t->ptr_inside = a != 0;
+        if (!t->ptr_inside) {
+            t->ptr_known = false;
+        }
+        test_cursor_refresh(t);
+        break;
+    }
     case 'c': test_finish_fetch(s->priv, sink, (unsigned)a); break;
     case 's': test_finish_stale_fetch(s->priv, sink); break;
     case 'd':
@@ -320,6 +474,14 @@ static int test_attach(struct nb_session *s, const struct nb_buf_desc *d)
         return -EINVAL;
     }
 
+    nb_frame_close(&t->pend_frame);
+    t->pend_geom.w = d->width;
+    t->pend_geom.h = d->height;
+    t->pend_geom.stride = d->stride;
+    t->pend_geom.offset = d->offset;
+    t->pend_geom.fourcc = d->fourcc;
+    (void)nb_frame_open(&t->pend_frame, d->fd, d->is_shm, d->size, &t->pend_geom,
+                        d->modifier);
     t->have_pending = true;
     t->pending_id = d->id;
     t->pending_w = d->width;
@@ -340,6 +502,13 @@ static int test_commit(struct nb_session *s, struct nb_sink *sink)
     }
     nb_log("TEST commit: id=%llu %ux%u", (unsigned long long)t->pending_id,
            t->pending_w, t->pending_h);
+    /* the pending buffer is now the one shown: the XOR patch is computed from
+     * IT, as wl_commit() does before its parent commit */
+    nb_frame_close(&t->shown_frame);
+    t->shown_frame = t->pend_frame;
+    memset(&t->pend_frame, 0, sizeof t->pend_frame);
+    t->shown_geom = t->pend_geom;
+    t->have_shown_frame = true;
     test_cursor_refresh(t);
     nb_sink_surface(sink, t->pending_w, t->pending_h, t->refresh_mhz);
     /* A real backend answers with these; produce them so a client's pacing
@@ -412,6 +581,12 @@ static void test_client_detach(struct nb_session *s, uint64_t generation)
 
 static void test_close(struct nb_session *s)
 {
+    struct nb_test *t = s->priv;
+
+    if (t) {
+        nb_frame_close(&t->pend_frame);
+        nb_frame_close(&t->shown_frame);
+    }
     free(s->priv);
     free(s);
 }
@@ -422,6 +597,7 @@ static int test_open(struct nb_session *s, const struct nb_config *cfg)
 
     s->width = cfg->win_w;
     s->height = cfg->win_h;
+    t->ptr_inside = true;
     /*
      * A deliberately SMALL advertised set, so the selftest can prove both
      * halves of the format gate: XRGB8888 linear and XRGB8888 implicit are

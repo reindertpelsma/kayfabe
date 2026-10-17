@@ -164,6 +164,10 @@ struct nb_wl_buf {
     bool      held;
     uint32_t  seq;                  /* client frame counter at last commit    */
     uint64_t  commits;
+    /* READ-ONLY window onto this frame, for the XOR cursor (nb_frame.c); a
+     * zero value is "not readable".  Opened where the buffer is accepted,
+     * closed with it. */
+    struct nb_frame frame;
 };
 
 /* Distinct pairs whose importability we remember.  Two occur in practice:
@@ -243,6 +247,22 @@ struct nb_wl {
     /* ...and there is at most ONE, because the two fields above are how its
      * answer is attributed.  See wl_attach(). */
     bool     probe_inflight;
+    /*
+     * THE FRAMES A PROBE WINDOW DROPS (found 2026-10-17 against a real mutter:
+     * a connect burst of three frames was dropped whole, nothing was shown until
+     * the guest redrew, and nothing was ever acknowledged -- which is what the
+     * VMM's acknowledgement detector reads as "the display cannot import
+     * dma-bufs" and answers by falling to shared memory for seconds).
+     *
+     * The NEWEST dropped dma-buf is kept (a dup of its fd: at most one, so the
+     * fd intake stays bounded) and imported as soon as its geometry is proven;
+     * every OLDER one is released the moment a newer one supersedes it -- the
+     * truth, "the display is no longer reading that buffer" (EV_RELEASE) -- and
+     * if the probe fails the kept one is released too.
+     */
+    struct nb_buf_desc defer;           /* .fd is OUR dup while defer_valid   */
+    bool     defer_valid;
+    bool     defer_committed;           /* its COMMIT arrived                 */
     /* A probe that failed and the client has not been told about yet. */
     bool     probe_bad_pending;
     uint32_t probe_bad_fourcc;
@@ -506,6 +526,20 @@ struct nb_wl {
     bool                    ov_starved; /* a re-render waits on a release  */
     bool                    ov_broken;
     int32_t                 ov_px_x, ov_px_y; /* last position, logical    */
+    /*
+     * THE XOR CURSOR (D2).  The overlay doubles as the TRUE inversion patch
+     * while the standing choice is "composed": a sync subsurface, so a patch
+     * computed from a frame is applied by the SAME parent commit as that frame.
+     * ov_kind says what the overlay's buffer holds; xo_* what was last placed.
+     */
+    int                     ov_kind;    /* 0 nothing, 1 image, 2 XOR patch */
+    bool                    ov_sync;    /* the subsurface is in sync mode  */
+    struct nb_xor_place     xo_place;
+    struct nb_xor_ctx       xo;
+    /* The host pointer on the content surface, wl_fixed (1/256 px), from
+     * enter and every motion: the position of the software cursor in hover. */
+    bool                    ptr_known;
+    int32_t                 ptr_fx, ptr_fy;
 
     /*
      * EV_DEVICE.  A SECOND zwp_linux_dmabuf_v1 object, bound at version 4,
@@ -576,6 +610,10 @@ static void cur_apply(struct nb_wl *w, uint32_t serial);
 /* Forward: re-run cur_apply() only if what the content's cursor should be has
  * changed -- the guest's image, the frame's scale, or the grab. */
 static void gc_refresh(struct nb_wl *w);
+/* Forward: the overlay is redrawn from a given frame (NULL: the one shown); the
+ * flag says the caller commits the parent surface itself right after. */
+static void ov_refresh(struct nb_wl *w, const struct nb_wl_buf *fb,
+                       bool parent_commits);
 /* Forward: the clipboard notice needs a clock and lives with the clipboard. */
 static uint64_t nb_now_ms_wl(void);
 /* Forward: the invisible resize borders, laid out on every size change. */
@@ -621,6 +659,7 @@ static void wl_buf_destroy(struct nb_wl *w, int i)
     if (w->bufs[i].buf) {
         wl_buffer_destroy(w->bufs[i].buf);
     }
+    nb_frame_close(&w->bufs[i].frame);
     memset(&w->bufs[i], 0, sizeof(w->bufs[i]));
 }
 
@@ -687,6 +726,11 @@ static int wl_pair_slot(struct nb_wl *w, uint32_t fourcc, uint64_t mod,
     return free_slot;
 }
 
+/* Forward: the frame a probe window kept (defined with wl_attach). */
+static void wl_defer_forget(struct nb_wl *w, bool release);
+static bool wl_adopt_deferred(struct nb_wl *w);
+static int wl_commit(struct nb_session *s, struct nb_sink *sink);
+
 /*
  * The probe answered.  `created` means this display really can import the pair;
  * `failed` means it advertised something it cannot bind, and the whole point of
@@ -716,6 +760,10 @@ static void probe_created(void *data, struct zwp_linux_buffer_params_v1 *params,
     }
     wl_buffer_destroy(buf);
     zwp_linux_buffer_params_v1_destroy(params);
+    /* the frame the window kept is the newest the VMM sent: show it */
+    if (w->sink && w->defer_valid && w->defer_committed && wl_adopt_deferred(w)) {
+        (void)wl_commit(w->sess, w->sink);
+    }
 }
 
 static void probe_failed(void *data, struct zwp_linux_buffer_params_v1 *params)
@@ -724,6 +772,7 @@ static void probe_failed(void *data, struct zwp_linux_buffer_params_v1 *params)
     int i = wl_pair_slot(w, w->probe_fourcc, w->probe_mod, false);
 
     w->probe_inflight = false;
+    wl_defer_forget(w, true);   /* it will never be shown: released, truthfully */
     if (i >= 0) {
         w->proven[i].state   = -1;
         w->proven[i].probing = false;
@@ -747,6 +796,100 @@ static const struct zwp_linux_buffer_params_v1_listener probe_listener = {
     .failed  = probe_failed,
 };
 
+static void wl_defer_forget(struct nb_wl *w, bool release)
+{
+    if (!w->defer_valid) {
+        return;
+    }
+    if (release && w->sink) {
+        nb_sink_release(w->sink, w->defer.id);
+    }
+    close(w->defer.fd);
+    w->defer_valid = false;
+    w->defer_committed = false;
+}
+
+/* A dma-buf the probe window drops: keep it as the newest (see the struct). */
+static void wl_defer_frame(struct nb_wl *w, const struct nb_buf_desc *d)
+{
+    int dupfd;
+
+    /* the one before it can never be shown: say so, now */
+    wl_defer_forget(w, true);
+    dupfd = fcntl(d->fd, F_DUPFD_CLOEXEC, 3);
+    if (dupfd < 0) {
+        /* cannot keep it: it is dropped, and honestly released */
+        if (w->sink) {
+            nb_sink_release(w->sink, d->id);
+        }
+        return;
+    }
+    w->defer = *d;
+    w->defer.fd = dupfd;
+    w->defer_valid = true;
+    w->defer_committed = false;
+}
+
+/* A newer frame is being shown through the proven path: whatever was kept can
+ * never be shown. */
+static void wl_defer_superseded(struct nb_wl *w)
+{
+    wl_defer_forget(w, true);
+}
+
+static int wl_attach(struct nb_session *s, const struct nb_buf_desc *d);
+
+/*
+ * The kept frame, once its geometry is proven: import it now (the pair is
+ * proven, so this takes the ordinary create_immed path and sets `pending`).
+ * Returns true when a frame is pending.  It is only ever called with its COMMIT
+ * already received, so the caller commits it.
+ */
+static bool wl_adopt_deferred(struct nb_wl *w)
+{
+    struct nb_buf_desc d;
+    int r;
+
+    if (!w->defer_valid || !w->defer_committed || w->probe_inflight) {
+        return false;
+    }
+    d = w->defer;               /* ownership of the dup moves to `d` */
+    w->defer_valid = false;
+    w->defer_committed = false;
+    r = wl_attach(w->sess, &d);
+    if (w->defer_valid) {
+        /* the attach went into another probe (a different geometry): it kept
+         * its own dup of d.fd; ours is done */
+        close(d.fd);
+        return false;
+    }
+    if (r != 0 || w->pending < 0) {
+        /* could not be shown after all: release it, it is nobody's now */
+        if (w->sink) {
+            nb_sink_release(w->sink, d.id);
+        }
+        close(d.fd);
+        return false;
+    }
+    close(d.fd);
+    nb_log("frame: the frame that arrived while its layout was being proven is "
+           "shown now (buffer %llu), not dropped", (unsigned long long)d.id);
+    return true;
+}
+
+/*
+ * Open the read-only window onto an accepted buffer (the XOR cursor reads the
+ * pixels under itself from it).  A failure is not an error: the buffer is shown
+ * exactly as before, the frame is simply "not readable" and says why.
+ */
+static void wl_frame_open(struct nb_wl_buf *sl, const struct nb_buf_desc *d)
+{
+    struct nb_frame_geom g = { d->width, d->height, d->stride, d->offset,
+                               d->fourcc };
+
+    (void)nb_frame_open(&sl->frame, d->fd, d->is_shm, d->size, &g, d->modifier);
+}
+
 static int wl_attach(struct nb_session *s, const struct nb_buf_desc *d)
 {
     struct nb_wl *w = s->priv;
@@ -769,6 +912,7 @@ static int wl_attach(struct nb_session *s, const struct nb_buf_desc *d)
             sl->modifier == d->modifier) {
             sl->used = w->tick;
             sl->seq  = d->seq;
+            wl_defer_superseded(w);
             w->pending = i;
             return 0;
         }
@@ -829,17 +973,6 @@ static int wl_attach(struct nb_session *s, const struct nb_buf_desc *d)
         if (!sb) {
             return -EIO;
         }
-        {
-            static bool told;
-
-            if (!told) {
-                told = true;
-                nb_log("presenting through wl_shm: the display refused every "
-                       "dma-buf layout offered, so frames are shared as plain "
-                       "memory.  This works everywhere and costs the "
-                       "compositor one upload per frame.");
-            }
-        }
         wl_buf_destroy(w, victim);
         w->bufs[victim] = (struct nb_wl_buf){
             .valid = true, .id = d->id, .buf = sb,
@@ -848,6 +981,8 @@ static int wl_attach(struct nb_session *s, const struct nb_buf_desc *d)
             .used = w->tick, .owner = w, .seq = d->seq,
         };
         wl_buffer_add_listener(sb, &buf_listener, &w->bufs[victim]);
+        wl_frame_open(&w->bufs[victim], d);
+        wl_defer_superseded(w);
         w->pending = victim;
         return 0;
     }
@@ -877,7 +1012,8 @@ static int wl_attach(struct nb_session *s, const struct nb_buf_desc *d)
             return -EINVAL;         /* known-refused: reject, do not retry */
         }
         if (w->proven[ps].probing) {
-            return 0;               /* a probe is in flight; nothing to show */
+            wl_defer_frame(w, d);
+            return 0;               /* a probe is in flight; shown when it ends */
         }
         /*
          * ONE PROBE AT A TIME.  probe_fourcc/probe_mod are a single slot --
@@ -889,6 +1025,7 @@ static int wl_attach(struct nb_session *s, const struct nb_buf_desc *d)
          * which is how a client reaches the ps < 0 case above.
          */
         if (w->probe_inflight) {
+            wl_defer_frame(w, d);
             return 0;
         }
         /*
@@ -936,6 +1073,7 @@ static int wl_attach(struct nb_session *s, const struct nb_buf_desc *d)
                    (unsigned long long)d->modifier, d->width, d->height,
                    d->stride);
             w->pending = -1;
+            wl_defer_frame(w, d);
             return 0;
         }
     }
@@ -975,6 +1113,8 @@ static int wl_attach(struct nb_session *s, const struct nb_buf_desc *d)
         .used = w->tick, .owner = w, .seq = d->seq,
     };
     wl_buffer_add_listener(b, &buf_listener, &w->bufs[victim]);
+    wl_frame_open(&w->bufs[victim], d);
+    wl_defer_superseded(w);
     w->pending = victim;
     return 0;
 }
@@ -1122,6 +1262,11 @@ static int wl_commit(struct nb_session *s, struct nb_sink *sink)
                                false);
     }
 
+    if (w->pending < 0 && w->defer_valid) {
+        /* the COMMIT of a frame the probe window kept: it is wanted */
+        w->defer_committed = true;
+        (void)wl_adopt_deferred(w);
+    }
     if (w->pending < 0) {
         return -ENOENT;         /* COMMIT with nothing attached; not fatal */
     }
@@ -1265,6 +1410,11 @@ static int wl_commit(struct nb_session *s, struct nb_sink *sink)
      * the compare.
      */
     bd_layout(w);
+    /* The XOR patch for THIS frame, attached to the (synchronised) overlay
+     * just before the parent commit that applies both together. */
+    if (w->gcur && w->gcur->xor) {
+        ov_refresh(w, sl, true);
+    }
     wl_surface_commit(w->surf);
 
     /*
@@ -1979,6 +2129,18 @@ static void wl_client_detach(struct nb_session *s, uint64_t generation)
     memset(w->proven, 0, sizeof w->proven);
     nb_geom_clear(&w->geoms);
     w->probe_bad_pending = false;
+    /*
+     * THE DEPARTED VM'S FRAMES ARE NOT READ ANY MORE.  The wl_buffers stay (the
+     * window keeps showing the last picture until a new VM draws), but the
+     * read-only mappings of memory the VM supplied go now, and the next VM's
+     * XOR cursor says its choice afresh.
+     */
+    wl_defer_forget(w, false);  /* the VM is gone: nobody to tell */
+    for (int i = 0; i < NB_MAX_BUFS; i++) {
+        nb_frame_close(&w->bufs[i].frame);
+    }
+    w->xo.choice_valid = false;
+    nb_xor_detached(&w->xo);
 }
 
 /* ── the output's fractional scale ───────────────────────────────────────── */
@@ -2144,6 +2306,53 @@ static void gc_geom_now(const struct nb_wl *w, struct nb_cursor_geom *g,
     b->h = sf.bh;
     b->hot_x = sf.g.hot_x * sf.scale;
     b->hot_y = sf.g.hot_y * sf.scale;
+}
+
+/*
+ * Gather what the XOR decision needs and run it (nb_xor_eval(): the pure
+ * table, the frame read, the compose).  The ONLY Wayland-specific part of the
+ * XOR cursor is this gathering and the three places that obey the answer:
+ * cur_apply() (host pointer), ov_refresh() (overlay), and the one log line.
+ * `fb` is the frame the patch must be computed from -- the one being shown, or
+ * the one about to be committed.
+ */
+static void xo_eval(struct nb_wl *w, const struct nb_wl_buf *fb,
+                    struct nb_xor_res *r)
+{
+    struct nb_xor_view v;
+    uint32_t nx, dx, ny, dy;
+
+    memset(&v, 0, sizeof v);
+    v.cur = w->gcur;
+    v.shown_ok = !w->dlg_open && fb && fb->valid;
+    v.grabbed = w->grabbed;
+    v.ptr_inside = w->ptr && w->ptr_on_content;
+    v.serial_ok = w->ptr_serial != 0;
+    v.ptr_known = w->ptr_known;
+    if (fb && fb->valid) {
+        v.frame = &fb->frame;
+        v.geom.w = fb->w;
+        v.geom.h = fb->h;
+        v.geom.stride = fb->stride;
+        v.geom.offset = fb->offset;
+        v.geom.fourcc = fb->fourcc;
+        gc_scale_now(w, &nx, &dx, &ny, &dy);
+        v.ptr_x = nb_xor_ptr_to_frame(w->ptr_fx, nx, dx, fb->w);
+        v.ptr_y = nb_xor_ptr_to_frame(w->ptr_fy, ny, dy, fb->h);
+    }
+    nb_xor_eval(&w->xo, &v, r);
+    if (r->choice_changed && (r->act.choice == NB_XC_COMPOSED ||
+                              r->act.choice == NB_XC_APPROX)) {
+        char line[256];
+
+        nb_xor_choice_line(r, v.frame, line, sizeof line);
+        nb_log("%s", line);
+    }
+}
+
+static const struct nb_wl_buf *xo_shown(const struct nb_wl *w)
+{
+    return w->current >= 0 ? &w->bufs[w->current] : NULL;
 }
 
 static bool gc_geom_eq(const struct nb_cursor_geom *a,
@@ -2327,13 +2536,17 @@ static bool gc_render(struct nb_wl *w)
 
 static void gc_refresh_ptr(struct nb_wl *w)
 {
+    struct nb_xor_res xr;
     bool want;
 
     if (!w->ptr || !w->ptr_on_content) {
         return;     /* not our pointer to set; ptr_enter will decide */
     }
-    want = !w->dlg_open && w->current >= 0 &&
-           nb_cursor_wanted(w->gcur, w->grabbed);
+    /* THE HOST POINTER'S STATE IS A FUNCTION (nb_xor_decide, a table under
+     * test): the guest's image, or hidden -- hidden also while an XOR cursor is
+     * composed, because the overlay is then the cursor. */
+    xo_eval(w, xo_shown(w), &xr);
+    want = xr.act.ptr == NB_XP_GUEST_IMAGE;
     if (!want && !w->gc_on) {
         return;     /* nothing of ours is up and nothing should be */
     }
@@ -2422,6 +2635,7 @@ static bool ov_ensure(struct nb_wl *w)
     wl_subsurface_place_above(w->ov_sub, w->surf);
     /* Desynchronised: its buffer shows when ITS commit lands, not the parent's. */
     wl_subsurface_set_desync(w->ov_sub);
+    w->ov_sync = false;
     /* No input: the overlay is never what the pointer is "over". */
     none = wl_compositor_create_region(w->comp);
     if (none) {
@@ -2440,15 +2654,34 @@ broken:
     return false;
 }
 
+static void ov_set_sync(struct nb_wl *w, bool sync)
+{
+    if (!w->ov_sub || w->ov_sync == sync) {
+        return;
+    }
+    if (sync) {
+        wl_subsurface_set_sync(w->ov_sub);
+    } else {
+        wl_subsurface_set_desync(w->ov_sub);
+    }
+    w->ov_sync = sync;
+}
+
 static void ov_hide(struct nb_wl *w)
 {
+    nb_xor_detached(&w->xo);
     if (!w->ov_on) {
         return;
     }
     wl_surface_attach(w->ov_surf, NULL, 0, 0);
     wl_surface_commit(w->ov_surf);
+    if (w->ov_sync) {
+        /* a sync subsurface's commit is cached until its parent's */
+        wl_surface_commit(w->surf);
+    }
     w->ov_on = false;
     w->ov_valid = false;
+    w->ov_kind = 0;
 }
 
 static bool ov_geom_eq(const struct nb_cursor_geom *a,
@@ -2459,28 +2692,145 @@ static bool ov_geom_eq(const struct nb_cursor_geom *a,
 }
 
 /*
- * Draw, move or take down the overlay for the held cursor.  Called from every
- * place gc_refresh() is: a new image, a MOVE, a grab change, a scale change.
+ * THE TRUE XOR PATCH on the overlay.
+ *
+ * KEEPING THE PATCH IN STEP WITH ITS FRAME.  The patch is computed from the
+ * frame in `xr` and attached to the overlay surface, which is a SYNCHRONISED
+ * subsurface: its commit is cached and applied by the PARENT's next commit, so
+ * a frame commit that carries a freshly computed patch puts frame and patch on
+ * screen together (wl_commit() calls this just before wl_surface_commit(surf)).
+ * Between frames a pointer move recomputes the patch from the frame that is
+ * showing, at the new position, and commits overlay and parent together too.
+ * If both patch buffers are still held by the compositor the previous patch
+ * stays up (stale for as long as the pixels under the cursor changed AND the
+ * compositor holds both buffers -- one or two frames) and the release re-runs
+ * this: the patch is never DRAWN into a buffer the compositor may read.
+ *
+ * REGISTRATION.  The overlay sits at an integer logical position and is scaled
+ * by the compositor, the frame by its viewport: each patch edge is rounded to
+ * the nearest logical pixel on its own (nb_xor_place), so it is within 0.5
+ * logical px of the frame's own pixel boundary, and exact at fit 1.
  */
-static void ov_refresh(struct nb_wl *w)
+static void ov_draw_xor(struct nb_wl *w, const struct nb_xor_res *xr,
+                        bool parent_commits)
 {
-    struct nb_cursor_geom g, b;
-    const struct nb_cursor *c = w->gcur;
-    bool want = !w->dlg_open && w->current >= 0 &&
-                nb_cursor_policy(c, w->grabbed, true) == NB_CURSOR_OVERLAY;
+    struct nb_xor_place pl;
     uint32_t nx, dx, ny, dy;
-    int32_t lx, ly;
+    bool redraw;
     int i, slot = -1;
 
-    if (!want) {
-        ov_hide(w);
+    if (xr->npix == 0) {
+        ov_hide(w);     /* composed, and nothing of the cursor is on the frame */
         return;
     }
     if (!ov_ensure(w)) {
         return;
     }
+    gc_scale_now(w, &nx, &dx, &ny, &dy);
+    nb_xor_place(xr->tlx, xr->tly, xr->pw, xr->ph, nx, dx, ny, dy, w->scale_120,
+                 &pl);
+    ov_set_sync(w, true);
+    redraw = xr->patch_changed || !w->ov_on || w->ov_kind != 2 ||
+             pl.gw != w->xo_place.gw || pl.gh != w->xo_place.gh ||
+             pl.scale != w->xo_place.scale;
+    if (redraw) {
+        struct wl_buffer *buf;
+        uint32_t *px;
+
+        if (pl.bw == 0 || pl.bh == 0 || (size_t)pl.bw * pl.bh > NB_GC_SLOT_PX) {
+            return;
+        }
+        for (i = 0; i < NB_GC_SLOTS; i++) {
+            if (!w->ov_slot[i].busy) {
+                slot = i;
+                break;
+            }
+        }
+        if (slot < 0) {
+            w->ov_starved = true;   /* the release re-runs this */
+            return;
+        }
+        if (w->ov_slot[slot].buf) {
+            wl_buffer_destroy(w->ov_slot[slot].buf);
+            w->ov_slot[slot].buf = NULL;
+        }
+        px = w->ov_px + (size_t)slot * NB_GC_SLOT_PX;
+        nb_px_scale_box(xr->px, xr->pw, xr->ph, px, pl.bw, pl.bh);
+        buf = wl_shm_pool_create_buffer(w->ov_pool,
+                                        (int32_t)((size_t)slot * NB_GC_SLOT_BYTES),
+                                        (int32_t)pl.bw, (int32_t)pl.bh,
+                                        (int32_t)(pl.bw * 4u),
+                                        WL_SHM_FORMAT_ARGB8888);
+        if (!buf) {
+            return;
+        }
+        wl_buffer_add_listener(buf, &ov_buf_listener, &w->ov_slot[slot]);
+        w->ov_slot[slot].buf = buf;
+        w->ov_slot[slot].busy = true;
+        wl_surface_set_buffer_scale(w->ov_surf, (int32_t)pl.scale);
+        wl_surface_attach(w->ov_surf, buf, 0, 0);
+        wl_surface_damage_buffer(w->ov_surf, 0, 0, (int32_t)pl.bw, (int32_t)pl.bh);
+        w->ov_on = true;
+        w->ov_valid = false;        /* not the image path's buffer */
+        w->ov_kind = 2;
+        w->ov_px_x = w->ov_px_y = INT32_MIN;
+        nb_xor_attached(&w->xo, xr, w->gcur->gen);
+        if (nb_verbose) {
+            nb_log("cursor: XOR patch %ux%u px (%u inverted) on the frame at %d,%d -> "
+                   "overlay %ux%u logical at %d,%d, buffer %ux%u scale %u",
+                   xr->pw, xr->ph, xr->npix, xr->tlx, xr->tly, pl.gw, pl.gh, pl.x,
+                   pl.y, pl.bw, pl.bh, pl.scale);
+        }
+    }
+    w->xo_place = pl;
+    if (redraw || pl.x != w->ov_px_x || pl.y != w->ov_px_y) {
+        w->ov_px_x = pl.x;
+        w->ov_px_y = pl.y;
+        wl_subsurface_set_position(w->ov_sub, pl.x, pl.y);
+        wl_surface_commit(w->ov_surf);              /* cached (sync) */
+        if (!parent_commits) {
+            wl_surface_commit(w->surf);             /* applies it, with the frame */
+        }
+    }
+}
+
+/*
+ * Draw, move or take down the overlay for the held cursor.  Called from every
+ * place gc_refresh() is: a new image, a MOVE, a grab change, a scale change.
+ */
+static void ov_refresh(struct nb_wl *w, const struct nb_wl_buf *fb,
+                       bool parent_commits)
+{
+    struct nb_cursor_geom g, b;
+    const struct nb_cursor *c = w->gcur;
+    struct nb_xor_res xr;
+    uint32_t nx, dx, ny, dy;
+    int32_t lx, ly;
+    int i, slot = -1;
+
+    if (!fb) {
+        fb = xo_shown(w);
+    }
+    /* WHAT THE OVERLAY SHOWS IS A FUNCTION (nb_xor_decide): nothing; the
+     * guest's image at the last MOVE (grab, as before); or the TRUE XOR patch
+     * (hover and grab, when the frame is readable). */
+    xo_eval(w, fb, &xr);
+    if (xr.act.ov == NB_XO_XOR) {
+        ov_draw_xor(w, &xr, parent_commits);
+        return;
+    }
+    if (xr.act.ov != NB_XO_IMAGE) {
+        ov_hide(w);
+        return;
+    }
+    nb_xor_detached(&w->xo);
+    if (!ov_ensure(w)) {
+        return;
+    }
+    /* back to the desynchronised mode this overlay always had */
+    ov_set_sync(w, false);
     ov_geom_now(w, &g, &b);
-    if (!(w->ov_valid && w->ov_on && w->ov_gen == c->gen &&
+    if (!(w->ov_valid && w->ov_on && w->ov_kind == 1 && w->ov_gen == c->gen &&
           ov_geom_eq(&w->ov_geom, &g) && ov_geom_eq(&w->ov_bgeom, &b))) {
         struct wl_buffer *buf;
         uint32_t *px;
@@ -2525,6 +2875,7 @@ static void ov_refresh(struct nb_wl *w)
         w->ov_geom = g;
         w->ov_bgeom = b;
         w->ov_on = true;
+        w->ov_kind = 1;
         w->ov_px_x = w->ov_px_y = INT32_MIN;    /* place it below */
     }
     /* The image's top-left on the frame, to the surface's logical pixels: the
@@ -2539,7 +2890,9 @@ static void ov_refresh(struct nb_wl *w)
         wl_subsurface_set_position(w->ov_sub, lx, ly);
         /* a subsurface's position is parent state: applied by the parent's commit */
         wl_surface_commit(w->ov_surf);
-        wl_surface_commit(w->surf);
+        if (!parent_commits) {
+            wl_surface_commit(w->surf);
+        }
     }
 }
 
@@ -2572,13 +2925,16 @@ static void ov_drop(struct nb_wl *w)
     }
     w->ov_valid = false;
     w->ov_on = false;
+    w->ov_kind = 0;
+    w->ov_sync = false;
+    nb_xor_detached(&w->xo);
 }
 
 /* The host-pointer image (hover) and the overlay (grab) follow the same state. */
 static void gc_refresh(struct nb_wl *w)
 {
     gc_refresh_ptr(w);
-    ov_refresh(w);
+    ov_refresh(w, NULL, false);
 }
 
 static void wl_cursor_op(struct nb_session *s, const struct nb_cursor *cur)
@@ -2649,12 +3005,15 @@ static void cur_apply(struct nb_wl *w, uint32_t serial)
          * composites the cursor into the frame, and a host pointer as well
          * would be two cursors a few pixels apart.
          */
-        if (nb_cursor_wanted(w->gcur, w->grabbed) && gc_render(w)) {
+        struct nb_xor_res xr;
+
+        xo_eval(w, &w->bufs[w->current], &xr);
+        if (xr.act.ptr == NB_XP_GUEST_IMAGE && gc_render(w)) {
             wl_pointer_set_cursor(w->ptr, serial, w->gc_surf,
                                   (int32_t)w->gc_geom.hot_x,
                                   (int32_t)w->gc_geom.hot_y);
             w->gc_on = true;
-        } else {
+        } else if (xr.act.ptr != NB_XP_UNTOUCHED) {
             wl_pointer_set_cursor(w->ptr, serial, NULL, 0, 0);
         }
     } else {
@@ -3344,7 +3703,6 @@ static void ptr_enter(void *d, struct wl_pointer *p, uint32_t serial,
                       struct wl_surface *s, wl_fixed_t x, wl_fixed_t y)
 {
     struct nb_wl *w = d;
-    (void)x; (void)y;
 
     w->last_serial = serial;
     w->ptr_serial = serial;
@@ -3400,7 +3758,11 @@ static void ptr_enter(void *d, struct wl_pointer *p, uint32_t serial,
      * the arrow returns on its own at the window chrome.
      */
     w->ptr_on_content = true;
+    w->ptr_known = true;
+    w->ptr_fx = x;
+    w->ptr_fy = y;
     cur_apply(w, serial);
+    ov_refresh(w, NULL, false);     /* the XOR patch, if that is the cursor */
     if (w->sink) {
         nb_sink_pointer(w->sink, true);
     }
@@ -3411,7 +3773,11 @@ static void ptr_leave(void *d, struct wl_pointer *p, uint32_t serial,
     struct nb_wl *w = d;
 
     w->ptr_on_content = false;
+    w->ptr_known = false;
     w->gc_on = false;           /* the pointer left; the surface is not ours */
+    if (w->ov_kind == 2) {
+        ov_refresh(w, NULL, false);     /* the software cursor goes with it */
+    }
 
     if (bd_index(w, s) >= 0) {
         w->bd_hot = -1;
@@ -3460,9 +3826,17 @@ static void ptr_motion(void *d, struct wl_pointer *p, uint32_t t,
         }
         return;                 /* chrome, not guest input */
     }
+    w->ptr_known = true;
+    w->ptr_fx = x;
+    w->ptr_fy = y;
     if (w->sink) {
         nb_sink_abs(w->sink, wl_fixed_to_int(x), wl_fixed_to_int(y),
                     (unsigned)w->surf_w, (unsigned)w->surf_h);
+    }
+    /* Hover with the XOR cursor composed: the software cursor follows the host
+     * pointer.  Nothing at all happens here for any other cursor. */
+    if (w->xo.choice_valid && w->xo.last_choice == NB_XC_COMPOSED && !w->grabbed) {
+        ov_refresh(w, NULL, false);
     }
 }
 static void ptr_button(void *d, struct wl_pointer *p, uint32_t serial,
@@ -4673,6 +5047,7 @@ static void wl_close_session(struct nb_session *s)
     free(w->src_text);
     free(w->clip_pending);
     w->clip_pending = NULL;
+    wl_defer_forget(w, false);
     for (i = 0; i < NB_MAX_BUFS; i++) {
         wl_buf_destroy(w, i);
     }

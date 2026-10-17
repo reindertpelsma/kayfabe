@@ -214,7 +214,19 @@ struct nb_cursor {
     bool     placed;            /* once a MOVE set it (CAP_CURSOR_STREAM)     */
     int32_t  abs_x, abs_y;      /* the last absolute pointer position (MOVE), */
     bool     abs_valid;         /* valid only if the VMM's last input was one */
+    /*
+     * XOR (NVKVM_BROKER_CURSOR_F_XOR, D2 2026-10-17).  When `xor` is set, `px`
+     * is the APPROXIMATION (nb_cursor_xor_approx(): what every backend that
+     * cannot invert draws, unchanged) and `mask` is the INVERSION MASK the VMM
+     * sent -- the true cursor, composed by nb_xor_eval() where the frame can be
+     * read.  mask[0 .. w*h) is packed like px; (bx, by, bw, bh) bounds its
+     * non-clear pixels (bw = 0: it inverts nothing).  Only nb_cursor_set_xor()
+     * sets these; nb_cursor_load() clears `xor`.
+     */
+    bool     xor;
+    uint32_t bx, by, bw, bh;
     uint32_t px[NVKVM_BROKER_CURSOR_MAX_DIM * NVKVM_BROKER_CURSOR_MAX_DIM];
+    uint32_t mask[NVKVM_BROKER_CURSOR_MAX_DIM * NVKVM_BROKER_CURSOR_MAX_DIM];
 };
 
 /*
@@ -254,6 +266,14 @@ int  nb_cursor_check(const struct nvkvm_broker_cursor_cmd *c, bool has_fd,
  * an XOR SET: a viewer cannot invert.  Returns false for an all-clear mask (the
  * guest's cursor inverts nothing: nothing to show; the caller hides it). */
 bool nb_cursor_xor_approx(struct nb_cursor *c);
+/*
+ * The whole XOR SET step on a freshly loaded image: keep the mask (c->mask,
+ * c->xor, its bounding box c->bx.. ), then make c->px the approximation.
+ * Returns false for an all-clear mask (nothing to show; the caller hides it).
+ * The mask's colour channels are exactly what nb_cursor_load() left (colour
+ * clamped to alpha: a mask pixel is alpha 0xff or 0, so nothing is changed).
+ */
+bool nb_cursor_set_xor(struct nb_cursor *c);
 /*
  * MOVE: refuse (-1) a position outside +-NVKVM_BROKER_CURSOR_MOVE_LIMIT, else
  * clamp it to -NVKVM_BROKER_CURSOR_MAX_DIM .. NVKVM_BROKER_MAX_DIM (outside of
@@ -376,6 +396,11 @@ void nb_cursor_surface_geom(const struct nb_cursor *c, uint32_t num_x,
  *           is on the frame, 0 elsewhere -- the opaque patch a subsurface shows
  *           over the unchanged frame.  Never writes `frame`.
  * Returns the number of frame pixels inverted / patch pixels set.
+ *
+ * NOTE: these two take `c->px` as the mask.  For a cursor with `xor` set, px is
+ * the APPROXIMATION and the mask is `c->mask` (cropped to c->bx.. by nb_xor_eval,
+ * which uses nb_xor_patch_rect()); these remain the whole-cursor reference the
+ * tests compare against.
  */
 size_t nb_cursor_xor_apply(const struct nb_cursor *c, uint32_t *frame,
                            uint32_t fw, uint32_t fh, size_t stride_px,
@@ -387,6 +412,198 @@ size_t nb_cursor_xor_patch(const struct nb_cursor *c, const uint32_t *frame,
  * dw, dh must be >= 1. */
 void nb_cursor_scale(const struct nb_cursor *c, uint32_t *dst, uint32_t dw,
                      uint32_t dh);
+/* The same scaler for any packed sw x sh pixel array. */
+void nb_px_scale(const uint32_t *src, uint32_t sw, uint32_t sh, uint32_t *dst,
+                 uint32_t dw, uint32_t dh);
+/*
+ * The XOR patch's scaler: nearest where an axis grows (crisp, like the guest's
+ * own cursor image), the mean of the covered source pixels where it shrinks --
+ * premultiplied ARGB averaged per channel, so a thin stem that nearest would
+ * skip (a 7x11 I-beam at fit 0.6 lost its bottom serif: MEASURED on a real
+ * mutter) comes out as partial coverage instead of vanishing.  Pure, bounded.
+ */
+void nb_px_scale_box(const uint32_t *src, uint32_t sw, uint32_t sh,
+                     uint32_t *dst, uint32_t dw, uint32_t dh);
+
+/* ══ THE XOR CURSOR, COMPOSED BY THE BROKER (nb_frame.c, nb_xor.c) ═══════════
+ *
+ * Design and live-check list: docs/design/V3_BROKER_XOR_CURSOR_20261017.md.
+ * Everything a backend decides about an XOR cursor is below, behind pure
+ * functions test/test_xor.c drives GPU-free; a backend gathers its state,
+ * calls nb_xor_eval(), and does what it returns. */
+
+/*
+ * A READ-ONLY WINDOW ONTO ONE FRAME BUFFER, opened when the broker accepts the
+ * buffer, closed with it.  Two carriers are readable:
+ *   - a sealed (F_SEAL_SHRINK) memfd, the wl_shm tier;
+ *   - a LINEAR dma-buf whose exporter is system memory (udmabuf, the system
+ *     dma-heap): mmap(PROT_READ), every read bracketed by DMA_BUF_IOCTL_SYNC.
+ * Anything else is "not readable" with a reason, and the caller falls back to
+ * the approximation.  Only the cursor's own rows are ever read.
+ */
+enum nb_frame_kind { NB_FRAME_NONE = 0, NB_FRAME_SHM, NB_FRAME_DMABUF };
+enum nb_frame_why {
+    NB_FW_OK = 0,
+    NB_FW_NONE,         /* no frame on screen yet / not opened               */
+    NB_FW_FORMAT,       /* not a 32-bit XR24 / AR24 layout                   */
+    NB_FW_GEOMETRY,     /* the described extent does not fit the buffer      */
+    NB_FW_NOSEAL,       /* a memfd without F_SEAL_SHRINK (SIGBUS risk)       */
+    NB_FW_MODIFIER,     /* a dma-buf that is not LINEAR (tiled: unreadable)  */
+    NB_FW_EXPORTER,     /* a dma-buf whose memory is not known to be system  */
+    NB_FW_FDINFO,       /* cannot learn a dma-buf's exporter                 */
+    NB_FW_MMAP,         /* mmap / dup failed                                 */
+    NB_FW_STALE,        /* the buffer on screen is not the one opened        */
+    NB_FW_RANGE,        /* a read outside the mapping was asked for          */
+    NB_FW_SYNC          /* DMA_BUF_IOCTL_SYNC failed                         */
+};
+struct nb_frame {
+    enum nb_frame_kind kind;    /* NB_FRAME_NONE: unreadable, see `why`      */
+    enum nb_frame_why  why;
+    const uint8_t     *map;     /* exactly what mmap returned               */
+    size_t             len;     /* ... and its length                       */
+    int                sync_fd; /* dup of the dma-buf (DMABUF only)         */
+    uint32_t           w, h, stride, offset, fourcc;
+    char               exporter[24];
+};
+/* The geometry the caller says is on screen, checked against `f` per frame. */
+struct nb_frame_geom {
+    uint32_t w, h, stride, offset, fourcc;
+};
+/* DRM_FORMAT_MOD_LINEAR / _INVALID (implicit), spelled locally. */
+#define NB_FRAME_MOD_LINEAR  0ULL
+#define NB_FRAME_MOD_INVALID 0x00ffffffffffffffULL
+/*
+ * Open the buffer behind `fd` (borrowed; a dma-buf is dup'ed).  `size` is the
+ * extent the caller measured (lseek SEEK_END).  Always fills *f; returns true
+ * iff the frame is readable (kind != NONE).  Re-proves what it relies on:
+ * seals, geometry against `size`, exporter, modifier.
+ */
+bool nb_frame_open(struct nb_frame *f, int fd, bool is_shm, uint64_t size,
+                   const struct nb_frame_geom *g, uint64_t modifier);
+void nb_frame_close(struct nb_frame *f);
+/* Per-frame check: `f` is open and describes exactly `g` (and its mapping
+ * still covers it).  Returns NB_FW_OK or the reason. */
+enum nb_frame_why nb_frame_check(const struct nb_frame *f,
+                                 const struct nb_frame_geom *g);
+/*
+ * Copy the rw x rh pixel rectangle at (rx, ry) into `out` (tight, rw*rh):
+ * rows only, each a bounded copy inside the mapping; the DMA-BUF sync pair
+ * brackets the whole read.  NB_FW_OK or the reason; on failure `out` is not
+ * to be trusted.  rw, rh <= NVKVM_BROKER_CURSOR_MAX_DIM.
+ */
+enum nb_frame_why nb_frame_read_rect(const struct nb_frame *f, uint32_t rx,
+                                     uint32_t ry, uint32_t rw, uint32_t rh,
+                                     uint32_t *out);
+/* Words a reason is logged with. */
+const char *nb_frame_why_text(enum nb_frame_why why);
+/* Pure: pick `exp_name` out of /proc/self/fdinfo text.  False when absent. */
+bool nb_fdinfo_exp_name(const char *text, size_t len, char *out, size_t n);
+/* Pure: the exporters whose memory is system RAM (a CPU read is cheap). */
+bool nb_frame_exporter_ok(const char *exp_name);
+/* Pure: which modifiers a CPU read can interpret (LINEAR; the implicit
+ * modifier only for a system-memory exporter, whose layout is linear). */
+bool nb_frame_layout_ok(uint64_t modifier, const char *exp_name);
+
+/* ── the decision (PURE) ─────────────────────────────────────────────────── */
+enum nb_xor_kind   { NB_XK_NONE, NB_XK_PLAIN, NB_XK_XOR };
+enum nb_xor_ptr    { NB_XP_UNTOUCHED, NB_XP_GUEST_IMAGE, NB_XP_HIDDEN };
+enum nb_xor_ov     { NB_XO_OFF, NB_XO_IMAGE, NB_XO_XOR };
+enum nb_xor_choice { NB_XC_NONE, NB_XC_PLAIN, NB_XC_COMPOSED, NB_XC_APPROX };
+struct nb_xor_in {
+    enum nb_xor_kind kind;  /* the cursor: none (undefined/hidden), plain, XOR */
+    bool grabbed;
+    bool placed;            /* a MOVE gave it a position (grab overlay)        */
+    bool frame_readable;    /* the frame on screen can be read right now       */
+    bool ptr_inside;        /* hover: the host pointer is over the content     */
+    bool serial_ok;         /* the wl_pointer enter serial is present          */
+};
+struct nb_xor_out {
+    enum nb_xor_ptr    ptr; /* what to do with the HOST pointer                */
+    enum nb_xor_ov     ov;  /* what the overlay subsurface shows               */
+    enum nb_xor_choice choice; /* the standing choice (one log line a change)  */
+};
+struct nb_xor_out nb_xor_decide(const struct nb_xor_in *in);
+const char *nb_xor_choice_text(enum nb_xor_choice c);
+
+/* ── placement (PURE) ────────────────────────────────────────────────────── */
+/*
+ * Where the patch lands in the surface's LOGICAL pixels, from the patch's
+ * top-left (tlx, tly) and size on the guest frame, the frame's fit (nx/dx,
+ * ny/dy logical px per guest px) and the output scale.  Both edges are rounded
+ * to the nearest logical pixel on their own, so each edge is within 0.5 logical
+ * px of where the frame's own pixel boundary falls (0 at fit 1); the size is
+ * the difference of the edges (>= 1).  scale = ceil(scale_120/120), 1..4;
+ * the buffer is logical x scale, bounded by NB_CURSOR_SURFACE_MAX_BUF.
+ */
+struct nb_xor_place {
+    int32_t  x, y;          /* logical position of the patch's top-left       */
+    uint32_t gw, gh;        /* logical size                                   */
+    uint32_t scale, bw, bh; /* buffer scale and buffer size                   */
+};
+void nb_xor_place(int32_t tlx, int32_t tly, uint32_t pw, uint32_t ph,
+                  uint32_t nx, uint32_t dx, uint32_t ny, uint32_t dy,
+                  uint32_t scale_120, struct nb_xor_place *o);
+/* The guest pixel under a surface-local position in wl_fixed units (1/256
+ * logical px), clamped to the frame.  nx/dx is the frame's fit (0 = 1:1). */
+int32_t nb_xor_ptr_to_frame(int32_t fixed, uint32_t nx, uint32_t dx,
+                            uint32_t frame_dim);
+
+/* ── mask-based compose ──────────────────────────────────────────────────── */
+/* nb_cursor_xor_patch() for a mask given as a pointer and a row pitch (so a
+ * sub-rectangle of a cursor image works): out is mw x mh, tight. */
+size_t nb_xor_patch_rect(const uint32_t *mask, uint32_t mstride, uint32_t mw,
+                         uint32_t mh, const uint32_t *frame, uint32_t fw,
+                         uint32_t fh, size_t stride_px, int32_t x, int32_t y,
+                         uint32_t *out);
+
+/* ── the driver every backend shares ─────────────────────────────────────── */
+struct nb_xor_view {
+    const struct nb_cursor *cur;    /* may be NULL                            */
+    bool shown_ok;                  /* no dialog, a guest frame is on screen  */
+    bool grabbed, ptr_inside, serial_ok;
+    bool ptr_known;
+    int32_t ptr_x, ptr_y;           /* hover: the pointer on the GUEST frame  */
+    const struct nb_frame *frame;   /* the buffer being shown (may be NULL)   */
+    struct nb_frame_geom geom;      /* ... and what the caller says it is     */
+};
+struct nb_xor_ctx {
+    enum nb_xor_choice last_choice;
+    enum nb_frame_why  last_why;
+    bool        choice_valid;
+    /* The patch the DISPLAY holds (nb_xor_attached()), to tell a patch that
+     * needs a new buffer from one that is already up -- including when an
+     * earlier one could not be attached (no free buffer) and must be retried. */
+    bool        att_valid;
+    uint32_t    att_pw, att_ph;
+    uint64_t    att_gen;
+    uint32_t    att[NVKVM_BROKER_CURSOR_MAX_DIM * NVKVM_BROKER_CURSOR_MAX_DIM];
+    uint32_t    patch[NVKVM_BROKER_CURSOR_MAX_DIM * NVKVM_BROKER_CURSOR_MAX_DIM];
+    uint32_t    rect[NVKVM_BROKER_CURSOR_MAX_DIM * NVKVM_BROKER_CURSOR_MAX_DIM];
+    uint64_t    n_composed, n_fallback;     /* evals, for the test backend    */
+};
+struct nb_xor_res {
+    struct nb_xor_out act;
+    bool     patch;                 /* act.ov == XOR: px/pw/ph/tl are valid   */
+    int32_t  tlx, tly;              /* patch top-left on the guest frame      */
+    uint32_t pw, ph;
+    const uint32_t *px;             /* pw*ph, tight; 0 = nothing inverted     */
+    uint32_t npix;                  /* pixels that invert                     */
+    bool     patch_changed;         /* the pixels or the size differ from the
+                                     * patch the display holds (or none held);
+                                     * a position change alone is NOT this    */
+    enum nb_frame_why why;          /* kind XOR but not composed: why not     */
+    bool     choice_changed;        /* the standing choice changed: LOG NOW   */
+};
+void nb_xor_eval(struct nb_xor_ctx *ctx, const struct nb_xor_view *v,
+                 struct nb_xor_res *r);
+/* The backend attached the result's patch to the display / took it down. */
+void nb_xor_attached(struct nb_xor_ctx *ctx, const struct nb_xor_res *r,
+                     uint64_t cursor_gen);
+void nb_xor_detached(struct nb_xor_ctx *ctx);
+/* The ONE line for a change of choice ("cursor: XOR composed by the broker
+ * ..." / "... approximated (frame not readable: ...)").  Fills buf. */
+void nb_xor_choice_line(const struct nb_xor_res *r, const struct nb_frame *f,
+                        char *buf, size_t n);
 /* Whether the host pointer over the guest's picture should BE the guest's
  * image: one is defined and visible, and the input is not grabbed. */
 bool nb_cursor_wanted(const struct nb_cursor *c, bool grabbed);
@@ -551,6 +768,11 @@ struct nb_sink {
     bool     cursor_dirty;      /* changed since the backend last saw it   */
     uint64_t cursor_applied_ms; /* when the backend last saw it            */
     uint64_t n_cursor, n_cursor_reject;
+    /* Which carrier the accepted frames arrive in (0 none yet, 1 dma-buf,
+     * 2 shared memory): a change is said ONCE, in the core, because the broker
+     * is the one place that can say what it was sent -- see nb_note_tier(). */
+    int      last_tier;
+    uint64_t n_tier_dmabuf, n_tier_shm;
 
     /*
      * PAIRS THE DISPLAY REFUSED TO IMPORT after advertising them, as the
