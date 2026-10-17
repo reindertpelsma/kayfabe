@@ -109,12 +109,16 @@ def main():
     ap.add_argument('--no-align', action='store_true')
     ap.add_argument('--broker-lines')
     ap.add_argument('--broker-epoch-offset', type=float, default=0.0)
+    ap.add_argument('--broker-clk', help='file with epoch=<s> uptime=<s> taken at the end of the run (CLOCK_MONOTONIC ~ uptime)')
     a = ap.parse_args()
     import matplotlib
     matplotlib.use('Agg')
     import matplotlib.pyplot as plt
 
     f9 = float(open(a.f9).read().strip())
+    if a.broker_clk:
+        c = dict(x.split('=') for x in open(a.broker_clk).read().split())
+        a.broker_epoch_offset = float(c['epoch']) - float(c['uptime'])
     lo, hi = a.span
     fam = load_family(a.dispts)
     fr = load_frames(a.guestlog, a.etw_offset)
@@ -179,7 +183,7 @@ def main():
             ax.axvline(x, color='tab:purple', alpha=.6, lw=1.2, ls='--')
 
     # ---- graph A
-    fig, ax = plt.subplots(3, 1, sharex=True, figsize=(15, 10))
+    fig, ax = plt.subplots(4, 1, sharex=True, figsize=(15, 13), gridspec_kw={'height_ratios': [3, 3, 3, 3]})
     ax[0].plot(ex, ey, color='tab:green', label='Heaven: DXGI Present/s (guest ETW, 1 s bins)')
     ax[0].plot(T, tear, color='k', lw=1, label='kayfabe: tear (immediate flips)/s')
     ax[0].axhline(60, color='grey', ls=':', lw=.8)
@@ -202,19 +206,39 @@ def main():
     if broker:
         for k, lab in (('feedbacks', 'feedbacks'), ('ticks', 'ticks sent'), ('want_ticks', 'WANT ticks'), ('commit', 'COMMIT answered'),
                        ('no_change', 'NO_CHANGE answered'), ('timeouts', 'request timeouts'), ('late', 'late'), ('unsolicited', 'unsolicited'),
-                       ('presented', 'presented frames')):
-            ax[2].plot([b['t'] for b in broker], [b.get(k, 0) for b in broker], label=lab, lw=1)
+                       ('discarded', 'feedbacks discarded'), ('new', 'presents with NEW content'), ('repeat', 'repeat presents'),
+                       ('merged', 'commits merged into a present')):
+            if any(k in b for b in broker):
+                ax[2].plot([b['t'] for b in broker], [b.get(k, 0) for b in broker], label=lab, lw=1)
         ax[2].legend(loc='center left', bbox_to_anchor=(1.0, 0.5), fontsize=7)
     else:
         ax[2].text(0.5, 0.5, 'no broker per-second line for this arm (the broker printed totals at exit only)', ha='center', va='center',
                    transform=ax[2].transAxes, color='grey')
     ax[2].set_ylabel('broker / s')
-    ax[2].set_xlabel('seconds after F9 (benchmark start)')
+    # panel 4: the max gap per second at each stage (the lag criterion), capped axis, thresholds
+    gt = [x for x in fr_rel if lo - 1 <= x <= hi]
+    gmax = {}
+    for i in range(1, len(gt)):
+        k = int(gt[i] // 1)
+        gmax[k] = max(gmax.get(k, 0), (gt[i] - gt[i - 1]) * 1000)
+    ax[3].plot([k + .5 for k in sorted(gmax)], [min(gmax[k], 500) for k in sorted(gmax)], color='tab:green', label='guest: max gap between consecutive DXGI presents (ETW, per present)')
+    if broker and any('cgap_max_us' in b for b in broker):
+        ax[3].plot([b['t'] for b in broker], [min(b.get('cgap_max_us', 0) / 1000.0, 500) for b in broker], color='tab:red', label='broker: max gap between NEW-content presents')
+    if broker:
+        ax[3].plot([b['t'] for b in broker], [min(b.get('gap_max_us', 0) / 1000.0, 500) for b in broker], color='tab:gray', lw=.7, label='broker: max gap between presentation feedbacks (capped 500)')
+    for yv in (16.7, 33, 50, 100):
+        ax[3].axhline(yv, color='k', ls=':', lw=.7)
+        ax[3].text(hi, yv, ' %g ms' % yv, fontsize=7, va='bottom')
+    ax[3].set_yscale('log')
+    ax[3].set_ylim(1, 600)
+    ax[3].set_ylabel('max gap / s (ms, log)')
+    ax[3].legend(fontsize=7, loc='upper left')
+    ax[3].set_xlabel('seconds after F9 (benchmark start)')
     for x in ax:
         vlines(x)
         x.grid(alpha=.2)
     fig.tight_layout()
-    fig.savefig(a.out + '_A.png', dpi=110)
+    fig.savefig(a.out + '_A.png', dpi=100)
     plt.close(fig)
 
     # ---- graph B: cumulative
@@ -244,10 +268,13 @@ def main():
     ax[0].plot(grid, copies_c, label='kayfabe copies (sum of copies/s)', color='tab:red')
     ax[0].plot(grid, sent_c, label='frames sent on a request (relay)', color='tab:olive', ls='--')
     if broker:
-        bt = [b['t'] for b in broker]
-        for k, lab in (('presented', 'broker presented (cum)'), ('commit', 'broker COMMIT (cum)')):
+        bw = [b for b in broker if lo <= b['t'] <= hi]
+        bt = [b['t'] for b in bw]
+        for k, lab in (('commit', 'broker COMMIT answered (cum)'), ('new', 'broker presents with NEW content (cum)')):
+            if not any(k in b for b in bw):
+                continue
             c, acc = [], 0.0
-            for b in broker:
+            for b in bw:
                 acc += b.get(k, 0)
                 c.append(acc)
             ax[0].plot(bt, c, label=lab, lw=1)
