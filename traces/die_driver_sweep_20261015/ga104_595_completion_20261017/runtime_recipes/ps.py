@@ -41,6 +41,7 @@ def connect():
 try:
     connect()
     encoded=base64.b64encode(path.read_text().encode('utf-16le')).decode()
+    assert len(encoded)<30000,'REFUSED Windows command-line limit before launch'
     result=agent.call('guest-exec',{'path':'powershell.exe','arg':['-NoProfile','-ExecutionPolicy','Bypass','-EncodedCommand',encoded],'capture-output':True},retry=False)
     pid=result['pid'];assert type(pid) is int and 0<pid<2**32
     print('GUEST_PROGRAM_STARTED',path.name,'pid='+str(pid),flush=True)

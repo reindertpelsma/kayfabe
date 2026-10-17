@@ -47,4 +47,8 @@ $explorer=@(Get-Process explorer -ErrorAction SilentlyContinue)
 Write-Output "DISPLAY_CENSUS_DESKTOP dwm=$($dwm.Count) explorer=$($explorer.Count)"
 Write-Output "DISPLAY_CENSUS_END problem=$($rows[0].problem) $([DateTime]::UtcNow.ToString('o'))"
 
+New-ItemProperty 'HKLM:\SYSTEM\CurrentControlSet\Services\nvlddmkm' EnableGpuFirmware -PropertyType DWord -Value 1 -Force|Out-Null
+$serviceGsp=(Get-ItemProperty 'HKLM:\SYSTEM\CurrentControlSet\Services\nvlddmkm' -Name EnableGpuFirmware -ErrorAction Stop).EnableGpuFirmware
+Write-Output "SERVICE_GSP=$serviceGsp"
+if($serviceGsp -ne 1) { throw 'Service GSP must be1' }
 Write-Output 'ACTUAL8088_CLASS_GSP_SET coldboot required; install-time problem is not acceptance'

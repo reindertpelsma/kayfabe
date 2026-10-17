@@ -1,3 +1,6 @@
+$serviceGsp=(Get-ItemProperty 'HKLM:\SYSTEM\CurrentControlSet\Services\nvlddmkm' -Name EnableGpuFirmware -ErrorAction Stop).EnableGpuFirmware
+Write-Output "SERVICE_GSP=$serviceGsp"
+if($serviceGsp -ne 1) { throw 'Service GSP must be1' }
 $oskey=[Microsoft.Win32.Registry]::LocalMachine.OpenSubKey('SOFTWARE\Microsoft\Windows NT\CurrentVersion')
 Write-Output ("ACTUAL_OS edition="+$oskey.GetValue('EditionID')+" build="+$oskey.GetValue('CurrentBuildNumber')+" ubr="+$oskey.GetValue('UBR'))
 $oskey.Close()
