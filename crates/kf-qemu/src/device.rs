@@ -2867,6 +2867,13 @@ impl Device {
                 d.scanout_refused.load(o),
                 d.scanout_us_total.load(o) / d.scanouts.load(o).max(1),
                 d.scanout_us_max.load(o)
+            ) + &format!(
+                // ★ MEASUREMENT (hitch investigation): n/sum_us/max_us of the display worker's steps
+                " lat[{} {} {} {}]",
+                d.lat_edge.fragment("edge"),
+                d.lat_resolve.fragment("resolve"),
+                d.lat_start.fragment("start"),
+                d.lat_pass.fragment("pass")
             ) + &{
                 // ★ §8.16 (`display-max-fps`): the achieved rates per path and `over`, early in
                 // the line (the worker also prints it on a line of its own)

@@ -814,9 +814,48 @@ impl CursorPorts {
     }
 }
 
+/// ★ MEASUREMENT ONLY (hitch investigation, 2026-10-17; never a decision input, no behaviour): a bounded latency
+/// meter — count, sum and max of one step's wall time, three relaxed atomics, no allocation, no lock.
+#[derive(Debug, Default)]
+pub struct LatStat {
+    n: AtomicU64,
+    sum_ns: AtomicU64,
+    max_ns: AtomicU64,
+}
+
+impl LatStat {
+    /// One sample.
+    pub fn add(&self, d: Duration) {
+        let ns = u64::try_from(d.as_nanos()).unwrap_or(u64::MAX);
+        self.n.fetch_add(1, Ordering::Relaxed);
+        self.sum_ns.fetch_add(ns, Ordering::Relaxed);
+        self.max_ns.fetch_max(ns, Ordering::Relaxed);
+    }
+
+    /// `name=n/sum_us/max_us` — cumulative; a reader takes window deltas of `n` and `sum_us`.
+    #[must_use]
+    pub fn fragment(&self, name: &str) -> String {
+        let o = Ordering::Relaxed;
+        format!(
+            "{name}={}/{}/{}",
+            self.n.load(o),
+            self.sum_ns.load(o) / 1000,
+            self.max_ns.load(o) / 1000
+        )
+    }
+}
+
 /// Boot-log counters.
 #[derive(Debug, Default)]
 pub struct DispCounters {
+    /// ★ MEASUREMENT: display-worker pass start → a vblank edge (event + interrupt) raised.
+    pub lat_edge: LatStat,
+    /// ★ MEASUREMENT: `ScanState::resolve_now` (the context-DMA resolve at a latch).
+    pub lat_resolve: LatStat,
+    /// ★ MEASUREMENT: `ScanState::start` (launching a scanout copy).
+    pub lat_start: LatStat,
+    /// ★ MEASUREMENT: display-worker pass start → end of the irq step (the whole pass up to the interrupt).
+    pub lat_pass: LatStat,
     /// Display-aperture writes from vCPUs.
     pub writes: AtomicU64,
     /// Updates the engine completed.
@@ -2817,6 +2856,7 @@ impl Device {
                 }
                 continue;
             }
+            let pass_t0 = Instant::now();
             let mut effects: Vec<Effect> = Vec::new();
             let mut gets: Vec<(u32, u32, u32)> = Vec::new();
             // 1. statements (the model's lock, only to take them)
@@ -3328,7 +3368,9 @@ impl Device {
                             // context DMA NOW, as the first copy after a latch always did, so a guest
                             // that unbinds it before the copy (NVKMS's teardown) is still resolved
                             let so = *so;
+                            let t_res = Instant::now();
                             scan.resolve_now(&mut io, &so);
+                            dp.counters.lat_resolve.add(t_res.elapsed());
                         }
                     }
                 }
@@ -3386,7 +3428,9 @@ impl Device {
                 scan.on_console_tick(true);
             }
             if (scan.want || scan.mailbox.due(scan.inflight.is_some())) && scan.inflight.is_none() {
+                let t_st = Instant::now();
                 scan.start(&mut io, &engine, shown.as_ref(), cursor.as_ref(), false);
+                dp.counters.lat_start.add(t_st.elapsed());
             } else if scan.nonflip.due(
                 console_tick,
                 watched,
@@ -3394,7 +3438,9 @@ impl Device {
                 scan.inflight.is_none(),
                 scan.flip_pending(),
             ) {
+                let t_st = Instant::now();
                 scan.start(&mut io, &engine, shown.as_ref(), cursor.as_ref(), true);
+                dp.counters.lat_start.add(t_st.elapsed());
             }
             if scan.failed {
                 // No synthetic success after rejected colour state or work sent to the GPU.
@@ -3601,6 +3647,7 @@ impl Device {
                 }
                 let irq =
                     frame_edge_out(dp, &store, h, edge_frame[h], loadv, wtrace, &vsync_traced);
+                dp.counters.lat_edge.add(pass_t0.elapsed());
                 raised |= irq != 0;
                 if irq & dp.map.head_vblank != 0 {
                     counts[h].vblirq += 1;
@@ -3635,6 +3682,7 @@ impl Device {
                     self.latch_and_deliver(kf_rm::authored::DISP_STALL_VECTOR);
                 }
             }
+            dp.counters.lat_pass.add(pass_t0.elapsed());
             // 9. ★ §8.16: the achieved rates per path, per window of at least 1 s — published for
             // the status line (never waited for) and printed on a line of their own, at most every
             // 2 s and only when they changed
