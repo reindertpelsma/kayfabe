@@ -112,7 +112,7 @@ impl Sys {
                 self.put = self.written;
             }
             Ev::Ring => {
-                if self.rung == self.put {
+                if self.rung == self.put && self.woken {
                     return Ok(false);
                 }
                 self.rung = self.put;
@@ -472,5 +472,166 @@ fn n_equals_one_is_bit_identical_to_the_reference_relay() {
         assert_eq!(turns_l, observes);
         assert_eq!(turns_l, turns_r);
         lazy.drain_and_check().unwrap();
+    }
+}
+
+// Additional review coverage, 2026-10-17. These oracles use absolute sequence
+// numbers and descriptor identities, rather than only comparing two Sys values.
+fn random_step(state: &mut u64) -> u64 {
+    *state ^= *state << 13;
+    *state ^= *state >> 7;
+    *state ^= *state << 17;
+    *state
+}
+
+#[test]
+fn put_advancing_behind_the_cache_drains_every_identity_before_fresh_idle() {
+    let mut s = Sys::new(true);
+    let mut identities = Vec::new();
+    for lap in 0..4 {
+        // Publish two, relay one, then advance PUT while the cache still covers
+        // the second. Absolute counts deliberately cross the four-slot wrap.
+        s.written += 2;
+        s.put = s.written;
+        s.rung = s.put;
+        s.woken = true;
+        let before = s.consumed;
+        s.turn().unwrap();
+        identities.push(before);
+        let cached = s.cache.select(true, s.generation, s.cursor()).unwrap();
+        s.written += 1;
+        s.put = s.written;
+        s.rung = s.put; // the LAST doorbell; no later wake is supplied
+        assert_eq!(s.cache.select(true, s.generation, s.cursor()), Some(cached));
+        for _ in 0..2 {
+            let cursor = s.cursor();
+            let loaded = s.cache.select(true, s.generation, cursor).unwrap_or(s.put % R);
+            assert!(dist(cursor, loaded) > 0);
+            assert!(dist(cursor, loaded) <= s.put - s.consumed);
+            identities.push(s.consumed);
+            s.turn().unwrap();
+        }
+        assert_eq!(s.consumed, (lap + 1) * 3);
+        assert_eq!(s.cache.select(true, s.generation, s.cursor()), None);
+        s.turn().unwrap(); // end_batch / idle is now based on a fresh PUT
+        assert!(!s.woken);
+    }
+    assert_eq!(identities, (0..12).collect::<Vec<_>>());
+}
+
+#[test]
+fn stale_get_is_conservative_across_many_wraps_and_receipts_are_exact() {
+    for entries in [4u32, 8, 128] {
+        let mut f = Fetch::new(entries).unwrap();
+        let (mut issued, mut real, mut observed) = (0u64, 0u64, 0u64);
+        let mut rng = 0x1234_9876_5555_aaaau64;
+        for _ in 0..100_000 {
+            match random_step(&mut rng) % 3 {
+                0 if f.available() > 0 => {
+                    issued += 1;
+                    f.publish(Some((7, issued as u32))).unwrap();
+                }
+                1 if real < issued => real += 1,
+                _ => {
+                    // An ordered but arbitrarily stale hardware sample, never
+                    // older than the last sample the relay accepted.
+                    let sample = observed + random_step(&mut rng) % (real - observed + 1);
+                    let receipts = f.observe((sample % u64::from(entries)) as u32).unwrap();
+                    let expected: Vec<_> = (observed + 1..=sample).map(|n| (7, n as u32)).collect();
+                    assert_eq!(receipts, expected);
+                    observed = sample;
+                }
+            }
+            let real_free = u64::from(entries - 1) - (issued - real);
+            assert!(u64::from(f.available()) <= real_free);
+            assert_eq!(f.fetched(), observed);
+            assert_eq!(f.issued(), issued);
+        }
+        assert!(issued > u64::from(entries) * 10, "must exercise repeated wraps");
+    }
+}
+
+#[test]
+fn a_full_private_ring_recovers_without_any_periodic_observation() {
+    let mut f = Fetch::new(128).unwrap();
+    for _ in 0..127 {
+        f.publish(None).unwrap();
+    }
+    assert_eq!(f.available(), 0);
+    assert!(f.publish(None).is_err());
+    // Every low-credit value, including zero, forces a read on a non-periodic
+    // turn. At exactly the floor it is safe to defer until another reason.
+    for credit in 0..CREDIT_FLOOR {
+        assert!(must_observe(1, u64::MAX, false, credit, false));
+    }
+    assert!(!must_observe(1, u64::MAX, false, CREDIT_FLOOR, false));
+    if must_observe(1, u64::MAX, false, f.available(), false) {
+        f.observe(127).unwrap();
+    }
+    assert_eq!(f.available(), 127);
+    assert_eq!(f.publish(Some((2, 1))).unwrap(), (127, 0));
+    assert!(must_observe(2, u64::MAX, true, f.available(), false));
+    assert!(must_observe(3, u64::MAX, false, f.available(), true));
+    assert_eq!(f.observe(0).unwrap(), vec![(2, 1)]);
+}
+
+#[test]
+fn n_one_matches_an_independent_eager_fifo_and_reference_oracle() {
+    let mut rng = 0x0ddc_0ffe_e15e_beefu64;
+    let mut f = Fetch::new(128).unwrap();
+    let mut m = Marks::default();
+    let mut pending = VecDeque::new();
+    let (mut issued, mut real_get, mut observed_get) = (0u64, 0u64, 0u64);
+    let (mut issued_marks, mut real_ref) = (0u64, 0u64);
+    for turn in 1..=200_000 {
+        let event = random_step(&mut rng);
+        if event & 1 != 0 && pending.len() < 127 {
+            issued += 1;
+            let receipt = (3, issued as u32);
+            pending.push_back(receipt);
+            f.publish(Some(receipt)).unwrap();
+        }
+        if event & 2 != 0 && real_get < issued {
+            real_get += 1;
+        }
+        if event & 4 != 0 {
+            issued_marks += 1;
+            assert_eq!(m.issue().unwrap().0, issued_marks);
+        }
+        if event & 8 != 0 && real_ref < issued_marks {
+            real_ref += 1;
+        }
+        assert!(must_observe(turn, 1, event & 16 != 0, f.available(), event & 32 != 0));
+        let got = f.observe((real_get % 128) as u32).unwrap();
+        let expected: Vec<_> = (observed_get..real_get).map(|_| pending.pop_front().unwrap()).collect();
+        assert_eq!(got, expected);
+        observed_get = real_get;
+        // The eager oracle knows absolute hardware progress independently of
+        // Marks and Fetch. Guest GP_GET write-back is the last returned receipt.
+        assert_eq!(got.last().copied(), expected.last().copied());
+        assert_eq!(f.available() as usize, 127 - pending.len());
+        let word = if real_ref == 0 { 0 } else { Marks::value(real_ref) };
+        assert_eq!(m.observe(word), real_ref);
+    }
+    assert!(issued > 10_000 && real_ref > 65_536, "exercise GET and REFERENCE wraps");
+}
+
+#[test]
+fn long_sync_wait_streams_with_lazy_observation_never_read_late_bytes_early() {
+    for interval in [4, OBSERVE_INTERVAL, 64, u64::MAX] {
+        for seed in 1..=12 {
+            let mut rng = seed * 0x1234_5678;
+            let entries: Vec<_> = (0..2048).map(|_| random_step(&mut rng) % 3 != 0).collect();
+            let mut s = GateSys::new(entries, interval);
+            for _ in 0..100_000 {
+                if random_step(&mut rng) % 4 == 0 {
+                    s.env_process_marker();
+                }
+                if !s.turn().unwrap() {
+                    break;
+                }
+            }
+            assert_eq!(s.reads, (0..2048).collect::<Vec<_>>());
+        }
     }
 }
