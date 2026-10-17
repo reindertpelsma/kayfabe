@@ -329,7 +329,9 @@ dependencies = [
 name = "kf-disp"
 version = "0.1.0"
 dependencies = [
+ "kf-broker",
  "kf-chip",
+ "kf-linux-raw",
 ]
 
 [[package]]

@@ -434,7 +434,14 @@ citation: ask whether its reason still holds before relying on it.
   seems not great though. The rest seems good to md"*.
   - **Mechanism:** the limit clamps kf-disp's own emulated vblank tick (the display thread's
     deadline). Nothing blocks a vCPU, and no lock is held while waiting.
-  - **D1, tearing flips are gated (adopted).** An async/tearing flip that arrives sooner than the
+  - ⊘ **D1 SUPERSEDED 2026-10-17 (§AK, below; the owner's decision (a)).** The guest's flips are
+    NEVER parked to bound the display rate: an immediate flip latches and completes at once, and the
+    rate is bounded by the COPIES (the newest latched frame, at most once per tick). `[measured,
+    Windows 11, Unigine Heaven D3D11, build 134dcb54, 2026-10-17]` the gate parked the guest's present
+    loop in exclusive fullscreen (windowed ~200 fps, fullscreen ~30 fps; design in
+    `docs/design/V3_DISPLAY_PACING_20261017.md`). The paragraph below is the superseded text, kept as
+    history; `Engine::tear_gate` and `KF3_TEAR_GATE` no longer exist.
+  - **D1, tearing flips are gated (adopted) — SUPERSEDED, see above.** An async/tearing flip that arrives sooner than the
     limit allows waits for the next tick. In kayfabe a flip copies a finished buffer, so the gate is
     about rate, not image tearing.
   - **D2, copies made without a flip (proposed by Claude in answer to the owner's question; adopted
@@ -1279,3 +1286,33 @@ worker-only submission and command inspection from birth, the owner answered:
   logged once per change); a GPU path was evaluated and not built (`V3_BROKER_XOR_CURSOR_20261017.md` §8: it would put EGL/Vulkan and a vendor driver into the privileged broker; owner decision if it is ever wanted).
   The wl_shm presentation after a broker restart was a false trip of the VMM's acknowledgement detector, not a display refusal: `V3_BROKER_PRESENT_TIER_20261017.md`.
 
+## §AK. Guest flips are never parked; the display rate is bounded by copies; the tick source falls back to the free-running clock, 2026-10-17
+
+**STATUS: LIVE, 2026-10-17 (owner, in the coordinator session; recorded by the display-pacing agent).** Design and phase-1 code: `docs/design/V3_DISPLAY_PACING_20261017.md`. These amend §M D1 and bind
+the display plane.
+
+- **(a) Flips are never parked to bound the rate.** The guest's immediate (async / tearing) flips latch and complete at once; vsync flips complete at the next vblank. The display and
+  copy rate is bounded separately: kayfabe copies only the NEWEST latched scanout frame, at most once per tick (mailbox semantics), into a free ring slot. §M D1's gate (a second tearing flip waits
+  for the next tick) is **superseded** by this and removed.
+- **(b) Flip syncing is lock step between guest and kayfabe.** The broker will later send a frame request only after it received the previous frame (credit based). Not built in phase 1; the
+  design must not preclude it (it does not: the mailbox's tick credit is the place a broker credit plugs in).
+- **(c) The free-running clock is kept.** It is the tick source when no broker is connected (headless) and the FALLBACK when the broker is silent. If no broker tick event arrives for 50 ms
+  the free-running clock takes over so the guest's vblank and flips keep going; the moment a broker tick event arrives the broker is the tick source again, automatically. The guest-visible vblank
+  is **never hard-gated by the broker**: a hung, hidden, occluded or crashed broker must not freeze the guest (Windows resets the display driver after about 2 s without a flip completion).
+  Handoffs are seamless: one tick source at a time, the vblank counter and timestamps monotonic, no double tick closer than a fraction of a period (built as one half), the clock phase
+  re-aligned to the broker's.
+- **(d) Later phases (design only, not built):** the broker as tick source over the broker protocol (a capability bit; presentation feedback; commit every refresh so frame callbacks
+  keep coming); an HDMI-over-TMDS virtual connector to lift the 75 Hz EDID cap and the 165 MHz DVI pixel clock (§M D3).
+
+## §AL. Kayfabe enforces the lock step and never trusts the broker's timing; the flip system is testable locally, 2026-10-17
+
+**STATUS: LIVE, 2026-10-17 (owner, via the coordinator; recorded by the phase-2 agent).** Design and code: `docs/design/V3_DISPLAY_PACING_20261017.md` §11. Binding on the broker-as-tick-source work (§AK (b)–(d)).
+
+- **Kayfabe enforces.** A broker tick / `WANT_FRAME` that arrives at the wrong moment (early: the previous copy or send still in flight, inside the half-period guard, out of sequence) is not acted on then; kayfabe acts
+  when the lock-step state allows (copy finished, slot free, sequence matches) — after the right moment, never before. Too-fast broker events never make kayfabe go faster and never build a backlog: credits coalesce
+  (at most one pending, extras counted and dropped), the vblank is capped by the double-tick guard, frames in flight are bounded by a named constant with a test. A flooding or hostile broker costs counted, dropped ticks.
+- **The guest's immediate flips are still never parked and never wait for a credit.** The rule governs the kayfabe→broker frame stream and the vblank clock only; the 50 ms silence fallback still applies.
+- **Local tests of the whole flip path**, GPU-free: an exhaustive bounded model, a seeded soak (>= 100 000 flips per scenario over >= 50 seeds, an ignored 10 M-flip run), a real-socket run with a fake broker, floods of every
+  kind, and broker STALLS (silence, partial messages, a slot never released, flapping around 50 ms, SIGSTOP); mutants of the harness itself. The harness's limits are stated in the doc (§11.7).
+- (Added by the agent, flagged for the owner: after a fallback to the clock the broker takes the tick back only after proving itself — one good gap, then 2, 4, 8 — so a broker flapping around 50 ms cannot flap the source
+  per tick; decision (c)'s "the first broker event takes it back at once" holds for a broker that never fell back. §11.5.)

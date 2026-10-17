@@ -8,5 +8,10 @@ license.workspace = true
 [dependencies]
 kf-chip.workspace = true
 
+[dev-dependencies]
+# the lock-step harness (`engine/lockstep_*.rs`, `tests/lockstep_threads.rs`) drives the REAL relay
+kf-broker.workspace = true
+kf-linux-raw.workspace = true
+
 [lints]
 workspace = true

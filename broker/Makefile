@@ -37,7 +37,7 @@ CFLAGS  += -std=gnu11 -Wall -Wextra -Wno-unused-parameter \
 LDFLAGS += -Wl,-z,relro,-z,now
 
 OBJS = nvkvm_broker.o nb_common.o nb_cursor.o nb_geom.o nb_placeholder.o \
-       nb_frame.o nb_xor.o \
+       nb_frame.o nb_xor.o nb_tick.o \
        nb_session_x11.o nb_session_wl.o nb_session_test.o
 
 # The broker -- and only the broker -- may start one helper thread: the one
@@ -125,7 +125,7 @@ GBM_LIBS   = $(shell $(PKG_CONFIG) --libs gbm)
 endif
 
 .SECONDARY:
-.PHONY: all install clean report check check-sanitize check-probe
+.PHONY: all install clean report check check-sanitize check-probe check-tick-probe mutate-tick-core mutate-tick-core
 all: report $(BIN) $(TESTCLIENT) $(RELAY) $(if $(HAVE_GBM),$(DMASRC),)
 
 report:
@@ -200,6 +200,12 @@ test-xor: test/test_xor.c nb_xor.c nb_frame.c nb_cursor.c nvkvm_broker.h \
           common/nvkvm_broker_proto.h
 	$(CC) $(CFLAGS) -o $@ test/test_xor.c nb_xor.c nb_frame.c nb_cursor.c $(LDFLAGS)
 
+# The display tick's decisions (EV_TICK, the lock-step requests, decimation),
+# linked from the SAME nb_tick.o the broker links (pure: nothing to stub).
+test-tick: test/test_tick.c nb_tick.c nvkvm_broker.h \
+           common/nvkvm_broker_proto.h
+	$(CC) $(CFLAGS) -o $@ test/test_tick.c nb_tick.c $(LDFLAGS)
+
 # The suggested-width rule and the proven-geometry set, linked from the SAME
 # nb_geom.c the broker links (pure: nothing to stub).
 test-geom: test/test_geom.c nb_geom.c nvkvm_broker.h \
@@ -210,24 +216,48 @@ test-geom: test/test_geom.c nb_geom.c nvkvm_broker.h \
 # (test/stall_fuse.py: mount(2) as root, fusermount3 otherwise -- package
 # fuse3).  Where FUSE is unusable that case prints SKIP; NB_REQUIRE_FUSE=1,
 # as CI sets it, makes that a failure instead.
-check: all test-utf8 test-cursor test-geom test-xor
+check: all test-utf8 test-cursor test-geom test-xor test-tick
 	./test-utf8
 	./test-cursor
 	./test-geom
 	./test-xor
+	./test-tick
 	python3 test/mutate_xor.py
+	python3 test/mutate_tick.py
 	bash selftest.sh
 	python3 test/test_adopted_socket.py ./$(BIN)
 	python3 test/test_clipboard.py ./$(BIN)
 	python3 test/test_lifecycle.py ./$(BIN)
 	python3 test/test_cursor.py ./$(BIN)
 	python3 test/test_xor.py ./$(BIN)
+	python3 test/test_tick.py ./$(BIN)
+
+# NOT SHIPPED: the instrument that measured what a Wayland client must commit
+# each refresh to keep getting frame callbacks and presentation feedback
+# (test/wl_tick_probe.c; results in docs/design/V3_DISPLAY_PACING_20261017.md
+# section 11.8).
+ifneq ($(HAVE_WL),)
+wl-tick-probe: test/wl_tick_probe.c $(WL_OBJS) $(WL_HDRS)
+	$(CC) $(CFLAGS) -o $@ test/wl_tick_probe.c $(WL_OBJS) $(LDFLAGS) $(LIBS)
+endif
 
 # The probe window against a REAL compositor (mutter --headless, software
 # renderer) and real udmabuf dma-bufs; exits 77 (skip) when either is missing.
 # Not part of `check`: it needs a compositor, and it takes ~15 s.
 check-probe: $(BIN)
 	python3 test/test_probe.py ./$(BIN)
+
+# The tick wiring in the core, mutated (rebuild + the socket tests per mutant):
+# on demand, not part of `check`.
+mutate-tick-core: $(BIN)
+	python3 test/mutate_tickcore.py
+
+# The tick pump against a REAL compositor (mutter --headless): ticks flow at the
+# refresh rate through the real backend and the real socket, requests open and
+# close, and stop when the window stops committing.  Exits 77 (skip) when mutter
+# is missing.  Not part of `check`: it needs a compositor and takes ~20 s.
+check-tick-probe: $(BIN)
+	python3 test/test_tickpump.py ./$(BIN)
 
 # Keep the sanitizer invocation reproducible locally and in CI.  A clean
 # rebuild matters here: mixing instrumented and ordinary objects links fine
@@ -242,6 +272,6 @@ install: $(BIN)
 	install -m 0755 $(BIN) $(DESTDIR)$(PREFIX)/bin/$(BIN)
 
 clean:
-	rm -f $(BIN) $(TESTCLIENT) $(RELAY) $(DMASRC) *.o *.d \
-	      *-client-protocol.h *-protocol.c test-utf8 test-cursor test-geom test-xor \
+	rm -f $(BIN) $(TESTCLIENT) $(RELAY) $(DMASRC) wl-tick-probe test-tick *.o *.d \
+	      *-client-protocol.h *-protocol.c test-utf8 test-cursor test-geom test-xor test-tick \
 	      test/utf8_extracted.inc

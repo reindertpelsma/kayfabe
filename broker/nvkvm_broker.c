@@ -130,6 +130,7 @@ static void bit_set(unsigned char *m, unsigned b, bool v)
 
 /* Forward: closing a client's fd is a filesystem call; see nb_fd_drop(). */
 static void nb_fd_drop(int fd);
+static void nb_tick_log_counters(const struct nb_sink *s);
 
 void nb_sink_init(struct nb_sink *s, struct nb_session *sess)
 {
@@ -183,6 +184,8 @@ static void nb_client_state_reset(struct nb_sink *s)
     memset(s->key_down, 0, sizeof(s->key_down));
     memset(s->consumed, 0, sizeof(s->consumed));
     s->n_attach = s->n_commit = s->n_reject = 0;
+    nb_tick_reset(&s->tick, false, 0);
+    s->surf_mhz = 0;
     s->last_tier = 0;
     s->n_tier_dmabuf = s->n_tier_shm = 0;
     /*
@@ -259,6 +262,7 @@ static void nb_tx_coalesce(struct nb_sink *s)
     static struct nvkvm_broker_pkt out[NB_TXRING];
     unsigned n = 0, cur = s->tx_tail;
     int abs_slot = -1, rel_slot = -1, frame_slot = -1;
+    unsigned last_tick = ~0u, last_want = ~0u;
 
     /* A partially written packet at the tail must survive untouched, or the
      * client sees the second half of one packet and the first half of another. */
@@ -266,10 +270,37 @@ static void nb_tx_coalesce(struct nb_sink *s)
         out[n++] = s->tx[cur];
         cur = (cur + 1u) % NB_TXRING;
     }
+    /* EV_TICK: the newest queued tick supersedes every older one that does not
+     * carry WANT_FRAME (a WANT tick is a request and is never dropped). */
+    {
+        unsigned c2;
+
+        for (c2 = cur; c2 != s->tx_head; c2 = (c2 + 1u) % NB_TXRING) {
+            if (s->tx[c2].type == NVKVM_BROKER_EV_TICK) {
+                last_tick = c2;
+                if ((uint32_t)s->tx[c2].y & NVKVM_BROKER_TICK_F_WANT_FRAME) {
+                    last_want = c2;
+                }
+            }
+        }
+    }
     while (cur != s->tx_head) {
         struct nvkvm_broker_pkt *p = &s->tx[cur];
+        unsigned here = cur;
 
         cur = (cur + 1u) % NB_TXRING;
+        if (p->type == NVKVM_BROKER_EV_TICK && here != last_tick &&
+            nb_tick_may_replace((uint32_t)p->y,
+                                (uint32_t)s->tx[last_tick].y)) {
+            s->tick.n_coalesced++;
+            continue;
+        }
+        if (p->type == NVKVM_BROKER_EV_TICK && here != last_want &&
+            ((uint32_t)p->y & NVKVM_BROKER_TICK_F_WANT_FRAME) &&
+            last_want != ~0u) {
+            s->tick.n_coalesced++;      /* a dead request: a newer one is queued */
+            continue;
+        }
         if (p->type == NVKVM_BROKER_EV_ABS && abs_slot >= 0) {
             out[abs_slot].x = p->x;
             out[abs_slot].y = p->y;
@@ -524,6 +555,7 @@ void nb_sink_detach(struct nb_sink *s, const char *why)
     if (s->sess->ops->dismiss_dialog) {
         s->sess->ops->dismiss_dialog(s->sess);
     }
+    nb_tick_log_counters(s);
     nb_log("client detached: %s "
            "(%llu attach, %llu commit, %llu rejected; %llu cursor, "
            "%llu cursor refused)", why,
@@ -837,11 +869,15 @@ void nb_sink_surface(struct nb_sink *s, unsigned w, unsigned h,
     if (w == 0 || h == 0) {
         return;
     }
-    if (s->sess->width == w && s->sess->height == h) {
+    if (s->sess->width == w && s->sess->height == h &&
+        (refresh_mhz == 0 || refresh_mhz == s->surf_mhz)) {
         return;
     }
     s->sess->width = w;
     s->sess->height = h;
+    if (refresh_mhz != 0) {
+        s->surf_mhz = refresh_mhz;
+    }
     /* w0 carries the host's refresh in MILLIHERTZ, 0 when unknown.  It was
      * a reserved zero, so an older VMM reads it as 'unknown' -- which is
      * what it meant. */
@@ -857,6 +893,191 @@ void nb_sink_release(struct nb_sink *s, uint64_t buf_id)
 {
     nb_emit(s, NVKVM_BROKER_EV_RELEASE, 0, 0,
             (uint32_t)buf_id, (uint32_t)(buf_id >> 32));
+}
+
+
+/* ── the display tick ────────────────────────────────────────────────────── */
+
+static void nb_violation(struct nb_sink *s, const char *why);
+static void nb_tick_log_counters(const struct nb_sink *s);
+
+/* The time the tick rules judge a COMMIT / NO_CHANGE / CAPS by: the backend's
+ * own clock when it has one (the test backend's is virtual, so its tests are
+ * deterministic), CLOCK_MONOTONIC otherwise. */
+static uint64_t nb_sess_now_ns(const struct nb_sink *s)
+{
+    struct timespec ts;
+
+    if (s->sess->ops->now_ns) {
+        return s->sess->ops->now_ns(s->sess);
+    }
+    clock_gettime(CLOCK_MONOTONIC, &ts);
+    return (uint64_t)ts.tv_sec * 1000000000ull + (uint64_t)ts.tv_nsec;
+}
+
+/*
+ * Queue one EV_TICK.  A tick without WANT_FRAME that is still waiting in the
+ * ring is REPLACED in place by a newer one (the count says how many), so a
+ * client that does not read cannot make ticks pile up, and a flood of
+ * feedbacks cannot grow the queue at all; a WANT_FRAME tick is a request and
+ * is never dropped or overwritten.  Nothing here blocks or allocates.
+ */
+static void nb_emit_tick(struct nb_sink *s, const struct nb_tick_out *o)
+{
+    unsigned i, last = ~0u, ticks = 0;
+    uint32_t lo = (uint32_t)o->present_ns, hi = (uint32_t)(o->present_ns >> 32);
+
+    if (s->client_fd < 0) {
+        return;
+    }
+    for (i = s->tx_tail; i != s->tx_head; i = (i + 1u) % NB_TXRING) {
+        if (s->tx[i].type == NVKVM_BROKER_EV_TICK) {
+            last = i;
+            ticks++;
+        }
+    }
+    if (last != ~0u && !(last == s->tx_tail && s->tx_partial != 0) &&
+        nb_tick_may_replace((uint32_t)s->tx[last].y, o->refresh_word)) {
+        s->tx[last].x = (int)o->tick_seq;
+        s->tx[last].y = (int)o->refresh_word;
+        s->tx[last].w0 = lo;
+        s->tx[last].w1 = hi;
+        s->tick.n_coalesced++;
+        return;
+    }
+    nb_emit(s, NVKVM_BROKER_EV_TICK, (int)o->tick_seq, (int)o->refresh_word,
+            lo, hi);
+    if (ticks >= 1) {
+        /* an older non-WANT tick now has a newer one behind it */
+        nb_tx_coalesce(s);
+    }
+}
+
+bool nb_sink_tick_on(const struct nb_sink *s)
+{
+    return s->client_fd >= 0 && s->tick.on;
+}
+
+unsigned nb_sink_mode_mhz(const struct nb_sink *s, unsigned host_mhz,
+                          uint64_t host_period_ns)
+{
+    if (!s->tick.on || nb_hz_mode != NB_HZ_AUTO || host_mhz == 0) {
+        return host_mhz;
+    }
+    return nb_tick_mode_mhz(host_mhz,
+                            nb_tick_div(host_period_ns, s->tick.cap_hz,
+                                        NB_HZ_AUTO, 0));
+}
+
+bool nb_sink_refresh(struct nb_sink *s, uint64_t now_ns, uint64_t present_ns,
+                     uint64_t host_period_ns, uint32_t flags)
+{
+    struct nb_tick_out o;
+
+    if (s->client_fd < 0 || !s->tick.on) {
+        return false;
+    }
+    if (host_period_ns != 0) {
+        s->host_period_ns = host_period_ns;
+        s->host_mhz = (unsigned)((1000000000000ull + host_period_ns / 2) /
+                                 host_period_ns);
+    }
+    if (!nb_tick_refresh(&s->tick, now_ns, present_ns, host_period_ns, flags,
+                         nb_hz_mode, nb_hz_fixed, &o)) {
+        return false;
+    }
+    nb_emit_tick(s, &o);
+    /* The mode the guest is told follows the host rate / the divisor
+     * (--refresh auto only): so a 144 Hz host is a 72 Hz mode, 2:1. */
+    if (nb_hz_mode == NB_HZ_AUTO && s->host_mhz != 0 && s->sess->width != 0) {
+        unsigned mhz = nb_sink_mode_mhz(s, s->host_mhz, s->host_period_ns);
+
+        if (mhz != s->surf_mhz) {
+            nb_sink_surface(s, s->sess->width, s->sess->height, mhz);
+        }
+    }
+    return true;
+}
+
+void nb_sink_presented(struct nb_sink *s)
+{
+    if (s->client_fd >= 0 && s->tick.on) {
+        nb_tick_presented(&s->tick);
+    }
+}
+
+/* CMD_CAPS: the VMM's opt in (or out) of ticks.  Returns false on a violation. */
+static bool nb_tick_caps(struct nb_sink *s, const struct nvkvm_broker_cmd *c)
+{
+    bool want = (c->width & NVKVM_BROKER_CLIENT_TICK) != 0;
+    struct nb_tick_out o;
+
+    if (!want) {
+        if (c->height != 0) {
+            nb_violation(s, "CAPS height without CLIENT_TICK");
+            return false;
+        }
+        if (s->tick.on) {
+            nb_log("ticks: OFF (the VMM withdrew CLIENT_TICK)");
+            nb_tick_reset(&s->tick, false, 0);
+        }
+        return true;
+    }
+    if (!(s->sess->caps & NVKVM_BROKER_CAP_TICK)) {
+        nb_violation(s, "CAPS CLIENT_TICK on a broker that did not advertise CAP_TICK");
+        return false;
+    }
+    if (c->height != 0 && (c->height < NVKVM_BROKER_GUEST_MIN_HZ ||
+                           c->height > NVKVM_BROKER_GUEST_MAX_HZ)) {
+        nb_violation(s, "CAPS height (the VMM's max Hz) out of range");
+        return false;
+    }
+    nb_tick_reset(&s->tick, true, c->height);
+    s->surf_mhz = 0;    /* the mode rate is re-advertised under the new rules */
+    nb_log("ticks: ON (the VMM opted in; its vblank is capped at %u Hz)",
+           c->height ? c->height : NVKVM_BROKER_GUEST_MAX_HZ);
+    /* the priming tick, like the priming EV_FRAME: the first request is open
+     * before the first refresh, so a frame never waits for one */
+    nb_tick_prime(&s->tick, nb_sess_now_ns(s), &o);
+    nb_emit_tick(s, &o);
+    return true;
+}
+
+/* A reply to a request: COMMIT.seq (is_commit) or NO_CHANGE.  False on a violation. */
+static bool nb_tick_reply(struct nb_sink *s, uint32_t req, bool is_commit)
+{
+    if (!s->tick.on) {
+        return true;        /* COMMIT.seq is advisory without CLIENT_TICK */
+    }
+    if (nb_tick_answer(&s->tick, req, is_commit, nb_sess_now_ns(s)) ==
+        NB_TICK_ANS_VIOLATION) {
+        nb_violation(s, is_commit ? "COMMIT names a request the broker never issued"
+                                  : "NO_CHANGE names a request the broker never issued");
+        return false;
+    }
+    return true;
+}
+
+static void nb_tick_log_counters(const struct nb_sink *s)
+{
+    const struct nb_tick *t = &s->tick;
+
+    if (t->n_feedback == 0 && t->n_ticks == 0) {
+        return;
+    }
+    nb_log("ticks: %llu feedbacks -> %llu ticks (%llu with WANT_FRAME), "
+           "%llu dropped as too fast/duplicate, %llu decimated, %llu "
+           "coalesced in the queue; %llu requests answered (%llu NO_CHANGE), "
+           "%llu late, %llu unsolicited, %llu request timeouts, %llu "
+           "presentation timeouts",
+           (unsigned long long)t->n_feedback, (unsigned long long)t->n_ticks,
+           (unsigned long long)t->n_want, (unsigned long long)t->n_fast,
+           (unsigned long long)t->n_decimated,
+           (unsigned long long)t->n_coalesced,
+           (unsigned long long)t->n_answered, (unsigned long long)t->n_no_change,
+           (unsigned long long)t->n_late, (unsigned long long)t->n_unsolicited,
+           (unsigned long long)t->n_req_timeouts,
+           (unsigned long long)t->n_present_timeouts);
 }
 
 /* ── clipboard ───────────────────────────────────────────────────────────── */
@@ -2399,11 +2620,45 @@ static void nb_handle_cmd(struct nb_sink *s, const struct nvkvm_broker_cmd *c,
             nb_violation(s, "COMMIT carried descriptor fields");
             return;
         }
+        /* `seq` names the request this frame answers once the VMM opted in to
+         * ticks (and is advisory before): a frame the broker never asked for is
+         * a violation, a late or unsolicited one is shown and counted. */
+        if (!nb_tick_reply(s, c->seq, true)) {
+            return;
+        }
         s->n_commit++;
         r = ss->ops->commit(ss, s);
         if (r != 0 && r != -ENOENT) {
             nb_err("COMMIT failed: %s", strerror(-r));
         }
+        if (r != 0) {
+            nb_sink_presented(s);       /* nothing was shown: nothing to wait for */
+        }
+        return;
+
+    case NVKVM_BROKER_CMD_NO_CHANGE:
+        if (c->reserved1 != 0) {
+            if (fd >= 0) {
+                nb_fd_drop(fd);
+            }
+            nb_violation(s, "NO_CHANGE reserved1 is not zero");
+            return;
+        }
+        if (fd >= 0) {
+            nb_fd_drop(fd);
+            nb_violation(s, "NO_CHANGE carried an fd");
+            return;
+        }
+        if (c->flags || c->height || c->stride || c->offset || c->fourcc ||
+            c->modifier || c->seq) {
+            nb_violation(s, "NO_CHANGE carried other fields");
+            return;
+        }
+        if (!s->tick.on) {
+            nb_violation(s, "NO_CHANGE without CLIENT_TICK");
+            return;
+        }
+        (void)nb_tick_reply(s, c->width, false);
         return;
 
     case NVKVM_BROKER_CMD_CLIPBOARD: {
@@ -2585,8 +2840,12 @@ static void nb_handle_cmd(struct nb_sink *s, const struct nvkvm_broker_cmd *c,
             nb_violation(s, "CAPS carried an fd");
             return;
         }
-        if (c->height || c->stride || c->offset || c->fourcc || c->modifier) {
+        if (c->stride || c->offset || c->fourcc || c->modifier) {
             nb_violation(s, "CAPS carried other fields");
+            return;
+        }
+        /* height is the VMM's max Hz, and only with CLIENT_TICK */
+        if (!nb_tick_caps(s, c)) {
             return;
         }
         s->caps_seen = c->width;

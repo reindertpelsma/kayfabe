@@ -108,6 +108,105 @@ pub const CURSOR_MAX_DIM: u32 = 256;
 /// `NVKVM_BROKER_CURSOR_MAX_STRIDE`: the widest cursor row in bytes (`4 * CURSOR_MAX_DIM`).
 pub const CURSOR_MAX_STRIDE: u32 = 4 * CURSOR_MAX_DIM;
 
+// ── PHASE 2: THE BROKER AS TICK SOURCE, LOCK-STEP FRAME REQUESTS (2026-10-17) ────────────────
+// `docs/design/V3_DISPLAY_PACING_20261017.md` §11.2; the broker's header is the one copy.
+
+/// ★ `NVKVM_BROKER_CAP_TICK` (HELLO `w1` bit 13): the broker reports the display's refresh as
+/// [`EV_TICK`] and runs lock-step frame requests. Only after the VMM opts in ([`CLIENT_TICK`]).
+pub const CAP_TICK: u32 = 1 << 13;
+/// ★ `NVKVM_BROKER_CLIENT_TICK` (`CMD_CAPS.width` bit 1): the VMM understands [`EV_TICK`] and answers
+/// requests. `CMD_CAPS.height` then carries the VMM's vblank ceiling in Hz.
+pub const CLIENT_TICK: u32 = 1 << 1;
+/// ★ `NVKVM_BROKER_EV_TICK`: one (decimated) host refresh. `x` = `tick_seq` (first tick 1, +1 per
+/// emitted tick, wraps skipping 0), `y` = the refresh word ([`TICK_REFRESH_MASK`] bits of refresh in
+/// ns, [`TICK_F_WANT_FRAME`], [`TICK_F_CLOCK_ONLY`]), `w0`/`w1` = `present_ns` (CLOCK_MONOTONIC).
+pub const EV_TICK: u16 = 18;
+/// ★ `NVKVM_BROKER_CMD_NO_CHANGE`: the VMM answers request `width` with "nothing newer".
+pub const CMD_NO_CHANGE: u16 = 8;
+/// The refresh-period bits of an `EV_TICK` refresh word.
+pub const TICK_REFRESH_MASK: u32 = 0x0fff_ffff;
+/// `TICK_F_WANT_FRAME` (refresh word bit 28): this tick opens request `tick_seq`.
+pub const TICK_F_WANT_FRAME: u32 = 1 << 28;
+/// `TICK_F_CLOCK_ONLY` (bit 29): `present_ns` is when the broker LEARNED of the refresh, not the
+/// compositor's presentation timestamp.
+pub const TICK_F_CLOCK_ONLY: u32 = 1 << 29;
+/// Refresh-word bits 30..31: reserved, zero.
+pub const TICK_F_RESERVED: u32 = 3 << 30;
+/// `NVKVM_BROKER_TICK_REQ_TIMEOUT_NS`: the broker re-opens an unanswered request after this (100 ms).
+pub const TICK_REQ_TIMEOUT_NS: u32 = 100_000_000;
+/// The shortest `refresh_ns` a tick may carry (1 ms); 0 = unknown is also allowed.
+pub const TICK_REFRESH_MIN_NS: u32 = 1_000_000;
+/// `NVKVM_BROKER_GUEST_MAX_HZ`: the VMM's vblank ceiling when it says nothing (D3).
+pub const GUEST_MAX_HZ: u32 = 75;
+/// The lowest ceiling `CMD_CAPS.height` may carry.
+pub const GUEST_MIN_HZ: u32 = 24;
+
+/// One `EV_TICK`, decoded and checked (`struct nvkvm_broker_tick_pkt`).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct TickPkt {
+    /// The tick number (never 0).
+    pub tick_seq: u32,
+    /// The decimated refresh period in ns, 0 = unknown.
+    pub refresh_ns: u32,
+    /// This tick opens request `tick_seq`.
+    pub want: bool,
+    /// `present_ns` is the broker's own clock reading, not the compositor's timestamp.
+    pub clock_only: bool,
+    /// `CLOCK_MONOTONIC`, ns.
+    pub present_ns: u64,
+}
+
+impl Pkt {
+    /// Decode an `EV_TICK`'s operands, or name the framing violation.
+    ///
+    /// # Errors
+    /// `tick_seq` 0, reserved bits, a refresh period outside 1 ms..=268 ms.
+    pub fn tick(&self) -> Result<TickPkt, &'static str> {
+        let word = self.y.cast_unsigned();
+        if word & TICK_F_RESERVED != 0 {
+            return Err("EV_TICK with reserved flag bits set");
+        }
+        let refresh_ns = word & TICK_REFRESH_MASK;
+        if refresh_ns != 0 && refresh_ns < TICK_REFRESH_MIN_NS {
+            return Err("EV_TICK with a refresh period under 1 ms");
+        }
+        let tick_seq = self.x.cast_unsigned();
+        if tick_seq == 0 {
+            return Err("EV_TICK with tick_seq 0");
+        }
+        Ok(TickPkt {
+            tick_seq,
+            refresh_ns,
+            want: word & TICK_F_WANT_FRAME != 0,
+            clock_only: word & TICK_F_CLOCK_ONLY != 0,
+            present_ns: self.wide(),
+        })
+    }
+
+    /// Build an `EV_TICK` (the broker's direction; for tests and fakes).
+    #[must_use]
+    pub fn tick_pkt(seq: u32, flags: u16, t: &TickPkt) -> Pkt {
+        let word = (t.refresh_ns & TICK_REFRESH_MASK)
+            | if t.want { TICK_F_WANT_FRAME } else { 0 }
+            | if t.clock_only { TICK_F_CLOCK_ONLY } else { 0 };
+        Pkt {
+            ty: EV_TICK,
+            flags,
+            seq,
+            x: t.tick_seq.cast_signed(),
+            y: word.cast_signed(),
+            w0: t.present_ns as u32,
+            w1: (t.present_ns >> 32) as u32,
+        }
+    }
+}
+
+/// `tick_seq` `a` is newer than `b` (wrapping; 0 never occurs).
+#[must_use]
+pub fn seq_newer(a: u32, b: u32) -> bool {
+    a != b && a.wrapping_sub(b) < 0x8000_0000
+}
+
 /// `NVKVM_BROKER_CLOSE_POWERDOWN`.
 pub const CLOSE_POWERDOWN: i32 = 0;
 /// `NVKVM_BROKER_CLOSE_FORCE`.
@@ -340,6 +439,42 @@ impl Cmd {
             ..Cmd::default()
         }
     }
+
+    /// ★ `CAPS` opting in to ticks: [`CLIENT_TICK`] and the vblank ceiling in Hz (`height`; clamped
+    /// into [`GUEST_MIN_HZ`]`..=`[`GUEST_MAX_HZ`], 0 = [`GUEST_MAX_HZ`]).
+    #[must_use]
+    pub fn caps_tick(max_hz: u32) -> Cmd {
+        Cmd {
+            ty: CMD_CAPS,
+            width: CLIENT_TICK,
+            height: if max_hz == 0 {
+                GUEST_MAX_HZ
+            } else {
+                max_hz.clamp(GUEST_MIN_HZ, GUEST_MAX_HZ)
+            },
+            ..Cmd::default()
+        }
+    }
+
+    /// ★ `COMMIT` answering request `req` (tick-negotiated connections): `seq` = `req`.
+    #[must_use]
+    pub fn commit_for(req: u32) -> Cmd {
+        Cmd {
+            ty: CMD_COMMIT,
+            seq: req,
+            ..Cmd::default()
+        }
+    }
+
+    /// ★ `NO_CHANGE(req)`: nothing newer to show for request `req`.
+    #[must_use]
+    pub fn no_change(req: u32) -> Cmd {
+        Cmd {
+            ty: CMD_NO_CHANGE,
+            width: req,
+            ..Cmd::default()
+        }
+    }
 }
 
 /// ★ `struct nvkvm_broker_cursor_cmd` — the 40-byte command record with ATTACH's buffer
@@ -419,7 +554,10 @@ impl CursorCmd {
     /// `op` zero. Only for a broker that advertised [`CAP_CURSOR_STREAM`].
     #[must_use]
     pub fn mov(x: i32, y: i32, abs: Option<(i32, i32)>) -> CursorCmd {
-        let c = |v: i32| v.clamp(-(CURSOR_MAX_DIM as i32), MAX_DIM as i32).cast_unsigned();
+        let c = |v: i32| {
+            v.clamp(-(CURSOR_MAX_DIM as i32), MAX_DIM as i32)
+                .cast_unsigned()
+        };
         let (ax, ay) = abs.unwrap_or((0, 0));
         CursorCmd {
             flags: if abs.is_some() { CURSOR_F_ABS } else { 0 },
@@ -603,5 +741,94 @@ mod tests {
         let q = Cmd::query(FOURCC_XR24, MOD_INVALID).encode();
         assert_eq!(&q[4..20], &[0u8; 16]);
         assert_eq!(fourcc_name(FOURCC_XR24), "XR24");
+    }
+
+    /// ★ The `EV_TICK` overlay at the header's offsets, and every framing rule of §11.2.
+    #[test]
+    fn the_tick_event_lands_at_the_header_offsets_and_its_violations_are_named() {
+        let t = TickPkt {
+            tick_seq: 0xa1b2_c3d4,
+            refresh_ns: 8_333_333,
+            want: true,
+            clock_only: false,
+            present_ns: 0x0123_4567_89ab_cdef,
+        };
+        let b = Pkt::tick_pkt(9, F_FOCUSED, &t).encode();
+        assert_eq!(&b[0..2], &EV_TICK.to_le_bytes());
+        assert_eq!(
+            &b[2..4],
+            &F_FOCUSED.to_le_bytes(),
+            "the mirrored flags stay the mirrored flags"
+        );
+        assert_eq!(&b[8..12], &0xa1b2_c3d4u32.to_le_bytes(), "tick_seq@8");
+        assert_eq!(
+            &b[12..16],
+            &(8_333_333u32 | TICK_F_WANT_FRAME).to_le_bytes(),
+            "refresh word@12"
+        );
+        assert_eq!(
+            &b[16..24],
+            &0x0123_4567_89ab_cdefu64.to_le_bytes(),
+            "present_ns@16"
+        );
+        assert_eq!(Pkt::decode(&b).tick(), Ok(t));
+        let base = Pkt::tick_pkt(1, 0, &t);
+        for (name, bad) in [
+            ("seq 0", Pkt { x: 0, ..base }),
+            (
+                "reserved 30",
+                Pkt {
+                    y: (base.y.cast_unsigned() | 1 << 30).cast_signed(),
+                    ..base
+                },
+            ),
+            (
+                "reserved 31",
+                Pkt {
+                    y: (base.y.cast_unsigned() | 1 << 31).cast_signed(),
+                    ..base
+                },
+            ),
+            ("refresh 999999 ns", Pkt { y: 999_999, ..base }),
+        ] {
+            assert!(bad.tick().is_err(), "{name}");
+        }
+        assert!(Pkt { y: 0, ..base }.tick().is_ok(), "refresh 0 = unknown");
+        assert!(
+            Pkt {
+                y: TICK_REFRESH_MASK.cast_signed(),
+                ..base
+            }
+            .tick()
+            .is_ok(),
+            "the largest refresh"
+        );
+        // the commands
+        assert_eq!(Cmd::commit_for(7).encode()[32..36], 7u32.to_le_bytes());
+        let n = Cmd::no_change(7).encode();
+        assert_eq!(&n[0..2], &CMD_NO_CHANGE.to_le_bytes());
+        assert_eq!(&n[4..8], &7u32.to_le_bytes());
+        assert!(n[8..].iter().all(|x| *x == 0));
+        let c = Cmd::caps_tick(0).encode();
+        assert_eq!(&c[4..8], &CLIENT_TICK.to_le_bytes());
+        assert_eq!(&c[8..12], &75u32.to_le_bytes());
+        assert_eq!(Cmd::caps_tick(10).height, 24);
+        assert_eq!(Cmd::caps_tick(60).height, 60);
+        assert_eq!(Cmd::caps_tick(900).height, 75);
+    }
+
+    /// Wrapping order of tick numbers, around the wrap and never equal.
+    #[test]
+    fn tick_numbers_order_around_the_wrap() {
+        assert!(seq_newer(2, 1));
+        assert!(!seq_newer(1, 2));
+        assert!(!seq_newer(5, 5));
+        assert!(seq_newer(1, u32::MAX), "1 follows the wrap (0 is skipped)");
+        assert!(!seq_newer(u32::MAX, 1));
+        assert!(
+            seq_newer(0x8000_0000, 1),
+            "half the range ahead is still newer"
+        );
+        assert!(!seq_newer(0x8000_0001, 1), "more than half is stale");
     }
 }

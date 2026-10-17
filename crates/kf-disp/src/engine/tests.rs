@@ -4,10 +4,10 @@
 use super::*;
 use crate::class::{self, put};
 
-const CORE: u32 = 0xC67D;
-const WIN: u32 = 0xC67E;
+pub(super) const CORE: u32 = 0xC67D;
+pub(super) const WIN: u32 = 0xC67E;
 const IMM: u32 = 0xC67B;
-const CLIENT: u32 = 0xc1d0_0015;
+pub(super) const CLIENT: u32 = 0xc1d0_0015;
 
 fn t() -> &'static ClassTable {
     class::for_version("580.159.04").unwrap()
@@ -17,7 +17,7 @@ fn classes() -> Classes {
     Classes::of(&kf_chip::display::AMPERE)
 }
 
-fn engine() -> Engine {
+pub(super) fn engine() -> Engine {
     let r = Regs::for_ip("580.159.04", 0x0401_0000).unwrap();
     Engine::new(
         Vocab::resolve(t(), &classes(), &r).expect("GA10x vocabulary"),
@@ -26,26 +26,26 @@ fn engine() -> Engine {
     )
 }
 
-fn m(cl: u32, n: &str) -> u32 {
+pub(super) fn m(cl: u32, n: &str) -> u32 {
     t().v(cl, n).unwrap_or_else(|| panic!("NV{cl:04X}_{n}"))
 }
-fn ma(cl: u32, n: &str, i: u32) -> u32 {
+pub(super) fn ma(cl: u32, n: &str, i: u32) -> u32 {
     t().a(cl, n, i)
         .unwrap_or_else(|| panic!("NV{cl:04X}_{n}({i})"))
 }
-fn fl(cl: u32, n: &str) -> (u8, u8) {
+pub(super) fn fl(cl: u32, n: &str) -> (u8, u8) {
     t().f(cl, n).unwrap_or_else(|| panic!("NV{cl:04X}_{n}"))
 }
 
 /// A NVKMS-style stream: every method with its own one-word header.
-struct Ring {
-    words: Vec<u32>,
+pub(super) struct Ring {
+    pub(super) words: Vec<u32>,
 }
 impl Ring {
-    fn new() -> Ring {
+    pub(super) fn new() -> Ring {
         Ring { words: Vec::new() }
     }
-    fn m(&mut self, method: u32, data: u32) -> &mut Ring {
+    pub(super) fn m(&mut self, method: u32, data: u32) -> &mut Ring {
         self.words.push((1 << 18) | method);
         self.words.push(data);
         self
@@ -60,11 +60,11 @@ impl Ring {
     }
 }
 
-fn all_ok(_: &Acquire) -> bool {
+pub(super) fn all_ok(_: &Acquire) -> bool {
     true
 }
 
-fn pb() -> Option<PbLoc> {
+pub(super) fn pb() -> Option<PbLoc> {
     Some(PbLoc {
         sysmem: true,
         addr: 0x1000_0000,
@@ -1336,9 +1336,7 @@ fn a_head_composes_its_windows_back_to_front() {
     let front = window(0xb0, 0, 250, 250);
     e.step(3, &back.bytes(), back.put(), &mut all_ok);
     e.step(4, &front.bytes(), front.put(), &mut all_ok);
-    // ★ D1 (`display-max-fps`): the second tearing flip on head 1 waits for the head's tick
-    assert!(e.waiting(4));
-    e.vblank(1, &mut all_ok);
+    // ★ §AK (was D1: "the second tearing flip on head 1 waits for the head's tick"): it latches at once
     assert!(!e.waiting(4));
     let mut imm = Ring::new();
     imm.m(ma(IMM, "SET_POINT_OUT", 0), (50 << 16) | 100)
@@ -1547,7 +1545,7 @@ fn flip(r: &mut Ring, mode: u32, with: u32) {
 }
 
 /// Head 0 lit (1080p60) with windows 0 and 1 on it; the core's ring for later updates.
-fn lit(e: &mut Engine) -> Ring {
+pub(super) fn lit(e: &mut Engine) -> Ring {
     e.alloc(ChannelKind::Core, 0, CLIENT, 1, pb(), 0);
     e.alloc(ChannelKind::Window, 0, CLIENT, 1, pb(), 0);
     e.alloc(ChannelKind::Window, 1, CLIENT, 1, pb(), 0);
@@ -1570,60 +1568,69 @@ fn latched(s: &Step) -> Vec<u32> {
         .collect()
 }
 
-/// ★ D1 (`display-max-fps`, owner decision of 2026-10-04): a TEARING flip on an active head that
-/// already presented since the head's tick waits for the next tick — so async flips are bounded by
-/// the cap too; the first one after a tick still latches at once (it tears as asked). Another
-/// head's tick releases nothing. Known-positive: with the gate off (the mutation) the second flip
-/// latches at once, as before the gate.
+/// ★ §AK (owner decision (a) of 2026-10-17, which REPLACES D1): a TEARING (immediate) flip latches
+/// and completes AT ONCE, however many the guest sends between two ticks — the tick no longer bounds
+/// them (the copies are bounded instead, `pace::Mailbox`). Every one is a present and a tearing present;
+/// none waits; a vblank has nothing of theirs to latch. (Replaces `a_second_tearing_flip_waits_for_the_vblank`.
+/// Mutation: the gate back — a second flip after a present parks — fails this at the second flip.)
 #[test]
-fn a_second_tearing_flip_waits_for_the_vblank() {
-    assert!(engine().tear_gate, "on by default (D1)");
-    for gate in [true, false] {
-        let mut e = engine();
-        e.tear_gate = gate;
-        lit(&mut e);
-        let mut w = Ring::new();
+fn an_immediate_flip_latches_at_once_however_many_come_between_ticks() {
+    let mut e = engine();
+    lit(&mut e);
+    let mut w = Ring::new();
+    for n in 1..=50u64 {
         flip(&mut w, 1, 0);
         let s = e.step(1, &w.bytes(), w.put(), &mut all_ok);
-        assert_eq!(
-            latched(&s),
-            vec![0],
-            "gate {gate}: the first latches at once"
-        );
-        flip(&mut w, 1, 0);
-        let s = e.step(1, &w.bytes(), w.put(), &mut all_ok);
-        if !gate {
-            assert_eq!(latched(&s), vec![0], "without the gate it latches at once");
-            assert_eq!(e.pace[0].tear_held, 0);
-            assert_eq!(e.pace[0].presents, 2);
-            continue;
-        }
-        assert!(s.effects.is_empty(), "{:?}", s.effects);
-        assert!(e.waiting(1));
-        assert_eq!(e.pace[0].tear_held, 1);
-        assert!(e.vblank(1, &mut all_ok).effects.is_empty(), "head 1's tick");
-        assert_eq!(latched(&e.vblank(0, &mut all_ok)), vec![0], "head 0's tick");
-        assert!(!e.waiting(1));
-        // presented again at that tick: the next waits again
-        flip(&mut w, 1, 0);
-        assert!(
-            e.step(1, &w.bytes(), w.put(), &mut all_ok)
-                .effects
-                .is_empty()
-        );
-        assert_eq!(e.pace[0].tear_held, 2);
-        // a tick with nothing presented since: the parked one latches, then one at once again
-        e.vblank(0, &mut all_ok);
-        e.vblank(0, &mut all_ok);
-        flip(&mut w, 1, 0);
-        assert_eq!(
-            latched(&e.step(1, &w.bytes(), w.put(), &mut all_ok)),
-            vec![0]
-        );
-        assert_eq!(e.pace[0].presents, 4);
-        assert_eq!(e.pace[0].tearing, 4);
-        assert_eq!(e.pace[1], PaceCounts::default(), "nothing on head 1");
+        assert_eq!(latched(&s), vec![0], "flip {n} latches at once");
+        assert!(!e.waiting(1), "flip {n} waits for nothing");
+        assert_eq!(e.pace[0].presents, n);
+        assert_eq!(e.pace[0].tearing, n);
     }
+    // a tick: nothing of theirs is left to latch, and the next flip is still immediate
+    assert!(e.vblank(0, &mut all_ok).effects.is_empty());
+    flip(&mut w, 1, 0);
+    assert_eq!(
+        latched(&e.step(1, &w.bytes(), w.put(), &mut all_ok)),
+        vec![0]
+    );
+    assert_eq!(e.pace[1], PaceCounts::default(), "nothing on head 1");
+}
+
+/// ★ §AK: a NON-tearing flip still waits for its tick, and an immediate flip after it does not wait
+/// for anything — including the tick the non-tearing one is parked for. A group that mixes a tearing
+/// window with a non-tearing one on the same head waits with the non-tearing one (it is a vsync
+/// update). (Replaces the gate's "first after a tick" rule, which no longer exists.)
+#[test]
+fn a_vsync_flip_waits_for_its_tick_and_an_immediate_one_beside_it_does_not() {
+    let mut e = engine();
+    lit(&mut e);
+    let (mut w0, mut w1) = (Ring::new(), Ring::new());
+    flip(&mut w0, 0, 0);
+    assert!(
+        e.step(1, &w0.bytes(), w0.put(), &mut all_ok)
+            .effects
+            .is_empty()
+    );
+    assert!(e.waiting(1), "the vsync flip is parked for head 0's tick");
+    // an immediate flip on the other window of the same head latches at once, the parked one stays
+    flip(&mut w1, 1, 0);
+    let s = e.step(2, &w1.bytes(), w1.put(), &mut all_ok);
+    assert_eq!(latched(&s), vec![1], "the immediate flip does not wait");
+    assert!(e.waiting(1));
+    assert!(e.vblank(1, &mut all_ok).effects.is_empty(), "head 1's tick");
+    assert_eq!(latched(&e.vblank(0, &mut all_ok)), vec![0], "head 0's tick");
+    assert_eq!((e.pace[0].presents, e.pace[0].tearing), (2, 1));
+    // one group: a tearing window and a non-tearing window, interlocked — a vsync update
+    flip(&mut w0, 1, 1 << 1);
+    flip(&mut w1, 0, 1 << 0);
+    e.step(1, &w0.bytes(), w0.put(), &mut all_ok);
+    assert!(
+        e.step(2, &w1.bytes(), w1.put(), &mut all_ok)
+            .effects
+            .is_empty()
+    );
+    assert_eq!(latched(&e.vblank(0, &mut all_ok)), vec![0, 1]);
+    assert_eq!((e.pace[0].presents, e.pace[0].tearing), (3, 2));
 }
 
 /// ★ `presents` counts LATCHES, once per head per latch: two windows of one head latched together

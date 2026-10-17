@@ -308,6 +308,29 @@ struct nb_wl {
      */
     struct wp_presentation *presentation;
     int                     last_scanout;   /* -1 unknown, 0 copy, 1 zero-copy */
+    /*
+     * THE TICK PUMP (docs/design/V3_DISPLAY_PACING_20261017.md section 11.3).
+     * The VMM's vblank follows the display's refresh, so the broker reports
+     * every refresh as an EV_TICK -- and for that it must keep a presentation
+     * feedback (and, without wp_presentation, a frame callback) coming even
+     * when the VMM sends no frame.  MEASURED (test/wl_tick_probe.c): a commit
+     * that changes nothing gets a frame callback AT ONCE and a `discarded`
+     * feedback AT ONCE (never a timestamp, never paced), so it cannot be the
+     * pump; a commit with 1x1 damage on the buffer already attached is
+     * presented at the next refresh, 60.00/s on mutter and 58.3/s on wlroots,
+     * and it is hidden/minimised-aware (the feedback is discarded).  So the
+     * pump is exactly that commit, driven by the `presented` it produced.
+     */
+    uint32_t                pres_clock;     /* wp_presentation.clock_id        */
+    bool                    pres_clock_known;
+    unsigned                fb_out;         /* feedback requests not answered  */
+    bool                    pump_out;       /* a pump commit is outstanding    */
+    uint64_t                tick_event_ms;  /* the last event that ticked      */
+    uint64_t                pump_commit_ms; /* the last pump commit            */
+    bool                    pump_stalled;   /* said once per episode           */
+    unsigned                pump_restarts;
+    uint64_t                cb_last_ns;     /* frame-callback fallback         */
+    uint64_t                cb_period_ns;   /* its smoothed interval           */
 
     /*
      * THE OUTPUT'S SCALE, IN 120THS -- and it is not cosmetic.
@@ -630,6 +653,7 @@ static int  bd_index(const struct nb_wl *w, const struct wl_surface *s);
 static void wl_idle_drop(struct nb_wl *w);
 /* Forward: presentation feedback is requested by wl_commit, defined below. */
 extern const struct wp_presentation_feedback_listener nb_pres_listener;
+extern const struct wp_presentation_feedback_listener nb_pump_listener;
 
 /* ── buffers ─────────────────────────────────────────────────────────────── */
 
@@ -1122,6 +1146,9 @@ static int wl_attach(struct nb_session *s, const struct nb_buf_desc *d)
 static void frame_done(void *data, struct wl_callback *cb, uint32_t t);
 static const struct wl_callback_listener frame_listener = { .done = frame_done };
 
+static void wl_tick_from_callback(struct nb_wl *w);
+static void wl_pump_commit(struct nb_wl *w);
+
 static void frame_done(void *data, struct wl_callback *cb, uint32_t t)
 {
     struct nb_wl *w = data;
@@ -1132,6 +1159,10 @@ static void frame_done(void *data, struct wl_callback *cb, uint32_t t)
     if (w->sink) {
         w->last_frame_ms = nb_now_ms_wl();
         nb_sink_frame(w->sink);
+        /* without wp_presentation the callback is the display's only word */
+        if (!w->presentation) {
+            wl_tick_from_callback(w);
+        }
     }
 }
 
@@ -1392,6 +1423,7 @@ static int wl_commit(struct nb_session *s, struct nb_sink *sink)
 
         if (fb) {
             wp_presentation_feedback_add_listener(fb, &nb_pres_listener, w);
+            w->fb_out++;
         }
     }
     if (!w->frame_inflight) {
@@ -2084,6 +2116,12 @@ static void wl_client_detach(struct nb_session *s, uint64_t generation)
 {
     struct nb_wl *w = s->priv;
 
+    /* the next connection starts its pump afresh */
+    w->tick_event_ms = 0;
+    w->pump_stalled = false;
+    w->cb_last_ns = 0;
+    w->cb_period_ns = 0;
+
     if (w->fetch_fd >= 0 && w->fetch_generation == generation) {
         close(w->fetch_fd);
         w->fetch_fd = -1;
@@ -2227,6 +2265,10 @@ static void wl_report_surface(struct nb_wl *w, int lw, int lh)
             say = 0;
         } else if (nb_hz_mode == NB_HZ_FIXED) {
             say = nb_hz_fixed;
+        } else {
+            /* --refresh auto: the host rate over the tick divisor (a 144 Hz
+             * host is a 72 Hz mode, 2:1) once the VMM opted in to ticks */
+            say = nb_sink_mode_mhz(w->sink, say, w->sink->host_period_ns);
         }
         nb_sink_surface(w->sink, pw, ph, say);
     }
@@ -3494,6 +3536,8 @@ static void wl_resync(struct nb_session *s)
 
 /* How long to wait before pacing the VMM unprompted. */
 #define NB_WL_PACE_MS 100
+/* A pump with no refresh for this long is restarted by a plain commit. */
+#define NB_WL_PUMP_STALL_MS 250
 
 static int wl_tick(struct nb_session *s)
 {
@@ -3514,6 +3558,28 @@ static int wl_tick(struct nb_session *s)
      */
     if (w->sink) {
         now = nb_now_ms_wl();
+        /*
+         * THE TICK PUMP'S WATCHDOG.  A hidden, occluded or minimised surface
+         * gets its feedback DISCARDED at once and no `presented`, so the pump
+         * (which commits on `presented`) stops -- by design, and the VMM's
+         * 50 ms fallback runs its own clock meanwhile.  When the window comes
+         * back nothing would restart it: a plain commit every
+         * NB_WL_PUMP_STALL_MS does, costing four commits a second while hidden.
+         */
+        if (nb_sink_tick_on(w->sink) &&
+            now - w->tick_event_ms >= NB_WL_PUMP_STALL_MS &&
+            now - w->pump_commit_ms >= NB_WL_PUMP_STALL_MS) {
+            if (!w->pump_stalled && w->tick_event_ms != 0) {
+                w->pump_stalled = true;
+                nb_log("display ticks stopped (the window is hidden, occluded or "
+                       "the compositor stopped refreshing it): the VMM runs its "
+                       "own clock; probing every %d ms", NB_WL_PUMP_STALL_MS);
+            }
+            w->pump_restarts++;
+            w->fb_out = 0;          /* an unanswered feedback must not block the restart */
+            w->pump_out = false;
+            wl_pump_commit(w);
+        }
         if (now - w->last_frame_ms >= NB_WL_PACE_MS) {
             w->last_frame_ms = now;
             nb_sink_frame(w->sink);
@@ -4523,10 +4589,117 @@ static int bd_index(const struct nb_wl *w, const struct wl_surface *s)
 }
 
 /* ── presentation feedback: FLIP or COPY ─────────────────────────────────── */
+static uint64_t wl_mono_ns(void)
+{
+    struct timespec ts;
+
+    clock_gettime(CLOCK_MONOTONIC, &ts);
+    return (uint64_t)ts.tv_sec * 1000000000ull + (uint64_t)ts.tv_nsec;
+}
+
+/*
+ * ONE display refresh, from a `presented` of ANY commit (a frame's or the
+ * pump's).  The core decides what reaches the VMM (decimation, WANT_FRAME, the
+ * rate rules); this only reports.  A presentation clock that is not
+ * CLOCK_MONOTONIC (weston's headless backend says CLOCK_MONOTONIC_RAW) cannot be
+ * compared with ours: the tick is stamped with the time we learned of it, and
+ * says so (CLOCK_ONLY).
+ */
+static void wl_tick_presented(struct nb_wl *w, uint32_t hi, uint32_t lo,
+                              uint32_t nsec, uint32_t refresh)
+{
+    uint64_t now = wl_mono_ns();
+    uint64_t ts = (((uint64_t)hi << 32) | lo) * 1000000000ull + nsec;
+    uint32_t flags = 0;
+
+    if (!w->sink || !nb_sink_tick_on(w->sink)) {
+        return;
+    }
+    if (!w->pres_clock_known || w->pres_clock != CLOCK_MONOTONIC ||
+        ts == 0 || ts > now) {
+        ts = now;
+        flags = NVKVM_BROKER_TICK_F_CLOCK_ONLY;
+    }
+    w->tick_event_ms = nb_now_ms_wl();
+    w->pump_stalled = false;
+    nb_sink_refresh(w->sink, now, ts, refresh, flags);
+}
+
+/* The frame-callback fallback: no refresh period is reported, so one is
+ * estimated from the callbacks themselves (a smoothed interval, bounded). */
+static void wl_tick_from_callback(struct nb_wl *w)
+{
+    uint64_t now = wl_mono_ns();
+
+    if (!nb_sink_tick_on(w->sink)) {
+        return;
+    }
+    if (w->cb_last_ns && now > w->cb_last_ns) {
+        uint64_t iv = now - w->cb_last_ns;
+
+        if (iv >= 1000000ull && iv <= 100000000ull) {
+            w->cb_period_ns = w->cb_period_ns
+                ? (w->cb_period_ns * 7u + iv) / 8u : iv;
+        }
+    }
+    w->cb_last_ns = now;
+    w->tick_event_ms = nb_now_ms_wl();
+    w->pump_stalled = false;
+    nb_sink_refresh(w->sink, now, now, w->cb_period_ns,
+                    NVKVM_BROKER_TICK_F_CLOCK_ONLY);
+    wl_pump_commit(w);
+}
+
+/*
+ * The tick pump's commit: 1x1 damage on the buffer already attached, a
+ * presentation feedback (and, without wp_presentation, a frame callback), and
+ * the commit.  Skipped while any feedback is outstanding -- a frame the VMM
+ * committed has its own, and a second commit in the same refresh would only
+ * be replaced.  Never re-attaches: the surface keeps what it shows.
+ */
+static void wl_pump_commit(struct nb_wl *w)
+{
+    struct wp_presentation_feedback *fb;
+
+    if (!w->sink || !nb_sink_tick_on(w->sink) || !w->surf || w->pump_out ||
+        w->fb_out != 0) {
+        return;
+    }
+    if (w->current < 0 && !w->idle_buf) {
+        return;                 /* nothing is attached yet */
+    }
+    wl_surface_damage_buffer(w->surf, 0, 0, 1, 1);
+    if (w->presentation) {
+        fb = wp_presentation_feedback(w->presentation, w->surf);
+        if (fb) {
+            wp_presentation_feedback_add_listener(fb, &nb_pump_listener, w);
+            w->fb_out++;
+            w->pump_out = true;
+        }
+    } else if (!w->frame_inflight) {
+        struct wl_callback *cb = wl_surface_frame(w->surf);
+
+        if (cb) {
+            wl_callback_add_listener(cb, &frame_listener, w);
+            w->frame_inflight = true;
+        }
+    }
+    wl_surface_commit(w->surf);
+    w->pump_commit_ms = nb_now_ms_wl();
+}
+
 static void pres_discarded(void *d, struct wp_presentation_feedback *f)
 {
-    (void)d;
+    struct nb_wl *w = d;
+
     wp_presentation_feedback_destroy(f);
+    if (w->fb_out) {
+        w->fb_out--;
+    }
+    /* the frame the VMM committed was not shown: nothing to wait for */
+    if (w->sink) {
+        nb_sink_presented(w->sink);
+    }
 }
 static void pres_sync_output(void *d, struct wp_presentation_feedback *f,
                              struct wl_output *o)
@@ -4539,8 +4712,18 @@ static void pres_presented(void *d, struct wp_presentation_feedback *f,
     struct nb_wl *w = d;
     int zc = (flags & WP_PRESENTATION_FEEDBACK_KIND_ZERO_COPY) ? 1 : 0;
 
-    (void)tv_sec_hi; (void)tv_sec_lo; (void)tv_nsec; (void)sh; (void)sl;
+    (void)sh; (void)sl;
     wp_presentation_feedback_destroy(f);
+    if (w->fb_out) {
+        w->fb_out--;
+    }
+    /* the VMM's frame was shown: the next request may open; and the display
+     * refreshed: that is a tick, and the pump goes on */
+    if (w->sink) {
+        nb_sink_presented(w->sink);
+    }
+    wl_tick_presented(w, tv_sec_hi, tv_sec_lo, tv_nsec, refresh);
+    wl_pump_commit(w);
 
     /*
      * THE HOST'S REFRESH, which the guest otherwise cannot know.
@@ -4591,6 +4774,58 @@ const struct wp_presentation_feedback_listener nb_pres_listener = {
     .sync_output = pres_sync_output,
     .presented   = pres_presented,
     .discarded   = pres_discarded,
+};
+
+/* The pump's own feedback: a refresh when presented, nothing when discarded
+ * (a hidden surface's feedback is discarded AT ONCE -- re-committing on it
+ * would spin; the watchdog in wl_tick() restarts a stopped pump instead). */
+static void pump_presented(void *d, struct wp_presentation_feedback *f,
+                           uint32_t hi, uint32_t lo, uint32_t nsec,
+                           uint32_t refresh, uint32_t sh, uint32_t sl,
+                           uint32_t flags)
+{
+    struct nb_wl *w = d;
+
+    (void)sh; (void)sl; (void)flags;
+    wp_presentation_feedback_destroy(f);
+    if (w->fb_out) {
+        w->fb_out--;
+    }
+    w->pump_out = false;
+    wl_tick_presented(w, hi, lo, nsec, refresh);
+    wl_pump_commit(w);
+}
+static void pump_discarded(void *d, struct wp_presentation_feedback *f)
+{
+    struct nb_wl *w = d;
+
+    wp_presentation_feedback_destroy(f);
+    if (w->fb_out) {
+        w->fb_out--;
+    }
+    w->pump_out = false;
+}
+const struct wp_presentation_feedback_listener nb_pump_listener = {
+    .sync_output = pres_sync_output,
+    .presented   = pump_presented,
+    .discarded   = pump_discarded,
+};
+
+static void pres_clock_id(void *d, struct wp_presentation *p, uint32_t id)
+{
+    struct nb_wl *w = d;
+
+    (void)p;
+    w->pres_clock = id;
+    w->pres_clock_known = true;
+    if (id != CLOCK_MONOTONIC) {
+        nb_log("the compositor's presentation clock is %u, not CLOCK_MONOTONIC: "
+               "ticks are stamped with the time the broker learned of them "
+               "(CLOCK_ONLY)", id);
+    }
+}
+static const struct wp_presentation_listener nb_presentation_listener = {
+    .clock_id = pres_clock_id,
 };
 
 /* ── decorations ─────────────────────────────────────────────────────────── */
@@ -4722,6 +4957,10 @@ static void reg_global(void *data, struct wl_registry *r, uint32_t name,
         w->subcomp = BIND(wl_subcompositor_interface, 1);
     } else if (!strcmp(iface, wp_presentation_interface.name)) {
         w->presentation = BIND(wp_presentation_interface, 1);
+        if (w->presentation) {
+            wp_presentation_add_listener(w->presentation,
+                                         &nb_presentation_listener, w);
+        }
     } else if (!strcmp(iface, wp_fractional_scale_manager_v1_interface.name)) {
         w->frac_mgr = BIND(wp_fractional_scale_manager_v1_interface, 1);
     } else if (!strcmp(iface, wl_data_device_manager_interface.name)) {
@@ -5400,6 +5639,22 @@ static int wl_open(struct nb_session *s, const struct nb_config *cfg)
     } else {
         nb_log("zwp_linux_dmabuf_v1 is version 2: no explicit modifiers, so "
                "only implicitly-modified buffers will be accepted");
+    }
+    /*
+     * The display tick.  Frame callbacks are core Wayland, so the bit is always
+     * honest; what differs is the quality of the tick, and the log says which.
+     */
+    s->caps |= NVKVM_BROKER_CAP_TICK;
+    if (w->presentation) {
+        nb_log("display ticks: from wp_presentation feedback (presentation "
+               "clock %s)",
+               !w->pres_clock_known ? "not reported yet"
+               : w->pres_clock == CLOCK_MONOTONIC ? "CLOCK_MONOTONIC"
+               : "another clock: ticks are stamped on receipt");
+    } else {
+        nb_log("display ticks: the compositor has no wp_presentation, so the "
+               "frame callback stands in (CLOCK_ONLY, and the refresh period "
+               "is only estimated)");
     }
     if (w->relptr_mgr && w->seat) {
         s->caps |= NVKVM_BROKER_CAP_REL_POINTER;
