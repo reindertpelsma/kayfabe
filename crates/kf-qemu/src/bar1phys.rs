@@ -214,9 +214,11 @@ pub fn restore_physical_view_scrubbed<V: kf_mem::cpuwin::ViewOps>(
             now.wrapping_sub(at_change)
         ));
     }
-    // RED STEP (tests first): the scrub is not wired yet.
-    let _ = &scrub;
-    let scrubbed: Option<Result<(), String>> = None;
+    let scrubbed = if w.seeded().is_none() {
+        Some(scrub(store_off, len))
+    } else {
+        None
+    };
     let line = match w.reseed() {
         Ok(kf_mem::cpuwin::Reseed::Placed { life }) => format!(
             "BAR1 back to its physical view: [{at:#x}, +{len:#x}) shows store [{store_off:#x}, +{len:#x}) \

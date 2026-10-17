@@ -1,0 +1,432 @@
+// SPDX-License-Identifier: Apache-2.0 OR GPL-2.0-or-later
+//! ★★ **The store scrub** — no byte of an earlier guest life, or of an earlier process that held
+//! the same video memory, is ever visible to the next guest life (owner requirement, 2026-10-18).
+//!
+//! STATUS: LIVE (code, GPU-free tested; hardware verification is the checklist in the branch
+//! report). Branch `claude/bootlayer-20261018`.
+//!
+//! The rule, with no policy options: **the whole guest-allocatable store is zeroed** at
+//!
+//! | cause | when | scope |
+//! |---|---|---|
+//! | [`Cause::Realize`] | VM start, before the guest can run | the whole store (nothing of kayfabe's exists yet) |
+//! | [`Cause::Reset`] | device reset / guest reboot, stage Memory, vCPUs paused | the guest heap `[0, carve)` — the firmware carve-out above it is kayfabe's and survives (see below) |
+//! | [`Cause::Teardown`] | the VA thread's exit, before the store is freed | the whole store (nothing of kayfabe's is needed any more) |
+//!
+//! **What survives a reset** (kayfabe-owned, `kf_chip::bar0::FbLayout`): the firmware carve-out
+//! `[carve, fb_length)`. Inside it, OUR two root pages (`bar1_pde_base`, `bar2_pde_base`) are
+//! rewritten by the reset's own stage (they are zeroed there, and the BAR objects re-registered);
+//! everything else in the carve-out is declared and used by kayfabe (`reserved == FW_CARVE_OUT_BYTES`
+//! in the region table, so the guest's RM never allocates there and a GPU leaf into it is refused,
+//! `V3_P1P2_TSPACE.md` §4.3) — a scrub that zeroed it would break a life the owner proved working.
+//! ⊘ INFERRED, not proved here: nothing the guest could read lives in the carve-out; the reset's
+//! hardware checklist reads it back.
+//!
+//! **Completion ordering.** [`run`] returns `Ok` only after [`Zeroer::complete`] (the device-side
+//! completion) succeeded, and the caller acknowledges the reset stage — which opens the gate and
+//! lets the vCPUs resume — only on `Ok`. A refused or incomplete scrub is an [`Err`] naming the
+//! range; the caller keeps the gate closed and says so (`V3_DEVICE_RESET.md` §6 item 1: fail
+//! closed). A rerun starts from the beginning (zeroing is idempotent), so a second reset request
+//! that arrives during or after a failed scrub is simply a second full run.
+
+use std::sync::atomic::{AtomicU64, Ordering};
+
+use kf_chip::bar0::FbLayout;
+
+/// Bytes per queued memset. Bounded so one chunk is bounded GPU work and `progress` moves; large
+/// enough that the per-chunk host cost is nothing next to the memset itself.
+pub const CHUNK: u64 = 256 << 20;
+
+/// Why the store is being scrubbed.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Cause {
+    /// VM start, before any guest instruction runs.
+    Realize,
+    /// Device reset or guest reboot (stage Memory).
+    Reset,
+    /// The device is going away; the store is about to be freed.
+    Teardown,
+}
+
+/// The ranges to zero, as `(offset, length)`, sorted, non-overlapping, non-empty.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Plan {
+    /// The ranges.
+    pub ranges: Vec<(u64, u64)>,
+}
+
+impl Plan {
+    /// Total bytes.
+    #[must_use]
+    pub fn bytes(&self) -> u64 {
+        self.ranges.iter().map(|r| r.1).sum()
+    }
+
+    /// The chunks of the plan, in order: each at most [`CHUNK`] bytes, never crossing a range.
+    #[must_use]
+    pub fn chunks(&self) -> Vec<(u64, u64)> {
+        let mut out = Vec::new();
+        for &(off, len) in &self.ranges {
+            let mut at = 0;
+            while at < len {
+                let n = (len - at).min(CHUNK);
+                out.push((off + at, n));
+                at += n;
+            }
+        }
+        out
+    }
+}
+
+/// ★ The plan for `cause` on `layout`, plus `boot` (the boot framebuffer's store range, always
+/// inside the heap; merged, so it is never zeroed twice).
+#[must_use]
+pub fn plan(layout: &FbLayout, cause: Cause, boot: Option<(u64, u64)>) -> Plan {
+    let mut want: Vec<(u64, u64)> = match cause {
+        Cause::Realize | Cause::Teardown => vec![(0, layout.fb_length)],
+        // the guest heap: below the carve-out, whatever console a guest reserves inside it (a
+        // reserved console region is still guest-written memory)
+        Cause::Reset => vec![(0, layout.carve())],
+    };
+    if let Some(b) = boot {
+        want.push(b);
+    }
+    want.retain(|r| r.1 > 0);
+    want.sort_unstable();
+    let mut ranges: Vec<(u64, u64)> = Vec::new();
+    for (off, len) in want {
+        let end = (off + len).min(layout.fb_length);
+        if end <= off {
+            continue;
+        }
+        match ranges.last_mut() {
+            Some(last) if off <= last.0 + last.1 => last.1 = last.1.max(end - last.0),
+            _ => ranges.push((off, end - off)),
+        }
+    }
+    Plan { ranges }
+}
+
+/// The device-side zero. `zero` QUEUES (it may return before the bytes are zero); `complete` is the
+/// completion of everything queued.
+pub trait Zeroer {
+    /// Queue a zero of `[off, off+len)`.
+    ///
+    /// # Errors
+    /// The host's refusal, by name.
+    fn zero(&mut self, off: u64, len: u64) -> Result<(), String>;
+    /// Everything queued is zero in device memory.
+    ///
+    /// # Errors
+    /// The host's refusal, by name.
+    fn complete(&mut self) -> Result<(), String>;
+}
+
+/// A scrub that did not finish. The store is NOT clean: the caller must keep the gate closed.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Incomplete {
+    /// Bytes queued before the refusal.
+    pub queued: u64,
+    /// Bytes the plan holds.
+    pub total: u64,
+    /// The chunk that was refused, or `None` when the completion was.
+    pub at: Option<(u64, u64)>,
+    /// The host's words.
+    pub why: String,
+}
+
+impl std::fmt::Display for Incomplete {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self.at {
+            Some((off, len)) => write!(
+                f,
+                "store scrub REFUSED at [{off:#x}, +{len:#x}) after {:#x} of {:#x} bytes: {}",
+                self.queued, self.total, self.why
+            ),
+            None => write!(
+                f,
+                "store scrub queued {:#x} bytes but its completion was REFUSED: {}",
+                self.total, self.why
+            ),
+        }
+    }
+}
+
+/// ★ Run `plan`: every chunk queued, then the completion. `progress` (bytes queued so far) is for
+/// the status line. `Ok(bytes)` only after the completion.
+///
+/// # Errors
+/// [`Incomplete`], with the store not clean.
+pub fn run(
+    plan: &Plan,
+    z: &mut impl Zeroer,
+    progress: &AtomicU64,
+) -> Result<u64, Incomplete> {
+    let total = plan.bytes();
+    let mut queued = 0u64;
+    progress.store(0, Ordering::Release);
+    for (off, len) in plan.chunks() {
+        z.zero(off, len).map_err(|why| Incomplete {
+            queued,
+            total,
+            at: Some((off, len)),
+            why,
+        })?;
+        queued += len;
+        progress.store(queued, Ordering::Release);
+    }
+    z.complete().map_err(|why| Incomplete {
+        queued,
+        total,
+        at: None,
+        why,
+    })?;
+    Ok(total)
+}
+
+/// ★ The production [`Zeroer`]: the walker's CUDA context on the store's own device mapping —
+/// `cuMemsetD8` per chunk (no host buffer, no PCIe), one `cuCtxSynchronize` for the completion.
+/// ⊘ Only ever driven from a worker thread (the VA thread): the completion blocks the CALLER, and a
+/// vCPU is paused around a reset and never waits here.
+pub struct WalkZeroer<'a>(pub &'a kf_cuda::walk::WalkKernel);
+
+impl Zeroer for WalkZeroer<'_> {
+    fn zero(&mut self, off: u64, len: u64) -> Result<(), String> {
+        self.0.zero_store_queued(off, len).map_err(|e| e.to_string())
+    }
+    fn complete(&mut self) -> Result<(), String> {
+        self.0.sync_store().map_err(|e| e.to_string())
+    }
+}
+
+/// One range, zeroed and completed — the boot framebuffer at an RM unload (`bar1phys`).
+///
+/// # Errors
+/// [`Incomplete`]'s words.
+pub fn zero_range(
+    k: &kf_cuda::walk::WalkKernel,
+    off: u64,
+    len: u64,
+    progress: &AtomicU64,
+) -> Result<u64, Incomplete> {
+    run(&Plan { ranges: vec![(off, len)] }, &mut WalkZeroer(k), progress)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use kf_chip::bar0::{FW_CARVE_OUT_BYTES, fb_layout};
+
+    const MIB: u64 = 1 << 20;
+    /// A store of 1 GiB plus the carve-out: big enough to chunk, small enough to model.
+    fn layout() -> FbLayout {
+        fb_layout(FW_CARVE_OUT_BYTES + 1024 * MIB).expect("a layout")
+    }
+
+    /// A model store: bytes `[0, len)` each dirty (0xAA) or zero, kept as sorted dirty intervals.
+    struct Model {
+        dirty: Vec<(u64, u64)>,
+        queued: Vec<(u64, u64)>,
+        completed: bool,
+        refuse_zero_at: Option<u64>,
+        refuse_complete: bool,
+        /// every `zero` call, in order
+        calls: Vec<(u64, u64)>,
+    }
+
+    impl Model {
+        fn filled(len: u64) -> Model {
+            Model {
+                dirty: vec![(0, len)],
+                queued: Vec::new(),
+                completed: false,
+                refuse_zero_at: None,
+                refuse_complete: false,
+                calls: Vec::new(),
+            }
+        }
+        fn clear_range(&mut self, off: u64, len: u64) {
+            let end = off + len;
+            let mut out = Vec::new();
+            for &(s, l) in &self.dirty {
+                let e = s + l;
+                if e <= off || s >= end {
+                    out.push((s, l));
+                    continue;
+                }
+                if s < off {
+                    out.push((s, off - s));
+                }
+                if e > end {
+                    out.push((end, e - end));
+                }
+            }
+            self.dirty = out;
+        }
+        fn is_dirty(&self, off: u64, len: u64) -> bool {
+            self.dirty.iter().any(|&(s, l)| s < off + len && s + l > off)
+        }
+        fn dirty_bytes_in(&self, off: u64, len: u64) -> u64 {
+            self.dirty
+                .iter()
+                .map(|&(s, l)| (s + l).min(off + len).saturating_sub(s.max(off)))
+                .sum()
+        }
+    }
+
+    impl Zeroer for Model {
+        fn zero(&mut self, off: u64, len: u64) -> Result<(), String> {
+            self.calls.push((off, len));
+            if self.refuse_zero_at == Some(off) {
+                return Err("cuMemsetD8: CUDA_ERROR_UNKNOWN".to_string());
+            }
+            // a queued zero is NOT visible until `complete` — the model is strict about it
+            self.queued.push((off, len));
+            Ok(())
+        }
+        fn complete(&mut self) -> Result<(), String> {
+            if self.refuse_complete {
+                return Err("cuCtxSynchronize: device fault".to_string());
+            }
+            for (o, l) in std::mem::take(&mut self.queued) {
+                self.clear_range(o, l);
+            }
+            self.completed = true;
+            Ok(())
+        }
+    }
+
+    /// ★ THE MODEL TEST of the owner's rule: whatever the old life (or an older process) left,
+    /// after a reset no guest-allocatable byte retains it.
+    #[test]
+    fn after_a_reset_no_guest_allocatable_byte_retains_old_bytes() {
+        let l = layout();
+        let mut m = Model::filled(l.fb_length);
+        let p = plan(&l, Cause::Reset, Some((0, 0x7F_0000)));
+        let done = run(&p, &mut m, &AtomicU64::new(0)).expect("scrubbed");
+        assert_eq!(done, l.carve());
+        assert_eq!(m.dirty_bytes_in(0, l.carve()), 0, "the whole guest heap is zero");
+        assert!(m.completed);
+    }
+
+    /// ★ THE SCOPE: the carve-out is kayfabe's and survives a reset byte for byte.
+    #[test]
+    fn a_reset_leaves_the_firmware_carve_out_alone() {
+        let l = layout();
+        let mut m = Model::filled(l.fb_length);
+        run(&plan(&l, Cause::Reset, None), &mut m, &AtomicU64::new(0)).expect("scrubbed");
+        assert_eq!(
+            m.dirty_bytes_in(l.carve(), FW_CARVE_OUT_BYTES),
+            FW_CARVE_OUT_BYTES,
+            "kayfabe's own region is untouched"
+        );
+        // our two root pages sit inside it, at their layout offsets: still there for the reset's
+        // own stage to rewrite
+        for root in [l.bar1_pde_base, l.bar2_pde_base] {
+            assert!(root >= l.carve() && m.is_dirty(root, kf_chip::bar0::ROOT_PAGE_BYTES));
+        }
+    }
+
+    /// VM start and teardown: nothing of kayfabe's exists (yet / any more) — the whole store.
+    #[test]
+    fn realize_and_teardown_scrub_the_whole_store() {
+        let l = layout();
+        for cause in [Cause::Realize, Cause::Teardown] {
+            let mut m = Model::filled(l.fb_length);
+            let n = run(&plan(&l, cause, None), &mut m, &AtomicU64::new(0)).expect("scrubbed");
+            assert_eq!(n, l.fb_length, "{cause:?}");
+            assert!(m.dirty.is_empty(), "{cause:?}: {:x?}", m.dirty);
+        }
+    }
+
+    /// The boot framebuffer is inside the heap: asking for it too never zeroes anything twice, and
+    /// a range past the store is clipped to it.
+    #[test]
+    fn the_boot_range_is_merged_and_never_zeroed_twice() {
+        let l = layout();
+        let p = plan(&l, Cause::Reset, Some((0, 0x7F_0000)));
+        assert_eq!(p.ranges, vec![(0, l.carve())]);
+        // a range the layout does not hold is clipped to the store, never read past it
+        let q = plan(&l, Cause::Reset, Some((l.fb_length - 4096, 1 << 20)));
+        assert_eq!(q.ranges, vec![(0, l.carve()), (l.fb_length - 4096, 4096)]);
+        let overlap = plan(&l, Cause::Realize, Some((16, 100)));
+        assert_eq!(overlap.ranges, vec![(0, l.fb_length)]);
+    }
+
+    /// Chunks: bounded, ordered, contiguous, covering the plan exactly.
+    #[test]
+    fn chunks_cover_the_plan_exactly_and_never_exceed_the_bound() {
+        let l = layout();
+        let p = plan(&l, Cause::Reset, None);
+        let c = p.chunks();
+        assert!(c.iter().all(|&(_, n)| n > 0 && n <= CHUNK));
+        assert_eq!(c.iter().map(|&(_, n)| n).sum::<u64>(), p.bytes());
+        assert!(c.windows(2).all(|w| w[0].0 + w[0].1 == w[1].0), "{c:x?}");
+        assert!(c.len() >= 4, "1 GiB of heap is several chunks");
+    }
+
+    /// ★ COMPLETION ORDER: the queued zeros are not zero until `complete`; `run` returns Ok only
+    /// after it. A model that is only checked after `run` would pass a run that skipped it.
+    #[test]
+    fn ok_means_the_completion_ran() {
+        let l = layout();
+        let mut m = Model::filled(l.fb_length);
+        let progress = AtomicU64::new(0);
+        run(&plan(&l, Cause::Reset, None), &mut m, &progress).expect("ok");
+        assert!(m.completed);
+        assert_eq!(progress.load(Ordering::Acquire), l.carve());
+    }
+
+    /// ★ REFUSAL: a refused chunk is an error naming the range, the store is NOT clean, and the
+    /// completion is never claimed.
+    #[test]
+    fn a_refused_chunk_is_incomplete_and_names_its_range() {
+        let l = layout();
+        let mut m = Model::filled(l.fb_length);
+        m.refuse_zero_at = Some(CHUNK);
+        let e = run(&plan(&l, Cause::Reset, None), &mut m, &AtomicU64::new(0)).unwrap_err();
+        assert_eq!(e.at, Some((CHUNK, CHUNK)));
+        assert_eq!(e.queued, CHUNK);
+        assert!(e.to_string().contains("REFUSED at") && e.to_string().contains("CUDA_ERROR"));
+        assert!(!m.completed);
+        assert!(m.dirty_bytes_in(0, l.carve()) > 0, "not clean: the caller keeps the gate closed");
+    }
+
+    /// A completion the host refuses is as bad as a refused chunk.
+    #[test]
+    fn a_refused_completion_is_incomplete() {
+        let l = layout();
+        let mut m = Model::filled(l.fb_length);
+        m.refuse_complete = true;
+        let e = run(&plan(&l, Cause::Reset, None), &mut m, &AtomicU64::new(0)).unwrap_err();
+        assert_eq!(e.at, None);
+        assert!(e.to_string().contains("completion was REFUSED"), "{e}");
+        assert!(m.dirty_bytes_in(0, l.carve()) > 0, "queued zeros were never completed");
+    }
+
+    /// ★ IDEMPOTENCE: a second reset during or after a failed scrub is a second full run from the
+    /// start, and the end state is the same as one clean run.
+    #[test]
+    fn a_rerun_after_a_failure_ends_clean_and_a_double_run_changes_nothing() {
+        let l = layout();
+        let p = plan(&l, Cause::Reset, None);
+        let mut m = Model::filled(l.fb_length);
+        m.refuse_zero_at = Some(2 * CHUNK);
+        assert!(run(&p, &mut m, &AtomicU64::new(0)).is_err());
+        m.refuse_zero_at = None;
+        m.calls.clear();
+        assert_eq!(run(&p, &mut m, &AtomicU64::new(0)), Ok(l.carve()));
+        assert_eq!(m.calls.first(), Some(&(0, CHUNK)), "restarted from the beginning");
+        let after_one = m.dirty.clone();
+        assert_eq!(run(&p, &mut m, &AtomicU64::new(0)), Ok(l.carve()));
+        assert_eq!(m.dirty, after_one);
+        assert_eq!(m.dirty_bytes_in(0, l.carve()), 0);
+    }
+
+    /// A store smaller than one chunk, and a layout whose boot range is empty, are plain cases.
+    #[test]
+    fn an_empty_boot_range_adds_nothing() {
+        let l = layout();
+        assert_eq!(plan(&l, Cause::Reset, Some((0, 0))), plan(&l, Cause::Reset, None));
+    }
+}

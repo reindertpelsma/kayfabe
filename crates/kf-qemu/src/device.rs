@@ -2257,7 +2257,21 @@ impl Device {
                     .table
                     .target(crate::mem::K_BAR1)
                     .and_then(crate::mem::Target::cpu_window)
-                    .and_then(|w| crate::bar1phys::restore_physical_view(w, at_change))
+                    .and_then(|w| {
+                        // ★ 2026-10-18: the boot range is zeroed on the GPU — complete — BEFORE the
+                        // seed returns (`bar1phys::restore_physical_view_scrubbed`).
+                        let kernel = &m.walker().kernel;
+                        let progress = std::sync::atomic::AtomicU64::new(0);
+                        crate::bar1phys::restore_physical_view_scrubbed(
+                            w,
+                            at_change,
+                            &mut |off, len| {
+                                crate::scrub::zero_range(kernel, off, len, &progress)
+                                    .map(|_| ())
+                                    .map_err(|e| e.to_string())
+                            },
+                        )
+                    })
             {
                 // ⊘ bounded: a guest can ask as often as it writes the register
                 if crate::bar1phys::bounded(bar1_phys_lines, 128, "BAR1 physical-view") {
