@@ -656,7 +656,7 @@ struct nb_tick_win {
     uint64_t loop_late_max_ns;           /* poll() slept this much past its timeout                      */
     uint64_t loop_work_max_ns;           /* the longest time between poll() returning and the next poll()*/
     uint64_t gaps50, gaps100;            /* accepted-refresh gaps over 50 / 100 ms                       */
-    uint64_t new_n, repeat_n;            /* presents that carried NEW content / pump repeats             */
+    uint64_t new_n, repeat_n, merged;    /* presents that carried NEW content / repeats / commits merged into a later present */
     uint64_t cgap_max_ns, cg33, cg50, cg100; /* gap between consecutive NEW-content presents             */
 };
 
@@ -681,6 +681,7 @@ struct nb_tick {
     uint64_t n_answered, n_no_change, n_late, n_unsolicited;
     uint64_t n_coalesced;
     struct nb_tick_win win;      /* ★ MEASUREMENT: see nb_tick_stats_format */
+    uint64_t commits_since_present; /* ★ MEASUREMENT: COMMITs answered since the last present   */
     bool     have_content;       /* ★ MEASUREMENT: a new-content present was seen        */
     uint64_t last_content_ns;    /* its present_ns (never part of the window)            */
 };
@@ -703,9 +704,11 @@ int nb_tick_stats_format(char *buf, size_t n, uint64_t t_ms, const struct nb_tic
                          const struct nb_tick_snap *now, const struct nb_tick_win *w);
 /* window updaters (pure) */
 void nb_tick_win_gap(struct nb_tick *t, uint64_t gap_ns);
-/* A presentation feedback arrived with compositor time `present_ns`: `new_content` = it was a VMM frame's (COMMIT), else the
- * broker's own pump repeat.  Counts both and tracks the gap between consecutive NEW-content presents. */
-void nb_tick_content_present(struct nb_tick *t, uint64_t present_ns, bool new_content);
+/* A PRESENT happened (a `presented` feedback, the compositor's time `present_ns`).  It carried NEW content when a COMMIT was
+ * answered since the previous present, else it repeated the previous frame; commits beyond the first merged into it.  (The
+ * compositor discards the feedback of a COMMIT that a later commit replaces, so the content flag is derived from the commits,
+ * not from which feedback arrived.)  Tracks the gap between consecutive NEW-content presents. */
+void nb_tick_content_present(struct nb_tick *t, uint64_t present_ns);
 void nb_tick_win_loop(struct nb_tick *t, uint64_t late_ns, uint64_t work_ns);
 void nb_tick_presented_at(struct nb_tick *t, uint64_t now_ns, bool discarded);
 
@@ -1039,7 +1042,7 @@ void nb_sink_stats_poll(struct nb_sink *s);
 /* ★ MEASUREMENT: the compositor DISCARDED a presentation feedback; the event loop's lateness / body time. */
 void nb_sink_note_discarded(struct nb_sink *s);
 void nb_sink_note_loop(struct nb_sink *s, uint64_t late_ns, uint64_t work_ns);
-void nb_sink_note_present(struct nb_sink *s, uint64_t present_ns, bool new_content);
+void nb_sink_note_present(struct nb_sink *s, uint64_t present_ns);
 /* The EV_SURFACE rate for a host rate of `host_mhz`, after the tick divisor. */
 unsigned nb_sink_mode_mhz(const struct nb_sink *s, unsigned host_mhz,
                           uint64_t host_period_ns);

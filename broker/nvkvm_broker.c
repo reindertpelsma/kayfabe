@@ -1038,10 +1038,10 @@ void nb_sink_note_discarded(struct nb_sink *s)
     }
 }
 
-void nb_sink_note_present(struct nb_sink *s, uint64_t present_ns, bool new_content)
+void nb_sink_note_present(struct nb_sink *s, uint64_t present_ns)
 {
     if (s->cfg->stats_line && s->client_fd >= 0 && s->tick.on) {
-        nb_tick_content_present(&s->tick, present_ns, new_content);
+        nb_tick_content_present(&s->tick, present_ns);
     }
 }
 

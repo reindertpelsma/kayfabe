@@ -240,6 +240,7 @@ enum nb_tick_ans nb_tick_answer(struct nb_tick *t, uint32_t req, bool is_commit,
         t->open_req = 0;
         t->n_answered++;
         if (is_commit) {
+            t->commits_since_present++;
             t->unpresented = true;
             t->unpresented_since_ns = now_ns;
         } else {
@@ -308,7 +309,7 @@ int nb_tick_stats_format(char *buf, size_t n, uint64_t t_ms, const struct nb_tic
                      "late=%llu unsolicited=%llu present_timeouts=%llu coalesced=%llu "
                      "gap_max_us=%llu gaps33=%llu discarded=%llu ans_max_us=%llu ans_mean_us=%llu "
                      "pres_max_us=%llu pres_mean_us=%llu loop_late_max_us=%llu loop_work_max_us=%llu "
-                     "gaps50=%llu gaps100=%llu new=%llu repeat=%llu cgap_max_us=%llu cg33=%llu cg50=%llu cg100=%llu",
+                     "gaps50=%llu gaps100=%llu new=%llu repeat=%llu merged=%llu cgap_max_us=%llu cg33=%llu cg50=%llu cg100=%llu",
                      (unsigned long long)t_ms,
                      (unsigned long long)delta_u64(now->feedback, prev->feedback),
                      (unsigned long long)delta_u64(now->ticks, prev->ticks),
@@ -329,7 +330,7 @@ int nb_tick_stats_format(char *buf, size_t n, uint64_t t_ms, const struct nb_tic
                      (unsigned long long)(w->loop_late_max_ns / 1000),
                      (unsigned long long)(w->loop_work_max_ns / 1000),
                      (unsigned long long)w->gaps50, (unsigned long long)w->gaps100,
-                     (unsigned long long)w->new_n, (unsigned long long)w->repeat_n,
+                     (unsigned long long)w->new_n, (unsigned long long)w->repeat_n, (unsigned long long)w->merged,
                      (unsigned long long)(w->cgap_max_ns / 1000), (unsigned long long)w->cg33,
                      (unsigned long long)w->cg50, (unsigned long long)w->cg100);
     return (k > 0 && (size_t)k < n) ? k : 0;
@@ -378,12 +379,16 @@ void nb_tick_win_loop(struct nb_tick *t, uint64_t late_ns, uint64_t work_ns)
     }
 }
 
-void nb_tick_content_present(struct nb_tick *t, uint64_t present_ns, bool new_content)
+void nb_tick_content_present(struct nb_tick *t, uint64_t present_ns)
 {
-    if (!new_content) {
+    uint64_t n = t->commits_since_present;
+
+    t->commits_since_present = 0;
+    if (n == 0) {
         t->win.repeat_n++;
         return;
     }
+    t->win.merged += n - 1;
     t->win.new_n++;
     if (t->have_content && present_ns > t->last_content_ns) {
         uint64_t g = present_ns - t->last_content_ns;

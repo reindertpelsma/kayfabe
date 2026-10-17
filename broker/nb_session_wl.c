@@ -4723,7 +4723,7 @@ static void pres_presented(void *d, struct wp_presentation_feedback *f,
     if (w->sink) {
         nb_sink_presented(w->sink);
         nb_sink_note_present(w->sink,
-                             (((uint64_t)tv_sec_hi << 32) | tv_sec_lo) * 1000000000ull + tv_nsec, true);
+                             (((uint64_t)tv_sec_hi << 32) | tv_sec_lo) * 1000000000ull + tv_nsec);
     }
     wl_tick_presented(w, tv_sec_hi, tv_sec_lo, tv_nsec, refresh);
     wl_pump_commit(w);
@@ -4796,7 +4796,7 @@ static void pump_presented(void *d, struct wp_presentation_feedback *f,
     }
     w->pump_out = false;
     if (w->sink) {
-        nb_sink_note_present(w->sink, (((uint64_t)hi << 32) | lo) * 1000000000ull + nsec, false);
+        nb_sink_note_present(w->sink, (((uint64_t)hi << 32) | lo) * 1000000000ull + nsec);
     }
     wl_tick_presented(w, hi, lo, nsec, refresh);
     wl_pump_commit(w);
