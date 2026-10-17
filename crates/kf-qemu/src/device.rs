@@ -1986,6 +1986,8 @@ impl Device {
         // each with its own bound: what the boot range shows (a line only when it changes), and the
         // re-seeds.
         let mut bar1_phys = crate::bar1phys::PhysicalViewDue::default();
+        // ★ 2026-10-18: the seed placed -> retired edge taints the boot range (`crate::bootclean`)
+        let mut seed_watch = crate::bootclean::SeedWatch::default();
         let mut bar1_view_last: Option<u64> = None;
         let mut bar1_view_lines = 0u64;
         let mut bar1_phys_lines = 0u64;
@@ -2078,7 +2080,14 @@ impl Device {
                         self.mem.inbox.user_va.serve(&m, self.rm);
                         served += 1;
                     }
-                    let line = crate::mem::reset_memory_life(&mut m, &self.mem, self.rm);
+                    let (line, boot_zeroed) =
+                        crate::mem::reset_memory_life(&mut m, &self.mem, self.rm);
+                    // ★ 2026-10-18: the boot layer is shown again only once the boot framebuffer's
+                    // zero COMPLETED (the display worker skips it while the range is tainted).
+                    if boot_zeroed && let Some(dp) = self.display {
+                        dp.boot_scrubbed();
+                    }
+                    seed_watch = crate::bootclean::SeedWatch::default();
                     last_seq = None;
                     armed_seen = None;
                     cache_done = [0u64; kf_trap::cacheop::CacheOp::COUNT];
@@ -2244,6 +2253,18 @@ impl Device {
                     bar1_view_lines = bar1_view_lines.saturating_add(1);
                 }
             }
+            if let Some(dp) = self.display
+                && let Some(w) = m
+                    .table
+                    .target(crate::mem::K_BAR1)
+                    .and_then(crate::mem::Target::cpu_window)
+                && w.boot_range().is_some()
+                && seed_watch.observe(w.seeded().is_some())
+            {
+                // the guest's CPU writes now go to scratch and its RM owns this memory: the boot
+                // layer stops showing it (the last frame stays) until a scrub completes
+                dp.boot_tainted();
+            }
             bar1_phys.notice(self.mem.inbox.bar1_physical_requests(), || {
                 m.table
                     .target(crate::mem::K_BAR1)
@@ -2259,18 +2280,26 @@ impl Device {
                     .and_then(crate::mem::Target::cpu_window)
                     .and_then(|w| {
                         // ★ 2026-10-18: the boot range is zeroed on the GPU — complete — BEFORE the
-                        // seed returns (`bar1phys::restore_physical_view_scrubbed`).
+                        // seed returns (`bar1phys::restore_physical_view_scrubbed`); the boot layer
+                        // may be shown again only once that completed.
                         let kernel = &m.walker().kernel;
                         let progress = std::sync::atomic::AtomicU64::new(0);
-                        crate::bar1phys::restore_physical_view_scrubbed(
+                        let scrub_ok = std::cell::Cell::new(false);
+                        let line = crate::bar1phys::restore_physical_view_scrubbed(
                             w,
                             at_change,
                             &mut |off, len| {
                                 crate::scrub::zero_range(kernel, off, len, &progress)
-                                    .map(|_| ())
+                                    .map(|_| scrub_ok.set(true))
                                     .map_err(|e| e.to_string())
                             },
-                        )
+                        );
+                        if scrub_ok.get()
+                            && let Some(dp) = self.display
+                        {
+                            dp.boot_scrubbed();
+                        }
+                        line
                     })
             {
                 // ⊘ bounded: a guest can ask as often as it writes the register
@@ -2967,6 +2996,13 @@ impl Device {
                 }
             }
             eprintln!("kf3: GSP rpc {:?} seq={}", c.function, c.sequence);
+            // ★ 2026-10-18: fn 72 is the first RPC of every guest RM life — before it can allocate
+            // heap. From here store [0, G) is the RM's memory, not the firmware console's.
+            if c.function == kf_gsp::RpcFunction::GspSetSystemInfo
+                && let Some(dp) = self.display
+            {
+                dp.boot_tainted();
+            }
             if c.function == kf_gsp::RpcFunction::UnloadingGuestDriver {
                 pm_suspend = self.observe_unloading(c);
             }

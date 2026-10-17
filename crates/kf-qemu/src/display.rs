@@ -1477,9 +1477,7 @@ fn choose_shown_gated(
     boot_clean: bool,
     held: &Held,
 ) -> Option<Shown> {
-    // RED STEP (tests first): the gate is not wired yet.
-    let _ = boot_clean;
-    choose_shown(console, boot, boot_done, held)
+    choose_shown(console, boot.filter(|_| boot_clean), boot_done, held)
 }
 
 /// FNV-1a over `words` — [`shown_key`]'s hash.
@@ -1828,9 +1826,27 @@ pub struct DisplayPlane {
     /// ★ The guest's RM gave the display up (fn 47 without a PM transition: GSP-RM's own unload) —
     /// how many times; the worker ends the display's life at each ([`DisplayPlane::rm_unloaded`]).
     unloads: AtomicU64,
+    /// ★ 2026-10-18: whether store `[0, G)` may be shown as the boot picture
+    /// ([`crate::bootclean`]). Tainted by a guest RM life, the seed's retirement and a device
+    /// reset; cleaned only by a scrub that completed.
+    pub boot_clean: crate::bootclean::BootClean,
 }
 
 impl DisplayPlane {
+    /// ★ Something other than the firmware console may write store `[0, G)` now (a guest RM life
+    /// began, the seed retired): the boot layer is not shown until a scrub completes. Never waits.
+    pub fn boot_tainted(&self) {
+        self.boot_clean.taint();
+        let _ = self.wake.signal();
+    }
+
+    /// ★ A scrub of store `[0, G)` COMPLETED: the boot layer may be shown again. Never waits; the
+    /// worker is woken to show it.
+    pub fn boot_scrubbed(&self) {
+        self.boot_clean.clean();
+        let _ = self.wake.signal();
+    }
+
     /// ★★ **The guest's RM unloaded** (`UNLOADING_GUEST_DRIVER` without `bInPMTransition`, observed
     /// on the drainer): the display's guest life is over. GSP-RM's own unload destroys every display
     /// object it held, so the worker drops the engine's channels and heads, the model's registry and
@@ -1849,6 +1865,8 @@ impl DisplayPlane {
     /// ★ Device reset: ask the worker to end the display's life for `epoch` (acknowledged on
     /// [`DisplayPlane::life_reset`]).
     pub fn request_life_reset(&self, epoch: u64) {
+        // the old life's bytes are in store [0, G) until the memory stage's scrub completes
+        self.boot_clean.taint();
         self.life_reset.request(epoch);
         let _ = self.wake.signal();
     }
@@ -2127,6 +2145,7 @@ impl DisplayPlane {
             ui_request: AtomicU64::new(0),
             life_reset: crate::reset::Ack::default(),
             unloads: AtomicU64::new(0),
+            boot_clean: crate::bootclean::BootClean::new(),
             formats,
             boot: None,
             max_fps,
@@ -3227,7 +3246,13 @@ impl Device {
             if console.is_some() {
                 held.preserved = None;
             }
-            let shown = choose_shown(console, dp.boot.as_ref(), boot_done, &held);
+            let shown = choose_shown_gated(
+                console,
+                dp.boot.as_ref(),
+                boot_done,
+                dp.boot_clean.is_clean(),
+                &held,
+            );
             shown_head = match &shown {
                 Some(Shown::Armed(c)) if c.head < 32 => Some(c.head),
                 _ => None,

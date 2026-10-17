@@ -3149,7 +3149,11 @@ fn retire_association(mirrors: &Mirrors, key: VasKey) -> Result<Mirror, String> 
 /// 4. The BAR1/BAR2 objects are re-registered: a FRESH walker slot each (§9 ResetWalkerState — the
 ///    next life's first diff maps everything), their windows back to the boot view (BAR1's seed
 ///    placed again), their roots set as realize set them.
-pub fn reset_memory_life(m: &mut Manager, plane: &MemPlane, rm: &'static HostRm) -> String {
+pub fn reset_memory_life(
+    m: &mut Manager,
+    plane: &MemPlane,
+    rm: &'static HostRm,
+) -> (String, bool) {
     let abandoned = plane.port.reset();
     plane.reset_pramin();
     let mut retired = 0usize;
@@ -3216,7 +3220,9 @@ pub fn reset_memory_life(m: &mut Manager, plane: &MemPlane, rm: &'static HostRm)
         }
     }
     let mirrors_left = plane.mirrors.lock().map_or(usize::MAX, |mm| mm.len());
-    format!(
+    // ★ 2026-10-18: the boot framebuffer was zeroed with no refusal — the boot layer may be shown.
+    let boot_zeroed = zero_refused.is_empty();
+    let line = format!(
         "device reset: memory plane — invalidate {}, PRAMIN scratch, {retired} VA space(s) retired, {} KEPT{}{}, mirrors left {mirrors_left}; roots and boot framebuffer zeroed{}; {}",
         if abandoned { "abandoned (armed)" } else { "idle" },
         kept.len(),
@@ -3228,7 +3234,8 @@ pub fn reset_memory_life(m: &mut Manager, plane: &MemPlane, rm: &'static HostRm)
             format!(" (REFUSED: {})", zero_refused.join("; "))
         },
         windows.join("; ")
-    )
+    );
+    (line, boot_zeroed)
 }
 
 fn retire_mirror(m: &mut Manager, plane: &MemPlane, rm: &'static HostRm, key: VasKey) -> String {
