@@ -195,7 +195,7 @@
       "FASTGUEST: client": 0,
       "guest refused": 0
     },
-    "exported_sha256": "5932ac23763917c8c1ac5abce8489265a0cb5ac1250ae40cb73040fb262f1031"
+    "exported_sha256": "97937b67c34e3066f7e24b2f2866db0b463e39713ca426ee4cde23f587e73047"
   },
   {
     "name": "prov__amp595_broker_x11_stop.log",
@@ -285,7 +285,7 @@
       "FASTGUEST: client": 0,
       "guest refused": 0
     },
-    "exported_sha256": "82ee89f00ddec6b4c9849eb866d71c11887b3f57d46df5e94b5d022d0f6d403d"
+    "exported_sha256": "2420a5905c0ec6d06095bf2da76a55a56ae820df7abc830f731660181f4398d4"
   },
   {
     "name": "broker__qemu.log",

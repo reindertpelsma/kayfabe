@@ -6,7 +6,7 @@
 [2026-10-17T02:07:26+00:00] qemu tarball rc=0  141137724
 [2026-10-17T02:07:40+00:00] cloudimg rc=0  625612288
 [2026-10-17T02:07:40+00:00] phase 3: tap
-[2026-10-17T02:07:40+00:00] nvktap0: nvktap0          DOWN           192.168.77.1/24    (DOWN/NO-CARRIER with no QEMU attached is NORMAL)
+[2026-10-17T02:07:40+00:00] nvktap0: nvktap0          DOWN           PRIVATE_IP_REDACTED/24    (DOWN/NO-CARRIER with no QEMU attached is NORMAL)
 [2026-10-17T02:07:40+00:00] guest_key: 399 bytes
 [2026-10-17T02:07:40+00:00] TRACK_A done
 [2026-10-17T02:12:58+00:00] TRACK_B done

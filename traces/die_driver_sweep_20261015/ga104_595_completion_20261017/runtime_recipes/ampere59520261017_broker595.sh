@@ -62,7 +62,7 @@ finish() {
 trap 'rc=$?; finish; echo "EXIT rc=$rc $(date -u -Is)"' EXIT
 for _ in $(seq 60); do [ -s "$KF_INTERACTIVE_DIR/qemu.pid" ] && break; kill -0 "$launcher" || exit 2; sleep 1; done
 python3 /root/amp595_broker_receipt.py "$KF_INTERACTIVE_DIR" "$KF_RUN_DIR" "$KF3_REV"
-G=(ssh -i /workspace/bench/guest_key -o BatchMode=yes -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -o LogLevel=ERROR -o ConnectTimeout=5 ubuntu@192.168.77.2)
+G=(ssh -i /workspace/bench/guest_key -o BatchMode=yes -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -o LogLevel=ERROR -o ConnectTimeout=5 ubuntu@PRIVATE_IP_REDACTED)
 ready=0
 for i in $(seq 1 100); do
   kill -0 "$launcher" || { tail -8 /root/prov/amp595_broker_x11_run.log; exit 3; }

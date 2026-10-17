@@ -102,11 +102,11 @@ wait $P2; say "cloudimg rc=$?  $(ls -la $BENCH/noble-server-cloudimg-amd64.img 2
 #   reads as "the guest never booted". ⚠ NOT persistent across a host reboot.
 say "phase 3: tap"
 ip link show nvktap0 >/dev/null 2>&1 || ip tuntap add dev nvktap0 mode tap
-ip addr add 192.168.77.1/24 dev nvktap0 2>/dev/null
+ip addr add PRIVATE_IP_REDACTED/24 dev nvktap0 2>/dev/null
 ip link set nvktap0 up
 sysctl -qw net.ipv4.ip_forward=1
-iptables -t nat -C POSTROUTING -s 192.168.77.0/24 ! -o nvktap0 -j MASQUERADE 2>/dev/null || \
-  iptables -t nat -A POSTROUTING -s 192.168.77.0/24 ! -o nvktap0 -j MASQUERADE
+iptables -t nat -C POSTROUTING -s PRIVATE_IP_REDACTED/24 ! -o nvktap0 -j MASQUERADE 2>/dev/null || \
+  iptables -t nat -A POSTROUTING -s PRIVATE_IP_REDACTED/24 ! -o nvktap0 -j MASQUERADE
 iptables -C FORWARD -i nvktap0 -j ACCEPT 2>/dev/null || iptables -I FORWARD 1 -i nvktap0 -j ACCEPT
 iptables -C FORWARD -o nvktap0 -j ACCEPT 2>/dev/null || iptables -I FORWARD 1 -o nvktap0 -j ACCEPT
 say "nvktap0: $(ip -br addr show nvktap0 2>&1)   (DOWN/NO-CARRIER with no QEMU attached is NORMAL)"
@@ -167,8 +167,8 @@ write_files:
             match: { name: "en*" }
             dhcp4: true
             optional: true
-            addresses: [192.168.77.2/24]
-            routes: [{to: default, via: 192.168.77.1, metric: 500}]
+            addresses: [PRIVATE_IP_REDACTED/24]
+            routes: [{to: default, via: PRIVATE_IP_REDACTED, metric: 500}]
             nameservers: { addresses: [8.8.8.8, 1.1.1.1] }
   - path: /etc/cloud/cloud.cfg.d/99-disable-network-config.cfg
     content: |
