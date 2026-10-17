@@ -200,10 +200,20 @@ newreceipt/timer andliveprice/PCI/KVM/diskchecks.
 
 | Instance | GPU | USD/hour incl150GB | StartUTC | StopUTC | Purpose | Ceiling |
 |---|---|---:|---|---|---|---|
-|56326220|RTX3070/GA104arch170impl4 unprivilegedRMverified|0.1555555556|2026-10-17T01:30:28.677605+00:00|ACTIVE; timer2714225 target2026-10-17T04:25:28.677605+00:00; hard05:00UTC|M1 nativecaps/M3 Linux595CUDA,gfx,broker; exact9d6f210ba|<=0.46USD at175minutes; campaign<=10.96USD+transfers if fulltimer|
+|56326220|RTX3070/GA104arch170impl4 unprivilegedRMverified|0.1555555556|2026-10-17T01:30:28.677605+00:00|RETIRED/APIabsent2026-10-17T04:02:45UTC; timer2714225+sleep2714228 canceledafterabsence|M1 nativecaps/M3 Linux595CUDA,gfx,broker; exact9d6f210ba|9137s/computeceil0.40USD; retiredcampaign10.90USD+transfers|
 
 All prior campaign-owned IDs were checked absent before creation; other account
 instances were not acted on. Immediately armed175minute timer and attached only
 the publicSSHkey. Startup/KVM/rootcapacity passed; native unprivileged MC_GET_ARCH_INFO proves GA104.
 Exact9d Linux595 native+guest raw/CUDA/gfx/broker functional acceptance PASS (warnings retained).
 FreshstockLTSC baseline active; Windows adapter/binding stillUNVERIFIED. No shared-host use.
+
+## Final GA104 retirement, 2026-10-17 04:02UTC
+
+Only56326220 destroyed/APIabsent04:02:45UTC afterallGPU/VMjobs stopped/NBD8detached and
+fulltextPUSH98dc717ec. Own timer2714225+verifiedsleepchild2714228 canceledAFTERabsence,
+nonrunningrechecked. Durationceil9137s/rate.1555555556USDh/computeceil.40USD; campaign10.90
+plusunbilledtransfers. Beforemanual04:15/original04:25/absolute05:00UTC deadlines.
+No ownrentalactive/no retiredaliasSSH. Linux595fullfunctionalPASS/warningsretained; Windows
+stockbaselinePASS, actualNVIDIA8088bindingUNVERIFIED/BasicDisplay; apps/holdUNRUN.
+No furtherboots/installerreplay. Nextnative/VFIOreference+verifiedINF/GSP-first-start setup.

@@ -1,0 +1,22 @@
+{
+  "owned_instance": 56326220,
+  "absent_in_live_API": true,
+  "absence_verified_utc": "2026-10-17T04:02:45.042502+00:00",
+  "evidence_pushed_before_destroy": "98dc717ec02a3f7498a1a856c7bfb45ece5d4678",
+  "owned_VM_GPU_work_stopped": true,
+  "owned_NBD8_detached": true,
+  "unowned_instances_untouched_count": 0,
+  "created_epoch_conservative": 1792200628.6776052,
+  "seconds_ceiling": 9137,
+  "quoted_usd_hour": 0.15555555555555556,
+  "compute_usd_ceiling": 0.4,
+  "transfers": "unbilled",
+  "night_deadline_met": true,
+  "timer_2714225_canceled_after_absence": true,
+  "verified_sleep_children_canceled_after_absence": [
+    2714228
+  ],
+  "process_2714225_runnable_after_cancel": false,
+  "process_2714228_runnable_after_cancel": false,
+  "timer_nonrunning_reverified_utc": "2026-10-17T04:06:31.143196+00:00"
+}

@@ -1,6 +1,22 @@
 # Die × driver campaign, 2026-10-15
 
-**STATUS: LIVE, 2026-10-17 02:56 UTC.** Only own56326220 active; original retirement timer unchanged.
+## Final update 2026-10-17 04:02UTC — GA104 wave retired; no own rental active
+
+Own56326220 destroyed/APIabsent04:02:45UTC/06:02:45CEST afterquiescence+textPUSH98dc717ec.
+Timer2714225+verifiedsleep2714228 canceledONLYafterabsence; bothnonrunningrechecked.
+9137s/computeceil0.40USD; campaign10.90USD+transfers/40USD. Allnightdeadlines met.
+Exact9dLinux595nativegates9/9+10/raw30/CUDA4/gfx andguestraw30/CUDA4/gfx10/broker PASS;
+246rawHB0,app27STALL/9nvAssert retained. Nativecaps95NZ/0xc100/97worddiff; no580row/capturedpage.
+FreshLTSCstockbaselineallchecksPASS; GPUstagingQGA/P19 actual19flags measured. NVIDIAsetup
+launchboundary reached, childPID/exitlost, scriptrc1, storedBasicDisplay10.0.26100.1;
+bindingUNVERIFIED, noCode0/43/apps/holdclaim. Recoveryrefusedreplay andstopped. Native580UNRUN.
+CPU900sbudgetcandidate fixes600s envelope vs measured315+child360+margin; failing-firsttestPASS,
+hardwareUNRUN. Nextnative/VFIOreference orverifiedNVIDIAimage+existingINF/GSP-before-first-start flow.
+No morewallloop, no sharedhost/master, D1-D6open/no familycomplete. Turingoffersstillnone.
+Evidence ga104_595_completion_20261017/FINAL.md +retirement.json. DoNOTSSHretiredaliases.
+All prior active-ownership/queued-work sections below are historical and superseded here.
+
+**STATUS: LIVE, 2026-10-17 04:02 UTC.** No own rental active;56326220retired/APIabsent.
 
 ## Update 2026-10-17 02:38 UTC — GA104 Linux595 raw and applications PASS
 
@@ -51,7 +67,7 @@ againstowner topic andmaster/ownerGPU/VM/checkout remainuntouched.
 Initial base: origin/claude/gpu-types-20261015 plus cursor fix2f99e673d;
 initial combined product revision23585a319.
 
-## Active wave 2026-10-17 — GA104 Linux595 complete; Windows baseline installing
+## Historical active wave 2026-10-17 — retired04:02UTC; results above
 
 Only own56326220/machine56506 ACTIVE, native unprivileged die GA104arch170/impl4.
 Created01:30:28UTC; originaltimer2714225 at04:25:28UTC/06:25:28CEST unchanged,

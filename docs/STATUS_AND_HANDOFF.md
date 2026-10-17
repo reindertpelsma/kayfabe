@@ -1,5 +1,21 @@
 # Status and handoff — where kayfabe v3 stands, and how to resume
 
+## Final update 2026-10-17 04:02UTC — GA104 wave retired; no own rental active
+
+Own56326220 destroyed/APIabsent04:02:45UTC/06:02:45CEST afterquiescence+textPUSH98dc717ec.
+Timer2714225+verifiedsleep2714228 canceledONLYafterabsence; bothnonrunningrechecked.
+9137s/computeceil0.40USD; campaign10.90USD+transfers/40USD. Allnightdeadlines met.
+Exact9dLinux595nativegates9/9+10/raw30/CUDA4/gfx andguestraw30/CUDA4/gfx10/broker PASS;
+246rawHB0,app27STALL/9nvAssert retained. Nativecaps95NZ/0xc100/97worddiff; no580row/capturedpage.
+FreshLTSCstockbaselineallchecksPASS; GPUstagingQGA/P19 actual19flags measured. NVIDIAsetup
+launchboundary reached, childPID/exitlost, scriptrc1, storedBasicDisplay10.0.26100.1;
+bindingUNVERIFIED, noCode0/43/apps/holdclaim. Recoveryrefusedreplay andstopped. Native580UNRUN.
+CPU900sbudgetcandidate fixes600s envelope vs measured315+child360+margin; failing-firsttestPASS,
+hardwareUNRUN. Nextnative/VFIOreference orverifiedNVIDIAimage+existingINF/GSP-before-first-start flow.
+No morewallloop, no sharedhost/master, D1-D6open/no familycomplete. Turingoffersstillnone.
+Evidence ga104_595_completion_20261017/FINAL.md +retirement.json. DoNOTSSHretiredaliases.
+All prior active-ownership/queued-work sections below are historical and superseded here.
+
 ## Update 2026-10-17 03:58UTC — GA104 Windows binding UNVERIFIED; all own GPU work stopped
 
 Only56326220 ACTIVE/quiescent pendingthistextPUSH+retirement; manualtarget04:15UTC,
@@ -53,7 +69,7 @@ Fresh stock-VGA LTSC baseline supervisor95215 waits for this evidence PUSH+remot
 Linux apps95214 finishedrc0. Windows580 actualbinding still UNVERIFIED/UNRUN.
 No shared-host use. D1-D6open/no mastermerge. Evidence ga104_595_completion_20261017/.
 
-## Active wave 2026-10-17 — GA104 Linux595 complete; Windows baseline installing
+## Historical active wave 2026-10-17 — retired04:02UTC; results above
 
 Only own56326220/machine56506 ACTIVE, native unprivileged die GA104arch170/impl4.
 Created01:30:28UTC; originaltimer2714225 at04:25:28UTC/06:25:28CEST unchanged,
