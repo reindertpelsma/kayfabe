@@ -1052,6 +1052,7 @@ mod tests {
         let mut c = [HeadCounts::default(); MAX_HEADS];
         let mut periods = [0; MAX_HEADS];
         periods[0] = p;
+        periods[1] = 3 * p; // a slower head beside it: the copies are judged against the FASTER tick
         assert_eq!(
             m.sample(0, &c, &periods, 0, 0),
             None,

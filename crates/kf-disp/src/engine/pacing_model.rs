@@ -11,6 +11,7 @@ use super::tests::{CORE, Ring, WIN, engine, fl, lit, m, ma};
 use super::*;
 use crate::class::put;
 use crate::pace::{Mailbox, Pacer, flip_completion_need};
+use crate::tick::Handoff;
 use std::collections::VecDeque;
 
 const MS: u64 = 1_000_000;
@@ -94,7 +95,7 @@ pub(super) struct Broker {
 }
 
 /// What a run measured, over the window after its first second.
-#[derive(Clone, Copy, Debug, Default)]
+#[derive(Clone, Debug, Default)]
 pub(super) struct Report {
     /// Flips whose completion the guest saw, per second.
     pub flips_per_s: f64,
@@ -120,6 +121,8 @@ pub(super) struct Report {
     pub bad_seq: u64,
     /// Handoffs of the tick source: to the broker, back to the free clock.
     pub handoffs: (u64, u64),
+    /// The handoffs the pacer reported to its caller (what the worker logs).
+    pub handoff_log: Vec<Handoff>,
     /// The smallest spacing between two consecutive ticks, ms.
     pub min_tick_gap_ms: f64,
 }
@@ -320,6 +323,7 @@ pub(super) fn run(cfg: Cfg, broker: Option<Broker>, secs: u64) -> Report {
     let (mut last_seq, mut bad_seq) = (0u64, 0u64);
     let (mut last_tick, mut min_gap) = (None::<u64>, u64::MAX);
     let (mut last_done, mut max_gap) = (None::<u64>, 0u64);
+    let mut handoff_log = Vec::new();
 
     while now < end {
         if !based && now >= 1_000_000_000 {
@@ -339,6 +343,7 @@ pub(super) fn run(cfg: Cfg, broker: Option<Broker>, secs: u64) -> Report {
             next_broker = Some(t + b.period_ns).filter(|n| *n < b.until_ns);
             got.extend(pacer.broker_tick(0, now));
         }
+        handoff_log.extend(pacer.take_handoffs().into_iter().map(|(_, h, _)| h));
         for t in got {
             if t.seq != last_seq + 1 {
                 bad_seq += 1;
@@ -466,6 +471,7 @@ pub(super) fn run(cfg: Cfg, broker: Option<Broker>, secs: u64) -> Report {
         max_gap_ms: max_gap as f64 / 1e6,
         bad_seq,
         handoffs: src.map_or((0, 0), |s| s.handoffs()),
+        handoff_log,
         min_tick_gap_ms: if min_gap == u64::MAX {
             0.0
         } else {
@@ -637,6 +643,11 @@ fn a_dead_broker_never_freezes_the_guest() {
     assert!(r.max_gap_ms < 100.0, "{r:?}");
     assert_eq!(r.bad_seq, 0, "{r:?}");
     assert_eq!(r.handoffs, (1, 1), "{r:?}");
+    assert_eq!(
+        r.handoff_log,
+        vec![Handoff::ToBroker, Handoff::ToFree],
+        "the worker is told of each handoff, once: {r:?}"
+    );
     assert!(near(r.flips_per_s, 60.0, 2.0), "{r:?}");
     assert!(r.min_tick_gap_ms >= 0.5 * 16.666, "no double tick: {r:?}");
 }
