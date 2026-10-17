@@ -2658,6 +2658,7 @@ impl Device {
         // the relay through a lock-free share; the gate decides when a request may be acted on
         let mut gate_c = CreditGate::new();
         let mut tick_seen = 0u64;
+        let mut tick_epoch = 0u32;
         let mut shown_head: Option<u32> = None;
         if let Some(b) = dp.broker.as_ref() {
             b.ticks().set_wake(dp.wake.clone());
@@ -2993,6 +2994,13 @@ impl Device {
             let mut ticked_free = 0u32;
             let now_ns = ns(Instant::now());
             let mut due_ticks = pacer.due(now_ns);
+            // a NEW broker connection numbers its ticks from 1 again: forget the old numbers
+            if let Some(b) = dp.broker.as_ref()
+                && b.ticks().epoch() != tick_epoch
+            {
+                tick_epoch = b.ticks().epoch();
+                gate_c.reset();
+            }
             if let Some(b) = dp.broker.as_ref()
                 && let Some(snap) = b.ticks().snapshot(tick_seen)
             {
@@ -5768,6 +5776,7 @@ mod tests {
             "b.ticks().set_wake(",
             "b.ticks().set_cap_hz(",
             "gate_c.reset()",
+            "b.ticks().epoch()",
         ] {
             assert!(code.contains(needed), "the worker no longer calls {needed}");
         }

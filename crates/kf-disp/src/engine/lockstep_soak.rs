@@ -846,6 +846,8 @@ struct World {
     relay: Option<Relay<FakeLink>>,
     broker: Broker,
     seen_connects: u32,
+    /// the TickShare epoch the worker last reset its gate for (display.rs does the same)
+    seen_epoch: u32,
     last_fresh_rx_ms: Option<u64>,
     was_connected: bool,
     crash_on_attach: bool,
@@ -956,6 +958,7 @@ impl World {
             relay,
             broker,
             seen_connects: 0,
+            seen_epoch: 0,
             last_fresh_rx_ms: None,
             was_connected: false,
             crash_on_attach: false,
@@ -1075,10 +1078,14 @@ impl World {
             self.broker
                 .on_connect(&mut self.wire.borrow_mut(), self.now, base);
             self.last_fresh_rx_ms = None;
+            self.tr(Ev::Connect);
+        }
+        // the worker resets its gate when the relay's epoch changes (display.rs: `b.ticks().epoch()`)
+        if self.share.epoch() != self.seen_epoch {
+            self.seen_epoch = self.share.epoch();
             if self.sc.reset_gate {
                 self.gate.reset();
             }
-            self.tr(Ev::Connect);
         }
         let connected = relay.connected();
         if self.was_connected && !connected {
@@ -2207,7 +2214,7 @@ fn books(o: &Out) {
     );
     if o.relay_on && o.advertised {
         assert!(
-            o.owed_unsolicited <= o.relay_c.recovered,
+            o.owed_unsolicited == 0,
             "seed {}: {} owed frames went out unsolicited while ticks were live, {} owed flushes",
             o.seed,
             o.owed_unsolicited,
@@ -2574,16 +2581,14 @@ fn lockstep_soak_s8_broker_crash_mid_frame() {
     }
 }
 
-/// ★ DEFECT (found by scenario 8, reported to the owner of the code; this test pins the CURRENT
-/// behaviour of `display.rs`, which resets the credit gate only when a guest life ends): after a broker
-/// restart the new connection's tick numbers start over at 1, the worker's gate still remembers the
-/// old connection's last number, calls every new tick STALE and ignores the broker's ticks and
-/// requests until the numbers pass the old one. The guest is not harmed (the clock ticks and flips
-/// complete); the lock step is silently off for as long as the old connection had been up.
-/// When the worker resets the gate at a new connection this test must be changed to expect `stale == 0`
-/// (the world's `reset_gate`, exercised by scenario 8).
+/// ★ The defect scenario 8 found (a worker that does not reset its credit gate at a new broker
+/// connection calls every tick of the new numbering STALE until the numbers pass the old one), FIXED in
+/// `display.rs` by the connection epoch the relay bumps in `TickShare::new_connection`. This test runs
+/// the world WITHOUT the reset (`reset_gate = false`) to keep the defect's size on record and to prove
+/// the harness would see it again if the epoch reset were removed; every other scenario resets at the
+/// epoch change and asserts `stale == 0`.
 #[test]
-fn lockstep_soak_defect_gate_not_reset_at_a_new_connection() {
+fn lockstep_soak_gate_without_the_epoch_reset_is_the_defect() {
     let outs = soak("defect: gate not reset", |_| {
         let mut sc = base_sc("lockstep_soak_defect_gate_not_reset_at_a_new_connection");
         sc.reset_gate = false;

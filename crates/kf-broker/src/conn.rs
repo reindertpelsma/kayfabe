@@ -1734,6 +1734,18 @@ impl<L: Link> Relay<L> {
         let Some(owed) = self.conn.as_ref().and_then(|c| c.owed) else {
             return;
         };
+        // ★ phase 2: an owed frame is a frame like any other — while the broker's ticks are live it
+        // goes only on an open request (the request it was attached under may have been answered
+        // since, or replaced); it waits for the next one, which `on_tick_pkt` flushes
+        if self.tick_live_at(now)
+            && self
+                .conn
+                .as_ref()
+                .and_then(|c| c.tick.as_ref())
+                .is_some_and(|t| t.reqs.open().is_none())
+        {
+            return self.rearm_owed(now);
+        }
         let j = match owed {
             Owed::Attach(j) => {
                 if !self.fits(j) {
@@ -1942,6 +1954,9 @@ impl<L: Link> Relay<L> {
                             && let Some(c) = self.conn.as_mut()
                         {
                             c.tick = Some(TickConn::default());
+                            if let Some(sh) = &self.ticks {
+                                sh.new_connection();
+                            }
                             say!(
                                 "broker ticks: ON (the broker's refresh drives the guest's vblank while it speaks; \
                                  frames go one per request; {BROKER_SILENCE_MS} ms of silence hands the vblank back to the clock)"
@@ -2280,13 +2295,16 @@ impl<L: Link> Relay<L> {
         };
         match tc.reqs.on_tick(&t) {
             TickVerdict::Stale => {}
-            TickVerdict::Fresh { .. } => {
+            TickVerdict::Fresh { opened: opened_now, .. } => {
                 tc.last_rx_ms = Some(now);
                 self.note_tick_live(now);
                 if let Some(sh) = &self.ticks {
                     sh.publish(&t);
                 }
                 self.progress(now, host);
+                if opened_now && self.conn.as_ref().is_some_and(|c| c.owed.is_some()) {
+                    self.flush_owed(now, host);
+                }
                 self.maybe_no_change(now, host);
             }
         }
@@ -2302,14 +2320,21 @@ impl<L: Link> Relay<L> {
             return;
         }
         tc.live = live;
+        // ★ one line per change, and a broker that flaps around 50 ms is said four times and then
+        // every 256th (the counters count every change)
         if live {
             tc.reqs.c.silence_resumes += 1;
-            say!(
-                "broker ticks: LIVE ({} resume(s)) — frames go one per request again",
-                tc.reqs.c.silence_resumes
-            );
+            if loud(tc.reqs.c.silence_resumes) {
+                say!(
+                    "broker ticks: LIVE ({} resume(s)) — frames go one per request again",
+                    tc.reqs.c.silence_resumes
+                );
+            }
         } else {
             tc.reqs.c.silence_fallbacks += 1;
+            if !loud(tc.reqs.c.silence_fallbacks) {
+                return;
+            }
             say!(
                 "broker ticks: SILENT for {BROKER_SILENCE_MS} ms ({} fallback(s)) — the free clock drives the guest's vblank and frames use the legacy credit",
                 tc.reqs.c.silence_fallbacks

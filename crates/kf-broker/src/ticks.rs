@@ -274,6 +274,10 @@ pub struct TickShare {
     want: AtomicU32,
     /// Requests replaced before the worker took them.
     want_overwritten: AtomicU64,
+    /// ★ Bumped at every connection that negotiated ticks: the worker resets its credit gate (a new
+    /// broker numbers its ticks from 1 again — without the reset every tick of the new connection
+    /// would be 'stale' until the numbers passed the old connection's).
+    epoch: AtomicU32,
     /// The VMM's vblank ceiling in Hz, told to the broker at opt-in (0 = unset: 75).
     cap_hz: AtomicU32,
     /// The worker's wake eventfd (one write per tick).
@@ -321,6 +325,18 @@ impl TickShare {
         if let Some(w) = self.wake.get() {
             let _ = w.signal();
         }
+    }
+
+    /// ★ **Relay**: a connection negotiated ticks — a new epoch, no request survives.
+    pub fn new_connection(&self) {
+        self.want.store(0, Ordering::Release);
+        self.epoch.fetch_add(1, Ordering::AcqRel);
+    }
+
+    /// ★ **Worker**: the connection epoch (0 before any).
+    #[must_use]
+    pub fn epoch(&self) -> u32 {
+        self.epoch.load(Ordering::Acquire)
     }
 
     /// ★ **Relay**, on a closed connection: no request survives it.
