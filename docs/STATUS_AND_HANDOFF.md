@@ -1,5 +1,18 @@
 # Status and handoff — where kayfabe v3 stands, and how to resume
 
+## Update 2026-10-17 03:34UTC — GA104 Windows install incomplete; ONE saved-state recovery
+
+Only56326220 ACTIVE; originaltimer04:25:28UTC unchanged. New manualretirementtarget
+**04:15UTC/06:15CEST**, recoverycommandsdeadline04:05UTC, all-rentAPIabsence05:00UTC.
+BaselinePASS/PUSHbfb950153; GPUstagingQGA+P19 verified, installerprogram4196 timeout600s,
+ownedcleanstop03:29:05. No actual8088 binding/Code measured; QEMU remainedCold/trapped0.
+ONE stockrecovery inspects durablebefore-setupmarker/actualsavedbinding. Neverreplay
+uncertainsetup. Onlyif clean-shutdown+absentmarker+no8088 proves setupUNRUN may cached
+preparation leadtoFIRSTNVIDIAsetup; elseconfigurealreadybounddriver orstopUNVERIFIED.
+Batchclass+serviceGSP1 andcachedpackage transport, thenonecoldGPUacceptanceifpossible.
+Plan ga104_595_completion_20261017/RECOVERY_PLAN.md. NativefallbackUNRUN/cutoffpassed.
+Linux595raw30/CUDA4/gfx10/brokerPUSHED;27STALL/9nvAssert retained. No sharedhost/master.
+
 ## Update 2026-10-17 03:15UTC — fresh GA104 Windows baseline PASS, GPU staging active
 
 Only own56326220 ACTIVE/originaltimer04:25:28UTC/manual03:55/APIabsence05:00UTC unchanged.
