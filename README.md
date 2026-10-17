@@ -47,12 +47,23 @@ Master is not the newest code: the latest Windows performance work lives on bran
 
 ## What runs today
 
-- **Windows 11:** Minecraft, Unigine Heaven (Direct3D 11 and OpenGL), GravityMark (Direct3D 12 and Vulkan), Edge with 4K60 hardware-decoded video
-  ([matrix](traces/win11_userring_20261014/matrix-eb9f2aa3-20261014-2321.md)). Reported by the owner, evidence not yet committed: SolidWorks, Blender.
-- **Linux:** the 30-arm test suite passes; a desktop with display, 3 of 3 suspend/resume cycles; gates 9/9 on the real GPU.
-- **CUDA applications on Linux:** 61 of 65 apps pass (CUDA samples, PyTorch, Hugging Face generation, llama.cpp), plus 6 of 6 stream probes and 100 processes in one boot;
-  outputs match bare metal (earlier run, rented RTX 3060; [matrix](docs/design/V3_APP_MATRIX.md)). The 4 failures use unified (UVM) memory paging and fail loudly.
-- Verified on an RTX 4070 (AD104); other dies are partly tested ([`docs/STATUS_DETAIL.md`](docs/STATUS_DETAIL.md)).
+**Windows 11 guest** (stock driver 580.88; [matrix](traces/win11_userring_20261014/matrix-eb9f2aa3-20261014-2321.md), revision `eb9f2aa3`; pass = the app's own completion, no host Xid, no GPU reset):
+
+| app | result |
+|---|---|
+| Minecraft Java | in a world, 6 minutes walking |
+| Unigine Heaven, Direct3D 11 and OpenGL | pass; fps in the table above |
+| GravityMark | Direct3D 12 and Vulkan pass (134 and 96 fps at that revision) |
+| Edge + YouTube 4K60, hardware decode (NVDEC) | 10:34 played to the end |
+| SolidWorks 2026, Blender 5.2 LTS | reported by the owner (installs, renders, passes its Performance Test); evidence not yet committed |
+
+**Linux guest** (stock driver): the 30-arm suite passes (also with the relay forced on); gates 9/9 on the real GPU; a desktop with display planes (overlay, YUV)
+and 3 of 3 suspend/resume cycles; **61 of 65 CUDA apps** (CUDA samples, PyTorch, Hugging Face generation, llama.cpp), 6 of 6 stream probes and 100 processes in one boot, with
+outputs equal to bare metal (earlier run, rented RTX 3060; [matrix](docs/design/V3_APP_MATRIX.md)). The 4 failures use unified (UVM) memory paging and fail loudly.
+
+**GPUs:** all of the above on the owner's RTX 4070 (AD104). Linux guests also passed on GA106 (RTX 3060), TU116, AD104 (RTX 4000 Ada), GB205 and, more recently, AD102
+(Linux guest driver 590); Windows desktops run on AD106 and AD103 with a borrowed display page, GA104 only has the GPU, and GB206 under Windows is still open
+(Code 43). Per-die table: [`docs/STATUS_DETAIL.md`](docs/STATUS_DETAIL.md).
 
 **Not finished:** Windows sleep/wake does not survive; Edge can reset after 7 to 16 minutes of playback; other GPU dies need more work under Windows; the
 security model is designed but not audited, so no public binary ships. The full list is in [`docs/STATUS_DETAIL.md`](docs/STATUS_DETAIL.md).
