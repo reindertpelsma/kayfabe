@@ -51,8 +51,8 @@ pass = the app's own completion, 0 host Xid, 0 GSP resets, 0 guest `nvlddmkm` 41
 | app | result |
 |---|---|
 | Minecraft Java | in a world, 6 minutes walking, frames moving |
-| Unigine Heaven, Direct3D 11 | 18.0 fps windowed, 21.2 fps fullscreen |
-| Unigine Heaven, OpenGL | passes: windowed 271 fps; fullscreen 29.9 fps (see the limits table) |
+| Unigine Heaven, Direct3D 11 (Ultra, 1080p) | about 89 to 102 fps on the production path (newer revisions `28a0ee9c`/`b4040417`, 2026-10-16, on branches); native is 330 (see the performance section below) |
+| Unigine Heaven, OpenGL (Ultra, 1080p) | passes: about 211 to 233 fps on the production path (same revisions); fullscreen is capped at 30 fps (see the limits table) |
 | GravityMark | Direct3D 12 134.2 fps, Vulkan 95.9 fps |
 | Edge + YouTube Big Buck Bunny 4K60, hardware decode (NVDEC) | 10:34 played to the end, 0 Xid, 0 TDR ([`traces/win11_userring_20261014/README.md`](traces/win11_userring_20261014/README.md), run 1 at `a8424ae2`) |
 
@@ -128,7 +128,7 @@ GPU-free tests at this tree: **3138 passed, 0 failed, 12 ignored** across the 22
 | S3 resume on FSP-booted families (Hopper, Blackwell) | not built ([`V3_S3_RESUME.md`](docs/design/V3_S3_RESUME.md)) |
 | Pre-v3 `kayfabe-*` crates | frozen; kept only so the 30-arm raw client (`kayfabe-rm-ladder`) builds |
 | Security | not audited; no public binary should ship before the stage-2 blockers close (`docs/OWNER_RULINGS.md` §P). Open items include the graphics-context hold timeout, BAR1 and mapping quotas, twin VRAM accounting and scrubbing between tenants ([`V3_SECURITY_MODEL.md`](docs/design/V3_SECURITY_MODEL.md) §9, [`V3_FEATURE_GAPS.md`](docs/design/V3_FEATURE_GAPS.md)) |
-| Performance on Windows | master: the Heaven rows above (older revision). Newer, experimental numbers near native are in the section above, not on master; the safe implementation has no Windows hardware run yet; the native 330/342 fps references are inherited, not re-measured |
+| Performance on Windows | the production path reaches about 30% (Direct3D 11) and about 65% (OpenGL) of the native numbers; experimental numbers near native are in the section above, not on master; the safe implementation has no Windows hardware run yet; the native 330/342 fps references are inherited, not re-measured |
 
 ## Supported hardware and drivers
 
