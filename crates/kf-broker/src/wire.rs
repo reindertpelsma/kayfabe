@@ -132,6 +132,8 @@ pub const TICK_F_WANT_FRAME: u32 = 1 << 28;
 pub const TICK_F_CLOCK_ONLY: u32 = 1 << 29;
 /// Refresh-word bits 30..31: reserved, zero.
 pub const TICK_F_RESERVED: u32 = 3 << 30;
+/// `NVKVM_BROKER_TICK_REQ_TIMEOUT_NS`: the broker re-opens an unanswered request after this (100 ms).
+pub const TICK_REQ_TIMEOUT_NS: u32 = 100_000_000;
 /// The shortest `refresh_ns` a tick may carry (1 ms); 0 = unknown is also allowed.
 pub const TICK_REFRESH_MIN_NS: u32 = 1_000_000;
 /// `NVKVM_BROKER_GUEST_MAX_HZ`: the VMM's vblank ceiling when it says nothing (D3).

@@ -159,6 +159,19 @@ fn every_protocol_value_matches_the_header_text_both_ways() {
         ("NVKVM_BROKER_CMD_F_ALL", u64::from(CMD_F_SHM)),
         ("NVKVM_BROKER_CLIENT_CLIPBOARD", u64::from(CLIENT_CLIPBOARD)),
         ("NVKVM_BROKER_MAX_DIM", u64::from(MAX_DIM)),
+        // phase 2 (docs/design/V3_DISPLAY_PACING_20261017.md section 11.2)
+        ("NVKVM_BROKER_CAP_TICK", u64::from(CAP_TICK)),
+        ("NVKVM_BROKER_CLIENT_TICK", u64::from(CLIENT_TICK)),
+        ("NVKVM_BROKER_EV_TICK", u64::from(EV_TICK)),
+        ("NVKVM_BROKER_CMD_NO_CHANGE", u64::from(CMD_NO_CHANGE)),
+        ("NVKVM_BROKER_TICK_REFRESH_MASK", u64::from(TICK_REFRESH_MASK)),
+        ("NVKVM_BROKER_TICK_REFRESH_MIN_NS", u64::from(TICK_REFRESH_MIN_NS)),
+        ("NVKVM_BROKER_TICK_F_WANT_FRAME", u64::from(TICK_F_WANT_FRAME)),
+        ("NVKVM_BROKER_TICK_F_CLOCK_ONLY", u64::from(TICK_F_CLOCK_ONLY)),
+        ("NVKVM_BROKER_TICK_F_RESERVED", u64::from(TICK_F_RESERVED)),
+        ("NVKVM_BROKER_TICK_REQ_TIMEOUT_NS", u64::from(TICK_REQ_TIMEOUT_NS)),
+        ("NVKVM_BROKER_GUEST_MAX_HZ", u64::from(GUEST_MAX_HZ)),
+        ("NVKVM_BROKER_GUEST_MIN_HZ", u64::from(GUEST_MIN_HZ)),
     ]
     .into_iter()
     .collect();
@@ -427,4 +440,63 @@ fn the_record_layouts_match_the_compiled_header() {
         let at = want[&format!("pkt.{f}")];
         assert_eq!(p[at], i as u8 + 1, "pkt.{f} at {at}");
     }
+}
+
+/// ★ Phase 2: the `EV_TICK` overlay's layout from the compiler — every field at the offset
+/// `Pkt::tick_pkt` writes it (the doc's table: tick_seq@8, refresh word@12, present_ns@16).
+#[test]
+fn the_tick_event_layout_matches_the_compiled_header() {
+    let dir = std::env::temp_dir().join(format!("kfb-proto-tick-{}", std::process::id()));
+    std::fs::create_dir_all(&dir).unwrap();
+    std::fs::copy(header_dir().join("nvkvm_broker_proto.h"), dir.join("nvkvm_broker_proto.h")).unwrap();
+    let fields = ["type", "flags", "seq", "tick_seq", "refresh_word", "present_ns"];
+    let mut prog = String::from(
+        "#include <stdio.h>\n#include <stddef.h>\n#include \"nvkvm_broker_proto.h\"\nint main(void) {\n",
+    );
+    prog.push_str("printf(\"size %zu\\n\", sizeof(struct nvkvm_broker_tick_pkt));\n");
+    for f in fields {
+        prog.push_str(&format!(
+            "printf(\"{f} %zu\\n\", offsetof(struct nvkvm_broker_tick_pkt, {f}));\n"
+        ));
+    }
+    prog.push_str("return 0; }\n");
+    std::fs::write(dir.join("c.c"), prog).unwrap();
+    let out = Command::new("cc")
+        .args(["-std=c11", "-Wall", "-Werror", "-o"])
+        .arg(dir.join("c"))
+        .arg(dir.join("c.c"))
+        .arg("-I")
+        .arg(&dir)
+        .output()
+        .unwrap();
+    assert!(out.status.success(), "{}", String::from_utf8_lossy(&out.stderr));
+    let run = Command::new(dir.join("c")).output().unwrap();
+    let got: BTreeMap<String, usize> = String::from_utf8(run.stdout)
+        .unwrap()
+        .lines()
+        .map(|l| {
+            let (k, v) = l.split_once(' ').unwrap();
+            (k.to_string(), v.parse().unwrap())
+        })
+        .collect();
+    let _ = std::fs::remove_dir_all(&dir);
+    assert_eq!(got["size"], wire::PKT_SIZE);
+    let t = wire::TickPkt {
+        tick_seq: 0x1111_1111,
+        refresh_ns: 0x0222_2222,
+        want: true,
+        clock_only: false,
+        present_ns: 0x4444_4444_3333_3333,
+    };
+    let b = wire::Pkt::tick_pkt(0x5555_5555, 0x0707, &t).encode();
+    let at = |name: &str, len: usize| &b[got[name]..got[name] + len];
+    assert_eq!(at("type", 2), &wire::EV_TICK.to_le_bytes());
+    assert_eq!(at("flags", 2), &0x0707u16.to_le_bytes());
+    assert_eq!(at("seq", 4), &0x5555_5555u32.to_le_bytes());
+    assert_eq!(at("tick_seq", 4), &0x1111_1111u32.to_le_bytes());
+    assert_eq!(
+        at("refresh_word", 4),
+        &(0x0222_2222u32 | wire::TICK_F_WANT_FRAME).to_le_bytes()
+    );
+    assert_eq!(at("present_ns", 8), &0x4444_4444_3333_3333u64.to_le_bytes());
 }
