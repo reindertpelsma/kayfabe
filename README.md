@@ -7,9 +7,14 @@ real, unmodified NVIDIA driver (Windows or Linux) against it. Kayfabe reads what
 tables, doorbells) and has the real host GPU do the work, from an **unprivileged** host process that talks to the host
 driver as an ordinary RM client. It is written in Rust.
 
-**STATUS: LIVE, 2026-10-15.** Research stage: no installer, no stable interface, not security-audited. Everything below
+**STATUS: LIVE, 2026-10-17.** Research stage: no installer, no stable interface, not security-audited. Everything below
 names its evidence; what is measured is kept apart from what is planned. Long form: [`docs/STATUS_DETAIL.md`](docs/STATUS_DETAIL.md);
 resume point and open decisions: [`docs/STATUS_AND_HANDOFF.md`](docs/STATUS_AND_HANDOFF.md).
+
+> **Master is not the newest code.** The tables below describe master. Since 2026-10-16 the work has moved to branches that are not merged yet: the Windows
+> performance work (`claude/win-lifecycle-p1b-20261016`, `claude/d3d11-gap-20261016`, `claude/perf-strategy-20261016`), the GPU die sweep
+> (`codex/sweep-blackwell-20261015` and related `codex/*`), and the release plan (`claude/release-ledger-20261016`). Their results are summarised, with their limits, in
+> [Windows performance, newest measurements](#windows-performance-newest-measurements-experimental-not-on-master) below.
 
 ![Windows 11 on kayfabe: desktop and nvidia-smi under the stock 580.88 driver (photo, 2026-10-09, run 223)](traces/windows_on_kayfabe.png)
 
@@ -54,6 +59,21 @@ pass = the app's own completion, 0 host Xid, 0 GSP resets, 0 guest `nvlddmkm` 41
 Reported by the owner, **no evidence committed yet**: SolidWorks Design 2026 (academic) installs, renders and passes its own
 Performance Test (graphics 39.2 s, overall 79.6 s, from a photo; launcher: `scripts/bench/windows/kfagent_ogl/launch-2990-solidworks.sh`);
 Blender 5.2.2 LTS renders its viewport; YouTube 4K60 watched for 30 minutes.
+
+### Windows performance, newest measurements (experimental, not on master)
+
+Unigine Heaven 4.0, Ultra, 1080p, same RTX 4070, Windows 11 guest. Taken on branches after the revisions above, so they do not describe master. Details and limits:
+[`traces/perf_status_20261017/README.md`](traces/perf_status_20261017/README.md).
+
+| | Direct3D 11 | OpenGL |
+|---|---|---|
+| native Windows (VFIO), from an earlier campaign, not re-measured | 330 fps | 342 fps |
+| kayfabe, production path | 89 to 102 fps | about 211 to 233 fps |
+| kayfabe, experimental build (skips reading guest pushbuffers after the first object binding; the D3D11 figure also reads the private ring less often, the OpenGL figure does not) | 296 to 299 fps (about 90% of native) | 353 to 359 fps (within run-to-run noise of native) |
+
+What changed: the production path pays for reading and parsing the guest's command buffers on every submission (PCIe reads for Direct3D 11, CPU parsing for OpenGL); the
+experimental build skips that once a channel is set up. It is research code: it is not safe to ship yet (a guest doing something unexpected gets an explicit reset of its own channel), it was run on
+Heaven only, and the safe version of the same design has no hardware run yet. Read these as "the ceiling looks close to native", not as a result.
 
 **Linux guest** (stock driver; `docs/design/V3_USER_RING_EVENT_LOOP_20261014.md` §8, `traces/linux_s3_resume_20261014/fixed/`,
 `traces/linux_planes_oracle_20261014/`):
@@ -108,7 +128,7 @@ GPU-free tests at this tree: **3138 passed, 0 failed, 12 ignored** across the 22
 | S3 resume on FSP-booted families (Hopper, Blackwell) | not built ([`V3_S3_RESUME.md`](docs/design/V3_S3_RESUME.md)) |
 | Pre-v3 `kayfabe-*` crates | frozen; kept only so the 30-arm raw client (`kayfabe-rm-ladder`) builds |
 | Security | not audited; no public binary should ship before the stage-2 blockers close (`docs/OWNER_RULINGS.md` §P). Open items include the graphics-context hold timeout, BAR1 and mapping quotas, twin VRAM accounting and scrubbing between tenants ([`V3_SECURITY_MODEL.md`](docs/design/V3_SECURITY_MODEL.md) §9, [`V3_FEATURE_GAPS.md`](docs/design/V3_FEATURE_GAPS.md)) |
-| Performance on Windows | only the numbers above; no VFIO or bare-metal comparison is measured at this revision |
+| Performance on Windows | master: the Heaven rows above (older revision). Newer, experimental numbers near native are in the section above, not on master; the safe implementation has no Windows hardware run yet; the native 330/342 fps references are inherited, not re-measured |
 
 ## Supported hardware and drivers
 
