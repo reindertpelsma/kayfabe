@@ -13,11 +13,14 @@ Master is not the newest code: the latest Windows performance work lives on bran
 
 ## Why it is interesting
 
-| | host keeps the GPU | guest driver | needs |
-|---|---|---|---|
-| VFIO passthrough | no, one VM owns it | stock | any GPU |
-| NVIDIA vGPU | yes | vendor vGPU driver | data-centre GPU, licence |
-| **kayfabe** | **yes** | **stock, unmodified** | a consumer GPU (Turing to Blackwell), the open NVIDIA host driver |
+| | host keeps the GPU | safe for untrusted guests | guest driver | needs |
+|---|---|---|---|---|
+| VFIO passthrough | no, one VM owns it | yes | stock | any GPU |
+| NVIDIA vGPU | no | yes | vendor vGPU driver | data-centre GPU, licence |
+| API forwarding ([nvkvm-pv](https://github.com/reindertpelsma/nvkvm-pv) / virtio-nvgpu) | yes | no | a custom guest module | a consumer GPU |
+| **kayfabe** | **yes** | **yes, by design (not yet audited)** | **stock, unmodified** | a consumer GPU (Turing to Blackwell), the open NVIDIA host driver |
+
+The rows compare technologies, not projects: nvkvm-pv is the author's earlier project and is one implementation of the API-forwarding approach (the one other people may know as virtio-nvgpu).
 
 - **Nothing is patched.** No host or guest driver or kernel is modified; the guest uses NVIDIA's own installer.
 - **The guest is treated as hostile.** Every host action is authored by kayfabe from a few unprivileged verbs, never forwarded from guest bytes.
