@@ -10,5 +10,23 @@
     "raw_bytes": 41,
     "raw_sha256": "48fea04ffd418f458b8272325217075b7b6b29a6455e9935551da1d99a8b226c",
     "sanitized_sha256": "48fea04ffd418f458b8272325217075b7b6b29a6455e9935551da1d99a8b226c"
+  },
+  {
+    "name": "ampere595_die.log",
+    "raw_bytes": 209,
+    "raw_sha256": "b7e1ffe6d7e67933a33778e24fedc2eaeba9e74af43abf4a85b66816fcc84a29",
+    "sanitized_sha256": "b7e1ffe6d7e67933a33778e24fedc2eaeba9e74af43abf4a85b66816fcc84a29"
+  },
+  {
+    "name": "ampere595_native_caps.txt",
+    "raw_bytes": 2363,
+    "raw_sha256": "0d8671c91c61cb163b98b115a9569e5d1450a00ab9b03fedd9cb4394bea5777f",
+    "sanitized_sha256": "0d8671c91c61cb163b98b115a9569e5d1450a00ab9b03fedd9cb4394bea5777f"
+  },
+  {
+    "name": "ampere595_native_caps.err",
+    "raw_bytes": 0,
+    "raw_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "sanitized_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
   }
 ]
