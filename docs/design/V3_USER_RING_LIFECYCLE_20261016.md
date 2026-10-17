@@ -153,14 +153,14 @@ USER-ring relay is created) and no `USER_RING_LAZY_OBSERVE` line. **Falsifier: a
 
 ### Tests (GPU-free; `cargo test --release -p kf-chan -p kf-rm -p kf-trap -p kf-qemu`)
 
-* `kf-chan/tests/user_lazy_turn.rs` (26): the real `Relay` over a recording `Io`: A (hits, cursor == cached, fresh-only idle, Scan / Window fresh, every mode change, stale cache after a Window, migration to a lower `GP_PUT`, mapping walk, out-of-range `GP_PUT`),
+* `kf-chan/tests/user_lazy_turn.rs` (27): the real `Relay` over a recording `Io`: A (hits, cursor == cached, fresh-only idle, Scan / Window fresh, every mode change, stale cache after a Window, migration to a lower `GP_PUT`, mapping walk, out-of-range `GP_PUT`),
   B (interval, off = every turn, after a wait, while waiting, credit floor, open segment, over-count, write-back lag, small rings, D6 guard), retire / reset, counter identities, no environment access.
-* `user_lifecycle_props.rs` (+9): **`lazy_off_is_bit_identical_to_the_base_relay_over_a_long_randomised_sequence`** (600 streams, 167,887 turns, 158,636 entries, every `Io` call hashed; the golden was computed on the UNCHANGED relay and is checked for
+* `user_lifecycle_props.rs` (+11): **`lazy_off_is_bit_identical_to_the_base_relay_over_a_long_randomised_sequence`** (600 streams, 167,887 turns, 158,636 entries, every `Io` call hashed; the golden was computed on the UNCHANGED relay and is checked for
   `Relay::new`, `LazyConfig::OFF`, both switches `0`, and interval 1 / 0 with the cache off; the ON configurations must differ), ON-versus-OFF forwarding identity over 4 configurations x 300 streams x all four lifecycle modes x lagging PBDMA, write-back liveness,
-  D6 bounds, I8 with poison above `GP_PUT`, hostile `GP_PUT`, I4 at every flip, 8 post-switch scanned entries per ring switch.
+  D6 bounds, I8 with poison above `GP_PUT`, hostile `GP_PUT`, I4 at every flip, 8 post-switch scanned entries per ring switch, refusal / retire, the credit floor under a slow PBDMA.
 * `user_lifecycle_model.rs` (+6): the registration cycle with and without a ring switch, each rule alone, the SYNC_WAIT scenario, a full guest ring, all in every interleaving with lazy ON; plus a child run of 33 existing scenarios with `KF_TEST_LAZY=1` (every `Cfg::new` opts in).
 * `user_lifecycle_stress.rs` (+2): real threads, well-behaved guest with concurrent registrations (default interval: 9.5 M entries bit-exact, 8.3 M cache hits, 8.1 M skipped looks, 29 k D6 forced looks in one run) and the hostile writer.
-* `user_lazy_model.rs` (17, from the doorbell-contract lineage): the abstract predicates; `user_lazy.rs` unit tests (+5); `kf-qemu` pins (+3): reachability, the switches read once, the counters / retire hook / walk gate wiring.
+* `user_lazy_model.rs` (17, from the doorbell-contract lineage): the abstract predicates; `user_lazy.rs` unit tests (+9 over the lineage's 0 in that module; the lib total is 198); `kf-qemu` pins (+7): reachability, the switches read once, the counters / retire hook / walk gate wiring, no switch read in `turn()`.
 
 ### Mutation table (`scripts/lazy_mutation_check.py`; full names in `traces/lazy_prod_20261017/mutation_table.md`)
 
