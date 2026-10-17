@@ -47,7 +47,7 @@ Master is not the newest code: the latest Windows performance work lives on bran
 
 ## What runs today
 
-**Windows 11 guest** (stock driver 580.88; [matrix](traces/win11_userring_20261014/matrix-eb9f2aa3-20261014-2321.md), revision `eb9f2aa3`; pass = the app's own completion, no host Xid, no GPU reset):
+**Windows 11 guest** (Windows 11 Pro and Enterprise LTSC; NVIDIA's stock 580.88 driver and installer; a few registry settings are required, listed in [`docs/WINDOWS_GUEST_SETUP.md`](docs/WINDOWS_GUEST_SETUP.md); [matrix](traces/win11_userring_20261014/matrix-eb9f2aa3-20261014-2321.md) on Windows 11 Pro, revision `eb9f2aa3`; pass = the app's own completion, no host Xid, no GPU reset):
 
 | app | result |
 |---|---|
@@ -55,9 +55,12 @@ Master is not the newest code: the latest Windows performance work lives on bran
 | Unigine Heaven, Direct3D 11 and OpenGL | pass; fps in the table above |
 | GravityMark | Direct3D 12 and Vulkan pass (134 and 96 fps at that revision) |
 | Edge + YouTube 4K60, hardware decode (NVDEC) | 10:34 played to the end |
-| SolidWorks 2026, Blender 5.2 LTS | reported by the owner (installs, renders, passes its Performance Test); evidence not yet committed |
+| CUDA in the guest | works: `nvidia-smi` shows CUDA 13.0; matrix multiply (N=2048) about 1.9 TFLOPS; Blender 5.2 Cycles renders with CUDA and OptiX (OptiX 5.3 s against 3.4 s native, 1.57x slower; measured 2026-10-15 on branch `claude/perf-win-20261015`) |
+| SolidWorks 2026 | reported by the owner (installs, renders, passes its Performance Test); evidence not yet committed |
 
-**Linux guest** (stock driver): the 30-arm suite passes (also with the relay forced on); gates 9/9 on the real GPU; a desktop with display planes (overlay, YUV)
+Minecraft, Blender and SolidWorks run unmodified, from the vendors' official, complete installers (nothing stripped down or patched).
+
+**Linux guest** (NVIDIA's stock driver, unmodified, nothing to set): the 30-arm suite passes (also with the relay forced on); gates 9/9 on the real GPU; a desktop with display planes (overlay, YUV)
 and 3 of 3 suspend/resume cycles; **61 of 65 CUDA apps** (CUDA samples, PyTorch, Hugging Face generation, llama.cpp), 6 of 6 stream probes and 100 processes in one boot, with
 outputs equal to bare metal (earlier run, rented RTX 3060; [matrix](docs/design/V3_APP_MATRIX.md)). The 4 failures use unified (UVM) memory paging and fail loudly.
 
