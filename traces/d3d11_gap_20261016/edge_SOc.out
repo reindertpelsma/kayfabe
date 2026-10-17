@@ -1,0 +1,8 @@
+pushed
+KFPLAUNCH ok mode=interactive user=kayfabe-windows\kfadmin
+START 22:22:03.826 user=kfadmin session=1
+EDGE exe=C:\Program Files (x86)\Microsoft\Edge\Application\msedge.exe exists=True
+EDGE alive_after_60s=False elapsed_s=60
+EDGE_DONE
+END 22:23:04.032
+

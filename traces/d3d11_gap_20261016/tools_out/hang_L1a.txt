@@ -1,0 +1,9 @@
+# L1a: 338 timestamped display lines, median interval 2.00 s
+== d3d11: window 247 s, 121 display samples joined with dmon
+  stall   n=   2 ( 1.7%) kms_mean=  2.5 gpu_sm%_mean= 95.8 power_W_mean=116.8 idle_gpu(<20%)=0 busy_gpu(>=50%)=2
+  slow    n=   1 ( 0.8%) kms_mean= 31.9 gpu_sm%_mean= 96.0 power_W_mean= 96.0 idle_gpu(<20%)=0 busy_gpu(>=50%)=1
+  normal  n= 118 (97.5%) kms_mean= 59.4 gpu_sm%_mean= 95.7 power_W_mean=125.8 idle_gpu(<20%)=0 busy_gpu(>=50%)=118
+== gl: window 247 s, 123 display samples joined with dmon
+  stall   n=   6 ( 4.9%) kms_mean=  0.8 gpu_sm%_mean= 96.5 power_W_mean=169.4 idle_gpu(<20%)=0 busy_gpu(>=50%)=6
+  slow    n=   2 ( 1.6%) kms_mean= 29.9 gpu_sm%_mean=100.0 power_W_mean=188.8 idle_gpu(<20%)=0 busy_gpu(>=50%)=2
+  normal  n= 115 (93.5%) kms_mean= 59.8 gpu_sm%_mean= 97.7 power_W_mean=182.4 idle_gpu(<20%)=0 busy_gpu(>=50%)=115

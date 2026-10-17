@@ -1,0 +1,38 @@
+ASSERT time=2026-10-16T23:41:49+02:00 qpid=2483755
+ASSERT host_driver=595.91.07
+ASSERT guest_driver=580.88
+ASSERT kf3_exe=/var/lib/kf-windows-20261005/kf3-bins/b4040417/qemu-system-x86_64
+ASSERT kf3_env_begin
+KF3_ASYNC_PREEMPT=1
+KF3_DEFERRED_API=1
+KF3_DISPLAY_CAPS_PROBE=1
+KF3_DISPLAY_CTRL_PROBE=1
+KF3_DISPLAY_ILUT_OFFSET_256=1
+KF3_DISPLAY_IMP_ENABLE=1
+KF3_DISPLAY_LUT_MIRROR=1
+KF3_DISPLAY_SDR_COLOR=1
+KF3_GFX_POOL_PROBE=1
+KF3_KERNEL_GR_CE=1
+KF3_KERNEL_GR_WORK=1
+KF3_LIFECYCLE_COUNT=1
+KF3_LIFECYCLE_PERIOD_S=5
+KF3_MEMORY_LIST_PROBE=1
+KF3_PREEMPT_BIND_PROBE=1
+KF3_REV=b4040417
+KF3_SW_RUNLIST_HOST_OWNED=1
+KF3_SW_RUNLIST_PROBE=1
+KF3_TRANSLATED_CE_RELAY=1
+KF3_WIN_TWIN_DEFAPI_OBJECT=1
+KF3_WIN_USER_CHANNELS_PASSTHROUGH=1
+KF3_ZCULL_BIND_PROBE=1
+ASSERT kf3_env_end
+ASSERT cmdline_flags=kf3-gpu,gpu-uuid=b7594b81-b2a0-47cb-b2b3-b0b7dcc60267,fb-mb=8192,bar1-size=8589934592,bar2-size=33554432,display=on,guest-driver=580.65.06,bus=pci.0,addr=0x6,id=kf0,display-broker=/run/user/1000/nvkvm/windows-run2995.sock,display-broker-uid=1000,gop=on
+ASSERT broker=ubuntu   /data/claude-resize/broker-bin/nvkvm-display-broker-666ea966 --socket /run/user/1000/nvkvm/windows-run2995.sock --backend wayland --persist --verbose 
+ASSERT MEMREC assert 2026-10-16T23:41:52+02:00 epoch=1792186912.711743089
+ASSERT MEMREC free:                total        used        free      shared  buff/cache   available
+ASSERT MEMREC free: Mem:           30719       25061        1498       18303       22773        5658
+ASSERT MEMREC free: Swap:              0           0           0
+ASSERT MEMREC meminfo: MemFree:         1533952 kB MemAvailable:    5794460 kB Cached:         23078392 kB SwapTotal:             0 kB SwapFree:              0 kB Dirty:               344 kB Shmem:          18742348 kB 
+ASSERT MEMREC psi.memory: some avg10=0.00 avg60=0.00 avg300=0.01 total=2145287814
+ASSERT MEMREC psi.memory: full avg10=0.00 avg60=0.00 avg300=0.01 total=2140031824
+ASSERT MEMREC vmstat: workingset_refault_anon 7871971 workingset_refault_file 255874482 pswpin 7891195 pswpout 6718870 pgmajfault 7805619 

@@ -1,0 +1,3 @@
+  └─────────────────────────────────────────────────────────────────
+PERF_SESSION_READY=2026-10-17T00:36:36+02:00 run=2995 rev=134dcb54 flags=[KF3_LIFECYCLE_COUNT=1 KF3_LIFECYCLE_PERIOD_S=5 KF3_SCAN_OFF_AFTER_5080=2 KF3_PRIV_RING_ENTRIES=2048] qpid=2521538
+guest ready after ~10 s: explorer=1 at 00:37:02

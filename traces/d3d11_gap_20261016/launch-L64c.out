@@ -1,0 +1,13 @@
+WINDOWS_START kf3=134dcb54 run=/var/lib/kf-windows-20261005/boundary-kayfabe-2995 checkout=6fafcc6e xid_before=62 2026-10-17T01:33:10+02:00
+[windows] broker: backend wayland, socket /run/user/1000/nvkvm/windows-run2995.sock, title 'KAYFABE PERF RUN 2995 134DCB54' (log /var/lib/kf-windows-20261005/boundary-kayfabe-2995/broker-20261017-013310.log)
+[windows] QEMU pid 2546493, kf3 134dcb54, run /var/lib/kf-windows-20261005/boundary-kayfabe-2995 (qemu.log, serial.log, command.json, marker.txt)
+
+  ┌ kayfabe Windows window: "KAYFABE PERF RUN 2995 134DCB54" on ubuntu's desktop ┐
+  │ hover = absolute USB tablet; CTRL+ALT+G grab (PS/2 relative mouse); CTRL+ALT+F fullscreen
+  │ guest PowerShell as SYSTEM: scripts/bench/windows/qga_run_ps.py 2995 <file.ps1>
+  │ stop: /data/claude-gap/broker_gap.sh stop 2995
+  └────────────────────────────────────────────────────────────────────────────────────────────┘
+PERF_SESSION_READY=2026-10-17T01:33:12+02:00 run=2995 rev=134dcb54 flags=[KF3_LIFECYCLE_COUNT=1 KF3_LIFECYCLE_PERIOD_S=5 KF3_SCAN_OFF_AFTER_5080=2 KF3_PRIV_RING_ENTRIES=32768] qpid=2546493
+[windows] no run2995 guest running
+[windows] run2995 stopped (Xid count now 62)
+PERF_SESSION_EXIT=0 at=2026-10-17T01:40:38+02:00

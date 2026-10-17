@@ -1,0 +1,25 @@
+# off-CPU microseconds in the 20 s window, by thread name (a thread blocked the whole time shows ~20,000,000)
+qemu-system-x86           549654084 us  (2748.3% of 20 s)
+      schedule                                                        549652003 us
+      preempt_schedule                                                     1999 us
+      preempt_schedule_irq                                                   82 us
+cuda-EvtHandlr             39893847 us  (199.5% of 20 s)
+      schedule                                                         39893847 us
+kf3-display                38329517 us  (191.6% of 20 s)
+      schedule                                                         38329517 us
+kf3-cuda-walk              33484497 us  (167.4% of 20 s)
+      schedule                                                         33484497 us
+kf3-vamgr                  19969041 us  (99.8% of 20 s)
+      schedule                                                         19969041 us
+kf3-worker0                19959111 us  (99.8% of 20 s)
+      schedule                                                         19959111 us
+kf3-worker1                19958882 us  (99.8% of 20 s)
+      schedule                                                         19958882 us
+kf3-drainer                19936699 us  (99.7% of 20 s)
+      schedule                                                         19936699 us
+kf3-scanline               19605767 us  (98.0% of 20 s)
+      schedule                                                         19605767 us
+kf3-cuda-disp              19500470 us  (97.5% of 20 s)
+      schedule                                                         19500470 us
+kf-view-reaper                  239 us  (0.0% of 20 s)
+      schedule                                                              239 us

@@ -1,0 +1,2 @@
+events: gpu_driver=0 other=1 (153/4101 in last 9 min), host xid delta 0
+HLOG  Time:    260.621 Frames:    93399 FPS:    358.371 Min FPS:    21.4748 Max FPS:    791.767 Score:    9027.36

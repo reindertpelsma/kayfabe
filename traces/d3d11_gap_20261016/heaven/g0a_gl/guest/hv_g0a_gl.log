@@ -1,0 +1,35 @@
+START 19:50:45.335 user=kfadmin session=1
+PRE guest_cpu_pct=9.2
+LAUNCH 19:50:47.850 -project_name Heaven -data_path ../ -engine_config ../data/heaven_4.0.cfg -system_script heaven/unigine.cpp -sound_app null -video_app opengl -video_multisample 0 -video_fullscreen 0 -video_mode -1 -video_width 1920 -video_height 1080 -extern_define RELEASE,QUALITY_ULTRA
+RESULT_FOUND=True alive=True elapsed_s=292
+HLOG 19:50:48 Loading "opengl32.dll"...
+HLOG 19:50:48 Features: OpenGL Direct3D9 Direct3D11 OpenAL XAudio2 XPad360 Joystick Flash Editor
+HLOG 19:50:48 OpenGL vendor:   NVIDIA Corporation
+HLOG 19:50:48 OpenGL renderer: NVIDIA GeForce RTX 4070/PCIe/SSE2
+HLOG 19:50:48 OpenGL version:  3.2.0 NVIDIA 580.88
+HLOG 19:50:48 OpenGL flags:    Core Profile
+HLOG 19:50:48 Found required GL_ARB_map_buffer_range
+HLOG 19:50:48 Found required GL_ARB_vertex_array_object
+HLOG 19:50:48 Found required GL_ARB_draw_instanced
+HLOG 19:50:48 Found required GL_ARB_draw_elements_base_vertex
+HLOG 19:50:48 Found required GL_ARB_transform_feedback
+HLOG 19:50:48 Found required GL_ARB_half_float_vertex
+HLOG 19:50:48 Found required GL_ARB_half_float_pixel
+HLOG 19:50:48 Found required GL_ARB_framebuffer_object
+HLOG 19:50:48 Found required GL_ARB_texture_multisample
+HLOG 19:50:48 Found required GL_ARB_uniform_buffer_object
+HLOG 19:50:48 Found required GL_ARB_geometry_shader4
+HLOG 19:50:48 Found optional GL_ARB_blend_func_extended
+HLOG 19:50:48 Found optional GL_ARB_tessellation_shader
+HLOG 19:50:48 Found optional GL_ARB_shader_bit_encoding
+HLOG 19:50:48 Found optional GL_ARB_sample_shading
+HLOG 19:50:48 Found optional GL_ARB_compute_shader
+HLOG 19:50:48 Found optional GL_ARB_gpu_shader5
+HLOG 19:50:48 Found optional GL_EXT_texture_compression_s3tc
+HLOG 19:50:48 Found optional GL_ARB_texture_compression_rgtc
+HLOG 19:50:49 Unigine Heaven Benchmark 4.0 (4.0)
+HLOG 19:51:16 Benchmark running
+HLOG 19:55:37 Benchmark results:
+HLOG 19:55:37 Time:    260.64919:55:37 Frames:    5095619:55:37 FPS:    195.49719:55:37 Min FPS:    20.675119:55:37 Max FPS:    470.0719:55:37 Score:    4924.57
+END 19:55:43.548
+

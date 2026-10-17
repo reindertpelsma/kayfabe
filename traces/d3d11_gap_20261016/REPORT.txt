@@ -1,0 +1,157 @@
+D3D11 GAP CAMPAIGN, REPORT (2026-10-16 evening .. 2026-10-17 02:40 CEST, stopped early by the owner pause)
+STATUS: RESEARCH. Branch claude/d3d11-gap-20261016. NOTHING HERE IS MERGEABLE (scratch counters, scan-off modes 1/2/3, experiment switches);
+the only liftable part is crates/kf-chan/src/user_lazy.rs + crates/kf-chan/tests/user_lazy_model.rs (commit 214a1ecd2).
+M = measured (run named, files under traces/d3d11_gap_20261016/), I = inferred (reasoning, never evidence).
+Pre-registration: PREREG.md (HG1-HG4 committed before any run, addenda A-D before the results they concern).
+Host root@172.22.1.20 (RTX 4070, host driver 595.91.07), guest Windows 11 driver 580.88, Unigine Heaven 4.0 Ultra 1080p windowed (D3D11 / OpenGL),
+guest desktop 1536x864 (125% DPI of a 1920x1080 head, I), broker backend wayland as user ubuntu on the owner's session in every arm unless named.
+
+=====================================================================================================================
+1. PER-FRAME TIME BUDGET (first, as requested). D3D11, Heaven, mode 2 (scan off after 5080, scan while a registration is pending)
+=====================================================================================================================
+Arms: control = scan on (28a0ee9c / b4040417, counters on). mode 2 = KF3_SCAN_OFF_AFTER_5080=2. Z16 = mode 2 + KF3_LAZY_OBSERVE=16 (guest GP_PUT cache + private-USERD look every 16th turn).
+fps are medians of 3 unprofiled boots unless n is given; per-thread CPU comes from perf record -g -F 999, 30 s in the middle of the benchmark (profiled runs, fps not scored).
+
+                                        control (scan on)   mode 2 (D3D11)    mode 2 (OpenGL)   Z16 (D3D11)
+fps (unprofiled, counters on)           101.3 (n=4, 101-102) 196.2 (193.1-202.2) 358.5 (n=1)      299.1 (296.5-299.2)
+frame period, ms                        9.87                5.10              2.79              3.34
+GP entries per frame (one relay turn each) 1,725           1,689             926               1,726
+GPU busy (dmon sm%)                     77-79 %             96 %              98 %              96-98 %
+GPU power, W                            93                  125               182               157   (native ~191 W, earlier campaign, not re-measured)
+PCIe MB per frame rx / tx               3.3 / 6.6           3.2 / 3.5         1.4 / 1.8         3.2 / 2.4
+relay workers (kf3-worker0+1) CPU per frame, ms (perf window)  10.45  5.16     3.19              (not profiled, see 9)
+   = cores, both workers                1.03                1.03              1.07
+   per GP entry, us                     6.0                 3.05              3.4
+relay worker time blocked in epoll_wait 46-47 % each        43-47 % each      ~(not run)
+other QEMU threads (8 vCPUs + io), ms/frame of CPU   ~2.0   2.08              ~1.7              -
+kf3-display thread, ms/frame            0.8                 0.41              0.2               -
+Private-ring credit waits per frame     0.000               0.000             3.2 (p50 64 us, p99 1 ms, max 10.9 ms)   0.15-0.23 (p99 1 ms)
+Publishes with the private ring EMPTY and the guest ring >= 2 entries ahead, per frame (starvation proxy)   -   23.2   2.4   6.3
+Where the worker CPU goes in mode 2 D3D11 (perf, % of the worker thread's samples, INCLUSIVE so rows overlap; x 5.16 ms for ms/frame):
+   Pump::turn_body self 12.7 | guest-USERD GP_GET write-back (UserdSource::write, memory_list lookups) 21.5 | Segment drop / free 11.8 | publish admission closure
+   (GP write + PUT) 11.4 | guest USERD GP_PUT read 10.7 | Fetch::observe 10.2 | GP-entry snapshot 8.5 | private-USERD loads (gpu_reference + gpu_get via the store view) 6.0
+   | RmGraph/hash/btree lookups under the USERD accessors ~12 | peek/alive/operands_translatable ~9.
+READING (M for the numbers, I for the reading): in all three scan-on / scan-off arms the two workers add up to 1.03-1.07 cores, i.e. the relay of the one busy USER channel
+(0xc1d00088:0xff040029 carries 320,345 GP entries/s in the M2exp1 window; D3D11 and OpenGL run at the SAME entries/s) is a serial chain at 100 % utilisation. D3D11 is slower than OpenGL
+because it issues 1.8x the GP entries per frame (1,689 vs 926), not because any entry costs more (3.05 vs 3.4 us). The GPU shows 96 % "busy" at 125 W: busy with a stream that
+arrives from the relay in bursts (23 empty-ring publishes per frame).
+
+=====================================================================================================================
+2. HEADLINE
+=====================================================================================================================
+* Reproduced baseline (gate 90-105 / 170-205): control D3D11 101.3 (PN2 101.33, PR1 101.96, PR2 101.13, PT1 100.71), mode 2 D3D11 196.2 (L1a/b/c 196.22 193.12 202.16); OpenGL 227.5 / 358.5 (M).
+* The ring size is NOT the limit (HG1 ladder, M): 1x 196.2 | 4x 194.5 (n=1) | 64x 196.7 (medians of 3), credit waits 0.000 per D3D11 frame at every rung. The brief's "305,820 credit waits"
+  belong to the OpenGL run (M2exp1 log: 2.95/frame x 82.9k frames), not to D3D11 (0.000/frame).
+* THE LEVER IS THE RELAY'S PER-TURN HOST I/O (M): KF3_LAZY_OBSERVE=16 gives D3D11 299.1 / 296.5 / 299.2 fps (median 299.1, +52.4 % over 196.2, spreads 0.9 % / 4.7 %), no Xid, no 153/4101,
+  0 REFUSED lines. Counters: private-USERD observations 189.8M -> 12.9M, BAR1 store loads 379.6M -> 25.8M, guest GP_PUT reads 189.3M -> 0.29M, guest GP_GET write-backs 77.6M -> 6.3M (run totals, L1a vs Z16a).
+  Adding KF3_FAST_SEG=1 (inline publish of a scan-off segment) gives 304.75 / 307.56 vs 300.13 / 299.50 in two interleaved pairs: +2.1 % median (n=2; marginal, see 6).
+  Best D3D11 reached: 307.6 fps single run (R2B2), 304.75-307.56 over two runs, native/VFIO D3D11 330 (earlier campaign). OpenGL mode 2 is already above the native 342 (358.5, 361.2, 368.8 in different arms).
+* Memory pressure was most of the "drift" the owner saw (89-90 fps control vs 101): G0a ran with 3.6 GB of swap in use (PSI full avg60 2.4 %): D3D11 89.10 / OpenGL 195.50. After swap went off (22:00) every control
+  arm sits at 101 +- 1 / 228 +- 2, with or without drop_caches, with the wayland or the test broker backend (section 4).
+
+=====================================================================================================================
+3. HYPOTHESES (prediction -> result -> verdict). Full text with falsifiers: PREREG.md
+=====================================================================================================================
+HG1 private-ring credit waits are on the critical path. Ladder 512 / 2048 / 32768 entries (3 / 1 / 3 interleaved D3D11 runs, 1 OpenGL each).
+   Result (M): D3D11 median 196.22 / 194.50 (n=1) / 196.66, i.e. +0.2 % at 64x (spreads 4.7 % and 0.6 %); credit_waits per frame 0.000 / 0.000 / 0.000; OpenGL 358.54 / 358.37 / 361.15 (+0.7 %),
+   its credit waits 3.217 -> 0.021 -> 0.000 per frame with no fps change. VERDICT: FALSIFIED (gain < 3 % AND credit waits ~ 0 at 64x). The ring went EMPTY while the guest was ahead 23x per D3D11 frame
+   at every rung (starvation proxy): the relay, not the GPU credit, limits D3D11.
+   Code obstacles (all named, all worked around in the scratch build): Fetch::new refused > 512 (cap raised to 65536), Consumption::MAX_ENTRIES 512, user_storage::ENTRIES/BYTES (1 MiB; GP array at 0xe0000, USERD at 0xf0000;
+   the new layout needs USERD at 0x1b0000 and a 2 MiB object), per-slot staging cells (slot*1024 bytes would be 32 MiB: decoupled as slot % 896, safe because nothing is staged after 5080 in mode 2), view quota pinned at 16,
+   Fetch.pending VecDeque capacity (entries-1, 786 kB per channel at 32768).
+HG2 Translated / CE-relay work (>= 3x per frame D3D11 vs OpenGL; falsified if <= 1.5x). Result (M, perframe_L1a.txt, PR1): translated-channel GP entries forwarded 4.34 vs 0.53 per frame (8.1x), host submissions 0.725 vs 0.091 (8.0x),
+   serves 0.69 vs 0.092 (7.5x), CE2 relays 0.187 vs 0.025 (7.6x); the doorbells_translated counter (it also counts the worker-served USER tokens) 5.29 vs 5.05 (1.05x). VERDICT: HELD by the pre-registered rule,
+   BUT absolute size is negligible: 4.3 translated GP entries per frame against 1,689 USER entries (0.26 %); not a lever.
+HG3 present/flip path (>= 1 ms per frame difference; falsified < 0.2 ms). Result (M): both APIs are windowed under DWM composition (guest query, DWM on, dwm 0.2 s CPU per 5 s in both), head armed at 60 Hz, flip rate kms 59.4-59.8 in both,
+   late_max_us ~1.1-1.3 ms constant. There is no flip-completion-latency counter (not built: INFERRED from the flat rates that there is none to find). VERDICT: FALSIFIED as a per-frame cost (rate and lateness identical; < 0.2 ms).
+   Hangs (owner item): stall samples (kms < 10 over a 2 s display line) are 1.6-3.3 % of D3D11 samples and 0-4.9 % of OpenGL samples; in EVERY stall sample the GPU was busy (sm 66-96 %, 81-117 W), none with an idle GPU:
+   "GPU busy but not presenting", never "guest paused with an idle GPU" (hang_*.txt, 10 arms). The display lines are 2 s apart (not 1 s).
+HG4 PCIe/power signature vs native. NOT TESTED: owner decision, no local VFIO detach; claude/native-vast-20261016 had no REPORT/traces on origin when this stopped. Kayfabe side recorded (per run host dmon -s pucvmet, section 1 and runs_all.txt):
+   mode-2 D3D11 125 W, SM 2857 MHz, mem 10251 MHz, pstate P0, PCIe rx 623 / tx 690 MB/s (3.2 / 3.5 MB per frame); Z16 157 W, 966 / 714 MB/s. Native column empty.
+HG5 (post-hoc, written after reading the M2exp1 log and the pump; weaker): per-GP-entry relay cost is the ceiling. Prediction (a) workers spend >= 70 % of samples in the relay turn: HELD (turn 86 % of worker samples). Falsifier (workers < 50 % busy AND mostly blocked): not met
+   for the CPU side (1.03 cores) but note the workers ARE blocked 43-47 % of the time (alternating hand-off between the two threads, I). Causality test: lazy observe >= +15 % -> measured +52 %. VERDICT: HELD (the rule was written before the Z16 result).
+   Surprise (M): the private-USERD BAR1 loads are only 6 % of worker samples; the cost is the guest-USERD accessors (memory_list lookups, admission locks) and allocation, which the lazy rules also remove.
+Addendum A/B/D items: HM memory (reset helps >= 5 %): FALSIFIED for the drop_caches step (PR1/PR2 reset 101.96 / 101.13 vs PN2 no reset 101.33); the drift came from swap (G0a). HB2 backend (test vs wayland within 5 %): HELD: PT1 test 100.71 / 229.79 vs W 101.96 / 227.30
+   (PT2 was not run; wayland stays the default). HH: see HG3. Split arms (A alone, B alone): NOT RUN (owner pause).
+
+=====================================================================================================================
+4. PAIRED ARMS (control, 28a0ee9c, counters on; D3D11 / OpenGL fps)
+=====================================================================================================================
+G0a  wayland, no reset, swap 3.6 GB in use, PSI full 2.4 %   89.10 / 195.50   (the owner's "81 fps"-class state)
+PR1  wayland, drop_caches + swap cycled (the last swap use)   101.96 / 227.30
+PT1  --backend test (needs a live stdin: a sleep feeds it; first attempt failed with a broken pipe and was fixed once)  100.71 / 229.79
+PN2  wayland, swap off, no reset                              101.33 / 227.65
+PR2  wayland, swap off, drop_caches                           101.13 / 227.82
+Backend uid ubuntu in every arm (assert.txt of each run). Memory records (free, swap, PSI, pgmajfault, refault, pswpin) in env_pre/env_post of every run and mem_* in arm/.
+SOc (scan-on control with the SET_OBJECT statistics, D3D11 90.15 / OpenGL 145.71) is NOT a control number: the statistics clone cost ~11 % / 36 % (scratch overhead).
+
+=====================================================================================================================
+5. PROFILE PER THREAD (perf record -g -F 999, 30 s mid-benchmark, frame-pointer build b4040417; d3d11 mode 2 = pfm + pfm2, control = pfc, OpenGL mode 2 = pfm2_gl)
+=====================================================================================================================
+Files: heaven/pfm2_d3d11/prof/{threads.txt,summary.txt,comm_dso.txt,offcpu_by_thread.txt}, same for pfc_d3d11, pfm2_gl, pfm_d3d11 (summary only for pfm2_d3d11 is in the tree; the others in the host dir ev/heaven/*/prof/, perf.data kept on the host).
+D3D11 mode 2 (46,217 samples = 1.54 cores): kf3-worker1 34.3 % (53 % of one CPU), kf3-worker0 33.1 % (51 %), vCPU thread 9.5 % (halted most of the time: kvm_vcpu_halt, srso/ibpb entry costs), kf3-display 5.4 % (HostCursorSrc::image 28.8 %,
+CursorImage::new 15.3 %, cuMemcpyHtoD 24 % inclusive = the 60 Hz cursor/scanout path), other vCPUs 1-4 % each, cuda-EvtHandlr 1 % each, drainer 0.1 %.
+Worker top self symbols (% of the worker's own samples): Pump::turn_body 12.7, UserdSource::write 8.0, Fetch::observe 7.9, memory_list::lookup 5.4, VolatileRegion::load_u32 5.4, UserdSource::read 4.7, _int_free_merge_chunk 4.5,
+memory_list::try_read 3.2, RmGraph::allocated_node 3.1, btree lookup 2.2. Inclusive: turn 85.7, turn_body 83.8, write 21.5, Segment drop 11.8, publish admit 11.4, read 10.7, observe 10.2, snapshot_at 8.5, gpu_reference 4.7.
+Control (scan on): the same two workers at 36.2 % each (1.03 cores) plus the BAR1 pushbuffer copies (4.3 ms per frame, section 1 of the lifecycle report). OpenGL mode 2: worker0 28.8 %, worker1 34.9 %, display 8.1 %.
+Blocking (bpftrace on the two workers, 20 s inside the benchmark, pfc_d3d11 and pfm2_d3d11): epoll_wait 43-47 % of wall per worker (330k short calls = the spin loop, ~10k waits > 20 us carrying 8.6-9.4 s), futex 0.3 %, write 0.3 %;
+involuntary context switches 1,100-1,700 per second per worker ("preempted" 33.5k / 34.7k in 20 s; vs blocked 20.6k) although the process has no CPU affinity (24 threads, 12 cores). Run-queue wait after a wake is small (46-72 ms in 20 s).
+(The same bpftrace in the PFm OpenGL arm and an earlier offcputime run were taken AFTER the benchmark had ended and are discarded: perfall.sh now runs the samplers first.)
+Spin vs blocked vs credit (I): spin (epoll_wait 0) ~28.8 turns per frame; credit waits 0 per D3D11 frame; blocked 43-47 % = waiting for the next doorbell / marker interrupt between bursts.
+
+=====================================================================================================================
+6. OPTIMISATION LADDER (owner's loop; correctness always; D3D11 median fps, mode 2 + counters, same flags, interleaved boots)
+=====================================================================================================================
+round | knob (binary)                        | D3D11 fps (runs)                | previous best         | gain   | support gap (explicit-failure / unsupported; silent = REJECTED) | production-safe?
+0     | mode 2 (b4040417/134dcb54)           | 196.2 (193.1 196.2 202.2)       | control 101.3         | +94 %  | mode 2 = intended lifecycle in scratch form. EVIDENCE is Heaven only: one ring-growth registration/trigger, 7,372 window reads, no Xid. NOT exercised: other trigger kinds (TLB invalidate, context), GravityMark growth, back-to-back registrations; the window start uses stale parser state (production anchors it at a GP_PUT, assumption P2'). A trigger outside the window reaches the hardware unscanned: mode 1 measured that failure LOUDLY (host Xid 32 + guest nvlddmkm 153, TDR). | yes: it is the lifecycle design
+1     | KF3_LAZY_OBSERVE=16 (A+B)            | 299.1 (299.1 296.5 299.2)       | 196.2                 | +52.4 %| none known: stale GP_GET only lowers credits, stale REFERENCE only delays a gate release, cached PUT never beyond the real PUT; the guest sees GP_GET up to 16 turns later (guest ring 32,768+ entries). Tests: 12 passed, 7 mutations killed (mutation_table.txt). Not a silent-wrong-result class. | yes, lift user_lazy.rs unchanged
+2     | + KF3_FAST_SEG=1 (a34f772c)          | 304.75 307.56 vs 300.13 299.50  | 299.1 (same binary)   | +2.1 % (n=2) | none: the same publish call, same admissions, falls back to the ordinary path with < 2 credits; trace on => off | yes (code motion)
+R2 gate (4 arms with the shot hook): Heaven completed with scores 7676.7 / 7560.3 / 7747.6 / 7544.5, host Xid delta 0, guest 153/4101 only the two boot ones, 0 USER_RING REFUSED lines, screenshots mean luma 154.7 / 70.0 / 71.3 / 68.1,
+std 86.3 / 53.7 / 59.7 / 53.1, 235 / 120 / 134 / 119 colours (all sane). Z16a/b/c: same event/Xid/REFUSED checks clean, no screenshot hook yet (added later).
+BAR1 read budget (run totals, the two Heaven runs of one boot): L1a 189.8M observations = 379.6M private-USERD loads; Z16a 12.9M = 25.8M; R2B2 14.2M = 28.3M.
+Ring-size knob (round "ring"): rejected, no gain (+0.2 %), kept out of the best build (default 512).
+Rounds 3-5 (worker pinning, no-diagnostics build, batching several GP entries per turn) were planned from the profile but NOT RUN (owner pause).
+Cumulative best (M): control 101 -> mode 2 196 -> +lazy 299 -> +fast segment ~305 fps.  What limits it next (I): the relay is still ~1.1 cores (Z16 worker CPU 136+158 s over the run), GPU sm 97 % at 157 W (native 191 W): the
+remaining guest-USERD accessor cost (memory_list lookups per turn), Segment allocation (FAST_SEG removes part), and the turn-per-entry design (batching entries per turn is the untested big step).
+
+=====================================================================================================================
+7. SET_OBJECT measurement (scan-on control arm SOc: D3D11 + OpenGL + a 60 s Edge launch; scratch statistics in the committed scan state)
+=====================================================================================================================
+M (setobj_SOc.txt; 75 channels with a SET_OBJECT): Heaven D3D11: 16 channels, max set_object_total per channel 1 (data word 0x5080 only), rebinds 0, same-resend 0, different 0, 5080 on an extra subchannel 0, late (after the 20th GP entry) 0.
+Heaven OpenGL: 25 channels, max total 4 (0x5080, 0x902d, 0xa140, 0xc997 on distinct subchannels), rebinds 0, late 0, extra-subchannel 5080 0. Edge: 2 channels, max 1 (0x5080), rebinds 0, late 0. Boot/idle: 32 channels, max 1.
+So "binds once" holds on these three workloads (not proof for other apps). The D3D11 channels bind ONLY the software object; the engine classes are not bound by SET_OBJECT there (public text: engines do not need it, I).
+
+=====================================================================================================================
+8. SANITY, INCIDENTS, ENVIRONMENT
+=====================================================================================================================
+* The 3 guest nvlddmkm 153 events at 21:26:22 (guest clock, 2 h behind the host's CEST: host 23:26:22) in the PFm OpenGL arm were NOT benign boot events: the guest then blue-screened (Application log: BlueScreen 0x116
+  VIDEO_TDR_FAILURE, status 0xC000009A, 25 LiveKernelEvent 141 reports, reported at the next boot) and Heaven GL died 14 s later (Benchmark running 21:25:53 .. END 21:26:36 = 43 s of 260 s), hence no score line for pfm_gl.
+  The event coincides to the second with my bpftrace TEST (raw_syscalls + sched tracepoints on the live QEMU, ~23:26:2x) while heavy perf-report jobs were running (I: that tracing stalled the host long enough for the guest GPU watchdog; the same script ran 3 times later,
+  20 s each, without incident). Host Xid delta of that arm was 0; the host NVRM Xid count rose from 62 to 79 later from OTHER agents (setobj_probe Xid 13), not from my runs (every run's startmarker: host xid delta 0).
+* Boot-time 153 events (Kernel-Boot "virtualization-based security disabled") are the "other=1/2" in every run summary.
+* Per-run records: assert.txt (guest driver 580.88, host 595.91.07, kf3 binary, KF3_* env, broker backend + uid, memory/PSI), env_pre/env_post, vmstat.txt (steal 0.0 in every run; interrupts 38-91 k/s on the host), host_dmon.txt, threads_cpu.txt.
+* Memory: host 30 GB, guest RAM 16 GiB memfd (shared 16.5-18 GB); swap was on until ~22:00 (coordinator turned it off); after that no run had swap use; PSI full per run 0-154 ms; refaults 0.6k-100k.
+* Scratch binaries (frame-pointer builds): b4040417 (ladder, profile), 134dcb54 (ladder rungs, lazy, SOc), a34f772c (R2); 0dc9ebc1 (split switches) was NOT built. Host tree /data/claude-gap/src (commits dcdd39fe..0dc9ebc1 are code-only snapshots of branch commits).
+
+=====================================================================================================================
+9. WHAT WAS NOT DONE (resume here)
+=====================================================================================================================
+Not run: split arms A (KF3_PUT_CACHE=1) and B (KF3_LAZY_OBSERVE=16 alone) and the none/A+B re-runs on the new binary (list perf/lists/split.txt, runner perf/split_run.sh, binary rev 0dc9ebc1 builds in 40 s from /data/claude-gap/src);
+the N ladder (4, 16, 64); the Z16 profile (list pz.txt); R2 pair 3; optimisation rounds 3-5; HG4 native column (waiting for claude/native-vast-20261016); the VFIO local reference (cancelled by the owner); PT2 (second test-backend run).
+GPU-free tests (done on the dev box, not on the host): 12 tests in crates/kf-chan/tests/user_lazy_model.rs pass; the cached-PUT exploration visits 2,260 reachable states; mutation table in mutation_table.txt (7 mutations, all killed; one test was strengthened after a surviving mutant).
+Resume: stage a guest overlay (qemu-img create -b win11-full-b/windows11.qcow2), re-download Heaven (stage1.ps1/stage2.ps1 under /data/claude-gap/*.ps1 were removed with serve/; commands are in perf/ and this report), cp fp/kf3-bins/<rev> into /var/lib/kf-windows-20261005/kf3-bins/<rev>,
+then `CHAIN_LOCKED=1 flock -o /tmp/kayfabe-fastguest.lock bash perf/chain7.sh perf/lists/split.txt` (build first with perf/split_run.sh). Overlay, cargo targets and the Heaven installer were deleted at the stop.
+
+=====================================================================================================================
+10. RANKED NEXT STEPS (evidence)
+=====================================================================================================================
+1. Lift user_lazy.rs (must_observe + PutCache) into the production relay: +52 % D3D11 in scratch, tests and mutation table exist. Choose N from the ladder (4/16/64) first.
+2. Batch several GP entries per turn (one PUT/doorbell and one set of admissions per batch): the per-entry cost is 3.05 us of which ~half survives the lazy rules; the relay is still ~1.1 cores at 299 fps.
+3. Cut the guest-USERD accessor cost (memory_list lookup + admission per access; 12-20 % of worker samples) with a cached lease for the relay's own USERD.
+4. Remove per-entry allocation (Segment, snapshot Vec, receipts Vec in Fetch::observe): 12-15 % of worker samples; FAST_SEG removed only part.
+5. Re-test worker pinning (involuntary switches 1,100-1,700/s per worker with no affinity) and the display cursor path (kf3-display 5 % of samples, cuMemcpyHtoD per 60 Hz tick).
+6. Exercise mode 2 beyond Heaven (TLB-invalidate and context triggers, GravityMark growth, back-to-back registrations) before any lifecycle claim.
+
+Resource costs seen (candidates for a later reduction, NOT changed): VRAM held by qemu ~9.0 GB (dmon fb 9,003-9,012 MB with the guest idle: 8 GiB declared framebuffer + store); BAR1 request 8 GiB, bar2 32 MiB (the guest sees BAR1 used 9,080 MB); the private ring storage is 1 MiB of device memory per USER channel
+(2 MiB in my scratch layout; ~36 USER channels were live in Heaven) with 512 slots of which only ~1 is in flight on average; per-channel staging cells (512 KB) unused after 5080; 16 GiB guest RAM memfd on a 30 GB host (no headroom with swap off for a second guest);
+the 60 Hz cursor/scanout path costs 0.08 core.

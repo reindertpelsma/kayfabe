@@ -1,0 +1,2 @@
+EVT 153 23:40:56 Microsoft-Windows-Kernel-Boot
+EVTDONE

@@ -1,0 +1,15 @@
+# 20 s of bpftrace on the two kf3 workers. us = microseconds inside the syscall; n = calls; blk20 = calls longer than 20 us
+== kf3-worker0
+   epoll_wait       us=  19958862 (99.8% of 20 s) calls=     2196 blk20_calls=    1835 blk20_us=  19955728
+   write            us=      4959 (0.0% of 20 s) calls=     2543 blk20_calls=       3 blk20_us=        76
+   read             us=        80 (0.0% of 20 s) calls=      955 blk20_calls=       0 blk20_us=         0
+   runqueue wait after wakeup: us=5646 n=2740
+   switches kf3-worker0, preempted = 1842
+   switches kf3-worker0, blocked = 2755
+== kf3-worker1
+   epoll_wait       us=  20003908 (100.0% of 20 s) calls=     1900 blk20_calls=    1578 blk20_us=  20001329
+   write            us=      3465 (0.0% of 20 s) calls=     1842 blk20_calls=       1 blk20_us=        21
+   read             us=       175 (0.0% of 20 s) calls=      833 blk20_calls=       0 blk20_us=         0
+   runqueue wait after wakeup: us=7323 n=2796
+   switches kf3-worker1, preempted = 1204
+   switches kf3-worker1, blocked = 2803

@@ -47,6 +47,8 @@ for tag in sys.argv[1:]:
         if not h: continue
         at = lambda w: ([x for x in ws if x <= w and "hist" in d[x] and "gp_entries" in d[x]] or [ws[0]])[-1]
         a, b = at(h[0]), at(h[1]); fr = h[2] * (b - a)
+        if fr <= 0:
+            print("%-8s %-6s window has no usable tick dump pair (skipped)" % (tag, api)); continue
         A, B = d[a], d[b]
         diff = lambda k: B.get(k, 0) - A.get(k, 0)
         hist = [B["hist"][i] - A["hist"][i] for i in range(len(B["hist"]))] if "hist" in A and "hist" in B else [0] * 24

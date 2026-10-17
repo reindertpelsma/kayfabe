@@ -1,0 +1,3 @@
+HV_START r2b1_d3d11 direct3d11 2026-10-17T01:58:49+02:00 xid_before=71
+HV_EXIT r2b1_d3d11 rc=0 2026-10-17T02:04:07+02:00 xid_after=71
+events: gpu_driver=0 other=2 (153/4101 in last 9 min), host xid delta 0

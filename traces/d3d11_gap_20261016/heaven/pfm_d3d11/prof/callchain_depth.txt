@@ -1,0 +1,1 @@
+samples=46264 single_frame_chains=110

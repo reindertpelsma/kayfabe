@@ -1,0 +1,3 @@
+HV_START soc_gl opengl 2026-10-17T00:16:42+02:00 xid_before=62
+HV_EXIT soc_gl rc=0 2026-10-17T00:21:55+02:00 xid_after=62
+events: gpu_driver=0 other=1 (153/4101 in last 9 min), host xid delta 0

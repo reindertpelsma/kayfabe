@@ -1,0 +1,3 @@
+HV_START pfm_gl opengl 2026-10-16T23:25:16+02:00 xid_before=62
+HV_EXIT pfm_gl rc=0 2026-10-16T23:29:43+02:00 xid_after=62
+events: gpu_driver=3 other=4 (153/4101 in last 9 min), host xid delta 0

@@ -1,0 +1,14 @@
+     6.33%     0.00%  [.] g_free                                         -      -            
+     6.31%     0.00%  [k] 0x00000000000001b8                             -      -            
+     6.31%     0.00%  [k] 0x000055e9dbd43300                             -      -            
+     6.31%     0.00%  [k] 0x007570632d34365f                             -      -            
+     6.26%     0.00%  [.] __ioctl (inlined)                              -      -            
+     6.26%     0.00%  [.] kvm_vcpu_ioctl                                 -      -            
+     6.17%     0.00%  [.] entry_SYSCALL_64_after_hwframe                 -      -            
+     6.13%     0.00%  [.] do_syscall_64                                  -      -            
+     6.03%     0.04%  [.] __x64_sys_ioctl                                -      -            
+     6.01%     0.03%  [.] x64_sys_call                                   -      -            
+     5.93%     0.07%  [.] kvm_vcpu_ioctl                                 -      -            
+     5.80%     0.02%  [.] kvm_arch_vcpu_ioctl_run                        -      -            
+     5.32%     0.06%  [.] vcpu_run                                       -      -            
+     3.48%     0.18%  [.] vcpu_enter_guest                               -      -            

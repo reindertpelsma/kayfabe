@@ -1,0 +1,3 @@
+HV_START r2b1_gl opengl 2026-10-17T02:04:13+02:00 xid_before=71
+HV_EXIT r2b1_gl rc=0 2026-10-17T02:09:26+02:00 xid_after=71
+events: gpu_driver=0 other=1 (153/4101 in last 9 min), host xid delta 0

@@ -1,0 +1,16 @@
+pushed
+KFPLAUNCH ok mode=interactive user=kayfabe-windows\kfadmin
+START 22:33:20.239 user=kfadmin session=1
+DWM composition enabled: True
+SCREEN \\.\DISPLAY1 bounds={X=0,Y=0,Width=1536,Height=864} primary=True
+PROC dwm pid=1268 cpu_s_in_5s=0.17
+PROC Heaven pid=12788 cpu_s_in_5s=7.98
+CTR \\kayfabe-windows\process(dwm)\% processor time 9.2
+CTR \\kayfabe-windows\process(heaven)\% processor time 138.5
+CTR \\kayfabe-windows\process(dwm)\% processor time 6.2
+CTR \\kayfabe-windows\process(heaven)\% processor time 142.1
+CTR \\kayfabe-windows\process(dwm)\% processor time 3.1
+CTR \\kayfabe-windows\process(heaven)\% processor time 126.7
+HDR 580.88, [N/A], 0 MHz, 0 MHz, [N/A]
+END 22:33:28.848
+

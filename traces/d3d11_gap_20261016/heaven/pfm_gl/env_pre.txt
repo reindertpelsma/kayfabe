@@ -1,0 +1,11 @@
+== pre 2026-10-16T23:25:16+02:00
+MEMREC pre 2026-10-16T23:25:16+02:00 epoch=1792185916.709906879
+MEMREC free:                total        used        free      shared  buff/cache   available
+MEMREC free: Mem:           30719       24872         786       18301       23687        5847
+MEMREC free: Swap:              0           0           0
+MEMREC meminfo: MemFree:          805252 kB MemAvailable:    5987616 kB Cached:         23993336 kB SwapTotal:             0 kB SwapFree:              0 kB Dirty:              1392 kB Shmem:          18741152 kB 
+MEMREC psi.memory: some avg10=6.35 avg60=5.55 avg300=1.49 total=2145045805
+MEMREC psi.memory: full avg10=6.35 avg60=5.55 avg300=1.49 total=2139790144
+MEMREC vmstat: workingset_refault_anon 7871971 workingset_refault_file 255820644 pswpin 7891195 pswpout 6718870 pgmajfault 7800642 
+2476716 ubuntu   /data/claude-resize/broker-bin/nvkvm-display-broker-666ea966 --socket /run/user/1000/nvkvm/windows-run2995.sock --backend wayland --persist --verbose --title KAYFABE PERF RUN 2995 B4040417
+35.87 W, 2490 MHz, 10251 MHz, 2 %, P2, 4

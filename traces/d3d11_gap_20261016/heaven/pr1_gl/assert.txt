@@ -1,0 +1,39 @@
+ASSERT time=2026-10-16T22:04:09+02:00 qpid=2440902
+ASSERT host_driver=595.91.07
+ASSERT guest_driver=580.88
+ASSERT kf3_exe=/var/lib/kf-windows-20261005/kf3-bins/28a0ee9c/qemu-system-x86_64
+ASSERT kf3_env_begin
+KF3_ASYNC_PREEMPT=1
+KF3_DEFERRED_API=1
+KF3_DISPLAY_CAPS_PROBE=1
+KF3_DISPLAY_CTRL_PROBE=1
+KF3_DISPLAY_ILUT_OFFSET_256=1
+KF3_DISPLAY_IMP_ENABLE=1
+KF3_DISPLAY_LUT_MIRROR=1
+KF3_DISPLAY_SDR_COLOR=1
+KF3_GFX_POOL_PROBE=1
+KF3_KERNEL_GR_CE=1
+KF3_KERNEL_GR_WORK=1
+KF3_LIFECYCLE_COUNT=1
+KF3_LIFECYCLE_PERIOD_S=5
+KF3_MEMORY_LIST_PROBE=1
+KF3_PREEMPT_BIND_PROBE=1
+KF3_REV=28a0ee9c
+KF3_SW_RUNLIST_HOST_OWNED=1
+KF3_SW_RUNLIST_PROBE=1
+KF3_TRANSLATED_CE_RELAY=1
+KF3_WIN_TWIN_DEFAPI_OBJECT=1
+KF3_WIN_USER_CHANNELS_PASSTHROUGH=1
+KF3_ZCULL_BIND_PROBE=1
+ASSERT kf3_env_end
+ASSERT cmdline_flags=kf3-gpu,gpu-uuid=b7594b81-b2a0-47cb-b2b3-b0b7dcc60267,fb-mb=8192,bar1-size=8589934592,bar2-size=33554432,display=on,guest-driver=580.65.06,bus=pci.0,addr=0x6,id=kf0,display-broker=/run/user/1000/nvkvm/windows-run2995.sock,display-broker-uid=1000,gop=on
+ASSERT broker=ubuntu   /data/claude-resize/broker-bin/nvkvm-display-broker-666ea966 --socket /run/user/1000/nvkvm/windows-run2995.sock --backend wayland --persist --verbose 
+ASSERT MEMREC assert 2026-10-16T22:04:12+02:00 epoch=1792181052.828399125
+ASSERT MEMREC free:                total        used        free      shared  buff/cache   available
+ASSERT MEMREC free: Mem:           30719       23717         912       17904       24314        7002
+ASSERT MEMREC free: Swap:           8191        1248        6943
+ASSERT MEMREC swap: /swap.img file 8G 1.2G -1
+ASSERT MEMREC meminfo: MemFree:          933920 kB MemAvailable:    7170376 kB Cached:         23964896 kB SwapTotal:       8388604 kB SwapFree:        7110208 kB Dirty:               532 kB Shmem:          18334216 kB 
+ASSERT MEMREC psi.memory: some avg10=0.00 avg60=0.00 avg300=0.37 total=2135589206
+ASSERT MEMREC psi.memory: full avg10=0.00 avg60=0.00 avg300=0.37 total=2130338689
+ASSERT MEMREC vmstat: workingset_refault_anon 7546684 workingset_refault_file 254946219 pswpin 7611716 pswpout 6708442 pgmajfault 7781430 

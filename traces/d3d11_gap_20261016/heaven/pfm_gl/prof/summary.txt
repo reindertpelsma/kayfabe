@@ -1,0 +1,300 @@
+=== thread 2476765 kf3-display  samples=2071  share_of_process_samples=40.1%  (~7% of one CPU over 30 s at 999 Hz)
+--- self (top 10)
+ 28.74% [.] <kf_disp::scanout::HostCursorSrc>::image - - 
+ 17.90% [.] <kf_broker::cursor::CursorImage>::new - - 
+ 12.12% [.] <kf_disp::scanout::HostCursorSrc>::pixel - - 
+ 3.21% [.] 0x0000000000000a06 - - 
+ 1.35% [.] 0x0000000001179331 - - 
+ 1.35% [.] 0x000000000021e9a9 - - 
+ 1.30% [.] 0x000000000022c158 - - 
+ 0.95% [.] 0x000000000021e99a - - 
+ 0.86% [.] 0x000000000021e983 - - 
+ 0.80% [.] 0x000000000022c152 - - 
+--- inclusive (top 12, call-chain frames of kf_/Device/libc/kernel only)
+ 99.86% 0.19% [.] <kf_qemu::device::Device>::display_loop - - 
+ 72.12% 0.00% [.] <kf_qemu::display::ScanState>::start - - 
+ 40.27% 28.74% [.] <kf_disp::scanout::HostCursorSrc>::image - - 
+ 33.72% 0.00% [.] 0x0000763e269d23cd - - 
+ 33.54% 0.00% [.] 0x0000763e279362fa - - 
+ 29.14% 0.00% [.] cuMemcpyHtoD_v2 - - 
+ 29.14% 0.00% [.] 0x0000763e269c19d5 - - 
+ 29.14% 0.00% [.] 0x0000763e26b7dce2 - - 
+ 29.00% 0.00% [.] 0x0000763e2798f964 - - 
+ 28.86% 0.00% [.] 0x0000763e26ab0d9d - - 
+ 28.86% 0.00% [.] 0x0000763e26ad9d59 - - 
+ 24.42% 0.00% [.] <kf_cuda::display::DisplayGpu>::write_store - - 
+=== thread 2476766 kf3-scanline  samples=504  share_of_process_samples=9.8%  (~2% of one CPU over 30 s at 999 Hz)
+--- self (top 10)
+ 5.17% [k] dequeue_entity - - 
+ 4.98% [k] entry_SYSRETQ_unsafe_stack - - 
+ 4.18% [k] __sched_balance_update_blocked_averages - - 
+ 3.27% [.] <kf_qemu::display::RegMap>::scan_words - - 
+ 2.99% [k] update_curr - - 
+ 2.58% [k] srso_alias_safe_ret - - 
+ 2.33% [k] set_next_task_idle - - 
+ 2.22% [k] sched_balance_newidle - - 
+ 2.19% [k] update_load_avg - - 
+ 2.05% [k] perf_pmu_nop_void - - 
+--- inclusive (top 12, call-chain frames of kf_/Device/libc/kernel only)
+ 99.05% 1.18% [.] <kf_qemu::device::Device>::scanline_loop - - 
+ 81.15% 1.43% [.] do_syscall_64 - - 
+ 79.95% 0.35% [.] entry_SYSCALL_64_after_hwframe - - 
+ 78.19% 0.90% [.] __x64_sys_clock_nanosleep - - 
+ 77.67% 0.42% [.] x64_sys_call - - 
+ 75.25% 0.30% [.] common_nsleep_timens - - 
+ 74.82% 0.69% [.] hrtimer_nanosleep - - 
+ 74.56% 1.21% [.] do_nanosleep - - 
+ 66.31% 0.37% [.] schedule - - 
+ 64.70% 1.01% [.] __schedule - - 
+ 21.58% 0.18% [.] try_to_block_task.constprop.0.isra.0 - - 
+ 20.77% 0.00% [.] dequeue_task - - 
+=== thread 2476736 qemu-system-x86  samples=404  share_of_process_samples=7.8%  (~1% of one CPU over 30 s at 999 Hz)
+--- self (top 10)
+ 5.22% [k] srso_alias_safe_ret - - 
+ 3.66% [k] svm_vcpu_run - - 
+ 3.47% [k] srso_alias_return_thunk - - 
+ 2.81% [k] vcpu_enter_guest - - 
+ 2.62% [k] 0xfffff8062c8c04b4 - - 
+ 2.34% [k] __svm_vcpu_run - - 
+ 1.70% [k] kvm_load_xfeatures - - 
+ 1.64% [k] sched_balance_newidle - - 
+ 1.63% [k] kvm_vcpu_halt - - 
+ 1.43% [k] native_write_msr_safe - - 
+--- inclusive (top 12, call-chain frames of kf_/Device/libc/kernel only)
+ 97.05% 0.00% [.] g_free - - 
+ 96.75% 0.00% [k] 0x00000000000001b8 - - 
+ 96.75% 0.00% [k] 0x000055e9dbd43300 - - 
+ 96.75% 0.00% [k] 0x007570632d34365f - - 
+ 95.99% 0.00% [.] kvm_vcpu_ioctl - - 
+ 94.55% 0.00% [.] entry_SYSCALL_64_after_hwframe - - 
+ 94.02% 0.00% [.] do_syscall_64 - - 
+ 92.45% 0.57% [.] __x64_sys_ioctl - - 
+ 92.12% 0.44% [.] x64_sys_call - - 
+ 90.91% 1.02% [.] kvm_vcpu_ioctl - - 
+ 88.91% 0.24% [.] kvm_arch_vcpu_ioctl_run - - 
+ 81.51% 0.86% [.] vcpu_run - - 
+=== thread 2476735 qemu-system-x86  samples=261  share_of_process_samples=5.1%  (~1% of one CPU over 30 s at 999 Hz)
+--- self (top 10)
+ 5.94% [k] vcpu_enter_guest - - 
+ 4.51% [k] kvm_vcpu_has_events - - 
+ 4.00% [k] kvm_vcpu_check_block - - 
+ 3.85% [k] __svm_vcpu_run - - 
+ 2.79% [k] kvm_load_xfeatures - - 
+ 2.77% [k] srso_alias_safe_ret - - 
+ 2.66% [k] __apic_update_ppr - - 
+ 2.47% [k] ktime_get - - 
+ 2.42% [k] read_tsc - - 
+ 2.27% [k] svm_interrupt_allowed - - 
+--- inclusive (top 12, call-chain frames of kf_/Device/libc/kernel only)
+ 100.00% 0.00% [.] __x64_sys_ioctl - - 
+ 100.00% 0.00% [.] do_syscall_64 - - 
+ 100.00% 0.00% [.] entry_SYSCALL_64_after_hwframe - - 
+ 100.00% 0.00% [.] g_free - - 
+ 100.00% 0.00% [.] kvm_arch_vcpu_ioctl_run - - 
+ 100.00% 0.00% [.] kvm_vcpu_ioctl - - 
+ 100.00% 0.00% [.] kvm_vcpu_ioctl - - 
+ 100.00% 0.00% [.] x64_sys_call - - 
+ 100.00% 0.00% [k] 0x00000000000001b8 - - 
+ 100.00% 0.00% [k] 0x000055e9dbd43300 - - 
+ 100.00% 0.00% [k] 0x007570632d34365f - - 
+ 100.00% 1.81% [.] vcpu_run - - 
+=== thread 2476734 qemu-system-x86  samples=237  share_of_process_samples=4.6%  (~1% of one CPU over 30 s at 999 Hz)
+--- self (top 10)
+ 4.61% [k] kvm_vcpu_has_events - - 
+ 4.34% [k] __svm_vcpu_run - - 
+ 4.29% [k] vcpu_enter_guest - - 
+ 3.94% [k] ktime_get - - 
+ 3.92% [k] srso_alias_safe_ret - - 
+ 3.81% [k] native_write_msr - - 
+ 3.70% [k] srso_alias_return_thunk - - 
+ 3.50% [k] svm_vcpu_run - - 
+ 3.42% [k] kvm_vcpu_halt - - 
+ 2.32% [k] kvm_vcpu_check_block - - 
+--- inclusive (top 12, call-chain frames of kf_/Device/libc/kernel only)
+ 100.00% 0.50% [.] vcpu_run - - 
+ 100.00% 0.00% [.] __x64_sys_ioctl - - 
+ 100.00% 0.00% [.] do_syscall_64 - - 
+ 100.00% 0.00% [.] entry_SYSCALL_64_after_hwframe - - 
+ 100.00% 0.00% [.] g_free - - 
+ 100.00% 0.00% [.] kvm_arch_vcpu_ioctl_run - - 
+ 100.00% 0.00% [.] kvm_vcpu_ioctl - - 
+ 100.00% 0.00% [.] kvm_vcpu_ioctl - - 
+ 100.00% 0.00% [.] x64_sys_call - - 
+ 100.00% 0.00% [k] 0x00000000000001b8 - - 
+ 100.00% 0.00% [k] 0x000055e9dbd43300 - - 
+ 100.00% 0.00% [k] 0x007570632d34365f - - 
+=== thread 2476741 qemu-system-x86  samples=231  share_of_process_samples=4.5%  (~1% of one CPU over 30 s at 999 Hz)
+--- self (top 10)
+ 5.58% [k] vcpu_enter_guest - - 
+ 4.01% [k] srso_alias_safe_ret - - 
+ 3.55% [k] kvm_vcpu_check_block - - 
+ 3.49% [k] srso_alias_return_thunk - - 
+ 3.05% [k] __svm_vcpu_run - - 
+ 2.72% [k] 0xfffff806970ac7ce - - 
+ 2.52% [k] svm_vcpu_run - - 
+ 2.47% [k] __update_load_avg_se - - 
+ 2.30% [k] switch_fpu_return - - 
+ 2.24% [k] dequeue_entity - - 
+--- inclusive (top 12, call-chain frames of kf_/Device/libc/kernel only)
+ 100.00% 0.00% [.] __x64_sys_ioctl - - 
+ 100.00% 0.00% [.] do_syscall_64 - - 
+ 100.00% 0.00% [.] entry_SYSCALL_64_after_hwframe - - 
+ 100.00% 0.00% [.] g_free - - 
+ 100.00% 0.00% [.] kvm_arch_vcpu_ioctl_run - - 
+ 100.00% 0.00% [.] kvm_vcpu_ioctl - - 
+ 100.00% 0.00% [.] kvm_vcpu_ioctl - - 
+ 100.00% 0.00% [.] x64_sys_call - - 
+ 100.00% 0.00% [k] 0x00000000000001b8 - - 
+ 100.00% 0.00% [k] 0x000055e9dbd43300 - - 
+ 100.00% 0.00% [k] 0x007570632d34365f - - 
+ 99.29% 1.30% [.] vcpu_run - - 
+=== thread 2476738 qemu-system-x86  samples=220  share_of_process_samples=4.3%  (~1% of one CPU over 30 s at 999 Hz)
+--- self (top 10)
+ 6.80% [k] srso_alias_safe_ret - - 
+ 4.42% [k] __svm_vcpu_run - - 
+ 4.34% [k] vcpu_enter_guest - - 
+ 4.22% [k] srso_alias_return_thunk - - 
+ 3.04% [k] 0xfffff80696d78f28 - - 
+ 2.20% [k] kvm_load_xfeatures - - 
+ 2.00% [k] svm_vcpu_run - - 
+ 2.00% [k] svm_prepare_switch_to_guest - - 
+ 1.99% [k] 0xfffff806970acecc - - 
+ 1.98% [k] __kvm_set_msr - - 
+--- inclusive (top 12, call-chain frames of kf_/Device/libc/kernel only)
+ 100.00% 1.21% [.] vcpu_run - - 
+ 100.00% 0.00% [.] __x64_sys_ioctl - - 
+ 100.00% 0.00% [.] do_syscall_64 - - 
+ 100.00% 0.00% [.] entry_SYSCALL_64_after_hwframe - - 
+ 100.00% 0.00% [.] g_free - - 
+ 100.00% 0.00% [.] kvm_arch_vcpu_ioctl_run - - 
+ 100.00% 0.00% [.] kvm_vcpu_ioctl - - 
+ 100.00% 0.00% [.] kvm_vcpu_ioctl - - 
+ 100.00% 0.00% [.] x64_sys_call - - 
+ 100.00% 0.00% [k] 0x00000000000001b8 - - 
+ 100.00% 0.00% [k] 0x000055e9dbd43300 - - 
+ 100.00% 0.00% [k] 0x007570632d34365f - - 
+=== thread 2476740 qemu-system-x86  samples=217  share_of_process_samples=4.2%  (~1% of one CPU over 30 s at 999 Hz)
+--- self (top 10)
+ 5.98% [k] srso_alias_safe_ret - - 
+ 4.21% [k] vcpu_enter_guest - - 
+ 3.64% [k] native_write_msr - - 
+ 3.60% [k] read_tsc - - 
+ 3.16% [k] sched_clock_noinstr - - 
+ 3.13% [k] svm_vcpu_run - - 
+ 2.72% [k] __svm_vcpu_run - - 
+ 2.59% [k] srso_alias_return_thunk - - 
+ 2.40% [k] kvm_cpu_has_interrupt - - 
+ 2.33% [k] kvm_hv_process_stimers - - 
+--- inclusive (top 12, call-chain frames of kf_/Device/libc/kernel only)
+ 100.00% 0.54% [.] vcpu_run - - 
+ 100.00% 0.00% [.] __x64_sys_ioctl - - 
+ 100.00% 0.00% [.] do_syscall_64 - - 
+ 100.00% 0.00% [.] entry_SYSCALL_64_after_hwframe - - 
+ 100.00% 0.00% [.] g_free - - 
+ 100.00% 0.00% [.] kvm_arch_vcpu_ioctl_run - - 
+ 100.00% 0.00% [.] kvm_vcpu_ioctl - - 
+ 100.00% 0.00% [.] kvm_vcpu_ioctl - - 
+ 100.00% 0.00% [.] x64_sys_call - - 
+ 100.00% 0.00% [k] 0x00000000000001b8 - - 
+ 100.00% 0.00% [k] 0x000055e9dbd43300 - - 
+ 100.00% 0.00% [k] 0x007570632d34365f - - 
+=== thread 2476739 qemu-system-x86  samples=215  share_of_process_samples=4.2%  (~1% of one CPU over 30 s at 999 Hz)
+--- self (top 10)
+ 8.99% [k] vcpu_enter_guest - - 
+ 4.17% [k] srso_alias_safe_ret - - 
+ 3.06% [k] native_write_msr - - 
+ 2.89% [k] kvm_hv_process_stimers - - 
+ 2.81% [k] svm_vcpu_run - - 
+ 2.63% [k] apic_set_eoi - - 
+ 2.42% [k] kvm_load_xfeatures - - 
+ 2.29% [k] __kvm_write_guest_page - - 
+ 2.07% [k] dequeue_task_fair - - 
+ 2.06% [k] kvm_apic_has_interrupt - - 
+--- inclusive (top 12, call-chain frames of kf_/Device/libc/kernel only)
+ 100.00% 0.00% [.] __x64_sys_ioctl - - 
+ 100.00% 0.00% [.] do_syscall_64 - - 
+ 100.00% 0.00% [.] entry_SYSCALL_64_after_hwframe - - 
+ 100.00% 0.00% [.] g_free - - 
+ 100.00% 0.00% [.] kvm_arch_vcpu_ioctl_run - - 
+ 100.00% 0.00% [.] kvm_vcpu_ioctl - - 
+ 100.00% 0.00% [.] kvm_vcpu_ioctl - - 
+ 100.00% 0.00% [.] x64_sys_call - - 
+ 100.00% 0.00% [k] 0x00000000000001b8 - - 
+ 100.00% 0.00% [k] 0x000055e9dbd43300 - - 
+ 100.00% 0.00% [k] 0x007570632d34365f - - 
+ 99.38% 0.75% [.] vcpu_run - - 
+=== thread 2476737 qemu-system-x86  samples=213  share_of_process_samples=4.1%  (~1% of one CPU over 30 s at 999 Hz)
+--- self (top 10)
+ 6.19% [k] srso_alias_safe_ret - - 
+ 5.84% [k] srso_alias_return_thunk - - 
+ 4.29% [k] native_write_msr - - 
+ 3.25% [k] __svm_vcpu_run - - 
+ 3.09% [k] vcpu_enter_guest - - 
+ 2.97% [k] kvm_vcpu_has_events - - 
+ 2.89% [k] __sched_balance_update_blocked_averages - - 
+ 2.65% [k] 0xfffff80696d78f28 - - 
+ 2.39% [k] kvm_set_msr_common - - 
+ 2.08% [k] 0xfffff806970ac7ce - - 
+--- inclusive (top 12, call-chain frames of kf_/Device/libc/kernel only)
+ 100.00% 1.19% [.] vcpu_run - - 
+ 100.00% 0.00% [.] __x64_sys_ioctl - - 
+ 100.00% 0.00% [.] do_syscall_64 - - 
+ 100.00% 0.00% [.] entry_SYSCALL_64_after_hwframe - - 
+ 100.00% 0.00% [.] g_free - - 
+ 100.00% 0.00% [.] kvm_arch_vcpu_ioctl_run - - 
+ 100.00% 0.00% [.] kvm_vcpu_ioctl - - 
+ 100.00% 0.00% [.] kvm_vcpu_ioctl - - 
+ 100.00% 0.00% [.] x64_sys_call - - 
+ 100.00% 0.00% [k] 0x00000000000001b8 - - 
+ 100.00% 0.00% [k] 0x000055e9dbd43300 - - 
+ 100.00% 0.00% [k] 0x007570632d34365f - - 
+=== thread 2476757 cuda-EvtHandlr  samples=95  share_of_process_samples=1.8%  (~0% of one CPU over 30 s at 999 Hz)
+--- self (top 10)
+ 10.69% [k] entry_SYSRETQ_unsafe_stack - - 
+ 6.66% [k] do_poll.constprop.0 - - 
+ 6.55% [k] srso_alias_safe_ret - - 
+ 4.77% [k] __pollwait - - 
+ 4.04% [k] hrtimer_start_range_ns - - 
+ 3.73% [k] read_tsc - - 
+ 3.56% [.] __vdso_clock_gettime - - 
+ 3.49% [k] perf_event_context_sched_out - - 
+ 3.35% [k] _raw_spin_unlock_irqrestore - - 
+ 3.34% [k] put_prev_task_fair - - 
+--- inclusive (top 12, call-chain frames of kf_/Device/libc/kernel only)
+ 100.00% 0.00% [.] 0x0000763e26aee373 - - 
+ 88.00% 0.00% [.] 0x0000763e26bdf215 - - 
+ 81.62% 0.00% [.] __poll - - 
+ 81.62% 0.00% [.] 0x0000763e26b038d7 - - 
+ 78.42% 0.00% [.] do_syscall_64 - - 
+ 78.42% 0.00% [.] entry_SYSCALL_64_after_hwframe - - 
+ 78.36% 1.71% [.] x64_sys_call - - 
+ 70.92% 0.00% [.] __x64_sys_poll - - 
+ 70.92% 0.00% [.] do_sys_poll - - 
+ 58.17% 6.66% [.] do_poll.constprop.0 - - 
+ 28.80% 0.03% [.] poll_schedule_timeout.constprop.0 - - 
+ 28.80% 0.00% [.] schedule_hrtimeout_range - - 
+=== thread 2476769 kf3-display  samples=77  share_of_process_samples=1.5%  (~0% of one CPU over 30 s at 999 Hz)
+--- self (top 10)
+ 13.11% [k] perf_ctx_enable - - 
+ 10.69% [k] call_function_single_prep_ipi - - 
+ 9.99% [k] update_curr - - 
+ 9.96% [k] srso_alias_safe_ret - - 
+ 6.42% [k] do_syscall_64 - - 
+ 6.11% [k] dequeue_entities - - 
+ 5.75% [k] futex_wait_setup - - 
+ 5.62% [k] sched_balance_newidle - - 
+ 4.00% [k] __futex_wait - - 
+ 4.00% [k] dequeue_entity - - 
+--- inclusive (top 12, call-chain frames of kf_/Device/libc/kernel only)
+ 100.00% 0.00% [.] 0x0000763e26aee373 - - 
+ 73.94% 6.42% [.] do_syscall_64 - - 
+ 68.02% 0.00% [.] entry_SYSCALL_64_after_hwframe - - 
+ 67.52% 0.00% [.] x64_sys_call - - 
+ 59.49% 0.00% [.] 0x0000763e26c57e71 - - 
+ 53.35% 0.00% [.] __x64_sys_futex - - 
+ 53.08% 4.00% [.] __futex_wait - - 
+ 53.08% 0.00% [.] do_futex - - 
+ 53.08% 0.00% [.] futex_wait - - 
+ 43.34% 0.01% [.] schedule - - 
+ 43.33% 0.00% [.] __schedule - - 
+ 43.32% 0.00% [.] futex_do_wait - - 

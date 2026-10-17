@@ -1,0 +1,9 @@
+# PR1: 340 timestamped display lines, median interval 2.00 s
+== d3d11: window 247 s, 122 display samples joined with dmon
+  stall   n=   2 ( 1.6%) kms_mean=  0.0 gpu_sm%_mean= 78.8 power_W_mean= 96.2 idle_gpu(<20%)=0 busy_gpu(>=50%)=2
+  slow    0
+  normal  n= 120 (98.4%) kms_mean= 59.6 gpu_sm%_mean= 78.8 power_W_mean= 92.6 idle_gpu(<20%)=0 busy_gpu(>=50%)=120
+== gl: window 247 s, 121 display samples joined with dmon
+  stall   0
+  slow    0
+  normal  n= 121 (100.0%) kms_mean= 59.6 gpu_sm%_mean= 86.3 power_W_mean=139.5 idle_gpu(<20%)=0 busy_gpu(>=50%)=121

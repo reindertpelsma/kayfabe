@@ -1,0 +1,39 @@
+/data/claude-gap/ev/heaven/pfm_gl/prof/offcpu.bt:2:246-262: WARNING: Return value discarded.
+tracepoint:raw_syscalls:sys_exit /@st[tid]/ { $d = nsecs - @st[tid]; @sys_us[comm, @id[tid]] = sum($d / 1000); @sys_n[comm, @id[tid]] = count(); if ($d > 20000) { @blk20_n[comm, @id[tid]] = count(); @blk20_us[comm, @id[tid]] = sum($d / 1000); } delete(@st[tid]); delete(@id[tid]); }
+                                                                                                                                                                                                                                                     ~~~~~~~~~~~~~~~~
+/data/claude-gap/ev/heaven/pfm_gl/prof/offcpu.bt:2:264-280: WARNING: Return value discarded.
+tracepoint:raw_syscalls:sys_exit /@st[tid]/ { $d = nsecs - @st[tid]; @sys_us[comm, @id[tid]] = sum($d / 1000); @sys_n[comm, @id[tid]] = count(); if ($d > 20000) { @blk20_n[comm, @id[tid]] = count(); @blk20_us[comm, @id[tid]] = sum($d / 1000); } delete(@st[tid]); delete(@id[tid]); }
+                                                                                                                                                                                                                                                                       ~~~~~~~~~~~~~~~~
+/data/claude-gap/ev/heaven/pfm_gl/prof/offcpu.bt:4:156-182: WARNING: Return value discarded.
+tracepoint:sched:sched_switch /@w[args->next_pid]/ { @rq_us[args->next_comm] = sum((nsecs - @w[args->next_pid]) / 1000); @rq_n[args->next_comm] = count(); delete(@w[args->next_pid]); }
+                                                                                                                                                           ~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+
+@blk20_n[kf3-worker1, 1]: 1
+@blk20_n[kf3-worker0, 1]: 3
+@blk20_n[kf3-worker1, 232]: 1578
+@blk20_n[kf3-worker0, 232]: 1835
+@blk20_us[kf3-worker1, 1]: 21
+@blk20_us[kf3-worker0, 1]: 76
+@blk20_us[kf3-worker0, 232]: 19955728
+@blk20_us[kf3-worker1, 232]: 20001329
+@csw[kf3-worker1, preempted]: 1204
+@csw[kf3-worker0, preempted]: 1842
+@csw[kf3-worker0, blocked]: 2755
+@csw[kf3-worker1, blocked]: 2803
+@rq_n[kf3-worker0]: 2740
+@rq_n[kf3-worker1]: 2796
+@rq_us[kf3-worker0]: 5646
+@rq_us[kf3-worker1]: 7323
+@sys_n[kf3-worker1, 0]: 833
+@sys_n[kf3-worker0, 0]: 955
+@sys_n[kf3-worker1, 1]: 1842
+@sys_n[kf3-worker1, 232]: 1900
+@sys_n[kf3-worker0, 232]: 2196
+@sys_n[kf3-worker0, 1]: 2543
+@sys_us[kf3-worker0, 0]: 80
+@sys_us[kf3-worker1, 0]: 175
+@sys_us[kf3-worker1, 1]: 3465
+@sys_us[kf3-worker0, 1]: 4959
+@sys_us[kf3-worker0, 232]: 19958862
+@sys_us[kf3-worker1, 232]: 20003908

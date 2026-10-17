@@ -1,0 +1,9 @@
+# SOc: 75 channels with at least one SET_OBJECT
+== edge: channels=2 max_set_object_total_per_channel=1 rebinds_total=0 same_resend=0 different=0 extra_sub_5080=0 channels_with_late=0
+   distinct data words (hex): ['0x5080']
+== heaven_d3d11: channels=16 max_set_object_total_per_channel=1 rebinds_total=0 same_resend=0 different=0 extra_sub_5080=0 channels_with_late=0
+   distinct data words (hex): ['0x5080']
+== heaven_opengl: channels=25 max_set_object_total_per_channel=4 rebinds_total=0 same_resend=0 different=0 extra_sub_5080=0 channels_with_late=0
+   distinct data words (hex): ['0x5080', '0x902d', '0xa140', '0xc997']
+== other (boot/idle/between): channels=32 max_set_object_total_per_channel=1 rebinds_total=0 same_resend=0 different=0 extra_sub_5080=0 channels_with_late=0
+   distinct data words (hex): ['0x5080']

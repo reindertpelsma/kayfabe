@@ -1,0 +1,6 @@
+# Z16a: 183 timestamped display lines, median interval 2.00 s
+== d3d11: window 247 s, 121 display samples joined with dmon
+  stall   0
+  slow    0
+  normal  n= 121 (100.0%) kms_mean= 59.6 gpu_sm%_mean= 96.3 power_W_mean=157.3 idle_gpu(<20%)=0 busy_gpu(>=50%)=121
+gl no window

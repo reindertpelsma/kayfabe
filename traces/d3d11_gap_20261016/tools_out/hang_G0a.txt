@@ -1,0 +1,5 @@
+Traceback (most recent call last):
+  File "/data/claude-gap/hang_corr.py", line 17, in <module>
+    for l in open(f"{EV}/arm/{tag}.dispts.txt", errors="replace"):
+             ~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+FileNotFoundError: [Errno 2] No such file or directory: '/data/claude-gap/ev/arm/G0a.dispts.txt'

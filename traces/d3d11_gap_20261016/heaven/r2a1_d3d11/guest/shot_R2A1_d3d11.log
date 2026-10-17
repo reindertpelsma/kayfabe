@@ -1,0 +1,5 @@
+START 00:14:45.535 user=kfadmin session=1
+SHOT screen=1536x864 mean_luma=70 std_luma=53.7 distinct_4bit_colours=120
+SHOT_DONE
+END 00:14:45.875
+

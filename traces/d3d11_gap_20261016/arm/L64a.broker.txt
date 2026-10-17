@@ -1,0 +1,1 @@
+[windows] broker: backend wayland, socket /run/user/1000/nvkvm/windows-run2995.sock, title 'KAYFABE PERF RUN 2995 134DCB54' (log /var/lib/kf-windows-20261005/boundary-kayfabe-2995/broker-20261017-004933.log)

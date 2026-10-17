@@ -1,0 +1,2 @@
+[ perf record: Woken up 107059 times to write data ]
+[ perf record: Captured and wrote 11.042 MB /data/claude-gap/ev/heaven/pfm_d3d11/prof/perf.data (95602 samples) ]
