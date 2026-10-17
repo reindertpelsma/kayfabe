@@ -70,7 +70,7 @@ outputs equal to bare metal (earlier run, rented RTX 3060; [matrix](docs/design/
 (Code 43). Per-die table: [`docs/STATUS_DETAIL.md`](docs/STATUS_DETAIL.md).
 
 **Not finished:** Windows sleep/wake does not survive; Edge can reset after 7 to 16 minutes of playback; other GPU dies need more work under Windows; the
-security model is designed but not audited, so no public binary ships. The full list is in [`docs/STATUS_DETAIL.md`](docs/STATUS_DETAIL.md).
+security model is designed but not audited, and what a guest-triggered GPU fault does to other VMs sharing the card is not yet measured, so no public binary ships. The full list is in [`docs/STATUS_DETAIL.md`](docs/STATUS_DETAIL.md).
 
 ## Trying it
 
