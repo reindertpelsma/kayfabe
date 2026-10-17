@@ -311,13 +311,16 @@ mod tests {
         }
     }
     fn identity() -> RpcCommand {
+        identity_for(driver(), "580.88")
+    }
+    fn identity_for(driver: DriverAbiTable, windows_name: &str) -> RpcCommand {
         use kf_abi::guestsysinfo::*;
         let twin = kf_abi::generated::windows_twins::WINDOWS_TWINS
             .iter()
-            .find(|t| t.win_name == "580.88")
+            .find(|t| t.win_name == windows_name)
             .unwrap();
         let mut p = vec![0; SET_GUEST_SYSTEM_INFO_SIZE];
-        let vgx = driver().vgx_version().unwrap();
+        let vgx = driver.vgx_version().unwrap();
         p[VGX_MAJOR_OFF..VGX_MAJOR_OFF + 4].copy_from_slice(&vgx.major.to_le_bytes());
         p[VGX_MINOR_OFF..VGX_MINOR_OFF + 4].copy_from_slice(&vgx.minor.to_le_bytes());
         p[GUEST_DRIVER_VERSION_OFF..GUEST_DRIVER_VERSION_OFF + twin.win_name.len()]
@@ -328,10 +331,16 @@ mod tests {
         command(RpcFunction::SetGuestSystemInfo, p)
     }
     fn fixture() -> (Probe, IdentityObserver, RpcCommand) {
+        fixture_for(driver(), "580.88")
+    }
+    fn fixture_for(
+        driver: DriverAbiTable,
+        windows_name: &str,
+    ) -> (Probe, IdentityObserver, RpcCommand) {
         let mut engines = [0; kf_abi::gspstaticinfo::ENGINE_CAPS_WORDS];
         engines[0] = 1 << kf_abi::submit::ENGINE_TYPE_GRAPHICS;
-        let (probe, mut observer) = Probe::new(driver(), engines);
-        observer.respond(&identity());
+        let (probe, mut observer) = Probe::new(driver, engines);
+        observer.respond(&identity_for(driver, windows_name));
         // Independent nvos.h layout: engineId@0, maxTSGs@4, qosIntrEnableMask@8.
         let mut p = vec![0; 44];
         for (off, v) in [(0, 1u32), (4, 3), (8, 4), (12, 0xb297), (20, 12), (32, 1)] {
@@ -671,6 +680,62 @@ mod tests {
             assert!(experimental.respond(&control).is_none());
             assert!(normal.respond(&control).is_none());
         }
+    }
+
+    fn windows_581_driver() -> DriverAbiTable {
+        *kf_abi::versions::table_for(kf_abi::DriverVersion {
+            major: 580,
+            minor: 94,
+            patch: 2,
+        })
+        .unwrap()
+    }
+
+    #[test]
+    fn windows_581_metadata_allocation_does_not_authorize_submission() {
+        let driver = windows_581_driver();
+        let (probe, mut observer, cmd) = fixture_for(driver, "581.51");
+        let declaration = probe
+            .decode(&cmd)
+            .unwrap()
+            .expect("native-evidenced allocation cell");
+        assert_eq!(declaration.engine, kf_abi::submit::ENGINE_TYPE_GRAPHICS);
+        let make = || {
+            ObjectPolicy::over(
+                &driver,
+                kf_abi::GuestOs::Windows,
+                Box::new({
+                    let mut objects = GraphObjects::new(kf_chip::Family::Ada);
+                    objects.graph = graph();
+                    objects
+                }),
+                Default::default(),
+            )
+        };
+        let mut normal = make();
+        assert_ne!(normal.respond(&cmd).unwrap().rpc_result, 0);
+        let mut diagnostic = make().with_sw_runlist_probe(probe);
+        assert_eq!(diagnostic.respond(&cmd).unwrap().rpc_result, 0);
+        assert_eq!(diagnostic.applied(), 1);
+        assert!(
+            !driver
+                .capabilities()
+                .alloc_class(ClassId(0xb297))
+                .is_permitted()
+        );
+        let mut host_owned = crate::sw_runlist_host::SwRunlistHostOwnedPolicy::new(driver);
+        host_owned.respond(&identity_for(driver, "581.51"));
+        for code in [0x20801110u32, 0x20801111] {
+            let wire = driver.rm_control_wire();
+            let mut p = vec![0; wire.params_off + 40];
+            p[8..12].copy_from_slice(&code.to_le_bytes());
+            p[wire.params_size_off..wire.params_size_off + 4].copy_from_slice(&40u32.to_le_bytes());
+            let control = command(RpcFunction::RmControl, p);
+            assert!(diagnostic.respond(&control).is_none());
+            assert!(host_owned.respond(&control).is_none());
+            assert!(observer.request_observation(&control).is_none());
+        }
+        assert_eq!(host_owned.answered(), 0);
     }
 
     #[test]
