@@ -13,7 +13,7 @@ Suites (test-name filters of `cargo test --release`):
   threads  kf-disp --test lockstep_threads          (real threads, real socket, fake broker)
   relay    kf-broker --test relay_ticks + --lib ticks:: (the relay's own tests)
   unit     kf-disp --lib tick:: lockstep:: pace::  (the pure units)
-A mutant a suite fails to kill is printed as SURVIVED and the exit code is 1.
+`--suite must` runs each mutant against the suites of its must-list. A mutant a required suite fails to kill is printed as SURVIVED and the exit code is 1.
 """
 import argparse, os, subprocess, sys
 
@@ -91,6 +91,7 @@ def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--suite", default="all")
     ap.add_argument("--only")
+    ap.add_argument("--part", help="i/n: run every n-th mutant starting at i (parallel workers)")
     ap.add_argument("--list", action="store_true")
     a = ap.parse_args()
     extra = []
@@ -106,8 +107,12 @@ def main():
         return 0
     bad = 0
     print(f"{'mutant':40} " + " ".join(f"{s:8}" for s in (["a", "b", "threads", "relay", "unit"] if a.suite == "all" else [a.suite])))
-    for name, rel, old, new, must in muts:
+    if a.suite == "must":
+        print("(suite 'must': each mutant is run against the suites its must-list names, in that order)")
+    for idx, (name, rel, old, new, must) in enumerate(muts):
         if a.only and a.only not in name:
+            continue
+        if a.part and idx % int(a.part.split("/")[1]) != int(a.part.split("/")[0]):
             continue
         path = os.path.join(ROOT, rel)
         src = open(path).read()
@@ -115,7 +120,8 @@ def main():
             print(f"{name:40} PATCH-FAILED ({src.count(old)} matches in {rel})")
             bad += 1
             continue
-        suites = ["a", "b", "threads", "relay", "unit"] if a.suite == "all" else [a.suite]
+        suites = (["a", "b", "threads", "relay", "unit"] if a.suite == "all"
+                  else must.split() if a.suite == "must" else [a.suite])
         row = []
         try:
             open(path, "w").write(src.replace(old, new))
