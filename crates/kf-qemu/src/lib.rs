@@ -10,6 +10,7 @@
 pub mod actq;
 pub mod bar0trace;
 pub mod bar1phys;
+pub mod bootclean;
 pub mod broker;
 pub mod cardbudget;
 pub mod chan;

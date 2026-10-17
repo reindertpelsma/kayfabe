@@ -1,0 +1,114 @@
+// SPDX-License-Identifier: Apache-2.0 OR GPL-2.0-or-later
+//! ★★ **Is store `[0, G)` fit to be shown as the boot picture?** (2026-10-18, branch
+//! `claude/bootlayer-20261018`.)
+//!
+//! The boot layer scans store `[0, G)`. That range is the firmware console's framebuffer ONLY while
+//! the guest's firmware (OVMF's GOP, the bootloader, a basic-display driver) is what writes it. From
+//! the moment a guest RM starts, the same bytes are ordinary video memory: the region table the
+//! device serves declares `[0, carve)` as heap (`kf_chip::bar0::fb_layout`) unless the guest reserves
+//! a console, and the RM's GPU work writes its structures there. Drawn as pixels they are thin
+//! coloured rows at fixed positions (`[measured, run 3081]` the stripes on the boot screen and on the
+//! screen after an unload; the RM allocates the same low addresses every life).
+//!
+//! So the boot layer is shown only while the range is **clean**:
+//!
+//! - it starts clean (realize zeroed it);
+//! - it is **tainted** when a guest RM life begins (fn 72, the first RPC of every RM life — before
+//!   the RM can allocate heap), when the seed retires (the guest's CPU writes then go to scratch, so
+//!   the store no longer follows its framebuffer), and when a device reset is requested;
+//! - it is **cleaned** only by a scrub that COMPLETED: at an RM unload (`bar1phys`) or at a device
+//!   reset's memory stage.
+//!
+//! While tainted the console shows no boot layer: the last frame stays (before any guest scanout was
+//! ever shown), or black (after one was lost) — never the RM's data. Once a head is armed the boot
+//! layer is not shown at all (`boot_done`), so a guest that arms its display is unaffected.
+
+use std::sync::atomic::{AtomicBool, Ordering};
+
+/// The shared flag: written by the VA thread, the drainer and the reset sequence, read by the display
+/// worker. Lock-free; nothing here ever waits.
+#[derive(Debug)]
+pub struct BootClean {
+    clean: AtomicBool,
+}
+
+impl Default for BootClean {
+    fn default() -> BootClean {
+        BootClean::new()
+    }
+}
+
+impl BootClean {
+    /// Clean: realize zeroed the range and nothing has written it since.
+    #[must_use]
+    pub const fn new() -> BootClean {
+        BootClean {
+            clean: AtomicBool::new(true),
+        }
+    }
+
+    /// Something other than the firmware console may now write the range.
+    pub fn taint(&self) {
+        self.clean.store(false, Ordering::Release);
+    }
+
+    /// A scrub of the range COMPLETED (never called on a refused or unfinished one).
+    pub fn clean(&self) {
+        self.clean.store(true, Ordering::Release);
+    }
+
+    /// May the boot layer be shown?
+    #[must_use]
+    pub fn is_clean(&self) -> bool {
+        self.clean.load(Ordering::Acquire)
+    }
+}
+
+/// ★ The VA thread's edge detector: the seed going from placed to retired is a taint, whichever
+/// pass of its loop notices; a seed that stays retired, or is placed again, is not.
+#[derive(Debug)]
+pub struct SeedWatch {
+    placed: bool,
+}
+
+impl Default for SeedWatch {
+    fn default() -> SeedWatch {
+        SeedWatch { placed: true }
+    }
+}
+
+impl SeedWatch {
+    /// The window's seed state this pass. `true` when the range must be tainted now.
+    pub fn observe(&mut self, placed: bool) -> bool {
+        let retired_now = self.placed && !placed;
+        self.placed = placed;
+        retired_now
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn it_starts_clean_and_only_a_completed_scrub_cleans_it_again() {
+        let b = BootClean::new();
+        assert!(b.is_clean(), "realize zeroed it");
+        b.taint();
+        assert!(!b.is_clean());
+        b.taint();
+        assert!(!b.is_clean(), "tainting twice is still tainted");
+        b.clean();
+        assert!(b.is_clean());
+    }
+
+    #[test]
+    fn the_seed_retiring_is_one_edge_and_only_that() {
+        let mut w = SeedWatch::default();
+        assert!(!w.observe(true), "placed from the start");
+        assert!(w.observe(false), "retired: the first BAR1 change");
+        assert!(!w.observe(false), "staying retired is not a new edge");
+        assert!(!w.observe(true), "placed again (reset, unload) is not a taint");
+        assert!(w.observe(false), "the next RM life retires it again");
+    }
+}

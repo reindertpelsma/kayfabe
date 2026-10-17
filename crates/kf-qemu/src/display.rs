@@ -1464,6 +1464,24 @@ fn choose_shown(
     }
 }
 
+/// ★★ [`choose_shown`] with the boot range's cleanliness (`crate::bootclean`, 2026-10-18): the boot
+/// layer is chosen only while store `[0, G)` is CLEAN. While it is tainted — a guest RM life has
+/// begun, or a reset or unload scrub has not completed — the boot layer is skipped and the choice
+/// falls to what `choose_shown` gives without it: the last frame stays before any guest scanout was
+/// ever shown (no black at the first handoff), black after one was lost. An armed composition always
+/// wins, as before.
+fn choose_shown_gated(
+    console: Option<Composition>,
+    boot: Option<&BootScan>,
+    boot_done: bool,
+    boot_clean: bool,
+    held: &Held,
+) -> Option<Shown> {
+    // RED STEP (tests first): the gate is not wired yet.
+    let _ = boot_clean;
+    choose_shown(console, boot, boot_done, held)
+}
+
 /// FNV-1a over `words` — [`shown_key`]'s hash.
 fn fnv(words: impl IntoIterator<Item = u64>) -> u64 {
     words.into_iter().fold(0xcbf2_9ce4_8422_2325, |h, w| {
@@ -6438,6 +6456,68 @@ mod tests {
                 "{prev:?}"
             );
         }
+    }
+
+    /// ★★ 2026-10-18 (branch `claude/bootlayer-20261018`): the boot layer is shown only while store
+    /// `[0, G)` is clean. A guest RM life writes its own vidmem there (`[measured, run 3081]` coloured
+    /// rows at fixed positions on the boot screen and after an unload), so while it is tainted the
+    /// console shows no boot layer: the last frame before any guest scanout, black after one was
+    /// lost — never the RM's data. An armed composition is not affected, and a completed scrub
+    /// brings the boot layer back from every state a life can end in.
+    #[test]
+    fn a_tainted_boot_range_is_never_shown_and_a_completed_scrub_brings_it_back() {
+        let boot = boot_scan();
+        let comp = Composition {
+            head: 0,
+            width: 1920,
+            height: 1080,
+            layers: Vec::new(),
+        };
+        let states = [
+            Held::default(),
+            Held {
+                preserved: None,
+                scanned: Some((1280, 720)),
+                dark: Dark::Unlit,
+            },
+            Held {
+                preserved: None,
+                scanned: Some((1920, 1080)),
+                dark: Dark::WindowlessBrief,
+            },
+        ];
+        for prev in &states {
+            let held = held_after_life_reset(prev);
+            // tainted: not the boot layer — the last frame stays (None) or black
+            let shown = choose_shown_gated(None, Some(&boot), false, false, &held);
+            assert_ne!(
+                shown,
+                Some(Shown::Boot(boot.layer, boot.size)),
+                "{prev:?}: tainted bytes must not be drawn"
+            );
+            assert_eq!(shown, prev.scanned.map(Shown::Blank), "{prev:?}");
+            // clean again: the boot layer returns (must-keep: unload / reset go back to it)
+            assert_eq!(
+                choose_shown_gated(None, Some(&boot), false, true, &held),
+                Some(Shown::Boot(boot.layer, boot.size)),
+                "{prev:?}"
+            );
+            // a guest that arms its display is unaffected either way
+            for clean in [false, true] {
+                assert_eq!(
+                    choose_shown_gated(Some(comp.clone()), Some(&boot), false, clean, &held),
+                    Some(Shown::Armed(comp.clone()))
+                );
+            }
+        }
+        // the first boot: tainted before anything was ever shown is NO new frame (the last stays)
+        assert_eq!(
+            choose_shown_gated(None, Some(&boot), false, false, &Held::default()),
+            None,
+            "no black at the first handoff"
+        );
+        // gop=off is untouched by the gate
+        assert_eq!(choose_shown_gated(None, None, false, false, &Held::default()), None);
     }
 
     /// ★ 2026-10-03 (B5, `V3_DISPLAY.md` §4.11.13): a head's scanout that WAS shown and is lost is
