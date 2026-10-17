@@ -20,8 +20,6 @@ Master is not the newest code: the latest Windows performance work lives on bran
 | API forwarding ([nvkvm-pv](https://github.com/reindertpelsma/nvkvm-pv) / virtio-nvgpu) | yes | no | a custom guest module | any NVIDIA GPU |
 | **kayfabe** | **yes** | **yes, by design (not yet audited)** | **stock, unmodified** | any NVIDIA GPU is the goal; tested on consumer cards (Turing to Blackwell); the open NVIDIA host driver |
 
-The rows compare technologies, not projects: nvkvm-pv is the author's earlier project and is one implementation of the API-forwarding approach (the one other people may know as virtio-nvgpu).
-
 - **Nothing is patched.** No host or guest driver or kernel is modified; the guest uses NVIDIA's own installer.
 - **The guest is treated as hostile.** Every host action is authored by kayfabe from a few unprivileged verbs, never forwarded from guest bytes.
 - **Near-native speed is within reach.** On the same RTX 4070, Unigine Heaven 4.0 in a Windows guest (1920x1080 windowed, Ultra, 260 s runs, Heaven's own score):
