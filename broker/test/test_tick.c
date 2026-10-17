@@ -488,11 +488,16 @@ static void test_answer(void)
 /* --- the TX queue's rule ------------------------------------------------------ */
 static void test_replace(void)
 {
-    CHECK(nb_tick_may_replace(0), "replace: a bare tick");
-    CHECK(nb_tick_may_replace(P60), "replace: a tick with a period");
-    CHECK(nb_tick_may_replace(NVKVM_BROKER_TICK_F_CLOCK_ONLY | 1000), "replace: CLOCK_ONLY");
-    CHECK(!nb_tick_may_replace(NVKVM_BROKER_TICK_F_WANT_FRAME), "replace: a WANT tick is never replaced");
-    CHECK(!nb_tick_may_replace(NVKVM_BROKER_TICK_F_WANT_FRAME | P60), "replace: WANT with a period");
+    const uint32_t W = NVKVM_BROKER_TICK_F_WANT_FRAME;
+
+    CHECK(nb_tick_may_replace(0, 0), "replace: a bare tick by a bare tick");
+    CHECK(nb_tick_may_replace(P60, P60), "replace: a tick with a period");
+    CHECK(nb_tick_may_replace(NVKVM_BROKER_TICK_F_CLOCK_ONLY | 1000, 0), "replace: CLOCK_ONLY");
+    CHECK(nb_tick_may_replace(0, W), "replace: a bare tick by a WANT tick");
+    CHECK(!nb_tick_may_replace(W, 0), "replace: the live WANT tick is not replaced by a bare one");
+    CHECK(!nb_tick_may_replace(W | P60, P60), "replace: WANT with a period, by a bare one");
+    CHECK(nb_tick_may_replace(W, W), "replace: a dead WANT tick is replaced by a newer WANT");
+    CHECK(nb_tick_may_replace(W | P60, W | P60 * 2), "replace: WANT by WANT with periods");
 }
 
 /* --- a long lock-step run: the invariants after every step --------------------- */

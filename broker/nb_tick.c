@@ -203,8 +203,6 @@ bool nb_tick_refresh(struct nb_tick *t, uint64_t now_ns, uint64_t present_ns,
 void nb_tick_prime(struct nb_tick *t, uint64_t now_ns, struct nb_tick_out *o)
 {
     t->now_ns = now_ns;
-    t->have_accept = true;
-    t->last_accept_ns = now_ns;
     tick_emit(t, now_ns, now_ns, 0, NVKVM_BROKER_TICK_F_CLOCK_ONLY, true, o);
 }
 
@@ -243,7 +241,8 @@ void nb_tick_presented(struct nb_tick *t)
     t->unpresented = false;
 }
 
-bool nb_tick_may_replace(uint32_t queued_refresh_word)
+bool nb_tick_may_replace(uint32_t queued_refresh_word, uint32_t new_refresh_word)
 {
-    return (queued_refresh_word & NVKVM_BROKER_TICK_F_WANT_FRAME) == 0;
+    return (queued_refresh_word & NVKVM_BROKER_TICK_F_WANT_FRAME) == 0 ||
+           (new_refresh_word & NVKVM_BROKER_TICK_F_WANT_FRAME) != 0;
 }

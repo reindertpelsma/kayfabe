@@ -711,9 +711,12 @@ enum nb_tick_ans nb_tick_answer(struct nb_tick *t, uint32_t req, bool is_commit,
                                 uint64_t now_ns);
 /* The display showed (or discarded) the answered frame. */
 void nb_tick_presented(struct nb_tick *t);
-/* The TX queue's rule: a queued tick without WANT_FRAME may be replaced by a
- * newer tick; one with it never. */
-bool nb_tick_may_replace(uint32_t queued_refresh_word);
+/* The TX queue's rule: a queued, unsent tick is REPLACED by a newer one -- unless
+ * it carries WANT_FRAME and the newer does not: that is the live request, and
+ * the only copy of it.  (A newer WANT_FRAME replaces it: its request is dead,
+ * the broker has already moved on.)  So the queue holds at most one live WANT
+ * tick and one newer tick behind it, however long the peer does not read. */
+bool nb_tick_may_replace(uint32_t queued_refresh_word, uint32_t new_refresh_word);
 
 /* ── the policy core ─────────────────────────────────────────────────────── */
 struct nb_session;
@@ -886,6 +889,9 @@ struct nb_sink {
 
     /* The display tick (EV_TICK / lock-step requests): connection state. */
     struct nb_tick tick;
+    unsigned surf_mhz;      /* the mode rate last advertised in EV_SURFACE   */
+    unsigned host_mhz;      /* the host rate the last refresh feedback gave  */
+    uint64_t host_period_ns;
 };
 
 void nb_sink_init(struct nb_sink *s, struct nb_session *sess);
@@ -1105,6 +1111,13 @@ struct nb_session_ops {
      */
     int  (*tick)(struct nb_session *s);
     void (*notify_clipboard)(struct nb_session *s);
+    /*
+     * The clock the display tick's rules judge COMMIT / NO_CHANGE / CAPS by,
+     * CLOCK_MONOTONIC nanoseconds.  OPTIONAL: NULL means the real clock.  Only
+     * the test backend has one (a virtual clock driven by its stdin, so a tick
+     * test is deterministic to the nanosecond).
+     */
+    uint64_t (*now_ns)(struct nb_session *s);
     /* Begin an asynchronous read of the host selection.  The backend captures
      * `generation`, queues content with nb_sink_send_clipboard(), then calls
      * nb_sink_clip_finish() with the same generation. */

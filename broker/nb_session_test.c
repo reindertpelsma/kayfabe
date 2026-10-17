@@ -112,6 +112,9 @@ struct nb_test {
     bool     xo_up;             /* an XOR patch is "on screen"             */
     uint32_t xo_key;
     int32_t  xo_x, xo_y;
+    /* The display tick.  The clock is VIRTUAL: it moves only when a stdin line
+     * says so, which makes every tick test deterministic to the nanosecond. */
+    uint64_t vnow_ns;
 };
 
 static uint64_t test_now_us(void)
@@ -366,11 +369,90 @@ static void test_finish_stale_fetch(struct nb_test *t, struct nb_sink *sink)
     nb_sink_clip_finish(sink, generation, sent);
 }
 
+static uint64_t test_now_ns(struct nb_session *s)
+{
+    struct nb_test *t = s->priv;
+
+    return t->vnow_ns;
+}
+
+static void test_tick_stats(struct nb_sink *sink)
+{
+    const struct nb_tick *k = &sink->tick;
+
+    nb_log("TEST tick stats: on=%d div=%u feedback=%llu ticks=%llu want=%llu "
+           "fast=%llu decimated=%llu coalesced=%llu answered=%llu "
+           "no_change=%llu late=%llu unsolicited=%llu req_timeouts=%llu "
+           "present_timeouts=%llu open=%u unpresented=%d last_seq=%u tx_used=%u",
+           k->on, k->div, (unsigned long long)k->n_feedback,
+           (unsigned long long)k->n_ticks, (unsigned long long)k->n_want,
+           (unsigned long long)k->n_fast, (unsigned long long)k->n_decimated,
+           (unsigned long long)k->n_coalesced, (unsigned long long)k->n_answered,
+           (unsigned long long)k->n_no_change, (unsigned long long)k->n_late,
+           (unsigned long long)k->n_unsolicited,
+           (unsigned long long)k->n_req_timeouts,
+           (unsigned long long)k->n_present_timeouts, k->open_req,
+           k->unpresented, k->last_seq,
+           (sink->tx_head + NB_TXRING - sink->tx_tail) % NB_TXRING);
+}
+
+/*
+ * The tick lines.  They carry 64-bit times, so they are parsed here and not by
+ * test_line()'s `%d`s.
+ *
+ *     t <present_ns> <refresh_ns> [clock_only]   one display feedback at that time
+ *     F <n> <refresh_ns> <step_ns>               n feedbacks, step_ns apart (a flood
+ *                                                when step_ns << refresh_ns)
+ *     P                                          the VMM's last frame was presented
+ *     N <ns>                                     move the virtual clock
+ *     S                                          log the tick counters
+ */
+static bool test_tick_line(struct nb_session *s, struct nb_sink *sink,
+                           const char *line)
+{
+    struct nb_test *t = s->priv;
+    unsigned long long a = 0, b = 0, c = 0;
+    char ch = 0;
+    int n = sscanf(line, " %c %llu %llu %llu", &ch, &a, &b, &c);
+
+    if (n < 1 || !strchr("tFPNS", ch)) {
+        return false;
+    }
+    switch (ch) {
+    case 't':
+        if (n >= 3) {
+            t->vnow_ns = a;
+            nb_sink_refresh(sink, a, a, b,
+                            c ? NVKVM_BROKER_TICK_F_CLOCK_ONLY : 0);
+        }
+        break;
+    case 'F':
+        if (n >= 4 && a <= 100000000ull) {
+            unsigned long long i;
+
+            for (i = 0; i < a; i++) {
+                t->vnow_ns += c;
+                nb_sink_refresh(sink, t->vnow_ns, t->vnow_ns, b, 0);
+            }
+        }
+        break;
+    case 'P': nb_sink_presented(sink); break;
+    case 'N': t->vnow_ns = a; break;
+    case 'S': test_tick_stats(sink); break;
+    default: break;
+    }
+    return true;
+}
+
 static void test_line(struct nb_session *s, struct nb_sink *sink,
                       const char *line)
 {
     int a = 0, b = 0, f = 0;
     char c = 0;
+
+    if (test_tick_line(s, sink, line)) {
+        return;
+    }
 
     if (sscanf(line, " %c %d %d %d", &c, &a, &b, &f) < 1) {
         return;
@@ -624,6 +706,10 @@ static int test_open(struct nb_session *s, const struct nb_config *cfg)
               NVKVM_BROKER_CAP_FULLSCREEN | NVKVM_BROKER_CAP_DMABUF |
               NVKVM_BROKER_CAP_MODIFIERS | NVKVM_BROKER_CAP_RELEASE |
               NVKVM_BROKER_CAP_CURSOR | NVKVM_BROKER_CAP_CURSOR_STREAM;
+    /* The display tick.  NB_TEST_NO_TICK=1 plays a broker that predates it. */
+    if (!getenv("NB_TEST_NO_TICK")) {
+        s->caps |= NVKVM_BROKER_CAP_TICK;
+    }
     /* No display, so no device: "unknown" until a `d` line says otherwise,
      * which is a valid EV_DEVICE answer in its own right. */
     snprintf(s->grab_caveat, sizeof(s->grab_caveat),
@@ -652,6 +738,7 @@ static const struct nb_session_ops test_ops = {
     .set_clipboard = test_set_clipboard,
     .fetch_clipboard = test_fetch_clipboard,
     .cursor = test_cursor,
+    .now_ns = test_now_ns,
 };
 
 struct nb_session *nb_session_test(const struct nb_config *cfg)
