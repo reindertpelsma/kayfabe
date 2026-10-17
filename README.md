@@ -1,6 +1,6 @@
 # kayfabe
 
-**Share a consumer NVIDIA GPU with virtual machines that run the stock NVIDIA driver, while the host keeps using it.**
+**Share an NVIDIA GPU with virtual machines that run the stock NVIDIA driver, while the host keeps using it.**
 
 Kayfabe is a QEMU device that shows a guest an emulated NVIDIA GPU. The guest loads NVIDIA's real, unmodified driver (Windows or Linux);
 kayfabe reads what that driver asks for and has the real host GPU do the work, from an **unprivileged** host process that talks to the host driver
@@ -17,8 +17,8 @@ Master is not the newest code: the latest Windows performance work lives on bran
 |---|---|---|---|---|
 | VFIO passthrough | no, one VM owns it | yes | stock | any GPU |
 | NVIDIA vGPU | no | yes | vendor vGPU driver | data-centre GPU, licence |
-| API forwarding ([nvkvm-pv](https://github.com/reindertpelsma/nvkvm-pv) / virtio-nvgpu) | yes | no | a custom guest module | a consumer GPU |
-| **kayfabe** | **yes** | **yes, by design (not yet audited)** | **stock, unmodified** | a consumer GPU (Turing to Blackwell), the open NVIDIA host driver |
+| API forwarding ([nvkvm-pv](https://github.com/reindertpelsma/nvkvm-pv) / virtio-nvgpu) | yes | no | a custom guest module | any NVIDIA GPU |
+| **kayfabe** | **yes** | **yes, by design (not yet audited)** | **stock, unmodified** | any NVIDIA GPU is the goal; tested on consumer cards (Turing to Blackwell); the open NVIDIA host driver |
 
 The rows compare technologies, not projects: nvkvm-pv is the author's earlier project and is one implementation of the API-forwarding approach (the one other people may know as virtio-nvgpu).
 
