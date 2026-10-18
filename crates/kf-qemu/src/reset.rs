@@ -1037,6 +1037,26 @@ mod tests {
         assert_eq!(*o.scrubs.borrow(), [true], "a store no guest touched is not scrubbed again");
     }
 
+    /// ★ A guest that ran (a dirty store) and resets ITSELF through a bridge, or wakes from S3, owes
+    /// no scrub: the same OS keeps its root. (Kills a Memory stage that always asks to scrub.)
+    #[test]
+    fn a_guest_issued_reset_of_a_dirty_store_does_not_scrub() {
+        let r = Reset::default();
+        let o = Fake::default();
+        let p = r.gate.enter().expect("open");
+        r.touched();
+        drop(p);
+        r.request_typed(true, false); // a bus reset on a vCPU thread
+        run_to_completion(&r, &o);
+        assert_eq!(*o.scrubs.borrow(), [false]);
+        let p = r.gate.enter().expect("open");
+        r.touched();
+        drop(p);
+        r.request_typed(true, false);
+        run_to_completion(&r, &o);
+        assert_eq!(*o.scrubs.borrow(), [false, false], "never, however often the guest resets itself");
+    }
+
     /// ★ Review B1(b): a reboot R2 that arrives while a vCPU-issued reset R1 is running must still
     /// scrub — at either point of R1's run (before its Memory stage is asked, or during it).
     #[test]

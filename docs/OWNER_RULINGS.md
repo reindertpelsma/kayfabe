@@ -1,6 +1,6 @@
 # Owner rulings — the decisions that govern kayfabe v3 work
 
-**STATUS: LIVE, 2026-10-07 (§S added, then the BAR0-trace exception and the `PERF_GET_POWERSTATE` confirmation; earlier rulings dated in place); §T added 2026-10-08 (filtered recovered directives); §X added 2026-10-08 (non-stall interrupts); §Y added 2026-10-09 (diagnostic BAR0 trace mode, numbered §X on its branch, the VFIO tracer); §AB added 2026-10-10 (T-space hardwired, privilege rules for mappings).** Every ruling the owner made in the 2026-09-25 … 09-30 working sessions,
+**STATUS: LIVE, 2026-10-07 (§AM added 2026-10-18: the vidmem scrub policy; §S added, then the BAR0-trace exception and the `PERF_GET_POWERSTATE` confirmation; earlier rulings dated in place); §T added 2026-10-08 (filtered recovered directives); §X added 2026-10-08 (non-stall interrupts); §Y added 2026-10-09 (diagnostic BAR0 trace mode, numbered §X on its branch, the VFIO tracer); §AB added 2026-10-10 (T-space hardwired, privilege rules for mappings).** Every ruling the owner made in the 2026-09-25 … 09-30 working sessions,
 with its date, so work can resume from the repository alone. The architecture itself is in
 `docs/design/THE_V3_PLAN.md` and `THE_CONSTRAINTS.md`; this file records *decisions* on top of it.
 Where a ruling was later refined, the refinement is listed under it. A ruling's date is part of its
@@ -1316,3 +1316,38 @@ the display plane.
   kind, and broker STALLS (silence, partial messages, a slot never released, flapping around 50 ms, SIGSTOP); mutants of the harness itself. The harness's limits are stated in the doc (§11.7).
 - (Added by the agent, flagged for the owner: after a fallback to the clock the broker takes the tick back only after proving itself — one good gap, then 2, 4, 8 — so a broker flapping around 50 ms cannot flap the source
   per tick; decision (c)'s "the first broker event takes it back at once" holds for a broker that never fell back. §11.5.)
+
+## §AM. Guest vidmem is scrubbed by trust boundary: only a guest reboot scrubs, the whole store, GPU-side, 2026-10-18
+
+**STATUS: LIVE, 2026-10-18 (owner, via the coordinator; recorded by the boot-layer agent).** Binding. Code and
+tests: `crates/kf-qemu/src/scrub.rs` (the event table), `memreset.rs` (the memory stage's driver), `reset.rs`
+(the decision), branch `claude/bootlayer-20261018`. The boot-layer rule (what the monitor shows) is separate:
+§AM.5 and `docs/design/V3_DISPLAY.md` §4.11.13.
+
+1. **Premise (owner-accepted, NOT verified by us):** the host driver does not promise zeroed memory, it promises
+   *process isolation* — an allocation can only hold stale bytes of the SAME process, never another process's
+   (like anonymous `mmap`; an RM `hMemory` behaves the same). A fresh QEMU/kayfabe process therefore gets a fresh
+   store, and a crashed previous QEMU's store was cleaned by the host on process death.
+2. **The only place a stale-bytes leak exists** is where the SAME process reuses the SAME store for a NEW OS
+   instance: a guest **reboot** (a system reset delivered on QEMU's main loop: reboot, reset button, bugcheck or
+   triple-fault reset, QMP `system_reset`). That scrubs: **the whole store `[0, fb_length)`**, on the GPU
+   (`cuMemsetD8` on the store's device mapping, chunked, the completion awaited), before the next life runs and
+   before anything from the store is shown. The firmware carve-out is NOT excluded: the guest's CPU views and GPU
+   leaves reach it (counted, not refused), so only our two root pages — rewritten by the reset's own stage after
+   the scrub — are kayfabe's.
+3. **No scrub** at: VM start (isolation premise; realize still zeroes what kayfabe itself needs zero — the roots
+   and the boot framebuffer `[0, G)` — and awaits that zero), VM teardown, an in-guest driver unload, a TDR-style
+   reset, a bus reset the guest itself issued (a vCPU thread), an S3 wake, the basic-display → NVIDIA handoff. The
+   same OS and root can already read all of its own vidmem; a real GPU does not scrub there either.
+4. **Distinguishable:** the device tells a reboot from an in-guest reset by where QEMU asked from
+   (`current_cpu != NULL` ⇒ a vCPU thread ⇒ the guest's own act) and the reset type (`RESET_TYPE_WAKEUP`). Were
+   they not distinguishable the rule would be the lazy one: scrub on every reset.
+5. **Fail closed:** a scrub the host refuses, or whose completion it refuses, is never acknowledged: the reset
+   gate stays closed, the stage retries the scrub alone with a back-off, and the device does not open on an
+   unclean store (`docs/design/V3_DEVICE_RESET.md` §6 item 14). A reboot that arrives while a guest-issued reset
+   runs still scrubs (a dirty bit, not a one-shot mark, drives it).
+6. **Boot layer (display policy, not a reason to scrub):** the boot layer is shown only while store `[0, G)` is
+   clean; a guest RM life (fn 72) taints it, only a completed scrub of the range cleans it. See §4.11.13.
+7. **Not yet measured:** the scrub's wall time (the log line carries it); hardware verification is the checklist
+   in the branch report.
+
