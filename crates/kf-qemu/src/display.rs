@@ -7800,3 +7800,111 @@ mod diagnostic_gate_tests {
         );
     }
 }
+
+#[cfg(test)]
+mod lut_life_tests {
+    use super::*;
+
+    fn lut() -> kf_disp::color::Lut {
+        kf_disp::color::Lut {
+            entries: 1025,
+            binding: kf_disp::color::Binding::Dma {
+                handle: 7,
+                offset: 0,
+            },
+            interpolate: false,
+            mirror: false,
+        }
+    }
+
+    fn dma() -> CtxDma {
+        CtxDma {
+            target: kf_disp::inst::Target::Vidmem,
+            base: 0x1000_0000,
+            limit: 0x1001_ffff,
+            block_linear: false,
+            writable: false,
+        }
+    }
+
+    fn snapshot_key(lut: kf_cuda::display::ColorLut) -> (u64, bool, u64, u32) {
+        // Pin this GPU-free cache model to the actual retained GPU snapshot key.
+        let source: String = include_str!("../../kf-cuda/src/display.rs")
+            .split("fn color_snapshot(")
+            .nth(1)
+            .unwrap()
+            .split("pub fn color_layer(")
+            .next()
+            .unwrap()
+            .chars()
+            .filter(|c| !c.is_whitespace())
+            .collect();
+        assert!(source.contains("letkey=(lut.src,lut.interpolate,lut.token,lut.entries);"));
+        assert!(source.contains("(old.src,old.interpolate,old.token,old.entries)!=key"));
+        (lut.src, lut.interpolate, lut.token, lut.entries)
+    }
+
+    #[test]
+    fn a_life_reset_with_the_same_lut_location_and_shape_requires_a_new_gpu_snapshot() {
+        let mut scan = ScanState::default();
+        let old = scan
+            .colors
+            .resolve(0, 1, 2, 3, Some(lut()), |_| Ok(dma()))
+            .unwrap()
+            .unwrap();
+        scan.reset_life();
+        assert!(
+            scan.colors.slots.iter().all(Option::is_none),
+            "all per-life bindings must be cleared"
+        );
+        let mut resolved = 0;
+        let new = scan
+            .colors
+            .resolve(0, 1, 2, 3, Some(lut()), |_| {
+                resolved += 1;
+                Ok(dma())
+            })
+            .unwrap()
+            .unwrap();
+        assert_eq!(
+            resolved, 1,
+            "reused channel ids must resolve their binding afresh"
+        );
+        assert_eq!(
+            (old.src, old.entries, old.interpolate),
+            (new.src, new.entries, new.interpolate)
+        );
+        assert_ne!(
+            snapshot_key(old),
+            snapshot_key(new),
+            "the old GPU snapshot key must not suppress the new life's LUT copy"
+        );
+    }
+
+    #[test]
+    fn repeated_life_resets_keep_tokens_newer_than_every_prior_snapshot() {
+        let mut scan = ScanState::default();
+        let mut highest = 0;
+        for _ in 0..3 {
+            for slot in [0, 32, 64] {
+                let resolved = scan
+                    .colors
+                    .resolve(slot, 1, 2, 3, Some(lut()), |_| Ok(dma()))
+                    .unwrap()
+                    .unwrap();
+                assert!(
+                    resolved.token > highest,
+                    "a new life reused snapshot token {} after {}",
+                    resolved.token,
+                    highest
+                );
+                highest = resolved.token;
+            }
+            scan.reset_life();
+            assert!(
+                scan.colors.slots.iter().all(Option::is_none),
+                "no binding survives the life reset"
+            );
+        }
+    }
+}
