@@ -1,0 +1,37 @@
+mutant                                   must    
+(suite 'must': each mutant is run against the suites its must-list names, in that order)
+credit_check_removed                     KILLED   KILLED   KILLED  
+request_not_replaced (coalescing)        KILLED   KILLED   KILLED  
+credit_not_consumed (gate)               KILLED   KILLED   KILLED  
+worker_fallback_removed                  KILLED   KILLED   KILLED  
+relay_silence_removed                    KILLED   KILLED   KILLED  
+buffer_reuse_rule_removed                KILLED   KILLED   KILLED  
+relay_sequence_check_removed             KILLED   KILLED   KILLED  
+gate_sequence_check_removed              KILLED   KILLED   KILLED  
+in_flight_bound_raised                   KILLED   KILLED   KILLED  
+double_tick_guard_removed                KILLED   KILLED   KILLED  
+swallowed_credit_acts_at_once (guard defer removed) KILLED   KILLED   KILLED  
+carried_credit_double_counts (copies > vblanks) KILLED   SURVIVED KILLED  
+gate_acts_early                          KILLED   KILLED   KILLED  
+flap_damping_removed                     KILLED   KILLED   KILLED  
+no_change_at_the_opening_tick            KILLED   KILLED   KILLED  
+read_deadline_removed                    KILLED   KILLED   KILLED  
+per_turn_budget_removed                  KILLED   KILLED   KILLED  
+send_blocks_on_full                      KILLED   KILLED   KILLED  
+stale_tick_counts_as_alive               SURVIVED KILLED   KILLED  
+want_lost_on_coalesce (share)            KILLED   KILLED   KILLED  
+a: NO_CHANGE ignores a ready frame       KILLED  
+a: request spent twice (spend does not take) KILLED  
+a: vblank number skips (+2)              KILLED  
+a: mailbox ignores the copy in flight    KILLED  
+a: mailbox keeps its credit after a copy KILLED  
+a: silence is 500 ms                     KILLED  
+a: probation never grows (always 1 gap)  KILLED  
+a: NO_CHANGE not paced (answer gap 0)    KILLED  
+held_slot_overwritten                    KILLED   KILLED  
+no_change_with_a_frame_waiting           KILLED  
+request_spent_twice                      KILLED   KILLED  
+legacy_credit_used_while_live            KILLED   KILLED  
+commit_label_dropped                     KILLED   KILLED  
+reserved_tick_bits_accepted              KILLED  
+tick_seq_zero_accepted                   KILLED  
