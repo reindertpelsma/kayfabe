@@ -933,6 +933,21 @@ impl HostAbi {
 
 #[cfg(test)]
 mod tests {
+
+    /// ★ tsg-mirror hardware finding (2026-10-19, run 3012): the CHANNEL-level `GPFIFO_SCHEDULE` (`0xa06f0103`)
+    /// kayfabe sends to stop/evict a twin of an explicit TSG was unlisted, so `raw_control` refused it at the 595.91
+    /// host (`HOST_ABI_REFUSED`, "has no row in HOST_CONTROLS") and every guest evict failed. Every control kf-host
+    /// sends must be listed; this one shares the TSG verb's typedef params.
+    #[test]
+    fn the_channel_level_gpfifo_schedule_is_a_listed_host_control() {
+        let c = host_control(0xa06f_0103).expect("0xa06f0103 must have a HOST_CONTROLS row");
+        assert_eq!(c.name, "NVA06F_CTRL_CMD_GPFIFO_SCHEDULE");
+        let tsg = host_control(0xa06c_0101).expect("TSG-level row");
+        assert!(matches!(
+            (&c.params, &tsg.params),
+            (HostParams::Measured(a), HostParams::Measured(b)) if a.name == b.name
+        ));
+    }
     use super::*;
     use crate::generated::matrix as m;
 
