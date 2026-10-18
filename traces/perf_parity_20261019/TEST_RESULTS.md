@@ -1,5 +1,7 @@
 # P1 GPU-free validation and mandatory stop
 
+> CODE READ — SUPERSEDED at 01:30 CEST: the coordinator overruled this stop, defining the gate as baseline diagnostic equality with zero additions. MEASURED: the complete base and candidate multisets match (89 errors, 364 warning occurrences, added=0); the restored/formatted diagnostic suite passed again, 322/0/0. See `RESUME.md` and `clippy_comparison.json`. Inherited lints are not repaired.
+
 STATUS: PARTIAL, 2026-10-19. No hardware claim or production promotion.
 
 MEASURED: Clippy exited 101 with 89 denied diagnostics (62 arithmetic-side-effects, 27 indexing/slicing). Every primary source text exists in production `0452613b5`; see `clippy_sites.tsv`. Ten sites are in unchanged portions of modified `chan.rs`; 79 are in files identical to production. No diagnostic intersected a P1 changed line, but the Clippy build failed: this is NOT a passed gate. No lint was suppressed or capped.

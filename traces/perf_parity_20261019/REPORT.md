@@ -1,5 +1,7 @@
 # P1 stop report
 
+> CODE READ — ARCHIVAL EARLY REPORT: superseded by the coordinator's 01:30 CEST resume instruction. MEASURED: Clippy base/candidate multisets match with added=0; see `RESUME.md`. P1 is active again; this file will be refreshed at the morning handoff.
+
 STATUS: PARTIAL, 2026-10-19. Branch `codex/perf-parity-20261019`; candidate source `78c6d54b2`. No promotion.
 
 ## Result

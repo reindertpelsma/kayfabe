@@ -1,0 +1,15 @@
+{
+  "added": 0,
+  "base": {
+    "error": 89,
+    "warning": 364
+  },
+  "base_build_success": false,
+  "candidate": {
+    "error": 89,
+    "warning": 364
+  },
+  "candidate_build_success": false,
+  "removed": 0,
+  "same_multiset": true
+}
