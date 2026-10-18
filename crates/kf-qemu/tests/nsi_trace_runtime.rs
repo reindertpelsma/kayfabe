@@ -166,3 +166,50 @@ fn concurrent_workers_account_for_every_record_or_explicit_trace_loss() {
             .all(|r| r.armed == Some(true) && matches!(r.verdict, Verdict::Raise(_)))
     );
 }
+
+#[test]
+fn mixed_event_streams_match_an_independent_tail_oracle_in_both_modes() {
+    use std::collections::VecDeque;
+    for setting in [None, Some("0"), Some("1")] {
+        let t = Trace::from_setting(setting);
+        let mut oracle = VecDeque::new();
+        let count = CAPACITY * 2 + 17;
+        for i in 0..count {
+            let source = match i % 3 {
+                0 => Source::CompletionFd,
+                1 => Source::Engine((i % 19) as u32),
+                _ => Source::Trailing,
+            };
+            let armed = if i % 3 == 2 { None } else { Some(i % 5 != 0) };
+            let verdict = if armed == Some(false) {
+                Verdict::NotArmed
+            } else {
+                Verdict::Raise((i % 6) as u32)
+            };
+            t.note(
+                i as u64,
+                source,
+                Some(i % 31),
+                Some((i % 6) as u32),
+                armed,
+                verdict,
+            );
+            if oracle.len() == CAPACITY {
+                oracle.pop_front();
+            }
+            oracle.push_back((i as u64, source, armed, verdict));
+        }
+        if setting == Some("1") {
+            let s = t.finish().unwrap();
+            assert_eq!(s.records.len(), CAPACITY);
+            assert_eq!(s.overwritten, (count - CAPACITY) as u64);
+            for (got, want) in s.records.iter().zip(oracle) {
+                assert_eq!((got.at_ns, got.source, got.armed, got.verdict), want);
+            }
+            assert!(t.finish().is_none());
+        } else {
+            assert_eq!(t.capacity(), 0);
+            assert!(t.finish().is_none());
+        }
+    }
+}
