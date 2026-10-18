@@ -3219,3 +3219,36 @@ fn diagnostic_default_conn_silence_emits_no_ring_dump() {
         log.lines()
     );
 }
+
+// Fixture self-tests: a deliberate blocking-send mutant must fail, never strand a test process.
+fn assert_fake_full_retry_is_detected(accepted_first: usize) {
+    let wire = Rc::new(RefCell::new(Wire {
+        budget: Some(accepted_first),
+        ..Wire::default()
+    }));
+    let mut link = Fake(wire);
+    let socket = link.connect(Path::new("/run/test/display.sock")).unwrap();
+    let record = Cmd::no_change(7).encode();
+    for _ in 0..accepted_first {
+        assert_eq!(link.send(&socket, &record, None), Sent::Done);
+    }
+    let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+        for _ in 0..513 {
+            assert_eq!(link.send(&socket, &record, None), Sent::Full);
+        }
+    }));
+    assert!(
+        result.is_err(),
+        "the fixture must assert on a send retry loop, rather than let the mutant spin forever"
+    );
+}
+
+#[test]
+fn a_fake_socket_full_from_the_start_detects_a_retry_loop() {
+    assert_fake_full_retry_is_detected(0);
+}
+
+#[test]
+fn a_fake_socket_that_fills_after_success_detects_a_retry_loop() {
+    assert_fake_full_retry_is_detected(2);
+}
