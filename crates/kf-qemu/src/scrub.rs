@@ -373,22 +373,38 @@ mod tests {
         assert!(m.completed);
     }
 
-    /// ★ THE SCOPE: the carve-out is kayfabe's and survives a reset byte for byte.
+    /// ★ Review B2: the firmware carve-out is NOT out of the guest's reach (BAR1/BAR2/PRAMIN CPU
+    /// views keep the `fb_len` bound; references into `[carve, fb_len)` are counted, not refused),
+    /// so a hostile root could park data there in OS 1 and read it in OS 2. A reboot therefore
+    /// zeroes the WHOLE store. What kayfabe itself keeps there — our two root pages, nothing else
+    /// (every other store write is a root, a heap-gated USERD/notifier, or a guest-chosen offset) —
+    /// is rewritten by the reset's own stage after the scrub.
     #[test]
-    fn a_reset_leaves_the_firmware_carve_out_alone() {
+    fn a_reset_zeroes_the_whole_store_and_the_roots_are_rewritten_after() {
         let l = layout();
         let mut m = Model::filled(l.fb_length);
-        run(&plan(&l, Cause::Reset, None), &mut m, &AtomicU64::new(0)).expect("scrubbed");
-        assert_eq!(
-            m.dirty_bytes_in(l.carve(), FW_CARVE_OUT_BYTES),
-            FW_CARVE_OUT_BYTES,
-            "kayfabe's own region is untouched"
-        );
-        // our two root pages sit inside it, at their layout offsets: still there for the reset's
-        // own stage to rewrite
+        let n = run(&plan(&l, Cause::Reset, None), &mut m, &AtomicU64::new(0)).expect("scrubbed");
+        assert_eq!(n, l.fb_length, "the carve-out is scrubbed too");
+        assert!(m.dirty.is_empty(), "{:x?}", m.dirty);
         for root in [l.bar1_pde_base, l.bar2_pde_base] {
-            assert!(root >= l.carve() && m.is_dirty(root, kf_chip::bar0::ROOT_PAGE_BYTES));
+            assert!(root >= l.carve() && !m.is_dirty(root, kf_chip::bar0::ROOT_PAGE_BYTES));
         }
+    }
+
+    /// A store whose size is not a multiple of the chunk: the partial last chunk is zeroed too, and
+    /// no byte past the store is ever named.
+    #[test]
+    fn an_unaligned_store_scrubs_its_partial_last_chunk() {
+        let l = fb_layout(FW_CARVE_OUT_BYTES + 1000 * MIB + 0x1_0000).expect("a layout");
+        assert_ne!(l.fb_length % CHUNK, 0);
+        let p = plan(&l, Cause::Reset, None);
+        let c = p.chunks();
+        let (lo, ln) = *c.last().expect("chunks");
+        assert!(ln < CHUNK && lo + ln == l.fb_length, "{c:x?}");
+        let mut m = Model::filled(l.fb_length);
+        run(&p, &mut m, &AtomicU64::new(0)).expect("scrubbed");
+        assert!(m.dirty.is_empty(), "the partial last chunk was dropped: {:x?}", m.dirty);
+        assert!(m.calls.iter().all(|&(o, n)| o + n <= l.fb_length));
     }
 
     /// The boot framebuffer is inside the heap: asking for it too never zeroes anything twice, and
