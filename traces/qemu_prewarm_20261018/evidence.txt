@@ -1,0 +1,61 @@
+L6 archived-evidence extracts, 2026-10-18.
+MEASURED = existing investigation output read by L6, not a new hardware run.
+Private source locations and full logs are recorded in the local L6 report.
+
+MEASURED S2 allthreads sampler timestamps (Unix seconds):
+  t0:         1792279230.160050086
+  attach 1:   1792279230.162882607
+  detach 1:   1792279230.569581406
+  attach 2:   1792279230.875965632
+  detach 2:   1792279235.484090506
+  attach 3:   1792279235.788851411
+  detach 3:   1792279236.195142048
+  attach 2 - t0 = 0.715915546 s
+  detach 2 - t0 = 5.324040420 s
+  detach 2 - attach 2 = 4.608124874 s
+  Sampler command: timeout 40 gdb -p QPID -batch -ex 'thread apply all bt 14'
+  CODE READ: sampler t0 is PID discovery, not QEMU creation.
+
+MEASURED S2 attach 2 public-function stack summary (addresses/host paths omitted):
+  Main, LWP 3087095:
+    futex_wait -> pthread_mutex_lock(bql) -> qemu_mutex_lock_impl
+    -> os_host_main_loop_wait -> main_loop_wait -> qemu_main_loop
+  vCPU thread, LWP 3087106:
+    mprotect -> grow_heap -> sysmalloc -> _int_malloc -> malloc -> g_realloc
+    -> phys_section_add -> dummy_section -> address_space_dispatch_new
+    -> generate_memory_topology -> flatviews_reset
+    -> memory_region_transaction_commit -> acpi_switch_to_modern_cphp
+  kf3-vamgr, LWP 3087157:
+    ioctl(fd=43, request=3224913447) -> CharDevice::ioctl
+    -> HostRm::alloc_os_descriptor -> OnceLock initialization
+    -> MemPlane::guest_ram_object -> tspace::prewarm -> Device::va_loop
+  At attach 3, vamgr is in epoll_wait and main is in ppoll.
+  INFERRED: none of these userspace frames identifies mmap_lock's kernel owner.
+
+MEASURED archived baseline runs (revision 0452613b, extra flags=[]; 12 GiB RAM):
+  tag  guest-RAM descriptor bytes  T-space ready/device birth  T-space build_us
+  H1   0x300000000                 4.693 s                    194513
+  H2   0x300000000                 4.655 s                    197108
+  H4   0x300000000                 4.799 s                    214095
+  n=3; ready 4.655..4.799 s; build 194513..214095 us.
+  These are whole-stage timestamps, not measured registration durations.
+
+CODE READ reference-source provenance:
+  NVIDIA/open-gpu-kernel-modules, tag 595.91.07
+  commit 9f087a6d4e86d85acc0ce1d354d6276fe5047b29
+  kernel-open/nvidia/os-mlock.c, os_lock_user_pages
+  current->mm; nv_mmap_read_lock; NV_PIN_USER_PAGES(page_count);
+  conditional ENOMEM chunk retry remains under the same read lock; unlock after.
+  No claim that the exact running host module build was verified by L6.
+
+CODE READ kayfabe base 0452613b5c71cb175271230b3e14c8e3c3eef2db:
+  kf-qemu/src/ffi_unsafe.rs: kf3_realize spawns kf3-vamgr, same process.
+  kf-qemu/src/device.rs: va_loop calls tspace::prewarm before epoll wait.
+  kf-qemu/src/mem.rs: guest_ram_object registers metadata().len() in ONE ioctl.
+  kf-qemu/src/tspace.rs: prewarm requires that object before TSpace::build.
+  kf-host/src/lib.rs: alloc_os_descriptor sets NVOS02 limit=len-1.
+  kf-linux-raw/src/chardev_unsafe.rs: ioctl checks ranked/leaf lock witnesses.
+  kf-mem/src/ledger.rs: HostVas uses one RAM handle and whole-memfd offsets.
+  kf-mem/src/batch.rs: map_row_in uses the same RAM handle/offset convention.
+  kf-host/src/channel.rs: unmap_row splits only at VA-reservation edges.
+  kf-qemu/src/chan.rs: sysmem USERD/RC notifier bind one handle + memfd offset.
