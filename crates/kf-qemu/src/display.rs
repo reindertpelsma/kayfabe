@@ -1424,6 +1424,44 @@ impl ColorDmas {
     }
 }
 
+/// ★ review hitch-20261017 (3): resolve a latched window's LUT and TMO context-DMA bindings AT THE LATCH — the same calls the
+/// copy makes (`ScanState::start`'s colour program), so the copy a tick later finds them cached. Without it the bindings were
+/// resolved at copy time, which with the one flip rule can be a tick AFTER the flip completed: a guest that idles and unbinds the
+/// LUT context DMA (NVKMS teardown) before the tick would make the copy fail (`Fault::Console`: a stale console frame and a
+/// refusal line). The LUT *contents* are still read by the copy (GPU, device-to-device); a guest that rewrites the LUT in place
+/// right after the flip can show the console one frame with the new table — console-only, never guest-visible.
+/// A refusal here is not kept: the copy tries again and reports it.
+fn resolve_window_colors(
+    colors: &mut ColorDmas,
+    engine: &kf_disp::engine::Engine,
+    io: &mut Io<'_>,
+    sdr: (&'static kf_disp::class::ClassTable, u32, u32),
+    so: &kf_disp::engine::Scanout,
+) -> Result<(), String> {
+    let (t, win, _core) = sdr;
+    let armed = |m| engine.armed(ChannelKind::Window, so.window, m).unwrap_or(0);
+    let lut = kf_disp::color::input(t, win, armed, color_experiments()).map_err(str::to_owned)?;
+    let life = engine
+        .generation(so.chn)
+        .ok_or("no colour window incarnation")?;
+    let pipeline = kf_disp::color::pipeline(
+        t,
+        win,
+        armed,
+        engine
+            .armed_inline(so.window)
+            .ok_or("missing armed inline tables")?,
+    )
+    .map_err(str::to_owned)?;
+    colors.resolve(32 + so.window as usize, so.client, so.chn, life, pipeline.tmo, |handle| {
+        io.resolve(so.client, handle, so.chn)
+    })?;
+    colors.resolve(so.window as usize, so.client, so.chn, life, lut, |handle| {
+        io.resolve(so.client, handle, so.chn)
+    })?;
+    Ok(())
+}
+
 /// ★ The layers one scanout copy composes, and the windows it refused (by name).
 #[derive(Debug, Default)]
 struct Planned {
@@ -3351,28 +3389,23 @@ impl Device {
                     scan.colors.forget(64);
                 }
                 if let Effect::Latched { window } = &e {
-                    // ★ the window's ARMED state changed: its next copy resolves it afresh
-                    scan.latched.forget(*window);
-                    scan.colors.forget_window(*window as usize);
-                    if let Some(Shown::Armed(c)) = &shown
-                        && let Some(so) = c.layers.iter().find(|l| l.window == *window)
-                    {
-                        // ★ §AK: the flip is NOT parked and does NOT wait for a tick or for its own copy.
-                        // A newer frame exists (the mailbox copies the newest, once per tick);
-                        // completing the flip releases the buffer it replaced, so its items wait for
-                        // the copy that was in flight at this latch, which read that buffer, and for
-                        // nothing else (the colour path too: its LUT context DMAs are resolved at copy time and a refusal there is console-only)
-                        scan.on_flip_latched();
-                        {
-                            // the delay between latch and copy is up to a tick: resolve the window's
-                            // context DMA NOW, as the first copy after a latch always did, so a guest
-                            // that unbinds it before the copy (NVKMS's teardown) is still resolved
-                            let so = *so;
+                    // ★ review hitch-20261017: ONE call into ScanState (the property tests drive that method); this
+                    // block holds nothing else but what the call resolves (`the_worker_latch_is_one_method_call_...`)
+                    let so = match &shown {
+                        Some(Shown::Armed(c)) => c.layers.iter().find(|l| l.window == *window).copied(),
+                        _ => None,
+                    };
+                    scan.on_window_latch(*window, so.is_some(), |scan| {
+                        if let Some(so) = so {
                             let t_res = Instant::now();
                             scan.resolve_now(&mut io, &so);
+                            if let Some(sdr) = dp.sdr_color {
+                                // the colour path: its LUT / TMO context DMAs are resolved now too (a refusal is never kept)
+                                let _ = resolve_window_colors(&mut scan.colors, &engine, &mut io, sdr, &so);
+                            }
                             dp.counters.lat_resolve.add(t_res.elapsed());
                         }
-                    }
+                    });
                 }
                 queue.push_back(Queued {
                     need: scan.barrier,
@@ -4396,6 +4429,21 @@ impl ScanState {
     fn on_flip_latched(&mut self) {
         self.mailbox.latch();
         self.barrier = flip_completion_need(self.barrier, self.inflight.as_ref().map(|f| f.n));
+    }
+
+    /// ★ review hitch-20261017: **everything the worker does when a window's UPDATE latches**, in one place the property
+    /// tests can drive. The window's armed state changed, so its context-DMA and colour bindings are forgotten (the next
+    /// copy resolves them afresh); when the window is one the console shows, the flip completes behind the copy in flight
+    /// at this latch and the newest frame becomes a pending mailbox copy ([`ScanState::on_flip_latched`] — the only place
+    /// that sets a barrier for a window flip, with or without the colour path), and `resolve` then runs the resolutions
+    /// the worker passes in (context DMA, LUT/TMO bindings) while the guest has not yet been told the flip completed.
+    fn on_window_latch(&mut self, window: u32, shown: bool, resolve: impl FnOnce(&mut ScanState)) {
+        self.latched.forget(window);
+        self.colors.forget_window(window as usize);
+        if shown {
+            self.on_flip_latched();
+            resolve(self);
+        }
     }
 
     /// ★ §AK: window `so` just latched — resolve its context DMA now (the first copy after a latch
@@ -5948,9 +5996,9 @@ mod tests {
 
     /// ★ §AK: the worker's copy bookkeeping. A flip-class copy serves the wanted copy, the pending latched frame
     /// and the tick's credit; a non-flip check serves none of them. The shown head's tick grants a copy only
-    /// while a guest scanout is shown. The colour experiment keeps the old rule (its own copy, wanted at once);
-    /// everything else waits for the copy in flight only. (Mutations: `begin_copy` not spending the mailbox, or
-    /// spending it for a check; a tick granting a credit for a boot picture; the colour rule dropped.)
+    /// while a guest scanout is shown. ⊘ CORRECTED 2026-10-18 (hitch-20261017): the colour path no longer has a rule of
+    /// its own (its own copy, wanted at once); every window flip waits for the copy in flight only. (Mutations:
+    /// `begin_copy` not spending the mailbox, or spending it for a check; a tick granting a credit for a boot picture.)
     #[test]
     fn a_flip_copy_serves_the_pending_frame_and_a_check_does_not() {
         let mut scan = ScanState::default();
@@ -5998,10 +6046,10 @@ mod tests {
             }
         };
         for _ in 0..N {
-            scan.on_flip_latched(); // the immediate flip, between ticks
+            scan.on_window_latch(0, true, |_| {}); // the immediate flip, between ticks (the method the worker calls)
             serve(&mut scan, &mut copies);
             scan.on_console_tick(true); // the tick: one copy credit
-            scan.on_flip_latched(); // the vsync flip latched at the tick
+            scan.on_window_latch(0, true, |_| {}); // the vsync flip latched at the tick
             serve(&mut scan, &mut copies);
         }
         assert!(
@@ -6009,7 +6057,158 @@ mod tests {
             "{copies} flip copies started in {N} ticks (bound {}): a latch path copies outside the tick",
             N + 1
         );
+        assert!(copies >= N, "{copies} copies in {N} ticks, each with a latched frame: the mailbox lost a frame");
     }
+
+    fn flight(n: u64) -> Inflight {
+        Inflight {
+            color: false,
+            n,
+            phase: Phase::Send,
+            slot: 0,
+            wh: (1920, 1080),
+            t0: Instant::now(),
+            vram: None,
+            d2h: true,
+            cursor: false,
+            req: 0,
+            summed: false,
+            boot: false,
+        }
+    }
+
+    /// ★ review hitch-20261017 (1): what the worker does at a latch, through the method the worker calls. A window the
+    /// console shows: the flip's items wait for the copy in flight at the latch and for nothing else (never its own copy,
+    /// never a wanted one), the frame is a pending mailbox copy, the bindings are forgotten and `resolve` runs exactly
+    /// once. A window it does not show: the bindings are forgotten, nothing else moves, `resolve` does not run.
+    /// (Mutations killed here and by the call-site scans: M1 the colour rule back (`barrier = started + 1`, `want`),
+    /// M2 `want = true` after the call, M3 `flip_completion_need(barrier, None)`, M4 no `mailbox.latch()`, M5 no `resolve`,
+    /// M6 no `forget`.)
+    #[test]
+    fn the_latch_method_waits_for_the_copy_in_flight_and_runs_the_resolutions_once() {
+        let mut scan = ScanState::default();
+        scan.started = 4;
+        scan.inflight = Some(flight(4));
+        let mut ran = 0;
+        scan.on_window_latch(3, true, |_| ran += 1);
+        assert_eq!(ran, 1, "the resolutions run once per shown latch");
+        assert_eq!(scan.barrier, 4, "the flip waits for the copy in flight (4), not for copy 5");
+        assert!(!scan.want, "a latch wants no copy of its own");
+        assert!(scan.mailbox.pending() && scan.flip_pending(), "the newest frame is a pending mailbox copy");
+        // nothing in flight: nothing to wait for
+        let mut idle = ScanState::default();
+        idle.started = 9;
+        idle.on_window_latch(3, true, |_| {});
+        assert_eq!((idle.barrier, idle.want), (0, false));
+        // a window the console does not show: only the forgetting
+        let mut other = ScanState::default();
+        let dma = CtxDma {
+            target: kf_disp::inst::Target::Vidmem,
+            base: 0x1000_0000,
+            limit: 0x1000_ffff,
+            block_linear: false,
+            writable: false,
+        };
+        other.latched.by_window[3] = Some(((1, 2, 3), dma));
+        other.colors.slots[3] = Some(((1, 3, 1, kf_disp::color::Lut { entries: 1025, binding: kf_disp::color::Binding::Vidmem(0), interpolate: false, mirror: false }), kf_cuda::display::ColorLut { entries: 1025, src: 0, interpolate: false, token: 1 }));
+        other.colors.slots[32 + 3] = other.colors.slots[3];
+        other.on_window_latch(3, false, |_| panic!("an un-shown window resolves nothing"));
+        assert!(other.latched.by_window[3].is_none() && other.colors.slots[3].is_none() && other.colors.slots[35].is_none(), "the bindings are forgotten at every latch");
+        assert_eq!((other.barrier, other.want, other.mailbox.latched), (0, false, 0), "nothing else moves");
+    }
+
+    /// ★ review hitch-20261017 (3): the colour bindings resolved AT THE LATCH are what the copy a tick later uses. A guest
+    /// that idles and unbinds the LUT context DMA (NVKMS teardown) before the tick must not make the copy fail; without the
+    /// latch-time resolution (the d6516e296 behaviour) it does (`Fault::Console`, console-only). A new latch re-resolves.
+    #[test]
+    fn colour_bindings_resolved_at_the_latch_survive_an_unbind_before_the_copy() {
+        let lut = kf_disp::color::Lut {
+            entries: 1025,
+            binding: kf_disp::color::Binding::Dma { handle: 7, offset: 0 },
+            interpolate: false,
+            mirror: false,
+        };
+        let dma = CtxDma {
+            target: kf_disp::inst::Target::Vidmem,
+            base: 0x1000_0000,
+            limit: 0x1001_ffff,
+            block_linear: false,
+            writable: false,
+        };
+        let mut colors = ColorDmas::default();
+        // the latch: resolve (what resolve_window_colors does through the same call)
+        let at_latch = colors.resolve(0, 1, 2, 3, Some(lut), |_| Ok(dma)).unwrap().unwrap();
+        // the guest unbinds the context DMA; the copy a tick later resolves again and must find it cached
+        let at_copy = colors
+            .resolve(0, 1, 2, 3, Some(lut), |_| Err("context DMA unbound".to_owned()))
+            .expect("the copy uses the binding resolved at the latch")
+            .unwrap();
+        assert_eq!(at_latch.token, at_copy.token, "the very binding of the latch");
+        // without a latch-time resolution the same unbind fails the copy (the hole)
+        let mut late = ColorDmas::default();
+        assert!(late.resolve(0, 1, 2, 3, Some(lut), |_| Err("context DMA unbound".to_owned())).is_err());
+        // a later latch forgets and resolves afresh (new armed state, new token)
+        colors.forget_window(0);
+        let again = colors.resolve(0, 1, 2, 3, Some(lut), |_| Ok(dma)).unwrap().unwrap();
+        assert_ne!(again.token, at_copy.token);
+    }
+
+    /// ★ review hitch-20261017 (1): the pieces of the latch that no behavioural test can see because they are wiring: the
+    /// worker passes "is this window shown" from the layer lookup (`so.is_some()`), resolves the window context DMA
+    /// (`scan.resolve_now`) and, on the colour path, the LUT/TMO bindings (`resolve_window_colors`) inside the call; and
+    /// `ScanState::on_window_latch` itself has its four steps — forget the DMA binding, forget the colour bindings, the one
+    /// flip rule, then the resolutions. (Mutations: M5 resolutions not run, M6 bindings not forgotten, M7 a call site that
+    /// always says "not shown".) Known-positive: the checker finds a planted token and misses a planted absence.
+    #[test]
+    fn the_latch_wiring_has_its_steps_at_the_call_site_and_in_the_method() {
+        let code = worker_code();
+        let has_all = |text: &str, needs: &[&str]| needs.iter().all(|n| text.contains(n));
+        assert!(has_all("a b c", &["a", "c"]) && !has_all("a b c", &["a", "z"]));
+        let block = code
+            .split("if let Effect::Latched { window } = &e")
+            .nth(1)
+            .unwrap()
+            .split("queue.push_back")
+            .next()
+            .unwrap();
+        for needed in [
+            "scan.on_window_latch(*window, so.is_some(),",
+            "scan.resolve_now(",
+            "resolve_window_colors(",
+            "c.layers.iter().find(|l| l.window == *window)",
+        ] {
+            assert!(block.contains(needed), "the latch call site lost {needed}: {block}");
+        }
+        let body = code
+            .split("fn on_window_latch(")
+            .nth(1)
+            .unwrap()
+            .split("\n    }\n")
+            .next()
+            .unwrap();
+        for needed in [
+            "self.latched.forget(window)",
+            "self.colors.forget_window(window as usize)",
+            "self.on_flip_latched()",
+            "resolve(self)",
+        ] {
+            assert!(body.contains(needed), "ScanState::on_window_latch lost {needed}: {body}");
+        }
+        // order: forget, forget, rule, resolve
+        let at = |n: &str| body.find(n).unwrap();
+        assert!(at("self.latched.forget") < at("self.colors.forget_window") && at("self.colors.forget_window") < at("self.on_flip_latched()") && at("self.on_flip_latched()") < at("resolve(self)"));
+    }
+
+    /// ★ review hitch-20261017 (1): `scan.want = true` appears at the two named sites of the worker only (a console change,
+    /// a core colour update) — a third one, at the latch or anywhere, is the original defect. Known-positive: the counter
+    /// sees a planted line.
+    #[test]
+    fn the_worker_sets_want_at_the_two_named_sites_only() {
+        let n = |t: &str| t.matches("scan.want = true").count();
+        assert_eq!(n("a; scan.want = true; b; scan.want = true"), 2);
+        assert_eq!(n(&worker_code()), 2, "scan.want = true appears at an unnamed site of the worker");
+    }
+
 
     /// ★ §AK: the worker no longer carries the D1 gate or its measurement flag, parks no flip for a
     /// tick, and wires the mailbox exactly once each way: a latch of the shown window calls
@@ -6040,7 +6239,9 @@ mod tests {
             assert_eq!(hits(&format!("let x = {planted};")), vec![planted]);
         }
         for needed in [
-            "scan.on_flip_latched()",
+            "scan.on_window_latch(*window, so.is_some(),",
+            "resolve_window_colors(&mut scan.colors",
+            "self.on_flip_latched()",
             "scan.on_console_tick(",
             "self.mailbox.tick()",
             "scan.mailbox.due(",
