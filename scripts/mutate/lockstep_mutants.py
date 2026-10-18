@@ -74,7 +74,7 @@ MUTANTS = [
      "        self.link.send(&c.sock, &rec, fd)\n    }",
      "        let mut r = self.link.send(&c.sock, &rec, fd);\n        while r == Sent::Full {\n            r = self.link.send(&c.sock, &rec, fd);\n        }\n        r\n    }", "b threads relay"),
     ("stale_tick_counts_as_alive", B + "conn.rs",
-     "            TickVerdict::Stale => {}", "            TickVerdict::Stale => {\n                tc.last_rx_ms = Some(now);\n            }", "a b relay"),
+     "            TickVerdict::Stale => {}", "            TickVerdict::Stale => {\n                tc.last_rx_ms = Some(now);\n            }", "b relay"),
     ("want_lost_on_coalesce (share)", B + "ticks.rs",
      "        if t.want && self.want.swap(t.tick_seq, Ordering::AcqRel) != 0 {", "        if t.want && self.want.load(Ordering::Acquire) != 0 {", "b threads relay"),
 ]

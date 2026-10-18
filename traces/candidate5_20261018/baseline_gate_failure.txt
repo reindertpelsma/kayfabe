@@ -1,3 +1,5 @@
+MEASURED Amendment 3: superseded by five quiet candidate-4 memory passes (5,734–6,992 us), one quiet channel pass, load <=2.445; see baseline_isolation.json. Classified LOAD-DEPENDENT, unchanged bounds. Historical failure follows.
+
 STATUS: HISTORICAL RECORD, updated 2026-10-18.
 CODE READ: Amendment 2 authorizes quiet-box classification without changing the bound.
 MEASURED: the first merged full memory run passes 184 tests; five quiet baseline

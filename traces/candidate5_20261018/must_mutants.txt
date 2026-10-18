@@ -1,37 +1,38 @@
-mutant                                   must    
-(suite 'must': each mutant is run against the suites its must-list names, in that order)
-credit_check_removed                     KILLED   KILLED   KILLED  
-request_not_replaced (coalescing)        KILLED   KILLED   KILLED  
-credit_not_consumed (gate)               KILLED   KILLED   KILLED  
-worker_fallback_removed                  KILLED   KILLED   KILLED  
-relay_silence_removed                    KILLED   KILLED   KILLED  
-buffer_reuse_rule_removed                KILLED   KILLED   KILLED  
-relay_sequence_check_removed             KILLED   KILLED   KILLED  
-gate_sequence_check_removed              KILLED   KILLED   KILLED  
-in_flight_bound_raised                   KILLED   KILLED   KILLED  
-double_tick_guard_removed                KILLED   KILLED   KILLED  
-swallowed_credit_acts_at_once (guard defer removed) KILLED   KILLED   KILLED  
-carried_credit_double_counts (copies > vblanks) KILLED   SURVIVED KILLED  
-gate_acts_early                          KILLED   KILLED   KILLED  
-flap_damping_removed                     KILLED   KILLED   KILLED  
-no_change_at_the_opening_tick            KILLED   KILLED   KILLED  
-read_deadline_removed                    KILLED   KILLED   KILLED  
-per_turn_budget_removed                  KILLED   KILLED   KILLED  
-send_blocks_on_full                      KILLED   KILLED   KILLED  
-stale_tick_counts_as_alive               SURVIVED KILLED   KILLED  
-want_lost_on_coalesce (share)            KILLED   KILLED   KILLED  
-a: NO_CHANGE ignores a ready frame       KILLED  
-a: request spent twice (spend does not take) KILLED  
-a: vblank number skips (+2)              KILLED  
-a: mailbox ignores the copy in flight    KILLED  
-a: mailbox keeps its credit after a copy KILLED  
-a: silence is 500 ms                     KILLED  
-a: probation never grows (always 1 gap)  KILLED  
-a: NO_CHANGE not paced (answer gap 0)    KILLED  
-held_slot_overwritten                    KILLED   KILLED  
-no_change_with_a_frame_waiting           KILLED  
-request_spent_twice                      KILLED   KILLED  
-legacy_credit_used_while_live            KILLED   KILLED  
-commit_label_dropped                     KILLED   KILLED  
-reserved_tick_bits_accepted              KILLED  
-tick_seq_zero_accepted                   KILLED  
+MEASURED: owner Amendment 3 approved harness; all 35 mutant anchors apply once.
+mutant	required forms (distinct assertion failures)
+credit_check_removed	a=7; b=15; relay=1
+request_not_replaced (coalescing)	a=11; b=7; relay=2
+credit_not_consumed (gate)	a=16; b=20; unit=1
+worker_fallback_removed	a=8; b=14; unit=3
+relay_silence_removed	a=2; b=11; relay=1
+buffer_reuse_rule_removed	a=8; b=21; unit=1
+relay_sequence_check_removed	a=6; b=7; relay=1
+gate_sequence_check_removed	a=1; b=2; unit=1
+in_flight_bound_raised	a=5; b=20; relay=4
+double_tick_guard_removed	a=14; b=14; unit=5
+swallowed_credit_acts_at_once (guard defer removed)	a=13; b=14; unit=1
+carried_credit_double_counts (copies > vblanks)	a=1; b=7; unit=1
+gate_acts_early	a=13; b=14; unit=1
+flap_damping_removed	a=8; b=2; unit=2
+no_change_at_the_opening_tick	a=16; b=19; relay=1
+read_deadline_removed	b=2; threads=1; relay=1
+per_turn_budget_removed	b=5; threads=2; relay=2
+send_blocks_on_full	b=6; threads=1; relay=5
+stale_tick_counts_as_alive	b=3; relay=1
+want_lost_on_coalesce (share)	b=4; threads=2; relay=1
+a: NO_CHANGE ignores a ready frame	a=1
+a: request spent twice (spend does not take)	a=11
+a: vblank number skips (+2)	a=15
+a: mailbox ignores the copy in flight	a=5
+a: mailbox keeps its credit after a copy	a=9
+a: silence is 500 ms	a=1
+a: probation never grows (always 1 gap)	a=1
+a: NO_CHANGE not paced (answer gap 0)	a=7
+held_slot_overwritten	b=20; threads=7
+no_change_with_a_frame_waiting	b=18
+request_spent_twice	b=20; threads=5
+legacy_credit_used_while_live	b=8; threads=5
+commit_label_dropped	b=20; threads=7
+reserved_tick_bits_accepted	b=2
+tick_seq_zero_accepted	b=2
+TOTAL	35/35 mutants; 78/78 required suite kills

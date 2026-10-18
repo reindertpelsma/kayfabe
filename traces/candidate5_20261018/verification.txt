@@ -1,3 +1,5 @@
+MEASURED Amendment 3: approved progress oracle and expectation correction now pass 35/35 mutants and 78/78 required-suite kills. Restored source 409/0/12. Earlier stop records below are historical; lane resumed.
+
 STATUS: PARTIAL; required verification held for an owner ruling, 2026-10-18.
 MEASURED: candidate-4 0452613b5 baseline full 22-package run: 3532 passed, 1 failed,
 19 ignored. Failure: memory lock wait 63117 us vs unchanged 60000 us. Quiet repeats
