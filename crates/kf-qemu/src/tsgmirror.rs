@@ -1335,6 +1335,31 @@ mod tests {
         assert_eq!(rig.host.ops(), before);
     }
 
+    /// A refused mix changes nothing: the group keeps its mode and members, the next same-mode channel joins it.
+    #[test]
+    fn a_refused_legacy_channel_leaves_the_explicit_group_untouched() {
+        let mut rig = Rig::new(true);
+        let a = rig.birth(req(CLIENT, TSG, 0x200, 1, 0x20)).unwrap();
+        assert!(rig.birth(req(CLIENT, TSG, 0, 0, 0x20)).is_err());
+        assert!(rig.map.is_explicit(CLIENT, TSG));
+        let b = rig.birth(req(CLIENT, TSG, 0x200, 1, 0x20)).unwrap();
+        assert_eq!(b.tsg, a.tsg);
+        assert_eq!(rig.host.live(), 4); // group, ctx, 2 channels
+        assert_eq!(rig.map.len(), 1);
+    }
+
+    #[test]
+    fn a_refused_explicit_channel_leaves_the_legacy_group_untouched() {
+        let mut rig = Rig::new(true);
+        let a = rig.birth(req(CLIENT, TSG, 0, 0, 0x20)).unwrap();
+        assert!(rig.birth(req(CLIENT, TSG, 0x200, 1, 0x20)).is_err());
+        assert!(!rig.map.is_explicit(CLIENT, TSG));
+        let b = rig.birth(req(CLIENT, TSG, 0, 0, 0x20)).unwrap();
+        assert_eq!(b.tsg, a.tsg);
+        assert_eq!(rig.host.live(), 3); // group, 2 channels, no ctxshare
+        assert_eq!(rig.host.ops().iter().filter(|o| o.starts_with("ctx_new")).count(), 0);
+    }
+
     #[test]
     fn unknown_ctxshare_parent_mismatch_engine_and_space_contradictions_are_refused() {
         let mut rig = Rig::new(true);
