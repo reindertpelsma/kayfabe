@@ -223,7 +223,10 @@ mod tests {
         assert!(!w.observe(true), "placed from the start");
         assert!(w.observe(false), "retired: the first BAR1 change");
         assert!(!w.observe(false), "staying retired is not a new edge");
-        assert!(!w.observe(true), "placed again (reset, unload) is not a taint");
+        assert!(
+            !w.observe(true),
+            "placed again (reset, unload) is not a taint"
+        );
         assert!(w.observe(false), "the next RM life retires it again");
     }
 
@@ -246,7 +249,9 @@ mod tests {
             self.boot.generation()
         }
         fn scrubbed_if(&self, life_id: u64) -> bool {
-            self.calls.borrow_mut().push(format!("scrubbed_if {life_id}"));
+            self.calls
+                .borrow_mut()
+                .push(format!("scrubbed_if {life_id}"));
             self.boot.clean_if(life_id)
         }
         fn scrubbed(&self) {
@@ -278,7 +283,10 @@ mod tests {
         let old = b.begin_life();
         let new = b.begin_life();
         assert!(new > old);
-        assert!(!b.clean_if(old), "the old unload must not clear the new life's taint");
+        assert!(
+            !b.clean_if(old),
+            "the old unload must not clear the new life's taint"
+        );
         assert!(!b.is_clean());
         assert!(b.clean_if(new));
         assert!(b.is_clean());
@@ -313,7 +321,10 @@ mod tests {
         let r = Rec::default();
         r.boot.taint();
         after_memory_stage(&r, false);
-        assert!(!r.boot.is_clean(), "a refused zero must not bring the boot layer back");
+        assert!(
+            !r.boot.is_clean(),
+            "a refused zero must not bring the boot layer back"
+        );
         after_memory_stage(&r, true);
         assert!(r.boot.is_clean());
     }
@@ -341,7 +352,11 @@ mod tests {
         let life = r.boot.begin_life();
         after_unload_scrub(&r, life, UnloadScrub::Failed);
         assert!(!r.boot.is_clean());
-        assert!(r.calls.borrow().is_empty(), "the display was never told: {:?}", r.calls.borrow());
+        assert!(
+            r.calls.borrow().is_empty(),
+            "the display was never told: {:?}",
+            r.calls.borrow()
+        );
         after_unload_scrub(&r, life, UnloadScrub::Done);
         assert!(r.boot.is_clean(), "and a completed one brings it back");
     }
@@ -352,7 +367,10 @@ mod tests {
         let r = Rec::default();
         assert!(r.boot.is_clean());
         on_rpc(&r, kf_gsp::RpcFunction::GspSetSystemInfo);
-        assert!(!r.boot.is_clean(), "an RM life began: the range is its memory");
+        assert!(
+            !r.boot.is_clean(),
+            "an RM life began: the range is its memory"
+        );
         after_memory_stage(&r, true);
         assert!(r.boot.is_clean());
     }

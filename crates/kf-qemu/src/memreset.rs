@@ -70,7 +70,11 @@ pub enum Step {
 /// The back-off after the `n`th consecutive refusal: 50 ms, doubling, capped at 1 s.
 #[must_use]
 pub fn backoff(n: u64) -> Duration {
-    Duration::from_millis(50u64.saturating_mul(1u64 << n.saturating_sub(1).min(5)).min(1000))
+    Duration::from_millis(
+        50u64
+            .saturating_mul(1u64 << n.saturating_sub(1).min(5))
+            .min(1000),
+    )
 }
 
 /// The driver's state across the VA thread's passes.
@@ -178,12 +182,27 @@ mod tests {
     #[test]
     fn an_owed_scrub_runs_between_prepare_and_finish() {
         let mut d = Driver::default();
-        let mut f = Fake { boot_ok: true, ..Fake::default() };
+        let mut f = Fake {
+            boot_ok: true,
+            ..Fake::default()
+        };
         let s = d.step(1, true, &mut f, t0());
         assert_eq!(f.calls, ["prepare", "scrub", "finish"]);
-        assert!(matches!(s, Step::Done { boot_zeroed: true, .. }), "{s:?}");
+        assert!(
+            matches!(
+                s,
+                Step::Done {
+                    boot_zeroed: true,
+                    ..
+                }
+            ),
+            "{s:?}"
+        );
         if let Step::Done { line, .. } = s {
-            assert!(line.contains("reset line") && line.contains("scrubbed"), "{line}");
+            assert!(
+                line.contains("reset line") && line.contains("scrubbed"),
+                "{line}"
+            );
         }
     }
 
@@ -201,7 +220,11 @@ mod tests {
     #[test]
     fn a_refused_scrub_is_not_acknowledged_and_only_the_scrub_is_retried() {
         let mut d = Driver::default();
-        let mut f = Fake { scrub_fails: 2, boot_ok: true, ..Fake::default() };
+        let mut f = Fake {
+            scrub_fails: 2,
+            boot_ok: true,
+            ..Fake::default()
+        };
         let mut now = t0();
         let s1 = d.step(1, true, &mut f, now);
         assert!(matches!(s1, Step::Refused { attempt: 1, .. }), "{s1:?}");
@@ -226,7 +249,11 @@ mod tests {
     #[test]
     fn the_owed_scrub_survives_the_retry() {
         let mut d = Driver::default();
-        let mut f = Fake { scrub_fails: 1, boot_ok: true, ..Fake::default() };
+        let mut f = Fake {
+            scrub_fails: 1,
+            boot_ok: true,
+            ..Fake::default()
+        };
         let now = t0();
         assert!(matches!(d.step(1, true, &mut f, now), Step::Refused { .. }));
         let later = now + Duration::from_secs(2);
@@ -239,16 +266,31 @@ mod tests {
     #[test]
     fn the_failure_count_is_per_episode() {
         let mut d = Driver::default();
-        let mut f = Fake { scrub_fails: 3, boot_ok: true, ..Fake::default() };
+        let mut f = Fake {
+            scrub_fails: 3,
+            boot_ok: true,
+            ..Fake::default()
+        };
         let mut now = t0();
         for want in 1..=2u64 {
             let s = d.step(1, true, &mut f, now);
-            assert!(matches!(s, Step::Refused { attempt, .. } if attempt == want), "{s:?}");
+            assert!(
+                matches!(s, Step::Refused { attempt, .. } if attempt == want),
+                "{s:?}"
+            );
             now += Duration::from_secs(2);
         }
         let s = d.step(2, true, &mut f, now);
-        assert!(matches!(s, Step::Refused { attempt: 1, .. }), "a new episode starts at 1: {s:?}");
-        assert_eq!(f.calls.iter().filter(|c| **c == "prepare").count(), 2, "{:?}", f.calls);
+        assert!(
+            matches!(s, Step::Refused { attempt: 1, .. }),
+            "a new episode starts at 1: {s:?}"
+        );
+        assert_eq!(
+            f.calls.iter().filter(|c| **c == "prepare").count(),
+            2,
+            "{:?}",
+            f.calls
+        );
     }
 
     /// The back-off: 50 ms, doubling, capped at one second.

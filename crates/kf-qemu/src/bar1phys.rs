@@ -239,7 +239,9 @@ pub fn restore_physical_view_scrubbed<V: kf_mem::cpuwin::ViewOps>(
     };
     Some(match scrubbed {
         None => line,
-        Some(Ok(())) => format!("{line}; boot framebuffer store [{store_off:#x}, +{len:#x}) scrubbed first"),
+        Some(Ok(())) => {
+            format!("{line}; boot framebuffer store [{store_off:#x}, +{len:#x}) scrubbed first")
+        }
         Some(Err(e)) => format!("{line}; boot framebuffer scrub REFUSED: {e}"),
     })
 }
@@ -269,9 +271,18 @@ mod tests {
             "gop=off: no boot framebuffer to return to (D3), the twins are freed all the same"
         );
         for gop in [true, false] {
-            assert_eq!(unload_actions(Some(&u(true, false)), gop), UnloadActions::default());
-            assert_eq!(unload_actions(Some(&u(true, true)), gop), UnloadActions::default());
-            assert!(!unload_actions(Some(&u(false, true)), gop).free_twins, "GC6: RM state kept");
+            assert_eq!(
+                unload_actions(Some(&u(true, false)), gop),
+                UnloadActions::default()
+            );
+            assert_eq!(
+                unload_actions(Some(&u(true, true)), gop),
+                UnloadActions::default()
+            );
+            assert!(
+                !unload_actions(Some(&u(false, true)), gop).free_twins,
+                "GC6: RM state kept"
+            );
             assert_eq!(unload_actions(None, gop), UnloadActions::default());
         }
     }
@@ -445,10 +456,7 @@ mod tests {
     }
 
     /// `one_life`, over a [`LogHost`]; the log is cleared once the life is over.
-    fn logged_life() -> (
-        kf_mem::cpuwin::CpuWindow<LogHost>,
-        Rc<RefCell<Vec<String>>>,
-    ) {
+    fn logged_life() -> (kf_mem::cpuwin::CpuWindow<LogHost>, Rc<RefCell<Vec<String>>>) {
         use kf_mem::ledger::{Desired, MapTarget};
         let log = Rc::new(RefCell::new(Vec::new()));
         let w = kf_mem::cpuwin::CpuWindow::new(LogHost(log.clone()), 128 << 20);
@@ -516,7 +524,10 @@ mod tests {
             Ok(())
         })
         .expect("a line");
-        assert!(line.contains("REFUSED") && line.contains("scrubbed first"), "{line}");
+        assert!(
+            line.contains("REFUSED") && line.contains("scrubbed first"),
+            "{line}"
+        );
         assert_eq!(zeroed, vec![(0, G)]);
         assert_eq!(w.seeded(), None, "the guest's placements still win");
     }
@@ -553,7 +564,10 @@ mod tests {
         })
         .expect("a line");
         assert_eq!(zeroed, vec![(0, G)], "{line}");
-        assert!(line.contains("already shows") && line.contains("scrubbed first"), "{line}");
+        assert!(
+            line.contains("already shows") && line.contains("scrubbed first"),
+            "{line}"
+        );
         assert_eq!(w.seeded(), Some((0, 0, G)), "the seed stays placed");
         // untainted: the live console is left alone (the existing rule)
         let mut again = 0;

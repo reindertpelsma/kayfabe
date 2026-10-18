@@ -285,7 +285,11 @@ impl Reset {
             // a NEW OS follows: set BEFORE the request is counted, like the cold mark
             self.new_os_pending.store(true, Ordering::SeqCst);
         }
-        let c = if from_vcpu { &self.from_vcpu } else { &self.from_main };
+        let c = if from_vcpu {
+            &self.from_vcpu
+        } else {
+            &self.from_main
+        };
         c.fetch_add(1, Ordering::Relaxed);
         if wake {
             self.from_wake.fetch_add(1, Ordering::Relaxed);
@@ -1024,7 +1028,11 @@ mod tests {
         drop(p);
         r.request_typed(true, false);
         run_to_completion(&r, &o);
-        assert_eq!(*o.scrubs.borrow(), [false], "a guest-issued reset must not scrub");
+        assert_eq!(
+            *o.scrubs.borrow(),
+            [false],
+            "a guest-issued reset must not scrub"
+        );
     }
 
     /// ★ Owner decision, 2026-10-18 (finding 1 of the review): the store counts as dirty as soon as
@@ -1038,11 +1046,18 @@ mod tests {
         let o = Fake::default();
         r.request_typed(false, false); // machine creation: pristine, the guest has not run yet
         run_to_completion(&r, &o);
-        assert!(o.scrubs.borrow().is_empty(), "the creation reset asks no owner");
+        assert!(
+            o.scrubs.borrow().is_empty(),
+            "the creation reset asks no owner"
+        );
         // the guest runs and writes ONLY through BAR1 [0, G): the device sees nothing at all
         r.request_typed(false, false); // it reboots
         run_to_completion(&r, &o);
-        assert_eq!(*o.scrubs.borrow(), [true], "a BAR1-only writer's bytes must not reach the next OS");
+        assert_eq!(
+            *o.scrubs.borrow(),
+            [true],
+            "a BAR1-only writer's bytes must not reach the next OS"
+        );
         assert!(!r.scrub_owed());
         // the new OS runs (touching nothing the device can see) and reboots again
         r.request_typed(false, false);
@@ -1075,8 +1090,15 @@ mod tests {
         let o = Fake::default();
         r.request_typed(false, false);
         run_to_completion(&r, &o);
-        assert!(o.calls.borrow().is_empty(), "no owner is asked: {:?}", o.calls.borrow());
-        assert!(!r.scrub_owed(), "a stale mark would scrub the next guest-issued reset");
+        assert!(
+            o.calls.borrow().is_empty(),
+            "no owner is asked: {:?}",
+            o.calls.borrow()
+        );
+        assert!(
+            !r.scrub_owed(),
+            "a stale mark would scrub the next guest-issued reset"
+        );
     }
 
     /// ★ A guest-issued bus reset and an S3 wake still never scrub, after a guest that only wrote BAR1.
@@ -1095,7 +1117,11 @@ mod tests {
         o.pm_suspended.set(true);
         r.request_typed(false, true); // S3 wake of a PM-suspended life: kept, no memory stage
         run_to_completion(&r, &o);
-        assert_eq!(*o.scrubs.borrow(), [false], "a kept life asks the memory stage nothing");
+        assert_eq!(
+            *o.scrubs.borrow(),
+            [false],
+            "a kept life asks the memory stage nothing"
+        );
     }
 
     /// ★ A guest that ran (a dirty store) and resets ITSELF through a bridge, or wakes from S3, owes
@@ -1115,7 +1141,11 @@ mod tests {
         drop(p);
         r.request_typed(true, false);
         run_to_completion(&r, &o);
-        assert_eq!(*o.scrubs.borrow(), [false, false], "never, however often the guest resets itself");
+        assert_eq!(
+            *o.scrubs.borrow(),
+            [false, false],
+            "never, however often the guest resets itself"
+        );
     }
 
     /// ★ Review B1(b): a reboot R2 that arrives while a vCPU-issued reset R1 is running must still
@@ -1139,13 +1169,20 @@ mod tests {
             drop(p);
             r.request_typed(true, false); // R1: a bus reset from a vCPU thread
             let end = run_to_completion(&r, &o);
-            assert_eq!(end.last(), Some(&Progress::Completed(2)), "during_memory={during_memory}");
+            assert_eq!(
+                end.last(),
+                Some(&Progress::Completed(2)),
+                "during_memory={during_memory}"
+            );
             assert!(
                 o.scrubs.borrow().contains(&true),
                 "during_memory={during_memory}: R2's new OS got no scrub: {:?}",
                 o.scrubs.borrow()
             );
-            assert!(!r.scrub_owed(), "during_memory={during_memory}: the mark leaked");
+            assert!(
+                !r.scrub_owed(),
+                "during_memory={during_memory}: the mark leaked"
+            );
         }
     }
 
@@ -1186,7 +1223,11 @@ mod tests {
         r.run.lock().expect("run").since =
             Some(std::time::Instant::now() - STALL_AFTER - std::time::Duration::from_millis(1));
         assert_eq!(r.poll(&o), Progress::Pending(Stage::Release));
-        let seen = o.status_seen.borrow().clone().expect("the report read the status");
+        let seen = o
+            .status_seen
+            .borrow()
+            .clone()
+            .expect("the report read the status");
         assert!(seen.contains("stage=Release"), "{seen}");
     }
 
@@ -1281,7 +1322,10 @@ mod tests {
         let t0 = std::time::Instant::now();
         assert_eq!(r.wait_completed(e, WAIT_BOUND), Waited::Done);
         assert!(t0.elapsed() < WAIT_BOUND);
-        assert!(!r.gate.is_closed(), "the gate is open before the vCPUs resume");
+        assert!(
+            !r.gate.is_closed(),
+            "the gate is open before the vCPUs resume"
+        );
         assert_eq!(o.finished.load(Ordering::SeqCst), 1);
         assert!(r.status().contains("main=2 vcpu=0"), "{}", r.status());
         // ⊘ 2026-10-18 (owner, finding 1): a system reset after the gate opened is no longer
@@ -1289,7 +1333,11 @@ mod tests {
         // invisible — so it takes the full sequence and scrubs.
         let e = r.request_from(false);
         assert_eq!(r.wait_completed(e, WAIT_BOUND), Waited::Done);
-        assert_eq!(o.finished.load(Ordering::SeqCst), 2, "the guest ran in between: a full reset");
+        assert_eq!(
+            o.finished.load(Ordering::SeqCst),
+            2,
+            "the guest ran in between: a full reset"
+        );
         stop.store(true, Ordering::SeqCst);
         d.join().expect("drainer");
     }
@@ -1357,7 +1405,10 @@ mod tests {
         touched_life(&r, &o);
         o.pm_suspended.set(true);
         let e = r.request_typed(false, true);
-        assert_eq!(run_to_completion(&r, &o).last(), Some(&Progress::Completed(e)));
+        assert_eq!(
+            run_to_completion(&r, &o).last(),
+            Some(&Progress::Completed(e))
+        );
         assert_eq!(
             *o.calls.borrow(),
             vec![format!("drainer-kept {e}"), format!("finish-kept {e}")]

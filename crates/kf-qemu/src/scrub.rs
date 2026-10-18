@@ -222,11 +222,7 @@ impl std::fmt::Display for Incomplete {
 ///
 /// # Errors
 /// [`Incomplete`], with the store not clean.
-pub fn run(
-    plan: &Plan,
-    z: &mut impl Zeroer,
-    progress: &AtomicU64,
-) -> Result<u64, Incomplete> {
+pub fn run(plan: &Plan, z: &mut impl Zeroer, progress: &AtomicU64) -> Result<u64, Incomplete> {
     let total = plan.bytes();
     let mut queued = 0u64;
     progress.store(0, Ordering::Release);
@@ -257,7 +253,9 @@ pub struct WalkZeroer<'a>(pub &'a kf_cuda::walk::WalkKernel);
 
 impl Zeroer for WalkZeroer<'_> {
     fn zero(&mut self, off: u64, len: u64) -> Result<(), String> {
-        self.0.zero_store_queued(off, len).map_err(|e| e.to_string())
+        self.0
+            .zero_store_queued(off, len)
+            .map_err(|e| e.to_string())
     }
     fn complete(&mut self) -> Result<(), String> {
         self.0.sync_store().map_err(|e| e.to_string())
@@ -274,7 +272,13 @@ pub fn zero_range(
     len: u64,
     progress: &AtomicU64,
 ) -> Result<u64, Incomplete> {
-    run(&Plan { ranges: vec![(off, len)] }, &mut WalkZeroer(k), progress)
+    run(
+        &Plan {
+            ranges: vec![(off, len)],
+        },
+        &mut WalkZeroer(k),
+        progress,
+    )
 }
 
 #[cfg(test)]
@@ -329,7 +333,9 @@ mod tests {
             self.dirty = out;
         }
         fn is_dirty(&self, off: u64, len: u64) -> bool {
-            self.dirty.iter().any(|&(s, l)| s < off + len && s + l > off)
+            self.dirty
+                .iter()
+                .any(|&(s, l)| s < off + len && s + l > off)
         }
         fn dirty_bytes_in(&self, off: u64, len: u64) -> u64 {
             self.dirty
@@ -370,7 +376,11 @@ mod tests {
         let p = plan(&l, Cause::Reset, Some((0, 0x7F_0000)));
         let done = run(&p, &mut m, &AtomicU64::new(0)).expect("scrubbed");
         assert_eq!(done, l.fb_length);
-        assert_eq!(m.dirty_bytes_in(0, l.fb_length), 0, "the whole store is zero");
+        assert_eq!(
+            m.dirty_bytes_in(0, l.fb_length),
+            0,
+            "the whole store is zero"
+        );
         assert!(m.completed);
     }
 
@@ -404,7 +414,11 @@ mod tests {
         assert!(ln < CHUNK && lo + ln == l.fb_length, "{c:x?}");
         let mut m = Model::filled(l.fb_length);
         run(&p, &mut m, &AtomicU64::new(0)).expect("scrubbed");
-        assert!(m.dirty.is_empty(), "the partial last chunk was dropped: {:x?}", m.dirty);
+        assert!(
+            m.dirty.is_empty(),
+            "the partial last chunk was dropped: {:x?}",
+            m.dirty
+        );
         assert!(m.calls.iter().all(|&(o, n)| o + n <= l.fb_length));
     }
 
@@ -417,7 +431,11 @@ mod tests {
         assert_eq!(p.ranges, vec![(0, l.fb_length)]);
         // a range the layout does not hold is clipped to the store, never read past it
         let q = plan(&l, Cause::Reset, Some((l.fb_length - 4096, 1 << 20)));
-        assert_eq!(q.ranges, vec![(0, l.fb_length)], "a range inside the store merges, one past it is clipped");
+        assert_eq!(
+            q.ranges,
+            vec![(0, l.fb_length)],
+            "a range inside the store merges, one past it is clipped"
+        );
         let inside = plan(&l, Cause::Reset, Some((16, 100)));
         assert_eq!(inside.ranges, vec![(0, l.fb_length)]);
     }
@@ -458,7 +476,10 @@ mod tests {
         assert_eq!(e.queued, CHUNK);
         assert!(e.to_string().contains("REFUSED at") && e.to_string().contains("CUDA_ERROR"));
         assert!(!m.completed);
-        assert!(m.dirty_bytes_in(0, l.fb_length) > 0, "not clean: the caller keeps the gate closed");
+        assert!(
+            m.dirty_bytes_in(0, l.fb_length) > 0,
+            "not clean: the caller keeps the gate closed"
+        );
     }
 
     /// A completion the host refuses is as bad as a refused chunk.
@@ -470,7 +491,10 @@ mod tests {
         let e = run(&plan(&l, Cause::Reset, None), &mut m, &AtomicU64::new(0)).unwrap_err();
         assert_eq!(e.at, None);
         assert!(e.to_string().contains("completion was REFUSED"), "{e}");
-        assert!(m.dirty_bytes_in(0, l.fb_length) > 0, "queued zeros were never completed");
+        assert!(
+            m.dirty_bytes_in(0, l.fb_length) > 0,
+            "queued zeros were never completed"
+        );
     }
 
     /// ★ IDEMPOTENCE: a second reset during or after a failed scrub is a second full run from the
@@ -485,7 +509,11 @@ mod tests {
         m.refuse_zero_at = None;
         m.calls.clear();
         assert_eq!(run(&p, &mut m, &AtomicU64::new(0)), Ok(l.fb_length));
-        assert_eq!(m.calls.first(), Some(&(0, CHUNK)), "restarted from the beginning");
+        assert_eq!(
+            m.calls.first(),
+            Some(&(0, CHUNK)),
+            "restarted from the beginning"
+        );
         let after_one = m.dirty.clone();
         assert_eq!(run(&p, &mut m, &AtomicU64::new(0)), Ok(l.fb_length));
         assert_eq!(m.dirty, after_one);
@@ -496,7 +524,10 @@ mod tests {
     #[test]
     fn an_empty_boot_range_adds_nothing() {
         let l = layout();
-        assert_eq!(plan(&l, Cause::Reset, Some((0, 0))), plan(&l, Cause::Reset, None));
+        assert_eq!(
+            plan(&l, Cause::Reset, Some((0, 0))),
+            plan(&l, Cause::Reset, None)
+        );
     }
 
     /// ★ THE OWNER'S TABLE, event -> scrub?: only a guest REBOOT scrubs — the one place the SAME
@@ -527,6 +558,10 @@ mod tests {
         assert_eq!(event_of_reset(false, false), Event::GuestReboot);
         assert_eq!(event_of_reset(true, false), Event::GuestBusReset);
         assert_eq!(event_of_reset(false, true), Event::S3Wake);
-        assert_eq!(event_of_reset(true, true), Event::S3Wake, "a wake is a wake");
+        assert_eq!(
+            event_of_reset(true, true),
+            Event::S3Wake,
+            "a wake is a wake"
+        );
     }
 }

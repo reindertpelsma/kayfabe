@@ -6463,6 +6463,263 @@ mod tests {
         );
     }
 
+    /// ★ integration (prod-candidate-5, 2026-10-18) — **hitch x bootlayer: a device reset that meets a colour-path
+    /// copy in flight neither strands a flip nor shows a tainted boot layer.** GPU-free, at the pure-state level
+    /// (the worker itself needs a GPU). Hitch moved the colour path onto the mailbox rule (a latch sets
+    /// `barrier = flip_completion_need(..)`, never `started + 1`); bootlayer gates the boot layer on a clean
+    /// store and taints it at the reset request. The pieces, in the order the reset runs them:
+    /// (1) the worker ends the life only with NO copy in flight (a source check: the guard is in the code);
+    /// (2) the copy in flight completes, and its flip's barrier (= that copy) is met by it;
+    /// (3) `reset_life` leaves `barrier == done == started` — nothing in the new life waits for a copy that will
+    ///     never be made — and the new life's first flip, latched with nothing in flight, waits for nothing;
+    /// (4) the shown choice, with the range still tainted (the memory stage's scrub has not completed), is
+    ///     never the boot layer, and clean again (scrub completed) it is.
+    /// (Mutations expected to be caught: the life-reset guard `scan.inflight.is_none()` dropped; `request_life_reset`
+    /// not tainting or tainting after the request. NOT caught: `reset_life` leaving `barrier` alone, because here the
+    /// barrier already equals `started` -- the pure state cannot distinguish.)
+    #[test]
+    fn a_reset_during_a_colour_path_copy_strands_no_flip_and_shows_no_tainted_boot_layer() {
+        let flight = |n| Inflight {
+            color: true, // the colour path: the one hitch moved from `started + 1` onto the mailbox rule
+            n,
+            phase: Phase::Send,
+            slot: 0,
+            wh: (1920, 1080),
+            t0: Instant::now(),
+            vram: None,
+            d2h: true,
+            cursor: false,
+            req: 0,
+            summed: false,
+            boot: false,
+        };
+        // A colour-path copy 7 is in flight; a flip latches under it.
+        let mut scan = ScanState {
+            started: 7,
+            done: 6,
+            inflight: Some(flight(7)),
+            ..ScanState::default()
+        };
+        scan.on_window_latch(0, true, |_| {});
+        assert_eq!(
+            scan.barrier, 7,
+            "the colour path waits for the copy in flight, as every path"
+        );
+        assert!(
+            scan.mailbox.pending(),
+            "the latched frame waits for the mailbox's copy"
+        );
+        // (1) the life must not end under the copy: the worker's guard is in the code
+        let src = include_str!("display.rs");
+        let code = src.split("#[cfg(test)]").next().unwrap();
+        let guard = code
+            .split("let owed = dp.life_reset.owed();")
+            .nth(1)
+            .and_then(|s| s.split("scan.reset_life();").next())
+            .expect("the worker's life-reset block");
+        assert!(
+            guard.contains("&& scan.inflight.is_none()"),
+            "the life ends only with no copy in flight: {guard}"
+        );
+        // (2) the copy completes: its flip is released (done >= barrier)
+        scan.done = 7;
+        scan.inflight = None;
+        assert!(scan.done >= scan.barrier);
+        // (3) the life ends
+        scan.reset_life();
+        assert_eq!((scan.barrier, scan.done, scan.started), (7, 7, 7));
+        assert!(
+            scan.barrier <= scan.done,
+            "no completion of the new life waits for a copy not yet made"
+        );
+        assert!(
+            !scan.mailbox.pending(),
+            "the old life's latched frame is forgotten"
+        );
+        assert!(scan.want, "the new life wants its first copy at once");
+        // the new life's first flip, nothing in flight: waits for nothing, and nothing is stranded
+        scan.on_window_latch(0, true, |_| {});
+        assert!(
+            scan.barrier <= scan.done,
+            "{} > {}",
+            scan.barrier,
+            scan.done
+        );
+        // (4) the boot layer: tainted at the request (`request_life_reset`), clean once the scrub completed
+        let rl = code
+            .split("pub fn request_life_reset(")
+            .nth(1)
+            .and_then(|s| s.split("\n    }\n").next())
+            .expect("request_life_reset");
+        assert!(
+            rl.find("self.boot_clean.taint()")
+                .is_some_and(|t| t < rl.find("self.life_reset.request(").unwrap()),
+            "the request taints BEFORE it can be acknowledged: {rl}"
+        );
+        let boot = boot_scan();
+        let held = held_after_life_reset(&Held {
+            preserved: None,
+            scanned: Some((1920, 1080)),
+            dark: Dark::Unlit,
+        });
+        assert_ne!(
+            choose_shown_gated(None, Some(&boot), false, false, &held),
+            Some(Shown::Boot(boot.layer, boot.size)),
+            "tainted: never the old life's bytes"
+        );
+        assert_eq!(
+            choose_shown_gated(None, Some(&boot), false, true, &held),
+            Some(Shown::Boot(boot.layer, boot.size)),
+            "clean: the boot layer is back"
+        );
+    }
+
+    /// CODE READ + pure state: a console colour refusal is not evidence of guest writes.
+    #[test]
+    fn a_console_colour_refusal_does_not_taint_the_boot_store() {
+        let clean = crate::bootclean::BootClean::new();
+        let counters = DispCounters::with_step_meters(true);
+        let console = ConsoleShare::default();
+        let mut scan = ScanState {
+            barrier: 1,
+            started: 1,
+            ..ScanState::default()
+        };
+        scan.fault(
+            &counters,
+            &console,
+            1,
+            0,
+            Fault::Console("SDR colour program: refused".into()),
+        );
+        assert_eq!(counters.console_copies_skipped.load(Ordering::Relaxed), 1);
+        assert!(clean.is_clean());
+        let boot = boot_scan();
+        assert_eq!(
+            choose_shown_gated(None, Some(&boot), false, clean.is_clean(), &Held::default()),
+            Some(Shown::Boot(boot.layer, boot.size))
+        );
+        clean.begin_life();
+        assert!(!clean.is_clean(), "an actual RM life taints the range");
+        assert_eq!(
+            choose_shown_gated(None, Some(&boot), false, clean.is_clean(), &Held::default()),
+            None
+        );
+        // Pin this compositional proof to the actual worker input and the real gate.
+        let code = include_str!("display.rs")
+            .split("#[cfg(test)]")
+            .next()
+            .unwrap();
+        let choice = code
+            .split("let shown = choose_shown_gated(")
+            .nth(1)
+            .unwrap()
+            .split(");")
+            .next()
+            .unwrap();
+        assert!(choice.contains("dp.boot_clean.is_clean()"));
+        assert!(!choice.contains("console_copies_skipped") && !choice.contains("scanout_refused"));
+        let gate = include_str!("bootclean.rs");
+        assert!(!gate.contains("console_copies_skipped") && !gate.contains("scanout_refused"));
+    }
+
+    /// Reused identifiers in a new life must resolve a fresh framebuffer binding.
+    #[test]
+    fn a_life_reset_drops_the_latched_scanout_binding_before_identifiers_are_reused() {
+        let mut scan = ScanState::default();
+        let so = scanout_6();
+        let old = CtxDma {
+            target: Target::Vidmem,
+            base: 0,
+            limit: 0x7f_ffff,
+            block_linear: false,
+            writable: true,
+        };
+        scan.on_window_latch(so.window, true, |state| {
+            assert_eq!(
+                state.latched.resolve(&so, || Ok(old)).unwrap().base,
+                old.base
+            );
+        });
+        assert_eq!(
+            scan.latched
+                .resolve(&so, || Err("unbound after latch".into()))
+                .unwrap()
+                .base,
+            old.base,
+            "the same life keeps its latch-time binding"
+        );
+        scan.reset_life();
+        assert!(scan.latched.by_window.iter().all(Option::is_none));
+        let new = CtxDma {
+            base: 0x1000_0000,
+            limit: 0x107f_ffff,
+            ..old
+        };
+        let mut resolutions = 0;
+        let got = scan
+            .latched
+            .resolve(&so, || {
+                resolutions += 1;
+                Ok(new)
+            })
+            .unwrap();
+        assert_eq!(
+            resolutions, 1,
+            "the next life resolves the reused identifiers afresh"
+        );
+        assert_eq!(got.base, new.base);
+        assert_ne!(got.base, old.base);
+    }
+
+    /// Pure-state integration: active bounded diagnostics do not participate in reset decisions.
+    #[test]
+    fn life_resets_with_event_recording_and_step_stats_remain_bounded() {
+        use kf_broker::ticks::{RING_CAP, RING_DUMPS_MAX, Requests};
+        let mut requests = Requests::with_diagnostics(true);
+        let meters = DispCounters::with_step_meters(true);
+        let mut scan = ScanState::default();
+        let ack = crate::reset::Ack::default();
+        let mut dumps = 0;
+        for seq in 1..=4096 {
+            requests.on_tick(&kf_broker::wire::TickPkt {
+                tick_seq: seq,
+                refresh_ns: 16_666_666,
+                want: true,
+                clock_only: false,
+                present_ns: u64::from(seq),
+            });
+            requests.note_live(false);
+            let before = requests.probe_state();
+            ack.request(u64::from(seq));
+            scan.reset_life();
+            ack.done(u64::from(seq));
+            assert_eq!(
+                requests.probe_state(),
+                before,
+                "reset does not consume or wait for a broker request"
+            );
+            meters.lat_pass.add(Duration::from_micros(1));
+            if let Some(lines) = requests.ring.take_dump("reset integration") {
+                dumps += 1;
+                assert!(lines.len() <= RING_CAP + 1);
+            }
+            assert!(requests.ring.events().len() <= RING_CAP);
+            assert!(ack.owed().is_none());
+        }
+        assert_eq!(requests.c.ticks, 4096);
+        assert_eq!(requests.ring.events().len(), RING_CAP);
+        assert_eq!(dumps, RING_DUMPS_MAX);
+        assert!(requests.ring.suppressed > 0);
+        assert_eq!(requests.spend(4096), Some(4096));
+        assert_eq!(
+            requests.spend(4096),
+            None,
+            "the request is still spent exactly once"
+        );
+        assert!(meters.step_fragment().contains("pass=4096/4096/1"));
+    }
+
     /// ★ §AK: the worker no longer carries the D1 gate or its measurement flag, parks no flip for a
     /// tick, and wires the mailbox exactly once each way: a latch of the shown window calls
     /// `on_flip_latched` (not the old `started + 1` barrier), the shown head's tick grants a copy, and
@@ -7089,7 +7346,10 @@ mod tests {
             "no black at the first handoff"
         );
         // gop=off is untouched by the gate
-        assert_eq!(choose_shown_gated(None, None, false, false, &Held::default()), None);
+        assert_eq!(
+            choose_shown_gated(None, None, false, false, &Held::default()),
+            None
+        );
     }
 
     /// ★ 2026-10-03 (B5, `V3_DISPLAY.md` §4.11.13): a head's scanout that WAS shown and is lost is

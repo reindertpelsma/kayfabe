@@ -2113,7 +2113,11 @@ impl Device {
                     );
                     let (line, boot_zeroed) = match step {
                         crate::memreset::Step::Waiting => continue,
-                        crate::memreset::Step::Refused { why, attempt, retry_in } => {
+                        crate::memreset::Step::Refused {
+                            why,
+                            attempt,
+                            retry_in,
+                        } => {
                             if crate::reset::loud(attempt) {
                                 eprintln!(
                                     "kf3: mem t={:.3}s device reset #{epoch} NOT acknowledged, scrub attempt {attempt} REFUSED: {why} — the store is NOT clean: the reset gate stays closed and the device does not open on it; retrying the scrub in {} ms",
@@ -3136,9 +3140,11 @@ impl Device {
                     // still running writes vidmem): a barrier act behind them opens the gate
                     let ticket = self.mem.inbox.unload_frees.request();
                     let inbox = self.mem.inbox.clone();
-                    let freed = self.chans.free_dead_clients_then(std::sync::Arc::new(move || {
-                        inbox.unload_frees.done(ticket);
-                    }));
+                    let freed = self
+                        .chans
+                        .free_dead_clients_then(std::sync::Arc::new(move || {
+                            inbox.unload_frees.done(ticket);
+                        }));
                     if log && !freed.is_empty() {
                         eprintln!(
                             "kf3: GSP fn 47: the guest RM unloaded with {} client(s) still holding host objects {freed:x?} — freed (the twins are dead)",

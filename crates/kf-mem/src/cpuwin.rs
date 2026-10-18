@@ -1131,7 +1131,11 @@ mod tests {
         let rep = w.sink_all();
         assert_eq!((rep.unmapped, rep.kept, rep.seed), (2, 0, None), "{rep:?}");
         assert_eq!(w.placements(), 0, "no placement of the old life is left");
-        assert_eq!(w.seeded(), None, "no seed while the store is being scrubbed");
+        assert_eq!(
+            w.seeded(),
+            None,
+            "no seed while the store is being scrubbed"
+        );
         let ops = r.ops.lock().unwrap().clone();
         for (i, o) in ops.iter().enumerate() {
             if let Op::Release(v) = o
@@ -1145,7 +1149,11 @@ mod tests {
         }
         // the reset's second half finds nothing to unmap and shows the boot view again
         let rep2 = w.reset_to_boot();
-        assert_eq!((rep2.unmapped, rep2.seed), (0, Some(Reseed::Placed { life: 2 })), "{rep2:?}");
+        assert_eq!(
+            (rep2.unmapped, rep2.seed),
+            (0, Some(Reseed::Placed { life: 2 })),
+            "{rep2:?}"
+        );
     }
 
     /// `sink_all` keeps a placement whose scratch re-point the host refuses (the guest could still
@@ -1155,7 +1163,8 @@ mod tests {
         let r = Rec::default();
         let w = CpuWindow::new(&r, 256 << 20);
         w.map(&d(0x2000, 0x40_0000, 0x4000, false), true).unwrap();
-        r.refuse_sink.store(true, std::sync::atomic::Ordering::SeqCst);
+        r.refuse_sink
+            .store(true, std::sync::atomic::Ordering::SeqCst);
         let rep = w.sink_all();
         assert_eq!((rep.unmapped, rep.kept), (0, 1), "{rep:?}");
         assert!(rep.first_refusal.is_some());
@@ -1173,7 +1182,8 @@ mod tests {
         w.map(&d(0, 0x10_0000, 0x1000, false), true).unwrap();
         w.invalidate().unwrap(); // the first batch retires the seed
         w.map(&d(0x2000, 0x40_0000, 0x4000, false), true).unwrap();
-        w.map(&d(0x10_0000, 0x5000_0000, 0x1000, true), true).unwrap();
+        w.map(&d(0x10_0000, 0x5000_0000, 0x1000, true), true)
+            .unwrap();
         assert!(w.seeded().is_none());
         assert_eq!(w.placements(), 3);
         let rep = w.reset_to_boot();
@@ -1215,7 +1225,10 @@ mod tests {
         let b2 = CpuWindow::new(&r, 32 << 20);
         b2.map(&d(0, 0x7000, 0x1000, false), true).unwrap();
         let rep = b2.reset_to_boot();
-        assert_eq!((rep.unmapped, rep.seed), (1, Some(Reseed::NoBootFramebuffer)));
+        assert_eq!(
+            (rep.unmapped, rep.seed),
+            (1, Some(Reseed::NoBootFramebuffer))
+        );
     }
 
     /// ★ The accounting property over N lives: every life places views of the store and of guest
@@ -1238,10 +1251,14 @@ mod tests {
             w.map(&d(0, 0x10_0000, 0x1000, false), true).unwrap();
             w.invalidate().unwrap();
             for i in 0..(life % 7 + 1) {
-                w.map(&d(base + i * 0x1000, 0x40_0000 + i * 0x1000, 0x1000, false), true)
-                    .unwrap();
+                w.map(
+                    &d(base + i * 0x1000, 0x40_0000 + i * 0x1000, 0x1000, false),
+                    true,
+                )
+                .unwrap();
             }
-            w.map(&d(base + 0x8000, 0x5000_0000, 0x1000, true), true).unwrap();
+            w.map(&d(base + 0x8000, 0x5000_0000, 0x1000, true), true)
+                .unwrap();
             let rep = w.reset_to_boot();
             assert_eq!(rep.kept, 0, "life {life}");
             assert_eq!(w.placements(), 0, "life {life}");
@@ -1261,7 +1278,10 @@ mod tests {
         let rep = w.reset_to_boot();
         assert_eq!((rep.unmapped, rep.kept), (0, 1));
         assert!(rep.first_refusal.is_some());
-        assert!(r.releases().is_empty(), "nothing released while the guest can still see it");
+        assert!(
+            r.releases().is_empty(),
+            "nothing released while the guest can still see it"
+        );
         r.refuse_sink.store(false, Ordering::Relaxed);
         let rep = w.reset_to_boot();
         assert_eq!((rep.unmapped, rep.kept), (1, 0));

@@ -118,8 +118,11 @@ impl RamMap {
     }
     /// Retain exact birth topology through bounded CPU publication, including
     /// already staged suffixes which no longer depend on the old guest rows.
-    pub(crate) fn admit_user_generation<T>(&self, generation: u64,
-        publish: impl FnOnce() -> T) -> Result<T, userread::Refusal> {
+    pub(crate) fn admit_user_generation<T>(
+        &self,
+        generation: u64,
+        publish: impl FnOnce() -> T,
+    ) -> Result<T, userread::Refusal> {
         let _guard = self.blocks.try_read().map_err(|e| match e {
             std::sync::TryLockError::WouldBlock => userread::Refusal::Busy,
             std::sync::TryLockError::Poisoned(_) => userread::Refusal::Poisoned,
@@ -243,7 +246,9 @@ impl MemoryListRam {
     ) -> Result<(), kf_rm::memory_list::AccessError> {
         use kf_rm::memory_list::AccessError;
         if bytes > kf_rm::memory_list::MAX_ACCESS
-            || offset.checked_add(bytes as u64).is_none_or(|end| end > span.length)
+            || offset
+                .checked_add(bytes as u64)
+                .is_none_or(|end| end > span.length)
         {
             return Err(AccessError::Bounds);
         }
@@ -255,12 +260,19 @@ impl MemoryListRam {
             return Err(AccessError::Topology);
         }
         let block = memory_list_block(&guard, span).ok_or(AccessError::Topology)?;
-        let at = span.base.checked_sub(block.gpa)
+        let at = span
+            .base
+            .checked_sub(block.gpa)
             .and_then(|v| v.checked_add(offset))
-            .and_then(|v| usize::try_from(v).ok()).ok_or(AccessError::Topology)?;
+            .and_then(|v| usize::try_from(v).ok())
+            .ok_or(AccessError::Topology)?;
         // Keep the topology guard across the bounded CPU copy: unregister cannot
         // free or replace this backing until the copy has returned.
-        if copy(block, at) { Ok(()) } else { Err(AccessError::Topology) }
+        if copy(block, at) {
+            Ok(())
+        } else {
+            Err(AccessError::Topology)
+        }
     }
 }
 impl core::fmt::Debug for MemoryListRam {
@@ -296,16 +308,26 @@ fn memory_list_block(blocks: &[RamBlock], span: kf_rm::memory_list::RamSpan) -> 
 
 impl kf_rm::memory_list::GuestRamAuthority for MemoryListRam {
     fn try_read(
-        &self, span: kf_rm::memory_list::RamSpan, generation: u64,
-        offset: u64, bytes: &mut [u8],
+        &self,
+        span: kf_rm::memory_list::RamSpan,
+        generation: u64,
+        offset: u64,
+        bytes: &mut [u8],
     ) -> Result<(), kf_rm::memory_list::AccessError> {
-        self.try_access(span, generation, offset, bytes.len(), |b, at| b.mem.read_into(at, bytes))
+        self.try_access(span, generation, offset, bytes.len(), |b, at| {
+            b.mem.read_into(at, bytes)
+        })
     }
     fn try_write(
-        &self, span: kf_rm::memory_list::RamSpan, generation: u64,
-        offset: u64, bytes: &[u8],
+        &self,
+        span: kf_rm::memory_list::RamSpan,
+        generation: u64,
+        offset: u64,
+        bytes: &[u8],
     ) -> Result<(), kf_rm::memory_list::AccessError> {
-        self.try_access(span, generation, offset, bytes.len(), |b, at| b.mem.write_from(at, bytes))
+        self.try_access(span, generation, offset, bytes.len(), |b, at| {
+            b.mem.write_from(at, bytes)
+        })
     }
     fn validate(&self, span: kf_rm::memory_list::RamSpan) -> Option<u64> {
         let guard = self.0.blocks.read().ok()?;
@@ -1457,7 +1479,9 @@ impl MapTarget for GpuMirror {
         Ok(m)
     }
     fn map_batch(&self, rows: &[Desired], defer: bool) -> Result<(), String> {
-        for row in rows { self.user_regions.check(row.va, row.len)?; }
+        for row in rows {
+            self.user_regions.check(row.va, row.len)?;
+        }
         let (Some(ram), true) = (self.ram, batching_enabled()) else {
             return Err(kf_mem::ledger::NOT_BATCHED.into());
         };
@@ -2218,7 +2242,10 @@ pub struct Inbox {
     pub life_reset: crate::reset::Ack,
 }
 
-pub(crate) enum UserSplitError { Busy, Refused(&'static str) }
+pub(crate) enum UserSplitError {
+    Busy,
+    Refused(&'static str),
+}
 
 impl Inbox {
     /// An empty inbox.
@@ -2382,17 +2409,27 @@ impl Inbox {
     /// Worker-only USER relay invalidate after a real prefix HOST receipt.
     /// Later USER publications remain held until the actual VA result arrives;
     /// this path has no writable GPU gate and never trusts guest target handles.
-    pub(crate) fn request_user_split(&self, token: u32, key: kf_mem::vasmgr::VasKey)
-        -> Result<u64, UserSplitError> {
-        let t = self.next_ticket.fetch_update(Ordering::Relaxed, Ordering::Relaxed,
-            |n| n.checked_add(1)).map_err(|_| UserSplitError::Refused("USER_RING_SPLIT_SEQUENCE"))?;
+    pub(crate) fn request_user_split(
+        &self,
+        token: u32,
+        key: kf_mem::vasmgr::VasKey,
+    ) -> Result<u64, UserSplitError> {
+        let t = self
+            .next_ticket
+            .fetch_update(Ordering::Relaxed, Ordering::Relaxed, |n| n.checked_add(1))
+            .map_err(|_| UserSplitError::Refused("USER_RING_SPLIT_SEQUENCE"))?;
         {
             let mut q = self.splits.try_lock().map_err(|e| match e {
                 std::sync::TryLockError::WouldBlock => UserSplitError::Busy,
-                std::sync::TryLockError::Poisoned(_) => UserSplitError::Refused("USER_RING_SPLIT_POISONED"),
+                std::sync::TryLockError::Poisoned(_) => {
+                    UserSplitError::Refused("USER_RING_SPLIT_POISONED")
+                }
             })?;
-            if q.len() >= 512 { return Err(UserSplitError::Refused("USER_RING_SPLIT_BUDGET")); }
-            q.try_reserve(1).map_err(|_| UserSplitError::Refused("USER_RING_SPLIT_ALLOCATION"))?;
+            if q.len() >= 512 {
+                return Err(UserSplitError::Refused("USER_RING_SPLIT_BUDGET"));
+            }
+            q.try_reserve(1)
+                .map_err(|_| UserSplitError::Refused("USER_RING_SPLIT_ALLOCATION"))?;
             q.push((t, token, SplitTarget::Space(key)));
         }
         let _ = self.wake.signal();
@@ -3056,13 +3093,8 @@ fn record_twin(
     if let Ok(mut mm) = plane.mirrors.lock() {
         mm.insert(key, mirror);
     }
-    let mut gpu = GpuMirror::with_ledger(
-            ledger,
-            (rows, log),
-            reserved,
-            Some(plane.ram),
-            kernel_vas,
-        );
+    let mut gpu =
+        GpuMirror::with_ledger(ledger, (rows, log), reserved, Some(plane.ram), kernel_vas);
     gpu.user_regions = user_regions;
     m.table.insert(key, Target::Gpu(gpu));
 }
@@ -3191,8 +3223,12 @@ pub fn prewarm(plane: &MemPlane, rm: &'static HostRm, store: u32) -> Option<Stri
 /// host space as a spare (it holds nothing of ours, §AB rule 2). ⊘ A space a live channel still
 /// runs in is never recycled (nor freed): it is kept, named.
 fn retire_association(mirrors: &Mirrors, key: VasKey) -> Result<Mirror, String> {
-    mirrors.lock().map_err(|_| "mirror associations poisoned".to_string())?
-        .get(&key).cloned().ok_or_else(|| "mirror association missing".to_string())
+    mirrors
+        .lock()
+        .map_err(|_| "mirror associations poisoned".to_string())?
+        .get(&key)
+        .cloned()
+        .ok_or_else(|| "mirror association missing".to_string())
 }
 
 /// ★★ **Device reset, stage Memory** (`docs/design/V3_DEVICE_RESET.md` §3), on the VA thread, once
@@ -3237,14 +3273,19 @@ pub fn reset_memory_prepare(m: &mut Manager, plane: &MemPlane, rm: &'static Host
                 w.unmapped,
                 w.kept,
                 views,
-                w.first_refusal.map_or(String::new(), |e| format!(" (refused: {e})"))
+                w.first_refusal
+                    .map_or(String::new(), |e| format!(" (refused: {e})"))
             ));
         }
     }
     let mirrors_left = plane.mirrors.lock().map_or(usize::MAX, |mm| mm.len());
     format!(
         "invalidate {}, PRAMIN scratch, {retired} VA space(s) retired, {} KEPT{}{}, mirrors left {mirrors_left}; views sunk [{}]",
-        if abandoned { "abandoned (armed)" } else { "idle" },
+        if abandoned {
+            "abandoned (armed)"
+        } else {
+            "idle"
+        },
         kept.len(),
         if kept.is_empty() { "" } else { ": " },
         kept.join("; "),
@@ -3320,7 +3361,9 @@ pub fn reset_memory_finish(
         }
         // the zeros above are awaited: the boot layer is shown again only after this completed
         if let Err(e) = k.sync_store() {
-            zero_refused.push(format!("completion of the root and boot framebuffer zero: {e}"));
+            zero_refused.push(format!(
+                "completion of the root and boot framebuffer zero: {e}"
+            ));
         }
     }
     let mut windows = Vec::new();
@@ -3336,7 +3379,8 @@ pub fn reset_memory_finish(
                 w.kept,
                 views,
                 w.seed,
-                w.first_refusal.map_or(String::new(), |e| format!(" (refused: {e})"))
+                w.first_refusal
+                    .map_or(String::new(), |e| format!(" (refused: {e})"))
             ));
         }
         m.table.insert(key, t);
@@ -3389,7 +3433,9 @@ fn retire_mirror(m: &mut Manager, plane: &MemPlane, rm: &'static HostRm, key: Va
     let Some(target) = m.remove(key) else {
         return format!("retire {key:?}: no mirror (no page-directory statement named it)");
     };
-    if let Ok(mut mirrors) = plane.mirrors.lock() { mirrors.remove(&key); }
+    if let Ok(mut mirrors) = plane.mirrors.lock() {
+        mirrors.remove(&key);
+    }
     plane
         .counters
         .mirrors_retired
@@ -3676,8 +3722,16 @@ mod tests {
         assert!(!i.walk_busy());
         assert_eq!(i.walk_busy(), fresh.walk_busy());
         assert!(i.take_walk_waiters().is_empty());
-        assert_eq!(i.split_result(t1), None, "a finished result of the old life is gone");
-        assert_eq!(i.finish_split(t2, Ok(())), None, "nobody waits on the old ticket");
+        assert_eq!(
+            i.split_result(t1),
+            None,
+            "a finished result of the old life is gone"
+        );
+        assert_eq!(
+            i.finish_split(t2, Ok(())),
+            None,
+            "nobody waits on the old ticket"
+        );
         let _ = i.split_result(t2);
         for k in 0..kf_trap::cacheop::CacheOp::COUNT {
             assert_eq!(i.cache_req[k].load(Ordering::Relaxed), 0);
@@ -3692,13 +3746,13 @@ mod tests {
     #[test]
     fn missing_or_poisoned_mirror_association_never_means_zero_live() {
         let mirrors: Mirrors = Default::default();
-        assert!(retire_association(&mirrors,VasKey(7)).is_err());
-        let poisoned=mirrors.clone();
-        let _=std::panic::catch_unwind(move || {
-            let _guard=poisoned.lock().unwrap();
+        assert!(retire_association(&mirrors, VasKey(7)).is_err());
+        let poisoned = mirrors.clone();
+        let _ = std::panic::catch_unwind(move || {
+            let _guard = poisoned.lock().unwrap();
             panic!("test-only association poison");
         });
-        assert!(retire_association(&mirrors,VasKey(7)).is_err());
+        assert!(retire_association(&mirrors, VasKey(7)).is_err());
         // The real retire_mirror returns before Manager::remove / any host verb
         // on either error, retaining the native VAS and all resource ownership.
     }
@@ -4709,22 +4763,46 @@ mod memory_list_tests {
     #[test]
     fn memory_list_worker_contention_is_busy_and_replacement_is_revoked() {
         let (ram, block) = setup();
-        let span = RamSpan { base: 0x3000, length: 0x7000 };
+        let span = RamSpan {
+            base: 0x3000,
+            length: 0x7000,
+        };
         let epoch = ram.validate(span).unwrap();
         let guard = ram.0.blocks.write().unwrap();
-        assert_eq!(ram.try_read(span, epoch, 0, &mut [0; 2]), Err(AccessError::Busy));
-        assert_eq!(ram.try_write(span, epoch, 0, &[1, 2]), Err(AccessError::Busy));
+        assert_eq!(
+            ram.try_read(span, epoch, 0, &mut [0; 2]),
+            Err(AccessError::Busy)
+        );
+        assert_eq!(
+            ram.try_write(span, epoch, 0, &[1, 2]),
+            Err(AccessError::Busy)
+        );
         drop(guard);
         assert_eq!(ram.try_write(span, epoch, span.length - 2, &[9, 7]), Ok(()));
         let mut bytes = [0; 2];
-        assert_eq!(ram.try_read(span, epoch, span.length - 2, &mut bytes), Ok(()));
+        assert_eq!(
+            ram.try_read(span, epoch, span.length - 2, &mut bytes),
+            Ok(())
+        );
         assert_eq!(bytes, [9, 7]);
-        assert_eq!(ram.try_read(span, epoch, span.length - 1, &mut bytes), Err(AccessError::Bounds));
-        assert_eq!(ram.try_write(span, epoch, 0, &vec![0; MAX_ACCESS + 1]), Err(AccessError::Bounds));
-        assert_eq!(ram.try_read(span, 0, 0, &mut bytes), Err(AccessError::Topology));
+        assert_eq!(
+            ram.try_read(span, epoch, span.length - 1, &mut bytes),
+            Err(AccessError::Bounds)
+        );
+        assert_eq!(
+            ram.try_write(span, epoch, 0, &vec![0; MAX_ACCESS + 1]),
+            Err(AccessError::Bounds)
+        );
+        assert_eq!(
+            ram.try_read(span, 0, 0, &mut bytes),
+            Err(AccessError::Topology)
+        );
         ram.0.del(block.gpa);
         ram.0.add(block);
-        assert_eq!(ram.try_read(span, epoch, 0, &mut bytes), Err(AccessError::Topology));
+        assert_eq!(
+            ram.try_read(span, epoch, 0, &mut bytes),
+            Err(AccessError::Topology)
+        );
     }
     #[test]
     fn memory_list_live_ram_copy_boundary_and_topology_revocation() {
