@@ -31,14 +31,12 @@
 //! channel number the display has; a malformed stream stops its channel by name.
 
 use crate::device::Device;
-use kf_broker::{
-    CursorMode, CursorPoint, CursorWant, FrameCursors, HotTracker, ShownFrame,
-};
+use kf_broker::{CursorMode, CursorPoint, CursorWant, FrameCursors, HotTracker, ShownFrame};
 use kf_cuda::display::{ComposeLayer, DisplayGpu, Frame};
 use kf_disp::engine::{Acquire, Composition, Effect, Engine, PbLoc, ScanVocab, Vocab};
 use kf_disp::inst::{CtxDma, Layout, Target};
-use kf_disp::model::{ChannelKind, Statement, Waker};
 use kf_disp::lockstep::CreditGate;
+use kf_disp::model::{ChannelKind, Statement, Waker};
 use kf_disp::pace::{HeadCounts, Mailbox, Meter, NonFlip, Pacer, Sent, flip_completion_need};
 use kf_disp::ports::{EventReg, Ports};
 use kf_disp::regs::Regs;
@@ -356,10 +354,18 @@ fn frame_edge_out(
 /// SwapBuffers; the ICD gave up after 300 s ("Unable to communicate with the display driver", error 2).
 /// Writes head `h`'s count (u32, little-endian, at `4*h`, `g_kern_disp_nvoc.h:72-75`) into the page,
 /// bounded by the size the guest stated; FB pages through the store, sysmem through guest RAM.
-fn write_vblank_count(io: &Io<'_>, page: kf_disp::model::InstMem, h: usize, n: u32) -> Result<(), String> {
+fn write_vblank_count(
+    io: &Io<'_>,
+    page: kf_disp::model::InstMem,
+    h: usize,
+    n: u32,
+) -> Result<(), String> {
     let off = (h as u64).checked_mul(4).ok_or("head")?;
     if off.checked_add(4).is_none_or(|e| e > page.size) {
-        return Err(format!("head {h}'s count is past the {:#x}-byte page", page.size));
+        return Err(format!(
+            "head {h}'s count is past the {:#x}-byte page",
+            page.size
+        ));
     }
     let at = page.phys.checked_add(off).ok_or("address")?;
     let bytes = n.to_le_bytes();
@@ -814,9 +820,87 @@ impl CursorPorts {
     }
 }
 
+/// ★ MEASUREMENT ONLY (hitch investigation, 2026-10-17; never a decision input, no behaviour): a bounded latency
+/// meter — count, sum and max of one step's wall time, three relaxed atomics, no allocation, no lock.
+#[derive(Debug)]
+pub struct LatStat {
+    enabled: bool,
+    n: AtomicU64,
+    sum_ns: AtomicU64,
+    max_ns: AtomicU64,
+}
+
+impl Default for LatStat {
+    fn default() -> Self {
+        Self::with_diagnostics(false)
+    }
+}
+
+impl LatStat {
+    fn with_diagnostics(enabled: bool) -> Self {
+        Self {
+            enabled,
+            n: AtomicU64::new(0),
+            sum_ns: AtomicU64::new(0),
+            max_ns: AtomicU64::new(0),
+        }
+    }
+
+    fn stamp(&self) -> Option<Instant> {
+        self.start_with(Instant::now)
+    }
+
+    fn start_with(&self, clock: impl FnOnce() -> Instant) -> Option<Instant> {
+        self.enabled.then(clock)
+    }
+
+    fn finish(&self, started: Option<Instant>) {
+        self.finish_with(started, Instant::now);
+    }
+
+    fn finish_with(&self, started: Option<Instant>, clock: impl FnOnce() -> Instant) {
+        if self.enabled
+            && let Some(started) = started
+        {
+            self.add(clock().saturating_duration_since(started));
+        }
+    }
+
+    /// One sample.
+    pub fn add(&self, d: Duration) {
+        if !self.enabled {
+            return;
+        }
+        let ns = u64::try_from(d.as_nanos()).unwrap_or(u64::MAX);
+        self.n.fetch_add(1, Ordering::Relaxed);
+        self.sum_ns.fetch_add(ns, Ordering::Relaxed);
+        self.max_ns.fetch_max(ns, Ordering::Relaxed);
+    }
+
+    /// `name=n/sum_us/max_us` — cumulative; a reader takes window deltas of `n` and `sum_us`.
+    #[must_use]
+    pub fn fragment(&self, name: &str) -> String {
+        let o = Ordering::Relaxed;
+        format!(
+            "{name}={}/{}/{}",
+            self.n.load(o),
+            self.sum_ns.load(o) / 1000,
+            self.max_ns.load(o) / 1000
+        )
+    }
+}
+
 /// Boot-log counters.
 #[derive(Debug, Default)]
 pub struct DispCounters {
+    /// ★ MEASUREMENT: display-worker pass start → a vblank edge (event + interrupt) raised.
+    pub lat_edge: LatStat,
+    /// ★ MEASUREMENT: `ScanState::resolve_now` (the context-DMA resolve at a latch).
+    pub lat_resolve: LatStat,
+    /// ★ MEASUREMENT: `ScanState::start` (launching a scanout copy).
+    pub lat_start: LatStat,
+    /// ★ MEASUREMENT: display-worker pass start → end of the irq step (the whole pass up to the interrupt).
+    pub lat_pass: LatStat,
     /// Display-aperture writes from vCPUs.
     pub writes: AtomicU64,
     /// Updates the engine completed.
@@ -880,6 +964,35 @@ pub struct DispCounters {
     pub same: AtomicU64,
     /// … and screendump/console refresh requests served.
     pub ondemand: AtomicU64,
+}
+
+impl DispCounters {
+    /// Construct the four diagnostic meters with one explicit selection; ordinary counters stay on.
+    #[must_use]
+    pub fn with_step_meters(enabled: bool) -> Self {
+        Self {
+            lat_edge: LatStat::with_diagnostics(enabled),
+            lat_resolve: LatStat::with_diagnostics(enabled),
+            lat_start: LatStat::with_diagnostics(enabled),
+            lat_pass: LatStat::with_diagnostics(enabled),
+            ..Self::default()
+        }
+    }
+
+    /// The legacy latency fragment only when the diagnostic was selected at construction.
+    #[must_use]
+    pub fn step_fragment(&self) -> String {
+        if !self.lat_pass.enabled {
+            return String::new();
+        }
+        format!(
+            " lat[{} {} {} {}]",
+            self.lat_edge.fragment("edge"),
+            self.lat_resolve.fragment("resolve"),
+            self.lat_start.fragment("start"),
+            self.lat_pass.fragment("pass")
+        )
+    }
 }
 
 /// ★ §8.16: the console or the broker WATCHES while it asked for a frame within this many
@@ -1383,6 +1496,49 @@ impl ColorDmas {
         *s = Some((key, resolved));
         Ok(Some(resolved))
     }
+}
+
+/// ★ review hitch-20261017 (3): resolve a latched window's LUT and TMO context-DMA bindings AT THE LATCH — the same calls the
+/// copy makes (`ScanState::start`'s colour program), so the copy a tick later finds them cached. Without it the bindings were
+/// resolved at copy time, which with the one flip rule can be a tick AFTER the flip completed: a guest that idles and unbinds the
+/// LUT context DMA (NVKMS teardown) before the tick would make the copy fail (`Fault::Console`: a stale console frame and a
+/// refusal line). The LUT *contents* are still read by the copy (GPU, device-to-device); a guest that rewrites the LUT in place
+/// right after the flip can show the console one frame with the new table — console-only, never guest-visible.
+/// A refusal here is not kept: the copy tries again and reports it.
+fn resolve_window_colors(
+    colors: &mut ColorDmas,
+    engine: &kf_disp::engine::Engine,
+    io: &mut Io<'_>,
+    sdr: (&'static kf_disp::class::ClassTable, u32, u32),
+    so: &kf_disp::engine::Scanout,
+) -> Result<(), String> {
+    let (t, win, _core) = sdr;
+    let armed = |m| engine.armed(ChannelKind::Window, so.window, m).unwrap_or(0);
+    let lut = kf_disp::color::input(t, win, armed, color_experiments()).map_err(str::to_owned)?;
+    let life = engine
+        .generation(so.chn)
+        .ok_or("no colour window incarnation")?;
+    let pipeline = kf_disp::color::pipeline(
+        t,
+        win,
+        armed,
+        engine
+            .armed_inline(so.window)
+            .ok_or("missing armed inline tables")?,
+    )
+    .map_err(str::to_owned)?;
+    colors.resolve(
+        32 + so.window as usize,
+        so.client,
+        so.chn,
+        life,
+        pipeline.tmo,
+        |handle| io.resolve(so.client, handle, so.chn),
+    )?;
+    colors.resolve(so.window as usize, so.client, so.chn, life, lut, |handle| {
+        io.resolve(so.client, handle, so.chn)
+    })?;
+    Ok(())
 }
 
 /// ★ The layers one scanout copy composes, and the windows it refused (by name).
@@ -2099,7 +2255,10 @@ impl DisplayPlane {
             cursor: core::array::from_fn(|_| CursorPorts::default()),
             counters: DispCounters {
                 vram_bytes: AtomicU64::new(vram_bytes),
-                ..DispCounters::default()
+                // Read once while constructing the plane, never on a worker pass or a vCPU.
+                ..DispCounters::with_step_meters(
+                    std::env::var("KF3_DIAG_STEP_METERS").is_ok_and(|v| v == "1"),
+                )
             },
             console,
             broker,
@@ -2817,6 +2976,7 @@ impl Device {
                 }
                 continue;
             }
+            let pass_t0 = dp.counters.lat_pass.stamp();
             let mut effects: Vec<Effect> = Vec::new();
             let mut gets: Vec<(u32, u32, u32)> = Vec::new();
             // 1. statements (the model's lock, only to take them)
@@ -3311,26 +3471,31 @@ impl Device {
                     scan.colors.forget(64);
                 }
                 if let Effect::Latched { window } = &e {
-                    // ★ the window's ARMED state changed: its next copy resolves it afresh
-                    scan.latched.forget(*window);
-                    scan.colors.forget_window(*window as usize);
-                    if let Some(Shown::Armed(c)) = &shown
-                        && let Some(so) = c.layers.iter().find(|l| l.window == *window)
-                    {
-                        // ★ §AK: the flip is NOT parked and does NOT wait for a tick or for its own copy.
-                        // A newer frame exists (the mailbox copies the newest, once per tick);
-                        // completing the flip releases the buffer it replaced, so its items wait for
-                        // the copy that was in flight at this latch, which read that buffer, and for
-                        // nothing else (the colour experiment keeps the old rule, see the function)
-                        scan.on_window_latched(dp.sdr_color.is_some());
-                        if dp.sdr_color.is_none() {
-                            // the delay between latch and copy is up to a tick: resolve the window's
-                            // context DMA NOW, as the first copy after a latch always did, so a guest
-                            // that unbinds it before the copy (NVKMS's teardown) is still resolved
-                            let so = *so;
-                            scan.resolve_now(&mut io, &so);
+                    // ★ review hitch-20261017: ONE call into ScanState (the property tests drive that method); this
+                    // block holds nothing else but what the call resolves (`the_worker_latch_is_one_method_call_...`)
+                    let so = match &shown {
+                        Some(Shown::Armed(c)) => {
+                            c.layers.iter().find(|l| l.window == *window).copied()
                         }
-                    }
+                        _ => None,
+                    };
+                    scan.on_window_latch(*window, so.is_some(), |scan| {
+                        if let Some(so) = so {
+                            let t_res = dp.counters.lat_resolve.stamp();
+                            scan.resolve_now(&mut io, &so);
+                            if let Some(sdr) = dp.sdr_color {
+                                // the colour path: its LUT / TMO context DMAs are resolved now too (a refusal is never kept)
+                                let _ = resolve_window_colors(
+                                    &mut scan.colors,
+                                    &engine,
+                                    &mut io,
+                                    sdr,
+                                    &so,
+                                );
+                            }
+                            dp.counters.lat_resolve.finish(t_res);
+                        }
+                    });
                 }
                 queue.push_back(Queued {
                     need: scan.barrier,
@@ -3386,7 +3551,9 @@ impl Device {
                 scan.on_console_tick(true);
             }
             if (scan.want || scan.mailbox.due(scan.inflight.is_some())) && scan.inflight.is_none() {
+                let t_st = dp.counters.lat_start.stamp();
                 scan.start(&mut io, &engine, shown.as_ref(), cursor.as_ref(), false);
+                dp.counters.lat_start.finish(t_st);
             } else if scan.nonflip.due(
                 console_tick,
                 watched,
@@ -3394,7 +3561,9 @@ impl Device {
                 scan.inflight.is_none(),
                 scan.flip_pending(),
             ) {
+                let t_st = dp.counters.lat_start.stamp();
                 scan.start(&mut io, &engine, shown.as_ref(), cursor.as_ref(), true);
+                dp.counters.lat_start.finish(t_st);
             }
             if scan.failed {
                 // No synthetic success after rejected colour state or work sent to the GPU.
@@ -3601,6 +3770,7 @@ impl Device {
                 }
                 let irq =
                     frame_edge_out(dp, &store, h, edge_frame[h], loadv, wtrace, &vsync_traced);
+                dp.counters.lat_edge.finish(pass_t0);
                 raised |= irq != 0;
                 if irq & dp.map.head_vblank != 0 {
                     counts[h].vblirq += 1;
@@ -3635,6 +3805,7 @@ impl Device {
                     self.latch_and_deliver(kf_rm::authored::DISP_STALL_VECTOR);
                 }
             }
+            dp.counters.lat_pass.finish(pass_t0);
             // 9. ★ §8.16: the achieved rates per path, per window of at least 1 s — published for
             // the status line (never waited for) and printed on a line of their own, at most every
             // 2 s and only when they changed
@@ -4341,17 +4512,6 @@ impl ScanState {
         }
     }
 
-    /// ★ §AK: a flip of the shown head latched. The colour experiment (`sdr_color`) resolves its LUT context DMAs at
-    /// copy time and keeps the old rule: the flip's items wait for its own copy, which is wanted at once.
-    fn on_window_latched(&mut self, sdr_color: bool) {
-        if sdr_color {
-            self.barrier = self.started + 1;
-            self.want = true;
-        } else {
-            self.on_flip_latched();
-        }
-    }
-
     /// ★ §AK: a flip of the shown head latched. A newer frame exists; the flip's completion items
     /// (queued next, with [`ScanState::barrier`]) wait for the copy in flight now — the one that read
     /// the buffer this flip replaces — and for nothing else
@@ -4359,6 +4519,21 @@ impl ScanState {
     fn on_flip_latched(&mut self) {
         self.mailbox.latch();
         self.barrier = flip_completion_need(self.barrier, self.inflight.as_ref().map(|f| f.n));
+    }
+
+    /// ★ review hitch-20261017: **everything the worker does when a window's UPDATE latches**, in one place the property
+    /// tests can drive. The window's armed state changed, so its context-DMA and colour bindings are forgotten (the next
+    /// copy resolves them afresh); when the window is one the console shows, the flip completes behind the copy in flight
+    /// at this latch and the newest frame becomes a pending mailbox copy ([`ScanState::on_flip_latched`] — the only place
+    /// that sets a barrier for a window flip, with or without the colour path), and `resolve` then runs the resolutions
+    /// the worker passes in (context DMA, LUT/TMO bindings) while the guest has not yet been told the flip completed.
+    fn on_window_latch(&mut self, window: u32, shown: bool, resolve: impl FnOnce(&mut ScanState)) {
+        self.latched.forget(window);
+        self.colors.forget_window(window as usize);
+        if shown {
+            self.on_flip_latched();
+            resolve(self);
+        }
     }
 
     /// ★ §AK: window `so` just latched — resolve its context DMA now (the first copy after a latch
@@ -4798,8 +4973,15 @@ impl ScanState {
                     );
                 }
                 // composed into the frame — or, under the stream, hidden (nothing composes)
-                kf_broker::want_of(kf_broker::CursorRead::Unshowable, stream, &mut self.hot, 0, 0, None)
-                    .unwrap_or(CursorWant::Hidden)
+                kf_broker::want_of(
+                    kf_broker::CursorRead::Unshowable,
+                    stream,
+                    &mut self.hot,
+                    0,
+                    0,
+                    None,
+                )
+                .unwrap_or(CursorWant::Hidden)
             }
         }
     }
@@ -5516,8 +5698,8 @@ impl ScanState {
 
 #[cfg(test)]
 mod tests {
-    use kf_broker::CursorImage;
     use super::*;
+    use kf_broker::CursorImage;
 
     /// ★ §8.18, the interleaving of runs e1-a…d (2026-10-08): the first copy is queued at +0.3 s,
     /// host RM spends 3.53 s registering the guest-RAM memfd, the copy's signal comes after that.
@@ -5632,9 +5814,15 @@ mod tests {
         let img = CursorWant::Image(Arc::new(
             CursorImage::new(32, 32, (0, 0), vec![1; 32 * 32 * 4]).unwrap(),
         ));
-        assert!(cursor_composed(CursorMode::Off, false, None), "today's path");
+        assert!(
+            cursor_composed(CursorMode::Off, false, None),
+            "today's path"
+        );
         for w in [&img, &CursorWant::Hidden, &CursorWant::Composed] {
-            assert!(cursor_composed(CursorMode::Grabbed, false, Some(w)), "{w:?}");
+            assert!(
+                cursor_composed(CursorMode::Grabbed, false, Some(w)),
+                "{w:?}"
+            );
         }
         assert!(!cursor_composed(CursorMode::Hover, false, Some(&img)));
         assert!(!cursor_composed(
@@ -5783,7 +5971,10 @@ mod tests {
         // a broker tick must not grant a copy credit by itself: `on_console_tick` is reached only
         // through the free-clock mask
         assert_eq!(code.matches("scan.on_console_tick(").count(), 1, "{code}");
-        assert!(!code.contains("scan.mailbox.tick()"), "no direct tick grant in the worker");
+        assert!(
+            !code.contains("scan.mailbox.tick()"),
+            "no direct tick grant in the worker"
+        );
         // the numbers the broker (the C header), the relay and the pacer share
         assert_eq!(kf_broker::wire::GUEST_MAX_HZ, kf_disp::pace::MAX_HZ);
         assert_eq!(kf_broker::wire::GUEST_MIN_HZ, kf_disp::pace::MIN_HZ);
@@ -5911,9 +6102,9 @@ mod tests {
 
     /// ★ §AK: the worker's copy bookkeeping. A flip-class copy serves the wanted copy, the pending latched frame
     /// and the tick's credit; a non-flip check serves none of them. The shown head's tick grants a copy only
-    /// while a guest scanout is shown. The colour experiment keeps the old rule (its own copy, wanted at once);
-    /// everything else waits for the copy in flight only. (Mutations: `begin_copy` not spending the mailbox, or
-    /// spending it for a check; a tick granting a credit for a boot picture; the colour rule dropped.)
+    /// while a guest scanout is shown. ⊘ CORRECTED 2026-10-18 (hitch-20261017): the colour path no longer has a rule of
+    /// its own (its own copy, wanted at once); every window flip waits for the copy in flight only. (Mutations:
+    /// `begin_copy` not spending the mailbox, or spending it for a check; a tick granting a credit for a boot picture.)
     #[test]
     fn a_flip_copy_serves_the_pending_frame_and_a_check_does_not() {
         let mut scan = ScanState::default();
@@ -5931,19 +6122,267 @@ mod tests {
         assert_eq!(scan.begin_copy(false), 2);
         assert!(!scan.want && !scan.mailbox.pending() && !scan.mailbox.due(false));
         assert_eq!(scan.mailbox.copies, 1);
-        // the colour rule: its own copy, wanted at once; the normal rule: nothing to wait for
-        scan.on_window_latched(true);
-        assert_eq!((scan.barrier, scan.want), (3, true));
-        assert_eq!(
-            scan.mailbox.latched, 1,
-            "the colour experiment bypasses the mailbox"
-        );
+        // one rule for every window flip, colour path included (hitch-20261017): nothing in flight, nothing to
+        // wait for, and the latched frame waits for the mailbox's copy (never "its own copy, wanted at once")
         scan.barrier = 0;
         scan.want = false;
-        scan.on_window_latched(false);
+        scan.on_flip_latched();
         assert_eq!(
             (scan.barrier, scan.want, scan.mailbox.latched),
             (0, false, 2)
+        );
+    }
+
+    /// ★ hitch-20261017 — **copies are bound by ticks, whatever the path that wants one.** The phase-1 rule
+    /// (`V3_DISPLAY_PACING` §6.3): the newest latched frame is copied at most once per tick, so in any window of N
+    /// ticks at most N + 1 flip copies start. Clock-free: ticks and latches are events, a copy completes at once.
+    /// Each tick sees a flip latch just BEFORE it (an immediate flip) and one AT it (the vsync flip of the same frame,
+    /// kms = 2 x tear) — the production order with the colour path on (`KF3_DISPLAY_SDR_COLOR=1`), where the
+    /// colour rule wanted a copy of its own at every latch (`want`), outside the mailbox: two copies per tick,
+    /// the measured `copies > tick + 2` seconds. Red on 54266072 (400 copies in 200 ticks: the colour rule), green once the colour path completes flips by the mailbox rule.
+    #[test]
+    fn copies_started_in_n_ticks_never_exceed_n_plus_1_on_any_latch_path() {
+        const N: u64 = 200;
+        let mut scan = ScanState::default();
+        let mut copies = 0u64;
+        let serve = |scan: &mut ScanState, copies: &mut u64| {
+            while (scan.want || scan.mailbox.due(scan.inflight.is_some()))
+                && scan.inflight.is_none()
+            {
+                scan.begin_copy(false);
+                *copies += 1; // the copy completes at once: nothing stays in flight
+            }
+        };
+        for _ in 0..N {
+            scan.on_window_latch(0, true, |_| {}); // the immediate flip, between ticks (the method the worker calls)
+            serve(&mut scan, &mut copies);
+            scan.on_console_tick(true); // the tick: one copy credit
+            scan.on_window_latch(0, true, |_| {}); // the vsync flip latched at the tick
+            serve(&mut scan, &mut copies);
+        }
+        assert!(
+            copies <= N + 1,
+            "{copies} flip copies started in {N} ticks (bound {}): a latch path copies outside the tick",
+            N + 1
+        );
+        assert!(
+            copies >= N,
+            "{copies} copies in {N} ticks, each with a latched frame: the mailbox lost a frame"
+        );
+    }
+
+    fn flight(n: u64) -> Inflight {
+        Inflight {
+            color: false,
+            n,
+            phase: Phase::Send,
+            slot: 0,
+            wh: (1920, 1080),
+            t0: Instant::now(),
+            vram: None,
+            d2h: true,
+            cursor: false,
+            req: 0,
+            summed: false,
+            boot: false,
+        }
+    }
+
+    /// ★ review hitch-20261017 (1): what the worker does at a latch, through the method the worker calls. A window the
+    /// console shows: the flip's items wait for the copy in flight at the latch and for nothing else (never its own copy,
+    /// never a wanted one), the frame is a pending mailbox copy, the bindings are forgotten and `resolve` runs exactly
+    /// once. A window it does not show: the bindings are forgotten, nothing else moves, `resolve` does not run.
+    /// (Mutations killed here and by the call-site scans: M1 the colour rule back (`barrier = started + 1`, `want`),
+    /// M2 `want = true` after the call, M3 `flip_completion_need(barrier, None)`, M4 no `mailbox.latch()`, M5 no `resolve`,
+    /// M6 no `forget`.)
+    #[test]
+    fn the_latch_method_waits_for_the_copy_in_flight_and_runs_the_resolutions_once() {
+        let mut scan = ScanState::default();
+        scan.started = 4;
+        scan.inflight = Some(flight(4));
+        let mut ran = 0;
+        scan.on_window_latch(3, true, |_| ran += 1);
+        assert_eq!(ran, 1, "the resolutions run once per shown latch");
+        assert_eq!(
+            scan.barrier, 4,
+            "the flip waits for the copy in flight (4), not for copy 5"
+        );
+        assert!(!scan.want, "a latch wants no copy of its own");
+        assert!(
+            scan.mailbox.pending() && scan.flip_pending(),
+            "the newest frame is a pending mailbox copy"
+        );
+        // nothing in flight: nothing to wait for
+        let mut idle = ScanState::default();
+        idle.started = 9;
+        idle.on_window_latch(3, true, |_| {});
+        assert_eq!((idle.barrier, idle.want), (0, false));
+        // a window the console does not show: only the forgetting
+        let mut other = ScanState::default();
+        let dma = CtxDma {
+            target: kf_disp::inst::Target::Vidmem,
+            base: 0x1000_0000,
+            limit: 0x1000_ffff,
+            block_linear: false,
+            writable: false,
+        };
+        other.latched.by_window[3] = Some(((1, 2, 3), dma));
+        other.colors.slots[3] = Some((
+            (
+                1,
+                3,
+                1,
+                kf_disp::color::Lut {
+                    entries: 1025,
+                    binding: kf_disp::color::Binding::Vidmem(0),
+                    interpolate: false,
+                    mirror: false,
+                },
+            ),
+            kf_cuda::display::ColorLut {
+                entries: 1025,
+                src: 0,
+                interpolate: false,
+                token: 1,
+            },
+        ));
+        other.colors.slots[32 + 3] = other.colors.slots[3];
+        other.on_window_latch(3, false, |_| panic!("an un-shown window resolves nothing"));
+        assert!(
+            other.latched.by_window[3].is_none()
+                && other.colors.slots[3].is_none()
+                && other.colors.slots[35].is_none(),
+            "the bindings are forgotten at every latch"
+        );
+        assert_eq!(
+            (other.barrier, other.want, other.mailbox.latched),
+            (0, false, 0),
+            "nothing else moves"
+        );
+    }
+
+    /// ★ review hitch-20261017 (3): the colour bindings resolved AT THE LATCH are what the copy a tick later uses. A guest
+    /// that idles and unbinds the LUT context DMA (NVKMS teardown) before the tick must not make the copy fail; without the
+    /// latch-time resolution (the d6516e296 behaviour) it does (`Fault::Console`, console-only). A new latch re-resolves.
+    #[test]
+    fn colour_bindings_resolved_at_the_latch_survive_an_unbind_before_the_copy() {
+        let lut = kf_disp::color::Lut {
+            entries: 1025,
+            binding: kf_disp::color::Binding::Dma {
+                handle: 7,
+                offset: 0,
+            },
+            interpolate: false,
+            mirror: false,
+        };
+        let dma = CtxDma {
+            target: kf_disp::inst::Target::Vidmem,
+            base: 0x1000_0000,
+            limit: 0x1001_ffff,
+            block_linear: false,
+            writable: false,
+        };
+        let mut colors = ColorDmas::default();
+        // the latch: resolve (what resolve_window_colors does through the same call)
+        let at_latch = colors
+            .resolve(0, 1, 2, 3, Some(lut), |_| Ok(dma))
+            .unwrap()
+            .unwrap();
+        // the guest unbinds the context DMA; the copy a tick later resolves again and must find it cached
+        let at_copy = colors
+            .resolve(0, 1, 2, 3, Some(lut), |_| {
+                Err("context DMA unbound".to_owned())
+            })
+            .expect("the copy uses the binding resolved at the latch")
+            .unwrap();
+        assert_eq!(
+            at_latch.token, at_copy.token,
+            "the very binding of the latch"
+        );
+        // without a latch-time resolution the same unbind fails the copy (the hole)
+        let mut late = ColorDmas::default();
+        assert!(
+            late.resolve(0, 1, 2, 3, Some(lut), |_| Err(
+                "context DMA unbound".to_owned()
+            ))
+            .is_err()
+        );
+        // a later latch forgets and resolves afresh (new armed state, new token)
+        colors.forget_window(0);
+        let again = colors
+            .resolve(0, 1, 2, 3, Some(lut), |_| Ok(dma))
+            .unwrap()
+            .unwrap();
+        assert_ne!(again.token, at_copy.token);
+    }
+
+    /// ★ review hitch-20261017 (1): the pieces of the latch that no behavioural test can see because they are wiring: the
+    /// worker passes "is this window shown" from the layer lookup (`so.is_some()`), resolves the window context DMA
+    /// (`scan.resolve_now`) and, on the colour path, the LUT/TMO bindings (`resolve_window_colors`) inside the call; and
+    /// `ScanState::on_window_latch` itself has its four steps — forget the DMA binding, forget the colour bindings, the one
+    /// flip rule, then the resolutions. (Mutations: M5 resolutions not run, M6 bindings not forgotten, M7 a call site that
+    /// always says "not shown".) Known-positive: the checker finds a planted token and misses a planted absence.
+    #[test]
+    fn the_latch_wiring_has_its_steps_at_the_call_site_and_in_the_method() {
+        let code = worker_code();
+        let has_all = |text: &str, needs: &[&str]| needs.iter().all(|n| text.contains(n));
+        assert!(has_all("a b c", &["a", "c"]) && !has_all("a b c", &["a", "z"]));
+        let block = code
+            .split("if let Effect::Latched { window } = &e")
+            .nth(1)
+            .unwrap()
+            .split("queue.push_back")
+            .next()
+            .unwrap();
+        for needed in [
+            "scan.on_window_latch(*window, so.is_some(),",
+            "scan.resolve_now(",
+            "resolve_window_colors(",
+            "c.layers.iter().find(|l| l.window == *window)",
+        ] {
+            assert!(
+                block.contains(needed),
+                "the latch call site lost {needed}: {block}"
+            );
+        }
+        let body = code
+            .split("fn on_window_latch(")
+            .nth(1)
+            .unwrap()
+            .split("\n    }\n")
+            .next()
+            .unwrap();
+        for needed in [
+            "self.latched.forget(window)",
+            "self.colors.forget_window(window as usize)",
+            "self.on_flip_latched()",
+            "resolve(self)",
+        ] {
+            assert!(
+                body.contains(needed),
+                "ScanState::on_window_latch lost {needed}: {body}"
+            );
+        }
+        // order: forget, forget, rule, resolve
+        let at = |n: &str| body.find(n).unwrap();
+        assert!(
+            at("self.latched.forget") < at("self.colors.forget_window")
+                && at("self.colors.forget_window") < at("self.on_flip_latched()")
+                && at("self.on_flip_latched()") < at("resolve(self)")
+        );
+    }
+
+    /// ★ review hitch-20261017 (1): `scan.want = true` appears at the two named sites of the worker only (a console change,
+    /// a core colour update) — a third one, at the latch or anywhere, is the original defect. Known-positive: the counter
+    /// sees a planted line.
+    #[test]
+    fn the_worker_sets_want_at_the_two_named_sites_only() {
+        let n = |t: &str| t.matches("scan.want = true").count();
+        assert_eq!(n("a; scan.want = true; b; scan.want = true"), 2);
+        assert_eq!(
+            n(&worker_code()),
+            2,
+            "scan.want = true appears at an unnamed site of the worker"
         );
     }
 
@@ -5976,7 +6415,9 @@ mod tests {
             assert_eq!(hits(&format!("let x = {planted};")), vec![planted]);
         }
         for needed in [
-            "scan.on_window_latched(dp.sdr_color.is_some())",
+            "scan.on_window_latch(*window, so.is_some(),",
+            "resolve_window_colors(&mut scan.colors",
+            "self.on_flip_latched()",
             "scan.on_console_tick(",
             "self.mailbox.tick()",
             "scan.mailbox.due(",
@@ -5987,7 +6428,18 @@ mod tests {
             "scan.flip_pending()",
             "pacer.take_handoffs()",
         ] {
-            assert!(code.contains(needed), "the worker no longer calls {needed}");
+            assert!(
+                code.chars()
+                    .filter(|c| !c.is_whitespace())
+                    .collect::<String>()
+                    .contains(
+                        &needed
+                            .chars()
+                            .filter(|c| !c.is_whitespace())
+                            .collect::<String>()
+                    ),
+                "the worker no longer calls {needed}"
+            );
         }
         // the latch of the shown window sets no barrier of its own: the rule is one function
         let latch = code
@@ -5996,6 +6448,67 @@ mod tests {
             .unwrap();
         let latch = latch.split("queue.push_back").next().unwrap();
         assert!(!latch.contains("barrier"), "{latch}");
+    }
+
+    /// The worker code with comments stripped (what the call-site scans look at).
+    fn worker_code() -> String {
+        include_str!("display.rs")
+            .split("#[cfg(test)]")
+            .next()
+            .unwrap()
+            .lines()
+            .map(|l| l.split("//").next().unwrap())
+            .collect::<Vec<_>>()
+            .join("\n")
+    }
+
+    /// ★ review hitch-20261017 (1): the latch of a window is ONE call into `ScanState` — the property tests exercise
+    /// that method, so the worker's call site must hold nothing but the call and the resolutions it passes in. A
+    /// `scan.want = true`, a `started + 1`, a barrier or a mailbox touch between `Effect::Latched` and the queueing of
+    /// its effect would bring the original defect back where no property test sees it. Known-positive: the scanner
+    /// finds each banned token in a planted block. EXPECTED RED on the commit that adds it (the call site still sets
+    /// things inline); green with the next.
+    #[test]
+    fn the_worker_latch_is_one_method_call_and_touches_no_copy_state() {
+        let code = worker_code();
+        let block = code
+            .split("if let Effect::Latched { window } = &e")
+            .nth(1)
+            .unwrap()
+            .split("queue.push_back")
+            .next()
+            .unwrap()
+            .to_owned();
+        let banned = [
+            ".want",
+            "started",
+            "barrier",
+            "mailbox",
+            "inflight",
+            "begin_copy",
+            ".start(",
+            "latched.forget",
+            "colors.forget",
+        ];
+        let hits = |text: &str| -> Vec<&str> {
+            banned
+                .iter()
+                .copied()
+                .filter(|b| text.contains(b))
+                .collect()
+        };
+        for planted in banned {
+            assert_eq!(hits(&format!("scan{planted} = 1;")), vec![planted]);
+        }
+        assert_eq!(
+            hits(&block),
+            Vec::<&str>::new(),
+            "the latch call site touches copy state: {block}"
+        );
+        assert!(
+            block.contains("scan.on_window_latch("),
+            "the worker no longer calls ScanState::on_window_latch at a latch: {block}"
+        );
     }
 
     fn map() -> RegMap {
@@ -7167,5 +7680,123 @@ mod tests {
             None
         );
         assert!(none.is_none() && !plain.ring().withdrawn(kf_broker::Kind::Host));
+    }
+}
+
+#[cfg(test)]
+mod diagnostic_gate_tests {
+    use super::*;
+
+    // The green commit changes only this fixture's explicit diagnostic selection.
+    fn enabled_meter() -> LatStat {
+        LatStat::with_diagnostics(true)
+    }
+
+    #[test]
+    fn diagnostic_default_meter_does_not_record_samples() {
+        let m = LatStat::default();
+        m.add(Duration::from_micros(12));
+        assert_eq!(
+            m.fragment("edge"),
+            "edge=0/0/0",
+            "no diagnostic flag: no latency samples"
+        );
+    }
+
+    #[test]
+    fn diagnostic_default_counters_do_not_record_any_step() {
+        let c = DispCounters::default();
+        for m in [&c.lat_edge, &c.lat_resolve, &c.lat_start, &c.lat_pass] {
+            m.add(Duration::from_micros(7));
+            assert_eq!(
+                m.fragment("step"),
+                "step=0/0/0",
+                "all four steps must be disabled by default"
+            );
+        }
+    }
+
+    #[test]
+    fn diagnostic_worker_never_takes_an_unguarded_meter_timestamp() {
+        let code = worker_code_for_diagnostics();
+        for raw in [
+            "let pass_t0 = Instant::now()",
+            "let t_res = Instant::now()",
+            "let t_st = Instant::now()",
+        ] {
+            assert!(
+                !code.contains(raw),
+                "diagnostics off still takes a timestamp: {raw}"
+            );
+        }
+        for guarded in [
+            "lat_pass.stamp()",
+            "lat_resolve.stamp()",
+            "lat_start.stamp()",
+        ] {
+            assert!(
+                code.contains(guarded),
+                "each measurement must use the gated clock: {guarded}"
+            );
+        }
+    }
+
+    fn worker_code_for_diagnostics() -> &'static str {
+        include_str!("display.rs")
+            .split("#[cfg(test)]")
+            .next()
+            .unwrap()
+    }
+
+    #[test]
+    fn diagnostic_enabled_meter_keeps_the_legacy_fragment() {
+        let m = enabled_meter();
+        m.add(Duration::from_micros(5));
+        m.add(Duration::from_micros(12));
+        assert_eq!(m.fragment("edge"), "edge=2/17/12");
+    }
+
+    #[test]
+    fn diagnostic_enabled_meter_keeps_nanosecond_sums_and_maximum() {
+        let m = enabled_meter();
+        for ns in [1500, 2500, 500] {
+            m.add(Duration::from_nanos(ns));
+        }
+        assert_eq!(m.n.load(Ordering::Relaxed), 3);
+        assert_eq!(m.sum_ns.load(Ordering::Relaxed), 4500);
+        assert_eq!(m.max_ns.load(Ordering::Relaxed), 2500);
+        assert_eq!(m.fragment("pass"), "pass=3/4/2");
+    }
+
+    #[test]
+    fn diagnostic_disabled_meter_never_calls_either_clock() {
+        let m = LatStat::with_diagnostics(false);
+        assert!(
+            m.start_with(|| panic!("disabled start read the clock"))
+                .is_none()
+        );
+        m.finish_with(Some(Instant::now()), || {
+            panic!("disabled finish read the clock")
+        });
+        assert_eq!(m.fragment("pass"), "pass=0/0/0");
+        assert!(
+            DispCounters::with_step_meters(false)
+                .step_fragment()
+                .is_empty()
+        );
+    }
+
+    #[test]
+    fn diagnostic_enabled_meter_keeps_the_legacy_start_to_finish_interval() {
+        let m = enabled_meter();
+        let now = Instant::now();
+        let start = m.start_with(|| now);
+        assert_eq!(start, Some(now));
+        m.finish_with(start, || now + Duration::from_micros(17));
+        assert_eq!(m.fragment("resolve"), "resolve=1/17/17");
+        assert_eq!(
+            DispCounters::with_step_meters(true).step_fragment(),
+            " lat[edge=0/0/0 resolve=0/0/0 start=0/0/0 pass=0/0/0]"
+        );
     }
 }

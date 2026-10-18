@@ -947,6 +947,7 @@ static void nb_emit_tick(struct nb_sink *s, const struct nb_tick_out *o)
     }
     nb_emit(s, NVKVM_BROKER_EV_TICK, (int)o->tick_seq, (int)o->refresh_word,
             lo, hi);
+    nb_sink_stats_poll(s);
     if (ticks >= 1) {
         /* an older non-WANT tick now has a newer one behind it */
         nb_tx_coalesce(s);
@@ -956,6 +957,18 @@ static void nb_emit_tick(struct nb_sink *s, const struct nb_tick_out *o)
 bool nb_sink_tick_on(const struct nb_sink *s)
 {
     return s->client_fd >= 0 && s->tick.on;
+}
+
+void nb_sink_stats_poll(struct nb_sink *s)
+{
+    char line[NB_TICK_STATS_LINE_MAX];
+
+    if (!s->cfg->stats_line || s->client_fd < 0 || !s->tick.on) {
+        return;
+    }
+    if (nb_tick_stats_step(&s->tick, &s->stats_prev, &s->stats_next_ns, nb_sess_now_ns(s), line, sizeof(line)) > 0) {
+        nb_log("%s", line);
+    }
 }
 
 unsigned nb_sink_mode_mhz(const struct nb_sink *s, unsigned host_mhz,
@@ -1002,7 +1015,35 @@ bool nb_sink_refresh(struct nb_sink *s, uint64_t now_ns, uint64_t present_ns,
 void nb_sink_presented(struct nb_sink *s)
 {
     if (s->client_fd >= 0 && s->tick.on) {
-        nb_tick_presented(&s->tick);
+        nb_tick_presented_at(&s->tick, nb_sess_now_ns(s), false);
+    }
+}
+
+void nb_sink_note_discarded(struct nb_sink *s)
+{
+    if (s->client_fd >= 0 && s->tick.on) {
+        nb_tick_presented_at(&s->tick, nb_sess_now_ns(s), true);
+    }
+}
+
+void nb_sink_note_present(struct nb_sink *s, uint64_t present_ns)
+{
+    if (s->cfg->stats_line && s->client_fd >= 0 && s->tick.on) {
+        nb_tick_content_present(&s->tick, present_ns);
+    }
+}
+
+void nb_sink_note_pump_discarded(struct nb_sink *s)
+{
+    if (s->cfg->stats_line && s->client_fd >= 0 && s->tick.on) {
+        nb_tick_pump_discarded(&s->tick);
+    }
+}
+
+void nb_sink_note_loop(struct nb_sink *s, uint64_t late_ns, uint64_t work_ns)
+{
+    if (s->cfg->stats_line && s->tick.on) {
+        nb_tick_win_loop(&s->tick, late_ns, work_ns);
     }
 }
 
@@ -1049,6 +1090,7 @@ static bool nb_tick_reply(struct nb_sink *s, uint32_t req, bool is_commit)
     if (!s->tick.on) {
         return true;        /* COMMIT.seq is advisory without CLIENT_TICK */
     }
+    nb_sink_stats_poll(s);
     if (nb_tick_answer(&s->tick, req, is_commit, nb_sess_now_ns(s)) ==
         NB_TICK_ANS_VIOLATION) {
         nb_violation(s, is_commit ? "COMMIT names a request the broker never issued"
@@ -3643,6 +3685,8 @@ static void usage(void)
 "                         shm     no dma-buf at all: plain shared memory, which\n"
 "                                 no compositor can refuse.  Slowest, universal\n"
 "  --linear-only        deprecated alias for --present-mode=linear\n"
+"  --stats-line         print one 'stats t=<CLOCK_MONOTONIC ms> ...' line per second with the\n"
+"                       tick counters' deltas (measurement only; off by default)\n"
 "  --verbose\n"
 "\n"
 "The broker owns the window, the compositor connection and the input grab.\n"
@@ -3811,6 +3855,17 @@ static int nb_validate_clipboard_mode(const struct nb_config *cfg,
     return -ENOTSUP;
 }
 
+/* Diagnostic-only timestamps: no clock syscall unless --stats-line was selected. */
+static uint64_t nb_stats_now_ns(bool enabled)
+{
+    struct timespec ts;
+    if (!enabled) {
+        return 0;
+    }
+    clock_gettime(CLOCK_MONOTONIC, &ts);
+    return (uint64_t)ts.tv_sec * 1000000000ull + (uint64_t)ts.tv_nsec;
+}
+
 int main(int argc, char **argv)
 {
     struct nb_config cfg;
@@ -3936,6 +3991,7 @@ int main(int argc, char **argv)
         else if (!strcmp(a, "--trace-frames")) { nb_trace_frames = 1; }
         else if (!strcmp(a, "--fullscreen")) { cfg.fullscreen = true; }
         else if (!strcmp(a, "--persist"))    { cfg.persist = true; }
+        else if (!strcmp(a, "--stats-line")) { cfg.stats_line = true; }
         else if (!strcmp(a, "--socket-mode")) { NEEDVAL();
             char *end = NULL;
             unsigned long m = strtoul(v, &end, 8);
@@ -4160,12 +4216,29 @@ int main(int argc, char **argv)
             tmo = ctmo;
         }
 
-        if (poll(pfd, (nfds_t)(n + nsess), tmo) < 0) {
-            if (errno == EINTR) {
-                continue;
+        {
+            /* ★ MEASUREMENT (--stats-line): how late poll() woke, and how long the loop body ran since the last one */
+            uint64_t t0, t1;
+            static uint64_t last_ret_ns;
+            int pr;
+
+            t0 = nb_stats_now_ns(cfg.stats_line);
+            pr = poll(pfd, (nfds_t)(n + nsess), tmo);
+            t1 = nb_stats_now_ns(cfg.stats_line);
+            if (pr == 0 && tmo > 0 && t1 - t0 > (uint64_t)tmo * 1000000ull) {
+                nb_sink_note_loop(&sink, t1 - t0 - (uint64_t)tmo * 1000000ull, 0);
             }
-            nb_err("poll: %s", strerror(errno));
-            break;
+            if (last_ret_ns != 0 && t0 > last_ret_ns) {
+                nb_sink_note_loop(&sink, 0, t0 - last_ret_ns);
+            }
+            last_ret_ns = t1;
+            if (pr < 0) {
+                if (errno == EINTR) {
+                    continue;
+                }
+                nb_err("poll: %s", strerror(errno));
+                break;
+            }
         }
 
         if (pfd[0].revents) {
