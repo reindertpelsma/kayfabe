@@ -2539,7 +2539,10 @@ mod tests {
         assert_eq!(f.subctx_id, 0x3f);
         // a hostile flag word is carried as written (refusing it is the plane's decision)
         b[4..8].copy_from_slice(&0xffff_ffffu32.to_le_bytes());
-        assert_eq!(t.decode_ctxshare_alloc_facts(&b).unwrap().flags, 0xffff_ffff);
+        assert_eq!(
+            t.decode_ctxshare_alloc_facts(&b).unwrap().flags,
+            0xffff_ffff
+        );
         // short params are refused, never zero-extended
         assert!(t.decode_ctxshare_alloc_facts(&b[..8]).is_err());
     }

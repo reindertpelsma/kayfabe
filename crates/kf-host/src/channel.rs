@@ -3723,7 +3723,10 @@ mod tsg_mirror_tests {
             &ring(),
             1,
             true,
-            Some(Placement { ctxshare: 0xabc, runqueue1: false }),
+            Some(Placement {
+                ctxshare: 0xabc,
+                runqueue1: false,
+            }),
         );
         assert_eq!(rq0.h_context_share, 0xabc);
         assert_eq!(rq0.h_va_space, 0);
@@ -3732,13 +3735,20 @@ mod tsg_mirror_tests {
             &ring(),
             1,
             true,
-            Some(Placement { ctxshare: 0xabc, runqueue1: true }),
+            Some(Placement {
+                ctxshare: 0xabc,
+                runqueue1: true,
+            }),
         );
         assert_eq!(
             rq1.flags,
-            NVOS04_FLAGS_CHANNEL_DENY_PHYSICAL_MODE_CE_TRUE | NVOS04_FLAGS_GROUP_CHANNEL_RUNQUEUE_ONE
+            NVOS04_FLAGS_CHANNEL_DENY_PHYSICAL_MODE_CE_TRUE
+                | NVOS04_FLAGS_GROUP_CHANNEL_RUNQUEUE_ONE
         );
-        assert_eq!(rq1.flags & 0xffff_ff2f, NVOS04_FLAGS_CHANNEL_DENY_PHYSICAL_MODE_CE_TRUE & 0xffff_ff2f);
+        assert_eq!(
+            rq1.flags & 0xffff_ff2f,
+            NVOS04_FLAGS_CHANNEL_DENY_PHYSICAL_MODE_CE_TRUE & 0xffff_ff2f
+        );
         // the ring parameters are untouched
         assert_eq!(rq1.gp_fifo_offset, ring().gp_fifo_va);
         assert_eq!(rq1.h_userd_memory_0, ring().userd_memory);
@@ -3756,7 +3766,10 @@ mod tsg_mirror_tests {
                     &ring(),
                     1,
                     deny,
-                    Some(Placement { ctxshare: 1, runqueue1: rq }),
+                    Some(Placement {
+                        ctxshare: 1,
+                        runqueue1: rq,
+                    }),
                 );
                 assert_eq!(r.flags & (1 << 5), 0);
                 assert_eq!(r.flags & !((1 << 7) | (1 << 4)), 0);
@@ -3771,11 +3784,17 @@ mod tsg_mirror_tests {
             &ring(),
             1,
             true,
-            Some(Placement { ctxshare: 0x1234, runqueue1: true }),
+            Some(Placement {
+                ctxshare: 0x1234,
+                runqueue1: true,
+            }),
         );
         let mut b = [0u8; kf_abi::submit::ChannelAllocParams::SIZE];
         r.encode_into(&mut b).unwrap();
-        assert_eq!(u32::from_le_bytes(b[20..24].try_into().unwrap()), (1 << 7) | (1 << 4));
+        assert_eq!(
+            u32::from_le_bytes(b[20..24].try_into().unwrap()),
+            (1 << 7) | (1 << 4)
+        );
         assert_eq!(u32::from_le_bytes(b[24..28].try_into().unwrap()), 0x1234);
         assert_eq!(u32::from_le_bytes(b[28..32].try_into().unwrap()), 0);
     }

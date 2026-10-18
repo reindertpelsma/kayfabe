@@ -174,7 +174,9 @@ pub fn host_rq1(guest_flags: u32) -> Result<bool, Refusal> {
         return Err(Refusal {
             status: NV_ERR_INVALID_ARGUMENT,
             class: RefusalClass::Flag,
-            why: format!("channel flags {guest_flags:#x}: GROUP_CHANNEL_THREAD = 3 is not a defined value"),
+            why: format!(
+                "channel flags {guest_flags:#x}: GROUP_CHANNEL_THREAD = 3 is not a defined value"
+            ),
         });
     }
     // The one forwarded bit: GROUP_CHANNEL_RUNQUEUE (4). Every other bit is the guest RM's own business
@@ -200,7 +202,9 @@ pub fn decode_kind(flags: u32, subctx_id: u32) -> Result<SubctxKind, Refusal> {
         _ => Err(Refusal {
             status: NV_ERR_INVALID_ARGUMENT,
             class: RefusalClass::Flag,
-            why: format!("ctxshare flags {flags:#x}: not one of SYNC/ASYNC/SPECIFIED/ASYNC_PREFER_LOWER"),
+            why: format!(
+                "ctxshare flags {flags:#x}: not one of SYNC/ASYNC/SPECIFIED/ASYNC_PREFER_LOWER"
+            ),
         }),
     }
 }
@@ -759,7 +763,11 @@ impl Stats {
         let o = Ordering::Relaxed;
         format!(
             "mirror=[{} groups={} ctx_created={} ctx_freed={} mode_refused={} flag_refused={} ctx_unknown={} cap_refused={} latejoin_skipped={} unwind_failed={}]",
-            if enabled() { "on" } else { "OFF(KF3_TSG_MIRROR=0)" },
+            if enabled() {
+                "on"
+            } else {
+                "OFF(KF3_TSG_MIRROR=0)"
+            },
             self.groups.load(o),
             self.ctx_created.load(o),
             self.ctx_freed.load(o),
@@ -843,9 +851,10 @@ mod tests {
 
     impl Fake {
         fn new() -> Self {
-            let mut rm = Rm::default();
-            rm.next = 0x1000;
-            Self(RefCell::new(rm))
+            Self(RefCell::new(Rm {
+                next: 0x1000,
+                ..Rm::default()
+            }))
         }
         fn fail_nth(&self, op: &'static str, nth: u32) {
             self.0.borrow_mut().fail.insert(op, nth);
@@ -856,13 +865,15 @@ mod tests {
         /// host objects still alive (groups + ctxshares + channels)
         fn live(&self) -> usize {
             let rm = self.0.borrow();
-            rm.groups.len() + rm.groups.values().map(|g| g.ctxs.len()).sum::<usize>() + rm.chans.len()
+            rm.groups.len()
+                + rm.groups.values().map(|g| g.ctxs.len()).sum::<usize>()
+                + rm.chans.len()
         }
         fn hit(&self, op: &'static str) -> Result<(), u32> {
             let mut rm = self.0.borrow_mut();
             let n = rm.calls.entry(op).or_insert(0);
             *n += 1;
-            if rm.fail.get(op) == Some(&*rm.calls.get(op).unwrap()) {
+            if rm.fail.get(op) == rm.calls.get(op) {
                 return Err(0x1a);
             }
             Ok(())
@@ -884,7 +895,13 @@ mod tests {
             }
             let h = self.mint();
             let mut rm = self.0.borrow_mut();
-            rm.groups.insert(h, FGroup { engine, ..FGroup::default() });
+            rm.groups.insert(
+                h,
+                FGroup {
+                    engine,
+                    ..FGroup::default()
+                },
+            );
             rm.ops.push(format!("group_new({engine})"));
             Ok(h)
         }
@@ -909,7 +926,10 @@ mod tests {
                     }
                     0
                 }
-                SubctxKind::Async => (1..=0x3fu32).rev().find(|v| !used.contains(v)).ok_or(0x51u32)?,
+                SubctxKind::Async => (1..=0x3fu32)
+                    .rev()
+                    .find(|v| !used.contains(v))
+                    .ok_or(0x51u32)?,
             };
             g.ctxs.insert(h, (kind, space, veid));
             rm.ops.push(format!("ctx_new({kind:?})"));
@@ -940,9 +960,21 @@ mod tests {
             }
             g.explicit = Some(true);
             rm.chans.insert(h, (tsg, place.ctxshare));
-            let idx = rm.groups[&tsg].ctxs.keys().position(|k| *k == place.ctxshare).unwrap();
-            rm.ops.push(format!("member_new(first={first},rq1={},ctx#{idx})", place.runqueue1));
-            Ok(Channel { tsg, chan: h, token: h + 0x100, born_user: None })
+            let idx = rm.groups[&tsg]
+                .ctxs
+                .keys()
+                .position(|k| *k == place.ctxshare)
+                .unwrap();
+            rm.ops.push(format!(
+                "member_new(first={first},rq1={},ctx#{idx})",
+                place.runqueue1
+            ));
+            Ok(Channel {
+                tsg,
+                chan: h,
+                token: h + 0x100,
+                born_user: None,
+            })
         }
 
         fn member_free(&self, chan: Channel) -> Result<(), u32> {
@@ -989,7 +1021,11 @@ mod tests {
 
     impl Rig {
         fn new(on: bool) -> Self {
-            Self { host: Fake::new(), map: GroupMap::new(on), chans: Vec::new() }
+            Self {
+                host: Fake::new(),
+                map: GroupMap::new(on),
+                chans: Vec::new(),
+            }
         }
 
         fn birth(&mut self, r: Req) -> Result<Born, Result<Refusal, BirthFail>> {
@@ -999,20 +1035,38 @@ mod tests {
                     // base path, as `birth_twin_in` does it: bare channel = group + first member; join = member
                     let (tsg, first) = match join {
                         Some(t) => (t, false),
-                        None => (self.host.group_new(r.space, r.engine).map_err(|e| Err(BirthFail { step: "group", err: format!("{e:#x}"), unwind_failed: 0 }))?, true),
+                        None => (
+                            self.host.group_new(r.space, r.engine).map_err(|e| {
+                                Err(BirthFail {
+                                    step: "group",
+                                    err: format!("{e:#x}"),
+                                    unwind_failed: 0,
+                                })
+                            })?,
+                            true,
+                        ),
                     };
                     // legacy member: ctx = the group's implicit subcontext (modelled as ctx 0 of the fake)
-                    let chan = self
-                        .legacy_member(tsg, r.engine, first)
-                        .map_err(|e| {
-                            if first {
-                                let _ = self.host.group_free(tsg);
-                            }
-                            Err(BirthFail { step: "channel", err: format!("{e:#x}"), unwind_failed: 0 })
-                        })?;
+                    let chan = self.legacy_member(tsg, r.engine, first).map_err(|e| {
+                        if first {
+                            let _ = self.host.group_free(tsg);
+                        }
+                        Err(BirthFail {
+                            step: "channel",
+                            err: format!("{e:#x}"),
+                            unwind_failed: 0,
+                        })
+                    })?;
                     self.map.commit_legacy(key, tsg, r.engine);
                     self.chans.push((r, chan));
-                    Ok(Born { chan, tsg, ctx_host: 0, group_new: first, ctx_new: false, veid: None })
+                    Ok(Born {
+                        chan,
+                        tsg,
+                        ctx_host: 0,
+                        group_new: first,
+                        ctx_new: false,
+                        veid: None,
+                    })
                 }
                 Plan::Explicit(p) => {
                     let born = birth_explicit(&self.host, &p, ring(), None).map_err(Err)?;
@@ -1036,16 +1090,27 @@ mod tests {
             let _ = engine;
             rm.chans.insert(h, (tsg, 0));
             rm.ops.push(format!("legacy_member(first={first})"));
-            Ok(Channel { tsg, chan: h, token: h + 0x100, born_user: None })
+            Ok(Channel {
+                tsg,
+                chan: h,
+                token: h + 0x100,
+                born_user: None,
+            })
         }
 
         fn free(&mut self, i: usize) -> Result<(), u32> {
             let (r, chan) = self.chans.remove(i);
-            let rel = self.map.release(r.client, r.tsg, r.ctx_share, chan.tsg, false);
+            let rel = self
+                .map
+                .release(r.client, r.tsg, r.ctx_share, chan.tsg, false);
             if r.ctx_share == 0 || !self.map_is_explicit_shape(&r) {
                 // legacy / kill switch: member then group, as `release_twin` at base
                 let a = self.host.member_free(chan);
-                let b = if rel.free_group { self.host.group_free(chan.tsg) } else { Ok(()) };
+                let b = if rel.free_group {
+                    self.host.group_free(chan.tsg)
+                } else {
+                    Ok(())
+                };
                 return a.and(b);
             }
             free_member(&self.host, chan, rel)
@@ -1060,20 +1125,45 @@ mod tests {
 
     #[test]
     fn runqueue_bit_is_the_only_forwarded_bit() {
-        assert_eq!(host_rq1(0x20).unwrap(), false); // Windows ch1: privileged only
-        assert_eq!(host_rq1(0x30).unwrap(), true); // Windows joiner: privileged + runqueue
-        assert_eq!(host_rq1(0x10).unwrap(), true);
-        assert_eq!(host_rq1(0).unwrap(), false);
+        assert!(!host_rq1(0x20).unwrap()); // Windows ch1: privileged only
+        assert!(host_rq1(0x30).unwrap()); // Windows joiner: privileged + runqueue
+        assert!(host_rq1(0x10).unwrap());
+        assert!(!host_rq1(0).unwrap());
     }
 
     #[test]
     fn every_real_guest_word_in_the_repo_histogram_is_accepted() {
         for w in [
-            0x0020_0320u32, 0x00a0_0120, 0x00a0_0220, 0x0020_0420, 0x0020_0620, 0x0020_0520, 0x0020_1020, 0x0020_0720,
-            0x0020_1120, 0x0020_1320, 0x0020_1220, 0x0020_1620, 0x0020_0300, 0x0020_1520, 0x0020_1420, 0x0020_0220,
-            0x0020_0120, 0x8020_1620, 0x8020_4320, 0x0020_1200, 0x0020_1100, 0x0020_1000, 0x0020_0700, 0x0020_0600, 0x0020_0500,
+            0x0020_0320u32,
+            0x00a0_0120,
+            0x00a0_0220,
+            0x0020_0420,
+            0x0020_0620,
+            0x0020_0520,
+            0x0020_1020,
+            0x0020_0720,
+            0x0020_1120,
+            0x0020_1320,
+            0x0020_1220,
+            0x0020_1620,
+            0x0020_0300,
+            0x0020_1520,
+            0x0020_1420,
+            0x0020_0220,
+            0x0020_0120,
+            0x8020_1620,
+            0x8020_4320,
+            0x0020_1200,
+            0x0020_1100,
+            0x0020_1000,
+            0x0020_0700,
+            0x0020_0600,
+            0x0020_0500,
         ] {
-            assert!(host_rq1(w).is_ok(), "{w:#x} is a real guest word and must not be refused");
+            assert!(
+                host_rq1(w).is_ok(),
+                "{w:#x} is a real guest word and must not be refused"
+            );
         }
     }
 
@@ -1088,7 +1178,9 @@ mod tests {
         }
         assert!(host_rq1(3 << 28).is_err());
         // CONSUMED: never refused, never forwarded
-        for bit in [3u32, 5, 6, 7, 8, 9, 10, 11, 12, 15, 20, 21, 22, 23, 24, 27, 30, 31] {
+        for bit in [
+            3u32, 5, 6, 7, 8, 9, 10, 11, 12, 15, 20, 21, 22, 23, 24, 27, 30, 31,
+        ] {
             assert_eq!(host_rq1(1 << bit), Ok(false), "bit {bit}");
         }
         for t in 0..=2u32 {
@@ -1123,7 +1215,11 @@ mod tests {
         assert_eq!(decode_kind(2, 5), Ok(SubctxKind::Async)); // SPECIFIED 5
         for bad in [4u32, 0x8, 0x100, 0x8000_0000, 0xffff_ffff, 0x5] {
             let r = decode_kind(bad, 0).unwrap_err();
-            assert_eq!((r.status, r.class), (NV_ERR_INVALID_ARGUMENT, RefusalClass::Flag), "{bad:#x}");
+            assert_eq!(
+                (r.status, r.class),
+                (NV_ERR_INVALID_ARGUMENT, RefusalClass::Flag),
+                "{bad:#x}"
+            );
         }
     }
 
@@ -1142,11 +1238,18 @@ mod tests {
         let ops = rig.host.ops();
         assert_eq!(ops[0], "group_new(1)");
         assert_eq!(ops[1], "ctx_new(Async)");
-        assert_eq!(ops.iter().filter(|o| o.starts_with("member_new")).count(), 8);
+        assert_eq!(
+            ops.iter().filter(|o| o.starts_with("member_new")).count(),
+            8
+        );
         assert_eq!(ops.iter().filter(|o| o.starts_with("group_new")).count(), 1);
         assert_eq!(ops.iter().filter(|o| o.starts_with("ctx_new")).count(), 1);
         assert_eq!(ops[2], "member_new(first=true,rq1=false,ctx#0)");
-        assert!(ops[3..].iter().all(|o| o == "member_new(first=false,rq1=false,ctx#0)"));
+        assert!(
+            ops[3..]
+                .iter()
+                .all(|o| o == "member_new(first=false,rq1=false,ctx#0)")
+        );
         assert_eq!(rig.map.len(), 1);
         assert_eq!(rig.map.ctx_count(CLIENT, TSG), 1);
         assert!(rig.map.is_explicit(CLIENT, TSG));
@@ -1163,7 +1266,11 @@ mod tests {
         let b2 = rig.birth(req(CLIENT, TSG, 0x201, 1, 0x30)).unwrap();
         let b3 = rig.birth(req(CLIENT, TSG, 0x201, 1, 0x30)).unwrap();
         let b4 = rig.birth(req(CLIENT, TSG, 0x202, 1, 0x30)).unwrap();
-        assert!(skip_late_schedule(Some(&b2)) && skip_late_schedule(Some(&b3)) && skip_late_schedule(Some(&b4)));
+        assert!(
+            skip_late_schedule(Some(&b2))
+                && skip_late_schedule(Some(&b3))
+                && skip_late_schedule(Some(&b4))
+        );
         assert!(!b2.group_new && b2.ctx_new);
         assert!(!b3.group_new && !b3.ctx_new);
         assert!(!b4.group_new && b4.ctx_new);
@@ -1220,10 +1327,15 @@ mod tests {
 
     impl Base {
         fn plan(&self, r: &Req) -> Option<u32> {
-            self.groups.get(&(r.client, r.tsg, r.ctx_share)).map(|g| g.0)
+            self.groups
+                .get(&(r.client, r.tsg, r.ctx_share))
+                .map(|g| g.0)
         }
         fn commit(&mut self, r: &Req, tsg: u32) {
-            self.groups.entry((r.client, r.tsg, r.ctx_share)).and_modify(|g| g.1 += 1).or_insert((tsg, 1));
+            self.groups
+                .entry((r.client, r.tsg, r.ctx_share))
+                .and_modify(|g| g.1 += 1)
+                .or_insert((tsg, 1));
         }
         fn release(&mut self, r: &Req, chan_tsg: u32) -> bool {
             let k = (r.client, r.tsg, r.ctx_share);
@@ -1249,9 +1361,21 @@ mod tests {
         let base_host = Fake::new();
         // script: (op, client, tsg, kind) with kind legacy (ctx 0)
         let script: Vec<(bool, u32, u32)> = vec![
-            (true, 1, 10), (true, 1, 10), (true, 2, 10), (true, 1, 11), (true, 1, 10), (false, 0, 0),
-            (true, 2, 10), (false, 2, 0), (false, 0, 0), (true, 1, 11), (false, 0, 0), (false, 0, 0), (false, 0, 0),
-            (false, 0, 0), (false, 0, 0),
+            (true, 1, 10),
+            (true, 1, 10),
+            (true, 2, 10),
+            (true, 1, 11),
+            (true, 1, 10),
+            (false, 0, 0),
+            (true, 2, 10),
+            (false, 2, 0),
+            (false, 0, 0),
+            (true, 1, 11),
+            (false, 0, 0),
+            (false, 0, 0),
+            (false, 0, 0),
+            (false, 0, 0),
+            (false, 0, 0),
         ];
         let mut live: Vec<(Req, Channel)> = Vec::new();
         let mut base_live: Vec<(Req, Channel)> = Vec::new();
@@ -1280,7 +1404,11 @@ mod tests {
                 live.remove(0);
             }
         }
-        assert_eq!(rig.host.ops(), base_host.ops(), "legacy op sequence must equal the base's");
+        assert_eq!(
+            rig.host.ops(),
+            base_host.ops(),
+            "legacy op sequence must equal the base's"
+        );
         assert_eq!(rig.map.len(), base.groups.len());
     }
 
@@ -1292,7 +1420,12 @@ mod tests {
             rm.chans.insert(h, (tsg, 0));
             rm.groups.get_mut(&tsg).unwrap().explicit = Some(false);
             rm.ops.push(format!("legacy_member(first={first})"));
-            Channel { tsg, chan: h, token: h + 0x100, born_user: None }
+            Channel {
+                tsg,
+                chan: h,
+                token: h + 0x100,
+                born_user: None,
+            }
         }
     }
 
@@ -1322,16 +1455,32 @@ mod tests {
         // explicit first, then a legacy channel
         rig.birth(req(CLIENT, TSG, 0x200, 1, 0x20)).unwrap();
         let before = rig.host.ops();
-        let e = rig.birth(req(CLIENT, TSG, 0, 0, 0x20)).unwrap_err().unwrap();
-        assert_eq!((e.status, e.class), (NV_ERR_INVALID_ARGUMENT, RefusalClass::Mode));
-        assert!(e.why.contains("legacy") && e.why.contains("explicit"), "{}", e.why);
+        let e = rig
+            .birth(req(CLIENT, TSG, 0, 0, 0x20))
+            .unwrap_err()
+            .unwrap();
+        assert_eq!(
+            (e.status, e.class),
+            (NV_ERR_INVALID_ARGUMENT, RefusalClass::Mode)
+        );
+        assert!(
+            e.why.contains("legacy") && e.why.contains("explicit"),
+            "{}",
+            e.why
+        );
         assert_eq!(rig.host.ops(), before, "no host call for a refused mix");
         // legacy first, then an explicit channel
         let t2 = TSG + 1;
         rig.birth(req(CLIENT, t2, 0, 0, 0x20)).unwrap();
         let before = rig.host.ops();
-        let e = rig.birth(req(CLIENT, t2, 0x300, 1, 0x20)).unwrap_err().unwrap();
-        assert_eq!((e.status, e.class), (NV_ERR_INVALID_ARGUMENT, RefusalClass::Mode));
+        let e = rig
+            .birth(req(CLIENT, t2, 0x300, 1, 0x20))
+            .unwrap_err()
+            .unwrap();
+        assert_eq!(
+            (e.status, e.class),
+            (NV_ERR_INVALID_ARGUMENT, RefusalClass::Mode)
+        );
         assert_eq!(rig.host.ops(), before);
     }
 
@@ -1341,7 +1490,10 @@ mod tests {
         let mut rig = Rig::new(true);
         let a = rig.birth(req(CLIENT, TSG, 0x200, 1, 0x20)).unwrap();
         let before = rig.host.ops();
-        let e = rig.birth(req(CLIENT, TSG, 0, 0, 0x20)).unwrap_err().unwrap();
+        let e = rig
+            .birth(req(CLIENT, TSG, 0, 0, 0x20))
+            .unwrap_err()
+            .unwrap();
         assert_eq!(e.class, RefusalClass::Mode);
         assert_eq!(rig.host.ops(), before, "refused before any host call");
         assert!(rig.map.is_explicit(CLIENT, TSG));
@@ -1356,14 +1508,24 @@ mod tests {
         let mut rig = Rig::new(true);
         let a = rig.birth(req(CLIENT, TSG, 0, 0, 0x20)).unwrap();
         let before = rig.host.ops();
-        let e = rig.birth(req(CLIENT, TSG, 0x200, 1, 0x20)).unwrap_err().unwrap();
+        let e = rig
+            .birth(req(CLIENT, TSG, 0x200, 1, 0x20))
+            .unwrap_err()
+            .unwrap();
         assert_eq!(e.class, RefusalClass::Mode);
         assert_eq!(rig.host.ops(), before, "refused before any host call");
         assert!(!rig.map.is_explicit(CLIENT, TSG));
         let b = rig.birth(req(CLIENT, TSG, 0, 0, 0x20)).unwrap();
         assert_eq!(b.tsg, a.tsg);
         assert_eq!(rig.host.live(), 3); // group, 2 channels, no ctxshare
-        assert_eq!(rig.host.ops().iter().filter(|o| o.starts_with("ctx_new")).count(), 0);
+        assert_eq!(
+            rig.host
+                .ops()
+                .iter()
+                .filter(|o| o.starts_with("ctx_new"))
+                .count(),
+            0
+        );
     }
 
     #[test]
@@ -1373,26 +1535,50 @@ mod tests {
         let mut r = req(CLIENT, TSG, 0x200, 1, 0x20);
         r.ctx = None;
         let e = rig.birth(r).unwrap_err().unwrap();
-        assert_eq!((e.status, e.class), (NV_ERR_OBJECT_NOT_FOUND, RefusalClass::CtxUnknown));
+        assert_eq!(
+            (e.status, e.class),
+            (NV_ERR_OBJECT_NOT_FOUND, RefusalClass::CtxUnknown)
+        );
         // ctxshare of ANOTHER tsg
         let mut r = req(CLIENT, TSG, 0x200, 1, 0x20);
         r.ctx = Some(facts(TSG + 7, 1));
         let e = rig.birth(r).unwrap_err().unwrap();
-        assert_eq!((e.status, e.class), (NV_ERR_INVALID_ARGUMENT, RefusalClass::Mode));
+        assert_eq!(
+            (e.status, e.class),
+            (NV_ERR_INVALID_ARGUMENT, RefusalClass::Mode)
+        );
         assert_eq!(rig.host.live(), 0);
         // a good first channel, then contradictions
         rig.birth(req(CLIENT, TSG, 0x200, 1, 0x20)).unwrap();
         let mut r = req(CLIENT, TSG, 0x201, 1, 0x30);
         r.engine = 0xb;
-        assert_eq!(rig.birth(r).unwrap_err().unwrap().status, NV_ERR_INVALID_ARGUMENT);
+        assert_eq!(
+            rig.birth(r).unwrap_err().unwrap().status,
+            NV_ERR_INVALID_ARGUMENT
+        );
         let mut r = req(CLIENT, TSG, 0x200, 1, 0x20);
         r.space = SPACE + 1;
         let e = rig.birth(r).unwrap_err().unwrap();
-        assert_eq!((e.status, e.class), (NV_ERR_INVALID_ARGUMENT, RefusalClass::Mode));
+        assert_eq!(
+            (e.status, e.class),
+            (NV_ERR_INVALID_ARGUMENT, RefusalClass::Mode)
+        );
         assert!(e.why.contains("other facts"), "{}", e.why);
         // a bad ctxshare flag word / a refused channel flag
-        assert_eq!(rig.birth(req(CLIENT, TSG, 0x202, 8, 0x30)).unwrap_err().unwrap().class, RefusalClass::Flag);
-        assert_eq!(rig.birth(req(CLIENT, TSG, 0x203, 1, 1 << 26)).unwrap_err().unwrap().class, RefusalClass::Flag);
+        assert_eq!(
+            rig.birth(req(CLIENT, TSG, 0x202, 8, 0x30))
+                .unwrap_err()
+                .unwrap()
+                .class,
+            RefusalClass::Flag
+        );
+        assert_eq!(
+            rig.birth(req(CLIENT, TSG, 0x203, 1, 1 << 26))
+                .unwrap_err()
+                .unwrap()
+                .class,
+            RefusalClass::Flag
+        );
         assert_eq!(rig.map.ctx_count(CLIENT, TSG), 1);
         assert_eq!(rig.host.live(), 3); // group, ctx, channel
     }
@@ -1415,7 +1601,13 @@ mod tests {
     fn kill_switch_makes_the_base_decisions_for_ctxshare_scripts() {
         let mut rig = Rig::new(false);
         let mut base = Base::default();
-        let script = [(0x200u32, 0u32), (0x201, 1), (0x201, 1), (0x200, 0), (0x202, 1)];
+        let script = [
+            (0x200u32, 0u32),
+            (0x201, 1),
+            (0x201, 1),
+            (0x200, 0),
+            (0x202, 1),
+        ];
         for (ctx, flags) in script {
             let r = req(CLIENT, TSG, ctx, flags, 0x20);
             let expect_join = base.plan(&r);
@@ -1424,7 +1616,11 @@ mod tests {
             base.commit(&r, b.tsg);
         }
         assert_eq!(rig.map.len(), base.groups.len());
-        assert_eq!(rig.map.len(), 3, "one host group per guest ctxshare, as at base");
+        assert_eq!(
+            rig.map.len(),
+            3,
+            "one host group per guest ctxshare, as at base"
+        );
     }
 
     #[test]
@@ -1432,7 +1628,10 @@ mod tests {
         let mut rig = Rig::new(true);
         rig.birth(req(CLIENT, TSG, 0x200, 0, 0x20)).unwrap();
         let before = rig.host.ops();
-        let e = rig.birth(req(CLIENT, TSG, 0x201, 0, 0x20)).unwrap_err().unwrap();
+        let e = rig
+            .birth(req(CLIENT, TSG, 0x201, 0, 0x20))
+            .unwrap_err()
+            .unwrap();
         assert_eq!((e.status, e.class), (NV_ERR_NO_MEMORY, RefusalClass::Cap));
         assert_eq!(rig.host.ops(), before);
     }
@@ -1441,7 +1640,8 @@ mod tests {
         let mut rig = Rig::new(true);
         rig.birth(req(CLIENT, TSG, 0x1000, 0, 0x20)).unwrap();
         for i in 1..64u32 {
-            rig.birth(req(CLIENT, TSG, 0x1000 + i, 1, 0x30)).unwrap_or_else(|_| panic!("ctxshare {i}"));
+            rig.birth(req(CLIENT, TSG, 0x1000 + i, 1, 0x30))
+                .unwrap_or_else(|_| panic!("ctxshare {i}"));
         }
         rig
     }
@@ -1460,17 +1660,28 @@ mod tests {
     fn the_sixty_fifth_subcontext_is_refused_by_name() {
         let mut rig = full_tsg();
         let (live, ops) = (rig.host.live(), rig.host.ops().len());
-        let e = rig.birth(req(CLIENT, TSG, 0x2000, 1, 0x30)).unwrap_err().unwrap();
+        let e = rig
+            .birth(req(CLIENT, TSG, 0x2000, 1, 0x30))
+            .unwrap_err()
+            .unwrap();
         assert_eq!((e.status, e.class), (NV_ERR_NO_MEMORY, RefusalClass::Cap));
         assert!(e.why.contains("64"), "{}", e.why);
-        assert_eq!((rig.host.live(), rig.host.ops().len()), (live, ops), "refused before any host call");
+        assert_eq!(
+            (rig.host.live(), rig.host.ops().len()),
+            (live, ops),
+            "refused before any host call"
+        );
     }
 
     /// Nothing is recorded for the refused 65th: the map still holds 64 and the TSG keeps working.
     #[test]
     fn the_refused_sixty_fifth_leaves_the_map_at_sixty_four() {
         let mut rig = full_tsg();
-        assert!(rig.birth(req(CLIENT, TSG, 0x2000, 1, 0x30)).unwrap_err().is_ok());
+        assert!(
+            rig.birth(req(CLIENT, TSG, 0x2000, 1, 0x30))
+                .unwrap_err()
+                .is_ok()
+        );
         assert_eq!(rig.map.ctx_count(CLIENT, TSG), 64);
         rig.free(63).unwrap();
         assert_eq!(rig.map.ctx_count(CLIENT, TSG), 63);
@@ -1483,7 +1694,10 @@ mod tests {
     fn host_refusal_at_the_group_step_leaves_nothing() {
         let mut rig = Rig::new(true);
         rig.host.fail_nth("group_new", 1);
-        let e = rig.birth(req(CLIENT, TSG, 0x200, 1, 0x20)).unwrap_err().unwrap_err();
+        let e = rig
+            .birth(req(CLIENT, TSG, 0x200, 1, 0x20))
+            .unwrap_err()
+            .unwrap_err();
         assert_eq!(e.step, "group");
         assert_eq!(rig.host.live(), 0);
         assert!(rig.map.is_empty());
@@ -1493,7 +1707,10 @@ mod tests {
     fn host_refusal_at_the_ctxshare_step_frees_the_new_group() {
         let mut rig = Rig::new(true);
         rig.host.fail_nth("ctx_new", 1);
-        let e = rig.birth(req(CLIENT, TSG, 0x200, 1, 0x20)).unwrap_err().unwrap_err();
+        let e = rig
+            .birth(req(CLIENT, TSG, 0x200, 1, 0x20))
+            .unwrap_err()
+            .unwrap_err();
         assert_eq!(e.step, "ctxshare");
         assert_eq!(e.unwind_failed, 0);
         assert_eq!(rig.host.live(), 0);
@@ -1506,7 +1723,10 @@ mod tests {
         // new group: everything this birth made goes
         let mut rig = Rig::new(true);
         rig.host.fail_nth("member_new", 1);
-        let e = rig.birth(req(CLIENT, TSG, 0x200, 0, 0x20)).unwrap_err().unwrap_err();
+        let e = rig
+            .birth(req(CLIENT, TSG, 0x200, 0, 0x20))
+            .unwrap_err()
+            .unwrap_err();
         assert_eq!(e.step, "channel");
         assert_eq!(rig.host.live(), 0);
         assert!(rig.map.is_empty());
@@ -1514,7 +1734,10 @@ mod tests {
         let mut rig = Rig::new(true);
         rig.birth(req(CLIENT, TSG, 0x200, 0, 0x20)).unwrap();
         rig.host.fail_nth("member_new", 2);
-        let e = rig.birth(req(CLIENT, TSG, 0x201, 1, 0x30)).unwrap_err().unwrap_err();
+        let e = rig
+            .birth(req(CLIENT, TSG, 0x201, 1, 0x30))
+            .unwrap_err()
+            .unwrap_err();
         assert_eq!(e.step, "channel");
         assert_eq!(rig.host.live(), 3); // group, sync ctx, first channel
         assert_eq!(rig.map.ctx_count(CLIENT, TSG), 1);
@@ -1533,7 +1756,10 @@ mod tests {
         let mut rig = Rig::new(true);
         rig.host.fail_nth("member_new", 1);
         rig.host.fail_nth("ctx_free", 1);
-        let e = rig.birth(req(CLIENT, TSG, 0x200, 1, 0x20)).unwrap_err().unwrap_err();
+        let e = rig
+            .birth(req(CLIENT, TSG, 0x200, 1, 0x20))
+            .unwrap_err()
+            .unwrap_err();
         assert_eq!(e.step, "channel");
         assert_eq!(e.unwind_failed, 1);
         // the group free still ran (it frees the ctxshare with it)
@@ -1554,9 +1780,16 @@ mod tests {
         rig.free(1).unwrap(); // last on 0x201: channel, ctxshare
         assert_eq!(&rig.host.ops()[n + 1..], ["member_free", "ctx_free"]);
         rig.free(0).unwrap(); // last in the TSG
-        assert_eq!(&rig.host.ops()[n + 3..], ["member_free", "ctx_free", "group_free"]);
+        assert_eq!(
+            &rig.host.ops()[n + 3..],
+            ["member_free", "ctx_free", "group_free"]
+        );
         assert_eq!(rig.host.live(), 0);
-        assert_eq!(rig.host.0.borrow().killed, 0, "no ctxshare was freed under a live channel");
+        assert_eq!(
+            rig.host.0.borrow().killed,
+            0,
+            "no ctxshare was freed under a live channel"
+        );
         assert!(rig.map.is_empty());
     }
 
@@ -1584,12 +1817,19 @@ mod tests {
         let mut r = req(CLIENT, TSG, 0x200, 1, 0x30); // 0x200 was SYNC
         r.ctx = Some(facts(TSG, 1));
         let e = rig.birth(r).unwrap_err().unwrap();
-        assert_eq!((e.status, e.class), (NV_ERR_INVALID_ARGUMENT, RefusalClass::Mode));
+        assert_eq!(
+            (e.status, e.class),
+            (NV_ERR_INVALID_ARGUMENT, RefusalClass::Mode)
+        );
         // a whole TSG freed and born again with the same handles
         rig.free(1).unwrap();
         rig.free(0).unwrap();
         assert!(rig.map.is_empty());
-        assert!(rig.birth(req(CLIENT, TSG, 0x200, 0, 0x20)).unwrap().group_new);
+        assert!(
+            rig.birth(req(CLIENT, TSG, 0x200, 0, 0x20))
+                .unwrap()
+                .group_new
+        );
     }
 
     /// The old #14 aliasing class: two guest processes (clients) with identical TSG and ctxshare handles.
@@ -1616,16 +1856,48 @@ mod tests {
     fn user_ring_free_with_a_foreign_group_does_not_decrement() {
         let mut m = GroupMap::new(true);
         let r = req(CLIENT, TSG, 0x200, 1, 0x20);
-        let Plan::Explicit(p) = m.plan(&r).unwrap() else { panic!("explicit") };
-        let chan = Channel { tsg: 0x55, chan: 1, token: 2, born_user: None };
-        m.commit_explicit(&p, &Born { chan, tsg: 0x55, ctx_host: 0x66, group_new: true, ctx_new: true, veid: Some(0x3f) });
+        let Plan::Explicit(p) = m.plan(&r).unwrap() else {
+            panic!("explicit")
+        };
+        let chan = Channel {
+            tsg: 0x55,
+            chan: 1,
+            token: 2,
+            born_user: None,
+        };
+        m.commit_explicit(
+            &p,
+            &Born {
+                chan,
+                tsg: 0x55,
+                ctx_host: 0x66,
+                group_new: true,
+                ctx_new: true,
+                veid: Some(0x3f),
+            },
+        );
         // strict (user ring) with a channel of another host group: nothing to free, nothing decremented
-        assert_eq!(m.release(CLIENT, TSG, 0x200, 0x99, true), Release::default());
+        assert_eq!(
+            m.release(CLIENT, TSG, 0x200, 0x99, true),
+            Release::default()
+        );
         assert_eq!(m.len(), 1);
-        assert_eq!(m.release(CLIENT, TSG, 0x200, 0x55, true), Release { free_ctx: Some(0x66), free_group: true });
+        assert_eq!(
+            m.release(CLIENT, TSG, 0x200, 0x55, true),
+            Release {
+                free_ctx: Some(0x66),
+                free_group: true
+            }
+        );
         assert!(m.is_empty());
         // an entry that is not there frees the channel's own group (the base's fallback)
-        assert_eq!(m.release(CLIENT, TSG, 0x200, 0x55, false), Release { free_ctx: None, free_group: true });
+        assert_eq!(
+            m.release(CLIENT, TSG, 0x200, 0x55, false),
+            Release {
+                free_ctx: None,
+                free_group: true
+            }
+        );
     }
 
     #[test]
@@ -1646,7 +1918,11 @@ mod tests {
     #[test]
     fn counters_follow_the_refusal_classes() {
         let s = Stats::default();
-        let mk = |class| Refusal { status: 0x1f, class, why: "x".into() };
+        let mk = |class| Refusal {
+            status: 0x1f,
+            class,
+            why: "x".into(),
+        };
         s.note(&mk(RefusalClass::Mode));
         s.note(&mk(RefusalClass::Mode));
         s.note(&mk(RefusalClass::Flag));
@@ -1657,7 +1933,15 @@ mod tests {
         assert_eq!(s.ctx_unknown.load(Ordering::Relaxed), 1);
         assert_eq!(s.cap_refused.load(Ordering::Relaxed), 1);
         let line = s.summary();
-        for f in ["mode_refused=2", "flag_refused=1", "ctx_unknown=1", "cap_refused=1", "ctx_created=0", "ctx_freed=0", "groups=0"] {
+        for f in [
+            "mode_refused=2",
+            "flag_refused=1",
+            "ctx_unknown=1",
+            "cap_refused=1",
+            "ctx_created=0",
+            "ctx_freed=0",
+            "groups=0",
+        ] {
             assert!(line.contains(f), "{line} lacks {f}");
         }
     }
