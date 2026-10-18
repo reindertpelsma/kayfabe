@@ -504,7 +504,9 @@ impl<V: ViewOps> CpuWindow<V> {
     /// counted in [`WindowReset::kept`]; the reset goes on with the rest. VA-manager thread only,
     /// like every other verb of the window.
     pub fn reset_to_boot(&self) -> WindowReset {
-        let mut out = self.sink_all();
+        // A reset's finish may preserve a seed that is already placed. Scrub preparation uses
+        // `sink_all` instead, which also removes that live view before any zero is queued.
+        let mut out = self.sink_placements();
         out.seed = match self.reseed() {
             Ok(r) => Some(r),
             Err(e) => {
@@ -520,6 +522,18 @@ impl<V: ViewOps> CpuWindow<V> {
     /// placed. The reset's memory stage sinks the views with this BEFORE its scrub, so no CPU view of
     /// the old life's bytes exists while the store is being zeroed.
     pub fn sink_all(&self) -> WindowReset {
+        let mut out = self.sink_placements();
+        // The firmware view is deliberately outside `placed`: a reboot can arrive before the
+        // first BAR1 change, or after an unload restored it. Scratch first, then release, just
+        // as for a guest placement. A refused sink keeps the backing and is reported.
+        if let Err(e) = self.retire_seed() {
+            out.kept = out.kept.saturating_add(1);
+            out.first_refusal.get_or_insert(e);
+        }
+        out
+    }
+
+    fn sink_placements(&self) -> WindowReset {
         let vas: Vec<u64> = self.placed.borrow().keys().copied().collect();
         let mut out = WindowReset::default();
         for va in vas {
