@@ -18,6 +18,9 @@
 use crate::ledger::{Desired, HostVas, MapTarget, Mapped, SkedRow};
 use std::collections::BTreeMap;
 
+#[cfg(test)]
+mod hang3004_tests;
+
 /// ★ 2026-10-09 — **the host verbs of ONE host VA space**, as [`BatchedVas`] uses them. Production
 /// is [`HostVas`] (the in-process host RM); the GPU-free tests drive the same [`BatchedVas`] code
 /// against a simulated host RM (`crate::sim`) that implements `ogkm-595.84 rs_server.c:2419-2520`
