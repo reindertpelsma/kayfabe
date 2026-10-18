@@ -12,6 +12,40 @@
 //! blind and its zero means nothing.
 
 const WALK_RS: &str = include_str!("../src/walk.rs");
+const WALK_VERBS: [&str; 7] = [
+    "pub fn submit",
+    "fn submit_over",
+    "pub fn ack",
+    "pub fn reset_slot",
+    "pub fn try_collect",
+    "pub fn wait",
+    "pub fn refresh",
+];
+
+fn code_only(src: &str) -> String {
+    src.lines()
+        .filter(|l| !l.trim_start().starts_with("//"))
+        .collect::<Vec<_>>()
+        .join("\n")
+}
+
+fn synchronizations_are_scoped(src: &str) -> bool {
+    // Preserve the old guard for the EXPECTED RED test commit.
+    code_only(src).matches("ctx_synchronize()").count() == 1
+}
+
+const WORKER_COMPLETION: &str = r#"impl WalkKernel {
+    pub fn submit(&self) {}
+    fn submit_over(&self) {}
+    pub fn ack(&self) {}
+    pub fn reset_slot(&self) {}
+    pub fn try_collect(&self) {}
+    pub fn wait(&self) {}
+    pub fn refresh(&self) {}
+    pub fn sync_store(&self) { self.cu.ctx_synchronize(); }
+    pub fn probe_failed_launch(&self) { let _ = self.cu.ctx_synchronize(); }
+}
+"#;
 
 /// The body of `fn name` (from its signature to the next `    pub fn`/`    fn` at the same
 /// indentation), or `None`.
@@ -37,14 +71,8 @@ fn the_known_positive_is_found() {
 
 #[test]
 fn only_the_probe_synchronizes() {
-    let code: String = WALK_RS
-        .lines()
-        .filter(|l| !l.trim_start().starts_with("//"))
-        .collect::<Vec<_>>()
-        .join("\n");
-    assert_eq!(
-        code.matches("ctx_synchronize()").count(),
-        1,
+    assert!(
+        synchronizations_are_scoped(WALK_RS),
         "a `ctx_synchronize()` outside `probe_failed_launch` blocks the submitting thread on the \
          GPU — the thing P4 removed. Complete through the fd (`try_collect`) instead."
     );
@@ -52,15 +80,7 @@ fn only_the_probe_synchronizes() {
 
 #[test]
 fn the_walk_verbs_do_not_synchronize() {
-    for sig in [
-        "pub fn submit",
-        "fn submit_over",
-        "pub fn ack",
-        "pub fn reset_slot",
-        "pub fn try_collect",
-        "pub fn wait",
-        "pub fn refresh",
-    ] {
+    for sig in WALK_VERBS {
         let b = body_of(WALK_RS, sig).unwrap_or_else(|| panic!("{sig} exists"));
         let code: String = b
             .lines()
@@ -69,6 +89,74 @@ fn the_walk_verbs_do_not_synchronize() {
             .join("\n");
         assert!(!code.contains("synchronize"), "{sig} synchronizes");
     }
+}
+
+#[test]
+fn the_worker_store_completion_is_allowed_and_found() {
+    assert!(synchronizations_are_scoped(WORKER_COMPLETION));
+    assert!(
+        body_of(WALK_RS, "pub fn sync_store")
+            .unwrap()
+            .contains("ctx_synchronize()")
+    );
+}
+
+#[test]
+fn a_store_completion_cannot_mask_a_missing_probe() {
+    let src = WORKER_COMPLETION.replace("let _ = self.cu.ctx_synchronize();", "");
+    assert!(!synchronizations_are_scoped(&src));
+}
+
+#[test]
+fn a_probe_cannot_mask_a_missing_store_completion() {
+    let src = WORKER_COMPLETION.replace(
+        "pub fn sync_store(&self) { self.cu.ctx_synchronize(); }",
+        "pub fn sync_store(&self) {}",
+    );
+    assert!(!synchronizations_are_scoped(&src));
+}
+
+#[test]
+fn a_store_completion_cannot_be_smuggled_into_submit() {
+    let src = WORKER_COMPLETION.replace(
+        "pub fn submit(&self) {}",
+        "pub fn submit(&self) { let _ = self.sync_store(); }",
+    );
+    assert!(!synchronizations_are_scoped(&src));
+}
+
+#[test]
+fn a_store_completion_cannot_be_smuggled_into_ack() {
+    let src = WORKER_COMPLETION.replace(
+        "pub fn ack(&self) {}",
+        "pub fn ack(&self) { let _ = self.sync_store(); }",
+    );
+    assert!(!synchronizations_are_scoped(&src));
+}
+
+#[test]
+fn a_probe_sync_cannot_be_moved_to_submit() {
+    let src = WORKER_COMPLETION
+        .replace("let _ = self.cu.ctx_synchronize();", "")
+        .replace(
+            "pub fn submit(&self) {}",
+            "pub fn submit(&self) { self.cu.ctx_synchronize(); }",
+        );
+    assert!(!synchronizations_are_scoped(&src));
+}
+
+#[test]
+fn a_store_sync_cannot_be_moved_to_ack() {
+    let src = WORKER_COMPLETION
+        .replace(
+            "pub fn sync_store(&self) { self.cu.ctx_synchronize(); }",
+            "pub fn sync_store(&self) {}",
+        )
+        .replace(
+            "pub fn ack(&self) {}",
+            "pub fn ack(&self) { self.cu.ctx_synchronize(); }",
+        );
+    assert!(!synchronizations_are_scoped(&src));
 }
 
 /// ★ 2026-09-25 (owner design, COMMIT-ON-ACK): the old whole-generation `ack` — which turned
