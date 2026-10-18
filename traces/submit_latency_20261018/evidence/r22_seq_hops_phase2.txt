@@ -1,0 +1,25 @@
+run r22_seq: 2220 submits; completion cell = candidate 1 of [1, 2, 4, 7, 8] (lag after last ISR write)
+period D0 -> next D0                                                           n= 2220 med=   1507.4 p90=   1676.3 max=   2456.8
+trapped BAR0 writes per submit                                                 n= 2220 med=     16.0 p90=     30.0 max=    136.0
+  of which doorbells (0xbb0090)                                                n= 2220 med=      2.0 p90=      2.0 max=      8.0
+  of which interrupt-tree (0xb81xxx)                                           n= 2220 med=     14.0 p90=     28.0 max=    128.0
+  interrupt service cycles (EN_CLEAR(2) writes)                                n= 2220 med=      2.0 p90=      4.0 max=     19.0
+H1  D0 -> last doorbell (3 traps)                                              n= 2220 med=     17.7 p90=     20.8 max=    316.4
+H2  D0 -> first worker wake (trap->IPI->thread runs)                           n= 2220 med=     10.3 p90=     11.8 max=     20.8
+    host GPU interrupts (irq 85 nvidia) per submit                             n= 2220 med=      2.0 p90=      3.0 max=     15.0
+    first host GPU interrupt (rel D0)                                          n= 2220 med=   1275.2 p90=   1283.3 max=   1653.9
+    last host GPU interrupt (rel D0)                                           n= 2220 med=   1339.4 p90=   1465.6 max=   1816.6
+    irqfd eventfd writes per submit                                            n= 2220 med=      4.0 p90=      6.0 max=     27.0
+    first irqfd write (rel D0)                                                 n= 2220 med=   1290.1 p90=   1299.0 max=   1668.8
+HN  first host GPU interrupt -> first irqfd write (host RM + worker)           n= 2220 med=     14.6 p90=     17.8 max=     30.6
+H5  first irqfd write -> first ISR trap (injection + guest vector entry)       n= 2220 med=     17.8 p90=     21.3 max=    155.1
+    first interrupt-tree trap (rel D0)                                         n= 2220 med=   1307.2 p90=   1318.2 max=   1694.1
+H6  first -> last interrupt-tree trap (ISR/DPC chain)                          n= 2220 med=    151.4 p90=   1142.8 max=   2304.2
+    last interrupt-tree trap (rel D0)                                          n= 2220 med=   1461.5 p90=   1632.5 max=   2376.9
+H7  last interrupt trap -> completion cell written (DPC)                       n=  379 med=     23.3 p90=     51.4 max=     81.5
+    completion cell written (rel D0)                                           n=  379 med=   1488.8 p90=   1657.5 max=   2044.9
+H8  completion cell -> next D0 (guest sees it, calls Execute, 1st doorbell)    n=  379 med=     15.0 p90=     41.0 max=     77.8
+    markers published per submit                                               n= 2167 med=      2.0 p90=      2.0 max=      6.0
+    last pub_marker (rel D0)                                                   n= 2167 med=     64.1 p90=     89.5 max=    328.6
+    guest GP_GET write-backs per submit                                        n= 2167 med=      7.0 p90=      7.0 max=     10.0
+HG  last relay marker publish -> first host GPU interrupt (GPU leg)            n= 2167 med=   1213.2 p90=   1217.1 max=   1590.7

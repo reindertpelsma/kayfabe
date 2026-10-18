@@ -1,0 +1,38 @@
+     0.0 MMIO bb0090=3b
+    17.1 MMIO bb0090=3d
+    31.4 MMIO bb0090=3c
+    80.3   GPU-progress channel=4af0 get=60
+   552.1   GPU-progress channel=b200 get=103
+   554.1   GPU-progress channel=b200 ref=4b460190
+   560.3   GPU-progress channel=4990 get=fd
+   571.6 MMIO b81408=101
+   581.2 MMIO b81410=ffffffff
+   589.4 MMIO b81610=8
+   601.2 MMIO b81208=101
+   609.4 MMIO b81210=c10007a
+   612.7   GPU-progress channel=4af0 get=63
+   621.5   GPU-progress channel=4af0 get=65
+   623.5   GPU-progress channel=4af0 ref=4b460191
+   633.6 MMIO b81608=fffffffe
+   643.8 MMIO b81000=1
+   655.5 MMIO b81000=2
+   678.2   GPU-progress channel=4990 ref=4b460190
+   681.4   GPU-progress channel=4990 get=101
+   703.3 MMIO b81408=101
+   711.7 MMIO b81410=ffffffff
+   719.7 MMIO b81610=8
+   731.2 MMIO b81208=101
+   739.7 MMIO b81210=c10007a
+   748.9 MMIO b81608=fffffffe
+   760.1 MMIO b81000=1
+   774.6 MMIO b81000=2
+   801.0 MMIO b81408=101
+   810.9 MMIO b81410=ffffffff
+   819.0 MMIO b81610=8
+   830.5 MMIO b81208=101
+   840.0 MMIO b81210=c10007a
+   848.2 MMIO b81608=fffffffe
+   908.4 MMIO bb0090=3b
+   925.5 MMIO bb0090=3d
+   941.8 MMIO bb0090=3c
+   989.2   GPU-progress channel=4af0 get=76

@@ -1,0 +1,3 @@
+cand 0: n=1960  changes/iter-ish; (us) next doorbell after: p5/25/50/75/95 = 0.4 1.3 3.3 10.1 16.1 | prev doorbell before: 0.4 728.7 827.0 853.8 940.9 | prev ISR-write before: 29.9 33.1 40.8 50.6 60.3 | next ISR-write after: 568.6 575.5 579.4 584.6 610.6
+cand 1: n=1960  changes/iter-ish; (us) next doorbell after: p5/25/50/75/95 = 14.1 15.3 25.2 34.5 44.4 | prev doorbell before: 775.8 798.8 811.1 843.4 933.8 | prev ISR-write before: 15.8 16.4 17.0 19.8 27.4 | next ISR-write after: 587.5 595.1 603.5 612.2 640.9
+cand 2: n=2201  changes/iter-ish; (us) next doorbell after: p5/25/50/75/95 = 0.7 2.5 4.6 8.8 22868.8 | prev doorbell before: 0.9 815.9 834.2 871.1 8543.6 | prev ISR-write before: 28.8 32.2 41.8 50.4 8310.5 | next ISR-write after: 571.3 577.8 582.3 589.2 7175.8

@@ -1,0 +1,12 @@
+GP adapter NVIDIA GeForce RTX 4070 dedicated 7843 MiB
+GP T_FENCE_BASE 0x5a5a5a5a00000000 value_after_warmup 0x5a5a5a5a000000c8 QPCfreq 10000000
+GP T_PRE_SLEEP_MS 22000
+GP MODE_T_START qpc 126547819647 utc 2026-10-18T15:33:05.9012600Z
+GP MODE_T_END qpc 126573935964 iterations 3000
+GP T total (Execute call start -> fence visible) us n=2995 med=828.9 mean=868.5 p95=989.8 p99=1117.7 min=697.8 max=54292.6
+GP T submit-return -> fence visible (the 837-style number) us n=2995 med=804.7 mean=848.9 p95=965.3 p99=1079.5 min=684.8 max=54274.1
+GP T ExecuteCommandLists call us n=2995 med=17.1 mean=19.6 p95=31.9 p99=44.5 min=9.2 max=176.7
+GP T Signal call us n=2995 med=2.5 mean=2.8 p95=4.1 p99=5.4 min=1.8 max=136.5
+GP T wait for fence after Signal returned us n=2995 med=802.0 mean=846.1 p95=962.4 p99=1076.1 min=657.5 max=54271.6
+GP T iteration period us n=2994 med=828.9 mean=868.5 p95=989.9 p99=1117.8 min=697.9 max=54292.7
+GP end

@@ -13,7 +13,7 @@
 #   T  (only with -WithTimestamps) GPU timestamps: EndQuery(ts0), 64 KiB / 16 MiB copy, EndQuery(ts1) on the DIRECT queue; ts mapped to CPU QPC with GetClockCalibration:
 #      submit->GPU-start (ts0 on the CPU clock minus the CPU time before ExecuteCommandLists), GPU execution (ts1-ts0), GPU-end->CPU-visible (poll seen minus ts1)
 # Output lines `GP <test> n=.. med=.. p95=.. p99=.. min=..` (us, or ms/GB/s for the copies). Reads/writes nothing outside GPU buffers it creates.
-param([string]$Out = 'C:\kf\sn\ui.txt', [int]$Iter = 2000, [switch]$WithTimestamps, [string]$Mode = 'all', [string]$FenceBase = '0', [int]$PreMs = 0, [string]$Raw = '', [int]$Queue = 0, [string]$Work = 'copy')
+param([string]$Out = 'C:\kf\sn\ui.txt', [int]$Iter = 2000, [switch]$WithTimestamps, [string]$Mode = 'all', [string]$FenceBase = '0', [int]$PreMs = 0, [string]$Raw = '', [int]$Queue = 0, [string]$Work = 'copy', [string]$Seq = '')
 $ErrorActionPreference = 'Continue'
 Add-Type -TypeDefinition @'
 using System;
@@ -253,5 +253,13 @@ public static class SnGp {
 '@
 Remove-Item $Out -ErrorAction SilentlyContinue
 [SnGp]::OutPath = $Out
+if ($Seq -ne '') {   # -Seq "T:0:copy:3000,T:3:copy:3000,..." : several runs in ONE process (one guest launch), 4 s apart; raw file per step
+  $k = 0
+  foreach ($st in $Seq.Split(',')) { $a = $st.Split(':'); $k++
+    try { [SnGp]::Run([int]$a[3], $false, $a[0], [Convert]::ToUInt64($FenceBase, 16), $(if ($k -eq 1) { $PreMs } else { 0 }), $(if ($Raw) { $Raw + ".$k" } else { '' }), [int]$a[1], $a[2]) } catch { "GP exception " + $_.Exception.ToString() | Add-Content $Out }
+    "GP SEQ_STEP_DONE $k $st" | Add-Content $Out; Start-Sleep -Seconds 4 }
+  "GP iteration period SEQ_END" | Add-Content $Out
+} else {
 try { [SnGp]::Run($Iter, [bool]$WithTimestamps, $Mode, [Convert]::ToUInt64($FenceBase, 16), $PreMs, $Raw, $Queue, $Work) } catch { "GP exception " + $_.Exception.ToString() | Add-Content $Out }
 'GP end' | Add-Content $Out
+}

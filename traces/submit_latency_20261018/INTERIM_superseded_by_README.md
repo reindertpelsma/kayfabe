@@ -1,4 +1,4 @@
-# INTERIM (2026-10-18, ~20:15 CEST) — where the ~0.84 ms of one tiny GPU packet goes under kayfabe
+# INTERIM (2026-10-18, ~19:55 CEST) — where the ~0.84 ms of one tiny GPU packet goes under kayfabe
 
 STATUS: RESEARCH, interim. Branch `claude/submit-latency-20261018` (off `claude/steelnomad-gap-20261018` 4f37bd12). Raw data: host `/data/claude-submitlat-20261018/` (not in git).
 Subject: owner VM run 3006, binary kf3-bins/0452613b, GPU RTX 4070, guest D3D12 probe (`scripts/bench/submit_latency/sl_probe.ps1`, DIRECT queue, 64 KiB copy + Signal, polled fence).

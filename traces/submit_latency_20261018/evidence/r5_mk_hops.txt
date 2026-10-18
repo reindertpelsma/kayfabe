@@ -1,0 +1,20 @@
+run r5_mk: 3194 submits; completion cell = candidate 0 of [0, 1] (lag after last ISR write)
+period D0 -> next D0                                                           n= 3194 med=    895.9 p90=    958.2 max=   1493.2
+trapped BAR0 writes per submit                                                 n= 3194 med=     25.0 p90=     29.0 max=     90.0
+  of which doorbells (0xbb0090)                                                n= 3194 med=      3.0 p90=      3.0 max=      6.0
+  of which interrupt-tree (0xb81xxx)                                           n= 3194 med=     22.0 p90=     26.0 max=     84.0
+  interrupt service cycles (EN_CLEAR(2) writes)                                n= 3194 med=      3.0 p90=      3.0 max=     12.0
+H1  D0 -> last doorbell (3 traps)                                              n= 3194 med=     32.9 p90=     37.2 max=    464.3
+H2  D0 -> first worker wake (trap->IPI->thread runs)                           n= 3194 med=      9.8 p90=     11.0 max=    227.9
+    markers published per submit                                               n= 3071 med=      3.0 p90=      4.0 max=      7.0
+    last pub_marker (rel D0)                                                   n= 3071 med=    146.6 p90=    241.1 max=    959.3
+    guest GP_GET write-backs per submit                                        n= 3071 med=      6.0 p90=      7.0 max=     19.0
+    irqfd eventfd writes per submit                                            n= 3194 med=      6.0 p90=      6.0 max=     19.0
+    first irqfd write (rel D0)                                                 n= 3194 med=    562.0 p90=    569.0 max=    738.1
+H5  first irqfd write -> first ISR trap (injection + guest vector entry)       n= 3194 med=     17.7 p90=     21.1 max=    155.8
+    first interrupt-tree trap (rel D0)                                         n= 3194 med=    579.8 p90=    588.6 max=    757.2
+H6  first -> last interrupt-tree trap (ISR/DPC chain)                          n= 3194 med=    277.4 p90=    351.5 max=   1278.9
+    last interrupt-tree trap (rel D0)                                          n= 3194 med=    853.1 p90=    899.7 max=   1350.6
+H7  last interrupt trap -> completion cell written (DPC)                       n= 2175 med=     38.6 p90=     52.8 max=    186.0
+    completion cell written (rel D0)                                           n= 2175 med=    896.3 p90=    936.3 max=   1461.5
+H8  completion cell -> next D0 (guest sees it, calls Execute, 1st doorbell)    n= 2175 med=      3.8 p90=      8.2 max=    652.4

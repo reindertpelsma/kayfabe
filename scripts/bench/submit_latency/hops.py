@@ -6,6 +6,10 @@ Hops are the differences of consecutive event medians' per-iteration values (com
 import sys, os, bisect, statistics as st, collections
 d = sys.argv[1]
 IRQFD = 130
+WMIN, WMAX = 600_000, 1_500_000; PH = None; GAP = 300_000
+if '--gap' in sys.argv: GAP = int(sys.argv[sys.argv.index('--gap') + 1]) * 1000
+if '--win' in sys.argv: i = sys.argv.index('--win'); WMIN, WMAX = int(sys.argv[i+1])*1000, int(sys.argv[i+2])*1000
+if '--phase' in sys.argv: PH = int(sys.argv[sys.argv.index('--phase') + 1])
 if '--irqfd' in sys.argv: IRQFD = int(sys.argv[sys.argv.index('--irqfd') + 1])
 M = []; W = []; Z = []; QI = []; U = collections.defaultdict(list); F = collections.defaultdict(list)
 for l in open(d + '/trace.txt'):
@@ -21,9 +25,20 @@ if os.path.exists(d + '/fence.txt'):
         p = l.split()
         if len(p) == 4 and p[0] == 'F': F[int(p[2])].append(int(p[1]))
 DBt = [t for t, o, _ in M if o == 'bb0090']
+if PH is not None:   # phases of a batched run: bursts of doorbells separated by > 2 s of silence in the loop's tokens; keep the PH-th long burst
+    runs = []; cur = [DBt[0]]
+    for a, b in zip(DBt, DBt[1:]):
+        if b - a > 2_000_000_000: runs.append(cur); cur = []
+        cur.append(b)
+    runs.append(cur); runs = [r for r in runs if len(r) > 1500]
+    DBt = runs[PH]
+    lo_t, hi_t = DBt[0], DBt[-1]
+    M = [m for m in M if lo_t - 1_000_000 <= m[0] <= hi_t + 1_000_000]; W = [x for x in W if lo_t <= x <= hi_t]; Z = [z for z in Z if lo_t <= z[0] <= hi_t]; QI = [x for x in QI if lo_t <= x <= hi_t]
+    for k in list(U): U[k] = [x for x in U[k] if lo_t <= x <= hi_t]
+    for k in list(F): F[k] = [x for x in F[k] if lo_t <= x <= hi_t]
 D0 = []; last = -10**12
 for t in DBt:
-    if t - last > 300_000: D0.append(t)
+    if t - last > GAP: D0.append(t)
     last = t
 Mt = [m[0] for m in M]; Wt = W; Zt = [z[0] for z in Z]
 Ft = {c: v for c, v in F.items() if len(v) > 100}
@@ -43,7 +58,7 @@ def last_before(arr, lim, t0):
     return arr[j] if j >= 0 and arr[j] >= t0 else None
 for i in range(30, len(D0) - 30):
     t0, t1 = D0[i], D0[i + 1]
-    if not 600_000 < t1 - t0 < 1_500_000: continue
+    if not WMIN < t1 - t0 < WMAX: continue
     lo = bisect.bisect_left(Mt, t0); hi = bisect.bisect_left(Mt, t1)
     seg = M[lo:hi]
     db = [t for t, o, _ in seg if o == 'bb0090']

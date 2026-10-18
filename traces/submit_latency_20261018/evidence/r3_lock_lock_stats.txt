@@ -1,0 +1,22 @@
+per-call durations (us; includes uprobe cost ~1 us per probe pair):
+  peek               n=  82426 med=   5.02 p90=  12.58 p99=   19.88 max=  1726.93
+  waiting            n=  87350 med=   1.11 p90=   1.64 p99=    2.62 max=   415.20
+  user_ring_record   n= 195556 med=   0.71 p90=   1.20 p99=    9.13 max=  1277.18
+  serve              n=  65173 med=   3.24 p90=   5.50 p99=   21.28 max=  1283.07
+  lock_contended     n=  56265 med=   0.83 p90=   6.79 p99=   15.63 max=  1720.26
+lock_contended by caller:
+  RelayLoop::peek+0x9a                                                   n= 42534 med=   0.72 p90=   6.80 sum_ms=   120.6
+  ChanPlane::user_ring_record+0x15b                                      n= 13690 med=   1.26 p90=   6.74 sum_ms=    34.7
+  <&std::io::stdio::Stderr as core::io::write::Write>::write_f+0x168     n=     5 med=   9.37 p90=  15.90 sum_ms=     0.0
+  <kf_core::plane::Plane>::worker_pass+0x429                             n=    16 med=   0.87 p90=   1.73 sum_ms=     0.0
+  <kf_qemu::mem::Inbox>::walk_busy+0x1ae                                 n=    16 med=   0.85 p90=   1.00 sum_ms=     0.0
+  <kf_qemu::mem::Inbox>::walk_busy+0x164                                 n=     2 med=   1.10 p90=   1.19 sum_ms=     0.0
+  ChanPlane::statement+0x456d                                            n=     1 med=   2.21 p90=   2.21 sum_ms=     0.0
+  <ChanPlane::promote_ctx::{closure#2} as core::ops::function:+0x105     n=     1 med=   1.25 p90=   1.25 sum_ms=     0.0
+steady windows: 806
+  per submit peek               calls med= 107.0   summed time over both workers (us) med=  676.6 p90=  849.8
+  per submit waiting            calls med= 110.5   summed time over both workers (us) med=  136.3 p90=  182.5
+  per submit user_ring_record   calls med= 195.0   summed time over both workers (us) med=  195.8 p90=  304.2
+  per submit serve              calls med=  65.0   summed time over both workers (us) med=  224.7 p90=  343.8
+  per submit lock_contended     calls med=  78.0   summed time over both workers (us) med=  152.4 p90=  386.6
+  per-submit window length med=989.5 us
