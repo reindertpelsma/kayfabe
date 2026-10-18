@@ -145,8 +145,9 @@ pub trait Owners {
     fn begin_release(&self, epoch: u64);
     /// Both have acknowledged `epoch`.
     fn released(&self, epoch: u64) -> bool;
-    /// Ask the VA thread to reset the memory plane.
-    fn begin_memory(&self, epoch: u64);
+    /// Ask the VA thread to reset the memory plane. `scrub`: a NEW OS follows and the store holds
+    /// the old one's bytes — the memory stage also zeroes the guest-allocatable store ([`crate::scrub`]).
+    fn begin_memory(&self, epoch: u64, scrub: bool);
     /// The VA thread has acknowledged `epoch`.
     fn memory_done(&self, epoch: u64) -> bool;
     /// The last, synchronous step before the gate opens ([`Stage::Finish`]). `false`: not yet (a
@@ -243,10 +244,11 @@ pub enum Waited {
 }
 
 impl Reset {
-    /// ★ 2026-10-18: did a request since the last call mean a NEW OS instance (so the memory stage
-    /// scrubs the guest's vidmem)? Read once per run, by the memory stage's trigger.
-    pub fn take_new_os(&self) -> bool {
-        self.new_os_pending.swap(false, Ordering::SeqCst)
+    /// ★ 2026-10-18: is a scrub owed — a request meant a NEW OS (a system reset from the main loop,
+    /// [`crate::scrub::decide`]) and no memory stage has scrubbed since? Not consuming.
+    #[must_use]
+    pub fn scrub_owed(&self) -> bool {
+        self.new_os_pending.load(Ordering::SeqCst)
     }
 
     /// ★ The main loop's call (QEMU's Resettable hold phase): close the gate and count a request.
@@ -402,7 +404,8 @@ impl Reset {
                     if !o.released(r.epoch) {
                         return self.waiting(&mut r, o);
                     }
-                    o.begin_memory(r.epoch);
+                    // RED STEP (tests first): the scrub decision is not made here yet
+                    o.begin_memory(r.epoch, false);
                     self.enter(&mut r, Stage::Memory);
                 }
                 Stage::Memory => {
@@ -654,6 +657,10 @@ mod tests {
         status_seen: RefCell<Option<String>>,
         /// ★ 2026-10-14: the life ended with a PM-transition suspend (the GSP `Halted`, saved).
         pm_suspended: Cell<bool>,
+        /// ★ 2026-10-18: the `scrub` argument of every `begin_memory`, as the real device gets it.
+        scrubs: RefCell<Vec<bool>>,
+        /// A callback run inside `begin_memory` (a request arriving during the memory stage).
+        during_memory: RefCell<Option<Box<dyn Fn()>>>,
     }
 
     impl Fake {
@@ -698,8 +705,12 @@ mod tests {
             self.live.set(0);
             true
         }
-        fn begin_memory(&self, e: u64) {
+        fn begin_memory(&self, e: u64, scrub: bool) {
             self.note(format!("memory {e}"));
+            self.scrubs.borrow_mut().push(scrub);
+            if let Some(f) = self.during_memory.borrow_mut().take() {
+                f();
+            }
             assert_eq!(
                 self.live.get(),
                 0,
@@ -944,21 +955,90 @@ mod tests {
         assert_eq!(r.completed(), 50);
     }
 
-    /// ★ 2026-10-18: only a system reset from the main loop is a new OS; a vCPU's bus reset and the
-    /// S3 wake are not (the table: [`crate::scrub::decide`]).
+    /// ★ 2026-10-18 (review B1): only a system reset from the main loop owes a scrub; a vCPU's bus
+    /// reset and the S3 wake do not (the table: [`crate::scrub::decide`]).
     #[test]
-    fn only_a_system_reset_from_the_main_loop_marks_a_new_os() {
+    fn only_a_system_reset_from_the_main_loop_owes_a_scrub() {
         let r = Reset::default();
         r.request_typed(true, false); // a bus reset on a vCPU thread
-        assert!(!r.take_new_os(), "the guest's own bus reset keeps the OS");
+        assert!(!r.scrub_owed(), "the guest's own bus reset keeps the OS");
         r.request_typed(false, true); // the S3 wake
-        assert!(!r.take_new_os(), "an S3 wake resumes the same OS");
+        assert!(!r.scrub_owed(), "an S3 wake resumes the same OS");
         r.request_typed(false, false); // QEMU's system reset: reboot, reset button, triple fault
-        assert!(r.take_new_os(), "a system reset is a new OS");
-        assert!(!r.take_new_os(), "read once");
+        assert!(r.scrub_owed(), "a system reset is a new OS");
+        assert!(r.scrub_owed(), "not consuming");
+    }
+
+    /// ★ Review B1(a), the reviewer's probe: the machine's own reset at creation comes from the main
+    /// loop with wake=false. It completes PRISTINE (nothing of a guest life exists), and the mark
+    /// it set must not survive that completion — else the first later reset that reaches a Memory
+    /// stage (a guest bus reset, a TDR-style reset) would do the heavy scrub.
+    #[test]
+    fn a_stale_mark_does_not_survive_a_pristine_completion() {
+        let r = Reset::default();
+        let o = Fake::default();
+        r.request_typed(false, false); // the start-up reset
+        assert_eq!(r.poll(&o), Progress::Completed(1));
+        assert!(!r.scrub_owed(), "the start-up request left a mark");
+        // the guest runs, then resets ITSELF through a bridge: no scrub
+        let p = r.gate.enter().expect("open");
+        r.touched();
+        drop(p);
         r.request_typed(true, false);
-        r.request_typed(false, false);
-        assert!(r.take_new_os(), "any system reset among the requests marks the run");
+        run_to_completion(&r, &o);
+        assert_eq!(*o.scrubs.borrow(), [false], "a guest-issued reset must not scrub");
+    }
+
+    /// ★ A reboot of a guest that ran: the memory stage is asked to scrub, exactly once, and a second
+    /// reboot with no guest access in between (nothing of a life exists) does not scrub again.
+    #[test]
+    fn a_reboot_scrubs_once_and_a_reboot_of_a_clean_store_does_not() {
+        let r = Reset::default();
+        let o = Fake::default();
+        r.request_typed(false, false); // start-up
+        run_to_completion(&r, &o);
+        let p = r.gate.enter().expect("open");
+        r.touched();
+        drop(p);
+        r.request_typed(false, false); // the guest reboots
+        run_to_completion(&r, &o);
+        assert_eq!(*o.scrubs.borrow(), [true]);
+        assert!(!r.scrub_owed());
+        r.request_typed(false, false); // reset button, no guest access since
+        run_to_completion(&r, &o);
+        assert_eq!(*o.scrubs.borrow(), [true], "a store no guest touched is not scrubbed again");
+    }
+
+    /// ★ Review B1(b): a reboot R2 that arrives while a vCPU-issued reset R1 is running must still
+    /// scrub — at either point of R1's run (before its Memory stage is asked, or during it).
+    #[test]
+    fn a_reboot_during_a_guest_issued_reset_still_scrubs() {
+        for during_memory in [false, true] {
+            let r = Arc::new(Reset::default());
+            let o = Fake::default();
+            let r2 = r.clone();
+            let hook: Box<dyn Fn()> = Box::new(move || {
+                r2.request_typed(false, false); // R2: the guest reboots
+            });
+            if during_memory {
+                *o.during_memory.borrow_mut() = Some(hook);
+            } else {
+                *o.during_release.borrow_mut() = Some(hook);
+            }
+            r.request_typed(true, false); // start-up is skipped: the guest ran
+            let p = r.gate.enter().expect("open");
+            r.touched();
+            drop(p);
+            r.request_typed(true, false); // R1: a bus reset from a vCPU thread
+            let end = run_to_completion(&r, &o);
+            assert_eq!(end.last(), Some(&Progress::Completed(3)), "during_memory={during_memory}");
+            assert!(
+                o.scrubs.borrow().contains(&true),
+                "during_memory={during_memory}: R2's new OS got no scrub: {:?}",
+                o.scrubs.borrow()
+            );
+            assert!(!r.scrub_owed(), "during_memory={during_memory}: the mark leaked");
+        }
     }
 
     /// ★ The machine's own reset at start-up (and a reset straight after a reset): no guest access
@@ -1051,7 +1131,7 @@ mod tests {
             self.release_polls.store(n - 1, Ordering::SeqCst);
             false
         }
-        fn begin_memory(&self, _e: u64) {}
+        fn begin_memory(&self, _e: u64, _scrub: bool) {}
         fn memory_done(&self, _e: u64) -> bool {
             true
         }

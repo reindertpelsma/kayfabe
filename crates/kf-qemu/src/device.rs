@@ -3773,10 +3773,10 @@ impl crate::reset::Owners for Device {
             })
     }
 
-    fn begin_memory(&self, epoch: u64) {
-        // ★ 2026-10-18 (`crate::scrub`): a system reset from QEMU's main loop is a NEW OS — the
-        // memory stage scrubs the guest heap. A guest-issued bus reset and an S3 wake are not.
-        if self.reset.take_new_os() {
+    fn begin_memory(&self, epoch: u64, scrub: bool) {
+        // ★ 2026-10-18 (`crate::scrub`): the reset decided a NEW OS follows a dirty store — the
+        // memory stage scrubs the guest-allocatable store.
+        if scrub {
             self.mem.inbox.set_full_scrub();
         }
         self.mem.inbox.life_reset.request(epoch);
