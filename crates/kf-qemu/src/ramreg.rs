@@ -16,9 +16,10 @@
 
 use std::time::Instant;
 
-/// The most bytes ONE populate call may cover. Named so that a single call's cost (allocate +
-/// zero this many bytes, ~2.3 GiB/s measured on the trusted host, so ~28 ms) is bounded and
-/// reviewable, and a 2 MiB / 1 GiB-agnostic multiple of every base page size.
+/// The most bytes ONE populate call may cover. Named so that one call's cost is bounded and
+/// reviewable: it allocates and zeroes this many bytes (two `fallocate` passes, MEASURED ~0.58 s/GiB
+/// on the dev box, so ~37 ms), takes no mmap lock, and then returns. A multiple of every base and
+/// 2 MiB huge page size.
 pub const PREWARM_POPULATE_CHUNK: u64 = 64 << 20;
 
 /// What the guest-RAM backing offers the registration.
@@ -76,11 +77,22 @@ pub struct Registered {
 /// The registration's refusal. A populate refusal is not an error ([`PopulateOutcome::Declined`]).
 pub fn register_guest_ram(r: &dyn RamRegistrar, len: u64) -> Result<Registered, String> {
     let t0 = Instant::now();
-    // EXPECTED RED seam: the populate step is not wired yet.
-    let populate = PopulateOutcome::Declined {
-        at: 0,
-        why: "populate step not wired".to_owned(),
-    };
+    let mut populate = PopulateOutcome::Populated { chunks: 0 };
+    let mut off = 0;
+    while off < len {
+        let n = PREWARM_POPULATE_CHUNK.min(len - off);
+        if let Err(why) = r.populate(off, n) {
+            // Not fatal: this backing cannot be populated this way (or the host is short of
+            // memory, which the registration will then report by its own name). The pin faults
+            // in whatever is left, exactly as before this step existed.
+            populate = PopulateOutcome::Declined { at: off, why };
+            break;
+        }
+        off += n;
+        if let PopulateOutcome::Populated { chunks } = &mut populate {
+            *chunks += 1;
+        }
+    }
     let populate_us = t0.elapsed().as_micros();
     let t1 = Instant::now();
     let obj = r.register(len)?;
@@ -171,8 +183,14 @@ mod tests {
     }
 
     const PAGE: u64 = 4096;
-    /// 2.5 chunks: two full chunks, a half chunk, so every boundary case is on the path.
-    const LEN: u64 = 2 * PREWARM_POPULATE_CHUNK + PREWARM_POPULATE_CHUNK / 2;
+    /// 160 MiB = 2.5 chunks of the 64 MiB constant: two full chunks and a half one, so every boundary
+    /// case is on the path. A LITERAL on purpose: derived from the constant it would follow a
+    /// mutated constant and hide it.
+    const LEN: u64 = 160 << 20;
+    /// An independent ceiling for one populate call, not derived from the constant under test.
+    const CALL_CEILING: u64 = 128 << 20;
+    /// The first chunk of [`LEN`] as a literal (see [`LEN`]).
+    const SIXTY_FOUR_MIB: u64 = 64 << 20;
 
     #[test]
     fn the_pin_finds_no_hole_to_fault_in() {
@@ -200,8 +218,8 @@ mod tests {
         for (off, len) in &calls {
             assert_eq!(*off, next, "calls must be contiguous from 0: {calls:?}");
             assert!(
-                *len > 0 && *len <= PREWARM_POPULATE_CHUNK,
-                "a call of {len:#x} bytes exceeds the chunk {PREWARM_POPULATE_CHUNK:#x}"
+                *len > 0 && *len <= PREWARM_POPULATE_CHUNK && *len <= CALL_CEILING,
+                "a call of {len:#x} bytes exceeds the chunk {PREWARM_POPULATE_CHUNK:#x} / {CALL_CEILING:#x}"
             );
             next += len;
         }
@@ -253,12 +271,12 @@ mod tests {
     #[test]
     fn a_refusing_backing_falls_back_to_the_unpopulated_registration() {
         let mut f = Fake::new(LEN);
-        f.refuse_from = Some(PREWARM_POPULATE_CHUNK);
+        f.refuse_from = Some(SIXTY_FOUR_MIB);
         let got = register_guest_ram(&f, LEN).expect("a populate refusal is not an error");
         assert_eq!(
             got.populate,
             PopulateOutcome::Declined {
-                at: PREWARM_POPULATE_CHUNK,
+                at: SIXTY_FOUR_MIB,
                 why: "scripted: EOPNOTSUPP".to_owned()
             }
         );
@@ -270,7 +288,7 @@ mod tests {
         assert_eq!(regs[0].0, LEN);
         assert_eq!(
             regs[0].1,
-            LEN - PREWARM_POPULATE_CHUNK,
+            LEN - SIXTY_FOUR_MIB,
             "only the first chunk is present"
         );
     }
