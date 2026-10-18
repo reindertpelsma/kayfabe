@@ -2,6 +2,13 @@
 
 STATUS: LIVE, 2026-10-18. Protected integration conflicts; owner decision pending.
 
+OWNER BUDGET UPDATE, 2026-10-18: stretch cap raised to **USD 25**; stop renting
+and report at **USD 20 spent**, superseding the previous USD 12 / USD 9 limits.
+The owner reports account credit USD 43.56 and no instances. See `BUDGET.md`
+and `budget_update_receipt.json` for authority and the fresh API observation.
+Stretch spend remains USD 0. The protected-conflict STOP remains unresolved;
+Phase 1 must complete before any rental. Other rules remain binding.
+
 Lane `sweep-20261018`; branch `codex/sweep-integrate-20261018`; initial product
 source candidate 4 `0452613b5c71cb175271230b3e14c8e3c3eef2db`. The report commit
 adds evidence only. See `SWEEP-publication.json` beside the local overnight report
