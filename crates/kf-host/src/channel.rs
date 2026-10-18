@@ -3764,6 +3764,22 @@ mod tsg_mirror_tests {
         }
     }
 
+    /// On the wire: flags @20 carry bit 4, hContextShare @24 the ctxshare, hVASpace @28 stays 0.
+    #[test]
+    fn a_placed_request_encodes_the_runqueue_bit_and_ctxshare_on_the_wire() {
+        let r = channel_alloc_request_placed(
+            &ring(),
+            1,
+            true,
+            Some(Placement { ctxshare: 0x1234, runqueue1: true }),
+        );
+        let mut b = [0u8; kf_abi::submit::ChannelAllocParams::SIZE];
+        r.encode_into(&mut b).unwrap();
+        assert_eq!(u32::from_le_bytes(b[20..24].try_into().unwrap()), (1 << 7) | (1 << 4));
+        assert_eq!(u32::from_le_bytes(b[24..28].try_into().unwrap()), 0x1234);
+        assert_eq!(u32::from_le_bytes(b[28..32].try_into().unwrap()), 0);
+    }
+
     #[test]
     fn ctxshare_kind_flags_are_the_two_documented_values() {
         assert_eq!(SubctxKind::Sync.flags(), 0);

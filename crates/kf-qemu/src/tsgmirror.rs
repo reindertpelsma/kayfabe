@@ -1340,7 +1340,10 @@ mod tests {
     fn a_refused_legacy_channel_leaves_the_explicit_group_untouched() {
         let mut rig = Rig::new(true);
         let a = rig.birth(req(CLIENT, TSG, 0x200, 1, 0x20)).unwrap();
-        assert!(rig.birth(req(CLIENT, TSG, 0, 0, 0x20)).is_err());
+        let before = rig.host.ops();
+        let e = rig.birth(req(CLIENT, TSG, 0, 0, 0x20)).unwrap_err().unwrap();
+        assert_eq!(e.class, RefusalClass::Mode);
+        assert_eq!(rig.host.ops(), before, "refused before any host call");
         assert!(rig.map.is_explicit(CLIENT, TSG));
         let b = rig.birth(req(CLIENT, TSG, 0x200, 1, 0x20)).unwrap();
         assert_eq!(b.tsg, a.tsg);
@@ -1352,7 +1355,10 @@ mod tests {
     fn a_refused_explicit_channel_leaves_the_legacy_group_untouched() {
         let mut rig = Rig::new(true);
         let a = rig.birth(req(CLIENT, TSG, 0, 0, 0x20)).unwrap();
-        assert!(rig.birth(req(CLIENT, TSG, 0x200, 1, 0x20)).is_err());
+        let before = rig.host.ops();
+        let e = rig.birth(req(CLIENT, TSG, 0x200, 1, 0x20)).unwrap_err().unwrap();
+        assert_eq!(e.class, RefusalClass::Mode);
+        assert_eq!(rig.host.ops(), before, "refused before any host call");
         assert!(!rig.map.is_explicit(CLIENT, TSG));
         let b = rig.birth(req(CLIENT, TSG, 0, 0, 0x20)).unwrap();
         assert_eq!(b.tsg, a.tsg);
@@ -1381,12 +1387,44 @@ mod tests {
         assert_eq!(rig.birth(r).unwrap_err().unwrap().status, NV_ERR_INVALID_ARGUMENT);
         let mut r = req(CLIENT, TSG, 0x200, 1, 0x20);
         r.space = SPACE + 1;
-        assert_eq!(rig.birth(r).unwrap_err().unwrap().status, NV_ERR_INVALID_ARGUMENT);
+        let e = rig.birth(r).unwrap_err().unwrap();
+        assert_eq!((e.status, e.class), (NV_ERR_INVALID_ARGUMENT, RefusalClass::Mode));
+        assert!(e.why.contains("other facts"), "{}", e.why);
         // a bad ctxshare flag word / a refused channel flag
         assert_eq!(rig.birth(req(CLIENT, TSG, 0x202, 8, 0x30)).unwrap_err().unwrap().class, RefusalClass::Flag);
         assert_eq!(rig.birth(req(CLIENT, TSG, 0x203, 1, 1 << 26)).unwrap_err().unwrap().class, RefusalClass::Flag);
         assert_eq!(rig.map.ctx_count(CLIENT, TSG), 1);
         assert_eq!(rig.host.live(), 3); // group, ctx, channel
+    }
+
+    /// A channel in another VA space than its ctxshare's recorded one changes nothing on the host.
+    #[test]
+    fn a_space_contradiction_makes_no_host_call() {
+        let mut rig = Rig::new(true);
+        rig.birth(req(CLIENT, TSG, 0x200, 1, 0x20)).unwrap();
+        let before = rig.host.ops();
+        let mut r = req(CLIENT, TSG, 0x200, 1, 0x20);
+        r.space = SPACE + 5;
+        assert!(rig.birth(r).unwrap_err().is_ok());
+        assert_eq!(rig.host.ops(), before);
+        assert_eq!(rig.host.live(), 3);
+    }
+
+    /// The kill switch is the base: the same decisions and host ops as the base algorithm over a ctxshare script.
+    #[test]
+    fn kill_switch_makes_the_base_decisions_for_ctxshare_scripts() {
+        let mut rig = Rig::new(false);
+        let mut base = Base::default();
+        let script = [(0x200u32, 0u32), (0x201, 1), (0x201, 1), (0x200, 0), (0x202, 1)];
+        for (ctx, flags) in script {
+            let r = req(CLIENT, TSG, ctx, flags, 0x20);
+            let expect_join = base.plan(&r);
+            let b = rig.birth(r.clone()).unwrap();
+            assert_eq!(!b.group_new, expect_join.is_some(), "ctx {ctx:#x}");
+            base.commit(&r, b.tsg);
+        }
+        assert_eq!(rig.map.len(), base.groups.len());
+        assert_eq!(rig.map.len(), 3, "one host group per guest ctxshare, as at base");
     }
 
     #[test]
@@ -1399,25 +1437,34 @@ mod tests {
         assert_eq!(rig.host.ops(), before);
     }
 
-    /// 1 SYNC + 63 ASYNC = 64 subcontexts work; the 65th is refused by name with the host's status, nothing leaks.
-    #[test]
-    fn sixty_four_subcontexts_and_the_sixty_fifth_refused() {
+    fn full_tsg() -> Rig {
         let mut rig = Rig::new(true);
         rig.birth(req(CLIENT, TSG, 0x1000, 0, 0x20)).unwrap();
         for i in 1..64u32 {
             rig.birth(req(CLIENT, TSG, 0x1000 + i, 1, 0x30)).unwrap_or_else(|_| panic!("ctxshare {i}"));
         }
+        rig
+    }
+
+    /// 1 SYNC + 63 ASYNC = 64 subcontexts work, and a further channel on an existing one is fine.
+    #[test]
+    fn sixty_four_subcontexts_are_accepted() {
+        let mut rig = full_tsg();
         assert_eq!(rig.map.ctx_count(CLIENT, TSG), 64);
-        let live = rig.host.live();
-        let ops = rig.host.ops().len();
+        rig.birth(req(CLIENT, TSG, 0x1005, 1, 0x30)).unwrap();
+        assert_eq!(rig.map.ctx_count(CLIENT, TSG), 64);
+    }
+
+    /// The 65th is refused by name with the host's status, before any host call, nothing leaks.
+    #[test]
+    fn the_sixty_fifth_subcontext_is_refused_by_name() {
+        let mut rig = full_tsg();
+        let (live, ops) = (rig.host.live(), rig.host.ops().len());
         let e = rig.birth(req(CLIENT, TSG, 0x2000, 1, 0x30)).unwrap_err().unwrap();
         assert_eq!((e.status, e.class), (NV_ERR_NO_MEMORY, RefusalClass::Cap));
         assert!(e.why.contains("64"), "{}", e.why);
-        assert_eq!(rig.host.live(), live);
-        assert_eq!(rig.host.ops().len(), ops, "refused before any host call");
+        assert_eq!((rig.host.live(), rig.host.ops().len()), (live, ops), "refused before any host call");
         assert_eq!(rig.map.ctx_count(CLIENT, TSG), 64);
-        // a 65th channel on an EXISTING ctxshare is fine (the cap is subcontexts, not channels)
-        rig.birth(req(CLIENT, TSG, 0x1005, 1, 0x30)).unwrap();
     }
 
     // ---------------------------------------------------------------- unwinding
