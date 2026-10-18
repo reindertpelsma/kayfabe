@@ -84,6 +84,23 @@ pub fn birth_twin(rm: &HostRm, space: VaSpace, g: GuestChannel) -> Result<Channe
     birth_twin_in(rm, space, g, None)
 }
 
+/// The host ring declaration of a guest channel (the same one [`birth_twin_in`] builds; shared with the
+/// tsg-mirror explicit path so both name the ring identically).
+#[must_use]
+pub fn ring_spec(g: &GuestChannel) -> RingSpec {
+    let (userd_memory, userd_offset) = match g.userd {
+        UserdAt::Store { store, off } => (store, off),
+        UserdAt::Ram { ram, off } => (ram, off),
+    };
+    RingSpec {
+        gp_fifo_va: g.gpfifo_va,
+        gp_fifo_entries: g.entries,
+        userd_memory,
+        userd_offset,
+        err_notifier: g.err_ctx,
+    }
+}
+
 /// ★ [`birth_twin`] INTO a host group: `join = Some(tsg)` makes the twin a member of the host group
 /// already standing for the guest channel's own TSG; `None` births a new group with this twin as
 /// its first member (its handle is `Channel::tsg`, which the caller may then share). The guest's
@@ -107,17 +124,7 @@ pub fn birth_twin_in(
             g.engine
         ));
     }
-    let (userd_memory, userd_offset) = match g.userd {
-        UserdAt::Store { store, off } => (store, off),
-        UserdAt::Ram { ram, off } => (ram, off),
-    };
-    let ring = RingSpec {
-        gp_fifo_va: g.gpfifo_va,
-        gp_fifo_entries: g.entries,
-        userd_memory,
-        userd_offset,
-        err_notifier: g.err_ctx,
-    };
+    let ring = ring_spec(&g);
     match join {
         Some(tsg) => rm
             .birth_member(

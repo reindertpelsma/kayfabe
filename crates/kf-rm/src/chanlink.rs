@@ -231,6 +231,9 @@ pub struct ChannelAlloc {
     /// ★ P5b: the channel group it was allocated under (`hParent`), when that is a TSG this link
     /// saw allocated — the group `GPFIFO_SCHEDULE` names.
     pub tsg: Option<u32>,
+    /// ★ 2026-10-18: for a TSG whose channels name context shares the plane now mirrors the guest TSG as ONE host
+    /// TSG with one real host ctxshare per guest ctxshare (`kf-qemu::tsgmirror`); the per-ctxshare host groups below
+    /// remain for legacy TSGs and under `KF3_TSG_MIRROR=0`.
     /// ★ v3-int: `hContextShare` as declared (0 = none: the group's legacy subcontext). The
     /// channel plane mirrors a guest TSG as one host group PER CONTEXT SHARE: CUDA's TSG is one
     /// ctxshare (all members share one GR context), a Vulkan TSG carries a graphics and an
@@ -258,6 +261,9 @@ pub struct ChannelAlloc {
     /// No other route can manufacture this witness from USERD placement alone.
     pub user_ring_permit: Option<WindowsUserRingPermit>,
 }
+
+/// `CTXSHARE-FACTS` lines printed per process (then silence): bounded, cheap, default on.
+const CTXSHARE_FACTS_LINES: u32 = 256;
 
 /// ★ tsg-mirror (2026-10-18): what a guest `FERMI_CONTEXT_SHARE_A` alloc declared, as the link decoded it.
 /// Plain data: the channel plane turns it into a host SYNC/ASYNC choice (never the guest\'s VEID).
@@ -1286,6 +1292,29 @@ impl ChannelPolicy {
                         subctx_id: c.subctx_id,
                     },
                 );
+                // ★ 2026-10-18: what the guest declared, recorded by the next hardware run (no repo trace has it).
+                // The VEID the guest\'s RM chose is not visible here: the alloc reply is our echo of the request.
+                static LINES: std::sync::atomic::AtomicU32 = std::sync::atomic::AtomicU32::new(0);
+                let n = LINES.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+                if n < CTXSHARE_FACTS_LINES {
+                    eprintln!(
+                        "kf-rm: chanlink: CTXSHARE-FACTS {:#x}:{:#x} parent(tsg)={:#x} flags={:#x} kind={} declared_subctxId={:#x} hVASpace={:#x}{}",
+                        h.client,
+                        h.handle,
+                        h.parent,
+                        c.flags,
+                        match c.flags {
+                            0 => "SYNC",
+                            1 => "ASYNC",
+                            2 => "SPECIFIED",
+                            3 => "ASYNC_PREFER_LOWER",
+                            _ => "INVALID(extra bits)",
+                        },
+                        c.subctx_id,
+                        c.h_vaspace,
+                        if n + 1 == CTXSHARE_FACTS_LINES { " [last CTXSHARE-FACTS line, the rest are suppressed]" } else { "" }
+                    );
+                }
                 return None;
             }
             Some(AllocParams::Channel) => {}

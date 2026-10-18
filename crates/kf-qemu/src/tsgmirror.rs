@@ -467,12 +467,6 @@ impl GroupMap {
                 .is_some_and(|g| g.mode == Mode::Explicit)
     }
 
-    /// A joiner into this guest TSG needs the authored late-joiner schedule (legacy groups only).
-    #[must_use]
-    pub fn late_schedule_needed(&self, client: u32, tsg: u32) -> bool {
-        !self.is_explicit(client, tsg)
-    }
-
     /// Groups held.
     #[must_use]
     pub fn len(&self) -> usize {
@@ -638,21 +632,91 @@ pub fn birth_explicit<H: ExplicitHost>(
     }
 }
 
-/// Free a member and then what `rel` says, in order: channel, ctxshare, TSG. All steps are attempted (the base does
-/// `r.and(free(tsg))`); the first refusal is returned.
+/// After a member's own free (`member_result`): what `rel` says, in order - ctxshare, then TSG. All steps are
+/// attempted (the base does `r.and(free(tsg))`); the first refusal is returned.
+///
+/// # Errors
+/// The first refusal.
+pub fn free_rest<H: ExplicitHost>(
+    host: &H,
+    chan_tsg: u32,
+    rel: Release,
+    member_result: Result<(), H::Err>,
+) -> Result<(), H::Err> {
+    let b = rel.free_ctx.map_or(Ok(()), |c| host.ctx_free(c));
+    let c = if rel.free_group {
+        host.group_free(chan_tsg)
+    } else {
+        Ok(())
+    };
+    member_result.and(b).and(c)
+}
+
+/// Free a member and then what `rel` says, in order: channel, ctxshare, TSG.
 ///
 /// # Errors
 /// The first refusal.
 pub fn free_member<H: ExplicitHost>(host: &H, chan: Channel, rel: Release) -> Result<(), H::Err> {
     let a = host.member_free(chan);
-    let b = rel.free_ctx.map_or(Ok(()), |c| host.ctx_free(c));
-    let c = if rel.free_group {
-        host.group_free(chan.tsg)
-    } else {
-        Ok(())
-    };
-    a.and(b).and(c)
+    free_rest(host, chan.tsg, rel, a)
 }
+
+/// The authored late-joiner schedule is not needed for a channel that JOINED a standing explicit host TSG (the
+/// TSG is already scheduled and a late member runs without a schedule of its own, probes 60-66, 90). The first
+/// channel of an explicit TSG (it made the host TSG) keeps the base's call, and legacy groups keep it entirely.
+#[must_use]
+pub fn skip_late_schedule(explicit_born: Option<&Born>) -> bool {
+    explicit_born.is_some_and(|b| !b.group_new)
+}
+
+impl ExplicitHost for kf_host::HostRm {
+    type Err = kf_host::RmError;
+
+    fn group_new(&self, space: u32, engine: u32) -> Result<u32, Self::Err> {
+        self.birth_group_in(space, engine)
+    }
+
+    fn ctx_new(&self, tsg: u32, space: u32, kind: SubctxKind) -> Result<CtxShare, Self::Err> {
+        self.alloc_ctxshare(tsg, space, kind)
+    }
+
+    fn member_new(
+        &self,
+        tsg: u32,
+        engine: u32,
+        ring: RingSpec,
+        first: bool,
+        subdevice_id: Option<u32>,
+        place: Placement,
+    ) -> Result<Channel, Self::Err> {
+        self.birth_member_placed(tsg, engine, ring, first, subdevice_id, place)
+    }
+
+    fn member_free(&self, chan: Channel) -> Result<(), Self::Err> {
+        self.free_member(chan)
+    }
+
+    fn ctx_free(&self, ctx: u32) -> Result<(), Self::Err> {
+        self.free_ctxshare(ctx)
+    }
+
+    fn group_free(&self, tsg: u32) -> Result<(), Self::Err> {
+        self.free(tsg)
+    }
+}
+
+/// A bounded log budget: `true` for the first `max` calls of a counter.
+#[must_use]
+pub fn log_ok(counter: &std::sync::atomic::AtomicU32, max: u32) -> bool {
+    counter.fetch_add(1, Ordering::Relaxed) < max
+}
+
+/// The `TSG-MIRROR BIRTH` line budget (per process).
+pub static BIRTH_LINES: std::sync::atomic::AtomicU32 = std::sync::atomic::AtomicU32::new(0);
+/// The `TSG-MIRROR CTX` line budget (per process).
+pub static CTX_LINES: std::sync::atomic::AtomicU32 = std::sync::atomic::AtomicU32::new(0);
+/// Lines each of the two kinds may print.
+pub const LOG_MAX: u32 = 512;
 
 /// Counters, in the `chan[...]` status line. Plain atomics: bounded by construction.
 #[derive(Debug, Default)]
@@ -1094,11 +1158,12 @@ mod tests {
         let mut rig = Rig::new(true);
         let b1 = rig.birth(req(CLIENT, TSG, 0x200, 0, 0x20)).unwrap();
         assert!(b1.group_new && b1.ctx_new);
-        // (the guest schedules the TSG here; the late joiner needs nothing)
-        assert!(!rig.map.late_schedule_needed(CLIENT, TSG));
+        // (the guest schedules the TSG here; the joiners below need no schedule of their own, the first channel keeps the base's call)
+        assert!(!skip_late_schedule(Some(&b1)));
         let b2 = rig.birth(req(CLIENT, TSG, 0x201, 1, 0x30)).unwrap();
         let b3 = rig.birth(req(CLIENT, TSG, 0x201, 1, 0x30)).unwrap();
         let b4 = rig.birth(req(CLIENT, TSG, 0x202, 1, 0x30)).unwrap();
+        assert!(skip_late_schedule(Some(&b2)) && skip_late_schedule(Some(&b3)) && skip_late_schedule(Some(&b4)));
         assert!(!b2.group_new && b2.ctx_new);
         assert!(!b3.group_new && !b3.ctx_new);
         assert!(!b4.group_new && b4.ctx_new);
@@ -1244,7 +1309,6 @@ mod tests {
         assert_eq!(c.tsg, b.tsg);
         assert_eq!(rig.map.len(), 2);
         assert!(!rig.map.is_explicit(CLIENT, TSG));
-        assert!(rig.map.late_schedule_needed(CLIENT, TSG));
         assert!(rig.host.ops().iter().all(|o| !o.starts_with("ctx_new")));
         // no allowlist under the switch: a flag word the allowlist refuses is not looked at
         assert!(rig.birth(req(CLIENT, TSG, 0x202, 1, 1 << 26)).is_ok());
@@ -1483,13 +1547,18 @@ mod tests {
     }
 
     #[test]
-    fn late_joiner_schedule_only_for_legacy_groups() {
+    fn late_joiner_schedule_is_skipped_only_for_explicit_joiners() {
         let mut rig = Rig::new(true);
-        assert!(rig.map.late_schedule_needed(CLIENT, TSG), "no group: the caller decides on the guest state");
+        // a legacy group (no explicit birth at all): the base's call
+        assert!(!skip_late_schedule(None));
         rig.birth(req(CLIENT, TSG, 0, 0, 0x20)).unwrap();
-        assert!(rig.map.late_schedule_needed(CLIENT, TSG));
-        rig.birth(req(CLIENT, TSG + 1, 0x200, 1, 0x20)).unwrap();
-        assert!(!rig.map.late_schedule_needed(CLIENT, TSG + 1));
+        // explicit: the first channel keeps the call, a joiner of a standing group skips it
+        let first = rig.birth(req(CLIENT, TSG + 1, 0x200, 1, 0x20)).unwrap();
+        let joiner = rig.birth(req(CLIENT, TSG + 1, 0x201, 1, 0x30)).unwrap();
+        let same_ctx = rig.birth(req(CLIENT, TSG + 1, 0x201, 1, 0x30)).unwrap();
+        assert!(!skip_late_schedule(Some(&first)));
+        assert!(skip_late_schedule(Some(&joiner)));
+        assert!(skip_late_schedule(Some(&same_ctx)));
     }
 
     #[test]

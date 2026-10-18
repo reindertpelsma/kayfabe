@@ -572,8 +572,19 @@ impl Birth {
             me.release_never_born_record(&record);
             return Err(fail("USER_RING_BIRTH_ORPHANED".into()));
         }
-        let gkey = a.tsg.map(|t| (a.client, t, a.ctx_share));
-        let join = gkey.and_then(|k| me.groups.lock().ok().and_then(|m| m.get(&k).map(|g| g.0)));
+        // ★ 2026-10-18 (`crate::tsgmirror`): where in the host TSG map this channel goes, decided BEFORE any native
+        // verb (a mode / flag refusal is a never-born cleanup, like the orphaned birth above).
+        let plan = match me.mirror_plan(a, self.mirror.space.space, a.engine_type.unwrap_or(0)) {
+            Ok(p) => p,
+            Err(r) => {
+                me.release_never_born_record(&record);
+                return Err((r.status, format!("USER_RING_TSG_MIRROR_REFUSED {}", r.why)));
+            }
+        };
+        let join = match &plan {
+            Some(crate::tsgmirror::Plan::Legacy { join, .. }) => *join,
+            _ => None,
+        };
         // From this point a plain Err cannot prove absence of native resources:
         // legacy host birth can hide a failed unwind. Keep the attempt, storage
         // and USER count until session close if no complete Channel is returned.
@@ -585,7 +596,24 @@ impl Birth {
                 a.client, a.handle, a.subdevice_id
             );
         }
-        let native = match (join, shadow_default) {
+        let mut explicit_born = None;
+        let native = if let Some(crate::tsgmirror::Plan::Explicit(p)) = &plan {
+            crate::tsgmirror::birth_explicit(
+                me.rm,
+                p,
+                spec,
+                (!shadow_default).then_some(native_id),
+            )
+            .map(|b| {
+                explicit_born = Some(b);
+                b.chan
+            })
+            .map_err(|f| {
+                me.mirror_stats.unwind_failed.fetch_add(u64::from(f.unwind_failed), Ordering::Relaxed);
+                format!("explicit birth failed at the {} step: {} (unwind steps failed: {})", f.step, f.err, f.unwind_failed)
+            })
+        } else {
+            match (join, shadow_default) {
             (Some(tsg), true) => me.rm.birth_member(
                 tsg,
                 a.engine_type.unwrap_or(0),
@@ -610,18 +638,20 @@ impl Birth {
                 spec,
                 native_id,
             ),
+            }
+            .map_err(|e| format!("{e:?}"))
         };
         let chan = match native {
             Ok(chan) => chan,
             Err(why) => {
                 if let Ok(mut r) = record.lock() {
-                    r.dead = Some(format!("NATIVE_BIRTH_UNCERTAIN {why:?}"));
+                    r.dead = Some(format!("NATIVE_BIRTH_UNCERTAIN {why}"));
                 }
                 eprintln!(
-                    "kf3: USER_RING_NATIVE_BIRTH_QUARANTINED {:#x}:{:#x} {why:?}; storage and counts retained, no token handed out",
+                    "kf3: USER_RING_NATIVE_BIRTH_QUARANTINED {:#x}:{:#x} {why}; storage and counts retained, no token handed out",
                     a.client, a.handle
                 );
-                return Err(fail(format!("USER_RING_NATIVE_BIRTH_UNCERTAIN {why:?}")));
+                return Err(fail(format!("USER_RING_NATIVE_BIRTH_UNCERTAIN {why}")));
             }
         };
         record
@@ -639,18 +669,23 @@ impl Birth {
             }
             rings.insert(chan.token, record.clone());
         }
-        if let Some(k) = gkey {
-            let mut groups = me
-                .groups
-                .lock()
-                .map_err(|_| fail("USER_RING_GROUPS_POISONED".into()))?;
-            groups
-                .entry(k)
-                .and_modify(|g| g.1 = g.1.saturating_add(1))
-                .or_insert((chan.tsg, 1));
+        match &plan {
+            Some(crate::tsgmirror::Plan::Legacy { key, join }) => {
+                me.mirror_commit_legacy(a, *key, chan, a.engine_type.unwrap_or(0), join.is_none());
+            }
+            Some(crate::tsgmirror::Plan::Explicit(p)) => {
+                if let Some(born) = &explicit_born {
+                    me.mirror_commit_explicit(a, p, born);
+                }
+            }
+            None => {}
         }
         let ready = if self.orphaned.load(Ordering::Acquire) {
             Err("USER_RING_BIRTH_ORPHANED".into())
+        } else if crate::tsgmirror::skip_late_schedule(explicit_born.as_ref()) {
+            // a joiner of a standing explicit host TSG: a member of a scheduled TSG runs unscheduled (probes 60-66, 90)
+            me.mirror_stats.latejoin_skipped.fetch_add(1, Ordering::Relaxed);
+            Ok(())
         } else {
             crate::latejoin::schedule_late_joiner(me.rm, &me.guest_sched, a.client, a.tsg, chan)
                 .map(|_| ())

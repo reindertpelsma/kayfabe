@@ -2322,6 +2322,12 @@ pub struct ChanPlane {
     /// ★ v3-video: host NVENC session slots held per guest client (acquired on OUR host client;
     /// released with the guest's release or its client's free).
     enc_sessions: Mutex<HashMap<u32, u32>>,
+    /// ★ 2026-10-18 (`crate::tsgmirror`, `V3_TSG_SUBCONTEXT_FEASIBILITY_20261018.md` section 10): the map is
+    /// `(hClient, hTsg, shard) -> Group` with a mode. LEGACY groups (`hContextShare = 0`; and everything under
+    /// `KF3_TSG_MIRROR=0`, where the shard is the ctxshare handle again) are the text below, unchanged;
+    /// EXPLICIT groups hold ONE host TSG for the whole guest TSG and one real host ctxshare per guest one.
+    ///
+    /// ⊘ SUPERSEDED for explicit TSGs (2026-10-18, above); still exact for LEGACY groups and under `KF3_TSG_MIRROR=0`:
     /// ★ v3-video: guest TSG `(hClient, hTsg, hContextShare)` → `(host group, live members)` — the
     /// guest's TSG membership mirrored, so its channels share ONE host GR context as on hardware.
     /// Touched by acts only (serialised on the act thread).
@@ -2332,7 +2338,9 @@ pub struct ChanPlane {
     /// merged onto one legacy subcontext and the compute channel took Xid 69 (class error, 3D
     /// class `c797`) — fence never signalled. Per-ctxshare groups keep CUDA's one-group shape and
     /// restore v3-gfx's measured shape for Vulkan (a separate host group per subcontext).
-    groups: Mutex<HashMap<(u32, u32, u32), (u32, u32)>>,
+    groups: Mutex<crate::tsgmirror::GroupMap>,
+    /// ★ tsg-mirror counters (`mirror=[...]` in the status line).
+    pub mirror_stats: crate::tsgmirror::Stats,
     /// ★ 2026-10-09 (`crate::latejoin`): which guest TSGs the guest has scheduled — written at
     /// statement time by the drainer, read by the birth act (`crate::latejoin`).
     guest_sched: Mutex<crate::latejoin::GuestTsgSched>,
@@ -2965,7 +2973,8 @@ impl ChanPlane {
             pt_fifo_edges: AtomicU64::new(0),
             pt_fifo_raised: AtomicU64::new(0),
             pt_fifo_owed: std::array::from_fn(|_| AtomicU64::new(0)),
-            groups: Mutex::new(HashMap::new()),
+            groups: Mutex::new(crate::tsgmirror::GroupMap::new(crate::tsgmirror::enabled())),
+            mirror_stats: crate::tsgmirror::Stats::default(),
             guest_sched: Mutex::new(crate::latejoin::GuestTsgSched::default()),
             enc_sessions: Mutex::new(HashMap::new()),
             rung: (0..tokens).map(|_| AtomicU64::new(0)).collect(),
@@ -3570,6 +3579,14 @@ impl ChanPlane {
                                     .disable_channels(&[*c], false, false, false)
                                     .map_err(|e| (NV_ERR_INVALID_STATE, format!("host {:#x} re-enable after STOP: {e:?}", c.token)))?;
                             }
+                            // ★ tsg-mirror: STOP took an explicit-group twin off the runlist with the CHANNEL-level
+                            // verb (siblings keep running), so the channel-level verb puts it back.
+                            let tsg = me.pt.lock().ok().and_then(|m| m.get(k).and_then(|v| v.tsg));
+                            if me.twin_explicit(client, tsg) {
+                                me.rm
+                                    .schedule_channel_enable(*c, true)
+                                    .map_err(|e| (NV_ERR_INVALID_STATE, format!("host {:#x} channel re-schedule after STOP: {e:?}", c.token)))?;
+                            }
                             restarted = restarted.saturating_add(1);
                             if let Ok(mut m) = me.pt.lock()
                                 && let Some(v) = m.get_mut(k)
@@ -4098,6 +4115,9 @@ impl ChanPlane {
     /// it — a host CPU write into guest memory that the guest's CPU-RM is about to make itself.
     /// A preempt failure is a host RC, reported through the RC plane like any other.
     ///
+    /// ★ 2026-10-18: in an EXPLICIT guest TSG the twins share ONE host TSG, so the "off its runlist" half is the
+    /// CHANNEL-level `GPFIFO_SCHEDULE` ([`ChanPlane::twin_schedule`]); the paragraph below is exact for LEGACY groups.
+    ///
     /// Per-twin scope (owner ruling 2026-09-25): the twin is its own host group, so this stops
     /// exactly the channel the guest named — a group sibling keeps running, as on hardware (a
     /// channel STOP is channel-scoped). A later `GPFIFO_SCHEDULE(enable)` re-enables the twin
@@ -4136,7 +4156,8 @@ impl ChanPlane {
                 me.rm
                     .disable_channels(&[chan], true, false, false)
                     .map_err(|e| (NV_ERR_INVALID_STATE, format!("host {:#x} DISABLE_CHANNELS: {e:?}", chan.token)))?;
-                me.rm.schedule_enable(chan, false).map_err(|e| (NV_ERR_INVALID_STATE, format!("host {:#x} GPFIFO_SCHEDULE(false): {e:?}", chan.token)))?;
+                let tsg = me.pt.lock().ok().and_then(|m| m.get(&(client, object)).and_then(|v| v.tsg));
+                me.twin_schedule(client, tsg, chan, false).map_err(|e| (NV_ERR_INVALID_STATE, format!("host {:#x} GPFIFO_SCHEDULE(false): {e:?}", chan.token)))?;
                 if let Ok(mut m) = me.pt.lock()
                     && let Some(v) = m.get_mut(&(client, object))
                 {
@@ -4435,7 +4456,14 @@ impl ChanPlane {
         self.defer(
             "preempt",
             Box::new(move |me: &ChanPlane| {
+                // ★ tsg-mirror: the twins of an EXPLICIT guest TSG share ONE host TSG - one preempt of it, not one
+                // per twin. Legacy groups keep the base\'s per-twin verbs.
+                let once = me.twin_explicit(client, Some(object));
+                let mut preempted = std::collections::HashSet::new();
                 for c in &pt {
+                    if once && !preempted.insert(c.tsg) {
+                        continue;
+                    }
                     me.rm.preempt(*c).map_err(|e| (NV_ERR_INVALID_STATE, format!("twin host {:#x} PREEMPT: {e:?}", c.token)))?;
                 }
                 for ht in &tr {
@@ -4631,7 +4659,8 @@ impl ChanPlane {
         self.defer(
             "evict ctx",
             Box::new(move |me: &ChanPlane| {
-                me.rm.schedule_enable(chan, false).map_err(|e| (NV_ERR_INVALID_STATE, format!("host {:#x} disable: {e:?}", chan.token)))?;
+                let tsg = me.pt.lock().ok().and_then(|m| m.get(&(client, object)).and_then(|v| v.tsg));
+                me.twin_schedule(client, tsg, chan, false).map_err(|e| (NV_ERR_INVALID_STATE, format!("host {:#x} disable: {e:?}", chan.token)))?;
                 let ctx = me.pt.lock().ok().and_then(|mut m| {
                     m.get_mut(&(client, object)).map(|v| {
                         v.ctx.bound = false;
@@ -5220,7 +5249,7 @@ impl ChanPlane {
         chan_client: u32,
         object: u32,
     ) -> Option<Result<String, (u32, String)>> {
-        let hit: Vec<((u32, u32), kf_host::Channel, u32)> = self
+        let hit: Vec<((u32, u32), kf_host::Channel, u32, Option<u32>)> = self
             .pt
             .lock()
             .ok()?
@@ -5228,17 +5257,17 @@ impl ChanPlane {
             .filter(|((c, h), v)| {
                 *c == chan_client && v.user_work && (*h == object || v.tsg == Some(object))
             })
-            .map(|(k, v)| (*k, v.chan, v.engine))
+            .map(|(k, v)| (*k, v.chan, v.engine, v.tsg))
             .collect();
         if hit.is_empty() {
             return None;
         }
         let evict = matches!(bundle, kf_abi::defapi::Bundle::EvictCtx { .. });
-        for (k, chan, engine) in &hit {
+        for (k, chan, engine, tsg) in &hit {
             if *engine != kf_abi::submit::ENGINE_TYPE_GRAPHICS {
                 continue;
             }
-            if evict && let Err(e) = self.rm.schedule_enable(*chan, false) {
+            if evict && let Err(e) = self.twin_schedule(chan_client, *tsg, *chan, false) {
                 return Some(Err((
                     NV_ERR_INVALID_STATE,
                     format!("Passthrough twin host {:#x} evict: {e:?}", chan.token),
@@ -5801,7 +5830,7 @@ impl ChanPlane {
                 return Err(kf_host::RmError::Other(NV_ERR_INVALID_STATE));
             }
         }
-        let Some(k) = guest_tsg.map(|t| (client, t, ctx_share)) else {
+        let Some(guest_tsg) = guest_tsg else {
             let r = self.rm.free_channel(chan);
             self.drop_relay(chan.token);
             self.finish_user_ring_free(chan.token, user_record.as_ref(), r.is_ok());
@@ -5810,23 +5839,192 @@ impl ChanPlane {
         let r = self.rm.free_member(chan);
         self.drop_relay(chan.token);
         if user_record.is_some() && r.is_err() { return r; }
-        let last = self
-            .groups
-            .lock()
-            .map_or(true, |mut m| match m.get_mut(&k) {
-                Some(g) if user_record.is_some() && g.0 != chan.tsg => false,
-                Some(g) if g.1 > 1 => {
-                    g.1 = g.1.saturating_sub(1);
-                    false
-                }
-                _ => {
-                    m.remove(&k);
-                    true
-                }
-            });
-        let outcome = if last { r.and(self.rm.free(chan.tsg)) } else { r };
+        // ★ tsg-mirror: the map says what else the host frees after the channel - the host ctxshare of the
+        // last member of a guest ctxshare, then the host TSG of the last member of the guest TSG
+        // (`crate::tsgmirror::free_rest`). A legacy group is the base: nothing but the TSG on the last member.
+        let rel = self.groups.lock().map_or(
+            crate::tsgmirror::Release { free_ctx: None, free_group: true },
+            |mut m| m.release(client, guest_tsg, ctx_share, chan.tsg, user_record.is_some()),
+        );
+        if rel.free_ctx.is_some() {
+            self.mirror_stats.ctx_freed.fetch_add(1, Ordering::Relaxed);
+        }
+        let outcome = crate::tsgmirror::free_rest(self.rm, chan.tsg, rel, r);
         self.finish_user_ring_free(chan.token, user_record.as_ref(), outcome.is_ok());
         outcome
+    }
+
+    /// ★ tsg-mirror (act thread): is the guest TSG mirrored as ONE host TSG with real ctxshares?
+    fn twin_explicit(&self, client: u32, tsg: Option<u32>) -> bool {
+        tsg.is_some_and(|t| self.groups.lock().is_ok_and(|m| m.is_explicit(client, t)))
+    }
+
+    /// ★ tsg-mirror (act thread): take a twin off (or put it back on) the host runlist. LEGACY groups: the
+    /// base\'s group verb, untouched. EXPLICIT groups: the CHANNEL-level `GPFIFO_SCHEDULE` - `[measured probe
+    /// 97-9a, 98]` the TSG-level verb is not a stop, and a channel-level one stops exactly that channel while
+    /// its siblings in other subcontexts keep running.
+    fn twin_schedule(
+        &self,
+        client: u32,
+        tsg: Option<u32>,
+        chan: kf_host::Channel,
+        enable: bool,
+    ) -> Result<(), kf_host::RmError> {
+        if self.twin_explicit(client, tsg) {
+            self.rm.schedule_channel_enable(chan, enable)
+        } else {
+            self.rm.schedule_enable(chan, enable)
+        }
+    }
+
+    /// ★ tsg-mirror (act thread): decide where a new passthrough/user-ring channel goes in the host TSG map.
+    /// `Ok(None)`: the channel is in no guest TSG the link knows (a bare channel: its own host group, as always).
+    /// The lock is held for the pure decision only - never across a host verb.
+    pub(super) fn mirror_plan(
+        &self,
+        a: &ChannelAlloc,
+        space: u32,
+        engine: u32,
+    ) -> Result<Option<crate::tsgmirror::Plan>, crate::tsgmirror::Refusal> {
+        let Some(tsg) = a.tsg else { return Ok(None) };
+        let req = crate::tsgmirror::Req {
+            client: a.client,
+            tsg,
+            ctx_share: a.ctx_share,
+            ctx: a.ctx,
+            flags: a.flags,
+            engine,
+            space,
+        };
+        let plan = match self.groups.lock() {
+            Ok(m) => m.plan(&req),
+            Err(_) => Err(crate::tsgmirror::Refusal {
+                status: NV_ERR_INVALID_STATE,
+                class: crate::tsgmirror::RefusalClass::Mode,
+                why: "TSG mirror map poisoned".into(),
+            }),
+        };
+        match plan {
+            Ok(p) => Ok(Some(p)),
+            Err(r) => {
+                self.mirror_stats.note(&r);
+                eprintln!(
+                    "kf3: TSG-MIRROR REFUSED {:#x}:{:#x} tsg={tsg:#x} ctxShare={:#x} flags={:#x} status={:#x} class={:?}: {}",
+                    a.client, a.handle, a.ctx_share, a.flags, r.status, r.class, r.why
+                );
+                Err(r)
+            }
+        }
+    }
+
+    /// ★ tsg-mirror (act thread): a LEGACY channel landed in its host group (the base\'s bookkeeping); one
+    /// `TSG-MIRROR BIRTH` line when it made the group.
+    pub(super) fn mirror_commit_legacy(
+        &self,
+        a: &ChannelAlloc,
+        key: crate::tsgmirror::Key,
+        chan: kf_host::Channel,
+        engine: u32,
+        group_new: bool,
+    ) {
+        if let Ok(mut m) = self.groups.lock() {
+            m.commit_legacy(key, chan.tsg, engine);
+        }
+        if group_new && crate::tsgmirror::log_ok(&crate::tsgmirror::BIRTH_LINES, crate::tsgmirror::LOG_MAX) {
+            eprintln!(
+                "kf3: TSG-MIRROR BIRTH {:#x}:{:#x} mode=LEGACY host_tsg={:#x} engine={engine:#x} shard={:#x} first_chan_flags={:#x} ctxShare={:#x}{}",
+                a.client,
+                a.tsg.unwrap_or(0),
+                chan.tsg,
+                key.2,
+                a.flags,
+                a.ctx_share,
+                if crate::tsgmirror::enabled() { "" } else { " [KF3_TSG_MIRROR=0]" }
+            );
+        }
+    }
+
+    /// ★ tsg-mirror (act thread): an EXPLICIT channel landed - the map, the counters, the birth / ctxshare lines.
+    pub(super) fn mirror_commit_explicit(
+        &self,
+        a: &ChannelAlloc,
+        plan: &crate::tsgmirror::ExplicitPlan,
+        born: &crate::tsgmirror::Born,
+    ) {
+        if let Ok(mut m) = self.groups.lock() {
+            m.commit_explicit(plan, born);
+        }
+        let o = Ordering::Relaxed;
+        if born.group_new {
+            self.mirror_stats.groups.fetch_add(1, o);
+        }
+        if born.ctx_new {
+            self.mirror_stats.ctx_created.fetch_add(1, o);
+        }
+        let tsg = a.tsg.unwrap_or(0);
+        if born.group_new && crate::tsgmirror::log_ok(&crate::tsgmirror::BIRTH_LINES, crate::tsgmirror::LOG_MAX) {
+            eprintln!(
+                "kf3: TSG-MIRROR BIRTH {:#x}:{tsg:#x} mode=EXPLICIT host_tsg={:#x} engine={:#x} first_ctx={:#x} kind={:?} ctx_flags={:#x?} ctx_subctxId={:#x?} first_chan_flags={:#x} host_rq1={}",
+                a.client,
+                born.tsg,
+                plan.engine,
+                plan.ctx_share,
+                plan.kind,
+                a.ctx.map(|c| c.flags),
+                a.ctx.map(|c| c.subctx_id),
+                a.flags,
+                plan.rq1
+            );
+        }
+        if born.ctx_new && crate::tsgmirror::log_ok(&crate::tsgmirror::CTX_LINES, crate::tsgmirror::LOG_MAX) {
+            eprintln!(
+                "kf3: TSG-MIRROR CTX {:#x}:{tsg:#x} guest_ctx={:#x} kind={:?} host_ctx={:#x} host_veid={:x?} space={:#x} chan_flags={:#x} host_rq1={}",
+                a.client, plan.ctx_share, plan.kind, born.ctx_host, born.veid, plan.space, a.flags, plan.rq1
+            );
+        }
+    }
+
+    /// ★ tsg-mirror (act thread): the passthrough channel\'s birth in its host group - the legacy path is the base\'s
+    /// `birth_twin_in` call, the explicit path is [`crate::tsgmirror::birth_explicit`]. Returns the channel and, for an
+    /// explicit birth, what it made. The error is `(status, why)`: a mode/flag refusal carries its own status, a
+    /// host failure the base\'s `NV_ERR_INSUFFICIENT_RESOURCES`.
+    fn birth_in_group(
+        &self,
+        a: &ChannelAlloc,
+        space: kf_host::VaSpace,
+        g: kf_chan::passthrough::GuestChannel,
+        engine: u32,
+    ) -> Result<(kf_host::Channel, Option<crate::tsgmirror::Born>), (u32, String)> {
+        let plan = self
+            .mirror_plan(a, space.space, engine)
+            .map_err(|r| (r.status, r.why))?;
+        let host_err = |e: String| (NV_ERR_INSUFFICIENT_RESOURCES, e);
+        match plan {
+            None => kf_chan::passthrough::birth_twin_in(self.rm, space, g, None)
+                .map(|c| (c, None))
+                .map_err(host_err),
+            Some(crate::tsgmirror::Plan::Legacy { key, join }) => {
+                let c = kf_chan::passthrough::birth_twin_in(self.rm, space, g, join).map_err(host_err)?;
+                self.mirror_commit_legacy(a, key, c, engine, join.is_none());
+                Ok((c, None))
+            }
+            Some(crate::tsgmirror::Plan::Explicit(p)) => {
+                let born = crate::tsgmirror::birth_explicit(self.rm, &p, kf_chan::passthrough::ring_spec(&g), None)
+                    .map_err(|f| {
+                        self.mirror_stats.unwind_failed.fetch_add(u64::from(f.unwind_failed), Ordering::Relaxed);
+                        host_err(format!(
+                            "explicit birth in {:#x}:{:#x} failed at the {} step: {} (unwind steps failed: {})",
+                            a.client,
+                            a.tsg.unwrap_or(0),
+                            f.step,
+                            f.err,
+                            f.unwind_failed
+                        ))
+                    })?;
+                self.mirror_commit_explicit(a, &p, &born);
+                Ok((born.chan, Some(born)))
+            }
+        }
     }
 
     /// ★ 2026-10-08 (`V3_USERD_RELAY.md` §2): kayfabe's own USERD for a relayed twin — a 4 KiB
@@ -6807,16 +7005,11 @@ impl ChanPlane {
                     let userd_at = relay_host.as_ref().map_or(g0.userd, |h| kf_chan::passthrough::UserdAt::Store { store: h.0, off: 0 });
                     let g = kf_chan::passthrough::GuestChannel { err_ctx: notifier.as_ref().map_or(0, |n| n.ctx), userd: userd_at, ..g0 };
                     // ★ v3-video: a member of a guest TSG joins the host group standing for it.
-                    let gkey = a.tsg.map(|t| (a.client, t, a.ctx_share));
-                    let join = gkey.and_then(|k| me.groups.lock().ok().and_then(|m| m.get(&k).map(|g| g.0)));
-                    let chan = match kf_chan::passthrough::birth_twin_in(me.rm, space, g, join) {
-                        Ok(c) => {
-                            if let (Some(k), Ok(mut m)) = (gkey, me.groups.lock()) {
-                                m.entry(k).and_modify(|g| g.1 = g.1.saturating_add(1)).or_insert((c.tsg, 1));
-                            }
-                            c
-                        }
-                        Err(e) => {
+                    // ★ 2026-10-18 (`crate::tsgmirror`): …or, for a TSG whose channels name context shares, the ONE
+                    // host TSG of the guest TSG, in its own real host ctxshare. The mode is fixed by the first channel.
+                    let (born, explicit_born) = match me.birth_in_group(&a, space, g, engine) {
+                        Ok(b) => b,
+                        Err((status, e)) => {
                             live.fetch_sub(1, Ordering::AcqRel);
                             if let Some(t) = &twin {
                                 t.user_done();
@@ -6829,16 +7022,24 @@ impl ChanPlane {
                                 let _ = me.rm.release_cpu_view(kf_host::CpuViewRelease { h_memory: mem, p_linear_address: cookie });
                                 let _ = me.rm.free(mem);
                             }
-                            return Err((NV_ERR_INSUFFICIENT_RESOURCES, e));
+                            return Err((status, e));
                         }
                     };
+                    let chan = born;
                     let owner = if a.kernel_client && !a.user_work { Owner::Kernel } else { Owner::User };
                     // ★ 2026-10-09, hardwired 2026-10-10 (`crate::latejoin`, hardware-verified): a twin
                     // born into a guest TSG the guest has ALREADY scheduled is in a host group nobody
                     // else schedules (the guest sent its one schedule before the channel existed).
                     // The schedule of its own host group, authored from the guest's own scheduled
                     // state. A refusal is the birth's refusal, by name.
-                    let late = crate::latejoin::schedule_late_joiner(me.rm, &me.guest_sched, a.client, a.tsg, chan);
+                    let late = if crate::tsgmirror::skip_late_schedule(explicit_born.as_ref()) {
+                        // ★ 2026-10-18: a joiner of a standing explicit host TSG is a member of a scheduled TSG - it
+                        // runs without a schedule of its own (feasibility probes 60-66, 90). Counted, and printed below.
+                        me.mirror_stats.latejoin_skipped.fetch_add(1, Ordering::Relaxed);
+                        Ok(crate::latejoin::LateJoin::SkippedExplicit)
+                    } else {
+                        crate::latejoin::schedule_late_joiner(me.rm, &me.guest_sched, a.client, a.tsg, chan)
+                    };
                     let alloc = late
                         .clone()
                         .map(|_| ())
@@ -8208,7 +8409,7 @@ impl ChanPlane {
             out.extend(m.iter().filter(|(_, n)| **n > 0).map(|(c, _)| *c));
         }
         if let Ok(m) = self.groups.lock() {
-            out.extend(m.keys().map(|k| k.0));
+            out.extend(m.clients());
         }
         if let Ok(m) = self.sw_objs.lock() {
             out.extend(m.values().map(|o| o.owner.0));
