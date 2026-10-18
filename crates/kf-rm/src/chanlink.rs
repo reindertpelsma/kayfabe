@@ -266,7 +266,7 @@ pub struct ChannelAlloc {
 const CTXSHARE_FACTS_LINES: u32 = 256;
 
 /// ★ tsg-mirror (2026-10-18): what a guest `FERMI_CONTEXT_SHARE_A` alloc declared, as the link decoded it.
-/// Plain data: the channel plane turns it into a host SYNC/ASYNC choice (never the guest\'s VEID).
+/// Plain data: the channel plane turns it into a host SYNC/ASYNC choice (never the guest's VEID).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct CtxShareFacts {
     /// The TSG the ctxshare was allocated under (its `hParent`).
@@ -1293,7 +1293,7 @@ impl ChannelPolicy {
                     },
                 );
                 // ★ 2026-10-18: what the guest declared, recorded by the next hardware run (no repo trace has it).
-                // The VEID the guest\'s RM chose is not visible here: the alloc reply is our echo of the request.
+                // The VEID the guest's RM chose is not visible here: the alloc reply is our echo of the request.
                 static LINES: std::sync::atomic::AtomicU32 = std::sync::atomic::AtomicU32::new(0);
                 let n = LINES.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
                 if n < CTXSHARE_FACTS_LINES {

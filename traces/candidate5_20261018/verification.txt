@@ -1,0 +1,37 @@
+MEASURED LUT integration 419d74b41: full 22-crate run 3561/0/19; broker normal/sanitizer and socket tests pass; 35/35 mutants, 78/78 required-suite assertion kills; restored source green; clippy878 equals baseline878 with no changed-file additions; all changed Rust format clean; eight cursor blobs unchanged.
+
+MEASURED Amendment 3: approved progress oracle and expectation correction now pass 35/35 mutants and 78/78 required-suite kills. Restored source 409/0/12. Earlier stop records below are historical; lane resumed.
+
+STATUS: PARTIAL; required verification held for an owner ruling, 2026-10-18.
+MEASURED: candidate-4 0452613b5 baseline full 22-package run: 3532 passed, 1 failed,
+19 ignored. Failure: memory lock wait 63117 us vs unchanged 60000 us. Quiet repeats
+are pending; this is not declared a reproducible quiet-box defect.
+MEASURED: first no-ff merge 0cb1ed2fc: 3557 passed, zero failed, 19 ignored. Crate
+counts are in crate_counts.tsv. Supplementary fixture tests add two broker tests:
+162 passed, 9 ignored. LUT source branch QEMU: 327 passed, no failed or ignored.
+MEASURED: normal/sanitizer broker checks both pass after cleaning stale ASan objects:
+283 socket checks plus 82 self-tests and five new clock assertions; cursor 66138,
+geometry 65431, XOR 80752, tick 566237 checks. XOR 29 and tick 28 mutants all killed
+by at least two checks. The cursor-plane sources/tests remain unchanged from C4.
+MEASURED: step on/off mutants kill 3/3 tests, ring on/off 5/3, stats clock on/off
+2/2, LUT restart/retained bindings 2/2, fixture Full-loop guard removal 2.
+MEASURED: all 35 lock-step patch anchors match once. The required sweep makes 79
+Cargo calls: 77 assertion failures, two surviving calls, zero build failures.
+33/35 mutants satisfy their complete must-list; the full table is must_mutants.txt.
+MEASURED: carried_credit_double_counts survives B; stale_tick_counts_as_alive
+survives A. Both are killed by their other required suites. The gate is not green.
+CODE READ: form A's module documentation explicitly excludes conn.rs mutations,
+whereas the stale-tick must-list currently requires A to kill a conn.rs mutation.
+CODE READ: B previously checks copy upper bounds without requiring a carried request
+to become usable at the next accepted tick without a new WANT.
+MEASURED PROPOSAL, not applied: harness_proposal.patch adds that B progress oracle,
+passes 22 normal soak tests (1 ignored), and kills the carried-credit mutant in 7
+soak tests (15 pass, 7 fail, 1 ignored). It also proposes B/relay for the conn.rs
+mutant's must-list, matching A's documented scope. All 35 mutants remain. Changing
+this explicit expectation is held for the owner's ruling; no requirement was
+silently removed. Temporary diagnostic mutations and the proposal were restored.
+MEASURED: correction branches are verified on origin: hitch gates 560f9bce1,
+LUT tokens 9ff3dc9e9. Candidate-5 is not pushed or built. READY is not written.
+CODE READ: no product timeout, timer, polling interval or required boot flag changed.
+No hardware result is claimed; n=0. The other two required merges and final
+interaction checks are not complete. The original FAILED marker is retained.

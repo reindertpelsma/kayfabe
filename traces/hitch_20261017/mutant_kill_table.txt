@@ -1,0 +1,8 @@
+M1 colour rule back at the call site       killed by 3: the_worker_is_wired_to_the_mailbox_and_has_no_tear_gate, the_worker_latch_is_one_method_call_and_touches_no_copy_state, the_worker_sets_want_at_the_two_named_sites_only
+M2 want = true after the call              killed by 2: the_worker_latch_is_one_method_call_and_touches_no_copy_state, the_worker_sets_want_at_the_two_named_sites_only
+M3 flip_completion_need(barrier, None)     killed by 2: a_flip_waits_for_the_copy_in_flight_and_a_latched_frame_is_a_pending_copy, the_latch_method_waits_for_the_copy_in_flight_and_runs_the_resolutions_once
+M4 no mailbox.latch() at a flip            killed by 4: a_flip_copy_serves_the_pending_frame_and_a_check_does_not, a_flip_waits_for_the_copy_in_flight_and_a_latched_frame_is_a_pending_copy, copies_started_in_n_ticks_never_exceed_n_plus_1_on_any_latch_path, the_latch_method_waits_for_the_copy_in_flight_and_runs_the_resolutions_once
+M5 resolutions not run                     killed by 2: the_latch_method_waits_for_the_copy_in_flight_and_runs_the_resolutions_once, the_latch_wiring_has_its_steps_at_the_call_site_and_in_the_method
+M6 bindings not forgotten                  killed by 2: the_latch_method_waits_for_the_copy_in_flight_and_runs_the_resolutions_once, the_latch_wiring_has_its_steps_at_the_call_site_and_in_the_method
+M8 colour bindings not resolved at the latch killed by 2: the_latch_wiring_has_its_steps_at_the_call_site_and_in_the_method, the_worker_is_wired_to_the_mailbox_and_has_no_tear_gate
+M7 call site says not shown                killed by 2: the_latch_wiring_has_its_steps_at_the_call_site_and_in_the_method, the_worker_is_wired_to_the_mailbox_and_has_no_tear_gate

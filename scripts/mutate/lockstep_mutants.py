@@ -64,7 +64,7 @@ MUTANTS = [
     ("flap_damping_removed", D + "tick.rs",
      "if self.source == Source::Free && self.fallbacks_run > 0 {", "if self.source == Source::Free && false {", "a b unit"),
     ("no_change_at_the_opening_tick", B + "ticks.rs",
-     "self.ticks_since_open >= 1", "self.ticks_since_open >= 0", "a b relay"),
+     "            nothing_to_send\n                && self.ticks_since_open >= 1", "            nothing_to_send\n                && self.ticks_since_open >= 0", "a b relay"),
     ("read_deadline_removed", B + "conn.rs",
      ".is_some_and(|t| now >= t + PARTIAL_READ_MS)", ".is_some_and(|_| false)", "b threads relay"),
     ("per_turn_budget_removed", B + "conn.rs",
@@ -74,7 +74,7 @@ MUTANTS = [
      "        self.link.send(&c.sock, &rec, fd)\n    }",
      "        let mut r = self.link.send(&c.sock, &rec, fd);\n        while r == Sent::Full {\n            r = self.link.send(&c.sock, &rec, fd);\n        }\n        r\n    }", "b threads relay"),
     ("stale_tick_counts_as_alive", B + "conn.rs",
-     "            TickVerdict::Stale => {}", "            TickVerdict::Stale => {\n                tc.last_rx_ms = Some(now);\n            }", "a b relay"),
+     "            TickVerdict::Stale => {}", "            TickVerdict::Stale => {\n                tc.last_rx_ms = Some(now);\n            }", "b relay"),
     ("want_lost_on_coalesce (share)", B + "ticks.rs",
      "        if t.want && self.want.swap(t.tick_seq, Ordering::AcqRel) != 0 {", "        if t.want && self.want.load(Ordering::Acquire) != 0 {", "b threads relay"),
 ]

@@ -1515,11 +1515,11 @@ impl HostRm {
 
     /// ★ tsg-mirror: a host `FERMI_CONTEXT_SHARE_A` (a subcontext) under the group `tsg`, in the VA
     /// space `space` (a host VA space handle, NEVER 0: `[measured probe 42]` a ctxshare with
-    /// `hVASpace = 0` allocates and its channel never fetches). The VEID is host RM\'s choice, read
+    /// `hVASpace = 0` allocates and its channel never fetches). The VEID is host RM's choice, read
     /// back from the reply; the guest cannot name one.
     ///
     /// # Errors
-    /// The host\'s refusal (`NV_ERR_NO_MEMORY` when the group\'s 64 VEIDs are spent).
+    /// The host's refusal (`NV_ERR_NO_MEMORY` when the group's 64 VEIDs are spent).
     pub fn alloc_ctxshare(
         &self,
         tsg: u32,
@@ -1550,7 +1550,7 @@ impl HostRm {
     /// channel kills the channel silently).
     ///
     /// # Errors
-    /// The host\'s status.
+    /// The host's status.
     pub fn free_ctxshare(&self, ctxshare: u32) -> Result<(), RmError> {
         self.free(ctxshare)
     }

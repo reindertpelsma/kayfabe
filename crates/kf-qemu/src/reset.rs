@@ -145,8 +145,9 @@ pub trait Owners {
     fn begin_release(&self, epoch: u64);
     /// Both have acknowledged `epoch`.
     fn released(&self, epoch: u64) -> bool;
-    /// Ask the VA thread to reset the memory plane.
-    fn begin_memory(&self, epoch: u64);
+    /// Ask the VA thread to reset the memory plane. `scrub`: a NEW OS follows and the store holds
+    /// the old one's bytes — the memory stage also zeroes the guest-allocatable store ([`crate::scrub`]).
+    fn begin_memory(&self, epoch: u64, scrub: bool);
     /// The VA thread has acknowledged `epoch`.
     fn memory_done(&self, epoch: u64) -> bool;
     /// The last, synchronous step before the gate opens ([`Stage::Finish`]). `false`: not yet (a
@@ -184,6 +185,9 @@ struct Run {
     stage: Stage,
     epoch: u64,
     life: Life,
+    /// ★ 2026-10-18: this run's Memory stage was asked to scrub (read at [`Stage::Memory`]'s end to
+    /// clear the owed scrub only once it completed).
+    scrub: bool,
     since: Option<std::time::Instant>,
     stall_said: bool,
 }
@@ -218,6 +222,19 @@ pub struct Reset {
     /// ★ 2026-10-14: a request that was NOT the platform's S3 wake arrived since the last run's
     /// Drainer stage read it — such a run never keeps a life. Set BEFORE the request is counted.
     cold_pending: std::sync::atomic::AtomicBool,
+    /// ★ 2026-10-18 (review B1): a scrub is OWED — a request that a NEW OS follows (a system reset
+    /// from the main loop: [`crate::scrub::decide`]) arrived and no completed Memory stage has
+    /// scrubbed since. Set BEFORE the request is counted; cleared only by a Memory stage that
+    /// completed WITH the scrub, or by a pristine completion over a clean store (the start-up reset).
+    new_os_pending: std::sync::atomic::AtomicBool,
+    /// ★ 2026-10-18 (review B1; owner decision on finding 1): the store may hold a guest life's
+    /// bytes. Set when the gate OPENS after any reset (the guest runs from there, and its BAR1,
+    /// BAR2, PRAMIN and DMA writes are invisible to the device) and on every admitted guest access
+    /// ([`Reset::touched`], for a device whose creation reset never ran); cleared ONLY while a Memory
+    /// stage with the scrub is acknowledged, and set again at the next open. Unlike `touched` it is
+    /// not consumed by a reset that scrubbed nothing. Only a reset that completes before the guest
+    /// ever ran (machine creation) finds it clean.
+    store_dirty: std::sync::atomic::AtomicBool,
     /// Wake requests (status line) and runs that kept a PM-suspended life.
     from_wake: AtomicU64,
     kept: AtomicU64,
@@ -239,6 +256,13 @@ pub enum Waited {
 }
 
 impl Reset {
+    /// ★ 2026-10-18: is a scrub owed — a request meant a NEW OS (a system reset from the main loop,
+    /// [`crate::scrub::decide`]) and no memory stage has scrubbed since? Not consuming.
+    #[must_use]
+    pub fn scrub_owed(&self) -> bool {
+        self.new_os_pending.load(Ordering::SeqCst)
+    }
+
     /// ★ The main loop's call (QEMU's Resettable hold phase): close the gate and count a request.
     /// Returns the request's number. Never waits; the caller wakes the drainer.
     pub fn request(&self) -> u64 {
@@ -257,7 +281,15 @@ impl Reset {
     /// Any other request marks the run cold BEFORE it is counted, so the run that covers it
     /// never keeps a life ([`Owners::reset_drainer_state`]).
     pub fn request_typed(&self, from_vcpu: bool, wake: bool) -> u64 {
-        let c = if from_vcpu { &self.from_vcpu } else { &self.from_main };
+        if crate::scrub::decide(crate::scrub::event_of_reset(from_vcpu, wake)).is_some() {
+            // a NEW OS follows: set BEFORE the request is counted, like the cold mark
+            self.new_os_pending.store(true, Ordering::SeqCst);
+        }
+        let c = if from_vcpu {
+            &self.from_vcpu
+        } else {
+            &self.from_main
+        };
         c.fetch_add(1, Ordering::Relaxed);
         if wake {
             self.from_wake.fetch_add(1, Ordering::Relaxed);
@@ -323,6 +355,7 @@ impl Reset {
     pub fn touched(&self) {
         if !self.touched.load(Ordering::Relaxed) {
             self.touched.store(true, Ordering::SeqCst);
+            self.store_dirty.store(true, Ordering::SeqCst);
         }
     }
 
@@ -354,8 +387,19 @@ impl Reset {
                     }
                     // ⊘ Read only now: every entry admitted before the close has left, so its mark
                     // is visible. Nothing admitted since the last reset began ⇒ nothing to undo.
-                    if !self.touched.swap(false, Ordering::SeqCst) {
+                    //
+                    // ★ 2026-10-18 (review B1): not pristine while a scrub is owed over a dirty
+                    // store — a reboot that arrives while a guest-issued reset runs finds `touched`
+                    // consumed, and must still get its Memory stage.
+                    let was_touched = self.touched.swap(false, Ordering::SeqCst);
+                    let scrub_due = self.new_os_pending.load(Ordering::SeqCst)
+                        && self.store_dirty.load(Ordering::SeqCst);
+                    if !was_touched && !scrub_due {
                         self.pristine.fetch_add(1, Ordering::Relaxed);
+                        // nothing of a guest life exists: a start-up request's mark dies here
+                        if !self.store_dirty.load(Ordering::SeqCst) {
+                            self.new_os_pending.store(false, Ordering::SeqCst);
+                        }
                         // ★ 2026-10-14: the cold mark is this run's even when nothing was undone —
                         // left set, it would make the NEXT life's S3 wake a full reset.
                         self.cold_pending.store(false, Ordering::SeqCst);
@@ -388,12 +432,21 @@ impl Reset {
                     if !o.released(r.epoch) {
                         return self.waiting(&mut r, o);
                     }
-                    o.begin_memory(r.epoch);
+                    // ★ the scrub is asked only for a reboot over a store a guest dirtied
+                    r.scrub = self.new_os_pending.load(Ordering::SeqCst)
+                        && self.store_dirty.load(Ordering::SeqCst);
+                    o.begin_memory(r.epoch, r.scrub);
                     self.enter(&mut r, Stage::Memory);
                 }
                 Stage::Memory => {
                     if !o.memory_done(r.epoch) {
                         return self.waiting(&mut r, o);
+                    }
+                    // the VA thread acknowledges only a COMPLETED scrub (a refused one keeps the
+                    // stage waiting): the owed scrub is paid
+                    if r.scrub {
+                        self.store_dirty.store(false, Ordering::SeqCst);
+                        self.new_os_pending.store(false, Ordering::SeqCst);
                     }
                     self.enter(&mut r, Stage::Finish);
                 }
@@ -423,6 +476,12 @@ impl Reset {
         }
         let epoch = r.epoch;
         self.enter(r, Stage::Idle);
+        // ★ Owner decision, 2026-10-18: the gate opens, so the guest RUNS from here — and anything
+        // it does through BAR1 (the seed over `[0, G)`, a CPU view), BAR2, PRAMIN or DMA is
+        // invisible to this device. The store is dirty from now on, even if no BAR0 access is ever
+        // admitted; only a reset that completed before the guest ever ran (machine creation) found
+        // it clean. Set BEFORE the open is visible.
+        self.store_dirty.store(true, Ordering::SeqCst);
         self.completed.store(epoch, Ordering::Release);
         // ⊘ A request racing this open (its close before the open, its count after the load) leaves
         // the gate open until the next poll, whose first step closes it again: the writes in between
@@ -640,6 +699,10 @@ mod tests {
         status_seen: RefCell<Option<String>>,
         /// ★ 2026-10-14: the life ended with a PM-transition suspend (the GSP `Halted`, saved).
         pm_suspended: Cell<bool>,
+        /// ★ 2026-10-18: the `scrub` argument of every `begin_memory`, as the real device gets it.
+        scrubs: RefCell<Vec<bool>>,
+        /// A callback run inside `begin_memory` (a request arriving during the memory stage).
+        during_memory: RefCell<Option<Box<dyn Fn()>>>,
     }
 
     impl Fake {
@@ -684,8 +747,12 @@ mod tests {
             self.live.set(0);
             true
         }
-        fn begin_memory(&self, e: u64) {
+        fn begin_memory(&self, e: u64, scrub: bool) {
             self.note(format!("memory {e}"));
+            self.scrubs.borrow_mut().push(scrub);
+            if let Some(f) = self.during_memory.borrow_mut().take() {
+                f();
+            }
             assert_eq!(
                 self.live.get(),
                 0,
@@ -930,6 +997,195 @@ mod tests {
         assert_eq!(r.completed(), 50);
     }
 
+    /// ★ 2026-10-18 (review B1): only a system reset from the main loop owes a scrub; a vCPU's bus
+    /// reset and the S3 wake do not (the table: [`crate::scrub::decide`]).
+    #[test]
+    fn only_a_system_reset_from_the_main_loop_owes_a_scrub() {
+        let r = Reset::default();
+        r.request_typed(true, false); // a bus reset on a vCPU thread
+        assert!(!r.scrub_owed(), "the guest's own bus reset keeps the OS");
+        r.request_typed(false, true); // the S3 wake
+        assert!(!r.scrub_owed(), "an S3 wake resumes the same OS");
+        r.request_typed(false, false); // QEMU's system reset: reboot, reset button, triple fault
+        assert!(r.scrub_owed(), "a system reset is a new OS");
+        assert!(r.scrub_owed(), "not consuming");
+    }
+
+    /// ★ Review B1(a), the reviewer's probe: the machine's own reset at creation comes from the main
+    /// loop with wake=false. It completes PRISTINE (nothing of a guest life exists), and the mark
+    /// it set must not survive that completion — else the first later reset that reaches a Memory
+    /// stage (a guest bus reset, a TDR-style reset) would do the heavy scrub.
+    #[test]
+    fn a_stale_mark_does_not_survive_a_pristine_completion() {
+        let r = Reset::default();
+        let o = Fake::default();
+        r.request_typed(false, false); // the start-up reset
+        assert_eq!(r.poll(&o), Progress::Completed(1));
+        assert!(!r.scrub_owed(), "the start-up request left a mark");
+        // the guest runs, then resets ITSELF through a bridge: no scrub
+        let p = r.gate.enter().expect("open");
+        r.touched();
+        drop(p);
+        r.request_typed(true, false);
+        run_to_completion(&r, &o);
+        assert_eq!(
+            *o.scrubs.borrow(),
+            [false],
+            "a guest-issued reset must not scrub"
+        );
+    }
+
+    /// ★ Owner decision, 2026-10-18 (finding 1 of the review): the store counts as dirty as soon as
+    /// the guest has RUN at all — a BAR1-only writer (the live boot-framebuffer seed, a CPU view, a
+    /// DMA) is invisible to the device, and the only reset that may skip the scrub is the one before
+    /// the guest ever ran (machine creation, pristine). So EVERY system reset after the gate first
+    /// opened scrubs, even if no BAR0 access was ever admitted in between.
+    #[test]
+    fn every_reboot_after_the_guest_ran_scrubs_even_with_no_bar0_access() {
+        let r = Reset::default();
+        let o = Fake::default();
+        r.request_typed(false, false); // machine creation: pristine, the guest has not run yet
+        run_to_completion(&r, &o);
+        assert!(
+            o.scrubs.borrow().is_empty(),
+            "the creation reset asks no owner"
+        );
+        // the guest runs and writes ONLY through BAR1 [0, G): the device sees nothing at all
+        r.request_typed(false, false); // it reboots
+        run_to_completion(&r, &o);
+        assert_eq!(
+            *o.scrubs.borrow(),
+            [true],
+            "a BAR1-only writer's bytes must not reach the next OS"
+        );
+        assert!(!r.scrub_owed());
+        // the new OS runs (touching nothing the device can see) and reboots again
+        r.request_typed(false, false);
+        run_to_completion(&r, &o);
+        assert_eq!(
+            *o.scrubs.borrow(),
+            [true, true],
+            "the gate opened after the first reboot, so the guest ran: the second reboot scrubs too"
+        );
+    }
+
+    /// ★ The same decision when the only admitted access was BAR0, before any reset completed (a device
+    /// whose machine-creation reset never ran): `touched` still marks the store.
+    #[test]
+    fn a_bar0_access_before_any_reset_marks_the_store_dirty() {
+        let r = Reset::default();
+        let o = Fake::default();
+        let p = r.gate.enter().expect("open");
+        r.touched();
+        drop(p);
+        r.request_typed(false, false);
+        run_to_completion(&r, &o);
+        assert_eq!(*o.scrubs.borrow(), [true]);
+    }
+
+    /// ★ The machine-creation reset is the only one that scrubs nothing and leaves no mark.
+    #[test]
+    fn the_machine_creation_reset_scrubs_nothing_and_leaves_no_mark() {
+        let r = Reset::default();
+        let o = Fake::default();
+        r.request_typed(false, false);
+        run_to_completion(&r, &o);
+        assert!(
+            o.calls.borrow().is_empty(),
+            "no owner is asked: {:?}",
+            o.calls.borrow()
+        );
+        assert!(
+            !r.scrub_owed(),
+            "a stale mark would scrub the next guest-issued reset"
+        );
+    }
+
+    /// ★ A guest-issued bus reset and an S3 wake still never scrub, after a guest that only wrote BAR1.
+    #[test]
+    fn a_guest_issued_reset_or_an_s3_wake_still_never_scrubs() {
+        let r = Reset::default();
+        let o = Fake::default();
+        r.request_typed(false, false); // creation
+        run_to_completion(&r, &o);
+        let p = r.gate.enter().expect("open");
+        r.touched(); // the guest got into BAR0 (so the reset below reaches a Memory stage at all)
+        drop(p);
+        r.request_typed(true, false); // the guest resets itself through a bridge
+        run_to_completion(&r, &o);
+        assert_eq!(*o.scrubs.borrow(), [false]);
+        o.pm_suspended.set(true);
+        r.request_typed(false, true); // S3 wake of a PM-suspended life: kept, no memory stage
+        run_to_completion(&r, &o);
+        assert_eq!(
+            *o.scrubs.borrow(),
+            [false],
+            "a kept life asks the memory stage nothing"
+        );
+    }
+
+    /// ★ A guest that ran (a dirty store) and resets ITSELF through a bridge, or wakes from S3, owes
+    /// no scrub: the same OS keeps its root. (Kills a Memory stage that always asks to scrub.)
+    #[test]
+    fn a_guest_issued_reset_of_a_dirty_store_does_not_scrub() {
+        let r = Reset::default();
+        let o = Fake::default();
+        let p = r.gate.enter().expect("open");
+        r.touched();
+        drop(p);
+        r.request_typed(true, false); // a bus reset on a vCPU thread
+        run_to_completion(&r, &o);
+        assert_eq!(*o.scrubs.borrow(), [false]);
+        let p = r.gate.enter().expect("open");
+        r.touched();
+        drop(p);
+        r.request_typed(true, false);
+        run_to_completion(&r, &o);
+        assert_eq!(
+            *o.scrubs.borrow(),
+            [false, false],
+            "never, however often the guest resets itself"
+        );
+    }
+
+    /// ★ Review B1(b): a reboot R2 that arrives while a vCPU-issued reset R1 is running must still
+    /// scrub — at either point of R1's run (before its Memory stage is asked, or during it).
+    #[test]
+    fn a_reboot_during_a_guest_issued_reset_still_scrubs() {
+        for during_memory in [false, true] {
+            let r = Arc::new(Reset::default());
+            let o = Fake::default();
+            let r2 = r.clone();
+            let hook: Box<dyn Fn()> = Box::new(move || {
+                r2.request_typed(false, false); // R2: the guest reboots
+            });
+            if during_memory {
+                *o.during_memory.borrow_mut() = Some(hook);
+            } else {
+                *o.during_release.borrow_mut() = Some(hook);
+            }
+            let p = r.gate.enter().expect("open");
+            r.touched();
+            drop(p);
+            r.request_typed(true, false); // R1: a bus reset from a vCPU thread
+            let end = run_to_completion(&r, &o);
+            assert_eq!(
+                end.last(),
+                Some(&Progress::Completed(2)),
+                "during_memory={during_memory}"
+            );
+            assert!(
+                o.scrubs.borrow().contains(&true),
+                "during_memory={during_memory}: R2's new OS got no scrub: {:?}",
+                o.scrubs.borrow()
+            );
+            assert!(
+                !r.scrub_owed(),
+                "during_memory={during_memory}: the mark leaked"
+            );
+        }
+    }
+
     /// ★ The machine's own reset at start-up (and a reset straight after a reset): no guest access
     /// was admitted, so there is nothing to undo — the gate opens at once and no owner is asked
     /// (the review of 2026-10-13: waiting for a VA thread busy with a cold prewarm would have kept
@@ -967,7 +1223,11 @@ mod tests {
         r.run.lock().expect("run").since =
             Some(std::time::Instant::now() - STALL_AFTER - std::time::Duration::from_millis(1));
         assert_eq!(r.poll(&o), Progress::Pending(Stage::Release));
-        let seen = o.status_seen.borrow().clone().expect("the report read the status");
+        let seen = o
+            .status_seen
+            .borrow()
+            .clone()
+            .expect("the report read the status");
         assert!(seen.contains("stage=Release"), "{seen}");
     }
 
@@ -1020,7 +1280,7 @@ mod tests {
             self.release_polls.store(n - 1, Ordering::SeqCst);
             false
         }
-        fn begin_memory(&self, _e: u64) {}
+        fn begin_memory(&self, _e: u64, _scrub: bool) {}
         fn memory_done(&self, _e: u64) -> bool {
             true
         }
@@ -1053,18 +1313,31 @@ mod tests {
         let o = Arc::new(SyncOwners::default());
         let stop = Arc::new(AtomicBool::new(false));
         let d = drainer(r.clone(), o.clone(), stop.clone());
+        // A pristine reset (the machine's own at creation) is done at once, asking no owner.
+        let e = r.request_from(false);
+        assert_eq!(r.wait_completed(e, WAIT_BOUND), Waited::Done);
+        assert_eq!(o.finished.load(Ordering::SeqCst), 0, "no owner asked");
         r.touched();
         let e = r.request_from(false);
         let t0 = std::time::Instant::now();
         assert_eq!(r.wait_completed(e, WAIT_BOUND), Waited::Done);
         assert!(t0.elapsed() < WAIT_BOUND);
-        assert!(!r.gate.is_closed(), "the gate is open before the vCPUs resume");
+        assert!(
+            !r.gate.is_closed(),
+            "the gate is open before the vCPUs resume"
+        );
         assert_eq!(o.finished.load(Ordering::SeqCst), 1);
-        assert!(r.status().contains("main=1 vcpu=0"), "{}", r.status());
-        // A pristine reset (the machine's own at creation) is done at once.
+        assert!(r.status().contains("main=2 vcpu=0"), "{}", r.status());
+        // ⊘ 2026-10-18 (owner, finding 1): a system reset after the gate opened is no longer
+        // pristine even with no admitted access — the guest ran, and its BAR1/DMA writes are
+        // invisible — so it takes the full sequence and scrubs.
         let e = r.request_from(false);
         assert_eq!(r.wait_completed(e, WAIT_BOUND), Waited::Done);
-        assert_eq!(o.finished.load(Ordering::SeqCst), 1, "no owner asked");
+        assert_eq!(
+            o.finished.load(Ordering::SeqCst),
+            2,
+            "the guest ran in between: a full reset"
+        );
         stop.store(true, Ordering::SeqCst);
         d.join().expect("drainer");
     }
@@ -1132,7 +1405,10 @@ mod tests {
         touched_life(&r, &o);
         o.pm_suspended.set(true);
         let e = r.request_typed(false, true);
-        assert_eq!(run_to_completion(&r, &o).last(), Some(&Progress::Completed(e)));
+        assert_eq!(
+            run_to_completion(&r, &o).last(),
+            Some(&Progress::Completed(e))
+        );
         assert_eq!(
             *o.calls.borrow(),
             vec![format!("drainer-kept {e}"), format!("finish-kept {e}")]

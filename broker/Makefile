@@ -231,6 +231,7 @@ check: all test-utf8 test-cursor test-geom test-xor test-tick
 	python3 test/test_cursor.py ./$(BIN)
 	python3 test/test_xor.py ./$(BIN)
 	python3 test/test_tick.py ./$(BIN)
+	python3 test/test_stats_clock.py
 
 # NOT SHIPPED: the instrument that measured what a Wayland client must commit
 # each refresh to keep getting frame callbacks and presentation feedback
