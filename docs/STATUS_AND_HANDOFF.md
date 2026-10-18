@@ -1,5 +1,9 @@
 # Status and handoff — where kayfabe v3 stands, and how to resume
 
+## UPDATE 2026-10-19 — P1 stopped GPU-free at Clippy; no host binary or hardware claim
+
+MEASURED: lane P1, branch `codex/perf-parity-20261019`, candidate `78c6d54b2`: red-first NSI diagnostic wiring tests, default kf-qemu 316/0/0 and diagnostic 322/0/0; four mutants each killed by two tests. Clippy failed with 89 inherited denied sites (62 arithmetic, 27 indexing), all primary source text present in production. No changed-line diagnostic was found, but the failed build is not a green gate. The lane stopped under its no-workaround rule; no lint suppression, host binary, GPU lease, guest command or performance experiment. Automatic approval review also rejected target cleanup; 418 MiB remains. Report and resume options: `traces/perf_parity_20261019/REPORT.md`; hypotheses: `PREREG.md`; source findings: `CODE_READ.md`; exact validation scope: `TEST_RESULTS.md`. CODE READ: diagnostics are excluded by default Cargo features and also require a runtime opt-in. MEASURED at 00:07 CEST: existing owner run 3008 remained on production 0452613b, nvidia driver bound; P1 had not stopped or restarted it. Later morning state is unverified.
+
 ## UPDATE 2026-10-15 - the display broker now lives in this repo; broker roadmap (cursor stream, control CLI with screendump/input, headless streaming, clipboard, ACPI, audio)
 
 `broker/` (from nvkvm-pv `badf2d7`, the revision in use; see `broker/IMPORTED.md`) is the broker to change from now on (branch
