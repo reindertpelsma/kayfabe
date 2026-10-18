@@ -6062,6 +6062,57 @@ mod tests {
         assert!(!latch.contains("barrier"), "{latch}");
     }
 
+    /// The worker code with comments stripped (what the call-site scans look at).
+    fn worker_code() -> String {
+        include_str!("display.rs")
+            .split("#[cfg(test)]")
+            .next()
+            .unwrap()
+            .lines()
+            .map(|l| l.split("//").next().unwrap())
+            .collect::<Vec<_>>()
+            .join("\n")
+    }
+
+    /// ★ review hitch-20261017 (1): the latch of a window is ONE call into `ScanState` — the property tests exercise
+    /// that method, so the worker's call site must hold nothing but the call and the resolutions it passes in. A
+    /// `scan.want = true`, a `started + 1`, a barrier or a mailbox touch between `Effect::Latched` and the queueing of
+    /// its effect would bring the original defect back where no property test sees it. Known-positive: the scanner
+    /// finds each banned token in a planted block. EXPECTED RED on the commit that adds it (the call site still sets
+    /// things inline); green with the next.
+    #[test]
+    fn the_worker_latch_is_one_method_call_and_touches_no_copy_state() {
+        let code = worker_code();
+        let block = code
+            .split("if let Effect::Latched { window } = &e")
+            .nth(1)
+            .unwrap()
+            .split("queue.push_back")
+            .next()
+            .unwrap()
+            .to_owned();
+        let banned = [
+            ".want",
+            "started",
+            "barrier",
+            "mailbox",
+            "inflight",
+            "begin_copy",
+            ".start(",
+            "latched.forget",
+            "colors.forget",
+        ];
+        let hits = |text: &str| -> Vec<&str> { banned.iter().copied().filter(|b| text.contains(b)).collect() };
+        for planted in banned {
+            assert_eq!(hits(&format!("scan{planted} = 1;")), vec![planted]);
+        }
+        assert_eq!(hits(&block), Vec::<&str>::new(), "the latch call site touches copy state: {block}");
+        assert!(
+            block.contains("scan.on_window_latch("),
+            "the worker no longer calls ScanState::on_window_latch at a latch: {block}"
+        );
+    }
+
     fn map() -> RegMap {
         let r = Regs::for_ip("580.159.04", 0x0401_0000).unwrap();
         let t = kf_disp::class::for_version("580.159.04").unwrap();

@@ -593,6 +593,37 @@ mod tests {
         assert_eq!(r.ring.events().len(), RING_CAP);
     }
 
+    /// ★ review hitch-20261017: the ring must not amplify a flooding broker into the log, and an idle request must not evict
+    /// the useful history. (1) However many unanswered requests are replaced, at most `RING_DUMPS_MAX` dumps are taken and the
+    /// rest are counted in `suppressed`; (2) a request that is declined at every later tick is ringed ONCE (`Declined`), not at
+    /// every tick. EXPECTED RED on the commit that adds it (`RING_DUMPS_MAX` / `suppressed` do not exist yet: the build fails).
+    #[test]
+    fn the_ring_dump_is_bounded_in_total_and_declines_do_not_evict_history() {
+        let mut r = Requests::new();
+        let mut taken = 0u32;
+        for i in 0..1000u32 {
+            r.on_tick(&tick(10 + 2 * i, true, u64::from(i)));
+            if r.ring.take_dump("flood").is_some() {
+                taken += 1;
+            }
+        }
+        assert!(taken <= RING_DUMPS_MAX, "{taken} dumps of 1000 replaced requests (cap {RING_DUMPS_MAX})");
+        assert_eq!(u64::from(taken) + r.ring.suppressed, 999, "every replaced request is dumped or counted");
+        let mut d = Requests::new();
+        d.on_tick(&tick(1, true, 1));
+        d.on_tick(&tick(2, false, 2));
+        for _ in 0..40 {
+            d.note_declined(true);
+        }
+        let declined = d.ring.events().iter().filter(|e| e.kind == EvKind::Declined).count();
+        assert_eq!(declined, 1, "a request declined at 40 later looks is ringed once");
+        d.on_tick(&tick(3, true, 3));
+        d.on_tick(&tick(4, false, 4));
+        d.note_declined(true);
+        let declined = d.ring.events().iter().filter(|e| e.kind == EvKind::Declined).count();
+        assert_eq!(declined, 2, "the next request's first decline is ringed again");
+    }
+
     /// The whole decision table of the request book, one row per rule R1–R4.
     #[test]
     fn the_request_book_table() {

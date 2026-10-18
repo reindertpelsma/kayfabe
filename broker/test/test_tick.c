@@ -636,6 +636,68 @@ static void test_stats(void)
     CHECK(nb_tick_stats_format(buf, sizeof(buf), 1, &b, &a, &ST.win) > 0 && strstr(buf, "feedbacks=0 ") != NULL, "stats: a reset never underflows");
 }
 
+/* ★ review hitch-20261017 (2): a PUMP discard must not touch the request book.  The pump's feedback is the broker's own 1x1
+ * repeat commit; a discard of it says nothing about a COMMITted frame, so it must not clear `unpresented` (which holds WANT back
+ * until the frame is shown or the timeout) -- it is only counted, in its own field.  A FRAME's discard still ends the wait.
+ * EXPECTED RED on the commit that adds it (nb_tick_pump_discarded and the pump_discarded field do not exist yet: the build fails). */
+static void test_pump_discard(void)
+{
+    struct nb_tick P;
+    struct nb_tick_out o;
+    const uint64_t t0 = 1000000000ull;
+
+    nb_tick_reset(&P, true, 60);
+    nb_tick_prime(&P, t0, &o);
+    CHECK(nb_tick_answer(&P, o.tick_seq, true, t0 + 1000000ull) == NB_TICK_ANS_OPEN, "pump: the frame is answered");
+    CHECK(P.unpresented, "pump: the COMMITted frame is un-presented");
+    CHECK(!nb_tick_want(&P, t0 + 20000000ull), "pump: no WANT while the frame is un-presented");
+    nb_tick_pump_discarded(&P);
+    CHECK(P.unpresented, "pump: a pump discard does not end the wait for the frame");
+    CHECK(!nb_tick_want(&P, t0 + 20000000ull), "pump: a pump discard does not re-open WANT early");
+    CHECK(P.win.pump_discarded == 1 && P.win.discarded == 0, "pump: counted in its own field, not as a frame discard");
+    nb_tick_presented_at(&P, t0 + 30000000ull, true);
+    CHECK(!P.unpresented && P.win.discarded == 1, "pump: a FRAME's discard ends the wait and is counted");
+}
+
+/* ★ review hitch-20261017 (nits): the stats step is pure.  It arms and takes the baseline ONCE (what happened before arming is not
+ * in the first line), a line that does not fit leaves the window and the baseline untouched (a dropped line is not a reset), and the
+ * worst-case line (every counter at 2^64-1) fits the buffer the sink uses. */
+static void test_stats_step(void)
+{
+    struct nb_tick S;
+    struct nb_tick_snap prev;
+    uint64_t next = 0;
+    char buf[NB_TICK_STATS_LINE_MAX];
+    const uint64_t P = NB_TICK_STATS_PERIOD_NS;
+
+    nb_tick_reset(&S, true, 60);
+    S.n_ticks = 500; S.n_feedback = 500;                          /* before arming */
+    memset(&prev, 0, sizeof(prev));
+    CHECK(nb_tick_stats_step(&S, &prev, &next, 5 * P, buf, sizeof(buf)) == 0, "step: the arming call writes nothing");
+    CHECK(prev.ticks == 500, "step: the baseline is taken at arming");
+    S.n_ticks = 560; S.n_feedback = 560;
+    CHECK(nb_tick_stats_step(&S, &prev, &next, 5 * P + 1, buf, sizeof(buf)) == 0, "step: not due");
+    CHECK(prev.ticks == 500, "step: a non-due call does not move the baseline");
+    S.win.cg100 = 3;
+    CHECK(nb_tick_stats_step(&S, &prev, &next, 6 * P, buf, 20) == 0, "step: a line that does not fit is dropped");
+    CHECK(S.win.cg100 == 3 && prev.ticks == 500, "step: a dropped line resets nothing");
+    CHECK(nb_tick_stats_step(&S, &prev, &next, 7 * P, buf, sizeof(buf)) > 0, "step: the next line is written");
+    CHECK(strstr(buf, " ticks=60 ") != NULL && strstr(buf, "cg100=3") != NULL, "step: it counts since arming ('%s')", buf);
+    CHECK(S.win.cg100 == 0 && prev.ticks == 560, "step: a written line resets the window and moves the baseline");
+    {
+        struct nb_tick W;
+        struct nb_tick_snap z, mx;
+        uint64_t *f, *g;
+        size_t i;
+
+        nb_tick_reset(&W, true, 60);
+        memset(&z, 0, sizeof(z));
+        for (f = (uint64_t *)&mx, i = 0; i < sizeof(mx) / sizeof(uint64_t); i++) { f[i] = UINT64_MAX; }
+        for (g = (uint64_t *)&W.win, i = 0; i < sizeof(W.win) / sizeof(uint64_t); i++) { g[i] = UINT64_MAX; }
+        CHECK(nb_tick_stats_format(buf, sizeof(buf), UINT64_MAX, &z, &mx, &W.win) > 0, "step: the worst-case line fits NB_TICK_STATS_LINE_MAX");
+    }
+}
+
 int main(void)
 {
     test_div();
@@ -647,6 +709,8 @@ int main(void)
     test_replace();
     test_invariants();
     test_stats();
+    test_pump_discard();
+    test_stats_step();
     printf("test_tick: %u checks, %u failed\n", n_checks, n_fail);
     return n_fail ? 1 : 0;
 }
