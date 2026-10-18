@@ -789,6 +789,17 @@ impl Target {
         }
     }
 
+    /// ★ Review (2026-10-18): every placement of a BAR window sunk to scratch, no seed placed
+    /// ([`CpuWindow::sink_all`]; on Hopper+ every BAR1 doorbell view's removal queued first).
+    /// `None` for a GPU mirror.
+    pub fn sink_all(&self) -> Option<(kf_mem::cpuwin::WindowReset, usize)> {
+        match self {
+            Target::Window(w) => Some((w.sink_all(), 0)),
+            Target::Bar1(b) => Some(b.sink_all()),
+            Target::Gpu(_) => None,
+        }
+    }
+
     /// ★ The guest CPU window behind a BAR target (BAR2, or BAR1 on either arm) — BAR1's is where the
     /// boot display's seed lives (`kf_mem::cpuwin::CpuWindow::seed`, `docs/design/V3_DISPLAY.md`
     /// §4.11.2). `None` for a host GPU VA space.
@@ -1968,6 +1979,13 @@ impl Bar1Target {
     /// and the window goes back to its boot view. Returns the window's report and the views removed.
     /// The main loop's acknowledgements of these removals are drained by the next settle.
     pub fn reset_to_boot(&self) -> (kf_mem::cpuwin::WindowReset, usize) {
+        let (_, removed) = self.sink_all();
+        (self.win.reset_to_boot(), removed)
+    }
+
+    /// ★ Review (2026-10-18): the first half of [`Bar1Target::reset_to_boot`] — every doorbell view
+    /// removed and every placement sunk to scratch, no seed placed. Idempotent.
+    pub fn sink_all(&self) -> (kf_mem::cpuwin::WindowReset, usize) {
         let views: Vec<kf_trap::bar1db::Bar1View> = self.db.borrow().views().copied().collect();
         let mut removed = 0usize;
         for v in views {
@@ -1977,7 +1995,7 @@ impl Bar1Target {
             self.db.borrow_mut().remove(v.base);
         }
         self.dead.borrow_mut().clear();
-        (self.win.reset_to_boot(), removed)
+        (self.win.sink_all(), removed)
     }
 
     /// The views currently trapped or being installed (the guest doorbell module's replay set).
@@ -2186,6 +2204,10 @@ pub struct Inbox {
     /// ★ 2026-10-18: the next memory stage scrubs the whole guest heap (a NEW OS follows: set by the
     /// reset's trigger, taken by the VA thread; deliberately NOT cleared by [`Inbox::reset_life`]).
     full_scrub: std::sync::atomic::AtomicBool,
+    /// ★ Review (2): the guest RM life the newest unload (fn 47) was seen in.
+    unload_life: AtomicU64,
+    /// ★ Review (5): the dead RM's twins' asynchronous frees, behind a barrier the unload scrub waits for.
+    pub unload_frees: crate::bootclean::FreesBarrier,
     /// ★ P1+P2 review fix (2026-10-04, §3.5): the VA thread has a walk in flight or pending, or an
     /// armed invalidate — published by it at the end of every loop ([`Inbox::set_walk_busy`]).
     walk_busy: std::sync::atomic::AtomicBool,
@@ -2219,6 +2241,8 @@ impl Inbox {
             next_ticket: AtomicU64::new(1),
             bar1_physical: AtomicU64::new(0),
             full_scrub: std::sync::atomic::AtomicBool::new(false),
+            unload_life: AtomicU64::new(0),
+            unload_frees: crate::bootclean::FreesBarrier::default(),
             walk_busy: std::sync::atomic::AtomicBool::new(false),
             walk_waiters: Mutex::new(Vec::new()),
             life_reset: crate::reset::Ack::default(),
@@ -2304,20 +2328,21 @@ impl Inbox {
     /// ★ Review (2026-10-18): the reset asked the memory stage `scrub` — a NEW OS follows a dirty
     /// store. Only a `true` arms the scrub the VA thread will take.
     pub fn memory_stage_asked(&self, scrub: bool) {
-        // RED STEP (tests first): not wired yet
-        let _ = scrub;
+        if scrub {
+            self.set_full_scrub();
+        }
     }
 
     /// ★ Review (2): the guest RM life an unload (fn 47) was seen in — the drainer stores it with
     /// the request, the VA thread's unload scrub checks it before it zeroes.
     pub fn set_unload_life(&self, life: u64) {
-        let _ = life;
+        self.unload_life.store(life, Ordering::Release);
     }
 
     /// The life [`Inbox::set_unload_life`] stored.
     #[must_use]
     pub fn unload_life(&self) -> u64 {
-        0
+        self.unload_life.load(Ordering::Acquire)
     }
 
     /// ★ 2026-10-18: the reset's trigger — a NEW OS follows, the memory stage scrubs the heap.
@@ -3172,23 +3197,18 @@ fn retire_association(mirrors: &Mirrors, key: VasKey) -> Result<Mirror, String> 
 
 /// ★★ **Device reset, stage Memory** (`docs/design/V3_DEVICE_RESET.md` §3), on the VA thread, once
 /// no walk is in flight (`VaManager::abandon_life` said so) and after the channel plane freed every
-/// guest client (so no mirror has a live channel). Returns the boot log's line.
+/// guest client (so no mirror has a live channel). Three steps, driven by [`crate::memreset::Driver`]
+/// (only the scrub is retried):
 ///
-/// 1. The invalidate port reads idle (its armed request abandoned, never completed) and PRAMIN
-///    shows scratch.
-/// 2. Every guest VA-space object is RETIRED through the guest's own path ([`retire_mirror`]: its
-///    rows unmapped, its host space recycled as a spare or freed, its walker slot emptied).
-/// 3. OUR two roots and the boot framebuffer `[0, G)` are zeroed on the GPU, as realize zeroed
-///    them (the guest's BAR PDEs and its last console must not greet the next life).
-/// 4. The BAR1/BAR2 objects are re-registered: a FRESH walker slot each (§9 ResetWalkerState — the
-///    next life's first diff maps everything), their windows back to the boot view (BAR1's seed
-///    placed again), their roots set as realize set them.
-pub fn reset_memory_life(
-    m: &mut Manager,
-    plane: &MemPlane,
-    rm: &'static HostRm,
-    full_scrub: bool,
-) -> MemoryReset {
+/// 1. [`reset_memory_prepare`]: the invalidate port reads idle (its armed request abandoned, never
+///    completed), PRAMIN shows scratch, every guest VA-space object is RETIRED through the guest's own
+///    path ([`retire_mirror`]), and every BAR1/BAR2 CPU view of the old life is SUNK to scratch —
+///    so no view of the old life's bytes exists while the store is scrubbed.
+/// 2. [`scrub_store`] (a reboot only): the whole store zeroed on the GPU, the completion awaited.
+/// 3. [`reset_memory_finish`]: OUR two roots and the boot framebuffer `[0, G)` zeroed (awaited), the
+///    BAR1/BAR2 objects re-registered with a FRESH walker slot each (§9 ResetWalkerState), their
+///    windows back to the boot view (BAR1's seed placed again), their roots set as realize set them.
+pub fn reset_memory_prepare(m: &mut Manager, plane: &MemPlane, rm: &'static HostRm) -> String {
     let abandoned = plane.port.reset();
     plane.reset_pramin();
     let mut retired = 0usize;
@@ -3204,36 +3224,77 @@ pub fn reset_memory_life(
             retired = retired.saturating_add(1);
         }
     }
+    // ★ Review (2026-10-18): every CPU view of the old life goes to scratch BEFORE any scrub, so a
+    // vCPU that resumes at the main loop's bound sees no store through BAR1/BAR2 while it is zeroed.
+    let mut sunk = Vec::new();
+    for key in [K_BAR1, K_BAR2] {
+        if let Some(t) = m.table.target(key)
+            && let Some((w, views)) = t.sink_all()
+        {
+            sunk.push(format!(
+                "{}: {} placement(s) sunk, {} kept, {} doorbell view(s) removed{}",
+                if key == K_BAR1 { "BAR1" } else { "BAR2" },
+                w.unmapped,
+                w.kept,
+                views,
+                w.first_refusal.map_or(String::new(), |e| format!(" (refused: {e})"))
+            ));
+        }
+    }
+    let mirrors_left = plane.mirrors.lock().map_or(usize::MAX, |mm| mm.len());
+    format!(
+        "invalidate {}, PRAMIN scratch, {retired} VA space(s) retired, {} KEPT{}{}, mirrors left {mirrors_left}; views sunk [{}]",
+        if abandoned { "abandoned (armed)" } else { "idle" },
+        kept.len(),
+        if kept.is_empty() { "" } else { ": " },
+        kept.join("; "),
+        sunk.join("; ")
+    )
+}
+
+/// ★ 2026-10-18 (`crate::scrub`): a guest REBOOT — the whole store `[0, fb_length)` zeroed on the
+/// GPU and the completion awaited (the guest's CPU views were sunk by [`reset_memory_prepare`]; the
+/// walker's own structures live in host GPU memory outside the store). `Err`: the store is NOT
+/// clean.
+///
+/// # Errors
+/// The refusal, by name.
+pub fn scrub_store(m: &Manager, plane: &MemPlane) -> Result<String, String> {
+    let t0 = std::time::Instant::now();
+    let layout = kf_chip::bar0::fb_layout(plane.fb_len).ok_or("no store layout")?;
+    let boot = m
+        .table
+        .target(K_BAR1)
+        .and_then(Target::cpu_window)
+        .and_then(CpuWindow::boot_range)
+        .map(|(_, off, len)| (off, len));
+    let p = crate::scrub::plan(&layout, crate::scrub::Cause::Reset, boot);
+    crate::scrub::run(
+        &p,
+        &mut crate::scrub::WalkZeroer(&m.walker().kernel),
+        &std::sync::atomic::AtomicU64::new(0),
+    )
+    .map(|n| {
+        format!(
+            "; NEW OS: the whole store scrubbed on the GPU ({n} bytes, completion awaited, {} ms)",
+            t0.elapsed().as_millis()
+        )
+    })
+    .map_err(|e| e.to_string())
+}
+
+/// ★ The last step: our two roots and the boot framebuffer zeroed AND AWAITED (a pageable
+/// `cuMemcpyHtoD` may return before the DMA landed), the BAR windows back to the boot view.
+pub fn reset_memory_finish(
+    m: &mut Manager,
+    plane: &MemPlane,
+    prepared: &str,
+) -> crate::memreset::Finished {
     let boot = m
         .table
         .target(K_BAR1)
         .and_then(Target::cpu_window)
         .and_then(CpuWindow::boot_range);
-    // ★ 2026-10-18 (`crate::scrub`): a NEW OS follows (a system reset) — every guest-allocatable
-    // byte is zeroed on the GPU and the completion awaited, here, with the vCPUs paused and the
-    // gate closed. A refusal is returned to the caller, which keeps the gate closed.
-    let scrub: Result<Option<(u64, u128)>, String> = if full_scrub {
-        let t0 = std::time::Instant::now();
-        match kf_chip::bar0::fb_layout(plane.fb_len) {
-            None => Err("no store layout".to_string()),
-            Some(layout) => {
-                let p = crate::scrub::plan(
-                    &layout,
-                    crate::scrub::Cause::Reset,
-                    boot.map(|(_, off, len)| (off, len)),
-                );
-                crate::scrub::run(
-                    &p,
-                    &mut crate::scrub::WalkZeroer(&m.walker().kernel),
-                    &std::sync::atomic::AtomicU64::new(0),
-                )
-                .map(|n| Some((n, t0.elapsed().as_millis())))
-                .map_err(|e| e.to_string())
-            }
-        }
-    } else {
-        Ok(None)
-    };
     let mut zero_refused = Vec::new();
     {
         let k = &m.walker().kernel;
@@ -3256,11 +3317,10 @@ pub fn reset_memory_life(
                 }
                 at = at.saturating_add(n.max(1));
             }
-            // ★ 2026-10-18: the zero above is awaited (a pageable cuMemcpyHtoD may return before the
-            // DMA landed): the boot layer is shown again only after this completed.
-            if let Err(e) = k.sync_store() {
-                zero_refused.push(format!("completion of the boot framebuffer zero: {e}"));
-            }
+        }
+        // the zeros above are awaited: the boot layer is shown again only after this completed
+        if let Err(e) = k.sync_store() {
+            zero_refused.push(format!("completion of the root and boot framebuffer zero: {e}"));
         }
     }
     let mut windows = Vec::new();
@@ -3284,44 +3344,39 @@ pub fn reset_memory_life(
             windows.push(format!("{key:?}: root {root:#x} REFUSED: {e:?}"));
         }
     }
-    let mirrors_left = plane.mirrors.lock().map_or(usize::MAX, |mm| mm.len());
-    // ★ 2026-10-18: the boot framebuffer was zeroed with no refusal — the boot layer may be shown.
     let boot_zeroed = zero_refused.is_empty();
-    let scrub_text = match &scrub {
-        Ok(None) => String::new(),
-        Ok(Some((n, ms))) => format!("; NEW OS: guest heap scrubbed on the GPU ({n} bytes, completed in {ms} ms)"),
-        Err(e) => format!("; NEW OS: {e}"),
-    };
     let line = format!(
-        "device reset: memory plane — invalidate {}, PRAMIN scratch, {retired} VA space(s) retired, {} KEPT{}{}, mirrors left {mirrors_left}; roots and boot framebuffer zeroed{}; {}",
-        if abandoned { "abandoned (armed)" } else { "idle" },
-        kept.len(),
-        if kept.is_empty() { "" } else { ": " },
-        kept.join("; "),
+        "device reset: memory plane — {prepared}; roots and boot framebuffer zeroed{}; {}",
         if zero_refused.is_empty() {
             String::new()
         } else {
             format!(" (REFUSED: {})", zero_refused.join("; "))
         },
         windows.join("; ")
-    ) + &scrub_text;
-    MemoryReset {
-        line,
-        boot_zeroed,
-        scrub: scrub.map(|_| ()),
-    }
+    );
+    crate::memreset::Finished { line, boot_zeroed }
 }
 
-/// What the memory stage of a device reset did.
-#[derive(Debug)]
-pub struct MemoryReset {
-    /// The boot log's line.
-    pub line: String,
-    /// The boot framebuffer's zero was accepted (the boot layer may be shown again).
-    pub boot_zeroed: bool,
-    /// `Err`: a scrub a NEW OS needed was refused or incomplete — the store is NOT clean, the reset
-    /// must not be acknowledged and the guest's next life must not start.
-    pub scrub: Result<(), String>,
+/// ★ The VA thread's memory plane as [`crate::memreset::Ops`].
+pub struct VaMemOps<'a> {
+    /// The VA manager.
+    pub m: &'a mut Manager,
+    /// The memory plane.
+    pub plane: &'a MemPlane,
+    /// The host RM session.
+    pub rm: &'static HostRm,
+}
+
+impl crate::memreset::Ops for VaMemOps<'_> {
+    fn prepare(&mut self) -> String {
+        reset_memory_prepare(self.m, self.plane, self.rm)
+    }
+    fn scrub(&mut self) -> Result<String, String> {
+        scrub_store(self.m, self.plane)
+    }
+    fn finish(&mut self, prepared: &str) -> crate::memreset::Finished {
+        reset_memory_finish(self.m, self.plane, prepared)
+    }
 }
 
 fn retire_mirror(m: &mut Manager, plane: &MemPlane, rm: &'static HostRm, key: VasKey) -> String {
@@ -3574,6 +3629,17 @@ mod tests {
         i.memory_stage_asked(true);
         assert!(i.take_full_scrub(), "a reboot arms it");
         assert!(!i.take_full_scrub(), "taken once");
+    }
+
+    /// A later reset that owes no scrub never disarms one a refused attempt still owes.
+    #[test]
+    fn a_stage_that_owes_no_scrub_never_disarms_an_owed_one() {
+        let i = Inbox::new().expect("eventfd");
+        i.memory_stage_asked(true);
+        i.memory_stage_asked(false);
+        assert!(i.take_full_scrub(), "the owed scrub is still armed");
+        i.memory_stage_asked(false);
+        assert!(!i.take_full_scrub(), "and nothing arms by itself");
     }
 
     /// ★ Review (2): the unload's life travels from the drainer to the VA thread.

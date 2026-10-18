@@ -70,17 +70,24 @@ impl BootClean {
     /// A guest RM life BEGINS (fn 72): the generation moves on and the range is tainted. Returns
     /// the new generation.
     pub fn begin_life(&self) -> u64 {
-        // RED STEP (tests first): the generation is not bumped yet
+        let next = self.life.fetch_add(1, Ordering::AcqRel).saturating_add(1);
         self.taint();
-        self.generation()
+        next
     }
 
     /// A scrub asked in life `life_id` completed: clean the range only if no newer life began since.
     /// Returns whether it cleaned.
     pub fn clean_if(&self, life_id: u64) -> bool {
-        // RED STEP (tests first): the generation is not checked yet
-        let _ = life_id;
+        if self.generation() != life_id {
+            return false;
+        }
         self.clean();
+        // fn 72 racing between the check and the store: `begin_life` bumps BEFORE it taints, so a
+        // bump seen now means our clean may have overwritten its taint — put it back
+        if self.generation() != life_id {
+            self.taint();
+            return false;
+        }
         true
     }
 
@@ -131,15 +138,17 @@ pub trait BootSink {
 /// ★ The drainer saw guest RPC `function`: fn 72 (`GSP_SET_SYSTEM_INFO`), the first RPC of every RM
 /// life and before any heap use, begins a life and taints the range.
 pub fn on_rpc<S: BootSink>(sink: &S, function: kf_gsp::RpcFunction) {
-    // RED STEP (tests first)
-    let _ = (sink, function);
+    if function == kf_gsp::RpcFunction::GspSetSystemInfo {
+        sink.begin_life();
+    }
 }
 
 /// ★ A reset's memory stage finished: the boot layer may come back only if the boot framebuffer's
 /// zero was accepted AND awaited.
 pub fn after_memory_stage<S: BootSink>(sink: &S, boot_zeroed: bool) {
-    // RED STEP (tests first)
-    let _ = (sink, boot_zeroed);
+    if boot_zeroed {
+        sink.scrubbed();
+    }
 }
 
 /// What the unload's scrub did.
@@ -158,8 +167,9 @@ pub enum UnloadScrub {
 /// ★ The unload's scrub finished (or not) for the unload asked in life `life_id`: the boot layer comes
 /// back only after a scrub that COMPLETED and only if no newer life began since.
 pub fn after_unload_scrub<S: BootSink>(sink: &S, life_id: u64, outcome: UnloadScrub) {
-    // RED STEP (tests first)
-    let _ = (sink, life_id, outcome);
+    if outcome == UnloadScrub::Done {
+        sink.scrubbed_if(life_id);
+    }
 }
 
 /// ★ Review (2026-10-18): the unload's scrub must wait for the dead RM's twins to be FREED — the
@@ -187,8 +197,7 @@ impl FreesBarrier {
     /// Every free asked for so far has completed.
     #[must_use]
     pub fn is_open(&self) -> bool {
-        // RED STEP (tests first)
-        true
+        self.done.load(Ordering::Acquire) >= self.requested.load(Ordering::Acquire)
     }
 }
 
@@ -323,5 +332,28 @@ mod tests {
         assert!(b.is_open());
         b.done(a);
         assert!(b.is_open(), "a late duplicate never closes it");
+    }
+
+    /// A failed or stale unload scrub leaves the taint standing (the boot layer stays hidden).
+    #[test]
+    fn a_failed_unload_scrub_leaves_the_boot_layer_hidden() {
+        let r = Rec::default();
+        let life = r.boot.begin_life();
+        after_unload_scrub(&r, life, UnloadScrub::Failed);
+        assert!(!r.boot.is_clean());
+        assert!(r.calls.borrow().is_empty(), "the display was never told: {:?}", r.calls.borrow());
+        after_unload_scrub(&r, life, UnloadScrub::Done);
+        assert!(r.boot.is_clean(), "and a completed one brings it back");
+    }
+
+    /// fn 72 hides the boot layer, and only a completed scrub brings it back.
+    #[test]
+    fn fn_72_hides_the_boot_layer_until_a_scrub_completed() {
+        let r = Rec::default();
+        assert!(r.boot.is_clean());
+        on_rpc(&r, kf_gsp::RpcFunction::GspSetSystemInfo);
+        assert!(!r.boot.is_clean(), "an RM life began: the range is its memory");
+        after_memory_stage(&r, true);
+        assert!(r.boot.is_clean());
     }
 }

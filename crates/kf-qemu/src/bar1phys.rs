@@ -171,6 +171,7 @@ pub fn bounded(n: u64, max: u64, family: &str) -> bool {
 /// win. The log line, or `None` for a window that never had a boot framebuffer (`gop=off`).
 ///
 /// ⊘ This does not scrub; production calls [`restore_physical_view_scrubbed`].
+#[cfg(test)]
 pub(crate) fn restore_physical_view<V: kf_mem::cpuwin::ViewOps>(
     w: &kf_mem::cpuwin::CpuWindow<V>,
     at_change: u64,
@@ -192,7 +193,8 @@ pub(crate) fn restore_physical_view<V: kf_mem::cpuwin::ViewOps>(
 /// simpledrm, Windows' basic display) can never be wiped by this zero.
 ///
 /// - The seed is ALREADY placed (no RM ever took BAR1): the guest's firmware console is writing
-///   the store right now — nothing is scrubbed.
+///   the store right now — nothing is scrubbed, UNLESS `tainted` (fn 72 began an RM life that died
+///   before it took BAR1: the range holds its bytes and nothing else would ever clean it).
 /// - BAR1 changed after the request (an RM holds BAR1 again): nothing is scrubbed — that is a new
 ///   RM life, and it owns the range.
 /// - The reseed is REFUSED because guest placements still overlap the range (`[measured]` every
@@ -215,9 +217,11 @@ pub fn restore_physical_view_scrubbed<V: kf_mem::cpuwin::ViewOps>(
             now.wrapping_sub(at_change)
         ));
     }
-    // RED STEP (tests first): `tainted` is not used yet
-    let _ = tainted;
-    let scrubbed = if w.seeded().is_none() {
+    // `tainted`: fn 72 began an RM life that may have died before it ever took BAR1 — the seed is
+    // still placed, the range holds that RM's bytes over the console's picture, and nothing else
+    // would ever clean it. A redraw that races this zero is lost; the line says the range was
+    // scrubbed.
+    let scrubbed = if w.seeded().is_none() || tainted {
         Some(scrub(store_off, len))
     } else {
         None

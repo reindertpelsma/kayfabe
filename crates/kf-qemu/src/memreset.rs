@@ -70,9 +70,7 @@ pub enum Step {
 /// The back-off after the `n`th consecutive refusal: 50 ms, doubling, capped at 1 s.
 #[must_use]
 pub fn backoff(n: u64) -> Duration {
-    // RED STEP (tests first)
-    let _ = n;
-    Duration::ZERO
+    Duration::from_millis(50u64.saturating_mul(1u64 << n.saturating_sub(1).min(5)).min(1000))
 }
 
 /// The driver's state across the VA thread's passes.
@@ -89,11 +87,46 @@ impl Driver {
     /// One pass for reset `epoch`. `scrub`: the reset asked for the scrub (it stays owed across
     /// passes until it completed).
     pub fn step(&mut self, epoch: u64, scrub: bool, ops: &mut impl Ops, now: Instant) -> Step {
-        // RED STEP (tests first): everything in one go, no retry logic
-        let _ = (epoch, scrub, now);
-        let p = ops.prepare();
-        let note = ops.scrub().unwrap_or_default();
-        let f = ops.finish(&p);
+        if epoch != self.episode {
+            // a new reset: its own failure count, its own prepare (the old prepare covered a
+            // different life), no back-off carried over
+            self.episode = epoch;
+            self.failures = 0;
+            self.retry_at = None;
+            self.prepared = None;
+        }
+        self.scrub_owed |= scrub;
+        if let Some(t) = self.retry_at
+            && now < t
+        {
+            return Step::Waiting;
+        }
+        if self.prepared.is_none() {
+            self.prepared = Some(ops.prepare());
+        }
+        let mut note = String::new();
+        if self.scrub_owed {
+            match ops.scrub() {
+                Ok(n) => {
+                    self.scrub_owed = false;
+                    note = n;
+                }
+                Err(why) => {
+                    self.failures = self.failures.saturating_add(1);
+                    let retry_in = backoff(self.failures);
+                    self.retry_at = now.checked_add(retry_in);
+                    return Step::Refused {
+                        why,
+                        attempt: self.failures,
+                        retry_in,
+                    };
+                }
+            }
+        }
+        let prepared = self.prepared.take().unwrap_or_default();
+        let f = ops.finish(&prepared);
+        self.failures = 0;
+        self.retry_at = None;
         Step::Done {
             line: format!("{}{note}", f.line),
             boot_zeroed: f.boot_zeroed,

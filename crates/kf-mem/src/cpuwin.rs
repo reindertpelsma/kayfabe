@@ -504,17 +504,7 @@ impl<V: ViewOps> CpuWindow<V> {
     /// counted in [`WindowReset::kept`]; the reset goes on with the rest. VA-manager thread only,
     /// like every other verb of the window.
     pub fn reset_to_boot(&self) -> WindowReset {
-        let vas: Vec<u64> = self.placed.borrow().keys().copied().collect();
-        let mut out = WindowReset::default();
-        for va in vas {
-            match MapTarget::unmap(self, va, false) {
-                Ok(()) => out.unmapped = out.unmapped.saturating_add(1),
-                Err(e) => {
-                    out.kept = out.kept.saturating_add(1);
-                    out.first_refusal.get_or_insert(e);
-                }
-            }
-        }
+        let mut out = self.sink_all();
         out.seed = match self.reseed() {
             Ok(r) => Some(r),
             Err(e) => {
@@ -530,8 +520,18 @@ impl<V: ViewOps> CpuWindow<V> {
     /// placed. The reset's memory stage sinks the views with this BEFORE its scrub, so no CPU view of
     /// the old life's bytes exists while the store is being zeroed.
     pub fn sink_all(&self) -> WindowReset {
-        // RED STEP (tests first): nothing is sunk yet
-        WindowReset::default()
+        let vas: Vec<u64> = self.placed.borrow().keys().copied().collect();
+        let mut out = WindowReset::default();
+        for va in vas {
+            match MapTarget::unmap(self, va, false) {
+                Ok(()) => out.unmapped = out.unmapped.saturating_add(1),
+                Err(e) => {
+                    out.kept = out.kept.saturating_add(1);
+                    out.first_refusal.get_or_insert(e);
+                }
+            }
+        }
+        out
     }
 
     /// Placements the window holds (the reset's accounting; never a decision input).

@@ -1993,8 +1993,9 @@ impl Device {
         // request's notice (a change since means an RM took BAR1 again first). Two log families,
         // each with its own bound: what the boot range shows (a line only when it changes), and the
         // re-seeds.
-        let mut full_scrub_owed = false;
-        let mut scrub_failures = 0u64;
+        // ★ Review (2026-10-18): the memory stage as a driver — prepare once, the scrub retried
+        // alone with a back-off, the reset acknowledged only when every step completed
+        let mut mem_reset = crate::memreset::Driver::default();
         let mut bar1_phys = crate::bar1phys::PhysicalViewDue::default();
         // ★ 2026-10-18: the seed placed -> retired edge taints the boot range (`crate::bootclean`)
         let mut seed_watch = crate::bootclean::SeedWatch::default();
@@ -2058,8 +2059,6 @@ impl Device {
             // — polled, never waited for — and only then is the plane reset. No statement of the
             // old life is applied but its `Retire`s.
             if let Some(epoch) = self.mem.inbox.life_reset.owed() {
-                // a scrub a NEW OS needs stays owed until it SUCCEEDS (a refused one is retried)
-                full_scrub_owed |= self.mem.inbox.take_full_scrub();
                 let _ = m.abandon_life();
                 if m.in_flight() {
                     let _ = m.on_walk_ready(trigger);
@@ -2092,27 +2091,42 @@ impl Device {
                         self.mem.inbox.user_va.serve(&m, self.rm);
                         served += 1;
                     }
-                    let mr = crate::mem::reset_memory_life(&mut m, &self.mem, self.rm, full_scrub_owed);
-                    let (line, boot_zeroed) = (mr.line, mr.boot_zeroed);
-                    // ★ FAIL CLOSED: a scrub a new OS needed was refused or incomplete — the store is
-                    // not clean. The reset is NOT acknowledged (the gate stays closed, the vCPUs
-                    // wait out the main loop's bounded wait and the guest's next life does not
-                    // start on this store) and the stage is retried at the next loop pass.
-                    if let Err(why) = mr.scrub {
-                        scrub_failures = scrub_failures.saturating_add(1);
-                        if crate::reset::loud(scrub_failures) {
-                            eprintln!(
-                                "kf3: mem t={:.3}s device reset #{epoch} REFUSED, attempt {scrub_failures}: {why} — the store is NOT clean: the reset gate stays closed and the next guest life is NOT started; retrying",
-                                self.born.elapsed().as_secs_f64()
-                            );
+                    // ★ FAIL CLOSED: a scrub a new OS needs that the host refuses is NOT acknowledged —
+                    // `life_reset.done` below is reached only when every step completed, so the
+                    // reset gate stays closed. What the gate's contract does at the main loop's 2 s
+                    // bound is unchanged (`V3_DEVICE_RESET.md` §3, §6 items 1 and 12): the vCPUs
+                    // resume with BAR0 gated (writes dropped, reads all ones) and this stage keeps
+                    // retrying in the background; because the prepare step ran first, the guest's
+                    // CPU views of the store are scratch meanwhile. Only the scrub is retried, with
+                    // a bounded back-off — never the retire, the root zero or the boot zero.
+                    let step = mem_reset.step(
+                        epoch,
+                        self.mem.inbox.take_full_scrub(),
+                        &mut crate::mem::VaMemOps {
+                            m: &mut m,
+                            plane: &self.mem,
+                            rm: self.rm,
+                        },
+                        std::time::Instant::now(),
+                    );
+                    let (line, boot_zeroed) = match step {
+                        crate::memreset::Step::Waiting => continue,
+                        crate::memreset::Step::Refused { why, attempt, retry_in } => {
+                            if crate::reset::loud(attempt) {
+                                eprintln!(
+                                    "kf3: mem t={:.3}s device reset #{epoch} NOT acknowledged, scrub attempt {attempt} REFUSED: {why} — the store is NOT clean: the reset gate stays closed and the device does not open on it; retrying the scrub in {} ms",
+                                    self.born.elapsed().as_secs_f64(),
+                                    retry_in.as_millis()
+                                );
+                            }
+                            continue;
                         }
-                        continue;
-                    }
-                    full_scrub_owed = false;
+                        crate::memreset::Step::Done { line, boot_zeroed } => (line, boot_zeroed),
+                    };
                     // ★ 2026-10-18: the boot layer is shown again only once the boot framebuffer's
                     // zero COMPLETED (the display worker skips it while the range is tainted).
-                    if boot_zeroed && let Some(dp) = self.display {
-                        dp.boot_scrubbed();
+                    if let Some(dp) = self.display {
+                        crate::bootclean::after_memory_stage(dp, boot_zeroed);
                     }
                     seed_watch = crate::bootclean::SeedWatch::default();
                     last_seq = None;
@@ -2300,6 +2314,8 @@ impl Device {
             });
             if !m.in_flight()
                 && m.pending() == 0
+                // ★ Review (2026-10-18): not before the dead RM's twins are freed
+                && self.mem.inbox.unload_frees.is_open()
                 && let Some(at_change) = bar1_phys.take()
                 && let Some(line) = m
                     .table
@@ -2308,24 +2324,44 @@ impl Device {
                     .and_then(|w| {
                         // ★ 2026-10-18: the boot range is zeroed on the GPU — complete — BEFORE the
                         // seed returns (`bar1phys::restore_physical_view_scrubbed`); the boot layer
-                        // may be shown again only once that completed.
+                        // may be shown again only once that completed, and only if no newer RM life
+                        // began since this unload (fn 72 moves the generation on).
                         let kernel = &m.walker().kernel;
                         let progress = std::sync::atomic::AtomicU64::new(0);
-                        let scrub_ok = std::cell::Cell::new(false);
+                        let life = self.mem.inbox.unload_life();
+                        let (tainted, stale) = self.display.map_or((false, false), |dp| {
+                            (
+                                !dp.boot_clean.is_clean(),
+                                crate::bootclean::BootSink::generation(dp) != life,
+                            )
+                        });
+                        let outcome = std::cell::Cell::new(crate::bootclean::UnloadScrub::NotAsked);
                         let line = crate::bar1phys::restore_physical_view_scrubbed(
                             w,
                             at_change,
-                            false,
+                            tainted,
                             &mut |off, len| {
-                                crate::scrub::zero_range(kernel, off, len, &progress)
-                                    .map(|_| scrub_ok.set(true))
-                                    .map_err(|e| e.to_string())
+                                if stale {
+                                    outcome.set(crate::bootclean::UnloadScrub::StaleLife);
+                                    return Err(
+                                        "not scrubbed: a newer guest RM life began (fn 72) after this unload"
+                                            .to_string(),
+                                    );
+                                }
+                                match crate::scrub::zero_range(kernel, off, len, &progress) {
+                                    Ok(_) => {
+                                        outcome.set(crate::bootclean::UnloadScrub::Done);
+                                        Ok(())
+                                    }
+                                    Err(e) => {
+                                        outcome.set(crate::bootclean::UnloadScrub::Failed);
+                                        Err(e.to_string())
+                                    }
+                                }
                             },
                         );
-                        if scrub_ok.get()
-                            && let Some(dp) = self.display
-                        {
-                            dp.boot_scrubbed();
+                        if let Some(dp) = self.display {
+                            crate::bootclean::after_unload_scrub(dp, life, outcome.get());
                         }
                         line
                     })
@@ -3026,10 +3062,8 @@ impl Device {
             eprintln!("kf3: GSP rpc {:?} seq={}", c.function, c.sequence);
             // ★ 2026-10-18: fn 72 is the first RPC of every guest RM life — before it can allocate
             // heap. From here store [0, G) is the RM's memory, not the firmware console's.
-            if c.function == kf_gsp::RpcFunction::GspSetSystemInfo
-                && let Some(dp) = self.display
-            {
-                dp.boot_tainted();
+            if let Some(dp) = self.display {
+                crate::bootclean::on_rpc(dp, c.function);
             }
             if c.function == kf_gsp::RpcFunction::UnloadingGuestDriver {
                 pm_suspend = self.observe_unloading(c);
@@ -3073,6 +3107,13 @@ impl Device {
                 // ★ GSP-RM's own unload returns BAR1 to physical mode on a real card (the same
                 // `kbusStatePreUnload`): the second of the two triggers (`crate::bar1phys`).
                 if a.reseed_bar1 {
+                    // ★ Review (2026-10-18): the RM life this unload belongs to — the VA thread's
+                    // scrub refuses to zero or clean a NEWER life's range (fn 72 moves it on)
+                    if let Some(dp) = self.display {
+                        self.mem
+                            .inbox
+                            .set_unload_life(crate::bootclean::BootSink::generation(dp));
+                    }
                     self.mem.inbox.request_bar1_physical();
                 }
                 // ★★ 2026-10-13 (owner requirement, `docs/design/V3_DEVICE_RESET.md` §3): the
@@ -3088,7 +3129,13 @@ impl Device {
                 // statements its RM would have sent (never blocks; the host acts run on the act
                 // thread). A clean unload has freed them already: nothing is found.
                 if a.free_twins {
-                    let freed = self.chans.free_dead_clients();
+                    // ★ Review (2026-10-18): the unload's scrub waits for these frees (a channel
+                    // still running writes vidmem): a barrier act behind them opens the gate
+                    let ticket = self.mem.inbox.unload_frees.request();
+                    let inbox = self.mem.inbox.clone();
+                    let freed = self.chans.free_dead_clients_then(std::sync::Arc::new(move || {
+                        inbox.unload_frees.done(ticket);
+                    }));
                     if log && !freed.is_empty() {
                         eprintln!(
                             "kf3: GSP fn 47: the guest RM unloaded with {} client(s) still holding host objects {freed:x?} — freed (the twins are dead)",
@@ -3777,9 +3824,7 @@ impl crate::reset::Owners for Device {
     fn begin_memory(&self, epoch: u64, scrub: bool) {
         // ★ 2026-10-18 (`crate::scrub`): the reset decided a NEW OS follows a dirty store — the
         // memory stage scrubs the guest-allocatable store.
-        if scrub {
-            self.mem.inbox.set_full_scrub();
-        }
+        self.mem.inbox.memory_stage_asked(scrub);
         self.mem.inbox.life_reset.request(epoch);
         let _ = self.mem.inbox.wake.signal();
     }
