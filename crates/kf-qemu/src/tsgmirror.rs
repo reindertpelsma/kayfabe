@@ -1464,7 +1464,17 @@ mod tests {
         assert_eq!((e.status, e.class), (NV_ERR_NO_MEMORY, RefusalClass::Cap));
         assert!(e.why.contains("64"), "{}", e.why);
         assert_eq!((rig.host.live(), rig.host.ops().len()), (live, ops), "refused before any host call");
+    }
+
+    /// Nothing is recorded for the refused 65th: the map still holds 64 and the TSG keeps working.
+    #[test]
+    fn the_refused_sixty_fifth_leaves_the_map_at_sixty_four() {
+        let mut rig = full_tsg();
+        assert!(rig.birth(req(CLIENT, TSG, 0x2000, 1, 0x30)).unwrap_err().is_ok());
         assert_eq!(rig.map.ctx_count(CLIENT, TSG), 64);
+        rig.free(63).unwrap();
+        assert_eq!(rig.map.ctx_count(CLIENT, TSG), 63);
+        rig.birth(req(CLIENT, TSG, 0x2000, 1, 0x30)).unwrap(); // a slot is free again
     }
 
     // ---------------------------------------------------------------- unwinding
