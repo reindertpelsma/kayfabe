@@ -1,0 +1,8 @@
+258:kf3: GSP rpc GspSetSystemInfo seq=0
+805:kf3: boot display seed [0x0, +0x7f0000) retired at the first change: no placement inside it (no console adopted); 0x7f0000 bytes re-pointed to scratch
+1207:kf3: mem t=10.114s BAR1 boot framebuffer [0x0, +0x7f0000) after BAR1 change #2: guest views [(0, 10000, Some(1ea320000))]; 0x7e0000 bytes show SCRATCH
+17121:kf3: mem t=438.794s the guest wrote NV_PBUS_BAR1_BLOCK = 0x0 (MODE PHYSICAL) at GSP phase Running
+17122:kf3: mem t=438.795s BAR1's physical view REFUSED: boot framebuffer [0x0, +0x7f0000): 56 placement(s) of the guest's still overlap it (first 0x0+0x10000 -> Some(1ea320000)) — BAR1's physical view not restored
+17126:kf3: GSP fn 47 UNLOADING_GUEST_DRIVER seq=0: bInPMTransition=false bGc6Entering=false newLevel=64 — the guest's RM gives BAR1 up
+17127:kf3: mem t=438.795s BAR1's physical view REFUSED: boot framebuffer [0x0, +0x7f0000): 56 placement(s) of the guest's still overlap it (first 0x0+0x10000 -> Some(1ea320000)) — BAR1's physical view not restored
+17144:kf3: display: +438796 ms the console shows the BOOT layer (store 0x0, 1920x1080) (core channel FREE)

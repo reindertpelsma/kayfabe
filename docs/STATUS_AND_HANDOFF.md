@@ -1058,6 +1058,22 @@ implemented. Late conversion and relay-only edits do not solve the observed case
 
 ## 0. Current resumption — start here
 
+**STATUS: RESEARCH, 2026-10-18 — L5 boot-layer follow-up** on
+`codex/bootlayer-followup-20261018`, from `claude/bootlayer-20261018` `0dbcc8a14`.
+MEASURED (GPU-free): failing-first tests and two-test-killed mutants cover a live
+boot seed surviving scrub preparation (`8eb188452`) and a detected stale unload
+re-seeding a new RM life (`c81bd42d4`). Final three-crate tests: 795 pass / 0 fail /
+6 ignored (base: 791 pass / 6 ignored). CODE READ: the run-3081
+Windows overlaps predate that same RM's unload; fn 47 never retired K_BAR1. A safe
+fix needs ordered CPU-view/root/walker retirement that excludes later RM work;
+O1 remains open. The C-only taint change remains an owner decision, and generation
+sampling/frees publication and host-refused preparation need stronger guarantees.
+Findings, exact evidence, validation counts and decisions:
+[`traces/bootlayer_followup_20261018/`](../traces/bootlayer_followup_20261018/FINDINGS.md).
+The [`scripts/bench/bootlayer/`](../scripts/bench/bootlayer/README.md) host plan was
+syntax-checked only; its external store-read adapter still needs identification.
+No new hardware verification, integration merge or Windows console-return claim.
+
 **Win11 USER ring, 2026-10-14 (branch `claude/win11-userring-20261014`, evidence `traces/win11_userring_20261014/`).**
 Host-side fixes, GPU-free tests green (kf-chan, kf-qemu 259, kf-disp 150, kf-rm 148); Windows verification pending
 (the VM was the owner's). (a) **Edge/YouTube TDR** [measured cause, `0c5fedff`]: the kernel NVDEC ring had no T-mode

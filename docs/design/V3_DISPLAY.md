@@ -1,6 +1,6 @@
 # V3 display — a virtual NVIDIA display the stock driver drives, scanned out by kayfabe
 
-**STATUS: LIVE, 2026-10-18 — §4.11.13 gains the boot-range cleanliness rule (below it: `bootclean`): the boot layer is shown only while store `[0, G)` is clean.** Measured on run 3081: the stripes on the boot screen and after an unload are the guest RM's own GPU-written vidmem, drawn as pixels — the region table declares `[0, carve)` as heap unless the guest reserves a console (Windows sent none), so the RM allocates the same low addresses every life, while the boot layer kept scanning `[0, G)` until a head was armed. Every Windows unload of the run also had its re-seed REFUSED (56 guest placements still over BAR1 `[0, G)`).
+**STATUS: LIVE, 2026-10-18 — L5 follow-up at §4.11.13 records stale-reseed handling and the open Windows/console decisions; §4.11.13 gains the boot-range cleanliness rule (below it: `bootclean`): the boot layer is shown only while store `[0, G)` is clean.** Measured on run 3081: the stripes on the boot screen and after an unload are the guest RM's own GPU-written vidmem, drawn as pixels — the region table declares `[0, carve)` as heap unless the guest reserves a console (Windows sent none), so the RM allocates the same low addresses every life, while the boot layer kept scanning `[0, G)` until a head was armed. Every Windows unload of the run also had its re-seed REFUSED (56 guest placements still over BAR1 `[0, G)`).
 
 **STATUS: LIVE, 2026-10-14 — the Linux plane oracle: [`V3_DISPLAY_PLANES_ORACLE.md`](V3_DISPLAY_PLANES_ORACLE.md).**
 A stock-nvidia-drm overlay test reproduced the "plane flip never completes" class and a bare-metal AD104 reference
@@ -1854,6 +1854,19 @@ committed `.efi`; the arch-neutral ROM: EFI machine type from the PE, x86 port I
 and the Windows arm in the bench scripts (B10); SPDX headers on the existing kf3 overlay files
 (`OWNER_RULINGS.md` §G, task I7).
 
+
+**L5 follow-up, 2026-10-18 (CODE READ, GPU-free changes only).** The Windows overlap
+refusal in run 3081 names the same first mapping installed during that RM's init; no new
+fn 72 intervened. Fn 47 leaves the memory plane intact. Keep the overlap guard: removing
+only CPU placements would leave the GPU walker's committed ledger wrong. An ordered
+unload transaction and a Windows Basic Display retest remain open. A stale-life scrub
+refusal now also prevents re-seeding; ordinary host scrub refusals still permit it.
+The one-time generation check does not exclude a later fn 72 racing an in-flight zero.
+C-only taint relaxation stays undecided: NVKMS sends `NOTIFY_CONSOLE_DISABLED` at modeset,
+whose handler is absent from the public 580.159.04 source. Findings, source citations and
+owner options: [`L5 follow-up`](../../traces/bootlayer_followup_20261018/FINDINGS.md).
+The [host capture plan](../../scripts/bench/bootlayer/README.md) has not been run; its
+store-read adapter still needs the host lane's existing diagnostic path.
 
 ⊘ **UPDATED 2026-10-18 (branch `claude/bootlayer-20261018`, `crates/kf-qemu/src/bootclean.rs`) — read before the text below.** The boot layer is
 chosen only while store `[0, G)` is CLEAN. It is **tainted** by fn 72 (the first RPC of every guest RM life, before any heap use; a

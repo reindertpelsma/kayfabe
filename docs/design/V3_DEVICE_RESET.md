@@ -1,6 +1,6 @@
 # V3 — the device reset: every guest life starts on the device realize left
 
-**STATUS: LIVE (code), 2026-10-13; ⊘ 2026-10-18: the memory stage scrubs the whole store on a guest REBOOT (§6 item 14, `docs/OWNER_RULINGS.md` §AM) — GPU-free tested only — PARTLY MEASURED ON HARDWARE (§11: Linux fast guest, binary
+**STATUS: LIVE (code), 2026-10-18 (L5 follow-up: live boot seed sunk before scrub preparation; §6 item 14 records the remaining host-map-refusal limit); ⊘ 2026-10-18: the memory stage scrubs the whole store on a guest REBOOT (§6 item 14, `docs/OWNER_RULINGS.md` §AM) — GPU-free tested only — PARTLY MEASURED ON HARDWARE (§11: Linux fast guest, binary
 `c9ac4e77`, ABI 27); the bounded wait (ABI 28) and D4 are GPU-free tested only.** Branch
 `claude/device-reset-20261013` (off `integration/prod-candidate-20261013` @ `342d319d9`). §8 is the
 hardware plan. Measured = a GPU-free test here (named in §7) or a hardware run (§11, the coordinator's);
@@ -232,14 +232,26 @@ registration) makes every reset report `NOT EMPTY`.
    reuses a dead client's handle; the free acts queue in statement order ahead of any next-life
    birth. [inferred]
 
-14. **The reboot scrub is refused (2026-10-18).** A system reset from the main loop is a NEW OS over a store
+14. **L5 follow-up, 2026-10-18 (CODE READ / GPU-free MEASURED).** Scrub preparation
+   now also retires a still-live boot seed: a reboot can precede the first BAR1 change or
+   follow an unload/reseed. The seed is outside the guest-placement ledger; two failing-first
+   `cpuwin` tests and a two-test-killed mutant cover these paths. `reset_to_boot` keeps its
+   already-shown/idempotent behavior. **Remaining limit (CODE READ):**
+   `reset_memory_prepare` records a host-refused scratch map as KEPT text, then the driver
+   continues; the no-CPU-view guarantee below is conditional on every sink succeeding.
+   Preparation needs an explicit success/refusal result before that host-failure path can
+   claim fail closed after the main-loop wait bound. No timing policy was changed.
+   Full findings/options: [`bootlayer follow-up`](../../traces/bootlayer_followup_20261018/FINDINGS.md);
+   executable host plan: [`scripts/bench/bootlayer`](../../scripts/bench/bootlayer/README.md).
+
+   **The reboot scrub is refused (2026-10-18).** A system reset from the main loop is a NEW OS over a store
    the old one dirtied; the memory stage zeroes the whole store on the GPU and awaits the completion
    (`crate::scrub`, `crate::memreset`). If the host refuses a chunk or the completion: the reset is **not
    acknowledged** (`life_reset.done` is reached only when every step completed), so the reset never reaches
    Finish and the gate stays closed; one loud line names the range (bounded), and **only the scrub is
    retried**, with a 50 ms..1 s back-off — never the retire, the root zero or the boot zero. The prepare step
-   (mirrors retired, every BAR1/BAR2 CPU view sunk to scratch) ran first, so the guest never has a CPU view of
-   the half-zeroed store. At the main loop's 2 s bound (failure mode 12, UNCHANGED contract) the vCPUs resume
+   (mirrors retired, BAR1/BAR2 CPU views requested to sink to scratch) ran first; when those sinks
+   succeed, the guest has no CPU view of the half-zeroed store. At the main loop's 2 s bound (failure mode 12, UNCHANGED contract) the vCPUs resume
    with BAR0 gated and the stage keeps retrying in the background; a guest that boots meanwhile sees a dead
    device, not an unscrubbed store. The scrub is owed for every system reset after the machine-creation
    reset: the store is dirty from the moment the gate first opens, because BAR1 (the live boot seed), BAR2,
