@@ -2580,6 +2580,25 @@ pub struct MemPlane {
     spares: Mutex<Vec<Spare>>,
 }
 
+/// The production [`crate::ramreg::RamRegistrar`]: the guest memfd (populated with `fallocate`)
+/// and its whole-file view (registered as one OS descriptor with the host RM).
+struct HostRamRegistrar<'a> {
+    rm: &'static HostRm,
+    fd: std::os::fd::BorrowedFd<'a>,
+    view: &'static kf_linux_raw::MappedRegion,
+}
+
+impl crate::ramreg::RamRegistrar for HostRamRegistrar<'_> {
+    fn populate(&self, off: u64, len: u64) -> Result<(), String> {
+        kf_linux_raw::populate_range(self.fd, off, len).map_err(|e| format!("{e:?}"))
+    }
+    fn register(&self, len: u64) -> Result<u32, String> {
+        self.rm
+            .alloc_os_descriptor(self.view, HostOffset::new(0), len)
+            .map_err(|e| format!("{e:?}"))
+    }
+}
+
 impl MemPlane {
     /// Build the windows, their scratch and the PRAMIN pool (views armed HERE, off the vCPU).
     ///
@@ -2710,11 +2729,21 @@ impl MemPlane {
                 )
                 .map_err(|e| format!("guest memfd view of {len:#x}: {e:?}"))?;
                 let view: &'static kf_linux_raw::MappedRegion = Box::leak(Box::new(view));
-                let obj = rm
-                    .alloc_os_descriptor(view, HostOffset::new(0), len)
-                    .map_err(|e| format!("guest-RAM OS descriptor of {len:#x}: {e:?}"))?;
-                eprintln!("kf3: guest-RAM object {obj:#x} over {len:#x} bytes of the guest memfd");
-                Ok((obj, len))
+                let reg = crate::ramreg::register_guest_ram(
+                    &HostRamRegistrar {
+                        rm,
+                        fd: borrowed,
+                        view,
+                    },
+                    len,
+                )
+                .map_err(|e| format!("guest-RAM OS descriptor of {len:#x}: {e}"))?;
+                eprintln!(
+                    "kf3: guest-RAM object {:#x} over {len:#x} bytes of the guest memfd \
+                     (populate {} us: {:?}; registration {} us)",
+                    reg.obj, reg.populate_us, reg.populate, reg.register_us
+                );
+                Ok((reg.obj, len))
             },
         )
     }

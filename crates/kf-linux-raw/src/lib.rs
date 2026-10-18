@@ -308,7 +308,7 @@ pub use epoll_unsafe::{MAX_READY_BATCH, PollTimeout, Poller, ReadyTokens};
 pub use error::RawError;
 pub use host_fd_unsafe::{
     Carrier, DMA_BUF_MAGIC, Notifier, SharedRam, TMPFS_MAGIC, descriptor_budget, fd_carrier,
-    fd_inode, fs_magic, udmabuf_create,
+    fd_inode, fs_magic, hole_bytes, populate_range, udmabuf_create,
 };
 pub use kvm_unsafe::{Kvm, KvmMemslot, KvmVm};
 pub use mapping_unsafe::{

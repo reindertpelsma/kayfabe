@@ -320,6 +320,93 @@ pub fn fs_magic(fd: BorrowedFd<'_>) -> Result<i64, RawError> {
     Ok(st.f_type as i64)
 }
 
+/// ★ Allocate (populate) the bytes `[off, off+len)` of a shmem-backed file NOW, with
+/// `fallocate(fd, 0, ..)` — so a LATER pin of those bytes (the host RM's OS-descriptor
+/// registration, which pins under the process's mmap lock) walks present pages instead of
+/// faulting in and zeroing them under that lock.
+///
+/// Never takes the mmap lock; the cost is page allocation + zeroing in the caller's own context,
+/// proportional to `len` — so a caller bounds it by calling in named-size chunks. Bytes that are
+/// already present are skipped, never rewritten (`mode 0` does not touch existing data), so a
+/// guest writing the range concurrently is not disturbed. Size, seals and offset of the file are
+/// untouched.
+///
+/// # Errors
+/// [`RawError::TooLargeForHost`] (an `off_t` overflow), [`RawError::Syscall`] — typically
+/// `EOPNOTSUPP`/`EINVAL`/`ESPIPE`/`EBADF` for a backing that cannot be populated this way
+/// (a caller treats that as "leave the pages to the pin", never as fatal), `ENOSPC` when the host
+/// is out of memory, `EINTR` on a fatal signal.
+///
+/// # Panics
+/// If called with any ranked lock held, or from a leaf context.
+pub fn populate_range(fd: BorrowedFd<'_>, off: u64, len: u64) -> Result<(), RawError> {
+    lockwitness::assert_lock_free("fallocate (populating a guest-RAM backing)");
+    leafwitness::assert_leaf_free("fallocate (populating a guest-RAM backing)");
+    let o = libc::off_t::try_from(off).map_err(|_| RawError::TooLargeForHost { value: off })?;
+    let l = libc::off_t::try_from(len).map_err(|_| RawError::TooLargeForHost { value: len })?;
+    // SAFETY: `fallocate` takes the descriptor, an integer mode and two checked `off_t` values
+    // by value and dereferences no user memory; `fd` is a live borrowed descriptor.
+    let rc = unsafe { libc::fallocate(fd.as_raw_fd(), 0, o, l) };
+    if rc != 0 {
+        return Err(last_syscall_error("fallocate"));
+    }
+    Ok(())
+}
+
+/// ★ How many bytes of `[0, len)` of the file behind `fd` are HOLES (unallocated), by
+/// `SEEK_DATA`/`SEEK_HOLE` — the instrument that proves a [`populate_range`] reached everywhere.
+///
+/// It seeks on a FRESH open of `/proc/self/fd/<fd>`, never on `fd` itself, so the caller's (or
+/// QEMU's) file offset is not moved.
+///
+/// # Errors
+/// [`RawError::Syscall`] (`open` of the proc path or `lseek`), [`RawError::TooLargeForHost`].
+///
+/// # Panics
+/// If called with any ranked lock held, or from a leaf context.
+pub fn hole_bytes(fd: BorrowedFd<'_>, len: u64) -> Result<u64, RawError> {
+    lockwitness::assert_lock_free("lseek(SEEK_HOLE) (a backing's holes)");
+    leafwitness::assert_leaf_free("lseek(SEEK_HOLE) (a backing's holes)");
+    let end = libc::off_t::try_from(len).map_err(|_| RawError::TooLargeForHost { value: len })?;
+    let file = std::fs::File::open(format!("/proc/self/fd/{}", fd.as_raw_fd())).map_err(|e| {
+        RawError::Syscall {
+            call: "open(/proc/self/fd)",
+            errno: e.raw_os_error(),
+        }
+    })?;
+    let raw = file.as_raw_fd();
+    let seek = |pos: libc::off_t, whence: libc::c_int| -> Result<Option<libc::off_t>, RawError> {
+        // SAFETY: `lseek` takes integers by value and dereferences no user memory; `raw` is the
+        // descriptor of `file`, alive for the whole function.
+        let r = unsafe { libc::lseek(raw, pos, whence) };
+        if r >= 0 {
+            return Ok(Some(r));
+        }
+        match std::io::Error::last_os_error().raw_os_error() {
+            Some(libc::ENXIO) => Ok(None),
+            errno => Err(RawError::Syscall {
+                call: "lseek",
+                errno,
+            }),
+        }
+    };
+    let mut holes: u64 = 0;
+    let mut pos: libc::off_t = 0;
+    while pos < end {
+        let Some(data) = seek(pos, libc::SEEK_DATA)? else {
+            holes += u64::try_from(end - pos).unwrap_or(0);
+            break;
+        };
+        let data = data.min(end);
+        holes += u64::try_from(data - pos).unwrap_or(0);
+        pos = match seek(data, libc::SEEK_HOLE)? {
+            Some(h) => h.min(end),
+            None => end,
+        };
+    }
+    Ok(holes)
+}
+
 /// ★ What a descriptor PROVES to be, by the display broker's own two proofs in the broker's order
 /// (nvkvm-pv `badf2d7`, `src/broker/nvkvm_broker.c:1228-1360`) — [`fd_carrier`].
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -947,5 +1034,72 @@ mod tests {
             "holding rank 0 while declaring only rank 1 must panic — an under-lock \
              variant that accepts any lock is not an exception, it is an exemption"
         );
+    }
+
+    // ---- populate_range / hole_bytes ----------------------------------------------------
+
+    const PG: u64 = 4096;
+
+    #[test]
+    fn hole_bytes_of_a_fresh_memfd_is_everything_and_populate_removes_it() {
+        let ram = SharedRam::create_named(c"kfu-populate-1", 64 * PG).expect("memfd");
+        let fd = ram.as_backing_fd();
+        assert_eq!(hole_bytes(fd, 64 * PG).expect("holes"), 64 * PG);
+        populate_range(fd, 8 * PG, 16 * PG).expect("populate");
+        assert_eq!(hole_bytes(fd, 64 * PG).expect("holes"), 48 * PG);
+        populate_range(fd, 0, 64 * PG).expect("populate all (overlaps the present part)");
+        assert_eq!(hole_bytes(fd, 64 * PG).expect("holes"), 0);
+        assert_eq!(ram.len_bytes(), 64 * PG, "the size is untouched");
+    }
+
+    #[test]
+    fn populate_does_not_rewrite_bytes_that_are_already_present() {
+        let ram = SharedRam::create_named(c"kfu-populate-2", 16 * PG).expect("memfd");
+        let map = MappedRegion::map(
+            Backing::SharedFile {
+                fd: ram.as_backing_fd(),
+                offset: 0,
+            },
+            16 * PG,
+            HostProt::ReadWrite,
+            CachePolicy::WriteBack,
+            HostPageSize::query(),
+        )
+        .expect("map");
+        map.write_from(HostOffset::new(5 * PG), &[0xA5; 16])
+            .expect("write");
+        populate_range(ram.as_backing_fd(), 0, 16 * PG).expect("populate");
+        let mut back = [0u8; 16];
+        map.read_into(HostOffset::new(5 * PG), &mut back)
+            .expect("read");
+        assert_eq!(
+            back, [0xA5; 16],
+            "mode-0 fallocate must not zero present data"
+        );
+    }
+
+    #[test]
+    fn hole_bytes_does_not_move_the_callers_file_offset() {
+        use std::io::{Seek, SeekFrom};
+        let ram = SharedRam::create_named(c"kfu-populate-3", 8 * PG).expect("memfd");
+        let mut f = std::fs::File::from(ram.as_backing_fd().try_clone_to_owned().expect("dup"));
+        f.seek(SeekFrom::Start(3 * PG)).expect("seek");
+        let _ = hole_bytes(ram.as_backing_fd(), 8 * PG).expect("holes");
+        assert_eq!(f.stream_position().expect("pos"), 3 * PG);
+    }
+
+    #[test]
+    fn populate_on_a_backing_that_cannot_is_a_named_syscall_error() {
+        let null = std::fs::OpenOptions::new()
+            .write(true)
+            .open("/dev/null")
+            .expect("/dev/null");
+        match populate_range(null.as_fd(), 0, PG) {
+            Err(RawError::Syscall {
+                call: "fallocate",
+                errno: Some(_),
+            }) => {}
+            other => panic!("expected a fallocate Syscall error, got {other:?}"),
+        }
     }
 }

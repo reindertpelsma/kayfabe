@@ -27,6 +27,7 @@ pub mod hostfacts;
 pub mod latejoin;
 pub mod mem;
 pub mod prof;
+pub mod ramreg;
 pub mod raw_unsafe;
 pub mod readtrace;
 pub mod reset;
