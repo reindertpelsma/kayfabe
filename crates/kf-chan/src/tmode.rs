@@ -720,7 +720,7 @@ fn gr_write(
     m: u32,
     v: u32,
 ) -> Result<(), Refusal> {
-    use crate::grtables::{Disposition, GrClass, gr_method, reauthor, report_semaphore};
+    use crate::grtables::{Disposition, GrClass, gr_method, reauthor_in_class, report_semaphore};
     let gc = GrClass::of_class(class).ok_or(Refusal::ForeignClass { subch: sub, class })?;
     // ★ Batch 3: the 3D report-semaphore rows are per family (the class id decides), the rest per kind.
     match report_semaphore(class, m).unwrap_or_else(|| gr_method(gc, m)) {
@@ -731,13 +731,14 @@ fn gr_write(
             name,
         }),
         Disposition::Allowed(row) => {
-            let word = reauthor(&row, v).map_err(|what| Refusal::GrField {
-                class,
-                method: m,
-                word: v,
-                name: row.name,
-                what,
-            })?;
+            let word =
+                reauthor_in_class(Some(class), &row, v).map_err(|what| Refusal::GrField {
+                    class,
+                    method: m,
+                    word: v,
+                    name: row.name,
+                    what,
+                })?;
             st.gr_methods += 1;
             match row.field {
                 crate::grtables::Field::AddressUpper8 => {
@@ -2075,7 +2076,7 @@ mod f2_tests {
     use super::*;
 
     fn assert_address_pair(class: u32, upper: u32, lower: u32, bytes: u64) {
-        for hi in [0x100, 0x1ff_ffff] {
+        for hi in [0x100, 0x01ff_ffff] {
             let mut state = TState::default();
             let mut out = Vec::new();
             gr_write(&mut out, &mut state, 0, class, upper, hi)
@@ -2136,12 +2137,12 @@ mod f2_tests {
 
     #[test]
     fn f2_hopper_refuses_upper_bit_25() {
-        assert_upper_refused(0xcb97, 0x104, 0x200_0000);
-        assert_upper_refused(0xcb97, 0x1b00, 0x200_0000);
+        assert_upper_refused(0xcb97, 0x104, 0x0200_0000);
+        assert_upper_refused(0xcb97, 0x1b00, 0x0200_0000);
     }
 
     #[test]
     fn f2_blackwell_compute_refuses_upper_bit_25() {
-        assert_upper_refused(0xcdc0, 0x104, 0x200_0000);
+        assert_upper_refused(0xcdc0, 0x104, 0x0200_0000);
     }
 }
