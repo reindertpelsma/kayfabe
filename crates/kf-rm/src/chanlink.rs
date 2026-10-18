@@ -1445,7 +1445,9 @@ impl ChannelPolicy {
             declared_kernel_pid: self.kernel_clients.contains(&h.client),
             tsg: tsg.map(|_| h.parent),
             ctx_share: f.h_ctx_share,
-            ctx: None,
+            ctx: (f.h_ctx_share != 0)
+                .then(|| self.ctxshares.get(&(h.client, f.h_ctx_share)).copied())
+                .flatten(),
             device,
             error_notifier: self
                 .abi
@@ -2324,6 +2326,10 @@ impl ChannelPolicy {
         } else {
             self.tsgs.remove(&(client, object));
             self.ctxshares.remove(&(client, object));
+            // RM frees the dependants of a TSG: its ctxshares go with it, so a TSG handle reused
+            // later cannot inherit a ctxshare that names the old TSG as its parent.
+            self.ctxshares
+                .retain(|k, v| !(k.0 == client && v.parent == object));
             // ★ Only the DEVICE's free forgets its default VAS. The VASpace handle itself is a
             // transient NAME (`index = GPU_DEVICE`, "acquire reference to device vaspace",
             // `nvos.h:3187`): RM allocs it, publishes the PDEs, and FREES it — `[measured p5c]`

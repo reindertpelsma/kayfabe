@@ -155,16 +155,54 @@ pub struct Release {
 ///
 /// # Errors
 /// The refusal of a bit no real guest sets (design 10.2).
-pub fn host_rq1(_guest_flags: u32) -> Result<bool, Refusal> {
-    Ok(false)
+pub fn host_rq1(guest_flags: u32) -> Result<bool, Refusal> {
+    // CHANNEL_TYPE 1:0 (obsolete), VPR / CC_SECURE 2, SET_EVICT_LAST_CE_PREFETCH 25, VGPU_PLUGIN_CONTEXT 26:
+    // set by no real guest (absent from every CHAN-FACTS word on record), and each carries a meaning the
+    // host must not grant. THREAD (29:28) = 3 is not a defined value.
+    const REFUSED: u32 = 0b111 | (1 << 25) | (1 << 26);
+    let bad = guest_flags & REFUSED;
+    if bad != 0 {
+        return Err(Refusal {
+            status: NV_ERR_INVALID_ARGUMENT,
+            class: RefusalClass::Flag,
+            why: format!(
+                "channel flags {guest_flags:#x}: bit(s) {bad:#x} (CHANNEL_TYPE/VPR/CC_SECURE/EVICT_LAST_CE_PREFETCH/VGPU_PLUGIN_CONTEXT) are never forwarded and no guest sets them"
+            ),
+        });
+    }
+    if (guest_flags >> 28) & 3 == 3 {
+        return Err(Refusal {
+            status: NV_ERR_INVALID_ARGUMENT,
+            class: RefusalClass::Flag,
+            why: format!("channel flags {guest_flags:#x}: GROUP_CHANNEL_THREAD = 3 is not a defined value"),
+        });
+    }
+    // The one forwarded bit: GROUP_CHANNEL_RUNQUEUE (4). Every other bit is the guest RM's own business
+    // (PRIVILEGED 5, DELAY_CHANNEL_SCHEDULING 6, the USERD index fields, SKIP_SCRUBBER 23, THREAD 0..2, ...):
+    // consumed, never forwarded.
+    Ok(guest_flags & (1 << 4) != 0)
 }
 
 /// A guest ctxshare flag word to the host kind.
 ///
 /// # Errors
 /// A flag word that is not one of the four values (`kernel_ctxshare.c:442-446`).
-pub fn decode_kind(_flags: u32, _subctx_id: u32) -> Result<SubctxKind, Refusal> {
-    Ok(SubctxKind::Sync)
+pub fn decode_kind(flags: u32, subctx_id: u32) -> Result<SubctxKind, Refusal> {
+    // 0 SYNC, 1 ASYNC, 2 SPECIFIED, 3 ASYNC_PREFER_LOWER; the guest RM compares the whole word.
+    match flags {
+        0 => Ok(SubctxKind::Sync),
+        1 | 3 => Ok(SubctxKind::Async),
+        2 => Ok(if subctx_id == 0 {
+            SubctxKind::Sync
+        } else {
+            SubctxKind::Async
+        }),
+        _ => Err(Refusal {
+            status: NV_ERR_INVALID_ARGUMENT,
+            class: RefusalClass::Flag,
+            why: format!("ctxshare flags {flags:#x}: not one of SYNC/ASYNC/SPECIFIED/ASYNC_PREFER_LOWER"),
+        }),
+    }
 }
 
 /// The group map. Touched by acts only (serialised on the act thread).
@@ -201,50 +239,244 @@ impl GroupMap {
         }
     }
 
-    /// Decide a channel's birth. Pure.
+    fn key(&self, client: u32, tsg: u32, ctx_share: u32) -> Key {
+        (client, tsg, if self.mirror_on { 0 } else { ctx_share })
+    }
+
+    /// Decide a channel's birth. Pure: reads the map, changes nothing.
     ///
     /// # Errors
     /// The named refusal.
     pub fn plan(&self, r: &Req) -> Result<Plan, Refusal> {
-        let key = (r.client, r.tsg, 0);
-        let _ = (r, &self.groups);
-        Ok(Plan::Legacy { key, join: None })
+        let key = self.key(r.client, r.tsg, r.ctx_share);
+        let refuse = |status, class, why: String| Err(Refusal { status, class, why });
+        let g = self.groups.get(&key);
+        if !self.mirror_on || r.ctx_share == 0 {
+            // LEGACY: the base decision - join the group that stands for (client, tsg[, ctx]), or birth one.
+            if g.is_some_and(|g| g.mode == Mode::Explicit) {
+                return refuse(
+                    NV_ERR_INVALID_ARGUMENT,
+                    RefusalClass::Mode,
+                    format!(
+                        "{:#x}:{:#x}: a legacy channel (hContextShare 0) in a TSG whose first channel named a context share (explicit); host RM refuses the mix (0x1f)",
+                        r.client, r.tsg
+                    ),
+                );
+            }
+            return Ok(Plan::Legacy {
+                key,
+                join: g.map(|g| g.tsg),
+            });
+        }
+        // EXPLICIT
+        let Some(ctx) = r.ctx else {
+            return refuse(
+                NV_ERR_OBJECT_NOT_FOUND,
+                RefusalClass::CtxUnknown,
+                format!(
+                    "{:#x}:{:#x}: channel names context share {:#x}, which this link never saw allocated",
+                    r.client, r.tsg, r.ctx_share
+                ),
+            );
+        };
+        if ctx.parent != r.tsg {
+            return refuse(
+                NV_ERR_INVALID_ARGUMENT,
+                RefusalClass::Mode,
+                format!(
+                    "{:#x}: context share {:#x} belongs to TSG {:#x}, not to the channel's TSG {:#x}",
+                    r.client, r.ctx_share, ctx.parent, r.tsg
+                ),
+            );
+        }
+        let kind = decode_kind(ctx.flags, ctx.subctx_id)?;
+        let rq1 = host_rq1(r.flags)?;
+        let Some(g) = g else {
+            return Ok(Plan::Explicit(ExplicitPlan {
+                key,
+                ctx_share: r.ctx_share,
+                kind,
+                rq1,
+                space: r.space,
+                engine: r.engine,
+                join_tsg: None,
+                ctx_host: None,
+            }));
+        };
+        if g.mode == Mode::Legacy {
+            return refuse(
+                NV_ERR_INVALID_ARGUMENT,
+                RefusalClass::Mode,
+                format!(
+                    "{:#x}:{:#x}: a channel naming context share {:#x} in a TSG whose first channel did not (legacy); host RM refuses the mix (0x1f)",
+                    r.client, r.tsg, r.ctx_share
+                ),
+            );
+        }
+        if g.engine != r.engine {
+            return refuse(
+                NV_ERR_INVALID_ARGUMENT,
+                RefusalClass::Mode,
+                format!(
+                    "{:#x}:{:#x}: channel engine {:#x} in a TSG on engine {:#x}; host RM refuses it (0x1f)",
+                    r.client, r.tsg, r.engine, g.engine
+                ),
+            );
+        }
+        let ctx_host = match g.ctxs.get(&r.ctx_share) {
+            Some(c) => {
+                if c.kind != kind || c.space != r.space {
+                    return refuse(
+                        NV_ERR_INVALID_ARGUMENT,
+                        RefusalClass::Mode,
+                        format!(
+                            "{:#x}:{:#x}: context share {:#x} named again with other facts ({:?} space {:#x} vs {:?} space {:#x}) while members live",
+                            r.client, r.tsg, r.ctx_share, kind, r.space, c.kind, c.space
+                        ),
+                    );
+                }
+                Some(c.host)
+            }
+            None => {
+                if g.ctxs.len() >= MAX_SUBCTX_PER_TSG {
+                    return refuse(
+                        NV_ERR_NO_MEMORY,
+                        RefusalClass::Cap,
+                        format!(
+                            "{:#x}:{:#x}: context share {:#x} would be subcontext {} of one TSG; host RM holds {MAX_SUBCTX_PER_TSG} (1 SYNC + 63 ASYNC)",
+                            r.client,
+                            r.tsg,
+                            r.ctx_share,
+                            g.ctxs.len() + 1
+                        ),
+                    );
+                }
+                if kind == SubctxKind::Sync && g.ctxs.values().any(|c| c.kind == SubctxKind::Sync) {
+                    return refuse(
+                        NV_ERR_NO_MEMORY,
+                        RefusalClass::Cap,
+                        format!(
+                            "{:#x}:{:#x}: a second SYNC context share ({:#x}); a TSG has exactly one SYNC subcontext (VEID 0), host RM answers 0x51",
+                            r.client, r.tsg, r.ctx_share
+                        ),
+                    );
+                }
+                None
+            }
+        };
+        Ok(Plan::Explicit(ExplicitPlan {
+            key,
+            ctx_share: r.ctx_share,
+            kind,
+            rq1,
+            space: r.space,
+            engine: r.engine,
+            join_tsg: Some(g.tsg),
+            ctx_host,
+        }))
     }
 
-    /// A legacy birth landed.
-    pub fn commit_legacy(&mut self, _key: Key, _tsg: u32, _engine: u32) {}
+    /// A legacy birth landed (the base's `entry(k).and_modify(+1).or_insert((tsg, 1))`).
+    pub fn commit_legacy(&mut self, key: Key, tsg: u32, engine: u32) {
+        self.groups
+            .entry(key)
+            .and_modify(|g| g.members = g.members.saturating_add(1))
+            .or_insert(Group {
+                tsg,
+                mode: Mode::Legacy,
+                engine,
+                members: 1,
+                ctxs: BTreeMap::new(),
+            });
+    }
 
     /// An explicit birth landed.
-    pub fn commit_explicit(&mut self, _plan: &ExplicitPlan, _born: &Born) {}
+    pub fn commit_explicit(&mut self, plan: &ExplicitPlan, born: &Born) {
+        let g = self.groups.entry(plan.key).or_insert(Group {
+            tsg: born.tsg,
+            mode: Mode::Explicit,
+            engine: plan.engine,
+            members: 0,
+            ctxs: BTreeMap::new(),
+        });
+        g.members = g.members.saturating_add(1);
+        g.ctxs
+            .entry(plan.ctx_share)
+            .or_insert(Ctx {
+                host: born.ctx_host,
+                kind: plan.kind,
+                space: plan.space,
+                members: 0,
+            })
+            .members += 1;
+    }
 
-    /// A member's host channel was (or is being) freed: what else the host must free.
+    /// A member's host channel was (or is being) freed: what else the host must free, in order. The map is
+    /// updated now (as the base does) so a refused host free cannot decrement twice. `strict` is the
+    /// private-ring rule: a channel of another host group than the entry's never decrements it.
     pub fn release(
         &mut self,
-        _client: u32,
-        _guest_tsg: u32,
-        _ctx_share: u32,
-        _chan_tsg: u32,
-        _strict: bool,
+        client: u32,
+        guest_tsg: u32,
+        ctx_share: u32,
+        chan_tsg: u32,
+        strict: bool,
     ) -> Release {
-        Release::default()
+        let key = self.key(client, guest_tsg, ctx_share);
+        let Some(g) = self.groups.get_mut(&key) else {
+            // no entry: free the channel's own group (the base's fallback)
+            return Release {
+                free_ctx: None,
+                free_group: true,
+            };
+        };
+        if strict && g.tsg != chan_tsg {
+            return Release::default();
+        }
+        let mut free_ctx = None;
+        if g.mode == Mode::Explicit
+            && let Some(c) = g.ctxs.get_mut(&ctx_share)
+        {
+            c.members = c.members.saturating_sub(1);
+            if c.members == 0 {
+                free_ctx = Some(c.host);
+                g.ctxs.remove(&ctx_share);
+            }
+        }
+        if g.members > 1 {
+            g.members -= 1;
+            return Release {
+                free_ctx,
+                free_group: false,
+            };
+        }
+        self.groups.remove(&key);
+        Release {
+            free_ctx,
+            free_group: true,
+        }
     }
 
     /// The guest TSG is mirrored explicitly.
     #[must_use]
-    pub fn is_explicit(&self, _client: u32, _tsg: u32) -> bool {
-        false
+    pub fn is_explicit(&self, client: u32, tsg: u32) -> bool {
+        self.mirror_on
+            && self
+                .groups
+                .get(&(client, tsg, 0))
+                .is_some_and(|g| g.mode == Mode::Explicit)
     }
 
     /// A joiner into this guest TSG needs the authored late-joiner schedule (legacy groups only).
     #[must_use]
-    pub fn late_schedule_needed(&self, _client: u32, _tsg: u32) -> bool {
-        true
+    pub fn late_schedule_needed(&self, client: u32, tsg: u32) -> bool {
+        !self.is_explicit(client, tsg)
     }
 
     /// Groups held.
     #[must_use]
     pub fn len(&self) -> usize {
-        0
+        self.groups.len()
     }
 
     /// No groups.
@@ -256,7 +488,10 @@ impl GroupMap {
     /// The clients that hold a group.
     #[must_use]
     pub fn clients(&self) -> Vec<u32> {
-        Vec::new()
+        let mut v: Vec<u32> = self.groups.keys().map(|k| k.0).collect();
+        v.sort_unstable();
+        v.dedup();
+        v
     }
 
     /// Forget everything (a device reset).
@@ -266,14 +501,16 @@ impl GroupMap {
 
     /// Host ctxshares of the guest TSG.
     #[must_use]
-    pub fn ctx_count(&self, _client: u32, _tsg: u32) -> usize {
-        0
+    pub fn ctx_count(&self, client: u32, tsg: u32) -> usize {
+        self.groups
+            .get(&(client, tsg, 0))
+            .map_or(0, |g| g.ctxs.len())
     }
 
-    /// The host group standing for a guest TSG (legacy shard 0 / explicit).
+    /// The host group standing for a guest TSG (the shard-0 group).
     #[must_use]
-    pub fn host_tsg(&self, _client: u32, _tsg: u32) -> Option<u32> {
-        None
+    pub fn host_tsg(&self, client: u32, tsg: u32) -> Option<u32> {
+        self.groups.get(&(client, tsg, 0)).map(|g| g.tsg)
     }
 }
 
@@ -332,29 +569,89 @@ pub struct BirthFail {
     pub unwind_failed: u32,
 }
 
-/// Run the explicit birth of `plan`.
+/// Run the explicit birth of `plan`: TSG (if new) -> ctxshare (if new) -> channel; every step's failure frees what
+/// THIS birth made and nothing else, newest first.
 ///
 /// # Errors
-/// [`BirthFail`]; everything this call created is freed first.
+/// [`BirthFail`].
 pub fn birth_explicit<H: ExplicitHost>(
-    _host: &H,
-    _plan: &ExplicitPlan,
-    _ring: RingSpec,
-    _subdevice_id: Option<u32>,
+    host: &H,
+    plan: &ExplicitPlan,
+    ring: RingSpec,
+    subdevice_id: Option<u32>,
 ) -> Result<Born, BirthFail> {
-    Err(BirthFail {
-        step: "unimplemented",
-        err: String::new(),
-        unwind_failed: 0,
-    })
+    let fail = |step, e: H::Err, unwind_failed| BirthFail {
+        step,
+        err: format!("{e:?}"),
+        unwind_failed,
+    };
+    let (tsg, group_new) = match plan.join_tsg {
+        Some(t) => (t, false),
+        None => (
+            host.group_new(plan.space, plan.engine)
+                .map_err(|e| fail("group", e, 0))?,
+            true,
+        ),
+    };
+    let (ctx_host, ctx_new, veid) = match plan.ctx_host {
+        Some(c) => (c, false, None),
+        None => match host.ctx_new(tsg, plan.space, plan.kind) {
+            Ok(c) => (c.handle, true, Some(c.veid)),
+            Err(e) => {
+                let mut failed = 0;
+                if group_new && host.group_free(tsg).is_err() {
+                    failed += 1;
+                }
+                return Err(fail("ctxshare", e, failed));
+            }
+        },
+    };
+    match host.member_new(
+        tsg,
+        plan.engine,
+        ring,
+        group_new,
+        subdevice_id,
+        Placement {
+            ctxshare: ctx_host,
+            runqueue1: plan.rq1,
+        },
+    ) {
+        Ok(chan) => Ok(Born {
+            chan,
+            tsg,
+            ctx_host,
+            group_new,
+            ctx_new,
+            veid,
+        }),
+        Err(e) => {
+            let mut failed = 0;
+            if ctx_new && host.ctx_free(ctx_host).is_err() {
+                failed += 1;
+            }
+            if group_new && host.group_free(tsg).is_err() {
+                failed += 1;
+            }
+            Err(fail("channel", e, failed))
+        }
+    }
 }
 
-/// Free a member and then what `rel` says, in order. All steps are attempted.
+/// Free a member and then what `rel` says, in order: channel, ctxshare, TSG. All steps are attempted (the base does
+/// `r.and(free(tsg))`); the first refusal is returned.
 ///
 /// # Errors
 /// The first refusal.
-pub fn free_member<H: ExplicitHost>(_host: &H, _chan: Channel, _rel: Release) -> Result<(), H::Err> {
-    Ok(())
+pub fn free_member<H: ExplicitHost>(host: &H, chan: Channel, rel: Release) -> Result<(), H::Err> {
+    let a = host.member_free(chan);
+    let b = rel.free_ctx.map_or(Ok(()), |c| host.ctx_free(c));
+    let c = if rel.free_group {
+        host.group_free(chan.tsg)
+    } else {
+        Ok(())
+    };
+    a.and(b).and(c)
 }
 
 /// Counters, in the `chan[...]` status line. Plain atomics: bounded by construction.
@@ -383,13 +680,32 @@ pub struct Stats {
 impl Stats {
     /// Count a refusal.
     pub fn note(&self, r: &Refusal) {
-        let _ = (r, Ordering::Relaxed);
+        match r.class {
+            RefusalClass::Mode => &self.mode_refused,
+            RefusalClass::Flag => &self.flag_refused,
+            RefusalClass::CtxUnknown => &self.ctx_unknown,
+            RefusalClass::Cap => &self.cap_refused,
+        }
+        .fetch_add(1, Ordering::Relaxed);
     }
 
     /// The status-line fragment.
     #[must_use]
     pub fn summary(&self) -> String {
-        String::new()
+        let o = Ordering::Relaxed;
+        format!(
+            "mirror=[{} groups={} ctx_created={} ctx_freed={} mode_refused={} flag_refused={} ctx_unknown={} cap_refused={} latejoin_skipped={} unwind_failed={}]",
+            if enabled() { "on" } else { "OFF(KF3_TSG_MIRROR=0)" },
+            self.groups.load(o),
+            self.ctx_created.load(o),
+            self.ctx_freed.load(o),
+            self.mode_refused.load(o),
+            self.flag_refused.load(o),
+            self.ctx_unknown.load(o),
+            self.cap_refused.load(o),
+            self.latejoin_skipped.load(o),
+            self.unwind_failed.load(o),
+        )
     }
 }
 
@@ -1105,7 +1421,7 @@ mod tests {
         rig.host.fail_nth("member_free", 1);
         assert_eq!(rig.free(0), Err(0x1a));
         // ctxshare and TSG were still attempted (the base does `r.and(free(tsg))`)
-        assert_eq!(&rig.host.ops()[2..], ["ctx_free", "group_free"]);
+        assert_eq!(&rig.host.ops()[3..], ["ctx_free", "group_free"]);
     }
 
     /// Handle reuse after free: the same guest ctxshare handle with other facts makes a NEW host ctxshare.

@@ -1160,8 +1160,8 @@ impl DriverAbiTable {
         let p = classes::NvCtxshareAllocationParameters::decode(bytes)?;
         Ok(CtxShareAllocFacts {
             h_vaspace: p.h_va_space,
-            flags: 0,
-            subctx_id: 0,
+            flags: p.flags,
+            subctx_id: p.subctx_id,
         })
     }
 
