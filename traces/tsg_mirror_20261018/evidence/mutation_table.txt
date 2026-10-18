@@ -1,0 +1,13 @@
+MUTATION M1 forward every guest bit: 2 failing: tsgmirror::tests::hostile_flag_words_never_widen tsgmirror::tests::single_bits_are_classified_per_the_table
+MUTATION M2 drop legacy-into-explicit refusal: 2 failing: tsgmirror::tests::a_refused_legacy_channel_leaves_the_explicit_group_untouched tsgmirror::tests::mixed_mode_is_refused_by_name_both_ways
+MUTATION M3 drop explicit-into-legacy refusal: 2 failing: tsgmirror::tests::a_refused_explicit_channel_leaves_the_legacy_group_untouched tsgmirror::tests::mixed_mode_is_refused_by_name_both_ways
+MUTATION M4 ctxshare never freed: 2 failing: tsgmirror::tests::a_refused_channel_free_still_frees_the_rest_and_reports_the_first_error tsgmirror::tests::free_order_is_channel_then_ctxshare_then_tsg_and_never_kills_a_channel
+MUTATION M5 no ctx unwind on channel failure: 2 failing: tsgmirror::tests::a_failing_unwind_step_is_counted_not_hidden tsgmirror::tests::host_refusal_at_the_channel_step_frees_the_new_ctx_and_group_but_not_old_ones
+MUTATION M7 shard ignores kill switch: 2 failing: tsgmirror::tests::kill_switch_makes_the_base_decisions_for_ctxshare_scripts tsgmirror::tests::kill_switch_restores_the_per_ctxshare_groups
+MUTATION M8 space contradiction unchecked: 2 failing: tsgmirror::tests::a_space_contradiction_makes_no_host_call tsgmirror::tests::unknown_ctxshare_parent_mismatch_engine_and_space_contradictions_are_refused
+MUTATION M9 TSG BIND flag always false: 3 failing: tsgmirror::tests::cuda_like_single_ctxshare_tsg tsgmirror::tests::d3d12_order_four_channels_three_subcontexts_one_tsg tsgmirror::tests::vulkan_order_graphics_sync_plus_async_compute_with_runqueue
+MUTATION M10 runqueue dropped in host request: 2 failing: channel::tsg_mirror_tests::a_placed_request_encodes_the_runqueue_bit_and_ctxshare_on_the_wire channel::tsg_mirror_tests::a_placement_sets_the_ctxshare_and_only_the_runqueue_bit
+MUTATION M11 chanlink ctx always None: 2 failing: chanlink::tests::a_channel_carries_the_facts_of_the_ctxshare_it_names chanlink::tests::a_freed_ctxshare_is_forgotten
+MUTATION M12 late schedule skipped for all: 2 failing: tsgmirror::tests::d3d12_order_four_channels_three_subcontexts_one_tsg tsgmirror::tests::late_joiner_schedule_is_skipped_only_for_explicit_joiners
+MUTATION M6 cap off by one: 2 failing: tsgmirror::tests::the_refused_sixty_fifth_leaves_the_map_at_sixty_four tsgmirror::tests::the_sixty_fifth_subcontext_is_refused_by_name
+MUTATION M13 channel-level schedule row removed: 2 failing: hostabi::tests::the_channel_level_gpfifo_schedule_is_a_listed_host_control hostabi::tests::the_channel_level_gpfifo_schedule_is_carried_not_refused_at_both_hosts
