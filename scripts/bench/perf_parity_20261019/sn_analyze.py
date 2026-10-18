@@ -63,6 +63,7 @@ t_lo = allp[a_i] + TRIM * TICK; t_hi = allp[b_i] - TRIM * TICK
 W = (t_hi - t_lo) / TICK
 inw = lambda t: t_lo <= t <= t_hi
 out = {'tag': tag, 'pid': PID, 'window_s': round(W, 3), 'rows': nrows, 'heavy_queues': len(heavy)}
+out['window_filetime_100ns'] = [int(t_lo), int(t_hi)]
 
 # --- frames: SOFTWARE packets with bPresent on the target
 pres = sorted(e[0] for e in E178 if e[1] == PID and e[10] == 'true' and 'SOFTWARE' in e[5] and inw(e[0]))
