@@ -1345,7 +1345,10 @@ tests: `crates/kf-qemu/src/scrub.rs` (the event table), `memreset.rs` (the memor
 5. **Fail closed:** a scrub the host refuses, or whose completion it refuses, is never acknowledged: the reset
    gate stays closed, the stage retries the scrub alone with a back-off, and the device does not open on an
    unclean store (`docs/design/V3_DEVICE_RESET.md` §6 item 14). A reboot that arrives while a guest-issued reset
-   runs still scrubs (a dirty bit, not a one-shot mark, drives it).
+   runs still scrubs (a dirty bit, not a one-shot mark, drives it). **The store counts as dirty as soon as the gate first
+   opens** (the guest runs from there, and its BAR1/BAR2/PRAMIN/DMA writes are invisible to the device; owner, 2026-10-18),
+   so every system reset after the machine-creation reset scrubs, even if no BAR0 access was ever admitted; only that
+   creation reset (pristine) is skipped.
 6. **Boot layer (display policy, not a reason to scrub):** the boot layer is shown only while store `[0, G)` is
    clean; a guest RM life (fn 72) taints it, only a completed scrub of the range cleans it. See §4.11.13.
 7. **Not yet measured:** the scrub's wall time (the log line carries it); hardware verification is the checklist

@@ -227,9 +227,13 @@ pub struct Reset {
     /// scrubbed since. Set BEFORE the request is counted; cleared only by a Memory stage that
     /// completed WITH the scrub, or by a pristine completion over a clean store (the start-up reset).
     new_os_pending: std::sync::atomic::AtomicBool,
-    /// ★ 2026-10-18 (review B1): the store may hold a guest life's bytes — set when a guest access is
-    /// admitted ([`Reset::touched`]), cleared ONLY when a Memory stage with the scrub completed.
-    /// Unlike `touched` it is not consumed by a reset that scrubbed nothing.
+    /// ★ 2026-10-18 (review B1; owner decision on finding 1): the store may hold a guest life's
+    /// bytes. Set when the gate OPENS after any reset (the guest runs from there, and its BAR1,
+    /// BAR2, PRAMIN and DMA writes are invisible to the device) and on every admitted guest access
+    /// ([`Reset::touched`], for a device whose creation reset never ran); cleared ONLY while a Memory
+    /// stage with the scrub is acknowledged, and set again at the next open. Unlike `touched` it is
+    /// not consumed by a reset that scrubbed nothing. Only a reset that completes before the guest
+    /// ever ran (machine creation) finds it clean.
     store_dirty: std::sync::atomic::AtomicBool,
     /// Wake requests (status line) and runs that kept a PM-suspended life.
     from_wake: AtomicU64,
@@ -468,6 +472,12 @@ impl Reset {
         }
         let epoch = r.epoch;
         self.enter(r, Stage::Idle);
+        // ★ Owner decision, 2026-10-18: the gate opens, so the guest RUNS from here — and anything
+        // it does through BAR1 (the seed over `[0, G)`, a CPU view), BAR2, PRAMIN or DMA is
+        // invisible to this device. The store is dirty from now on, even if no BAR0 access is ever
+        // admitted; only a reset that completed before the guest ever ran (machine creation) found
+        // it clean. Set BEFORE the open is visible.
+        self.store_dirty.store(true, Ordering::SeqCst);
         self.completed.store(epoch, Ordering::Release);
         // ⊘ A request racing this open (its close before the open, its count after the load) leaves
         // the gate open until the next poll, whose first step closes it again: the writes in between
@@ -1262,6 +1272,10 @@ mod tests {
         let o = Arc::new(SyncOwners::default());
         let stop = Arc::new(AtomicBool::new(false));
         let d = drainer(r.clone(), o.clone(), stop.clone());
+        // A pristine reset (the machine's own at creation) is done at once, asking no owner.
+        let e = r.request_from(false);
+        assert_eq!(r.wait_completed(e, WAIT_BOUND), Waited::Done);
+        assert_eq!(o.finished.load(Ordering::SeqCst), 0, "no owner asked");
         r.touched();
         let e = r.request_from(false);
         let t0 = std::time::Instant::now();
@@ -1269,11 +1283,13 @@ mod tests {
         assert!(t0.elapsed() < WAIT_BOUND);
         assert!(!r.gate.is_closed(), "the gate is open before the vCPUs resume");
         assert_eq!(o.finished.load(Ordering::SeqCst), 1);
-        assert!(r.status().contains("main=1 vcpu=0"), "{}", r.status());
-        // A pristine reset (the machine's own at creation) is done at once.
+        assert!(r.status().contains("main=2 vcpu=0"), "{}", r.status());
+        // ⊘ 2026-10-18 (owner, finding 1): a system reset after the gate opened is no longer
+        // pristine even with no admitted access — the guest ran, and its BAR1/DMA writes are
+        // invisible — so it takes the full sequence and scrubs.
         let e = r.request_from(false);
         assert_eq!(r.wait_completed(e, WAIT_BOUND), Waited::Done);
-        assert_eq!(o.finished.load(Ordering::SeqCst), 1, "no owner asked");
+        assert_eq!(o.finished.load(Ordering::SeqCst), 2, "the guest ran in between: a full reset");
         stop.store(true, Ordering::SeqCst);
         d.join().expect("drainer");
     }

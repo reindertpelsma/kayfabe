@@ -241,7 +241,9 @@ registration) makes every reset report `NOT EMPTY`.
    (mirrors retired, every BAR1/BAR2 CPU view sunk to scratch) ran first, so the guest never has a CPU view of
    the half-zeroed store. At the main loop's 2 s bound (failure mode 12, UNCHANGED contract) the vCPUs resume
    with BAR0 gated and the stage keeps retrying in the background; a guest that boots meanwhile sees a dead
-   device, not an unscrubbed store. [GPU-free tested: `memreset::tests`, `scrub::tests`]
+   device, not an unscrubbed store. The scrub is owed for every system reset after the machine-creation
+   reset: the store is dirty from the moment the gate first opens, because BAR1 (the live boot seed), BAR2,
+   PRAMIN and DMA writes never reach the device. [GPU-free tested: `memreset::tests`, `scrub::tests`, `reset::tests`]
 
 ## 7. GPU-free tests (all passing at this branch's head)
 
