@@ -1441,6 +1441,11 @@ impl Default for ColorDmas {
 type ColorKey = (u32, u32, u32, kf_disp::color::Lut);
 
 impl ColorDmas {
+    /// Drop per-life bindings while keeping GPU snapshot tokens unique across lives.
+    fn reset_life(&mut self) {
+        self.slots.fill(None);
+    }
+
     fn forget(&mut self, slot: usize) {
         if let Some(s) = self.slots.get_mut(slot) {
             *s = None;
@@ -4451,7 +4456,8 @@ impl ScanState {
     /// black). ⊘ Only with no copy in flight (the caller waits for its completion): its frame slot
     /// and the completions waiting on it are the old life's. Kept: the frames (process-lifetime
     /// page-locked memory), the GPU-copy rung, the broker refusal, the self-test verdict, a failed
-    /// GPU context (`failed` describes the device's own context, not the guest), the counters.
+    /// GPU context (`failed` describes the device's own context, not the guest), the counters,
+    /// and the monotonic colour token counter (the GPU LUT snapshot cache also survives).
     fn reset_life(&mut self) {
         debug_assert!(self.inflight.is_none());
         self.barrier = self.started;
@@ -4462,7 +4468,7 @@ impl ScanState {
         self.idle_at = None;
         self.last_plan = None;
         self.latched = LatchedDmas::default();
-        self.colors = ColorDmas::default();
+        self.colors.reset_life();
         self.cursor_mode = CursorMode::default();
         self.cursor_in_frame = false;
         self.cursor_posted = None;
