@@ -3175,3 +3175,28 @@ fn a_stale_tick_does_not_keep_the_ticks_alive() {
     assert!(!t.relay.tick_live(), "stale ticks are not liveness");
     assert_eq!(t.relay.tick_counters().silence_fallbacks, 1);
 }
+
+
+#[test]
+fn diagnostic_default_conn_supersession_emits_no_ring_dump() {
+    let (mut t, _share) = T::with_share();
+    t.up_keep(TICK_CAPS);
+    let log = kf_broker::capture_log();
+    t.tick_pkt(1, true, 100);
+    t.tick_pkt(2, true, 200);
+    t.read();
+    assert_eq!(t.relay.tick_counters().credits_coalesced, 1, "request replacement stays active");
+    assert!(!log.lines().iter().any(|line| line.contains("lock-step event ring")), "default conn dump emission must do nothing: {:?}",log.lines());
+}
+
+#[test]
+fn diagnostic_default_conn_silence_emits_no_ring_dump() {
+    let (mut t, _share) = T::with_share();
+    t.up_keep(TICK_CAPS);
+    t.tick_pkt(1, false, 100);
+    t.read();
+    let log = kf_broker::capture_log();
+    t.tick(51);
+    assert_eq!(t.relay.tick_counters().silence_fallbacks, 1, "silence fallback stays active");
+    assert!(!log.lines().iter().any(|line| line.contains("lock-step event ring")), "default conn dump emission must do nothing: {:?}",log.lines());
+}

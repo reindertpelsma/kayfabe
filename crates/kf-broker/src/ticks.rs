@@ -790,3 +790,71 @@ mod tests {
         assert_eq!(BROKER_SILENCE_MS, 50);
     }
 }
+
+
+#[cfg(test)]
+mod diagnostic_gate_tests {
+    use super::*;
+
+    // The green commit selects diagnostics explicitly; assertions stay unchanged.
+    fn enabled_requests() -> Requests { Requests::new() }
+
+    fn tick(seq: u32, want: bool) -> TickPkt {
+        TickPkt { tick_seq: seq, refresh_ns: 16_666_666, want, clock_only: false, present_ns: u64::from(seq) }
+    }
+
+    #[test]
+    fn diagnostic_default_requests_allocate_and_record_nothing() {
+        for mut r in [Requests::default(), Requests::new()] {
+            r.on_tick(&tick(5, true));
+            r.on_tick(&tick(7, true));
+            r.note_declined(true);
+            r.note_live(false);
+            r.blocked();
+            assert_eq!(r.ring.buf.capacity(), 0, "no flag: no event allocation");
+            assert!(r.ring.events().is_empty(), "no flag: no recorded events");
+        }
+    }
+
+    #[test]
+    fn diagnostic_default_requests_never_request_or_return_a_dump() {
+        let mut r = Requests::new();
+        r.on_tick(&tick(5, true));
+        r.on_tick(&tick(7, true));
+        r.note_live(false);
+        assert!(r.ring.take_dump("superseded and silent").is_none(), "no flag: no dump or formatting");
+        assert!(!r.ring.pending, "no flag: no pending diagnostic work");
+        assert_eq!((r.ring.dumps, r.ring.suppressed), (0, 0));
+    }
+
+    #[test]
+    fn diagnostic_enabled_ring_keeps_legacy_contents_and_exact_dump_text() {
+        let mut r = enabled_requests();
+        r.on_tick(&tick(5, true));
+        r.on_tick(&tick(7, true));
+        let expected = [(EvKind::Tick,5,1), (EvKind::Opened,5,0), (EvKind::Tick,7,1), (EvKind::Superseded,5,7), (EvKind::Opened,7,0)];
+        let got: Vec<_> = r.ring.events().iter().map(|e| (e.kind,e.a,e.b)).collect();
+        assert_eq!(got, expected);
+        // Normalize only wall-clock offsets so the legacy text has a deterministic oracle.
+        for (i,e) in r.ring.buf.iter_mut().enumerate() { e.t_us = i as u64 * 10; }
+        let mut text = vec!["lock-step event ring #1 (legacy), last 5 events, newest at 0:".to_owned()];
+        for (i,(kind,a,b)) in expected.into_iter().enumerate() {
+            text.push(format!("  {:>9} us  {kind:?} a={a} b={b}", i as i128 * 10 - 40));
+        }
+        assert_eq!(r.ring.take_dump("legacy"), Some(text));
+        assert!(r.ring.take_dump("again").is_none());
+    }
+
+    #[test]
+    fn diagnostic_enabled_ring_keeps_legacy_bound_and_dump_budget() {
+        let mut r = enabled_requests();
+        let mut dumps = 0;
+        for seq in 1..=500 {
+            r.on_tick(&tick(seq, true));
+            dumps += u32::from(r.ring.take_dump("flood").is_some());
+        }
+        assert_eq!(r.ring.events().len(), RING_CAP);
+        assert_eq!(dumps, RING_DUMPS_MAX);
+        assert_eq!(u64::from(dumps) + r.ring.suppressed, 499);
+    }
+}

@@ -7485,3 +7485,63 @@ mod tests {
         assert!(none.is_none() && !plain.ring().withdrawn(kf_broker::Kind::Host));
     }
 }
+
+
+#[cfg(test)]
+mod diagnostic_gate_tests {
+    use super::*;
+
+    // The green commit changes only this fixture's explicit diagnostic selection.
+    fn enabled_meter() -> LatStat {
+        LatStat::default()
+    }
+
+    #[test]
+    fn diagnostic_default_meter_does_not_record_samples() {
+        let m = LatStat::default();
+        m.add(Duration::from_micros(12));
+        assert_eq!(m.fragment("edge"), "edge=0/0/0", "no diagnostic flag: no latency samples");
+    }
+
+    #[test]
+    fn diagnostic_default_counters_do_not_record_any_step() {
+        let c = DispCounters::default();
+        for m in [&c.lat_edge, &c.lat_resolve, &c.lat_start, &c.lat_pass] {
+            m.add(Duration::from_micros(7));
+            assert_eq!(m.fragment("step"), "step=0/0/0", "all four steps must be disabled by default");
+        }
+    }
+
+    #[test]
+    fn diagnostic_worker_never_takes_an_unguarded_meter_timestamp() {
+        let code = worker_code_for_diagnostics();
+        for raw in ["let pass_t0 = Instant::now()", "let t_res = Instant::now()", "let t_st = Instant::now()"] {
+            assert!(!code.contains(raw), "diagnostics off still takes a timestamp: {raw}");
+        }
+        for guarded in ["lat_pass.start()", "lat_resolve.start()", "lat_start.start()"] {
+            assert!(code.contains(guarded), "each measurement must use the gated clock: {guarded}");
+        }
+    }
+
+    fn worker_code_for_diagnostics() -> &'static str {
+        include_str!("display.rs").split("#[cfg(test)]").next().unwrap()
+    }
+
+    #[test]
+    fn diagnostic_enabled_meter_keeps_the_legacy_fragment() {
+        let m = enabled_meter();
+        m.add(Duration::from_micros(5));
+        m.add(Duration::from_micros(12));
+        assert_eq!(m.fragment("edge"), "edge=2/17/12");
+    }
+
+    #[test]
+    fn diagnostic_enabled_meter_keeps_nanosecond_sums_and_maximum() {
+        let m = enabled_meter();
+        for ns in [1500, 2500, 500] { m.add(Duration::from_nanos(ns)); }
+        assert_eq!(m.n.load(Ordering::Relaxed), 3);
+        assert_eq!(m.sum_ns.load(Ordering::Relaxed), 4500);
+        assert_eq!(m.max_ns.load(Ordering::Relaxed), 2500);
+        assert_eq!(m.fragment("pass"), "pass=3/4/2");
+    }
+}
