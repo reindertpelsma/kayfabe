@@ -8121,6 +8121,25 @@ impl ChanPlane {
         clients
     }
 
+    /// ★ Review (2026-10-18): [`ChanPlane::free_dead_clients`], then a barrier act queued BEHIND the
+    /// frees that calls `done` once every one of them has run on the act thread. A barrier that
+    /// cannot be queued (the act thread is not running) calls `done` at once — never stuck.
+    pub fn free_dead_clients_then(&self, done: Arc<dyn Fn() + Send + Sync>) -> Vec<u32> {
+        let clients = self.free_dead_clients();
+        let d = done.clone();
+        let answer = self.defer(
+            "unload: frees barrier",
+            Box::new(move |_me: &ChanPlane| {
+                d();
+                Ok(String::new())
+            }),
+        );
+        if matches!(answer, ChanAnswer::Refused { .. }) {
+            done();
+        }
+        clients
+    }
+
     /// One round of the reset's frees (act thread), then a barrier act behind them.
     fn reset_free_round(&self, epoch: u64, round: u32) -> Result<String, (u32, String)> {
         let clients = self.guest_clients();

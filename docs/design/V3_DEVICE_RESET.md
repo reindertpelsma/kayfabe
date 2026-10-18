@@ -1,6 +1,6 @@
 # V3 — the device reset: every guest life starts on the device realize left
 
-**STATUS: LIVE (code), 2026-10-13 — PARTLY MEASURED ON HARDWARE (§11: Linux fast guest, binary
+**STATUS: LIVE (code), 2026-10-13; ⊘ 2026-10-18: the memory stage scrubs the whole store on a guest REBOOT (§6 item 14, `docs/OWNER_RULINGS.md` §AM) — GPU-free tested only — PARTLY MEASURED ON HARDWARE (§11: Linux fast guest, binary
 `c9ac4e77`, ABI 27); the bounded wait (ABI 28) and D4 are GPU-free tested only.** Branch
 `claude/device-reset-20261013` (off `integration/prod-candidate-20261013` @ `342d319d9`). §8 is the
 hardware plan. Measured = a GPU-free test here (named in §7) or a hardware run (§11, the coordinator's);
@@ -231,6 +231,19 @@ registration) makes every reset report `NOT EMPTY`.
    on the drainer (statement time), so a next-life twin, born later, is never among them even if it
    reuses a dead client's handle; the free acts queue in statement order ahead of any next-life
    birth. [inferred]
+
+14. **The reboot scrub is refused (2026-10-18).** A system reset from the main loop is a NEW OS over a store
+   the old one dirtied; the memory stage zeroes the whole store on the GPU and awaits the completion
+   (`crate::scrub`, `crate::memreset`). If the host refuses a chunk or the completion: the reset is **not
+   acknowledged** (`life_reset.done` is reached only when every step completed), so the reset never reaches
+   Finish and the gate stays closed; one loud line names the range (bounded), and **only the scrub is
+   retried**, with a 50 ms..1 s back-off — never the retire, the root zero or the boot zero. The prepare step
+   (mirrors retired, every BAR1/BAR2 CPU view sunk to scratch) ran first, so the guest never has a CPU view of
+   the half-zeroed store. At the main loop's 2 s bound (failure mode 12, UNCHANGED contract) the vCPUs resume
+   with BAR0 gated and the stage keeps retrying in the background; a guest that boots meanwhile sees a dead
+   device, not an unscrubbed store. The scrub is owed for every system reset after the machine-creation
+   reset: the store is dirty from the moment the gate first opens, because BAR1 (the live boot seed), BAR2,
+   PRAMIN and DMA writes never reach the device. [GPU-free tested: `memreset::tests`, `scrub::tests`, `reset::tests`]
 
 ## 7. GPU-free tests (all passing at this branch's head)
 
