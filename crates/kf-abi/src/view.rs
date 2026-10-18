@@ -389,6 +389,13 @@ pub struct TsgAllocFacts {
 pub struct CtxShareAllocFacts {
     /// `hVASpace` — the VASpace this context share is bound to. 0 = none.
     pub h_vaspace: u32,
+    /// `flags` @ +4 — `NVOS_CTXSHARE_FLAGS_*` (`SYNC` 0 / `ASYNC` 1 / `SPECIFIED` 2 /
+    /// `ASYNC_PREFER_LOWER` 3 in 1:0; the guest RM refuses any other bit,
+    /// `kernel_ctxshare.c:442-446`). The raw word: the plane decides what it means.
+    pub flags: u32,
+    /// `subctxId` @ +8 as the guest wrote it into the request (the VEID of a `SPECIFIED`
+    /// ctxshare; RM writes the chosen VEID here only in its own reply, which kayfabe echoes).
+    pub subctx_id: u32,
 }
 
 /// `NV_CHANNEL_ALLOC_PARAMS` — the three fields a channel declares that the core

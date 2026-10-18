@@ -32,6 +32,7 @@ pub mod readtrace;
 pub mod reset;
 pub mod rmfacts;
 pub mod tspace;
+pub mod tsgmirror;
 pub mod twin;
 pub(crate) mod userbirth;
 pub(crate) mod userstore;

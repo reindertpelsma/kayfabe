@@ -1110,6 +1110,7 @@ mod tests {
             declared_kernel_pid: true,
             tsg: Some(2),
             ctx_share: 8,
+            ctx: None,
             device: 9,
             error_notifier: None,
             process_id: Some(200),

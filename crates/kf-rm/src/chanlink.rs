@@ -236,6 +236,10 @@ pub struct ChannelAlloc {
     /// ctxshare (all members share one GR context), a Vulkan TSG carries a graphics and an
     /// async-compute ctxshare (distinct subcontexts, which one legacy host subcontext cannot be).
     pub ctx_share: u32,
+    /// ★ tsg-mirror (2026-10-18): the facts of the context share the channel names, `Some` only if this
+    /// link saw that `FERMI_CONTEXT_SHARE_A` allocated in the client (`ctx_share_known`). The plane
+    /// decides from it; nothing in it is forwarded.
+    pub ctx: Option<CtxShareFacts>,
     /// ★ v3-promote: the DEVICE the channel hangs off (its parent, or its group's parent) — a
     /// guest free of the device takes the channel with it, so the plane must match it.
     pub device: u32,
@@ -253,6 +257,20 @@ pub struct ChannelAlloc {
     /// Birth-time admission for the restricted read-only Windows user ring.
     /// No other route can manufacture this witness from USERD placement alone.
     pub user_ring_permit: Option<WindowsUserRingPermit>,
+}
+
+/// ★ tsg-mirror (2026-10-18): what a guest `FERMI_CONTEXT_SHARE_A` alloc declared, as the link decoded it.
+/// Plain data: the channel plane turns it into a host SYNC/ASYNC choice (never the guest\'s VEID).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct CtxShareFacts {
+    /// The TSG the ctxshare was allocated under (its `hParent`).
+    pub parent: u32,
+    /// `hVASpace` as declared (0 = none).
+    pub h_vaspace: u32,
+    /// The raw `flags` word.
+    pub flags: u32,
+    /// The `subctxId` the request carried.
+    pub subctx_id: u32,
 }
 
 /// ★ 2026-10-08: `KF3_ASYNC_PREEMPT=1` (default off) serves `DISABLE_CHANNELS` with a
@@ -862,7 +880,7 @@ pub struct ChannelPolicy {
     /// (`ENGINE_TYPE_NULL` ⇒ the group's, libcuda's CE channels).
     tsgs: std::collections::BTreeMap<(u32, u32), (u32, u32, u32)>,
     /// ★ P5b: `(hClient, hCtxShare)` → its `hVASpace`.
-    ctxshares: std::collections::BTreeMap<(u32, u32), u32>,
+    ctxshares: std::collections::BTreeMap<(u32, u32), CtxShareFacts>,
     /// ★ v3-gfx: every VA-space object seen (alloc'd, or named by a page-directory statement).
     vas_objects: std::collections::BTreeSet<(u32, u32)>,
     /// ★ v3-gfx: `DUP_OBJECT` aliases of a VA-space object, `(dst client, dst handle)` → the
@@ -1259,7 +1277,15 @@ impl ChannelPolicy {
             Some(AllocParams::CtxShare) => {
                 let params = crate::rmrpc::alloc_params_window(&self.abi, body)?;
                 let c = self.abi.decode_ctxshare_alloc_facts(params).ok()?;
-                self.ctxshares.insert((h.client, h.handle), c.h_vaspace);
+                self.ctxshares.insert(
+                    (h.client, h.handle),
+                    CtxShareFacts {
+                        parent: h.parent,
+                        h_vaspace: c.h_vaspace,
+                        flags: c.flags,
+                        subctx_id: c.subctx_id,
+                    },
+                );
                 return None;
             }
             Some(AllocParams::Channel) => {}
@@ -1309,7 +1335,11 @@ impl ChannelPolicy {
             .ok()
             .and_then(|c| {
                 (c.h_ctx_share != 0)
-                    .then(|| self.ctxshares.get(&(h.client, c.h_ctx_share)).copied())
+                    .then(|| {
+                        self.ctxshares
+                            .get(&(h.client, c.h_ctx_share))
+                            .map(|c| c.h_vaspace)
+                    })
                     .flatten()
             });
         let vaspace = if f.h_vaspace != 0 {
@@ -1415,6 +1445,7 @@ impl ChannelPolicy {
             declared_kernel_pid: self.kernel_clients.contains(&h.client),
             tsg: tsg.map(|_| h.parent),
             ctx_share: f.h_ctx_share,
+            ctx: None,
             device,
             error_notifier: self
                 .abi
@@ -4236,6 +4267,194 @@ mod tests {
             elements: 1,
             delivered: Vec::new(),
         }
+    }
+
+    /// A `KEPLER_CHANNEL_GROUP_A` alloc of `client:handle` under `device` (hVASpace, engineType).
+    fn tsg_alloc(client: u32, device: u32, handle: u32, vas: u32, engine: u32) -> RpcCommand {
+        let mut params = [0u8; kf_abi::generated::classes::NvChannelGroupAllocationParameters::SIZE];
+        kf_abi::generated::classes::NvChannelGroupAllocationParameters {
+            h_object_error: 0,
+            h_object_ecc_error: 0,
+            h_va_space: vas,
+            engine_type: engine,
+            b_is_calling_context_vgpu_plugin: 0,
+        }
+        .encode_into(&mut params)
+        .unwrap();
+        let mut payload: Vec<u8> = [
+            client,
+            device,
+            handle,
+            kf_abi::generated::classes::KEPLER_CHANNEL_GROUP_A,
+            0,
+            params.len() as u32,
+            0,
+            0,
+        ]
+        .into_iter()
+        .flat_map(u32::to_le_bytes)
+        .collect();
+        payload.extend(params);
+        RpcCommand {
+            function: RpcFunction::RmAlloc,
+            code: 103,
+            sequence: 1,
+            payload,
+            elements: 1,
+            delivered: Vec::new(),
+        }
+    }
+
+    /// A `FERMI_CONTEXT_SHARE_A` alloc under the TSG `tsg`.
+    fn ctxshare_alloc(client: u32, tsg: u32, handle: u32, vas: u32, flags: u32, subctx: u32) -> RpcCommand {
+        let mut params = [0u8; 12];
+        kf_abi::generated::classes::NvCtxshareAllocationParameters {
+            h_va_space: vas,
+            flags,
+            subctx_id: subctx,
+        }
+        .encode_into(&mut params)
+        .unwrap();
+        let mut payload: Vec<u8> = [
+            client,
+            tsg,
+            handle,
+            kf_abi::generated::classes::FERMI_CONTEXT_SHARE_A,
+            0,
+            params.len() as u32,
+            0,
+            0,
+        ]
+        .into_iter()
+        .flat_map(u32::to_le_bytes)
+        .collect();
+        payload.extend(params);
+        RpcCommand {
+            function: RpcFunction::RmAlloc,
+            code: 103,
+            sequence: 1,
+            payload,
+            elements: 1,
+            delivered: Vec::new(),
+        }
+    }
+
+    /// A channel alloc into `tsg` naming `ctx` (0 = none) with channel `flags`.
+    fn tsg_channel_alloc(client: u32, tsg: u32, handle: u32, ctx: u32, flags: u32) -> RpcCommand {
+        let wire = kf_abi::matrix::Resolved::of(
+            &kf_abi::generated::matrix::NV_CHANNEL_ALLOC_PARAMS,
+            kf_abi::versions::BENCH_DRIVER,
+        )
+        .unwrap();
+        let mut cmd = kernel_channel_alloc(client, tsg, handle, 1, 200);
+        let params = &mut cmd.payload[32..];
+        for (path, v) in [("hContextShare", ctx), ("flags", flags)] {
+            let o = wire.need(path).unwrap().off();
+            params[o..o + 4].copy_from_slice(&v.to_le_bytes());
+        }
+        cmd
+    }
+
+    /// An `NV_ESC_RM_FREE` (`RmFree`) of `client:handle` under `parent`.
+    fn free_cmd(client: u32, parent: u32, handle: u32) -> RpcCommand {
+        let payload: Vec<u8> = [client, parent, handle, 0]
+            .into_iter()
+            .flat_map(u32::to_le_bytes)
+            .collect();
+        RpcCommand {
+            function: RpcFunction::Free,
+            code: 10,
+            sequence: 1,
+            payload,
+            elements: 1,
+            delivered: Vec::new(),
+        }
+    }
+
+    /// ★ tsg-mirror: the link keeps what a ctxshare alloc declared and hands it to the channel that names it.
+    #[test]
+    fn a_channel_carries_the_facts_of_the_ctxshare_it_names() {
+        use std::sync::{Arc, Mutex};
+        let abi = *kf_abi::versions::table_for(kf_abi::versions::BENCH_DRIVER).unwrap();
+        let seen: Arc<Mutex<Vec<(u32, u32, Option<CtxShareFacts>)>>> = Arc::default();
+        let out = seen.clone();
+        let sink: ChanSink = Arc::new(move |st| {
+            if let ChanStatement::Alloc(a) = st {
+                out.lock().unwrap().push((a.handle, a.ctx_share, a.ctx));
+            }
+            ChanAnswer::Done
+        });
+        let mut link = ChannelPolicy::new(abi, kf_abi::GuestOs::Windows, sink);
+        let (c, dev, tsg) = (0xc1d0_0013u32, 0xff03_0000u32, 0xff0e_0000u32);
+        let _ = link.respond(&tsg_alloc(c, dev, tsg, 0, 1));
+        let _ = link.respond(&ctxshare_alloc(c, tsg, 0xff0e_0200, 0x5000_0001, 1, 0x3f));
+        let _ = link.respond(&ctxshare_alloc(c, tsg, 0xff0e_0201, 0x5000_0002, 0x8000_0000, 0));
+        let _ = link.respond(&tsg_channel_alloc(c, tsg, 0xff04_0001, 0xff0e_0200, 0x30));
+        let _ = link.respond(&tsg_channel_alloc(c, tsg, 0xff04_0002, 0xff0e_0201, 0x20));
+        let _ = link.respond(&tsg_channel_alloc(c, tsg, 0xff04_0003, 0, 0x20)); // legacy
+        let _ = link.respond(&tsg_channel_alloc(c, tsg, 0xff04_0004, 0xff0e_0999, 0x20)); // never allocated
+        let got = seen.lock().unwrap().clone();
+        assert_eq!(got.len(), 4, "{got:x?}");
+        assert_eq!(
+            got[0].2,
+            Some(CtxShareFacts { parent: tsg, h_vaspace: 0x5000_0001, flags: 1, subctx_id: 0x3f })
+        );
+        assert_eq!(
+            got[1].2,
+            Some(CtxShareFacts { parent: tsg, h_vaspace: 0x5000_0002, flags: 0x8000_0000, subctx_id: 0 }),
+            "a hostile flag word is carried as written"
+        );
+        assert_eq!(got[2].2, None, "no ctxshare named");
+        assert_eq!((got[3].1, got[3].2), (0xff0e_0999, None), "an unseen ctxshare is None, not invented");
+    }
+
+    /// A ctxshare the guest freed is forgotten: a channel naming its handle afterwards sees `None`.
+    #[test]
+    fn a_freed_ctxshare_is_forgotten() {
+        use std::sync::{Arc, Mutex};
+        let abi = *kf_abi::versions::table_for(kf_abi::versions::BENCH_DRIVER).unwrap();
+        let seen: Arc<Mutex<Vec<Option<CtxShareFacts>>>> = Arc::default();
+        let out = seen.clone();
+        let sink: ChanSink = Arc::new(move |st| {
+            if let ChanStatement::Alloc(a) = st {
+                out.lock().unwrap().push(a.ctx);
+            }
+            ChanAnswer::Done
+        });
+        let mut link = ChannelPolicy::new(abi, kf_abi::GuestOs::Windows, sink);
+        let (c, dev, tsg, ctx) = (0xc1d0_0013u32, 0xff03_0000u32, 0xff0e_0000u32, 0xff0e_0200u32);
+        let _ = link.respond(&tsg_alloc(c, dev, tsg, 0, 1));
+        let _ = link.respond(&ctxshare_alloc(c, tsg, ctx, 0x5000_0001, 1, 0));
+        let _ = link.respond(&tsg_channel_alloc(c, tsg, 0xff04_0001, ctx, 0x30));
+        let _ = link.respond(&free_cmd(c, tsg, ctx));
+        let _ = link.respond(&tsg_channel_alloc(c, tsg, 0xff04_0002, ctx, 0x30));
+        let got = seen.lock().unwrap().clone();
+        assert!(got[0].is_some());
+        assert_eq!(got[1], None);
+    }
+
+    /// Freeing a TSG frees the ctxshares under it (RM frees dependants): a TSG handle reused later
+    /// does not inherit a stale ctxshare, whose `parent` would be a lie about the new TSG.
+    #[test]
+    fn a_freed_tsg_takes_its_ctxshares_with_it() {
+        use std::sync::{Arc, Mutex};
+        let abi = *kf_abi::versions::table_for(kf_abi::versions::BENCH_DRIVER).unwrap();
+        let seen: Arc<Mutex<Vec<Option<CtxShareFacts>>>> = Arc::default();
+        let out = seen.clone();
+        let sink: ChanSink = Arc::new(move |st| {
+            if let ChanStatement::Alloc(a) = st {
+                out.lock().unwrap().push(a.ctx);
+            }
+            ChanAnswer::Done
+        });
+        let mut link = ChannelPolicy::new(abi, kf_abi::GuestOs::Windows, sink);
+        let (c, dev, tsg, ctx) = (0xc1d0_0013u32, 0xff03_0000u32, 0xff0e_0000u32, 0xff0e_0200u32);
+        let _ = link.respond(&tsg_alloc(c, dev, tsg, 0, 1));
+        let _ = link.respond(&ctxshare_alloc(c, tsg, ctx, 0x5000_0001, 1, 0));
+        let _ = link.respond(&free_cmd(c, dev, tsg));
+        let _ = link.respond(&tsg_alloc(c, dev, tsg, 0, 1));
+        let _ = link.respond(&tsg_channel_alloc(c, tsg, 0xff04_0001, ctx, 0x30));
+        assert_eq!(seen.lock().unwrap().clone(), vec![None]);
     }
 
     #[test]

@@ -1160,6 +1160,8 @@ impl DriverAbiTable {
         let p = classes::NvCtxshareAllocationParameters::decode(bytes)?;
         Ok(CtxShareAllocFacts {
             h_vaspace: p.h_va_space,
+            flags: 0,
+            subctx_id: 0,
         })
     }
 
@@ -2519,5 +2521,26 @@ mod tests {
         );
         assert_eq!(t.alloc_param_size(ClassId(classes::NV01_ROOT_CLIENT)), None);
         assert_eq!(t.alloc_param_size(ClassId(0xDEAD_BEEF)), None);
+    }
+
+    /// ★ tsg-mirror: the ctxshare decoder keeps the whole request: `hVASpace` @0, `flags` @4, `subctxId` @8
+    /// (the plane's SYNC/ASYNC decision and the logged facts come from here; the 12-byte image is
+    /// identical at 580 and 610, `view.rs`).
+    #[test]
+    fn ctxshare_alloc_facts_carry_flags_and_subctx_id() {
+        let t = table_for(BENCH_DRIVER).expect("supported");
+        let mut b = [0u8; 12];
+        b[0..4].copy_from_slice(&0xcafe_0001u32.to_le_bytes());
+        b[4..8].copy_from_slice(&3u32.to_le_bytes());
+        b[8..12].copy_from_slice(&0x3fu32.to_le_bytes());
+        let f = t.decode_ctxshare_alloc_facts(&b).expect("decodes");
+        assert_eq!(f.h_vaspace, 0xcafe_0001);
+        assert_eq!(f.flags, 3);
+        assert_eq!(f.subctx_id, 0x3f);
+        // a hostile flag word is carried as written (refusing it is the plane's decision)
+        b[4..8].copy_from_slice(&0xffff_ffffu32.to_le_bytes());
+        assert_eq!(t.decode_ctxshare_alloc_facts(&b).unwrap().flags, 0xffff_ffff);
+        // short params are refused, never zero-extended
+        assert!(t.decode_ctxshare_alloc_facts(&b[..8]).is_err());
     }
 }

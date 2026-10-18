@@ -14,7 +14,9 @@ pub mod channel;
 pub mod event;
 pub mod tier;
 pub mod timer;
-pub use channel::{Channel, MapBacking, MapPerm, RingSpec, ScatterError, VaSpace};
+pub use channel::{
+    Channel, CtxShare, MapBacking, MapPerm, Placement, RingSpec, ScatterError, SubctxKind, VaSpace,
+};
 pub use event::EventFd;
 
 use kf_abi::bringup::{
