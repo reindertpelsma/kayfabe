@@ -185,6 +185,9 @@ struct Run {
     stage: Stage,
     epoch: u64,
     life: Life,
+    /// ★ 2026-10-18: this run's Memory stage was asked to scrub (read at [`Stage::Memory`]'s end to
+    /// clear the owed scrub only once it completed).
+    scrub: bool,
     since: Option<std::time::Instant>,
     stall_said: bool,
 }
@@ -219,10 +222,15 @@ pub struct Reset {
     /// ★ 2026-10-14: a request that was NOT the platform's S3 wake arrived since the last run's
     /// Drainer stage read it — such a run never keeps a life. Set BEFORE the request is counted.
     cold_pending: std::sync::atomic::AtomicBool,
-    /// ★ 2026-10-18: a request that a NEW OS follows (a system reset from the main loop:
-    /// [`crate::scrub::decide`]) arrived since the memory stage last asked — the run scrubs the
-    /// guest's vidmem. Set BEFORE the request is counted, like the cold mark.
+    /// ★ 2026-10-18 (review B1): a scrub is OWED — a request that a NEW OS follows (a system reset
+    /// from the main loop: [`crate::scrub::decide`]) arrived and no completed Memory stage has
+    /// scrubbed since. Set BEFORE the request is counted; cleared only by a Memory stage that
+    /// completed WITH the scrub, or by a pristine completion over a clean store (the start-up reset).
     new_os_pending: std::sync::atomic::AtomicBool,
+    /// ★ 2026-10-18 (review B1): the store may hold a guest life's bytes — set when a guest access is
+    /// admitted ([`Reset::touched`]), cleared ONLY when a Memory stage with the scrub completed.
+    /// Unlike `touched` it is not consumed by a reset that scrubbed nothing.
+    store_dirty: std::sync::atomic::AtomicBool,
     /// Wake requests (status line) and runs that kept a PM-suspended life.
     from_wake: AtomicU64,
     kept: AtomicU64,
@@ -339,6 +347,7 @@ impl Reset {
     pub fn touched(&self) {
         if !self.touched.load(Ordering::Relaxed) {
             self.touched.store(true, Ordering::SeqCst);
+            self.store_dirty.store(true, Ordering::SeqCst);
         }
     }
 
@@ -370,8 +379,19 @@ impl Reset {
                     }
                     // ⊘ Read only now: every entry admitted before the close has left, so its mark
                     // is visible. Nothing admitted since the last reset began ⇒ nothing to undo.
-                    if !self.touched.swap(false, Ordering::SeqCst) {
+                    //
+                    // ★ 2026-10-18 (review B1): not pristine while a scrub is owed over a dirty
+                    // store — a reboot that arrives while a guest-issued reset runs finds `touched`
+                    // consumed, and must still get its Memory stage.
+                    let was_touched = self.touched.swap(false, Ordering::SeqCst);
+                    let scrub_due = self.new_os_pending.load(Ordering::SeqCst)
+                        && self.store_dirty.load(Ordering::SeqCst);
+                    if !was_touched && !scrub_due {
                         self.pristine.fetch_add(1, Ordering::Relaxed);
+                        // nothing of a guest life exists: a start-up request's mark dies here
+                        if !self.store_dirty.load(Ordering::SeqCst) {
+                            self.new_os_pending.store(false, Ordering::SeqCst);
+                        }
                         // ★ 2026-10-14: the cold mark is this run's even when nothing was undone —
                         // left set, it would make the NEXT life's S3 wake a full reset.
                         self.cold_pending.store(false, Ordering::SeqCst);
@@ -404,13 +424,21 @@ impl Reset {
                     if !o.released(r.epoch) {
                         return self.waiting(&mut r, o);
                     }
-                    // RED STEP (tests first): the scrub decision is not made here yet
-                    o.begin_memory(r.epoch, false);
+                    // ★ the scrub is asked only for a reboot over a store a guest dirtied
+                    r.scrub = self.new_os_pending.load(Ordering::SeqCst)
+                        && self.store_dirty.load(Ordering::SeqCst);
+                    o.begin_memory(r.epoch, r.scrub);
                     self.enter(&mut r, Stage::Memory);
                 }
                 Stage::Memory => {
                     if !o.memory_done(r.epoch) {
                         return self.waiting(&mut r, o);
+                    }
+                    // the VA thread acknowledges only a COMPLETED scrub (a refused one keeps the
+                    // stage waiting): the owed scrub is paid
+                    if r.scrub {
+                        self.store_dirty.store(false, Ordering::SeqCst);
+                        self.new_os_pending.store(false, Ordering::SeqCst);
                     }
                     self.enter(&mut r, Stage::Finish);
                 }
@@ -1025,13 +1053,12 @@ mod tests {
             } else {
                 *o.during_release.borrow_mut() = Some(hook);
             }
-            r.request_typed(true, false); // start-up is skipped: the guest ran
             let p = r.gate.enter().expect("open");
             r.touched();
             drop(p);
             r.request_typed(true, false); // R1: a bus reset from a vCPU thread
             let end = run_to_completion(&r, &o);
-            assert_eq!(end.last(), Some(&Progress::Completed(3)), "during_memory={during_memory}");
+            assert_eq!(end.last(), Some(&Progress::Completed(2)), "during_memory={during_memory}");
             assert!(
                 o.scrubs.borrow().contains(&true),
                 "during_memory={during_memory}: R2's new OS got no scrub: {:?}",
