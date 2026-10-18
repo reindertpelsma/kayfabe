@@ -253,6 +253,88 @@ fn on() -> LazyConfig {
     LazyConfig::ON
 }
 
+#[cfg(feature = "diag-get-writeback")]
+mod diag_full_ring_get {
+    use super::*;
+
+    fn experiment(io: &mut Mock) -> Relay {
+        let r = pointer_relay(io, LazyConfig::OFF);
+        r.with_full_ring_get(true)
+    }
+
+    #[test]
+    fn a_non_full_ring_keeps_its_visible_get_and_pending_real_progress() {
+        let mut io = Mock::new(64, 512);
+        let mut r = experiment(&mut io);
+        let actual = r.written_get;
+        io.pop_all(&r);
+        turn(&mut r, &mut io).unwrap();
+        assert_eq!(io.count_writebacks(), 0);
+        assert_eq!(r.written_get, actual);
+        assert_eq!(r.guest_get, Some((r.generation, 2)));
+    }
+
+    #[test]
+    fn successive_non_full_pops_do_not_fake_acknowledgement_or_lose_the_latest_get() {
+        let mut io = Mock::new(64, 512);
+        let mut r = experiment(&mut io);
+        let actual = r.written_get;
+        feed(&mut io, 2, 10);
+        for _ in 0..12 {
+            io.pop_all(&r);
+            io.markers_done = r.marks.issued();
+            turn(&mut r, &mut io).unwrap();
+        }
+        assert_eq!(io.count_writebacks(), 0);
+        assert_eq!(r.written_get, actual);
+        assert_eq!(r.guest_get, Some((r.generation, 10)));
+        assert_eq!(r.cursor, 10);
+    }
+
+    fn first_full_observation(entries: u32, pending: u32) {
+        let mut io = Mock::new(entries, 512);
+        let mut r = experiment(&mut io);
+        io.pop_all(&r);
+        // Hold a valid already-observed pending write-back. This is the state
+        // after a deferred Wb and before a newly published full-ring PUT.
+        r.guest_get = Some((r.generation, pending));
+        r.phase = Phase::Put;
+        r.put_full = false;
+        let full_put = r.written_get.wrapping_sub(1) & (entries - 1);
+        feed(&mut io, r.cursor, full_put);
+        io.calls.clear();
+        assert_eq!(r.step(&mut io).unwrap(), Step::More);
+        assert_eq!(r.phase, Phase::Wb);
+        assert_eq!(r.cursor, 2, "the guarded entry has not been loaded");
+        r.step(&mut io).unwrap();
+        assert_eq!(r.written_get, pending);
+        assert_eq!(r.guest_get, None);
+        assert_eq!(io.count(&Call::WriteGuestGet(pending)), 1);
+        assert!(!io.calls.iter().any(|call| matches!(call, Call::Load(_, _))));
+    }
+
+    #[test]
+    fn a_new_full_small_ring_flushes_pending_get_before_entry_or_gate_work() {
+        first_full_observation(8, 1);
+    }
+
+    #[test]
+    fn a_new_full_large_ring_flushes_pending_get_before_entry_or_gate_work() {
+        first_full_observation(32768, 2);
+    }
+
+    #[test]
+    fn the_off_arm_still_writes_every_observed_pop() {
+        let mut io = Mock::new(64, 512);
+        let mut r = pointer_relay(&mut io, LazyConfig::OFF).with_full_ring_get(false);
+        io.pop_all(&r);
+        turn(&mut r, &mut io).unwrap();
+        assert_eq!(r.written_get, 2);
+        assert_eq!(r.guest_get, None);
+        assert_eq!(io.count(&Call::WriteGuestGet(2)), 1);
+    }
+}
+
 /// Run `n` turns, returning per turn whether it read the private `USERD`, `GP_PUT`, and whether the guest ring looked full.
 fn run(r: &mut Relay, io: &mut Mock, n: usize) -> Vec<(bool, bool, bool)> {
     let mut out = Vec::new();
