@@ -794,6 +794,14 @@ pub static HOST_CONTROLS: &[HostControl] = &[
         NVA06C_CTRL_PREEMPT_PARAMS
     ),
     hc!("NVA06F_CTRL_CMD_BIND", 0xa06f_0104, NVA06F_CTRL_BIND_PARAMS),
+    // ★ 2026-10-19 (tsg-mirror): the CHANNEL-level schedule, sent to stop/evict one twin of an explicit TSG
+    // (`HostRm::schedule_channel_enable`). `NVA06C_CTRL_GPFIFO_SCHEDULE_PARAMS` is a typedef of the NVA06F params
+    // (`ctrla06fgpfifo.h`, see `submit::NVA06F_CTRL_CMD_GPFIFO_SCHEDULE`), so the measured struct is the TSG verb's.
+    hc!(
+        "NVA06F_CTRL_CMD_GPFIFO_SCHEDULE",
+        0xa06f_0103,
+        NVA06C_CTRL_GPFIFO_SCHEDULE_PARAMS
+    ),
     // ★ 2026-10-08 (x11-dispsw at host 595.91.07, `V3_DISPLAY.md` §8.18): the display-SW twin's
     // readback (kf-host `disp_sw_class_id`). Unlisted, it was refused outside the encoded interval
     // (`HOST_ABI_REFUSED`, run wl1), so every guest GF100_DISP_SW was refused there. Its id has no
@@ -933,6 +941,18 @@ impl HostAbi {
 
 #[cfg(test)]
 mod tests {
+
+    /// And through the carry gate itself, at the host that refused it (595.91.07) and at the bench's (580.65.06).
+    #[test]
+    fn the_channel_level_gpfifo_schedule_is_carried_not_refused_at_both_hosts() {
+        for v in ["595.91.07", "580.65.06"] {
+            let h = host(v);
+            assert!(
+                h.control_carry(0xa06f_0103).is_ok(),
+                "0xa06f0103 refused at host {v}"
+            );
+        }
+    }
 
     /// ★ tsg-mirror hardware finding (2026-10-19, run 3012): the CHANNEL-level `GPFIFO_SCHEDULE` (`0xa06f0103`)
     /// kayfabe sends to stop/evict a twin of an explicit TSG was unlisted, so `raw_control` refused it at the 595.91
