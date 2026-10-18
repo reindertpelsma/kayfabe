@@ -658,6 +658,7 @@ struct nb_tick_win {
     uint64_t gaps50, gaps100;            /* accepted-refresh gaps over 50 / 100 ms                       */
     uint64_t new_n, repeat_n, merged;    /* presents that carried NEW content / repeats / commits merged into a later present */
     uint64_t cgap_max_ns, cg33, cg50, cg100; /* gap between consecutive NEW-content presents             */
+    uint64_t pump_discarded;             /* feedbacks of the broker's own pump commit the compositor discarded (not a frame's) */
 };
 
 struct nb_tick {
@@ -713,6 +714,16 @@ void nb_tick_win_loop(struct nb_tick *t, uint64_t late_ns, uint64_t work_ns);
 void nb_tick_presented_at(struct nb_tick *t, uint64_t now_ns, bool discarded);
 
 #define NB_TICK_STATS_PERIOD_NS 1000000000ull
+/* The buffer for one line.  The worst line (every counter 2^64-1, 30 numbers of 20 digits and their names) is under 1000 bytes;
+ * test_tick.c formats that worst case into exactly this size. */
+#define NB_TICK_STATS_LINE_MAX 1536
+/* One step of the per-second line: the first call ARMS (and takes the baseline once: what happened before is not in the first line);
+ * a call that is not due writes nothing; a due call formats into buf and, only when the line fitted, moves the baseline and clears
+ * the window.  Returns the line's length, 0 when nothing was written (a dropped line resets nothing). */
+int nb_tick_stats_step(struct nb_tick *t, struct nb_tick_snap *prev, uint64_t *next_ns, uint64_t now_ns, char *buf, size_t n);
+/* The broker's own pump commit's feedback was DISCARDED: counted, and nothing else -- the request book is untouched (a frame's
+ * un-presented flag gates WANT, and a pump discard says nothing about a frame). */
+void nb_tick_pump_discarded(struct nb_tick *t);
 
 /* What nb_tick_refresh() decided to put on the wire. */
 struct nb_tick_out {
@@ -1042,6 +1053,7 @@ void nb_sink_stats_poll(struct nb_sink *s);
 /* ★ MEASUREMENT: the compositor DISCARDED a presentation feedback; the event loop's lateness / body time. */
 void nb_sink_note_discarded(struct nb_sink *s);
 void nb_sink_note_loop(struct nb_sink *s, uint64_t late_ns, uint64_t work_ns);
+void nb_sink_note_pump_discarded(struct nb_sink *s);
 void nb_sink_note_present(struct nb_sink *s, uint64_t present_ns);
 /* The EV_SURFACE rate for a host rate of `host_mhz`, after the tick divisor. */
 unsigned nb_sink_mode_mhz(const struct nb_sink *s, unsigned host_mhz,

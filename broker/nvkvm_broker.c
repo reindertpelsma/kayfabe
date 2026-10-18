@@ -961,26 +961,14 @@ bool nb_sink_tick_on(const struct nb_sink *s)
 
 void nb_sink_stats_poll(struct nb_sink *s)
 {
-    struct nb_tick_snap now;
-    char line[640];
-    uint64_t t_ns;
+    char line[NB_TICK_STATS_LINE_MAX];
 
     if (!s->cfg->stats_line || s->client_fd < 0 || !s->tick.on) {
         return;
     }
-    t_ns = nb_sess_now_ns(s);
-    if (!nb_tick_stats_due(t_ns, &s->stats_next_ns, NB_TICK_STATS_PERIOD_NS)) {
-        if (s->stats_next_ns != 0 && s->stats_prev.feedback == 0 && s->stats_prev.ticks == 0) {
-            nb_tick_snap_take(&s->tick, &s->stats_prev);   /* the baseline at arming */
-        }
-        return;
-    }
-    nb_tick_snap_take(&s->tick, &now);
-    if (nb_tick_stats_format(line, sizeof(line), t_ns / 1000000ull, &s->stats_prev, &now, &s->tick.win) > 0) {
+    if (nb_tick_stats_step(&s->tick, &s->stats_prev, &s->stats_next_ns, nb_sess_now_ns(s), line, sizeof(line)) > 0) {
         nb_log("%s", line);
     }
-    s->stats_prev = now;
-    memset(&s->tick.win, 0, sizeof(s->tick.win));
 }
 
 unsigned nb_sink_mode_mhz(const struct nb_sink *s, unsigned host_mhz,
@@ -1042,6 +1030,13 @@ void nb_sink_note_present(struct nb_sink *s, uint64_t present_ns)
 {
     if (s->cfg->stats_line && s->client_fd >= 0 && s->tick.on) {
         nb_tick_content_present(&s->tick, present_ns);
+    }
+}
+
+void nb_sink_note_pump_discarded(struct nb_sink *s)
+{
+    if (s->cfg->stats_line && s->client_fd >= 0 && s->tick.on) {
+        nb_tick_pump_discarded(&s->tick);
     }
 }
 

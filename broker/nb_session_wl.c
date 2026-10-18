@@ -4811,7 +4811,7 @@ static void pump_discarded(void *d, struct wp_presentation_feedback *f)
     }
     w->pump_out = false;
     if (w->sink) {
-        nb_sink_note_discarded(w->sink);
+        nb_sink_note_pump_discarded(w->sink);
     }
 }
 const struct wp_presentation_feedback_listener nb_pump_listener = {
