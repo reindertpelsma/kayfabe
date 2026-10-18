@@ -2315,6 +2315,7 @@ impl Device {
                         let line = crate::bar1phys::restore_physical_view_scrubbed(
                             w,
                             at_change,
+                            false,
                             &mut |off, len| {
                                 crate::scrub::zero_range(kernel, off, len, &progress)
                                     .map(|_| scrub_ok.set(true))

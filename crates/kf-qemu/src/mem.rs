@@ -2301,6 +2301,25 @@ impl Inbox {
         let _ = self.wake.signal();
     }
 
+    /// ★ Review (2026-10-18): the reset asked the memory stage `scrub` — a NEW OS follows a dirty
+    /// store. Only a `true` arms the scrub the VA thread will take.
+    pub fn memory_stage_asked(&self, scrub: bool) {
+        // RED STEP (tests first): not wired yet
+        let _ = scrub;
+    }
+
+    /// ★ Review (2): the guest RM life an unload (fn 47) was seen in — the drainer stores it with
+    /// the request, the VA thread's unload scrub checks it before it zeroes.
+    pub fn set_unload_life(&self, life: u64) {
+        let _ = life;
+    }
+
+    /// The life [`Inbox::set_unload_life`] stored.
+    #[must_use]
+    pub fn unload_life(&self) -> u64 {
+        0
+    }
+
     /// ★ 2026-10-18: the reset's trigger — a NEW OS follows, the memory stage scrubs the heap.
     pub fn set_full_scrub(&self) {
         self.full_scrub.store(true, Ordering::SeqCst);
@@ -3545,6 +3564,27 @@ pub fn apply_statement(
 
 #[cfg(test)]
 mod tests {
+    /// ★ Review (M2b): the memory stage arms the scrub only when the reset asked for it, and the VA
+    /// thread takes it once; an in-guest reset's stage arms nothing.
+    #[test]
+    fn only_a_scrubbing_memory_stage_arms_the_scrub() {
+        let i = Inbox::new().expect("eventfd");
+        i.memory_stage_asked(false);
+        assert!(!i.take_full_scrub(), "a reset that owes no scrub arms none");
+        i.memory_stage_asked(true);
+        assert!(i.take_full_scrub(), "a reboot arms it");
+        assert!(!i.take_full_scrub(), "taken once");
+    }
+
+    /// ★ Review (2): the unload's life travels from the drainer to the VA thread.
+    #[test]
+    fn the_unload_life_is_carried_to_the_va_thread() {
+        let i = Inbox::new().expect("eventfd");
+        assert_eq!(i.unload_life(), 0);
+        i.set_unload_life(7);
+        assert_eq!(i.unload_life(), 7);
+    }
+
     use super::*;
 
     /// ★ Device reset: an inbox the old life left with splits requested and running, finished

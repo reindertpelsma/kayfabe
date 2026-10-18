@@ -171,11 +171,11 @@ pub fn bounded(n: u64, max: u64, family: &str) -> bool {
 /// win. The log line, or `None` for a window that never had a boot framebuffer (`gop=off`).
 ///
 /// ⊘ This does not scrub; production calls [`restore_physical_view_scrubbed`].
-pub fn restore_physical_view<V: kf_mem::cpuwin::ViewOps>(
+pub(crate) fn restore_physical_view<V: kf_mem::cpuwin::ViewOps>(
     w: &kf_mem::cpuwin::CpuWindow<V>,
     at_change: u64,
 ) -> Option<String> {
-    restore_physical_view_scrubbed(w, at_change, &mut |_, _| Ok(()))
+    restore_physical_view_scrubbed(w, at_change, false, &mut |_, _| Ok(()))
 }
 
 /// ★★ [`restore_physical_view`], with the boot framebuffer's store range ZEROED (`scrub(store_off,
@@ -203,6 +203,7 @@ pub fn restore_physical_view<V: kf_mem::cpuwin::ViewOps>(
 pub fn restore_physical_view_scrubbed<V: kf_mem::cpuwin::ViewOps>(
     w: &kf_mem::cpuwin::CpuWindow<V>,
     at_change: u64,
+    tainted: bool,
     scrub: &mut dyn FnMut(u64, u64) -> Result<(), String>,
 ) -> Option<String> {
     let (at, store_off, len) = w.boot_range()?;
@@ -214,6 +215,8 @@ pub fn restore_physical_view_scrubbed<V: kf_mem::cpuwin::ViewOps>(
             now.wrapping_sub(at_change)
         ));
     }
+    // RED STEP (tests first): `tainted` is not used yet
+    let _ = tainted;
     let scrubbed = if w.seeded().is_none() {
         Some(scrub(store_off, len))
     } else {
@@ -469,7 +472,7 @@ mod tests {
     fn the_boot_range_is_scrubbed_before_the_seed_returns() {
         let (w, log) = logged_life();
         let l2 = log.clone();
-        let line = restore_physical_view_scrubbed(&w, w.changes(), &mut |off, len| {
+        let line = restore_physical_view_scrubbed(&w, w.changes(), false, &mut |off, len| {
             l2.borrow_mut().push(format!("zero {off:#x}+{len:#x}"));
             Ok(())
         })
@@ -504,7 +507,7 @@ mod tests {
         w.map(&mine, false).unwrap();
         w.invalidate().unwrap();
         let mut zeroed = Vec::new();
-        let line = restore_physical_view_scrubbed(&w, w.changes(), &mut |o, l| {
+        let line = restore_physical_view_scrubbed(&w, w.changes(), false, &mut |o, l| {
             zeroed.push((o, l));
             Ok(())
         })
@@ -521,7 +524,7 @@ mod tests {
         let w = kf_mem::cpuwin::CpuWindow::new(Host, 128 << 20);
         w.seed(0, 0, G).unwrap();
         let mut zeroed = 0;
-        let line = restore_physical_view_scrubbed(&w, w.changes(), &mut |_, _| {
+        let line = restore_physical_view_scrubbed(&w, w.changes(), false, &mut |_, _| {
             zeroed += 1;
             Ok(())
         })
@@ -530,12 +533,39 @@ mod tests {
         assert!(line.contains("already shows"), "{line}");
     }
 
+    /// ★ Review (3), stuck taint: fn 72 tainted the range, but the RM died before it ever touched
+    /// BAR1 — the seed is still placed and the unload used to say "already shows" with no scrub and
+    /// no clean, leaving the boot layer hidden for good. With the range tainted the unload scrubs
+    /// (the console's picture was the RM's data over a console; a redraw that races the zero is
+    /// lost, and said) so the caller can clean.
+    #[test]
+    fn a_tainted_range_under_a_still_placed_seed_is_scrubbed_so_the_taint_can_clear() {
+        let w = kf_mem::cpuwin::CpuWindow::new(Host, 128 << 20);
+        w.seed(0, 0, G).unwrap();
+        let mut zeroed = Vec::new();
+        let line = restore_physical_view_scrubbed(&w, w.changes(), true, &mut |o, l| {
+            zeroed.push((o, l));
+            Ok(())
+        })
+        .expect("a line");
+        assert_eq!(zeroed, vec![(0, G)], "{line}");
+        assert!(line.contains("already shows") && line.contains("scrubbed first"), "{line}");
+        assert_eq!(w.seeded(), Some((0, 0, G)), "the seed stays placed");
+        // untainted: the live console is left alone (the existing rule)
+        let mut again = 0;
+        restore_physical_view_scrubbed(&w, w.changes(), false, &mut |_, _| {
+            again += 1;
+            Ok(())
+        });
+        assert_eq!(again, 0);
+    }
+
     /// An RM that took BAR1 again before the VA thread got to the request owns the range.
     #[test]
     fn a_bar1_change_after_the_request_never_scrubs() {
         let w = one_life();
         let mut zeroed = 0;
-        let line = restore_physical_view_scrubbed(&w, w.changes() - 1, &mut |_, _| {
+        let line = restore_physical_view_scrubbed(&w, w.changes() - 1, false, &mut |_, _| {
             zeroed += 1;
             Ok(())
         })
@@ -549,7 +579,7 @@ mod tests {
     #[test]
     fn a_refused_scrub_is_named_and_the_seed_still_returns() {
         let w = one_life();
-        let line = restore_physical_view_scrubbed(&w, w.changes(), &mut |_, _| {
+        let line = restore_physical_view_scrubbed(&w, w.changes(), false, &mut |_, _| {
             Err("cuMemsetD8: out of memory".to_string())
         })
         .expect("a line");
@@ -566,7 +596,7 @@ mod tests {
         let w = kf_mem::cpuwin::CpuWindow::new(Host, 128 << 20);
         let mut asked = false;
         assert_eq!(
-            restore_physical_view_scrubbed(&w, 0, &mut |_, _| {
+            restore_physical_view_scrubbed(&w, 0, false, &mut |_, _| {
                 asked = true;
                 Ok(())
             }),

@@ -27,6 +27,7 @@ pub mod gpuuid;
 pub mod hostfacts;
 pub mod latejoin;
 pub mod mem;
+pub mod memreset;
 pub mod prof;
 pub mod raw_unsafe;
 pub mod readtrace;

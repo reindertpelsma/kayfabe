@@ -1872,6 +1872,30 @@ impl DisplayPlane {
     }
 }
 
+impl crate::bootclean::BootSink for DisplayPlane {
+    fn begin_life(&self) -> u64 {
+        let g = self.boot_clean.begin_life();
+        let _ = self.wake.signal();
+        g
+    }
+    fn taint(&self) {
+        self.boot_tainted();
+    }
+    fn generation(&self) -> u64 {
+        self.boot_clean.generation()
+    }
+    fn scrubbed_if(&self, life_id: u64) -> bool {
+        let cleaned = self.boot_clean.clean_if(life_id);
+        if cleaned {
+            let _ = self.wake.signal();
+        }
+        cleaned
+    }
+    fn scrubbed(&self) {
+        self.boot_scrubbed();
+    }
+}
+
 impl std::fmt::Debug for DisplayPlane {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("DisplayPlane")
