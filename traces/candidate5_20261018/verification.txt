@@ -1,3 +1,5 @@
+MEASURED LUT integration 419d74b41: full 22-crate run 3561/0/19; broker normal/sanitizer and socket tests pass; 35/35 mutants, 78/78 required-suite assertion kills; restored source green; clippy878 equals baseline878 with no changed-file additions; all changed Rust format clean; eight cursor blobs unchanged.
+
 MEASURED Amendment 3: approved progress oracle and expectation correction now pass 35/35 mutants and 78/78 required-suite kills. Restored source 409/0/12. Earlier stop records below are historical; lane resumed.
 
 STATUS: PARTIAL; required verification held for an owner ruling, 2026-10-18.
