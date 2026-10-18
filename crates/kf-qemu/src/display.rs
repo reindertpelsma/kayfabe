@@ -6197,9 +6197,11 @@ mod tests {
     /// M6 no `forget`.)
     #[test]
     fn the_latch_method_waits_for_the_copy_in_flight_and_runs_the_resolutions_once() {
-        let mut scan = ScanState::default();
-        scan.started = 4;
-        scan.inflight = Some(flight(4));
+        let mut scan = ScanState {
+            started: 4,
+            inflight: Some(flight(4)),
+            ..ScanState::default()
+        };
         let mut ran = 0;
         scan.on_window_latch(3, true, |_| ran += 1);
         assert_eq!(ran, 1, "the resolutions run once per shown latch");
@@ -6213,8 +6215,10 @@ mod tests {
             "the newest frame is a pending mailbox copy"
         );
         // nothing in flight: nothing to wait for
-        let mut idle = ScanState::default();
-        idle.started = 9;
+        let mut idle = ScanState {
+            started: 9,
+            ..ScanState::default()
+        };
         idle.on_window_latch(3, true, |_| {});
         assert_eq!((idle.barrier, idle.want), (0, false));
         // a window the console does not show: only the forgetting

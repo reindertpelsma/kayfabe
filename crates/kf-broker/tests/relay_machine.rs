@@ -35,6 +35,8 @@ struct Wire {
     sent: Vec<(Cmd, Option<u64>)>,
     /// Sends allowed before the socket reports Full (`None`: unlimited).
     budget: Option<usize>,
+    /// Full results in this fixture entry; the soak fixture uses the same 512-result bound.
+    full_run: u32,
     open: i32,
     /// ★ Runs after a record of this type was sent — what another thread does in the window
     /// between two of the relay's sends (the worker's `withdraw_all`, for one).
@@ -78,6 +80,9 @@ impl Link for Fake {
         let mut w = self.0.borrow_mut();
         if let Some(b) = w.budget.as_mut() {
             if *b == 0 {
+                w.full_run += 1;
+                // READ_BATCH packets can each try several sends; looping on Full is forbidden.
+                assert!(w.full_run <= 512, "the relay retried a full send in a loop");
                 return Sent::Full;
             }
             *b -= 1;
@@ -210,6 +215,7 @@ impl T {
     }
 
     fn frame(&mut self) {
+        self.wire.borrow_mut().full_run = 0;
         let now = self.now;
         self.relay.on_frame(now, &mut self.host);
     }
@@ -227,6 +233,7 @@ impl T {
     }
 
     fn read(&mut self) -> Vec<Input> {
+        self.wire.borrow_mut().full_run = 0;
         let mut out = Vec::new();
         let now = self.now;
         self.relay
@@ -235,6 +242,7 @@ impl T {
     }
 
     fn writable(&mut self) {
+        self.wire.borrow_mut().full_run = 0;
         let now = self.now;
         let mut out = Vec::new();
         self.relay
@@ -242,6 +250,7 @@ impl T {
     }
 
     fn tick(&mut self, ms: u64) {
+        self.wire.borrow_mut().full_run = 0;
         self.now += ms;
         let now = self.now;
         self.relay.on_timer(now, &mut self.host);
@@ -249,6 +258,7 @@ impl T {
 
     /// `start` arms the first attempt for now; the VMM's loop then fires the timer.
     fn start(&mut self) {
+        self.wire.borrow_mut().full_run = 0;
         let now = self.now;
         self.relay.start(now, &mut self.host);
         assert_eq!(
