@@ -1,6 +1,6 @@
 # V3 — one host TSG with real host context shares: feasibility study
 
-**STATUS: RESEARCH, 2026-10-18.** Phase A (source + repo reading) and Phase B (native, unprivileged, bare-metal probe on the
+**STATUS: RESEARCH, 2026-10-18; IMPLEMENTATION DESIGN (section 10) LIVE, 2026-10-18, branch `claude/tsg-mirror-20261018`.** Phase A (source + repo reading) and Phase B (native, unprivileged, bare-metal probe on the
 host RTX 4070 / driver 595.91.07, 72 runs, 0 Xid) are both done. Nothing in a `kf-*` crate was changed. Not merged.
 Branch `claude/tsg-subctx-feasibility-20261018` (from `integration/prod-candidate-4-20261017`). Probe:
 `scripts/bench/tsg_subctx_probe/`. Evidence summaries: `traces/tsg_subctx_probe_20261018/summaries_all_batches.txt`. Raw logs
@@ -328,3 +328,103 @@ bash sum.sh OUTDIR '*.log'
 ```
 Binaries used: md5 `18628f92` (b1), `067bb4a1` (b2-b3), `10a1ee87` (b4-b8), `e6db725f` (b9; the final one on the host). Scripts changed between batches only as noted
 (rq1 added to ASYNC channels after b3; `scripts_v1/` = as run in b3, b4).
+
+## 10. Implementation design (A\'), settled before code
+
+**STATUS: LIVE (design of the code on `claude/tsg-mirror-20261018`), 2026-10-18.** Labels as above. "Base" = `0452613b5`
+(`integration/prod-candidate-4-20261017`), every `file:line` below is base. This section changes nothing in sections 0-9; where the
+plan of section 7 is made concrete or refined the refinement is named.
+
+### 10.1 What kayfabe observes, and what it validates
+
+* **Guest ctxshare alloc.** Today `kf-rm/src/chanlink.rs:1259-1264` keeps `(client, hCtxShare) -> hVASpace` and drops `flags`,
+  `subctxId` and the parent (`kf-abi/src/view.rs:389-393` has one field). New: `CtxShareFacts { parent, h_vaspace, flags, subctx_id }`
+  per `(client, handle)`, and one bounded log line per guest ctxshare alloc (`CTXSHARE-FACTS`, the first 256 per process, then one
+  `suppressed` line): decoded flags, the decoded kind, the declared `subctxId`, `hVASpace`, parent TSG. **Limit, stated:** the guest's
+  returned VEID is NOT visible to kayfabe: the alloc reply is an echo of the guest's own params (`kf-gsp/src/rpc.rs:598-608`), so the
+  `subctxId` seen is what the guest wrote INTO the request. The VEID that exists is the HOST's, logged in the `TSG-MIRROR CTX` line
+  (below). The guest-side VEID needs the guest recorder named in section 8.
+* **Guest channel alloc.** `ChannelAlloc` (`kf-rm/src/chanlink.rs:205-206,238`) already carries `flags`, `ctx_share`, `tsg`; new field
+  `ctx: Option<CtxShareFacts>` = the facts of the ctxshare the channel names, `Some` only if this link saw that ctxshare allocated
+  (`ctx_share_known` today). The existing per-channel `CHAN-FACTS` line (`chanlink.rs:1417+`) already prints flags; it is unchanged.
+* **Validation, all before any host call, all by name, all counted:**
+  1. channel names a ctxshare the link never saw -> refused `NV_ERR_OBJECT_NOT_FOUND` (0x57), counter `ctx_unknown` (today it silently
+     became its own host group; "never fall back silently");
+  2. the ctxshare\'s recorded parent is not the channel\'s TSG -> 0x1f;
+  3. ctxshare `flags` outside {0 SYNC, 1 ASYNC, 2 SPECIFIED, 3 PREFER_LOWER} (the guest RM compares the whole word,
+     `kernel_ctxshare.c:442-446`) -> 0x1f, counter `flag_refused`;
+  4. channel flag word through the allowlist (10.2) -> 0x1f for a refused bit, counter `flag_refused`;
+  5. mode contradiction (10.3) -> 0x1f, counter `mode_refused`;
+  6. ctxshare space or engine contradiction with the group\'s record (10.3) -> 0x1f;
+  7. the 65th ctxshare of one TSG -> `NV_ERR_NO_MEMORY` (0x51, what the host answers), counter `cap_refused`.
+
+### 10.2 The host-flag allowlist (explicit-mode channels only)
+
+The host channel flag word is **built**, never copied: `DENY_PHYSICAL_MODE_CE` (bit 7, always, as today) plus, only if the guest set it,
+`GROUP_CHANNEL_RUNQUEUE` (bit 4). No other bit of the guest word can reach the host word. Classes of the guest bits (`alloc_channel.h`, [595]):
+
+| guest bits | class | rule |
+|---|---|---|
+| 4 `RUNQUEUE` | FORWARD | host bit 4 = guest bit 4 (probe 1.2a: a compute channel next to a 3D subcontext needs it; Windows sets it on all 1 393 joiners) |
+| 1:0 `CHANNEL_TYPE`, 2 `VPR`/`CC_SECURE`, 25 `SET_EVICT_LAST_CE_PREFETCH`, 26 `VGPU_PLUGIN_CONTEXT`, 29:28 `THREAD` = 3 (undefined) | REFUSE | loud named refusal, 0x1f, `flag_refused` (no real guest sets them: absent from every `CHAN-FACTS` word in `traces/` and `docs/`; confidential-compute, VPR and vGPU-plugin bits carry meaning the host must not grant) |
+| 3, 5 `PRIVILEGED_CHANNEL`, 6 `DELAY_CHANNEL_SCHEDULING`, 7, 8-11, 12-21 (USERD index), 22, 23 `SKIP_SCRUBBER`, 24, 27, 29:28 = 0..2, 30, 31 | CONSUMED | the guest RM\'s own business, present in real guest words (`0xa00120`, `0x80201620`, `0x201520` in the repo\'s CHAN-FACTS histogram); NOT forwarded. Bit 5 never reaches the host (channels stay USER, `birth_privilege`); bit 6 is never set (late members run unscheduled by design, section 1.3); thread bits are not forwarded either |
+
+Legacy-mode channels are NOT put through the allowlist and get today\'s word (`DENY_PHYSICAL_MODE_CE` only): legacy stays bit for bit
+(refinement of section 6, which allowed `thread` bits for legacy; kayfabe does not use that allowance).
+Host ctxshare `kind` = two-valued: SYNC (flags 0, or SPECIFIED with id 0), else ASYNC (flags 1, 3, SPECIFIED id != 0). The guest\'s
+`subctxId` is never forwarded (the host picks the VEID); ctxshare `hVASpace` = the channel\'s resolved twin space handle, never 0.
+
+### 10.3 The group map and the mode
+
+`groups: (hClient, hTsg, shard) -> Group { host_tsg, mode, engine, members, ctxs: guest_ctx -> {host_ctx, kind, space, members} }`
+where `shard == 0` always, except under `KF3_TSG_MIRROR=0` where `shard == hContextShare` (today\'s key, mode forced LEGACY: the A/B kill
+switch is the same code with the old key). Mode is fixed by the FIRST channel that creates the group: `hContextShare == 0` -> LEGACY,
+else EXPLICIT. A later channel that disagrees (a legacy channel into an explicit TSG or the reverse) is refused 0x1f BY NAME before any
+host call - the status the host gives (probe 53) and the guest RM gives. A channel whose engine type differs from the group\'s, or whose
+resolved twin space differs from the ctxshare\'s recorded space, or whose ctxshare handle was reused with a different (kind, space) while
+members live, is refused 0x1f the same way. A channel without a known TSG is not in the map (bare channel: today\'s path).
+
+### 10.4 Order of host operations and unwinding (explicit mode)
+
+First channel of a guest TSG: `birth_group` (engine of the first member, `hVASpace` = its twin space) -> `ctxshare` (parent = host TSG,
+kind, `hVASpace` = twin space) -> channel (`hContextShare` = host ctxshare, flags per 10.2, `hVASpace` 0) -> `NVA06C BIND` of the group
+(first member of the host TSG only) -> work-submit token. A later channel of a known ctxshare: channel -> channel `BIND` -> token.
+A later channel of a new ctxshare (the D3D12 joiners): ctxshare -> channel -> channel `BIND` -> token; the group is already scheduled
+and the joiner needs no schedule of its own (probes 60-66, 90, 91). The ctxshare is allocated **lazily at the first channel that names
+it** (not at the guest\'s ctxshare alloc, which the plane never sees as a statement): a ctxshare without a channel has no effect on the
+host and its order relative to its channels is preserved. Refinement of "as the guest allocates them", stated so it is not read as a miss.
+Unwinding, every step: the channel step fails -> free ctxshare iff it was created by this birth, then the group iff created by this birth;
+the ctxshare step fails -> free the group iff new; the group step fails -> nothing. The group map is committed only after the host
+channel exists, so a refusal leaves no half group. A failed unwind step is logged and counted (`unwind_failed`); the object it leaked
+is the host RM client\'s, freed with the TSG (`forget` cascades) or at the client teardown.
+
+### 10.5 Free order
+
+`release_twin` frees the channel first (as today: `free_member`); then, if it was the last member of its guest ctxshare, the host
+ctxshare; then, if it was the last member of the group, the host TSG. The map is updated before the host verbs (as today) so a refused
+free cannot make a second free decrement twice. Legacy mode: exactly today (`free_member`, then `free(tsg)` on the last).
+
+### 10.6 Guest TSG controls on the one host TSG (and what they did at base)
+
+| Control | At base | Now (explicit group) |
+|---|---|---|
+| `GPFIFO_SCHEDULE` TSG `0xa06c0101` | `chan.rs:3553-3600`: every twin of the guest TSG; `schedule_group_once` (`latejoin.rs:131`) dedups by host group, i.e. one verb PER guest ctxshare (several host groups) | the same code; the dedup collapses to ONE verb on the one host TSG |
+| late joiner | `chan.rs:6841`, `userrelay.rs:655`: an authored schedule of the joiner\'s own (new, unscheduled) host group | not needed: the joiner joins the already-scheduled host TSG. The call is **skipped for explicit groups** and counted (`latejoin_skipped`) and printed in the BORN line (`late_joiner_schedule=SkippedExplicit`). Legacy groups: as today |
+| `SET_TIMESLICE` `0xa06c0103` | `chan.rs:3866-3930`: every host group existing at the statement; not remembered (a ctxshare group born later, i.e. all D3D12 joiners, ran at the host default) | same code, one group: the host TSG exists from the first channel, so the timeslice D3D12 sends before its schedule applies to every later joiner. No remembering needed (section 7 item 3 refined) |
+| `PREEMPT` `0xa06c0105` | `chan.rs:4407-4447`: one host verb per twin (not deduplicated) | explicit groups: one verb per host TSG; legacy groups: unchanged (one per twin) |
+| `STOP_CHANNEL` | `chan.rs:4105-4146`: `DISABLE_CHANNELS` on the twin, then TSG-level `schedule_enable(false)` (`:4139`) on its whole group | explicit groups: `DISABLE_CHANNELS` then the CHANNEL-level `NVA06F GPFIFO_SCHEDULE(false)` (probe 98: only that channel stops; TSG-level `false` is not a stop, 1.4). Legacy: unchanged |
+| `GPU_EVICT_CTX`, Windows user-work evict | `chan.rs:4634`, `:5241` (`schedule_enable(false)`, TSG level) | explicit groups: channel-level `false`. Legacy: unchanged |
+| re-enable after STOP | `chan.rs:3567-3586`: `DISABLE_CHANNELS(false)` then TSG schedule | explicit groups: additionally the channel-level `true` for a twin STOP took off |
+| channel disable (`DISABLE_CHANNELS`) | channel-scoped (`HostRm::disable_channels`) | unchanged (probe 99) |
+
+The channel-level verb is new in `kf-host` (`HostRm::schedule_channel_enable`, `NVA06F_CTRL_CMD_GPFIFO_SCHEDULE` `0xa06f0103`, the
+same params as the TSG one, forced `bSkipSubmit = bSkipEnable = 0`).
+
+### 10.7 Kill switch, counters, logs
+
+`KF3_TSG_MIRROR=0` (measurement class, default ON, read once at plane construction) restores base behaviour: shard = ctxshare handle,
+mode always LEGACY, no ctxshare, no allowlist, late-joiner call as at base, STOP/evict/preempt as at base. Counters (plain atomics,
+bounded by construction, in the `chan[...]` status line as `mirror=[...]`): host ctxshares created / freed, groups created, `mode_refused`,
+`flag_refused`, `ctx_unknown`, `cap_refused`, `latejoin_skipped`, `unwind_failed`. Logs: one `TSG-MIRROR BIRTH` line per guest TSG
+(mode, first ctxshare, kinds, guest flags and host rq bit), one `TSG-MIRROR CTX` line per host ctxshare created (guest handle, kind,
+host handle, host-returned VEID); both capped at 512 lines per process.
