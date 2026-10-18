@@ -1017,24 +1017,75 @@ mod tests {
         assert_eq!(*o.scrubs.borrow(), [false], "a guest-issued reset must not scrub");
     }
 
-    /// ★ A reboot of a guest that ran: the memory stage is asked to scrub, exactly once, and a second
-    /// reboot with no guest access in between (nothing of a life exists) does not scrub again.
+    /// ★ Owner decision, 2026-10-18 (finding 1 of the review): the store counts as dirty as soon as
+    /// the guest has RUN at all — a BAR1-only writer (the live boot-framebuffer seed, a CPU view, a
+    /// DMA) is invisible to the device, and the only reset that may skip the scrub is the one before
+    /// the guest ever ran (machine creation, pristine). So EVERY system reset after the gate first
+    /// opened scrubs, even if no BAR0 access was ever admitted in between.
     #[test]
-    fn a_reboot_scrubs_once_and_a_reboot_of_a_clean_store_does_not() {
+    fn every_reboot_after_the_guest_ran_scrubs_even_with_no_bar0_access() {
         let r = Reset::default();
         let o = Fake::default();
-        r.request_typed(false, false); // start-up
+        r.request_typed(false, false); // machine creation: pristine, the guest has not run yet
         run_to_completion(&r, &o);
+        assert!(o.scrubs.borrow().is_empty(), "the creation reset asks no owner");
+        // the guest runs and writes ONLY through BAR1 [0, G): the device sees nothing at all
+        r.request_typed(false, false); // it reboots
+        run_to_completion(&r, &o);
+        assert_eq!(*o.scrubs.borrow(), [true], "a BAR1-only writer's bytes must not reach the next OS");
+        assert!(!r.scrub_owed());
+        // the new OS runs (touching nothing the device can see) and reboots again
+        r.request_typed(false, false);
+        run_to_completion(&r, &o);
+        assert_eq!(
+            *o.scrubs.borrow(),
+            [true, true],
+            "the gate opened after the first reboot, so the guest ran: the second reboot scrubs too"
+        );
+    }
+
+    /// ★ The same decision when the only admitted access was BAR0, before any reset completed (a device
+    /// whose machine-creation reset never ran): `touched` still marks the store.
+    #[test]
+    fn a_bar0_access_before_any_reset_marks_the_store_dirty() {
+        let r = Reset::default();
+        let o = Fake::default();
         let p = r.gate.enter().expect("open");
         r.touched();
         drop(p);
-        r.request_typed(false, false); // the guest reboots
+        r.request_typed(false, false);
         run_to_completion(&r, &o);
         assert_eq!(*o.scrubs.borrow(), [true]);
-        assert!(!r.scrub_owed());
-        r.request_typed(false, false); // reset button, no guest access since
+    }
+
+    /// ★ The machine-creation reset is the only one that scrubs nothing and leaves no mark.
+    #[test]
+    fn the_machine_creation_reset_scrubs_nothing_and_leaves_no_mark() {
+        let r = Reset::default();
+        let o = Fake::default();
+        r.request_typed(false, false);
         run_to_completion(&r, &o);
-        assert_eq!(*o.scrubs.borrow(), [true], "a store no guest touched is not scrubbed again");
+        assert!(o.calls.borrow().is_empty(), "no owner is asked: {:?}", o.calls.borrow());
+        assert!(!r.scrub_owed(), "a stale mark would scrub the next guest-issued reset");
+    }
+
+    /// ★ A guest-issued bus reset and an S3 wake still never scrub, after a guest that only wrote BAR1.
+    #[test]
+    fn a_guest_issued_reset_or_an_s3_wake_still_never_scrubs() {
+        let r = Reset::default();
+        let o = Fake::default();
+        r.request_typed(false, false); // creation
+        run_to_completion(&r, &o);
+        let p = r.gate.enter().expect("open");
+        r.touched(); // the guest got into BAR0 (so the reset below reaches a Memory stage at all)
+        drop(p);
+        r.request_typed(true, false); // the guest resets itself through a bridge
+        run_to_completion(&r, &o);
+        assert_eq!(*o.scrubs.borrow(), [false]);
+        o.pm_suspended.set(true);
+        r.request_typed(false, true); // S3 wake of a PM-suspended life: kept, no memory stage
+        run_to_completion(&r, &o);
+        assert_eq!(*o.scrubs.borrow(), [false], "a kept life asks the memory stage nothing");
     }
 
     /// ★ A guest that ran (a dirty store) and resets ITSELF through a bridge, or wakes from S3, owes
