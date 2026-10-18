@@ -521,6 +521,46 @@ mod tests {
         assert_eq!(w.seeded(), None, "the guest's placements still win");
     }
 
+    /// Mirrors the production callback's already-detected stale-life refusal. An old unload
+    /// must not install a physical boot view into a newer RM life's otherwise-scratch window.
+    #[test]
+    fn a_stale_unload_does_not_reseed_a_new_lifes_scratch() {
+        let (w, log) = logged_life();
+        let line = restore_physical_view_scrubbed(&w, w.changes(), true, &mut |_, _| {
+            Err("not scrubbed: a newer guest RM life began (fn 72) after this unload".into())
+        })
+        .expect("a line");
+        assert_eq!(w.seeded(), None, "a stale unload changed the new life: {line}");
+        assert!(log.borrow().is_empty(), "a stale unload placed a view: {:?}", log.borrow());
+    }
+
+    /// The new life's placements need not overlap the boot range. Its first BAR1 change retired
+    /// the seed, and the VA thread can notice the old unload only after this new mapping landed.
+    #[test]
+    fn a_stale_unload_preserves_a_new_life_with_a_mapping_above_the_boot_range() {
+        use kf_mem::ledger::{Desired, MapTarget};
+        let (w, log) = logged_life();
+        let live = Desired {
+            va: G + 0x10000,
+            len: 0x10000,
+            off: 0x2000000,
+            ram: false,
+            kind: 0,
+            perm: kf_host::MapPerm::READ_WRITE,
+            leaf: 0,
+        };
+        w.map(&live, false).unwrap();
+        w.invalidate().unwrap();
+        log.borrow_mut().clear();
+        let line = restore_physical_view_scrubbed(&w, w.changes(), true, &mut |_, _| {
+            Err("not scrubbed: a newer guest RM life began (fn 72) after this unload".into())
+        })
+        .expect("a line");
+        assert_eq!(w.seeded(), None, "a stale unload replaced the live RM's scratch: {line}");
+        assert_eq!(w.placements(), 1, "the new life's mapping stays");
+        assert!(log.borrow().is_empty(), "a stale unload placed a view: {:?}", log.borrow());
+    }
+
     /// A seed that is still placed (no RM ever took BAR1) is the firmware console's live
     /// framebuffer: scrubbing it would wipe what the guest is drawing.
     #[test]
