@@ -1,0 +1,445 @@
+{
+ "window_s": 42.3633616,
+ "functions": {
+  "DxgkEscape": {
+   "calls_per_s": 238.0,
+   "med_us": 13.1,
+   "p95_us": 1878.2,
+   "p99_us": 5121.7,
+   "max_us": 9924.0,
+   "total_ms_per_s": 104.47
+  },
+  "DdiEscape": {
+   "calls_per_s": 238.0,
+   "med_us": 12.6,
+   "p95_us": 1874.8,
+   "p99_us": 5118.2,
+   "max_us": 9921.8,
+   "total_ms_per_s": 104.0
+  },
+  "DdiNotifyDpc": {
+   "calls_per_s": 398.8,
+   "med_us": 11.7,
+   "p95_us": 158.8,
+   "p99_us": 192.4,
+   "max_us": 1174.2,
+   "total_ms_per_s": 14.87
+  },
+  "DpiDpcForIsr": {
+   "calls_per_s": 362.0,
+   "med_us": 11.9,
+   "p95_us": 161.3,
+   "p99_us": 194.6,
+   "max_us": 1175.8,
+   "total_ms_per_s": 13.64
+  },
+  "DdiQueryAdapterInfo": {
+   "calls_per_s": 10.8,
+   "med_us": 612.1,
+   "p95_us": 2901.5,
+   "p99_us": 5453.5,
+   "max_us": 9179.2,
+   "total_ms_per_s": 10.76
+  },
+  "DpiFdoMessageInterruptRoutine": {
+   "calls_per_s": 403.7,
+   "med_us": 20.8,
+   "p95_us": 44.2,
+   "p99_us": 54.9,
+   "max_us": 163.9,
+   "total_ms_per_s": 9.2
+  },
+  "DxgkQueryStatistics": {
+   "calls_per_s": 11.4,
+   "med_us": 552.7,
+   "p95_us": 2583.2,
+   "p99_us": 4709.6,
+   "max_us": 7058.3,
+   "total_ms_per_s": 8.82
+  },
+  "DxgkSubmitCommandToHwQueue": {
+   "calls_per_s": 1223.6,
+   "med_us": 2.9,
+   "p95_us": 6.5,
+   "p99_us": 11.7,
+   "max_us": 236.2,
+   "total_ms_per_s": 4.28
+  },
+  "DdiSetVidPnSourceAddressWithMultiPlaneOverlay3": {
+   "calls_per_s": 39.3,
+   "med_us": 80.2,
+   "p95_us": 103.5,
+   "p99_us": 135.8,
+   "max_us": 180.3,
+   "total_ms_per_s": 3.2
+  },
+  "DdiSubmitCommandToHwQueue": {
+   "calls_per_s": 1223.8,
+   "med_us": 1.5,
+   "p95_us": 4.0,
+   "p99_us": 5.7,
+   "max_us": 64.3,
+   "total_ms_per_s": 2.24
+  },
+  "DxgkQueryAdapterInfo": {
+   "calls_per_s": 4.6,
+   "med_us": 2.5,
+   "p95_us": 2054.4,
+   "p99_us": 5765.6,
+   "max_us": 9198.3,
+   "total_ms_per_s": 1.98
+  },
+  "DxgkPresent": {
+   "calls_per_s": 39.3,
+   "med_us": 46.2,
+   "p95_us": 60.4,
+   "p99_us": 79.0,
+   "max_us": 201.6,
+   "total_ms_per_s": 1.85
+  },
+  "DxgkSubmitWaitForSyncObjectsToHwQueue": {
+   "calls_per_s": 438.0,
+   "med_us": 2.4,
+   "p95_us": 4.3,
+   "p99_us": 7.8,
+   "max_us": 117.3,
+   "total_ms_per_s": 1.19
+  },
+  "DxgkSubmitSignalSyncObjectsToHwQueue": {
+   "calls_per_s": 235.8,
+   "med_us": 3.2,
+   "p95_us": 11.6,
+   "p99_us": 16.0,
+   "max_us": 159.8,
+   "total_ms_per_s": 1.08
+  },
+  "DdiValidateSubmitCommand": {
+   "calls_per_s": 1223.6,
+   "med_us": 0.5,
+   "p95_us": 1.3,
+   "p99_us": 2.6,
+   "max_us": 22.3,
+   "total_ms_per_s": 0.79
+  },
+  "DdiSetInterruptTargetPresentId": {
+   "calls_per_s": 39.6,
+   "med_us": 16.7,
+   "p95_us": 24.6,
+   "p99_us": 30.1,
+   "max_us": 63.1,
+   "total_ms_per_s": 0.68
+  },
+  "DxgkWaitForVerticalBlankEvent": {
+   "calls_per_s": 0.1,
+   "med_us": 6.2,
+   "p95_us": 16592.7,
+   "p99_us": 16592.7,
+   "max_us": 16592.7,
+   "total_ms_per_s": 0.63
+  },
+  "DdiUpdateFlipQueueLog": {
+   "calls_per_s": 39.3,
+   "med_us": 10.9,
+   "p95_us": 12.9,
+   "p99_us": 18.9,
+   "max_us": 24.5,
+   "total_ms_per_s": 0.44
+  },
+  "DxgkWaitForSynchronizationObject": {
+   "calls_per_s": 40.4,
+   "med_us": 4.1,
+   "p95_us": 6.6,
+   "p99_us": 226.0,
+   "max_us": 414.0,
+   "total_ms_per_s": 0.41
+  },
+  "DxgkGetPresentHistory": {
+   "calls_per_s": 43.2,
+   "med_us": 6.5,
+   "p95_us": 10.2,
+   "p99_us": 14.5,
+   "max_us": 45.5,
+   "total_ms_per_s": 0.28
+  },
+  "DxgkCreateAllocation": {
+   "calls_per_s": 0.8,
+   "med_us": 130.2,
+   "p95_us": 1879.7,
+   "p99_us": 5763.1,
+   "max_us": 5763.1,
+   "total_ms_per_s": 0.27
+  },
+  "DdiPresent": {
+   "calls_per_s": 39.3,
+   "med_us": 6.2,
+   "p95_us": 8.9,
+   "p99_us": 12.1,
+   "max_us": 21.0,
+   "total_ms_per_s": 0.25
+  },
+  "DdiCreateAllocation": {
+   "calls_per_s": 0.8,
+   "med_us": 88.8,
+   "p95_us": 1835.0,
+   "p99_us": 5703.8,
+   "max_us": 5703.8,
+   "total_ms_per_s": 0.24
+  },
+  "VidSchDdiNotifyInterrupt": {
+   "calls_per_s": 405.5,
+   "med_us": 0.4,
+   "p95_us": 1.2,
+   "p99_us": 1.7,
+   "max_us": 14.3,
+   "total_ms_per_s": 0.21
+  },
+  "2126": {
+   "calls_per_s": 39.3,
+   "med_us": 3.8,
+   "p95_us": 5.3,
+   "p99_us": 9.5,
+   "max_us": 281.3,
+   "total_ms_per_s": 0.16
+  },
+  "DxgkOpenAdapterFromLuid": {
+   "calls_per_s": 211.8,
+   "med_us": 0.4,
+   "p95_us": 1.0,
+   "p99_us": 2.0,
+   "max_us": 56.5,
+   "total_ms_per_s": 0.1
+  },
+  "DxgkGetDeviceState": {
+   "calls_per_s": 81.1,
+   "med_us": 1.1,
+   "p95_us": 1.9,
+   "p99_us": 2.7,
+   "max_us": 20.1,
+   "total_ms_per_s": 0.1
+  },
+  "DxgkCloseAdapter": {
+   "calls_per_s": 218.5,
+   "med_us": 0.2,
+   "p95_us": 0.7,
+   "p99_us": 1.9,
+   "max_us": 61.6,
+   "total_ms_per_s": 0.07
+  },
+  "DxgkCheckMonitorPowerState": {
+   "calls_per_s": 39.3,
+   "med_us": 1.4,
+   "p95_us": 2.0,
+   "p99_us": 2.6,
+   "max_us": 12.5,
+   "total_ms_per_s": 0.06
+  },
+  "DdiSubmitCommandVirtual": {
+   "calls_per_s": 4.5,
+   "med_us": 11.7,
+   "p95_us": 22.1,
+   "p99_us": 73.7,
+   "max_us": 75.7,
+   "total_ms_per_s": 0.06
+  },
+  "DxgkQueryClockCalibration": {
+   "calls_per_s": 9.1,
+   "med_us": 4.8,
+   "p95_us": 7.6,
+   "p99_us": 14.0,
+   "max_us": 14.8,
+   "total_ms_per_s": 0.05
+  },
+  "DdiBuildPagingBuffer": {
+   "calls_per_s": 12.0,
+   "med_us": 2.3,
+   "p95_us": 9.4,
+   "p99_us": 12.4,
+   "max_us": 18.8,
+   "total_ms_per_s": 0.04
+  },
+  "DdiNotifyFocusPresent": {
+   "calls_per_s": 39.3,
+   "med_us": 0.9,
+   "p95_us": 1.2,
+   "p99_us": 1.6,
+   "max_us": 8.2,
+   "total_ms_per_s": 0.03
+  },
+  "DdiCalibrateGpuClock": {
+   "calls_per_s": 9.1,
+   "med_us": 3.4,
+   "p95_us": 5.4,
+   "p99_us": 9.4,
+   "max_us": 13.5,
+   "total_ms_per_s": 0.03
+  },
+  "DxgkOpenAdapter": {
+   "calls_per_s": 4.5,
+   "med_us": 3.7,
+   "p95_us": 10.8,
+   "p99_us": 11.9,
+   "max_us": 12.3,
+   "total_ms_per_s": 0.02
+  },
+  "DxgkMapGpuVirtualAddress": {
+   "calls_per_s": 1.3,
+   "med_us": 13.9,
+   "p95_us": 19.9,
+   "p99_us": 72.3,
+   "max_us": 72.3,
+   "total_ms_per_s": 0.02
+  },
+  "ProbeAndLockPages": {
+   "calls_per_s": 0.4,
+   "med_us": 26.8,
+   "p95_us": 151.3,
+   "p99_us": 151.3,
+   "max_us": 151.3,
+   "total_ms_per_s": 0.02
+  },
+  "DxgkOpenResourceFromNtHandle": {
+   "calls_per_s": 0.5,
+   "med_us": 31.2,
+   "p95_us": 44.5,
+   "p99_us": 57.7,
+   "max_us": 57.7,
+   "total_ms_per_s": 0.02
+  },
+  "DxgkEnumAdapters": {
+   "calls_per_s": 2.0,
+   "med_us": 8.4,
+   "p95_us": 15.3,
+   "p99_us": 33.9,
+   "max_us": 33.9,
+   "total_ms_per_s": 0.02
+  },
+  "DdiOpenAllocation": {
+   "calls_per_s": 1.3,
+   "med_us": 7.3,
+   "p95_us": 14.1,
+   "p99_us": 40.3,
+   "max_us": 40.3,
+   "total_ms_per_s": 0.01
+  },
+  "ProcessHeapAllocate": {
+   "calls_per_s": 1.6,
+   "med_us": 3.9,
+   "p95_us": 14.8,
+   "p99_us": 17.9,
+   "max_us": 17.9,
+   "total_ms_per_s": 0.01
+  },
+  "DxgkMakeResident": {
+   "calls_per_s": 1.3,
+   "med_us": 6.8,
+   "p95_us": 12.2,
+   "p99_us": 15.8,
+   "max_us": 15.8,
+   "total_ms_per_s": 0.01
+  },
+  "DxgkDestroyAllocation2": {
+   "calls_per_s": 0.5,
+   "med_us": 11.5,
+   "p95_us": 18.7,
+   "p99_us": 27.5,
+   "max_us": 27.5,
+   "total_ms_per_s": 0.01
+  },
+  "DxgkSignalSynchronizationObjectFromGpu2": {
+   "calls_per_s": 0.6,
+   "med_us": 7.9,
+   "p95_us": 12.2,
+   "p99_us": 13.5,
+   "max_us": 13.5,
+   "total_ms_per_s": 0.01
+  },
+  "DdiCloseAllocation": {
+   "calls_per_s": 0.5,
+   "med_us": 5.4,
+   "p95_us": 7.2,
+   "p99_us": 7.6,
+   "max_us": 7.6,
+   "total_ms_per_s": 0.0
+  },
+  "DxgkQueryResourceInfoFromNtHandle": {
+   "calls_per_s": 0.5,
+   "med_us": 3.9,
+   "p95_us": 5.0,
+   "p99_us": 6.2,
+   "max_us": 6.2,
+   "total_ms_per_s": 0.0
+  },
+  "DxgkSetProcessSchedulingPriorityClass": {
+   "calls_per_s": 0.1,
+   "med_us": 2.9,
+   "p95_us": 23.4,
+   "p99_us": 23.4,
+   "max_us": 23.4,
+   "total_ms_per_s": 0.0
+  },
+  "UnlockPages": {
+   "calls_per_s": 0.1,
+   "med_us": 9.2,
+   "p95_us": 23.4,
+   "p99_us": 23.4,
+   "max_us": 23.4,
+   "total_ms_per_s": 0.0
+  },
+  "DxgkProcessCallout": {
+   "calls_per_s": 0.0,
+   "med_us": 23.7,
+   "p95_us": 23.7,
+   "p99_us": 23.7,
+   "max_us": 23.7,
+   "total_ms_per_s": 0.0
+  },
+  "DxgkLock2": {
+   "calls_per_s": 0.4,
+   "med_us": 2.0,
+   "p95_us": 4.1,
+   "p99_us": 4.1,
+   "max_us": 4.1,
+   "total_ms_per_s": 0.0
+  },
+  "DdiSetContextSchedulingProperties": {
+   "calls_per_s": 0.1,
+   "med_us": 3.1,
+   "p95_us": 6.8,
+   "p99_us": 6.8,
+   "max_us": 6.8,
+   "total_ms_per_s": 0.0
+  },
+  "DxgkReclaimAllocations": {
+   "calls_per_s": 0.0,
+   "med_us": 14.9,
+   "p95_us": 14.9,
+   "p99_us": 14.9,
+   "max_us": 14.9,
+   "total_ms_per_s": 0.0
+  },
+  "DxgkOfferAllocations": {
+   "calls_per_s": 0.0,
+   "med_us": 10.5,
+   "p95_us": 10.5,
+   "p99_us": 10.5,
+   "max_us": 10.5,
+   "total_ms_per_s": 0.0
+  },
+  "DxgkUnlock2": {
+   "calls_per_s": 0.0,
+   "med_us": 1.8,
+   "p95_us": 1.8,
+   "p99_us": 1.8,
+   "max_us": 1.8,
+   "total_ms_per_s": 0.0
+  },
+  "3": {
+   "calls_per_s": 0.0,
+   "med_us": 0.4,
+   "p95_us": 0.4,
+   "p99_us": 0.4,
+   "max_us": 0.4,
+   "total_ms_per_s": 0.0
+  }
+ }
+}

@@ -1,0 +1,31 @@
+GP adapter NVIDIA GeForce RTX 4070 dedicated 7843 MiB
+GP A  empty-queue Signal round trip, polled      round0 us n=2000 med=1.3 mean=1.3 p95=1.3 p99=2.8 min=1.2 max=10.0
+GP B  empty-queue Signal round trip, event-wait  round0 us n=2000 med=2.5 mean=2.6 p95=2.8 p99=3.4 min=2.4 max=94.5
+GP A2 64KiB-copy + Signal round trip, polled     round0 us n=2000 med=844.8 mean=857.8 p95=996.1 p99=1111.5 min=709.8 max=6177.8
+GP B2 64KiB-copy + Signal round trip, event-wait round0 us n=2000 med=857.3 mean=871.0 p95=1000.4 p99=1134.8 min=692.2 max=1324.3
+GP A  empty-queue Signal round trip, polled      round1 us n=2000 med=1.3 mean=1.3 p95=1.3 p99=3.9 min=1.2 max=11.7
+GP B  empty-queue Signal round trip, event-wait  round1 us n=2000 med=2.6 mean=2.6 p95=2.7 p99=2.9 min=2.5 max=10.1
+GP A2 64KiB-copy + Signal round trip, polled     round1 us n=2000 med=847.0 mean=858.2 p95=997.6 p99=1117.5 min=664.2 max=3267.5
+GP B2 64KiB-copy + Signal round trip, event-wait round1 us n=2000 med=867.4 mean=899.0 p95=1000.1 p99=1081.4 min=697.6 max=51020.0
+GP A  empty-queue Signal round trip, polled      round2 us n=2000 med=1.3 mean=1.4 p95=1.4 p99=4.1 min=1.2 max=151.6
+GP B  empty-queue Signal round trip, event-wait  round2 us n=2000 med=2.5 mean=2.6 p95=2.7 p99=2.9 min=2.5 max=9.6
+GP A2 64KiB-copy + Signal round trip, polled     round2 us n=2000 med=823.2 mean=842.5 p95=987.5 p99=1108.1 min=750.9 max=1726.6
+GP B2 64KiB-copy + Signal round trip, event-wait round2 us n=2000 med=879.4 mean=1024.1 p95=1012.8 p99=1145.2 min=704.0 max=179939.4
+GP C vram->vram copy 256MiB time n=30 med=2.1ms mean=2.1ms p95=2.5ms p99=2.6ms min=2.0ms max=2.6ms | GiB/s n=30 med=120.9 mean=117.8 p95=123.1 p99=126.2 min=94.5 max=126.2
+GP D upload(sysmem)->vram copy 128MiB time n=30 med=5.5ms mean=5.5ms p95=5.7ms p99=5.8ms min=5.4ms max=5.8ms | GiB/s n=30 med=22.9 mean=22.7 p95=23.3 p99=23.3 min=21.6 max=23.3
+GP E vram->readback copy 128MiB time n=30 med=5.5ms mean=5.6ms p95=5.7ms p99=5.8ms min=5.5ms max=5.8ms | GiB/s n=30 med=22.6 mean=22.4 p95=22.7 p99=22.8 min=21.4 max=22.8
+GP F DIRECT-signal -> COPY-wait -> COPY-signal, polled us n=2000 med=3.8 mean=4.4 p95=4.9 p99=8.2 min=3.7 max=33.0
+GP G  64 lists in ONE ExecuteCommandLists + Signal, polled   us n=100 med=1231.0 mean=1242.0 p95=1385.3 p99=2552.8 min=1074.9 max=2552.8
+GP H  64 x ExecuteCommandLists(1 list) + one Signal, polled  us n=100 med=35631.7 mean=36321.2 p95=40602.0 p99=60296.2 min=34555.6 max=60296.2
+GP G0 1 list + Signal, polled (same loop)                    us n=100 med=950.8 mean=955.0 p95=1108.9 p99=1439.2 min=807.4 max=1439.2
+GP I  vram->vram 64KiB round trip us n=40 med=934.4 mean=930.5 p95=1061.3 p99=1159.6 min=831.9 max=1159.6
+GP I  vram->vram 1MiB round trip us n=40 med=883.0 mean=911.7 p95=1190.3 p99=1232.2 min=825.8 max=1232.2
+GP I  vram->vram 4MiB round trip us n=40 med=927.0 mean=941.2 p95=1061.1 p99=1159.2 min=832.6 max=1159.2
+GP I  vram->vram 16MiB round trip us n=40 med=1000.0 mean=1015.2 p95=1352.0 p99=1366.8 min=859.7 max=1366.8
+GP I  vram->vram 64MiB round trip us n=40 med=1173.4 mean=1186.3 p95=1297.3 p99=1363.5 min=1082.6 max=1363.5
+GP I  vram->vram 256MiB round trip us n=40 med=2180.1 mean=2211.1 p95=2597.1 p99=2820.1 min=2056.5 max=2820.1
+GP J  CPU time inside ExecuteCommandLists(1 tiny list) us n=1450 med=30.7 mean=38.7 p95=72.7 p99=130.3 min=9.7 max=704.9
+GP J  CPU time inside Signal us n=1450 med=4.7 mean=5.8 p95=10.9 p99=19.3 min=1.7 max=557.8
+GP J  then wait for the fence (poll) us n=1450 med=850.6 mean=866.8 p95=990.4 p99=1196.5 min=339.1 max=2697.2
+GP done
+

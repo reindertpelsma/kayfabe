@@ -1,0 +1,20 @@
+IT user=kayfabe-windows\kfadmin
+GP adapter NVIDIA GeForce RTX 4070 dedicated 11762 MiB
+GP A  empty-queue Signal round trip, polled      round0 us n=2000 med=1.4 mean=1.4 p95=1.4 p99=1.9 min=1.3 max=10.0
+GP B  empty-queue Signal round trip, event-wait  round0 us n=2000 med=2.7 mean=2.8 p95=2.8 p99=3.3 min=2.6 max=85.9
+GP A2 64KiB-copy + Signal round trip, polled     round0 us n=2000 med=60.4 mean=63.0 p95=67.1 p99=92.3 min=49.1 max=818.4
+GP B2 64KiB-copy + Signal round trip, event-wait round0 us n=2000 med=71.1 mean=73.9 p95=80.1 p99=106.8 min=60.9 max=360.5
+GP A  empty-queue Signal round trip, polled      round1 us n=2000 med=1.5 mean=1.5 p95=1.5 p99=2.2 min=1.4 max=20.0
+GP B  empty-queue Signal round trip, event-wait  round1 us n=2000 med=2.7 mean=2.8 p95=3.4 p99=3.9 min=2.6 max=15.9
+GP A2 64KiB-copy + Signal round trip, polled     round1 us n=2000 med=60.4 mean=63.0 p95=68.4 p99=97.7 min=50.2 max=438.2
+GP B2 64KiB-copy + Signal round trip, event-wait round1 us n=2000 med=70.3 mean=71.8 p95=78.8 p99=97.3 min=59.0 max=334.6
+GP A  empty-queue Signal round trip, polled      round2 us n=2000 med=1.4 mean=1.6 p95=2.0 p99=4.6 min=1.3 max=51.2
+GP B  empty-queue Signal round trip, event-wait  round2 us n=2000 med=3.3 mean=3.1 p95=3.4 p99=4.9 min=2.6 max=24.2
+GP A2 64KiB-copy + Signal round trip, polled     round2 us n=2000 med=61.0 mean=64.4 p95=70.1 p99=87.4 min=49.4 max=2826.0
+GP B2 64KiB-copy + Signal round trip, event-wait round2 us n=2000 med=69.9 mean=70.7 p95=76.0 p99=89.2 min=58.4 max=109.3
+GP C vram->vram copy 256MiB time n=30 med=1.2ms mean=1.4ms p95=3.7ms p99=4.1ms min=1.2ms max=4.1ms | GiB/s n=30 med=205.8 mean=194.1 p95=208.0 p99=209.4 min=60.4 max=209.4
+GP D upload(sysmem)->vram copy 128MiB time n=30 med=5.1ms mean=5.1ms p95=5.1ms p99=5.4ms min=5.1ms max=5.4ms | GiB/s n=30 med=24.6 mean=24.5 p95=24.7 p99=24.7 min=23.0 max=24.7
+GP E vram->readback copy 128MiB time n=30 med=5.1ms mean=5.1ms p95=5.1ms p99=6.0ms min=5.1ms max=6.0ms | GiB/s n=30 med=24.5 mean=24.4 p95=24.6 p99=24.6 min=20.8 max=24.6
+GP F DIRECT-signal -> COPY-wait -> COPY-signal, polled us n=2000 med=3.9 mean=4.3 p95=4.8 p99=7.9 min=3.7 max=109.9
+GP done
+

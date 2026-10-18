@@ -1,0 +1,80 @@
+# To display the perf.data header info, please use --header/--header-only options.
+#
+#
+# Total Lost Samples: 0
+#
+# Samples: 139K of event 'cpu/cycles/P'
+# Event count (approx.): 655973639229
+#
+# Overhead  Command          Shared Object            Symbol                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    
+# ........  ...............  .......................  ..........................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................
+#
+     5.22%  kf3-worker1      qemu-system-x86_64       [.] <kf_qemu::chan::ChanPlane as kf_chan::worker::RelayLoop>::peek
+            |          
+            |--2.90%--<kf_qemu::chan::ChanPlane as kf_chan::worker::RelayLoop>::peek
+            |          |          
+            |           --2.52%--0x76ff1caca3d0
+            |          
+            |--0.88%--entry_SYSCALL_64
+            |          |          
+            |           --0.81%--__syscall_cancel_arch (inlined)
+            |                     |          
+            |                      --0.81%--epoll_wait
+            |                                <kf_linux_raw::epoll_unsafe::Poller>::wait
+            |          
+             --0.77%--<kf_qemu::chan::ChanPlane as kf_chan::worker::RelayLoop>::waiting
+
+     5.00%  kf3-worker0      qemu-system-x86_64       [.] <kf_qemu::chan::ChanPlane as kf_chan::worker::RelayLoop>::peek
+            |          
+            |--2.81%--<kf_qemu::chan::ChanPlane as kf_chan::worker::RelayLoop>::peek
+            |          |          
+            |           --2.49%--0x76ff1caca3d0
+            |          
+            |--0.84%--entry_SYSCALL_64
+            |          |          
+            |           --0.78%--__syscall_cancel_arch (inlined)
+            |                     |          
+            |                      --0.78%--epoll_wait
+            |                                <kf_linux_raw::epoll_unsafe::Poller>::wait
+            |          
+             --0.73%--<kf_qemu::chan::ChanPlane as kf_chan::worker::RelayLoop>::waiting
+
+     2.09%  kf3-worker0      qemu-system-x86_64       [.] <std::sys::sync::mutex::futex::Mutex>::lock_contended
+            |          
+             --1.89%--spin (inlined)
+                       lock_contended (inlined)
+                       |          
+                        --1.79%--<kf_qemu::chan::ChanPlane>::user_ring_record
+
+     2.06%  kf3-worker1      qemu-system-x86_64       [.] <std::sys::sync::mutex::futex::Mutex>::lock_contended
+            |          
+             --1.86%--spin (inlined)
+                       lock_contended (inlined)
+                       |          
+                        --1.75%--<kf_qemu::chan::ChanPlane>::user_ring_record
+
+     1.54%  kf3-display      [vdso]                   [.] 0x0000000000000a06
+     0.82%  kf3-worker0      [kernel.kallsyms]        [k] entry_SYSRETQ_unsafe_stack
+     0.78%  kf3-worker1      [kernel.kallsyms]        [k] entry_SYSRETQ_unsafe_stack
+     0.67%  kf3-display      libcuda.so.595.91.07     [.] 0x000000000022c158
+     0.66%  kf3-worker1      qemu-system-x86_64       [.] <kf_chan::user_storage::Storage<kf_chan::user_storage::CpuView>>::cpu
+     0.65%  kf3-worker0      qemu-system-x86_64       [.] <kf_chan::user_storage::Storage<kf_chan::user_storage::CpuView>>::cpu
+     0.58%  kf3-worker0      qemu-system-x86_64       [.] <kf_chan::user_storage::Storage<kf_chan::user_storage::CpuView>>::gpu_reference
+     0.57%  kf3-worker1      qemu-system-x86_64       [.] <kf_chan::user_storage::Storage<kf_chan::user_storage::CpuView>>::gpu_reference
+     0.55%  kf3-display      libcuda.so.595.91.07     [.] 0x000000000021e9a9
+     0.49%  qemu-system-x86  [kernel.kallsyms]        [k] srso_alias_safe_ret
+     0.42%  qemu-system-x86  [kernel.kallsyms]        [k] svm_vcpu_run
+     0.38%  kf3-display      libcuda.so.595.91.07     [.] 0x000000000022c152
+     0.35%  qemu-system-x86  [kernel.kallsyms]        [k] vcpu_enter_guest
+     0.35%  kf3-worker1      [kernel.kallsyms]        [k] native_queued_spin_lock_slowpath
+     0.34%  kf3-display      libcuda.so.595.91.07     [.] 0x0000000001179331
+     0.34%  qemu-system-x86  [kernel.kallsyms]        [k] kvm_vcpu_halt
+     0.33%  kf3-display      libcuda.so.595.91.07     [.] 0x0000000001179330
+     0.33%  qemu-system-x86  [kernel.kallsyms]        [k] srso_alias_return_thunk
+     0.33%  kf3-display      libcuda.so.595.91.07     [.] 0x000000000022c155
+     0.32%  kf3-worker0      [kernel.kallsyms]        [k] native_queued_spin_lock_slowpath
+     0.31%  kf3-worker1      qemu-system-x86_64       [.] <kf_chan::user_turn::Relay>::step::<kf_qemu::chan::userpump::PumpIo>
+     0.31%  kf3-worker0      qemu-system-x86_64       [.] <kf_chan::user_turn::Relay>::step::<kf_qemu::chan::userpump::PumpIo>
+     0.30%  qemu-system-x86  [kernel.kallsyms]        [k] kvm_vcpu_check_block
+     0.29%  qemu-system-x86  [kernel.kallsyms]        [k] ktime_get
+     0.25%  qemu-system-x86  [kernel.kallsyms]        [k] native_write_msr
