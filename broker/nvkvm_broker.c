@@ -3855,6 +3855,17 @@ static int nb_validate_clipboard_mode(const struct nb_config *cfg,
     return -ENOTSUP;
 }
 
+/* Diagnostic-only timestamps: no clock syscall unless --stats-line was selected. */
+static uint64_t nb_stats_now_ns(bool enabled)
+{
+    struct timespec ts;
+    if (!enabled) {
+        return 0;
+    }
+    clock_gettime(CLOCK_MONOTONIC, &ts);
+    return (uint64_t)ts.tv_sec * 1000000000ull + (uint64_t)ts.tv_nsec;
+}
+
 int main(int argc, char **argv)
 {
     struct nb_config cfg;
@@ -4207,16 +4218,13 @@ int main(int argc, char **argv)
 
         {
             /* ★ MEASUREMENT (--stats-line): how late poll() woke, and how long the loop body ran since the last one */
-            struct timespec ts0, ts1;
             uint64_t t0, t1;
             static uint64_t last_ret_ns;
             int pr;
 
-            clock_gettime(CLOCK_MONOTONIC, &ts0);
-            t0 = (uint64_t)ts0.tv_sec * 1000000000ull + (uint64_t)ts0.tv_nsec;
+            t0 = nb_stats_now_ns(cfg.stats_line);
             pr = poll(pfd, (nfds_t)(n + nsess), tmo);
-            clock_gettime(CLOCK_MONOTONIC, &ts1);
-            t1 = (uint64_t)ts1.tv_sec * 1000000000ull + (uint64_t)ts1.tv_nsec;
+            t1 = nb_stats_now_ns(cfg.stats_line);
             if (pr == 0 && tmo > 0 && t1 - t0 > (uint64_t)tmo * 1000000ull) {
                 nb_sink_note_loop(&sink, t1 - t0 - (uint64_t)tmo * 1000000ull, 0);
             }

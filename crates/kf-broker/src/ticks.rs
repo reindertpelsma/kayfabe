@@ -116,7 +116,6 @@ pub enum TickVerdict {
     },
 }
 
-
 /// ★ MEASUREMENT ONLY (hitch investigation, 2026-10-17; behaviour-neutral, never required, no lock, no allocation after the first
 /// [`RING_CAP`] events): the last events of the lock step as the relay saw them, with monotonic microseconds, dumped as one
 /// group of log lines when the broker's request timeout was OBSERVED (a new `WANT_FRAME` replaced an unanswered open request) or
@@ -165,9 +164,10 @@ pub struct RingEv {
 /// The bounded ring. `Clone` copies the entries (a book is cloned only by the exhaustive model).
 #[derive(Debug, Clone)]
 pub struct EventRing {
+    enabled: bool,
     buf: Vec<RingEv>,
     next: usize,
-    base: std::time::Instant,
+    base: Option<std::time::Instant>,
     pending: bool,
     /// Dumps taken so far (never more than [`RING_DUMPS_MAX`]).
     pub dumps: u32,
@@ -177,21 +177,49 @@ pub struct EventRing {
 
 impl Default for EventRing {
     fn default() -> Self {
-        EventRing {
+        Self::with_diagnostics(false)
+    }
+}
+
+impl EventRing {
+    /// Select recording once; a disabled ring takes no timestamp and allocates no storage.
+    #[must_use]
+    pub fn with_diagnostics(enabled: bool) -> Self {
+        Self::with_clock(enabled, std::time::Instant::now)
+    }
+
+    fn with_clock(enabled: bool, clock: impl FnOnce() -> std::time::Instant) -> Self {
+        Self {
+            enabled,
             buf: Vec::new(),
             next: 0,
-            base: std::time::Instant::now(),
+            base: enabled.then(clock),
             pending: false,
             dumps: 0,
             suppressed: 0,
         }
     }
-}
 
-impl EventRing {
     /// Record one event.
     pub fn push(&mut self, kind: EvKind, a: u32, b: u32) {
-        let t_us = u64::try_from(self.base.elapsed().as_micros()).unwrap_or(u64::MAX);
+        self.push_with_clock(kind, a, b, std::time::Instant::now);
+    }
+
+    fn push_with_clock(
+        &mut self,
+        kind: EvKind,
+        a: u32,
+        b: u32,
+        clock: impl FnOnce() -> std::time::Instant,
+    ) {
+        if !self.enabled {
+            return;
+        }
+        let base = self
+            .base
+            .expect("an enabled ring has its construction timestamp");
+        let t_us =
+            u64::try_from(clock().saturating_duration_since(base).as_micros()).unwrap_or(u64::MAX);
         let ev = RingEv { t_us, kind, a, b };
         if self.buf.len() < RING_CAP {
             if self.buf.capacity() == 0 {
@@ -206,7 +234,9 @@ impl EventRing {
 
     /// Ask for a dump at the next [`EventRing::take_dump`].
     pub fn request_dump(&mut self) {
-        self.pending = true;
+        if self.enabled {
+            self.pending = true;
+        }
     }
 
     /// The entries, oldest first.
@@ -221,6 +251,9 @@ impl EventRing {
     /// The pending dump as text lines (oldest first, times relative to the newest entry): the first [`RING_DUMPS_MAX`] only,
     /// the rest counted in `suppressed`. `None` when none is pending or the cap is reached.
     pub fn take_dump(&mut self, why: &str) -> Option<Vec<String>> {
+        if !self.enabled {
+            return None;
+        }
         if !std::mem::take(&mut self.pending) {
             return None;
         }
@@ -231,16 +264,26 @@ impl EventRing {
         self.dumps += 1;
         let ev = self.events();
         let last = ev.last().map_or(0, |e| e.t_us);
-        let mut out = vec![format!("lock-step event ring #{} ({why}), last {} events, newest at 0:", self.dumps, ev.len())];
+        let mut out = vec![format!(
+            "lock-step event ring #{} ({why}), last {} events, newest at 0:",
+            self.dumps,
+            ev.len()
+        )];
         for e in &ev {
-            out.push(format!("  {:>9} us  {:?} a={} b={}", i128::from(e.t_us) - i128::from(last), e.kind, e.a, e.b));
+            out.push(format!(
+                "  {:>9} us  {:?} a={} b={}",
+                i128::from(e.t_us) - i128::from(last),
+                e.kind,
+                e.a,
+                e.b
+            ));
         }
         Some(out)
     }
 }
 
 /// ★ The relay's request book for one connection.
-#[derive(Debug, Clone, Default)]
+#[derive(Debug, Clone)]
 pub struct Requests {
     last_seq: Option<u32>,
     last_present: Option<u64>,
@@ -261,7 +304,29 @@ pub struct Requests {
     declined_for: Option<u32>,
 }
 
+impl Default for Requests {
+    fn default() -> Self {
+        Self::with_diagnostics(std::env::var("KF3_DIAG_EVENT_RING").is_ok_and(|v| v == "1"))
+    }
+}
+
 impl Requests {
+    /// Select the measurement ring at construction; request decisions are identical either way.
+    #[must_use]
+    pub fn with_diagnostics(enabled: bool) -> Self {
+        Self {
+            last_seq: None,
+            last_present: None,
+            open: None,
+            refresh_ns: 0,
+            last_answer_ms: None,
+            ticks_since_open: 0,
+            c: TickCounters::default(),
+            ring: EventRing::with_diagnostics(enabled),
+            declined_for: None,
+        }
+    }
+
     /// A new book (a new connection).
     #[must_use]
     pub fn new() -> Requests {
@@ -387,18 +452,23 @@ impl Requests {
     /// ★ MEASUREMENT: the open request was NOT answered `NO_CHANGE` although a later tick came: `ready` = a frame is ready
     /// or owed (the frame path should be answering), else the answer gap has not passed.
     pub fn note_declined(&mut self, ready: bool) {
+        if !self.ring.enabled {
+            return;
+        }
         if let Some(n) = self.open
             && self.ticks_since_open >= 1
             && self.declined_for != Some(n)
         {
             self.declined_for = Some(n);
-            self.ring.push(EvKind::Declined, n, if ready { 1 } else { 2 });
+            self.ring
+                .push(EvKind::Declined, n, if ready { 1 } else { 2 });
         }
     }
 
     /// ★ MEASUREMENT: ticks went live (`true`) or silent (`false`); silence asks for a dump.
     pub fn note_live(&mut self, live: bool) {
-        self.ring.push(EvKind::Live, self.open.unwrap_or(0), u32::from(live));
+        self.ring
+            .push(EvKind::Live, self.open.unwrap_or(0), u32::from(live));
         if !live {
             self.ring.request_dump();
         }
@@ -574,11 +644,14 @@ mod tests {
     /// silence asks for a dump too; the ring stays bounded.
     #[test]
     fn the_ring_records_an_unanswered_request_replaced_and_dumps_once() {
-        let mut r = Requests::new();
+        let mut r = Requests::with_diagnostics(true);
         r.on_tick(&tick(5, true, 10));
         r.on_tick(&tick(6, false, 20));
         r.note_declined(true);
-        assert!(r.ring.take_dump("x").is_none(), "no timeout seen yet: no dump");
+        assert!(
+            r.ring.take_dump("x").is_none(),
+            "no timeout seen yet: no dump"
+        );
         r.on_tick(&tick(7, true, 30)); // the broker timed 5 out and opened 7
         let kinds: Vec<EvKind> = r.ring.events().iter().map(|e| e.kind).collect();
         assert_eq!(
@@ -593,7 +666,10 @@ mod tests {
                 EvKind::Opened
             ]
         );
-        let d = r.ring.take_dump("request timeout observed").expect("one dump is due");
+        let d = r
+            .ring
+            .take_dump("request timeout observed")
+            .expect("one dump is due");
         assert!(d.iter().any(|l| l.contains("Superseded a=5 b=7")), "{d:?}");
         assert!(r.ring.take_dump("again").is_none(), "one dump per cause");
         r.note_live(false);
@@ -610,7 +686,7 @@ mod tests {
     /// every tick. EXPECTED RED on the commit that adds it (`RING_DUMPS_MAX` / `suppressed` do not exist yet: the build fails).
     #[test]
     fn the_ring_dump_is_bounded_in_total_and_declines_do_not_evict_history() {
-        let mut r = Requests::new();
+        let mut r = Requests::with_diagnostics(true);
         let mut taken = 0u32;
         for i in 0..1000u32 {
             r.on_tick(&tick(10 + 2 * i, true, u64::from(i)));
@@ -618,21 +694,44 @@ mod tests {
                 taken += 1;
             }
         }
-        assert!(taken <= RING_DUMPS_MAX, "{taken} dumps of 1000 replaced requests (cap {RING_DUMPS_MAX})");
-        assert_eq!(u64::from(taken) + r.ring.suppressed, 999, "every replaced request is dumped or counted");
-        let mut d = Requests::new();
+        assert!(
+            taken <= RING_DUMPS_MAX,
+            "{taken} dumps of 1000 replaced requests (cap {RING_DUMPS_MAX})"
+        );
+        assert_eq!(
+            u64::from(taken) + r.ring.suppressed,
+            999,
+            "every replaced request is dumped or counted"
+        );
+        let mut d = Requests::with_diagnostics(true);
         d.on_tick(&tick(1, true, 1));
         d.on_tick(&tick(2, false, 2));
         for _ in 0..40 {
             d.note_declined(true);
         }
-        let declined = d.ring.events().iter().filter(|e| e.kind == EvKind::Declined).count();
-        assert_eq!(declined, 1, "a request declined at 40 later looks is ringed once");
+        let declined = d
+            .ring
+            .events()
+            .iter()
+            .filter(|e| e.kind == EvKind::Declined)
+            .count();
+        assert_eq!(
+            declined, 1,
+            "a request declined at 40 later looks is ringed once"
+        );
         d.on_tick(&tick(3, true, 3));
         d.on_tick(&tick(4, false, 4));
         d.note_declined(true);
-        let declined = d.ring.events().iter().filter(|e| e.kind == EvKind::Declined).count();
-        assert_eq!(declined, 2, "the next request's first decline is ringed again");
+        let declined = d
+            .ring
+            .events()
+            .iter()
+            .filter(|e| e.kind == EvKind::Declined)
+            .count();
+        assert_eq!(
+            declined, 2,
+            "the next request's first decline is ringed again"
+        );
     }
 
     /// The whole decision table of the request book, one row per rule R1–R4.
@@ -791,16 +890,23 @@ mod tests {
     }
 }
 
-
 #[cfg(test)]
 mod diagnostic_gate_tests {
     use super::*;
 
     // The green commit selects diagnostics explicitly; assertions stay unchanged.
-    fn enabled_requests() -> Requests { Requests::new() }
+    fn enabled_requests() -> Requests {
+        Requests::with_diagnostics(true)
+    }
 
     fn tick(seq: u32, want: bool) -> TickPkt {
-        TickPkt { tick_seq: seq, refresh_ns: 16_666_666, want, clock_only: false, present_ns: u64::from(seq) }
+        TickPkt {
+            tick_seq: seq,
+            refresh_ns: 16_666_666,
+            want,
+            clock_only: false,
+            present_ns: u64::from(seq),
+        }
     }
 
     #[test]
@@ -822,7 +928,10 @@ mod diagnostic_gate_tests {
         r.on_tick(&tick(5, true));
         r.on_tick(&tick(7, true));
         r.note_live(false);
-        assert!(r.ring.take_dump("superseded and silent").is_none(), "no flag: no dump or formatting");
+        assert!(
+            r.ring.take_dump("superseded and silent").is_none(),
+            "no flag: no dump or formatting"
+        );
         assert!(!r.ring.pending, "no flag: no pending diagnostic work");
         assert_eq!((r.ring.dumps, r.ring.suppressed), (0, 0));
     }
@@ -832,14 +941,26 @@ mod diagnostic_gate_tests {
         let mut r = enabled_requests();
         r.on_tick(&tick(5, true));
         r.on_tick(&tick(7, true));
-        let expected = [(EvKind::Tick,5,1), (EvKind::Opened,5,0), (EvKind::Tick,7,1), (EvKind::Superseded,5,7), (EvKind::Opened,7,0)];
-        let got: Vec<_> = r.ring.events().iter().map(|e| (e.kind,e.a,e.b)).collect();
+        let expected = [
+            (EvKind::Tick, 5, 1),
+            (EvKind::Opened, 5, 0),
+            (EvKind::Tick, 7, 1),
+            (EvKind::Superseded, 5, 7),
+            (EvKind::Opened, 7, 0),
+        ];
+        let got: Vec<_> = r.ring.events().iter().map(|e| (e.kind, e.a, e.b)).collect();
         assert_eq!(got, expected);
         // Normalize only wall-clock offsets so the legacy text has a deterministic oracle.
-        for (i,e) in r.ring.buf.iter_mut().enumerate() { e.t_us = i as u64 * 10; }
-        let mut text = vec!["lock-step event ring #1 (legacy), last 5 events, newest at 0:".to_owned()];
-        for (i,(kind,a,b)) in expected.into_iter().enumerate() {
-            text.push(format!("  {:>9} us  {kind:?} a={a} b={b}", i as i128 * 10 - 40));
+        for (i, e) in r.ring.buf.iter_mut().enumerate() {
+            e.t_us = i as u64 * 10;
+        }
+        let mut text =
+            vec!["lock-step event ring #1 (legacy), last 5 events, newest at 0:".to_owned()];
+        for (i, (kind, a, b)) in expected.into_iter().enumerate() {
+            text.push(format!(
+                "  {:>9} us  {kind:?} a={a} b={b}",
+                i as i128 * 10 - 40
+            ));
         }
         assert_eq!(r.ring.take_dump("legacy"), Some(text));
         assert!(r.ring.take_dump("again").is_none());
@@ -856,5 +977,61 @@ mod diagnostic_gate_tests {
         assert_eq!(r.ring.events().len(), RING_CAP);
         assert_eq!(dumps, RING_DUMPS_MAX);
         assert_eq!(u64::from(dumps) + r.ring.suppressed, 499);
+    }
+
+    #[test]
+    fn diagnostic_disabled_ring_never_calls_construction_or_event_clocks() {
+        let mut ring =
+            EventRing::with_clock(false, || panic!("disabled construction read the clock"));
+        assert!(ring.base.is_none());
+        ring.push_with_clock(EvKind::Tick, 1, 1, || {
+            panic!("disabled event read the clock")
+        });
+        ring.request_dump();
+        assert!(ring.take_dump("off").is_none());
+        assert_eq!(ring.buf.capacity(), 0);
+    }
+
+    #[test]
+    fn diagnostic_enabled_ring_keeps_the_legacy_microsecond_offset() {
+        use std::time::{Duration, Instant};
+        let base = Instant::now();
+        let mut ring = EventRing::with_clock(true, || base);
+        ring.push_with_clock(EvKind::Tick, 5, 1, || base + Duration::from_micros(37));
+        let events = ring.events();
+        assert_eq!(events.len(), 1);
+        assert_eq!(
+            (events[0].t_us, events[0].kind, events[0].a, events[0].b),
+            (37, EvKind::Tick, 5, 1)
+        );
+    }
+
+    #[test]
+    fn diagnostic_selection_never_changes_request_decisions_or_counters() {
+        let (mut off, mut on) = (
+            Requests::with_diagnostics(false),
+            Requests::with_diagnostics(true),
+        );
+        for seq in 1..=200 {
+            let t = tick(seq, seq % 3 != 0);
+            assert_eq!(off.on_tick(&t), on.on_tick(&t));
+            let now = u64::from(seq) * 17;
+            if seq % 4 == 0 {
+                assert_eq!(off.spend(now), on.spend(now));
+            }
+            if seq % 5 == 0 {
+                assert_eq!(off.idle_request(true, now), on.idle_request(true, now));
+                off.no_change_done(now);
+                on.no_change_done(now);
+            }
+            off.note_declined(true);
+            on.note_declined(true);
+            off.note_live(seq % 9 != 0);
+            on.note_live(seq % 9 != 0);
+            off.ring.take_dump("selection");
+            on.ring.take_dump("selection");
+            assert_eq!(off.probe_state(), on.probe_state());
+            assert_eq!(off.c, on.c);
+        }
     }
 }

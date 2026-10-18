@@ -2295,7 +2295,9 @@ impl<L: Link> Relay<L> {
         };
         match tc.reqs.on_tick(&t) {
             TickVerdict::Stale => {}
-            TickVerdict::Fresh { opened: opened_now, .. } => {
+            TickVerdict::Fresh {
+                opened: opened_now, ..
+            } => {
                 tc.last_rx_ms = Some(now);
                 self.note_tick_live(now);
                 if let Some(sh) = &self.ticks {
