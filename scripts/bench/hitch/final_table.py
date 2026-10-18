@@ -35,7 +35,7 @@ def arm(d,p):
             r['b_cg33']=sum(b['cg33'] for b in Bw)/mins; r['b_cg50']=sum(b['cg50'] for b in Bw)/mins; r['b_cg100']=sum(b['cg100'] for b in Bw)/mins; r['b_cmax']=max(b['cgap_max_us'] for b in Bw)/1000
         r['b_timeouts_session']=sum(b['timeouts'] for b in B); r['b_timeouts_bench']=sum(b['timeouts'] for b in Bw)
     return r
-def ms(v): 
+def ms(v):
     v=[x for x in v if x is not None]
     return '%.2f [%.2f..%.2f]'%(st.mean(v),min(v),max(v)) if v else 'n/a'
 for g,arms in groups.items():

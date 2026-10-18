@@ -21,7 +21,7 @@ crates/kf-qemu/src/display.rs
 822:     sum_ns: AtomicU64,
 823:     max_ns: AtomicU64,
 824: }
-825: 
+825:
 826: impl LatStat {
 827:     /// One sample.
 828:     pub fn add(&self, d: Duration) {
@@ -30,7 +30,7 @@ crates/kf-qemu/src/display.rs
 831:         self.sum_ns.fetch_add(ns, Ordering::Relaxed);
 832:         self.max_ns.fetch_max(ns, Ordering::Relaxed);
 833:     }
-834: 
+834:
 835:     /// `name=n/sum_us/max_us` — cumulative; a reader takes window deltas of `n` and `sum_us`.
 836:     #[must_use]
 837:     pub fn fragment(&self, name: &str) -> String {
@@ -59,7 +59,7 @@ crates/kf-broker/src/ticks.rs
 174:     /// Dumps asked for and NOT taken (the cap).
 175:     pub suppressed: u64,
 176: }
-177: 
+177:
 178: impl Default for EventRing {
 179:     fn default() -> Self {
 180:         EventRing {
@@ -72,7 +72,7 @@ crates/kf-broker/src/ticks.rs
 187:         }
 188:     }
 189: }
-190: 
+190:
 191: impl EventRing {
 192:     /// Record one event.
 193:     pub fn push(&mut self, kind: EvKind, a: u32, b: u32) {
@@ -88,15 +88,15 @@ crates/kf-broker/src/ticks.rs
 203:             self.next = (self.next + 1) % RING_CAP;
 204:         }
 205:     }
-206: 
+206:
 207:     /// Ask for a dump at the next [`EventRing::take_dump`].
 208:     pub fn request_dump(&mut self) {
 209:         self.pending = true;
 210:     }
-211: 
+211:
 268:         Requests::default()
 269:     }
-270: 
+270:
 301:             self.ring.push(EvKind::Stale, t.tick_seq, 0);
 302:             return TickVerdict::Stale;
 303:         }
@@ -126,4 +126,3 @@ crates/kf-broker/src/conn.rs
 491:     /// Whether ticks were live at the last look (a change is one log line, never one per tick).
 492:     live: bool,
 493: }
-
