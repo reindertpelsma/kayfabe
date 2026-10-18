@@ -122,6 +122,9 @@ pub enum TickVerdict {
 /// group of log lines when the broker's request timeout was OBSERVED (a new `WANT_FRAME` replaced an unanswered open request) or
 /// the ticks went SILENT (the 50 ms fallback). It answers "what was the relay doing when it did not answer".
 pub const RING_CAP: usize = 48;
+/// The most dumps ever taken (each is up to `RING_CAP + 1` log lines); later requests for a dump are only counted in
+/// [`EventRing::suppressed`] — a flooding broker cannot amplify itself into the log.
+pub const RING_DUMPS_MAX: u32 = 6;
 
 /// What a ring entry records (`a`/`b` name the numbers per kind).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -166,8 +169,10 @@ pub struct EventRing {
     next: usize,
     base: std::time::Instant,
     pending: bool,
-    /// Dumps taken so far.
+    /// Dumps taken so far (never more than [`RING_DUMPS_MAX`]).
     pub dumps: u32,
+    /// Dumps asked for and NOT taken (the cap).
+    pub suppressed: u64,
 }
 
 impl Default for EventRing {
@@ -178,6 +183,7 @@ impl Default for EventRing {
             base: std::time::Instant::now(),
             pending: false,
             dumps: 0,
+            suppressed: 0,
         }
     }
 }
@@ -212,16 +218,17 @@ impl EventRing {
         v
     }
 
-    /// The pending dump as text lines (oldest first, times relative to the newest entry), rate limited: the first 6, then
-    /// every 64th. `None` when none is pending or it is rate limited.
+    /// The pending dump as text lines (oldest first, times relative to the newest entry): the first [`RING_DUMPS_MAX`] only,
+    /// the rest counted in `suppressed`. `None` when none is pending or the cap is reached.
     pub fn take_dump(&mut self, why: &str) -> Option<Vec<String>> {
         if !std::mem::take(&mut self.pending) {
             return None;
         }
-        self.dumps += 1;
-        if self.dumps > 6 && self.dumps % 64 != 0 {
+        if self.dumps >= RING_DUMPS_MAX {
+            self.suppressed += 1;
             return None;
         }
+        self.dumps += 1;
         let ev = self.events();
         let last = ev.last().map_or(0, |e| e.t_us);
         let mut out = vec![format!("lock-step event ring #{} ({why}), last {} events, newest at 0:", self.dumps, ev.len())];
@@ -250,6 +257,8 @@ pub struct Requests {
     pub c: TickCounters,
     /// ★ MEASUREMENT: the last events of the lock step ([`EventRing`]).
     pub ring: EventRing,
+    /// The request already ringed as declined (a request declined at every later look is ringed once).
+    declined_for: Option<u32>,
 }
 
 impl Requests {
@@ -380,7 +389,9 @@ impl Requests {
     pub fn note_declined(&mut self, ready: bool) {
         if let Some(n) = self.open
             && self.ticks_since_open >= 1
+            && self.declined_for != Some(n)
         {
+            self.declined_for = Some(n);
             self.ring.push(EvKind::Declined, n, if ready { 1 } else { 2 });
         }
     }
