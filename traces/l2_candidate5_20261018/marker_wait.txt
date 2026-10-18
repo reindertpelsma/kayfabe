@@ -1,0 +1,11 @@
+2026-10-18T01:52:45Z
+L1_PENDING
+POLL=1 rc=0
+2026-10-18T01:54:45Z
+L1_FAILED
+L1 FAILED: pre-merge source defaults gate.
+CODE READ: reviewed hitch b233037d95da2ae157cfcf50066fb500991c5b7b unconditionally samples display LatStat meters and records EventRing events from Requests::default(); no default-off opt-in gates.
+L1 requires stats-line / step meters / event ring optional and off by default. Broker stats-line itself is gated.
+Stopped before either merge. No candidate-5 push, binaries, or READY from L1.
+Owner options: require source-branch default-off gates with EXPECTED RED tests and mutation checks (recommended), or explicitly authorize always-on instrumentation.
+Date: 2026-10-18T01:53:51.919033+00:00
