@@ -7,8 +7,7 @@
 //!
 //! The rule, with no policy options: **the whole guest-allocatable store is zeroed when the SAME
 //! process reuses the SAME store for a NEW OS instance** — a guest reboot ([`Cause::Reset`]: a system
-//! reset from QEMU's main loop, stage Memory, vCPUs paused; scope: the guest heap `[0, carve)`, the
-//! firmware carve-out above it is kayfabe's and survives, see below).
+//! reset from QEMU's main loop, stage Memory, vCPUs paused; scope: the whole store, see below).
 //!
 //! **Why only there** (owner decision, 2026-10-18, premise OWNER-ACCEPTED, NOT verified by us): the
 //! host driver does not promise zeroed memory, it promises process isolation — any allocation can
@@ -28,14 +27,15 @@
 //! is a vCPU thread: the guest's own bus reset) and the reset type (`RESET_TYPE_WAKEUP`); see
 //! [`event_of_reset`]. Were they indistinguishable the lazy rule would scrub on every reset.
 //!
-//! **What survives a reset** (kayfabe-owned, `kf_chip::bar0::FbLayout`): the firmware carve-out
-//! `[carve, fb_length)`. Inside it, OUR two root pages (`bar1_pde_base`, `bar2_pde_base`) are
-//! rewritten by the reset's own stage (they are zeroed there, and the BAR objects re-registered);
-//! everything else in the carve-out is declared and used by kayfabe (`reserved == FW_CARVE_OUT_BYTES`
-//! in the region table, so the guest's RM never allocates there and a GPU leaf into it is refused,
-//! `V3_P1P2_TSPACE.md` §4.3) — a scrub that zeroed it would break a life the owner proved working.
-//! ⊘ INFERRED, not proved here: nothing the guest could read lives in the carve-out; the reset's
-//! hardware checklist reads it back.
+//! **Scope: the WHOLE store `[0, fb_length)`** (review B2, 2026-10-18). The firmware carve-out
+//! `[carve, fb_length)` is declared to the guest as reserved, but it is not out of the guest's reach:
+//! BAR1/BAR2/PRAMIN CPU views keep the `fb_len` bound and references into it are counted, not refused
+//! (`kf_mem::apply`), so a hostile root could park data there in one OS and read it in the next.
+//! What kayfabe itself keeps in the store across a reset is ONLY our two root pages
+//! (`bar1_pde_base`, `bar2_pde_base`): every other store write is a root page, a heap-gated
+//! USERD/notifier (`chan::heap_gate`), or at a guest-chosen offset. The reset's own stage rewrites
+//! the roots and re-registers the BAR objects AFTER the scrub (`mem::reset_memory_finish`).
+//! Hardware checklist: after a reboot, read `[carve, fb_length)` back from the guest.
 //!
 //! **Completion ordering.** [`run`] returns `Ok` only after [`Zeroer::complete`] (the device-side
 //! completion) succeeded, and the caller acknowledges the reset stage — which opens the gate and
@@ -148,9 +148,10 @@ impl Plan {
 #[must_use]
 pub fn plan(layout: &FbLayout, cause: Cause, boot: Option<(u64, u64)>) -> Plan {
     let mut want: Vec<(u64, u64)> = match cause {
-        // the guest heap: below the carve-out, whatever console a guest reserves inside it (a
-        // reserved console region is still guest-written memory)
-        Cause::Reset => vec![(0, layout.carve())],
+        // the WHOLE store (review B2): the guest's CPU views and its GPU leaves reach the carve-out
+        // too (counted, not refused), so nothing above `carve` is out of its reach; our own two
+        // root pages are rewritten by the reset's stage after the scrub
+        Cause::Reset => vec![(0, layout.fb_length)],
     };
     if let Some(b) = boot {
         want.push(b);
@@ -368,8 +369,8 @@ mod tests {
         let mut m = Model::filled(l.fb_length);
         let p = plan(&l, Cause::Reset, Some((0, 0x7F_0000)));
         let done = run(&p, &mut m, &AtomicU64::new(0)).expect("scrubbed");
-        assert_eq!(done, l.carve());
-        assert_eq!(m.dirty_bytes_in(0, l.carve()), 0, "the whole guest heap is zero");
+        assert_eq!(done, l.fb_length);
+        assert_eq!(m.dirty_bytes_in(0, l.fb_length), 0, "the whole store is zero");
         assert!(m.completed);
     }
 
@@ -413,12 +414,12 @@ mod tests {
     fn the_boot_range_is_merged_and_never_zeroed_twice() {
         let l = layout();
         let p = plan(&l, Cause::Reset, Some((0, 0x7F_0000)));
-        assert_eq!(p.ranges, vec![(0, l.carve())]);
+        assert_eq!(p.ranges, vec![(0, l.fb_length)]);
         // a range the layout does not hold is clipped to the store, never read past it
         let q = plan(&l, Cause::Reset, Some((l.fb_length - 4096, 1 << 20)));
-        assert_eq!(q.ranges, vec![(0, l.carve()), (l.fb_length - 4096, 4096)]);
+        assert_eq!(q.ranges, vec![(0, l.fb_length)], "a range inside the store merges, one past it is clipped");
         let inside = plan(&l, Cause::Reset, Some((16, 100)));
-        assert_eq!(inside.ranges, vec![(0, l.carve())]);
+        assert_eq!(inside.ranges, vec![(0, l.fb_length)]);
     }
 
     /// Chunks: bounded, ordered, contiguous, covering the plan exactly.
@@ -442,7 +443,7 @@ mod tests {
         let progress = AtomicU64::new(0);
         run(&plan(&l, Cause::Reset, None), &mut m, &progress).expect("ok");
         assert!(m.completed);
-        assert_eq!(progress.load(Ordering::Acquire), l.carve());
+        assert_eq!(progress.load(Ordering::Acquire), l.fb_length);
     }
 
     /// ★ REFUSAL: a refused chunk is an error naming the range, the store is NOT clean, and the
@@ -457,7 +458,7 @@ mod tests {
         assert_eq!(e.queued, CHUNK);
         assert!(e.to_string().contains("REFUSED at") && e.to_string().contains("CUDA_ERROR"));
         assert!(!m.completed);
-        assert!(m.dirty_bytes_in(0, l.carve()) > 0, "not clean: the caller keeps the gate closed");
+        assert!(m.dirty_bytes_in(0, l.fb_length) > 0, "not clean: the caller keeps the gate closed");
     }
 
     /// A completion the host refuses is as bad as a refused chunk.
@@ -469,7 +470,7 @@ mod tests {
         let e = run(&plan(&l, Cause::Reset, None), &mut m, &AtomicU64::new(0)).unwrap_err();
         assert_eq!(e.at, None);
         assert!(e.to_string().contains("completion was REFUSED"), "{e}");
-        assert!(m.dirty_bytes_in(0, l.carve()) > 0, "queued zeros were never completed");
+        assert!(m.dirty_bytes_in(0, l.fb_length) > 0, "queued zeros were never completed");
     }
 
     /// ★ IDEMPOTENCE: a second reset during or after a failed scrub is a second full run from the
@@ -483,12 +484,12 @@ mod tests {
         assert!(run(&p, &mut m, &AtomicU64::new(0)).is_err());
         m.refuse_zero_at = None;
         m.calls.clear();
-        assert_eq!(run(&p, &mut m, &AtomicU64::new(0)), Ok(l.carve()));
+        assert_eq!(run(&p, &mut m, &AtomicU64::new(0)), Ok(l.fb_length));
         assert_eq!(m.calls.first(), Some(&(0, CHUNK)), "restarted from the beginning");
         let after_one = m.dirty.clone();
-        assert_eq!(run(&p, &mut m, &AtomicU64::new(0)), Ok(l.carve()));
+        assert_eq!(run(&p, &mut m, &AtomicU64::new(0)), Ok(l.fb_length));
         assert_eq!(m.dirty, after_one);
-        assert_eq!(m.dirty_bytes_in(0, l.carve()), 0);
+        assert_eq!(m.dirty_bytes_in(0, l.fb_length), 0);
     }
 
     /// A store smaller than one chunk, and a layout whose boot range is empty, are plain cases.
