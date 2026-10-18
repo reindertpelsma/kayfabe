@@ -409,13 +409,15 @@ free cannot make a second free decrement twice. Legacy mode: exactly today (`fre
 | Control | At base | Now (explicit group) |
 |---|---|---|
 | `GPFIFO_SCHEDULE` TSG `0xa06c0101` | `chan.rs:3553-3600`: every twin of the guest TSG; `schedule_group_once` (`latejoin.rs:131`) dedups by host group, i.e. one verb PER guest ctxshare (several host groups) | the same code; the dedup collapses to ONE verb on the one host TSG |
-| late joiner | `chan.rs:6841`, `userrelay.rs:655`: an authored schedule of the joiner's own (new, unscheduled) host group | not needed: the joiner joins the already-scheduled host TSG. The call is **skipped for explicit groups** and counted (`latejoin_skipped`) and printed in the BORN line (`late_joiner_schedule=SkippedExplicit`). Legacy groups: as today |
+| late joiner | `chan.rs:6841`, `userrelay.rs:655`: an authored schedule of the joiner's own (new, unscheduled) host group | not needed: the joiner joins the already-scheduled host TSG. The call is **skipped for the joiners of a standing explicit group** (the group's FIRST channel keeps the base's call, a refinement made at implementation) and counted (`latejoin_skipped`) and printed in the BORN line (`late_joiner_schedule=SkippedExplicit`). Legacy groups: as today |
 | `SET_TIMESLICE` `0xa06c0103` | `chan.rs:3866-3930`: every host group existing at the statement; not remembered (a ctxshare group born later, i.e. all D3D12 joiners, ran at the host default) | same code, one group: the host TSG exists from the first channel, so the timeslice D3D12 sends before its schedule applies to every later joiner. No remembering needed (section 7 item 3 refined) |
 | `PREEMPT` `0xa06c0105` | `chan.rs:4407-4447`: one host verb per twin (not deduplicated) | explicit groups: one verb per host TSG; legacy groups: unchanged (one per twin) |
 | `STOP_CHANNEL` | `chan.rs:4105-4146`: `DISABLE_CHANNELS` on the twin, then TSG-level `schedule_enable(false)` (`:4139`) on its whole group | explicit groups: `DISABLE_CHANNELS` then the CHANNEL-level `NVA06F GPFIFO_SCHEDULE(false)` (probe 98: only that channel stops; TSG-level `false` is not a stop, 1.4). Legacy: unchanged |
 | `GPU_EVICT_CTX`, Windows user-work evict | `chan.rs:4634`, `:5241` (`schedule_enable(false)`, TSG level) | explicit groups: channel-level `false`. Legacy: unchanged |
 | re-enable after STOP | `chan.rs:3567-3586`: `DISABLE_CHANNELS(false)` then TSG schedule | explicit groups: additionally the channel-level `true` for a twin STOP took off |
 | channel disable (`DISABLE_CHANNELS`) | channel-scoped (`HostRm::disable_channels`) | unchanged (probe 99) |
+
+**Hardware correction (2026-10-19, Windows run 3012):** the channel-level verb must be a row of `kf_abi::hostabi::HOST_CONTROLS` or `raw_control` refuses it at the 595.91 host (`HOST_ABI_REFUSED`); unlisted, every explicit-group `GPU_EVICT_CTX` was refused and the Windows driver unloaded and reset repeatedly. Row added (typedef of the TSG verb's params, unit tests `the_channel_level_gpfifo_schedule_*`).
 
 The channel-level verb is new in `kf-host` (`HostRm::schedule_channel_enable`, `NVA06F_CTRL_CMD_GPFIFO_SCHEDULE` `0xa06f0103`, the
 same params as the TSG one, forced `bSkipSubmit = bSkipEnable = 0`).
