@@ -1,89 +1,98 @@
-# Phase 1 stop report
+# Phase 1 scope audit: original exclusion approved, independent F-2 STOP
 
-STATUS: LIVE, 2026-10-18. Protected integration conflicts; owner decision pending.
+STATUS: LIVE, 2026-10-18. New protected-edit decision required; original exclusion approved.
 
-OWNER BUDGET UPDATE, 2026-10-18: stretch cap raised to **USD 25**; stop renting
-and report at **USD 20 spent**, superseding the previous USD 12 / USD 9 limits.
-The owner reports account credit USD 43.56 and no instances. See `BUDGET.md`
-and `budget_update_receipt.json` for authority and the fresh API observation.
-Stretch spend remains USD 0. The protected-conflict STOP remains unresolved;
-Phase 1 must complete before any rental. Other rules remain binding.
+Lane `sweep-20261018`; branch `codex/sweep-integrate-20261018`; product source
+remains candidate 4 `0452613b5c71cb175271230b3e14c8e3c3eef2db`. Publication head
+and remote equality are recorded in the local `SWEEP-publication.json` after
+push, avoiding a self-referential committed hash. This branch adds evidence only.
 
-Lane `sweep-20261018`; branch `codex/sweep-integrate-20261018`; initial product
-source candidate 4 `0452613b5c71cb175271230b3e14c8e3c3eef2db`. The report commit
-adds evidence only. See `SWEEP-publication.json` beside the local overnight report
-for the final local/remote head equality receipt; that receipt is written after
-push to avoid a self-referential commit hash.
+## Owner updates folded into the report
 
-## Result
+Budget: **USD 25 stretch cap; stop renting and report at USD 20 spent**. These
+supersede USD 12 / USD 9. Live API at 2026-10-18T21:05:38Z confirms credit
+USD 43.559771576861976 and zero instances. Stretch spend USD 0, not reset.
+`BUDGET.md` and `budget_update_receipt.json` record authority and observation.
 
-- MEASURED DONE: isolated required worktree; full new steering and COMMON read.
-- MEASURED DONE: preflight on candidate 4 against gpu-types, without applying it.
-- MEASURED STOP: three protected files, twelve conflicting code/test hunks.
-- CODE READ: overlap is old USER batching versus current relay/lifecycle/lazy state.
-- MEASURED: every winner remains UNRESOLVED; product source is unchanged.
-- MEASURED PARTIAL: dependency inventory and exact conflict evidence recorded.
-- MEASURED NOT DONE: code integration, release gates, mutation checks, hardware.
-- MEASURED: all current-revision cells UNRUN; every old PASS labelled STALE.
-- MEASURED: candidate 5 now exists on origin at `f8f9d1a5f`; not merged here.
-- MEASURED: no rentals; no owner-host access; incremental spend $0.
+Scope: the coordinator APPROVED excluding `24e7a297a`, `639acf57d`, `7476ef69f`,
+`edcaaca67`, merge `29eae05a4` and dependent edits. Preserve current relay,
+lifecycle, doorbells and ALL current tests. No old PUT-ahead diagnostic or
+old batching/measurement behavior is ported. The original twelve-hunk conflict
+request is resolved by this exclusion; its earlier snapshot remains labelled
+historical in `CONFLICTS.md`.
 
-The hypothesis and falsifier were written in `PLAN.md` before the preflight.
-H-I1 was FALSIFIED by the protected conflicts. `CONFLICTS.md` identifies every
-file/hunk and states the proposed resolution; no resolution is implemented.
-`preflight_conflicts.json` retains reproducible stage blob IDs and hunk hashes.
+Condition 2 still requires a STOP if a retained die/ABI/constants/display topic
+needs a change in kf-chan or any other named protected area. The audit found
+exactly such an independent topic before applying product changes: F-2 commit
+`3970937f6`, changes to `grtables.rs` and `tmode.rs`. This is the NEW pending
+scope question; the original USER exclusion is not being asked again.
+
+## Result (current)
+
+- MEASURED DONE: isolated worktree and original GPU-free preflight; no rental.
+- CODE READ DONE: five explicit exclusions plus five merge-contained companion commits inventoried.
+- CODE READ DONE: all 67 first-parent merge hunks across seven paths enumerated, including dependent nonconflicting edits.
+- CODE READ: userread span-reservation is independently deferred with the excluded merge, not mislabelled as a batching dependency.
+- MEASURED: zero product or current-test changes; all candidate-4 source/test objects unchanged.
+- CODE READ NEW STOP: retained F-2 ABI rule needs two kf-chan files; exact caller/table dependency recorded.
+- PARTIAL: integration scope audited; product integration NOT DONE.
+- NOT DONE: release counts, AD104 oracle execution, mutation gates and Phase 2.
+- MEASURED: all current-revision hardware cells UNRUN; every historical PASS STALE.
+- MEASURED: created IDs [], destroyed IDs [], incremental spend USD 0.
+
+`CONFLICTS.md` contains every excluded commit, all dropped hunk ranges and
+reasons, exact F-2 files and source blobs, and the narrow recommendation.
+`exclusion_inventory.json` includes full commit IDs and per-hunk hashes.
+No code patch, including a cleanly merging dependent edit, has been applied.
+`preflight_conflicts.json` remains historical evidence of the original preflight.
 
 ## Verification and limits
 
 | Check | Before | After | Meaning |
 |---|---|---|---|
-| Release tests per touched `kf-*` crate | NOT RUN | NOT RUN | STOP preceded integration; zero product crates changed; no test count claimed |
-| Product trees/manifests versus candidate 4 | Baseline | Byte-identical Git objects | No source or test was added, removed or edited |
-| AD104 / Windows580.88 code-path differences | Baseline | None introduced | Source identity only; no oracle or behavioral execution claim |
-| `cudart_gate_ad104_oracle`, `host_facts_*`, consttab | NOT RUN | NOT RUN | Required before integration acceptance; STOP does not waive them |
-| Clippy / rustfmt | NOT RUN | NOT RUN | No Rust changes |
-| Mutation kill table | N/A | N/A | No behavior change or mutant run |
-| Hardware sample size | 0 | 0 | No gate/raw/app/desktop run; spread N/A |
+| Release test counts per changed kf crate | NOT RUN | NOT RUN | Zero changed product crates; second STOP precedes code import; no numeric execution count claimed |
+| All candidate-4 product/test trees and manifests | Baseline | Identical Git objects | No existing test/source added, dropped or edited; verified by scoped git diff |
+| F-2 affected current files | `grtables` 497939a6f; `tmode` 1b05d02b7 | Same blobs | New retained topic is held, not applied |
+| AD104/Windows580.88 code-path differences | Baseline | None introduced | Source identity only, not an execution result |
+| AD104 oracle, host_facts, consttab | NOT RUN | NOT RUN | Still required before integration acceptance |
+| Clippy / rustfmt | NOT RUN | NOT RUN | No Rust change |
+| Mutation kills | N/A | N/A | No behavior change applied |
+| Hardware n / spread | 0 / N/A | 0 / N/A | No new hardware claim |
 
-MEASURED: the Git preflight is not a passing integration. A hypothetical merge
-tree exists only as Git objects; it was never installed as product source or
-built. The unprotected documentation conflict is excluded from the proposed
-code-only import. See `MATRIX.md` for die/OS/build/revision, stale history,
-evidence locations, and the complete nineteen Windows flags.
+The absence of dropped tests is established by unchanged source objects, not by
+pretending to have run tests. Before/after per-crate numeric release counts and
+>=2 killing tests per applicable behavior remain required once scope permits
+integration. Neither STOP waives those acceptance gates. See `MATRIX.md` for
+all reported die/OS/build/source cells, historical evidence and the nineteen flags.
 
-## Owner decisions
+## Owner decisions (one line each)
 
-1. Protected conflicts: recommend excluding obsolete gpu-types USER batching/measurement and dependent edits, preserving current relay/lifecycle/doorbells and tests; authorize this scope before resuming.
-2. D4 caps keys: retain exact die/branch keys until a mechanism and branch-independence evidence justify each proposed broader key; never borrow another die's row.
-3. D5 TU106 R34: retain frozen 180 s grader and name the historical performance failure; do not rent for this policy item.
-4. D6 oracle page: keep captured pages as test oracles; prefer header-derived diagnostic groups; a diagnostic-only runtime oracle still needs explicit owner authorization.
-5. New PR plan: after resolving item 1, title `sweep: integrate per-die code onto current product`; base candidate 4 (or owner-designated candidate 5), head this branch; product diff currently 0 files / 0 lines, eventual code size not yet determined. New follow-up topics target this branch until directed otherwise. Existing drafts remain untouched.
-6. windows-on-vast: no change proposed; use the owner's specified unmodified reference flow for GA104's native/VFIO prerequisite. No push or patch to that repository occurred.
+1. NEW F-2 scope: recommend allowing only commit 3970937f6's grtables/tmode class-width topic under condition 2, with current tests preserved and required tests/mutants; alternatively explicitly defer it.
+2. D4 caps keys: retain exact die/branch keys until a mechanism and branch-independence evidence justify each broader key; never borrow another die's row.
+3. D5 TU106 R34: retain frozen 180 s grader and name the historical performance failure; no lease for this policy item.
+4. D6 oracle page: retain captured pages as test oracles and prefer header-derived diagnostic groups; a runtime oracle still needs explicit authorization.
+5. PR plan: eventual title `sweep: integrate per-die code onto current product`, head this branch, base owner-designated candidate 4/5; product diff currently 0 files/0 lines, final code size unknown; no PR created or retargeted.
+6. windows-on-vast: use the specified unmodified native/VFIO reference flow; no change or patch proposed, no push there.
 
-## Access, cost, cleanup
+## Access, cost and cleanup
 
-MEASURED live API receipt: credit $18.559771576861976, zero instances at
-2026-10-18T20:31:52Z; previous owned instance 56326220 absent. This lane created
-[] and destroyed []; spend $0. No new cost ledger entry is needed for a lease
-that did not occur; the historical ledger remains on the evidence branch.
-
-MEASURED: no cargo target directory was created, no GPU/VM job or autodestroy
-timer was started, and no lock was acquired. No own background job remains.
-Only this lane's own worktree/evidence and external overnight report are written;
-other session checkouts, integration/master branches and old draft PRs are not
-modified. Target cleanup is N/A because `/workspace/sweep-target` never existed.
+No own rental, GPU/VM job, target directory, autodestroy timer or lock was
+created; no owner-host access. IDs created/destroyed [], spend USD 0.
+No own background job remains. `/workspace/sweep-target` never existed.
+The initial USD 18.56 observation is historical; current filtered receipt shows
+USD 43.56 and no instances. The owner-host and other checkouts are untouched.
 
 ## Ten-line session status
 
 ```text
 1 Lane sweep-20261018; branch codex/sweep-integrate-20261018.
-2 Product source remains candidate 4, 0452613b5; evidence-only commit follows.
-3 Required worktree /workspace/sweep-wt is isolated from other sessions.
-4 GPU-types preflight STOP: 3 protected code/test files, 12 conflicting hunks.
-5 Conflict winners UNRESOLVED; no code, test or historical evidence imported.
-6 Release counts/oracles/mutants NOT RUN; behavior not revalidated.
-7 Every current hardware cell UNRUN; historical PASS results STALE.
-8 Candidate 5 observed f8f9d1a5f; refresh current line before any hardware.
-9 Created/destroyed IDs []; spend $0; no own rental/job/target/lock remains.
-10 Await owner scope decision in CONFLICTS.md before continuing either phase.
+2 Product source remains candidate 4 0452613b5; evidence-only commits.
+3 Original obsolete USER-topic exclusion APPROVED and recorded.
+4 Five named commits plus five companions / 67 merge hunks inventoried.
+5 NEW STOP: F-2 3970937f6 requires grtables.rs and tmode.rs in kf-chan.
+6 No protected code applied; every current source/test object preserved.
+7 Release counts/oracles/mutants NOT RUN; all current hardware UNRUN.
+8 Every old PASS STALE; candidate 5 must be refreshed before hardware.
+9 Cap USD25 / rental-stop USD20; spend USD0; no instances/jobs/targets/locks.
+10 Await only the narrow F-2 scope decision, not the approved USER exclusion.
 ```

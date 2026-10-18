@@ -1,6 +1,165 @@
+# Current scope decision and exclusion ledger
+
+STATUS: LIVE, 2026-10-18. Original exclusion APPROVED; separate F-2 protected edit STOP.
+
+## Applied authority, not a product edit
+
+OWNER/COORDINATOR DECISION, 2026-10-18: exclude the obsolete USER relay batching
+and measurement topic, including dependent nonconflicting edits; retain current
+integration relay/lifecycle/doorbell code and ALL current candidate-4 tests.
+The old behavior is not ported. Original conflict winners are now EXCLUDE OLD
+TOPIC / PRESERVE CURRENT, by explicit authorization. The historical pre-approval
+hunk snapshot is retained below and no longer represents an unresolved request.
+No merge result or product/test change has been applied while preparing the
+exclusion audit. Every current test is still byte-identical to candidate 4.
+
+| Explicitly excluded commit | Topic | Reason |
+|---|---|---|
+| `24e7a297a6b9f18d4de359f4e55b0e51d58ea209` | Flow/stage counters and timers | Approved exclusion; retain current lifecycle/lazy diagnostics |
+| `639acf57d0550ac9638dd87205657c489dd2250a` | Histograms and stress flood mode | Approved exclusion; relies on excluded instrumentation |
+| `7476ef69f218e352be8c8a2ed7e8d8e249d6303c` | EXPECTED RED batching tests | Approved exclusion of incoming topic only; no current test dropped |
+| `edcaaca67a10ecbf64169e017e461041c02c958b` | Claim batching/deferred host bell | Approved exclusion; current relay/doorbells retained |
+| `29eae05a46061bcbfd5bfe67d72b7fa3039ad774` | Merge of old event-loop topic | Approved exclusion including dependent edits, enumerated below |
+
+Other commits arriving only through that excluded merge are documented in full
+in `exclusion_inventory.json`: `a4027e16e`, `8f4610bc5`, `bd079a8df` are historical
+batching documentation; `d5be61ed1` and `6c2cb4371` introduce and explain the
+independent userread span-reservation optimization. Their merge-contained edits
+are held outside the import too. The userread optimization is **not** claimed
+to depend on batching and is not silently smuggled into the die integration.
+
+
+| Additional commit held with the excluded merge | Reason |
+|---|---|
+| `a4027e16eb9369634d21c84f0d42becef81df5a3` | Historical batching design/results/handoff; not imported as product code. |
+| `d5be61ed11b87043f7df651f5b0defbbc4516bf2` | Independent span-reservation change/comment carried only by excluded merge; deferred, not a batching dependency. |
+| `6c2cb43717584947c85f0609b4c24f5345d5d56d` | Independent span-reservation change/comment carried only by excluded merge; deferred, not a batching dependency. |
+| `8f4610bc515268534fdcb7ec510c341ee5689d46` | Historical batching design/results/handoff; not imported as product code. |
+| `bd079a8df979ce2be3ec68a7450b96dfe79ababb` | Historical batching design/results/handoff; not imported as product code. |
+
+The old-only `backstop_put_ahead` field, its `put_ahead` formatting argument and
+call site, stage timing fields/methods, flow/histogram counters and call sites,
+`chain_more` helper, chained model, deferred-bell state and dependent bookkeeping
+are all excluded. Nonconflicting hunks of the excluded topic are not carried.
+This concerns incoming old code; no current diagnostic or test is removed.
+
+## New exact STOP dependency: retained F-2 class-width rule
+
+CODE READ: commit `3970937f6f417d2779b5ffbb63a0b8fa9c382224` is an independent
+per-class ABI topic in gpu-types, **not** part of the approved excluded topic.
+Its entire product edit is 97 additions / 4 deletions in two protected files:
+
+| File | Required change | Why it triggers the new condition |
+|---|---|---|
+| `crates/kf-chan/src/grtables.rs` | Add `address_upper_bits` / `reauthor_in_class`, class-aware upper-address validation and two tests | Changes kf-chan, explicitly named in approval condition 2 |
+| `crates/kf-chan/src/tmode.rs` | `gr_write` calls `reauthor_in_class(Some(class), ...)` instead of `reauthor(...)` | Required caller dependency; changing the table alone leaves execution on the narrow path |
+
+Current source allows only 8 upper-address bits. The incoming rule admits
+25 bits for class `0xCB97` and `0xCDC0`; others retain the narrow default.
+CODE READ confirmation: public ogkm 580.65.06 `clcb97.h` lines 42/3913 declare
+24:0, and ogkm 595.91.07 `clcdc0.h` lines 39/116 declare 24:0. The 580.65.06
+`clcdc0.h` is an id-only header, so no width is inferred from that older stub.
+No hardware test was run and no missing-address failure is asserted for a
+specific sweep cell. The exact dependency is ABI rule -> `gr_write` authoring
+in kf-chan, not an inferred dependency on old USER batching.
+
+STOP under coordinator condition 2: a retained ABI topic needs a kf-chan change.
+No F-2 hunk was applied. No other protected area is implicitly authorized.
+Recommendation: authorize only this two-file F-2 topic, with the current narrow
+behavior preserved for every other class, current tests retained, failing-first
+coverage and >=2 killing tests before acceptance. Alternatively explicitly defer
+F-2; do not silently drop it from the requested gpu-types code integration.
+
+This approval would not authorize USER relay, birth/groups/latejoin,
+doorbell/drainer, display pacing or boot-layer scrub changes. Any such new
+required dependency still stops the lane. The two affected candidate-4 blobs
+are `497939a6ff4c325efa8c840896615f62f35dbc70` (grtables) and
+`1b05d02b75c70c158e7bec676a69bc7d152f1262` (tmode), both unchanged locally.
+
+## Complete dropped-edit inventory (CODE READ)
+
+The rows below enumerate every hunk introduced by excluded merge
+`29eae05a4` relative to its first parent. Every row is excluded from the
+planned import; none is a deletion from candidate 4. Hunk numbering and hashes
+in `exclusion_inventory.json` reproduce the exact old source without importing it.
+Other incidental source differences are not automatically included or discarded.
+
+| Source path | Every dropped hunk (old/new ranges, zero context) | Reason |
+|---|---|---|
+| `crates/kf-chan/src/user_loop.rs` | H1 `-166,0 +167,22` (+22 / -0) | Old flow/stage/PUT-ahead diagnostics and claim-batching helper/tests; no port authorized. |
+| `crates/kf-chan/src/user_loop.rs` | H2 `-209,0 +232,69` (+69 / -0) | Old flow/stage/PUT-ahead diagnostics and claim-batching helper/tests; no port authorized. |
+| `crates/kf-chan/src/user_loop.rs` | H3 `-216,0 +308,35` (+35 / -0) | Old flow/stage/PUT-ahead diagnostics and claim-batching helper/tests; no port authorized. |
+| `crates/kf-chan/src/user_loop.rs` | H4 `-226,0 +353,12` (+12 / -0) | Old flow/stage/PUT-ahead diagnostics and claim-batching helper/tests; no port authorized. |
+| `crates/kf-chan/src/user_loop.rs` | H5 `-228 +366` (+1 / -1) | Old flow/stage/PUT-ahead diagnostics and claim-batching helper/tests; no port authorized. |
+| `crates/kf-chan/src/user_loop.rs` | H6 `-243,0 +382,7` (+7 / -0) | Old flow/stage/PUT-ahead diagnostics and claim-batching helper/tests; no port authorized. |
+| `crates/kf-chan/src/user_loop.rs` | H7 `-251,0 +397,11` (+11 / -0) | Old flow/stage/PUT-ahead diagnostics and claim-batching helper/tests; no port authorized. |
+| `crates/kf-chan/tests/user_loop_model.rs` | H1 `-152,0 +153,2` (+2 / -0) | Old claim-batching model, final-bell mutant and associated tests; current model/tests preserved. |
+| `crates/kf-chan/tests/user_loop_model.rs` | H2 `-195,0 +198,24` (+24 / -0) | Old claim-batching model, final-bell mutant and associated tests; current model/tests preserved. |
+| `crates/kf-chan/tests/user_loop_model.rs` | H3 `-213,0 +240,3` (+3 / -0) | Old claim-batching model, final-bell mutant and associated tests; current model/tests preserved. |
+| `crates/kf-chan/tests/user_loop_model.rs` | H4 `-330,0 +360,14` (+14 / -0) | Old claim-batching model, final-bell mutant and associated tests; current model/tests preserved. |
+| `crates/kf-chan/tests/user_loop_model.rs` | H5 `-390,0 +434` (+1 / -0) | Old claim-batching model, final-bell mutant and associated tests; current model/tests preserved. |
+| `crates/kf-chan/tests/user_loop_model.rs` | H6 `-432,0 +477,4` (+4 / -0) | Old claim-batching model, final-bell mutant and associated tests; current model/tests preserved. |
+| `crates/kf-chan/tests/user_loop_model.rs` | H7 `-487,0 +536,7` (+7 / -0) | Old claim-batching model, final-bell mutant and associated tests; current model/tests preserved. |
+| `crates/kf-chan/tests/user_loop_model.rs` | H8 `-504,0 +560` (+1 / -0) | Old claim-batching model, final-bell mutant and associated tests; current model/tests preserved. |
+| `crates/kf-chan/tests/user_loop_model.rs` | H9 `-610,0 +667,6` (+6 / -0) | Old claim-batching model, final-bell mutant and associated tests; current model/tests preserved. |
+| `crates/kf-chan/tests/user_loop_model.rs` | H10 `-616 +678` (+1 / -1) | Old claim-batching model, final-bell mutant and associated tests; current model/tests preserved. |
+| `crates/kf-chan/tests/user_loop_model.rs` | H11 `-779,0 +842,14` (+14 / -0) | Old claim-batching model, final-bell mutant and associated tests; current model/tests preserved. |
+| `crates/kf-chan/tests/user_loop_model.rs` | H12 `-1058,0 +1135,4` (+4 / -0) | Old claim-batching model, final-bell mutant and associated tests; current model/tests preserved. |
+| `crates/kf-chan/tests/user_loop_model.rs` | H13 `-1091,2 +1171,8` (+8 / -2) | Old claim-batching model, final-bell mutant and associated tests; current model/tests preserved. |
+| `crates/kf-chan/tests/user_loop_model.rs` | H14 `-1234,0 +1321,8` (+8 / -0) | Old claim-batching model, final-bell mutant and associated tests; current model/tests preserved. |
+| `crates/kf-chan/tests/user_loop_model.rs` | H15 `-1248,2 +1342,12` (+12 / -2) | Old claim-batching model, final-bell mutant and associated tests; current model/tests preserved. |
+| `crates/kf-chan/tests/user_loop_model.rs` | H16 `-1263 +1367` (+1 / -1) | Old claim-batching model, final-bell mutant and associated tests; current model/tests preserved. |
+| `crates/kf-chan/tests/user_loop_model.rs` | H17 `-1346,0 +1451,3` (+3 / -0) | Old claim-batching model, final-bell mutant and associated tests; current model/tests preserved. |
+| `crates/kf-chan/tests/user_loop_model.rs` | H18 `-1379,0 +1487` (+1 / -0) | Old claim-batching model, final-bell mutant and associated tests; current model/tests preserved. |
+| `crates/kf-chan/tests/user_loop_model.rs` | H19 `-1407,0 +1516,7` (+7 / -0) | Old claim-batching model, final-bell mutant and associated tests; current model/tests preserved. |
+| `crates/kf-chan/tests/user_loop_model.rs` | H20 `-1428 +1543,5` (+5 / -1) | Old claim-batching model, final-bell mutant and associated tests; current model/tests preserved. |
+| `crates/kf-chan/tests/user_loop_model.rs` | H21 `-1987,0 +2107,2` (+2 / -0) | Old claim-batching model, final-bell mutant and associated tests; current model/tests preserved. |
+| `crates/kf-chan/tests/user_loop_model.rs` | H22 `-1988,0 +2110` (+1 / -0) | Old claim-batching model, final-bell mutant and associated tests; current model/tests preserved. |
+| `crates/kf-chan/tests/user_loop_model.rs` | H23 `-2003,0 +2126,28` (+28 / -0) | Old claim-batching model, final-bell mutant and associated tests; current model/tests preserved. |
+| `crates/kf-chan/tests/user_loop_model.rs` | H24 `-2021,0 +2172` (+1 / -0) | Old claim-batching model, final-bell mutant and associated tests; current model/tests preserved. |
+| `crates/kf-chan/tests/user_loop_model.rs` | H25 `-2022,0 +2174,7` (+7 / -0) | Old claim-batching model, final-bell mutant and associated tests; current model/tests preserved. |
+| `crates/kf-chan/tests/user_loop_model.rs` | H26 `-2405,0 +2564,173` (+173 / -0) | Old claim-batching model, final-bell mutant and associated tests; current model/tests preserved. |
+| `crates/kf-harness/src/bin/kf-syncwait-stress.rs` | H1 `-716,0 +717,35` (+35 / -0) | Histogram/flood instrumentation dependent on the excluded old measurement topic. |
+| `crates/kf-qemu/src/userpump.rs` | H1 `-434,0 +435,14` (+14 / -0) | All old counter/timer call sites, chained-turn state/control flow, deferred doorbell and dependent bookkeeping excluded together. |
+| `crates/kf-qemu/src/userpump.rs` | H2 `-451,0 +466,2` (+2 / -0) | All old counter/timer call sites, chained-turn state/control flow, deferred doorbell and dependent bookkeeping excluded together. |
+| `crates/kf-qemu/src/userpump.rs` | H3 `-501,0 +518,5` (+5 / -0) | All old counter/timer call sites, chained-turn state/control flow, deferred doorbell and dependent bookkeeping excluded together. |
+| `crates/kf-qemu/src/userpump.rs` | H4 `-1260 +1281,41` (+41 / -1) | All old counter/timer call sites, chained-turn state/control flow, deferred doorbell and dependent bookkeeping excluded together. |
+| `crates/kf-qemu/src/userpump.rs` | H5 `-1285,12 +1346,16` (+16 / -12) | All old counter/timer call sites, chained-turn state/control flow, deferred doorbell and dependent bookkeeping excluded together. |
+| `crates/kf-qemu/src/userpump.rs` | H6 `-1298,16 +1363,14` (+14 / -16) | All old counter/timer call sites, chained-turn state/control flow, deferred doorbell and dependent bookkeeping excluded together. |
+| `crates/kf-qemu/src/userpump.rs` | H7 `-1315 +1378,11` (+11 / -1) | All old counter/timer call sites, chained-turn state/control flow, deferred doorbell and dependent bookkeeping excluded together. |
+| `crates/kf-qemu/src/userpump.rs` | H8 `-1317,2 +1389,0` (+0 / -2) | All old counter/timer call sites, chained-turn state/control flow, deferred doorbell and dependent bookkeeping excluded together. |
+| `crates/kf-qemu/src/userpump.rs` | H9 `-1328,17 +1399,30` (+30 / -17) | All old counter/timer call sites, chained-turn state/control flow, deferred doorbell and dependent bookkeeping excluded together. |
+| `crates/kf-qemu/src/userpump.rs` | H10 `-1350,0 +1435` (+1 / -0) | All old counter/timer call sites, chained-turn state/control flow, deferred doorbell and dependent bookkeeping excluded together. |
+| `crates/kf-qemu/src/userpump.rs` | H11 `-1375,0 +1461` (+1 / -0) | All old counter/timer call sites, chained-turn state/control flow, deferred doorbell and dependent bookkeeping excluded together. |
+| `crates/kf-qemu/src/userpump.rs` | H12 `-1376,0 +1463` (+1 / -0) | All old counter/timer call sites, chained-turn state/control flow, deferred doorbell and dependent bookkeeping excluded together. |
+| `crates/kf-qemu/src/userpump.rs` | H13 `-1412,0 +1500` (+1 / -0) | All old counter/timer call sites, chained-turn state/control flow, deferred doorbell and dependent bookkeeping excluded together. |
+| `crates/kf-qemu/src/userpump.rs` | H14 `-1433,0 +1522` (+1 / -0) | All old counter/timer call sites, chained-turn state/control flow, deferred doorbell and dependent bookkeeping excluded together. |
+| `crates/kf-qemu/src/userpump.rs` | H15 `-1519,0 +1609` (+1 / -0) | All old counter/timer call sites, chained-turn state/control flow, deferred doorbell and dependent bookkeeping excluded together. |
+| `crates/kf-qemu/src/userpump.rs` | H16 `-1524,0 +1615` (+1 / -0) | All old counter/timer call sites, chained-turn state/control flow, deferred doorbell and dependent bookkeeping excluded together. |
+| `crates/kf-qemu/src/userpump.rs` | H17 `-1530,0 +1622,2` (+2 / -0) | All old counter/timer call sites, chained-turn state/control flow, deferred doorbell and dependent bookkeeping excluded together. |
+| `crates/kf-qemu/src/userpump.rs` | H18 `-1542 +1635,4` (+4 / -1) | All old counter/timer call sites, chained-turn state/control flow, deferred doorbell and dependent bookkeeping excluded together. |
+| `crates/kf-qemu/src/userpump.rs` | H19 `-1599,0 +1696` (+1 / -0) | All old counter/timer call sites, chained-turn state/control flow, deferred doorbell and dependent bookkeeping excluded together. |
+| `crates/kf-qemu/src/userpump.rs` | H20 `-1627,0 +1725,7` (+7 / -0) | All old counter/timer call sites, chained-turn state/control flow, deferred doorbell and dependent bookkeeping excluded together. |
+| `crates/kf-qemu/src/userpump.rs` | H21 `-1865,0 +1970` (+1 / -0) | All old counter/timer call sites, chained-turn state/control flow, deferred doorbell and dependent bookkeeping excluded together. |
+| `crates/kf-qemu/src/userpump.rs` | H22 `-1925 +2030,19` (+19 / -1) | All old counter/timer call sites, chained-turn state/control flow, deferred doorbell and dependent bookkeeping excluded together. |
+| `crates/kf-qemu/src/userpump.rs` | H23 `-1927 +2050,3` (+3 / -1) | All old counter/timer call sites, chained-turn state/control flow, deferred doorbell and dependent bookkeeping excluded together. |
+| `crates/kf-qemu/src/userpump.rs` | H24 `-2014,0 +2140` (+1 / -0) | All old counter/timer call sites, chained-turn state/control flow, deferred doorbell and dependent bookkeeping excluded together. |
+| `crates/kf-qemu/src/userpump.rs` | H25 `-2096,0 +2223,4` (+4 / -0) | All old counter/timer call sites, chained-turn state/control flow, deferred doorbell and dependent bookkeeping excluded together. |
+| `crates/kf-qemu/src/userpump.rs` | H26 `-2479,0 +2610` (+1 / -0) | All old counter/timer call sites, chained-turn state/control flow, deferred doorbell and dependent bookkeeping excluded together. |
+| `crates/kf-qemu/src/userpump.rs` | H27 `-2530,0 +2662` (+1 / -0) | All old counter/timer call sites, chained-turn state/control flow, deferred doorbell and dependent bookkeeping excluded together. |
+| `crates/kf-qemu/src/userread.rs` | H1 `-199,0 +200,2` (+2 / -0) | Span-reservation optimization and its test/comment arrived through excluded merge; independent of die rules, deferred with that merge, not described as a batching dependency. |
+| `crates/kf-qemu/src/userread.rs` | H2 `-201,3 +202,0` (+0 / -3) | Span-reservation optimization and its test/comment arrived through excluded merge; independent of die rules, deferred with that merge, not described as a batching dependency. |
+| `crates/kf-qemu/src/userread.rs` | H3 `-208,0 +208` (+1 / -0) | Span-reservation optimization and its test/comment arrived through excluded merge; independent of die rules, deferred with that merge, not described as a batching dependency. |
+| `crates/kf-qemu/src/userread.rs` | H4 `-341,0 +342,29` (+29 / -0) | Span-reservation optimization and its test/comment arrived through excluded merge; independent of die rules, deferred with that merge, not described as a batching dependency. |
+| `docs/STATUS_AND_HANDOFF.md` | H1 `-2,0 +3,14` (+14 / -0) | Old batching/performance handoff; historical documentation is not part of code import. |
+| `docs/design/V3_USER_RING_EVENT_LOOP_20261014.md` | H1 `-405,0 +406,167` (+167 / -0) | Old measurement/batching design/results; historical documentation is not part of code import. |
+
+
+## Historical pre-approval preflight (superseded authority)
+
 # Sweep integration conflict ledger
 
-STATUS: LIVE, 2026-10-18. STOP: protected conflicts require the owner's decision.
+STATUS: SUPERSEDED SNAPSHOT, 2026-10-18. The original USER-topic decision was approved; see the current update above.
 
 MEASURED: the GPU-free, unapplied `git merge-tree --write-tree --messages -z`
 preflight of candidate 4 `0452613b5` and gpu-types `1cb048610` reports content
@@ -37,7 +196,7 @@ relay implementation. A blanket incoming-side choice would discard current
 relay/lifecycle code; a blanket current-side choice alone would leave incoming
 nonconflicting dependent edits unreviewed. Neither choice was applied.
 
-## Owner decision requested
+## Historical owner request — APPROVED by the subsequent coordinator decision
 
 INFERRED recommendation: authorize excluding this obsolete USER relay batching
 and measurement topic, including its dependent nonconflicting edits, from the
