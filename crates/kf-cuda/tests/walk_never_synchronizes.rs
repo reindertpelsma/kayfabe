@@ -9,7 +9,9 @@
 //! ⊘ A source scan is a blunt instrument, so it is paired with a KNOWN POSITIVE (a sweep that
 //! reports zero must first report one): the one deliberate `ctx_synchronize` — the failed-launch
 //! probe's drain of a launch that unexpectedly succeeded — must still be found, or the scan is
-//! blind and its zero means nothing.
+//! blind and its zero means nothing. Owner ruling AM also requires awaited store zeroing on
+//! VA/realize threads: `sync_store` is the second explicit completion site. Neither direct
+//! synchronization nor a call to that worker barrier may enter the asynchronous walk path.
 
 const WALK_RS: &str = include_str!("../src/walk.rs");
 const WALK_VERBS: [&str; 7] = [
@@ -30,8 +32,27 @@ fn code_only(src: &str) -> String {
 }
 
 fn synchronizations_are_scoped(src: &str) -> bool {
-    // Preserve the old guard for the EXPECTED RED test commit.
-    code_only(src).matches("ctx_synchronize()").count() == 1
+    let code: String = code_only(src)
+        .chars()
+        .filter(|c| !c.is_whitespace())
+        .collect();
+    let one_call = |sig| {
+        body_of(src, sig).is_some_and(|body| {
+            let body: String = code_only(body)
+                .chars()
+                .filter(|c| !c.is_whitespace())
+                .collect();
+            body.matches("ctx_synchronize()").count() == 1
+        })
+    };
+    code.matches("ctx_synchronize()").count() == 2
+        && one_call("pub fn probe_failed_launch")
+        && one_call("pub fn sync_store")
+        // Only the declaration: even an indirect worker-barrier call in this file is refused.
+        && code.matches("sync_store(").count() == 1
+        && WALK_VERBS.iter().all(|sig| {
+            body_of(src, sig).is_some_and(|body| !code_only(body).contains("synchronize"))
+        })
 }
 
 const WORKER_COMPLETION: &str = r#"impl WalkKernel {
@@ -65,16 +86,16 @@ fn the_known_positive_is_found() {
     let probe = body_of(WALK_RS, "pub fn probe_failed_launch").expect("the probe exists");
     assert!(
         probe.contains("ctx_synchronize()"),
-        "the scan must SEE the one deliberate synchronize, or its zero below is vacuous"
+        "the scan must SEE the deliberate probe synchronize, or its zero below is vacuous"
     );
 }
 
 #[test]
-fn only_the_probe_synchronizes() {
+fn only_the_probe_and_store_completion_synchronize() {
     assert!(
         synchronizations_are_scoped(WALK_RS),
-        "a `ctx_synchronize()` outside `probe_failed_launch` blocks the submitting thread on the \
-         GPU — the thing P4 removed. Complete through the fd (`try_collect`) instead."
+        "synchronization must stay in the failed-launch probe or explicit worker store barrier; \
+         walk submission/acknowledgement/collection stays asynchronous"
     );
 }
 
@@ -88,6 +109,10 @@ fn the_walk_verbs_do_not_synchronize() {
             .collect::<Vec<_>>()
             .join("\n");
         assert!(!code.contains("synchronize"), "{sig} synchronizes");
+        assert!(
+            !code.contains("sync_store("),
+            "{sig} calls the worker barrier"
+        );
     }
 }
 
