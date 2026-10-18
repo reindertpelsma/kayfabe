@@ -179,6 +179,16 @@ pub(crate) fn restore_physical_view<V: kf_mem::cpuwin::ViewOps>(
     restore_physical_view_scrubbed(w, at_change, false, &mut |_, _| Ok(()))
 }
 
+/// Why an unload's boot-range scrub was not performed. A stale life withdraws the entire
+/// restore operation; a host refusal still permits the same OS to regain its console view.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum ScrubError {
+    /// A newer guest RM life owns the range: neither zero it nor install a boot view there.
+    StaleLife,
+    /// The host refused the zero or its completion. The guest still owns this memory.
+    Refused(String),
+}
+
 /// ★★ [`restore_physical_view`], with the boot framebuffer's store range ZEROED (`scrub(store_off,
 /// len)`, GPU work on the VA thread) BEFORE the seed is placed again (2026-10-18, branch
 /// `claude/bootlayer-20261018`).
@@ -188,9 +198,10 @@ pub(crate) fn restore_physical_view<V: kf_mem::cpuwin::ViewOps>(
 /// `kf_chip::bar0::fb_layout`), and the guest's CPU writes to BAR1 `[0, G)` went to scratch (the
 /// seed retired at its first BAR1 change). What the monitor shows after the unload is store `[0, G)`
 /// — the RM's data, drawn as pixels (`[measured, run 3081, 2026-10-18]` the old life's last frame).
-/// Zeroing it here is ordered before the seed by construction: until `reseed` places the view, no
-/// guest CPU write reaches the store range, so a console that redraws after the unload (efifb,
-/// simpledrm, Windows' basic display) can never be wiped by this zero.
+/// Zeroing it here is ordered before a successful seed placement. This does not prove that no
+/// other CPU alias reaches the store range: guest placements may remain when reseed is refused,
+/// and a placement elsewhere in BAR1/BAR2 can alias these bytes. The Windows refusal therefore
+/// does not establish a working basic-display handoff (L5, 2026-10-18).
 ///
 /// - The seed is ALREADY placed (no RM ever took BAR1): the guest's firmware console is writing
 ///   the store right now — nothing is scrubbed, UNLESS `tainted` (fn 72 began an RM life that died
@@ -198,15 +209,17 @@ pub(crate) fn restore_physical_view<V: kf_mem::cpuwin::ViewOps>(
 /// - BAR1 changed after the request (an RM holds BAR1 again): nothing is scrubbed — that is a new
 ///   RM life, and it owns the range.
 /// - The reseed is REFUSED because guest placements still overlap the range (`[measured]` every
-///   Windows life of run 3081): the range IS scrubbed all the same — nothing reaches the store
-///   through BAR1 `[0, G)` then, and the monitor still shows the store as the boot layer.
-/// - A refused scrub does not stop the reseed (the guest's console must return, the guest owns this
+///   Windows life of run 3081): the range IS scrubbed all the same (the existing display policy).
+///   CPU mappings still need ordered retirement; the monitor's store read and the guest's CPU
+///   window are independent views.
+/// - A stale-life scrub refusal cancels the entire restore: the new RM's scratch must stay scratch.
+/// - A host-refused scrub does not stop the reseed (the guest's console must return, the guest owns this
 ///   memory anyway): it is said in the line.
 pub fn restore_physical_view_scrubbed<V: kf_mem::cpuwin::ViewOps>(
     w: &kf_mem::cpuwin::CpuWindow<V>,
     at_change: u64,
     tainted: bool,
-    scrub: &mut dyn FnMut(u64, u64) -> Result<(), String>,
+    scrub: &mut dyn FnMut(u64, u64) -> Result<(), ScrubError>,
 ) -> Option<String> {
     let (at, store_off, len) = w.boot_range()?;
     let now = w.changes();
@@ -222,7 +235,16 @@ pub fn restore_physical_view_scrubbed<V: kf_mem::cpuwin::ViewOps>(
     // would ever clean it. A redraw that races this zero is lost; the line says the range was
     // scrubbed.
     let scrubbed = if w.seeded().is_none() || tainted {
-        Some(scrub(store_off, len))
+        match scrub(store_off, len) {
+            Ok(()) => Some(Ok(())),
+            Err(ScrubError::Refused(why)) => Some(Err(why)),
+            Err(ScrubError::StaleLife) => {
+                return Some(
+                    "BAR1's physical view NOT restored: a newer guest RM life began (fn 72) \
+                     after this unload — neither scrubbed nor re-seeded".to_string(),
+                );
+            }
+        }
     } else {
         None
     };
@@ -492,7 +514,8 @@ mod tests {
 
     /// `[measured]` run 3081: every Windows unload found 56 guest placements still over BAR1
     /// `[0, G)` and the re-seed was REFUSED. The monitor still shows the store, so the store is
-    /// still scrubbed — nothing reaches it through BAR1 `[0, G)` while those placements stand.
+    /// still scrubbed under the existing display policy. That does not prove other aliases are
+    /// absent or that the guest console can redraw into this store range.
     #[test]
     fn a_refused_reseed_still_scrubs_the_store() {
         use kf_mem::ledger::{Desired, MapTarget};
@@ -527,7 +550,7 @@ mod tests {
     fn a_stale_unload_does_not_reseed_a_new_lifes_scratch() {
         let (w, log) = logged_life();
         let line = restore_physical_view_scrubbed(&w, w.changes(), true, &mut |_, _| {
-            Err("not scrubbed: a newer guest RM life began (fn 72) after this unload".into())
+            Err(ScrubError::StaleLife)
         })
         .expect("a line");
         assert_eq!(w.seeded(), None, "a stale unload changed the new life: {line}");
@@ -553,7 +576,7 @@ mod tests {
         w.invalidate().unwrap();
         log.borrow_mut().clear();
         let line = restore_physical_view_scrubbed(&w, w.changes(), true, &mut |_, _| {
-            Err("not scrubbed: a newer guest RM life began (fn 72) after this unload".into())
+            Err(ScrubError::StaleLife)
         })
         .expect("a line");
         assert_eq!(w.seeded(), None, "a stale unload replaced the live RM's scratch: {line}");
@@ -624,7 +647,7 @@ mod tests {
     fn a_refused_scrub_is_named_and_the_seed_still_returns() {
         let w = one_life();
         let line = restore_physical_view_scrubbed(&w, w.changes(), false, &mut |_, _| {
-            Err("cuMemsetD8: out of memory".to_string())
+            Err(ScrubError::Refused("cuMemsetD8: out of memory".to_string()))
         })
         .expect("a line");
         assert!(

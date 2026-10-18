@@ -2343,10 +2343,7 @@ impl Device {
                             &mut |off, len| {
                                 if stale {
                                     outcome.set(crate::bootclean::UnloadScrub::StaleLife);
-                                    return Err(
-                                        "not scrubbed: a newer guest RM life began (fn 72) after this unload"
-                                            .to_string(),
-                                    );
+                                    return Err(crate::bar1phys::ScrubError::StaleLife);
                                 }
                                 match crate::scrub::zero_range(kernel, off, len, &progress) {
                                     Ok(_) => {
@@ -2355,7 +2352,7 @@ impl Device {
                                     }
                                     Err(e) => {
                                         outcome.set(crate::bootclean::UnloadScrub::Failed);
-                                        Err(e.to_string())
+                                        Err(crate::bar1phys::ScrubError::Refused(e.to_string()))
                                     }
                                 }
                             },
