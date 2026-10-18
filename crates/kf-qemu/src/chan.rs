@@ -2352,6 +2352,9 @@ pub struct ChanPlane {
     /// ★ 2026-10-08 (owner ruling §X, `kf_chan::ptnsi`): host non-stall edges → the guest vectors
     /// of the events this VM's guest armed; never dropped (`KF3_PT_NSI_*`, read once at realize).
     pub nsi: kf_chan::ptnsi::Relay,
+    /// P1 worker-only trace, compiled out of production (including its storage).
+    #[cfg(feature = "diag-nsi")]
+    pub nsi_trace: crate::nsitrace::Trace,
     /// The guest's non-stall subscriptions (`kf_rm::osevent::NonstallArms`), set once at realize
     /// from the served chain's os-event registry; read lock-free by the workers.
     nsi_arms: std::sync::OnceLock<std::sync::Arc<kf_rm::osevent::NonstallArms>>,
@@ -2974,6 +2977,8 @@ impl ChanPlane {
             queued: (0..tokens).map(|_| AtomicU64::new(0)).collect(),
             db_census: std::array::from_fn(|_| AtomicU64::new(0)),
             nsi,
+            #[cfg(feature = "diag-nsi")]
+            nsi_trace: crate::nsitrace::Trace::from_env(),
             nsi_arms: std::sync::OnceLock::new(),
             nsi_log: std::sync::OnceLock::new(),
             host_notify_engine,
@@ -3139,11 +3144,19 @@ impl ChanPlane {
         } else {
             None
         };
-        let verdict = self.nsi.edge(
-            kf_chan::ptnsi::EdgeKind::Fifo,
-            armed,
+        let now_ns = self.nsi_now_ns();
+        let verdict = self
+            .nsi
+            .edge(kf_chan::ptnsi::EdgeKind::Fifo, armed, vector, now_ns);
+        // The shared completion fd also subscribes the host CE: do not claim FIFO-only provenance.
+        #[cfg(feature = "diag-nsi")]
+        self.nsi_trace.note(
+            now_ns,
+            crate::nsitrace::Source::CompletionFd,
+            Some(kf_abi::eventnotify::NONSTALL_SLOT_FIFO_EVENT_MTHD),
             vector,
-            self.nsi_now_ns(),
+            Some(armed),
+            verdict,
         );
         match verdict {
             kf_chan::ptnsi::Verdict::Raise(v) => {
@@ -3176,11 +3189,18 @@ impl ChanPlane {
         deliver: impl FnOnce(u32),
     ) -> kf_chan::ptnsi::Verdict {
         let armed = self.nsi_armed(e.slot);
-        let verdict = self.nsi.edge(
-            kf_chan::ptnsi::EdgeKind::Engine,
-            armed,
+        let now_ns = self.nsi_now_ns();
+        let verdict = self
+            .nsi
+            .edge(kf_chan::ptnsi::EdgeKind::Engine, armed, e.vector, now_ns);
+        #[cfg(feature = "diag-nsi")]
+        self.nsi_trace.note(
+            now_ns,
+            crate::nsitrace::Source::Engine(e.engine_type),
+            e.slot,
             e.vector,
-            self.nsi_now_ns(),
+            Some(armed),
+            verdict,
         );
         match verdict {
             kf_chan::ptnsi::Verdict::Raise(v) => {
@@ -3211,7 +3231,8 @@ impl ChanPlane {
         if self.nsi.pacer().interval_ns() == 0 {
             return false;
         }
-        self.nsi.flush(self.nsi_now_ns(), |v| {
+        let now_ns = self.nsi_now_ns();
+        self.nsi.flush(now_ns, |v| {
             let i = v as usize;
             if let Some(w) = self.pt_fifo_owed.get(i / 64)
                 && w.fetch_and(!(1 << (i % 64)), Ordering::Relaxed) & (1 << (i % 64)) != 0
@@ -3223,6 +3244,16 @@ impl ChanPlane {
                     e.raised.fetch_add(1, Ordering::Relaxed);
                 }
             }
+            // Arming belonged to the original offer; a trailing raise may carry several sources.
+            #[cfg(feature = "diag-nsi")]
+            self.nsi_trace.note(
+                now_ns,
+                crate::nsitrace::Source::Trailing,
+                None,
+                Some(v),
+                None,
+                kf_chan::ptnsi::Verdict::Raise(v),
+            );
             deliver(v);
         })
     }

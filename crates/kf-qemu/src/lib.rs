@@ -26,6 +26,8 @@ pub mod gpuuid;
 pub mod hostfacts;
 pub mod latejoin;
 pub mod mem;
+#[cfg(feature = "diag-nsi")]
+pub mod nsitrace;
 pub mod prof;
 pub mod raw_unsafe;
 pub mod readtrace;

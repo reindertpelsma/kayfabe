@@ -2451,6 +2451,8 @@ impl Device {
             if snap_at.elapsed() >= std::time::Duration::from_millis(250) {
                 snap_at = std::time::Instant::now();
                 self.chans.pt_stall_snapshot_poll();
+                #[cfg(feature = "diag-nsi")]
+                self.chans.nsi_trace.poll_dump();
             }
             // A heartbeat for the boot log, on the drainer (never a vCPU): printed only on change.
             if beat.0.elapsed() >= std::time::Duration::from_secs(2) {
