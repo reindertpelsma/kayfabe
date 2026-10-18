@@ -426,6 +426,22 @@ mod tests {
     use super::*;
 
     #[test]
+    fn f2_context_free_notifier_stays_narrow() {
+        let row = &NOTIFY_ALLOWED[0];
+        assert_eq!(reauthor(row, 0xff), Ok(0xff));
+        assert!(reauthor(row, 0x100).is_err());
+        assert!(reauthor(row, 0x1ff_ffff).is_err());
+    }
+
+    #[test]
+    fn f2_context_free_report_semaphore_stays_narrow() {
+        let row = &REPORT_SEMAPHORE_ALLOWED[0];
+        assert_eq!(reauthor(row, 0xff), Ok(0xff));
+        assert!(reauthor(row, 0x100).is_err());
+        assert!(reauthor(row, 0x1ff_ffff).is_err());
+    }
+
+    #[test]
     fn exactly_the_run31_methods_are_admitted() {
         let run31 = [
             0x888, 0x290, 0x29c, 0x2ac, 0x804, 0x840, 0x844, 0x848, 0x84c, 0x850, 0x854, 0x858,

@@ -2069,3 +2069,79 @@ impl StaleBind {
         )
     }
 }
+
+#[cfg(test)]
+mod f2_tests {
+    use super::*;
+
+    fn assert_address_pair(class: u32, upper: u32, lower: u32, bytes: u64) {
+        for hi in [0x100, 0x1ff_ffff] {
+            let mut state = TState::default();
+            let mut out = Vec::new();
+            gr_write(&mut out, &mut state, 0, class, upper, hi)
+                .expect("the public class header admits all 25 upper bits");
+            assert!(out.is_empty(), "the upper half alone emits no address");
+            gr_write(&mut out, &mut state, 0, class, lower, 0xffff_fffc)
+                .expect("the aligned lower half completes the address");
+            assert_eq!(
+                out,
+                [Ir::GrAddress {
+                    sub: 0,
+                    upper,
+                    va: (u64::from(hi) << 32) | 0xffff_fffc,
+                    bytes,
+                }],
+                "authoring must preserve the address and the declared footprint"
+            );
+        }
+    }
+
+    fn assert_upper_refused(class: u32, upper: u32, value: u32) {
+        let mut state = TState::default();
+        let before = state;
+        let mut out = Vec::new();
+        assert!(matches!(
+            gr_write(&mut out, &mut state, 0, class, upper, value),
+            Err(Refusal::GrField { .. })
+        ));
+        assert!(out.is_empty());
+        assert_eq!(state, before, "refused bits must not update channel state");
+    }
+
+    #[test]
+    fn f2_hopper_notifier_preserves_all_25_upper_bits() {
+        assert_address_pair(0xcb97, 0x104, 0x108, 16);
+    }
+
+    #[test]
+    fn f2_blackwell_compute_notifier_preserves_all_25_upper_bits() {
+        assert_address_pair(0xcdc0, 0x104, 0x108, 16);
+    }
+
+    #[test]
+    fn f2_hopper_report_semaphore_preserves_all_25_upper_bits() {
+        assert_address_pair(0xcb97, 0x1b00, 0x1b04, 4);
+    }
+
+    #[test]
+    fn f2_ada_three_d_keeps_8_bit_upper() {
+        assert_upper_refused(0xc997, 0x104, 0x100);
+        assert_upper_refused(0xc997, 0x1b00, 0x100);
+    }
+
+    #[test]
+    fn f2_ada_compute_keeps_8_bit_upper() {
+        assert_upper_refused(0xc9c0, 0x104, 0x100);
+    }
+
+    #[test]
+    fn f2_hopper_refuses_upper_bit_25() {
+        assert_upper_refused(0xcb97, 0x104, 0x200_0000);
+        assert_upper_refused(0xcb97, 0x1b00, 0x200_0000);
+    }
+
+    #[test]
+    fn f2_blackwell_compute_refuses_upper_bit_25() {
+        assert_upper_refused(0xcdc0, 0x104, 0x200_0000);
+    }
+}
