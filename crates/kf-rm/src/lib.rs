@@ -505,7 +505,7 @@ pub fn served_chain(
         && let Some(policy) = objects.take()
     {
         let (probe, observer) =
-            sw_runlist_probe::Probe::new(driver, authored::engine_caps(&host.engines));
+            sw_runlist_probe::Probe::new(driver, authored::engine_caps(&host.engines), host.die);
         objects = Some(policy.with_sw_runlist_probe(probe));
         chain.push(Box::new(observer));
         eprintln!(
