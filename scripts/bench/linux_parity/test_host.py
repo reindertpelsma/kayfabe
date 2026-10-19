@@ -50,6 +50,16 @@ class HostContracts(unittest.TestCase):
             self.assertIn('memory-backend-memfd,id=ram0,size=12288M,share=on', args)
             self.assertEqual('8', args[args.index('-smp') + 1])
 
+    def test_manifest_disk_used_in_vfio(self):
+        args, _ = self.h.plan(self.c, 'C', {})
+        disks = [x for x in args if x.startswith('file=') and 'id=disk0' in x]
+        self.assertEqual(1, len(disks))
+        self.assertTrue(disks[0].startswith('file=' + self.c['disk'] + ','))
+
+    def test_shared_ram_required_by_kayfabe(self):
+        args, _ = self.h.plan(self.c, 'B', {})
+        self.assertIn('memory-backend-memfd,id=ram0,size=12288M,share=on', args)
+
     def test_a_c_same_binary(self):
         self.assertEqual(self.h.plan(self.c, 'A', {})[0][0], self.h.plan(self.c, 'C', {})[0][0])
 
@@ -129,6 +139,40 @@ class HostContracts(unittest.TestCase):
 
     def test_lease_accepts_matching_holder(self):
         self.h.lease_guard({'pid': 30, 'start': '100'}, 30, '100', {30})
+
+    def test_sampler_fields_and_missing_nvml_are_explicit(self):
+        from unittest.mock import patch
+        import subprocess
+        def query(argv, **kwargs):
+            return subprocess.CompletedProcess(argv, 9, '', 'GPU is owned by VFIO')
+        with patch.object(self.h.subprocess, 'run', query):
+            row = self.h.snapshot()
+        self.assertEqual(9, row['nvml']['rc'])
+        self.assertEqual(9, row['nvml_detail']['rc'])
+        self.assertGreaterEqual(row['sample_end_ns'], row['realtime_ns'])
+        self.assertGreater(row['monotonic_ns'], 0)
+        self.assertEqual({'cpu', 'memory', 'io'}, set(row['pressure']))
+
+    def test_sampler_vcpu_identity_with_fake_proc(self):
+        from unittest.mock import patch
+        import subprocess
+        import tempfile
+        with tempfile.TemporaryDirectory() as tmp:
+            task = pathlib.Path(tmp) / 'proc/123/task/124'
+            task.mkdir(parents=True)
+            fields = ['S'] + [str(i) for i in range(4, 53)]
+            (task / 'stat').write_text('124 (CPU 0/KVM) ' + ' '.join(fields))
+            (task / 'comm').write_text('CPU 0/KVM')
+            (task / 'schedstat').write_text('1000 2000 30')
+            original_path = pathlib.Path
+            def path(value):
+                if str(value).startswith('/proc/123/'):
+                    return original_path(tmp) / str(value).lstrip('/')
+                return original_path(value)
+            with patch.object(self.h, 'Path', path), patch.object(self.h, 'proc_start', return_value='900'), patch.object(self.h.subprocess, 'run', side_effect=lambda argv, **kw: subprocess.CompletedProcess(argv, 0, 'sample', '')):
+                row = self.h.snapshot(123)
+        self.assertEqual({'pid': 123, 'start': '900'}, row['qemu'])
+        self.assertEqual([{'tid': 124, 'name': 'CPU 0/KVM', 'start': '22', 'schedstat': '1000 2000 30'}], row['vcpu'])
 
     def test_proc_stat_with_spaces_in_name(self):
         fields = ['S'] + [str(i) for i in range(4, 53)]

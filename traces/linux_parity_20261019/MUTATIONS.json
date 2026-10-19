@@ -1,0 +1,78 @@
+[
+  {
+    "mutant": "retain_inherited_flags",
+    "killed_by": [
+      "test_a_has_zero_kf3_variables",
+      "test_a_removes_inherited_diagnostic",
+      "test_b_explicit_mirror"
+    ],
+    "rc": 1
+  },
+  {
+    "mutant": "invert_mirror",
+    "killed_by": [
+      "test_b_explicit_mirror",
+      "test_d_explicit_kill_switch"
+    ],
+    "rc": 1
+  },
+  {
+    "mutant": "substitute_disk",
+    "killed_by": [
+      "test_manifest_disk_used_in_vfio",
+      "test_same_disk_all_arms"
+    ],
+    "rc": 1
+  },
+  {
+    "mutant": "private_ram",
+    "killed_by": [
+      "test_same_cpu_memory_all_arms",
+      "test_shared_ram_required_by_kayfabe"
+    ],
+    "rc": 1
+  },
+  {
+    "mutant": "ignore_users",
+    "killed_by": [
+      "test_refuses_broker",
+      "test_refuses_gpu_client",
+      "test_refuses_qemu"
+    ],
+    "rc": 1
+  },
+  {
+    "mutant": "ignore_group",
+    "killed_by": [
+      "test_refuses_extra_iommu_member",
+      "test_refuses_missing_iommu_member"
+    ],
+    "rc": 1
+  },
+  {
+    "mutant": "unsafe_restore",
+    "killed_by": [
+      "test_rebind_refuses_live_vm",
+      "test_rebind_rejects_unrecorded_driver",
+      "test_rebind_requires_original_drivers"
+    ],
+    "rc": 1
+  },
+  {
+    "mutant": "ignore_lease",
+    "killed_by": [
+      "test_lease_pid_reuse_refused",
+      "test_lease_requires_flock_holder"
+    ],
+    "rc": 1
+  },
+  {
+    "mutant": "bad_stat_split",
+    "killed_by": [
+      "test_proc_stat_with_parentheses_in_name",
+      "test_proc_stat_with_spaces_in_name",
+      "test_sampler_vcpu_identity_with_fake_proc"
+    ],
+    "rc": 1
+  }
+]

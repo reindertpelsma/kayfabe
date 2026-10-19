@@ -1,0 +1,9 @@
+{
+  "root": "/data/codex-LX1",
+  "disk": "/data/codex-LX1/guest.qcow2",
+  "run": "replace-with-unique-run",
+  "driver": "595.91.07",
+  "bins": "/data/codex-LX1/kf3-bins",
+  "pci": ["0000:01:00.0", "0000:01:00.1"],
+  "amd_desktop_verified": false
+}
