@@ -1109,6 +1109,29 @@ mod tests {
         }
     }
 
+    /// Output carry preserves the public GID length/data fields and refuses incomplete replies.
+    #[test]
+    fn host_gid_reply_preserves_uuid_bytes_at_every_measured_tag() {
+        let cmd = crate::gspstaticinfo::NV2080_CTRL_CMD_GPU_GET_GID_INFO;
+        let uuid: Vec<u8> = (1..=16).collect();
+        for &version in m::MEASURED {
+            let h = host(&version.to_string());
+            let carry = h.control_carry(cmd).unwrap().expect("GID reply layout");
+            let mut reply = vec![0; crate::gspstaticinfo::GID_INFO_SIZE];
+            reply[4..8].copy_from_slice(&crate::gspstaticinfo::GID_FLAGS_SHA1_BINARY.to_le_bytes());
+            reply[8..12].copy_from_slice(&16u32.to_le_bytes());
+            reply[12..28].copy_from_slice(&uuid);
+            let canonical = h.carry_in("host GID reply", &carry, &reply).unwrap();
+            assert_eq!(canonical, reply, "{version}: UUID reply changed");
+            assert!(
+                h.carry_in("short GID", &carry, &reply[..reply.len() - 1])
+                    .is_err()
+            );
+            reply.push(0);
+            assert!(h.carry_in("long GID", &carry, &reply).is_err());
+        }
+    }
+
     /// ★ Every listed id is the SDK's own for its name, at every measured tag where it exists —
     /// and where the id is absent, its struct is absent too (the carry then refuses by name).
     #[test]
