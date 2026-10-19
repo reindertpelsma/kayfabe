@@ -402,12 +402,17 @@ impl Drop for NeverBorn {
 
 /// Validate class and bounded ring geometry before resolving own-VM USERD storage.
 fn source_declaration(
-    _family: kf_chip::Family,
+    family: kf_chip::Family,
     class: u32,
     entries: u32,
     gpfifo_va: u64,
 ) -> Result<(), &'static str> {
-    if class != kf_abi::generated::classes::AMPERE_CHANNEL_GPFIFO_A
+    // Preserve the integration line's exact Ada admission set. The generated
+    // Ada list also names c36f/c46f; admitting them needs separate native proof.
+    let ada_allowed = family != kf_chip::Family::Ada
+        || class == kf_abi::generated::classes::AMPERE_CHANNEL_GPFIFO_A;
+    if !ada_allowed
+        || family.classes().kind_of(class) != Some(kf_chip::classes::Kind::ChannelGpfifo)
         || entries < 2
         || !entries.is_power_of_two()
         || entries > (1 << 20)
