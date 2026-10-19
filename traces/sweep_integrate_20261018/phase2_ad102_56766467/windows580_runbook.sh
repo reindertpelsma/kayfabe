@@ -31,5 +31,8 @@ bash "$W" nv-install
 # Export actual binding, without accepting the installer command's status as proof.
 timeout 60 bash "$W" ssh 'Get-CimInstance Win32_VideoController | Select-Object Name,DriverVersion,ConfigManagerErrorCode,PNPDeviceID | ConvertTo-Json -Compress' > /root/prov/sweep_windows580_binding.json
 cat /root/prov/sweep_windows580_binding.json
+bash "$W" scp-to /root/sweep-probes/prepare_cold580.ps1 C:/kf/prepare_cold580.ps1
+timeout 120 bash "$W" ssh 'powershell -NoProfile -ExecutionPolicy Bypass -File C:\kf\prepare_cold580.ps1' >/root/prov/sweep_windows580_cold_ready.txt 2>&1
+cat /root/prov/sweep_windows580_cold_ready.txt
 timeout 300 bash "$W" stop
 echo "WINDOWS580_BIND_STOPPED $(date -u -Is)"
