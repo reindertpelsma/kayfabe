@@ -37,6 +37,11 @@ start)
     QBIN=${QBIN:-/workspace/bench/kf3-bins/$CHECKOUT_REV/qemu-system-x86_64}
     [ -x "$QBIN" ] || die "no kf3 binary (QBIN)"
     REV=$(basename "$(dirname "$QBIN")")
+    # The Windows build's measured same-CL public ogkm tag, independent of the
+    # Linux host. QEMU still refuses unsupported exact tables; never guess a twin.
+    GUEST_DRIVER=${WIN_GUEST_DRIVER-580.65.06}
+    [[ "$GUEST_DRIVER" =~ ^[0-9]{3}\.[0-9]{1,3}(\.[0-9]{1,3})?$ ]] \
+        || die "WIN_GUEST_DRIVER must be major.minor[.patch] without extra properties"
     mkdir -p -m 0700 "$RUN" "$RUN/shots"
     # Keep the VM identity with its overlay, including across the two required boots.
     [ -s "$RUN/vm.uuid" ] || cat /proc/sys/kernel/random/uuid > "$RUN/vm.uuid"
@@ -48,8 +53,8 @@ start)
     fi
     rm -f "$RUN/qmp.sock" "$RUN/qga.sock"
     [ -e "$RUN/qemu.log" ] && mv "$RUN/qemu.log" "$RUN/qemu-$(date +%H%M%S).log"
-    # WIN_KF3_DISPLAY="display=off" + WIN_STDVGA=1: GB20x, whose kf3 display plane is refused at realize (doc §3)
-    KF3="kf3-gpu,fb-mb=${WIN_FB_MB:-4096},bar1-size=134217728,bar2-size=33554432,${WIN_KF3_DISPLAY:-display=on,gop=on},guest-driver=580.65.06,bus=pci.0,addr=0x6,id=kf0"
+    # WIN_KF3_DISPLAY="display=off" + WIN_STDVGA=1 is a diagnostic alternate console.
+    KF3="kf3-gpu,fb-mb=${WIN_FB_MB:-4096},bar1-size=134217728,bar2-size=33554432,${WIN_KF3_DISPLAY:-display=on,gop=on},guest-driver=$GUEST_DRIVER,bus=pci.0,addr=0x6,id=kf0"
     VGA=(); [ "${WIN_STDVGA:-0}" = 1 ] && VGA=(-device VGA,addr=0x9,id=vga0)
     ARGS=(-name kayfabe-diesweep -uuid "$VM_UUID" -nodefaults -no-user-config
         -machine pc,accel=kvm,smm=on,memory-backend=ram0
@@ -79,8 +84,8 @@ start)
     for d in ${WIN_FLAGS_DROP:-}; do FLAGS=$(printf '%s\n' $FLAGS | grep -vx "$d" | tr '\n' ' '); done
     while IFS= read -r name; do unset "$name"; done < <(compgen -e | sed -n '/^KF3_/p')
     ENV=(); for f in $FLAGS; do case $f in *=*) ENV+=("$f") ;; *) ENV+=("$f=1") ;; esac; done
-    printf '%s\n' "${ENV[@]}" "WIN_KF3_DISPLAY=${WIN_KF3_DISPLAY:-display=on,gop=on}" "WIN_STDVGA=${WIN_STDVGA:-0}" > "$RUN/flags.txt"; printf '%q ' "$QBIN" "${ARGS[@]}" > "$RUN/argv.txt"
-    echo "WIN_DIE_START kf3=$REV checkout=$(git -C "$K" rev-parse --short=9 HEAD) gpu=$(nvidia-smi --query-gpu=name --format=csv,noheader) xid_before=$(dmesg | grep -c 'NVRM: Xid') $(date -Is)" | tee -a "$RUN/marker.txt"
+    printf '%s\n' "${ENV[@]}" "WIN_KF3_DISPLAY=${WIN_KF3_DISPLAY:-display=on,gop=on}" "WIN_STDVGA=${WIN_STDVGA:-0}" "WIN_GUEST_DRIVER=$GUEST_DRIVER" > "$RUN/flags.txt"; printf '%q ' "$QBIN" "${ARGS[@]}" > "$RUN/argv.txt"
+    echo "WIN_DIE_START kf3=$REV checkout=$(git -C "$K" rev-parse --short=9 HEAD) guest_driver=$GUEST_DRIVER gpu=$(nvidia-smi --query-gpu=name --format=csv,noheader) xid_before=$(dmesg | grep -c 'NVRM: Xid') $(date -Is)" | tee -a "$RUN/marker.txt"
     env "${ENV[@]}" setsid "$QBIN" "${ARGS[@]}" > "$RUN/qemu.log" 2>&1 < /dev/null &
     QPID=$!; echo "$QPID" > "$RUN/qpid"
     setsid bash -c "while kill -0 $QPID 2>/dev/null; do sleep 5; done; echo \"WIN_DIE_EXIT qemu-gone \$(date -Is) xid_after=\$(dmesg | grep -c 'NVRM: Xid')\" >> '$RUN/marker.txt'" > /dev/null 2>&1 < /dev/null &
