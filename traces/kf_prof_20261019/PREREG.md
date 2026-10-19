@@ -21,3 +21,20 @@ which takes a build lock. That action cannot be performed under both rules.
 Options: coordinator performs the build in Part B (recommended); or owner
 explicitly authorizes a CPU-only host build and its build lock. No host action
 will be attempted under an inferred exception.
+
+## Coordinator source addendum acceptance plan — 2026-10-19
+
+CODE READ: all six new sources and the per-second RmControl/frame display are
+required, without changing work order or lifting the existing mutation STOP.
+INFERRED: the following hypotheses/falsifiers are prospective tests, not results.
+
+| Hypothesis | Falsifier before implementation/run | Planned stage evidence |
+|---|---|---|
+| C1: queue progress has correct identity and observation age | wrap/reused token corrupts depth, unchanged GET resets age, or stale observation is reported fresh/completed | bounded ring fixtures, two-test mutants |
+| C2: forwarded latency spans seen to successful post per function | held/refused attempt/host-return closes it early, or same-function instances cross-match | immediate/held/refused posts across intervals |
+| C3: per-VasKey bytes and large applies reproduce host-confirmed results | refused/partial bytes count as mapped, remaps invent live stock, or legacy large-apply count differs | apply-result fixtures with per-key interval totals |
+| C4: scheduling deltas and per-frame ratios reconcile exposure | TID reuse underflows runtime; actual RM calls conflate guest RmControl; zero/missing frames produce a number; mean of ratios replaces ratio of sums | schedstat fixtures and reader goldens |
+| C5: clock alignment retains uncertainty | absent/expired calibration aligns guest data, or stated uncertainty excludes a valid bracketing offset | synthetic ping-pong/clock-drift fixtures; live Part B UNRUN |
+| C6: interrupt stages remain distinct and observable | injection becomes ack, shared vector invents engine ack, or coalescing/loss disappears | source/injection/ack fixtures with two-test mutants |
+
+CODE READ: no new experiment or source-coverage claim accompanies this addendum.

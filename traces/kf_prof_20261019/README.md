@@ -82,3 +82,20 @@ Owner decisions:
 MEASURED: the lane-owned target directory was deleted after STOP. No profiler,
 test, mutation runner, cargo job, host process or lock remains owned by this lane.
 The worktree and local uncommitted source backup are retained for review.
+
+## Coordinator addendum — required sources, 2026-10-19
+
+CODE READ: the design now requires per-channel/token PUT-minus-GET and GET-change
+age; forwarded GSP seen-to-successful-reply-post latency max/p99 per function;
+per-VasKey map/unmap bytes and interval large-apply counts; per-vCPU schedstat
+runtime deltas plus actual host RM calls/frame; diag-channel clock offset with
+uncertainty; and per-engine/vector raised/delivered/acked observations.
+
+CODE READ: reader requirements now include per-second RmControl/frame with raw
+numerators, named display/broker new-content frame denominators and explicit
+zero/missing-source handling. The coordinator's run-3017 observation is a supplied
+motivation, not an independently measured or causal K1 result.
+
+MEASURED: this addendum changes documentation only; no implementation test was
+run, no source wiring or reader behavior was implemented, and stage order, the
+existing mutation STOP and hardware UNRUN status remain unchanged.
