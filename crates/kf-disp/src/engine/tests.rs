@@ -2072,6 +2072,21 @@ fn every_family_row_resolves_its_vocabulary() {
     }
 }
 
+#[test]
+fn separate_semaphore_controls_take_precedence_over_retained_legacy_method_names() {
+    for row in kf_chip::display::ALL {
+        let regs = Regs::for_ip("580.159.04", row.ip_version).unwrap();
+        let vocab = Vocab::resolve(t(), &Classes::of(row), &regs).unwrap();
+        let cl = row.classes.window;
+        assert!(t().v(cl, "SET_SEMAPHORE_ACQUIRE").is_some(), "legacy name exists on every row");
+        assert_eq!(
+            matches!(vocab.w_semaphores, WindowSemaphores::Separate { .. }),
+            t().v(cl, "SET_ACQ_SEMAPHORE_CONTROL").is_some(),
+            "{}: the separate control selects the later model", row.chips,
+        );
+    }
+}
+
 /// ogkm EvoProgramSemaphore3: one context DMA and 16-byte slot for acquire and release,
 /// both 32-bit. Acquiring gates the latch; releasing belongs to the outgoing flip. A zero
 /// context DMA disables both, even if the old control/value words remain programmed.

@@ -520,7 +520,8 @@ impl Vocab {
             w_sem_release_hi: t.v(win, "SET_SEMAPHORE_RELEASE_HI"),
             // ogkm nvkms-evo3.c:EvoProgramSemaphore3: the older model programs one context DMA
             // and one offset for both 32-bit values. Select it by its methods, never the die name.
-            w_semaphores: if let Some(acquire_value) = t.v(win, "SET_SEMAPHORE_ACQUIRE") {
+            w_semaphores: if t.v(win, "SET_ACQ_SEMAPHORE_CONTROL").is_none() {
+                let acquire_value = v(win, "SET_SEMAPHORE_ACQUIRE")?;
                 for name in ["SET_SEMAPHORE_ACQUIRE_VALUE", "SET_SEMAPHORE_RELEASE_VALUE"] {
                     if f(win, name)? != (31, 0) {
                         return Err(miss(&format!("NV{win:04X}_{name}: shared semaphore is not 32-bit")));
