@@ -33,10 +33,14 @@ qpid(){ [ -s "$RUN/qpid" ] && kill -0 "$(cat "$RUN/qpid")" 2>/dev/null && cat "$
 case "${1:-}" in
 start)
     q=$(qpid) && die "QEMU $q already runs $RUN"
-    QBIN=${QBIN:-$(ls -1t /workspace/bench/kf3-bins/*/qemu-system-x86_64 2>/dev/null | head -1)}
+    CHECKOUT_REV=$(git -C "$K" rev-parse --short=8 HEAD) || die "checkout revision"
+    QBIN=${QBIN:-/workspace/bench/kf3-bins/$CHECKOUT_REV/qemu-system-x86_64}
     [ -x "$QBIN" ] || die "no kf3 binary (QBIN)"
     REV=$(basename "$(dirname "$QBIN")")
     mkdir -p -m 0700 "$RUN" "$RUN/shots"
+    # Keep the VM identity with its overlay, including across the two required boots.
+    [ -s "$RUN/vm.uuid" ] || cat /proc/sys/kernel/random/uuid > "$RUN/vm.uuid"
+    VM_UUID=$(cat "$RUN/vm.uuid")
     if [ ! -e "$RUN/windows.qcow2" ]; then
         QIMG=$(command -v qemu-img || ls /workspace/bench/qemu-build-kf3/qemu-img 2>/dev/null)
         "$QIMG" create -q -f qcow2 -F qcow2 -b "$W/base.qcow2" "$RUN/windows.qcow2" || die qemu-img
@@ -47,7 +51,7 @@ start)
     # WIN_KF3_DISPLAY="display=off" + WIN_STDVGA=1: GB20x, whose kf3 display plane is refused at realize (doc §3)
     KF3="kf3-gpu,fb-mb=${WIN_FB_MB:-4096},bar1-size=134217728,bar2-size=33554432,${WIN_KF3_DISPLAY:-display=on,gop=on},guest-driver=580.65.06,bus=pci.0,addr=0x6,id=kf0"
     VGA=(); [ "${WIN_STDVGA:-0}" = 1 ] && VGA=(-device VGA,addr=0x9,id=vga0)
-    ARGS=(-name kayfabe-diesweep -nodefaults -no-user-config
+    ARGS=(-name kayfabe-diesweep -uuid "$VM_UUID" -nodefaults -no-user-config
         -machine pc,accel=kvm,smm=on,memory-backend=ram0
         -object "memory-backend-memfd,id=ram0,size=${WIN_RAM_MB:-8192}M,share=on" -m "${WIN_RAM_MB:-8192}" -smp ${WIN_SMP:-8}
         -cpu "${WIN_CPU:-host,-vmx,hv_relaxed,hv_vapic,hv_spinlocks=0x1fff,hv_vpindex,hv_runtime,hv_time,hv_synic,hv_stimer,hv_tlbflush,hv_ipi,hv_frequencies}"
