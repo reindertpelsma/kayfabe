@@ -47,12 +47,20 @@
     "product_head": "24906bf334665c9000b16b271005593daa3586c7",
     "credit_before": 43.54274980556204,
     "auto_destroy_minutes": 180,
-    "destroyed": false,
+    "destroyed": true,
     "auto_destroy_pid": 60974,
     "auto_destroy_armed_utc": "2026-10-19T17:53:04.288751+00:00",
     "auto_destroy_verified": true,
     "observed_dph_total": 0.49,
     "phase": "native PASS; Linux595 raw29/30 R19FAIL also on C4; generic Windows LTSC install active",
-    "phase_updated_utc": "2026-10-19T19:02:27.610557+00:00"
+    "phase_updated_utc": "2026-10-19T19:02:27.610557+00:00",
+    "absence_verified_utc": "2026-10-19T20:44:59.768674+00:00",
+    "credit_after_observed": 42.17335899796285,
+    "observed_account_credit_delta": 1.3693908075991885,
+    "elapsed_hours_until_absence": 2.8657085472222223,
+    "runtime_cost_estimate_usd": 1.4041971881388888,
+    "cost_upper_bound_usd": 2.404197188138889,
+    "cost_note": "Runtime estimate and shared-account credit delta are observations, not settled attribution. Budget guard reserves1USD for delayed transfer billing until invoices reconcile.",
+    "auto_destroy_cancelled_after_absence": true
   }
 ]

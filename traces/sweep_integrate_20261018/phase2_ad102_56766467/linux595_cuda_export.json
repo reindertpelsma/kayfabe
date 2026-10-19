@@ -1,0 +1,38 @@
+[
+  {
+    "file": "linux595_cuda_incomplete.txt",
+    "rental_source": "/workspace/bench/cl_sweep249_ad102_g595_guest.out",
+    "raw_sha256": "b595714ab21b89c2ff3af6fce2f7c17bee890521e3dea457d95b90bd2a4b87c5",
+    "raw_bytes": 146
+  },
+  {
+    "file": "linux595_cuda_driver.txt",
+    "rental_source": "/workspace/bench/cl_sweep249_ad102_g595_cup2_1_driver.log",
+    "raw_sha256": "fb3883210b7a3a4b5dc18acd70b903ff79a560137d44bc8ce8421d40befe59d6",
+    "raw_bytes": 1219
+  },
+  {
+    "file": "linux595_cuda_probe.txt",
+    "rental_source": "/workspace/bench/run_cl_sweep249_ad102_g595_cup2_1_probe.log",
+    "raw_sha256": "c0305347233cf69b9c0bad2e499e145f6043d5ea98eebfa8bf053415f9662a42",
+    "raw_bytes": 3738
+  },
+  {
+    "file": "linux595_cuda_serial.txt",
+    "rental_source": "/workspace/bench/run_cl_sweep249_ad102_g595_cup2_1_serial.log",
+    "raw_sha256": "95234dd8bb8d9c37028407dabbe5aba758da4dfc0b3378be9e4a0d3fbf3aa018",
+    "raw_bytes": 58943
+  },
+  {
+    "file": "linux595_cuda_dmesg.txt",
+    "rental_source": "/workspace/bench/run_cl_sweep249_ad102_g595_cup2_1_dmesg.log",
+    "raw_sha256": "deb12141864b36d18849e909dec80ed23f94339a1851b208a7d2a80ed390a77b",
+    "raw_bytes": 6239
+  },
+  {
+    "file": "linux_cuda_controller.txt",
+    "rental_source": "/root/prov/sweep_cuda_guests.log",
+    "raw_sha256": "370ade2cfd1ccbe923500db64fd1cf9c86bbc2ee1646d394e9a72cb622b08574",
+    "raw_bytes": 2455
+  }
+]

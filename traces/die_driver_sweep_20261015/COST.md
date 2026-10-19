@@ -31,3 +31,12 @@ Entries below will record every created ID and actual/conservative cost.
  0.49USD/h with180GBrequest; offer54367435 reserved32effective CPU cores.
   First box absence verified before creation. SSH/OS startup pending, no hardware
   result yet. Maximum runtime at observed rate1.47USD plus transfer.
+
+- DESTROYED56766467, API absence2026-10-19T20:44:59.768674Z, elapsed2.86571h,
+  observed0.49USD/h, runtime estimate1.404197USD. TimerPID60974 cancelled only
+  after absence. Exported all cited results first; no executable/image copied back.
+  Invoice observation:56765201 now0.017USD;56766467 compute1.232+disk0.142
+  =1.374USD. Own invoiced-so-far1.391USD, attribution not final. Conservative
+  cost guard includes1USD delayed-transfer reserve per lease; this is not spend.
+  Active own IDs0. Owner directs next lease Blackwell B1/B2/B3 (any Blackwell
+  permitted); no Ampere lease created. Cap25USD, stop renting/report20USD unchanged.

@@ -1,12 +1,12 @@
 # Sweep matrix on candidate-5 integration
 
-STATUS: LIVE, 2026-10-19. AD102595 raw is FAIL29/30 (R19); native gates/raw/CUDA pass. Other current cells remain UNRUN; no family is complete.
+STATUS: LIVE, 2026-10-19. AD102595 raw is FAIL29/30 (R19); native gates/raw/CUDA pass. Windows580 and Linux580 CUDA pass; Windows581 fails Code43. No family is complete.
 
 MEASURED Phase1 accepted:14release crates3338/0/21,49mutants>=2kills,
 no C4/C5test removed. Candidate5 f8f9d1a5f is an ancestor. Runtime product is
 frozen24906bf33; subsequent commits are evidence-only and accepted product trees
 remain equal. Every historical PASS is STALE. Own56765201 destroyed after
-preflight; own56766467 AD102 active with180minauto-destroy/deadline20:53UTC.
+preflight; own56766467 AD102 destroyed/API absence20:44:59UTC before20:53deadline.
 Actual current host open595.91.07; guest580/595 are separate axes and no current
 host580 result is implied. Native AD102 gates9/9+gate10/USER12,raw30,Cuda4 PASS.
 AD104 CPU oracles pass; strict native page equality RED100words. Fresh AD102
@@ -17,8 +17,8 @@ establishes a cause. Evidence under phase2_ad102_56766467/. Host remains off-lim
 |---|---|---|---|---|---|
 | AD102 | Linux 580.159.04 | `24906bf33` | PARTIAL: CUDA4PASS; raw30/brokerUNRUN | Raw30/CUDA4/gfx10/broker PASS | `da0569a6`; E1 `ad102_4090/README.md` |
 | AD102 | Linux 590.48.01 | `24906bf33` | UNRUN | Raw30/CUDA4/gfx10/broker PASS; 18 STALL/10 nvAssert | `9d6f210ba`; E1 `ad102_second_builds_20261016/linux590_apps/RESULT.md` |
-| AD102 | Linux 595.91.07 | `24906bf33` | FAIL: raw29/30 (R19); guest CUDA/broker UNRUN | Raw30/CUDA4/gfx10/broker PASS across recorded revisions; warnings retained | Raw latest `9d6f210ba`, broker `6265b980f`; E1 `ad102_followup_20261016/RESULT.md` and `ad102_second_builds_20261016/linux595_regression/RESULT.md` |
-| AD102 | Windows 580.88 / 32.0.15.8088 | `24906bf33`, P19 planned | PASS: Code0/desktop/CUDA3/D3D11+12;420.9s,0TDR | Code0, desktop, CUDA3, hardware DX11/12, 421 s zero-TDR hold; Blender/Edge short PASS | Hold/apps `77a72da9e`; E1 `ad102_followup_20261016/RESULT.md` |
+| AD102 | Linux 595.91.07 | `24906bf33` | FAIL: raw29/30 (R19); CUDA incomplete (ext4, also C4); broker UNRUN | Raw30/CUDA4/gfx10/broker PASS across recorded revisions; warnings retained | Raw latest `9d6f210ba`, broker `6265b980f`; E1 `ad102_followup_20261016/RESULT.md` and `ad102_second_builds_20261016/linux595_regression/RESULT.md` |
+| AD102 | Windows 580.88 / 32.0.15.8088 | `24906bf33`, exact P19 | PASS: Code0/desktop/CUDA3/D3D11+12;420.9s,0TDR | Code0, desktop, CUDA3, hardware DX11/12, 421 s zero-TDR hold; Blender/Edge short PASS | Hold/apps `77a72da9e`; E1 `ad102_followup_20261016/RESULT.md` |
 | AD102 | Windows 581.51 / 32.0.15.8151 | `24906bf33`, P19 | FAIL Code43: alloc216/217OK;20801111refused219; unload254 | Guest FAIL Code43; native same-board suite/hold PASS | `9d6f210ba`; E1 `ad102_second_builds_20261016/{windows58151,native_windows58151}/RESULT.md` |
 | AD103 | Linux 580 / 595 | `24906bf33` | UNRUN | No sweep acceptance claimed | Not re-audited |
 | AD103 | Windows 580.88 | `24906bf33`, P19 planned | UNRUN | Older captured-page desktop result is STALE; derived-page cell unverified | E2; old exact revision not re-audited |
