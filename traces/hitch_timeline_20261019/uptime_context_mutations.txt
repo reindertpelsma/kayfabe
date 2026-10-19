@@ -1,0 +1,7 @@
+MEASURED: 44-test Python suite; one mutant at a time, originals restored.
+U1 omit uptime bins: 3 killing tests: test_bin_rates_use_exposure_not_assumed_ten_minutes, test_three_hour_observation_retains_absolute_uptime, test_cross_bin_gap_belongs_to_preceding_content_bin
+U2 omit event uptime: 2 killing tests: test_missing_vm_start_does_not_invent_uptime, test_zero_anchor_is_valid_and_events_have_uptime
+C1 collapse device and generation identity: 2 killing tests: test_same_sequence_in_two_devices_is_not_joined, test_same_sequence_in_two_generations_is_not_joined
+C2 ignore recorder loss for exact context: 2 killing tests: test_completion_loss_does_not_report_exact_rate, test_mmu_loss_invalidates_exact_count_even_with_coverage_assertion
+C3 invent exact completion rates: 2 killing tests: test_completion_loss_does_not_report_exact_rate, test_missing_completion_coverage_does_not_report_zero_rate
+C4 omit post-gap residency sample: 2 killing tests: test_post_exit_vram_sample_stays_marked_after_gap, test_vram_samples_bracket_gap_without_interpolation

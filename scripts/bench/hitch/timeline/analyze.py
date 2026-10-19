@@ -7,10 +7,11 @@ present. Mere temporal overlap with a global MMU/RM operation is insufficient.
 Classification is INFERRED; raw intervals and gaps are MEASURED observations.
 """
 import argparse
-import collections
 import json
 import math
 import pathlib
+
+from gap_context import gap_context
 
 KINDS = {"mmu_wait": "S1", "mmu_walk": "S1", "mmu_plan": "S1",
          "mmu_apply": "S1", "rm_call": "S1", "tick_wait": "S2",
@@ -61,7 +62,30 @@ def _percentile(values, fraction):
     return sorted(values)[max(0, math.ceil(len(values) * fraction) - 1)] if values else 0
 
 
-def analyze(events, broker, *, threshold_ms=80, coverage=False, lost=0, clock_error_ns=None):
+def _uptime_bins(gaps, times, vm_start_ns, width):
+    if vm_start_ns is None or len(times) < 2:
+        return []
+    lo, hi = max(0, times[0] - vm_start_ns), times[-1] - vm_start_ns
+    if hi <= lo:
+        return []
+    bins = []
+    for number in range(lo // width, (hi - 1) // width + 1):
+        start, end = number * width, (number + 1) * width
+        observed = min(hi, end) - max(lo, start)
+        classes = {}
+        for label in ["S" + str(i) for i in range(1, 8)] + ["UNKNOWN"]:
+            selected = [g for g in gaps if g["class"] == label and start <= g["vm_uptime_ns"] < end]
+            classes[label] = dict(count=len(selected), per_min=len(selected)*60*1e9/observed,
+                                  max_ms=max((g["duration_ns"] for g in selected), default=0)/1e6,
+                                  **{f"gt{ms}_per_min": sum(g["duration_ns"] > ms*1e6 for g in selected)
+                                     *60*1e9/observed for ms in (80, 100, 200, 1000, 10000)})
+        bins.append(dict(start_uptime_ns=start, end_uptime_ns=end,
+                         observed_ns=observed, classes=classes))
+    return bins
+
+
+def analyze(events, broker, *, threshold_ms=80, coverage=False, lost=0, clock_error_ns=None,
+            vm_start_ns=None, uptime_bin_minutes=10, context_coverage=None):
     """Return every new-content gap, its event window, metrics and class rates.
 
     broker rows: ts_ns, seq, new. Event intervals: ts_ns, end_ns, kind,
@@ -72,6 +96,14 @@ def analyze(events, broker, *, threshold_ms=80, coverage=False, lost=0, clock_er
         raise ValueError("gap threshold must be finite and positive")
     if lost < 0:
         raise ValueError("lost must be nonnegative")
+    if not math.isfinite(uptime_bin_minutes) or uptime_bin_minutes <= 0:
+        raise ValueError("uptime bin size must be finite and positive")
+    width = int(uptime_bin_minutes * 60 * 1e9)
+    if width < 1:
+        raise ValueError("uptime bin size is smaller than one nanosecond")
+    events = [dict(e, vm_uptime_ns=int(e["ts_ns"])-vm_start_ns if vm_start_ns is not None else None)
+              for e in events]
+    context_coverage = context_coverage or {}
     threshold = int(threshold_ms * 1_000_000)
     times = [int(b["ts_ns"]) for b in broker]
     if any(a > b for a, b in zip(times, times[1:])):
@@ -91,7 +123,10 @@ def analyze(events, broker, *, threshold_ms=80, coverage=False, lost=0, clock_er
         label, reason = _classify(window, lo, hi, right["seq"], threshold,
                                   coverage, lost, clock_error_ns)
         gaps.append(dict(start_ns=lo, end_ns=hi, duration_ns=duration,
-                         seq=right["seq"], **{"class": label}, reason=reason, events=window))
+                         seq=right["seq"], **{"class": label}, reason=reason, events=window,
+                         vm_uptime_ns=lo-vm_start_ns if vm_start_ns is not None else None,
+                         end_uptime_ns=hi-vm_start_ns if vm_start_ns is not None else None,
+                         context=gap_context(events, lo, hi, context_coverage, lost)))
     summary = {}
     for label in ["S" + str(i) for i in range(1, 8)] + ["UNKNOWN"]:
         selected = [g for g in gaps if g["class"] == label]
@@ -108,7 +143,8 @@ def analyze(events, broker, *, threshold_ms=80, coverage=False, lost=0, clock_er
                    **{f"gt{ms}_per_min": sum(d > ms*1e6 for d in intervals)*60/seconds
                       if seconds else 0 for ms in (33, 50, 80, 100, 200)})
     return dict(gaps=gaps, summary=summary, metrics=metrics, lost=lost,
-                classification="INFERRED", clock_error_ns=clock_error_ns)
+                classification="INFERRED", clock_error_ns=clock_error_ns, vm_start_ns=vm_start_ns,
+                uptime_bins=_uptime_bins(gaps, times, vm_start_ns, width))
 
 
 def read_jsonl(path):
@@ -126,6 +162,9 @@ def main():
     parser.add_argument("--threshold-ms", type=float, default=80)
     parser.add_argument("--coverage", action="store_true", help="assert all required collection gates passed")
     parser.add_argument("--lost", type=int, default=0)
+    parser.add_argument("--vm-start-ns", type=int, help="measured VM start on host CLOCK_MONOTONIC")
+    parser.add_argument("--uptime-bin-minutes", type=float, default=10)
+    parser.add_argument("--context-coverage", help="JSON assertions: mmu, completions, guest; only after loss validation")
     parser.add_argument("--out", required=True)
     args = parser.parse_args()
     events = read_jsonl(args.events)
@@ -143,12 +182,16 @@ def main():
             if "end_qpc" in row:
                 row["end_ns"] = qpc_to_host(row.pop("end_qpc"), calibration)
             events.append(row)
+    context_coverage = json.loads(pathlib.Path(args.context_coverage).read_text()) if args.context_coverage else {}
     result = analyze(events, read_jsonl(args.broker), threshold_ms=args.threshold_ms,
-                     coverage=args.coverage, lost=args.lost, clock_error_ns=error)
+                     coverage=args.coverage, lost=args.lost, clock_error_ns=error,
+                     vm_start_ns=args.vm_start_ns, uptime_bin_minutes=args.uptime_bin_minutes,
+                     context_coverage=context_coverage)
     pathlib.Path(args.out).write_text(json.dumps(result, indent=2) + "\n")
     for gap in result["gaps"]:
         print(f"MEASURED gap {gap['start_ns']}..{gap['end_ns']} {gap['duration_ns']/1e6:.3f} ms "
-              f"seq={gap['seq']} INFERRED {gap['class']}: {gap['reason']}")
+              f"seq={gap['seq']} uptime_ns={gap['vm_uptime_ns']} INFERRED {gap['class']}: {gap['reason']}")
+        print("  MEASURED context " + json.dumps(gap["context"], sort_keys=True))
         for event in gap["events"]:
             print("  " + json.dumps(event, sort_keys=True))
     print("class count gaps/min total_ms max_ms >80/min >100/min >200/min")
@@ -156,6 +199,8 @@ def main():
         print(label, row["count"], *(f"{row[k]:.3f}" for k in
               ("per_min", "total_ms", "max_ms", "gt80_per_min", "gt100_per_min", "gt200_per_min")))
     print("MEASURED", json.dumps(result["metrics"], sort_keys=True))
+    for row in result["uptime_bins"]:
+        print("INFERRED classes by MEASURED uptime/exposure " + json.dumps(row, sort_keys=True))
 
 
 if __name__ == "__main__":
