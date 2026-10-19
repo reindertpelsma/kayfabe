@@ -27,6 +27,10 @@ def main():
     parser.add_argument('--qpid', type=int, required=True)
     parser.add_argument('--clock-map', type=Path, required=True)
     parser.add_argument('--offset', type=int, required=True)
+    parser.add_argument('--legacy', action='store_true')
+    parser.add_argument('--broker-log', type=Path)
+    parser.add_argument('--fx', type=float, default=0.1786)
+    parser.add_argument('--fy', type=float, default=0.845)
     parser.add_argument('--seconds', type=int, default=105)
     parser.add_argument('tag')
     args = parser.parse_args()
@@ -44,8 +48,19 @@ def main():
         parser.error('clock calibration belongs to another QEMU process')
     destination = root / (args.tag + '_broker')
     destination.mkdir(exist_ok=False)
+    clock_proof = None
+    if args.legacy:
+        if not args.broker_log or Path(f'/proc/{args.broker_pid}/fd/1').resolve(strict=True) != args.broker_log.resolve(strict=True):
+            raise RuntimeError('legacy feedback needs this process stdout log as native-clock proof')
+        lines = [l for l in args.broker_log.read_text().splitlines() if 'presentation clock' in l]
+        if not lines or not lines[-1].endswith('presentation clock CLOCK_MONOTONIC)'):
+            raise RuntimeError('the compositor did not prove a native monotonic presentation clock')
+        clock_proof = {'clock_id': 1, 'source': str(args.broker_log), 'line': lines[-1],
+                       'method': 'immutable wp_presentation clock_id, recorded by this live broker'}
     program = subprocess.check_output([sys.executable, str(host_measure.HERE / 'broker_content.py'),
-                                       'gen', str(binary), str(args.broker_pid), str(args.offset)], text=True)
+                                       'gen', str(binary), str(args.broker_pid), str(args.offset)] + (['--legacy', '--native-clock', '1'] if args.legacy else []), text=True)
+    program = program.replace('nsecs', 'nsecs(monotonic)')
+    (destination / 'clock-proof.json').write_text(json.dumps(clock_proof, indent=2))
     (destination / 'trace.bt').write_text(program)
     streams = [open(destination / 'trace.txt', 'w'), open(destination / 'trace.err', 'w')]
     observer = subprocess.Popen(['bpftrace', str(destination / 'trace.bt')], stdout=streams[0], stderr=streams[1])
@@ -53,7 +68,7 @@ def main():
         time.sleep(2)
         if observer.poll() is not None:
             raise RuntimeError('broker observer did not attach')
-        host_measure.capture(root, args.tag, args.seconds)
+        host_measure.capture(root, args.tag, args.seconds, args.fx, args.fy)
     finally:
         if observer.poll() is None:
             observer.send_signal(signal.SIGINT)
@@ -74,6 +89,7 @@ def main():
               for ticks in graphics['window_filetime_100ns']]
     summary = broker_content.summarize(destination / 'trace.txt', *window)
     summary['window_monotonic_ns'] = window
+    summary['presentation_clock_proof'] = clock_proof
     summary['clock_calibration'] = str(args.clock_map)
     summary['clock_limit'] = 'fence observer precedes guest poll; calibration spread recorded; UTC/QPC anchor sampled consecutively'
     (root / args.tag / (args.tag + '_broker.json')).write_text(json.dumps(summary, indent=2))

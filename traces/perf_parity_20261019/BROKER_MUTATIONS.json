@@ -1,0 +1,18 @@
+[
+  {
+    "mutant": "duplicate_feedback",
+    "failed_tests": [
+      "test_a_pump_and_content_feedback_for_one_refresh_are_one_new_present",
+      "test_two_content_callbacks_at_one_display_time_cannot_create_two_frames"
+    ],
+    "kills": 2
+  },
+  {
+    "mutant": "accept_fallback_clock",
+    "failed_tests": [
+      "test_an_unknown_presentation_clock_before_the_samples_is_rejected",
+      "test_mixing_a_fallback_clock_with_native_feedback_is_rejected"
+    ],
+    "kills": 2
+  }
+]

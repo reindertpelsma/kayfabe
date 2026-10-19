@@ -26,7 +26,23 @@ def stats(values):
             'p99': values[min(len(values) - 1, int(len(values) * .99))]}
 
 
-def analyze(run, trace):
+def resolve_irqfd(latch_writes, identity=None):
+    observed = set(latch_writes)
+    if identity is not None:
+        if identity.get('method') != 'public kf3_irq_fd C ABI entry/return at realize':
+            raise ValueError('unproven irqfd identity method')
+        fd = identity.get('irqfd')
+        if not isinstance(fd, int) or fd < 0 or identity.get('vectors', {}).get('0') != fd:
+            raise ValueError('C ABI vector-zero descriptor is inconsistent')
+        if observed and observed != {fd}:
+            raise ValueError('latch writes contradict the C ABI irqfd identity')
+        return fd
+    if len(observed) != 1:
+        raise ValueError(f'latch-scoped irqfd was not unique: {sorted(observed)}')
+    return next(iter(observed))
+
+
+def analyze(run, trace, irqfd_identity=None):
     with (run / 'raw.csv').open(encoding='utf-8-sig') as source:
         guest = list(csv.DictReader(source))
     total = len(guest)
@@ -78,12 +94,9 @@ def analyze(run, trace):
             latch_writes.append(int(p[3].split('=')[1]))
         elif p[0] == 'K':
             writes.append((int(p[1]), int(p[-2].split('=')[1]), p[3]))
-        elif p[0] == 'T':
+        elif p[0] in ('T', 'C'):
             channel_offsets.append(int(p[1]) - int(p[3].split('=')[1]))
-    irqfds = set(latch_writes)
-    if len(irqfds) != 1:
-        raise ValueError(f'latch-scoped irqfd was not unique: {sorted(irqfds)}')
-    irqfd = next(iter(irqfds))
+    irqfd = resolve_irqfd(latch_writes, irqfd_identity)
     mmio.sort(); markers.sort(); gpu.sort(); writes.sort()
     mt = [m[0] for m in mmio]
     rows = collections.defaultdict(list)
@@ -130,7 +143,8 @@ def analyze(run, trace):
             'completion_candidate': cell, 'candidate_common_values': len(common),
             'candidate_median_lag_ns': lag,
             'candidate_values': {c: len(v) for c, v in fences.items()},
-            'actual_irqfd': irqfd, 'exclusions': dict(exclusions),
+            'actual_irqfd': irqfd, 'irqfd_identity': irqfd_identity or {'method': 'latch-scoped writes'},
+            'latch_scoped_writes_observed': len(latch_writes), 'exclusions': dict(exclusions),
             'guest_qpc_frequency': frequency,
             'fence_base': hex(fence_base),
             'host_minus_guest_qpc_ns': stats(offsets),

@@ -130,14 +130,14 @@ if (-not (Select-String -Path {quote(log)} -Pattern '^GP end$' -Quiet -ErrorActi
 
 def ui(root, action, fx, fy):
     args = f"-Action {action} -FX {fx} -FY {fy}"
-    body = f"& {GUEST}\\sn_it.ps1 -ScriptArgs {quote(args)} -Wait 90\n"
+    body = f"& {GUEST}\\sl_it.ps1 -ScriptArgs {quote(args)} -Wait 90\n"
     response = agent(root, body, 120)
     print(response, flush=True)
     if "NO LOG" in response or "NOWINDOW" in response:
         raise RuntimeError("UI task failed; inspect the screenshot before continuing")
 
 
-def capture(root, tag, seconds):
+def capture(root, tag, seconds, fx=0.1786, fy=0.845):
     destination = root / tag
     destination.mkdir(exist_ok=False)
     before = stats_checkpoint(root)
@@ -146,7 +146,7 @@ def capture(root, tag, seconds):
     (destination / "start.txt").write_text(start)
     if "CAPSTART" not in start:
         raise RuntimeError("capture did not start")
-    ui(root, "run", 0.1786, 0.845)
+    ui(root, "run", fx, fy)
     # Measurement duration only: never changes an interrupt/submit deadline.
     until = time.monotonic() + seconds
     while time.monotonic() < until:

@@ -26,6 +26,7 @@ def main():
     parser.add_argument('--qpid', type=int, required=True)
     parser.add_argument('--queue', type=int, choices=[0, 2, 3], default=0)
     parser.add_argument('--iterations', type=int, default=3000)
+    parser.add_argument('--irqfd-map', type=Path)
     parser.add_argument('--fence', action='store_true')
     parser.add_argument('tag')
     args = parser.parse_args()
@@ -41,6 +42,16 @@ def main():
     command = Path(f'/proc/{args.qpid}/cmdline').read_bytes().replace(b'\0', b' ').decode()
     if str(root / 'W') not in command:
         parser.error('QPID is not a P1 Windows guest')
+    irqfd_identity = None
+    if args.irqfd_map:
+        irqfd_identity = json.loads(args.irqfd_map.read_text())
+        if (irqfd_identity['qpid'] != args.qpid or
+                irqfd_identity['proc_start'] != Path(f'/proc/{args.qpid}/stat').read_text().split()[21] or
+                Path(irqfd_identity['binary']).resolve(strict=True) != binary):
+            raise RuntimeError('C ABI descriptor identity belongs to another process/binary')
+        fd = iteration_hops.resolve_irqfd([], irqfd_identity)
+        if os.readlink(f'/proc/{args.qpid}/fd/{fd}') != 'anon_inode:[eventfd]':
+            raise RuntimeError('observed descriptor is no longer an eventfd')
     destination = root / (args.tag + '_trace')
     destination.mkdir(exist_ok=False)
     (destination / 'command.txt').write_text(command)
@@ -64,6 +75,12 @@ def main():
     if len(clocks) == 1:
         program += (f'uretprobe:{binary}:0x{clocks[0]} /pid == {args.qpid}/ {{ '
                     'printf("T %llu %d nsi_ns=%llu\\n", nsecs, tid, retval); }\n')
+    notes = [line.split()[0] for line in symbols
+             if '8nsitrace' in line and line.endswith('5Trace4note')]
+    if len(notes) == 1:
+        program += (f'uprobe:{binary}:0x{notes[0]} /pid == {args.qpid}/ {{ '
+                    'printf("C %llu %d nsi_ns=%llu\\n", nsecs, tid, arg1); }\n')
+    program = program.replace('nsecs', 'nsecs(monotonic)')
     (destination / 'trace.bt').write_text(program)
     outputs = [open(destination / 'trace.txt', 'w'), open(destination / 'trace.err', 'w')]
     tracer = subprocess.Popen(['bpftrace', str(destination / 'trace.bt')], stdout=outputs[0], stderr=outputs[1],
@@ -107,7 +124,7 @@ def main():
     if re.search(r'lost|ERROR|failed', error, re.IGNORECASE):
         raise RuntimeError('BPF loss/error: trace cannot support a complete event census')
     if args.fence:
-        analysis = iteration_hops.analyze(root / args.tag, destination)
+        analysis = iteration_hops.analyze(root / args.tag, destination, irqfd_identity)
         (destination / 'hops.json').write_text(json.dumps(analysis, indent=2))
         calibration = {'qpid': args.qpid,
                        'proc_start': Path(f'/proc/{args.qpid}/stat').read_text().split()[21],
