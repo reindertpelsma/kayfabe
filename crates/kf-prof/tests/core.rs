@@ -204,3 +204,30 @@ fn ledger_full_kinds_are_independent() {
     let mut l=Ledger::<3,1>::new(1);for k in 0..3 {assert!(l.open(k,k as u64,0).is_some());}for k in 0..3 {assert!(l.open(k,9,0).is_none());}
     assert_eq!(l.dropped(),3);assert_eq!(l.entries().count(),3);assert!(l.open(3,0,0).is_none());
 }
+
+#[test]
+fn seqlock_model_requires_fences_on_both_sides() {
+    // Observing a new payload word must carry the writer's odd sequence before
+    // the reader's final validation. Assert the actual backend operation trace.
+    let s=Spy::new();let mut seq=0;write_record(&s,0,&[1,2,3],&mut seq).unwrap();
+    assert!(s.ops.lock().unwrap().contains(&Op::Fence(Ordering::Release)));
+    s.ops.lock().unwrap().clear();read_record::<3>(&s,0).unwrap();
+    assert!(s.ops.lock().unwrap().contains(&Op::Fence(Ordering::Acquire)));
+}
+#[test]
+fn seqlock_every_writer_commit_is_release_and_every_reader_starts_acquire() {
+    let s=Spy::new();let mut seq=0;
+    for _ in 0..10 {s.ops.lock().unwrap().clear();write_record(&s,0,&[7],&mut seq).unwrap();
+        assert_eq!(s.ops.lock().unwrap().last(),Some(&Op::Store(0,seq,Ordering::Release)));
+        s.ops.lock().unwrap().clear();read_record::<1>(&s,0).unwrap();
+        assert_eq!(s.ops.lock().unwrap().first(),Some(&Op::Load(0,Ordering::Acquire)));}
+}
+#[test]
+fn ledger_seeded_model_preserves_every_live_obligation() {
+    let mut l=Ledger::<2,4>::new(1);let mut live=Vec::new();let mut seed=11u64;
+    for id in 0..10_000 {seed=seed.wrapping_mul(6364136223846793005).wrapping_add(1);
+        if seed&1==0 {if let Some(t)=l.open(((seed>>20)&1) as usize,id,id) {live.push((t,id));}}
+        else if !live.is_empty() {let index=(seed as usize)%live.len();let (t,_)=live.swap_remove(index);assert!(l.close(t,id));assert!(!l.close(t,id));}
+        let mut actual=l.entries().map(|e| e.id).collect::<Vec<_>>();let mut expected=live.iter().map(|e| e.1).collect::<Vec<_>>();actual.sort_unstable();expected.sort_unstable();assert_eq!(actual,expected);
+    }
+}
