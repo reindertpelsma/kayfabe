@@ -1,0 +1,55 @@
+   Compiling kf-prof v0.1.0 (crates/kf-prof)
+    Finished `release` profile [optimized] target(s) in 1.28s
+     Running unittests src/lib.rs (/workspace/k1-target/release/deps/kf_prof-5865e7cefb0da14f)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/core.rs (/workspace/k1-target/release/deps/core-5cb10206fb61aaa6)
+
+running 36 tests
+test clock_calibration_converts_frequency_and_anchor ... ok
+test clock_invalid_backwards_and_overflow_are_explicit ... ok
+test clock_pair_estimator_matches_observed_interval ... ok
+test clock_rational_frequency_and_large_integers_do_not_use_floats ... ok
+test header_exact_offsets_and_zero_reserved_bytes ... ok
+test histogram_all_octave_edges_and_zero_are_exact_buckets ... ok
+test histogram_saturates_instead_of_wrapping ... ok
+test header_rejects_truncated_wrong_version_and_wrong_geometry ... ok
+test histogram_conserves_samples_and_arg_of_first_max ... ok
+test layout_regions_are_bounded_aligned_and_disjoint ... ok
+test histogram_seeded_property_matches_log2_reference ... ok
+test ledger_full_kinds_are_independent ... ok
+test ledger_overflow_does_not_overwrite_and_is_counted ... ok
+test ledger_reuse_rejects_stale_close ... ok
+test ledger_same_id_on_reused_slot_has_new_generation ... ok
+test ledger_seeded_model_preserves_every_live_obligation ... ok
+test ledger_kind_and_owner_identity_cannot_cross_close ... ok
+test ledger_overdue_is_advisory_and_boundary_is_strict ... ok
+test ring_concurrent_stress_has_no_loss_among_accepted_records ... ok
+test ring_invalid_capacity_is_rejected ... ok
+test ring_overflow_is_counted_without_claiming_a_slot ... ok
+test ring_repeated_full_laps_count_all_drops ... ok
+test ring_wrap_preserves_fifo_over_many_laps ... ok
+test ring_wrapped_partial_batches_match_reference_queue ... ok
+test seqlock_bounds_and_generation_exhaustion_make_no_stores ... ok
+test seqlock_interrupted_writer_is_busy_without_waiting ... ok
+test seqlock_every_writer_commit_is_release_and_every_reader_starts_acquire ... ok
+test seqlock_model_requires_fences_on_both_sides ... ok
+test seqlock_concurrent_snapshots_never_mix_generations ... ok
+test header_hostile_bytes_never_panic ... ok
+test seqlock_reader_orders_acquire_validation_after_payload ... ok
+test seqlock_writer_orders_odd_before_payload_and_release_commit ... ok
+test tables_have_stable_unique_ids_and_every_kind_has_a_bound ... ok
+test thread_nested_spans_integrate_exclusive_time_and_restore_parent ... ok
+test thread_slice_is_cache_line_aligned_and_bounded ... ok
+test thread_span_overflow_and_bad_close_never_corrupt_current_state ... ok
+
+test result: ok. 36 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+
+   Doc-tests kf_prof
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
