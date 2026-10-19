@@ -2554,8 +2554,11 @@ impl Device {
                 && hb_at.elapsed() >= std::time::Duration::from_millis(500)
             {
                 hb_at = std::time::Instant::now();
-                if let Ok(ns) = self.rm.gpu_time_ns() {
-                    let ms = u64::from((ns / 1_000_000) as u32);
+                if let Some(ms) = crate::heartbeat::sample(
+                    || self.timer.as_ref()?.read_ns().ok(),
+                    || self.rm.gpu_time_ns().ok(),
+                ) {
+                    let ms = u64::from(ms);
                     self.shadow_store(gsprm, ms, 4);
                     self.shadow_store(libos, ms, 4);
                 }

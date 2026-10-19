@@ -40,3 +40,5 @@ pub(crate) mod userbirth;
 pub(crate) mod userstore;
 pub mod userva;
 pub mod vblankgate;
+
+mod heartbeat;
