@@ -16,7 +16,9 @@ image RO, assertskernelRO, never mounts-write/repairs/recovers the volume,
 then disconnects only its verifiedread-onlyNBDPID. RawEVTX/XML remainrental.
 No NVIDIAactivation or Windowsboot and no ROM/TPM/SBchange. Initialfailure
 marker is retained; fixedextractor has its own explicitattemptrecord.
-The separate GOPguardSTOP/question remainspending; no OFFhardwarearm allowed.
+The initialGOPguardrefusalwaspreserved. Priorsection2authorizes the
+validemptyROMOFFprofile; extraapprovalquestionwasunnecessary (see
+b1_off_refused/README.md correction). No guard/protectedcode/TPM/SBchange.
 
 Actualresult: ROextractor parsed748records (592System/156Kernel-PnP),
 selected4NVIDIApublicevents, noneinsideONwindow. No positiveTDR/Code43 record.
