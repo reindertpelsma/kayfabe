@@ -22,12 +22,18 @@ for i in $(seq 1 90); do
 done
 timeout 20 bash "$W" ssh 'echo KF_SSH_UP' | grep KF_SSH_UP
 python3 /root/sweep_windows_receipt.py sweep580_validate
+python3 /root/sweep_signin_kf.py "$WINVM_ROOT/kfwin/run/qmp.sock" "$WINVM_ROOT/kfwin/run/qga.sock" "$WINVM_ROOT/kfwin/secrets/win_password"
 timeout 30 bash "$W" ssh 'New-Item -ItemType Directory -Force C:\ProgramData\KayfabeSweep | Out-Null'
 for f in cup2.exe cup3.exe cup8.exe kf_dxprobe.exe accept580.ps1 hold580.ps1; do
   bash "$W" scp-to "/root/sweep-probes/$f" "C:/ProgramData/KayfabeSweep/$f"
 done
 timeout 900 bash "$W" ssh 'powershell -NoProfile -ExecutionPolicy Bypass -File C:\ProgramData\KayfabeSweep\accept580.ps1' >/root/prov/sweep_windows580_accept.txt 2>&1
 grep 'WIN_ACCEPT_EXIT rc=0 ' /root/prov/sweep_windows580_accept.txt
+# cup2's inherited native probe returns0 even on a copy mismatch: grade values too.
+grep -aF 'CE rv=0xabcd1234 want=0xabcd1234 -> PASS' /root/prov/sweep_windows580_accept.txt
+grep -aF 'KERNEL rv=43 want=43 -> PASS' /root/prov/sweep_windows580_accept.txt
+grep -aF 'CUP8 RESULT N=2048 bad=0 maxerr=0 ' /root/prov/sweep_windows580_accept.txt
+[ "$(grep -ac '^KFDX RESULT OK' /root/prov/sweep_windows580_accept.txt)" = 2 ]
 bash "$W" shot sweep580_accept
 timeout 900 bash "$W" ssh 'powershell -NoProfile -ExecutionPolicy Bypass -File C:\ProgramData\KayfabeSweep\hold580.ps1' >/root/prov/sweep_windows580_hold.txt 2>&1
 grep 'HOLD_EXIT rc=0 ' /root/prov/sweep_windows580_hold.txt
