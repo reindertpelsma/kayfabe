@@ -2,6 +2,8 @@
 """Observed MMU, interrupt and guest-residency context; never assigns a cause."""
 import collections
 
+from reply_waits import inventory
+
 MMU_KINDS = {"mmu_arrive", "mmu_walk", "mmu_plan", "mmu_apply", "mmu_clear"}
 ENGINES = ("CE2", "CE3", "GR0")
 
@@ -85,6 +87,7 @@ def gap_context(events, lo, hi, coverage, lost):
                (("before", before[-1:]), ("inside", inside), ("after", after[:1])) for e in rows]
     present_count = sum(e.get("kind") == "guest_present" and lo <= e["ts_ns"] < hi for e in events)
     return dict(invalidates=_invalidates(events, lo, hi, coverage.get("mmu") and not lost),
+                reply_waits=inventory(events, lo, hi, coverage=coverage.get("replies"), lost=lost),
                 completions=completions, guest_vram=samples,
                 guest_present_observed_count=present_count,
                 guest_present_count=present_count if coverage.get("guest") and not lost else None,

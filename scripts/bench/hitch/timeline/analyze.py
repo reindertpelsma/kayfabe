@@ -12,11 +12,13 @@ import math
 import pathlib
 
 from gap_context import gap_context
+from reply_waits import inventory, overlap
 
 KINDS = {"mmu_wait": "S1", "mmu_walk": "S1", "mmu_plan": "S1",
          "mmu_apply": "S1", "rm_call": "S1", "tick_wait": "S2",
          "credit_wait": "S2", "broker_wait": "S3", "compositor_wait": "S3",
-         "cpu_stall": "S4", "gpu_wait": "S5", "guest_wait": "S6"}
+         "cpu_stall": "S4", "gpu_wait": "S5", "guest_wait": "S6",
+         "rpc_reply_wait": "S8", "held_reply_wait": "S8"}
 RESOURCE = {"reclaim", "compaction", "runqueue"}
 
 
@@ -33,10 +35,18 @@ def _overlap(e, lo, hi):
     return max(0, min(int(e.get("end_ns", e["ts_ns"])), hi) - max(int(e["ts_ns"]), lo))
 
 
+def _verified_s8(event, clock_error_ns, threshold_ns):
+    return (event.get("guest_thread_wait_verified") is True
+            and type(event.get("guest_waiter_pid")) is int and event["guest_waiter_pid"] > 0
+            and type(event.get("guest_waiter_tid")) is int and event["guest_waiter_tid"] > 0
+            and clock_error_ns is not None and 0 <= clock_error_ns * 2 < threshold_ns)
+
+
 def _classify(window, lo, hi, seq, threshold_ns, coverage, lost, clock_error_ns):
     if not coverage or lost:
         return "UNKNOWN", "missing coverage or recorder loss"
     candidates = [e for e in window if e.get("kind") in KINDS
+                  and (KINDS[e["kind"]] != "S8" or _verified_s8(e, clock_error_ns, threshold_ns))
                   and e.get("frame_seq") == seq and "stage" in e and "tid" in e
                   and _overlap(e, lo, hi) > threshold_ns
                   and int(e.get("end_ns", e["ts_ns"])) <= hi]
@@ -73,7 +83,7 @@ def _uptime_bins(gaps, times, vm_start_ns, width):
         start, end = number * width, (number + 1) * width
         observed = min(hi, end) - max(lo, start)
         classes = {}
-        for label in ["S" + str(i) for i in range(1, 8)] + ["UNKNOWN"]:
+        for label in ["S" + str(i) for i in range(1, 9)] + ["UNKNOWN"]:
             selected = [g for g in gaps if g["class"] == label and start <= g["vm_uptime_ns"] < end]
             classes[label] = dict(count=len(selected), per_min=len(selected)*60*1e9/observed,
                                   max_ms=max((g["duration_ns"] for g in selected), default=0)/1e6,
@@ -128,7 +138,7 @@ def analyze(events, broker, *, threshold_ms=80, coverage=False, lost=0, clock_er
                          end_uptime_ns=hi-vm_start_ns if vm_start_ns is not None else None,
                          context=gap_context(events, lo, hi, context_coverage, lost)))
     summary = {}
-    for label in ["S" + str(i) for i in range(1, 8)] + ["UNKNOWN"]:
+    for label in ["S" + str(i) for i in range(1, 9)] + ["UNKNOWN"]:
         selected = [g for g in gaps if g["class"] == label]
         summary[label] = dict(count=len(selected), per_min=len(selected) * 60 / seconds if seconds else 0,
                               total_ms=sum(g["duration_ns"] for g in selected) / 1e6,
@@ -142,9 +152,21 @@ def analyze(events, broker, *, threshold_ms=80, coverage=False, lost=0, clock_er
                    max_gap_ms=max(intervals, default=0)/1e6,
                    **{f"gt{ms}_per_min": sum(d > ms*1e6 for d in intervals)*60/seconds
                       if seconds else 0 for ms in (33, 50, 80, 100, 200)})
+    observed_start = min(times + [e["ts_ns"] for e in events], default=0)
+    observed_end = max(times + [e.get("end_ns", e["ts_ns"]) for e in events], default=0)
+    replies = inventory(events, observed_start, observed_end, coverage=context_coverage.get("replies"),
+                        lost=lost, all_requests=True)
+    longest = []
+    for row in replies["requests"]:
+        spans = [dict(seq=g["seq"], start_ns=g["start_ns"], end_ns=g["end_ns"],
+                      **overlap(row, g["start_ns"], g["end_ns"], replies["complete"])) for g in gaps]
+        longest.append(dict(row, stall_overlaps=spans))
+    longest.sort(key=lambda r: r["arrive_to_post_ns"] if r["arrive_to_post_ns"] is not None else -1,
+                 reverse=True)
     return dict(gaps=gaps, summary=summary, metrics=metrics, lost=lost,
                 classification="INFERRED", clock_error_ns=clock_error_ns, vm_start_ns=vm_start_ns,
-                uptime_bins=_uptime_bins(gaps, times, vm_start_ns, width))
+                uptime_bins=_uptime_bins(gaps, times, vm_start_ns, width),
+                reply_wait_inventory=replies, longest_reply_waits=longest)
 
 
 def read_jsonl(path):
@@ -164,7 +186,7 @@ def main():
     parser.add_argument("--lost", type=int, default=0)
     parser.add_argument("--vm-start-ns", type=int, help="measured VM start on host CLOCK_MONOTONIC")
     parser.add_argument("--uptime-bin-minutes", type=float, default=10)
-    parser.add_argument("--context-coverage", help="JSON assertions: mmu, completions, guest; only after loss validation")
+    parser.add_argument("--context-coverage", help="JSON assertions: mmu, completions, guest, replies; only after loss validation")
     parser.add_argument("--out", required=True)
     args = parser.parse_args()
     events = read_jsonl(args.events)
@@ -201,6 +223,8 @@ def main():
     print("MEASURED", json.dumps(result["metrics"], sort_keys=True))
     for row in result["uptime_bins"]:
         print("INFERRED classes by MEASURED uptime/exposure " + json.dumps(row, sort_keys=True))
+    for row in result["longest_reply_waits"]:
+        print("MEASURED reply phases/overlap; guest blocking needs verification " + json.dumps(row, sort_keys=True))
 
 
 if __name__ == "__main__":

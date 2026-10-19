@@ -106,6 +106,18 @@ class ReplyPhases(unittest.TestCase):
         self.assertEqual(longest["stall_overlaps"][0]["overlap_ns"], 0)
         self.assertEqual(rows(e)[0]["rpc_id"], 2)
 
+    def test_longest_table_also_reports_a_positive_stall_overlap(self):
+        e = [phase("rpc_arrive", 10), phase("reply_posted", 110)]
+        r = result(e)["longest_reply_waits"][0]
+        self.assertEqual(r["stall_overlaps"][0]["overlap_ns"], 100*MS)
+
+    def test_host_call_duration_is_separate_from_reply_latency(self):
+        e = [phase("rpc_arrive", 10), phase("rm_call", 25, end_ns=30*MS),
+             phase("reply_posted", 110)]
+        r = rows(e)[0]
+        self.assertEqual(r["host_call_ns"], 5*MS)
+        self.assertEqual(r["arrive_to_post_ns"], 100*MS)
+
     def test_observed_host_wait_alone_never_proves_guest_s8(self):
         r = result([phase("rpc_arrive", 10), phase("reply_posted", 110)], coverage=True)
         self.assertEqual(r["gaps"][0]["class"], "UNKNOWN")
