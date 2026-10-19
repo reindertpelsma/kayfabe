@@ -51,6 +51,12 @@ fn compile(tag: &str, replay: bool) {
         code += "mod cpuintr_replay {\n";
         code += &replay.replace("//!", "//");
         code += "\n}\n";
+        let audit =
+            std::fs::read_to_string(concat!(env!("CARGO_MANIFEST_DIR"), "/src/cpuintr_audit.rs"))
+                .unwrap();
+        code += "mod cpuintr_audit {\n";
+        code += &audit.replace("//!", "//");
+        code += "\n}\n";
     }
     let input = temp.join("gate.rs");
     std::fs::write(&input, code).unwrap();

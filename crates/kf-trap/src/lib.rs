@@ -27,6 +27,7 @@ pub mod bar1db;
 pub mod bitmap;
 pub mod cacheop;
 pub mod cpuintr;
+pub mod cpuintr_audit;
 #[cfg(feature = "research-replay")]
 pub mod cpuintr_replay;
 pub mod fspemem;

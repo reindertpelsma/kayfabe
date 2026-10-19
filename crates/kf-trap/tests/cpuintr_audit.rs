@@ -98,3 +98,80 @@ fn audit_does_not_publish_an_incomplete_record() {
     a.finish(ticket, &t, Raise::None);
     assert!(a.read(0).is_some());
 }
+
+#[test]
+fn separate_reservations_cannot_publish_each_others_payload() {
+    let t = tree();
+    let a = Audit::<2>::new();
+    a.arm();
+    let first = a.begin(&t, 8, Event::Latch(7)).unwrap();
+    let second = a.begin(&t, 8, Event::Latch(8)).unwrap();
+    a.finish(second, &t, Raise::Message);
+    assert!(a.read(0).is_none());
+    assert_eq!(a.read(1).unwrap().event, Event::Latch(8));
+    assert_eq!(a.read(1).unwrap().raise, Raise::Message);
+    a.finish(first, &t, Raise::None);
+    assert_eq!(a.read(0).unwrap().event, Event::Latch(7));
+    assert_eq!(a.read(0).unwrap().end, 1);
+    assert_eq!(a.read(1).unwrap().end, 0);
+}
+
+#[test]
+fn zero_capacity_audit_always_drops_without_indexing_storage() {
+    let t = tree();
+    let a = Audit::<0>::new();
+    a.arm();
+    assert!(a.begin(&t, 8, Event::Latch(0)).is_none());
+    assert_eq!(a.used(), 0);
+    assert_eq!(a.full(), 1);
+    assert!(a.read(0).is_none());
+}
+
+#[test]
+fn stopping_capture_preserves_existing_tickets_and_refuses_new_ones() {
+    let t = tree();
+    let a = Audit::<2>::new();
+    a.arm();
+    let ticket = a.begin(&t, 8, Event::Latch(0)).unwrap();
+    a.stop();
+    assert!(a.begin(&t, 8, Event::Latch(1)).is_none());
+    a.finish(ticket, &t, Raise::None);
+    assert_eq!(a.read(0).unwrap().event, Event::Latch(0));
+}
+
+#[test]
+fn stopping_empty_capture_remains_empty() {
+    let t = tree();
+    let a = Audit::<2>::new();
+    a.arm();
+    a.stop();
+    assert!(a.begin(&t, 8, Event::Latch(0)).is_none());
+    assert_eq!(a.used(), 0);
+}
+
+#[test]
+fn contending_producers_account_for_every_bounded_attempt() {
+    let a = std::sync::Arc::new(Audit::<128>::new());
+    a.arm();
+    let threads: Vec<_> = (0..4)
+        .map(|id| {
+            let a = std::sync::Arc::clone(&a);
+            std::thread::spawn(move || {
+                let t = tree();
+                for n in 0..100 {
+                    if let Some(ticket) = a.begin(&t, 8, Event::Latch(id * 100 + n)) {
+                        a.finish(ticket, &t, Raise::None);
+                    }
+                }
+            })
+        })
+        .collect();
+    for thread in threads {
+        thread.join().unwrap();
+    }
+    assert!(a.used() <= 128);
+    assert_eq!(a.used() as u64 + a.full() + a.contended(), 400);
+    for i in 0..a.used() {
+        assert!(a.read(i).is_some());
+    }
+}

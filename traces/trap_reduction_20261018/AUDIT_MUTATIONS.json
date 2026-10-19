@@ -1,0 +1,66 @@
+[
+  {
+    "mutant": "audit_default_armed",
+    "exit": 101,
+    "killing_tests": [
+      "audit_is_off_until_explicitly_armed",
+      "unarmed_audit_cannot_record_a_guest_write"
+    ],
+    "kills": 2
+  },
+  {
+    "mutant": "audit_overrun",
+    "exit": 101,
+    "killing_tests": [
+      "audit_cap_never_overwrites_a_committed_record",
+      "zero_capacity_audit_always_drops_without_indexing_storage"
+    ],
+    "kills": 2
+  },
+  {
+    "mutant": "audit_publish_incomplete",
+    "exit": 101,
+    "killing_tests": [
+      "audit_does_not_publish_an_incomplete_record",
+      "separate_reservations_cannot_publish_each_others_payload",
+      "unarmed_audit_cannot_record_a_guest_write"
+    ],
+    "kills": 3
+  },
+  {
+    "mutant": "audit_drop_pending_snapshot",
+    "exit": 101,
+    "killing_tests": [
+      "enable_of_pending_bit_is_observed_with_the_message_result",
+      "latch_captures_pending_mask_and_raise_without_conflating_subscription"
+    ],
+    "kills": 2
+  },
+  {
+    "mutant": "audit_drop_message_result",
+    "exit": 101,
+    "killing_tests": [
+      "enable_of_pending_bit_is_observed_with_the_message_result",
+      "separate_reservations_cannot_publish_each_others_payload"
+    ],
+    "kills": 2
+  },
+  {
+    "mutant": "audit_ignore_stop",
+    "exit": 101,
+    "killing_tests": [
+      "stopping_capture_preserves_existing_tickets_and_refuses_new_ones",
+      "stopping_empty_capture_remains_empty"
+    ],
+    "kills": 2
+  },
+  {
+    "mutant": "audit_runtime_default_on",
+    "exit": 101,
+    "killing_tests": [
+      "intraudit::tests::explicit_off_allocates_no_recorder",
+      "intraudit::tests::missing_runtime_flag_allocates_no_recorder_or_path"
+    ],
+    "kills": 2
+  }
+]

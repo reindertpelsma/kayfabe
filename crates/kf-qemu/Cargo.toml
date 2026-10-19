@@ -5,6 +5,10 @@ version.workspace = true
 edition.workspace = true
 license.workspace = true
 
+[features]
+# Optional bounded interrupt audit; compiled out of ordinary builds.
+diag-intr-audit = []
+
 [lib]
 crate-type = ["rlib", "staticlib"]
 

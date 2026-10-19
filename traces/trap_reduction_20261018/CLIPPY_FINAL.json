@@ -1,0 +1,18 @@
+{
+  "baseline": {
+    "warnings": 440,
+    "errors": 89,
+    "exit": 101
+  },
+  "candidate": {
+    "warnings": 440,
+    "errors": 89,
+    "exit": 101
+  },
+  "added": 0,
+  "removed": 0,
+  "changed_line_diagnostics": 0,
+  "baseline_revision": "0d7ba7438",
+  "scope": "kf-trap + kf-qemu --release --all-targets; candidate adds research-replay and diag-intr-audit",
+  "comparison": "full multiset (level, code, message, primary source file); original sources temporarily restored only in own worktree, then restored before proceeding"
+}

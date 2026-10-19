@@ -289,6 +289,9 @@ pub struct Device {
     pub worker_stats: kf_chan::worker::WorkerStats,
     /// ★ P5 §2.7: the CPU interrupt tree (atomic; applied synchronously on the vCPU).
     pub intr: kf_trap::cpuintr::CpuIntr,
+    /// Optional bounded observation only; absent from default builds.
+    #[cfg(feature = "diag-intr-audit")]
+    intr_audit: crate::intraudit::Trace,
     /// ★ P5 §2.7: one eventfd per MSI-X vector, registered by the C device as a KVM irqfd — a
     /// raise is ONE `write(2)` from any thread, no BQL (`THE_TRANSLATED_PLANE.md` §7).
     irq_lines: Vec<Notifier>,
@@ -1216,6 +1219,8 @@ impl Device {
             worker_stats: kf_chan::worker::WorkerStats::default(),
             intr: kf_trap::cpuintr::CpuIntr::new(family, kf_trap::memmap::VF_USERMODE_PAGE)
                 .ok_or("CPU interrupt tree: the usermode base is below the PRIV delta")?,
+            #[cfg(feature = "diag-intr-audit")]
+            intr_audit: crate::intraudit::Trace::from_env()?,
             irq_lines: (0..MSIX_VECTORS)
                 .map(|_| Notifier::create().map_err(|e| format!("irq eventfd: {e:?}")))
                 .collect::<Result<Vec<_>, _>>()?,
@@ -1631,7 +1636,18 @@ impl Device {
             && let Some(r) = self.intr.decode(off)
         {
             self.irq_counts.writes.fetch_add(1, Ordering::Relaxed);
+            #[cfg(feature = "diag-intr-audit")]
+            let audit_ticket = self.intr_audit.begin(
+                &self.intr,
+                kf_trap::cpuintr::leaf_regs_for(self.family),
+                kf_trap::cpuintr_audit::Event::Write {
+                    off,
+                    value: val as u32,
+                },
+            );
             let raise = self.intr.write(r, val as u32);
+            #[cfg(feature = "diag-intr-audit")]
+            self.intr_audit.finish(audit_ticket, &self.intr, raise);
             self.intr
                 .shadow(r, |o, v| self.shadow_store(o, u64::from(v), 4));
             self.deliver(raise);
@@ -1836,7 +1852,15 @@ impl Device {
 
     /// ★ Latch `vector` (a completion this device announces) and deliver — any thread.
     pub fn latch_and_deliver(&self, vector: u32) {
+        #[cfg(feature = "diag-intr-audit")]
+        let audit_ticket = self.intr_audit.begin(
+            &self.intr,
+            kf_trap::cpuintr::leaf_regs_for(self.family),
+            kf_trap::cpuintr_audit::Event::Latch(vector),
+        );
         let raise = self.intr.latch(vector);
+        #[cfg(feature = "diag-intr-audit")]
+        self.intr_audit.finish(audit_ticket, &self.intr, raise);
         self.intr
             .shadow_all(|o, v| self.shadow_store(o, u64::from(v), 4));
         if raise == kf_trap::cpuintr::Raise::None {
@@ -2565,6 +2589,8 @@ impl Device {
             if snap_at.elapsed() >= std::time::Duration::from_millis(250) {
                 snap_at = std::time::Instant::now();
                 self.chans.pt_stall_snapshot_poll();
+                #[cfg(feature = "diag-intr-audit")]
+                self.intr_audit.service();
             }
             // A heartbeat for the boot log, on the drainer (never a vCPU): printed only on change.
             if beat.0.elapsed() >= std::time::Duration::from_secs(2) {
