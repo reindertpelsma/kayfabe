@@ -182,6 +182,22 @@ mod tests {
         assert!(for_version("595.91.08").is_none());
     }
 
+    #[test]
+    fn a_removed_control_is_not_claimed_by_the_new_driver() {
+        let old = for_version("590.48.01").unwrap();
+        let new = for_version("595.91.07").unwrap();
+        let name = "NVC370_CTRL_CMD_SET_SWAPRDY_GPIO_WAR";
+        let cmd = old.k32(name).expect("public590 control");
+        assert!(new.k32(name).is_none(), "public595 removed this control");
+        let model = |layouts| crate::model::DisplayModel::new(
+            &kf_chip::display::TURING,
+            vec![crate::edid::Monitor::default_1080p()],
+            layouts,
+        );
+        assert!(model(old).claims(cmd));
+        assert!(!model(new).claims(cmd));
+    }
+
     /// The bench's layouts parse, and a few sizes are what the headers say (`ctrl0073system.h`:
     /// three `NvU32`s; `ctrl2080internal.h`: GET_STATIC_INFO 36 bytes).
     #[test]
