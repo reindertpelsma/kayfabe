@@ -47,10 +47,24 @@ mod tests {
     }
 
     #[test]
-    fn a_ring_with_no_host_ce_object_or_a_foreign_class_gets_nothing() {
+    fn a_ring_with_no_host_ce_object_gets_nothing() {
         assert_eq!(implicit_ce_class(true, true, None), 0);
-        for class in [0, 0xC9B0, 0xC997, 0xC7B4, 0xC7B6, 0xDEAD, u32::MAX] {
+        assert_eq!(implicit_ce_class(true, true, Some(0)), 0);
+    }
+
+    #[test]
+    fn a_foreign_class_gets_nothing() {
+        for class in [0xC9B0, 0xC997, 0xC7B4, 0xC7B6, 0xDEAD, u32::MAX] {
             assert_eq!(implicit_ce_class(true, true, Some(class)), 0, "{class:#x}");
+        }
+    }
+
+    #[test]
+    fn no_class_reaches_a_user_tier_or_non_copy_engine_channel() {
+        for class in [0xC5B5, 0xC6B5, 0xC7B5, 0xC8B5, 0xC9B5, 0xCAB5] {
+            assert_eq!(implicit_ce_class(false, true, Some(class)), 0);
+            assert_eq!(implicit_ce_class(true, false, Some(class)), 0);
+            assert_eq!(implicit_ce_class(false, false, Some(class)), 0);
         }
     }
 }

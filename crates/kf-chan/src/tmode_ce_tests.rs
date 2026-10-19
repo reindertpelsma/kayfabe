@@ -333,3 +333,39 @@ fn the_host_semaphore_width_follows_the_derived_class() {
         );
     }
 }
+
+/// The guest's own `SET_OBJECT` decides from then on, in BOTH directions: a newer class than the
+/// ring's host class admits that class's methods (REQ_ATTR is `CAB5`-only), an older one refuses
+/// the methods only the host's newer class defines (`SCRUB_PARAMETERS` is `C8B5`+).
+#[test]
+fn the_guests_binding_wins_over_the_derived_class_when_newer() {
+    let mut st = cfg(C7B5);
+    decode(&[h(4, 0, 1), 0xCAB5], is_ce, &mut st, None).expect("bind");
+    assert!(decode(&[h(4, 0x754, 1), 0], is_ce, &mut st, None).is_ok());
+}
+
+#[test]
+fn the_guests_binding_wins_over_the_derived_class_when_older() {
+    let mut st = cfg(0xC8B5);
+    decode(&[h(4, 0, 1), 0xC7B5], is_ce, &mut st, None).expect("bind");
+    assert_eq!(
+        decode(&[h(4, 0x6FC, 1), 0], is_ce, &mut st, None),
+        Err(Refusal::Unclassified {
+            subch: 4,
+            method: 0x6FC
+        })
+    );
+    // and the derived class alone does admit it
+    assert!(decode(&[h(4, 0x6FC, 1), 0], is_ce, &mut cfg(0xC8B5), None).is_ok());
+}
+
+/// The wide host-semaphore field has its own limit (25 bits on `C8B5`+): a bit above it is refused.
+#[test]
+fn the_wide_host_semaphore_field_is_still_bounded() {
+    let pb = |hi: u32| [h(0, 0x5C, 5), 0x2023_3060, hi, 7, 0, 1];
+    assert!(decode(&pb(0x1FF_FFFF), is_ce, &mut cfg(0xC8B5), None).is_ok());
+    assert!(matches!(
+        decode(&pb(0x200_0000), is_ce, &mut cfg(0xC8B5), None),
+        Err(Refusal::FieldValue { .. })
+    ));
+}
