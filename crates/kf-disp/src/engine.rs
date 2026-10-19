@@ -391,9 +391,10 @@ pub struct Vocab {
     w_sem_release: u32,
     w_sem_release_hi: Option<u32>,
     w_semaphores: WindowSemaphores,
-    /// The window's first ISO surface word — a context DMA handle (C5x–C9x) or the surface address's
-    /// low word with its ENABLE bit (CAx): non-zero iff the window scans a surface.
+    /// The window's first ISO surface word: context DMA handle or address low word.
     w_iso0: u32,
+    /// Address words have an independent ENABLE field; retained address/target bits do not enable them.
+    w_iso_enable: Option<(u8, u8)>,
     // window-immediate and cursor
     i_update: u32,
     i_ilk_window: (u8, u8),
@@ -552,6 +553,11 @@ impl Vocab {
                         "NV{win:04X}_SET_CONTEXT_DMA_ISO(0) / SET_SURFACE_ADDRESS_LO_ISO(0)"
                     ))
                 })?,
+            w_iso_enable: if t.a(win, "SET_CONTEXT_DMA_ISO", 0).is_some() {
+                None
+            } else {
+                Some(f(win, "SET_SURFACE_ADDRESS_LO_ISO_ENABLE")?)
+            },
             i_update: v(imm, "UPDATE")?,
             i_ilk_window: f(imm, "UPDATE_INTERLOCK_WITH_WINDOW")?,
             k_update: v(cur, "UPDATE")?,
@@ -559,6 +565,10 @@ impl Vocab {
             k_ilk_core: t.f(cur, "SET_INTERLOCK_FLAGS_INTERLOCK_WITH_CORE"),
             k_window_interlock: v(cur, "SET_WINDOW_INTERLOCK_FLAGS")?,
         })
+    }
+
+    fn iso_enabled(&self, word: u32) -> bool {
+        self.w_iso_enable.map_or(word != 0, |field| fld(word, field) != 0)
     }
 
     fn space(&self, kind: ChannelKind) -> u32 {
@@ -1391,7 +1401,9 @@ impl Engine {
             // and joined the parked latch), and the first flip then waited for UPDATEs the driver sends only
             // after that flip completes. [inferred from the guest's behaviour on hardware and in the one
             // traced run that did not stall, 414; a run decides]
-            if c.a(self.vocab.w_iso0) == 0 && c.armed(self.vocab.w_iso0) == 0 {
+            if !self.vocab.iso_enabled(c.a(self.vocab.w_iso0))
+                && !self.vocab.iso_enabled(c.armed(self.vocab.w_iso0))
+            {
                 continue;
             }
             if !self.tearing(c) {
@@ -1575,7 +1587,7 @@ impl Engine {
             return false;
         };
         c.kind == ChannelKind::Window
-            && c.armed(self.vocab.w_iso0) != 0
+            && self.vocab.iso_enabled(c.armed(self.vocab.w_iso0))
             && self
                 .owner_head(c.instance)
                 .is_some_and(|h| heads.iter().any(|m| m.head == h && m.period_ns > 0))
