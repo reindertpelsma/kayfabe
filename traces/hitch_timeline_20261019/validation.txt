@@ -4,8 +4,19 @@ Environment: lane-owned CARGO_TARGET_DIR; df checked before the build (47 GiB fr
 Exit status 0; 31 result groups, 1038 passed, 0 failed, 15 ignored.
 No Rust source changed in H1; no repeated Rust after-build was needed.
 Python analyzer before implementation: 1 expected missing-file loader error.
-Python analyzer after implementation: 20 passed, 0 failed.
-Mutants A1/A2/A3: 2/2/3 killing tests; originals restored; final 20 passed.
+Initial analyzer after implementation: 20 passed, 0 failed.
+Coordinator additions 2/3: uptime/context 24 tests RED (24 errors), then 44 total passed.
+Long-act inventory: expected missing-module loader error before implementation; 14 tests now pass.
+Coordinator addition 4: 24 S8/reply tests before implementation, 2 failures + 15 errors; 26 now pass.
+Final Python suite: 84 passed, 0 failed (20 initial + 24 uptime/context + 14 long-act + 26 S8/reply).
+Initial mutants A1/A2/A3: 2/2/3 killing tests (20-test suite).
+Uptime/context mutants U1/U2/C1/C2/C3/C4: 3/2/2/2/2/2 killing tests (44-test suite).
+Long-act mutants L1/L2/L3: 2/2/2 killing tests (14 long-act tests, total suite 58).
+S8/reply mutants R1/R2/R3/R4/R5/R6: 5/3/2/8/2/2 killing tests (84-test suite).
+All 18 mutants restored; final suite passed. CLI smoke passed on synthetic calibrated guest evidence,
+S8 reply phases and a three-hour uptime anchor. This is not a hardware capture/recorder soak.
+Actual long-act tool exercised on read-only 3014/3015 printed-log snapshots: 12/9 long acts,
+5085/4239 timed lines, zero unparsed act lines; missing guest identity/mode/uptime remains UNKNOWN.
 Clippy: not run, no Rust source changed. Runtime instrumentation: not implemented.
 Hardware: n=0. No VM, guest diagnostic channel, GPU or GPU lock touched.
 Cleanup: CPU build/test process exited. Own target directory remains (204 MiB).

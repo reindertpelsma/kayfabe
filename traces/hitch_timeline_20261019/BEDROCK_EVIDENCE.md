@@ -124,3 +124,12 @@ without timestamps. INFERRED: pair totals cannot reveal whether any reply
 waited ten seconds, nor identify its guest waiter. S8 is now the first priority,
 S1 second. Full correlated host reply spans plus feasible guest ETW wait/ready
 evidence are needed before classifying a particular stall as S8.
+
+MEASURED by H1 in a later read-only snapshot: 4055 holds, all depth=1, and
+4055 posts, all n=1. The function breakdown is RmControl 1996, RmAlloc 1186,
+Free 872, UpdateBarPde 1 (see held_reply_counts_3015.json). This distinguishes
+all-function totals from RmControl-only counts; neither has per-request timing.
+The later long-act snapshot has 4239 timed 3015 act lines, still nine >20 ms;
+3014 remains 5085 timed lines and twelve >20 ms. The full observed inventories
+are long_acts_3014/3015.json and .tsv; the earlier 3914-line snapshot is not
+silently relabeled as the later one.

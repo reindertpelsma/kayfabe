@@ -1,0 +1,18 @@
+{
+  "capture_monotonic_ns": 850564947391551,
+  "held_by_function": {
+    "Free": 872,
+    "RmAlloc": 1186,
+    "RmControl": 1996,
+    "UpdateBarPde": 1
+  },
+  "held_depths": {
+    "1": 4055
+  },
+  "limit": "counts only; no per-request timestamp, hold reason, row count or waiter identity in these lines",
+  "posted_batch_sizes": {
+    "1": 4055
+  },
+  "run": 3015,
+  "source_lines_read": 269188
+}

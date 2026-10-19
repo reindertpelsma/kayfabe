@@ -3,19 +3,53 @@
 STATUS: RESEARCH, 2026-10-19. Branch `codex/hitch-timeline-20261019`, based on
 published candidate-5 `f8f9d1a5f`. Part B is gated on coordinator `go`.
 
-[PREREG.md](PREREG.md) records falsifiers and the three-hour hardware plan.
+[PREREG.md](PREREG.md) records S1–S8 falsifiers, Bedrock, aging, the VRAM pair
+and the expanded budget conflict. The requested four-hour window cannot fit
+all required workloads plus a three-hour soak; no scope reduction is assumed.
 No VM, GPU, guest diagnostic channel or GPU lock has been touched by this lane.
 
-**PARTIAL; stopped under the lane's contradiction rule.** [STOP.md](STOP.md)
-records the mismatch in required broker/clock evidence and three options.
-MEASURED: the normalized-input analyzer has 20 passing tests and three mutants
-killed by 2/2/3 tests ([analyzer_mutations.txt](analyzer_mutations.txt)). Tests
-were committed alone as EXPECTED RED before implementation. No timeline
+**PARTIAL.** The runtime recorder remains stopped under the lane's contradiction
+rule; [STOP.md](STOP.md) records the missing broker/clock contract and options.
+Coordinator additions 2–4 were implemented independently in the offline tools:
+MEASURED: 84 passing tests; 18 mutants, each killed by at least two tests.
+Tests-first EXPECTED RED stages precede each implementation stage. See
+[tool schema/usage](../../scripts/bench/hitch/timeline/README.md),
+[validation.txt](validation.txt) and the four mutation tables. No runtime
 recorder, collectors or binaries have been built. Part B is not ready.
 MEASURED: unchanged Rust baseline passed 1038 tests, 15 ignored, zero failures;
 [validation.txt](validation.txt) records the command and cleanup limitation.
 The lane-owned target directory remains (204 MiB): deletion was rejected by
 the execution safety check and the lane forbids working around a refused step.
+
+## Bedrock, S8 and reply waits
+
+[BEDROCK_EVIDENCE.md](BEDROCK_EVIDENCE.md) distinguishes coordinator measurements,
+H1 read-only snapshots, code semantics and unresolved provenance differences.
+INFERRED priority is S8 (guest reply wait), then S1 (invalidate apply), then the
+remaining suspects. No freeze has been attributed from real ETW in this lane.
+
+MEASURED: offline tools report ten-minute uptime bins with actual exposure;
+per-gap invalidate arrival/clear/apply intervals, CE2/CE3/GR0 completion rates
+only with coverage, bracketing residency samples, and held/forwarded reply
+phases plus longest waits and per-gap overlap. S8 requires verified guest
+waiter identity and bounded clock error; otherwise the causal class stays
+UNKNOWN. Pending/missing phases do not become zero durations or fake posts.
+MEASURED: CLI smoke passed on synthetic data with a three-hour uptime anchor;
+this is not a three-hour recorder/soak test.
+
+MEASURED: [3014 long acts](long_acts_3014.tsv),
+[3015 long acts](long_acts_3015.tsv): 12/9 printed acts >20 ms. JSON companions
+preserve parse coverage and unknown identity/timing fields. The 3015 table
+reproduces SET_TIMESLICE acts of 265635/875734 us; these are whole-closure wall
+times, not scheduling quanta or isolated RM-call durations.
+
+MEASURED: [held-reply snapshot](held_reply_counts_3015.json) contains 4055 holds
+and 4055 n=1 posts: RmControl=1996, RmAlloc=1186, Free=872, UpdateBarPde=1.
+CODE READ: the common "map reply" log text also covers deferred acts. These
+untimestamped totals neither measure wait duration nor prove gameplay overlap.
+The coordinator's Bedrock-running sample (2010/8192 MiB dedicated, 2396 MiB
+committed, 268 MiB shared; host 9093/12282 MiB) weakens overcommit at that instant;
+the stall peak remains unmeasured.
 
 ## Existing counter evidence
 

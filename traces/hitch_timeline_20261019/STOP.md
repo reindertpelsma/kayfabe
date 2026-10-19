@@ -1,6 +1,8 @@
 # H1 stop: collection prerequisites differ from the lane description
 
-STATUS: RESEARCH, 2026-10-19. CODE READ. No runtime instrumentation or launcher
+STATUS: RESEARCH, 2026-10-19. CODE READ. The initial runtime-recorder stop remains
+unresolved. Coordinator additions 2–4 were implemented independently in the
+offline analyzer/inventory tools; no runtime instrumentation or launcher
 behavior was changed. H1's binding instruction is: "If something contradicts
 the code or these instructions, STOP and write down options; never improvise
 a design change." Implementation stopped on the following discrepancy.
@@ -53,8 +55,10 @@ measurement of QPC-to-host offset or its error. The owner VM was not queried.
 
 ## Preserved work and limits
 
-MEASURED: the normalized-input Python analyzer passes 20 tests; three mutations
-are killed by 2/2/3 tests. It reports every qualifying supplied content gap,
+MEASURED: the initial normalized-input analyzer stage passed 20 tests and three
+mutations were killed by 2/2/3 tests. After coordinator additions 2–4, the suite
+passes 84 tests with 18 measured mutants killed by at least two tests each.
+It reports every qualifying supplied content gap,
 retains event windows, exposes UNKNOWN and guards loss, clock uncertainty,
 unlinked frames and same-thread S7 evidence. It requires already normalized,
 correlated intervals and an explicit collection-coverage assertion; it does not
@@ -66,4 +70,5 @@ dump/ETW adapters, scheduling/memory/taskstats collectors, guest collectors,
 scripted walk, live guest backing audit, production/instrumented control
 binaries, clippy comparison and hardware validation. No diagnosis of the
 owner's hitches is established. The preceding stages are useful partial work,
-not a ready-to-run Part B kit. PREREG.md includes S1–S7 and the proposed run plan.
+not a ready-to-run Part B kit. PREREG.md includes S1–S8, Bedrock, aging and VRAM
+experiments, S8-first priority, and the unresolved four-hour budget conflict.
