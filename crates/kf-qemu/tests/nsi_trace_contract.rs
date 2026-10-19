@@ -72,8 +72,15 @@ fn no_recorder_hook_is_added_to_the_vcpu_interrupt_or_mmio_paths() {
 #[test]
 fn live_counter_requests_run_only_on_the_existing_drainer_heartbeat() {
     let device = include_str!("../src/device.rs");
-    let drainer = body(device, "pub fn drainer_loop(", "pub fn enable_doorbell_fast_path(");
-    assert!(drainer.contains("nsi_trace.poll_stats("), "no live counter observation");
+    let drainer = body(
+        device,
+        "pub fn drainer_loop(",
+        "pub fn enable_doorbell_fast_path(",
+    );
+    assert!(
+        drainer.contains("nsi_trace.poll_stats("),
+        "no live counter observation"
+    );
     assert!(drainer.contains("self.chans.relay_stats.summary()"));
     assert!(drainer.contains("self.chans.pt_summary()"));
 }
@@ -81,8 +88,25 @@ fn live_counter_requests_run_only_on_the_existing_drainer_heartbeat() {
 #[test]
 fn a_counter_request_is_idempotent_and_independent_of_trace_freezing() {
     let trace = include_str!("../src/nsitrace.rs");
-    let method = trace.split_once("pub fn poll_stats(").expect("missing request method").1;
+    let method = trace
+        .split_once("pub fn poll_stats(")
+        .expect("missing request method")
+        .1;
     assert!(method.contains("self.stats_seen"));
-    assert!(!method.contains("self.finish()"), "stats must leave tracing active");
+    assert!(
+        !method.contains("self.finish()"),
+        "stats must leave tracing active"
+    );
     assert!(method.contains("report("));
+}
+
+#[test]
+fn diagnostic_dump_io_cannot_take_the_shared_stderr_lock() {
+    let trace = include_str!("../src/nsitrace.rs");
+    let dump = trace.split_once("pub fn poll_dump(").unwrap().1;
+    assert!(!dump.contains("eprintln!"), "drainer dump must use a private file sink");
+    assert!(dump.contains("File::create"));
+    let device = include_str!("../src/device.rs");
+    let callback = body(device, "nsi_trace.poll_stats(", "self.chans.pt_summary()");
+    assert!(!callback.contains("eprintln!"), "counter output must use the same private sink rule");
 }
