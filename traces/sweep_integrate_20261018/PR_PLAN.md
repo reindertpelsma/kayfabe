@@ -1,6 +1,6 @@
 # Proposed review plan
 
-STATUS: DESIGN-ONLY, 2026-10-19. Owner must decide bases before any old PR retarget.
+STATUS: DESIGN-ONLY, 2026-10-19. Candidate5 base recommendation APPROVED; no old PR retarget authorized.
 Only codex/sweep-integrate-20261018 is pushed. Heads below are planned, not created.
 Base recommendation: clean candidate5 f8f9d1a5f, then stack by actual dependencies.
 Each proposed head contains code/tests only; evidence stays on the integrate/evidence refs.
@@ -25,6 +25,10 @@ dominates display diffs; keep generated tables separate from logic when cutting
 review branches. Do not include obsolete USER batching/measurement, perf PR17,
 the TSG mirror branch or old evidence trees.
 
-Pending protected topics: heartbeat_drainer_PROPOSAL.patch is unapplied after
-corrective hold32d1128b4; scrub_test_address_key_PROPOSAL.patch is only one
-existing test fixture field. Neither is silently part of an accepted PR.
+Approved separate heartbeat series: scaffold f041ceab3, tests-only EXPECTED RED
+16e80e802, helper fix32eebb3ab, Device wiring4e0e0b645, fresh-queue EXPECTED RED
+39b11e805 and one-bit readiness fixd99c2367b. Proposed head sweep-heartbeat,
+base sweep-types/constants for the shared exact ABI and current-life state.
+This replaces the old unapplied blocking proposal, preserving the500msperiod.
+Approved fixture compatibility topic94518f95b adds onlyNone to the existing
+scrub test key; base sweep-display plus candidate5. All assertions remain.

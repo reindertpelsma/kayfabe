@@ -2,9 +2,11 @@
 
 STATUS: LIVE. Spend0USD; own rentals created0, active0, destroyed0.
 Owner cap25USD and stop-renting/report threshold20USD remain binding.
-No rental before Phase1 acceptance. The earlier family-gate STOP below is
-superseded by its approved/verified fix; current pending topics are only the
-heartbeat drainer scope and one scrub-test fixture field (PROTECTED_DECISIONS.md).
+No rental before Phase1 acceptance. The coordinator approved both protected
+heartbeat/scrub-fixture decisions on2026-10-19; final release/mutation acceptance
+is running. Fresh filtered API credit43.559771576861976USD; no instances running.
+This is account credit, not a spending reset. No own rental has been created.
+
 
 # Sweep budget authority
 

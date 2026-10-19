@@ -2,6 +2,16 @@
 
 STATUS: LIVE. STOP for these two narrow topics; independent work continues.
 
+2026-10-19 APPROVAL supersedes the two pending STOPs below. The scrub fixture
+gets only None (94518f95b). Heartbeat is an isolated failing-first series with
+nonblocking clock/metadata access and unchanged500ms; see HEARTBEAT_PLAN.md.
+No excluded USER measurement/batching edit is restored. Five held historical
+heartbeat source commits are represented by this new reviewed topic, not blindly
+reapplied: drop the old blocking lock/latest/clone implementation and command_seq
+freshness heuristic; replace them with try-lock borrowed reads and a per-life
+fn72-ready bit. The old diagnostic PUT-ahead field remains excluded.
+
+
 1. Heartbeat epoch topic: the original file-level audit missed that Device's
    existing GSP drainer contains the publication hunk. The import briefly
    reached 30a43bc9d and has now been removed in a dedicated corrective commit.

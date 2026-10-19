@@ -1,7 +1,7 @@
 # Phase 2 execution gate and prepared lease plan
 
 STATUS: LIVE, 2026-10-19. GPU-free preparation only; rental remains forbidden
-until Phase1 acceptance and the two protected decisions are resolved or deferred.
+until Phase1 acceptance; both protected decisions are approved as of2026-10-19.
 
 Authority: owner cap25USD, stop renting/report at20USD spent, one own rental
 at a time, maximum180minutes per rental. Current spend0USD and own active IDs0.
@@ -37,8 +37,8 @@ exact binary revision. An old pass is STALE until rerun at the integrated revisi
 GB206: follow October16 section2 step0/step1 and ranked falsifiers exactly. Use
 a passing integrated Ada kayfabe display trace as the display-subtree reference;
 native-headless is useful only before display objects. Body trace is host-enabled
-and bounded. Current heartbeat publication remains candidate5 while its topic
-is held. Never infer B3 fixed from CPU helper tests or old hardware.
+and bounded. The approved nonblocking heartbeat topic must pass GPU-free acceptance before
+its exact revision is built for hardware. Never infer B3 fixed from CPU helper tests or old hardware.
 
 AD102581.51: run the exact native-scoped PR46 allocation diagnostic once after
 regression, preserving scheduling refusal. Falsifier: allocation is accepted yet

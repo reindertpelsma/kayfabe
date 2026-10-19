@@ -49,7 +49,7 @@ CODE READ paths that differ:
    checks extents before memory access. Malformed declarations can therefore
    refuse earlier; legitimate Ada notifier/semaphore semantics are tested but
    not freshly measured on hardware. Pacing, broker cursor and scrub code are
-   preserved; the one scrub test tuple adapter remains pending approval.
+   preserved; the approved scrub test tuple adds only None, retaining every assertion.
 9. WalkKernel uses a fresh GPU event recorded after each launch and queries it
    before collecting. A stale fd cannot authorize completion. The VA worker
    selects its existing pending-event observation interval instead of always
@@ -65,10 +65,16 @@ CODE READ preserved boundaries: F-2 keeps Ada's8-bit upper field; the approved
 family gate accepts exactlyc56f, with c36f/c46f refused by exhaustive tests.
 The new FSP reset/gate branches apply to Hopper/Blackwell; Ada keeps Falcon.
 All candidate4/candidate5 named tests are retained, including the old walk
-ratchet name alongside candidate5's explicit store-completion guard. The GSP
-drainer heartbeat topic was removed; Device::drainer_loop is byte-identical
-to candidate5 (drainer_retention.json). Groups/latejoin/birth_group and USER
-relay/lifecycle/doorbell paths beyond the approved helper are unchanged.
+ratchet name alongside candidate5's explicit store-completion guard.
+11. The newly APPROVED heartbeat topic changes AD104 clocks too: the same500ms
+    tick reads the validated mapped timer rather than an RM ioctl, subtracts
+    this life's fn72 offset after separate millisecond divisions, and skips a
+    tick if metadata is contended/missing/invalid. No blocking lock acquisition
+    enters this operation. See HEARTBEAT_NONBLOCKING.md and mutation receipts.
+    This is another explicit path difference, not an owner-host parity claim.
+
+Groups/latejoin/birth_group and USER relay/lifecycle/doorbell paths beyond the
+approved helper are unchanged. Production scrub and pacing stay unchanged.
 
 No current hardware claim follows from this inventory. The matrix keeps all
 old passes STALE and current cells UNRUN until the authorized rental suites run.
