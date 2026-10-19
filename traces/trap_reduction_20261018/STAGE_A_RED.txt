@@ -1,0 +1,7 @@
+MEASURED 2026-10-19, base 0d7ba7438; GPU-free release, jobs=2, nice=19.
+Baseline kf-trap: 86 unit + 5 doorbell + 8 hardware-reference + 12 memory-map = 111 PASS, 0 FAIL.
+Added independent oracle: 4 PASS (two 60,000-operation random sequences plus 86,016 exhaustive single-vector schedules and reset/read/shadow checks).
+Naive replay fixture: 2 FAIL as expected. W1C before a later host latch erases the new pending bit (got 0, expected 1); enable/trigger/W1C before a later host latch also erases it (got pending 0, expected 1).
+H1 supported for serial schedules; this is not a concurrent linearizability proof.
+H2 supported by explicit counterexamples. The red implementation exists only in tests; no production behavior changes.
+Command: CARGO_TARGET_DIR=<lane-target> nice -n 19 cargo test -p kf-trap -j2 --release
