@@ -144,6 +144,27 @@ class HostContracts(unittest.TestCase):
     def test_rebind_accepts_record(self):
         self.h.restore_guard(False, {'0000:01:00.0': 'nvidia', '0000:01:00.1': 'snd_hda_intel'})
 
+    def check_existing_driver_clears_override(self, target):
+        from unittest.mock import patch
+        import tempfile
+        with tempfile.TemporaryDirectory() as tmp:
+            base = pathlib.Path(tmp) / '0000:01:00.0'
+            base.mkdir()
+            override = base / 'driver_override'
+            override.write_text('vfio-pci\n')
+            original_path = pathlib.Path
+            def path(value):
+                return original_path(tmp) if str(value) == '/sys/bus/pci/devices' else original_path(value)
+            with patch.object(self.h, 'Path', path), patch.object(self.h, 'driver', return_value=target):
+                self.h.bind('0000:01:00.0', target)
+            self.assertEqual('\n', override.read_text())
+
+    def test_existing_gpu_driver_clears_override(self):
+        self.check_existing_driver_clears_override('nvidia')
+
+    def test_existing_audio_driver_clears_override(self):
+        self.check_existing_driver_clears_override('snd_hda_intel')
+
     def test_lease_pid_reuse_refused(self):
         with self.assertRaises(RuntimeError):
             self.h.lease_guard({'pid': 30, 'start': '100'}, 30, '101', {30})
