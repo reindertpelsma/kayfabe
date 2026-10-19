@@ -1,6 +1,6 @@
 # Display DMA format from the public class
 
-STATUS: LIVE, 2026-10-19. GPU-free validation complete; candidate hardware UNRUN.
+STATUS: LIVE, 2026-10-19. GPU-free validation complete; GB202 candidate desktop MEASURED FAIL.
 Code45a4d91b5, separate unmerged branch codex/sweep-display-dma-20261019.
 Accepted integration baseline b6accbca2/runtime24906bf33 contains candidate5f8f9d1a5f.
 The optional CE95e23df77 branch is not merged or included.
@@ -55,3 +55,13 @@ on codex/sweep-integrate-20261018: native9+10/raw30/CUDA4PASS, guest595concurren
 X11 SHM window/one flip timeout. A candidate must still prove functional output.
 The Linux disk has post-baseline writes; a later PASS is functional evidence,
 not a perfect same-snapshot causal comparison. No second capability-group run.
+
+GB202 candidate run completed22:07:32..22:10:53UTC, owned56788212. Code45a4d91b5
+QEMU SHA4e57223b50c474718c90b7939110a7e064ce74aad207a9a0b901235182b2590d.
+Native gates9/9+10/12USER PASS. Linux580.159.04 still showed a one-color black
+1920x1080 desktop, one flip timeout,12nvAssert,0guestXid, no host Xid increase.
+PixelSHA788ae0147bdf979a6575938ca2d7d4403788588f7be2010f03776c968fd1ab49
+is identical to baseline. Thus the codec fix did not fix B2 in this run. No
+third B2 attempt this lease. Both hardware receipts and raw Linux evidence
+are on the integration branch under phase2_blackwell_56788212/b2_codec_candidate.
+The candidate remains a separate, unmerged public-format topic, draftPR51.
