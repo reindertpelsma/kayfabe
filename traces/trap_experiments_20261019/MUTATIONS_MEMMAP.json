@@ -1,0 +1,40 @@
+[
+ {
+  "id": "P1",
+  "desc": "with_plain_page: carved region stays a trapped shadow",
+  "killed_by": [
+   "memmap::trapexp_tests::the_carve_refuses_a_second_carve_of_the_same_page",
+   "memmap::trapexp_tests::the_carved_page_is_plain_ram_exactly_one_page_and_the_map_still_tiles"
+  ],
+  "n": 2
+ },
+ {
+  "id": "P2",
+  "desc": "with_plain_page: accepts any region kind (holes, passthrough)",
+  "killed_by": [
+   "memmap::trapexp_tests::the_carve_refuses_a_hole_page",
+   "memmap::trapexp_tests::the_carve_refuses_a_second_carve_of_the_same_page",
+   "memmap::trapexp_tests::the_carve_refuses_passthrough_and_pramin"
+  ],
+  "n": 3
+ },
+ {
+  "id": "P3",
+  "desc": "with_plain_page: carves two pages",
+  "killed_by": [
+   "memmap::trapexp_tests::the_carve_is_exactly_one_page",
+   "memmap::trapexp_tests::the_carve_tiles_on_every_family",
+   "memmap::trapexp_tests::the_carved_page_is_plain_ram_exactly_one_page_and_the_map_still_tiles"
+  ],
+  "n": 3
+ },
+ {
+  "id": "P4",
+  "desc": "with_plain_page: unaligned base accepted",
+  "killed_by": [
+   "memmap::trapexp_tests::the_carve_refuses_a_half_page_base",
+   "memmap::trapexp_tests::the_carve_refuses_a_word_unaligned_base"
+  ],
+  "n": 2
+ }
+]

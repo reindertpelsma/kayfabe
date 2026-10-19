@@ -63,6 +63,62 @@ impl RawRegion {
         Some(unsafe { core::ptr::read_unaligned(p.cast::<u32>()) })
     }
 
+    /// ★ MEASUREMENT ONLY (`diag-trap-exp`): a volatile 32-bit load (a spinner must not be
+    /// hoisted out of its loop). `None` when out of range or not 4-aligned.
+    #[cfg(feature = "diag-trap-exp")]
+    #[must_use]
+    pub fn load_u32_volatile(&self, off: usize) -> Option<u32> {
+        let p = self.span(off, 4)?;
+        if !(p as usize).is_multiple_of(4) {
+            return None;
+        }
+        // SAFETY: `span` bounds-checked 4 bytes, the address is 4-aligned (checked above), and the
+        // memory stays mapped for the region's life (the type invariant).
+        Some(unsafe { core::ptr::read_volatile(p.cast::<u32>()) })
+    }
+
+    /// ★ MEASUREMENT ONLY (`diag-trap-exp`): compare-and-swap a 32-bit word, so a store a guest
+    /// vCPU made between our load and our store is never overwritten. `false` when the word no
+    /// longer holds `old` (or is out of range / unaligned).
+    #[cfg(feature = "diag-trap-exp")]
+    pub fn cas_u32(&self, off: usize, old: u32, new: u32) -> bool {
+        use core::sync::atomic::{AtomicU32, Ordering};
+        let Some(p) = self.span(off, 4) else {
+            return false;
+        };
+        if !(p as usize).is_multiple_of(4) {
+            return false;
+        }
+        // SAFETY: `span` bounds-checked 4 bytes, the address is 4-aligned (checked above), the
+        // memory is valid for the region's life, and every other access to the word is a plain
+        // 4-byte load/store of an integer (guest or host), for which an atomic view is sound.
+        let a = unsafe { AtomicU32::from_ptr(p.cast::<u32>()) };
+        a.compare_exchange(old, new, Ordering::AcqRel, Ordering::Relaxed)
+            .is_ok()
+    }
+
+    /// ★ MEASUREMENT ONLY (`diag-trap-exp`): a zeroed, page-aligned 4 KiB region that lives for
+    /// the process (the interrupt page's RAM). `None` if the allocator refuses.
+    #[cfg(feature = "diag-trap-exp")]
+    #[must_use]
+    pub fn leak_zeroed_page() -> Option<RawRegion> {
+        let layout = std::alloc::Layout::from_size_align(4096, 4096).ok()?;
+        // SAFETY: the layout has a nonzero size; a null return is checked below.
+        let p = unsafe { std::alloc::alloc_zeroed(layout) };
+        if p.is_null() {
+            return None;
+        }
+        // SAFETY: 4096 zeroed bytes, never freed (leaked on purpose): valid for the process life.
+        Some(unsafe { RawRegion::adopt(p, 4096) })
+    }
+
+    /// ★ MEASUREMENT ONLY (`diag-trap-exp`): the base address, for the hypervisor to map as RAM.
+    #[cfg(feature = "diag-trap-exp")]
+    #[must_use]
+    pub fn base_ptr(&self) -> *mut u8 {
+        self.ptr
+    }
+
     /// Store `width` (1, 2, 4 or 8) bytes of `v`, little-endian.
     pub fn store(&self, off: usize, v: u64, width: u8) -> bool {
         let n = usize::from(width);

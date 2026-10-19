@@ -8,6 +8,10 @@ license.workspace = true
 [lib]
 crate-type = ["rlib", "staticlib"]
 
+[features]
+# MEASUREMENT ONLY (traces/trap_experiments_20261019). Not in `default`; no production build has it.
+diag-trap-exp = ["kf-trap/diag-trap-exp"]
+
 [dependencies]
 kf-abi.workspace = true
 kf-arch.workspace = true

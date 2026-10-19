@@ -36,6 +36,8 @@ pub mod rmfacts;
 pub mod scrub;
 pub mod tspace;
 pub mod tsgmirror;
+#[cfg(feature = "diag-trap-exp")]
+pub mod trapexp;
 pub mod twin;
 pub(crate) mod userbirth;
 pub(crate) mod userstore;

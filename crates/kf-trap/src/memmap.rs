@@ -316,6 +316,49 @@ impl MemoryMap {
         self.regions.splice(i..i, replacement);
         Ok(self)
     }
+    /// ★ MEASUREMENT ONLY (`diag-trap-exp`): carve one page of BAR0 out of a shadow region as
+    /// [`Disposition::PlainRam`] (no exit in either direction). Same refusals as `with_timer`.
+    #[cfg(feature = "diag-trap-exp")]
+    pub fn with_plain_page(mut self, base: u64) -> Result<Self, &'static str> {
+        let end = base.checked_add(PAGE).ok_or("page overflow")?;
+        if base == 0 || !base.is_multiple_of(PAGE) || end > self.bar0_bytes {
+            return Err("page outside/alignment of BAR0");
+        }
+        let i = self
+            .regions
+            .iter()
+            .position(|r| {
+                r.bar == Bar(0)
+                    && r.how == Disposition::ShadowWriteTrapped
+                    && base >= r.base
+                    && end <= r.base + r.len
+            })
+            .ok_or("page overlaps a non-shadow BAR0 range")?;
+        let old = self.regions.remove(i);
+        let mut replacement = Vec::new();
+        if old.base < base {
+            replacement.push(Region {
+                len: base - old.base,
+                ..old
+            });
+        }
+        replacement.push(Region {
+            bar: Bar(0),
+            base,
+            len: PAGE,
+            how: Disposition::PlainRam,
+        });
+        if end < old.base + old.len {
+            replacement.push(Region {
+                base: end,
+                len: old.base + old.len - end,
+                ..old
+            });
+        }
+        self.regions.splice(i..i, replacement);
+        Ok(self)
+    }
+
     /// ★ Does the map **tile** each BAR — cover it exactly, no gaps, no overlaps?
     ///
     /// ⊘ This is the property that lets a VMM install the map blindly. A gap is not a harmless
@@ -437,4 +480,114 @@ pub fn install(
         installed.push((*r, vmm.install_memslot(gpa, r.len, host, readonly)?));
     }
     Ok(installed)
+}
+
+#[cfg(all(test, feature = "diag-trap-exp"))]
+mod trapexp_tests {
+    use super::*;
+    use crate::trappolicy::doorbell_for;
+
+    const B0: u64 = 16 << 20;
+    const PAGE_AT: u64 = 0x00B8_1000;
+
+    fn map(f: Family) -> MemoryMap {
+        memory_map(f, doorbell_for(f), B0, 1 << 20, 1 << 20)
+    }
+
+    #[test]
+    fn the_carved_page_is_plain_ram_exactly_one_page_and_the_map_still_tiles() {
+        for f in [Family::Turing, Family::Ampere, Family::Ada, Family::Hopper, Family::Blackwell] {
+            let m = map(f).with_plain_page(PAGE_AT).unwrap();
+            m.tiles().unwrap();
+            assert_eq!(m.disposition_at(Bar(0), PAGE_AT), Some(Disposition::PlainRam), "{f:?}");
+            assert_eq!(m.disposition_at(Bar(0), PAGE_AT + PAGE - 4), Some(Disposition::PlainRam));
+            assert_eq!(
+                m.disposition_at(Bar(0), PAGE_AT - 4),
+                Some(map(f).disposition_at(Bar(0), PAGE_AT - 4).unwrap()),
+                "the neighbour below is unchanged"
+            );
+            assert_eq!(
+                m.disposition_at(Bar(0), PAGE_AT + PAGE),
+                Some(Disposition::ShadowWriteTrapped),
+                "the neighbour above is unchanged"
+            );
+            let plain: u64 = m
+                .regions
+                .iter()
+                .filter(|r| r.bar == Bar(0) && r.how == Disposition::PlainRam)
+                .map(|r| r.len)
+                .sum();
+            assert_eq!(plain, PRAMIN_LEN + PAGE, "{f:?}: PRAMIN plus the one page");
+        }
+    }
+
+    #[test]
+    fn the_carve_leaves_the_read_trap_surface_unchanged() {
+        for f in [Family::Ampere, Family::Hopper] {
+            let a = map(f);
+            let b = map(f).with_plain_page(PAGE_AT).unwrap();
+            assert_eq!(a.read_exit_pages(), b.read_exit_pages(), "{f:?}");
+        }
+    }
+
+    #[test]
+    fn the_carve_tiles_on_every_family() {
+        for f in [Family::Turing, Family::Ampere, Family::Ada, Family::Hopper, Family::Blackwell] {
+            map(f).with_plain_page(PAGE_AT).unwrap().tiles().unwrap();
+        }
+    }
+
+    #[test]
+    fn the_carve_is_exactly_one_page() {
+        let m = map(Family::Ampere).with_plain_page(PAGE_AT).unwrap();
+        let r: Vec<_> = m.regions.iter().filter(|r| r.base == PAGE_AT).collect();
+        assert_eq!(r.len(), 1);
+        assert_eq!(r[0].len, PAGE);
+        assert_eq!(m.disposition_at(Bar(0), PAGE_AT + PAGE), Some(Disposition::ShadowWriteTrapped));
+        assert_eq!(m.disposition_at(Bar(0), PAGE_AT + 2 * PAGE - 4), Some(Disposition::ShadowWriteTrapped));
+    }
+
+    #[test]
+    fn the_carve_refuses_a_hole_page() {
+        let m = map(Family::Hopper);
+        assert!(m.with_plain_page(0xB8_0000).is_err());
+    }
+
+    #[test]
+    fn the_carve_refuses_passthrough_and_pramin() {
+        let m = map(Family::Hopper);
+        assert!(m.clone().with_plain_page(VF_USERMODE_PAGE).is_err());
+        assert!(m.with_plain_page(PRAMIN_BASE).is_err());
+    }
+
+    #[test]
+    fn the_carve_refuses_a_second_carve_of_the_same_page() {
+        let m = map(Family::Ampere).with_plain_page(PAGE_AT).unwrap();
+        assert!(m.with_plain_page(PAGE_AT).is_err());
+    }
+
+    #[test]
+    fn the_carve_refuses_a_word_unaligned_base() {
+        assert!(map(Family::Ampere).with_plain_page(PAGE_AT + 4).is_err());
+    }
+
+    #[test]
+    fn the_carve_refuses_a_half_page_base() {
+        assert!(map(Family::Ampere).with_plain_page(PAGE_AT + 0x800).is_err());
+    }
+
+    #[test]
+    fn the_carve_refuses_zero_and_outside() {
+        let m = map(Family::Ampere);
+        assert!(m.clone().with_plain_page(0).is_err());
+        assert!(m.clone().with_plain_page(B0).is_err());
+        assert!(m.with_plain_page(u64::MAX - 0xFFF).is_err());
+    }
+
+    #[test]
+    fn without_the_carve_the_page_is_an_ordinary_shadow_page() {
+        for f in [Family::Ampere, Family::Hopper] {
+            assert_eq!(map(f).disposition_at(Bar(0), PAGE_AT), Some(Disposition::ShadowWriteTrapped));
+        }
+    }
 }
