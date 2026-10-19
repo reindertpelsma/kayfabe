@@ -27,6 +27,9 @@ pub struct Cfg {
     /// Variant B: microseconds a pending bit is held before it acks itself
     /// (`KF3_DIAG_INTR_SPIN_HOLD_US`, default 300).
     pub hold_us: u32,
+    /// Variant B: publish 0 in the EN_CLEAR words (`KF3_DIAG_INTR_SPIN_ENCLR0=1`), so that a
+    /// "disable exactly the enabled mask" store is seen; default off (hardware read-back = the mask).
+    pub en_clear_zero: bool,
     /// The core the spinner pins itself to.
     pub spin_cpu: Option<usize>,
 }
@@ -38,6 +41,7 @@ impl Default for Cfg {
             spin: false,
             model: false,
             hold_us: 300,
+            en_clear_zero: false,
             spin_cpu: None,
         }
     }
@@ -56,6 +60,7 @@ impl Cfg {
             hold_us: get("KF3_DIAG_INTR_SPIN_HOLD_US")
                 .and_then(|v| v.trim().parse::<u32>().ok())
                 .map_or(300, |v| v.min(100_000)),
+            en_clear_zero: get("KF3_DIAG_INTR_SPIN_ENCLR0").is_some_and(|v| v.trim() == "1"),
             spin_cpu: get("KF3_DIAG_INTR_SPIN_CPU").and_then(|v| v.trim().parse().ok()),
         }
     }
@@ -184,6 +189,8 @@ pub struct SpinB {
     pub last: Regs,
     /// Pending-bit ages.
     pub ages: Ages,
+    /// Publish 0 in the EN_CLEAR words (default: the enable mask, as hardware reads it back).
+    pub en_clear_zero: bool,
 }
 
 /// Publish the model's words into the page: `put` is `(BAR0 offset, value)` from `CpuIntr::shadow*`.
@@ -194,11 +201,12 @@ fn publish(
     out: &mut ModelPoll,
     off_abs: u64,
     v: u32,
+    en_clear_zero: bool,
 ) {
     let off = (off_abs - INTR_PAGE) as usize;
     // EN_CLEAR is write-only in practice: its page word stays 0, so that a store of the enabled
     // mask (the usual "disable all") changes the word and is SEEN.
-    let v = if (0x400..0x600).contains(&off) { 0 } else { v };
+    let v = if en_clear_zero && (0x400..0x600).contains(&off) { 0 } else { v };
     let Some(old) = last.get(off, n) else { return };
     if old == v {
         return;
@@ -236,7 +244,7 @@ pub fn model_poll(
         let mut puts = Vec::new();
         intr.shadow(r, |o, v| puts.push((o, v)));
         for (o, v) in puts {
-            publish(n_leaf, &mut st.last, cas, out, o, v);
+            publish(n_leaf, &mut st.last, cas, out, o, v, st.en_clear_zero);
         }
     };
     for (off, val) in observed_writes(n_leaf, &st.last, &cur) {
@@ -270,7 +278,7 @@ pub fn model_publish_all(
     let mut puts = Vec::new();
     intr.shadow_all(|o, v| puts.push((o, v)));
     for (o, v) in puts {
-        publish(n_leaf, &mut st.last, cas, &mut out, o, v);
+        publish(n_leaf, &mut st.last, cas, &mut out, o, v, st.en_clear_zero);
     }
     out
 }
@@ -535,6 +543,7 @@ mod tests {
             spin: true,
             model: false,
             hold_us: 300,
+            en_clear_zero: false,
             delays: Delays { intr_us: 10, db_us: 20 },
             spin_cpu: None,
         };
@@ -768,6 +777,7 @@ mod tests {
     #[test]
     fn model_variant_enable_clear_is_exact_its_word_reads_zero_and_a_masked_edge_waits() {
         let mut m = MPage::new(Family::Ampere);
+        m.st.en_clear_zero = true;
         m.p.guest(TOP_EN_SET, 1);
         m.poll();
         assert_eq!(m.worker_latch(5), Raise::None, "masked: held");
@@ -869,6 +879,7 @@ mod tests {
     #[test]
     fn a_worker_publish_keeps_the_en_clear_word_at_zero() {
         let mut m = MPage::new(Family::Ampere);
+        m.st.en_clear_zero = true;
         m.p.guest(EN_SET, 0b110);
         m.p.guest(TOP_EN_SET, 1);
         m.poll();
@@ -918,5 +929,24 @@ mod tests {
         m.now = 41;
         m.poll();
         assert_eq!(m.p.word(LEAF), 0);
+    }
+    #[test]
+    fn by_default_en_clear_reads_back_the_enable_mask_like_hardware() {
+        let mut m = MPage::new(Family::Ampere);
+        m.p.guest(EN_SET, 0b110);
+        m.poll();
+        assert_eq!(m.p.word(EN_CLEAR), 0b110);
+        assert_eq!(m.p.word(EN_SET), 0b110);
+        m.p.guest(EN_CLEAR, 0b010); // a visible disable of one bit
+        m.poll();
+        assert_eq!(m.p.word(EN_SET), 0b100);
+        assert_eq!(m.p.word(EN_CLEAR), 0b100);
+    }
+
+    #[test]
+    fn the_en_clear_zero_flag_is_off_unless_exactly_one() {
+        assert!(!Cfg::from_lookup(env(&[])).en_clear_zero);
+        assert!(Cfg::from_lookup(env(&[("KF3_DIAG_INTR_SPIN_ENCLR0", "1")])).en_clear_zero);
+        assert!(!Cfg::from_lookup(env(&[("KF3_DIAG_INTR_SPIN_ENCLR0", "2")])).en_clear_zero);
     }
 }

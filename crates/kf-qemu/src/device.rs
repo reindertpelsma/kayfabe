@@ -1234,7 +1234,10 @@ impl Device {
             #[cfg(feature = "diag-trap-exp")]
             exp: crate::trapexp::Counters::default(),
             #[cfg(feature = "diag-trap-exp")]
-            exp_b: Mutex::new(crate::trapexp::SpinB::default()),
+            exp_b: Mutex::new(crate::trapexp::SpinB {
+                en_clear_zero: crate::trapexp::Cfg::from_env().en_clear_zero,
+                ..Default::default()
+            }),
             drainer_efd,
             stop: AtomicBool::new(false),
             hotplug_pending: AtomicU32::new(0),
