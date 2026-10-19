@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+# SPDX-License-Identifier: Apache-2.0 OR GPL-2.0-or-later
 """Bounded outbound probe staging; verify the resulting hash in Windows before execution."""
 import base64
 import hashlib
@@ -7,6 +8,7 @@ from pathlib import Path
 import secrets
 import socket
 import sys
+import time
 
 sock_path, source, destination = sys.argv[1:]
 p = Path(source)
@@ -19,9 +21,18 @@ s = socket.socket(socket.AF_UNIX)
 s.settimeout(15)
 s.connect(sock_path)
 f = s.makefile('rwb', buffering=0)
+deadline = time.monotonic() + 120
 
 def call(command, args):
-    f.write(json.dumps({'execute': command, 'arguments': args}).encode() + b'\n')
+    remaining = deadline - time.monotonic()
+    if remaining <= 0:
+        raise TimeoutError('QGA file staging deadline exceeded')
+    s.settimeout(min(15, remaining))
+    s.sendall(json.dumps({'execute': command, 'arguments': args}).encode() + b'\n')
+    remaining = deadline - time.monotonic()
+    if remaining <= 0:
+        raise TimeoutError('QGA file staging deadline exceeded')
+    s.settimeout(min(15, remaining))
     raw = f.readline(32769)
     if not raw.endswith(b'\n') or len(raw) > 32768:
         raise RuntimeError('REFUSED oversized/incomplete QGA reply')
@@ -33,8 +44,23 @@ def call(command, args):
 handle = None
 try:
     token = secrets.randbelow(1 << 31)
-    if call('guest-sync', {'id': token}) != token:
-        raise RuntimeError('QGA sync failed')
+    s.sendall(b'\xff' + json.dumps({'execute':'guest-sync','arguments':{'id':token}}).encode() + b'\n')
+    for _ in range(64):
+        remaining = deadline - time.monotonic()
+        if remaining <= 0:
+            raise TimeoutError('QGA synchronization deadline exceeded')
+        s.settimeout(min(15, remaining))
+        raw = f.readline(32769)
+        if not raw.endswith(b'\n') or len(raw) > 32768:
+            raise RuntimeError('REFUSED oversized/incomplete QGA sync reply')
+        try:
+            reply = json.loads(raw)
+        except ValueError:
+            continue
+        if isinstance(reply, dict) and reply.get('return') == token:
+            break
+    else:
+        raise RuntimeError('QGA sync did not echo the token within64replies')
     handle = call('guest-file-open', {'path': destination, 'mode': 'wb'})
     if type(handle) is not int or not 0 <= handle < (1 << 63):
         handle = None
@@ -54,4 +80,5 @@ finally:
             call('guest-file-close', {'handle': handle})
         except (OSError, ValueError, RuntimeError):
             pass
+    f.close()
     s.close()
