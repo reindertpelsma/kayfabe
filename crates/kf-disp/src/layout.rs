@@ -78,6 +78,8 @@ impl Layouts {
 pub fn for_version(version: &str) -> Option<&'static Layouts> {
     static V580_159_04: OnceLock<Layouts> = OnceLock::new();
     static V580_65_06: OnceLock<Layouts> = OnceLock::new();
+    static V590_48_01: OnceLock<Layouts> = OnceLock::new();
+    static V595_91_07: OnceLock<Layouts> = OnceLock::new();
     match version {
         "580.159.04" => Some(
             V580_159_04
@@ -89,6 +91,14 @@ pub fn for_version(version: &str) -> Option<&'static Layouts> {
         "580.65.06" => Some(
             V580_65_06
                 .get_or_init(|| Layouts::parse(include_str!("../data/layouts-580.65.06.tsv"))),
+        ),
+        "590.48.01" => Some(
+            V590_48_01
+                .get_or_init(|| Layouts::parse(include_str!("../data/layouts-590.48.01.tsv"))),
+        ),
+        "595.91.07" => Some(
+            V595_91_07
+                .get_or_init(|| Layouts::parse(include_str!("../data/layouts-595.91.07.tsv"))),
         ),
         _ => None,
     }
