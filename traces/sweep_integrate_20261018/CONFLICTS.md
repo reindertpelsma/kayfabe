@@ -1,3 +1,19 @@
+# Family topic verification, 2026-10-19
+
+STATUS: LIVE. Narrow family approval completed: EXPECTED RED 2fb8aa503,
+fix 871c38fad. Release kf-qemu 312 -> 320 passing, no dropped tests; mutants
+3/2/4/2 kills, clippy 451 -> 451 added=0. Ada c36f/c46f remain refused;
+exact accepted set c56f is exhaustively pinned. See USERRELAY_RESULT.md.
+
+# Family admission approval, 2026-10-19 11:55 coordinator
+
+STATUS: LIVE. The USER relay STOP below is superseded by narrow approval for
+source_declaration, its Birth::run call site and tests in userrelay.rs only.
+Generated Ada extras c36f and c46f are deliberately refused; the accepted Ada
+set stays exactly c56f. See USERRELAY_PLAN.md. No native-birth widening.
+The TSG mirror branch c2685412e is not imported or edited; groups/latejoin/
+birth_group remain protected. Candidate-5 f8f9d1a5f will be merged before hardware.
+
 # Current approval and verification update, 2026-10-19
 
 STATUS: LIVE. F-2 APPROVED and VERIFIED for exactly grtables.rs and tmode.rs.

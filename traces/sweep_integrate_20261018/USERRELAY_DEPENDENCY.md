@@ -1,3 +1,11 @@
+# Superseding approval, 2026-10-19
+
+STATUS: LIVE. The coordinator approved exactly the helper, call site and tests.
+The earlier STOP/proposal below is historical and superseded. The proposal
+will be adapted to preserve Ada exactly c56f; generated extras c36f/c46f
+remain refused. See USERRELAY_PLAN.md for falsifier and mutation requirements.
+The actual call site is Birth::run (the earlier text said Birth::new).
+
 # Remaining protected dependency: USER channel family admission
 
 STATUS: LIVE, 2026-10-19. STOP for this edit; proposal only, product unchanged.
