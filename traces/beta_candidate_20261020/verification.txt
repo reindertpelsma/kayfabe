@@ -1,0 +1,28 @@
+C6 documentation-only stop verification, 2026-10-19 (MEASURED)
+
+Stage 1 commit: 3c4731eec682f62f9e9d55e5dde00d3ded393fd3
+git ls-remote --heads origin integration/beta-candidate-1-20261020:
+  exactly matched the above local HEAD after Stage 1 push.
+
+git diff --exit-code f8f9d1a5f -- crates qemu broker scripts: PASS
+git diff --cached --check before each commit: PASS
+All 15 relative Markdown links in the new ledger/report/policy: targets exist.
+P19 decision-table rows: 19 unique names, all 19 retained without implementation.
+
+Staged diff scans before each commit: PASS for credential assignments/tokens,
+private-key markers, prohibited source paths/address, private host paths and
+global IPv4 addresses. This is a bounded pattern scan, not a security proof.
+
+Cargo build/test/clippy/fmt: NOT RUN (stop before implementation).
+Broker make check/check-sanitize: NOT RUN.
+Shellcheck/install command checks: NOT RUN (no launcher/install work).
+Behaviour mutation campaign: N/A, no product behaviour changes.
+Every-reader KF3 inventory/default/zero-cost audit: NOT DONE.
+GPU/VM/host build/guest diagnostic operations: NOT RUN, hardware n=0.
+C6 target directory: never created, absent at stop.
+No persistent C6 process or acquired shared/host lock.
+
+The candidate-5 reference 3620/0/19 is CODE READ from existing evidence,
+not a C6 execution. No inferred after-count is substituted for a rerun.
+Final publication SHA and post-push remote equality are recorded in the
+external C6 report and final session reply after this report is committed.
