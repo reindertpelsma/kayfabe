@@ -1,0 +1,746 @@
+{
+  "7537216": {
+    "type": "NV0073_CTRL_SPECIFIC_GET_TYPE_PARAMS",
+    "fields": {
+      "subDeviceInstance": {
+        "ctype": "NvU32",
+        "offset": 0,
+        "bytes": 4
+      },
+      "displayId": {
+        "ctype": "NvU32",
+        "offset": 4,
+        "bytes": 4
+      },
+      "displayType": {
+        "ctype": "NvU32",
+        "offset": 8,
+        "bytes": 4
+      }
+    },
+    "abi": "580.65.06",
+    "size": 12
+  },
+  "7537221": {
+    "type": "NV0073_CTRL_SPECIFIC_GET_EDID_V2_PARAMS",
+    "fields": {
+      "subDeviceInstance": {
+        "ctype": "NvU32",
+        "offset": 0,
+        "bytes": 4
+      },
+      "displayId": {
+        "ctype": "NvU32",
+        "offset": 4,
+        "bytes": 4
+      },
+      "bufferSize": {
+        "ctype": "NvU32",
+        "offset": 8,
+        "bytes": 4
+      },
+      "flags": {
+        "ctype": "NvU32",
+        "offset": 12,
+        "bytes": 4
+      },
+      "edidBuffer": {
+        "ctype": "NvU8",
+        "offset": 16,
+        "bytes": 2048
+      }
+    },
+    "abi": "580.65.06",
+    "size": 2064
+  },
+  "7537287": {
+    "type": "NV0073_CTRL_SPECIFIC_GET_ALL_HEAD_MASK_PARAMS",
+    "fields": {
+      "subDeviceInstance": {
+        "ctype": "NvU32",
+        "offset": 0,
+        "bytes": 4
+      },
+      "headMask": {
+        "ctype": "NvU32",
+        "offset": 4,
+        "bytes": 4
+      }
+    },
+    "abi": "580.65.06",
+    "size": 8
+  },
+  "7537290": {
+    "type": "NV0073_CTRL_SPECIFIC_GET_PCLK_LIMIT_PARAMS",
+    "fields": {
+      "subDeviceInstance": {
+        "ctype": "NvU32",
+        "offset": 0,
+        "bytes": 4
+      },
+      "displayId": {
+        "ctype": "NvU32",
+        "offset": 4,
+        "bytes": 4
+      },
+      "pclkLimit": {
+        "ctype": "NvU32",
+        "offset": 8,
+        "bytes": 4
+      },
+      "orPclkLimit": {
+        "ctype": "NvU32",
+        "offset": 12,
+        "bytes": 4
+      },
+      "vbPclkLimit": {
+        "ctype": "NvU32",
+        "offset": 16,
+        "bytes": 4
+      }
+    },
+    "abi": "580.65.06",
+    "size": 20
+  },
+  "7537291": {
+    "type": "NV0073_CTRL_SPECIFIC_OR_GET_INFO_PARAMS",
+    "fields": {
+      "subDeviceInstance": {
+        "ctype": "NvU32",
+        "offset": 0,
+        "bytes": 4
+      },
+      "displayId": {
+        "ctype": "NvU32",
+        "offset": 4,
+        "bytes": 4
+      },
+      "index": {
+        "ctype": "NvU32",
+        "offset": 8,
+        "bytes": 4
+      },
+      "type": {
+        "ctype": "NvU32",
+        "offset": 12,
+        "bytes": 4
+      },
+      "protocol": {
+        "ctype": "NvU32",
+        "offset": 16,
+        "bytes": 4
+      },
+      "ditherType": {
+        "ctype": "NvU32",
+        "offset": 20,
+        "bytes": 4
+      },
+      "ditherAlgo": {
+        "ctype": "NvU32",
+        "offset": 24,
+        "bytes": 4
+      },
+      "location": {
+        "ctype": "NvU32",
+        "offset": 28,
+        "bytes": 4
+      },
+      "rootPortId": {
+        "ctype": "NvU32",
+        "offset": 32,
+        "bytes": 4
+      },
+      "dcbIndex": {
+        "ctype": "NvU32",
+        "offset": 36,
+        "bytes": 4
+      },
+      "vbiosAddress": {
+        "ctype": "NvU64",
+        "offset": 40,
+        "bytes": 8
+      },
+      "bIsLitByVbios": {
+        "ctype": "NvBool",
+        "offset": 48,
+        "bytes": 1
+      },
+      "bIsDispDynamic": {
+        "ctype": "NvBool",
+        "offset": 49,
+        "bytes": 1
+      }
+    },
+    "abi": "580.65.06",
+    "size": 56
+  },
+  "7537316": {
+    "type": "NV0073_CTRL_SPECIFIC_DISPLAY_CHANGE_PARAMS",
+    "fields": {
+      "subDeviceInstance": {
+        "ctype": "NvU32",
+        "offset": 0,
+        "bytes": 4
+      },
+      "newDevices": {
+        "ctype": "NvU32",
+        "offset": 4,
+        "bytes": 4
+      },
+      "properties": {
+        "ctype": "NvU32",
+        "offset": 8,
+        "bytes": 4
+      },
+      "enable": {
+        "ctype": "NvU32",
+        "offset": 12,
+        "bytes": 4
+      }
+    },
+    "abi": "580.65.06",
+    "size": 16
+  },
+  "7536897": {
+    "type": "NV0073_CTRL_SYSTEM_GET_CAPS_V2_PARAMS",
+    "fields": {
+      "capsTbl": {
+        "ctype": "NvU8",
+        "offset": 0,
+        "bytes": 2
+      }
+    },
+    "abi": "580.65.06",
+    "size": 2
+  },
+  "7536898": {
+    "type": "NV0073_CTRL_SYSTEM_GET_NUM_HEADS_PARAMS",
+    "fields": {
+      "subDeviceInstance": {
+        "ctype": "NvU32",
+        "offset": 0,
+        "bytes": 4
+      },
+      "flags": {
+        "ctype": "NvU32",
+        "offset": 4,
+        "bytes": 4
+      },
+      "numHeads": {
+        "ctype": "NvU32",
+        "offset": 8,
+        "bytes": 4
+      }
+    },
+    "abi": "580.65.06",
+    "size": 12
+  },
+  "7536903": {
+    "type": "NV0073_CTRL_SYSTEM_GET_SUPPORTED_PARAMS",
+    "fields": {
+      "subDeviceInstance": {
+        "ctype": "NvU32",
+        "offset": 0,
+        "bytes": 4
+      },
+      "displayMask": {
+        "ctype": "NvU32",
+        "offset": 4,
+        "bytes": 4
+      },
+      "displayMaskDDC": {
+        "ctype": "NvU32",
+        "offset": 8,
+        "bytes": 4
+      }
+    },
+    "abi": "580.65.06",
+    "size": 12
+  },
+  "7536904": {
+    "type": "NV0073_CTRL_SYSTEM_GET_CONNECT_STATE_PARAMS",
+    "fields": {
+      "subDeviceInstance": {
+        "ctype": "NvU32",
+        "offset": 0,
+        "bytes": 4
+      },
+      "flags": {
+        "ctype": "NvU32",
+        "offset": 4,
+        "bytes": 4
+      },
+      "displayMask": {
+        "ctype": "NvU32",
+        "offset": 8,
+        "bytes": 4
+      },
+      "retryTimeMs": {
+        "ctype": "NvU32",
+        "offset": 12,
+        "bytes": 4
+      }
+    },
+    "abi": "580.65.06",
+    "size": 16
+  },
+  "7536906": {
+    "type": "NV0073_CTRL_SYSTEM_GET_HOTPLUG_STATE_PARAMS",
+    "fields": {
+      "subDeviceInstance": {
+        "ctype": "NvU32",
+        "offset": 0,
+        "bytes": 4
+      },
+      "flags": {
+        "ctype": "NvU32",
+        "offset": 4,
+        "bytes": 4
+      },
+      "hotplugAfterEdidMask": {
+        "ctype": "NvU32",
+        "offset": 8,
+        "bytes": 4
+      }
+    },
+    "abi": "580.65.06",
+    "size": 12
+  },
+  "7536907": {
+    "type": "NV0073_CTRL_SYSTEM_GET_HEAD_ROUTING_MAP_PARAMS",
+    "fields": {
+      "subDeviceInstance": {
+        "ctype": "NvU32",
+        "offset": 0,
+        "bytes": 4
+      },
+      "displayMask": {
+        "ctype": "NvU32",
+        "offset": 4,
+        "bytes": 4
+      },
+      "oldDisplayMask": {
+        "ctype": "NvU32",
+        "offset": 8,
+        "bytes": 4
+      },
+      "oldHeadRoutingMap": {
+        "ctype": "NvU32",
+        "offset": 12,
+        "bytes": 4
+      },
+      "headRoutingMap": {
+        "ctype": "NvU32",
+        "offset": 16,
+        "bytes": 4
+      }
+    },
+    "abi": "580.65.06",
+    "size": 20
+  },
+  "7536908": {
+    "type": "NV0073_CTRL_SYSTEM_GET_ACTIVE_PARAMS",
+    "fields": {
+      "subDeviceInstance": {
+        "ctype": "NvU32",
+        "offset": 0,
+        "bytes": 4
+      },
+      "head": {
+        "ctype": "NvU32",
+        "offset": 4,
+        "bytes": 4
+      },
+      "flags": {
+        "ctype": "NvU32",
+        "offset": 8,
+        "bytes": 4
+      },
+      "displayId": {
+        "ctype": "NvU32",
+        "offset": 12,
+        "bytes": 4
+      }
+    },
+    "abi": "580.65.06",
+    "size": 16
+  },
+  "7536918": {
+    "type": "NV0073_CTRL_SYSTEM_GET_INTERNAL_DISPLAYS_PARAMS",
+    "fields": {
+      "subDeviceInstance": {
+        "ctype": "NvU32",
+        "offset": 0,
+        "bytes": 4
+      },
+      "internalDisplaysMask": {
+        "ctype": "NvU32",
+        "offset": 4,
+        "bytes": 4
+      },
+      "availableInternalDisplaysMask": {
+        "ctype": "NvU32",
+        "offset": 8,
+        "bytes": 4
+      }
+    },
+    "abi": "580.65.06",
+    "size": 12
+  },
+  "7536940": {
+    "type": "NV0073_CTRL_SYSTEM_VRR_DISPLAY_INFO_PARAMS",
+    "fields": {
+      "subDeviceInstance": {
+        "ctype": "NvU32",
+        "offset": 0,
+        "bytes": 4
+      },
+      "displayId": {
+        "ctype": "NvU32",
+        "offset": 4,
+        "bytes": 4
+      },
+      "bAddition": {
+        "ctype": "NvBool",
+        "offset": 8,
+        "bytes": 1
+      }
+    },
+    "abi": "580.65.06",
+    "size": 12
+  },
+  "7536957": {
+    "type": "NV0073_CTRL_CMD_SYSTEM_QUERY_DISPLAY_IDS_WITH_MUX_PARAMS",
+    "fields": {
+      "subDeviceInstance": {
+        "ctype": "NvU32",
+        "offset": 0,
+        "bytes": 4
+      },
+      "muxDisplayMask": {
+        "ctype": "NvU32",
+        "offset": 4,
+        "bytes": 4
+      }
+    },
+    "abi": "580.65.06",
+    "size": 8
+  },
+  "7536971": {
+    "type": "NV0073_CTRL_CMD_SYSTEM_CHECK_SIDEBAND_I2C_SUPPORT_PARAMS",
+    "fields": {
+      "subDeviceInstance": {
+        "ctype": "NvU32",
+        "offset": 0,
+        "bytes": 4
+      },
+      "bIsSidebandI2cSupported": {
+        "ctype": "NvBool",
+        "offset": 4,
+        "bytes": 1
+      }
+    },
+    "abi": "580.65.06",
+    "size": 8
+  },
+  "7536977": {
+    "type": "NV0073_CTRL_CMD_SYSTEM_MAP_SHARED_DATA_PARAMS",
+    "fields": {
+      "subDeviceInstance": {
+        "ctype": "NvU32",
+        "offset": 32,
+        "bytes": 4
+      },
+      "bMap": {
+        "ctype": "NvBool",
+        "offset": 36,
+        "bytes": 1
+      }
+    },
+    "abi": "580.65.06",
+    "size": 40
+  },
+  "7537409": {
+    "type": "NV0073_CTRL_EVENT_SET_NOTIFICATION_PARAMS",
+    "fields": {
+      "subDeviceInstance": {
+        "ctype": "NvU32",
+        "offset": 0,
+        "bytes": 4
+      },
+      "hEvent": {
+        "ctype": "NvHandle",
+        "offset": 4,
+        "bytes": 4
+      },
+      "event": {
+        "ctype": "NvU32",
+        "offset": 8,
+        "bytes": 4
+      },
+      "action": {
+        "ctype": "NvU32",
+        "offset": 12,
+        "bytes": 4
+      }
+    },
+    "abi": "580.65.06",
+    "size": 16
+  },
+  "7541609": {
+    "type": "NV0073_CTRL_CMD_DP_GET_CAPS_PARAMS",
+    "fields": {
+      "subDeviceInstance": {
+        "ctype": "NvU32",
+        "offset": 0,
+        "bytes": 4
+      },
+      "sorIndex": {
+        "ctype": "NvU32",
+        "offset": 4,
+        "bytes": 4
+      },
+      "maxLinkRate": {
+        "ctype": "NvU32",
+        "offset": 8,
+        "bytes": 4
+      },
+      "dpVersionsSupported": {
+        "ctype": "NvU32",
+        "offset": 12,
+        "bytes": 4
+      },
+      "UHBRSupportedByGpu": {
+        "ctype": "NvU32",
+        "offset": 16,
+        "bytes": 4
+      },
+      "bIsMultistreamSupported": {
+        "ctype": "NvBool",
+        "offset": 20,
+        "bytes": 1
+      },
+      "bIsSCEnabled": {
+        "ctype": "NvBool",
+        "offset": 21,
+        "bytes": 1
+      },
+      "bHasIncreasedWatermarkLimits": {
+        "ctype": "NvBool",
+        "offset": 22,
+        "bytes": 1
+      },
+      "bIsPC2Disabled": {
+        "ctype": "NvBool",
+        "offset": 23,
+        "bytes": 1
+      },
+      "isSingleHeadMSTSupported": {
+        "ctype": "NvBool",
+        "offset": 24,
+        "bytes": 1
+      },
+      "bFECSupported": {
+        "ctype": "NvBool",
+        "offset": 25,
+        "bytes": 1
+      },
+      "bIsTrainPhyRepeater": {
+        "ctype": "NvBool",
+        "offset": 26,
+        "bytes": 1
+      },
+      "bOverrideLinkBw": {
+        "ctype": "NvBool",
+        "offset": 27,
+        "bytes": 1
+      },
+      "bUseRgFlushSequence": {
+        "ctype": "NvBool",
+        "offset": 28,
+        "bytes": 1
+      },
+      "bSupportDPDownSpread": {
+        "ctype": "NvBool",
+        "offset": 29,
+        "bytes": 1
+      },
+      "bAvoidHBR3": {
+        "ctype": "NvBool",
+        "offset": 30,
+        "bytes": 1
+      },
+      "bIsDpTunnelingHwBugWarEnabled": {
+        "ctype": "NvBool",
+        "offset": 31,
+        "bytes": 1
+      }
+    },
+    "abi": "580.65.06",
+    "size": 60
+  },
+  "7541056": {
+    "type": "NV0073_CTRL_DFP_GET_INFO_PARAMS",
+    "fields": {
+      "subDeviceInstance": {
+        "ctype": "NvU32",
+        "offset": 0,
+        "bytes": 4
+      },
+      "displayId": {
+        "ctype": "NvU32",
+        "offset": 4,
+        "bytes": 4
+      },
+      "flags": {
+        "ctype": "NvU32",
+        "offset": 8,
+        "bytes": 4
+      },
+      "UHBRSupportedByDfp": {
+        "ctype": "NvU32",
+        "offset": 12,
+        "bytes": 4
+      }
+    },
+    "abi": "580.65.06",
+    "size": 16
+  },
+  "7541058": {
+    "type": "NV0073_CTRL_DFP_GET_DISPLAYPORT_DONGLE_INFO_PARAMS",
+    "fields": {
+      "subDeviceInstance": {
+        "ctype": "NvU32",
+        "offset": 0,
+        "bytes": 4
+      },
+      "displayId": {
+        "ctype": "NvU32",
+        "offset": 4,
+        "bytes": 4
+      },
+      "flags": {
+        "ctype": "NvU32",
+        "offset": 8,
+        "bytes": 4
+      },
+      "maxTmdsClkRateHz": {
+        "ctype": "NvU32",
+        "offset": 12,
+        "bytes": 4
+      }
+    },
+    "abi": "580.65.06",
+    "size": 16
+  },
+  "7541074": {
+    "type": "NV0073_CTRL_DFP_ASSIGN_SOR_PARAMS",
+    "fields": {
+      "subDeviceInstance": {
+        "ctype": "NvU32",
+        "offset": 0,
+        "bytes": 4
+      },
+      "displayId": {
+        "ctype": "NvU32",
+        "offset": 4,
+        "bytes": 4
+      },
+      "sorExcludeMask": {
+        "ctype": "NvU8",
+        "offset": 8,
+        "bytes": 1
+      },
+      "slaveDisplayId": {
+        "ctype": "NvU32",
+        "offset": 12,
+        "bytes": 4
+      },
+      "bIs2Head1Or": {
+        "ctype": "NvBool",
+        "offset": 20,
+        "bytes": 1
+      },
+      "sorAssignList": {
+        "ctype": "NvU32",
+        "offset": 24,
+        "bytes": 16
+      },
+      "reservedSorMask": {
+        "ctype": "NvU8",
+        "offset": 72,
+        "bytes": 1
+      },
+      "flags": {
+        "ctype": "NvU32",
+        "offset": 76,
+        "bytes": 4
+      }
+    },
+    "abi": "580.65.06",
+    "size": 80
+  },
+  "545262168": {
+    "type": "NV2080_CTRL_INTERNAL_DISPLAY_CHANNEL_PUSHBUFFER_PARAMS",
+    "fields": {
+      "addressSpace": {
+        "ctype": "NvU32",
+        "offset": 0,
+        "bytes": 4
+      },
+      "physicalAddr": {
+        "ctype": "NvU64",
+        "offset": 8,
+        "bytes": 8
+      },
+      "limit": {
+        "ctype": "NvU64",
+        "offset": 16,
+        "bytes": 8
+      },
+      "cacheSnoop": {
+        "ctype": "NvU32",
+        "offset": 24,
+        "bytes": 4
+      },
+      "hclass": {
+        "ctype": "NvU32",
+        "offset": 28,
+        "bytes": 4
+      },
+      "channelInstance": {
+        "ctype": "NvU32",
+        "offset": 32,
+        "bytes": 4
+      },
+      "valid": {
+        "ctype": "NvBool",
+        "offset": 36,
+        "bytes": 1
+      },
+      "pbTargetAperture": {
+        "ctype": "NvU32",
+        "offset": 40,
+        "bytes": 4
+      },
+      "channelPBSize": {
+        "ctype": "NvU32",
+        "offset": 44,
+        "bytes": 4
+      },
+      "subDeviceId": {
+        "ctype": "NvU32",
+        "offset": 48,
+        "bytes": 4
+      }
+    },
+    "abi": "580.65.06",
+    "size": 56
+  },
+  "_provenance": {
+    "abi": "580.65.06",
+    "control_params_at": 40,
+    "source": "public NVIDIA580.65.06 headers; compiler sizeof/offsetof; partial fields only; no nested unknown fields",
+    "omissions": "unknown/serialized/truncated controls and unknown fields omitted;64bit/pointer/address/handle fields redacted"
+  }
+}
