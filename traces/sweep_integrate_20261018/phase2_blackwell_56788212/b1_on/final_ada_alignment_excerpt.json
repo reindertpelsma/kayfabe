@@ -1,0 +1,81 @@
+{
+  "classification": "MEASURED API metadata; API alignment INFERRED, final timing limited by powerdown",
+  "Ada_calls": 8461,
+  "GB202_final_calls": 386,
+  "aligned_calls": 306,
+  "Ada_only": 8155,
+  "GB202_only": 80,
+  "full_alignment_bytes": 946452,
+  "full_alignment_sha256": "0104c8eb21f33284f4ceab8ae86bae71ef06d7d8a4e605293f3706e43c655706",
+  "last_allocation": {
+    "ordinal": "277",
+    "function": "103",
+    "kind": "RmAlloc",
+    "rpc_sequence": "0",
+    "control_or_class": "0xca7a",
+    "trace_result": "0x0",
+    "effective_result": "unknown"
+  },
+  "next_calls": [
+    {
+      "ordinal": "278",
+      "function": "76",
+      "kind": "RmControl",
+      "rpc_sequence": "0",
+      "control_or_class": "0x50700117",
+      "trace_result": "0x0",
+      "effective_result": "unknown"
+    },
+    {
+      "ordinal": "279",
+      "function": "10",
+      "kind": "Free",
+      "rpc_sequence": "0",
+      "control_or_class": "-",
+      "trace_result": "0x0",
+      "effective_result": "unknown"
+    },
+    {
+      "ordinal": "280",
+      "function": "76",
+      "kind": "RmControl",
+      "rpc_sequence": "0",
+      "control_or_class": "0x50700117",
+      "trace_result": "0x0",
+      "effective_result": "unknown"
+    },
+    {
+      "ordinal": "281",
+      "function": "10",
+      "kind": "Free",
+      "rpc_sequence": "0",
+      "control_or_class": "-",
+      "trace_result": "0x0",
+      "effective_result": "unknown"
+    },
+    {
+      "ordinal": "282",
+      "function": "76",
+      "kind": "RmControl",
+      "rpc_sequence": "0",
+      "control_or_class": "0x50700117",
+      "trace_result": "0x0",
+      "effective_result": "unknown"
+    }
+  ],
+  "explicit_unload": {
+    "ordinal": "385",
+    "function": "47",
+    "kind": "UnloadingGuestDriver",
+    "rpc_sequence": "0",
+    "control_or_class": "-",
+    "trace_result": "0x0",
+    "effective_result": "unknown"
+  },
+  "cleanup_limit": "The final trace was acquired after requested powerdown/QMPquit; unload is not proven StartDevice abort, Code43 and TDR unverified.",
+  "not_derived_controls": {
+    "0xcbcb": "Historical exactGB206native120byte/43distinct replies; no GB202same-die nativeWindows trace; no guessedack",
+    "0x20800ab2": "HistoricalGB206native580=17296 vs595host17488, cannot borrow acrossABI/die"
+  },
+  "no_more_B1_GPU_init_attempts_without_OFF_guard_decision": true
+}
