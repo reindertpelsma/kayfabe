@@ -238,6 +238,17 @@ pub unsafe extern "C" fn kf3_realize(
                 write_err(err, err_len, "could not start the completion-probe thread");
                 return -1;
             }
+            // ★ MEASUREMENT ONLY (`diag-trap-exp` AND `KF3_DIAG_INTR_SPIN=1`): the page spinner.
+            #[cfg(feature = "diag-trap-exp")]
+            if d.exp_cfg.spin
+                && std::thread::Builder::new()
+                    .name("kf3-exp-spin".into())
+                    .spawn(move || d.exp_spin_loop())
+                    .is_err()
+            {
+                write_err(err, err_len, "could not start the interrupt-page spinner");
+                return -1;
+            }
             // ★ v3-display: the display worker (`display=on` only).
             if d.display.is_some()
                 && std::thread::Builder::new()
@@ -464,6 +475,15 @@ pub unsafe extern "C" fn kf3_bar_ram(
     let (Some(d), false) = (dev(h), ptr.is_null()) else {
         return -1;
     };
+    // ★ MEASUREMENT ONLY (`diag-trap-exp`): the interrupt page's RAM, when the spinner is on.
+    #[cfg(feature = "diag-trap-exp")]
+    if bar == 0
+        && let Some(p) = d.exp_intr_page(base, len)
+    {
+        // SAFETY: `ptr` is writable (caller contract); the page is leaked, valid for the process.
+        unsafe { *ptr = p.cast::<c_void>() };
+        return 0;
+    }
     let Some(span) = d.window_address(bar, base, len) else {
         return -1;
     };

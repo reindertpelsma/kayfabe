@@ -294,6 +294,12 @@ pub struct Device {
     irq_lines: Vec<Notifier>,
     /// Interrupt counters for the boot log.
     pub irq_counts: IrqCounts,
+    /// ★ MEASUREMENT ONLY (`diag-trap-exp`): the parsed experiment flags.
+    #[cfg(feature = "diag-trap-exp")]
+    pub exp_cfg: crate::trapexp::Cfg,
+    /// ★ MEASUREMENT ONLY (`diag-trap-exp`): the experiment counters.
+    #[cfg(feature = "diag-trap-exp")]
+    pub exp: crate::trapexp::Counters,
     pub(crate) stop: AtomicBool,
     /// ★ Display step 3c: display ids whose monitor changed and whose hotplug the register drainer
     /// still owes the guest (set by the display worker, taken by the drainer).
@@ -1220,6 +1226,10 @@ impl Device {
                 .map(|_| Notifier::create().map_err(|e| format!("irq eventfd: {e:?}")))
                 .collect::<Result<Vec<_>, _>>()?,
             irq_counts: IrqCounts::default(),
+            #[cfg(feature = "diag-trap-exp")]
+            exp_cfg: crate::trapexp::Cfg::from_env(),
+            #[cfg(feature = "diag-trap-exp")]
+            exp: crate::trapexp::Counters::default(),
             drainer_efd,
             stop: AtomicBool::new(false),
             hotplug_pending: AtomicU32::new(0),
@@ -1255,8 +1265,28 @@ impl Device {
 
     /// The BAR0 memory map for the C device to build (family-scoped: shadow / plain RAM /
     /// passthrough / hole).
+    #[cfg(not(feature = "diag-trap-exp"))]
     #[must_use]
     pub fn memory_map(&self, bar1_bytes: u64, bar2_bytes: u64) -> kf_trap::memmap::MemoryMap {
+        self.memory_map_base(bar1_bytes, bar2_bytes)
+    }
+
+    /// The BAR0 memory map for the C device to build. ★ MEASUREMENT ONLY (`diag-trap-exp`): with
+    /// the spinner on, the interrupt page is plain RAM (no exit on a guest write).
+    #[cfg(feature = "diag-trap-exp")]
+    #[must_use]
+    pub fn memory_map(&self, bar1_bytes: u64, bar2_bytes: u64) -> kf_trap::memmap::MemoryMap {
+        let map = self.memory_map_base(bar1_bytes, bar2_bytes);
+        if self.exp_cfg.spin {
+            map.with_plain_page(kf_trap::trapexp::INTR_PAGE)
+                .expect("the interrupt page is an ordinary shadow page on every family")
+        } else {
+            map
+        }
+    }
+
+    #[must_use]
+    fn memory_map_base(&self, bar1_bytes: u64, bar2_bytes: u64) -> kf_trap::memmap::MemoryMap {
         let map = kf_trap::memmap::memory_map(
             self.family,
             self.plane.doorbell,
@@ -1515,6 +1545,8 @@ impl Device {
             return;
         };
         self.reset.touched();
+        #[cfg(feature = "diag-trap-exp")]
+        self.exp_delay(off);
         // ★ DIAGNOSTIC (`KF3_BAR0_TRACE`, default off): one atomic load when off. The next RPC's
         // queue-head write closes an open window.
         self.chans.bar0trace.note(
@@ -1836,6 +1868,22 @@ impl Device {
 
     /// ★ Latch `vector` (a completion this device announces) and deliver — any thread.
     pub fn latch_and_deliver(&self, vector: u32) {
+        // ★ MEASUREMENT ONLY: with the interrupt page spun, the model never sees the guest's
+        // enables, so every completion edge raises the irqfd unconditionally.
+        #[cfg(feature = "diag-trap-exp")]
+        if self.exp_cfg.spin {
+            let raise = self.intr.latch_forward(vector);
+            let c = if raise == kf_trap::cpuintr::Raise::Message {
+                &self.exp.worker_raises
+            } else {
+                &self.exp.out_of_range
+            };
+            c.fetch_add(1, Ordering::Relaxed);
+            if raise == kf_trap::cpuintr::Raise::Message {
+                let _ = self.irq_lines[0].signal();
+            }
+            return;
+        }
         let raise = self.intr.latch(vector);
         self.intr
             .shadow_all(|o, v| self.shadow_store(o, u64::from(v), 4));
@@ -1843,6 +1891,110 @@ impl Device {
             self.irq_counts.held.fetch_add(1, Ordering::Relaxed);
         }
         self.deliver(raise);
+    }
+
+    /// ★ MEASUREMENT ONLY (`diag-trap-exp`): the injected delay, if any, for a trapped write.
+    #[cfg(feature = "diag-trap-exp")]
+    fn exp_delay(&self, off: u64) {
+        let d = self.exp_cfg.delays;
+        if d.intr_us == 0 && d.db_us == 0 {
+            return;
+        }
+        let db = kf_trap::memmap::VF_USERMODE_PAGE + self.plane.doorbell.offset();
+        let us = kf_trap::trapexp::delay_for(&d, db, off);
+        if us == 0 {
+            return;
+        }
+        let c = if off == db {
+            &self.exp.db_delayed
+        } else {
+            &self.exp.intr_delayed
+        };
+        c.fetch_add(1, Ordering::Relaxed);
+        crate::trapexp::busy_wait_us(us);
+    }
+
+    /// ★ MEASUREMENT ONLY (`diag-trap-exp`): the host memory for the interrupt page, registered as
+    /// a BAR0 shadow piece (so the device's own shadow stores land in it) and handed to QEMU as
+    /// plain RAM. `None` unless the spinner is on and `[base, base+len)` is exactly that page.
+    #[cfg(feature = "diag-trap-exp")]
+    pub fn exp_intr_page(&self, base: u64, len: u64) -> Option<*mut u8> {
+        if !self.exp_cfg.spin || base != kf_trap::trapexp::INTR_PAGE || len != 4096 {
+            return None;
+        }
+        let mem = RawRegion::leak_zeroed_page()?;
+        let p = mem.base_ptr();
+        self.attach_shadow(base, mem);
+        Some(p)
+    }
+
+    /// ★ MEASUREMENT ONLY (`diag-trap-exp`): the interrupt-page spinner. ONE thread, optionally
+    /// pinned, spinning on the page the guest writes without an exit. Its only output is the irqfd
+    /// (`irq_lines[0]`). ⊘ Deliberately breaks "no polling": an experiment, not a design.
+    #[cfg(feature = "diag-trap-exp")]
+    pub fn exp_spin_loop(&self) {
+        if !self.exp_cfg.spin {
+            return;
+        }
+        if let Some(cpu) = self.exp_cfg.spin_cpu {
+            let ok = kf_linux_raw::affinity::pin_current_thread(&[cpu]);
+            eprintln!("kf3: trapexp spinner pinned to cpu {cpu}: {ok}");
+        } else {
+            eprintln!("kf3: trapexp spinner NOT pinned (KF3_DIAG_INTR_SPIN_CPU unset)");
+        }
+        let region = loop {
+            if self.stop.load(Ordering::Acquire) {
+                return;
+            }
+            if let Some((p, 0)) = self.piece_for(kf_trap::trapexp::INTR_PAGE)
+                && p.base == kf_trap::trapexp::INTR_PAGE
+                && p.mem.len() == 4096
+            {
+                break p.mem;
+            }
+            std::thread::sleep(std::time::Duration::from_millis(10));
+        };
+        let mut st = kf_trap::trapexp::SpinState::new(self.family);
+        eprintln!("kf3: trapexp spinner running on the interrupt page ({:?})", self.family);
+        let mut last = std::time::Instant::now();
+        let mut n: u64 = 0;
+        let o = Ordering::Relaxed;
+        loop {
+            let p = crate::trapexp::poll_once(
+                &mut st,
+                &mut |off| region.load_u32_volatile(off).unwrap_or(0),
+                &mut |off, old, new| region.cas_u32(off, old, new),
+            );
+            n += 1;
+            if p.stored != 0 {
+                self.exp.stored.fetch_add(u64::from(p.stored), o);
+            }
+            if p.lost != 0 {
+                self.exp.lost.fetch_add(u64::from(p.lost), o);
+            }
+            if p.raise {
+                let _ = self.irq_lines[0].signal();
+                self.exp.trigger_raises.fetch_add(1, o);
+            }
+            if n & 0xFFFF == 0 {
+                self.exp.polls.fetch_add(0x1_0000, o);
+                if self.stop.load(Ordering::Acquire) {
+                    break;
+                }
+                if last.elapsed() >= std::time::Duration::from_secs(5) {
+                    last = std::time::Instant::now();
+                    eprintln!(
+                        "kf3: trapexp{}",
+                        self.exp.status(&self.exp_cfg, Some(&st)).trim_start()
+                    );
+                }
+            }
+            core::hint::spin_loop();
+        }
+        eprintln!(
+            "kf3: trapexp at stop:{}",
+            self.exp.status(&self.exp_cfg, Some(&st))
+        );
     }
 
     /// The eventfd of MSI-X vector `v`, for the C device to register as a KVM irqfd.
@@ -3025,6 +3177,8 @@ impl Device {
         // ★ EXPERIMENT x11-dispsw: `""` with the switch off (the line is the line it was).
         let irq = irq + &self.chans.dispsw_status(self.x11_dispsw);
         let db = format!(" {}", self.dbfast.status());
+        #[cfg(feature = "diag-trap-exp")]
+        let db = db + &self.exp.status(&self.exp_cfg, None);
         // ★ EXPERIMENT `KF3_WIN_KERNEL_PID4`: `""` with the switch off (the line is the line it was).
         // ★ EXPERIMENT `KF3_GSS_NATIVE`: `""` with the switch off (the line is the line it was).
         let db = match &self.gss_native {
