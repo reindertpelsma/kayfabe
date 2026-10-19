@@ -1,0 +1,80 @@
+M2 VULKAN FINISH 2026-10-19T11:19:33.0580458+02:00
+VULKAN_RENDER_BEGIN 2026-10-19T11:16:22.3420565+02:00
+COMMAND GravityMark.exe -raster 1 -temporal 1 -fps 1 -info 1 -benchmark 1 -close 1 -count 1 -asteroids 20000 -width 1280 -height 720 -fullscreen 0 -vk -image C:\kf-m2\vulkan.png -times C:\kf-m2\vulkan.times.txt
+VULKAN_RENDER_END rc= 2026-10-19T11:19:17.1474937+02:00
+M:   4.915 s: GravityMark 1.89 Vulkan CS is Ready in 4.9 s
+M:   4.915 s: Starting 1280x720 Vulkan CS Benchmark
+M:   4.916 s: Close when finished
+M:   4.916 s: Image: C:/kf-m2/vulkan.png
+M:   4.916 s: Times: C:/kf-m2/vulkan.times.txt
+M:   4.916 s: Count: 1
+M:   4.919 s: Resizing 1280x720 frame
+M:  2:51.925: Benchmark Finished
+M:  2:52.008: Times: C:/kf-m2/vulkan.times.txt
+M:  2:52.009: NVIDIA GeForce RTX 4070
+M:  2:52.010: API: Vulkan CS
+M:  2:52.010: Platform: Windows
+M:  2:52.010: Resolution: 1280x720
+M:  2:52.011: Antialiasing: Temporal
+M:  2:52.011: Asteroids: 20,000
+M:  2:52.011: Score: 82547
+M:  2:52.012: Time: 167.0 s
+M:  2:52.012: FPS: 494.3
+M:  2:52.469: Image: C:/kf-m2/vulkan.png
+M:  2:52.479: Clearing Scene
+M:  2:52.636: GravityMark 1.89 Done
+V:  2:54.078: Windows::main(): finished
+
+Name              Length
+----              ------
+vulkan.png        876096
+vulkan.times.txt 2889180
+
+
+      0:     4.887187  0.000000  0
+      1:     4.891601  0.004414  0
+      2:     5.176194  0.284593  0
+      3:     5.186900  0.010706  0
+      4:     5.189306  0.002406  0
+      5:     5.321088  0.131782  0
+      6:     5.332785  0.011697  0
+      7:     5.333921  0.001136  0
+  82543:   171.888733  0.002406  5
+  82544:   171.890950  0.002217  5
+  82545:   171.893115  0.002165  5
+  82546:   171.895813  0.002698  5
+  82547:   171.897448  0.001635  5
+TDR_EVENTS=0
+Mon Oct 19 11:19:33 2026       
++-----------------------------------------------------------------------------------------+
+| NVIDIA-SMI 580.88                 Driver Version: 580.88         CUDA Version: 13.0     |
++-----------------------------------------+------------------------+----------------------+
+| GPU  Name                  Driver-Model | Bus-Id          Disp.A | Volatile Uncorr. ECC |
+| Fan  Temp   Perf          Pwr:Usage/Cap |           Memory-Usage | GPU-Util  Compute M. |
+|                                         |                        |               MIG M. |
+|=========================================+========================+======================|
+|   0  NVIDIA GeForce RTX 4070      WDDM  |   00000000:00:06.0  On |                  N/A |
+| N/A    0C  N/A             N/A  /  N/A  |     711MiB /   8192MiB |     N/A      Default |
+|                                         |                        |                  N/A |
++-----------------------------------------+------------------------+----------------------+
+
++-----------------------------------------------------------------------------------------+
+| Processes:                                                                              |
+|  GPU   GI   CI              PID   Type   Process name                        GPU Memory |
+|        ID   ID                                                               Usage      |
+|=========================================================================================|
+|    0   N/A  N/A            1288    C+G   C:\Windows\System32\dwm.exe           N/A      |
+|    0   N/A  N/A            1924    C+G   ...em32\ApplicationFrameHost.exe      N/A      |
+|    0   N/A  N/A            7036    C+G   C:\Windows\explorer.exe               N/A      |
+|    0   N/A  N/A            7104    C+G   ...2txyewy\CrossDeviceResume.exe      N/A      |
+|    0   N/A  N/A            7160    C+G   ...indows\System32\ShellHost.exe      N/A      |
+|    0   N/A  N/A            8208    C+G   ..._cw5n1h2txyewy\SearchHost.exe      N/A      |
+|    0   N/A  N/A            8308    C+G   ...y\StartMenuExperienceHost.exe      N/A      |
+|    0   N/A  N/A           10360    C+G   ....0.4283.62\msedgewebview2.exe      N/A      |
+|    0   N/A  N/A           10976    C+G   ...t\Edge\Application\msedge.exe      N/A      |
+|    0   N/A  N/A           11080    C+G   ...IA App\CEF\NVIDIA Overlay.exe      N/A      |
+|    0   N/A  N/A           11512    C+G   ...IA App\CEF\NVIDIA Overlay.exe      N/A      |
+|    0   N/A  N/A           13324    C+G   ...\cef.win64\steamwebhelper.exe      N/A      |
+|    0   N/A  N/A           14092    C+G   ...ntrolPanel\SystemSettings.exe      N/A      |
++-----------------------------------------------------------------------------------------+
+M2 VULKAN FINISH END

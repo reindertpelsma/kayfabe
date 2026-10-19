@@ -1,0 +1,119 @@
+MEASURED: vulkaninfo device and complete queue-family properties. Full output retained on lane host.
+GPU0:
+VkPhysicalDeviceProperties:
+---------------------------
+	apiVersion        = 1.4.312 (4211000)
+	driverVersion     = 580.88.0.0 (2434138112)
+	vendorID          = 0x10de
+	deviceID          = 0x2786
+	deviceType        = PHYSICAL_DEVICE_TYPE_DISCRETE_GPU
+	deviceName        = NVIDIA GeForce RTX 4070
+
+VkQueueFamilyProperties:
+========================
+	queueProperties[0]:
+	-------------------
+		minImageTransferGranularity = (1,1,1)
+		queueCount                  = 16
+		queueFlags                  = QUEUE_GRAPHICS_BIT | QUEUE_COMPUTE_BIT | QUEUE_TRANSFER_BIT | QUEUE_SPARSE_BINDING_BIT
+		timestampValidBits          = 64
+		present support             = true
+		VkQueueFamilyQueryResultStatusPropertiesKHR:
+		--------------------------------------------
+			queryResultStatusSupport = false
+
+		VkQueueFamilyVideoPropertiesKHR:
+		--------------------------------
+			videoCodecOperations:
+				None
+
+
+	queueProperties[1]:
+	-------------------
+		minImageTransferGranularity = (1,1,1)
+		queueCount                  = 2
+		queueFlags                  = QUEUE_TRANSFER_BIT | QUEUE_SPARSE_BINDING_BIT
+		timestampValidBits          = 64
+		present support             = false
+		VkQueueFamilyQueryResultStatusPropertiesKHR:
+		--------------------------------------------
+			queryResultStatusSupport = false
+
+		VkQueueFamilyVideoPropertiesKHR:
+		--------------------------------
+			videoCodecOperations:
+				None
+
+
+	queueProperties[2]:
+	-------------------
+		minImageTransferGranularity = (1,1,1)
+		queueCount                  = 8
+		queueFlags                  = QUEUE_COMPUTE_BIT | QUEUE_TRANSFER_BIT | QUEUE_SPARSE_BINDING_BIT
+		timestampValidBits          = 64
+		present support             = true
+		VkQueueFamilyQueryResultStatusPropertiesKHR:
+		--------------------------------------------
+			queryResultStatusSupport = false
+
+		VkQueueFamilyVideoPropertiesKHR:
+		--------------------------------
+			videoCodecOperations:
+				None
+
+
+	queueProperties[3]:
+	-------------------
+		minImageTransferGranularity = (1,1,1)
+		queueCount                  = 1
+		queueFlags                  = QUEUE_TRANSFER_BIT | QUEUE_SPARSE_BINDING_BIT | QUEUE_VIDEO_DECODE_BIT_KHR
+		timestampValidBits          = 32
+		present support             = false
+		VkQueueFamilyQueryResultStatusPropertiesKHR:
+		--------------------------------------------
+			queryResultStatusSupport = true
+
+		VkQueueFamilyVideoPropertiesKHR:
+		--------------------------------
+			videoCodecOperations: count = 3
+				VIDEO_CODEC_OPERATION_DECODE_H264_BIT_KHR
+				VIDEO_CODEC_OPERATION_DECODE_H265_BIT_KHR
+				VIDEO_CODEC_OPERATION_DECODE_AV1_BIT_KHR
+
+
+	queueProperties[4]:
+	-------------------
+		minImageTransferGranularity = (1,1,1)
+		queueCount                  = 1
+		queueFlags                  = QUEUE_TRANSFER_BIT | QUEUE_SPARSE_BINDING_BIT | QUEUE_VIDEO_ENCODE_BIT_KHR
+		timestampValidBits          = 32
+		present support             = false
+		VkQueueFamilyQueryResultStatusPropertiesKHR:
+		--------------------------------------------
+			queryResultStatusSupport = true
+
+		VkQueueFamilyVideoPropertiesKHR:
+		--------------------------------
+			videoCodecOperations: count = 3
+				VIDEO_CODEC_OPERATION_ENCODE_H264_BIT_KHR
+				VIDEO_CODEC_OPERATION_ENCODE_H265_BIT_KHR
+				VIDEO_CODEC_OPERATION_ENCODE_AV1_BIT_KHR
+
+
+	queueProperties[5]:
+	-------------------
+		minImageTransferGranularity = (1,1,1)
+		queueCount                  = 1
+		queueFlags                  = QUEUE_TRANSFER_BIT | QUEUE_SPARSE_BINDING_BIT | QUEUE_OPTICAL_FLOW_BIT_NV
+		timestampValidBits          = 64
+		present support             = false
+		VkQueueFamilyQueryResultStatusPropertiesKHR:
+		--------------------------------------------
+			queryResultStatusSupport = false
+
+		VkQueueFamilyVideoPropertiesKHR:
+		--------------------------------
+			videoCodecOperations:
+				None
+
+
