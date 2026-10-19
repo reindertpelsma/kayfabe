@@ -7,13 +7,22 @@ QEMU24906bf33/exactP19process asserted. Coldstart22:22:07; actualdisabled
 (255), before CIM/status returned; no retry/replay. Postdisconnect SSH255 and
 QGAping1, QMPquery-status running, guest windowblack, QEMUalive656%CPU.
 
-Bounded trace snapshot99calls, no quota loss. No CA70/CA7A/NV0073allocation,
-no explicitfn47unload. LastAPIordinal98=90f10106/NV_OKpolicy; actualposted
-effective result remains unknown. This is earlier than historicalGB206Code43;
-it does not reproduce that abort point. Do not call pnputil success a PASS,
-or infer a TDR/Code43 from the black window. Fullsuite/hold UNRUN.
-OptionalCE95e23df77 unmerged/UNRUN because no actualTDR was established.
-Powerdown requested22:29:51 with120s grace before documentedQMPquit fallback.
-Only own shutdowncontroller descendants stopped; no GPUVM SIGKILL. Final
-trace snapshot/cleanup and matchedOFF result will be recorded separately.
+Correction folded here:99calls was a transient snapshot. Final export after
+cleanup has386calls, CA70@233, CA7A@271/273/275/277, CBCB@150/refused,
+2801@151/refused,2806@162/refused, explicitfn47unload385. Later display
+traffic appeared between the unresponsive snapshot and final shutdown; its
+exact time is unknown. Powerdown was requested22:29:51, QMPquit22:31:57
+after126s grace; QEMU exited22:31:58 rc0/host-qmp-quit, no new hostXid.
+Therefore the final unload is NOT proven to be a StartDevice-abort ordinal: it
+may be associated with requested shutdown. Code43/TDR remain UNVERIFIED.
+The assertion that final metadata equalled the99call snapshot correctly failed;
+no equality claim accepted. Both snapshots/projections are retained.
+
+Early99call Ada alignment (94matched/5GB202-only) remains explicitly an
+early snapshot; it cannot locate the final failure. Full final alignment and
+public reply comparison are separate. Fullsuite/hold UNRUN. OptionalCE95e23df77
+unmerged/UNRUN because no actualTDR was established.
+OFF sibling refused22:32:06 before VM initialization: helper includes signed
+gop-efi but requests gop=off. Exact guard STOP reported; coordinator asked
+whether to omit the ROM for authorized OFF profile. No guard bypass.
 Only APImetadata/publicscalarprojections exported; opaqueWindowsbodylog staysrental.
