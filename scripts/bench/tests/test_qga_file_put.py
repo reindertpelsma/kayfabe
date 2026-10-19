@@ -42,6 +42,11 @@ class FilePut(unittest.TestCase):
                                 observed['writes']+=1;observed['data'].extend(chunk)
                                 if mode=='lost':return
                                 reply={'count':len(chunk)-(mode=='short')}
+                            if name=='guest-file-close':
+                                observed['closes']=observed.get('closes',0)+1
+                                if mode=='close-error' and observed['closes']==1:
+                                    connection.sendall(b'{"error":{"desc":"uncertain close response"}}\n')
+                                    continue
                             connection.sendall(json.dumps({'return':reply}).encode()+b'\n')
                 except (BrokenPipeError,ConnectionResetError):
                     pass
@@ -83,6 +88,11 @@ class FilePut(unittest.TestCase):
                 str(source),r'C:\probe.exe'],capture_output=True,timeout=3)
             self.assertNotEqual(result.returncode,0)
             self.assertIn(b'REFUSED source size',result.stdout+result.stderr)
+
+    def test_uncertain_close_is_not_replayed_on_the_same_handle(self):
+        result,observed,_=self.transfer('close-error')
+        self.assertNotEqual(result.returncode,0)
+        self.assertEqual(observed['closes'],1)
 
 
 if __name__=='__main__':
