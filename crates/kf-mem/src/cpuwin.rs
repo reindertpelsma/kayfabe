@@ -504,6 +504,22 @@ impl<V: ViewOps> CpuWindow<V> {
     /// counted in [`WindowReset::kept`]; the reset goes on with the rest. VA-manager thread only,
     /// like every other verb of the window.
     pub fn reset_to_boot(&self) -> WindowReset {
+        let mut out = self.sink_all();
+        out.seed = match self.reseed() {
+            Ok(r) => Some(r),
+            Err(e) => {
+                out.first_refusal.get_or_insert(e);
+                None
+            }
+        };
+        out
+    }
+
+    /// ★ Review (2026-10-18): the first half of [`CpuWindow::reset_to_boot`] on its own — EVERY
+    /// placement of the old life gone (scratch first, then the view's aperture released) and NO seed
+    /// placed. The reset's memory stage sinks the views with this BEFORE its scrub, so no CPU view of
+    /// the old life's bytes exists while the store is being zeroed.
+    pub fn sink_all(&self) -> WindowReset {
         let vas: Vec<u64> = self.placed.borrow().keys().copied().collect();
         let mut out = WindowReset::default();
         for va in vas {
@@ -515,13 +531,6 @@ impl<V: ViewOps> CpuWindow<V> {
                 }
             }
         }
-        out.seed = match self.reseed() {
-            Ok(r) => Some(r),
-            Err(e) => {
-                out.first_refusal.get_or_insert(e);
-                None
-            }
-        };
         out
     }
 
@@ -1107,6 +1116,61 @@ mod tests {
         }
     }
 
+    /// ★ Review (2026-10-18): `sink_all` removes every placement (scratch first, then release) and
+    /// places NO seed — so while the store is scrubbed no CPU view of it exists; the reset's own
+    /// `reset_to_boot` afterwards finds nothing to unmap and puts the seed back.
+    #[test]
+    fn sink_all_leaves_no_view_of_the_store_and_no_seed() {
+        let r = Rec::default();
+        let w = CpuWindow::new(&r, 256 << 20);
+        w.seed(0, 0, 0x80_0000).unwrap();
+        w.map(&d(0, 0x10_0000, 0x1000, false), true).unwrap();
+        w.invalidate().unwrap(); // the first batch retires the seed
+        w.map(&d(0x2000, 0x40_0000, 0x4000, false), true).unwrap();
+        assert_eq!(w.placements(), 2);
+        let rep = w.sink_all();
+        assert_eq!((rep.unmapped, rep.kept, rep.seed), (2, 0, None), "{rep:?}");
+        assert_eq!(w.placements(), 0, "no placement of the old life is left");
+        assert_eq!(
+            w.seeded(),
+            None,
+            "no seed while the store is being scrubbed"
+        );
+        let ops = r.ops.lock().unwrap().clone();
+        for (i, o) in ops.iter().enumerate() {
+            if let Op::Release(v) = o
+                && *v != 0
+            {
+                assert!(
+                    ops[..i].iter().any(|p| matches!(p, Op::Sink(..))),
+                    "release of {v:#x} before any sink: {ops:?}"
+                );
+            }
+        }
+        // the reset's second half finds nothing to unmap and shows the boot view again
+        let rep2 = w.reset_to_boot();
+        assert_eq!(
+            (rep2.unmapped, rep2.seed),
+            (0, Some(Reseed::Placed { life: 2 })),
+            "{rep2:?}"
+        );
+    }
+
+    /// `sink_all` keeps a placement whose scratch re-point the host refuses (the guest could still
+    /// reach it), as `reset_to_boot` does, and says so.
+    #[test]
+    fn sink_all_keeps_a_view_whose_scratch_is_refused() {
+        let r = Rec::default();
+        let w = CpuWindow::new(&r, 256 << 20);
+        w.map(&d(0x2000, 0x40_0000, 0x4000, false), true).unwrap();
+        r.refuse_sink
+            .store(true, std::sync::atomic::Ordering::SeqCst);
+        let rep = w.sink_all();
+        assert_eq!((rep.unmapped, rep.kept), (0, 1), "{rep:?}");
+        assert!(rep.first_refusal.is_some());
+        assert_eq!(w.placements(), 1);
+    }
+
     /// ★ Device reset: a BAR1 window that lived a whole guest life (seed retired, guest views of
     /// the store and of guest RAM placed) comes back as realize left it — no placement, the seed
     /// shown again — every armed view released exactly once, scratch placed before each release.
@@ -1118,7 +1182,8 @@ mod tests {
         w.map(&d(0, 0x10_0000, 0x1000, false), true).unwrap();
         w.invalidate().unwrap(); // the first batch retires the seed
         w.map(&d(0x2000, 0x40_0000, 0x4000, false), true).unwrap();
-        w.map(&d(0x10_0000, 0x5000_0000, 0x1000, true), true).unwrap();
+        w.map(&d(0x10_0000, 0x5000_0000, 0x1000, true), true)
+            .unwrap();
         assert!(w.seeded().is_none());
         assert_eq!(w.placements(), 3);
         let rep = w.reset_to_boot();
@@ -1160,7 +1225,10 @@ mod tests {
         let b2 = CpuWindow::new(&r, 32 << 20);
         b2.map(&d(0, 0x7000, 0x1000, false), true).unwrap();
         let rep = b2.reset_to_boot();
-        assert_eq!((rep.unmapped, rep.seed), (1, Some(Reseed::NoBootFramebuffer)));
+        assert_eq!(
+            (rep.unmapped, rep.seed),
+            (1, Some(Reseed::NoBootFramebuffer))
+        );
     }
 
     /// ★ The accounting property over N lives: every life places views of the store and of guest
@@ -1183,10 +1251,14 @@ mod tests {
             w.map(&d(0, 0x10_0000, 0x1000, false), true).unwrap();
             w.invalidate().unwrap();
             for i in 0..(life % 7 + 1) {
-                w.map(&d(base + i * 0x1000, 0x40_0000 + i * 0x1000, 0x1000, false), true)
-                    .unwrap();
+                w.map(
+                    &d(base + i * 0x1000, 0x40_0000 + i * 0x1000, 0x1000, false),
+                    true,
+                )
+                .unwrap();
             }
-            w.map(&d(base + 0x8000, 0x5000_0000, 0x1000, true), true).unwrap();
+            w.map(&d(base + 0x8000, 0x5000_0000, 0x1000, true), true)
+                .unwrap();
             let rep = w.reset_to_boot();
             assert_eq!(rep.kept, 0, "life {life}");
             assert_eq!(w.placements(), 0, "life {life}");
@@ -1206,7 +1278,10 @@ mod tests {
         let rep = w.reset_to_boot();
         assert_eq!((rep.unmapped, rep.kept), (0, 1));
         assert!(rep.first_refusal.is_some());
-        assert!(r.releases().is_empty(), "nothing released while the guest can still see it");
+        assert!(
+            r.releases().is_empty(),
+            "nothing released while the guest can still see it"
+        );
         r.refuse_sink.store(false, Ordering::Relaxed);
         let rep = w.reset_to_boot();
         assert_eq!((rep.unmapped, rep.kept), (1, 0));

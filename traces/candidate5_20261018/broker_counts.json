@@ -1,0 +1,66 @@
+{
+  "candidate4_check": {
+    "pass_lines": 365,
+    "self_tests": 82,
+    "socket_checks": 283,
+    "clock_tests": 0,
+    "units": [
+      "test_cursor: 66138 checks, 0 failed",
+      "test-geom: 65431 checks passed",
+      "test_xor: 80752 checks, 0 failed",
+      "test_tick: 566195 checks, 0 failed"
+    ],
+    "mutants": [
+      "mutation check: all 29 mutants killed by >= 2 distinct checks",
+      "tick mutation check: all 28 mutants killed by >= 2 distinct checks"
+    ]
+  },
+  "candidate4_sanitize": {
+    "pass_lines": 365,
+    "self_tests": 82,
+    "socket_checks": 283,
+    "clock_tests": 0,
+    "units": [
+      "test_cursor: 66138 checks, 0 failed",
+      "test-geom: 65431 checks passed",
+      "test_xor: 80752 checks, 0 failed",
+      "test_tick: 566195 checks, 0 failed"
+    ],
+    "mutants": [
+      "mutation check: all 29 mutants killed by >= 2 distinct checks",
+      "tick mutation check: all 28 mutants killed by >= 2 distinct checks"
+    ]
+  },
+  "candidate5_check": {
+    "pass_lines": 365,
+    "self_tests": 82,
+    "socket_checks": 283,
+    "clock_tests": 5,
+    "units": [
+      "test_cursor: 66138 checks, 0 failed",
+      "test-geom: 65431 checks passed",
+      "test_xor: 80752 checks, 0 failed",
+      "test_tick: 566237 checks, 0 failed"
+    ],
+    "mutants": [
+      "mutation check: all 29 mutants killed by >= 2 distinct checks",
+      "tick mutation check: all 28 mutants killed by >= 2 distinct checks"
+    ]
+  },
+  "candidate5_sanitize": {
+    "pass_lines": 365,
+    "self_tests": 82,
+    "socket_checks": 283,
+    "clock_tests": 5,
+    "units": [
+      "test_cursor: 66138 checks, 0 failed",
+      "test-geom: 65431 checks passed",
+      "test_xor: 80752 checks, 0 failed",
+      "test_tick: 566237 checks, 0 failed"
+    ],
+    "mutants": [
+      "mutation check: all 29 mutants killed by >= 2 distinct checks",
+      "tick mutation check: all 28 mutants killed by >= 2 distinct checks"
+    ]
+  }
+}

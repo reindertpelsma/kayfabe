@@ -27,7 +27,11 @@
 //!
 //! Replay one seed: `KF_SOAK_SEED=<n> cargo test --release -p kf-disp --lib lockstep_soak_<name>`.
 //! The long soak: `KF_SOAK_FLIPS=10000000 cargo test --release -p kf-disp --lib lockstep_soak_long -- --ignored`.
-#![allow(clippy::too_many_lines, clippy::cognitive_complexity, clippy::type_complexity)]
+#![allow(
+    clippy::too_many_lines,
+    clippy::cognitive_complexity,
+    clippy::type_complexity
+)]
 
 use super::pacing_model::{Model, Worker, Writer};
 use super::tests::{WIN, engine, fl, lit, m, ma};
@@ -485,7 +489,11 @@ impl Broker {
         if fresh {
             if let Some(l) = self.last_fresh {
                 let m = t.tick_seq.wrapping_sub(l).saturating_sub(1);
-                self.e_missed += u64::from(if t.tick_seq < l { m.saturating_sub(1) } else { m });
+                self.e_missed += u64::from(if t.tick_seq < l {
+                    m.saturating_sub(1)
+                } else {
+                    m
+                });
             }
             self.last_fresh = Some(t.tick_seq);
             self.e_ticks += 1;
@@ -1161,7 +1169,9 @@ impl World {
                         self.broker.opted = true;
                         self.broker.next_tick_at = Some(self.now);
                     } else if cmd.width != 0 || cmd.height != 0 {
-                        self.fail(&format!("CAPS opted in to a broker without CAP_TICK: {cmd:?}"));
+                        self.fail(&format!(
+                            "CAPS opted in to a broker without CAP_TICK: {cmd:?}"
+                        ));
                     }
                 }
                 CMD_COMMIT => {
@@ -1171,7 +1181,9 @@ impl World {
                     let label = cmd.seq;
                     if !self.broker.opted {
                         if label != 0 {
-                            self.fail(&format!("COMMIT.seq {label} on a connection that never opted in"));
+                            self.fail(&format!(
+                                "COMMIT.seq {label} on a connection that never opted in"
+                            ));
                         }
                     } else if label == 0 {
                         if live && live_before && owed_flush {
@@ -1235,8 +1247,13 @@ impl World {
                     if self.ring.broker_ready().is_some() {
                         self.fail(&format!("NO_CHANGE({label}) while a frame is ready for the broker: the request would be wasted"));
                     }
-                    if fresh.len() == 1 && wants.first() == Some(&label) && exp_before != Some(label) {
-                        self.fail(&format!("NO_CHANGE({label}) at the very tick that opened it"));
+                    if fresh.len() == 1
+                        && wants.first() == Some(&label)
+                        && exp_before != Some(label)
+                    {
+                        self.fail(&format!(
+                            "NO_CHANGE({label}) at the very tick that opened it"
+                        ));
                     }
                     let gap = (self.broker.cfg.period / 2_000_000).max(1);
                     if let Some(t) = self.broker.last_answer_ms
@@ -1258,7 +1275,9 @@ impl World {
                     }
                     self.broker.last_answer_ms = Some(now_ms);
                 }
-                other => self.fail(&format!("the relay sent an unexpected command type {other}")),
+                other => self.fail(&format!(
+                    "the relay sent an unexpected command type {other}"
+                )),
             }
         }
         self.broker.exp_open = match wants.last() {
@@ -1328,8 +1347,8 @@ impl World {
                 self.broker.hung = h;
                 self.wire.borrow_mut().never_reads = h;
                 if !h {
-                    self.broker.next_tick_at = (opted_now && self.broker.mode != Mode::Silent)
-                        .then_some(now + MS);
+                    self.broker.next_tick_at =
+                        (opted_now && self.broker.mode != Mode::Silent).then_some(now + MS);
                     self.kick_write = true;
                 }
             }
@@ -1453,8 +1472,8 @@ impl World {
                             },
                         );
                     }
-                    self.broker.next_tick_at = (opted_now && self.broker.mode != Mode::Silent)
-                        .then_some(now + MS);
+                    self.broker.next_tick_at =
+                        (opted_now && self.broker.mode != Mode::Silent).then_some(now + MS);
                 }
             }
             Act::GuestPause(d) => self.guest.pause_until = now + d,
@@ -1612,7 +1631,10 @@ impl World {
                     drop(w);
                     self.tr(Ev::Tick {
                         seq: self.broker.tick_seq,
-                        want: self.broker.b_open.is_some_and(|(s, _)| s == self.broker.tick_seq),
+                        want: self
+                            .broker
+                            .b_open
+                            .is_some_and(|(s, _)| s == self.broker.tick_seq),
                     });
                     let j = self.rng.below(jitter + 1);
                     self.broker.next_tick_at = Some(now + period + j);
@@ -1626,7 +1648,10 @@ impl World {
                     drop(w);
                     self.tr(Ev::Tick {
                         seq: self.broker.tick_seq,
-                        want: self.broker.b_open.is_some_and(|(s, _)| s == self.broker.tick_seq),
+                        want: self
+                            .broker
+                            .b_open
+                            .is_some_and(|(s, _)| s == self.broker.tick_seq),
                     });
                     self.broker.next_tick_at = Some(now + u64::from(b) * iv);
                 }
@@ -1651,7 +1676,11 @@ impl World {
         if self.relay.is_none() {
             return;
         }
-        if self.host.timer.is_some_and(|t| t.saturating_mul(MS) <= self.now) {
+        if self
+            .host
+            .timer
+            .is_some_and(|t| t.saturating_mul(MS) <= self.now)
+        {
             self.relay_entry(Entry::Timer);
         }
         let go = {
@@ -1769,14 +1798,20 @@ impl World {
                 .pacer
                 .source(0)
                 .map_or((None, 0), |s| (s.last_tick_ns(), s.guard_ns()));
-            self.gate.on_tick(
-                snap.tick_seq,
-                coalesced,
-                want,
-                t.map(|_| now),
-                last,
-                guard,
-            );
+            // An accepted tick without a new WANT must release the carried request.
+            // This is a progress obligation, independent of the upper bound on copies.
+            let carried = self.gate.pending().filter(|(_, at)| *at > now);
+            let expected_release = carried.filter(|_| t.is_some() && want.is_none());
+            self.gate
+                .on_tick(snap.tick_seq, coalesced, want, t.map(|_| now), last, guard);
+            if let Some((req, _)) = expected_release
+                && self
+                    .gate
+                    .pending()
+                    .is_none_or(|(pending, at)| pending != req || at > now)
+            {
+                self.fail("an accepted tick without a new WANT did not release its carried credit");
+            }
             if let Some(req) = want {
                 self.defer_ready = t
                     .is_none()
@@ -1882,7 +1917,8 @@ impl World {
             self.guest.k_render += 1;
         }
         let g = &self.guest;
-        let free = g.k_render < g.buffers as u64 || g.completed + g.buffers as u64 >= g.k_render + 2;
+        let free =
+            g.k_render < g.buffers as u64 || g.completed + g.buffers as u64 >= g.k_render + 2;
         if self.guest.render_until.is_none() && free && now >= self.guest.pause_until {
             let r = self.render_ns();
             if now >= self.guest.pause_until {
@@ -1914,7 +1950,12 @@ impl World {
             self.guest.imm += u64::from(imm);
             self.tr(Ev::Flip { imm });
             let s = self.e.step(1, &bytes, p, &mut |_a: &Acquire| true);
-            if imm && !s.effects.iter().any(|e| matches!(e, Effect::Latched { .. })) {
+            if imm
+                && !s
+                    .effects
+                    .iter()
+                    .any(|e| matches!(e, Effect::Latched { .. }))
+            {
                 self.fail("an IMMEDIATE flip did not latch at once: it was parked");
             }
             self.mdl.effects(&s);
@@ -1925,7 +1966,11 @@ impl World {
 
     fn next_event(&self) -> Option<u64> {
         if let Some(dt) = self.sc.fixed_dt {
-            return Some(if self.out.steps == 0 { 0 } else { self.now + dt });
+            return Some(if self.out.steps == 0 {
+                0
+            } else {
+                self.now + dt
+            });
         }
         let mut t = u64::MAX;
         let mut at = |x: Option<u64>| {
@@ -1990,7 +2035,11 @@ impl World {
                 FLIP_BOUND
             };
             // an immediate flip may sit behind a vsync flip's items only when the guest is single-flip
-            let bound = if self.sc.gk == GKind::Imm { bound } else { FLIP_BOUND };
+            let bound = if self.sc.gk == GKind::Imm {
+                bound
+            } else {
+                FLIP_BOUND
+            };
             if age > bound {
                 self.fail(&format!(
                     "a {} flip has not completed after {} ms (bound {} ms)",
@@ -2153,7 +2202,13 @@ impl World {
             let b = &self.broker;
             let r = &o.relay;
             let want = (b.e_ticks, b.e_stale, b.e_missed, b.e_want, b.e_back);
-            let got = (r.ticks, r.ticks_stale, r.ticks_missed, r.want_ticks, r.ts_backwards);
+            let got = (
+                r.ticks,
+                r.ticks_stale,
+                r.ticks_missed,
+                r.want_ticks,
+                r.ts_backwards,
+            );
             if want != got {
                 self.fail(&format!(
                     "the relay's tick counters (ticks, stale, missed, want, backwards) are {got:?}, the broker expected {want:?}"
@@ -2170,7 +2225,10 @@ impl World {
 const SEEDS: u64 = 50;
 
 fn seeds() -> Vec<u64> {
-    match std::env::var("KF_SOAK_SEED").ok().and_then(|s| s.parse().ok()) {
+    match std::env::var("KF_SOAK_SEED")
+        .ok()
+        .and_then(|s| s.parse().ok())
+    {
         Some(s) => vec![s],
         None => (0..SEEDS).collect(),
     }
@@ -2179,7 +2237,10 @@ fn seeds() -> Vec<u64> {
 /// Run `mk(seed)` for every seed; print one summary line (flips, simulated seconds, wall time).
 fn soak(name: &str, mk: impl Fn(u64) -> Sc) -> Vec<Out> {
     let t0 = std::time::Instant::now();
-    let outs: Vec<Out> = seeds().into_iter().map(|s| World::new(mk(s), s).run()).collect();
+    let outs: Vec<Out> = seeds()
+        .into_iter()
+        .map(|s| World::new(mk(s), s).run())
+        .collect();
     let flips: u64 = outs.iter().map(|o| o.completed).sum();
     let sim: u64 = outs.iter().map(|o| o.sim_ns).sum();
     let steps: u64 = outs.iter().map(|o| o.steps).sum();
@@ -2197,7 +2258,10 @@ fn total<F: Fn(&Out) -> u64>(o: &[Out], f: F) -> u64 {
 }
 
 fn flips_goal(n: u64) -> u64 {
-    std::env::var("KF_SOAK_FLIPS").ok().and_then(|s| s.parse().ok()).unwrap_or(n)
+    std::env::var("KF_SOAK_FLIPS")
+        .ok()
+        .and_then(|s| s.parse().ok())
+        .unwrap_or(n)
 }
 
 /// The common assertions of every scenario with a live relay: the goal was reached, a COMMIT is an
@@ -2257,14 +2321,35 @@ fn lockstep_soak_s1_fast_guest_immediate() {
     for o in &outs {
         books(o);
         assert_eq!(o.imm, o.submitted, "seed {}", o.seed);
-        assert!(o.copies <= o.broker_ticks + 2, "seed {}: {} copies, {} ticks", o.seed, o.copies, o.broker_ticks);
-        assert!(o.skipped > o.latches / 4, "seed {}: newest wins, the rest are skipped: {o:?}", o.seed);
-        assert_eq!(o.free_ticks, 0, "seed {}: the broker ticks the whole run", o.seed);
+        assert!(
+            o.copies <= o.broker_ticks + 2,
+            "seed {}: {} copies, {} ticks",
+            o.seed,
+            o.copies,
+            o.broker_ticks
+        );
+        assert!(
+            o.skipped > o.latches / 4,
+            "seed {}: newest wins, the rest are skipped: {o:?}",
+            o.seed
+        );
+        assert_eq!(
+            o.free_ticks, 0,
+            "seed {}: the broker ticks the whole run",
+            o.seed
+        );
         assert_eq!(o.handoffs, (1, 0), "seed {}", o.seed);
         assert!(o.relay.credits_coalesced == 0 || o.relay.want_ticks > 0);
     }
-    let fps: Vec<f64> = outs.iter().map(|o| o.completed as f64 / (o.sim_ns as f64 / 1e9)).collect();
-    eprintln!("  s1 flips/s per seed: min {:.0} max {:.0} (display ticks at 60)", fps.iter().cloned().fold(f64::MAX, f64::min), fps.iter().cloned().fold(0.0, f64::max));
+    let fps: Vec<f64> = outs
+        .iter()
+        .map(|o| o.completed as f64 / (o.sim_ns as f64 / 1e9))
+        .collect();
+    eprintln!(
+        "  s1 flips/s per seed: min {:.0} max {:.0} (display ticks at 60)",
+        fps.iter().cloned().fold(f64::MAX, f64::min),
+        fps.iter().cloned().fold(0.0, f64::max)
+    );
     assert!(fps.iter().all(|f| *f > 150.0), "{fps:?}");
 }
 
@@ -2281,9 +2366,19 @@ fn lockstep_soak_s2_two_flips_per_frame() {
     });
     for o in &outs {
         books(o);
-        assert!(o.imm.abs_diff(o.submitted / 2) <= 1, "seed {}: {} of {}", o.seed, o.imm, o.submitted);
+        assert!(
+            o.imm.abs_diff(o.submitted / 2) <= 1,
+            "seed {}: {} of {}",
+            o.seed,
+            o.imm,
+            o.submitted
+        );
         let fps = o.completed as f64 / (o.sim_ns as f64 / 1e9);
-        assert!((90.0..=125.0).contains(&fps), "seed {}: {fps:.1} flips/s", o.seed);
+        assert!(
+            (90.0..=125.0).contains(&fps),
+            "seed {}: {fps:.1} flips/s",
+            o.seed
+        );
         assert!(o.worst_flip_ns <= FLIP_BOUND, "seed {}", o.seed);
     }
 }
@@ -2323,7 +2418,11 @@ fn lockstep_soak_s4_floods() {
     let outs = soak("s4 floods", |s| {
         let combo = s % 12;
         let mult = [10u32, 100, 1000][(combo % 3) as usize];
-        let want = if (combo / 3) % 2 == 0 { WantPolicy::Always } else { WantPolicy::Never };
+        let want = if (combo / 3) % 2 == 0 {
+            WantPolicy::Always
+        } else {
+            WantPolicy::Never
+        };
         let burst = if combo / 6 == 0 { 1 } else { 32 };
         let mut sc = base_sc("lockstep_soak_s4_floods");
         sc.exact = true;
@@ -2334,8 +2433,10 @@ fn lockstep_soak_s4_floods() {
         sc.caps = vec![1, 16, READ_BATCH];
         for k in 0..80u64 {
             let t = 300 * MS + k * 500 * MS;
-            sc.timeline.push((t, Act::Mode(Mode::Flood { mult, burst })));
-            sc.timeline.push((t + (50 + (k % 5) * 25) * MS, Act::Mode(Mode::Steady)));
+            sc.timeline
+                .push((t, Act::Mode(Mode::Flood { mult, burst })));
+            sc.timeline
+                .push((t + (50 + (k % 5) * 25) * MS, Act::Mode(Mode::Steady)));
         }
         sc
     });
@@ -2344,10 +2445,25 @@ fn lockstep_soak_s4_floods() {
         books(o);
         assert!(o.max_turn_packets <= READ_BATCH as u64, "seed {}", o.seed);
         let cap = o.sim_ns / (P60 / 2) + 3;
-        assert!(o.ticks <= cap, "seed {}: {} vblanks in {} ms exceed the guard's cap {cap}", o.seed, o.ticks, o.sim_ns / MS);
-        assert!(o.relay.budget_hits > 0 || o.ticks_pushed < 50, "seed {}: a flood must hit the per-turn budget", o.seed);
+        assert!(
+            o.ticks <= cap,
+            "seed {}: {} vblanks in {} ms exceed the guard's cap {cap}",
+            o.seed,
+            o.ticks,
+            o.sim_ns / MS
+        );
+        assert!(
+            o.relay.budget_hits > 0 || o.ticks_pushed < 50,
+            "seed {}: a flood must hit the per-turn budget",
+            o.seed
+        );
         assert!(o.max_held <= 2);
-        assert_eq!(o.relay.ticks + o.relay.ticks_stale, o.ticks_pushed, "seed {}", o.seed);
+        assert_eq!(
+            o.relay.ticks + o.relay.ticks_stale,
+            o.ticks_pushed,
+            "seed {}",
+            o.seed
+        );
         rates.push(o.ticks as f64 / (o.sim_ns as f64 / 1e9));
     }
     let max = rates.iter().cloned().fold(0.0, f64::max);
@@ -2375,14 +2491,21 @@ fn lockstep_soak_flood_rates() {
                 sc.exact = true;
                 sc.b.noisy = true;
                 sc.b.want = want;
-                sc.mode0 = Mode::Flood { mult, burst: if s % 2 == 0 { 1 } else { 200 } };
+                sc.mode0 = Mode::Flood {
+                    mult,
+                    burst: if s % 2 == 0 { 1 } else { 200 },
+                };
                 sc.turn_gap_ns = 5 * MS;
                 sc.render = (2 * MS, 8 * MS);
                 sc.caps = vec![READ_BATCH];
                 sc
             });
             for o in &outs {
-                assert!(o.completed >= o.submitted.saturating_sub(1), "seed {}", o.seed);
+                assert!(
+                    o.completed >= o.submitted.saturating_sub(1),
+                    "seed {}",
+                    o.seed
+                );
                 assert!(o.max_turn_packets <= READ_BATCH as u64);
                 assert!(o.ticks <= o.sim_ns / (P60 / 2) + 3, "seed {}", o.seed);
                 assert_eq!(o.relay.ticks + o.relay.ticks_stale, o.ticks_pushed);
@@ -2426,7 +2549,11 @@ fn lockstep_soak_s5_early_and_out_of_sequence_ticks() {
         sc.b.drop = 60;
         sc.b.backwards = 80;
         sc.b.noisy = s % 2 == 0;
-        sc.b.want = if s % 5 == 0 { WantPolicy::Always } else { WantPolicy::Lockstep };
+        sc.b.want = if s % 5 == 0 {
+            WantPolicy::Always
+        } else {
+            WantPolicy::Lockstep
+        };
         sc.render = (MS, 6 * MS);
         sc.gk = [GKind::Imm, GKind::Alt][(s % 2) as usize];
         sc.caps = vec![1, 3, READ_BATCH];
@@ -2434,9 +2561,22 @@ fn lockstep_soak_s5_early_and_out_of_sequence_ticks() {
     });
     for o in &outs {
         books(o);
-        assert!(o.relay.ticks_stale > 0 && o.stale_pushed == o.relay.ticks_stale, "seed {}", o.seed);
-        assert!(o.relay.ticks_missed > 0 && o.relay.ts_backwards > 0, "seed {}: {:?}", o.seed, o.relay);
-        assert_eq!(o.gate.stale, 0, "seed {}: the relay filters stale ticks before the worker sees them", o.seed);
+        assert!(
+            o.relay.ticks_stale > 0 && o.stale_pushed == o.relay.ticks_stale,
+            "seed {}",
+            o.seed
+        );
+        assert!(
+            o.relay.ticks_missed > 0 && o.relay.ts_backwards > 0,
+            "seed {}: {:?}",
+            o.seed,
+            o.relay
+        );
+        assert_eq!(
+            o.gate.stale, 0,
+            "seed {}: the relay filters stale ticks before the worker sees them",
+            o.seed
+        );
     }
     eprintln!(
         "  s5: stale dropped {} (all counted), missed {}, backwards {}, credits coalesced {}",
@@ -2472,13 +2612,34 @@ fn lockstep_soak_s6_silence_then_return_mid_copy() {
     for o in &outs {
         books(o);
         let seed = o.seed;
-        let falls = (0..6u64).filter(|k| durs[((seed + k) % 6) as usize] >= 50).count() as u64;
-        assert!(o.handoffs.1 >= falls, "seed {seed}: {} fallbacks, expected at least {falls}", o.handoffs.1);
-        assert!(o.handoffs.0 >= 2, "seed {seed}: the broker must get the tick back: {:?}", o.handoffs);
-        assert!(o.handoffs.0 <= o.handoffs.1 + 1, "seed {seed}: one handoff back per fallback: {:?}", o.handoffs);
+        let falls = (0..6u64)
+            .filter(|k| durs[((seed + k) % 6) as usize] >= 50)
+            .count() as u64;
+        assert!(
+            o.handoffs.1 >= falls,
+            "seed {seed}: {} fallbacks, expected at least {falls}",
+            o.handoffs.1
+        );
+        assert!(
+            o.handoffs.0 >= 2,
+            "seed {seed}: the broker must get the tick back: {:?}",
+            o.handoffs
+        );
+        assert!(
+            o.handoffs.0 <= o.handoffs.1 + 1,
+            "seed {seed}: one handoff back per fallback: {:?}",
+            o.handoffs
+        );
         assert!(o.free_ticks > 0, "seed {seed}");
-        assert!(o.unsolicited > 0, "seed {seed}: frames must keep flowing in the fallback (the legacy credit)");
-        assert!(o.relay.silence_fallbacks >= 1 && o.relay.silence_resumes >= 2, "seed {seed}: {:?}", o.relay);
+        assert!(
+            o.unsolicited > 0,
+            "seed {seed}: frames must keep flowing in the fallback (the legacy credit)"
+        );
+        assert!(
+            o.relay.silence_fallbacks >= 1 && o.relay.silence_resumes >= 2,
+            "seed {seed}: {:?}",
+            o.relay
+        );
         assert!(o.stale_pushed >= 8, "seed {seed}");
     }
 }
@@ -2512,17 +2673,49 @@ fn lockstep_soak_s7_headless_is_bit_identical_to_phase_1() {
                     let b = o.base.expect("the measured window began");
                     let sec = 4.0f64;
                     let ctx = format!("{kind:?} {buffers} buffers R={r} relay={relay}");
-                    assert_eq!((o.completed - b.completed) as f64 / sec, rep.flips_per_s, "{ctx}: flips/s");
-                    assert_eq!((o.presents - b.presents) as f64 / sec, rep.presents_per_s, "{ctx}: presents/s");
-                    assert_eq!((o.tearing - b.tearing) as f64 / sec, rep.tear_per_s, "{ctx}: tear/s");
-                    assert_eq!((o.copies - b.copies) as f64 / sec, rep.copies_per_s, "{ctx}: copies/s");
-                    assert_eq!((o.ticks - b.ticks) as f64 / sec, rep.ticks_per_s, "{ctx}: ticks/s");
-                    assert_eq!((o.skipped - b.skipped) as f64 / sec, rep.skipped_per_s, "{ctx}: skipped/s");
-                    assert_eq!(o.worst_flip_ns as f64 / 1e6, rep.worst_flip_ms, "{ctx}: worst flip");
+                    assert_eq!(
+                        (o.completed - b.completed) as f64 / sec,
+                        rep.flips_per_s,
+                        "{ctx}: flips/s"
+                    );
+                    assert_eq!(
+                        (o.presents - b.presents) as f64 / sec,
+                        rep.presents_per_s,
+                        "{ctx}: presents/s"
+                    );
+                    assert_eq!(
+                        (o.tearing - b.tearing) as f64 / sec,
+                        rep.tear_per_s,
+                        "{ctx}: tear/s"
+                    );
+                    assert_eq!(
+                        (o.copies - b.copies) as f64 / sec,
+                        rep.copies_per_s,
+                        "{ctx}: copies/s"
+                    );
+                    assert_eq!(
+                        (o.ticks - b.ticks) as f64 / sec,
+                        rep.ticks_per_s,
+                        "{ctx}: ticks/s"
+                    );
+                    assert_eq!(
+                        (o.skipped - b.skipped) as f64 / sec,
+                        rep.skipped_per_s,
+                        "{ctx}: skipped/s"
+                    );
+                    assert_eq!(
+                        o.worst_flip_ns as f64 / 1e6,
+                        rep.worst_flip_ms,
+                        "{ctx}: worst flip"
+                    );
                     assert_eq!(rep.violations, 0);
                     assert_eq!(o.handoffs, rep.handoffs, "{ctx}");
                     assert_eq!(o.handoffs, (0, 0), "{ctx}: nothing feeds a broker event");
-                    assert_eq!(o.gate, crate::lockstep::GateCounters::default(), "{ctx}: the gate is untouched");
+                    assert_eq!(
+                        o.gate,
+                        crate::lockstep::GateCounters::default(),
+                        "{ctx}: the gate is untouched"
+                    );
                     assert_eq!(o.broker_ticks, 0, "{ctx}");
                     assert_eq!(o.relay.ticks, 0, "{ctx}");
                 }
@@ -2574,10 +2767,24 @@ fn lockstep_soak_s8_broker_crash_mid_frame() {
     });
     for o in &outs {
         books(o);
-        assert!(o.connects >= 5, "seed {}: only {} connections", o.seed, o.connects);
+        assert!(
+            o.connects >= 5,
+            "seed {}: only {} connections",
+            o.seed,
+            o.connects
+        );
         assert!(o.lost >= 4, "seed {}", o.seed);
-        assert!(o.handoffs.0 >= 3, "seed {}: the broker must get the tick back after reconnects: {:?}", o.seed, o.handoffs);
-        assert_eq!(o.gate.stale, 0, "seed {}: no restarted numbering may look stale to the gate", o.seed);
+        assert!(
+            o.handoffs.0 >= 3,
+            "seed {}: the broker must get the tick back after reconnects: {:?}",
+            o.seed,
+            o.handoffs
+        );
+        assert_eq!(
+            o.gate.stale, 0,
+            "seed {}: no restarted numbering may look stale to the gate",
+            o.seed
+        );
     }
 }
 
@@ -2623,20 +2830,46 @@ fn lockstep_soak_s9_hostile_framing() {
         sc.hostile = true;
         sc.render = (MS, 5 * MS);
         sc.b.advertise = s % 2 == 0;
-        let kinds: &[u8] = if sc.b.advertise { &[0, 1, 2, 3, 9] } else { &[5, 5, 9, 4] };
+        let kinds: &[u8] = if sc.b.advertise {
+            &[0, 1, 2, 3, 9]
+        } else {
+            &[5, 5, 9, 4]
+        };
         for k in 0..12u64 {
-            sc.timeline.push((1000 * MS + k * 900 * MS, Act::Hostile(kinds[(k as usize + s as usize) % kinds.len()])));
+            sc.timeline.push((
+                1000 * MS + k * 900 * MS,
+                Act::Hostile(kinds[(k as usize + s as usize) % kinds.len()]),
+            ));
         }
         sc.min_sim_ns = 13_000 * MS;
         sc
     });
     for o in &outs {
         books(o);
-        assert!(o.hostile >= 8, "seed {}: {} hostile packets", o.seed, o.hostile);
-        assert!(o.lost >= o.hostile, "seed {}: {} violations sent, {} connections dropped", o.seed, o.hostile, o.lost);
-        assert!(o.connects as u64 > o.hostile.saturating_sub(1), "seed {}: the relay must reconnect after each", o.seed);
+        assert!(
+            o.hostile >= 8,
+            "seed {}: {} hostile packets",
+            o.seed,
+            o.hostile
+        );
+        assert!(
+            o.lost >= o.hostile,
+            "seed {}: {} violations sent, {} connections dropped",
+            o.seed,
+            o.hostile,
+            o.lost
+        );
+        assert!(
+            o.connects as u64 > o.hostile.saturating_sub(1),
+            "seed {}: the relay must reconnect after each",
+            o.seed
+        );
     }
-    eprintln!("  s9: {} violations sent, {} connections dropped", total(&outs, |o| o.hostile), total(&outs, |o| o.lost));
+    eprintln!(
+        "  s9: {} violations sent, {} connections dropped",
+        total(&outs, |o| o.hostile),
+        total(&outs, |o| o.lost)
+    );
 }
 
 /// ★ The adversarial scheduler: everything at once — floods, silences of every length, SIGSTOP, a
@@ -2694,7 +2927,10 @@ fn summary_adv(outs: &[Out]) {
 #[test]
 #[ignore = "long soak: 10M flips (minutes)"]
 fn lockstep_soak_long() {
-    let total_flips: u64 = std::env::var("KF_SOAK_FLIPS").ok().and_then(|s| s.parse().ok()).unwrap_or(10_000_000);
+    let total_flips: u64 = std::env::var("KF_SOAK_FLIPS")
+        .ok()
+        .and_then(|s| s.parse().ok())
+        .unwrap_or(10_000_000);
     let per = total_flips / SEEDS;
     let outs = soak("long", |s| {
         let mut sc = adversarial_sc(s);
@@ -2727,7 +2963,10 @@ fn lockstep_soak_st1_broker_stops_reading_but_still_ticks() {
         let d = stall_dur(s) * MS;
         let mut sc = base_sc("lockstep_soak_st1_broker_stops_reading_but_still_ticks");
         sc.render = (MS, 5 * MS);
-        sc.timeline = vec![(3000 * MS, Act::NeverRead(true)), (3000 * MS + d, Act::NeverRead(false))];
+        sc.timeline = vec![
+            (3000 * MS, Act::NeverRead(true)),
+            (3000 * MS + d, Act::NeverRead(false)),
+        ];
         sc.min_sim_ns = 3000 * MS + d + 3000 * MS;
         sc.b.noisy = s % 2 == 0;
         sc
@@ -2735,12 +2974,30 @@ fn lockstep_soak_st1_broker_stops_reading_but_still_ticks() {
     for o in &outs {
         books(o);
         let d = stall_dur(o.seed);
-        assert_eq!(o.handoffs.1, 0, "seed {}: the ticks never stopped, the clock must not take over", o.seed);
-        assert!(o.max_tick_gap_ns <= P60 + MS, "seed {}: vblank gap {} ns", o.seed, o.max_tick_gap_ns);
+        assert_eq!(
+            o.handoffs.1, 0,
+            "seed {}: the ticks never stopped, the clock must not take over",
+            o.seed
+        );
+        assert!(
+            o.max_tick_gap_ns <= P60 + MS,
+            "seed {}: vblank gap {} ns",
+            o.seed,
+            o.max_tick_gap_ns
+        );
         if d >= 200 {
-            assert!(o.fulls > 0 && o.relay_c.dropped > 0, "seed {}: frames must be dropped and counted: {:?}", o.seed, o.relay_c);
+            assert!(
+                o.fulls > 0 && o.relay_c.dropped > 0,
+                "seed {}: frames must be dropped and counted: {:?}",
+                o.seed,
+                o.relay_c
+            );
         }
-        assert!(o.sim_ns - o.last_commit_ns < 1500 * MS, "seed {}: the frame stream did not recover", o.seed);
+        assert!(
+            o.sim_ns - o.last_commit_ns < 1500 * MS,
+            "seed {}: the frame stream did not recover",
+            o.seed
+        );
         assert!(o.max_held <= 2);
     }
     eprintln!(
@@ -2765,12 +3022,21 @@ fn lockstep_soak_st1b_a_broker_that_never_reads() {
         sc
     });
     for o in &outs {
-        assert!(o.completed >= o.goal, "seed {}: the guest must not notice", o.seed);
+        assert!(
+            o.completed >= o.goal,
+            "seed {}: the guest must not notice",
+            o.seed
+        );
         assert!(o.fulls > 0, "seed {}", o.seed);
         if o.seed % 2 == 1 {
             assert!(o.relay_c.dropped > 0, "seed {}: {:?}", o.seed, o.relay_c);
         } else {
-            assert!(o.relay_c.attempts_failed >= 1 || o.connects == 0, "seed {}: a replay into a full socket fails the attempt: {:?}", o.seed, o.relay_c);
+            assert!(
+                o.relay_c.attempts_failed >= 1 || o.connects == 0,
+                "seed {}: a replay into a full socket fails the attempt: {:?}",
+                o.seed,
+                o.relay_c
+            );
         }
         assert!(o.max_held <= 2);
     }
@@ -2799,21 +3065,45 @@ fn lockstep_soak_st2_broker_stops_ticking_but_still_reads() {
         books(o);
         let d = stall_dur(o.seed);
         if d >= 100 {
-            assert!(o.handoffs.1 >= 1 && o.relay.silence_fallbacks >= 1, "seed {}: {:?} {:?}", o.seed, o.handoffs, o.relay);
-            assert_eq!(o.handoffs.0, o.handoffs.1 + 1, "seed {}: the broker gets the tick back exactly once per fallback", o.seed);
-            assert!(o.unsolicited >= 1 || d < 200, "seed {}: frames must flow on the legacy credit", o.seed);
+            assert!(
+                o.handoffs.1 >= 1 && o.relay.silence_fallbacks >= 1,
+                "seed {}: {:?} {:?}",
+                o.seed,
+                o.handoffs,
+                o.relay
+            );
+            assert_eq!(
+                o.handoffs.0,
+                o.handoffs.1 + 1,
+                "seed {}: the broker gets the tick back exactly once per fallback",
+                o.seed
+            );
+            assert!(
+                o.unsolicited >= 1 || d < 200,
+                "seed {}: frames must flow on the legacy credit",
+                o.seed
+            );
         }
         assert!(o.handoffs.0 <= o.handoffs.1 + 1);
     }
     let lines = log.lines();
-    assert!(lines.iter().any(|l| l.contains("SILENT")), "the stall must be visible in the log");
+    assert!(
+        lines.iter().any(|l| l.contains("SILENT")),
+        "the stall must be visible in the log"
+    );
     eprintln!(
         "  st2: durations {STALLS_MS:?} ms; fallbacks {}, handoffs {:?}, unsolicited frames {}, relay log lines {} (SILENT/LIVE: {})",
         total(&outs, |o| o.handoffs.1),
-        (total(&outs, |o| o.handoffs.0), total(&outs, |o| o.handoffs.1)),
+        (
+            total(&outs, |o| o.handoffs.0),
+            total(&outs, |o| o.handoffs.1)
+        ),
         total(&outs, |o| o.unsolicited),
         lines.len(),
-        lines.iter().filter(|l| l.contains("SILENT") || l.contains("LIVE")).count()
+        lines
+            .iter()
+            .filter(|l| l.contains("SILENT") || l.contains("LIVE"))
+            .count()
     );
 }
 
@@ -2826,7 +3116,10 @@ fn lockstep_soak_st3_broker_never_releases_a_slot() {
         let d = [300u64, 1000, 2000, 6000][(s % 4) as usize] * MS;
         let mut sc = base_sc("lockstep_soak_st3_broker_never_releases_a_slot");
         sc.render = (MS, 4 * MS);
-        sc.timeline = vec![(2000 * MS, Act::NoRelease(true)), (2000 * MS + d, Act::NoRelease(false))];
+        sc.timeline = vec![
+            (2000 * MS, Act::NoRelease(true)),
+            (2000 * MS + d, Act::NoRelease(false)),
+        ];
         sc.min_sim_ns = 2000 * MS + d + 2500 * MS;
         sc
     });
@@ -2836,12 +3129,28 @@ fn lockstep_soak_st3_broker_never_releases_a_slot() {
         assert!(o.max_held <= 2, "seed {}", o.seed);
         assert!(o.relay_c.blocked > 0, "seed {}: {:?}", o.seed, o.relay_c);
         if d >= 2000 {
-            assert!(o.relay_c.reclaims > 0, "seed {}: an unreleased frame must be reclaimed after a second", o.seed);
+            assert!(
+                o.relay_c.reclaims > 0,
+                "seed {}: an unreleased frame must be reclaimed after a second",
+                o.seed
+            );
         }
-        assert!(o.sim_ns - o.last_commit_ns < 2000 * MS, "seed {}: no deadlock", o.seed);
-        assert!(o.worst_flip_ns <= FLIP_BOUND, "seed {}: the guest is not held back by a slot the broker keeps", o.seed);
+        assert!(
+            o.sim_ns - o.last_commit_ns < 2000 * MS,
+            "seed {}: no deadlock",
+            o.seed
+        );
+        assert!(
+            o.worst_flip_ns <= FLIP_BOUND,
+            "seed {}: the guest is not held back by a slot the broker keeps",
+            o.seed
+        );
     }
-    eprintln!("  st3: blocked {}, reclaimed {}", total(&outs, |o| o.relay_c.blocked), total(&outs, |o| o.relay_c.reclaims));
+    eprintln!(
+        "  st3: blocked {}, reclaimed {}",
+        total(&outs, |o| o.relay_c.blocked),
+        total(&outs, |o| o.relay_c.reclaims)
+    );
 }
 
 /// (st4) The broker stalls MID-PACKET (a partial tick, then nothing): the partial state is one packet
@@ -2866,9 +3175,19 @@ fn lockstep_soak_st4_broker_stalls_mid_message() {
         if o.seed % 2 == 0 {
             assert_eq!(o.relay.partial_timeouts, 1, "seed {}", o.seed);
             assert!(o.lost >= 1 && o.connects >= 2, "seed {}", o.seed);
-            assert!((PARTIAL_READ_MS..=PARTIAL_READ_MS + 5).contains(&o.partial_drop_ms), "seed {}: dropped after {} ms", o.seed, o.partial_drop_ms);
+            assert!(
+                (PARTIAL_READ_MS..=PARTIAL_READ_MS + 5).contains(&o.partial_drop_ms),
+                "seed {}: dropped after {} ms",
+                o.seed,
+                o.partial_drop_ms
+            );
         } else {
-            assert_eq!((o.relay.partial_timeouts, o.lost, o.connects), (0, 0, 1), "seed {}: a packet that completes in time is fine", o.seed);
+            assert_eq!(
+                (o.relay.partial_timeouts, o.lost, o.connects),
+                (0, 0, 1),
+                "seed {}: a packet that completes in time is fine",
+                o.seed
+            );
         }
     }
     assert!(
@@ -2899,13 +3218,31 @@ fn lockstep_soak_st5_stall_then_resume_with_a_stale_burst() {
         books(o);
         let g = stall_dur(o.seed);
         let falls = if g >= 50 { 2 } else { 0 };
-        assert_eq!(o.handoffs, (1 + falls, falls), "seed {}: gap {g} ms", o.seed);
-        assert_eq!(o.relay.silence_fallbacks, if g > 50 { 2 } else { 0 }, "seed {}: gap {g} ms: the relay's rule is 'more than 50 ms'", o.seed);
-        assert!(o.stale_pushed >= 48 && o.relay.ticks_stale == o.stale_pushed, "seed {}: stale ticks are counted exactly", o.seed);
+        assert_eq!(
+            o.handoffs,
+            (1 + falls, falls),
+            "seed {}: gap {g} ms",
+            o.seed
+        );
+        assert_eq!(
+            o.relay.silence_fallbacks,
+            if g > 50 { 2 } else { 0 },
+            "seed {}: gap {g} ms: the relay's rule is 'more than 50 ms'",
+            o.seed
+        );
+        assert!(
+            o.stale_pushed >= 48 && o.relay.ticks_stale == o.stale_pushed,
+            "seed {}: stale ticks are counted exactly",
+            o.seed
+        );
         assert_eq!(o.gate.stale, 0, "seed {}", o.seed);
         assert!(o.min_broker_gap_ns >= P60 / 2);
         if g >= 50 {
-            assert!(o.probation >= falls, "seed {}: the broker proves itself after a fallback", o.seed);
+            assert!(
+                o.probation >= falls,
+                "seed {}: the broker proves itself after a fallback",
+                o.seed
+            );
         }
     }
 }
@@ -2930,10 +3267,25 @@ fn lockstep_soak_st6_flapping_around_the_boundary() {
         books(o);
         let changes = o.handoffs.0 + o.handoffs.1;
         worst = worst.max(changes);
-        assert!(changes <= 14, "seed {}: the tick source changed {changes} times in 10 s of flapping: {:?}", o.seed, o.handoffs);
-        assert!(o.relay.silence_fallbacks.abs_diff(o.long_gaps) <= 1, "seed {}: relay silences {} vs gaps over 50 ms {}", o.seed, o.relay.silence_fallbacks, o.long_gaps);
+        assert!(
+            changes <= 14,
+            "seed {}: the tick source changed {changes} times in 10 s of flapping: {:?}",
+            o.seed,
+            o.handoffs
+        );
+        assert!(
+            o.relay.silence_fallbacks.abs_diff(o.long_gaps) <= 1,
+            "seed {}: relay silences {} vs gaps over 50 ms {}",
+            o.seed,
+            o.relay.silence_fallbacks,
+            o.long_gaps
+        );
     }
-    let lines = log.lines().iter().filter(|l| l.contains("broker ticks:")).count();
+    let lines = log
+        .lines()
+        .iter()
+        .filter(|l| l.contains("broker ticks:"))
+        .count();
     eprintln!(
         "  st6: tick-source changes per run: max {worst} (limit 14) over 10 s; the RELAY logged {lines} 'broker ticks:' lines in {} runs (it has no hysteresis: one line per live/silent change; relay silences {} for {} long gaps)",
         outs.len(),
@@ -2965,14 +3317,21 @@ fn lockstep_soak_st7_sigstop_and_a_hung_broker() {
     for o in &outs {
         books(o);
         assert_eq!(o.relay.silence_fallbacks, 1, "seed {}", o.seed);
-        assert!(o.free_ticks > 100, "seed {}: the clock ran the guest", o.seed);
+        assert!(
+            o.free_ticks > 100,
+            "seed {}: the clock ran the guest",
+            o.seed
+        );
         if o.seed % 2 == 0 {
             assert_eq!(o.handoffs, (1, 1), "seed {}: the clock for ever", o.seed);
         } else {
             assert_eq!(o.handoffs, (2, 1), "seed {}: one handoff back", o.seed);
         }
     }
-    assert!(log.lines().iter().any(|l| l.contains("SILENT for 50 ms")), "the stall must be visible in a log line");
+    assert!(
+        log.lines().iter().any(|l| l.contains("SILENT for 50 ms")),
+        "the stall must be visible in a log line"
+    );
 }
 
 /// (st8) A stall while a request is waiting for its copy and an IMMEDIATE flip arrives: the flip
@@ -3037,7 +3396,11 @@ fn lockstep_soak_gate_defends_itself_against_stale_events() {
                     seq
                 }
             };
-            let want = rng.chance(500).then_some(if rng.chance(900) { s } else { s.wrapping_sub(3).max(1) });
+            let want = rng.chance(500).then_some(if rng.chance(900) {
+                s
+            } else {
+                s.wrapping_sub(3).max(1)
+            });
             let fresh = last.is_none_or(|l| seq_newer(s, l));
             assert_eq!(g.fresh(s), fresh, "seed {seed} event {i}");
             let emitted = rng.chance(600).then_some(i * 1000);
@@ -3060,6 +3423,10 @@ fn lockstep_soak_gate_defends_itself_against_stale_events() {
                 granted_ref += 1;
             }
         }
-        assert_eq!((g.c.stale, g.c.stale_credits, g.c.granted), (stale, stale_cr, granted_ref), "seed {seed}");
+        assert_eq!(
+            (g.c.stale, g.c.stale_credits, g.c.granted),
+            (stale, stale_cr, granted_ref),
+            "seed {seed}"
+        );
     }
 }

@@ -18,6 +18,7 @@
  *     NVKVM_BROKER_TICK_REQ_TIMEOUT_NS;
  *   - a reply is judged against what was ISSUED, not against what is open.
  */
+#include <stdio.h>
 #include <string.h>
 
 #include "nvkvm_broker.h"
@@ -182,6 +183,11 @@ bool nb_tick_refresh(struct nb_tick *t, uint64_t now_ns, uint64_t present_ns,
         t->have_real = true;
         t->last_real_ns = present_ns;
     }
+    /* ★ MEASUREMENT: the spacing of ACCEPTED refreshes by arrival time - one clock domain (the pump's ticks carry the broker's own
+     * clock, a frame's carry the compositor's, so present_ns deltas across the two are not a spacing) */
+    if (t->have_accept) {
+        nb_tick_win_gap(t, now_ns - t->last_accept_ns);
+    }
     t->have_accept = true;
     t->last_accept_ns = now_ns;
     div = nb_tick_div(host_period_ns, t->cap_hz, hz_mode, fixed_mhz);
@@ -222,9 +228,19 @@ enum nb_tick_ans nb_tick_answer(struct nb_tick *t, uint32_t req, bool is_commit,
         return NB_TICK_ANS_VIOLATION;
     }
     if (t->open_req != 0 && req == t->open_req) {
+        if (now_ns >= t->open_since_ns) {
+            uint64_t l = now_ns - t->open_since_ns;
+
+            t->win.ans_n++;
+            t->win.ans_sum_ns += l;
+            if (l > t->win.ans_max_ns) {
+                t->win.ans_max_ns = l;
+            }
+        }
         t->open_req = 0;
         t->n_answered++;
         if (is_commit) {
+            t->commits_since_present++;
             t->unpresented = true;
             t->unpresented_since_ns = now_ns;
         } else {
@@ -245,4 +261,173 @@ bool nb_tick_may_replace(uint32_t queued_refresh_word, uint32_t new_refresh_word
 {
     return (queued_refresh_word & NVKVM_BROKER_TICK_F_WANT_FRAME) == 0 ||
            (new_refresh_word & NVKVM_BROKER_TICK_F_WANT_FRAME) != 0;
+}
+
+/* ── ★ MEASUREMENT: the per-second stats line (pure) ───────────────────────── */
+
+void nb_tick_snap_take(const struct nb_tick *t, struct nb_tick_snap *s)
+{
+    s->feedback = t->n_feedback;
+    s->ticks = t->n_ticks;
+    s->want = t->n_want;
+    s->answered = t->n_answered;
+    s->no_change = t->n_no_change;
+    s->req_timeouts = t->n_req_timeouts;
+    s->late = t->n_late;
+    s->unsolicited = t->n_unsolicited;
+    s->present_timeouts = t->n_present_timeouts;
+    s->coalesced = t->n_coalesced;
+}
+
+bool nb_tick_stats_due(uint64_t now_ns, uint64_t *next_ns, uint64_t period_ns)
+{
+    if (*next_ns == 0) {
+        *next_ns = now_ns + period_ns;      /* armed: the first line is one period away */
+        return false;
+    }
+    if (now_ns < *next_ns) {
+        return false;
+    }
+    /* one line per call; after a gap the next one is a period from now, never a burst of catch-up lines */
+    *next_ns = now_ns + period_ns;
+    return true;
+}
+
+static uint64_t delta_u64(uint64_t now, uint64_t prev)
+{
+    return now >= prev ? now - prev : 0;
+}
+
+int nb_tick_stats_format(char *buf, size_t n, uint64_t t_ms, const struct nb_tick_snap *prev,
+                         const struct nb_tick_snap *now, const struct nb_tick_win *w)
+{
+    uint64_t dans = delta_u64(now->answered, prev->answered);
+    uint64_t dnc = delta_u64(now->no_change, prev->no_change);
+    uint64_t commit = dans - (dnc <= dans ? dnc : dans);
+    int k = snprintf(buf, n,
+                     "stats t=%llu feedbacks=%llu ticks=%llu want_ticks=%llu commit=%llu no_change=%llu timeouts=%llu "
+                     "late=%llu unsolicited=%llu present_timeouts=%llu coalesced=%llu "
+                     "gap_max_us=%llu gaps33=%llu discarded=%llu ans_max_us=%llu ans_mean_us=%llu "
+                     "pres_max_us=%llu pres_mean_us=%llu loop_late_max_us=%llu loop_work_max_us=%llu "
+                     "gaps50=%llu gaps100=%llu new=%llu repeat=%llu merged=%llu cgap_max_us=%llu cg33=%llu cg50=%llu cg100=%llu "
+                     "pump_discarded=%llu",
+                     (unsigned long long)t_ms,
+                     (unsigned long long)delta_u64(now->feedback, prev->feedback),
+                     (unsigned long long)delta_u64(now->ticks, prev->ticks),
+                     (unsigned long long)delta_u64(now->want, prev->want),
+                     (unsigned long long)commit,
+                     (unsigned long long)dnc,
+                     (unsigned long long)delta_u64(now->req_timeouts, prev->req_timeouts),
+                     (unsigned long long)delta_u64(now->late, prev->late),
+                     (unsigned long long)delta_u64(now->unsolicited, prev->unsolicited),
+                     (unsigned long long)delta_u64(now->present_timeouts, prev->present_timeouts),
+                     (unsigned long long)delta_u64(now->coalesced, prev->coalesced),
+                     (unsigned long long)(w->gap_max_ns / 1000), (unsigned long long)w->gap33,
+                     (unsigned long long)w->discarded,
+                     (unsigned long long)(w->ans_max_ns / 1000),
+                     (unsigned long long)(w->ans_n ? w->ans_sum_ns / w->ans_n / 1000 : 0),
+                     (unsigned long long)(w->pres_max_ns / 1000),
+                     (unsigned long long)(w->pres_n ? w->pres_sum_ns / w->pres_n / 1000 : 0),
+                     (unsigned long long)(w->loop_late_max_ns / 1000),
+                     (unsigned long long)(w->loop_work_max_ns / 1000),
+                     (unsigned long long)w->gaps50, (unsigned long long)w->gaps100,
+                     (unsigned long long)w->new_n, (unsigned long long)w->repeat_n, (unsigned long long)w->merged,
+                     (unsigned long long)(w->cgap_max_ns / 1000), (unsigned long long)w->cg33,
+                     (unsigned long long)w->cg50, (unsigned long long)w->cg100,
+                     (unsigned long long)w->pump_discarded);
+    return (k > 0 && (size_t)k < n) ? k : 0;
+}
+
+void nb_tick_presented_at(struct nb_tick *t, uint64_t now_ns, bool discarded)
+{
+    if (t->unpresented && now_ns >= t->unpresented_since_ns) {
+        uint64_t l = now_ns - t->unpresented_since_ns;
+
+        t->win.pres_n++;
+        t->win.pres_sum_ns += l;
+        if (l > t->win.pres_max_ns) {
+            t->win.pres_max_ns = l;
+        }
+    }
+    if (discarded) {
+        t->win.discarded++;
+    }
+    nb_tick_presented(t);
+}
+
+void nb_tick_win_gap(struct nb_tick *t, uint64_t gap_ns)
+{
+    if (gap_ns > t->win.gap_max_ns) {
+        t->win.gap_max_ns = gap_ns;
+    }
+    if (gap_ns > 33000000ull) {
+        t->win.gap33++;
+    }
+    if (gap_ns > 50000000ull) {
+        t->win.gaps50++;
+    }
+    if (gap_ns > 100000000ull) {
+        t->win.gaps100++;
+    }
+}
+
+void nb_tick_win_loop(struct nb_tick *t, uint64_t late_ns, uint64_t work_ns)
+{
+    if (late_ns > t->win.loop_late_max_ns) {
+        t->win.loop_late_max_ns = late_ns;
+    }
+    if (work_ns > t->win.loop_work_max_ns) {
+        t->win.loop_work_max_ns = work_ns;
+    }
+}
+
+void nb_tick_content_present(struct nb_tick *t, uint64_t present_ns)
+{
+    uint64_t n = t->commits_since_present;
+
+    t->commits_since_present = 0;
+    if (n == 0) {
+        t->win.repeat_n++;
+        return;
+    }
+    t->win.merged += n - 1;
+    t->win.new_n++;
+    if (t->have_content && present_ns > t->last_content_ns) {
+        uint64_t g = present_ns - t->last_content_ns;
+
+        if (g > t->win.cgap_max_ns) {
+            t->win.cgap_max_ns = g;
+        }
+        t->win.cg33 += g > 33000000ull;
+        t->win.cg50 += g > 50000000ull;
+        t->win.cg100 += g > 100000000ull;
+    }
+    t->have_content = true;
+    t->last_content_ns = present_ns;
+}
+
+void nb_tick_pump_discarded(struct nb_tick *t)
+{
+    t->win.pump_discarded++;
+}
+
+int nb_tick_stats_step(struct nb_tick *t, struct nb_tick_snap *prev, uint64_t *next_ns, uint64_t now_ns, char *buf, size_t n)
+{
+    struct nb_tick_snap now;
+    int k;
+
+    if (*next_ns == 0) {
+        nb_tick_snap_take(t, prev);         /* the baseline, once, at arming */
+    }
+    if (!nb_tick_stats_due(now_ns, next_ns, NB_TICK_STATS_PERIOD_NS)) {
+        return 0;
+    }
+    nb_tick_snap_take(t, &now);
+    k = nb_tick_stats_format(buf, n, now_ns / 1000000ull, prev, &now, &t->win);
+    if (k <= 0) {
+        return 0;                           /* dropped: neither the window nor the baseline moves */
+    }
+    *prev = now;
+    memset(&t->win, 0, sizeof(t->win));
+    return k;
 }

@@ -1,0 +1,128 @@
+STATUS: HISTORICAL RECORD, corrected 2026-10-18.
+CODE READ: the original finding below was confirmed by the owner. Phase 0 now gates
+step meters and the event ring; source branch 560f9bce1 is verified on origin.
+MEASURED: tests and six gate mutants pass; see traces/diagnostic_gates_20261018/README.md.
+This original stopped-state record is retained as evidence, not as the current status.
+
+L1 pre-merge source gate: FAILED
+Date: 2026-10-18T01:54:10.008147+00:00
+CODE READ: source revision b233037d95da2ae157cfcf50066fb500991c5b7b
+CODE READ required gate: measurements must be optional/off by default. Failure condition: default construction records events or worker samples without an explicit enable gate.
+MEASURED: no merges performed; no production behavior changed; no candidate binaries built.
+CODE READ: step sampling and EventRing recording are unconditional; broker --stats-line is explicitly gated.
+Decision required: source gates plus EXPECTED RED/mutation checks (recommended), or explicit owner acceptance of always-on measurements.
+
+crates/kf-qemu/src/display.rs
+817: /// ★ MEASUREMENT ONLY (hitch investigation, 2026-10-17; never a decision input, no behaviour): a bounded latency
+818: /// meter — count, sum and max of one step's wall time, three relaxed atomics, no allocation, no lock.
+819: #[derive(Debug, Default)]
+820: pub struct LatStat {
+821:     n: AtomicU64,
+822:     sum_ns: AtomicU64,
+823:     max_ns: AtomicU64,
+824: }
+825:
+826: impl LatStat {
+827:     /// One sample.
+828:     pub fn add(&self, d: Duration) {
+829:         let ns = u64::try_from(d.as_nanos()).unwrap_or(u64::MAX);
+830:         self.n.fetch_add(1, Ordering::Relaxed);
+831:         self.sum_ns.fetch_add(ns, Ordering::Relaxed);
+832:         self.max_ns.fetch_max(ns, Ordering::Relaxed);
+833:     }
+834:
+835:     /// `name=n/sum_us/max_us` — cumulative; a reader takes window deltas of `n` and `sum_us`.
+836:     #[must_use]
+837:     pub fn fragment(&self, name: &str) -> String {
+838:         let o = Ordering::Relaxed;
+839:         format!(
+840:             "{name}={}/{}/{}",
+841:             self.n.load(o),
+842:             self.sum_ns.load(o) / 1000,
+843:             self.max_ns.load(o) / 1000
+844:         )
+845:     }
+2897:             let pass_t0 = Instant::now();
+2898:             let mut effects: Vec<Effect> = Vec::new();
+3463:             if (scan.want || scan.mailbox.due(scan.inflight.is_some())) && scan.inflight.is_none() {
+3464:                 let t_st = Instant::now();
+3465:                 scan.start(&mut io, &engine, shown.as_ref(), cursor.as_ref(), false);
+3466:                 dp.counters.lat_start.add(t_st.elapsed());
+3718:             dp.counters.lat_pass.add(pass_t0.elapsed());
+
+crates/kf-broker/src/ticks.rs
+169:     next: usize,
+170:     base: std::time::Instant,
+171:     pending: bool,
+172:     /// Dumps taken so far (never more than [`RING_DUMPS_MAX`]).
+173:     pub dumps: u32,
+174:     /// Dumps asked for and NOT taken (the cap).
+175:     pub suppressed: u64,
+176: }
+177:
+178: impl Default for EventRing {
+179:     fn default() -> Self {
+180:         EventRing {
+181:             buf: Vec::new(),
+182:             next: 0,
+183:             base: std::time::Instant::now(),
+184:             pending: false,
+185:             dumps: 0,
+186:             suppressed: 0,
+187:         }
+188:     }
+189: }
+190:
+191: impl EventRing {
+192:     /// Record one event.
+193:     pub fn push(&mut self, kind: EvKind, a: u32, b: u32) {
+194:         let t_us = u64::try_from(self.base.elapsed().as_micros()).unwrap_or(u64::MAX);
+195:         let ev = RingEv { t_us, kind, a, b };
+196:         if self.buf.len() < RING_CAP {
+197:             if self.buf.capacity() == 0 {
+198:                 self.buf.reserve_exact(RING_CAP);
+199:             }
+200:             self.buf.push(ev);
+201:         } else {
+202:             self.buf[self.next] = ev;
+203:             self.next = (self.next + 1) % RING_CAP;
+204:         }
+205:     }
+206:
+207:     /// Ask for a dump at the next [`EventRing::take_dump`].
+208:     pub fn request_dump(&mut self) {
+209:         self.pending = true;
+210:     }
+211:
+268:         Requests::default()
+269:     }
+270:
+301:             self.ring.push(EvKind::Stale, t.tick_seq, 0);
+302:             return TickVerdict::Stale;
+303:         }
+304:         // numbers skipped between two ticks; the wrap past 0 is not a skipped tick (0 is never sent)
+305:         let missed = self.last_seq.map_or(0, |l| {
+325:         self.ticks_since_open = self.ticks_since_open.saturating_add(1);
+326:         let mut opened = false;
+327:         if t.want {
+328:             self.c.want_ticks += 1;
+329:             if let Some(old) = self.open {
+330:                 self.c.credits_coalesced += 1;
+331:                 self.ring.push(EvKind::Superseded, old, t.tick_seq);
+332:                 self.ring.request_dump();
+333:             }
+334:             self.ring.push(EvKind::Opened, t.tick_seq, 0);
+335:             self.open = Some(t.tick_seq);
+336:             self.ticks_since_open = 0;
+337:             opened = true;
+
+crates/kf-broker/src/conn.rs
+485: /// ★ Phase 2: one connection's tick state (`docs/design/V3_DISPLAY_PACING_20261017.md` §11).
+486: #[derive(Debug, Default)]
+487: struct TickConn {
+488:     reqs: Requests,
+489:     /// When the last FRESH tick arrived.
+490:     last_rx_ms: Option<u64>,
+491:     /// Whether ticks were live at the last look (a change is one log line, never one per tick).
+492:     live: bool,
+493: }

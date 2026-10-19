@@ -1,5 +1,14 @@
 # Status and handoff — where kayfabe v3 stands, and how to resume
 
+## UPDATE 2026-10-18 — hitch measurement gates
+
+CODE READ: `codex/hitch-gates-20261018` makes display step timing and the relay event
+ring opt-in with `KF3_DIAG_STEP_METERS=1 KF3_DIAG_EVENT_RING=1`, selected at construction.
+The broker poll clock follows the existing optional `--stats-line`. Production defaults
+preserve decision inputs and periodic FPS reporting. MEASURED: the tests-first proof,
+three-crate counts and six mutation kills are in `traces/diagnostic_gates_20261018/README.md`.
+Hardware validation remains pending; this change performs no GPU work during testing.
+
 ## UPDATE 2026-10-15 - the display broker now lives in this repo; broker roadmap (cursor stream, control CLI with screendump/input, headless streaming, clipboard, ACPI, audio)
 
 `broker/` (from nvkvm-pv `badf2d7`, the revision in use; see `broker/IMPORTED.md`) is the broker to change from now on (branch

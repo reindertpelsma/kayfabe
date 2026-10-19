@@ -1,5 +1,15 @@
 # V3 display pacing — the guest's flips are never parked; copies are bounded; who ticks
 
+**STATUS (2026-10-18, hitch-20261017): CORRECTION to everything below that says the colour experiment keeps the old rule.** §6.2's colour
+bullet and mutation row W9 describe a rule that production ran until `claude/hitch-20261017`: with `KF3_DISPLAY_SDR_COLOR=1` (a production flag)
+every window flip waited for its OWN scanout copy (`barrier = started + 1`, `want = true`), so the §6 rule (a flip completes behind the copy in
+flight at its latch; the newest latched frame is copied once per tick) never applied on the owner's boxes. It applies now, colour path included
+(`ScanState::on_window_latch`, one method for every window flip; the colour bindings are resolved at the latch). MEASURED on Windows 11, Heaven 4.0
+D3D11 Ultra 1920x1080 fullscreen exclusive, vsync on, per pass: Heaven average 51.5 fps (7 baseline passes, 51.14-51.78) -> 57.1 fps (5 fix boots,
+56.92-57.56; the first fix boot alone was 57.56); gaps > 33 ms per minute 513 -> 177; repeated presents 8.5 -> 2.8 per second. Gaps >= 100 ms
+(0.56 -> 0.51 per minute) and the 1% low (21.3 -> 21.8 fps) did NOT improve beyond the spread: those hitches sit at the same benchmark seconds in every
+boot and build and are born in the guest application. Evidence summary: `traces/hitch_20261017/README.md`.
+
 **STATUS: LIVE, 2026-10-17.** Phase 1 (§4–§6) is BUILT on `claude/display-pacing-20261017` (cut from `claude/tear-gate-exp-20261017`
 `ec42327f0` = `integration/prod-candidate-3-20261017` + the `KF3_TEAR_GATE` measurement flag), GPU-free tested, **NOT RUN ON A BOX**.
 Phase 2 (§11: the broker as tick source, lock-step frame requests) is BUILT on `claude/display-tick-20261017`, GPU-free tested, **NOT RUN ON A BOX**. Phase 3 (§8) is DESIGN-ONLY. The owner's decisions are `OWNER_RULINGS.md` §AK (they amend §M D1). The mechanism this
@@ -203,8 +213,15 @@ window's context DMA **at the latch** (`ScanState::resolve_now`); a refusal is n
   console head's tick, sent when the checksum changed (`NonFlip`). A pending flip frame replaces the check (`flip_pending`).
 - **`display-max-fps`** still clamps the tick, so it bounds everything vblank-paced *and* the copies (one per tick). It no longer bounds
   the guest's immediate-flip rate; that is by design.
-- **The colour experiment** (`KF3_DISPLAY_SDR_COLOR=1`) resolves LUT context DMAs at copy time: it keeps the old rule (the flip's items
-  wait for its own copy, `want`) until it is validated under the mailbox. Off by default.
+- ⊘ **CORRECTED 2026-10-18 (hitch-20261017): the colour path has no rule of its own.** With `KF3_DISPLAY_SDR_COLOR=1` a window flip completes behind
+  the copy in flight at its latch, like any other (`ScanState::on_window_latch` → `on_flip_latched`); the window's context DMA AND its LUT/TMO
+  bindings are resolved at the latch (`resolve_window_colors`), so a guest that unbinds the LUT context DMA before the tick cannot fail the copy.
+  Still true: the LUT *contents* are read by the copy, which can run a tick after the flip completed, so an in-place LUT rewrite can give the
+  console one frame with the new table (console only); a refusal in the copy is `Fault::Console`
+  (`kf3: display: scanout REFUSED SDR colour program: …`, `console_copies_skipped`) and is not guest taint. Core (modeset) colour updates keep
+  `barrier = started + 1` and a wanted copy.
+- ⊘ SUPERSEDED (kept for the record): *The colour experiment* (`KF3_DISPLAY_SDR_COLOR=1`) resolves LUT context DMAs at copy time: it keeps the old
+  rule (the flip's items wait for its own copy, `want`) until it is validated under the mailbox. Off by default.
 
 ### 6.3 The mailbox (`pace::Mailbox`)
 
@@ -254,6 +271,13 @@ timestamp under a backwards clock, the constants), `kf-qemu display::tests` (3: 
 **Mutation table.** Each mutant applied in place, the named suites run (`kf-disp --lib`, and `kf-qemu --lib display::` for those touching
 `pace.rs` or the worker), the failing tests counted, the mutant removed (`git status` clean after). Target: ≥ 2 failing tests.
 
+⊘ **CORRECTED 2026-10-18 (hitch-20261017): rows W1, W9 and the paragraph under the table are stale.** The worker's latch is now ONE method call
+(`ScanState::on_window_latch`) and the property tests drive that method; the call site is scanned for copy state. Mutants applied alone, each killed
+by >= 2 display tests: M1 colour rule back at the call site 3; M2 `scan.want = true` after the call (the original defect) 2; M3
+`flip_completion_need(barrier, None)` 2; M4 no `mailbox.latch()` 4; M5 resolutions not run 2; M6 bindings not forgotten 2; M7 call site says "not
+shown" 2; M8 colour bindings not resolved at the latch 2. On the previous head M2 passed all 32 display tests and M1 had one detector. W9 ("the colour
+experiment loses its old rule") no longer exists: there is no such rule.
+
 | mutant | failing tests |
 |---|---|
 | T1 broker double-tick guard removed | 6 |
@@ -289,7 +313,7 @@ timestamp under a backwards clock, the constants), `kf-qemu display::tests` (3: 
 | W6 the `KF3_TEAR_GATE` flag back | **1** (source scan) |
 | W7 a non-flip check spends the pending frame | **1** (behaviour test) |
 | W8 a tick grants a copy for a boot picture | **1** (behaviour test) |
-| W9 the colour experiment loses its old rule | **1** (behaviour test) |
+| W9 ⊘ SUPERSEDED (see the correction above the table): the colour experiment's old rule no longer exists | — |
 
 The six single-detector mutants are in the worker's loop (a call removed, a flag put back) or in a branch only the display worker
 reaches; the worker's loop cannot run without a GPU, so a call-site mutant has exactly one detector by construction (the source scan, with a

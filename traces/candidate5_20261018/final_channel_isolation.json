@@ -1,0 +1,21 @@
+{
+  "evidence": "MEASURED: final named channel case passed alone; diagnostics unset",
+  "runs": [
+    {
+      "run": 1,
+      "exit": 0,
+      "load_before": [
+        2.84326171875,
+        3.099609375,
+        2.5322265625
+      ],
+      "load_after": [
+        2.6328125,
+        3.04638671875,
+        2.52099609375
+      ],
+      "load_peak_1m": 2.84326171875,
+      "wait_us": []
+    }
+  ]
+}
