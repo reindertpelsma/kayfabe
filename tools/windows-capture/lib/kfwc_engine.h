@@ -67,6 +67,7 @@ typedef struct kfwc_config {
      * queues on the same PCI device. Never accepted through the device ioctl. A
      * revisit must prove a fresh sequence-zero prefix before it can attach. */
     kfwc_u64 recent_table_pa;
+    kfwc_u64 recent_window_bytes, recent_window_ticks; /* internal, bounded early search */
 } kfwc_config;
 
 typedef struct kfwc_stats {          /* counters monotonic (scan_backoff_ticks is a level); 33 x u64 */
@@ -113,6 +114,7 @@ typedef struct kfwc_dir {
 } kfwc_dir;
 
 typedef struct kfwc_engine {
+    kfwc_u64 recent_cursor;
     kfwc_platform plat;
     kfwc_sink sink;
     kfwc_config cfg;
