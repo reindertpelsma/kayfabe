@@ -25,3 +25,9 @@ Entries below will record every created ID and actual/conservative cost.
 - Invoice observation after teardown:56765201 has two current charge rows,
  0.006+0.005=0.011USD. These are invoiced-so-far, not asserted final settlement.
  Guard reserve remains conservative; actual spend is not the1USDdelay reserve.
+
+- CREATED56766467 (own RTX4090/AD102 candidate), auto-destroy180min armed
+  immediately/verified (ownPID60974). Frozen source24906bf33. Observed rate
+ 0.49USD/h with180GBrequest; offer54367435 reserved32effective CPU cores.
+  First box absence verified before creation. SSH/OS startup pending, no hardware
+  result yet. Maximum runtime at observed rate1.47USD plus transfer.

@@ -36,5 +36,22 @@
         "rate": "0.0417"
       }
     ]
+  },
+  {
+    "id": 56766467,
+    "offer": 54367435,
+    "gpu_offer": "RTX 4090",
+    "quote_dph": 0.4413888888888889,
+    "disk_gb_requested": 180,
+    "created_utc": "2026-10-19T17:53:04.266546+00:00",
+    "product_head": "24906bf334665c9000b16b271005593daa3586c7",
+    "credit_before": 43.54274980556204,
+    "auto_destroy_minutes": 180,
+    "destroyed": false,
+    "auto_destroy_pid": 60974,
+    "auto_destroy_armed_utc": "2026-10-19T17:53:04.288751+00:00",
+    "auto_destroy_verified": true,
+    "observed_dph_total": 0.49,
+    "phase": "fresh KVM boot/SSH setup; no hardware run"
   }
 ]
