@@ -1,6 +1,7 @@
 """Rental-only bounded Windows EVTX projection; no messages, paths or raw payload exported."""
 from pathlib import Path
 import json,re,hashlib,xml.etree.ElementTree as ET,datetime
+from event_time import event_time
 root=Path('/root/prov/bw580_on_evtx_raw')
 ns={'e':'http://schemas.microsoft.com/win/2004/08/events/event'}
 allowed={'Display','nvlddmkm','Microsoft-Windows-Kernel-PnP','Microsoft-Windows-WER-SystemErrorReporting'}
@@ -20,8 +21,8 @@ for p in sorted(root.glob('*.evtx.xml')):
   provider=sys.find('e:Provider',ns).get('Name','')
   event_id=int(sys.findtext('e:EventID','-1',ns))
   utc=sys.find('e:TimeCreated',ns).get('SystemTime','')
-  # Win EVTX timestamps have7fractiondigits; fromisoformat accepts them and truncates to microseconds.
-  stamp=datetime.datetime.fromisoformat(utc.replace('Z','+00:00'))
+  # Preserve the full original timestamp; only window comparison uses microsecond precision.
+  stamp=event_time(utc)
   parsed+=1
   if provider not in allowed:continue
   data={z.get('Name',''):z.text or '' for z in x.findall('e:EventData/e:Data',ns)}

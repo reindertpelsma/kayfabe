@@ -3,6 +3,7 @@ set -euo pipefail
 exec >/root/prov/bw580_on_evtx_fixed_controller.txt 2>&1
 trap 'rc=$?; echo "EVTX_READONLY_EXIT rc=$rc $(date -u -Is)"' EXIT
 grep '^LINUX_ARM_EXIT kind=raw version=595 rc=0 ' /root/prov/sweep_linux_raw595.log
+grep '^LINUX_ARM_EXIT kind=cuda version=595 rc=0 ' /root/prov/sweep_linux_cuda595.log
 [ -z "$(pgrep -x qemu-system-x86 || true)" ]
 [ ! -e /root/prov/bw580_on_evtx_fixed.started ]
 date -u -Is >/root/prov/bw580_on_evtx_fixed.started
@@ -32,7 +33,7 @@ trap finish EXIT
 [ "$(cat /sys/block/nbd15/ro)" = 1 ]
 udevadm settle --timeout=15
 lsblk -b -J -o PATH,SIZE,FSTYPE "$node" >/root/prov/bw580_on_evtx_block_layout.json
-part=$(python3 /root/sweep_evtx_block_layout.py /root/prov/bw580_on_evtx_block_layout.json)
+part=$(python3 /root/sweep-evtx-tools/block_layout.py /root/prov/bw580_on_evtx_block_layout.json)
 mkdir -p /root/prov/bw580_on_evtx_raw
 for name in System Microsoft-Windows-Kernel-PnP%4Configuration; do
  out=/root/prov/bw580_on_evtx_raw/$name.evtx
@@ -44,4 +45,4 @@ for name in System Microsoft-Windows-Kernel-PnP%4Configuration; do
   timeout 90 evtxexport -f xml -m items "$out" >"$out.xml" 2>"$out.stderr"
  )
 done
-python3 /root/sweep_evtx_project.py
+python3 /root/sweep-evtx-tools/project.py
