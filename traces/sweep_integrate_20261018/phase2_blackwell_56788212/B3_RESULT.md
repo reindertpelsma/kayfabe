@@ -14,5 +14,10 @@ gap, not a warning-free result; no causal speedup or complete B3fix is claimed.
 The same-binary quiet arm was not needed because normal-console concurrency
 finished below180s. No timer, console, grader or heartbeat period was changed.
 
-Guest full raw30/CUDA/graphics/broker595 remain UNRUN. Evidence and export hashes:
+Additional full raw595 run22:33:40..22:44:34UTC:30/30PASS at frozen180s,
+0fail/crash/notrun. All30complete serial logs have0heartbeat warning,0Xid
+and0flip timeout. This later observation does not erase the31startup warnings
+in the first concurrency run above. Fullsuite concurrency33s/client19030ms;
+observed concurrency n=2 total[41,33]s, client[19350,19030]ms, no ratio claim.
+Guest CUDA595 now active; graphics/broker595 remain UNRUN. Evidence and export hashes:
 b3_concurrency595*, b3_heartbeat_summary.json, b3_export_receipt.json.
