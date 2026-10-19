@@ -1,0 +1,19 @@
+MEASURED video host interval 2026-10-19T13:22:35.615376+02:00 -> 2026-10-19T13:23:02.346592+02:00
+Xid 21 -> 21 delta=0
+Non-status/non-lifecycle matches of refused|ERROR|TSG_MIRROR|0x1f: 0
+
+TSG/ctxshare records: 14
+kf-rm: chanlink: CTXSHARE-FACTS 0xc1d00112:0xff0e0200 parent(tsg)=0xff0e0000 flags=0x0 kind=SYNC declared_subctxId=0x0 hVASpace=0x0
+kf3: TSG-MIRROR BIRTH 0xc1d00112:0xff0e0000 mode=EXPLICIT host_tsg=0xcafe10e9 engine=0x1 first_ctx=0xff0e0200 kind=Sync ctx_flags=Some(
+kf3: TSG-MIRROR CTX 0xc1d00112:0xff0e0000 guest_ctx=0xff0e0200 kind=Sync host_ctx=0xcafe10ea host_veid=Some(0) space=0xcafe0fff chan_flags=0x80206120 host_rq1=false
+kf3: TSG-MIRROR BIRTH 0xc1d00113:0xff0e0000 mode=LEGACY host_tsg=0xcafe1120 engine=0xc shard=0x0 first_chan_flags=0x207120 ctxShare=0x0
+kf3: TSG-MIRROR BIRTH 0xc1d00114:0xff0e0000 mode=LEGACY host_tsg=0xcafe114a engine=0xc shard=0x0 first_chan_flags=0x207220 ctxShare=0x0
+kf-rm: chanlink: CTXSHARE-FACTS 0xc1d00118:0xff0e0200 parent(tsg)=0xff0e0000 flags=0x0 kind=SYNC declared_subctxId=0x0 hVASpace=0x0
+kf3: TSG-MIRROR BIRTH 0xc1d00118:0xff0e0000 mode=EXPLICIT host_tsg=0xcafe1219 engine=0x1 first_ctx=0xff0e0200 kind=Sync ctx_flags=Some(
+kf3: TSG-MIRROR CTX 0xc1d00118:0xff0e0000 guest_ctx=0xff0e0200 kind=Sync host_ctx=0xcafe121a host_veid=Some(0) space=0xcafe0fff chan_flags=0x80206120 host_rq1=false
+kf3: TSG-MIRROR BIRTH 0xc1d00119:0xff0e0000 mode=LEGACY host_tsg=0xcafe1250 engine=0xc shard=0x0 first_chan_flags=0x207120 ctxShare=0x0
+kf3: TSG-MIRROR BIRTH 0xc1d0011a:0xff0e0000 mode=LEGACY host_tsg=0xcafe127a engine=0xc shard=0x0 first_chan_flags=0x207220 ctxShare=0x0
+kf-rm: chanlink: CTXSHARE-FACTS 0xc1d0011e:0xff0e0200 parent(tsg)=0xff0e0000 flags=0x0 kind=SYNC declared_subctxId=0x0 hVASpace=0x0
+kf3: TSG-MIRROR BIRTH 0xc1d0011e:0xff0e0000 mode=EXPLICIT host_tsg=0xcafe1328 engine=0x1 first_ctx=0xff0e0200 kind=Sync ctx_flags=Some(
+kf3: TSG-MIRROR CTX 0xc1d0011e:0xff0e0000 guest_ctx=0xff0e0200 kind=Sync host_ctx=0xcafe1329 host_veid=Some(0) space=0xcafe0fff chan_flags=0x80206120 host_rq1=false
+kf3: TSG-MIRROR BIRTH 0xc1d0011f:0xff0e0000 mode=LEGACY host_tsg=0xcafe135e engine=0xc shard=0x0 first_chan_flags=0x207120 ctxShare=0x0

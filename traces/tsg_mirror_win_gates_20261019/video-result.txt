@@ -1,0 +1,115 @@
+M2 VIDEO STATUS 2026-10-19T11:22:53.8334927+02:00
+M2 VIDEO BEGIN 2026-10-19T11:22:35.9193203+02:00
+COMMAND C:\kf-m2\ffmpeg.exe -y -hide_banner -nostdin -nostats -f lavfi -i testsrc2=size=1280x720:rate=30:duration=10 -an -pix_fmt yuv420p -c:v h264_nvenc -preset p4 C:\kf-m2\h264.mp4
+RESULT encode-h264 rc=0
+COMMAND C:\kf-m2\ffprobe.exe -v error -count_frames -select_streams v:0 -show_entries stream=codec_name,width,height,nb_read_frames -of json C:\kf-m2\h264.mp4
+RESULT probe-h264 rc=0
+FRAME_COUNT h264 PASS count=300
+COMMAND C:\kf-m2\ffmpeg.exe -y -hide_banner -nostdin -nostats -f lavfi -i testsrc2=size=1280x720:rate=30:duration=10 -an -pix_fmt yuv420p -c:v hevc_nvenc -preset p4 C:\kf-m2\hevc.mp4
+RESULT encode-hevc rc=0
+COMMAND C:\kf-m2\ffprobe.exe -v error -count_frames -select_streams v:0 -show_entries stream=codec_name,width,height,nb_read_frames -of json C:\kf-m2\hevc.mp4
+RESULT probe-hevc rc=0
+FRAME_COUNT hevc PASS count=300
+COMMAND C:\kf-m2\ffmpeg.exe -y -hide_banner -nostdin -nostats -i C:\kf-m2\h264.mp4 -pix_fmt yuv420p -f framemd5 C:\kf-m2\cpu.framemd5
+RESULT decode-cpu rc=0
+COMMAND C:\kf-m2\ffmpeg.exe -y -hide_banner -nostdin -nostats -hwaccel cuda -hwaccel_output_format cuda -i C:\kf-m2\h264.mp4 -vf hwdownload,format=nv12 -pix_fmt yuv420p -f framemd5 C:\kf-m2\gpu.framemd5
+RESULT decode-nvdec rc=0
+DECODE_CPU_COMPARE PASS frames=300 exact_per_frame_md5=300
+VIDEO_PASS
+M2 VIDEO END 2026-10-19T11:22:41.1599627+02:00
+VIDEO_RC=0
+Output #0, mp4, to 'C:\kf-m2\h264.mp4':
+  Metadata:
+    encoder         : Lavf62.12.103
+  Stream #0:0: Video: h264 (Main) (avc1 / 0x31637661), yuv420p(tv, progressive), 1280x720 [SAR 1:1 DAR 16:9], q=2-31, 2000 kb/s, 30 fps, 15360 tbn
+    Metadata:
+      encoder         : Lavc62.28.103 h264_nvenc
+    Side data:
+      CPB properties: bitrate max/min/avg: 0/0/2000000 buffer size: 4000000 vbv_delay: N/A
+[out#0/mp4 @ 000002286a1f0540] video:2779KiB audio:0KiB subtitle:0KiB other streams:0KiB global headers:0KiB muxing overhead: 0.158459%
+frame=  300 fps=245 q=29.0 Lsize=    2783KiB time=00:00:09.90 bitrate=2303.1kbits/s speed=8.07x elapsed=0:00:01.22    
+Output #0, mp4, to 'C:\kf-m2\hevc.mp4':
+  Metadata:
+    encoder         : Lavf62.12.103
+  Stream #0:0: Video: hevc (Main) (hev1 / 0x31766568), yuv420p(tv, progressive), 1280x720 [SAR 1:1 DAR 16:9], q=2-31, 2000 kb/s, 30 fps, 15360 tbn
+    Metadata:
+      encoder         : Lavc62.28.103 hevc_nvenc
+    Side data:
+      CPB properties: bitrate max/min/avg: 0/0/2000000 buffer size: 4000000 vbv_delay: N/A
+[out#0/mp4 @ 0000022a44f5f040] video:2841KiB audio:0KiB subtitle:0KiB other streams:0KiB global headers:0KiB muxing overhead: 0.157763%
+frame=  300 fps=0.0 q=29.0 Lsize=    2846KiB time=00:00:09.90 bitrate=2354.8kbits/s speed=10.8x elapsed=0:00:00.91    
+    major_brand     : isom
+    minor_version   : 512
+    compatible_brands: isomiso2avc1mp41
+    encoder         : Lavf62.12.103
+  Stream #0:0(und): Video: rawvideo (I420 / 0x30323449), yuv420p(progressive), 1280x720 [SAR 1:1 DAR 16:9], q=2-31, 331776 kb/s, 30 fps, 30 tbn (default)
+    Metadata:
+      encoder         : Lavc62.28.103 rawvideo
+      handler_name    : VideoHandler
+[out#0/framemd5 @ 00000296ae53d600] video:405000KiB audio:0KiB subtitle:0KiB other streams:0KiB global headers:0KiB muxing overhead: unknown
+frame=  300 fps=0.0 q=-0.0 Lsize=      24KiB time=00:00:10.00 bitrate=  19.4kbits/s speed=17.1x elapsed=0:00:00.58    
+{
+    "programs": [
+
+    ],
+    "stream_groups": [
+
+    ],
+    "streams": [
+        {
+            "codec_name": "h264",
+            "width": 1280,
+            "height": 720,
+            "nb_read_frames": "300"
+        }
+    ]
+}
+{
+    "programs": [
+
+    ],
+    "stream_groups": [
+
+    ],
+    "streams": [
+        {
+            "codec_name": "hevc",
+            "width": 1280,
+            "height": 720,
+            "nb_read_frames": "300"
+        }
+    ]
+}
+TDR_EVENTS=0
+Mon Oct 19 11:22:53 2026       
++-----------------------------------------------------------------------------------------+
+| NVIDIA-SMI 580.88                 Driver Version: 580.88         CUDA Version: 13.0     |
++-----------------------------------------+------------------------+----------------------+
+| GPU  Name                  Driver-Model | Bus-Id          Disp.A | Volatile Uncorr. ECC |
+| Fan  Temp   Perf          Pwr:Usage/Cap |           Memory-Usage | GPU-Util  Compute M. |
+|                                         |                        |               MIG M. |
+|=========================================+========================+======================|
+|   0  NVIDIA GeForce RTX 4070      WDDM  |   00000000:00:06.0  On |                  N/A |
+| N/A    0C  N/A             N/A  /  N/A  |     711MiB /   8192MiB |     N/A      Default |
+|                                         |                        |                  N/A |
++-----------------------------------------+------------------------+----------------------+
+
++-----------------------------------------------------------------------------------------+
+| Processes:                                                                              |
+|  GPU   GI   CI              PID   Type   Process name                        GPU Memory |
+|        ID   ID                                                               Usage      |
+|=========================================================================================|
+|    0   N/A  N/A            1288    C+G   C:\Windows\System32\dwm.exe           N/A      |
+|    0   N/A  N/A            1924    C+G   ...em32\ApplicationFrameHost.exe      N/A      |
+|    0   N/A  N/A            7036    C+G   C:\Windows\explorer.exe               N/A      |
+|    0   N/A  N/A            7104    C+G   ...2txyewy\CrossDeviceResume.exe      N/A      |
+|    0   N/A  N/A            7160    C+G   ...indows\System32\ShellHost.exe      N/A      |
+|    0   N/A  N/A            8208    C+G   ..._cw5n1h2txyewy\SearchHost.exe      N/A      |
+|    0   N/A  N/A            8308    C+G   ...y\StartMenuExperienceHost.exe      N/A      |
+|    0   N/A  N/A           10360    C+G   ....0.4283.62\msedgewebview2.exe      N/A      |
+|    0   N/A  N/A           10976    C+G   ...t\Edge\Application\msedge.exe      N/A      |
+|    0   N/A  N/A           11080    C+G   ...IA App\CEF\NVIDIA Overlay.exe      N/A      |
+|    0   N/A  N/A           11512    C+G   ...IA App\CEF\NVIDIA Overlay.exe      N/A      |
+|    0   N/A  N/A           13324    C+G   ...\cef.win64\steamwebhelper.exe      N/A      |
+|    0   N/A  N/A           14092    C+G   ...ntrolPanel\SystemSettings.exe      N/A      |
++-----------------------------------------------------------------------------------------+
