@@ -7,13 +7,20 @@ use std::sync::{
     atomic::{AtomicUsize, Ordering},
 };
 const LIMIT: usize = 16_384;
+fn fixed_reply() -> Reply {
+    Reply {
+        rpc_result: 0x56,
+        rpc_result_private: None,
+        body: vec![1, 2, 3],
+    }
+}
 
 #[derive(Debug)]
 struct FixedReply(Arc<AtomicUsize>);
 impl CommandPolicy for FixedReply {
     fn respond(&mut self, _: &RpcCommand) -> Option<Reply> {
         self.0.fetch_add(1, Ordering::Relaxed);
-        Some(Reply::refused(0x56))
+        Some(fixed_reply())
     }
 }
 
@@ -39,7 +46,7 @@ fn child_metadata_trace() {
             elements: 1,
             delivered: vec![],
         };
-        assert_eq!(policy.respond(&cmd), Some(Reply::refused(0x56)));
+        assert_eq!(policy.respond(&cmd), Some(fixed_reply()));
     }
     assert_eq!(calls.load(Ordering::Relaxed), 2 * LIMIT + 1);
     println!("INNER_CALLS={} ALL_REPLIES_UNCHANGED=1", 2 * LIMIT + 1);
