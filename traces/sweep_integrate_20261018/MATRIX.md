@@ -13,7 +13,7 @@ AD104_PATH_AUDIT.md. The trusted host remains off-limits.
 |---|---|---|---|---|---|
 | AD102 | Linux 580.159.04 | `7fb36324a` | UNRUN | Raw30/CUDA4/gfx10/broker PASS | `da0569a6`; E1 `ad102_4090/README.md` |
 | AD102 | Linux 590.48.01 | `7fb36324a` | UNRUN | Raw30/CUDA4/gfx10/broker PASS; 18 STALL/10 nvAssert | `9d6f210ba`; E1 `ad102_second_builds_20261016/linux590_apps/RESULT.md` |
-| AD102 | Linux 595.91.07 | `7fb36324a` | UNRUN | Raw30/CUDA4/gfx10/broker PASS across recorded revisions; warnings retained | Raw latest `9d6f210ba`, broker `6265b980f`; E1 `ad102_followup_20261016/RESULT.md` and `ad102_second_builds_20261016/linux595_regression/RESULT.md` |
+| AD102 | Linux 595.91.07 | `24906bf33` | FAIL: raw29/30 (R19); guest CUDA/broker UNRUN | Raw30/CUDA4/gfx10/broker PASS across recorded revisions; warnings retained | Raw latest `9d6f210ba`, broker `6265b980f`; E1 `ad102_followup_20261016/RESULT.md` and `ad102_second_builds_20261016/linux595_regression/RESULT.md` |
 | AD102 | Windows 580.88 / 32.0.15.8088 | `7fb36324a`, P19 | UNRUN | Code0, desktop, CUDA3, hardware DX11/12, 421 s zero-TDR hold; Blender/Edge short PASS | Hold/apps `77a72da9e`; E1 `ad102_followup_20261016/RESULT.md` |
 | AD102 | Windows 581.51 / 32.0.15.8151 | `7fb36324a`, P19 | UNRUN | Guest FAIL Code43; native same-board suite/hold PASS | `9d6f210ba`; E1 `ad102_second_builds_20261016/{windows58151,native_windows58151}/RESULT.md` |
 | AD103 | Linux 580 / 595 | `7fb36324a` | UNRUN | No sweep acceptance claimed | Not re-audited |

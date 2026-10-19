@@ -1,0 +1,43 @@
+{
+  "measured": {
+    "integrated_source": "24906bf334665c9000b16b271005593daa3586c7",
+    "integrated_gap_ns": 8000480,
+    "candidate4_source": "0452613b5c71cb175271230b3e14c8e3c3eef2db",
+    "candidate4_gap_ns": 4001056,
+    "same_fixed_bound_ns": 1000000,
+    "both_timer_verdicts": "FAIL",
+    "n_per_arm": 1,
+    "spread": "N/A",
+    "guest_driver": "595.91.07",
+    "host_driver": "595.91.07",
+    "budget_seconds": 180,
+    "same_initrd_kernel_launcher": true,
+    "changed_variable": "product QEMU revision via documented QEMU_BIN override"
+  },
+  "falsifier_result": "integration-specific-only hypothesis rejected: candidate4 reproduces the same R19 assertion failure",
+  "root_cause": "UNRESOLVED; serial output and/or first mirror access overhead remain hypotheses, not clock-domain proof",
+  "policy": "grade remainsFAIL; no bound/grader/timeout change; no further timer attempt this lease",
+  "early_heartbeat_warnings": "separate finding; no B3fix claimed",
+  "artifacts": {
+    "candidate4_timer_serial.txt": {
+      "raw_sha256": "003b98ed66cb210ac324098220801915ff99a67e939643403a99a827ca8033a4",
+      "committed": "candidate4_timer_serial.txt",
+      "bytes": 10009
+    },
+    "candidate4_timer_run.txt": {
+      "raw_sha256": "333135e0b792c3a980314d0c36143258397df2b90a8a12a9bfc2a016875a3d90",
+      "committed": "candidate4_timer_run.txt",
+      "bytes": 1511
+    },
+    "timer_comparison_guest_hashes.txt": {
+      "raw_sha256": "25f032e0c76a740f161cbf108d02adb24b593e9ba085a6024352c4b62e44d3f7",
+      "committed": "timer_comparison_guest_hashes.txt",
+      "bytes": 215
+    },
+    "candidate4_qemu_sha256.txt": {
+      "raw_sha256": "6cebe51102d33b1b5a11e16ee04710001bf0a7144488358cabf39b37e155f6c8",
+      "committed": "candidate4_qemu_sha256.txt",
+      "bytes": 120
+    }
+  }
+}
