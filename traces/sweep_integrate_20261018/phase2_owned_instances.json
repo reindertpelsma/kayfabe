@@ -52,6 +52,7 @@
     "auto_destroy_armed_utc": "2026-10-19T17:53:04.288751+00:00",
     "auto_destroy_verified": true,
     "observed_dph_total": 0.49,
-    "phase": "fresh KVM boot/SSH setup; no hardware run"
+    "phase": "native PASS; Linux595 raw29/30 R19FAIL also on C4; generic Windows LTSC install active",
+    "phase_updated_utc": "2026-10-19T19:02:27.610557+00:00"
   }
 ]

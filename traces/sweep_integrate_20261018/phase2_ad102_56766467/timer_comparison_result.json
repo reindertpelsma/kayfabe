@@ -15,7 +15,7 @@
     "changed_variable": "product QEMU revision via documented QEMU_BIN override"
   },
   "falsifier_result": "integration-specific-only hypothesis rejected: candidate4 reproduces the same R19 assertion failure",
-  "root_cause": "UNRESOLVED; serial output and/or first mirror access overhead remain hypotheses, not clock-domain proof",
+  "root_cause": "UNRESOLVED; serial output/preemption is a code-read hypothesis. Mirror mapping is already held; first-access allocation/IO is not supported by source.",
   "policy": "grade remainsFAIL; no bound/grader/timeout change; no further timer attempt this lease",
   "early_heartbeat_warnings": "separate finding; no B3fix claimed",
   "artifacts": {
