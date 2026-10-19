@@ -71,8 +71,9 @@ try:
         if not isinstance(reply, dict) or type(reply.get('count')) is not int or reply['count'] != len(chunk):
             raise RuntimeError('REFUSED short/invalid QGA write')
     call('guest-file-flush', {'handle': handle})
-    call('guest-file-close', {'handle': handle})
-    handle = None
+    closing, handle = handle, None
+    # A lost close response is uncertain too; never close that handle a second time.
+    call('guest-file-close', {'handle': closing})
     print(f'QGA_PUT bytes={len(data)} sha256={hashlib.sha256(data).hexdigest()}')
 finally:
     if handle is not None:
