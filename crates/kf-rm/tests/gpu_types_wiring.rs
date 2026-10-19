@@ -366,7 +366,11 @@ fn tu106_580_small_controls_answer_only_the_measured_requests() {
     }
     assert!(!ok(&p.respond(&control(0x2080_2806, &0xbu32.to_le_bytes()))));
     let mut wrong_branch = policy(tu106, V595);
-    assert!(!ok(&wrong_branch.respond(&control(0x2080_2801, &3u32.to_le_bytes()))));
+    assert!(!ok(
+        &wrong_branch.respond(&control(0x2080_2801, &3u32.to_le_bytes()))
+    ));
     let mut neighbour = policy(DieId::new(arch::TU100, 4), V580);
-    assert!(!ok(&neighbour.respond(&control(0x2080_2801, &3u32.to_le_bytes()))));
+    assert!(!ok(
+        &neighbour.respond(&control(0x2080_2801, &3u32.to_le_bytes()))
+    ));
 }
