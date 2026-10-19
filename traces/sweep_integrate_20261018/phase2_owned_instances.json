@@ -9,11 +9,32 @@
     "product_head": "24a67f4c35542ff61b59c7e2d4c838f6263faf2a",
     "credit_before": 43.559771576861976,
     "auto_destroy_minutes": 180,
-    "destroyed": false,
+    "destroyed": true,
     "auto_destroy_pid": 54157,
     "auto_destroy_armed_utc": "2026-10-19T17:42:43.750812+00:00",
     "auto_destroy_verified": true,
     "observed_dph_total": 0.175,
-    "phase": "KVM image pull; SSH unavailable; hardware unrun"
+    "phase": "destroyed after resource preflight failure; hardware UNRUN",
+    "absence_verified_utc": "2026-10-19T17:49:06.134820+00:00",
+    "credit_after_observed": 43.55443920156199,
+    "observed_account_credit_delta": 0.00533237529998587,
+    "elapsed_hours_until_absence": 0.1065880675,
+    "runtime_cost_estimate_usd": 0.0186529118125,
+    "cost_upper_bound_usd": 1.0186529118125,
+    "cost_note": "Runtime estimate and shared-account credit delta are observations, not settled attribution. Budget guard reserves1USD for delayed transfer billing until invoices reconcile.",
+    "auto_destroy_cancelled_after_absence": true,
+    "invoiced_so_far_usd": 0.011,
+    "invoice_charge_rows": [
+      {
+        "amount": "0.006",
+        "quantity": "0.044",
+        "rate": "0.1333"
+      },
+      {
+        "amount": "0.005",
+        "quantity": "0.128",
+        "rate": "0.0417"
+      }
+    ]
   }
 ]

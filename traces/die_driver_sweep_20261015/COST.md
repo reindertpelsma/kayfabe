@@ -14,3 +14,14 @@ Entries below will record every created ID and actual/conservative cost.
   observed rate0.175USD/h (quote0.13449 at search defaults). Still pulling KVM
   image; no hardware test yet. Cost pending settlement; maximum runtime charge
   at observed rate0.525USD plus transfer. One active own instance.
+
+- DESTROYED56765201; API absence verified2026-10-19T17:49:06Z. Preflight
+  HOST_FAULT:5CPUs(<8), missing NVIDIA device nodes, NVIDIA-SMI unavailable.
+  No product build or guest test. Actual attribution pending invoice: runtime
+  estimate0.018653USD, observed shared-account credit delta0.005332USD. The
+  temporary budget guard reserves1USD for delayed transfer billing, not a claim
+  of actual spend. Own timer cancelled only after verified absence. ActiveIDs0.
+
+- Invoice observation after teardown:56765201 has two current charge rows,
+ 0.006+0.005=0.011USD. These are invoiced-so-far, not asserted final settlement.
+ Guard reserve remains conservative; actual spend is not the1USDdelay reserve.
