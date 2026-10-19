@@ -108,7 +108,40 @@ pub enum Resolution {
 
 static AUTHORED_DEFAULTS: AtomicU64 = AtomicU64::new(0);
 static WITHHELD: AtomicU64 = AtomicU64::new(0);
-static SEEN: Mutex<BTreeSet<String>> = Mutex::new(BTreeSet::new());
+const NOTICE_LIMIT: usize = 64;
+static NOTICES: Mutex<Notices> = Mutex::new(Notices {
+    seen: BTreeSet::new(),
+    truncated: false,
+});
+
+#[derive(Default)]
+struct Notices {
+    seen: BTreeSet<String>,
+    truncated: bool,
+}
+
+enum Notice {
+    Silent,
+    Line(String),
+    Limit,
+}
+
+impl Notices {
+    fn record(&mut self, text: String) -> Notice {
+        if self.seen.contains(&text) {
+            return Notice::Silent;
+        }
+        if self.seen.len() >= NOTICE_LIMIT {
+            return if std::mem::replace(&mut self.truncated, true) {
+                Notice::Silent
+            } else {
+                Notice::Limit
+            };
+        }
+        self.seen.insert(text.clone());
+        Notice::Line(text)
+    }
+}
 
 /// How many authored defaults were served in place of an unmeasured (die, branch) row (every call counts).
 #[must_use]
@@ -122,11 +155,19 @@ pub fn withheld_count() -> u64 {
     WITHHELD.load(Ordering::Relaxed)
 }
 
-/// Log a notice once per distinct text (a guest asking a thousand times prints one line).
+/// Emit at most 64 distinct notices and one truncation line per process.
+/// A refusal's text can contain a changing counter; neither guest life changes
+/// nor unique message text may grow retained state or diagnostic output forever.
 fn notice(text: String) {
-    if let Ok(mut s) = SEEN.lock() {
-        if s.insert(text.clone()) {
-            eprintln!("{text}");
+    let event = match NOTICES.lock() {
+        Ok(mut notices) => notices.record(text),
+        Err(_) => return,
+    };
+    match event {
+        Notice::Silent => {}
+        Notice::Line(text) => eprintln!("{text}"),
+        Notice::Limit => {
+            eprintln!("W349NOTICE limit reached (64 distinct notices); further notices suppressed")
         }
     }
 }
@@ -232,4 +273,35 @@ pub fn ce_fault_method_buffer_size(
 fn word(b: &[u8], i: usize) -> u32 {
     b.get(4 * i..4 * i + 4)
         .map_or(0, |w| u32::from_le_bytes([w[0], w[1], w[2], w[3]]))
+}
+
+#[cfg(test)]
+mod notice_tests {
+    use super::*;
+
+    #[test]
+    fn unique_text_cannot_grow_retained_notice_state_past_the_limit() {
+        let mut notices = Notices::default();
+        for i in 0..10_000 {
+            let event = notices.record(format!("refusal counter={i}"));
+            match i {
+                0..NOTICE_LIMIT => assert!(matches!(event, Notice::Line(_))),
+                NOTICE_LIMIT => assert!(matches!(event, Notice::Limit)),
+                _ => assert!(matches!(event, Notice::Silent)),
+            }
+            assert!(notices.seen.len() <= NOTICE_LIMIT);
+        }
+        assert_eq!(notices.seen.len(), NOTICE_LIMIT);
+    }
+
+    #[test]
+    fn duplicate_notices_consume_no_extra_budget_or_limit_marker() {
+        let mut notices = Notices::default();
+        assert!(matches!(notices.record("same".into()), Notice::Line(_)));
+        for _ in 0..10_000 {
+            assert!(matches!(notices.record("same".into()), Notice::Silent));
+        }
+        assert_eq!(notices.seen.len(), 1);
+        assert!(!notices.truncated);
+    }
 }
