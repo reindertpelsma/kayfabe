@@ -9,6 +9,7 @@
 #   full 580.159.04 .run installed by provision_bench_tree.sh; this adds only the Khronos side.
 set -uo pipefail
 BENCH=/workspace/bench
+IMG=${KF_GUEST_IMG:-$BENCH/guest.qcow2}
 SRC_DIR="$(cd "$(dirname "$0")" && pwd)"
 VGL_URL=${VGL_URL:-https://github.com/VirtualGL/virtualgl/releases/download/3.1.3/virtualgl_3.1.3_amd64.deb}
 PKGS="vulkan-tools libvulkan-dev glslang-tools libegl-dev libopengl-dev libgl-dev libx11-dev mesa-utils xvfb x11-utils gcc"
@@ -24,7 +25,7 @@ fi
 
 pgrep -x qemu-system-x86 >/dev/null && { say "⊘ a QEMU is already running — the bench is serialized, refusing"; exit 2; }
 qemu-system-x86_64 -enable-kvm -cpu host -m 4G -smp 8 -display none \
-  -drive if=virtio,file="$BENCH/guest.qcow2",format=qcow2 \
+  -drive if=virtio,file="$IMG",format=qcow2 \
   -netdev user,id=n0,hostfwd=tcp::2222-:22 -device virtio-net-pci,netdev=n0 \
   -serial file:"$BENCH/gfxprov_serial.log" -daemonize -pidfile "$BENCH/gfxprov.pid"
 GS="ssh -i $BENCH/guest_key -p 2222 -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -o LogLevel=ERROR -o ConnectTimeout=8 ubuntu@127.0.0.1"
@@ -39,6 +40,9 @@ $GS "sudo systemctl mask --now unattended-upgrades apt-daily.service apt-daily.t
 KB=$($GS 'uname -r' | tr -d '\r')
 say "guest up, kernel $KB — installing: $PKGS + VirtualGL"
 $GS "sudo apt-get update -qq && sudo DEBIAN_FRONTEND=noninteractive apt-get install -y -qq $PKGS 2>&1 | tail -2"
+# A .run driver uninstall can remove the development linker symlinks even when
+# dpkg still considers these packages installed. Restore their owned files.
+$GS "sudo DEBIAN_FRONTEND=noninteractive apt-get install --reinstall -y -qq libegl-dev libopengl-dev libgl-dev 2>&1 | tail -2"
 $GS "curl -fsSL -o /tmp/vgl.deb '$VGL_URL' && sudo DEBIAN_FRONTEND=noninteractive apt-get install -y -qq /tmp/vgl.deb 2>&1 | tail -1"
 # the render node for the unprivileged ssh user (Ubuntu gives /dev/dri/renderD* to group render)
 $GS "sudo usermod -aG video,render ubuntu"
