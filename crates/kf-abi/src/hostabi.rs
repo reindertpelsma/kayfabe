@@ -615,6 +615,11 @@ pub static HOST_CONTROLS: &[HostControl] = &[
         NV2080_CTRL_GPU_GET_SHORT_NAME_STRING_PARAMS
     ),
     hc!(
+        "NV2080_CTRL_CMD_GPU_GET_GID_INFO",
+        0x2080_014a,
+        NV2080_CTRL_GPU_GET_GID_INFO_PARAMS
+    ),
+    hc!(
         "NV2080_CTRL_CMD_GPU_GET_PES_INFO",
         0x2080_0168,
         NV2080_CTRL_GPU_GET_PES_INFO_PARAMS
@@ -1079,14 +1084,27 @@ mod tests {
         let cmd = crate::gspstaticinfo::NV2080_CTRL_CMD_GPU_GET_GID_INFO;
         let mut request = vec![0; crate::gspstaticinfo::GID_INFO_SIZE];
         request[4..8].copy_from_slice(&crate::gspstaticinfo::GID_FLAGS_SHA1_BINARY.to_le_bytes());
-        assert!(host_control(cmd).is_some(), "host UUID query is missing from the inventory");
+        assert!(
+            host_control(cmd).is_some(),
+            "host UUID query is missing from the inventory"
+        );
         for &version in m::MEASURED {
             let h = host(&version.to_string());
-            let carry = h.control_carry(cmd).expect("published control").expect("measured layout");
+            let carry = h
+                .control_carry(cmd)
+                .expect("published control")
+                .expect("measured layout");
             assert_eq!(carry.host_size(), request.len(), "{version}");
-            assert_eq!(h.carry_out("host GID", &carry, &request).expect("authored request"), request);
+            assert_eq!(
+                h.carry_out("host GID", &carry, &request)
+                    .expect("authored request"),
+                request
+            );
             for size in [0, request.len() - 1, request.len() + 1] {
-                assert!(matches!(h.carry_out("host GID", &carry, &vec![0; size]), Err(HostAbiError::Size { .. })));
+                assert!(matches!(
+                    h.carry_out("host GID", &carry, &vec![0; size]),
+                    Err(HostAbiError::Size { .. })
+                ));
             }
         }
     }
