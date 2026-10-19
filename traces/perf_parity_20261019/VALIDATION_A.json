@@ -1,0 +1,54 @@
+{
+  "status": "MEASURED: release profiles completed, zero added Clippy diagnostics",
+  "source": "41a8beb07573847a932b76d48bc0dcd4383ea247",
+  "release_tests": {
+    "mirror_base": {
+      "passed": 929,
+      "failed": 0,
+      "ignored": 3
+    },
+    "candidate_default": {
+      "passed": 939,
+      "failed": 0,
+      "ignored": 3
+    },
+    "candidate_diagnostics": {
+      "passed": 960,
+      "failed": 0,
+      "ignored": 3
+    }
+  },
+  "clippy_default": {
+    "kf-chan": {
+      "added": 0,
+      "base": {
+        "warning": 220
+      },
+      "base_build_success": true,
+      "candidate": {
+        "warning": 220
+      },
+      "candidate_build_success": true,
+      "removed": 0,
+      "same_multiset": true
+    },
+    "kf-qemu": {
+      "added": 0,
+      "base": {
+        "error": 89,
+        "warning": 364
+      },
+      "base_build_success": false,
+      "candidate": {
+        "error": 89,
+        "warning": 364
+      },
+      "candidate_build_success": false,
+      "removed": 0,
+      "same_multiset": true
+    }
+  },
+  "rustfmt_changed_lines": "PASS",
+  "mutants": 14,
+  "minimum_test_kills_per_mutant": 2
+}
