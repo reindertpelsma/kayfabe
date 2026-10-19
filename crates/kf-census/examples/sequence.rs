@@ -28,10 +28,10 @@ fn run() -> Result<bool, String> {
     let failure = Rc::new(RefCell::new(None::<String>));
     let (tap_out, tap_failure) = (out.clone(), failure.clone());
     an.set_record_tap(Box::new(move |source, m| {
-        if tap_failure.borrow().is_none() {
-            if let Err(e) = tap_out.borrow_mut().message(source, m) {
-                *tap_failure.borrow_mut() = Some(e.to_string());
-            }
+        if tap_failure.borrow().is_none()
+            && let Err(e) = tap_out.borrow_mut().message(source, m)
+        {
+            *tap_failure.borrow_mut() = Some(e.to_string());
         }
     }));
     let mut input = BufReader::new(std::fs::File::open(&a[1]).map_err(|e| e.to_string())?);
