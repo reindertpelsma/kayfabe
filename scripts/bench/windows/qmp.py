@@ -13,7 +13,7 @@ usage:
                                        (or "none"); SOCK is ignored
   qga.py-style, on the guest-agent socket:
   qmp.py SOCK qga-ping                 guest-ping (exit 0 when the agent answers)
-  qmp.py SOCK qga-exec PATH [ARG...]   guest-exec with captured output; prints stdout/stderr and
+  qmp.py SOCK qga-exec [--timeout=SECONDS] PATH [ARG...]   guest-exec with captured output; prints stdout/stderr and
                                        exits with the program's exit code (124 on timeout)
 
 Box output is data: nothing printed here is interpreted by the caller beyond exit codes and the
@@ -22,6 +22,7 @@ one-word reason of `last-shutdown`.
 
 import base64
 import json
+import math
 import socket
 import sys
 import time
@@ -230,7 +231,17 @@ def main(argv):
     if verb == "qga-ping":
         return qga_ping(sock)
     if verb == "qga-exec" and rest:
-        return qga_exec(sock, rest[0], rest[1:])
+        timeout = 300.0
+        if rest[0].startswith("--timeout="):
+            try:
+                timeout = float(rest.pop(0).split("=", 1)[1])
+                if not math.isfinite(timeout) or not 0 < timeout <= 3600:
+                    raise ValueError()
+            except ValueError:
+                print("qga-exec: timeout must be finite, positive and <= 3600 seconds", file=sys.stderr)
+                return 2
+        if rest:
+            return qga_exec(sock, rest[0], rest[1:], timeout=timeout)
     print(__doc__, file=sys.stderr)
     return 2
 
