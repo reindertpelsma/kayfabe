@@ -24,6 +24,10 @@ class FilePut(unittest.TestCase):
             def serve():
                 try:
                     connection,_=server.accept();observed['connections']+=1
+                    if mode=='lost-sync':
+                        connection.recv(4096)
+                        connection.close()
+                        connection,_=server.accept();observed['connections']+=1
                     with connection:
                         connection.settimeout(5);reader=connection.makefile('rb')
                         first=reader.readline(100000);observed['reset']=first.startswith(b'\xff')
@@ -93,6 +97,12 @@ class FilePut(unittest.TestCase):
         result,observed,_=self.transfer('close-error')
         self.assertNotEqual(result.returncode,0)
         self.assertEqual(observed['closes'],1)
+
+    def test_lost_readonly_sync_can_reconnect_before_any_file_command(self):
+        result,observed,data=self.transfer('lost-sync')
+        self.assertEqual(result.returncode,0,result.stdout+result.stderr)
+        self.assertEqual(observed['connections'],2)
+        self.assertEqual(observed['data'],data)
 
 
 if __name__=='__main__':
