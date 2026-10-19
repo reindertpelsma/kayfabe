@@ -1925,6 +1925,17 @@ impl Engine {
     }
 }
 
+/// An ISO surface named directly by address (NVKMS `EvoSetISOSurfaceAddressC9`).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct SurfaceAddress {
+    /// Address aperture; IOVA is not framebuffer memory.
+    pub aperture: Aperture,
+    /// Byte address, with the low method's control bits removed.
+    pub addr: u64,
+    /// `SET_SURFACE_ADDRESS_LO_ISO.KIND`.
+    pub block_linear: bool,
+}
+
 /// ★ What a head scans out: the first enabled window it owns, read from the ARMED state (M2's scanout
 /// copy source). Raw class values — the plane resolves the context DMA and bounds every byte.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -1941,6 +1952,8 @@ pub struct Scanout {
     pub handle: u32,
     /// Byte offset into it (`SET_OFFSET(0)` is in 256-byte units, `nvCtxDmaOffsetFromBytes`).
     pub offset: u64,
+    /// Address-named plane 0; when present, `handle` and `offset` are zero.
+    pub address: Option<SurfaceAddress>,
     /// The source rectangle (`SET_SIZE_IN`).
     pub width: u32,
     /// Height of the source rectangle.
@@ -1975,6 +1988,8 @@ pub struct Scanout {
     pub iso1: u32,
     /// `SET_OFFSET(1)` in bytes.
     pub offset1: u64,
+    /// Address-named plane 1, independently enabled and addressed.
+    pub address1: Option<SurfaceAddress>,
     /// `SET_PLANAR_STORAGE(1).PITCH`, in the units of `pitch`.
     pub pitch1: u32,
     /// `SET_PARAMS.SWAP_UV`.
@@ -2009,12 +2024,79 @@ pub struct Composition {
     pub layers: Vec<Scanout>,
 }
 
-/// The window-class methods a scanout reads — resolved from the derived table; `None` for a family
-/// whose windows name surfaces by address (GB20x `CA7E`, M5).
+/// ISO surface methods, resolved by their class vocabulary rather than a family switch.
+#[derive(Debug, Clone, Copy)]
+enum IsoVocab {
+    Context {
+        iso: u32,
+        offset: u32,
+    },
+    Address {
+        naming: Naming,
+        kind: (u8, u8),
+        block_linear: u32,
+    },
+}
+
+impl IsoVocab {
+    fn resolve(t: &ClassTable, win: u32, index: u32) -> Option<Self> {
+        if let Some(iso) = t.a(win, "SET_CONTEXT_DMA_ISO", index) {
+            return Some(Self::Context {
+                iso,
+                offset: t.a(win, "SET_OFFSET", index)?,
+            });
+        }
+        let lo = "SET_SURFACE_ADDRESS_LO_ISO";
+        Some(Self::Address {
+            naming: Naming::Surface {
+                hi: t.a(win, "SET_SURFACE_ADDRESS_HI_ISO", index)?,
+                lo: t.a(win, lo, index)?,
+                addr_lo: t.f(win, &format!("{lo}_ADDRESS_LO"))?,
+                target: t.f(win, &format!("{lo}_TARGET"))?,
+                enable: t.f(win, &format!("{lo}_ENABLE"))?,
+                tgt: [
+                    t.v(win, &format!("{lo}_TARGET_IOVA"))?,
+                    t.v(win, &format!("{lo}_TARGET_PHYSICAL_NVM"))?,
+                    t.v(win, &format!("{lo}_TARGET_PHYSICAL_PCI"))?,
+                    t.v(win, &format!("{lo}_TARGET_PHYSICAL_PCI_COHERENT"))?,
+                ],
+            },
+            kind: t.f(win, &format!("{lo}_KIND"))?,
+            block_linear: t.v(win, &format!("{lo}_KIND_BLOCKLINEAR"))?,
+        })
+    }
+
+    fn read(self, get: impl Fn(u32) -> u32) -> (u32, u64, Option<SurfaceAddress>) {
+        match self {
+            Self::Context { iso, offset } => (get(iso), u64::from(get(offset)) << 8, None),
+            Self::Address {
+                naming,
+                kind,
+                block_linear,
+            } => {
+                let address = match naming.place(0, &get) {
+                    Some(Place::Addr { aperture, addr }) => {
+                        let Naming::Surface { lo, .. } = naming else {
+                            unreachable!()
+                        };
+                        Some(SurfaceAddress {
+                            aperture,
+                            addr,
+                            block_linear: fld(get(lo), kind) == block_linear,
+                        })
+                    }
+                    _ => None,
+                };
+                (0, 0, address)
+            }
+        }
+    }
+}
+
+/// The window-class methods a scanout reads, resolved from the derived table.
 #[derive(Debug, Clone, Copy)]
 pub struct ScanVocab {
-    iso0: u32,
-    offset0: u32,
+    source0: IsoVocab,
     size: (u32, (u8, u8), (u8, u8)),
     size_in: (u32, (u8, u8), (u8, u8)),
     point_in: (u32, (u8, u8), (u8, u8)),
@@ -2023,7 +2105,7 @@ pub struct ScanVocab {
     storage: (u32, (u8, u8)),
     size_out: (u32, (u8, u8), (u8, u8)),
     /// Plane 1 of a semi-planar format (`None`: the class names none).
-    plane1: Option<(u32, u32, u32, (u8, u8))>,
+    plane1: Option<(IsoVocab, u32, (u8, u8))>,
     /// `SET_PARAMS.SWAP_UV`.
     swap_uv: Option<(u8, u8)>,
     comp_depth: (u32, (u8, u8)),
@@ -2053,8 +2135,7 @@ impl ScanVocab {
             ))
         };
         Some(ScanVocab {
-            iso0: t.a(win, "SET_CONTEXT_DMA_ISO", 0)?,
-            offset0: t.a(win, "SET_OFFSET", 0)?,
+            source0: IsoVocab::resolve(t, win, 0)?,
             size: wh("SET_SIZE")?,
             size_in: wh("SET_SIZE_IN")?,
             point_in: (
@@ -2074,8 +2155,7 @@ impl ScanVocab {
             size_out: wh("SET_SIZE_OUT")?,
             plane1: (|| {
                 Some((
-                    t.a(win, "SET_CONTEXT_DMA_ISO", 1)?,
-                    t.a(win, "SET_OFFSET", 1)?,
+                    IsoVocab::resolve(t, win, 1)?,
                     t.a(win, "SET_PLANAR_STORAGE", 1)?,
                     t.f(win, "SET_PLANAR_STORAGE_PITCH")?,
                 ))
@@ -2167,10 +2247,12 @@ impl Engine {
             }
             let chn = ChannelKind::Window.channel_number(w);
             let c = self.chans.get(chn as usize)?.as_ref()?;
-            let handle = c.armed(sv.iso0);
-            if handle == 0 {
+            let (handle, offset, address) = sv.source0.read(|m| c.armed(m));
+            if handle == 0 && address.is_none() {
                 return None;
             }
+            let (iso1, offset1, address1) =
+                sv.plane1.map_or((0, 0, None), |p| p.0.read(|m| c.armed(m)));
             let (sm, sw, sh) = sv.size;
             let (im, iw, ih) = sv.size_in;
             let (pm, px, py) = sv.point_in;
@@ -2189,7 +2271,8 @@ impl Engine {
                 chn,
                 client: c.client,
                 handle,
-                offset: u64::from(c.armed(sv.offset0)) << 8,
+                offset,
+                address,
                 width: fld(c.armed(im), iw),
                 height: fld(c.armed(im), ih),
                 x: fld(c.armed(pm), px),
@@ -2203,9 +2286,10 @@ impl Engine {
                 out_y: fld(point_out, qy),
                 out_width: fld(c.armed(om), ow),
                 out_height: fld(c.armed(om), oh),
-                iso1: sv.plane1.map_or(0, |p| c.armed(p.0)),
-                offset1: sv.plane1.map_or(0, |p| u64::from(c.armed(p.1)) << 8),
-                pitch1: sv.plane1.map_or(0, |p| fld(c.armed(p.2), p.3)),
+                iso1,
+                offset1,
+                address1,
+                pitch1: sv.plane1.map_or(0, |p| fld(c.armed(p.1), p.2)),
                 swap_uv: sv
                     .swap_uv
                     .is_some_and(|f| fld(c.armed(sv.params.0), f) != 0),

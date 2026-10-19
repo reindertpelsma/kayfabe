@@ -1099,8 +1099,8 @@ fn a_head_scans_out_its_lowest_enabled_window() {
     let sv =
         ScanVocab::resolve(t(), WIN, IMM, CORE).expect("GA10x window surfaces are context DMAs");
     assert!(
-        ScanVocab::resolve(t(), 0xCA7E, 0xCA7B, 0xCA7D).is_none(),
-        "GB20x names surfaces by address (M5)"
+        ScanVocab::resolve(t(), 0xCA7E, 0xCA7B, 0xCA7D).is_some(),
+        "GB20x address-named surfaces have a scanout vocabulary"
     );
     e.alloc(ChannelKind::Core, 0, CLIENT, 1, pb(), 0);
     e.alloc(ChannelKind::Window, 2, CLIENT, 1, pb(), 0);
