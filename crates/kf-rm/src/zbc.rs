@@ -90,7 +90,9 @@ fn defaults(t: TableType, die: kf_chip::DieId) -> Vec<ZbcValue> {
             .body()
             .chunks_exact(44)
             .map(|c| {
-                let w = |i: usize| u32::from_le_bytes([c[4 * i], c[4 * i + 1], c[4 * i + 2], c[4 * i + 3]]);
+                let w = |i: usize| {
+                    u32::from_le_bytes([c[4 * i], c[4 * i + 1], c[4 * i + 2], c[4 * i + 3]])
+                };
                 ZbcValue {
                     color_fb: [w(0), w(1), w(2), w(3)],
                     color_ds: [w(4), w(5), w(6), w(7)],
@@ -111,7 +113,8 @@ fn defaults(t: TableType, die: kf_chip::DieId) -> Vec<ZbcValue> {
 }
 
 /// How many (table, die) default sets were refused for want of a measured row (counted clean fallback).
-pub static ZBC_DEFAULTS_REFUSED: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
+pub static ZBC_DEFAULTS_REFUSED: std::sync::atomic::AtomicU64 =
+    std::sync::atomic::AtomicU64::new(0);
 
 /// ★ The link. Seated with the answering links; claims only `GSP_RM_CONTROL` ids `0x9096xxxx`.
 pub struct ZbcPolicy {
@@ -297,7 +300,11 @@ mod tests {
     fn policy() -> ZbcPolicy {
         let abi = *kf_abi::versions::table_for(kf_abi::versions::BENCH_DRIVER).expect("bench");
         // `[measured vgfx 2026-09-26]` the GA102 host's ranges: color 1..30, depth/stencil 1..15.
-        ZbcPolicy::new(abi, Some([(1, 30), (1, 15), (1, 15)]), kf_chip::DieId::new(kf_chip::arch::GA100, 2))
+        ZbcPolicy::new(
+            abi,
+            Some([(1, 30), (1, 15), (1, 15)]),
+            kf_chip::DieId::new(kf_chip::arch::GA100, 2),
+        )
     }
     fn entry(p: &mut ZbcPolicy, t: TableType, idx: u32) -> (bool, [u32; 14]) {
         let mut q = vec![0u8; z::GET_ENTRY_PARAMS_SIZE];
@@ -387,7 +394,8 @@ mod tests {
         );
         let abi = *kf_abi::versions::table_for(kf_abi::versions::BENCH_DRIVER).expect("bench");
         assert_eq!(
-            ZbcPolicy::new(abi, None, kf_chip::DieId::new(kf_chip::arch::GA100, 2)).answer(z::GET_ZBC_CLEAR_TABLE_SIZE, &[0u8; 12]),
+            ZbcPolicy::new(abi, None, kf_chip::DieId::new(kf_chip::arch::GA100, 2))
+                .answer(z::GET_ZBC_CLEAR_TABLE_SIZE, &[0u8; 12]),
             Err(NV_ERR_NOT_SUPPORTED)
         );
     }

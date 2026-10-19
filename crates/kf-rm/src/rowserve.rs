@@ -134,7 +134,13 @@ fn notice(text: String) {
 /// ★ Resolve `key` for `(die, branch)` and the guest's `request`. `authored` is the authored bytes of the key's
 /// authored fallback (ignored for other uses).
 #[must_use]
-pub fn resolve(key: &str, die: DieId, branch: u16, request: &[u8], authored: Option<&[u8]>) -> Resolution {
+pub fn resolve(
+    key: &str,
+    die: DieId,
+    branch: u16,
+    request: &[u8],
+    authored: Option<&[u8]>,
+) -> Resolution {
     let Some(u) = use_of(key) else {
         return Resolution::Refuse(format!("{key}: no wiring decision (not a wired key)"));
     };
@@ -144,7 +150,9 @@ pub fn resolve(key: &str, die: DieId, branch: u16, request: &[u8], authored: Opt
             Ok(_) => "a row exists for this die and branch".to_string(),
             Err(e) => e.to_string(),
         };
-        let text = format!("W349WITHHELD key={key} die={die} branch={branch}: {why} ({measured_on}) - not served");
+        let text = format!(
+            "W349WITHHELD key={key} die={die} branch={branch}: {why} ({measured_on}) - not served"
+        );
         notice(text.clone());
         return Resolution::Refuse(text);
     }
@@ -206,7 +214,11 @@ pub fn gmmu_static(
 ///
 /// # Errors
 /// The refusal text.
-pub fn ce_fault_method_buffer_size(die: DieId, branch: u16, authored: u32) -> Result<(u32, Origin), String> {
+pub fn ce_fault_method_buffer_size(
+    die: DieId,
+    branch: u16,
+    authored: u32,
+) -> Result<(u32, Origin), String> {
     // the host fact is validated even when a measured row will win: a chip row that smuggles a zero past realize is refused
     // here too (`tests/ce_fault_method_buffer_size.rs`, belt and braces)
     kf_abi::fmbsize::encode_fault_method_buffer_size(authored).map_err(|e| format!("{e:?}"))?;

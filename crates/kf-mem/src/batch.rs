@@ -254,7 +254,10 @@ pub fn reserve_cores(s: u64, e: u64) -> Vec<(u64, u64)> {
         x.div_ceil(a).saturating_mul(a)
     }
     fn small(s: u64, e: u64, out: &mut Vec<(u64, u64)>) {
-        let (mut cur, end) = (up(s, RESERVE_SMALL_ALIGN), (e / RESERVE_SMALL_ALIGN).saturating_mul(RESERVE_SMALL_ALIGN));
+        let (mut cur, end) = (
+            up(s, RESERVE_SMALL_ALIGN),
+            (e / RESERVE_SMALL_ALIGN).saturating_mul(RESERVE_SMALL_ALIGN),
+        );
         while cur < end {
             let n = end.saturating_sub(cur).min(RESERVE_SMALL_MAX);
             out.push((cur, cur.saturating_add(n)));
@@ -265,7 +268,10 @@ pub fn reserve_cores(s: u64, e: u64) -> Vec<(u64, u64)> {
     if e <= s {
         return out;
     }
-    let (ms, me) = (up(s, RESERVE_HUGE_ALIGN), (e / RESERVE_HUGE_ALIGN).saturating_mul(RESERVE_HUGE_ALIGN));
+    let (ms, me) = (
+        up(s, RESERVE_HUGE_ALIGN),
+        (e / RESERVE_HUGE_ALIGN).saturating_mul(RESERVE_HUGE_ALIGN),
+    );
     if me > ms {
         small(s, ms, &mut out);
         out.push((ms, me));
@@ -284,7 +290,10 @@ pub fn reserve_hull(s: u64, e: u64) -> Option<(u64, u64)> {
         return None;
     }
     let hull = |a: u64| -> Option<(u64, u64)> {
-        Some((s.checked_div(a)?.saturating_mul(a), e.checked_next_multiple_of(a)?))
+        Some((
+            s.checked_div(a)?.saturating_mul(a),
+            e.checked_next_multiple_of(a)?,
+        ))
     };
     let small = hull(RESERVE_SMALL_ALIGN)?;
     let h = if small.1.saturating_sub(small.0) >= RESERVE_HUGE_MIN {
@@ -298,7 +307,9 @@ pub fn reserve_hull(s: u64, e: u64) -> Option<(u64, u64)> {
 /// The single largest [`reserve_cores`] unit of `[s, e)` — the core a batch is placed through.
 #[must_use]
 pub fn batch_core(s: u64, e: u64) -> Option<(u64, u64)> {
-    reserve_cores(s, e).into_iter().max_by_key(|&(a, b)| b.saturating_sub(a))
+    reserve_cores(s, e)
+        .into_iter()
+        .max_by_key(|&(a, b)| b.saturating_sub(a))
 }
 
 /// `rows` clipped to `[lo, hi)` (rows are VA-contiguous; offsets move with the clip).
@@ -1412,7 +1423,9 @@ impl<V: SpaceVerbs> BatchedVas<'_, V> {
     /// waiting — over an overlapping range (the act thread never waits for the VA thread).
     fn claim_steer(&self, va: u64, end: u64) -> Option<ClaimGuard<'_>> {
         let mut c = lk(&self.claims);
-        if c.maps.iter().any(|&r| overlap(r, va, end)) || c.waiting.iter().any(|&r| overlap(r, va, end)) {
+        if c.maps.iter().any(|&r| overlap(r, va, end))
+            || c.waiting.iter().any(|&r| overlap(r, va, end))
+        {
             return None;
         }
         c.steers.push((va, end));
@@ -1429,14 +1442,18 @@ impl<V: SpaceVerbs> BatchedVas<'_, V> {
     /// Whether a MAP is in flight or waiting over any part of `[va, end)`.
     fn map_claimed(&self, va: u64, end: u64) -> bool {
         let c = lk(&self.claims);
-        c.maps.iter().any(|&r| overlap(r, va, end)) || c.waiting.iter().any(|&r| overlap(r, va, end))
+        c.maps.iter().any(|&r| overlap(r, va, end))
+            || c.waiting.iter().any(|&r| overlap(r, va, end))
     }
 
     /// ★ Review 3 item 4: `(placement calls, amplified calls)` spent so far in this refresh.
     #[must_use]
     pub fn budget_spent(&self) -> (u64, u64) {
         use std::sync::atomic::Ordering::Relaxed;
-        (self.placed_spent.load(Relaxed), self.amp_spent.load(Relaxed))
+        (
+            self.placed_spent.load(Relaxed),
+            self.amp_spent.load(Relaxed),
+        )
     }
 
     /// ★ Review item 4: a new refresh begins (the apply calls this once per walker entry): the
@@ -1559,8 +1576,7 @@ impl<V: SpaceVerbs> BatchedVas<'_, V> {
     /// Whether `[a, b)` (a pad, possibly empty) holds none of our mappings and is covered by none of
     /// our reservations — the precondition for taking it into a reservation's hull.
     fn segments_free_of_ours(&self, a: u64, b: u64) -> bool {
-        b <= a
-            || (!self.hold(&self.own, |o| (o.any_in(a, b), 1)) && !self.micro_covers(a, b))
+        b <= a || (!self.hold(&self.own, |o| (o.any_in(a, b), 1)) && !self.micro_covers(a, b))
     }
 
     /// Record a NEW micro reservation of ours, pinned once (the caller maps through it next).
@@ -2323,7 +2339,12 @@ impl<V: SpaceVerbs> BatchedVas<'_, V> {
         if len > BATCH_MAX_EXTENT {
             return Err(format!("batch {va:#x}+{len:#x}: {BATCH_EXTENT_CAPPED}"));
         }
-        if self.hold(&self.book, |b| (b.booked_extent().saturating_add(len) > BATCH_MAX_TOTAL_EXTENT, 1)) {
+        if self.hold(&self.book, |b| {
+            (
+                b.booked_extent().saturating_add(len) > BATCH_MAX_TOTAL_EXTENT,
+                1,
+            )
+        }) {
             static LOGGED: std::sync::atomic::AtomicU32 = std::sync::atomic::AtomicU32::new(0);
             bump(&self.total_capped);
             if LOGGED.fetch_add(1, std::sync::atomic::Ordering::Relaxed) < 8 {
@@ -2426,15 +2447,25 @@ impl<V: SpaceVerbs> BatchedVas<'_, V> {
                     extra.push((d.va, d.va.saturating_add(d.len)));
                     continue;
                 }
-                Ok(Mapped::HeldByHost) => format!("row {:#x}+{:#x} is held by the host", d.va, d.len),
+                Ok(Mapped::HeldByHost) => {
+                    format!("row {:#x}+{:#x} is held by the host", d.va, d.len)
+                }
                 Err(e) => e,
             };
-            for (s, e) in extra.iter().copied().chain(std::iter::once((bva, bva.saturating_add(blen)))) {
+            for (s, e) in extra
+                .iter()
+                .copied()
+                .chain(std::iter::once((bva, bva.saturating_add(blen))))
+            {
                 if let Err(r) = self.unmap_range(s, e.saturating_sub(s), defer) {
-                    eprintln!("kf-mem: batch {va:#x}+{len:#x}: taking {s:#x}..{e:#x} down after a refused head/tail piece was refused too ({r}) — kept in the ledger as strays");
+                    eprintln!(
+                        "kf-mem: batch {va:#x}+{len:#x}: taking {s:#x}..{e:#x} down after a refused head/tail piece was refused too ({r}) — kept in the ledger as strays"
+                    );
                 }
             }
-            return Err(format!("batch {va:#x}+{len:#x}: head/tail piece not placed ({why})"));
+            return Err(format!(
+                "batch {va:#x}+{len:#x}: head/tail piece not placed ({why})"
+            ));
         }
         Ok(())
     }
@@ -3058,7 +3089,9 @@ mod tests {
     static TIMING: std::sync::Mutex<()> = std::sync::Mutex::new(());
 
     fn timing() -> std::sync::MutexGuard<'static, ()> {
-        TIMING.lock().unwrap_or_else(std::sync::PoisonError::into_inner)
+        TIMING
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
     }
 
     /// The bound every hold must keep: a chunk, plus the one predecessor a range scan may add.
@@ -3716,7 +3749,10 @@ mod tests {
         let verdict = steer.join().unwrap();
         // (`Busy` too: the waiting map is a map over the range at the verdict.)
         assert!(
-            matches!(verdict, HandOver::Free | HandOver::StillOurs | HandOver::Busy),
+            matches!(
+                verdict,
+                HandOver::Free | HandOver::StillOurs | HandOver::Busy
+            ),
             "{verdict:?}"
         );
         assert_eq!(va_thread.join().unwrap(), Ok(Mapped::Placed));
@@ -3816,7 +3852,11 @@ mod tests {
             stop.store(true, Relaxed);
         });
         lat.sort_unstable();
-        let (p50, p90, max) = (lat[lat.len() / 2], lat[lat.len() * 9 / 10], lat[lat.len() - 1]);
+        let (p50, p90, max) = (
+            lat[lat.len() / 2],
+            lat[lat.len() * 9 / 10],
+            lat[lat.len() - 1],
+        );
         let (wait_us, _) = bv.act_stats();
         eprintln!(
             "hold2: act thread micro-lock wait p50 {p50} p90 {p90} max {max} us (n={}, announce-to-acquire max {wait_us} us); VA yields {} (longest {} us)",
@@ -3826,7 +3866,10 @@ mod tests {
         );
         // Pre-fix every contended acquisition waited out the VA thread's yield (~2 ms): the p90 was
         // that cap. Now it is one trivial hold plus the wake-up.
-        assert!(p90 < HOLD2_ACT_P90_BOUND_US, "act micro-lock wait p90 {p90} us");
+        assert!(
+            p90 < HOLD2_ACT_P90_BOUND_US,
+            "act micro-lock wait p90 {p90} us"
+        );
     }
 
     /// The p90 of an act-thread acquisition of an almost-always contended lock whose holds are
@@ -3865,8 +3908,14 @@ mod tests {
             steer_step(&HandOver::StillReserved, 0, Duration::ZERO),
             SteerStep::Refuse
         );
-        assert_eq!(steer_step(&HandOver::Free, 0, Duration::ZERO), SteerStep::Done);
-        assert_eq!(steer_step(&HandOver::Free, STEER_MAX_TRIES, STEER_MAX_AGE), SteerStep::Done);
+        assert_eq!(
+            steer_step(&HandOver::Free, 0, Duration::ZERO),
+            SteerStep::Done
+        );
+        assert_eq!(
+            steer_step(&HandOver::Free, STEER_MAX_TRIES, STEER_MAX_AGE),
+            SteerStep::Done
+        );
     }
 
     /// ★ Review 3 item 5, with the model host and a map in flight — the first try meets the map
@@ -3889,11 +3938,18 @@ mod tests {
         assert_eq!(bv.map(&row(va, 2 * P, P), true), Ok(Mapped::Placed));
         let (over, step) = first.lock().unwrap().take().unwrap();
         assert_eq!((over, step), (HandOver::Busy, SteerStep::Retry));
-        assert_eq!(host.pages.lock().unwrap().len(), 2, "the first try touched nothing");
+        assert_eq!(
+            host.pages.lock().unwrap().len(),
+            2,
+            "the first try touched nothing"
+        );
         // The retry: the map is recorded now; this try hands the (guest-mapped) pages over.
         let over = bv.hand_to_host(va, 2 * P);
         assert_eq!(over, HandOver::Free);
-        assert_eq!(steer_step(&over, 1, std::time::Duration::ZERO), SteerStep::Done);
+        assert_eq!(
+            steer_step(&over, 1, std::time::Duration::ZERO),
+            SteerStep::Done
+        );
         assert!(host.pages.lock().unwrap().is_empty());
     }
 
@@ -3915,7 +3971,11 @@ mod tests {
             let over = bv.hand_to_host_within(va, len, slice);
             calls += 1;
             // One act never runs much past its slice (a slice plus one hull's host call).
-            assert!(t.elapsed().as_millis() < 60, "{} ms", t.elapsed().as_millis());
+            assert!(
+                t.elapsed().as_millis() < 60,
+                "{} ms",
+                t.elapsed().as_millis()
+            );
             if over == HandOver::Free {
                 break;
             }
@@ -3945,7 +4005,11 @@ mod tests {
         let rss = || {
             std::fs::read_to_string("/proc/self/statm")
                 .ok()
-                .and_then(|t| t.split_whitespace().nth(1).and_then(|x| x.parse::<u64>().ok()))
+                .and_then(|t| {
+                    t.split_whitespace()
+                        .nth(1)
+                        .and_then(|x| x.parse::<u64>().ok())
+                })
                 .map_or(0, |p| p * 4096 / (1 << 20))
         };
         let batch = |b: u64| -> Vec<Desired> {
@@ -3970,7 +4034,11 @@ mod tests {
             }
         }
         // 512 GiB / 64 GiB per batch.
-        assert_eq!(placed.len() as u64, BATCH_MAX_TOTAL_EXTENT / (64 << 30), "{placed:?}");
+        assert_eq!(
+            placed.len() as u64,
+            BATCH_MAX_TOTAL_EXTENT / (64 << 30),
+            "{placed:?}"
+        );
         assert_eq!(bv.total_capped.load(Relaxed), 256 - placed.len() as u64);
         assert!(rss() < before + 64, "RSS {before} -> {} MiB", rss());
         let first = placed[0];
@@ -3979,7 +4047,10 @@ mod tests {
         // The room comes back when a batch is taken down.
         let base = 0x1_0000_0000u64 + first * (128u64 << 30);
         assert_eq!(bv.unmap_range(base, 16 * g, true), Ok(()));
-        assert!(bv.place(f.as_fd(), &batch(250), true).is_ok(), "room returned");
+        assert!(
+            bv.place(f.as_fd(), &batch(250), true).is_ok(),
+            "room returned"
+        );
     }
 
     /// A host whose range unmap takes a while (a real RM unmap is 84-123 µs; this one 25 ms, so a
@@ -4085,8 +4156,15 @@ mod tests {
             bv.holds.va_claim_waits.load(Relaxed),
             bv.holds.va_claim_wait_max_ns.load(Relaxed) / 1000
         );
-        assert_eq!(bv.holds.va_claim_waits.load(Relaxed), 1, "the map really met a claimed hull");
-        assert!(steer_ms >= 150, "the steer ran hull by hull ({steer_ms} ms)");
+        assert_eq!(
+            bv.holds.va_claim_waits.load(Relaxed),
+            1,
+            "the map really met a claimed hull"
+        );
+        assert!(
+            steer_ms >= 150,
+            "the steer ran hull by hull ({steer_ms} ms)"
+        );
         assert!(
             map_ms < 100 && map_ms * 2 < steer_ms,
             "the map waited {map_ms} ms for one hull of a {steer_ms} ms steer"
@@ -4096,7 +4174,6 @@ mod tests {
             "the page the VA thread mapped is ours again: {verdict:?}"
         );
     }
-
 
     /// ★ Review 3 item 2 (`rv3_per_leaf_hull_claim_lasts_2048_host_calls`) — a hull is bounded by
     /// HOST CALLS. In the per-leaf reservation tier every ledger entry is its own reservation, so the
@@ -4134,7 +4211,10 @@ mod tests {
         eprintln!("per-leaf steer {steer_ms} ms; a map inside a claimed hull waited {map_ms} ms");
         assert!(steer_ms >= 100, "the steer was long ({steer_ms} ms)");
         // 16 calls x 100 us + scheduling; the 2 048-entry hull made it hundreds of ms.
-        assert!(map_ms < 40, "a map waited {map_ms} ms for one hull of a {steer_ms} ms steer");
+        assert!(
+            map_ms < 40,
+            "a map waited {map_ms} ms for one hull of a {steer_ms} ms steer"
+        );
     }
 
     /// ★ Review 2 item 2 (`review_steer_flood_vs_map_latency`) — a flood of steers over the very
@@ -4173,7 +4253,10 @@ mod tests {
             bv.holds.act_busy.load(Relaxed)
         );
         assert!(p99 < 20_000, "p99 map latency {p99} us under a steer flood");
-        assert!(max < 100_000, "worst map latency {max} us under a steer flood");
+        assert!(
+            max < 100_000,
+            "worst map latency {max} us under a steer flood"
+        );
     }
 
     /// ★ Review 2 item 7 (`review_batch_bitmap_scales_with_va_extent_not_guest_ram`) — a batch's
@@ -4206,7 +4289,11 @@ mod tests {
         let rss = || {
             std::fs::read_to_string("/proc/self/statm")
                 .ok()
-                .and_then(|t| t.split_whitespace().nth(1).and_then(|x| x.parse::<u64>().ok()))
+                .and_then(|t| {
+                    t.split_whitespace()
+                        .nth(1)
+                        .and_then(|x| x.parse::<u64>().ok())
+                })
                 .map_or(0, |p| p * 4096 / (1 << 20))
         };
         let before = rss();

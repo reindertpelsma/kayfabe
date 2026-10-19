@@ -5821,7 +5821,6 @@ mod tests {
         })
     }
 
-
     /// ⚠⚠ H-caps probe (default off): the measured page is published only for the caps class and
     /// page base it was measured with (Ada's C773 at `0x640000`, VFIO DVI reference boot3, RTX 4070,
     /// 2026-10-08); its words are in the page, 4-byte aligned, distinct, and it presents the same
@@ -5852,8 +5851,6 @@ mod tests {
         assert_ne!(p.word(0x780), p.word(0x7a0));
         assert_eq!(authored.word(0x780), authored.word(0x7a0));
     }
-
-
 
     /// ★ 2026-10-14 (die sweep): every piece of the GPU-free realize path resolves for every display row. The GB206
     /// run found `display=on` refused at realize because no test resolved the vocabulary for GB20x; the register map
@@ -8403,13 +8400,41 @@ mod address_scan_tests {
 
     fn surface() -> Scanout {
         Scanout {
-            window: 0, head: 0, chn: 1, client: 7, handle: 0, offset: 0,
-            address: Some(SurfaceAddress { aperture: Aperture::Vidmem, addr: 0x1000, block_linear: false }),
-            address1: None, width: 1, height: 1, x: 0, y: 0, surface_width: 1,
-            surface_height: 1, pitch: 1, block_height_log2: 0, format: 0xe6,
-            out_x: 0, out_y: 0, out_width: 1, out_height: 1, iso1: 0,
-            offset1: 0, pitch1: 0, swap_uv: false, depth: 0, k1: 255,
-            k2: 0, src_factor: 0, dst_factor: 0, fmt: [0; 12],
+            window: 0,
+            head: 0,
+            chn: 1,
+            client: 7,
+            handle: 0,
+            offset: 0,
+            address: Some(SurfaceAddress {
+                aperture: Aperture::Vidmem,
+                addr: 0x1000,
+                block_linear: false,
+            }),
+            address1: None,
+            width: 1,
+            height: 1,
+            x: 0,
+            y: 0,
+            surface_width: 1,
+            surface_height: 1,
+            pitch: 1,
+            block_height_log2: 0,
+            format: 0xe6,
+            out_x: 0,
+            out_y: 0,
+            out_width: 1,
+            out_height: 1,
+            iso1: 0,
+            offset1: 0,
+            pitch1: 0,
+            swap_uv: false,
+            depth: 0,
+            k1: 255,
+            k2: 0,
+            src_factor: 0,
+            dst_factor: 0,
+            fmt: [0; 12],
         }
     }
 
@@ -8418,55 +8443,131 @@ mod address_scan_tests {
         let base = surface();
         let mut cache = LatchedDmas::default();
         let resolve = |s: &Scanout| kf_disp::scanout::address_dma(s.address.unwrap(), 0x4000);
-        assert_eq!(cache.resolve(&base, || resolve(&base)).unwrap().base, 0x1000);
+        assert_eq!(
+            cache.resolve(&base, || resolve(&base)).unwrap().base,
+            0x1000
+        );
         for address in [
-            SurfaceAddress { addr: 0x2000, ..base.address.unwrap() },
-            SurfaceAddress { block_linear: true, ..base.address.unwrap() },
+            SurfaceAddress {
+                addr: 0x2000,
+                ..base.address.unwrap()
+            },
+            SurfaceAddress {
+                block_linear: true,
+                ..base.address.unwrap()
+            },
         ] {
-            let s = Scanout { address: Some(address), ..base };
+            let s = Scanout {
+                address: Some(address),
+                ..base
+            };
             let dma = cache.resolve(&s, || resolve(&s)).unwrap();
-            assert_eq!((dma.base, dma.block_linear), (address.addr, address.block_linear));
+            assert_eq!(
+                (dma.base, dma.block_linear),
+                (address.addr, address.block_linear)
+            );
         }
         for aperture in [Aperture::Sysmem, Aperture::Iova] {
-            let s = Scanout { address: Some(SurfaceAddress { aperture, ..base.address.unwrap() }), ..base };
+            let s = Scanout {
+                address: Some(SurfaceAddress {
+                    aperture,
+                    ..base.address.unwrap()
+                }),
+                ..base
+            };
             assert!(cache.resolve(&s, || resolve(&s)).is_err());
         }
     }
 
     #[test]
     fn address_iso_rgb_plan_checks_the_last_byte_of_the_store() {
-        let formats = ScanFormats::resolve(kf_disp::class::for_version("580.159.04").unwrap(), 0xCA7E);
+        let formats =
+            ScanFormats::resolve(kf_disp::class::for_version("580.159.04").unwrap(), 0xCA7E);
         for (addr, good) in [(0, true), (0x1ff0, true), (0x1ffc, true), (0x2000, false)] {
-            let so = Scanout { address: Some(kf_disp::engine::SurfaceAddress {
-                addr, ..surface().address.unwrap()
-            }), ..surface() };
-            let shown = Shown::Armed(Composition { head: 0, width: 1, height: 1, layers: vec![so] });
-            let plan = ScanState::default().plan(&shown, &formats, (1, 1), 1,
-                |s| kf_disp::scanout::address_dma(s.address.unwrap(), 0x2000));
-            assert_eq!(plan.refused.is_empty(), good, "{addr:#x} {:?}", plan.refused);
+            let so = Scanout {
+                address: Some(kf_disp::engine::SurfaceAddress {
+                    addr,
+                    ..surface().address.unwrap()
+                }),
+                ..surface()
+            };
+            let shown = Shown::Armed(Composition {
+                head: 0,
+                width: 1,
+                height: 1,
+                layers: vec![so],
+            });
+            let plan = ScanState::default().plan(&shown, &formats, (1, 1), 1, |s| {
+                kf_disp::scanout::address_dma(s.address.unwrap(), 0x2000)
+            });
+            assert_eq!(
+                plan.refused.is_empty(),
+                good,
+                "{addr:#x} {:?}",
+                plan.refused
+            );
             assert_eq!(plan.layers.len(), usize::from(good));
-            if good { assert_eq!(plan.layers[0].src, addr); }
+            if good {
+                assert_eq!(plan.layers[0].src, addr);
+            }
         }
     }
 
     #[test]
     fn address_iso_yuv_reads_its_separate_chroma_address_and_refuses_disabled_plane() {
-        let formats = ScanFormats::resolve(kf_disp::class::for_version("580.159.04").unwrap(), 0xCA7E);
-        let video = Scanout { format: 0x38, width: 2, height: 2, surface_width: 2,
-            surface_height: 2, out_width: 2, out_height: 2, pitch1: 1,
-            address1: Some(SurfaceAddress { addr: 0x3000, ..surface().address.unwrap() }),
-            ..surface() };
-        for (address1, good) in [(video.address1, true), (None, false),
-            (Some(SurfaceAddress { addr: 0x3ff0, ..video.address1.unwrap() }), true),
-            (Some(SurfaceAddress { addr: 0x4000, ..video.address1.unwrap() }), false)] {
+        let formats =
+            ScanFormats::resolve(kf_disp::class::for_version("580.159.04").unwrap(), 0xCA7E);
+        let video = Scanout {
+            format: 0x38,
+            width: 2,
+            height: 2,
+            surface_width: 2,
+            surface_height: 2,
+            out_width: 2,
+            out_height: 2,
+            pitch1: 1,
+            address1: Some(SurfaceAddress {
+                addr: 0x3000,
+                ..surface().address.unwrap()
+            }),
+            ..surface()
+        };
+        for (address1, good) in [
+            (video.address1, true),
+            (None, false),
+            (
+                Some(SurfaceAddress {
+                    addr: 0x3ff0,
+                    ..video.address1.unwrap()
+                }),
+                true,
+            ),
+            (
+                Some(SurfaceAddress {
+                    addr: 0x4000,
+                    ..video.address1.unwrap()
+                }),
+                false,
+            ),
+        ] {
             let so = Scanout { address1, ..video };
-            let shown = Shown::Armed(Composition { head: 0, width: 2, height: 2, layers: vec![so] });
-            let plan = ScanState::default().plan(&shown, &formats, (2, 2), 1,
-                |s| kf_disp::scanout::address_dma(s.address.unwrap(), 0x4000));
+            let shown = Shown::Armed(Composition {
+                head: 0,
+                width: 2,
+                height: 2,
+                layers: vec![so],
+            });
+            let plan = ScanState::default().plan(&shown, &formats, (2, 2), 1, |s| {
+                kf_disp::scanout::address_dma(s.address.unwrap(), 0x4000)
+            });
             assert_eq!(plan.refused.is_empty(), good, "{:?}", plan.refused);
             assert_eq!(plan.yuv.len(), usize::from(good));
-            if good { assert_eq!((plan.yuv[0].y_src, plan.yuv[0].c_src),
-                (video.address.unwrap().addr, address1.unwrap().addr)); }
+            if good {
+                assert_eq!(
+                    (plan.yuv[0].y_src, plan.yuv[0].c_src),
+                    (video.address.unwrap().addr, address1.unwrap().addr)
+                );
+            }
         }
     }
 }

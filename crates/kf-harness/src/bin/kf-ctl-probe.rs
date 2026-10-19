@@ -251,7 +251,9 @@ fn main() {
                         z::put(&mut e, 13, t.wire()); // tableType
                         match rm.raw_control_opaque(obj, z::GET_ZBC_CLEAR_TABLE_ENTRY, &mut e) {
                             Ok(0) => {
-                                let w: Vec<String> = (0..10).map(|i| format!("{:08x}", z::word(&e, i).unwrap_or(0))).collect();
+                                let w: Vec<String> = (0..10)
+                                    .map(|i| format!("{:08x}", z::word(&e, i).unwrap_or(0)))
+                                    .collect();
                                 println!(
                                     "ZBC table={} index={idx} valid={} format={} value={}",
                                     t.wire(),
@@ -260,12 +262,22 @@ fn main() {
                                     w.join(" ")
                                 );
                             }
-                            Ok(st) => println!("ZBC table={} index={idx} status={st:#x} {}", t.wire(), status_name(st)),
-                            Err(er) => println!("ZBC table={} index={idx} ioctl_error={er:?}", t.wire()),
+                            Ok(st) => println!(
+                                "ZBC table={} index={idx} status={st:#x} {}",
+                                t.wire(),
+                                status_name(st)
+                            ),
+                            Err(er) => {
+                                println!("ZBC table={} index={idx} ioctl_error={er:?}", t.wire())
+                            }
                         }
                     }
                 }
-                Ok(st) => println!("ZBC table={} size status={st:#x} {}", t.wire(), status_name(st)),
+                Ok(st) => println!(
+                    "ZBC table={} size status={st:#x} {}",
+                    t.wire(),
+                    status_name(st)
+                ),
                 Err(er) => println!("ZBC table={} size ioctl_error={er:?}", t.wire()),
             }
         }
@@ -281,18 +293,29 @@ fn main() {
         let sub = rm.subdevice_handle();
         for item in spec.split(',').filter(|x| !x.is_empty()) {
             let mut it = item.split(':');
-            let cmd = it.next().and_then(|c| u32::from_str_radix(c.trim_start_matches("0x"), 16).ok());
+            let cmd = it
+                .next()
+                .and_then(|c| u32::from_str_radix(c.trim_start_matches("0x"), 16).ok());
             let lo: usize = it.next().and_then(|x| x.parse().ok()).unwrap_or(4);
             let hi: usize = it.next().and_then(|x| x.parse().ok()).unwrap_or(16384);
-            let Some(cmd) = cmd else { println!("SCAN bad_spec={item}"); continue };
+            let Some(cmd) = cmd else {
+                println!("SCAN bad_spec={item}");
+                continue;
+            };
             let mut hits = 0;
             let mut size = lo;
             while size <= hi {
                 let mut payload = vec![0u8; size];
                 if let Ok(status) = rm.raw_control_opaque(sub, cmd, &mut payload) {
                     if status != 0x1f && status != 0x3a {
-                        let nz = payload.chunks(4).filter(|w| w.iter().any(|b| *b != 0)).count();
-                        println!("SCAN cmd={cmd:#010x} size={size} status={status:#x} {} nonzero_words={nz}", status_name(status));
+                        let nz = payload
+                            .chunks(4)
+                            .filter(|w| w.iter().any(|b| *b != 0))
+                            .count();
+                        println!(
+                            "SCAN cmd={cmd:#010x} size={size} status={status:#x} {} nonzero_words={nz}",
+                            status_name(status)
+                        );
                         hits += 1;
                     }
                 }

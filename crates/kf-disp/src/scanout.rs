@@ -154,17 +154,83 @@ impl ScanFormats {
         // and the packed 4:2:2 ones (YUY2/UYVY) — everything a semi-planar-capable page lets NVKMS
         // offer (`caps::page`); 3-plane formats stay out (left out by name).
         let yuv_names = [
-            ("SET_PARAMS_FORMAT_Y8___U8V8_N444", 0, 0, false, YUV_SEMI_PLANAR_8),
-            ("SET_PARAMS_FORMAT_Y8___U8V8_N422", 1, 0, false, YUV_SEMI_PLANAR_8),
-            ("SET_PARAMS_FORMAT_Y8___V8U8_N420", 1, 1, true, YUV_SEMI_PLANAR_8),
-            ("SET_PARAMS_FORMAT_Y10___U10V10_N444", 0, 0, false, YUV_SEMI_PLANAR_16),
-            ("SET_PARAMS_FORMAT_Y10___U10V10_N422", 1, 0, false, YUV_SEMI_PLANAR_16),
-            ("SET_PARAMS_FORMAT_Y10___V10U10_N420", 1, 1, true, YUV_SEMI_PLANAR_16),
-            ("SET_PARAMS_FORMAT_Y12___U12V12_N444", 0, 0, false, YUV_SEMI_PLANAR_16),
-            ("SET_PARAMS_FORMAT_Y12___U12V12_N422", 1, 0, false, YUV_SEMI_PLANAR_16),
-            ("SET_PARAMS_FORMAT_Y12___V12U12_N420", 1, 1, true, YUV_SEMI_PLANAR_16),
-            ("SET_PARAMS_FORMAT_Y8_U8__Y8_V8_N422", 1, 0, false, YUV_PACKED_YUYV),
-            ("SET_PARAMS_FORMAT_U8_Y8__V8_Y8_N422", 1, 0, false, YUV_PACKED_UYVY),
+            (
+                "SET_PARAMS_FORMAT_Y8___U8V8_N444",
+                0,
+                0,
+                false,
+                YUV_SEMI_PLANAR_8,
+            ),
+            (
+                "SET_PARAMS_FORMAT_Y8___U8V8_N422",
+                1,
+                0,
+                false,
+                YUV_SEMI_PLANAR_8,
+            ),
+            (
+                "SET_PARAMS_FORMAT_Y8___V8U8_N420",
+                1,
+                1,
+                true,
+                YUV_SEMI_PLANAR_8,
+            ),
+            (
+                "SET_PARAMS_FORMAT_Y10___U10V10_N444",
+                0,
+                0,
+                false,
+                YUV_SEMI_PLANAR_16,
+            ),
+            (
+                "SET_PARAMS_FORMAT_Y10___U10V10_N422",
+                1,
+                0,
+                false,
+                YUV_SEMI_PLANAR_16,
+            ),
+            (
+                "SET_PARAMS_FORMAT_Y10___V10U10_N420",
+                1,
+                1,
+                true,
+                YUV_SEMI_PLANAR_16,
+            ),
+            (
+                "SET_PARAMS_FORMAT_Y12___U12V12_N444",
+                0,
+                0,
+                false,
+                YUV_SEMI_PLANAR_16,
+            ),
+            (
+                "SET_PARAMS_FORMAT_Y12___U12V12_N422",
+                1,
+                0,
+                false,
+                YUV_SEMI_PLANAR_16,
+            ),
+            (
+                "SET_PARAMS_FORMAT_Y12___V12U12_N420",
+                1,
+                1,
+                true,
+                YUV_SEMI_PLANAR_16,
+            ),
+            (
+                "SET_PARAMS_FORMAT_Y8_U8__Y8_V8_N422",
+                1,
+                0,
+                false,
+                YUV_PACKED_YUYV,
+            ),
+            (
+                "SET_PARAMS_FORMAT_U8_Y8__V8_Y8_N422",
+                1,
+                0,
+                false,
+                YUV_PACKED_UYVY,
+            ),
         ];
         ScanFormats {
             map: names
@@ -734,7 +800,9 @@ pub fn plan_yuv(
         return Ok(None);
     }
     if dw > 16_384 || dh > 16_384 {
-        return no(format!("a {dw}x{dh} destination is larger than the kernel's 16384 limit"));
+        return no(format!(
+            "a {dw}x{dh} destination is larger than the kernel's 16384 limit"
+        ));
     }
     // the last source column/row the kernel can touch (nearest sampling stays inside the rectangle)
     let x_end = u64::from(s.x) + u64::from(s.width); // luma, exclusive
@@ -794,8 +862,16 @@ pub fn plan_yuv(
             ))
         }
     };
-    let (y_src, y_extent, y_pitch) =
-        bound("luma", y_dma, s.offset, s.pitch, f.luma_bytes(), x_end, y_end).map_err(refuse)?;
+    let (y_src, y_extent, y_pitch) = bound(
+        "luma",
+        y_dma,
+        s.offset,
+        s.pitch,
+        f.luma_bytes(),
+        x_end,
+        y_end,
+    )
+    .map_err(refuse)?;
     let fmt = if s.fmt == [0; 12] {
         BT709_LIMITED
     } else {
@@ -848,9 +924,16 @@ pub fn plan_yuv(
     } else {
         s.offset1
     };
-    let (c_src, c_extent, c_pitch) =
-        bound("chroma", c_dma, chroma_off, s.pitch1, f.chroma_bytes(), cx_end, cy_end)
-            .map_err(refuse)?;
+    let (c_src, c_extent, c_pitch) = bound(
+        "chroma",
+        c_dma,
+        chroma_off,
+        s.pitch1,
+        f.chroma_bytes(),
+        cx_end,
+        cy_end,
+    )
+    .map_err(refuse)?;
     Ok(Some(YuvPlan {
         window: s.window,
         y_src,
@@ -2115,7 +2198,10 @@ mod tests {
         );
         assert_eq!((p010.luma_bytes(), p010.chroma_bytes()), (2, 4));
         let yuy2 = f.yuv_of(v("SET_PARAMS_FORMAT_Y8_U8__Y8_V8_N422")).unwrap();
-        assert_eq!((yuy2.layout, yuy2.sub_y_log2, yuy2.chroma_bytes()), (YUV_PACKED_YUYV, 0, 0));
+        assert_eq!(
+            (yuy2.layout, yuy2.sub_y_log2, yuy2.chroma_bytes()),
+            (YUV_PACKED_YUYV, 0, 0)
+        );
         let uyvy = f.yuv_of(v("SET_PARAMS_FORMAT_U8_Y8__V8_Y8_N422")).unwrap();
         assert_eq!(uyvy.layout, YUV_PACKED_UYVY);
         assert!(f.yuv_of(v("SET_PARAMS_FORMAT_Y8___U8___V8_N420")).is_none());
@@ -2174,7 +2260,18 @@ mod tests {
             0
         );
         assert!(
-            plan_yuv(&Scanout { out_width: 20_000, ..s }, yf, &dma, &dma, 1920, 1080).is_err(),
+            plan_yuv(
+                &Scanout {
+                    out_width: 20_000,
+                    ..s
+                },
+                yf,
+                &dma,
+                &dma,
+                1920,
+                1080
+            )
+            .is_err(),
             "a hostile destination size is refused by name"
         );
         assert_eq!(
@@ -3330,7 +3427,11 @@ mod tests {
             for px in 0..256usize {
                 let p = &img[(py * 256 + px) * 4..(py * 256 + px) * 4 + 4];
                 if fill.contains(&(px, py)) {
-                    assert_eq!(p, [255, 255, 255, 255], "inverts at {px},{py}: white XOR colour");
+                    assert_eq!(
+                        p,
+                        [255, 255, 255, 255],
+                        "inverts at {px},{py}: white XOR colour"
+                    );
                 } else {
                     assert_eq!(p, [0; 4], "untouched at {px},{py}");
                 }
@@ -3350,7 +3451,11 @@ mod tests {
         let mut x = cursor16(0, 0, 1);
         x.size = 32;
         let h = plan_host_cursor_xor(&x, &dma, true).unwrap();
-        assert_eq!(h.image(&vec![0; h.extent as usize]), Ok(None), "empty: hidden");
+        assert_eq!(
+            h.image(&vec![0; h.extent as usize]),
+            Ok(None),
+            "empty: hidden"
+        );
         let mut raw = vec![0u8; h.extent as usize];
         raw[0..2].copy_from_slice(&0x8000u16.to_le_bytes()); // alpha set, colour black: no inversion
         assert_eq!(h.image(&raw), Ok(None), "black XOR is nothing");
@@ -3358,7 +3463,11 @@ mod tests {
         raw[2..4].copy_from_slice(&px16(0, 31, 0, 0).to_le_bytes()); // red 31, alpha clear
         let img = h.image(&raw).unwrap().unwrap();
         assert_eq!(&img[0..4], &[8, 0, 0, 255], "blue 1 widened to 8, opaque");
-        assert_eq!(&img[4..8], &[0, 0, 255, 255], "red 31 widened to 255, opaque");
+        assert_eq!(
+            &img[4..8],
+            &[0, 0, 255, 255],
+            "red 31 widened to 255, opaque"
+        );
         assert_eq!(img.chunks(4).filter(|p| p[3] != 0).count(), 2);
         // A8R8G8B8: the colour bytes decide, the alpha byte does not
         let mut a = cursor(0, 0);
@@ -3424,17 +3533,41 @@ mod address_tests {
     #[test]
     fn address_iso_is_read_only_and_bounded_to_the_guest_store() {
         for block_linear in [false, true] {
-            let surface = SurfaceAddress { aperture: Aperture::Vidmem, addr: 0x1000, block_linear };
+            let surface = SurfaceAddress {
+                aperture: Aperture::Vidmem,
+                addr: 0x1000,
+                block_linear,
+            };
             let dma = address_dma(surface, 0x2000).unwrap();
             assert_eq!(dma.span(0, 0x1000), Some(0x1000));
             assert_eq!(dma.span(0, 0x1001), None);
             assert_eq!(dma.span(u64::MAX, 2), None);
             assert!(!dma.writable);
             assert_eq!(dma.block_linear, block_linear);
-            for bytes in [0, 1, 0x1000] { assert!(address_dma(surface, bytes).is_err()); }
-            assert!(address_dma(SurfaceAddress { addr: u64::MAX, ..surface }, u64::MAX).is_err());
+            for bytes in [0, 1, 0x1000] {
+                assert!(address_dma(surface, bytes).is_err());
+            }
+            assert!(
+                address_dma(
+                    SurfaceAddress {
+                        addr: u64::MAX,
+                        ..surface
+                    },
+                    u64::MAX
+                )
+                .is_err()
+            );
             for aperture in [Aperture::Iova, Aperture::Sysmem] {
-                assert!(address_dma(SurfaceAddress { aperture, ..surface }, 0x2000).is_err());
+                assert!(
+                    address_dma(
+                        SurfaceAddress {
+                            aperture,
+                            ..surface
+                        },
+                        0x2000
+                    )
+                    .is_err()
+                );
             }
         }
     }

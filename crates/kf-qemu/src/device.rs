@@ -931,7 +931,10 @@ impl Device {
                 let plane = on_cuda_thread("kf3-cuda-disp", || {
                     crate::display::DisplayPlane::build(
                         row,
-                        kf_disp::capsderive::Die { architecture, implementation },
+                        kf_disp::capsderive::Die {
+                            architecture,
+                            implementation,
+                        },
                         table,
                         &bdf,
                         fd,
@@ -1040,7 +1043,9 @@ impl Device {
             _ => u64::MAX,
         };
         let gsp = Gsp {
-            fsm: console.fsm(abi).with_system_info_cell(heartbeat_system_info.clone()),
+            fsm: console
+                .fsm(abi)
+                .with_system_info_cell(heartbeat_system_info.clone()),
             model,
             policy,
             published: std::collections::HashMap::new(),
@@ -2567,11 +2572,13 @@ impl Device {
                     let g = self.gsp.lock().unwrap_or_else(|p| p.into_inner());
                     // A reset starts at command zero. Never reuse the previous life's clock
                     // before this life has published its initial system-info command.
-                    (g.fsm.command_seq() != 0).then(|| {
-                        self.heartbeat_system_info.latest().and_then(|info| {
-                            crate::heartbeat::offset_ns(g.policy.current(), &info)
+                    (g.fsm.command_seq() != 0)
+                        .then(|| {
+                            self.heartbeat_system_info.latest().and_then(|info| {
+                                crate::heartbeat::offset_ns(g.policy.current(), &info)
+                            })
                         })
-                    }).flatten()
+                        .flatten()
                 };
                 if let Some(ms) = crate::heartbeat::sample(
                     || self.timer.as_ref()?.read_ns().ok(),

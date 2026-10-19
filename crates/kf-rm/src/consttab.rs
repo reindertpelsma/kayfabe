@@ -219,7 +219,9 @@ fn parse_source(s: &str) -> Result<SourceTag, String> {
         let dv: Vec<&str> = driver.split('.').collect();
         // x.y.z (a Linux driver, 580.159.04) or x.y (ogkm's own two-part tags and a GSP firmware, 595.84, 595.76)
         if !(2..=3).contains(&dv.len()) || dv.iter().any(|p| p.parse::<u16>().is_err()) {
-            return Err(format!("measured tag driver {driver:?} is not x.y.z or x.y"));
+            return Err(format!(
+                "measured tag driver {driver:?} is not x.y.z or x.y"
+            ));
         }
         let d: Vec<&str> = date.split('-').collect();
         if d.len() != 3
@@ -515,7 +517,10 @@ pub fn lookup_in<'a>(
 /// [`Refusal`], by name.
 pub fn lookup(key: &str, die: DieId, branch: u16) -> Result<&'static Row, Refusal> {
     let rows = table()?;
-    if let Some(b) = board_specific()?.iter().find(|b| b.key == key && b.die == die) {
+    if let Some(b) = board_specific()?
+        .iter()
+        .find(|b| b.key == key && b.die == die)
+    {
         REFUSALS.fetch_add(1, Ordering::Relaxed);
         return Err(Refusal::BoardSpecific {
             key: key.to_string(),
@@ -573,7 +578,9 @@ pub fn parse_board_specific(tsv: &str, rows: &[Row]) -> Result<Vec<BoardSpecific
         let die = DieId::from_name(f[1])
             .ok_or_else(|| format!("line {ln}: {:?} is not an ogkm die name", f[1]))?;
         if f[2].split(';').filter(|m| !m.trim().is_empty()).count() < 2 {
-            return Err(format!("line {ln}: a board-specific entry needs two contradicting measurements"));
+            return Err(format!(
+                "line {ln}: a board-specific entry needs two contradicting measurements"
+            ));
         }
         if f[3].trim().is_empty() {
             return Err(format!("line {ln}: no evidence path"));

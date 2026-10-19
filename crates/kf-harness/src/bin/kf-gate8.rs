@@ -484,7 +484,10 @@ fn phase(
             "ver2_completion_observed_from_gpu_event"
         },
         r1.collected == 1 && r1.completion_polls >= 1,
-        format!("event polls={} fd wakes={} collected={}", r1.completion_polls, r1.walk_wakes, r1.collected),
+        format!(
+            "event polls={} fd wakes={} collected={}",
+            r1.completion_polls, r1.walk_wakes, r1.collected
+        ),
     );
 
     // (i) the CE copy, issued now that the trigger has cleared.

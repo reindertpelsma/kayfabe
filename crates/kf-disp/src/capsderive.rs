@@ -278,7 +278,15 @@ pub fn derive(
     let mut why: BTreeMap<u32, (Tier, String)> = base
         .words
         .iter()
-        .map(|(o, _)| (*o, (Tier::Rule, "authored base page (class header + family row)".into())))
+        .map(|(o, _)| {
+            (
+                *o,
+                (
+                    Tier::Rule,
+                    "authored base page (class header + family row)".into(),
+                ),
+            )
+        })
         .collect();
     if row.heads == 0 || !row.windows.is_multiple_of(row.heads) {
         return Err(Missing(format!(
@@ -295,7 +303,10 @@ pub fn derive(
                 if lr.optional {
                     continue;
                 }
-                return Err(Missing(format!("NV{:04X}_{}_{}", c.caps, lr.register, lr.field)));
+                return Err(Missing(format!(
+                    "NV{:04X}_{}_{}",
+                    c.caps, lr.register, lr.field
+                )));
             };
             let e = words.entry(off).or_insert(0);
             *e = put(*e, f, v);
@@ -315,14 +326,12 @@ pub fn derive(
     // T3: this die's measured words
     let mut unmeasured: Vec<(u32, &'static str)> = Vec::new();
     for (off, because) in REQUIRED_UNNAMED {
-        let hit = measured
-            .iter()
-            .find(|m| {
-                m.die == die
-                    && m.caps_class == c.caps
-                    && m.offset == off
-                    && (m.branch == "*" || m.branch == branch)
-            });
+        let hit = measured.iter().find(|m| {
+            m.die == die
+                && m.caps_class == c.caps
+                && m.offset == off
+                && (m.branch == "*" || m.branch == branch)
+        });
         match hit {
             Some(m) => {
                 words.insert(off, m.value);
@@ -338,7 +347,11 @@ pub fn derive(
             .keys()
             .map(|o| {
                 let (tier, w) = why.get(o).cloned().unwrap_or((Tier::Rule, String::new()));
-                Provenance { offset: *o, tier, why: w }
+                Provenance {
+                    offset: *o,
+                    tier,
+                    why: w,
+                }
             })
             .collect(),
         page: CapsPage {

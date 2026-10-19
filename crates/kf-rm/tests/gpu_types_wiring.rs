@@ -25,9 +25,21 @@ const GA106: DieId = DieId::new(arch::GA100, 6);
 const GA104: DieId = DieId::new(arch::GA100, 4);
 const AD104: DieId = DieId::new(arch::AD100, 4);
 
-const V580: DriverVersion = DriverVersion { major: 580, minor: 159, patch: 4 };
-const V575: DriverVersion = DriverVersion { major: 575, minor: 57, patch: 8 };
-const V595: DriverVersion = DriverVersion { major: 595, minor: 84, patch: 0 };
+const V580: DriverVersion = DriverVersion {
+    major: 580,
+    minor: 159,
+    patch: 4,
+};
+const V575: DriverVersion = DriverVersion {
+    major: 575,
+    minor: 57,
+    patch: 8,
+};
+const V595: DriverVersion = DriverVersion {
+    major: 595,
+    minor: 84,
+    patch: 0,
+};
 
 /// A host whose AUTHORED GMMU / CE numbers are not the GA106 ones, so a measured hit and an authored default are told apart by bytes.
 const ODD_GMMU: (u32, u32) = (0x2000, 0x4000);
@@ -98,7 +110,11 @@ fn ce(p: &mut InitTablePolicy) -> Option<u32> {
 #[test]
 fn a_hit_serves_the_measured_value_not_the_hosts_authored_one() {
     let mut p = policy(GA106, V580);
-    assert_eq!(gmmu(&mut p), Some((0x31000, 0x120c20)), "GA106 at 580: the Windows-captured row");
+    assert_eq!(
+        gmmu(&mut p),
+        Some((0x31000, 0x120c20)),
+        "GA106 at 580: the Windows-captured row"
+    );
     assert_eq!(ce(&mut p), Some(0x5000));
     // GA104 has rows at 595 only
     let mut p = policy(GA104, V595);
@@ -109,9 +125,16 @@ fn a_hit_serves_the_measured_value_not_the_hosts_authored_one() {
 fn a_miss_serves_the_authored_value_labelled_and_counted() {
     let before = rowserve::authored_default_count();
     let mut p = policy(AD104, V580);
-    assert_eq!(gmmu(&mut p), Some(ODD_GMMU), "AD104 has no row: the host's authored value, never GA106's");
+    assert_eq!(
+        gmmu(&mut p),
+        Some(ODD_GMMU),
+        "AD104 has no row: the host's authored value, never GA106's"
+    );
     assert_eq!(ce(&mut p), Some(ODD_CE));
-    assert!(rowserve::authored_default_count() >= before + 2, "each authored default is counted");
+    assert!(
+        rowserve::authored_default_count() >= before + 2,
+        "each authored default is counted"
+    );
 }
 
 #[test]
@@ -119,7 +142,10 @@ fn a_wrong_branch_is_a_miss_not_a_neighbour_branchs_row() {
     // GA106 has rows at 570..610 only; 565 (a measured guest driver) and 560 have none. (At the table: the guest layouts of
     // those older branches differ, so the responder-level bytes are checked on 580 below.)
     for b in [535u16, 550, 560, 565] {
-        assert!(consttab::answer("rm.0x20800a59", GA106, b, &[0u8; 16]).is_err(), "branch {b}");
+        assert!(
+            consttab::answer("rm.0x20800a59", GA106, b, &[0u8; 16]).is_err(),
+            "branch {b}"
+        );
         match rowserve::resolve("rm.0x20800a59", GA106, b, &[0u8; 16], Some(&[7u8; 16])) {
             Resolution::Serve(bytes, Origin::Authored(_)) => assert_eq!(bytes, vec![7u8; 16]),
             other => panic!("branch {b}: {other:?}"),
@@ -159,9 +185,15 @@ fn the_withheld_keys_are_counted_and_never_served_even_on_a_row() {
     let mut p = policy(GA106, V580);
     let mut pool = vec![0u8; 40];
     pool[0..4].copy_from_slice(&4u32.to_le_bytes());
-    assert!(!ok(&p.respond(&control(0x2080_121f, &pool))), "gfx pool is an owner decision");
+    assert!(
+        !ok(&p.respond(&control(0x2080_121f, &pool))),
+        "gfx pool is an owner decision"
+    );
     let caps = vec![0u8; 8];
-    assert!(!ok(&p.respond(&control(0x5070_0709, &caps))), "NV5070 caps is an owner decision");
+    assert!(
+        !ok(&p.respond(&control(0x5070_0709, &caps))),
+        "NV5070 caps is an owner decision"
+    );
     assert!(rowserve::withheld_count() >= before + 2);
 }
 
@@ -179,7 +211,10 @@ fn a_board_specific_pair_is_refused_everywhere_and_has_no_table_row() {
             }
         }
         assert!(
-            consttab::table().unwrap().iter().all(|r| !(r.key == b.key && r.die == DieScope::Die(b.die))),
+            consttab::table()
+                .unwrap()
+                .iter()
+                .all(|r| !(r.key == b.key && r.die == DieScope::Die(b.die))),
             "{} {}: a board-specific value is never tabled",
             b.key,
             b.die
@@ -198,16 +233,30 @@ fn the_board_specific_registry_equals_the_contradictions_in_the_tier2_summary() 
     let mut lines = tsv.lines();
     let head: Vec<&str> = lines.next().unwrap().split('\t').collect();
     let col = |n: &str| head.iter().position(|h| *h == n).unwrap();
-    let (cdie, c8162, ca001, c9001, c9009) = (col("die_by_host"), col("8162"), col("a001"), col("9001"), col("9009"));
-    let mut seen: std::collections::BTreeMap<(&str, String), std::collections::BTreeSet<String>> = Default::default();
+    let (cdie, c8162, ca001, c9001, c9009) = (
+        col("die_by_host"),
+        col("8162"),
+        col("a001"),
+        col("9001"),
+        col("9009"),
+    );
+    let mut seen: std::collections::BTreeMap<(&str, String), std::collections::BTreeSet<String>> =
+        Default::default();
     for l in lines {
         let f: Vec<&str> = l.split('\t').collect();
         if f.len() <= c9009 || f[cdie] == "-" {
             continue;
         }
-        for (key, c) in [("gss.0x20808162", c8162), ("cudart.0x2080a001", ca001), ("cudart.0x20809001", c9001), ("cudart.0x20809009", c9009)] {
+        for (key, c) in [
+            ("gss.0x20808162", c8162),
+            ("cudart.0x2080a001", ca001),
+            ("cudart.0x20809001", c9001),
+            ("cudart.0x20809009", c9009),
+        ] {
             if f[c] != "-" && !f[c].is_empty() {
-                seen.entry((key, f[cdie].to_string())).or_default().insert(f[c].to_string());
+                seen.entry((key, f[cdie].to_string()))
+                    .or_default()
+                    .insert(f[c].to_string());
             }
         }
     }
@@ -231,13 +280,14 @@ fn the_board_specific_registry_equals_the_contradictions_in_the_tier2_summary() 
 #[test]
 fn no_row_is_ever_served_across_dies() {
     let rows = consttab::table().unwrap();
-    let branches: std::collections::BTreeSet<u16> = [0u16, 535, 560, 570, 575, 580, 590, 595, 610, 615]
-        .into_iter()
-        .chain(rows.iter().filter_map(|r| match r.branch {
-            consttab::BranchScope::Major(m) => Some(m),
-            consttab::BranchScope::Any => None,
-        }))
-        .collect();
+    let branches: std::collections::BTreeSet<u16> =
+        [0u16, 535, 560, 570, 575, 580, 590, 595, 610, 615]
+            .into_iter()
+            .chain(rows.iter().filter_map(|r| match r.branch {
+                consttab::BranchScope::Major(m) => Some(m),
+                consttab::BranchScope::Any => None,
+            }))
+            .collect();
     let keys: std::collections::BTreeSet<&str> = rows.iter().map(|r| r.key.as_str()).collect();
     let mut checked = 0u64;
     for &(a, i, name) in DIE_NAMES {
@@ -247,8 +297,12 @@ fn no_row_is_ever_served_across_dies() {
             for &b in &branches {
                 if let Ok(r) = consttab::lookup(key, die, b) {
                     match &r.die {
-                        DieScope::Die(d) => assert_eq!(*d, die, "{key} {die} {b}: served {d}'s row"),
-                        DieScope::Any => assert!(r.source.is_mechanism(), "{key}: a measured wildcard"),
+                        DieScope::Die(d) => {
+                            assert_eq!(*d, die, "{key} {die} {b}: served {d}'s row")
+                        }
+                        DieScope::Any => {
+                            assert!(r.source.is_mechanism(), "{key}: a measured wildcard")
+                        }
                     }
                     if let consttab::BranchScope::Major(m) = r.branch {
                         assert_eq!(m, b, "{key} {die}: served branch {m}'s row at {b}");
@@ -266,11 +320,23 @@ fn no_row_is_ever_served_across_dies() {
 #[test]
 fn every_rm_key_of_the_table_has_a_wiring_decision_and_every_decision_has_rows() {
     let rows = consttab::table().unwrap();
-    let rm_keys: std::collections::BTreeSet<&str> = rows.iter().map(|r| r.key.as_str()).filter(|k| k.starts_with("rm.")).collect();
-    let decided: std::collections::BTreeSet<&str> = rowserve::USES.iter().map(|(k, _)| *k).collect();
-    assert_eq!(rm_keys, decided, "a row consumed by no code, or a decision with no row");
+    let rm_keys: std::collections::BTreeSet<&str> = rows
+        .iter()
+        .map(|r| r.key.as_str())
+        .filter(|k| k.starts_with("rm."))
+        .collect();
+    let decided: std::collections::BTreeSet<&str> =
+        rowserve::USES.iter().map(|(k, _)| *k).collect();
+    assert_eq!(
+        rm_keys, decided,
+        "a row consumed by no code, or a decision with no row"
+    );
     assert_eq!(rm_keys.len(), 6);
-    assert_eq!(rows.iter().filter(|r| r.key.starts_with("rm.")).count(), 46, "42 inherited rows plus two AD102/580 and two TU106/580 questions");
+    assert_eq!(
+        rows.iter().filter(|r| r.key.starts_with("rm.")).count(),
+        46,
+        "42 inherited rows plus two AD102/580 and two TU106/580 questions"
+    );
 }
 
 #[test]
@@ -294,7 +360,10 @@ fn the_design_doc_states_the_same_wiring_as_the_code() {
 #[test]
 fn resolve_names_a_withheld_key_and_never_serves_it() {
     match rowserve::resolve("rm.0x2080121f", GA106, 580, &[0u8; 40], None) {
-        Resolution::Refuse(t) => assert!(t.contains("W349WITHHELD") && t.contains("rm.0x2080121f"), "{t}"),
+        Resolution::Refuse(t) => assert!(
+            t.contains("W349WITHHELD") && t.contains("rm.0x2080121f"),
+            "{t}"
+        ),
         Resolution::Serve(..) => panic!("served"),
     }
     match rowserve::resolve("rm.0x20800a59", GA106, 580, &[0u8; 16], Some(&[1u8; 16])) {
@@ -307,8 +376,16 @@ fn resolve_names_a_withheld_key_and_never_serves_it() {
 #[test]
 fn the_design_doc_lists_the_zbc_dies_and_the_board_specific_pairs_the_data_has() {
     let doc = include_str!("fixtures/gpu_types_wiring_manifest.txt");
-    let line = |tag: &str| doc.lines().find_map(|l| l.strip_prefix(tag)).unwrap_or_else(|| panic!("no {tag} line")).to_string();
-    let doc_zbc: std::collections::BTreeSet<String> = line("ZBC-MEASURED:").split_whitespace().map(str::to_string).collect();
+    let line = |tag: &str| {
+        doc.lines()
+            .find_map(|l| l.strip_prefix(tag))
+            .unwrap_or_else(|| panic!("no {tag} line"))
+            .to_string()
+    };
+    let doc_zbc: std::collections::BTreeSet<String> = line("ZBC-MEASURED:")
+        .split_whitespace()
+        .map(str::to_string)
+        .collect();
     let data_zbc: std::collections::BTreeSet<String> = consttab::table()
         .unwrap()
         .iter()
@@ -344,12 +421,18 @@ fn ad102_580_small_controls_answer_only_the_measured_requests() {
         assert_eq!(w(&r.unwrap().body[PARAMS_AT..], 0), output);
         assert!(!ok(&p.respond(&control(cmd, &(input ^ 1).to_le_bytes()))));
     }
-    assert!(!ok(&p.respond(&control(0x2080_2806, &3u32.to_le_bytes()))),
-        "GA106's request is not AD102's measured question");
+    assert!(
+        !ok(&p.respond(&control(0x2080_2806, &3u32.to_le_bytes()))),
+        "GA106's request is not AD102's measured question"
+    );
     let mut wrong_branch = policy(ad102, V595);
-    assert!(!ok(&wrong_branch.respond(&control(0x2080_2801, &3u32.to_le_bytes()))));
+    assert!(!ok(
+        &wrong_branch.respond(&control(0x2080_2801, &3u32.to_le_bytes()))
+    ));
     let mut neighbour = policy(DieId::new(arch::AD100, 3), V580);
-    assert!(!ok(&neighbour.respond(&control(0x2080_2801, &3u32.to_le_bytes()))));
+    assert!(!ok(
+        &neighbour.respond(&control(0x2080_2801, &3u32.to_le_bytes()))
+    ));
 }
 
 #[test]

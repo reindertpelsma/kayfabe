@@ -14,23 +14,47 @@ use kf_disp::regs::Regs;
 
 const VER: &str = "580.65.06";
 const BRANCH: &str = "580";
-const AD104: Die = Die { architecture: 0x190, implementation: 0x4 };
-const AD106: Die = Die { architecture: 0x190, implementation: 0x6 };
-const AD103: Die = Die { architecture: 0x190, implementation: 0x3 };
-const GA104: Die = Die { architecture: 0x170, implementation: 0x4 };
-const TU106: Die = Die { architecture: 0x160, implementation: 0x6 };
-const GB206: Die = Die { architecture: 0x1B0, implementation: 0x6 };
+const AD104: Die = Die {
+    architecture: 0x190,
+    implementation: 0x4,
+};
+const AD106: Die = Die {
+    architecture: 0x190,
+    implementation: 0x6,
+};
+const AD103: Die = Die {
+    architecture: 0x190,
+    implementation: 0x3,
+};
+const GA104: Die = Die {
+    architecture: 0x170,
+    implementation: 0x4,
+};
+const TU106: Die = Die {
+    architecture: 0x160,
+    implementation: 0x6,
+};
+const GB206: Die = Die {
+    architecture: 0x1B0,
+    implementation: 0x6,
+};
 
 fn fixture() -> CapsPage {
     let text = include_str!("fixtures/caps_page_ad104_580.65.06.txt");
     let mut words = Vec::new();
-    for line in text.lines().filter(|l| !l.starts_with('#') && !l.trim().is_empty()) {
+    for line in text
+        .lines()
+        .filter(|l| !l.starts_with('#') && !l.trim().is_empty())
+    {
         let mut f = line.split_whitespace();
         let off = u32::from_str_radix(f.next().unwrap().trim_start_matches("0x"), 16).unwrap();
         let val = u32::from_str_radix(f.next().unwrap().trim_start_matches("0x"), 16).unwrap();
         words.push((off, val));
     }
-    CapsPage { base: 0x0064_0000, words }
+    CapsPage {
+        base: 0x0064_0000,
+        words,
+    }
 }
 
 fn table() -> &'static ClassTable {
@@ -63,17 +87,49 @@ fn ad104() -> Derived {
 fn not_claimed(d: &FieldDiff) -> Option<&'static str> {
     let reg = d.reg.as_str();
     Some(match (reg, d.offset) {
-        ("?", 0x008) => "unnamed word 0x008 (0x432): no header names it; bisection run e16: not needed (0x00c is)",
-        ("?", 0x048 | 0x058 | 0x068 | 0x078) => "unnamed per-head words (0xa00): no header names them; bisection e9: not needed",
-        ("?", 0x0c0 | 0x0d0 | 0x0e0 | 0x0f0) => "unnamed per-head words (0x10): no header names them; bisection e10/e4: not needed",
-        ("?", 0x5e4..=0x604) => "HEAD_CLK_CAP words (v05_01 NV_PDISP_FE_SW_HEAD_CLK_CAP; 0x86 x8 measured, the authored page presents 4 heads at the header's INIT 0x77): a per-SKU pixel clock, not needed (e5)",
-        ("IHUB_COMMON_CAPA" | "IHUB_COMMON_CAPC", _) => "isohub mempool / line buffer / flip: per-die IMP inputs the engine does not model; NVKMS reads only PLANAR/SEMI_PLANAR/HOR_VER_FLIP (e3: not needed)",
-        ("SOR_CAP", _) => "DisplayPort and dual-TMDS SOR bits: kayfabe's connectors are TMDS-only (connector policy, caps.rs)",
+        ("?", 0x008) => {
+            "unnamed word 0x008 (0x432): no header names it; bisection run e16: not needed (0x00c is)"
+        }
+        ("?", 0x048 | 0x058 | 0x068 | 0x078) => {
+            "unnamed per-head words (0xa00): no header names them; bisection e9: not needed"
+        }
+        ("?", 0x0c0 | 0x0d0 | 0x0e0 | 0x0f0) => {
+            "unnamed per-head words (0x10): no header names them; bisection e10/e4: not needed"
+        }
+        ("?", 0x5e4..=0x604) => {
+            "HEAD_CLK_CAP words (v05_01 NV_PDISP_FE_SW_HEAD_CLK_CAP; 0x86 x8 measured, the authored page presents 4 heads at the header's INIT 0x77): a per-SKU pixel clock, not needed (e5)"
+        }
+        ("IHUB_COMMON_CAPA" | "IHUB_COMMON_CAPC", _) => {
+            "isohub mempool / line buffer / flip: per-die IMP inputs the engine does not model; NVKMS reads only PLANAR/SEMI_PLANAR/HOR_VER_FLIP (e3: not needed)"
+        }
+        ("SOR_CAP", _) => {
+            "DisplayPort and dual-TMDS SOR bits: kayfabe's connectors are TMDS-only (connector policy, caps.rs)"
+        }
         ("SOR_CLK_CAP", _) => "DP_MAX, and SORs 4-7 that the 4-SOR family row does not present",
-        (r, _) if r.starts_with("POSTCOMP_HEAD_HDR_CAP") => "postcomp head scaler/DSC/OCSC/dither: features the engine does not implement (e2: not needed)",
-        ("PRECOMP_WIN_PIPE_HDR_CAPA", _) if matches!(d.field.as_str(), "ALPHA_WIDTH" | "FULL_WIDTH" | "UNIT_WIDTH") => "pipeline unit widths: no open source states them, not needed (f3: presence bits suffice)",
-        ("PRECOMP_WIN_PIPE_HDR_CAPA", _) if d.index.is_some_and(|i| i % 2 == 1) => "overlay-layer window presence (CSC11 only, no TMO on the measured die): not needed (f5 vs f6); the authored overlay keeps its CSC chain and TMO",
-        ("PRECOMP_WIN_PIPE_HDR_CAPB" | "PRECOMP_WIN_PIPE_HDR_CAPC" | "PRECOMP_WIN_PIPE_HDR_CAPD" | "PRECOMP_WIN_PIPE_HDR_CAPE" | "PRECOMP_WIN_PIPE_HDR_CAPF", _) => "window precisions, LUT/scaler limits: numbers no header states; not needed (e19b fails alone, e18b/f3 pass without them)",
+        (r, _) if r.starts_with("POSTCOMP_HEAD_HDR_CAP") => {
+            "postcomp head scaler/DSC/OCSC/dither: features the engine does not implement (e2: not needed)"
+        }
+        ("PRECOMP_WIN_PIPE_HDR_CAPA", _)
+            if matches!(
+                d.field.as_str(),
+                "ALPHA_WIDTH" | "FULL_WIDTH" | "UNIT_WIDTH"
+            ) =>
+        {
+            "pipeline unit widths: no open source states them, not needed (f3: presence bits suffice)"
+        }
+        ("PRECOMP_WIN_PIPE_HDR_CAPA", _) if d.index.is_some_and(|i| i % 2 == 1) => {
+            "overlay-layer window presence (CSC11 only, no TMO on the measured die): not needed (f5 vs f6); the authored overlay keeps its CSC chain and TMO"
+        }
+        (
+            "PRECOMP_WIN_PIPE_HDR_CAPB"
+            | "PRECOMP_WIN_PIPE_HDR_CAPC"
+            | "PRECOMP_WIN_PIPE_HDR_CAPD"
+            | "PRECOMP_WIN_PIPE_HDR_CAPE"
+            | "PRECOMP_WIN_PIPE_HDR_CAPF",
+            _,
+        ) => {
+            "window precisions, LUT/scaler limits: numbers no header states; not needed (e19b fails alone, e18b/f3 pass without them)"
+        }
         _ => return None,
     })
 }
@@ -91,14 +147,21 @@ fn the_derived_ad104_page_equals_the_measured_one_except_the_named_unclaimed_fie
         hit.insert(why);
     }
     // every claimed word is exactly the measured one: the decisive facts are not in the diff
-    assert!(!diffs.iter().any(|x| x.offset == 0x00c), "word 0x00c is measured");
+    assert!(
+        !diffs.iter().any(|x| x.offset == 0x00c),
+        "word 0x00c is measured"
+    );
     assert!(
         !diffs
             .iter()
             .any(|x| x.reg == "PRECOMP_WIN_PIPE_HDR_CAPA" && x.field == "SCLR_PRESENT"),
         "the main layer's scaler presence matches"
     );
-    assert!(!diffs.iter().any(|x| x.reg == "SYS_CAP" || x.reg == "SYS_CAPB"));
+    assert!(
+        !diffs
+            .iter()
+            .any(|x| x.reg == "SYS_CAP" || x.reg == "SYS_CAPB")
+    );
     assert!(hit.len() >= 8, "the allow-list is exercised: {}", hit.len());
 }
 
@@ -113,7 +176,11 @@ fn the_decisive_words_are_in_the_page() {
         let off = 0x780 + 0x20 * win;
         let sclr = (d.page.word(off) >> 19) & 1;
         assert_eq!(sclr, u32::from(win % 2 == 0), "window {win} SCLR_PRESENT");
-        assert_eq!(sclr, (fx.word(off) >> 19) & 1, "window {win} equals the measured page");
+        assert_eq!(
+            sclr,
+            (fx.word(off) >> 19) & 1,
+            "window {win} equals the measured page"
+        );
     }
 }
 
@@ -123,7 +190,8 @@ fn the_decisive_words_are_in_the_page() {
 fn the_derived_ad104_page_is_the_page_bisection_run_f5_booted() {
     let regs = Regs::for_ip(VER, ADA.ip_version).unwrap();
     let c = &ADA.classes;
-    let base = kf_disp::caps::sdr_page(table(), &regs, c.caps, c.core, ADA.heads, ADA.windows).unwrap();
+    let base =
+        kf_disp::caps::sdr_page(table(), &regs, c.caps, c.core, ADA.heads, ADA.windows).unwrap();
     let fx = fixture();
     let mut words: std::collections::BTreeMap<u32, u32> = base.words.iter().copied().collect();
     words.insert(0x00c, fx.word(0x00c));
@@ -149,16 +217,41 @@ fn every_word_names_its_tier() {
     assert_eq!(p(0x780).tier, Tier::Rule);
     assert!(p(0x780).why.contains("window-layer model"));
     assert_eq!(p(0x000).tier, Tier::Rule);
-    assert!(d.provenance.iter().all(|p| p.tier != Tier::Host), "no tier-2 source exists for this page");
+    assert!(
+        d.provenance.iter().all(|p| p.tier != Tier::Host),
+        "no tier-2 source exists for this page"
+    );
 }
 
 /// OWNER_RULINGS §AH: a value measured on one die is never served to another die (or another driver
 /// branch). Unmeasured dies get the clean authored page, and say what is missing.
 #[test]
 fn an_unmeasured_die_gets_the_clean_page_and_the_notice_never_a_neighbours_row() {
-    for (row, die) in [(&ADA, AD106), (&ADA, AD103), (&AMPERE, GA104), (&TURING, Die { architecture: 0x160, implementation: 4 }), (&BLACKWELL_GB20X, Die { implementation: 3, ..GB206 })] {
+    for (row, die) in [
+        (&ADA, AD106),
+        (&ADA, AD103),
+        (&AMPERE, GA104),
+        (
+            &TURING,
+            Die {
+                architecture: 0x160,
+                implementation: 4,
+            },
+        ),
+        (
+            &BLACKWELL_GB20X,
+            Die {
+                implementation: 3,
+                ..GB206
+            },
+        ),
+    ] {
         let d = go(row, die, true, true, BRANCH);
-        assert_eq!(d.page.word(0x00c), 0, "{die:?} must not receive AD104's word");
+        assert_eq!(
+            d.page.word(0x00c),
+            0,
+            "{die:?} must not receive AD104's word"
+        );
         assert_eq!(d.unmeasured.len(), 1, "{die:?}");
         assert_eq!(d.unmeasured[0].0, 0x00c);
         assert!(d.provenance.iter().all(|p| p.tier != Tier::Measured));
@@ -179,10 +272,20 @@ fn a_second_dies_row_is_served_to_that_die_only() {
     .unwrap();
     let regs = Regs::for_ip(VER, ADA.ip_version).unwrap();
     let run = |die| {
-        derive(table(), &regs, &ADA, die, true, shipped_rows(), &rows, "580", &HostFacts::default())
-            .unwrap()
-            .page
-            .word(0x00c)
+        derive(
+            table(),
+            &regs,
+            &ADA,
+            die,
+            true,
+            shipped_rows(),
+            &rows,
+            "580",
+            &HostFacts::default(),
+        )
+        .unwrap()
+        .page
+        .word(0x00c)
     };
     assert_eq!(run(AD104), 0x100);
     assert_eq!(run(AD106), 0x300);
@@ -192,10 +295,16 @@ fn a_second_dies_row_is_served_to_that_die_only() {
 /// The T3 file refuses a row with no `measured:` source (a blob-derived row is refused, ruling §AF).
 #[test]
 fn a_measured_row_needs_a_measured_source() {
-    assert!(parse_measured("0x190\t0x4\t580\t0xC773\t0x00c\t0x100\tcaptured from somewhere\n").is_err());
+    assert!(
+        parse_measured("0x190\t0x4\t580\t0xC773\t0x00c\t0x100\tcaptured from somewhere\n").is_err()
+    );
     assert!(parse_measured("0x190\t0x4\t580\t0xC773\t0x00c\n").is_err());
     assert!(!shipped_measured().is_empty(), "the shipped file parses");
-    assert!(shipped_measured().iter().all(|m| m.source.starts_with("measured:")));
+    assert!(
+        shipped_measured()
+            .iter()
+            .all(|m| m.source.starts_with("measured:"))
+    );
     assert!(!shipped_rows().is_empty(), "the shipped rows parse");
     assert!(parse_rows("LAYER\tmiddle\tR\tF\tTRUE\trequired\tx\n").is_err());
 }
@@ -222,12 +331,20 @@ fn every_family_derives_a_page_at_the_caps_base_with_the_layer_model() {
             for win in 0..8_u32 {
                 let t = table();
                 let off = t.a(class, "PRECOMP_WIN_PIPE_HDR_CAPA", win).unwrap();
-                let f = t.f(class, "PRECOMP_WIN_PIPE_HDR_CAPA_SCLR_PRESENT").unwrap();
+                let f = t
+                    .f(class, "PRECOMP_WIN_PIPE_HDR_CAPA_SCLR_PRESENT")
+                    .unwrap();
                 let v = kf_disp::class::get(d.page.word(off), f);
                 assert_eq!(v, u32::from(win % 2 == 0), "{die:?} window {win}");
                 // the base page's CSC11 (NVKMS asserts it) stays on every window
-                let c11 = t.f(class, "PRECOMP_WIN_PIPE_HDR_CAPA_CSC11_PRESENT").unwrap();
-                assert_eq!(kf_disp::class::get(d.page.word(off), c11), 1, "{die:?} window {win} CSC11");
+                let c11 = t
+                    .f(class, "PRECOMP_WIN_PIPE_HDR_CAPA_CSC11_PRESENT")
+                    .unwrap();
+                assert_eq!(
+                    kf_disp::class::get(d.page.word(off), c11),
+                    1,
+                    "{die:?} window {win} CSC11"
+                );
             }
         }
     }
@@ -237,7 +354,12 @@ fn every_family_derives_a_page_at_the_caps_base_with_the_layer_model() {
 /// read-only; nothing in it is derived from guest bytes, and every word has a provenance.
 #[test]
 fn the_page_is_static_bounded_and_fully_attributed() {
-    for (row, die) in [(&TURING, TU106), (&AMPERE, GA104), (&ADA, AD104), (&BLACKWELL_GB20X, GB206)] {
+    for (row, die) in [
+        (&TURING, TU106),
+        (&AMPERE, GA104),
+        (&ADA, AD104),
+        (&BLACKWELL_GB20X, GB206),
+    ] {
         let d = go(row, die, true, true, BRANCH);
         let mut seen = std::collections::BTreeSet::new();
         for (o, v) in &d.page.words {
@@ -257,8 +379,18 @@ fn a_family_row_that_is_not_whole_layers_is_refused() {
     let bad = DisplayRow { windows: 7, ..ADA };
     let regs = Regs::for_ip(VER, ADA.ip_version).unwrap();
     assert!(
-        derive(table(), &regs, &bad, AD104, true, shipped_rows(), &[], "580", &HostFacts::default())
-            .is_err()
+        derive(
+            table(),
+            &regs,
+            &bad,
+            AD104,
+            true,
+            shipped_rows(),
+            &[],
+            "580",
+            &HostFacts::default()
+        )
+        .is_err()
     );
 }
 
@@ -270,7 +402,16 @@ fn family_rows() -> String {
          # the page of each family with NO measured row (T1 only); columns: caps_class  offset  value  tier  reason\n",
     );
     for row in kf_chip::display::ALL {
-        let d = go(row, Die { architecture: 0, implementation: 0 }, true, false, BRANCH);
+        let d = go(
+            row,
+            Die {
+                architecture: 0,
+                implementation: 0,
+            },
+            true,
+            false,
+            BRANCH,
+        );
         for p in &d.provenance {
             out.push_str(&format!(
                 "{:#06X}\t{:#05x}\t{:#010x}\t{:?}\t{}\n",
@@ -282,7 +423,10 @@ fn family_rows() -> String {
             ));
         }
         for (off, why) in &d.unmeasured {
-            out.push_str(&format!("{:#06X}\t{:#05x}\t-\tUnmeasured\t{}\n", row.classes.caps, off, why));
+            out.push_str(&format!(
+                "{:#06X}\t{:#05x}\t-\tUnmeasured\t{}\n",
+                row.classes.caps, off, why
+            ));
         }
     }
     out
@@ -297,7 +441,10 @@ fn the_committed_family_rows_are_the_derivation() {
 #[test]
 #[ignore = "emits data/caps_family_pages.tsv for tools/derive_display_caps.sh"]
 fn emit_family_rows() {
-    print!("KF_FAMILY_ROWS_BEGIN\n{}KF_FAMILY_ROWS_END\n", family_rows());
+    print!(
+        "KF_FAMILY_ROWS_BEGIN\n{}KF_FAMILY_ROWS_END\n",
+        family_rows()
+    );
 }
 
 /// Prints the field diff of the derived AD104 page against the oracle (the doc's table).
@@ -322,13 +469,20 @@ fn dump_derived_vs_measured() {
 /// Exact AD102/580 native-Windows measurement, not inheritance from AD104.
 #[test]
 fn the_ad102_580_caps_word_has_its_own_native_measurement() {
-    let ad102 = Die { architecture: 0x190, implementation: 0x2 };
+    let ad102 = Die {
+        architecture: 0x190,
+        implementation: 0x2,
+    };
     let d = go(&ADA, ad102, true, true, "580");
     assert_eq!(d.page.word(0x00c), 0x100);
     assert!(d.unmeasured.is_empty());
     let p = d.provenance.iter().find(|p| p.offset == 0x00c).unwrap();
     assert_eq!(p.tier, Tier::Measured);
-    assert!(p.why.contains("AD102") && p.why.contains("580.88"), "{}", p.why);
+    assert!(
+        p.why.contains("AD102") && p.why.contains("580.88"),
+        "{}",
+        p.why
+    );
     for branch in ["570", "595"] {
         let d = go(&ADA, ad102, true, true, branch);
         assert_eq!(d.page.word(0x00c), 0);
@@ -362,7 +516,11 @@ fn the_gb206_580_caps_word_requires_its_own_native_measurement() {
     assert!(d.unmeasured.is_empty());
     let p = d.provenance.iter().find(|p| p.offset == 0x00c).unwrap();
     assert_eq!(p.tier, Tier::Measured);
-    assert!(p.why.contains("GB206") && p.why.contains("580.88"), "{}", p.why);
+    assert!(
+        p.why.contains("GB206") && p.why.contains("580.88"),
+        "{}",
+        p.why
+    );
     for branch in ["570", "590", "595"] {
         let d = go(&BLACKWELL_GB20X, GB206, true, true, branch);
         assert_eq!(d.page.word(0x00c), 0);
@@ -370,9 +528,16 @@ fn the_gb206_580_caps_word_requires_its_own_native_measurement() {
     }
     // GB205 now has its own independently measured580 row; GB202/203 remain unmeasured.
     for implementation in [0x2, 0x3] {
-        let die = Die { implementation, ..GB206 };
+        let die = Die {
+            implementation,
+            ..GB206
+        };
         let d = go(&BLACKWELL_GB20X, die, true, true, "580");
-        assert_eq!(d.page.word(0x00c), 0, "a neighbouring die cannot borrow the row");
+        assert_eq!(
+            d.page.word(0x00c),
+            0,
+            "a neighbouring die cannot borrow the row"
+        );
         assert_eq!(d.unmeasured.len(), 1);
     }
 }

@@ -695,7 +695,11 @@ mod hwref_check {
     #[test]
     fn the_resize_bar1_word_is_the_header_field() {
         for g in [DieGroup::Ga100, DieGroup::Ga10x, DieGroup::Ad10x] {
-            assert_eq!(range(g, "NV_XVE_RESIZE_BAR1_CTRL_BAR_SIZE"), (12, 8), "{g:?}");
+            assert_eq!(
+                range(g, "NV_XVE_RESIZE_BAR1_CTRL_BAR_SIZE"),
+                (12, 8),
+                "{g:?}"
+            );
             assert_eq!(
                 val(g, "NV_XVE_RESIZE_BAR1_CTRL_BAR_SIZE_MIN"),
                 u64::from(RESIZE_BAR1_SIZE_MIN)

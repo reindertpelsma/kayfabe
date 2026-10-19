@@ -983,7 +983,8 @@ mod hwref_check {
             "the static BAR0 row agrees"
         );
         // the model a GB10x die gets carries the GB10x gate
-        let m = crate::Family::gsp_model_for_arch(crate::arch::GB100, 0x3, 8192).expect("GB10x model");
+        let m =
+            crate::Family::gsp_model_for_arch(crate::arch::GB100, 0x3, 8192).expect("GB10x model");
         let _ = m;
     }
 

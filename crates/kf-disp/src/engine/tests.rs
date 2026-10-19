@@ -511,7 +511,10 @@ fn a_plane_disable_raises_one_awaken_through_the_flipped_away_entry() {
     };
     let flip = |r: &mut Ring, iso: u32, notifier: u32, idx: u32| {
         r.m(m(WIN, "SET_CONTEXT_DMA_NOTIFIER"), notifier);
-        r.m(m(WIN, "SET_NOTIFIER_CONTROL"), if notifier == 0 { 0 } else { ctl(idx) });
+        r.m(
+            m(WIN, "SET_NOTIFIER_CONTROL"),
+            if notifier == 0 { 0 } else { ctl(idx) },
+        );
         r.m(ma(WIN, "SET_CONTEXT_DMA_ISO", 0), iso);
         r.m(m(WIN, "SET_WINDOW_INTERLOCK_FLAGS"), 1 << 1);
         r.m(m(WIN, "UPDATE"), 0);
@@ -539,7 +542,12 @@ fn a_plane_disable_raises_one_awaken_through_the_flipped_away_entry() {
     flip(&mut r, 0x3_0002, 0xA0, 1);
     e.step(w1, &r.bytes(), r.put(), &mut all_ok);
     let s = e.vblank(0, &mut all_ok);
-    assert_eq!(awakens(&s), vec![(true, false), (false, true)], "{:?}", s.effects);
+    assert_eq!(
+        awakens(&s),
+        vec![(true, false), (false, true)],
+        "{:?}",
+        s.effects
+    );
     // the plane's disable: no surface, no notifier — the flipped-away entry's FINISHED raises the AWAKEN
     flip(&mut r, 0, 0, 0);
     e.step(w1, &r.bytes(), r.put(), &mut all_ok);
@@ -2128,7 +2136,13 @@ fn turing_shared_semaphore_waits_then_releases_the_outgoing_flip() {
     let s = e.step(1, &w.bytes(), w.put(), &mut all_ok);
     assert!(s.effects.is_empty());
     let check = |a: &Acquire, current| {
-        assert_eq!(a.at, Place::CtxDma { handle: 0x20002, offset: 48 });
+        assert_eq!(
+            a.at,
+            Place::CtxDma {
+                handle: 0x20002,
+                offset: 48
+            }
+        );
         assert_eq!((a.value, a.wide, a.mode), (0xf473_f473, false, 0));
         a.satisfied_by(current)
     };
@@ -2136,9 +2150,15 @@ fn turing_shared_semaphore_waits_then_releases_the_outgoing_flip() {
     assert!(s.effects.is_empty(), "a larger value is not equality");
     assert!(e.waiting(1));
     let s = e.vblank(0, &mut |a| check(a, 0x1234_5678_f473_f473));
-    assert!(s.effects.iter().any(|x| matches!(x, Effect::Latched { window: 0 })));
     assert!(
-        !s.effects.iter().any(|x| matches!(x, Effect::Release { .. })),
+        s.effects
+            .iter()
+            .any(|x| matches!(x, Effect::Latched { window: 0 }))
+    );
+    assert!(
+        !s.effects
+            .iter()
+            .any(|x| matches!(x, Effect::Release { .. })),
         "first latch does not release itself"
     );
 
@@ -2148,14 +2168,20 @@ fn turing_shared_semaphore_waits_then_releases_the_outgoing_flip() {
     w.m(m(win, "UPDATE"), 0);
     e.step(1, &w.bytes(), w.put(), &mut all_ok);
     let s = e.vblank(0, &mut |_| panic!("zero context DMA disables the acquire"));
-    let releases: Vec<_> = s.effects.iter()
-        .filter(|x| matches!(x, Effect::Release { .. })).collect();
+    let releases: Vec<_> = s
+        .effects
+        .iter()
+        .filter(|x| matches!(x, Effect::Release { .. }))
+        .collect();
     assert_eq!(
         releases,
         vec![&Effect::Release {
             chn: 1,
             client: CLIENT,
-            at: Place::CtxDma { handle: 0x20002, offset: 48 },
+            at: Place::CtxDma {
+                handle: 0x20002,
+                offset: 48
+            },
             value: 0xd00d_d00d,
             wide: false,
             awaken: false,
@@ -2166,7 +2192,9 @@ fn turing_shared_semaphore_waits_then_releases_the_outgoing_flip() {
     e.step(1, &w.bytes(), w.put(), &mut all_ok);
     let s = e.vblank(0, &mut |_| panic!("acquire remains disabled"));
     assert!(
-        !s.effects.iter().any(|x| matches!(x, Effect::Release { .. })),
+        !s.effects
+            .iter()
+            .any(|x| matches!(x, Effect::Release { .. })),
         "zero context DMA disables the release"
     );
 }
@@ -2503,9 +2531,18 @@ fn gb20x_scanout_latches_iso_address_aperture_kind_and_plane_one() {
                 surf(&mut w, BWIN, "ISO", addr, target, true);
                 // The helper's last word is LO_ISO(0); set only its derived KIND field.
                 let n = w.words.len() - 1;
-                w.words[n] = put(w.words[n], fl(BWIN, "SET_SURFACE_ADDRESS_LO_ISO_KIND"),
-                    m(BWIN, if block_linear { "SET_SURFACE_ADDRESS_LO_ISO_KIND_BLOCKLINEAR" }
-                        else { "SET_SURFACE_ADDRESS_LO_ISO_KIND_PITCH" }));
+                w.words[n] = put(
+                    w.words[n],
+                    fl(BWIN, "SET_SURFACE_ADDRESS_LO_ISO_KIND"),
+                    m(
+                        BWIN,
+                        if block_linear {
+                            "SET_SURFACE_ADDRESS_LO_ISO_KIND_BLOCKLINEAR"
+                        } else {
+                            "SET_SURFACE_ADDRESS_LO_ISO_KIND_PITCH"
+                        },
+                    ),
+                );
                 w.m(ma(BWIN, "SET_SURFACE_ADDRESS_HI_ISO", 1), 2)
                     .m(ma(BWIN, "SET_SURFACE_ADDRESS_LO_ISO", 1), 0x4000 | 5)
                     .m(m(BWIN, "SET_SIZE"), (1080 << 16) | 1920)
@@ -2518,13 +2555,30 @@ fn gb20x_scanout_latches_iso_address_aperture_kind_and_plane_one() {
                 e.step(1, &w.bytes(), w.put(), &mut all_ok);
                 assert!(e.scanout(&sv, 0).is_none(), "pending is not armed");
                 e.vblank(0, &mut all_ok);
-                let s = e.scanout(&sv, 0).expect("enabled ISO scans, even at address zero");
-                assert_eq!(s.address, Some(SurfaceAddress { aperture, addr, block_linear }));
+                let s = e
+                    .scanout(&sv, 0)
+                    .expect("enabled ISO scans, even at address zero");
+                assert_eq!(
+                    s.address,
+                    Some(SurfaceAddress {
+                        aperture,
+                        addr,
+                        block_linear
+                    })
+                );
                 assert_eq!((s.handle, s.offset, s.iso1, s.offset1), (0, 0, 0, 0));
-                assert_eq!(s.address1, Some(SurfaceAddress {
-                    aperture: Aperture::Vidmem, addr: 0x2_0000_4000, block_linear: false,
-                }));
-                assert_eq!((s.width, s.height, s.pitch, s.pitch1), (1920, 1080, 120, 60));
+                assert_eq!(
+                    s.address1,
+                    Some(SurfaceAddress {
+                        aperture: Aperture::Vidmem,
+                        addr: 0x2_0000_4000,
+                        block_linear: false,
+                    })
+                );
+                assert_eq!(
+                    (s.width, s.height, s.pitch, s.pitch1),
+                    (1920, 1080, 120, 60)
+                );
                 // Nonzero address with ENABLE clear is disabled after the next latch.
                 surf(&mut w, BWIN, "ISO", addr, target, false);
                 w.m(m(BWIN, "UPDATE"), 0);
@@ -2532,8 +2586,10 @@ fn gb20x_scanout_latches_iso_address_aperture_kind_and_plane_one() {
                 assert_eq!(e.scanout(&sv, 0).unwrap().address, s.address);
                 e.vblank(0, &mut all_ok);
                 assert!(e.scanout(&sv, 0).is_none());
-                assert!(!e.window_was_active(1, &e.heads_armed()),
-                    "ENABLE clear must mean inactive even with retained address/target bits");
+                assert!(
+                    !e.window_was_active(1, &e.heads_armed()),
+                    "ENABLE clear must mean inactive even with retained address/target bits"
+                );
             }
         }
     }

@@ -16,13 +16,20 @@ fn the_ampere_windows_rows_equal_the_authored_values_on_every_measured_branch() 
     let ga104 = DieId::from_name("GA104").expect("GA104");
     let g = authored::GMMU_STATIC;
     let mut seen = 0;
-    for (die, branches) in [(ga106, &[570u16, 575, 580, 590, 595, 610][..]), (ga104, &[595u16][..])] {
+    for (die, branches) in [
+        (ga106, &[570u16, 575, 580, 590, 595, 610][..]),
+        (ga104, &[595u16][..]),
+    ] {
         for &b in branches {
             let gm = consttab::answer("rm.0x20800a59", die, b, &[0u8; 16]).expect("gmmu row");
             assert_eq!(word(&gm, 0), g.replayable_size, "{die} {b}");
             assert_eq!(word(&gm, 2), g.non_replayable_size, "{die} {b}");
             let ce = consttab::answer("rm.0x20802a08", die, b, &[0u8; 4]).expect("ce row");
-            assert_eq!(word(&ce, 0), authored::CE_FAULT_METHOD_BUFFER_SIZE, "{die} {b}");
+            assert_eq!(
+                word(&ce, 0),
+                authored::CE_FAULT_METHOD_BUFFER_SIZE,
+                "{die} {b}"
+            );
             seen += 1;
         }
     }

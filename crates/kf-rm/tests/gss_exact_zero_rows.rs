@@ -111,7 +111,10 @@ fn every_exact_row_is_in_rows_with_its_measured_size() {
         .iter()
         .find(|r| r.cmd == R853B.0 && r.size == R853B.1)
         .expect("853b row");
-    assert!(r.exact && r.inputs == [(4, 1)], "853b asks {{0, 1}} and nothing else");
+    assert!(
+        r.exact && r.inputs == [(4, 1)],
+        "853b asks {{0, 1}} and nothing else"
+    );
 }
 
 #[test]
@@ -138,7 +141,9 @@ fn the_host_is_asked_once_with_zeros_only() {
             "{cmd:#x}: zero request"
         );
         assert!(
-            answers.iter().any(|a| a.row.cmd == cmd && a.row.size == size),
+            answers
+                .iter()
+                .any(|a| a.row.cmd == cmd && a.row.size == size),
             "{cmd:#x}/{size} kept"
         );
     }
@@ -151,7 +156,12 @@ fn the_host_is_asked_once_with_zeros_only() {
         .collect();
     assert_eq!(asks.len(), 1);
     assert_eq!(&asks[0][4..8], &1u32.to_le_bytes());
-    assert!(asks[0].iter().enumerate().all(|(i, &b)| (4..8).contains(&i) || b == 0));
+    assert!(
+        asks[0]
+            .iter()
+            .enumerate()
+            .all(|(i, &b)| (4..8).contains(&i) || b == 0)
+    );
 }
 
 #[test]
@@ -212,7 +222,10 @@ fn the_595_853b_request_is_answered_only_when_word_one_is_one() {
     real[4..8].copy_from_slice(&1u32.to_le_bytes());
     let r = p.respond(&control(cmd, &real)).expect("answered");
     assert_eq!(r.rpc_result, 0);
-    assert_eq!(&r.body[PARAMS_AT..PARAMS_AT + size], &pattern(cmd, size)[..]);
+    assert_eq!(
+        &r.body[PARAMS_AT..PARAMS_AT + size],
+        &pattern(cmd, size)[..]
+    );
     // The all-zero request of the same size is another question.
     let r = p.respond(&control(cmd, &vec![0u8; size]));
     assert!(

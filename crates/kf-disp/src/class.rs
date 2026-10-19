@@ -202,7 +202,8 @@ pub fn for_version(version: &str) -> Option<&'static ClassTable> {
     static V590_48_01: OnceLock<ClassTable> = OnceLock::new();
     match version {
         "580.94.02" => Some(
-            V580_94_02.get_or_init(|| ClassTable::parse(include_str!("../data/classes-580.94.02.tsv"))),
+            V580_94_02
+                .get_or_init(|| ClassTable::parse(include_str!("../data/classes-580.94.02.tsv"))),
         ),
 
         "580.159.04" => Some(
