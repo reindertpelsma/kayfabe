@@ -4961,6 +4961,45 @@ mod device_reset_from_every_phase {
         second_life_after_a_reset_matches_a_fresh_device(AfterSuspend::FirmwareHalts, true);
     }
 
+    fn heartbeat_freshness(after: AfterSuspend) {
+        let cell = SystemInfoCell::new();
+        let mut old = Dev::life(fresh(Some(&cell)), after);
+        old.start_with_frts();
+        old.firmware_loaded();
+        old.publish();
+        old.run();
+        old.queue_traffic();
+        assert!(old.fsm.has_current_system_info());
+        old.fsm.device_reset();
+        assert!(
+            cell.latest().is_some(),
+            "console's retained state stays untouched"
+        );
+        assert!(!old.fsm.has_current_system_info());
+        let mut next = Dev::life(old.fsm, after);
+        next.start_with_frts();
+        next.firmware_loaded();
+        next.publish();
+        next.run();
+        next.send(next.fsm.abi.rpc.codes.gsp_rm_control, vec![0; 40]);
+        next.ring();
+        assert_ne!(next.fsm.command_seq(), 0);
+        assert!(
+            !next.fsm.has_current_system_info(),
+            "another command cannot authorize an old offset"
+        );
+        next.queue_traffic();
+        assert!(next.fsm.has_current_system_info());
+    }
+    #[test]
+    fn heartbeat_falcon_new_life_rejects_old_fn72_after_other_commands() {
+        heartbeat_freshness(AfterSuspend::AwaitsTeardownUcode);
+    }
+    #[test]
+    fn heartbeat_fsp_new_life_rejects_old_fn72_after_other_commands() {
+        heartbeat_freshness(AfterSuspend::FirmwareHalts);
+    }
+
     // ---- 4. nothing accumulates ------------------------------------------------------------------
 
     #[test]
