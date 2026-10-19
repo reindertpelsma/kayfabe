@@ -26,10 +26,13 @@ pub(crate) fn offset_ns(version: DriverVersion, info: &StashedSystemInfo) -> Opt
 
 pub(crate) fn sample(
     system_timer_ns: impl FnOnce() -> Option<u64>,
-    _guest_offset_ns: impl FnOnce() -> Option<u64>,
+    guest_offset_ns: impl FnOnce() -> Option<u64>,
 ) -> Option<u32> {
-    // Previous, hardware-falsified selector: PTIMER contains the system offset too.
-    system_timer_ns().map(|ns| (ns / 1_000_000) as u32)
+    let offset_ms = (guest_offset_ns()? / 1_000_000) as u32;
+    let system_ms = (system_timer_ns()? / 1_000_000) as u32;
+    // Mirror _kgspIsHeartbeatTimedOut's separate divisions exactly: subtracting
+    // nanoseconds first can place the millisecond heartbeat one tick in the future.
+    Some(system_ms.wrapping_sub(offset_ms))
 }
 
 #[cfg(test)]
