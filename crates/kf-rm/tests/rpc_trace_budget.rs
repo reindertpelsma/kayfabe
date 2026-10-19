@@ -33,9 +33,14 @@ fn child_metadata_trace() {
     let calls = Arc::new(AtomicUsize::new(0));
     let log = ControlCensusLog::new();
     let mut policy = ControlCensus::new(driver, log.clone(), FixedReply(calls.clone()));
+    let recreate_every = std::env::var("KF_TEST_RPC_TRACE_RECREATE_EVERY")
+        .ok()
+        .and_then(|s| s.parse::<usize>().ok())
+        .unwrap_or(1024);
+    assert!(recreate_every > 0);
     for i in 0..(2 * LIMIT + 1) {
         // A fresh wrapper models guest-triggered ABI re-selection/reset attempts.
-        if i % 1024 == 0 {
+        if i % recreate_every == 0 {
             policy = ControlCensus::new(driver, log.clone(), FixedReply(calls.clone()));
         }
         let cmd = RpcCommand {
@@ -86,4 +91,34 @@ fn metadata_trace_remains_off_by_default() {
         .unwrap();
     assert!(out.status.success());
     assert!(!String::from_utf8_lossy(&out.stderr).contains("rpc-trace"));
+}
+
+fn check_recreation_period(period: usize) {
+    let out = std::process::Command::new(std::env::current_exe().unwrap())
+        .args(["--exact", "child_metadata_trace", "--nocapture"])
+        .env("KF_TEST_RPC_TRACE_BUDGET_CHILD", "1")
+        .env("KF_TEST_RPC_TRACE_RECREATE_EVERY", period.to_string())
+        .env("KF3_RPC_TRACE", "1")
+        .output()
+        .unwrap();
+    assert!(out.status.success());
+    let text = String::from_utf8_lossy(&out.stderr);
+    assert_eq!(
+        text.lines()
+            .filter(|l| l.starts_with("kf-rm: rpc-trace fn="))
+            .count(),
+        LIMIT
+    );
+    assert_eq!(text.matches("rpc-trace lifetime limit reached").count(), 1);
+    assert!(String::from_utf8_lossy(&out.stdout).contains("ALL_REPLIES_UNCHANGED=1"));
+}
+
+#[test]
+fn a_single_long_lived_policy_has_the_same_process_trace_limit() {
+    check_recreation_period(usize::MAX);
+}
+
+#[test]
+fn recreating_the_policy_on_every_request_cannot_rearm_the_trace_limit() {
+    check_recreation_period(1);
 }
