@@ -58,7 +58,16 @@ say "BENCH_TREE_START"
 # ---- 0. preconditions, checked on CONTENT ----------------------------------------------
 grep -q "Open Kernel Module" /proc/driver/nvidia/version 2>/dev/null \
   || { say "⊘ host driver is not the OPEN module -- run provision_host_driver.sh first"; exit 2; }
-[ -s "$RUN" ] || { say "⊘ missing $RUN (the guest needs the SAME .run)"; exit 2; }
+# The fat guest's pinned package is independent of the installed host driver.
+# A fresh host installed directly at595 will not already have the580 package.
+if [ ! -s "$RUN" ]; then
+  say "fetching the pinned guest580.159.04 package"
+  curl --fail --location --retry 3 --connect-timeout 20 \
+    -o "$RUN.part" \
+    https://us.download.nvidia.com/XFree86/Linux-x86_64/580.159.04/NVIDIA-Linux-x86_64-580.159.04.run \
+    && mv "$RUN.part" "$RUN" \
+    || { say "⊘ pinned guest package download failed"; exit 2; }
+fi
 mkdir -p "$BENCH"
 
 # ---- 1. host deps ----------------------------------------------------------------------
