@@ -135,6 +135,7 @@
 0xCA73	0x000	0x00000f0f	Rule	authored base page (class header + family row)
 0xCA73	0x004	0x000000ff	Rule	authored base page (class header + family row)
 0xCA73	0x018	0x00000800	Rule	authored base page (class header + family row)
+0xCA73	0x020	0x0000000f	Rule	authored base page (class header + family row)
 0xCA73	0x144	0x10000b00	Rule	authored base page (class header + family row)
 0xCA73	0x14c	0x10000b00	Rule	authored base page (class header + family row)
 0xCA73	0x154	0x10000b00	Rule	authored base page (class header + family row)
