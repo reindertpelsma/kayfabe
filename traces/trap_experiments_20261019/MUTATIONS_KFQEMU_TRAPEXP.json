@@ -1,0 +1,117 @@
+[
+ {
+  "id": "Q1",
+  "desc": "cfg: spin on for any nonempty value",
+  "killed_by": [
+   "trapexp::tests::spin_is_on_only_for_exactly_one",
+   "trapexp::tests::spin_stays_off_for_other_truthy_words_and_a_delay_flag_does_not_turn_it_on"
+  ],
+  "n": 2
+ },
+ {
+  "id": "Q2",
+  "desc": "cfg: intr and db delay flags swapped",
+  "killed_by": [
+   "trapexp::tests::the_db_delay_flag_alone",
+   "trapexp::tests::the_delay_flags_parse_independently",
+   "trapexp::tests::the_intr_delay_flag_alone"
+  ],
+  "n": 3
+ },
+ {
+  "id": "Q3",
+  "desc": "cfg.any ignores delays",
+  "killed_by": [
+   "trapexp::tests::the_delay_flags_parse_independently",
+   "trapexp::tests::the_status_fragment_is_empty_with_no_flag_and_names_the_counters_otherwise"
+  ],
+  "n": 2
+ },
+ {
+  "id": "Q4",
+  "desc": "cfg: spin_cpu accepts garbage as 0",
+  "killed_by": [
+   "trapexp::tests::spin_cpu_garbage_is_none_not_zero",
+   "trapexp::tests::spin_cpu_parses_a_number_and_nothing_else"
+  ],
+  "n": 2
+ },
+ {
+  "id": "Q5",
+  "desc": "busy_wait returns immediately",
+  "killed_by": [
+   "trapexp::tests::busy_wait_is_never_short",
+   "trapexp::tests::busy_wait_scales_with_the_request",
+   "trapexp::tests::busy_wait_waits_at_least_the_time_and_zero_returns_at_once"
+  ],
+  "n": 3
+ },
+ {
+  "id": "Q6",
+  "desc": "busy_wait waits half",
+  "killed_by": [
+   "trapexp::tests::busy_wait_is_never_short",
+   "trapexp::tests::busy_wait_scales_with_the_request",
+   "trapexp::tests::busy_wait_waits_at_least_the_time_and_zero_returns_at_once"
+  ],
+  "n": 3
+ },
+ {
+  "id": "Q7",
+  "desc": "poll: raise reported whenever anything was stored",
+  "killed_by": [
+   "trapexp::tests::a_trigger_whose_clear_lost_still_raises_exactly_once_per_poll_that_saw_it",
+   "trapexp::tests::the_loopback_self_test_end_to_end_on_a_page"
+  ],
+  "n": 2
+ },
+ {
+  "id": "Q8",
+  "desc": "poll: lost counted as stored",
+  "killed_by": [
+   "trapexp::tests::a_lost_compare_and_swap_is_counted_and_healed_by_the_next_poll",
+   "trapexp::tests::a_partial_cas_loss_splits_stored_and_lost"
+  ],
+  "n": 2
+ },
+ {
+  "id": "Q9",
+  "desc": "poll: step run on an all-zero snapshot (ignores the page)",
+  "killed_by": [
+   "trapexp::tests::a_lost_compare_and_swap_is_counted_and_healed_by_the_next_poll",
+   "trapexp::tests::a_partial_cas_loss_splits_stored_and_lost",
+   "trapexp::tests::a_trigger_whose_clear_lost_still_raises_exactly_once_per_poll_that_saw_it",
+   "trapexp::tests::stored_counts_exactly_the_changed_words",
+   "trapexp::tests::the_loopback_self_test_end_to_end_on_a_page"
+  ],
+  "n": 5
+ },
+ {
+  "id": "Q10",
+  "desc": "poll: only the first changed word is stored",
+  "killed_by": [
+   "trapexp::tests::a_partial_cas_loss_splits_stored_and_lost",
+   "trapexp::tests::stored_counts_exactly_the_changed_words",
+   "trapexp::tests::the_loopback_self_test_end_to_end_on_a_page"
+  ],
+  "n": 3
+ },
+ {
+  "id": "Q11",
+  "desc": "status: not empty with no flag",
+  "killed_by": [
+   "trapexp::tests::the_status_fragment_is_empty_with_no_flag_and_names_the_counters_otherwise",
+   "trapexp::tests::the_status_is_empty_when_nothing_is_on_even_with_counters_and_state"
+  ],
+  "n": 2
+ },
+ {
+  "id": "Q12",
+  "desc": "status: omits the learned mask",
+  "killed_by": [
+   "trapexp::tests::the_status_fragment_is_empty_with_no_flag_and_names_the_counters_otherwise",
+   "trapexp::tests::the_status_lists_every_learned_leaf"
+  ],
+  "n": 2
+ }
+]

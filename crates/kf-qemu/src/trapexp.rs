@@ -27,14 +27,13 @@ pub struct Cfg {
 impl Cfg {
     /// Read the flags through `get` (the environment, or a table in a test).
     pub fn from_lookup(get: impl Fn(&str) -> Option<String>) -> Cfg {
-        let _ = &get;
         Cfg {
             delays: Delays {
-                intr_us: 1,
-                db_us: 1,
+                intr_us: parse_delay_us(get("KF3_DIAG_TRAP_DELAY_INTR_US").as_deref()),
+                db_us: parse_delay_us(get("KF3_DIAG_TRAP_DELAY_DB_US").as_deref()),
             },
-            spin: true,
-            spin_cpu: Some(0),
+            spin: get("KF3_DIAG_INTR_SPIN").is_some_and(|v| v.trim() == "1"),
+            spin_cpu: get("KF3_DIAG_INTR_SPIN_CPU").and_then(|v| v.trim().parse().ok()),
         }
     }
 
@@ -53,7 +52,14 @@ impl Cfg {
 
 /// Spin on a monotonic clock for `us` microseconds (no sleep, no yield).
 pub fn busy_wait_us(us: u32) {
-    let _ = us;
+    if us == 0 {
+        return;
+    }
+    let t = std::time::Instant::now();
+    let want = std::time::Duration::from_micros(u64::from(us));
+    while t.elapsed() < want {
+        core::hint::spin_loop();
+    }
 }
 
 /// What one poll of the page did.
@@ -74,12 +80,21 @@ pub fn poll_once(
     rd: &mut dyn FnMut(usize) -> u32,
     cas: &mut dyn FnMut(usize, u32, u32) -> bool,
 ) -> Poll {
-    let _ = (st, rd, cas);
-    Poll {
-        raise: true,
-        stored: 99,
-        lost: 99,
-    }
+    let n = st.n_leaf();
+    let cur = Regs::load(n, rd);
+    let (new, raise) = st.step(&cur);
+    let mut out = Poll {
+        raise,
+        ..Poll::default()
+    };
+    cur.changes(&new, n, |off, old, nw| {
+        if cas(off, old, nw) {
+            out.stored += 1;
+        } else {
+            out.lost += 1;
+        }
+    });
+    out
 }
 
 /// Experiment counters (any thread; relaxed).
@@ -108,8 +123,31 @@ impl Counters {
     /// with the feature but no flag prints the line it always printed.
     #[must_use]
     pub fn status(&self, cfg: &Cfg, st: Option<&SpinState>) -> String {
-        let _ = (cfg, st);
-        String::from("?")
+        if !cfg.any() {
+            return String::new();
+        }
+        let o = Ordering::Relaxed;
+        let mask = st.map_or(String::new(), |s| {
+            let v: Vec<String> = (0..s.n_leaf())
+                .filter(|&i| s.mask(i) != 0)
+                .map(|i| format!("{i}:{:#x}", s.mask(i)))
+                .collect();
+            format!(" mask=[{}]", v.join(","))
+        });
+        format!(
+            " trapexp[delay_intr_us={} delay_db_us={} intr_delayed={} db_delayed={} spin={} polls={} stored={} lost={} trigger_raises={} worker_raises={} oor={}{mask}]",
+            cfg.delays.intr_us,
+            cfg.delays.db_us,
+            self.intr_delayed.load(o),
+            self.db_delayed.load(o),
+            u8::from(cfg.spin),
+            self.polls.load(o),
+            self.stored.load(o),
+            self.lost.load(o),
+            self.trigger_raises.load(o),
+            self.worker_raises.load(o),
+            self.out_of_range.load(o),
+        )
     }
 }
 
@@ -333,5 +371,110 @@ mod tests {
         };
         let s = c.status(&only_delay, None);
         assert!(s.contains("delay_intr_us=10") && s.contains("spin=0") && !s.contains("mask="), "{s}");
+    }
+    #[test]
+    fn the_intr_delay_flag_alone() {
+        let c = Cfg::from_lookup(env(&[("KF3_DIAG_TRAP_DELAY_INTR_US", "10")]));
+        assert_eq!((c.delays.intr_us, c.delays.db_us), (10, 0));
+    }
+
+    #[test]
+    fn the_db_delay_flag_alone() {
+        let c = Cfg::from_lookup(env(&[("KF3_DIAG_TRAP_DELAY_DB_US", "20")]));
+        assert_eq!((c.delays.intr_us, c.delays.db_us), (0, 20));
+    }
+
+    #[test]
+    fn spin_stays_off_for_other_truthy_words_and_a_delay_flag_does_not_turn_it_on() {
+        for v in ["true", "on", "yes", "11", "01x", "enable"] {
+            let c = Cfg::from_lookup(move |k| (k == "KF3_DIAG_INTR_SPIN").then(|| v.to_string()));
+            assert!(!c.spin && !c.any(), "{v:?}");
+        }
+        let c = Cfg::from_lookup(env(&[("KF3_DIAG_TRAP_DELAY_DB_US", "1")]));
+        assert!(!c.spin);
+    }
+
+    #[test]
+    fn spin_cpu_garbage_is_none_not_zero() {
+        for v in ["abc", "-3", "2.5", "0x3", ""] {
+            let c = Cfg::from_lookup(move |k| (k == "KF3_DIAG_INTR_SPIN_CPU").then(|| v.to_string()));
+            assert_eq!(c.spin_cpu, None, "{v:?}");
+        }
+        let c = Cfg::from_lookup(env(&[("KF3_DIAG_INTR_SPIN_CPU", "0")]));
+        assert_eq!(c.spin_cpu, Some(0), "an explicit 0 is core 0");
+    }
+
+    #[test]
+    fn busy_wait_zero_returns_at_once() {
+        let t = std::time::Instant::now();
+        for _ in 0..1000 {
+            busy_wait_us(0);
+        }
+        assert!(t.elapsed() < std::time::Duration::from_millis(5));
+    }
+
+    #[test]
+    fn busy_wait_is_never_short() {
+        for us in [1u32, 50, 400, 2000] {
+            let t = std::time::Instant::now();
+            busy_wait_us(us);
+            assert!(t.elapsed() >= std::time::Duration::from_micros(u64::from(us)), "{us}");
+        }
+    }
+
+    #[test]
+    fn busy_wait_scales_with_the_request() {
+        let t = std::time::Instant::now();
+        for _ in 0..5 {
+            busy_wait_us(1000);
+        }
+        assert!(t.elapsed() >= std::time::Duration::from_millis(5));
+    }
+
+    #[test]
+    fn a_partial_cas_loss_splits_stored_and_lost() {
+        let page = Page::new();
+        let mut st = SpinState::new(Family::Ampere);
+        page.guest(EN_SET + 4, 1);
+        let mut calls = 0;
+        let p = poll_once(
+            &mut st,
+            &mut |o| page.0[o / 4].load(Ordering::SeqCst),
+            &mut |o, old, new| {
+                calls += 1;
+                calls != 1
+                    && page.0[o / 4]
+                        .compare_exchange(old, new, Ordering::SeqCst, Ordering::SeqCst)
+                        .is_ok()
+            },
+        );
+        assert_eq!((p.stored, p.lost), (2, 1));
+    }
+
+    #[test]
+    fn the_status_is_empty_when_nothing_is_on_even_with_counters_and_state() {
+        let c = Counters::default();
+        c.polls.fetch_add(100, Ordering::Relaxed);
+        let mut st = SpinState::new(Family::Ampere);
+        let mut r = Regs::default();
+        r.en_set[0] = 1;
+        let _ = st.step(&r);
+        assert_eq!(c.status(&Cfg::default(), Some(&st)), "");
+        let only_cpu = Cfg { spin_cpu: Some(3), ..Cfg::default() };
+        assert_eq!(c.status(&only_cpu, Some(&st)), "");
+    }
+
+    #[test]
+    fn the_status_lists_every_learned_leaf() {
+        let c = Counters::default();
+        let cfg = Cfg { spin: true, ..Cfg::default() };
+        let mut st = SpinState::new(Family::Hopper);
+        let mut r = Regs::default();
+        r.en_set[1] = 0x10;
+        r.en_set[15] = 0x3;
+        let _ = st.step(&r);
+        let s = c.status(&cfg, Some(&st));
+        assert!(s.contains("1:0x10") && s.contains("15:0x3"), "{s}");
+        assert!(!s.contains("0:0x"), "{s}");
     }
 }
