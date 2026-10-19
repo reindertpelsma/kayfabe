@@ -120,5 +120,23 @@
         "rate": "0.0500"
       }
     ]
+  },
+  {
+    "id": 56808180,
+    "offer": 56311549,
+    "gpu_offer": "RTX 3070",
+    "quote_dph": 0.13407407407407407,
+    "disk_gb_requested": 180,
+    "created_utc": "2026-10-19T23:48:46.516496+00:00",
+    "product_head": "e8553e6ce7ec557aef9ff96c3c876e3060a6b9f8",
+    "credit_before": 39.96114900956297,
+    "auto_destroy_minutes": 180,
+    "destroyed": false,
+    "auto_destroy_pid": 224025,
+    "auto_destroy_armed_utc": "2026-10-19T23:48:46.532671+00:00",
+    "auto_destroy_verified": true,
+    "observed_dph_total": 0.16,
+    "deadline_utc": "2026-10-20T02:48:46Z",
+    "phase": "GA104 resource/health preflight; native Windows binding prerequisite planned"
   }
 ]

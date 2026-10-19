@@ -64,3 +64,10 @@ Entries below will record every created ID and actual/conservative cost.
   39.961149USD is not exclusive attribution. Cap25USD, stop renting/report20USD.
   Sanitized own-id-only receipt:
   `../sweep_integrate_20261018/phase2_cost_closeout_20261020.json`.
+
+- CREATED56808180 at2026-10-19T23:48:46.516496Z, RTX3070offer56311549,
+  frozen sourcee8553e6ce7ec557aef9ff96c3c876e3060a6b9f8 (accepted product trees).
+  Previous own IDs API-absent first. Auto-destroy180min armed/verifiedPID224025
+  before SSH. Observed rate0.16USD/h with180GBdisk, maximum runtime0.48USD plus
+  transfer. Harddeadline2026-10-20T02:48:46Z, cleanup reserve02:40UTC. Resource
+  and driver-health preflight pending; no hardware result is implied.
