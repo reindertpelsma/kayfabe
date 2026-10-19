@@ -351,3 +351,22 @@ fn ad102_580_small_controls_answer_only_the_measured_requests() {
     let mut neighbour = policy(DieId::new(arch::AD100, 3), V580);
     assert!(!ok(&neighbour.respond(&control(0x2080_2801, &3u32.to_le_bytes()))));
 }
+
+#[test]
+fn tu106_580_small_controls_answer_only_the_measured_requests() {
+    let tu106 = DieId::new(arch::TU100, 6);
+    let mut p = policy(tu106, V580);
+    for (cmd, output) in [(0x2080_2801, 2), (0x2080_2806, 0)] {
+        let r = p.respond(&control(cmd, &3u32.to_le_bytes()));
+        assert!(ok(&r), "TU106/580 {cmd:#x} measured hit");
+        assert_eq!(w(&r.unwrap().body[PARAMS_AT..], 0), output);
+        assert!(!ok(&p.respond(&control(cmd, &2u32.to_le_bytes()))));
+        assert!(!ok(&p.respond(&control(cmd, &[]))));
+        assert!(!ok(&p.respond(&control(cmd, &[3, 0, 0, 0, 0, 0, 0, 0]))));
+    }
+    assert!(!ok(&p.respond(&control(0x2080_2806, &0xbu32.to_le_bytes()))));
+    let mut wrong_branch = policy(tu106, V595);
+    assert!(!ok(&wrong_branch.respond(&control(0x2080_2801, &3u32.to_le_bytes()))));
+    let mut neighbour = policy(DieId::new(arch::TU100, 4), V580);
+    assert!(!ok(&neighbour.respond(&control(0x2080_2801, &3u32.to_le_bytes()))));
+}
