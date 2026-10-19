@@ -1,0 +1,376 @@
+{
+  "tag": "p1on1-direct-final-3",
+  "clock_abi_crosscheck": {
+    "retained_in_trace_interval": 18374,
+    "matching_ns_arguments": 18374,
+    "offset_ns": {
+      "n": 18374,
+      "median": 808554166017241.0,
+      "min": 808554166017041,
+      "max": 808554166034871,
+      "p99": 808554166019851
+    },
+    "boundary_uncertainty_ns": 17830
+  },
+  "whole_dump": {
+    "trace": {
+      "seen": 1499603,
+      "retained": 32768,
+      "overwritten": 1466432,
+      "contended": 403,
+      "accounting_delta": 0
+    },
+    "selected_records": 32768,
+    "retained_relative_ns": [
+      2138498350642,
+      2183184279759
+    ],
+    "selected_relative_ns": [
+      2138498350642,
+      2183184279759
+    ],
+    "duplicate_sequences": 0,
+    "holes_between_retained_sequences": 31,
+    "complete_retained_census": false,
+    "decisions": [
+      {
+        "source": "CompletionFd",
+        "vector": "Some(1)",
+        "armed": "Some(true)",
+        "verdict": "Raise(1)",
+        "count": 16416
+      },
+      {
+        "source": "Engine(1)",
+        "vector": "Some(0)",
+        "armed": "Some(true)",
+        "verdict": "Raise(0)",
+        "count": 12181
+      },
+      {
+        "source": "Engine(12)",
+        "vector": "Some(2)",
+        "armed": "Some(true)",
+        "verdict": "Raise(2)",
+        "count": 2669
+      },
+      {
+        "source": "Engine(11)",
+        "vector": "Some(1)",
+        "armed": "Some(false)",
+        "verdict": "NotArmed",
+        "count": 1502
+      }
+    ],
+    "limit": "bounded tail; completion-fd mixes FIFO and configured host CE; host readiness may coalesce physical edges; trailing raises carry earlier sources"
+  },
+  "edges_near_fence_boundary": 5,
+  "per_iteration_sources": [
+    {
+      "source": "CompletionFd",
+      "vector": "Some(1)",
+      "armed": "Some(true)",
+      "verdict": "Raise(1)",
+      "distribution": {
+        "n": 2995,
+        "median": 2,
+        "min": 1,
+        "max": 5,
+        "p99": 4
+      }
+    },
+    {
+      "source": "Engine(1)",
+      "vector": "Some(0)",
+      "armed": "Some(true)",
+      "verdict": "Raise(0)",
+      "distribution": {
+        "n": 2995,
+        "median": 2,
+        "min": 1,
+        "max": 4,
+        "p99": 3
+      }
+    },
+    {
+      "source": "Engine(12)",
+      "vector": "Some(2)",
+      "armed": "Some(true)",
+      "verdict": "Raise(2)",
+      "distribution": {
+        "n": 2995,
+        "median": 0,
+        "min": 0,
+        "max": 4,
+        "p99": 1
+      }
+    }
+  ],
+  "limit": "retained tail only; offset includes note-entry observation delay; boundary uncertainty reported; same fence window does not prove same physical completion or redundancy; source completion-fd is ambiguous/coalesced",
+  "windows_within_retained_time_range": 2995,
+  "status": "MEASURED; incomplete bounded event census, not proof of redundant physical completions",
+  "final_direct_traces": [
+    {
+      "tag": "p1on1-direct-final-1_trace",
+      "iterations_total": 3000,
+      "exclusions": {
+        "missing_adjacent_fence_value": 2,
+        "no_doorbell_between_adjacent_fence_values": 3,
+        "accepted_iteration_without_gpu_irq_or_marker": 2
+      },
+      "metrics": {
+        "doorbells_per_iteration": {
+          "n": 2990,
+          "median": 3.0,
+          "min": 1,
+          "max": 6,
+          "p99": 3
+        },
+        "interrupt_tree_writes_per_iteration": {
+          "n": 2990,
+          "median": 14.0,
+          "min": 8,
+          "max": 56,
+          "p99": 22
+        },
+        "isr_cycles_per_iteration": {
+          "n": 2990,
+          "median": 2.0,
+          "min": 1,
+          "max": 8,
+          "p99": 3
+        },
+        "irqfd_writes_per_iteration": {
+          "n": 2990,
+          "median": 4.0,
+          "min": 2,
+          "max": 10,
+          "p99": 6
+        },
+        "worker_irqfd_writes_per_iteration": {
+          "n": 2990,
+          "median": 4.0,
+          "min": 2,
+          "max": 10,
+          "p99": 6
+        },
+        "fence_to_fence_us": {
+          "n": 2990,
+          "median": 300.462,
+          "min": 210.298,
+          "max": 50618.563,
+          "p99": 538.936
+        },
+        "last_doorbell_us_from_first": {
+          "n": 2990,
+          "median": 30.31,
+          "min": 0.0,
+          "max": 1269.27,
+          "p99": 47.28
+        },
+        "last_marker_us_from_first_doorbell": {
+          "n": 2990,
+          "median": 115.979,
+          "min": 68.589,
+          "max": 50396.086,
+          "p99": 296.778
+        },
+        "first_gpu_irq_minus_last_marker_us": {
+          "n": 2988,
+          "median": -14.395,
+          "min": -47046.245,
+          "max": 135.629,
+          "p99": 22.56
+        },
+        "host_gpu_irqs_per_iteration": {
+          "n": 2988,
+          "median": 2.0,
+          "min": 1,
+          "max": 5,
+          "p99": 4
+        },
+        "isr_chain_us": {
+          "n": 2990,
+          "median": 135.159,
+          "min": 59.139,
+          "max": 47177.393,
+          "p99": 255.688
+        }
+      }
+    },
+    {
+      "tag": "p1on1-direct-final-2_trace",
+      "iterations_total": 3000,
+      "exclusions": {
+        "no_doorbell_between_adjacent_fence_values": 3,
+        "accepted_iteration_without_gpu_irq_or_marker": 2
+      },
+      "metrics": {
+        "doorbells_per_iteration": {
+          "n": 2992,
+          "median": 3.0,
+          "min": 1,
+          "max": 6,
+          "p99": 3
+        },
+        "interrupt_tree_writes_per_iteration": {
+          "n": 2992,
+          "median": 14.0,
+          "min": 8,
+          "max": 44,
+          "p99": 24
+        },
+        "isr_cycles_per_iteration": {
+          "n": 2992,
+          "median": 2.0,
+          "min": 1,
+          "max": 6,
+          "p99": 3
+        },
+        "irqfd_writes_per_iteration": {
+          "n": 2992,
+          "median": 4.0,
+          "min": 2,
+          "max": 8,
+          "p99": 6
+        },
+        "worker_irqfd_writes_per_iteration": {
+          "n": 2992,
+          "median": 4.0,
+          "min": 2,
+          "max": 8,
+          "p99": 6
+        },
+        "fence_to_fence_us": {
+          "n": 2992,
+          "median": 298.0125,
+          "min": 211.159,
+          "max": 2617.368,
+          "p99": 534.326
+        },
+        "last_doorbell_us_from_first": {
+          "n": 2992,
+          "median": 29.13,
+          "min": 0.0,
+          "max": 338.927,
+          "p99": 45.029
+        },
+        "last_marker_us_from_first_doorbell": {
+          "n": 2992,
+          "median": 116.66900000000001,
+          "min": 50.16,
+          "max": 2418.449,
+          "p99": 283.077
+        },
+        "first_gpu_irq_minus_last_marker_us": {
+          "n": 2990,
+          "median": -15.07,
+          "min": -298.068,
+          "max": 178.809,
+          "p99": 14.23
+        },
+        "host_gpu_irqs_per_iteration": {
+          "n": 2990,
+          "median": 2.0,
+          "min": 1,
+          "max": 4,
+          "p99": 4
+        },
+        "isr_chain_us": {
+          "n": 2992,
+          "median": 134.279,
+          "min": 60.289,
+          "max": 611.805,
+          "p99": 256.588
+        }
+      }
+    },
+    {
+      "tag": "p1on1-direct-final-3_trace",
+      "iterations_total": 3000,
+      "exclusions": {
+        "accepted_iteration_without_gpu_irq_or_marker": 2,
+        "no_doorbell_between_adjacent_fence_values": 1
+      },
+      "metrics": {
+        "doorbells_per_iteration": {
+          "n": 2994,
+          "median": 3.0,
+          "min": 1,
+          "max": 6,
+          "p99": 3
+        },
+        "interrupt_tree_writes_per_iteration": {
+          "n": 2994,
+          "median": 14.0,
+          "min": 8,
+          "max": 70,
+          "p99": 23
+        },
+        "isr_cycles_per_iteration": {
+          "n": 2994,
+          "median": 2.0,
+          "min": 1,
+          "max": 10,
+          "p99": 3
+        },
+        "irqfd_writes_per_iteration": {
+          "n": 2994,
+          "median": 4.0,
+          "min": 2,
+          "max": 10,
+          "p99": 6
+        },
+        "worker_irqfd_writes_per_iteration": {
+          "n": 2994,
+          "median": 4.0,
+          "min": 2,
+          "max": 10,
+          "p99": 6
+        },
+        "fence_to_fence_us": {
+          "n": 2994,
+          "median": 402.202,
+          "min": 260.458,
+          "max": 53639.298,
+          "p99": 715.514
+        },
+        "last_doorbell_us_from_first": {
+          "n": 2994,
+          "median": 38.425,
+          "min": 0.0,
+          "max": 507.616,
+          "p99": 60.239
+        },
+        "last_marker_us_from_first_doorbell": {
+          "n": 2994,
+          "median": 138.04399999999998,
+          "min": 71.25,
+          "max": 53232.581,
+          "p99": 367.577
+        },
+        "first_gpu_irq_minus_last_marker_us": {
+          "n": 2992,
+          "median": -14.5495,
+          "min": -50452.135,
+          "max": 129.159,
+          "p99": 9.56
+        },
+        "host_gpu_irqs_per_iteration": {
+          "n": 2992,
+          "median": 2.0,
+          "min": 1,
+          "max": 5,
+          "p99": 4
+        },
+        "isr_chain_us": {
+          "n": 2994,
+          "median": 187.88299999999998,
+          "min": 66.359,
+          "max": 50738.423,
+          "p99": 341.977
+        }
+      }
+    }
+  ]
+}

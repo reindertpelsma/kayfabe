@@ -1,0 +1,40 @@
+[
+  {
+    "tag": "mb4-sn-r1",
+    "unmatched_exits": 0,
+    "mismatched_exits": 0,
+    "unclosed_entries": 2,
+    "unclosed_entries_in_window": 0,
+    "isr": {
+      "calls": 37215,
+      "entry_calls": 37215,
+      "calls_per_s": 658.5,
+      "calls_per_frame": 22.033747779751334,
+      "entry_calls_per_frame": 22.033747779751334,
+      "med_us": 84.0,
+      "p95_us": 150.2,
+      "p99_us": 197.1,
+      "max_us": 922.9,
+      "total_ms_per_s": 57.45
+    }
+  },
+  {
+    "tag": "mb4-sn-r2",
+    "unmatched_exits": 0,
+    "mismatched_exits": 0,
+    "unclosed_entries": 0,
+    "unclosed_entries_in_window": 0,
+    "isr": {
+      "calls": 37530,
+      "entry_calls": 37530,
+      "calls_per_s": 657.4,
+      "calls_per_frame": 22.446172248803826,
+      "entry_calls_per_frame": 22.446172248803826,
+      "med_us": 82.7,
+      "p95_us": 139.0,
+      "p99_us": 179.1,
+      "max_us": 3469.0,
+      "total_ms_per_s": 55.02
+    }
+  }
+]

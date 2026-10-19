@@ -1,0 +1,818 @@
+{
+  "status": "MEASURED; in progress until the morning handoff",
+  "updated_utc": "2026-10-19T02:51:52.799392+00:00",
+  "source_binary": "41a8beb07573847a932b76d48bc0dcd4383ea247",
+  "control_binary": "0d7ba74389cd85ac65826417ad53f5c0bcd1ef2f",
+  "controls": "same persistent P1 disk and unchanged cursor6 broker; reboot between configurations; mirror control A3, diagnostic B5, mirror control A2; later experimental arms compare to diagnostic B",
+  "arms": {
+    "mb4": {
+      "rev": "0d7ba74389cd85ac65826417ad53f5c0bcd1ef2f",
+      "run": 41004,
+      "flags": "KF3_LIFECYCLE_COUNT=1 KF3_LIFECYCLE_PERIOD_S=5",
+      "binary_sha256": "d2c8d7490cc24cffd69167baea0803acbb433c312808274cf40f83f74f008c06",
+      "actual_flags": {
+        "KF3_REV": "0d7ba743",
+        "KF3_WIN_USER_CHANNELS_PASSTHROUGH": "1",
+        "KF3_WIN_TWIN_DEFAPI_OBJECT": "1",
+        "KF3_KERNEL_GR_CE": "1",
+        "KF3_KERNEL_GR_WORK": "1",
+        "KF3_TRANSLATED_CE_RELAY": "1",
+        "KF3_DEFERRED_API": "1",
+        "KF3_PREEMPT_BIND_PROBE": "1",
+        "KF3_DISPLAY_IMP_ENABLE": "1",
+        "KF3_DISPLAY_CTRL_PROBE": "1",
+        "KF3_ZCULL_BIND_PROBE": "1",
+        "KF3_SW_RUNLIST_HOST_OWNED": "1",
+        "KF3_ASYNC_PREEMPT": "1",
+        "KF3_GFX_POOL_PROBE": "1",
+        "KF3_SW_RUNLIST_PROBE": "1",
+        "KF3_MEMORY_LIST_PROBE": "1",
+        "KF3_DISPLAY_SDR_COLOR": "1",
+        "KF3_DISPLAY_CAPS_PROBE": "1",
+        "KF3_DISPLAY_LUT_MIRROR": "1",
+        "KF3_DISPLAY_ILUT_OFFSET_256": "1",
+        "KF3_LIFECYCLE_COUNT": "1",
+        "KF3_LIFECYCLE_PERIOD_S": "5"
+      },
+      "captures": [
+        {
+          "tag": "mb4-sn-r1",
+          "complete": true,
+          "guest": {
+            "fps": 29.883,
+            "frames": 1689,
+            "window_s": 56.519,
+            "packets_per_frame_target_heavy": 28.56
+          },
+          "broker": {
+            "new_content_presents": 1689,
+            "new_content_fps": 29.883724603823552,
+            "one_percent_low_fps": 14.999250037498125,
+            "point_one_percent_low_fps": 11.999328037629894,
+            "new_content_gaps_per_minute": {
+              "33": 1096.6212261367577,
+              "50": 663.492997420594,
+              "100": 1.0615887958729504
+            },
+            "new_content_gap_max_ms": 116.673,
+            "repeated_presents_per_s": 30.00757663000873,
+            "merged_commits": 0,
+            "duplicate_feedback_records": 0,
+            "max_reported_future_us": 392.253
+          },
+          "guest_content_count_delta_pct": 0.0,
+          "isr": {
+            "calls": 37215,
+            "entry_calls": 37215,
+            "calls_per_s": 658.5,
+            "calls_per_frame": 22.033747779751334,
+            "entry_calls_per_frame": 22.033747779751334,
+            "med_us": 84.0,
+            "p95_us": 150.2,
+            "p99_us": 197.1,
+            "max_us": 922.9,
+            "total_ms_per_s": 57.45
+          },
+          "ddi_pairing": {
+            "unmatched_exits": 0,
+            "mismatched_exits": 0,
+            "unclosed_entries": 2,
+            "unmatched_exits_in_window": 0,
+            "mismatched_exits_in_window": 0,
+            "unclosed_entries_in_window": 0
+          },
+          "app_score": {
+            "score": 2967,
+            "fps": 29.68,
+            "method": "visually read result PNG"
+          },
+          "health": {
+            "tdr_4101": 0,
+            "gpu_153": 0,
+            "app_crashes": 0,
+            "new_host_xid": []
+          },
+          "health_scope": "cumulative whole-boot check after all three captures",
+          "archive_sha256": "17d0cabd350b48d6a4676043646adf5b7545e24552482e961f5d717583953e7f"
+        },
+        {
+          "tag": "mb4-sn-r2",
+          "complete": true,
+          "guest": {
+            "fps": 29.331,
+            "frames": 1672,
+            "window_s": 57.088,
+            "packets_per_frame_target_heavy": 28.6
+          },
+          "broker": {
+            "new_content_presents": 1666,
+            "new_content_fps": 29.18311305935478,
+            "one_percent_low_fps": 11.999472023230977,
+            "point_one_percent_low_fps": 8.571012069219218,
+            "new_content_gaps_per_minute": {
+              "33": 1127.736385811081,
+              "50": 622.1993852750791,
+              "100": 3.1530374253804685
+            },
+            "new_content_gap_max_ms": 183.342,
+            "repeated_presents_per_s": 30.67204739911778,
+            "merged_commits": 0,
+            "duplicate_feedback_records": 0,
+            "max_reported_future_us": 396.576
+          },
+          "guest_content_count_delta_pct": -0.3588516746411474,
+          "isr": {
+            "calls": 37530,
+            "entry_calls": 37530,
+            "calls_per_s": 657.4,
+            "calls_per_frame": 22.446172248803826,
+            "entry_calls_per_frame": 22.446172248803826,
+            "med_us": 82.7,
+            "p95_us": 139.0,
+            "p99_us": 179.1,
+            "max_us": 3469.0,
+            "total_ms_per_s": 55.02
+          },
+          "ddi_pairing": {
+            "unmatched_exits": 0,
+            "mismatched_exits": 0,
+            "unclosed_entries": 0,
+            "unmatched_exits_in_window": 0,
+            "mismatched_exits_in_window": 0,
+            "unclosed_entries_in_window": 0
+          },
+          "health": {
+            "tdr_4101": 0,
+            "gpu_153": 0,
+            "app_crashes": 0,
+            "new_host_xid": []
+          },
+          "health_scope": "cumulative whole-boot check after all three captures",
+          "archive_sha256": "05ad9a6766a50a6034d3f30e381c961f6af0e02240e634e3d02365fcb1e7f282"
+        },
+        {
+          "tag": "mb4-sn-r3",
+          "complete": true,
+          "guest": {
+            "fps": 29.56,
+            "frames": 1685,
+            "window_s": 57.185,
+            "packets_per_frame_target_heavy": 28.57
+          },
+          "broker": {
+            "new_content_presents": 1681,
+            "new_content_fps": 29.396004851088275,
+            "one_percent_low_fps": 11.999472023230977,
+            "point_one_percent_low_fps": 10.633974822193359,
+            "new_content_gaps_per_minute": {
+              "33": 1062.8727988394678,
+              "50": 691.4443972706903,
+              "100": 2.0984655455863135
+            },
+            "new_content_gap_max_ms": 116.672,
+            "repeated_presents_per_s": 30.515186475400974,
+            "merged_commits": 0,
+            "duplicate_feedback_records": 0,
+            "max_reported_future_us": 400.524
+          },
+          "guest_content_count_delta_pct": -0.23738872403560318,
+          "isr": {
+            "calls": 38103,
+            "entry_calls": 38103,
+            "calls_per_s": 666.3,
+            "calls_per_frame": 22.61305637982196,
+            "entry_calls_per_frame": 22.61305637982196,
+            "med_us": 83.9,
+            "p95_us": 148.3,
+            "p99_us": 188.9,
+            "max_us": 2993.0,
+            "total_ms_per_s": 58.05
+          },
+          "ddi_pairing": {
+            "unmatched_exits": 0,
+            "mismatched_exits": 0,
+            "unclosed_entries": 0,
+            "unmatched_exits_in_window": 0,
+            "mismatched_exits_in_window": 0,
+            "unclosed_entries_in_window": 0
+          },
+          "app_score": {
+            "score": 2955,
+            "fps": 29.55,
+            "method": "visually read result PNG"
+          },
+          "health": {
+            "tdr_4101": 0,
+            "gpu_153": 0,
+            "app_crashes": 0,
+            "new_host_xid": []
+          },
+          "archive_sha256": "92383088d5bb8b0e32fd4488d78c0e068a083cab258ed6fe4faf1ca8c6fb1439"
+        }
+      ],
+      "tiny": [
+        {
+          "tag": "mb4-q0-r1",
+          "iterations": 2995,
+          "median_us": 337.4,
+          "p99_us": 623.6,
+          "max_us": 3734.1
+        },
+        {
+          "tag": "mb4-q0-r2",
+          "iterations": 2995,
+          "median_us": 254.5,
+          "p99_us": 468.4,
+          "max_us": 111743.7
+        },
+        {
+          "tag": "mb4-q0-r3",
+          "iterations": 2995,
+          "median_us": 256.5,
+          "p99_us": 514.6,
+          "max_us": 54513.2
+        },
+        {
+          "tag": "mb4-q0-r4",
+          "iterations": 2995,
+          "median_us": 251.5,
+          "p99_us": 433.8,
+          "max_us": 2302.8
+        },
+        {
+          "tag": "mb4-q0-r5",
+          "iterations": 2995,
+          "median_us": 252.8,
+          "p99_us": 451.4,
+          "max_us": 111727.5
+        },
+        {
+          "tag": "mb4-q2-r1",
+          "iterations": 2995,
+          "median_us": 215.9,
+          "p99_us": 438.9,
+          "max_us": 623.7
+        },
+        {
+          "tag": "mb4-q2-r2",
+          "iterations": 2995,
+          "median_us": 217.6,
+          "p99_us": 432.4,
+          "max_us": 50614.9
+        },
+        {
+          "tag": "mb4-q2-r3",
+          "iterations": 2995,
+          "median_us": 217.4,
+          "p99_us": 437.8,
+          "max_us": 50580.5
+        },
+        {
+          "tag": "mb4-q2-r4",
+          "iterations": 2995,
+          "median_us": 219.6,
+          "p99_us": 428.5,
+          "max_us": 639.0
+        },
+        {
+          "tag": "mb4-q2-r5",
+          "iterations": 2995,
+          "median_us": 274.6,
+          "p99_us": 499.2,
+          "max_us": 913.8
+        },
+        {
+          "tag": "mb4-q3-r1",
+          "iterations": 2995,
+          "median_us": 187.7,
+          "p99_us": 212.6,
+          "max_us": 318.5
+        },
+        {
+          "tag": "mb4-q3-r2",
+          "iterations": 2995,
+          "median_us": 185.4,
+          "p99_us": 232.3,
+          "max_us": 1037.9
+        },
+        {
+          "tag": "mb4-q3-r3",
+          "iterations": 2995,
+          "median_us": 186.5,
+          "p99_us": 230.0,
+          "max_us": 2230.8
+        },
+        {
+          "tag": "mb4-q3-r4",
+          "iterations": 2995,
+          "median_us": 188.1,
+          "p99_us": 209.3,
+          "max_us": 289.7
+        },
+        {
+          "tag": "mb4-q3-r5",
+          "iterations": 2995,
+          "median_us": 186.6,
+          "p99_us": 209.7,
+          "max_us": 283.0
+        }
+      ]
+    },
+    "p1on1": {
+      "rev": "41a8beb07573847a932b76d48bc0dcd4383ea247",
+      "run": 41005,
+      "flags": "KF3_LIFECYCLE_COUNT=1 KF3_LIFECYCLE_PERIOD_S=5 KF3_DIAG_NSI_TRACE=1 KF3_DIAG_NSI_TRACE_DUMP=/data/codex-P1/p1on1-nsi",
+      "binary_sha256": "653d8d8b7c59f62b8998078356288111dfbd88776c67f1fff05c72a346f5ab08",
+      "actual_flags": {
+        "KF3_REV": "41a8beb0",
+        "KF3_WIN_USER_CHANNELS_PASSTHROUGH": "1",
+        "KF3_WIN_TWIN_DEFAPI_OBJECT": "1",
+        "KF3_KERNEL_GR_CE": "1",
+        "KF3_KERNEL_GR_WORK": "1",
+        "KF3_TRANSLATED_CE_RELAY": "1",
+        "KF3_DEFERRED_API": "1",
+        "KF3_PREEMPT_BIND_PROBE": "1",
+        "KF3_DISPLAY_IMP_ENABLE": "1",
+        "KF3_DISPLAY_CTRL_PROBE": "1",
+        "KF3_ZCULL_BIND_PROBE": "1",
+        "KF3_SW_RUNLIST_HOST_OWNED": "1",
+        "KF3_ASYNC_PREEMPT": "1",
+        "KF3_GFX_POOL_PROBE": "1",
+        "KF3_SW_RUNLIST_PROBE": "1",
+        "KF3_MEMORY_LIST_PROBE": "1",
+        "KF3_DISPLAY_SDR_COLOR": "1",
+        "KF3_DISPLAY_CAPS_PROBE": "1",
+        "KF3_DISPLAY_LUT_MIRROR": "1",
+        "KF3_DISPLAY_ILUT_OFFSET_256": "1",
+        "KF3_LIFECYCLE_COUNT": "1",
+        "KF3_LIFECYCLE_PERIOD_S": "5",
+        "KF3_DIAG_NSI_TRACE": "1",
+        "KF3_DIAG_NSI_TRACE_DUMP": "/data/codex-P1/p1on1-nsi"
+      },
+      "captures": [
+        {
+          "tag": "p1on1-sn-r1",
+          "complete": true,
+          "guest": {
+            "fps": 29.685,
+            "frames": 1693,
+            "window_s": 57.071,
+            "packets_per_frame_target_heavy": 28.58
+          },
+          "broker": {
+            "new_content_presents": 1690,
+            "new_content_fps": 29.612454932212593,
+            "one_percent_low_fps": 11.999472023230977,
+            "point_one_percent_low_fps": 10.668008503000571,
+            "new_content_gaps_per_minute": {
+              "33": 1061.8430585160254,
+              "50": 670.7483874586379,
+              "100": 2.1026595218139117
+            },
+            "new_content_gap_max_ms": 200.009,
+            "repeated_presents_per_s": 30.34838576484746,
+            "merged_commits": 0,
+            "duplicate_feedback_records": 0,
+            "max_reported_future_us": 394.242
+          },
+          "guest_content_count_delta_pct": -0.17720023626698334,
+          "isr": {
+            "calls": 38258,
+            "entry_calls": 38258,
+            "calls_per_s": 670.4,
+            "calls_per_frame": 22.597755463673952,
+            "entry_calls_per_frame": 22.597755463673952,
+            "med_us": 79.4,
+            "p95_us": 121.9,
+            "p99_us": 144.9,
+            "max_us": 1332.2,
+            "total_ms_per_s": 52.17
+          },
+          "ddi_pairing": {
+            "unmatched_exits": 0,
+            "mismatched_exits": 0,
+            "unclosed_entries": 1,
+            "unmatched_exits_in_window": 0,
+            "mismatched_exits_in_window": 0,
+            "unclosed_entries_in_window": 0
+          },
+          "app_score": {
+            "score": 2972,
+            "fps": 29.72,
+            "method": "visually read result PNG"
+          },
+          "health": {
+            "tdr_4101": 0,
+            "gpu_153": 0,
+            "app_crashes": 0,
+            "new_host_xid": []
+          },
+          "counters_before": {
+            "id": 2,
+            "backstop_work": 0,
+            "backstop_carried": 0,
+            "backstop_contended": 2
+          },
+          "counters_after": {
+            "id": 3,
+            "backstop_work": 0,
+            "backstop_carried": 0,
+            "backstop_contended": 5
+          },
+          "archive_sha256": "60e5322dee0df3cc03969ca0147e3416d6cbe6ad0df28cff13c0c52922f16cf7"
+        },
+        {
+          "tag": "p1on1-sn-r2",
+          "complete": true,
+          "guest": {
+            "fps": 30.002,
+            "frames": 1710,
+            "window_s": 57.161,
+            "packets_per_frame_target_heavy": 28.62
+          },
+          "broker": {
+            "new_content_presents": 1705,
+            "new_content_fps": 29.82827503562861,
+            "one_percent_low_fps": 11.999472023230977,
+            "point_one_percent_low_fps": 11.326554896147387,
+            "new_content_gaps_per_minute": {
+              "33": 1083.2649795930345,
+              "50": 646.600026578788,
+              "100": 2.0993507356454155
+            },
+            "new_content_gap_max_ms": 150.007,
+            "repeated_presents_per_s": 30.020715519729443,
+            "merged_commits": 0,
+            "duplicate_feedback_records": 0,
+            "max_reported_future_us": 396.616
+          },
+          "guest_content_count_delta_pct": -0.29239766081871066,
+          "isr": {
+            "calls": 38765,
+            "entry_calls": 38765,
+            "calls_per_s": 678.2,
+            "calls_per_frame": 22.669590643274855,
+            "entry_calls_per_frame": 22.669590643274855,
+            "med_us": 80.8,
+            "p95_us": 128.2,
+            "p99_us": 161.1,
+            "max_us": 936.1,
+            "total_ms_per_s": 54.38
+          },
+          "ddi_pairing": {
+            "unmatched_exits": 0,
+            "mismatched_exits": 0,
+            "unclosed_entries": 0,
+            "unmatched_exits_in_window": 0,
+            "mismatched_exits_in_window": 0,
+            "unclosed_entries_in_window": 0
+          },
+          "app_score": {
+            "score": 2993,
+            "fps": 29.93,
+            "method": "visually read result PNG"
+          },
+          "health": {
+            "tdr_4101": 0,
+            "gpu_153": 0,
+            "app_crashes": 0,
+            "new_host_xid": []
+          },
+          "counters_before": {
+            "id": 4,
+            "backstop_work": 0,
+            "backstop_carried": 0,
+            "backstop_contended": 5
+          },
+          "counters_after": {
+            "id": 5,
+            "backstop_work": 0,
+            "backstop_carried": 0,
+            "backstop_contended": 11
+          },
+          "archive_sha256": "0c0cc2d1f481de7df423a1ed40a031104e12e8e3505ec96c5484de294bc61363"
+        },
+        {
+          "tag": "p1on1-sn-r3",
+          "complete": true,
+          "guest": {
+            "fps": 30.138,
+            "frames": 1706,
+            "window_s": 56.584,
+            "packets_per_frame_target_heavy": 28.61
+          },
+          "broker": {
+            "new_content_presents": 1704,
+            "new_content_fps": 30.11454725478615,
+            "one_percent_low_fps": 11.999472023230977,
+            "point_one_percent_low_fps": 10.721384955915589,
+            "new_content_gaps_per_minute": {
+              "33": 1101.7258661170004,
+              "50": 624.5587441221494,
+              "100": 2.1207427644215597
+            },
+            "new_content_gap_max_ms": 116.673,
+            "repeated_presents_per_s": 29.796435840122914,
+            "merged_commits": 0,
+            "duplicate_feedback_records": 0,
+            "max_reported_future_us": 400.628
+          },
+          "guest_content_count_delta_pct": -0.11723329425556983,
+          "isr": {
+            "calls": 38294,
+            "entry_calls": 38294,
+            "calls_per_s": 676.8,
+            "calls_per_frame": 22.446658851113718,
+            "entry_calls_per_frame": 22.446658851113718,
+            "med_us": 80.4,
+            "p95_us": 127.0,
+            "p99_us": 163.9,
+            "max_us": 1932.5,
+            "total_ms_per_s": 53.88
+          },
+          "ddi_pairing": {
+            "unmatched_exits": 0,
+            "mismatched_exits": 0,
+            "unclosed_entries": 0,
+            "unmatched_exits_in_window": 0,
+            "mismatched_exits_in_window": 0,
+            "unclosed_entries_in_window": 0
+          },
+          "app_score": {
+            "score": 3015,
+            "fps": 30.15,
+            "method": "visually read result PNG"
+          },
+          "health": {
+            "tdr_4101": 0,
+            "gpu_153": 0,
+            "app_crashes": 0,
+            "new_host_xid": []
+          },
+          "counters_before": {
+            "id": 6,
+            "backstop_work": 0,
+            "backstop_carried": 0,
+            "backstop_contended": 11
+          },
+          "counters_after": {
+            "id": 7,
+            "backstop_work": 0,
+            "backstop_carried": 0,
+            "backstop_contended": 14
+          },
+          "archive_sha256": "bdf2db13c78f702c8171039ce1093b82031827cf32d4d3548c25ec78b37a3a98"
+        },
+        {
+          "tag": "p1on1-sn-r4",
+          "complete": true,
+          "guest": {
+            "fps": 30.105,
+            "frames": 1715,
+            "window_s": 56.966,
+            "packets_per_frame_target_heavy": 28.55
+          },
+          "broker": {
+            "new_content_presents": 1712,
+            "new_content_fps": 30.052810618840105,
+            "one_percent_low_fps": 11.999472023230977,
+            "point_one_percent_low_fps": 9.118085129178294,
+            "new_content_gaps_per_minute": {
+              "33": 1086.956795279544,
+              "50": 640.3776468313592,
+              "100": 3.159758125812628
+            },
+            "new_content_gap_max_ms": 150.007,
+            "repeated_presents_per_s": 29.842160077119264,
+            "merged_commits": 0,
+            "duplicate_feedback_records": 0,
+            "max_reported_future_us": 400.566
+          },
+          "guest_content_count_delta_pct": -0.1749271137026276,
+          "isr": {
+            "calls": 38669,
+            "entry_calls": 38669,
+            "calls_per_s": 678.8,
+            "calls_per_frame": 22.547521865889212,
+            "entry_calls_per_frame": 22.547521865889212,
+            "med_us": 82.2,
+            "p95_us": 139.1,
+            "p99_us": 185.0,
+            "max_us": 1247.8,
+            "total_ms_per_s": 56.5
+          },
+          "ddi_pairing": {
+            "unmatched_exits": 0,
+            "mismatched_exits": 0,
+            "unclosed_entries": 0,
+            "unmatched_exits_in_window": 0,
+            "mismatched_exits_in_window": 0,
+            "unclosed_entries_in_window": 0
+          },
+          "app_score": {
+            "score": 3014,
+            "fps": 30.14,
+            "method": "visually read result PNG"
+          },
+          "health": {
+            "tdr_4101": 0,
+            "gpu_153": 0,
+            "app_crashes": 0,
+            "new_host_xid": []
+          },
+          "counters_before": {
+            "id": 8,
+            "backstop_work": 0,
+            "backstop_carried": 0,
+            "backstop_contended": 14
+          },
+          "counters_after": {
+            "id": 9,
+            "backstop_work": 0,
+            "backstop_carried": 0,
+            "backstop_contended": 15
+          },
+          "archive_sha256": "9c02f52c10cf9b401c3bac5eaa517cc5d44058448ffbd8d06062250f9733ce1b"
+        },
+        {
+          "tag": "p1on1-sn-r5",
+          "complete": true,
+          "guest": {
+            "fps": 29.285,
+            "frames": 1651,
+            "window_s": 56.384,
+            "packets_per_frame_target_heavy": 28.69
+          },
+          "broker": {
+            "new_content_presents": 1651,
+            "new_content_fps": 29.281155267251215,
+            "one_percent_low_fps": 11.999472023230977,
+            "point_one_percent_low_fps": 7.7898252185233305,
+            "new_content_gaps_per_minute": {
+              "33": 1038.5853739856034,
+              "50": 726.796936918204,
+              "100": 3.1923730757754205
+            },
+            "new_content_gap_max_ms": 250.012,
+            "repeated_presents_per_s": 30.717723151350157,
+            "merged_commits": 0,
+            "duplicate_feedback_records": 0,
+            "max_reported_future_us": 392.909
+          },
+          "guest_content_count_delta_pct": 0.0,
+          "isr": {
+            "calls": 37276,
+            "entry_calls": 37276,
+            "calls_per_s": 661.1,
+            "calls_per_frame": 22.577831617201696,
+            "entry_calls_per_frame": 22.577831617201696,
+            "med_us": 82.5,
+            "p95_us": 141.9,
+            "p99_us": 186.4,
+            "max_us": 2075.0,
+            "total_ms_per_s": 55.85
+          },
+          "ddi_pairing": {
+            "unmatched_exits": 0,
+            "mismatched_exits": 0,
+            "unclosed_entries": 1,
+            "unmatched_exits_in_window": 0,
+            "mismatched_exits_in_window": 0,
+            "unclosed_entries_in_window": 0
+          },
+          "app_score": {
+            "score": 2936,
+            "fps": 29.37,
+            "method": "visually read result PNG"
+          },
+          "health": {
+            "tdr_4101": 0,
+            "gpu_153": 0,
+            "app_crashes": 0,
+            "new_host_xid": []
+          },
+          "counters_before": {
+            "id": 10,
+            "backstop_work": 0,
+            "backstop_carried": 0,
+            "backstop_contended": 15
+          },
+          "counters_after": {
+            "id": 11,
+            "backstop_work": 0,
+            "backstop_carried": 0,
+            "backstop_contended": 17
+          },
+          "archive_sha256": "89248e1f247ab9fb6de13378ae87f0c8964ef9bebbce1e5585fdffa5955493fd"
+        }
+      ],
+      "tiny": [
+        {
+          "tag": "p1on1-q0-r1",
+          "iterations": 2995,
+          "median_us": 240.9,
+          "p99_us": 454.7,
+          "max_us": 1374.4
+        },
+        {
+          "tag": "p1on1-q0-r2",
+          "iterations": 2995,
+          "median_us": 242.8,
+          "p99_us": 428.5,
+          "max_us": 50737.3
+        },
+        {
+          "tag": "p1on1-q0-r3",
+          "iterations": 2995,
+          "median_us": 246.9,
+          "p99_us": 449.6,
+          "max_us": 81905.7
+        },
+        {
+          "tag": "p1on1-q0-r4",
+          "iterations": 2995,
+          "median_us": 251.5,
+          "p99_us": 484.4,
+          "max_us": 77397.9
+        },
+        {
+          "tag": "p1on1-q0-r5",
+          "iterations": 2995,
+          "median_us": 333.7,
+          "p99_us": 632.8,
+          "max_us": 1281.0
+        },
+        {
+          "tag": "p1on1-q2-r1",
+          "iterations": 2995,
+          "median_us": 213.2,
+          "p99_us": 417.9,
+          "max_us": 1194.0
+        },
+        {
+          "tag": "p1on1-q2-r2",
+          "iterations": 2995,
+          "median_us": 217.7,
+          "p99_us": 426.6,
+          "max_us": 634.3
+        },
+        {
+          "tag": "p1on1-q2-r3",
+          "iterations": 2995,
+          "median_us": 214.1,
+          "p99_us": 420.2,
+          "max_us": 2418.9
+        },
+        {
+          "tag": "p1on1-q2-r4",
+          "iterations": 2995,
+          "median_us": 217.7,
+          "p99_us": 425.1,
+          "max_us": 642.6
+        },
+        {
+          "tag": "p1on1-q2-r5-quiet",
+          "iterations": 2995,
+          "median_us": 302.2,
+          "p99_us": 501.7,
+          "max_us": 1673.7
+        },
+        {
+          "tag": "p1on1-q3-r1",
+          "iterations": 2995,
+          "median_us": 185.8,
+          "p99_us": 211.0,
+          "max_us": 345.5
+        },
+        {
+          "tag": "p1on1-q3-r2",
+          "iterations": 2995,
+          "median_us": 259.5,
+          "p99_us": 325.1,
+          "max_us": 545.5
+        },
+        {
+          "tag": "p1on1-q3-r3",
+          "iterations": 2995,
+          "median_us": 188.0,
+          "p99_us": 232.4,
+          "max_us": 622.9
+        },
+        {
+          "tag": "p1on1-q3-r4",
+          "iterations": 2995,
+          "median_us": 281.1,
+          "p99_us": 629.4,
+          "max_us": 1295.4
+        },
+        {
+          "tag": "p1on1-q3-r5",
+          "iterations": 2995,
+          "median_us": 189.4,
+          "p99_us": 303.2,
+          "max_us": 395.6
+        }
+      ]
+    }
+  }
+}

@@ -4,7 +4,7 @@ STATUS: MEASURED / CODE READ, 2026-10-19 04:38 CEST. Branch `codex/perf-parity-2
 
 MEASURED — DONE: mirror-based immutable binary `41a8beb0`, native9/9 plus gate10, and diagnostic fast30/30. Mirror release-test baseline929 passed /0 failed /3 ignored; candidate defaults939/0/3, both optional features960/0/3. Fourteen product mutants and four harness mutants each fail at least two tests. Changed-line Clippy adds zero diagnostics; complete base/candidate sets match, including89 inherited denied errors. See `VALIDATION_A.json`, `CLIPPY.json`, and the mutation artifacts.
 
-MEASURED — DONE: mirror baseline three Steel Nomad captures, five tiny probes per queue, reproducible raw archives and source/vector diagnostics. Baseline new-content fps median29.396, range29.183–29.884; DIRECT/COMPUTE/COPY tiny medians254.5/217.6/186.6us. Full baseline values are in `BASE_RESULTS.json`.
+MEASURED — DONE: mirror baseline three Steel Nomad captures, five tiny probes per queue, reproducible raw archives and exact-fence host traces. The optional source/vector recorder is implemented; its retained live edge census is still being collected. Baseline new-content fps median29.396, range29.183–29.884; DIRECT/COMPUTE/COPY tiny medians254.5/217.6/186.6us. Full baseline values are in `BASE_RESULTS.json`.
 
 MEASURED — IN PROGRESS: mirror plus optional diagnostics has three clean Steel Nomad captures (new-content fps29.612/29.828/30.115; ISR entries/frame22.598/22.670/22.447). Spreads overlap, so both controls are being extended to five samples before comparison. No performance gain is established. Pacing20/50us, lazy-observe and PUT-cache arms follow as separate configurations, subject to health/counter gates and the hard deadline.
 
