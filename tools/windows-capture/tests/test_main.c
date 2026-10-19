@@ -622,21 +622,40 @@ static void t_recent_empty_epoch(void)
 
 static void t_recent_moved_table_is_found_before_bulk_delay(void)
 {
+    kfwc_u32 layout;
+    for (layout = 1; layout <= 2; layout++) {
+        harness h;
+        synth next;
+        recent_setup(&h, layout, 1);
+        h.s.q[0].seq = h.s.q[1].seq = 99;
+        sy_post(&h.s, 0, 76, 16); sy_post(&h.s, 1, 76, 16);
+        sy_init(&next, &h.m, layout, 0x500000, 0x40000, 0x40000, 1);
+        sy_post(&next, 0, 72, 32); sy_post(&next, 1, 65, 32);
+        h.cfg.recent_window_bytes = 4u << 20;
+        h.cfg.recent_window_ticks = 1000;
+        h.cfg.scan_bytes_per_step = 1u << 20;
+        kfwc_engine_init(h.e, &h.plat, &h.sink, &h.cfg);
+        hn_steps(&h, 6);
+        CHECK(h.e->state == KFWC_ST_ATTACHED && h.e->stats.method == 4);
+        CHECK(h.e->bind.table_pa == next.table_pa);
+        CHECK(sb_losses(&h.sb) == 0 && h.m.stores == 0 && h.m.refused == 0);
+        hn_free(&h);
+    }
+}
+
+static void t_recent_window_skips_pages_outside_ram(void)
+{
     harness h;
-    synth next;
     recent_setup(&h, 1, 1);
-    h.s.q[0].seq = h.s.q[1].seq = 99;
-    sy_post(&h.s, 0, 76, 16); sy_post(&h.s, 1, 76, 16);
-    sy_init(&next, &h.m, 1, 0x500000, 0x40000, 0x40000, 1);
-    sy_post(&next, 0, 72, 32); sy_post(&next, 1, 65, 32);
-    h.cfg.recent_window_bytes = 4u << 20;
-    h.cfg.recent_window_ticks = 1000;
+    h.cfg.recent_table_pa = RAM_BYTES - KFWC_PAGE; /* last valid page, no table */
+    h.cfg.recent_window_bytes = 1u << 20;
+    h.cfg.recent_window_ticks = 100;
     h.cfg.scan_bytes_per_step = 1u << 20;
     kfwc_engine_init(h.e, &h.plat, &h.sink, &h.cfg);
-    hn_steps(&h, 6);
-    CHECK(h.e->state == KFWC_ST_ATTACHED && h.e->stats.method == 4);
-    CHECK(h.e->bind.table_pa == next.table_pa);
-    CHECK(sb_losses(&h.sb) == 0 && h.m.stores == 0 && h.m.refused == 0);
+    hn_steps(&h, 3);
+    CHECK(h.e->state == KFWC_ST_SEARCHING && h.e->stats.attaches == 0);
+    CHECK(h.e->stats.scan_bytes == 3u * KFWC_PAGE);
+    CHECK(h.m.refused == 0 && h.m.stores == 0);
     hn_free(&h);
 }
 
@@ -1263,6 +1282,7 @@ int main(int argc, char **argv)
         {"recent_empty_epoch", t_recent_empty_epoch},
         {"recent_moved_table_early", t_recent_moved_table_is_found_before_bulk_delay},
         {"recent_window_expires", t_recent_window_expires_and_does_not_accept_stale_queues},
+        {"recent_window_ram_edges", t_recent_window_skips_pages_outside_ram},
         {"recent_sequence_zero_prefix", t_recent_sequence_zero_prefix},
         {"recent_stale_and_partial_epochs", t_recent_stale_and_partial_epochs},
         {"recent_requires_scan_and_ram_validation", t_recent_requires_scan_and_ram_validation},
