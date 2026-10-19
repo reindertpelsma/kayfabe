@@ -369,3 +369,28 @@ fn the_wide_host_semaphore_field_is_still_bounded() {
         Err(Refusal::FieldValue { .. })
     ));
 }
+
+/// The count-only census files a derived-class method under the DERIVED class (not under class 0,
+/// "no CE bound"), so a census of a kernel CE ring says which table decoded it.
+#[test]
+fn the_census_names_the_derived_class() {
+    use crate::census::{Census, SubKind};
+    let mut c = Census::default();
+    decode(&RUN3017_GP34, is_ce, &mut cfg(C7B5), Some(&mut c)).expect("decoded");
+    assert_eq!(c.count(C7B5, SubKind::Ce, 0x240), 1);
+    assert_eq!(c.count(C7B5, SubKind::Ce, 0x300), 1);
+    assert_eq!(c.launches_of(C7B5, 0x4c), 1);
+    assert_eq!(
+        c.count(0, SubKind::Ce, 0x240),
+        0,
+        "not filed under 'no class'"
+    );
+}
+
+#[test]
+fn the_census_files_a_refused_unconfigured_method_under_no_class() {
+    use crate::census::{Census, SubKind};
+    let mut c = Census::default();
+    assert!(decode(&RUN3017_GP34, is_ce, &mut cfg(0), Some(&mut c)).is_err());
+    assert_eq!(c.count(0, SubKind::Ce, 0x240), 1);
+}

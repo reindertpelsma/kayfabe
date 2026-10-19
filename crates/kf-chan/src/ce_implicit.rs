@@ -53,8 +53,15 @@ mod tests {
     }
 
     #[test]
-    fn a_foreign_class_gets_nothing() {
-        for class in [0xC9B0, 0xC997, 0xC7B4, 0xC7B6, 0xDEAD, u32::MAX] {
+    fn a_video_or_graphics_class_gets_nothing() {
+        for class in [0xC9B0, 0xC7B0, 0xC997, 0xC7C0, 0x5080, 0xC56F] {
+            assert_eq!(implicit_ce_class(true, true, Some(class)), 0, "{class:#x}");
+        }
+    }
+
+    #[test]
+    fn a_number_next_to_a_copy_class_gets_nothing() {
+        for class in [0xC7B4, 0xC7B6, 0xCBB5, 0xC4B5, 0xDEAD, u32::MAX] {
             assert_eq!(implicit_ce_class(true, true, Some(class)), 0, "{class:#x}");
         }
     }
