@@ -1,0 +1,139 @@
+BASELINE_BEGIN 2026-10-19T11:06:32.4777290+02:00
+Mon Oct 19 11:06:32 2026       
++-----------------------------------------------------------------------------------------+
+| NVIDIA-SMI 580.88                 Driver Version: 580.88         CUDA Version: 13.0     |
++-----------------------------------------+------------------------+----------------------+
+| GPU  Name                  Driver-Model | Bus-Id          Disp.A | Volatile Uncorr. ECC |
+| Fan  Temp   Perf          Pwr:Usage/Cap |           Memory-Usage | GPU-Util  Compute M. |
+|                                         |                        |               MIG M. |
+|=========================================+========================+======================|
+|   0  NVIDIA GeForce RTX 4070      WDDM  |   00000000:00:06.0  On |                  N/A |
+| N/A    0C  N/A             N/A  /  N/A  |     549MiB /   8192MiB |     N/A      Default |
+|                                         |                        |                  N/A |
++-----------------------------------------+------------------------+----------------------+
+
++-----------------------------------------------------------------------------------------+
+| Processes:                                                                              |
+|  GPU   GI   CI              PID   Type   Process name                        GPU Memory |
+|        ID   ID                                                               Usage      |
+|=========================================================================================|
+|    0   N/A  N/A            1288    C+G   C:\Windows\System32\dwm.exe           N/A      |
+|    0   N/A  N/A            7036    C+G   C:\Windows\explorer.exe               N/A      |
+|    0   N/A  N/A            7104    C+G   ...2txyewy\CrossDeviceResume.exe      N/A      |
+|    0   N/A  N/A            7160    C+G   ...indows\System32\ShellHost.exe      N/A      |
+|    0   N/A  N/A            8208    C+G   ..._cw5n1h2txyewy\SearchHost.exe      N/A      |
+|    0   N/A  N/A            8308    C+G   ...y\StartMenuExperienceHost.exe      N/A      |
+|    0   N/A  N/A           10360    C+G   ....0.4283.62\msedgewebview2.exe      N/A      |
+|    0   N/A  N/A           10976    C+G   ...t\Edge\Application\msedge.exe      N/A      |
+|    0   N/A  N/A           11080    C+G   ...IA App\CEF\NVIDIA Overlay.exe      N/A      |
+|    0   N/A  N/A           11512    C+G   ...IA App\CEF\NVIDIA Overlay.exe      N/A      |
+|    0   N/A  N/A           13324    C+G   ...\cef.win64\steamwebhelper.exe      N/A      |
++-----------------------------------------------------------------------------------------+
+BASELINE_END 2026-10-19T11:07:32.5689335+02:00
+Mon Oct 19 11:07:32 2026       
++-----------------------------------------------------------------------------------------+
+| NVIDIA-SMI 580.88                 Driver Version: 580.88         CUDA Version: 13.0     |
++-----------------------------------------+------------------------+----------------------+
+| GPU  Name                  Driver-Model | Bus-Id          Disp.A | Volatile Uncorr. ECC |
+| Fan  Temp   Perf          Pwr:Usage/Cap |           Memory-Usage | GPU-Util  Compute M. |
+|                                         |                        |               MIG M. |
+|=========================================+========================+======================|
+|   0  NVIDIA GeForce RTX 4070      WDDM  |   00000000:00:06.0  On |                  N/A |
+| N/A    0C  N/A             N/A  /  N/A  |     549MiB /   8192MiB |     N/A      Default |
+|                                         |                        |                  N/A |
++-----------------------------------------+------------------------+----------------------+
+
++-----------------------------------------------------------------------------------------+
+| Processes:                                                                              |
+|  GPU   GI   CI              PID   Type   Process name                        GPU Memory |
+|        ID   ID                                                               Usage      |
+|=========================================================================================|
+|    0   N/A  N/A            1288    C+G   C:\Windows\System32\dwm.exe           N/A      |
+|    0   N/A  N/A            7036    C+G   C:\Windows\explorer.exe               N/A      |
+|    0   N/A  N/A            7104    C+G   ...2txyewy\CrossDeviceResume.exe      N/A      |
+|    0   N/A  N/A            7160    C+G   ...indows\System32\ShellHost.exe      N/A      |
+|    0   N/A  N/A            8208    C+G   ..._cw5n1h2txyewy\SearchHost.exe      N/A      |
+|    0   N/A  N/A            8308    C+G   ...y\StartMenuExperienceHost.exe      N/A      |
+|    0   N/A  N/A           10360    C+G   ....0.4283.62\msedgewebview2.exe      N/A      |
+|    0   N/A  N/A           10976    C+G   ...t\Edge\Application\msedge.exe      N/A      |
+|    0   N/A  N/A           11080    C+G   ...IA App\CEF\NVIDIA Overlay.exe      N/A      |
+|    0   N/A  N/A           11512    C+G   ...IA App\CEF\NVIDIA Overlay.exe      N/A      |
+|    0   N/A  N/A           13324    C+G   ...\cef.win64\steamwebhelper.exe      N/A      |
++-----------------------------------------------------------------------------------------+
+TDR_EVENTS=0
+DIR C:\kf\apps
+
+Name                   Mode  
+----                   ----  
+blender                d-----
+gravitymark            d-----
+heaven                 d-----
+out                    d-----
+gm.ps1                 -a----
+GravityMark_1.89.msi   -a----
+heaven.ps1             -a----
+Unigine_Heaven-4.0.exe -a----
+
+
+DIR C:\Program Files\Blender Foundation
+
+Name        Mode  
+----        ----  
+Blender 5.2 d-----
+
+
+DIR C:\Users\Public
+
+Name      Mode  
+----      ----  
+Documents d-r---
+Downloads d-r---
+Music     d-r---
+Pictures  d-r---
+Videos    d-r---
+
+
+DIR C:\tools
+DIR C:\kf\ogl
+
+Name             Mode  
+----             ----  
+gdi32.dll        -a----
+gears1.txt       -a----
+gears2.txt       -a----
+javaw_hang1.dmp  -a----
+javaw_hang2.dmp  -a----
+KernelBase.dll   -a----
+kf_glgears.exe   -a----
+kf_glvsync.exe   -a----
+mc.ps1           -a----
+mc_cmd.txt       -a----
+mc_start.txt     -a----
+md.ps1           -a----
+ntdll.dll        -a----
+options.txt.orig -a----
+runi.ps1         -a----
+scan.ps1         -a----
+scan1.txt        -a----
+scan2.txt        -a----
+scan3.txt        -a----
+vbl.ps1          -a----
+vbl1.txt         -a----
+vs1.txt          -a----
+vs2.txt          -a----
+vs3.txt          -a----
+vs4.txt          -a----
+vs5.txt          -a----
+vs6.txt          -a----
+win32u.dll       -a----
+
+
+
+FullName                                                                     Length
+--------                                                                     ------
+C:\kf\apps\gravitymark\GravityMark\bin\GravityMark.exe                      1076752
+C:\Program Files\Blender Foundation\Blender 5.2\blender-launcher.exe         335312
+C:\Program Files\Blender Foundation\Blender 5.2\blender.exe               113022936
+C:\Program Files\Blender Foundation\Blender 5.2\5.2\python\bin\python.exe    106456
+
+

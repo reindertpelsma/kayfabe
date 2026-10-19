@@ -1,0 +1,7 @@
+# Baseline
+
+MEASURED: guest NVIDIA-SMI 580.88 / CUDA driver API maximum 13.0, RTX 4070 WDDM, 8192 MiB. Host NVIDIA-SMI 595.91.07 / CUDA maximum 13.2. Idle guest interval 11:06:32.4777290 to 11:07:32.5689335 (+02:00): **60.091 seconds**, n=1; System 4101/nvlddmkm events in that interval: **0**. Host Xid total **21 before, 21 after**, delta **0**. QEMU mirror status ON, phase Running, acts refused 0, reset count unchanged at boot-only req=done=1. No non-status REFUSED/ERROR/TSG_MIRROR/0x1f lines in captured post-baseline host log segment.
+
+MEASURED limitation/correction: the combined baseline plus recursive tool inventory exceeded the 90-second diagnostic client deadline. Its late result was retrieved from the existing diagnostic result store; this was **not evidence of a guest hang**. A queued read-only responsiveness query also hit its 40-second client deadline while waiting. The raw baseline output above proves the idle command completed and returned. Use bounded path checks in later stages. Full command: `baseline.ps1`; actual output: `baseline.txt`. Historical host Xids belong to earlier processes. No rendering/compute/video gate has run yet.
+
+CODE READ earlier legacy evidence: `docs/design/V3_VIDEO_ENGINES.md` section 2.2 records `int_gfx` at ada6855a: legacy merged graphics/async-compute subcontexts produced Xid 69, class c797 method 0x2620, and GFX_S3=FAIL. This historical Linux workload is not the Windows workload tested here and is not rerun.
