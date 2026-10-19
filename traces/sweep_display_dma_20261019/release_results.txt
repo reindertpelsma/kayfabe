@@ -1,0 +1,38 @@
+     Running unittests src/lib.rs (/workspace/sweep-dma-clippy-target/release/deps/kf_disp-2166b735185da115)
+test result: ok. 245 passed; 0 failed; 3 ignored; 0 measured; 0 filtered out; finished in 11.75s
+     Running tests/abi_5809402.rs (/workspace/sweep-dma-clippy-target/release/deps/abi_5809402-17aa5e1a213176c8)
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+     Running tests/bl_pack_kernel.rs (/workspace/sweep-dma-clippy-target/release/deps/bl_pack_kernel-f5c30d8bdec502fa)
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.12s
+     Running tests/caps_derive.rs (/workspace/sweep-dma-clippy-target/release/deps/caps_derive-d32d9486929c8ca9)
+test result: ok. 16 passed; 0 failed; 2 ignored; 0 measured; 0 filtered out; finished in 0.01s
+     Running tests/compose_kernel.rs (/workspace/sweep-dma-clippy-target/release/deps/compose_kernel-cbedf9e2d47d4daa)
+test result: ok. 7 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.57s
+     Running tests/display_dma_format.rs (/workspace/sweep-dma-clippy-target/release/deps/display_dma_format-113cd14c8c9e9cd4)
+test result: ok. 19 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+     Running tests/gb205_caps_word.rs (/workspace/sweep-dma-clippy-target/release/deps/gb205_caps_word-3e46ee122882750d)
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+     Running tests/lockstep_threads.rs (/workspace/sweep-dma-clippy-target/release/deps/lockstep_threads-6f18373b6b15b5d7)
+test result: ok. 7 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 6.10s
+     Running tests/yuv_kernel.rs (/workspace/sweep-dma-clippy-target/release/deps/yuv_kernel-6033c6a10f9de452)
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.34s
+     Running unittests src/lib.rs (/workspace/sweep-dma-clippy-target/release/deps/kf_qemu-377a752895ad55b0)
+test result: ok. 395 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 3.15s
+     Running tests/bar0_trace_gate.rs (/workspace/sweep-dma-clippy-target/release/deps/bar0_trace_gate-e3d471b4661a0e40)
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+     Running tests/channel_budget_lazy.rs (/workspace/sweep-dma-clippy-target/release/deps/channel_budget_lazy-ec5fa56db5cc9893)
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+     Running tests/doorbell_no_put_poll.rs (/workspace/sweep-dma-clippy-target/release/deps/doorbell_no_put_poll-5f86002b9ff83782)
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+     Running tests/gop_rom_knobs.rs (/workspace/sweep-dma-clippy-target/release/deps/gop_rom_knobs-57bcaeeaf6355467)
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.04s
+     Running tests/gpu_uuid_property.rs (/workspace/sweep-dma-clippy-target/release/deps/gpu_uuid_property-1e0ed5ffe30b65e0)
+test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+     Running tests/kf3_realize_discard.rs (/workspace/sweep-dma-clippy-target/release/deps/kf3_realize_discard-fcc50f41c20ae44e)
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+     Running tests/max_fps_property.rs (/workspace/sweep-dma-clippy-target/release/deps/max_fps_property-afaee3d4601929b8)
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+     Running tests/wire_mirror.rs (/workspace/sweep-dma-clippy-target/release/deps/wire_mirror-57e3b715fa58248a)
+test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.10s
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
