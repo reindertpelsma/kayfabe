@@ -1196,6 +1196,12 @@ impl GspFsm {
         self.cmd_seq
     }
 
+    /// Whether command progress could supply heartbeat metadata (initial test seam).
+    #[must_use]
+    pub fn has_current_system_info(&self) -> bool {
+        self.command_seq() != 0
+    }
+
     /// The abstract observation the register model serves from — §3.2's table, and
     /// nothing else.
     #[must_use]
