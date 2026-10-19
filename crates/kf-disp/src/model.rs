@@ -1994,7 +1994,7 @@ mod tests {
 
     #[test]
     fn blackwell_imp_refuses_invalid_head_lists_and_dsc_in_every_layout() {
-        for version in ["580.65.06", "580.159.04"] {
+        for version in ["580.65.06", "580.159.04", "590.48.01", "595.91.07"] {
             let mut m = DisplayModel::new(
                 &kf_chip::display::BLACKWELL_GB20X,
                 vec![Monitor::default_1080p()],
@@ -3216,7 +3216,7 @@ mod tests {
             &kf_chip::display::ADA,
             &kf_chip::display::BLACKWELL_GB20X,
         ] {
-            for version in ["580.65.06", "580.159.04"] {
+            for version in ["580.65.06", "580.159.04", "590.48.01", "595.91.07"] {
                 let mut m = DisplayModel::new(
                     row,
                     vec![Monitor::default_1080p()],
@@ -3271,7 +3271,7 @@ mod tests {
 
     #[test]
     fn assign_sor_validates_audio_request_and_authors_output_flags() {
-        for version in ["580.65.06", "580.159.04"] {
+        for version in ["580.65.06", "580.159.04", "590.48.01", "595.91.07"] {
             let mut m = ada(version);
             // Open ctrl0073dfp.h: AUDIO at bit 0 (input), ACTIVE_SOR_NOT_AUDIO_CAPABLE at bit 1 (output).
             let r = assign_sor(&mut m, |p| {
@@ -3299,7 +3299,7 @@ mod tests {
 
     #[test]
     fn assign_sor_respects_requested_sublink() {
-        for version in ["580.65.06", "580.159.04"] {
+        for version in ["580.65.06", "580.159.04", "590.48.01", "595.91.07"] {
             let mut m = ada(version);
             for name in ["NONE", "PRIMARY_SOR_LINK", "SECONDARY_SOR_LINK"] {
                 let value =
