@@ -1,0 +1,285 @@
+{
+  "source": "traces/windows_reset_20261009/run102-trace.log.gz",
+  "records": 155377,
+  "reads": 65197,
+  "writes": 90180,
+  "read_offset_counts": {
+    "0xb81210": 2,
+    "0xb81214": 2,
+    "0xb81010": 16498,
+    "0xb81008": 5258,
+    "0xb8100c": 5258,
+    "0xb81014": 5258,
+    "0xb81018": 5258,
+    "0xb8101c": 5258,
+    "0xb81608": 2,
+    "0xb81600": 6643,
+    "0xb81000": 3940,
+    "0xb81200": 3940,
+    "0xb81004": 3940,
+    "0xb81204": 3940
+  },
+  "common_cycles": [
+    {
+      "n": 4579,
+      "events": [
+        [
+          "write",
+          "0xb81408",
+          "0x101"
+        ],
+        [
+          "write",
+          "0xb81410",
+          "0xffffffff"
+        ],
+        [
+          "write",
+          "0xb81610",
+          "0x8"
+        ],
+        [
+          "write",
+          "0xb81210",
+          "0x4000000"
+        ],
+        [
+          "write",
+          "0xb81208",
+          "0x101"
+        ],
+        [
+          "write",
+          "0xb81210",
+          "0xc10007a"
+        ],
+        [
+          "write",
+          "0xb81608",
+          "0xfffffffe"
+        ]
+      ]
+    },
+    {
+      "n": 2117,
+      "events": [
+        [
+          "write",
+          "0xb81408",
+          "0x101"
+        ],
+        [
+          "write",
+          "0xb81410",
+          "0xffffffff"
+        ],
+        [
+          "write",
+          "0xb81610",
+          "0x8"
+        ],
+        [
+          "read",
+          "0xb81008",
+          "0x0"
+        ],
+        [
+          "read",
+          "0xb8100c",
+          "0x0"
+        ],
+        [
+          "read",
+          "0xb81010",
+          "0x0"
+        ],
+        [
+          "read",
+          "0xb81014",
+          "0x0"
+        ],
+        [
+          "read",
+          "0xb81018",
+          "0x0"
+        ],
+        [
+          "read",
+          "0xb8101c",
+          "0x0"
+        ],
+        [
+          "write",
+          "0xb81208",
+          "0x101"
+        ],
+        [
+          "write",
+          "0xb81210",
+          "0xc10007a"
+        ],
+        [
+          "write",
+          "0xb81608",
+          "0xfffffffe"
+        ],
+        [
+          "read",
+          "0xb81600",
+          "0x1"
+        ],
+        [
+          "read",
+          "0xb81000",
+          "0x3"
+        ],
+        [
+          "read",
+          "0xb81200",
+          "0x3f"
+        ],
+        [
+          "write",
+          "0xb81000",
+          "0x1"
+        ],
+        [
+          "write",
+          "0xb81000",
+          "0x2"
+        ],
+        [
+          "read",
+          "0xb81004",
+          "0x0"
+        ],
+        [
+          "read",
+          "0xb81204",
+          "0x0"
+        ]
+      ]
+    },
+    {
+      "n": 1918,
+      "events": [
+        [
+          "write",
+          "0xb81408",
+          "0x101"
+        ],
+        [
+          "write",
+          "0xb81410",
+          "0xffffffff"
+        ],
+        [
+          "write",
+          "0xb81610",
+          "0x8"
+        ]
+      ]
+    },
+    {
+      "n": 1904,
+      "events": [
+        [
+          "write",
+          "0xb81408",
+          "0x101"
+        ],
+        [
+          "write",
+          "0xb81410",
+          "0xffffffff"
+        ],
+        [
+          "write",
+          "0xb81610",
+          "0x8"
+        ],
+        [
+          "read",
+          "0xb81008",
+          "0x0"
+        ],
+        [
+          "read",
+          "0xb8100c",
+          "0x0"
+        ],
+        [
+          "read",
+          "0xb81010",
+          "0x0"
+        ],
+        [
+          "read",
+          "0xb81014",
+          "0x0"
+        ],
+        [
+          "read",
+          "0xb81018",
+          "0x0"
+        ],
+        [
+          "read",
+          "0xb8101c",
+          "0x0"
+        ],
+        [
+          "write",
+          "0xb81208",
+          "0x101"
+        ],
+        [
+          "write",
+          "0xb81210",
+          "0xc10007a"
+        ],
+        [
+          "write",
+          "0xb81608",
+          "0xfffffffe"
+        ],
+        [
+          "read",
+          "0xb81600",
+          "0x0"
+        ]
+      ]
+    },
+    {
+      "n": 1142,
+      "events": [
+        [
+          "write",
+          "0xb81408",
+          "0x101"
+        ],
+        [
+          "write",
+          "0xb81410",
+          "0xffffffff"
+        ],
+        [
+          "write",
+          "0xb81610",
+          "0x8"
+        ],
+        [
+          "write",
+          "0xb81210",
+          "0x4000000"
+        ]
+      ]
+    }
+  ],
+  "limits": [
+    "kayfabe run102 diagnostic using VFIO-format tracer; not a hardware VFIO capture",
+    "capture timestamp prefix says 2026-10-08; README labels run Oct 9: retain literal timestamp; date discrepancy unresolved",
+    "cycle windows are global EN_CLEAR(2) delimiters, may interleave vCPUs; no guest thread identity in this format",
+    "no whole-machine pending state or loss-free physical-edge census"
+  ]
+}

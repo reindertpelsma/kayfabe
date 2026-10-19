@@ -1,0 +1,52 @@
+{
+  "trap_baseline": {
+    "passed": 111,
+    "failed": 0,
+    "ignored": 0,
+    "log_sha256": "a40fe874a4a4bf4ff8670ab8b4eea683a8eb6608bee10d518706812b432a9438"
+  },
+  "qemu_baseline": {
+    "passed": 408,
+    "failed": 0,
+    "ignored": 0,
+    "log_sha256": "7dd1f83466f4964177ccb7759abdbc27af117eca0565081fed6c3bd9e2c8e7a8"
+  },
+  "both_default": {
+    "passed": 548,
+    "failed": 0,
+    "ignored": 0,
+    "log_sha256": "0f69204771749584c887fd63141b0a00bcac9f2a58b33ec7d2c158a900cf26b6"
+  },
+  "both_features": {
+    "passed": 551,
+    "failed": 0,
+    "ignored": 0,
+    "log_sha256": "7c1e389a9dccc41e2730af10c44562db8eac3b39877884e7640fb917f919a401"
+  },
+  "restored_trap": {
+    "passed": 140,
+    "failed": 0,
+    "ignored": 0,
+    "log_sha256": "c1556d390ba3fb8c4378c7275ccb7d44b56d3fe87746ae10399c5714738e21f2"
+  },
+  "mutants": {
+    "count": 19,
+    "min_kills": 2,
+    "max_kills": 7
+  },
+  "commands": [
+    "CARGO_TARGET_DIR=<own-target> nice -n 19 cargo test -p kf-trap -p kf-qemu -j2 --release",
+    "same with --features kf-trap/research-replay,kf-qemu/diag-intr-audit",
+    "cargo clippy same scope --all-targets (89 inherited errors, complete baseline multiset equal)",
+    "rustfmt --edition 2024 --check changed Rust files",
+    "git diff --check; staged secret/path/public-IP scan before every commit"
+  ],
+  "scope": "MEASURED GPU/VM-free tests only; no KVM microguest benchmarks or hardware diagnostics executed",
+  "cleanup": {
+    "target_deleted": false,
+    "target_remaining_mib": 392,
+    "reason": "automatic approval review rejected deletion; lane STOP rule applied; no alternative attempted",
+    "own_workloads_running": false,
+    "host_locks_acquired": false
+  }
+}

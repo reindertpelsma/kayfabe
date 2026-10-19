@@ -1,0 +1,47 @@
+{
+  "method": "adjacent candidate-8 fence values 205..3200; require a doorbell in interval; end boundary open/closed; all background retained",
+  "intervals": 2994,
+  "per_submit": {
+    "doorbell": {
+      "median": 3.0,
+      "min": 1,
+      "max": 6,
+      "n": 2994
+    },
+    "mask": {
+      "median": 12.0,
+      "min": 6,
+      "max": 60,
+      "n": 2994
+    },
+    "ack": {
+      "median": 2.0,
+      "min": 2,
+      "max": 10,
+      "n": 2994
+    },
+    "trigger": {
+      "median": 0.0,
+      "min": 0,
+      "max": 0,
+      "n": 2994
+    },
+    "cycles": {
+      "median": 2.0,
+      "min": 1,
+      "max": 10,
+      "n": 2994
+    },
+    "intr_total": {
+      "median": 14.0,
+      "min": 8,
+      "max": 70,
+      "n": 2994
+    }
+  },
+  "limits": [
+    "not the P1 QPC-aligned warmup/filter; descriptive host-fence-window census, not pure critical path",
+    "fence candidate chosen by P1; no GPU identity beyond trace window",
+    "fraction of medians is not median of fractions"
+  ]
+}

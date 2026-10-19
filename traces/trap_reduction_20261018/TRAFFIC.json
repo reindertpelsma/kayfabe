@@ -1,0 +1,321 @@
+{
+  "source": "P1 p1on1-direct-final-3_trace/trace.txt",
+  "sha256": "a5592daecb5226135db8eeb627886d9544996caaa3f46b00753c36d758f8ce4c",
+  "mmio_records": 89823,
+  "types": {
+    "2": 89823
+  },
+  "classes": {
+    "mask": 68460,
+    "ack": 11401,
+    "doorbell": 9962
+  },
+  "mask_fraction_of_interrupt_writes": 0.8572394535505441,
+  "cycles": 11310,
+  "offset_counts": [
+    {
+      "off": "0xb81000",
+      "type": 2,
+      "count": 11388
+    },
+    {
+      "off": "0xb81010",
+      "type": 2,
+      "count": 13
+    },
+    {
+      "off": "0xb81208",
+      "type": 2,
+      "count": 11310
+    },
+    {
+      "off": "0xb81210",
+      "type": 2,
+      "count": 11910
+    },
+    {
+      "off": "0xb81408",
+      "type": 2,
+      "count": 11310
+    },
+    {
+      "off": "0xb81410",
+      "type": 2,
+      "count": 11310
+    },
+    {
+      "off": "0xb81608",
+      "type": 2,
+      "count": 11310
+    },
+    {
+      "off": "0xb81610",
+      "type": 2,
+      "count": 11310
+    },
+    {
+      "off": "0xbb0090",
+      "type": 2,
+      "count": 9962
+    }
+  ],
+  "top_shapes": [
+    {
+      "count": 4802,
+      "ordered": [
+        [
+          "0xb81408",
+          "0x101",
+          "W"
+        ],
+        [
+          "0xb81410",
+          "0xffffffff",
+          "W"
+        ],
+        [
+          "0xb81610",
+          "0x8",
+          "W"
+        ],
+        [
+          "0xb81208",
+          "0x101",
+          "W"
+        ],
+        [
+          "0xb81210",
+          "0xc10007a",
+          "W"
+        ],
+        [
+          "0xb81608",
+          "0xfffffffe",
+          "W"
+        ]
+      ]
+    },
+    {
+      "count": 3462,
+      "ordered": [
+        [
+          "0xb81408",
+          "0x101",
+          "W"
+        ],
+        [
+          "0xb81410",
+          "0xffffffff",
+          "W"
+        ],
+        [
+          "0xb81610",
+          "0x8",
+          "W"
+        ],
+        [
+          "0xb81208",
+          "0x101",
+          "W"
+        ],
+        [
+          "0xb81210",
+          "0xc10007a",
+          "W"
+        ],
+        [
+          "0xb81608",
+          "0xfffffffe",
+          "W"
+        ],
+        [
+          "0xb81000",
+          "0x1",
+          "W"
+        ],
+        [
+          "0xb81000",
+          "0x2",
+          "W"
+        ]
+      ]
+    },
+    {
+      "count": 1566,
+      "ordered": [
+        [
+          "0xb81408",
+          "0x101",
+          "W"
+        ],
+        [
+          "0xb81410",
+          "0xffffffff",
+          "W"
+        ],
+        [
+          "0xb81610",
+          "0x8",
+          "W"
+        ],
+        [
+          "0xb81208",
+          "0x101",
+          "W"
+        ],
+        [
+          "0xb81210",
+          "0xc10007a",
+          "W"
+        ],
+        [
+          "0xb81608",
+          "0xfffffffe",
+          "W"
+        ],
+        [
+          "0xb81000",
+          "0x2",
+          "W"
+        ],
+        [
+          "0xb81000",
+          "0x4",
+          "W"
+        ]
+      ]
+    },
+    {
+      "count": 783,
+      "ordered": [
+        [
+          "0xb81408",
+          "0x101",
+          "W"
+        ],
+        [
+          "0xb81410",
+          "0xffffffff",
+          "W"
+        ],
+        [
+          "0xb81610",
+          "0x8",
+          "W"
+        ],
+        [
+          "0xb81208",
+          "0x101",
+          "W"
+        ],
+        [
+          "0xb81210",
+          "0xc10007a",
+          "W"
+        ],
+        [
+          "0xb81608",
+          "0xfffffffe",
+          "W"
+        ],
+        [
+          "0xb81000",
+          "0x2",
+          "W"
+        ]
+      ]
+    },
+    {
+      "count": 575,
+      "ordered": [
+        [
+          "0xb81408",
+          "0x101",
+          "W"
+        ],
+        [
+          "0xb81410",
+          "0xffffffff",
+          "W"
+        ],
+        [
+          "0xb81610",
+          "0x8",
+          "W"
+        ],
+        [
+          "0xb81210",
+          "0x4000000",
+          "W"
+        ],
+        [
+          "0xb81208",
+          "0x101",
+          "W"
+        ],
+        [
+          "0xb81210",
+          "0xc10007a",
+          "W"
+        ],
+        [
+          "0xb81608",
+          "0xfffffffe",
+          "W"
+        ]
+      ]
+    },
+    {
+      "count": 38,
+      "ordered": [
+        [
+          "0xb81408",
+          "0x101",
+          "W"
+        ],
+        [
+          "0xb81410",
+          "0xffffffff",
+          "W"
+        ],
+        [
+          "0xb81610",
+          "0x8",
+          "W"
+        ],
+        [
+          "0xb81208",
+          "0x101",
+          "W"
+        ],
+        [
+          "0xb81210",
+          "0xc10007a",
+          "W"
+        ],
+        [
+          "0xb81608",
+          "0xfffffffe",
+          "W"
+        ],
+        [
+          "0xb81000",
+          "0x1",
+          "W"
+        ]
+      ]
+    }
+  ],
+  "successive_write_spacing_us": {
+    "n": 68551,
+    "median": 11.16,
+    "min": 7.03,
+    "max": 20936.799
+  },
+  "limits": [
+    "whole capture including background/warmup; per-TID windows delimited by EN_CLEAR(2), not guest ISR entry; last window per TID may be truncated",
+    "type=2 is write; no read record does NOT mean no guest RAM-backed reads",
+    "no coherent pending/enable snapshots: cannot count masked then enabled edges",
+    "spacing includes guest instructions, interrupt/DPC gaps, scheduling and tracing overhead; not pure VM-exit latency"
+  ]
+}

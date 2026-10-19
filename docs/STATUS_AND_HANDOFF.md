@@ -1,5 +1,20 @@
 # Status and handoff — where kayfabe v3 stands, and how to resume
 
+
+## UPDATE 2026-10-19 — R1 interrupt trap research (GPU/VM-free)
+
+CODE READ / MEASURED: branch `codex/trap-research-20261019`, based on mirror `0d7ba7438`;
+research and exact limits in `docs/design/V3_TRAP_REDUCTION_RESEARCH_20261019.md`.
+`kf-trap` 111→140 tests; `kf-qemu` 408 default /411 with optional audit; 19 mutants killed by >=2 tests;
+Clippy baseline equality (89 inherited errors/440 warnings). Pure serial replay remains unwired;
+new interrupt-state audit requires compile/runtime opt-in, default off, no VM run.
+Existing traces: median 12 masks +2 acks +3 doorbells per tiny-submit interval (n=2994),
+but guest enable readbacks and final-unmask liveness refute the simple mask-only coalescing design.
+Generic QEMU flush/kernel spinlock paths are not approved by the vCPU audit. Host VMSCAPE reports
+conditional IBPB before userspace return; true per-exit cost and active AVIC remain unmeasured.
+No GPU, VM, lease, host setting or production default changed; do not infer deployment readiness.
+Cleanup blocker: automatic approval review refused deletion of the own lane target (392MiB remains); STOP rule applied, no alternate deletion attempted. Completed research/report publication only follows this stop.
+
 ## UPDATE 2026-10-18 — hitch measurement gates
 
 CODE READ: `codex/hitch-gates-20261018` makes display step timing and the relay event

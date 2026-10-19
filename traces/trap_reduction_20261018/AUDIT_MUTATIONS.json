@@ -13,9 +13,10 @@
     "exit": 101,
     "killing_tests": [
       "audit_cap_never_overwrites_a_committed_record",
+      "contending_producers_account_for_every_bounded_attempt",
       "zero_capacity_audit_always_drops_without_indexing_storage"
     ],
-    "kills": 2
+    "kills": 3
   },
   {
     "mutant": "audit_publish_incomplete",
