@@ -7,7 +7,7 @@ index af3ed78dc..9aaa3ebad 100644
 +    /// Bounded coherent read; guests read the same host page directly. The drainer also samples
 +    /// this clock to publish GSP heartbeats in the guest timer's epoch.
 diff --git a/crates/kf-qemu/src/device.rs b/crates/kf-qemu/src/device.rs
-index 68a18d76b..d77298710 100644
+index 8eb64db01..f97b81ac2 100644
 --- a/crates/kf-qemu/src/device.rs
 +++ b/crates/kf-qemu/src/device.rs
 @@ -232,0 +233,3 @@ pub struct Device {
@@ -21,20 +21,20 @@ index 68a18d76b..d77298710 100644
 +        // fn72 is retained separately below because heartbeat clocks also need its offset.
 @@ -857,0 +861 @@ impl Device {
 +        let heartbeat_system_info = console.seat().map(|s| s.system_info).unwrap_or_default();
-@@ -1042 +1046,3 @@ impl Device {
+@@ -1044 +1048,3 @@ impl Device {
 -            fsm: console.fsm(abi),
 +            fsm: console
 +                .fsm(abi)
 +                .with_system_info_cell(heartbeat_system_info.clone()),
-@@ -1188,0 +1195 @@ impl Device {
+@@ -1190,0 +1197 @@ impl Device {
 +            heartbeat_system_info,
-@@ -2532,2 +2539,3 @@ impl Device {
+@@ -2534,2 +2541,3 @@ impl Device {
 -        // the guest's 1.3 × default-timeout window — in ms of the host GPU clock the guest itself
 -        // reads through the aliased usermode page.
 +        // the guest's 1.3 × default-timeout window — in ms of the validated timer page guest RM
 +        // itself reads, with fn72's guest system offset removed. Both PTIMER and VF_TIME can
 +        // already contain the offset; changing between those clocks alone cannot fix this.
-@@ -2563,2 +2571,17 @@ impl Device {
+@@ -2565,2 +2573,17 @@ impl Device {
 -                if let Ok(ns) = self.rm.gpu_time_ns() {
 -                    let ms = u64::from((ns / 1_000_000) as u32);
 +                let guest_offset = {
