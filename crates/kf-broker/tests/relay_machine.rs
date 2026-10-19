@@ -35,6 +35,8 @@ struct Wire {
     sent: Vec<(Cmd, Option<u64>)>,
     /// Sends allowed before the socket reports Full (`None`: unlimited).
     budget: Option<usize>,
+    /// Full results in this fixture entry; the soak fixture uses the same 512-result bound.
+    full_run: u32,
     open: i32,
     /// ★ Runs after a record of this type was sent — what another thread does in the window
     /// between two of the relay's sends (the worker's `withdraw_all`, for one).
@@ -78,6 +80,9 @@ impl Link for Fake {
         let mut w = self.0.borrow_mut();
         if let Some(b) = w.budget.as_mut() {
             if *b == 0 {
+                w.full_run += 1;
+                // READ_BATCH packets can each try several sends; looping on Full is forbidden.
+                assert!(w.full_run <= 512, "the relay retried a full send in a loop");
                 return Sent::Full;
             }
             *b -= 1;
@@ -210,6 +215,7 @@ impl T {
     }
 
     fn frame(&mut self) {
+        self.wire.borrow_mut().full_run = 0;
         let now = self.now;
         self.relay.on_frame(now, &mut self.host);
     }
@@ -227,6 +233,7 @@ impl T {
     }
 
     fn read(&mut self) -> Vec<Input> {
+        self.wire.borrow_mut().full_run = 0;
         let mut out = Vec::new();
         let now = self.now;
         self.relay
@@ -235,6 +242,7 @@ impl T {
     }
 
     fn writable(&mut self) {
+        self.wire.borrow_mut().full_run = 0;
         let now = self.now;
         let mut out = Vec::new();
         self.relay
@@ -242,6 +250,7 @@ impl T {
     }
 
     fn tick(&mut self, ms: u64) {
+        self.wire.borrow_mut().full_run = 0;
         self.now += ms;
         let now = self.now;
         self.relay.on_timer(now, &mut self.host);
@@ -249,6 +258,7 @@ impl T {
 
     /// `start` arms the first attempt for now; the VMM's loop then fires the timer.
     fn start(&mut self) {
+        self.wire.borrow_mut().full_run = 0;
         let now = self.now;
         self.relay.start(now, &mut self.host);
         assert_eq!(
@@ -3174,4 +3184,81 @@ fn a_stale_tick_does_not_keep_the_ticks_alive() {
     t.tick(11); // 51 ms after the last fresh tick
     assert!(!t.relay.tick_live(), "stale ticks are not liveness");
     assert_eq!(t.relay.tick_counters().silence_fallbacks, 1);
+}
+
+#[test]
+fn diagnostic_default_conn_supersession_emits_no_ring_dump() {
+    let (mut t, _share) = T::with_share();
+    t.up_keep(TICK_CAPS);
+    let log = kf_broker::capture_log();
+    t.tick_pkt(1, true, 100);
+    t.tick_pkt(2, true, 200);
+    t.read();
+    assert_eq!(
+        t.relay.tick_counters().credits_coalesced,
+        1,
+        "request replacement stays active"
+    );
+    assert!(
+        !log.lines()
+            .iter()
+            .any(|line| line.contains("lock-step event ring")),
+        "default conn dump emission must do nothing: {:?}",
+        log.lines()
+    );
+}
+
+#[test]
+fn diagnostic_default_conn_silence_emits_no_ring_dump() {
+    let (mut t, _share) = T::with_share();
+    t.up_keep(TICK_CAPS);
+    t.tick_pkt(1, false, 100);
+    t.read();
+    let log = kf_broker::capture_log();
+    t.tick(51);
+    assert_eq!(
+        t.relay.tick_counters().silence_fallbacks,
+        1,
+        "silence fallback stays active"
+    );
+    assert!(
+        !log.lines()
+            .iter()
+            .any(|line| line.contains("lock-step event ring")),
+        "default conn dump emission must do nothing: {:?}",
+        log.lines()
+    );
+}
+
+// Fixture self-tests: a deliberate blocking-send mutant must fail, never strand a test process.
+fn assert_fake_full_retry_is_detected(accepted_first: usize) {
+    let wire = Rc::new(RefCell::new(Wire {
+        budget: Some(accepted_first),
+        ..Wire::default()
+    }));
+    let mut link = Fake(wire);
+    let socket = link.connect(Path::new("/run/test/display.sock")).unwrap();
+    let record = Cmd::no_change(7).encode();
+    for _ in 0..accepted_first {
+        assert_eq!(link.send(&socket, &record, None), Sent::Done);
+    }
+    let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+        for _ in 0..513 {
+            assert_eq!(link.send(&socket, &record, None), Sent::Full);
+        }
+    }));
+    assert!(
+        result.is_err(),
+        "the fixture must assert on a send retry loop, rather than let the mutant spin forever"
+    );
+}
+
+#[test]
+fn a_fake_socket_full_from_the_start_detects_a_retry_loop() {
+    assert_fake_full_retry_is_detected(0);
+}
+
+#[test]
+fn a_fake_socket_that_fills_after_success_detects_a_retry_loop() {
+    assert_fake_full_retry_is_detected(2);
 }

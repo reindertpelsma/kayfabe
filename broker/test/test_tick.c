@@ -559,6 +559,145 @@ static void test_invariants(void)
     CHECK(T.n_want == issued_want, "run: n_want counts the WANT ticks");
 }
 
+/* ★ MEASUREMENT: the per-second stats line is pure: deltas, one line per period, never a burst, the format is stable. */
+static void test_stats(void)
+{
+    struct nb_tick ST;
+    struct nb_tick_snap a, b;
+    uint64_t next = 0;
+    char buf[400];
+    const uint64_t P = NB_TICK_STATS_PERIOD_NS;
+
+    nb_tick_reset(&ST, true, 60);
+    nb_tick_snap_take(&ST, &a);
+    CHECK(!nb_tick_stats_due(5 * P, &next, P), "stats: the first call only arms");
+    CHECK(next == 6 * P, "stats: armed one period ahead");
+    CHECK(!nb_tick_stats_due(6 * P - 1, &next, P), "stats: not due a ns early");
+    CHECK(nb_tick_stats_due(6 * P, &next, P), "stats: due at the period");
+    CHECK(next == 7 * P, "stats: next is a period later");
+    CHECK(nb_tick_stats_due(20 * P, &next, P) && next == 21 * P, "stats: after a gap one line, then a period from now");
+    CHECK(!nb_tick_stats_due(20 * P + 1, &next, P), "stats: no catch-up burst");
+    ST.n_feedback = 61; ST.n_ticks = 60; ST.n_want = 50; ST.n_answered = 49; ST.n_no_change = 9;
+    ST.n_req_timeouts = 2; ST.n_late = 1; ST.n_unsolicited = 3; ST.n_present_timeouts = 0; ST.n_coalesced = 4;
+    nb_tick_snap_take(&ST, &b);
+    CHECK(nb_tick_stats_format(buf, sizeof(buf), 123456, &a, &b, &ST.win) > 0, "stats: formats");
+    CHECK(strstr(buf, "stats t=123456 feedbacks=61 ticks=60 want_ticks=50 commit=40 no_change=9 timeouts=2 late=1 "
+                      "unsolicited=3 present_timeouts=0 coalesced=4 gap_max_us=0 ") == buf, "stats: line is '%s'", buf);
+    /* the window: gaps, tick->answer and commit->present latencies, discards, loop stalls */
+    nb_tick_reset(&ST, true, 60);
+    nb_tick_win_gap(&ST, 16000000ull);
+    nb_tick_win_gap(&ST, 50000000ull);
+    nb_tick_win_gap(&ST, 34000000ull);
+    CHECK(ST.win.gap_max_ns == 50000000ull && ST.win.gap33 == 2, "win: max gap and gaps over 33 ms");
+    ST.last_seq = 7; ST.open_req = 7; ST.open_since_ns = 1000000000ull;
+    CHECK(nb_tick_answer(&ST, 7, true, 1004000000ull) == NB_TICK_ANS_OPEN, "win: answer");
+    CHECK(ST.win.ans_n == 1 && ST.win.ans_max_ns == 4000000ull, "win: tick->answer latency");
+    nb_tick_presented_at(&ST, 1021000000ull, false);
+    CHECK(ST.win.pres_n == 1 && ST.win.pres_max_ns == 17000000ull && !ST.unpresented, "win: commit->present latency");
+    ST.unpresented = true; ST.unpresented_since_ns = 1030000000ull;
+    nb_tick_presented_at(&ST, 1031000000ull, true);
+    CHECK(ST.win.discarded == 1 && ST.win.pres_n == 2, "win: a discard is counted and ends the wait");
+    nb_tick_win_loop(&ST, 3000000ull, 9000000ull);
+    nb_tick_win_loop(&ST, 1000000ull, 2000000ull);
+    CHECK(ST.win.loop_late_max_ns == 3000000ull && ST.win.loop_work_max_ns == 9000000ull, "win: loop maxima");
+    /* presents: NEW when a COMMIT was answered since the previous present, else a repeat; extra commits merge */
+    ST.commits_since_present = 1;
+    nb_tick_content_present(&ST, 1000000000ull);          /* new */
+    nb_tick_content_present(&ST, 1016000000ull);          /* repeat */
+    nb_tick_content_present(&ST, 1032000000ull);          /* repeat */
+    ST.commits_since_present = 1;
+    nb_tick_content_present(&ST, 1060000000ull);          /* new, 60 ms after the previous NEW one */
+    ST.commits_since_present = 3;
+    nb_tick_content_present(&ST, 1070000000ull);          /* new (two commits merged), 10 ms */
+    ST.commits_since_present = 1;
+    nb_tick_content_present(&ST, 1200000000ull);          /* new, 130 ms */
+    CHECK(ST.win.new_n == 4 && ST.win.repeat_n == 2 && ST.win.merged == 2, "content: new / repeat / merged (%llu %llu %llu)",
+          (unsigned long long)ST.win.new_n, (unsigned long long)ST.win.repeat_n, (unsigned long long)ST.win.merged);
+    CHECK(ST.win.cgap_max_ns == 130000000ull && ST.win.cg33 == 2 && ST.win.cg50 == 2 && ST.win.cg100 == 1,
+          "content: gap max and thresholds (%llu %llu %llu %llu)", (unsigned long long)ST.win.cgap_max_ns,
+          (unsigned long long)ST.win.cg33, (unsigned long long)ST.win.cg50, (unsigned long long)ST.win.cg100);
+    {
+        struct nb_tick S2;
+
+        nb_tick_reset(&S2, true, 60);
+        S2.last_seq = 3; S2.open_req = 3; S2.open_since_ns = 10;
+        CHECK(nb_tick_answer(&S2, 3, true, 20) == NB_TICK_ANS_OPEN && S2.commits_since_present == 1, "content: a COMMIT answer counts");
+        S2.last_seq = 4; S2.open_req = 4;
+        CHECK(nb_tick_answer(&S2, 4, false, 30) == NB_TICK_ANS_OPEN && S2.commits_since_present == 1, "content: NO_CHANGE is not content");
+    }
+    nb_tick_win_gap(&ST, 120000000ull);
+    CHECK(ST.win.gaps50 == 1 && ST.win.gaps100 == 1, "win: refresh gaps over 50 / 100 ms");
+    nb_tick_snap_take(&ST, &a);
+    nb_tick_snap_take(&ST, &b);
+    CHECK(nb_tick_stats_format(buf, sizeof(buf), 5, &a, &b, &ST.win) > 0 && strstr(buf, " new=4 repeat=2 merged=2 cgap_max_us=130000 cg33=2 cg50=2 cg100=1") != NULL, "content line is '%s'", buf);
+    CHECK(nb_tick_stats_format(buf, sizeof(buf), 5, &a, &b, &ST.win) > 0 && strstr(buf, "gap_max_us=120000 gaps33=3 discarded=1 ans_max_us=4000 ans_mean_us=4000 pres_max_us=17000 pres_mean_us=9000 loop_late_max_us=3000 loop_work_max_us=9000") != NULL, "win: line is '%s'", buf);
+    CHECK(nb_tick_stats_format(buf, 20, 1, &a, &b, &ST.win) == 0, "stats: a small buffer yields nothing, never a overrun");
+    CHECK(nb_tick_stats_format(buf, sizeof(buf), 1, &b, &b, &ST.win) > 0 && strstr(buf, "ticks=0 ") != NULL, "stats: no change, zero deltas");
+    CHECK(nb_tick_stats_format(buf, sizeof(buf), 1, &b, &a, &ST.win) > 0 && strstr(buf, "feedbacks=0 ") != NULL, "stats: a reset never underflows");
+}
+
+/* ★ review hitch-20261017 (2): a PUMP discard must not touch the request book.  The pump's feedback is the broker's own 1x1
+ * repeat commit; a discard of it says nothing about a COMMITted frame, so it must not clear `unpresented` (which holds WANT back
+ * until the frame is shown or the timeout) -- it is only counted, in its own field.  A FRAME's discard still ends the wait.
+ * EXPECTED RED on the commit that adds it (nb_tick_pump_discarded and the pump_discarded field do not exist yet: the build fails). */
+static void test_pump_discard(void)
+{
+    struct nb_tick P;
+    struct nb_tick_out o;
+    const uint64_t t0 = 1000000000ull;
+
+    nb_tick_reset(&P, true, 60);
+    nb_tick_prime(&P, t0, &o);
+    CHECK(nb_tick_answer(&P, o.tick_seq, true, t0 + 1000000ull) == NB_TICK_ANS_OPEN, "pump: the frame is answered");
+    CHECK(P.unpresented, "pump: the COMMITted frame is un-presented");
+    CHECK(!nb_tick_want(&P, t0 + 20000000ull), "pump: no WANT while the frame is un-presented");
+    nb_tick_pump_discarded(&P);
+    CHECK(P.unpresented, "pump: a pump discard does not end the wait for the frame");
+    CHECK(!nb_tick_want(&P, t0 + 20000000ull), "pump: a pump discard does not re-open WANT early");
+    CHECK(P.win.pump_discarded == 1 && P.win.discarded == 0, "pump: counted in its own field, not as a frame discard");
+    nb_tick_presented_at(&P, t0 + 30000000ull, true);
+    CHECK(!P.unpresented && P.win.discarded == 1, "pump: a FRAME's discard ends the wait and is counted");
+}
+
+/* ★ review hitch-20261017 (nits): the stats step is pure.  It arms and takes the baseline ONCE (what happened before arming is not
+ * in the first line), a line that does not fit leaves the window and the baseline untouched (a dropped line is not a reset), and the
+ * worst-case line (every counter at 2^64-1) fits the buffer the sink uses. */
+static void test_stats_step(void)
+{
+    struct nb_tick S;
+    struct nb_tick_snap prev;
+    uint64_t next = 0;
+    char buf[NB_TICK_STATS_LINE_MAX];
+    const uint64_t P = NB_TICK_STATS_PERIOD_NS;
+
+    nb_tick_reset(&S, true, 60);
+    S.n_ticks = 500; S.n_feedback = 500;                          /* before arming */
+    memset(&prev, 0, sizeof(prev));
+    CHECK(nb_tick_stats_step(&S, &prev, &next, 5 * P, buf, sizeof(buf)) == 0, "step: the arming call writes nothing");
+    CHECK(prev.ticks == 500, "step: the baseline is taken at arming");
+    S.n_ticks = 560; S.n_feedback = 560;
+    CHECK(nb_tick_stats_step(&S, &prev, &next, 5 * P + 1, buf, sizeof(buf)) == 0, "step: not due");
+    CHECK(prev.ticks == 500, "step: a non-due call does not move the baseline");
+    S.win.cg100 = 3;
+    CHECK(nb_tick_stats_step(&S, &prev, &next, 6 * P, buf, 20) == 0, "step: a line that does not fit is dropped");
+    CHECK(S.win.cg100 == 3 && prev.ticks == 500, "step: a dropped line resets nothing");
+    CHECK(nb_tick_stats_step(&S, &prev, &next, 7 * P, buf, sizeof(buf)) > 0, "step: the next line is written");
+    CHECK(strstr(buf, " ticks=60 ") != NULL && strstr(buf, "cg100=3") != NULL, "step: it counts since arming ('%s')", buf);
+    CHECK(S.win.cg100 == 0 && prev.ticks == 560, "step: a written line resets the window and moves the baseline");
+    {
+        struct nb_tick W;
+        struct nb_tick_snap z, mx;
+        uint64_t *f, *g;
+        size_t i;
+
+        nb_tick_reset(&W, true, 60);
+        memset(&z, 0, sizeof(z));
+        for (f = (uint64_t *)&mx, i = 0; i < sizeof(mx) / sizeof(uint64_t); i++) { f[i] = UINT64_MAX; }
+        for (g = (uint64_t *)&W.win, i = 0; i < sizeof(W.win) / sizeof(uint64_t); i++) { g[i] = UINT64_MAX; }
+        CHECK(nb_tick_stats_format(buf, sizeof(buf), UINT64_MAX, &z, &mx, &W.win) > 0, "step: the worst-case line fits NB_TICK_STATS_LINE_MAX");
+    }
+}
+
 int main(void)
 {
     test_div();
@@ -569,6 +708,9 @@ int main(void)
     test_answer();
     test_replace();
     test_invariants();
+    test_stats();
+    test_pump_discard();
+    test_stats_step();
     printf("test_tick: %u checks, %u failed\n", n_checks, n_fail);
     return n_fail ? 1 : 0;
 }

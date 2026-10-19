@@ -310,6 +310,9 @@ pub struct Relay {
     pub put_packet: Option<(MethodHeader, usize)>,
     /// The guest `GP_GET` last written back (what the guest sees; 0 at birth and after a source switch).
     pub written_get: u32,
+    /// Measurement only: retain GET progress until the real guest-visible ring is full.
+    #[cfg(feature = "diag-get-writeback")]
+    pub diag_full_ring_get: bool,
     /// The guest `GP_GET` after this entry.
     pub next_get: u32,
     /// The decoded entry.
@@ -363,6 +366,8 @@ impl Relay {
             lazy: Lazy::new(LazyConfig::OFF),
             put_packet: None,
             written_get: 0,
+            #[cfg(feature = "diag-get-writeback")]
+            diag_full_ring_get: false,
             next_get: 0,
             desc: None,
             words: Vec::new(),
@@ -385,6 +390,41 @@ impl Relay {
     pub fn with_lazy(mut self, cfg: LazyConfig) -> Self {
         self.lazy = Lazy::new(cfg);
         self
+    }
+
+    /// Opt in at birth to the full-ring-only GET measurement. No success is
+    /// reported for a suppressed store; `written_get` always remains the real value.
+    #[cfg(feature = "diag-get-writeback")]
+    #[must_use]
+    pub fn with_full_ring_get(mut self, on: bool) -> Self {
+        self.diag_full_ring_get = on;
+        self
+    }
+
+    fn defer_guest_get(&self) -> bool {
+        #[cfg(feature = "diag-get-writeback")]
+        {
+            self.diag_full_ring_get && !self.put_full
+        }
+        #[cfg(not(feature = "diag-get-writeback"))]
+        {
+            false
+        }
+    }
+
+    fn diagnostic_get_key(&self) -> &'static str {
+        #[cfg(feature = "diag-get-writeback")]
+        {
+            if self.diag_full_ring_get {
+                "|get=full"
+            } else {
+                ""
+            }
+        }
+        #[cfg(not(feature = "diag-get-writeback"))]
+        {
+            ""
+        }
     }
 
     /// Everything that decides behaviour, none of the counters (model checking).
@@ -421,6 +461,7 @@ impl Relay {
             self.written_get,
             u8::from(self.put_full),
         ) + &self.lazy.key()
+            + self.diagnostic_get_key()
     }
 
     /// Start a turn.
@@ -450,6 +491,10 @@ impl Relay {
         self.grace.clear();
         self.guest_get = None;
         self.written_get = 0;
+        #[cfg(feature = "diag-get-writeback")]
+        if self.diag_full_ring_get {
+            self.put_full = false;
+        }
         self.life.source_switched();
         // the new ring may have a LOWER `GP_PUT`: nothing remembered about the old one is valid (it would also miss by
         // generation, which is belt and braces)
@@ -557,7 +602,11 @@ impl Relay {
                 Ok(Step::More)
             }
             Phase::Wb => {
-                if let Some((generation, get)) = self.guest_get {
+                // Keep the actual guest-visible cursor and owed progress when a
+                // measurement suppresses a store. A busy real store is still contention.
+                if !self.defer_guest_get()
+                    && let Some((generation, get)) = self.guest_get
+                {
                     if generation == self.generation {
                         if io.write_guest_get(get)? {
                             self.written_get = get;
@@ -660,6 +709,15 @@ impl Relay {
         if self.put_full {
             // D6: the guest may be blocked on the write-back this turn did not make
             self.lazy.ring_full_seen();
+        }
+        // A newly seen full ring can require a store this turn's Wb deferred.
+        // Service it BEFORE loading an entry that may gate on that same guest.
+        // This uses the PUT already obtained by the normal doorbell-driven turn;
+        // there is no additional idle PUT poll or new timer/wake source.
+        #[cfg(feature = "diag-get-writeback")]
+        if self.diag_full_ring_get && self.put_full && self.guest_get.is_some() {
+            self.phase = Phase::Wb;
+            return Ok(Step::More);
         }
         let known = matches!(self.life.mode(), Mode::Scan | Mode::Window);
         self.put_packet = known.then(|| self.scan.carried()).flatten();

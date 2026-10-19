@@ -333,6 +333,51 @@ mod diag_full_ring_get {
         assert_eq!(r.guest_get, None);
         assert_eq!(io.count(&Call::WriteGuestGet(2)), 1);
     }
+
+    fn switch_drops_old_fullness(entries: u32) {
+        let mut io = Mock::new(entries, 512);
+        let mut r = experiment(&mut io);
+        r.put_full = true;
+        r.guest_get = Some((r.generation, 2));
+        r.switch_source(r.generation + 1);
+        assert!(
+            !r.put_full,
+            "old-ring fullness cannot authorize a new-ring store"
+        );
+        assert_eq!(r.guest_get, None);
+        assert_eq!(r.written_get, 0);
+        r.guest_get = Some((r.generation, 1));
+        r.phase = Phase::Wb;
+        io.calls.clear();
+        r.step(&mut io).unwrap();
+        assert_eq!(io.count_writebacks(), 0);
+        assert_eq!(r.written_get, 0);
+        assert_eq!(r.guest_get, Some((r.generation, 1)));
+    }
+
+    #[test]
+    fn switching_a_small_source_cannot_carry_its_full_ring_permission() {
+        switch_drops_old_fullness(8);
+    }
+
+    #[test]
+    fn switching_a_large_source_cannot_carry_its_full_ring_permission() {
+        switch_drops_old_fullness(32768);
+    }
+
+    #[test]
+    fn the_off_key_is_unchanged_and_the_on_key_distinguishes_the_experiment() {
+        let io = Mock::new(64, 512);
+        let r = relay(&io, LazyConfig::OFF);
+        let off = r.state_key();
+        assert!(
+            !off.contains("|get="),
+            "the base golden key must stay unchanged"
+        );
+        let on = r.with_full_ring_get(true);
+        assert_ne!(on.state_key(), off);
+        assert_eq!(on.with_full_ring_get(false).state_key(), off);
+    }
 }
 
 /// Run `n` turns, returning per turn whether it read the private `USERD`, `GP_PUT`, and whether the guest ring looked full.

@@ -14,6 +14,8 @@ kf-core.workspace = true
 kf-chip.workspace = true
 
 [features]
+# P1 measurement only. Production excludes its field and decisions entirely.
+diag-get-writeback = []
 # Test-only: deliberate defects of the lifecycle machine, for the mutation checks
 # (`tests/user_lifecycle_mutants.rs`, `docs/design/V3_USER_RING_LIFECYCLE_20261016.md` section 8).
 # Never enabled by another crate.

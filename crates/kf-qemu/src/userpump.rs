@@ -964,6 +964,20 @@ impl kf_chan::user_turn::Io for PumpIo<'_> {
     }
 }
 
+#[cfg(feature = "diag-get-writeback")]
+fn diagnostic_get_mode(core: kf_chan::user_turn::Relay) -> kf_chan::user_turn::Relay {
+    let on = std::env::var("KF3_DIAG_GP_GET_FULL_ONLY").as_deref() == Ok("1");
+    if on {
+        eprintln!("kf3: DIAG_GP_GET_FULL_ONLY enabled; measurement only");
+    }
+    core.with_full_ring_get(on)
+}
+
+#[cfg(not(feature = "diag-get-writeback"))]
+fn diagnostic_get_mode(core: kf_chan::user_turn::Relay) -> kf_chan::user_turn::Relay {
+    core
+}
+
 impl Pump {
     pub(super) fn new(me: &ChanPlane, subdevice_id: u32, key: (u32, u32)) -> Result<Self, String> {
         let scan = if userrelay::shadow_enabled() {
@@ -981,15 +995,17 @@ impl Pump {
             .map_err(|e| format!("USER_RING_CACHE {e:?}"))?,
             ram_generation: me.ram.try_generation().ok_or("USER_RING_RAM_TOPOLOGY")?,
             source_admitted: false,
-            core: kf_chan::user_turn::Relay::new(
-                kf_chan::user_storage::ENTRIES,
-                kf_chan::user_lifecycle::Lifecycle::new()
-                    .with_mode(lifecycle_mode())
-                    .with_latch(me.relay_stats.life.latch.clone()),
-                scan,
-            )
-            .map_err(str::to_owned)?
-            .with_lazy(lazy_config()),
+            core: diagnostic_get_mode(
+                kf_chan::user_turn::Relay::new(
+                    kf_chan::user_storage::ENTRIES,
+                    kf_chan::user_lifecycle::Lifecycle::new()
+                        .with_mode(lifecycle_mode())
+                        .with_latch(me.relay_stats.life.latch.clone()),
+                    scan,
+                )
+                .map_err(str::to_owned)?
+                .with_lazy(lazy_config()),
+            ),
             shadow: userrelay::shadow_enabled()
                 .then(|| super::usershadow::Shadow::new(subdevice_id)),
             key,

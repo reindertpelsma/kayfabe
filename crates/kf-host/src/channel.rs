@@ -28,6 +28,9 @@ use kf_abi::submit::{
 };
 
 /// `NV01_CONTEXT_DMA` (`ogkm-580: class/cl0002.h:40`).
+/// A ctxshare was asked for with `hVASpace = 0`: refused before any host call (probe 42: it would
+/// allocate and its channel would never fetch, silently).
+pub const CTXSHARE_NEEDS_VASPACE: u32 = 0x4B7A;
 /// `NVOS04_FLAGS_CHANNEL_DENY_PHYSICAL_MODE_CE_TRUE` at `7:7` (`ogkm-580 alloc_channel.h:168-170`).
 pub const NVOS04_FLAGS_CHANNEL_DENY_PHYSICAL_MODE_CE_TRUE: u32 = 1 << 7;
 /// `NVOS04_FLAGS_PRIVILEGED_CHANNEL_TRUE` at `5:5` (`ogkm-580: alloc_channel.h:141-143`) — the bit
@@ -575,6 +578,86 @@ pub fn channel_alloc_request_with(
         userd_offset_0: ring.userd_offset,
         engine_type,
     }
+}
+
+/// `NVOS04_FLAGS_GROUP_CHANNEL_RUNQUEUE_ONE` at `4:4` (`ogkm-580 alloc_channel.h:130-132`).
+pub const NVOS04_FLAGS_GROUP_CHANNEL_RUNQUEUE_ONE: u32 = 1 << 4;
+
+/// ★ tsg-mirror: the two subcontext kinds a host context share can be (`FERMI_CONTEXT_SHARE_A`
+/// `flags` 1:0 = SYNC 0 / ASYNC 1, `ogkm-580 nvos.h:3226-3245`). The guest's richer flag values
+/// (`SPECIFIED`, `ASYNC_PREFER_LOWER`) are decoded to one of these by the caller; the host picks
+/// the VEID, so the guest can never name one.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
+pub enum SubctxKind {
+    /// VEID 0, the one subcontext that may hold every engine.
+    Sync,
+    /// Any free VEID (highest first).
+    Async,
+}
+
+impl SubctxKind {
+    /// The `flags` word of `NV_CTXSHARE_ALLOCATION_PARAMETERS`.
+    #[must_use]
+    pub const fn flags(self) -> u32 {
+        match self {
+            Self::Sync => 0,
+            Self::Async => 1,
+        }
+    }
+}
+
+/// ★ tsg-mirror: a born host context share.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct CtxShare {
+    /// The host object.
+    pub handle: u32,
+    /// The VEID host RM chose (`subctxId` in the alloc reply; `PREFER_LOWER` is never asked for).
+    pub veid: u32,
+}
+
+/// ★ tsg-mirror: where a channel is born inside its host TSG: a host context share and the
+/// runqueue bit (the only guest channel flag that reaches the host, besides the kf3 belt).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct Placement {
+    /// The host `FERMI_CONTEXT_SHARE_A` the channel names (`hContextShare`).
+    pub ctxshare: u32,
+    /// `GROUP_CHANNEL_RUNQUEUE = ONE`.
+    pub runqueue1: bool,
+}
+
+/// ★ tsg-mirror: [`channel_alloc_request_with`] for a channel placed in a host context share.
+/// `None` is exactly [`channel_alloc_request_with`]. The flag word is BUILT here: the belt, and the
+/// runqueue bit iff asked - nothing else can be set through this function.
+#[must_use]
+pub fn channel_alloc_request_placed(
+    ring: &RingSpec,
+    engine_type: u32,
+    deny_physical_ce: bool,
+    place: Option<Placement>,
+) -> ChannelAllocParams {
+    let mut r = channel_alloc_request_with(ring, engine_type, deny_physical_ce);
+    if let Some(p) = place {
+        r.h_context_share = p.ctxshare;
+        if p.runqueue1 {
+            r.flags |= NVOS04_FLAGS_GROUP_CHANNEL_RUNQUEUE_ONE;
+        }
+    }
+    r
+}
+
+/// ★ tsg-mirror: the `NV_CTXSHARE_ALLOCATION_PARAMETERS` image kf3 sends: `hVASpace` @0, `flags` @4,
+/// `subctxId` @8 (always 0: the host chooses).
+#[must_use]
+pub fn ctxshare_request(space: u32, kind: SubctxKind) -> [u8; 12] {
+    let mut b = [0u8; 12];
+    kf_abi::generated::classes::NvCtxshareAllocationParameters {
+        h_va_space: space,
+        flags: kind.flags(),
+        subctx_id: 0,
+    }
+    .encode_into(&mut b)
+    .expect("12 bytes hold the 12-byte struct");
+    b
 }
 
 /// What RM stamped on a channel kf3 births, read from the alloc **reply**.
@@ -1307,6 +1390,7 @@ impl HostRm {
             first,
             PhysicalCeBelt::Deny,
             Some(subdevice_id),
+            None,
         )
     }
 
@@ -1345,11 +1429,20 @@ impl HostRm {
     /// # Errors
     /// The host's refusal.
     pub fn birth_group(&self, space: VaSpace, engine_type: u32) -> Result<u32, RmError> {
+        self.birth_group_in(space.space, engine_type)
+    }
+
+    /// [`HostRm::birth_group`] over a VA space named by its handle (`VaSpace::space`) - the form the
+    /// tsg-mirror seam uses.
+    ///
+    /// # Errors
+    /// The host's refusal.
+    pub fn birth_group_in(&self, space: u32, engine_type: u32) -> Result<u32, RmError> {
         let mut tsg_params = [0u8; NvChannelGroupAllocationParameters::SIZE];
         NvChannelGroupAllocationParameters {
             h_object_error: 0,
             h_object_ecc_error: 0,
-            h_va_space: space.space,
+            h_va_space: space,
             engine_type,
             b_is_calling_context_vgpu_plugin: 0,
         }
@@ -1390,7 +1483,76 @@ impl HostRm {
         first: bool,
         belt: PhysicalCeBelt,
     ) -> Result<Channel, RmError> {
-        self.birth_member_profile(tsg, engine_type, ring, first, belt, None)
+        self.birth_member_profile(tsg, engine_type, ring, first, belt, None, None)
+    }
+
+    /// ★ tsg-mirror: [`HostRm::birth_member`] for a channel placed in a host context share of its
+    /// group, optionally on the second runqueue and with a private-ring `subDeviceId`. The flag word
+    /// is built by [`channel_alloc_request_placed`] (belt + runqueue only); everything else is as
+    /// [`HostRm::birth_member`], including the `USER` reply check.
+    ///
+    /// # Errors
+    /// As [`HostRm::birth_member`].
+    pub fn birth_member_placed(
+        &self,
+        tsg: u32,
+        engine_type: u32,
+        ring: RingSpec,
+        first: bool,
+        subdevice_id: Option<u32>,
+        place: Placement,
+    ) -> Result<Channel, RmError> {
+        self.birth_member_profile(
+            tsg,
+            engine_type,
+            ring,
+            first,
+            PhysicalCeBelt::Deny,
+            subdevice_id,
+            Some(place),
+        )
+    }
+
+    /// ★ tsg-mirror: a host `FERMI_CONTEXT_SHARE_A` (a subcontext) under the group `tsg`, in the VA
+    /// space `space` (a host VA space handle, NEVER 0: `[measured probe 42]` a ctxshare with
+    /// `hVASpace = 0` allocates and its channel never fetches). The VEID is host RM's choice, read
+    /// back from the reply; the guest cannot name one.
+    ///
+    /// # Errors
+    /// The host's refusal (`NV_ERR_NO_MEMORY` when the group's 64 VEIDs are spent).
+    pub fn alloc_ctxshare(
+        &self,
+        tsg: u32,
+        space: u32,
+        kind: SubctxKind,
+    ) -> Result<CtxShare, RmError> {
+        if space == 0 {
+            return Err(RmError::Other(CTXSHARE_NEEDS_VASPACE));
+        }
+        let mut params = ctxshare_request(space, kind);
+        let want = self.mint();
+        let handle = self.raw_alloc(
+            tsg,
+            want,
+            kf_abi::invariant_classes::CONTEXT_SHARE,
+            Some(kf_abi::hostabi::HostParams::Measured(
+                &kf_abi::generated::matrix::NV_CTXSHARE_ALLOCATION_PARAMETERS,
+            )),
+            &mut params,
+        )?;
+        self.remember(handle, tsg);
+        let veid = kf_abi::generated::classes::NvCtxshareAllocationParameters::decode(&params)
+            .map_or(u32::MAX, |p| p.subctx_id);
+        Ok(CtxShare { handle, veid })
+    }
+
+    /// Free a host context share (after its channels: `[measured probe 95]` freeing it under a live
+    /// channel kills the channel silently).
+    ///
+    /// # Errors
+    /// The host's status.
+    pub fn free_ctxshare(&self, ctxshare: u32) -> Result<(), RmError> {
+        self.free(ctxshare)
     }
 
     fn birth_member_profile(
@@ -1401,11 +1563,12 @@ impl HostRm {
         first: bool,
         belt: PhysicalCeBelt,
         subdevice_id: Option<u32>,
+        place: Option<Placement>,
     ) -> Result<Channel, RmError> {
         if !ring.userd_offset.is_multiple_of(USERD_ALIGNMENT) {
             return Err(RmError::Other(USERD_OFFSET_MISALIGNED));
         }
-        let request = channel_alloc_request_with(&ring, engine_type, belt.denied());
+        let request = channel_alloc_request_placed(&ring, engine_type, belt.denied(), place);
         let mut chan_params = [0u8; ChannelAllocParams::SIZE];
         let encoded = if let Some(id) = subdevice_id {
             if id == 0 || !id.is_power_of_two() || id & !0xfff != 0 {
@@ -1910,6 +2073,28 @@ impl HostRm {
         .encode_into(&mut params)
         .map_err(|_| RmError::Other(ABI_ENCODE_FAILED))?;
         self.raw_control(chan.tsg, NVA06C_CTRL_CMD_GPFIFO_SCHEDULE, &mut params)
+    }
+
+    /// ★ tsg-mirror: `NVA06F_CTRL_CMD_GPFIFO_SCHEDULE` (`0xa06f0103`) on the CHANNEL, `bEnable = enable`.
+    /// `[measured probe 98]` with several subcontexts in one host TSG this stops (and restarts) exactly
+    /// that channel, where the TSG-level verb is not a stop at all (probe 97, 9a).
+    ///
+    /// # Errors
+    /// The host's status.
+    pub fn schedule_channel_enable(&self, chan: Channel, enable: bool) -> Result<(), RmError> {
+        let mut params = [0u8; GpfifoScheduleParams::SIZE];
+        GpfifoScheduleParams {
+            b_enable: u8::from(enable),
+            b_skip_submit: 0,
+            b_skip_enable: 0,
+        }
+        .encode_into(&mut params)
+        .map_err(|_| RmError::Other(ABI_ENCODE_FAILED))?;
+        self.raw_control(
+            chan.chan,
+            kf_abi::submit::NVA06F_CTRL_CMD_GPFIFO_SCHEDULE,
+            &mut params,
+        )
     }
 
     /// ★★★ v3-chanctl — `NVA06C_CTRL_CMD_PREEMPT` (`0xa06c0105`) on the channel's own host
@@ -3496,5 +3681,140 @@ mod reaper_tests {
             }
         }
         assert_eq!(got, vec![0, 1, 2, 3]);
+    }
+}
+
+#[cfg(test)]
+mod tsg_mirror_tests {
+    use super::{
+        NVOS04_FLAGS_CHANNEL_DENY_PHYSICAL_MODE_CE_TRUE, NVOS04_FLAGS_GROUP_CHANNEL_RUNQUEUE_ONE,
+        Placement, RingSpec, SubctxKind, channel_alloc_request_placed, channel_alloc_request_with,
+        ctxshare_request,
+    };
+
+    fn ring() -> RingSpec {
+        RingSpec {
+            gp_fifo_va: 0x1_0000_0000,
+            gp_fifo_entries: 512,
+            userd_memory: 0xcafe_0001,
+            userd_offset: 0x200,
+            err_notifier: 0x77,
+        }
+    }
+
+    /// `None` is the base request, field for field (legacy births must stay bit-identical).
+    #[test]
+    fn no_placement_is_the_base_request() {
+        for deny in [true, false] {
+            for engine in [1u32, 0xb, 0x2a] {
+                assert_eq!(
+                    channel_alloc_request_placed(&ring(), engine, deny, None),
+                    channel_alloc_request_with(&ring(), engine, deny)
+                );
+            }
+        }
+    }
+
+    /// A placed channel names its ctxshare, keeps `hVASpace` 0 (a TSG channel must not name one:
+    /// probe 42/43), sets the runqueue bit iff asked and no other bit.
+    #[test]
+    fn a_placement_sets_the_ctxshare_and_only_the_runqueue_bit() {
+        let rq0 = channel_alloc_request_placed(
+            &ring(),
+            1,
+            true,
+            Some(Placement {
+                ctxshare: 0xabc,
+                runqueue1: false,
+            }),
+        );
+        assert_eq!(rq0.h_context_share, 0xabc);
+        assert_eq!(rq0.h_va_space, 0);
+        assert_eq!(rq0.flags, NVOS04_FLAGS_CHANNEL_DENY_PHYSICAL_MODE_CE_TRUE);
+        let rq1 = channel_alloc_request_placed(
+            &ring(),
+            1,
+            true,
+            Some(Placement {
+                ctxshare: 0xabc,
+                runqueue1: true,
+            }),
+        );
+        assert_eq!(
+            rq1.flags,
+            NVOS04_FLAGS_CHANNEL_DENY_PHYSICAL_MODE_CE_TRUE
+                | NVOS04_FLAGS_GROUP_CHANNEL_RUNQUEUE_ONE
+        );
+        assert_eq!(
+            rq1.flags & 0xffff_ff2f,
+            NVOS04_FLAGS_CHANNEL_DENY_PHYSICAL_MODE_CE_TRUE & 0xffff_ff2f
+        );
+        // the ring parameters are untouched
+        assert_eq!(rq1.gp_fifo_offset, ring().gp_fifo_va);
+        assert_eq!(rq1.h_userd_memory_0, ring().userd_memory);
+        assert_eq!(rq1.userd_offset_0, ring().userd_offset);
+        assert_eq!(rq1.h_object_error, ring().err_notifier);
+        assert_eq!(rq1.engine_type, 1);
+    }
+
+    /// The privileged bit can never be produced through a placement.
+    #[test]
+    fn a_placement_never_produces_the_privileged_bit() {
+        for rq in [false, true] {
+            for deny in [false, true] {
+                let r = channel_alloc_request_placed(
+                    &ring(),
+                    1,
+                    deny,
+                    Some(Placement {
+                        ctxshare: 1,
+                        runqueue1: rq,
+                    }),
+                );
+                assert_eq!(r.flags & (1 << 5), 0);
+                assert_eq!(r.flags & !((1 << 7) | (1 << 4)), 0);
+            }
+        }
+    }
+
+    /// On the wire: flags @20 carry bit 4, hContextShare @24 the ctxshare, hVASpace @28 stays 0.
+    #[test]
+    fn a_placed_request_encodes_the_runqueue_bit_and_ctxshare_on_the_wire() {
+        let r = channel_alloc_request_placed(
+            &ring(),
+            1,
+            true,
+            Some(Placement {
+                ctxshare: 0x1234,
+                runqueue1: true,
+            }),
+        );
+        let mut b = [0u8; kf_abi::submit::ChannelAllocParams::SIZE];
+        r.encode_into(&mut b).unwrap();
+        assert_eq!(
+            u32::from_le_bytes(b[20..24].try_into().unwrap()),
+            (1 << 7) | (1 << 4)
+        );
+        assert_eq!(u32::from_le_bytes(b[24..28].try_into().unwrap()), 0x1234);
+        assert_eq!(u32::from_le_bytes(b[28..32].try_into().unwrap()), 0);
+    }
+
+    #[test]
+    fn ctxshare_kind_flags_are_the_two_documented_values() {
+        assert_eq!(SubctxKind::Sync.flags(), 0);
+        assert_eq!(SubctxKind::Async.flags(), 1);
+    }
+
+    /// `hVASpace` @0, `flags` @4, `subctxId` @8 = 0 (the guest never names a VEID).
+    #[test]
+    fn ctxshare_request_layout() {
+        let a = ctxshare_request(0x1122_3344, SubctxKind::Async);
+        assert_eq!(&a[0..4], &0x1122_3344u32.to_le_bytes());
+        assert_eq!(&a[4..8], &1u32.to_le_bytes());
+        assert_eq!(&a[8..12], &0u32.to_le_bytes());
+        let s = ctxshare_request(0x55, SubctxKind::Sync);
+        assert_eq!(&s[0..4], &0x55u32.to_le_bytes());
+        assert_eq!(&s[4..8], &0u32.to_le_bytes());
+        assert_eq!(&s[8..12], &0u32.to_le_bytes());
     }
 }

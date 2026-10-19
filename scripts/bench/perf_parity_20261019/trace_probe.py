@@ -16,6 +16,7 @@ import sys
 import time
 
 import host_measure
+import iteration_hops
 
 
 def main():
@@ -31,6 +32,7 @@ def main():
     root = args.root.resolve(strict=True)
     if root != Path('/data/codex-P1') or not (root / 'GPU_LEASE_HELD').is_file():
         parser.error('P1 lease is required')
+    host_measure.require_lease(root)
     if not re.fullmatch(r'[a-zA-Z0-9_-]+', args.tag):
         parser.error('unsafe tag')
     binary = args.binary.resolve(strict=True)
@@ -56,6 +58,12 @@ def main():
                 f'uretprobe:{binary}:{address} /pid == {args.qpid}/ {{ delete(@p1_latch[tid]); }}\n'
                 f'tracepoint:syscalls:sys_enter_write /pid == {args.qpid} && @p1_latch[tid]/ {{ '
                 'printf("J %llu %d fd=%d n=%d\\n", nsecs, tid, args->fd, args->count); }\n')
+    program += (f'tracepoint:syscalls:sys_enter_write /pid == {args.qpid} && args->count == 8/ {{ '
+                'printf("K %llu %d %s fd=%d n=%d\\n", nsecs, tid, comm, args->fd, args->count); }\n')
+    clocks = [line.split()[0] for line in symbols if line.endswith('9ChanPlane10nsi_now_ns')]
+    if len(clocks) == 1:
+        program += (f'uretprobe:{binary}:0x{clocks[0]} /pid == {args.qpid}/ {{ '
+                    'printf("T %llu %d nsi_ns=%llu\\n", nsecs, tid, retval); }\n')
     (destination / 'trace.bt').write_text(program)
     outputs = [open(destination / 'trace.txt', 'w'), open(destination / 'trace.err', 'w')]
     tracer = subprocess.Popen(['bpftrace', str(destination / 'trace.bt')], stdout=outputs[0], stderr=outputs[1],
@@ -74,7 +82,7 @@ def main():
             observer_outputs = [open(destination / 'fence.log', 'w')]
             observer = subprocess.Popen(
                 [str(root / 'fencepoll'), str(args.qpid), descriptors[0].name,
-                 '0x5A5A5A5A', '0xC8', '20', str(destination / 'fence.txt')],
+                 hex(host_measure.fence_high(args.tag)), '0xC8', '20', str(destination / 'fence.txt')],
                 stdout=observer_outputs[0], stderr=subprocess.STDOUT,
             )
         (destination / 'observers.json').write_text(json.dumps({
@@ -98,6 +106,13 @@ def main():
     error = (destination / 'trace.err').read_text()
     if re.search(r'lost|ERROR|failed', error, re.IGNORECASE):
         raise RuntimeError('BPF loss/error: trace cannot support a complete event census')
+    if args.fence:
+        analysis = iteration_hops.analyze(root / args.tag, destination)
+        (destination / 'hops.json').write_text(json.dumps(analysis, indent=2))
+        calibration = {'qpid': args.qpid,
+                       'proc_start': Path(f'/proc/{args.qpid}/stat').read_text().split()[21],
+                       'analysis': analysis}
+        (root / (args.tag + '_clock.json')).write_text(json.dumps(calibration, indent=2))
     print('P1_TRACE_COMPLETE', destination, flush=True)
 
 

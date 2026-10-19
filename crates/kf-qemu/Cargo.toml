@@ -12,6 +12,7 @@ crate-type = ["rlib", "staticlib"]
 # P1 measurement hooks are absent from production builds. Runtime opt-in is also required.
 default = []
 diag-nsi = []
+diag-get-writeback = ["kf-chan/diag-get-writeback"]
 
 [dependencies]
 kf-abi.workspace = true

@@ -1,0 +1,121 @@
+{
+  "status": "MEASURED: all mutants killed; source restored after each run",
+  "mutants": [
+    {
+      "mutant": "default_on",
+      "failed_tests": [
+        "unset_and_non_one_values_leave_the_trace_unallocated_and_silent",
+        "mixed_event_streams_match_an_independent_tail_oracle_in_both_modes"
+      ],
+      "kills": 2
+    },
+    {
+      "mutant": "unbounded_tail",
+      "failed_tests": [
+        "the_trace_retains_a_bounded_tail_instead_of_filling_during_boot",
+        "mixed_event_streams_match_an_independent_tail_oracle_in_both_modes"
+      ],
+      "kills": 2
+    },
+    {
+      "mutant": "source_collapsed",
+      "failed_tests": [
+        "a_host_edge_keeps_source_time_vector_arming_and_decision",
+        "mixed_event_streams_match_an_independent_tail_oracle_in_both_modes"
+      ],
+      "kills": 2
+    },
+    {
+      "mutant": "snapshot_duplicated",
+      "failed_tests": [
+        "finishing_twice_does_not_duplicate_output_and_later_edges_do_not_grow_it",
+        "mixed_event_streams_match_an_independent_tail_oracle_in_both_modes"
+      ],
+      "kills": 2
+    },
+    {
+      "mutant": "eager",
+      "failed_tests": [
+        "diag_full_ring_get::successive_non_full_pops_do_not_fake_acknowledgement_or_lose_the_latest_get",
+        "diag_full_ring_get::a_non_full_ring_keeps_its_visible_get_and_pending_real_progress",
+        "diag_full_ring_get::switching_a_large_source_cannot_carry_its_full_ring_permission",
+        "diag_full_ring_get::switching_a_small_source_cannot_carry_its_full_ring_permission"
+      ],
+      "kills": 4
+    },
+    {
+      "mutant": "never_flush",
+      "failed_tests": [
+        "diag_full_ring_get::a_new_full_small_ring_flushes_pending_get_before_entry_or_gate_work",
+        "diag_full_ring_get::a_new_full_large_ring_flushes_pending_get_before_entry_or_gate_work"
+      ],
+      "kills": 2
+    },
+    {
+      "mutant": "missing_first_full_guard",
+      "failed_tests": [
+        "diag_full_ring_get::a_new_full_small_ring_flushes_pending_get_before_entry_or_gate_work",
+        "diag_full_ring_get::a_new_full_large_ring_flushes_pending_get_before_entry_or_gate_work"
+      ],
+      "kills": 2
+    },
+    {
+      "mutant": "stale_source_fullness",
+      "failed_tests": [
+        "diag_full_ring_get::switching_a_small_source_cannot_carry_its_full_ring_permission",
+        "diag_full_ring_get::switching_a_large_source_cannot_carry_its_full_ring_permission"
+      ],
+      "kills": 2
+    },
+    {
+      "mutant": "off_key_changed",
+      "failed_tests": [
+        "diag_full_ring_get::the_off_key_is_unchanged_and_the_on_key_distinguishes_the_experiment",
+        "lazy_off_is_bit_identical_to_the_base_relay_over_a_long_randomised_sequence"
+      ],
+      "kills": 2
+    },
+    {
+      "mutant": "stats_replayed",
+      "failed_tests": [
+        "appended_stats_checkpoints_keep_exact_ids_and_later_edges",
+        "one_stats_checkpoint_is_idempotent_and_does_not_freeze_tracing"
+      ],
+      "kills": 2
+    },
+    {
+      "mutant": "stats_freezes_trace",
+      "failed_tests": [
+        "appended_stats_checkpoints_keep_exact_ids_and_later_edges",
+        "one_stats_checkpoint_is_idempotent_and_does_not_freeze_tracing"
+      ],
+      "kills": 2
+    },
+    {
+      "mutant": "disabled_stats_active",
+      "failed_tests": [
+        "a_non_one_trace_setting_never_observes_an_existing_stats_request",
+        "unset_trace_never_observes_an_existing_stats_request"
+      ],
+      "kills": 2
+    },
+    {
+      "mutant": "acknowledges_failed_output",
+      "failed_tests": [
+        "a_failed_private_counter_write_does_not_acknowledge_the_request",
+        "a_failed_private_counter_file_open_does_not_acknowledge_the_request"
+      ],
+      "kills": 2
+    },
+    {
+      "mutant": "stats_uses_shared_stderr",
+      "failed_tests": [
+        "a_failed_private_counter_file_open_does_not_acknowledge_the_request",
+        "a_failed_private_counter_write_does_not_acknowledge_the_request",
+        "appended_stats_checkpoints_keep_exact_ids_and_later_edges",
+        "one_stats_checkpoint_is_idempotent_and_does_not_freeze_tracing"
+      ],
+      "kills": 4
+    }
+  ]
+}

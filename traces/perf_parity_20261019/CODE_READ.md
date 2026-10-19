@@ -1,3 +1,5 @@
+UPDATE 2026-10-19: source baseline is now mirror `c2685412e` (binary code `0d7ba7438`) per coordinator. The diagnostic dump and live counter output use drainer-only private files; shared stderr is excluded from those methods by a failing-first test. Rust documents synchronized stderr access ([standard library](https://doc.rust-lang.org/std/io/struct.Stderr.html)). The implementation choices/validation are in `BASELINE_UPDATE.md` and the current stage report. Historical production source findings below remain identified by their source revision.
+
 # P1 source findings before hardware
 
 STATUS: RESEARCH, 2026-10-18. CODE READ unless otherwise labelled. Source: production `0452613b5`.

@@ -104,9 +104,15 @@ fn a_counter_request_is_idempotent_and_independent_of_trace_freezing() {
 fn diagnostic_dump_io_cannot_take_the_shared_stderr_lock() {
     let trace = include_str!("../src/nsitrace.rs");
     let dump = trace.split_once("pub fn poll_dump(").unwrap().1;
-    assert!(!dump.contains("eprintln!"), "drainer dump must use a private file sink");
+    assert!(
+        !dump.contains("eprintln!"),
+        "drainer dump must use a private file sink"
+    );
     assert!(dump.contains("File::create"));
     let device = include_str!("../src/device.rs");
     let callback = body(device, "nsi_trace.poll_stats(", "self.chans.pt_summary()");
-    assert!(!callback.contains("eprintln!"), "counter output must use the same private sink rule");
+    assert!(
+        !callback.contains("eprintln!"),
+        "counter output must use the same private sink rule"
+    );
 }

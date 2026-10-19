@@ -1,5 +1,7 @@
 # V3 display — a virtual NVIDIA display the stock driver drives, scanned out by kayfabe
 
+**STATUS: LIVE, 2026-10-18 — §4.11.13 gains the boot-range cleanliness rule (below it: `bootclean`): the boot layer is shown only while store `[0, G)` is clean.** Measured on run 3081: the stripes on the boot screen and after an unload are the guest RM's own GPU-written vidmem, drawn as pixels — the region table declares `[0, carve)` as heap unless the guest reserves a console (Windows sent none), so the RM allocates the same low addresses every life, while the boot layer kept scanning `[0, G)` until a head was armed. Every Windows unload of the run also had its re-seed REFUSED (56 guest placements still over BAR1 `[0, G)`).
+
 **STATUS: LIVE, 2026-10-14 — the Linux plane oracle: [`V3_DISPLAY_PLANES_ORACLE.md`](V3_DISPLAY_PLANES_ORACLE.md).**
 A stock-nvidia-drm overlay test reproduced the "plane flip never completes" class and a bare-metal AD104 reference
 was measured with the same binary. Engine: an UPDATE parked only for its vblank is no longer joined by later
@@ -1852,6 +1854,16 @@ committed `.efi`; the arch-neutral ROM: EFI machine type from the PE, x86 port I
 and the Windows arm in the bench scripts (B10); SPDX headers on the existing kf3 overlay files
 (`OWNER_RULINGS.md` §G, task I7).
 
+
+⊘ **UPDATED 2026-10-18 (branch `claude/bootlayer-20261018`, `crates/kf-qemu/src/bootclean.rs`) — read before the text below.** The boot layer is
+chosen only while store `[0, G)` is CLEAN. It is **tainted** by fn 72 (the first RPC of every guest RM life, before any heap use; a
+generation counter moves on), by the seed's placed → retired edge, and by a device reset request; it is **cleaned** only by a scrub
+that COMPLETED: the unload's zero of `[0, G)` (issued BEFORE the seed returns, so a console that redraws afterwards is never wiped; it
+waits for the dead twins' frees and refuses to zero or clean a newer life's range) or a reset's memory stage. While tainted the last
+frame stays (no black at the first handoff) or the console is black after a scanout was lost — never the RM's bytes. An unload under
+a still-placed seed scrubs when the range is tainted, so the taint cannot stick. The unload zero is a DISPLAY rule, not the
+security scrub (`docs/OWNER_RULINGS.md` §AM). Owner decision still open: fn 72 freezes the boot spinner/console until a head arms
+(about 12 s measured); tainting only when the console reservation `C < G` would keep it live for guests that reserve one.
 
 #### 4.11.13 B5 — when RM, NVKMS or nvidia-drm lets go (measured 2026-10-03, branch `v3-gop-unload`)
 

@@ -5,6 +5,199 @@
 use kf_chan::ptnsi::Verdict;
 use kf_qemu::nsitrace::{CAPACITY, Source, Trace};
 
+struct StatsRequest(std::path::PathBuf);
+
+impl StatsRequest {
+    fn new() -> Self {
+        static NEXT: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
+        let root = std::path::PathBuf::from(
+            std::env::var_os("CARGO_TARGET_DIR")
+                .unwrap_or_else(|| std::env::temp_dir().into_os_string()),
+        )
+        .join("p1-test-requests")
+        .join(format!(
+            "{}-{}",
+            std::process::id(),
+            NEXT.fetch_add(1, std::sync::atomic::Ordering::Relaxed)
+        ));
+        std::fs::create_dir_all(&root).unwrap();
+        Self(root)
+    }
+
+    fn dump(&self) -> std::path::PathBuf {
+        self.0.join("dump")
+    }
+
+    fn append(&self, bytes: &[u8]) {
+        use std::io::Write;
+        let mut file = std::fs::OpenOptions::new()
+            .create(true)
+            .append(true)
+            .open(self.0.join("dump.stats"))
+            .unwrap();
+        file.write_all(bytes).unwrap();
+    }
+}
+
+impl Drop for StatsRequest {
+    fn drop(&mut self) {
+        std::fs::remove_dir_all(&self.0).unwrap();
+    }
+}
+
+fn stats_leave_tracing_live(two_checkpoints: bool) {
+    let request = StatsRequest::new();
+    let trace = Trace::from_setting(Some("1")).with_dump_request(request.dump());
+    let mut ids = Vec::new();
+    trace.note(
+        1,
+        Source::CompletionFd,
+        Some(1),
+        Some(1),
+        Some(true),
+        Verdict::Raise(1),
+    );
+    trace
+        .poll_stats(|id| {
+            ids.push(id);
+            format!("checkpoint {id}")
+        })
+        .unwrap();
+    assert!(ids.is_empty());
+    request.append(b"x");
+    trace
+        .poll_stats(|id| {
+            ids.push(id);
+            format!("checkpoint {id}")
+        })
+        .unwrap();
+    trace
+        .poll_stats(|id| {
+            ids.push(id);
+            format!("checkpoint {id}")
+        })
+        .unwrap();
+    trace.note(
+        2,
+        Source::Engine(9),
+        Some(2),
+        Some(2),
+        Some(true),
+        Verdict::Raise(2),
+    );
+    if two_checkpoints {
+        request.append(b"yz");
+        trace
+            .poll_stats(|id| {
+                ids.push(id);
+                format!("checkpoint {id}")
+            })
+            .unwrap();
+        trace
+            .poll_stats(|id| {
+                ids.push(id);
+                format!("checkpoint {id}")
+            })
+            .unwrap();
+        assert_eq!(ids, [1, 3]);
+    } else {
+        assert_eq!(ids, [1]);
+    }
+    let output = std::fs::read_to_string(request.0.join("dump.stats.out")).unwrap();
+    assert_eq!(output.lines().count(), ids.len());
+    let snapshot = trace
+        .finish()
+        .expect("stats must not finish the event trace");
+    assert_eq!(snapshot.seen, 2);
+    assert_eq!(snapshot.records.len(), 2);
+}
+
+#[test]
+fn one_stats_checkpoint_is_idempotent_and_does_not_freeze_tracing() {
+    stats_leave_tracing_live(false);
+}
+
+#[test]
+fn appended_stats_checkpoints_keep_exact_ids_and_later_edges() {
+    stats_leave_tracing_live(true);
+}
+
+fn disabled_stats(setting: Option<&str>) {
+    let request = StatsRequest::new();
+    request.append(b"x");
+    let trace = Trace::from_setting(setting).with_dump_request(request.dump());
+    trace
+        .poll_stats(|_| panic!("a disabled trace must never report or inspect requests"))
+        .unwrap();
+    assert_eq!(trace.capacity(), 0);
+    assert!(!request.0.join("dump.stats.out").exists());
+    assert!(trace.finish().is_none());
+}
+
+#[test]
+fn unset_trace_never_observes_an_existing_stats_request() {
+    disabled_stats(None);
+}
+
+#[test]
+fn a_non_one_trace_setting_never_observes_an_existing_stats_request() {
+    disabled_stats(Some("0"));
+}
+
+#[test]
+fn a_private_dump_is_complete_and_a_second_request_cannot_replace_it() {
+    let request = StatsRequest::new();
+    let trace = Trace::from_setting(Some("1")).with_dump_request(request.dump());
+    trace.note(
+        1,
+        Source::Engine(9),
+        Some(2),
+        Some(2),
+        Some(true),
+        Verdict::Raise(2),
+    );
+    std::fs::write(request.dump(), b"dump").unwrap();
+    assert!(trace.poll_dump().unwrap());
+    let output = request.0.join("dump.out");
+    let before = std::fs::read_to_string(&output).unwrap();
+    assert!(before.contains("source=Engine(9)"));
+    assert!(before.ends_with("kf3: DIAG_NSI_TRACE_END\n"));
+    assert!(!trace.poll_dump().unwrap());
+    assert_eq!(std::fs::read_to_string(output).unwrap(), before);
+    request.append(b"x");
+    assert!(trace.poll_stats(|id| format!("after freeze {id}")).unwrap());
+}
+
+fn failed_counter_output_is_not_acknowledged(write_failure: bool) {
+    let request = StatsRequest::new();
+    let trace = Trace::from_setting(Some("1")).with_dump_request(request.dump());
+    let output = request.0.join("dump.stats.out");
+    if write_failure {
+        std::os::unix::fs::symlink("/dev/full", &output).unwrap();
+    } else {
+        std::fs::create_dir(&output).unwrap();
+    }
+    request.append(b"x");
+    assert!(trace.poll_stats(|id| format!("checkpoint {id}")).is_err());
+    if write_failure {
+        std::fs::remove_file(&output).unwrap();
+    } else {
+        std::fs::remove_dir(&output).unwrap();
+    }
+    assert!(trace.poll_stats(|id| format!("checkpoint {id}")).unwrap());
+    assert_eq!(std::fs::read_to_string(output).unwrap(), "checkpoint 1\n");
+}
+
+#[test]
+fn a_failed_private_counter_file_open_does_not_acknowledge_the_request() {
+    failed_counter_output_is_not_acknowledged(false);
+}
+
+#[test]
+fn a_failed_private_counter_write_does_not_acknowledge_the_request() {
+    failed_counter_output_is_not_acknowledged(true);
+}
+
 #[test]
 fn unset_and_non_one_values_leave_the_trace_unallocated_and_silent() {
     for setting in [None, Some("0"), Some("on"), Some(""), Some("junk")] {

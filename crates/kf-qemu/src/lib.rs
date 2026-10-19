@@ -10,6 +10,7 @@
 pub mod actq;
 pub mod bar0trace;
 pub mod bar1phys;
+pub mod bootclean;
 pub mod broker;
 pub mod cardbudget;
 pub mod chan;
@@ -26,6 +27,7 @@ pub mod gpuuid;
 pub mod hostfacts;
 pub mod latejoin;
 pub mod mem;
+pub mod memreset;
 #[cfg(feature = "diag-nsi")]
 pub mod nsitrace;
 pub mod prof;
@@ -33,7 +35,9 @@ pub mod raw_unsafe;
 pub mod readtrace;
 pub mod reset;
 pub mod rmfacts;
+pub mod scrub;
 pub mod tspace;
+pub mod tsgmirror;
 pub mod twin;
 pub(crate) mod userbirth;
 pub(crate) mod userstore;

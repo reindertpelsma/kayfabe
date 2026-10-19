@@ -9,6 +9,7 @@
 //! counted; a trace with contention cannot support an exact event census.
 
 use std::collections::VecDeque;
+use std::io::Write;
 use std::path::PathBuf;
 use std::sync::Mutex;
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
@@ -73,6 +74,10 @@ pub struct Trace {
     contended: AtomicU64,
     buffer: Option<Mutex<Buffer>>,
     dump_request: Option<PathBuf>,
+    stats_request: Option<PathBuf>,
+    dump_output: Option<PathBuf>,
+    stats_output: Option<PathBuf>,
+    stats_seen: AtomicU64,
 }
 
 impl Trace {
@@ -82,7 +87,9 @@ impl Trace {
         let setting = std::env::var("KF3_DIAG_NSI_TRACE").ok();
         let mut trace = Self::from_setting(setting.as_deref());
         if trace.buffer.is_some() {
-            trace.dump_request = std::env::var_os("KF3_DIAG_NSI_TRACE_DUMP").map(PathBuf::from);
+            if let Some(path) = std::env::var_os("KF3_DIAG_NSI_TRACE_DUMP") {
+                trace = trace.with_dump_request(PathBuf::from(path));
+            }
             eprintln!(
                 "kf3: DIAG_NSI_TRACE enabled cap={CAPACITY} clock=channel-relative-monotonic-ns dump_request={:?}; completion-fd=FIFO-or-host-CE, not raw IRQs",
                 trace.dump_request
@@ -107,7 +114,30 @@ impl Trace {
                 })
             }),
             dump_request: None,
+            stats_request: None,
+            dump_output: None,
+            stats_output: None,
+            stats_seen: AtomicU64::new(0),
         }
+    }
+
+    /// Host control only: the dump path freezes the trace; appending bytes to
+    /// its `.stats` companion requests independent live counter checkpoints.
+    #[must_use]
+    pub fn with_dump_request(mut self, path: PathBuf) -> Self {
+        if self.buffer.is_some() {
+            let mut stats = path.as_os_str().to_owned();
+            stats.push(".stats");
+            self.stats_request = Some(PathBuf::from(stats));
+            let mut dump_output = path.as_os_str().to_owned();
+            dump_output.push(".out");
+            self.dump_output = Some(PathBuf::from(dump_output));
+            let mut stats_output = path.as_os_str().to_owned();
+            stats_output.push(".stats.out");
+            self.stats_output = Some(PathBuf::from(stats_output));
+            self.dump_request = Some(path);
+        }
+        self
     }
 
     /// Allocated record slots, fixed at creation (zero with the runtime flag off).
@@ -174,27 +204,74 @@ impl Trace {
     }
 
     /// Drainer only, from the existing diagnostic heartbeat: dump once when the host-created
-    /// request file exists. Never sleeps, changes a wake/interval, or checks a file on a vCPU.
-    pub fn poll_dump(&self) {
+    /// request file exists, into its private `.out` companion. Never sleeps,
+    /// changes a wake/interval, checks a file on a vCPU or takes shared stderr.
+    ///
+    /// # Errors
+    /// The trusted host output path could not be created or written. No guest
+    /// delivery depends on diagnostic I/O; the host must reject an incomplete dump.
+    pub fn poll_dump(&self) -> std::io::Result<bool> {
         if !self.dump_request.as_ref().is_some_and(|p| p.is_file()) {
-            return;
+            return Ok(false);
         }
-        let Some(s) = self.finish() else { return };
+        let Some(output) = &self.dump_output else {
+            return Ok(false);
+        };
+        let Some(s) = self.finish() else {
+            return Ok(false);
+        };
+        let mut file = std::fs::File::create(output)?;
         let accounted = s.records.len() as u64 + s.overwritten + s.contended;
-        eprintln!(
+        writeln!(
+            file,
             "kf3: DIAG_NSI_TRACE_BEGIN seen={} retained={} overwritten={} contended={} accounting_delta={} clock=channel-relative-monotonic-ns",
             s.seen,
             s.records.len(),
             s.overwritten,
             s.contended,
             s.seen.abs_diff(accounted)
-        );
+        )?;
         for r in s.records {
-            eprintln!(
+            writeln!(
+                file,
                 "kf3: DIAG_NSI_EDGE seq={} ns={} source={:?} slot={:?} vector={:?} armed={:?} verdict={:?}",
                 r.seq, r.at_ns, r.source, r.slot, r.vector, r.armed, r.verdict
-            );
+            )?;
         }
-        eprintln!("kf3: DIAG_NSI_TRACE_END");
+        writeln!(file, "kf3: DIAG_NSI_TRACE_END")?;
+        file.flush()?;
+        Ok(true)
+    }
+
+    /// Drainer only: one callback per new length of an append-only request file.
+    /// No record lock, worker work, trace freeze, timer change or file contents read.
+    /// The callback formats one line into the private `.stats.out` companion;
+    /// its id lets the host await the checkpoint before starting a run.
+    ///
+    /// # Errors
+    /// The trusted host output path could not be opened or written. Failed
+    /// output does not acknowledge the request or change guest delivery.
+    pub fn poll_stats(&self, report: impl FnOnce(u64) -> String) -> std::io::Result<bool> {
+        let Some(path) = &self.stats_request else {
+            return Ok(false);
+        };
+        let Ok(metadata) = path.metadata() else {
+            return Ok(false);
+        };
+        let id = metadata.len();
+        if !metadata.is_file() || id == 0 || id <= self.stats_seen.load(Ordering::Relaxed) {
+            return Ok(false);
+        }
+        let Some(output) = &self.stats_output else {
+            return Ok(false);
+        };
+        let mut file = std::fs::OpenOptions::new()
+            .create(true)
+            .append(true)
+            .open(output)?;
+        writeln!(file, "{}", report(id))?;
+        file.flush()?;
+        self.stats_seen.store(id, Ordering::Relaxed);
+        Ok(true)
     }
 }
