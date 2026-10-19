@@ -394,3 +394,17 @@ fn the_census_files_a_refused_unconfigured_method_under_no_class() {
     assert!(decode(&RUN3017_GP34, is_ce, &mut cfg(0), Some(&mut c)).is_err());
     assert_eq!(c.count(0, SubKind::Ce, 0x240), 1);
 }
+
+#[test]
+fn the_census_counts_a_run_under_the_derived_class() {
+    use crate::census::{Census, SubKind};
+    let mut c = Census::default();
+    let mut seg = Vec::new();
+    for _ in 0..8 {
+        seg.extend_from_slice(&RUN3017_GP34);
+    }
+    decode(&seg, is_ce, &mut cfg(0xC9B5), Some(&mut c)).expect("decoded");
+    assert_eq!(c.count(0xC9B5, SubKind::Ce, 0x244), 8);
+    assert_eq!(c.launches_of(0xC9B5, 0x4c), 8);
+    assert_eq!(c.count(0, SubKind::Ce, 0x244), 0);
+}
