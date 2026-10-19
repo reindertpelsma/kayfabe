@@ -336,9 +336,12 @@ pub fn olut_constructor_probe_page(
 
 /// The caps registers of every family, by the header's own names (class prefix dropped). Used to read a
 /// page back field by field (`diff_pages`); the authoring code names the ones it writes itself.
-const CAP_REGISTERS: [&str; 24] = [
+const CAP_REGISTERS: [&str; 27] = [
     "SYS_CAP",
     "SYS_CAPB",
+    "SYS_CAPC",
+    "SYS_CAPD",
+    "SYS_CAPE",
     "IHUB_COMMON_CAPA",
     "IHUB_COMMON_CAPB",
     "IHUB_COMMON_CAPC",
