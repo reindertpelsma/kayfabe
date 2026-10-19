@@ -54,3 +54,13 @@ ext4failure, not a proven original corruption cause. Next rental will flatten595
 with qemu-img convert while no QEMU is running, and use a separate580scratch
 image. No old input repaired, CUDA595 still incomplete. This is orchestration,
 not a product behavior change. No image/executable copied back from a rental.
+
+MEASURED typed comparison now also projects all44old GB206 public display
+records against the same public580.65.06 compiler schema as current Ada. Comparable
+NV0073fields show no projected scalar differences by occurrence; command counts
+and missing controls differ. A58has21records per side: family hclass differs in
+all21and channelPBSize4vs0 in the first9 (other projected fields equal). CODE READ
+public header labels these parameters[IN], and current model returns p.buf;
+these are caller-selected inputs, not evidence of an authored wrong reply. No
+neighbour-class or buffer-size value will be copied. Occurrence alignment and
+causal meaning remain INFERRED; old product/die differs from the current reference.
