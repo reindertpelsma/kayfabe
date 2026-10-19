@@ -1,0 +1,13 @@
+MEASURED cuda host interval 2026-10-19T13:20:54.309543+02:00 -> 2026-10-19T13:22:07.959146+02:00
+Xid 21 -> 21 delta=0
+Non-status/non-lifecycle matches of refused|ERROR|TSG_MIRROR|0x1f: 0
+
+TSG/ctxshare records: 8
+kf-rm: chanlink: CTXSHARE-FACTS 0xc1d00106:0xff0e0200 parent(tsg)=0xff0e0000 flags=0x0 kind=SYNC declared_subctxId=0x0 hVASpace=0x0
+kf3: TSG-MIRROR BIRTH 0xc1d00106:0xff0e0000 mode=EXPLICIT host_tsg=0xcafe100b engine=0x1 first_ctx=0xff0e0200 kind=Sync ctx_flags=Some(
+kf3: TSG-MIRROR CTX 0xc1d00106:0xff0e0000 guest_ctx=0xff0e0200 kind=Sync host_ctx=0xcafe100c host_veid=Some(0) space=0xcafe0b73 chan_flags=0x80206120 host_rq1=false
+kf-rm: chanlink: CTXSHARE-FACTS 0xc1d00107:0xff0e0200 parent(tsg)=0xff0e0000 flags=0x0 kind=SYNC declared_subctxId=0x0 hVASpace=0x0
+kf3: TSG-MIRROR BIRTH 0xc1d00107:0xff0e0000 mode=EXPLICIT host_tsg=0xcafe1014 engine=0x1 first_ctx=0xff0e0200 kind=Sync ctx_flags=Some(
+kf3: TSG-MIRROR CTX 0xc1d00107:0xff0e0000 guest_ctx=0xff0e0200 kind=Sync host_ctx=0xcafe1015 host_veid=Some(0) space=0xcafe0fff chan_flags=0x80206220 host_rq1=false
+kf3: TSG-MIRROR BIRTH 0xc1d00108:0xff0e0000 mode=LEGACY host_tsg=0xcafe107d engine=0xc shard=0x0 first_chan_flags=0x208120 ctxShare=0x0
+kf3: TSG-MIRROR BIRTH 0xc1d00109:0xff0e0000 mode=LEGACY host_tsg=0xcafe108f engine=0xc shard=0x0 first_chan_flags=0x208220 ctxShare=0x0
