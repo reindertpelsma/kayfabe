@@ -1,6 +1,7 @@
 {
   "root": "/data/codex-LX1",
   "disk": "/data/codex-LX1/guest.qcow2",
+  "seed": "/data/codex-LX1/seed.iso",
   "run": "replace-with-unique-run",
   "driver": "595.91.07",
   "bins": "/data/codex-LX1/kf3-bins",

@@ -74,5 +74,14 @@
       "test_sampler_vcpu_identity_with_fake_proc"
     ],
     "rc": 1
+  },
+  {
+    "mutant": "omit_cloud_seed",
+    "killed_by": [
+      "test_cloud_seed_identical_on_vfio",
+      "test_cloud_seed_must_be_lane_local",
+      "test_cloud_seed_preserves_instance_during_provision"
+    ],
+    "rc": 1
   }
 ]

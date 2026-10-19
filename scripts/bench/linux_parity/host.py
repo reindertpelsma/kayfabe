@@ -108,6 +108,11 @@ def plan(c, arm, inherited):
             '-display', 'none', '-serial', 'file:' + str(run / 'serial.log'),
             '-qmp', 'unix:' + str(run / 'qmp.sock') + ',server=on,wait=off',
             '-monitor', 'none', '-no-reboot', '-msg', 'timestamp=on']
+    if c.get('seed'):
+        seed = Path(c['seed'])
+        if not seed.is_relative_to(root) or '..' in seed.parts:
+            raise ValueError('cloud seed must be lane local')
+        args += ['-drive', 'file=' + str(seed) + ',if=virtio,format=raw,readonly=on']
     if arm == 'C':
         for dev in c['pci']:
             if not re.fullmatch(r'0000:[0-9a-f]{2}:[0-9a-f]{2}\.[0-7]', dev):

@@ -27,6 +27,8 @@ example's PCI values are placeholders to verify against the actual IOMMU group;
    `python3 host.py run --arm P --config provision.json`.
    P has no NVIDIA device and is not a performance arm. SSH is forwarded only
    on loopback port 2229. Use the copied benchmark key privately. Preserve the
+   existing NoCloud seed in the lane directory and attach it identically across
+   P/A/B/C/D; omitting it can trigger cloud-init's new-instance work.
    pinned kernel and exact driver/module pairing; no distro switch or silent
    package fallback. Clean guest poweroff, verify QEMU exit, freeze manifests.
 5. Before each gate/run, write its private config with the same guest disk and
