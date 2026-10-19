@@ -5008,6 +5008,43 @@ mod device_reset_from_every_phase {
         heartbeat_freshness(AfterSuspend::FirmwareHalts);
     }
 
+    fn heartbeat_new_queue(after: AfterSuspend) {
+        let cell = SystemInfoCell::new();
+        let mut old = Dev::life(fresh(Some(&cell)), after);
+        old.start_with_frts();
+        old.firmware_loaded();
+        old.publish();
+        old.run();
+        old.queue_traffic();
+        assert!(old.fsm.has_current_system_info());
+        old.unload();
+        if after == AfterSuspend::AwaitsTeardownUcode {
+            old.write(OFF_START, 1);
+        }
+        assert_eq!(old.fsm.phase(), BootPhase::Halted);
+        let mut next = Dev::life(old.fsm, after);
+        next.start_with_frts();
+        next.firmware_loaded();
+        next.publish();
+        next.run();
+        assert_eq!(next.fsm.command_seq(), 0, "fresh queue instance");
+        assert!(cell.latest().is_some(), "console metadata remains retained");
+        assert!(
+            !next.fsm.has_current_system_info(),
+            "fresh queue cannot use old fn72"
+        );
+        next.queue_traffic();
+        assert!(next.fsm.has_current_system_info());
+    }
+    #[test]
+    fn heartbeat_falcon_fresh_queue_needs_its_own_fn72() {
+        heartbeat_new_queue(AfterSuspend::AwaitsTeardownUcode);
+    }
+    #[test]
+    fn heartbeat_fsp_fresh_queue_needs_its_own_fn72() {
+        heartbeat_new_queue(AfterSuspend::FirmwareHalts);
+    }
+
     // ---- 4. nothing accumulates ------------------------------------------------------------------
 
     #[test]
