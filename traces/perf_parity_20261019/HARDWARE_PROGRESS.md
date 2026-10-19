@@ -36,3 +36,10 @@ MEASURED: the final DIRECT-window source medians are two armed GR0/Engine(1) off
 CODE READ: GR0 and RM's HOST/FIFO notifier are separate subscription notifications, and the completion fd also carries the configured host CE. DATALESS readiness can coalesce notifications; it does not identify an original physical completion. Owner ruling X requires each armed subscription to survive. No event-removal fix is justified by an identical fence window/vector, and none was made. The hypothesis that removing proven redundancy improves fps remains untested because no redundant edge was proved. The existing loss-free20/50us pacer is the next separate experiment.
 
 MEASURED: throughout the diagnostic boot, unconditional backstop_found_work and carried stayed0; contended rose2→24 between the first calibration checkpoint and final check. Those distinct contention counts and roughly50ms trace outliers remain unexplained by this census; zero work discoveries do not exonerate every contention/race. No timer or poll was changed. W5 lacks a true GPU-fetch timestamp; overlapping first-IRQ/last-marker observations cannot supply it.
+
+
+## Five-versus-five control, 05:04 CEST
+
+MEASURED: author mirror control A3/B5/A2 sequence is complete. Combined mirror new-content fps median29.200, range28.773–29.884 (n5); diagnostic-ON29.828, range29.281–30.115 (n5). These overlap; no beyond-spread benefit or cost is established for the diagnostic build. The two fresh mirror UI scores are2880/2905; all earlier scores and the one uncollected UI result remain explicit. One fresh control capture's maximum content gap is1066.717ms; it is retained, with clean cumulative health and zero new Xid. Its cause is unverified.
+
+MEASURED: both mirror boots' pure tiny probes remain included (n10 per queue), rather than discarding cold/warm variation. Diagnostic-ON has n5 valid probes per queue, with the incomplete COMPUTE terminal-marker record kept separately. The20us pacer arm is booted with the same diagnostic binary, broker and disk; only the existing pacer setting changes, apart from per-arm diagnostic filenames. Performance falsifiers remain pending until that arm completes.

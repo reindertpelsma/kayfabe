@@ -1,6 +1,6 @@
 {
   "status": "MEASURED; in progress until the morning handoff",
-  "updated_utc": "2026-10-19T02:51:52.799392+00:00",
+  "updated_utc": "2026-10-19T03:04:21.004516+00:00",
   "source_binary": "41a8beb07573847a932b76d48bc0dcd4383ea247",
   "control_binary": "0d7ba74389cd85ac65826417ad53f5c0bcd1ef2f",
   "controls": "same persistent P1 disk and unchanged cursor6 broker; reboot between configurations; mirror control A3, diagnostic B5, mirror control A2; later experimental arms compare to diagnostic B",
@@ -811,6 +811,298 @@
           "median_us": 189.4,
           "p99_us": 303.2,
           "max_us": 395.6
+        }
+      ]
+    },
+    "pacer20": {
+      "rev": "41a8beb07573847a932b76d48bc0dcd4383ea247",
+      "run": 41007,
+      "flags": "KF3_LIFECYCLE_COUNT=1 KF3_LIFECYCLE_PERIOD_S=5 KF3_DIAG_NSI_TRACE=1 KF3_DIAG_NSI_TRACE_DUMP=/data/codex-P1/pacer20-nsi KF3_PT_NSI_MIN_INTERVAL_US=20",
+      "binary_sha256": "653d8d8b7c59f62b8998078356288111dfbd88776c67f1fff05c72a346f5ab08",
+      "actual_flags": {
+        "KF3_REV": "41a8beb0",
+        "KF3_WIN_USER_CHANNELS_PASSTHROUGH": "1",
+        "KF3_WIN_TWIN_DEFAPI_OBJECT": "1",
+        "KF3_KERNEL_GR_CE": "1",
+        "KF3_KERNEL_GR_WORK": "1",
+        "KF3_TRANSLATED_CE_RELAY": "1",
+        "KF3_DEFERRED_API": "1",
+        "KF3_PREEMPT_BIND_PROBE": "1",
+        "KF3_DISPLAY_IMP_ENABLE": "1",
+        "KF3_DISPLAY_CTRL_PROBE": "1",
+        "KF3_ZCULL_BIND_PROBE": "1",
+        "KF3_SW_RUNLIST_HOST_OWNED": "1",
+        "KF3_ASYNC_PREEMPT": "1",
+        "KF3_GFX_POOL_PROBE": "1",
+        "KF3_SW_RUNLIST_PROBE": "1",
+        "KF3_MEMORY_LIST_PROBE": "1",
+        "KF3_DISPLAY_SDR_COLOR": "1",
+        "KF3_DISPLAY_CAPS_PROBE": "1",
+        "KF3_DISPLAY_LUT_MIRROR": "1",
+        "KF3_DISPLAY_ILUT_OFFSET_256": "1",
+        "KF3_LIFECYCLE_COUNT": "1",
+        "KF3_LIFECYCLE_PERIOD_S": "5",
+        "KF3_DIAG_NSI_TRACE": "1",
+        "KF3_DIAG_NSI_TRACE_DUMP": "/data/codex-P1/pacer20-nsi",
+        "KF3_PT_NSI_MIN_INTERVAL_US": "20"
+      },
+      "captures": [],
+      "tiny": []
+    },
+    "mirror-b5": {
+      "rev": "0d7ba74389cd85ac65826417ad53f5c0bcd1ef2f",
+      "run": 41006,
+      "flags": "KF3_LIFECYCLE_COUNT=1 KF3_LIFECYCLE_PERIOD_S=5",
+      "binary_sha256": "d2c8d7490cc24cffd69167baea0803acbb433c312808274cf40f83f74f008c06",
+      "actual_flags": {
+        "KF3_REV": "0d7ba743",
+        "KF3_WIN_USER_CHANNELS_PASSTHROUGH": "1",
+        "KF3_WIN_TWIN_DEFAPI_OBJECT": "1",
+        "KF3_KERNEL_GR_CE": "1",
+        "KF3_KERNEL_GR_WORK": "1",
+        "KF3_TRANSLATED_CE_RELAY": "1",
+        "KF3_DEFERRED_API": "1",
+        "KF3_PREEMPT_BIND_PROBE": "1",
+        "KF3_DISPLAY_IMP_ENABLE": "1",
+        "KF3_DISPLAY_CTRL_PROBE": "1",
+        "KF3_ZCULL_BIND_PROBE": "1",
+        "KF3_SW_RUNLIST_HOST_OWNED": "1",
+        "KF3_ASYNC_PREEMPT": "1",
+        "KF3_GFX_POOL_PROBE": "1",
+        "KF3_SW_RUNLIST_PROBE": "1",
+        "KF3_MEMORY_LIST_PROBE": "1",
+        "KF3_DISPLAY_SDR_COLOR": "1",
+        "KF3_DISPLAY_CAPS_PROBE": "1",
+        "KF3_DISPLAY_LUT_MIRROR": "1",
+        "KF3_DISPLAY_ILUT_OFFSET_256": "1",
+        "KF3_LIFECYCLE_COUNT": "1",
+        "KF3_LIFECYCLE_PERIOD_S": "5"
+      },
+      "captures": [
+        {
+          "tag": "mirror-b5-sn-r1",
+          "complete": true,
+          "guest": {
+            "fps": 28.784,
+            "frames": 1623,
+            "window_s": 56.372,
+            "packets_per_frame_target_heavy": 28.61
+          },
+          "broker": {
+            "new_content_presents": 1622,
+            "new_content_fps": 28.77302239149952,
+            "one_percent_low_fps": 11.999472023230977,
+            "point_one_percent_low_fps": 3.3257815919317593,
+            "new_content_gaps_per_minute": {
+              "33": 1072.8683071750254,
+              "50": 619.4537249760563,
+              "100": 8.514827834722423
+            },
+            "new_content_gap_max_ms": 1066.717,
+            "repeated_presents_per_s": 31.13233927070386,
+            "merged_commits": 0,
+            "duplicate_feedback_records": 0,
+            "max_reported_future_us": 393.6
+          },
+          "guest_content_count_delta_pct": -0.06161429451633227,
+          "isr": {
+            "calls": 37087,
+            "entry_calls": 37087,
+            "calls_per_s": 657.9,
+            "calls_per_frame": 22.850893407270487,
+            "entry_calls_per_frame": 22.850893407270487,
+            "med_us": 81.8,
+            "p95_us": 139.1,
+            "p99_us": 181.8,
+            "max_us": 1852.0,
+            "total_ms_per_s": 54.96
+          },
+          "ddi_pairing": {
+            "unmatched_exits": 0,
+            "mismatched_exits": 0,
+            "unclosed_entries": 1,
+            "unmatched_exits_in_window": 0,
+            "mismatched_exits_in_window": 0,
+            "unclosed_entries_in_window": 0
+          },
+          "app_score": {
+            "score": 2880,
+            "fps": 28.81,
+            "method": "visually read result PNG"
+          },
+          "health": {
+            "tdr_4101": 0,
+            "gpu_153": 0,
+            "app_crashes": 0,
+            "new_host_xid": []
+          },
+          "archive_sha256": "f031bf5fb0275bb838fd120eee41bb6948d59e8df7113a876c729fbc151f3ecb"
+        },
+        {
+          "tag": "mirror-b5-sn-r2",
+          "complete": true,
+          "guest": {
+            "fps": 29.197,
+            "frames": 1649,
+            "window_s": 56.472,
+            "packets_per_frame_target_heavy": 28.73
+          },
+          "broker": {
+            "new_content_presents": 1649,
+            "new_content_fps": 29.200188421587555,
+            "one_percent_low_fps": 11.999472023230977,
+            "point_one_percent_low_fps": 10.51470512003658,
+            "new_content_gaps_per_minute": {
+              "33": 1063.531423044602,
+              "50": 640.6687793165784,
+              "100": 2.124937908181023
+            },
+            "new_content_gap_max_ms": 1083.384,
+            "repeated_presents_per_s": 30.758476220920304,
+            "merged_commits": 0,
+            "duplicate_feedback_records": 0,
+            "max_reported_future_us": 394.895
+          },
+          "guest_content_count_delta_pct": 0.0,
+          "isr": {
+            "calls": 38981,
+            "entry_calls": 38981,
+            "calls_per_s": 690.3,
+            "calls_per_frame": 23.63917525773196,
+            "entry_calls_per_frame": 23.63917525773196,
+            "med_us": 80.8,
+            "p95_us": 129.2,
+            "p99_us": 165.7,
+            "max_us": 3068.5,
+            "total_ms_per_s": 55.16
+          },
+          "ddi_pairing": {
+            "unmatched_exits": 0,
+            "mismatched_exits": 0,
+            "unclosed_entries": 0,
+            "unmatched_exits_in_window": 0,
+            "mismatched_exits_in_window": 0,
+            "unclosed_entries_in_window": 0
+          },
+          "app_score": {
+            "score": 2905,
+            "fps": 29.06,
+            "method": "visually read result PNG"
+          },
+          "health": {
+            "tdr_4101": 0,
+            "gpu_153": 0,
+            "app_crashes": 0,
+            "new_host_xid": []
+          },
+          "archive_sha256": "ffd6a32b1bdcddeca902136b5aede203efecea910fe9c60d96f4c305b3692f47"
+        }
+      ],
+      "tiny": [
+        {
+          "tag": "mirror-b5-q0-r1",
+          "iterations": 2995,
+          "median_us": 251.6,
+          "p99_us": 431.3,
+          "max_us": 905.6
+        },
+        {
+          "tag": "mirror-b5-q0-r2",
+          "iterations": 2995,
+          "median_us": 252.1,
+          "p99_us": 456.9,
+          "max_us": 80721.1
+        },
+        {
+          "tag": "mirror-b5-q0-r3",
+          "iterations": 2995,
+          "median_us": 243.8,
+          "p99_us": 446.8,
+          "max_us": 50607.5
+        },
+        {
+          "tag": "mirror-b5-q0-r4",
+          "iterations": 2995,
+          "median_us": 254.0,
+          "p99_us": 464.5,
+          "max_us": 77782.1
+        },
+        {
+          "tag": "mirror-b5-q0-r5",
+          "iterations": 2995,
+          "median_us": 250.2,
+          "p99_us": 426.2,
+          "max_us": 194039.3
+        },
+        {
+          "tag": "mirror-b5-q2-r1",
+          "iterations": 2995,
+          "median_us": 218.2,
+          "p99_us": 430.1,
+          "max_us": 884.2
+        },
+        {
+          "tag": "mirror-b5-q2-r2",
+          "iterations": 2995,
+          "median_us": 215.7,
+          "p99_us": 437.9,
+          "max_us": 971.3
+        },
+        {
+          "tag": "mirror-b5-q2-r3",
+          "iterations": 2995,
+          "median_us": 218.7,
+          "p99_us": 438.1,
+          "max_us": 653.5
+        },
+        {
+          "tag": "mirror-b5-q2-r4",
+          "iterations": 2995,
+          "median_us": 213.5,
+          "p99_us": 434.1,
+          "max_us": 646.4
+        },
+        {
+          "tag": "mirror-b5-q2-r5",
+          "iterations": 2995,
+          "median_us": 215.4,
+          "p99_us": 434.9,
+          "max_us": 698.9
+        },
+        {
+          "tag": "mirror-b5-q3-r1",
+          "iterations": 2995,
+          "median_us": 184.6,
+          "p99_us": 208.1,
+          "max_us": 321.0
+        },
+        {
+          "tag": "mirror-b5-q3-r2",
+          "iterations": 2995,
+          "median_us": 187.2,
+          "p99_us": 210.6,
+          "max_us": 312.1
+        },
+        {
+          "tag": "mirror-b5-q3-r3",
+          "iterations": 2995,
+          "median_us": 187.0,
+          "p99_us": 209.1,
+          "max_us": 287.2
+        },
+        {
+          "tag": "mirror-b5-q3-r4",
+          "iterations": 2995,
+          "median_us": 185.7,
+          "p99_us": 223.1,
+          "max_us": 342.1
+        },
+        {
+          "tag": "mirror-b5-q3-r5",
+          "iterations": 2995,
+          "median_us": 188.6,
+          "p99_us": 288.7,
+          "max_us": 711.2
         }
       ]
     }

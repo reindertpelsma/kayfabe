@@ -4,7 +4,7 @@ MEASURED: all values below are valid completed captures unless marked pending. R
 
 | Arm | n | New-content fps median [min,max] | ISR entries/frame median [min,max] |
 |---|---:|---|---|
-| mirror | 3 | 29.396 [29.183,29.884] | 22.446 [22.034,22.613] |
+| mirror | 5 | 29.200 [28.773,29.884] | 22.613 [22.034,23.639] |
 | diagnostic ON | 5 | 29.828 [29.281,30.115] | 22.578 [22.447,22.670] |
 
 MEASURED: spread means the minimum and maximum of independent run averages. Overlapping primary-fps arms require at least five captures; incomplete arms do not settle their falsifiers. No outlier is removed.
@@ -19,12 +19,14 @@ MEASURED: spread means the minimum and maximum of independent run averages. Over
 | p1on1-sn-r3 | p1on1 / 41a8beb0 | 30.138 | 30.115 | 11.999 / 10.721 | 1101.73 / 624.56 / 2.12 | 116.673 | 29.796 | 3015 |
 | p1on1-sn-r4 | p1on1 / 41a8beb0 | 30.105 | 30.053 | 11.999 / 9.118 | 1086.96 / 640.38 / 3.16 | 150.007 | 29.842 | 3014 |
 | p1on1-sn-r5 | p1on1 / 41a8beb0 | 29.285 | 29.281 | 11.999 / 7.790 | 1038.59 / 726.80 / 3.19 | 250.012 | 30.718 | 2936 |
+| mirror-b5-sn-r1 | mirror-b5 / 0d7ba743 | 28.784 | 28.773 | 11.999 / 3.326 | 1072.87 / 619.45 / 8.51 | 1066.717 | 31.132 | 2880 |
+| mirror-b5-sn-r2 | mirror-b5 / 0d7ba743 | 29.197 | 29.200 | 11.999 / 10.515 | 1063.53 / 640.67 / 2.12 | 1083.384 | 30.758 | 2905 |
 
 | Arm | Tiny queue | n | Submit-return to polled-fence median [min,max], us |
 |---|---|---:|---|
-| mirror | DIRECT | 5 | 254.5 [251.5,337.4] |
-| mirror | COMPUTE | 5 | 217.6 [215.9,274.6] |
-| mirror | COPY | 5 | 186.6 [185.4,188.1] |
+| mirror | DIRECT | 10 | 252.4 [243.8,337.4] |
+| mirror | COMPUTE | 10 | 217.5 [213.5,274.6] |
+| mirror | COPY | 10 | 186.8 [184.6,188.6] |
 | diagnostic ON | DIRECT | 5 | 246.9 [240.9,333.7] |
 | diagnostic ON | COMPUTE | 5 | 217.7 [213.2,302.2] |
 | diagnostic ON | COPY | 5 | 189.4 [185.8,281.1] |
