@@ -1,0 +1,1 @@
+default features, base c2685412e, cargo test --release -p kf-trap -p kf-qemu: kf-trap 111 passed (lib 86 + integration 25), kf-qemu 408 passed (lib 387 + integration 21), 0 failed.

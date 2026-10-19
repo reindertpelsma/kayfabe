@@ -5,6 +5,11 @@ version.workspace = true
 edition.workspace = true
 license.workspace = true
 
+[features]
+# MEASUREMENT ONLY (docs: traces/trap_experiments_20261019). Absent from every production build:
+# not in `default`, enabled by nothing but the experiment build.
+diag-trap-exp = []
+
 [dependencies]
 kf-chip.workspace = true
 

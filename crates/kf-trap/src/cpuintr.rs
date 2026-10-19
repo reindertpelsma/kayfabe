@@ -256,6 +256,15 @@ impl CpuIntr {
         }
     }
 
+    /// ★ MEASUREMENT ONLY (`diag-trap-exp`): the spinner experiment's latch. The interrupt page is
+    /// plain RAM the spinner owns, so the model never sees the guest's enables: raise
+    /// UNCONDITIONALLY for any vector in this family's leaves, and touch no state.
+    #[cfg(feature = "diag-trap-exp")]
+    pub fn latch_forward(&self, vector: u32) -> Raise {
+        let _ = vector;
+        Raise::None
+    }
+
     /// `(BAR0 offset, value)` for every register whose read-back `r` may have changed — the vCPU
     /// stores these into the read shadow before returning (TOP is always included: derived).
     pub fn shadow(&self, r: Reg, mut put: impl FnMut(u64, u32)) {

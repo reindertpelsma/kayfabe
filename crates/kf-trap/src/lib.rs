@@ -38,6 +38,8 @@ pub mod shadow;
 pub mod timer;
 pub mod token;
 pub mod tokenindex;
+#[cfg(feature = "diag-trap-exp")]
+pub mod trapexp;
 pub mod trap;
 pub mod trappolicy;
 pub mod vmm;
