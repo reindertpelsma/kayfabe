@@ -77,10 +77,14 @@
     "auto_destroy_pid": 144987,
     "auto_destroy_armed_utc": "2026-10-19T20:48:41.560802+00:00",
     "auto_destroy_verified": true,
-    "phase": "Blackwell rental loading, no hardware result",
-    "phase_updated_utc": "2026-10-19T20:49:41.646693+00:00",
+    "phase": "MEASURED GB202 arch1b0 impl2, stock open595 stricthealth/gates9+10PASS; productbuild active",
+    "phase_updated_utc": "2026-10-19T21:00:41.888412+00:00",
     "hardware_frozen_source": "24906bf334665c9000b16b271005593daa3586c7",
     "deadline_utc": "2026-10-19T23:48:41Z",
-    "observed_dph_total": 0.7833333333333334
+    "observed_dph_total": 0.7833333333333334,
+    "die": "GB202",
+    "arch": "0x1b0",
+    "impl": "0x2",
+    "host_driver": "595.91.07"
   }
 ]

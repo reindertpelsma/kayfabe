@@ -23,11 +23,36 @@
   "owner_host_used": false,
   "accepted_trees": {
     "crates": "fb9029d1f3ea9ca09fbd1dd8a95730ccbc2f9a81",
-    "scripts": "cb6cdb61f4a41ce781498de3e75141db01571488",
+    "scripts": "9cc936c096a0278209b5bda8b030bc9ab1bf08e1",
     "qemu": "fa8938d9c1a4b2caeaeb6f15a7daf96ed1e2f190",
     "tools": "22b5600afa56a3745b7214499c349fd09caf774a",
     "Cargo.toml": "5cd514833548ba051d99072853b2aa655e4c5097",
     "Cargo.lock": "5d87da2ec29f9bb1e422addf02dd697d5d40bf5f",
     "rust-toolchain.toml": "fd75b70c6fec4e8975fd3c63636107084e575173"
-  }
+  },
+  "host_only_harness_supplements": [
+    {
+      "commit": "c325497c8c11f6dfb4be4254f6486bc7d519b830",
+      "paths": [
+        "scripts/bench/host_preflight.sh",
+        "scripts/bench/tests/test_host_family.py"
+      ],
+      "previous_scripts_tree": "cb6cdb61f4a41ce781498de3e75141db01571488",
+      "accepted_scripts_tree": "9cc936c096a0278209b5bda8b030bc9ab1bf08e1",
+      "tests_only_expected_red": "042132e91",
+      "before_full_bench_tests": 53,
+      "after_full_bench_tests": 63,
+      "failures": 0,
+      "mutation_killers": [
+        2,
+        2,
+        2,
+        3
+      ],
+      "bash_n": true,
+      "rust_product_trees_unchanged": true,
+      "runtime_frozen_source": "24906bf334665c9000b16b271005593daa3586c7",
+      "purpose": "reject nvidia-smi error text/failed queries before native acceptance"
+    }
+  ]
 }
