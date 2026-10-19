@@ -1,0 +1,212 @@
+diff --git a/crates/kf-host/src/timer.rs b/crates/kf-host/src/timer.rs
+index af3ed78dc..9aaa3ebad 100644
+--- a/crates/kf-host/src/timer.rs
++++ b/crates/kf-host/src/timer.rs
+@@ -39 +39,2 @@ impl TimerWindow<'_> {
+-    /// Bounded coherent read, for native validation only; guests read the same host page directly.
++    /// Bounded coherent read; guests read the same host page directly. The drainer also samples
++    /// this clock to publish GSP heartbeats in the guest timer's epoch.
+diff --git a/crates/kf-qemu/src/device.rs b/crates/kf-qemu/src/device.rs
+index 68a18d76b..d77298710 100644
+--- a/crates/kf-qemu/src/device.rs
++++ b/crates/kf-qemu/src/device.rs
+@@ -232,0 +233,3 @@ pub struct Device {
++    /// Bounded fn72 state, shared with the console when present. Clock state only;
++    /// guest values here never author a host action.
++    heartbeat_system_info: kf_gsp::SystemInfoCell,
+@@ -855,2 +858,2 @@ impl Device {
+-        // `gop=on` only. ONE decision for both halves (`crate::gop::ConsoleWiring`): with `gop=off`
+-        // there is no cell and no seat, so fn 72 is dropped unread and fn 65 is today's.
++        // `gop=on` only. With `gop=off` there is no console seat and fn65 is unchanged;
++        // fn72 is retained separately below because heartbeat clocks also need its offset.
+@@ -857,0 +861 @@ impl Device {
++        let heartbeat_system_info = console.seat().map(|s| s.system_info).unwrap_or_default();
+@@ -1042 +1046,3 @@ impl Device {
+-            fsm: console.fsm(abi),
++            fsm: console
++                .fsm(abi)
++                .with_system_info_cell(heartbeat_system_info.clone()),
+@@ -1188,0 +1195 @@ impl Device {
++            heartbeat_system_info,
+@@ -2532,2 +2539,3 @@ impl Device {
+-        // the guest's 1.3 × default-timeout window — in ms of the host GPU clock the guest itself
+-        // reads through the aliased usermode page.
++        // the guest's 1.3 × default-timeout window — in ms of the validated timer page guest RM
++        // itself reads, with fn72's guest system offset removed. Both PTIMER and VF_TIME can
++        // already contain the offset; changing between those clocks alone cannot fix this.
+@@ -2563,2 +2571,17 @@ impl Device {
+-                if let Ok(ns) = self.rm.gpu_time_ns() {
+-                    let ms = u64::from((ns / 1_000_000) as u32);
++                let guest_offset = {
++                    let g = self.gsp.lock().unwrap_or_else(|p| p.into_inner());
++                    // A reset starts at command zero. Never reuse the previous life's clock
++                    // before this life has published its initial system-info command.
++                    (g.fsm.command_seq() != 0)
++                        .then(|| {
++                            self.heartbeat_system_info.latest().and_then(|info| {
++                                crate::heartbeat::offset_ns(g.policy.current(), &info)
++                            })
++                        })
++                        .flatten()
++                };
++                if let Some(ms) = crate::heartbeat::sample(
++                    || self.timer.as_ref()?.read_ns().ok(),
++                    || guest_offset,
++                ) {
++                    let ms = u64::from(ms);
+diff --git a/crates/kf-qemu/src/gop.rs b/crates/kf-qemu/src/gop.rs
+index 5908cc513..821f6b7dd 100644
+--- a/crates/kf-qemu/src/gop.rs
++++ b/crates/kf-qemu/src/gop.rs
+@@ -13 +13,5 @@
+-//! What `gop=on` changes, and where (each is `None`/absent with `gop=off`, so every path is today's):
++//! **2026-10-16 correction:** `Device` also retains bounded fn72 state with GOP off for
++//! the GSP heartbeat's `sysTimerOffsetNs`. `ConsoleWiring` still adds a console seat only
++//! with GOP on; its no-cell statements below describe console wiring alone.
++//!
++//! What `gop=on` changes in the boot display:
+diff --git a/crates/kf-qemu/src/heartbeat.rs b/crates/kf-qemu/src/heartbeat.rs
+new file mode 100644
+index 000000000..1d18ddaca
+--- /dev/null
++++ b/crates/kf-qemu/src/heartbeat.rs
+@@ -0,0 +1,132 @@
++//! GSP heartbeat clock conversion, sampled only on the drainer.
++//! Public595 kernel_gsp.c passes sysTimerOffsetNs in fn72 and adds its millisecond
++//! value back when checking the heartbeat. PTIMER and VF_TIME are system clocks.
++use kf_abi::DriverVersion;
++use kf_gsp::StashedSystemInfo;
++
++pub(crate) fn offset_ns(version: DriverVersion, info: &StashedSystemInfo) -> Option<u64> {
++    let layout = kf_abi::generated::matrix::GSPSYSTEMINFO
++        .at(version)
++        .ok()??;
++    if info.declared_len != layout.size() || info.bytes.len() != layout.size() {
++        return None;
++    }
++    let field = layout.field("sysTimerOffsetNs")?;
++    if field.size != 8 || field.elem != 0 {
++        return None;
++    }
++    let start = usize::try_from(field.off).ok()?;
++    Some(u64::from_le_bytes(
++        info.bytes
++            .get(start..start.checked_add(8)?)?
++            .try_into()
++            .ok()?,
++    ))
++}
++
++pub(crate) fn sample(
++    system_timer_ns: impl FnOnce() -> Option<u64>,
++    guest_offset_ns: impl FnOnce() -> Option<u64>,
++) -> Option<u32> {
++    let offset_ms = (guest_offset_ns()? / 1_000_000) as u32;
++    let system_ms = (system_timer_ns()? / 1_000_000) as u32;
++    // Mirror _kgspIsHeartbeatTimedOut's separate divisions exactly: subtracting
++    // nanoseconds first can place the millisecond heartbeat one tick behind.
++    Some(system_ms.wrapping_sub(offset_ms))
++}
++
++#[cfg(test)]
++mod tests {
++    use super::*;
++    fn v() -> DriverVersion {
++        DriverVersion {
++            major: 595,
++            minor: 91,
++            patch: 7,
++        }
++    }
++    #[test]
++    fn public595_formula_applies_guest_offset_once() {
++        let offset = 7_980_000u64 * 1_000_000;
++        let current = 8_000_000u64 * 1_000_000;
++        let beat = sample(|| Some(current), || Some(offset)).unwrap();
++        assert_eq!(
++            ((current / 1_000_000) as u32)
++                .wrapping_sub(beat.wrapping_add((offset / 1_000_000) as u32)),
++            0
++        );
++    }
++    #[test]
++    fn round_before_subtracting_like_guest_not_after() {
++        assert_eq!(sample(|| Some(10_100_000), || Some(3_900_000)), Some(7));
++    }
++    #[test]
++    fn millisecond_wrap_is_unsigned_in_both_operands() {
++        let ms = u64::from(u32::MAX) + 7;
++        assert_eq!(sample(|| Some(ms * 1_000_000), || Some(3_000_000)), Some(3));
++    }
++    #[test]
++    fn zero_offset_preserves_older_family_clock() {
++        assert_eq!(sample(|| Some(42_000_000), || Some(0)), Some(42));
++    }
++    #[test]
++    fn missing_offset_never_publishes_wrong_epoch() {
++        assert_eq!(sample(|| Some(42_000_000), || None), None);
++    }
++    #[test]
++    fn missing_clock_never_forges_freshness() {
++        assert_eq!(sample(|| None, || Some(0)), None);
++    }
++    #[test]
++    fn offset_is_decoded_at_every_exact_compiled_tag() {
++        for &version in kf_abi::generated::matrix::MEASURED {
++            let layout = kf_abi::generated::matrix::GSPSYSTEMINFO
++                .at(version)
++                .unwrap()
++                .unwrap();
++            let f = layout.field("sysTimerOffsetNs").unwrap();
++            let mut info = StashedSystemInfo {
++                declared_len: layout.size(),
++                bytes: vec![0; layout.size()],
++                sequence: 1,
++            };
++            let start = f.off as usize;
++            info.bytes[start..start + 8].copy_from_slice(&u64::MAX.to_le_bytes());
++            assert_eq!(offset_ns(version, &info), Some(u64::MAX));
++        }
++    }
++    #[test]
++    fn truncated_or_wrong_size_or_unknown_abi_is_refused() {
++        let layout = kf_abi::generated::matrix::GSPSYSTEMINFO
++            .at(v())
++            .unwrap()
++            .unwrap();
++        let mut info = StashedSystemInfo {
++            declared_len: layout.size(),
++            bytes: vec![0; layout.size()],
++            sequence: 1,
++        };
++        assert_eq!(offset_ns(v(), &info), Some(0));
++        info.declared_len += 1;
++        assert_eq!(offset_ns(v(), &info), None);
++        info.declared_len -= 1;
++        info.bytes.pop();
++        assert_eq!(offset_ns(v(), &info), None);
++        assert_eq!(
++            offset_ns(
++                DriverVersion {
++                    major: 595,
++                    minor: 91,
++                    patch: 8
++                },
++                &info
++            ),
++            None
++        );
++    }
++    #[test]
++    fn hostile_offset_extremes_are_bounded_clock_arithmetic() {
++        let beat = sample(|| Some(0), || Some(u64::MAX)).unwrap();
++        assert_eq!(beat.wrapping_add((u64::MAX / 1_000_000) as u32), 0);
++    }
++}
+diff --git a/crates/kf-qemu/src/lib.rs b/crates/kf-qemu/src/lib.rs
+index 84dc6b351..672f78b17 100644
+--- a/crates/kf-qemu/src/lib.rs
++++ b/crates/kf-qemu/src/lib.rs
+@@ -42,0 +43,2 @@ pub mod vblankgate;
++
++mod heartbeat;

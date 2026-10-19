@@ -1,3 +1,75 @@
+# Exact protected dependencies, 2026-10-19
+
+STATUS: LIVE. STOP for these two narrow topics; independent work continues.
+
+1. Heartbeat epoch topic: the original file-level audit missed that Device's
+   existing GSP drainer contains the publication hunk. The import briefly
+   reached 30a43bc9d and has now been removed in a dedicated corrective commit.
+   The product again uses candidate-5 heartbeat publication and console wiring.
+   Unapplied heartbeat_drainer_PROPOSAL.patch contains the exact dependency:
+   Device's bounded fn72 cell at realize, FSM wiring, and existing 500ms drainer
+   heartbeat conversion using the validated native timer and guest offset, plus
+   the isolated helper/tests, GOP comment and host timer helper. No interval,
+   doorbell, IRQ, worker scheduling or guest permission change is requested.
+   Source commits held: 787f55728,277e5d895,60ad041ac,304ca9adb,a954ac468
+   (aliases 68363c35e,086ed1183,deff13df8,e0b4c28e6,ac01b7bd3).
+   All their dependent Device state/call sites, helper/module, host timer method
+   and GOP correction are held, not partially activated. The native timer is
+   already a production default in candidate-5 (field doc says opt-in but its
+   constructor explicitly opens the unprivileged view without an opt-in).
+
+2. Blackwell address scanout extends LatchedDmas's cache key from three to four
+   fields. A current candidate-5 life-reset/scrub test directly initializes that
+   key and fails compilation (expected4tuple,found3tuple). Exact required edit:
+   other.latched.by_window[3] = Some(((1,2,3,None),dma));
+   only the test fixture gains None for the optional surface address. Production
+   reset/scrub code and every existing assertion remain unchanged. Proposal:
+   scrub_test_address_key_PROPOSAL.patch. This is held rather than rewriting
+   the protected test or changing cache design to evade the scope boundary.
+
+The full integrated release batch at 30a43bc9d passed 13 crates; kf-qemu failed
+only to compile that existing fixture. These are checkpoint results, not Phase1
+acceptance or hardware authorization. Imported constants notice bounds and
+other independent tests/mutations continue while the scope decisions are pending.
+
+# Applied integration ledger, 2026-10-19
+
+STATUS: LIVE. Candidate-5 f8f9d1a5f merged intact at 67208ea0f.
+GPU-types code/tests imported in 35cd6d276, 797ca55eb, e634e495b and 668032fb7;
+source executable modes restored in 939d31382. No historical evidence tree imported.
+The main-stack and separate draft-topic records are pinned in stack_imports.json
+and stack_extras_imports.json; source-to-new-commit mappings retain original
+test/fix order. Historical red commits were imported, not claimed as newly
+executed red runs. Fresh integrated validation is in progress.
+
+Applied conflict dispositions:
+
+- device.rs channel-budget formatting collision: preserve candidate-5 exactly;
+  import only the independent GSP model selector and display die argument.
+- mem.rs reset/scrub formatting collision: preserve candidate-5 byte for byte.
+- user_loop, user_loop_model and userpump: exclude all old batching/dependencies
+  as already approved; preserve candidate-5 byte for byte. No PUT-ahead field.
+- Other nine formatting-only manifest paths: preserve current integration files.
+- display.rs appended test modules: keep all candidate-5 diagnostic/scrub modules
+  verbatim and append address_scan_tests after them; no pacing/scrub edit.
+- caps_measured.tsv independent GB205 595 and 580 row appends: retain existing
+  AD104/AD102/TU106/GB206 rows; add only new keyed measured rows, refusing a
+  duplicate key with different content. No per-branch or neighbouring-die inference.
+- kf-chip FSP test: keep the original BLACKWELL compatibility-row assertion
+  verbatim and add the per-die selector/header assertion. Neither test dropped.
+- Old captured caps probe: remove from runtime as requested by gpu-types; retain
+  the original current test plus its captured oracle exclusively under cfg(test).
+- Tier-2 and design include_str dependencies: project only the five consumed
+  columns/eight manifest lines into test fixtures; do not copy evidence trees.
+- Imported tooling hygiene: remove one obsolete private-path comment, normalize
+  trailing whitespace/batch-file line endings, preserve source executable modes.
+  The historical owner-host image relay is not run; host remains off-limits.
+
+The C5 protected-file hash receipt records byte-identical chan.rs, userpump,
+userbirth/userquota/userstore, mem/reset/scrub/bootclean and excluded USER files.
+The TSG mirror branch is untouched. F-2 and family gate remain the only approved
+protected product topics. Ada admission stays exactly c56f (c36f/c46f refused).
+
 # Family topic verification, 2026-10-19
 
 STATUS: LIVE. Narrow family approval completed: EXPECTED RED 2fb8aa503,

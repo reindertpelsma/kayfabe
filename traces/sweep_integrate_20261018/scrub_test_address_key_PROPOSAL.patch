@@ -1,0 +1,5 @@
+--- a/crates/kf-qemu/src/display.rs
++++ b/crates/kf-qemu/src/display.rs
+@@ -6420 +6420 @@
+-        other.latched.by_window[3] = Some(((1, 2, 3), dma));
++        other.latched.by_window[3] = Some(((1, 2, 3, None), dma));
