@@ -38,7 +38,9 @@ typedef struct kfwc_platform {
 static __inline int kfwc_reg_allowed(kfwc_u32 off)
 {
     return off == KFWC_REG_PMC_BOOT_0 || off == KFWC_REG_GSP_MAILBOX0 ||
-           off == KFWC_REG_GSP_MAILBOX1;
+           off == KFWC_REG_GSP_MAILBOX1 ||
+           (off >= KFWC_DISPLAY_CAPS_BASE &&
+            off < KFWC_DISPLAY_CAPS_BASE + KFWC_DISPLAY_CAPS_BYTES && (off & 3u) == 0);
 }
 
 /* Whitelisted register read. Returns 0 on success, 1 on refusal/failure.
@@ -50,6 +52,21 @@ static __inline int kfwc_reg_read(const kfwc_platform *p, kfwc_u32 off, kfwc_u32
     if (p->read_reg32(p->ctx, off, out))
         return 1;
     return *out == 0xFFFFFFFFu;
+}
+
+/* One fixed page, never a caller-selected physical range. Reject an undersized output,
+ * unreadable register or empty page. The driver copies no partial snapshot on failure. */
+static __inline int kfwc_display_caps_read(const kfwc_platform *p, kfwc_u32 *words, kfwc_u32 capacity)
+{
+    kfwc_u32 i, nonzero = 0;
+    if (!p || !words || capacity < KFWC_DISPLAY_CAPS_WORDS)
+        return 1;
+    for (i = 0; i < KFWC_DISPLAY_CAPS_WORDS; i++) {
+        if (kfwc_reg_read(p, KFWC_DISPLAY_CAPS_BASE + i * 4u, &words[i]))
+            return 1;
+        nonzero |= words[i];
+    }
+    return nonzero == 0;
 }
 
 #endif /* KFWC_PLATFORM_H */
