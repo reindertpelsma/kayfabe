@@ -186,7 +186,10 @@ mod tests {
     #[test]
     fn every_display_driver_has_exact_wire_layouts() {
         for version in ["580.65.06", "580.159.04", "590.48.01", "595.91.07"] {
-            assert!(for_version(version).is_some(), "{version}: wire layouts absent");
+            assert!(
+                for_version(version).is_some(),
+                "{version}: wire layouts absent"
+            );
         }
         assert!(for_version("590.48.02").is_none());
         assert!(for_version("595.91.08").is_none());
@@ -199,11 +202,13 @@ mod tests {
         let name = "NVC370_CTRL_CMD_SET_SWAPRDY_GPIO_WAR";
         let cmd = old.k32(name).expect("public590 control");
         assert!(new.k32(name).is_none(), "public595 removed this control");
-        let model = |layouts| crate::model::DisplayModel::new(
-            &kf_chip::display::TURING,
-            vec![crate::edid::Monitor::default_1080p()],
-            layouts,
-        );
+        let model = |layouts| {
+            crate::model::DisplayModel::new(
+                &kf_chip::display::TURING,
+                vec![crate::edid::Monitor::default_1080p()],
+                layouts,
+            )
+        };
         assert!(model(old).claims(cmd));
         assert!(!model(new).claims(cmd));
     }
