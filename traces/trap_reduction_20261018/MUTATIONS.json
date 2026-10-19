@@ -1,0 +1,130 @@
+[
+  {
+    "mutant": "fire_only_on_latch",
+    "exit": 101,
+    "killing_tests": [
+      "differential_random_sparse_and_dense_seed_one",
+      "differential_random_sparse_and_dense_seed_two",
+      "exhaustive_pending_leaf_top_and_all_six_orders_every_vector"
+    ],
+    "kills": 3
+  },
+  {
+    "mutant": "fire_only_on_enable",
+    "exit": 101,
+    "killing_tests": [
+      "differential_random_sparse_and_dense_seed_one",
+      "differential_random_sparse_and_dense_seed_two",
+      "exhaustive_pending_leaf_top_and_all_six_orders_every_vector"
+    ],
+    "kills": 3
+  },
+  {
+    "mutant": "double_fire",
+    "exit": 101,
+    "killing_tests": [
+      "capacity_flush_never_drops_a_write_or_message",
+      "owed_pending_edge_is_returned_at_explicit_drain",
+      "owed_pending_edge_is_returned_before_w1c_barrier",
+      "random_replay_equivalence_seed_one",
+      "random_replay_equivalence_seed_two",
+      "trigger_before_a_host_latch_preserves_the_pre_latch_message",
+      "unmask_without_a_later_event_has_no_autonomous_delivery"
+    ],
+    "kills": 7
+  },
+  {
+    "mutant": "ignore_top_enable",
+    "exit": 101,
+    "killing_tests": [
+      "differential_random_sparse_and_dense_seed_one",
+      "differential_random_sparse_and_dense_seed_two",
+      "exhaustive_pending_leaf_top_and_all_six_orders_every_vector"
+    ],
+    "kills": 3
+  },
+  {
+    "mutant": "ignore_leaf_enable",
+    "exit": 101,
+    "killing_tests": [
+      "differential_random_sparse_and_dense_seed_one",
+      "differential_random_sparse_and_dense_seed_two",
+      "exhaustive_pending_leaf_top_and_all_six_orders_every_vector"
+    ],
+    "kills": 3
+  },
+  {
+    "mutant": "drop_w1c",
+    "exit": 101,
+    "killing_tests": [
+      "differential_random_sparse_and_dense_seed_one",
+      "differential_random_sparse_and_dense_seed_two",
+      "exhaustive_pending_leaf_top_and_all_six_orders_every_vector"
+    ],
+    "kills": 3
+  },
+  {
+    "mutant": "reorder_set_clear",
+    "exit": 101,
+    "killing_tests": [
+      "fifo_set_then_clear_is_not_a_final_value_store",
+      "random_replay_equivalence_seed_one",
+      "random_replay_equivalence_seed_two"
+    ],
+    "kills": 3
+  },
+  {
+    "mutant": "lose_owed_edge",
+    "exit": 101,
+    "killing_tests": [
+      "capacity_flush_never_drops_a_write_or_message",
+      "owed_pending_edge_is_returned_at_explicit_drain",
+      "owed_pending_edge_is_returned_before_w1c_barrier",
+      "random_replay_equivalence_seed_one",
+      "random_replay_equivalence_seed_two",
+      "trigger_before_a_host_latch_preserves_the_pre_latch_message",
+      "unmask_without_a_later_event_has_no_autonomous_delivery"
+    ],
+    "kills": 7
+  },
+  {
+    "mutant": "apply_takes_a_lock",
+    "exit": 101,
+    "killing_tests": [
+      "cpuintr_apply_has_no_std_lock_allocator_or_os_capability",
+      "replay_and_its_transitive_apply_have_no_blocking_capability"
+    ],
+    "kills": 2
+  },
+  {
+    "mutant": "remove_replay_bound",
+    "exit": 101,
+    "killing_tests": [
+      "pure_replay_refuses_oversized_input_before_any_apply",
+      "pure_replay_rejection_cannot_acknowledge_a_pending_edge"
+    ],
+    "kills": 2
+  },
+  {
+    "mutant": "eager_masks",
+    "exit": 101,
+    "killing_tests": [
+      "capacity_flush_never_drops_a_write_or_message",
+      "deferred_mask_reads_are_stale_even_when_eventual_irq_replay_is_correct",
+      "owed_pending_edge_is_returned_at_explicit_drain",
+      "owed_pending_edge_is_returned_before_w1c_barrier",
+      "unmask_without_a_later_event_has_no_autonomous_delivery"
+    ],
+    "kills": 5
+  },
+  {
+    "mutant": "reset_retains_state",
+    "exit": 101,
+    "killing_tests": [
+      "differential_random_sparse_and_dense_seed_one",
+      "differential_random_sparse_and_dense_seed_two",
+      "reset_discards_pending_and_both_enable_aliases_every_family"
+    ],
+    "kills": 3
+  }
+]

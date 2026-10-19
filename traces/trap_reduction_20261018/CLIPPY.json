@@ -1,0 +1,8 @@
+{
+  "baseline_warnings": 188,
+  "candidate_warnings": 188,
+  "added": 0,
+  "removed": 0,
+  "errors": 0,
+  "scope": "kf-trap --release --all-targets; candidate also research-replay"
+}

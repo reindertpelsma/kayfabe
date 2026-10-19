@@ -5,6 +5,10 @@ version.workspace = true
 edition.workspace = true
 license.workspace = true
 
+[features]
+# Pure research oracle only. No device registration or runtime path uses this.
+research-replay = []
+
 [dependencies]
 kf-chip.workspace = true
 

@@ -1,0 +1,7 @@
+MEASURED: base 111 PASS / 0 FAIL; candidate 129 PASS / 0 FAIL / 0 ignored (release, jobs=2, nice=19).
+120000 differential operations; 86016 single-edge schedules; 150000 randomized serial replay operations; extra messages=0.
+12 restored-source mutants killed by >=2 tests each; MUTATIONS.json lists exact tests.
+Two no_std capability compilations cover CpuIntr apply/read/shadow/reset and transitive replay. They reject std locks/allocators/OS calls, not custom atomic spinlocks.
+Clippy baseline and candidate multisets identical: 188 inherited warnings, 0 errors, added=0, removed=0.
+Production CpuIntr source is unchanged. Replay has no device callers, no callback/allocator/OS handle, fixed 64-entry storage and bounded drain, optional research-replay feature default off.
+This establishes SERIAL order equivalence only; untrapped mask read coherence, total ordering among concurrent producers, guaranteed final drain and kernel/QEMU blocking remain separate gates.
