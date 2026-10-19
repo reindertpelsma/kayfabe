@@ -6419,7 +6419,7 @@ mod tests {
             block_linear: false,
             writable: false,
         };
-        other.latched.by_window[3] = Some(((1, 2, 3), dma));
+        other.latched.by_window[3] = Some(((1, 2, 3, None), dma));
         other.colors.slots[3] = Some((
             (
                 1,
