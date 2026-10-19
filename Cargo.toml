@@ -5,6 +5,7 @@ resolver = "2"
 # never linked into the VMM (firmware/README.md).
 exclude = ["archive", "firmware"]
 members = [
+    "crates/kf-prof",
     "crates/kf-mem",
     "crates/kf-trap",
     "crates/kf-rm",
@@ -53,6 +54,7 @@ license = "Apache-2.0 OR GPL-2.0-or-later"
 authors = ["kayfabe"]
 
 [workspace.dependencies]
+kf-prof = { path = "crates/kf-prof" }
 kayfabe-util = { path = "crates/kayfabe-util" }
 kf-util = { path = "crates/kf-util" }
 kf-arch = { path = "crates/kf-arch" }

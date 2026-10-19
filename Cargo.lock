@@ -401,6 +401,10 @@ name = "kf-oprom"
 version = "0.1.0"
 
 [[package]]
+name = "kf-prof"
+version = "0.1.0"
+
+[[package]]
 name = "kf-qemu"
 version = "0.1.0"
 dependencies = [
