@@ -6,6 +6,17 @@ published candidate-5 `f8f9d1a5f`. Part B is gated on coordinator `go`.
 [PREREG.md](PREREG.md) records falsifiers and the three-hour hardware plan.
 No VM, GPU, guest diagnostic channel or GPU lock has been touched by this lane.
 
+**PARTIAL; stopped under the lane's contradiction rule.** [STOP.md](STOP.md)
+records the mismatch in required broker/clock evidence and three options.
+MEASURED: the normalized-input analyzer has 20 passing tests and three mutants
+killed by 2/2/3 tests ([analyzer_mutations.txt](analyzer_mutations.txt)). Tests
+were committed alone as EXPECTED RED before implementation. No timeline
+recorder, collectors or binaries have been built. Part B is not ready.
+MEASURED: unchanged Rust baseline passed 1038 tests, 15 ignored, zero failures;
+[validation.txt](validation.txt) records the command and cleanup limitation.
+The lane-owned target directory remains (204 MiB): deletion was rejected by
+the execution safety check and the lane forbids working around a refused step.
+
 ## Existing counter evidence
 
 MEASURED, read-only scan of existing run logs, 2026-10-19; these are lifetime
@@ -20,7 +31,7 @@ CODE READ: `kf-mem/src/vasmgr.rs`, `VaTiming::since`, subtracts cumulative count
 and sums, but retains lifetime `inval_ns_max` and `leaves_last`. `device.rs`
 formats that mixed snapshot as `vat[...]`. Thus `invals=0 max_us>0` is expected.
 `complete_invalidate` times VA-manager acceptance to trigger completion (including
-deferred target settlement); acceptance timestamps are created in `invalidate`.
+deferred target settlement); acceptance timestamps are created in `on_invalidate`.
 It excludes earlier vCPU-to-drainer/manager delay. `walk_ns` is submit-to-collected
 wall time; `gpu_us` comes from the walker; plan/apply are separate sums.
 INFERRED: these maxima justify event-level measurement, but identify no culprit.

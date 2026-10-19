@@ -1,0 +1,13 @@
+MEASURED: CPU-only baseline; unchanged candidate-5 Rust source f8f9d1a5f.
+Command: nice -n 19 cargo test --release -j2 -p kf-qemu -p kf-mem -p kf-host -p kf-broker -p kf-disp
+Environment: lane-owned CARGO_TARGET_DIR; df checked before the build (47 GiB free).
+Exit status 0; 31 result groups, 1038 passed, 0 failed, 15 ignored.
+No Rust source changed in H1; no repeated Rust after-build was needed.
+Python analyzer before implementation: 1 expected missing-file loader error.
+Python analyzer after implementation: 20 passed, 0 failed.
+Mutants A1/A2/A3: 2/2/3 killing tests; originals restored; final 20 passed.
+Clippy: not run, no Rust source changed. Runtime instrumentation: not implemented.
+Hardware: n=0. No VM, guest diagnostic channel, GPU or GPU lock touched.
+Cleanup: CPU build/test process exited. Own target directory remains (204 MiB).
+The execution safety check rejected its deletion: rm -f style commands are not permitted.
+The lane's stop/no-workaround rule was honored; no alternative deletion attempted.
