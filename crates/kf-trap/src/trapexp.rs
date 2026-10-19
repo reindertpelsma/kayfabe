@@ -27,8 +27,16 @@ pub const INTR_PAGE_END: u64 = 0x00B8_2000;
 /// off; a larger value is clamped to [`MAX_DELAY_US`].
 #[must_use]
 pub fn parse_delay_us(v: Option<&str>) -> u32 {
-    let _ = v;
-    u32::MAX
+    match v.map(str::trim).and_then(|t| t.parse::<u64>().ok()) {
+        Some(n) => u32::try_from(n.min(u64::from(MAX_DELAY_US))).unwrap_or(MAX_DELAY_US),
+        None => {
+            // An all-digit value too large for u64 is still "a lot": clamp, do not turn it off.
+            match v.map(str::trim) {
+                Some(t) if !t.is_empty() && t.bytes().all(|b| b.is_ascii_digit()) => MAX_DELAY_US,
+                _ => 0,
+            }
+        }
+    }
 }
 
 /// The two delays, in microseconds (0 = off).
@@ -44,8 +52,13 @@ pub struct Delays {
 /// BAR0 offset. Only the interrupt page and the doorbell are ever delayed.
 #[must_use]
 pub fn delay_for(d: &Delays, doorbell_off: u64, off: u64) -> u32 {
-    let _ = (d, doorbell_off, off);
-    u32::MAX
+    if (INTR_PAGE..INTR_PAGE_END).contains(&off) {
+        d.intr_us
+    } else if off == doorbell_off {
+        d.db_us
+    } else {
+        0
+    }
 }
 
 /// The interrupt page's registers, one value per word the spinner owns.
@@ -72,21 +85,52 @@ const REL: u64 = INTR_PAGE - 0xB8_0000; // PRIV-relative start of the page (0x10
 impl Regs {
     /// Read the page: `rd(page_offset)` returns the 32-bit word at that byte offset in the page.
     pub fn load(n_leaf: usize, mut rd: impl FnMut(usize) -> u32) -> Regs {
-        let _ = (n_leaf, &mut rd);
-        Regs::default()
+        let mut r = Regs::default();
+        for i in 0..n_leaf.min(MAX_LEAF) {
+            r.leaf[i] = rd(Self::off(LEAF_OFF, i));
+            r.en_set[i] = rd(Self::off(LEAF_EN_SET_OFF, i));
+            r.en_clear[i] = rd(Self::off(LEAF_EN_CLEAR_OFF, i));
+        }
+        r.top = rd(Self::off(TOP_OFF, 0));
+        r.top_en_set = rd(Self::off(TOP_EN_SET_OFF, 0));
+        r.top_en_clear = rd(Self::off(TOP_EN_CLEAR_OFF, 0));
+        r.trigger = rd(Self::off(LEAF_TRIGGER_OFF, 0));
+        r
+    }
+
+    fn off(base: u64, i: usize) -> usize {
+        (base - REL) as usize + 4 * i
     }
 
     /// Call `f(page_offset, old, new)` for every owned word whose value differs.
     pub fn changes(&self, new: &Regs, n_leaf: usize, mut f: impl FnMut(usize, u32, u32)) {
-        let _ = (new, n_leaf, &mut f);
+        let mut diff = |o: usize, a: u32, b: u32| {
+            if a != b {
+                f(o, a, b);
+            }
+        };
+        for i in 0..n_leaf.min(MAX_LEAF) {
+            diff(Self::off(LEAF_OFF, i), self.leaf[i], new.leaf[i]);
+            diff(Self::off(LEAF_EN_SET_OFF, i), self.en_set[i], new.en_set[i]);
+            diff(Self::off(LEAF_EN_CLEAR_OFF, i), self.en_clear[i], new.en_clear[i]);
+        }
+        diff(Self::off(TOP_OFF, 0), self.top, new.top);
+        diff(Self::off(TOP_EN_SET_OFF, 0), self.top_en_set, new.top_en_set);
+        diff(Self::off(TOP_EN_CLEAR_OFF, 0), self.top_en_clear, new.top_en_clear);
+        diff(Self::off(LEAF_TRIGGER_OFF, 0), self.trigger, new.trigger);
     }
 }
 
 /// `TOP(0)` derived from the leaves: subtree `s` pends iff leaf `2s` or `2s+1` is nonzero.
 #[must_use]
 pub fn derive_top(leaf: &[u32], n_leaf: usize) -> u32 {
-    let _ = (leaf, n_leaf);
-    u32::MAX
+    let mut t = 0u32;
+    for (i, w) in leaf.iter().enumerate().take(n_leaf) {
+        if *w != 0 {
+            t |= 1 << (i / 2);
+        }
+    }
+    t
 }
 
 /// The spinner's whole state: the vector mask it has learned. Bounded: 17 words.
@@ -101,9 +145,8 @@ impl SpinState {
     /// A fresh state for a family (8 leaves on Turing/Ampere/Ada, 16 on Hopper/Blackwell).
     #[must_use]
     pub fn new(family: kf_chip::Family) -> SpinState {
-        let _ = family;
         SpinState {
-            n_leaf: 0,
+            n_leaf: leaf_regs_for(family),
             p: [0; MAX_LEAF],
             top_p: 0,
         }
@@ -124,8 +167,25 @@ impl SpinState {
     /// One poll: `cur` is what the page holds; returns the words the page should hold and whether to
     /// raise the irqfd once.
     pub fn step(&mut self, cur: &Regs) -> (Regs, bool) {
-        let _ = cur;
-        (Regs::default(), true)
+        let n = self.n_leaf;
+        let mut new = *cur;
+        for i in 0..n {
+            // (a) learn: the guest only enables vectors it handles. A value in EN_SET that is not
+            // the mask means a store happened; OR it in. EN_CLEAR is never learned from.
+            self.p[i] |= cur.en_set[i];
+            new.en_set[i] = self.p[i];
+            new.en_clear[i] = self.p[i];
+            // (b) forward everything enabled-ever, restoring it right after any guest store (W1C).
+            new.leaf[i] = self.p[i];
+        }
+        self.top_p |= cur.top_en_set;
+        new.top_en_set = self.top_p;
+        new.top_en_clear = self.top_p;
+        new.top = derive_top(&new.leaf, n);
+        // (c) a nonzero trigger word: one raise, word cleared.
+        let raise = cur.trigger != 0;
+        new.trigger = 0;
+        (new, raise)
     }
 }
 
@@ -485,6 +545,135 @@ mod tests {
     fn leaf_regs_match_the_family_table() {
         for f in [Family::Turing, Family::Ampere, Family::Ada, Family::Hopper, Family::Blackwell] {
             assert_eq!(fresh(f).n_leaf(), leaf_regs_for(f));
+        }
+    }
+    #[test]
+    fn delay_cap_holds_for_every_large_value() {
+        for v in ["1000", "1001", "2000", "65536", "4294967295", "4294967296", "18446744073709551616"] {
+            assert!(parse_delay_us(Some(v)) <= MAX_DELAY_US, "{v}");
+            assert_eq!(parse_delay_us(Some(v)), MAX_DELAY_US, "{v}");
+        }
+        assert_eq!(parse_delay_us(Some("1")), 1);
+    }
+
+    #[test]
+    fn delay_garbage_is_off_never_max() {
+        for v in ["x", "10us", "0x10", "+", "--3", "1e3", " ", "\t"] {
+            assert_eq!(parse_delay_us(Some(v)), 0, "{v:?}");
+        }
+    }
+
+    #[test]
+    fn the_interrupt_range_is_exactly_one_page() {
+        let d = Delays { intr_us: 7, db_us: 0 };
+        let hit = (0u64..0xBC_0000).step_by(4).filter(|&o| delay_for(&d, 0xBB_0090, o) != 0).count();
+        assert_eq!(hit, 0x1000 / 4);
+        assert_eq!(delay_for(&d, 0xBB_0090, 0xB8_1000), 7);
+        assert_eq!(delay_for(&d, 0xBB_0090, 0xB8_2000), 0);
+    }
+
+    #[test]
+    fn the_doorbell_delay_is_exactly_one_register() {
+        let d = Delays { intr_us: 0, db_us: 9 };
+        let hit: Vec<u64> = (0u64..0xBC_0000).step_by(4).filter(|&o| delay_for(&d, 0xBB_0090, o) != 0).collect();
+        assert_eq!(hit, vec![0xBB_0090]);
+    }
+
+    #[test]
+    fn learning_never_forgets_a_vector() {
+        let mut s = fresh(Family::Ampere);
+        let mut page = Regs::default();
+        page.en_set[0] = 0b01;
+        page = s.step(&page).0;
+        page.en_set[0] = 0b10;
+        page = s.step(&page).0;
+        assert_eq!(s.mask(0), 0b11);
+        page.en_set[0] = 0b01; // re-enabling a subset
+        page = s.step(&page).0;
+        assert_eq!(s.mask(0), 0b11);
+        assert_eq!(page.leaf[0], 0b11);
+        page.top_en_set = 0b01;
+        page = s.step(&page).0;
+        page.top_en_set = 0b10;
+        page = s.step(&page).0;
+        assert_eq!(page.top_en_set, 0b11);
+    }
+
+    #[test]
+    fn an_en_clear_store_alone_never_changes_the_mask() {
+        let mut s = fresh(Family::Ampere);
+        let mut page = Regs::default();
+        page.en_set[3] = 0b1111;
+        page = s.step(&page).0;
+        for v in [0b0001, 0b0110, 0xFFFF_FFFF, 0b1111, 0] {
+            page.en_clear[3] = v;
+            let (n, raise) = s.step(&page);
+            assert!(!raise);
+            assert_eq!(s.mask(3), 0b1111, "after EN_CLEAR {v:#x}");
+            assert_eq!(n.leaf[3], 0b1111);
+            assert_eq!(n.en_clear[3], 0b1111);
+            page = n;
+        }
+    }
+
+    #[test]
+    fn the_restore_never_exceeds_the_learned_mask() {
+        let mut s = fresh(Family::Hopper);
+        let mut page = Regs::default();
+        page.en_set[9] = 0x0000_00F0;
+        page = s.step(&page).0;
+        for v in [0xFFFF_FFFF, 0x0F, 0x100, 0xF0, 0] {
+            page.leaf[9] = v;
+            let (n, _) = s.step(&page);
+            assert_eq!(n.leaf[9], 0xF0, "guest stored {v:#x}");
+            assert_eq!(n.leaf[9] & !s.mask(9), 0);
+            page = n;
+        }
+    }
+
+    #[test]
+    fn en_set_reads_back_the_mask_not_the_last_store() {
+        let mut s = fresh(Family::Ampere);
+        let mut page = Regs::default();
+        page.en_set[1] = 0b0100;
+        page = s.step(&page).0;
+        page.en_set[1] = 0b0001;
+        let (n, _) = s.step(&page);
+        assert_eq!(n.en_set[1], 0b0101);
+        assert_eq!(n.en_clear[1], 0b0101);
+    }
+
+    #[test]
+    fn every_register_has_its_own_word_at_its_documented_offset() {
+        let at = |f: &dyn Fn(&mut Regs)| {
+            let mut r = Regs::default();
+            f(&mut r);
+            let mut v = Vec::new();
+            r.changes(&Regs::default(), 16, |o, _, _| v.push(o));
+            v
+        };
+        assert_eq!(at(&|r| r.leaf[0] = 1), vec![0x000]);
+        assert_eq!(at(&|r| r.leaf[15] = 1), vec![0x03C]);
+        assert_eq!(at(&|r| r.en_set[0] = 1), vec![0x200]);
+        assert_eq!(at(&|r| r.en_set[15] = 1), vec![0x23C]);
+        assert_eq!(at(&|r| r.en_clear[0] = 1), vec![0x400]);
+        assert_eq!(at(&|r| r.en_clear[15] = 1), vec![0x43C]);
+        assert_eq!(at(&|r| r.top = 1), vec![0x600]);
+        assert_eq!(at(&|r| r.top_en_set = 1), vec![0x608]);
+        assert_eq!(at(&|r| r.top_en_clear = 1), vec![0x610]);
+        assert_eq!(at(&|r| r.trigger = 1), vec![0x640]);
+    }
+    #[test]
+    fn latch_forward_range_is_the_family_range_for_every_vector() {
+        use crate::cpuintr::{CpuIntr, Raise};
+        for (f, n) in [(Family::Ampere, 8u32), (Family::Hopper, 16)] {
+            let t = CpuIntr::new(f, 0xBB_0000).unwrap();
+            let snap = t.snapshot();
+            for v in 0..(20 * 32) {
+                let want = if v / 32 < n { Raise::Message } else { Raise::OutOfRange };
+                assert_eq!(t.latch_forward(v), want, "{f:?} vector {v}");
+            }
+            assert_eq!(t.snapshot(), snap, "{f:?}: the model is untouched");
         }
     }
 }

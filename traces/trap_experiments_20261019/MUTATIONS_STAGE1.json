@@ -1,0 +1,248 @@
+[
+ {
+  "id": "M1",
+  "desc": "delay parse: no clamp",
+  "killed_by": [
+   "trapexp::tests::delay_cap_holds_for_every_large_value",
+   "trapexp::tests::delay_parse_is_bounded"
+  ],
+  "n": 2
+ },
+ {
+  "id": "M2",
+  "desc": "delay parse: garbage parses as max instead of off",
+  "killed_by": [
+   "trapexp::tests::delay_garbage_is_off_never_max",
+   "trapexp::tests::delay_parse_default_off"
+  ],
+  "n": 2
+ },
+ {
+  "id": "M3",
+  "desc": "delay_for: interrupt range end inclusive",
+  "killed_by": [
+   "trapexp::tests::delay_applies_only_to_the_listed_ranges",
+   "trapexp::tests::the_interrupt_range_is_exactly_one_page"
+  ],
+  "n": 2
+ },
+ {
+  "id": "M4",
+  "desc": "delay_for: doorbell delay applies to the whole usermode page",
+  "killed_by": [
+   "trapexp::tests::delay_applies_only_to_the_listed_ranges",
+   "trapexp::tests::the_doorbell_delay_is_exactly_one_register"
+  ],
+  "n": 2
+ },
+ {
+  "id": "M5",
+  "desc": "delay_for: swapped arms",
+  "killed_by": [
+   "trapexp::tests::delay_applies_only_to_the_listed_ranges",
+   "trapexp::tests::delay_arms_are_independent_and_default_zero",
+   "trapexp::tests::the_doorbell_delay_is_exactly_one_register",
+   "trapexp::tests::the_interrupt_range_is_exactly_one_page"
+  ],
+  "n": 4
+ },
+ {
+  "id": "M6",
+  "desc": "step: does not learn from EN_SET",
+  "killed_by": [
+   "trapexp::tests::a_family_never_owns_leaves_beyond_its_count",
+   "trapexp::tests::an_en_clear_store_alone_never_changes_the_mask",
+   "trapexp::tests::en_clear_and_top_en_clear_are_ignored",
+   "trapexp::tests::en_set_reads_back_the_mask_not_the_last_store",
+   "trapexp::tests::learning_never_forgets_a_vector",
+   "trapexp::tests::learns_the_mask_from_en_set_and_ors_it_over_time",
+   "trapexp::tests::restores_pending_right_after_the_guest_ack_store",
+   "trapexp::tests::step_writes_top_from_the_forced_leaves",
+   "trapexp::tests::the_driver_loopback_self_test_sees_its_vector",
+   "trapexp::tests::the_restore_never_exceeds_the_learned_mask"
+  ],
+  "n": 10
+ },
+ {
+  "id": "M7",
+  "desc": "step: learn replaces instead of ORs",
+  "killed_by": [
+   "trapexp::tests::en_set_reads_back_the_mask_not_the_last_store",
+   "trapexp::tests::learning_never_forgets_a_vector",
+   "trapexp::tests::learns_the_mask_from_en_set_and_ors_it_over_time"
+  ],
+  "n": 3
+ },
+ {
+  "id": "M8",
+  "desc": "step: EN_CLEAR is learned from (unlearns)",
+  "killed_by": [
+   "trapexp::tests::an_en_clear_store_alone_never_changes_the_mask",
+   "trapexp::tests::en_set_reads_back_the_mask_not_the_last_store",
+   "trapexp::tests::learning_never_forgets_a_vector",
+   "trapexp::tests::learns_the_mask_from_en_set_and_ors_it_over_time"
+  ],
+  "n": 4
+ },
+ {
+  "id": "M9",
+  "desc": "step: leaf not restored after an ack store (keeps the guest word)",
+  "killed_by": [
+   "trapexp::tests::learning_never_forgets_a_vector",
+   "trapexp::tests::learns_the_mask_from_en_set_and_ors_it_over_time",
+   "trapexp::tests::restores_pending_right_after_the_guest_ack_store",
+   "trapexp::tests::the_restore_never_exceeds_the_learned_mask"
+  ],
+  "n": 4
+ },
+ {
+  "id": "M10",
+  "desc": "step: restore ORs the guest word (can exceed the mask)",
+  "killed_by": [
+   "trapexp::tests::restores_pending_right_after_the_guest_ack_store",
+   "trapexp::tests::the_restore_never_exceeds_the_learned_mask"
+  ],
+  "n": 2
+ },
+ {
+  "id": "M11",
+  "desc": "step: TOP not derived (copied)",
+  "killed_by": [
+   "trapexp::tests::step_writes_top_from_the_forced_leaves",
+   "trapexp::tests::the_driver_loopback_self_test_sees_its_vector"
+  ],
+  "n": 2
+ },
+ {
+  "id": "M12",
+  "desc": "derive_top: leaf i maps to subtree i, not i/2",
+  "killed_by": [
+   "trapexp::tests::step_writes_top_from_the_forced_leaves",
+   "trapexp::tests::the_driver_loopback_self_test_sees_its_vector",
+   "trapexp::tests::top_is_derived_from_the_leaves"
+  ],
+  "n": 3
+ },
+ {
+  "id": "M13",
+  "desc": "step: raises every poll",
+  "killed_by": [
+   "trapexp::tests::a_quiescent_page_is_a_fixpoint_and_stores_nothing",
+   "trapexp::tests::a_trigger_raises_once_and_the_word_is_cleared",
+   "trapexp::tests::an_en_clear_store_alone_never_changes_the_mask",
+   "trapexp::tests::en_clear_and_top_en_clear_are_ignored",
+   "trapexp::tests::it_never_raises_without_a_trigger",
+   "trapexp::tests::nothing_is_pending_before_anything_is_enabled",
+   "trapexp::tests::restores_pending_right_after_the_guest_ack_store",
+   "trapexp::tests::the_driver_loopback_self_test_sees_its_vector"
+  ],
+  "n": 8
+ },
+ {
+  "id": "M14",
+  "desc": "step: trigger word not cleared",
+  "killed_by": [
+   "trapexp::tests::a_trigger_raises_once_and_the_word_is_cleared",
+   "trapexp::tests::the_driver_loopback_self_test_sees_its_vector"
+  ],
+  "n": 2
+ },
+ {
+  "id": "M15",
+  "desc": "step: raises on any pending/leaf activity",
+  "killed_by": [
+   "trapexp::tests::a_quiescent_page_is_a_fixpoint_and_stores_nothing",
+   "trapexp::tests::an_en_clear_store_alone_never_changes_the_mask",
+   "trapexp::tests::en_clear_and_top_en_clear_are_ignored",
+   "trapexp::tests::it_never_raises_without_a_trigger",
+   "trapexp::tests::restores_pending_right_after_the_guest_ack_store",
+   "trapexp::tests::the_driver_loopback_self_test_sees_its_vector"
+  ],
+  "n": 6
+ },
+ {
+  "id": "M16",
+  "desc": "new: always 16 leaves",
+  "killed_by": [
+   "trapexp::tests::a_family_never_owns_leaves_beyond_its_count",
+   "trapexp::tests::leaf_counts_per_family",
+   "trapexp::tests::leaf_regs_match_the_family_table"
+  ],
+  "n": 3
+ },
+ {
+  "id": "M17",
+  "desc": "changes: reports equal words too",
+  "killed_by": [
+   "trapexp::tests::a_quiescent_page_is_a_fixpoint_and_stores_nothing",
+   "trapexp::tests::changes_reports_only_what_differs_and_only_owned_leaves",
+   "trapexp::tests::every_register_has_its_own_word_at_its_documented_offset",
+   "trapexp::tests::page_offsets_match_the_register_map"
+  ],
+  "n": 4
+ },
+ {
+  "id": "M18",
+  "desc": "offsets: EN_CLEAR placed at the EN_SET offset",
+  "killed_by": [
+   "trapexp::tests::every_register_has_its_own_word_at_its_documented_offset",
+   "trapexp::tests::page_offsets_match_the_register_map"
+  ],
+  "n": 2
+ },
+ {
+  "id": "M19",
+  "desc": "step: TOP_EN_CLEAR learned/forced to zero (not read-back of the mask)",
+  "killed_by": [
+   "trapexp::tests::a_quiescent_page_is_a_fixpoint_and_stores_nothing",
+   "trapexp::tests::en_clear_and_top_en_clear_are_ignored"
+  ],
+  "n": 2
+ },
+ {
+  "id": "M20",
+  "desc": "step: EN_SET read-back left as the guest wrote it",
+  "killed_by": [
+   "trapexp::tests::en_set_reads_back_the_mask_not_the_last_store",
+   "trapexp::tests::learns_the_mask_from_en_set_and_ors_it_over_time"
+  ],
+  "n": 2
+ },
+ {
+  "id": "L1",
+  "desc": "latch_forward: no range check (always Message)",
+  "killed_by": [
+   "trapexp::tests::latch_forward_raises_without_enables_and_the_normal_latch_is_unchanged",
+   "trapexp::tests::latch_forward_range_is_the_family_range_for_every_vector"
+  ],
+  "n": 2
+ },
+ {
+  "id": "L2",
+  "desc": "latch_forward: honours the enables (calls latch)",
+  "killed_by": [
+   "trapexp::tests::latch_forward_does_not_touch_the_model",
+   "trapexp::tests::latch_forward_raises_without_enables_and_the_normal_latch_is_unchanged",
+   "trapexp::tests::latch_forward_range_is_the_family_range_for_every_vector"
+  ],
+  "n": 3
+ },
+ {
+  "id": "L3",
+  "desc": "latch_forward: also latches the pending bit into the model",
+  "killed_by": [
+   "trapexp::tests::latch_forward_does_not_touch_the_model",
+   "trapexp::tests::latch_forward_range_is_the_family_range_for_every_vector"
+  ],
+  "n": 2
+ },
+ {
+  "id": "L4",
+  "desc": "latch_forward: range off by one leaf",
+  "killed_by": [
+   "trapexp::tests::latch_forward_raises_without_enables_and_the_normal_latch_is_unchanged",
+   "trapexp::tests::latch_forward_range_is_the_family_range_for_every_vector"
+  ],
+  "n": 2
+ }
+]

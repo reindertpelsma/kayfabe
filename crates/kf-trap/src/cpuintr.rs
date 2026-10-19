@@ -261,8 +261,11 @@ impl CpuIntr {
     /// UNCONDITIONALLY for any vector in this family's leaves, and touch no state.
     #[cfg(feature = "diag-trap-exp")]
     pub fn latch_forward(&self, vector: u32) -> Raise {
-        let _ = vector;
-        Raise::None
+        if (vector / 32) as usize >= self.n_leaf {
+            Raise::OutOfRange
+        } else {
+            Raise::Message
+        }
     }
 
     /// `(BAR0 offset, value)` for every register whose read-back `r` may have changed — the vCPU

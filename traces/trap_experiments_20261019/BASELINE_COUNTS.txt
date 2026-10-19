@@ -1,1 +1,2 @@
 default features, base c2685412e, cargo test --release -p kf-trap -p kf-qemu: kf-trap 111 passed (lib 86 + integration 25), kf-qemu 408 passed (lib 387 + integration 21), 0 failed.
+stage 1 GREEN: kf-trap default features 111 (unchanged), with diag-trap-exp 142 (+31: 30 trapexp tests + latch_forward range test counted in 31). 24 mutants (MUTATIONS_STAGE1.json), each killed by >=2 tests.
