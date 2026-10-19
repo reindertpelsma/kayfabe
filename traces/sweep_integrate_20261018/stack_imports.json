@@ -666,7 +666,17 @@
         "crates/kf-qemu/src/heartbeat.rs",
         "crates/kf-qemu/src/lib.rs"
       ],
-      "disposition": "held after import at protected drainer boundary; corrective commit 32d1128b4; proposal only"
+      "disposition": "approved2026-10-19; reimplemented as isolated nonblocking heartbeat series with fresh EXPECTED RED and mutation proof, rather than reapplying the blocking proposal",
+      "prior_disposition": "held after import at protected drainer boundary; corrective commit 32d1128b4; proposal only",
+      "replacement_series": [
+        "f041ceab3",
+        "16e80e802",
+        "32eebb3ab",
+        "4e0e0b645",
+        "39b11e805",
+        "d99c2367b",
+        "3cf12a4b9"
+      ]
     },
     {
       "source": "277e5d895fbbb273e4585940f85ee031c8d5063f",
@@ -677,7 +687,17 @@
         "crates/kf-qemu/src/device.rs",
         "crates/kf-qemu/src/heartbeat.rs"
       ],
-      "disposition": "held after import at protected drainer boundary; corrective commit 32d1128b4; proposal only"
+      "disposition": "approved2026-10-19; reimplemented as isolated nonblocking heartbeat series with fresh EXPECTED RED and mutation proof, rather than reapplying the blocking proposal",
+      "prior_disposition": "held after import at protected drainer boundary; corrective commit 32d1128b4; proposal only",
+      "replacement_series": [
+        "f041ceab3",
+        "16e80e802",
+        "32eebb3ab",
+        "4e0e0b645",
+        "39b11e805",
+        "d99c2367b",
+        "3cf12a4b9"
+      ]
     },
     {
       "source": "60ad041ac3cf62fce9f1385e256e30158c688ea7",
@@ -686,7 +706,17 @@
       "paths": [
         "crates/kf-qemu/src/heartbeat.rs"
       ],
-      "disposition": "held after import at protected drainer boundary; corrective commit 32d1128b4; proposal only"
+      "disposition": "approved2026-10-19; reimplemented as isolated nonblocking heartbeat series with fresh EXPECTED RED and mutation proof, rather than reapplying the blocking proposal",
+      "prior_disposition": "held after import at protected drainer boundary; corrective commit 32d1128b4; proposal only",
+      "replacement_series": [
+        "f041ceab3",
+        "16e80e802",
+        "32eebb3ab",
+        "4e0e0b645",
+        "39b11e805",
+        "d99c2367b",
+        "3cf12a4b9"
+      ]
     },
     {
       "source": "304ca9adb10528ac73d809636174625199f40ba1",
@@ -696,7 +726,17 @@
         "crates/kf-qemu/src/device.rs",
         "crates/kf-qemu/src/heartbeat.rs"
       ],
-      "disposition": "held after import at protected drainer boundary; corrective commit 32d1128b4; proposal only"
+      "disposition": "approved2026-10-19; reimplemented as isolated nonblocking heartbeat series with fresh EXPECTED RED and mutation proof, rather than reapplying the blocking proposal",
+      "prior_disposition": "held after import at protected drainer boundary; corrective commit 32d1128b4; proposal only",
+      "replacement_series": [
+        "f041ceab3",
+        "16e80e802",
+        "32eebb3ab",
+        "4e0e0b645",
+        "39b11e805",
+        "d99c2367b",
+        "3cf12a4b9"
+      ]
     },
     {
       "source": "a954ac468300d3a085317ed90bdd84f0785d9efc",
@@ -706,7 +746,17 @@
         "crates/kf-qemu/src/gop.rs",
         "crates/kf-qemu/src/heartbeat.rs"
       ],
-      "disposition": "held after import at protected drainer boundary; corrective commit 32d1128b4; proposal only"
+      "disposition": "approved2026-10-19; reimplemented as isolated nonblocking heartbeat series with fresh EXPECTED RED and mutation proof, rather than reapplying the blocking proposal",
+      "prior_disposition": "held after import at protected drainer boundary; corrective commit 32d1128b4; proposal only",
+      "replacement_series": [
+        "f041ceab3",
+        "16e80e802",
+        "32eebb3ab",
+        "4e0e0b645",
+        "39b11e805",
+        "d99c2367b",
+        "3cf12a4b9"
+      ]
     },
     {
       "source": "c450af0782724f6c764f33780076d7456078d244",

@@ -28,7 +28,8 @@ the TSG mirror branch or old evidence trees.
 Approved separate heartbeat series: scaffold f041ceab3, tests-only EXPECTED RED
 16e80e802, helper fix32eebb3ab, Device wiring4e0e0b645, fresh-queue EXPECTED RED
 39b11e805 and one-bit readiness fixd99c2367b. Proposed head sweep-heartbeat,
-base sweep-types/constants for the shared exact ABI and current-life state.
+base candidate5: its existing timer, fn72 cell and generated ABI already supply
+the needed clock interfaces; the topic adds readiness and nonblocking reads.
 This replaces the old unapplied blocking proposal, preserving the500msperiod.
 Approved fixture compatibility topic94518f95b adds onlyNone to the existing
 scrub test key; base sweep-display plus candidate5. All assertions remain.

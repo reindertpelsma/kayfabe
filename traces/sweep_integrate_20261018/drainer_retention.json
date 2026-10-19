@@ -1,7 +1,11 @@
 {
   "method": "Device::drainer_loop",
-  "candidate5_sha256": "c2746daace22dc4a2e1967423606e26c3a0757742c95c1af1f8cf16eb0fd803c",
-  "current_sha256": "c2746daace22dc4a2e1967423606e26c3a0757742c95c1af1f8cf16eb0fd803c",
-  "byte_identical": true,
-  "heartbeat_topic_held": true
+  "candidate5_sha256": "7d9b85481231e2630514d3df4a8fc5dc6c3dc2feee61bff1dd4c572f718ab0cc",
+  "current_sha256": "ed73d88e8c057784a7e4f79cf7ebd045d11521c4ba7b8d6e78a40d5d0220cce0",
+  "byte_identical": false,
+  "heartbeat_topic_held": false,
+  "approval": "2026-10-19 coordinator; nonblocking isolated heartbeat, period500ms",
+  "all_drainer_code_after_heartbeat_byte_identical": true,
+  "clock_operation": "borrowed try-lock metadata and bounded mapped timer; no ioctl/clone/blocking lock",
+  "regression_tests": "heartbeat::tests::actual_drainer_uses_nonblocking_clock_path_at_500ms + runtime contention tests"
 }

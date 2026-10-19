@@ -1,0 +1,25 @@
+{
+  "distinct_mutants": 49,
+  "prior_mutants": 39,
+  "heartbeat_mutants": 10,
+  "all_at_least_two_runtime_kills": true,
+  "heartbeat_kill_counts": [
+    5,
+    3,
+    4,
+    2,
+    2,
+    2,
+    2,
+    2,
+    2,
+    2
+  ],
+  "prior_receipts": [
+    "final_stack_mutations.json",
+    "f2_mutations.json",
+    "userrelay_mutations.json",
+    "rowserve_notice_mutations.json"
+  ],
+  "heartbeat_receipt": "heartbeat_mutations.json"
+}

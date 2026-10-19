@@ -9,8 +9,8 @@
     "current_passed": 594,
     "current_failed": 0,
     "current_ignored": 0,
-    "scope": "full release",
-    "tested_source": "7326d3184f41a4fdac55515598fb88e1cb4a9172",
+    "scope": "full release PASS",
+    "tested_source": "7e9145ff8d5ea8a238e34064b7636024ed0d62c8",
     "status": "PASS"
   },
   {
@@ -23,8 +23,8 @@
     "current_passed": 4,
     "current_failed": 0,
     "current_ignored": 0,
-    "scope": "full release; original source files retained",
-    "tested_source": "30a43bc9d814761bc78cd766fa9cbddec19467f3",
+    "scope": "full release PASS",
+    "tested_source": "7e9145ff8d5ea8a238e34064b7636024ed0d62c8",
     "status": "PASS",
     "own_crate_source_unchanged_since_pass": true
   },
@@ -38,8 +38,8 @@
     "current_passed": 162,
     "current_failed": 0,
     "current_ignored": 9,
-    "scope": "full release; original source files retained",
-    "tested_source": "30a43bc9d814761bc78cd766fa9cbddec19467f3",
+    "scope": "full release PASS",
+    "tested_source": "7e9145ff8d5ea8a238e34064b7636024ed0d62c8",
     "status": "PASS",
     "own_crate_source_unchanged_since_pass": true
   },
@@ -53,9 +53,15 @@
     "current_passed": 57,
     "current_failed": 0,
     "current_ignored": 1,
-    "scope": "full release",
-    "tested_source": "7326d3184f41a4fdac55515598fb88e1cb4a9172",
-    "status": "PASS"
+    "scope": "full release PASS",
+    "tested_source": "7e9145ff8d5ea8a238e34064b7636024ed0d62c8",
+    "status": "PASS",
+    "example_style_recheck_source": "058f3da39",
+    "example_style_recheck_full_counts": [
+      57,
+      0,
+      1
+    ]
   },
   {
     "crate": "kf-chan",
@@ -67,8 +73,8 @@
     "current_passed": 530,
     "current_failed": 0,
     "current_ignored": 3,
-    "scope": "full release; original source files retained",
-    "tested_source": "30a43bc9d814761bc78cd766fa9cbddec19467f3",
+    "scope": "full release PASS",
+    "tested_source": "7e9145ff8d5ea8a238e34064b7636024ed0d62c8",
     "status": "PASS",
     "own_crate_source_unchanged_since_pass": true
   },
@@ -82,8 +88,8 @@
     "current_passed": 84,
     "current_failed": 0,
     "current_ignored": 0,
-    "scope": "full release",
-    "tested_source": "7326d3184f41a4fdac55515598fb88e1cb4a9172",
+    "scope": "full release PASS",
+    "tested_source": "7e9145ff8d5ea8a238e34064b7636024ed0d62c8",
     "status": "PASS"
   },
   {
@@ -96,8 +102,8 @@
     "current_passed": 80,
     "current_failed": 0,
     "current_ignored": 0,
-    "scope": "full release",
-    "tested_source": "7326d3184f41a4fdac55515598fb88e1cb4a9172",
+    "scope": "full release PASS",
+    "tested_source": "7e9145ff8d5ea8a238e34064b7636024ed0d62c8",
     "status": "PASS"
   },
   {
@@ -110,9 +116,10 @@
     "current_passed": 284,
     "current_failed": 0,
     "current_ignored": 5,
-    "scope": "full release",
-    "tested_source": "7326d3184f41a4fdac55515598fb88e1cb4a9172",
-    "status": "PASS"
+    "scope": "full release PASS",
+    "tested_source": "7e9145ff8d5ea8a238e34064b7636024ed0d62c8",
+    "status": "PASS",
+    "later_example_style_recheck": "7fb36324a; strict oracle100word red and duplicate footer exit2 preserved"
   },
   {
     "crate": "kf-gsp",
@@ -121,12 +128,13 @@
     "candidate4_ignored": 0,
     "candidate5_passed": 49,
     "candidate5_ignored": 0,
-    "current_passed": 54,
+    "current_passed": 61,
     "current_failed": 0,
     "current_ignored": 0,
-    "scope": "full release",
-    "tested_source": "7326d3184f41a4fdac55515598fb88e1cb4a9172",
-    "status": "PASS"
+    "scope": "full release PASS",
+    "tested_source": "7e9145ff8d5ea8a238e34064b7636024ed0d62c8",
+    "status": "PASS",
+    "later_comment_only_equivalence": "heartbeat_comment_equivalence.json"
   },
   {
     "crate": "kf-harness",
@@ -138,8 +146,8 @@
     "current_passed": 12,
     "current_failed": 0,
     "current_ignored": 0,
-    "scope": "full release",
-    "tested_source": "7326d3184f41a4fdac55515598fb88e1cb4a9172",
+    "scope": "full release PASS",
+    "tested_source": "7e9145ff8d5ea8a238e34064b7636024ed0d62c8",
     "status": "PASS"
   },
   {
@@ -152,8 +160,8 @@
     "current_passed": 66,
     "current_failed": 0,
     "current_ignored": 0,
-    "scope": "full release",
-    "tested_source": "7326d3184f41a4fdac55515598fb88e1cb4a9172",
+    "scope": "full release PASS",
+    "tested_source": "7e9145ff8d5ea8a238e34064b7636024ed0d62c8",
     "status": "PASS"
   },
   {
@@ -166,8 +174,8 @@
     "current_passed": 186,
     "current_failed": 0,
     "current_ignored": 3,
-    "scope": "full release; original source files retained",
-    "tested_source": "30a43bc9d814761bc78cd766fa9cbddec19467f3",
+    "scope": "full release PASS",
+    "tested_source": "7e9145ff8d5ea8a238e34064b7636024ed0d62c8",
     "status": "PASS",
     "own_crate_source_unchanged_since_pass": true
   },
@@ -178,12 +186,12 @@
     "candidate4_ignored": 0,
     "candidate5_passed": 377,
     "candidate5_ignored": 0,
-    "current_passed": 21,
+    "current_passed": 407,
     "current_failed": 0,
     "current_ignored": 0,
-    "scope": "integration tests only; unit fixture adaptation awaits approval",
-    "tested_source": "7326d3184f41a4fdac55515598fb88e1cb4a9172",
-    "status": "PARTIAL: 21 integration tests pass; full unit compilation awaits scrub fixture approval"
+    "scope": "full release PASS",
+    "tested_source": "7e9145ff8d5ea8a238e34064b7636024ed0d62c8",
+    "status": "PASS"
   },
   {
     "crate": "kf-rm",
@@ -195,8 +203,8 @@
     "current_passed": 811,
     "current_failed": 0,
     "current_ignored": 0,
-    "scope": "full release",
-    "tested_source": "7326d3184f41a4fdac55515598fb88e1cb4a9172",
+    "scope": "full release PASS",
+    "tested_source": "7e9145ff8d5ea8a238e34064b7636024ed0d62c8",
     "status": "PASS"
   }
 ]

@@ -1,3 +1,35 @@
+# Phase1 accepted, 2026-10-19
+
+STATUS: LIVE. Both protected decisions approved and implemented. Phase1 GPU-free
+acceptance PASS; Phase2 rental execution now authorized and next. This section
+supersedes the historical pending/partial checkpoint below.
+
+MEASURED:14full release suites3338passed/0failed/21ignored; QEMU389->407,
+GSP54->61, kf-chan530. All candidate4/candidate5 tests retained.49distinct
+mutants each have>=2runtime killing tests. Clippy0new on changed lines with89
+inherited denied errors; rustfmt81files plus approved userrelay-region proof.
+Candidate5 f8f9d1a5f refreshed again before hardware; no TSG mirror import.
+
+HEARTBEAT_RESULT.md records the two tests-only EXPECTED RED commits, nonblocking
+fix, lifetime proof and mutation counts. Scrub fixture94518f95b adds onlyNone;
+no existing assertion or production scrub behavior changes. The obsolete USER
+batching/measurement topic and every dependent edit remain excluded. Five old
+heartbeat imports are replaced by the approved nonblocking series, with dropped
+blocking/clone/command-sequence edits explicitly listed in CONFLICTS.md.
+
+AD104 CPU oracles pass; strict stored-native caps equality remains RED100words
+at7fb36324a. AD104_PATH_AUDIT.md names every known path difference, including
+heartbeat. No current hardware or owner-host parity claim follows. All old PASS
+cells remain STALE. Windows tracer build/static tests pass; current load UNRUN.
+
+Current stretch spend0USD, own active IDs0 before Phase2. Cap25USD, stop renting
+and report at20USD, one owned box, maximum180min, auto-destroy before SSH, ownIDs
+only and API-verified teardown. Host off-limits; windows-on-vast unmodified.
+
+---
+
+SUPERSEDED CHECKPOINT (kept for chronology):
+
 # Current integration checkpoint, 2026-10-19
 
 STATUS: LIVE. Phase1 PARTIAL only at two explicit protected scope decisions;

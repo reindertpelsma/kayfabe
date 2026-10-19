@@ -80,13 +80,15 @@
   {
     "path": "crates/kf-qemu/src/gop.rs",
     "candidate5_blob": "5908cc513369c7c489cd4d1c554a58b8c43ea4ed",
-    "current_blob": "5908cc513369c7c489cd4d1c554a58b8c43ea4ed",
-    "byte_identical": true
+    "current_blob": "d451e0b321785732df8612ff743030dc478da548",
+    "byte_identical": false,
+    "approved_delta": "heartbeat documentation correction only; non-comment code identical"
   },
   {
     "path": "crates/kf-host/src/timer.rs",
     "candidate5_blob": "af3ed78dcf82c6168dfb4a4de5bfb898cd3b09f2",
-    "current_blob": "af3ed78dcf82c6168dfb4a4de5bfb898cd3b09f2",
-    "byte_identical": true
+    "current_blob": "e532071ac343a3439d78480f1e73040990cced61",
+    "byte_identical": false,
+    "approved_delta": "heartbeat documentation correction only; non-comment code identical"
   }
 ]

@@ -62,8 +62,10 @@
     ],
     "kill_count": 2,
     "passed": true,
-    "fixed_sha256": "3117bc8fc46b41c7815bf5a71ad414dbf839fe49fa8d84430185dfb86563f807",
-    "log_sha256": "bc65ff6c183208b7986d65f31f8416caa475dcf8eeca17d4328ebbafcac66138"
+    "fixed_sha256": "921b30651359670c515d23729b50edb9fc964b039b0df9072a10b6f2bae4de37",
+    "log_sha256": "18e3dd51112429ff4ff31f8e37bd143f5d468d78952361f37876855168799960",
+    "prior_receipt_fixed_sha256": "3117bc8fc46b41c7815bf5a71ad414dbf839fe49fa8d84430185dfb86563f807",
+    "note": "rechecked after strengthening the populated-metadata contention case"
   },
   {
     "mutant": "HB_wait_on_fn72_lock",

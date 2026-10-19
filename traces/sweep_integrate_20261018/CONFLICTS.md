@@ -5,6 +5,16 @@ STATUS: LIVE. STOP for these two narrow topics; independent work continues.
 2026-10-19 APPROVAL supersedes the two pending STOPs below. The scrub fixture
 gets only None (94518f95b). Heartbeat is an isolated failing-first series with
 nonblocking clock/metadata access and unchanged500ms; see HEARTBEAT_PLAN.md.
+Every old dependent heartbeat edit deliberately dropped from the new topic:
+Device's blocking gsp.lock acquisition; SystemInfoCell.latest's blocking lock
+and Vec clone on each clock read; the command_seq!=0 freshness heuristic, which
+cannot distinguish an old fn72 after a reset followed by other commands. These
+belong to the five old heartbeat commits787f55728/277e5d895/60ad041ac/304ca9adb/
+a954ac468 (full mappings in stack_imports.json). The replacement uses borrowed
+try-lock reads plus actual current-life fn72 readiness. Historical intermediate
+PTIMER-vs-VF_TIME hypotheses are not shipped as clock-domain switches: the exact
+public formula uses the existing validated read_ns layout and guest offset.
+
 No excluded USER measurement/batching edit is restored. Five held historical
 heartbeat source commits are represented by this new reviewed topic, not blindly
 reapplied: drop the old blocking lock/latest/clone implementation and command_seq
