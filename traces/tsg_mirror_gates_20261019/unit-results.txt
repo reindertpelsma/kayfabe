@@ -1,0 +1,41 @@
+MEASURED: M1 targeted GPU-free validation, 2026-10-19.
+Source: c2685412e159534b88097ea824d05fe963be83b1; product code unchanged.
+Command: CARGO_TARGET_DIR=/workspace/m1-target nice -n 19 cargo test -j2 --release -p kf-qemu tsgmirror
+Shared dev cargo lock held during build; GPU lock not acquired.
+Build: release profile, 1m14s. Process exit 0. Inherited compiler warnings present.
+
+test tsgmirror::tests::a_failing_unwind_step_is_counted_not_hidden ... ok
+test tsgmirror::tests::a_refused_channel_free_still_frees_the_rest_and_reports_the_first_error ... ok
+test tsgmirror::tests::a_refused_explicit_channel_leaves_the_legacy_group_untouched ... ok
+test tsgmirror::tests::a_refused_legacy_channel_leaves_the_explicit_group_untouched ... ok
+test tsgmirror::tests::ctxshare_flag_words_decode_to_two_kinds ... ok
+test tsgmirror::tests::a_second_sync_ctxshare_is_refused_by_name_before_the_host ... ok
+test tsgmirror::tests::a_space_contradiction_makes_no_host_call ... ok
+test tsgmirror::tests::counters_follow_the_refusal_classes ... ok
+test tsgmirror::tests::cuda_like_single_ctxshare_tsg ... ok
+test tsgmirror::tests::every_real_guest_word_in_the_repo_histogram_is_accepted ... ok
+test tsgmirror::tests::ctxshare_handle_reuse_after_free_is_a_new_host_object ... ok
+test tsgmirror::tests::free_order_is_channel_then_ctxshare_then_tsg_and_never_kills_a_channel ... ok
+test tsgmirror::tests::host_refusal_at_the_channel_step_frees_the_new_ctx_and_group_but_not_old_ones ... ok
+test tsgmirror::tests::host_refusal_at_the_group_step_leaves_nothing ... ok
+test tsgmirror::tests::kill_switch_makes_the_base_decisions_for_ctxshare_scripts ... ok
+test tsgmirror::tests::host_refusal_at_the_ctxshare_step_frees_the_new_group ... ok
+test tsgmirror::tests::d3d12_order_four_channels_three_subcontexts_one_tsg ... ok
+test tsgmirror::tests::kill_switch_restores_the_per_ctxshare_groups ... ok
+test tsgmirror::tests::legacy_tsgs_make_the_base_decisions ... ok
+test tsgmirror::tests::mixed_mode_is_refused_by_name_both_ways ... ok
+test tsgmirror::tests::late_joiner_schedule_is_skipped_only_for_explicit_joiners ... ok
+test tsgmirror::tests::single_bits_are_classified_per_the_table ... ok
+test tsgmirror::tests::runqueue_bit_is_the_only_forwarded_bit ... ok
+test tsgmirror::tests::sixty_four_subcontexts_are_accepted ... ok
+test tsgmirror::tests::the_refused_sixty_fifth_leaves_the_map_at_sixty_four ... ok
+test tsgmirror::tests::the_sixty_fifth_subcontext_is_refused_by_name ... ok
+test tsgmirror::tests::hostile_flag_words_never_widen ... ok
+test tsgmirror::tests::two_clients_with_identical_handles_do_not_alias ... ok
+test tsgmirror::tests::unknown_ctxshare_parent_mismatch_engine_and_space_contradictions_are_refused ... ok
+test tsgmirror::tests::user_ring_free_with_a_foreign_group_does_not_decrement ... ok
+test tsgmirror::tests::vulkan_order_graphics_sync_plus_async_compute_with_runqueue ... ok
+
+test result: ok. 31 passed; 0 failed; 0 ignored; 0 measured; 356 filtered out; finished in 0.00s
+Integration test executables: zero selected tests; not counted as new coverage.
+Mutation table: N/A; no product behavior change and no mutants made.

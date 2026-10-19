@@ -23,4 +23,4 @@ INFERRED: attempting an unreviewed offline package-install/chroot flow, ignoring
 
 MEASURED harness incident: bulk read-only mounting initially failed because the partition device node did not exist yet after NBD attachment (`mount` rc 32). Waiting for the specific udev partition event, with a bounded failure, completed all 62 inspections. No product timeout/poll constant changed. Every inspection unmounted its filesystem and disconnected its own NBD attachment; the device is now released.
 
-CODE READ: existing fake-host unit tests include `sixty_four_subcontexts_are_accepted`, `the_sixty_fifth_subcontext_is_refused_by_name`, and `the_refused_sixty_fifth_leaves_the_map_at_sixty_four`. Targeted `tsgmirror` tests are being checked separately; even a pass does not establish hardware cap behavior or 8-channel guest execution.
+CODE READ: existing fake-host unit tests include `sixty_four_subcontexts_are_accepted`, `the_sixty_fifth_subcontext_is_refused_by_name`, and `the_refused_sixty_fifth_leaves_the_map_at_sixty_four`. MEASURED: all 31 targeted `tsgmirror` tests pass (`unit-results.txt`); this does not establish hardware cap behavior or 8-channel guest execution.
