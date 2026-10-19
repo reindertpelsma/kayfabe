@@ -1,0 +1,18 @@
+[
+  {
+    "mutant": "share_tid_zero_across_cpus",
+    "failed_tests": [
+      "test_distinct_tid_zero_functions_on_other_cpus_do_not_break_each_others_stack",
+      "test_simultaneous_tid_zero_isr_durations_belong_to_their_own_cpu"
+    ],
+    "kills": 2
+  },
+  {
+    "mutant": "sort_same_tick_exits_first",
+    "failed_tests": [
+      "test_a_zero_duration_isr_is_a_call_at_one_tick",
+      "test_same_tick_nested_calls_keep_the_recorded_entry_exit_order"
+    ],
+    "kills": 2
+  }
+]

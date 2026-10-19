@@ -1,0 +1,40 @@
+{
+  "status": "MEASURED: raw CSV replay on dev box, same source capture",
+  "expected_red": {
+    "commit": "2227bfe9f",
+    "tests": 5,
+    "failures": 4
+  },
+  "after": {
+    "tests": 9,
+    "failures": 0
+  },
+  "before": {
+    "unmatched_exits": 22,
+    "mismatched_exits": 58,
+    "unclosed_entries": 2
+  },
+  "after_replay": {
+    "window_s": 56.5190592,
+    "unmatched_exits": 0,
+    "mismatched_exits": 0,
+    "unmatched_exits_in_window": 0,
+    "mismatched_exits_in_window": 0,
+    "unclosed_entries": 2,
+    "unclosed_entries_in_window": 0,
+    "csv_profiler_order_preserved": true,
+    "pairing": "pid/thread; thread zero additionally keyed by processor; equal ticks retain CSV order"
+  },
+  "isr": {
+    "calls": 37215,
+    "entry_calls": 37215,
+    "calls_per_s": 658.5,
+    "calls_per_frame": 22.033747779751334,
+    "entry_calls_per_frame": 22.033747779751334,
+    "med_us": 84.0,
+    "p95_us": 150.2,
+    "p99_us": 197.1,
+    "max_us": 922.9,
+    "total_ms_per_s": 57.45
+  }
+}

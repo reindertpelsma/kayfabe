@@ -17,6 +17,7 @@ import csv, pickle, sys, collections
 KEEP = {'105', '106', '107', '108', '17', '18', '19', '22', '175', '176', '177', '178', '179', '180', '181', '238', '244', '245', '300', '450', '451', '552', '550', '295', '294'}
 d, tag = sys.argv[1], sys.argv[2]
 ev = collections.defaultdict(list)
+profiler_order = []
 n = 0
 with open(f'{d}/{tag}_dxg.csv', encoding='utf-8', errors='replace', newline='') as f:
     r = csv.reader(f, skipinitialspace=True); next(r)
@@ -28,5 +29,8 @@ with open(f'{d}/{tag}_dxg.csv', encoding='utf-8', errors='replace', newline='') 
         try: t = int(row[16])
         except ValueError: continue
         ev[i].append((t, int(row[9], 16), int(row[10], 16), int(row[11]), *[x.strip() for x in row[19:]]))
+        if i in ('105', '106'):
+            profiler_order.append((i == '105', len(ev[i]) - 1))
+ev['_p1_profiler_order'] = profiler_order
 pickle.dump((dict(ev), n), open(f'{d}/{tag}_ev.pkl', 'wb'))
 print('rows', n, {k: len(v) for k, v in sorted(ev.items(), key=lambda kv: -len(kv[1]))})
