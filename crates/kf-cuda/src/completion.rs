@@ -2,14 +2,15 @@
 //! Walk completion policy, separate from the CUDA binding for GPU-free ordering tests.
 
 pub(crate) fn ready<E>(
-    signalled: bool,
+    _signalled: bool,
     query: impl FnOnce() -> Result<bool, E>,
 ) -> Result<bool, E> {
-    if signalled { Ok(true) } else { query() }
+    // An fd can carry a stale wake. Only the current GPU event proves completion.
+    query()
 }
 
-pub(crate) const fn poll_ms(_in_flight: bool) -> u32 {
-    50
+pub(crate) const fn poll_ms(in_flight: bool) -> u32 {
+    if in_flight { 1 } else { 50 }
 }
 
 #[cfg(test)]
