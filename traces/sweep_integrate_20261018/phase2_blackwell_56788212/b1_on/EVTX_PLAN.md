@@ -1,6 +1,6 @@
 # Read-only persisted event evidence
 
-STATUS: LIVE,2026-10-19. Prepared/fixturechecked; actualimage UNRUN.
+STATUS: LIVE,2026-10-19. Completedreadonlyextract22:55:46UTC;748records parsed.
 After Linux595 raw completesPASS, and only with no QEMU running, attach the
 stoppedON child using read-onlyNBD, assertkernelRO=1, readNTFSfiles without
 mounting/repairing/recovering the volume, then disconnect only our verifiedPID.
@@ -19,3 +19,6 @@ Microsoftsources: [Code43](https://learn.microsoft.com/en-us/windows-hardware/dr
 [TDR117](https://learn.microsoft.com/en-us/windows-hardware/drivers/debugger/bug-check-0x117---video-tdr-timeout-detected),
 [119](https://learn.microsoft.com/en-us/windows-hardware/drivers/debugger/bug-check-0x119---video-scheduler-internal-error).
 This is a rental-onlyevidence helper; no productbehavior or cratetestcountschange.
+
+Result: no positivepersistedTDR/Code43 record; status remainsunknown, notgreen.
+Fullreceiptandproofunder../b1_forensics/results; rawEVTX/XMLneverexported.

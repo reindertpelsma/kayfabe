@@ -19,5 +19,21 @@ Additional full raw595 run22:33:40..22:44:34UTC:30/30PASS at frozen180s,
 and0flip timeout. This later observation does not erase the31startup warnings
 in the first concurrency run above. Fullsuite concurrency33s/client19030ms;
 observed concurrency n=2 total[41,33]s, client[19350,19030]ms, no ratio claim.
-Guest CUDA595 now active; graphics/broker595 remain UNRUN. Evidence and export hashes:
+Guest CUDA595completed4/4PASS22:46:24..22:55:13UTC, allboot_rc0/valuechecks;
+graphics/broker595 remainUNRUN. Fatguestheartbeatdiagnostics are reported
+separately;0warningsabove applies only to the30rawseriallogs. Evidence and export hashes:
 b3_concurrency595*, b3_heartbeat_summary.json, b3_export_receipt.json.
+
+Additionalimportantfatguestresult at24906bf33: successful595CUP3boot has
+144warnings inpreworkcapture and304inpostworkcapture (overlappingviews;
+do notadd). Allare nonzero rawheartbeat, fromguest100.921698..106.674757s
+(5.753059s span). First currentTimeMs1448864316/heartbeat5472/offsetadjusted
+1448869753; lastcurrent1448870068/heartbeat5345/adjusted1448875322.
+Unsigneddiff isnear2^32 becauseadjustedheartbeatisahead. ThisisNOTmerely
+thefirstconcurrencyraw0startupissue. CUDAkernel43passed/0hostXid.
+Completepre/postlogs inlinux595_cuda/rungs/cup3; no warningfreeB3claim.
+
+H_CLOCK_VIEWS (INFERRED, beforeprobe): mappedPTIMERandVF_TIMEreadbytheguest
+maydiffer. Existingkf-timer-probecomparesthem3timeswithoutGPUwork, UID65534
+andnocaps. Falsifier: viewsagreewithinexisting10msboundineveryround.
+ProbeplannedafterCUDA580ends; no heartbeat500ms/clock/timeoutchange.

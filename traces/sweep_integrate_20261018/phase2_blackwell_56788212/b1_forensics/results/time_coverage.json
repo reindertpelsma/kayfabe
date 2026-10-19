@@ -1,0 +1,16 @@
+[
+  {
+    "log": "Microsoft-Windows-Kernel-PnP%4Configuration.evtx.xml",
+    "records_with_time": 156,
+    "first_utc": "2026-10-19T22:14:18.254034200Z",
+    "last_utc": "2026-10-20T04:44:28.936263400Z",
+    "records_in_ON_window": 2
+  },
+  {
+    "log": "System.evtx.xml",
+    "records_with_time": 592,
+    "first_utc": "2026-10-19T21:45:30.981214800Z",
+    "last_utc": "2026-10-20T04:45:30.982707200Z",
+    "records_in_ON_window": 77
+  }
+]

@@ -1,0 +1,188 @@
+{
+  "classification": "MEASURED complete captures; pre/post may overlap, do not add as distinctevents",
+  "source": "24906bf334665c9000b16b271005593daa3586c7",
+  "actual_guest": "595.91.07",
+  "rungs": [
+    {
+      "rung": "cup2",
+      "logs": {
+        "dmesg_after.txt": {
+          "bytes": 4878,
+          "normalized_sha256": "58d2be413641f3060a97d8328a7aa2f98c46755f0f717717598fa8b9ba3bdba1"
+        },
+        "hostdmesg.txt": {
+          "bytes": 154,
+          "normalized_sha256": "8579e24960550eaa34a49942f4938ccbb6f79059f87a546e08d83d7324f92adb"
+        },
+        "qemu.txt": {
+          "bytes": 333144,
+          "normalized_sha256": "88983a1512bc073dc6eb0d2c470b3388dd547b88a24831256fae1cac56f7b025"
+        },
+        "dmesg.txt": {
+          "bytes": 4113,
+          "normalized_sha256": "cb77d9d61938778bbbd7d8e0a77633931bfb227649017f7c52438f0226d82a30"
+        },
+        "controller.txt": {
+          "bytes": 5484,
+          "normalized_sha256": "b85b2034b0447c8758ad73537ec9ea636f035c713f7df5238a0385a5893dea33"
+        },
+        "probe.txt": {
+          "bytes": 9245,
+          "normalized_sha256": "ee570ffbd09cea5372a412d4199b7be3e5c55bf2904aed13b705508ae4ead6c6"
+        }
+      },
+      "dmesg": {
+        "heartbeat_warnings": 0,
+        "nonzero_raw_heartbeat_warnings": 0,
+        "xid": 0,
+        "flip_timeout": 0,
+        "module_banners": []
+      },
+      "dmesg_after": {
+        "heartbeat_warnings": 0,
+        "nonzero_raw_heartbeat_warnings": 0,
+        "xid": 0,
+        "flip_timeout": 0,
+        "module_banners": []
+      },
+      "host_xid": 0
+    },
+    {
+      "rung": "cup3",
+      "logs": {
+        "dmesg_after.txt": {
+          "bytes": 86347,
+          "normalized_sha256": "e429a8dd0a865016ba577700306175d17ebe89478a8c2cd4fb9a3d490bbb1a9f"
+        },
+        "hostdmesg.txt": {
+          "bytes": 53,
+          "normalized_sha256": "e8350188de65bd234b6c3c4a22794d3cc4ed194a6e209db18e3baff54f3ff7c7"
+        },
+        "qemu.txt": {
+          "bytes": 464017,
+          "normalized_sha256": "587ea752caa6ec21c2574eb2396f205c4cb6ac9530a68d230900dc87ecaa16c5"
+        },
+        "dmesg.txt": {
+          "bytes": 41678,
+          "normalized_sha256": "b2a14e3f845820065a57554752e812b86ae6445d37800ef63ac7f4cc724ce77c"
+        },
+        "controller.txt": {
+          "bytes": 5872,
+          "normalized_sha256": "3f02dd27aa752149a21f5e8b790bac7072a93e72ec40bb7351ed3bee8682b4b6"
+        },
+        "probe.txt": {
+          "bytes": 23197,
+          "normalized_sha256": "bacc0d01b51fdc164b7512cd7bde3d467cdbae5048f1e2041b3686ded0979a62"
+        }
+      },
+      "dmesg": {
+        "heartbeat_warnings": 144,
+        "nonzero_raw_heartbeat_warnings": 144,
+        "xid": 0,
+        "flip_timeout": 0,
+        "module_banners": [
+          "[   98.811669] NVRM: loading NVIDIA UNIX Open Kernel Module for x86_64  595.91.07  Release Build  (dvs-builder@U22-I3-B08-02-2)  Wed Jul 29 03:01:16 UTC 2026"
+        ]
+      },
+      "dmesg_after": {
+        "heartbeat_warnings": 304,
+        "nonzero_raw_heartbeat_warnings": 304,
+        "xid": 0,
+        "flip_timeout": 0,
+        "module_banners": [
+          "[   98.811669] NVRM: loading NVIDIA UNIX Open Kernel Module for x86_64  595.91.07  Release Build  (dvs-builder@U22-I3-B08-02-2)  Wed Jul 29 03:01:16 UTC 2026"
+        ]
+      },
+      "host_xid": 0
+    },
+    {
+      "rung": "cup8",
+      "logs": {
+        "dmesg_after.txt": {
+          "bytes": 4878,
+          "normalized_sha256": "a712d12c78262042c9eab1f416d2d071851154f71a6628ca5cf53a37b937eced"
+        },
+        "hostdmesg.txt": {
+          "bytes": 53,
+          "normalized_sha256": "c1fc1710a7daf3c5f41e919053d8b9202a80843461e177b9153b03461dcb2257"
+        },
+        "qemu.txt": {
+          "bytes": 291491,
+          "normalized_sha256": "e6fb60ef5994ff38ed5c03a46feca7fa2d8458fa9e9a549a39ceb1e08937b059"
+        },
+        "dmesg.txt": {
+          "bytes": 4113,
+          "normalized_sha256": "ff1390bc501bba50f16a0ec50eeb613193b713845c6b6fdd2d6a477dff7568f7"
+        },
+        "controller.txt": {
+          "bytes": 5480,
+          "normalized_sha256": "89eb21bdfc6a5a7ec354aab72fa92d4318d23c77722ddfcac8d4fa88efd0f7f8"
+        },
+        "probe.txt": {
+          "bytes": 13666,
+          "normalized_sha256": "8dd5c5792e3309b69316a62545a19d3e0c50576fc2196f792f5d290e2c8d567b"
+        }
+      },
+      "dmesg": {
+        "heartbeat_warnings": 0,
+        "nonzero_raw_heartbeat_warnings": 0,
+        "xid": 0,
+        "flip_timeout": 0,
+        "module_banners": []
+      },
+      "dmesg_after": {
+        "heartbeat_warnings": 0,
+        "nonzero_raw_heartbeat_warnings": 0,
+        "xid": 0,
+        "flip_timeout": 0,
+        "module_banners": []
+      },
+      "host_xid": 0
+    },
+    {
+      "rung": "cup8bench",
+      "logs": {
+        "dmesg_after.txt": {
+          "bytes": 4984,
+          "normalized_sha256": "06e7f3254eb46205358cc27356a7cb38a0caa0810ff7ad6ea4882272c861e2c2"
+        },
+        "hostdmesg.txt": {
+          "bytes": 53,
+          "normalized_sha256": "1a07c655878e3ff04c7180e6da83ab818d749a2bee34bf30fca54bd38652543f"
+        },
+        "qemu.txt": {
+          "bytes": 300067,
+          "normalized_sha256": "1d5a9bb1a82b99b419842cf310bb15e630797f0031cf726338bb78d594116471"
+        },
+        "dmesg.txt": {
+          "bytes": 4113,
+          "normalized_sha256": "406491232605f56d3b4eb96d346c4f55d8c5b94ffcd5512c5bbef9fb7aaf0129"
+        },
+        "controller.txt": {
+          "bytes": 5628,
+          "normalized_sha256": "9313ecf1637fbfd8a0663d0f702274dcd751313496b7d44ee4599d4cc2d64a03"
+        },
+        "probe.txt": {
+          "bytes": 27156,
+          "normalized_sha256": "8a1a34af07272ced4e6945eab1551c8a5a367442cd2ea4bce5e05a5f7c83938a"
+        }
+      },
+      "dmesg": {
+        "heartbeat_warnings": 0,
+        "nonzero_raw_heartbeat_warnings": 0,
+        "xid": 0,
+        "flip_timeout": 0,
+        "module_banners": []
+      },
+      "dmesg_after": {
+        "heartbeat_warnings": 0,
+        "nonzero_raw_heartbeat_warnings": 0,
+        "xid": 0,
+        "flip_timeout": 0,
+        "module_banners": []
+      },
+      "host_xid": 0
+    }
+  ],
+  "legacy_gate_limit": "assert_boot_evidence.sh expects pre-v3 nvkvm census/kayfabe-rev markers absent here. Not claimed green; v3 controller records BINARY kf3-bin-rev:24906bf3 and frozenbinary SHA. All complete rawLinuxlogs exported under1MiB each."
+}
