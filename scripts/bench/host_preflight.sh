@@ -41,9 +41,20 @@ grep -qE 'vmx|svm' /proc/cpuinfo && ok "CPU virt extensions present" || bad "no 
 # 2. NVIDIA driver responds. All supported families proceed to the host-derived
 # chip/class checks in the v3 gates; a GPU name cannot establish that support.
 if command -v nvidia-smi >/dev/null 2>&1; then
-  GPU=$(nvidia-smi --query-gpu=name --format=csv,noheader 2>/dev/null | head -1)
-  DRV=$(nvidia-smi --query-gpu=driver_version --format=csv,noheader 2>/dev/null | head -1)
-  if [ -z "$GPU" ]; then bad "nvidia-smi present but returned NO GPU (driver wedged?)"
+  # Preserve the query exit status: piping through head hides a failed query,
+  # and nvidia-smi can print "No devices were found" on stdout when it fails.
+  GPU=$(nvidia-smi --query-gpu=name --format=csv,noheader 2>/dev/null)
+  GPU_RC=$?
+  DRV=$(nvidia-smi --query-gpu=driver_version --format=csv,noheader 2>/dev/null)
+  DRV_RC=$?
+  GPU=${GPU%%$'\n'*}
+  DRV=${DRV%%$'\n'*}
+  if [ "$GPU_RC" -ne 0 ] || [ "$DRV_RC" -ne 0 ]; then
+    bad "nvidia-smi identity query failed (name=$GPU_RC driver=$DRV_RC)"
+  elif [ -z "$GPU" ] || [ "$GPU" = 'No devices were found' ]; then
+    bad "nvidia-smi present but returned NO GPU (driver wedged?)"
+  elif [[ ! "$DRV" =~ ^[0-9]+\.[0-9]+(\.[0-9]+)?$ ]]; then
+    bad "nvidia-smi returned no valid numeric driver version"
   else
     ok "GPU: $GPU  driver: $DRV"
   fi
