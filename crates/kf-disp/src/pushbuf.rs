@@ -1,9 +1,9 @@
 //! ★ The NVDisplay channel pushbuffer decoder — bounded, total, and blind to method meaning.
 //!
-//! A display DMA channel's pushbuffer is at most 4 KiB (`NV2080_CTRL_INTERNAL_DISPLAY_CHANNEL_
-//! PUSHBUFFER`'s limit, `ogkm-580: ctrl2080internal.h:1343-1400`), and its command words are the
-//! NVDisplay DMA format every class from `C37D` to `CC7D` shares (`ogkm-580:
-//! src/common/sdk/nvidia/inc/class/clc67d.h:59-69`):
+//! The channel class supplies the address fields and ring bound. C67D/C67E use a
+//! 4 KiB ring; CA7D/CA7E extend METHOD_OFFSET and JUMP_OFFSET through bit15 for
+//! 64 KiB rings (`clc67d.h:59-69`, `clca7d.h:59-69`, `clca7e.h:36-46`).
+//! Generated class fields select the format; the legacy entry points retain C67D:
 //!
 //! | bits | field |
 //! |---|---|
@@ -47,8 +47,53 @@ pub enum DecodeError {
     Runaway,
 }
 
-/// The largest pushbuffer a display channel may declare (bytes).
+/// The legacy C67D/C67E pushbuffer bound (bytes).
 pub const MAX_PUSHBUFFER: u32 = 4096;
+
+/// The public class's DMA address fields, resolved before reading guest memory.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct DmaFormat {
+    method_mask: u32,
+    jump_mask: u32,
+    max_bytes: u32,
+}
+
+impl DmaFormat {
+    pub(crate) const LEGACY: Self = Self {
+        method_mask: 0x3ffc,
+        jump_mask: 0xffc,
+        max_bytes: MAX_PUSHBUFFER,
+    };
+
+    /// Derive a bounded format from the exact public class table. Missing or
+    /// unsupported fields fail closed; a newer class never inherits an older mask.
+    #[must_use]
+    pub fn from_class(table: &crate::class::ClassTable, class: u32) -> Option<Self> {
+        let (method_hi, method_lo) = table.f(class, "DMA_METHOD_OFFSET")?;
+        let (jump_hi, jump_lo) = table.f(class, "DMA_JUMP_OFFSET")?;
+        // All supported headers address words through at most bit15. Keep an
+        // absolute 64 KiB ceiling as well as the narrower per-class bound.
+        if method_lo != 2
+            || jump_lo != 2
+            || !(2..=15).contains(&method_hi)
+            || !(2..=15).contains(&jump_hi)
+        {
+            return None;
+        }
+        let max_bytes = 1u32 << (jump_hi + 1);
+        Some(Self {
+            method_mask: ((1u32 << (method_hi + 1)) - 1) & !3,
+            jump_mask: (max_bytes - 1) & !3,
+            max_bytes,
+        })
+    }
+
+    /// Maximum ring length for this class, before any guest memory is read.
+    #[must_use]
+    pub const fn max_bytes(self) -> u32 {
+        self.max_bytes
+    }
+}
 
 /// ★ Decode `[get, put)` of `pb` (the channel's whole pushbuffer, `pb.len()` bytes, ≤ 4 KiB).
 ///
@@ -75,10 +120,21 @@ pub struct Located {
 /// (waiting for its interlocked channels or the next vblank) needs to publish a GET that stands
 /// before the unconsumed method, and to resume from exactly there.
 pub fn decode_groups(pb: &[u8], get: u32, put: u32) -> (Vec<Located>, u32, Option<DecodeError>) {
+    decode_groups_with(DmaFormat::LEGACY, pb, get, put)
+}
+
+/// Decode using a generated class format. Work remains bounded by the declared
+/// ring length; unsupported opcodes and jump cycles retain their existing errors.
+pub fn decode_groups_with(
+    format: DmaFormat,
+    pb: &[u8],
+    get: u32,
+    put: u32,
+) -> (Vec<Located>, u32, Option<DecodeError>) {
     let len = u32::try_from(pb.len()).unwrap_or(0);
     let mut out = Vec::new();
     if len == 0
-        || len > MAX_PUSHBUFFER
+        || len > format.max_bytes
         || len % 4 != 0
         || get % 4 != 0
         || put % 4 != 0
@@ -109,7 +165,7 @@ pub fn decode_groups(pb: &[u8], get: u32, put: u32) -> (Vec<Located>, u32, Optio
         }
         let opcode = w >> 29;
         let count = (w >> 18) & 0x3ff;
-        let offset = ((w >> 2) & 0xfff) << 2;
+        let offset = w & format.method_mask;
         match opcode {
             0 | 2 => {
                 // data must lie in [at+4, put) without wrapping (a method never spans a JUMP)
@@ -133,7 +189,7 @@ pub fn decode_groups(pb: &[u8], get: u32, put: u32) -> (Vec<Located>, u32, Optio
                 at = end;
             }
             1 => {
-                let target = ((w >> 2) & 0x3ff) << 2;
+                let target = w & format.jump_mask;
                 if target >= len {
                     return (out, at, Some(DecodeError::BadPointers));
                 }

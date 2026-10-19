@@ -103,3 +103,119 @@ fn ada_retains_its_4k_ring_bound() {
         assert!(feed(&ADA, kind, 0).3);
     }
 }
+
+#[test]
+fn blackwell_window_immediate_accepts_its_public_64k_ring() {
+    let state = feed(&BLACKWELL_GB20X, ChannelKind::WindowImm, 0);
+    assert!(!state.3);
+    assert_eq!((state.0, state.1, state.2), (4, 4, 0));
+}
+
+#[test]
+fn blackwell_window_immediate_jump_keeps_address_bit_15() {
+    let state = feed(&BLACKWELL_GB20X, ChannelKind::WindowImm, 0x8000);
+    assert!(!state.3);
+    assert_eq!((state.0, state.1, state.2), (0x8004, 0x8004, 0));
+}
+
+#[test]
+fn blackwell_cursor_keeps_the_defensive_legacy_dma_bound() {
+    assert!(feed(&BLACKWELL_GB20X, ChannelKind::Cursor, 0).3);
+}
+
+fn format(class: u32) -> kf_disp::pushbuf::DmaFormat {
+    kf_disp::pushbuf::DmaFormat::from_class(class::for_version(VERSION).unwrap(), class).unwrap()
+}
+
+fn assert_method(class: u32, method: u32) {
+    let mut ring = vec![0u8; 8];
+    ring[..4].copy_from_slice(&((1u32 << 18) | method).to_le_bytes());
+    ring[4..].copy_from_slice(&0x12345678u32.to_le_bytes());
+    let (writes, get, err) = kf_disp::pushbuf::decode_groups_with(format(class), &ring, 0, 8);
+    assert_eq!(err, None);
+    assert_eq!(get, 8);
+    assert_eq!(writes.len(), 1);
+    assert_eq!(writes[0].write.method, method);
+    assert_eq!(writes[0].write.data, 0x12345678);
+}
+
+#[test]
+fn blackwell_core_method_address_does_not_alias_a_legacy_update() {
+    assert_method(BLACKWELL_GB20X.classes.core, 0x4200);
+}
+
+#[test]
+fn blackwell_window_method_address_keeps_its_upper_bit() {
+    assert_method(BLACKWELL_GB20X.classes.window, 0x8800);
+}
+
+#[test]
+fn unsupported_core_address_extent_is_refused() {
+    let t = class::ClassTable::parse(
+        "F\tNVCA7D_DMA_METHOD_OFFSET\t31\t2\nF\tNVCA7D_DMA_JUMP_OFFSET\t15\t2\n",
+    );
+    assert!(kf_disp::pushbuf::DmaFormat::from_class(&t, 0xca7d).is_none());
+}
+
+#[test]
+fn unsupported_window_jump_extent_is_refused() {
+    let t = class::ClassTable::parse(
+        "F\tNVCA7E_DMA_METHOD_OFFSET\t15\t2\nF\tNVCA7E_DMA_JUMP_OFFSET\t31\t2\n",
+    );
+    assert!(kf_disp::pushbuf::DmaFormat::from_class(&t, 0xca7e).is_none());
+}
+
+fn assert_bounded_jump_cycle(class: u32) {
+    let mut ring = vec![0u8; 65536];
+    ring[..4].copy_from_slice(&(1u32 << 29).to_le_bytes());
+    let (_, _, err) = kf_disp::pushbuf::decode_groups_with(format(class), &ring, 0, 4);
+    assert_eq!(err, Some(kf_disp::pushbuf::DecodeError::Runaway));
+}
+
+#[test]
+fn a_blackwell_core_jump_cycle_remains_bounded() {
+    assert_bounded_jump_cycle(BLACKWELL_GB20X.classes.core);
+}
+
+#[test]
+fn a_blackwell_window_jump_cycle_remains_bounded() {
+    assert_bounded_jump_cycle(BLACKWELL_GB20X.classes.window);
+}
+
+fn assert_ad104_legacy_identity(class: u32) {
+    let t = class::for_version("580.65.06").unwrap();
+    let format = kf_disp::pushbuf::DmaFormat::from_class(t, class).unwrap();
+    assert_eq!(format.max_bytes(), 4096);
+    for high in [0, 0x4000, 0x8000, 0xc000] {
+        for low in [0, 0x200, 0x3ffc] {
+            let mut ring = [0u8; 8];
+            ring[..4].copy_from_slice(&((1u32 << 18) | high | low).to_le_bytes());
+            ring[4..].copy_from_slice(&0x12345678u32.to_le_bytes());
+            assert_eq!(
+                kf_disp::pushbuf::decode_groups_with(format, &ring, 0, 8),
+                kf_disp::pushbuf::decode_groups(&ring, 0, 8),
+                "AD104 method alias handling changed for class {class:x}"
+            );
+        }
+    }
+    for target in [0, 4, 0x400, 0xffc, 0x3ffc, 0x8000] {
+        let mut ring = [0u8; 4096];
+        ring[..4].copy_from_slice(&((1u32 << 29) | target).to_le_bytes());
+        assert_eq!(
+            kf_disp::pushbuf::decode_groups_with(format, &ring, 0, 8),
+            kf_disp::pushbuf::decode_groups(&ring, 0, 8),
+            "AD104 jump handling changed for class {class:x}"
+        );
+    }
+}
+
+#[test]
+fn ad104_5806506_core_decoder_matches_legacy() {
+    assert_ad104_legacy_identity(ADA.classes.core);
+}
+
+#[test]
+fn ad104_5806506_window_decoders_match_legacy() {
+    assert_ad104_legacy_identity(ADA.classes.window);
+    assert_ad104_legacy_identity(ADA.classes.window_imm);
+}

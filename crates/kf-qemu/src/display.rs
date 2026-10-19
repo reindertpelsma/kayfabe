@@ -3946,124 +3946,12 @@ fn chan_of(chn: u32) -> Option<(ChannelKind, u32)> {
 }
 
 /// Bound a declared display ring before the worker reads guest memory.
-fn pushbuffer_location(
-    p: kf_disp::model::Pushbuffer,
-    _engine: &Engine,
-    _kind: ChannelKind,
-) -> PbLoc {
+fn pushbuffer_location(p: kf_disp::model::Pushbuffer, engine: &Engine, kind: ChannelKind) -> PbLoc {
     let lim = u32::try_from(p.limit.saturating_add(1)).unwrap_or(u32::MAX);
     PbLoc {
         sysmem: p.addr_space == 1,
         addr: p.phys,
-        bytes: p.bytes().min(lim).min(kf_disp::pushbuf::MAX_PUSHBUFFER) & !3,
-    }
-}
-
-#[cfg(test)]
-mod display_dma_bounds_tests {
-    use super::*;
-    use kf_chip::display::{ADA, AMPERE, BLACKWELL_GB20X, DisplayRow};
-
-    fn engine(row: &DisplayRow) -> Engine {
-        let table = kf_disp::class::for_version("580.159.04").unwrap();
-        let regs = kf_disp::regs::Regs::for_ip("580.159.04", row.ip_version).unwrap();
-        let classes = kf_disp::model::Classes::of(row);
-        Engine::new(
-            Vocab::resolve(table, &classes, &regs).unwrap(),
-            row.heads,
-            row.windows,
-        )
-    }
-
-    fn declared(size_enum: u32, limit: u64) -> kf_disp::model::Pushbuffer {
-        kf_disp::model::Pushbuffer {
-            addr_space: 1,
-            phys: 0x10000,
-            limit,
-            size_enum,
-        }
-    }
-
-    fn assert_blackwell_ring(kind: ChannelKind) {
-        let mut e = engine(&BLACKWELL_GB20X);
-        let loc = pushbuffer_location(declared(4, 65535), &e, kind);
-        assert_eq!(
-            loc.bytes, 65536,
-            "the worker clipped the public class's ring"
-        );
-        let channel = e.alloc(kind, 0, 1, 1, Some(loc), 0).unwrap();
-        e.step(channel, &vec![0; loc.bytes as usize], 0x8004, &mut |_| true);
-        let (get, decoded, queued, halted, _) = e.chan_state(channel).unwrap();
-        assert!(!halted);
-        assert_eq!((get, decoded, queued), (0x8004, 0x8004, 0));
-    }
-
-    #[test]
-    fn blackwell_core_worker_keeps_its_64k_ring() {
-        assert_blackwell_ring(ChannelKind::Core);
-    }
-
-    #[test]
-    fn blackwell_window_worker_keeps_its_64k_ring() {
-        assert_blackwell_ring(ChannelKind::Window);
-    }
-
-    #[test]
-    fn blackwell_window_immediate_worker_keeps_its_64k_ring() {
-        assert_blackwell_ring(ChannelKind::WindowImm);
-    }
-
-    #[test]
-    fn context_dma_limit_still_bounds_a_blackwell_core_read() {
-        let e = engine(&BLACKWELL_GB20X);
-        assert_eq!(
-            pushbuffer_location(declared(4, 1023), &e, ChannelKind::Core).bytes,
-            1024
-        );
-    }
-
-    #[test]
-    fn context_dma_limit_still_bounds_and_aligns_a_blackwell_window_read() {
-        let e = engine(&BLACKWELL_GB20X);
-        assert_eq!(
-            pushbuffer_location(declared(4, 4098), &e, ChannelKind::Window).bytes,
-            4096
-        );
-    }
-
-    #[test]
-    fn declared_size_still_bounds_a_blackwell_core_read() {
-        let e = engine(&BLACKWELL_GB20X);
-        assert_eq!(
-            pushbuffer_location(declared(0, u64::MAX), &e, ChannelKind::Core).bytes,
-            4096
-        );
-    }
-
-    #[test]
-    fn declared_size_still_bounds_a_blackwell_window_read() {
-        let e = engine(&BLACKWELL_GB20X);
-        assert_eq!(
-            pushbuffer_location(declared(1, u64::MAX), &e, ChannelKind::Window).bytes,
-            8192
-        );
-    }
-
-    #[test]
-    fn legacy_classes_keep_their_worker_read_bounds() {
-        for row in [&ADA, &AMPERE] {
-            let e = engine(row);
-            for kind in [
-                ChannelKind::Core,
-                ChannelKind::Window,
-                ChannelKind::WindowImm,
-            ] {
-                assert_eq!(
-                    pushbuffer_location(declared(4, u64::MAX), &e, kind).bytes,
-                    4096
-                );
-            }
-        }
+        bytes: p.bytes().min(lim).min(engine.pushbuffer_limit(kind)) & !3,
     }
 }
 
@@ -8684,5 +8572,122 @@ mod address_scan_tests {
                 );
             }
         }
+    }
+}
+
+#[cfg(test)]
+mod display_dma_bounds_tests {
+    use super::*;
+    use kf_chip::display::{ADA, AMPERE, BLACKWELL_GB20X, DisplayRow};
+
+    fn engine(row: &DisplayRow) -> Engine {
+        let table = kf_disp::class::for_version("580.159.04").unwrap();
+        let regs = kf_disp::regs::Regs::for_ip("580.159.04", row.ip_version).unwrap();
+        let classes = kf_disp::model::Classes::of(row);
+        Engine::new(
+            Vocab::resolve(table, &classes, &regs).unwrap(),
+            row.heads,
+            row.windows,
+        )
+    }
+
+    fn declared(size_enum: u32, limit: u64) -> kf_disp::model::Pushbuffer {
+        kf_disp::model::Pushbuffer {
+            addr_space: 1,
+            phys: 0x10000,
+            limit,
+            size_enum,
+        }
+    }
+
+    fn assert_blackwell_ring(kind: ChannelKind) {
+        let mut e = engine(&BLACKWELL_GB20X);
+        let loc = pushbuffer_location(declared(4, 65535), &e, kind);
+        assert_eq!(
+            loc.bytes, 65536,
+            "the worker clipped the public class's ring"
+        );
+        let channel = e.alloc(kind, 0, 1, 1, Some(loc), 0).unwrap();
+        e.step(channel, &vec![0; loc.bytes as usize], 0x8004, &mut |_| true);
+        let (get, decoded, queued, halted, _) = e.chan_state(channel).unwrap();
+        assert!(!halted);
+        assert_eq!((get, decoded, queued), (0x8004, 0x8004, 0));
+    }
+
+    #[test]
+    fn blackwell_core_worker_keeps_its_64k_ring() {
+        assert_blackwell_ring(ChannelKind::Core);
+    }
+
+    #[test]
+    fn blackwell_window_worker_keeps_its_64k_ring() {
+        assert_blackwell_ring(ChannelKind::Window);
+    }
+
+    #[test]
+    fn blackwell_window_immediate_worker_keeps_its_64k_ring() {
+        assert_blackwell_ring(ChannelKind::WindowImm);
+    }
+
+    #[test]
+    fn context_dma_limit_still_bounds_a_blackwell_core_read() {
+        let e = engine(&BLACKWELL_GB20X);
+        assert_eq!(
+            pushbuffer_location(declared(4, 1023), &e, ChannelKind::Core).bytes,
+            1024
+        );
+    }
+
+    #[test]
+    fn context_dma_limit_still_bounds_and_aligns_a_blackwell_window_read() {
+        let e = engine(&BLACKWELL_GB20X);
+        assert_eq!(
+            pushbuffer_location(declared(4, 4098), &e, ChannelKind::Window).bytes,
+            4096
+        );
+    }
+
+    #[test]
+    fn declared_size_still_bounds_a_blackwell_core_read() {
+        let e = engine(&BLACKWELL_GB20X);
+        assert_eq!(
+            pushbuffer_location(declared(0, u64::MAX), &e, ChannelKind::Core).bytes,
+            4096
+        );
+    }
+
+    #[test]
+    fn declared_size_still_bounds_a_blackwell_window_read() {
+        let e = engine(&BLACKWELL_GB20X);
+        assert_eq!(
+            pushbuffer_location(declared(1, u64::MAX), &e, ChannelKind::Window).bytes,
+            8192
+        );
+    }
+
+    #[test]
+    fn legacy_classes_keep_their_worker_read_bounds() {
+        for row in [&ADA, &AMPERE] {
+            let e = engine(row);
+            for kind in [
+                ChannelKind::Core,
+                ChannelKind::Window,
+                ChannelKind::WindowImm,
+            ] {
+                assert_eq!(
+                    pushbuffer_location(declared(4, u64::MAX), &e, kind).bytes,
+                    4096
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn cursor_pio_worker_keeps_the_old_read_bound() {
+        let e = engine(&BLACKWELL_GB20X);
+        assert_eq!(
+            pushbuffer_location(declared(4, u64::MAX), &e, ChannelKind::Cursor).bytes,
+            4096
+        );
     }
 }
