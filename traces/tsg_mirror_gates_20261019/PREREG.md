@@ -1,6 +1,6 @@
 # M1 correctness gates preregistration
 
-STATUS: LIVE, 2026-10-19 00:10 UTC. Lane M1. No hardware gate has run in this lane.
+STATUS: LIVE, 2026-10-19 00:03 UTC. Lane M1. No hardware gate has run in this lane.
 
 ## Hypotheses and falsifiers (written before runs)
 

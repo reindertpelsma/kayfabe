@@ -1,0 +1,27 @@
+{
+  "inspected": 62,
+  "tool_presence": {
+    "gcc": 62,
+    "vulkaninfo": 15,
+    "vkcube": 15,
+    "glxgears": 60,
+    "ffmpeg": 1,
+    "glslangValidator": 0,
+    "Xvfb": 0,
+    "vglrun": 0,
+    "Xorg": 46
+  },
+  "gfx_sources": 0,
+  "gfx_binaries": {
+    "vk_gfx": 0,
+    "egl_gfx": 0,
+    "glx_gfx": 0
+  },
+  "app_bundles": 0,
+  "llm_venvs": 0,
+  "cuda_libraries": 62,
+  "images_with_nvidia_modules": 62,
+  "images_with_nvidia_icd_under_usr_share": 0,
+  "desktop_seed_nvidia_icd_under_etc": true,
+  "icd_note": "The initial bulk inventory checked usr/share only. Separate read-only inspection found etc/vulkan/icd.d/nvidia_icd.json in the desktop seed; do not infer ICD absence from the bulk count."
+}
