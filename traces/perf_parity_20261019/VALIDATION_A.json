@@ -50,5 +50,31 @@
   },
   "rustfmt_changed_lines": "PASS",
   "mutants": 14,
-  "minimum_test_kills_per_mutant": 2
+  "minimum_test_kills_per_mutant": 2,
+  "expected_red": [
+    {
+      "commit": "b8bccde88",
+      "scope": "trace contract",
+      "passed": 1,
+      "failed": 3
+    },
+    {
+      "commit": "b9a86a716",
+      "scope": "GET contract",
+      "passed": 0,
+      "failed": 3
+    },
+    {
+      "commit": "4084480dc",
+      "scope": "live counters",
+      "passed": 4,
+      "failed": 2
+    },
+    {
+      "commit": "043f90f00",
+      "scope": "private sink",
+      "passed": 6,
+      "failed": 1
+    }
+  ]
 }

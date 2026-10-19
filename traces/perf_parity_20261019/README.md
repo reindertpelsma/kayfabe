@@ -1,6 +1,6 @@
 # P1 Steel Nomad parity
 
-STATUS: Part A COMPLETE; Part B starting, 2026-10-19 02:55 CEST.
+STATUS: Part A COMPLETE; native/fast correctness gates PASS, Windows measurements starting, 2026-10-19 03:02 CEST.
 
 CODE READ: hardware baseline is the mirror source `c2685412e` / binary `0d7ba7438`, as directed by the coordinator. P1 imports its build inputs verbatim without merging or changing TSG implementation. The effective crate diff is limited to 12 paths in kf-qemu/kf-chan. See `BASELINE_UPDATE.md`, `PREREG.md` and `CODE_READ.md` for source provenance, hypotheses and falsifiers.
 
@@ -13,3 +13,5 @@ CODE READ: compile-time features `diag-nsi` and `diag-get-writeback` default off
 CODE READ: M1 DONE/report is present, with its hardware gates UNRUN. Production run 3009 still owns the GPU. P1 has performed no hardware measurement; its source validation and mirror-based immutable binary build are now complete, so it will request a clean owner shutdown and bounded lock acquisition. The earlier production-based P1 binary is ineligible for these A/B runs. Morning production promotion remains subject to every original lane criterion.
 
 CODE READ: diagnostic use: choose a P1-owned request path in `KF3_DIAG_NSI_TRACE_DUMP`. Appending bytes to `<path>.stats` yields checkpoint ids in `<path>.stats.out`; creating `<path>` freezes the bounded tail once into `<path>.out`. Require a complete END marker and inspect trace losses. The source fd combines FIFO and configured host-copy events; identical vectors do not prove redundancy. The harness stops further performance arms if unconditional `backstop_found_work` increases. Host logs stay in the lane directory; only small text/PNG evidence is committed.
+
+MEASURED: P1 acquired the shared GPU lease after production run3009 exited cleanly. Native gates passed9/9, gate10PASS, births12/12USER and zero new Xid. The diagnostic-enabled fast suite passed30/30. Five deliberate negative-probe Xids are documented in `FAST_SUITE.txt`; no zero-Xid Windows hold is claimed yet.
