@@ -533,7 +533,10 @@ pub fn served_chain(
     // Diagnostic-only B1 rank2, default off. No firmware logger or host DMA is created.
     if cmc_log_probe::enabled() {
         chain.push(Box::new(cmc_log_probe::CmcLogProbe::new(driver)));
-        eprintln!("kf-rm: PROBE {}=1: CMC log-buffer registration echo only; no log writer or host action", cmc_log_probe::FLAG);
+        eprintln!(
+            "kf-rm: PROBE {}=1: CMC log-buffer registration echo only; no log writer or host action",
+            cmc_log_probe::FLAG
+        );
     }
     // ⚠ PROBE (default off): H-preempt-bind, 2026-10-08 — `preempt_bind_probe.rs`. Answers
     // `GR_CTXSW_PREEMPTION_BIND` NV_OK with nothing sent to the host; never a shipped behaviour.
