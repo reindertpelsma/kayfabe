@@ -15,9 +15,9 @@ establishes a cause. Evidence under phase2_ad102_56766467/. Host remains off-lim
 
 | Die | Guest OS / actual driver build | Current source | Current result | Historical result, now STALE | Historical source / evidence |
 |---|---|---|---|---|---|
-| GB202 | Linux580.159.04 | `24906bf33`, host595 | PARTIAL: raw30/CUDA4PASS; desktopFAIL black broker frame,1flip timeout/0guestXid | No current acceptance | phase2_blackwell_56788212/B2_RESULT.md |
+| GB202 | Linux580.159.04 | `24906bf33`, host595 | PARTIAL: raw30/CUDA4/gfx5steps+10hashesPASS; desktopFAIL black broker frame,1flip timeout/0guestXid | No current acceptance | phase2_blackwell_56788212/B2_RESULT.md |
 | GB202 | Linux580.159.04 codec candidate | `45a4d91b5`, unmerged | FAIL: same black frame/1flip timeout; native9+10PASS; final B2 attempt | Separate public-format topic, PR51 | phase2_blackwell_56788212/b2_codec_candidate/ |
-| GB202 | Linux595.91.07 | `24906bf33`, host595 | PARTIAL: raw30PASS (0HBwarnings), concurrency2PASS; 31zero-HB startup warnings + CUP3nonzeroHBbursts retained; CUDA4PASS/brokerUNRUN | No current acceptance | phase2_blackwell_56788212/B3_RESULT.md |
+| GB202 | Linux595.91.07 | `24906bf33`, host595 | PARTIAL: raw30PASS (0HBwarnings), concurrency2PASS; 31zero-HB startup warnings + CUP3nonzeroHBbursts retained; CUDA4/gfx5steps+10hashesPASS; brokerUNRUN | No current acceptance | phase2_blackwell_56788212/B3_RESULT.md |
 | GB202 | Windows580.88 | `24906bf33`, P19 | FAIL init/CodeTDRunverified: ONlate386RPCs/unload385; OFFcold0RPCs; suiteUNRUN. Initialguardrefusal retained | No current acceptance | phase2_blackwell_56788212/ |
 | AD102 | Linux 580.159.04 | `24906bf33` | PARTIAL: CUDA4PASS; raw30/brokerUNRUN | Raw30/CUDA4/gfx10/broker PASS | `da0569a6`; E1 `ad102_4090/README.md` |
 | AD102 | Linux 590.48.01 | `24906bf33` | UNRUN | Raw30/CUDA4/gfx10/broker PASS; 18 STALL/10 nvAssert | `9d6f210ba`; E1 `ad102_second_builds_20261016/linux590_apps/RESULT.md` |

@@ -46,3 +46,7 @@ CUP3warningsare two shortbursts:144records/81.426ms at100.921698..101.003124
 and160records/61.867ms at106.612890..106.674757, gap5.609766s. ItisNOTone
 continuous5.75s storm. RawHB5472then5345; epochtransition/stalepublishedvalue
 is an INFERRED nextlead, not proved or patched.500ms period unchanged.
+
+Headless595gfx5/5+10hashPASSbutbeforecapture104nonzeroHBwarnings,after214
+(overlapping).0capturedXid/flip. ThusnonzeroHBburstsalsorecurinasecondfat
+workload; no clockfixclaimed. Linux580CUDA/gfxcaptureshave0HBwarnings.
