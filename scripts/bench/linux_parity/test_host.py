@@ -60,6 +60,21 @@ class HostContracts(unittest.TestCase):
         args, _ = self.h.plan(self.c, 'B', {})
         self.assertIn('memory-backend-memfd,id=ram0,size=12288M,share=on', args)
 
+    def test_cloud_seed_preserves_instance_during_provision(self):
+        self.c['seed'] = '/data/codex-LX1/seed.iso'
+        args, _ = self.h.plan(self.c, 'P', {})
+        self.assertIn('file=' + self.c['seed'] + ',if=virtio,format=raw,readonly=on', args)
+
+    def test_cloud_seed_identical_on_vfio(self):
+        self.c['seed'] = '/data/codex-LX1/seed.iso'
+        args, _ = self.h.plan(self.c, 'C', {})
+        self.assertIn('file=' + self.c['seed'] + ',if=virtio,format=raw,readonly=on', args)
+
+    def test_cloud_seed_must_be_lane_local(self):
+        self.c['seed'] = '/other/seed.iso'
+        with self.assertRaises(ValueError):
+            self.h.plan(self.c, 'A', {})
+
     def test_a_c_same_binary(self):
         self.assertEqual(self.h.plan(self.c, 'A', {})[0][0], self.h.plan(self.c, 'C', {})[0][0])
 
