@@ -1,0 +1,19 @@
+[
+  {
+    "id": 56765201,
+    "offer": 56180125,
+    "gpu_offer": "RTX 5060",
+    "quote_dph": 0.13449074074074074,
+    "disk_gb_requested": 180,
+    "created_utc": "2026-10-19T17:42:43.729582+00:00",
+    "product_head": "24a67f4c35542ff61b59c7e2d4c838f6263faf2a",
+    "credit_before": 43.559771576861976,
+    "auto_destroy_minutes": 180,
+    "destroyed": false,
+    "auto_destroy_pid": 54157,
+    "auto_destroy_armed_utc": "2026-10-19T17:42:43.750812+00:00",
+    "auto_destroy_verified": true,
+    "observed_dph_total": 0.175,
+    "phase": "KVM image pull; SSH unavailable; hardware unrun"
+  }
+]
