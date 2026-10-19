@@ -5866,11 +5866,10 @@ mod tests {
                         && t.notifier_value("__0_STATUS_BEGUN").is_some(),
                     "{version}"
                 );
-                // GB20x windows name surfaces by address: no scanout vocabulary yet, the boot layer shows
-                assert_eq!(
+                // Every supported family must expose its armed window surfaces to the console.
+                assert!(
                     ScanVocab::resolve(t, classes.window, classes.window_imm, classes.core)
-                        .is_none(),
-                    row.chips.starts_with("GB2"),
+                        .is_some(),
                     "{version} {}",
                     row.chips
                 );
