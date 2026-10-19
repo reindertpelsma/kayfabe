@@ -1,11 +1,6 @@
-diff --git a/crates/kf-qemu/src/userrelay.rs b/crates/kf-qemu/src/userrelay.rs
-index 5ceb34a6f..026ff51e0 100644
 --- a/crates/kf-qemu/src/userrelay.rs
 +++ b/crates/kf-qemu/src/userrelay.rs
-@@ -400,6 +400,33 @@ impl Drop for NeverBorn {
-     }
- }
- 
+@@ -402,0 +403,27 @@
 +/// Validate the channel declaration before resolving any own-VM USERD storage.
 +/// The class is generated from ogkm's g_gpu_class_list.c/resource_list.h for
 +/// this host-derived family, as in kf_rm::chanlink::alloc_shape. Every listed
@@ -33,13 +28,7 @@ index 5ceb34a6f..026ff51e0 100644
 +    Ok(())
 +}
 +
- struct Birth {
-     a: ChannelAlloc,
-     mirror: Mirror,
-@@ -437,18 +464,8 @@ impl Birth {
-         // The CPU-RM resolved descriptor supplies bounded own-VM RAM; runtime
-         // CPU access additionally retains exact Pt allocation identity.
-         let source = (|| {
+@@ -440,12 +467,2 @@
 -            if a.class != kf_abi::generated::classes::AMPERE_CHANNEL_GPFIFO_A
 -                || a.entries < 2
 -                || !a.entries.is_power_of_two()
@@ -54,14 +43,7 @@ index 5ceb34a6f..026ff51e0 100644
 -            }
 +            source_declaration(me.family, a.class, a.entries, a.gpfifo_va)
 +                .map_err(str::to_string)?;
-             let declared = a.subdevice_id.ok_or("USER_RING_SUBDEVICE_ID_UNMEASURED")?;
-             let native_id = if shadow_enabled() && declared == 0 {
-                 0 // Existing opaque diagnostic retains the host default.
-@@ -1003,6 +1020,36 @@ mod tests {
-     use kf_core::{HostOps, HostSlice, Owner, Plane, Translatable, VmCaps, Vmm};
-     use kf_trap::token::Route;
- 
-+    #[test]
+@@ -1015,0 +1033,30 @@
 +    fn user_ring_source_accepts_generated_channel_classes_for_every_family() {
 +        for family in kf_chip::Family::ALL {
 +            for &class in family.classes().channel_gpfifo {
@@ -91,6 +73,4 @@ index 5ceb34a6f..026ff51e0 100644
 +        assert_eq!(source_declaration(family, class, 1 << 20, 0x1000), Ok(()));
 +    }
 +
-     #[test]
-     fn windows_relay_is_the_default_with_an_explicit_negative_control() {
-         assert!(relay_enabled(None));
++    #[test]

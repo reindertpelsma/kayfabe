@@ -36,3 +36,6 @@ userpump/userrelay, channel groups/latejoin or the drainer paths. All other
 candidate-5 raw preflight collisions in mem.rs/device.rs arise from incidental
 old formatting at current reset/budget code; those formatting edits need not be
 imported. Preserve current integration behavior there.
+
+The proposal is a zero-context patch against the current unchanged product file;
+read-only git apply --check --unidiff-zero passes. It has not been applied.

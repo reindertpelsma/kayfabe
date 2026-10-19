@@ -13,7 +13,7 @@ f2_mutations.json. The F-2 request below is superseded, not still awaiting appro
 
 A separate retained Turing topic requires userrelay.rs: current declaration
 validation accepts only AMPERE_CHANNEL_GPFIFO_A. Exact dependency and the
-96-line unapplied proposal are in USERRELAY_DEPENDENCY.md and
+bounded unapplied proposal are in USERRELAY_DEPENDENCY.md and
 userrelay_family_gate_PROPOSAL.patch. The latest coordinator explicitly leaves
 userrelay protected, so that edit is STOPPED and an asynchronous narrow scope
 question is pending. No userrelay/birth/group/doorbell/lifecycle code was edited.

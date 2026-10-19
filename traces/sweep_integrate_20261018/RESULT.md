@@ -87,7 +87,7 @@ accepts only AMPERE_CHANNEL_GPFIFO_A. The retained Turing family topic needs
 userrelay.rs to use the actual host-derived family's generated channel class.
 The latest coordinator expressly keeps userrelay protected, so it is unchanged.
 
-See USERRELAY_DEPENDENCY.md and the 96-line unapplied
+See USERRELAY_DEPENDENCY.md and the bounded unapplied
 userrelay_family_gate_PROPOSAL.patch. Upstream test-first/fixture/fix history is
 0b1a1fe7e / c5ee774cb / 8e3a9d325. Scope is only the declaration helper/call and
 pure tests; preserve bounds, ownership, all existing tests, lazy/scan-off,

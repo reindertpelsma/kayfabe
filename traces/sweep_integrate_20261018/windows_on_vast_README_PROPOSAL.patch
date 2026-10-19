@@ -1,9 +1,6 @@
 --- a/README.md
 +++ b/README.md
-@@ -43,6 +43,18 @@
- checks cover device health and driver/compiler versions; a real CUDA workload
- must be tested separately.
- 
+@@ -45,0 +46,12 @@
 +## Comparing with a Kayfabe guest
 +
 +This installer supplies a Windows reference on the rental's assigned GPU. A
@@ -16,6 +13,3 @@
 +CUDA and hardware D3D workloads, and retain their results and the TDR count over
 +the chosen hold, before comparing the reference with the guest.
 +
- ## Template configuration
- 
- - Image: `docker.io/vastai/kvm`.
