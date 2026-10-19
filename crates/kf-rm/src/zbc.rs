@@ -88,7 +88,9 @@ fn defaults(t: TableType, die: kf_chip::DieId) -> Vec<ZbcValue> {
     match crate::consttab::lookup(key, die, 0) {
         Ok(row) => row
             .body()
-            .chunks_exact(44)
+            .as_chunks::<44>()
+            .0
+            .iter()
             .map(|c| {
                 let w = |i: usize| {
                     u32::from_le_bytes([c[4 * i], c[4 * i + 1], c[4 * i + 2], c[4 * i + 3]])

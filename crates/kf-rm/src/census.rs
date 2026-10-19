@@ -346,7 +346,7 @@ fn rpc_trace_slot() -> bool {
     static LEFT: AtomicUsize = AtomicUsize::new(16_384);
     static ANNOUNCED: AtomicBool = AtomicBool::new(false);
     if LEFT
-        .fetch_update(Ordering::Relaxed, Ordering::Relaxed, |n| n.checked_sub(1))
+        .try_update(Ordering::Relaxed, Ordering::Relaxed, |n| n.checked_sub(1))
         .is_ok()
     {
         true
