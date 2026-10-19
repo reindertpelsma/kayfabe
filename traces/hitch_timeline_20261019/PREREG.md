@@ -8,6 +8,7 @@ INFERRED; none is an attribution of the owner's hitches.
 
 | Suspect | Decisive observation | Falsifier for a particular gap |
 |---|---|---|
+| S8 held/forwarded guest reply (FIRST PRIORITY) | A correlated reply wait spans the ETW-verified present-thread wait, with arrival/hold, rows-applied/act-resolution and posted timestamps | Complete correlated traces show every relevant reply posted promptly before the verified guest wait; no overlapping held/forwarded request |
 | S1 MMU / host act | Correlated invalidate arrival, walk, plan, apply, clear or RM interval spans the first delayed stage | All relevant operations complete before that stage is due, with complete coverage |
 | S2 tick / credit | Copy-ready frame waits for a missing tick/credit, followed by fallback or handoff | Credits and ticks progress throughout the delay and the frame is sent promptly |
 | S3 broker / compositor | A sent content sequence waits for commit or presentation feedback | Its compositor present follows promptly; the earlier stage already stalled |
@@ -23,6 +24,9 @@ new-content gap strictly above 80 ms, including UNKNOWN. Also tabulate strictly
 above 100/200 ms, and the owner's >33/>50/>100 ms metrics. Preserve event windows.
 S7 explicitly includes same-thread runqueue intervals per the coordinator's
 addition; S4 remains available for independently established CPU/IRQ causes.
+Addition 4 sets investigation priority to S8, then S1, then the remaining
+suspects. Priority is not attribution or permission to skip the earliest-stage
+and UNKNOWN rules. Summary tables must include S8 as a separate class.
 
 ## Arms and stopping rule
 
@@ -155,7 +159,7 @@ workload context. Report exact observed invalidate count plus per-request
 arrival/clear/apply durations (pending durations remain unknown/censored),
 CE2/CE3/GR0 completion-edge counts/rates with coverage, and bracketing guest
 residency samples without pretending stale values were measured at the stall.
-Summarize S1..S7/UNKNOWN in 10-minute uptime bins using each bin's actual observed
+Summarize S1..S8/UNKNOWN in 10-minute uptime bins using each bin's actual observed
 exposure. Assign each gap to the bin of its preceding new-content present;
 keep its entire duration and cross-bin end timestamp. No gaps are manufactured
 from `kms=0`/`copies=0`; those counters cannot distinguish idle from a stall.
@@ -167,3 +171,47 @@ or timing stays UNKNOWN. Existing successful-act log lines omit some fields,
 and quiet/requeued acts may not print a line; the existing log cannot prove a
 complete inventory or isolate individual RM-call duration from closure time.
 Never turn an opaque RM client handle into a guest PID by assumption.
+
+## Addition 4: held-reply and forwarded-request timing, priority S8
+
+MEASURED by the coordinator at 15:45 with Bedrock running: guest dedicated
+2010/8192 MiB, total committed 2396 MiB, shared 268 MiB; host GPU 9093/12282 MiB;
+swap disabled. INFERRED: this weakens guest VRAM overcommit at that snapshot.
+It does not measure a stall peak, resident budgets or eviction activity. Sample
+guest `\GPU Adapter Memory(*)\Dedicated Usage` and Total Committed every second
+during Part B alongside ETW VidMm; retain instance identities, PID/LUID and
+sampling age. Do not replace the snapshot with a peak claim.
+
+MEASURED by the coordinator: roughly 3800 HELD-REPLY / POSTED pairs, depth/n=1,
+without timestamps. CODE READ: the common HELD-REPLY text is printed for both
+map-refresh holds and deferred host acts. RmControl alone does not identify a
+mapping operation. Matching pair counts say nothing about individual latency.
+
+Record every RmControl/RmAlloc/Free request, including immediate, refused,
+deferred and held replies, with these distinct same-clock phases:
+
+1. Queue-head trap and command arrival/service (different points in the path,
+   both host CLOCK_MONOTONIC; never silently rename service as arrival).
+2. Hold created, reason `map_refresh`, `deferred_act` or both; unique RPC sequence
+   plus VM/device/driver generation, client/object, actual API/class, requested
+   row/page counts and the inbox/walk settlement watermark.
+3. Real host rows acknowledged/applied and/or host act resolved, observed
+   applied row/page counts and status. Preserve both phases when both gate it.
+4. Reply successfully written to the guest queue, then publication/IRQ edge.
+   A failed/full-queue post is not a posted reply. Retain retries and censor
+   waits outstanding at capture end. Posting is not guest consumption.
+
+The analyzer reports the longest arrival-to-post and hold-to-post intervals,
+their row-apply/act-resolution splits and overlap with EACH verified stall.
+Missing arrival, row counts, application phase or waiter identity stays UNKNOWN;
+missing post is right-censored, not zero and not a fabricated completion. Keys
+include device/generation, not a reused raw handle or depth=1. Report host-call
+service duration separately from guest-visible reply latency.
+
+When feasible capture guest kernel CSwitch/ReadyThread events, present-thread
+PID/TID/wait reason and the NVIDIA/dxgkrnl work leading to the RPC. Verify ETW
+loss, guest/host clock uncertainty and identity mapping before assigning S8.
+No host timestamp overlap or opaque RM client handle alone proves the presenting
+guest thread waited for that RPC. A spinning kernel waiter may not generate a
+sleep interval; absence of CSwitch is not its falsifier. Without verified guest
+linkage, show the host reply interval but keep causal attribution UNKNOWN.

@@ -95,3 +95,32 @@ NOT VERIFIED: the root cause of a slow ioctl, actual guest waiter identity,
 Bedrock package/version/API/world, active-game VRAM residency, exact ETW stall
 durations, or a causal relationship between VM age and stalls. Nothing here
 authorizes stopping the owner's VM or collecting live GPU/guest data.
+
+## Addition 4: active-game snapshot and S8 hold semantics
+
+MEASURED by the coordinator at 15:45, Bedrock running: dedicated 2010 MiB of
+8192, committed 2396 MiB, shared 268 MiB; host GPU 9093/12282 MiB, swap off.
+INFERRED: this is evidence against sustained guest overcommit at that instant,
+not a peak-at-stall measurement or grounds to remove VidMm from the experiment.
+The one-second guest memory sampler remains a Part B requirement.
+
+CODE READ, candidate-5 `kf-gsp/src/boot.rs:2500`: `held_this_command` is the
+OR of `policy.holds_for_refresh(cmd)` and `policy.defers(cmd).is_some()`.
+The same "this map reply WAITS for its rows" line is printed for either.
+Thus an RmControl HELD line is not proof of a map wait; it can be a deferred
+timeslice/control act. The original held structure has the RPC (including its
+sequence), optional deferred status, alloc bit and refusal detail, but no
+per-reply arrival/hold timestamp or row/page-count record.
+
+CODE READ: `Device::release_settled` (`device.rs:3212`) first requires the memory
+inbox to be all-settled; then `GspFsm::release_held` also waits for the head's
+deferred act to settle, preserves reply order, and removes the reply only after
+`post` succeeds. Instrument global settlement watermarks as well as per-reply
+reasons so an unrelated mapping or earlier reply cannot be mistaken for the
+held request's own work. Stamp a successful post, not an attempt.
+
+MEASURED by the coordinator: approximately 3800 held/posted pairs, depth/n=1,
+without timestamps. INFERRED: pair totals cannot reveal whether any reply
+waited ten seconds, nor identify its guest waiter. S8 is now the first priority,
+S1 second. Full correlated host reply spans plus feasible guest ETW wait/ready
+evidence are needed before classifying a particular stall as S8.
