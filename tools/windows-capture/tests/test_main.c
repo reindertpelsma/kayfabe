@@ -675,6 +675,40 @@ static void t_recent_requires_scan_and_ram_validation(void)
     hn_free(&h);
 }
 
+static void t_recent_seed_requires_both_old_queues_to_have_wrapped(void)
+{
+    harness h;
+    kfwc_u32 i;
+    hn_init(&h, 1, 1, 0);
+    hn_steps(&h, 2);
+    CHECK(kfwc_engine_recent_table(h.e) == 0);
+    for (i = 0; i < 100; i++) sy_post(&h.s, 0, 76, 16);
+    hn_steps(&h, 2);
+    CHECK(kfwc_engine_recent_table(h.e) == 0);
+    for (i = 0; i < 100; i++) sy_post(&h.s, 1, 76, 16);
+    hn_steps(&h, 2);
+    CHECK(kfwc_engine_recent_table(h.e) == h.s.table_pa);
+    kfwc_engine_stop(h.e);
+    CHECK(kfwc_engine_recent_table(h.e) == 0);
+    hn_free(&h);
+}
+
+static void t_recent_corrupt_prefix_is_not_accepted(void)
+{
+    harness h;
+    kfwc_u8 *byte;
+    recent_setup(&h, 1, 1);
+    sy_post(&h.s, 0, 72, 8000);
+    byte = sy_region(&h.s, h.s.q[0].off + 4096u + 128u);
+    *byte ^= 1;
+    hn_steps(&h, 1);
+    CHECK(h.e->stats.attaches == 0 && h.sb.n == 0);
+    *byte ^= 1;
+    hn_steps(&h, 1);
+    CHECK(h.e->state == KFWC_ST_ATTACHED);
+    hn_free(&h);
+}
+
 static void t_scan_discovery(void)
 {
     harness h;
@@ -1194,6 +1228,8 @@ int main(int argc, char **argv)
         {"recent_sequence_zero_prefix", t_recent_sequence_zero_prefix},
         {"recent_stale_and_partial_epochs", t_recent_stale_and_partial_epochs},
         {"recent_requires_scan_and_ram_validation", t_recent_requires_scan_and_ram_validation},
+        {"recent_seed_requires_wrapped_queues", t_recent_seed_requires_both_old_queues_to_have_wrapped},
+        {"recent_corrupt_prefix_is_refused", t_recent_corrupt_prefix_is_not_accepted},
         {"scan_gated_by_mailbox", t_scan_gated_by_mailbox_zero},
         {"events_and_mailbox_cross_check", t_events_and_xcheck},
         {"detach_and_reattach", t_detach_and_reattach},

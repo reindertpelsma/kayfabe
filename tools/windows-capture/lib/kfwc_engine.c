@@ -695,6 +695,44 @@ static void search_step(kfwc_engine *e)
     }
     if (!e->cfg.use_scan)
         return;
+    /* A previous validated queue's table can be reused by the next driver life.
+     * This hint comes only from the module, not a caller-supplied address. Check
+     * it before the bulk-scan delay, with the same full region/geometry checks.
+     * Both published queues must be empty or retain their sequence-zero first
+     * message. Retained old traffic must never be relabelled a fresh capture. */
+    if (e->cfg.recent_table_pa &&
+        e->plat.ram_contains(e->plat.ctx, e->cfg.recent_table_pa, KFWC_PAGE) &&
+        kfwc_bind_candidate(&e->plat, &e->bind, e->cfg.recent_table_pa) == 0) {
+        kfwc_u32 d;
+        int fresh = 1;
+        e->bind.layout = e->cfg.layout;
+        for (d = 0; d < 2 && fresh; d++) {
+            kfwc_elem_info info, copied;
+            kfwc_u32 i;
+            if (!e->bind.q[d].valid)
+                continue; /* the status header may not yet be published */
+            if (read_elem_part(e, d, 0, 0, e->run, KFWC_PAGE)) {
+                fresh = 0;
+                break;
+            }
+            for (i = 0; i < KFWC_PAGE && e->run[i] == 0; i++) {}
+            if (i == KFWC_PAGE && e->bind.q[d].write_ptr == 0)
+                continue;
+            if (peek_slot(e, d, 0, &info) != KFWC_ELEM_OK || info.seq != 0 ||
+                info.elems > e->bind.q[d].count || load_verified(e, d, 0, &info) != 0 ||
+                kfwc_elem_peek(kfwc_layout_get(info.layout), e->run, &copied) != KFWC_ELEM_OK ||
+                copied.seq != 0 || copied.elems != info.elems || copied.msg_bytes != info.msg_bytes) {
+                fresh = 0;
+                break;
+            }
+            e->bind.layout = info.layout; /* both prefixes must use the same layout */
+        }
+        if (fresh) {
+            e->bind.method = KFWC_METHOD_REVISIT;
+            do_attach(e);
+            return;
+        }
+    }
     if (scan_gate_open(e, now))
         (void)scan_step(e);
 }
@@ -730,6 +768,15 @@ void kfwc_engine_init(kfwc_engine *e, const kfwc_platform *p, const kfwc_sink *s
     e->start_ticks = now_ticks(e);
     e->scan_backoff_cur = e->cfg.scan_backoff_initial_ticks;
     e->stats.scan_backoff_ticks = e->scan_backoff_cur;
+}
+
+kfwc_u64 kfwc_engine_recent_table(const kfwc_engine *e)
+{
+    if (e->state != KFWC_ST_ATTACHED || !e->dir[0].seq_known || !e->dir[1].seq_known ||
+        !e->bind.q[0].valid || !e->bind.q[1].valid ||
+        e->dir[0].next_seq <= e->bind.q[0].count || e->dir[1].next_seq <= e->bind.q[1].count)
+        return 0;
+    return e->bind.table_pa;
 }
 
 kfwc_u32 kfwc_engine_step(kfwc_engine *e)
