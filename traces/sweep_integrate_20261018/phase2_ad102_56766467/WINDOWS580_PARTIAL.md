@@ -1,3 +1,14 @@
+# AD102 Windows580 full cell result
+
+STATUS: LIVE, 2026-10-19. MEASURED full requested Windows580cell PASS at source24906bf33.
+This supersedes the partial hold checkpoint below.420.9seconds,11hardwareD3D
+rounds,zeroSystem4101TDRs; Code0/DWM/Explorer and nonblankscreen retained.
+Final WIN_CHECKfail0. windows580_result.json and fulltext/PNGs give proof.
+The initial sign-in verification failure is retained honestly; same coldboot
+was independently verified and then completed the suite. No full family claim.
+
+SUPERSEDED PARTIAL CHECKPOINT:
+
 # AD102 Windows580 short suite
 
 STATUS: LIVE, 2026-10-19. MEASURED short suite PASS; full cell PARTIAL while420shold runs.
