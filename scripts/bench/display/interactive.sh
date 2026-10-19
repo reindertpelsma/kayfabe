@@ -17,7 +17,8 @@
 # env: KF3_REV (kf3 binary revision under $BENCH/kf3-bins; default: the newest built ancestor of this
 #   checkout's HEAD), KF_IMG (the guest disk; default $WORK/desktop.qcow2), KF_RAM_MB (8192),
 #   KF_FB_MB (the kf3 store, 8192; a smaller one beside another VM on the same card),
-#   KF_SMP (6), KF_EXTRA_QEMU (more QEMU args), BROKER_ARGS (more broker flags), KF_BROKER_BACKEND
+#   KF_SMP (6), KF_GUEST_DRIVER (580.159.04; the disk's exact public ABI, independent of the host),
+#   KF_EXTRA_QEMU (more QEMU args), BROKER_ARGS (more broker flags), KF_BROKER_BACKEND
 #   (auto: wayland for a Wayland session, x11 otherwise; or test, which reads input from a FIFO —
 #   input_proof.sh uses it), KF_NVPV_REV (prep: the nvkvm-pv revision, default badf2d7), KF_VNC=1
 #   (also a QEMU VNC server on 127.0.0.1:5907, view-only use).
@@ -116,6 +117,9 @@ pick_qemu() {
 
 # shellcheck disable=SC2054  # the commas are QEMU property lists inside one argument
 qemu_args() {   # $1 = run dir; fills QARGS
+    local guest_driver=${KF_GUEST_DRIVER-580.159.04}
+    [[ "$guest_driver" =~ ^[0-9]{3}\.[0-9]{1,3}(\.[0-9]{1,3})?$ ]] \
+        || die "KF_GUEST_DRIVER must be the guest's exact public ABI version"
     local d=$1 sock; sock=$(SOCK_OF)
     cp /usr/share/OVMF/OVMF_VARS_4M.fd "$d/ovmf_vars.fd"
     local ram=${KF_RAM_MB:-8192}
@@ -128,7 +132,7 @@ qemu_args() {   # $1 = run dir; fills QARGS
         -netdev tap,id=n0,ifname=nvktap0,script=no,downscript=no
         -device virtio-net-pci,netdev=n0,mac=52:54:00:12:34:56,romfile=
         -vga none
-        -device "kf3-gpu,id=kf0,guest-driver=580.159.04,fb-mb=${KF_FB_MB:-8192},bar1-size=134217728,bar2-size=33554432,display=on,gop=on,x11-dispsw=on,display-broker=$sock,display-broker-uid=$SUID${KF3_EXTRA:+,$KF3_EXTRA}"
+        -device "kf3-gpu,id=kf0,guest-driver=$guest_driver,fb-mb=${KF_FB_MB:-8192},bar1-size=134217728,bar2-size=33554432,display=on,gop=on,x11-dispsw=on,display-broker=$sock,display-broker-uid=$SUID${KF3_EXTRA:+,$KF3_EXTRA}"
         -device virtio-keyboard-pci
         -device virtio-tablet-pci,display=kf0,head=0
         -device virtio-mouse-pci
