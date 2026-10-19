@@ -248,10 +248,10 @@ fn methods_outside_the_ce_set_are_still_refused() {
     // a LAUNCH_DMA with the blocking interrupt type
     assert!(run(&[h(4, 0x300, 1), 0x20]).is_err());
     // SubDeviceMask headers are refused before any method
-    assert!(matches!(
-        run(&[0x6000_0000]),
-        Err(Refusal::SubDeviceMask { .. } | Refusal::BadHeader { .. })
-    ));
+    assert_eq!(
+        run(&[(1 << 16) | (1 << 4)]),
+        Err(Refusal::SubDeviceMask { at: 0 })
+    );
 }
 
 /// Only the HARDWARE subchannels 0-4 are fixed to the engine. Software subchannels 5-7 need a
@@ -306,4 +306,30 @@ fn emission_is_bounded_by_the_segment() {
         super::bind(i, &Rows, &w, &mut out).expect("bound");
     }
     assert!(out.len() <= N * 16, "{} words for {N} launches", out.len());
+}
+
+/// The channel's decode width follows the same derived class for HOST methods: a Hopper+ host
+/// `SEM_EXECUTE` whose `SEM_ADDR_HI` is wider than 8 bits (high kernel VAs) is admitted on a ring
+/// whose host CE class is `C8B5`+ (wide), and refused on `C7B5` and before (the field is 8 bits).
+/// With no class at all the field stays the narrow, stricter one.
+#[test]
+fn the_host_semaphore_width_follows_the_derived_class() {
+    let sem_hi: u32 = 0x100; // bit 8: beyond the 8-bit field
+    let pb = [h(0, 0x5C, 5), 0x2023_3060, sem_hi, 7, 0, 1];
+    for class in [0xC8B5, 0xC9B5, 0xCAB5] {
+        let ir = decode(&pb, is_ce, &mut cfg(class), None).expect("wide tier");
+        assert!(
+            matches!(&ir[..], [Ir::HostSem(_)]),
+            "class {class:#x}: {ir:?}"
+        );
+    }
+    for class in [0xC5B5, 0xC6B5, 0xC7B5, 0] {
+        assert!(
+            matches!(
+                decode(&pb, is_ce, &mut cfg(class), None),
+                Err(Refusal::FieldValue { .. })
+            ),
+            "class {class:#x}"
+        );
+    }
 }
