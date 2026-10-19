@@ -32,7 +32,7 @@ GS="ssh -i $BENCH/guest_key -p 2222 -o StrictHostKeyChecking=no -o UserKnownHost
 for i in $(seq 1 40); do $GS true >/dev/null 2>&1 && break; sleep 5; done
 $GS true >/dev/null 2>&1 || { say "⊘ guest never answered ssh"; exit 3; }
 for i in $(seq 1 40); do
-  case "$($GS 'cloud-init status 2>/dev/null | head -1' 2>/dev/null | tr -d '\r')" in *done*) break ;; esac; sleep 5
+  case "$($GS 'cloud-init status 2>/dev/null | head -1' 2>/dev/null | tr -d '\r')" in *done*|*disabled*) break ;; esac; sleep 5
 done
 # ⊘ pin the kernel first (provision_guest_llm.sh, [measured w383]): the nvidia module does not follow it.
 $GS "sudo systemctl mask --now unattended-upgrades apt-daily.service apt-daily.timer apt-daily-upgrade.service apt-daily-upgrade.timer 2>/dev/null; \
