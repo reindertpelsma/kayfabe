@@ -7,6 +7,8 @@
 //! holds a copy-engine object of a class the T-mode CE table knows. Anything else gets `0` (the
 //! strict `NoCeObject` behaviour).
 
+use crate::ttables::Tier;
+
 /// The CE class a Translated ring decodes copy-engine methods against when the guest sends no
 /// `SET_OBJECT`, or `0` for none.
 ///
@@ -16,8 +18,10 @@
 ///   ([`crate::host::HostRing::ce_object_class`]), `None` on a graphics or video ring.
 #[must_use]
 pub fn implicit_ce_class(kernel_work: bool, copy_engine: bool, host_ce: Option<u32>) -> u32 {
-    let _ = (kernel_work, copy_engine, host_ce);
-    0 // STUB (tests first)
+    match host_ce {
+        Some(class) if kernel_work && copy_engine && Tier::of_ce_class(class).is_some() => class,
+        _ => 0,
+    }
 }
 
 #[cfg(test)]

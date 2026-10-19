@@ -365,8 +365,26 @@ pub struct TState {
     video_payload64: Option<(u32, u32)>,
     /// ★ VIDEO tier: video methods admitted over the channel's life (for the log).
     pub video_methods: u64,
-    /// ★ 2026-10-19 — the CE-IMPLICIT binding. STUB (tests first): not yet read.
+    /// ★ 2026-10-19 — the CE-IMPLICIT binding of a guest-KERNEL copy-engine ring: the CE class the
+    /// ring's own HOST channel holds from birth (`0` = none: a user-tier or unconfigured ring, or
+    /// a class that is not a known copy-engine class). Hardware subchannels 0-4 are fixed to the
+    /// channel's engine and `SET_OBJECT` is not required by any engine (public `dev_ram.ref`, as
+    /// recorded in `docs/design/V3_USERD_RELAY.md` §2.5; the same ground as the VIDEO tier), so the
+    /// Windows driver may send a CE method before — or without — a `SET_OBJECT` (run 3017: GP 34 of
+    /// a kernel COPY2 ring, `NoCeObject`, channel poisoned). Until the guest binds a class itself
+    /// ([`TState::tier`]), copy-engine methods on subchannels 0-4 decode against THIS class. It is
+    /// never read from guest bytes and never authored as a bind.
     pub ce_object: u32,
+}
+
+impl TState {
+    /// The tier copy-engine methods on a hardware subchannel decode against: the guest's own
+    /// `SET_OBJECT` (it decides from then on), else the ring's host CE class
+    /// ([`TState::ce_object`]), else none (refused `NoCeObject`).
+    #[must_use]
+    pub fn ce_tier(&self) -> Option<Tier> {
+        self.tier.or_else(|| Tier::of_ce_class(self.ce_object))
+    }
 }
 
 /// ★ Owner rulings 2026-10-07 (`OWNER_RULINGS.md` §S, items 1-4): what a Translated channel's
@@ -509,12 +527,12 @@ fn one(
         } else {
             SubKind::Ce
         };
-        c.method(st.tier.map_or(0, tier_class), kind, m);
+        c.method(st.ce_tier().map_or(0, tier_class), kind, m);
         // ★ 2026-10-08 (owner question, run64): the T-mode path never recorded the LAUNCH_DMA words,
         // so a census could not say whether a channel named a PHYSICAL operand (`SRC_TYPE` bit 12,
         // `DST_TYPE` bit 13). Count-only, as every census entry.
         if kind == SubKind::Ce && m == ce::LAUNCH_DMA {
-            c.launch(st.tier.map_or(0, tier_class), v);
+            c.launch(st.ce_tier().map_or(0, tier_class), v);
         }
     }
     if m < 0x100 {
@@ -568,7 +586,7 @@ fn one(
     if st.gr.video != 0 {
         return video_write(out, st, sub, m, v);
     }
-    let tier = st.tier.ok_or(Refusal::NoCeObject {
+    let tier = st.ce_tier().ok_or(Refusal::NoCeObject {
         subch: sub,
         method: m,
     })?;
@@ -932,7 +950,7 @@ fn host(
         HostMethod::SemPayloadHi => st.sem_phi = v,
         HostMethod::SemExecute => {
             let op = SemExecute::decode(v)?;
-            let wide = st.tier.is_some_and(Tier::wide_sem_addr);
+            let wide = st.ce_tier().is_some_and(Tier::wide_sem_addr);
             let hi_mask: u32 = if wide { 0x1FF_FFFF } else { 0xFF };
             if st.sem_hi & !hi_mask != 0 || st.sem_lo & 3 != 0 {
                 return Err(Refusal::FieldValue {

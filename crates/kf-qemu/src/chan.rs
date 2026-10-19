@@ -7148,9 +7148,20 @@ impl ChanPlane {
                     deferred_api: deferred_api_trigger(),
                     video: video_class,
                 };
+                // ★ 2026-10-19 (run 3017, token 0x806): a guest-KERNEL copy-engine ring decodes
+                // subchannels 0-4 against the CE class its own host channel holds when the guest
+                // has sent no `SET_OBJECT` (not required by any engine). Kernel work on a copy
+                // engine only: a user-tier channel never reaches this route, a graphics or video
+                // ring has no CE object (`ce_object_class` is `None`).
+                let ce_object = kf_chan::ce_implicit::implicit_ce_class(
+                    kernel_work,
+                    is_copy_engine(engine),
+                    host.ce_object_class(),
+                );
                 let mut chan = {
                     let mut ring = TranslatedRing::new_tmode(a.gpfifo_va, entries, 0);
                     ring.set_gr(gr_cfg);
+                    ring.set_ce_object(ce_object);
                     let mut c = TranslatedChannel::new(ring, host, idx);
                     c.set_tspace(t.windows(privileged), negctl_stale_bind());
                     c
