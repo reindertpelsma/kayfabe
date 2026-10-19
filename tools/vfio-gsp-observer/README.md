@@ -6,6 +6,22 @@ QEMU 10.2.4 observer. Local compilation and GPU-free tests pass; no native GPU
 runtime result or complete-prefix claim exists.
 It changes neither Kayfabe product semantics nor a guest/GPU queue pointer.
 
+## 2026-10-16 FMC mailbox route
+
+**STATUS: RESEARCH, 2026-10-16. CPU validation passes; hardware validation pending.**
+The shared observer also recognizes the mailbox route in public OGKM580.65.06
+`kgspBootstrapGspFmc_GH100`: MAILBOX0/1 names `GSP_FMC_BOOT_PARAMS`, whose
+`gspRmParams.bootArgsOffset` names LibOS. Compiler checks derive target offset
+40, LibOS pointer offset 48 and the two system-memory aperture encodings from
+`gspifpub.h`. Try the existing direct route first, then at most one indirection
+through a system-memory aperture. The original complete RAM, page-table and
+queue validation applies; local FB, recursive chains and invalid pointers fail.
+This adds no RAM scan, GPU write, product reply or new MMIO trigger. The FSP COT
+packet route remains unsupported. A complete Blackwell capture still requires
+both sequence-zero prefixes and a clean decoder; successful attachment alone
+does not establish completeness. Earlier statements about TU102/GA102-only
+bootstrap coverage are superseded for this specific mailbox route.
+
 > ★ **2026-10-09 — one observer for vfio-pci AND kf3-gpu** (owner ruling `docs/OWNER_RULINGS.md`
 > §X: the same tracer for both, not a look-alike; `docs/design/V3_BAR0_TRACE_MODE.md`). The
 > `VFIOPCIDevice`-typed body of `qemu/gsp-observer.c` is now the device-agnostic `GspObserver`

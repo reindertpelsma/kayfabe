@@ -15,12 +15,14 @@ expected.pop('source')
 assert subprocess.check_output(['git', 'rev-parse', 'HEAD'], cwd=source, text=True).strip() == revision
 roots = ['src/common/sdk/nvidia/inc', 'src/common/uproc/os/common/include',
          'src/nvidia/inc/kernel/gpu/gsp', 'src/common/inc/swref/published/turing/tu102',
+         'src/nvidia/arch/nvalloc/common/inc/gsp',
          'src/common/inc/swref/published/ampere/ga102']
 assert not subprocess.check_output(['git', 'status', '--porcelain', '--untracked-files=all',
                                    '--'] + roots, cwd=source), 'layout include roots must be clean'
 with tempfile.TemporaryDirectory() as tmp:
     for family in ('turing/tu102', 'ampere/ga102'):
         includes = ['src/common/sdk/nvidia/inc', 'src/common/uproc/os/common/include',
+                    'src/nvidia/arch/nvalloc/common/inc/gsp',
                     'src/nvidia/inc/kernel/gpu/gsp', 'src/common/inc/swref/published/' + family]
         exe = Path(tmp) / 'layout'
         subprocess.run(['cc', '-std=c11', '-Wall', '-Wextra', '-Werror'] +
