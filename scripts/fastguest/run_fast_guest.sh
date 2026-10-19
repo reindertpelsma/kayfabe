@@ -238,13 +238,16 @@ fi
 MGPU_TOK=""
 case "$KF_DEVICE" in
     kf3)
+        . "$KF3_REPO/scripts/bench/guest_profile.sh"
+        _profile=$(kf_guest_driver_arg "$FG/initrd.cpio.gz" "${KF3_DEV_EXTRA:-}" "$FG/driver.STAGED") || exit 2
+        case ",${KF3_DEV_EXTRA:-}," in *,guest-driver=*,*) _profile= ;; *) _profile=",$_profile" ;; esac
         if [ -z "${KF3_GPUS:-}" ]; then
-            DEVARGS=(-device "kf3-gpu,fb-mb=${KF3_FB_MB:-8192},bar1-size=$BAR1_BYTES,bar2-size=33554432,id=kf0${KF3_DEV_EXTRA:+,$KF3_DEV_EXTRA}")
+            DEVARGS=(-device "kf3-gpu,fb-mb=${KF3_FB_MB:-8192},bar1-size=$BAR1_BYTES,bar2-size=33554432,id=kf0${_profile}${KF3_DEV_EXTRA:+,$KF3_DEV_EXTRA}")
         else
             case "$KF3_GPUS" in *[!0-9,]*|,*|*,|*,,*) echo "run_fast_guest: KF3_GPUS must be comma-separated host minors, got [$KF3_GPUS]" >&2; exit 2 ;; esac
             DEVARGS=(); _i=0
             for _m in $(echo "$KF3_GPUS" | tr ',' ' '); do
-                DEVARGS+=(-device "kf3-gpu,gpu-minor=$_m,fb-mb=${KF3_FB_MB:-8192},bar1-size=$BAR1_BYTES,bar2-size=33554432,id=kf$_i${KF3_DEV_EXTRA:+,$KF3_DEV_EXTRA}")
+                DEVARGS+=(-device "kf3-gpu,gpu-minor=$_m,fb-mb=${KF3_FB_MB:-8192},bar1-size=$BAR1_BYTES,bar2-size=33554432,id=kf$_i${_profile}${KF3_DEV_EXTRA:+,$KF3_DEV_EXTRA}")
                 _i=$((_i+1))
             done
             # ★ The guest's side of the contract, in whitespace-free tokens (see KF_ARMS above).

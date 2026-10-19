@@ -3,7 +3,7 @@
 # The fat image's driver axis is independent of the host. Read a staging receipt as data;
 # never source it, and never guess the guest version from nvidia-smi on the host.
 kf_guest_driver_arg() {
-    local image=$1 extra=${2:-} version= source= count=0 field key value
+    local image=$1 extra=${2:-} receipt=${3:-$1.STAGED} version= source= count=0 field key value
     local -a fields
     IFS=, read -r -a fields <<< "$extra"
     for field in "${fields[@]}"; do
@@ -11,14 +11,14 @@ kf_guest_driver_arg() {
             version=${field#guest-driver=}; count=$((count + 1)); source=explicit
         fi
     done
-    if [ "$count" = 0 ] && [ -r "$image.STAGED" ]; then
+    if [ "$count" = 0 ] && [ -r "$receipt" ]; then
         source=receipt
         while IFS='=' read -r key value; do
             if [ "$key" = version ]; then version=$value; count=$((count + 1)); fi
-        done < "$image.STAGED"
+        done < "$receipt"
     fi
     if [ "$count" != 1 ] || [[ ! "$version" =~ ^[0-9]+\.[0-9]+(\.[0-9]+)?$ ]]; then
-        echo "guest profile refused: $image needs one verified version in $image.STAGED or one explicit guest-driver= property" >&2
+        echo "guest profile refused: $image needs one verified version in $receipt or one explicit guest-driver= property" >&2
         return 2
     fi
     echo "KF_GUEST_PROFILE image=$image source=$source version=$version" >&2
