@@ -1849,6 +1849,11 @@ mod tests {
         diff_runs: Vec<usize>,
         /// A root whose walk "refuses" a leaf (`KFWR_R_LEAF_OOB`) — the refusal the ruling names.
         refuse_in: Option<u64>,
+        /// ★ Interleaving checker: every submitted walk stays "on the GPU" (a poll answers
+        /// not-ready) until the harness releases it, so the harness decides WHEN a walk finishes.
+        hold_walks: bool,
+        /// Whether the walk in flight is still held (set at submit from `hold_walks`).
+        hold: bool,
     }
 
     impl ModelWalker {
@@ -1868,6 +1873,8 @@ mod tests {
                 fail_poll: None,
                 diff_runs: vec![],
                 refuse_in: None,
+                hold_walks: false,
+                hold: false,
             }
         }
     }
@@ -1902,6 +1909,7 @@ mod tests {
                 self.slots.remove(&s);
             }
             self.submits.push(entries.iter().map(|e| e.pdb).collect());
+            self.hold = self.hold_walks;
             let t = self.tables.borrow();
             self.queued = Some(
                 entries
@@ -1929,6 +1937,9 @@ mod tests {
             Ok(())
         }
         fn poll(&mut self) -> Result<Option<WalkDone>, String> {
+            if self.hold {
+                return Ok(None);
+            }
             if self.not_ready > 0 {
                 self.not_ready -= 1;
                 return Ok(None);
@@ -3444,4 +3455,6 @@ mod tests {
         assert_eq!(r.m.stats.no_slot, 1);
         assert!(busy(&r.port), "never cleared: nothing was applied");
     }
+
+    mod interleave;
 }
