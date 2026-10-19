@@ -1,0 +1,180 @@
+{
+  "status": "MEASURED: three baseline captures, five probes per queue; no comparative gain claimed",
+  "arm": "mirror-c6-b4",
+  "source": "0d7ba74389cd85ac65826417ad53f5c0bcd1ef2f",
+  "run": 41004,
+  "flags": {
+    "KF3_REV": "0d7ba743",
+    "KF3_WIN_USER_CHANNELS_PASSTHROUGH": "1",
+    "KF3_WIN_TWIN_DEFAPI_OBJECT": "1",
+    "KF3_KERNEL_GR_CE": "1",
+    "KF3_KERNEL_GR_WORK": "1",
+    "KF3_TRANSLATED_CE_RELAY": "1",
+    "KF3_DEFERRED_API": "1",
+    "KF3_PREEMPT_BIND_PROBE": "1",
+    "KF3_DISPLAY_IMP_ENABLE": "1",
+    "KF3_DISPLAY_CTRL_PROBE": "1",
+    "KF3_ZCULL_BIND_PROBE": "1",
+    "KF3_SW_RUNLIST_HOST_OWNED": "1",
+    "KF3_ASYNC_PREEMPT": "1",
+    "KF3_GFX_POOL_PROBE": "1",
+    "KF3_SW_RUNLIST_PROBE": "1",
+    "KF3_MEMORY_LIST_PROBE": "1",
+    "KF3_DISPLAY_SDR_COLOR": "1",
+    "KF3_DISPLAY_CAPS_PROBE": "1",
+    "KF3_DISPLAY_LUT_MIRROR": "1",
+    "KF3_DISPLAY_ILUT_OFFSET_256": "1",
+    "KF3_LIFECYCLE_COUNT": "1",
+    "KF3_LIFECYCLE_PERIOD_S": "5"
+  },
+  "captures": [
+    {
+      "tag": "mb4-sn-r1",
+      "frames": 1689,
+      "guest_fps": 29.883,
+      "window_s": 56.519,
+      "broker": {
+        "new_content_presents": 1689,
+        "new_content_fps": 29.883724603823552,
+        "one_percent_low_fps": 14.999250037498125,
+        "point_one_percent_low_fps": 11.999328037629894,
+        "new_content_gaps_per_minute": {
+          "33": 1096.6212261367577,
+          "50": 663.492997420594,
+          "100": 1.0615887958729504
+        },
+        "new_content_gap_max_ms": 116.673,
+        "repeated_presents_per_s": 30.00757663000873,
+        "merged_commits": 0,
+        "max_reported_future_us": 392.253
+      }
+    },
+    {
+      "tag": "mb4-sn-r2",
+      "frames": 1672,
+      "guest_fps": 29.331,
+      "window_s": 57.088,
+      "broker": {
+        "new_content_presents": 1666,
+        "new_content_fps": 29.18311305935478,
+        "one_percent_low_fps": 11.999472023230977,
+        "point_one_percent_low_fps": 8.571012069219218,
+        "new_content_gaps_per_minute": {
+          "33": 1127.736385811081,
+          "50": 622.1993852750791,
+          "100": 3.1530374253804685
+        },
+        "new_content_gap_max_ms": 183.342,
+        "repeated_presents_per_s": 30.67204739911778,
+        "merged_commits": 0,
+        "max_reported_future_us": 396.576
+      }
+    },
+    {
+      "tag": "mb4-sn-r3",
+      "frames": 1685,
+      "guest_fps": 29.56,
+      "window_s": 57.185,
+      "broker": {
+        "new_content_presents": 1681,
+        "new_content_fps": 29.396004851088275,
+        "one_percent_low_fps": 11.999472023230977,
+        "point_one_percent_low_fps": 10.633974822193359,
+        "new_content_gaps_per_minute": {
+          "33": 1062.8727988394678,
+          "50": 691.4443972706903,
+          "100": 2.0984655455863135
+        },
+        "new_content_gap_max_ms": 116.672,
+        "repeated_presents_per_s": 30.515186475400974,
+        "merged_commits": 0,
+        "max_reported_future_us": 400.524
+      }
+    }
+  ],
+  "tiny": {
+    "DIRECT": [
+      {
+        "tag": "mb4-q0-r1",
+        "median_us": 337.4
+      },
+      {
+        "tag": "mb4-q0-r2",
+        "median_us": 254.5
+      },
+      {
+        "tag": "mb4-q0-r3",
+        "median_us": 256.5
+      },
+      {
+        "tag": "mb4-q0-r4",
+        "median_us": 251.5
+      },
+      {
+        "tag": "mb4-q0-r5",
+        "median_us": 252.8
+      }
+    ],
+    "COMPUTE": [
+      {
+        "tag": "mb4-q2-r1",
+        "median_us": 215.9
+      },
+      {
+        "tag": "mb4-q2-r2",
+        "median_us": 217.6
+      },
+      {
+        "tag": "mb4-q2-r3",
+        "median_us": 217.4
+      },
+      {
+        "tag": "mb4-q2-r4",
+        "median_us": 219.6
+      },
+      {
+        "tag": "mb4-q2-r5",
+        "median_us": 274.6
+      }
+    ],
+    "COPY": [
+      {
+        "tag": "mb4-q3-r1",
+        "median_us": 187.7
+      },
+      {
+        "tag": "mb4-q3-r2",
+        "median_us": 185.4
+      },
+      {
+        "tag": "mb4-q3-r3",
+        "median_us": 186.5
+      },
+      {
+        "tag": "mb4-q3-r4",
+        "median_us": 188.1
+      },
+      {
+        "tag": "mb4-q3-r5",
+        "median_us": 186.6
+      }
+    ]
+  },
+  "app_score_observations": [
+    {
+      "tag": "mb4-sn-r1",
+      "score": 2967,
+      "app_fps": 29.68
+    },
+    {
+      "tag": "mb4-sn-r2",
+      "score": null,
+      "reason": "score screenshot not collected; ETW/broker data present"
+    },
+    {
+      "tag": "mb4-sn-r3",
+      "score": 2955,
+      "app_fps": 29.55
+    }
+  ]
+}
