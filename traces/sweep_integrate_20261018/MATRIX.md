@@ -16,8 +16,9 @@ establishes a cause. Evidence under phase2_ad102_56766467/. Host remains off-lim
 | Die | Guest OS / actual driver build | Current source | Current result | Historical result, now STALE | Historical source / evidence |
 |---|---|---|---|---|---|
 | GB202 | Linux580.159.04 | `24906bf33`, host595 | FAIL: valid modes/Cinnamon/NVIDIA, black broker frame,1flip timeout/0guestXid | No current acceptance | phase2_blackwell_56788212/B2_RESULT.md |
+| GB202 | Linux580.159.04 codec candidate | `45a4d91b5`, unmerged | FAIL: same black frame/1flip timeout; native9+10PASS; final B2 attempt | Separate public-format topic, PR51 | phase2_blackwell_56788212/b2_codec_candidate/ |
 | GB202 | Linux595.91.07 | `24906bf33`, host595 | PARTIAL: concurrency PASS41s;31zero-heartbeat startup warnings; fullsuiteUNRUN | No current acceptance | phase2_blackwell_56788212/B3_RESULT.md |
-| GB202 | Windows580.88 | `24906bf33`, P19 planned | UNRUN: fresh generic LTSC installation active | No current acceptance | phase2_blackwell_56788212/ |
+| GB202 | Windows580.88 | `24906bf33`, P19 | UNRUN: sealed LTSC ready; binding-only preparation active | No current acceptance | phase2_blackwell_56788212/ |
 | AD102 | Linux 580.159.04 | `24906bf33` | PARTIAL: CUDA4PASS; raw30/brokerUNRUN | Raw30/CUDA4/gfx10/broker PASS | `da0569a6`; E1 `ad102_4090/README.md` |
 | AD102 | Linux 590.48.01 | `24906bf33` | UNRUN | Raw30/CUDA4/gfx10/broker PASS; 18 STALL/10 nvAssert | `9d6f210ba`; E1 `ad102_second_builds_20261016/linux590_apps/RESULT.md` |
 | AD102 | Linux 595.91.07 | `24906bf33` | FAIL: raw29/30 (R19); CUDA incomplete (ext4, also C4); broker UNRUN | Raw30/CUDA4/gfx10/broker PASS across recorded revisions; warnings retained | Raw latest `9d6f210ba`, broker `6265b980f`; E1 `ad102_followup_20261016/RESULT.md` and `ad102_second_builds_20261016/linux595_regression/RESULT.md` |
@@ -42,7 +43,7 @@ establishes a cause. Evidence under phase2_ad102_56766467/. Host remains off-lim
 | GB205 | Linux 595.91.07 | `24906bf33` | UNRUN | Raw30 PASS with startup warnings; broader acceptance unverified | E1 `README.md`; exact source not re-audited |
 | GB205 | Windows 580.88 | `24906bf33`, P19 planned | UNRUN | Native reference PASS; kayfabe guest UNRUN | E1 `README.md`; exact source not re-audited |
 | Hopper GH100 | Linux / Windows builds unchosen | `24906bf33` | UNRUN | CPU FSP model/header tests only | No hardware or driver-installation claim |
-| GB202 / GB203 / GA102 / GA106 and other unlisted dies | Linux / Windows builds | `24906bf33` | UNRUN | No current-revision coverage claimed | Other campaign or provisioning history cannot establish acceptance here |
+| GB203 / GA102 / GA106 and other unlisted dies | Linux / Windows builds | `24906bf33` | UNRUN | No current-revision coverage claimed | Other campaign or provisioning history cannot establish acceptance here |
 
 E1: historical evidence remains on `codex/sweep-blackwell-20261015` at
 `24b6a4256ebdd4d806854696d417b93eddf34df4`, under
@@ -53,7 +54,7 @@ does not upgrade its claims or substitute that summary for a new bench run.
 ## Windows P19 flags
 
 CODE READ of historical receipts: every historical P19 result above required
-the following exact set. No Windows run occurred in the current lane and no
+the following exact set. Current AD102 Windows results use this set; GB202 preparation is active. No
 result is described as flagless. Future receipts must assert the actual process
 environment, build, ABI and source. Display/GOP on, VGA none.
 
