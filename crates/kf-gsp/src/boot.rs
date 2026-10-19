@@ -1905,6 +1905,7 @@ impl GspFsm {
             }
         );
         if !same_instance {
+            self.system_info_current = false;
             self.stat_seq = 0;
             self.cmd_seq = 0;
             self.cmd_read_ptr = 0;
