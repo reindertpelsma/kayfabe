@@ -926,11 +926,13 @@ impl Device {
                 let fd = export.fd_number();
                 let plane = on_cuda_thread("kf3-cuda-disp", || {
                     crate::display::DisplayPlane::build(
-                        row,
-                        kf_disp::capsderive::Die {
-                            architecture,
-                            implementation,
-                        },
+                        (
+                            row,
+                            kf_disp::capsderive::Die {
+                                architecture,
+                                implementation,
+                            },
+                        ),
                         table,
                         &bdf,
                         fd,

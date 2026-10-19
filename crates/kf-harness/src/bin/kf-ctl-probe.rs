@@ -242,7 +242,7 @@ fn main() {
             let mut p = vec![0u8; z::GET_SIZE_PARAMS_SIZE];
             z::put(&mut p, 2, t.wire());
             match rm.raw_control_opaque(obj, z::GET_ZBC_CLEAR_TABLE_SIZE, &mut p) {
-                Ok(status) if status == 0 => {
+                Ok(0) => {
                     let (start, end) = (z::word(&p, 0).unwrap_or(0), z::word(&p, 1).unwrap_or(0));
                     println!("ZBC table={} size start={start} end={end}", t.wire());
                     for idx in start..=end.min(start + 63) {
@@ -306,18 +306,19 @@ fn main() {
             let mut size = lo;
             while size <= hi {
                 let mut payload = vec![0u8; size];
-                if let Ok(status) = rm.raw_control_opaque(sub, cmd, &mut payload) {
-                    if status != 0x1f && status != 0x3a {
-                        let nz = payload
-                            .chunks(4)
-                            .filter(|w| w.iter().any(|b| *b != 0))
-                            .count();
-                        println!(
-                            "SCAN cmd={cmd:#010x} size={size} status={status:#x} {} nonzero_words={nz}",
-                            status_name(status)
-                        );
-                        hits += 1;
-                    }
+                if let Ok(status) = rm.raw_control_opaque(sub, cmd, &mut payload)
+                    && status != 0x1f
+                    && status != 0x3a
+                {
+                    let nz = payload
+                        .chunks(4)
+                        .filter(|w| w.iter().any(|b| *b != 0))
+                        .count();
+                    println!(
+                        "SCAN cmd={cmd:#010x} size={size} status={status:#x} {} nonzero_words={nz}",
+                        status_name(status)
+                    );
+                    hits += 1;
                 }
                 size += 4;
             }

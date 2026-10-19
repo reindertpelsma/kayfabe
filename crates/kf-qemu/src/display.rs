@@ -1994,8 +1994,10 @@ impl DisplayPlane {
     /// # Errors
     /// By name — `display=on` never starts on a guessed display.
     pub fn build(
-        row: &'static kf_chip::display::DisplayRow,
-        die: kf_disp::capsderive::Die,
+        (row, die): (
+            &'static kf_chip::display::DisplayRow,
+            kf_disp::capsderive::Die,
+        ),
         table: &kf_abi::versions::DriverAbiTable,
         bdf: &str,
         store_fd: i32,
