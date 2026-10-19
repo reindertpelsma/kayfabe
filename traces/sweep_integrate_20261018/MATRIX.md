@@ -15,7 +15,9 @@ establishes a cause. Evidence under phase2_ad102_56766467/. Host remains off-lim
 
 | Die | Guest OS / actual driver build | Current source | Current result | Historical result, now STALE | Historical source / evidence |
 |---|---|---|---|---|---|
-| GB202 | Linux580/595, Windows580.88 | `24906bf33`, nativehost595 | UNRUN guests; stricthealth/nativegates9+10PASS,build active | No current acceptance | phase2_blackwell_56788212/ |
+| GB202 | Linux580.159.04 | `24906bf33`, host595 | FAIL: valid modes/Cinnamon/NVIDIA, black broker frame,1flip timeout/0guestXid | No current acceptance | phase2_blackwell_56788212/B2_RESULT.md |
+| GB202 | Linux595.91.07 | `24906bf33`, host595 | PARTIAL: concurrency PASS41s;31zero-heartbeat startup warnings; fullsuiteUNRUN | No current acceptance | phase2_blackwell_56788212/B3_RESULT.md |
+| GB202 | Windows580.88 | `24906bf33`, P19 planned | UNRUN: fresh generic LTSC installation active | No current acceptance | phase2_blackwell_56788212/ |
 | AD102 | Linux 580.159.04 | `24906bf33` | PARTIAL: CUDA4PASS; raw30/brokerUNRUN | Raw30/CUDA4/gfx10/broker PASS | `da0569a6`; E1 `ad102_4090/README.md` |
 | AD102 | Linux 590.48.01 | `24906bf33` | UNRUN | Raw30/CUDA4/gfx10/broker PASS; 18 STALL/10 nvAssert | `9d6f210ba`; E1 `ad102_second_builds_20261016/linux590_apps/RESULT.md` |
 | AD102 | Linux 595.91.07 | `24906bf33` | FAIL: raw29/30 (R19); CUDA incomplete (ext4, also C4); broker UNRUN | Raw30/CUDA4/gfx10/broker PASS across recorded revisions; warnings retained | Raw latest `9d6f210ba`, broker `6265b980f`; E1 `ad102_followup_20261016/RESULT.md` and `ad102_second_builds_20261016/linux595_regression/RESULT.md` |

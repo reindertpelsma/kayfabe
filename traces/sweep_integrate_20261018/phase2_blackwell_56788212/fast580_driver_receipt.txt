@@ -1,0 +1,2 @@
+version=580.159.04
+kernel=6.8.0-59-generic

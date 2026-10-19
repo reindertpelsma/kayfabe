@@ -1,0 +1,2 @@
+OWNED_QEMU_STOP how=term
+[interactive] stopped

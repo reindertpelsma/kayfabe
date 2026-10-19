@@ -1,0 +1,12 @@
+BROKER_HOST_PREPARE_START 2026-10-19T21:08:01+00:00
+Name=kfbench
+Seat=seat0
+Type=x11
+Active=yes
+LockedHint=no
+112163 /usr/lib/xorg/Xorg -nolisten tcp :0 -seat seat0 -auth /var/run/lightdm/root/:0 -nolisten tcp vt7 -novtswitch
+001791413c1ab10c4eed8fbd60cd6bf7d55842774ab4060e5c573fdccefd25b8  broker/nvkvm-display-broker
+001791413c1ab10c4eed8fbd60cd6bf7d55842774ab4060e5c573fdccefd25b8  broker/nvkvm-display-broker
+001791413c1ab10c4eed8fbd60cd6bf7d55842774ab4060e5c573fdccefd25b8  /opt/sweep-broker/nvkvm-display-broker
+BROKER_HOST_READY source=24906bf334665c9000b16b271005593daa3586c7 actual_binary=/opt/sweep-broker/nvkvm-display-broker 2026-10-19T21:08:12+00:00
+BROKER_HOST_PREPARE_EXIT rc=0 2026-10-19T21:08:12+00:00
