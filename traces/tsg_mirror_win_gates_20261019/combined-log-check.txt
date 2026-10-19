@@ -1,0 +1,114 @@
+MEASURED combined host interval 2026-10-19T13:23:41.763590+02:00 -> 2026-10-19T13:27:10.171232+02:00
+Xid 21 -> 21 delta=0
+Non-status/non-lifecycle matches of refused|ERROR|TSG_MIRROR|0x1f: 39
+kf3: TSPACE-RETIRE tok=0x80b host=0x10032 key=VasKey(13965662577603119184) ring_va=0xff00a00000 released=true stale_binds=0/0 late=0 indeterminate=0 unresolved[walk=0 acquire=0 refused=0]
+kf3: chan token 0x80b (host 0x10032) RETIRED, forwarded=0 submissions=0 splits=0/0 serves=1 last_put=Some(0) gp_get=None store_views=0 privilege=Some(ChannelPrivilege { level: 2, uvm_owned: false }) dead=None inca=[refused_methods=0 subdevice_masks=0 control_entries=0 ext_base_unapplied=0] gr_tier=false gr[methods=0 inert_binds=0 objects=[]] gp_get_by_engine=(false, 0)
+kf3: TSPACE-RETIRE tok=0xd host=0x34 key=VasKey(13965662590488021072) ring_va=0xff00c00000 released=true stale_binds=0/2 late=0 indeterminate=0 unresolved[walk=0 acquire=0 refused=0]
+kf3: chan token 0xd (host 0x34) RETIRED, forwarded=1 submissions=1 splits=0/0 serves=2 last_put=Some(1) gp_get=Some(1) store_views=0 privilege=Some(ChannelPrivilege { level: 2, uvm_owned: false }) dead=None inca=[refused_methods=0 subdevice_masks=0 control_entries=0 ext_base_unapplied=0] gr_tier=true gr[methods=21 inert_binds=0 objects=[(902d, cafe0076), (a140, cafe0077), (c997, cafe0078), (c9c0, cafe0075)]] gp_get_by_engine=(true, 1)
+kf3: mem invalidate seq 6311 CLEARED OVER ABSENCE (Some(VasKey(13965662813826320464))): its refused leaves are absent on the host (a GPU access faults on that space's twin); KF3_INVALIDATE_CLEAR_OVER_ABSENT
+kf3: mem invalidate seq 6312 CLEARED OVER ABSENCE (Some(VasKey(13965662813826320464))): its refused leaves are absent on the host (a GPU access faults on that space's twin); KF3_INVALIDATE_CLEAR_OVER_ABSENT
+kf3: mem invalidate seq 6313 CLEARED OVER ABSENCE (Some(VasKey(13965662813826320464))): its refused leaves are absent on the host (a GPU access faults on that space's twin); KF3_INVALIDATE_CLEAR_OVER_ABSENT
+kf3: mem invalidate seq 6314 CLEARED OVER ABSENCE (Some(VasKey(13965662813826320464))): its refused leaves are absent on the host (a GPU access faults on that space's twin); KF3_INVALIDATE_CLEAR_OVER_ABSENT
+kf3: mem invalidate seq 6315 CLEARED OVER ABSENCE (Some(VasKey(13965662813826320464))): its refused leaves are absent on the host (a GPU access faults on that space's twin); KF3_INVALIDATE_CLEAR_OVER_ABSENT
+kf3: mem invalidate seq 6316 CLEARED OVER ABSENCE (Some(VasKey(13965662813826320464))): its refused leaves are absent on the host (a GPU access faults on that space's twin); KF3_INVALIDATE_CLEAR_OVER_ABSENT
+kf3: TSPACE-RETIRE tok=0x1805 host=0x3002c key=VasKey(13965662457344034928) ring_va=0xff00400000 released=true stale_binds=0/8 late=0 indeterminate=0 unresolved[walk=0 acquire=0 refused=0]
+kf3: chan token 0x1805 (host 0x3002c) RETIRED, forwarded=35 submissions=2 splits=0/0 serves=4 last_put=Some(35) gp_get=Some(35) store_views=1 privilege=Some(ChannelPrivilege { level: 2, uvm_owned: false }) dead=None inca=[refused_methods=0 subdevice_masks=0 control_entries=0 ext_base_unapplied=0] gr_tier=false gr[methods=0 inert_binds=0 objects=[]] gp_get_by_engine=(false, 0)
+kf3: TSPACE-RETIRE tok=0x806 host=0x1002d key=VasKey(13965662457344034928) ring_va=0xff00500000 released=true stale_binds=0/0 late=0 indeterminate=0 unresolved[walk=0 acquire=0 refused=0]
+kf3: chan token 0x806 (host 0x1002d) RETIRED, forwarded=0 submissions=0 splits=0/0 serves=1 last_put=Some(0) gp_get=None store_views=0 privilege=Some(ChannelPrivilege { level: 2, uvm_owned: false }) dead=None inca=[refused_methods=0 subdevice_masks=0 control_entries=0 ext_base_unapplied=0] gr_tier=false gr[methods=0 inert_binds=0 objects=[]] gp_get_by_engine=(false, 0)
+kf3: TSPACE-RETIRE tok=0x2007 host=0xc002e key=VasKey(13965662457344034928) ring_va=0xff00600000 released=true stale_binds=0/16 late=0 indeterminate=0 unresolved[walk=0 acquire=0 refused=0]
+kf3: chan token 0x2007 (host 0xc002e) RETIRED, forwarded=70 submissions=4 splits=0/0 serves=7 last_put=Some(70) gp_get=Some(70) store_views=1 privilege=Some(ChannelPrivilege { level: 2, uvm_owned: false }) dead=None inca=[refused_methods=0 subdevice_masks=0 control_entries=0 ext_base_unapplied=0] gr_tier=false gr[methods=0 inert_binds=0 objects=[]] gp_get_by_engine=(false, 0)
+kf3: TSPACE-RETIRE tok=0x2008 host=0xc002f key=VasKey(13965662457344034928) ring_va=0xff00700000 released=true stale_binds=0/0 late=0 indeterminate=0 unresolved[walk=0 acquire=0 refused=0]
+kf3: chan token 0x2008 (host 0xc002f) RETIRED, forwarded=0 submissions=0 splits=0/0 serves=1 last_put=Some(0) gp_get=None store_views=0 privilege=Some(ChannelPrivilege { level: 2, uvm_owned: false }) dead=None inca=[refused_methods=0 subdevice_masks=0 control_entries=0 ext_base_unapplied=0] gr_tier=false gr[methods=0 inert_binds=0 objects=[]] gp_get_by_engine=(false, 0)
+kf3: TSPACE-RETIRE tok=0x2809 host=0x50030 key=VasKey(13965662457344034928) ring_va=0xff00800000 released=true stale_binds=0/0 late=0 indeterminate=0 unresolved[walk=0 acquire=0 refused=0]
+kf3: chan token 0x2809 (host 0x50030) RETIRED, forwarded=0 submissions=0 splits=0/0 serves=1 last_put=Some(0) gp_get=None store_views=0 privilege=Some(ChannelPrivilege { level: 2, uvm_owned: false }) dead=None inca=[refused_methods=0 subdevice_masks=0 control_entries=0 ext_base_unapplied=0] gr_tier=false gr[methods=0 inert_binds=0 objects=[]] gp_get_by_engine=(false, 0)
+kf3: TSPACE-RETIRE tok=0x200a host=0xc0031 key=VasKey(13965662457344034928) ring_va=0xff00900000 released=true stale_binds=0/0 late=0 indeterminate=0 unresolved[walk=0 acquire=0 refused=0]
+kf3: chan token 0x200a (host 0xc0031) RETIRED, forwarded=0 submissions=0 splits=0/0 serves=1 last_put=Some(0) gp_get=None store_views=0 privilege=Some(ChannelPrivilege { level: 2, uvm_owned: false }) dead=None inca=[refused_methods=0 subdevice_masks=0 control_entries=0 ext_base_unapplied=0] gr_tier=false gr[methods=0 inert_binds=0 objects=[]] gp_get_by_engine=(false, 0)
+kf3: TSPACE-RETIRE tok=0x804 host=0x1002b key=VasKey(13965662457344034928) ring_va=0xff00300000 released=true stale_binds=0/0 late=0 indeterminate=0 unresolved[walk=0 acquire=0 refused=0]
+kf3: chan token 0x804 (host 0x1002b) RETIRED, forwarded=0 submissions=0 splits=0/0 serves=1 last_put=Some(0) gp_get=None store_views=0 privilege=Some(ChannelPrivilege { level: 2, uvm_owned: false }) dead=None inca=[refused_methods=0 subdevice_masks=0 control_entries=0 ext_base_unapplied=0] gr_tier=false gr[methods=0 inert_binds=0 objects=[]] gp_get_by_engine=(false, 0)
+kf3: TSPACE-RETIRE tok=0x80c host=0x10033 key=VasKey(13965662590488021072) ring_va=0xff00b00000 released=true stale_binds=0/115113 late=0 indeterminate=0 unresolved[walk=0 acquire=0 refused=0]
+kf3: chan token 0x80c (host 0x10033) RETIRED, forwarded=547332 submissions=101091 splits=14308/14308 serves=95071 last_put=Some(6660) gp_get=Some(6660) store_views=1 privilege=Some(ChannelPrivilege { level: 2, uvm_owned: false }) dead=None inca=[refused_methods=0 subdevice_masks=0 control_entries=0 ext_base_unapplied=0] gr_tier=false gr[methods=0 inert_binds=0 objects=[]] gp_get_by_engine=(false, 0)
+kf3: USER_STORE_VIEWS keep=16 armed=10 evicted_at_quota=0 rm_refused_retry_ok=0 rm_refused_fallback_ok=0 rm_refused_read_refused=0
+kf3: TSPACE-RETIRE tok=0x802 host=0x10029 key=VasKey(13965662457344034928) ring_va=0xff00100000 released=true stale_binds=0/0 late=0 indeterminate=0 unresolved[walk=0 acquire=0 refused=0]
+kf3: chan token 0x802 (host 0x10029) RETIRED, forwarded=1 submissions=1 splits=0/0 serves=3 last_put=Some(1) gp_get=Some(1) store_views=0 privilege=Some(ChannelPrivilege { level: 2, uvm_owned: false }) dead=None inca=[refused_methods=0 subdevice_masks=0 control_entries=0 ext_base_unapplied=0] gr_tier=false gr[methods=0 inert_binds=0 objects=[]] gp_get_by_engine=(false, 0)
+kf3: TSPACE-RETIRE tok=0x3 host=0x2a key=VasKey(13965662457344034928) ring_va=0xff00200000 released=true stale_binds=0/466 late=0 indeterminate=0 unresolved[walk=0 acquire=0 refused=0]
+kf3: chan token 0x3 (host 0x2a) RETIRED, forwarded=103 submissions=233 splits=0/0 serves=1139 last_put=Some(103) gp_get=Some(103) store_views=0 privilege=Some(ChannelPrivilege { level: 2, uvm_owned: false }) dead=None inca=[refused_methods=0 subdevice_masks=0 control_entries=0 ext_base_unapplied=0] gr_tier=true gr[methods=949 inert_binds=0 objects=[(902d, cafe003f), (a140, cafe0040), (c997, cafe0041), (c9c0, cafe003e)]] gp_get_by_engine=(true, 103)
+kf3: TSPACE-RETIRE tok=0x801 host=0x10028 key=VasKey(13970166078463016970) ring_va=0xff00000000 released=true stale_binds=0/6 late=0 indeterminate=0 unresolved[walk=0 acquire=0 refused=0]
+kf3: chan token 0x801 (host 0x10028) RETIRED, forwarded=2 submissions=2 splits=0/0 serves=5 last_put=Some(2) gp_get=Some(2) store_views=0 privilege=Some(ChannelPrivilege { level: 2, uvm_owned: false }) dead=None inca=[refused_methods=0 subdevice_masks=0 control_entries=0 ext_base_unapplied=0] gr_tier=false gr[methods=0 inert_binds=0 objects=[]] gp_get_by_engine=(false, 0)
+kf3: GSP WPR2 up at the guest's FWSEC-FRTS command: frts_offset=0x1ffe00000 → served WPR2_ADDR_LO=Some(Ok("0x1ffe000"))
+kf3: TSPACE-RETIRE tok=0x1 host=0x28 key=VasKey(13970167477460140098) ring_va=0xff00000000 released=true stale_binds=0/0 late=0 indeterminate=0 unresolved[walk=0 acquire=0 refused=0]
+kf3: chan token 0x1 (host 0x28) RETIRED, forwarded=0 submissions=0 splits=0/0 serves=0 last_put=None gp_get=None store_views=0 privilege=Some(ChannelPrivilege { level: 2, uvm_owned: false }) dead=None inca=[refused_methods=0 subdevice_masks=0 control_entries=0 ext_base_unapplied=0] gr_tier=true gr[methods=0 inert_binds=0 objects=[(902d, cafe18af), (a140, cafe18b0), (c997, cafe18b1), (c9c0, cafe18ae)]] gp_get_by_engine=(true, 0)
+kf3: mem invalidate seq 7670 CLEARED OVER ABSENCE (Some(VasKey(13970167478622355466))): its refused leaves are absent on the host (a GPU access faults on that space's twin); KF3_INVALIDATE_CLEAR_OVER_ABSENT
+kf3: mem invalidate seq 7674 CLEARED OVER ABSENCE (Some(VasKey(13970167478622355466))): its refused leaves are absent on the host (a GPU access faults on that space's twin); KF3_INVALIDATE_CLEAR_OVER_ABSENT
+kf3: mem invalidate seq 7675 CLEARED OVER ABSENCE (Some(VasKey(13970167478622355466))): its refused leaves are absent on the host (a GPU access faults on that space's twin); KF3_INVALIDATE_CLEAR_OVER_ABSENT
+TSG/ctxshare records: 71
+kf-rm: chanlink: CTXSHARE-FACTS 0xc1d0012a:0xff0e0200 parent(tsg)=0xff0e0000 flags=0x0 kind=SYNC declared_subctxId=0x0 hVASpace=0x0
+kf3: TSG-MIRROR BIRTH 0xc1d0012a:0xff0e0000 mode=EXPLICIT host_tsg=0xcafe13ee engine=0x1 first_ctx=0xff0e0200 kind=Sync ctx_flags=Some(
+kf3: TSG-MIRROR CTX 0xc1d0012a:0xff0e0000 guest_ctx=0xff0e0200 kind=Sync host_ctx=0xcafe13ef host_veid=Some(0) space=0xcafe0fff chan_flags=0x80206120 host_rq1=false
+kf3: TSG-MIRROR BIRTH 0xc1d0012b:0xff0e0000 mode=LEGACY host_tsg=0xcafe13fa engine=0xb shard=0x0 first_chan_flags=0x206220 ctxShare=0x0
+kf3: TSG-MIRROR BIRTH 0xc1d0012c:0xff0e0000 mode=LEGACY host_tsg=0xcafe1401 engine=0xc shard=0x0 first_chan_flags=0x206320 ctxShare=0x0
+kf3: TSG-MIRROR BIRTH 0xc1d0012d:0xff0e0000 mode=LEGACY host_tsg=0xcafe1418 engine=0xc shard=0x0 first_chan_flags=0x206420 ctxShare=0x0
+kf-rm: chanlink: CTXSHARE-FACTS 0xc1d0012e:0xff0e0200 parent(tsg)=0xff0e0000 flags=0x0 kind=SYNC declared_subctxId=0x0 hVASpace=0x0
+kf3: TSG-MIRROR BIRTH 0xc1d0012e:0xff0e0000 mode=EXPLICIT host_tsg=0xcafe1437 engine=0x1 first_ctx=0xff0e0200 kind=Sync ctx_flags=Some(
+kf3: TSG-MIRROR CTX 0xc1d0012e:0xff0e0000 guest_ctx=0xff0e0200 kind=Sync host_ctx=0xcafe1438 host_veid=Some(0) space=0xcafe0fff chan_flags=0x80206520 host_rq1=false
+kf-rm: chanlink: CTXSHARE-FACTS 0xc1d0012e:0xff0e0201 parent(tsg)=0xff0e0000 flags=0x1 kind=ASYNC declared_subctxId=0x3f hVASpace=0x0
+kf3: TSG-MIRROR CTX 0xc1d0012e:0xff0e0000 guest_ctx=0xff0e0201 kind=Async host_ctx=0xcafe1444 host_veid=Some(3f) space=0xcafe0fff chan_flags=0x80206630 host_rq1=true
+kf3: TSG-MIRROR BIRTH 0xc1d0012f:0xff0e0000 mode=LEGACY host_tsg=0xcafe144d engine=0xc shard=0x0 first_chan_flags=0x206720 ctxShare=0x0
+kf3: TSG-MIRROR BIRTH 0xc1d00130:0xff0e0000 mode=LEGACY host_tsg=0xcafe1462 engine=0xc shard=0x0 first_chan_flags=0x207020 ctxShare=0x0
+kf-rm: chanlink: CTXSHARE-FACTS 0xc1d00131:0xff0e0200 parent(tsg)=0xff0e0000 flags=0x0 kind=SYNC declared_subctxId=0x0 hVASpace=0x0
+kf3: TSG-MIRROR BIRTH 0xc1d00131:0xff0e0000 mode=EXPLICIT host_tsg=0xcafe1471 engine=0x1 first_ctx=0xff0e0200 kind=Sync ctx_flags=Some(
+kf3: TSG-MIRROR CTX 0xc1d00131:0xff0e0000 guest_ctx=0xff0e0200 kind=Sync host_ctx=0xcafe1472 host_veid=Some(0) space=0xcafe0fff chan_flags=0x80207120 host_rq1=false
+kf3: TSG-MIRROR BIRTH 0xc1d00132:0xff0e0000 mode=LEGACY host_tsg=0xcafe147c engine=0xc shard=0x0 first_chan_flags=0x207220 ctxShare=0x0
+kf-rm: chanlink: CTXSHARE-FACTS 0xc1d0012e:0xff0e0202 parent(tsg)=0xff0e0000 flags=0x1 kind=ASYNC declared_subctxId=0x3e hVASpace=0x0
+kf3: TSG-MIRROR CTX 0xc1d0012e:0xff0e0000 guest_ctx=0xff0e0202 kind=Async host_ctx=0xcafe148d host_veid=Some(3e) space=0xcafe0fff chan_flags=0x80207330 host_rq1=true
+kf-rm: chanlink: CTXSHARE-FACTS 0xc1d00137:0xff0e0200 parent(tsg)=0xff0e0000 flags=0x0 kind=SYNC declared_subctxId=0x0 hVASpace=0x0
+kf3: TSG-MIRROR BIRTH 0xc1d00137:0xff0e0000 mode=EXPLICIT host_tsg=0xcafe15cb engine=0x1 first_ctx=0xff0e0200 kind=Sync ctx_flags=Some(
+kf3: TSG-MIRROR CTX 0xc1d00137:0xff0e0000 guest_ctx=0xff0e0200 kind=Sync host_ctx=0xcafe15cc host_veid=Some(0) space=0xcafe0b73 chan_flags=0x80207420 host_rq1=false
+kf-rm: chanlink: CTXSHARE-FACTS 0xc1d00138:0xff0e0200 parent(tsg)=0xff0e0000 flags=0x0 kind=SYNC declared_subctxId=0x0 hVASpace=0x0
+kf3: TSG-MIRROR BIRTH 0xc1d00138:0xff0e0000 mode=EXPLICIT host_tsg=0xcafe15d4 engine=0x1 first_ctx=0xff0e0200 kind=Sync ctx_flags=Some(
+kf3: TSG-MIRROR CTX 0xc1d00138:0xff0e0000 guest_ctx=0xff0e0200 kind=Sync host_ctx=0xcafe15d5 host_veid=Some(0) space=0xcafe10d5 chan_flags=0x80207520 host_rq1=false
+kf3: TSG-MIRROR BIRTH 0xc1d00139:0xff0e0000 mode=LEGACY host_tsg=0xcafe1637 engine=0xc shard=0x0 first_chan_flags=0x209420 ctxShare=0x0
+kf3: TSG-MIRROR BIRTH 0xc1d0013a:0xff0e0000 mode=LEGACY host_tsg=0xcafe164e engine=0xc shard=0x0 first_chan_flags=0x209520 ctxShare=0x0
+kf-rm: chanlink: CTXSHARE-FACTS 0xc1d0013d:0xff0e0200 parent(tsg)=0xff0e0000 flags=0x0 kind=SYNC declared_subctxId=0x0 hVASpace=0x0
+kf3: TSG-MIRROR BIRTH 0xc1d0013d:0xff0e0000 mode=EXPLICIT host_tsg=0xcafe16a8 engine=0x1 first_ctx=0xff0e0200 kind=Sync ctx_flags=Some(
+kf3: TSG-MIRROR CTX 0xc1d0013d:0xff0e0000 guest_ctx=0xff0e0200 kind=Sync host_ctx=0xcafe16a9 host_veid=Some(0) space=0xcafe169c chan_flags=0x80209620 host_rq1=false
+kf3: TSG-MIRROR BIRTH 0xc1d0013e:0xff0e0000 mode=LEGACY host_tsg=0xcafe1710 engine=0xc shard=0x0 first_chan_flags=0x20a620 ctxShare=0x0
+kf3: TSG-MIRROR BIRTH 0xc1d0013f:0xff0e0000 mode=LEGACY host_tsg=0xcafe17a9 engine=0xc shard=0x0 first_chan_flags=0x20a720 ctxShare=0x0
+kf-rm: chanlink: CTXSHARE-FACTS 0xc1d0016b:0xff0e0200 parent(tsg)=0xff0e0000 flags=0x0 kind=SYNC declared_subctxId=0x0 hVASpace=0x0
+kf3: TSG-MIRROR BIRTH 0xc1d0016b:0xff0e0000 mode=EXPLICIT host_tsg=0xcafe1963 engine=0x1 first_ctx=0xff0e0200 kind=Sync ctx_flags=Some(
+kf3: TSG-MIRROR CTX 0xc1d0016b:0xff0e0000 guest_ctx=0xff0e0200 kind=Sync host_ctx=0xcafe1964 host_veid=Some(0) space=0xcafe0015 chan_flags=0x201620 host_rq1=false
+kf-rm: chanlink: CTXSHARE-FACTS 0xc1d0016c:0xff0e0200 parent(tsg)=0xff0e0000 flags=0x0 kind=SYNC declared_subctxId=0x0 hVASpace=0x0
+kf3: TSG-MIRROR BIRTH 0xc1d0016c:0xff0e0000 mode=EXPLICIT host_tsg=0xcafe196f engine=0x1 first_ctx=0xff0e0200 kind=Sync ctx_flags=Some(
+kf3: TSG-MIRROR CTX 0xc1d0016c:0xff0e0000 guest_ctx=0xff0e0200 kind=Sync host_ctx=0xcafe1970 host_veid=Some(0) space=0xcafe189d chan_flags=0x80201720 host_rq1=false
+kf3: TSG-MIRROR BIRTH 0xc1d0016e:0xff0e0000 mode=LEGACY host_tsg=0xcafe197b engine=0xc shard=0x0 first_chan_flags=0x202020 ctxShare=0x0
+kf-rm: chanlink: CTXSHARE-FACTS 0xc1d0016d:0xff0e0200 parent(tsg)=0xff0e0000 flags=0x0 kind=SYNC declared_subctxId=0x0 hVASpace=0x0
+kf3: TSG-MIRROR BIRTH 0xc1d0016d:0xff0e0000 mode=EXPLICIT host_tsg=0xcafe1982 engine=0x1 first_ctx=0xff0e0200 kind=Sync ctx_flags=Some(
+kf3: TSG-MIRROR CTX 0xc1d0016d:0xff0e0000 guest_ctx=0xff0e0200 kind=Sync host_ctx=0xcafe1983 host_veid=Some(0) space=0xcafe1900 chan_flags=0x80202120 host_rq1=false
+kf3: TSG-MIRROR BIRTH 0xc1d0016f:0xff0e0000 mode=LEGACY host_tsg=0xcafe198e engine=0xc shard=0x0 first_chan_flags=0x202220 ctxShare=0x0
+kf-rm: chanlink: CTXSHARE-FACTS 0xc1d00171:0xff0e0200 parent(tsg)=0xff0e0000 flags=0x0 kind=SYNC declared_subctxId=0x0 hVASpace=0x0
+kf3: TSG-MIRROR BIRTH 0xc1d00171:0xff0e0000 mode=EXPLICIT host_tsg=0xcafe19d2 engine=0x1 first_ctx=0xff0e0200 kind=Sync ctx_flags=Some(
+kf3: TSG-MIRROR CTX 0xc1d00171:0xff0e0000 guest_ctx=0xff0e0200 kind=Sync host_ctx=0xcafe19d3 host_veid=Some(0) space=0xcafe1932 chan_flags=0x80202320 host_rq1=false
+kf3: TSG-MIRROR BIRTH 0xc1d00173:0xff0e0000 mode=LEGACY host_tsg=0xcafe1a26 engine=0xc shard=0x0 first_chan_flags=0x202420 ctxShare=0x0
+kf-rm: chanlink: CTXSHARE-FACTS 0xc1d00174:0xff0e0200 parent(tsg)=0xff0e0000 flags=0x0 kind=SYNC declared_subctxId=0x0 hVASpace=0x0
+kf3: TSG-MIRROR BIRTH 0xc1d00174:0xff0e0000 mode=EXPLICIT host_tsg=0xcafe1a2e engine=0x1 first_ctx=0xff0e0200 kind=Sync ctx_flags=Some(
+kf3: TSG-MIRROR CTX 0xc1d00174:0xff0e0000 guest_ctx=0xff0e0200 kind=Sync host_ctx=0xcafe1a2f host_veid=Some(0) space=0xcafe1900 chan_flags=0x80202520 host_rq1=false
+kf3: TSG-MIRROR BIRTH 0xc1d00175:0xff0e0000 mode=LEGACY host_tsg=0xcafe1a41 engine=0xc shard=0x0 first_chan_flags=0x202620 ctxShare=0x0
+kf-rm: chanlink: CTXSHARE-FACTS 0xc1d00176:0xff0e0200 parent(tsg)=0xff0e0000 flags=0x0 kind=SYNC declared_subctxId=0x0 hVASpace=0x0
+kf3: TSG-MIRROR BIRTH 0xc1d00176:0xff0e0000 mode=EXPLICIT host_tsg=0xcafe1aa4 engine=0x1 first_ctx=0xff0e0200 kind=Sync ctx_flags=Some(
+kf3: TSG-MIRROR CTX 0xc1d00176:0xff0e0000 guest_ctx=0xff0e0200 kind=Sync host_ctx=0xcafe1aa5 host_veid=Some(0) space=0xcafe190f chan_flags=0x80201720 host_rq1=false
+kf-rm: chanlink: CTXSHARE-FACTS 0xc1d00177:0xff0e0200 parent(tsg)=0xff0e0000 flags=0x0 kind=SYNC declared_subctxId=0x0 hVASpace=0x0
+kf3: TSG-MIRROR BIRTH 0xc1d00177:0xff0e0000 mode=EXPLICIT host_tsg=0xcafe1aad engine=0x1 first_ctx=0xff0e0200 kind=Sync ctx_flags=Some(
+kf3: TSG-MIRROR CTX 0xc1d00177:0xff0e0000 guest_ctx=0xff0e0200 kind=Sync host_ctx=0xcafe1aae host_veid=Some(0) space=0xcafe190a chan_flags=0x80202020 host_rq1=false
+kf3: TSG-MIRROR BIRTH 0xc1d00178:0xff0e0000 mode=LEGACY host_tsg=0xcafe1aca engine=0xc shard=0x0 first_chan_flags=0x202720 ctxShare=0x0
+kf3: TSG-MIRROR BIRTH 0xc1d00179:0xff0e0000 mode=LEGACY host_tsg=0xcafe1ade engine=0xc shard=0x0 first_chan_flags=0x203020 ctxShare=0x0
+kf-rm: chanlink: CTXSHARE-FACTS 0xc1d0017c:0xff0e0200 parent(tsg)=0xff0e0000 flags=0x0 kind=SYNC declared_subctxId=0x0 hVASpace=0x0
+kf3: TSG-MIRROR BIRTH 0xc1d0017c:0xff0e0000 mode=EXPLICIT host_tsg=0xcafe1c18 engine=0x1 first_ctx=0xff0e0200 kind=Sync ctx_flags=Some(
+kf3: TSG-MIRROR CTX 0xc1d0017c:0xff0e0000 guest_ctx=0xff0e0200 kind=Sync host_ctx=0xcafe1c1a host_veid=Some(0) space=0xcafe189d chan_flags=0x80203120 host_rq1=false
+kf3: TSG-MIRROR BIRTH 0xc1d0017d:0xff0e0000 mode=LEGACY host_tsg=0xcafe1c42 engine=0xc shard=0x0 first_chan_flags=0x203220 ctxShare=0x0
+kf-rm: chanlink: CTXSHARE-FACTS 0xc1d0017e:0xff0e0200 parent(tsg)=0xff0e0000 flags=0x0 kind=SYNC declared_subctxId=0x0 hVASpace=0x0
+kf3: TSG-MIRROR BIRTH 0xc1d0017e:0xff0e0000 mode=EXPLICIT host_tsg=0xcafe1c5f engine=0x1 first_ctx=0xff0e0200 kind=Sync ctx_flags=Some(
+kf3: TSG-MIRROR CTX 0xc1d0017e:0xff0e0000 guest_ctx=0xff0e0200 kind=Sync host_ctx=0xcafe1c60 host_veid=Some(0) space=0xcafe189d chan_flags=0x80203320 host_rq1=false
+kf3: TSG-MIRROR BIRTH 0xc1d0017f:0xff0e0000 mode=LEGACY host_tsg=0xcafe1c6b engine=0xc shard=0x0 first_chan_flags=0x203420 ctxShare=0x0
+kf-rm: chanlink: CTXSHARE-FACTS 0xc1d00180:0xff0e0200 parent(tsg)=0xff0e0000 flags=0x0 kind=SYNC declared_subctxId=0x0 hVASpace=0x0
+kf3: TSG-MIRROR BIRTH 0xc1d00180:0xff0e0000 mode=EXPLICIT host_tsg=0xcafe1d0d engine=0x1 first_ctx=0xff0e0200 kind=Sync ctx_flags=Some(
+kf3: TSG-MIRROR CTX 0xc1d00180:0xff0e0000 guest_ctx=0xff0e0200 kind=Sync host_ctx=0xcafe1d0e host_veid=Some(0) space=0xcafe189d chan_flags=0x80203520 host_rq1=false
+kf3: TSG-MIRROR BIRTH 0xc1d00181:0xff0e0000 mode=LEGACY host_tsg=0xcafe1d1e engine=0xc shard=0x0 first_chan_flags=0x203620 ctxShare=0x0

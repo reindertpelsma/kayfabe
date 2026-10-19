@@ -1,0 +1,90 @@
+M2 COMBINED STATUS 2026-10-19T11:25:11.7397365+02:00
+
+
+TaskName : KF-M2-Combined
+State    : Running
+
+
+
+M2 COMBINED
+2026-10-19T11:23:43.2362823+02:00 COMMAND GravityMark.exe -raster 1 -temporal 1 -fps 1 -info 1 -benchmark 1 -close 1 -count 1 -asteroids 20000 -width 1280 -height 720 -fullscreen 0 -vk -image C:\kf-m2\combined.png -times C:\kf-m2\combined.times.txt
+2026-10-19T11:23:46.8523105+02:00 RENDER_READY pid=5080
+2026-10-19T11:23:46.8683094+02:00 CUDA_START k=1 pid=5996 duration_s=145 seed=11111
+2026-10-19T11:23:46.8793088+02:00 CUDA_START k=2 pid=3796 duration_s=145 seed=22222
+2026-10-19T11:23:48.9654759+02:00 CUDA_BOTH_READY initial_cpu_checks=PASS
+2026-10-19T11:23:48.9664736+02:00 COMMAND ffmpeg.exe -y -hide_banner -nostdin -nostats -progress C:\kf-m2\combined-encode.progress -re -stream_loop -1 -i C:\kf-m2\h264.mp4 -t 130 -an -pix_fmt yuv420p -c:v h264_nvenc -preset p4 C:\kf-m2\combined-encode.mp4
+2026-10-19T11:23:48.9819948+02:00 ENCODE_START pid=2472 duration_s=130
+COMBINED_RC=
+CUDA_CONTEXT_READY pid=5996 device=NVIDIA GeForce RTX 4070 streams=4 elements_per_stream=1048576 seed=11111
+CUDA_START wall_ns=1792401828677558400
+CPU_CHECK PASS iteration=0 streams=4 elements=4194304
+CUDA_CONTEXT_READY pid=3796 device=NVIDIA GeForce RTX 4070 streams=4 elements_per_stream=1048576 seed=22222
+CUDA_START wall_ns=1792401828716971200
+CPU_CHECK PASS iteration=0 streams=4 elements=4194304
+frame=245
+fps=2.95
+stream_0_0_q=33.0
+bitrate=2079.9kbits/s
+total_size=2097200
+out_time_us=8066667
+out_time_ms=8066667
+out_time=00:00:08.066667
+dup_frames=0
+drop_frames=0
+speed=0.0971x
+progress=continue
+M:   1.421 s: DeviceID: 0x2786
+M:   1.421 s: Group Memory: 48.00 KB
+M:   1.421 s: Video Memory: 7.66 GB
+M:   1.422 s: Max Uniform Size: 64.00 KB
+M:   1.422 s: Max Storage Size: 4.00 GB
+M:   1.422 s: Creating SceneManager
+M:   1.593 s: Creating RenderManager
+M:   1.776 s: Compute Shader Mode
+M:   1.777 s: Creating Scene
+M:   3.155 s: Creating 20,000 Asteroids
+M:   3.170 s: Updating Scene
+M:   3.184 s: GravityMark 1.89 Vulkan CS is Ready in 3.2 s
+M:   3.184 s: Starting 1280x720 Vulkan CS Benchmark
+M:   3.185 s: Close when finished
+M:   3.185 s: Image: C:/kf-m2/combined.png
+M:   3.185 s: Times: C:/kf-m2/combined.times.txt
+M:   3.185 s: Count: 1
+M:   3.186 s: Resizing 1280x720 frame
+TDR_EVENTS=0
+Mon Oct 19 11:25:12 2026       
++-----------------------------------------------------------------------------------------+
+| NVIDIA-SMI 580.88                 Driver Version: 580.88         CUDA Version: 13.0     |
++-----------------------------------------+------------------------+----------------------+
+| GPU  Name                  Driver-Model | Bus-Id          Disp.A | Volatile Uncorr. ECC |
+| Fan  Temp   Perf          Pwr:Usage/Cap |           Memory-Usage | GPU-Util  Compute M. |
+|                                         |                        |               MIG M. |
+|=========================================+========================+======================|
+|   0  NVIDIA GeForce RTX 4070      WDDM  |   00000000:00:06.0  On |                  N/A |
+| N/A    0C  N/A             N/A  /  N/A  |    3473MiB /   8192MiB |     N/A      Default |
+|                                         |                        |                  N/A |
++-----------------------------------------+------------------------+----------------------+
+
++-----------------------------------------------------------------------------------------+
+| Processes:                                                                              |
+|  GPU   GI   CI              PID   Type   Process name                        GPU Memory |
+|        ID   ID                                                               Usage      |
+|=========================================================================================|
+|    0   N/A  N/A            1288    C+G   C:\Windows\System32\dwm.exe           N/A      |
+|    0   N/A  N/A            1924    C+G   ...em32\ApplicationFrameHost.exe      N/A      |
+|    0   N/A  N/A            2472      C   C:\kf-m2\ffmpeg.exe                   N/A      |
+|    0   N/A  N/A            3796      C   ...5.2\5.2\python\bin\python.exe      N/A      |
+|    0   N/A  N/A            5080    C+G   ...avityMark\bin\GravityMark.exe      N/A      |
+|    0   N/A  N/A            5996      C   ...5.2\5.2\python\bin\python.exe      N/A      |
+|    0   N/A  N/A            7036    C+G   C:\Windows\explorer.exe               N/A      |
+|    0   N/A  N/A            7104    C+G   ...2txyewy\CrossDeviceResume.exe      N/A      |
+|    0   N/A  N/A            7160    C+G   ...indows\System32\ShellHost.exe      N/A      |
+|    0   N/A  N/A            8208    C+G   ..._cw5n1h2txyewy\SearchHost.exe      N/A      |
+|    0   N/A  N/A            8308    C+G   ...y\StartMenuExperienceHost.exe      N/A      |
+|    0   N/A  N/A           10360    C+G   ....0.4283.62\msedgewebview2.exe      N/A      |
+|    0   N/A  N/A           10976    C+G   ...t\Edge\Application\msedge.exe      N/A      |
+|    0   N/A  N/A           11080    C+G   ...IA App\CEF\NVIDIA Overlay.exe      N/A      |
+|    0   N/A  N/A           11512    C+G   ...IA App\CEF\NVIDIA Overlay.exe      N/A      |
+|    0   N/A  N/A           13324    C+G   ...\cef.win64\steamwebhelper.exe      N/A      |
+|    0   N/A  N/A           14092    C+G   ...ntrolPanel\SystemSettings.exe      N/A      |
++-----------------------------------------------------------------------------------------+

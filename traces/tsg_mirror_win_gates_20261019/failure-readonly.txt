@@ -1,0 +1,167 @@
+M2 FAILURE READONLY 2026-10-19T11:27:08.8823074+02:00
+
+
+LastBootUpTime : 10/19/2026 11:04:21 AM
+LocalDateTime  : 10/19/2026 11:27:08 AM
+
+
+
+SYSTEM_4101=0 NVLDDMKM=3
+<Event xmlns='http://schemas.microsoft.com/win/2004/08/events/event'><System><Provider Name='nvlddmkm'/><EventID Qualifiers='0'>153</EventID><Version>0</Version><Level>2</Level><Task>0</Task><Opcode>0</Opcode><Keywords>0x80000000000000</Keywords><TimeCreated SystemTime='2026-10-19T09:25:54.4812756Z'/><EventRecordID>10107</EventRecordID><Correlation/><Execution ProcessID='4' ThreadID='13392'/><Channel>System</Channel><Computer>kayfabe-windows</Computer><Security/></System><EventData><Data>\Device\Video0</Data><Data>Restarting TDR occurred on GPUID:6</Data><Binary>00000000020030000000000099000000000000000000000000000000000000000000000000000000</Binary></EventData></Event>
+<Event xmlns='http://schemas.microsoft.com/win/2004/08/events/event'><System><Provider Name='nvlddmkm'/><EventID Qualifiers='0'>153</EventID><Version>0</Version><Level>2</Level><Task>0</Task><Opcode>0</Opcode><Keywords>0x80000000000000</Keywords><TimeCreated SystemTime='2026-10-19T09:25:54.4111628Z'/><EventRecordID>10106</EventRecordID><Correlation/><Execution ProcessID='4' ThreadID='10376'/><Channel>System</Channel><Computer>kayfabe-windows</Computer><Security/></System><EventData><Data>\Device\Video0</Data><Data>Reset TDR occurred on GPUID:6</Data><Binary>00000000020030000000000099000000000000000000000000000000000000000000000000000000</Binary></EventData></Event>
+<Event xmlns='http://schemas.microsoft.com/win/2004/08/events/event'><System><Provider Name='nvlddmkm'/><EventID Qualifiers='0'>153</EventID><Version>0</Version><Level>2</Level><Task>0</Task><Opcode>0</Opcode><Keywords>0x80000000000000</Keywords><TimeCreated SystemTime='2026-10-19T09:25:53.3798947Z'/><EventRecordID>10105</EventRecordID><Correlation/><Execution ProcessID='4' ThreadID='320'/><Channel>System</Channel><Computer>kayfabe-windows</Computer><Security/></System><EventData><Data>\Device\Video0</Data><Data>Resetting TDR occurred on GPUID:6</Data><Binary>00000000020030000000000099000000000000000000000000000000000000000000000000000000</Binary></EventData></Event>
+
+
+ProcessId   : 5080
+Name        : GravityMark.exe
+CommandLine : "C:\kf-m2\GravityMark\bin\GravityMark.exe" -raster 1 -temporal 1 -fps 1 -info 1 -benchmark 1 -close 1 -count 1 -asteroids 20000 -width 1280 -height 720 -fullscreen 0 -vk -image C:\kf-m2\combined.png -times C:\kf-m2\combined.times.txt 
+
+
+
+
+
+TaskName : KF-M2-Combined
+State    : Ready
+
+TaskName : KF-M2-Vulkan
+State    : Ready
+
+
+
+M2 COMBINED
+2026-10-19T11:23:43.2362823+02:00 COMMAND GravityMark.exe -raster 1 -temporal 1 -fps 1 -info 1 -benchmark 1 -close 1 -count 1 -asteroids 20000 -width 1280 -height 720 -fullscreen 0 -vk -image C:\kf-m2\combined.png -times C:\kf-m2\combined.times.txt
+2026-10-19T11:23:46.8523105+02:00 RENDER_READY pid=5080
+2026-10-19T11:23:46.8683094+02:00 CUDA_START k=1 pid=5996 duration_s=145 seed=11111
+2026-10-19T11:23:46.8793088+02:00 CUDA_START k=2 pid=3796 duration_s=145 seed=22222
+2026-10-19T11:23:48.9654759+02:00 CUDA_BOTH_READY initial_cpu_checks=PASS
+2026-10-19T11:23:48.9664736+02:00 COMMAND ffmpeg.exe -y -hide_banner -nostdin -nostats -progress C:\kf-m2\combined-encode.progress -re -stream_loop -1 -i C:\kf-m2\h264.mp4 -t 130 -an -pix_fmt yuv420p -c:v h264_nvenc -preset p4 C:\kf-m2\combined-encode.mp4
+2026-10-19T11:23:48.9819948+02:00 ENCODE_START pid=2472 duration_s=130
+2026-10-19T11:26:00.6882393+02:00 ENCODE_END rc=-1073741819 elapsed_s=131.6827227 render_alive=True cuda1_alive=False cuda2_alive=False
+2026-10-19T11:26:00.7167586+02:00 COMBINED_FAIL Combined overlap or encode failed
+2026-10-19T11:26:00.7207586+02:00 COMBINED_END
+E:  2:09.907: VK::error(): device lost
+E:  2:09.954: VKContext::Frame::wait(): can't wait for fence
+E:  2:09.957: VKContext::flip(): can't wait frame
+E:  2:09.961: VKWindow::present(): can't flip context
+E:  2:09.964: GravityMark::render(): can't present window
+    encoder         : Lavf62.12.103
+  Duration: 00:00:10.00, start: 0.000000, bitrate: 2280 kb/s
+  Stream #0:0[0x1](und): Video: h264 (Main) (avc1 / 0x31637661), yuv420p(progressive), 1280x720 [SAR 1:1 DAR 16:9], 2276 kb/s, 30 fps, 30 tbr, 15360 tbn (default)
+    Metadata:
+      handler_name    : VideoHandler
+      encoder         : Lavc62.28.103 h264_nvenc
+Stream mapping:
+  Stream #0:0 -> #0:0 (h264 (native) -> h264 (h264_nvenc))
+Output #0, mp4, to 'C:\kf-m2\combined-encode.mp4':
+  Metadata:
+    major_brand     : isom
+    minor_version   : 512
+    compatible_brands: isomiso2avc1mp41
+    encoder         : Lavf62.12.103
+  Stream #0:0(und): Video: h264 (Main) (avc1 / 0x31637661), yuv420p(tv, progressive), 1280x720 [SAR 1:1 DAR 16:9], q=2-31, 2000 kb/s, 30 fps, 15360 tbn (default)
+    Metadata:
+      encoder         : Lavc62.28.103 h264_nvenc
+      handler_name    : VideoHandler
+    Side data:
+      CPB properties: bitrate max/min/avg: 0/0/2000000 buffer size: 4000000 vbv_delay: N/A
+[vist#0:0/h264 @ 0000022eee5da580] Resumed reading at pts 0.533 with rate 1.050 after a lag of 3.465s
+[vist#0:0/h264 @ 0000022eee5da580] Resumed reading at pts 9.400 with rate 1.050 after a lag of 111.114s
+[h264_nvenc @ 0000022ef0566980] Failed locking bitstream buffer: invalid device (4): Device passed to the API is invalid.
+[vost#0:0/h264_nvenc @ 0000022ef05664c0] [enc:h264_nvenc @ 0000022ef05668c0] Error submitting video frame to the encoder
+[vost#0:0/h264_nvenc @ 0000022ef05664c0] [enc:h264_nvenc @ 0000022ef05668c0] Error encoding a frame: Invalid argument
+[vost#0:0/h264_nvenc @ 0000022ef05664c0] Task finished with error code: -22 (Invalid argument)
+[vost#0:0/h264_nvenc @ 0000022ef05664c0] Terminating thread with return code -22 (Invalid argument)
+[vist#0:0/h264 @ 0000022eee5da580] Resumed reading at pts 14.133 with rate 1.050 after a lag of 113.580s
+[out#0/mp4 @ 0000022eee54f500] video:3495KiB audio:0KiB subtitle:0KiB other streams:0KiB global headers:0KiB muxing overhead: 0.155615%
+frame=  387 fps=3.0 q=32.0 Lsize=    3500KiB time=00:00:12.80 bitrate=2240.2kbits/s speed= 0.1x elapsed=0:02:07.73    
+
+Name                          Length
+----                          ------
+combined-cuda-1.pid                6
+combined-cuda-1.stderr.txt       375
+combined-cuda-1.stdout.txt       250
+combined-cuda-2.pid                6
+combined-cuda-2.stderr.txt       375
+combined-cuda-2.stdout.txt       249
+combined-encode.mp4          3584284
+combined-encode.pid                6
+combined-encode.progress       48496
+combined-encode.stderr.txt      2318
+combined-encode.stdout.txt         0
+combined-render.pid                6
+combined-render.stderr.txt       267
+combined-render.stdout.txt      1765
+combined.log                    1162
+combined.ps1                    4557
+combined.rc                        3
+cpu.framemd5                   24216
+cuda-1.pid                         7
+cuda-1.stderr.txt                  0
+cuda-1.stdout.txt                517
+cuda-2.pid                         6
+cuda-2.stderr.txt                  0
+cuda-2.stdout.txt                560
+cuda-wrapper.pid                   6
+cuda.log                         296
+cuda.ps1                        1275
+cuda.rc                            3
+cuda_streams.py                 4370
+decode-cpu.stderr.txt           1328
+decode-cpu.stdout.txt              0
+decode-nvdec.stderr.txt         1328
+decode-nvdec.stdout.txt            0
+encode-h264.stderr.txt           975
+encode-h264.stdout.txt             0
+encode-hevc.stderr.txt           975
+encode-hevc.stdout.txt             0
+ffmpeg.exe                 164751360
+ffprobe.exe                164545536
+gpu.framemd5                   24216
+h264.mp4                     2850045
+hevc.mp4                     2914020
+probe-h264.stderr.txt              0
+probe-h264.stdout.txt            244
+probe-hevc.stderr.txt              0
+probe-hevc.stdout.txt            244
+start.txt                         35
+video-wrapper.pid                  7
+video.log                       1411
+video.ps1                       2672
+video.rc                           3
+vulkan-render.log                324
+vulkan-render.ps1                899
+vulkan.pid                         6
+vulkan.png                    876096
+vulkan.rc                          0
+vulkan.stderr.txt                  0
+vulkan.stdout.txt               2284
+vulkan.times.txt             2889180
+vulkaninfo.txt                102188
+wrapper-initial.log              647
+
+
+Mon Oct 19 11:27:09 2026       
++-----------------------------------------------------------------------------------------+
+| NVIDIA-SMI 580.88                 Driver Version: 580.88         CUDA Version: 13.0     |
++-----------------------------------------+------------------------+----------------------+
+| GPU  Name                  Driver-Model | Bus-Id          Disp.A | Volatile Uncorr. ECC |
+| Fan  Temp   Perf          Pwr:Usage/Cap |           Memory-Usage | GPU-Util  Compute M. |
+|                                         |                        |               MIG M. |
+|=========================================+========================+======================|
+|   0  NVIDIA GeForce RTX 4070      WDDM  |   00000000:00:06.0  On |                  N/A |
+| N/A    0C  N/A             N/A  /  N/A  |    2762MiB /   8192MiB |     N/A      Default |
+|                                         |                        |                  N/A |
++-----------------------------------------+------------------------+----------------------+
+
++-----------------------------------------------------------------------------------------+
+| Processes:                                                                              |
+|  GPU   GI   CI              PID   Type   Process name                        GPU Memory |
+|        ID   ID                                                               Usage      |
+|=========================================================================================|
+|    0   N/A  N/A            1924    C+G   ...em32\ApplicationFrameHost.exe      N/A      |
+|    0   N/A  N/A            5308    C+G   C:\Windows\System32\dwm.exe           N/A      |
+|    0   N/A  N/A            7036    C+G   C:\Windows\explorer.exe               N/A      |
+|    0   N/A  N/A            8208    C+G   ..._cw5n1h2txyewy\SearchHost.exe      N/A      |
+|    0   N/A  N/A            8308    C+G   ...y\StartMenuExperienceHost.exe      N/A      |
++-----------------------------------------------------------------------------------------+
+M2 FAILURE READONLY END 2026-10-19T11:27:09.6923176+02:00

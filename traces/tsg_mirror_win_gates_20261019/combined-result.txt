@@ -1,0 +1,121 @@
+M2 COMBINED STATUS 2026-10-19T11:26:13.0669279+02:00
+
+
+TaskName : KF-M2-Combined
+State    : Ready
+
+
+
+M2 COMBINED
+2026-10-19T11:23:43.2362823+02:00 COMMAND GravityMark.exe -raster 1 -temporal 1 -fps 1 -info 1 -benchmark 1 -close 1 -count 1 -asteroids 20000 -width 1280 -height 720 -fullscreen 0 -vk -image C:\kf-m2\combined.png -times C:\kf-m2\combined.times.txt
+2026-10-19T11:23:46.8523105+02:00 RENDER_READY pid=5080
+2026-10-19T11:23:46.8683094+02:00 CUDA_START k=1 pid=5996 duration_s=145 seed=11111
+2026-10-19T11:23:46.8793088+02:00 CUDA_START k=2 pid=3796 duration_s=145 seed=22222
+2026-10-19T11:23:48.9654759+02:00 CUDA_BOTH_READY initial_cpu_checks=PASS
+2026-10-19T11:23:48.9664736+02:00 COMMAND ffmpeg.exe -y -hide_banner -nostdin -nostats -progress C:\kf-m2\combined-encode.progress -re -stream_loop -1 -i C:\kf-m2\h264.mp4 -t 130 -an -pix_fmt yuv420p -c:v h264_nvenc -preset p4 C:\kf-m2\combined-encode.mp4
+2026-10-19T11:23:48.9819948+02:00 ENCODE_START pid=2472 duration_s=130
+2026-10-19T11:26:00.6882393+02:00 ENCODE_END rc=-1073741819 elapsed_s=131.6827227 render_alive=True cuda1_alive=False cuda2_alive=False
+2026-10-19T11:26:00.7167586+02:00 COMBINED_FAIL Combined overlap or encode failed
+2026-10-19T11:26:00.7207586+02:00 COMBINED_END
+COMBINED_RC=1
+CUDA_CONTEXT_READY pid=5996 device=NVIDIA GeForce RTX 4070 streams=4 elements_per_stream=1048576 seed=11111
+CUDA_START wall_ns=1792401828677558400
+CPU_CHECK PASS iteration=0 streams=4 elements=4194304
+CUDA_PROGRESS elapsed_s=120.478 batches=1287
+Traceback (most recent call last):
+  File "C:\kf-m2\cuda_streams.py", line 104, in <module>
+    launch(fn, (n + 255) // 256, 1, 1, 256, 1, 1, 0, stream, args, None)
+    ~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\kf-m2\cuda_streams.py", line 29, in call
+    raise RuntimeError(f'{name} rc={rc}')
+RuntimeError: cuLaunchKernel rc=999
+CUDA_CONTEXT_READY pid=3796 device=NVIDIA GeForce RTX 4070 streams=4 elements_per_stream=1048576 seed=22222
+CUDA_START wall_ns=1792401828716971200
+CPU_CHECK PASS iteration=0 streams=4 elements=4194304
+CUDA_PROGRESS elapsed_s=120.439 batches=856
+Traceback (most recent call last):
+  File "C:\kf-m2\cuda_streams.py", line 104, in <module>
+    launch(fn, (n + 255) // 256, 1, 1, 256, 1, 1, 0, stream, args, None)
+    ~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\kf-m2\cuda_streams.py", line 29, in call
+    raise RuntimeError(f'{name} rc={rc}')
+RuntimeError: cuLaunchKernel rc=999
+frame=387
+fps=3.03
+stream_0_0_q=32.0
+bitrate=2240.2kbits/s
+total_size=3584284
+out_time_us=12800000
+out_time_ms=12800000
+out_time=00:00:12.800000
+dup_frames=0
+drop_frames=0
+speed= 0.1x
+progress=end
+M:   1.421 s: DeviceID: 0x2786
+M:   1.421 s: Group Memory: 48.00 KB
+M:   1.421 s: Video Memory: 7.66 GB
+M:   1.422 s: Max Uniform Size: 64.00 KB
+M:   1.422 s: Max Storage Size: 4.00 GB
+M:   1.422 s: Creating SceneManager
+M:   1.593 s: Creating RenderManager
+M:   1.776 s: Compute Shader Mode
+M:   1.777 s: Creating Scene
+M:   3.155 s: Creating 20,000 Asteroids
+M:   3.170 s: Updating Scene
+M:   3.184 s: GravityMark 1.89 Vulkan CS is Ready in 3.2 s
+M:   3.184 s: Starting 1280x720 Vulkan CS Benchmark
+M:   3.185 s: Close when finished
+M:   3.185 s: Image: C:/kf-m2/combined.png
+M:   3.185 s: Times: C:/kf-m2/combined.times.txt
+M:   3.185 s: Count: 1
+M:   3.186 s: Resizing 1280x720 frame
+E:  2:09.907: VK::error(): device lost
+E:  2:09.954: VKContext::Frame::wait(): can't wait for fence
+E:  2:09.957: VKContext::flip(): can't wait frame
+E:  2:09.961: VKWindow::present(): can't flip context
+E:  2:09.964: GravityMark::render(): can't present window
+TDR_EVENTS=3
+
+
+TimeCreated  : 10/19/2026 11:25:54 AM
+Id           : 153
+ProviderName : nvlddmkm
+Message      : 
+
+TimeCreated  : 10/19/2026 11:25:54 AM
+Id           : 153
+ProviderName : nvlddmkm
+Message      : 
+
+TimeCreated  : 10/19/2026 11:25:53 AM
+Id           : 153
+ProviderName : nvlddmkm
+Message      : 
+
+
+
+Mon Oct 19 11:26:14 2026       
++-----------------------------------------------------------------------------------------+
+| NVIDIA-SMI 580.88                 Driver Version: 580.88         CUDA Version: 13.0     |
++-----------------------------------------+------------------------+----------------------+
+| GPU  Name                  Driver-Model | Bus-Id          Disp.A | Volatile Uncorr. ECC |
+| Fan  Temp   Perf          Pwr:Usage/Cap |           Memory-Usage | GPU-Util  Compute M. |
+|                                         |                        |               MIG M. |
+|=========================================+========================+======================|
+|   0  NVIDIA GeForce RTX 4070      WDDM  |   00000000:00:06.0  On |                  N/A |
+| N/A    0C  N/A             N/A  /  N/A  |    2762MiB /   8192MiB |     N/A      Default |
+|                                         |                        |                  N/A |
++-----------------------------------------+------------------------+----------------------+
+
++-----------------------------------------------------------------------------------------+
+| Processes:                                                                              |
+|  GPU   GI   CI              PID   Type   Process name                        GPU Memory |
+|        ID   ID                                                               Usage      |
+|=========================================================================================|
+|    0   N/A  N/A            1924    C+G   ...em32\ApplicationFrameHost.exe      N/A      |
+|    0   N/A  N/A            5308    C+G   C:\Windows\System32\dwm.exe           N/A      |
+|    0   N/A  N/A            7036    C+G   C:\Windows\explorer.exe               N/A      |
+|    0   N/A  N/A            8208    C+G   ..._cw5n1h2txyewy\SearchHost.exe      N/A      |
+|    0   N/A  N/A            8308    C+G   ...y\StartMenuExperienceHost.exe      N/A      |
++-----------------------------------------------------------------------------------------+
