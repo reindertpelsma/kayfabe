@@ -195,6 +195,13 @@ mod tests {
         let held = state.lock().unwrap();
         let worker_state = state.clone();
         let info = SystemInfoCell::new();
+        if !read_clock {
+            let layout = kf_abi::generated::matrix::GSPSYSTEMINFO
+                .at(v())
+                .unwrap()
+                .unwrap();
+            info.store(&vec![0; layout.size()], 1);
+        }
         let (tx, rx) = mpsc::channel();
         let worker = std::thread::spawn(move || {
             let value = try_sample(
