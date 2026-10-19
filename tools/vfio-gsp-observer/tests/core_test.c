@@ -37,7 +37,21 @@ static void fixture(FIXTURE *f) {
     header(f->ram+0x4000);message(f->ram+0x5000,0,72,UINT32_MAX);w32(f->ram+0x4010,1);
 }
 static void boot(VG_OBSERVER *v) {vg_mmio(v,0x110040,0x1000,4,1,1);vg_mmio(v,0x110044,0,4,1,2);}
-int main(void) {
+static int fmc_aperture_case(uint32_t target, uint64_t address) {
+    VG_OBSERVER *v=calloc(1,sizeof(*v));FIXTURE *f=calloc(1,sizeof(*f));
+    assert(v&&f);fixture(f);vg_init(v,read_ram,emit,f);
+    w32(f->ram+address+40,target);w64(f->ram+address+48,0x1000);
+    vg_mmio(v,0x110040,address,4,1,1);vg_mmio(v,0x110044,0,4,1,2);
+    assert(v->active&&f->emitted==1&&f->last.queue_sequence==0);
+    assert(f->reads<40);
+    free(f);free(v);return 0;
+}
+int main(int argc,char **argv) {
+    if(argc==2) {
+        if(!strcmp(argv[1],"--fmc-coherent"))return fmc_aperture_case(1,0xb000);
+        if(!strcmp(argv[1],"--fmc-noncoherent"))return fmc_aperture_case(2,0xa000);
+        return 2;
+    }
     VG_OBSERVER *v=calloc(1,sizeof(*v));FIXTURE *f=calloc(1,sizeof(*f));unsigned i;
     assert(v&&f);fixture(f);vg_init(v,read_ram,emit,f);boot(v);
     assert(v->active&&v->stats.attached==1&&f->emitted==1);
