@@ -1,0 +1,35 @@
+Input #0, mov,mp4,m4a,3gp,3g2,mj2, from 'C:\kf-m2\h264.mp4':
+  Metadata:
+    major_brand     : isom
+    minor_version   : 512
+    compatible_brands: isomiso2avc1mp41
+    encoder         : Lavf62.12.103
+  Duration: 00:00:10.00, start: 0.000000, bitrate: 2280 kb/s
+  Stream #0:0[0x1](und): Video: h264 (Main) (avc1 / 0x31637661), yuv420p(progressive), 1280x720 [SAR 1:1 DAR 16:9], 2276 kb/s, 30 fps, 30 tbr, 15360 tbn (default)
+    Metadata:
+      handler_name    : VideoHandler
+      encoder         : Lavc62.28.103 h264_nvenc
+Stream mapping:
+  Stream #0:0 -> #0:0 (h264 (native) -> h264 (h264_nvenc))
+Output #0, mp4, to 'C:\kf-m2\combined-encode.mp4':
+  Metadata:
+    major_brand     : isom
+    minor_version   : 512
+    compatible_brands: isomiso2avc1mp41
+    encoder         : Lavf62.12.103
+  Stream #0:0(und): Video: h264 (Main) (avc1 / 0x31637661), yuv420p(tv, progressive), 1280x720 [SAR 1:1 DAR 16:9], q=2-31, 2000 kb/s, 30 fps, 15360 tbn (default)
+    Metadata:
+      encoder         : Lavc62.28.103 h264_nvenc
+      handler_name    : VideoHandler
+    Side data:
+      CPB properties: bitrate max/min/avg: 0/0/2000000 buffer size: 4000000 vbv_delay: N/A
+[vist#0:0/h264 @ 0000022eee5da580] Resumed reading at pts 0.533 with rate 1.050 after a lag of 3.465s
+[vist#0:0/h264 @ 0000022eee5da580] Resumed reading at pts 9.400 with rate 1.050 after a lag of 111.114s
+[h264_nvenc @ 0000022ef0566980] Failed locking bitstream buffer: invalid device (4): Device passed to the API is invalid.
+[vost#0:0/h264_nvenc @ 0000022ef05664c0] [enc:h264_nvenc @ 0000022ef05668c0] Error submitting video frame to the encoder
+[vost#0:0/h264_nvenc @ 0000022ef05664c0] [enc:h264_nvenc @ 0000022ef05668c0] Error encoding a frame: Invalid argument
+[vost#0:0/h264_nvenc @ 0000022ef05664c0] Task finished with error code: -22 (Invalid argument)
+[vost#0:0/h264_nvenc @ 0000022ef05664c0] Terminating thread with return code -22 (Invalid argument)
+[vist#0:0/h264 @ 0000022eee5da580] Resumed reading at pts 14.133 with rate 1.050 after a lag of 113.580s
+[out#0/mp4 @ 0000022eee54f500] video:3495KiB audio:0KiB subtitle:0KiB other streams:0KiB global headers:0KiB muxing overhead: 0.155615%
+frame=  387 fps=3.0 q=32.0 Lsize=    3500KiB time=00:00:12.80 bitrate=2240.2kbits/s speed= 0.1x elapsed=0:02:07.73    

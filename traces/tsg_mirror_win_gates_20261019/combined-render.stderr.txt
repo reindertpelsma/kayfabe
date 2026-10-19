@@ -1,0 +1,5 @@
+E:  2:09.907: VK::error(): device lost
+E:  2:09.954: VKContext::Frame::wait(): can't wait for fence
+E:  2:09.957: VKContext::flip(): can't wait frame
+E:  2:09.961: VKWindow::present(): can't flip context
+E:  2:09.964: GravityMark::render(): can't present window

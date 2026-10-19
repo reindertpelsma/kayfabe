@@ -1,0 +1,5 @@
+MEASURED: in-memory read-only guest archive 56 files, 1646860 bytes; preserved on lane host.
+MEASURED: guest cuda_streams.py, cuda.ps1, video.ps1, combined.ps1, vulkan-render.ps1 byte-identical to committed sources.
+MEASURED: cpu.framemd5 and gpu.framemd5 byte-identical; 300 decoded frames.
+MEASURED: Vulkan PNG visually inspected, 1280x720, valid completed benchmark scene.
+MEASURED: running QEMU MD5 48ab1b70c2cf2c26d2c1287bf7311a9a matches expected 0d7ba743; KF3_TSG_MIRROR environment unset, runtime mirror=on.

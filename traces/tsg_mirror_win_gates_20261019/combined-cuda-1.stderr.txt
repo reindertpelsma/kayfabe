@@ -1,0 +1,7 @@
+Traceback (most recent call last):
+  File "C:\kf-m2\cuda_streams.py", line 104, in <module>
+    launch(fn, (n + 255) // 256, 1, 1, 256, 1, 1, 0, stream, args, None)
+    ~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\kf-m2\cuda_streams.py", line 29, in call
+    raise RuntimeError(f'{name} rc={rc}')
+RuntimeError: cuLaunchKernel rc=999
