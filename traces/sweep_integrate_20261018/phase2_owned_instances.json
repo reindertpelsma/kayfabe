@@ -52,7 +52,7 @@
     "auto_destroy_armed_utc": "2026-10-19T17:53:04.288751+00:00",
     "auto_destroy_verified": true,
     "observed_dph_total": 0.49,
-    "phase": "native PASS; Linux595 raw29/30 R19FAIL also on C4; generic Windows LTSC install active",
+    "phase": "closed: native PASS; Linux580CUDA4PASS; Linux595rawR19FAIL/C4same; CUDA595ext4INCOMPLETE; Win580PASS/581Code43",
     "phase_updated_utc": "2026-10-19T19:02:27.610557+00:00",
     "absence_verified_utc": "2026-10-19T20:44:59.768674+00:00",
     "credit_after_observed": 42.17335899796285,
@@ -62,5 +62,25 @@
     "cost_upper_bound_usd": 2.404197188138889,
     "cost_note": "Runtime estimate and shared-account credit delta are observations, not settled attribution. Budget guard reserves1USD for delayed transfer billing until invoices reconcile.",
     "auto_destroy_cancelled_after_absence": true
+  },
+  {
+    "id": 56788212,
+    "offer": 56778084,
+    "gpu_offer": "RTX 5090",
+    "quote_dph": 0.7347222222222223,
+    "disk_gb_requested": 180,
+    "created_utc": "2026-10-19T20:48:41.537703+00:00",
+    "product_head": "f9849e50006e542e981977b62f62d3f8e2537563",
+    "credit_before": 42.151346929962756,
+    "auto_destroy_minutes": 180,
+    "destroyed": false,
+    "auto_destroy_pid": 144987,
+    "auto_destroy_armed_utc": "2026-10-19T20:48:41.560802+00:00",
+    "auto_destroy_verified": true,
+    "phase": "Blackwell rental loading, no hardware result",
+    "phase_updated_utc": "2026-10-19T20:49:41.646693+00:00",
+    "hardware_frozen_source": "24906bf334665c9000b16b271005593daa3586c7",
+    "deadline_utc": "2026-10-19T23:48:41Z",
+    "observed_dph_total": 0.7833333333333334
   }
 ]

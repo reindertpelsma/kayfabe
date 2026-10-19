@@ -40,3 +40,11 @@ Entries below will record every created ID and actual/conservative cost.
   cost guard includes1USD delayed-transfer reserve per lease; this is not spend.
   Active own IDs0. Owner directs next lease Blackwell B1/B2/B3 (any Blackwell
   permitted); no Ampere lease created. Cap25USD, stop renting/report20USD unchanged.
+
+- CREATED56788212 at2026-10-19T20:48:41.537703Z, RTX5090offer56778084,
+  creationheadf9849e500, runtimeproductfrozen24906bf33. Auto-destroy180min
+  immediately armed/verifiedPID144987 before SSH. Observed rate0.783333USD/h
+  with180GBdisk, maximum180min runtime2.35USDplus transfer. Reserved32effective
+  CPUs/63GBRAM; actual health/die not yet verified. PreviousownID absence verified
+  first. Owner explicitly directed anyBlackwell when GB206 unavailable. Only this
+  own ID active, harddeadline23:48:41UTC, cleanup reserve23:43UTC.
