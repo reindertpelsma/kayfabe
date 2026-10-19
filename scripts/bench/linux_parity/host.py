@@ -132,6 +132,7 @@ def bind(dev, target):
     base = Path('/sys/bus/pci/devices') / dev
     current = driver(dev)
     if current == target:
+        (base / 'driver_override').write_text('\n')
         return
     (base / 'driver_override').write_text(target)
     if current:

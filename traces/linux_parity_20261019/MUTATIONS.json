@@ -83,5 +83,13 @@
       "test_cloud_seed_preserves_instance_during_provision"
     ],
     "rc": 1
+  },
+  {
+    "mutant": "retain_override_on_idempotent_bind",
+    "killed_by": [
+      "test_existing_audio_driver_clears_override",
+      "test_existing_gpu_driver_clears_override"
+    ],
+    "rc": 1
   }
 ]
