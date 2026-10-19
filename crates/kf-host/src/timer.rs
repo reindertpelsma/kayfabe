@@ -36,8 +36,7 @@ impl TimerWindow<'_> {
             .expect("live timer mapping")
             .host_span()
     }
-    /// Bounded coherent read; guests read the same host page directly. The drainer also samples
-    /// this clock to publish GSP heartbeats in the guest timer's epoch.
+    /// Bounded coherent read, for native validation only; guests read the same host page directly.
     pub fn read_ns(&self) -> Result<u64, RmError> {
         let region = self.region.as_ref().expect("live timer mapping");
         kf_abi::submit::ptimer_sample(self.layout.time_high, self.layout.time_low, |off| {

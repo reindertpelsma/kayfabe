@@ -230,9 +230,6 @@ pub struct Device {
     pub rm: &'static kf_host::HostRm,
     /// Opt-in native timer backing; present only after host/guest layout and map validation.
     pub timer: Option<kf_host::timer::TimerWindow<'static>>,
-    /// Bounded fn72 state, shared with the console when present. Clock state only;
-    /// guest values here never author a host action.
-    heartbeat_system_info: kf_gsp::SystemInfoCell,
     /// The host's family.
     pub family: Family,
     /// What the C device presents.
@@ -855,10 +852,9 @@ impl Device {
         let census = kf_rm::census::ControlCensusLog::new();
         // ★ The boot display: fn 72's body, kept by the GSP state machine for fn 65's encoder —
         // ONE cell across every `ReselectAtFn1` rebuild, like the census (`kf_gsp::sysinfo`) — with
-        // `gop=on` only. With `gop=off` there is no console seat and fn65 is unchanged;
-        // fn72 is retained separately below because heartbeat clocks also need its offset.
+        // `gop=on` only. ONE decision for both halves (`crate::gop::ConsoleWiring`): with `gop=off`
+        // there is no cell and no seat, so fn 72 is dropped unread and fn 65 is today's.
         let console = crate::gop::ConsoleWiring::for_plan(gop.as_ref(), cfg.bar1_bytes);
-        let heartbeat_system_info = console.seat().map(|s| s.system_info).unwrap_or_default();
         // ★ v3-display (`docs/design/V3_DISPLAY.md` §4.1): the chip's display row, when asked for.
         // ⊘ A chip whose bare metal has no display engine (GA100, GH100, GB10x datacenter) is
         // REFUSED by name: the guest driver hard-wires those as displayless, so a display here
@@ -1043,9 +1039,7 @@ impl Device {
             _ => u64::MAX,
         };
         let gsp = Gsp {
-            fsm: console
-                .fsm(abi)
-                .with_system_info_cell(heartbeat_system_info.clone()),
+            fsm: console.fsm(abi),
             model,
             policy,
             published: std::collections::HashMap::new(),
@@ -1192,7 +1186,6 @@ impl Device {
         Ok(Device {
             rm,
             timer,
-            heartbeat_system_info,
             family,
             identity: Identity { pci, bar0_bytes },
             store,
@@ -2536,9 +2529,8 @@ impl Device {
         let mut beat = (std::time::Instant::now(), String::new());
         // ★ The GSP heartbeats (`kf_chip::Family::gsp_heartbeat_mailboxes`): a 595.84+ guest reads
         // them after every RPC poll. Stored on this thread (never a vCPU) every 0.5 s — well inside
-        // the guest's 1.3 × default-timeout window — in ms of the validated timer page guest RM
-        // itself reads, with fn72's guest system offset removed. Both PTIMER and VF_TIME can
-        // already contain the offset; changing between those clocks alone cannot fix this.
+        // the guest's 1.3 × default-timeout window — in ms of the host GPU clock the guest itself
+        // reads through the aliased usermode page.
         let heartbeat = self.plane.family.gsp_heartbeat_mailboxes();
         let mut hb_at = std::time::Instant::now() - std::time::Duration::from_secs(1);
         let mut prof_beat = std::time::Instant::now();
@@ -2568,23 +2560,8 @@ impl Device {
                 && hb_at.elapsed() >= std::time::Duration::from_millis(500)
             {
                 hb_at = std::time::Instant::now();
-                let guest_offset = {
-                    let g = self.gsp.lock().unwrap_or_else(|p| p.into_inner());
-                    // A reset starts at command zero. Never reuse the previous life's clock
-                    // before this life has published its initial system-info command.
-                    (g.fsm.command_seq() != 0)
-                        .then(|| {
-                            self.heartbeat_system_info.latest().and_then(|info| {
-                                crate::heartbeat::offset_ns(g.policy.current(), &info)
-                            })
-                        })
-                        .flatten()
-                };
-                if let Some(ms) = crate::heartbeat::sample(
-                    || self.timer.as_ref()?.read_ns().ok(),
-                    || guest_offset,
-                ) {
-                    let ms = u64::from(ms);
+                if let Ok(ns) = self.rm.gpu_time_ns() {
+                    let ms = u64::from((ns / 1_000_000) as u32);
                     self.shadow_store(gsprm, ms, 4);
                     self.shadow_store(libos, ms, 4);
                 }
