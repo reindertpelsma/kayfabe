@@ -1,0 +1,29 @@
+{
+  "status": "MEASURED: actual06:30 morning state; restoration blocked after clean-stop refusal",
+  "observed_utc": "2026-10-19T04:30:20.494331+00:00",
+  "production_running": false,
+  "p1_vm": [
+    {
+      "pid": 3718348,
+      "run": "boundary-kayfabe-41009",
+      "source": "41a8beb0",
+      "nsi": "1",
+      "get_full_only": "1",
+      "pacer_interval_us": "0"
+    }
+  ],
+  "gpu_binding": "nvidia",
+  "gpu_driver_utilization_memory": "595.91.07, 2 %, 9007 MiB",
+  "new_host_xid_since_get_boot": 0,
+  "p1_lease_held": true,
+  "clean_shutdown": "ACPI and guest agent failed; helper explicitly refused signals and retained lease",
+  "cleanup": {
+    "host_target_deleted": true,
+    "dev_target_deleted": false,
+    "dev_target_mib": 561,
+    "dev_deletion_refused": "automatic approval review rejected rm-f style commands; no alternative attempted",
+    "guest_files_and_overlay_cleanup": "not completed: own VM remains live"
+  },
+  "candidate_promoted": false,
+  "owner_override": "requested, no response at actual morning refresh"
+}

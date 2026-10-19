@@ -1,6 +1,6 @@
 # P1 Steel Nomad parity
 
-STATUS: Part A COMPLETE; hardware performance stopped on an unexplained Windows GET-mode automation failure. Final results and morning state are in REPORT.md; RESULTS.md and MICRO_RUNS.md list every completed performance run. This index was refreshed2026-10-19; earlier progress statements below are historical.
+STATUS: Part A COMPLETE; hardware performance stopped on an unexplained Windows GET-mode automation failure. The actual06:30 production restore is BLOCKED by a failed clean shutdown; the P1 VM and lease remain held. Final results and morning state are in REPORT.md; RESULTS.md and MICRO_RUNS.md list every completed performance run. This index was refreshed2026-10-19; earlier progress statements below are historical.
 
 CODE READ: hardware baseline is the mirror source `c2685412e` / binary `0d7ba7438`, as directed by the coordinator. P1 imports its build inputs verbatim without merging or changing TSG implementation. The effective crate diff is limited to 12 paths in kf-qemu/kf-chan. See `BASELINE_UPDATE.md`, `PREREG.md` and `CODE_READ.md` for source provenance, hypotheses and falsifiers.
 
