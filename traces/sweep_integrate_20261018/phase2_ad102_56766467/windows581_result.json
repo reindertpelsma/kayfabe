@@ -1,0 +1,200 @@
+{
+  "source": "24906bf33",
+  "result": "FAIL Code43 actual32.0.15.8151",
+  "commands": 255,
+  "schedule_refusal": {
+    "ordinal": 219,
+    "function": 76,
+    "kind": "RmControl",
+    "rpc_sequence": 219,
+    "control_or_class": "0x20801111",
+    "trace_result": "none",
+    "effective_result": "unknown"
+  },
+  "first_free_after_refusal": {
+    "ordinal": 220,
+    "function": 10,
+    "kind": "Free",
+    "rpc_sequence": 220,
+    "control_or_class": "-",
+    "trace_result": "0x0",
+    "effective_result": "unknown"
+  },
+  "tail": [
+    {
+      "ordinal": 237,
+      "function": 76,
+      "kind": "RmControl",
+      "rpc_sequence": 237,
+      "control_or_class": "0x20800a70",
+      "trace_result": "0x0",
+      "effective_result": "unknown"
+    },
+    {
+      "ordinal": 238,
+      "function": 76,
+      "kind": "RmControl",
+      "rpc_sequence": 238,
+      "control_or_class": "0x20800a6c",
+      "trace_result": "0x0",
+      "effective_result": "unknown"
+    },
+    {
+      "ordinal": 239,
+      "function": 76,
+      "kind": "RmControl",
+      "rpc_sequence": 239,
+      "control_or_class": "0x00730151",
+      "trace_result": "0x0",
+      "effective_result": "unknown"
+    },
+    {
+      "ordinal": 240,
+      "function": 10,
+      "kind": "Free",
+      "rpc_sequence": 240,
+      "control_or_class": "-",
+      "trace_result": "0x0",
+      "effective_result": "unknown"
+    },
+    {
+      "ordinal": 241,
+      "function": 10,
+      "kind": "Free",
+      "rpc_sequence": 241,
+      "control_or_class": "-",
+      "trace_result": "0x0",
+      "effective_result": "unknown"
+    },
+    {
+      "ordinal": 242,
+      "function": 10,
+      "kind": "Free",
+      "rpc_sequence": 242,
+      "control_or_class": "-",
+      "trace_result": "0x0",
+      "effective_result": "unknown"
+    },
+    {
+      "ordinal": 243,
+      "function": 76,
+      "kind": "RmControl",
+      "rpc_sequence": 243,
+      "control_or_class": "0x20800a38",
+      "trace_result": "0x0",
+      "effective_result": "unknown"
+    },
+    {
+      "ordinal": 244,
+      "function": 10,
+      "kind": "Free",
+      "rpc_sequence": 244,
+      "control_or_class": "-",
+      "trace_result": "0x0",
+      "effective_result": "unknown"
+    },
+    {
+      "ordinal": 245,
+      "function": 10,
+      "kind": "Free",
+      "rpc_sequence": 245,
+      "control_or_class": "-",
+      "trace_result": "0x0",
+      "effective_result": "unknown"
+    },
+    {
+      "ordinal": 246,
+      "function": 10,
+      "kind": "Free",
+      "rpc_sequence": 246,
+      "control_or_class": "-",
+      "trace_result": "0x0",
+      "effective_result": "unknown"
+    },
+    {
+      "ordinal": 247,
+      "function": 10,
+      "kind": "Free",
+      "rpc_sequence": 247,
+      "control_or_class": "-",
+      "trace_result": "0x0",
+      "effective_result": "unknown"
+    },
+    {
+      "ordinal": 248,
+      "function": 70,
+      "kind": "UpdateBarPde",
+      "rpc_sequence": 248,
+      "control_or_class": "-",
+      "trace_result": "0x0",
+      "effective_result": "unknown"
+    },
+    {
+      "ordinal": 249,
+      "function": 10,
+      "kind": "Free",
+      "rpc_sequence": 249,
+      "control_or_class": "-",
+      "trace_result": "0x0",
+      "effective_result": "unknown"
+    },
+    {
+      "ordinal": 250,
+      "function": 10,
+      "kind": "Free",
+      "rpc_sequence": 250,
+      "control_or_class": "-",
+      "trace_result": "0x0",
+      "effective_result": "unknown"
+    },
+    {
+      "ordinal": 251,
+      "function": 10,
+      "kind": "Free",
+      "rpc_sequence": 251,
+      "control_or_class": "-",
+      "trace_result": "0x0",
+      "effective_result": "unknown"
+    },
+    {
+      "ordinal": 252,
+      "function": 10,
+      "kind": "Free",
+      "rpc_sequence": 252,
+      "control_or_class": "-",
+      "trace_result": "0x0",
+      "effective_result": "unknown"
+    },
+    {
+      "ordinal": 253,
+      "function": 76,
+      "kind": "RmControl",
+      "rpc_sequence": 253,
+      "control_or_class": "0x20800afe",
+      "trace_result": "none",
+      "effective_result": "unknown"
+    },
+    {
+      "ordinal": 254,
+      "function": 47,
+      "kind": "UnloadingGuestDriver",
+      "rpc_sequence": 254,
+      "control_or_class": "-",
+      "trace_result": "0x0",
+      "effective_result": "unknown"
+    }
+  ],
+  "detector_limit": "abort_point.py found no run of20consecutiveFree; use exactfirstFreeafter219 rather than inventing an unload ordinal",
+  "prior_source_fact": "old581README firstunsupportedseq216 classB297; current216and217NVOK, nextunsupported219schedule",
+  "inference": "allocation removes firstrefusal and moves unsupportedpoint; fullinitstillfails. Scheduling body40byte semantics remainNOT_DERIVABLE; no ack added.",
+  "explicit_unloading_rpc": {
+    "ordinal": 254,
+    "function": 47,
+    "kind": "UnloadingGuestDriver",
+    "rpc_sequence": 254,
+    "control_or_class": "-",
+    "trace_result": "0x0",
+    "effective_result": "unknown"
+  },
+  "falsifier_scope": "firstunsupported moved216allocation->219scheduling; the exact sameabortpoint condition is not established, especially with enable-after-cold activation. Code43 remains."
+}

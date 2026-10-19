@@ -1,0 +1,10 @@
+ENABLE581_START actual=32.0.15.8151 UTC=2026-10-19T20:23:20.3769932Z
+Microsoft PnP Utility
+
+Enabling device:          PCI\VEN_10DE&DEV_2684&SUBSYS_88E21043&REV_A1\3&11583659&0&28
+Device enabled successfully.
+
+ENABLE581_PNPUTIL_RC=0
+{"Name":"NVIDIA GeForce RTX 4090","DriverVersion":"32.0.15.8151","ConfigManagerErrorCode":43}
+{"FriendlyName":"NVIDIA GeForce RTX 4090","Status":"Error","Problem":43}
+ENABLE581_OBSERVED UTC=2026-10-19T20:23:48.9910872Z; device status is verdict, not this command rc

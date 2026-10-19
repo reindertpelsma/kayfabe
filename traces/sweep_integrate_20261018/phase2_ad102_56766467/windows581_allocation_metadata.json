@@ -1,0 +1,48 @@
+{
+  "source": "24906bf33",
+  "public_wire": "580.94.02",
+  "layout": "public rpc_gsp_rm_alloc_v03_00 header32, public NV_SWRUNLIST_ALLOCATION_PARAMS12; no native pointers exported",
+  "critical_policy": [
+    "kf-rm: rpc-trace fn=103 RmAlloc seq=216 class=0xb297 client=0xc1d00002 parent=0xff030000 handle=0xff008050 result=0x0",
+    "kf-rm: rpc-trace fn=103 RmAlloc seq=217 class=0xb297 client=0xc1d00002 parent=0xff030000 handle=0xff008250 result=0x0",
+    "kf-rm: rpc-trace fn=76 RmControl seq=219 cmd=0x20801111 client=0xc1d00002 object=0xff030000 result=none"
+  ],
+  "posted_allocation": [
+    {
+      "record": 60,
+      "message_seq": 217,
+      "function": "0x67",
+      "selector": "0xb297",
+      "envelope": "0x0",
+      "private": "0x0",
+      "total": 44,
+      "class_at12": "0xb297",
+      "body_status_at16": "0x0",
+      "declared_size_at20": 12,
+      "flags_at24": 0,
+      "public_params_u32": [
+        1,
+        0,
+        0
+      ]
+    },
+    {
+      "record": 61,
+      "message_seq": 218,
+      "function": "0x67",
+      "selector": "0xb297",
+      "envelope": "0x0",
+      "private": "0x0",
+      "total": 44,
+      "class_at12": "0xb297",
+      "body_status_at16": "0x0",
+      "declared_size_at20": 12,
+      "flags_at24": 0,
+      "public_params_u32": [
+        1,
+        0,
+        0
+      ]
+    }
+  ]
+}
