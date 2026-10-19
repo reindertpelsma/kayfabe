@@ -1,0 +1,40 @@
+{
+  "status": "MEASURED: full-ring-only GET Linux gate passes; Windows automation gate unresolved, no performance result",
+  "source": "41a8beb07573847a932b76d48bc0dcd4383ea247",
+  "flags": {
+    "KF3_DIAG_NSI_TRACE": "1",
+    "KF3_DIAG_GP_GET_FULL_ONLY": "1"
+  },
+  "linux": {
+    "returncode": 0,
+    "stopped_for_deadline": false,
+    "monitor_error": null,
+    "runtime_qemu_count": 30,
+    "xid_ring_before": 16,
+    "xid_ring_after": 21
+  },
+  "suite": {
+    "passed": 30,
+    "failed": 0,
+    "crash": 0,
+    "not_run": 0
+  },
+  "new_xid": {
+    "count": 5,
+    "code": 31,
+    "attribution": "four deliberate defer-liveness faults and one missing-page-fault containment case; serial fault markers and exact process/address journal records retained privately"
+  },
+  "windows": {
+    "run": 41009,
+    "startup_health": {
+      "tdr_4101": 0,
+      "gpu_153": 0,
+      "app_crashes": 0
+    },
+    "steel_nomad_samples": 0,
+    "heaven_samples": 0,
+    "failure": "interactive scheduled-task launch timed out; subsequent read-only guest dispatch also timed out; no cause established",
+    "new_host_xid_before_stop": 0,
+    "disposition": "STOP further experiments; production restoration required"
+  }
+}

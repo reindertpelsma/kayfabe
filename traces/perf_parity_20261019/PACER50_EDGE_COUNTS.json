@@ -1,0 +1,94 @@
+{
+  "trace": {
+    "seen": 1503646,
+    "retained": 32768,
+    "overwritten": 1467551,
+    "contended": 3327,
+    "accounting_delta": 0
+  },
+  "selected_records": 32768,
+  "retained_relative_ns": [
+    1346220983602,
+    1360763544056
+  ],
+  "selected_relative_ns": [
+    1346220983602,
+    1360763544056
+  ],
+  "duplicate_sequences": 0,
+  "holes_between_retained_sequences": 169,
+  "complete_retained_census": false,
+  "decisions": [
+    {
+      "source": "CompletionFd",
+      "vector": "Some(1)",
+      "armed": "Some(true)",
+      "verdict": "Raise(1)",
+      "count": 10103
+    },
+    {
+      "source": "Engine(1)",
+      "vector": "Some(0)",
+      "armed": "Some(true)",
+      "verdict": "Raise(0)",
+      "count": 4861
+    },
+    {
+      "source": "Engine(12)",
+      "vector": "Some(2)",
+      "armed": "Some(true)",
+      "verdict": "Raise(2)",
+      "count": 3989
+    },
+    {
+      "source": "CompletionFd",
+      "vector": "Some(1)",
+      "armed": "Some(true)",
+      "verdict": "Owed",
+      "count": 3558
+    },
+    {
+      "source": "Trailing",
+      "vector": "Some(1)",
+      "armed": "None",
+      "verdict": "Raise(1)",
+      "count": 3013
+    },
+    {
+      "source": "Engine(1)",
+      "vector": "Some(0)",
+      "armed": "Some(true)",
+      "verdict": "Owed",
+      "count": 2625
+    },
+    {
+      "source": "Trailing",
+      "vector": "Some(0)",
+      "armed": "None",
+      "verdict": "Raise(0)",
+      "count": 2438
+    },
+    {
+      "source": "Engine(11)",
+      "vector": "Some(1)",
+      "armed": "Some(false)",
+      "verdict": "NotArmed",
+      "count": 2021
+    },
+    {
+      "source": "Engine(12)",
+      "vector": "Some(2)",
+      "armed": "Some(true)",
+      "verdict": "Owed",
+      "count": 82
+    },
+    {
+      "source": "Trailing",
+      "vector": "Some(2)",
+      "armed": "None",
+      "verdict": "Raise(2)",
+      "count": 78
+    }
+  ],
+  "limit": "bounded tail; completion-fd mixes FIFO and configured host CE; host readiness may coalesce physical edges; trailing raises carry earlier sources"
+}
