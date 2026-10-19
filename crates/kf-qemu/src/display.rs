@@ -3006,16 +3006,7 @@ impl Device {
                         pb,
                         life,
                     } => {
-                        // ⊘ bounded by the declared size, the context DMA's limit and the decoder's 4 KiB
-                        let loc = pb.map(|p| {
-                            let lim = u32::try_from(p.limit.saturating_add(1)).unwrap_or(u32::MAX);
-                            PbLoc {
-                                sysmem: p.addr_space == 1,
-                                addr: p.phys,
-                                bytes: p.bytes().min(lim).min(kf_disp::pushbuf::MAX_PUSHBUFFER)
-                                    & !3,
-                            }
-                        });
+                        let loc = pb.map(|p| pushbuffer_location(p, &engine, kind));
                         if pb.is_some_and(|p| p.addr_space != 1 && p.addr_space != 2) {
                             io.refuse(&format!("{kind:?} {instance}: pushbuffer address space is neither sysmem nor vidmem"));
                         }
@@ -3951,6 +3942,20 @@ fn chan_of(chn: u32) -> Option<(ChannelKind, u32)> {
         33..=64 => Some((ChannelKind::WindowImm, chn - 33)),
         73..=80 => Some((ChannelKind::Cursor, chn - 73)),
         _ => None,
+    }
+}
+
+/// Bound a declared display ring before the worker reads guest memory.
+fn pushbuffer_location(
+    p: kf_disp::model::Pushbuffer,
+    _engine: &Engine,
+    _kind: ChannelKind,
+) -> PbLoc {
+    let lim = u32::try_from(p.limit.saturating_add(1)).unwrap_or(u32::MAX);
+    PbLoc {
+        sysmem: p.addr_space == 1,
+        addr: p.phys,
+        bytes: p.bytes().min(lim).min(kf_disp::pushbuf::MAX_PUSHBUFFER) & !3,
     }
 }
 
