@@ -1,0 +1,45 @@
+{
+  "instance": 56766467,
+  "die": "AD102",
+  "host": "595.91.07 open",
+  "revision": "24906bf334665c9000b16b271005593daa3586c7",
+  "native_raw": "30/30 PASS",
+  "native_cuda": "4/4 PASS",
+  "n": 1,
+  "spread": "N/A, functional coverage only",
+  "current_guest595": "initial full batch ongoing; measured R19 FAIL with8000480ns gap against1000000ns bound; C4 control next",
+  "early_guest_heartbeat_warnings": "present, separate finding; no B3fix claimed",
+  "windows": "first old-QEMU launch failed pre-OS; owned TPM cleanup preserved state, no Windows driver result yet",
+  "artifacts": {
+    "native_raw595.txt": {
+      "raw_sha256": "bc4b04f9688f9a692190b610b2190e20e373d197d109360130c594e242f4bbd8",
+      "raw_bytes": 5843,
+      "committed": "native_raw595.txt",
+      "format": "UTF8 text; trailing whitespace stripped"
+    },
+    "native_cuda595.txt": {
+      "raw_sha256": "d3611e733d6a95638cef4feb18a4f3400cc556ca2f90362991ed012221931435",
+      "raw_bytes": 1716,
+      "committed": "native_cuda595.txt",
+      "format": "UTF8 text; trailing whitespace stripped"
+    },
+    "current595_timer_serial.txt": {
+      "raw_sha256": "d8a89d0c71bd078abdd1ffbe3908594406b8c12d658041ab7e5396d98aa24b63",
+      "raw_bytes": 13306,
+      "committed": "current595_timer_serial.txt.gz",
+      "format": "gzip-compressed UTF8 text, scanned before compression"
+    },
+    "windows_prelaunch_qemu62.txt": {
+      "raw_sha256": "1016e1210e8371f865918e806320c5ce91a968eaa8180935fd606660cd69254f",
+      "raw_bytes": 118,
+      "committed": "windows_prelaunch_qemu62.txt",
+      "format": "UTF8 text; trailing whitespace stripped"
+    },
+    "product_qemu_sha256.txt": {
+      "raw_sha256": "1a30b992dc21109cc6a13981ee48209e90b5a177d0f30136ffee67d13ed3acb0",
+      "raw_bytes": 120,
+      "committed": "product_qemu_sha256.txt",
+      "format": "UTF8 text; trailing whitespace stripped"
+    }
+  }
+}
