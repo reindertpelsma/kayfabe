@@ -4,7 +4,7 @@ STATUS: Part A validation/build in progress; 2026-10-19 02:48 CEST.
 
 CODE READ: hardware baseline is the mirror source `c2685412e` / binary `0d7ba7438`, as directed by the coordinator. P1 imports its build inputs verbatim without merging or changing TSG implementation. The effective crate diff is limited to 12 paths in kf-qemu/kf-chan. See `BASELINE_UPDATE.md`, `PREREG.md` and `CODE_READ.md` for source provenance, hypotheses and falsifiers.
 
-MEASURED: mirror baseline release tests total 929 passed, zero failed, three existing ignored. P1 focused diagnostic source/runtime tests pass 7+13; GET relay properties pass 38, including the unchanged randomized off-mode fingerprint. Full default/diagnostic profiles are running, and their totals will be published before hardware. All 14 mutants fail in at least two tests each (`MUTATIONS.json`).
+MEASURED: mirror baseline release tests total 929 passed, zero failed, three existing ignored. P1 diagnostic-feature full profile passes 960 tests, zero failures and three existing ignored; focused diagnostic source/runtime tests pass 7+13; GET relay properties pass 38, including the unchanged randomized off-mode fingerprint. The full default profile is running; its total and default Clippy comparison will be published before hardware. All 14 mutants fail in at least two tests each (`MUTATIONS.json`).
 
 MEASURED: complete diagnostic-feature Clippy matches the mirror baseline exactly: 89 inherited denied errors and 364 warning occurrences, added=0, removed=0 (`CLIPPY.json`). This follows the coordinator's explicit changed-lines gate; none of the inherited diagnostics is suppressed or fixed. Rustfmt passes on P1 changed lines. Default-profile Clippy is queued after the full tests.
 
