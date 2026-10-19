@@ -270,7 +270,7 @@ fn every_rm_key_of_the_table_has_a_wiring_decision_and_every_decision_has_rows()
     let decided: std::collections::BTreeSet<&str> = rowserve::USES.iter().map(|(k, _)| *k).collect();
     assert_eq!(rm_keys, decided, "a row consumed by no code, or a decision with no row");
     assert_eq!(rm_keys.len(), 6);
-    assert_eq!(rows.iter().filter(|r| r.key.starts_with("rm.")).count(), 42, "the 42 rows");
+    assert_eq!(rows.iter().filter(|r| r.key.starts_with("rm.")).count(), 44, "42 inherited rows plus the two exact AD102/580 questions");
 }
 
 #[test]
