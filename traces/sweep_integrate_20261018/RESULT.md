@@ -1,3 +1,46 @@
+# Current integration checkpoint, 2026-10-19
+
+STATUS: LIVE. Phase1 PARTIAL only at two explicit protected scope decisions;
+all independent imported code/test topics and their GPU-free checks are complete.
+
+Candidate5 f8f9d1a5f is merged. GPU-types and99 code-changing main-stack imports
+plus14 separate draft imports are recorded; one further source record was already
+present. Five heartbeat source commits and all their dependent edits are held
+by corrective32d1128b4. The original obsolete USER exclusions remain complete.
+F-2 and the family admission approval are implemented, tested and pushed.
+
+MEASURED:13full crate suites pass2924tests; all21QEMU integration tests pass.
+Full QEMU unit compilation awaits only the proposed None cache-key field in
+one current life-reset/scrub test. Family component312->320 was fully tested
+before candidate5; it accepts Ada exactlyc56f. Before/after per-crate counts
+and source retention are in current_crate_counts.tsv/source_test_retention.json.
+
+MEASURED:39distinct final mutants each have>=2runtime killing tests;53bench
+Python tests pass. Native portable tracer/observer sanitizers pass. The Windows
+driver/collector cross-build with the pinned SDK/WDK, PE/import guards pass,
+and an injected BAR0 store is rejected as read-only by the compiler. No current
+Windows load or hardware acceptance is claimed.
+
+Clippy:0new diagnostics on changed lines;89denied diagnostics are inherited
+from the base and are not a stop by coordinator ruling. Rustfmt changed files
+passes, with the approved userrelay regions formatted and unrelated inherited
+hunks preserved. No existing C4/C5 test is dropped or newly ignored.
+
+AD104: CPU per-die/host-fact/consttab/oracle checks pass. Strict full-page
+equality against the stored native oracle FAILS100words. AD104_PATH_AUDIT.md
+names changed code paths and limits; do not report unchanged owner behavior.
+Current hardware cells allUNRUN, oldPASS cells allSTALE, no family complete.
+
+Current exact decisions: approve/defer the isolated heartbeat drainer topic,
+and approve only the None cache-key field in the existing scrub-test fixture.
+Both proposals/conditions are in PROTECTED_DECISIONS.md. Other protected
+relay/lifecycle/doorbell/birth/group/latejoin/scrub code is preserved; the
+GSP drainer is byte-identical to candidate5. Scope questions remain pending
+while independent work has continued. Phase2 is prepared but cannot rent
+before Phase1 acceptance. Budgetcap25USD/stop20; spend0, own active IDs0.
+
+Earlier component checkpoint below is historical and superseded by this one.
+
 # F-2 complete; remaining sweep integration has a protected family-admission dependency
 
 STATUS: LIVE, 2026-10-19. F-2 verified and pushed; separate userrelay scope question pending.

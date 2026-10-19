@@ -1,0 +1,8 @@
+{
+  "total_diagnostics": 511,
+  "new_diagnostics_on_changed_lines": 0,
+  "inherited_kf_qemu_denied_diagnostics": 89,
+  "exit": 101,
+  "baseline_identity_file": "userrelay_clippy.json",
+  "note": "Inherited errors are not acceptance stops by coordinator ruling; qemu unit compilation has a separate pending fixture adapter."
+}

@@ -1,0 +1,7 @@
+{
+  "method": "Device::drainer_loop",
+  "candidate5_sha256": "c2746daace22dc4a2e1967423606e26c3a0757742c95c1af1f8cf16eb0fd803c",
+  "current_sha256": "c2746daace22dc4a2e1967423606e26c3a0757742c95c1af1f8cf16eb0fd803c",
+  "byte_identical": true,
+  "heartbeat_topic_held": true
+}

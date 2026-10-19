@@ -1,0 +1,87 @@
+[
+  {
+    "mutant": "F3_force_consumer_gate",
+    "path": "crates/kf-chip/src/lib.rs",
+    "falsifier": "fewer than two distinct runtime killing tests; compilation failure does not count"
+  },
+  {
+    "mutant": "F3_force_datacenter_gate",
+    "path": "crates/kf-chip/src/lib.rs",
+    "falsifier": "fewer than two distinct runtime killing tests; compilation failure does not count"
+  },
+  {
+    "mutant": "C1_ignore_die",
+    "path": "crates/kf-rm/src/consttab.rs",
+    "falsifier": "fewer than two distinct runtime killing tests; compilation failure does not count"
+  },
+  {
+    "mutant": "C2_ignore_branch",
+    "path": "crates/kf-rm/src/consttab.rs",
+    "falsifier": "fewer than two distinct runtime killing tests; compilation failure does not count"
+  },
+  {
+    "mutant": "C3_ignore_request",
+    "path": "crates/kf-rm/src/consttab.rs",
+    "falsifier": "fewer than two distinct runtime killing tests; compilation failure does not count"
+  },
+  {
+    "mutant": "Z1_borrow_ga102_defaults",
+    "path": "crates/kf-rm/src/zbc.rs",
+    "falsifier": "fewer than two distinct runtime killing tests; compilation failure does not count"
+  },
+  {
+    "mutant": "D1_borrow_caps_die",
+    "path": "crates/kf-disp/src/capsderive.rs",
+    "falsifier": "fewer than two distinct runtime killing tests; compilation failure does not count"
+  },
+  {
+    "mutant": "T1_drop_shared_semaphore",
+    "path": "crates/kf-disp/src/engine.rs",
+    "falsifier": "fewer than two distinct runtime killing tests; compilation failure does not count"
+  },
+  {
+    "mutant": "I1_ignore_surface_enable",
+    "path": "crates/kf-disp/src/engine.rs",
+    "falsifier": "fewer than two distinct runtime killing tests; compilation failure does not count"
+  },
+  {
+    "mutant": "V1_drop_imp_assignments",
+    "path": "crates/kf-disp/src/model.rs",
+    "falsifier": "fewer than two distinct runtime killing tests; compilation failure does not count"
+  },
+  {
+    "mutant": "G1_unbound_reply_trace",
+    "path": "crates/kf-gsp/src/replytrace.rs",
+    "falsifier": "fewer than two distinct runtime killing tests; compilation failure does not count"
+  },
+  {
+    "mutant": "W1_trust_stale_wake",
+    "path": "crates/kf-cuda/src/completion.rs",
+    "falsifier": "fewer than two distinct runtime killing tests; compilation failure does not count"
+  },
+  {
+    "mutant": "P46_wrong_host_die",
+    "path": "crates/kf-abi/src/sw_runlist.rs",
+    "falsifier": "fewer than two distinct runtime killing tests; compilation failure does not count"
+  },
+  {
+    "mutant": "CMC_invert_exact_abi",
+    "path": "crates/kf-rm/src/cmc_log_probe.rs",
+    "falsifier": "fewer than two distinct runtime killing tests; compilation failure does not count"
+  },
+  {
+    "mutant": "S1_conflate_queue_instances",
+    "path": "crates/kf-census/src/sequence.rs",
+    "falsifier": "fewer than two distinct runtime killing tests; compilation failure does not count"
+  },
+  {
+    "mutant": "A1_align_function_only",
+    "path": "tools/align_metadata.py",
+    "falsifier": "fewer than two distinct runtime killing tests; compilation failure does not count"
+  },
+  {
+    "mutant": "K1_disable_early_window",
+    "path": "tools/windows-capture/lib/kfwc_engine.c",
+    "falsifier": "fewer than two distinct runtime killing tests; compilation failure does not count"
+  }
+]

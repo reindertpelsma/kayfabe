@@ -1,3 +1,11 @@
+# Current budget checkpoint, 2026-10-19
+
+STATUS: LIVE. Spend0USD; own rentals created0, active0, destroyed0.
+Owner cap25USD and stop-renting/report threshold20USD remain binding.
+No rental before Phase1 acceptance. The earlier family-gate STOP below is
+superseded by its approved/verified fix; current pending topics are only the
+heartbeat drainer scope and one scrub-test fixture field (PROTECTED_DECISIONS.md).
+
 # Sweep budget authority
 
 STATUS: LIVE, 2026-10-18. Owner budget update; Phase 1 STOP still applies.
