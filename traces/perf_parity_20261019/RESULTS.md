@@ -1,11 +1,12 @@
 # P1 hardware captures
 
-MEASURED: all values below are valid completed captures unless marked pending. Runtime flags, source revisions, individual tiny probes, archive hashes, pairing checks and health/counter results are in `RESULTS.json`. Common production flags are recorded there in full. The optional source binary is41a8beb0; the author mirror control is0d7ba743. Pacing/lazy/cache arms compare to diagnostic-ON, changing one variable. All use the same disk and cursor6 broker, with reboot between configurations.
+MEASURED: completed captures passed acquisition, clock, health and archive checks. Application online validation is separate: the20us result UI shows warning icons, and the inspected r4 tooltip explicitly says it was not validated online; its UI FPS was occluded. Runtime flags, source revisions, individual tiny probes, archive hashes, pairing checks and health/counter results are in `RESULTS.json`. Common production flags are recorded there in full. The optional source binary is41a8beb0; the author mirror control is0d7ba743. Pacing/lazy/cache arms compare to diagnostic-ON, changing one variable. All use the same disk and cursor6 broker, with reboot between configurations.
 
 | Arm | n | New-content fps median [min,max] | ISR entries/frame median [min,max] |
 |---|---:|---|---|
 | mirror | 5 | 29.200 [28.773,29.884] | 22.613 [22.034,23.639] |
 | diagnostic ON | 5 | 29.828 [29.281,30.115] | 22.578 [22.447,22.670] |
+| pacer20us | 5 | 29.854 [29.584,30.351] | 22.481 [22.006,23.694] |
 
 MEASURED: spread means the minimum and maximum of independent run averages. Overlapping primary-fps arms require at least five captures; incomplete arms do not settle their falsifiers. No outlier is removed.
 
@@ -19,6 +20,11 @@ MEASURED: spread means the minimum and maximum of independent run averages. Over
 | p1on1-sn-r3 | p1on1 / 41a8beb0 | 30.138 | 30.115 | 11.999 / 10.721 | 1101.73 / 624.56 / 2.12 | 116.673 | 29.796 | 3015 |
 | p1on1-sn-r4 | p1on1 / 41a8beb0 | 30.105 | 30.053 | 11.999 / 9.118 | 1086.96 / 640.38 / 3.16 | 150.007 | 29.842 | 3014 |
 | p1on1-sn-r5 | p1on1 / 41a8beb0 | 29.285 | 29.281 | 11.999 / 7.790 | 1038.59 / 726.80 / 3.19 | 250.012 | 30.718 | 2936 |
+| pacer20-sn-r1 | pacer20 / 41a8beb0 | 29.606 | 29.584 | 11.999 / 7.833 | 1040.40 / 683.69 / 7.43 | 150.007 | 30.310 | 2963 |
+| pacer20-sn-r2 | pacer20 / 41a8beb0 | 29.726 | 29.714 | 11.999 / 6.666 | 1066.73 / 658.73 / 7.44 | 150.008 | 30.227 | 2979 |
+| pacer20-sn-r3 | pacer20 / 41a8beb0 | 29.949 | 29.921 | 11.999 / 8.777 | 1079.68 / 644.63 / 2.12 | 433.354 | 30.009 | 2988 |
+| pacer20-sn-r4 | pacer20 / 41a8beb0 | 30.380 | 30.351 | 19.999 / 11.999 | 1193.15 / 562.04 / 0.00 | 83.338 | 29.590 | 3031 |
+| pacer20-sn-r5 | pacer20 / 41a8beb0 | 29.880 | 29.854 | 11.999 / 8.571 | 1070.48 / 651.64 / 5.32 | 150.007 | 30.049 | 2988 |
 | mirror-b5-sn-r1 | mirror-b5 / 0d7ba743 | 28.784 | 28.773 | 11.999 / 3.326 | 1072.87 / 619.45 / 8.51 | 1066.717 | 31.132 | 2880 |
 | mirror-b5-sn-r2 | mirror-b5 / 0d7ba743 | 29.197 | 29.200 | 11.999 / 10.515 | 1063.53 / 640.67 / 2.12 | 1083.384 | 30.758 | 2905 |
 
@@ -30,5 +36,8 @@ MEASURED: spread means the minimum and maximum of independent run averages. Over
 | diagnostic ON | DIRECT | 5 | 246.9 [240.9,333.7] |
 | diagnostic ON | COMPUTE | 5 | 217.7 [213.2,302.2] |
 | diagnostic ON | COPY | 5 | 189.4 [185.8,281.1] |
+| pacer20us | DIRECT | 6 | 266.2 [257.7,347.7] |
+| pacer20us | COMPUTE | 5 | 211.7 [208.0,304.7] |
+| pacer20us | COPY | 5 | 186.4 [185.4,252.8] |
 
 CODE READ: no GPU-fetch execution timestamp is inferred from a CPU marker or overlapping host IRQ. Diagnostic traces and pure tiny probes are kept separate. Earlier setup/reset/incomplete probes remain in `HARDWARE_PROGRESS.md`; they are not pooled. The original p1on1-q2-r5 is excluded because its terminal PowerShell marker was absent despite all3000 raw iterations; its successful isolated quiet repeat is labelled separately.

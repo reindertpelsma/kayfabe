@@ -1,0 +1,16 @@
+{
+  "status": "MEASURED",
+  "expected_red_commit": "2844a539d579cbebda9b88fed87989f5683038d2",
+  "red_passed": 2,
+  "red_errors": 4,
+  "fix_commit": "088511ef7ca39f784597d3bd29f1a413b9ce41c3",
+  "new_tests_passed": 6,
+  "combined_python_tests_passed": 15,
+  "combined_python_failed": 0,
+  "mutants": 2,
+  "kills_per_mutant": [
+    2,
+    2
+  ],
+  "state": "all five samples require an active recorder; freeze only after the final capture; original samples were unaffected"
+}

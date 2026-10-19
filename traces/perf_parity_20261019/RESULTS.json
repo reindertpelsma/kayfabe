@@ -1,6 +1,6 @@
 {
   "status": "MEASURED; in progress until the morning handoff",
-  "updated_utc": "2026-10-19T03:04:21.004516+00:00",
+  "updated_utc": "2026-10-19T03:36:04.759182+00:00",
   "source_binary": "41a8beb07573847a932b76d48bc0dcd4383ea247",
   "control_binary": "0d7ba74389cd85ac65826417ad53f5c0bcd1ef2f",
   "controls": "same persistent P1 disk and unchanged cursor6 broker; reboot between configurations; mirror control A3, diagnostic B5, mirror control A2; later experimental arms compare to diagnostic B",
@@ -84,7 +84,8 @@
           "app_score": {
             "score": 2967,
             "fps": 29.68,
-            "method": "visually read result PNG"
+            "method": "mb4-sn-r1-score.png visually read",
+            "online_validation": "not asserted from the numeric score"
           },
           "health": {
             "tdr_4101": 0,
@@ -199,7 +200,8 @@
           "app_score": {
             "score": 2955,
             "fps": 29.55,
-            "method": "visually read result PNG"
+            "method": "mb4-sn-r3-score.png visually read",
+            "online_validation": "not asserted from the numeric score"
           },
           "health": {
             "tdr_4101": 0,
@@ -399,7 +401,8 @@
           "app_score": {
             "score": 2972,
             "fps": 29.72,
-            "method": "visually read result PNG"
+            "method": "p1on1-sn-r1-score.png visually read",
+            "online_validation": "not asserted from the numeric score"
           },
           "health": {
             "tdr_4101": 0,
@@ -470,7 +473,8 @@
           "app_score": {
             "score": 2993,
             "fps": 29.93,
-            "method": "visually read result PNG"
+            "method": "p1on1-sn-r2-score.png visually read",
+            "online_validation": "not asserted from the numeric score"
           },
           "health": {
             "tdr_4101": 0,
@@ -541,7 +545,8 @@
           "app_score": {
             "score": 3015,
             "fps": 30.15,
-            "method": "visually read result PNG"
+            "method": "p1on1-sn-r3-score.png visually read",
+            "online_validation": "not asserted from the numeric score"
           },
           "health": {
             "tdr_4101": 0,
@@ -612,7 +617,8 @@
           "app_score": {
             "score": 3014,
             "fps": 30.14,
-            "method": "visually read result PNG"
+            "method": "p1on1-sn-r4-score.png visually read",
+            "online_validation": "not asserted from the numeric score"
           },
           "health": {
             "tdr_4101": 0,
@@ -683,7 +689,8 @@
           "app_score": {
             "score": 2936,
             "fps": 29.37,
-            "method": "visually read result PNG"
+            "method": "p1on1-sn-r5-score.png visually read",
+            "online_validation": "not asserted from the numeric score"
           },
           "health": {
             "tdr_4101": 0,
@@ -846,6 +853,515 @@
         "KF3_DIAG_NSI_TRACE_DUMP": "/data/codex-P1/pacer20-nsi",
         "KF3_PT_NSI_MIN_INTERVAL_US": "20"
       },
+      "captures": [
+        {
+          "tag": "pacer20-sn-r1",
+          "complete": true,
+          "guest": {
+            "fps": 29.606,
+            "frames": 1672,
+            "window_s": 56.517,
+            "packets_per_frame_target_heavy": 28.53
+          },
+          "broker": {
+            "new_content_presents": 1672,
+            "new_content_fps": 29.584178064949384,
+            "one_percent_low_fps": 11.999472023230977,
+            "point_one_percent_low_fps": 7.832537221196091,
+            "new_content_gaps_per_minute": {
+              "33": 1040.4005204659234,
+              "50": 683.6917705918925,
+              "100": 7.431432289042309
+            },
+            "new_content_gap_max_ms": 150.007,
+            "repeated_presents_per_s": 30.30962740745113,
+            "merged_commits": 0,
+            "duplicate_feedback_records": 0,
+            "max_reported_future_us": 394.615
+          },
+          "guest_content_count_delta_pct": 0.0,
+          "isr": {
+            "calls": 39616,
+            "entry_calls": 39616,
+            "calls_per_s": 701.0,
+            "calls_per_frame": 23.69377990430622,
+            "entry_calls_per_frame": 23.69377990430622,
+            "med_us": 82.0,
+            "p95_us": 143.8,
+            "p99_us": 194.5,
+            "max_us": 1153.3,
+            "total_ms_per_s": 58.65
+          },
+          "ddi_pairing": {
+            "unmatched_exits": 0,
+            "mismatched_exits": 0,
+            "unclosed_entries": 1,
+            "unmatched_exits_in_window": 0,
+            "mismatched_exits_in_window": 0,
+            "unclosed_entries_in_window": 0
+          },
+          "app_score": {
+            "score": 2963,
+            "fps": 29.63,
+            "method": "pacer20-sn-r1-score.png visually read; warning icon",
+            "online_validation": "not asserted from the numeric score"
+          },
+          "health": {
+            "tdr_4101": 0,
+            "gpu_153": 0,
+            "app_crashes": 0,
+            "new_host_xid": []
+          },
+          "counters_before": {
+            "id": 2,
+            "backstop_work": 0,
+            "backstop_carried": 0,
+            "backstop_contended": 1
+          },
+          "counters_after": {
+            "id": 3,
+            "backstop_work": 0,
+            "backstop_carried": 0,
+            "backstop_contended": 6
+          },
+          "archive_sha256": "c50ae6f3e358e52ea094e186279318fdea4b25b6f08afc8bca4c8f9380ec0352"
+        },
+        {
+          "tag": "pacer20-sn-r2",
+          "complete": true,
+          "guest": {
+            "fps": 29.726,
+            "frames": 1678,
+            "window_s": 56.472,
+            "packets_per_frame_target_heavy": 28.57
+          },
+          "broker": {
+            "new_content_presents": 1678,
+            "new_content_fps": 29.713894367169274,
+            "one_percent_low_fps": 11.999472023230977,
+            "point_one_percent_low_fps": 6.666355570073397,
+            "new_content_gaps_per_minute": {
+              "33": 1066.7252661968278,
+              "50": 658.7347261374833,
+              "100": 7.437327553165134
+            },
+            "new_content_gap_max_ms": 150.008,
+            "repeated_presents_per_s": 30.22742412679258,
+            "merged_commits": 0,
+            "duplicate_feedback_records": 0,
+            "max_reported_future_us": 396.436
+          },
+          "guest_content_count_delta_pct": 0.0,
+          "isr": {
+            "calls": 37723,
+            "entry_calls": 37723,
+            "calls_per_s": 668.0,
+            "calls_per_frame": 22.480929678188318,
+            "entry_calls_per_frame": 22.480929678188318,
+            "med_us": 80.6,
+            "p95_us": 125.6,
+            "p99_us": 159.1,
+            "max_us": 1160.2,
+            "total_ms_per_s": 53.25
+          },
+          "ddi_pairing": {
+            "unmatched_exits": 0,
+            "mismatched_exits": 0,
+            "unclosed_entries": 0,
+            "unmatched_exits_in_window": 0,
+            "mismatched_exits_in_window": 0,
+            "unclosed_entries_in_window": 0
+          },
+          "app_score": {
+            "score": 2979,
+            "fps": 29.8,
+            "method": "pacer20-sn-r2-score.png visually read; warning icon",
+            "online_validation": "not asserted from the numeric score"
+          },
+          "health": {
+            "tdr_4101": 0,
+            "gpu_153": 0,
+            "app_crashes": 0,
+            "new_host_xid": []
+          },
+          "counters_before": {
+            "id": 4,
+            "backstop_work": 0,
+            "backstop_carried": 0,
+            "backstop_contended": 6
+          },
+          "counters_after": {
+            "id": 5,
+            "backstop_work": 0,
+            "backstop_carried": 0,
+            "backstop_contended": 15
+          },
+          "archive_sha256": "401d8155a17ef56398295a0f74780c45d06ec037a4bf6aa1903f1d297eca482f"
+        },
+        {
+          "tag": "pacer20-sn-r3",
+          "complete": true,
+          "guest": {
+            "fps": 29.949,
+            "frames": 1698,
+            "window_s": 56.683,
+            "packets_per_frame_target_heavy": 28.7
+          },
+          "broker": {
+            "new_content_presents": 1696,
+            "new_content_fps": 29.92052575435562,
+            "one_percent_low_fps": 11.999472023230977,
+            "point_one_percent_low_fps": 8.776608834899251,
+            "new_content_gaps_per_minute": {
+              "33": 1079.6793491548135,
+              "50": 644.6320819953739,
+              "100": 2.117018331676105
+            },
+            "new_content_gap_max_ms": 433.354,
+            "repeated_presents_per_s": 30.008734851508788,
+            "merged_commits": 0,
+            "duplicate_feedback_records": 0,
+            "max_reported_future_us": 396.012
+          },
+          "guest_content_count_delta_pct": -0.11778563015312216,
+          "isr": {
+            "calls": 38111,
+            "entry_calls": 38111,
+            "calls_per_s": 672.3,
+            "calls_per_frame": 22.444640753828033,
+            "entry_calls_per_frame": 22.444640753828033,
+            "med_us": 80.7,
+            "p95_us": 127.9,
+            "p99_us": 162.4,
+            "max_us": 2341.1,
+            "total_ms_per_s": 53.84
+          },
+          "ddi_pairing": {
+            "unmatched_exits": 0,
+            "mismatched_exits": 0,
+            "unclosed_entries": 0,
+            "unmatched_exits_in_window": 0,
+            "mismatched_exits_in_window": 0,
+            "unclosed_entries_in_window": 0
+          },
+          "app_score": {
+            "score": 2988,
+            "fps": 29.89,
+            "method": "pacer20-sn-r3-score.png visually read; warning icon",
+            "online_validation": "not asserted from the numeric score"
+          },
+          "health": {
+            "tdr_4101": 0,
+            "gpu_153": 0,
+            "app_crashes": 0,
+            "new_host_xid": []
+          },
+          "counters_before": {
+            "id": 6,
+            "backstop_work": 0,
+            "backstop_carried": 0,
+            "backstop_contended": 15
+          },
+          "counters_after": {
+            "id": 7,
+            "backstop_work": 0,
+            "backstop_carried": 0,
+            "backstop_contended": 17
+          },
+          "archive_sha256": "79cfcba718e1e564921ea00d2136fb0d162eb2aa3aca36d49499785dfa5751e3"
+        },
+        {
+          "tag": "pacer20-sn-r4",
+          "complete": true,
+          "guest": {
+            "fps": 30.38,
+            "frames": 1716,
+            "window_s": 56.473,
+            "packets_per_frame_target_heavy": 28.75
+          },
+          "broker": {
+            "new_content_presents": 1714,
+            "new_content_fps": 30.351039880769456,
+            "one_percent_low_fps": 19.99880007199568,
+            "point_one_percent_low_fps": 11.999472023230977,
+            "new_content_gaps_per_minute": {
+              "33": 1193.1464802603534,
+              "50": 562.0431772553223,
+              "100": 0.0
+            },
+            "new_content_gap_max_ms": 83.338,
+            "repeated_presents_per_s": 29.589607725067538,
+            "merged_commits": 0,
+            "duplicate_feedback_records": 0,
+            "max_reported_future_us": 394.899
+          },
+          "guest_content_count_delta_pct": -0.11655011655011815,
+          "isr": {
+            "calls": 37762,
+            "entry_calls": 37762,
+            "calls_per_s": 668.7,
+            "calls_per_frame": 22.005827505827504,
+            "entry_calls_per_frame": 22.005827505827504,
+            "med_us": 82.5,
+            "p95_us": 139.4,
+            "p99_us": 183.8,
+            "max_us": 1114.3,
+            "total_ms_per_s": 55.71
+          },
+          "ddi_pairing": {
+            "unmatched_exits": 0,
+            "mismatched_exits": 0,
+            "unclosed_entries": 0,
+            "unmatched_exits_in_window": 0,
+            "mismatched_exits_in_window": 0,
+            "unclosed_entries_in_window": 0
+          },
+          "app_score": {
+            "score": 3031,
+            "fps": null,
+            "method": "pacer20-sn-r4-score.png visually read; tooltip says not validated online; FPS occluded",
+            "online_validation": "not asserted from the numeric score"
+          },
+          "health": {
+            "tdr_4101": 0,
+            "gpu_153": 0,
+            "app_crashes": 0,
+            "new_host_xid": []
+          },
+          "counters_before": {
+            "id": 8,
+            "backstop_work": 0,
+            "backstop_carried": 0,
+            "backstop_contended": 17
+          },
+          "counters_after": {
+            "id": 9,
+            "backstop_work": 0,
+            "backstop_carried": 0,
+            "backstop_contended": 17
+          },
+          "archive_sha256": "ed7c01ee0559a22868bf4aea8d2256bd4f339cc616a94111e7325e0b6ffd1aa3"
+        },
+        {
+          "tag": "pacer20-sn-r5",
+          "complete": true,
+          "guest": {
+            "fps": 29.88,
+            "frames": 1686,
+            "window_s": 56.442,
+            "packets_per_frame_target_heavy": 28.71
+          },
+          "broker": {
+            "new_content_presents": 1685,
+            "new_content_fps": 29.853673833171385,
+            "one_percent_low_fps": 11.999472023230977,
+            "point_one_percent_low_fps": 8.571036752605595,
+            "new_content_gaps_per_minute": {
+              "33": 1070.4801026707507,
+              "50": 651.6428033139724,
+              "100": 5.315194154273837
+            },
+            "new_content_gap_max_ms": 150.007,
+            "repeated_presents_per_s": 30.04856428549476,
+            "merged_commits": 0,
+            "duplicate_feedback_records": 0,
+            "max_reported_future_us": 397.593
+          },
+          "guest_content_count_delta_pct": -0.059311981020171434,
+          "isr": {
+            "calls": 38227,
+            "entry_calls": 38227,
+            "calls_per_s": 677.3,
+            "calls_per_frame": 22.673190984578884,
+            "entry_calls_per_frame": 22.673190984578884,
+            "med_us": 82.5,
+            "p95_us": 137.7,
+            "p99_us": 180.5,
+            "max_us": 2263.2,
+            "total_ms_per_s": 56.7
+          },
+          "ddi_pairing": {
+            "unmatched_exits": 0,
+            "mismatched_exits": 0,
+            "unclosed_entries": 0,
+            "unmatched_exits_in_window": 0,
+            "mismatched_exits_in_window": 0,
+            "unclosed_entries_in_window": 0
+          },
+          "app_score": {
+            "score": 2988,
+            "fps": 29.88,
+            "method": "pacer20-sn-r5-score.png visually read; warning icon",
+            "online_validation": "not asserted from the numeric score"
+          },
+          "health": {
+            "tdr_4101": 0,
+            "gpu_153": 0,
+            "app_crashes": 0,
+            "new_host_xid": []
+          },
+          "counters_before": {
+            "id": 10,
+            "backstop_work": 0,
+            "backstop_carried": 0,
+            "backstop_contended": 17
+          },
+          "counters_after": {
+            "id": 11,
+            "backstop_work": 0,
+            "backstop_carried": 0,
+            "backstop_contended": 27
+          },
+          "archive_sha256": "d024dccb6cc9a2e982c412cb54df5eed978ed1c9bd9f5cc57d3865fd4c00cd66"
+        }
+      ],
+      "tiny": [
+        {
+          "tag": "pacer20-q0-r1",
+          "iterations": 2995,
+          "median_us": 347.7,
+          "p99_us": 767.1,
+          "max_us": 3198.3
+        },
+        {
+          "tag": "pacer20-q0-r2",
+          "iterations": 2995,
+          "median_us": 267.1,
+          "p99_us": 497.9,
+          "max_us": 386192.1
+        },
+        {
+          "tag": "pacer20-q0-r3",
+          "iterations": 2995,
+          "median_us": 268.1,
+          "p99_us": 474.8,
+          "max_us": 2326.6
+        },
+        {
+          "tag": "pacer20-q0-r4",
+          "iterations": 2995,
+          "median_us": 257.7,
+          "p99_us": 482.9,
+          "max_us": 89768.3
+        },
+        {
+          "tag": "pacer20-q0-r5",
+          "iterations": 2995,
+          "median_us": 265.1,
+          "p99_us": 507.4,
+          "max_us": 133353.7
+        },
+        {
+          "tag": "pacer20-q0-r6",
+          "iterations": 2995,
+          "median_us": 265.3,
+          "p99_us": 503.3,
+          "max_us": 1568.8
+        },
+        {
+          "tag": "pacer20-q2-r1",
+          "iterations": 2995,
+          "median_us": 208.0,
+          "p99_us": 431.1,
+          "max_us": 1252.5
+        },
+        {
+          "tag": "pacer20-q2-r2",
+          "iterations": 2995,
+          "median_us": 211.7,
+          "p99_us": 427.6,
+          "max_us": 1447.0
+        },
+        {
+          "tag": "pacer20-q2-r3",
+          "iterations": 2995,
+          "median_us": 304.7,
+          "p99_us": 687.0,
+          "max_us": 3431.1
+        },
+        {
+          "tag": "pacer20-q2-r4",
+          "iterations": 2995,
+          "median_us": 213.3,
+          "p99_us": 419.6,
+          "max_us": 2577.2
+        },
+        {
+          "tag": "pacer20-q2-r5",
+          "iterations": 2995,
+          "median_us": 208.9,
+          "p99_us": 419.9,
+          "max_us": 674.0
+        },
+        {
+          "tag": "pacer20-q3-r1",
+          "iterations": 2995,
+          "median_us": 186.4,
+          "p99_us": 221.1,
+          "max_us": 325.2
+        },
+        {
+          "tag": "pacer20-q3-r2",
+          "iterations": 2995,
+          "median_us": 186.9,
+          "p99_us": 211.9,
+          "max_us": 296.2
+        },
+        {
+          "tag": "pacer20-q3-r3",
+          "iterations": 2995,
+          "median_us": 185.4,
+          "p99_us": 231.9,
+          "max_us": 312.2
+        },
+        {
+          "tag": "pacer20-q3-r4",
+          "iterations": 2995,
+          "median_us": 185.8,
+          "p99_us": 227.5,
+          "max_us": 314.2
+        },
+        {
+          "tag": "pacer20-q3-r5",
+          "iterations": 2995,
+          "median_us": 252.8,
+          "p99_us": 354.7,
+          "max_us": 2043.8
+        }
+      ]
+    },
+    "pacer50": {
+      "rev": "41a8beb07573847a932b76d48bc0dcd4383ea247",
+      "run": 41008,
+      "flags": "KF3_LIFECYCLE_COUNT=1 KF3_LIFECYCLE_PERIOD_S=5 KF3_DIAG_NSI_TRACE=1 KF3_DIAG_NSI_TRACE_DUMP=/data/codex-P1/pacer50-nsi KF3_PT_NSI_MIN_INTERVAL_US=50",
+      "binary_sha256": "653d8d8b7c59f62b8998078356288111dfbd88776c67f1fff05c72a346f5ab08",
+      "actual_flags": {
+        "KF3_REV": "41a8beb0",
+        "KF3_WIN_USER_CHANNELS_PASSTHROUGH": "1",
+        "KF3_WIN_TWIN_DEFAPI_OBJECT": "1",
+        "KF3_KERNEL_GR_CE": "1",
+        "KF3_KERNEL_GR_WORK": "1",
+        "KF3_TRANSLATED_CE_RELAY": "1",
+        "KF3_DEFERRED_API": "1",
+        "KF3_PREEMPT_BIND_PROBE": "1",
+        "KF3_DISPLAY_IMP_ENABLE": "1",
+        "KF3_DISPLAY_CTRL_PROBE": "1",
+        "KF3_ZCULL_BIND_PROBE": "1",
+        "KF3_SW_RUNLIST_HOST_OWNED": "1",
+        "KF3_ASYNC_PREEMPT": "1",
+        "KF3_GFX_POOL_PROBE": "1",
+        "KF3_SW_RUNLIST_PROBE": "1",
+        "KF3_MEMORY_LIST_PROBE": "1",
+        "KF3_DISPLAY_SDR_COLOR": "1",
+        "KF3_DISPLAY_CAPS_PROBE": "1",
+        "KF3_DISPLAY_LUT_MIRROR": "1",
+        "KF3_DISPLAY_ILUT_OFFSET_256": "1",
+        "KF3_LIFECYCLE_COUNT": "1",
+        "KF3_LIFECYCLE_PERIOD_S": "5",
+        "KF3_DIAG_NSI_TRACE": "1",
+        "KF3_DIAG_NSI_TRACE_DUMP": "/data/codex-P1/pacer50-nsi",
+        "KF3_PT_NSI_MIN_INTERVAL_US": "50"
+      },
       "captures": [],
       "tiny": []
     },
@@ -928,7 +1444,8 @@
           "app_score": {
             "score": 2880,
             "fps": 28.81,
-            "method": "visually read result PNG"
+            "method": "mirror-b5-sn-r1-score.png visually read",
+            "online_validation": "not asserted from the numeric score"
           },
           "health": {
             "tdr_4101": 0,
@@ -987,7 +1504,8 @@
           "app_score": {
             "score": 2905,
             "fps": 29.06,
-            "method": "visually read result PNG"
+            "method": "mirror-b5-sn-r2-score.png visually read",
+            "online_validation": "not asserted from the numeric score"
           },
           "health": {
             "tdr_4101": 0,
