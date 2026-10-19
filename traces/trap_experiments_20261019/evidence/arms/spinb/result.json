@@ -1,0 +1,63 @@
+{
+ "arm": "spinb",
+ "rev": "1bd33400",
+ "flags": "KF3_LIFECYCLE_COUNT=1 KF3_LIFECYCLE_PERIOD_S=5 KF3_DIAG_INTR_SPIN=2 KF3_DIAG_INTR_SPIN_CPU=23",
+ "start": "2026-10-19T20:58:57+0200",
+ "xid_before": 528,
+ "qpid": 4042771,
+ "environ_kf3": [
+  "KF3_ASYNC_PREEMPT=1",
+  "KF3_DEFERRED_API=1",
+  "KF3_DIAG_INTR_SPIN=2",
+  "KF3_DIAG_INTR_SPIN_CPU=23",
+  "KF3_DISPLAY_CAPS_PROBE=1",
+  "KF3_DISPLAY_CTRL_PROBE=1",
+  "KF3_DISPLAY_ILUT_OFFSET_256=1",
+  "KF3_DISPLAY_IMP_ENABLE=1",
+  "KF3_DISPLAY_LUT_MIRROR=1",
+  "KF3_DISPLAY_SDR_COLOR=1",
+  "KF3_GFX_POOL_PROBE=1",
+  "KF3_KERNEL_GR_CE=1",
+  "KF3_KERNEL_GR_WORK=1",
+  "KF3_LIFECYCLE_COUNT=1",
+  "KF3_LIFECYCLE_PERIOD_S=5",
+  "KF3_MEMORY_LIST_PROBE=1",
+  "KF3_PREEMPT_BIND_PROBE=1",
+  "KF3_REV=1bd33400",
+  "KF3_SW_RUNLIST_HOST_OWNED=1",
+  "KF3_SW_RUNLIST_PROBE=1",
+  "KF3_TRANSLATED_CE_RELAY=1",
+  "KF3_WIN_TWIN_DEFAPI_OBJECT=1",
+  "KF3_WIN_USER_CHANNELS_PASSTHROUGH=1",
+  "KF3_ZCULL_BIND_PROBE=1"
+ ],
+ "exe_md5": "63eb6ba8f54a86a49e56aad6910ee2e2",
+ "agent_up_s": 19,
+ "health0": "HEALTH tdr_4101=0 gpu_153=0 app_crashes=0 boot=2026-10-19T16:59:05.5000000Z user=kayfabe-windows\\kfadmin",
+ "probe_n": 0,
+ "probe_median_us": {
+  "DIRECT": null,
+  "COMPUTE": null,
+  "COPY": null
+ },
+ "probe_all_us": {
+  "DIRECT": [],
+  "COMPUTE": [],
+  "COPY": []
+ },
+ "error": "no result for run 1",
+ "sn_scores": [],
+ "sn_fps_score_over_100": [],
+ "health1": "HEALTH tdr_4101=0 gpu_153=0 app_crashes=0 boot=2026-10-19T16:59:05.5000000Z user=kayfabe-windows\\kfadmin",
+ "xid_after": 528,
+ "xid_delta": 0,
+ "stopped": false,
+ "last_irq_line": "irq[writes=0 raised=4 held=177 oor=0]",
+ "trapexp_lines": [
+  "kf3: family=Ada phase=Halted trapped=2615 applied=1672 refused=0 serviced=726 ram_refused=0 unshadowed_writes=2 read_exits=0 last_off=0x110100 mem[inval=290 walks=277/277 cleared=290 superseded=0 named_missed=20 unreconciled=0 absent_cleared=3 mapped=241 unmapped=226 clipped=0x0 held=0 vmm_overlaps=0 priv_withheld=0 priv_withheld_bytes=0x0 priv_mirrored=12 sked=0/0held carve_gpu=0 carve_kernel=4 carve_cpu=1 carve_clipped=0x20000 fn70=2 roots=5 root_moves=0 stmts=15/15 refused=3 pramin_repoints=22 pramin_miss=0 last_miss=0x0 pramin_worst_us=94 (map 39 mmap 50) pramin_maps=22 pramin_mmaps=22 pramin_kept=0 pramin_kept_now=0 window_advice_refused=0 inline_opens=0 reaped=21 cache_ops=0 sysmembars=3 root_unsets=0] mirrors=0 reused=5 prewarmed=3 mirror_avg_us=0 mirror_max_us=0 vat[invals=0 arrive->clear_avg_us=0 max_us=110118 walks=0 walk_avg_us=0 gpu_avg_us=0 plan_avg_us=0 apply_avg_us=0 leaves=93 host_calls=0] chan[births=11 pt_births=0 acts=35/0refused birth_refused_cap=0 worst_act_us=5650 nsi=[GR0:277/0raised(nolive=0,novec=0) CE2:2/2raised(nolive=0,novec=0) CE3:61030/0raised(nolive=0,novec=0)] pt_nsi=[fifo_edges=61309 fifo_raised=179 fifo_armed=0 sticky=0x0 kernel_nonstall_registered=1 arm_clears=1 os_event_overflowed=0 kernel_nonstall_overflowed=0 edges=122618 not_armed=122439 unvectored=0 relay_off=0 relay=on pacing=off refused=0 v0[raised=179 coalesced_later_raised=0 late=0 owed=false] GR0[vec=Some(0) armed=0 wakes=277 not_armed=277 raised=0 live_twins=0] CE2[vec=Some(1) armed=0 wakes=2 not_armed=2 raised=2 live_twins=0] CE3[vec=Some(2) armed=0 wakes=61030 not_armed=61030 raised=0 live_twins=0]] served=14 parks=80962 host_rings=2 contended=0 poisoned=0 tokens=[] mirror=[on groups=0 ctx_created=0 ctx_freed=0 mode_refused=0 flag_refused=0 ctx_unknown=0 cap_refused=0 latejoin_skipped=0 unwind_failed=0]] views[armed=210 released=206 refused=0 held=4] rc[armed=0 unarmed=0 wakes=0 seen=0 posted=0] inca[strict=yes counted=0 heap_out=0 rows_inexact=0] tspace[built=yes twin_refused=0 tspace_refused=0 slots_leaked=0 twin_freeing=0] irq[writes=0 raised=4 held=177 oor=0] disp[writes=71 puts=35 methods=5338 updates=0 notifies=0 releases=0 vblanks=0 irqs=0 exceptions=0 refused=0 scanouts=90 scanout_refused=0 scanout_avg_us=54490 scanout_max_us=4854618] fps[cap=75(unset) copies=0.0 skipped=0 checks=59.9 same=60813 ondemand=0 over=0 lock[ticks_coalesced=469 credits_coalesced=30488 mailbox_coalesced=0 credits_deferred=30490 granted=0 stale=0 probation=0]] scanout_no_slot=0 scanout_d2h=90 scanout_pack=0 pack_skipped=0 display_vram_mib=0 host_cursor_reads=0 host_cursor_refused=0 console_windows_left_out=0 console_copies_skipped=0 broker[up=1 sent=90 gpucopy=0 gpucopy_backoffs=0 dmabuf_trips=1 carrier_refused=0 carrier_unchecked=0 formats_unasked=0 dropped=0 uncommitted=0 recovered=0 releases=87 unknown_releases=2 reclaims=2 blocked=0 backstops=0 reconnects=0 failed_attempts=0 peer_refused=0 cursor=hover cursor_sets=0 cursor_hides=0 cursor_shows=0 cursor_moves=0 cursor_refused=0] input[keys=0 keys_refused=0 keys_unmapped=0 buttons=0 buttons_dropped=0 wheel=0 abs=0 rel=0 switches=1] tick[on=1 live=1 ticks=61471 stale=0 missed=14 backwards=0 want=30660 credits_coalesced=38 frames_on_credit=90 no_change=30532 req_blocked=19 silence_fallbacks=0 resumes=1 partial_timeouts=0 budget_hits=4] boot[frames=90 retired=no] dbfast[off regs=0 placed=0/0 sites=0 doorbells=0 wakes=0 rang=0 handed=0 absorbed=0 refused(budget=0 kvm=0 enospc=0 eexist=0 fd=0) deassign_failed=0 ack_timeouts=0 double=0 stale=0 empty=0 polls=0/0 max_batch=0 wake_to_deliver[n=0 p50=0.0us p99=0.0us max=0.0us] ack_wait[n=0 p50=0.0us p99=0.0us max=0.0us]] trapexp[delay_intr_us=0 delay_db_us=0 intr_delayed=0 db_delayed=0 spin=1 model=1 model_writes=10929 polls=5234819072 stored=11322 lost=374 trigger_raises=0 worker_raises=0 oor=0] unserviced=[0x20800a87,0x20800afe,0x20800aff,0x20800aaf,0x00800292,0x20800a80,0x20802a0f,0x2080017e,0x20800a30,0x20800a2e,0x20800b03,0x20800b05,0x20800a3f,0x2080013f,0x20809004,0x00801306,0x20810108,0x20800ab8,0x20800173,0x20802a12,0x20800160,0x20802801,0x2080012f,0x20802806,0x2080205b,0x2080a060,0x20802068,0x00800106,0x2080a70a,0x2080a801,0x2080a02f,0x208081ea,0x20808524,0x00730285,0x0073011d,0x20800a3a,0x20801110,0x2080080b,0x00730288,0x20801220,0x20801222] gsp_refusals[total=65 distinct=41 [fn76/0x20800a87=0x56x1 fn76/0x20800afe=0x56x2 fn76/0x20800aff=0x56x1 fn76/0x20800aaf=0x56x1 fn76/0x00800292=0x56x1 fn76/0x20800a80=0x56x2 fn76/0x20802a0f=0x56x1 fn76/0x2080017e=0x56x1 fn76/0x20800a30=0x56x1 fn76/0x20800a2e=0x56x1 fn76/0x20800b03=0x56x1 fn76/0x20800b05=0x56x1 fn76/0x20800a3f=0x56x1 fn76/0x2080013f=0x56x1 fn76/0x20809004=0x56x1 fn76/0x00801306=0x56x1 fn76/0x20810108=0x56x1 fn76/0x20800ab8=0x56x1 fn76/0x20800173=0x56x1 fn76/0x20802a12=0x56x8 fn76/0x20800160=0x56x1 fn76/0x20802801=0x56x1 fn76/0x2080012f=0x56x1 fn76/0x20802806=0x56x1 fn76/0x2080205b=0x56x1 fn76/0x2080a060=0x56x1 fn76/0x20802068=0x56x1 fn76/0x00800106=0x56x1 fn76/0x2080a70a=0x56x1 fn76/0x2080a801=0x56x1 fn76/0x2080a02f=0x56x1 fn76/0x208081ea=0x56x1 fn76/0x20808524=0x56x1 fn76/0x00730285=0x56x5 fn76/0x0073011d=0x56x1 fn76/0x20800a3a=0x56x5 fn76/0x20801110=0x56x1 fn76/0x2080080b=0x56x1 fn76/0x00730288=0x56x8 fn76/0x20801220=0x56x1 fn76/0x20801222=0x56x1]] reset[req=1 (main=1 vcpu=0 wake=0) done=1 kept=0 pristine=1 waits_timed_out=0 stage=Idle dropped=0]",
+  "kf3: trapexptrapexp[delay_intr_us=0 delay_db_us=0 intr_delayed=0 db_delayed=0 spin=1 model=1 model_writes=10929 polls=5240061952 stored=11322 lost=374 trigger_raises=0 worker_raises=0 oor=0]",
+  "kf3: family=Ada phase=Halted trapped=2615 applied=1672 refused=0 serviced=726 ram_refused=0 unshadowed_writes=2 read_exits=0 last_off=0x110100 mem[inval=290 walks=277/277 cleared=290 superseded=0 named_missed=20 unreconciled=0 absent_cleared=3 mapped=241 unmapped=226 clipped=0x0 held=0 vmm_overlaps=0 priv_withheld=0 priv_withheld_bytes=0x0 priv_mirrored=12 sked=0/0held carve_gpu=0 carve_kernel=4 carve_cpu=1 carve_clipped=0x20000 fn70=2 roots=5 root_moves=0 stmts=15/15 refused=3 pramin_repoints=22 pramin_miss=0 last_miss=0x0 pramin_worst_us=94 (map 39 mmap 50) pramin_maps=22 pramin_mmaps=22 pramin_kept=0 pramin_kept_now=0 window_advice_refused=0 inline_opens=0 reaped=21 cache_ops=0 sysmembars=3 root_unsets=0] mirrors=0 reused=5 prewarmed=3 mirror_avg_us=0 mirror_max_us=0 vat[invals=0 arrive->clear_avg_us=0 max_us=110118 walks=0 walk_avg_us=0 gpu_avg_us=0 plan_avg_us=0 apply_avg_us=0 leaves=93 host_calls=0] chan[births=11 pt_births=0 acts=35/0refused birth_refused_cap=0 worst_act_us=5650 nsi=[GR0:277/0raised(nolive=0,novec=0) CE2:2/2raised(nolive=0,novec=0) CE3:61150/0raised(nolive=0,novec=0)] pt_nsi=[fifo_edges=61429 fifo_raised=179 fifo_armed=0 sticky=0x0 kernel_nonstall_registered=1 arm_clears=1 os_event_overflowed=0 kernel_nonstall_overflowed=0 edges=122858 not_armed=122679 unvectored=0 relay_off=0 relay=on pacing=off refused=0 v0[raised=179 coalesced_later_raised=0 late=0 owed=false] GR0[vec=Some(0) armed=0 wakes=277 not_armed=277 raised=0 live_twins=0] CE2[vec=Some(1) armed=0 wakes=2 not_armed=2 raised=2 live_twins=0] CE3[vec=Some(2) armed=0 wakes=61150 not_armed=61150 raised=0 live_twins=0]] served=14 parks=81118 host_rings=2 contended=0 poisoned=0 tokens=[] mirror=[on groups=0 ctx_created=0 ctx_freed=0 mode_refused=0 flag_refused=0 ctx_unknown=0 cap_refused=0 latejoin_skipped=0 unwind_failed=0]] views[armed=210 released=206 refused=0 held=4] rc[armed=0 unarmed=0 wakes=0 seen=0 posted=0] inca[strict=yes counted=0 heap_out=0 rows_inexact=0] tspace[built=yes twin_refused=0 tspace_refused=0 slots_leaked=0 twin_freeing=0] irq[writes=0 raised=4 held=177 oor=0] disp[writes=71 puts=35 methods=5338 updates=0 notifies=0 releases=0 vblanks=0 irqs=0 exceptions=0 refused=0 scanouts=90 scanout_refused=0 scanout_avg_us=54490 scanout_max_us=4854618] fps[cap=75(unset) copies=0.0 skipped=0 checks=59.9 same=60933 ondemand=0 over=0 lock[ticks_coalesced=469 credits_coalesced=30548 mailbox_coalesced=0 credits_deferred=30550 granted=0 stale=0 probation=0]] scanout_no_slot=0 scanout_d2h=90 scanout_pack=0 pack_skipped=0 display_vram_mib=0 host_cursor_reads=0 host_cursor_refused=0 console_windows_left_out=0 console_copies_skipped=0 broker[up=1 sent=90 gpucopy=0 gpucopy_backoffs=0 dmabuf_trips=1 carrier_refused=0 carrier_unchecked=0 formats_unasked=0 dropped=0 uncommitted=0 recovered=0 releases=87 unknown_releases=2 reclaims=2 blocked=0 backstops=0 reconnects=0 failed_attempts=0 peer_refused=0 cursor=hover cursor_sets=0 cursor_hides=0 cursor_shows=0 cursor_moves=0 cursor_refused=0] input[keys=0 keys_refused=0 keys_unmapped=0 buttons=0 buttons_dropped=0 wheel=0 abs=0 rel=0 switches=1] tick[on=1 live=1 ticks=61591 stale=0 missed=14 backwards=0 want=30720 credits_coalesced=38 frames_on_credit=90 no_change=30592 req_blocked=19 silence_fallbacks=0 resumes=1 partial_timeouts=0 budget_hits=4] boot[frames=90 retired=no] dbfast[off regs=0 placed=0/0 sites=0 doorbells=0 wakes=0 rang=0 handed=0 absorbed=0 refused(budget=0 kvm=0 enospc=0 eexist=0 fd=0) deassign_failed=0 ack_timeouts=0 double=0 stale=0 empty=0 polls=0/0 max_batch=0 wake_to_deliver[n=0 p50=0.0us p99=0.0us max=0.0us] ack_wait[n=0 p50=0.0us p99=0.0us max=0.0us]] trapexp[delay_intr_us=0 delay_db_us=0 intr_delayed=0 db_delayed=0 spin=1 model=1 model_writes=10929 polls=5245370368 stored=11322 lost=374 trigger_raises=0 worker_raises=0 oor=0] unserviced=[0x20800a87,0x20800afe,0x20800aff,0x20800aaf,0x00800292,0x20800a80,0x20802a0f,0x2080017e,0x20800a30,0x20800a2e,0x20800b03,0x20800b05,0x20800a3f,0x2080013f,0x20809004,0x00801306,0x20810108,0x20800ab8,0x20800173,0x20802a12,0x20800160,0x20802801,0x2080012f,0x20802806,0x2080205b,0x2080a060,0x20802068,0x00800106,0x2080a70a,0x2080a801,0x2080a02f,0x208081ea,0x20808524,0x00730285,0x0073011d,0x20800a3a,0x20801110,0x2080080b,0x00730288,0x20801220,0x20801222] gsp_refusals[total=65 distinct=41 [fn76/0x20800a87=0x56x1 fn76/0x20800afe=0x56x2 fn76/0x20800aff=0x56x1 fn76/0x20800aaf=0x56x1 fn76/0x00800292=0x56x1 fn76/0x20800a80=0x56x2 fn76/0x20802a0f=0x56x1 fn76/0x2080017e=0x56x1 fn76/0x20800a30=0x56x1 fn76/0x20800a2e=0x56x1 fn76/0x20800b03=0x56x1 fn76/0x20800b05=0x56x1 fn76/0x20800a3f=0x56x1 fn76/0x2080013f=0x56x1 fn76/0x20809004=0x56x1 fn76/0x00801306=0x56x1 fn76/0x20810108=0x56x1 fn76/0x20800ab8=0x56x1 fn76/0x20800173=0x56x1 fn76/0x20802a12=0x56x8 fn76/0x20800160=0x56x1 fn76/0x20802801=0x56x1 fn76/0x2080012f=0x56x1 fn76/0x20802806=0x56x1 fn76/0x2080205b=0x56x1 fn76/0x2080a060=0x56x1 fn76/0x20802068=0x56x1 fn76/0x00800106=0x56x1 fn76/0x2080a70a=0x56x1 fn76/0x2080a801=0x56x1 fn76/0x2080a02f=0x56x1 fn76/0x208081ea=0x56x1 fn76/0x20808524=0x56x1 fn76/0x00730285=0x56x5 fn76/0x0073011d=0x56x1 fn76/0x20800a3a=0x56x5 fn76/0x20801110=0x56x1 fn76/0x2080080b=0x56x1 fn76/0x00730288=0x56x8 fn76/0x20801220=0x56x1 fn76/0x20801222=0x56x1]] reset[req=1 (main=1 vcpu=0 wake=0) done=1 kept=0 pristine=1 waits_timed_out=0 stage=Idle dropped=0]"
+ ],
+ "qemu_log": "/data/claude-trapexp-20261019/W/boundary-kayfabe-4107/qemu.log",
+ "end": "2026-10-19T21:16:07+0200"
+}

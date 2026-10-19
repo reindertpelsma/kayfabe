@@ -1,0 +1,361 @@
+GP adapter NVIDIA GeForce RTX 4070 dedicated 7843 MiB
+GP T_QUEUE 0 WORK copy
+GP T_FENCE_BASE 0x0 value_after_warmup 0xc8 QPCfreq 10000000
+GP MODE_T_START qpc 870485968 utc 2026-10-19T15:15:53.0117590Z
+GP MODE_T_END qpc 876001448 iterations 2000
+GP T total (Execute call start -> fence visible) us n=1995 med=258.4 mean=272.7 p95=349.3 p99=462.1 min=201.7 max=2709.9
+GP T submit-return -> fence visible (the 837-style number) us n=1995 med=243.9 mean=257.5 p95=333.1 p99=442.5 min=168.7 max=2693.2
+GP T ExecuteCommandLists call us n=1995 med=13.4 mean=15.2 p95=27.7 p99=39.8 min=9.2 max=106.4
+GP T Signal call us n=1995 med=1.9 mean=2.2 p95=3.5 p99=4.7 min=1.6 max=21.3
+GP T wait for fence after Signal returned us n=1995 med=241.7 mean=255.3 p95=331.3 p99=440.7 min=163.9 max=2690.8
+GP T iteration period us n=1994 med=258.5 mean=272.8 p95=349.3 p99=462.1 min=201.7 max=2710.1
+GP SEQ_STEP_DONE 1 T:0:copy:2000
+GP adapter NVIDIA GeForce RTX 4070 dedicated 7843 MiB
+GP T_QUEUE 2 WORK copy
+GP T_FENCE_BASE 0x0 value_after_warmup 0xc8 QPCfreq 10000000
+GP MODE_T_START qpc 920683221 utc 2026-10-19T15:15:58.0318163Z
+GP MODE_T_END qpc 925385976 iterations 2000
+GP T total (Execute call start -> fence visible) us n=1995 med=224.9 mean=234.9 p95=282.4 p99=456.8 min=157.5 max=642.9
+GP T submit-return -> fence visible (the 837-style number) us n=1995 med=212.9 mean=221.4 p95=264.9 p99=436.6 min=147.2 max=628.9
+GP T ExecuteCommandLists call us n=1995 med=10.1 mean=13.5 p95=22.4 p99=35.1 min=6.6 max=77.6
+GP T Signal call us n=1995 med=2.0 mean=2.4 p95=3.6 p99=4.9 min=1.6 max=31.5
+GP T wait for fence after Signal returned us n=1995 med=210.7 mean=219.0 p95=262.0 p99=434.6 min=135.4 max=627.0
+GP T iteration period us n=1994 med=224.9 mean=234.9 p95=282.5 p99=456.9 min=157.5 max=642.9
+GP SEQ_STEP_DONE 2 T:2:copy:2000
+GP adapter NVIDIA GeForce RTX 4070 dedicated 7843 MiB
+GP T_QUEUE 3 WORK copy
+GP T_FENCE_BASE 0x0 value_after_warmup 0xc8 QPCfreq 10000000
+GP MODE_T_START qpc 969200168 utc 2026-10-19T15:16:02.8833349Z
+GP MODE_T_END qpc 973112217 iterations 2000
+GP T total (Execute call start -> fence visible) us n=1995 med=193.7 mean=195.4 p95=218.9 p99=253.8 min=132.3 max=415.6
+GP T submit-return -> fence visible (the 837-style number) us n=1995 med=186.7 mean=187.4 p95=204.0 p99=236.8 min=126.9 max=394.2
+GP T ExecuteCommandLists call us n=1995 med=6.1 mean=8.1 p95=16.2 p99=21.3 min=3.5 max=67.1
+GP T Signal call us n=1995 med=2.0 mean=2.5 p95=4.1 p99=5.6 min=1.7 max=26.6
+GP T wait for fence after Signal returned us n=1995 med=184.1 mean=184.9 p95=200.7 p99=233.5 min=123.8 max=389.4
+GP T iteration period us n=1994 med=193.7 mean=195.5 p95=218.9 p99=253.9 min=132.3 max=415.6
+GP SEQ_STEP_DONE 3 T:3:copy:2000
+GP adapter NVIDIA GeForce RTX 4070 dedicated 7843 MiB
+GP T_QUEUE 0 WORK copy
+GP T_FENCE_BASE 0x0 value_after_warmup 0xc8 QPCfreq 10000000
+GP MODE_T_START qpc 1016147708 utc 2026-10-19T15:16:07.5778551Z
+GP MODE_T_END qpc 1021847253 iterations 2000
+GP T total (Execute call start -> fence visible) us n=1995 med=269.3 mean=280.2 p95=357.1 p99=465.4 min=195.5 max=1462.5
+GP T submit-return -> fence visible (the 837-style number) us n=1995 med=252.7 mean=264.9 p95=339.7 p99=440.9 min=184.2 max=1449.0
+GP T ExecuteCommandLists call us n=1995 med=12.3 mean=15.4 p95=27.5 p99=38.0 min=9.0 max=88.5
+GP T Signal call us n=1995 med=1.8 mean=2.2 p95=3.5 p99=4.5 min=1.6 max=10.1
+GP T wait for fence after Signal returned us n=1995 med=250.5 mean=262.7 p95=337.5 p99=437.8 min=182.5 max=1446.8
+GP T iteration period us n=1994 med=269.4 mean=280.3 p95=357.1 p99=465.4 min=195.5 max=1462.7
+GP SEQ_STEP_DONE 4 T:0:copy:2000
+GP adapter NVIDIA GeForce RTX 4070 dedicated 7843 MiB
+GP T_QUEUE 2 WORK copy
+GP T_FENCE_BASE 0x0 value_after_warmup 0xc8 QPCfreq 10000000
+GP MODE_T_START qpc 1066667452 utc 2026-10-19T15:16:12.6300941Z
+GP MODE_T_END qpc 1071469880 iterations 2000
+GP T total (Execute call start -> fence visible) us n=1995 med=231.5 mean=240.0 p95=283.3 p99=475.5 min=157.2 max=2074.7
+GP T submit-return -> fence visible (the 837-style number) us n=1995 med=218.9 mean=227.9 p95=272.4 p99=462.9 min=147.1 max=2060.9
+GP T ExecuteCommandLists call us n=1995 med=9.6 mean=12.1 p95=22.4 p99=35.4 min=6.8 max=61.8
+GP T Signal call us n=1995 med=1.9 mean=2.3 p95=3.4 p99=5.2 min=1.6 max=32.5
+GP T wait for fence after Signal returned us n=1995 med=216.6 mean=225.6 p95=270.0 p99=460.6 min=145.2 max=2058.3
+GP T iteration period us n=1994 med=231.5 mean=240.0 p95=283.3 p99=475.5 min=157.3 max=2074.9
+GP SEQ_STEP_DONE 5 T:2:copy:2000
+GP adapter NVIDIA GeForce RTX 4070 dedicated 7843 MiB
+GP T_QUEUE 3 WORK copy
+GP T_FENCE_BASE 0x0 value_after_warmup 0xc8 QPCfreq 10000000
+GP MODE_T_START qpc 1115305101 utc 2026-10-19T15:16:17.4931289Z
+GP MODE_T_END qpc 1119278808 iterations 2000
+GP T total (Execute call start -> fence visible) us n=1995 med=198.5 mean=198.5 p95=220.6 p99=239.8 min=133.8 max=344.5
+GP T submit-return -> fence visible (the 837-style number) us n=1995 med=188.6 mean=188.2 p95=205.1 p99=225.7 min=126.9 max=290.5
+GP T ExecuteCommandLists call us n=1995 med=8.0 mean=10.3 p95=15.5 p99=28.6 min=3.6 max=153.3
+GP T Signal call us n=1995 med=3.5 mean=3.0 p95=4.3 p99=6.0 min=1.7 max=23.7
+GP T wait for fence after Signal returned us n=1995 med=185.7 mean=185.2 p95=201.4 p99=221.6 min=124.2 max=286.8
+GP T iteration period us n=1994 med=198.5 mean=198.6 p95=220.6 p99=239.9 min=133.8 max=344.6
+GP SEQ_STEP_DONE 6 T:3:copy:2000
+GP adapter NVIDIA GeForce RTX 4070 dedicated 7843 MiB
+GP T_QUEUE 0 WORK copy
+GP T_FENCE_BASE 0x0 value_after_warmup 0xc8 QPCfreq 10000000
+GP MODE_T_START qpc 1162500861 utc 2026-10-19T15:16:22.2126557Z
+GP MODE_T_END qpc 1168182422 iterations 2000
+GP T total (Execute call start -> fence visible) us n=1995 med=267.8 mean=281.5 p95=363.0 p99=463.2 min=188.1 max=1636.9
+GP T submit-return -> fence visible (the 837-style number) us n=1995 med=250.4 mean=265.7 p95=343.5 p99=452.3 min=159.9 max=1623.5
+GP T ExecuteCommandLists call us n=1995 med=12.2 mean=15.8 p95=29.1 p99=39.1 min=8.9 max=64.1
+GP T Signal call us n=1995 med=1.8 mean=2.3 p95=3.6 p99=4.5 min=1.6 max=27.7
+GP T wait for fence after Signal returned us n=1995 med=248.1 mean=263.4 p95=340.6 p99=450.5 min=157.1 max=1621.3
+GP T iteration period us n=1994 med=267.8 mean=281.6 p95=363.0 p99=463.2 min=188.2 max=1637.0
+GP SEQ_STEP_DONE 7 T:0:copy:2000
+GP adapter NVIDIA GeForce RTX 4070 dedicated 7843 MiB
+GP T_QUEUE 2 WORK copy
+GP T_FENCE_BASE 0x0 value_after_warmup 0xc8 QPCfreq 10000000
+GP MODE_T_START qpc 1213017058 utc 2026-10-19T15:16:27.2647612Z
+GP MODE_T_END qpc 1219426520 iterations 2000
+GP T total (Execute call start -> fence visible) us n=1995 med=224.7 mean=320.5 p95=268.8 p99=454.9 min=159.1 max=176300.4
+GP T submit-return -> fence visible (the 837-style number) us n=1995 med=214.2 mean=308.0 p95=253.7 p99=439.2 min=150.3 max=176274.2
+GP T ExecuteCommandLists call us n=1995 med=9.7 mean=12.5 p95=25.7 p99=34.2 min=6.4 max=96.5
+GP T Signal call us n=1995 med=2.0 mean=2.3 p95=3.4 p99=4.9 min=1.6 max=15.5
+GP T wait for fence after Signal returned us n=1995 med=212.0 mean=305.7 p95=251.5 p99=437.5 min=148.3 max=176271.1
+GP T iteration period us n=1994 med=224.8 mean=320.6 p95=268.8 p99=454.9 min=159.1 max=176300.5
+GP SEQ_STEP_DONE 8 T:2:copy:2000
+GP adapter NVIDIA GeForce RTX 4070 dedicated 7843 MiB
+GP T_QUEUE 3 WORK copy
+GP T_FENCE_BASE 0x0 value_after_warmup 0xc8 QPCfreq 10000000
+GP MODE_T_START qpc 1263552466 utc 2026-10-19T15:16:32.3190082Z
+GP MODE_T_END qpc 1267368809 iterations 2000
+GP T total (Execute call start -> fence visible) us n=1995 med=191.9 mean=190.6 p95=207.2 p99=219.5 min=130.1 max=317.1
+GP T submit-return -> fence visible (the 837-style number) us n=1995 med=186.0 mean=183.8 p95=198.3 p99=206.0 min=121.1 max=307.4
+GP T ExecuteCommandLists call us n=1995 med=5.5 mean=6.8 p95=14.1 p99=24.2 min=3.5 max=78.3
+GP T Signal call us n=1995 med=1.9 mean=2.2 p95=3.9 p99=5.5 min=1.7 max=27.1
+GP T wait for fence after Signal returned us n=1995 med=183.9 mean=181.6 p95=196.3 p99=203.5 min=115.4 max=304.3
+GP T iteration period us n=1994 med=191.9 mean=190.6 p95=207.3 p99=219.5 min=130.1 max=317.2
+GP SEQ_STEP_DONE 9 T:3:copy:2000
+GP adapter NVIDIA GeForce RTX 4070 dedicated 7843 MiB
+GP T_QUEUE 0 WORK copy
+GP T_FENCE_BASE 0x0 value_after_warmup 0xc8 QPCfreq 10000000
+GP MODE_T_START qpc 1310505766 utc 2026-10-19T15:16:37.0135268Z
+GP MODE_T_END qpc 1318341814 iterations 2000
+GP T total (Execute call start -> fence visible) us n=1995 med=267.7 mean=389.2 p95=374.8 p99=464.0 min=183.1 max=108030.5
+GP T submit-return -> fence visible (the 837-style number) us n=1995 med=251.5 mean=372.9 p95=358.8 p99=439.7 min=168.6 max=108006.4
+GP T ExecuteCommandLists call us n=1995 med=13.3 mean=16.4 p95=28.3 p99=38.2 min=9.5 max=58.8
+GP T Signal call us n=1995 med=1.9 mean=2.3 p95=3.5 p99=4.6 min=1.5 max=11.9
+GP T wait for fence after Signal returned us n=1995 med=249.3 mean=370.6 p95=357.1 p99=437.8 min=166.6 max=108003.0
+GP T iteration period us n=1994 med=267.8 mean=389.3 p95=374.9 p99=464.0 min=183.1 max=108030.7
+GP SEQ_STEP_DONE 10 T:0:copy:2000
+GP adapter NVIDIA GeForce RTX 4070 dedicated 7843 MiB
+GP T_QUEUE 2 WORK copy
+GP T_FENCE_BASE 0x0 value_after_warmup 0xc8 QPCfreq 10000000
+GP MODE_T_START qpc 1362656468 utc 2026-10-19T15:16:42.2285729Z
+GP MODE_T_END qpc 1367374816 iterations 2000
+GP T total (Execute call start -> fence visible) us n=1995 med=227.2 mean=235.8 p95=284.3 p99=439.7 min=158.5 max=685.9
+GP T submit-return -> fence visible (the 837-style number) us n=1995 med=215.8 mean=223.6 p95=267.0 p99=422.4 min=148.6 max=666.7
+GP T ExecuteCommandLists call us n=1995 med=9.6 mean=12.2 p95=23.4 p99=35.0 min=6.6 max=80.8
+GP T Signal call us n=1995 med=2.0 mean=2.3 p95=3.6 p99=4.7 min=1.6 max=10.7
+GP T wait for fence after Signal returned us n=1995 med=213.5 mean=221.3 p95=264.8 p99=420.4 min=146.7 max=664.0
+GP T iteration period us n=1994 med=227.2 mean=235.8 p95=284.4 p99=439.7 min=158.6 max=685.9
+GP SEQ_STEP_DONE 11 T:2:copy:2000
+GP adapter NVIDIA GeForce RTX 4070 dedicated 7843 MiB
+GP T_QUEUE 3 WORK copy
+GP T_FENCE_BASE 0x0 value_after_warmup 0xc8 QPCfreq 10000000
+GP MODE_T_START qpc 1410475543 utc 2026-10-19T15:16:47.0106104Z
+GP MODE_T_END qpc 1414345227 iterations 2000
+GP T total (Execute call start -> fence visible) us n=1995 med=195.0 mean=193.3 p95=216.2 p99=237.5 min=133.4 max=348.7
+GP T submit-return -> fence visible (the 837-style number) us n=1995 med=187.9 mean=185.3 p95=204.2 p99=223.9 min=86.1 max=332.6
+GP T ExecuteCommandLists call us n=1995 med=6.4 mean=8.0 p95=14.4 p99=22.8 min=3.6 max=143.1
+GP T Signal call us n=1995 med=2.1 mean=2.7 p95=4.2 p99=5.5 min=1.7 max=28.1
+GP T wait for fence after Signal returned us n=1995 med=185.0 mean=182.6 p95=201.0 p99=220.7 min=72.4 max=328.1
+GP T iteration period us n=1994 med=195.0 mean=193.3 p95=216.2 p99=237.6 min=133.4 max=348.8
+GP SEQ_STEP_DONE 12 T:3:copy:2000
+GP adapter NVIDIA GeForce RTX 4070 dedicated 7843 MiB
+GP T_QUEUE 0 WORK copy
+GP T_FENCE_BASE 0x0 value_after_warmup 0xc8 QPCfreq 10000000
+GP MODE_T_START qpc 1457264426 utc 2026-10-19T15:16:51.6895562Z
+GP MODE_T_END qpc 1462838764 iterations 2000
+GP T total (Execute call start -> fence visible) us n=1995 med=260.6 mean=275.1 p95=359.4 p99=520.9 min=211.9 max=2160.2
+GP T submit-return -> fence visible (the 837-style number) us n=1995 med=243.8 mean=258.9 p95=343.5 p99=495.7 min=200.0 max=2126.5
+GP T ExecuteCommandLists call us n=1995 med=13.2 mean=16.2 p95=27.0 p99=38.5 min=9.2 max=195.7
+GP T Signal call us n=1995 med=1.9 mean=2.3 p95=3.4 p99=4.6 min=1.6 max=11.3
+GP T wait for fence after Signal returned us n=1995 med=241.4 mean=256.7 p95=341.2 p99=493.6 min=197.8 max=2123.2
+GP T iteration period us n=1994 med=260.6 mean=275.1 p95=359.5 p99=520.9 min=211.9 max=2160.2
+GP SEQ_STEP_DONE 13 T:0:copy:2000
+GP adapter NVIDIA GeForce RTX 4070 dedicated 7843 MiB
+GP T_QUEUE 2 WORK copy
+GP T_FENCE_BASE 0x0 value_after_warmup 0xc8 QPCfreq 10000000
+GP MODE_T_START qpc 1506662716 utc 2026-10-19T15:16:56.6291399Z
+GP MODE_T_END qpc 1511895639 iterations 2000
+GP T total (Execute call start -> fence visible) us n=1995 med=228.6 mean=261.5 p95=282.7 p99=488.6 min=157.9 max=50602.4
+GP T submit-return -> fence visible (the 837-style number) us n=1995 med=215.9 mean=248.7 p95=268.2 p99=479.8 min=148.5 max=50591.5
+GP T ExecuteCommandLists call us n=1995 med=9.9 mean=12.8 p95=23.2 p99=34.9 min=6.7 max=71.9
+GP T Signal call us n=1995 med=2.0 mean=2.4 p95=3.5 p99=5.0 min=1.6 max=15.6
+GP T wait for fence after Signal returned us n=1995 med=213.7 mean=246.3 p95=266.1 p99=477.9 min=145.8 max=50589.1
+GP T iteration period us n=1994 med=228.7 mean=261.6 p95=282.7 p99=488.6 min=157.9 max=50602.5
+GP SEQ_STEP_DONE 14 T:2:copy:2000
+GP adapter NVIDIA GeForce RTX 4070 dedicated 7843 MiB
+GP T_QUEUE 3 WORK copy
+GP T_FENCE_BASE 0x0 value_after_warmup 0xc8 QPCfreq 10000000
+GP MODE_T_START qpc 1555109745 utc 2026-10-19T15:17:01.4747338Z
+GP MODE_T_END qpc 1558977169 iterations 2000
+GP T total (Execute call start -> fence visible) us n=1995 med=192.3 mean=193.2 p95=209.7 p99=227.0 min=124.9 max=332.3
+GP T submit-return -> fence visible (the 837-style number) us n=1995 med=185.8 mean=186.2 p95=199.8 p99=209.6 min=119.1 max=315.8
+GP T ExecuteCommandLists call us n=1995 med=5.6 mean=7.0 p95=14.1 p99=22.5 min=3.5 max=149.0
+GP T Signal call us n=1995 med=1.9 mean=2.3 p95=3.9 p99=5.2 min=1.7 max=10.7
+GP T wait for fence after Signal returned us n=1995 med=183.6 mean=183.9 p95=197.4 p99=207.5 min=117.2 max=313.4
+GP T iteration period us n=1994 med=192.3 mean=193.2 p95=209.7 p99=227.1 min=125.0 max=332.4
+GP SEQ_STEP_DONE 15 T:3:copy:2000
+GP adapter NVIDIA GeForce RTX 4070 dedicated 7843 MiB
+GP T_QUEUE 0 WORK copy
+GP T_FENCE_BASE 0x0 value_after_warmup 0xc8 QPCfreq 10000000
+GP MODE_T_START qpc 1601952469 utc 2026-10-19T15:17:06.1575514Z
+GP MODE_T_END qpc 1607620306 iterations 2000
+GP T total (Execute call start -> fence visible) us n=1995 med=264.5 mean=280.9 p95=370.7 p99=487.6 min=212.1 max=2785.4
+GP T submit-return -> fence visible (the 837-style number) us n=1995 med=248.5 mean=265.0 p95=353.4 p99=471.3 min=186.9 max=2770.3
+GP T ExecuteCommandLists call us n=1995 med=12.9 mean=15.9 p95=28.7 p99=39.2 min=9.0 max=90.0
+GP T Signal call us n=1995 med=1.9 mean=2.3 p95=3.5 p99=4.9 min=1.6 max=25.7
+GP T wait for fence after Signal returned us n=1995 med=246.3 mean=262.7 p95=350.2 p99=469.5 min=181.8 max=2768.1
+GP T iteration period us n=1994 med=264.5 mean=280.9 p95=370.7 p99=487.7 min=212.2 max=2785.4
+GP SEQ_STEP_DONE 16 T:0:copy:2000
+GP adapter NVIDIA GeForce RTX 4070 dedicated 7843 MiB
+GP T_QUEUE 2 WORK copy
+GP T_FENCE_BASE 0x0 value_after_warmup 0xc8 QPCfreq 10000000
+GP MODE_T_START qpc 1652050896 utc 2026-10-19T15:17:11.1679692Z
+GP MODE_T_END qpc 1656828526 iterations 2000
+GP T total (Execute call start -> fence visible) us n=1995 med=229.4 mean=238.7 p95=292.3 p99=456.8 min=159.8 max=684.7
+GP T submit-return -> fence visible (the 837-style number) us n=1995 med=216.6 mean=225.6 p95=275.4 p99=443.2 min=149.5 max=672.1
+GP T ExecuteCommandLists call us n=1995 med=9.3 mean=13.1 p95=22.8 p99=32.1 min=6.5 max=69.2
+GP T Signal call us n=1995 med=2.1 mean=2.4 p95=3.4 p99=4.2 min=1.6 max=14.9
+GP T wait for fence after Signal returned us n=1995 med=214.1 mean=223.2 p95=273.3 p99=441.3 min=146.1 max=669.9
+GP T iteration period us n=1994 med=229.4 mean=238.7 p95=292.3 p99=456.8 min=159.8 max=684.7
+GP SEQ_STEP_DONE 17 T:2:copy:2000
+GP adapter NVIDIA GeForce RTX 4070 dedicated 7843 MiB
+GP T_QUEUE 3 WORK copy
+GP T_FENCE_BASE 0x0 value_after_warmup 0xc8 QPCfreq 10000000
+GP MODE_T_START qpc 1700754539 utc 2026-10-19T15:17:16.0391597Z
+GP MODE_T_END qpc 1704527307 iterations 2000
+GP T total (Execute call start -> fence visible) us n=1995 med=189.8 mean=188.4 p95=206.6 p99=218.5 min=129.4 max=315.4
+GP T submit-return -> fence visible (the 837-style number) us n=1995 med=183.9 mean=181.8 p95=197.0 p99=206.0 min=124.1 max=310.4
+GP T ExecuteCommandLists call us n=1995 med=5.6 mean=6.7 p95=13.7 p99=22.8 min=3.5 max=53.4
+GP T Signal call us n=1995 med=1.9 mean=2.3 p95=3.8 p99=5.3 min=1.7 max=28.3
+GP T wait for fence after Signal returned us n=1995 med=181.7 mean=179.5 p95=194.3 p99=203.0 min=119.7 max=308.2
+GP T iteration period us n=1994 med=189.8 mean=188.4 p95=206.7 p99=218.5 min=129.4 max=315.5
+GP SEQ_STEP_DONE 18 T:3:copy:2000
+GP adapter NVIDIA GeForce RTX 4070 dedicated 7843 MiB
+GP T_QUEUE 0 WORK copy
+GP T_FENCE_BASE 0x0 value_after_warmup 0xc8 QPCfreq 10000000
+GP MODE_T_START qpc 1747668878 utc 2026-10-19T15:17:20.7290067Z
+GP MODE_T_END qpc 1753228461 iterations 2000
+GP T total (Execute call start -> fence visible) us n=1995 med=262.5 mean=275.3 p95=366.5 p99=489.9 min=202.5 max=741.2
+GP T submit-return -> fence visible (the 837-style number) us n=1995 med=247.4 mean=259.9 p95=351.5 p99=466.9 min=191.3 max=724.8
+GP T ExecuteCommandLists call us n=1995 med=11.9 mean=15.4 p95=27.8 p99=36.0 min=9.5 max=136.6
+GP T Signal call us n=1995 med=1.8 mean=2.2 p95=3.4 p99=4.1 min=1.6 max=10.6
+GP T wait for fence after Signal returned us n=1995 med=244.9 mean=257.7 p95=349.8 p99=463.6 min=189.6 max=722.8
+GP T iteration period us n=1994 med=262.6 mean=275.4 p95=366.6 p99=490.0 min=202.6 max=741.2
+GP SEQ_STEP_DONE 19 T:0:copy:2000
+GP adapter NVIDIA GeForce RTX 4070 dedicated 7843 MiB
+GP T_QUEUE 2 WORK copy
+GP T_FENCE_BASE 0x0 value_after_warmup 0xc8 QPCfreq 10000000
+GP MODE_T_START qpc 1797781411 utc 2026-10-19T15:17:25.7409144Z
+GP MODE_T_END qpc 1802491929 iterations 2000
+GP T total (Execute call start -> fence visible) us n=1995 med=224.6 mean=235.4 p95=297.4 p99=433.5 min=157.7 max=662.6
+GP T submit-return -> fence visible (the 837-style number) us n=1995 med=214.4 mean=224.7 p95=284.8 p99=422.0 min=132.0 max=639.7
+GP T ExecuteCommandLists call us n=1995 med=8.8 mean=10.6 p95=21.2 p99=32.2 min=6.5 max=66.2
+GP T Signal call us n=1995 med=2.0 mean=2.1 p95=3.2 p99=4.2 min=1.6 max=10.1
+GP T wait for fence after Signal returned us n=1995 med=212.3 mean=222.6 p95=282.9 p99=420.2 min=121.9 max=636.4
+GP T iteration period us n=1994 med=224.7 mean=235.4 p95=297.4 p99=433.6 min=157.7 max=662.6
+GP SEQ_STEP_DONE 20 T:2:copy:2000
+GP adapter NVIDIA GeForce RTX 4070 dedicated 7843 MiB
+GP T_QUEUE 3 WORK copy
+GP T_FENCE_BASE 0x0 value_after_warmup 0xc8 QPCfreq 10000000
+GP MODE_T_START qpc 1846360113 utc 2026-10-19T15:17:30.5985401Z
+GP MODE_T_END qpc 1850192749 iterations 2000
+GP T total (Execute call start -> fence visible) us n=1995 med=191.9 mean=191.4 p95=210.6 p99=245.7 min=129.6 max=336.3
+GP T submit-return -> fence visible (the 837-style number) us n=1995 med=185.9 mean=184.9 p95=201.6 p99=235.8 min=121.4 max=322.3
+GP T ExecuteCommandLists call us n=1995 med=5.7 mean=6.5 p95=13.4 p99=21.5 min=3.5 max=29.1
+GP T Signal call us n=1995 med=1.9 mean=2.2 p95=3.7 p99=4.7 min=1.7 max=15.9
+GP T wait for fence after Signal returned us n=1995 med=183.8 mean=182.8 p95=199.2 p99=233.4 min=119.0 max=318.5
+GP T iteration period us n=1994 med=192.0 mean=191.5 p95=210.6 p99=245.7 min=129.6 max=336.3
+GP SEQ_STEP_DONE 21 T:3:copy:2000
+GP adapter NVIDIA GeForce RTX 4070 dedicated 7843 MiB
+GP T_QUEUE 0 WORK copy
+GP T_FENCE_BASE 0x0 value_after_warmup 0xc8 QPCfreq 10000000
+GP MODE_T_START qpc 1893357944 utc 2026-10-19T15:17:35.2980977Z
+GP MODE_T_END qpc 1900274976 iterations 2000
+GP T total (Execute call start -> fence visible) us n=1995 med=278.2 mean=341.9 p95=397.1 p99=542.9 min=203.7 max=98075.9
+GP T submit-return -> fence visible (the 837-style number) us n=1995 med=258.4 mean=324.3 p95=379.7 p99=531.8 min=181.7 max=98054.9
+GP T ExecuteCommandLists call us n=1995 med=14.4 mean=17.7 p95=32.0 p99=40.2 min=8.9 max=103.3
+GP T Signal call us n=1995 med=2.1 mean=2.4 p95=3.6 p99=4.9 min=1.6 max=19.1
+GP T wait for fence after Signal returned us n=1995 med=256.1 mean=321.8 p95=376.5 p99=530.1 min=176.3 max=98052.0
+GP T iteration period us n=1994 med=278.2 mean=342.0 p95=397.2 p99=543.0 min=203.7 max=98076.0
+GP SEQ_STEP_DONE 22 T:0:copy:2000
+GP adapter NVIDIA GeForce RTX 4070 dedicated 7843 MiB
+GP T_QUEUE 2 WORK copy
+GP T_FENCE_BASE 0x0 value_after_warmup 0xc8 QPCfreq 10000000
+GP MODE_T_START qpc 1945589017 utc 2026-10-19T15:17:40.5213398Z
+GP MODE_T_END qpc 1950425320 iterations 2000
+GP T total (Execute call start -> fence visible) us n=1995 med=230.5 mean=241.6 p95=296.8 p99=485.0 min=164.4 max=1322.5
+GP T submit-return -> fence visible (the 837-style number) us n=1995 med=215.9 mean=228.5 p95=280.2 p99=475.4 min=154.6 max=1313.1
+GP T ExecuteCommandLists call us n=1995 med=10.1 mean=13.1 p95=25.4 p99=35.6 min=6.5 max=107.4
+GP T Signal call us n=1995 med=2.1 mean=2.4 p95=3.7 p99=5.2 min=1.6 max=21.0
+GP T wait for fence after Signal returned us n=1995 med=213.5 mean=226.0 p95=277.5 p99=473.3 min=152.4 max=1311.1
+GP T iteration period us n=1994 med=230.5 mean=241.6 p95=296.8 p99=485.0 min=164.4 max=1322.6
+GP SEQ_STEP_DONE 23 T:2:copy:2000
+GP adapter NVIDIA GeForce RTX 4070 dedicated 7843 MiB
+GP T_QUEUE 3 WORK copy
+GP T_FENCE_BASE 0x0 value_after_warmup 0xc8 QPCfreq 10000000
+GP MODE_T_START qpc 1994409536 utc 2026-10-19T15:17:45.4043489Z
+GP MODE_T_END qpc 1998232415 iterations 2000
+GP T total (Execute call start -> fence visible) us n=1995 med=190.8 mean=191.0 p95=207.2 p99=220.7 min=130.2 max=325.7
+GP T submit-return -> fence visible (the 837-style number) us n=1995 med=184.4 mean=184.3 p95=198.9 p99=210.0 min=125.1 max=320.1
+GP T ExecuteCommandLists call us n=1995 med=5.5 mean=6.7 p95=14.0 p99=22.9 min=3.5 max=36.8
+GP T Signal call us n=1995 med=1.9 mean=2.2 p95=3.8 p99=5.0 min=1.7 max=17.7
+GP T wait for fence after Signal returned us n=1995 med=182.3 mean=182.1 p95=196.8 p99=206.7 min=122.4 max=318.3
+GP T iteration period us n=1994 med=190.8 mean=191.0 p95=207.2 p99=220.7 min=130.2 max=325.7
+GP SEQ_STEP_DONE 24 T:3:copy:2000
+GP adapter NVIDIA GeForce RTX 4070 dedicated 7843 MiB
+GP T_QUEUE 0 WORK copy
+GP T_FENCE_BASE 0x0 value_after_warmup 0xc8 QPCfreq 10000000
+GP MODE_T_START qpc 2041434151 utc 2026-10-19T15:17:50.1067158Z
+GP MODE_T_END qpc 2047078397 iterations 2000
+GP T total (Execute call start -> fence visible) us n=1995 med=263.1 mean=279.3 p95=374.2 p99=547.4 min=201.6 max=1404.1
+GP T submit-return -> fence visible (the 837-style number) us n=1995 med=246.1 mean=262.2 p95=357.4 p99=528.3 min=182.7 max=1392.5
+GP T ExecuteCommandLists call us n=1995 med=13.2 mean=17.1 p95=30.3 p99=39.4 min=9.1 max=104.8
+GP T Signal call us n=1995 med=1.9 mean=2.3 p95=3.6 p99=4.4 min=1.6 max=15.2
+GP T wait for fence after Signal returned us n=1995 med=243.9 mean=259.9 p95=355.6 p99=519.3 min=179.9 max=1390.8
+GP T iteration period us n=1994 med=263.2 mean=279.3 p95=374.2 p99=547.5 min=201.6 max=1404.2
+GP SEQ_STEP_DONE 25 T:0:copy:2000
+GP adapter NVIDIA GeForce RTX 4070 dedicated 7843 MiB
+GP T_QUEUE 2 WORK copy
+GP T_FENCE_BASE 0x0 value_after_warmup 0xc8 QPCfreq 10000000
+GP MODE_T_START qpc 2093142576 utc 2026-10-19T15:17:55.2770760Z
+GP MODE_T_END qpc 2100058668 iterations 2000
+GP T total (Execute call start -> fence visible) us n=1995 med=341.5 mean=345.4 p95=479.6 p99=663.0 min=183.1 max=1674.1
+GP T submit-return -> fence visible (the 837-style number) us n=1995 med=312.4 mean=315.4 p95=438.8 p99=581.1 min=169.9 max=1646.5
+GP T ExecuteCommandLists call us n=1995 med=21.4 mean=30.0 p95=71.7 p99=112.0 min=6.8 max=840.6
+GP T Signal call us n=1995 med=4.5 mean=5.9 p95=13.0 p99=27.6 min=1.6 max=692.6
+GP T wait for fence after Signal returned us n=1995 med=306.5 mean=309.5 p95=432.1 p99=567.4 min=0.8 max=1641.9
+GP T iteration period us n=1994 med=341.5 mean=345.5 p95=479.7 p99=663.1 min=183.1 max=1674.1
+GP SEQ_STEP_DONE 26 T:2:copy:2000
+GP adapter NVIDIA GeForce RTX 4070 dedicated 7843 MiB
+GP T_QUEUE 3 WORK copy
+GP T_FENCE_BASE 0x0 value_after_warmup 0xc8 QPCfreq 10000000
+GP MODE_T_START qpc 2144215276 utc 2026-10-19T15:18:00.3834685Z
+GP MODE_T_END qpc 2148084312 iterations 2000
+GP T total (Execute call start -> fence visible) us n=1995 med=191.7 mean=193.3 p95=213.2 p99=237.1 min=130.6 max=1080.7
+GP T submit-return -> fence visible (the 837-style number) us n=1995 med=185.5 mean=186.4 p95=201.9 p99=225.8 min=124.1 max=1072.6
+GP T ExecuteCommandLists call us n=1995 med=5.4 mean=6.9 p95=14.8 p99=24.9 min=3.5 max=45.7
+GP T Signal call us n=1995 med=1.9 mean=2.3 p95=4.0 p99=5.2 min=1.7 max=32.3
+GP T wait for fence after Signal returned us n=1995 med=183.3 mean=184.1 p95=199.3 p99=222.9 min=120.6 max=1070.3
+GP T iteration period us n=1994 med=191.8 mean=193.3 p95=213.2 p99=237.1 min=130.6 max=1080.7
+GP SEQ_STEP_DONE 27 T:3:copy:2000
+GP adapter NVIDIA GeForce RTX 4070 dedicated 7843 MiB
+GP T_QUEUE 0 WORK copy
+GP T_FENCE_BASE 0x0 value_after_warmup 0xc8 QPCfreq 10000000
+GP MODE_T_START qpc 2191240703 utc 2026-10-19T15:18:05.0868000Z
+GP MODE_T_END qpc 2197213240 iterations 2000
+GP T total (Execute call start -> fence visible) us n=1995 med=271.6 mean=295.4 p95=412.0 p99=715.2 min=194.2 max=2661.4
+GP T submit-return -> fence visible (the 837-style number) us n=1995 med=251.9 mean=277.0 p95=391.6 p99=703.9 min=173.0 max=2630.5
+GP T ExecuteCommandLists call us n=1995 med=14.7 mean=18.5 p95=32.2 p99=40.7 min=9.3 max=118.3
+GP T Signal call us n=1995 med=2.2 mean=2.5 p95=4.1 p99=5.0 min=1.6 max=10.5
+GP T wait for fence after Signal returned us n=1995 med=249.6 mean=274.5 p95=389.2 p99=702.2 min=170.2 max=2626.3
+GP T iteration period us n=1994 med=271.6 mean=295.5 p95=412.1 p99=715.2 min=194.2 max=2661.5
+GP SEQ_STEP_DONE 28 T:0:copy:2000
+GP adapter NVIDIA GeForce RTX 4070 dedicated 7843 MiB
+GP T_QUEUE 2 WORK copy
+GP T_FENCE_BASE 0x0 value_after_warmup 0xc8 QPCfreq 10000000
+GP MODE_T_START qpc 2242011979 utc 2026-10-19T15:18:10.1649693Z
+GP MODE_T_END qpc 2246826265 iterations 2000
+GP T total (Execute call start -> fence visible) us n=1995 med=232.5 mean=240.6 p95=309.4 p99=426.6 min=158.6 max=636.7
+GP T submit-return -> fence visible (the 837-style number) us n=1995 med=219.2 mean=227.8 p95=292.6 p99=410.1 min=148.1 max=618.3
+GP T ExecuteCommandLists call us n=1995 med=9.3 mean=12.8 p95=21.9 p99=34.2 min=6.6 max=158.6
+GP T Signal call us n=1995 med=2.1 mean=2.3 p95=3.4 p99=4.2 min=1.6 max=10.1
+GP T wait for fence after Signal returned us n=1995 med=216.9 mean=225.5 p95=290.1 p99=408.3 min=144.7 max=615.5
+GP T iteration period us n=1994 med=232.6 mean=240.6 p95=309.5 p99=426.7 min=158.7 max=636.7
+GP SEQ_STEP_DONE 29 T:2:copy:2000
+GP adapter NVIDIA GeForce RTX 4070 dedicated 7843 MiB
+GP T_QUEUE 3 WORK copy
+GP T_FENCE_BASE 0x0 value_after_warmup 0xc8 QPCfreq 10000000
+GP MODE_T_START qpc 2290982989 utc 2026-10-19T15:18:15.0618732Z
+GP MODE_T_END qpc 2294902031 iterations 2000
+GP T total (Execute call start -> fence visible) us n=1995 med=193.9 mean=195.7 p95=219.4 p99=261.3 min=129.1 max=347.9
+GP T submit-return -> fence visible (the 837-style number) us n=1995 med=186.6 mean=187.8 p95=209.6 p99=250.8 min=123.2 max=328.5
+GP T ExecuteCommandLists call us n=1995 med=6.1 mean=8.0 p95=15.2 p99=24.8 min=3.6 max=34.6
+GP T Signal call us n=1995 med=2.0 mean=2.6 p95=4.1 p99=5.1 min=1.7 max=103.7
+GP T wait for fence after Signal returned us n=1995 med=184.0 mean=185.2 p95=206.9 p99=246.9 min=97.3 max=326.3
+GP T iteration period us n=1994 med=193.9 mean=195.7 p95=219.4 p99=261.4 min=129.2 max=347.9
+GP SEQ_STEP_DONE 30 T:3:copy:2000
+GP iteration period SEQ_END

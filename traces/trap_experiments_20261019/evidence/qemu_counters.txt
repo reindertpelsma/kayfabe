@@ -1,0 +1,38 @@
+== 4100
+irq[writes=6468017 raised=1235225 held=4802 oor=0]
+resets=1
+== 4101
+trapexp[delay_intr_us=0 delay_db_us=0 intr_delayed=0 db_delayed=0 spin=1 polls=10178789376 stored=67510710 lost=2225 trigger_raises=2 worker_raises=284 oor=0 mask=[0:0x3f,2:0x101,4:0xc10007a]
+irq[writes=0 raised=0 held=0 oor=0]
+resets=3
+== 4102
+trapexp[delay_intr_us=20 delay_db_us=0 intr_delayed=5290014 db_delayed=0 spin=0 polls=0 stored=0 lost=0 trigger_raises=0 worker_raises=0 oor=0]
+irq[writes=5290014 raised=1262718 held=1742 oor=0]
+resets=1
+== 4103
+trapexp[delay_intr_us=0 delay_db_us=20 intr_delayed=0 db_delayed=319486 spin=0 polls=0 stored=0 lost=0 trigger_raises=0 worker_raises=0 oor=0]
+irq[writes=3525142 raised=700383 held=1842 oor=0]
+resets=1
+== 4104
+trapexp[delay_intr_us=10 delay_db_us=0 intr_delayed=5668485 db_delayed=0 spin=0 polls=0 stored=0 lost=0 trigger_raises=0 worker_raises=0 oor=0]
+irq[writes=5668485 raised=1262139 held=1826 oor=0]
+resets=1
+== 4105
+trapexp[delay_intr_us=0 delay_db_us=10 intr_delayed=0 db_delayed=654021 spin=0 polls=0 stored=0 lost=0 trigger_raises=0 worker_raises=0 oor=0]
+irq[writes=6430999 raised=1250732 held=3939 oor=0]
+resets=1
+== 4106
+irq[writes=6422855 raised=1243339 held=4406 oor=0]
+resets=1
+== 4107
+trapexp[delay_intr_us=0 delay_db_us=0 intr_delayed=0 db_delayed=0 spin=1 model=1 model_writes=10929 polls=5662965760 stored=11322 lost=374 trigger_raises=0 worker_raises=0 oor=0]
+irq[writes=0 raised=4 held=177 oor=0]
+resets=1
+== 4108
+trapexp[delay_intr_us=100 delay_db_us=0 intr_delayed=3665851 db_delayed=0 spin=0 polls=0 stored=0 lost=0 trigger_raises=0 worker_raises=0 oor=0]
+irq[writes=3665851 raised=1173629 held=4064 oor=0]
+resets=1
+== 4109
+trapexp[delay_intr_us=0 delay_db_us=0 intr_delayed=0 db_delayed=0 spin=1 model=1 model_writes=36058 polls=4881121280 stored=58864 lost=83 trigger_raises=2 worker_raises=0 oor=0]
+irq[writes=0 raised=2294 held=2343 oor=0]
+resets=1

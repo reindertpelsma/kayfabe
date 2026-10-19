@@ -15,6 +15,7 @@ for a, r in rows.items():
     s = r.get('sn_scores') or []
     fl = ' '.join(x for x in r['flags'].split() if x.startswith('KF3_DIAG')) or '-'
     p = r.get('probe_median_us') or {}
+    if p and None in p.values(): p = {}
     h = (r.get('health1') or '').replace('HEALTH ', '')
     hh = ' '.join(x for x in h.split() if x.startswith(('tdr', 'gpu', 'app')))
     print('| %s | %s | %s | %d | %s | %s | %s (%s) | %s | %s | %s |' % (
@@ -27,7 +28,7 @@ def slope(xs, ys):
     n = len(xs); mx = sum(xs) / n; my = sum(ys) / n
     den = sum((x - mx) ** 2 for x in xs)
     return sum((x - mx) * (y - my) for x, y in zip(xs, ys)) / den if den else None
-for name, arms in (('interrupt-tree delay', [('control1', 0), ('intr10', 10), ('intr20', 20)]), ('doorbell delay', [('control1', 0), ('db10', 10), ('db20', 20), ('db20b', 20)])):
+for name, arms in (('interrupt-tree delay', [('control1', 0), ('intr10', 10), ('intr20', 20), ('intr100', 100)]), ('doorbell delay', [('control1', 0), ('db10', 10), ('db20', 20), ('db20b', 20)])):
     pts = [(x, rows[a]) for a, x in arms if a in rows and rows[a].get('sn_scores')]
     if len(pts) >= 2:
         xs = [x for x, _ in pts]
