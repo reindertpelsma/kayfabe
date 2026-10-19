@@ -48,3 +48,19 @@ Entries below will record every created ID and actual/conservative cost.
   CPUs/63GBRAM; actual health/die not yet verified. PreviousownID absence verified
   first. Owner explicitly directed anyBlackwell when GB206 unavailable. Only this
   own ID active, harddeadline23:48:41UTC, cleanup reserve23:43UTC.
+
+- DESTROYED56788212; API absence verified2026-10-19T23:41:48.173963Z,
+  elapsed2.885458h (<3h), observed0.783333USD/h, runtime estimate2.260276USD.
+  Auto-destroyPID144987 cancelled only after absence. All cited Linux/Windows
+  evidence was exported and pushed first. Final host health was good; no QEMU
+  or forensic NBD remained before destruction. All three own IDs API-absent.
+  No next lease has been created at this closeout.
+
+- Closeout invoices, observed2026-10-19:56765201=0.017USD,
+  56766467=1.391USD,56788212=2.190USD; total **3.598USD invoiced so far**.
+  This is not asserted final settlement. Combined runtime estimate3.683126USD;
+  conservative budget guard6.683126USD includes three1USD delayed-billing
+  reserves and is not actual spend. Last shared-account credit observation
+  39.961149USD is not exclusive attribution. Cap25USD, stop renting/report20USD.
+  Sanitized own-id-only receipt:
+  `../sweep_integrate_20261018/phase2_cost_closeout_20261020.json`.

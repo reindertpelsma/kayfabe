@@ -1,6 +1,11 @@
 # Sweep matrix on candidate-5 integration
 
-STATUS: LIVE, 2026-10-19. AD102595 raw is FAIL29/30 (R19); native gates/raw/CUDA pass. Windows580 and Linux580 CUDA pass; Windows581 fails Code43. No family is complete.
+STATUS: LIVE, 2026-10-20. The AD102 and GB202 leases are closed and API-absent. GB202 Linux580/595 raw30, CUDA4 and headless graphics pass; desktop fails and Windows initialization is unverified. AD102595 raw is FAIL29/30 (R19); Windows580 passes and Windows581 fails Code43. No family is complete.
+
+Blackwell closeout, falsifier results and remaining questions:
+`phase2_blackwell_56788212/FINAL.md`. All three own instance IDs were verified
+absent after the last box was destroyed at 2026-10-19 23:41:48 UTC. Own invoiced
+charges so far: 3.598 USD, not asserted final settlement; cap 25 / stop renting 20.
 
 MEASURED Phase1 accepted:14release crates3338/0/21,49mutants>=2kills,
 no C4/C5test removed. Candidate5 f8f9d1a5f is an ancestor. Runtime product is
@@ -54,9 +59,10 @@ does not upgrade its claims or substitute that summary for a new bench run.
 ## Windows P19 flags
 
 CODE READ of historical receipts: every historical P19 result above required
-the following exact set. Current AD102 Windows results use this set; GB202 preparation is active. No
+the following exact set. Current AD102 and both GB202 Windows arms use this set. No
 result is described as flagless. Future receipts must assert the actual process
-environment, build, ABI and source. Display/GOP on, VGA none.
+environment, build, ABI and source. Display/GOP on, VGA none, except the measured
+GB202 OFF arm: display off, GOP off, empty GOP ROM, directly verified by QOM.
 
 ```text
 KF3_WIN_USER_CHANNELS_PASSTHROUGH=1

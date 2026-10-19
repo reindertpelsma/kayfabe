@@ -22,7 +22,10 @@ Early99call Ada alignment (94matched/5GB202-only) remains explicitly an
 early snapshot; it cannot locate the final failure. Full final alignment and
 public reply comparison are separate. Fullsuite/hold UNRUN. OptionalCE95e23df77
 unmerged/UNRUN because no actualTDR was established.
-OFF sibling refused22:32:06 before VM initialization: helper includes signed
+Resolved OFF configuration: the valid empty-ROM OFF arm completed later; see
+../b1_off/README.md. Existing section2 authorization covered it, so the extra
+approval question was unnecessary. No guard or protected code was changed.
+The original OFF sibling refused22:32:06 before VM initialization: helper includes signed
 gop-efi but requests gop=off. Exact guard STOP reported; coordinator asked
 whether to omit the ROM for authorized OFF profile. No guard bypass.
 Only APImetadata/publicscalarprojections exported; opaqueWindowsbodylog staysrental.
