@@ -1,0 +1,18 @@
+[
+  {
+    "mutant": "missing_vsync_override",
+    "kills": 2,
+    "failed_tests": [
+      "FAILED scripts/bench/perf_parity_20261019/tests/test_heaven_preset.py::test_requested_vsync_is_explicit_in_the_heaven_command",
+      "FAILED scripts/bench/perf_parity_20261019/tests/test_heaven_preset.py::test_an_inherited_vsync_off_config_cannot_change_the_requested_preset"
+    ]
+  },
+  {
+    "mutant": "vsync_off",
+    "kills": 2,
+    "failed_tests": [
+      "FAILED scripts/bench/perf_parity_20261019/tests/test_heaven_preset.py::test_requested_vsync_is_explicit_in_the_heaven_command",
+      "FAILED scripts/bench/perf_parity_20261019/tests/test_heaven_preset.py::test_an_inherited_vsync_off_config_cannot_change_the_requested_preset"
+    ]
+  }
+]

@@ -7,7 +7,7 @@ $r='C:\kf\P1'; $state="$r\${Tag}_heaven.json"
 $exe='C:\kf\apps\heaven\bin\Heaven.exe'; $lg="$env:USERPROFILE\Heaven\log.html"
 if ($Action -eq 'launch') {
   if (Get-Process Heaven -ErrorAction SilentlyContinue) { throw 'Existing Heaven process: no process signalled' }
-  $args2='-project_name Heaven -data_path ../ -engine_config ../data/heaven_4.0.cfg -system_script heaven/unigine.cpp -sound_app null -video_app direct3d11 -video_multisample 0 -video_fullscreen 1 -video_mode -1 -video_width 1920 -video_height 1080 -extern_define RELEASE,QUALITY_ULTRA'
+  $args2='-project_name Heaven -data_path ../ -engine_config ../data/heaven_4.0.cfg -system_script heaven/unigine.cpp -sound_app null -video_app direct3d11 -video_multisample 0 -video_vsync 1 -video_fullscreen 1 -video_mode -1 -video_width 1920 -video_height 1080 -extern_define RELEASE,QUALITY_ULTRA'
   $p=Start-Process $exe -ArgumentList $args2 -WorkingDirectory (Split-Path $exe) -PassThru
   $s=@{pid=$p.Id;start=$p.StartTime.ToUniversalTime().ToString('o');args=$args2;log=$lg}
   $s | ConvertTo-Json | Set-Content $state
