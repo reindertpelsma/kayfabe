@@ -55,18 +55,21 @@ static __inline int kfwc_reg_read(const kfwc_platform *p, kfwc_u32 off, kfwc_u32
 }
 
 /* One fixed page, never a caller-selected physical range. Reject an undersized output,
- * unreadable register or empty page. The driver copies no partial snapshot on failure. */
+ * unreadable register or empty/all-ones page. An individual all-ones capability word
+ * can be a valid mask; use the page rule of tools/read_display_caps_page.py instead of
+ * the scalar mailbox reader's all-ones rule. No partial snapshot is copied on failure. */
 static __inline int kfwc_display_caps_read(const kfwc_platform *p, kfwc_u32 *words, kfwc_u32 capacity)
 {
-    kfwc_u32 i, nonzero = 0;
-    if (!p || !words || capacity < KFWC_DISPLAY_CAPS_WORDS)
+    kfwc_u32 i, nonzero = 0, not_all_ones = 0;
+    if (!p || !p->read_reg32 || !words || capacity < KFWC_DISPLAY_CAPS_WORDS)
         return 1;
     for (i = 0; i < KFWC_DISPLAY_CAPS_WORDS; i++) {
-        if (kfwc_reg_read(p, KFWC_DISPLAY_CAPS_BASE + i * 4u, &words[i]))
+        if (p->read_reg32(p->ctx, KFWC_DISPLAY_CAPS_BASE + i * 4u, &words[i]))
             return 1;
         nonzero |= words[i];
+        not_all_ones |= ~words[i];
     }
-    return nonzero == 0;
+    return nonzero == 0 || not_all_ones == 0;
 }
 
 #endif /* KFWC_PLATFORM_H */
