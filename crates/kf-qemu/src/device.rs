@@ -2523,8 +2523,9 @@ impl Device {
         let mut beat = (std::time::Instant::now(), String::new());
         // ★ The GSP heartbeats (`kf_chip::Family::gsp_heartbeat_mailboxes`): a 595.84+ guest reads
         // them after every RPC poll. Stored on this thread (never a vCPU) every 0.5 s — well inside
-        // the guest's 1.3 × default-timeout window — in ms of the host GPU clock the guest itself
-        // reads through the aliased usermode page.
+        // the guest's 1.3 × default-timeout window — in ms of the validated timer page guest RM
+        // itself reads. Guest RM applies its system-timer offset; the host usermode clock can
+        // already contain that offset and must not be substituted here.
         let heartbeat = self.plane.family.gsp_heartbeat_mailboxes();
         let mut hb_at = std::time::Instant::now() - std::time::Duration::from_secs(1);
         let mut prof_beat = std::time::Instant::now();
