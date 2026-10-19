@@ -82,7 +82,7 @@ for i in $(seq 1 60); do fuser /var/lib/dpkg/lock-frontend >/dev/null 2>&1 || br
 apt-get update -qq >/dev/null 2>&1
 apt-get install -y -qq ninja-build meson python3-venv python3-pip python3-tomli \
   libglib2.0-dev libpixman-1-dev flex bison qemu-utils cloud-image-utils genisoimage \
-  qemu-system-x86 ovmf musl-tools libslirp-dev >/dev/null 2>&1
+  qemu-system-x86 ovmf musl-tools libslirp-dev libzstd-dev iptables >/dev/null 2>&1
 say "apt rc=$?  (ninja=$(command -v ninja||echo NO) meson=$(command -v meson||echo NO) cloud-localds=$(command -v cloud-localds||echo NO))"
 
 # ---- 2. downloads, in parallel ----------------------------------------------------------
