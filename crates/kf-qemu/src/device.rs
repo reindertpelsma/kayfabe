@@ -300,6 +300,9 @@ pub struct Device {
     /// ★ MEASUREMENT ONLY (`diag-trap-exp`): the experiment counters.
     #[cfg(feature = "diag-trap-exp")]
     pub exp: crate::trapexp::Counters,
+    /// ★ MEASUREMENT ONLY: variant B's published words and pending ages.
+    #[cfg(feature = "diag-trap-exp")]
+    exp_b: Mutex<crate::trapexp::SpinB>,
     pub(crate) stop: AtomicBool,
     /// ★ Display step 3c: display ids whose monitor changed and whose hotplug the register drainer
     /// still owes the guest (set by the display worker, taken by the drainer).
@@ -1230,6 +1233,8 @@ impl Device {
             exp_cfg: crate::trapexp::Cfg::from_env(),
             #[cfg(feature = "diag-trap-exp")]
             exp: crate::trapexp::Counters::default(),
+            #[cfg(feature = "diag-trap-exp")]
+            exp_b: Mutex::new(crate::trapexp::SpinB::default()),
             drainer_efd,
             stop: AtomicBool::new(false),
             hotplug_pending: AtomicU32::new(0),
@@ -1871,6 +1876,29 @@ impl Device {
         // ★ MEASUREMENT ONLY: with the interrupt page spun, the model never sees the guest's
         // enables, so every completion edge raises the irqfd unconditionally.
         #[cfg(feature = "diag-trap-exp")]
+        if self.exp_cfg.spin && self.exp_cfg.model {
+            // Variant B: the model holds the truth; publish it (compare-and-swap) BEFORE the raise.
+            let raise = self.intr.latch(vector);
+            if let (Ok(mut g), Some((p, 0))) = (
+                self.exp_b.lock(),
+                self.piece_for(kf_trap::trapexp::INTR_PAGE),
+            ) {
+                g.ages.touch(vector, crate::prof::now_ns());
+                let mem = p.mem;
+                crate::trapexp::model_publish_all(
+                    &self.intr,
+                    self.intr_leaves(),
+                    &mut g,
+                    &mut |off, old, new| mem.cas_u32(off, old, new),
+                );
+            }
+            if raise == kf_trap::cpuintr::Raise::None {
+                self.irq_counts.held.fetch_add(1, Ordering::Relaxed);
+            }
+            self.deliver(raise);
+            return;
+        }
+        #[cfg(feature = "diag-trap-exp")]
         if self.exp_cfg.spin {
             let raise = self.intr.latch_forward(vector);
             let c = if raise == kf_trap::cpuintr::Raise::Message {
@@ -1928,6 +1956,12 @@ impl Device {
         Some(p)
     }
 
+    /// ★ MEASUREMENT ONLY (`diag-trap-exp`): this family's leaf count.
+    #[cfg(feature = "diag-trap-exp")]
+    fn intr_leaves(&self) -> usize {
+        kf_trap::cpuintr::leaf_regs_for(self.family)
+    }
+
     /// ★ MEASUREMENT ONLY (`diag-trap-exp`): the interrupt-page spinner. ONE thread, optionally
     /// pinned, spinning on the page the guest writes without an exit. Its only output is the irqfd
     /// (`irq_lines[0]`). ⊘ Deliberately breaks "no polling": an experiment, not a design.
@@ -1954,6 +1988,60 @@ impl Device {
             }
             std::thread::sleep(std::time::Duration::from_millis(10));
         };
+        if self.exp_cfg.model {
+            eprintln!(
+                "kf3: trapexp spinner (variant B, model-driven, hold {} us) running on the interrupt page ({:?})",
+                self.exp_cfg.hold_us, self.family
+            );
+            let hold = u64::from(self.exp_cfg.hold_us) * 1000;
+            let n = self.intr_leaves();
+            let mut last = std::time::Instant::now();
+            let mut k: u64 = 0;
+            let o = Ordering::Relaxed;
+            loop {
+                let r = if let Ok(mut g) = self.exp_b.lock() {
+                    crate::trapexp::model_poll(
+                        &self.intr,
+                        n,
+                        &mut g,
+                        &mut |off| region.load_u32_volatile(off).unwrap_or(0),
+                        &mut |off, old, new| region.cas_u32(off, old, new),
+                        crate::prof::now_ns(),
+                        hold,
+                    )
+                } else {
+                    break;
+                };
+                if r.writes != 0 {
+                    self.exp.model_writes.fetch_add(u64::from(r.writes), o);
+                }
+                if r.stored != 0 {
+                    self.exp.stored.fetch_add(u64::from(r.stored), o);
+                }
+                if r.lost != 0 {
+                    self.exp.lost.fetch_add(u64::from(r.lost), o);
+                }
+                for _ in 0..r.raises {
+                    let _ = self.irq_lines[0].signal();
+                    self.irq_counts.raised.fetch_add(1, o);
+                    self.exp.trigger_raises.fetch_add(1, o);
+                }
+                k += 1;
+                if k & 0xFFFF == 0 {
+                    self.exp.polls.fetch_add(0x1_0000, o);
+                    if self.stop.load(Ordering::Acquire) {
+                        break;
+                    }
+                    if last.elapsed() >= std::time::Duration::from_secs(5) {
+                        last = std::time::Instant::now();
+                        eprintln!("kf3: trapexp{}", self.exp.status(&self.exp_cfg, None).trim_start());
+                    }
+                }
+                core::hint::spin_loop();
+            }
+            eprintln!("kf3: trapexp at stop:{}", self.exp.status(&self.exp_cfg, None));
+            return;
+        }
         let mut st = kf_trap::trapexp::SpinState::new(self.family);
         eprintln!("kf3: trapexp spinner running on the interrupt page ({:?})", self.family);
         let mut last = std::time::Instant::now();

@@ -121,6 +121,88 @@ impl Regs {
     }
 }
 
+impl Regs {
+    /// The word at page offset `off` (4-aligned, one of the owned registers of an `n_leaf` family).
+    #[must_use]
+    pub fn get(&self, off: usize, n_leaf: usize) -> Option<u32> {
+        let n = n_leaf.min(MAX_LEAF);
+        let idx = |base: u64| -> Option<usize> {
+            let r = off.checked_sub((base - REL) as usize)?;
+            (r % 4 == 0 && r / 4 < n).then_some(r / 4)
+        };
+        if let Some(i) = idx(LEAF_OFF) {
+            return Some(self.leaf[i]);
+        }
+        if let Some(i) = idx(LEAF_EN_SET_OFF) {
+            return Some(self.en_set[i]);
+        }
+        if let Some(i) = idx(LEAF_EN_CLEAR_OFF) {
+            return Some(self.en_clear[i]);
+        }
+        match off as u64 + REL {
+            TOP_OFF => Some(self.top),
+            TOP_EN_SET_OFF => Some(self.top_en_set),
+            TOP_EN_CLEAR_OFF => Some(self.top_en_clear),
+            LEAF_TRIGGER_OFF => Some(self.trigger),
+            _ => None,
+        }
+    }
+
+    /// Set the word at page offset `off`; `false` when `off` is not an owned register.
+    pub fn set(&mut self, off: usize, n_leaf: usize, v: u32) -> bool {
+        if self.get(off, n_leaf).is_none() {
+            return false;
+        }
+        let n = n_leaf.min(MAX_LEAF);
+        let idx = |base: u64| -> Option<usize> {
+            let r = off.checked_sub((base - REL) as usize)?;
+            (r % 4 == 0 && r / 4 < n).then_some(r / 4)
+        };
+        if let Some(i) = idx(LEAF_OFF) {
+            self.leaf[i] = v;
+        } else if let Some(i) = idx(LEAF_EN_SET_OFF) {
+            self.en_set[i] = v;
+        } else if let Some(i) = idx(LEAF_EN_CLEAR_OFF) {
+            self.en_clear[i] = v;
+        } else {
+            match off as u64 + REL {
+                TOP_OFF => self.top = v,
+                TOP_EN_SET_OFF => self.top_en_set = v,
+                TOP_EN_CLEAR_OFF => self.top_en_clear = v,
+                _ => self.trigger = v,
+            }
+        }
+        true
+    }
+}
+
+/// Variant B ("model-driven spinner"): the guest writes it made since the page was last published, as
+/// `(page offset, value)`, in the order a trap would have applied them: enables, then leaf acks, then
+/// the trigger. TOP is read-only and never a write.
+#[must_use]
+pub fn observed_writes(n_leaf: usize, last: &Regs, cur: &Regs) -> Vec<(usize, u32)> {
+    let mut v: Vec<(u8, usize, u32)> = Vec::new();
+    last.changes(cur, n_leaf, |off, _old, new| {
+        let rel = off as u64 + REL;
+        let class = if (LEAF_EN_SET_OFF..LEAF_EN_SET_OFF + 0x200).contains(&rel)
+            || (LEAF_EN_CLEAR_OFF..LEAF_EN_CLEAR_OFF + 0x200).contains(&rel)
+            || rel == TOP_EN_SET_OFF
+            || rel == TOP_EN_CLEAR_OFF
+        {
+            0
+        } else if (LEAF_OFF..LEAF_OFF + 0x200).contains(&rel) {
+            1
+        } else if rel == LEAF_TRIGGER_OFF {
+            2
+        } else {
+            return; // TOP: read-only
+        };
+        v.push((class, off, new));
+    });
+    v.sort_by_key(|&(c, o, _)| (c, o));
+    v.into_iter().map(|(_, o, n)| (o, n)).collect()
+}
+
 /// `TOP(0)` derived from the leaves: subtree `s` pends iff leaf `2s` or `2s+1` is nonzero.
 #[must_use]
 pub fn derive_top(leaf: &[u32], n_leaf: usize) -> u32 {
@@ -675,5 +757,110 @@ mod tests {
             }
             assert_eq!(t.snapshot(), snap, "{f:?}: the model is untouched");
         }
+    }
+
+    #[test]
+    fn get_and_set_address_every_owned_word_and_nothing_else() {
+        let mut r = Regs::default();
+        for (off, n) in [(0x000usize, 8usize), (0x01C, 8), (0x200, 8), (0x21C, 8), (0x400, 8), (0x41C, 8), (0x600, 8), (0x608, 8), (0x610, 8), (0x640, 8), (0x03C, 16), (0x43C, 16)] {
+            assert!(r.set(off, n, off as u32 + 1), "{off:#x}");
+            assert_eq!(r.get(off, n), Some(off as u32 + 1), "{off:#x}");
+        }
+        assert_eq!(r.leaf[0], 1);
+        assert_eq!(r.leaf[7], 0x1D);
+        assert_eq!(r.en_set[0], 0x201);
+        assert_eq!(r.en_clear[7], 0x41D);
+        assert_eq!(r.top, 0x601);
+        assert_eq!(r.trigger, 0x641);
+        for off in [0x020usize, 0x03C, 0x220, 0x420, 0x604, 0x60C, 0x644, 0x800, 0xFFC, 0x002] {
+            let n = if off == 0x03C { 8 } else { 8 };
+            assert_eq!(r.get(off, n), None, "{off:#x} is not owned on an 8-leaf family");
+            assert!(!r.set(off, n, 7), "{off:#x}");
+        }
+        assert_eq!(r.get(0x03C, 16), Some(0x3D), "owned on a 16-leaf family");
+    }
+
+    #[test]
+    fn observed_writes_are_enables_then_acks_then_the_trigger_and_never_top() {
+        let last = Regs::default();
+        let mut cur = Regs::default();
+        cur.trigger = 129;
+        cur.leaf[4] = 2;
+        cur.top = 0xFF; // a guest store to a read-only word is not a write
+        cur.top_en_set = 4;
+        cur.en_set[4] = 2;
+        cur.en_clear[1] = 1;
+        let w = observed_writes(8, &last, &cur);
+        assert_eq!(
+            w,
+            vec![(0x210, 2), (0x404, 1), (0x608, 4), (0x010, 2), (0x640, 129)],
+            "en_set, en_clear, top_en_set; leaf; trigger"
+        );
+        assert!(observed_writes(8, &cur, &cur).is_empty());
+    }
+
+    #[test]
+    fn observed_writes_see_only_the_family_leaves() {
+        let last = Regs::default();
+        let mut cur = Regs::default();
+        cur.leaf[9] = 1;
+        assert!(observed_writes(8, &last, &cur).is_empty());
+        assert_eq!(observed_writes(16, &last, &cur), vec![(0x024, 1)]);
+    }
+    #[test]
+    fn observed_writes_put_enables_before_acks() {
+        let mut cur = Regs::default();
+        cur.leaf[0] = 1;
+        cur.en_set[7] = 1;
+        let w = observed_writes(8, &Regs::default(), &cur);
+        assert_eq!(w, vec![(0x21C, 1), (0x000, 1)]);
+    }
+
+    #[test]
+    fn observed_writes_put_acks_before_the_trigger() {
+        let mut cur = Regs::default();
+        cur.trigger = 3;
+        cur.leaf[7] = 1;
+        let w = observed_writes(8, &Regs::default(), &cur);
+        assert_eq!(w, vec![(0x01C, 1), (0x640, 3)]);
+    }
+
+    #[test]
+    fn a_store_to_the_read_only_top_word_is_not_a_write() {
+        let mut cur = Regs::default();
+        cur.top = 7;
+        assert!(observed_writes(8, &Regs::default(), &cur).is_empty());
+        assert_eq!(observed_writes(16, &Regs::default(), &cur).len(), 0);
+    }
+
+    #[test]
+    fn get_reads_the_three_top_words_and_the_trigger() {
+        let mut r = Regs::default();
+        r.top = 1;
+        r.top_en_set = 2;
+        r.top_en_clear = 3;
+        r.trigger = 4;
+        assert_eq!(
+            [r.get(0x600, 8), r.get(0x608, 8), r.get(0x610, 8), r.get(0x640, 8)],
+            [Some(1), Some(2), Some(3), Some(4)]
+        );
+    }
+
+    #[test]
+    fn set_refuses_a_word_that_is_not_owned_and_changes_nothing() {
+        let mut r = Regs::default();
+        assert!(!r.set(0x800, 8, 5));
+        assert!(!r.set(0x024, 8, 5), "leaf 9 on an 8-leaf family");
+        assert_eq!(r, Regs::default());
+    }
+
+    #[test]
+    fn get_is_bounded_by_the_family_leaf_count_for_every_array() {
+        let mut r = Regs::default();
+        r.leaf[8] = 1;
+        r.en_set[8] = 2;
+        r.en_clear[8] = 3;
+        assert_eq!([r.get(0x020, 8), r.get(0x220, 8), r.get(0x420, 8)], [None, None, None]);
+        assert_eq!([r.get(0x020, 16), r.get(0x220, 16), r.get(0x420, 16)], [Some(1), Some(2), Some(3)]);
     }
 }
