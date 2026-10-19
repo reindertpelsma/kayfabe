@@ -37,3 +37,12 @@ H_CLOCK_VIEWS (INFERRED, beforeprobe): mappedPTIMERandVF_TIMEreadbytheguest
 maydiffer. Existingkf-timer-probecomparesthem3timeswithoutGPUwork, UID65534
 andnocaps. Falsifier: viewsagreewithinexisting10msboundineveryround.
 ProbeplannedafterCUDA580ends; no heartbeat500ms/clock/timeoutchange.
+
+H_CLOCK_VIEWSresult: FALSIFIED for the native sampledviews. Existingprobe
+ranUID65534/allcaps0/NoNewPrivs1, source24906bf33,3open/read/drop rounds.
+PTIMERvsVFdelta5696/5696/5728ns, wellbelowexisting10msbound. NoGPUwork/VM.
+Thisdoesnotproveguestepoch/lifecyclebehaviorcorrect; no clocksourcefixmade.
+CUP3warningsare two shortbursts:144records/81.426ms at100.921698..101.003124
+and160records/61.867ms at106.612890..106.674757, gap5.609766s. ItisNOTone
+continuous5.75s storm. RawHB5472then5345; epochtransition/stalepublishedvalue
+is an INFERRED nextlead, not proved or patched.500ms period unchanged.
