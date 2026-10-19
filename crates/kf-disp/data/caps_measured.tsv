@@ -1,0 +1,7 @@
+# kf-disp caps MEASURED WORDS — tier 3 (OWNER_RULINGS §AF/§AH): words of the display capabilities page that no
+# class header names and that the Windows display driver needs, one row per (die, word), each with its source.
+# Columns (TAB, hex but branch/source): die_architecture  die_implementation  guest_driver_branch  caps_class  offset  value  source
+# A source must start with `measured:`. A die with no row gets the clean authored page and a notice at
+# realize (kf_disp::capsderive::Derived::unmeasured); never a neighbouring die's row.
+# Produce a row with `tools/read_display_caps_page.py <pci-bdf>` as root on a box that is ours.
+0x190	0x4	580	0xC773	0x00c	0x00000100	measured:AD104 10de:2786,bar0 0x64000c read as root via tools/read_display_caps_page.py on the host driver 595.91.07 (identical to the stock Windows 580.88 bare-metal capture of 2026-10-08),2026-10-15

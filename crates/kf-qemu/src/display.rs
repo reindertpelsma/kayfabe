@@ -33,7 +33,9 @@
 use crate::device::Device;
 use kf_broker::{CursorMode, CursorPoint, CursorWant, FrameCursors, HotTracker, ShownFrame};
 use kf_cuda::display::{ComposeLayer, DisplayGpu, Frame};
-use kf_disp::engine::{Acquire, Composition, Effect, Engine, PbLoc, ScanVocab, Vocab};
+use kf_disp::engine::{
+    Acquire, Aperture, Composition, Effect, Engine, PbLoc, Place, ScanVocab, Vocab,
+};
 use kf_disp::inst::{CtxDma, Layout, Target};
 use kf_disp::lockstep::CreditGate;
 use kf_disp::model::{ChannelKind, Statement, Waker};
@@ -143,135 +145,6 @@ fn color_experiments() -> kf_disp::color::Experiments {
 
 /// `nvkms-evo3.c:1437-1438`'s default `MIN_FRAME_IDLE` (H-armeddefault): leading, trailing lines.
 const MIN_FRAME_IDLE_DEFAULT: (u32, u32) = (2, 1);
-
-/// ⚠⚠ PROBE (default off, 2026-10-09, H-caps; `KF3_DISPLAY_CAPS_PROBE=1`, read once) — never a
-/// shipped behaviour, and a CAPTURED table (the defect v3 exists to end), so it may only ever be a
-/// probe. `[measured, VFIO DVI reference boot3, RTX 4070, 2026-10-08]` (record
-/// `traces/display_reply_diff_20261008/` §0 row P16r) Windows reads the whole caps page
-/// (`NV_PDISP_FE_SW`) at 10.9488 s and 0.12 s later initialises only windows 0/2/4/6 — the windows
-/// whose `PRECOMP_WIN_PIPE_HDR_CAPA` has the scaler and TMO; the odd windows have CSC11 only — while
-/// under kf3 (every window alike) it initialises all eight. 101 of the page's 1024 words differ.
-/// Under the probe kf3 publishes the real GPU's page, for its caps class and page base only.
-fn caps_probe_on() -> bool {
-    static ON: std::sync::OnceLock<bool> = std::sync::OnceLock::new();
-    *ON.get_or_init(|| std::env::var("KF3_DISPLAY_CAPS_PROBE").is_ok_and(|v| v == "1"))
-}
-
-/// The caps class and page base the probe's page was measured with (RTX 4070, 2026-10-08).
-const CAPS_PROBE_AT: (u32, u64) = (0xC773, 0x0064_0000);
-
-/// The real GPU's caps page: every non-zero word, `(byte offset, value)` (VFIO DVI reference boot3,
-/// 8-byte reads 10.948826-10.953350 s; RTX 4070, 2026-10-08).
-const CAPS_PROBE_WORDS: [(u32, u32); 99] = [
-    (0x000, 0x00000f0f),
-    (0x004, 0x000000ff),
-    (0x008, 0x00000432),
-    (0x00c, 0x00000100),
-    (0x010, 0x81f22b20),
-    (0x018, 0x00001822),
-    (0x048, 0x00000a00),
-    (0x058, 0x00000a00),
-    (0x068, 0x00000a00),
-    (0x078, 0x00000a00),
-    (0x0c0, 0x00000010),
-    (0x0d0, 0x00000010),
-    (0x0e0, 0x00000010),
-    (0x0f0, 0x00000010),
-    (0x144, 0x1b000300),
-    (0x14c, 0x1b000300),
-    (0x154, 0x1b000300),
-    (0x15c, 0x1b000300),
-    (0x5e4, 0x00000086),
-    (0x5e8, 0x00000086),
-    (0x5ec, 0x00000086),
-    (0x5f0, 0x00000086),
-    (0x5f4, 0x00000086),
-    (0x5f8, 0x00000086),
-    (0x5fc, 0x00000086),
-    (0x600, 0x00000086),
-    (0x604, 0x00000086),
-    (0x608, 0x003c0051),
-    (0x60c, 0x003c0051),
-    (0x610, 0x003c0051),
-    (0x614, 0x003c0051),
-    (0x618, 0x003c0051),
-    (0x61c, 0x003c0051),
-    (0x620, 0x003c0051),
-    (0x624, 0x003c0051),
-    (0x680, 0x00ff01d0),
-    (0x684, 0x0000d681),
-    (0x688, 0x03580e0e),
-    (0x68c, 0x0a001400),
-    (0x690, 0x00000506),
-    (0x694, 0x00001400),
-    (0x6a0, 0x00ff01d0),
-    (0x6a4, 0x0000d680),
-    (0x6a8, 0x03580e0e),
-    (0x6ac, 0x0a001400),
-    (0x6b0, 0x00000506),
-    (0x6b4, 0x00001400),
-    (0x6c0, 0x00ff01d0),
-    (0x6c4, 0x0000d680),
-    (0x6c8, 0x03580e0e),
-    (0x6cc, 0x0a001400),
-    (0x6d0, 0x00000506),
-    (0x6d4, 0x00001400),
-    (0x6e0, 0x00ff01d0),
-    (0x6e4, 0x0000d680),
-    (0x6e8, 0x03580e0e),
-    (0x6ec, 0x0a001400),
-    (0x6f0, 0x00000506),
-    (0x6f4, 0x00001400),
-    (0x780, 0x01df21d0),
-    (0x784, 0x0000da90),
-    (0x788, 0x000e164e),
-    (0x78c, 0x5075816a),
-    (0x790, 0x000e1a4e),
-    (0x794, 0x0a001400),
-    (0x7a0, 0x010021d0),
-    (0x7a4, 0x0000da90),
-    (0x7b0, 0x000e0000),
-    (0x7b4, 0x0a001400),
-    (0x7c0, 0x01df21d0),
-    (0x7c4, 0x0000da90),
-    (0x7c8, 0x000e164e),
-    (0x7cc, 0x5075816a),
-    (0x7d0, 0x000e1a4e),
-    (0x7d4, 0x0a001400),
-    (0x7e0, 0x010021d0),
-    (0x7e4, 0x0000da90),
-    (0x7f0, 0x000e0000),
-    (0x7f4, 0x0a001400),
-    (0x800, 0x01df21d0),
-    (0x804, 0x0000da90),
-    (0x808, 0x000e164e),
-    (0x80c, 0x5075816a),
-    (0x810, 0x000e1a4e),
-    (0x814, 0x0a001400),
-    (0x820, 0x010021d0),
-    (0x824, 0x0000da90),
-    (0x830, 0x000e0000),
-    (0x834, 0x0a001400),
-    (0x840, 0x01df21d0),
-    (0x844, 0x0000da90),
-    (0x848, 0x000e164e),
-    (0x84c, 0x5075816a),
-    (0x850, 0x000e1a4e),
-    (0x854, 0x0a001400),
-    (0x860, 0x010021d0),
-    (0x864, 0x0000da90),
-    (0x870, 0x000e0000),
-    (0x874, 0x0a001400),
-];
-
-/// H-caps: the measured page (VFIO DVI reference boot3, RTX 4070, 2026-10-08) for the caps class and
-/// page base it was measured with, else `None`.
-fn caps_probe_page(base: u64, caps_class: u32) -> Option<kf_disp::caps::CapsPage> {
-    ((caps_class, base) == CAPS_PROBE_AT).then(|| kf_disp::caps::CapsPage {
-        base,
-        words: CAPS_PROBE_WORDS.to_vec(),
-    })
-}
 
 /// Lines per kind the display write trace prints in a run.
 const DISPLAY_TRACE_CAP_DEFAULT: u32 = 4096;
@@ -2121,6 +1994,7 @@ impl DisplayPlane {
     /// By name — `display=on` never starts on a guessed display.
     pub fn build(
         row: &'static kf_chip::display::DisplayRow,
+        die: kf_disp::capsderive::Die,
         table: &kf_abi::versions::DriverAbiTable,
         bdf: &str,
         store_fd: i32,
@@ -2173,39 +2047,44 @@ impl DisplayPlane {
                 "display=on: SDR processing cannot be combined with constructor-only probes".into(),
             );
         }
-        let caps = if sdr_color {
-            kf_disp::caps::sdr_page(
+        // ★ 2026-10-15 (H01): the page is DERIVED per die (`kf_disp::capsderive`): the authored base page,
+        // the window-layer family rows (T1) and this die's measured words (T3, `data/caps_measured.tsv`).
+        // The captured AD104 page that `KF3_DISPLAY_CAPS_PROBE` served is gone; it is a test oracle.
+        // The constructor-only diagnostics keep their own nested pages.
+        let caps = if constructor_probe {
+            caps_author(t, &regs, row.classes.caps, row.heads, row.windows)
+                .map_err(|e| format!("display=on: caps page: {}", e.0))?
+        } else {
+            let branch = version.split('.').next().unwrap_or("").to_string();
+            let d = kf_disp::capsderive::derive(
                 t,
                 &regs,
-                row.classes.caps,
-                classes.core,
-                row.heads,
-                row.windows,
+                row,
+                die,
+                sdr_color,
+                kf_disp::capsderive::shipped_rows(),
+                kf_disp::capsderive::shipped_measured(),
+                &branch,
+                &kf_disp::capsderive::HostFacts::default(),
             )
-        } else {
-            caps_author(t, &regs, row.classes.caps, row.heads, row.windows)
-        }
-        .map_err(|e| format!("display=on: caps page: {}", e.0))?;
-        // ⚠⚠ PROBE (default off, H-caps): the real GPU's caps page instead of the authored one
-        let caps = if caps_probe_on() {
-            match caps_probe_page(caps.base, row.classes.caps) {
-                Some(p) => {
-                    eprintln!(
-                        "kf3: display: PROBE KF3_DISPLAY_CAPS_PROBE=1 — the caps page is the real GPU's measured page ({} words; H-caps probe, not a shipped behaviour)",
-                        p.words.len()
-                    );
-                    p
-                }
-                None => {
-                    eprintln!(
-                        "kf3: display: PROBE KF3_DISPLAY_CAPS_PROBE=1 REFUSED — caps class {:#x} / page {:#x} is not the measured one; the authored page stays",
-                        row.classes.caps, caps.base
-                    );
-                    caps
-                }
+            .map_err(|e| format!("display=on: caps page: {}", e.0))?;
+            for (off, why) in &d.unmeasured {
+                eprintln!(
+                    "kf3: display: ⚠ NO MEASURED caps word {off:#05x} for die arch {:#x} impl {:#x}, driver branch {branch}: the authored page stays clean and a Windows guest's display may not come up ({why}). Read the die's word with tools/read_display_caps_page.py and add a row to crates/kf-disp/data/caps_measured.tsv (OWNER_RULINGS §AH: a value measured on one die is never served to another)",
+                    die.architecture, die.implementation
+                );
             }
-        } else {
-            caps
+            let tiers = |x: kf_disp::capsderive::Tier| {
+                d.provenance.iter().filter(|p| p.tier == x).count()
+            };
+            eprintln!(
+                "kf3: display: caps page derived — {} words: {} T1 rule, {} T3 measured ({} unmeasured)",
+                d.page.words.len(),
+                tiers(kf_disp::capsderive::Tier::Rule),
+                tiers(kf_disp::capsderive::Tier::Measured),
+                d.unmeasured.len()
+            );
+            d.page
         };
         let layout = Layout::from_regs(&regs)
             .ok_or("display=on: the instance-memory layout is not derived")?;
@@ -2615,6 +2494,42 @@ impl Io<'_> {
             .map_err(|m| format!("context DMA {handle:#x} on channel {chn}: {m:?}"))
     }
 
+    /// ★ A notifier's or semaphore's memory as a bounded context DMA plus an offset. A context-DMA place is
+    /// the guest's bound object (resolved through instance memory, as ever). A surface address (Blackwell's
+    /// classes have no context DMAs) is bounded to `len` bytes at the address the method stated, in guest
+    /// system memory or the framebuffer store — both of which refuse an access outside them by name; the
+    /// IOVA aperture belongs to an SoC display's IOMMU and a discrete GPU's display has none.
+    fn at(&mut self, client: u32, chn: u32, p: Place, len: u64) -> Result<(CtxDma, u64), String> {
+        match p {
+            Place::CtxDma { handle, offset } => Ok((self.resolve(client, handle, chn)?, offset)),
+            Place::Addr { aperture, addr } => {
+                let target = match aperture {
+                    Aperture::Vidmem => Target::Vidmem,
+                    Aperture::Sysmem => Target::Sysmem,
+                    Aperture::Iova => {
+                        return Err(format!(
+                            "surface address {addr:#x} on channel {chn}: TARGET_IOVA (no display IOMMU on a discrete GPU)"
+                        ));
+                    }
+                };
+                let limit = len
+                    .checked_sub(1)
+                    .and_then(|l| addr.checked_add(l))
+                    .ok_or_else(|| format!("surface address {addr:#x} +{len:#x} wraps"))?;
+                Ok((
+                    CtxDma {
+                        target,
+                        base: addr,
+                        limit,
+                        block_linear: false,
+                        writable: true,
+                    },
+                    0,
+                ))
+            }
+        }
+    }
+
     fn read(&self, dma: CtxDma, off: u64, buf: &mut [u8]) -> Result<(), String> {
         let at = dma
             .span(off, buf.len() as u64)
@@ -2670,7 +2585,8 @@ impl Io<'_> {
 
     /// Does acquire `a` hold against guest memory now?
     fn acquired(&mut self, a: &Acquire) -> bool {
-        let dma = match self.resolve(a.client, a.handle, a.chn) {
+        let n = if a.wide { 8 } else { 4 };
+        let (dma, off) = match self.at(a.client, a.chn, a.at, n as u64) {
             Ok(d) => d,
             Err(e) => {
                 self.refuse(&format!("acquire: {e}"));
@@ -2678,8 +2594,7 @@ impl Io<'_> {
             }
         };
         let mut b = [0u8; 8];
-        let n = if a.wide { 8 } else { 4 };
-        if let Err(e) = self.read(dma, a.offset, &mut b[..n]) {
+        if let Err(e) = self.read(dma, off, &mut b[..n]) {
             self.refuse(&format!("acquire read: {e}"));
             return false;
         }
@@ -2688,10 +2603,10 @@ impl Io<'_> {
 
     /// The semaphore value an acquire reads now (diagnostic: `Err` text when it cannot be read).
     fn peek_acquire(&mut self, a: &Acquire) -> Result<u64, String> {
-        let dma = self.resolve(a.client, a.handle, a.chn)?;
-        let mut b = [0u8; 8];
         let n = if a.wide { 8 } else { 4 };
-        self.read(dma, a.offset, &mut b[..n])?;
+        let (dma, off) = self.at(a.client, a.chn, a.at, n as u64)?;
+        let mut b = [0u8; 8];
+        self.read(dma, off, &mut b[..n])?;
         Ok(u64::from_le_bytes(b))
     }
 
@@ -3692,24 +3607,24 @@ impl Device {
                     Effect::Notify {
                         chn,
                         client,
-                        handle,
-                        offset,
+                        at,
                         awaken,
                         finished,
                     } => {
+                        let (handle, offset) = at.diag();
                         let status = if finished {
                             io.notifier_finished
                         } else {
                             io.notifier_begun
                         };
-                        let r = io.resolve(client, handle, chn).and_then(|dma| {
+                        let r = io.at(client, chn, at, 16).and_then(|(dma, base)| {
                             let ts = self.rm.gpu_time_ns().unwrap_or(0);
                             let mut n = [0u8; 16];
                             n[8..12].copy_from_slice(&(ts as u32).to_le_bytes());
                             n[12..16].copy_from_slice(&((ts >> 32) as u32).to_le_bytes());
                             // the timestamp words first, the status word (what the guest polls) last
-                            io.write(dma, offset + 4, &n[4..16])?;
-                            io.write(dma, offset, &status.to_le_bytes())
+                            io.write(dma, base + 4, &n[4..16])?;
+                            io.write(dma, base, &status.to_le_bytes())
                         });
                         fx_seq += 1;
                         if fx_ring.len() >= 192 {
@@ -3752,16 +3667,18 @@ impl Device {
                     Effect::Release {
                         chn,
                         client,
-                        handle,
-                        offset,
+                        at,
                         value,
                         wide,
                         awaken,
                     } => {
-                        let r = io.resolve(client, handle, chn).and_then(|dma| {
-                            let b = value.to_le_bytes();
-                            io.write(dma, offset, if wide { &b[..] } else { &b[..4] })
-                        });
+                        let (handle, offset) = at.diag();
+                        let r = io.at(client, chn, at, if wide { 8 } else { 4 }).and_then(
+                            |(dma, base)| {
+                                let b = value.to_le_bytes();
+                                io.write(dma, base, if wide { &b[..] } else { &b[..4] })
+                            },
+                        );
                         fx_seq += 1;
                         if fx_ring.len() >= 192 {
                             fx_ring.pop_front();
@@ -5774,6 +5691,199 @@ mod tests {
     use super::*;
     use kf_broker::CursorImage;
 
+    // Candidate-4 captured probe retained as a test-only oracle.
+    const CAPS_PROBE_AT: (u32, u64) = (0xC773, 0x0064_0000);
+
+    /// The real GPU's caps page: every non-zero word, `(byte offset, value)` (VFIO DVI reference boot3,
+    /// 8-byte reads 10.948826-10.953350 s; RTX 4070, 2026-10-08).
+    const CAPS_PROBE_WORDS: [(u32, u32); 99] = [
+        (0x000, 0x00000f0f),
+        (0x004, 0x000000ff),
+        (0x008, 0x00000432),
+        (0x00c, 0x00000100),
+        (0x010, 0x81f22b20),
+        (0x018, 0x00001822),
+        (0x048, 0x00000a00),
+        (0x058, 0x00000a00),
+        (0x068, 0x00000a00),
+        (0x078, 0x00000a00),
+        (0x0c0, 0x00000010),
+        (0x0d0, 0x00000010),
+        (0x0e0, 0x00000010),
+        (0x0f0, 0x00000010),
+        (0x144, 0x1b000300),
+        (0x14c, 0x1b000300),
+        (0x154, 0x1b000300),
+        (0x15c, 0x1b000300),
+        (0x5e4, 0x00000086),
+        (0x5e8, 0x00000086),
+        (0x5ec, 0x00000086),
+        (0x5f0, 0x00000086),
+        (0x5f4, 0x00000086),
+        (0x5f8, 0x00000086),
+        (0x5fc, 0x00000086),
+        (0x600, 0x00000086),
+        (0x604, 0x00000086),
+        (0x608, 0x003c0051),
+        (0x60c, 0x003c0051),
+        (0x610, 0x003c0051),
+        (0x614, 0x003c0051),
+        (0x618, 0x003c0051),
+        (0x61c, 0x003c0051),
+        (0x620, 0x003c0051),
+        (0x624, 0x003c0051),
+        (0x680, 0x00ff01d0),
+        (0x684, 0x0000d681),
+        (0x688, 0x03580e0e),
+        (0x68c, 0x0a001400),
+        (0x690, 0x00000506),
+        (0x694, 0x00001400),
+        (0x6a0, 0x00ff01d0),
+        (0x6a4, 0x0000d680),
+        (0x6a8, 0x03580e0e),
+        (0x6ac, 0x0a001400),
+        (0x6b0, 0x00000506),
+        (0x6b4, 0x00001400),
+        (0x6c0, 0x00ff01d0),
+        (0x6c4, 0x0000d680),
+        (0x6c8, 0x03580e0e),
+        (0x6cc, 0x0a001400),
+        (0x6d0, 0x00000506),
+        (0x6d4, 0x00001400),
+        (0x6e0, 0x00ff01d0),
+        (0x6e4, 0x0000d680),
+        (0x6e8, 0x03580e0e),
+        (0x6ec, 0x0a001400),
+        (0x6f0, 0x00000506),
+        (0x6f4, 0x00001400),
+        (0x780, 0x01df21d0),
+        (0x784, 0x0000da90),
+        (0x788, 0x000e164e),
+        (0x78c, 0x5075816a),
+        (0x790, 0x000e1a4e),
+        (0x794, 0x0a001400),
+        (0x7a0, 0x010021d0),
+        (0x7a4, 0x0000da90),
+        (0x7b0, 0x000e0000),
+        (0x7b4, 0x0a001400),
+        (0x7c0, 0x01df21d0),
+        (0x7c4, 0x0000da90),
+        (0x7c8, 0x000e164e),
+        (0x7cc, 0x5075816a),
+        (0x7d0, 0x000e1a4e),
+        (0x7d4, 0x0a001400),
+        (0x7e0, 0x010021d0),
+        (0x7e4, 0x0000da90),
+        (0x7f0, 0x000e0000),
+        (0x7f4, 0x0a001400),
+        (0x800, 0x01df21d0),
+        (0x804, 0x0000da90),
+        (0x808, 0x000e164e),
+        (0x80c, 0x5075816a),
+        (0x810, 0x000e1a4e),
+        (0x814, 0x0a001400),
+        (0x820, 0x010021d0),
+        (0x824, 0x0000da90),
+        (0x830, 0x000e0000),
+        (0x834, 0x0a001400),
+        (0x840, 0x01df21d0),
+        (0x844, 0x0000da90),
+        (0x848, 0x000e164e),
+        (0x84c, 0x5075816a),
+        (0x850, 0x000e1a4e),
+        (0x854, 0x0a001400),
+        (0x860, 0x010021d0),
+        (0x864, 0x0000da90),
+        (0x870, 0x000e0000),
+        (0x874, 0x0a001400),
+    ];
+
+    /// H-caps: the measured page (VFIO DVI reference boot3, RTX 4070, 2026-10-08) for the caps class and
+    /// page base it was measured with, else `None`.
+    fn caps_probe_page(base: u64, caps_class: u32) -> Option<kf_disp::caps::CapsPage> {
+        ((caps_class, base) == CAPS_PROBE_AT).then(|| kf_disp::caps::CapsPage {
+            base,
+            words: CAPS_PROBE_WORDS.to_vec(),
+        })
+    }
+
+
+    /// ⚠⚠ H-caps probe (default off): the measured page is published only for the caps class and
+    /// page base it was measured with (Ada's C773 at `0x640000`, VFIO DVI reference boot3, RTX 4070,
+    /// 2026-10-08); its words are in the page, 4-byte aligned, distinct, and it presents the same
+    /// engine as kf3's authored page (`SYS_CAP` heads 0-3 + SORs 0-3, `SYS_CAPB` windows 0-7) — what
+    /// differs is the per-window / per-head / per-SOR capabilities only.
+    #[test]
+    fn the_caps_probe_page_is_the_measured_one_for_its_class_only() {
+        assert!(
+            caps_probe_page(0x0064_0000, 0xC673).is_none(),
+            "another class"
+        );
+        assert!(
+            caps_probe_page(0x0064_1000, 0xC773).is_none(),
+            "another base"
+        );
+        let p = caps_probe_page(0x0064_0000, 0xC773).expect("the measured class");
+        let mut seen = std::collections::BTreeSet::new();
+        for (o, _) in &p.words {
+            assert!(*o < 0x1000 && o % 4 == 0 && seen.insert(*o), "{o:#x}");
+        }
+        let t = kf_disp::class::for_version("580.65.06").unwrap();
+        let r = Regs::for_ip("580.65.06", kf_chip::display::ADA.ip_version).unwrap();
+        let authored = kf_disp::caps::sdr_page(t, &r, 0xC773, 0xC77D, 4, 8).expect("SDR page");
+        assert_eq!(authored.base, p.base);
+        assert_eq!(p.word(0), authored.word(0), "SYS_CAP");
+        assert_eq!(p.word(4), authored.word(4), "SYS_CAPB");
+        // the window-capability difference the record names: even windows scaler + TMO, odd not
+        assert_ne!(p.word(0x780), p.word(0x7a0));
+        assert_eq!(authored.word(0x780), authored.word(0x7a0));
+    }
+
+
+
+    /// ★ 2026-10-14 (die sweep): every piece of the GPU-free realize path resolves for every display row except
+    /// the one known gap (Turing's semaphore model, `kf_disp` `every_family_row_resolves_its_vocabulary`). The GB206
+    /// run found `display=on` refused at realize because no test resolved the vocabulary for GB20x; the register map
+    /// and layout are checked here for all four rows so the next refusal is a test failure, not a rented box.
+    #[test]
+    fn the_gpu_free_realize_path_resolves_for_every_row() {
+        for version in ["580.65.06", "580.159.04"] {
+            let t = kf_disp::class::for_version(version).unwrap();
+            for row in kf_chip::display::ALL {
+                let regs = Regs::for_ip(version, row.ip_version).unwrap();
+                RegMap::resolve(&regs, t, row)
+                    .unwrap_or_else(|e| panic!("{version} {}: {e}", row.chips));
+                assert!(
+                    Layout::from_regs(&regs).is_some(),
+                    "{version} {}",
+                    row.chips
+                );
+                let classes = kf_disp::model::Classes::of(row);
+                let vocab = Vocab::resolve(t, &classes, &regs);
+                assert_eq!(
+                    vocab.is_ok(),
+                    !row.chips.starts_with("TU"),
+                    "{version} {}",
+                    row.chips
+                );
+                assert!(
+                    t.notifier_field("__0_STATUS").is_some()
+                        && t.notifier_value("__0_STATUS_FINISHED").is_some()
+                        && t.notifier_value("__0_STATUS_BEGUN").is_some(),
+                    "{version}"
+                );
+                // GB20x windows name surfaces by address: no scanout vocabulary yet, the boot layer shows
+                assert_eq!(
+                    ScanVocab::resolve(t, classes.window, classes.window_imm, classes.core)
+                        .is_none(),
+                    row.chips.starts_with("GB2"),
+                    "{version} {}",
+                    row.chips
+                );
+            }
+        }
+    }
+
     /// ★ §8.18, the interleaving of runs e1-a…d (2026-10-08): the first copy is queued at +0.3 s,
     /// host RM spends 3.53 s registering the guest-RAM memfd, the copy's signal comes after that.
     /// At every point of that wait the copy is NOT lost (the old rule gave it up at 2 s for good);
@@ -6849,37 +6959,6 @@ mod tests {
         let r = Regs::for_ip("580.159.04", 0x0401_0000).unwrap();
         let t = kf_disp::class::for_version("580.159.04").unwrap();
         RegMap::resolve(&r, t, &kf_chip::display::AMPERE).expect("GA10x register map")
-    }
-
-    /// ⚠⚠ H-caps probe (default off): the measured page is published only for the caps class and
-    /// page base it was measured with (Ada's C773 at `0x640000`, VFIO DVI reference boot3, RTX 4070,
-    /// 2026-10-08); its words are in the page, 4-byte aligned, distinct, and it presents the same
-    /// engine as kf3's authored page (`SYS_CAP` heads 0-3 + SORs 0-3, `SYS_CAPB` windows 0-7) — what
-    /// differs is the per-window / per-head / per-SOR capabilities only.
-    #[test]
-    fn the_caps_probe_page_is_the_measured_one_for_its_class_only() {
-        assert!(
-            caps_probe_page(0x0064_0000, 0xC673).is_none(),
-            "another class"
-        );
-        assert!(
-            caps_probe_page(0x0064_1000, 0xC773).is_none(),
-            "another base"
-        );
-        let p = caps_probe_page(0x0064_0000, 0xC773).expect("the measured class");
-        let mut seen = std::collections::BTreeSet::new();
-        for (o, _) in &p.words {
-            assert!(*o < 0x1000 && o % 4 == 0 && seen.insert(*o), "{o:#x}");
-        }
-        let t = kf_disp::class::for_version("580.65.06").unwrap();
-        let r = Regs::for_ip("580.65.06", kf_chip::display::ADA.ip_version).unwrap();
-        let authored = kf_disp::caps::sdr_page(t, &r, 0xC773, 0xC77D, 4, 8).expect("SDR page");
-        assert_eq!(authored.base, p.base);
-        assert_eq!(p.word(0), authored.word(0), "SYS_CAP");
-        assert_eq!(p.word(4), authored.word(4), "SYS_CAPB");
-        // the window-capability difference the record names: even windows scaler + TMO, odd not
-        assert_ne!(p.word(0x780), p.word(0x7a0));
-        assert_eq!(authored.word(0x780), authored.word(0x7a0));
     }
 
     /// ★ 2026-10-14 — THE SCAN LINE IS LIVE. The words the Windows driver reads per vblank and per
