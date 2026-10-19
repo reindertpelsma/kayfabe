@@ -25,13 +25,12 @@ fn oracle(text: &str) -> Result<CapsPage, String> {
     let mut fixture = false;
     let mut end = None;
     for line in text.lines() {
-        if let Some(n) = line.strip_prefix("# end words=") {
-            if end
+        if let Some(n) = line.strip_prefix("# end words=")
+            && end
                 .replace(n.trim().parse::<usize>().map_err(|e| e.to_string())?)
                 .is_some()
-            {
-                return Err("multiple native pages/end markers; select one complete page".into());
-            }
+        {
+            return Err("multiple native pages/end markers; select one complete page".into());
         }
         let f: Vec<_> = line.split_whitespace().collect();
         let row = if f.first() == Some(&"WORD") {
