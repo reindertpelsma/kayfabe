@@ -1,0 +1,4 @@
+MEASURED: 14 long-act tests, each mutant restored; total suite 58 tests.
+L1 admit short and threshold-equal acts: 2 killing tests: test_short_act_does_not_enter_long_table, test_threshold_is_strictly_greater_than_twenty_ms
+L2 invent guest waiter identity: 2 killing tests: test_timeslice_handles_do_not_identify_the_guest_waiter_either, test_unknown_guest_waiter_is_not_synthesized_from_handles
+L3 treat tail arrival as event clock: 2 killing tests: test_explicit_event_end_clock_can_be_converted, test_tail_arrival_timestamp_is_not_an_act_end_clock

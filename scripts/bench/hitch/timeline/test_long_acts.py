@@ -35,6 +35,14 @@ class LongActs(unittest.TestCase):
     def test_unknown_group_mode_is_not_inferred_from_twin_token(self):
         self.assertIsNone(long_acts.parse_lines([ENGINE])["acts"][0]["group_mode"])
 
+    def test_timeslice_handles_do_not_identify_the_guest_waiter_either(self):
+        row = long_acts.parse_lines([TIMESLICE])["acts"][0]
+        self.assertIsNone(row["guest_waiter_pid"])
+        self.assertIsNone(row["guest_waiter_tid"])
+
+    def test_one_twin_group_does_not_reveal_legacy_or_explicit_mode(self):
+        self.assertIsNone(long_acts.parse_lines([TIMESLICE])["acts"][0]["group_mode"])
+
     def test_unknown_uptime_remains_unknown_without_event_clock(self):
         row = long_acts.parse_lines([TIMESLICE], vm_start_ns=0)["acts"][0]
         self.assertIsNone(row["vm_uptime_ns"])
