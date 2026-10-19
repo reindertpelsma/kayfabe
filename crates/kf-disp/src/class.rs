@@ -196,6 +196,7 @@ pub fn put(v: u32, (hi, lo): (u8, u8), x: u32) -> u32 {
 pub fn for_version(version: &str) -> Option<&'static ClassTable> {
     static V580_159_04: OnceLock<ClassTable> = OnceLock::new();
     static V580_65_06: OnceLock<ClassTable> = OnceLock::new();
+    static V595_91_07: OnceLock<ClassTable> = OnceLock::new();
     match version {
         "580.159.04" => Some(
             V580_159_04
@@ -207,6 +208,10 @@ pub fn for_version(version: &str) -> Option<&'static ClassTable> {
         "580.65.06" => Some(
             V580_65_06
                 .get_or_init(|| ClassTable::parse(include_str!("../data/classes-580.65.06.tsv"))),
+        ),
+        "595.91.07" => Some(
+            V595_91_07
+                .get_or_init(|| ClassTable::parse(include_str!("../data/classes-595.91.07.tsv"))),
         ),
         _ => None,
     }
