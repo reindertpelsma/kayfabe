@@ -47,6 +47,20 @@ class GuestExecTests(unittest.TestCase):
         self.assertEqual(sends[0]["arguments"]["arg"], ["--check"])
         self.assertEqual(sum(m["execute"] == "guest-exec" for m in sends), 1)
 
+    def test_short_cli_deadline_stops_before_an_unrequested_status_poll(self):
+        sends = []
+        with patch.object(qmp, "qga_open", return_value=(Mock(), Mock())), \
+             patch.object(qmp, "send", side_effect=lambda f, m: sends.append(m)), \
+             patch.object(qmp, "recv", side_effect=[
+                 {"return": {"pid": 73}},
+                 {"return": {"exited": True, "exitcode": 0}},
+             ]), \
+             patch.object(qmp.time, "monotonic", side_effect=[0, 1]):
+            rc = qmp.main(["qmp.py", "fixture.sock", "qga-exec", "--timeout=0.5",
+                           "probe.exe", "--check"])
+        self.assertEqual(rc, 124)
+        self.assertEqual([m["execute"] for m in sends], ["guest-exec"])
+
     def test_invalid_cli_deadline_never_launches(self):
         for value in ("nan", "inf", "0", "-1", "3601", "bad"):
             with self.subTest(value=value), patch.object(qmp, "qga_exec") as launch, \

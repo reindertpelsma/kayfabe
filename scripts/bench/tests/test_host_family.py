@@ -32,6 +32,11 @@ nvidia-smi() {
             with self.subTest(name=name):
                 self.assertIn('CHECK=0,0', self.check(name))
 
+    def test_healthy_datacenter_names_are_eligible_without_a_geforce_whitelist(self):
+        for name in ('NVIDIA A100-SXM4-40GB', 'NVIDIA H100 PCIe'):
+            with self.subTest(name=name):
+                self.assertIn('CHECK=0,0', self.check(name))
+
     def test_a_driver_returning_no_gpu_still_fails_health(self):
         self.assertIn('CHECK=1,0', self.check(''))
 
