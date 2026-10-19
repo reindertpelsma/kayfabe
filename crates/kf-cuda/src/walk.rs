@@ -1281,6 +1281,12 @@ impl WalkKernel {
         self.inflight.is_some()
     }
 
+    /// Maximum event-loop sleep while this walk needs a completion observation.
+    #[must_use]
+    pub fn completion_poll_ms(&self) -> u32 {
+        crate::completion::poll_ms(self.in_flight())
+    }
+
     /// ★ The fd a walk's completion is signalled on — put it in the worker's `epoll` set.
     #[must_use]
     pub fn completion_fd(&self) -> &CompletionFd {
@@ -1321,20 +1327,26 @@ impl WalkKernel {
         let Some(f) = self.inflight else {
             return Ok(None);
         };
-        if self.done_fd.drain() == 0 {
+        let ready = crate::completion::ready(self.done_fd.drain() != 0, || {
             // The fd is silent. Ask the event, so a failed stream — whose host function may
             // never run — is named rather than waited on forever.
             match self.cu.event_query(self.ev_done) {
-                Ok(false) => return Ok(None),
+                Ok(false) => Ok(false),
                 Ok(true) => {
                     // `ev_done` follows the host signal in the stream, so the fd was written;
                     // consume it now so it cannot complete the next walk.
                     let _ = self.done_fd.drain();
+                    Ok(true)
                 }
-                Err(e) => {
-                    self.inflight = None;
-                    return Err(e);
-                }
+                Err(e) => Err(e),
+            }
+        });
+        match ready {
+            Ok(false) => return Ok(None),
+            Ok(true) => {}
+            Err(e) => {
+                self.inflight = None;
+                return Err(e);
             }
         }
         self.inflight = None;
