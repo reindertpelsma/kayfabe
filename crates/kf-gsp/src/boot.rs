@@ -4703,6 +4703,7 @@ mod device_reset_from_every_phase {
         let mut d = drive(BootPhase::Running, true, None);
         d.fsm.device_reset();
         let GspFsm {
+            reply_body_trace,
             pending_command_doorbells,
             held,
             refusals,
@@ -4734,6 +4735,7 @@ mod device_reset_from_every_phase {
             system_info,
         } = d.fsm;
         let GspFsm {
+            reply_body_trace: bt0,
             pending_command_doorbells: p0,
             held: h0,
             refusals: r0,
@@ -4764,6 +4766,9 @@ mod device_reset_from_every_phase {
             frts_offset: fo0,
             system_info: si0,
         } = GspFsm::new(abi());
+        // Default-off diagnostic state remains empty; enabled budget survival
+        // is covered separately by guest_reset_does_not_rearm_the_reply_record_budget.
+        assert_eq!(reply_body_trace, bt0);
         assert_eq!(pending_command_doorbells, p0);
         assert_eq!(held, h0);
         assert_eq!(refusals, r0);
