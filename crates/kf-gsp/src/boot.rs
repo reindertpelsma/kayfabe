@@ -1048,11 +1048,10 @@ pub struct GspFsm {
     /// … and the FRTS offset its command named, served while WPR2 is up
     /// ([`GspObservation::frts_offset`]). Cleared when WPR2 comes down.
     frts_offset: Option<u64>,
-    /// ★ The boot display (`docs/design/V3_DISPLAY.md` §4.11.4 row 2): where fn 72's body is kept
-    /// for fn 65's encoder ([`crate::sysinfo`]). `None`: fn 72 is dropped unread, as before the boot
-    /// display — kf3's posture with `gop=off`, which since 2026-10-03 (`v3-gop`) attaches no cell
-    /// (`kf_qemu::gop::ConsoleWiring`; before that every kf3 device carried one).
-    /// ⊘ Survives [`GspFsm::device_reset`]: it is the chain's, not one driver life's.
+    /// Shared bounded fn72 metadata: fn65's console encoder and nonblocking
+    /// heartbeat clock reads. Device also attaches this cell with GOP off,
+    /// while console seating remains GOP-only. The cell survives device_reset;
+    /// the separate current-life heartbeat authorization does not.
     system_info: Option<crate::sysinfo::SystemInfoCell>,
     /// Only fn72 in THIS life authorizes heartbeat conversion. Constructor reset
     /// clears this bit while preserving the console cell and all existing reset policy.
@@ -1150,7 +1149,8 @@ impl GspFsm {
 
     /// ★ Keep every `GSP_SET_SYSTEM_INFO` (fn 72) body in `cell` ([`crate::sysinfo`]) — it is still
     /// answered with nothing, as an asynchronous RPC must be; the cell is what fn 65's encoder reads
-    /// the guest's `consoleMemSize` from.
+    /// the guest's `consoleMemSize` from. The heartbeat borrows clock metadata through
+    /// its nonblocking reader even when no console seat is configured.
     #[must_use]
     pub fn with_system_info_cell(mut self, cell: crate::sysinfo::SystemInfoCell) -> GspFsm {
         self.system_info = Some(cell);
