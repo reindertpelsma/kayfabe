@@ -1,0 +1,4 @@
+MEASURED Python analyzer mutants, each restored before the next; 20 tests.
+A1 missing coverage/loss guard: 2 killing tests: test_dropped_events_force_unknown, test_missing_coverage_forces_unknown
+A2 accept unrelated/unlinked frames: 2 killing tests: test_unlinked_global_act_is_not_causal, test_unrelated_frame_is_not_causal
+A3 omit same-thread resource attribution: 3 killing tests: test_compaction_is_s7, test_runqueue_stall_is_s7_per_coordinator, test_s7_requires_the_same_thread_as_first_stage
