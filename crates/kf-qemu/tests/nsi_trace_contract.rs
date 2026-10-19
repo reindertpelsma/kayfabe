@@ -68,3 +68,21 @@ fn no_recorder_hook_is_added_to_the_vcpu_interrupt_or_mmio_paths() {
         assert!(!body(device, start, end).contains("nsi_trace"));
     }
 }
+
+#[test]
+fn live_counter_requests_run_only_on_the_existing_drainer_heartbeat() {
+    let device = include_str!("../src/device.rs");
+    let drainer = body(device, "pub fn drainer_loop(", "pub fn enable_doorbell_fast_path(");
+    assert!(drainer.contains("nsi_trace.poll_stats("), "no live counter observation");
+    assert!(drainer.contains("self.chans.relay_stats.summary()"));
+    assert!(drainer.contains("self.chans.pt_summary()"));
+}
+
+#[test]
+fn a_counter_request_is_idempotent_and_independent_of_trace_freezing() {
+    let trace = include_str!("../src/nsitrace.rs");
+    let method = trace.split_once("pub fn poll_stats(").expect("missing request method").1;
+    assert!(method.contains("self.stats_seen"));
+    assert!(!method.contains("self.finish()"), "stats must leave tracing active");
+    assert!(method.contains("report("));
+}
