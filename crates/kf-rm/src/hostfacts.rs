@@ -58,6 +58,10 @@ use kf_chip::Family;
 pub struct HostFacts {
     /// The GPU family (`MC_GET_ARCH_INFO` → [`Family::from_arch`]).
     pub family: Family,
+    /// ★ Lane C 2026-10-14: the host DIE (`MC_GET_ARCH_INFO` architecture + implementation,
+    /// named by ogkm, [`kf_chip::DieId`]) — the key of the published measured table
+    /// ([`crate::consttab`]): a measured row is served only to the die it was measured on.
+    pub die: kf_chip::DieId,
     /// Whether a chip-to-chip link exists (`BUS_GET_C2C_INFO`).
     pub has_c2c: bool,
     /// ★ The host die's own copy-engine caps (`CE_GET_ALL_CAPS` `0x20802a0a`, NON_PRIVILEGED):
@@ -197,6 +201,13 @@ pub const PROVENANCE: &[(&str, Source)] = &[
         Source::HostControl {
             cmd: 0x2080_1701,
             name: "MC_GET_ARCH_INFO",
+        },
+    ),
+    (
+        "die",
+        Source::HostControl {
+            cmd: 0x2080_1701,
+            name: "MC_GET_ARCH_INFO (architecture, implementation) named by ogkm ctrl2080mc.h (kf_chip::die)",
         },
     ),
     (
@@ -453,7 +464,7 @@ pub const PROVENANCE: &[(&str, Source)] = &[
         "gss_replay",
         Source::HostControl {
             cmd: 0x2080_a028,
-            name: "GSS-legacy 0x20809064 / 0x2080a028 / 0x2080a026 / 0x2080a084 (layouts measured, kf_abi::gssreplay::ROWS), asked with requests we author over two backgrounds; the bytes the host wrote",
+            name: "GSS-legacy 0x20809064 / 0x2080a028 / 0x2080a026 / 0x2080a084 and the cudart init gate 0x20809009 / 0x20809001 / 0x20809064 / 0x2080a001 (layouts measured, kf_abi::gssreplay::ROWS), asked with requests we author over two backgrounds; the bytes the host wrote",
         },
     ),
 ];
@@ -674,6 +685,20 @@ pub fn derive_fb_geometry(pairs: &[(u32, u32)]) -> Result<kf_abi::fbinfo::FbGeom
 /// # Errors
 /// [`FactRefusal`] on a short reply or an architecture with no family.
 pub fn derive_family(reply: &[u8]) -> Result<Family, FactRefusal> {
+    derive_die(reply).and_then(|d| {
+        d.family().map_err(|_| FactRefusal::Unservable {
+            cmd: kf_chip::NV2080_CTRL_CMD_MC_GET_ARCH_INFO,
+            why: "no family for this architecture",
+        })
+    })
+}
+
+/// ★ Lane C 2026-10-14: the die from the host's `MC_GET_ARCH_INFO` reply (both words, kept whole:
+/// an implementation ogkm does not name is still a die, it just has no table rows).
+///
+/// # Errors
+/// [`FactRefusal::ShortReply`].
+pub fn derive_die(reply: &[u8]) -> Result<kf_chip::DieId, FactRefusal> {
     let cmd = kf_chip::NV2080_CTRL_CMD_MC_GET_ARCH_INFO;
     let b: &[u8; kf_chip::MC_GET_ARCH_INFO_SIZE] = reply
         .get(..kf_chip::MC_GET_ARCH_INFO_SIZE)
@@ -683,10 +708,7 @@ pub fn derive_family(reply: &[u8]) -> Result<Family, FactRefusal> {
             len: reply.len(),
         })?;
     let (arch, imp) = kf_chip::decode_arch_info(b);
-    Family::from_arch(arch, imp).map_err(|_| FactRefusal::Unservable {
-        cmd,
-        why: "no family for this architecture",
-    })
+    Ok(kf_chip::DieId::new(arch, imp))
 }
 
 /// ★ A model name from a host name-string reply: the ASCII run starting at `at` (4 for
