@@ -1054,6 +1054,9 @@ pub struct GspFsm {
     /// (`kf_qemu::gop::ConsoleWiring`; before that every kf3 device carried one).
     /// ⊘ Survives [`GspFsm::device_reset`]: it is the chain's, not one driver life's.
     system_info: Option<crate::sysinfo::SystemInfoCell>,
+    /// Only fn72 in THIS life authorizes heartbeat conversion. Constructor reset
+    /// clears this bit while preserving the console cell and all existing reset policy.
+    system_info_current: bool,
 }
 
 /// ★★★ v3-initrace — **FWSEC's FRTS command, read out of the DMEM image RM loaded it from.**
@@ -1141,6 +1144,7 @@ impl GspFsm {
             frts_image: None,
             frts_offset: None,
             system_info: None,
+            system_info_current: false,
         }
     }
 
@@ -1196,10 +1200,10 @@ impl GspFsm {
         self.cmd_seq
     }
 
-    /// Whether command progress could supply heartbeat metadata (initial test seam).
+    /// Whether fn72 supplied the current GSP life's heartbeat clock metadata.
     #[must_use]
     pub fn has_current_system_info(&self) -> bool {
-        self.command_seq() != 0
+        self.system_info_current
     }
 
     /// The abstract observation the register model serves from — §3.2's table, and
@@ -2467,6 +2471,7 @@ impl GspFsm {
                 && let Some(cell) = &self.system_info
             {
                 cell.store(&cmd.payload, cmd.sequence);
+                self.system_info_current = true;
             }
             return Ok(());
         }
@@ -4739,6 +4744,7 @@ mod device_reset_from_every_phase {
             frts_image,
             frts_offset,
             system_info,
+            system_info_current,
         } = d.fsm;
         let GspFsm {
             reply_body_trace: bt0,
@@ -4771,6 +4777,7 @@ mod device_reset_from_every_phase {
             frts_image: fr0,
             frts_offset: fo0,
             system_info: si0,
+            system_info_current: sic0,
         } = GspFsm::new(abi());
         // Default-off diagnostic state remains empty; enabled budget survival
         // is covered separately by guest_reset_does_not_rearm_the_reply_record_budget.
@@ -4804,6 +4811,7 @@ mod device_reset_from_every_phase {
         assert_eq!(frts_image, fr0);
         assert_eq!(frts_offset, fo0);
         assert_eq!(system_info, si0);
+        assert_eq!(system_info_current, sic0);
     }
 
     // ---- 2. reset after reset ------------------------------------------------------------------

@@ -1,27 +1,51 @@
-//! Heartbeat clock seams. Initial extraction preserves the candidate-5 formula.
+//! GSP heartbeat clock conversion, sampled only on the drainer.
+//! Public595 kernel_gsp.c passes sysTimerOffsetNs in fn72 and adds its millisecond
+//! value back when checking the heartbeat. PTIMER and VF_TIME are system clocks.
 use kf_abi::DriverVersion;
 use kf_gsp::{StashedSystemInfo, SystemInfoCell};
 use std::sync::Mutex;
 
-pub(crate) fn offset_ns(_version: DriverVersion, _info: &StashedSystemInfo) -> Option<u64> {
-    Some(0)
+pub(crate) fn offset_ns(version: DriverVersion, info: &StashedSystemInfo) -> Option<u64> {
+    let layout = kf_abi::generated::matrix::GSPSYSTEMINFO
+        .at(version)
+        .ok()??;
+    if info.declared_len != layout.size() || info.bytes.len() != layout.size() {
+        return None;
+    }
+    let field = layout.field("sysTimerOffsetNs")?;
+    if field.size != 8 || field.elem != 0 {
+        return None;
+    }
+    let start = usize::try_from(field.off).ok()?;
+    Some(u64::from_le_bytes(
+        info.bytes
+            .get(start..start.checked_add(8)?)?
+            .try_into()
+            .ok()?,
+    ))
 }
 
 pub(crate) fn sample(
     system_timer_ns: impl FnOnce() -> Option<u64>,
-    _guest_offset_ns: impl FnOnce() -> Option<u64>,
+    guest_offset_ns: impl FnOnce() -> Option<u64>,
 ) -> Option<u32> {
-    Some((system_timer_ns()? / 1_000_000) as u32)
+    let offset_ms = (guest_offset_ns()? / 1_000_000) as u32;
+    let system_ms = (system_timer_ns()? / 1_000_000) as u32;
+    // Mirror _kgspIsHeartbeatTimedOut's separate divisions exactly: subtracting
+    // nanoseconds first can place the millisecond heartbeat one tick behind.
+    Some(system_ms.wrapping_sub(offset_ms))
 }
 
-// Not wired to the drainer until the following failing-first topic is fixed.
+/// Contention and poisoning skip this tick, never wait. The callback only reads
+/// the current life's flag and ABI. fn72 is borrowed without allocation or cloning;
+/// the clock callback performs at most three hi/lo/hi mapped-register rounds.
 pub(crate) fn try_sample<S>(
     state: &Mutex<S>,
     info: &SystemInfoCell,
     current: impl FnOnce(&S) -> Option<DriverVersion>,
     clock: impl FnOnce() -> Option<u64>,
 ) -> Option<u32> {
-    let guard = state.lock().ok()?;
+    let guard = state.try_lock().ok()?;
     let version = current(&guard)?;
     info.try_with_latest(|body| sample(clock, || offset_ns(version, body)))?
 }
