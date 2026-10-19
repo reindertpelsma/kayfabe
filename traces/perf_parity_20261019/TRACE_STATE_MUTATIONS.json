@@ -1,0 +1,18 @@
+[
+  {
+    "mutant": "ignore_freeze_request",
+    "kills": 2,
+    "failed_tests": [
+      "test_a_dump_request_prevents_another_capture_before_guest_dispatch (test_capture_trace_state.TraceStateTests.test_a_dump_request_prevents_another_capture_before_guest_dispatch)",
+      "test_a_request_directory_cannot_hide_an_already_requested_freeze (test_capture_trace_state.TraceStateTests.test_a_request_directory_cannot_hide_an_already_requested_freeze)"
+    ]
+  },
+  {
+    "mutant": "ignore_frozen_output",
+    "kills": 2,
+    "failed_tests": [
+      "test_a_partial_dump_also_means_the_recorder_was_frozen (test_capture_trace_state.TraceStateTests.test_a_partial_dump_also_means_the_recorder_was_frozen)",
+      "test_removing_the_request_does_not_make_a_completed_dump_active (test_capture_trace_state.TraceStateTests.test_removing_the_request_does_not_make_a_completed_dump_active)"
+    ]
+  }
+]

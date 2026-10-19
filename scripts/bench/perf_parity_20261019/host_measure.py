@@ -137,7 +137,22 @@ def ui(root, action, fx, fy):
         raise RuntimeError("UI task failed; inspect the screenshot before continuing")
 
 
+def require_trace_recording(root):
+    active = json.loads((root / 'active-arm.json').read_text())
+    flags = dict(item.split('=', 1) for item in shlex.split(active['flags']) if '=' in item)
+    if flags.get('KF3_DIAG_NSI_TRACE') != '1':
+        return
+    dump = Path(flags['KF3_DIAG_NSI_TRACE_DUMP']).resolve()
+    if not dump.is_relative_to(root.resolve()):
+        raise RuntimeError('diagnostic request path leaves P1 directory')
+    # Freezing is irreversible for this process, even if its request is removed
+    # or its private output is incomplete. Keep recording state constant per arm.
+    if dump.exists() or Path(str(dump) + '.out').exists():
+        raise RuntimeError('trace already frozen; capture would change the arm instrumentation')
+
+
 def capture(root, tag, seconds, fx=0.1786, fy=0.845):
+    require_trace_recording(root)
     destination = root / tag
     destination.mkdir(exist_ok=False)
     before = stats_checkpoint(root)
