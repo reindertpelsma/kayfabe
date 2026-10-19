@@ -178,3 +178,26 @@ The requested submit_latency directory is absent in both available candidate-5
 and mirror checkouts; Windows latency reports are inherited evidence only.
 The 2026-10-16 parity report stopped on a Linux gate failure: do not reuse its
 performance values or unfinished implementation as this lane's baseline.
+
+## Hardware pause and GPU-free follow-up, 2026-10-19 21:08 UTC
+
+MEASURED: the coordinator requested hardware release for the owner's Minecraft
+session. LX1 stopped its restored run 3019 gracefully (EXIT=0), verified no own
+QEMU/broker/lease and NVIDIA binding, and wrote the requested PAUSED marker.
+Latest instruction supersedes automatic owner restoration: do not start/stop an
+owner VM or acquire the GPU lock until the coordinator schedules the next slot.
+GPU-free preparation continues; the eight-hour wall deadline remains unchanged.
+
+INFERRED H8, before offline inspection: damaged/inconsistent installed guest
+userspace may explain the CPU-only provisioning panic. FALSIFIER: bounded
+read-only inspection finds the implicated systemd, libc, sudo and apt files
+consistent with their recorded package manifests and no relevant I/O/package
+errors. That would weaken a file-damage explanation, not prove CPU/KVM correctness.
+No guest binary will be executed on the host. Inspection uses only LX1's stopped
+private disk, read-only/no journal replay, and promptly releases its own NBD.
+No provisioning VM, GPU operation or shared GPU lock is allowed during the pause.
+
+INFERRED H9, before the new guard tests: an idempotent VFIO restore can leave
+driver_override stale when the original driver is already bound. FALSIFIER:
+fake-sysfs tests show both GPU and audio overrides cleared in that case.
+This concerns unexecuted host tooling; no VFIO transition has occurred.

@@ -1,0 +1,34 @@
+[  242.571848] systemd[1]: Failed to start fwupd-refresh.service - Refresh fwupd metadata and update motd.
+[  272.690051] systemd[1]: Failed to start systemd-journald.service - Journal Service.
+[  272.691870] systemd[1]: Failed to start dbus.service - D-Bus System Message Bus.
+[  333.234101] systemd[1]: Failed to start update-notifier-download.service - Download data for packages that failed at package install time.
+[  363.368277] Kernel panic - not syncing: Attempted to kill init! exitcode=0x0000008b
+[  363.369556] CPU: 6 PID: 1 Comm: systemd Not tainted 6.8.0-142-generic #142-Ubuntu
+[  363.370659] Hardware name: QEMU Standard PC (Q35 + ICH9, 2009), BIOS 1.17.0-debian-1.17.0-1ubuntu1 04/01/2014
+[  363.372109] Call Trace:
+[  363.372548]  <TASK>
+[  363.372961]  dump_stack_lvl+0x27/0xa0
+[  363.373566]  dump_stack+0x10/0x20
+[  363.374145]  panic+0x366/0x3c0
+[  363.374669]  ? srso_alias_return_thunk+0x5/0xfbef5
+[  363.375436]  do_exit+0x513/0x530
+[  363.376027]  do_group_exit+0x35/0x90
+[  363.376625]  get_signal+0x96e/0x9b0
+[  363.377238]  ? srso_alias_return_thunk+0x5/0xfbef5
+[  363.378040]  ? signal_setup_done+0x183/0x1b0
+[  363.378746]  arch_do_signal_or_restart+0x42/0x210
+[  363.379501]  irqentry_exit_to_user_mode+0x154/0x1e0
+[  363.380307]  irqentry_exit+0x43/0x50
+[  363.380950]  exc_page_fault+0x94/0x1b0
+[  363.381579]  asm_exc_page_fault+0x27/0x30
+[  363.382253] RIP: 0033:0x6448149f6fdf
+[  363.382891] Code: f5 41 54 41 89 fc 53 48 8d 9d 30 ff ff ff 48 89 df 48 81 ec 48 01 00 00 64 48 8b 04 25 28 00 00 00 48 89 45 c8 31 c0 f3 48 ab <e8> 8c 7b ff ff 83 f8 01 0f 85 5a 02 00 00 80 3d 7c 92 00 00 00 0f
+[  363.385302] RSP: 002b:00007ffc2b78d3c0 EFLAGS: 00010246
+[  363.386047] RAX: 0000000000000000 RBX: 00007ffc2b78d460 RCX: 0000000000000000
+[  363.387016] RDX: 00007ffc2b78d540 RSI: 00007ffc2b78d670 RDI: 00007ffc2b78d4f8
+[  363.387972] RBP: 00007ffc2b78d530 R08: 0000000000000010 R09: 0000000000000004
+[  363.388932] R10: 00000000ffffffff R11: 0000000000000202 R12: 000000000000000b
+[  363.389916] R13: 00007ffc2b78d670 R14: 000064481cf67b20 R15: ffffffffffffffff
+[  363.390880]  </TASK>
+[  363.391399] Kernel Offset: 0x3800000 from 0xffffffff81000000 (relocation range: 0xffffffff80000000-0xffffffffbfffffff)
+[  363.392769] ---[ end Kernel panic - not syncing: Attempted to kill init! exitcode=0x0000008b ]---

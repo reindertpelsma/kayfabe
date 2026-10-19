@@ -1,6 +1,13 @@
 # LX1 hardware progress
 
-STATUS: IN PROGRESS, 2026-10-19 20:58 UTC. Not a gate or parity verdict.
+STATUS: PAUSED, 2026-10-19 21:13 UTC. Not a gate or parity verdict.
+
+MEASURED correction/update: provisioning later failed with a CPU-only PID1
+SIGSEGV/panic; no GPU arm ran. Owner initially restored as3019, then stopped
+gracefully at the coordinator's explicit request. GPU NVIDIA-bound and global
+flock free; PAUSED marker written21:07:15UTC. Coordinator owns owner restart.
+The latest state/results are folded into [README.md](README.md); the20:58
+checkpoint below describes the earlier in-progress state, not current readiness.
 
 MEASURED: original owner run 3018 used perf6, binary 0d7ba743 and
 KF3_TSG_MIRROR=0. A byte-identical restore copy and private process/configuration
