@@ -2057,11 +2057,8 @@ fn surf(r: &mut Ring, cl: u32, what: &str, addr: u64, target: &str, enable: bool
 
 /// The vocabulary resolves for the display rows kayfabe serves with `display=on`, in both derived class
 /// tables — the hole that let GB20x's realize refusal ship (the only vocabulary test was GA10x's).
-/// ⚠ KNOWN GAP (found by this test, 2026-10-14, not yet a Turing offer to measure on): TURING's window class
-/// `NVC57E` has a different semaphore model — one semaphore for acquire AND release (`SET_SEMAPHORE_ACQUIRE`
-/// + `SET_SEMAPHORE_RELEASE`), 32-bit only, no `PAYLOAD_SIZE`/`REL_MODE`/`ACQ_SEMAPHORE_*` — so `display=on` is
-/// refused at realize on TU10x/TU11x exactly as it was on GB20x. The assertion below pins today's refusal so the
-/// change is deliberate; the fix is an acquire/release path for that model (V3_DIE_SWEEP_20261014.md §3.3).
+/// Turing's shared 32-bit semaphore is a supported vocabulary too: requiring the later split-semaphore
+/// fields used to refuse `display=on` on TU10x/TU11x before the guest could boot.
 #[test]
 fn every_family_row_resolves_its_vocabulary() {
     for version in ["580.65.06", "580.159.04"] {
@@ -2069,16 +2066,8 @@ fn every_family_row_resolves_its_vocabulary() {
         for row in kf_chip::display::ALL {
             let r = Regs::for_ip(version, row.ip_version)
                 .unwrap_or_else(|| panic!("{version}: no registers for IP {:#x}", row.ip_version));
-            let res = Vocab::resolve(tb, &Classes::of(row), &r);
-            if row.chips.starts_with("TU") {
-                let e = res.expect_err("Turing's semaphore model is not implemented");
-                assert_eq!(
-                    e.0, "NVC57E_SET_SEMAPHORE_CONTROL_PAYLOAD_SIZE",
-                    "{version}"
-                );
-            } else {
-                res.unwrap_or_else(|e| panic!("{version} {}: {} is not derived", row.chips, e.0));
-            }
+            Vocab::resolve(tb, &Classes::of(row), &r)
+                .unwrap_or_else(|e| panic!("{version} {}: {} is not derived", row.chips, e.0));
         }
     }
 }
