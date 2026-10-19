@@ -22,5 +22,5 @@ must be appended to the campaign's existing owned cost ledger.
 This update does not resolve the protected conflicts in `CONFLICTS.md`.
 No conflict resolution, product change, hardware run or rental is authorized
 by this budget amendment alone. The coordinator subsequently approved excluding the obsolete USER topic; the
-independent F-2 kf-chan edit now awaits the separate condition-2 scope decision
-recorded in `CONFLICTS.md`.
+F-2 two-file edit is also approved and verified. The distinct userrelay family
+admission topic remains pending under the protected-scope rule in CONFLICTS.md.

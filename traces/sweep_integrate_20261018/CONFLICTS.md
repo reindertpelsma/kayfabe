@@ -1,3 +1,31 @@
+# Current approval and verification update, 2026-10-19
+
+STATUS: LIVE. F-2 APPROVED and VERIFIED for exactly grtables.rs and tmode.rs.
+
+The coordinator approved the independent public-header class-width topic as a
+separate test-first/fix topic. EXPECTED RED commit `08424cf11` adds nine tests
+and no production change; three wide-address tests fail and six boundary/default
+tests pass. The focused fix passes nine tests, four mutants are killed by
+3/2/2/3 tests, and clippy has 217 baseline / 217 fixed diagnostics (added=0).
+The measured full kf-chan baseline is 521 passed / 0 failed / 3 ignored; the
+full fixed run passed 530 / 0 / 3 (fix commit 6a32d4e8e). See F2_PLAN.md, f2_clippy.json and
+f2_mutations.json. The F-2 request below is superseded, not still awaiting approval.
+
+A separate retained Turing topic requires userrelay.rs: current declaration
+validation accepts only AMPERE_CHANNEL_GPFIFO_A. Exact dependency and the
+96-line unapplied proposal are in USERRELAY_DEPENDENCY.md and
+userrelay_family_gate_PROPOSAL.patch. The latest coordinator explicitly leaves
+userrelay protected, so that edit is STOPPED and an asynchronous narrow scope
+question is pending. No userrelay/birth/group/doorbell/lifecycle code was edited.
+
+The broader stack audit found only that family topic among the retained,
+non-F2 protected source paths examined. Candidate-5 mem.rs reset and device.rs
+budget raw-merge conflicts are incidental old formatting, not required semantic
+changes; retain current files/hunks there. No candidate-5 merge is applied yet.
+
+The earlier ledger and exact source/hunk inventories below remain historical
+records; their superseded F-2 STOP does not undo the new two-file approval.
+
 # Current scope decision and exclusion ledger
 
 STATUS: LIVE, 2026-10-18. Original exclusion APPROVED; separate F-2 protected edit STOP.

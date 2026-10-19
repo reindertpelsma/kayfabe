@@ -1,98 +1,137 @@
-# Phase 1 scope audit: original exclusion approved, independent F-2 STOP
+# F-2 complete; remaining sweep integration has a protected family-admission dependency
 
-STATUS: LIVE, 2026-10-18. New protected-edit decision required; original exclusion approved.
+STATUS: LIVE, 2026-10-19. F-2 verified and pushed; separate userrelay scope question pending.
 
-Lane `sweep-20261018`; branch `codex/sweep-integrate-20261018`; product source
-remains candidate 4 `0452613b5c71cb175271230b3e14c8e3c3eef2db`. Publication head
-and remote equality are recorded in the local `SWEEP-publication.json` after
-push, avoiding a self-referential committed hash. This branch adds evidence only.
+Lane `sweep-20261018`; branch `codex/sweep-integrate-20261018`.
+Product checkpoint: F-2 fix `6a32d4e8e`, following EXPECTED RED `08424cf11`.
+The publication receipt beside the local SWEEP.md records the final evidence
+head and exact origin equality after push. Neither candidate 5 nor the remaining
+gpu-types/stacked sweep topics are integrated yet. Phase 1 is PARTIAL.
 
-## Owner updates folded into the report
+## Result (MEASURED unless marked CODE READ)
 
-Budget: **USD 25 stretch cap; stop renting and report at USD 20 spent**. These
-supersede USD 12 / USD 9. Live API at 2026-10-18T21:05:38Z confirms credit
-USD 43.559771576861976 and zero instances. Stretch spend USD 0, not reset.
-`BUDGET.md` and `budget_update_receipt.json` record authority and observation.
+- DONE: isolated two-file F-2 public-header class-width fix and test-first history.
+- DONE: full kf-chan release 521/0/3 before -> 530/0/3 after; no old test dropped.
+- DONE: all 9 focused tests pass after compiling/failing 3 cases on old code.
+- DONE: 4 mutants killed by 3/2/2/3 tests; exact fix restored.
+- DONE: clippy 217 inherited before / 217 after; added=0; rustfmt passes.
+- DONE: prospective integration baseline across 14 crates, 3084 passed / 0 failed / 19 ignored.
+- CODE READ: five approved exclusions and all 67 old merge hunks inventoried.
+- CODE READ: F-2 leaves Ada's 8-bit validation unchanged; no host/guest GPU run.
+- CODE READ STOP: retained family-admission fix requires protected userrelay.rs.
+- PARTIAL: code-only import manifest prepared; full sweep code import NOT DONE.
+- NOT DONE: integrated AD104/consttab oracles, candidate-5 merge, Phase 2.
+- All current hardware cells UNRUN; every historical PASS remains STALE.
+- No rental, owner-host access or spend; cap USD25 / rental-stop/report USD20.
 
-Scope: the coordinator APPROVED excluding `24e7a297a`, `639acf57d`, `7476ef69f`,
-`edcaaca67`, merge `29eae05a4` and dependent edits. Preserve current relay,
-lifecycle, doorbells and ALL current tests. No old PUT-ahead diagnostic or
-old batching/measurement behavior is ported. The original twelve-hunk conflict
-request is resolved by this exclusion; its earlier snapshot remains labelled
-historical in `CONFLICTS.md`.
+## F-2 and test retention
 
-Condition 2 still requires a STOP if a retained die/ABI/constants/display topic
-needs a change in kf-chan or any other named protected area. The audit found
-exactly such an independent topic before applying product changes: F-2 commit
-`3970937f6`, changes to `grtables.rs` and `tmode.rs`. This is the NEW pending
-scope question; the original USER exclusion is not being asked again.
+The production edit is exactly `kf-chan/src/grtables.rs` and `tmode.rs`:
+public CB97/CDC0 fields allow 25 upper bits, other classes and context-free
+calls retain 8. `gr_write` passes the bound class to the field validator.
+Tests check complete address/footprint preservation, no premature emission,
+side-effect-free refusal and the narrow/default boundary. The unchanged address
+binder/perimeter still validates the resulting address before GPU work.
 
-## Result (current)
+`f2_test_retention.json` verifies every old test in the two files remains and
+nine tests were added. All other candidate-4 product/test files are unchanged.
+AD104's internal call path now selects a class width, but its Ada classes still
+select 8 bits: no observable width-rule change is introduced there. This is
+CODE READ plus CPU regression coverage, not an AD104 hardware result.
 
-- MEASURED DONE: isolated worktree and original GPU-free preflight; no rental.
-- CODE READ DONE: five explicit exclusions plus five merge-contained companion commits inventoried.
-- CODE READ DONE: all 67 first-parent merge hunks across seven paths enumerated, including dependent nonconflicting edits.
-- CODE READ: userread span-reservation is independently deferred with the excluded merge, not mislabelled as a batching dependency.
-- MEASURED: zero product or current-test changes; all candidate-4 source/test objects unchanged.
-- CODE READ NEW STOP: retained F-2 ABI rule needs two kf-chan files; exact caller/table dependency recorded.
-- PARTIAL: integration scope audited; product integration NOT DONE.
-- NOT DONE: release counts, AD104 oracle execution, mutation gates and Phase 2.
-- MEASURED: all current-revision hardware cells UNRUN; every historical PASS STALE.
-- MEASURED: created IDs [], destroyed IDs [], incremental spend USD 0.
+| Check | Before | After |
+|---|---|---|
+| kf-chan release (MEASURED) | 521 pass, 0 fail, 3 ignored | 530 pass, 0 fail, 3 ignored |
+| Focused F-2 before fix / after fix | 6 pass, 3 fail (EXPECTED RED) | 9 pass, 0 fail |
+| Clippy diagnostic identities | 217 inherited | 217 inherited; added=0 |
+| Mutants force-narrow / widen-all / admit-bit25 / drop-class | Planned before runs | 3 / 2 / 2 / 3 killing tests |
+| Rustfmt | Existing files | PASS, exactly approved files |
+| Full integrated AD104/consttab acceptance | Not imported | UNRUN |
 
-`CONFLICTS.md` contains every excluded commit, all dropped hunk ranges and
-reasons, exact F-2 files and source blobs, and the narrow recommendation.
-`exclusion_inventory.json` includes full commit IDs and per-hunk hashes.
-No code patch, including a cleanly merging dependent edit, has been applied.
-`preflight_conflicts.json` remains historical evidence of the original preflight.
+Existing host-fact tests were included in the RM baseline below. They do not
+substitute for the new AD104 oracles on the complete integrated sweep product.
+Mutation identities/log hashes and source retention are recorded beside this
+report; raw build logs stay in the lane's own scratch rather than enlarging Git.
 
-## Verification and limits
+## Broader release baseline
 
-| Check | Before | After | Meaning |
-|---|---|---|---|
-| Release test counts per changed kf crate | NOT RUN | NOT RUN | Zero changed product crates; second STOP precedes code import; no numeric execution count claimed |
-| All candidate-4 product/test trees and manifests | Baseline | Identical Git objects | No existing test/source added, dropped or edited; verified by scoped git diff |
-| F-2 affected current files | `grtables` 497939a6f; `tmode` 1b05d02b7 | Same blobs | New retained topic is held, not applied |
-| AD104/Windows580.88 code-path differences | Baseline | None introduced | Source identity only, not an execution result |
-| AD104 oracle, host_facts, consttab | NOT RUN | NOT RUN | Still required before integration acceptance |
-| Clippy / rustfmt | NOT RUN | NOT RUN | No Rust change |
-| Mutation kills | N/A | N/A | No behavior change applied |
-| Hardware n / spread | 0 / N/A | 0 / N/A | No new hardware claim |
+The following are MEASURED local runs with candidate-4 files unchanged outside
+the approved F-2 dependency. They establish the next import's baseline and do
+not validate the unimported sweep code. `cpu_counts.tsv` compares them with the
+candidate-4 reference from the announced candidate-5 evidence (CODE READ).
+That reference had one memory/RSS failure; this run passed the same 184 memory
+tests without a memory source change. No causal improvement is attributed to F-2.
 
-The absence of dropped tests is established by unchanged source objects, not by
-pretending to have run tests. Before/after per-crate numeric release counts and
->=2 killing tests per applicable behavior remain required once scope permits
-integration. Neither STOP waives those acceptance gates. See `MATRIX.md` for
-all reported die/OS/build/source cells, historical evidence and the nineteen flags.
+| Crate | Passed | Failed | Ignored |
+|---|---:|---:|---:|
+| kf-abi | 592 | 0 | 0 |
+| kf-arch | 4 | 0 | 0 |
+| kf-chip | 72 | 0 | 0 |
+| kf-census | 50 | 0 | 1 |
+| kf-cuda | 67 | 0 | 0 |
+| kf-disp | 247 | 0 | 3 |
+| kf-gsp | 49 | 0 | 0 |
+| kf-host | 66 | 0 | 0 |
+| kf-rm | 750 | 0 | 0 |
+| kf-harness | 12 | 0 | 0 |
+| kf-broker | 149 | 0 | 9 |
+| kf-mem | 184 | 0 | 3 |
+| kf-qemu | 312 | 0 | 0 |
+| kf-chan | 530 | 0 | 3 |
 
-## Owner decisions (one line each)
+## Current protected dependency
 
-1. NEW F-2 scope: recommend allowing only commit 3970937f6's grtables/tmode class-width topic under condition 2, with current tests preserved and required tests/mutants; alternatively explicitly defer it.
-2. D4 caps keys: retain exact die/branch keys until a mechanism and branch-independence evidence justify each broader key; never borrow another die's row.
-3. D5 TU106 R34: retain frozen 180 s grader and name the historical performance failure; no lease for this policy item.
-4. D6 oracle page: retain captured pages as test oracles and prefer header-derived diagnostic groups; a runtime oracle still needs explicit authorization.
-5. PR plan: eventual title `sweep: integrate per-die code onto current product`, head this branch, base owner-designated candidate 4/5; product diff currently 0 files/0 lines, final code size unknown; no PR created or retargeted.
-6. windows-on-vast: use the specified unmodified native/VFIO reference flow; no change or patch proposed, no push there.
+The original USER batching exclusion and F-2 scope are APPROVED, not pending.
+The remaining dependency is distinct: the current `Birth::new` declaration gate
+accepts only AMPERE_CHANNEL_GPFIFO_A. The retained Turing family topic needs
+userrelay.rs to use the actual host-derived family's generated channel class.
+The latest coordinator expressly keeps userrelay protected, so it is unchanged.
 
-## Access, cost and cleanup
+See USERRELAY_DEPENDENCY.md and the 96-line unapplied
+userrelay_family_gate_PROPOSAL.patch. Upstream test-first/fixture/fix history is
+0b1a1fe7e / c5ee774cb / 8e3a9d325. Scope is only the declaration helper/call and
+pure tests; preserve bounds, ownership, all existing tests, lazy/scan-off,
+lifecycle, counters, publication, doorbells and channel groups. An asynchronous
+scope question is pending; no answer is inferred from elapsed time.
 
-No own rental, GPU/VM job, target directory, autodestroy timer or lock was
-created; no owner-host access. IDs created/destroyed [], spend USD 0.
-No own background job remains. `/workspace/sweep-target` never existed.
-The initial USD 18.56 observation is historical; current filtered receipt shows
-USD 43.56 and no instances. The owner-host and other checkouts are untouched.
+The code-only gpu-types manifest contains 98 candidate paths, 9 formatting-only
+paths to retain current, 6 excluded USER/dependency paths, and the 2 approved
+F-2 files to retain. The raw candidate-5 preflight was NOT applied. Incidental
+old formatting is not a reason to overwrite current reset/budget behavior.
+
+## Owner decisions (numbered, one line each)
+
+1. Family admission: recommend approving only the generated-family declaration helper/call/tests in userrelay.rs, with test-first and mutation gates; otherwise explicitly defer it.
+2. D4 caps keys: retain exact die/branch keys until each broader key has branch-independence evidence and a mechanism; never borrow another die's row.
+3. D5 TU106 R34: retain frozen 180 s grader, report the historical named performance failure, and do not spend a lease on this policy item.
+4. D6 runtime oracle page: retain captured pages as test oracles and use header-derived diagnostic groups; runtime oracle still needs explicit authorization.
+5. PR plan: isolate F-2 pair 08424cf11/6a32d4e8e as `chan: honor public 25-bit GR address fields`; base owner-designated candidate 5, head an authorized isolated sweep topic, code size 2 files (+129/-11). Overall integration PR still awaits completion/base decision; no PR or retarget created.
+6. windows-on-vast: no installer change proposed; optional README-only distinction between native reference and nested guest is written as an unapplied patch here; reference e8883e2 remains clean/unmodified.
+
+## Hardware, cost and cleanup
+
+No Phase 2 run or rental occurred. Created IDs [], destroyed IDs [], stretch
+spend USD0. The latest filtered account receipt shows USD43.56 and no instances
+at its recorded time. No owner-host access, VM, GPU job, timer or lock was used.
+The lane's own target /workspace/sweep-target has been removed; the final
+publication receipt records deletion and absence of own running jobs.
+
+`MATRIX.md` records every reported die/OS/build, current untested checkpoint,
+historical source/evidence and all 19 Windows flags. No historical pass is
+promoted. Candidate 5 f8f9d1a5f must be merged before any hardware stage, after
+Phase 1 is complete; the current line must be refreshed again then.
 
 ## Ten-line session status
 
 ```text
 1 Lane sweep-20261018; branch codex/sweep-integrate-20261018.
-2 Product source remains candidate 4 0452613b5; evidence-only commits.
-3 Original obsolete USER-topic exclusion APPROVED and recorded.
-4 Five named commits plus five companions / 67 merge hunks inventoried.
-5 NEW STOP: F-2 3970937f6 requires grtables.rs and tmode.rs in kf-chan.
-6 No protected code applied; every current source/test object preserved.
-7 Release counts/oracles/mutants NOT RUN; all current hardware UNRUN.
-8 Every old PASS STALE; candidate 5 must be refreshed before hardware.
-9 Cap USD25 / rental-stop USD20; spend USD0; no instances/jobs/targets/locks.
-10 Await only the narrow F-2 scope decision, not the approved USER exclusion.
+2 F-2 EXPECTED RED 08424cf11; verified fix 6a32d4e8e, pushed.
+3 kf-chan release 521/0/3 -> 530/0/3; no current test dropped.
+4 Mutant kills 3/2/2/3; clippy added=0; rustfmt PASS.
+5 Broader 14-crate baseline: 3084 pass / 0 fail / 19 ignored.
+6 Only the approved two product files changed; original exclusions preserved.
+7 NEW STOP: generated-family admission needs protected userrelay.rs; proposal unapplied.
+8 Main stack/candidate-5 integration and integrated AD104 acceptance remain pending.
+9 Hardware UNRUN; old PASS STALE; spend USD0 / cap USD25 / rental-stop USD20.
+10 Await only family-gate scope decision; cleanup recorded by final publication receipt.
 ```
