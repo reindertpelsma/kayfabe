@@ -231,3 +231,40 @@ fn ledger_seeded_model_preserves_every_live_obligation() {
         let mut actual=l.entries().map(|e| e.id).collect::<Vec<_>>();let mut expected=live.iter().map(|e| e.1).collect::<Vec<_>>();actual.sort_unstable();expected.sort_unstable();assert_eq!(actual,expected);
     }
 }
+
+#[test]
+fn thread_slice_is_cache_line_aligned_and_bounded() {
+    use kf_prof::thread::ThreadState;
+    assert_eq!(std::mem::align_of::<ThreadState>(),64);
+    assert!(std::mem::size_of::<ThreadState>()<=THREAD_BYTES);
+}
+#[test]
+fn thread_nested_spans_integrate_exclusive_time_and_restore_parent() {
+    use kf_prof::{thread::ThreadState,tables::{State,Site}};
+    let mut t=ThreadState::new(100);
+    let a=t.enter(State::Running,Site::TrapDispatch,7,110).unwrap();
+    let b=t.enter(State::Mutex,Site::WorkerPark,9,120).unwrap();
+    assert_eq!(t.snapshot().site,Site::WorkerPark);assert_eq!(t.snapshot().enter_ns,120);
+    assert!(t.leave(b,150));assert_eq!(t.snapshot().arg,7);assert_eq!(t.snapshot().enter_ns,110);
+    assert!(t.leave(a,180));assert_eq!(t.exclusive_ns(State::Running),40);
+    assert_eq!(t.exclusive_ns(State::Mutex),30);assert_eq!(t.histogram(State::Running).total_ns,70);
+    assert_eq!(t.histogram(State::Mutex).max_arg,9);assert_eq!(t.snapshot().state,State::Idle);
+}
+#[test]
+fn thread_span_overflow_and_bad_close_never_corrupt_current_state() {
+    use kf_prof::{thread::ThreadState,tables::{State,Site}};
+    let mut t=ThreadState::new(0);let mut tokens=Vec::new();
+    for n in 0..8 {tokens.push(t.enter(State::Running,Site::TrapDispatch,n,n).unwrap());}
+    assert!(t.enter(State::Mutex,Site::Init,99,10).is_err());assert_eq!(t.dropped(),1);
+    let before=t.snapshot();assert!(!t.leave(tokens[0],20));assert_eq!(t.snapshot(),before);
+    assert!(!t.leave(*tokens.last().unwrap(),0));assert_eq!(t.snapshot(),before);
+    for token in tokens.into_iter().rev() {assert!(t.leave(token,30));}
+    assert_eq!(t.snapshot().state,State::Idle);
+}
+#[test]
+fn tables_have_stable_unique_ids_and_every_kind_has_a_bound() {
+    use kf_prof::tables::{State,Site,Kind};
+    assert_eq!(Kind::ALL.len(),12);assert_eq!(Site::Init as u16,1);assert_eq!(State::Trap as u16,10);
+    for (i,k) in Kind::ALL.iter().enumerate() {assert_eq!(*k as usize,i);assert!(k.bound_ns()>0);}
+    for (i,s) in Site::ALL.iter().enumerate() {assert_eq!(*s as usize,i);assert!(!s.name().is_empty());}
+}

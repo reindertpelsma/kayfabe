@@ -1,0 +1,43 @@
+   Compiling kf-prof v0.1.0 (crates/kf-prof)
+error[E0432]: unresolved imports `kf_prof::clock`, `kf_prof::histogram`, `kf_prof::layout`, `kf_prof::ledger`, `kf_prof::publication`, `kf_prof::ring`
+ --> crates/kf-prof/tests/core.rs:2:15
+  |
+2 | use kf_prof::{clock::Calibration, histogram::Histogram, layout::*, ledger::Ledger,
+  |               ^^^^^               ^^^^^^^^^             ^^^^^^     ^^^^^^ could not find `ledger` in `kf_prof`
+  |               |                   |                     |
+  |               |                   |                     could not find `layout` in `kf_prof`
+  |               |                   could not find `histogram` in `kf_prof`
+  |               could not find `clock` in `kf_prof`
+3 |     publication::{AtomicWords, ReadError, WordStorage, read_record, write_record}, ring::{Event, Ring}};
+  |     ^^^^^^^^^^^ could not find `publication` in `kf_prof`                          ^^^^ could not find `ring` in `kf_prof`
+
+error[E0432]: unresolved import `kf_prof::thread`
+   --> crates/kf-prof/tests/core.rs:237:18
+    |
+237 |     use kf_prof::thread::ThreadState;
+    |                  ^^^^^^ could not find `thread` in `kf_prof`
+
+error[E0432]: unresolved imports `kf_prof::thread`, `kf_prof::tables`
+   --> crates/kf-prof/tests/core.rs:243:19
+    |
+243 |     use kf_prof::{thread::ThreadState,tables::{State,Site}};
+    |                   ^^^^^^              ^^^^^^ could not find `tables` in `kf_prof`
+    |                   |
+    |                   could not find `thread` in `kf_prof`
+
+error[E0432]: unresolved imports `kf_prof::thread`, `kf_prof::tables`
+   --> crates/kf-prof/tests/core.rs:255:19
+    |
+255 |     use kf_prof::{thread::ThreadState,tables::{State,Site}};
+    |                   ^^^^^^              ^^^^^^ could not find `tables` in `kf_prof`
+    |                   |
+    |                   could not find `thread` in `kf_prof`
+
+error[E0432]: unresolved import `kf_prof::tables`
+   --> crates/kf-prof/tests/core.rs:266:18
+    |
+266 |     use kf_prof::tables::{State,Site,Kind};
+    |                  ^^^^^^ could not find `tables` in `kf_prof`
+
+For more information about this error, try `rustc --explain E0432`.
+error: could not compile `kf-prof` (test "core") due to 5 previous errors
