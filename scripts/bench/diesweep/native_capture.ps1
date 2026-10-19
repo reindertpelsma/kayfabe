@@ -1,7 +1,11 @@
 # SPDX-License-Identifier: Apache-2.0 OR GPL-2.0-or-later
 # Native Windows reference only, on an owned disposable rental. Requires the
 # test-signed read-only measurement module and native_oracle.ps1 already staged.
-param([ValidatePattern('^[A-Za-z0-9_-]{1,40}$')][string]$CaptureName='capture580')
+param(
+ [ValidatePattern('^[A-Za-z0-9_-]{1,40}$')][string]$CaptureName='capture580',
+ [switch]$MailboxOnly,
+ [switch]$EnableDisabledDevice
+)
 $ErrorActionPreference='Stop'
 $ProgressPreference='SilentlyContinue'
 $root='C:\ProgramData\KayfabeSweep'
@@ -18,18 +22,28 @@ foreach($name in $hashes.Keys) {
 }
 $gpu=@(Get-PnpDevice -PresentOnly -Class Display | Where-Object InstanceId -like 'PCI\VEN_10DE*')
 if($gpu.Count -ne 1) { throw 'Need exactly one NVIDIA display device' }
+if($EnableDisabledDevice) {
+ $problem=(Get-PnpDeviceProperty -InstanceId $gpu[0].InstanceId -KeyName DEVPKEY_Device_ProblemCode).Data
+ if($problem -ne 22) { throw 'Enable replay requires the owned adapter already disabled' }
+}
 $key=(Get-PnpDeviceProperty -InstanceId $gpu[0].InstanceId -KeyName DEVPKEY_Device_Driver).Data
 Set-ItemProperty "HKLM:\SYSTEM\CurrentControlSet\Control\Class\$key" -Name EnableGpuFirmware -Type DWord -Value 1
 Set-ItemProperty 'HKLM:\SYSTEM\CurrentControlSet\Services\nvlddmkm' -Name EnableGpuFirmware -Type DWord -Value 1
 New-Item -Type Directory $dir | Out-Null
-$p=Start-Process "$root\caps\kfwc_collect.exe" -ArgumentList @($dir,'--seconds','120','--decode-tag','580.65.06') -RedirectStandardOutput "$dir\collector.out" -RedirectStandardError "$dir\collector.err" -PassThru
+$collectorArgs=@($dir,'--seconds','120','--decode-tag','580.65.06')
+if($MailboxOnly) { $collectorArgs+='--no-scan' }
+$p=Start-Process "$root\caps\kfwc_collect.exe" -ArgumentList $collectorArgs -RedirectStandardOutput "$dir\collector.out" -RedirectStandardError "$dir\collector.err" -PassThru
 # Cache the process handle while alive so the exit status remains available.
 $null=$p.Handle
 Start-Sleep 2
 if($p.HasExited) { throw 'Collector exited before the restart' }
 Write-Output "NATIVE_CAPTURE_START pid=$($p.Id) $([DateTime]::UtcNow.ToString('o'))"
-& pnputil.exe /restart-device $gpu[0].InstanceId | Out-File "$dir\restart.private.log"
-if($LASTEXITCODE) { throw "NVIDIA restart failed: $LASTEXITCODE" }
+if($EnableDisabledDevice) {
+ & pnputil.exe /enable-device $gpu[0].InstanceId | Out-File "$dir\restart.private.log"
+} else {
+ & pnputil.exe /restart-device $gpu[0].InstanceId | Out-File "$dir\restart.private.log"
+}
+if($LASTEXITCODE) { throw "NVIDIA restart/enable failed: $LASTEXITCODE" }
 Start-Sleep 15
 & nvidia-smi.exe -q | Select-String 'GSP Firmware Version'
 & .\native_oracle.ps1 | Tee-Object "$root\native-oracle-gsp580.txt"
