@@ -24,3 +24,10 @@ Original logs and export hash receipts are linux595_cuda_* and linux595_c4_*.
 The launcher prints its source revision249 alongside the overridden binary;
 the authoritative binary stamp in the control driver log is0452613b.
 This control is separate from the earlier frozen raw30 R19 comparison.
+
+CODE READ follow-up: stage_fat_guest.sh explicitly forbids writing its580base
+while595overlay exists. The subsequent580CUDA boots did write that base.
+This measured orchestration order violates the image invariant and is a strong
+candidate for the ext4error; original corruption cause is not proven. Next
+rental uses a flattened independent595image before any580workload. No product
+fix or successful595CUDA result is claimed.
