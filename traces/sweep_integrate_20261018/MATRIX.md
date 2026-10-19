@@ -15,7 +15,7 @@ establishes a cause. Evidence under phase2_ad102_56766467/. Host remains off-lim
 
 | Die | Guest OS / actual driver build | Current source | Current result | Historical result, now STALE | Historical source / evidence |
 |---|---|---|---|---|---|
-| AD102 | Linux 580.159.04 | `24906bf33` | UNRUN | Raw30/CUDA4/gfx10/broker PASS | `da0569a6`; E1 `ad102_4090/README.md` |
+| AD102 | Linux 580.159.04 | `24906bf33` | PARTIAL: CUDA4PASS; raw30/brokerUNRUN | Raw30/CUDA4/gfx10/broker PASS | `da0569a6`; E1 `ad102_4090/README.md` |
 | AD102 | Linux 590.48.01 | `24906bf33` | UNRUN | Raw30/CUDA4/gfx10/broker PASS; 18 STALL/10 nvAssert | `9d6f210ba`; E1 `ad102_second_builds_20261016/linux590_apps/RESULT.md` |
 | AD102 | Linux 595.91.07 | `24906bf33` | FAIL: raw29/30 (R19); guest CUDA/broker UNRUN | Raw30/CUDA4/gfx10/broker PASS across recorded revisions; warnings retained | Raw latest `9d6f210ba`, broker `6265b980f`; E1 `ad102_followup_20261016/RESULT.md` and `ad102_second_builds_20261016/linux595_regression/RESULT.md` |
 | AD102 | Windows 580.88 / 32.0.15.8088 | `24906bf33`, P19 planned | PASS: Code0/desktop/CUDA3/D3D11+12;420.9s,0TDR | Code0, desktop, CUDA3, hardware DX11/12, 421 s zero-TDR hold; Blender/Edge short PASS | Hold/apps `77a72da9e`; E1 `ad102_followup_20261016/RESULT.md` |
