@@ -203,3 +203,28 @@ fn broken_output_is_an_export_failure() {
     let mut out = Sequence::new(abi(), FlushFailure(Vec::new()), 10).unwrap();
     assert!(out.finish().is_err());
 }
+
+#[test]
+fn returning_to_interleaved_queue_epochs_reuses_only_the_matching_instance() {
+    let bytes = encode(&[ctl_req(0x2080_852a, &[0; 8])], &[0]).remove(0);
+    let m = message(&bytes, Dir::Cmd);
+    let mut out = Sequence::new(abi(), Vec::new(), 8).unwrap();
+    for i in 0..4 {
+        out.message(
+            0,
+            &In {
+                b: m.b + if i % 2 == 0 { 0 } else { 4096 },
+                ordinal: i,
+                ..m
+            },
+        )
+        .unwrap();
+    }
+    let text = String::from_utf8(out.into_inner()).unwrap();
+    let instances: Vec<_> = text
+        .lines()
+        .skip(1)
+        .map(|l| l.split('\t').nth(1).unwrap())
+        .collect();
+    assert_eq!(instances, ["1", "2", "1", "2"]);
+}
