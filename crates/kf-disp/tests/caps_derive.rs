@@ -541,3 +541,34 @@ fn the_gb206_580_caps_word_requires_its_own_native_measurement() {
         assert_eq!(d.unmeasured.len(), 1);
     }
 }
+
+#[test]
+fn an_ad102_measurement_does_not_authorize_an_unmeasured_guest_branch() {
+    let die = Die {
+        architecture: 0x190,
+        implementation: 2,
+    };
+    let measured = go(&ADA, die, true, true, "580");
+    let other = go(&ADA, die, true, true, "595");
+    assert!(measured.unmeasured.is_empty());
+    assert!(!other.unmeasured.is_empty());
+    assert_ne!(other.page.word(0x00c), measured.page.word(0x00c));
+}
+
+#[test]
+fn two_separate_gb205_measurements_do_not_authorize_590_or_610() {
+    let die = Die {
+        architecture: 0x1b0,
+        implementation: 5,
+    };
+    for branch in ["580", "595"] {
+        let own = go(&BLACKWELL_GB20X, die, true, true, branch);
+        assert!(own.unmeasured.is_empty());
+        assert_eq!(own.page.word(0x00c), 0x102);
+    }
+    for branch in ["590", "610"] {
+        let other = go(&BLACKWELL_GB20X, die, true, true, branch);
+        assert!(!other.unmeasured.is_empty());
+        assert_ne!(other.page.word(0x00c), 0x102);
+    }
+}
