@@ -1,0 +1,65 @@
+B1_BIND_ONLY_NO_ENABLE; not a measured GPU initialization arm. H_WIN580: falsified by wrong driver, Code!=0, missing desktop, CUDA/D3D failure, blank image, or System4101 during >=420s hold.
+WINDOWS580_START source=24906bf334665c9000b16b271005593daa3586c7 2026-10-19T22:13:35+00:00
+KF3_WIN_USER_CHANNELS_PASSTHROUGH=1
+KF3_WIN_TWIN_DEFAPI_OBJECT=1
+KF3_KERNEL_GR_CE=1
+KF3_KERNEL_GR_WORK=1
+KF3_TRANSLATED_CE_RELAY=1
+KF3_DEFERRED_API=1
+KF3_PREEMPT_BIND_PROBE=1
+KF3_DISPLAY_IMP_ENABLE=1
+KF3_DISPLAY_CTRL_PROBE=1
+KF3_ZCULL_BIND_PROBE=1
+KF3_SW_RUNLIST_HOST_OWNED=1
+KF3_ASYNC_PREEMPT=1
+KF3_GFX_POOL_PROBE=1
+KF3_SW_RUNLIST_PROBE=1
+KF3_MEMORY_LIST_PROBE=1
+KF3_DISPLAY_SDR_COLOR=1
+KF3_DISPLAY_CAPS_PROBE=1
+KF3_DISPLAY_LUT_MIRROR=1
+KF3_DISPLAY_ILUT_OFFSET_256=1
+KF_GOP_EXPORT target=x86_64-unknown-uefi bytes=9216 out=/workspace/sweep-win-56788212/secureboot/kf-gop.24906bf3.efi
+Signing Unsigned original image
+Signature verification OK
+[2026-10-19T22:13:35Z] KF_GOP_SIGNED /workspace/sweep-win-56788212/secureboot/kf-gop.24906bf3.signed.efi sha256=f97d65eda385181cbd2736ec1bf51d44b016200585e05c6cca88745307069b36 unsigned_sha256=e2616ad8d4cb09da88399218144b6bdea9d2cb3148b701964f926604b7d6dff6
+[2026-10-19T22:13:35Z] detached: tag=bw580_bind_bind, log logs/bw580_bind_bind_run.log (stdout logs/bw580_bind_bind_run.out)
+KF_SSH_UP
+{"pid": 123704, "source": "24906bf334665c9000b16b271005593daa3586c7", "exe": "/workspace/bench/kf3-bins/24906bf3/qemu-system-x86_64", "sha256": "b33394dd23e515994a4478747a52311d05f1a1bffbb300eb4415f2a0e22220ef", "argv": ["/workspace/bench/kf3-bins/24906bf3/qemu-system-x86_64", "-name", "kfwin,debug-threads=on", "-object", "memory-backend-memfd,id=ram0,size=8192M,share=on", "-machine", "pc-q35-10.2,accel=kvm,smm=on,memory-backend=ram0", "-m", "8192", "-smp", "8,sockets=1,cores=8,threads=1", "-global", "driver=cfi.pflash01,property=secure,value=on", "-drive", "if=pflash,format=raw,unit=0,readonly=on,file=/usr/share/OVMF/OVMF_CODE_4M.secboot.fd", "-drive", "if=pflash,format=raw,unit=1,file=/workspace/sweep-win-56788212/kfwin/firmware/OVMF_VARS.fd", "-global", "ICH9-LPC.disable_s3=1", "-global", "ICH9-LPC.disable_s4=1", "-rtc", "base=utc,driftfix=slew", "-global", "kvm-pit.lost_tick_policy=discard", "-chardev", "socket,id=chrtpm,path=/workspace/sweep-win-56788212/kfwin/run/swtpm.sock", "-tpmdev", "emulator,id=tpm0,chardev=chrtpm", "-device", "tpm-crb,tpmdev=tpm0", "-netdev", "user,id=n0,restrict=on,hostfwd=tcp:127.0.0.1:2224-:22", "-device", "virtio-net-pci,netdev=n0,mac=52:54:00:4b:46:57", "-device", "virtio-serial-pci,id=vser0", "-chardev", "socket,id=qga0,path=/workspace/sweep-win-56788212/kfwin/run/qga.sock,server=on,wait=off", "-device", "virtserialport,bus=vser0.0,chardev=qga0,name=org.qemu.guest_agent.0", "-object", "rng-random,id=rng0,filename=/dev/urandom", "-device", "virtio-rng-pci,rng=rng0", "-device", "pvpanic", "-display", "none", "-vnc", "unix:/workspace/sweep-win-56788212/kfwin/run/vnc.sock", "-qmp", "unix:/workspace/sweep-win-56788212/kfwin/run/qmp.sock,server=on,wait=off", "-qmp", "unix:/workspace/sweep-win-56788212/kfwin/run/qmp-ev.sock,server=on,wait=off", "-msg", "timestamp=on", "-cpu", "host,-vmx,hv-relaxed,hv-vapic,hv-spinlocks=0x1fff,hv-time,hv-vpindex,hv-synic,hv-stimer,hv-crash", "-action", "reboot=shutdown,panic=none", "-drive", "file=/workspace/sweep-win-56788212/kfwin/disk/bw580_bind.qcow2,if=none,id=sys,format=qcow2,discard=unmap", "-device", "virtio-blk-pci,drive=sys,bootindex=0", "-vga", "none", "-device", "kf3-gpu,fb-mb=8192,bar1-size=134217728,bar2-size=33554432,display=on,gop=on,gop-efi=/workspace/sweep-win-56788212/secureboot/kf-gop.24906bf3.signed.efi,id=kf0,guest-driver=580.65.06", "-serial", "file:/workspace/sweep-win-56788212/kfwin/logs/bw580_bind_bind_b1_serial.log"], "flags": {"KF3_KERNEL_GR_WORK": "1", "KF3_GFX_POOL_PROBE": "1", "KF3_RPC_BODY_TRACE": "1", "KF3_TRANSLATED_CE_RELAY": "1", "KF3_RPC_TRACE": "1", "KF3_DISPLAY_CTRL_PROBE": "1", "KF3_MEMORY_LIST_PROBE": "1", "KF3_WIN_USER_CHANNELS_PASSTHROUGH": "1", "KF3_SW_RUNLIST_PROBE": "1", "KF3_ZCULL_BIND_PROBE": "1", "KF3_DEFERRED_API": "1", "KF3_WIN_TWIN_DEFAPI_OBJECT": "1", "KF3_DISPLAY_ILUT_OFFSET_256": "1", "KF3_SW_RUNLIST_HOST_OWNED": "1", "KF3_DISPLAY_SDR_COLOR": "1", "KF3_KERNEL_GR_CE": "1", "KF3_DISPLAY_LUT_MIRROR": "1", "KF3_ASYNC_PREEMPT": "1", "KF3_DISPLAY_IMP_ENABLE": "1", "KF3_PREEMPT_BIND_PROBE": "1", "KF3_DISPLAY_CAPS_PROBE": "1"}, "p19_count": 19}
+[2026-10-19T22:17:36Z] START nv-extract
+[2026-10-19T22:17:54Z] NV_EXTRACTED /workspace/sweep-win-56788212/cache/nv580.88/Display.Driver (2.6G)
+[2026-10-19T22:17:54Z] EXIT nv-extract rc=0
+[2026-10-19T22:18:01Z] START nv-copy
+[2026-10-19T22:19:46Z] EXIT nv-copy rc=0
+  [2026-10-19T22:19:49Z] START gsp-on
+  GSP_ON device PCI\VEN_10DE&DEV_2B85&SUBSYS_41981458&REV_A1\3&11583659&0&28 name='Microsoft Basic Display Adapter' status=OK problem=CM_PROB_NONE inf=display.inf driverkey={4d36e968-e325-11ce-bfc1-08002be10318}\0001
+  GSP_ON nvlddmkm.sys signature status=Valid signer='CN=NVIDIA Corporation, OU=1-F, O=NVIDIA Corporation, L=Santa Clara, S=California, C=US'
+  GSP_ON disable: Microsoft PnP Utility
+  GSP_ON disable:
+  GSP_ON disable: Disabling device:          PCI\VEN_10DE&DEV_2B85&SUBSYS_41981458&REV_A1\3&11583659&0&28
+  GSP_ON disable: Device disabled successfully.
+  GSP_ON disable:
+  GSP_ON add-driver: Microsoft PnP Utility
+  GSP_ON add-driver:
+  GSP_ON add-driver: Adding driver package:  nv_dispi.inf
+  GSP_ON add-driver: Driver package added successfully.
+  GSP_ON add-driver: Published Name:         oem7.inf
+  GSP_ON add-driver: Driver package installed on device: PCI\VEN_10DE&DEV_2B85&SUBSYS_41981458&REV_A1\3&11583659&0&28
+  GSP_ON add-driver:
+  GSP_ON add-driver: Total driver packages:  1
+  GSP_ON add-driver: Added driver packages:  1
+  GSP_ON add-driver rc=0
+  GSP_ON after install: inf=oem7.inf driverkey={4d36e968-e325-11ce-bfc1-08002be10318}\0001 version=32.0.15.8088
+  GSP_ON readback HKLM:\SYSTEM\CurrentControlSet\Control\Class\{4d36e968-e325-11ce-bfc1-08002be10318}\0001 EnableGpuFirmware=1
+  GSP_ON readback HKLM:\SYSTEM\CurrentControlSet\Services\nvlddmkm EnableGpuFirmware=1
+  [2026-10-19T22:21:00Z] EXIT gsp-on rc=0
+{"Name":"NVIDIA GeForce RTX 5090","DriverVersion":"32.0.15.8088","ConfigManagerErrorCode":22,"PNPDeviceID":"PCI\\VEN_10DE\u0026DEV_2B85\u0026SUBSYS_41981458\u0026REV_A1\\3\u002611583659\u00260\u002628"}
+COLD580_BIND version=32.0.15.8088 inf=oem7.inf driverkey={4d36e968-e325-11ce-bfc1-08002be10318}\0001 problem=CM_PROB_DISABLED
+COLD580_GSP_BEFORE class=1
+COLD580_GSP_READBACK path=HKLM:\SYSTEM\CurrentControlSet\Control\Class\{4d36e968-e325-11ce-bfc1-08002be10318}\0001 value=1
+COLD580_GSP_READBACK path=HKLM:\SYSTEM\CurrentControlSet\Services\nvlddmkm value=1
+COLD580_READY=1; cold QEMU required; this is not a suite PASS
+[2026-10-19T22:21:11Z] stopping kfwin (pid 123704)
+[2026-10-19T22:21:23Z] stopped
+WINDOWS580_BIND_STOPPED 2026-10-19T22:21:23+00:00
+WINDOWS580_EXIT rc=0 2026-10-19T22:21:23+00:00
