@@ -1,0 +1,34 @@
+== diff stat vs base c2685412e (crates only)
+ crates/kf-qemu/Cargo.toml        |   4 +
+ crates/kf-qemu/src/device.rs     | 154 +++++++++
+ crates/kf-qemu/src/ffi_unsafe.rs |  20 ++
+ crates/kf-qemu/src/lib.rs        |   2 +
+ crates/kf-qemu/src/raw_unsafe.rs |  56 ++++
+ crates/kf-qemu/src/trapexp.rs    | 480 +++++++++++++++++++++++++++
+ crates/kf-trap/Cargo.toml        |   5 +
+ crates/kf-trap/src/cpuintr.rs    |  12 +
+ crates/kf-trap/src/lib.rs        |   2 +
+ crates/kf-trap/src/memmap.rs     | 153 +++++++++
+ crates/kf-trap/src/trapexp.rs    | 679 +++++++++++++++++++++++++++++++++++++++
+ 11 files changed, 1567 insertions(+)
+
+== features (not in default): 
+crates/kf-qemu/Cargo.toml:13:diag-trap-exp = ["kf-trap/diag-trap-exp"]
+crates/kf-trap/Cargo.toml:11:diag-trap-exp = []
+(no [features] default entry in kf-trap/kf-qemu: crates/kf-qemu/Cargo.toml:0 crates/kf-trap/Cargo.toml:0 )
+
+== production-visible (non-cfg) hunks in kf-qemu/device.rs: only the memory_map -> memory_map_base split
+11
+cfg(feature) attributes added in device.rs/ffi_unsafe.rs/lib.rs/raw_unsafe.rs/cpuintr.rs/memmap.rs/lib.rs(trap):
+23
+
+== archive strings: control (feature off) vs experiment
+grep: strings: No such file or directory
+ctl 0 matches, exp 3 matches (host build log: ctl strings: 0  exp strings: 3
+Dependency libdaxctl skipped: feature libdaxctl disabled
+Header "sys/prctl.h" has symbol "PR_SET_TIMERSLACK" : YES 
+    libdaxctl support               : NO
+7c7eb2683137bc3596334eb5f2c7c102  /data/claude-trapexp-20261019/kf3-bins/02911cbb-ctl/qemu-system-x86_64)
+== qemu md5
+7c7eb2683137bc3596334eb5f2c7c102  /data/claude-trapexp-20261019/kf3-bins/02911cbb-ctl/qemu-system-x86_64
+eed1439e467f0a7fb326e8d6a50212da  /data/claude-trapexp-20261019/kf3-bins/02911cbb/qemu-system-x86_64
