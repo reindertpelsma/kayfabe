@@ -647,7 +647,7 @@ static void t_recent_window_skips_pages_outside_ram(void)
 {
     harness h;
     recent_setup(&h, 1, 1);
-    h.cfg.recent_table_pa = RAM_BYTES - KFWC_PAGE; /* last valid page, no table */
+    h.cfg.recent_table_pa = h.m.base[0] + h.m.len[0] - KFWC_PAGE; /* last valid page, no table */
     h.cfg.recent_window_bytes = 1u << 20;
     h.cfg.recent_window_ticks = 100;
     h.cfg.scan_bytes_per_step = 1u << 20;
