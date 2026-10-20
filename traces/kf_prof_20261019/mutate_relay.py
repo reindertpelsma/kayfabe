@@ -17,6 +17,9 @@ def budget(s):
  a=s.index('pub fn bounded_record(');b=s.index('/// Channel-birth registration',a)
  return s[:a]+'pub fn bounded_record(row:&mut Value)->io::Result<Vec<u8>> {serde_json::to_vec(row).map_err(raw_error)}\n'+s[b:]
 CASES=[
+('producer retirement marker',MODEL,rep('self.words[23] = 0;','self.words[23] = 1;'),RUST),
+('retirement publication',RUN,rep('if self.gauge.retire(self.engine.now()).is_ok() {','if false {'),RUST),
+('retired unanswered ledger',RUN,rep('if v[9] != 0 {','if v[9] != 0 && v[23] != 0 {'),RUST),
 ('runtime guest wrap',RUN,rep('(p + guest_entries - g) % guest_entries','p.saturating_sub(g) % guest_entries'),RUST),
 ('guest GET change tracking',MODEL,rep('w[30] = now;','w[30] = 0;'),RUST),
 ('guest unchanged GET age',MODEL,rep('w[5] & 8 == 0 || w[16] != u64::from(n)','true'),RUST),
@@ -31,7 +34,7 @@ CASES=[
 ('registration capacity',RUN,rep('(n < SOURCES as u64).then(|| n + 1)','true.then(|| n + 1)'),RUST),
 ('registration generation',RUN,rep('slot as u64 + 1, key','1, key'),RUST),
 ('registration overflow count',RUN,rep('|n| Some(n.saturating_add(1))','|n| Some(n)'),RUST),
-('live relay ledger',RUN,rep('if v[9] != 0 && v[23] != 0 {','if false {'),RUST),
+('live relay ledger',RUN,rep('if v[9] != 0 {','if false {'),RUST),
 ('runtime private wrap depth',RUN,rep('(p + entries - g) % entries','p.saturating_sub(g) % entries'),RUST),
 ('wire payload budget',RUN,budget,RUST),
 ('reader relay seqlock',READER,rep(' or v[0]&1',''),PY),

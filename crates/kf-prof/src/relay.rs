@@ -178,6 +178,15 @@ impl RelayGauge {
         w[24] = u64::from(o.private_entries);
         Ok(*w)
     }
+    /// Mark the producer retired, preserving progress and unanswered Wait identity.
+    pub fn retire(&mut self, now: u64) -> Result<[u64; 31], BackwardsClock> {
+        if now < self.words[4] {
+            return Err(BackwardsClock);
+        }
+        self.words[4] = now;
+        self.words[23] = 0;
+        Ok(self.words)
+    }
     /// Current trusted model words, for birth-time publication.
     pub fn words(&self) -> &[u64; 31] {
         &self.words

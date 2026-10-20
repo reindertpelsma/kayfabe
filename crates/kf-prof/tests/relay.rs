@@ -706,6 +706,12 @@ fn dropped_relay_probe_is_retired_in_the_live_file() {
         ..Observation::default()
     });
     drop(r);
+    let file = std::fs::read(path.join("prof.mmap")).unwrap();
+    let base = kf_prof::layout::LEDGER_BASE;
+    let word =
+        |i: usize| u64::from_le_bytes(file[base + i * 8..base + i * 8 + 8].try_into().unwrap());
+    assert!(word(0) > 0 && word(0) % 2 == 0);
+    assert_eq!((word(1), word(10), word(11), word(24)), (1, 1, 9, 0));
     let row = s.snapshot();
     assert_eq!(row["relays"][0]["active"], false);
     assert_eq!(row["ledger"]["counts"][12], 1);

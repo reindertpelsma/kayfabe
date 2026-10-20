@@ -1,0 +1,6 @@
+MEASURED: EXPECTED RED: two missing retire-method compile errors.
+MEASURED: final prof-inject suite108 passed,0 failed/ignored (40core+4injection+34relay+23runtime+7sink).
+MEASURED: full24-case relay table: all>=2 named killing tests; retirement cases4,2,2.
+MEASURED: no-deps kf-prof clippy all targets/prof-inject -Dclippy::all PASS.
+CODE READ: probe Drop publishes producer inactive; unanswered Wait remains in ledger with source_active=false.
+CODE READ: inactive means producer retired, not successful GPU processing or completed hardware teardown.

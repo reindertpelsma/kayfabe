@@ -197,11 +197,11 @@ impl Engine {
                 if v[0] != 1 {
                     continue;
                 }
-                if v[9] != 0 && v[23] != 0 {
+                if v[9] != 0 {
                     kinds[Kind::RelayDrain as usize] =
                         kinds[Kind::RelayDrain as usize].saturating_add(1);
                     let age = now.saturating_sub(v[27]);
-                    oldest.push(json!({"source":index,"kind":Kind::RelayDrain as u16,"generation":v[1],"id":v[2],"birth_ns":v[27],"age_ns":age,"observed_ns":v[4],"last_known":true,"overdue":age>Kind::RelayDrain.bound_ns()}));
+                    oldest.push(json!({"source":index,"kind":Kind::RelayDrain as u16,"generation":v[1],"id":v[2],"birth_ns":v[27],"age_ns":age,"observed_ns":v[4],"last_known":true,"source_active":v[23]!=0,"overdue":age>Kind::RelayDrain.bound_ns()}));
                 }
                 relays.push(relay_row(index, &v));
             }
@@ -1051,6 +1051,13 @@ impl RelayProbe {
     /// Publish cached observations only; no hardware reads or completion decisions.
     pub fn observe(&mut self, o: crate::relay::Observation) {
         if self.gauge.observe(self.engine.now(), o).is_ok() {
+            self.publish();
+        }
+    }
+}
+impl Drop for RelayProbe {
+    fn drop(&mut self) {
+        if self.gauge.retire(self.engine.now()).is_ok() {
             self.publish();
         }
     }
