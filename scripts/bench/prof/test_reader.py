@@ -67,4 +67,14 @@ class ReaderTests(unittest.TestCase):
     def test_unknown_interval_is_not_counted_as_zero_exposure(self):
         _,a=fixture();_,b=fixture();b['counters']['display_new_frames']=None
         s=reader.summarize([a,b]);self.assertEqual(s['ratios']['rmcontrol_per_display_new'],5);self.assertEqual(s['ratio_covered_records'],1)
+    def test_hostile_timestamp_types_are_rejected_before_sorting(self):
+        for value in [None, '999', [], {}, -1, 2**64]:
+            _,r=fixture();r['end_ns']=value
+            p=Path(self.tmp.name)/'prof.jsonl';p.write_text(json.dumps(r)+'\n')
+            self.assertEqual(reader.read_jsonl(p),[])
+    def test_hostile_counter_or_thread_container_cannot_reach_display(self):
+        for key,value in [('counters',[]),('threads',{}),('ledger',[]),('threads',[False])]:
+            _,r=fixture();r[key]=value
+            p=Path(self.tmp.name)/'prof.jsonl';p.write_text(json.dumps(r)+'\n')
+            self.assertEqual(reader.read_jsonl(p),[])
 if __name__=='__main__':unittest.main()
