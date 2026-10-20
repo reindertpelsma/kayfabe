@@ -2614,3 +2614,26 @@ fn the_exploration_reaches_every_race_it_claims_to_cover() {
         assert!(labels.contains(needle), "never reached: {needle:?}");
     }
 }
+
+/// EXPECTED RED (2026-10-20). P10 under the inferred hardware ordering (`hw_db_races_stores`, see the model tests above)
+/// needs the pump to read a private word back between its video-memory stores and `rm.doorbell`. Today `publish_guarded`
+/// (and `Storage::publish_put`) have release fences only: the entry and its marker (PUT - GET == 2) can be stranded until the
+/// channel's next doorbell. The hardware ordering is NOT measured; this test pins the gap, the owner decides (docs section 9.2).
+#[test]
+fn p10_publish_reads_back_before_the_native_doorbell() {
+    let p = after(USERPUMP, "fn publish_guarded(")
+        .split("fn snapshot_with")
+        .next()
+        .unwrap();
+    let admit = p
+        .find(".map_err(|e| access_error(e, \"USER_RING_USERD_ADMISSION\"))??;")
+        .expect("pin: admit end");
+    let bell = p.find("me.rm\n        .doorbell(").expect("pin: doorbell");
+    let between = &p[admit..bell];
+    assert!(
+        between.contains("gpu_get()")
+            || between.contains("read_back")
+            || between.contains("load_u32"),
+        "publish_guarded rings the native doorbell with no read-back of the private stores before it (P10)"
+    );
+}
