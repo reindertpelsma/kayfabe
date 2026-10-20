@@ -199,6 +199,16 @@ fn dispatch_handles_no_tag_class_the_registry_does_not_list() {
 }
 
 #[test]
+fn dispatch_has_exactly_as_many_branches_as_the_registry_has_dispatch_sources() {
+    // counted with multiplicity: two branches with one condition, or a registry entry listed twice, are both a mismatch
+    let entries = WAKE_SOURCES
+        .iter()
+        .filter(|w| matches!(w.visit, Visit::Dispatch(_)))
+        .count();
+    assert_eq!(dispatch_branches().len(), entries);
+}
+
+#[test]
 fn every_registered_dispatch_source_is_still_a_branch_of_dispatch() {
     let found: BTreeSet<String> = dispatch_branches().into_iter().collect();
     for w in WAKE_SOURCES {
