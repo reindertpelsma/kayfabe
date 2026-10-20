@@ -29,7 +29,7 @@ by this install work. `--stats-line` is measurement only and off by default.
 
 Design rationale, threat model and the hardware verification log:
 [display design](../docs/design/V3_DISPLAY.md).
-Wire protocol: [`docs/reference/broker-protocol.md`](../docs/reference/broker-protocol.md).
+Wire protocol: [`common/nvkvm_broker_proto.h`](common/nvkvm_broker_proto.h).
 
 ## Grab, focus and hotkeys
 
@@ -305,8 +305,8 @@ compositor's call, and it will not tell you.
   changes; the path exists for a VMM whose guest does have a cursor plane.
 - **No reverse channel beyond the commands in the protocol header.** Every
   field the privileged side reads is listed in
-  [`docs/reference/broker-protocol.md`](../docs/reference/broker-protocol.md),
+  [`common/nvkvm_broker_proto.h`](common/nvkvm_broker_proto.h),
   and that list is meant to stay short. (This line used to say "the three
-  commands"; there are seven now -- `ATTACH`, `COMMIT`, `WINDOW`, `CLIPBOARD`,
-  `CAPS`, `QUERY_FORMAT`, `CURSOR` -- each fixed-size, and only `ATTACH` and
+  commands"; there are eight now -- `ATTACH`, `COMMIT`, `WINDOW`, `CLIPBOARD`,
+  `CAPS`, `QUERY_FORMAT`, `CURSOR`, `NO_CHANGE` -- each fixed-size, and only `ATTACH` and
   `CURSOR`'s `SET` carry an fd.)
