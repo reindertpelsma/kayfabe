@@ -15,7 +15,13 @@
  * Times are seconds since t0 (the start of the timed loop); t0_epoch is CLOCK_REALTIME.
  */
 #define _GNU_SOURCE
+#include <dirent.h>
 #include <dlfcn.h>
+#include <fcntl.h>
+#include <glob.h>
+#include <pthread.h>
+#include <sys/mman.h>
+#include <sys/stat.h>
 #include <errno.h>
 #include <signal.h>
 #include <stdint.h>
@@ -49,6 +55,8 @@ static CUresult (*p_cuMemAlloc)(unsigned long long *, size_t);
 static CUresult (*p_cuStreamSynchronize)(CUstream);
 static CUresult (*p_cuGetErrorString)(CUresult, const char **);
 static CUresult (*p_cuDriverGetVersion)(int *);
+static CUresult (*p_cuStreamQuery)(CUstream);
+static CUresult (*p_cuCtxSetCurrent)(CUcontext);
 
 /* Hand-written PTX: spin on %clock64 until `cycles` SM cycles have elapsed. */
 static const char PTX[] =
@@ -165,19 +173,173 @@ static double calibrate(void) {
 
 typedef struct { double start, dur_ms, done; } Iter;
 
+/* ---- self-watchdog (second thread): if no iteration completes for --wd-ms, dump the guest-side
+ * picture (format documented in wd_parse.py) to --wd-out.  Reads only /proc; no strace. ---- */
+typedef struct { volatile double last_real; volatile unsigned long long iters; } Hb;
+static Hb *g_hb;                 /* this client's mmap'd heartbeat (shared via --hb-dir) */
+static const char *g_hb_dir, *g_label = "A", *g_wd_path;
+static double g_wd_ms = 2000, g_m0, g_r0;
+static CUcontext g_ctx;
+static volatile unsigned long long g_iters, g_launched;
+static volatile int g_sync_active, g_done;
+static volatile double g_last_done_m;
+
+static void slurp(const char *path, char *buf, size_t cap) {
+    int fd = open(path, O_RDONLY);
+    buf[0] = 0;
+    if (fd < 0) { snprintf(buf, cap, "<err %d>", errno); return; }
+    ssize_t n = read(fd, buf, cap - 1);
+    close(fd);
+    if (n < 0) { snprintf(buf, cap, "<err %d>", errno); return; }
+    buf[n] = 0;
+    while (n > 0 && (buf[n - 1] == '\n')) buf[--n] = 0;
+}
+
+static void dump_proc_file(FILE *o, const char *path) {
+    char b[4096];
+    slurp(path, b, sizeof b);
+    if (!strncmp(b, "<err", 4) && strstr(b, " 21>")) return; /* directory */
+    fprintf(o, "PROC %s\n%s\nENDPROC\n", path, b);
+}
+
+static void dump_tree(FILE *o, const char *dir, int depth) {
+    DIR *d = opendir(dir);
+    if (!d) return;
+    struct dirent *e;
+    while ((e = readdir(d))) {
+        if (e->d_name[0] == '.') continue;
+        char p[512];
+        snprintf(p, sizeof p, "%s/%s", dir, e->d_name);
+        struct stat st;
+        if (stat(p, &st)) continue;
+        if (S_ISDIR(st.st_mode)) { if (depth > 0) dump_tree(o, p, depth - 1); }
+        else if (S_ISREG(st.st_mode)) dump_proc_file(o, p);
+    }
+    closedir(d);
+}
+
+static void watchdog_dump(FILE *o, double idle_ms, int again) {
+    char b[4096], p[512];
+    double now = real();
+    fprintf(o, "WD_BEGIN label=%s pid=%d t=%.3f epoch=%.3f idle_ms=%.1f iters=%llu launched=%llu sync_active=%d again=%d\n",
+            g_label, (int)getpid(), mono() - g_m0, now, idle_ms, g_iters, g_launched, g_sync_active, again);
+    if (g_hb_dir) {
+        DIR *d = opendir(g_hb_dir);
+        struct dirent *e;
+        while (d && (e = readdir(d))) {
+            if (strncmp(e->d_name, "hb.", 3) || !strcmp(e->d_name + 3, g_label)) continue;
+            snprintf(p, sizeof p, "%s/%s", g_hb_dir, e->d_name);
+            int fd = open(p, O_RDONLY);
+            Hb h;
+            if (fd >= 0 && pread(fd, &h, sizeof h, 0) == (ssize_t)sizeof h)
+                fprintf(o, "HB label=%s age_ms=%.1f iters=%llu\n", e->d_name + 3, (now - h.last_real) * 1e3, h.iters);
+            if (fd >= 0) close(fd);
+        }
+        if (d) closedir(d);
+    }
+    if (p_cuStreamQuery) {
+        CUresult r = p_cuStreamQuery(g_stream);
+        fprintf(o, "STREAMQ rc=%d name=%s\n", r, r == 0 ? "SUCCESS" : r == 600 ? "NOT_READY" : "ERROR");
+    }
+    DIR *d = opendir("/proc/self/task");
+    struct dirent *e;
+    while (d && (e = readdir(d))) {
+        if (e->d_name[0] == '.') continue;
+        char comm[64], wch[128], sc[160], stat[512], *st_state;
+        snprintf(p, sizeof p, "/proc/self/task/%s/comm", e->d_name); slurp(p, comm, sizeof comm);
+        snprintf(p, sizeof p, "/proc/self/task/%s/wchan", e->d_name); slurp(p, wch, sizeof wch);
+        snprintf(p, sizeof p, "/proc/self/task/%s/syscall", e->d_name); slurp(p, sc, sizeof sc);
+        snprintf(p, sizeof p, "/proc/self/task/%s/stat", e->d_name); slurp(p, stat, sizeof stat);
+        st_state = strrchr(stat, ')'); st_state = st_state ? st_state + 2 : stat;
+        long nr = -1; char a0[40] = "", a1[40] = "", a2[40] = "";
+        if (sscanf(sc, "%ld %39s %39s %39s", &nr, a0, a1, a2) < 1) nr = -1;
+        fprintf(o, "TASK tid=%s comm=%s state=%c wchan=%s syscall=%ld args=%s,%s,%s\n", e->d_name, comm,
+                *st_state, wch[0] ? wch : "0", nr, a0[0] ? a0 : "-", a1[0] ? a1 : "-", a2[0] ? a2 : "-");
+        fprintf(o, "STAT tid=%s %s\n", e->d_name, stat);
+        snprintf(p, sizeof p, "/proc/self/task/%s/stack", e->d_name); slurp(p, b, sizeof b);
+        fprintf(o, "STACK tid=%s\n%s\nENDSTACK\n", e->d_name, b);
+        snprintf(p, sizeof p, "/proc/self/task/%s/status", e->d_name); slurp(p, b, sizeof b);
+        char *c = strstr(b, "voluntary_ctxt_switches");
+        fprintf(o, "CTXT tid=%s %s\n", e->d_name, c ? c : "?");
+    }
+    if (d) closedir(d);
+    d = opendir("/proc/self/fd");
+    while (d && (e = readdir(d))) {
+        if (e->d_name[0] == '.') continue;
+        char t[256]; ssize_t n;
+        snprintf(p, sizeof p, "/proc/self/fd/%s", e->d_name);
+        n = readlink(p, t, sizeof t - 1);
+        if (n > 0) { t[n] = 0; fprintf(o, "FD %s -> %s\n", e->d_name, t); }
+    }
+    if (d) closedir(d);
+    dump_tree(o, "/proc/driver/nvidia/gpus", 3);
+    dump_tree(o, "/proc/driver/nvidia-uvm", 3);
+    dump_proc_file(o, "/proc/driver/nvidia/warnings");
+    slurp("/proc/interrupts", b, sizeof b);
+    fprintf(o, "PROC /proc/interrupts(nvidia|virtio)\n");
+    { char *l = strtok(b, "\n"); while (l) { if (strstr(l, "nvidia") || strstr(l, "virtio") || strstr(l, "CPU0")) fprintf(o, "%s\n", l); l = strtok(NULL, "\n"); } }
+    fprintf(o, "ENDPROC\n");
+    dump_proc_file(o, "/proc/loadavg");
+    fprintf(o, "WD_END label=%s\n", g_label);
+    fflush(o);
+}
+
+static void *watchdog_main(void *arg) {
+    (void)arg;
+    FILE *o = fopen(g_wd_path, "a");
+    if (!o) return NULL;
+    if (p_cuCtxSetCurrent) p_cuCtxSetCurrent(g_ctx);
+    unsigned long long seen = g_iters;
+    double last = g_m0, episode_start = 0, next_dump = 0;
+    int in_ep = 0;
+    while (!g_done) {
+        usleep(100000);
+        unsigned long long it = g_iters;
+        double nowm = mono();
+        if (it != seen) {
+            if (in_ep) fprintf(o, "WD_RECOVER label=%s t=%.3f gap_ms=%.1f\n", g_label, g_last_done_m - g_m0, (g_last_done_m - last) * 1e3), fflush(o);
+            in_ep = 0; seen = it;
+            continue;
+        }
+        last = g_last_done_m > g_m0 ? g_last_done_m : g_m0;
+        double idle = (nowm - last) * 1e3;
+        if (idle >= g_wd_ms && (!in_ep || nowm >= next_dump)) {
+            watchdog_dump(o, idle, in_ep);
+            if (!in_ep) episode_start = nowm;
+            in_ep = 1; next_dump = nowm + 10.0;
+        }
+    }
+    (void)episode_start;
+    fclose(o);
+    return NULL;
+}
+
+static void hb_open(void) {
+    if (!g_hb_dir) return;
+    char p[512];
+    snprintf(p, sizeof p, "%s/hb.%s", g_hb_dir, g_label);
+    int fd = open(p, O_RDWR | O_CREAT, 0644);
+    if (fd < 0) return;
+    if (ftruncate(fd, sizeof(Hb))) { close(fd); return; }
+    g_hb = mmap(NULL, sizeof(Hb), PROT_READ | PROT_WRITE, MAP_SHARED, fd, 0);
+    if (g_hb == MAP_FAILED) g_hb = NULL;
+    close(fd);
+}
+
 static void usage(void) {
     fprintf(stderr,
         "usage: baton [--duration S] [--k-ms K] [--label L] [--cycles-per-ms X] [--calibrate-only]\n"
         "             [--kernel burn|clock]  (burn = fixed work, default; clock = spin on %%clock64)\n"
         "             [--start-at EPOCH_SEC] [--dump-all FILE] [--slow-ms MS] [--blocks N]\n"
-        "             [--threads N] [--device N] [--spin]\n");
+        "             [--threads N] [--device N] [--spin] [--burst N]\n"
+        "             [--wd-ms MS (2000, 0=off)] [--wd-out FILE] [--hb-dir DIR]\n");
     exit(1);
 }
 
 int main(int argc, char **argv) {
     double duration = 10, k_ms = 5, cpm_override = 0, start_at = 0, slow_ms = 50;
     const char *label = "A", *dump_path = NULL;
-    int calibrate_only = 0, device = 0, spin = 0;
+    int calibrate_only = 0, device = 0, spin = 0, burst = 1;
     const char *kernel = "burn";
     for (int i = 1; i < argc; i++) {
         const char *a = argv[i];
@@ -193,11 +355,16 @@ int main(int argc, char **argv) {
         else if (ARG("--threads")) g_threads = (unsigned)atoi(argv[++i]);
         else if (ARG("--kernel")) kernel = argv[++i];
         else if (ARG("--device")) device = atoi(argv[++i]);
+        else if (ARG("--burst")) burst = atoi(argv[++i]);
+        else if (ARG("--wd-ms")) g_wd_ms = atof(argv[++i]);
+        else if (ARG("--wd-out")) g_wd_path = argv[++i];
+        else if (ARG("--hb-dir")) g_hb_dir = argv[++i];
         else if (!strcmp(a, "--calibrate-only")) calibrate_only = 1;
         else if (!strcmp(a, "--spin")) spin = 1;
         else usage();
     }
-    if (duration <= 0 || k_ms <= 0) usage();
+    if (duration <= 0 || k_ms <= 0 || burst < 1) usage();
+    g_label = label;
     if (strcmp(kernel, "burn") && strcmp(kernel, "clock")) usage();
 
     void *h = dlopen("libcuda.so.1", RTLD_NOW);
@@ -214,11 +381,14 @@ int main(int argc, char **argv) {
     p_cuStreamSynchronize = sym(h, "cuStreamSynchronize", 1);
     p_cuGetErrorString = sym(h, "cuGetErrorString", 0);
     p_cuDriverGetVersion = sym(h, "cuDriverGetVersion", 0);
+    p_cuStreamQuery = sym(h, "cuStreamQuery", 0);
+    p_cuCtxSetCurrent = sym(h, "cuCtxSetCurrent", 0);
 
     CUdevice dev; CUcontext ctx; CUmodule mod;
     CK(p_cuInit(0));
     CK(p_cuDeviceGet(&dev, device));
     CK(p_cuCtxCreate(&ctx, spin ? CU_CTX_SCHED_SPIN : CU_CTX_SCHED_BLOCKING_SYNC, dev));
+    g_ctx = ctx;
     CK(p_cuModuleLoadData(&mod, PTX));
     CK(p_cuModuleGetFunction(&g_fn, mod, strcmp(kernel, "clock") ? "burn" : "spin"));
     CK(p_cuMemAlloc(&g_sink, 256));
@@ -247,6 +417,10 @@ int main(int argc, char **argv) {
     if (dump) fprintf(dump, "idx,start_s,dur_ms,done_s\n");
 
     double m0 = mono(), r0 = real();
+    g_m0 = m0; g_r0 = r0;
+    hb_open();
+    pthread_t wdt; int wd_on = 0;
+    if (g_wd_ms > 0 && g_wd_path && pthread_create(&wdt, NULL, watchdog_main, NULL) == 0) wd_on = 1;
     printf("# baton v1\n");
     printf("# label=%s pid=%d k_ms=%.3f cycles=%llu grid=%ux%u duration_s=%g kernel=%s spin=%d device=\"%s\" driver=%d\n",
            label, (int)getpid(), k_ms, cycles, g_blocks, g_threads, duration, kernel, spin,
@@ -264,9 +438,16 @@ int main(int argc, char **argv) {
         double s = mono() - m0;
         if (g_stop || s >= duration) break;
         void *args[] = { &cycles, &g_sink };
-        CK(p_cuLaunchKernel(g_fn, g_blocks, 1, 1, g_threads, 1, 1, 0, g_stream, args, NULL));
+        for (int b = 0; b < burst; b++) {
+            CK(p_cuLaunchKernel(g_fn, g_blocks, 1, 1, g_threads, 1, 1, 0, g_stream, args, NULL));
+            g_launched++;
+        }
+        g_sync_active = 1;
         CK(p_cuStreamSynchronize(g_stream));
+        g_sync_active = 0;
         double d = mono() - m0;
+        g_iters++; g_last_done_m = m0 + d;
+        if (g_hb) { g_hb->iters = g_iters; g_hb->last_real = r0 + d; }
         double dur = (d - s) * 1e3;
         if (n == cap) { cap *= 2; it = realloc(it, cap * sizeof *it); if (!it) return 3; }
         it[n].start = s; it[n].dur_ms = dur; it[n].done = d; n++;
@@ -286,6 +467,8 @@ int main(int argc, char **argv) {
         cur_cnt++;
         if (dur > cur_max) cur_max = dur;
     }
+    g_done = 1;
+    if (wd_on) pthread_join(wdt, NULL);
     /* the last (possibly partial) second */
     printf("%d %ld %.3f\n", cur_sec, cur_cnt, cur_max);
     if (cur_cnt == 0 && cur_sec < nsec_window) zero_sec++;
