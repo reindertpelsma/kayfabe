@@ -41,3 +41,8 @@ docs/whitepaper/*.toc
 
 # w753 session scratch: logs, saved copies for the known-positive pass, box coordinates.
 .w753/
+
+# Generated from the canonical VERSION by the broker build.
+/broker/kayfabe_version.h
+
+/.build/

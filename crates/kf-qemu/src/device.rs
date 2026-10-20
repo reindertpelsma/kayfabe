@@ -368,6 +368,7 @@ impl Device {
     /// Any refusal, by name — the VM must not start on a guessed device.
     pub fn realize(cfg: &Config) -> Result<Device, String> {
         cfg.check()?;
+        eprintln!("kf3: kayfabe {}", include_str!("../../../VERSION").trim());
         eprintln!(
             "kf3: effective-config guest-os={:?} settings={:?}",
             cfg.guest_profile,

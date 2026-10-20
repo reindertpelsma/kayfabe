@@ -21,7 +21,7 @@ BUILD="${2:-$(dirname "$QEMU")/qemu-build-kf3}"
 [ -f "$QEMU/VERSION" ] || { echo "⊘ $QEMU is not a QEMU source tree"; exit 1; }
 command -v cargo >/dev/null || { echo "⊘ cargo not on PATH (export PATH=\$HOME/.cargo/bin:\$PATH)"; exit 127; }
 echo "== kf3 build: QEMU $(cat "$QEMU/VERSION") rev $(git -C "$REPO" rev-parse --short=8 HEAD)"
-( cd "$REPO" && cargo build --release -p kf-qemu )
+( cd "$REPO" && cargo build --release --locked -j2 -p kf-qemu )
 TARGET=${CARGO_TARGET_DIR:-$REPO/target}
 [[ "$TARGET" = /* ]] || TARGET="$REPO/$TARGET"
 ARCHIVE="$TARGET/release/libkf_qemu.a"
@@ -37,6 +37,14 @@ mkdir -p "$QEMU/hw/misc/kf3"
 # box build failed "kf3_gop.h: No such file or directory" because this line named three files.
 cp "$REPO"/qemu/hw/misc/kf3/*.c "$REPO"/qemu/hw/misc/kf3/*.h "$REPO"/qemu/hw/misc/kf3/meson.build "$QEMU/hw/misc/kf3/"
 cp "$ARCHIVE" "$QEMU/hw/misc/kf3/libkf_qemu.a"
+python3 - "$REPO/VERSION" "$QEMU/hw/misc/kf3/kf3_version.h" <<'PYVERSION'
+from pathlib import Path
+import re,sys
+version=Path(sys.argv[1]).read_text().strip()
+if not re.fullmatch(r'[0-9]+\.[0-9]+\.[0-9]+(?:-[A-Za-z0-9.]+)?',version):
+    raise SystemExit('invalid canonical VERSION')
+Path(sys.argv[2]).write_text('#define KAYFABE_VERSION "'+version+'"\n')
+PYVERSION
 grep -q "subdir('kf3')" "$QEMU/hw/misc/meson.build" || printf "\nsubdir('kf3')\n" >> "$QEMU/hw/misc/meson.build"
 grep -q '^config KF3' "$QEMU/hw/misc/Kconfig" || printf '\nconfig KF3\n    bool\n    default y if TEST_DEVICES\n    depends on PCI\n' >> "$QEMU/hw/misc/Kconfig"
 # One build at a time in the shared build dir (a second waits, it does not interleave).
@@ -68,13 +76,12 @@ if [ ! -f "$BUILD/build.ninja" ] || [ "$(cat "$BUILD/.kf3-configure" 2>/dev/null
   ( cd "$BUILD" && "$QEMU/configure" $CONF_FLAGS >/dev/null )
   printf '%s' "$CONF_FLAGS" > "$BUILD/.kf3-configure"
 fi
-ninja -C "$BUILD" qemu-system-x86_64
+ninja -j2 -C "$BUILD" qemu-system-x86_64
 REV=$(git -C "$REPO" rev-parse --short=8 HEAD)
 [ -z "$(git -C "$REPO" status --porcelain --untracked-files=no)" ] || REV="$REV-dirty"
 PRIV="$(dirname "$BUILD")/kf3-bins/$REV"
 mkdir -p "$PRIV"
-cp "$BUILD/qemu-system-x86_64" "$PRIV/.qemu-system-x86_64.tmp.$$"
-mv -f "$PRIV/.qemu-system-x86_64.tmp.$$" "$PRIV/qemu-system-x86_64"
+python3 "$REPO/scripts/release/publish_binary.py" "$BUILD/qemu-system-x86_64" "$PRIV/qemu-system-x86_64"
 # QEMU finds its firmware relative to the executable; the data files are revision-independent.
 for x in pc-bios qemu-bundle; do [ -e "$BUILD/$x" ] && ln -sfn "$BUILD/$x" "$PRIV/$x"; done
 echo "KF3_BUILT $PRIV/qemu-system-x86_64 rev=$REV mtime=$(stat -c %y "$PRIV/qemu-system-x86_64") (shared build dir $BUILD)"

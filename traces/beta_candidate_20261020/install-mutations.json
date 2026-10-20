@@ -1,0 +1,59 @@
+[
+  {
+    "mutant": "vram-headroom",
+    "kills": 3,
+    "tests": [
+      "test_derived_geometry_always_reserves_documented_headroom",
+      "test_insufficient_resources_refuse_instead_of_guessing",
+      "test_small_bar_and_vram_follow_the_documented_budget"
+    ]
+  },
+  {
+    "mutant": "bar-headroom",
+    "kills": 2,
+    "tests": [
+      "test_derived_geometry_always_reserves_documented_headroom",
+      "test_small_bar_and_vram_follow_the_documented_budget"
+    ]
+  },
+  {
+    "mutant": "os-selection",
+    "kills": 2,
+    "tests": [
+      "test_declared_os_and_driver_are_independent_device_properties",
+      "test_windows_needs_one_profile_and_no_environment_flags"
+    ]
+  },
+  {
+    "mutant": "version-match",
+    "kills": 2,
+    "tests": [
+      "test_old_qemu_is_refused_even_with_the_current_broker",
+      "test_versions_must_match"
+    ]
+  },
+  {
+    "mutant": "dry-run",
+    "kills": 2,
+    "tests": [
+      "test_linux_print_never_starts_a_process_or_writes_state",
+      "test_windows_print_never_starts_a_process_or_writes_state"
+    ]
+  },
+  {
+    "mutant": "uninstall-escape",
+    "kills": 2,
+    "tests": [
+      "test_uninstall_refuses_absolute_manifest_paths",
+      "test_uninstall_refuses_traversal"
+    ]
+  },
+  {
+    "mutant": "publication",
+    "kills": 2,
+    "tests": [
+      "test_publication_is_an_exact_copy_and_second_writer_is_refused",
+      "test_publication_never_replaces_an_existing_revision"
+    ]
+  }
+]

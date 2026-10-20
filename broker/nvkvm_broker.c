@@ -38,6 +38,7 @@
  * OUTSIDE any sandbox — is allowed to read a byte of it.  Every rule is in
  * nb_validate_desc() below and in README.md §3.
  */
+#include "kayfabe_version.h"
 #include <errno.h>
 #include <fcntl.h>
 #include <grp.h>
@@ -3868,6 +3869,10 @@ static uint64_t nb_stats_now_ns(bool enabled)
 
 int main(int argc, char **argv)
 {
+    if (argc == 2 && !strcmp(argv[1], "--version")) {
+        printf("kayfabe %s\n", KAYFABE_VERSION);
+        return 0;
+    }
     struct nb_config cfg;
     struct nb_session *sess;
     static struct nb_sink sink;     /* ~12 KB of ring; not a stack object */

@@ -79,6 +79,7 @@
 #include "system/runstate.h"
 #include <linux/kvm.h>
 #include "kf3.h"
+#include "kf3_version.h"
 #include "kf3_gop.h"
 /* ★ ABI 24, DIAGNOSTIC (KF3_BAR0_READ_TRACE and x-gsp-observer, both default off; OWNER_RULINGS.md
  * sec. X, docs/design/V3_BAR0_TRACE_MODE.md): the VFIO reference's OWN tracer — QEMU's vfio trace
@@ -2009,7 +2010,7 @@ static void kf3_class_init(ObjectClass *klass, const void *data)
     k->class_id = PCI_CLASS_DISPLAY_VGA;
     device_class_set_props(dc, kf3_properties);
     set_bit(DEVICE_CATEGORY_DISPLAY, dc->categories);
-    dc->desc = "kayfabe v3 GPU (stock NVIDIA driver on a real host GPU)";
+    dc->desc = "kayfabe " KAYFABE_VERSION " kf3 GPU";
 }
 
 static const TypeInfo kf3_type_info = {

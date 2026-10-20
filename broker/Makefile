@@ -30,6 +30,7 @@ RELAY       = nvkvm-broker-relay
 DMASRC      = nvkvm-broker-dmabuf-src
 
 CFLAGS  ?= -O2 -g
+KAYFABE_VERSION := $(shell cat ../VERSION)
 CFLAGS  += -std=gnu11 -Wall -Wextra -Wno-unused-parameter \
            -Wformat=2 -Wshadow -Wvla \
            -fstack-protector-strong -D_FORTIFY_SOURCE=2 \
@@ -134,6 +135,11 @@ report:
 	@echo "  wayland : $(if $(HAVE_WL),yes,NO - install libwayland-dev wayland-protocols)"
 	@echo "  x11     : $(if $(HAVE_X11),yes (dri3+present$(if $(HAVE_XRENDER), +xrender scaling and guest cursor, NO SCALING OR GUEST CURSOR: install libxcb-render0-dev)),NO - install libxcb1-dev libxcb-dri3-dev libxcb-present-dev)$(if $(HAVE_X11),$(if $(HAVE_XI), + xi2 raw motion, - NO relative motion under grab: install libxcb-xinput-dev),)"
 	@echo "  test    : yes (always)"
+
+kayfabe_version.h: ../VERSION ../scripts/release/version_header.py
+	python3 ../scripts/release/version_header.py ../VERSION $@
+
+nvkvm_broker.o: kayfabe_version.h
 
 $(BIN): $(OBJS)
 	$(CC) $(CFLAGS) -o $@ $^ $(LDFLAGS) $(LIBS)
@@ -274,6 +280,7 @@ install: $(BIN)
 	install -m 0755 $(BIN) $(DESTDIR)$(PREFIX)/bin/$(BIN)
 
 clean:
+	rm -f kayfabe_version.h
 	rm -f $(BIN) $(TESTCLIENT) $(RELAY) $(DMASRC) wl-tick-probe test-tick *.o *.d \
 	      *-client-protocol.h *-protocol.c test-utf8 test-cursor test-geom test-xor test-tick \
 	      test/utf8_extracted.inc

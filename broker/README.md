@@ -4,37 +4,32 @@ A small privileged-side program that owns the window, the input and the
 clipboard, so the VMM does not have to. QEMU hands it finished frames over a
 unix socket and holds no connection to your display server at all.
 
-## Do you need this?
+STATUS: BETA CANDIDATE, updated 2026-10-20. No supported external-user path.
+CODE READ: kayfabe's virtual display uses this broker even for a plain desktop
+QEMU. Run it as the desktop user; it owns the compositor connection, input and
+clipboard. QEMU connects through the kf3 **device properties**, not a special
+QEMU display backend. A broker does not sandbox an otherwise unconfined QEMU.
+For install/first boot see [INSTALL](../docs/INSTALL.md) and
+[RUNNING_KAYFABE](../docs/RUNNING_KAYFABE.md).
 
-**Use the broker when the VMM is sandboxed** — in a container, `systemd-nspawn`
-or `bubblewrap` — and must not be able to reach your display server. That is
-the only thing it buys you: the sandbox stays sealed, and the display
-connection lives outside it. This is how `nvkvm-steamos` and the compose
-deployments run.
+CODE READ: build from the repository root with `make -C broker -j2`.
+`broker/nvkvm-display-broker --version` prints the canonical VERSION and exits
+before opening a compositor/socket; install matching QEMU and launcher parts.
+Wayland needs libwayland-dev and wayland-protocols; X11 needs libxcb1-dev,
+libxcb-dri3-dev and libxcb-present-dev. libxcb-render0-dev supplies scaling and
+cursor support, and libxcb-xinput-dev supplies relative input. The build report
+states which backends are present. The broker does not create a CUDA context.
 
-**Do not use it for a plain QEMU on your own desktop.** If the VMM is not
-sandboxed, render directly:
-
-```bash
-qemu-system-x86_64 ... -display sdl        # or -display gtk
-```
-
-The broker's security property is *"the VMM never touches the display
-server"*. If the VMM is already running unconfined as your user, that property
-is vacuous — it can reach your display server, your clipboard and your input
-devices regardless of how frames get to the screen. All the broker adds in
-that case is a socket hop and one more process to run. SDL is simpler, faster
-to set up, and no less safe.
-
-| your setup | use |
-|---|---|
-| QEMU in a container / nspawn / bwrap | the broker |
-| QEMU as your normal user, unconfined | `-display sdl` |
-| headless, no display at all | neither |
+CODE READ: GNOME/mutter Wayland with wp_presentation is the source-measured
+pacing path; actual capability is announced, not inferred from the desktop name.
+X11 remains a fallback and does not advertise CAP_TICK. Without presentation
+feedback, the CLOCK_ONLY/frame-callback path and VMM fallback retain their
+existing behavior. No tick source, timer constant or cursor behavior is changed
+by this install work. `--stats-line` is measurement only and off by default.
 
 Design rationale, threat model and the hardware verification log:
-[`docs/internal/broker-design.md`](../../docs/internal/broker-design.md).
-Wire protocol: [`docs/reference/broker-protocol.md`](../../docs/reference/broker-protocol.md).
+[display design](../docs/design/V3_DISPLAY.md).
+Wire protocol: [`docs/reference/broker-protocol.md`](../docs/reference/broker-protocol.md).
 
 ## Grab, focus and hotkeys
 
@@ -81,7 +76,7 @@ away.
 ### Build
 
 ```bash
-cd src/broker && make          # prints which backends it kept
+cd broker && make          # prints which backends it kept
 make check                     # build + selftest.sh
 bash headless_present_test.sh  # real import + present, headless, no monitor
 ```
@@ -121,16 +116,17 @@ X11 rel. motion    libxcb-xinput-dev     (optional; without it, no relative
 
 ```bash
 # in your desktop session, as your normal user
-nvkvm-display-broker --socket /run/nvkvm/display.sock --size 1920x1080
+mkdir -p "$XDG_RUNTIME_DIR/kayfabe"
+broker/nvkvm-display-broker --socket "$XDG_RUNTIME_DIR/kayfabe/broker.sock" --backend auto
 
-# then, in the sandbox
-qemu-system-x86_64 ... -display nvkvm-broker,socket=/run/nvkvm/display.sock
+# then, in another terminal as the same user (normal VM args omitted)
+qemu-system-x86_64 ... -device kf3-gpu,display=on,display-broker="$XDG_RUNTIME_DIR/kayfabe/broker.sock",display-broker-uid="$(id -u)"
 ```
 
 Before involving QEMU, prove the broker alone works:
 
 ```bash
-nvkvm-broker-testclient /run/nvkvm/display.sock --present 640x480
+broker/nvkvm-broker-testclient "$XDG_RUNTIME_DIR/kayfabe/broker.sock" --present 640x480
 ```
 
 That prints the handshake and every input event, and sends one buffer. It
@@ -309,7 +305,7 @@ compositor's call, and it will not tell you.
   changes; the path exists for a VMM whose guest does have a cursor plane.
 - **No reverse channel beyond the commands in the protocol header.** Every
   field the privileged side reads is listed in
-  [`docs/reference/broker-protocol.md`](../../docs/reference/broker-protocol.md),
+  [`docs/reference/broker-protocol.md`](../docs/reference/broker-protocol.md),
   and that list is meant to stay short. (This line used to say "the three
   commands"; there are seven now -- `ATTACH`, `COMMIT`, `WINDOW`, `CLIPBOARD`,
   `CAPS`, `QUERY_FORMAT`, `CURSOR` -- each fixed-size, and only `ATTACH` and

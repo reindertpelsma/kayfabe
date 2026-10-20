@@ -16,6 +16,7 @@ class InstallPath(unittest.TestCase):
 
     def facts(self):
         return dict(total_mb=12288, free_mb=11000, bar1_mb=256, kvm=True,
+                    uefi_code='/firmware/OVMF_CODE.fd',uefi_vars_template='/firmware/OVMF_VARS.fd',
                     devices=True, driver='595.91.07', family='Ada', model='RTX 4070',
                     qemu_version='0.1.0-beta.1', broker_version='0.1.0-beta.1',
                     graphical=True, disk_free=8<<30, hugepages=0, memlock=8<<20,
@@ -92,5 +93,59 @@ class InstallPath(unittest.TestCase):
             with self.assertRaises(ValueError):self.k.install_prefix(source,prefix)
             for bad in ['/', '/usr', '/usr/bin', '/opt']:
                 with self.assertRaises(ValueError):self.k.install_prefix(source,Path(bad))
+
+    def test_derived_geometry_always_reserves_documented_headroom(self):
+        for total,bar in [(6144,256),(8192,512),(12288,16384)]:
+            facts=self.facts();facts.update(total_mb=total,bar1_mb=bar)
+            for display in [False,True]:
+                fb,b1,b2=self.k.geometry(facts,display)
+                self.assertLessEqual(fb+2048,total)
+                boot=1920*1080*4 if display else 0
+                self.assertLessEqual(b1+b2+(1+16)*(1<<20)+boot,bar*(1<<20))
+
+    def test_declared_os_and_driver_are_independent_device_properties(self):
+        for os_name in ['windows','linux']:
+            command=self.k.qemu_command(self.options('--os',os_name),self.facts(),Path('/opt/kayfabe'))
+            device=command[command.index('-device')+1]
+            self.assertIn('guest-os='+os_name,device)
+            self.assertIn('guest-driver=580.65.06',device)
+
+    def test_old_qemu_is_refused_even_with_the_current_broker(self):
+        facts=self.facts();facts['qemu_version']='old'
+        row=next(row for row in self.k.doctor_rows(facts,'0.1.0-beta.1',True) if row['check']=='versions')
+        self.assertEqual(row['status'],'FAIL')
+
+    def _print_has_no_launch_or_state_effect(self,os_name):
+        import contextlib,io,json
+        from unittest.mock import patch
+        with tempfile.TemporaryDirectory() as raw:
+            root=Path(raw);disk=root/'disk.qcow2';disk.write_bytes(b'fixture')
+            facts=root/'facts.json';facts.write_text(json.dumps(self.facts()))
+            with patch.object(self.k.subprocess,'run',side_effect=AssertionError('dry-run executed a process')), \
+                 patch.object(self.k.subprocess,'Popen',side_effect=AssertionError('dry-run launched TPM')), \
+                 patch.object(Path,'mkdir',side_effect=AssertionError('dry-run wrote state')), \
+                 contextlib.redirect_stdout(io.StringIO()):
+                self.assertEqual(self.k.main(['--os',os_name,'--disk',str(disk),'--guest-driver','580.65.06',
+                                             '--facts',str(facts),'--print']),0)
+            self.assertFalse((root/'.kayfabe').exists())
+
+    def test_windows_print_never_starts_a_process_or_writes_state(self):
+        self._print_has_no_launch_or_state_effect('windows')
+
+    def test_linux_print_never_starts_a_process_or_writes_state(self):
+        self._print_has_no_launch_or_state_effect('linux')
+
+    def _reject_manifest_escape(self,absolute):
+        import json,hashlib
+        with tempfile.TemporaryDirectory() as raw:
+            root=Path(raw);prefix=root/'prefix';prefix.mkdir();outside=root/'outside';outside.write_bytes(b'owned fixture')
+            name=str(outside) if absolute else '../outside'
+            (prefix/'.kayfabe-install.json').write_text(json.dumps({name:hashlib.sha256(outside.read_bytes()).hexdigest()}))
+            with self.assertRaises(ValueError):self.k.uninstall_prefix(prefix)
+            self.assertEqual(outside.read_bytes(),b'owned fixture')
+
+    def test_uninstall_refuses_traversal(self):self._reject_manifest_escape(False)
+
+    def test_uninstall_refuses_absolute_manifest_paths(self):self._reject_manifest_escape(True)
 
 if __name__=='__main__':unittest.main()

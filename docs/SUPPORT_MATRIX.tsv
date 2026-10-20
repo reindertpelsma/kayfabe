@@ -1,0 +1,6 @@
+family	die	host_driver	guest_os	guest_driver	revision	result	evidence	status
+Ada	AD104	595.91.07	Linux	UNKNOWN (not restated in report)	0a746117	rootless fast suite 30/30; gates 9/9 plus gate10	32d7319b2:traces/rootless_audit_20261016/REPORT.txt	STALE
+Ada	AD104	595.91.07	Windows 11	580.88	0a746117	rootless Heaven using test broker; real compositor unverified	32d7319b2:traces/rootless_audit_20261016/REPORT.txt	STALE
+Turing	UNTESTED C6	UNTESTED	Linux / Windows	UNTESTED	C6	UNTESTED; no beta hardware acceptance	traces/beta_candidate_20261020/HW_PLAN.md	UNTESTED
+Ampere	UNTESTED C6	UNTESTED	Linux / Windows	UNTESTED	C6	UNTESTED; no beta hardware acceptance	traces/beta_candidate_20261020/HW_PLAN.md	UNTESTED
+Blackwell	UNTESTED C6	UNTESTED	Linux / Windows	UNTESTED	C6	UNTESTED; no beta hardware acceptance	traces/beta_candidate_20261020/HW_PLAN.md	UNTESTED
