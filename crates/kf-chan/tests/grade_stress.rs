@@ -2088,19 +2088,37 @@ fn run_scenario(sc: &Scenario) -> Outcome {
                 // no recorded wait (a batch marker's late interrupt legitimately rings one more turn) and no interrupt in flight
                 && rt.cells.iter().all(|c| !c.is_waiting())
                 && irqs.lock().map_or(false, |q| q.is_empty())
+                // 2026-10-20 (grader G5 under load): no token rung or being served and no relay demand -- a doorbell whose work
+                // an earlier turn already did still rings its token (a legal redundant ring, "a ring with no work is safe"); under
+                // load its wake lands after the guests are done. Quiet means: nothing rung, nothing in a worker's hands.
+                && rt.plane.tokens.iter().take(rt.n_real as usize).all(|w| format!("{:?}", w.load().state) == "Idle")
+                && rt.cells.iter().all(|c| !c.pending())
         };
         if !sh.abort.load(Ordering::Acquire)
             && env_u("RS_PARK_NET", 0) == 0
             && sc.synth_hot == 0
             && !sc.holder.on
             && !sc.force_spin
-            && settled()
+            && {
+            // wait for the system to settle (bounded: 2 s); a run that never settles is reported by the caller (vacuous)
+            let t = Instant::now();
+            while !settled() && t.elapsed() < Duration::from_millis(2000) {
+                std::thread::sleep(Duration::from_millis(1));
+            }
+            settled()
+        }
         {
             sh.quiet_checked.store(true, Ordering::Release);
             std::thread::sleep(Duration::from_millis(20));
             let quiet = |ws: &WorkerStats, st: &RelayStats| {
                 (
-                    ws.parks.load(Ordering::Relaxed),
+                    // WAKEUPS (park waits that ENDED), not parks: a wake that ended before the window and re-parks inside it
+                    // under load is not a wakeup in the window (2026-10-20, G5 under load, 1 of 10 runs)
+                    if cfg!(feature = "chaos-hooks") {
+                        sh.after_waits.load(Ordering::Relaxed)
+                    } else {
+                        ws.parks.load(Ordering::Relaxed)
+                    },
                     st.retry_looks.load(Ordering::Relaxed),
                     rt.serve_calls.load(Ordering::Relaxed),
                 )
@@ -2114,7 +2132,7 @@ fn run_scenario(sc: &Scenario) -> Outcome {
                     .all(|c| c.pq.lock().map(|q| q.is_empty()).unwrap_or(true))
             {
                 sh.violation(format!(
-                    "I7 the workers were not quiet with nothing outstanding: (parks, timeout-0 looks, serves) {before:?} -> {after:?}"
+                    "I7 the workers were not quiet with nothing outstanding: (wakeups, timeout-0 looks, serves) {before:?} -> {after:?}"
                 ));
             }
         }
