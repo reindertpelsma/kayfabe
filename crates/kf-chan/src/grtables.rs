@@ -95,7 +95,8 @@ pub enum Field {
     OneOf(&'static [u32]),
     /// `V` 31:0: the whole word is the one named field (a coordinate or a fixed-point scale).
     Word,
-    /// ★ An ADDRESS register's upper bits (`ADDRESS_UPPER` 7:0) — held, never emitted as written.
+    /// An address register's upper bits: 7:0 by default, or the bound class's public width.
+    /// Held, never emitted as written.
     AddressUpper8,
     /// ★ The same address's lower word (`ADDRESS_LOWER` 31:0): the decoder pairs it with the upper
     /// bits into a guest VA of `bytes` written bytes, which the binder resolves through the
@@ -383,6 +384,25 @@ pub fn gr_method(class: GrClass, method: u32) -> Disposition {
 /// # Errors
 /// A word with a bit outside the field, or a value the field does not name.
 pub fn reauthor(r: &Row, v: u32) -> Result<u32, &'static str> {
+    reauthor_in_class(None, r, v)
+}
+
+/// Upper address width declared by the class header; an id-only header stays narrow.
+/// `clcb97.h` (ogkm 580.65.06) and `clcdc0.h` (ogkm 595.91.07) declare 24:0;
+/// the other supported field layouts declare 7:0 or supply no wider definition.
+#[must_use]
+pub const fn address_upper_bits(class: u32) -> u32 {
+    match class {
+        0xCB97 | 0xCDC0 => 25,
+        _ => 8,
+    }
+}
+
+/// Re-author a field using the bound class's public width (`None`: narrow default).
+///
+/// # Errors
+/// A bit outside the class field, or a value the field does not name.
+pub fn reauthor_in_class(class: Option<u32>, r: &Row, v: u32) -> Result<u32, &'static str> {
     match r.field {
         Field::Bool => {
             if v & !1 != 0 {
@@ -397,8 +417,13 @@ pub fn reauthor(r: &Row, v: u32) -> Result<u32, &'static str> {
             .ok_or("a value the class header does not name"),
         Field::Word => Ok(u32::from_le_bytes(v.to_le_bytes())),
         Field::AddressUpper8 => {
-            if v & !0xFF != 0 {
-                return Err("ADDRESS_UPPER beyond 7:0");
+            let bits = class.map_or(8, address_upper_bits);
+            if v >> bits != 0 {
+                return Err(if bits == 8 {
+                    "ADDRESS_UPPER beyond 7:0"
+                } else {
+                    "ADDRESS_UPPER beyond 24:0"
+                });
             }
             Ok(v)
         }
@@ -430,7 +455,7 @@ mod tests {
         let row = &NOTIFY_ALLOWED[0];
         assert_eq!(reauthor(row, 0xff), Ok(0xff));
         assert!(reauthor(row, 0x100).is_err());
-        assert!(reauthor(row, 0x1ff_ffff).is_err());
+        assert!(reauthor(row, 0x01ff_ffff).is_err());
     }
 
     #[test]
@@ -438,7 +463,7 @@ mod tests {
         let row = &REPORT_SEMAPHORE_ALLOWED[0];
         assert_eq!(reauthor(row, 0xff), Ok(0xff));
         assert!(reauthor(row, 0x100).is_err());
-        assert!(reauthor(row, 0x1ff_ffff).is_err());
+        assert!(reauthor(row, 0x01ff_ffff).is_err());
     }
 
     #[test]

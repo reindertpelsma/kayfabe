@@ -1,0 +1,44 @@
+[
+  {
+    "status": "killed",
+    "kills": 3,
+    "tests": [
+      "tmode::f2_tests::f2_hopper_notifier_preserves_all_25_upper_bits",
+      "tmode::f2_tests::f2_hopper_report_semaphore_preserves_all_25_upper_bits",
+      "tmode::f2_tests::f2_blackwell_compute_notifier_preserves_all_25_upper_bits"
+    ],
+    "errors": [],
+    "mutant": "wide-narrow"
+  },
+  {
+    "status": "killed",
+    "kills": 2,
+    "tests": [
+      "tmode::f2_tests::f2_ada_three_d_keeps_8_bit_upper",
+      "tmode::f2_tests::f2_ada_compute_keeps_8_bit_upper"
+    ],
+    "errors": [],
+    "mutant": "narrow-wide"
+  },
+  {
+    "status": "killed",
+    "kills": 2,
+    "tests": [
+      "tmode::f2_tests::f2_hopper_refuses_upper_bit_25",
+      "tmode::f2_tests::f2_blackwell_compute_refuses_upper_bit_25"
+    ],
+    "errors": [],
+    "mutant": "bit25"
+  },
+  {
+    "status": "killed",
+    "kills": 3,
+    "tests": [
+      "tmode::f2_tests::f2_blackwell_compute_notifier_preserves_all_25_upper_bits",
+      "tmode::f2_tests::f2_hopper_notifier_preserves_all_25_upper_bits",
+      "tmode::f2_tests::f2_hopper_report_semaphore_preserves_all_25_upper_bits"
+    ],
+    "errors": [],
+    "mutant": "lost-class"
+  }
+]
