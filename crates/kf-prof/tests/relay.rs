@@ -302,6 +302,7 @@ mod runtime {
         let b = std::fs::read(p.join("prof.mmap")).unwrap();
         let off = kf_prof::layout::RECORD_BASE;
         assert_eq!(&b[off..off + 8], &[0; 8]);
+        assert_eq!(s.snapshot()["relay_dropped"],1);
         s.stop().unwrap();
         std::fs::remove_dir_all(p).unwrap();
     }
@@ -395,4 +396,12 @@ fn a_backward_clock_cannot_relabel_an_outstanding_wait() {
     g.observe(10,Observation{wait:Wait::Marker(9),..Observation::default()}).unwrap();
     assert!(g.observe(9,Observation{wait:Wait::Popped(11),..Observation::default()}).is_err());
     let w=g.observe(10,Observation{wait:Wait::Marker(9),..Observation::default()}).unwrap();assert_eq!((w[9],w[10],w[27]),(1,9,10));
+}
+
+#[test]
+fn repeated_zero_after_get_wrap_does_not_reset_the_change_time() {
+    let mut g=RelayGauge::new(1,1,1);
+    g.observe(10,Observation{private_get:Some(511),..Observation::default()}).unwrap();
+    g.observe(20,Observation{private_get:Some(0),..Observation::default()}).unwrap();
+    let w=g.observe(30,Observation{private_get:Some(0),wake:Some(Wake::Event),..Observation::default()}).unwrap();assert_eq!(w[15],20);
 }
