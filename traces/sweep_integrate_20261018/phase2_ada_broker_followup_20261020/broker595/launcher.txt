@@ -1,0 +1,22 @@
+INTERACTIVE_START kf3=7f22d18d checkout=7f22d18d 2026-10-20T03:22:35+00:00
+[interactive] session: kfbench (uid 1002) session c1 type=x11 wayland=none x=:0; locked=no
+[interactive] broker: pid 94562, backend x11, socket /run/user/1002/nvkvm/display.sock, 7f22d18dfff8083345cdb54a4666018dca845384 (/opt/sweep-broker/nvkvm-display-broker)
+OWNED_QEMU_RECORDED pid=94571
+[interactive] QEMU pid 94571, kf3 7f22d18d (/workspace/bench/kf3-bins/7f22d18d/qemu-system-x86_64)
+
+  ┌──────────────────────────────────────────────────────────────────────────────┐
+  │ kayfabe guest window: "kayfabe guest" on kfbench's desktop
+  │   pointer      hover = absolute tablet (the guest pointer follows yours)
+  │   CTRL+ALT+G   GRAB: keyboard + pointer locked to the guest, relative mouse (GNOME asks
+  │                once whether to allow inhibiting shortcuts: click Allow);
+  │                press CTRL+ALT+G again to RELEASE (focus loss also releases)
+  │   CTRL+ALT+F   fullscreen on/off
+  │   grub menu    10 s after TianoCore; arrows, e and Enter work in the window
+  │   desktop      Cinnamon logs in by itself as 'ubuntu' (~60-90 s)
+  │   stop         Ctrl-C here, or: scripts/bench/display/interactive.sh stop  (or close the window: it asks the
+  │                guest to power down)
+  │   guest ssh    ssh -i /workspace/bench/guest_key ubuntu@192.168.77.2
+  │   logs         /workspace/sweep-desktop595-56829120/baseline
+  └──────────────────────────────────────────────────────────────────────────────┘
+[interactive] QEMU exited rc=0 (log /workspace/sweep-desktop595-56829120/baseline/qemu.log)
+INTERACTIVE_EXIT rc=0 2026-10-20T03:24:37+00:00
