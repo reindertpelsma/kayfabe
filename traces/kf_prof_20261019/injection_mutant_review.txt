@@ -1,0 +1,8 @@
+CODE READ: initial overdue mutant changed only the first temporary JSON label.
+Later stable-snapshot validation recomputes age/overdue and overwrote it.
+MEASURED: that non-behavioral mutation yielded0 kills; discarded as a no-op.
+The revised mutant changes both computations; two-kill requirement unchanged.
+MEASURED: revised overdue mutant killed the injection integration test; Cargo
+stopped before running the separate runtime test binary (one observed kill).
+Runner now uses --no-fail-fast to execute every independent test binary.
+This changes runner completion only, not tests, mutation, or the two-kill gate.

@@ -1,0 +1,5 @@
+MEASURED: named delay API EXPECTED RED: six missing-method compile errors.
+MEASURED: restored prof-inject suite100 passed (40core+4injection+26relay+23runtime+7sink).
+MEASURED: every28 Site and13 Kind table entries exercised by generated loops.
+MEASURED: four injection mutants:3,3,2,2 named killing tests.
+CODE READ: tests prove helper/table coverage; production reachability incomplete.

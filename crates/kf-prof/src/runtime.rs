@@ -82,6 +82,10 @@ struct Engine {
     delay_ms: AtomicU64,
     #[cfg(feature = "prof-inject")]
     paused: AtomicBool,
+    #[cfg(feature = "prof-inject")]
+    site_delay: AtomicU64,
+    #[cfg(feature = "prof-inject")]
+    site_paused: AtomicBool,
 }
 impl Engine {
     fn now(&self) -> u64 {
@@ -371,6 +375,16 @@ pub fn site(site: Site, state: State, arg: u64) -> SpanGuard {
             }
         }
         c.publish();
+        #[cfg(feature = "prof-inject")]
+        {
+            let request = c.engine.site_delay.load(Ordering::Acquire);
+            if request & 0xffff == u64::from(site as u16) + 1 {
+                let request = c.engine.site_delay.swap(0, Ordering::AcqRel);
+                c.engine.site_paused.store(true, Ordering::Release);
+                thread::sleep(Duration::from_millis(request >> 16));
+                c.engine.site_paused.store(false, Ordering::Release);
+            }
+        }
         SpanGuard {
             token: Some(token),
             owner: c.engine.owner,
@@ -580,6 +594,10 @@ impl Session {
             delay_ms: AtomicU64::new(0),
             #[cfg(feature = "prof-inject")]
             paused: AtomicBool::new(false),
+            #[cfg(feature = "prof-inject")]
+            site_delay: AtomicU64::new(0),
+            #[cfg(feature = "prof-inject")]
+            site_paused: AtomicBool::new(false),
         });
         let mut revision = [0; 40];
         if let Some(text) = option_env!("KF_PROF_BUILD_REV").filter(|s| {
@@ -706,6 +724,27 @@ impl Session {
     #[cfg(feature = "prof-inject")]
     pub fn publication_paused(&self) -> bool {
         self.engine.paused.load(Ordering::Acquire)
+    }
+    /// Inject once at a named Site after publishing its live state. Diagnostic only.
+    #[cfg(feature = "prof-inject")]
+    pub fn inject_site_delay_ms(&self, site: Site, ms: u64) -> io::Result<()> {
+        if ms == 0 || ms > 1000 {
+            return Err(error("diagnostic Site delay outside 1..1000 ms"));
+        }
+        self.engine
+            .site_delay
+            .store((ms << 16) | (u64::from(site as u16) + 1), Ordering::Release);
+        Ok(())
+    }
+    /// Whether the named diagnostic delay is executing after publication.
+    #[cfg(feature = "prof-inject")]
+    pub fn site_delay_paused(&self) -> bool {
+        self.engine.site_paused.load(Ordering::Acquire)
+    }
+    /// Whether the diagnostic request has yet to reach its named Site.
+    #[cfg(feature = "prof-inject")]
+    pub fn site_delay_pending(&self) -> bool {
+        self.engine.site_delay.load(Ordering::Acquire) != 0
     }
     /// Read trusted in-process publication, not mutable file bytes.
     pub fn snapshot(&self) -> Value {

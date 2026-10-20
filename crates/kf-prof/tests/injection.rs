@@ -59,8 +59,7 @@ fn every_site_exposes_the_injected_live_wait_and_completed_maximum() {
             .unwrap()
             .iter()
             .flat_map(|t| t["states"].as_array().unwrap())
-            .filter(|r| r["state"] == State::EventWait as u16)
-            .last()
+            .rfind(|r| r["state"] == State::EventWait as u16)
             .unwrap();
         assert!(
             state_row["exclusive_ns"].as_u64().unwrap() >= 20_000_000,
@@ -83,7 +82,12 @@ fn each_site_delay_is_targeted_and_does_not_pause_a_different_site() {
         s.inject_site_delay_ms(site, 1).unwrap();
         kf_prof::call(other, State::Running, 0, || assert!(!s.site_delay_paused()));
         assert!(s.site_delay_pending(), "different Site consumed {site:?}");
+        let started = Instant::now();
         kf_prof::call(site, State::Running, 0, || {});
+        assert!(
+            started.elapsed() >= Duration::from_millis(1),
+            "target delay missing {site:?}"
+        );
         assert!(!s.site_delay_pending(), "target did not consume {site:?}");
     }
     drop(_b);
@@ -117,6 +121,36 @@ fn every_ledger_kind_exposes_overdue_age_and_only_a_real_close_completes_it() {
         );
     }
     drop(b);
+    Arc::try_unwrap(s).ok().unwrap().stop().unwrap();
+    std::fs::remove_dir_all(p).unwrap();
+}
+
+#[test]
+fn named_delay_leaves_a_stable_mapped_site_before_it_finishes() {
+    let (p, s) = session("mapped-site");
+    let site = Site::RelayMapLock;
+    s.inject_site_delay_ms(site, 50).unwrap();
+    std::thread::scope(|scope| {
+        let s2 = &s;
+        scope.spawn(move || {
+            let _b = s2.bind_current(94).unwrap();
+            kf_prof::call(site, State::Mutex, 0, || {});
+        });
+        let deadline = Instant::now() + Duration::from_secs(3);
+        while !s.site_delay_paused() {
+            assert!(Instant::now() < deadline);
+            std::thread::yield_now();
+        }
+        use std::os::unix::fs::FileExt;
+        let f = std::fs::File::open(p.join("prof.mmap")).unwrap();
+        let mut b = [0u8; 112];
+        f.read_exact_at(&mut b, kf_prof::layout::THREAD_BASE as u64)
+            .unwrap();
+        let word = |i: usize| u64::from_le_bytes(b[i * 8..i * 8 + 8].try_into().unwrap());
+        assert!(word(0) > 0 && word(0) % 2 == 0);
+        assert_eq!(word(3), State::Mutex as u64);
+        assert_eq!(word(6), site as u64);
+    });
     Arc::try_unwrap(s).ok().unwrap().stop().unwrap();
     std::fs::remove_dir_all(p).unwrap();
 }
