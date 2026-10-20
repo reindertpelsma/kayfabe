@@ -192,7 +192,7 @@ int kfwc_bind_candidate(const kfwc_platform *p, kfwc_binding *b, kfwc_u64 pa)
 
 int kfwc_discover_mailbox(const kfwc_platform *p, kfwc_binding *b, kfwc_mb_diag *d)
 {
-    kfwc_u32 id, lo, hi, i;
+    kfwc_u32 id, lo, hi, i, route;
     kfwc_u64 array_pa, args_pa = 0, shared, cmd_off, stat_off;
     kfwc_u32 pte_count;
     kfwc_u8 args[KFWC_MQA_MIN_610];
@@ -214,31 +214,43 @@ int kfwc_discover_mailbox(const kfwc_platform *p, kfwc_binding *b, kfwc_mb_diag 
     }
     array_pa = ((kfwc_u64)hi << 32) | lo;
     d->mailbox_pa = array_pa;
-    if ((array_pa & (KFWC_PAGE - 1)) || !p->ram_contains(p->ctx, array_pa, KFWC_LIBOS_ARRAY_BYTES)) {
-        d->status = KFWC_MB_BAD_ADDR;
-        return 1;
-    }
-    if (p->read_ram(p->ctx, array_pa, b->scratch, KFWC_LIBOS_ARRAY_BYTES)) {
-        d->status = KFWC_MB_BAD_ADDR;
-        return 1;
-    }
-    d->status = KFWC_MB_NO_RMARGS;
-    for (i = 0; i < KFWC_LIBOS_MAX_ENTRIES; i++) {
-        const kfwc_u8 *e = b->scratch + i * KFWC_LIBOS_STRIDE;
-        if (kfwc_get64(e + KFWC_LIBOS_ID) != KFWC_RMARGS_ID)
-            continue;
-        /* Zero entries are skipped, not terminators (kf-gsp boot.rs). */
-        args_pa = kfwc_get64(e + KFWC_LIBOS_PA);
-        if (e[KFWC_LIBOS_KIND] != KFWC_LIBOS_KIND_CONTIGUOUS ||
-            e[KFWC_LIBOS_LOC] != KFWC_LIBOS_LOC_SYSMEM ||
-            kfwc_get64(e + KFWC_LIBOS_SIZE) < KFWC_MQA_MIN_PRE610) {
-            d->status = KFWC_MB_ARGS_BAD;
+    /* Keep direct LibOS first. Only an array with no RMARGS may be an FMC
+     * structure; an invalid RMARGS never falls through to another pointer.
+     * At most one indirection, system-memory apertures only, no RAM scan. */
+    for (route = 0; route < 2; route++) {
+        kfwc_u32 target;
+        if ((array_pa & (KFWC_PAGE - 1)) ||
+            !p->ram_contains(p->ctx, array_pa, KFWC_LIBOS_ARRAY_BYTES)) {
+            d->status = KFWC_MB_BAD_ADDR;
             return 1;
         }
-        break;
+        if (p->read_ram(p->ctx, array_pa, b->scratch, KFWC_LIBOS_ARRAY_BYTES)) {
+            d->status = KFWC_MB_BAD_ADDR;
+            return 1;
+        }
+        d->status = KFWC_MB_NO_RMARGS;
+        for (i = 0; i < KFWC_LIBOS_MAX_ENTRIES; i++) {
+            const kfwc_u8 *e = b->scratch + i * KFWC_LIBOS_STRIDE;
+            if (kfwc_get64(e + KFWC_LIBOS_ID) != KFWC_RMARGS_ID)
+                continue;
+            /* Zero entries are skipped, not terminators (kf-gsp boot.rs). */
+            args_pa = kfwc_get64(e + KFWC_LIBOS_PA);
+            if (e[KFWC_LIBOS_KIND] != KFWC_LIBOS_KIND_CONTIGUOUS ||
+                e[KFWC_LIBOS_LOC] != KFWC_LIBOS_LOC_SYSMEM ||
+                kfwc_get64(e + KFWC_LIBOS_SIZE) < KFWC_MQA_MIN_PRE610) {
+                d->status = KFWC_MB_ARGS_BAD;
+                return 1;
+            }
+            break;
+        }
+        if (i != KFWC_LIBOS_MAX_ENTRIES)
+            break;
+        target = kfwc_get32(b->scratch + KFWC_FMC_TARGET);
+        if (route || (target != KFWC_FMC_COHERENT_SYSTEM &&
+                      target != KFWC_FMC_NONCOHERENT_SYSTEM))
+            return 1;
+        array_pa = kfwc_get64(b->scratch + KFWC_FMC_LIBOS);
     }
-    if (i == KFWC_LIBOS_MAX_ENTRIES)
-        return 1;
     /* The args struct must sit inside one page so one bounded read covers it. */
     if ((args_pa & 7u) || (args_pa & (KFWC_PAGE - 1)) > KFWC_PAGE - sizeof(args) ||
         !p->ram_contains(p->ctx, args_pa, sizeof(args)) ||

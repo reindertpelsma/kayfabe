@@ -1,0 +1,1 @@
+Pinned OGKM TU102/GA102 compiler layouts match the 580 profile

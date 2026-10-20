@@ -1,0 +1,14 @@
+guard_readonly: clean
+self-test store to a device register in driver/kfwc_drv.c      caught
+self-test store to PCI configuration space in driver/kfwc_drv.c caught
+self-test writable or executable mapping in driver/kfwc_drv.c  caught
+self-test use MmMapIoSpaceEx in driver/kfwc_drv.c              caught
+self-test PAGE_READONLY in driver/kfwc_drv.c                   caught
+self-test mapped device pointer in driver/kfwc_drv.c           caught
+self-test mapped device pointer in driver/kfwc_drv.c           caught
+self-test hooking in driver/kfwc_drv.c                         caught
+self-test only physical copies are allowed in driver/kfwc_drv.c caught
+self-test store-like platform member in lib/kfwc_platform.h    caught
+self-test board/person in user/kfwc_collect.c                  caught
+self-test board/person in user/kfwc_collect.c                  caught
+guard self-test: all injected violations caught, real tree clean

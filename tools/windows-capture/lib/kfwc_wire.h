@@ -110,6 +110,13 @@ typedef struct kfwc_layout {
 #define KFWC_LIBOS_ARRAY_BYTES 4096u     /* the bounded 4096-byte array (observer README) */
 #define KFWC_LIBOS_MAX_ENTRIES (KFWC_LIBOS_ARRAY_BYTES / KFWC_LIBOS_STRIDE)
 #define KFWC_RMARGS_ID 0x0000524d41524753ull   /* "RMARGS", id built MSB first (kf-chip RMARGS_ID) */
+/* OGKM580.65.06 gspifpub.h / kgspBootstrapGspFmc_GH100. Compiler-derived
+ * by tools/vfio-gsp-observer/layout.c (307159f2623d3bf45feb9177bd2da52ffbc5ddf9).
+ * Hopper/Blackwell MAILBOX0/1 may name this structure instead of LibOS. */
+#define KFWC_FMC_TARGET 40u
+#define KFWC_FMC_LIBOS 48u
+#define KFWC_FMC_COHERENT_SYSTEM 1u
+#define KFWC_FMC_NONCOHERENT_SYSTEM 2u
 /* MESSAGE_QUEUE_INIT_ARGUMENTS, first member of GSP_ARGUMENTS_CACHED (NvLength is 64-bit). */
 #define KFWC_MQA_SHARED_PA 0u
 #define KFWC_MQA_PTE_COUNT 8u            /* u32, then 4 pad bytes */

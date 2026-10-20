@@ -1,0 +1,42 @@
+{
+  "disable_fmc": [
+    "fmc_coherent",
+    "fmc_noncoherent",
+    "fmc_unaligned_byte",
+    "fmc_unaligned_entry",
+    "fmc_ram_hole_refused",
+    "fmc_wrapped_address_refused",
+    "fmc_bad_region_refused",
+    "fmc_bad_queue_refused",
+    "fmc_no_coherent_chain",
+    "fmc_no_noncoherent_chain"
+  ],
+  "accept_any_aperture": [
+    "fmc_local_fb_refused",
+    "fmc_unknown_aperture_refused"
+  ],
+  "wrong_libos_field": [
+    "fmc_coherent",
+    "fmc_noncoherent",
+    "fmc_bad_region_refused",
+    "fmc_bad_queue_refused",
+    "fmc_no_coherent_chain",
+    "fmc_no_noncoherent_chain"
+  ],
+  "drop_alignment": [
+    "fmc_unaligned_byte",
+    "fmc_unaligned_entry"
+  ],
+  "drop_ram_guard": [
+    "fmc_ram_hole_refused",
+    "fmc_wrapped_address_refused"
+  ],
+  "follow_extra_fmc": [
+    "fmc_no_coherent_chain",
+    "fmc_no_noncoherent_chain"
+  ],
+  "ignore_binding_failure": [
+    "fmc_bad_region_refused",
+    "fmc_bad_queue_refused"
+  ]
+}
