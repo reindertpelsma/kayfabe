@@ -168,6 +168,13 @@ pub fn run_with_relay(
     let prof = stats.prof.load(Ordering::Relaxed);
     let mut busy_from = std::time::Instant::now();
     let mut after_timeout = false;
+    // ★ DIAGNOSTIC (2026-10-20, baton H-WAKE falsifier; default OFF, read once): `KF3_DEBUG_WORKER_SPIN=1` makes the worker
+    // NEVER block: the park wait is `epoll_wait(timeout=0)`, so every empty pass ends in the relays' backstop peek (a pure
+    // super-loop; one core per worker at 100 %). Never a product setting.
+    let worker_spin = std::env::var("KF3_DEBUG_WORKER_SPIN").is_ok_and(|v| v == "1");
+    if worker_spin {
+        eprintln!("kf3: ⚠ DIAGNOSTIC KF3_DEBUG_WORKER_SPIN=1: the worker never blocks (epoll timeout 0)");
+    }
     while !stop.load(Ordering::Acquire) {
         let owed = on_tick();
         // §5.3: every `seen` load happens-before the scan.
@@ -226,7 +233,12 @@ pub fn run_with_relay(
             stats.max_busy_ns.fetch_max(b, Ordering::Relaxed);
         }
         let park = if owed { OWED_PARK_MS } else { PARK_MS };
-        let got = poller.wait(&mut ready, PollTimeout::Millis(park));
+        let timeout = if worker_spin {
+            PollTimeout::Immediate
+        } else {
+            PollTimeout::Millis(park)
+        };
+        let got = poller.wait(&mut ready, timeout);
         if let Some(tw) = tw {
             busy_from = std::time::Instant::now();
             let w = u64::try_from(busy_from.duration_since(tw).as_nanos()).unwrap_or(u64::MAX);
