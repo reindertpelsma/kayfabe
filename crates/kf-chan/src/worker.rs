@@ -115,6 +115,43 @@ impl LoopPolicy {
     }
 }
 
+/// How the worker loop visits one wake source (see [`WAKE_SOURCES`]).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Visit {
+    /// Through `dispatch`: the ready tag's branch. The text is the branch condition as `run_with_relay` writes it, with the
+    /// whitespace removed (`"else"` for the final fall-through branch).
+    Dispatch(&'static str),
+    /// Through `RelayLoop::peek` with this reason.
+    Peek(Peek),
+    /// The bounded-period tick after a park (`on_other(TICK_TAG)`); no fd carries it.
+    Tick,
+}
+
+/// One wake source of the worker loop and where the loop visits it. STUB (tests first): the registry is empty.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct WakeSource {
+    /// A short name for messages.
+    pub name: &'static str,
+    /// How the loop reaches it.
+    pub visit: Visit,
+    /// For a [`Visit::Dispatch`] source: the calls its branch makes, as `run_with_relay` writes them.
+    pub handlers: &'static [&'static str],
+    /// Visited by the busy `AfterPass::Look`.
+    pub look: bool,
+    /// Visited by the bounded idle spin.
+    pub idle_spin: bool,
+    /// Visited after the park wait ends.
+    pub park: bool,
+    /// Why a `false` above is intended (empty when everything is `true`).
+    pub why_not: &'static str,
+}
+
+/// Every wake source `run_with_relay` visits. STUB (tests first).
+pub const WAKE_SOURCES: &[WakeSource] = &[];
+
+/// Callbacks of `run_with_relay` that run once per loop iteration, whatever the pass did.
+pub const EVERY_ITERATION: &[&str] = &[];
+
 /// No relays (the harness): the loop is the old one minus the timer-driven refresh.
 pub struct NoRelay;
 impl RelayLoop for NoRelay {
