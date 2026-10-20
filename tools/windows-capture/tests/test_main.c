@@ -218,6 +218,109 @@ static void expect_mb(harness *h, kfwc_u32 status)
     free(b);
 }
 
+
+/* OGKM580.65.06 GSP_FMC_BOOT_PARAMS: public compiler layout in
+ * tools/vfio-gsp-observer/layout-580.json, target@40, bootArgsOffset@48. */
+static void fmc_setup(harness *h, kfwc_u32 target, kfwc_u64 libos)
+{
+    kfwc_u8 *fmc;
+    hn_init(h, KFWC_LAYOUT_PRE610, 1, 0);
+    fmc = fk_ptr(&h->m, 0x6e0000);
+    memset(fmc, 0, 4096);
+    kfwc_put32(fmc + 40, target);
+    kfwc_put64(fmc + 48, libos);
+    h->m.mailbox0 = 0x6e0000;
+}
+static void fmc_accept(kfwc_u32 target)
+{
+    harness h;
+    kfwc_binding *b = (kfwc_binding *)calloc(1, sizeof(*b));
+    kfwc_mb_diag d;
+    fmc_setup(&h, target, 0x6f0000);
+    CHECK(kfwc_discover_mailbox(&h.plat, b, &d) == 0 && d.status == KFWC_MB_OK);
+    CHECK(b->method == KFWC_METHOD_MAILBOX && b->libos_args_pa == 0x6f0000);
+    CHECK(d.mailbox_pa == 0x6e0000 && b->table_pa == h.s.table_pa);
+    CHECK(b->q[0].valid && b->q[1].valid && h.m.refused == 0 && h.m.ram_reads < 12);
+    free(b);
+    hn_free(&h);
+}
+static void t_fmc_coherent(void) { fmc_accept(1); }
+static void t_fmc_noncoherent(void) { fmc_accept(2); }
+static void fmc_aperture_refuse(kfwc_u32 target)
+{
+    harness h;
+    fmc_setup(&h, target, 0x6f0000);
+    expect_mb(&h, KFWC_MB_NO_RMARGS);
+    CHECK(h.m.refused == 0 && h.m.ram_reads == 1);
+    hn_free(&h);
+}
+static void t_fmc_local_fb_refused(void) { fmc_aperture_refuse(0); }
+static void t_fmc_unknown_aperture_refused(void) { fmc_aperture_refuse(3); }
+static void fmc_unaligned(kfwc_u64 address)
+{
+    harness h;
+    fmc_setup(&h, 1, address);
+    sy_boot_args(&h.s, address, 0x6f1000);
+    h.m.mailbox0 = 0x6e0000;
+    expect_mb(&h, KFWC_MB_BAD_ADDR);
+    CHECK(h.m.refused == 0 && h.m.ram_reads == 1);
+    hn_free(&h);
+}
+static void t_fmc_unaligned_byte(void) { fmc_unaligned(0x6d0001); }
+static void t_fmc_unaligned_entry(void) { fmc_unaligned(0x6d0020); }
+static void fmc_outside_ram(kfwc_u64 address)
+{
+    harness h;
+    fmc_setup(&h, 1, address);
+    expect_mb(&h, KFWC_MB_BAD_ADDR);
+    CHECK(h.m.refused == 0 && h.m.ram_reads == 1);
+    hn_free(&h);
+}
+static void t_fmc_ram_hole_refused(void) { fmc_outside_ram(0x800000); }
+static void t_fmc_wrapped_address_refused(void) { fmc_outside_ram(0xfffffffffffff000ull); }
+static void t_fmc_bad_region_refused(void)
+{
+    harness h;
+    fmc_setup(&h, 1, 0x6f0000);
+    kfwc_put64(fk_ptr(&h.m, h.s.table_pa) + 16, h.s.page[1]);
+    expect_mb(&h, KFWC_MB_REGION_BAD);
+    hn_free(&h);
+}
+static void t_fmc_bad_queue_refused(void)
+{
+    harness h;
+    fmc_setup(&h, 2, 0x6f0000);
+    kfwc_put32(sy_region(&h.s, 4096) + 8, 2048);
+    expect_mb(&h, KFWC_MB_QUEUE_BAD);
+    hn_free(&h);
+}
+static void fmc_chain_refuse(kfwc_u32 target)
+{
+    harness h;
+    kfwc_u8 *second;
+    fmc_setup(&h, target, 0x6d0000);
+    second = fk_ptr(&h.m, 0x6d0000);
+    kfwc_put32(second + 40, target);
+    kfwc_put64(second + 48, 0x6f0000);
+    expect_mb(&h, KFWC_MB_NO_RMARGS);
+    CHECK(h.m.refused == 0 && h.m.ram_reads == 2);
+    hn_free(&h);
+}
+static void t_fmc_no_coherent_chain(void) { fmc_chain_refuse(1); }
+static void t_fmc_no_noncoherent_chain(void) { fmc_chain_refuse(2); }
+static void t_fmc_direct_libos_precedes_fallback(void)
+{
+    harness h;
+    kfwc_binding *b = (kfwc_binding *)calloc(1, sizeof(*b));
+    kfwc_mb_diag d;
+    hn_init(&h, KFWC_LAYOUT_PRE610, 1, 0);
+    kfwc_put32(fk_ptr(&h.m, 0x6f0000) + 40, 1);
+    kfwc_put64(fk_ptr(&h.m, 0x6f0000) + 48, 0x800000);
+    CHECK(kfwc_discover_mailbox(&h.plat, b, &d) == 0 && b->libos_args_pa == 0x6f0000);
+    free(b);
+    hn_free(&h);
+}
+
 static void t_mailbox_failures(void)
 {
     harness h;
@@ -1268,6 +1371,19 @@ int main(int argc, char **argv)
         {"elements", t_elements},
         {"mailbox_ok", t_mailbox_ok},
         {"mailbox_failures", t_mailbox_failures},
+        {"fmc_coherent", t_fmc_coherent},
+        {"fmc_noncoherent", t_fmc_noncoherent},
+        {"fmc_local_fb_refused", t_fmc_local_fb_refused},
+        {"fmc_unknown_aperture_refused", t_fmc_unknown_aperture_refused},
+        {"fmc_unaligned_byte", t_fmc_unaligned_byte},
+        {"fmc_unaligned_entry", t_fmc_unaligned_entry},
+        {"fmc_ram_hole_refused", t_fmc_ram_hole_refused},
+        {"fmc_wrapped_address_refused", t_fmc_wrapped_address_refused},
+        {"fmc_bad_region_refused", t_fmc_bad_region_refused},
+        {"fmc_bad_queue_refused", t_fmc_bad_queue_refused},
+        {"fmc_no_coherent_chain", t_fmc_no_coherent_chain},
+        {"fmc_no_noncoherent_chain", t_fmc_no_noncoherent_chain},
+        {"fmc_direct_libos_precedes_fallback", t_fmc_direct_libos_precedes_fallback},
         {"scan_signature_false_positives", t_scan_signature_false_positives},
         {"walker_basic_pre610", t_basic_pre610},
         {"walker_basic_610", t_basic_610},
