@@ -446,3 +446,20 @@ fn repeated_full_stack_entries_are_counted_without_corrupting_the_parent() {
     s.stop().unwrap();
     std::fs::remove_dir_all(p).unwrap();
 }
+
+#[test]
+fn blocking_wrapper_publishes_the_callers_site_before_the_operation() {
+    let p=directory();let s=Session::create_diagnostic(&p).unwrap();let b=s.bind_current(1).unwrap();
+    let value=kf_prof::call(Site::ChanWorkerPark,State::EventWait,7,|| {
+        let row=s.snapshot();assert_eq!(row["threads"][0]["site"],Site::ChanWorkerPark as u16);
+        assert_eq!(row["threads"][0]["arg"],7);19
+    });assert_eq!(value,19);drop(b);s.stop().unwrap();std::fs::remove_dir_all(p).unwrap();
+}
+#[test]
+fn blocking_wrapper_preserves_errors_and_records_completed_duration() {
+    let p=directory();let s=Session::create_diagnostic(&p).unwrap();let b=s.bind_current(1).unwrap();
+    let value:Result<(),u32>=kf_prof::call(Site::ChanWorkerImmediate,State::EventWait,0,|| {std::thread::sleep(Duration::from_millis(2));Err(73)});
+    assert_eq!(value,Err(73));let row=s.snapshot();let site=&row["threads"][0]["sites"][0];
+    assert_eq!(site["site"],Site::ChanWorkerImmediate as u16);assert_eq!(site["count"],1);
+    assert!(site["max_ns"].as_u64().unwrap()>=1_000_000);drop(b);s.stop().unwrap();std::fs::remove_dir_all(p).unwrap();
+}
