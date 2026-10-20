@@ -5,3 +5,6 @@ receipt_time	2	1
 unarmed_count	2	1
 drop_terminal	2	1
 ignore_lifetime	2	1
+ignore_context	2	1
+ignore_sequence	2	1
+drop_pending	5	1
