@@ -175,6 +175,13 @@ impl<H: Host> Cache<H> {
         (self.armed, self.evicted, self.keep)
     }
 
+    /// MEASUREMENT ONLY (`KF3_DIAG_USER_STALL`): the diagnostic's read-only `prepare`. It succeeds only when every
+    /// window the spans need is ALREADY armed and ready; it never arms, evicts, releases or calls RM, so a
+    /// diagnostic read cannot disturb the relay's working set. `Refusal::Store` names a window that is not armed.
+    pub(crate) fn passive_prepare(&self, _spans: &[Span]) -> Result<(), Refusal> {
+        Err(Refusal::Store)
+    }
+
     /// Release the least recently used ready view that `required` does not name. A refused release
     /// keeps ownership (the view stays, not ready, and blocks replacement until retried).
     fn evict_lru(&mut self, required: &[(u64, u64)]) -> Result<(), Refusal> {
@@ -456,6 +463,42 @@ mod tests {
             perm: kf_host::MapPerm::READ_WRITE,
         }
     }
+    #[test]
+    fn the_passive_prepare_accepts_only_windows_that_are_already_armed_and_changes_nothing() {
+        let mut c = Cache::create(Fake::default(), BYTES * 64).unwrap();
+        c.prepare(&[span(0, 64), span(3 * BYTES, 64)]).unwrap();
+        let before = (counts(&c), c.views.len(), c.tick, c.stats());
+        assert_eq!(c.passive_prepare(&[span(0, 64)]), Ok(()));
+        assert_eq!(c.passive_prepare(&[span(BYTES / 2, 128)]), Ok(()), "any bytes of an armed window");
+        assert_eq!(c.passive_prepare(&[span(0, 64), span(3 * BYTES + 8, 4)]), Ok(()));
+        // a window that is not armed is refused by name, and nothing is armed, evicted or released
+        assert_eq!(c.passive_prepare(&[span(5 * BYTES, 64)]), Err(Refusal::Store));
+        assert_eq!(c.passive_prepare(&[span(0, 64), span(5 * BYTES, 64)]), Err(Refusal::Store));
+        assert_eq!(c.passive_prepare(&[span(0, BYTES + 1)]), Err(Refusal::Store), "straddles an unarmed window");
+        assert_eq!((counts(&c), c.views.len(), c.tick, c.stats()), before);
+        assert!(c.host.events.borrow().iter().all(|e| e.0 == "arm"), "no release, no copy");
+    }
+
+    #[test]
+    fn the_passive_prepare_needs_no_window_for_ram_and_keeps_the_bounds() {
+        let c = Cache::create(Fake::default(), BYTES * 64).unwrap();
+        let ram = Span { ram: true, ..span(0, 4096) };
+        assert_eq!(c.passive_prepare(&[ram]), Ok(()));
+        assert_eq!(c.passive_prepare(&[]), Ok(()));
+        // past the store bound, or too many spans: the same refusals as `prepare`
+        assert_eq!(c.passive_prepare(&[span(BYTES * 64, 4)]), Err(Refusal::Bounds));
+        assert_eq!(c.passive_prepare(&vec![ram; SPANS + 1]), Err(Refusal::Bounds));
+        assert_eq!(counts(&c), (0, 0));
+    }
+
+    #[test]
+    fn a_window_whose_mapping_failed_half_way_is_not_ready_for_the_passive_read() {
+        let mut c = Cache::create(Fake::default(), BYTES * 64).unwrap();
+        c.host.partial_arm.set(true);
+        assert_eq!(c.prepare(&[span(0, 64)]), Err(Refusal::Store));
+        assert_eq!(c.passive_prepare(&[span(0, 64)]), Err(Refusal::Store));
+    }
+
     #[test]
     fn actual_cache_prepares_full_fragmented_ram_and_contiguous_store_snapshots() {
         use crate::mem::{PlacedRows, RamBlock, RamMap, RowsLog, userread};

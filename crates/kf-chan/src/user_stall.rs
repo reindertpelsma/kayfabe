@@ -1157,6 +1157,98 @@ pub fn peek_name(why: Peek) -> &'static str {
     }
 }
 
+impl Private {
+    /// The private USERD words of one report (`dev_ram.ref` `NV_RAMUSERD`, `clc56f.h`
+    /// `Nvc56fControl`: PUT 0x40, GET 0x44, REFERENCE 0x48, PUT_HI 0x4c, TOP_LEVEL_GET 0x58/0x5c,
+    /// GET_HI 0x60, GP_GET 0x88, GP_PUT 0x8c).
+    #[must_use]
+    pub fn from_userd(_w: &[u32; 36]) -> Self {
+        Self::default()
+    }
+}
+
+/// Everything the glue gathered before it builds the report.
+#[derive(Debug, Clone)]
+pub struct Inputs {
+    /// The channel key.
+    pub key: (u32, u32),
+    /// The host token.
+    pub host: u32,
+    /// How long the private `GP_GET` has been unmoved.
+    pub stalled_ms: u64,
+    /// The threshold.
+    pub threshold_ms: u64,
+    /// The guest's `GP_PUT` / `GP_GET`.
+    pub guest_put: Option<u32>,
+    /// See `guest_put`.
+    pub guest_get: Option<u32>,
+    /// The private USERD, first 36 words.
+    pub userd: [u32; 36],
+    /// The private ring size.
+    pub entries: u32,
+    /// The rows of [`ring_window`], read.
+    pub rows: Vec<Row>,
+    /// What the relay is parked on.
+    pub wait: Option<Wait>,
+    /// Doorbells / ms since the count changed.
+    pub doorbells: (u64, Option<u64>),
+    /// The last look that rang the relay.
+    pub wake: Option<(u64, Peek)>,
+    /// Ms since the relay's last turn.
+    pub turn_ago_ms: Option<u64>,
+    /// `Fetch::issued`, `Fetch::fetched`, `Marks::issued`, `Marks::seen`.
+    pub receipts: (u64, u64, u64, u64),
+    /// The relay's guest-ring cursor.
+    pub cursor: u32,
+    /// The relay's turn counter.
+    pub turns: u64,
+    /// Lifecycle entries by mode: scan, pointer, window.
+    pub entries_by_mode: (u64, u64, u64),
+    /// Cumulative counters text.
+    pub totals: String,
+}
+
+/// Build the report. `read(gpu_va, bytes)` reads guest memory through the relay's placement view
+/// (never more than `bytes`; the reason is a short literal); it is called at most
+/// `1 + MAX_PROBES` times.
+pub fn build_report(
+    _inp: Inputs,
+    _read: &mut dyn FnMut(u64, usize) -> Result<Vec<u8>, &'static str>,
+    _stats: &StallStats,
+) -> Report {
+    Report {
+        key: (0, 0),
+        host: 0,
+        stalled_ms: 0,
+        threshold_ms: 0,
+        guest_put: None,
+        guest_get: None,
+        private: Private::default(),
+        wait: None,
+        doorbells: 0,
+        doorbell_ago_ms: None,
+        wake: None,
+        turn_ago_ms: None,
+        issued: 0,
+        fetched: 0,
+        marks_issued: 0,
+        marks_seen: 0,
+        cursor: 0,
+        turns: 0,
+        entries: (0, 0, 0),
+        rows: Vec::new(),
+        segment: Segment::NotFound,
+        totals: String::new(),
+    }
+}
+
+/// Whether the cumulative counter line is due: at least [`PERIOD_MS`] since the last one and the
+/// counters (summed) moved.
+#[must_use]
+pub fn period_due(_now_ms: u64, _last_ms: u64, _sum: u64, _last_sum: u64) -> bool {
+    false
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -2458,5 +2550,351 @@ mod tests {
         assert_eq!(peek_name(Peek::Spin), "Spin");
         assert_eq!(peek_name(Peek::Event), "Event");
         assert_eq!(peek_name(Peek::Backstop), "Backstop");
+    }
+
+    // ------------------------------------------------------------------ the glue's pure core
+    #[test]
+    fn the_private_words_come_from_the_userd_dword_positions() {
+        let mut w = [0u32; 36];
+        w[16] = 0x1111_1111; // Put
+        w[19] = 0x2; // PutHi
+        w[17] = 0x4720_0040; // Get
+        w[24] = 0x3; // GetHi
+        w[18] = 0x4b46_6dd4; // Reference
+        w[22] = 0x4720_0000; // TopLevelGet
+        w[23] = 0x3; // TopLevelGetHi
+        w[34] = 0x1a8; // GPGet
+        w[35] = 0x1aa; // GPPut
+        let p = Private::from_userd(&w);
+        assert_eq!(p.gp_get, 0x1a8);
+        assert_eq!(p.gp_put, 0x1aa);
+        assert_eq!(p.reference, 0x4b46_6dd4);
+        assert_eq!(p.pb_get, 0x3_4720_0040);
+        assert_eq!(p.pb_put, 0x2_1111_1111);
+        assert_eq!(p.top_level_get, 0x3_4720_0000);
+    }
+
+    /// A fake placement view: a few byte ranges of guest memory.
+    struct Mem(Vec<(u64, Vec<u8>)>, Vec<(u64, usize)>);
+    impl Mem {
+        fn read(&mut self, va: u64, n: usize) -> Result<Vec<u8>, &'static str> {
+            self.1.push((va, n));
+            for (base, bytes) in &self.0 {
+                if va >= *base && va + n as u64 <= *base + bytes.len() as u64 {
+                    let o = (va - base) as usize;
+                    return Ok(bytes[o..o + n].to_vec());
+                }
+            }
+            Err(if va >= 1 << 40 { "vidmem" } else { "Missing" })
+        }
+    }
+    fn le(words: &[u32]) -> Vec<u8> {
+        words.iter().flat_map(|w| w.to_le_bytes()).collect()
+    }
+
+    fn inputs(rows: Vec<Row>, pb_get: u64) -> Inputs {
+        let mut userd = [0u32; 36];
+        userd[17] = pb_get as u32;
+        userd[24] = (pb_get >> 32) as u32;
+        userd[34] = 0x1a8;
+        userd[35] = 0x1aa;
+        Inputs {
+            key: (1, 2),
+            host: 3,
+            stalled_ms: 0x7d3,
+            threshold_ms: 0x7d0,
+            guest_put: Some(9),
+            guest_get: Some(8),
+            userd,
+            entries: 512,
+            rows,
+            wait: Some(Wait::Popped { target: 0x1aa }),
+            doorbells: (0x10, Some(0x20)),
+            wake: Some((5, Peek::Spin)),
+            turn_ago_ms: Some(6),
+            receipts: (0x1aa, 0x1a8, 7, 6),
+            cursor: 0x1ab,
+            turns: 99,
+            entries_by_mode: (1, 2, 3),
+            totals: String::new(),
+        }
+    }
+
+    #[test]
+    fn the_report_reads_the_segment_decodes_it_and_reads_each_acquires_semaphore() {
+        let mut pb = vec![0u32; 4];
+        pb.extend(sem(0x2000, 0x2a, 3)); // items 4..=8: circular acquire, exec = item 8
+        pb.extend(sem(0x2008, 7, 0)); // items 9..=13: acquire, exec = item 13
+        pb.extend(sem(0x20_0000_0000, 1, 0)); // items 14..=18: unmapped semaphore
+        pb.extend(sem(0x2010, 9, 1)); // items 19..=23: a release, never read
+        let mut mem = Mem(
+            vec![(0x4_0000, le(&pb)), (0x2000, le(&[0x29, 0, 7, 0, 0, 0]))],
+            Vec::new(),
+        );
+        let rows = vec![
+            Row {
+                slot: 0x1a7,
+                entry: gp_entry(0x4_0000, (pb.len() * 4) as u64).unwrap(),
+            },
+            Row {
+                slot: 0x1a8,
+                entry: gp_entry(0x9_0000, 40).unwrap(),
+            },
+        ];
+        let stats = StallStats::default();
+        let rep = build_report(
+            inputs(rows, 0x4_0000 + 0x30),
+            &mut |a, n| mem.read(a, n),
+            &stats,
+        );
+        assert_eq!(rep.key, (1, 2));
+        assert_eq!(rep.host, 3);
+        assert_eq!((rep.stalled_ms, rep.threshold_ms), (0x7d3, 0x7d0));
+        assert_eq!((rep.guest_put, rep.guest_get), (Some(9), Some(8)));
+        assert_eq!(rep.private.gp_get, 0x1a8);
+        assert_eq!(rep.wait, Some(Wait::Popped { target: 0x1aa }));
+        assert_eq!(
+            (rep.issued, rep.fetched, rep.marks_issued, rep.marks_seen),
+            (0x1aa, 0x1a8, 7, 6)
+        );
+        assert_eq!((rep.cursor, rep.turns, rep.entries), (0x1ab, 99, (1, 2, 3)));
+        assert_eq!((rep.doorbells, rep.doorbell_ago_ms), (0x10, Some(0x20)));
+        assert_eq!(
+            (rep.wake, rep.turn_ago_ms),
+            (Some((5, Peek::Spin)), Some(6))
+        );
+        let Segment::Decoded {
+            slot,
+            va,
+            len_bytes,
+            read_bytes,
+            stream,
+            probes,
+        } = &rep.segment
+        else {
+            panic!("{:?}", rep.segment)
+        };
+        assert_eq!(
+            (*slot, *va, *len_bytes, *read_bytes),
+            (0x1a7, 0x4_0000, 96, 96)
+        );
+        assert_eq!(stream.items.len(), 20);
+        let got: Vec<(usize, Current)> = probes.iter().map(|p| (p.item, p.current)).collect();
+        assert_eq!(
+            got,
+            [
+                (4, Current::Value(0x29)),
+                (9, Current::Value(7)),
+                (14, Current::Unread("Missing")),
+            ]
+        );
+        // the pushbuffer is read once, from its start, whole; then one read per acquire
+        assert_eq!(
+            mem.1,
+            [
+                (0x4_0000, 96),
+                (0x2000, 4),
+                (0x2008, 4),
+                (0x20_0000_0000, 4)
+            ]
+        );
+        use std::sync::atomic::Ordering::Relaxed;
+        assert_eq!(stats.conditions.load(Relaxed), 1);
+        assert_eq!(stats.acquires.load(Relaxed), 3);
+        assert_eq!(stats.unread.load(Relaxed), 1);
+        assert_eq!(stats.no_segment.load(Relaxed), 0);
+        // 0x29 < 0x2a on a circular GEQ: no; 7 == 7 on an equality acquire: yes
+        assert_eq!(stats.would_pass.load(Relaxed), 1);
+    }
+
+    #[test]
+    fn no_row_holding_pb_get_means_no_segment_and_no_read_at_all() {
+        let mut mem = Mem(vec![], Vec::new());
+        let rows = vec![Row {
+            slot: 0x1a7,
+            entry: gp_entry(0x4_0000, 64).unwrap(),
+        }];
+        let stats = StallStats::default();
+        let rep = build_report(inputs(rows, 0x7_0000), &mut |a, n| mem.read(a, n), &stats);
+        assert_eq!(rep.segment, Segment::NotFound);
+        assert!(
+            mem.1.is_empty(),
+            "nothing is read when nothing is known: {:?}",
+            mem.1
+        );
+        use std::sync::atomic::Ordering::Relaxed;
+        assert_eq!(
+            (
+                stats.conditions.load(Relaxed),
+                stats.no_segment.load(Relaxed)
+            ),
+            (1, 1)
+        );
+    }
+
+    #[test]
+    fn an_unreadable_pushbuffer_is_reported_with_its_reason_after_one_read() {
+        let mut mem = Mem(vec![], Vec::new());
+        let rows = vec![Row {
+            slot: 0x1a7,
+            entry: gp_entry(0x100_0000_0000 - 0x1000, 64).unwrap(),
+        }];
+        let stats = StallStats::default();
+        let rep = build_report(
+            inputs(rows, 0xff_ffff_f010),
+            &mut |a, n| mem.read(a, n),
+            &stats,
+        );
+        assert_eq!(
+            rep.segment,
+            Segment::Unread {
+                slot: 0x1a7,
+                va: 0xff_ffff_f000,
+                len_bytes: 64,
+                why: "Missing"
+            }
+        );
+        assert_eq!(mem.1.len(), 1);
+        use std::sync::atomic::Ordering::Relaxed;
+        assert_eq!(stats.no_segment.load(Relaxed), 1);
+    }
+
+    #[test]
+    fn a_long_segment_is_read_up_to_the_cap_only() {
+        let words = vec![0u32; 0x4000]; // 64 KiB of NOPs
+        let mut mem = Mem(vec![(0x10_0000, le(&words))], Vec::new());
+        let rows = vec![Row {
+            slot: 0x1a7,
+            entry: gp_entry(0x10_0000, 0x10000).unwrap(),
+        }];
+        let rep = build_report(
+            inputs(rows, 0x10_0000 + 0x8000),
+            &mut |a, n| mem.read(a, n),
+            &StallStats::default(),
+        );
+        assert_eq!(mem.1, [(0x10_0000, MAX_PB_BYTES)]);
+        let Segment::Decoded {
+            len_bytes,
+            read_bytes,
+            ..
+        } = &rep.segment
+        else {
+            panic!()
+        };
+        assert_eq!((*len_bytes, *read_bytes), (0x10000, MAX_PB_BYTES));
+        // PB_GET is far beyond the window: said so, never marked
+        let text = all(&render(&rep));
+        assert!(
+            text.contains("pb_get_off=0x8000(beyond_read_window)"),
+            "{text}"
+        );
+        assert!(!text.contains("<== PB_GET"));
+    }
+
+    #[test]
+    fn the_semaphore_reads_are_bounded_and_a_short_read_is_unread_not_zero() {
+        let mut pb = Vec::new();
+        for i in 0..12u64 {
+            pb.extend(sem(0x3000 + i * 4, 1, 0));
+        }
+        let mut mem = Mem(vec![(0x4_0000, le(&pb)), (0x3000, vec![1; 64])], Vec::new());
+        let rows = vec![Row {
+            slot: 0x1a7,
+            entry: gp_entry(0x4_0000, (pb.len() * 4) as u64).unwrap(),
+        }];
+        let rep = build_report(
+            inputs(rows.clone(), 0x4_0000),
+            &mut |a, n| mem.read(a, n),
+            &StallStats::default(),
+        );
+        let Segment::Decoded { probes, .. } = &rep.segment else {
+            panic!()
+        };
+        assert_eq!(probes.len(), MAX_PROBES);
+        assert_eq!(mem.1.len(), 1 + MAX_PROBES);
+        // a view that returns fewer bytes than asked, and one that returns more
+        let mut calls = 0;
+        let rep = build_report(
+            inputs(rows, 0x4_0000),
+            &mut |a, n| {
+                calls += 1;
+                if a == 0x4_0000 {
+                    // the pushbuffer: 10 bytes of it (two whole words), then nothing
+                    return Ok(le(&pb)[..10].to_vec());
+                }
+                Ok(vec![0xAA; n + 8])
+            },
+            &StallStats::default(),
+        );
+        let Segment::Decoded {
+            read_bytes,
+            stream,
+            probes,
+            ..
+        } = &rep.segment
+        else {
+            panic!()
+        };
+        assert_eq!(*read_bytes, 8, "whole words only");
+        assert_eq!(stream.items.len(), 2);
+        assert!(probes.is_empty(), "no acquire decoded from two words");
+        assert_eq!(calls, 1);
+    }
+
+    #[test]
+    fn a_semaphore_view_that_returns_too_little_is_marked_short() {
+        let pb = sem(0x3000, 1, 0);
+        let rows = vec![Row {
+            slot: 0x1a7,
+            entry: gp_entry(0x4_0000, (pb.len() * 4) as u64).unwrap(),
+        }];
+        let rep = build_report(
+            inputs(rows, 0x4_0000),
+            &mut |a, _| {
+                if a == 0x4_0000 {
+                    Ok(le(&pb))
+                } else {
+                    Ok(vec![1, 2])
+                }
+            },
+            &StallStats::default(),
+        );
+        let Segment::Decoded { probes, .. } = &rep.segment else {
+            panic!()
+        };
+        assert_eq!(probes[0].current, Current::Unread("short"));
+    }
+
+    #[test]
+    fn a_64_bit_semaphore_is_read_as_eight_bytes_little_endian() {
+        let pb = sem(0x3000, 0x1_0000_0001, 3 | (1 << 24));
+        let rows = vec![Row {
+            slot: 0x1a7,
+            entry: gp_entry(0x4_0000, (pb.len() * 4) as u64).unwrap(),
+        }];
+        let mut mem = Mem(
+            vec![(0x4_0000, le(&pb)), (0x3000, le(&[0x11, 0x22]))],
+            Vec::new(),
+        );
+        let rep = build_report(
+            inputs(rows, 0x4_0000),
+            &mut |a, n| mem.read(a, n),
+            &StallStats::default(),
+        );
+        let Segment::Decoded { probes, .. } = &rep.segment else {
+            panic!()
+        };
+        assert_eq!(probes[0].current, Current::Value(0x22_0000_0011));
+        assert_eq!(mem.1[1], (0x3000, 8));
+    }
+
+    #[test]
+    fn the_period_line_is_due_once_per_period_and_only_when_the_counters_moved() {
+        assert!(period_due(PERIOD_MS, 0, 1, 0));
+        assert!(period_due(5 * PERIOD_MS, 4 * PERIOD_MS, 9, 3));
+        assert!(!period_due(PERIOD_MS - 1, 0, 1, 0), "too soon");
+        assert!(!period_due(PERIOD_MS, 0, 0, 0), "nothing counted");
+        assert!(!period_due(PERIOD_MS * 9, 0, 5, 5), "nothing new");
+        assert!(!period_due(3, 10_000_000, 5, 0), "clock ran backwards");
     }
 }

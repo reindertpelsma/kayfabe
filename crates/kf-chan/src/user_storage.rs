@@ -697,6 +697,23 @@ impl Storage<CpuView> {
             ))
             .map_err(|e| format!("USER_STORAGE_REF_READ: {e:?}"))
     }
+
+    /// MEASUREMENT ONLY (`KF3_DIAG_USER_STALL`): the private ring's hardware `GP_GET` and the
+    /// `GP_PUT` the relay published, two 4-byte loads. Never a decision input.
+    ///
+    /// # Errors
+    /// Released CPU view/load failure.
+    pub fn gpu_cursors(&self) -> Result<(u32, u32), String> {
+        Err("USER_STORAGE_STUB".into())
+    }
+
+    /// MEASUREMENT ONLY (`KF3_DIAG_USER_STALL`): one private GP ring entry as it stands, 8 bytes.
+    ///
+    /// # Errors
+    /// A slot outside the ring, or a released CPU view/load failure.
+    pub fn read_gp(&self, _slot: u32) -> Result<u64, String> {
+        Err("USER_STORAGE_STUB".into())
+    }
 }
 
 #[cfg(test)]
@@ -730,6 +747,34 @@ mod tests {
             mapped: Mapping::Live,
             cleared: BYTES,
         }
+    }
+
+    #[test]
+    fn the_diagnostic_reads_the_private_cursors_and_entries_without_writing() {
+        let s = anonymous_live_storage();
+        let cpu = s.cpu().unwrap();
+        cpu.store_u32(HostOffset::new(USERD_OFFSET + kf_abi::submit::USERD_GP_GET), 0x1a8).unwrap();
+        s.publish_put(0x1aa).unwrap();
+        assert_eq!(s.gpu_cursors().unwrap(), (0x1a8, 0x1aa));
+        let entry = kf_abi::submit::gp_entry(0x3_0472_0000, 500).unwrap() | (1 << 41);
+        s.write_user_gp(0x1a7, entry).unwrap();
+        s.write_user_gp(ENTRIES - 1, 0x1234_5678_9abc_def0 & !(1 << 63)).ok();
+        assert_eq!(s.read_gp(0x1a7).unwrap(), entry);
+        assert_eq!(s.read_gp(0x1a8).unwrap(), 0, "a slot never written reads zero");
+        // reading changed nothing
+        assert_eq!(s.gpu_cursors().unwrap(), (0x1a8, 0x1aa));
+        assert_eq!(s.read_gp(0x1a7).unwrap(), entry);
+    }
+
+    #[test]
+    fn the_diagnostic_refuses_a_slot_outside_the_ring_and_a_released_view() {
+        let mut s = anonymous_live_storage();
+        assert!(s.read_gp(ENTRIES).is_err());
+        assert!(s.read_gp(u32::MAX).is_err());
+        assert!(s.read_gp(ENTRIES - 1).is_ok());
+        s.view = None;
+        assert!(s.read_gp(0).is_err());
+        assert!(s.gpu_cursors().is_err());
     }
 
     #[test]

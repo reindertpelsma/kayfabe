@@ -288,6 +288,8 @@ macro_rules! lifecycle_stats {
             pub set_object_5080_max_per_channel: std::sync::atomic::AtomicU64,
             /// The VM-wide switch of Pointer-mode markers (PHASE 1c): every channel's [`Lifecycle`] reads and sets it.
             pub latch: std::sync::Arc<MarkerLatch>,
+            /// ★ 2026-10-20 `KF3_DIAG_USER_STALL`'s cumulative counters (empty, and absent from the line, when off).
+            pub stall: crate::user_stall::StallStats,
         }
         impl LifecycleStats {
             /// Merge one channel's delta ([`Lifecycle::take_delta`]).
@@ -2383,5 +2385,21 @@ mod tests {
         }
         assert_eq!(asked, 1, "once, then only when the epoch moves");
         assert_eq!(fresh.mode(), Mode::Scan);
+    }
+
+    /// 2026-10-20: the stall diagnostic's counters ride the existing lifecycle counters line, and only when counted.
+    #[test]
+    fn the_stall_diagnostic_counters_join_the_summary_line_only_when_counted() {
+        use std::sync::atomic::Ordering::Relaxed;
+        let stats = LifecycleStats::default();
+        assert!(!stats.summary().contains("diag_user_stall"), "{}", stats.summary());
+        let before = stats.summary();
+        stats.stall.conditions.fetch_add(2, Relaxed);
+        stats.stall.acquires.fetch_add(5, Relaxed);
+        let line = stats.summary();
+        assert!(line.starts_with(&before), "the existing fields keep their place: {line}");
+        assert!(line.contains("diag_user_stall_conditions=0x2"), "{line}");
+        assert!(line.contains("diag_user_stall_acquires=0x5"), "{line}");
+        assert!(!line.contains('\n'));
     }
 }
