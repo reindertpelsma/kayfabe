@@ -11,7 +11,7 @@ import re
 
 
 def verify(packet):
-    if not re.fullmatch(r't_[0-9]{6}\.etl',packet['name']):
+    if packet['name']!='pm_tail.bin' and not re.fullmatch(r't_[0-9]{6}\.etl',packet['name']):
         raise ValueError('invalid captured trace name')
     raw=gzip.decompress(base64.b64decode(packet['gzip']))
     if hashlib.sha256(raw).hexdigest()!=packet['sha256']:
@@ -49,3 +49,29 @@ def preserve(out, guest_root, agent):
             receipts.append(receipt)
             (target/'manifest.json').write_text(json.dumps(receipts,indent=2))
     return receipts
+
+
+def preserve_pm(out, guest_root, agent):
+    """Stop our monitor, preserve its full appended tail, retain the prior prefix."""
+    packet=json.loads(agent(f'& C:\\kf\\n1\\pm_tail.ps1 -Root {guest_root}',90))
+    raw=verify(packet)
+    dest=out/'pm_tail.bin.gz'
+    with dest.open('wb') as stream:
+        stream.write(base64.b64decode(packet['gzip'])); stream.flush(); os.fsync(stream.fileno())
+    directory=os.open(out,os.O_RDONLY)
+    try: os.fsync(directory)
+    finally: os.close(directory)
+    if hashlib.sha256(gzip.decompress(dest.read_bytes())).hexdigest()!=packet['sha256']:
+        raise ValueError('PM tail readback failed; no truncate authorized')
+    receipt={k:v for k,v in packet.items() if k!='gzip'}
+    receipt['verified_bytes']=len(raw)
+    receipt['truncate_receipt']=json.loads(agent(f'& C:\\kf\\n1\\pm_tail.ps1 -Root {guest_root} -DeleteHash {packet["sha256"]}',90))
+    (out/'pm-tail-manifest.json').write_text(json.dumps(receipt,indent=2))
+    # The analysis and immutable compressed transport payload are already saved.
+    csv=out/'pm_live.csv'
+    if csv.exists():
+        original=csv.read_bytes(); compressed=gzip.compress(original,compresslevel=3)
+        target=out/'pm_live.csv.gz'; target.write_bytes(compressed)
+        if gzip.decompress(target.read_bytes())!=original: raise ValueError('CSV compression mismatch')
+        csv.unlink()
+    return receipt

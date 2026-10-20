@@ -180,7 +180,7 @@ def main():
         raise RuntimeError('REFUSED: guest agent unavailable')
     guest_root = f'C:\\kf\\n1\\run{n}'
     installer = ['$ErrorActionPreference="Stop"', 'New-Item -ItemType Directory -Force C:\\kf\\n1 | Out-Null']
-    for name in ['load.ps1','post_boot.ps1','collect.ps1','transport.ps1','health.ps1','viewport.py','webgl.html','test_transport.ps1','preflight.ps1','archive.ps1']:
+    for name in ['load.ps1','post_boot.ps1','collect.ps1','transport.ps1','health.ps1','viewport.py','webgl.html','test_transport.ps1','preflight.ps1','archive.ps1','pm_tail.ps1']:
         data = base64.b64encode((SCRIPTS/name).read_bytes()).decode()
         installer.append(f'[IO.File]::WriteAllBytes("C:\\kf\\n1\\{name}",[Convert]::FromBase64String("{data}"))')
     if args.transport_preflight:
@@ -267,6 +267,12 @@ def main():
         except Exception:
             (out/'ARCHIVE_ERROR.txt').write_text(traceback.format_exc())
             log('ARCHIVE_ERROR: original guest captures retained; repair required')
+    try:
+        importlib.reload(archive)
+        result['pm_tail_archive']=archive.preserve_pm(out,guest_root,agent)
+    except Exception:
+        (out/'PM_ARCHIVE_ERROR.txt').write_text(traceback.format_exc())
+        log('PM_ARCHIVE_ERROR: original guest PM bytes retained')
     gpu.terminate(); gpu.wait(timeout=10)
     if probe and probe.poll() is None:
         probe.terminate(); probe.wait(timeout=10)

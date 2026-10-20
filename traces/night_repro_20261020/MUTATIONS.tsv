@@ -20,3 +20,4 @@ archive_ignore_name	2	1
 load_always_valid	5	1
 load_ignore_roles	2	1
 loss-time-parser	restore unsupported-seconds/fabricated-time parser	4/13 killed	PASS
+pm-tail-guard	remove owned-tail eligibility	2/7 killed	PASS
