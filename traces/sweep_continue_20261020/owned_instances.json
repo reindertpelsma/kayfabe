@@ -26,5 +26,29 @@
     "cost_upper_bound_usd": 3.2790151446064817,
     "cost_note": "Runtime estimate and shared-account credit delta are observations, not settled attribution. Budget guard reserves1USD for delayed transfer billing until invoices reconcile.",
     "auto_destroy_cancelled_after_absence": true
+  },
+  {
+    "id": 56964717,
+    "role": "Corrected native GR oracle; Blackwell OFF TDR and ON public OLUT sibling comparison",
+    "offer": 56684494,
+    "machine_id": 11051,
+    "gpu_offer": "RTX 5090",
+    "quote_dph": 0.9342592592592591,
+    "disk_gb_requested": 180,
+    "created_utc": "2026-10-20T23:07:18.231745+00:00",
+    "product_head": "fe3a978eee980986e0a3b1c1626c44e5a99bbf18",
+    "code_base": "26691c14a",
+    "credit_before": 27.529452514062882,
+    "budget_shared_cap": 20,
+    "budget_shared_stop": 15,
+    "credit_reserve": 5,
+    "known_shared_spend_conservative_usd": 8.425015144606482,
+    "reservation_usd": 3.7249228395061724,
+    "auto_destroy_minutes": 175,
+    "global_teardown_utc": "2026-10-21T04:30:00+00:00",
+    "destroyed": false,
+    "auto_destroy_pid": 1509322,
+    "auto_destroy_verified": true,
+    "auto_destroy_armed_utc": "2026-10-20T23:07:18.255012+00:00"
   }
 ]
