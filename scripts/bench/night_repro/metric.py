@@ -130,8 +130,9 @@ def analyze(directory):
     for f in root.glob('*.stderr.txt'):
         for line in f.read_text(errors='replace').splitlines():
             if re.search(r'device (?:lost|removed|hung)|DXGI_ERROR_DEVICE',line,re.I):
-                m=re.search(r'[ME]:\s*(?:(\d+):)?(\d+\.\d+):',line)
-                elapsed=starts.get(f.name.split('-')[0],0)+(60*int(m[1] or 0)+float(m[2]) if m else 0)
+                m=re.search(r'[ME]:\s*(?:(\d+):)?(\d+\.\d+)(?:\s+s)?:',line)
+                role=f.name.removesuffix('.stderr.txt').split('-')[0]
+                elapsed=starts[role]+60*int(m[1] or 0)+float(m[2]) if m and role in starts else None
                 losses.append(dict(elapsed_s=elapsed,line=line))
     events=json.loads((root/'guest-state.json').read_text()).get('health',{}).get('events',[]) if (root/'guest-state.json').exists() else []
     if isinstance(events,dict): events=[events]
