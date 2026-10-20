@@ -353,11 +353,52 @@ fn mapped_thread_sequence_stays_odd_until_the_whole_update_is_committed() {
 
 #[test]
 fn explicit_mmap_output_path_creates_only_its_adjacent_jsonl() {
-    let p=directory();let path=p.join("capture.mmap");let s=Session::create_diagnostic_file(&path).unwrap();s.stop().unwrap();
-    assert!(path.exists());assert!(p.join("capture.jsonl").exists());assert!(!p.join("prof.mmap").exists());std::fs::remove_dir_all(p).unwrap();
+    let p = directory();
+    let path = p.join("capture.mmap");
+    let s = Session::create_diagnostic_file(&path).unwrap();
+    s.stop().unwrap();
+    assert!(path.exists());
+    assert!(p.join("capture.jsonl").exists());
+    assert!(!p.join("prof.mmap").exists());
+    std::fs::remove_dir_all(p).unwrap();
 }
 #[test]
 fn explicit_jsonl_output_path_creates_its_adjacent_mmap() {
-    let p=directory();let path=p.join("capture.jsonl");let s=Session::create_diagnostic_file(&path).unwrap();s.stop().unwrap();
-    assert!(p.join("capture.mmap").exists());assert!(path.exists());assert_eq!(std::fs::read_dir(&p).unwrap().count(),2);std::fs::remove_dir_all(p).unwrap();
+    let p = directory();
+    let path = p.join("capture.jsonl");
+    let s = Session::create_diagnostic_file(&path).unwrap();
+    s.stop().unwrap();
+    assert!(p.join("capture.mmap").exists());
+    assert!(path.exists());
+    assert_eq!(std::fs::read_dir(&p).unwrap().count(), 2);
+    std::fs::remove_dir_all(p).unwrap();
+}
+
+#[test]
+fn rejected_ledger_open_is_visible_without_another_span() {
+    let p=directory();let s=Session::create_diagnostic(&p).unwrap();let b=s.bind_current(1).unwrap();
+    for id in 0..16 {assert!(kf_prof::ledger_open(Kind::HeldReply,id).is_some());}
+    assert!(kf_prof::ledger_open(Kind::HeldReply,99).is_none());assert_eq!(s.snapshot()["threads"][0]["dropped"],1);
+    drop(b);s.stop().unwrap();std::fs::remove_dir_all(p).unwrap();
+}
+#[test]
+fn every_rejected_ledger_open_is_counted_across_kinds() {
+    let p=directory();let s=Session::create_diagnostic(&p).unwrap();let b=s.bind_current(1).unwrap();
+    for kind in [Kind::HeldReply,Kind::MmuInvalidate] {for id in 0..16 {assert!(kf_prof::ledger_open(kind,id).is_some());}for _ in 0..3 {assert!(kf_prof::ledger_open(kind,99).is_none());}}
+    assert_eq!(s.snapshot()["threads"][0]["dropped"],6);drop(b);s.stop().unwrap();std::fs::remove_dir_all(p).unwrap();
+}
+#[test]
+fn rejected_span_is_visible_while_the_stack_is_still_full() {
+    let p=directory();let s=Session::create_diagnostic(&p).unwrap();let b=s.bind_current(1).unwrap();let mut spans=Vec::new();
+    for id in 0..8 {spans.push(kf_prof::site(Site::TrapDispatch,State::Running,id));}
+    let _rejected=kf_prof::site(Site::WorkerPark,State::Mutex,9);assert_eq!(s.snapshot()["threads"][0]["dropped"],1);
+    while let Some(g)=spans.pop() {drop(g);}drop(b);s.stop().unwrap();std::fs::remove_dir_all(p).unwrap();
+}
+#[test]
+fn repeated_full_stack_entries_are_counted_without_corrupting_the_parent() {
+    let p=directory();let s=Session::create_diagnostic(&p).unwrap();let b=s.bind_current(1).unwrap();let mut spans=Vec::new();
+    for id in 0..8 {spans.push(kf_prof::site(Site::TrapDispatch,State::Running,id));}
+    for _ in 0..4 {let _rejected=kf_prof::site(Site::WorkerPark,State::Mutex,9);}
+    let row=s.snapshot();assert_eq!(row["threads"][0]["dropped"],4);assert_eq!(row["threads"][0]["arg"],7);
+    while let Some(g)=spans.pop() {drop(g);}drop(b);s.stop().unwrap();std::fs::remove_dir_all(p).unwrap();
 }
