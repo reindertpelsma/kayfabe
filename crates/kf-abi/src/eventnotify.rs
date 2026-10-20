@@ -674,6 +674,13 @@ pub const RULED_NOTIFIERS: &[RuledNotifier] = &[
               which goes with the RC-recovery stub (kf_rm::vfguest). Its producer is the guest's own \
               CPU-RM (ogkm-580: kernel_rc_callback.c:360)",
     },
+    // ⚠ OWNER REVIEW (2026-10-20, bw-resume): this row is the agent's READING of §S.1, not a ruling
+    // the owner made for index 196. Argument: GC6 entry thresholds are the physical board's power
+    // management, the same class as the ruled PSTATE_CHANGE ("a no-op, the host does power
+    // management, arm silently, never post"), PLATFORM_POWER_MODE_CHANGE and AUX_POWER_STATE_CHANGE;
+    // this device performs no GC6 and no OGKM producer exists. Counter-reading: §S.3 lists "power
+    // events" among events accepted only when derived from real host events. Please confirm the stub
+    // or rule otherwise (refuse => GB202 Windows stays at Code 43 at this arming, measured).
     RuledNotifier {
         notifier:
             &crate::generated::matrix::NV2080_NOTIFIERS_NV2080_NOTIFIERS_USE_GC6_REDUCED_THRESHOLD,
