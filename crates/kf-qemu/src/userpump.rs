@@ -7,6 +7,11 @@ use crate::mem::userread::{self, Mapping, Snapshot};
 use kf_chan::user_loop::Stats;
 use kf_chan::user_scan::{Fetch, Scan, Trigger};
 
+/// ★ 2026-10-20 MEASUREMENT ONLY (`KF3_DIAG_PROGRESS`, default off): the glue of the progress diagnostic. A child of this module so
+/// that it can read the pump's private state; it only reads.
+#[path = "progdiag.rs"]
+mod progdiag;
+
 /// Retry means no native publication/action was attempted. An uncertain write or
 /// native doorbell error is always terminal; issued credits are never rolled back.
 /// (The type lives in `kf_chan::user_turn`, whose per-entry turn runs on these accessors.)
@@ -2771,6 +2776,11 @@ impl ChanPlane {
         if let Some(t) = pump.trace.as_mut() {
             t.wake(woke);
         }
+        // ★ `KF3_DIAG_PROGRESS`: a turn counts as a look at this relay, and as a visit of the relay path.
+        if kf_chan::progress::on() {
+            record.stamp_look();
+            kf_chan::progress::hit_point(kf_chan::progress::Point::RelayTurn);
+        }
         let outcome = pump.turn(self, &mut r);
         r.pump = Some(pump);
         match outcome {
@@ -2881,6 +2891,7 @@ impl ChanPlane {
         // number of times in a row (else the spin is an endless busy loop); the safety net always may
         let retry_ok = kf_chan::user_loop::may_retry(record.contended_run(), why);
         let ring = |this: &Self| {
+            kf_chan::progress::hit_point(kf_chan::progress::Point::RelayRing);
             if this.plane.ring_internal(record.idx) {
                 let _ = this.wake.signal();
             }
@@ -2898,6 +2909,11 @@ impl ChanPlane {
             return false;
         };
         if let Some(w) = p.wait {
+            // ★ `KF3_DIAG_PROGRESS`: a look that was entitled to act on this wait stamps the relay (a contended wait whose retry budget is spent is
+            // NOT looked at by the spin / event looks: only the safety net may re-ring it).
+            if kf_chan::progress::on() && (retry_ok || !matches!(w, kf_chan::user_loop::Wait::Contended)) {
+                record.stamp_look();
+            }
             // The private words: `GP_GET` (entries popped) and the tagged `REFERENCE` (markers
             // processed) are the proofs; the interrupt is only the hint.
             let mut pops = false;
@@ -3765,5 +3781,193 @@ mod tests {
         assert!(installed < call && call < logged, "install < switch_source < MIGRATED line");
         let admit = migrate.find("ring.admit(|| {").unwrap();
         assert!(admit < installed);
+    }
+
+    // ---- 2026-10-20: KF3_DIAG_PROGRESS (default off, measurement only): where it may run, what it may touch, what it stamps
+
+    fn prog_source() -> &'static str {
+        include_str!("progdiag.rs").split("#[cfg(test)]").next().unwrap()
+    }
+    fn pump_prod() -> &'static str {
+        include_str!("userpump.rs").split("#[cfg(test)]").next().unwrap()
+    }
+
+    /// It takes every lock with `try_lock` and sleeps once, outside every lock.
+    #[test]
+    fn the_progress_diagnostic_takes_every_lock_with_try_lock() {
+        let d = prog_source();
+        assert!(d.len() > 500, "progdiag.rs is not written yet");
+        assert!(d.matches(".try_lock()").count() >= 4, "the map, the record and the storage are all try_lock");
+        assert!(d.contains("self.user_rings.try_lock()"));
+        assert!(d.contains("record.try_lock()"));
+        assert_eq!(d.matches("thread::sleep").count(), 1, "the one sleep is the tick, outside every lock");
+    }
+
+    /// Nothing in it can block.
+    #[test]
+    fn the_progress_diagnostic_never_blocks() {
+        let d = prog_source();
+        for banned in [".lock()", ".read()", ".write()", "Condvar", ".join(", ".recv(", "block_on", "park"] {
+            assert!(!d.contains(banned), "progdiag.rs must not contain {banned:?}");
+        }
+    }
+
+    /// It reads no environment (the switch was read once by `init_from_env`), runs no unsafe, prints through the pure renderers.
+    #[test]
+    fn the_progress_diagnostic_reads_no_environment_and_prints_only_rendered_lines() {
+        let d = prog_source();
+        for banned in ["unsafe", "env::var", "{:?}"] {
+            assert!(!d.contains(banned), "progdiag.rs must not contain {banned:?}");
+        }
+        assert!(d.contains("progress::render_relay_block("));
+        assert!(d.contains("progress::render_starved("));
+    }
+
+    /// Its passive reads are the worker look's own (`gpu_get`, `gpu_reference`, `Fetch::peek`, `Marks::peek`) and the same
+    /// `Wait::satisfied` decides.
+    #[test]
+    fn the_progress_diagnostic_evaluates_the_same_satisfied_predicate_on_the_same_passive_reads() {
+        let d: String = prog_source().split_whitespace().collect();
+        for needle in [
+            "storage.gpu_get()",
+            "storage.gpu_reference()",
+            "p.core.fetch.peek(get)",
+            "p.core.marks.peek(reference)",
+            "w.satisfied(marks,popped)",
+        ] {
+            assert!(d.contains(needle), "{needle}");
+        }
+        let peek = pump_prod().split("fn user_ring_peek_one(").nth(1).unwrap();
+        let peek = peek.split("pub(crate) fn user_ring_poll_due").next().unwrap();
+        let peek: String = peek.split_whitespace().collect();
+        for needle in ["storage.gpu_get()", "storage.gpu_reference()", "p.core.fetch.peek(get)", "p.core.marks.peek(reference)", "w.satisfied(p.core.marks.peek(reference),popped)"] {
+            assert!(peek.contains(needle), "the look reads {needle}");
+        }
+    }
+
+    fn peek_one_prod() -> &'static str {
+        let pump = pump_prod();
+        let peek = pump.split("fn user_ring_peek_one(").nth(1).unwrap();
+        peek.split("pub(crate) fn user_ring_poll_due").next().unwrap()
+    }
+    fn serve_prod() -> &'static str {
+        let pump = pump_prod();
+        let serve = pump.split("pub(super) fn user_ring_serve(").nth(1).unwrap();
+        serve.split("fn user_ring_arm").next().unwrap()
+    }
+
+    /// Inventory: the relay is stamped in exactly two places (the look and the serve), and the relay path's two points are hit once each.
+    #[test]
+    fn the_relay_stamp_and_point_inventory_is_exact() {
+        let pump = pump_prod();
+        assert_eq!(pump.matches("record.stamp_look()").count(), 2, "the look and the serve");
+        assert!(pump.contains("kf_chan::progress::hit_point(kf_chan::progress::Point::RelayRing)"));
+        assert_eq!(pump.matches("Point::RelayRing").count(), 1);
+        assert_eq!(pump.matches("Point::RelayTurn").count(), 1);
+    }
+
+    /// The look stamps only when it was entitled to act on the wait (a contended wait whose retry budget is spent is NOT looked at by the
+    /// spin / event looks), only with the diagnostic on, and before it reads the private words.
+    #[test]
+    fn the_look_stamps_the_relay_only_when_entitled_and_only_with_the_switch_on() {
+        let peek = peek_one_prod();
+        let w = peek.find("if let Some(w) = p.wait {").unwrap();
+        let stamp = peek.find("record.stamp_look()").unwrap();
+        let satisfied = peek.find("let satisfied = match").unwrap();
+        assert!(w < stamp && stamp < satisfied, "stamped on entering the wait evaluation, before the reads");
+        let cond = &peek[w..stamp];
+        assert!(cond.contains("kf_chan::progress::on()"), "{cond}");
+        assert!(cond.contains("retry_ok || !matches!(w, kf_chan::user_loop::Wait::Contended)"), "{cond}");
+    }
+
+    /// The stamp's entitlement is the SAME retry budget the ring decision uses (`may_retry`), computed once before both.
+    #[test]
+    fn the_look_stamp_uses_the_retry_budget_of_the_ring_decision() {
+        let peek = peek_one_prod();
+        let budget = peek.find("let retry_ok = kf_chan::user_loop::may_retry(record.contended_run(), why);").unwrap();
+        assert!(budget < peek.find("record.stamp_look()").unwrap());
+        assert!(budget < peek.find("retry_ok && ring(self)").unwrap());
+        let stamp = peek.find("record.stamp_look()").unwrap();
+        let cond = peek[..stamp].rfind("if kf_chan::progress::on()").unwrap();
+        assert!(peek[cond..stamp].contains("retry_ok"), "the stamp's own condition names the budget");
+    }
+
+    /// A turn stamps the relay and hits the relay-turn point before it runs.
+    #[test]
+    fn the_serve_stamps_the_relay_before_its_turn() {
+        let serve = serve_prod();
+        let turn = serve.find("pump.turn(self").unwrap();
+        assert!(serve.find("record.stamp_look()").unwrap() < turn);
+        assert!(serve.find("Point::RelayTurn").unwrap() < turn);
+        let guard = serve.find("kf_chan::progress::on()").unwrap();
+        assert!(guard < serve.find("record.stamp_look()").unwrap());
+    }
+
+    /// The device clears the worker's `serving` word after every serve, and sets it before.
+    #[test]
+    fn the_device_records_what_the_worker_is_serving() {
+        let dev = include_str!("device.rs");
+        let dev = dev.split("#[cfg(test)]").next().unwrap();
+        let f = dev.split("fn run_translated(&self, host_token: u32").nth(1).unwrap();
+        let f = f.split("fn run_emulated").next().unwrap();
+        let set = f.find("kf_chan::progress::set_serving(Some(host_token))").unwrap();
+        let serve = f.find("self.chans.serve(host_token)").unwrap();
+        let clear = f.find("kf_chan::progress::set_serving(None)").unwrap();
+        assert!(set < serve && serve < clear);
+    }
+
+    /// Exactly one set and one clear of the worker's serving word, both in `run_translated`.
+    #[test]
+    fn the_serving_word_is_set_once_and_cleared_once() {
+        let dev = include_str!("device.rs");
+        let dev = dev.split("#[cfg(test)]").next().unwrap();
+        assert_eq!(dev.matches("progress::set_serving(Some(").count(), 1);
+        assert_eq!(dev.matches("progress::set_serving(None)").count(), 1);
+    }
+
+    /// The thread exists only when the switch is on, and is started in the one place workers are started.
+    #[test]
+    fn the_progress_thread_is_started_only_with_the_switch_on() {
+        let ffi = include_str!("ffi_unsafe.rs");
+        assert_eq!(ffi.matches("kf3-progress").count(), 1);
+        let at = ffi.find("kf3-progress").unwrap();
+        let before = &ffi[at.saturating_sub(700)..at];
+        assert!(before.contains("kf_chan::progress::Setting::On"), "{before}");
+        assert!(ffi.contains("kf_chan::progress::init_from_env()"));
+        assert!(ffi.find("kf_chan::progress::init_from_env()").unwrap() < ffi.find("Device::realize(&cfg)").unwrap(), "the switch is read before the workers exist");
+        assert!(ffi.contains("progress_loop"));
+    }
+
+    /// Coordinator H-64: every block and every summary carries the contention / demand / lifecycle state of the relays and the
+    /// worker-level counters the hypothesis is decided by, read passively.
+    #[test]
+    fn the_progress_diagnostic_reads_the_contention_state_and_the_counters_the_h64_falsifier_needs() {
+        let d: String = prog_source().split_whitespace().collect();
+        for needle in [
+            "record.contended_run()",
+            "record.pending()",
+            "record.is_waiting()",
+            "record.is_canceled()",
+            "record.retry.load(",
+            "self.inbox.walk_diag()",
+            "self.pt.try_lock()",
+            "t.stopped",
+            "t.disabled",
+            "progress::render_summary_context(",
+            "(\"contended_turns\",",
+            "(\"wake_backstop\",",
+            "(\"backstop_contended\",",
+            "(\"backstop_found_work\",",
+            "(\"backstop_carried\",",
+            "(\"busy_looks\",",
+            "(\"event_without_progress\",",
+            "self.relay_stats",
+        ] {
+            assert!(d.contains(needle), "{needle}");
+        }
+        let mem = include_str!("mem.rs");
+        let diag = mem.split("pub fn walk_diag(").nth(1).expect("Inbox::walk_diag");
+        let diag = diag.split("\n    }\n").next().unwrap();
+        assert!(diag.contains("try_lock") && !diag.contains(".lock()"), "walk_diag never blocks: {diag}");
     }
 }

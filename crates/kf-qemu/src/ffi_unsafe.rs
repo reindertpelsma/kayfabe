@@ -204,6 +204,14 @@ pub unsafe extern "C" fn kf3_realize(
         channel_budget,
     };
     crate::userstore::configure(user_view_keep);
+    // ★ 2026-10-20 `KF3_DIAG_PROGRESS` (measurement only, default off): read ONCE, before any worker exists.
+    let progress = kf_chan::progress::init_from_env();
+    if progress == kf_chan::progress::Setting::Invalid {
+        eprintln!(
+            "kf3: PROGRESS_INVALID {}: not a decimal number of milliseconds in 1..=0x36ee80; the diagnostic is OFF",
+            kf_chan::progress::ENV
+        );
+    }
     // ★ Review addendum: a panic on any service thread stops the VM, visibly (`failclosed`).
     crate::failclosed::install();
     match Device::realize(&cfg) {
@@ -227,6 +235,16 @@ pub unsafe extern "C" fn kf3_realize(
                     write_err(err, err_len, "could not start a worker thread");
                     return -1;
                 }
+            }
+            // ★ 2026-10-20 `KF3_DIAG_PROGRESS`: the diagnostic thread, only with the switch on.
+            if matches!(progress, kf_chan::progress::Setting::On(_))
+                && std::thread::Builder::new()
+                    .name("kf3-progress".into())
+                    .spawn(move || d.progress_loop())
+                    .is_err()
+            {
+                write_err(err, err_len, "could not start the progress diagnostic thread");
+                return -1;
             }
             // ★ v3-initrace: the completion probe (`KF3_COMPLETION_PROBE`, default off).
             if crate::chan::completion_probe_ms().is_some()

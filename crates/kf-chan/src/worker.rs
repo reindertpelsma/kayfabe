@@ -9,6 +9,7 @@
 //! lived here at gate 4).
 
 use crate::completions::Completions;
+use crate::progress::{self, Tap};
 use crate::user_loop::{self, Peek, Stats as RelayStats};
 use kf_core::{HostOps, Plane};
 use kf_linux_raw::{Notifier, PollTimeout, Poller, ReadyTokens};
@@ -101,9 +102,47 @@ pub enum AfterPass {
 }
 
 /// The worker loop's per-iteration policy state.
-#[derive(Debug, Clone, Default, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct LoopPolicy {
     busy_passes: u32,
+    /// Whether a busy worker ever looks (`true` = the bounded-fairness fix; `false` only under the negative control).
+    look: bool,
+}
+
+impl Default for LoopPolicy {
+    /// The fix: a busy worker looks every [`LOOK_EVERY`] passes.
+    fn default() -> Self {
+        Self {
+            busy_passes: 0,
+            look: true,
+        }
+    }
+}
+
+/// ★ 2026-10-20 NEGATIVE CONTROL (default off, read once): `KF3_NEGCTL_NO_BUSY_LOOK=1` makes [`LoopPolicy::after_pass`] never answer
+/// [`AfterPass::Look`] -- the loop as it was before the bounded-fairness fix -- so ONE binary can run both arms of an A/B by one
+/// environment variable.
+pub const NEGCTL_NO_BUSY_LOOK: &str = "KF3_NEGCTL_NO_BUSY_LOOK";
+
+/// Whether [`NEGCTL_NO_BUSY_LOOK`]'s value turns the control on: exactly `1`.
+#[must_use]
+pub fn parse_negctl_no_busy_look(value: Option<&str>) -> bool {
+    value == Some("1")
+}
+
+/// The control's setting, read from the environment once.
+#[must_use]
+pub fn negctl_no_busy_look() -> bool {
+    static ON: std::sync::OnceLock<bool> = std::sync::OnceLock::new();
+    *ON.get_or_init(|| {
+        let on = parse_negctl_no_busy_look(std::env::var(NEGCTL_NO_BUSY_LOOK).ok().as_deref());
+        if on {
+            eprintln!(
+                "kf3: ⚠ NEGATIVE CONTROL {NEGCTL_NO_BUSY_LOOK}=1: a busy worker NEVER looks (the loop as it was before the bounded-fairness fix)"
+            );
+        }
+        on
+    })
 }
 
 /// After this many consecutive busy passes (each served something) the loop looks once. A pass serves a hot token up to
@@ -111,9 +150,34 @@ pub struct LoopPolicy {
 pub const LOOK_EVERY: u32 = 4;
 
 impl LoopPolicy {
+    /// The policy of the pre-fix loop: never a busy look (the negative control).
+    #[must_use]
+    pub fn without_busy_look() -> Self {
+        Self {
+            busy_passes: 0,
+            look: false,
+        }
+    }
+    /// The policy the worker runs: the fix, unless the negative control is on.
+    #[must_use]
+    pub fn from_env() -> Self {
+        Self::from_setting(negctl_no_busy_look())
+    }
+    /// The policy for a given control setting.
+    #[must_use]
+    pub fn from_setting(no_busy_look: bool) -> Self {
+        if no_busy_look {
+            Self::without_busy_look()
+        } else {
+            Self::default()
+        }
+    }
     /// What follows a pass that served `served` tokens.
     pub fn after_pass(&mut self, served: usize) -> AfterPass {
         if served > 0 {
+            if !self.look {
+                return AfterPass::Continue;
+            }
             self.busy_passes += 1;
             if self.busy_passes >= LOOK_EVERY {
                 self.busy_passes = 0;
@@ -245,6 +309,31 @@ pub const WAKE_SOURCES: &[WakeSource] = &[
 
 /// Callbacks of `run_with_relay` that run once per loop iteration, whatever the pass did (the Pacer's timer).
 pub const EVERY_ITERATION: &[&str] = &["on_tick"];
+/// One progress hook: a call on the worker's [`Tap`] when the diagnostic registered one, nothing otherwise (one untaken branch).
+macro_rules! hook {
+    ($tap:expr, $method:ident($($arg:expr),*)) => {
+        if let Some(t) = &$tap {
+            t.$method($($arg),*);
+        }
+    };
+}
+
+/// The relay seen through the progress diagnostic (`KF3_DIAG_PROGRESS`): every look is announced to the board first. Only built when the
+/// diagnostic is on; `run_with_relay` shadows `relay` with it, so the call sites are the same lines either way.
+struct Watched<'a> {
+    inner: &'a dyn RelayLoop,
+    tap: &'a progress::Tap,
+}
+
+impl RelayLoop for Watched<'_> {
+    fn waiting(&self) -> bool {
+        self.inner.waiting()
+    }
+    fn peek(&self, why: Peek) -> bool {
+        self.tap.peek(why);
+        self.inner.peek(why)
+    }
+}
 
 /// No relays (the harness): the loop is the old one minus the timer-driven refresh.
 pub struct NoRelay;
@@ -313,16 +402,26 @@ pub fn run_with_relay(
     relay: &dyn RelayLoop,
     relay_stats: &RelayStats,
 ) {
+    // ★ 2026-10-20 `KF3_DIAG_PROGRESS`: with the diagnostic off `tap` is `None` and every hook below is one untaken branch.
+    let tap = Tap::register();
+    let watched = tap.as_ref().map(|tap| Watched { inner: relay, tap });
+    let relay: &dyn RelayLoop = match &watched {
+        Some(w) => w,
+        None => relay,
+    };
     // The ready tags of one wait, dispatched. Returns (doorbell eventfd, engine/completion/other event).
     let dispatch = |ready: &ReadyTokens| -> (bool, bool) {
         let (mut doorbell, mut event) = (false, false);
         for tag in ready.iter() {
             if tag >= OTHER_TAG_BASE {
                 event = true;
+                hook!(tap, dispatch_other());
                 on_other(tag);
             } else if tag == COMPLETIONS_TAG {
                 event = true;
                 completions.for_each_inflight(&mut |t| {
+                hook!(tap, dispatch_completions());
+                completions.for_each_inflight(|t| {
                     stats.host_rings.fetch_add(1, Ordering::Relaxed);
                     if plane.ring_internal(t) {
                         let _ = efd.signal();
@@ -331,13 +430,14 @@ pub fn run_with_relay(
                 on_completion();
             } else {
                 doorbell = true;
+                hook!(tap, doorbell_drain());
                 let _ = efd.drain();
             }
         }
         (doorbell, event)
     };
     let mut scratch = Vec::with_capacity(SCAN_LIMIT);
-    let mut policy = LoopPolicy::default();
+    let mut policy = LoopPolicy::from_env();
     let prof = stats.prof.load(Ordering::Relaxed);
     let mut busy_from = std::time::Instant::now();
     let mut after_timeout = false;
@@ -347,7 +447,9 @@ pub fn run_with_relay(
         let seen = plane.worker_wake().seen();
         #[cfg(feature = "chaos-hooks")]
         kf_trap::chaos::at(kf_trap::chaos::Point::WorkerAfterSeen);
+        hook!(tap, begin_pass());
         let n = plane.worker_pass(host, &mut scratch, SCAN_LIMIT);
+        hook!(tap, end_pass(n));
         if n > 0 {
             stats.served.fetch_add(n as u64, Ordering::Relaxed);
             if after_timeout {
@@ -361,6 +463,7 @@ pub fn run_with_relay(
                     // hot token to each other) must still look at the world: the engine's events (the guest's completion
                     // interrupts), the completions, and the waiting relays' private words. Same look as the idle spin's, once.
                     RelayStats::bump(&relay_stats.busy_looks);
+                    hook!(tap, look());
                     let mut ready = ReadyTokens::new();
                     if matches!(poller.wait(&mut ready, PollTimeout::Immediate), Ok(k) if k > 0) {
                         let (doorbell, event) = dispatch(&ready);
@@ -385,6 +488,7 @@ pub fn run_with_relay(
         if user_loop::idle(relay.waiting(), user_loop::SPIN) == user_loop::Idle::Spin {
             let mut woke = false;
             for _ in 0..user_loop::SPIN {
+                hook!(tap, spin());
                 let mut ready = ReadyTokens::new();
                 if matches!(poller.wait(&mut ready, PollTimeout::Immediate), Ok(n) if n > 0) {
                     let (doorbell, event) = dispatch(&ready);
@@ -426,7 +530,9 @@ pub fn run_with_relay(
             stats.max_busy_ns.fetch_max(b, Ordering::Relaxed);
         }
         let park = if owed { OWED_PARK_MS } else { PARK_MS };
+        hook!(tap, park_begin());
         let got = poller.wait(&mut ready, PollTimeout::Millis(park));
+        hook!(tap, park_end());
         if let Some(tw) = tw {
             busy_from = std::time::Instant::now();
             let w = u64::try_from(busy_from.duration_since(tw).as_nanos()).unwrap_or(u64::MAX);
@@ -485,5 +591,163 @@ mod tests {
             assert_eq!(p.after_pass(1), AfterPass::Continue, "the count restarted");
         }
         assert_eq!(p.after_pass(1), AfterPass::Look);
+    }
+
+    /// The default IS the fix: the byte-identical behaviour of the fairness branch.
+    #[test]
+    fn the_default_policy_is_the_fix() {
+        assert_eq!(LoopPolicy::default(), LoopPolicy::from_setting(false));
+        let mut p = LoopPolicy::default();
+        for _ in 1..LOOK_EVERY {
+            assert_eq!(p.after_pass(1), AfterPass::Continue);
+        }
+        assert_eq!(p.after_pass(1), AfterPass::Look);
+    }
+
+    /// The control never looks, however long the worker stays busy; an empty pass still idles (the park is not the control's business).
+    #[test]
+    fn the_negative_control_never_looks_however_busy_the_worker() {
+        let mut p = LoopPolicy::without_busy_look();
+        for i in 0..10_000 {
+            assert_eq!(p.after_pass(1 + i % 7), AfterPass::Continue, "pass {i}");
+        }
+        assert_eq!(p.after_pass(0), AfterPass::Idle);
+        for _ in 0..(10 * LOOK_EVERY) {
+            assert_eq!(p.after_pass(3), AfterPass::Continue);
+        }
+    }
+
+    /// The control's state is bounded (the model hashes it): it does not count passes.
+    #[test]
+    fn the_negative_controls_state_does_not_grow() {
+        let mut p = LoopPolicy::without_busy_look();
+        let before = p.clone();
+        for _ in 0..1000 {
+            p.after_pass(1);
+        }
+        assert_eq!(p, before);
+    }
+
+    /// The two policies differ in exactly one answer.
+    #[test]
+    fn the_control_and_the_fix_differ_only_in_the_look() {
+        let (mut fix, mut ctl) = (LoopPolicy::default(), LoopPolicy::without_busy_look());
+        let mut looks = 0;
+        for i in 0..200usize {
+            let served = [0usize, 1, 1, 1, 1, 2, 3][i % 7];
+            let (a, b) = (fix.after_pass(served), ctl.after_pass(served));
+            if a == AfterPass::Look {
+                looks += 1;
+                assert_eq!(b, AfterPass::Continue);
+            } else {
+                assert_eq!(a, b, "pass {i}");
+            }
+        }
+        assert!(looks > 0);
+    }
+
+    /// OFF unless the value is exactly `1`.
+    #[test]
+    fn the_negative_control_is_off_unless_exactly_one() {
+        assert!(!parse_negctl_no_busy_look(None));
+        for off in ["", "0", "true", "yes", "2", " 1", "1 ", "01", "on"] {
+            assert!(!parse_negctl_no_busy_look(Some(off)), "{off:?}");
+        }
+        assert!(parse_negctl_no_busy_look(Some("1")));
+    }
+
+    /// The environment is read in one place, once, and the name is the repo's control class.
+    #[test]
+    fn the_negative_control_is_read_once_from_a_negctl_name() {
+        let src = include_str!("worker.rs");
+        let prod = src.split("#[cfg(test)]").next().unwrap();
+        assert_eq!(NEGCTL_NO_BUSY_LOOK, "KF3_NEGCTL_NO_BUSY_LOOK");
+        assert_eq!(
+            prod.matches("std::env::var").count(),
+            1,
+            "one read of the environment in worker.rs"
+        );
+        assert!(prod.contains("OnceLock"), "read once");
+        assert!(
+            prod.contains("LoopPolicy::from_env()"),
+            "the loop asks for its policy once, outside the loop"
+        );
+        assert_eq!(prod.matches("LoopPolicy::from_env()").count(), 1);
+    }
+
+    /// `from_setting` is the one place the switch picks the policy.
+    #[test]
+    fn the_switch_picks_the_policy_in_one_place() {
+        assert_eq!(LoopPolicy::from_setting(false), LoopPolicy::default());
+        assert_eq!(
+            LoopPolicy::from_setting(true),
+            LoopPolicy::without_busy_look()
+        );
+        assert_ne!(
+            LoopPolicy::from_setting(true),
+            LoopPolicy::from_setting(false)
+        );
+        // the value `1` is the only way to the control
+        for v in [None, Some("0"), Some("true")] {
+            let mut p = LoopPolicy::from_setting(parse_negctl_no_busy_look(v));
+            let looks = (0..8)
+                .filter(|_| p.after_pass(1) == AfterPass::Look)
+                .count();
+            assert_eq!(looks, 2, "{v:?} must leave the fix in force");
+        }
+        let mut p = LoopPolicy::from_setting(parse_negctl_no_busy_look(Some("1")));
+        assert!((0..8).all(|_| p.after_pass(1) == AfterPass::Continue));
+    }
+
+    struct Fake(std::cell::Cell<u32>);
+    impl RelayLoop for Fake {
+        fn waiting(&self) -> bool {
+            true
+        }
+        fn peek(&self, _why: Peek) -> bool {
+            self.0.set(self.0.get() + 1);
+            true
+        }
+    }
+
+    /// The diagnostic's wrapper announces every look to the board, then asks the real relay and returns its answer.
+    #[test]
+    fn the_watched_relay_announces_each_peek_then_forwards_it() {
+        let board: &'static progress::Board = Box::leak(Box::new(progress::Board::new()));
+        let tap = Tap::on_board(board, board.register().unwrap());
+        let inner = Fake(std::cell::Cell::new(0));
+        let w = Watched {
+            inner: &inner,
+            tap: &tap,
+        };
+        assert!(w.peek(Peek::Spin));
+        assert!(w.peek(Peek::Event));
+        assert!(w.waiting());
+        assert_eq!(inner.0.get(), 2);
+        let s = board.snapshot(progress::now_ns(), progress::START_NS);
+        assert_eq!(s.points[progress::Point::PeekSpin.index()].hits, 1);
+        assert_eq!(s.points[progress::Point::PeekEvent.index()].hits, 1);
+        assert_eq!(s.points[progress::Point::PeekBackstop.index()].hits, 0);
+    }
+
+    #[test]
+    fn the_watched_relay_forwards_a_refusal_unchanged() {
+        struct No;
+        impl RelayLoop for No {
+            fn waiting(&self) -> bool {
+                false
+            }
+            fn peek(&self, _why: Peek) -> bool {
+                false
+            }
+        }
+        let board: &'static progress::Board = Box::leak(Box::new(progress::Board::new()));
+        let tap = Tap::on_board(board, board.register().unwrap());
+        let w = Watched {
+            inner: &No,
+            tap: &tap,
+        };
+        assert!(!w.peek(Peek::Backstop));
+        assert!(!w.waiting());
     }
 }
