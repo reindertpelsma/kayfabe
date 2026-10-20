@@ -7,6 +7,9 @@ trap 'rc=$?; echo "BW580_ARM_EXIT profile=$profile rc=$rc $(date -u -Is)"' EXIT
 export PATH=/root/.cargo/bin:$PATH
 cd /root/kayfabe
 [ "$(git rev-parse HEAD)" = 0c87acda802b18a610739e75f2b50049a9247067 ]
+c5=$(git ls-remote origin refs/heads/integration/prod-candidate-5-20261018 | cut -f1)
+[ "$c5" = f8f9d1a5f0aae58fc8ccf0da740cf12682cd284e ] || { echo CURRENT_INTEGRATION_ADVANCED_STOP; exit 5; }
+git merge-base --is-ancestor "$c5" HEAD
 export WINVM_ROOT=/workspace/sweep-win-56816449 WINVM_QEMU=/workspace/bench/kf3-bins/0c87acda/qemu-system-x86_64 WINVM_RAM_MB=8192 WINVM_SMP=8
 VM=$WINVM_ROOT/kfwin
 W=scripts/bench/windows/win_vm.sh

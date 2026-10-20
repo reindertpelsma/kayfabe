@@ -5,6 +5,9 @@ cd /root/kayfabe
 exec >/root/prov/sweep_windows580_validate.log 2>&1
 trap 'rc=$?; echo "WINDOWS580_VALIDATE_EXIT rc=$rc $(date -u -Is)"' EXIT
 [ "$(git rev-parse HEAD)" = 0c87acda802b18a610739e75f2b50049a9247067 ]
+c5=$(git ls-remote origin refs/heads/integration/prod-candidate-5-20261018 | cut -f1)
+[ "$c5" = f8f9d1a5f0aae58fc8ccf0da740cf12682cd284e ] || { echo CURRENT_INTEGRATION_ADVANCED_STOP; exit 5; }
+git merge-base --is-ancestor "$c5" HEAD
 export WINVM_ROOT=/workspace/sweep-win-56816419
 export WINVM_QEMU=/workspace/bench/kf3-bins/0c87acda/qemu-system-x86_64
 export WINVM_RAM_MB=8192 WINVM_SMP=8
