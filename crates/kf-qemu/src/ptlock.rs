@@ -38,6 +38,10 @@ impl HandoffHub {
     pub(crate) fn released(&self) {
         self.h.released(|who| (self.ring)(who));
     }
+    /// Registered, not yet rung losers (the strand diagnostic prints it).
+    pub(crate) fn waiters(&self) -> u32 {
+        self.h.waiters()
+    }
     /// One bounded line for the loop summary.
     pub(crate) fn summary(&self) -> String {
         self.h.summary()

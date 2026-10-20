@@ -52,16 +52,20 @@ pub(super) struct Cell<T = Record> {
     /// ★ 2026-10-20 (owner): the relay holds an obligation NO registered wake source announces (`kf_chan::user_loop::Obligation::Popped` /
     /// `Lagging`): the worker must not block while any relay has this set (written under the record lock, read without it).
     unannounced: AtomicBool,
+    /// MEASUREMENT ONLY (`KF3_DIAG_PROGRESS`): when a turn or a look last touched this relay (`userstrand::now_ns`; 0 = never). Written only with the
+    /// diagnostic on.
+    touched_ns: std::sync::atomic::AtomicU64,
     inner: Mutex<T>,
 }
 impl<T> Cell<T> {
-    fn new(idx: u32, value: T) -> Self {
+    pub(super) fn new(idx: u32, value: T) -> Self {
         Self {
             idx,
             retry: AtomicBool::new(false),
             canceled: AtomicBool::new(false),
             waiting: AtomicBool::new(false),
             unannounced: AtomicBool::new(false),
+            touched_ns: std::sync::atomic::AtomicU64::new(0),
             inner: Mutex::new(value),
         }
     }
@@ -109,6 +113,17 @@ impl<T> Cell<T> {
     }
     pub fn is_canceled(&self) -> bool {
         self.canceled.load(Ordering::Acquire)
+    }
+    /// MEASUREMENT ONLY: stamp a turn or a look (a no-op unless `KF3_DIAG_PROGRESS` is set).
+    pub fn touch(&self) {
+        if super::userstrand::threshold_ms().is_some() {
+            self.touched_ns
+                .store(super::userstrand::now_ns(), Ordering::Relaxed);
+        }
+    }
+    /// MEASUREMENT ONLY: the last stamp (0 = never).
+    pub fn last_touch_ns(&self) -> u64 {
+        self.touched_ns.load(Ordering::Relaxed)
     }
     /// See [`Cell::unannounced`].
     pub fn is_unannounced(&self) -> bool {

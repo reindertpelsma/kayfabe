@@ -2766,6 +2766,7 @@ impl ChanPlane {
 
     pub(super) fn user_ring_serve(&self, ht: u32) -> Option<bool> {
         let record = self.user_ring_record(ht)?;
+        record.touch();
         // ★ 2026-10-20 (owner design, section 10): the epoch BEFORE the first attempt. A lock holder bumps it after releasing, so a loser that
         // registers late learns that a release already happened (`HandoffHub::lost`).
         let e0 = self.handoff.prepare();
@@ -2948,6 +2949,7 @@ impl ChanPlane {
         if !kf_chan::user_loop::look_needed(why, false, record.is_waiting()) {
             return false;
         }
+        record.touch();
         let ring = |this: &Self| {
             if this.plane.ring_internal(record.idx) {
                 let _ = this.wake.signal();

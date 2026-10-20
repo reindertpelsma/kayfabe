@@ -73,6 +73,8 @@ mod userpump;
 mod userquota;
 #[path = "userrelay.rs"]
 mod userrelay;
+#[path = "userstrand.rs"]
+mod userstrand;
 #[path = "usershadow.rs"]
 mod usershadow;
 
@@ -3127,6 +3129,8 @@ impl ChanPlane {
         if let Ok(mut a) = self.acts.lock() {
             *a = Some(tx);
         }
+        // MEASUREMENT ONLY, default off (`KF3_DIAG_PROGRESS=<ms>`): the PROGRESS_STRAND watcher.
+        self.start_strand_diag();
         Ok(())
     }
 
