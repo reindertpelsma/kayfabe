@@ -3054,11 +3054,10 @@ mod tests {
     }
 
     /// The timing tests below measure latencies of threads running concurrently: they take this lock
-    /// so the test harness's other threads do not load the box under them.
-    static TIMING: std::sync::Mutex<()> = std::sync::Mutex::new(());
-
+    /// so the test harness's other threads do not load the box under them (the crate-wide lock,
+    /// which the CPU-heavy interleaving tests of the VA manager take as well).
     fn timing() -> std::sync::MutexGuard<'static, ()> {
-        TIMING.lock().unwrap_or_else(std::sync::PoisonError::into_inner)
+        crate::TIMING_LOCK.lock().unwrap_or_else(std::sync::PoisonError::into_inner)
     }
 
     /// The bound every hold must keep: a chunk, plus the one predecessor a range scan may add.

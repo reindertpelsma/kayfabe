@@ -477,7 +477,15 @@ impl Report {
     }
 }
 
+/// The CPU-heavy tests take the crate's timing lock: they never run under a latency test.
+fn heavy() -> std::sync::MutexGuard<'static, ()> {
+    crate::TIMING_LOCK
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner)
+}
+
 fn explore(cfg: Cfg) -> Report {
+    let _heavy = heavy();
     let mut rep = Report::default();
     let mut ids: HashMap<u128, usize> = HashMap::new();
     let mut next_id = 1usize;
@@ -529,7 +537,13 @@ fn explore(cfg: Cfg) -> Report {
             w2.apply(ev);
             rep.transitions += 1;
             let v = w2.check();
+            let broken = !v.is_empty();
             rep.note(&path, ev, v);
+            if broken {
+                // A state that breaks an invariant is reported, not expanded: what follows it is
+                // not the protocol under test (and a broken one may never stop growing).
+                continue;
+            }
             let d = w2.digest();
             let nid = match ids.get(&d) {
                 Some(&n) if cfg.memo => n,
@@ -806,6 +820,7 @@ impl Rng {
 type Ptes = Arc<Mutex<Vec<(u64, u64, u64)>>>;
 
 fn stress(seed: u64, polite: bool) {
+    let _heavy = heavy();
     const GUESTS: u64 = 3;
     const ARMS: u64 = 40;
     let port = Arc::new(InvalidatePort::new(
@@ -1346,4 +1361,125 @@ fn a_requeued_invalidate_merges_with_the_newer_arm() {
     assert!(a1.seq < a2.seq);
     h.release();
     assert!(!busy(&h.r.port));
+}
+
+/// A want that must walk again, merged with a newer ALL_PDB that arrived while it walked: the
+/// follow-up carries the global alone (it covers the requeued space).
+#[test]
+fn a_requeued_invalidate_is_covered_by_a_newer_global() {
+    let mut h = Held::new();
+    h.r.m.walker_mut().cap = 2;
+    h.r.tables.borrow_mut().insert(
+        PDB_A,
+        vec![
+            (0x1000, 0x10_0000, 0x1000, 0),
+            (0x3000, 0x20_0000, 0x1000, 0),
+        ],
+    );
+    h.r.m.walker_mut().hold_walks = false;
+    settle(&mut h.r, PDB_A);
+    h.r.m.walker_mut().hold_walks = true;
+    h.r.tables.borrow_mut().insert(
+        PDB_A,
+        vec![
+            (0x3000, 0x30_0000, 0x1000, 0),
+            (0x5000, 0x40_0000, 0x1000, 0),
+        ],
+    );
+    h.arm(PDB_A, false);
+    let g = h.arm(0, true);
+    h.release();
+    let inflight = h.r.m.inflight.as_ref().expect("walked again at once");
+    assert_eq!(
+        inflight.wants.len(),
+        1,
+        "the global alone: {:?}",
+        inflight.wants
+    );
+    assert!(matches!(&inflight.wants[0].0, Want::Invalidate(r, _) if r.seq == g.seq));
+    h.release();
+    assert!(!busy(&h.r.port));
+}
+
+/// The follow-up walk after a storm of root statements carries ONE root want.
+#[test]
+fn root_walks_queued_once_make_one_wanted_walk() {
+    let mut h = Held::new();
+    h.arm(PDB_A, false);
+    for _ in 0..50 {
+        h.r.m.schedule_walk(K_B, h.r.port.trigger());
+    }
+    h.release();
+    let inflight = h.r.m.inflight.as_ref().expect("the follow-up walk");
+    assert_eq!(inflight.wants.len(), 1, "{:?}", inflight.wants);
+}
+
+/// A space re-rooted between arms names a different directory each time. The refreshes that
+/// wait are bounded by the spaces (more distinct directories than spaces fold into one global),
+/// not by the arms.
+#[test]
+fn a_space_re_rooted_between_arms_cannot_grow_the_queue() {
+    let mut h = Held::new();
+    h.arm(PDB_A, false);
+    for i in 1..=40u64 {
+        let root = 0x0400_0000 + i * 0x1000;
+        h.r.m
+            .table
+            .set_root(K_A, root, PdbAperture::Vidmem)
+            .unwrap();
+        h.arm(root, false);
+        assert!(
+            h.r.m.pending() <= BOUND_PENDING,
+            "pending {} after {i} arms",
+            h.r.m.pending()
+        );
+    }
+}
+
+/// ... and what the fold keeps is complete: the follow-up walk reaches the PTE of the space's
+/// current root and the bit clears.
+#[test]
+fn a_re_rooted_space_is_refreshed_through_the_fold() {
+    let mut h = Held::new();
+    h.arm(PDB_A, false);
+    let mut root = 0;
+    for i in 1..=12u64 {
+        root = 0x0400_0000 + i * 0x1000;
+        h.r.m
+            .table
+            .set_root(K_A, root, PdbAperture::Vidmem)
+            .unwrap();
+        h.arm(root, false);
+    }
+    h.r.tables
+        .borrow_mut()
+        .insert(root, vec![(0x1000_0000, 0x0200_0000, 0x1000, 0)]);
+    assert!(h.r.m.pending() <= BOUND_PENDING);
+    h.release();
+    h.release();
+    assert!(!busy(&h.r.port));
+    assert!(ops(&h.r).contains(&Op::Map(0x1000_0000, 0x0200_0000, 0x1000)));
+}
+
+/// A hostile guest's unknown directories leave nothing waiting once the walk in flight lands:
+/// the last one clears with no walk (nothing of ours is named) and nothing else is queued.
+#[test]
+fn unknown_directories_leave_nothing_waiting_after_the_walk() {
+    let mut h = Held::new();
+    h.arm(PDB_A, false);
+    for i in 0..300u64 {
+        h.arm(0x4000_0000 + i * 0x1000, false);
+    }
+    h.release();
+    assert!(
+        !busy(&h.r.port),
+        "the last unknown directory clears with no walk"
+    );
+    assert_eq!(h.r.m.walker().submits.len(), 1);
+    let gone = h.r.m.abandon_life();
+    assert_eq!(
+        (gone.invalidates, gone.roots),
+        (0, 0),
+        "nothing was left waiting"
+    );
 }

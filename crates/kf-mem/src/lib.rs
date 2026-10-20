@@ -26,6 +26,12 @@
     )
 )]
 
+/// Tests that measure latencies of concurrent threads, and tests that load the box with spinning
+/// threads (the VA-refresh interleaving checker and its real-thread stress), take this lock, so
+/// the second kind never runs under the first.
+#[cfg(test)]
+pub(crate) static TIMING_LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
+
 pub mod addr;
 pub mod store;
 

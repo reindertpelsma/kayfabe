@@ -723,4 +723,52 @@ mod tests {
         }
         assert_eq!(unpack_arm(0, 0), None, "empty slot");
     }
+
+    /// ★ Record BEFORE arm, with a real reader: one writer arms with a different directory each
+    /// time, and a reader on another thread looks at the port as fast as it can. Whatever it
+    /// sees armed is read back exactly - never an arm whose record is not there yet (which would
+    /// come back as ALL_PDB). The writer waits for the reader after every arm, so no slot is ever
+    /// reused under the reader and any inexact answer is the window between arm and record.
+    #[test]
+    fn a_reader_never_sees_an_arm_before_its_record() {
+        use std::sync::Arc;
+        use std::sync::atomic::{AtomicU64, Ordering};
+        const N: u64 = 150_000;
+        let p = Arc::new(port());
+        let acked = Arc::new(AtomicU64::new(0));
+        let pdb_of = |seq: u64| 0x0100_0000 + (seq % 4096) * 0x1000;
+        let reader = {
+            let (p, acked) = (p.clone(), acked.clone());
+            std::thread::spawn(move || {
+                let mut after: Option<u64> = None;
+                let mut inexact = 0u64;
+                while acked.load(Ordering::Acquire) < N {
+                    let Some(a) = p.armed_since(after) else {
+                        std::hint::spin_loop();
+                        continue;
+                    };
+                    for r in a.earlier.iter().chain([&a.newest]) {
+                        if r.inval.all_pdb || r.inval.pdb != pdb_of(r.seq) {
+                            inexact += 1;
+                        }
+                    }
+                    after = Some(a.newest.seq);
+                    acked.store(a.newest.seq + 1, Ordering::Release);
+                }
+                inexact
+            })
+        };
+        for i in 0..N {
+            let req = arm(&p, pdb_of(i), PdbAperture::Vidmem, 1);
+            assert_eq!(req.seq, i);
+            while acked.load(Ordering::Acquire) <= i {
+                std::hint::spin_loop();
+            }
+        }
+        let inexact = reader.join().unwrap();
+        assert_eq!(
+            inexact, 0,
+            "{inexact} arms were visible before their record"
+        );
+    }
 }
