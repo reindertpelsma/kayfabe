@@ -36,6 +36,7 @@ pub mod user_lazy;
 pub mod user_lifecycle;
 pub mod user_turn;
 pub mod user_loop;
+pub mod user_stall;
 pub mod user_storage;
 pub mod user_stream;
 pub mod userd_relay;
