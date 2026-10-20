@@ -33,20 +33,11 @@ impl NativeQuota {
             return Err("USER_RING_QUOTA_TOKEN_BOUNDS".into());
         }
         let runlist = plane.token_index.runlist_of(idx);
-        caps.lock()
-            .map_err(|_| "USER_RING_CAPS_POISONED")?
-            .acquire_channel(runlist)
-            .map_err(|e| format!("USER_RING_QUOTA {e:?}"))?;
+        caps.lock().map_err(|_| "USER_RING_CAPS_POISONED")?
+            .acquire_channel(runlist).map_err(|e| format!("USER_RING_QUOTA {e:?}"))?;
         Ok(Arc::new(Self {
-            caps,
-            plane,
-            idx,
-            runlist,
-            state: Mutex::new(State {
-                charged: true,
-                attached: false,
-                token_retired: false,
-            }),
+            caps, plane, idx, runlist,
+            state: Mutex::new(State { charged: true, attached: false, token_retired: false }),
         }))
     }
 
@@ -61,18 +52,13 @@ impl NativeQuota {
         // No other birth can observe the intermediate decrement under this lock.
         caps.release_channel(self.runlist);
         let result = self.plane.allocate_channel(
-            &mut caps,
-            self.idx,
-            Route::Translated,
-            host_token,
-            kf_core::Owner::User,
+            &mut caps, self.idx, Route::Translated, host_token, kf_core::Owner::User,
         );
         if let Err(e) = result {
             // allocate_channel rolls back its own charge on token collision.
             // The native attempt still exists and must remain charged.
-            caps.acquire_channel(self.runlist).map_err(|restore| {
-                format!("USER_RING_QUOTA_RESTORE {restore:?}; publication {e:?}")
-            })?;
+            caps.acquire_channel(self.runlist)
+                .map_err(|restore| format!("USER_RING_QUOTA_RESTORE {restore:?}; publication {e:?}"))?;
             return Err(format!("USER_RING_TOKEN {e:?}"));
         }
         state.attached = true;
@@ -81,18 +67,10 @@ impl NativeQuota {
 
     /// Wake/token lifetime ends before native lifetime. Retain the charge.
     pub(super) fn retire_token(&self) -> bool {
-        let Ok(mut state) = self.state.lock() else {
-            return false;
-        };
-        if !state.charged || !state.attached {
-            return false;
-        }
-        if state.token_retired {
-            return true;
-        }
-        let Ok(mut caps) = self.caps.lock() else {
-            return false;
-        };
+        let Ok(mut state) = self.state.lock() else { return false };
+        if !state.charged || !state.attached { return false; }
+        if state.token_retired { return true; }
+        let Ok(mut caps) = self.caps.lock() else { return false };
         state.token_retired = self.plane.retire_channel_token(&mut caps, self.idx);
         state.token_retired
     }
@@ -101,12 +79,8 @@ impl NativeQuota {
     /// retains the native resources and charge; it is not cleanup permission.
     pub(super) fn prepare_native_cleanup(&self) -> Result<(), String> {
         let mut state = self.state.lock().map_err(|_| "USER_RING_QUOTA_POISONED")?;
-        if !state.charged {
-            return Err("USER_RING_QUOTA_ALREADY_RELEASED".into());
-        }
-        if !state.attached || state.token_retired {
-            return Ok(());
-        }
+        if !state.charged { return Err("USER_RING_QUOTA_ALREADY_RELEASED".into()); }
+        if !state.attached || state.token_retired { return Ok(()); }
         let mut caps = self.caps.lock().map_err(|_| "USER_RING_CAPS_POISONED")?;
         if !self.plane.retire_channel_token(&mut caps, self.idx) {
             return Err("USER_RING_TOKEN_STILL_OWNED".into());
@@ -119,9 +93,7 @@ impl NativeQuota {
     /// succeeded. An error or elapsed time never authorizes this call.
     pub(super) fn release_confirmed(&self) -> Result<(), String> {
         let mut state = self.state.lock().map_err(|_| "USER_RING_QUOTA_POISONED")?;
-        if !state.charged {
-            return Ok(());
-        }
+        if !state.charged { return Ok(()); }
         if state.attached && !state.token_retired {
             return Err("USER_RING_QUOTA_TOKEN_NOT_RETIRED".into());
         }
@@ -139,10 +111,7 @@ mod tests {
     fn setup(cap: u32) -> (&'static Plane<'static>, Arc<Mutex<VmCaps>>) {
         let vmm = Box::leak(Box::new(kf_core::Vmm::default()));
         let plane = Box::leak(Box::new(Plane::new(vmm, 4, 3)));
-        (
-            plane,
-            Arc::new(Mutex::new(VmCaps::from_declared(cap, 8, 8, 8))),
-        )
+        (plane, Arc::new(Mutex::new(VmCaps::from_declared(cap, 8, 8, 8))))
     }
 
     #[test]
@@ -176,15 +145,8 @@ mod tests {
     #[test]
     fn failed_publication_restores_charge_and_does_not_replace_old_token() {
         let (plane, caps) = setup(2);
-        plane
-            .allocate_channel(
-                &mut caps.lock().unwrap(),
-                0,
-                Route::Passthrough,
-                11,
-                kf_core::Owner::User,
-            )
-            .unwrap();
+        plane.allocate_channel(&mut caps.lock().unwrap(), 0, Route::Passthrough,
+            11, kf_core::Owner::User).unwrap();
         let a = NativeQuota::reserve(caps.clone(), plane, 0).unwrap();
         assert!(a.attach(22).is_err());
         assert_eq!(caps.lock().unwrap().live_on_runlist(0), 2);
@@ -212,10 +174,7 @@ mod tests {
         let a = NativeQuota::reserve(caps.clone(), plane, 0).unwrap();
         a.attach(77).unwrap();
         plane.tokens[0].ring(0);
-        assert!(matches!(
-            plane.tokens[0].claim(),
-            kf_trap::token::Claim::Won(_)
-        ));
+        assert!(matches!(plane.tokens[0].claim(), kf_trap::token::Claim::Won(_)));
         assert!(!a.retire_token());
         assert!(a.prepare_native_cleanup().is_err());
         assert!(a.release_confirmed().is_err());

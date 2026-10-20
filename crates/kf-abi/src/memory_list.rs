@@ -206,8 +206,7 @@ impl Cell {
     pub fn declared_len(&self, head: &[u8]) -> Option<usize> {
         let at = self.offsets[8];
         let count = u32::from_le_bytes(head.get(at..at.checked_add(4)?)?.try_into().ok()?);
-        self.pte
-            .checked_add(usize::try_from(count).ok()?.checked_mul(8)?)
+        self.pte.checked_add(usize::try_from(count).ok()?.checked_mul(8)?)
     }
 
     /// ★ 2026-10-14: a SYSTEM MemoryList registration of any page count, whole (the joined

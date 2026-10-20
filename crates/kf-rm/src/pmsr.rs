@@ -221,26 +221,15 @@ mod tests {
     fn the_fbsr_save_protocol_is_answered_and_its_free_matches() {
         let mut p = PmSuspendResumePolicy::new(abi());
         let r = p
-            .respond(&cmd(
-                RpcFunction::Other(4),
-                4,
-                list(0xc1d0_0001, 0xcafe, 9000),
-            ))
+            .respond(&cmd(RpcFunction::Other(4), 4, list(0xc1d0_0001, 0xcafe, 9000)))
             .expect("claimed");
         assert_eq!((r.rpc_result, r.body.len()), (0, 0));
         let init = control(FBSR_INIT, &[7u8; 32]);
         let r = p.respond(&init).expect("claimed");
         assert_eq!(r.rpc_result, 0);
         let w = abi().rm_control_wire();
-        assert_eq!(
-            r.body[w.params_off..],
-            init.payload[w.params_off..],
-            "[IN] params as sent"
-        );
-        assert_eq!(
-            p.respond(&free(0xc1d0_0001, 0xcafe)).map(|r| r.rpc_result),
-            Some(0)
-        );
+        assert_eq!(r.body[w.params_off..], init.payload[w.params_off..], "[IN] params as sent");
+        assert_eq!(p.respond(&free(0xc1d0_0001, 0xcafe)).map(|r| r.rpc_result), Some(0));
         assert!(
             p.respond(&free(0xc1d0_0001, 0xcafe)).is_none(),
             "a second FREE is not this link's"
@@ -292,10 +281,7 @@ mod tests {
             p.respond(&cmd(RpcFunction::Other(4), 4, list(1, 0x9999, 2)))
                 .is_none()
         );
-        assert!(
-            p.respond(&free(1, 1)).is_none(),
-            "the seat frees the client"
-        );
+        assert!(p.respond(&free(1, 1)).is_none(), "the seat frees the client");
         assert!(
             p.respond(&cmd(RpcFunction::Other(4), 4, list(1, 0x9999, 2)))
                 .is_some()

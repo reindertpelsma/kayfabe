@@ -91,58 +91,30 @@ pub enum BudgetError {
     /// `channel-budget` is below [`MIN_CHANNEL_BUDGET`].
     BelowMinimum { asked: u32 },
     /// `channel-budget` is above what the host can give.
-    AboveLimit {
-        asked: u32,
-        limit: u32,
-        engine: u32,
-        total: u32,
-        in_use: u32,
-    },
+    AboveLimit { asked: u32, limit: u32, engine: u32, total: u32, in_use: u32 },
     /// No `channel-budget` and the host has less than the minimum to give after its reserve.
-    HostTooFull {
-        derived: u32,
-        engine: u32,
-        total: u32,
-        in_use: u32,
-    },
+    HostTooFull { derived: u32, engine: u32, total: u32, in_use: u32 },
 }
 
 impl core::fmt::Display for BudgetError {
     fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
         match self {
-            Self::NoRunlists => write!(
-                f,
-                "channel budget: the VM serves no host-driven engine to ask the host about"
-            ),
+            Self::NoRunlists => write!(f, "channel budget: the VM serves no host-driven engine to ask the host about"),
             Self::NoChannels { engine } => {
-                write!(
-                    f,
-                    "channel budget: the host reports 0 channels on the runlist of engine {engine:#x}"
-                )
+                write!(f, "channel budget: the host reports 0 channels on the runlist of engine {engine:#x}")
             }
             Self::BelowMinimum { asked } => write!(
                 f,
                 "channel-budget={asked} is below the minimum {MIN_CHANNEL_BUDGET} channels per runlist \
                  (the guest's kernel channels plus a desktop's need about 64 and the budget is 4x that)"
             ),
-            Self::AboveLimit {
-                asked,
-                limit,
-                engine,
-                total,
-                in_use,
-            } => write!(
+            Self::AboveLimit { asked, limit, engine, total, in_use } => write!(
                 f,
                 "channel-budget={asked} is above what the host can give: {limit} channels per runlist \
                  (the runlist of engine {engine:#x} has {total}, {in_use} already in use; the guest's token \
                  field caps a runlist at {MAX_CHANNEL_BUDGET})"
             ),
-            Self::HostTooFull {
-                derived,
-                engine,
-                total,
-                in_use,
-            } => write!(
+            Self::HostTooFull { derived, engine, total, in_use } => write!(
                 f,
                 "the host has too few free channels for a default budget: {derived} per runlist after keeping 1/{RESERVE_DIVISOR} for the host \
                  (the runlist of engine {engine:#x} has {total}, {in_use} in use), below the minimum {MIN_CHANNEL_BUDGET}; \
@@ -178,11 +150,7 @@ pub fn decode_reply(engine_type: u32, params: &[u8]) -> Option<HostRunlist> {
     {
         return None;
     }
-    Some(HostRunlist {
-        engine: engine_type,
-        total: w(8),
-        in_use: w(16),
-    })
+    Some(HostRunlist { engine: engine_type, total: w(8), in_use: w(16) })
 }
 
 /// Resolve the budget. `requested == 0` means "derive". Pure: the host's answers come in as `host`.
@@ -190,10 +158,7 @@ pub fn decode_reply(engine_type: u32, params: &[u8]) -> Option<HostRunlist> {
 /// # Errors
 /// [`BudgetError`], by name; never a clamp.
 pub fn resolve(requested: u32, host: &[HostRunlist]) -> Result<ChannelBudget, BudgetError> {
-    let tightest_free = host
-        .iter()
-        .min_by_key(|r| r.free())
-        .ok_or(BudgetError::NoRunlists)?;
+    let tightest_free = host.iter().min_by_key(|r| r.free()).ok_or(BudgetError::NoRunlists)?;
     if let Some(z) = host.iter().find(|r| r.total == 0) {
         return Err(BudgetError::NoChannels { engine: z.engine });
     }
@@ -215,12 +180,7 @@ pub fn resolve(requested: u32, host: &[HostRunlist]) -> Result<ChannelBudget, Bu
                 in_use: tightest_default.in_use,
             });
         }
-        return Ok(ChannelBudget {
-            per_runlist: derived,
-            derived,
-            limit,
-            source: BudgetSource::Derived,
-        });
+        return Ok(ChannelBudget { per_runlist: derived, derived, limit, source: BudgetSource::Derived });
     }
     if requested < MIN_CHANNEL_BUDGET {
         return Err(BudgetError::BelowMinimum { asked: requested });
@@ -234,12 +194,7 @@ pub fn resolve(requested: u32, host: &[HostRunlist]) -> Result<ChannelBudget, Bu
             in_use: tightest_free.in_use,
         });
     }
-    Ok(ChannelBudget {
-        per_runlist: requested,
-        derived,
-        limit,
-        source: BudgetSource::Requested,
-    })
+    Ok(ChannelBudget { per_runlist: requested, derived, limit, source: BudgetSource::Requested })
 }
 
 #[cfg(test)]
@@ -247,21 +202,14 @@ mod tests {
     use super::*;
 
     fn rl(engine: u32, total: u32, in_use: u32) -> HostRunlist {
-        HostRunlist {
-            engine,
-            total,
-            in_use,
-        }
+        HostRunlist { engine, total, in_use }
     }
 
     #[test]
     fn default_is_free_minus_the_hosts_reserve_on_the_tightest_runlist() {
         // GR 2048 total, 100 used -> 1948 free - 256 reserve = 1692; CE 2048/10 -> 1782.
         let b = resolve(0, &[rl(1, 2048, 100), rl(0x13, 2048, 10)]).unwrap();
-        assert_eq!(
-            (b.per_runlist, b.derived, b.limit, b.source),
-            (1692, 1692, 1948, BudgetSource::Derived)
-        );
+        assert_eq!((b.per_runlist, b.derived, b.limit, b.source), (1692, 1692, 1948, BudgetSource::Derived));
         // an empty host: the table's extent bounds it.
         let b = resolve(0, &[rl(1, 4096, 0)]).unwrap();
         assert_eq!((b.per_runlist, b.limit), (2048, 2048));
@@ -271,44 +219,23 @@ mod tests {
     fn a_request_inside_the_limits_is_taken_exactly() {
         let b = resolve(512, &[rl(1, 2048, 100)]).unwrap();
         assert_eq!((b.per_runlist, b.source), (512, BudgetSource::Requested));
-        assert_eq!(
-            resolve(1948, &[rl(1, 2048, 100)]).unwrap().per_runlist,
-            1948
-        );
+        assert_eq!(resolve(1948, &[rl(1, 2048, 100)]).unwrap().per_runlist, 1948);
     }
 
     #[test]
     fn over_the_limit_and_under_the_minimum_are_refused_never_clamped() {
-        assert!(matches!(
-            resolve(1949, &[rl(1, 2048, 100)]),
-            Err(BudgetError::AboveLimit { limit: 1948, .. })
-        ));
-        assert!(matches!(
-            resolve(4096, &[rl(1, 8192, 0)]),
-            Err(BudgetError::AboveLimit { limit: 2048, .. })
-        ));
-        assert!(matches!(
-            resolve(255, &[rl(1, 2048, 0)]),
-            Err(BudgetError::BelowMinimum { asked: 255 })
-        ));
+        assert!(matches!(resolve(1949, &[rl(1, 2048, 100)]), Err(BudgetError::AboveLimit { limit: 1948, .. })));
+        assert!(matches!(resolve(4096, &[rl(1, 8192, 0)]), Err(BudgetError::AboveLimit { limit: 2048, .. })));
+        assert!(matches!(resolve(255, &[rl(1, 2048, 0)]), Err(BudgetError::BelowMinimum { asked: 255 })));
         let e = resolve(2000, &[rl(1, 2048, 100)]).unwrap_err().to_string();
-        assert!(
-            e.contains("channel-budget=2000") && e.contains("1948"),
-            "{e}"
-        );
+        assert!(e.contains("channel-budget=2000") && e.contains("1948"), "{e}");
     }
 
     #[test]
     fn a_full_host_refuses_the_default_by_name() {
-        assert!(matches!(
-            resolve(0, &[rl(1, 2048, 1900)]),
-            Err(BudgetError::HostTooFull { .. })
-        ));
+        assert!(matches!(resolve(0, &[rl(1, 2048, 1900)]), Err(BudgetError::HostTooFull { .. })));
         assert!(matches!(resolve(0, &[]), Err(BudgetError::NoRunlists)));
-        assert!(matches!(
-            resolve(0, &[rl(1, 0, 0)]),
-            Err(BudgetError::NoChannels { engine: 1 })
-        ));
+        assert!(matches!(resolve(0, &[rl(1, 0, 0)]), Err(BudgetError::NoChannels { engine: 1 })));
     }
 
     #[test]
