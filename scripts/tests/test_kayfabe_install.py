@@ -72,21 +72,23 @@ class InstallPath(unittest.TestCase):
             row=next(row for row in rows if row['check']==check)
             self.assertEqual(row['status'],'FAIL');self.assertTrue(row['fix'])
 
-    def _display_requires_udmabuf(self, os_name):
+    def _display_reports_udmabuf(self, os_name):
         facts=self.facts();facts['udmabuf']=False
         options=self.options('--os',os_name,'--broker','/tmp/fixture.sock')
         self.assertFalse(options.no_display)
         rows=self.k.doctor_rows(facts,'0.1.0-beta.1',True)
         row=next(row for row in rows if row['check']=='udmabuf')
-        self.assertEqual(row['status'],'FAIL')
+        self.assertEqual(row['status'],'WARN')
+        self.assertIn('shared memory',row['detail'])
+        self.assertFalse(any(item['status']=='FAIL' for item in rows))
         self.assertIn('/dev/udmabuf',row['detail'])
         self.assertIn('kvm',row['fix'])
 
-    def test_windows_display_refuses_missing_udmabuf_access(self):
-        self._display_requires_udmabuf('windows')
+    def test_windows_display_warns_and_preserves_shared_memory_fallback(self):
+        self._display_reports_udmabuf('windows')
 
-    def test_linux_broker_refuses_missing_udmabuf_access(self):
-        self._display_requires_udmabuf('linux')
+    def test_linux_broker_warns_and_preserves_shared_memory_fallback(self):
+        self._display_reports_udmabuf('linux')
 
     def test_headless_does_not_require_udmabuf(self):
         facts=self.facts();facts['udmabuf']=False
