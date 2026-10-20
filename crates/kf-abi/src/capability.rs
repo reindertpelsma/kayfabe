@@ -2873,6 +2873,33 @@ mod tests {
         }
     }
 
+    // [measured 2026-10-20, GB202 Windows 580.88 / ABI 580.65.06, own lease 56909569,
+    // traces/blackwell_resume_20261020/arms/cand_off_1] with CFB0 admitted the guest's
+    // next wall is the NVCFFA_VIDEO_OFA constructor (refused NotOnAllowlist, then teardown
+    // and Code 43). Public 580 resource_list.h:1877 gives it the same shape as the admitted
+    // NVC9FA (OfaContext under KernelChannel, optional NV_OFA_ALLOCATION_PARAMETERS).
+    #[test]
+    fn nvofa_cffa_570_constructor_is_admitted() {
+        assert!(CAPS_570_86_15.alloc_class(ClassId(0xcffa)).is_permitted());
+    }
+    #[test]
+    fn nvofa_cffa_580_constructor_is_admitted() {
+        assert!(CAPS_580_65_06.alloc_class(ClassId(0xcffa)).is_permitted());
+    }
+    #[test]
+    fn nvofa_cffa_580_inventory_has_public_name_once() {
+        let rows: Vec<_> = CAPS_580_65_06
+            .all_classes()
+            .filter(|e| e.class == 0xcffa)
+            .collect();
+        assert_eq!(rows.len(), 1);
+        assert_eq!(rows[0].name, "NVCFFA_VIDEO_OFA");
+    }
+    #[test]
+    fn nvofa_cffa_does_not_leak_to_560() {
+        assert!(!CAPS_560_28_03.alloc_class(ClassId(0xcffa)).is_permitted());
+    }
+
     /// Every listed class is answered by its own row.
     #[test]
     fn every_listed_class_is_the_reason_it_is_permitted() {
