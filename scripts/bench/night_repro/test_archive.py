@@ -15,6 +15,12 @@ class Archive(unittest.TestCase):
         b=b'own captured trace'; return {'name':'t_010203.etl','sha256':hashlib.sha256(b).hexdigest(),'gzip':base64.b64encode(gzip.compress(b)).decode()}
     def test_valid_capture(self):
         self.assertEqual(archive.verify(self.packet()),b'own captured trace')
+    def test_owned_pm_tail_is_verifiable(self):
+        p=self.packet(); p['name']='pm_tail.bin'
+        self.assertEqual(archive.verify(p),b'own captured trace')
+    def test_empty_owned_pm_tail_is_verifiable(self):
+        p={'name':'pm_tail.bin','gzip':base64.b64encode(gzip.compress(b'')).decode(),'sha256':hashlib.sha256(b'').hexdigest()}
+        self.assertEqual(archive.verify(p),b'')
     def test_corrupt_digest_cannot_authorize_delete(self):
         p=self.packet();p['sha256']='0'*64
         with self.assertRaises(ValueError): archive.verify(p)
