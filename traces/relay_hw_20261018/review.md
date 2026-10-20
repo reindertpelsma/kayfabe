@@ -60,3 +60,15 @@ does not itself report an I7 violation. RS_STRICT=1 cannot promote an assertion
 that was skipped into coverage. The separate generated grade_stress G5 test
 does carry quiet_checked and asserts it. Do not use a random relay_stress
 holdout alone to claim idle-efficiency coverage.
+
+MEASURED: exact B' did pass fresh strict random seeds 4294967296..4294967328
+(exclusive upper bound), infinite park, chaos-hooks: 32 seeds, zero failures,
+zero soft findings. Its dedicated grade_stress G5 idle test also passed with
+two and three workers and its explicit non-vacuity check. These results do not
+identify the cause of the inherited hardware counter hits.
+
+CODE READ: no production seed or thread-name special case was identified in
+the reviewed worker/relay/handoff changes. B' chaos hooks return no decision
+value; their callback can perturb scheduling. The negative-control and optional
+diagnostic/park knobs are explicit. This is a bounded code review, not a proof
+of every source path or an exact-hardware validation.

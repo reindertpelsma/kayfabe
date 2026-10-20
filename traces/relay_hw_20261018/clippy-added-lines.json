@@ -1,0 +1,83 @@
+{
+  "M": [
+    {
+      "file": "crates/kf-qemu/src/userstrand.rs",
+      "line": 93,
+      "level": "error",
+      "code": "clippy::arithmetic_side_effects",
+      "message": "arithmetic operation that can potentially result in unexpected side-effects"
+    },
+    {
+      "file": "crates/kf-qemu/src/userstrand.rs",
+      "line": 115,
+      "level": "error",
+      "code": "clippy::arithmetic_side_effects",
+      "message": "arithmetic operation that can potentially result in unexpected side-effects"
+    },
+    {
+      "file": "crates/kf-qemu/src/userstrand.rs",
+      "line": 123,
+      "level": "error",
+      "code": "clippy::arithmetic_side_effects",
+      "message": "arithmetic operation that can potentially result in unexpected side-effects"
+    },
+    {
+      "file": "crates/kf-qemu/src/userstrand.rs",
+      "line": 132,
+      "level": "error",
+      "code": "clippy::arithmetic_side_effects",
+      "message": "arithmetic operation that can potentially result in unexpected side-effects"
+    }
+  ],
+  "B": [
+    {
+      "file": "crates/kf-qemu/src/userrelay.rs",
+      "line": 158,
+      "level": "warning",
+      "code": "deprecated",
+      "message": "use of deprecated method `std::sync::atomic::Atomic::<u32>::fetch_update`: renamed to `try_update` for consistency"
+    },
+    {
+      "file": "crates/kf-qemu/src/progdiag.rs",
+      "line": 66,
+      "level": "error",
+      "code": "clippy::indexing_slicing",
+      "message": "indexing may panic"
+    },
+    {
+      "file": "crates/kf-qemu/src/progdiag.rs",
+      "line": 71,
+      "level": "warning",
+      "code": "clippy::useless_conversion",
+      "message": "useless conversion to the same type: `u64`"
+    },
+    {
+      "file": "crates/kf-qemu/src/progdiag.rs",
+      "line": 79,
+      "level": "error",
+      "code": "clippy::arithmetic_side_effects",
+      "message": "arithmetic operation that can potentially result in unexpected side-effects"
+    },
+    {
+      "file": "crates/kf-qemu/src/progdiag.rs",
+      "line": 96,
+      "level": "error",
+      "code": "clippy::arithmetic_side_effects",
+      "message": "arithmetic operation that can potentially result in unexpected side-effects"
+    },
+    {
+      "file": "crates/kf-qemu/src/userrelay.rs",
+      "line": 228,
+      "level": "error",
+      "code": "clippy::expect_used",
+      "message": "used `expect()` on an `Option` value"
+    },
+    {
+      "file": "crates/kf-qemu/src/userrelay.rs",
+      "line": 233,
+      "level": "error",
+      "code": "clippy::expect_used",
+      "message": "used `expect()` on an `Option` value"
+    }
+  ]
+}

@@ -1,6 +1,6 @@
 # HW2 relay hardware validation — 2026-10-20
 
-STATUS: PARTIAL. No HW2 hardware boot has been run. All hardware numbers below
+STATUS: BLOCKED / PARTIAL. No HW2 hardware test boot has been run. All hardware numbers below
 are inherited measurements, independently extracted from the completed baton
 campaign. Production code and the existing binaries are unchanged.
 
@@ -56,3 +56,29 @@ The lane explicitly requires stopping and reporting a safety refusal.
 CODE READ: review findings and the preregistered falsifiers are in the adjacent
 files. INFERRED: zero inherited M stalls is promising, but the requested
 12-boot minimum and exact-head hardware gates remain necessary before Windows.
+
+MEASURED: exact B' holdout, chaos-hooks, strict soft findings, infinite park:
+32/32 seeds [4294967296,4294967328) passed, zero soft findings, 7,251,066 entries,
+94.5 s wall. Per-seed response maxima range 0.36–50.51 ms. The original
+thresholds were unchanged. The dedicated grader G5 one-second idle test passed
+for two and three workers (one test, 4.58 s), including its quiet_checked assert.
+Neither result explains the inherited hardware timeout counter.
+
+MEASURED: B' library clippy exited 101 with 93 errors overall; the added-line
+filter found five errors and two warnings. Details for both heads are in
+`clippy-added-lines.json`. Neither head is clippy-clean under this toolchain.
+
+MEASURED: owner production VM was restored as run 3435, REV=0d7ba743, with
+LIFECYCLE_COUNT=1, LIFECYCLE_PERIOD_S=5, TSG_MIRROR=0 (all KF3_ prefixed).
+OWNER_SESSION_READY was logged at 2026-10-20T23:42:30+02:00. M hardware gates,
+fast suite, remaining boots and Windows reproducer are NOT DONE.
+MEASURED: the guest-agent hostname query returned kayfabe-windows.
+MEASURED: final restoration inspection found host Xid count unchanged at 25,
+QEMU alive, and all three production environment values as requested.
+
+MEASURED: automatic command review rejected deleting the lane's target
+directory ("rm -f style commands are not permitted. Use a safer approach").
+The lane's stop-on-refusal rule was followed: no alternate deletion command was
+attempted. The 256 MiB target directory remains. No HW2 cargo/test job remains.
+The hardware campaign never acquired a lasting lease; the restored owner's
+launcher holds its own intentional lifetime lease.

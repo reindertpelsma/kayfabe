@@ -38,3 +38,8 @@ any failed seed, panic, incomplete execution or abnormal test exit. Holdout:
 RS_STRICT=1, RS_FROM=4294967296, RS_TO=4294967328 (exclusive), RS_SECS=0.5,
 RS_PARK_NET=0, chaos-hooks enabled, one test thread. No threshold adjustments.
 This does not establish I7 coverage where its settled precondition is skipped.
+
+H-B-IDLE: the dedicated grader G5 test observes a real settled one-second
+quiet window and blocks idle workers. FALSIFIER before execution: the test
+fails, including its explicit quiet_checked assertion, or does not complete.
+Run exact B', chaos-hooks, original defaults and thresholds, one test thread.
