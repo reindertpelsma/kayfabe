@@ -256,7 +256,7 @@ fn resumed_parent_residence_excludes_the_completed_child() {
         .unwrap();
     assert_eq!(
         running["exclusive_ns"].as_u64().unwrap(),
-        row["end_ns"].as_u64().unwrap()
+        t["observed_ns"].as_u64().unwrap()
             - t["since_ns"].as_u64().unwrap()
             - child["total_ns"].as_u64().unwrap()
     );
@@ -268,31 +268,96 @@ fn resumed_parent_residence_excludes_the_completed_child() {
 
 #[test]
 fn concurrent_thread_snapshots_keep_histogram_counts_coherent() {
-    let p=directory();let s=Session::create_diagnostic(&p).unwrap();
-    std::thread::scope(|scope| {let session=&s;let child=scope.spawn(move || {let _b=session.bind_current(1).unwrap();for i in 0..1000 {let _g=kf_prof::site(Site::WorkerPark,State::Mutex,i);}});
-        for _ in 0..100 {let row=s.snapshot();for t in row["threads"].as_array().unwrap() {
-            assert!(t["observed_ns"].as_u64().unwrap()<=row["end_ns"].as_u64().unwrap());
-            for h in t["states"].as_array().unwrap() {assert_eq!(h["histogram"].as_array().unwrap().iter().map(|n|n.as_u64().unwrap()).sum::<u64>(),h["count"].as_u64().unwrap());}
-        }}child.join().unwrap();
-    });s.stop().unwrap();std::fs::remove_dir_all(p).unwrap();
+    let p = directory();
+    let s = Session::create_diagnostic(&p).unwrap();
+    std::thread::scope(|scope| {
+        let session = &s;
+        let child = scope.spawn(move || {
+            let _b = session.bind_current(1).unwrap();
+            for i in 0..1000 {
+                let _g = kf_prof::site(Site::WorkerPark, State::Mutex, i);
+            }
+        });
+        for _ in 0..100 {
+            let row = s.snapshot();
+            for t in row["threads"].as_array().unwrap() {
+                assert!(t["observed_ns"].as_u64().unwrap() <= row["end_ns"].as_u64().unwrap());
+                for h in t["states"].as_array().unwrap() {
+                    assert_eq!(
+                        h["histogram"]
+                            .as_array()
+                            .unwrap()
+                            .iter()
+                            .map(|n| n.as_u64().unwrap())
+                            .sum::<u64>(),
+                        h["count"].as_u64().unwrap()
+                    );
+                }
+            }
+        }
+        child.join().unwrap();
+    });
+    s.stop().unwrap();
+    std::fs::remove_dir_all(p).unwrap();
 }
 
-fn paused_publication(s:&Session) {
-    let deadline=std::time::Instant::now()+Duration::from_secs(2);
-    while !s.publication_paused() {assert!(std::time::Instant::now()<deadline,"bounded publication fixture");std::thread::yield_now();}
+fn paused_publication(s: &Session) {
+    let deadline = std::time::Instant::now() + Duration::from_secs(2);
+    while !s.publication_paused() {
+        assert!(
+            std::time::Instant::now() < deadline,
+            "bounded publication fixture"
+        );
+        std::thread::yield_now();
+    }
 }
 #[test]
 fn publishing_thread_is_not_sampled_halfway_through_a_histogram_update() {
-    let p=directory();let s=Session::create_diagnostic(&p).unwrap();s.inject_publication_delay_ms(200).unwrap();
-    std::thread::scope(|scope| {let session=&s;scope.spawn(move || {let _b=session.bind_current(1).unwrap();let _g=kf_prof::site(Site::WorkerPark,State::Mutex,1);});
-        paused_publication(&s);assert!(s.snapshot()["threads"].as_array().unwrap().is_empty());
-    });s.stop().unwrap();std::fs::remove_dir_all(p).unwrap();
+    let p = directory();
+    let s = Session::create_diagnostic(&p).unwrap();
+    s.inject_publication_delay_ms(200).unwrap();
+    std::thread::scope(|scope| {
+        let session = &s;
+        scope.spawn(move || {
+            let _b = session.bind_current(1).unwrap();
+            let _g = kf_prof::site(Site::WorkerPark, State::Mutex, 1);
+        });
+        paused_publication(&s);
+        assert!(s.snapshot()["threads"].as_array().unwrap().is_empty());
+    });
+    s.stop().unwrap();
+    std::fs::remove_dir_all(p).unwrap();
 }
 #[test]
 fn mapped_thread_sequence_stays_odd_until_the_whole_update_is_committed() {
-    let p=directory();let s=Session::create_diagnostic(&p).unwrap();s.inject_publication_delay_ms(200).unwrap();
-    std::thread::scope(|scope| {let session=&s;scope.spawn(move || {let _b=session.bind_current(1).unwrap();let _g=kf_prof::site(Site::WorkerPark,State::Mutex,1);});
-        paused_publication(&s);let bytes=std::fs::read(p.join("prof.mmap")).unwrap();let base=kf_prof::layout::THREAD_BASE;
-        assert_eq!(u64::from_le_bytes(bytes[base..base+8].try_into().unwrap())%2,1);
-    });s.stop().unwrap();std::fs::remove_dir_all(p).unwrap();
+    let p = directory();
+    let s = Session::create_diagnostic(&p).unwrap();
+    s.inject_publication_delay_ms(200).unwrap();
+    std::thread::scope(|scope| {
+        let session = &s;
+        scope.spawn(move || {
+            let _b = session.bind_current(1).unwrap();
+            let _g = kf_prof::site(Site::WorkerPark, State::Mutex, 1);
+        });
+        paused_publication(&s);
+        let bytes = std::fs::read(p.join("prof.mmap")).unwrap();
+        let base = kf_prof::layout::THREAD_BASE;
+        assert_eq!(
+            u64::from_le_bytes(bytes[base..base + 8].try_into().unwrap()) % 2,
+            1
+        );
+    });
+    s.stop().unwrap();
+    std::fs::remove_dir_all(p).unwrap();
+}
+
+#[test]
+fn explicit_mmap_output_path_creates_only_its_adjacent_jsonl() {
+    let p=directory();let path=p.join("capture.mmap");let s=Session::create_diagnostic_file(&path).unwrap();s.stop().unwrap();
+    assert!(path.exists());assert!(p.join("capture.jsonl").exists());assert!(!p.join("prof.mmap").exists());std::fs::remove_dir_all(p).unwrap();
+}
+#[test]
+fn explicit_jsonl_output_path_creates_its_adjacent_mmap() {
+    let p=directory();let path=p.join("capture.jsonl");let s=Session::create_diagnostic_file(&path).unwrap();s.stop().unwrap();
+    assert!(p.join("capture.mmap").exists());assert!(path.exists());assert_eq!(std::fs::read_dir(&p).unwrap().count(),2);std::fs::remove_dir_all(p).unwrap();
 }
