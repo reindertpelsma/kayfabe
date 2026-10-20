@@ -16,8 +16,9 @@ with (out/'api.tsv').open('w') as f:
 unl=[r[0] for r in rows if r[1]=='47']
 # teardown start: first run of >=20 consecutive Free (fn 10)
 td=None;run=0
+def tdlike(r): return r[1]=='10' or r[4]=='0x50700117'
 for r in rows:
-  run=run+1 if r[1]=='10' else 0
+  run=run+1 if tdlike(r) else 0
   if run==20: td=r[0]-19; break
 # kf lines (no rpc-trace/reply-body/hex) around teardown start .. unload
 def keep(l): return ('kf' in l[:40]) and 'reply-body' not in l and 'rpc-trace' not in l and len(l)<=400
@@ -36,7 +37,7 @@ nonok=[r for r in rows if r[5] not in ('0x0','none')]
 subprocess.run(['python3','-I','/root/bwr/alloc_headers.py',str(log),str(out/'allocations.jsonl')],stdout=subprocess.DEVNULL,check=False)
 al=[json.loads(x) for x in (out/'allocations.jsonl').read_text().splitlines()] if (out/'allocations.jsonl').exists() else []
 summ={'log_sha256':hashlib.sha256(data).hexdigest(),'rpcs':len(rows),'unload_ordinals':unl,'teardown_start_ordinal':td,
- 'last_nonfree_before_teardown':[r for r in rows if td is not None and r[0]<td and r[1]!='10'][-3:],
+ 'last_nonfree_before_teardown':[r for r in rows if td is not None and r[0]<td and not tdlike(r)][-3:],
  'policy_nonok':nonok,'alloc_posted_nonzero_body_status':[a for a in al if a.get('body_status') not in (None,'0x0') or a.get('envelope_result')!='0x0'],
  'cfb0_posted':[a for a in al if a.get('class_selector')=='0xcfb0'],'ca7a_posted':[a for a in al if a.get('class_selector')=='0xca7a'],'cbcb_posted':[a for a in al if a.get('class_selector')=='0xcbcb']}
 (out/'summary.json').write_text(json.dumps(summ,indent=1)+'\n'); print(json.dumps({k:summ[k] for k in ('rpcs','unload_ordinals','teardown_start_ordinal','last_nonfree_before_teardown')}))

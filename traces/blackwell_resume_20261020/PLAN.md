@@ -101,3 +101,14 @@ may not come up`. MEASURED caps page of this GB202 (root, read-only BAR0, tools/
   init after the cursor channels). Product fix3 = fix2 + one measured GB202/580 row in
   crates/kf-disp/data/caps_measured.tsv (tier 3, OWNER_RULINGS §AF/§AH; tests first).
   *Falsifier:* fix3_on still aborts right after the 4th CA7A (ordinal 275/276) with Code 43.
+
+## Addendum 18:22 UTC — after fix3_on_1, before capsdiag_on_1 (not started)
+
+MEASURED fix3_on_1: the GB202 caps word 0x00c is now served (kf-disp: 1 T3 measured, 0 unmeasured)
+and ON still aborts after the 4th CA7A (ordinal 275, Code 43): **H-CAPS-ON falsified** (n=1 so far).
+The served page has 40 derived words; this die's own read has 127 non-zero words (126 differ).
+
+- **H-CAPS-ANY** (some other caps-page word decides the ON abort). capsdiag_on_1 = fix3 + DIAGNOSTIC
+  branch claude/blackwell-diag2-20261020 (0752115a7, NOT for merge) with KF3_DIAG_CAPS_PAGE_FILE = this
+  box's own Linux 580.159.04 read (oracle only, never shipped). *Falsifier:* with the full own-die
+  page served, ON still aborts right after the 4th CA7A with Code 43.

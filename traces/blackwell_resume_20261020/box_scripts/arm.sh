@@ -22,6 +22,8 @@ qemu-img create -q -f qcow2 -F qcow2 -b "$parent" "$child"
 while IFS= read -r key; do unset "$key"; done < <(compgen -A variable KF3_)
 while IFS= read -r flag; do export "$flag"; done </root/bwr/p19.flags
 export KF3_RPC_TRACE=1 KF3_RPC_BODY_TRACE=1
+for kv in ${ARM_EXTRA:-}; do [[ $kv =~ ^KF3_[A-Z0-9_]+=[0-9A-Za-z_./-]+$ ]] && export "$kv" && echo "ARM_EXTRA $kv"; done
+if [ "${ARM_TRACE:-0}" = 1 ]; then export WINVM_TRACE=1 KF3_BAR0_READ_TRACE=1; echo "ARM_TRACE diagnostic BAR0 trace ON (display reads + all writes)"; fi
 echo "ARM_START run=$run prod=$prod source=$SRC bin=$BIN profile=$profile $(date -u -Is)"
 extra=()
 [ "$profile" = on ] || extra=(--kf3-extra display=off,gop=off,gop-efi=)
@@ -44,6 +46,7 @@ timeout 120 bash "$W" ssh 'powershell -NoProfile -ExecutionPolicy Bypass -File C
 bash "$W" shot "$run" || true
 python3 scripts/bench/windows/abort_point.py points "$QLOG" >"/root/prov/arm_${run}_abort_point.txt" 2>&1 || true
 python3 -I /root/bwr/export.py "$QLOG" "/root/prov/arms/$run" || true
+[ "${ARM_TRACE:-0}" = 1 ] && python3 -I /root/bwr/trace_window.py "$QLOG" "$VM/logs/${run}_b1_trace.log" "/root/prov/arm_${run}_trace_window.txt" || true
 echo "ARM_DIAGNOSTIC_READY run=$run $(date -u -Is)"
 timeout 300 bash "$W" stop || true
 sleep 3
