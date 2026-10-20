@@ -103,7 +103,7 @@ here in `results-20261020/` (`ab_table.txt`, `events.tsv`, per session `report.t
 
 No harness parameter gives >= 60 % of runs >= 4 s within 120 s. Best known: plain `pair`, K = 5 ms, blocking sync, 2 clients, 4 vCPUs,
 USER route forced. MEASURED hit rates per 120 s pair run (control-equivalent builds, n = 16 runs: 0d7ba743 base+a+b1+b2, and 0d325edab):
-**>= 1 s: 7/16 (44 %), >= 2 s: 4/16, >= 4 s: 2/16 (13 %)**. Variation tried (x1, 80 s runs, 1 each): K=1, burst 8, 3 and 4 clients, spin, heavylight,
+**>= 1 s: 7/16 (44 %), >= 2 s: 5/16, >= 4 s: 2/16 (13 %)**. Variation tried (x1, 80 s runs, 1 each): K=1, burst 8, 3 and 4 clients, spin, heavylight,
 one client bursting, K=20, grid 16: all 0 stalls (n = 1 each, uninformative). Three clients + a keep-alive client: 2/4 stalls but only 2.1-2.3 s; a dense
 keep-alive (500 Hz): 0/4. Stalls cluster in the second run of a boot and in the first 70 s; no config reached 40 % at >= 4 s.
 The default path (no force) is clean: 0 stalls in 2 pairk runs (n small) and in the previous agent's ~16 runs.
