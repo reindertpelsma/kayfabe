@@ -6,20 +6,16 @@ import re
 import subprocess
 import sys
 
-TEST = ["cargo", "test", "--release", "-p", "kf-chan", "--test", "relay_fairness", "--lib", "-j2", "--no-fail-fast"]
+TEST = ["cargo", "test", "--release", "-p", "kf-chan", "--features", "chaos-hooks", "--test", "relay_fairness", "--test", "wake_registry", "--lib", "-j2", "--no-fail-fast"]
 W = "crates/kf-chan/src/worker.rs"
+# 2026-10-20 (simple relay): the LOOK_EVERY / Look-arm mutants pinned deleted code; these are the mutants of the one loop.
 MUTANTS = [
-    ("look_every_effectively_never", W, "pub const LOOK_EVERY: u32 = 4;", "pub const LOOK_EVERY: u32 = 1_000_000;"),
-    ("look_arm_drops_the_event_peek", W,
-     "                        if event {\n                            RelayStats::bump(&relay_stats.wake_event);\n                            let _ = relay.peek(Peek::Event);\n                        }\n                    }\n                    if relay.waiting() && relay.peek(Peek::Spin) {\n                        RelayStats::bump(&relay_stats.wake_spin);\n                    }\n                    continue;",
-     "                        if event {\n                            RelayStats::bump(&relay_stats.wake_event);\n                        }\n                    }\n                    if relay.waiting() && relay.peek(Peek::Spin) {\n                        RelayStats::bump(&relay_stats.wake_spin);\n                    }\n                    continue;"),
-    ("look_arm_drops_the_spin_peek", W,
-     "                    if relay.waiting() && relay.peek(Peek::Spin) {\n                        RelayStats::bump(&relay_stats.wake_spin);\n                    }\n                    continue;",
-     "                    if relay.waiting() && false {\n                        RelayStats::bump(&relay_stats.wake_spin);\n                    }\n                    continue;"),
-    ("look_arm_does_not_dispatch", W,
-     "                        let (doorbell, event) = dispatch(&ready);\n                        if doorbell {\n                            RelayStats::bump(&relay_stats.wake_doorbell);\n                        }\n                        if event {\n                            RelayStats::bump(&relay_stats.wake_event);\n                            let _ = relay.peek(Peek::Event);\n                        }\n                    }\n                    if relay.waiting() && relay.peek(Peek::Spin) {",
-     "                        let (doorbell, event) = (false, false);\n                        if doorbell {\n                            RelayStats::bump(&relay_stats.wake_doorbell);\n                        }\n                        if event {\n                            RelayStats::bump(&relay_stats.wake_event);\n                            let _ = relay.peek(Peek::Event);\n                        }\n                    }\n                    if relay.waiting() && relay.peek(Peek::Spin) {"),
-    ("busy_pass_never_asks_for_a_look", W, "            if self.busy_passes >= LOOK_EVERY {", "            if false {"),
+    ("no_level_evaluation", W, "let rang = if after == AfterPass::Continue {", "let rang = if true {"),
+    ("evaluation_only_when_idle", W, "let rang = if after == AfterPass::Continue {", "let rang = if after != AfterPass::Idle {"),
+    ("busy_pass_never_polls", W, "let spin = n > 0 || rang || relay.unsourced();", "let spin = n > 0 || rang || relay.unsourced();\n        if n > 0 { continue; }"),
+    ("block_despite_unsourced", W, "let spin = n > 0 || rang || relay.unsourced();", "let spin = n > 0 || rang;"),
+    ("dispatch_skipped", W, "            let (doorbell, event) = dispatch(&ready);", "            let (doorbell, event) = (false, false);"),
+    ("policy_never_looks", W, "            if self.look {\n                AfterPass::Look", "            if false {\n                AfterPass::Look"),
 ]
 
 
