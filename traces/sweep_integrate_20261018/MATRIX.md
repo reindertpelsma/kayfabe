@@ -1,6 +1,7 @@
 # Sweep matrix
 
-STATUS: LIVE, 2026-10-20. All six own rentals destroyed/API-absent. Latest AD102 refresh Windows580PASS426.09s and Linux580/595 raw30+CUDA4+gfx5steps/10hashesPASS; brokerSTOPPED before boot at missing pinned reference guard. Latest GB202 Windows580 ON/OFF verifiedCode43; complete native forced-GSP prefix reference captured. No family has full acceptance.
+STATUS: LIVE, 2026-10-20. Latest Ada broker follow-up7f22d18df PASS on595.91.07 and580.159.04, closing the earlier missing-reference STOP after explicit approval; source/runtime broker unchanged. Ada56829120 destroyed/API-absent03:31:11UTC; seven own IDs now absent. One authorized bounded Blackwell probe56830105 ACTIVE, timer66143560min armedfirst; GPU-free differential completed/pushed before rental, WindowsinitpairUNRUN. Earlier windows/native results below retained; no full family claim. Allteardown04:30UTC.
+
 
 Phase1:14release crates3338/0/21,49mutants with>=2killers; C4/C5 tests retained, candidate5f8f9d1a5f merged. The accepted product24906bf33 and rental0c87acda8 have identical Rust/QEMU/Cargo trees. Subsequent main commits record evidence; draftPR51/52/53 remain unmerged. Every pre-candidate4 PASS is STALE. The trusted host remains off-limits and untouched.
 
@@ -88,8 +89,10 @@ Latest paired refresh, completed2026-10-20. Native595 gates9/9+gate10/USER12/raw
 | AD10256816419 | Windows580.88/32.0.15.8088 | `0c87acda8`, P19+RPC diagnostics, display/GOPon | PASS desktop/CUDA3/hardwareDX11+12/426.09s zero4101hold | `phase2_windows_ad102_56816419/windows580_pass/` |
 | GB20256816449 | SameWindowsbuild | `0c87acda8`, P19+RPC diagnostics, OFF/OFF/emptyROM | FAIL verifiedCode43;357RPCs/unload356 precleanup;noNV0073/CA70/CA7A;0System4101 | `phase2_windows_gb202_56816449/b1_off/` |
 | GB20256816449 | SameWindowsbuild | Same source+flags, ON/ON/signedROM | FAIL verifiedCode43;386RPCs/unload385 precleanup;CA70/CA7A present;0System4101 | `phase2_windows_gb202_56816449/b1_on/` |
-| AD10256816419 | Linux580.159.04 | `0c87acda8`, native595 | raw30/30 + CUDA4/4 + gfx5/5steps,10/10hashesPASS; brokerSTOP before VM | `phase2_windows_ad102_56816419/linux/` |
-| AD10256816419 | Linux595.91.07 | `0c87acda8`, native595 | raw30/30 + CUDA4/4 + gfx5/5steps,10/10hashesPASS;1562raw-zeroHBwarnings; brokerSTOP | Same |
+| AD10256816419 | Linux580.159.04 | `0c87acda8`, native595 | raw30/30 + CUDA4/4 + gfx5/5steps,10/10hashesPASS; brokerPASS at7f22d18df on new56829120 | `phase2_windows_ad102_56816419/linux/` |
+| AD10256816419 | Linux595.91.07 | `0c87acda8`, native595 | raw30/30 + CUDA4/4 + gfx5/5steps,10/10hashesPASS;1562raw-zeroHBwarnings; brokerPASS at7f22d18df on new56829120 | Same |
 | GB20256816449 native | Windows580.88 / GSP580.65.05 | reference e8883e231 + tracer8f9bd4e51, productN/A | Code0+forcedGSP CUDA3PASS; final3804cmd/3863status fromseq0,strictdecoders0/0loss; firstpartial retained | `phase2_windows_gb202_56816449/native_trace/` |
 
 Candidate NVDEC admission: draftPR53 aa8fdea9c, expectedRED340c12909/fixf71c1ce5e,1908releasePASS,5mutants each2killers,clippy0new; hardwareUNRUN. NativeCFB0 success supports a missing public policy row, not a complete Code43 cause. ON reports fourCA7A trace_result0allocations then tears down beforeCFB0; effective posted-result equality unavailable. TracerPR52 b9e246281 signed/loaded, complete capture uses existing nearby method4; added FMC runtime path NOTPROVED.
+
+Ada broker source note: raw/CUDA/headlessgfx above measured0c87acda8 on56816419; broker595/580 measured7f22d18df on56829120. Product trees are equal. Both actualdriver/Cinnamon/Xorg/NVIDIAgears and nonblank1920x1080 screenshots pass;0guestXid/flip,host5→5,n1each. Exact referencebadf2d707da47a625e0ce69172a84785d20f81b8 throughNVPV_DIR; actualruntimebroker current0017914, unchangedprep verified. Evidence phase2_ada_broker_followup_20261020/RESULT.md. GPU-free Blackwell first-order/status/size/quiet-event comparison and3falsifiers: blackwell_diff_20261020/RESULT.md.
