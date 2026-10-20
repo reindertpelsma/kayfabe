@@ -1,0 +1,52 @@
+{
+  "schema": "kfwc-cell/1",
+  "driver": "32.0.15.8088",
+  "abi": "580.65.06",
+  "firmware": "580.65.05",
+  "source": "8f9bd4e519fdd085c5b90e39542e0a3454145d75",
+  "raw_bytes": 14193472,
+  "raw_sha256": "A1E3C1BDB846A2CAB1F40C6132FDD474C2AD14E770688887DFAB0D95A2645D48",
+  "discovery": {
+    "method": 2,
+    "layout": 1,
+    "mailbox_reads": 1220,
+    "mailbox_status": 2,
+    "scan_passes": 0,
+    "scan_bytes": 4596555776
+  },
+  "stats": {
+    "steps": 104985,
+    "attaches": 1,
+    "detaches": 1,
+    "messages_cmd": 694,
+    "messages_status": 696,
+    "lost_messages_exact": 0,
+    "seq_gap_messages": 0,
+    "lapped_messages": 0,
+    "loss_records": 2,
+    "torn_reads": 0,
+    "invalid_elements": 0,
+    "unsupported": 0,
+    "read_failures": 0,
+    "resyncs": 2,
+    "sink_dropped": 0,
+    "records_refused": 0
+  },
+  "capture": {
+    "records": 1428,
+    "end_seen": 1,
+    "file_ok": 1,
+    "by_kind": {
+      "bind": 2,
+      "elements": 1423,
+      "loss_overflow": 0,
+      "loss_unreadable": 0,
+      "loss_unknown": 2,
+      "end": 1
+    }
+  },
+  "collector_exit_code": "UNVERIFIED: first script did not cache Process.Handle",
+  "strict_census_rc": 1,
+  "prefix_result": "INCOMPLETE",
+  "raw_kept_on_rental": true
+}
