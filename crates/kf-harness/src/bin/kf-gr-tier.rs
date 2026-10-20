@@ -128,6 +128,13 @@ const RUN31_CE: [u32; 7] = [
     0x0000_0001,
 ];
 
+/// Build the native GR oracle's segment separately from its placement and GPU run.
+fn gr_segment(_classes: &[u32]) -> Result<Vec<u32>, String> {
+    let mut words = RUN31_GR.to_vec();
+    words.extend_from_slice(&RUN32_GR_TAIL);
+    Ok(words)
+}
+
 fn main() {
     let mut l = Checks::default();
     if let Err(e) = run(&mut l) {
@@ -370,17 +377,6 @@ fn run(l: &mut Checks) -> Result<(), String> {
     };
     // GP 0: run32's whole 46-word segment, unchanged (it releases nothing: GP_GET is its
     // completion). GP 1: a semaphore release. GP 2 (hostile): a 3D notifier address no row covers.
-    let mut gp0 = RUN31_GR.to_vec();
-    gp0.extend_from_slice(&RUN32_GR_TAIL);
-    // ★ Batch 3: GP 1 is run44's 3D report-semaphore release first, then the host release.
-    let mut gp1 = report_release(VA_CHAN + SEM_3D, P3);
-    gp1.extend(release(P1));
-    let gp2 = m(0, 0x0104, &[0x5, 0]);
-    stage(&walk, CHAN, VA_CHAN, &[&gp0, &gp1, &gp2])?;
-    walk.write_store(CHAN + SEM_GR, &0u32.to_le_bytes())
-        .map_err(|e| e.to_string())?;
-    walk.write_store(CHAN + SEM_3D, &0u32.to_le_bytes())
-        .map_err(|e| e.to_string())?;
 
     let mut host = HostRing::on_engine_layout(
         &rm,
@@ -414,6 +410,17 @@ fn run(l: &mut Checks) -> Result<(), String> {
         },
         format!("{objects:x?} context={:x?}", host.gr_context()),
     );
+    let gp0 = gr_segment(&classes)?;
+    // ★ Batch 3: GP 1 is run44's 3D report-semaphore release first, then the host release.
+    let mut gp1 = report_release(VA_CHAN + SEM_3D, P3);
+    gp1.extend(release(P1));
+    let gp2 = m(0, 0x0104, &[0x5, 0]);
+    stage(&walk, CHAN, VA_CHAN, &[&gp0, &gp1, &gp2])?;
+    walk.write_store(CHAN + SEM_GR, &0u32.to_le_bytes())
+        .map_err(|e| e.to_string())?;
+    walk.write_store(CHAN + SEM_3D, &0u32.to_le_bytes())
+        .map_err(|e| e.to_string())?;
+
     let gp_get_at = win
         .fb(CHAN + USERD + kf_abi::submit::USERD_GP_GET, 4)
         .ok_or("USERD GP_GET outside the store window")?;
