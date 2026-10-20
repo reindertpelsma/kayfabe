@@ -86,6 +86,17 @@ def classify(apps, events, losses):
                 independent_silences_count=0 if failed else count)
 
 
+def valid_load(pair,rows,roles):
+    counts=defaultdict(int)
+    for _,app,pid in rows: counts[(app.lower(),pid)]+=1
+    if pair=='heaven-heaven':
+        first={p for p in roles.get('Heaven',set()) if counts[('heaven.exe',p)]>=100}
+        second={p for p in roles.get('Heaven2',set()) if counts[('heaven.exe',p)]>=100}
+        return any(a!=b for a in first for b in second)
+    other={'heaven-gravity':'gravitymark.exe','heaven-blender':'blender.exe','heaven-edge':'msedge.exe'}[pair]
+    return all(sum(n for (app,p),n in counts.items() if app==name)>=100 for name in ['heaven.exe',other])
+
+
 def analyze(directory):
     root = Path(directory)
     meta = json.loads((root / 'guest.json').read_text(encoding='utf-8-sig'))
@@ -103,10 +114,12 @@ def analyze(directory):
     pair=meta.get('pair','heaven-gravity')
     expected={'heaven-gravity':['Heaven.exe','GravityMark.exe'],'heaven-heaven':['Heaven.exe'],
               'heaven-blender':['Heaven.exe','blender.exe'],'heaven-edge':['Heaven.exe','msedge.exe']}[pair]
-    counts=defaultdict(int)
-    for _,app,pid in rows: counts[(app,pid)]+=1
-    valid=all(apps.get(a,{}).get('presents',0)>=100 for a in expected)
-    if pair=='heaven-heaven': valid=valid and sum(n>=100 for (a,p),n in counts.items() if a=='Heaven.exe')>=2
+    roles=defaultdict(set)
+    for f in root.glob('life-*.tsv'):
+        for line in f.read_text(encoding='utf-8-sig').splitlines():
+            q=line.split('\t')
+            if len(q)>2 and q[0]=='START': roles[f.stem[5:]].add(int(q[1]))
+    valid=valid_load(pair,rows,roles)
     observed={a:r for a,r in apps.items() if a.lower() in {n.lower() for n in expected}}
     losses=[]
     starts={}
