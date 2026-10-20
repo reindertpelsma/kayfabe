@@ -131,12 +131,20 @@
     "product_head": "e8553e6ce7ec557aef9ff96c3c876e3060a6b9f8",
     "credit_before": 39.96114900956297,
     "auto_destroy_minutes": 180,
-    "destroyed": false,
+    "destroyed": true,
     "auto_destroy_pid": 224025,
     "auto_destroy_armed_utc": "2026-10-19T23:48:46.532671+00:00",
     "auto_destroy_verified": true,
     "observed_dph_total": 0.16,
     "deadline_utc": "2026-10-20T02:48:46Z",
-    "phase": "GA104 resource/health preflight; native Windows binding prerequisite planned"
+    "phase": "GA104 resource/health preflight; native Windows binding prerequisite planned",
+    "absence_verified_utc": "2026-10-20T01:05:56.954502+00:00",
+    "credit_after_observed": 39.76303184746257,
+    "observed_account_credit_delta": 0.1981171621004023,
+    "elapsed_hours_until_absence": 1.2866714886111112,
+    "runtime_cost_estimate_usd": 0.20586743817777778,
+    "cost_upper_bound_usd": 1.2058674381777779,
+    "cost_note": "Runtime estimate and shared-account credit delta are observations, not settled attribution. Budget guard reserves1USD for delayed transfer billing until invoices reconcile.",
+    "auto_destroy_cancelled_after_absence": true
   }
 ]
