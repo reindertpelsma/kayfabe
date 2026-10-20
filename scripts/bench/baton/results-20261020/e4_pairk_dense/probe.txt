@@ -1,0 +1,4 @@
+PROBE_BEGIN clients=3 detect_ms=1500 hold_ms=1000 hold2_ms=500
+PROBE_BEGIN clients=3 detect_ms=1500 hold_ms=1000 hold2_ms=500
+PROBE_BEGIN clients=3 detect_ms=1500 hold_ms=1000 hold2_ms=500
+PROBE_BEGIN clients=3 detect_ms=1500 hold_ms=1000 hold2_ms=500

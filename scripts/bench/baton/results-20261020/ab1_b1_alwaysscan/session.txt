@@ -1,0 +1,1 @@
+SESSION ab1_b1_alwaysscan start 2026-10-20T14:37:19+02:00 smp=4 seq=pair:120,pair:120 qemu=/var/lib/kf-windows-20261005/kf3-bins/0d7ba743/qemu-system-x86_64 host_xid0=25 budget=380 env_KF3=KF3_DEBUG_FORCE_MIGRATABLE=1 KF3_LIFECYCLE_MODE=always_scan KF3_DEBUG=1 KF3_TSG_MIRROR=0 

@@ -1,0 +1,2 @@
+A t=43.8s idle=2048 ms GPU_NOT_COMPLETE | main: tid=526 futex wchan=futex_do_wait | streamq=NOT_READY | others: B age 1 ms,C age 0 ms | recovered after 2349 ms
+A t=116.0s idle=2041 ms GPU_NOT_COMPLETE | main: tid=1179 futex wchan=futex_do_wait | streamq=NOT_READY | others: B age 3 ms,C age 6 ms | recovered after 2137 ms

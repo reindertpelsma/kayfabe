@@ -1,0 +1,15 @@
+session	run	starved	from_s	to_s	dur_s	busy_looks(session)	guest_picture
+ab1_a_nocache	pair1	B	37.2	40.4	3.14	0	GPU_NOT_COMPLETE; main: tid=201 futex wchan=futex_do_wait; streamq=NOT_READY
+ab1_a_nocache	pair2	B	5.9	7.2	1.39	0	no watchdog episode (stall < 2 s)
+ab1_b2_nopmark	pair1	A	67.5	70.3	2.82	0	GPU_NOT_COMPLETE; main: tid=201 futex wchan=futex_do_wait; streamq=NOT_READY
+ab1_base	pair1	B	6.6	15.7	9.10	0	GPU_NOT_COMPLETE; main: tid=201 futex wchan=futex_do_wait; streamq=NOT_READY
+ab1_c_readback	pair2	A	25.8	34.3	8.52	0	GPU_NOT_COMPLETE; main: tid=512 futex wchan=futex_do_wait; streamq=NOT_READY
+e1_pairk	pairk2	A	41.8	44.1	2.29	0	GPU_NOT_COMPLETE; main: tid=526 futex wchan=futex_do_wait; streamq=NOT_READY
+e1_pairk	pairk4	A	113.9	116.0	2.09	0	GPU_NOT_COMPLETE; main: tid=1179 futex wchan=futex_do_wait; streamq=NOT_READY
+rf1_F	pair1	A	102.0	103.8	1.83	77204	no watchdog episode (stall < 2 s)
+rf2_C	pair2	A	110.9	113.1	2.21	0	GPU_NOT_COMPLETE; main: tid=512 futex wchan=futex_do_wait; streamq=NOT_READY
+rf2_F	pair2	A	54.8	58.8	3.93	85880	GPU_NOT_COMPLETE; main: tid=512 futex wchan=futex_do_wait; streamq=NOT_READY
+rf3_C	pair2	A	77.4	81.6	4.16	0	GPU_NOT_COMPLETE; main: tid=512 futex wchan=futex_do_wait; streamq=NOT_READY
+rf4_C	pair1	A	27.6	29.3	1.73	0	no watchdog episode (stall < 2 s)
+rf4_F	pair2	A	3.5	9.7	6.21	88727	GPU_NOT_COMPLETE; main: tid=512 futex wchan=futex_do_wait; streamq=NOT_READY
+x1	pair1	B	36.7	39.7	3.04	0	GPU_NOT_COMPLETE; main: tid=202 futex wchan=futex_do_wait; streamq=NOT_READY

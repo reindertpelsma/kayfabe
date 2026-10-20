@@ -1,0 +1,11 @@
+files	hl6	hit=0	starved=- 0.0s	gaps=heavy:0.11,light:0.01	iters=heavy:867,light:6932
+files	pair1	hit=1	starved=B 3.0s	gaps=A:0.01,B:3.04	iters=A:8117,B:7346
+files	pair2	hit=0	starved=- 0.0s	gaps=A:0.00,B:0.00	iters=A:38017,B:38018
+files	pair3	hit=0	starved=- 0.0s	gaps=A:0.09,B:0.09	iters=A:967,B:967
+files	pair5	hit=0	starved=- 0.0s	gaps=A:0.01,B:0.01	iters=A:7699,B:7699
+files	pair7	hit=0	starved=- 0.0s	gaps=A:0.01,B:0.09	iters=A:7013,B:1053
+files	pair8	hit=0	starved=- 0.0s	gaps=A:0.05,B:0.05	iters=A:1956,B:1956
+files	pair9	hit=0	starved=- 0.0s	gaps=A:0.01,B:0.01	iters=A:15724,B:15725
+files	quad10	hit=0	starved=- 0.0s	gaps=A:0.02,B:0.02,C:0.02,D:0.02	iters=A:3855,B:3855,C:3855,D:3856
+files	tri4	hit=0	starved=- 0.0s	gaps=A:0.02,B:0.02,C:0.02	iters=A:5142,B:5142,C:5142
+files	TOTAL	1/10

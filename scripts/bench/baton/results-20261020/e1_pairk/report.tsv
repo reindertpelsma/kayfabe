@@ -1,0 +1,5 @@
+files	pairk1	hit=0	starved=- 0.0s	gaps=A:0.01,B:0.01,C:0.02	iters=A:11335,B:11335,C:6802
+files	pairk2	hit=1	starved=A 2.3s	gaps=A:2.29,B:0.01,C:0.02	iters=A:11124,B:11557,C:6819
+files	pairk3	hit=0	starved=- 0.0s	gaps=A:0.01,B:0.01,C:0.02	iters=A:11323,B:11323,C:6795
+files	pairk4	hit=1	starved=A 2.1s	gaps=A:2.09,B:0.01,C:0.02	iters=A:11153,B:11549,C:6825
+files	TOTAL	2/4

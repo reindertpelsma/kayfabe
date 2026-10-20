@@ -1,0 +1,1 @@
+SESSION rfs1_Cspin start 2026-10-20T15:38:14+02:00 smp=4 seq=pair:120:spin=1,pair:120:spin=1 qemu=/data/claude-baton-debug-20261020/kf3-bins/0d325edab/qemu-system-x86_64 host_xid0=25 budget=380 env_KF3=KF3_DEBUG_FORCE_MIGRATABLE=1 KF3_DEBUG=1 KF3_TSG_MIRROR=0 

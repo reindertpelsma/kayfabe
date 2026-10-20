@@ -1,0 +1,1 @@
+SESSION x1 start 2026-10-20T13:32:59+02:00 smp=4 seq=pair:80,pair:80:k=1,pair:80:burst=8,tri:80,pair:80:spin=1,hl:80,pair:80:bburst=8,pair:80:k=20,pair:80:blocks=16,quad:80 qemu=/var/lib/kf-windows-20261005/kf3-bins/0d7ba743/qemu-system-x86_64 host_xid0=25 budget=1140 env_KF3=KF3_DEBUG_FORCE_MIGRATABLE=1 KF3_DEBUG=1 KF3_TSG_MIRROR=0 

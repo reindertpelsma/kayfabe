@@ -1,0 +1,1 @@
+SESSION e1_pairk start 2026-10-20T13:59:04+02:00 smp=4 seq=pairk:120:probe=1,pairk:120:probe=1,pairk:120:probe=1,pairk:120:probe=1 qemu=/var/lib/kf-windows-20261005/kf3-bins/0d7ba743/qemu-system-x86_64 host_xid0=25 budget=670 env_KF3=KF3_DEBUG_FORCE_MIGRATABLE=1 KF3_DEBUG=1 KF3_TSG_MIRROR=0 

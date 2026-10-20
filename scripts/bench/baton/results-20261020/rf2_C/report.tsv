@@ -1,0 +1,3 @@
+files	pair1	hit=0	starved=- 0.0s	gaps=A:0.01,B:0.01	iters=A:11615,B:11616
+files	pair2	hit=1	starved=A 2.2s	gaps=A:2.21,B:0.01	iters=A:11403,B:11831
+files	TOTAL	1/2

@@ -25,7 +25,8 @@ def find_pid():
                 c = f.read()
         except OSError:
             continue
-        if b"kf-fastguest" in c and b"qemu-system" in c:
+        argv = c.split(b"\0")
+        if argv and argv[0].endswith(b"qemu-system-x86_64") and b"kf-fastguest" in c:
             return int(p.split("/")[-1])
     return None
 
