@@ -1180,16 +1180,17 @@ fn arms_the_manager_never_looked_at_are_all_refreshed_by_one_walk() {
 }
 
 /// More unobserved arms than the port remembers: the walk covers everything (the overflow is a
-/// global refresh), so no PTE is lost even though their scopes are unknown.
+/// global refresh). The FIRST arm names space B and falls out of the port's memory behind a long
+/// run of arms that all name A; B's PTE must still reach the host.
 #[test]
 fn more_unobserved_arms_than_the_port_remembers_refresh_everything() {
     let mut h = Held::new();
     let n = 3 * kf_trap::mmuinval::ARM_RING as u64;
     for i in 0..n {
-        let (pdb, va, at) = if i % 2 == 0 {
-            (PDB_A, 0x1000_0000 + i * 0x10000, 0x0200_0000 + i * 0x10000)
+        let (pdb, va, at) = if i == 0 {
+            (PDB_B, 0x2000_0000, 0x0210_0000)
         } else {
-            (PDB_B, 0x2000_0000 + i * 0x10000, 0x0210_0000 + i * 0x10000)
+            (PDB_A, 0x1000_0000 + i * 0x10000, 0x0200_0000 + i * 0x10000)
         };
         h.r.tables
             .borrow_mut()
@@ -1208,6 +1209,42 @@ fn more_unobserved_arms_than_the_port_remembers_refresh_everything() {
             .count() as u64,
         n,
         "every PTE any arm wrote reached the host"
+    );
+    assert!(ops(&h.r).contains(&Op::Map(0x2000_0000, 0x0210_0000, 0x1000)));
+}
+
+/// ★ An arm whose record is not there (a vCPU minted its sequence and has not stored the scope
+/// yet) is treated as ALL_PDB: it is cleared only after a walk of EVERY space, never after a
+/// guess.
+#[test]
+fn an_arm_whose_record_is_not_there_refreshes_every_space() {
+    let mut h = Held::new();
+    for (pdb, va, at) in [
+        (PDB_A, 0x1000_0000, 0x0200_0000),
+        (PDB_B, 0x2000_0000, 0x0210_0000),
+    ] {
+        h.r.tables
+            .borrow_mut()
+            .entry(pdb)
+            .or_default()
+            .push((va, at, 0x1000, 0));
+    }
+    // Sequence 0 minted and armed with no record at all.
+    let t = h.r.port.trigger();
+    let s = t.mint();
+    t.arm_minted(s);
+    h.look();
+    let mut walked = h.r.m.walker().submits[0].clone();
+    walked.sort_unstable();
+    assert_eq!(walked, vec![PDB_A, PDB_B]);
+    h.release();
+    assert!(!busy(&h.r.port));
+    assert_eq!(
+        ops(&h.r)
+            .iter()
+            .filter(|o| matches!(o, Op::Map(..)))
+            .count(),
+        2
     );
 }
 
