@@ -569,7 +569,7 @@ fn thread_span_overflow_and_bad_close_never_corrupt_current_state() {
 #[test]
 fn tables_have_stable_unique_ids_and_every_kind_has_a_bound() {
     use kf_prof::tables::{Kind, Site, State};
-    assert_eq!(Kind::ALL.len(), 12);
+    assert_eq!(Kind::ALL.len(), 13);
     assert_eq!(Site::Init as u16, 1);
     assert_eq!(State::Trap as u16, 10);
     for (i, k) in Kind::ALL.iter().enumerate() {

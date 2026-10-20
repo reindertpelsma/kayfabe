@@ -1,0 +1,129 @@
+//! Passive relay gauges: raw observations remain distinct from completion authority.
+use kf_prof::relay::{Observation, RelayGauge, Wait, Wake};
+#[test]
+fn private_and_guest_progress_are_independent_and_missing_is_not_zero() {
+    let mut g=RelayGauge::new(7,0x11,10);
+    let w=g.observe(20,Observation{private_get:Some(4),reference:Some(9),guest_get:Some(2),..Observation::default()}).unwrap();
+    assert_eq!((w[6],w[8],w[16]),(4,9,2));assert_eq!(w[5]&2,0);assert_ne!(w[5]&1,0);
+}
+#[test]
+fn unchanged_private_get_keeps_its_change_time_despite_a_new_sample() {
+    let mut g=RelayGauge::new(1,1,10);
+    g.observe(20,Observation{private_get:Some(5),..Observation::default()}).unwrap();
+    let w=g.observe(40,Observation{private_get:Some(5),reference:Some(6),..Observation::default()}).unwrap();
+    assert_eq!(w[15],20);assert_eq!(w[25],40);assert_eq!(w[8],6);
+}
+#[test]
+fn wrapped_private_get_changes_its_age_without_changing_reference() {
+    let mut g=RelayGauge::new(1,1,10);
+    g.observe(20,Observation{private_get:Some(511),reference:Some(19),..Observation::default()}).unwrap();
+    let w=g.observe(30,Observation{private_get:Some(0),..Observation::default()}).unwrap();
+    assert_eq!(w[15],30);assert_eq!(w[8],19);assert_eq!(w[6],0);
+}
+#[test]
+fn unchanged_wait_retains_its_birth_and_new_target_starts_a_new_obligation() {
+    let mut g=RelayGauge::new(1,1,10);
+    g.observe(20,Observation{wait:Wait::Marker(9),..Observation::default()}).unwrap();
+    let w=g.observe(30,Observation{wait:Wait::Marker(9),..Observation::default()}).unwrap();assert_eq!(w[27],20);
+    let w=g.observe(40,Observation{wait:Wait::Popped(10),..Observation::default()}).unwrap();assert_eq!((w[9],w[10],w[27]),(2,10,40));
+}
+#[test]
+fn reference_does_not_close_a_wait_without_the_real_relay_transition() {
+    let mut g=RelayGauge::new(1,1,10);
+    let w=g.observe(20,Observation{reference:Some(99),wait:Wait::Marker(9),..Observation::default()}).unwrap();
+    assert_eq!((w[9],w[10],w[27]),(1,9,20));
+    let w=g.observe(30,Observation{wait:Wait::None,..Observation::default()}).unwrap();assert_eq!((w[9],w[27]),(0,0));
+}
+#[test]
+fn absent_reads_do_not_refresh_the_recorded_hardware_observation() {
+    let mut g=RelayGauge::new(1,1,10);
+    g.observe(20,Observation{private_get:Some(1),reference:Some(8),..Observation::default()}).unwrap();
+    let w=g.observe(30,Observation{wake:Some(Wake::Event),..Observation::default()}).unwrap();
+    assert_eq!(w[25],20);assert_eq!(w[15],20);assert_eq!((w[13],w[14]),(1,30));
+}
+#[test]
+fn doorbell_count_change_and_last_wake_are_separate_observations() {
+    let mut g=RelayGauge::new(1,1,10);
+    g.observe(20,Observation{doorbells:Some(4),wake:Some(Wake::Spin),..Observation::default()}).unwrap();
+    let w=g.observe(30,Observation{doorbells:Some(4),wake:Some(Wake::Backstop),..Observation::default()}).unwrap();
+    assert_eq!((w[11],w[12],w[13],w[14]),(4,20,3,30));
+}
+#[test]
+fn backward_clock_cannot_corrupt_a_published_relay_lifetime() {
+    let mut g=RelayGauge::new(1,1,10);let old=g.observe(20,Observation::default()).unwrap();
+    assert!(g.observe(19,Observation{private_get:Some(8),..Observation::default()}).is_err());
+    assert_eq!(g.observe(20,Observation::default()).unwrap(),old);
+}
+#[cfg(feature="prof-inject")]
+mod runtime {
+    use super::*;
+    use kf_prof::runtime::Session;
+    use std::{sync::atomic::{AtomicU64,Ordering},time::Duration};
+    static NEXT:AtomicU64=AtomicU64::new(0);
+    fn dir()->std::path::PathBuf {let p=std::env::temp_dir().join(format!("kf-prof-relay-{}-{}",std::process::id(),NEXT.fetch_add(1,Ordering::Relaxed)));std::fs::create_dir(&p).unwrap();p}
+    #[test]
+    fn live_source_is_mapped_before_the_first_aggregator_second() {
+        let p=dir();let s=Session::create_diagnostic(&p).unwrap();let mut r=s.register_relay(0x44).unwrap();
+        r.observe(Observation{private_get:Some(4),private_put:Some(7),reference:Some(2),wait:Wait::Marker(9),..Observation::default()});
+        let b=std::fs::read(p.join("prof.mmap")).unwrap();let off=kf_prof::layout::LEDGER_BASE;
+        let word=|i|u64::from_le_bytes(b[off+i*8..off+i*8+8].try_into().unwrap());
+        assert!(word(0)>0&&word(0)%2==0);assert_eq!((word(3),word(7),word(8),word(9),word(10)),(0x44,4,7,2,1));
+        s.stop().unwrap();std::fs::remove_dir_all(p).unwrap();
+    }
+    #[test]
+    fn relay_wait_is_an_overdue_ledger_source_and_real_idle_closes_it() {
+        let p=dir();let s=Session::create_diagnostic(&p).unwrap();let mut r=s.register_relay(0x45).unwrap();
+        r.observe(Observation{wait:Wait::Popped(8),..Observation::default()});std::thread::sleep(Duration::from_millis(15));
+        let row=s.snapshot();assert_eq!(row["relays"][0]["key"],0x45);assert_eq!(row["ledger"]["oldest"][0]["kind"],12);assert_eq!(row["ledger"]["oldest"][0]["overdue"],true);
+        r.observe(Observation::default());assert_eq!(s.snapshot()["ledger"]["oldest"].as_array().unwrap().len(),0);
+        s.stop().unwrap();std::fs::remove_dir_all(p).unwrap();
+    }
+    #[test]
+    fn reused_guest_keys_keep_distinct_host_registration_generations() {
+        let p=dir();let s=Session::create_diagnostic(&p).unwrap();let mut a=s.register_relay(7).unwrap();let mut b=s.register_relay(7).unwrap();
+        a.observe(Observation{private_get:Some(1),..Observation::default()});b.observe(Observation{private_get:Some(9),..Observation::default()});let row=s.snapshot();
+        assert_eq!(row["relays"].as_array().unwrap().len(),2);assert_ne!(row["relays"][0]["generation"],row["relays"][1]["generation"]);assert_eq!(row["relays"][0]["private_get"],1);assert_eq!(row["relays"][1]["private_get"],9);
+        s.stop().unwrap();std::fs::remove_dir_all(p).unwrap();
+    }
+    #[test]
+    fn late_source_registration_generation_is_its_own_host_slot() {
+        let p=dir();let s=Session::create_diagnostic(&p).unwrap();
+        for key in 0..65 {let mut r=s.register_relay(key).unwrap();r.observe(Observation::default());}
+        let row=s.snapshot();assert_eq!(row["relays"][64]["generation"],65);
+        s.stop().unwrap();std::fs::remove_dir_all(p).unwrap();
+    }
+    #[test]
+    fn source_exhaustion_never_publishes_into_the_record_region() {
+        let p=dir();let s=Session::create_diagnostic(&p).unwrap();
+        for key in 0..4096 {let _=s.register_relay(key).unwrap();}
+        assert!(s.register_relay(8192).is_err());let b=std::fs::read(p.join("prof.mmap")).unwrap();
+        let off=kf_prof::layout::RECORD_BASE;assert_eq!(&b[off..off+8],&[0;8]);
+        s.stop().unwrap();std::fs::remove_dir_all(p).unwrap();
+    }
+    #[test]
+    fn every_relay_table_refusal_is_visible_and_never_overwrites() {
+        let p=dir();let s=Session::create_diagnostic(&p).unwrap();
+        for key in 0..4096 {assert!(s.register_relay(key).is_ok());}assert!(s.register_relay(9999).is_err());assert!(s.register_relay(10000).is_err());
+        let row=s.snapshot();assert_eq!(row["relay_registered"],4096);assert_eq!(row["relay_dropped"],2);assert_eq!(row["relays"][0]["key"],0);
+        s.stop().unwrap();std::fs::remove_dir_all(p).unwrap();
+    }
+}
+
+#[cfg(feature="prof-inject")]
+#[test]
+fn oversize_relay_and_thread_record_is_bounded_with_explicit_omissions() {
+    let mut row=serde_json::json!({"schema":1,"start_ns":1,"end_ns":2,"threads":vec![serde_json::json!({"states":vec![0;1024],"sites":vec![0;1024],"tid":7});64],"relays":vec![serde_json::json!({"key":7,"padding":vec![0;1024]});4096],"coverage":{}});
+    let b=kf_prof::runtime::bounded_record(&mut row).unwrap();assert!(b.len()<=65472);assert_eq!(row["coverage"]["payload_truncated"],true);assert!(row["coverage"]["relay_rows_omitted"].as_u64().unwrap()>0);
+}
+#[cfg(feature="prof-inject")]
+#[test]
+fn irreducible_record_overflow_is_an_error_before_any_publication() {
+    let mut row=serde_json::json!({"schema":1,"start_ns":1,"end_ns":2,"coverage":{},"irreducible":"x".repeat(70000)});
+    assert!(kf_prof::runtime::bounded_record(&mut row).is_err());
+}
+#[test]
+fn private_get_ahead_of_marker_never_supplies_a_processing_receipt() {
+    let mut g=RelayGauge::new(1,1,10);
+    let w=g.observe(20,Observation{private_get:Some(100),reference:Some(1),wait:Wait::Marker(9),..Observation::default()}).unwrap();
+    assert_eq!((w[9],w[10],w[27]),(1,9,20));
+}
