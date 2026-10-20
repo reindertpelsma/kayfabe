@@ -1,96 +1,85 @@
-# C6 Part A checkpoint
+# C6 Part A progress
 
-STATUS: PARTIAL / STOPPED, 2026-10-20. BETA CANDIDATE; no supported external-user
-install path. This supersedes the earlier guest-OS decision stop.
+STATUS: ACTIVE / FINAL VERIFICATION RUNNING, 2026-10-20. BETA CANDIDATE;
+no supported external-user install path. Deadline 06:30 CEST.
 
 ## 1. Lane, branch and request
 
-MEASURED: C6, branch `integration/beta-candidate-1-20261020`, candidate-5 base
-`f8f9d1a5f0aae58fc8ccf0da740cf12682cd284e`. Stage 1 ledger publication
-`3c4731eec682f62f9e9d55e5dde00d3ded393fd3` remains intact. New test-only
-checkpoints: caps EXPECTED RED `b1ea24127`; profile/audit EXPECTED RED
-`a4a9db447`. The external lane report records this enclosing report's exact
-post-push head and origin equality, avoiding a self-referential commit hash.
+CODE READ: C6, `integration/beta-candidate-1-20261020`, based on candidate-5
+`f8f9d1a5f0aae58fc8ccf0da740cf12682cd284e`. Request: GPU-free Stages1–4,
+tests first, mutation checks and push after each stage. Coordinator approved
+explicit per-device guest-os=windows|linux (default Linux), separately reviewed
+derived caps, and corrections to own tooling. Those decisions are resolved.
+MEASURED: latest product/style checkpoint `c27134846` was verified on origin;
+the external report records the enclosing report commit after its push.
 
-CODE READ: request is GPU-free Stages 1–4, tests first, push after each stage,
-with hardware only in a coordinator slot. The coordinator approved explicit
-`guest-os=windows|linux`, default Linux, then a separately reviewed sweep-derived
-caps replacement. Those choices are resolved; no GPU/VM slot was granted.
+## 2. Result (twelve lines)
 
-## 2. Result (eleven lines)
+- DONE — MEASURED: Stage1 ledger published first at `3c4731eec`; [current topics](TOPICS.md).
+- DONE — MEASURED: mutation wrapper corrected, five regression tests; two wrapper mutants killed by two tests each.
+- DONE — MEASURED: scoped caps import, profile wiring and all selected pure fixes committed; [conflicts](CONFLICTS.md) resolved within the approved scopes.
+- DONE — CODE READ: 19 P19 env selectors retired; Windows property enables18 behaviours and derived caps; default Linux settings retained.
+- DONE — CODE READ: mirror/trap/profiler/recorder/full sweep excluded; no captured whole-page runtime path.
+- DONE — MEASURED: launcher/doctor/install/version/audit/wrapper fixture suite40/0; [install review](INSTALL_REVIEW.md).
+- DONE — MEASURED: broker make check and check-sanitize pass; pacing helper fixture corrected without production timing changes.
+- DONE — MEASURED: 42 changed Rust files rustfmt2024 clean; new shell wrappers/build shellcheck, flag audit and docs command/link checks pass.
+- PARTIAL — MEASURED: final22-crate regression and CPU-only host binary build are running; baseline3620/0/19 reproduced exactly.
+- PARTIAL — CODE READ: existing cached diagnostic gates retained; universal one-relaxed-load cost guarantee is not established.
+- NOT DONE — MEASURED: Stage5 hardware and clean install walk-through, Stage6 README/PR; hardware n=0.
+- DONE — MEASURED: no GPU/VM action, owner-VM stop, foreign-session message, master merge or non-lane push.
 
-- DONE — MEASURED: Stage 1 [topics](TOPICS.md) and [conflicts](CONFLICTS.md) published first.
-- DONE — CODE READ: retain candidate-5; queued F-2, CE2, L5 and nonblocking heartbeat remain unimported; exclusions remain as recorded in the ledger.
-- DONE — MEASURED: all 22 baseline crates reproduce candidate-5 exactly: 3620 passed / 0 failed / 19 ignored; [per-crate counts](BASELINE_COUNTS.tsv).
-- PARTIAL — MEASURED: separate caps EXPECTED RED commit reproduces missing module/API/data; scoped uncommitted implementation passed 20 tests / 0 failed / 2 inherited diagnostic emitters ignored.
-- PARTIAL — MEASURED: effective-config EXPECTED RED table fails to compile against the absent profile API; source-wiring checks fail 3 tests / 1 missing-module error; audit tests lack their module.
-- STOPPED — MEASURED: exact-die mutant killed by 4 tests, but C6's wrapper rejected Cargo's expected test-failure diagnostic as a compiler error; [receipt](mutations.json).
-- DONE — MEASURED: wrapper restored exact-die matching; no mutant remains applied. No detector change or further implementation after rejection.
-- NOT DONE — MEASURED: property wiring, complete flag inventory/KEEP audit, launcher flag removal, final profile/caps verification and remaining selected topic imports.
-- NOT DONE — MEASURED: Stages 3–4 release layout/version/install/uninstall/doctor/docs/launcher, complete checks and CPU-only host build.
-- NOT DONE — MEASURED: Stage 5 hardware, Stage 6 README/PR work; no minimal working QEMU line or install claim established.
-- DONE — MEASURED: no host contact, GPU/VM action, rental, other-session message, master merge or non-lane push; hardware n=0.
+## 3. Tests, mutations and flags
 
-## 3. Tests, mutations and flag counts
+MEASURED baseline: all22 crates3620/0/19, each matching candidate-5;
+[per-crate reference](BASELINE_COUNTS.tsv). Changed-tree counts are pending;
+focused passes are not substituted for the full run.
 
-| MEASURED check | Before | After / limit |
-|---|---|---|
-| All 22 crates | Candidate-5 3620/0/19 | C6 baseline 3620/0/19, every crate equal; [summary/hash](baseline.json); full changed-tree run NOT RUN |
-| Scoped new caps integration + example | Missing module/API/data, compile RED | 20 pass / 0 fail / 2 ignored on uncommitted scope; not a full-crate result |
-| Effective-config table | Missing profile API, compile RED | 8 written tests; runtime execution NOT RUN |
-| Source wiring / flag audit | 3 fail + 1 error / missing module | No green claim |
-| Exact-die mutant | Scoped passing implementation | 4 killing tests; wrapper rejected run; mutation campaign NOT accepted |
-| Branch / measured word / layer / provenance / tile mutants | NOT RUN | NOT RUN; full strict native-oracle comparison also NOT RUN |
-| Hardware | n=0 | n=0; spread N/A |
+| MEASURED campaign | Mutants | Killing tests per mutant |
+|---|---:|---|
+| Scoped caps | 6 | 4/6/10/6/2/2 |
+| Per-device profile | 23 | each≥2 |
+| F-2 address widths | 4 | 3/2/2/3 |
+| CE2 owned kernel ring | 8 | 2/2/2/10/2/2/2/2 |
+| L5 seed/stale-life | 2 | 2/2 |
+| Nonblocking heartbeat | 10 | 7/3/2/2/2/2/2/2/2/2 |
+| Launcher/install | 7 | 3/2/2/2/2/2/2 |
+| Broker pacing fixture | 1 | 2 |
+| Display permission preflight | 1 | 2 |
+| Mutation wrapper | 2 | 2/2 |
 
-MEASURED: [check summaries and hashes](checks.json) identify commands and local
-checkpoint revisions. Caps implementation was uncommitted; its check is not a
-claim about a published product revision. Source review and limitations are in
-[CAPS_REVIEW.md](CAPS_REVIEW.md). The source sweep's strict AD104/native comparison
-was RED by 100 words (CODE READ); C6 has not rerun that strict comparison.
+MEASURED: named kill receipts are the adjacent *mutations.json files. Compiler,
+harness errors and insufficient kills do not count. All injected source is
+restored. The source-policy auditor mutant also failed two named tests.
+MEASURED: strict AD104/native oracle rerun at c27134846 remains RED by100 words;
+this is the approved derived-caps limitation, not a passing equality claim.
 
-CODE READ: [partial flag policy](../../docs/design/V3_FLAG_POLICY_BETA_20261020.md)
-records P19. Published product flag changes: 19 selectors unchanged, hardwired 0,
-deleted 0; every-reader before/after totals and final KEEP count NOT DONE.
-Recommended migration preserves the 18 functional settings behind the Windows
-property and replaces captured CAPS_PROBE with derived caps; idle-only ablation
-passes do not establish loaded redundancy. TSG mirror remains absent/OFF;
-lifecycle/lazy-observe defaults remain unchanged; timer mapping is already
-automatic. These are not a completed optional/zero-cost diagnostic audit.
+CODE READ: [policy](../../docs/design/V3_FLAG_POLICY_BETA_20261020.md) has156 lexical
+rows:18 conditional HARDWIRE ON,1 absent/OFF mirror,42 DELETE historical/metadata
+rows,95 KEEP. These are not live-env-reader counts or42 removed product paths.
+All19 P19 selectors are retired; none of the18 behaviours is proven redundant
+across loaded workloads by the idle-only2026-10-10 ablations. Lifecycle/lazy
+observe stay at candidate-5 defaults; timer mapping was already automatic.
 
-## 4. Decision for the coordinator
+## 4. Decisions / recommendations
 
-1. INFERRED recommendation: authorize correcting the local mutation-wrapper
-   classifier, rerun the entire mutation campaign, then resume approved Stages
-   2–4. Keep the two OS/caps decisions already approved. Alternative: leave this
-   partial checkpoint stopped; do not promote the uncommitted caps import.
+1. INFERRED: allocate Stage5 only after final CPU verification; retain the [hardware plan](HW_PLAN.md), including mixed-use aging and exact binary identity.
+2. INFERRED: keep explicit guest-driver and launcher-derived resources; direct Linux QOM defaults remain unchanged. Deriving pre-fn1 driver ABI from the host is not soundly established.
+3. INFERRED: before release, audit inherited diagnostic costs against the requested compile-out/one-relaxed-load bound; no such universal claim is made here.
+4. CODE READ: before external support, finish packaging/signing/CI, licence/provenance and install security review, telemetry/log hygiene and the clean-directory hardware walkthrough.
 
-CODE READ reason for the pause: the lane's AGENTS.md explicitly says, “If a
-step is blocked or refused by your own safety checks, STOP and report; do not
-reword or work around it.” The wrapper condition matched `^error(?:\[|:)`,
-which includes Cargo's expected `error: test failed` after four test failures.
-MEASURED: no Rust compilation error occurred in that mutant run. The recommended
-correction must still require at least two named failing tests, reject compiler
-errors, restore source and rerun the full campaign. It has not been applied.
+## 5. Not verified
 
-## 5. Unverified and preserved work
+MEASURED: hardware n=0, spread N/A. No C6 boot, compositor, performance, TDR/Xid,
+aging, new guest install or live doctor probe. CPU-only build uses its own host
+prefix. Source extraction omits an unbuilt absolute upstream EDK2 Mac include
+symlink; upstream archive signature has not been verified by this lane.
+CODE READ minimal direct fragments: Linux `-device kf3-gpu,id=gpu0`; Windows adds
+`guest-os=windows,guest-driver=580.65.06,display=on,gop=on`, host-derived resource
+and broker properties. Ordinary VM args and why each remains are documented in
+[RUNNING](../../docs/RUNNING_KAYFABE.md). Minimal *working* awaits Stage5.
 
-MEASURED: the scoped caps source/data/helpers/example and an additional tile
-assertion remain uncommitted in the lane worktree, with a lane-local snapshot.
-They are not accepted product content and were not pushed. The published
-branch contains deliberately RED new tests, not an implemented Windows profile.
-No final changed-tree regression, clippy/fmt/broker/sanitizer/shell/docs checks
-or host binary was produced. Stage 5 readiness is NOT claimed.
+## 6. Cleanup at this progress checkpoint
 
-CODE READ: before external support, outstanding items include packaging,
-signing, CI, licence/provenance review, security review of installation,
-telemetry/log hygiene, exact-revision hardware/aging tests, support matrix and
-clean-directory install acceptance. No new rootless or GPU/driver support
-combination is asserted.
-
-## 6. Cleanup
-
-MEASURED: no C6 build/test process remains; the own cargo target directory was
-deleted. The local build lock was released as its cargo processes exited; no
-host lock was acquired. No foreign process, target, branch or worktree was
-modified. The lane worktree and small text evidence remain for resumption.
+MEASURED: own local release regression and CPU-only host build are running;
+own target dirs are retained until those complete. No host GPU lock was taken.
+Final cleanup and origin equality will be recorded after final verification.

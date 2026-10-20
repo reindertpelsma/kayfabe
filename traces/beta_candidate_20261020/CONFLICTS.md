@@ -1,10 +1,11 @@
 # C6 integration conflict ledger
 
-STATUS: LIVE, 2026-10-19.
+STATUS: LIVE, updated 2026-10-20.
 
 MEASURED: C6 created the beta branch from candidate-5 `f8f9d1a5f` and has
-performed no topic merge or cherry-pick. There are no resolved or unresolved
-merge conflicts at the Stage 1 ledger checkpoint.
+published the ledger before any topic integration. There were no conflicts
+at Stage 1; the subsequent resolved scope/context differences are recorded below.
+No unresolved protected semantic conflict remains.
 
 CODE READ: the topic queue and protected boundaries are in [TOPICS.md](TOPICS.md).
 Potential overlaps are F-2/CE2 in `kf-chan/src/tmode.rs`, L5/current reset

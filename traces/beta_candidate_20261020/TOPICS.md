@@ -6,17 +6,14 @@ CODE READ supersession: coordinator approved explicit `guest-os=windows|linux`
 (default Linux), then separately approved the sweep-derived caps replacement.
 This lifts the earlier guest-OS decision stop below. Only the scoped caps
 module/data/helpers/tests are approved from the sweep; no full sweep merge.
-MEASURED: new derived-caps EXPECTED RED tests are committed at `b1ea24127`;
-implementation remains uncommitted after the mutation-wrapper stop documented
-in [the report](README.md). No new product topic is accepted yet.
-This is a BETA CANDIDATE assembly plan, not a release or hardware verdict.
-
-MEASURED: the branch was cut from origin candidate-5
-`f8f9d1a5f0aae58fc8ccf0da740cf12682cd284e`. The remote heads below were
-queried read-only on 2026-10-19. No topic has been merged by C6 at this
-checkpoint. **INCLUDE / queued** means selected for a separate integration
-group after the Stage 2 guest-OS decision; it does not mean already present.
-The explicit Stage 2 stop takes precedence over proceeding with that queue.
+MEASURED: Stage 1 ledger was published first at `3c4731eec`. Subsequent
+coordinator instructions lifted the guest-OS/caps and own-wrapper stops.
+Scoped caps `b930e7778`, profile `26a690d5a`, F-2 `ea9dcd315`, CE2
+`8acb1e8d5`, L5 `1f693b79c` and heartbeat `effdd0271` are integrated as
+separate failing-first/fix groups. Launcher/install/version is `1f08be5e2`.
+This is a BETA CANDIDATE assembly, not a release or hardware verdict.
+The base is candidate-5 `f8f9d1a5f0aae58fc8ccf0da740cf12682cd284e`.
+Source heads below were queried read-only; only selected scopes are imported.
 
 CODE READ: evidence from another lane is identified as a source report, not
 as a C6 measurement. A passing test or benchmark on a source branch does not
@@ -35,22 +32,32 @@ coordinator's slot; the owner's VM is untouched.
 | CODE READ: LUT correction `9ff3dc9e9`, merge `419d74b41` | Snapshot identity survives guest-life transitions | Source final verification reports two killing tests per LUT mutant | INCLUDE already merged; retain identity and reset interaction tests. |
 | CODE READ: `claude/bootlayer-20261018`, `0dbcc8a14`, merge `f3f3351e3` | Clean boot-layer selection; unload zero; dirty-from-first-open reboot scrub | Owner AM; source report records integration and tests, hardware checklist still owed | INCLUDE already merged. Do not equate bus reset, TDR, unload and reboot. |
 
-## Separately selected pure fixes — INCLUDE, queued
+## Separately selected pure fixes — INCLUDE, integrated
 
 | Topic / branch and head | Argument for inclusion | Evidence and hardware status | Risk / integration boundary |
 |---|---|---|---|
-| CODE READ: F-2 subset of `codex/sweep-integrate-20261018` (`b6accbca2`); tests `08424cf11`, fix `6a32d4e8e` | Class-aware public upper-address widths in `kf-chan/src/grtables.rs` and `tmode.rs`; Ada/narrow and context-free validation remain 8-bit | Source `traces/sweep_integrate_20261018/F2_RESULT.md` reports 521→530 passes, 3 ignored, 9 focused tests, mutant kills 3/2/2/3; C6 has not rerun them | INCLUDE isolated two-file series, not the whole sweep branch. Inspect CE2 overlap in `tmode.rs` semantically and record it. Hardware in Stage 5. |
-| CODE READ: CE2 `claude/ce2-kernel-ring-20261019`, `95e23df77` | Default CE decode class comes from the ring's owned host CE object, only for guest-kernel copy-engine work, when no guest SET_OBJECT exists; user/GR/video routes get none | C6 independently read the 8-file diff, class filter, caller and semaphore-width change. Separate EXPECTED RED commits `a8dc77dec`, `212b6db99`, `0b34d3eb8`; later source tests add second killers. No independent C6 execution yet | INCLUDE queued for independent test/mutation verification before integration acceptance. Windows TDR relevance is INFERRED, not a demonstrated cure. Birth/decoder boundary is sensitive; stop on any unresolved semantic conflict. |
-| CODE READ: L5 `codex/bootlayer-followup-20261018`, `83071cb78`; product head `c81bd42d4` | Retire physical boot seed on sink-all; typed stale-life refusal cancels an unload restore instead of reseeding into a newer life | Source `traces/bootlayer_followup_20261018/VALIDATION.md`: 791→795 pass / 6 ignored, 2 killing tests per fix; hardware n=0 | INCLUDE two isolated failing-first/fix groups. Source base is bootlayer, not the completed candidate-5; retain current integration tests. Boot-layer scrub conflicts require a stop. Collector scripts are optional evidence tools, not part of boot. |
-| CODE READ: nonblocking heartbeat subset in sweep head `b6accbca2`; green commits `32eebb3ab`, `4e0e0b645`, `d99c2367b`; red `16e80e802`, `39b11e805` | Removes blocking clock sampling from the drainer, uses mapped PTIMER and current-life fn72 clock metadata with bounded try-lock reads; keeps existing 500 ms eligibility | Source `PROTECTED_DECISIONS.md` records coordinator/owner approval of this exact nonblocking series; `HEARTBEAT_NONBLOCKING.md` traces the call path and source mutation receipts. Hardware UNRUN | INCLUDE this approved series only, after checking dependencies against candidate-5. Do not restore rejected blocking/clone/command-sequence imports. Doorbell/drainer or scrub conflict means STOP, not discretionary resolution. |
+| CODE READ: F-2 subset of `codex/sweep-integrate-20261018` (`b6accbca2`); tests `08424cf11`, fix `6a32d4e8e` | Class-aware public upper-address widths in `kf-chan/src/grtables.rs` and `tmode.rs`; Ada/narrow and context-free validation remain 8-bit | Source `traces/sweep_integrate_20261018/F2_RESULT.md` reports 521→530 passes, 3 ignored, 9 focused tests, mutant kills 3/2/2/3; C6 reproduced 6 pass/3 fail before the fix, then 9/0; all four mutants killed 3/2/2/3 | INCLUDE integrated at `ea9dcd315`, isolated two-file series, not the whole sweep branch. Inspect CE2 overlap in `tmode.rs` semantically and record it. Hardware in Stage 5. |
+| CODE READ: CE2 `claude/ce2-kernel-ring-20261019`, `95e23df77` | Default CE decode class comes from the ring's owned host CE object, only for guest-kernel copy-engine work, when no guest SET_OBJECT exists; user/GR/video routes get none | C6 independently read the 8-file diff, class filter, caller and semaphore-width change. Separate EXPECTED RED commits `a8dc77dec`, `212b6db99`, `0b34d3eb8`; later source tests add second killers. C6 CE-focused suite 86/0; eight mutants killed 2/2/2/10/2/2/2/2 | INCLUDE integrated at `8acb1e8d5` after independent test/mutation verification. Windows TDR relevance is INFERRED, not a demonstrated cure. Birth/decoder boundary is sensitive; stop on any unresolved semantic conflict. |
+| CODE READ: L5 `codex/bootlayer-followup-20261018`, `83071cb78`; product head `c81bd42d4` | Retire physical boot seed on sink-all; typed stale-life refusal cancels an unload restore instead of reseeding into a newer life | Source `traces/bootlayer_followup_20261018/VALIDATION.md`: 791→795 pass / 6 ignored, 2 killing tests per fix; hardware n=0 | INCLUDE integrated at `1f693b79c`; both defects reproduced with two failing tests each, both mutants killed by two tests. Source exact modules and integrated qemu tests passed; full final run is Stage 4. Source base is bootlayer, not the completed candidate-5; retain current integration tests. Boot-layer scrub conflicts require a stop. Collector scripts are optional evidence tools, not part of boot. |
+| CODE READ: nonblocking heartbeat subset in sweep head `b6accbca2`; green commits `32eebb3ab`, `4e0e0b645`, `d99c2367b`; red `16e80e802`, `39b11e805` | Removes blocking clock sampling from the drainer, uses mapped PTIMER and current-life fn72 clock metadata with bounded try-lock reads; keeps existing 500 ms eligibility | Source `PROTECTED_DECISIONS.md` records coordinator/owner approval of this exact nonblocking series; `HEARTBEAT_NONBLOCKING.md` traces the call path and source mutation receipts. C6 GSP 56/0 and heartbeat module 19/0; ten mutants killed 7/3/2/2/2/2/2/2/2/2; hardware UNRUN | INCLUDE this approved series only, integrated at `effdd0271`; dependencies checked against candidate-5. Do not restore rejected blocking/clone/command-sequence imports. Doorbell/drainer or scrub conflict means STOP, not discretionary resolution. |
+
+## Separately reviewed caps replacement — INCLUDE, integrated
+
+CODE READ: coordinator separately selected derived caps from sweep `24906bf33`,
+originating design `7c12dfd14`; exact scope is in [CAPS_REVIEW.md](CAPS_REVIEW.md).
+MEASURED: integration `b930e7778`; six mutants killed 4/6/10/6/2/2.
+Ordinary Linux page constructor source matches candidate-5. The C6 strict AD104
+oracle rerun is RED, exactly 100 differing words; no captured bytes are promoted.
+INFERRED risk: Windows compatibility/performance with the derived replacement
+requires Stage 5. The full sweep, newer vocabulary and None scrub fixture stay out.
 
 ## Excluded or deferred topics
 
 | Topic / branch and head | Evidence read | Decision / reason / what would change it |
 |---|---|---|
-| CODE READ: full sweep `codex/sweep-integrate-20261018`, `b6accbca2`; accepted Phase 1 product `24906bf33` | Source `RESULT.md`, `MATRIX.md`, `AD104_PATH_AUDIT.md`, `PROTECTED_DECISIONS.md`: source reports 3338/0/21 across 14 crates, 49 mutants with ≥2 kills, candidate-5 tests retained. Per-die constants/ZBC/caps, new public display layouts, FSP/reset, walker completion, diagnostics and harness changes span 406 files | DEFER full merge; include only isolated fixes above. AD104 strict native caps equality is RED by 100 words; AD104 hardware is UNRUN. AD102 Linux595 raw29/30 (timer failure also reproduced on candidate-4), Windows580 short hold PASS at `24906bf33`, Windows581 Code43. These mixed results do not establish owner-host parity or a complete family. No inference of new regression from the shared timer failure. Obtain exact-revision scope/slot acceptance before replacing the production paths. |
+| CODE READ: full sweep `codex/sweep-integrate-20261018`, `b6accbca2`; accepted Phase 1 product `24906bf33` | Source `RESULT.md`, `MATRIX.md`, `AD104_PATH_AUDIT.md`, `PROTECTED_DECISIONS.md`: source reports 3338/0/21 across 14 crates, 49 mutants with ≥2 kills, candidate-5 tests retained. Per-die constants/ZBC/caps, new public display layouts, FSP/reset, walker completion, diagnostics and harness changes span 406 files | DEFER full merge; include only isolated fixes and the separately approved caps replacement above. AD104 strict native caps equality is RED by 100 words; AD104 hardware is UNRUN. AD102 Linux595 raw29/30 (timer failure also reproduced on candidate-4), Windows580 short hold PASS at `24906bf33`, Windows581 Code43. These mixed results do not establish owner-host parity or a complete family. No inference of new regression from the shared timer failure. Obtain exact-revision scope/slot acceptance before replacing the production paths. |
 | CODE READ: sweep scrub fixture `94518f95b` | Approved tuple change adds `None` for the address-aware cache key; assertions and production scrub behavior retained | DEFER unless the corresponding surface-address change is imported. Do not apply an orphan fixture/type change to candidate-5 or count its compilation failure as a candidate-5 defect. |
-| CODE READ: sweep family admission / per-die rows / diagnostic probes | Source AD104 path audit distinguishes authored fallbacks, measured exact die/branch rows and refused board values; `userrelay` family helper is a protected change | DEFER with the full sweep, except F-2. No copied native caps page, guessed neighbor row or automatic promotion of diagnostic probes. Separate reviewed imports and Stage 5 gates required. |
+| CODE READ: sweep family admission / per-die rows / diagnostic probes | Source AD104 path audit distinguishes authored fallbacks, measured exact die/branch rows and refused board values; `userrelay` family helper is a protected change | DEFER with the full sweep, except F-2 and the scoped caps dependency rows reviewed above. No copied native caps page, guessed neighbor row or automatic promotion of diagnostic probes. Separate reviewed imports and Stage 5 gates required. |
 | CODE READ: TSG mirror `claude/tsg-mirror-20261018`, `c2685412e`; runtime `0d7ba7438` | Source report records legacy Linux30/30 and Windows isolated latency/Steel Nomad gains, but Linux explicit CUDA/Vulkan/video unrun | EXCLUDE. Behaviour-changing experimental grouping; mirror default ON in that source is not beta policy. Beta keeps `KF3_TSG_MIRROR` absent/OFF. |
 | CODE READ: M1 `codex/tsg-mirror-gates-20261019`, `59df38e20`; M2 `codex/tsg-mirror-win-gates-20261019`, `24b122a33` | Source M2 REPORT: isolated Vulkan/CUDA/video PASS; combined load FAIL, >111 s encode stall, 3 event153, device lost/CUDA999, no new host Xid; M1 hardware unrun | EXCLUDE, owner decision pending. Failure attribution to mirror alone remains INFERRED without a matched control; isolated passes cannot certify mixed load. |
 | CODE READ: trap experiments `claude/trap-experiments-20261019`, `a80249eff` | Source README: `diag-trap-exp` feature and default-off injection/spinner controls; spinner variants did not run a benchmark; inherits TSG mirror | EXCLUDE whole branch. Experimental timing/interrupt behaviour, no production need. A compile-time gate does not make its experimental base acceptable. |
@@ -65,7 +72,7 @@ coordinator's slot; the owner's VM is untouched.
 
 ## Integration order and stop boundaries
 
-CODE READ: preserve candidate-5 first; queued order is isolated F-2, CE2, L5
+CODE READ: preserve candidate-5 first; completed order after caps/profile is isolated F-2, CE2, L5
 seed retirement, L5 stale-life cancellation, then the approved nonblocking
 heartbeat series after checking its exact fn72/ABI dependencies. Keep each topic's
 EXPECTED RED history separate from its fix and use one topic per commit group.
@@ -78,7 +85,7 @@ change in display pacing/tick source, broker/cursor, USER relay/lazy observe,
 channel birth/TSG/latejoin, doorbell/drainer, boot-layer scrub or interrupt relay
 requires STOP and a concrete report. Never resolve such a conflict by guessing.
 
-INFERRED acceptance falsifier for every queued pure fix: a changed authority
+INFERRED acceptance falsifier registered before integration for each pure fix: a changed authority
 boundary, lost candidate-5 test, mutant with fewer than two killing tests,
 unresolved protected conflict, or hardware regression beyond measured spread
 invalidates promotion. Hardware remains unscheduled, n=0 for C6.

@@ -9,7 +9,7 @@ The ordinary Linux page constructor matches candidate-5 source exactly.
 
 # C6 independent review: scoped derived display caps
 
-STATUS: REVIEWED DESIGN / UNCOMMITTED IMPLEMENTATION / VALIDATION STOPPED, 2026-10-20.
+STATUS: HISTORICAL STOP DETAILS BELOW; superseded by the accepted import above.
 
 CODE READ: the coordinator approved a separate caps replacement, not the full
 sweep. Source product checkpoint `24906bf33` on
@@ -89,3 +89,7 @@ compiler errors from expected failing-test exit diagnostics, rerun the entire
 mutation campaign, then resume the approved profile wiring. The existing
 captured page remains reachable on the published product base: the runtime
 replacement is not implemented or shipped at this checkpoint.
+
+MEASURED final strict-oracle rerun at `c27134846`: exit1,
+`EXACT_NATIVE_PAGE_EQUAL=false differing_words=100`. This confirms the stated
+limitation; the runtime constructor is not patched with the native oracle.
