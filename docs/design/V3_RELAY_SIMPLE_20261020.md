@@ -100,6 +100,25 @@ or a pin of the new line. Stress: `I6` sleep safety, `I7` no hidden spin, the tw
 `unsourced_ignores_carried` found by 3 (Pointer) + 4 (fairness, W=1/2/3) + 3 (v1) tests; `unsourced_ignores_demand` is EQUIVALENT
 with the real look (it rings every demand before the block decision), found only together with a weakened look.
 
+### 5.1 Second session (2026-10-20, +2 h): classification, restatements, runs (MEASURED unless marked)
+
+* **I6 classified as harness artifacts, not design gaps.** Forensics at fire time (wait, words at the last look, REFERENCE store
+  time, interrupt raise / dispatch times, token state; then the KERNEL: the monitor's own level-triggered epoll on the workers'
+  eventfds and every worker's `/proc` state). Each hit was a wake in flight (an eventfd already signalled, a worker not yet
+  scheduled on a box at load 8-11) or the harness holder lacking production's unconditional worker wake. With
+  `RS_I6_KERNEL_ONLY=1` (only the kernel's ready set and thread states decide) seeds 0 (3 runs), 1 and 3 show NO I6. The real
+  lost wake (seed 20, busy record) is still found by I6 when re-introduced (2/2).
+* **Anomaly, unexplained:** seed 1 (1 worker, 7 clients, a holder taking locks for up to 20 ms) twice took ~570 s instead of
+  ~10 s, without a violation. INFERRED candidate: R3 -- the worker spinning on the retry set while the lock holder competes
+  for CPU on a loaded box. Not measured (no `retry_looks` captured for that run). This is the main open item.
+* **Restated moot tests:** `user_lifecycle_model` l1 / m1 (and the lazy re-run): deadlock iff the guest's GP_GET waits for
+  pops (both policies tested by the one switch); `lifecycle_props lazy_d6` and the `user_lazy_turn` wait-latch tests restated
+  for ReadIndex; `i1` explores to a documented 6 M-state bound under ReadIndex.
+* **Credit wake:** a credit wait now waits for the NEXT outstanding marker (the first point whose processing frees credit).
+  The rest is the owner decision of §3.
+* **Mutation, fairness script:** 5 of 6 mutants killed by >= 3 tests. `busy_pass_never_polls` survived every model; a new
+  wake-registry pin kills it (1 test).
+
 ## 6. Risks
 
 * **R1** (Change A vs pushbuffer reuse / idle): open kernel RM 595.91.07 reads USERD `GPGet` only for its own CE channel's slot
