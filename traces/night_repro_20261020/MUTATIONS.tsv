@@ -1,0 +1,7 @@
+mutant	failed_tests	exit
+threshold_six	5	1
+merge_pids	4	1
+receipt_time	2	1
+unarmed_count	2	1
+drop_terminal	2	1
+ignore_lifetime	2	1

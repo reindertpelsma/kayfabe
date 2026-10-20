@@ -65,6 +65,25 @@ class MetricTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             metric.silences([(1000, 'a', 1), (0, 'a', 1)], 1000, 0, 5, {})
 
+    def test_both_processes_count(self):
+        rows = [(i*10, 'a', pid) for pid in (1, 2) for i in range(110)]
+        rows += [(6090, 'a', pid) for pid in (1, 2)]
+        self.assertEqual(metric.silences(rows,1000,0,6.09,{})['a']['count'],2)
+
+    def test_prefix_does_not_set_time(self):
+        r, _ = metric.read_csv(['Application,ProcessID,TimeInQPC','999999,a,1,42'])
+        self.assertEqual(r[0][0],42)
+
+    def test_99_presents_not_armed(self):
+        rows = [(i*10,'a',1) for i in range(99)] + [(5980,'a',1)]
+        self.assertEqual(metric.silences(rows,1000,0,5.98,{})['a']['count'],0)
+
+    def test_terminal_duration(self):
+        self.assertAlmostEqual(self.run_case((), end=8)['Heaven.exe']['total_s'],6.91)
+
+    def test_exit_bounds_duration(self):
+        self.assertEqual(self.run_case((), end=20, process_end=2)['Heaven.exe']['count'],0)
+
     def test_missing_header_refused(self):
         with self.assertRaises(ValueError):
             metric.read_csv(['1,a,7,1000'])
