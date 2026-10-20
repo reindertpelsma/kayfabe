@@ -277,6 +277,7 @@ jobs:
           python3 scripts/ci/dependencies.py
           python3 scripts/ci/debt.py frozen
           python3 -m unittest discover -s scripts/ci -p 'test_*.py'
+          python3 -B -m unittest discover -s scripts/bench/prof -p 'test_*.py'
           bash scripts/bench/qemu_identity_selftest.sh
           bash scripts/bench/box/birth_census.sh --selftest
       # ★ The hexagonal boundary gate (l1_concurrency.md §6.2, decision #37). The

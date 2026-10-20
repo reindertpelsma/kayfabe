@@ -46,3 +46,15 @@ pub fn ledger_open(_: tables::Kind, _: u64) -> Option<ledger::Token> {
 pub fn ledger_close(_: ledger::Token) -> bool {
     false
 }
+
+/// Attribute exactly one operation; its result, borrow and unwind behavior are preserved.
+#[inline(always)]
+pub fn call<T>(
+    at: tables::Site,
+    state: tables::State,
+    arg: u64,
+    operation: impl FnOnce() -> T,
+) -> T {
+    let _span = site(at, state, arg);
+    operation()
+}

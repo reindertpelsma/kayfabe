@@ -14,6 +14,26 @@ use kf_core::{HostOps, Plane};
 use kf_linux_raw::{Notifier, PollTimeout, Poller, ReadyTokens};
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 
+// The expression is evaluated exactly once in either build. No closure, load or
+// profiler dependency exists in a production build without the feature.
+macro_rules! prof_wait {
+    ($site:ident, $operation:expr) => {{
+        #[cfg(feature = "prof")]
+        {
+            kf_prof::call(
+                kf_prof::tables::Site::$site,
+                kf_prof::tables::State::EventWait,
+                0,
+                || $operation,
+            )
+        }
+        #[cfg(not(feature = "prof"))]
+        {
+            $operation
+        }
+    }};
+}
+
 /// The poller tag of the worker eventfd.
 pub const WORKER_EFD_TAG: u64 = 0;
 /// The poller tag of the session's completion fd ([`Completions`]).
@@ -188,7 +208,8 @@ pub fn run_with_relay(
             let mut woke = false;
             for _ in 0..user_loop::SPIN {
                 let mut ready = ReadyTokens::new();
-                if matches!(poller.wait(&mut ready, PollTimeout::Immediate), Ok(n) if n > 0) {
+                if matches!(prof_wait!(ChanWorkerImmediate, poller.wait(&mut ready, PollTimeout::Immediate)), Ok(n) if n > 0)
+                {
                     let (doorbell, event) = dispatch(&ready);
                     if doorbell {
                         RelayStats::bump(&relay_stats.wake_doorbell);
@@ -226,7 +247,10 @@ pub fn run_with_relay(
             stats.max_busy_ns.fetch_max(b, Ordering::Relaxed);
         }
         let park = if owed { OWED_PARK_MS } else { PARK_MS };
-        let got = poller.wait(&mut ready, PollTimeout::Millis(park));
+        let got = prof_wait!(
+            ChanWorkerPark,
+            poller.wait(&mut ready, PollTimeout::Millis(park))
+        );
         if let Some(tw) = tw {
             busy_from = std::time::Instant::now();
             let w = u64::try_from(busy_from.duration_since(tw).as_nanos()).unwrap_or(u64::MAX);

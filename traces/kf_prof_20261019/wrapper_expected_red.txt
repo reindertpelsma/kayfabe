@@ -1,0 +1,10 @@
+MEASURED: release test compile before wrapper implementation: E0425 kf_prof::call
+absent; E0599 ChanWorkerImmediate/ChanWorkerPark absent. Python source-audit
+contracts also fail because wait_audit.py is absent. Tests committed alone.
+MEASURED: baseline kf-chan198 unit tests, kf-trap86 unit tests; all passed.
+MEASURED: strengthened lexical cases separately failed for raw identifiers,
+qualified calls and a parenthesis character leaking a macro scope. Expected-red
+checkpoint 4bb4e598e. Restored scoped gate has ten passing tests.
+MEASURED: unchanged dependency-isolation baseline: kf-trap→loom, kf-disp→kf-broker,
+kf-disp→kf-linux-raw; no new K1 violation. New wrapper code has no changed-line
+clippy warning; existing kf-chan warnings are outside the edited worker.

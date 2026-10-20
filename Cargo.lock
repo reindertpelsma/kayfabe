@@ -284,6 +284,7 @@ dependencies = [
  "kf-core",
  "kf-host",
  "kf-linux-raw",
+ "kf-prof",
  "kf-trap",
 ]
 

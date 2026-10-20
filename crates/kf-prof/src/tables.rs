@@ -19,7 +19,7 @@ Join=8,FileLock=9,Trap=10,Relay=11,Drain=12,MapApply=13,DisplayCopy=14,FrameSend
 table! {Site,"Initial reserved Site families; integration must assign individual wait expressions.";
 Unknown=0,Init=1,TrapDispatch=2,WorkerPark=3,RelayCompletion=4,DrainerPark=5,VaManagerPark=6,
 HostRmIoctl=7,MappingApply=8,DisplayWake=9,DisplayCopy=10,BrokerReceive=11,BrokerSend=12,
-HeldReply=13,ShutdownJoin=14,ProfAggregator=15}
+HeldReply=13,ShutdownJoin=14,ProfAggregator=15,ChanWorkerImmediate=16,ChanWorkerPark=17}
 table! {Kind,"Outstanding obligation kind. Bounds are advisory only.";
 DoorbellCompletion=0,GpPutObserved=1,HeldReply=2,MmuInvalidate=3,MappingApply=4,FlipCompletion=5,
 FrameRequested=6,BrokerCredit=7,ForwardedRm=8,InterruptAck=9,ChannelBirth=10,ChannelTeardown=11}

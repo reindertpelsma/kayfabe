@@ -30,6 +30,13 @@ reports that its fall preceded the run-3017 slide; this is motivation supplied b
 the coordinator, not an independently measured K1 causal result. Zero denominators
 are unavailable and missing sources UNKNOWN; summary uses ratio of summed counts.
 
+MEASURED: initial stage-4 scope wraps kf-chan's two worker poll expressions with
+Sites16/17. Existing tests remain198/198 with prof enabled; kf-trap baseline86/86
+and no production code changed there. Shared wrapper runtime tests add2 (70 total
+Rust profiler tests). Ten Python wait-audit tests run in CI; four wrapper/audit
+mutants each have>=2 kills. Full R5 coverage remains unfinished. The three
+pre-existing dependency-isolation violations are unchanged from candidate-5.
+
 Historical first-stop report follows; statuses and counts below refer only to
 that stopped run and are superseded by the authorised resume above.
 
