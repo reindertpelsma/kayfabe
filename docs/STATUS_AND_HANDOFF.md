@@ -1,5 +1,18 @@
 # Status and handoff — where kayfabe v3 stands, and how to resume
 
+## UPDATE 2026-10-21 — HW3 Translated slot fix, LINT STOP / NOT READY
+
+MEASURED: `codex/translated-wall-20261021` code head `1e6e64314`, tests-first
+RED commits `79f5f01de` and `827498557`; full kf-chan 639 and kf-qemu lib 391
+pass, extra 300-scenario holdout passes, ten compiling mutants killed by >=2
+tests. CODE READ: slot-holder handoff, immutable drainer identity, all schedule
+edits and BAR0 snapshots on the existing act thread. No new boot flag.
+MEASURED: clippy returns 93 errors on unchanged lines plus two new test style
+warnings; lane stops under its no-workaround rule. Automatic cleanup is also
+rejected, so the target remains. No READY marker or Windows validation.
+B′ remains research: grade model 11 pass / 3 fail / 1 ignored despite 18 passing
+strict holdouts. Evidence and owner options: `traces/translated_wall_20261018/`.
+
 ## UPDATE 2026-10-18 — hitch measurement gates
 
 CODE READ: `codex/hitch-gates-20261018` makes display step timing and the relay event

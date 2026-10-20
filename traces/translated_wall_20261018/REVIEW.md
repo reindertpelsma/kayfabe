@@ -80,3 +80,16 @@ current-loop and handoff pins; v2 contention and unannounced-obligation models
 are restated for holder handoff. These do not substitute test decisions inside
 production. The old v1 green count is expressly historical, not current-loop
 coverage. HW3 removes no upstream test, ignore, or assertion.
+
+
+Final validation (MEASURED): M's unmodified Handoff passes the three novel
+holdouts; forced-loss controls execute. B′ grade_model is 11 green / 3 red /
+1 ignored. `g1_models_exhaustive_three_workers` and
+`g2_sleep_safety_model_never_blocks_with_an_unsourced_obligation` exceed the
+6 M cap; `g5_efficiency_model_no_hidden_spin` finds two phantom cycles for W2
+RecordAct. The source pin and all 18 strict infinite-park holdout seeds pass,
+with zero soft findings. Five key archived source blobs match c452ca7cb exactly.
+H3 is supported: the full selected grader is not green. H4 and H7 are not
+falsified by the holdouts. Neither Windows progress nor hardware backstop
+classification is established. HW3 stops at its lint failure and cleanup
+rejection; no READY marker is produced.

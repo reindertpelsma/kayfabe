@@ -1,6 +1,40 @@
 # Translated slot contention — 2026-10-21
 
-STATUS: RESEARCH; GPU-free HW3 lane, based on M (`89fc8a222`).
+STATUS: RESEARCH / LINT STOP; GPU-free fix backed up, NOT READY for HW2.
+Based on M (`89fc8a222`).
+
+
+## Final outcome — supersedes the pending checkpoint below
+
+MEASURED: code head `1e6e64314`; full kf-chan 639 passed / 0 failed / 4 existing
+ignored; kf-qemu lib 391 passed / 0 failed / 1 ignored holdout. The holdout then
+passes explicitly: 300 scenarios, seeds 10007–10106, 1–3 workers, 240 entries
+each, 0.31 s. All 1,030 selected default tests pass. Measured library baseline:
+200 + 366; after: 200 + 391. Three new M handoff holdouts pass (384 episodes,
+0.03 s). Ten compiling mutants have >= 2 killers each. Rustfmt check passes.
+CODE READ: no upstream test or ignore is removed.
+
+MEASURED: clippy exits 101: 93 errors on unchanged lines (66 arithmetic,
+27 indexing), plus two new collapsible-if warnings in the HW3 test harness.
+Errors span userpump (51), userrelay (3), usershadow (9), userstrand (4), chan
+(10), userread (16). No error overlaps changed lines. Full locations and the
+new warnings are in `clippy-stop.json`. The lane stops under its binding rule;
+lint levels and the new warnings remain unchanged. No READY marker is emitted.
+
+MEASURED: unchanged B′ grade model: 11 passed / 3 failed / 1 ignored, 51.23 s.
+Two failures exceed the 6 M exploration cap; the third finds two phantom cycles
+with two workers and an act holder. Its source pin and all 18 novel strict,
+infinite-park contention seeds pass, with zero soft findings. W1/W2/W3 maxima:
+118.13/33.35/16.78 ms; wall 2.1/1.9/1.9 s, six seeds each. These are fake-GPU
+harness results. CODE READ: B′ remains research despite passing holdouts.
+
+MEASURED cleanup: no process retains the HW3 target environment; build/test
+processes have exited and HW3 lock holders are gone. Automatic approval review
+rejects target deletion because its deletion-command policy forbids the requested
+form. Under the no-workaround rule, no substitute deletion is attempted. The
+lane target remains (835 MiB). No GPU/VM or rental was started; hardware n=0,
+spend=0. Windows validation, READY handoff, target deletion and optional profiler
+work are NOT DONE. Remaining worker RM calls are listed below.
 
 CODE READ: the worker's Translated `serve` returns on a lost slot `try_lock`
 without a durable re-ring. The drainer's group selection, token query and
