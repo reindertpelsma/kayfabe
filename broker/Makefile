@@ -230,6 +230,7 @@ check: all test-utf8 test-cursor test-geom test-xor test-tick
 	python3 test/test_lifecycle.py ./$(BIN)
 	python3 test/test_cursor.py ./$(BIN)
 	python3 test/test_xor.py ./$(BIN)
+	python3 test/test_tick_pacing.py
 	python3 test/test_tick.py ./$(BIN)
 	python3 test/test_stats_clock.py
 

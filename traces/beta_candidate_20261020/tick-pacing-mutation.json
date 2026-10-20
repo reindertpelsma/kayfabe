@@ -1,0 +1,8 @@
+{
+  "mutant": "no wire acknowledgement",
+  "kills": 2,
+  "tests": [
+    "test_decimated_feedback_cannot_replace_the_previous_wire_tick",
+    "test_peer_acknowledges_every_accepted_feedback_before_the_next"
+  ]
+}

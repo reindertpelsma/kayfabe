@@ -72,6 +72,21 @@ def paced(b, lines, gap=0.004):
         time.sleep(gap)
 
 
+def paced_roundtrip(b, sock, lines, div):
+    """Synchronize on each accepted EV_TICK, so queue coalescing cannot race this fixture."""
+    packets = []
+    sock.settimeout(0.6)  # the existing decimation read bound, not a pacing delay
+    for index, line in enumerate(lines):
+        b.feed(line)
+        if index % div == 0:
+            while True:
+                packet = tc.recv_exact(sock, PKT.size)
+                packets.append(packet)
+                if struct.unpack_from("<H", packet)[0] == EV_TICK:
+                    break
+    return packets
+
+
 def caps(bits, height=0, **kw):
     f = dict(stride=0, offset=0, fourcc=0, modifier=0, seq=0, reserved=0)
     f.update(kw)
@@ -402,8 +417,8 @@ def decimation(b):
         s, hs = connect(b, height=cap)
         read_raw(s, 0.2)
         period = int(1e9 / host)
-        paced(b, ["t %d %d" % (t0 + i * period, period) for i in range(host)], 0.002)
-        raws = read_raw(s, 0.6)
+        raws = paced_roundtrip(b, s, ["t %d %d" % (t0 + i * period, period) for i in range(host)], div)
+        raws += read_raw(s, 0.6)
         t = ticks_of(raws)
         check(len(t) == host // div + (1 if host % div else 0),
               "%d Hz cap %d: %d ticks of %d feedbacks (div %d), got %d"
