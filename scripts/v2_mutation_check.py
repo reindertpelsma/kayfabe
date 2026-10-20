@@ -32,9 +32,11 @@ MUTANTS = [
     ("popped_wait_target_off_by_one_high", "crates/kf-chan/src/user_loop.rs",
      "Self::Popped { target } => popped >= target,",
      "Self::Popped { target } => popped > target,"),
-    ("contended_wait_never_satisfied", "crates/kf-chan/src/user_loop.rs",
-     "Self::Contended => true,",
-     "Self::Contended => false,"),
+    # 2026-10-20 (simple relay, e49f0c225): `Wait::Contended` and its `satisfied` arm are deleted; a lost lock now leaves the demand
+    # flag set (the retry set) and the look re-rings it. This is the same mutant in the new shape: a demand-only look never rings.
+    ("contended_demand_never_rung", "crates/kf-chan/src/user_loop.rs",
+     "    if i.demand {\n        Look::Ring {\n            clear_wait: false,\n            pops_only: false,\n        }\n    } else {",
+     "    if false {\n        Look::Ring {\n            clear_wait: false,\n            pops_only: false,\n        }\n    } else {"),
 ]
 
 
@@ -54,7 +56,7 @@ EXPECTED_SURVIVORS = {
     "b_skips_while_a_wait_is_pending",
     "wait_never_latched",
     "end_batch_forgets_work_in_flight",
-    "contended_wait_never_satisfied",
+    "contended_demand_never_rung",
 }
 
 

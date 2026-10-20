@@ -35,10 +35,28 @@
 //! The tests of [`Policy::Today`] are expected to FAIL (they are the gap list); the tests of
 //! [`Policy::Design`] and of the deliberately broken mutants validate that the checker is neither
 //! vacuous nor unsatisfiable.
+//!
+//! ★ 2026-10-20 PORT TO THE SIMPLE RELAY (commit e49f0c225, `docs/design/V3_RELAY_SIMPLE_20261020.md`). `Policy::Design`
+//! now mirrors the new production exactly: the worker is ONE loop (`worker::run_with_relay`): `seen`; a PASS (snapshot scan,
+//! claim each rung token, serve it); a LEVEL EVALUATION of every relay (`peek` = `userpump::user_ring_peek_one`, whose decision
+//! is `kf_chan::user_loop::look`, called here, not copied); then `spin = served || rang || unsourced()`: an `epoll_wait(0)`
+//! (`Imm`) when spinning, else `try_park` and a BLOCKING wait that has NO timeout step at all (the production 50 ms net is a
+//! last resort nothing depends on; `worker::set_park_net(false)` is its test knob). No pre-park spin, no backstop look, no
+//! `LOOK_EVERY`, no retry budget; `Need::Contended` is not a wait: the arm re-sets the demand flag (`Cell::retry`, the RETRY
+//! SET) and `unsourced()` keeps the worker from blocking while it is non-empty. `Policy::Today` (the retired loop) is untouched.
+//!
+//! ★ THE SLEEP-SAFETY INVARIANT (`V_SLEEP`, rule 4 of the port brief): at every state where the worker is in a BLOCKING park, no
+//! obligation without a registered wake source exists: no demand flag set with its token not rung, no `Wait::Popped` recorded
+//! (nothing announces it), no recorded wait already satisfied by the words with neither the doorbell eventfd nor an engine event
+//! pending to wake the worker. The model-only mutants `unsourced_ignores_carried` / `unsourced_ignores_demand` (and
+//! `peek_never_rings`, `eval_polls_put`) must be FOUND.
+//!
+//! Liveness now also covers a worker that SPINS forever on an unsourced obligation (a `Popped` wait the hardware never
+//! satisfies): such a state is judged like a parked terminal one (`quiescent_spin`).
 #![allow(clippy::too_many_lines, clippy::needless_range_loop)]
-
 use kf_chan::user_gate::{Gate, SyncGate, Witness, witness};
 use kf_chan::user_loop::{self as ul, Need, Wait};
+use kf_chan::user_turn::guest_get_follows_pops;
 use std::collections::{HashMap, VecDeque};
 use std::hash::{Hash, Hasher};
 
@@ -150,8 +168,16 @@ struct Mutant {
     no_notify: bool,
     /// The RETIRED proof: the gate's marker is "processed" when `GP_GET` has popped past it.
     get_proof: bool,
-    /// The RETIRED idle backstop: read `GP_PUT` and ring the relay when it is ahead of the cursor.
-    backstop_polls_put: bool,
+    /// The RETIRED idle poll, now in the level evaluation: read `GP_PUT` of an IDLE relay and ring it when it is ahead of the cursor.
+    eval_polls_put: bool,
+    /// `RelayLoop::unsourced` forgets a recorded `Wait::Popped` (nothing announces it): the worker would block on it.
+    unsourced_ignores_carried: bool,
+    /// `RelayLoop::unsourced` forgets durable demand (`Cell::retry`).
+    unsourced_ignores_demand: bool,
+    /// The look through a busy record lock passes NO wait (the call site before aad1e9ff4, the lost wake stress seed 20 found).
+    busy_look_ignores_wait: bool,
+    /// The level evaluation never rings anything (a lost look).
+    peek_never_rings: bool,
 }
 
 #[derive(Clone, Debug)]
@@ -183,9 +209,9 @@ struct Cfg {
     irq: bool,
     /// May the visible `GP_GET` lag the PBDMA's by an arbitrary time?
     lag: bool,
-    /// Design: bounded spin iterations before blocking.
+    /// IGNORED since the simple relay (the bounded pre-park spin is deleted); kept so that the scenarios' configs stay as they were.
     spin: u8,
-    /// Design: may the backstop wake fire (only when parked)?
+    /// IGNORED since the simple relay (the backstop wake and look are deleted: the park is infinite); kept for the configs.
     backstop: bool,
     /// Private ring entries (a power of two >= 4).
     priv_entries: usize,
@@ -235,9 +261,7 @@ enum Cause {
     Again,
     /// Today: `TICK_TAG` -> `user_ring_refresh` re-rings a pump (a timer-driven turn).
     Tick,
-    Completion,
     Spin,
-    Backstop,
     LockRelease,
 }
 
@@ -328,8 +352,6 @@ struct Chan {
     dead: bool,
     lock_held: bool,
     pt_held: bool,
-    /// Consecutive contended turns (`Cell::contended`, `user_loop::may_retry`).
-    contended_run: u8,
     // ---- Today's policy state (`Pump::tick`, `Cell::retry`, `Poll`)
     tick: bool,
     retry: bool,
@@ -337,6 +359,8 @@ struct Chan {
     poll_due: bool,
     // ---- Design's policy state
     waiting: Option<Wait>,
+    /// `Cell::carried`: the recorded wait is one no interrupt announces (`Wait::Popped`); set in the arm, cleared when a look clears the wait.
+    carried: bool,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
@@ -344,12 +368,15 @@ enum Pc {
     Top0,
     Top1,
     Top2,
-    Spin,
     Parked,
     /// Today: after a wake, `on_other(TICK_TAG)` -> `user_ring_refresh`.
     TickRefresh,
-    /// Design: after a completion-event wake.
-    Event,
+    /// Design: the pass is over; evaluate every relay (`relay.peek(Peek::Spin)`).
+    Eval,
+    /// Design: `spin = served || rang || relay.unsourced()`.
+    Decide,
+    /// Design: `epoll_wait(timeout 0)` and `dispatch`.
+    Imm,
     /// Inside a claimed turn on `cur`: stage.
     T(u8),
 }
@@ -371,7 +398,13 @@ struct World {
     /// `WakeWord`: the sequence moved since the worker's `seen` load (kept as a flag so a cycle of
     /// timer wakes is a cycle of states, not an ever-growing counter).
     moved: bool,
-    spin_left: u8,
+    /// Design: the pass served at least one token (`n > 0`).
+    served: bool,
+    /// Design: the evaluation rang something (`rang`).
+    rang: bool,
+    /// Design: the pass's scan snapshot (`bits.scan`): channels still to visit; `scanned` = the snapshot was taken.
+    snap: u8,
+    scanned: bool,
     parked: bool,
     efd: bool,
     locks_left: u8,
@@ -382,14 +415,13 @@ struct World {
 const V_STALE: u32 = 1 << 0;
 const V_BYTES_IN_OPEN_PACKET: u32 = 1 << 1;
 const V_TIMER_TURN: u32 = 1 << 2;
-const V_BACKSTOP_FOUND_WORK: u32 = 1 << 3;
-const V_BACKSTOP_CARRIED: u32 = 1 << 4;
 const V_ORDER: u32 = 1 << 5;
 const V_PARKED_WITH_WORK: u32 = 1 << 6;
 const V_PUT_BOUND: u32 = 1 << 8;
 const V_PUT_POLL: u32 = 1 << 10;
-const V_BACKSTOP_CONTENDED: u32 = 1 << 11;
 const V_UNBOUNDED: u32 = 1 << 9;
+/// ★ the sleep-safety invariant: a BLOCKING park with an obligation that has no registered wake source.
+const V_SLEEP: u32 = 1 << 12;
 
 fn viol_names(v: u32) -> Vec<&'static str> {
     let mut out = Vec::new();
@@ -404,12 +436,8 @@ fn viol_names(v: u32) -> Vec<&'static str> {
         ),
         (V_TIMER_TURN, "TIMER_TURN (a turn caused by a timer tick)"),
         (
-            V_BACKSTOP_FOUND_WORK,
-            "BACKSTOP_FOUND_WORK (the safety net was needed)",
-        ),
-        (
-            V_BACKSTOP_CARRIED,
-            "BACKSTOP_CARRIED (counted separately: control-witness gate)",
+            V_SLEEP,
+            "SLEEP (blocked in the park with an obligation that has no registered wake source)",
         ),
         (
             V_ORDER,
@@ -421,12 +449,8 @@ fn viol_names(v: u32) -> Vec<&'static str> {
         ),
         (V_PUT_BOUND, "PUT_BOUND (hostile GP_PUT refused)"),
         (
-            V_BACKSTOP_CONTENDED,
-            "BACKSTOP_CONTENDED (counted apart: the safety net re-rang a relay whose lock was busy)",
-        ),
-        (
             V_PUT_POLL,
-            "PUT_POLL (a timer read GP_PUT and rang the relay: the doorbell contract forbids any GP_PUT poll)",
+            "PUT_POLL (a look read GP_PUT of an idle relay and rang it: the doorbell contract forbids any GP_PUT poll)",
         ),
         (
             V_UNBOUNDED,
@@ -486,12 +510,12 @@ impl Chan {
             dead: false,
             lock_held: false,
             pt_held: false,
-            contended_run: 0,
             tick: false,
             retry: false,
             poll_active: false,
             poll_due: false,
             waiting: None,
+            carried: false,
         }
     }
     fn avail(&self, entries: usize) -> usize {
@@ -515,7 +539,10 @@ impl World {
             cur: 0,
             rounds: 0,
             moved: false,
-            spin_left: cfg.spin,
+            served: false,
+            rang: false,
+            snap: 0,
+            scanned: false,
             parked: false,
             efd: false,
             locks_left: cfg.lock_windows,
@@ -687,10 +714,11 @@ fn env_steps(cfg: &Cfg, w: &World, out: &mut Vec<Step>) {
         if w.ch[c].lock_held {
             let mut n = w.clone();
             n.ch[c].lock_held = false;
-            // Design: the holder of the record lock checks the durable demand (`Cell::retry`, set
-            // by `enter()` BEFORE its `try_lock`) after releasing, and rings the token.
-            if cfg.policy == Policy::Design && !cfg.m.no_lock_wake && n.ch[c].retry {
-                n.ch[c].retry = false;
+            // Design: the holder of the record lock (an act thread) calls `user_ring_wake` at its completion: `request()`
+            // (the durable demand flag), `wake_if` (rings the token now that the lock is free), `wake.signal()`. A registered
+            // wake source for everything the worker's look could not read through the busy lock (a recorded wait included).
+            if cfg.policy == Policy::Design && !cfg.m.no_lock_wake && n.ch[c].alive() {
+                n.ch[c].retry = true;
                 n.ring(c, Cause::LockRelease);
             }
             out.push(step(format!("env{c}:unlock"), n));
@@ -732,9 +760,7 @@ fn env_steps(cfg: &Cfg, w: &World, out: &mut Vec<Step>) {
                     n.pc = Pc::TickRefresh;
                     out.push(step("env:park timeout", n));
                 }
-                Policy::Design if cfg.backstop => {
-                    // handled in worker_steps (a parked worker's own wake)
-                }
+                // the simple relay has no timer step at all: the park is infinite
                 Policy::Design => {}
             }
         }
@@ -763,33 +789,35 @@ fn finish(cfg: &Cfg, n: &mut World, need: Need) {
             }
         }
         Policy::Design => {
+            // `user_ring_arm` (simple relay): the wait the need leaves (`wait_of`), the carried flag, and for `Need::Contended`
+            // NO wait but the durable demand flag set again (`record.request()`: the RETRY SET)
             let ch = &mut n.ch[c];
             ch.waiting = ul::wait_of(need);
+            ch.carried = ch.waiting.is_some_and(Wait::carried);
+            if matches!(need, Need::Contended) {
+                ch.retry = true;
+            }
             if matches!(need, Need::Again) {
                 n.ring(c, Cause::Again);
             }
         }
     }
-    // `user_ring_arm`: contended turns are counted, any other ending clears the run
-    {
-        let ch = &mut n.ch[c];
-        if matches!(need, Need::Contended) {
-            ch.contended_run = ch.contended_run.saturating_add(1);
-        } else if !matches!(need, Need::Idle) || !ch.retry {
-            ch.contended_run = 0;
-        }
-    }
-    // release
+    // release (Design: back to the scan of the SAME pass; Today: the old loop's top)
+    let after = if cfg.policy == Policy::Design {
+        Pc::Top1
+    } else {
+        Pc::Top0
+    };
     let ch = &mut n.ch[c];
     match ch.tok {
         Tok::Busy => {
             ch.tok = Tok::Idle;
-            n.pc = Pc::Top0;
+            n.pc = after;
         }
         Tok::BusyRung => {
             if cfg.m.drop_busy_rung {
                 ch.tok = Tok::Idle;
-                n.pc = Pc::Top0;
+                n.pc = after;
             } else if n.rounds < REACT {
                 ch.tok = Tok::Busy;
                 n.rounds += 1;
@@ -797,13 +825,12 @@ fn finish(cfg: &Cfg, n: &mut World, need: Need) {
             } else {
                 ch.tok = Tok::Rung; // RepublishAndMoveOn
                 n.moved = true;
-                n.pc = Pc::Top0;
+                n.pc = after;
             }
         }
-        Tok::Dead => n.pc = Pc::Top0,
+        Tok::Dead => n.pc = after,
         t => panic!("release in token state {t:?}"),
     }
-    n.spin_left = cfg.spin;
 }
 
 /// Design: a wait the worker cannot satisfy right now; publish the batch's marker out of the
@@ -836,79 +863,196 @@ fn credit_wait(cfg: &Cfg, n: &mut World) {
     finish(cfg, n, need);
 }
 
-/// Production `ChanPlane::user_ring_peek_one` (`userpump.rs`): look at one relay's not-yet-fd
-/// state and ring it if its wait is satisfied, if its lock was busy, or if demand is pending.
-/// The classification of what a BACKSTOP look finds is `kf_chan::user_loop::found`.
-fn peek(n: &mut World, c: usize, why: ul::Peek, spin: u8, polls_put: bool) -> bool {
+/// Production `ChanPlane::user_ring_peek_one` (`userpump.rs`), simple relay: ONE level look at one relay, whatever woke the
+/// worker. The decision is `kf_chan::user_loop::look` itself (not a copy): record lock busy -> ring iff demand or the waiting flag is set
+/// (production cannot read the wait through a lock it does not hold and passes `Some(_)` for the flag, since aad1e9ff4); wait unreadable or satisfied -> ring + clear;
+/// new pops while the guest's `GP_GET` follows pops -> ring (wait kept); demand -> ring; else leave.
+fn peek(cfg: &Cfg, n: &mut World, c: usize) -> bool {
     let ch = &n.ch[c];
     if !ch.alive() {
         return false;
     }
-    let backstop = why == ul::Peek::Backstop;
     let demand = ch.retry;
-    // the production decision (`kf_chan::user_loop::look_needed`); the retired idle poll is the mutant
-    if !ul::look_needed(why, demand, ch.waiting.is_some()) && !(backstop && polls_put) {
-        return false;
-    }
-    let cause = match why {
-        ul::Peek::Spin => Cause::Spin,
-        ul::Peek::Event => Cause::Completion,
-        ul::Peek::Backstop => Cause::Backstop,
-    };
-    // a relay that keeps finding a busy lock is re-rung by the spin / event looks only a bounded
-    // number of times in a row; the safety net always may (`user_loop::may_retry`)
-    let retry_ok = backstop || u32::from(ch.contended_run) < u32::from(spin);
-    if ch.lock_held {
-        // `try_lock` failed: ring, the turn handles the contention itself
-        if retry_ok {
-            n.ring(c, cause);
-            return true;
-        }
-        return false;
-    }
-    if let Some(w) = ch.waiting {
-        let pops = (ch.userd_get as u64) > ch.fetched;
-        if !w.satisfied(ch.ref_visible, ch.userd_get as u64)
-            && pops
-            && matches!(w, Wait::Marker { .. })
-        {
-            // still draining, but pops the guest's GP_GET has not shown yet: write them back
-            n.ring(c, cause);
-            return true;
-        }
-        if w.satisfied(ch.ref_visible, ch.userd_get as u64)
-            && (retry_ok || !matches!(w, Wait::Contended))
-        {
-            if backstop {
-                n.viol |= match ul::found(w) {
-                    ul::Found::Work => V_BACKSTOP_FOUND_WORK,
-                    ul::Found::Carried => V_BACKSTOP_CARRIED,
-                    ul::Found::Contended => V_BACKSTOP_CONTENDED,
-                };
-            }
-            n.ch[c].waiting = None;
-            n.ring(c, cause);
-            return true;
-        }
-    } else if backstop && polls_put && ch.put[ch.src] != ch.cursor {
-        // MUTANT ONLY: the retired idle GP_PUT poll. GP_PUT ahead of the last doorbell is NORMAL;
-        // only a doorbell announces it, so a timer that reads it and rings is a contract violation.
+    // MUTANT ONLY: the retired idle `GP_PUT` poll. `GP_PUT` ahead of the last doorbell is NORMAL; only a doorbell announces it, so
+    // a look that reads it and rings is a contract violation.
+    if cfg.m.eval_polls_put && !demand && ch.waiting.is_none() && ch.put[ch.src] != ch.cursor {
         n.viol |= V_PUT_POLL;
-        n.ring(c, cause);
+        n.ring(c, Cause::Spin);
         return true;
     }
-    if demand && retry_ok {
-        if backstop {
-            n.viol |= V_BACKSTOP_CONTENDED;
+    // the doorbell contract: no look has a reason to touch an idle relay
+    if !ul::look_needed(ul::Peek::Spin, demand, ch.waiting.is_some()) {
+        return false;
+    }
+    let i = if ch.lock_held {
+        ul::LookIn {
+            demand,
+            record_busy: true,
+            // the wait cannot be read through the lock: `Some(_)` stands for "the waiting flag is set" (aad1e9ff4)
+            wait: if ch.waiting.is_some() && !cfg.m.busy_look_ignores_wait {
+                Some(Wait::Marker { target: u64::MAX })
+            } else {
+                None
+            },
+            words: None,
+            fetched: 0,
+            get_follows_pops: false,
         }
-        n.ring(c, cause);
-        return true;
+    } else {
+        ul::LookIn {
+            demand,
+            record_busy: false,
+            wait: ch.waiting,
+            // the private words, read fresh: (markers processed, entries popped); readable (no storage lock in the model)
+            words: ch.waiting.map(|_| (ch.ref_visible, ch.userd_get as u64)),
+            fetched: ch.fetched,
+            get_follows_pops: guest_get_follows_pops(),
+        }
+    };
+    match ul::look(i) {
+        ul::Look::Leave => false,
+        ul::Look::Ring { clear_wait, .. } => {
+            if cfg.m.peek_never_rings {
+                return false;
+            }
+            if clear_wait {
+                n.ch[c].waiting = None;
+                n.ch[c].carried = false;
+            }
+            n.ring(c, Cause::Spin);
+            true
+        }
     }
-    false
+}
+
+/// `ChanPlane::user_ring_unsourced`: demand (the retry set) or a recorded wait no interrupt announces.
+fn unsourced(cfg: &Cfg, w: &World) -> bool {
+    w.ch.iter().any(|c| {
+        c.alive()
+            && ((c.retry && !cfg.m.unsourced_ignores_demand)
+                || (c.waiting.is_some() && c.carried && !cfg.m.unsourced_ignores_carried))
+    })
+}
+
+/// The simple relay's worker (`worker::run_with_relay`): one loop, one `epoll_wait` per iteration.
+fn design_worker_steps(cfg: &Cfg, w: &World, out: &mut Vec<Step>) {
+    match w.pc {
+        Pc::Top0 => {
+            let mut n = w.clone();
+            n.moved = false; // seen = seq
+            n.served = false;
+            n.scanned = false;
+            n.snap = 0;
+            n.pc = Pc::Top1;
+            out.push(step("w:seen=seq", n));
+        }
+        Pc::Top1 => {
+            let mut n = w.clone();
+            if !w.scanned {
+                // worker_pass: `bits.scan` snapshot of the rung tokens
+                for (c, ch) in w.ch.iter().enumerate() {
+                    if ch.tok == Tok::Rung {
+                        n.snap |= 1 << c;
+                    }
+                }
+                n.scanned = true;
+                out.push(step("w:scan", n));
+            } else if w.snap != 0 {
+                let c = w.snap.trailing_zeros() as usize;
+                n.snap &= !(1 << c);
+                if w.ch[c].tok == Tok::Rung {
+                    // claim RUNG -> BUSY. The flag is cleared HERE, before any PUT read.
+                    n.ch[c].tok = Tok::Busy;
+                    n.cur = c;
+                    n.rounds = 0;
+                    n.served = true;
+                    if n.ch[c].cause == Cause::Tick {
+                        n.viol |= V_TIMER_TURN;
+                    }
+                    n.pc = Pc::T(T0);
+                    out.push(step(format!("w:claim c{c} ({:?})", w.ch[c].cause), n));
+                } else {
+                    out.push(step(format!("w:scan skip c{c}"), n));
+                }
+            } else {
+                n.pc = Pc::Eval;
+                out.push(step("w:pass done", n));
+            }
+        }
+        Pc::Eval => {
+            // the level evaluation of ALL relays, every iteration (busy pass: `Look`; empty pass: `Idle`)
+            let mut n = w.clone();
+            let mut rang = false;
+            for c in 0..n.ch.len() {
+                rang |= peek(cfg, &mut n, c);
+            }
+            n.rang = rang;
+            n.pc = Pc::Decide;
+            out.push(step("w:eval relays", n));
+        }
+        Pc::Decide => {
+            let mut n = w.clone();
+            let spin = w.served || w.rang || unsourced(cfg, w);
+            n.pc = if spin { Pc::Imm } else { Pc::Top2 };
+            out.push(step(
+                if spin {
+                    "w:spin (epoll timeout 0)"
+                } else {
+                    "w:to try_park"
+                },
+                n,
+            ));
+        }
+        Pc::Imm => {
+            // `poller.wait(Immediate)` then `dispatch`: whatever is ready is drained (the doorbell eventfd, an engine event)
+            let mut n = w.clone();
+            n.efd = false;
+            for c in &mut n.ch {
+                c.ev = false;
+            }
+            n.pc = Pc::Top0;
+            out.push(step("w:epoll(0) dispatch", n));
+        }
+        Pc::Top2 => {
+            let mut n = w.clone();
+            if w.moved && !cfg.m.no_seq_check {
+                n.pc = Pc::Top0; // work arrived during the scan: rescan, never sleep
+                out.push(step("w:try_park refused (seq moved)", n));
+            } else {
+                n.parked = true;
+                n.pc = Pc::Parked;
+                out.push(step("w:parked", n));
+            }
+        }
+        Pc::Parked => {
+            // BLOCKING: no timeout step exists. doorbell eventfd
+            if w.efd {
+                let mut n = w.clone();
+                n.efd = false;
+                n.parked = false;
+                n.pc = Pc::Top0;
+                out.push(step("w:wake(efd)", n));
+            }
+            // completion interrupt on the worker's epoll (`dispatch` -> `on_other`; no peek there any more)
+            if w.ch.iter().any(|c| c.ev) {
+                let mut n = w.clone();
+                n.parked = false;
+                for c in &mut n.ch {
+                    c.ev = false;
+                }
+                n.pc = Pc::Top0;
+                out.push(step("w:wake(event)", n));
+            }
+        }
+        Pc::TickRefresh => unreachable!("not a Design state"),
+        Pc::T(stage) => turn_step(cfg, w, stage, out),
+    }
 }
 
 fn worker_steps(cfg: &Cfg, w: &World, out: &mut Vec<Step>) {
-    let design = cfg.policy == Policy::Design;
+    if cfg.policy == Policy::Design {
+        return design_worker_steps(cfg, w, out);
+    }
     match w.pc {
         Pc::Top0 => {
             let mut n = w.clone();
@@ -928,39 +1072,10 @@ fn worker_steps(cfg: &Cfg, w: &World, out: &mut Vec<Step>) {
                 }
                 n.pc = Pc::T(T0);
                 out.push(step(format!("w:claim c{c} ({:?})", w.ch[c].cause), n));
-            } else if design
-                && ul::idle(
-                    w.ch.iter()
-                        .any(|c| c.alive() && (c.waiting.is_some() || c.retry)),
-                    u32::from(w.spin_left),
-                ) == ul::Idle::Spin
-            {
-                n.pc = Pc::Spin;
-                out.push(step("w:to spin", n));
             } else {
                 n.pc = Pc::Top2;
                 out.push(step("w:to try_park", n));
             }
-        }
-        Pc::Spin => {
-            // epoll(timeout=0) + a peek of the not-yet-fd words (GP_GET); BOUNDED by `spin_left`.
-            let mut n = w.clone();
-            n.spin_left -= 1;
-            let mut any = false;
-            for c in 0..n.ch.len() {
-                any |= peek(
-                    &mut n,
-                    c,
-                    ul::Peek::Spin,
-                    cfg.spin,
-                    cfg.m.backstop_polls_put,
-                );
-            }
-            if any {
-                n.spin_left = cfg.spin;
-            }
-            n.pc = if any { Pc::Top0 } else { Pc::Top1 };
-            out.push(step("w:spin peek", n));
         }
         Pc::Top2 => {
             let mut n = w.clone();
@@ -979,38 +1094,19 @@ fn worker_steps(cfg: &Cfg, w: &World, out: &mut Vec<Step>) {
                 let mut n = w.clone();
                 n.efd = false;
                 n.parked = false;
-                n.pc = if design { Pc::Top0 } else { Pc::TickRefresh };
+                n.pc = Pc::TickRefresh;
                 out.push(step("w:wake(efd)", n));
             }
             // completion interrupt on the worker's epoll
             if w.ch.iter().any(|c| c.ev) {
                 let mut n = w.clone();
                 n.parked = false;
-                n.pc = if design { Pc::Event } else { Pc::TickRefresh };
-                if !design {
-                    // Today: the engine event is consumed for the guest's interrupt; it wakes nothing in the relay
-                    for c in &mut n.ch {
-                        c.ev = false;
-                    }
+                n.pc = Pc::TickRefresh;
+                // Today: the engine event is consumed for the guest's interrupt; it wakes nothing in the relay
+                for c in &mut n.ch {
+                    c.ev = false;
                 }
                 out.push(step("w:wake(event)", n));
-            }
-            // Design: the backstop (only if the configuration lets time pass at all)
-            if design && cfg.backstop && cfg.timers && !w.efd && !w.ch.iter().any(|c| c.ev) {
-                let mut n = w.clone();
-                n.parked = false;
-                n.efd = false;
-                for c in 0..n.ch.len() {
-                    peek(
-                        &mut n,
-                        c,
-                        ul::Peek::Backstop,
-                        cfg.spin,
-                        cfg.m.backstop_polls_put,
-                    );
-                }
-                n.pc = Pc::Top0;
-                out.push(step("w:wake(backstop)", n));
             }
         }
         Pc::TickRefresh => {
@@ -1027,26 +1123,7 @@ fn worker_steps(cfg: &Cfg, w: &World, out: &mut Vec<Step>) {
             n.pc = Pc::Top0;
             out.push(step("w:tick refresh", n));
         }
-        Pc::Event => {
-            // Design: clear the event BEFORE peeking (`dispatch` ran `on_other` first), then look at
-            // every relay (production: any engine event peeks them all).
-            let mut n = w.clone();
-            for c in &mut n.ch {
-                c.ev = false;
-            }
-            for c in 0..n.ch.len() {
-                peek(
-                    &mut n,
-                    c,
-                    ul::Peek::Event,
-                    cfg.spin,
-                    cfg.m.backstop_polls_put,
-                );
-            }
-            n.spin_left = cfg.spin;
-            n.pc = Pc::Top0;
-            out.push(step("w:handle event", n));
-        }
+        Pc::Eval | Pc::Decide | Pc::Imm => unreachable!("not a Today state"),
         Pc::T(stage) => turn_step(cfg, w, stage, out),
     }
 }
@@ -1346,12 +1423,41 @@ fn invariant(cfg: &Cfg, w: &World) -> u32 {
         {
             v |= V_PARKED_WITH_WORK;
         }
+        // ★ SLEEP SAFETY (Design): blocking is only safe when every obligation has a registered wake source.
+        if cfg.policy == Policy::Design {
+            let any_ev = w.ch.iter().any(|c| c.ev);
+            for ch in w.ch.iter().filter(|c| c.alive()) {
+                let rung = matches!(ch.tok, Tok::Rung | Tok::BusyRung);
+                // an act thread holding the record lock rings the relay at its completion (`user_ring_wake`: a registered wake
+                // source for everything the look could not read through the busy lock)
+                let holder_will_wake = ch.lock_held && !cfg.m.no_lock_wake;
+                // demand left behind, its token not rung: nothing wakes the worker (the retry set)
+                if ch.retry && !rung && !holder_will_wake {
+                    v |= V_SLEEP;
+                }
+                // a recorded wait no interrupt announces (`Wait::Popped`)
+                if ch.waiting.is_some_and(Wait::carried) {
+                    v |= V_SLEEP;
+                }
+                // a recorded wait already satisfied by the words, not rung, with no doorbell / engine event to wake the worker
+                if ch
+                    .waiting
+                    .is_some_and(|wt| wt.satisfied(ch.ref_visible, ch.userd_get as u64))
+                    && !rung
+                    && !w.efd
+                    && !any_ev
+                    && !holder_will_wake
+                {
+                    v |= V_SLEEP;
+                }
+            }
+        }
     }
     v
 }
 
-fn goal_failure(cfg: &Cfg, w: &World) -> Option<String> {
-    if !matches!(w.pc, Pc::Parked) {
+fn goal_failure(cfg: &Cfg, w: &World, spinning: bool) -> Option<String> {
+    if !matches!(w.pc, Pc::Parked) && !spinning {
         return Some(format!("worker stuck at {:?}", w.pc));
     }
     for (c, ch) in w.ch.iter().enumerate() {
@@ -1378,6 +1484,39 @@ fn goal_failure(cfg: &Cfg, w: &World) -> Option<String> {
         }
     }
     None
+}
+
+/// ★ A worker that SPINS on an unsourced obligation (a `Popped` wait the hardware never satisfies) has no terminal state, so the
+/// deadlock check would never judge it. `w` (at `Decide`) is a spinning terminal when no guest / PBDMA / environment step is
+/// enabled from it or from anything the worker alone reaches, and the worker never parks: the final state of that loop is judged like
+/// a parked one (`goal_failure(.., spinning = true)`).
+fn quiescent_spin(cfg: &Cfg, w: &World) -> bool {
+    use std::collections::HashSet;
+    let mut seen: HashSet<u128> = HashSet::new();
+    let mut stack = vec![w.clone()];
+    seen.insert(key(w));
+    while let Some(s) = stack.pop() {
+        let mut other = Vec::new();
+        guest_steps(cfg, &s, &mut other);
+        hw_steps(cfg, &s, &mut other);
+        env_steps(cfg, &s, &mut other);
+        if !other.is_empty() {
+            return false; // the world can still change: not a final state
+        }
+        let succ = successors(cfg, &s);
+        if succ.is_empty() {
+            return false; // the worker parks: the ordinary terminal check judges it
+        }
+        for x in succ {
+            if seen.insert(key(&x.w)) {
+                if seen.len() > 100_000 {
+                    return false;
+                }
+                stack.push(x.w);
+            }
+        }
+    }
+    true
 }
 
 /// What an exhaustive exploration visited.
@@ -1442,8 +1581,13 @@ fn explore(cfg: &Cfg, allow: u32) -> Result<Explored, Counterexample> {
             });
         }
         let succ = successors(cfg, &w);
-        if succ.is_empty() && cfg.liveness {
-            if let Some(why) = goal_failure(cfg, &w) {
+        let spinning = cfg.liveness
+            && cfg.policy == Policy::Design
+            && w.pc == Pc::Decide
+            && !succ.is_empty()
+            && quiescent_spin(cfg, &w);
+        if (succ.is_empty() || spinning) && cfg.liveness {
+            if let Some(why) = goal_failure(cfg, &w, spinning) {
                 return Err(Counterexample {
                     why: format!("DEADLOCK: {why}"),
                     trace: trace_of(&seen, k),
@@ -1862,14 +2006,25 @@ fn the_retired_loop_ran_turns_nobody_rang_when_time_passed() {
     );
 }
 
+/// ★ REPLACES `design_b_no_turn_is_caused_by_a_timer_and_the_backstop_finds_nothing` (the backstop wake is deleted): time may
+/// pass in the explorer and nothing in the design reacts to it -- no turn is caused by a timer, and there is NO timeout step at
+/// all (the label set of every scenario has no `backstop`/`timeout` wake).
 #[test]
-fn design_b_no_turn_is_caused_by_a_timer_and_the_backstop_finds_nothing() {
-    let f = run_contract(Policy::Design, "design/timers+backstop", 0, |c| {
-        c.timers = true;
-        c.backstop = true;
-        c.liveness = false;
-    });
-    no_failures(&f);
+fn design_b_time_passing_changes_nothing_because_no_timeout_step_exists() {
+    let mut labels = std::collections::HashSet::new();
+    for (name, chans) in contract_scenarios() {
+        let mut cfg = Cfg::new(Policy::Design, chans);
+        cfg.timers = true;
+        cfg.backstop = true;
+        cfg.liveness = false;
+        let r = explore(&cfg, 0);
+        assert!(r.is_ok(), "{}", report(name, &r));
+        labels.extend(r.unwrap().labels);
+    }
+    assert!(
+        !labels.iter().any(|l| l.contains("backstop") || l.contains("park timeout") || l.contains("tick")),
+        "a timer step exists: {labels:?}"
+    );
 }
 
 /// ★ THE MEASURED DEFECT as a model result. The retired gate proved "the barrier's wait finished" by
@@ -1936,40 +2091,31 @@ fn design_a_sync_wait_behind_an_open_packet_cannot_protect_late_bytes() {
     );
 }
 
-/// ★ A lost / never-armed interrupt: progress comes only from the backstop, and every firing that
-/// finds work is the loud counter.
+/// ★ REPLACES `design_a_lost_interrupt_is_covered_by_the_backstop_and_counted` (the backstop is deleted: the park is infinite).
+/// A lost / never-armed interrupt now has NO rescuer in the model: the sleep-safety invariant names it (a satisfied wait with
+/// nothing to wake the worker) and the liveness check finds the deadlock, with or without a (nonexistent) timer.
 #[test]
-fn design_a_lost_interrupt_is_covered_by_the_backstop_and_counted() {
-    let mut cfg = Cfg::new(Policy::Design, s_gate_late_pb());
-    cfg.irq = false;
-    cfg.timers = false;
-    finds("design/lost-irq/no-backstop", &cfg, 0, &["DEADLOCK"]);
-    cfg.timers = true;
-    cfg.backstop = true;
-    holds("design/lost-irq/backstop", &cfg, V_BACKSTOP_FOUND_WORK);
-    finds(
-        "design/lost-irq/counter-reached",
-        &cfg,
-        0,
-        &["BACKSTOP_FOUND_WORK"],
-    );
+fn design_a_lost_interrupt_is_not_covered_and_the_sleep_invariant_names_it() {
+    for timers in [false, true] {
+        let mut cfg = Cfg::new(Policy::Design, s_gate_late_pb());
+        cfg.irq = false;
+        cfg.timers = timers;
+        cfg.backstop = timers; // ignored: no such step exists
+        finds("design/lost-irq", &cfg, 0, &["SLEEP"]);
+        finds("design/lost-irq/deadlock", &cfg, V_SLEEP, &["DEADLOCK"]);
+    }
 }
 
-/// GP_GET becoming visible AFTER its interrupt (an inferred hazard, not measured): the event is a
-/// hint, the peek is the proof; progress then needs the spin or the backstop.
+/// ★ REPLACES `design_get_visibility_lag_after_the_interrupt_needs_the_backstop`. `GP_GET` / `REFERENCE` becoming visible AFTER
+/// the interrupt (an inferred hazard, not measured): the event is a hint and the look is the proof, and no look follows once the
+/// worker has blocked -- the backstop was the only rescuer and is deleted. Pinned as the loop's one assumption: the proof words
+/// are visible no later than the interrupt that announces them.
 #[test]
-fn design_get_visibility_lag_after_the_interrupt_needs_the_backstop() {
+fn design_get_visibility_lag_after_the_interrupt_is_the_one_hazard_the_loop_does_not_cover() {
     let mut cfg = Cfg::new(Policy::Design, s_gate_late_pb());
     cfg.lag = true;
-    cfg.spin = 1;
-    finds("design/lag/no-backstop", &cfg, 0, &["DEADLOCK"]);
-    cfg.timers = true;
-    cfg.backstop = true;
-    holds(
-        "design/lag/backstop",
-        &cfg,
-        V_BACKSTOP_FOUND_WORK | V_BACKSTOP_CARRIED,
-    );
+    finds("design/lag", &cfg, 0, &["SLEEP"]);
+    finds("design/lag/deadlock", &cfg, V_SLEEP, &["DEADLOCK"]);
 }
 
 /// Without timers the spin is not what makes the design live: with spin 0 every non-carried
@@ -2023,36 +2169,31 @@ fn design_a_turn_deferred_by_a_busy_lock_is_resumed_by_an_event() {
     let mut cfg = Cfg::new(Policy::Design, s_batched());
     cfg.lock_windows = 1;
     cfg.timers = false;
-    cfg.spin = 0; // the holder's wake alone (the spin is only a latency optimisation)
     holds("design/lock", &cfg, 0);
+    // ★ CHANGED (retry set + the busy-lock look, aad1e9ff4): the holder's wake is no longer the only thing between a busy lock and a
+    // block. Without it the level loop still finds the relay (the busy look rings a waiting relay, the lost turn leaves the retry set)...
     cfg.m.no_lock_wake = true;
-    finds("design/lock/mutant", &cfg, 0, &["DEADLOCK"]);
-    // with the spin the durable demand (`Cell::retry`) is looked at and rung even without the wake
-    cfg.spin = 1;
-    holds("design/lock/spin", &cfg, 0);
+    holds("design/lock/no-holder-wake", &cfg, 0);
+    // ... and with BOTH gone (the look through a busy lock reads no wait, as before aad1e9ff4 -- stress seed 20's lost wake) a
+    // satisfied wait whose event was already consumed is rung by nobody: the sleep invariant finds it.
+    cfg.m.busy_look_ignores_wait = true;
+    finds("design/lock/no-holder-wake+blind-busy-look", &cfg, 0, &["SLEEP", "DEADLOCK"]);
 }
 
-/// The pt / USERD admission lock is busy at the guest's `GP_GET` write-back and nothing announces
-/// its release: the relay waits `Wait::Contended` -- satisfied by looking again -- so liveness
-/// needs the bounded spin to coincide with the release or else the safety net, whose firing is the
-/// separate `BACKSTOP_CONTENDED` counter. Documented, counted, and the only place left where a
-/// release is not an event.
+/// ★ REPLACES `design_pt_admission_contention_is_spin_then_the_counted_backstop` (budget, spin and backstop are deleted). The
+/// pt / USERD admission lock is busy at the guest's `GP_GET` write-back and nothing announces its release: the turn ends
+/// `Need::Contended`, which is no wait but the demand flag set again (the RETRY SET). The loop does not block while it is
+/// non-empty, so the release is found with no timer, no budget and no safety net; the sleep invariant holds throughout.
 #[test]
-fn design_pt_admission_contention_is_spin_then_the_counted_backstop() {
+fn design_pt_admission_contention_is_the_retry_set() {
     let mut cfg = Cfg::new(Policy::Design, s_batched());
     cfg.pt_windows = 1;
     cfg.timers = false;
-    cfg.spin = 1;
-    finds("design/pt/no-backstop", &cfg, 0, &["DEADLOCK"]);
-    cfg.timers = true;
-    cfg.backstop = true;
-    holds("design/pt/backstop", &cfg, V_BACKSTOP_CONTENDED);
-    finds(
-        "design/pt/counter-reached",
-        &cfg,
-        0,
-        &["BACKSTOP_CONTENDED"],
-    );
+    holds("design/pt/retry-set", &cfg, 0);
+    // the retry set is what makes it live: a worker that ignored it (and whose evaluation rings nothing) would sleep on it
+    cfg.m.unsourced_ignores_demand = true;
+    cfg.m.peek_never_rings = true;
+    finds("design/pt/no-retry-set", &cfg, 0, &["SLEEP", "DEADLOCK"]);
 }
 
 // ------------------------------------------------------------------------------------------------
@@ -2073,19 +2214,17 @@ fn mutant_lost_wakeup_is_found() {
 fn mutant_a_ring_during_a_turn_is_lost_is_found() {
     let mut cfg = Cfg::new(Policy::Design, s_coalesce());
     cfg.m.drop_busy_rung = true;
-    finds("mutant/drop_busy_rung", &cfg, 0, &["DEADLOCK"]);
+    finds("mutant/drop_busy_rung", &cfg, 0, &["DEADLOCK", "SLEEP"]);
 }
 #[test]
 fn mutant_byte_witness_inside_an_open_packet_is_found() {
     let mut cfg = Cfg::new(Policy::Design, s_gate_carried());
     cfg.m.bytes_witness = true;
-    cfg.timers = true;
-    cfg.backstop = true;
     cfg.liveness = false;
     finds(
         "mutant/bytes_witness",
         &cfg,
-        V_BACKSTOP_CARRIED,
+        0,
         &["BYTES_IN_OPEN_PACKET"],
     );
 }
@@ -2101,7 +2240,7 @@ fn mutant_no_completion_event_is_found() {
     let mut cfg = Cfg::new(Policy::Design, s_gate_late_pb());
     cfg.m.no_notify = true;
     cfg.irq = false;
-    finds("mutant/no_notify", &cfg, 0, &["DEADLOCK"]);
+    finds("mutant/no_notify", &cfg, 0, &["DEADLOCK", "SLEEP"]);
 }
 
 /// ★ FAILED at 77eaf7620, in the PRODUCTION primitive (`SyncGate::cleared` is never forgotten,
@@ -2201,7 +2340,7 @@ fn retire_in_gate(policy: Policy) {
     holds(
         &format!("{policy:?}/retire-in-gate"),
         &cfg,
-        V_TIMER_TURN | V_STALE | V_BACKSTOP_FOUND_WORK | V_BACKSTOP_CARRIED,
+        V_TIMER_TURN | V_STALE,
     );
 }
 #[test]
@@ -2251,11 +2390,7 @@ fn stuck_gate(policy: Policy, backstop: bool) {
     cfg.timers = true;
     cfg.backstop = backstop;
     cfg.liveness = false;
-    holds(
-        &format!("{policy:?}/stuck-gate-wakeups"),
-        &cfg,
-        V_BACKSTOP_FOUND_WORK | V_BACKSTOP_CARRIED,
-    );
+    holds(&format!("{policy:?}/stuck-gate-wakeups"), &cfg, 0);
 }
 #[test]
 fn the_retired_loop_polled_a_gate_nobody_releases_forever() {
@@ -2265,12 +2400,12 @@ fn the_retired_loop_polled_a_gate_nobody_releases_forever() {
     finds(
         "retired/stuck-gate",
         &cfg,
-        V_BACKSTOP_FOUND_WORK | V_BACKSTOP_CARRIED,
+        0,
         &["TIMER_TURN"],
     );
 }
 #[test]
-fn design_a_channel_stuck_in_a_gate_costs_no_wakeups_beyond_the_backstop() {
+fn design_a_channel_stuck_in_a_gate_costs_no_wakeups() {
     stuck_gate(Policy::Design, true);
 }
 /// ... and the neighbour completes while the other channel is stuck, with no timer at all.
@@ -2302,44 +2437,40 @@ fn ring_full_and_empty_are_distinguishable_at_the_wrap_point() {
 #[test]
 fn migration_executes_each_entry_exactly_once_in_order() {
     for (gated, scenario) in [(false, s_migration()), (true, s_migration_gated())] {
-        for lag in [false, true] {
-            if gated && lag {
-                continue; // the gated migration with a lagging GP_GET/REFERENCE exceeds the explorer's bound
-            }
-            // (the lagging variant runs a smaller migration: timers + backstop multiply the states)
-            let scenario = if lag {
-                vec![spec(
-                    vec![
-                        Push(seg(1)),
-                        Push(trigger(2)),
-                        SetPut,
-                        Ring,
-                        UseNew,
-                        Push(seg(3)),
-                        SetPut,
-                        Ring,
-                    ],
-                    vec![1, 2, 3],
-                    3,
-                )]
-            } else {
-                scenario.clone()
-            };
-            let mut cfg = Cfg::new(Policy::Design, scenario);
-            cfg.timers = lag;
-            cfg.backstop = lag;
-            cfg.lag = lag;
-            holds(
-                &format!("design/migration/lag={lag}"),
-                &cfg,
-                if lag {
-                    V_BACKSTOP_FOUND_WORK | V_BACKSTOP_CARRIED
-                } else {
-                    0
-                },
-            );
-        }
+        let _ = gated;
+        let mut cfg = Cfg::new(Policy::Design, scenario);
+        cfg.timers = false;
+        cfg.lag = false;
+        holds(&format!("design/migration/gated={gated}"), &cfg, 0);
     }
+}
+
+/// ★ REPLACES the `lag = true` half of `migration_executes_each_entry_exactly_once_in_order` (it held only through the deleted
+/// backstop). With a visibility lag after the interrupt the loop has no rescuer (see
+/// `design_get_visibility_lag_after_the_interrupt_is_the_one_hazard_the_loop_does_not_cover`); migration inherits that, and
+/// nothing else: the safety bits (order, no replay, no early read) hold in every state of the lagging exploration.
+#[test]
+fn migration_with_a_visibility_lag_is_safe_and_only_the_known_hazard_can_stall() {
+    let scenario = vec![spec(
+        vec![
+            Push(seg(1)),
+            Push(trigger(2)),
+            SetPut,
+            Ring,
+            UseNew,
+            Push(seg(3)),
+            SetPut,
+            Ring,
+        ],
+        vec![1, 2, 3],
+        3,
+    )];
+    let mut cfg = Cfg::new(Policy::Design, scenario);
+    cfg.lag = true;
+    cfg.liveness = false;
+    holds("design/migration/lag=true/safety", &cfg, V_SLEEP);
+    cfg.liveness = true;
+    finds("design/migration/lag=true/live", &cfg, 0, &["SLEEP", "DEADLOCK"]);
 }
 
 #[test]
@@ -2378,7 +2509,9 @@ fn the_design_exploration_reaches_every_race_it_claims_to_cover() {
         "w:claim c0 (Again)",             // the worker re-rings itself after progress
         "w:wake(efd)",                    // doorbell wake
         "w:wake(event)",                  // completion-interrupt wake
-        "w:spin peek",                    // the bounded spin
+        "w:eval relays",                  // the level evaluation of every relay, every iteration
+        "w:spin (epoll timeout 0)",       // the immediate wait while work / an unsourced obligation exists
+        "w:epoll(0) dispatch",
         "w:T4 gate: wait",                // a turn that finds the gate still draining
         "w:T4 gate: barrier+marker",
         "w:T5 no credit",            // private-ring credit shortage
@@ -2389,45 +2522,31 @@ fn the_design_exploration_reaches_every_race_it_claims_to_cover() {
     ] {
         assert!(all.contains(needle), "never reached: {needle:?}");
     }
-    // the backstop wake itself is reached (a lost interrupt)
-    let mut cfg = Cfg::new(Policy::Design, s_gate_late_pb());
-    cfg.irq = false;
-    cfg.timers = true;
-    cfg.backstop = true;
-    cfg.liveness = false;
-    let lost = explore(&cfg, V_BACKSTOP_FOUND_WORK).expect("a lost interrupt is covered");
-    assert!(lost.labels.contains("w:wake(backstop)"));
 }
 
 /// ★ DOORBELL CONTRACT (owner, 2026-10-17). `GP_PUT` ahead of the LAST doorbell is normal and
-/// nothing is owed for it: only a doorbell announces `GP_PUT`. With timers that fire and the
-/// backstop armed, the safety net never reads `GP_PUT` and never rings an idle relay (no
-/// `PUT_POLL`), and the design stays live.
+/// nothing is owed for it: only a doorbell announces `GP_PUT`. The level evaluation (every iteration) never reads `GP_PUT` and
+/// never rings an idle relay (no `PUT_POLL`), and the design stays live. (Was: with the backstop armed; the backstop look is
+/// deleted, the evaluation is now the only look, so the contract is pinned on it.)
 #[test]
-fn put_ahead_of_the_last_doorbell_is_owed_nothing_and_no_timer_reads_it() {
+fn put_ahead_of_the_last_doorbell_is_owed_nothing_and_no_look_reads_it() {
     for chans in [s_put_ahead_unrung(), s_put_ahead()] {
         let mut cfg = Cfg::new(Policy::Design, chans);
         cfg.timers = false;
         holds("design/put-ahead-unrung", &cfg, 0);
-        cfg.timers = true;
-        cfg.backstop = true;
-        holds("design/put-ahead-unrung/backstop", &cfg, 0);
-        // the backstop wake itself is reached: it fires, finds nothing owed, and does nothing
         let r = explore(&cfg, 0).expect("holds");
-        assert!(r.labels.contains("w:wake(backstop)"));
+        assert!(r.labels.contains("w:eval relays"), "the evaluation ran");
     }
 }
 
-/// The checker has teeth for it: the RETIRED idle poll (the backstop reads `GP_PUT` and rings the
-/// relay when it is ahead of the cursor) is found.
+/// ★ REPLACES `mutant_the_backstop_polls_gp_put_is_found`: the RETIRED idle poll (a look reads `GP_PUT` of an idle relay and
+/// rings it when it is ahead of the cursor), now put in the level evaluation, is found.
 #[test]
-fn mutant_the_backstop_polls_gp_put_is_found() {
+fn mutant_the_evaluation_polls_gp_put_is_found() {
     for chans in [s_put_ahead_unrung(), s_put_ahead()] {
         let mut cfg = Cfg::new(Policy::Design, chans);
-        cfg.m.backstop_polls_put = true;
-        cfg.timers = true;
-        cfg.backstop = true;
-        finds("mutant/backstop_polls_put", &cfg, 0, &["PUT_POLL"]);
+        cfg.m.eval_polls_put = true;
+        finds("mutant/eval_polls_put", &cfg, 0, &["PUT_POLL"]);
     }
 }
 
@@ -2494,4 +2613,107 @@ fn a_guest_with_a_full_ring_behind_its_own_gate_deadlocks_by_construction() {
     let mut cfg = Cfg::new(Policy::Design, chans);
     cfg.timers = false;
     holds("design/full-ring-control", &cfg, 0);
+}
+
+// ------------------------------------------------------------------------------------------------
+// ★ the sleep-safety invariant (V_SLEEP) and its mutants (port brief, rule 4). The unmutated configs HOLD (every test above runs the
+// invariant at every parked state); each mutant of `RelayLoop::unsourced` is FOUND.
+
+/// A scenario whose turn ends `Need::Popped` (the packet is open at `GP_PUT == cursor`: no marker can be placed, no interrupt will
+/// announce the pops) while the PBDMA has not popped the last entry yet (entry 1 stalls on an acquire the guest releases last; run
+/// with `pop_depth = 0` so that a pop is its own processing): the recorded wait is the carried one, and stays unsatisfied for a while.
+fn s_open_packet_popped() -> Vec<ChanSpec> {
+    vec![spec(
+        vec![
+            Push(seg(1).acq(0)),
+            Push(seg(2).open()),
+            SetPut,
+            Ring,
+            Release(0),
+        ],
+        vec![1, 2],
+        2,
+    )]
+}
+fn cfg_popped(mut cfg: Cfg) -> Cfg {
+    cfg.pop_depth = 0;
+    cfg.timers = false;
+    cfg
+}
+
+/// The unmutated loop spins on the carried wait (never blocks on it) and still reaches the same terminal state.
+#[test]
+fn sleep_safety_holds_for_a_carried_wait_when_unsourced_sees_it() {
+    for chans in [s_open_packet_popped(), s_batched()] {
+        let cfg = cfg_popped(Cfg::new(Policy::Design, chans));
+        let r = explore(&cfg, 0).expect("holds");
+        eprintln!("sleep-safety/carried: {} states", r.states);
+    }
+
+}
+
+#[test]
+fn mutant_unsourced_ignores_carried_is_found_open_packet() {
+    let mut cfg = cfg_popped(Cfg::new(Policy::Design, s_open_packet_popped()));
+    cfg.m.unsourced_ignores_carried = true;
+    finds("mutant/unsourced_ignores_carried/open-packet", &cfg, 0, &["SLEEP"]);
+}
+
+#[test]
+fn mutant_unsourced_ignores_carried_is_found_with_credit_shortage() {
+    // a private ring of 4 credits: the batch waits for pops with no marker possible behind an open packet
+    let mut cfg = cfg_popped(Cfg::new(Policy::Design, s_open_packet_popped()));
+    cfg.priv_entries = 4;
+    cfg.m.unsourced_ignores_carried = true;
+    finds("mutant/unsourced_ignores_carried/shallow", &cfg, 0, &["SLEEP"]);
+}
+
+#[test]
+fn mutant_unsourced_ignores_carried_is_found_with_two_relays() {
+    // one relay carries a wait while the other is served: the worker may block only when NO relay holds an unsourced obligation
+    let mut chans = s_open_packet_popped();
+    chans.push(spec(vec![Push(seg(11)), SetPut, Ring], vec![11], 1));
+    let mut cfg = cfg_popped(Cfg::new(Policy::Design, chans));
+    cfg.m.unsourced_ignores_carried = true;
+    finds("mutant/unsourced_ignores_carried/two-relays", &cfg, 0, &["SLEEP"]);
+    cfg.m.unsourced_ignores_carried = false;
+    holds("unmutated/two-relays", &cfg, 0);
+}
+
+/// The demand clause of `unsourced` is DEFENCE IN DEPTH in the faithful model: the level evaluation rings every demand before the
+/// decision (`rang`), so a worker that forgot demand in `unsourced` still does not block on it. Pinned (both lock kinds), so that
+/// a change that makes the evaluation skip demand shows up here as the clause becoming load-bearing.
+#[test]
+fn mutant_unsourced_ignores_demand_is_covered_by_the_evaluation_ring() {
+    for (lock_windows, pt_windows) in [(1u8, 0u8), (0, 1)] {
+        let mut cfg = Cfg::new(Policy::Design, s_batched());
+        cfg.lock_windows = lock_windows;
+        cfg.pt_windows = pt_windows;
+        cfg.m.unsourced_ignores_demand = true;
+        holds("mutant/unsourced_ignores_demand/covered", &cfg, 0);
+    }
+}
+
+/// ... and the demand clause is what keeps the worker awake when the evaluation rings nothing: with the ring lost too, the retry
+/// set is the only thing standing between the worker and a block on demand (V_SLEEP), and without BOTH the demand is stranded.
+#[test]
+fn mutant_unsourced_ignores_demand_and_a_lost_ring_is_found() {
+    for (lock_windows, pt_windows) in [(1u8, 0u8), (0, 1)] {
+        let mut cfg = Cfg::new(Policy::Design, s_batched());
+        cfg.lock_windows = lock_windows;
+        cfg.pt_windows = pt_windows;
+        cfg.m.unsourced_ignores_demand = true;
+        cfg.m.peek_never_rings = true;
+        finds("mutant/unsourced_ignores_demand+peek_never_rings", &cfg, 0, &["SLEEP", "DEADLOCK"]);
+    }
+}
+
+/// With the evaluation lost but `unsourced` intact the worker SPINS on the demand forever (no block, no progress): the liveness
+/// check judges that spinning terminal state (`quiescent_spin`) and names it.
+#[test]
+fn mutant_peek_never_rings_is_found_as_a_spinning_deadlock() {
+    let mut cfg = Cfg::new(Policy::Design, s_batched());
+    cfg.pt_windows = 1;
+    cfg.m.peek_never_rings = true;
+    finds("mutant/peek_never_rings", &cfg, 0, &["DEADLOCK"]);
 }

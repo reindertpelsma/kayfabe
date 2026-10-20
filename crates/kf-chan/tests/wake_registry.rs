@@ -1,51 +1,54 @@
-//! 2026-10-20 -- **The structural guard of the worker loop's wake sources.**
+//! 2026-10-20 -- **The structural guard of the worker loop's wake sources** (ported to the SIMPLE RELAY, commit e49f0c225,
+//! `docs/design/V3_RELAY_SIMPLE_20261020.md`).
 //!
 //! The bounded-fairness hole (`docs/design/V3_USER_RING_EVENT_LOOP_20261014.md` section 10) was: a wake source the idle spin
-//! visited but the busy loop did not. Its fix is `worker::LoopPolicy::after_pass` (a `Look` every `LOOK_EVERY` busy passes).
-//! This file keeps a FUTURE wake source from re-opening it silently:
+//! visited but the busy loop did not. The simple relay removes the SHAPE that allowed it: `worker::run_with_relay` is ONE loop
+//! (no `AfterPass::Look` arm, no `user_loop::idle` spin, no `LOOK_EVERY`); every iteration serves, evaluates ALL relays level-
+//! triggered (`relay.peek(Peek::Spin)`, skipped only by the negative control's busy pass), makes ONE `epoll_wait` (`Immediate`
+//! when work was served / a relay was rung / `relay.unsourced()`, else the park) and dispatches what is ready.
+//! This file keeps a FUTURE wake source from re-opening the hole silently:
 //!
 //!  * `worker::WAKE_SOURCES` lists every source `run_with_relay` visits (derived from the code; see the registry's own comment);
 //!  * a source-level check (the repo's `include_str!` pin idiom) fails if `dispatch` handles a tag class the registry does not
-//!    list, if a listed source is no longer there, if a callback or peek reason appears that nobody registered, or if the busy
-//!    `Look` arm stops doing exactly what the idle spin does;
-//!  * a property test drives `LoopPolicy` with deterministic pseudo-random pass results: a look at least once in every
-//!    `LOOK_EVERY` consecutive busy passes, the count restarting on an idle pass.
+//!    list, if a listed source is no longer there, if a callback or peek reason appears that nobody registered, if the loop grows a
+//!    second look site (an arm, a spin, a second `dispatch`/`peek`) or if the registry's `look` / `idle_spin` / `park` flags
+//!    disagree with where the single loop visits the source;
+//!  * property tests drive `LoopPolicy` with deterministic pseudo-random pass results: the default policy answers `Look` after EVERY
+//!    busy pass and `Idle` after an empty one, with no state (replaces the `LOOK_EVERY` period tests), and the loop evaluates the
+//!    relays in every iteration.
 //!
 //! Production behaviour is not touched by any of this: the registry is a `const`, the rest is tests.
 //!
-//! ## Mutation table (2026-10-20; each mutant applied alone to `worker.rs`; run: `cargo test --release -p kf-chan --lib --test wake_registry --test relay_fairness`)
+//! ## Port table (2026-10-20, simple relay; old test -> new test)
 //!
-//! | mutant | killed by |
-//! |---|---|
-//! | M1 registry entry removed: completions | 4 (`dispatch_handles_no_tag_class_the_registry_does_not_list`, `dispatch_has_exactly_as_many_branches_...`, `every_call_dispatch_makes_is_a_registered_handler_or_mechanical`, `every_peek_reason_the_loop_uses_is_registered_...`) |
-//! | M1c registry entry removed: doorbell | 3 (the first three above) |
-//! | M1b registry entry removed: peek Event | 2 (`the_registry_names_every_peek_reason`, `every_peek_reason_the_loop_uses_is_registered_...`) |
-//! | M2a `dispatch` handles a new tag class (known handler) | 2 (`dispatch_handles_no_tag_class_...`, `dispatch_has_exactly_as_many_branches_...`) |
-//! | M2b `dispatch` handles a new tag class (new handler) | 3 (the two above, `every_call_dispatch_makes_is_a_registered_handler_or_mechanical`) |
-//! | M3 Look arm skips `dispatch` | 4 (`the_busy_look_makes_exactly_the_calls_...`, `the_busy_look_and_the_idle_spin_visit_what_the_registry_says`, `relay_fairness::pin_the_busy_look_dispatches_events_and_completions`, `relay_fairness::pin_the_busy_look_order_...`) |
-//! | M4 Look arm skips `peek(Event)` | 4 (same shape) |
-//! | M5 Look arm skips `peek(Spin)` | 4 (same shape, `pin_the_busy_look_peeks_the_waiting_relays`) |
-//! | M5b Look arm polls with a timeout instead of `Immediate` | 4 (same shape) |
-//! | M6a `LOOK_EVERY` 5 | 3 (`look_every_is_the_value_the_design_document_states`, `relay_fairness::pin_a_busy_pass_asks_the_policy`, the baton model `p11_two_workers_...`) |
-//! | M6b `LOOK_EVERY` 8 (doubled) | 4 (the three above, `p12_two_workers_...`) |
-//! | M6c `LOOK_EVERY` 3 (still fair; a drift of the documented value) | 2 (`look_every_is_the_value_the_design_document_states`, `pin_a_busy_pass_asks_the_policy`) |
-//! | M7a `>` instead of `>=` in `after_pass` | 5 (the random-sequence property, the window test, `an_idle_pass_restarts_...`, the worker unit test, `p11_two_workers_...`) |
-//! | M7b counts served tokens, not passes | 4 (the random-sequence property, the window test, `an_idle_pass_restarts_...`, the worker unit test) |
-//! | M7c an idle pass keeps the count | 4 (the random-sequence property, `an_idle_pass_restarts_...`, the worker unit test, `p11_two_workers_...`) |
-//! | M7d a Look keeps the count | 3 (the random-sequence property, the window test, the worker unit test) |
-//! | M7e the policy never looks | 16 |
+//! | old | new | why |
+//! |---|---|---|
+//! | `the_busy_look_makes_exactly_the_calls_the_idle_spin_makes` | `the_busy_and_the_idle_iteration_are_one_code_path` | there are no two arms to compare; the one path is pinned |
+//! | `the_busy_look_and_the_idle_spin_visit_what_the_registry_says` | `the_single_loop_visits_what_the_registry_says` | same registry flags, read from the one loop |
+//! | `the_busy_loop_asks_the_policy_after_a_pass_that_served` | `the_loop_asks_the_policy_then_evaluates_the_relays_every_iteration` | the `Look =>` arm is gone; the peek follows the policy in every iteration |
+//! | `a_look_in_every_look_every_consecutive_busy_passes_for_random_pass_results` | `the_default_policy_looks_after_every_busy_pass_for_random_pass_results` | `LOOK_EVERY` deleted: every busy pass looks |
+//! | `any_window_of_look_every_busy_passes_contains_a_look_even_for_huge_bursts` | `every_busy_pass_looks_however_large_the_burst` | same |
+//! | `an_idle_pass_restarts_the_count_whatever_came_before` | `an_idle_pass_changes_nothing_about_the_next_busy_pass` | no count to restart |
+//! | `look_every_is_the_value_the_design_document_states` | `no_look_every_period_exists_any_more` | the constant is deleted; pin its absence |
+//! | (new) | `the_loop_blocks_only_without_an_unsourced_obligation_and_never_with_a_timer_dependency` | pins `spin = n > 0 \|\| rang \|\| relay.unsourced()` and the infinite park |
+//!
+//! ## Mutation table (2026-10-20, ported; each mutant applied alone to `worker.rs`; run: `cargo test --release -p kf-chan --features chaos-hooks --test wake_registry`)
+//!
+//! Unchanged in kind from the pre-port table for the registry/dispatch mutants (M1, M1b, M1c, M2a, M2b). Re-targeted: a second look
+//! site added to the loop (an `AfterPass::Look =>` arm, a spin, a second `relay.peek(`, a second `dispatch(`) is killed by
+//! `the_loop_has_exactly_one_look_site...`; `relay.peek` skipped for `Idle` or for `Look` by `the_busy_and_the_idle_iteration_are_one_code_path`;
+//! `after_pass` returning `Continue` for some busy pass by `the_default_policy_looks_after_every_busy_pass...`.
 #![allow(clippy::too_many_lines, missing_docs)]
 
 use kf_chan::user_loop::Peek;
 use kf_chan::worker::{
-    AfterPass, COMPLETIONS_TAG, EVERY_ITERATION, LOOK_EVERY, LoopPolicy, OTHER_TAG_BASE, TICK_TAG,
-    Visit, WAKE_SOURCES, WORKER_EFD_TAG,
+    AfterPass, COMPLETIONS_TAG, EVERY_ITERATION, LoopPolicy, OTHER_TAG_BASE, TICK_TAG, Visit,
+    WAKE_SOURCES, WORKER_EFD_TAG,
 };
 use std::collections::BTreeSet;
 
 const WORKER: &str = include_str!("../src/worker.rs");
 const USER_LOOP: &str = include_str!("../src/user_loop.rs");
-const DESIGN: &str = include_str!("../../../docs/design/V3_USER_RING_EVENT_LOOP_20261014.md");
 
 // ------------------------------------------------------------------------------------------------
 // text helpers (tolerant to formatting: rustfmt may re-wrap, the tests compare tokens, not layout)
@@ -67,6 +70,15 @@ fn run_with_relay_text() -> &'static str {
     a.split("#[cfg(test)]").next().expect("pin")
 }
 
+/// [`run_with_relay_text`] without its `//` comments (comments name the deleted mechanisms on purpose).
+fn code_text() -> String {
+    run_with_relay_text()
+        .lines()
+        .map(|l| l.split("//").next().unwrap())
+        .collect::<Vec<_>>()
+        .join("\n")
+}
+
 /// The body of the `dispatch` closure.
 fn dispatch_text() -> &'static str {
     let a = run_with_relay_text()
@@ -76,30 +88,41 @@ fn dispatch_text() -> &'static str {
     a.split("(doorbell, event)\n").next().expect("pin")
 }
 
-fn look_arm() -> &'static str {
-    let a = run_with_relay_text()
-        .split("AfterPass::Look => {")
+/// The loop body of `run_with_relay`, whitespace removed (from `while !stop...`).
+fn loop_squashed() -> String {
+    let t = squash(&code_text());
+    t.split("while!stop.load(Ordering::Acquire){")
         .nth(1)
-        .expect("pin: the Look arm of run_with_relay is gone");
-    a.split("continue;").next().expect("pin")
+        .expect("pin: the loop of run_with_relay is gone")
+        .to_string()
 }
 
-/// The idle spin: from the `user_loop::idle(..)` decision to the `if woke` that leaves it.
-fn spin_arm() -> &'static str {
-    let a = run_with_relay_text()
-        .split("user_loop::idle(")
-        .nth(1)
-        .expect("pin: the idle spin of run_with_relay is gone");
-    a.split("if woke").next().expect("pin")
+/// The level evaluation: from `let rang =` to the timeout bookkeeping that follows it (whitespace removed).
+fn peek_site() -> String {
+    let t = loop_squashed();
+    let a = t.split("letrang=").nth(1).expect("pin: `let rang =` is gone");
+    a.split("ifafter_timeout&&").next().expect("pin").to_string()
 }
 
-/// What follows the park wait: from the wait to the tick.
-fn park_arm() -> &'static str {
-    let a = run_with_relay_text()
-        .split("PollTimeout::Millis(")
-        .nth(1)
-        .expect("pin: the park wait of run_with_relay is gone");
-    a.split("on_other(TICK_TAG);").next().expect("pin")
+/// The immediate wait's branch: from `if spin {` to the `Immediate` poll (whitespace removed).
+fn spin_branch() -> String {
+    let t = loop_squashed();
+    let a = t.split("letgot=ifspin{").nth(1).expect("pin: `let got = if spin {` is gone");
+    a.split("PollTimeout::Immediate)").next().expect("pin").to_string()
+}
+
+/// The blocking branch: from the `Immediate` poll to the end of the `if/else` that yields `got` (whitespace removed).
+fn park_branch() -> String {
+    let t = loop_squashed();
+    let a = t.split("PollTimeout::Immediate)").nth(1).expect("pin: the Immediate poll is gone");
+    a.split("got};").next().expect("pin: the end of the wait is gone").to_string()
+}
+
+/// What follows the wait: the dispatch of the ready tags and the event hook (whitespace removed).
+fn after_wait() -> String {
+    let t = loop_squashed();
+    let a = t.split("PollTimeout::Immediate)").nth(1).expect("pin");
+    a.split("got};").nth(1).expect("pin: the end of the wait is gone").to_string()
 }
 
 /// The branch conditions of `dispatch`, whitespace removed: every `if tag ... {` / `else if tag ... {` and `"else"` for a
@@ -145,41 +168,10 @@ fn call_paths(text: &str) -> BTreeSet<String> {
     out
 }
 
-/// The calls that make a look: the poll, `dispatch`, the peeks (with their reason), the waiting test, the counters of what a
-/// look found. `busy_looks` is the Look arm's own counter and is the one intended difference.
-fn look_calls(text: &str) -> BTreeSet<String> {
-    let s = squash(text);
-    let mut out = BTreeSet::new();
-    for needle in [
-        "poller.wait(",
-        "dispatch(",
-        "relay.peek(",
-        "relay.waiting(",
-        "RelayStats::bump(",
-    ] {
-        let mut rest = s.as_str();
-        while let Some(i) = rest.find(needle) {
-            let tail = &rest[i..];
-            let end = tail.find(')').expect("unbalanced call");
-            let mut call = tail[..=end].to_string();
-            if needle == "poller.wait(" {
-                // the out-parameter's name is a local choice
-                call = call.replace("&mutready", "&mut_");
-            }
-            if !call.contains("busy_looks") {
-                out.insert(call);
-            }
-            rest = &tail[end..];
-        }
-    }
-    out
-}
-
 fn peek_name(p: Peek) -> &'static str {
     match p {
         Peek::Spin => "Spin",
         Peek::Event => "Event",
-        Peek::Backstop => "Backstop",
     }
 }
 
@@ -247,7 +239,15 @@ fn every_registered_dispatch_source_is_still_a_branch_of_dispatch() {
 #[test]
 fn every_call_dispatch_makes_is_a_registered_handler_or_mechanical() {
     // calls that move no wake: the iteration, the counters, the signal that re-wakes the worker itself
-    const MECHANICAL: &[&str] = &["ready.iter", "stats.host_rings.fetch_add", "efd.signal"];
+    // (the three `dispatch_*` / `doorbell_drain` names are the `KF3_DIAG_PROGRESS` taps: one untaken branch each when the diagnostic is off)
+    const MECHANICAL: &[&str] = &[
+        "ready.iter",
+        "stats.host_rings.fetch_add",
+        "efd.signal",
+        "dispatch_other",
+        "dispatch_completions",
+        "doorbell_drain",
+    ];
     let handlers: BTreeSet<String> = WAKE_SOURCES
         .iter()
         .flat_map(|w| w.handlers.iter())
@@ -286,7 +286,7 @@ fn every_registered_handler_is_called_in_its_branch() {
 fn the_registry_names_every_peek_reason() {
     // compile-time: a new variant breaks this match
     let _exhaustive = |p: Peek| match p {
-        Peek::Spin | Peek::Event | Peek::Backstop => (),
+        Peek::Spin | Peek::Event => (),
     };
     let enum_text = USER_LOOP
         .split("pub enum Peek {")
@@ -299,7 +299,7 @@ fn the_registry_names_every_peek_reason() {
         .filter(|l| !l.starts_with("//") && l.ends_with(','))
         .map(|l| l.trim_end_matches(',').to_string())
         .collect();
-    assert_eq!(variants.len(), 3, "{variants:?}");
+    assert_eq!(variants.len(), 2, "{variants:?}");
     let registered: BTreeSet<String> = WAKE_SOURCES
         .iter()
         .filter_map(|w| match w.visit {
@@ -315,7 +315,7 @@ fn the_registry_names_every_peek_reason() {
 
 #[test]
 fn every_peek_reason_the_loop_uses_is_registered_and_every_callback_is_accounted_for() {
-    let t = squash(run_with_relay_text());
+    let t = squash(&code_text());
     let registered: BTreeSet<&str> = WAKE_SOURCES
         .iter()
         .filter_map(|w| match w.visit {
@@ -324,8 +324,10 @@ fn every_peek_reason_the_loop_uses_is_registered_and_every_callback_is_accounted
         })
         .collect();
     let mut rest = t.as_str();
-    while let Some(i) = rest.find("relay.peek(Peek::") {
-        let tail = &rest[i + "relay.peek(Peek::".len()..];
+    let mut sites = 0;
+    while let Some(i) = rest.find("peek(Peek::") {
+        sites += 1;
+        let tail = &rest[i + "peek(Peek::".len()..];
         let name = &tail[..tail.find(')').unwrap()];
         assert!(
             registered.contains(name),
@@ -333,6 +335,7 @@ fn every_peek_reason_the_loop_uses_is_registered_and_every_callback_is_accounted
         );
         rest = tail;
     }
+    assert!(sites >= 2, "the loop's peek sites were not parsed ({sites})");
     // every `on_*` parameter of run_with_relay is a registered handler or runs every iteration
     let sig = run_with_relay_text().split(") {").next().unwrap();
     let handlers: BTreeSet<String> = WAKE_SOURCES
@@ -356,58 +359,142 @@ fn every_peek_reason_the_loop_uses_is_registered_and_every_callback_is_accounted
     }
 }
 
+
 // ------------------------------------------------------------------------------------------------
-// (ii) the busy Look is the idle spin's look
+// (ii) the busy iteration and the idle iteration are ONE code path
 
 #[test]
-fn the_busy_look_makes_exactly_the_calls_the_idle_spin_makes() {
-    let (l, s) = (look_calls(look_arm()), look_calls(spin_arm()));
-    assert!(l.len() >= 6, "the Look arm parsed to {l:?}");
-    assert_eq!(l, s, "the Look arm and the idle spin diverged");
+fn the_loop_has_exactly_one_look_site_and_none_of_the_deleted_mechanisms() {
+    let t = squash(&code_text());
+    // the deleted mechanisms: a busy `Look` arm, the bounded idle spin, the period, the backstop look
+    for gone in [
+        "AfterPass::Look=>",
+        "AfterPass::Look=>{",
+        "user_loop::idle(",
+        "LOOK_EVERY",
+        "Peek::Backstop",
+        "CONTENTION_RETRIES",
+        "may_retry",
+        "ifwoke",
+    ] {
+        assert!(!t.contains(gone), "run_with_relay still has `{gone}`");
+    }
+    // one level evaluation, one dispatch, one blocking wait, one immediate wait, one park decision
+    assert_eq!(t.matches("relay.peek(").count(), 1, "one relay.peek per iteration");
+    assert_eq!(t.matches("relay.peek(Peek::Spin)").count(), 1);
+    assert_eq!(t.matches("dispatch(&ready)").count(), 1, "one dispatch site");
+    assert_eq!(t.matches("poller.wait(").count(), 2, "one immediate wait and one park wait");
+    assert_eq!(t.matches("PollTimeout::Immediate").count(), 1);
+    assert_eq!(t.matches("try_park(").count(), 1);
+    assert_eq!(t.matches("relay.unsourced()").count(), 1);
+    assert_eq!(t.matches("policy.after_pass(").count(), 1);
+    assert_eq!(t.matches("worker_pass(").count(), 1);
+    // no peek inside dispatch (the next iteration's level evaluation covers an event), and none after it
+    assert!(!dispatch_text().contains("peek("), "dispatch peeks again");
+    assert!(
+        !after_wait().contains("relay."),
+        "the relay is touched after the dispatch: {}",
+        after_wait()
+    );
 }
 
 #[test]
-fn the_busy_look_and_the_idle_spin_visit_what_the_registry_says() {
-    let (l, s, p) = (squash(look_arm()), squash(spin_arm()), squash(park_arm()));
+fn the_busy_and_the_idle_iteration_are_one_code_path() {
+    // The level evaluation is skipped for exactly one policy answer: `Continue` (the negative control's busy pass). A busy pass
+    // (`Look`) and an empty one (`Idle`) both evaluate, in the same statement.
+    let site = peek_site();
+    assert!(
+        site.starts_with("ifafter==AfterPass::Continue{false}else{"),
+        "the evaluation is guarded by something other than the negative control: {site}"
+    );
+    assert!(!site.contains("AfterPass::Idle"), "the evaluation distinguishes the idle pass: {site}");
+    assert!(site.contains("relay.peek(Peek::Spin)"), "{site}");
+    // the Look branch inside it is the counter only: no second look, no wait, no dispatch
+    let look = site
+        .split("ifafter==AfterPass::Look{")
+        .nth(1)
+        .and_then(|a| a.split("}relay.peek(").next())
+        .expect("pin: the busy-look counter block is gone");
+    for forbidden in ["relay.", "dispatch", "poller", "on_other", "completions"] {
+        assert!(!look.contains(forbidden), "the Look counter block does `{forbidden}`: {look}");
+    }
+    // the immediate wait and the park wait both lead to the same dispatch (it follows the whole if/else)
+    let spin = spin_branch();
+    assert!(!spin.contains("dispatch") && !spin.contains("relay.peek"), "{spin}");
+    let park = park_branch();
+    assert!(!park.contains("dispatch(&ready)") && !park.contains("relay.peek"), "{park}");
+    assert!(
+        after_wait().starts_with("ifmatches!(got,Ok(k)ifk>0){letl(doorbell,event)=dispatch(&ready);")
+            || after_wait().contains("=dispatch(&ready);"),
+        "the dispatch no longer follows the wait: {}",
+        after_wait()
+    );
+    // calls of the immediate branch: counters and the immediate poll only
+    let calls = call_paths(&spin_branch_with_poll());
+    for c in &calls {
+        assert!(
+            ["RelayStats::bump", "hook!", "poller.wait", "spin"].contains(&c.as_str()),
+            "the immediate branch calls `{c}`"
+        );
+    }
+}
+
+/// The spin branch including its poll call (whitespace removed text re-parsed by `call_paths`, which collapses blanks).
+fn spin_branch_with_poll() -> String {
+    format!("{}PollTimeout::Immediate)", spin_branch())
+}
+
+#[test]
+fn the_single_loop_visits_what_the_registry_says() {
+    let t = loop_squashed();
+    let (site, spin, park, after) = (peek_site(), spin_branch(), park_branch(), after_wait());
     assert!(!WAKE_SOURCES.is_empty());
+    // where the policy answers a look: busy pass -> Look (default policy; pinned in part (iii)), empty pass -> Idle
+    let guard_only_continue = site.starts_with("ifafter==AfterPass::Continue{false}else{")
+        && !site.contains("AfterPass::Idle");
     for w in WAKE_SOURCES {
-        let needle = match w.visit {
-            Visit::Dispatch(_) => "dispatch(&ready)".to_string(),
-            Visit::Peek(pk) => format!("relay.peek(Peek::{})", peek_name(pk)),
-            Visit::Tick => "on_other(TICK_TAG)".to_string(),
+        let (look, idle_spin, park_flag) = match w.visit {
+            // the common tail after the wait: reached from the immediate wait (busy / rung / unsourced iteration), from the
+            // park, and from an idle iteration that does not park
+            Visit::Dispatch(_) => {
+                let reached = after.contains("=dispatch(&ready);")
+                    && t.find("=dispatch(&ready);") > t.find("PollTimeout::Immediate)");
+                (reached, reached, reached)
+            }
+            // the level evaluation: before the wait, in every iteration (no branch of `if spin` holds it)
+            Visit::Peek(Peek::Spin) => {
+                let reached = guard_only_continue
+                    && site.contains("relay.peek(Peek::Spin)")
+                    && !spin.contains("relay.peek")
+                    && !park.contains("relay.peek");
+                (reached, reached, reached)
+            }
+            // an engine event is announced to the diagnostics after the dispatch; the look it asks for IS the next
+            // iteration's level evaluation (no peek inside dispatch any more)
+            Visit::Peek(Peek::Event) => {
+                let reached = after.contains("hook!(tap,peek(Peek::Event))")
+                    && !dispatch_text().contains("peek(");
+                (reached, reached, reached)
+            }
+            // the tick follows the park wait only
+            Visit::Tick => {
+                let in_park = park.contains("on_other(TICK_TAG);");
+                (
+                    spin.contains("on_other(TICK_TAG)") || after.contains("on_other(TICK_TAG)"),
+                    spin.contains("on_other(TICK_TAG)"),
+                    in_park,
+                )
+            }
         };
-        let in_tick_arm = squash(run_with_relay_text()).contains("on_other(TICK_TAG);");
-        assert_eq!(
-            l.contains(&needle),
-            w.look,
-            "{}: the Look arm vs the registry",
-            w.name
-        );
-        assert_eq!(
-            s.contains(&needle),
-            w.idle_spin,
-            "{}: the idle spin vs the registry",
-            w.name
-        );
-        match w.visit {
-            Visit::Tick => assert!(
-                in_tick_arm && w.park,
-                "{}: the tick follows the park",
-                w.name
-            ),
-            _ => assert_eq!(
-                p.contains(&needle),
-                w.park,
-                "{}: the park arm vs the registry",
-                w.name
-            ),
-        }
+        assert_eq!(look, w.look, "{}: a busy iteration vs the registry", w.name);
+        assert_eq!(idle_spin, w.idle_spin, "{}: an idle iteration vs the registry", w.name);
+        assert_eq!(park_flag, w.park, "{}: after the park vs the registry", w.name);
     }
 }
 
 #[test]
-fn the_busy_loop_asks_the_policy_after_a_pass_that_served() {
-    let t = squash(run_with_relay_text());
+fn the_loop_asks_the_policy_then_evaluates_the_relays_every_iteration() {
+    let t = squash(&code_text());
     let i = t
         .find("policy.after_pass(n)")
         .expect("pin: the loop no longer asks LoopPolicy");
@@ -415,7 +502,35 @@ fn the_busy_loop_asks_the_policy_after_a_pass_that_served() {
         t[..i].contains("worker_pass("),
         "the policy must be asked after the pass"
     );
-    assert!(t[i..].contains("AfterPass::Look=>"), "the Look arm is gone");
+    let p = t.find("relay.peek(Peek::Spin)").expect("pin: the level evaluation is gone");
+    assert!(p > i, "the evaluation must follow the policy's answer");
+    let w = t.find("poller.wait(").expect("pin");
+    assert!(p < w, "the evaluation must precede the wait (race free: the dispatch drains before the next evaluation)");
+    // an empty pass is NOT the case that skips the evaluation: the only skip is `Continue`
+    assert!(t.contains("ifafter==AfterPass::Continue{false}"));
+}
+
+#[test]
+fn the_loop_blocks_only_without_an_unsourced_obligation_and_never_with_a_timer_dependency() {
+    let t = loop_squashed();
+    // the one spin condition: work served, a relay rung by the evaluation, or an obligation without a wake source
+    assert!(
+        t.contains("letspin=n>0||rang||relay.unsourced();"),
+        "the spin condition changed: it must be `n > 0 || rang || relay.unsourced()`"
+    );
+    // the immediate wait is the `if spin` branch; the park is the else branch and is refused (not blocked) when `seen` moved
+    assert!(t.contains("letgot=ifspin{"));
+    let park = park_branch();
+    assert!(park.contains("if!plane.worker_wake().try_park(seen){continue;}"), "{park}");
+    // the park: owed rate (Pacer), the last-resort net (a switch the models turn off) or BLOCKING; no other timeout
+    assert!(park.contains("PollTimeout::Millis(OWED_PARK_MS)"));
+    assert!(park.contains("PARK_NET.load("));
+    assert!(park.contains("PollTimeout::Blocking"));
+    assert_eq!(park.matches("PollTimeout::").count(), 3, "{park}");
+    // a timeout only counts the bug (a net firing that finds work); no logic hangs on it
+    assert!(t.contains("timeouts_with_work"));
+    let net_logic = t.split("ifafter_timeout&&(n>0||rang){").nth(1).expect("pin: the net bug counter is gone");
+    assert!(net_logic.starts_with("stats.timeouts_with_work"), "{net_logic}");
 }
 
 #[test]
@@ -426,7 +541,7 @@ fn tag_classes_are_disjoint_and_ordered() {
 }
 
 // ------------------------------------------------------------------------------------------------
-// (iii) LoopPolicy: a look in every LOOK_EVERY consecutive busy passes; the count restarts on an idle pass
+// (iii) LoopPolicy: the default answers Look after EVERY busy pass (no period), Idle after an empty one
 
 struct Lcg(u64);
 impl Lcg {
@@ -449,51 +564,27 @@ fn pass_result(r: &mut Lcg, idle_per_mille: u64) -> usize {
 }
 
 #[test]
-fn a_look_in_every_look_every_consecutive_busy_passes_for_random_pass_results() {
+fn the_default_policy_looks_after_every_busy_pass_for_random_pass_results() {
     let mut looks_seen = 0u64;
     for seed in 0..96u64 {
         // profiles: never idle, rarely idle, often idle, almost always idle
         let idle = [0, 20, 300, 950][(seed % 4) as usize];
         let mut r = Lcg(seed.wrapping_mul(0x9E37_79B9_7F4A_7C15) ^ 0xD1B5_4A32);
         let mut p = LoopPolicy::default();
-        let mut run = 0u32; // consecutive busy passes since the last look or idle pass
         for step in 0..4000 {
             let n = pass_result(&mut r, idle);
             let a = p.after_pass(n);
             if n == 0 {
                 assert_eq!(a, AfterPass::Idle, "seed {seed} step {step}");
-                assert_eq!(
-                    p,
-                    LoopPolicy::default(),
-                    "an idle pass restarts the count (seed {seed} step {step})"
-                );
-                run = 0;
-                continue;
-            }
-            assert_ne!(
-                a,
-                AfterPass::Idle,
-                "a pass that served {n} must not idle (seed {seed} step {step})"
-            );
-            run += 1;
-            if a == AfterPass::Look {
+            } else {
                 looks_seen += 1;
                 assert_eq!(
-                    p,
-                    LoopPolicy::default(),
-                    "a look restarts the count (seed {seed})"
-                );
-                assert_eq!(
-                    run, LOOK_EVERY,
-                    "looked after {run} busy passes (seed {seed} step {step})"
-                );
-                run = 0;
-            } else {
-                assert!(
-                    run < LOOK_EVERY,
-                    "{run} consecutive busy passes without a look (seed {seed} step {step}): the bound is LOOK_EVERY = {LOOK_EVERY}"
+                    a,
+                    AfterPass::Look,
+                    "a pass that served {n} must look (seed {seed} step {step})"
                 );
             }
+            assert_eq!(p, LoopPolicy::default(), "the policy keeps no state (seed {seed} step {step})");
         }
     }
     assert!(
@@ -503,56 +594,49 @@ fn a_look_in_every_look_every_consecutive_busy_passes_for_random_pass_results() 
 }
 
 #[test]
-fn any_window_of_look_every_busy_passes_contains_a_look_even_for_huge_bursts() {
-    // a pass is one pass however many tokens it served: usize::MAX tokens must not look more often, 1 token not less often
+fn every_busy_pass_looks_however_large_the_burst() {
+    // a pass is one pass however many tokens it served: usize::MAX tokens and 1 token look alike, every time
     for n in [1usize, 2, 9, 64, usize::MAX] {
         let mut p = LoopPolicy::default();
-        let results: Vec<AfterPass> = (0..200).map(|_| p.after_pass(n)).collect();
-        for w in results.windows(LOOK_EVERY as usize) {
-            assert!(
-                w.contains(&AfterPass::Look),
-                "n = {n}: a window of {LOOK_EVERY} busy passes without a look"
-            );
-        }
-        let looks = results.iter().filter(|a| **a == AfterPass::Look).count();
-        assert_eq!(
-            looks,
-            200 / LOOK_EVERY as usize,
-            "n = {n}: one look per {LOOK_EVERY} passes"
-        );
+        assert!((0..200).all(|_| p.after_pass(n) == AfterPass::Look), "n = {n}");
     }
 }
 
 #[test]
-fn an_idle_pass_restarts_the_count_whatever_came_before() {
-    for before in 1..=LOOK_EVERY * 2 + 1 {
+fn an_idle_pass_changes_nothing_about_the_next_busy_pass() {
+    for before in 0..12 {
         let mut p = LoopPolicy::default();
         for _ in 0..before {
-            let _ = p.after_pass(5);
+            assert_eq!(p.after_pass(5), AfterPass::Look);
         }
         assert_eq!(p.after_pass(0), AfterPass::Idle);
-        for i in 1..LOOK_EVERY {
-            assert_eq!(
-                p.after_pass(5),
-                AfterPass::Continue,
-                "after {before} busy passes then idle: pass {i}"
-            );
-        }
-        assert_eq!(p.after_pass(5), AfterPass::Look);
+        assert_eq!(p.after_pass(5), AfterPass::Look, "after {before} busy passes then idle");
     }
 }
 
 #[test]
-fn look_every_is_the_value_the_design_document_states() {
-    // the delay a busy worker adds to any wait is bounded by LOOK_EVERY passes (section 10); the bound and the text move together
-    let look_every = std::hint::black_box(LOOK_EVERY);
-    assert!(look_every >= 1, "a look every 0 passes is not a policy");
+fn the_negative_control_alone_skips_the_busy_look() {
+    // `Continue` is the only answer that skips the level evaluation (`the_busy_and_the_idle_iteration_are_one_code_path`)
+    let mut ctl = LoopPolicy::without_busy_look();
+    let mut fix = LoopPolicy::default();
+    for n in [0usize, 1, 3, 64, usize::MAX] {
+        let (c, f) = (ctl.after_pass(n), fix.after_pass(n));
+        if n == 0 {
+            assert_eq!((c, f), (AfterPass::Idle, AfterPass::Idle));
+        } else {
+            assert_eq!((c, f), (AfterPass::Continue, AfterPass::Look), "n = {n}");
+        }
+    }
+}
+
+#[test]
+fn no_look_every_period_exists_any_more() {
+    // the period is deleted (owner, 2026-10-20): not as a constant, not in the loop, not as a policy field
+    let prod = WORKER.split("#[cfg(test)]").next().unwrap();
     assert!(
-        DESIGN.contains(&format!("`LOOK_EVERY = {LOOK_EVERY}`")),
-        "docs/design/V3_USER_RING_EVENT_LOOP_20261014.md section 10 does not state LOOK_EVERY = {LOOK_EVERY}"
+        !prod.contains("pub const LOOK_EVERY") && !prod.contains("const LOOK_EVERY"),
+        "worker.rs defines LOOK_EVERY again"
     );
-    assert!(
-        look_every <= 4,
-        "the fairness bound of the model (K = 16 passes) assumes a look at least every 4 busy passes"
-    );
+    assert!(!squash(&code_text()).contains("LOOK_EVERY"));
+    assert!(!USER_LOOP.contains("pub const SPIN"), "user_loop::SPIN (the pre-park spin budget) is back");
 }
