@@ -588,7 +588,13 @@ fn a_fresh_window_forgets_a_packet_the_scan_left_open_before_pointer_mode() {
 fn the_guest_ring_is_full_when_gp_put_leaves_one_slot_before_the_gp_get_the_guest_sees() {
     let mut io = Mock::new(8);
     let mut r = pointer_relay(&mut io);
-    assert_eq!(r.written_get, 0, "nothing written back yet");
+    // Popped: nothing written back yet; ReadIndex (Change A): the read index of the prelude's first entry
+    let want = if kf_chan::user_turn::guest_get_follows_pops() {
+        0
+    } else {
+        1
+    };
+    assert_eq!(r.written_get, want, "what the guest sees before the turn");
     // the PBDMA popped both forwarded entries: the next turn writes GP_GET = 2 back
     io.hw_get = 2;
     // the guest filled slots 2..=7 and 0: GP_PUT = 1, so put + 1 == 2 == the GP_GET it sees
@@ -813,7 +819,13 @@ fn copy_before_get_a_slot_overwritten_after_get_passed_it_is_never_forwarded() {
             .calls
             .iter()
             .rev()
-            .find_map(|c| if let Call::WriteGuestGet(g) = c { Some(*g) } else { None })
+            .find_map(|c| {
+                if let Call::WriteGuestGet(g) = c {
+                    Some(*g)
+                } else {
+                    None
+                }
+            })
             .unwrap_or(written);
         // the hostile guest reuses every slot the visible GET passed, at once
         let mut s = written;
@@ -829,9 +841,21 @@ fn copy_before_get_a_slot_overwritten_after_get_passed_it_is_never_forwarded() {
     let forwarded: Vec<u64> = io
         .calls
         .iter()
-        .filter_map(|c| if let Call::Entry(_, e) = c { Some(*e) } else { None })
+        .filter_map(|c| {
+            if let Call::Entry(_, e) = c {
+                Some(*e)
+            } else {
+                None
+            }
+        })
         .collect();
     assert_eq!(written, io.put, "the guest's GP_GET reached GP_PUT");
-    assert!(!forwarded.contains(&garbage), "a post-GET overwrite was forwarded: {forwarded:x?}");
-    assert_eq!(forwarded, originals, "what was forwarded is exactly what the guest wrote before GET passed it");
+    assert!(
+        !forwarded.contains(&garbage),
+        "a post-GET overwrite was forwarded: {forwarded:x?}"
+    );
+    assert_eq!(
+        forwarded, originals,
+        "what was forwarded is exactly what the guest wrote before GET passed it"
+    );
 }
