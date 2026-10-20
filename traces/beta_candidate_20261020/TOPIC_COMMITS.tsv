@@ -1,0 +1,28 @@
+topic	commit	subject	files_touched	insertions	deletions
+caps	b1ea24127	test(display): EXPECTED RED scoped derived caps contracts	2	689	0
+caps	b930e7778	display: import reviewed derived caps without changing Linux pages	12	1064	3
+profile	a4a9db447	test(config): EXPECTED RED per-device Windows profile and flag audit	3	191	0
+profile	26a690d5a	config: replace Windows P19 environment selectors with per-device guest-os	39	2025	623
+profile	a2c19cca5	style: retain untouched lifecycle and ABI source formatting	9	175	631
+f2	0abe223f8	test(chan): EXPECTED RED F-2 public class address widths	2	92	0
+f2	ea9dcd315	chan: import reviewed F-2 class-specific address widths	3	87	17
+ce2	facc99a8f	test(chan): EXPECTED RED kernel CE methods without SET_OBJECT	6	491	0
+ce2	8acb1e8d5	chan: import reviewed kernel CE implicit-object fix	10	297	10
+l5	24482a5ee	test(boot): EXPECTED RED live-seed retirement and stale unload restore	2	81	0
+l5	1f693b79c	boot: retire live firmware seed before scrub and cancel stale-life restores	5	78	18
+heartbeat	4131ea767	refactor(heartbeat): expose unused seams for failing-first clock coverage	4	42	0
+heartbeat	f1a922f39	test(heartbeat): EXPECTED RED offset locking and stale-life contracts	3	319	0
+heartbeat	effdd0271	heartbeat: import approved bounded mapped-clock publication and life gating	9	279	33
+release_install	26c0314ee	test(install): EXPECTED RED rootless launcher doctor and prefix contracts	1	96	0
+release_install	047bd00dc	test(release): EXPECTED RED shared version and no-clobber publication	1	41	0
+release_install	1f08be5e2	install: add versioned prefix launcher doctor and first-run documentation	27	966	40
+release_install	762e54a87	test(doctor): EXPECTED RED display requires udmabuf permission preflight	1	22	1
+release_install	e6b5b4dc8	doctor: check display export permission without requiring it for headless	4	23	2
+own_tooling	d133cbb2d	test(tooling): EXPECTED RED distinguish mutant kills from wrapper faults	1	33	0
+own_tooling	9ee40e51b	fix(tooling): count expected Cargo test failures as mutant kills	1	14	0
+own_tooling	8938a3bc9	test(broker): EXPECTED RED exact-decimation fixture needs wire acknowledgements	1	33	0
+own_tooling	baec48aa9	fix(test): acknowledge accepted broker ticks instead of assuming a flush delay	3	26	2
+own_tooling	42f5ba5a8	test(tooling): prove expected Cargo diagnostics and wrapper faults remain distinct	2	28	0
+release_install	744eb8afe	test(build): EXPECTED RED published bundle must include generated firmware and trace data	1	55	0
+release_install	480a88d66	build: generate QEMU bundle data before immutable revision publication	5	57	1
+release_install	26c12d860	docs(broker): point protocol readers to the maintained header and eighth command	1	4	4

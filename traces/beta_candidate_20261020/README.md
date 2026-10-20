@@ -10,7 +10,7 @@ CODE READ: C6, `integration/beta-candidate-1-20261020`, based on candidate-5
 tests first, mutation checks and push after each stage. Coordinator approved
 explicit per-device guest-os=windows|linux (default Linux), separately reviewed
 derived caps, and corrections to own tooling. Those decisions are resolved.
-MEASURED: latest product/style checkpoint `c27134846` was verified on origin;
+MEASURED: latest build-tools checkpoint `480a88d66` was verified on origin;
 the external report records the enclosing report commit after its push.
 
 ## 2. Result (twelve lines)
@@ -20,10 +20,10 @@ the external report records the enclosing report commit after its push.
 - DONE — MEASURED: scoped caps import, profile wiring and all selected pure fixes committed; [conflicts](CONFLICTS.md) resolved within the approved scopes.
 - DONE — CODE READ: 19 P19 env selectors retired; Windows property enables18 behaviours and derived caps; default Linux settings retained.
 - DONE — CODE READ: mirror/trap/profiler/recorder/full sweep excluded; no captured whole-page runtime path.
-- DONE — MEASURED: launcher/doctor/install/version/audit/wrapper fixture suite40/0; [install review](INSTALL_REVIEW.md).
+- DONE — MEASURED: launcher/doctor/install/version/audit/wrapper fixture suite42/0; [install review](INSTALL_REVIEW.md).
 - DONE — MEASURED: broker make check and check-sanitize pass; pacing helper fixture corrected without production timing changes.
 - DONE — MEASURED: 42 changed Rust files rustfmt2024 clean; new shell wrappers/build shellcheck, flag audit and docs command/link checks pass.
-- PARTIAL — MEASURED: final22-crate regression and CPU-only host binary build are running; baseline3620/0/19 reproduced exactly.
+- PARTIAL — MEASURED: final22-crate regression is running; CPU-only host build and real layout smoke pass; baseline3620/0/19 reproduced exactly.
 - PARTIAL — CODE READ: existing cached diagnostic gates retained; universal one-relaxed-load cost guarantee is not established.
 - NOT DONE — MEASURED: Stage5 hardware and clean install walk-through, Stage6 README/PR; hardware n=0.
 - DONE — MEASURED: no GPU/VM action, owner-VM stop, foreign-session message, master merge or non-lane push.
@@ -45,11 +45,14 @@ focused passes are not substituted for the full run.
 | Launcher/install | 7 | 3/2/2/2/2/2/2 |
 | Broker pacing fixture | 1 | 2 |
 | Display permission preflight | 1 | 2 |
+| Generated bundle data | 1 | 2 |
+| Source-policy auditor | 1 | 2 |
 | Mutation wrapper | 2 | 2/2 |
 
 MEASURED: named kill receipts are the adjacent *mutations.json files. Compiler,
 harness errors and insufficient kills do not count. All injected source is
-restored. The source-policy auditor mutant also failed two named tests.
+restored. The corrected real layout verifies174 file hashes and all three versions,
+then removes its temporary prefix; [CPU artifact identity](HOST_BUILD.json).
 MEASURED: strict AD104/native oracle rerun at c27134846 remains RED by100 words;
 this is the approved derived-caps limitation, not a passing equality claim.
 
@@ -70,8 +73,7 @@ observe stay at candidate-5 defaults; timer mapping was already automatic.
 ## 5. Not verified
 
 MEASURED: hardware n=0, spread N/A. No C6 boot, compositor, performance, TDR/Xid,
-aging, new guest install or live doctor probe. CPU-only build uses its own host
-prefix. Source extraction omits an unbuilt absolute upstream EDK2 Mac include
+aging, new guest install or live doctor probe. CPU-only build and install smoke use their own host prefix. Source extraction omits an unbuilt absolute upstream EDK2 Mac include
 symlink; upstream archive signature has not been verified by this lane.
 CODE READ minimal direct fragments: Linux `-device kf3-gpu,id=gpu0`; Windows adds
 `guest-os=windows,guest-driver=580.65.06,display=on,gop=on`, host-derived resource
@@ -80,6 +82,6 @@ and broker properties. Ordinary VM args and why each remains are documented in
 
 ## 6. Cleanup at this progress checkpoint
 
-MEASURED: own local release regression and CPU-only host build are running;
+MEASURED: own local release regression is running; CPU-only host build/layout jobs exited;
 own target dirs are retained until those complete. No host GPU lock was taken.
 Final cleanup and origin equality will be recorded after final verification.

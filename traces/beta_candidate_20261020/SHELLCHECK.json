@@ -1,0 +1,50 @@
+[
+  {
+    "file": "scripts/bench/build_kf3.sh",
+    "baseline_count": 0,
+    "after_count": 0,
+    "new_count": 0
+  },
+  {
+    "file": "scripts/bench/v3_gates.sh",
+    "baseline_count": 1,
+    "after_count": 1,
+    "new_count": 0
+  },
+  {
+    "file": "scripts/bench/windows/windows_broker.sh",
+    "baseline_count": 1,
+    "after_count": 1,
+    "new_count": 0
+  },
+  {
+    "file": "scripts/bench/windows/winpass_cycle.sh",
+    "baseline_count": 28,
+    "after_count": 28,
+    "new_count": 0
+  },
+  {
+    "file": "scripts/kayfabe-doctor.sh",
+    "baseline_count": 0,
+    "after_count": 0,
+    "new_count": 0
+  },
+  {
+    "file": "scripts/kayfabe-install.sh",
+    "baseline_count": 0,
+    "after_count": 0,
+    "new_count": 0
+  },
+  {
+    "file": "scripts/kayfabe-run.sh",
+    "baseline_count": 0,
+    "after_count": 0,
+    "new_count": 0
+  },
+  {
+    "file": "scripts/kayfabe-uninstall.sh",
+    "baseline_count": 0,
+    "after_count": 0,
+    "new_count": 0
+  }
+]

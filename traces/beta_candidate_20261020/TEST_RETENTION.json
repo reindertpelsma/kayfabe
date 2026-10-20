@@ -1,0 +1,175 @@
+{
+  "evidence": "MEASURED syntactic retention of existing named tests in changed Rust files; not assertion equivalence",
+  "files": [
+    {
+      "path": "crates/kf-abi/src/lib.rs",
+      "before_named_tests": 2,
+      "removed": []
+    },
+    {
+      "path": "crates/kf-chan/src/grtables.rs",
+      "before_named_tests": 8,
+      "removed": []
+    },
+    {
+      "path": "crates/kf-chan/src/host.rs",
+      "before_named_tests": 4,
+      "removed": []
+    },
+    {
+      "path": "crates/kf-chan/src/lib.rs",
+      "before_named_tests": 0,
+      "removed": []
+    },
+    {
+      "path": "crates/kf-chan/src/ring.rs",
+      "before_named_tests": 0,
+      "removed": []
+    },
+    {
+      "path": "crates/kf-chan/src/tmode.rs",
+      "before_named_tests": 0,
+      "removed": []
+    },
+    {
+      "path": "crates/kf-chan/tests/ring.rs",
+      "before_named_tests": 12,
+      "removed": []
+    },
+    {
+      "path": "crates/kf-disp/src/caps.rs",
+      "before_named_tests": 11,
+      "removed": []
+    },
+    {
+      "path": "crates/kf-disp/src/class.rs",
+      "before_named_tests": 1,
+      "removed": []
+    },
+    {
+      "path": "crates/kf-disp/src/lib.rs",
+      "before_named_tests": 0,
+      "removed": []
+    },
+    {
+      "path": "crates/kf-gsp/src/boot.rs",
+      "before_named_tests": 36,
+      "removed": []
+    },
+    {
+      "path": "crates/kf-gsp/src/sysinfo.rs",
+      "before_named_tests": 4,
+      "removed": []
+    },
+    {
+      "path": "crates/kf-harness/src/bin/kf-micro-reserve-probe.rs",
+      "before_named_tests": 3,
+      "removed": []
+    },
+    {
+      "path": "crates/kf-host/src/channel.rs",
+      "before_named_tests": 38,
+      "removed": []
+    },
+    {
+      "path": "crates/kf-host/src/lib.rs",
+      "before_named_tests": 3,
+      "removed": []
+    },
+    {
+      "path": "crates/kf-host/src/timer.rs",
+      "before_named_tests": 0,
+      "removed": []
+    },
+    {
+      "path": "crates/kf-mem/src/cpuwin.rs",
+      "before_named_tests": 36,
+      "removed": []
+    },
+    {
+      "path": "crates/kf-qemu/src/bar1phys.rs",
+      "before_named_tests": 16,
+      "removed": []
+    },
+    {
+      "path": "crates/kf-qemu/src/chan.rs",
+      "before_named_tests": 33,
+      "removed": []
+    },
+    {
+      "path": "crates/kf-qemu/src/device.rs",
+      "before_named_tests": 1,
+      "removed": []
+    },
+    {
+      "path": "crates/kf-qemu/src/display.rs",
+      "before_named_tests": 51,
+      "removed": []
+    },
+    {
+      "path": "crates/kf-qemu/src/ffi_unsafe.rs",
+      "before_named_tests": 0,
+      "removed": []
+    },
+    {
+      "path": "crates/kf-qemu/src/gop.rs",
+      "before_named_tests": 9,
+      "removed": []
+    },
+    {
+      "path": "crates/kf-qemu/src/lib.rs",
+      "before_named_tests": 0,
+      "removed": []
+    },
+    {
+      "path": "crates/kf-qemu/tests/gpu_uuid_property.rs",
+      "before_named_tests": 6,
+      "removed": []
+    },
+    {
+      "path": "crates/kf-qemu/tests/max_fps_property.rs",
+      "before_named_tests": 2,
+      "removed": []
+    },
+    {
+      "path": "crates/kf-rm/src/chanlink.rs",
+      "before_named_tests": 36,
+      "removed": []
+    },
+    {
+      "path": "crates/kf-rm/src/display.rs",
+      "before_named_tests": 16,
+      "removed": []
+    },
+    {
+      "path": "crates/kf-rm/src/display_ctrl_probe.rs",
+      "before_named_tests": 3,
+      "removed": []
+    },
+    {
+      "path": "crates/kf-rm/src/lib.rs",
+      "before_named_tests": 0,
+      "removed": []
+    },
+    {
+      "path": "crates/kf-rm/src/preempt_bind_probe.rs",
+      "before_named_tests": 3,
+      "removed": []
+    },
+    {
+      "path": "crates/kf-rm/src/sw_runlist_host.rs",
+      "before_named_tests": 3,
+      "removed": []
+    },
+    {
+      "path": "crates/kf-rm/tests/memory_list_chain.rs",
+      "before_named_tests": 2,
+      "removed": []
+    },
+    {
+      "path": "crates/kf-rm/tests/sw_runlist_probe_chain.rs",
+      "before_named_tests": 2,
+      "removed": []
+    }
+  ]
+}

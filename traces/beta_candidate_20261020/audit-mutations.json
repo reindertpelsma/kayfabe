@@ -1,0 +1,12 @@
+[
+  {
+    "mutant": "ignore-unregistered-reads",
+    "status": "killed",
+    "kills": 2,
+    "tests": [
+      "test_new_c_read_and_launcher_set_require_rows (__main__.FlagPolicy.test_new_c_read_and_launcher_set_require_rows)",
+      "test_new_rust_read_requires_a_policy_row (__main__.FlagPolicy.test_new_rust_read_requires_a_policy_row)"
+    ],
+    "errors": []
+  }
+]

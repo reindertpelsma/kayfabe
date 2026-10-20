@@ -1,0 +1,15 @@
+{
+  "evidence": "MEASURED lexical superset, not live-read counts",
+  "baseline_names": 155,
+  "current_names": 155,
+  "registered_names": 156,
+  "added_names": [],
+  "removed_names": [],
+  "verdict_counts": {
+    "DELETE": 42,
+    "HARDWIRE ON": 18,
+    "KEEP": 95,
+    "HARDWIRE OFF": 1
+  },
+  "unknown": []
+}
