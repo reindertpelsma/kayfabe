@@ -1,0 +1,80 @@
+483	kfN: w#N barN @N = N phase=Running
+244	kfN: GSP rpc RmControl seq=N
+239	kfN: mem t=N.Ns walk reconciled [N:+N-NrN] completed=[(N, Cleared)] unreconciled=[]
+174	kfN: GSP rpc Free seq=N
+172	kfN: GSP rpc RmAlloc seq=N
+50	kfN: GSP rpc UNSERVICED Unserviced { code: N, sequence: N }
+41	kfN: GSP REFUSED fnN/N=N (GSP_RM_CONTROL) first_seq=N — the guest read a non-OK status
+27	kfN: w#N barN @N = N phase=Cold
+16	kf-rm: chanlink: client N root: kernel=false internal=false
+15	kf-host: channel birth h=N engine=N reply_flags=N PRIVILEGED_CHANNEL=N privilege=USER cap_sys_admin=cleared-for-call
+15	kfN: TSPACE-RETIRE tok=N host=N key=VasKey(N) ring_va=N released=true stale_binds=N/N late=N indeterminate=N unresolved[
+15	kfN: DOORBELL-LEDGER tok=N route=translated emulated=N forwarded=N host=N fast=N
+15	kfN: act free: N:N: translated host N (N us, off the GSP lock)
+14	kfN: chan N:N GPFIFO_SCHEDULE enable=true (token N, host N)
+13	kf-host: map_scattered N pieces N bytes: stitch N us, descriptor N us, hand view to reaper N us, map N us
+13	kfN: FIFO_GET_LATENCY_BUFFER_SIZE engine N: gp=N pb=N (the host's answer)
+13	kfN: chan N:N: NVN_DEFERRED_API N ADMITTED on Translated host N, software classID Some(N) (OWNER_RULINGS §U.N)
+13	kfN: chan token N (host N) RETIRED, forwarded=N submissions=N splits=N/N serves=N last_put=Some(N) gp_get=None store_vie
+12	kfN: VasKey(N) root N: N privileged run(s) mirrored — a guest-kernel space or CPU window
+12	kf-rm: chanlink: CLASSIFY N:N kernel work -> Translated (the kernel driver's own process)
+11	kf-rm: chanlink: GPU_PROMOTE_CTX on N:N params=N rpc_flags=N
+10	kfN: host facts: GSS N [] refused by the host (HostRefusal { status: None, detail: "Other(N)" }) — not served
+9	kf-host: HOST-ABI REFUSED control N: host control N has no public header (zero request measured NV_OK on ADN N.N.N and G
+9	kf-rm: chanlink: falcon ctx promote N:N engine N guest ctx buffer VA N+N
+7	kfN: mem t=N.Ns walk reconciled [N:+N-NrN] completed=[] unreconciled=[]
+7	kf-rm: FECS-TRACE GET_FECS_TRACE_HW_ENABLE N: NV_OK bEnable=NV_FALSE (no guest ctxsw trace; the SETs stay unserviced) #N
+6	kf-rm: chanlink: FERMI_VASPACE_A N:N under N (device default for it: N) VAS-FACTS index=Some(N) flags=Some(N) bigPageSiz
+6	kf-rm: chanlink: VAS-DECL N:N vaBase=N vaSize=N end=None shared_management=false
+5	kf-rm: chanlink: client N root: kernel=false internal=true
+5	kfN: VasKey(N) mirror space=N: windows=none rings=none (recycled)
+5	kfN: mem t=N.Ns pagedir VasKey(N) root=N First
+4	kf-rm: EXPERIMENT software-runlist request engine=N maxTSGs=N qosIntrEnableMask=N; metadata only
+4	kf-rm: channel-property-facts envelope=N:N channel=N property=N value=N
+4	kfN: act channel timeslice: N:N SET_CHANNEL_PROPERTIES ENGINE_TIMESLICE N us on host group N (twin N) (N us, off the GSP
+4	kfN: act promote translated context: N:N GPU_PROMOTE_CTX satisfied by Translated host N GR=None VIDEO=Some((cafeN, cfbN,
+3	kfN: mem t=N.Ns [N/N] prewarm: spare host space N ready before the guest runs — windows=none (vaspace N us, ram_obj N us
+3	kfN: mem t=N.Ns retire VasKey(N): N row(s) unmapped (N refused) in N us, N host call(s), host space N kept as a spare — 
+3	kfN: mem invalidate seq N CLEARED OVER ABSENCE (Some(VasKey(N))): its refused leaves are absent on the host (a GPU acces
+3	kfN: mem t=N.Ns REFUSED VasKey(N) root N: N run(s) not applied: leaf N+N names store N, inside the firmware carve-out at
+3	kf-rm: EXPERIMENT software-runlist diagnostic function=N ALLOC_MEMORY payload_bytes=N prefix_only=true hClient=N hDevice
+3	kfN: GSP rpc Other(N) seq=N
+3	kfN: act timeslice: N:N SET_TIMESLICE N us on N twin group(s) (N us, off the GSP lock)
+3	kf-rm: EXPERIMENT software-runlist diagnostic control=N params_bytes=N raw_uN_le=[ffN,N,ffN,N,N,N,N,N,N,N]; observation 
+3	kf-rm: SW-RUNLIST HOST-OWNED N client=N object=N: NV_OK, request echoed, contents ignored (kernel channels are scheduled
+2	kfN: host facts: GSS N [(N, N), (N, N), (c, N), (Nc, N)]: the background probe was refused or changed the answer — zero-
+2	kfN: BARN scratch: tile N x N over N (host RAM bound N)
+2	kfN: w#N barN @N = N phase=Booted
+2	kfN: GSP rpc UpdateBarPde seq=N
+2	kf-rm: chanlink: CLASSIFY N:N kernel work -> Translated (an RM-internal client)
+2	kfN: GSS N answered from the host's realize-time reply
+1	kf-host: host tier: stock
+1	kf-host: HOST-ABI REFUSED control N: host control N has no row in kf_abi::hostabi::HOST_CONTROLS, and host driver N.N.N 
+1	kfN: host facts: GSS N [(N, N)] refused by the host (HostRefusal { status: None, detail: "Other(N)" }) — not served
+1	kf-host: HOST-ABI REFUSED control N: : body is N bytes, its layout is N
+1	kfN: host facts: FIFO latency buffers (engine, gp, pb) from the host: [(N, NaN, aN), (N, NaN, aN), (d, N, N), (e, N, N),
+1	kfN: channel budget N per runlist (Derived; derived default N, host limit N; the count the guest is told AND the enforce
+1	kfN: ⚠ gpu-uuid=auto: this VM has no identity (no vm-id= and no QEMU -uuid), so there is nothing stable to derive from; 
+1	kfN: guest GPU UUID GPU-NfNaab-NbN-Nbc-eaN-NdfNcbNbdN (gpu-uuid=auto, basis RandomNoVmId, devfn N)
+1	kfN: permission policy: READ_ONLY+VOLATILE carried to the host map, PRIVILEGED leaves withheld from user twins, ATOMIC_D
+1	kf-cuda: cuda thread posture thread=kfN-cuda-walk cap_sys_admin=cleared-for-thread-life (libcuda's channels from this th
+1	kf-cuda: cuda thread posture thread=kfN-cuda-store cap_sys_admin=cleared-for-thread-life (libcuda's channels from this t
+1	kfN: host GPU minor=N bdf=N:N:N.N gpuId=N rm_device_instance=N cuda_device="NVIDIA GeForce RTX N" store=N MiB
+1	kfN: guest driver N.N.N (guest-driver=); measured ABI: static-info PreN, element PreN, init-args FourField, rm-control p
+1	kfN: native timer BARN=N, read-only N-byte mapping, host/guest layout TimerLayout { register_bytes: N, time_low: N, time
+1	kfN: PN+PN T-space ON: built at prewarm (hardwired, OWNER_RULINGS §AB; docs/design/VN_PNPN_TSPACE.md); mirrors carry no 
+1	kfN: channel plane: Translated rings on host COPYN (engine N); completions on FIFO_EVENT_MTHD + CEN
+1	kfN: interrupt plane: host non-stall events -> guest vectors [GRN->Some(N) CEN->Some(N) CEN->Some(N) CEN->Some(N) NVENCN
+1	kfN: non-stall relay (owner ruling N-N-N): every host edge -> the guest vector of every event this guest ARMED, never dr
+1	kf-rm: EXPERIMENT software-runlist allocation metadata only; native backing and scheduling are NOT implemented
+1	kf-rm: KFN_SW_RUNLIST_HOST_OWNED=N: software-runlist submits answered NV_OK and ignored; kernel channels scheduled at bi
+1	kf-rm: PROBE KFN_PREEMPT_BIND_PROBE=N: GR_CTXSW_PREEMPTION_BIND answered NV_OK, NOTHING bound on the host (H-preempt-bin
+1	kf-rm: PROBE KFN_ZCULL_BIND_PROBE=N: a cross-client GR_CTXSW_ZCULL_BIND answered NV_OK, NOTHING bound on the host (probe
+1	kf-rm: PROBE KFN_DISPLAY_CTRL_PROBE=N: six NVN controls answered NV_OK with the request echoed (H-modeset probe, not a s
+1	kf-rm: EXPERIMENT contiguous SYSRAM descriptors backed by checked guest RAM; no scheduling
+1	kf-rm: EXPERIMENT virtual GfxP pool sizing enabled; lifecycle is not implemented
+1	kfN: PRAMIN scratch: tile N x N over N (host RAM bound N)
+1	kfN: scratch host-RAM bound N for this device (PRAMIN N + BARN N + BARN N); whole-window scratch would have allowed N
+1	kfN: PN memory plane: store N MiB (imported into the walker), walker pools N MiB of host GPU memory (walk pool N runs, s
+1	kf-cuda: cuda thread posture thread=kfN-vamgr cap_sys_admin=cleared-for-thread-life (libcuda's channels from this thread
+1	kfN: device reset #N COMPLETE — the device is as realize left it; guest writes accepted again (dropped while in reset: N

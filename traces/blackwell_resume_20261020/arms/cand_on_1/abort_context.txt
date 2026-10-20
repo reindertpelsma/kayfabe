@@ -1,0 +1,493 @@
+1522: kf-rm: rpc-trace fn=103 RmAlloc seq=0 class=0xca7b client=H parent=H handle=H result=0x0
+1524: kf3: GSP rpc RmAlloc seq=0
+1525: kf3: display: ChannelAllocated { kind: WindowImm, instance: 4, offset: 0, client: 3251634178, pb: Some(Pushbuffer { addr_space: 1, phys: 10627108864, limit: 4095, size_enum: 0 }), life: 1 }
+1526: kf3: w#303 bar0 @0x110c00 = 0x0 phase=Running
+1527: kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x20800a58 client=H object=H result=0x0
+1529: kf3: GSP rpc RmControl seq=0
+1530: kf3: w#304 bar0 @0x110c00 = 0x0 phase=Running
+1531: kf-rm: rpc-trace fn=103 RmAlloc seq=0 class=0xca7b client=H parent=H handle=H result=0x0
+1532: kf3: display: ChannelAllocated { kind: WindowImm, instance: 5, offset: 0, client: 3251634178, pb: Some(Pushbuffer { addr_space: 1, phys: 10627112960, limit: 4095, size_enum: 0 }), life: 1 }
+1534: kf3: GSP rpc RmAlloc seq=0
+1535: kf3: w#305 bar0 @0x110c00 = 0x0 phase=Running
+1536: kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x20800a58 client=H object=H result=0x0
+1538: kf3: GSP rpc RmControl seq=0
+1539: kf3: w#306 bar0 @0x110c00 = 0x0 phase=Running
+1540: kf-rm: rpc-trace fn=103 RmAlloc seq=0 class=0xca7b client=H parent=H handle=H result=0x0
+1541: kf3: display: ChannelAllocated { kind: WindowImm, instance: 6, offset: 0, client: 3251634178, pb: Some(Pushbuffer { addr_space: 1, phys: 10627117056, limit: 4095, size_enum: 0 }), life: 1 }
+1543: kf3: GSP rpc RmAlloc seq=0
+1544: kf3: w#307 bar0 @0x110c00 = 0x0 phase=Running
+1545: kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x20800a58 client=H object=H result=0x0
+1547: kf3: GSP rpc RmControl seq=0
+1548: kf3: w#308 bar0 @0x110c00 = 0x0 phase=Running
+1549: kf-rm: rpc-trace fn=103 RmAlloc seq=0 class=0xca7b client=H parent=H handle=H result=0x0
+1550: kf3: display: ChannelAllocated { kind: WindowImm, instance: 7, offset: 0, client: 3251634178, pb: Some(Pushbuffer { addr_space: 1, phys: 10627121152, limit: 4095, size_enum: 0 }), life: 1 }
+1552: kf3: GSP rpc RmAlloc seq=0
+1553: kf3: w#309 bar0 @0x110c00 = 0x0 phase=Running
+1554: kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x20800a58 client=H object=H result=0x0
+1556: kf3: GSP rpc RmControl seq=0
+1557: kf3: w#310 bar0 @0x110c00 = 0x0 phase=Running
+1558: kf-rm: rpc-trace fn=103 RmAlloc seq=0 class=0xca7a client=H parent=H handle=H result=0x0
+1560: kf3: display: ChannelAllocated { kind: Cursor, instance: 0, offset: 0, client: 3251634178, pb: None, life: 1 }
+1561: kf3: GSP rpc RmAlloc seq=0
+1562: kf3: w#311 bar0 @0x110c00 = 0x0 phase=Running
+1563: kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x20800a58 client=H object=H result=0x0
+1565: kf3: GSP rpc RmControl seq=0
+1566: kf3: w#312 bar0 @0x110c00 = 0x0 phase=Running
+1567: kf-rm: rpc-trace fn=103 RmAlloc seq=0 class=0xca7a client=H parent=H handle=H result=0x0
+1569: kf3: GSP rpc RmAlloc seq=0
+1570: kf3: display: ChannelAllocated { kind: Cursor, instance: 1, offset: 0, client: 3251634178, pb: None, life: 1 }
+1571: kf3: w#313 bar0 @0x110c00 = 0x0 phase=Running
+1572: kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x20800a58 client=H object=H result=0x0
+1574: kf3: GSP rpc RmControl seq=0
+1575: kf3: w#314 bar0 @0x110c00 = 0x0 phase=Running
+1576: kf-rm: rpc-trace fn=103 RmAlloc seq=0 class=0xca7a client=H parent=H handle=H result=0x0
+1578: kf3: display: ChannelAllocated { kind: Cursor, instance: 2, offset: 0, client: 3251634178, pb: None, life: 1 }
+1579: kf3: GSP rpc RmAlloc seq=0
+1580: kf3: w#315 bar0 @0x110c00 = 0x0 phase=Running
+1581: kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x20800a58 client=H object=H result=0x0
+1583: kf3: GSP rpc RmControl seq=0
+1584: kf3: w#316 bar0 @0x110c00 = 0x0 phase=Running
+1585: kf-rm: rpc-trace fn=103 RmAlloc seq=0 class=0xca7a client=H parent=H handle=H result=0x0
+1587: kf3: GSP rpc RmAlloc seq=0
+1588: kf3: display: ChannelAllocated { kind: Cursor, instance: 3, offset: 0, client: 3251634178, pb: None, life: 1 }
+1589: kf3: mem t=186.150s walk reconciled [0xffffffff00000002:+1-0r0] completed=[(149, Cleared)] unreconciled=[]
+1590: kf3: mem t=186.152s walk reconciled [0xc1d00002ff000870:+1-0r0] completed=[(150, Cleared)] unreconciled=[]
+1591: kf3: mem t=186.153s walk reconciled [0xffffffff00000001:+0-0r0] completed=[(151, Cleared)] unreconciled=[]
+1592: kf3: mem t=186.155s walk reconciled [0xffffffff00000001:+2-0r0] completed=[(152, Cleared)] unreconciled=[]
+1594: kf3: mem t=186.159s walk reconciled [0xc1d00002ff000870:+1-0r0] completed=[(153, Cleared)] unreconciled=[]
+1595: kf3: mem t=186.161s walk reconciled [0xffffffff00000001:+0-0r0] completed=[(154, Cleared)] unreconciled=[]
+1596: kf3: mem t=186.162s walk reconciled [0xffffffff00000001:+2-0r0] completed=[(155, Cleared)] unreconciled=[]
+1598: kf3: mem t=186.166s walk reconciled [0xc1d00002ff000870:+1-0r0] completed=[(156, Cleared)] unreconciled=[]
+1599: kf3: mem t=186.168s walk reconciled [0xffffffff00000001:+0-0r0] completed=[(157, Cleared)] unreconciled=[]
+1600: kf3: mem t=186.170s walk reconciled [0xffffffff00000001:+16-0r0] completed=[(158, Cleared)] unreconciled=[]
+1602: kf3: mem t=186.181s walk reconciled [0xffffffff00000001:+0-16r0] completed=[(159, Cleared)] unreconciled=[]
+1604: kf3: mem t=186.183s walk reconciled [0xc1d00002ff000870:+0-1r0] completed=[(160, Cleared)] unreconciled=[]
+1605: kf3: mem t=186.185s walk reconciled [0xffffffff00000001:+0-2r0] completed=[(161, Cleared)] unreconciled=[]
+1607: kf3: mem t=186.187s walk reconciled [0xc1d00002ff000870:+0-1r0] completed=[(162, Cleared)] unreconciled=[]
+1608: kf3: mem t=186.190s walk reconciled [0xffffffff00000001:+0-2r0] completed=[(163, Cleared)] unreconciled=[]
+1610: kf3: mem t=186.192s walk reconciled [0xc1d00002ff000870:+0-1r0] completed=[(164, Cleared)] unreconciled=[]
+1611: kf3: w#317 bar0 @0x110c00 = 0x0 phase=Running
+1612: kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x50700117 client=H object=H result=0x0
+1613: kf3: GSP rpc RmControl seq=0
+1614: kf3: w#318 bar0 @0x110c00 = 0x0 phase=Running
+1615: kf-rm: rpc-trace fn=10 Free seq=0  result=0x0
+1616: kf3: GSP rpc Free seq=0
+1617: kf3: display: ChannelFreed { kind: Cursor, instance: 0, preserve: false }
+1618: kf3: w#319 bar0 @0x110c00 = 0x0 phase=Running
+1619: kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x50700117 client=H object=H result=0x0
+1620: kf3: GSP rpc RmControl seq=0
+1621: kf3: w#320 bar0 @0x110c00 = 0x0 phase=Running
+1622: kf-rm: rpc-trace fn=10 Free seq=0  result=0x0
+1623: kf3: GSP rpc Free seq=0
+1624: kf3: display: ChannelFreed { kind: Cursor, instance: 1, preserve: false }
+1625: kf3: w#321 bar0 @0x110c00 = 0x0 phase=Running
+1626: kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x50700117 client=H object=H result=0x0
+1627: kf3: GSP rpc RmControl seq=0
+1628: kf3: w#322 bar0 @0x110c00 = 0x0 phase=Running
+1629: kf-rm: rpc-trace fn=10 Free seq=0  result=0x0
+1630: kf3: GSP rpc Free seq=0
+1631: kf3: display: ChannelFreed { kind: Cursor, instance: 2, preserve: false }
+1632: kf3: w#323 bar0 @0x110c00 = 0x0 phase=Running
+1633: kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x50700117 client=H object=H result=0x0
+1634: kf3: GSP rpc RmControl seq=0
+1635: kf3: w#324 bar0 @0x110c00 = 0x0 phase=Running
+1636: kf-rm: rpc-trace fn=10 Free seq=0  result=0x0
+1637: kf3: GSP rpc Free seq=0
+1638: kf3: display: ChannelFreed { kind: Cursor, instance: 3, preserve: false }
+1639: kf3: w#325 bar0 @0x110c00 = 0x0 phase=Running
+1640: kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x50700117 client=H object=H result=0x0
+1641: kf3: GSP rpc RmControl seq=0
+1642: kf3: w#326 bar0 @0x110c00 = 0x0 phase=Running
+1643: kf-rm: rpc-trace fn=10 Free seq=0  result=0x0
+1644: kf3: GSP rpc Free seq=0
+1645: kf3: display: ChannelFreed { kind: WindowImm, instance: 0, preserve: false }
+1646: kf3: w#327 bar0 @0x110c00 = 0x0 phase=Running
+1647: kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x50700117 client=H object=H result=0x0
+1648: kf3: GSP rpc RmControl seq=0
+1649: kf3: w#328 bar0 @0x110c00 = 0x0 phase=Running
+1650: kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x50700117 client=H object=H result=0x0
+1651: kf3: GSP rpc RmControl seq=0
+1652: kf3: w#329 bar0 @0x110c00 = 0x0 phase=Running
+1653: kf-rm: rpc-trace fn=10 Free seq=0  result=0x0
+1654: kf3: GSP rpc Free seq=0
+1655: kf3: display: ChannelFreed { kind: WindowImm, instance: 1, preserve: false }
+1656: kf3: w#330 bar0 @0x110c00 = 0x0 phase=Running
+1657: kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x50700117 client=H object=H result=0x0
+1658: kf3: GSP rpc RmControl seq=0
+1659: kf3: w#331 bar0 @0x110c00 = 0x0 phase=Running
+1660: kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x50700117 client=H object=H result=0x0
+1661: kf3: GSP rpc RmControl seq=0
+1662: kf3: w#332 bar0 @0x110c00 = 0x0 phase=Running
+1663: kf-rm: rpc-trace fn=10 Free seq=0  result=0x0
+1664: kf3: GSP rpc Free seq=0
+1665: kf3: display: ChannelFreed { kind: WindowImm, instance: 2, preserve: false }
+1666: kf3: w#333 bar0 @0x110c00 = 0x0 phase=Running
+1667: kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x50700117 client=H object=H result=0x0
+1668: kf3: GSP rpc RmControl seq=0
+1669: kf3: w#334 bar0 @0x110c00 = 0x0 phase=Running
+1670: kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x50700117 client=H object=H result=0x0
+1671: kf3: GSP rpc RmControl seq=0
+1672: kf3: w#335 bar0 @0x110c00 = 0x0 phase=Running
+1673: kf-rm: rpc-trace fn=10 Free seq=0  result=0x0
+1674: kf3: GSP rpc Free seq=0
+1675: kf3: display: ChannelFreed { kind: WindowImm, instance: 3, preserve: false }
+1676: kf3: w#336 bar0 @0x110c00 = 0x0 phase=Running
+1677: kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x50700117 client=H object=H result=0x0
+1678: kf3: GSP rpc RmControl seq=0
+1679: kf3: w#337 bar0 @0x110c00 = 0x0 phase=Running
+1680: kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x50700117 client=H object=H result=0x0
+1681: kf3: GSP rpc RmControl seq=0
+1682: kf3: w#338 bar0 @0x110c00 = 0x0 phase=Running
+1683: kf-rm: rpc-trace fn=10 Free seq=0  result=0x0
+1684: kf3: GSP rpc Free seq=0
+1685: kf3: display: ChannelFreed { kind: WindowImm, instance: 4, preserve: false }
+1686: kf3: w#339 bar0 @0x110c00 = 0x0 phase=Running
+1687: kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x50700117 client=H object=H result=0x0
+1688: kf3: GSP rpc RmControl seq=0
+1689: kf3: w#340 bar0 @0x110c00 = 0x0 phase=Running
+1690: kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x50700117 client=H object=H result=0x0
+1691: kf3: GSP rpc RmControl seq=0
+1692: kf3: w#341 bar0 @0x110c00 = 0x0 phase=Running
+1693: kf-rm: rpc-trace fn=10 Free seq=0  result=0x0
+1694: kf3: GSP rpc Free seq=0
+1695: kf3: display: ChannelFreed { kind: WindowImm, instance: 5, preserve: false }
+1696: kf3: w#342 bar0 @0x110c00 = 0x0 phase=Running
+1697: kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x50700117 client=H object=H result=0x0
+1698: kf3: GSP rpc RmControl seq=0
+1699: kf3: w#343 bar0 @0x110c00 = 0x0 phase=Running
+1700: kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x50700117 client=H object=H result=0x0
+1701: kf3: GSP rpc RmControl seq=0
+1702: kf3: w#344 bar0 @0x110c00 = 0x0 phase=Running
+1703: kf-rm: rpc-trace fn=10 Free seq=0  result=0x0
+1704: kf3: GSP rpc Free seq=0
+1705: kf3: display: ChannelFreed { kind: WindowImm, instance: 6, preserve: false }
+1706: kf3: w#345 bar0 @0x110c00 = 0x0 phase=Running
+1707: kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x50700117 client=H object=H result=0x0
+1708: kf3: GSP rpc RmControl seq=0
+1709: kf3: w#346 bar0 @0x110c00 = 0x0 phase=Running
+1710: kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x50700117 client=H object=H result=0x0
+1711: kf3: GSP rpc RmControl seq=0
+1712: kf3: w#347 bar0 @0x110c00 = 0x0 phase=Running
+1713: kf-rm: rpc-trace fn=10 Free seq=0  result=0x0
+1714: kf3: GSP rpc Free seq=0
+1715: kf3: display: ChannelFreed { kind: WindowImm, instance: 7, preserve: false }
+1716: kf3: w#348 bar0 @0x110c00 = 0x0 phase=Running
+1717: kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x50700117 client=H object=H result=0x0
+1718: kf3: GSP rpc RmControl seq=0
+1719: kf3: w#349 bar0 @0x110c00 = 0x0 phase=Running
+1720: kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x50700117 client=H object=H result=0x0
+1721: kf3: GSP rpc RmControl seq=0
+1722: kf3: w#350 bar0 @0x110c00 = 0x0 phase=Running
+1723: kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x50700117 client=H object=H result=0x0
+1724: kf3: GSP rpc RmControl seq=0
+1725: kf3: w#351 bar0 @0x110c00 = 0x0 phase=Running
+1726: kf-rm: rpc-trace fn=10 Free seq=0  result=0x0
+1727: kf3: GSP rpc Free seq=0
+1728: kf3: display: ChannelFreed { kind: Window, instance: 0, preserve: false }
+1729: kf3: w#352 bar0 @0x110c00 = 0x0 phase=Running
+1730: kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x50700117 client=H object=H result=0x0
+1731: kf3: GSP rpc RmControl seq=0
+1732: kf3: w#353 bar0 @0x110c00 = 0x0 phase=Running
+1733: kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x50700117 client=H object=H result=0x0
+1734: kf3: GSP rpc RmControl seq=0
+1735: kf3: w#354 bar0 @0x110c00 = 0x0 phase=Running
+1736: kf-rm: rpc-trace fn=10 Free seq=0  result=0x0
+1737: kf3: GSP rpc Free seq=0
+1738: kf3: display: ChannelFreed { kind: Window, instance: 1, preserve: false }
+1739: kf3: w#355 bar0 @0x110c00 = 0x0 phase=Running
+1740: kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x50700117 client=H object=H result=0x0
+1741: kf3: GSP rpc RmControl seq=0
+1742: kf3: w#356 bar0 @0x110c00 = 0x0 phase=Running
+1743: kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x50700117 client=H object=H result=0x0
+1744: kf3: GSP rpc RmControl seq=0
+1745: kf3: w#357 bar0 @0x110c00 = 0x0 phase=Running
+1746: kf-rm: rpc-trace fn=10 Free seq=0  result=0x0
+1747: kf3: GSP rpc Free seq=0
+1748: kf3: display: ChannelFreed { kind: Window, instance: 2, preserve: false }
+1749: kf3: w#358 bar0 @0x110c00 = 0x0 phase=Running
+1750: kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x50700117 client=H object=H result=0x0
+1751: kf3: GSP rpc RmControl seq=0
+1752: kf3: w#359 bar0 @0x110c00 = 0x0 phase=Running
+1753: kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x50700117 client=H object=H result=0x0
+1754: kf3: GSP rpc RmControl seq=0
+1755: kf3: w#360 bar0 @0x110c00 = 0x0 phase=Running
+1756: kf-rm: rpc-trace fn=10 Free seq=0  result=0x0
+1757: kf3: GSP rpc Free seq=0
+1758: kf3: display: ChannelFreed { kind: Window, instance: 3, preserve: false }
+1759: kf3: w#361 bar0 @0x110c00 = 0x0 phase=Running
+1760: kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x50700117 client=H object=H result=0x0
+1761: kf3: GSP rpc RmControl seq=0
+1762: kf3: w#362 bar0 @0x110c00 = 0x0 phase=Running
+1763: kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x50700117 client=H object=H result=0x0
+1764: kf3: GSP rpc RmControl seq=0
+1765: kf3: w#363 bar0 @0x110c00 = 0x0 phase=Running
+1766: kf-rm: rpc-trace fn=10 Free seq=0  result=0x0
+1767: kf3: GSP rpc Free seq=0
+1768: kf3: display: ChannelFreed { kind: Window, instance: 4, preserve: false }
+1769: kf3: w#364 bar0 @0x110c00 = 0x0 phase=Running
+1770: kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x50700117 client=H object=H result=0x0
+1771: kf3: GSP rpc RmControl seq=0
+1772: kf3: w#365 bar0 @0x110c00 = 0x0 phase=Running
+1773: kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x50700117 client=H object=H result=0x0
+1774: kf3: GSP rpc RmControl seq=0
+1775: kf3: w#366 bar0 @0x110c00 = 0x0 phase=Running
+1776: kf-rm: rpc-trace fn=10 Free seq=0  result=0x0
+1777: kf3: GSP rpc Free seq=0
+1778: kf3: display: ChannelFreed { kind: Window, instance: 5, preserve: false }
+1779: kf3: w#367 bar0 @0x110c00 = 0x0 phase=Running
+1780: kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x50700117 client=H object=H result=0x0
+1781: kf3: GSP rpc RmControl seq=0
+1782: kf3: w#368 bar0 @0x110c00 = 0x0 phase=Running
+1783: kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x50700117 client=H object=H result=0x0
+1784: kf3: GSP rpc RmControl seq=0
+1785: kf3: w#369 bar0 @0x110c00 = 0x0 phase=Running
+1786: kf-rm: rpc-trace fn=10 Free seq=0  result=0x0
+1787: kf3: GSP rpc Free seq=0
+1788: kf3: display: ChannelFreed { kind: Window, instance: 6, preserve: false }
+1789: kf3: w#370 bar0 @0x110c00 = 0x0 phase=Running
+1790: kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x50700117 client=H object=H result=0x0
+1791: kf3: GSP rpc RmControl seq=0
+1792: kf3: w#371 bar0 @0x110c00 = 0x0 phase=Running
+1793: kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x50700117 client=H object=H result=0x0
+1794: kf3: GSP rpc RmControl seq=0
+1795: kf3: w#372 bar0 @0x110c00 = 0x0 phase=Running
+1796: kf-rm: rpc-trace fn=10 Free seq=0  result=0x0
+1797: kf3: GSP rpc Free seq=0
+1798: kf3: display: ChannelFreed { kind: Window, instance: 7, preserve: false }
+1799: kf3: w#373 bar0 @0x110c00 = 0x0 phase=Running
+1800: kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x50700117 client=H object=H result=0x0
+1801: kf3: GSP rpc RmControl seq=0
+1802: kf3: w#374 bar0 @0x110c00 = 0x0 phase=Running
+1803: kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x50700117 client=H object=H result=0x0
+1804: kf3: GSP rpc RmControl seq=0
+1805: kf3: mem t=186.239s walk reconciled [0xffffffff00000001:+0-16r0] completed=[(165, Cleared)] unreconciled=[]
+1806: kf3: mem t=186.239s BAR1 boot framebuffer [0x0, +0x7f0000) after BAR1 change #17: guest views [(0, 10000, Some(1e7b20000)), (10000, 10000, Some(1e7b30000)), (20000, 10000, Some(1e7b40000)), (30000, 80000, Some(1e7b50000)), (b0000, 80000, Some(1e7bd0000)), (130000, 80000, Some(1e7c50000)), (1b0000, 80000, Some(1e7cd0000))]; 0x5c0000 bytes show SCRATCH
+1807: kf3: w#375 bar0 @0x110c00 = 0x0 phase=Running
+1808: kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x50700117 client=H object=H result=0x0
+1809: kf3: GSP rpc RmControl seq=0
+1810: kf3: w#376 bar0 @0x110c00 = 0x0 phase=Running
+1811: kf-rm: rpc-trace fn=10 Free seq=0  result=0x0
+1812: kf3: GSP rpc Free seq=0
+1813: kf3: display: ChannelFreed { kind: Core, instance: 0, preserve: false }
+1814: kf3: w#377 bar0 @0x110c00 = 0x0 phase=Running
+1815: kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x50700117 client=H object=H result=0x0
+1816: kf3: GSP rpc RmControl seq=0
+1817: kf3: w#378 bar0 @0x110c00 = 0x0 phase=Running
+1818: kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x50700117 client=H object=H result=0x0
+1819: kf3: GSP rpc RmControl seq=0
+1820: kf3: w#379 bar0 @0x110c00 = 0x0 phase=Running
+1821: kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x50700117 client=H object=H result=0x0
+1822: kf3: GSP rpc RmControl seq=0
+1823: kf3: w#380 bar0 @0x110c00 = 0x0 phase=Running
+1824: kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x50700117 client=H object=H result=0x0
+1825: kf3: GSP rpc RmControl seq=0
+1826: kf3: w#381 bar0 @0x110c00 = 0x0 phase=Running
+1827: kf-rm: rpc-trace fn=10 Free seq=0  result=0x0
+1828: kf3: GSP rpc Free seq=0
+1829: kf3: mem t=186.247s walk reconciled [0xffffffff00000001:+0-1r0] completed=[(166, Cleared)] unreconciled=[]
+1830: kf3: mem t=186.247s BAR1 boot framebuffer [0x0, +0x7f0000) after BAR1 change #18: guest views [(0, 10000, Some(1e7b20000)), (10000, 10000, Some(1e7b30000)), (20000, 10000, Some(1e7b40000)), (b0000, 80000, Some(1e7bd0000)), (130000, 80000, Some(1e7c50000)), (1b0000, 80000, Some(1e7cd0000))]; 0x640000 bytes show SCRATCH
+1831: kf3: mem t=186.249s walk reconciled [0xc1d00002ff000870:+0-1r0] completed=[(167, Cleared)] unreconciled=[]
+1832: kf3: mem t=186.252s walk reconciled [0xffffffff00000001:+0-1r0] completed=[(168, Cleared)] unreconciled=[]
+1833: kf3: mem t=186.252s BAR1 boot framebuffer [0x0, +0x7f0000) after BAR1 change #19: guest views [(0, 10000, Some(1e7b20000)), (10000, 10000, Some(1e7b30000)), (20000, 10000, Some(1e7b40000)), (130000, 80000, Some(1e7c50000)), (1b0000, 80000, Some(1e7cd0000))]; 0x6c0000 bytes show SCRATCH
+1834: kf3: mem t=186.254s walk reconciled [0xc1d00002ff000870:+0-1r0] completed=[(169, Cleared)] unreconciled=[]
+1835: kf3: mem t=186.256s walk reconciled [0xffffffff00000001:+0-1r0] completed=[(170, Cleared)] unreconciled=[]
+1836: kf3: mem t=186.256s BAR1 boot framebuffer [0x0, +0x7f0000) after BAR1 change #20: guest views [(0, 10000, Some(1e7b20000)), (10000, 10000, Some(1e7b30000)), (20000, 10000, Some(1e7b40000)), (1b0000, 80000, Some(1e7cd0000))]; 0x740000 bytes show SCRATCH
+1837: kf3: mem t=186.258s walk reconciled [0xc1d00002ff000870:+0-1r0] completed=[(171, Cleared)] unreconciled=[]
+1838: kf3: mem t=186.261s walk reconciled [0xffffffff00000001:+0-1r0] completed=[(172, Cleared)] unreconciled=[]
+1839: kf3: mem t=186.261s BAR1 boot framebuffer [0x0, +0x7f0000) after BAR1 change #21: guest views [(0, 10000, Some(1e7b20000)), (10000, 10000, Some(1e7b30000)), (20000, 10000, Some(1e7b40000))]; 0x7c0000 bytes show SCRATCH
+1840: kf3: mem t=186.263s walk reconciled [0xc1d00002ff000870:+0-1r0] completed=[(173, Cleared)] unreconciled=[]
+1841: kf3: mem t=186.272s walk reconciled [0xc1d00002ff000870:+0-1r0] completed=[(174, Cleared)] unreconciled=[]
+1842: kf3: mem t=186.274s walk reconciled [0xc1d00002ff000870:+0-0r0] completed=[(175, Cleared)] unreconciled=[]
+1843: kf3: mem t=186.277s walk reconciled [0xffffffff00000001:+0-1r0] completed=[(176, Cleared)] unreconciled=[]
+1844: kf3: mem t=186.277s BAR1 boot framebuffer [0x0, +0x7f0000) after BAR1 change #22: guest views [(10000, 10000, Some(1e7b30000)), (20000, 10000, Some(1e7b40000))]; 0x7d0000 bytes show SCRATCH
+1845: kf3: mem t=186.279s walk reconciled [0xc1d00002ff000870:+0-1r0] completed=[(177, Cleared)] unreconciled=[]
+1846: kf3: mem t=186.282s walk reconciled [0xc1d00002ff000870:+0-0r0] completed=[(178, Cleared)] unreconciled=[]
+1847: kf3: mem t=186.284s walk reconciled [0xffffffff00000001:+0-1r0] completed=[(179, Cleared)] unreconciled=[]
+1848: kf3: mem t=186.284s BAR1 boot framebuffer [0x0, +0x7f0000) after BAR1 change #23: guest views [(20000, 10000, Some(1e7b40000))]; 0x7e0000 bytes show SCRATCH
+1849: kf3: mem t=186.286s walk reconciled [0xc1d00002ff000870:+0-1r0] completed=[(180, Cleared)] unreconciled=[]
+1850: kf3: mem t=186.289s walk reconciled [0xc1d00002ff000870:+0-0r0] completed=[(181, Cleared)] unreconciled=[]
+1851: kf3: mem t=186.291s walk reconciled [0xffffffff00000001:+0-1r0] completed=[(182, Cleared)] unreconciled=[]
+1852: kf3: mem t=186.291s BAR1 boot framebuffer [0x0, +0x7f0000) after BAR1 change #24: guest views []; 0x7f0000 bytes show SCRATCH
+1853: kf3: w#382 bar0 @0x110c00 = 0x0 phase=Running
+1854: kf-rm: rpc-trace fn=10 Free seq=0  result=0x0
+1855: kf3: GSP rpc Free seq=0
+1856: kf3: w#383 bar0 @0x110c00 = 0x0 phase=Running
+1857: kf-rm: rpc-trace fn=10 Free seq=0  result=0x0
+1858: kf3: GSP rpc Free seq=0
+1859: kf3: mem t=186.304s walk reconciled [0xffffffff00000001:+0-1r0] completed=[] unreconciled=[]
+1860: kf3: bar1db view REMOVED #1: BAR1 0x7f00000+0x10000 (doorbells through BAR1 views so far: 0)
+1861: kf3: mem t=186.355s deferred clears released completed=[(183, Cleared)] unreconciled=[]
+1862: kf3: w#384 bar0 @0x110c00 = 0x0 phase=Running
+1863: kf-rm: EXPERIMENT software-runlist diagnostic control=0x20801111 params_bytes=40 raw_u32_le=[ff008250,00000000,ff000100,00000000,00006000,00000000,00000001,00000000,00000000,00000000]; observation only
+1864: kf-rm: SW-RUNLIST HOST-OWNED 0x20801111 client=H object=H: NV_OK, request echoed, contents ignored (kernel channels are scheduled at birth) — AWAITING OWNER CONFIRMATION #1
+1865: kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x20801111 client=H object=H result=0x0
+1866: kf3: GSP rpc RmControl seq=0
+1867: kf3: w#385 bar0 @0x110c00 = 0x0 phase=Running
+1868: kf-rm: rpc-trace fn=10 Free seq=0  result=0x0
+1869: kf3: GSP rpc Free seq=0
+1870: kf3: w#386 bar0 @0x110c00 = 0x0 phase=Running
+1871: kf-rm: rpc-trace fn=10 Free seq=0  result=0x0
+1872: kf3: GSP rpc Free seq=0
+1873: kf3: w#387 bar0 @0x110c00 = 0x0 phase=Running
+1874: kf-rm: rpc-trace fn=10 Free seq=0  result=0x0
+1875: kf3: GSP rpc Free seq=0
+1876: kf3: w#388 bar0 @0x110c00 = 0x0 phase=Running
+1877: kf-rm: FECS-TRACE GET_FECS_TRACE_HW_ENABLE 0x20800a38: NV_OK bEnable=NV_FALSE (no guest ctxsw trace; the SETs stay unserviced) #2
+1878: kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x20800a38 client=H object=H result=0x0
+1879: kf3: GSP rpc RmControl seq=0
+1880: kf3: w#389 bar0 @0x110c00 = 0x0 phase=Running
+1881: kf-rm: EXPERIMENT software-runlist diagnostic control=0x20801111 params_bytes=40 raw_u32_le=[ff008254,00000000,ff000104,00000000,00006000,00000000,00000001,00000000,00000000,00000000]; observation only
+1882: kf-rm: SW-RUNLIST HOST-OWNED 0x20801111 client=H object=H: NV_OK, request echoed, contents ignored (kernel channels are scheduled at birth) — AWAITING OWNER CONFIRMATION #2
+1883: kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x20801111 client=H object=H result=0x0
+1884: kf3: GSP rpc RmControl seq=0
+1885: kf3: w#390 bar0 @0x110c00 = 0x0 phase=Running
+1886: kf-rm: rpc-trace fn=10 Free seq=0  result=0x0
+1887: kf3: GSP rpc Free seq=0
+1888: kf3: w#391 bar0 @0x110c00 = 0x0 phase=Running
+1889: kf-rm: rpc-trace fn=10 Free seq=0  result=0x0
+1890: kf3: GSP rpc Free seq=0
+1891: kf3: w#392 bar0 @0x110c00 = 0x0 phase=Running
+1892: kf-rm: rpc-trace fn=10 Free seq=0  result=0x0
+1893: kf3: GSP rpc Free seq=0
+1894: kf3: w#393 bar0 @0x110c00 = 0x0 phase=Running
+1895: kf-rm: rpc-trace fn=10 Free seq=0  result=0x0
+1896: kf3: GSP rpc Free seq=0
+1897: kf3: w#394 bar0 @0x110c00 = 0x0 phase=Running
+1898: kf-rm: rpc-trace fn=10 Free seq=0  result=0x0
+1899: kf3: GSP rpc Free seq=0
+1900: kf3: w#395 bar0 @0x110c00 = 0x0 phase=Running
+1901: kf-rm: rpc-trace fn=10 Free seq=0  result=0x0
+1902: kf3: GSP rpc Free seq=0
+1903: kf3: w#396 bar0 @0x110c00 = 0x0 phase=Running
+1904: kf-rm: rpc-trace fn=10 Free seq=0  result=0x0
+1905: kf3: GSP rpc Free seq=0
+1906: kf3: w#397 bar0 @0x110c00 = 0x0 phase=Running
+1907: kf-rm: rpc-trace fn=10 Free seq=0  result=0x0
+1908: kf3: GSP rpc Free seq=0
+1909: kf3: w#398 bar0 @0x110c00 = 0x0 phase=Running
+1910: kf-rm: rpc-trace fn=10 Free seq=0  result=0x0
+1911: kf3: GSP rpc Free seq=0
+1912: kf3: mem t=186.492s retire VasKey(13965662457344034928): 0 row(s) unmapped (0 refused) in 2 us, 0 host call(s), host space 0xcafe001c kept as a spare — host RM over its life: 10 map call(s) (10 per-run, 0 batch(es) x2 carrying 0 runs, 0 batch(es) refused) in 1 ms; 10 unmap call(s) (10 range(s)) + 0 free(s) in 0 ms
+1913: kf3: w#399 bar0 @0x110c00 = 0x0 phase=Running
+1914: kf-rm: rpc-trace fn=10 Free seq=0  result=0x0
+1915: kf3: GSP rpc Free seq=0
+1916: kf3: w#400 bar0 @0x110c00 = 0x0 phase=Running
+1917: kf-rm: rpc-trace fn=10 Free seq=0  result=0x0
+1918: kf3: GSP rpc Free seq=0
+1919: kf3: w#401 bar0 @0x110c00 = 0x0 phase=Running
+1920: kf-rm: rpc-trace fn=10 Free seq=0  result=0x0
+1922: kf3: GSP rpc Free seq=0
+1923: kf3: TSPACE-RETIRE tok=0x1 host=0x400d000e key=VasKey(13970166078463016970) ring_va=0xff00000000 released=true stale_binds=0/0 late=0 indeterminate=0 unresolved[walk=0 acquire=0 refused=0]
+1924: kf3: DOORBELL-LEDGER tok=0x00000001 route=translated emulated=0 forwarded=0 host=0x400d000e fast=0
+1925: kf3: chan token 0x1 (host 0x400d000e) RETIRED, forwarded=0 submissions=0 splits=0/0 serves=1 last_put=Some(0) gp_get=None store_views=0 privilege=Some(ChannelPrivilege { level: 2, uvm_owned: false }) dead=None inca=[refused_methods=0 subdevice_masks=0 control_entries=0 ext_base_unapplied=0] gr_tier=false gr[methods=0 inert_binds=0 objects=[]] gp_get_by_engine=(false, 0)
+1926: kf3: act free: 0xc1e00008:0x2: translated host 0x400d000e (3262 us, off the GSP lock)
+1929: kf3: mem t=186.595s walk reconciled [0xc1e000080000000a:+0-1r0] completed=[(184, Cleared)] unreconciled=[]
+1930: kf3: mem t=186.596s walk reconciled [0xc1e000080000000a:+0-0r0] completed=[(185, Cleared)] unreconciled=[]
+1931: kf3: mem t=186.598s walk reconciled [0xc1e000080000000a:+0-1r0] completed=[(186, Cleared)] unreconciled=[]
+1932: kf3: mem t=186.599s walk reconciled [0xc1e000080000000a:+0-0r0] completed=[(187, Cleared)] unreconciled=[]
+1933: kf3: mem t=186.601s walk reconciled [0xc1e000080000000a:+0-1r0] completed=[(188, Cleared)] unreconciled=[]
+1934: kf3: mem t=186.604s walk reconciled [0xc1e000080000000a:+0-0r0] completed=[(189, Cleared)] unreconciled=[]
+1935: kf3: w#402 bar0 @0x110c00 = 0x0 phase=Running
+1936: kf-rm: rpc-trace fn=10 Free seq=0  result=0x0
+1937: kf3: GSP rpc Free seq=0
+1938: kf3: mem t=186.605s retire VasKey(13970166078463016970): 0 row(s) unmapped (0 refused) in 2 us, 0 host call(s), host space 0xcafe0021 kept as a spare — host RM over its life: 4 map call(s) (4 per-run, 0 batch(es) x2 carrying 0 runs, 0 batch(es) refused) in 168 ms; 3 unmap call(s) (3 range(s)) + 0 free(s) in 73 ms
+1939: kf3: w#403 bar0 @0x110c00 = 0x0 phase=Running
+1940: kf-rm: rpc-trace fn=10 Free seq=0  result=0x0
+1941: kf3: GSP rpc Free seq=0
+1942: kf3: w#404 bar0 @0x110c00 = 0x0 phase=Running
+1943: kf-rm: rpc-trace fn=10 Free seq=0  result=0x0
+1944: kf3: GSP rpc Free seq=0
+1945: kf3: w#405 bar0 @0x110c00 = 0x0 phase=Running
+1946: kf-rm: rpc-trace fn=10 Free seq=0  result=0x0
+1947: kf3: GSP rpc Free seq=0
+1948: kf3: w#406 bar0 @0x110c00 = 0x0 phase=Running
+1949: kf-rm: rpc-trace fn=10 Free seq=0  result=0x0
+1950: kf3: GSP rpc Free seq=0
+1951: kf3: mem t=186.644s walk reconciled [0xffffffff00000001:+0-1r0] completed=[(190, Cleared)] unreconciled=[]
+1952: kf3: w#407 bar0 @0x110c00 = 0x0 phase=Running
+1953: kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x20800a6c client=H object=H result=0x0
+1954: kf3: GSP rpc RmControl seq=0
+1955: kf3: w#408 bar0 @0xb80f60 = 0x0 phase=Running
+1956: kf3: mem t=186.652s the guest wrote NV_VIRTUAL_FUNCTION_PRIV_FUNC_BAR1_BLOCK_LOW_ADDR = 0x0 (MODE PHYSICAL) at GSP phase Running
+1957: kf3: mem t=186.652s BAR1 back to its physical view: [0x0, +0x7f0000) shows store [0x0, +0x7f0000) again (seed life 2) — the guest's RM gave BAR1 up; boot framebuffer scrub REFUSED: not scrubbed: a newer guest RM life began (fn 72) after this unload
+1958: kf3: w#409 bar0 @0x110c00 = 0x0 phase=Running
+1959: kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x20800ab4 client=H object=H result=none
+1960: kf3: GSP rpc RmControl seq=0
+1961: kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 0 }
+1962: kf3: GSP REFUSED fn76/0x20800ab4=0x56 (GSP_RM_CONTROL) first_seq=0 — the guest read a non-OK status
+1963: kf3: w#410 bar0 @0x110c00 = 0x0 phase=Running
+1964: kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x00730151 client=H object=H params=00000000000000000000000000000000000000000000000000000000000000000000000000000000 result=0x0
+1966: kf3: display: SharedData(None)
+1967: kf3: GSP rpc RmControl seq=0
+1968: kf3: w#411 bar0 @0x110c00 = 0x0 phase=Running
+1969: kf-rm: rpc-trace fn=10 Free seq=0  result=0x0
+1970: kf3: GSP rpc Free seq=0
+1971: kf3: w#412 bar0 @0x110c00 = 0x0 phase=Running
+1972: kf-rm: rpc-trace fn=10 Free seq=0  result=0x0
+1973: kf3: GSP rpc Free seq=0
+1974: kf3: w#413 bar0 @0x110c00 = 0x0 phase=Running
+1975: kf-rm: rpc-trace fn=10 Free seq=0  result=0x0
+1976: kf3: GSP rpc Free seq=0
+1977: kf3: w#414 bar0 @0x110c00 = 0x0 phase=Running
+1978: kf-rm: FECS-TRACE GET_FECS_TRACE_HW_ENABLE 0x20800a38: NV_OK bEnable=NV_FALSE (no guest ctxsw trace; the SETs stay unserviced) #3
+1979: kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x20800a38 client=H object=H result=0x0
+1980: kf3: GSP rpc RmControl seq=0
+1981: kf3: w#415 bar0 @0x110c00 = 0x0 phase=Running
+1982: kf-rm: rpc-trace fn=10 Free seq=0  result=0x0
+1983: kf3: GSP rpc Free seq=0
+1984: kf3: w#416 bar0 @0x110c00 = 0x0 phase=Running
+1985: kf-rm: rpc-trace fn=10 Free seq=0  result=0x0
+1986: kf3: GSP rpc Free seq=0
+1987: kf3: w#417 bar0 @0x110c00 = 0x0 phase=Running
+1988: kf-rm: rpc-trace fn=10 Free seq=0  result=0x0
+1989: kf3: GSP rpc Free seq=0
+1990: kf3: w#418 bar0 @0x110c00 = 0x0 phase=Running
+1991: kf-rm: rpc-trace fn=10 Free seq=0  result=0x0
+1992: kf3: GSP rpc Free seq=0
+1993: kf3: w#419 bar0 @0x8f2ac0 = 0x1000000 phase=Running
+1994: kf3: w#420 bar0 @0x8f2ac4 = 0xc0000000 phase=Running
+1995: kf3: w#421 bar0 @0x8f2ac4 = 0x2010de7e phase=Running
+1996: kf3: w#422 bar0 @0x8f2ac4 = 0x0 phase=Running
+1997: kf3: w#423 bar0 @0x8f2c04 = 0x8 phase=Running
+1998: kf3: w#424 bar0 @0x8f2c00 = 0x0 phase=Running
+1999: kf3: w#425 bar0 @0x8f2ac0 = 0x2000000 phase=Running
+2000: kf3: w#426 bar0 @0x8f2c84 = 0x0 phase=Running
+2001: kf3: w#427 bar0 @0x8f2c80 = 0x0 phase=Running
+2002: kf3: w#428 bar0 @0xb80f70 = 0x0 phase=Running
+2003: kf3: w#429 bar0 @0x10fd40 = 0x1efbc phase=Running
+2004: kf3: w#430 bar0 @0x10fd40 = 0x1fff0 phase=Running
+2005: kf3: w#431 bar0 @0x110c00 = 0x0 phase=Running
+2006: kf-rm: rpc-trace fn=70 UpdateBarPde seq=0  result=0x0
+2008: kf3: GSP rpc UpdateBarPde seq=0
+2009: kf3: mem t=186.682s fn70 Bar2 entry=0x0 shift=56 -> our root @0x1f3392000, walk scheduled
+2010: kf3: mem t=186.694s walk reconciled [0xffffffff00000002:+0-61r0] completed=[] unreconciled=[]
+2012: kf3: w#432 bar0 @0x110c00 = 0x0 phase=Running
+2013: kf-rm: rpc-trace fn=10 Free seq=0  result=0x0
+2014: kf3: GSP rpc Free seq=0
+2015: kf3: w#433 bar0 @0x110c00 = 0x0 phase=Running
+2016: kf-rm: rpc-trace fn=10 Free seq=0  result=0x0
+2017: kf3: GSP rpc Free seq=0
+2018: kf3: w#434 bar0 @0x110c00 = 0x0 phase=Running
+2019: kf-rm: rpc-trace fn=10 Free seq=0  result=0x0
+2020: kf3: GSP rpc Free seq=0
+2021: kf3: w#435 bar0 @0x110c00 = 0x0 phase=Running
+2022: kf-rm: rpc-trace fn=10 Free seq=0  result=0x0
+2023: kf3: GSP rpc Free seq=0
+2024: kf3: w#436 bar0 @0x110c00 = 0x0 phase=Running
+2025: kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x20800afe client=H object=H result=none
+2026: kf3: GSP rpc RmControl seq=0
+2027: kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 0 }
+2028: kf3: w#437 bar0 @0x110c00 = 0x0 phase=Running
+2029: kf-rm: rpc-trace fn=47 UnloadingGuestDriver seq=0  result=0x0
+2030: kf3: GSP rpc UnloadingGuestDriver seq=0
+2031: kf3: GSP fn 47 UNLOADING_GUEST_DRIVER seq=0: bInPMTransition=false bGc6Entering=false newLevel=0 — the guest's RM gives BAR1 up
+2032: kf3: GSP phase Running -> Halted
+2033: kf3: display: +186676 ms the guest's display life ENDED (its RM unloaded): 0 model channel(s), 0 queued completion(s) dropped (never written) — the boot layer is shown again
+2034: kf3: mem t=186.749s BAR1 [0x0, +0x7f0000) already shows its physical view (the seed is placed); boot framebuffer store [0x0, +0x7f0000) scrubbed first
+2035: kf3: display: +186726 ms the console shows the BOOT layer (store 0x0, 1920x1080) (core channel FREE)
+2036: kf3: display fps[cap=75(unset) copies=0.9 skipped=0 checks=0.0 same=583 ondemand=6 over=0]
+2038: kf3: display fps[cap=75(unset) copies=0.0 skipped=0 checks=0.0 same=583 ondemand=6 over=0]
+2050: kf3: display fps[cap=75(unset) copies=0.9 skipped=0 checks=27.7 same=610 ondemand=7 over=0]
+2052: kf3: display fps[cap=75(unset) copies=0.0 skipped=0 checks=32.9 same=703 ondemand=7 over=0]
+2054: kf3: display fps[cap=75(unset) copies=0.0 skipped=0 checks=0.0 same=703 ondemand=7 over=0]
+2068: kf3: display fps[cap=75(unset) copies=0.9 skipped=0 checks=25.9 same=728 ondemand=8 over=0]

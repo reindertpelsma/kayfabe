@@ -49,3 +49,17 @@ cand_off_1 accepts CFB0 x2 and CFB7 x6 and aborts at the next refused constructo
   claude/blackwell-ofa-20261020, PR53 + public CFFA admission, tests first). *Falsifier:* in fix1_off
   CFFA is accepted and the guest tears down immediately after it (no new non-Free RPC) with Code 43.
   *Support:* progress past CFFA (a later abort or Code 0).
+
+## Addendum 16:52 UTC — before fix1d_off_1 and trace_on_1 (neither started)
+
+MEASURED: fix1_off_1 accepts CFFA (ordinal 387) and progresses to 595 RPCs; new abort = the 13th
+consecutive NV2080_CTRL_CMD_EVENT_SET_NOTIFICATION (0x20800301) at ordinal 416, refused 0x56 by
+kayfabe's notifier admission (inittables EventSetNotification), then teardown, unload 594, Code 43.
+H-OFA-OFF supported (not falsified). The refused event index is not in the logs.
+
+- fix1d (5a072171d, branch claude/blackwell-diag-20261020, NOT for merge) = fix1 + a bounded (64-line)
+  log of each arming's event/action words. Measurement only: which index is refused.
+- **H-ON-DISP** (ON abort after the 4th CA7A is decided from display-plane/BAR0 state, not from an RPC
+  reply). trace_on_1 = base product ON with WINVM_TRACE=1 KF3_BAR0_READ_TRACE=1 (display-range reads,
+  all writes). *Falsifier:* between the doorbell of the 4th CA7A allocation and the doorbell of the
+  first teardown RPC the trace holds no display-range (0x610000..0x6fffff) access at all.
