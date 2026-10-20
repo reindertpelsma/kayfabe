@@ -1,5 +1,18 @@
 # HW2 preregistration — 2026-10-20
 
+CODE READ, amendment 2026-10-21: the owner's complete overnight briefing
+authorizes freedom of method, hardware access and tests-first fixes. HW2 resumes
+with an owned-child harness. H-FIX falsifiers below remain unchanged. New cohort:
+C/M/M/C repeated three times, six boots each, M infinite park, profiling on in
+both arms, same existing binary hashes and fg5 guest, 2 x 120-second pairs.
+One boot per arm includes a 60-second idle-context sample. Inherited boots are
+reported separately. Native and fast gates precede Windows deployment of M.
+
+H-OWNERSHIP: startup and abort preserve a foreign matching process. FALSIFIER:
+the test-created foreign process is signalled. MEASURED tests first: normal and
+budget startup cases both failed on inherited code; owned-abort support tests
+were committed before introduction. Each of two mutants is killed by two tests.
+
 CODE READ: lane instructions read completely; branch arms are C pw3f4b9e82-s2,
 M 89fc8a22291dd7bda69c3077ba829b1e934b11db, B' c452ca7cb412852a3e6ca68d18e94f92ac625599.
 

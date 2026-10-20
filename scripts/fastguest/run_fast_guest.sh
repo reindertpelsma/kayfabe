@@ -76,7 +76,9 @@ fi
 # ★ 2026-09-26 (V3_MULTI_GPU_AUDIT §2 harness): kill ONLY this lane's own QEMUs — the ones started
 # with `-name kf-fastguest` below — never every `qemu-system-x86` on the box (that shot other VMs,
 # and ruled out several VMs per host by construction). The lock above already serializes this lane.
-pkill -9 -f '[k]f-fastguest' 2>/dev/null
+# Process names do not establish ownership. The timeout below owns its child;
+# an existing process, including a matching fast guest, belongs to its creator.
+# The resource lock serializes runs; stale processes require explicit review.
 sleep 1
 
 # ⊘⊘⊘ **ONE WHITESPACE-FREE TOKEN, OR THE ARMS SILENTLY DO NOT ARRIVE.** The kernel command
