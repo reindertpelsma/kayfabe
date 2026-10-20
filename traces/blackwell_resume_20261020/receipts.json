@@ -1,0 +1,16 @@
+[
+  {
+    "id": 56909569,
+    "role": "BlackwellResumeKayfabe",
+    "offer": 56894506,
+    "gpu": "RTX 5090",
+    "quote_dph": 1.1347222222222222,
+    "geo": "Taiwan, TW",
+    "created_utc": "2026-10-20T15:04:21.173336+00:00",
+    "credit_before": 35.87498823126339,
+    "auto_destroy_minutes": 360,
+    "destroyed": false,
+    "auto_destroy_pid": 1026967,
+    "auto_destroy_armed_utc": "2026-10-20T15:04:21.212193+00:00"
+  }
+]
