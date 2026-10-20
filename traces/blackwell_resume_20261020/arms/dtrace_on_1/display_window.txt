@@ -1,0 +1,26 @@
+{"rpcs": 384, "unload_ordinals": [383], "teardown_start_ordinal": 276, "last_nonfree_before_teardown": [[273, "103", "RmAlloc", "0", "0xca7a", "0x0"], [274, "76", "RmControl", "0", "0x20800a58", "0x0"], [275, "103", "RmAlloc", "0", "0xca7a", "0x0"]]}
+lastCA7A=1590 teardown=1617
+kf3: display: ChannelAllocated { kind: WindowImm, instance: 4, offset: 0, client: 3251634178, pb: Some(Pushbuffer { addr_space: 1, phys: 10627014656, limit: 4095, size_enum: 0 }), life: 1 }
+kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x20800a58 client=H object=H result=0x0
+kf-rm: rpc-trace fn=103 RmAlloc seq=0 class=0xca7b client=H parent=H handle=H result=0x0
+kf3: display: ChannelAllocated { kind: WindowImm, instance: 5, offset: 0, client: 3251634178, pb: Some(Pushbuffer { addr_space: 1, phys: 10627018752, limit: 4095, size_enum: 0 }), life: 1 }
+kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x20800a58 client=H object=H result=0x0
+kf-rm: rpc-trace fn=103 RmAlloc seq=0 class=0xca7b client=H parent=H handle=H result=0x0
+kf3: display: ChannelAllocated { kind: WindowImm, instance: 6, offset: 0, client: 3251634178, pb: Some(Pushbuffer { addr_space: 1, phys: 10627022848, limit: 4095, size_enum: 0 }), life: 1 }
+kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x20800a58 client=H object=H result=0x0
+kf-rm: rpc-trace fn=103 RmAlloc seq=0 class=0xca7b client=H parent=H handle=H result=0x0
+kf3: display: ChannelAllocated { kind: WindowImm, instance: 7, offset: 0, client: 3251634178, pb: Some(Pushbuffer { addr_space: 1, phys: 10627026944, limit: 4095, size_enum: 0 }), life: 1 }
+kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x20800a58 client=H object=H result=0x0
+kf-rm: rpc-trace fn=103 RmAlloc seq=0 class=0xca7a client=H parent=H handle=H result=0x0
+kf3: display: ChannelAllocated { kind: Cursor, instance: 0, offset: 0, client: 3251634178, pb: None, life: 1 }
+kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x20800a58 client=H object=H result=0x0
+kf-rm: rpc-trace fn=103 RmAlloc seq=0 class=0xca7a client=H parent=H handle=H result=0x0
+kf3: display: ChannelAllocated { kind: Cursor, instance: 1, offset: 0, client: 3251634178, pb: None, life: 1 }
+kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x20800a58 client=H object=H result=0x0
+kf-rm: rpc-trace fn=103 RmAlloc seq=0 class=0xca7a client=H parent=H handle=H result=0x0
+kf3: display: ChannelAllocated { kind: Cursor, instance: 2, offset: 0, client: 3251634178, pb: None, life: 1 }
+kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x20800a58 client=H object=H result=0x0
+kf-rm: rpc-trace fn=103 RmAlloc seq=0 class=0xca7a client=H parent=H handle=H result=0x0
+kf3: display: ChannelAllocated { kind: Cursor, instance: 3, offset: 0, client: 3251634178, pb: None, life: 1 }
+kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x50700117 client=H object=H result=0x0
+kf-rm: rpc-trace fn=10 Free seq=0  result=0x0

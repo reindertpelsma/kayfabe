@@ -88,3 +88,16 @@ H-ON-DISP is NOT settled by it).
   kf-disp does not deliver as the Blackwell driver expects). dtrace_on_1 = base ON with
   KF3_DISPLAY_TRACE=1 KF3_DISPLAY_METHOD_TRACE=1 (diagnostic logs only). *Falsifier:* no display
   method/update/notifier activity is logged between the 4th CA7A allocation and the first teardown RPC.
+
+## Addendum 17:55 UTC (box clock) — before the fix3 arms (none started)
+
+MEASURED dtrace_on_1 (KF3_DISPLAY_TRACE/METHOD_TRACE): the guest pushes **no display methods at all**
+in the ON run (no method record), and kf-disp logs at realize: `NO MEASURED caps word 0x00c for die
+arch 0x1b0 impl 0x2, driver branch 580: the authored page stays clean and a Windows guest's display
+may not come up`. MEASURED caps page of this GB202 (root, read-only BAR0, tools/read_display_caps_page.py):
+0x00c = 0x00000102 under Linux 580.159.04 and under 595.91.07 (127 words identical), caps/.
+
+- **H-CAPS-ON** (the unmeasured caps word 0x00c makes the Blackwell Windows driver abandon display
+  init after the cursor channels). Product fix3 = fix2 + one measured GB202/580 row in
+  crates/kf-disp/data/caps_measured.tsv (tier 3, OWNER_RULINGS §AF/§AH; tests first).
+  *Falsifier:* fix3_on still aborts right after the 4th CA7A (ordinal 275/276) with Code 43.
