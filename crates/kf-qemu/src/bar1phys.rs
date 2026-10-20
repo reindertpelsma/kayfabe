@@ -241,7 +241,8 @@ pub fn restore_physical_view_scrubbed<V: kf_mem::cpuwin::ViewOps>(
             Err(ScrubError::StaleLife) => {
                 return Some(
                     "BAR1's physical view NOT restored: a newer guest RM life began (fn 72) \
-                     after this unload — neither scrubbed nor re-seeded".to_string(),
+                     after this unload — neither scrubbed nor re-seeded"
+                        .to_string(),
                 );
             }
         }
@@ -564,8 +565,16 @@ mod tests {
             Err(ScrubError::StaleLife)
         })
         .expect("a line");
-        assert_eq!(w.seeded(), None, "a stale unload changed the new life: {line}");
-        assert!(log.borrow().is_empty(), "a stale unload placed a view: {:?}", log.borrow());
+        assert_eq!(
+            w.seeded(),
+            None,
+            "a stale unload changed the new life: {line}"
+        );
+        assert!(
+            log.borrow().is_empty(),
+            "a stale unload placed a view: {:?}",
+            log.borrow()
+        );
     }
 
     /// The new life's placements need not overlap the boot range. Its first BAR1 change retired
@@ -590,9 +599,17 @@ mod tests {
             Err(ScrubError::StaleLife)
         })
         .expect("a line");
-        assert_eq!(w.seeded(), None, "a stale unload replaced the live RM's scratch: {line}");
+        assert_eq!(
+            w.seeded(),
+            None,
+            "a stale unload replaced the live RM's scratch: {line}"
+        );
         assert_eq!(w.placements(), 1, "the new life's mapping stays");
-        assert!(log.borrow().is_empty(), "a stale unload placed a view: {:?}", log.borrow());
+        assert!(
+            log.borrow().is_empty(),
+            "a stale unload placed a view: {:?}",
+            log.borrow()
+        );
     }
 
     /// A seed that is still placed (no RM ever took BAR1) is the firmware console's live

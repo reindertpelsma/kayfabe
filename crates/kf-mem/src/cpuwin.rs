@@ -1175,7 +1175,11 @@ mod tests {
         w.seed(0, 0, 0x80_0000).unwrap();
         r.ops.lock().unwrap().clear();
         let rep = w.sink_all();
-        assert_eq!(w.seeded(), None, "a CPU view survived scrub preparation: {rep:?}");
+        assert_eq!(
+            w.seeded(),
+            None,
+            "a CPU view survived scrub preparation: {rep:?}"
+        );
         assert_eq!(w.placements(), 0);
         assert_eq!(
             *r.ops.lock().unwrap(),
@@ -1203,7 +1207,11 @@ mod tests {
         let once = r.ops.lock().unwrap().clone();
         assert_eq!(once, [Op::Sink(0, 0x80_0000), Op::Release(0)]);
         w.sink_all();
-        assert_eq!(*r.ops.lock().unwrap(), once, "a retry must not release twice");
+        assert_eq!(
+            *r.ops.lock().unwrap(),
+            once,
+            "a retry must not release twice"
+        );
         assert_eq!(w.reset_to_boot().seed, Some(Reseed::Placed { life: 3 }));
     }
 
