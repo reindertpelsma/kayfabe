@@ -84,6 +84,17 @@ class MetricTests(unittest.TestCase):
     def test_exit_bounds_duration(self):
         self.assertEqual(self.run_case((), end=20, process_end=2)['Heaven.exe']['count'],0)
 
+    def test_csv_orders_delayed_present_by_event_time(self):
+        rows,_=metric.read_csv(['Application,ProcessID,TimeInQPC','9999,a,7,2000','10000,a,7,1000'])
+        self.assertEqual([r[0] for r in rows],[1000,2000])
+
+    def test_delayed_completion_does_not_refuse_valid_silence_input(self):
+        lines=['Application,ProcessID,TimeInQPC']
+        lines += [f'{9999+i},a,7,{i*10}' for i in range(110)]
+        lines += ['10110,a,7,2000','10111,a,7,1000']
+        rows,_=metric.read_csv(lines)
+        self.assertEqual(metric.silences(rows,1000,0,2,{})['a']['count'],0)
+
     def test_missing_header_refused(self):
         with self.assertRaises(ValueError):
             metric.read_csv(['1,a,7,1000'])
