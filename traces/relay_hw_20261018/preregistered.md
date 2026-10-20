@@ -73,3 +73,12 @@ runs per arm, same host desktop GPU and benchmark settings; report raw values,
 range and paired differences, without asserting equivalence from small n.
 The owner's earlier 2050 score has no verified M run receipt: the inspected
 owner process was still production 0d7ba743.
+
+H-COUNTER-ATTRIBUTION: B' backstop_found_work>0 establishes a missing wake for
+an old obligation. FALSIFIER before the probe: the real production worker
+counts fresh direct-token work or fresh relay demand submitted after timeout,
+with its registered eventfd already signalled before the next pass. Use the
+existing chaos hook only to schedule that window; no production edit, no
+private-word wait, no contention. A positive counter in this construction is
+a counter-attribution false positive, not evidence that every hardware hit is
+explained. Probe source remains outside ordinary product test targets.
