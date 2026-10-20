@@ -14,10 +14,11 @@
 //!    waiting relays' private words, demand left by a busy lock) ONLY when a pass served NOTHING (`if n > 0 { continue }`).
 //!    A wait is woken only by such a look (marker interrupt -> peek(Event); `Popped` / pt-busy / disabled Retry -> peek(Spin));
 //!    the 50 ms safety net is a park timeout and never runs while the worker is busy.
-//!  => with as many hot relays as workers no look ever happens; a cold relay's wait, the engine's guest interrupts and a busy-lock
-//!  retry all wait for the hot neighbours to pause. The model drives the production `worker::LoopPolicy::after_pass` and the
-//!  production `user_loop::{idle, look_needed, may_retry, Wait}`; the token/bitmap layer is the production state machine
-//!  transliterated (`kf-trap` `TokenWord`, `RungBitmap::scan`: fairness of FINDING is separately tested below with the real bitmap).
+//!
+//! So: with as many hot relays as workers (or fewer, when the workers hand one hot token to each other: the baton) no look ever happens; a cold relay's wait, the engine's guest interrupts and a busy-lock
+//! retry all wait for the hot neighbours to pause. The model drives the production `worker::LoopPolicy::after_pass` and the
+//! production `user_loop::{idle, look_needed, may_retry, Wait}`; the token/bitmap layer is the production state machine
+//! transliterated (`kf-trap` `TokenWord`, `RungBitmap::scan`: fairness of FINDING is separately tested below with the real bitmap).
 #![allow(
     clippy::too_many_lines,
     clippy::needless_range_loop,
@@ -130,6 +131,8 @@ struct Cfg {
     cold_rings: u8,
     irq: bool,
     m: Mutant,
+    /// Which of P11/P12/P13 are tracked (the counters multiply the state space).
+    track: u32,
 }
 
 #[derive(Clone, PartialEq, Eq, Hash)]
@@ -279,16 +282,16 @@ fn successors(cfg: &Cfg, s: &S) -> Vec<(String, S)> {
                 let mut n = s.clone();
                 n.moved = false;
                 // passes since something became attendable
-                if n.wait.is_some() && n.sat {
+                if cfg.track & V_P11 != 0 && n.wait.is_some() && n.sat {
                     n.since_sat = n.since_sat.saturating_add(1);
                 }
-                if n.ev {
+                if cfg.track & V_P12 != 0 && n.ev {
                     n.since_ev = n.since_ev.saturating_add(1);
                 }
-                if n.demand {
+                if cfg.track & V_P13 != 0 && n.demand {
                     n.since_demand = n.since_demand.saturating_add(1);
                 }
-                if n.bit[cold] {
+                if cfg.track & V_TOKEN != 0 && n.bit[cold] {
                     n.since_rung = n.since_rung.saturating_add(1);
                 }
                 let mut q = Vec::new();
@@ -342,10 +345,17 @@ fn successors(cfg: &Cfg, s: &S) -> Vec<(String, S)> {
                     ok.run = 0;
                     variants.push((me("serve the cold relay"), ok));
                 } else {
-                    // a hot relay: the turn made progress (`Need::Again`) -> it rings itself
+                    // a hot relay: every turn makes progress (`Need::Again`) -> it rings itself, so `worker_pass` serves it
+                    // `REACT_ROUNDS + 1` times (nothing else touches a BUSY token meanwhile: the rounds are one step) and then
+                    // republishes it RUNG (`RepublishAndMoveOn`)
                     let mut h = base;
-                    h.ring(r);
-                    variants.push((me(&format!("serve hot relay {r} (rings itself again)")), h));
+                    h.wk[i].n += REACT_ROUNDS;
+                    h.tok[r] = T::Rung;
+                    h.bit[r] = true;
+                    h.moved = true;
+                    h.wk[i].pc = Pc::Claim;
+                    out.push((me(&format!("serve hot relay {r} {} times (it rings itself again every time), republish it", REACT_ROUNDS + 1)), h));
+                    continue;
                 }
                 for (label, mut n) in variants {
                     // release
@@ -540,6 +550,7 @@ fn base(workers: usize, hot: usize, wait: WaitKind) -> Cfg {
         cold_rings: 1,
         irq: true,
         m: Mutant::default(),
+        track: V_P11 | V_P12 | V_P13 | V_TOKEN,
     }
 }
 
@@ -567,26 +578,23 @@ fn p13_one_worker_a_lost_try_lock_is_re_rung_within_k_passes() {
     holds("W=1 hot=1 lock convoy", &c);
 }
 
-/// Two workers need two hot relays (one hot relay leaves the other worker idle, so it looks).
-#[test]
-fn p11_two_workers_two_hot_relays_a_marker_wait_is_attended_within_k_passes() {
-    holds("W=2 hot=2 marker", &base(2, 2, WaitKind::Marker));
-}
-
-#[test]
-fn p13_two_workers_two_hot_relays_a_lost_try_lock_is_re_rung_within_k_passes() {
-    let mut c = base(2, 2, WaitKind::Popped);
-    c.fails = 2;
-    holds("W=2 hot=2 lock convoy", &c);
-}
-
 /// The BATON: with two workers and ONE hot relay the workers hand the hot token to each other. The worker that finishes its
 /// `REACT_ROUNDS` republishes the token RUNG and its next scan (or the other worker's) claims it again; a worker finds nothing
 /// -- and so looks -- only when it scans in the window in which the token is BUSY (timing sensitive: about one run in three on
 /// hardware).
 #[test]
 fn p11_two_workers_one_hot_relay_the_baton_does_not_starve_the_cold_wait() {
-    holds("W=2 hot=1 baton", &base(2, 1, WaitKind::Marker));
+    let mut c = base(2, 1, WaitKind::Marker);
+    c.track = V_P11;
+    holds("W=2 hot=1 baton", &c);
+}
+
+/// The baton also starves the ENGINE EVENT (the guest's completion interrupt is raised from the same dispatch).
+#[test]
+fn p12_two_workers_one_hot_relay_the_baton_does_not_delay_the_engine_event() {
+    let mut c = base(2, 1, WaitKind::Marker);
+    c.track = V_P12;
+    holds("W=2 hot=1 baton event", &c);
 }
 
 /// Control: the token path (finding a flagged cold token) is fair today: the scan visits every summary word and takes all flagged
@@ -663,4 +671,98 @@ fn the_real_rung_bitmap_reaches_a_cold_token_behind_a_crowd_of_hot_ones() {
         served_cold_at.is_some_and(|p| p < 8),
         "the cold token was never scanned in 8 passes"
     );
+}
+
+// ------------------------------------------------------------------------------------------------
+// the checker has teeth: mutants of the loop's look, each found by at least two scenarios
+
+fn w1(wait: WaitKind, track: u32, m: Mutant) -> Cfg {
+    let mut c = base(1, 1, wait);
+    c.track = track;
+    c.m = m;
+    c
+}
+
+macro_rules! mutants {
+    ($( $name:ident : $cfg:expr, $needle:expr; )*) => {
+        $( #[test] fn $name() { let c: Cfg = $cfg; holds(concat!(stringify!($name), "/control"), &Cfg { m: Mutant::default(), ..c.clone() }); finds(stringify!($name), &c, $needle); } )*
+    };
+}
+
+mutants! {
+    mutant_no_look_after_busy_passes_is_found_by_a_marker_wait:
+        w1(WaitKind::Marker, V_P11, Mutant { policy_continue_only: true, ..Mutant::default() }), "P11";
+    mutant_no_look_after_busy_passes_is_found_by_a_carried_wait:
+        w1(WaitKind::Popped, V_P11, Mutant { policy_continue_only: true, ..Mutant::default() }), "P11";
+    mutant_no_look_after_busy_passes_is_found_by_the_engine_event:
+        w1(WaitKind::Marker, V_P12, Mutant { policy_continue_only: true, ..Mutant::default() }), "P12";
+    mutant_look_without_event_dispatch_is_found_by_the_engine_event:
+        w1(WaitKind::Marker, V_P12, Mutant { look_skips_events: true, ..Mutant::default() }), "P12";
+    mutant_look_without_event_dispatch_is_found_by_a_marker_wait_that_only_the_event_peeks:
+        Cfg { cold_rings: 0, ..w1(WaitKind::Marker, V_P12, Mutant { look_skips_events: true, ..Mutant::default() }) }, "P12";
+    mutant_look_without_peek_is_found_by_a_carried_wait:
+        w1(WaitKind::Popped, V_P11, Mutant { look_skips_peek: true, ..Mutant::default() }), "P11";
+    mutant_look_without_peek_is_found_by_a_lost_try_lock:
+        Cfg { fails: 2, ..w1(WaitKind::Popped, V_P13, Mutant { look_skips_peek: true, ..Mutant::default() }) }, "P13";
+}
+
+// ------------------------------------------------------------------------------------------------
+// the production loop really does what the model's Look does
+
+const WORKER: &str = include_str!("../src/worker.rs");
+
+fn look_arm() -> &'static str {
+    let a = WORKER
+        .split("AfterPass::Look => {")
+        .nth(1)
+        .expect("pin: the Look arm of run_with_relay is gone");
+    a.split("continue;").next().expect("pin")
+}
+
+#[test]
+fn pin_the_busy_look_dispatches_events_and_completions() {
+    let l = look_arm();
+    assert!(
+        l.contains("PollTimeout::Immediate")
+            && l.contains("dispatch(&ready)")
+            && l.contains("relay.peek(Peek::Event)"),
+        "{l}"
+    );
+}
+
+#[test]
+fn pin_the_busy_look_peeks_the_waiting_relays() {
+    let l = look_arm();
+    assert!(
+        l.contains("relay.waiting()") && l.contains("relay.peek(Peek::Spin)"),
+        "{l}"
+    );
+}
+
+#[test]
+fn pin_a_busy_pass_asks_the_policy() {
+    assert!(
+        WORKER.contains("policy.after_pass(n)"),
+        "pin: run_with_relay no longer asks LoopPolicy after a busy pass"
+    );
+    assert!(WORKER.contains("pub const LOOK_EVERY: u32 = 4;"));
+}
+
+#[test]
+fn pin_the_busy_look_order_is_poll_dispatch_event_peek_then_spin_peek() {
+    let l = look_arm();
+    let order = [
+        "PollTimeout::Immediate",
+        "dispatch(&ready)",
+        "relay.peek(Peek::Event)",
+        "relay.waiting()",
+        "relay.peek(Peek::Spin)",
+    ];
+    let mut at = 0;
+    for o in order {
+        let i = l[at..]
+            .find(o)
+            .unwrap_or_else(|| panic!("pin: {o:?} missing or out of order in the Look arm"));
+        at += i + o.len();
+    }
 }

@@ -490,3 +490,32 @@ The last three survive v2 **by construction**: they are redundant defences (D6 `
 GPU time-slicing between the twins' TSGs (a blocked acquire holding a time slice); the BAR1-store / BAR0-doorbell ordering itself (assumed in 9.2, not decidable GPU-free); the shared software
 object / registry of the channels of one client; `segment_turn` triggers (Window, ring growth: `user_lifecycle_model`); the 32768-entry guest ring (the model uses 4-32 slots, the lazy interval
 is capped at half the ring so the same code path runs); `serve`/`peek`/`arm` run as a transliteration (guarded by pins, see the proposed `look()` refactor above).
+
+## 10. Bounded fairness of the worker loop (2026-10-20): the baton
+
+**STATUS: LIVE (fix in the code, GPU-free; NOT yet run on hardware), 2026-10-20.** Branch `claude/relay-fairness-20261020`. Labels as in §9.
+Symptom (hardware, owner's runs): on the relay route (Linux with `KF3_DEBUG_FORCE_MIGRATABLE=1`, the Windows guest) about one plain two-client run in three starves ONE client for
+6-59 s while the other completes thousands of iterations; GPU 94-97 %, no Xid, `KF3_DIAG_USER_STALL` never fired, `backstop_found_*` stay 0, an `strace`-wrapped run is clean (timing),
+the Passthrough route 0 of ~16. §9's liveness check ("every covered entry is eventually relayed") cannot see it: a client served after 59 s is "eventually served".
+
+**Cause [CODE READ + MEASURED in the model]** `kf_chan::worker::run_with_relay` looked at the world (epoll poll with timeout 0: engine NON_STALL events, completions, the doorbell
+eventfd; `relay.peek`: the waiting relays' private words and the demand a busy lock left) **only when a pass served nothing** (`if n > 0 { continue }`). A hot relay ends every turn
+`Need::Again` and rings its own token, so a pass always serves it (up to `REACT_ROUNDS + 1` times, then `RepublishAndMoveOn`). With one worker the loop is never idle; with TWO workers
+(`ffi_unsafe.rs`: `for i in 0..2`) the workers hand the hot token to each other (the **baton**): the one that finishes its rounds republishes the token RUNG and either worker's next scan
+claims it again; a worker is idle -- and so looks -- only if it scans in the window in which the token is BUSY, which depends on timing (hence 1 in 3, and clean under `strace`).
+What waits for a look: (P11) a cold relay's satisfied wait (the marker's interrupt is an epoll event, a `Wait::Popped` has no event at all); (P12) the engine events themselves, whose
+dispatch is what injects the guest's completion interrupt (`on_other` -> `nsi_engine_edge`) -- on the Passthrough route the hot tokens are rung inline on the vCPU, never served here, so the
+worker idles and looks; (P13) demand left behind by a lost `try_lock` (`pt`, record), whose only re-ring is a look. The 50 ms safety net is a park timeout and never fires while the worker is
+busy, which is why its counters stay 0. No ring is stuck: the cold relay's token path is fair (the scan visits every summary word, takes every flagged token of a pass, rotating start:
+`control_a_flagged_cold_token_is_claimed_within_two_passes`, and the real `RungBitmap` reaches a cold token behind 200 hot ones).
+
+**Minimal schedule (model, printed by `relay_fairness`, 1 worker; the 2-worker baton is the same with the token handed over at "pass ends")**: the cold relay's marker interrupt fires;
+the worker scans, claims the hot token, serves it 9 times, republishes it, `after_pass(9) = Continue`, scans, ... for ever; the event is never dispatched and the wait is never peeked.
+
+**Fix (event-driven, no timer)** `worker::LoopPolicy::after_pass`: every `LOOK_EVERY = 4` consecutive busy passes the loop LOOKS once (`AfterPass::Look`): the same poll(0) + dispatch +
+`peek(Event)` + `peek(Spin)` the idle spin does, then the next pass. The delay any wait suffers from a busy worker is bounded by `LOOK_EVERY` passes of that worker whatever the neighbours do.
+Cost: one `epoll_wait(0)` and, when a relay waits, its two private-word reads per four busy passes. New counter `busy_looks` (`USER_RING_LOOP SUMMARY`): non-zero on a hot run is the fix working.
+Hardware check: two-client runs on the relay route, 20 runs; the stall must not appear; `busy_looks` > 0; `backstop_found_*` still 0. Falsifier: a starvation that persists with `busy_looks` > 0.
+
+**Not modelled / cannot be seen GPU-free**: whether `try_lock` on `pt` / the record is lost for long against a busy neighbour (hold times; the model treats a lost try_lock as an adversary with a
+budget and shows the re-ring needs a look); GPU-side starvation (time-slicing of the twins' TSGs); the relay's own turn cost (a long `Pump::turn` delays every look by one turn).

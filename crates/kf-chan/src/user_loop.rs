@@ -203,6 +203,9 @@ pub struct Stats {
     pub wake_spin: AtomicU64,
     /// Parks that ended on the backstop timeout.
     pub wake_backstop: AtomicU64,
+    /// Looks a BUSY worker made between passes (`worker::LoopPolicy`, bounded fairness): events dispatched and waiting relays peeked
+    /// although every pass served something. Non-zero on a hot run is the fix doing its job; the starvation it prevents is silent.
+    pub busy_looks: AtomicU64,
     /// Backstop peeks that found a satisfied wait an interrupt should have announced (a BUG).
     pub backstop_found_work: AtomicU64,
     /// Backstop peeks that found a satisfied control-witness gate (expected, apart).
@@ -253,11 +256,12 @@ impl Stats {
         let g = |c: &AtomicU64| c.load(Ordering::Relaxed);
         let drain: Vec<u64> = self.drain.iter().map(g).collect();
         format!(
-            "wakes(doorbell={} event={} spin={} backstop={}) backstop_found(work={} carried={} contended={}) event_without_progress={} gates={} carried_ungated={} credit_waits={} contended_turns={} pop_writebacks={} markers={} drain_us_log2={drain:?}",
+            "wakes(doorbell={} event={} spin={} backstop={} busy_looks={}) backstop_found(work={} carried={} contended={}) event_without_progress={} gates={} carried_ungated={} credit_waits={} contended_turns={} pop_writebacks={} markers={} drain_us_log2={drain:?}",
             g(&self.wake_doorbell),
             g(&self.wake_event),
             g(&self.wake_spin),
             g(&self.wake_backstop),
+            g(&self.busy_looks),
             g(&self.backstop_found_work),
             g(&self.backstop_carried),
             g(&self.backstop_contended),

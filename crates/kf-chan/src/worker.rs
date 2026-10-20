@@ -93,11 +93,21 @@ pub struct LoopPolicy {
     busy_passes: u32,
 }
 
+/// After this many consecutive busy passes (each served something) the loop looks once. A pass serves a hot token up to
+/// `REACT_ROUNDS + 1` times, so the delay a busy worker adds to any wait is bounded by `LOOK_EVERY` passes, whatever the neighbours do.
+pub const LOOK_EVERY: u32 = 4;
+
 impl LoopPolicy {
     /// What follows a pass that served `served` tokens.
     pub fn after_pass(&mut self, served: usize) -> AfterPass {
         if served > 0 {
-            AfterPass::Continue
+            self.busy_passes += 1;
+            if self.busy_passes >= LOOK_EVERY {
+                self.busy_passes = 0;
+                AfterPass::Look
+            } else {
+                AfterPass::Continue
+            }
         } else {
             self.busy_passes = 0;
             AfterPass::Idle
@@ -213,7 +223,27 @@ pub fn run_with_relay(
             after_timeout = false;
             match policy.after_pass(n) {
                 AfterPass::Continue | AfterPass::Idle => continue,
-                AfterPass::Look => continue,
+                AfterPass::Look => {
+                    // ★ BOUNDED FAIRNESS: a busy worker (a hot relay rings its own token after every turn; two workers can hand one
+                    // hot token to each other) must still look at the world: the engine's events (the guest's completion
+                    // interrupts), the completions, and the waiting relays' private words. Same look as the idle spin's, once.
+                    RelayStats::bump(&relay_stats.busy_looks);
+                    let mut ready = ReadyTokens::new();
+                    if matches!(poller.wait(&mut ready, PollTimeout::Immediate), Ok(k) if k > 0) {
+                        let (doorbell, event) = dispatch(&ready);
+                        if doorbell {
+                            RelayStats::bump(&relay_stats.wake_doorbell);
+                        }
+                        if event {
+                            RelayStats::bump(&relay_stats.wake_event);
+                            let _ = relay.peek(Peek::Event);
+                        }
+                    }
+                    if relay.waiting() && relay.peek(Peek::Spin) {
+                        RelayStats::bump(&relay_stats.wake_spin);
+                    }
+                    continue;
+                }
             }
         }
         after_timeout = false;
@@ -297,14 +327,26 @@ pub fn run_with_relay(
 mod tests {
     use super::*;
 
-    /// Behaviour-neutral extraction (this commit): a pass that served anything runs the next one at once; one that served nothing
-    /// idles (spin, then park).
+    /// A pass that served something continues; every `LOOK_EVERY`-th consecutive busy pass looks first; an empty pass idles and
+    /// restarts the count.
     #[test]
-    fn a_pass_that_served_something_continues_and_an_empty_one_idles() {
+    fn a_busy_worker_looks_every_look_every_passes_and_an_empty_pass_idles() {
         let mut p = LoopPolicy::default();
-        for _ in 0..1000 {
-            assert_eq!(p.after_pass(3), AfterPass::Continue);
+        for round in 0..3 {
+            for i in 1..LOOK_EVERY {
+                assert_eq!(
+                    p.after_pass(3),
+                    AfterPass::Continue,
+                    "round {round} pass {i}"
+                );
+            }
+            assert_eq!(p.after_pass(3), AfterPass::Look, "round {round}");
         }
+        assert_eq!(p.after_pass(1), AfterPass::Continue);
         assert_eq!(p.after_pass(0), AfterPass::Idle);
+        for _ in 1..LOOK_EVERY {
+            assert_eq!(p.after_pass(1), AfterPass::Continue, "the count restarted");
+        }
+        assert_eq!(p.after_pass(1), AfterPass::Look);
     }
 }
