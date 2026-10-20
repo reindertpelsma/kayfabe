@@ -1,6 +1,16 @@
 # Windows multi-client night reproducer
 
-STATUS: RESEARCH, 2026-10-20. Scripts and observations only; no product fix.
+STATUS: BLOCKED / UNQUALIFIED, 2026-10-20. Scripts and observations only; no product fix.
+
+MEASURED: the first hardware collection failed with `PresentMon header absent`.
+PowerShell serialized `pm_header` as a metadata object; collection prepended its
+string rendering before the actual CSV header. The parser refused that preamble.
+The lane's mandatory STOP rule ended experiments and restored the owner session.
+This transport defect remains unfixed. Do not use this harness for an A/B claim
+until a later authorized session adds a failing transport regression, corrects
+serialization, and completes A/A validation. `RESULT.json` from this campaign is
+an explicit failure receipt with null silence metrics, written during reporting.
+The 25 passing Python tests do not cover PowerShell serialization.
 
 CODE READ: this harness starts a fresh VM from a copy of the owner launcher,
 restarts the existing vCPU watchdog and PresentMon monitor, runs windowed Heaven

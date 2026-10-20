@@ -1,0 +1,3 @@
+01:07:04.718 START qpc=206002782
+01:07:24.255 TRIGGER Heaven.exe silent 4s after 366 presents/30s -> t_010724.etl qpc=401373429
+01:08:08.557 TRIGGER dwm.exe silent 4s after 1577 presents/30s -> t_010807.etl qpc=844390277
