@@ -1,1 +1,21 @@
-[]
+[
+  {
+    "id": 56949833,
+    "role": "Blackwell TDR/POSTCOMP continuation",
+    "offer": 56638596,
+    "machine_id": 53347,
+    "gpu_offer": "RTX 5090",
+    "quote_dph": 1.0680555555555555,
+    "disk_gb_requested": 180,
+    "created_utc": "2026-10-20T20:49:07.435255+00:00",
+    "product_head": "90e7f2a54dcf4a885d5d1bb7cd442a8b96309686",
+    "code_base": "048c28b9c645190adf5bcaf859284adb8eb222ed",
+    "credit_before": 29.717979920862604,
+    "auto_destroy_minutes": 175,
+    "global_teardown_utc": "2026-10-21T04:30:00+00:00",
+    "destroyed": false,
+    "auto_destroy_pid": 1382696,
+    "auto_destroy_armed_utc": "2026-10-20T20:49:07.454726+00:00",
+    "auto_destroy_verified": true
+  }
+]
