@@ -1,0 +1,9 @@
+DESKTOP580_DESKTOP_IMAGE_READY 2026-10-20T03:26:36+00:00
+DESKTOP580_BASELINE_START 2026-10-20T03:26:36+00:00 source=7f22d18dfff8083345cdb54a4666018dca845384
+H_B2 falsifier mode rejection, missing NVIDIA/Cinnamon, black presented window, guestXid/flip timeout, or new hostXid. No additional caps group.
+DESKTOP580_REAL_PROCESS_VERIFIED 95806 {'KF3_REV': '7f22d18d', 'KF3_RPC_TRACE': '1'}
+DESKTOP580_GUEST_PROBE_EXIT=0
+DESKTOP580_ACTUAL_PRESENTED_WINDOW {'width': 1920, 'height': 1080, 'colors': 13721, 'pixel_sha256': '3f6d72bc0aa368b13cf4b2df67aba3766741da47a7798ed42b3793aae5c7d0b8', 'public_window_only': True, 'nonblank': True}
+DESKTOP580_PRESENTATION_PASS n=1 spread=N/A
+DESKTOP580_HOST_XID before=5 after=5
+DESKTOP580_BASELINE_EXIT rc=0 2026-10-20T03:28:38+00:00

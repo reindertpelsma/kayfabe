@@ -1,0 +1,11 @@
+DESKTOP580_PREP_START 2026-10-20T03:24:37+00:00
+STAGE_LINUX_READY 2026-10-20T03:19:54+00:00
+BROKER_HOST_READY source=7f22d18dfff8083345cdb54a4666018dca845384 actual_binary=/opt/sweep-broker/nvkvm-display-broker 2026-10-20T03:20:29+00:00
+[interactive] broker badf2d707da4: nvkvm-display-broker backends:  dma-buf test source : NO - apt install libgbm-dev  wayland : NO - install libwayland-dev wayland-protocols  x11 : yes (dri3+present +xrender scaling and guest cursor) + xi2 raw motion  test : yes (always)
+[interactive] provisioning boot, kf3 7f22d18d (/workspace/bench/kf3-bins/7f22d18d/qemu-system-x86_64)
+OWNED_QEMU_RECORDED pid=94968
+[interactive] provision: APT_RC=0 + echo APT_RC=0 PROVISION_DONE + echo PROVISION_DONE  (log /workspace/sweep-desktop580-56829120/prep-20261020-032438/provision.log)
+OWNED_QEMU_STOP how=acpi
+[interactive] INTERACTIVE_PREP_EXIT 2026-10-20T03:26:36+00:00
+DESKTOP580_DESKTOP_IMAGE_READY 2026-10-20T03:26:36+00:00
+DESKTOP580_PREP_EXIT rc=0 2026-10-20T03:26:36+00:00
