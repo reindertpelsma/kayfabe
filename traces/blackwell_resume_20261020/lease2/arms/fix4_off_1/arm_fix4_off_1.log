@@ -1,0 +1,20 @@
+ARM_START run=fix4_off_1 prod=fix4 source=71588cecb64968c4a514faef8de2a2111c915d9a bin=71588cec profile=off 2026-10-20T20:12:23+00:00
+[2026-10-20T20:12:23Z] detached: tag=fix4_off_1, log logs/fix4_off_1_run.log (stdout logs/fix4_off_1_run.out)
+KF_SSH_UP
+{"pid": 125563, "exe": "/workspace/bench/kf3-bins/71588cec/qemu-system-x86_64", "sha256": "99dbb54be590a4469c6437ce4e4099aa03dfcb9ef6d44c140d5ffdeb8be2c117", "kf3_device": "kf3-gpu,fb-mb=8192,bar1-size=134217728,bar2-size=33554432,display=on,gop=on,gop-efi=/workspace/bwr-win/secureboot/kf-gop.7f22d18d.signed.efi,id=kf0,guest-driver=580.65.06,display=off,gop=off,gop-efi="}
+STAGE580_READY=1 actual=32.0.15.8088 device_disabled=1 GSP_flags=1; fresh QEMU580.65.06 then one enable
+ENABLE580_START actual=32.0.15.8088 UTC=2026-10-20T20:14:58.3126986Z
+Microsoft PnP Utility
+
+Enabling device:          PCI\VEN_10DE&DEV_2B85&SUBSYS_41991458&REV_A1\3&11583659&0&28
+Device enabled successfully.
+
+ENABLE580_PNPUTIL_RC=0
+{"Name":"NVIDIA GeForce RTX 5090","DriverVersion":"32.0.15.8088","ConfigManagerErrorCode":0}
+{"FriendlyName":"NVIDIA GeForce RTX 5090","Status":"OK","Problem":0}
+ENABLE580_OBSERVED UTC=2026-10-20T20:15:40.1989699Z; device status is verdict, not this command rc
+ssh: connect to host 127.0.0.1 port 2224: Connection refused
+[2026-10-20T20:16:12Z] REFUSED: no QEMU running for kfwin
+ARM_HOLD 240s 2026-10-20T20:16:12+00:00
+ssh: connect to host 127.0.0.1 port 2224: Connection refused
+ARM_EXIT run=fix4_off_1 rc=1 2026-10-20T20:20:12+00:00

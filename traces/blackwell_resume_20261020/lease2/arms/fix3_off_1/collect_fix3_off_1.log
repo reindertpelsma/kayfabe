@@ -1,0 +1,5 @@
+COLLECT_START fix3_off_1 2026-10-20T20:08:47+00:00
+[2026-10-20T20:08:47Z] detached: tag=fix3_off_1_collect, log logs/fix3_off_1_collect_run.log (stdout logs/fix3_off_1_collect_run.out)
+[2026-10-20T20:11:27Z] stopping kfwin (pid 124274)
+[2026-10-20T20:11:48Z] stopped
+COLLECT_EXIT fix3_off_1 2026-10-20T20:11:48+00:00

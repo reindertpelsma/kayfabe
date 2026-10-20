@@ -17,9 +17,10 @@
     "auto_destroy_timer_cancelled_after_absence": true,
     "started_utc": "2026-10-20T15:04:20+00:00",
     "runtime_s_at_destroy": 14674.5,
-    "invoice_gpu_usd": 4.553,
-    "invoice_storage_usd": 0.203,
-    "invoice_total_usd": 4.756
+    "invoice_gpu_usd": 4.64,
+    "invoice_storage_usd": 0.207,
+    "invoice_total_usd": 4.847,
+    "invoice_note": "re-read 20:36 UTC (settled higher than the 19:09 reading 4.756)"
   },
   {
     "id": 56939139,
@@ -31,8 +32,15 @@
     "created_utc": "2026-10-20T19:12:50.969624+00:00",
     "credit_before": 31.041572435962507,
     "auto_destroy_minutes": 240,
-    "destroyed": false,
+    "destroyed": true,
     "auto_destroy_pid": 1258630,
-    "auto_destroy_armed_utc": "2026-10-20T19:12:51.008154+00:00"
+    "auto_destroy_armed_utc": "2026-10-20T19:12:51.008154+00:00",
+    "destroy_requested_utc": "2026-10-20T20:35:43+00:00",
+    "api_absent_verified_utc": "2026-10-20T20:36:03+00:00",
+    "auto_destroy_timer_cancelled_after_absence": true,
+    "runtime_s_at_destroy": 4969.8,
+    "invoice_gpu_usd": 1.207,
+    "invoice_storage_usd": 0.092,
+    "invoice_total_usd": 1.299
   }
 ]

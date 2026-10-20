@@ -1,0 +1,1 @@
+BW580_RESULT {"utc":"2026-10-20T20:30:37.3047591Z","driver":"32.0.15.8088","inf":"oem7.inf","problem":43,"code":43,"tdr4101":0,"dwm":1,"explorer":0,"logonui":1}

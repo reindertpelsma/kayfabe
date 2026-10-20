@@ -91,3 +91,17 @@ Guest events (`arm_*_events.txt`): no nvlddmkm/Display/WUDF records in the Code 
 Native windows-on-vast reference on this board (time spent on the root-cause chain; the board passed
 native Linux 595/580 health, and kayfabe reached Code 0 on it). Linux guest regression of fix1–fix3.
 No merge; PR53/PR51/PR52 untouched except a factual comment on PR53.
+
+## Phase 2 (lease 56939139, 19:13–20:36 UTC; stopped on the coordinator's wrap-up order)
+
+See HANDOFF_CODEX.md for the full state. MEASURED (n=1 each, second GB202 board, parent with small-dump config):
+- fix3_off_1: Code 0, then 0x116 (same parameters). Collection boot without kf3: System 1001 BugCheck
+  0x116, minidump + 1 GB WATCHDOG LiveKernelReport, WER LiveKernelEvent **141 (VIDEO_ENGINE_TIMEOUT)** x3
+  then 116; no 4101. Kernel GR channel dead at its report-semaphore segment; copy channel 0x80f GP_GET
+  6877/7084 (identical to lease 1).
+- fix4_off_1 (Blackwell 3D report semaphore admitted from NVIDIA open-gpu-doc): Code 0, GR channel alive
+  (33 methods relayed), copy channel drained (19352 forwarded, GP_GET==PUT); **still 0x116** at ~+40 s.
+  H-TDR-GRSEM: a real wall, not the last one (falsifier met for "sole cause").
+- fix5_on_1 (CA73 POSTCOMP_HDR_CAPA derived): Code 43 at the same CA7A abort: H-POSTCOMP-DERIVED falsified.
+- Native raw on lease 2: 29/30 while the Windows install ran beside it (concurrent-fuzz invariant
+  violation), 30/30 + CUDA 4/4 when rerun alone (`lease2/native/`).

@@ -1,0 +1,11 @@
+FAIL cuInit(0) -> no CUDA-capable device is detected (100)
+RC=1
+FAIL cuInit(0) -> no CUDA-capable device is detected (100)
+RC=1
+KFDX start api=d3d11 iters=20 any_vendor=0
+KFDX ok CreateDXGIFactory1
+KFDX adapter index=0 vendor=0x1414 device=0x008c luid=0x00000000_0x000057c0 dedicated_mb=0 software=1 name="Microsoft Basic Render Driver"
+KFDX adapter index=1 vendor=0x1414 device=0x008c luid=0x00000000_0x000057fa dedicated_mb=0 software=1 name="Microsoft Basic Render Driver"
+KFDX FAILED an NVIDIA hardware adapter exists (WARP/Basic Render excluded) hr=0x00000000
+KFDX RESULT FAIL an NVIDIA hardware adapter exists (WARP/Basic Render excluded)
+RC=1
