@@ -518,6 +518,31 @@ pub fn page(
             set(off, fa("SYS_CAPC_TILE_EXISTS", h)?, 1);
         }
     }
+    // ★ 2026-10-20 (bw-resume): the per-TILE post-composition pipe of a class that names it
+    // `POSTCOMP_HDR_CAPA(i)` (CA73; Turing..Ada name a per-head `POSTCOMP_HEAD_HDR_*` and are untouched).
+    // Public NVKMS reads it for every usable tile and asserts OCSC0/OCSC1/HCLPF/OSCAN/DTH/DSC present
+    // (ogkm 580.65.06 nvkms-evo4.c:1826-1831, EvoGetHwTileType) — a class invariant, so it is stated
+    // for each virtual tile; SCLR and VFILTER stay absent (tile type 1: the virtual tile is unscaled, as
+    // the SYS_CAPC block above says). [measured GB202 Windows 580.88] without these words the Windows
+    // driver abandons display init after its cursor channels (Code 43).
+    if let Some(size) = t.v(caps, "POSTCOMP_HDR_CAPA__SIZE_1") {
+        if heads > size {
+            return Err(m("POSTCOMP_HDR_CAPA tiles outside layout".into()));
+        }
+        for i in 0..heads {
+            let off = a("POSTCOMP_HDR_CAPA", i)?;
+            for fld in [
+                "POSTCOMP_HDR_CAPA_OCSC0_PRESENT",
+                "POSTCOMP_HDR_CAPA_OCSC1_PRESENT",
+                "POSTCOMP_HDR_CAPA_HCLPF_PRESENT",
+                "POSTCOMP_HDR_CAPA_OSCAN_PRESENT",
+                "POSTCOMP_HDR_CAPA_DTH_PRESENT",
+                "POSTCOMP_HDR_CAPA_DSC_PRESENT",
+            ] {
+                set(off, f(fld)?, v(&format!("{fld}_TRUE"))?);
+            }
+        }
+    }
     // SORs
     let tmds_max = tmds_max_field(t)?;
     for s in 0..heads {
