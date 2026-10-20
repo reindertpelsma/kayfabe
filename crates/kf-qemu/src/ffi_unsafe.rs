@@ -183,11 +183,11 @@ pub unsafe extern "C" fn kf3_realize(
             return -1;
         }
     };
-    // SAFETY: the caller promises guest_os is null or a NUL-terminated property string.
     // Unlike optional paths, an explicitly empty guest-os is an error.
     let guest_os_text = if guest_os.is_null() {
         None
     } else {
+        // SAFETY: the caller promises a NUL-terminated property string; null returned above.
         Some(unsafe { CStr::from_ptr(guest_os) }.to_string_lossy())
     };
     let guest_profile = match kf_abi::guest_profile::GuestProfile::parse(guest_os_text.as_deref()) {
