@@ -1,0 +1,1629 @@
+# kayfabe failure catalogue -- machine list (STATUS: LIVE, 2026-10-20).
+# Human view: docs/design/V3_FAILURE_CATALOGUE.md. The grader (scripts/relay_grade.sh, group G11) FAILS if an entry has no
+# pinning test and no declared hardware_gate, or if a cited test fn does not exist.
+# test = "crate:test-binary-or-lib:fn_name". status: pinned (>=1 GPU-free test) | hw-gated (only a hardware/process gate) | open
+# (root cause UNKNOWN, or fix/pin not on this head; the tests/hardware_gate name what detects it).
+# optional keys: pending_branch (tests/fix only on an unmerged branch), known_red (a cited test is red today), note.
+
+[[entry]]
+id = "RELAY-F1"
+group = "relay/worker"
+name = "relay stranded after 64 lost try_locks (the baton; probable cause of the Minecraft/Heaven freezes)"
+source = [
+  "docs/design/V3_RELAY_SIMPLE_20261020.md:5 (results table F1)",
+  "docs/design/V3_USER_RING_EVENT_LOOP_20261014.md:10 (P13)",
+  "scripts/bench/baton/README.md S2 section (branch claude/baton-pointer-20261020, PROGRESS_STRAND)",
+  "commit 82830cd5e",
+  "commit 527fb1ed7",
+  "commit 0e2edaf49",
+]
+symptom = "With two GPU clients on the relay route one client makes no progress for 1-59 s while the peer runs at full rate; GPU 94-97 %, no Xid, guest cuStreamQuery NOT_READY, KF3_DIAG_USER_STALL silent."
+root_cause = "A relay that lost the record/pt try_lock CONTENTION_RETRIES (64) turns in a row was re-rung only by Peek::Backstop (an idle 50 ms epoll timeout), which never comes beside a hot neighbour. MEASURED: in 2 of 2 control stalls >= 1 s a PROGRESS_STRAND (contended_run=0x40, h64_backstop_only=yes) lasted as long as the stall (n=2). Causal link to the owner's Windows freezes is not proven until the hardware A/B of the simple relay."
+root_cause_label = "MEASURED"
+expected = "A relay whose demand flag is set is re-rung by every look until served, with no retry budget, so a convoy of lost try_locks past 64 beside a hot neighbour and peer interrupts is served within K passes and no timer is needed."
+tests = [
+  "kf-chan:user_loop_model_v3_pointer:simple_relay_a_repeated_pt_convoy_beside_a_hot_neighbour_and_peer_interrupts_is_live_and_bounded",
+  "kf-chan:user_loop_model_v3_pointer:break1_expected_red_a_convoy_past_the_retry_budget_is_stranded_by_a_peers_interrupt_stream",
+  "kf-chan:user_loop_model_v3_pointer:break1b_expected_red_one_long_pt_hold_spends_the_budget_and_strands_the_relay",
+  "kf-chan:user_loop_model_v3_pointer:known_p13_expected_red_a_convoy_past_the_retry_budget_beside_a_hot_neighbour",
+  "kf-chan:relay_fairness:p13_expected_red_a_convoy_past_contention_retries_is_still_re_rung_within_k_passes_beside_a_hot_relay",
+  "kf-chan:relay_stress:expected_red_exhausted_try_lock_retries_leave_a_relay_to_the_backstop",
+  "kf-chan:grade_model:g1_f1_convoy_past_budget_is_served",
+]
+hardware_gate = "scripts/bench/baton (branch claude/baton-pointer-20261020: session3.sh + guest_driver.sh, plain pair 120 s, KF3_DEBUG_FORCE_MIGRATABLE=1 KF3_DIAG_PROGRESS=1000, n>=10 ABBA, one box) : no client gap >= 1 s, no PROGRESS_STRAND line, USER_RING_LOOP SUMMARY backstop_found_work=0 and timeouts_with_work=0"
+status = "pinned"
+
+[[entry]]
+id = "RELAY-F2"
+group = "relay/worker"
+name = "Wait::Popped partial pops not written back to GP_GET when Pointer markers are latched off"
+source = [
+  "docs/design/V3_RELAY_SIMPLE_20261020.md:5 (F2)",
+  "crates/kf-chan/tests/user_loop_model_v3_pointer.rs break2",
+  "commit a14e59ba6",
+]
+symptom = "Model: the guest sees a full ring the hardware already freed, never submits the batch that would release the acquire, deadlock; or its space is delayed until the whole batch is popped."
+root_cause = "The pop write-back existed only for Wait::Marker; a Popped wait had no wake source. CODE READ + MEASURED in the model (break 2 red on the merged base, green under simple relay Change B; moot under Change A where the guest GP_GET is the relay's read index)."
+root_cause_label = "MEASURED"
+expected = "The guest's visible GP_GET never depends on pops: it is the relay's read index (GuestGet::ReadIndex), and a Popped wait is looked at on every iteration."
+tests = [
+  "kf-chan:user_loop_model_v3_pointer:break2_control_with_pointer_markers_on_the_marker_waits_pop_write_back_frees_the_guest",
+  "kf-chan:user_loop_model_v3_pointer:break2_expected_red_a_carried_wait_never_writes_back_partial_pops_and_the_guest_deadlocks_on_ring_space",
+  "kf-chan:user_loop_model_v3_pointer:break2b_expected_red_a_carried_wait_delays_the_guests_ring_space_until_the_whole_batch_is_popped",
+  "kf-chan:user_loop_model_v3_pointer:a_carried_popped_wait_satisfied_while_the_worker_is_busy_is_found_within_k_ticks",
+  "kf-chan:user_turn_unit:copy_before_get_a_slot_overwritten_after_get_passed_it_is_never_forwarded",
+]
+hardware_gate = "Change A canary (V3_RELAY_SIMPLE_20261020.md section 7, not run): a guest that overwrites every GPFIFO slot and its pushbuffer as soon as GP_GET passes it, checksum written by the GPU; plus channel free / driver unload with work in flight"
+status = "pinned"
+
+[[entry]]
+id = "RELAY-F3"
+group = "relay/worker"
+name = "worker never looks while a self-re-ringing relay keeps it busy (P11-P13)"
+source = [
+  "docs/design/V3_USER_RING_EVENT_LOOP_20261014.md:10 (section 10)",
+  "docs/design/V3_FOUND_IN_PRODUCTION.md entry A",
+  "commit cfdcaf73b",
+]
+symptom = "A cold relay's satisfied marker wait, the engine events (completion interrupt injection) and a lost try_lock's demand wait for as long as a hot relay ends every turn Need::Again."
+root_cause = "run_with_relay looked (poll(0) + relay.peek) only when a pass served nothing. CODE READ + MEASURED in the model (P11-P13); the simple relay evaluates every relay on every iteration."
+root_cause_label = "MEASURED"
+expected = "Whatever a hot neighbour does, every wake source (engine event, doorbell eventfd, completion fd, every relay's wait) is visited within a constant number of passes of the same worker."
+tests = [
+  "kf-chan:relay_fairness:p11_p12_one_worker_one_hot_relay_the_cold_wait_and_the_engine_event_are_attended_within_k_passes",
+  "kf-chan:relay_fairness:p13_one_worker_one_hot_relay_a_carried_wait_is_found_within_k_passes_without_the_safety_net",
+  "kf-chan:relay_fairness:p13_one_worker_a_lost_try_lock_is_re_rung_within_k_passes",
+  "kf-chan:relay_fairness:p11_two_workers_one_hot_relay_the_baton_does_not_starve_the_cold_wait",
+  "kf-chan:relay_fairness:p12_two_workers_one_hot_relay_the_baton_does_not_delay_the_engine_event",
+  "kf-chan:wake_registry:every_iteration_reaches_the_one_poll_after_the_block_decision",
+  "kf-chan:relay_stress:the_baton_a_cold_client_is_answered_beside_hot_neighbours",
+  "kf-chan:grade_model:g1_f3_busy_worker_looks",
+]
+hardware_gate = "scripts/bench/baton (branch claude/baton-pointer-20261020: session3.sh + guest_driver.sh, plain pair 120 s, KF3_DEBUG_FORCE_MIGRATABLE=1 KF3_DIAG_PROGRESS=1000, n>=10 ABBA, one box) : no client gap >= 1 s, no PROGRESS_STRAND line, USER_RING_LOOP SUMMARY backstop_found_work=0 and timeouts_with_work=0"
+status = "pinned"
+
+[[entry]]
+id = "RELAY-F4"
+group = "relay/worker"
+name = "stress seed 18: marker wait found only by the 50 ms backstop"
+source = [
+  "crates/kf-chan/tests/relay_stress.rs:2310-2330",
+  "docs/design/V3_RELAY_SIMPLE_20261020.md:5 (F4)",
+]
+symptom = "backstop_found_work 1-2 per 0.25 s run in the stress harness (2 workers, 7 clients, SYNC_WAIT on 1/4 of entries): a satisfied marker wait no look had rung."
+root_cause = "HYPOTHESIS (same family as F1) confirmed only indirectly: green with the budget deleted and an infinite park. Not separately root-caused."
+root_cause_label = "INFERRED"
+expected = "With an infinite park (no timer) seed 18 completes with violations empty and backstop_found_work == 0."
+tests = [
+  "kf-chan:relay_stress:expected_red_seed_18_marker_wait_found_only_by_the_backstop",
+  "kf-chan:relay_stress:i6_classified_seeds_hold_the_sleep_invariant",
+  "kf-chan:grade_stress:g3_strict_seed_list",
+]
+hardware_gate = ""
+status = "pinned"
+
+[[entry]]
+id = "RELAY-F5"
+group = "relay/worker"
+name = "lost wake: a look that found the record busy consumed the engine event and rang nothing (stress seed 20)"
+source = [
+  "commit aad1e9ff4",
+  "docs/design/V3_RELAY_SIMPLE_20261020.md:5 (NEW row seed 20)",
+  "crates/kf-chan/tests/relay_stress.rs:2331",
+]
+symptom = "Stress seed 20 hangs (3 of 3 runs) with an infinite park: a satisfied marker wait is never rung. Latent in production because the 50 ms net hid it."
+root_cause = "peek_one consumed the epoll event, found the record try_lock lost, and dropped the obligation without setting demand. MEASURED (seed 20 found by I6, mutant re-found 2/2 after the fix)."
+root_cause_label = "MEASURED"
+expected = "An engine event consumed by a look that finds the relay's record busy leaves the relay rung or in the retry set; no satisfied wait sleeps."
+tests = [
+  "kf-chan:relay_stress:i6_classified_seeds_hold_the_sleep_invariant",
+  "kf-chan:user_loop_model:the_retired_loop_waited_for_the_tick_after_a_busy_record_lock",
+  "kf-chan:user_loop_model:mutant_lost_wakeup_is_found",
+  "kf-chan:grade_model:g1_f5_busy_record_look_keeps_the_event",
+  "kf-chan:grade_stress:g2_kernel_view_sleep_safety",
+]
+hardware_gate = ""
+status = "pinned"
+
+[[entry]]
+id = "RELAY-LOSTREG"
+group = "relay/worker"
+name = "lost registration in the holder handoff (worker parks between the failed try_lock and the holder's release)"
+source = [
+  "commit edde750cd (EXPECTED RED against the naive Handoff)",
+  "docs/design/V3_RELAY_SIMPLE_20261020.md:3",
+]
+symptom = "A relay that lost a lock to a holder that rings nobody is never re-rung when the holder releases between the loser's decision to park and the registration."
+root_cause = "Classic lost-registration race of a naive release-then-register protocol. MEASURED in the grader model (red for the naive protocol, green for the lineage protocol)."
+root_cause_label = "MEASURED"
+expected = "The lineage handoff protocol never strands a loser, and the naive protocol is detected red by the same model."
+tests = [
+  "kf-chan:grade_locks:g8_lost_registration_is_red_for_the_naive_protocol",
+  "kf-chan:grade_locks:g8_lineage_protocol_never_strands",
+]
+hardware_gate = ""
+status = "pinned"
+
+[[entry]]
+id = "RELAY-WATCHED"
+group = "relay/worker"
+name = "diagnostic wrapper Watched does not forward unsourced()"
+source = [
+  "crates/kf-chan/src/worker.rs:312-327 (impl RelayLoop for Watched)",
+  "grader agent, 2026-10-20",
+]
+symptom = "With KF3_DIAG_PROGRESS on, the worker may block (epoll timeout > 0) while the retry set is non-empty, so the diagnostic changes the behaviour it measures."
+root_cause = "Watched implements waiting() and peek() only; the trait default unsourced() returns false. CODE READ at worker.rs:97-100 and 317-327."
+root_cause_label = "CODE READ"
+expected = "A diagnostic wrapper forwards every RelayLoop method (waiting, unsourced, peek) to the wrapped relay."
+tests = [
+  "kf-chan:grade_static:g9_watched_forwards_every_relayloop_method",
+  "kf-chan:lib:the_watched_relay_announces_each_peek_then_forwards_it",
+]
+hardware_gate = ""
+status = "pinned"
+
+[[entry]]
+id = "RELAY-I6FP"
+group = "relay/worker"
+name = "I6 sleep-safety false positives in the stress monitor (wake in flight, obligation compared without identity)"
+source = [
+  "commit fb88d5999",
+  "docs/design/V3_RELAY_SIMPLE_20261020.md:5.1",
+]
+symptom = "I6 fired on 6 of 60 seeds (0, 1, 3, 18 and later others) although no wake was lost."
+root_cause = "Monitor artifacts: an eventfd already signalled but the worker not yet scheduled on a loaded box, and the obligation compared without its identity; later the harness holder lacked user_ring_wake's unconditional worker wake. MEASURED with the kernel view (RS_I6_KERNEL_ONLY=1: seeds 0, 1, 3 show no I6)."
+root_cause_label = "MEASURED"
+expected = "I6 asks the kernel (ready fd on the workers' eventfds, thread state) and fires only for a satisfied obligation with no wake in flight."
+tests = [
+  "kf-chan:relay_stress:i6_classified_seeds_hold_the_sleep_invariant",
+  "kf-chan:grade_stress:g2_kernel_view_sleep_safety",
+]
+hardware_gate = ""
+status = "pinned"
+
+[[entry]]
+id = "RELAY-SEED1SLOW"
+group = "relay/worker"
+name = "stress seed 1 takes ~570 s instead of ~10 s without a violation (UNEXPLAINED)"
+source = [
+  "docs/design/V3_RELAY_SIMPLE_20261020.md:5.1 (Anomaly, unexplained)",
+]
+symptom = "Seed 1 (1 worker, 7 clients, a lock holder taking locks for up to 20 ms) took ~570 s twice, no violation."
+root_cause = "UNKNOWN. INFERRED candidate R3: the worker spins on the retry set while the lock holder competes for CPU on a loaded box; retry_looks was not captured."
+root_cause_label = "UNKNOWN"
+expected = "Seed 1 completes in roughly its nominal time (about 10 s) with retry_looks reported."
+tests = [
+  "kf-chan:relay_stress:one_seed",
+]
+hardware_gate = "No hardware needed: RS_SEED=1 RS_SECS=3 cargo test -p kf-chan --test relay_stress --features chaos-hooks one_seed -- --ignored must finish in well under 60 s and print retry_looks; today it is not asserted (one_seed only checks invariants)"
+status = "open"
+note = "the listed test is the vehicle, not a pin: it does not assert elapsed time"
+
+[[entry]]
+id = "RELAY-DOORBELL"
+group = "relay/worker"
+name = "PUT-ahead-unread is a doorbell race, never a poll; the last doorbell covers all earlier GP_PUT writes"
+source = [
+  "traces/doorbell_contract_20261017",
+  "docs/design/V3_RELAY_SIMPLE_20261020.md:1 (P2)",
+  "crates/kf-chan/src/user_loop.rs look_needed",
+]
+symptom = "Stalls where GP_PUT is ahead of what the relay read and no doorbell is pending; the temptation to fix it by reading GP_PUT without a doorbell."
+root_cause = "Design rule (owner): hardware semantics give a covering doorbell for every GP_PUT write; an idle relay's backstop reads nothing. A GP_PUT poll would hide a doorbell race instead of finding it. CODE READ."
+root_cause_label = "CODE READ"
+expected = "No look reads GP_PUT without a covering doorbell; a PUT ahead of the last doorbell is owed nothing; a GP_PUT that moves backwards or leaves the ring reads nothing beyond the loaded value."
+tests = [
+  "kf-chan:user_loop_model:put_ahead_of_the_last_doorbell_is_owed_nothing_and_no_look_reads_it",
+  "kf-chan:user_loop_model:mutant_the_evaluation_polls_gp_put_is_found",
+  "kf-chan:user_lifecycle_props:i8_a_gp_put_that_moves_backwards_or_leaves_the_ring_reads_nothing_beyond_the_value_loaded",
+  "kf-chan:user_lazy_model:put_cache_every_reachable_state_keeps_i8_order_and_the_doorbell_contract",
+]
+hardware_gate = ""
+status = "pinned"
+
+[[entry]]
+id = "RELAY-IDLEPUT"
+group = "relay/worker"
+name = "relay stopped reading GP_PUT when its own ring drained (30 IDLE_STALLs, 1.6-55 s, Edge resets)"
+source = [
+  "docs/design/V3_USER_RING_SCAN_RACE.md:0 (root cause 2)",
+  "commit 50068268 (Poll)",
+  "docs/design/V3_FEATURE_GAPS.md G16",
+]
+symptom = "Work published after a drain sat unread for 1.6-55 s; the guest's 2 s timeout fired and Windows reset the adapter when Edge started."
+root_cause = "MEASURED 2026-10-14: 205 doorbells against ~70 000 new-work GP_PUT reads on one channel; the relay read GP_PUT only on a doorbell or while its own ring was in flight. SUPERSEDED as a design: the 2026-10-17 doorbell contract replaced the 1 ms/20 ms Poll with event-driven doorbell covering (RELAY-DOORBELL)."
+root_cause_label = "MEASURED"
+expected = "Work published after a drain is relayed whenever a covering doorbell exists, with no timer and no GP_PUT poll (see RELAY-DOORBELL); no IDLE_STALL in the Edge/YouTube lane."
+tests = [
+  "kf-chan:user_loop_model:put_ahead_of_the_last_doorbell_is_owed_nothing_and_no_look_reads_it",
+  "kf-chan:user_loop_model:doorbell_storm_coalesces",
+  "kf-chan:user_loop_model:the_retired_loop_deadlocks_without_timers_exactly_where_it_polled",
+]
+hardware_gate = "scripts/bench/windows/windows_broker.sh + scripts/bench/windows/regress_matrix.sh (Edge + YouTube 10 min): no USER_RING_REFUSED, no IDLE_STALL line, 0 TDR"
+status = "pinned"
+
+[[entry]]
+id = "RELAY-LAZY"
+group = "relay/worker"
+name = "lazy observe + PUT cache interplay (stale cache hides a covered doorbell; stale GET over-counts credit)"
+source = [
+  "docs/design/V3_USER_RING_EVENT_LOOP_20261014.md:9 (P9)",
+  "memory project_lazy_observe_finding_20261017",
+  "traces/lazy_prod_20261017",
+]
+symptom = "Risk statement of KF3_LAZY_OBSERVE=16 / PUT cache (+97 fps D3D11): stale GP_GET only lowers credit, stale REFERENCE delays SyncGate release; a cached PUT must never hide a covered doorbell."
+root_cause = "Design risk, no failure observed. MEASURED in the models (P9 holds; the cache is dropped on ring migration even for a lower PUT)."
+root_cause_label = "MEASURED"
+expected = "A stale PUT cache never hides a covered doorbell, a skipped observation never over-counts credit, and a ring generation switch invalidates the cache."
+tests = [
+  "kf-chan:user_loop_model_v2:p9_a_stale_put_cache_never_hides_a_covered_doorbell",
+  "kf-chan:user_loop_model_v3_pointer:coalesced_doorbells_with_a_stale_put_cache_are_live_and_bounded",
+  "kf-chan:user_lazy_model:stale_get_never_yields_more_credits_than_the_real_ring_has",
+  "kf-chan:user_lazy_model:a_ring_generation_switch_invalidates_the_cache_even_for_a_lower_put",
+  "kf-chan:user_lazy_turn:b_a_skipped_observation_never_over_counts_credit_and_the_next_look_catches_up",
+  "kf-chan:user_lazy_turn:a_a_ring_migration_drops_the_cache_even_when_the_new_ring_has_a_lower_put",
+]
+hardware_gate = ""
+status = "pinned"
+
+[[entry]]
+id = "RELAY-IRQVIS"
+group = "relay/worker"
+name = "interrupt visible before the REFERENCE / GP_GET write is visible (hazard)"
+source = [
+  "docs/design/V3_USER_RING_EVENT_LOOP_20261014.md:9 (P6)",
+  "docs/design/V3_RELAY_SIMPLE_20261020.md:5 (NEW row: uncovered with an infinite park)",
+]
+symptom = "None observed. A marker's NON_STALL_INTERRUPT could reach the worker before the private REFERENCE word is visible; the look finds the wait unsatisfied and sleeps."
+root_cause = "INFERRED hardware ordering assumption. The v1 model shows it UNCOVERED with an infinite park; production's 50 ms net covers it. Not measurable GPU-free."
+root_cause_label = "INFERRED"
+expected = "A satisfied marker wait is rung even if the interrupt preceded the REFERENCE/GP_GET store becoming visible, without a timer; until then timeouts_with_work must stay 0 on hardware."
+tests = [
+  "kf-chan:user_loop_model:design_get_visibility_lag_after_the_interrupt_is_the_one_hazard_the_loop_does_not_cover",
+  "kf-chan:user_loop_model_v2:p6_get_visibility_lag_after_the_interrupt_is_the_one_hazard_the_loop_does_not_cover",
+  "kf-chan:user_loop_model:migration_with_a_visibility_lag_is_safe_and_only_the_known_hazard_can_stall",
+]
+hardware_gate = "scripts/bench/baton (branch claude/baton-pointer-20261020: session3.sh + guest_driver.sh, plain pair 120 s, KF3_DEBUG_FORCE_MIGRATABLE=1 KF3_DIAG_PROGRESS=1000, n>=10 ABBA, one box) : no client gap >= 1 s, no PROGRESS_STRAND line, USER_RING_LOOP SUMMARY backstop_found_work=0 and timeouts_with_work=0 (the hazard is detected as backstop_found_work > 0 / timeouts_with_work > 0 with the 50 ms net ON)"
+status = "open"
+note = "tests document the model hazard; no test fails today because the hazard is not covered by design, only by the net"
+
+[[entry]]
+id = "RELAY-MARKER"
+group = "relay/worker"
+name = "tagged marker: proof, wake and credit reclaim conflated (GP_GET retired proof; credit waits on the newest marker)"
+source = [
+  "docs/design/V3_USER_RING_EVENT_LOOP_20261014.md:3.3 (GP_GET runs ahead)",
+  "commit c777f03d9",
+  "commit b07aecc9c",
+]
+symptom = "A marker wait satisfied by pops (the retired GP_GET proof) read a pushbuffer the hardware had not executed; credit waited for the newest marker instead of the next one in ring order."
+root_cause = "MEASURED (GP_GET runs ahead of processing, bare metal RTX 4070) and CODE READ: three roles (proof of execution = tagged REFERENCE, wake = the marker's own interrupt, credit reclaim = next marker) were served by one word."
+root_cause_label = "MEASURED"
+expected = "A marker wait is satisfied only by processed tagged references (16-bit extended count), whatever GP_GET says; a credit wait waits for the NEXT outstanding marker."
+tests = [
+  "kf-chan:lib:a_marker_wait_is_over_when_enough_markers_were_processed_whatever_get_says",
+  "kf-chan:lib:marks_count_only_tagged_references_and_extend_the_sixteen_bit_count",
+  "kf-chan:user_loop_model:the_retired_gp_get_proof_read_a_pushbuffer_before_the_drain",
+  "kf-chan:user_loop_model:design_credit_waits_with_a_shallow_pop_window_are_event_driven",
+  "kf-chan:user_loop_model:mutant_byte_witness_inside_an_open_packet_is_found",
+]
+hardware_gate = ""
+status = "pinned"
+
+[[entry]]
+id = "RELAY-RINGFULL"
+group = "relay/worker"
+name = "ring-full guest waiting on a write-back only a turn performs"
+source = [
+  "docs/design/V3_USER_RING_LIFECYCLE_REVIEW1_20261016.md D3",
+  "docs/design/V3_RELAY_SIMPLE_20261020.md:5.1",
+]
+symptom = "Model: a full guest ring (behind its own gate) deadlocks because the guest's GP_GET only moves in a turn that has a reason to run."
+root_cause = "MEASURED in the models; closed by Change A (guest GP_GET = relay read index) plus looks on every iteration."
+root_cause_label = "MEASURED"
+expected = "A guest whose ring is full is freed once the relay has read the entries, with a look on every iteration and no timer."
+tests = [
+  "kf-chan:user_loop_model_v3_pointer:a_ring_full_guest_with_markers_on_is_live_and_bounded",
+  "kf-chan:user_loop_model_v3_pointer:simple_relay_a_carried_wait_with_a_full_guest_ring_is_live_and_bounded_with_peer_interrupts",
+  "kf-chan:user_lifecycle_model:b_a_registration_with_a_full_guest_ring_waiting_for_the_gp_get_write_back",
+  "kf-chan:user_lifecycle_props:lazy_d6_a_turn_that_skipped_its_look_and_saw_a_full_guest_ring_is_followed_by_a_look",
+  "kf-chan:user_lifecycle_model:lazy_a_guest_ring_full_of_work_is_written_back_in_every_interleaving",
+]
+hardware_gate = ""
+status = "pinned"
+
+[[entry]]
+id = "RELAY-GUESTFULL-RED"
+group = "relay/worker"
+name = "guest-ring-full rule test is RED on the merged base and on the simple relay (untouched)"
+source = [
+  "docs/design/V3_RELAY_SIMPLE_20261020.md:5 (user_turn_unit 23/24)",
+]
+symptom = "user_turn_unit the_guest_ring_is_full_when_gp_put_leaves_one_slot_before_the_gp_get_the_guest_sees fails on both the merged base and the simple relay head."
+root_cause = "UNKNOWN: not analysed. It may be a stale expectation (the rule changed with Change A) or a real off-by-one in the full test; nobody has classified it."
+root_cause_label = "UNKNOWN"
+expected = "The test either passes (the rule is right) or is restated for ReadIndex with a stated reason."
+tests = [
+  "kf-chan:user_turn_unit:the_guest_ring_is_full_when_gp_put_leaves_one_slot_before_the_gp_get_the_guest_sees",
+]
+hardware_gate = ""
+status = "open"
+known_red = true
+note = "classification owed; until then the entry stays open"
+
+[[entry]]
+id = "RELAY-CREDIT512"
+group = "relay/worker"
+name = "private ring full (512 entries): credit waits mid-batch are an unsourced spin (Wait::Popped), Heaven ~1 per frame"
+source = [
+  "docs/design/V3_RELAY_SIMPLE_20261020.md:3 (Wait::Popped owner decision) and 6 (R2)",
+  "memory project_lifecycle_20261016",
+  "docs/design/V3_USER_RING_LIFECYCLE_REVIEW1_20261016.md D3",
+]
+symptom = "Pointer mode with markers latched off: the worker spins (epoll timeout 0) until the PBDMA pops; cost between ~0 and one core per frame. Before the simple relay the wait cost a 50 ms backstop per 510 entries."
+root_cause = "No wake source exists for a pop (the relay does not parse Pointer-mode pushbuffers, so it knows no packet boundary mid-batch). Owner decision: spin on exactly it. Cost INFERRED, not measured."
+root_cause_label = "INFERRED"
+expected = "A credit wait is found within K iterations by looks alone and never needs the 50 ms net; a full private ring recovers without periodic observation."
+tests = [
+  "kf-chan:user_lifecycle_model:i6_pointer_mode_waits_for_private_ring_credit_are_only_found_by_a_look",
+  "kf-chan:user_lazy_model:a_full_private_ring_recovers_without_any_periodic_observation",
+  "kf-chan:user_lifecycle_props:lazy_a_slow_pbdma_and_a_small_private_ring_run_on_the_credit_floor_without_stalling",
+  "kf-chan:user_loop_model:mutant_unsourced_ignores_carried_is_found_with_credit_shortage",
+  "kf-chan:user_loop_model_v3_pointer:pin_a_pointer_batch_without_a_marker_waits_for_every_issued_pop",
+]
+hardware_gate = "Windows Heaven D3D11 (scripts/bench/windows/windows_broker.sh): USER_RING_LOOP SUMMARY retry_looks and worker CPU recorded; falsifier: worker CPU > 1 core sustained or a frame stall > 100 ms"
+status = "pinned"
+
+[[entry]]
+id = "RELAY-SYNCOPEN"
+group = "relay/worker"
+name = "SYNC_WAIT behind an open packet: carried, no interrupt; Minecraft in-world Xid 32 PBENTRY"
+source = [
+  "docs/STATUS_AND_HANDOFF.md:1078 (Minecraft Xid 32 PBENTRY, H1)",
+  "docs/design/V3_USER_RING_EVENT_LOOP_20261014.md section 5",
+  "commit 1c503f87e",
+  "docs/design/V3_USER_RING_LIFECYCLE_20261016.md:458 (27 334 carried_ungated)",
+]
+symptom = "Minecraft in-world: Xid 32 PBDMA PBENTRY on javaw's USER-ring twin a few seconds after a world loads, guest RESET_CHANNEL refused, TDR (3/3). 27 334 SYNC_WAIT entries behind open packets in 6 minutes."
+root_cause = "The SYNC_WAIT gate inserted a 4-byte zero witness while a packet was open (one-word shift -> PBENTRY). Leading candidate H1, CODE READ + INFERRED; fix 1c503f87 uses a control-NOP witness while a packet is open and counts USER_RING_SYNC_CARRIED. Measured after the fix: Minecraft 6 min in-world, 0 Xid, 0 TDR (run1 at a8424ae2, commit efdaebe49)."
+root_cause_label = "INFERRED"
+expected = "A SYNC_WAIT entry behind an open packet is forwarded at once, counted once, never gets a byte witness or marker inside the packet, and needs no wake."
+tests = [
+  "kf-chan:user_turn_unit:a_sync_wait_entry_behind_an_open_packet_is_read_at_once_and_counted_without_a_gate",
+  "kf-chan:user_loop_model:design_a_sync_wait_behind_an_open_packet_is_read_ungated_and_needs_no_wake",
+  "kf-chan:user_loop_model:design_a_sync_wait_behind_an_open_packet_cannot_protect_late_bytes",
+  "kf-chan:lib:a_packet_carried_into_a_sync_wait_entry_is_not_gated_and_gets_no_marker",
+  "kf-chan:user_lifecycle_model:obs_a_sync_wait_behind_an_open_packet_is_read_at_once_and_counted_exactly_once_in_a_window",
+  "kf-chan:user_loop_model:mutant_byte_witness_inside_an_open_packet_is_found",
+]
+hardware_gate = "scripts/bench/windows/windows_broker.sh + scripts/bench/windows/regress_matrix.sh (Minecraft in-world 6 min, run1 recipe of commit efdaebe49): 0 Xid 32, 0 TDR, USER_RING_SYNC_CARRIED > 0"
+status = "pinned"
+
+[[entry]]
+id = "RELAY-E1"
+group = "relay/worker"
+name = "SyncGate::cleared never forgotten (stale read one ring lap later)"
+source = [
+  "docs/design/V3_FOUND_IN_PRODUCTION.md E1",
+  "docs/design/V3_USER_RING_EVENT_LOOP_20261014.md:5.1",
+  "commit 95a9ad422",
+]
+symptom = "After one ring lap the same (generation, cursor) carried a NEW SYNC_WAIT entry and was waved through; the relay read a pushbuffer the hardware had not fetched."
+root_cause = "MEASURED in the model (75 steps): a done-latch keyed by position is wrong once positions repeat."
+root_cause_label = "MEASURED"
+expected = "A SYNC_WAIT entry one ring lap later is gated again and authors its own barrier; a retried turn at the same gated entry publishes one barrier."
+tests = [
+  "kf-chan:user_gate_rules:a_sync_wait_entry_one_ring_lap_later_is_gated_again",
+  "kf-chan:user_gate_rules:the_same_slot_gated_twice_a_lap_apart_authors_two_barriers",
+  "kf-chan:user_gate_rules:a_retried_turn_at_the_same_gated_entry_publishes_one_barrier",
+  "kf-chan:user_loop_model:design_a_sync_wait_in_the_same_slot_one_lap_later_is_not_read_early",
+  "kf-chan:user_lifecycle_props:t3_a_second_window_one_ring_lap_later_gates_its_sync_wait_entry_again",
+]
+hardware_gate = ""
+status = "pinned"
+
+[[entry]]
+id = "RELAY-E2"
+group = "relay/worker"
+name = "Grace finality was a function of the wall clock"
+source = [
+  "docs/design/V3_FOUND_IN_PRODUCTION.md E2",
+  "commit c45ac776f",
+]
+symptom = "With the clock frozen a refusal never became final (retry for ever)."
+root_cause = "Grace::refused returned retry until 50 ms had passed. CODE READ + MEASURED."
+root_cause_label = "MEASURED"
+expected = "A refusal becomes final after a bounded number of re-reads (REFUSE_RETRIES), independent of any clock."
+tests = [
+  "kf-chan:user_gate_rules:a_refusal_becomes_final_after_a_bounded_number_of_rereads_without_any_clock",
+  "kf-chan:lib:grace_retries_the_same_entry_a_bounded_number_of_times_then_is_final",
+  "kf-chan:lib:the_machine_names_no_clock_no_sleep_and_no_poll",
+]
+hardware_gate = ""
+status = "pinned"
+
+[[entry]]
+id = "RELAY-E3"
+group = "relay/worker"
+name = "GP_GET runs ahead of processing (first SYNC_WAIT gate unsound)"
+source = [
+  "docs/design/V3_FOUND_IN_PRODUCTION.md E3",
+  "docs/design/V3_USER_RING_EVENT_LOOP_20261014.md:3.3 (EL:150-158)",
+  "commit b07aecc9c",
+]
+symptom = "kf-syncwait-stress --families barrier: the relay refused 49 of 60 late-bytes plans."
+root_cause = "MEASURED on bare metal (RTX 4070 / 595.91.07): with an acquire stalling entry 0, GP_GET already covers all entries, REFERENCE is 0."
+root_cause_label = "MEASURED"
+expected = "The proof that a segment has run is a processed effect (tagged USERD.REFERENCE), never GP_GET."
+tests = [
+  "kf-chan:user_loop_model:the_retired_gp_get_proof_read_a_pushbuffer_before_the_drain",
+  "kf-chan:user_loop_model:design_a_sync_wait_behind_an_open_packet_cannot_protect_late_bytes",
+  "kf-chan:user_loop_model:design_credit_waits_with_a_shallow_pop_window_are_event_driven",
+]
+hardware_gate = ""
+status = "pinned"
+
+[[entry]]
+id = "RELAY-SCANRACE1"
+group = "relay/worker"
+name = "relay read pushbuffers behind an unreached SYNC_WAIT (Edge start resets the display driver; USER_RING_SCAN rejections)"
+source = [
+  "docs/design/V3_USER_RING_SCAN_RACE.md:0 (root cause 1)",
+  "docs/design/V3_FEATURE_GAPS.md G16",
+  "commit c45ac776f",
+  "memory project_win11_diag_channel_20261014",
+]
+symptom = "Win11 reset its display driver whenever Edge started; 19 traced USER_RING_SCAN refusals (15 bytes that changed under the scan, 4 downstream of a stale straddle); then RESET_CHANNEL refused and an adapter reset."
+root_cause = "MEASURED 2026-10-14 (KF3_USER_RING_TRACE VERIFY): every refused entry's GP ring shows a SYNC_WAIT entry the GPU had not reached (15/15); with SyncGate 0 stale reads in ~100 000 verified segments. H-DESYNC and H-APERTURE falsified."
+root_cause_label = "MEASURED"
+expected = "No byte at or after a guest SYNC_WAIT entry is read until the barrier's witness has begun processing."
+tests = [
+  "kf-chan:lib:a_segment_behind_an_unreached_sync_wait_is_not_read_until_the_witness_runs",
+  "kf-chan:lib:sync_wait_publishes_one_barrier_then_waits_for_its_witness_then_proceeds_once",
+  "kf-chan:user_lifecycle_model:d_the_recorded_edge_ring_shape_behind_unreached_sync_waits_is_not_read_early_in_a_window",
+  "kf-chan:user_lifecycle_model:a1_a_registration_right_after_a_forwarded_sync_wait_never_scans_the_late_pushbuffer",
+  "kf-chan:user_lifecycle_model:t2_a1_with_a_length0_sync_wait_never_reads_the_late_pushbuffer_early",
+]
+hardware_gate = "scripts/bench/windows/windows_broker.sh + scripts/bench/windows/regress_matrix.sh (Edge + YouTube): 0 USER_RING_REFUSED, 0 TDR, no 906f0102 refusal"
+status = "pinned"
+
+[[entry]]
+id = "RELAY-DISABLE"
+group = "relay/worker"
+name = "DISABLE_CHANNELS / ENABLE acts: a doorbell inside the window or a disable-reply ordering drops work"
+source = [
+  "docs/design/V3_USER_RING_EVENT_LOOP_20261014.md:9.1 (P8)",
+  "commits 256e510fd, 54b12063d",
+  "docs/design/V3_COMPLETION_AUDIT.md section 1 item 4",
+]
+symptom = "Windows TDR exactly TdrDelay after a refused/dropped async preempt (runs 77-84); model: a publish + doorbell landing on an already host-disabled channel."
+root_cause = "MEASURED (runs 77-84: the TDR follows the refused async preempt) for the refusal; P8 holds in the model by construction (the serve clears retry, the enable act calls user_ring_wake)."
+root_cause_label = "MEASURED"
+expected = "A doorbell inside the disable/enable window is relayed after the enable; an enable never posts its event before the disable's reply; two preempts post in order."
+tests = [
+  "kf-chan:user_loop_model_v2:p8_a_doorbell_inside_the_disable_enable_window_is_relayed_after_the_enable",
+  "kf-chan:user_loop_model_v2:p8_the_same_with_the_record_lock_held_by_an_act_around_the_enable",
+  "kf-qemu:lib:an_enable_sent_before_the_disable_completed_never_puts_the_event_before_the_disable_reply",
+  "kf-qemu:lib:two_preempts_each_post_after_their_replies_in_order",
+]
+hardware_gate = ""
+status = "pinned"
+
+[[entry]]
+id = "RELAY-P10A"
+group = "relay/worker"
+name = "native doorbell overtakes the private-ring stores (BAR0 doorbell vs BAR1 stores; strands the last two entries)"
+source = [
+  "docs/design/V3_USER_RING_EVENT_LOOP_20261014.md:9.2 (P10 case 1)",
+  "branch claude/doorbell-readback-20261020 (03e6dfe2)",
+  "memory project_freeze_hunt_20261020",
+]
+symptom = "Freeze signature: GPU idle, PUT - GET == 2 for seconds, safety-net counters 0."
+root_cause = "INFERRED hardware hypothesis. Hardware falsifier run: read-back before the doorbell, 182M reads, 0 mismatches, freezes not removed (one TDR run). MEASURED: not the cause of the baton."
+root_cause_label = "INFERRED"
+expected = "Every published private entry reaches the hardware: a read-back (or an equivalent ordering) separates the stores from the doorbell, or the hardware latches the old PUT harmlessly."
+tests = [
+  "kf-chan:user_loop_model_v2:p10_a_doorbell_that_overtakes_the_private_stores_strands_the_last_two_entries",
+  "kf-chan:user_loop_model_v2:p10_a_read_back_before_the_doorbell_closes_the_race",
+  "kf-chan:user_loop_model_v2:p10_publish_reads_back_before_the_native_doorbell",
+]
+hardware_gate = "branch claude/doorbell-readback-20261020 binary 03e6dfe2 : zero read-back mismatches over the baton pair campaign (done once: 182M reads, 0 mismatches)"
+status = "hw-gated"
+note = "model tests document the hazard; hardware measurement decides it"
+
+[[entry]]
+id = "RELAY-P10B"
+group = "relay/worker"
+name = "doorbell dropped by a host-disabled channel; neither enable path re-rings the native doorbell"
+source = [
+  "docs/design/V3_USER_RING_EVENT_LOOP_20261014.md:9.2 (P10 case 2)",
+]
+symptom = "None observed. The probe agent saw no disable/enable act within 230 s of the onset of two freezes, which falsifies it for those two."
+root_cause = "INFERRED: disable_channels sets v.disabled only after the host verb returned and rm.doorbell is rung after the pt lock is released; adversarial hardware strands the entries."
+root_cause_label = "INFERRED"
+expected = "After an enable of a twin with PUT != GET the native doorbell is rung again (or the hardware re-reads GP_PUT on enable)."
+tests = [
+  "kf-chan:user_loop_model_v2:p10_adversarial_hardware_leaves_published_entries_unpopped_after_a_disable_window",
+  "kf-chan:user_loop_model_v2:p10_a_publish_on_a_host_disabled_channel_is_live_if_the_hardware_latches_the_doorbell",
+  "kf-chan:user_loop_model_v2:p10_hardware_that_rereads_gp_put_on_enable_is_live_even_if_the_doorbell_was_dropped",
+]
+hardware_gate = "Linux guest, scripts/fastguest/fast_suite.sh with a forced disable/enable act mid-submission (no script exists yet): no stranded PUT - GET after the enable"
+status = "hw-gated"
+
+[[entry]]
+id = "RELAY-NSI"
+group = "relay/worker"
+name = "non-stall interrupt edge dropped (owner ruling X: an edge may be delayed, never dropped)"
+source = [
+  "docs/OWNER_RULINGS.md:991 (section X)",
+  "traces/passthrough_interrupt_20261008",
+]
+symptom = "Lost completions for Passthrough work: guest relay-off FAIL with the host edge present."
+root_cause = "MEASURED 2026-10-08: a gate/bucket/afterglow could lose edges; ruling X removed them."
+root_cause_label = "MEASURED"
+expected = "Every host FIFO_EVENT_MTHD / engine-notifier edge reaches every VM that armed the event; pacing, when on, is loss-free with a guaranteed trailing raise."
+tests = [
+  "kf-chan:lib:two_workers_never_lose_an_edge",
+  "kf-chan:lib:a_single_edge_inside_the_window_with_no_later_edge_still_raises_later",
+  "kf-chan:lib:an_armed_vm_gets_every_edge",
+  "kf-chan:lib:with_pacing_off_every_edge_raises",
+]
+hardware_gate = ""
+status = "pinned"
+
+[[entry]]
+id = "RELAY-NSI-UNARMED"
+group = "relay/worker"
+name = "non-stall edges dropped when kayfabe does not see an arm (run 102: edges=12135 not_armed=3071, CE2 armed=0)"
+source = [
+  "docs/design/V3_COMPLETION_AUDIT.md item 3",
+  "crates/kf-chan/src/ptnsi.rs:388-391",
+]
+symptom = "Candidate for the Windows paging-node completions lost until TDR."
+root_cause = "CODE READ + counters: arms are learned only from observed allocs and zeroed at every fn 1; hardware latches the leaf regardless, kayfabe remembers nothing. Causal link to the stall is INFERRED."
+root_cause_label = "CODE READ"
+expected = "An edge for work that retired between the fn-1 zeroing and the new KMD's arm is not lost: a later arm on completed work fires at once."
+tests = [
+  "kf-chan:lib:the_falsifier_mode_counts_fifo_edges_and_still_raises_engine_edges",
+]
+hardware_gate = "scripts/bench/windows/windows_broker.sh + scripts/bench/windows/regress_matrix.sh : ptnsi counters not_armed == 0 after the first arm, and DXGKETW paging packets all complete < 2 s"
+status = "open"
+note = "the listed test only pins the counting mode; no test pins 'arm after completion fires'"
+
+[[entry]]
+id = "RELAY-INTR-SHADOW"
+group = "relay/worker"
+name = "CPU_INTR shadow publication is a load-then-store race (a latched leaf bit hidden after its MSI was consumed)"
+source = [
+  "docs/design/V3_COMPLETION_AUDIT.md item 2",
+  "commit 3c600c988 (EXPECTED RED: CpuIntr oracle and naive deferred-write counterexamples; unmerged)",
+  "docs/design/V3_FEATURE_GAPS.md G10",
+]
+symptom = "The guest ISR reads TOP=0 / leaf0=0 after an MSI; the last completion of a burst stays invisible until the next latch (the 30 s of silence before TDR)."
+root_cause = "CODE READ: vCPU W1C + shadow store against a worker latch + shadow_all are unordered. Occurrence in the Windows runs is INFERRED, never observed in the traces."
+root_cause_label = "CODE READ"
+expected = "After any interleaving of a guest W1C and a worker latch every published shadow word equals the atomics (or is re-published)."
+tests = [
+  "kf-trap:lib:a_reset_tree_is_the_fresh_tree_and_an_old_latch_never_fires_in_the_next_life",
+]
+hardware_gate = "Windows lane: ISR trace never shows TOP=1 leaf0=0 after an MSI (BAR0 trace mode KF3 read-trace, scripts/bench/windows/windows_broker.sh)"
+status = "open"
+pending_branch = "check 3c600c988 on its branch for the oracle test"
+note = "listed test covers reset only, not the race"
+
+[[entry]]
+id = "RELAY-TRANSLATED-DEAD"
+group = "relay/worker"
+name = "a Translated ring dies silently (no RC, no fence, no interrupt, never pumped again)"
+source = [
+  "docs/design/V3_COMPLETION_AUDIT.md item 1",
+  "crates/kf-chan/src/host.rs:1778 ('no room for a completion tail')",
+]
+symptom = "Paging node (token 0x80c, COPY2) packets never complete until the 30 s TDR; Windows reset-at-idle black flashes."
+root_cause = "CODE READ: any ChanError sets g.dead and clears completions; the pump returns at once for ever. Occurrence in run 232 is INFERRED (falsifier: grep 'chan token 0x80c .* DEAD:')."
+root_cause_label = "CODE READ"
+expected = "A Translated ring that cannot post a completion tail keeps the work and retries on the next completion (or posts RC_TRIGGERED); it never absorbs doorbells silently."
+tests = []
+hardware_gate = "scripts/bench/windows/windows_broker.sh + scripts/bench/windows/regress_matrix.sh : qemu.log has no 'chan token 0x80c .* DEAD:' line and the status line tokens=[0x80c: put == gp_get] at idle; kf-chan unit test with a fake host whose fence_releasing returns Busy is the missing GPU-free pin"
+status = "open"
+
+[[entry]]
+id = "RELAY-SLOT-TRYLOCK"
+group = "relay/worker"
+name = "serve()'s slot try_lock miss consumes the ring (lost wake) -- audit W7 / completion audit item 11"
+source = [
+  "docs/design/V3_BLOCKING_AUDIT_20261020.md (branch claude/blocking-audit-20261020, 40185d178) W7",
+  "docs/design/V3_COMPLETION_AUDIT.md item 11",
+]
+symptom = "A Translated ring (or channel) waits for the next doorbell or completion edge; with no fence in flight that can be the guest's 2 s timeout."
+root_cause = "CODE READ: chan.rs:7689-7692 try_lock failure -> contended++ and return false, the token is released with no re-ring (plane.rs:630). Measured contended=0 in runs 100-103 (downgraded), not measured elsewhere."
+root_cause_label = "CODE READ"
+expected = "A slot try_lock miss re-rings the token with a durable retry flag (as the USER ring does), so it cannot become a lost wake."
+tests = []
+hardware_gate = "KF3_PROF=1 line 'PROF workers ... max_busy_us ... timeouts_with_work' (device.rs) on the Windows lane scripts/bench/windows/windows_broker.sh + scripts/bench/windows/regress_matrix.sh : heartbeat chan[contended=N] stays 0, or every contended turn is followed by a serve of the same token"
+status = "open"
+
+[[entry]]
+id = "RELAY-PREEMPT139"
+group = "relay/worker"
+name = "RUNLIST_PREEMPT_COMPLETE (139) silent-drop paths"
+source = [
+  "docs/design/V3_COMPLETION_AUDIT.md item 4",
+  "commit 54b12063d",
+  "OWNER_RULINGS section on async preempt",
+]
+symptom = "VidSchSuspend gets NV_OK for a runlist preempt, never gets 139, waits for ever; TDR exactly TdrDelay later."
+root_cause = "CODE READ: queue-full skip at 64, entry consumed with no requeue when no registration, lists with a Translated TSG answer NotOurs. Firing in run 232 UNKNOWN."
+root_cause_label = "CODE READ"
+expected = "Every preempt control that returned OK is followed by exactly one 139 event, after its reply, in order."
+tests = [
+  "kf-qemu:lib:two_preempts_each_post_after_their_replies_in_order",
+  "kf-qemu:lib:an_enable_sent_before_the_disable_completed_never_puts_the_event_before_the_disable_reply",
+]
+hardware_gate = "scripts/bench/windows/windows_broker.sh + scripts/bench/windows/regress_matrix.sh : every DISABLE_CHANNELS carrying pRunlistPreemptEvent is followed by a RUNLIST_PREEMPT_COMPLETE line in qemu.log"
+status = "open"
+note = "the listed tests pin ordering only, not the drop paths"
+
+[[entry]]
+id = "RELAY-HELDREPLY"
+group = "relay/worker"
+name = "held replies: head-of-line blocking, no deadline, no retry when a post fails (a failed answer leaves the command owed)"
+source = [
+  "docs/design/V3_COMPLETION_AUDIT.md item 7",
+  "crates/kf-gsp/src/boot.rs:2550-2589",
+  "docs/design/V3_BATCHED_MAP.md (held replies 1:1 with the map sync point)",
+]
+symptom = "Guest times out waiting for a reply; 139 gated on held_len()==0."
+root_cause = "CODE READ: release_held is FIFO, a settle-pending head blocks the rest; a failed answer decrements the doorbell count first. Held replies balanced 205/205 in run 102, so not hit there."
+root_cause_label = "CODE READ"
+expected = "Each held reply is released exactly once, 1:1 with its command, a failed post is retried, and one slow head cannot block replies that are settled."
+tests = []
+hardware_gate = "scripts/bench/windows/windows_broker.sh + scripts/bench/windows/regress_matrix.sh : held replies balanced (posted == held) at exit and max hold age < 2 s in the status line"
+status = "open"
+
+[[entry]]
+id = "RELAY-EVENTDROP"
+group = "relay/worker"
+name = "GSP events dropped (not requeued) while the phase is not Running; late IRQSCLR wipes a newer event's status"
+source = [
+  "docs/design/V3_COMPLETION_AUDIT.md item 10",
+  "crates/kf-gsp/src/boot.rs:2668-2680",
+]
+symptom = "The guest ISR finds status 0 and returns; the message waits until the next RPC."
+root_cause = "CODE READ, narrow window; never observed."
+root_cause_label = "CODE READ"
+expected = "An event posted while the GSP is not Running is requeued, and an IRQSCLR applied later cannot clear a newer event's bit."
+tests = []
+hardware_gate = "scripts/bench/windows/windows_broker.sh + scripts/bench/windows/regress_matrix.sh : no 'NotRunning' event-drop line during a suspend/resume cycle"
+status = "open"
+
+[[entry]]
+id = "RELAY-DISABLE-STICKY"
+group = "relay/worker"
+name = "a failed disable leaves the Translated ring disabled for good; stale 139/RC queues carry into the next life"
+source = [
+  "docs/design/V3_COMPLETION_AUDIT.md item 12",
+  "crates/kf-qemu/src/chan.rs:3502-3511",
+]
+symptom = "Translated ring never pumped again after a failed disable verb."
+root_cause = "CODE READ: g.disabled = true is set before the host verb and not undone on error."
+root_cause_label = "CODE READ"
+expected = "A failed disable undoes the disabled flag; preempt_done / rc_queue / pt are cleared at the GSP life boundary."
+tests = [
+  "kf-mem:lib:a_reset_drops_queued_walks_lets_the_one_in_flight_land_and_reslots_the_bar_object",
+]
+hardware_gate = "Windows lane: driver unload/reload (docs/design/V3_DEVICE_RESET.md) with a forced disable error: ring pumps again"
+status = "open"
+note = "the listed test covers the VA-side reset only"
+
+[[entry]]
+id = "BLOCK-RMIOCTL"
+group = "relay/worker"
+name = "RM ioctls (open/map/unmap/mmap) on the worker: CPU-view arm/release in USER-ring snapshot and Translated pump (audit W1, W2)"
+source = [
+  "docs/design/V3_BLOCKING_AUDIT_20261020.md (branch claude/blocking-audit-20261020, 40185d178) W1/W2 (VIOLATION)",
+  "crates/kf-qemu/src/userstore.rs:358,384; chan.rs:1313-1335",
+]
+symptom = "Candidate for multi-second worker stalls; quoted 106 s of system time per worker per 293 s before keep-views (Heaven D3D11)."
+root_cause = "CODE READ (frequency QUOTED from a code comment, not re-measured): the only sleeping kernel calls in a worker task; they share the host RM API lock with act/VA-thread RM calls."
+root_cause_label = "CODE READ"
+expected = "The worker never issues an RM ioctl: views are armed on the act/VA thread and the worker copies from ready views or reports not-ready and is re-rung."
+tests = []
+hardware_gate = "KF3_PROF=1 line 'PROF workers ... max_busy_us ... timeouts_with_work' (device.rs) on the Windows lane scripts/bench/windows/windows_broker.sh + scripts/bench/windows/regress_matrix.sh : max_busy_us < 10 ms and views[armed - released] flat during Heaven D3D11 + Minecraft"
+status = "open"
+
+[[entry]]
+id = "BLOCK-UCCOPY"
+group = "relay/worker"
+name = "guest-sized uncached copies (60-200 ms) under rows/ram.blocks/slot guards (audit W3, W4, W5)"
+source = [
+  "docs/design/V3_BLOCKING_AUDIT_20261020.md (branch claude/blocking-audit-20261020, 40185d178) W3/W4/W5 (SUSPECT)",
+]
+symptom = "Delays VA-thread row commits (hence MMU invalidate completion) and any RamMap writer on a BQL/vCPU thread; alone 100s of ms."
+root_cause = "CODE READ + arithmetic from a QUOTED 13.5 MiB/s UC vidmem read; a stalled BAR is longer (INFERRED)."
+root_cause_label = "CODE READ"
+expected = "A worker turn copies at most a byte budget per serve with guards dropped between chunks."
+tests = []
+hardware_gate = "KF3_PROF=1 line 'PROF workers ... max_busy_us ... timeouts_with_work' (device.rs) on the Windows lane scripts/bench/windows/windows_broker.sh + scripts/bench/windows/regress_matrix.sh : PROF vidmem_view_reads ms small and max_busy_us < 10 ms"
+status = "open"
+
+[[entry]]
+id = "BLOCK-DRAINER-SLOT"
+group = "relay/worker"
+name = "drainer takes slot.lock() blocking under the GSP lock while a worker holds the slot for a whole pump (audit W6)"
+source = [
+  "docs/design/V3_BLOCKING_AUDIT_20261020.md (branch claude/blocking-audit-20261020, 40185d178) W6 (VIOLATION of 'drainer never blocks')",
+  "memory feedback_drainer_must_never_block",
+]
+symptom = "Whole-device freeze with no worker symptom: held GSP replies and release_settled wait."
+root_cause = "CODE READ: chan.rs:3533,3705,4697 blocking slot.lock()."
+root_cause_label = "CODE READ"
+expected = "The drainer and the register path never block on a lock a worker holds across a pump."
+tests = [
+  "kf-util:lib:assert_lock_free_panics_under_a_held_rank",
+  "kf-qemu:lib:a_stall_report_may_read_the_status_without_deadlocking",
+  "kf-chan:lib:the_status_line_never_waits_on_the_registry_lock",
+]
+hardware_gate = "KF3_PROF=1 line 'PROF workers ... max_busy_us ... timeouts_with_work' (device.rs) on the Windows lane scripts/bench/windows/windows_broker.sh + scripts/bench/windows/regress_matrix.sh : drainer gap (act_worst_us / drainer busy) < 10 ms"
+status = "open"
+note = "tests pin the lock-rank witness and two earlier drainer deadlocks, not W6 itself"
+
+[[entry]]
+id = "BLOCK-RCSCAN"
+group = "relay/worker"
+name = "rc_scan takes pt blocking across UC loads (audit W8); user_rings held across UC loads (W9/W10); diagnostic holds (W11, W13, W16)"
+source = [
+  "docs/design/V3_BLOCKING_AUDIT_20261020.md (branch claude/blocking-audit-20261020, 40185d178) W8 (VIOLATION), W9/W10/W11/W13/W16 (SUSPECT)",
+]
+symptom = "Short in the healthy case, long if the GPU/BAR stalls; the in-code comment 'a handful of instructions' for user_ring_peek is wrong."
+root_cause = "CODE READ."
+root_cause_label = "CODE READ"
+expected = "Worker-side takes are try_lock with a durable retry flag and a wake from the releaser; no UC load runs under a lock another thread takes blocking."
+tests = [
+  "kf-util:lib:assert_lock_free_passes_when_nothing_is_held",
+  "kf-util:lib:assert_lock_free_panics_under_a_held_rank",
+]
+hardware_gate = "KF3_PROF=1 line 'PROF workers ... max_busy_us ... timeouts_with_work' (device.rs) on the Windows lane scripts/bench/windows/windows_broker.sh + scripts/bench/windows/regress_matrix.sh"
+status = "open"
+note = "lock-rank witness exists; the specific conversions are not done"
+
+[[entry]]
+id = "BLOCK-LOG"
+group = "relay/worker"
+name = "eprintln on per-event worker paths and thread::sleep in trace_refusal (audit W14, W15)"
+source = [
+  "docs/design/V3_BLOCKING_AUDIT_20261020.md (branch claude/blocking-audit-20261020, 40185d178) W14 (SUSPECT), W15 (VIOLATION under KF3_USER_RING_TRACE only)",
+]
+symptom = "Worker stalls if the log filesystem stalls; KF3_MAPLOG is in the default FLAGS of windows_broker.sh."
+root_cause = "CODE READ (blocking on a log write is INFERRED)."
+root_cause_label = "CODE READ"
+expected = "No eprintln or sleep on a worker task path; counters plus first-N logging."
+tests = []
+hardware_gate = "rerun scripts/bench/windows/windows_broker.sh + scripts/bench/windows/regress_matrix.sh with KF3_MAPLOG dropped (WIN_DROP): freezes unchanged = cleared as a cause"
+status = "open"
+
+[[entry]]
+id = "BLOCK-VCPU-RAMMAP"
+group = "host"
+name = "RamMap::add/del writer and dbfast.reg held across KVM_IOEVENTFD can run on a vCPU/BQL thread behind worker read guards (audit V1, V2)"
+source = [
+  "docs/design/V3_BLOCKING_AUDIT_20261020.md (branch claude/blocking-audit-20261020, 40185d178) V1/V2",
+  "CLAUDE.md rule: nothing blocks on a vCPU or under a lock a vCPU takes",
+]
+symptom = "None observed; rare (BAR remap / region change at boot)."
+root_cause = "CODE READ + INFERRED (kf3.c:808 comment that a vCPU in a PCI config write reaches the listener)."
+root_cause_label = "INFERRED"
+expected = "No lock a vCPU can take is ever held across a UC copy or a syscall by another thread."
+tests = [
+  "kf-linux-raw:lib:mapping_under_a_held_lock_violates_r1",
+  "kf-linux-raw:lib:dropping_a_host_mapping_under_a_held_lock_violates_r1",
+]
+hardware_gate = "scripts/bench/v3_gates.sh (9/9) with BAR remap during load: no vCPU stall in the trap-stackshot (scripts/bench/trap_stackshot.sh)"
+status = "open"
+
+[[entry]]
+id = "BLOCK-BACKSTOP"
+group = "relay/worker"
+name = "Popped and Contended waits depended on the spin / 50 ms backstop (audit W17, W18)"
+source = [
+  "docs/design/V3_BLOCKING_AUDIT_20261020.md (branch claude/blocking-audit-20261020, 40185d178) W17/W18",
+  "docs/design/V3_RELAY_SIMPLE_20261020.md:3",
+]
+symptom = "Contended USER-ring turns cost the spin plus up to 50 ms each."
+root_cause = "CODE READ; superseded by the simple relay (retry set + unsourced spin, no budget, no backstop look)."
+root_cause_label = "CODE READ"
+expected = "No wait kind depends on a timer; a wait with no wake source is spun, never slept."
+tests = [
+  "kf-chan:user_loop_model:design_pt_admission_contention_is_the_retry_set",
+  "kf-chan:user_loop_model_v2:p6_a_pt_admission_window_is_covered_by_the_retry_set",
+  "kf-chan:user_loop_model_v2:p6_a_pt_window_across_two_batches_is_covered_by_the_retry_set",
+  "kf-chan:user_loop_model_v3_pointer:one_pt_window_across_a_doorbell_is_re_rung_within_k_ticks",
+]
+hardware_gate = ""
+status = "pinned"
+
+[[entry]]
+id = "DRAINER-STALL"
+group = "relay/worker"
+name = "stall report deadlocked the drainer; the status line waited on the registry lock"
+source = [
+  "commit 8f8533f7b (kf-qemu review fixes: lock-free stage)",
+  "memory feedback_drainer_must_never_block",
+]
+symptom = "The register drainer blocked while building a stall report."
+root_cause = "MEASURED (review of the QEMU glue): the report took a lock the drainer holds."
+root_cause_label = "MEASURED"
+expected = "The register drainer and input threads never block; diagnostics read via try_lock or lock-free staging."
+tests = [
+  "kf-qemu:lib:a_stall_report_may_read_the_status_without_deadlocking",
+  "kf-chan:lib:the_status_line_never_waits_on_the_registry_lock",
+]
+hardware_gate = ""
+status = "pinned"
+
+[[entry]]
+id = "VA-HANG-E4"
+group = "VA/mmu"
+name = "uncleared MMU_INVALIDATE (0xB830B0) refused by kf-mem: guest polls the trigger bit holding dxgkrnl locks (2026-10-09 Windows hang)"
+source = [
+  "docs/design/V3_FOUND_IN_PRODUCTION.md E4",
+  "docs/OWNER_RULINGS.md:1015 (AA)",
+  "memory project_windows_hang_root_cause_20261009",
+  "commit 003f861e0",
+]
+symptom = "Windows hangs after sign-in, TDR 0x117; qemu.log mem[inval=N cleared=N-1 unreconciled=1] in runs 221, 190, 181, 162, 223."
+root_cause = "MEASURED (host memory dump of run 223): one vCPU polled BAR0 0xB830B0 bit 31 forever holding a dxgkrnl resource shared x13; kf-mem refused one unmappable range and by the 2026-09-25 design did not clear."
+root_cause_label = "MEASURED"
+expected = "An invalidate completes over ABSENCE (hardware has no error channel): a refused map clears and is retried by the next invalidate; a refused unmap still holds the clear."
+tests = [
+  "kf-mem:lib:clear_over_absence_completes_the_invalidate_by_default",
+  "kf-mem:lib:a_refused_map_completes_the_invalidate_and_is_retried_by_the_next_one",
+  "kf-mem:lib:a_refused_unmap_still_holds_the_clear_by_default",
+  "kf-mem:lib:clear_over_absence_can_be_switched_off",
+]
+hardware_gate = "scripts/bench/windows/windows_broker.sh + scripts/bench/windows/regress_matrix.sh sign-in run: status line mem[inval=N cleared=N unreconciled=0] at exit, no 0x117"
+status = "pinned"
+
+[[entry]]
+id = "VA-ARMED-FOREVER"
+group = "VA/mmu"
+name = "MMU_INVALIDATE stays armed for ever on every 'unreconciled' path (refused UNMAP, slot overflow, walk error, root moving during the walk)"
+source = [
+  "docs/design/V3_COMPLETION_AUDIT.md item 6",
+  "crates/kf-mem/src/vasmgr.rs:1610-1612",
+]
+symptom = "Guest spins on the trigger bit under its GPU lock (run 223 mechanism) whenever one of those paths is taken."
+root_cause = "CODE READ: AA covers absence only; a root that moves during the walk queues Want::Root but the invalidate branch requeues only on partial, not rewalk. Whether run 232 hit it is UNKNOWN."
+root_cause_label = "CODE READ"
+expected = "Every unreconciled path ends in a retry that clears the trigger, or in a loud bounded give-up that clears over absence; nothing stays armed indefinitely."
+tests = [
+  "kf-mem:lib:a_failed_walk_leaves_the_trigger_armed_and_names_why",
+  "kf-mem:lib:a_partial_diff_walks_again_and_clears_only_when_complete",
+  "kf-mem:lib:a_moved_root_is_walked_at_the_next_sync_point_and_retires_the_old_rows",
+  "kf-mem:lib:a_refused_unmap_still_holds_the_clear_by_default",
+]
+hardware_gate = "scripts/bench/windows/windows_broker.sh + scripts/bench/windows/regress_matrix.sh : trigger-to-clear latency max < 12 ms (section AD) and unreconciled == 0 at exit"
+status = "open"
+note = "the listed tests pin today's designed behaviour (armed on failure); the retry-to-clear bound is not pinned"
+
+[[entry]]
+id = "VA-STALECLEAR"
+group = "VA/mmu"
+name = "VA-refresh stale clear: a later PDB latch redirects an earlier arm; its trigger is cleared though its own space was never walked"
+source = [
+  "docs/design/V3_FOUND_IN_PRODUCTION.md B (I1)",
+  "branch origin/claude/va-refresh-interleavings-20261020 (a4c1d56b8 red, 372435ac1 fix, 5c1a864d2 mutation table)",
+]
+symptom = "None observed on hardware (found by an exhaustive checker over the real InvalidatePort and VaManager; 8-event schedule)."
+root_cause = "MEASURED by the checker: the armed request is rebuilt from the latches after the guest wrote the next invalidate's latch."
+root_cause_label = "MEASURED"
+expected = "A completion retires only an arm that preceded the work that produced it; each arm's scope is recorded in its own trap, in the same atomic step that publishes the arm."
+tests = [
+  "kf-trap:lib:a_stale_completion_never_clears_a_later_trigger",
+  "kf-trap:lib:arm_precedes_publish_so_a_fast_completion_cannot_strand_the_trigger",
+  "kf-mem:lib:a_rearmed_trigger_is_superseded_and_the_next_walk_clears_it",
+]
+hardware_gate = "Windows lane scripts/bench/windows/windows_broker.sh + scripts/bench/windows/regress_matrix.sh: status line superseded counter explained; no trigger cleared whose space was not walked (checker-only today)"
+status = "open"
+pending_branch = "origin/claude/va-refresh-interleavings-20261020: crates/kf-mem/src/vasmgr/tests/interleave.rs adversarial_guest_n3_no_stale_clear_and_no_lost_arm, a_later_pdb_latch_must_not_redirect_an_earlier_arm, adversarial_guest_n4_two_spaces_every_invariant"
+note = "head tests pin the neighbouring stale-completion rules, not the PDB-latch redirect; fix not on this head"
+
+[[entry]]
+id = "VA-LOSTSPECIFIC"
+group = "VA/mmu"
+name = "VA-refresh lost specific arm: arms A, A, B all armed before the manager looks; only the newest is refreshed"
+source = [
+  "docs/design/V3_FOUND_IN_PRODUCTION.md B (I1/I4)",
+  "branch origin/claude/va-refresh-interleavings-20261020",
+]
+symptom = "None observed on hardware."
+root_cause = "MEASURED by the checker: the trigger names only the newest arm."
+root_cause_label = "MEASURED"
+expected = "Every specific arm is refreshed (or answered by ALL_PDB when its record is unreadable) before its trigger clears."
+tests = [
+  "kf-mem:lib:all_pdb_walks_and_applies_every_rooted_space",
+  "kf-mem:lib:requests_arriving_during_a_walk_coalesce_into_one_follow_up_walk",
+]
+hardware_gate = ""
+status = "open"
+pending_branch = "origin/claude/va-refresh-interleavings-20261020: an_unobserved_specific_arm_is_not_lost_when_a_later_arm_overwrites_it, an_arm_without_a_readable_record_is_treated_as_all_pdb, more_unobserved_arms_than_the_ring_keeps_set_the_overflow_flag"
+note = "fix not on this head; head tests pin coalescing and ALL_PDB, not the lost specific arm"
+
+[[entry]]
+id = "VA-BACKLOG"
+group = "VA/mmu"
+name = "VA-refresh unbounded backlog: 200 arms during one walk leave 200 pending wants"
+source = [
+  "docs/design/V3_FOUND_IN_PRODUCTION.md B (I3)",
+  "branch origin/claude/va-refresh-interleavings-20261020",
+]
+symptom = "None observed."
+root_cause = "MEASURED by the checker."
+root_cause_label = "MEASURED"
+expected = "Refreshes coalesce like doorbells: pending work is bounded by the number of spaces, not by the number of arrivals."
+tests = [
+  "kf-mem:lib:requests_arriving_during_a_walk_coalesce_into_one_follow_up_walk",
+  "kf-mem:lib:a_wake_before_the_walk_finishes_changes_nothing",
+]
+hardware_gate = ""
+status = "open"
+pending_branch = "origin/claude/va-refresh-interleavings-20261020: a_storm_of_arms_during_one_walk_leaves_one_bounded_follow_up, real_threads_hostile_arm_storms_lose_no_pte_and_build_no_backlog"
+note = "head test coalesces requests but the I3 schedule (200 arms) is only on the branch"
+
+[[entry]]
+id = "VA-LATENCY"
+group = "VA/mmu"
+name = "invalidate latency: guest-visible maximum 74.8 ms, 46 over 12 ms (run 278); batched-map worst case ~45 s of VA thread"
+source = [
+  "docs/OWNER_RULINGS.md:1103 (section AD)",
+  "docs/design/V3_FEATURE_GAPS.md G09",
+  "commit c338bfd35",
+]
+symptom = "A guest thread polls the trigger bit holding driver locks; a suspended scheduler waits behind it."
+root_cause = "MEASURED (run 278 latency, VA-side maxima 44-90 ms in runs 263-277); the worst-case estimate is the document's own arithmetic (INFERRED)."
+root_cause_label = "MEASURED"
+expected = "No invalidate is marked incomplete for more than about 12 ms; the latency distribution is reported in every run's status line."
+tests = [
+  "kf-mem:lib:thousands_of_micro_reservations_are_walked_in_bounded_holds",
+  "kf-mem:lib:the_trigger_clears_only_after_the_host_mapping_is_committed",
+]
+hardware_gate = "scripts/bench/windows/windows_broker.sh + scripts/bench/windows/regress_matrix.sh : status line invalidate latency count above 12 ms == 0 over a 15 min run"
+status = "hw-gated"
+note = "bounded holds are pinned GPU-free; the 12 ms end-to-end bound is only measurable on hardware"
+
+[[entry]]
+id = "VA-UNCHANGED"
+group = "VA/mmu"
+name = "unchanged VAs must stay accessible during a refresh (no unmap-then-remap; exact partial unmaps via reservations)"
+source = [
+  "memory feedback_va_manager_unchanged_va_invariant (owner 2026-10-10)",
+  "commit 5cec7adb9",
+  "commit 2c6c0faa2",
+]
+symptom = "Windows post-sign-in freeze and Xid 31 on a D3D process's twins after the guest unmapped their VA (runs 101, 272-289)."
+root_cause = "MEASURED (batched-path freeze fixed by 2c6c0faa2: no split of an NV01-range mapping); the batch block was freed on an unmap outside a reservation."
+root_cause_label = "MEASURED"
+expected = "After EVERY host call of a refresh, every VA whose guest mapping is unchanged is still mapped; only created/deleted VAs may be undefined."
+tests = [
+  "kf-mem:lib:the_guard_catches_split_by_remap",
+  "kf-mem:lib:splitting_a_big_leaf_and_changing_part_of_it_is_exact_everywhere",
+  "kf-mem:lib:unmapping_one_row_outside_a_reservation_keeps_the_others_mapped",
+  "kf-mem:lib:a_refused_extension_takes_down_unchanged_neighbours",
+  "kf-mem:lib:property_batched_mirror_against_the_host_rm_model",
+  "kf-mem:lib:no_nv01_mapping_bigger_than_a_page_can_be_made",
+]
+hardware_gate = ""
+status = "pinned"
+
+[[entry]]
+id = "VA-HELDHOLE"
+group = "VA/mmu"
+name = "HELD-BY-HOST holes in a batched map (Xid 31 on leaves held by the host)"
+source = [
+  "commit dbe97bc09 (held-hole hardware verdict runs 381/382/384)",
+  "commit 5b3715bf5",
+  "docs/design/V3_BATCHED_MAP.md",
+  "docs/design/V3_HELD_HOLE_HANDOFF_20261010.md",
+]
+symptom = "4-8 Xid 31 on HELD-BY-HOST leaves in runs 276 and 289."
+root_cause = "MEASURED (runs 272-289): held leaves of the fixed batch; fixed in the reviewed kf-mem; verdict runs 381/382/384: 0 HELD, 0 new Xid."
+root_cause_label = "MEASURED"
+expected = "A held map is acknowledged held, committed held and retired as held; a held unmap never reaches the host."
+tests = [
+  "kf-mem:lib:held_is_acknowledged_held_and_a_held_unmap_never_reaches_the_host",
+  "kf-cuda:lib:a_held_map_is_committed_held_and_retired_as_held",
+]
+hardware_gate = "scripts/bench/windows/windows_broker.sh + scripts/bench/windows/regress_matrix.sh : host journal 0 Xid 31 and ledger HELD == 0"
+status = "pinned"
+
+[[entry]]
+id = "VA-STRADDLE"
+group = "VA/mmu"
+name = "map straddling a big-leaf boundary / refused map (0xb0000+0x80000 Other(19313), 0xff000) killed a shared channel"
+source = [
+  "memory project_windows_stall_findings_20261009",
+  "commit 62a50c449 (a valid big PTE owns its slot; a refused map no longer kills a shared channel)",
+  "branch claude/va-split-straddle-20261009",
+]
+symptom = "First-failure faults at 0xb0000/0xff000 in the Windows sign-in runs."
+root_cause = "MEASURED (host RM status Other(19313) for the same VA every boot); fixed by splitting at the straddle."
+root_cause_label = "MEASURED"
+expected = "A split is done only after its space applies; a refused map completes the split unsettled and is retried; an NV01-range mapping is never split."
+tests = [
+  "kf-mem:lib:a_split_is_done_only_after_its_space_applies_and_leaves_the_trigger_alone",
+  "kf-mem:lib:a_refused_map_completes_the_split_unsettled_and_is_retried",
+  "kf-mem:lib:a_failed_walk_fails_the_split",
+  "kf-mem:lib:a_refused_unmap_still_fails_the_split",
+]
+hardware_gate = ""
+status = "pinned"
+
+[[entry]]
+id = "VA-PTLEAVES"
+group = "VA/mmu"
+name = "Passthrough spaces hold only guest-PT-leaf mappings; whole-store FB/RAM windows in every mirrored space are host-owned reachable VAs"
+source = [
+  "memory feedback_passthrough_only_pt_leaves (owner 2026-10-10)",
+  "docs/design/V3_WINDOW_EXPOSURE_REVIEW.md",
+]
+symptom = "Not a failure observed: a guest user process could name a host-owned window VA in its own Passthrough space (v3-roperm / hostile-guest exposure)."
+root_cause = "CODE READ (mem.rs ~2665, ~2820 at the time of the ruling); present status UNKNOWN on this head."
+root_cause_label = "UNKNOWN"
+expected = "In a Passthrough space every VA mapping comes from the guest's page-table leaves and nothing else (the USERD sysmem address-size fix is the only future exception)."
+tests = [
+  "kf-mem:lib:a_leaf_over_a_vmm_placement_is_refused_before_the_host_is_asked",
+  "kf-mem:lib:a_va_the_host_already_holds_is_satisfied_and_never_unmapped_by_us",
+]
+hardware_gate = "scripts/bench/gpu_fault_containment.sh : a guest user context naming a kayfabe window VA faults in guest userspace only"
+status = "open"
+note = "listed tests are related guards, not the ruling; owner review branch claude/window-exposure-review-20261009"
+
+[[entry]]
+id = "VA-MISALIGNED-LEAF"
+group = "VA/mmu"
+name = "walk refuses 'misaligned leaves' (KFWR_R_MISALIGNED_LEAF refuse_mask=0x400) in runs 162/223"
+source = [
+  "memory project_windows_hang_root_cause_20261009",
+  "docs/STATUS_AND_HANDOFF.md:1099 (proposed AA amendment: stale reads of recycled tables, not leaves)",
+]
+symptom = "walk REFUSED leaves refuse_mask=0x400 before the uncleared-invalidate hang."
+root_cause = "UNKNOWN: a proposed amendment says the refusals are stale reads of recycled tables, not real misalignment (not confirmed)."
+root_cause_label = "UNKNOWN"
+expected = "A walk refusal fails the space by name and applies the rest; recycled tables are not read stale."
+tests = [
+  "kf-mem:lib:a_walk_refusal_fails_the_space_by_name_and_applies_the_rest",
+  "kf-mem:lib:a_leaf_outside_the_store_is_refused_and_the_trigger_stays_armed",
+]
+hardware_gate = "scripts/bench/windows/windows_broker.sh + scripts/bench/windows/regress_matrix.sh : walk REFUSED count == 0 in a sign-in run (VFIO reference comparison)"
+status = "open"
+
+[[entry]]
+id = "LIFE-D1"
+group = "lifecycle"
+name = "seeded window-start marker lands inside an open guest packet (review D1)"
+source = [
+  "docs/design/V3_USER_RING_LIFECYCLE_REVIEW1_20261016.md D1",
+  "commit 6f9163848 (phase 1), phase 1c 736c097d4",
+]
+symptom = "Review: the marker's words become packet arguments; the guest tail shifts; PBDMA error / TDR; the marker's REFERENCE never happens so the gate never opens."
+root_cause = "MEASURED in a scratch model (130 065 states, MARKER_IN_PACKET); hardware effect INFERRED from the original Xid-32 PBENTRY history."
+root_cause_label = "MEASURED"
+expected = "No marker is authored where the parser state is unknown or a packet is open; windows and markers anchor at an observed GP_PUT boundary (I8) and a latched open boundary switches Pointer markers off VM-wide."
+tests = [
+  "kf-chan:user_lifecycle_model:d1_a_registration_inside_a_submission_never_puts_a_host_marker_inside_a_guest_packet",
+  "kf-chan:user_lifecycle_model:l1_once_an_open_boundary_was_seen_no_marker_ever_lands_in_a_packet_and_nothing_is_lost",
+  "kf-chan:user_lifecycle_model:m1_no_anchored_windows_is_the_phase_1_start_and_puts_the_marker_inside_the_packet",
+  "kf-chan:user_turn_unit:a_pointer_marker_is_authored_where_the_cursor_reached_gp_put_and_not_mid_submission",
+  "kf-chan:lib:markers_need_a_known_parser_state_or_an_observed_gp_put_boundary",
+  "kf-chan:lib:a_window_starts_only_at_the_anchor_never_inside_the_submission_the_flip_was_seen_in",
+]
+hardware_gate = "Windows Heaven D3D11/OpenGL, GravityMark Vulkan (migration), Edge, Minecraft on KF3_LIFECYCLE_MODE=always_scan first (docs/design/V3_USER_RING_LIFECYCLE_20261016.md:688): put_boundary_open_scan == 0, 0 Xid 32"
+status = "pinned"
+
+[[entry]]
+id = "LIFE-D2"
+group = "lifecycle"
+name = "a flip inside a packet can be silent: misparse desyncs the Window, missed or false trigger (review D2)"
+source = [
+  "docs/design/V3_USER_RING_LIFECYCLE_REVIEW1_20261016.md D2",
+]
+symptom = "The P2 falsifier undercounts: window_fresh_start_parse_error counts refusals only; a misparse that decodes as headers desyncs for an unbounded stretch."
+root_cause = "MEASURED in the review model (no V_REFUSED on the Fresh scan of the tail); P2 (segments end on packet boundaries) is contradicted by traces (55 of 196 refusal-trace segments end in an open packet). Residual P2' risk documented."
+root_cause_label = "MEASURED"
+expected = "Data that looks like the trigger inside a packet is never a trigger when the parser state is exact; a submission that ends inside a packet is counted (put_boundary_open) and switches markers off."
+tests = [
+  "kf-chan:user_lifecycle_model:d2_data_that_looks_like_the_trigger_inside_a_packet_of_one_submission_is_never_a_trigger",
+  "kf-chan:user_lifecycle_model:a5_data_that_looks_like_the_trigger_inside_a_packet_is_not_a_trigger_when_the_state_is_exact",
+  "kf-chan:user_lifecycle_model:p2prime_a_submission_that_ends_inside_a_packet_is_the_documented_residual_risk",
+  "kf-chan:user_lifecycle_props:p2prime_scan_mode_counts_a_packet_open_at_a_gp_put_boundary_and_one_that_is_not",
+  "kf-chan:user_lifecycle_props:corpus_p2_is_contradicted_by_the_recorded_segments_that_end_inside_an_open_packet",
+]
+hardware_gate = "Windows Heaven D3D11/OpenGL, GravityMark Vulkan (migration), Edge, Minecraft on KF3_LIFECYCLE_MODE=always_scan first (docs/design/V3_USER_RING_LIFECYCLE_20261016.md:688): put_boundary_open_scan == 0, 0 Xid 32"
+status = "pinned"
+
+[[entry]]
+id = "LIFE-D3"
+group = "lifecycle"
+name = "Pointer-mode progress woken only by a timer (50 ms) when no doorbell or event comes (review D3)"
+source = [
+  "docs/design/V3_USER_RING_LIFECYCLE_REVIEW1_20261016.md D3",
+]
+symptom = "A full private ring when the guest stops ringing stalls for up to 50 ms per 510 entries; GP_GET write-back lags up to 50 ms."
+root_cause = "CODE READ: in Pointer mode marker_possible() is false so waits end Need::Popped; the only wakes were spin, doorbell, any engine event, backstop. Closed by the simple relay (unsourced spin, no timer)."
+root_cause_label = "CODE READ"
+expected = "Pointer-mode credit waits are found by looks on every iteration; performance never depends on timing."
+tests = [
+  "kf-chan:user_lifecycle_model:i6_pointer_mode_waits_for_private_ring_credit_are_only_found_by_a_look",
+  "kf-chan:user_lifecycle_model:i6_open_pointer_mode_credit_waits_need_no_look",
+  "kf-chan:user_loop_model_v3_pointer:a_carried_popped_wait_satisfied_while_the_worker_is_busy_is_found_within_k_ticks",
+  "kf-chan:user_lifecycle_model:d3_a_credit_stall_inside_a_packet_never_gets_a_marker",
+]
+hardware_gate = ""
+status = "pinned"
+
+[[entry]]
+id = "LIFE-D4"
+group = "lifecycle"
+name = "sub-device mask state reset to 'nothing stored' at a Fresh window start (review D4)"
+source = [
+  "docs/design/V3_USER_RING_LIFECYCLE_REVIEW1_20261016.md D4",
+]
+symptom = "The first USE_SUBDEVICE_MASK after a Fresh start refuses and the channel is killed (if the guest STOREs during setup and USEs later). UNVERIFIED whether Windows streams use STORE/USE."
+root_cause = "CODE READ: fresh_resume set stored: None; fixed to keep the mask state."
+root_cause_label = "CODE READ"
+expected = "A fresh resume keeps bindings and the stored sub-device mask state and forgets only the open packet."
+tests = [
+  "kf-chan:user_lifecycle_props:d4_a_stored_sub_device_mask_is_still_stored_when_a_window_scans_its_use",
+  "kf-chan:lib:a_fresh_resume_keeps_the_bindings_and_the_mask_state_and_forgets_only_the_open_packet",
+]
+hardware_gate = ""
+status = "pinned"
+
+[[entry]]
+id = "LIFE-D5"
+group = "lifecycle"
+name = "source switch: Pointer mode forwards the new ring unscanned; wrong cursor semantics replay old commands silently (review D5)"
+source = [
+  "docs/design/V3_USER_RING_LIFECYCLE_REVIEW1_20261016.md D5",
+  "memory project_lifecycle_20261016",
+  "commit 4e97b8efd (Xid 13 after a USER-ring migration: FE atomic sequence gap)",
+]
+symptom = "GravityMark ring growth: if indices continue, stale slots are forwarded; the hardware replays old commands. Earlier: Xid 13 from an atomic sequence gap in channel-update staging (fixed by gapless staging)."
+root_cause = "CODE READ (replay risk, INFERRED on hardware); the Xid 13 gap is MEASURED and fixed."
+root_cause_label = "CODE READ"
+expected = "A source switch loses and duplicates nothing whether the new ring starts at zero or the indices continue; the new GP_PUT is preset before the switch; the old ring's boundaries are forgotten."
+tests = [
+  "kf-chan:user_lifecycle_model:b_the_source_switch_loses_and_duplicates_nothing_when_the_new_ring_starts_at_zero",
+  "kf-chan:user_lifecycle_model:b_the_source_switch_loses_and_duplicates_nothing_when_the_indices_continue",
+  "kf-chan:user_lifecycle_model:b_open_continued_indices_need_the_new_gp_put_preset_before_the_switch",
+  "kf-chan:user_turn_unit:the_switch_forgets_the_old_rings_gp_put_boundaries_so_no_marker_lands_at_a_stale_index",
+  "kf-chan:user_turn_unit:a_nonzero_guest_get_in_the_new_userd_contradicts_the_reset_and_is_what_the_guest_sees",
+]
+hardware_gate = "Windows GravityMark Vulkan (migration case): 0 Xid 13/32, same frames as the Scan baseline"
+status = "pinned"
+
+[[entry]]
+id = "LIFE-D6"
+group = "lifecycle"
+name = "Pointer mode never re-snapshots the 5080 software object; Dead returns a Scan plan; scan_refused counted only for one prefix (review D6)"
+source = [
+  "docs/design/V3_USER_RING_LIFECYCLE_REVIEW1_20261016.md D6",
+]
+symptom = "A freed or replaced 5080 object goes unnoticed (P1-class); not counted anywhere."
+root_cause = "CODE READ; not fixed on this head (no test found)."
+root_cause_label = "CODE READ"
+expected = "A replaced/freed software object is noticed (counted loud) and a Dead lifecycle returns a stop, not a Scan plan."
+tests = [
+  "kf-chan:user_lifecycle_model:a6_a_rebind_inside_a_window_is_seen_and_counted_and_the_new_binding_is_used",
+  "kf-chan:user_lifecycle_model:a6_open_a_rebind_in_pointer_mode_is_not_known_to_the_window",
+]
+hardware_gate = "Windows app matrix with KF3_LIFECYCLE_MODE=always_scan: set_object_5080_total and rebind tallies reported per app (m2 counters)"
+status = "open"
+note = "a6_open_* documents the known gap; it is not a fix"
+
+[[entry]]
+id = "LIFE-P1"
+group = "lifecycle"
+name = "P1 (the 5080 software object binds once) is an empirical assumption, not a hardware guarantee"
+source = [
+  "memory project_lifecycle_20261016 (SET_OBJECT hardware test 2026-10-17, branch claude/setobj-20261016 ed81e56f)",
+]
+symptom = "Hardware ACCEPTS a second SET_OBJECT on a software subchannel and the rebind takes effect; scan-off after 5080 would then miss it."
+root_cause = "MEASURED on the RTX 4070 (595.91.07) by claude/setobj-20261016."
+root_cause_label = "MEASURED"
+expected = "Every software SET_OBJECT and every rebind of a run is counted; scan-off applies only while the count shows bind-once."
+tests = [
+  "kf-chan:lib:the_tally_counts_every_software_set_object_and_every_rebind_and_commits_with_the_scan",
+  "kf-chan:user_lifecycle_model:m2_always_scan_counts_every_5080_set_object_and_every_rebind_of_the_whole_run",
+  "kf-chan:user_lifecycle_props:a2_set_object_at_every_dword_position_switches_after_the_segment_that_commits_it",
+]
+hardware_gate = "App-matrix per-app SET_OBJECT counters (always_scan): set_object_5080_total == 1 and no rebind in Heaven, Edge, GravityMark, Minecraft"
+status = "hw-gated"
+
+[[entry]]
+id = "LIFE-SWITCHRACE"
+group = "lifecycle"
+name = "Scan->Pointer switch racing a doorbell / a trigger published before the reply"
+source = [
+  "docs/design/V3_USER_RING_LIFECYCLE_REVIEW1_20261016.md (a) epoch/flip ordering checked sound",
+  "crates/kf-chan/tests/user_lifecycle_model.rs i4/a5",
+]
+symptom = "Risk: a trigger reaches the hardware unscanned, or the epoch is read before the entry."
+root_cause = "MEASURED in the model: every race resolves conservatively (recount at the next entry), nothing wedges."
+root_cause_label = "MEASURED"
+expected = "A trigger published before the reply, or after remove-api, reaches the hardware, is counted, and wedges nothing; a new epoch with a live registration opens a fresh window at that entry; the turn loads GP_PUT, then the entry, then the epoch, in that order."
+tests = [
+  "kf-chan:user_lifecycle_model:i4_a_trigger_published_before_the_reply_may_reach_the_hardware_unscanned_and_nothing_wedges",
+  "kf-chan:user_lifecycle_model:a5_a_trigger_after_remove_api_reaches_the_hardware_and_is_counted_nothing_wedges",
+  "kf-chan:lib:a_new_epoch_with_a_live_registration_opens_a_fresh_window_at_that_entry",
+  "kf-chan:user_turn_unit:a_turn_loads_gp_put_once_then_the_entry_at_the_cursor_then_the_epoch_in_that_order",
+]
+hardware_gate = ""
+status = "pinned"
+
+[[entry]]
+id = "LIFE-RINGGROW"
+group = "lifecycle"
+name = "without the registration window the guest dies at the first ring growth (Xid 32)"
+source = [
+  "commit 632f5c03d (perf-lifecycle S3: mode 1 crash, Xid 32 at the first ring growth)",
+  "commit 28a0ee9c9 (scan also while a FIFO_UPDATE_CHANNEL_INFO registration is pending)",
+]
+symptom = "KF3_SCAN_OFF_AFTER_5080=1 broke the guest at the first ring growth."
+root_cause = "MEASURED: the trigger segment must be scanned and published as one staged copy; mode 1 skipped it."
+root_cause_label = "MEASURED"
+expected = "Ten thousand registration cycles with ring growth never stick and never lose an entry; the registration cycle with a ring switch is clean in every interleaving."
+tests = [
+  "kf-chan:user_lifecycle_props:b_ten_thousand_cycles_with_ring_growth_never_stick_and_never_lose_an_entry",
+  "kf-chan:user_lifecycle_model:lazy_the_registration_cycle_with_a_ring_switch_is_clean_in_every_interleaving",
+  "kf-chan:user_lifecycle_model:m1_always_scan_with_a_registration_and_a_ring_switch_still_relays_everything_in_order",
+]
+hardware_gate = ""
+status = "pinned"
+
+[[entry]]
+id = "LIFE-LAZYREG"
+group = "lifecycle"
+name = "a lagging PBDMA must still see every consumed entry reach the guest's GP_GET (lazy observe)"
+source = [
+  "docs/design/V3_USER_RING_LIFECYCLE_20261016.md lazy section",
+  "traces/lazy_prod_20261017",
+]
+symptom = "Risk statement of lazy observe: stale GP_GET delays the guest's ring space."
+root_cause = "MEASURED in the props: bounded lag (at most the interval)."
+root_cause_label = "MEASURED"
+expected = "Every consumed entry reaches the guest's GP_GET within the interval even with a lagging PBDMA."
+tests = [
+  "kf-chan:user_lifecycle_props:lazy_every_consumed_entry_reaches_the_guests_gp_get_even_with_a_lagging_pbdma",
+  "kf-chan:user_lazy_turn:b_the_guests_gp_get_write_back_lags_by_at_most_the_interval",
+]
+hardware_gate = ""
+status = "pinned"
+
+[[entry]]
+id = "DISP-VBLANK"
+group = "display"
+name = "Minecraft / OpenGL 300 s vsync hang: frozen GSP-client vblank counter ('Unable to communicate with the display driver, error 2')"
+source = [
+  "docs/STATUS_AND_HANDOFF.md:1095",
+  "commit d86fea1f (fixed), traces/win11_opengl_20261014",
+]
+symptom = "Minecraft with vsync, kf_glvsync --swap 1: hang for 300 s."
+root_cause = "MEASURED: kHeadVblankCount[head] was frozen in the MAP_SHARED_DATA page; fixed by keeping it live. kf_glvsync --swap 1 -> 60 fps, Minecraft vsync on loads."
+root_cause_label = "MEASURED"
+expected = "The MAP_SHARED_DATA page states the live vblank count; flips complete at the next vblank."
+tests = [
+  "kf-disp:lib:map_shared_data_states_the_vblank_count_page",
+  "kf-disp:lib:a_non_tearing_flip_waits_for_vblank_and_its_acquire",
+]
+hardware_gate = "scripts/bench/windows/windows_broker.sh + scripts/bench/windows/regress_matrix.sh : kf_glvsync --swap 1 reaches 60 fps over 60 s; Minecraft with vsync loads a world"
+status = "pinned"
+
+[[entry]]
+id = "DISP-PARKED"
+group = "display"
+name = "guest flips parked to bound the display rate / overlay UPDATE parked only for its vblank (playback stall, 2 s driver reset)"
+source = [
+  "docs/OWNER_RULINGS.md:1289 (AK)",
+  "commit 17eb8b2f3",
+  "commit a34d30032",
+  "commit 4c1c04fea",
+]
+symptom = "Guest silent ~2 s with VSync pending, then a display driver reset; overlay re-enable stalls."
+root_cause = "MEASURED (Linux plane oracle reproduced the overlay stall; fixed in the engine: an UPDATE naming a channel parked only for its vblank joins the latch group)."
+root_cause_label = "MEASURED"
+expected = "Guest flips are never parked to bound the rate; a vblank/acquire-parked update is not available for interlock pairing; copies never exceed vblanks."
+tests = [
+  "kf-disp:lib:an_update_naming_a_channel_parked_only_for_its_vblank_waits_for_that_channels_next_update",
+  "kf-disp:lib:lockstep_exhaustive_a_flood_cannot_make_copies_exceed_vblanks",
+  "kf-qemu:lib:empty_vblanks_raise_now_merged_ticks_raise_once_and_a_stuck_copy_is_capped",
+]
+hardware_gate = "Linux plane oracle (docs/design/V3_DISPLAY_PACING_20261017.md lane) and Windows hold: 0 flip-completion timeouts over 15 min"
+status = "pinned"
+
+[[entry]]
+id = "HOST-KCOMPACTD"
+group = "host"
+name = "host memory compaction multiplies VM exits (kcompactd0 TLB-shootdown storm, ~540k exits/s, ~10 s guest stall)"
+source = [
+  "docs/design/V3_FOUND_IN_PRODUCTION.md D",
+  "memory project_freeze_hunt_20261020 (compaction_proactiveness=0 + THP defrag never applied)",
+  "host path /data/claude-stall10s-20261019 (not readable from the dev box)",
+]
+symptom = "A guest stall of about 10 s with kcompactd0 busy on the host and about 540k VM exits/s (coordinator's figures, not re-measured)."
+root_cause = "INFERRED (standard Linux behaviour: page migration flushes TLBs on the CPUs that run vCPUs). HOST CONFIGURATION, not code; no unit test can pin it."
+root_cause_label = "INFERRED"
+expected = "Every bench evidence directory records vm.compaction_proactiveness, THP defrag and kcompactd0 CPU share; a lane fails on a nonzero kcompactd share."
+tests = []
+hardware_gate = "HOST GATE: scripts/bench/host_preflight.sh (proposed extension, not built) records the sysctls (vm.compaction_proactiveness=0, /sys/kernel/mm/transparent_hugepage/defrag=never) and the lane fails if kcompactd0 CPU share > 0 during the lane"
+status = "hw-gated"
+
+[[entry]]
+id = "HOST-USERD-SYSMEM"
+group = "host"
+name = "USERD in guest system memory: IOVA does not fit the 40-bit USERD pointer; host RM refuses a Passthrough twin (Windows)"
+source = [
+  "docs/design/V3_H5_USERD_DMA_PATCH.md:0",
+  "docs/design/V3_USERD_RELAY.md",
+  "memory project_host_patch_tier_20261010",
+  "commit 100c020b9 (15/15 sysmem USERD births refused, IOVAs 47-bit)",
+]
+symptom = "Windows Passthrough birth refused on sysmem USERD; the stock fallback is the USERD relay (cost: TDR windows, Xid 31 on twins in earlier runs)."
+root_cause = "MEASURED (kf-userd-iova spike: 15/15 births refused, IOVAs 47-bit) + CODE READ (kchannelIsUserdAddrSizeValid_GV100/_GA100, 40 bits)."
+root_cause_label = "MEASURED"
+expected = "Stock install keeps working through the USERD relay; the optional patched host maps USERD sysmem under 40 bits (the only Passthrough host-owned exception), and the field is ABSENT from stock code."
+tests = [
+  "kf-qemu:lib:resolved_userd_owner_requires_exact_channel_incarnation",
+  "kf-qemu:lib:topology_contention_retries_but_replacement_never_revives_old_userd",
+]
+hardware_gate = "Patched-host lane (V3_H5_USERD_DMA_PATCH.md, build-only verified, NOT loaded): Windows twin with sysmem USERD births Passthrough, 0 Xid; stock host: USERD relay path 0 Xid in scripts/bench/windows/windows_broker.sh + scripts/bench/windows/regress_matrix.sh"
+status = "hw-gated"
+
+[[entry]]
+id = "HOST-S3"
+group = "host"
+name = "Win11 'crash' after idle = S3 sleep + failed wake (GSP SR-resume unbuilt, wake reset drops state)"
+source = [
+  "memory project_s3_resume_20261014",
+  "docs/design/V3_S3_RESUME.md",
+  "traces/linux_s3_resume_20261014",
+]
+symptom = "Black screen with all vCPUs busy after system_wakeup; guest 'kgspBootstrap_TU102: Failed to boot GSP' then Xid 119 (Linux repro)."
+root_cause = "MEASURED (Linux repro, ogkm 580.159.04): SR_RESUME NV_ERR_NOT_READY; kf-gsp resume S6-S8 were unbuilt at the time. Resume unit tests exist now; Win11 retest still owed."
+root_cause_label = "MEASURED"
+expected = "A PM-suspended GSP life survives the wake reset and resumes without a publish; three suspend/resume cycles keep one stream."
+tests = [
+  "kf-gsp:lib:a_pm_suspended_life_survives_the_wake_reset_and_resumes_without_a_publish",
+  "kf-gsp:lib:three_suspend_resume_cycles_keep_one_stream",
+  "kf-gsp:lib:a_resume_without_a_wake_reset_restores_the_binding_too",
+]
+hardware_gate = "desktop_s3.sh (branch claude/s3-resume-20261014, not on this head): S3_CYCLES=3 each with ssh, nvidia-smi, glxgears frames, 0 Xid; then Win11 idle sleep + wake x3"
+status = "pinned"
+
+[[entry]]
+id = "HOST-DEVRESET"
+group = "host"
+name = "device model has no reset: guest reboot / FLR / GSP life cycle leave Rust-side state alive (stale queue binding, held replies, preempt_done)"
+source = [
+  "docs/design/V3_COMPLETION_AUDIT.md item 5",
+  "docs/design/V3_DEVICE_RESET.md",
+  "memory project_device_reset_20261013",
+]
+symptom = "bugcheck 0x116 -> reboot=reset inside the same QEMU: GSP phase stays Running with the dead life's binding (PeerWritePtrOutOfRange, then Code 43)."
+root_cause = "CODE READ + MEASURED (run 102 tail); reset branch implemented 2026-10-13 (c9ac4e77)."
+root_cause_label = "CODE READ"
+expected = "A reset returns every plane to the fresh tree; an old latch never fires in the next life; queued walks are dropped and the in-flight one lands."
+tests = [
+  "kf-trap:lib:a_reset_tree_is_the_fresh_tree_and_an_old_latch_never_fires_in_the_next_life",
+  "kf-trap:lib:a_reset_port_reads_idle_and_a_late_completion_of_the_old_request_is_harmless",
+  "kf-mem:lib:a_reset_drops_queued_walks_lets_the_one_in_flight_land_and_reslots_the_bar_object",
+]
+hardware_gate = "Windows reboot=reset after a forced bugcheck and Linux driver unload/reload: second life reaches the desktop / nvidia-smi with 0 stale-queue errors"
+status = "pinned"
+
+[[entry]]
+id = "HOST-NOCE"
+group = "host"
+name = "legal first submission on a kernel copy-engine ring refused (NoCeObject) -> channel DEAD -> TDR recovery (run 3017)"
+source = [
+  "docs/design/V3_FOUND_IN_PRODUCTION.md C",
+  "branch origin/claude/ce2-kernel-ring-20261019 (4085b0851, head 95e23df77)",
+]
+symptom = "Token 0x806 (0xc1d00019:0xff040004, COPY2): GP entry 34 SET_SEMAPHORE + LAUNCH_DMA on subchannel 4 with no SET_OBJECT, refused NoCeObject { subch: 4, method: 576 }, channel DEAD during the guest's TDR recovery."
+root_cause = "MEASURED (Windows run 3017): hardware subchannels 0-4 are fixed to the channel's engine and need no SET_OBJECT; the T-mode decoder required a guest binding."
+root_cause_label = "MEASURED"
+expected = "A kernel CE ring's first CE method is decoded against the ring's own host CE class (derived, never from guest bytes); user-tier and non-CE channels never gain it."
+tests = []
+hardware_gate = "scripts/bench/windows/windows_broker.sh + scripts/bench/windows/regress_matrix.sh (Win11 TDR-recovery lane, run 3017 recipe): no NoCeObject refusal, token 0x806 not DEAD"
+status = "open"
+pending_branch = "origin/claude/ce2-kernel-ring-20261019: crates/kf-chan/src/tmode_ce_tests.rs the_measured_run3017_segment_is_decoded_against_the_rings_own_ce_class, a_user_tier_channel_never_gains_it (ce_implicit.rs); fix not on this head"
+
+[[entry]]
+id = "HOST-E5"
+group = "host"
+name = "NVDEC kernel channel refused as a copy-engine channel (Edge/YouTube TDR, run 2990)"
+source = [
+  "docs/design/V3_FOUND_IN_PRODUCTION.md E5",
+  "commit 1c503f87e",
+  "docs/STATUS_AND_HANDOFF.md:1078",
+]
+symptom = "Edge/YouTube: NoCeObject { subch: 4, method: 576 } on 0xc1d00018:0xff040003 -> DEAD -> TDR."
+root_cause = "MEASURED (run 2990 0c5fedff): the video runlist has no copy engine."
+root_cause_label = "MEASURED"
+expected = "A VIDEO tier decodes the measured NVDEC segment with method space derived from NVIDIA's public class headers; hostile video words are refused by name."
+tests = [
+  "kf-chan:lib:the_measured_nvdec_segment_is_refused_without_the_video_tier",
+  "kf-chan:lib:the_measured_nvdec_segment_is_admitted_and_bound_through_the_windows",
+  "kf-chan:lib:hostile_video_words_are_refused_by_name",
+  "kf-chan:lib:a_video_semaphore_outside_the_vms_rows_is_refused_at_bind",
+  "kf-chan:lib:every_derived_video_class_has_the_semaphore_rows_the_tier_needs",
+]
+hardware_gate = "scripts/bench/windows/windows_broker.sh + scripts/bench/windows/regress_matrix.sh : Edge + YouTube Shorts 10 min, 0 TDR (run1 efdaebe49: 0 Xid, 0 TDR)"
+status = "pinned"
+
+[[entry]]
+id = "HOST-GSSROW"
+group = "host"
+name = "0x20808162 GA106 byte served to every die is wrong on the AD104 at 595.91.07 (captured per-die constant)"
+source = [
+  "commit 95911226f",
+  "memory project_constants_night_20261014",
+  "CLAUDE.md rule: derive, never capture",
+]
+symptom = "A captured constant from one die served to others (host answers 00 where GA106 had 01)."
+root_cause = "MEASURED unprivileged on the host: GA106 byte 01 vs AD104 answer 00."
+root_cause_label = "MEASURED"
+expected = "Per-die facts come from the host first; an unknown GSS-legacy control refuses by name."
+tests = [
+  "kf-rm:gss_legacy_answer:an_unknown_gss_legacy_control_refuses_by_name",
+  "kf-rm:gss_native:a_gss_legacy_subdevice_control_is_forwarded_and_the_hosts_answer_reaches_the_guest",
+]
+hardware_gate = "scripts/bench/v3_gates.sh on a second die family (AD104 vs GA106): the host-first row equals the host's unprivileged answer"
+status = "pinned"
+
+[[entry]]
+id = "HOST-PAGINGLOST"
+group = "host"
+name = "Windows paging-node (copy engine) packets never complete until the 30 s TDR"
+source = [
+  "memory project_windows_stall_findings_20261009 (run 232, ETW)",
+  "docs/design/V3_COMPLETION_AUDIT.md section 0-2",
+  "memory project_freeze_hunt_20261020",
+]
+symptom = "3 packets from t=108.4 s and 11 from t=119.7 s never complete until the TDR recovery completes all 14 in the same ms; scheduler silent 30.0 s; NVDisplay.Container waits in VidSchSuspendAdapter."
+root_cause = "UNKNOWN. Candidates (all INFERRED/CODE READ): Translated ring dead (RELAY-TRANSLATED-DEAD), CPU_INTR shadow race (RELAY-INTR-SHADOW), non-stall edge unarmed (RELAY-NSI-UNARMED), preempt 139 drop (RELAY-PREEMPT139), uncleared invalidate (VA-ARMED-FOREVER)."
+root_cause_label = "UNKNOWN"
+expected = "Every paging-node packet completes within 2 s of submission in a 15 min Windows hold; no Event 153."
+tests = []
+hardware_gate = "scripts/bench/windows/windows_broker.sh + scripts/bench/windows/regress_matrix.sh with ETW (scripts/bench/windows/dxg_etw_arm.ps1 / dxg_sched_unfinished.py): zero unfinished DXGKETW_CLIENT_PAGING_BUFFER packets older than 2 s"
+status = "open"
+
+[[entry]]
+id = "HOST-MCJAVA-TDR"
+group = "host"
+name = "Minecraft Java fps decays 57 -> 0 over ~10 s before nvlddmkm 153 (run 3017)"
+source = [
+  "memory project_profiler_stalls_20261019",
+  "commit 0e24a663b (Minecraft TDR bisect)",
+]
+symptom = "fps decayed over ~10 s BEFORE the TDR; disk idle; REFUSED/absence counts equal production run 3011."
+root_cause = "UNKNOWN (storage ruled out; K1 profiler owed)."
+root_cause_label = "UNKNOWN"
+expected = "Minecraft Java survives a 15 min in-world session with no fps collapse and no Event 153."
+tests = []
+hardware_gate = "Minecraft A/B (old disk vs production 0452613b) with the -prof binary (lane K1, codex/kf-prof-20261019) under scripts/bench/windows/windows_broker.sh + scripts/bench/windows/regress_matrix.sh: no fps collapse > 2 s, 0 Event 153"
+status = "open"
+
+[[entry]]
+id = "HOST-IDLEPBDMA"
+group = "host"
+name = "idle PBDMA with pending entries (run 3418) and GPU scheduling of host TSGs (freeze hunt open list)"
+source = [
+  "memory project_freeze_hunt_20261020",
+  "branch claude/user-stall-diag-20261020 (KF3_DIAG_USER_STALL)",
+]
+symptom = "Seen once: a stalled client's PBDMA idle with pending entries in the stall diag block."
+root_cause = "UNKNOWN. Open hypotheses: GPU scheduling of host TSGs (one per guest ctx group); needs a bare-metal/VFIO baseline for Heaven+Heaven (impossible while the host desktop runs on the NVIDIA GPU)."
+root_cause_label = "UNKNOWN"
+expected = "No client of a two-client run is starved for >= 1 s; if one is, the stall diag shows whether PBDMA is idle with entries pending."
+tests = []
+hardware_gate = "scripts/bench/baton (branch claude/baton-pointer-20261020: session3.sh + guest_driver.sh, plain pair 120 s, KF3_DEBUG_FORCE_MIGRATABLE=1 KF3_DIAG_PROGRESS=1000, n>=10 ABBA, one box) : no client gap >= 1 s, no PROGRESS_STRAND line, USER_RING_LOOP SUMMARY backstop_found_work=0 and timeouts_with_work=0 plus KF3_DIAG_USER_STALL=1 stall block: GET == PUT or PBDMA busy at every stall"
+status = "open"
+
+[[entry]]
+id = "HOST-XID32APPS"
+group = "host"
+name = "Windows apps die with host Xid 32 / PBDMA fault, channel 0x4a intr 00800000 (Valley D3D11/GL, nbody GL, GravityMark GL, FurMark GL intermittent)"
+source = [
+  "docs/design/V3_FEATURE_GAPS.md APP-valley_*, APP-nbody_demo_gl, APP-gravitymark_gl, APP-furmark_gl_bench",
+]
+symptom = "TIMEOUT at supervisor deadline, one GSP cycle, host Xid 32 channel 0x4a intr 00800000; stock 580.88 PASS."
+root_cause = "UNKNOWN: offending method unmeasured; same raw fault code, common cause not proven."
+root_cause_label = "UNKNOWN"
+expected = "The Windows app matrix runs the OpenGL/D3D11 benchmark apps without a host Xid 32."
+tests = []
+hardware_gate = "scripts/bench/windows/regress_matrix.sh (appmatrix apps.json: valley_d3d11, valley_opengl, nbody_demo_gl, gravitymark_gl): PASS, host journal 0 Xid 32"
+status = "open"
+
+[[entry]]
+id = "PROC-STOPFLAG"
+group = "process"
+name = "two agents / one stop flag: an agent's cleanup killed another agent's (or the owner's) VM"
+source = [
+  "memory feedback_concurrent_kayfabe_vm_ok",
+  "memory project_freeze_hunt_20261020 (owner VM stop procedure, /tmp/kf-owner-playing)",
+  "scripts/bench/box/README.md",
+]
+symptom = "A run stopped by another agent's stop script; the owner's instance killed or restarted."
+root_cause = "PROCESS RULE (not code): a shared stop flag has no owner identity. Details of the incident are not recorded in the repo (UNKNOWN beyond the memory rule)."
+root_cause_label = "INFERRED"
+expected = "A script stops only the PIDs it started (own ids/own PIDs); the owner's instance is never killed; the owner-playing flag is checked before any VM restart."
+tests = []
+hardware_gate = "PROCESS GATE: scripts/bench/box/README.md (teardown by own ids only) and the baton session3.sh stop path: kill list == pids recorded by the same script start marker"
+status = "hw-gated"
+
+[[entry]]
+id = "PROC-WORKTREE"
+group = "process"
+name = "parallel agents sharing one checkout contaminated a commit"
+source = [
+  "memory feedback_agent_worktrees",
+]
+symptom = "A commit contained another agent's uncommitted files."
+root_cause = "PROCESS RULE (not code): shared working tree."
+root_cause_label = "INFERRED"
+expected = "One git worktree per parallel agent; never bare git stash in a shared repo."
+tests = []
+hardware_gate = "PROCESS GATE: coordinator launches every agent with isolation: worktree; git status clean check before commit"
+status = "hw-gated"
+
+[[entry]]
+id = "PROC-INFERENCE"
+group = "process"
+name = "an inference written as evidence ('the 24 watchdog assertions never change, so the walls are irrelevant')"
+source = [
+  "CLAUDE.md (Working rules: every hypothesis states its falsifier)",
+]
+symptom = "A week lost: the journal held exactly 24 records so it could not change; the walls were the abort points."
+root_cause = "PROCESS RULE (not code)."
+root_cause_label = "MEASURED"
+expected = "Every hypothesis states its falsifier before the run; MEASURED / CODE READ / INFERRED / UNKNOWN stay apart in every doc."
+tests = []
+hardware_gate = "PROCESS GATE: doc review checklist (docs/design/V3_FOUND_IN_PRODUCTION.md section 3) and scripts/claim_ledger.py claim-ledger gate"
+status = "hw-gated"
+
+[[entry]]
+id = "PROC-KILLEDJOB"
+group = "process"
+name = "a killed job and a running job look the same when only output is checked; bench claims without a source revision"
+source = [
+  "CLAUDE.md (Bench traps; Verification)",
+]
+symptom = "A truncated or killed run read as a pass or as still running."
+root_cause = "PROCESS RULE (not code)."
+root_cause_label = "INFERRED"
+expected = "Every run writes a start marker and an exit line, carries its source revision (kf3-bins/<rev>/), and is checked for a live process."
+tests = []
+hardware_gate = "PROCESS GATE: scripts/bench/host_preflight.sh terminator line + scripts/bench/assert_boot_evidence.sh"
+status = "hw-gated"
+
+[[entry]]
+id = "HOST-INITRACE"
+group = "host"
+name = "adapter-init flake: a Translated channel born over a stale USERD slot read an earlier channel's GP_PUT as queued work"
+source = [
+  "commit dfd4cab25 (fix)",
+  "commit 01d5583a0 (root cause measured)",
+  "docs/design/THE_TRANSLATED_PLANE.md section 7 item 3",
+  "docs/design/V3_DRIVER_MATRIX.md section 6",
+]
+symptom = "Guest adapter init flaked: control dead 5/5 on GA102, fixed 20/20 (commit 01d5583a0)."
+root_cause = "MEASURED: the FB-resident USERD of a Translated (kernel) channel is the physical RM's to zero; kayfabe never did, and RM reuses slots, so the first pump fetched NOPs and authored GP_GET to the stale value."
+root_cause_label = "MEASURED"
+expected = "A Translated channel is born over a zeroed USERD, clearing exactly the channel's declared size and refusing by name the first store it cannot make."
+tests = [
+  "kf-chan:ring:zero_userd_clears_the_channel_size_and_no_further",
+]
+hardware_gate = "scripts/fastguest/fast_suite.sh with KF_CYCLES open/close mode (KF3_INJECT_STALE_USERD reproduces the stale slot): 30/30, no init flake over 20 boots"
+status = "pinned"
