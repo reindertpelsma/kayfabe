@@ -74,6 +74,37 @@ pub trait RelayLoop {
     fn peek(&self, why: Peek) -> bool;
 }
 
+/// What the worker loop does after a `worker_pass` that served `served` tokens (`docs/design/V3_USER_RING_EVENT_LOOP_20261014.md`
+/// section 10). The decision is a pure function so that the fairness model drives THE SAME code the loop runs.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum AfterPass {
+    /// Run the next pass at once.
+    Continue,
+    /// Look before the next pass: poll the epoll set with timeout 0 (engine events, completions, the doorbell eventfd) and peek the
+    /// waiting relays, then run the next pass.
+    Look,
+    /// Nothing was served: spin, then park.
+    Idle,
+}
+
+/// The worker loop's per-iteration policy state.
+#[derive(Debug, Clone, Default, PartialEq, Eq, Hash)]
+pub struct LoopPolicy {
+    busy_passes: u32,
+}
+
+impl LoopPolicy {
+    /// What follows a pass that served `served` tokens.
+    pub fn after_pass(&mut self, served: usize) -> AfterPass {
+        if served > 0 {
+            AfterPass::Continue
+        } else {
+            self.busy_passes = 0;
+            AfterPass::Idle
+        }
+    }
+}
+
 /// No relays (the harness): the loop is the old one minus the timer-driven refresh.
 pub struct NoRelay;
 impl RelayLoop for NoRelay {
@@ -165,6 +196,7 @@ pub fn run_with_relay(
         (doorbell, event)
     };
     let mut scratch = Vec::with_capacity(SCAN_LIMIT);
+    let mut policy = LoopPolicy::default();
     let prof = stats.prof.load(Ordering::Relaxed);
     let mut busy_from = std::time::Instant::now();
     let mut after_timeout = false;
@@ -179,7 +211,10 @@ pub fn run_with_relay(
                 stats.timeouts_with_work.fetch_add(1, Ordering::Relaxed);
             }
             after_timeout = false;
-            continue;
+            match policy.after_pass(n) {
+                AfterPass::Continue | AfterPass::Idle => continue,
+                AfterPass::Look => continue,
+            }
         }
         after_timeout = false;
         // ★ The bounded SPIN: only while some relay waits for something that only a look can find,
@@ -255,5 +290,21 @@ pub fn run_with_relay(
             }
         }
         on_other(TICK_TAG);
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// Behaviour-neutral extraction (this commit): a pass that served anything runs the next one at once; one that served nothing
+    /// idles (spin, then park).
+    #[test]
+    fn a_pass_that_served_something_continues_and_an_empty_one_idles() {
+        let mut p = LoopPolicy::default();
+        for _ in 0..1000 {
+            assert_eq!(p.after_pass(3), AfterPass::Continue);
+        }
+        assert_eq!(p.after_pass(0), AfterPass::Idle);
     }
 }
