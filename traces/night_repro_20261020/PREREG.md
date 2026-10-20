@@ -65,3 +65,7 @@ and report G's actual lineage. FALSIFIER for diagnostic-only causal attribution:
 A and G differ in product source outside diagnostics (already found); do not
 attribute any A/G outcome difference solely to KF3_DIAG_USER_STALL. No product
 rebase or modification is performed by N1.
+
+## Coordinator H-VA priority, before H measurements
+
+H-VA: a refresh cleared without covering a changed page leaves stale GPU page-table state and can misdirect a semaphore release. Falsifier: the H independent-freeze rate is within the measured control spread. Compare C f8f9d1a5 with H 5c1a864d2, same profile without mirror flags, fresh boots, at least two runs each, interleaved. Keep DEVICE_LOST_TDR separate: a fast device-loss response does not establish improvement in independent freezes. Record superseded/overflow/ALL_PDB lines and report zero matches explicitly. Build the immutable H binary from the named source with two CPU jobs into a new private output; never replace a binary. C/H supersedes B/E in run priority. Pair screening proceeds while H builds.
