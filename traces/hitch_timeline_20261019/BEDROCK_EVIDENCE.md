@@ -1,7 +1,8 @@
 # Bedrock long-stall evidence and act interpretation
 
 STATUS: RESEARCH, 2026-10-19. Part A, read-only. No VM, guest channel, GPU or
-GPU-lock interaction. Recorder collection contract remains unresolved (STOP.md).
+GPU-lock interaction. Updated ownership: K1 supplies the single profiler;
+H1's importer awaits its concrete format (K1_IMPORT.md). STOP.md is historical.
 
 ## Evidence read
 

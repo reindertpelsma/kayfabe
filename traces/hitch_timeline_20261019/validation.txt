@@ -8,7 +8,7 @@ Initial analyzer after implementation: 20 passed, 0 failed.
 Coordinator additions 2/3: uptime/context 24 tests RED (24 errors), then 44 total passed.
 Long-act inventory: expected missing-module loader error before implementation; 14 tests now pass.
 Coordinator addition 4: 24 S8/reply tests before implementation, 2 failures + 15 errors; 26 now pass.
-Final Python suite: 84 passed, 0 failed (20 initial + 24 uptime/context + 14 long-act + 26 S8/reply).
+Python suite before consolidated update: 84 passed, 0 failed (20 initial + 24 uptime/context + 14 long-act + 26 S8/reply).
 Initial mutants A1/A2/A3: 2/2/3 killing tests (20-test suite).
 Uptime/context mutants U1/U2/C1/C2/C3/C4: 3/2/2/2/2/2 killing tests (44-test suite).
 Long-act mutants L1/L2/L3: 2/2/2 killing tests (14 long-act tests, total suite 58).
@@ -17,8 +17,24 @@ All 18 mutants restored; final suite passed. CLI smoke passed on synthetic calib
 S8 reply phases and a three-hour uptime anchor. This is not a hardware capture/recorder soak.
 Actual long-act tool exercised on read-only 3014/3015 printed-log snapshots: 12/9 long acts,
 5085/4239 timed lines, zero unparsed act lines; missing guest identity/mode/uptime remains UNKNOWN.
-Clippy: not run, no Rust source changed. Runtime instrumentation: not implemented.
+Clippy: not run, no Rust source changed. Runtime instrumentation: K1-owned; no separate H1 ring.
 Hardware: n=0. No VM, guest diagnostic channel, GPU or GPU lock touched.
 Cleanup: CPU build/test process exited. Own target directory remains (204 MiB).
 The execution safety check rejected its deletion: rm -f style commands are not permitted.
 The lane's stop/no-workaround rule was honored; no alternative deletion attempted.
+
+Consolidated update, 2026-10-20:
+S9 tests-only EXPECTED RED stage 42043ad08: 110 tests run, 30 expected errors
+(26 new test methods; subtests contribute additional errors). Existing 84 stay green.
+Implementation stage 6a05f515a: 31 S9 tests, final total 115 passed / 0 failed.
+Seven S9 mutants P1-P7: 9/6/3/2/3/2/2 distinct killing test methods; originals restored.
+All 25 cumulative mutants killed by >=2 tests; five mutation evidence files.
+CLI smoke: PASS synthetic guest QPC (10 MHz), large nonzero host anchor,
+1-us calibration error, ten-second S9 decline, 3-hour uptime anchor and separate S1 class.
+This is not a real TDR/ETW trace or a 3-hour recorder test.
+K1 origin checked read-only at 9b5f12f29 then d93d35a41; core GREEN,
+runtime/reader EXPECTED RED tests present, complete JSONL format/writer absent.
+Importer remains pending the concrete schema; no guessed prof.jsonl adapter added.
+Saved sampler read-only: 362 lines incl header, 02:09:04..02:15:04 clock labels;
+no run/monotonic identity, so not independently aligned to 3017 at 16:04 CEST.
+No new Rust build, VM/guest/GPU/lock access or cleanup workaround.

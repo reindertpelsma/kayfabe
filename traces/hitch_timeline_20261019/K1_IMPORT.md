@@ -5,10 +5,21 @@ STATUS: PENDING FORMAT, 2026-10-20. No runtime H1 recorder is authorized.
 CODE READ: read-only fetch of `codex/kf-prof-20261019`, pinned revision
 `9b5f12f292c7ede0867b2834d7be427eda15d5e1`, design
 `docs/design/V3_PROFILER_20261019.md`. The design explicitly calls wire v1 a
-proposal and K1 records its stage-2 stop. `crates/kf-prof/src/lib.rs` has core
+proposal and still describes an earlier stage-2 stop; the pinned commit has
+since made the bounded core GREEN. `crates/kf-prof/src/lib.rs` has core
 types, not a JSON writer/reader. No complete canonical JSONL object or fixture
 is published at this revision. `schema:1` alone is insufficient for an importer.
 H1 has not guessed a format or treated the mmap binary layout as JSON fields.
+
+CODE READ, second read-only fetch:
+`d93d35a4133f6dc050305f14d0320a64e2522da6` adds EXPECTED RED runtime/reader and
+clock-perimeter tests. `scripts/bench/prof/test_reader.py` has a proposed minimal
+aggregate fixture (`schema`, `start_ns`, `end_ns`, `threads`, `ledger`, `counters`)
+but no implementation or writer-generated fixture. The design document is
+unchanged. This partial fixture supplies neither individual event/phase encoding
+nor clock/session/loss/coverage semantics; it cannot yet satisfy H1 import.
+The core is no longer stopped; the missing format is an external dependency,
+not an assertion about K1's ability to progress.
 
 CODE READ (coordinator ownership): K1 supplies `prof.jsonl` / `prof.mmap`, one
 CLOCK_MONOTONIC clock, runtime hooks and collectors. H1 supplies offline analysis
