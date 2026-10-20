@@ -58,3 +58,17 @@ options: --pid, --log, --lowmem, --interval, --stuck-after S (2), --lazy-bound N
 6. A USERD that moves (ring growth, `FIFO_UPDATE_CHANNEL_INFO` switch) is not tracked; the log does not print
    the new address.
 7. The probe is racy by nature (two 4-byte loads of a live page); a one-sample difference means nothing.
+
+## Stuck private ring dump (`--dump-file`)
+
+When a private storage shows GPU `GP_GET != GP_PUT` for `--stuck-after` seconds the probe decodes it once per
+(storage, GET, PUT): the private USERD words (PUT/GET/REFERENCE/GET_HI/TOP_LEVEL_GET/GP_GET/GP_PUT, as last written
+back by the PBDMA), the private GPFIFO entries GET-2 .. PUT (fields as in `kf_abi::submit::gp_entry_decode`: address,
+length, LEVEL, SYNC_WAIT, FETCH, PRIV, control opcode), and, for entries that point into the storage itself (markers,
+witnesses, staged segments; the storage's GPU VA base is recovered from the marker entries' addresses), the
+decoded methods (SET_REFERENCE, NON_STALL_INTERRUPT, SEM_ADDR/PAYLOAD/EXECUTE with ACQUIRE/RELEASE/ACQ_*).
+`PB_GET` inside the segment of entry GET-1 means the PBDMA is mid-segment (blocked or still executing), not idle.
+A marker whose value is REFERENCE+1 means exactly that marker is unprocessed. Limits: entries that point at guest
+pushbuffers are NOT decoded (their GPU VA needs the guest's GPU page tables, whose root is not logged; the walk
+roots in the log did not translate the ring VA), semaphore values are therefore not read, and the USERD PB_GET
+is the PBDMA's last write-back, not a live register.

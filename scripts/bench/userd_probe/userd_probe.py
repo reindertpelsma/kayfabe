@@ -308,6 +308,131 @@ def read_priv(fd, addr):
     return w[0], get, put
 
 
+# ---- decoding of a stuck private ring (read-only) ------------------------------------------------------------------
+GP_OFFSET = 0xE0000
+WITNESS_OFF = GP_OFFSET + PRIV_ENTRIES * 8          # 0xe1000: the 4-byte host witness / marker area start
+MARKER_OFF = WITNESS_OFF + 0x10                     # cell for ring slot i: MARKER_OFF + 16 * i
+METHODS = {0x00: "SET_OBJECT", 0x20: "NON_STALL_INTERRUPT", 0x28: "MEM_OP_A", 0x2C: "MEM_OP_B", 0x30: "MEM_OP_C",
+           0x34: "MEM_OP_D", 0x50: "SET_REFERENCE", 0x5C: "SEM_ADDR_LO", 0x60: "SEM_ADDR_HI",
+           0x64: "SEM_PAYLOAD_LO", 0x68: "SEM_PAYLOAD_HI", 0x6C: "SEM_EXECUTE", 0x78: "WFI"}
+SEM_OPS = {0: "ACQUIRE", 1: "RELEASE", 2: "ACQ_STRICT_GEQ", 3: "ACQ_CIRC_GEQ", 4: "ACQ_AND", 5: "ACQ_NOR", 6: "REDUCTION"}
+USERD_NAMES = {0x40: "PUT", 0x44: "GET", 0x48: "REFERENCE", 0x4C: "PUT_HI", 0x58: "TOP_LEVEL_GET", 0x5C: "TOP_LEVEL_GET_HI",
+               0x60: "GET_HI", 0x88: "GP_GET", 0x8C: "GP_PUT"}
+
+
+def gp_decode(e):
+    e0, e1 = e & 0xFFFFFFFF, e >> 32
+    ln = ((e1 >> 10) & 0x1FFFFF) * 4
+    return {"va": (e0 & 0xFFFFFFFC) | ((e1 & 0xFF) << 32), "len": ln, "level": (e1 >> 9) & 1, "sync_wait": (e1 >> 31) & 1,
+            "fetch": e0 & 1, "priv": (e1 >> 8) & 1, "opcode": e1 & 0xFF, "operand": e0, "raw": e}
+
+
+def pb_decode(words):
+    """Minimal pushbuffer decoder; returns (list of text, list of semaphore ops)."""
+    out, sems, i = [], [], 0
+    sem = {"lo": 0, "hi": 0, "plo": 0, "phi": 0}
+    def method(m, d):
+        name = METHODS.get(m, "m%#x" % m)
+        t = "%s=%#x" % (name, d)
+        if m == 0x5C: sem["lo"] = d
+        elif m == 0x60: sem["hi"] = d
+        elif m == 0x64: sem["plo"] = d
+        elif m == 0x68: sem["phi"] = d
+        elif m == 0x6C:
+            op = d & 7
+            va = (sem["hi"] << 32) | sem["lo"]
+            pay = (sem["phi"] << 32) | sem["plo"] if d & (1 << 24) else sem["plo"]
+            t = "SEM_EXECUTE=%#x[%s%s%s va=%#x payload=%#x]" % (d, SEM_OPS.get(op, op), " +WFI" if d & (1 << 20) else "",
+                                                               " 64bit" if d & (1 << 24) else "", va, pay)
+            sems.append((SEM_OPS.get(op, str(op)), va, pay))
+        return t
+    while i < len(words):
+        w = words[i]
+        i += 1
+        op, cnt, sub, m = w >> 29, (w >> 16) & 0x1FFF, (w >> 13) & 7, (w & 0xFFF) * 4
+        if w == 0:
+            out.append("NOP")
+        elif op in (1, 3, 5):
+            for k in range(cnt):
+                if i >= len(words):
+                    out.append("...truncated"); break
+                mm = m + 4 * k if op == 1 else (m if op == 3 else (m if k == 0 else m + 4))
+                out.append("s%d.%s" % (sub, method(mm, words[i])))
+                i += 1
+        elif op == 4:
+            out.append("s%d.%s" % (sub, method(m, cnt)))
+        else:
+            out.append("hdr%#x?" % w)
+    return out, sems
+
+
+def dump_stuck(fd, pr, tag):
+    """Decode the private ring of a storage whose GPU GET < PUT. Read-only. Returns a list of text lines."""
+    L = []
+    try:
+        ud = os.pread(fd, 0x200, pr.addr + STORE_USERD)
+        gp = os.pread(fd, PRIV_ENTRIES * 8, pr.addr + GP_OFFSET)
+    except OSError as e:
+        return [f"  dump failed: {e}"]
+    uw = struct.unpack("<128I", ud)
+    names = ["%s=%#x" % (USERD_NAMES.get(4 * i, "+%#x" % (4 * i)), v) for i, v in enumerate(uw) if v]
+    L.append(f"  [{tag}] private USERD @{pr.addr + STORE_USERD:#x} nonzero words: " + " ".join(names))
+    ents = struct.unpack("<%dQ" % PRIV_ENTRIES, gp)
+    # derive the storage's GPU VA base from marker (len 16, LEVEL=1) and witness (len 4, LEVEL=1) entries
+    votes = {}
+    for i, e in enumerate(ents):
+        d = gp_decode(e)
+        if d["level"] and d["len"] == 16 and d["va"]:
+            votes[d["va"] - MARKER_OFF - 16 * i] = votes.get(d["va"] - MARKER_OFF - 16 * i, 0) + 1
+        elif d["level"] and d["len"] == 4 and d["va"]:
+            votes[d["va"] - WITNESS_OFF] = votes.get(d["va"] - WITNESS_OFF, 0) + 1
+    base = max(votes, key=votes.get) if votes else None
+    L.append(f"  storage GPU VA base (from marker entries) = {base:#x} ({votes[base]} votes)" if base is not None
+             else "  storage GPU VA base unknown (no marker entries in the ring)")
+    get, put = pr.get, pr.put
+    pbget = (uw[0x60 // 4] << 32) | uw[0x44 // 4]
+    tlg = (uw[0x5C // 4] << 32) | uw[0x58 // 4]
+    L.append(f"  GPU GP_GET={get} GP_PUT={put} REFERENCE={uw[0x48 // 4]:#x} PB_GET={pbget:#x} TOP_LEVEL_GET={tlg:#x} "
+             f"(the USERD copy is only what the PBDMA last wrote back)")
+    idx = [(get - 2) % PRIV_ENTRIES, (get - 1) % PRIV_ENTRIES] + [(get + k) % PRIV_ENTRIES for k in range((put - get) % PRIV_ENTRIES + 1)]
+    for n, i in enumerate(idx):
+        e = ents[i]
+        d = gp_decode(e)
+        role = "before GET" if n < 2 else ("STUCK" if i != put else "at PUT (not yet published)")
+        kind, body = "?", ""
+        if d["len"] == 0:
+            kind = "sync-wait?" if d["sync_wait"] else "control(opcode %d)" % d["opcode"]
+        elif d["sync_wait"]:
+            kind = "SYNC_WAIT entry"
+        if d["len"]:
+            inside = base is not None and base <= d["va"] < base + STORE_USERD
+            if inside:
+                off = d["va"] - base
+                nbytes = min(d["len"], 0x100)
+                try:
+                    raw = os.pread(fd, nbytes, pr.addr + off)
+                    words = list(struct.unpack("<%dI" % (len(raw) // 4), raw))
+                except OSError:
+                    words = []
+                dec, sems = pb_decode(words)
+                if sems:
+                    kind = "+".join(sorted({"semaphore " + x[0] for x in sems}))
+                    body = " ; ".join(dec)
+                elif any("SET_REFERENCE" in x for x in dec):
+                    kind, body = "marker(in storage)", " ; ".join(dec)
+                else:
+                    kind, body = "in-storage segment", " ; ".join(dec)
+                if d["len"] > 0x100:
+                    body += " ...(+%d bytes)" % (d["len"] - 0x100)
+            else:
+                kind = "guest pushbuffer (guest GPU VA, unresolved)" + (" LEVEL=SUBROUTINE" if d["level"] else "")
+                if pbget and d["va"] <= pbget < d["va"] + d["len"]:
+                    kind += " <== PB_GET inside this segment (PBDMA is mid-segment)"
+        L.append(f"  ring[{i}] {role}: raw={e:#018x} va={d['va']:#x} len={d['len']}B sync_wait={d['sync_wait']} level={d['level']} "
+                 f"fetch={d['fetch']} priv={d['priv']} -> {kind} {body}")
+    return L
+
+
 def fmt_age(t, now):
     return "?" if t is None else f"{now - t:.0f}s"
 
@@ -328,6 +453,7 @@ def main():
     ap.add_argument("--lazy-bound", type=int, default=32,
                     help="a frozen guest PUT!=GET gap up to this many entries is 'lazy?' (only meaningful with "
                          "KF3_LAZY_OBSERVE on), larger gaps STUCK")
+    ap.add_argument("--dump-file", help="append the decoded private ring of every stuck storage here")
     ap.add_argument("--no-real", action="store_true", help="do not read the private (GPU) USERDs")
     a = ap.parse_args()
 
@@ -359,6 +485,8 @@ def main():
     if tsv and tsv.tell() == 0:
         tsv.write("kind\tiso\tepoch\tchannel\tpid\thost\ttoken\tgpa\tput\tget\tdelta\tbehind_s\tstatic_s\tact\tflag"
                   "\treal_get\treal_put\treal_delta\treal_static_s\tmatch_j\n")
+    dumped = set()
+    dumpf = open(a.dump_file, "a") if a.dump_file else None
     privs = {}                      # addr -> Priv
     co = {}                         # (chan key, addr) -> decayed co-change count
     gn = {}                         # chan key -> decayed change count
@@ -539,6 +667,22 @@ def main():
                       f"{'' if rg is None else rg:>8} {'' if rp is None else rp:>8} {'' if rs is None else '%.1fs' % rs:>7} "
                       f"{'' if j is None else '%.2f' % j:>4} {actcol:>10} {flag}")
             for pr in real_behind:
+                dk = (pr.addr, pr.get, pr.put)
+                if dk not in dumped:
+                    dumped.add(dk)
+                    txt = [f"=== {iso} STUCK private ring {pr.addr:#x} GET={pr.get} PUT={pr.put}"
+                           f" frozen {mono - pr.t_change:.1f}s (matched guest channel: {pr.chan})"]
+                    txt += dump_stuck(pfd, pr, iso)
+                    others = [f"{q.addr:#x}:GET={q.get}/PUT={q.put}" for q in privs.values()
+                              if q is not pr and q.get is not None and q.get != q.put]
+                    txt.append("  other private rings with GET != PUT right now: " + (", ".join(others) or "none"))
+                    gb = [f"{c.key}(host {c.host:#x}) put={c.put} get={c.get}" for c in live if c.put != c.get]
+                    txt.append("  guest slots with PUT != GET right now: " + ("; ".join(gb) or "none"))
+                    for ln in txt:
+                        print(ln)
+                    if dumpf:
+                        dumpf.write("\n".join(txt) + "\n")
+                        dumpf.flush()
                 print(f"    REAL-BEHIND private storage {pr.addr:#x}: GPU GET={pr.get} PUT={pr.put} frozen {mono - pr.t_change:.1f}s"
                       f"{'  (matched ' + pr.chan + ')' if pr.chan else ''}")
             for t, text in ev:
