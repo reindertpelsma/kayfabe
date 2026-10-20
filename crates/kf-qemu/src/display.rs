@@ -2086,7 +2086,34 @@ impl DisplayPlane {
                 tiers(kf_disp::capsderive::Tier::Measured),
                 d.unmeasured.len()
             );
-            d.page
+            let mut page = d.page;
+            // DIAGNOSTIC (bw-resume 2026-10-20, diag branch only, NEVER shipped): replace the
+            // derived page by a page file read from THIS box's own die (WORD <off> <val> lines),
+            // to test whether any caps word matters. Bounded: 1024 words, page offsets only.
+            if let Ok(path) = std::env::var("KF3_DIAG_CAPS_PAGE_FILE") {
+                if let Ok(text) = std::fs::read_to_string(&path) {
+                    let mut words = Vec::new();
+                    for l in text.lines().filter(|l| l.starts_with("WORD ")).take(1024) {
+                        let f: Vec<&str> = l.split_whitespace().collect();
+                        if f.len() == 3 {
+                            let off = u32::from_str_radix(f[1].trim_start_matches("0x"), 16);
+                            let val = u32::from_str_radix(f[2].trim_start_matches("0x"), 16);
+                            if let (Ok(o), Ok(v)) = (off, val) {
+                                if o < 0x1000 && o % 4 == 0 && v != 0 {
+                                    words.push((o, v));
+                                }
+                            }
+                        }
+                    }
+                    eprintln!(
+                        "kf3: display: DIAGNOSTIC caps page REPLACED from {path}: {} words (was {})",
+                        words.len(),
+                        page.words.len()
+                    );
+                    page.words = words;
+                }
+            }
+            page
         };
         let layout = Layout::from_regs(&regs)
             .ok_or("display=on: the instance-memory layout is not derived")?;
