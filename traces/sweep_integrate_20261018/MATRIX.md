@@ -1,22 +1,13 @@
-# Sweep matrix on candidate-5 integration
+# Sweep matrix
 
-STATUS: LIVE, 2026-10-20. The AD102 and GB202 leases are closed and API-absent. GB202 Linux580/595 raw30, CUDA4 and headless graphics pass; desktop fails and Windows initialization is unverified. AD102595 raw is FAIL29/30 (R19); Windows580 passes and Windows581 fails Code43. No family is complete.
+STATUS: LIVE, 2026-10-20 continuation task5. New stack starts048c28b9c on codex/sweep-blackwell-20261020. Current task rows and source limits are in ../sweep_continue_20261020/MATRIX.md. The rows below preserve the prior sweep, including its approved Ada broker follow-up; original evidence is on codex/sweep-integrate-20261018@0bbf3c55f. They are not a hardware acceptance of048c. Prior eight own leases remain absent; new task has no own rental yet.
 
-Blackwell closeout, falsifier results and remaining questions:
-`phase2_blackwell_56788212/FINAL.md`. All three own instance IDs were verified
-absent after the last box was destroyed at 2026-10-19 23:41:48 UTC. Own invoiced
-charges so far: 3.598 USD, not asserted final settlement; cap 25 / stop renting 20.
 
-MEASURED Phase1 accepted:14release crates3338/0/21,49mutants>=2kills,
-no C4/C5test removed. Candidate5 f8f9d1a5f is an ancestor. Runtime product is
-frozen24906bf33; subsequent commits are evidence-only and accepted product trees
-remain equal. Every historical PASS is STALE. Own56765201 destroyed after
-preflight; own56766467 AD102 destroyed/API absence20:44:59UTC before20:53deadline.
-Actual current host open595.91.07; guest580/595 are separate axes and no current
-host580 result is implied. Native AD102 gates9/9+gate10/USER12,raw30,Cuda4 PASS.
-AD104 CPU oracles pass; strict native page equality RED100words. Fresh AD102
-native read has99nonzero words and strict equality is also RED100words; neither
-establishes a cause. Evidence under phase2_ad102_56766467/. Host remains off-limits.
+Phase1:14release crates3338/0/21,49mutants with>=2killers; C4/C5 tests retained, candidate5f8f9d1a5f merged. The accepted product24906bf33 and rental0c87acda8 have identical Rust/QEMU/Cargo trees. Subsequent main commits record evidence; draftPR51/52/53 remain unmerged. Every pre-candidate4 PASS is STALE. The trusted host remains off-limits and untouched.
+
+Budget amendment for task5: NEW stretch15USD cap/12USD stop/5USD reserve, one box/max180min/timerfirst, hardteardown2026-10-21 04:30UTC. New own spend0 so far; start APIcredit29.987922USD (shared account, not exclusive attribution). Previous task's7.676USD observed charges and eight closures are retained in codex/sweep-integrate-20261018@0bbf3c55f and SWEEP.md; predecessor Claude charges are separate. Current ledger ../sweep_continue_20261020/owned_instances.json and COST.md.
+
+The first table preserves earlier measurements and original source revisions. Latest refreshed results follow below. A later pass on another box does not erase an earlier measured failure or establish a universal timing result. AD104 CPU oracles pass, but strict native caps equality remains RED100words; see AD104_PATH_AUDIT.md.
 
 | Die | Guest OS / actual driver build | Current source | Current result | Historical result, now STALE | Historical source / evidence |
 |---|---|---|---|---|---|
@@ -91,10 +82,29 @@ Public guest ABI for historical 580.88 is 580.65.06; for 581.51 it is
 
 MEASURED GA104580 R34 matched candidate-4 control0452613b5: PASS159s versus integrated e8553e6c timeout180s, n=1 each, fixed180s budget. Evidence phase2_ga104_56808180/c4_ce_control/. Subsequent Linux arms deferred for owner Windows priority.
 
-2026-10-20 paired Windows refresh: AD10256816419 and GB20256816449 at0c87acda802b18a610739e75f2b50049a9247067/P19 planned. Both native595 gates9/9+gate10/raw30/CUDA4 PASS; generic LTSC installation active, nested Windows suite UNRUN. Separate unmerged native-tracer FMC topic f09ee369f, draftPR52, CPU49/49 and unsigned Windows cross-build PASS; load/capture UNRUN.
+Latest paired refresh, completed2026-10-20. Native595 gates9/9+gate10/USER12/raw30/CUDA4 PASS on both boxes before guests. Windows LTSC2024 is nested under kayfabe on Linux. Blackwell was subsequently reimaged with unmodified windows-on-vast for the separate native reference; no native result is a kayfabe Windows PASS.
 
 | Refresh die | Guest actual build | Measured source / configuration | Result | Evidence |
 |---|---|---|---|---|
 | AD10256816419 | Windows580.88/32.0.15.8088 | `0c87acda8`, P19+RPC diagnostics, display/GOPon | PASS desktop/CUDA3/hardwareDX11+12/426.09s zero4101hold | `phase2_windows_ad102_56816419/windows580_pass/` |
 | GB20256816449 | SameWindowsbuild | `0c87acda8`, P19+RPC diagnostics, OFF/OFF/emptyROM | FAIL verifiedCode43;357RPCs/unload356 precleanup;noNV0073/CA70/CA7A;0System4101 | `phase2_windows_gb202_56816449/b1_off/` |
 | GB20256816449 | SameWindowsbuild | Same source+flags, ON/ON/signedROM | FAIL verifiedCode43;386RPCs/unload385 precleanup;CA70/CA7A present;0System4101 | `phase2_windows_gb202_56816449/b1_on/` |
+| AD10256816419 | Linux580.159.04 | `0c87acda8`, native595 | raw30/30 + CUDA4/4 + gfx5/5steps,10/10hashesPASS; brokerPASS at7f22d18df on new56829120 | `phase2_windows_ad102_56816419/linux/` |
+| AD10256816419 | Linux595.91.07 | `0c87acda8`, native595 | raw30/30 + CUDA4/4 + gfx5/5steps,10/10hashesPASS;1562raw-zeroHBwarnings; brokerPASS at7f22d18df on new56829120 | Same |
+| GB20256816449 native | Windows580.88 / GSP580.65.05 | reference e8883e231 + tracer8f9bd4e51, productN/A | Code0+forcedGSP CUDA3PASS; final3804cmd/3863status fromseq0,strictdecoders0/0loss; firstpartial retained | `phase2_windows_gb202_56816449/native_trace/` |
+
+Candidate NVDEC admission: draftPR53 aa8fdea9c, expectedRED340c12909/fixf71c1ce5e,1908releasePASS,5mutants each2killers,clippy0new; hardwareUNRUN. NativeCFB0 success supports a missing public policy row, not a complete Code43 cause. ON reports fourCA7A trace_result0allocations then tears down beforeCFB0; effective posted-result equality unavailable. TracerPR52 b9e246281 signed/loaded, complete capture uses existing nearby method4; added FMC runtime path NOTPROVED.
+
+Ada broker source note: raw/CUDA/headlessgfx above measured0c87acda8 on56816419; broker595/580 measured7f22d18df on56829120. Product trees are equal. Both actualdriver/Cinnamon/Xorg/NVIDIAgears and nonblank1920x1080 screenshots pass;0guestXid/flip,host5→5,n1each. Exact referencebadf2d707da47a625e0ce69172a84785d20f81b8 throughNVPV_DIR; actualruntimebroker current0017914, unchangedprep verified. Evidence phase2_ada_broker_followup_20261020/RESULT.md. GPU-free Blackwell first-order/status/size/quiet-event comparison and3falsifiers: blackwell_diff_20261020/RESULT.md.
+
+## Final bounded Blackwell follow-up56830105
+
+| Die / OS / driver | Product revision | Result | Evidence |
+|---|---|---|---|
+| AD102 Linux595.91.07 broker, host595 | `7f22d18df` | PASS actualNVIDIA/Cinnamon/gears/nonblank1920x1080; guestXid/flip0,host5→5,n1 | phase2_ada_broker_followup_20261020/broker595/ |
+| AD102 Linux580.159.04 broker, host595 | `7f22d18df` | PASS same criteria,n1; public pin verified/currentbroker | phase2_ada_broker_followup_20261020/broker580/ |
+| GB202 nativeLinux595.91.07 | `7f22d18df` | PASS SOUND/gates9+10/USER12/raw30/CUDA4 | phase2_blackwell_probe_56830105/native/ |
+| GB202 Windows580.88 OFF baseline | `7f22d18df`, P19 planned | UNRUN: disabled parent not ready by fixed04:04 latest-start; no product enable | phase2_blackwell_probe_56830105/probe_verdict.json |
+| GB202 Windows580.88 OFF PR53 candidate | `aa8fdea9c`, P19 planned, unmerged | UNRUN: no unmatched candidate after paired baseline missed cutoff | Same; preparation/candidate_scope.json |
+
+Only setup was measured on this lastlease: genericLTSC check exit0, both binaries built, actual disabled8088/oem7/GSP1 parent ready04:06:09; no product init/arm markers/RPC records. Original harness cleanstop, evidencepushed before destroy/APIabsence04:06:46. H-NVDEC-OFF falsifier remains untested. No deadline extension, extra lease, private reply or PR merge.
