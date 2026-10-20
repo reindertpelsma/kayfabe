@@ -1,3 +1,12 @@
+STATUS: GPU-FREE SCOPED IMPORT ACCEPTED / HARDWARE PENDING, 2026-10-20.
+
+MEASURED supersession: coordinator authorized the wrapper correction and
+resumption. Four wrapper tests pass. All six mutants were rerun and killed by
+4 / 6 / 10 / 6 / 2 / 2 tests; restored scoped run: 250 pass / 0 fail / 5 ignored
+(existing unit tests plus new caps integration and example; other integration
+targets wait for the full Stage 4 run). The old wrapper stop below is historical.
+The ordinary Linux page constructor matches candidate-5 source exactly.
+
 # C6 independent review: scoped derived display caps
 
 STATUS: REVIEWED DESIGN / UNCOMMITTED IMPLEMENTATION / VALIDATION STOPPED, 2026-10-20.

@@ -581,3 +581,25 @@ fn two_separate_gb205_measurements_do_not_authorize_590_or_610() {
         assert_ne!(other.page.word(0x00c), 0x102);
     }
 }
+
+/// The selected derivation authors a contiguous virtual output, without physical fuse guessing.
+#[test]
+fn derived_blackwell_outputs_each_have_one_independent_tile() {
+    let d = go(&BLACKWELL_GB20X, GB206, true, true, BRANCH);
+    let t = table();
+    let c = BLACKWELL_GB20X.classes.caps;
+    let word = d.page.word(t.v(c, "SYS_CAPC").unwrap());
+    for index in 0..t.v(c, "SYS_CAPC_TILE_EXISTS__SIZE_1").unwrap() {
+        assert_eq!(
+            kf_disp::class::get(word, t.fa(c, "SYS_CAPC_TILE_EXISTS", index).unwrap()),
+            u32::from(index < BLACKWELL_GB20X.heads)
+        );
+        assert_eq!(
+            kf_disp::class::get(
+                word,
+                t.fa(c, "SYS_CAPC_TILE_SUPPORT_MULTI_TILE", index).unwrap()
+            ),
+            0
+        );
+    }
+}

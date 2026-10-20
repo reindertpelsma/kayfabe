@@ -3,10 +3,66 @@
     "mutant": "die",
     "kills": 4,
     "tests": [
-      "an_unmeasured_die_gets_the_clean_page_and_the_notice_never_a_neighbours_row",
       "a_second_dies_row_is_served_to_that_die_only",
+      "an_unmeasured_die_gets_the_clean_page_and_the_notice_never_a_neighbours_row",
       "the_ad102_580_caps_word_has_its_own_native_measurement",
       "the_gb206_580_caps_word_requires_its_own_native_measurement"
+    ]
+  },
+  {
+    "mutant": "branch",
+    "kills": 6,
+    "tests": [
+      "an_unmeasured_die_gets_the_clean_page_and_the_notice_never_a_neighbours_row",
+      "an_ad102_measurement_does_not_authorize_an_unmeasured_guest_branch",
+      "the_ad102_580_caps_word_has_its_own_native_measurement",
+      "the_tu106_580_caps_word_has_its_own_native_measurement",
+      "the_gb206_580_caps_word_requires_its_own_native_measurement",
+      "two_separate_gb205_measurements_do_not_authorize_590_or_610"
+    ]
+  },
+  {
+    "mutant": "measured-word",
+    "kills": 10,
+    "tests": [
+      "an_ad102_measurement_does_not_authorize_an_unmeasured_guest_branch",
+      "a_second_dies_row_is_served_to_that_die_only",
+      "every_word_names_its_tier",
+      "the_decisive_words_are_in_the_page",
+      "the_ad102_580_caps_word_has_its_own_native_measurement",
+      "the_derived_ad104_page_is_the_page_bisection_run_f5_booted",
+      "the_gb206_580_caps_word_requires_its_own_native_measurement",
+      "the_tu106_580_caps_word_has_its_own_native_measurement",
+      "two_separate_gb205_measurements_do_not_authorize_590_or_610",
+      "the_derived_ad104_page_equals_the_measured_one_except_the_named_unclaimed_fields"
+    ]
+  },
+  {
+    "mutant": "layers",
+    "kills": 6,
+    "tests": [
+      "every_family_derives_a_page_at_the_caps_base_with_the_layer_model",
+      "every_word_names_its_tier",
+      "the_committed_family_rows_are_the_derivation",
+      "the_derived_ad104_page_is_the_page_bisection_run_f5_booted",
+      "the_decisive_words_are_in_the_page",
+      "the_derived_ad104_page_equals_the_measured_one_except_the_named_unclaimed_fields"
+    ]
+  },
+  {
+    "mutant": "provenance",
+    "kills": 2,
+    "tests": [
+      "a_measured_row_needs_a_measured_source",
+      "captured_or_missing_provenance_never_enters_the_shipped_measurement_type"
+    ]
+  },
+  {
+    "mutant": "tiles",
+    "kills": 2,
+    "tests": [
+      "derived_blackwell_outputs_each_have_one_independent_tile",
+      "the_committed_family_rows_are_the_derivation"
     ]
   }
 ]
