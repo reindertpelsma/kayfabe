@@ -154,13 +154,17 @@ fn chaos() {
     });
 }
 thread_local! {
-    static AFTER_WAITS: RefCell<Option<Arc<AtomicU64>>> = const { RefCell::new(None) };
+    static AFTER_WAITS: RefCell<Option<(Arc<AtomicU64>, Arc<AtomicU64>, Instant)>> = const { RefCell::new(None) };
 }
 /// The production hook points (`kf_trap::chaos`, feature `chaos-hooks`). `WorkerAfterWait` also counts ended park waits (I6).
 fn hook(p: kf_trap::chaos::Point) {
     if p == kf_trap::chaos::Point::WorkerAfterWait {
         AFTER_WAITS.with(|a| {
-            if let Some(a) = a.borrow().as_ref() {
+            if let Some((a, stamp, t0)) = a.borrow().as_ref() {
+                stamp.store(
+                    u64::try_from(t0.elapsed().as_nanos()).unwrap_or(u64::MAX),
+                    Ordering::Release,
+                );
                 a.fetch_add(1, Ordering::AcqRel);
             }
         });
@@ -687,6 +691,9 @@ struct Shared {
     /// FORENSICS (I6): the last engine-event dispatch and the last irq raise (ns).
     last_dispatch_ns: AtomicU64,
     last_raise_ns: AtomicU64,
+    /// FORENSICS (I6): the last worker-eventfd signal and the last end of a park wait (ns since t0).
+    last_efd_signal_ns: AtomicU64,
+    last_after_wait_ns: Arc<AtomicU64>,
     irq_hist: Mutex<Hist>,
     irqs_raised: AtomicU64,
     irqs_dispatched: AtomicU64,
@@ -858,6 +865,9 @@ struct Rt<'a> {
 impl Rt<'_> {
     fn ring_token(&self, idx: u32) -> bool {
         if self.plane.ring_internal(idx) {
+            self.sh
+                .last_efd_signal_ns
+                .store(self.sh.now(), Ordering::Release);
             let _ = self.wake.signal();
         }
         true
@@ -1262,6 +1272,9 @@ fn sleep_safety_monitor(
             || sh.last_raise_ns.load(Ordering::Acquire)
                 >= sh.last_dispatch_ns.load(Ordering::Acquire)
                 && sh.last_raise_ns.load(Ordering::Acquire) != 0
+            || sh.last_efd_signal_ns.load(Ordering::Acquire)
+                >= sh.last_after_wait_ns.load(Ordering::Acquire)
+                && sh.last_efd_signal_ns.load(Ordering::Acquire) != 0
     };
     let blocked = || {
         ws.parks
@@ -1327,7 +1340,7 @@ fn sleep_safety_monitor(
                 let now = sh.now();
                 let forensic = c.try_lock().map(|r| {
                     format!(
-                        "wait={:?} armed_ago_us={} last_look={:?} ago_us={:?} need={:?} again={} marks(issued={} seen={}) fetch(issued={} fetched={}) hw_get={} hw_ref_n={:?} ref_store_ago_us={} last_dispatch_ago_us={} last_raise_ago_us={} token={}",
+                        "wait={:?} armed_ago_us={} last_look={:?} ago_us={:?} need={:?} again={} marks(issued={} seen={}) fetch(issued={} fetched={}) hw_get={} hw_ref_n={:?} ref_store_ago_us={} last_dispatch_ago_us={} last_raise_ago_us={} efd_signal_ago_us={} after_wait_ago_us={} token={}",
                         r.wait,
                         now.saturating_sub(r.armed_ns) / 1000,
                         r.last_look.map(|l| (l.1, l.2)),
@@ -1343,6 +1356,8 @@ fn sleep_safety_monitor(
                         now.saturating_sub(cl.ref_ns.load(Ordering::Acquire)) / 1000,
                         now.saturating_sub(sh.last_dispatch_ns.load(Ordering::Acquire)) / 1000,
                         now.saturating_sub(sh.last_raise_ns.load(Ordering::Acquire)) / 1000,
+                        now.saturating_sub(sh.last_efd_signal_ns.load(Ordering::Acquire)) / 1000,
+                        now.saturating_sub(sh.last_after_wait_ns.load(Ordering::Acquire)) / 1000,
                         rt.plane.tokens.get(first.0).map(|w| format!("{:?}", w.load())).unwrap_or_default(),
                     )
                 });
@@ -1374,6 +1389,9 @@ fn holder_thread(sh: &Shared, rt: &Rt<'_>, cfg: HolderCfg, seed: u64, ch: ChaosC
                     sleep_or_spin(rng.range(1, u64::from(cfg.hold_us_max.max(1))));
                 }
                 if rng.p(cfg.rings_after_p) {
+                    // MIRROR of `ChanPlane::user_ring_wake`: request, ring if the record is free, and ALWAYS wake the worker
+                    // ("even when metadata is busy, wake the worker to observe durable demand"). The mirror lacked the last
+                    // line until 2026-10-20 (found by I6 on seed 1: demand set, record try_lock lost, nobody woken).
                     if cell.request() {
                         cell.wake_if(
                             |_| true,
@@ -1381,6 +1399,8 @@ fn holder_thread(sh: &Shared, rt: &Rt<'_>, cfg: HolderCfg, seed: u64, ch: ChaosC
                                 rt.ring_token(idx);
                             },
                         );
+                        sh.last_efd_signal_ns.store(sh.now(), Ordering::Release);
+                        let _ = rt.wake.signal();
                     }
                 }
             }
@@ -1448,6 +1468,7 @@ fn guest(
             if plane.trap_write(Class::Doorbell, 0, DB_OFF, u64::from(c.idx), 4)
                 == Action::WakeWorker
             {
+                sh.last_efd_signal_ns.store(sh.now(), Ordering::Release);
                 let _ = wake.signal();
             }
         };
@@ -1772,6 +1793,8 @@ fn run_scenario(sc: &Scenario) -> Outcome {
         after_waits: Arc::new(AtomicU64::new(0)),
         last_dispatch_ns: AtomicU64::new(0),
         last_raise_ns: AtomicU64::new(0),
+        last_efd_signal_ns: AtomicU64::new(0),
+        last_after_wait_ns: Arc::new(AtomicU64::new(0)),
         abort: AtomicBool::new(false),
         violations: Mutex::new(Vec::new()),
         soft: Mutex::new(Vec::new()),
@@ -1848,7 +1871,10 @@ fn run_scenario(sc: &Scenario) -> Outcome {
             let sc = sc.clone();
             worker_handles.push(s.spawn(move || {
                 chaos_install(sc.seed, 10 + wi as u64, sc.chaos);
-                AFTER_WAITS.with(|a| *a.borrow_mut() = Some(sh.after_waits.clone()));
+                AFTER_WAITS.with(|a| {
+                    *a.borrow_mut() =
+                        Some((sh.after_waits.clone(), sh.last_after_wait_ns.clone(), sh.t0))
+                });
                 let poller = Poller::create().expect("epoll");
                 poller
                     .watch(wake.as_source_fd(), worker::WORKER_EFD_TAG)

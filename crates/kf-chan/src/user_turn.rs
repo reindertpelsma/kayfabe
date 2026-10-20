@@ -953,7 +953,9 @@ impl Relay {
             });
             return Ok(false);
         }
-        if self.fetch.fetched() < self.fetch.issued() {
+        // ★ Change A: with `GuestGet::ReadIndex` the guest's ring is freed by the relay's READ, so work in flight owes the guest
+        // nothing and the relay waits for nothing here (private credit is waited for where it runs out, `credit_need`).
+        if self.fetch.fetched() < self.fetch.issued() && guest_get_follows_pops() {
             // published work in flight: the last marker's processing frees the guest's ring (the `GP_GET`
             // write-back)
             let need = if self.marker_event {
@@ -992,9 +994,14 @@ impl Relay {
             }
         }
         io.event(Ev::CreditWait);
+        // a marker can announce credit only while one is outstanding (issued, not yet seen processed)
+        let marker = marker && self.marks.seen() < self.marks.issued();
+        // ★ 2026-10-20 (simple relay): the wake is placed WHERE the credit is freed: the NEXT marker in ring order (the oldest
+        // one not yet seen processed); its processing implies the pops of every entry before it. Not the newest marker (that
+        // would wait for the whole ring to drain). No threshold, no period.
         let need = if marker {
             Need::Marker {
-                target: self.marks.issued(),
+                target: self.marks.seen().saturating_add(1).min(self.marks.issued()),
             }
         } else {
             Need::Popped {

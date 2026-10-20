@@ -2362,6 +2362,28 @@ fn lazy_the_post_switch_scan_is_eight_entries_per_ring_switch_with_lazy_on() {
 
 #[test]
 fn lazy_d6_a_turn_that_skipped_its_look_and_saw_a_full_guest_ring_is_followed_by_a_look() {
+    if !kf_chan::user_turn::guest_get_follows_pops() {
+        // ★ 2026-10-20 (Change A, GuestGet::ReadIndex): MOOT BY DESIGN -- D6 forces a look so a full guest ring gets its pop
+        // write-back; the guest's GP_GET is now the relay's read index, written by the next turn without any look. Restated
+        // property over the same random streams and rings: a full guest ring never deadlocks (every stream is relayed, the
+        // relay is alive) and the guest sees free space once the relay READ the entries (written GP_GET == cursor at the end).
+        for seed in 0..60u64 {
+            let mut rng = Rng::new(0x1A2E_5000 + seed);
+            let n = 100 + rng.below(300) as usize;
+            let stream = gen_stream(&mut rng, n, false, false);
+            for ring in [32u32, 64, 128] {
+                let mut sim = Sim::new(ring, 256, &stream, vec![]);
+                let mut relay = new_relay(256, false).with_lazy(kf_chan::user_lazy::LazyConfig::ON);
+                drive(&mut sim, &mut relay, 400_000);
+                assert!(!relay.dead, "seed {seed} ring {ring}");
+                assert_eq!(
+                    relay.written_get, relay.cursor,
+                    "seed {seed} ring {ring}: the guest sees the read index"
+                );
+            }
+        }
+        return;
+    }
     let mut checked = 0;
     for seed in 0..60u64 {
         let mut rng = Rng::new(0x1A2E_5000 + seed);

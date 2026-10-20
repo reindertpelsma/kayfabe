@@ -659,8 +659,14 @@ fn b_off_observes_on_every_turn_like_the_base() {
 
 #[test]
 fn b_a_turn_after_a_wait_always_observes() {
-    let mut io = Mock::new(64, 512);
+    // ★ 2026-10-20 (Change A): with `GuestGet::ReadIndex` a caught-up batch waits for nothing (no write-back is owed); the
+    // wait under test is then the private ring's CREDIT wait: an 8-entry private ring the PBDMA does not drain.
+    let pops = kf_chan::user_turn::guest_get_follows_pops();
+    let mut io = Mock::new(64, if pops { 512 } else { 8 });
     let mut r = pointer_relay(&mut io, on());
+    if !pops {
+        feed(&mut io, 2, 20);
+    }
     // the relay caught up: end_batch publishes a marker and waits for it
     run(&mut r, &mut io, 1);
     let waited = (0..4).find(|_| {
@@ -686,9 +692,11 @@ fn b_a_turn_after_a_wait_always_observes() {
 
 #[test]
 fn b_a_wait_forces_a_look_on_every_turn_until_it_is_over() {
-    let mut io = Mock::new(64, 512);
+    // ★ 2026-10-20 (Change A): see `b_a_turn_after_a_wait_always_observes` -- the wait is a credit wait under ReadIndex.
+    let pops = kf_chan::user_turn::guest_get_follows_pops();
+    let mut io = Mock::new(64, if pops { 512 } else { 8 });
     let mut r = pointer_relay(&mut io, on());
-    feed(&mut io, 2, 4);
+    feed(&mut io, 2, if pops { 4 } else { 20 });
     run(&mut r, &mut io, 2);
     // GP_PUT == cursor: marker, wait. The PBDMA does NOT pop for a while.
     let mut looks = 0;
