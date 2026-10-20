@@ -112,4 +112,24 @@ class ReaderTests(unittest.TestCase):
     def test_backwards_interval_is_rejected_before_summary(self):
         _,r=fixture();r['end_ns']=0;p=Path(self.tmp.name)/'prof.jsonl';p.write_text(json.dumps(r)+'\n')
         self.assertEqual(reader.read_jsonl(p),[])
+    def test_nested_object_extras_are_rejected_before_recursive_decode(self):
+        _,r=fixture();v=0
+        for _ in range(30):v={'child':v}
+        r['extra']=v;p=Path(self.tmp.name)/'prof.jsonl';p.write_text(json.dumps(r)+'\n')
+        self.assertEqual(reader.read_jsonl(p),[])
+    def test_nested_list_extras_are_rejected_before_recursive_decode(self):
+        _,r=fixture();v=0
+        for _ in range(30):v=[v]
+        r['extra']=v;p=Path(self.tmp.name)/'prof.jsonl';p.write_text(json.dumps(r)+'\n')
+        self.assertEqual(reader.read_jsonl(p),[])
+    def test_live_interval_residence_uses_recorded_boundaries(self):
+        with self.child():
+            data=reader.read_mmap(Path(self.tmp.name)/'prof.mmap');t=data['records'][-1]['threads'][0]
+            self.assertGreater(t['exposure_ns'],0)
+            self.assertEqual(sum(s['interval_exclusive_ns'] for s in t['states']),t['exposure_ns'])
+    def test_live_wait_appears_as_time_share_before_guard_completion(self):
+        with self.child():
+            data=reader.read_mmap(Path(self.tmp.name)/'prof.mmap');t=data['records'][-1]['threads'][0]
+            r=next(s for s in t['states'] if s['state']==4)
+            self.assertGreater(r['time_share'],0.5);self.assertEqual(r['count'],0)
 if __name__=='__main__':unittest.main()
