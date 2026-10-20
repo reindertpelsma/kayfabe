@@ -540,7 +540,8 @@ fn the_gb206_580_caps_word_requires_its_own_native_measurement() {
         let p = d.provenance.iter().find(|p| p.offset == 0x00c).unwrap();
         assert!(p.why.contains("GB202"), "{}", p.why);
     }
-    for implementation in [0x3] {
+    {
+        let implementation = 0x3;
         let die = Die {
             implementation,
             ..GB206
