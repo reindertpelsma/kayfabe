@@ -1,0 +1,97 @@
+{
+  "case": "gfx595",
+  "source": "0c87acda802b18a610739e75f2b50049a9247067",
+  "own_id": 56816419,
+  "utc": "2026-10-20T02:52:08.766527+00:00",
+  "normalization": "UTF8 replacement, universal newlines, trailing whitespace, GPU identifiers redacted; source/export hashes preserved",
+  "files": [
+    {
+      "source": "/root/prov/sweep_gfx595.log",
+      "export": "controller.txt",
+      "source_bytes": 1366,
+      "source_sha256": "a6816de5bf26b497ac678c5562ea2db56b3fbaa28f6d28834d14f1e592276a6b",
+      "export_sha256": "a6816de5bf26b497ac678c5562ea2db56b3fbaa28f6d28834d14f1e592276a6b",
+      "gpu_identifier_redactions": 0
+    },
+    {
+      "source": "/workspace/bench/sweep0c87acda_ad102_gfx595_gfxsuite.out",
+      "export": "suite.txt",
+      "source_bytes": 716,
+      "source_sha256": "68d334aace8aa78bfbf030a0f74e7312753fdff580427075777e942969117c46",
+      "export_sha256": "68d334aace8aa78bfbf030a0f74e7312753fdff580427075777e942969117c46",
+      "gpu_identifier_redactions": 0
+    },
+    {
+      "source": "/root/prov/sweep_gfx595_native.txt",
+      "export": "native595_gfx.txt",
+      "source_bytes": 5646,
+      "source_sha256": "862644d2045f4f8a548ffd93e63a1cca2ed63c81c4672cc686fafccc2a5764bc",
+      "export_sha256": "97489a268b2d3875619e33972c3fd6efcf8c6c32f54b02a4774f41721ab083af",
+      "gpu_identifier_redactions": 0
+    },
+    {
+      "source": "/root/prov/sweep_gfx595_guest_prepare.txt",
+      "export": "guest_prepare.txt",
+      "source_bytes": 1357,
+      "source_sha256": "c1d899691010164a6b7950c3a7632f39ecf149402725adbe40c624575047ee22",
+      "export_sha256": "9bcef31249cb53316804ba776f1f54bd1ea43d4eefa40fc8c91f024cb10bbdad",
+      "gpu_identifier_redactions": 0
+    },
+    {
+      "source": "/root/prov/sweep_gfx595_lane_receipt.txt",
+      "export": "lane_receipt.txt",
+      "source_bytes": 495,
+      "source_sha256": "e369833ae47b28932a9db30c6bff9b3fbb143ba88fd1a265da0460cd387a9a04",
+      "export_sha256": "c63a5ec45b9a19c464121f626e3f2b97a430cd938f591fdbdc0cf6782e680bd8",
+      "gpu_identifier_redactions": 0
+    },
+    {
+      "source": "/workspace/bench/run_sweep0c87acda_ad102_gfx595_gfx.out",
+      "export": "gfx.out",
+      "source_bytes": 5303,
+      "source_sha256": "85d0e42455c38606380626624c1d2c3aa94e79cb994eb6c24431c08ea090e376",
+      "export_sha256": "bb4400afc7a69dc400a52ee114b0acd8e649896331a0172ffbb9bad89fc777da",
+      "gpu_identifier_redactions": 0
+    },
+    {
+      "source": "/workspace/bench/run_sweep0c87acda_ad102_gfx595_probe.log",
+      "export": "probe.txt",
+      "source_bytes": 10324,
+      "source_sha256": "cc523282d71b09f901177cad323e2f46abbd09cbede8fbda1bfa4ffac24e761b",
+      "export_sha256": "bfa00144883caee018a628956f4106bbec48d16b18f842ae06101e6dc1c7d1a4",
+      "gpu_identifier_redactions": 0
+    },
+    {
+      "source": "/workspace/bench/run_sweep0c87acda_ad102_gfx595_qemu.log",
+      "export": "qemu.txt",
+      "source_bytes": 601839,
+      "source_sha256": "f1b77ad1ae4fdaab4c63861fa7516d6425f4e6a0cb118090b0aa39921f60a67a",
+      "export_sha256": "e5a535d671027f2d6b7de4f3b8f47d1d5e4896280699a7b86183d412b2b3fed0",
+      "gpu_identifier_redactions": 1
+    },
+    {
+      "source": "/workspace/bench/run_sweep0c87acda_ad102_gfx595_dmesg.log",
+      "export": "dmesg.txt",
+      "source_bytes": 6239,
+      "source_sha256": "f95f09fa5f6e3845b2753be2b5be30167f7e6ec1e15a67d84986915c66afb34f",
+      "export_sha256": "f95f09fa5f6e3845b2753be2b5be30167f7e6ec1e15a67d84986915c66afb34f",
+      "gpu_identifier_redactions": 0
+    },
+    {
+      "source": "/workspace/bench/run_sweep0c87acda_ad102_gfx595_dmesg_after.log",
+      "export": "dmesg_after.txt",
+      "source_bytes": 15093,
+      "source_sha256": "16228fdd2fade9d65ef8c37f0fea20611b97e75b969cf761ecc32265aa92a826",
+      "export_sha256": "16228fdd2fade9d65ef8c37f0fea20611b97e75b969cf761ecc32265aa92a826",
+      "gpu_identifier_redactions": 0
+    },
+    {
+      "source": "/workspace/bench/run_sweep0c87acda_ad102_gfx595_hostdmesg.log",
+      "export": "hostdmesg.txt",
+      "source_bytes": 53,
+      "source_sha256": "ce14bb56b297f2d30676417221da04cdefa43dd334705b24c5fffa8cd1e5e761",
+      "export_sha256": "ce14bb56b297f2d30676417221da04cdefa43dd334705b24c5fffa8cd1e5e761",
+      "gpu_identifier_redactions": 0
+    }
+  ]
+}
