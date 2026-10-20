@@ -9,5 +9,9 @@ license.workspace = true
 kf-trap.workspace = true
 kf-chip.workspace = true
 
+[features]
+# Test-only: forwards `kf-trap/chaos-hooks` and adds the worker pass's hook points. Never enabled by a normal build.
+chaos-hooks = ["kf-trap/chaos-hooks"]
+
 [lints]
 workspace = true

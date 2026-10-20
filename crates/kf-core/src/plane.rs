@@ -549,7 +549,11 @@ impl<'v> Plane<'v> {
             let Some(w) = self.tokens.get(tok as usize) else {
                 continue;
             };
+            #[cfg(feature = "chaos-hooks")]
+            kf_trap::chaos::at(kf_trap::chaos::Point::ScanToClaim);
             let Claim::Won(t) = w.claim() else { continue };
+            #[cfg(feature = "chaos-hooks")]
+            kf_trap::chaos::at(kf_trap::chaos::Point::AfterClaim);
             let mut round = 0;
             loop {
                 // ⊘ Re-read the stamp each round: a ring that arrived while we held the token

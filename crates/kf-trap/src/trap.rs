@@ -148,8 +148,12 @@ impl TrapPath<'_> {
                 // §5.2: stamp and set RUNG in one CAS. Publishes only on IDLE → RUNG; every other
                 // transition already has a bit outstanding or is owned by a worker who re-checks.
                 if w.ring(self.ring.applied_seq()) {
+                    #[cfg(feature = "chaos-hooks")]
+                    crate::chaos::at(crate::chaos::Point::DoorbellAfterRing);
                     // ⊘ bit THEN summary, inside publish(). Never reachable in the wrong order.
                     self.bits.publish(tok);
+                    #[cfg(feature = "chaos-hooks")]
+                    crate::chaos::at(crate::chaos::Point::DoorbellAfterPublish);
                     match self.worker_wake.bump() {
                         Wake::SignalOne => Action::WakeWorker,
                         Wake::NoOne => Action::None,

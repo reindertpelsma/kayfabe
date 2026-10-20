@@ -18,6 +18,13 @@ kf-chip.workspace = true
 # (`tests/user_lifecycle_mutants.rs`, `docs/design/V3_USER_RING_LIFECYCLE_20261016.md` section 8).
 # Never enabled by another crate.
 lifecycle-mutants = []
+# Test-only: the schedule-chaos hook points of `kf-trap` / `kf-core` / `worker.rs` (`tests/relay_stress.rs`; the hooks do
+# not exist without it) and nothing else. Never enabled by another crate.
+chaos-hooks = ["kf-core/chaos-hooks", "kf-trap/chaos-hooks"]
+
+[dev-dependencies]
+# Test builds of this crate enable the schedule-chaos hook points (`tests/relay_stress.rs`); no normal build does.
+kf-chan = { path = ".", features = ["chaos-hooks"] }
 
 [lints]
 workspace = true

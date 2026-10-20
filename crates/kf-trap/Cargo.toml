@@ -8,6 +8,11 @@ license.workspace = true
 [dependencies]
 kf-chip.workspace = true
 
+[features]
+# Test-only (never enabled by another crate's normal build): schedule-chaos hook points for the real-thread
+# stress harness (`kf-chan/tests/relay_stress.rs`). Without it the hooks do not exist (the release build is unchanged).
+chaos-hooks = []
+
 [dev-dependencies]
 loom = "=0.7.2"
 
