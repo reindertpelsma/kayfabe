@@ -904,9 +904,7 @@ fn cfg(workers: usize, hot: usize, holder: HolderKind, kind: AWait) -> Cfg {
     }
 }
 
-// 2026-10-20: 12 M (was 6 M): W=3 with a `pt` holder exceeded 6 M on the merged head (MEASURED at 983fcca15, before this
-// branch's G5 fixes); a budget of the explorer, not a property.
-const CAP: usize = 12_000_000;
+const CAP: usize = 6_000_000;
 /// The bounded-wait bound K: worker steps the cold relay may wait while serviceable (all workers' steps counted).
 fn k_bound(c: &Cfg) -> usize {
     60 * c.workers + 20 * c.hot + 40
