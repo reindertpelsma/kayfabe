@@ -1,0 +1,441 @@
+{
+  "native_cmd": 3804,
+  "native_status": 3863,
+  "native_events": {
+    "0x101c": 30,
+    "0x100c": 2,
+    "0x1020": 26,
+    "0x1001": 1,
+    "0x1003": 2
+  },
+  "event_scope": "Native events are measured. Virtual RM api export excludes outbound events: absent here is unobserved, not evidence of missing delivery. NativeGSP_INIT_DONE statusseq19 occurs before virtual-equivalent fn1; virtualfn1 proves driver progressed past its wait.",
+  "b1_on": {
+    "comparable_fn1_prefix_api_count": 27,
+    "first_order_delta": {
+      "native": {
+        "source": "1",
+        "instance": "1",
+        "ordinal": "74",
+        "dir": "cmd",
+        "element_sequence": "29",
+        "function": "0x4c",
+        "rpc_result": "0xffffffff",
+        "rpc_result_private": "0xffffffff",
+        "rpc_sequence": "0",
+        "kind": "control",
+        "control_or_class": "0x20800a61",
+        "control_status": "0x0",
+        "declared_params_bytes": "8",
+        "decode": "ok"
+      },
+      "virtual": {
+        "ordinal": "27",
+        "function": "76",
+        "kind": "RmControl",
+        "rpc_sequence": "0",
+        "control_or_class": "0x20802a08",
+        "trace_result": "0x0",
+        "effective_result": "unknown"
+      }
+    },
+    "first_policy_vs_native_status_delta": {
+      "relation": "match",
+      "native_command_sequence": "118",
+      "native_status_sequence": "136",
+      "function": "0x4c",
+      "control_or_class": "0x20809064",
+      "native_effective_result": "0x0",
+      "virtual_ordinal": "109",
+      "virtual_effective_result": "unknown",
+      "effective_status_equal": "unknown",
+      "matching_block_length": "54",
+      "native_envelope": "0x0",
+      "native_control_status": "0x0",
+      "virtual_envelope": "0x56",
+      "virtual_control_status": "-",
+      "api_key_repeated": "0",
+      "native_pair_basis": "function FIFO; keys agree; handles/bodies unavailable",
+      "virtual_pair_basis": "pretty trace; body unavailable",
+      "next_native_function": "0x4c",
+      "next_native_control_or_class": "0x20809001"
+    },
+    "all_aligned_status_deltas": [
+      {
+        "relation": "match",
+        "native_command_sequence": "118",
+        "native_status_sequence": "136",
+        "function": "0x4c",
+        "control_or_class": "0x20809064",
+        "native_effective_result": "0x0",
+        "virtual_ordinal": "109",
+        "virtual_effective_result": "unknown",
+        "effective_status_equal": "unknown",
+        "matching_block_length": "54",
+        "native_envelope": "0x0",
+        "native_control_status": "0x0",
+        "virtual_envelope": "0x56",
+        "virtual_control_status": "-",
+        "api_key_repeated": "0",
+        "native_pair_basis": "function FIFO; keys agree; handles/bodies unavailable",
+        "virtual_pair_basis": "pretty trace; body unavailable",
+        "next_native_function": "0x4c",
+        "next_native_control_or_class": "0x20809001"
+      },
+      {
+        "relation": "match",
+        "native_command_sequence": "166",
+        "native_status_sequence": "184",
+        "function": "0x67",
+        "control_or_class": "0xcbcb",
+        "native_effective_result": "0x0",
+        "virtual_ordinal": "150",
+        "virtual_effective_result": "unknown",
+        "effective_status_equal": "unknown",
+        "matching_block_length": "5",
+        "native_envelope": "0x0",
+        "native_control_status": "-",
+        "virtual_envelope": "0x56",
+        "virtual_control_status": "-",
+        "api_key_repeated": "1",
+        "native_pair_basis": "function FIFO; keys agree; handles/bodies unavailable",
+        "virtual_pair_basis": "pretty trace; body unavailable",
+        "next_native_function": "0xa",
+        "next_native_control_or_class": "-"
+      }
+    ],
+    "public_posted_size_comparisons": [
+      {
+        "control": "0x730151",
+        "virtual_posted_declared_params_bytes": 40,
+        "native_reply_size_histogram": "40:1"
+      },
+      {
+        "control": "0x730107",
+        "virtual_posted_declared_params_bytes": 12,
+        "native_reply_size_histogram": "12:1"
+      },
+      {
+        "control": "0x73028b",
+        "virtual_posted_declared_params_bytes": 56,
+        "native_reply_size_histogram": "56:70"
+      },
+      {
+        "control": "0x73013d",
+        "virtual_posted_declared_params_bytes": 8,
+        "native_reply_size_histogram": "8:1"
+      },
+      {
+        "control": "0x730101",
+        "virtual_posted_declared_params_bytes": 2,
+        "native_reply_size_histogram": "2:2"
+      },
+      {
+        "control": "0x731369",
+        "virtual_posted_declared_params_bytes": 60,
+        "native_reply_size_histogram": "60:3"
+      },
+      {
+        "control": "0x73014b",
+        "virtual_posted_declared_params_bytes": 8,
+        "native_reply_size_histogram": "8:1"
+      },
+      {
+        "control": "0x730101",
+        "virtual_posted_declared_params_bytes": 2,
+        "native_reply_size_histogram": "2:2"
+      },
+      {
+        "control": "0x730102",
+        "virtual_posted_declared_params_bytes": 12,
+        "native_reply_size_histogram": "12:8"
+      },
+      {
+        "control": "0x730287",
+        "virtual_posted_declared_params_bytes": 8,
+        "native_reply_size_histogram": "8:4"
+      },
+      {
+        "control": "0x73028b",
+        "virtual_posted_declared_params_bytes": 56,
+        "native_reply_size_histogram": "56:70"
+      },
+      {
+        "control": "0x730108",
+        "virtual_posted_declared_params_bytes": 16,
+        "native_reply_size_histogram": "16:5"
+      },
+      {
+        "control": "0x730240",
+        "virtual_posted_declared_params_bytes": 12,
+        "native_reply_size_histogram": "12:7"
+      },
+      {
+        "control": "0x73028b",
+        "virtual_posted_declared_params_bytes": 56,
+        "native_reply_size_histogram": "56:70"
+      },
+      {
+        "control": "0x731140",
+        "virtual_posted_declared_params_bytes": 16,
+        "native_reply_size_histogram": "16:27"
+      },
+      {
+        "control": "0x73028a",
+        "virtual_posted_declared_params_bytes": 20,
+        "native_reply_size_histogram": "20:7"
+      },
+      {
+        "control": "0x730116",
+        "virtual_posted_declared_params_bytes": 12,
+        "native_reply_size_histogram": "12:1"
+      },
+      {
+        "control": "0x730108",
+        "virtual_posted_declared_params_bytes": 16,
+        "native_reply_size_histogram": "16:5"
+      },
+      {
+        "control": "0x20800a58",
+        "virtual_posted_declared_params_bytes": 56,
+        "native_reply_size_histogram": "56:21"
+      },
+      {
+        "control": "0x20800a58",
+        "virtual_posted_declared_params_bytes": 56,
+        "native_reply_size_histogram": "56:21"
+      },
+      {
+        "control": "0x20800a58",
+        "virtual_posted_declared_params_bytes": 56,
+        "native_reply_size_histogram": "56:21"
+      },
+      {
+        "control": "0x20800a58",
+        "virtual_posted_declared_params_bytes": 56,
+        "native_reply_size_histogram": "56:21"
+      },
+      {
+        "control": "0x20800a58",
+        "virtual_posted_declared_params_bytes": 56,
+        "native_reply_size_histogram": "56:21"
+      },
+      {
+        "control": "0x20800a58",
+        "virtual_posted_declared_params_bytes": 56,
+        "native_reply_size_histogram": "56:21"
+      },
+      {
+        "control": "0x20800a58",
+        "virtual_posted_declared_params_bytes": 56,
+        "native_reply_size_histogram": "56:21"
+      },
+      {
+        "control": "0x20800a58",
+        "virtual_posted_declared_params_bytes": 56,
+        "native_reply_size_histogram": "56:21"
+      },
+      {
+        "control": "0x20800a58",
+        "virtual_posted_declared_params_bytes": 56,
+        "native_reply_size_histogram": "56:21"
+      },
+      {
+        "control": "0x20800a58",
+        "virtual_posted_declared_params_bytes": 56,
+        "native_reply_size_histogram": "56:21"
+      },
+      {
+        "control": "0x20800a58",
+        "virtual_posted_declared_params_bytes": 56,
+        "native_reply_size_histogram": "56:21"
+      },
+      {
+        "control": "0x20800a58",
+        "virtual_posted_declared_params_bytes": 56,
+        "native_reply_size_histogram": "56:21"
+      },
+      {
+        "control": "0x20800a58",
+        "virtual_posted_declared_params_bytes": 56,
+        "native_reply_size_histogram": "56:21"
+      },
+      {
+        "control": "0x20800a58",
+        "virtual_posted_declared_params_bytes": 56,
+        "native_reply_size_histogram": "56:21"
+      },
+      {
+        "control": "0x20800a58",
+        "virtual_posted_declared_params_bytes": 56,
+        "native_reply_size_histogram": "56:21"
+      },
+      {
+        "control": "0x20800a58",
+        "virtual_posted_declared_params_bytes": 56,
+        "native_reply_size_histogram": "56:21"
+      },
+      {
+        "control": "0x20800a58",
+        "virtual_posted_declared_params_bytes": 56,
+        "native_reply_size_histogram": "56:21"
+      },
+      {
+        "control": "0x20800a58",
+        "virtual_posted_declared_params_bytes": 56,
+        "native_reply_size_histogram": "56:21"
+      },
+      {
+        "control": "0x20800a58",
+        "virtual_posted_declared_params_bytes": 56,
+        "native_reply_size_histogram": "56:21"
+      },
+      {
+        "control": "0x20800a58",
+        "virtual_posted_declared_params_bytes": 56,
+        "native_reply_size_histogram": "56:21"
+      },
+      {
+        "control": "0x20800a58",
+        "virtual_posted_declared_params_bytes": 56,
+        "native_reply_size_histogram": "56:21"
+      },
+      {
+        "control": "0x730151",
+        "virtual_posted_declared_params_bytes": 40,
+        "native_reply_size_histogram": "40:1"
+      }
+    ],
+    "private_body_size_limit": "Native control/alloc declared param sizes are measured; virtual non-display/opaque alloc payload sizes were not exported. No global first posted-size difference is established."
+  },
+  "b1_off": {
+    "comparable_fn1_prefix_api_count": 17,
+    "first_order_delta": {
+      "native": {
+        "source": "1",
+        "instance": "1",
+        "ordinal": "56",
+        "dir": "cmd",
+        "element_sequence": "19",
+        "function": "0x67",
+        "rpc_result": "0xffffffff",
+        "rpc_result_private": "0xffffffff",
+        "rpc_sequence": "0",
+        "kind": "alloc",
+        "control_or_class": "0x0",
+        "control_status": "-",
+        "declared_params_bytes": "120",
+        "decode": "ok"
+      },
+      "virtual": {
+        "ordinal": "17",
+        "function": "76",
+        "kind": "RmControl",
+        "rpc_sequence": "0",
+        "control_or_class": "0x20800af3",
+        "trace_result": "0x0",
+        "effective_result": "unknown"
+      }
+    },
+    "first_policy_vs_native_status_delta": {
+      "relation": "match",
+      "native_command_sequence": "118",
+      "native_status_sequence": "136",
+      "function": "0x4c",
+      "control_or_class": "0x20809064",
+      "native_effective_result": "0x0",
+      "virtual_ordinal": "100",
+      "virtual_effective_result": "unknown",
+      "effective_status_equal": "unknown",
+      "matching_block_length": "54",
+      "native_envelope": "0x0",
+      "native_control_status": "0x0",
+      "virtual_envelope": "0x56",
+      "virtual_control_status": "-",
+      "api_key_repeated": "0",
+      "native_pair_basis": "function FIFO; keys agree; handles/bodies unavailable",
+      "virtual_pair_basis": "pretty trace; body unavailable",
+      "next_native_function": "0x4c",
+      "next_native_control_or_class": "0x20809001"
+    },
+    "all_aligned_status_deltas": [
+      {
+        "relation": "match",
+        "native_command_sequence": "118",
+        "native_status_sequence": "136",
+        "function": "0x4c",
+        "control_or_class": "0x20809064",
+        "native_effective_result": "0x0",
+        "virtual_ordinal": "100",
+        "virtual_effective_result": "unknown",
+        "effective_status_equal": "unknown",
+        "matching_block_length": "54",
+        "native_envelope": "0x0",
+        "native_control_status": "0x0",
+        "virtual_envelope": "0x56",
+        "virtual_control_status": "-",
+        "api_key_repeated": "0",
+        "native_pair_basis": "function FIFO; keys agree; handles/bodies unavailable",
+        "virtual_pair_basis": "pretty trace; body unavailable",
+        "next_native_function": "0x4c",
+        "next_native_control_or_class": "0x20809001"
+      },
+      {
+        "relation": "match",
+        "native_command_sequence": "166",
+        "native_status_sequence": "184",
+        "function": "0x67",
+        "control_or_class": "0xcbcb",
+        "native_effective_result": "0x0",
+        "virtual_ordinal": "141",
+        "virtual_effective_result": "unknown",
+        "effective_status_equal": "unknown",
+        "matching_block_length": "5",
+        "native_envelope": "0x0",
+        "native_control_status": "-",
+        "virtual_envelope": "0x56",
+        "virtual_control_status": "-",
+        "api_key_repeated": "1",
+        "native_pair_basis": "function FIFO; keys agree; handles/bodies unavailable",
+        "virtual_pair_basis": "pretty trace; body unavailable",
+        "next_native_function": "0xa",
+        "next_native_control_or_class": "-"
+      },
+      {
+        "relation": "match",
+        "native_command_sequence": "2425",
+        "native_status_sequence": "2445",
+        "function": "0x67",
+        "control_or_class": "0xcfb0",
+        "native_effective_result": "0x0",
+        "virtual_ordinal": "277",
+        "virtual_effective_result": "unknown",
+        "effective_status_equal": "unknown",
+        "matching_block_length": "31",
+        "native_envelope": "0x0",
+        "native_control_status": "-",
+        "virtual_envelope": "0x56",
+        "virtual_control_status": "-",
+        "api_key_repeated": "1",
+        "native_pair_basis": "function FIFO; keys agree; handles/bodies unavailable",
+        "virtual_pair_basis": "pretty trace; body unavailable",
+        "next_native_function": "0x4c",
+        "next_native_control_or_class": "0xa06f0103"
+      }
+    ],
+    "public_posted_size_comparisons": [],
+    "private_body_size_limit": "Native control/alloc declared param sizes are measured; virtual non-display/opaque alloc payload sizes were not exported. No global first posted-size difference is established."
+  },
+  "ada_20809064_refusals": 255,
+  "ada_a58_shape": {
+    "('0xc77d', 1, 56)": 1,
+    "('0xc67e', 1, 56)": 8,
+    "('0xc67b', 1, 56)": 8,
+    "('0xc67a', 0, 56)": 4
+  },
+  "blackwell_on_a58_shape": {
+    "('0xca7d', 1, 56)": 1,
+    "('0xca7e', 1, 56)": 8,
+    "('0xca7b', 1, 56)": 8,
+    "('0xca7a', 0, 56)": 4
+  }
+}
