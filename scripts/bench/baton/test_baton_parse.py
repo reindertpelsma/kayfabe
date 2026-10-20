@@ -63,7 +63,7 @@ class ParseLog(unittest.TestCase):
         self.assertEqual(bp.parse_log(noisy)["summary"]["iterations"], 195)
 
     def test_missing_summary_is_none(self):
-        trunc = "\n".join(SAMPLE.splitlines()[:6]) + "\n"
+        trunc = "\n".join(SAMPLE.splitlines()[:7]) + "\n"
         log = bp.parse_log(trunc)
         self.assertIsNone(log["summary"])  # a killed run has no summary
         self.assertEqual(len(log["per_sec"]), 3)
@@ -152,10 +152,10 @@ class Batons(unittest.TestCase):
     def test_clock_alignment_uses_t0_epoch(self):
         # B's t0 is 10 s after A's: B's local 2..8 s stall is A-time 12..18 s.
         a = [it(i, i * 0.010, 9.0) for i in range(3000)]  # 0..30 s
-        b = [it(0, 2.0, 6000.0), it(1, 8.0, 5.0)]
+        b = [it(0, 1.995, 5.0), it(1, 2.0, 6000.0), it(2, 8.0, 5.0)]
         ev = bp.detect_batons({"A": (100.0, a), "B": (110.0, b)})
         self.assertEqual(len(ev), 1)
-        self.assertAlmostEqual(ev[0]["from_s"], 112.0 - 100.0 + 0.0, places=1)  # relative to earliest t0
+        self.assertAlmostEqual(ev[0]["from_s"], 12.0, places=2)  # relative to the earliest t0
 
 
 class Share(unittest.TestCase):
