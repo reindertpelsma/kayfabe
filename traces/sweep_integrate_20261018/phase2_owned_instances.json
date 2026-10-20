@@ -214,5 +214,23 @@
     "auto_destroy_pid": 644909,
     "auto_destroy_armed_utc": "2026-10-20T03:09:26.466166+00:00",
     "auto_destroy_verified": true
+  },
+  {
+    "id": 56830105,
+    "role": "BlackwellProbe",
+    "offer": 35126133,
+    "gpu_offer": "RTX 5090",
+    "quote_dph": 0.6956481481481481,
+    "disk_gb_requested": 180,
+    "created_utc": "2026-10-20T03:17:29.789123+00:00",
+    "product_head": "7f22d18dfff8083345cdb54a4666018dca845384",
+    "creation_head": "e7456193747072599f8b18747b5c17bde58f2192",
+    "credit_before": 36.62201426726301,
+    "auto_destroy_minutes": 60,
+    "global_teardown_utc": "2026-10-20T04:30:00+00:00",
+    "destroyed": false,
+    "auto_destroy_pid": 661435,
+    "auto_destroy_armed_utc": "2026-10-20T03:17:29.816746+00:00",
+    "auto_destroy_verified": true
   }
 ]
