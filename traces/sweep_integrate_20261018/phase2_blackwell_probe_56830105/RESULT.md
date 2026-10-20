@@ -9,3 +9,5 @@ UNRUN baseline OFF and candidate OFF. Final baseline start cutoff04:04UTC was re
 The GPU-free differential and three hypotheses/falsifiers were published before this lease, in ../blackwell_diff_20261020/RESULT.md. First aligned policy difference20809064 is also refused255times by passing Ada, so refusal alone does not establish the cause. CBCB remains private/NOT_DERIVABLE; all15 comparable public selector sizes agree; absent events in the responder log are unobserved, not proved missing. No fabricated reply or captured per-die constants were added.
 
 Own56830105 auto-destroy60min was armed first, original expiry~04:17UTC. Setup receipts are exported before orderly stop/destruction; final API absence and cost follow in phase2_owned_instances.json and COST.md. No third product initialization, additional lease, trusted-host access, or PR merge.
+
+MEASURED disabled binding completed04:06:09UTC: actual32.0.15.8088/oem7.inf, CM_PROB_DISABLED, both forced-GSP values1. Original harness stopped the setup VM cleanly; final pre-teardown confirms no QEMU/NBD/controller remains, native host healthy. The cutoff remains unchanged; neither arm was started.

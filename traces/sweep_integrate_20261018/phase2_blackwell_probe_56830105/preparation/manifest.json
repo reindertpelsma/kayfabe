@@ -1,13 +1,13 @@
 {
-  "utc": "2026-10-20T04:05:12.264469+00:00",
+  "utc": "2026-10-20T04:06:21.494635+00:00",
   "own_id": 56830105,
   "kind": "preparation only; no product initialization; both paired arms UNRUN",
   "files": [
     {
       "source": "/root/prov/sweep_20261020_provision.log",
-      "source_sha256": "e6c240ad0edcaa2472d97e0e33d276988091339c45fe57a3eb5534974ef130ed",
+      "source_sha256": "eaa32e2dfe666e322556327601bbe1bc469f7de760f2671106873bac213b12ae",
       "export": "provision.txt",
-      "export_sha256": "e6c240ad0edcaa2472d97e0e33d276988091339c45fe57a3eb5534974ef130ed"
+      "export_sha256": "eaa32e2dfe666e322556327601bbe1bc469f7de760f2671106873bac213b12ae"
     },
     {
       "source": "/root/prov/sweep_candidate_build.log",
@@ -29,9 +29,21 @@
     },
     {
       "source": "/root/prov/sweep_windows580.log",
-      "source_sha256": "3592506850b0b66c8c5a1bc23f8e735aed9d751a634934dbbf1bd1cfb52884c2",
+      "source_sha256": "78863d767e73b7ae953147f046cf834c43494c8d27649a186ba8a526145334c9",
       "export": "windows580_binding.txt",
-      "export_sha256": "45ade34f2343567f1526a4714768193999469b1f035b333623023ab78d19df9f"
+      "export_sha256": "e55915c818e33b5908dafefc7b41fcabc570ee5c294650c466a42cdfd6c32491"
+    },
+    {
+      "source": "/root/prov/sweep_windows580_binding.json",
+      "source_sha256": "0195fa875931066bacbcbad7159e2849192ada1af8cc51753f688b5c839a6d68",
+      "export": "binding.json",
+      "export_sha256": "937f82a802f2541cb639013caa0fccdac41e469503765892a6c20fef4c045ac9"
+    },
+    {
+      "source": "/root/prov/sweep_windows580_cold_ready.txt",
+      "source_sha256": "d2c880a7888640e46af1b4edd92f3986d3f7ed749835704d63e0aad7d5a9ac39",
+      "export": "cold_ready.txt",
+      "export_sha256": "9d8bf7733a3465ada4a53604dbcf6d8878cbb105240aacbbfcaeaa6c2946a937"
     }
   ]
 }

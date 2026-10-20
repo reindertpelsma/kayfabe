@@ -1,0 +1,15 @@
+{
+  "utc": "2026-10-20T04:06:27.854055+00:00",
+  "own_id": 56830105,
+  "qemu_pids": [],
+  "nbd_pids": [],
+  "product_arm_markers": {
+    "baseline_off": false,
+    "candidate_off": false
+  },
+  "controller_alive": false,
+  "native_health_rc": 0,
+  "native_health": "NVIDIA GeForce RTX 5090, 595.91.07, 2 MiB",
+  "binding_exit_zero": true,
+  "binding_ready": true
+}

@@ -1,5 +1,5 @@
 {
-  "utc": "2026-10-20T04:05:12.233914+00:00",
+  "utc": "2026-10-20T04:06:21.462832+00:00",
   "generic_install_log_sha256": "e0cab8883110460d9ee1228c5e085ca87e733d605512a511e2c7d021c373cdf9",
   "generic_install_selected_lines": [
     "[2026-10-20T03:56:31Z] START check-boot",
@@ -9,5 +9,5 @@
   "setup_rpc_trace_lines": 0,
   "baseline_started": false,
   "candidate_started": false,
-  "setup_qemu_log_sha256": "9b4cde524fc18e16d1c259d0bcb5cc7b11d8d902869caf640a0ed4a546c34626"
+  "setup_qemu_log_sha256": "e08e941eebe1d4bf0b18db914a4745d2acd01d076316a437edc9c51c9cf8a014"
 }
