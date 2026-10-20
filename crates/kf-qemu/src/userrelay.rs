@@ -880,6 +880,9 @@ impl ChanPlane {
                     if self.relay_stats.lazy.any() {
                         eprintln!("kf3: USER_RING_LAZY_OBSERVE SUMMARY (all relays gone, #{n}) {}", self.relay_stats.lazy.summary());
                     }
+                    if kf_chan::user_storage::readback_stats().any() {
+                        eprintln!("kf3: {} (all relays gone, #{n})", kf_chan::user_storage::readback_stats().summary());
+                    }
                     eprintln!("kf3: {}", crate::userstore::summary());
                 }
             }

@@ -3413,13 +3413,27 @@ mod tests {
         let pump = include_str!("userpump.rs");
         let pump = pump.split("#[cfg(test)]").next().unwrap();
         assert_eq!(pump.matches("storage.publish_put(put)").count(), 6);
-        assert_eq!(pump.matches("publish_put(").count(), 6, "no other caller of the PUT publication");
-        assert!(!pump.contains("store_u32("), "the pump stores no private word itself: only through the storage verbs");
+        assert_eq!(
+            pump.matches("publish_put(").count(),
+            6,
+            "no other caller of the PUT publication"
+        );
+        assert!(
+            !pump.contains("store_u32("),
+            "the pump stores no private word itself: only through the storage verbs"
+        );
         for part in pump.split("storage.publish_put(put)").skip(1) {
-            assert!(part.trim_start().starts_with('}'), "nothing is stored after the read-back step");
+            assert!(
+                part.trim_start().starts_with('}'),
+                "nothing is stored after the read-back step"
+            );
         }
         // the closures are run by the guarded publication, nowhere else
-        assert_eq!(pump.matches("publish_guarded(").count(), 5, "definition, three direct calls, the pump's `publish`");
+        assert_eq!(
+            pump.matches("publish_guarded(").count(),
+            5,
+            "definition, three direct calls, the pump's `publish`"
+        );
         assert_eq!(pump.matches("self.publish(").count(), 3);
     }
 
@@ -3430,22 +3444,35 @@ mod tests {
         let pump = include_str!("userpump.rs");
         let pump = pump.split("#[cfg(test)]").next().unwrap();
         assert_eq!(pump.matches(".doorbell(").count(), 1);
-        let f = pump.split("fn publish_guarded(").nth(1).unwrap().split("fn snapshot_with").next().unwrap();
+        let f = pump
+            .split("fn publish_guarded(")
+            .nth(1)
+            .unwrap()
+            .split("fn snapshot_with")
+            .next()
+            .unwrap();
         let admit = f.find("USER_RING_USERD_ADMISSION\"))??;").unwrap();
         let bell = f.find(".doorbell(").unwrap();
         assert!(admit < bell);
-        assert!(f.find("write(&storage)").unwrap() < admit, "the closure runs inside the admission");
-        assert!(f[bell..].trim_end().ends_with("}"), "the doorbell is the tail expression");
+        assert!(
+            f.find("write(&storage)").unwrap() < admit,
+            "the closure runs inside the admission"
+        );
+        assert!(
+            f[bell..].trim_end().ends_with("}"),
+            "the doorbell is the tail expression"
+        );
     }
 
     /// RB-Q3: the read-back counters are reported with the other relay summaries, only when they moved.
     #[test]
     fn the_read_back_counters_are_reported_only_when_they_moved() {
         let relay = include_str!("userrelay.rs");
-        let at = relay.find("kf_chan::user_storage::readback_stats().any()").expect("the report is conditional on a moved counter");
+        let at = relay
+            .find("kf_chan::user_storage::readback_stats().any()")
+            .expect("the report is conditional on a moved counter");
         assert!(relay[at..].contains("kf_chan::user_storage::readback_stats().summary()"));
     }
-
     /// G3 (`docs/design/V3_USER_RING_LIFECYCLE_20261016.md` section 0): the lifecycle machine is reachable
     /// only from the Windows USER-ring pump, which only the Windows birth path constructs (it needs a
     /// `WindowsUserRingPermit`). Linux Passthrough, Translated and Emulated channels never get one. This

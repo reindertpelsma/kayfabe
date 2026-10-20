@@ -2638,22 +2638,41 @@ fn p10_publish_reads_back_before_the_native_doorbell() {
     let load = body
         .find("w.load_u32(PUT_WORD")
         .expect("P10: the PUT publication step reads the stored word back (no read-back found)");
-    let fence = body.find("w.read_fence()").expect("pin: the compiler barrier after the read");
+    let fence = body
+        .find("w.read_fence()")
+        .expect("pin: the compiler barrier after the read");
     let tail = body.find("stats.record(").expect("pin: the counter");
-    assert!(store < load && load < fence && fence < tail, "store, then read-back, then barrier, then counters");
-    assert_eq!(body.matches("load_u32(").count(), 1, "one read per publication, never per entry");
-    assert_eq!(body.matches("store_u32(").count(), 1, "the step stores exactly the PUT");
+    assert!(
+        store < load && load < fence && fence < tail,
+        "store, then read-back, then barrier, then counters"
+    );
+    assert_eq!(
+        body.matches("load_u32(").count(),
+        1,
+        "one read per publication, never per entry"
+    );
+    assert_eq!(
+        body.matches("store_u32(").count(),
+        1,
+        "the step stores exactly the PUT"
+    );
     // the production publish_put is that step with the process counters, not a second implementation
     let publish = after(USER_STORAGE, "pub fn publish_put(&self, put: u32)")
         .split("\n    }\n")
         .next()
         .unwrap();
-    assert!(publish.contains("publish_put_counted(put, readback_stats())"), "publish_put feeds the process counters");
+    assert!(
+        publish.contains("publish_put_counted(put, readback_stats())"),
+        "publish_put feeds the process counters"
+    );
     let counted = after(USER_STORAGE, "pub fn publish_put_counted(")
         .split("\n    }\n")
         .next()
         .unwrap();
-    assert!(counted.contains("publish_put_via(self.cpu()?, put, stats)"), "through the live CPU view only");
+    assert!(
+        counted.contains("publish_put_via(self.cpu()?, put, stats)"),
+        "through the live CPU view only"
+    );
 }
 
 /// P10 (every publication path): the pump has ONE doorbell for private publications, rung after the guarded publication
@@ -2662,16 +2681,39 @@ fn p10_publish_reads_back_before_the_native_doorbell() {
 #[test]
 fn p10_every_publication_path_ends_in_the_read_back_step_before_the_single_doorbell() {
     let pump = USERPUMP.split("#[cfg(test)]").next().unwrap();
-    assert_eq!(pump.matches(".doorbell(").count(), 1, "one private doorbell in the pump");
-    let publish = after(pump, "fn publish_guarded(").split("fn snapshot_with").next().unwrap();
+    assert_eq!(
+        pump.matches(".doorbell(").count(),
+        1,
+        "one private doorbell in the pump"
+    );
+    let publish = after(pump, "fn publish_guarded(")
+        .split("fn snapshot_with")
+        .next()
+        .unwrap();
     let admit = publish
         .find(".map_err(|e| access_error(e, \"USER_RING_USERD_ADMISSION\"))??;")
         .expect("pin: admit end");
-    let bell = publish.find("me.rm\n        .doorbell(").expect("pin: doorbell");
-    assert!(admit < bell, "the doorbell is rung after the guarded publication");
-    assert!(!publish[..admit].contains(".doorbell("), "no doorbell inside the publication");
-    assert!(publish[admit..bell].lines().all(|l| l.trim().is_empty() || l.contains("USER_RING_USERD_ADMISSION")));
-    assert_eq!(pump.matches("storage.publish_put(put)").count(), 6, "six publication closures");
+    let bell = publish
+        .find("me.rm\n        .doorbell(")
+        .expect("pin: doorbell");
+    assert!(
+        admit < bell,
+        "the doorbell is rung after the guarded publication"
+    );
+    assert!(
+        !publish[..admit].contains(".doorbell("),
+        "no doorbell inside the publication"
+    );
+    assert!(
+        publish[admit..bell]
+            .lines()
+            .all(|l| l.trim().is_empty() || l.contains("USER_RING_USERD_ADMISSION"))
+    );
+    assert_eq!(
+        pump.matches("storage.publish_put(put)").count(),
+        6,
+        "six publication closures"
+    );
     for part in pump.split("storage.publish_put(put)").skip(1) {
         assert!(
             part.trim_start().starts_with('}'),

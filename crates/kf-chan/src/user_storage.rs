@@ -426,7 +426,8 @@ pub trait PutWords {
 
 impl PutWords for VolatileRegion {
     fn store_u32(&self, offset: u64, value: u32) -> Result<(), String> {
-        VolatileRegion::store_u32(self, HostOffset::new(offset), value).map_err(|e| format!("{e:?}"))
+        VolatileRegion::store_u32(self, HostOffset::new(offset), value)
+            .map_err(|e| format!("{e:?}"))
     }
     fn load_u32(&self, offset: u64) -> Result<u32, String> {
         VolatileRegion::load_u32(self, HostOffset::new(offset)).map_err(|e| format!("{e:?}"))
@@ -492,7 +493,8 @@ impl ReadbackStats {
     #[must_use]
     pub fn any(&self) -> bool {
         use core::sync::atomic::Ordering::Relaxed;
-        self.confirmed.load(Relaxed) + self.mismatched.load(Relaxed) + self.unreadable.load(Relaxed) != 0
+        self.confirmed.load(Relaxed) + self.mismatched.load(Relaxed) + self.unreadable.load(Relaxed)
+            != 0
     }
     /// One bounded line.
     #[must_use]
@@ -528,7 +530,11 @@ pub const fn report_due(n: u64) -> bool {
 ///
 /// # Errors
 /// Out-of-ring PUT, or the store failed.
-pub fn publish_put_via<W: PutWords>(w: &W, put: u32, stats: &ReadbackStats) -> Result<ReadBack, String> {
+pub fn publish_put_via<W: PutWords>(
+    w: &W,
+    put: u32,
+    stats: &ReadbackStats,
+) -> Result<ReadBack, String> {
     if put >= ENTRIES {
         return Err("USER_STORAGE_PUT_BOUND".into());
     }
@@ -536,9 +542,21 @@ pub fn publish_put_via<W: PutWords>(w: &W, put: u32, stats: &ReadbackStats) -> R
     w.store_u32(PUT_WORD, put)
         .map_err(|e| format!("USER_STORAGE_PUT_WRITE: {e}"))?;
     w.release_fence();
-    // STUB (EXPECTED RED): the read-back is not issued yet.
-    let outcome = ReadBack::Unreadable;
-    stats.record(&outcome);
+    // The read-back: a non-posted read of the word just stored, through the same mapping. It cannot pass the
+    // earlier posted writes (entries, marker, PUT) to the device, so the caller's doorbell (a store into another
+    // BAR) is rung only after they have landed. The value is used (compared), so it is never optimised away.
+    let outcome = match w.load_u32(PUT_WORD) {
+        Ok(read) if read == put => ReadBack::Confirmed,
+        Ok(read) => ReadBack::Mismatch { wrote: put, read },
+        Err(_) => ReadBack::Unreadable,
+    };
+    w.read_fence();
+    let n = stats.record(&outcome);
+    if outcome != ReadBack::Confirmed && report_due(n) {
+        eprintln!(
+            "kf3: USER_RING_READBACK_ANOMALY #{n} {outcome:?} (the doorbell is rung regardless; no retry)"
+        );
+    }
     Ok(outcome)
 }
 
@@ -785,8 +803,7 @@ impl Storage<CpuView> {
     /// Out-of-ring PUT or released CPU view. A failed or mismatching read-back is counted
     /// ([`readback_stats`]) and never an error: the doorbell must still ring.
     pub fn publish_put(&self, put: u32) -> Result<(), String> {
-        self.publish_put_counted(put, readback_stats())
-            .map(|_| ())
+        self.publish_put_counted(put, readback_stats()).map(|_| ())
     }
 
     /// [`Self::publish_put`] with the counters and the outcome explicit (tests; the pump uses `publish_put`).
@@ -1461,10 +1478,25 @@ mod tests {
             publish_put_via(&rec, 5, &stats),
             Ok(ReadBack::Mismatch { wrote: 5, read: 99 })
         );
-        assert_eq!((stats.confirmed.load(Relaxed), stats.mismatched.load(Relaxed), stats.unreadable.load(Relaxed)), (0, 1, 0));
+        assert_eq!(
+            (
+                stats.confirmed.load(Relaxed),
+                stats.mismatched.load(Relaxed),
+                stats.unreadable.load(Relaxed)
+            ),
+            (0, 1, 0)
+        );
         let ev = rec.events.borrow();
-        assert_eq!(ev.iter().filter(|e| matches!(e, Ev::Load(_))).count(), 1, "no retry loop");
-        assert_eq!(ev.iter().filter(|e| matches!(e, Ev::Store(..))).count(), 1, "no second store");
+        assert_eq!(
+            ev.iter().filter(|e| matches!(e, Ev::Load(_))).count(),
+            1,
+            "no retry loop"
+        );
+        assert_eq!(
+            ev.iter().filter(|e| matches!(e, Ev::Store(..))).count(),
+            1,
+            "no second store"
+        );
     }
 
     /// RB4: a read that fails is the bounded fallback: counted, one attempt, the publication still succeeds so the
@@ -1475,9 +1507,20 @@ mod tests {
         *rec.load_result.borrow_mut() = Some(Err("load".into()));
         let stats = ReadbackStats::default();
         assert_eq!(publish_put_via(&rec, 5, &stats), Ok(ReadBack::Unreadable));
-        assert_eq!((stats.confirmed.load(Relaxed), stats.mismatched.load(Relaxed), stats.unreadable.load(Relaxed)), (0, 0, 1));
         assert_eq!(
-            rec.events.borrow().iter().filter(|e| matches!(e, Ev::Load(_))).count(),
+            (
+                stats.confirmed.load(Relaxed),
+                stats.mismatched.load(Relaxed),
+                stats.unreadable.load(Relaxed)
+            ),
+            (0, 0, 1)
+        );
+        assert_eq!(
+            rec.events
+                .borrow()
+                .iter()
+                .filter(|e| matches!(e, Ev::Load(_)))
+                .count(),
             1,
             "one attempt, no retry"
         );
@@ -1491,9 +1534,17 @@ mod tests {
         let stats = ReadbackStats::default();
         assert!(publish_put_via(&rec, ENTRIES, &stats).is_err());
         assert!(rec.events.borrow().is_empty());
-        let rec = Rec { store_fails: true, ..Rec::default() };
+        let rec = Rec {
+            store_fails: true,
+            ..Rec::default()
+        };
         assert!(publish_put_via(&rec, 1, &stats).is_err());
-        assert!(!rec.events.borrow().iter().any(|e| matches!(e, Ev::Load(_) | Ev::ReadFence)));
+        assert!(
+            !rec.events
+                .borrow()
+                .iter()
+                .any(|e| matches!(e, Ev::Load(_) | Ev::ReadFence))
+        );
         assert!(!stats.any(), "nothing counted");
     }
 
@@ -1504,10 +1555,26 @@ mod tests {
     fn every_publication_shape_on_the_real_mapping_is_confirmed_once() {
         let s = anonymous_live_storage();
         let stats = ReadbackStats::default();
-        let shapes: [(&str, Box<dyn Fn(&Storage<CpuView>) -> Result<(), String>>, u32); 5] = [
-            ("entry", Box::new(|s| s.write_user_gp(0, kf_abi::submit::gp_entry(0x420000, 4096).unwrap())), 1),
-            ("gate", Box::new(|s| s.write_host_barrier(1).and_then(|()| s.write_host_marker(2, 0x4b46_0001))), 3),
-            ("marker", Box::new(|s| s.write_host_marker(3, 0x4b46_0002)), 4),
+        type Shape = Box<dyn Fn(&Storage<CpuView>) -> Result<(), String>>;
+        let shapes: [(&str, Shape, u32); 5] = [
+            (
+                "entry",
+                Box::new(|s| s.write_user_gp(0, kf_abi::submit::gp_entry(0x420000, 4096).unwrap())),
+                1,
+            ),
+            (
+                "gate",
+                Box::new(|s| {
+                    s.write_host_barrier(1)
+                        .and_then(|()| s.write_host_marker(2, 0x4b46_0001))
+                }),
+                3,
+            ),
+            (
+                "marker",
+                Box::new(|s| s.write_host_marker(3, 0x4b46_0002)),
+                4,
+            ),
             ("shadow", Box::new(|s| s.write_shadow_gp(4, 1 << 40)), 5),
             (
                 "staged",
@@ -1521,11 +1588,22 @@ mod tests {
         ];
         for (name, writes, put) in shapes {
             writes(&s).unwrap_or_else(|e| panic!("{name}: {e}"));
-            assert_eq!(s.publish_put_counted(put, &stats), Ok(ReadBack::Confirmed), "{name}");
+            assert_eq!(
+                s.publish_put_counted(put, &stats),
+                Ok(ReadBack::Confirmed),
+                "{name}"
+            );
             assert_eq!(s.userd_words().unwrap()[35], put, "{name}: GP_PUT");
         }
-        assert_eq!(stats.confirmed.load(Relaxed), 5, "one read-back per publication, not per entry");
-        assert_eq!(stats.mismatched.load(Relaxed) + stats.unreadable.load(Relaxed), 0);
+        assert_eq!(
+            stats.confirmed.load(Relaxed),
+            5,
+            "one read-back per publication, not per entry"
+        );
+        assert_eq!(
+            stats.mismatched.load(Relaxed) + stats.unreadable.load(Relaxed),
+            0
+        );
     }
 
     /// RB7: the process-wide counters are what `publish_put` feeds, and the stderr report is bounded.
@@ -1536,7 +1614,11 @@ mod tests {
         s.publish_put(2).unwrap();
         assert!(readback_stats().confirmed.load(Relaxed) > before);
         assert!(readback_stats().any());
-        assert!(readback_stats().summary().starts_with("USER_RING_READBACK confirmed="));
+        assert!(
+            readback_stats()
+                .summary()
+                .starts_with("USER_RING_READBACK confirmed=")
+        );
         let due: Vec<u64> = (1..=20).filter(|n| report_due(*n)).collect();
         assert_eq!(due, [1, 2, 3, 4, 8, 16]);
         assert!(!report_due(1_000_003) && report_due(1 << 20));
