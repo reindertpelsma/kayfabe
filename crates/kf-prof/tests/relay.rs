@@ -605,5 +605,53 @@ fn guest_get_wrap_changes_once_and_no_fresh_read_keeps_its_age() {
         .unwrap()[30],
         30
     );
+    assert_eq!(
+        g.observe(
+            80,
+            Observation {
+                guest_get: Some(0),
+                ..Observation::default()
+            }
+        )
+        .unwrap()[30],
+        30
+    );
     assert_eq!(g.observe(90, Observation::default()).unwrap()[30], 30);
+}
+
+#[cfg(feature = "prof-inject")]
+fn runtime_guest_geometry(get: u32, put: u32, entries: u32, private: u32, expected: u64) {
+    let path =
+        std::env::temp_dir().join(format!("kf-prof-k1-guest-{}-{entries}", std::process::id()));
+    std::fs::create_dir(&path).unwrap();
+    let s = kf_prof::runtime::Session::create_diagnostic(&path).unwrap();
+    let mut r = s.register_relay(1).unwrap();
+    r.observe(Observation {
+        guest_get: Some(get),
+        guest_put: Some(put),
+        guest_entries: entries,
+        private_entries: private,
+        ..Observation::default()
+    });
+    let row = s.snapshot();
+    assert_eq!(row["relays"][0]["guest_depth"], expected);
+    let changed = row["relays"][0]["guest_get_changed_ns"].as_u64().unwrap();
+    assert!(changed > 0);
+    r.observe(Observation {
+        guest_entries: entries,
+        ..Observation::default()
+    });
+    assert_eq!(s.snapshot()["relays"][0]["guest_get_changed_ns"], changed);
+    s.stop().unwrap();
+    std::fs::remove_dir_all(path).unwrap();
+}
+#[cfg(feature = "prof-inject")]
+#[test]
+fn runtime_guest_wrap_uses_eight_entries_not_the_private_geometry() {
+    runtime_guest_geometry(7, 1, 8, 512, 2);
+}
+#[cfg(feature = "prof-inject")]
+#[test]
+fn runtime_guest_wrap_uses_512_entries_even_when_private_ring_is_smaller() {
+    runtime_guest_geometry(511, 3, 512, 16, 4);
 }

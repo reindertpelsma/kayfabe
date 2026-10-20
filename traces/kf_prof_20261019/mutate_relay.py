@@ -17,6 +17,10 @@ def budget(s):
  a=s.index('pub fn bounded_record(');b=s.index('/// Channel-birth registration',a)
  return s[:a]+'pub fn bounded_record(row:&mut Value)->io::Result<Vec<u8>> {serde_json::to_vec(row).map_err(raw_error)}\n'+s[b:]
 CASES=[
+('runtime guest wrap',RUN,rep('(p + guest_entries - g) % guest_entries','p.saturating_sub(g) % guest_entries'),RUST),
+('guest GET change tracking',MODEL,rep('w[30] = now;','w[30] = 0;'),RUST),
+('guest unchanged GET age',MODEL,rep('w[5] & 8 == 0 || w[16] != u64::from(n)','true'),RUST),
+('reader guest wrap',READER,rep('(gp+ge-gg)%ge','max(0,gp-gg)%ge'),PY),
 ('unchanged GET age',MODEL,rep('w[5] & 1 == 0 || w[6] != u64::from(n)','true'),RUST),
 ('unchanged wait age',MODEL,rep('w[9] != kind || w[10] != target','true'),RUST),
 ('hardware freshness',MODEL,stale,RUST),

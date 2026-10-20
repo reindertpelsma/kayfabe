@@ -1070,7 +1070,14 @@ fn relay_row(index: usize, v: &[u64; 31]) -> Value {
         .zip(put)
         .filter(|&(g, p)| entries > 0 && g < entries && p < entries)
         .map(|(g, p)| (p + entries - g) % entries);
-    json!({"source_slot":index,"generation":v[1],"key":v[2],"token":v[3],"observed_ns":v[4],"private_get":get,"private_put":put,"reference":known(4,8),"private_depth":depth,"wait":{"kind":v[9],"target":v[10],"birth_ns":v[27]},"doorbell_count":known(32,11),"last_doorbell_observed_ns":v[12],"wake_reason":v[13],"wake_observed_ns":v[14],"private_get_changed_ns":v[15],"guest_get":known(8,16),"guest_put":known(16,17),"guest_entries":v[18],"guest_observed_ns":v[19],"issued":v[20],"fetched":v[21],"markers_issued":v[22],"active":v[23]!=0,"private_entries":entries,"private_observed_ns":v[25],"private_put_observed_ns":v[26],"birth_ns":v[28]})
+    let guest_get = known(8, 16);
+    let guest_put = known(16, 17);
+    let guest_entries = v[18];
+    let guest_depth = guest_get
+        .zip(guest_put)
+        .filter(|&(g, p)| guest_entries > 0 && g < guest_entries && p < guest_entries)
+        .map(|(g, p)| (p + guest_entries - g) % guest_entries);
+    json!({"guest_depth":guest_depth,"guest_get_changed_ns":guest_get.map(|_|v[30]),"source_slot":index,"generation":v[1],"key":v[2],"token":v[3],"observed_ns":v[4],"private_get":get,"private_put":put,"reference":known(4,8),"private_depth":depth,"wait":{"kind":v[9],"target":v[10],"birth_ns":v[27]},"doorbell_count":known(32,11),"last_doorbell_observed_ns":v[12],"wake_reason":v[13],"wake_observed_ns":v[14],"private_get_changed_ns":v[15],"guest_get":known(8,16),"guest_put":known(16,17),"guest_entries":v[18],"guest_observed_ns":v[19],"issued":v[20],"fetched":v[21],"markers_issued":v[22],"active":v[23]!=0,"private_entries":entries,"private_observed_ns":v[25],"private_put_observed_ns":v[26],"birth_ns":v[28]})
 }
 /// Bound the exact wire payload before publishing any byte of a circular record.
 /// Full live source gauges remain in mmap when summaries omit rows.

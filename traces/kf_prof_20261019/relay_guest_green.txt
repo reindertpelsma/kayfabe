@@ -1,0 +1,6 @@
+MEASURED: guest depth/age EXPECTED RED:2 Rust failures and2 reader missing-field errors.
+MEASURED: restored prof-inject suite104 passed (40core+4injection+30relay+23runtime+7sink).
+MEASURED: full21-case relay/model/runtime/reader mutation table: every case>=2 kills.
+MEASURED: scoped relay/wiring Python26 passed before final two runtime geometry tests.
+MEASURED: qemu after two lock wrappers356 passed; clippy base/current full diagnostic multiset307 equal, new0.
+CODE READ: milliseconds are since last observed change; observation staleness is separate.

@@ -54,7 +54,9 @@ def _relay(index,v):
     known=lambda mask,at:v[at] if v[6]&mask else None
     get,put,entries=known(1,7),known(2,8),v[25]
     depth=(put+entries-get)%entries if get is not None and put is not None and entries>0 and get<entries and put<entries else None
-    return dict(source_slot=index,generation=v[2],key=v[3],token=v[4],observed_ns=v[5],private_get=get,private_put=put,reference=known(4,9),private_depth=depth,wait=dict(kind=v[10],target=v[11],birth_ns=v[28]),doorbell_count=known(32,12),last_doorbell_observed_ns=v[13],wake_reason=v[14],wake_observed_ns=v[15],private_get_changed_ns=v[16],guest_get=known(8,17),guest_put=known(16,18),guest_entries=v[19],guest_observed_ns=v[20],issued=v[21],fetched=v[22],markers_issued=v[23],active=bool(v[24]),private_entries=entries,private_observed_ns=v[26],private_put_observed_ns=v[27],birth_ns=v[29])
+    gg,gp,ge=known(8,17),known(16,18),v[19]
+    gd=(gp+ge-gg)%ge if gg is not None and gp is not None and ge>0 and gg<ge and gp<ge else None
+    return dict(guest_depth=gd,guest_get_changed_ns=v[31] if gg is not None else None,source_slot=index,generation=v[2],key=v[3],token=v[4],observed_ns=v[5],private_get=get,private_put=put,reference=known(4,9),private_depth=depth,wait=dict(kind=v[10],target=v[11],birth_ns=v[28]),doorbell_count=known(32,12),last_doorbell_observed_ns=v[13],wake_reason=v[14],wake_observed_ns=v[15],private_get_changed_ns=v[16],guest_get=known(8,17),guest_put=known(16,18),guest_entries=v[19],guest_observed_ns=v[20],issued=v[21],fetched=v[22],markers_issued=v[23],active=bool(v[24]),private_entries=entries,private_observed_ns=v[26],private_put_observed_ns=v[27],birth_ns=v[29])
 
 def read_mmap(path):
     # pread handles concurrent truncation as a short read, never a SIGBUS.
@@ -163,7 +165,13 @@ def main():
                     print(f"relay={q['key']:x}/{q['generation']} private_GET/PUT/REF={q['private_get']}/{q['private_put']}/{q['reference']} depth={q['private_depth']} Wait={q['wait']} get_change_age_ms={get_age} doorbells={q['doorbell_count']} doorbell_seen_ns={q['last_doorbell_observed_ns']} wake={q['wake_reason']} sample_ns={q['private_observed_ns']}",flush=True)
                 if args.once:break
                 time.sleep(1);continue
-            if args.command=='relays':out=data.get('relays',[])
+            if args.command=='relays':
+                out=data.get('relays',[]);observed_now=time.monotonic_ns()
+                for q in out:
+                    q['observation_age_ms']=max(0,observed_now-q['observed_ns'])/1e6
+                    for domain in ['guest','private']:
+                        changed=q.get(domain+'_get_changed_ns')
+                        q[domain+'_ms_since_last_observed_get_change']=max(0,observed_now-changed)/1e6 if changed is not None and (domain!='private' or q.get('private_get') is not None) else None
             elif args.command=='window':rows=[r for r in rows if r.get('start_ns',0)<args.t1 and r.get('end_ns',0)>args.t0];out=rows
             elif args.command=='hangs':
                 last=rows[-1] if rows else {};now=last.get('end_ns',data['header'].get('last_update_ns',0))

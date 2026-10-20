@@ -139,6 +139,9 @@ impl RelayGauge {
             w[25] = now;
         }
         if let Some(n) = o.guest_get {
+            if w[5] & 8 == 0 || w[16] != u64::from(n) {
+                w[30] = now;
+            }
             w[16] = u64::from(n);
             w[5] |= 8;
             w[19] = now;
