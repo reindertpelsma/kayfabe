@@ -1,0 +1,9 @@
+{
+  "source": "f09ee369f2b3fc72ecc1f2dd0bf9f4d94cb35b01",
+  "sha256": "187ef920be2be8c61433a0b2a70c1e37a4cb0172747ad263571a616b59b53714",
+  "target": "x86_64-pc-windows-gnu",
+  "cargo": "--locked --offline --release -j2 -p kf-census",
+  "result": "build PASS; runtime UNRUN",
+  "own_target_cleaned": true,
+  "note": "Initial combined command with rm-rf rejected before execution. Scoped cargo clean safely removed the complete own target directory."
+}
