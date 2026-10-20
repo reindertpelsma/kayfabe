@@ -6,6 +6,8 @@ edition.workspace = true
 license.workspace = true
 
 [features]
+# Optional profiler clock primitives; no code in the production build.
+prof = []
 # ★ Test-only escape hatch for `HostPageSize::forced` (l1_os_shell.md §5.2 item 1/3).
 # Unit tests get it from `cfg(test)`; this feature is what an INTEGRATION harness will
 # enable to run the shell suite at a forced 64 KiB on an x86 runner. Nothing enables it
