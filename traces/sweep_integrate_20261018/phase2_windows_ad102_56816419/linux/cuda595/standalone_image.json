@@ -1,0 +1,19 @@
+{
+    "virtual-size": 35970351104,
+    "filename": "/workspace/bench/sweep-guest595-flat.qcow2",
+    "cluster-size": 65536,
+    "format": "qcow2",
+    "actual-size": 8951087104,
+    "format-specific": {
+        "type": "qcow2",
+        "data": {
+            "compat": "1.1",
+            "compression-type": "zlib",
+            "lazy-refcounts": false,
+            "refcount-bits": 16,
+            "corrupt": false,
+            "extended-l2": false
+        }
+    },
+    "dirty-flag": false
+}

@@ -1,0 +1,225 @@
+{
+  "case": "cuda580",
+  "source": "0c87acda802b18a610739e75f2b50049a9247067",
+  "own_id": 56816419,
+  "utc": "2026-10-20T02:47:52.359506+00:00",
+  "normalization": "UTF8 replacement, universal newlines, trailing whitespace, GPU identifiers redacted; source/export hashes preserved",
+  "files": [
+    {
+      "source": "/root/prov/sweep_cuda580.log",
+      "export": "controller.txt",
+      "source_bytes": 4767,
+      "source_sha256": "3d129d1194ffb58e248a99a5541ea68ebc93d2d1f9372ef2327c4e9ce386107e",
+      "export_sha256": "3d129d1194ffb58e248a99a5541ea68ebc93d2d1f9372ef2327c4e9ce386107e",
+      "gpu_identifier_redactions": 0
+    },
+    {
+      "source": "/workspace/bench/cl_sweep0c87acda_ad102_cuda580_guest.out",
+      "export": "suite.txt",
+      "source_bytes": 3180,
+      "source_sha256": "f4b114fe98eb3516d66e395593624958669f28d51427bf2ed389613f446c7e91",
+      "export_sha256": "f4b114fe98eb3516d66e395593624958669f28d51427bf2ed389613f446c7e91",
+      "gpu_identifier_redactions": 0
+    },
+    {
+      "source": "/root/prov/sweep_cuda580_image.json",
+      "export": "standalone_image.json",
+      "source_bytes": 486,
+      "source_sha256": "4c275facc0843e49c64ba2339eb65ab2f2be2786e13e934874a03ccef58c59d1",
+      "export_sha256": "4c275facc0843e49c64ba2339eb65ab2f2be2786e13e934874a03ccef58c59d1",
+      "gpu_identifier_redactions": 0
+    },
+    {
+      "source": "/workspace/bench/run_cl_sweep0c87acda_ad102_cuda580_cup2_1_probe.log",
+      "export": "rungs/cup2/probe.txt",
+      "source_bytes": 10873,
+      "source_sha256": "2c9ecb626cd81bbeb70893a0f40a6a2ee3916738b1dfc9013b19ec04b98d19ee",
+      "export_sha256": "cd125d769ae775779b708dcfff2cfbff2fada376b6465c5afee3b5b3dc8c122a",
+      "gpu_identifier_redactions": 0
+    },
+    {
+      "source": "/workspace/bench/run_cl_sweep0c87acda_ad102_cuda580_cup2_1_qemu.log",
+      "export": "rungs/cup2/qemu.txt",
+      "source_bytes": 227488,
+      "source_sha256": "130d836231ec42296c9a59ee21d112eb4af0c33fae634d104c6cd6ab7e776c89",
+      "export_sha256": "4e6003f3d5b0c2f6d8893e6498582c77f3c376d939b89789f2d02d0492c71b8e",
+      "gpu_identifier_redactions": 1
+    },
+    {
+      "source": "/workspace/bench/run_cl_sweep0c87acda_ad102_cuda580_cup2_1_dmesg.log",
+      "export": "rungs/cup2/dmesg.txt",
+      "source_bytes": 4774,
+      "source_sha256": "9fc3717d21108d61bf82678e33fee1cb296a91d603461ed3eef81d4acd9bf817",
+      "export_sha256": "9fc3717d21108d61bf82678e33fee1cb296a91d603461ed3eef81d4acd9bf817",
+      "gpu_identifier_redactions": 0
+    },
+    {
+      "source": "/workspace/bench/run_cl_sweep0c87acda_ad102_cuda580_cup2_1_dmesg_after.log",
+      "export": "rungs/cup2/dmesg_after.txt",
+      "source_bytes": 9106,
+      "source_sha256": "baf59cbd1c68c21710df053514356119e9f2eb36c086df56ca5f7d0ed05e1877",
+      "export_sha256": "baf59cbd1c68c21710df053514356119e9f2eb36c086df56ca5f7d0ed05e1877",
+      "gpu_identifier_redactions": 0
+    },
+    {
+      "source": "/workspace/bench/run_cl_sweep0c87acda_ad102_cuda580_cup2_1_hostdmesg.log",
+      "export": "rungs/cup2/hostdmesg.txt",
+      "source_bytes": 150,
+      "source_sha256": "bbb69845b13f2bc8eff614285ad37e3b83d5e4f10eb72a98e5728736d1d33d9f",
+      "export_sha256": "bbb69845b13f2bc8eff614285ad37e3b83d5e4f10eb72a98e5728736d1d33d9f",
+      "gpu_identifier_redactions": 0
+    },
+    {
+      "source": "/workspace/bench/cl_sweep0c87acda_ad102_cuda580_cup2_1_driver.log",
+      "export": "rungs/cup2/controller.txt",
+      "source_bytes": 5718,
+      "source_sha256": "b24ac97ffe1803741413524bdf70d6959b7583fe9759fb461a839fcb12b24b5c",
+      "export_sha256": "b24ac97ffe1803741413524bdf70d6959b7583fe9759fb461a839fcb12b24b5c",
+      "gpu_identifier_redactions": 0
+    },
+    {
+      "source": "/workspace/bench/run_cl_sweep0c87acda_ad102_cuda580_cup3_1_probe.log",
+      "export": "rungs/cup3/probe.txt",
+      "source_bytes": 23464,
+      "source_sha256": "40530f22b3f1e177fd5f55e901f6389e4d048f13219af93e95558fd7c4468dff",
+      "export_sha256": "526cf9d3b9a358cce561802933a1b215427ba716f5e03c401eebeed5e36c041a",
+      "gpu_identifier_redactions": 0
+    },
+    {
+      "source": "/workspace/bench/run_cl_sweep0c87acda_ad102_cuda580_cup3_1_qemu.log",
+      "export": "rungs/cup3/qemu.txt",
+      "source_bytes": 308817,
+      "source_sha256": "21096894a8764b0ae84d500661e2431119cf5a84c61af5dc5cd478af30177bd3",
+      "export_sha256": "f61d976a15d928c75e75220267a6837f98c2dd3c54201d24eef7cb70438ac2c8",
+      "gpu_identifier_redactions": 1
+    },
+    {
+      "source": "/workspace/bench/run_cl_sweep0c87acda_ad102_cuda580_cup3_1_dmesg.log",
+      "export": "rungs/cup3/dmesg.txt",
+      "source_bytes": 4774,
+      "source_sha256": "636c6d3f30188ec0066f53da6a7777a95bfd80843e0437263e471aa15a21d577",
+      "export_sha256": "636c6d3f30188ec0066f53da6a7777a95bfd80843e0437263e471aa15a21d577",
+      "gpu_identifier_redactions": 0
+    },
+    {
+      "source": "/workspace/bench/run_cl_sweep0c87acda_ad102_cuda580_cup3_1_dmesg_after.log",
+      "export": "rungs/cup3/dmesg_after.txt",
+      "source_bytes": 9208,
+      "source_sha256": "85163a8b6df4223161436e86924f151639ddb73f4584fad95c4918441bee7010",
+      "export_sha256": "85163a8b6df4223161436e86924f151639ddb73f4584fad95c4918441bee7010",
+      "gpu_identifier_redactions": 0
+    },
+    {
+      "source": "/workspace/bench/run_cl_sweep0c87acda_ad102_cuda580_cup3_1_hostdmesg.log",
+      "export": "rungs/cup3/hostdmesg.txt",
+      "source_bytes": 53,
+      "source_sha256": "9c64c59df0be7625724e4692916d39af45d748c2ce76431efcc124bdd664cb33",
+      "export_sha256": "9c64c59df0be7625724e4692916d39af45d748c2ce76431efcc124bdd664cb33",
+      "gpu_identifier_redactions": 0
+    },
+    {
+      "source": "/workspace/bench/cl_sweep0c87acda_ad102_cuda580_cup3_1_driver.log",
+      "export": "rungs/cup3/controller.txt",
+      "source_bytes": 5712,
+      "source_sha256": "18b1fdd715ee3385a80942a1f7c28453dd1d3bb1b37896161a1e5b325e5823f0",
+      "export_sha256": "18b1fdd715ee3385a80942a1f7c28453dd1d3bb1b37896161a1e5b325e5823f0",
+      "gpu_identifier_redactions": 0
+    },
+    {
+      "source": "/workspace/bench/run_cl_sweep0c87acda_ad102_cuda580_cup8_1_probe.log",
+      "export": "rungs/cup8/probe.txt",
+      "source_bytes": 14012,
+      "source_sha256": "3b9038a7ca18e144f31f710ba3379147733fce36bee99ac7c74da03489e9718e",
+      "export_sha256": "c00f78d1e3f062a42a1e4f83b76a036101cae577d91a860834d3dc46e924286d",
+      "gpu_identifier_redactions": 0
+    },
+    {
+      "source": "/workspace/bench/run_cl_sweep0c87acda_ad102_cuda580_cup8_1_qemu.log",
+      "export": "rungs/cup8/qemu.txt",
+      "source_bytes": 237652,
+      "source_sha256": "35c19fecacd1aaee08ab5d40623df96a97635e692be42c4dac22afe5ca1f245c",
+      "export_sha256": "f5f1346a226e37c6fa05727ab16c5ab1599df6192f0171ee7b67c19e1e5e2efb",
+      "gpu_identifier_redactions": 1
+    },
+    {
+      "source": "/workspace/bench/run_cl_sweep0c87acda_ad102_cuda580_cup8_1_dmesg.log",
+      "export": "rungs/cup8/dmesg.txt",
+      "source_bytes": 4774,
+      "source_sha256": "4eaaff737f62f71bcc9a4c7cfb2446b9db8a50133878998285e535a4ccf41afb",
+      "export_sha256": "4eaaff737f62f71bcc9a4c7cfb2446b9db8a50133878998285e535a4ccf41afb",
+      "gpu_identifier_redactions": 0
+    },
+    {
+      "source": "/workspace/bench/run_cl_sweep0c87acda_ad102_cuda580_cup8_1_dmesg_after.log",
+      "export": "rungs/cup8/dmesg_after.txt",
+      "source_bytes": 9106,
+      "source_sha256": "800db2fb45f3ccba0fa36e440be95dc612629ba99af48dd5889d1a3174bbeeec",
+      "export_sha256": "800db2fb45f3ccba0fa36e440be95dc612629ba99af48dd5889d1a3174bbeeec",
+      "gpu_identifier_redactions": 0
+    },
+    {
+      "source": "/workspace/bench/run_cl_sweep0c87acda_ad102_cuda580_cup8_1_hostdmesg.log",
+      "export": "rungs/cup8/hostdmesg.txt",
+      "source_bytes": 53,
+      "source_sha256": "f9bf07831324425903e41ef7c43badb4584acacb9f1fcd2eab519aea07a226e1",
+      "export_sha256": "f9bf07831324425903e41ef7c43badb4584acacb9f1fcd2eab519aea07a226e1",
+      "gpu_identifier_redactions": 0
+    },
+    {
+      "source": "/workspace/bench/cl_sweep0c87acda_ad102_cuda580_cup8_1_driver.log",
+      "export": "rungs/cup8/controller.txt",
+      "source_bytes": 5718,
+      "source_sha256": "2012a38f7cd3cb50d850c25c83b776795ef07b2ed51acd9642132784efdfbab9",
+      "export_sha256": "2012a38f7cd3cb50d850c25c83b776795ef07b2ed51acd9642132784efdfbab9",
+      "gpu_identifier_redactions": 0
+    },
+    {
+      "source": "/workspace/bench/run_cl_sweep0c87acda_ad102_cuda580_cup8bench_1_probe.log",
+      "export": "rungs/cup8bench/probe.txt",
+      "source_bytes": 27444,
+      "source_sha256": "b7596984b4240f4dbdc279cd43bb8cc9340c25236dc901d241d625ba6e9a5518",
+      "export_sha256": "e636bce5c0d8581257e487ff09666be49cd548fd60940dd9049c67f88f3a9147",
+      "gpu_identifier_redactions": 0
+    },
+    {
+      "source": "/workspace/bench/run_cl_sweep0c87acda_ad102_cuda580_cup8bench_1_qemu.log",
+      "export": "rungs/cup8bench/qemu.txt",
+      "source_bytes": 242297,
+      "source_sha256": "ec0eb06a869c3ef96a864c4599c8ec5c788148f56c5497ddefaff13230d079d8",
+      "export_sha256": "31cf25bd2a6c58fd5828e5c5644e9e6c02a5523a662b8892aa00ca377d3dc07e",
+      "gpu_identifier_redactions": 1
+    },
+    {
+      "source": "/workspace/bench/run_cl_sweep0c87acda_ad102_cuda580_cup8bench_1_dmesg.log",
+      "export": "rungs/cup8bench/dmesg.txt",
+      "source_bytes": 4774,
+      "source_sha256": "2abfdfeefe4779d456e94729b22266e80a0fb785df1ebd146dec22cd5bdbbeef",
+      "export_sha256": "2abfdfeefe4779d456e94729b22266e80a0fb785df1ebd146dec22cd5bdbbeef",
+      "gpu_identifier_redactions": 0
+    },
+    {
+      "source": "/workspace/bench/run_cl_sweep0c87acda_ad102_cuda580_cup8bench_1_dmesg_after.log",
+      "export": "rungs/cup8bench/dmesg_after.txt",
+      "source_bytes": 9106,
+      "source_sha256": "8dac9b5c7e57b0fe25b4fd7abc2b3c1c9e9af37c4267c2c0ae6565388e426502",
+      "export_sha256": "8dac9b5c7e57b0fe25b4fd7abc2b3c1c9e9af37c4267c2c0ae6565388e426502",
+      "gpu_identifier_redactions": 0
+    },
+    {
+      "source": "/workspace/bench/run_cl_sweep0c87acda_ad102_cuda580_cup8bench_1_hostdmesg.log",
+      "export": "rungs/cup8bench/hostdmesg.txt",
+      "source_bytes": 53,
+      "source_sha256": "640fdb63310c88476ff0952a4e8bd5134db97c486f528d38d86f053856128b1d",
+      "export_sha256": "640fdb63310c88476ff0952a4e8bd5134db97c486f528d38d86f053856128b1d",
+      "gpu_identifier_redactions": 0
+    },
+    {
+      "source": "/workspace/bench/cl_sweep0c87acda_ad102_cuda580_cup8bench_1_driver.log",
+      "export": "rungs/cup8bench/controller.txt",
+      "source_bytes": 5866,
+      "source_sha256": "447bba020102dd318f1d139eb32db9394ce68bc898f64979f01414cc143cdc52",
+      "export_sha256": "447bba020102dd318f1d139eb32db9394ce68bc898f64979f01414cc143cdc52",
+      "gpu_identifier_redactions": 0
+    }
+  ]
+}

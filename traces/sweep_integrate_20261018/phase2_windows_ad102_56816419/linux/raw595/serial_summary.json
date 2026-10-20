@@ -1,0 +1,212 @@
+[
+  {
+    "arm": "fast_sweep0c87acda_ad102_raw595_alias-two-vas_serial.log",
+    "heartbeat_warning_lines": 66,
+    "guest_xid_lines": 0,
+    "flip_timeout_lines": 0,
+    "module_version_banner": true
+  },
+  {
+    "arm": "fast_sweep0c87acda_ad102_raw595_alias-unmap-observe_serial.log",
+    "heartbeat_warning_lines": 62,
+    "guest_xid_lines": 0,
+    "flip_timeout_lines": 0,
+    "module_version_banner": true
+  },
+  {
+    "arm": "fast_sweep0c87acda_ad102_raw595_atomics-probe_serial.log",
+    "heartbeat_warning_lines": 54,
+    "guest_xid_lines": 0,
+    "flip_timeout_lines": 0,
+    "module_version_banner": true
+  },
+  {
+    "arm": "fast_sweep0c87acda_ad102_raw595_bar1-crossing_serial.log",
+    "heartbeat_warning_lines": 40,
+    "guest_xid_lines": 0,
+    "flip_timeout_lines": 0,
+    "module_version_banner": true
+  },
+  {
+    "arm": "fast_sweep0c87acda_ad102_raw595_blockage-coverage_serial.log",
+    "heartbeat_warning_lines": 52,
+    "guest_xid_lines": 0,
+    "flip_timeout_lines": 0,
+    "module_version_banner": true
+  },
+  {
+    "arm": "fast_sweep0c87acda_ad102_raw595_bus-info-sweep_serial.log",
+    "heartbeat_warning_lines": 54,
+    "guest_xid_lines": 0,
+    "flip_timeout_lines": 0,
+    "module_version_banner": true
+  },
+  {
+    "arm": "fast_sweep0c87acda_ad102_raw595_ce-client-guest-ram_serial.log",
+    "heartbeat_warning_lines": 46,
+    "guest_xid_lines": 0,
+    "flip_timeout_lines": 0,
+    "module_version_banner": true
+  },
+  {
+    "arm": "fast_sweep0c87acda_ad102_raw595_ce-client_serial.log",
+    "heartbeat_warning_lines": 56,
+    "guest_xid_lines": 0,
+    "flip_timeout_lines": 0,
+    "module_version_banner": true
+  },
+  {
+    "arm": "fast_sweep0c87acda_ad102_raw595_concurrency_serial.log",
+    "heartbeat_warning_lines": 54,
+    "guest_xid_lines": 0,
+    "flip_timeout_lines": 0,
+    "module_version_banner": true
+  },
+  {
+    "arm": "fast_sweep0c87acda_ad102_raw595_concurrent-fuzz_serial.log",
+    "heartbeat_warning_lines": 60,
+    "guest_xid_lines": 0,
+    "flip_timeout_lines": 0,
+    "module_version_banner": true
+  },
+  {
+    "arm": "fast_sweep0c87acda_ad102_raw595_cross-client-leak_serial.log",
+    "heartbeat_warning_lines": 34,
+    "guest_xid_lines": 0,
+    "flip_timeout_lines": 0,
+    "module_version_banner": true
+  },
+  {
+    "arm": "fast_sweep0c87acda_ad102_raw595_defer-liveness_serial.log",
+    "heartbeat_warning_lines": 56,
+    "guest_xid_lines": 0,
+    "flip_timeout_lines": 0,
+    "module_version_banner": true
+  },
+  {
+    "arm": "fast_sweep0c87acda_ad102_raw595_dictated-ring-negative_serial.log",
+    "heartbeat_warning_lines": 52,
+    "guest_xid_lines": 0,
+    "flip_timeout_lines": 0,
+    "module_version_banner": true
+  },
+  {
+    "arm": "fast_sweep0c87acda_ad102_raw595_dictated-ring_serial.log",
+    "heartbeat_warning_lines": 42,
+    "guest_xid_lines": 0,
+    "flip_timeout_lines": 0,
+    "module_version_banner": true
+  },
+  {
+    "arm": "fast_sweep0c87acda_ad102_raw595_doorbell-census_serial.log",
+    "heartbeat_warning_lines": 52,
+    "guest_xid_lines": 0,
+    "flip_timeout_lines": 0,
+    "module_version_banner": true
+  },
+  {
+    "arm": "fast_sweep0c87acda_ad102_raw595_engines_serial.log",
+    "heartbeat_warning_lines": 50,
+    "guest_xid_lines": 0,
+    "flip_timeout_lines": 0,
+    "module_version_banner": true
+  },
+  {
+    "arm": "fast_sweep0c87acda_ad102_raw595_executor-vas_serial.log",
+    "heartbeat_warning_lines": 70,
+    "guest_xid_lines": 0,
+    "flip_timeout_lines": 0,
+    "module_version_banner": true
+  },
+  {
+    "arm": "fast_sweep0c87acda_ad102_raw595_gpga-reserve-probe_serial.log",
+    "heartbeat_warning_lines": 56,
+    "guest_xid_lines": 0,
+    "flip_timeout_lines": 0,
+    "module_version_banner": true
+  },
+  {
+    "arm": "fast_sweep0c87acda_ad102_raw595_gpu-info-sweep_serial.log",
+    "heartbeat_warning_lines": 70,
+    "guest_xid_lines": 0,
+    "flip_timeout_lines": 0,
+    "module_version_banner": true
+  },
+  {
+    "arm": "fast_sweep0c87acda_ad102_raw595_guest-ram-pin_serial.log",
+    "heartbeat_warning_lines": 26,
+    "guest_xid_lines": 0,
+    "flip_timeout_lines": 0,
+    "module_version_banner": true
+  },
+  {
+    "arm": "fast_sweep0c87acda_ad102_raw595_guest-ring-channel_serial.log",
+    "heartbeat_warning_lines": 50,
+    "guest_xid_lines": 0,
+    "flip_timeout_lines": 0,
+    "module_version_banner": true
+  },
+  {
+    "arm": "fast_sweep0c87acda_ad102_raw595_late-map-race_serial.log",
+    "heartbeat_warning_lines": 62,
+    "guest_xid_lines": 0,
+    "flip_timeout_lines": 0,
+    "module_version_banner": true
+  },
+  {
+    "arm": "fast_sweep0c87acda_ad102_raw595_map-propagation_serial.log",
+    "heartbeat_warning_lines": 58,
+    "guest_xid_lines": 0,
+    "flip_timeout_lines": 0,
+    "module_version_banner": true
+  },
+  {
+    "arm": "fast_sweep0c87acda_ad102_raw595_map-stress_serial.log",
+    "heartbeat_warning_lines": 10,
+    "guest_xid_lines": 0,
+    "flip_timeout_lines": 0,
+    "module_version_banner": true
+  },
+  {
+    "arm": "fast_sweep0c87acda_ad102_raw595_missing-page-fault_serial.log",
+    "heartbeat_warning_lines": 62,
+    "guest_xid_lines": 0,
+    "flip_timeout_lines": 0,
+    "module_version_banner": true
+  },
+  {
+    "arm": "fast_sweep0c87acda_ad102_raw595_pce-mask-probe_serial.log",
+    "heartbeat_warning_lines": 50,
+    "guest_xid_lines": 0,
+    "flip_timeout_lines": 0,
+    "module_version_banner": true
+  },
+  {
+    "arm": "fast_sweep0c87acda_ad102_raw595_rpc-mixed-allocs_serial.log",
+    "heartbeat_warning_lines": 64,
+    "guest_xid_lines": 0,
+    "flip_timeout_lines": 0,
+    "module_version_banner": true
+  },
+  {
+    "arm": "fast_sweep0c87acda_ad102_raw595_timer_serial.log",
+    "heartbeat_warning_lines": 50,
+    "guest_xid_lines": 0,
+    "flip_timeout_lines": 0,
+    "module_version_banner": true
+  },
+  {
+    "arm": "fast_sweep0c87acda_ad102_raw595_uvm-invalidate_serial.log",
+    "heartbeat_warning_lines": 54,
+    "guest_xid_lines": 0,
+    "flip_timeout_lines": 0,
+    "module_version_banner": true
+  },
+  {
+    "arm": "fast_sweep0c87acda_ad102_raw595_uvm-mean_serial.log",
+    "heartbeat_warning_lines": 50,
+    "guest_xid_lines": 0,
+    "flip_timeout_lines": 0,
+    "module_version_banner": true
+  }
+]

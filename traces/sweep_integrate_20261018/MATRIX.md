@@ -1,6 +1,6 @@
 # Sweep matrix on candidate-5 integration
 
-STATUS: LIVE, 2026-10-20. The AD102 and GB202 leases are closed and API-absent. GB202 Linux580/595 raw30, CUDA4 and headless graphics pass; desktop fails and Windows initialization is unverified. AD102595 raw is FAIL29/30 (R19); Windows580 passes and Windows581 fails Code43. No family is complete.
+STATUS: LIVE, 2026-10-20. Latest refresh: active own AD10256816419 Windows580 PASS426.09s; Linux580/595 raw30+CUDA4 PASS. Active own GB20256816449 Windows580 ON/OFF verifiedCode43; forced-GSP native trace partial. Tables below retain earlier measurements with their original revisions; newer results are in the refresh table. No family is complete.
 
 Blackwell closeout, falsifier results and remaining questions:
 `phase2_blackwell_56788212/FINAL.md`. All three own instance IDs were verified
@@ -98,3 +98,7 @@ MEASURED GA104580 R34 matched candidate-4 control0452613b5: PASS159s versus inte
 | AD10256816419 | Windows580.88/32.0.15.8088 | `0c87acda8`, P19+RPC diagnostics, display/GOPon | PASS desktop/CUDA3/hardwareDX11+12/426.09s zero4101hold | `phase2_windows_ad102_56816419/windows580_pass/` |
 | GB20256816449 | SameWindowsbuild | `0c87acda8`, P19+RPC diagnostics, OFF/OFF/emptyROM | FAIL verifiedCode43;357RPCs/unload356 precleanup;noNV0073/CA70/CA7A;0System4101 | `phase2_windows_gb202_56816449/b1_off/` |
 | GB20256816449 | SameWindowsbuild | Same source+flags, ON/ON/signedROM | FAIL verifiedCode43;386RPCs/unload385 precleanup;CA70/CA7A present;0System4101 | `phase2_windows_gb202_56816449/b1_on/` |
+
+| AD10256816419 | Linux580.159.04 | `0c87acda8`, native595 | raw30/30 + CUDA4/4 PASS; graphics/broker pending | `phase2_windows_ad102_56816419/linux/` |
+| AD10256816419 | Linux595.91.07 | `0c87acda8`, native595 | raw30/30 + CUDA4/4 PASS; heartbeat warnings retained; graphics/broker pending | Same |
+| GB20256816449 native | Windows580.88 / GSP580.65.05 | reference e8883e231 + tracer8f9bd4e51, productN/A | Code0; first trace prefix INCOMPLETE, strictcensus1; final retained-table arm pending | `phase2_windows_gb202_56816449/native_trace/` |

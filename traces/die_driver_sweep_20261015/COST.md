@@ -77,3 +77,5 @@ Entries below will record every created ID and actual/conservative cost.
 MEASURED GA10456808180 API-absent2026-10-20T01:05:56.954502Z; observed rate0.16USD/h, elapsed1.286671h, runtime estimate0.205867USD, conservative guard1.205867USD including1USD reserve for delayed billing. New Ada56816419 quote0.561667USD/h, Blackwell56816449 quote1.001389USD/h; timers294763/295834180min armed before SSH, expires before04:30UTC. Shared credit39.77734USD pre-pair; final invoices pending.
 
 2026-10-20T01:41:11UTC APIcredit38.9078384275USD, reserve5USD intact; no budget threshold reached. AD102current580PASS426.09shold; GB202twoCode43arms complete. Conditional native/VFIOreference on same owned56816449 next, within unchanged180mintimer and04:30UTCglobaldeadline; no third product initialization.
+
+2026-10-20T02:48:20UTC API credit37.0302557975USD;5USDreserve intact. Two original own timers stay armed; no new rental. Shared credit delta is not exclusively attributed sweep spend.

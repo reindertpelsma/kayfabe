@@ -1,0 +1,14 @@
+[
+  {
+    "driver": "595",
+    "heartbeat_warnings": 1562,
+    "raw_zero": 1562,
+    "raw_nonzero_or_unparsed": 0
+  },
+  {
+    "driver": "580",
+    "heartbeat_warnings": 0,
+    "raw_zero": 0,
+    "raw_nonzero_or_unparsed": 0
+  }
+]
