@@ -18,6 +18,12 @@ attempts per red cell. Keep raw timeout 180 s and the heartbeat period 500 ms.
 Use isolated standalone guest images; never write a backing parent after making
 a child. Native gates/raw/CUDA precede guest claims. Export and push each result.
 
+H_HEARTBEAT_SCOPE (INFERRED, before GA104 CUDA/gfx): the observed nonzero,
+future-adjusted heartbeat warnings might be specific to Blackwell. Falsifier:
+the same pattern appears in the already-required GA104595 CUDA/gfx captures.
+Use their ordinary complete dmesg captures, with no additional arm or flags;
+cross-box observations can reject exclusivity but cannot establish the cause.
+
 H_NATIVE_BINDING (INFERRED): the unmodified windows-on-vast native flow can bind
 580.88 on this real GA104. Falsifier: the actual NVIDIA adapter is not healthy
 with driver 32.0.15.8088, or the native install fails its own setup checks.
