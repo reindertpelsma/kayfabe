@@ -1,7 +1,6 @@
 #!/bin/bash
 set -euo pipefail
-profile=${1:?on or off}
-[[ "$profile" = on || "$profile" = off ]]
+profile=on
 exec >"/root/prov/bw580_${profile}.log" 2>&1
 trap 'rc=$?; echo "BW580_ARM_EXIT profile=$profile rc=$rc $(date -u -Is)"' EXIT
 export PATH=/root/.cargo/bin:$PATH

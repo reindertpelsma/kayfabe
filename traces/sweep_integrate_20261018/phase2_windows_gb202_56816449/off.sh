@@ -37,6 +37,7 @@ for i in $(seq 1 90); do
 done
 timeout 20 bash "$W" ssh 'echo KF_SSH_UP' </dev/null | grep KF_SSH_UP
 python3 /root/sweep_bw_receipt.py "bw580_${run}" "$profile"
+python3 /root/sweep_off_qom.py
 for f in verify_stage580.ps1 enable580_once.ps1 diag580.ps1; do bash "$W" scp-to "/root/sweep-probes/$f" "C:/kf/$f"; done
 timeout 120 bash "$W" ssh 'powershell -NoProfile -ExecutionPolicy Bypass -File C:\kf\verify_stage580.ps1' </dev/null >"/root/prov/bw580_${run}_pre_enable.txt" 2>&1
 grep '^STAGE580_READY=1 ' "/root/prov/bw580_${run}_pre_enable.txt"
