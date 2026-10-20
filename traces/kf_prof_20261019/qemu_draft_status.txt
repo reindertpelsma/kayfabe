@@ -1,0 +1,12 @@
+STATUS: UNCOMMITTED DRAFT, STOP before final clippy/checkpoint.
+MEASURED: patch SHA256 6b1a4e2587ded13fbc55da3c486d927bba1f97bd318ab1beb3439922c95cd96f
+MEASURED: device.rs SHA256 6172328602375a99b73c2acb81a9e7955549d27fb626a39a97896bf8ed6b7a8a
+MEASURED: default QEMU baseline356 passed; prof draft356 passed; no ignored/failed.
+MEASURED: initial seven Python adapter contracts passed. Three additional contracts
+were shown RED against committed expected-red source2825a5cce. Four source-audit
+mutants of the draft have>=2 kills. No hardware injection claim follows.
+CODE READ: profiler registration at worker/VA/drainer setup; three poll wrappers;
+feature/default-off/boot preservation. Native TSC clock validation UNRUN.
+NOT GREEN: final draft clippy, normal full adapter source-audit rerun after mutations,
+feature-off artifact size/symbol proof and checkpoint commit remain UNRUN.
+The expected-red adapter tests on origin intentionally await this draft.

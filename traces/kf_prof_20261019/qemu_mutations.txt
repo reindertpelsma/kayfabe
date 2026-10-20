@@ -1,0 +1,6 @@
+STATUS: UNCOMMITTED DRAFT; see qemu_draft_status.txt for source hashes and limits.
+MEASURED: adapter source-audit mutation checks, not hardware delay injection.
+adapter poll coverage: 4 kills: test_drainer_idle_wait_has_a_distinct_site, test_drainer_reset_wait_has_a_distinct_site, test_qemu_device_poll_expressions_are_all_wrapped, test_va_wait_has_a_distinct_site
+optional startup and thread binding: 3 kills: test_loop_registration_happens_before_the_loop_body, test_startup_initializes_exactly_once_before_device_setup, test_startup_is_compile_gated_and_does_not_gate_boot
+running residence attribution: 2 kills: test_drainer_execution_is_not_misattributed_as_idle_between_waits, test_va_execution_is_not_misattributed_as_idle_between_waits
+distinct drainer wait identities: 2 kills: test_drainer_idle_wait_has_a_distinct_site, test_drainer_reset_wait_has_a_distinct_site

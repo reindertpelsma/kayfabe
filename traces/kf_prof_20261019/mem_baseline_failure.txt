@@ -1,0 +1,17 @@
+STATUS: STOP, 2026-10-20 01:23 UTC, unchanged kf-mem baseline.
+MEASURED: nice19 cargo test -p kf-mem --lib -j2 --release; own target.
+MEASURED: 180 passed;1 failed;3 ignored;0 measured;0 filtered;31.08 seconds.
+Failing test: batch::tests::the_act_thread_waits_for_a_chunk_not_for_the_operation
+Recorded diagnostic fields:
+act thread:6445 hand-overs in4272ms (VA operations[1049,1046,2083]ms);
+longest lock WAIT123626us; longest whole hand-over123632us;
+longest hold122788us (2048entries); VA yielded197 times (longest135850us).
+Panic: crates/kf-mem/src/batch.rs:3782: the act thread waited123626us for a ledger lock.
+CODE READ: assertion wait_us<ACT_WAIT_BOUND_US; existing bound60000us at line4225.
+MEASURED: git diff -- crates/kf-mem is empty. No code/threshold/interval changed.
+INFERRED: scheduling/preemption is one possible explanation, not established.
+Future hypothesis falsifier BEFORE any diagnostic rerun: if scheduler evidence
+shows the holder continuously executing instead of being descheduled during the
+long wait, preemption does not explain that hold. No diagnostic rerun performed.
+CODE READ: COMMON stop-on-refusal rule applies; no skip, threshold relaxation,
+rerun-until-pass or bypass was used. Implementation stopped for owner review.

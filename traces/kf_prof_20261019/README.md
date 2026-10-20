@@ -1,143 +1,138 @@
-STATUS: RESEARCH, 2026-10-20. K1 resumed; core and persistent-runtime checkpoints.
+STATUS: RESEARCH / STOP, 2026-10-20. Part A incomplete; unchanged baseline failed.
 
-MEASURED: core GREEN checkpoint `9b5f12f29`: 40 tests; nine hand mutants,
-each killed by >=2 tests, header geometry by three. Stage-3 runtime has 21 tests
-and seven sink tests; all 20 runtime/reader mutants have >=2 independent killing
-tests. Named results: [core](core_mutations.txt), [runtime](runtime_mutations.txt).
-CODE READ: production integrations, all-source coverage, mapped event-ring drain,
-merge, broker writer and overhead proof are still unfinished. Missing frame/call
-sources are UNKNOWN rather than zero. No hardware or production-cost claim.
+1. Lane, branch, checkpoint and assignment
 
-MEASURED: the runtime writes a fixed 16 MiB mmap and bounded rotating JSONL; tests
-exercise live reads, SIGKILL persistence, torn records, bad geometry/version,
-hostile payloads, nested residence, slot reuse and foreign-file preservation.
-The dev CPU does not advertise invariant TSC; ordinary production Session creation
-refuses before output files. Explicit prof-inject fixtures use a marked diagnostic
-OS clock. This is not a production-clock or hot-path overhead measurement.
+CODE READ: K1, `codex/kf-prof-20261019`, base `f8f9d1a5f`.
+MEASURED: last GREEN checkpoint `8be6b80214479e952a4b447dbb4f32d039588ca4`,
+pushed and verified on origin. Last expected-red source checkpoint
+`3e0582d8a82939e9245f05ed49eb3219d971163b` was also verified on origin.
+This evidence-only report commit follows it; the final owner report records its
+full verified hash. Expected-red QEMU adapter tests intentionally await the local
+draft. Assignment: execute GPU/VM-free profiler Part A, stages/tests/mutations,
+stage pushes, six coordinator sources and per-second RmControl/frame.
 
-CODE READ: reader commands (host MONOTONIC ns):
+2. Result (12 lines)
 
-```sh
-python3 scripts/bench/prof/reader.py tail /path/to/prof.mmap --once
-python3 scripts/bench/prof/reader.py summary /path/to/prof.jsonl
-python3 scripts/bench/prof/reader.py window /path/to/prof.mmap T0 T1
-python3 scripts/bench/prof/reader.py hangs /path/to/prof.mmap --stuck-ms 100
-```
+- DONE (CODE READ): lane AGENTS.md and repository instructions read; design and preregistration published.
+- DONE (MEASURED): geometry strengthening; all nine core mutants >=2 kills; geometry has three.
+- DONE (MEASURED): core GREEN `9b5f12f29`,40 tests; persistent-runtime GREEN `ac38df884`.
+- DONE (MEASURED): bounded mmap/rotating JSONL, four reader commands, live/SIGKILL/hostile-reader tests.
+- DONE (MEASURED): channel worker's two distinct poll wrappers and scoped CI syntax gate, GREEN `8be6b8021`.
+- PARTIAL (MEASURED): QEMU draft356/356 prof tests and four source-audit mutants; final clippy/checkpoint UNRUN.
+- STOP (MEASURED): untouched kf-mem baseline180 passed/1 failed/3 ignored;123626us wait exceeded60000us bound.
+- NOT DONE (CODE READ): real ledger birth/close wiring, mapped event-ring integration and complete wait audit.
+- NOT DONE (CODE READ): generated all-Site/kind injection proofs, six production sources, FPS/broker writer/merge/H1 absorption.
+- NOT DONE (MEASURED): microbenchmark, production symbol/size proof and trusted-host binary; host access=0.
+- PARTIAL (CODE READ): reader ratios name display/broker denominators and use summed counts; runtime sources remain UNKNOWN.
+- UNRUN (MEASURED): Part B GPU overhead; hardware n=0, spread unavailable.
 
-CODE READ: print per-second RmControl-per-frame, retaining raw RmControl counts
-and distinct display/broker new-content frame denominators. The coordinator
-reports that its fall preceded the run-3017 slide; this is motivation supplied by
-the coordinator, not an independently measured K1 causal result. Zero denominators
-are unavailable and missing sources UNKNOWN; summary uses ratio of summed counts.
+3. Tests, mutations and stage inventory
 
-MEASURED: initial stage-4 scope wraps kf-chan's two worker poll expressions with
-Sites16/17. Existing tests remain198/198 with prof enabled; kf-trap baseline86/86
-and no production code changed there. Shared wrapper runtime tests add2 (70 total
-Rust profiler tests). Ten Python wait-audit tests run in CI; four wrapper/audit
-mutants each have>=2 kills. Full R5 coverage remains unfinished. The three
-pre-existing dependency-isolation violations are unchanged from candidate-5.
+MEASURED: counts below are individual completed runs, not summed repetitions.
 
-Historical first-stop report follows; statuses and counts below refer only to
-that stopped run and are superseded by the authorised resume above.
+| Crate/suite | Before | Latest measured result | Limits |
+|---|---:|---|---|
+| kf-prof core |0, new crate|40 passed|bounded stress/order-model tests; no loom proof|
+| kf-prof total with prof-inject |0|70 passed=40 core+23 runtime+7 sink|explicit diagnostic clock fixtures|
+| Python reader |0|25 passed including4 live/crash/residence cases|requires owned fixture binary for4 cases|
+| Python worker wait audit |0|10 passed|scoped syntax, not type resolution|
+| kf-linux-raw |174 passed baseline|2 added clock tests passed selectively|full existing suite not rerun after clock module addition|
+| kf-chan unit |198 passed|198 passed with prof enabled|whole-crate wait coverage unfinished|
+| kf-trap unit |86 passed|86 passed, no production change|no profiler dependency added|
+| kf-qemu unit |356 passed|356 passed with prof, local draft|final draft clippy/checkpoint unrun|
+| kf-mem unit |unchanged source|180 passed,1 failed,3 ignored|STOP; no rerun or edit|
+| unsafe-count CI self-tests |existing|4 passed|three clock unsafe blocks added in allowed perimeter|
 
-Historical report (2026-10-19, superseded by authorised resume above).
+MEASURED: no profiler test ignored/removed. Existing kf-mem ignored tests stayed
+ignored. The 174-test raw baseline includes tiny KVM fixtures on the dev box;
+that baseline exceeded this lane's VM-free scope. No owner/host VM was
+started or touched. Later raw verification was limited to the two clock tests.
 
-CODE READ: branch `codex/kf-prof-20261019`, base `f8f9d1a5f`.
-MEASURED: design checkpoint `f21637743` and EXPECTED RED checkpoints
-`4ee99da33`, `4cf61dd94`, `e30807dcf` were pushed and verified against origin.
-The final documentation commit is recorded in the session's owner report;
-no green implementation checkpoint exists. No production integration was changed.
+MEASURED: mutation gate results.
 
-## Result and stage inventory
+| Mutation group | Cases | Independent named kills per case | Evidence |
+|---|---:|---|---|
+| Core |9|3,4,3,2,2,2,2,2,3|[table](core_mutations.txt)|
+| Runtime/reader |20|2–4|[table](runtime_mutations.txt)|
+| Worker wrapper/audit |4|3,2,5,3|[table](wrapper_mutations.txt)|
+| QEMU adapter draft |4|4,3,2,2|[table](qemu_mutations.txt)|
 
-| Stage | Status | Evidence |
+MEASURED: the coordinator-requested complete core table was rerun before its
+GREEN commit. All37 recorded cases meet the two-kill gate. QEMU cases prove
+source-audit coverage wiring, not real hardware injected delays. Latest restored
+profiler Rust suite=70 passed. Whole-dependency clippy -Dclippy::all encountered
+nine pre-existing kf-util errors; kf-prof --no-deps passed with -Dclippy::all.
+Changed channel/raw lines had no new clippy warnings. The three existing
+isolation violations equal candidate-5: trap→loom, disp→broker, disp→linux-raw.
+
+CODE READ: stage completion at STOP.
+
+| Stage | Status | Concrete evidence |
 |---|---|---|
-| 1 Design | DONE, DESIGN-ONLY | [design](../../docs/design/V3_PROFILER_20261019.md), [preregistration](PREREG.md) |
-| 2 Core | PARTIAL / STOP | EXPECTED RED tests pushed; uncommitted local draft passed 36 tests before further test additions; mutation gate below rejected |
-| 3 Aggregator, mmap, JSONL, CLI | NOT DONE | no runtime implementation or files |
-| 4 Wrappers/lint | NOT DONE | no production wait wrapped; no complete raw-call inventory |
-| 5 Ledger wiring | NOT DONE | local core slot tests only; no real birth/close integration |
-| 6 Injection coverage | NOT DONE | reserved tables only; no generated injector |
-| 7 Pacing/broker/H1 | NOT DONE | design only; H1 was read, never edited |
-| 8 Overhead/production symbols/build | NOT DONE | microbench and size/symbol comparison UNRUN; host build scope conflict |
-| 9 Report | DONE as partial report | this file and external owner report |
+|1 Design|DONE as research design|[design](../../docs/design/V3_PROFILER_20261019.md),[preregistration](PREREG.md)|
+|2 Core|GREEN|`9b5f12f29`,40 tests,[mutants](core_mutations.txt)|
+|3 Aggregator/files/reader|PARTIAL|`ac38df884`,[results](runtime_green.txt); all-source/event integration unfinished|
+|4 Wrappers/lint|PARTIAL|`8be6b8021` worker waits; QEMU is [uncommitted draft](qemu_draft_status.txt)|
+|5 Real ledger wiring|NOT DONE|same-owner runtime slots tested; no production kind wired|
+|6 All-Site/kind injection|NOT DONE|publication-pause diagnostic tests are not full coverage|
+|7 FPS/broker/merge/H1|NOT DONE|H1 read-only review/design only; no old instrument removed|
+|8 Cost/production/build|NOT DONE|no benchmark or symbol/size evidence; no host access|
+|9 Report|PARTIAL report complete|this file plus final owner report|
 
-MEASURED: the last verified remote test checkpoint is
-`e30807dcf170508dacd022173c9c817d6d18d246`; its empty crate intentionally
-fails to compile the tests. The core implementation and two additional tests
-remain uncommitted in the K1 worktree, preserved locally for an authorized resume.
-Do not use this branch as a production binary or call the core stage green.
+CODE READ: wrapped production sites are16 ChanWorkerImmediate and17
+ChanWorkerPark in `kf-chan/src/worker.rs`. QEMU's local draft has18 QemuVaPark,
+19 QemuDrainerResetPark,20 QemuDrainerPark and running scopes21–23, plus optional
+realize startup and three thread registrations. The current CI syntax gate covers
+only worker.rs; its draft extension covers device.rs. Other raw blocking calls
+have not been fully inventoried or justified. A preliminary867 text matches across
+67 files included tests, strings and false positives; it is not a wait count or
+vCPU audit. Existing code candidates were not changed or certified safe.
 
-## Counts and mutation gate
+MEASURED: [baseline failure](mem_baseline_failure.txt):6445 handovers in4272ms;
+max wait123626us, max hold122788us, max handover123632us; one baseline experiment.
+INFERRED: scheduler preemption is possible, unverified; no causality claimed.
+CODE READ: COMMON says “If a step is blocked or refused by your own safety
+checks, STOP and report; do not reword or work around it.” Implementation stopped
+on this failed baseline, before the10-hour deadline. No threshold, timer, poll
+interval, test skip or production behavior fix was substituted.
 
-MEASURED: new crate baseline = 0 tests (crate absent). First uncommitted draft
-passed 29 tests; the expanded draft passed 36/36, 0 ignored, 0 failed
-([output](core_green.txt)). Subsequently two tests were added, making 38 local
-tests. The last 38-test invocation was the header mutant: 37 passed, 1 failed.
-A normal 38-test green run was NOT performed after STOP. All other crates were
-untouched and their baselines were NOT run. The red evidence is a missing-API
-compile failure, not a runtime defect reproduction ([core](core_expected_red.txt),
-[thread contracts](thread_expected_red.txt)).
+4. Owner decisions
 
-| Hand mutant | Killing tests | Gate |
-|---|---:|---|
-| Seqlock ordering | 3 | PASS |
-| Ring slot wrap | 4 | PASS |
-| Histogram bucket | 3 | PASS |
-| Ring overflow count | 2 | PASS |
-| Clock calibration | 2 | PASS |
-| Ledger slot reuse | 2 | PASS |
-| Ledger overflow count | 2 | PASS |
-| Exclusive residence | 2 | PASS |
-| Header geometry validation | 1 | **REJECTED** |
+1. CODE READ: investigate/adjudicate the failed unchanged baseline before resuming;
+   recommend collecting lock-holder scheduling evidence, with the preregistered
+   falsifier in the failure record, rather than changing its bound.
+2. CODE READ: resume from the last GREEN worker checkpoint and review the preserved
+   QEMU draft; recommend retaining its expected-red tests and remaining gates.
 
-MEASURED: [named tests and exit status](core_mutations.txt).
-CODE READ: the lane's COMMON rules say: "If a step is blocked or refused by your
-own safety checks, STOP and report; do not reword or work around it."
-The required two-test mutation gate refused the header validation behavior;
-implementation work stopped instead of weakening or bypassing that gate.
-Clippy, final rustfmt, per-thread mmap publication, true clock reads/calibration,
-loom/weak-memory proof and production feature-elimination checks remain UNRUN.
-Earlier `cargo fmt -p kf-prof` ran before the final two test additions only.
+5. Unverified and operating limits
 
-## Overhead, coverage and decisions
+MEASURED: the dev CPU lacks the invariant-TSC capability bit. Ordinary production
+Session creation refuses before files; explicit prof-inject OS-clock files carry
+flag1 and `clock_mode=diagnostic_os_clock`. Native cross-core calibration, drift
+bounds, cost budgets and supported-host operation remain UNRUN. No hot-path cost
+can be inferred from diagnostic syscall-clock tests. No per-operation ns/n/spread
+microbenchmark exists. Steel Nomad/Heaven overhead is UNRUN, Part B.
 
-MEASURED: no CPU overhead measurements, GPU/VM runs, host SSH, diagnostic-channel
-calls, host writes or locks were taken. Hardware n=0; spread unavailable.
-Steel Nomad/Heaven overhead is UNRUN (Part B). No live or crash-persistent profiler
-file was produced, and no hang-coverage claim is supported by this partial work.
+CODE READ: runtime reserves64 thread slices and192 per-thread ledger slots;
+thread slots are not reused. The core SPSC ring is tested, but is not yet connected
+to runtime mmap publication/draining. Cross-thread ledger close is unsupported;
+no cross-thread production source was wired. The aggregator is not self-profiled.
+The reader's window is per-second aggregate granularity. Header geometry is fixed
+and actual length is checked before bounded pread; no reader writes mapped data.
 
-CODE READ: no wait sites were wrapped. The full source audit and vCPU bug-candidate
-classification have not been performed. A preliminary text search found 867 raw
-blocking-pattern matches across 67 files in the ten named crates; that includes
-tests and false positives, is not a blocking-call count, and proves no coverage.
-All production wait expressions remain as at candidate-5.
+CODE READ: tail/summary/window/hangs are available in `scripts/bench/prof/reader.py`;
+merge is not implemented. Print per-second RmControl-per-frame, retaining raw call
+counts and distinct display/broker new-content denominators: its fall preceded
+the run-3017 slide according to the coordinator. K1 did not independently verify
+that observation or causality. Missing sources are UNKNOWN; zero denominators
+are unavailable; summary uses a ratio of sums. All six addendum sources remain
+required by the design and unwired, not silently zero. Production call-site
+elimination/public symbols/size, broker checks/sanitizers and H1 compatibility
+remain UNRUN. No install-ready -prof binary or executable Part B recipe is claimed.
 
-Owner decisions:
-1. Resume implementation after reviewing this STOP; recommended next step is a
-   separate EXPECTED RED strengthening of header geometry rejection tests, then
-   repeat the complete mutation gate before any green implementation commit.
-2. Stage 8's host install conflicts with Part A's SSH/log-only/no-lock scope;
-   recommend the coordinator build/install during Part B, or explicitly authorize
-   a CPU-only host build and its documented build lock. No exception was assumed.
+6. Cleanup
 
-MEASURED: the lane-owned target directory was deleted after STOP. No profiler,
-test, mutation runner, cargo job, host process or lock remains owned by this lane.
-The worktree and local uncommitted source backup are retained for review.
-
-## Coordinator addendum — required sources, 2026-10-19
-
-CODE READ: the design now requires per-channel/token PUT-minus-GET and GET-change
-age; forwarded GSP seen-to-successful-reply-post latency max/p99 per function;
-per-VasKey map/unmap bytes and interval large-apply counts; per-vCPU schedstat
-runtime deltas plus actual host RM calls/frame; diag-channel clock offset with
-uncertainty; and per-engine/vector raised/delivered/acked observations.
-
-CODE READ: reader requirements now include per-second RmControl/frame with raw
-numerators, named display/broker new-content frame denominators and explicit
-zero/missing-source handling. The coordinator's run-3017 observation is a supplied
-motivation, not an independently measured or causal K1 result.
-
-MEASURED: this addendum changes documentation only; no implementation test was
-run, no source wiring or reader behavior was implemented, and stage order, the
-existing mutation STOP and hardware UNRUN status remain unchanged.
+MEASURED: all lane-started cargo/test/mutant/fixture processes completed. No SSH,
+GPU or host-VM operation or host lock was taken. The lane-owned target directory
+was deleted; worktree and uncommitted QEMU draft retained for review/resume.
+The owner report records the final verified remote head and draft backup location.
