@@ -133,6 +133,11 @@ struct Cfg {
     m: Mutant,
     /// Which of P11/P12/P13 are tracked (the counters multiply the state space).
     track: u32,
+    /// The parked worker's 50 ms park timeout exists (`Peek::Backstop`, the safety net). Off by default (state space).
+    timer: bool,
+    /// The contention budget is compared as `run * scale` against `CONTENTION_RETRIES`: with scale 8, 8 lost try_locks exhaust
+    /// the real 64-run budget (the production `may_retry` still decides). 1 = exact.
+    scale: u32,
 }
 
 #[derive(Clone, PartialEq, Eq, Hash)]
@@ -220,11 +225,11 @@ impl S {
     }
     /// `ChanPlane::user_ring_peek_one` for the cold relay (the hot ones keep no wait and no demand): the production
     /// `look_needed`, `may_retry` and `Wait::satisfied` decide.
-    fn peek(&mut self, cold: usize, why: Peek) -> bool {
+    fn peek(&mut self, cfg: &Cfg, cold: usize, why: Peek) -> bool {
         if !ul::look_needed(why, self.demand, self.wait.is_some()) {
             return false;
         }
-        let retry_ok = ul::may_retry(u32::from(self.run), why);
+        let retry_ok = ul::may_retry(u32::from(self.run) * cfg.scale, why);
         if let Some(w) = self.wait {
             let (marks, popped) = if self.sat { (1, 1) } else { (0, 0) };
             if w.satisfied(marks, popped) && (retry_ok || !matches!(w, Wait::Contended)) {
@@ -248,7 +253,7 @@ impl S {
         }
         self.ev = false;
         self.since_ev = 0;
-        self.peek(cold, Peek::Event);
+        self.peek(cfg, cold, Peek::Event);
     }
 }
 
@@ -406,7 +411,7 @@ fn successors(cfg: &Cfg, s: &S) -> Vec<(String, S)> {
                     n.dispatch_event(cfg, cold);
                 }
                 if n.waiting() && !cfg.m.look_skips_peek {
-                    n.peek(cold, Peek::Spin);
+                    n.peek(cfg, cold, Peek::Spin);
                 }
                 n.wk[i].pc = Pc::Scan;
                 out.push((me("LOOK between busy passes: poll(0) + peek"), n));
@@ -418,7 +423,7 @@ fn successors(cfg: &Cfg, s: &S) -> Vec<(String, S)> {
                     n.wk[i].pc = Pc::Scan;
                     out.push((me("idle spin: event"), n));
                 } else if ul::idle(n.waiting(), u32::from(SPIN - k.min(SPIN))) == ul::Idle::Spin {
-                    let rang = n.peek(cold, Peek::Spin);
+                    let rang = n.peek(cfg, cold, Peek::Spin);
                     n.wk[i].pc = if rang { Pc::Scan } else { Pc::Spin(k + 1) };
                     out.push((me("idle spin peek"), n));
                 } else {
@@ -448,6 +453,13 @@ fn successors(cfg: &Cfg, s: &S) -> Vec<(String, S)> {
                     n.dispatch_event(cfg, cold);
                     n.wk[i].pc = Pc::Scan;
                     out.push((me("woken by an engine event"), n));
+                }
+                if cfg.timer && !s.efd && !s.ev {
+                    // the park timeout: the safety net may re-ring whatever waits, whatever the contention budget
+                    let mut n = s.clone();
+                    n.peek(cfg, cold, Peek::Backstop);
+                    n.wk[i].pc = Pc::Scan;
+                    out.push((me("park timeout (50 ms): safety-net look"), n));
                 }
             }
         }
@@ -554,6 +566,8 @@ fn base(workers: usize, hot: usize, wait: WaitKind) -> Cfg {
         irq: true,
         m: Mutant::default(),
         track: V_P11 | V_P12 | V_P13 | V_TOKEN,
+        timer: false,
+        scale: 1,
     }
 }
 
@@ -592,12 +606,33 @@ fn p13_one_worker_a_lost_try_lock_is_re_rung_within_k_passes() {
 /// then the lock is free, and nothing rings the cold relay while the hot neighbour runs (W = 1: the worker is never idle, so
 /// a missing park timeout is not a modelling artefact).
 #[test]
-fn p13_expected_red_a_convoy_past_contention_retries_is_still_re_rung_within_k_passes_beside_a_hot_relay() {
+fn p13_expected_red_a_convoy_past_contention_retries_is_still_re_rung_within_k_passes_beside_a_hot_relay()
+ {
     let mut c = base(1, 1, WaitKind::Popped);
     c.track = V_P13;
     c.cold_rings = 0;
     c.fails = u8::try_from(ul::CONTENTION_RETRIES).expect("small");
     holds("W=1 hot=1 convoy past CONTENTION_RETRIES", &c);
+}
+
+/// ⚠ EXPECTED RED (2026-10-20, second fairness task). The same convoy with the BATON (two workers, one hot relay) and the park
+/// timeout in the model. The contention budget is scaled (`scale` 64: ONE lost try_lock exhausts the real 64-run budget; the
+/// production `may_retry` still decides) because the exact budget with two workers exceeds the state space. Neither worker ever
+/// parks (every hot republish bumps the wake word), so the timeout transition is present but unreachable: the safety net cannot
+/// save a relay whose demand outlives the budget beside a hot neighbour.
+#[test]
+fn p14_expected_red_two_workers_a_convoy_past_the_budget_is_re_rung_within_k_passes_with_the_park_timeout_in_the_model()
+ {
+    let mut c = base(2, 1, WaitKind::Popped);
+    c.track = V_P13;
+    c.cold_rings = 0;
+    c.fails = 1;
+    c.scale = ul::CONTENTION_RETRIES;
+    c.timer = true;
+    holds(
+        "W=2 hot=1 convoy past the (scaled) budget + park timeout",
+        &c,
+    );
 }
 
 /// Control for the red test above: one lost try_lock fewer than the budget, and the busy Look re-rings every episode within K.
