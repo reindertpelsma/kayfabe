@@ -4,7 +4,7 @@ mkdir -p /root/prov /workspace/bench
 exec >/root/prov/bwr_provision.log 2>&1
 trap 'rc=$?; echo "BWR_PROVISION_EXIT rc=$rc $(date -u -Is)"' EXIT
 . /root/bwr/common.sh
-echo "BWR_PROVISION_START own_instance=56909569 $(date -u -Is)"
+echo "BWR_PROVISION_START own_instance=56939139 $(date -u -Is)"
 export KAYFABE_BRANCH=codex/sweep-integrate-20261018 CARGO_BUILD_JOBS=48
 export HOST_DRIVER=595.91.07 KF_HOST_DRIVER=595.91.07
 bash /root/provision_box.sh >/root/prov/box.log 2>&1

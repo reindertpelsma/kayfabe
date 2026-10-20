@@ -24,6 +24,10 @@ bash "$W" scp-to /root/bwr/probes/prepare_cold580.ps1 C:/kf/prepare_cold580.ps1
 timeout 120 bash "$W" ssh 'powershell -NoProfile -ExecutionPolicy Bypass -File C:\kf\prepare_cold580.ps1' >/root/prov/bwr_cold_ready.txt 2>&1
 cat /root/prov/bwr_cold_ready.txt
 grep -q 'COLD580_READY=1' /root/prov/bwr_cold_ready.txt
+bash "$W" scp-to /root/bwr/crashdump.ps1 C:/kf/crashdump.ps1
+timeout 120 bash "$W" ssh 'powershell -NoProfile -ExecutionPolicy Bypass -File C:\kf\crashdump.ps1' >/root/prov/bwr_crashdump.txt 2>&1
+cat /root/prov/bwr_crashdump.txt
+grep -q 'CRASHDUMP_READY=1' /root/prov/bwr_crashdump.txt
 timeout 300 bash "$W" stop
 [ -z "$(pgrep -x qemu-system-x86 || true)" ]
 chmod 0400 "$VM/disk/bw580_bind.qcow2"

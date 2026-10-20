@@ -44,6 +44,16 @@ timeout 120 bash "$W" ssh 'powershell -NoProfile -ExecutionPolicy Bypass -File C
 cat "/root/prov/arm_${run}_diag.txt"
 timeout 120 bash "$W" ssh 'powershell -NoProfile -ExecutionPolicy Bypass -File C:\kf\events.ps1' </dev/null >"/root/prov/arm_${run}_events.txt" 2>&1 || true
 bash "$W" shot "$run" || true
+if [ -n "${ARM_HOLD:-}" ]; then
+  echo "ARM_HOLD ${ARM_HOLD}s $(date -u -Is)"; sleep "$ARM_HOLD"
+  timeout 120 bash "$W" ssh 'powershell -NoProfile -ExecutionPolicy Bypass -File C:\kf\diag580.ps1' </dev/null >"/root/prov/arm_${run}_diag2.txt" 2>&1 || true
+  cat "/root/prov/arm_${run}_diag2.txt"
+  for f in cup2.exe cup3.exe kf_dxprobe.exe; do bash "$W" scp-to "/root/bwr/exe/$f" "C:/kf/$f" >/dev/null 2>&1 || true; done
+  timeout 120 bash "$W" ssh 'C:\kf\cup2.exe; "RC=$LASTEXITCODE"; C:\kf\cup3.exe; "RC=$LASTEXITCODE"; C:\kf\kf_dxprobe.exe d3d11 --iters 20; "RC=$LASTEXITCODE"' </dev/null >"/root/prov/arm_${run}_work.txt" 2>&1 || true
+  grep -aE "PASS|RC=|FAIL|rv=" "/root/prov/arm_${run}_work.txt" | head -20
+  timeout 120 bash "$W" ssh 'powershell -NoProfile -ExecutionPolicy Bypass -File C:\kf\diag580.ps1' </dev/null >"/root/prov/arm_${run}_diag3.txt" 2>&1 || true
+  cat "/root/prov/arm_${run}_diag3.txt"
+fi
 python3 scripts/bench/windows/abort_point.py points "$QLOG" >"/root/prov/arm_${run}_abort_point.txt" 2>&1 || true
 python3 -I /root/bwr/export.py "$QLOG" "/root/prov/arms/$run" || true
 [ "${ARM_TRACE:-0}" = 1 ] && python3 -I /root/bwr/trace_window.py "$QLOG" "$VM/logs/${run}_b1_trace.log" "/root/prov/arm_${run}_trace_window.txt" || true

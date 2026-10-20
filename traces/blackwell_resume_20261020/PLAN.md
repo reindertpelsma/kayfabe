@@ -134,3 +134,30 @@ MEASURED: caps_lowa_on (native 0x000..0x624) **Code 43** (CA7A abort); caps_high
 and/or PRECOMP_WIN_PIPE_HDR_CAP*(i) (0x780+32i) (clca73.h, ogkm 580.65.06).
 - caps_post_on: native POSTCOMP only. *Falsifier for "POSTCOMP decides":* Code 43.
 - caps_pre_on: native PRECOMP only. *Falsifier for "PRECOMP decides":* Code 43.
+
+# Phase 2 (coordinator follow-up, 19:13 UTC): TDR 0x116 and display-on derivation
+
+Own lease 56939139 (GB202, UK, 0.909 $/h, auto-destroy 240 min). Same recipe as lease 1, plus the
+parent's CrashControl set to a small memory dump (CrashDumpEnabled=3, AutoReboot=1) during bind.
+
+## Addendum 19:40 UTC — before any phase-2 arm
+
+MEASURED from lease-1 exports (arms/fix2_off_1, fix2_off_2, fix3_off_1, caps_highb_on), identical in all
+three OFF Code-0 arms: the kernel GR channel (token 0x3, runlist 0) is marked dead at its first segment
+(`ring REFUSED segment gp 1 ... GrMethod { class 0xCE97, method 0x1B00,
+"SET_REPORT_SEMAPHORE_* (this family's public 3D header does not define it)" }`), and the async-copy
+kernel channel token 0x80f (runlist 1) retires with forwarded=7084, last_put=7084, **gp_get=6877**
+(207 GP entries never consumed). CODE READ: kf-chan grtables.rs REPORT_SEMAPHORE_FAMILIES excludes
+Blackwell because ogkm's clcd97/clce97 name only the class id. NVIDIA's own open-gpu-doc
+(@9fdf5c40) defines the four methods for CD97/CE97 at the same offsets, D fields identical,
+OFFSET_UPPER 24:0.
+
+- **H-TDR-GRSEM**: the 0x116 is the refused report-semaphore release: Windows' GR completion never
+  happens, the paging copy channel waits behind it, dxgkrnl's fence times out. Product fix4 =
+  71588cecb (fix3 + Blackwell report-semaphore admission, tests first). *Falsifier:* fix4_off reaches
+  Code 0 and still bugchecks 0x116 within the 240 s hold, or the GR channel is no longer dead but the
+  copy channel still retires with GP_GET short of PUT.
+- Reference on this board: fix3_off_1 (expected Code 0 then 0x116, as on lease 1); its crash evidence
+  (minidump presence, System 1001/41/4101, WER) is read in a following boot WITHOUT kf3 (collect.sh).
+- The relay-branch arm (KF3_DIAG_PROGRESS) is conditional on a lost completion/interrupt on a USER ring;
+  the measured stall is a KERNEL channel behind a refused GR method, so it runs only if H-TDR-GRSEM falls.
