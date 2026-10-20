@@ -45,7 +45,8 @@ pub mod wake;
 
 pub use bitmap::RungBitmap;
 pub use mmuinval::{
-    Invalidate, InvalidatePort, InvalidateRegs, InvalidateRequest, PdbAperture, PortWrite,
+    ArmedSince, Invalidate, InvalidatePort, InvalidateRegs, InvalidateRequest, PdbAperture,
+    PortWrite,
 };
 pub use ring::{PrivRing, Push, RegWrite};
 pub use shadow::{Cell, ClearOutcome, Trigger, WriteSemantics};

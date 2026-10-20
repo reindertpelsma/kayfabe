@@ -2135,7 +2135,8 @@ impl Device {
                         crate::bootclean::after_memory_stage(dp, boot_zeroed);
                     }
                     seed_watch = crate::bootclean::SeedWatch::default();
-                    last_seq = None;
+                    // The new life's first arm is the first one to take (sequences never rewind).
+                    last_seq = self.mem.port.trigger().issued().checked_sub(1);
                     armed_seen = None;
                     cache_done = [0u64; kf_trap::cacheop::CacheOp::COUNT];
                     bar1_phys = crate::bar1phys::PhysicalViewDue::default();
@@ -2174,12 +2175,9 @@ impl Device {
                     );
                 }
             }
-            if let Some(req) = self.mem.port.armed_request()
-                && last_seq != Some(req.seq)
-            {
-                last_seq = Some(req.seq);
-                m.on_invalidate(req, trigger);
-            }
+            // ★ Every arm newer than the last one taken, each with the scope recorded in its own
+            // trap (`VaManager::observe_port`): the newest clears, an overwritten one is refreshed.
+            m.observe_port(&self.mem.port, &mut last_seq);
             // ★ P6: a Translated channel's `MEM_OP` split — walked with the invalidates, never a
             // wait on the worker that asked.
             for (ticket, target) in self.mem.inbox.take_split_requests() {

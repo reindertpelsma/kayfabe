@@ -25,6 +25,7 @@
 //! `:526-630`) is NOT copied — it fed a table re-sweep, i.e. a mirror.
 
 use crate::shadow::{Cell, Trigger, WriteSemantics};
+use core::sync::atomic::{AtomicU64, Ordering};
 
 /// `DRF_BASE(NV_VIRTUAL_FUNCTION)` — how far the usermode window sits above the PRIV block.
 pub const USERMODE_ABOVE_PRIV: u64 = 0x0003_0000;
@@ -135,6 +136,67 @@ impl Invalidate {
     }
 }
 
+impl Invalidate {
+    /// `ALL_PDB` + `ALL_VA`: the scope that covers every other. What an arm whose record cannot be
+    /// read is treated as.
+    #[must_use]
+    pub fn everything() -> Invalidate {
+        Invalidate::decode(TRIGGER_BIT | 0b11, 0, 0)
+    }
+}
+
+/// The slot of `seq` in the arm ring.
+#[inline]
+fn ring_slot(seq: u64) -> usize {
+    (seq % ARM_RING as u64) as usize
+}
+
+/// One arm's scope in one word: `valid(1) | tag(8) | scope bits(6) | aperture(1) | pdb page(48)`.
+/// The tag is `seq / ARM_RING` (mod 256), so a slot that holds another arm's record is recognised.
+fn pack_arm(seq: u64, inval: &Invalidate) -> u64 {
+    let page = (inval.pdb >> PDB_ADDR_ALIGNMENT) & ((1 << 48) - 1);
+    let ap = u64::from(inval.pdb_aperture == PdbAperture::Sysmem);
+    1 | (((seq / ARM_RING as u64) & 0xFF) << 1)
+        | (u64::from(inval.raw & 0x3F) << 9)
+        | (ap << 15)
+        | (page << 16)
+}
+
+/// The inverse of [`pack_arm`] for `seq`; `None` when the slot is empty or holds another arm.
+fn unpack_arm(seq: u64, word: u64) -> Option<Invalidate> {
+    if word & 1 == 0 || (word >> 1) & 0xFF != (seq / ARM_RING as u64) & 0xFF {
+        return None;
+    }
+    let scope = ((word >> 9) & 0x3F) as u32;
+    Some(Invalidate {
+        raw: TRIGGER_BIT | scope,
+        trigger: true,
+        all_va: scope & 0b1 != 0,
+        all_pdb: scope & 0b10 != 0,
+        hubtlb_only: scope & 0b100 != 0,
+        replay: (scope >> 3) & 0b111,
+        pdb: (word >> 16) << PDB_ADDR_ALIGNMENT,
+        pdb_aperture: if (word >> 15) & 1 == 1 {
+            PdbAperture::Sysmem
+        } else {
+            PdbAperture::Vidmem
+        },
+    })
+}
+
+/// What [`InvalidatePort::armed_since`] found.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ArmedSince {
+    /// The newest arm: the sequence the clear must name, with the scope recorded for it.
+    pub newest: InvalidateRequest,
+    /// Arms between the caller's last and `newest` (oldest first), each with its recorded scope
+    /// (`ALL_PDB` when the record is gone). Each is superseded by `newest`; its SCOPE still has
+    /// to be refreshed.
+    pub earlier: Vec<InvalidateRequest>,
+    /// More arms than the ring keeps were skipped: their scopes are unknown, refresh everything.
+    pub overflow: bool,
+}
+
 /// ★ What the VA manager is asked to do: walk, reconcile, map — then `complete(seq)`.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct InvalidateRequest {
@@ -161,7 +223,16 @@ pub struct InvalidatePort {
     pdb_hi: Cell,
     word: Cell,
     trigger: Trigger,
+    /// ★ What each recent arm was FOR, recorded by the arming vCPU before the arm is visible
+    /// (see [`InvalidatePort::armed_since`]). One word per slot, so a reader never sees a torn
+    /// record; slot `seq % ARM_RING`.
+    ring: [AtomicU64; ARM_RING],
 }
+
+/// Arms whose scope is remembered. The manager reads them back by sequence; more than this many
+/// unobserved arms (or a slot overwritten or not yet written) are answered by `ALL_PDB`, which
+/// covers every scope — never by dropping one.
+pub const ARM_RING: usize = 8;
 
 /// What a write to one of the three registers did.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -184,6 +255,7 @@ impl InvalidatePort {
             pdb_hi: Cell::new(),
             word: Cell::new(),
             trigger: Trigger::new(),
+            ring: [const { AtomicU64::new(0) }; ARM_RING],
         }
     }
 
@@ -216,8 +288,15 @@ impl InvalidatePort {
             if !inval.trigger {
                 return PortWrite::Latched;
             }
-            // ★ ARM BEFORE PUBLISH — see `Trigger::arm_next`.
-            let seq = self.trigger.arm_next();
+            // ★ ARM BEFORE PUBLISH — see `Trigger::arm_next`. ★ And RECORD BEFORE ARM: the scope
+            // of THIS arm is taken from the latches the guest wrote for it, here, in its own
+            // trap, and stored under its sequence before the arm is visible. The manager reads
+            // the scope of every arm from the record, never from the latches, which the guest
+            // may already be rewriting for its NEXT invalidate (a timed-out one, or a hostile
+            // one): rebuilt from the latches, an arm could be redirected to another space.
+            let seq = self.trigger.mint();
+            self.ring[ring_slot(seq)].store(pack_arm(seq, &inval), Ordering::Release);
+            self.trigger.arm_minted(seq);
             PortWrite::Publish(InvalidateRequest { seq, inval })
         } else {
             PortWrite::NotOurs
@@ -240,6 +319,42 @@ impl InvalidatePort {
         Some(InvalidateRequest { seq, inval })
     }
 
+    /// ★★ **Every arm the manager has not seen yet** — the newest, with its recorded scope, and the
+    /// earlier ones it overwrote. `after` is the newest sequence the caller already took (`None`:
+    /// none). `None` when nothing newer than `after` is armed.
+    ///
+    /// ⊘ Why not [`Self::armed_request`] alone: the trigger names only the NEWEST arm. An earlier
+    /// arm that the manager never looked at (the guest's invalidate timed out and it armed again;
+    /// or a hostile guest) would be lost, and the newest one rebuilt from the latches could even
+    /// name the wrong space. Each arm's scope is recorded in the trap ([`Self::write`]); this reads
+    /// them back. A record that is not there (not written yet, or overwritten by a newer arm), and
+    /// every arm past the last [`ARM_RING`], is answered by `ALL_PDB`: a global refresh covers any
+    /// scope, so the answer is conservative, never a loss.
+    ///
+    /// Lock-free: three atomic loads per arm; the caller is the VA manager thread.
+    #[must_use]
+    pub fn armed_since(&self, after: Option<u64>) -> Option<ArmedSince> {
+        let newest = self.trigger.armed_seq()?;
+        if after.is_some_and(|a| newest <= a) {
+            return None;
+        }
+        let first = after.map_or(0, |a| a + 1);
+        let window = (ARM_RING as u64) - 1;
+        let lo = first.max(newest.saturating_sub(window));
+        let read = |seq: u64| -> InvalidateRequest {
+            let word = self.ring[ring_slot(seq)].load(Ordering::Acquire);
+            InvalidateRequest {
+                seq,
+                inval: unpack_arm(seq, word).unwrap_or_else(Invalidate::everything),
+            }
+        };
+        Some(ArmedSince {
+            newest: read(newest),
+            earlier: (lo..newest).map(read).collect(),
+            overflow: lo > first,
+        })
+    }
+
     /// ★ Device reset (`docs/design/V3_DEVICE_RESET.md`): the three registers read as a fresh
     /// port's — latches zero, the trigger idle ([`Trigger::abandon`]). Returns whether a request
     /// was armed. ⊘ Only while no vCPU can write the port (the device's reset gate).
@@ -247,6 +362,9 @@ impl InvalidatePort {
         self.pdb_lo.apply(WriteSemantics::Plain, 0);
         self.pdb_hi.apply(WriteSemantics::Plain, 0);
         self.word.apply(WriteSemantics::Plain, 0);
+        for slot in &self.ring {
+            slot.store(0, Ordering::Release);
+        }
         self.trigger.abandon()
     }
 
@@ -433,5 +551,176 @@ mod tests {
         let seq = t.arm_next();
         assert_eq!(t.complete(seq), ClearOutcome::Cleared);
         assert_eq!(t.read(), 0);
+    }
+
+    /// One guest invalidate through the port: PDB latches, then the trigger.
+    fn arm(p: &InvalidatePort, pdb: u64, ap: PdbAperture, word: u32) -> InvalidateRequest {
+        let r = p.regs();
+        let (lo, hi) = Invalidate::encode_pdb(pdb, ap);
+        p.write(r.pdb, lo);
+        p.write(r.upper_pdb, hi);
+        let PortWrite::Publish(req) = p.write(r.trigger, TRIGGER_BIT | word) else {
+            panic!("no publish")
+        };
+        req
+    }
+
+    /// ★ The scope of an arm is recorded in ITS trap: a guest that starts the next invalidate
+    /// (writes other PDB latches, no trigger yet) cannot redirect the arm still waiting.
+    #[test]
+    fn an_arms_scope_is_its_own_not_whatever_the_latches_say_later() {
+        let p = port();
+        let a = arm(&p, 0x0100_0000, PdbAperture::Vidmem, 1);
+        let (lo, hi) = Invalidate::encode_pdb(0x0900_0000, PdbAperture::Sysmem);
+        p.write(p.regs().pdb, lo);
+        p.write(p.regs().upper_pdb, hi);
+        let got = p.armed_since(None).expect("armed");
+        assert_eq!(got.newest.seq, a.seq);
+        assert_eq!(got.newest.inval.pdb, 0x0100_0000, "A's own pdb");
+        assert_eq!(got.newest.inval.pdb_aperture, PdbAperture::Vidmem);
+        assert!(got.earlier.is_empty() && !got.overflow);
+    }
+
+    /// ★ Arms the manager never looked at are not lost: each comes back with its scope, oldest
+    /// first, and the newest is the one that clears.
+    #[test]
+    fn every_overwritten_arm_comes_back_with_its_own_scope() {
+        let p = port();
+        let a = arm(&p, 0x0100_0000, PdbAperture::Vidmem, 1);
+        let b = arm(&p, 0x0200_0000, PdbAperture::Sysmem, 1);
+        let g = arm(&p, 0x0300_0000, PdbAperture::Vidmem, 0b11);
+        let got = p.armed_since(None).expect("armed");
+        assert_eq!(got.newest.seq, g.seq);
+        assert!(got.newest.inval.all_pdb);
+        let e: Vec<_> = got
+            .earlier
+            .iter()
+            .map(|r| (r.seq, r.inval.pdb, r.inval.pdb_aperture, r.inval.all_pdb))
+            .collect();
+        assert_eq!(
+            e,
+            vec![
+                (a.seq, 0x0100_0000, PdbAperture::Vidmem, false),
+                (b.seq, 0x0200_0000, PdbAperture::Sysmem, false)
+            ]
+        );
+        assert!(!got.overflow);
+        // Having taken `a`, only the later ones are new.
+        let got = p.armed_since(Some(a.seq)).expect("armed");
+        assert_eq!(got.earlier.len(), 1);
+        assert_eq!(got.earlier[0].seq, b.seq);
+    }
+
+    #[test]
+    fn nothing_newer_than_the_last_taken_arm_is_none_and_idle_is_none() {
+        let p = port();
+        assert_eq!(p.armed_since(None), None, "idle");
+        let a = arm(&p, 0x0100_0000, PdbAperture::Vidmem, 1);
+        assert_eq!(p.armed_since(Some(a.seq)), None, "already taken");
+        let b = arm(&p, 0x0200_0000, PdbAperture::Vidmem, 1);
+        assert_eq!(
+            p.armed_since(Some(a.seq)).map(|x| x.newest.seq),
+            Some(b.seq)
+        );
+        assert_eq!(p.armed_since(Some(b.seq)), None, "already taken");
+        assert_eq!(p.trigger().complete(b.seq), ClearOutcome::Cleared);
+        assert_eq!(p.armed_since(None), None, "cleared");
+    }
+
+    /// More unobserved arms than the ring keeps: the overflow flag says refresh everything; the
+    /// newest and the last `ARM_RING - 1` earlier ones still come back exactly.
+    #[test]
+    fn more_unobserved_arms_than_the_ring_keeps_set_the_overflow_flag() {
+        let p = port();
+        let mut seqs = Vec::new();
+        for i in 0..20u64 {
+            seqs.push(arm(&p, 0x0100_0000 + i * 0x1000, PdbAperture::Vidmem, 1).seq);
+        }
+        let got = p.armed_since(None).expect("armed");
+        assert!(got.overflow);
+        assert_eq!(got.newest.seq, 19);
+        assert_eq!(got.earlier.len(), ARM_RING - 1);
+        for r in got.earlier.iter().chain([&got.newest]) {
+            assert_eq!(
+                r.inval.pdb,
+                0x0100_0000 + r.seq * 0x1000,
+                "exact, not guessed"
+            );
+        }
+        // Exactly the ring's worth of unobserved arms: no overflow.
+        let got = p.armed_since(Some(19 - ARM_RING as u64)).expect("armed");
+        assert!(!got.overflow);
+        assert_eq!(got.earlier.len(), ARM_RING - 1);
+        let got = p
+            .armed_since(Some(19 - ARM_RING as u64 - 1))
+            .expect("armed");
+        assert!(got.overflow, "one more than the ring keeps");
+    }
+
+    /// A record that is not there (a vCPU minted a sequence and has not stored its scope; or the
+    /// slot was reused) is answered by ALL_PDB, never by a guess from the latches.
+    #[test]
+    fn an_arm_without_a_readable_record_is_treated_as_all_pdb() {
+        let p = port();
+        for i in 0..9u64 {
+            arm(&p, 0x0100_0000 + i * 0x1000, PdbAperture::Vidmem, 1);
+        }
+        // Sequence 9 armed with no record: its slot still holds sequence 1's.
+        let s = p.trigger().mint();
+        assert_eq!(s, 9);
+        p.trigger().arm_minted(s);
+        let got = p.armed_since(Some(7)).expect("armed");
+        assert_eq!(got.newest.seq, 9);
+        assert!(got.newest.inval.all_pdb, "unreadable => everything");
+        assert_eq!(got.earlier.len(), 1);
+        assert_eq!(got.earlier[0].inval.pdb, 0x0100_0000 + 8 * 0x1000);
+        assert!(!got.earlier[0].inval.all_pdb);
+    }
+
+    /// A device reset empties the ring with the trigger.
+    #[test]
+    fn a_reset_forgets_every_recorded_arm() {
+        let p = port();
+        arm(&p, 0x0100_0000, PdbAperture::Vidmem, 1);
+        arm(&p, 0x0200_0000, PdbAperture::Vidmem, 1);
+        assert!(p.reset());
+        assert_eq!(p.armed_since(None), None);
+        // The next life: a fresh arm is the only one, and its scope is its own.
+        let n = arm(&p, 0x0300_0000, PdbAperture::Vidmem, 1);
+        let got = p.armed_since(Some(n.seq - 1)).expect("armed");
+        assert!(got.earlier.is_empty() && !got.overflow);
+        assert_eq!(got.newest.inval.pdb, 0x0300_0000);
+    }
+
+    #[test]
+    fn a_packed_scope_round_trips() {
+        for (pdb, ap, word) in [
+            (0u64, PdbAperture::Vidmem, 1u32),
+            (0x1000, PdbAperture::Sysmem, 0b11),
+            (0x0123_4567_8000_0000, PdbAperture::Sysmem, 0b100_101),
+            (
+                0xFFFF_FFFF_F000_0000_u64 & !0xFFF,
+                PdbAperture::Vidmem,
+                0b111_111,
+            ),
+        ] {
+            let (lo, hi) = Invalidate::encode_pdb(pdb, ap);
+            let inval = Invalidate::decode(TRIGGER_BIT | word, lo, hi);
+            for seq in [0u64, 7, 8, 12345] {
+                let back = unpack_arm(seq, pack_arm(seq, &inval)).expect("same seq");
+                assert_eq!(back.pdb, inval.pdb);
+                assert_eq!(back.pdb_aperture, ap);
+                assert_eq!(
+                    (back.all_va, back.all_pdb, back.hubtlb_only, back.replay),
+                    (inval.all_va, inval.all_pdb, inval.hubtlb_only, inval.replay)
+                );
+                assert_eq!(
+                    unpack_arm(seq + 8, pack_arm(seq, &inval)),
+                    None,
+                    "other arm"
+                );
+            }
+        }
+        assert_eq!(unpack_arm(0, 0), None, "empty slot");
     }
 }

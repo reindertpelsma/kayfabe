@@ -41,6 +41,9 @@ use std::collections::{BTreeMap, HashMap, VecDeque};
 /// at most one scope-only refresh of the other space.
 const BOUND_PENDING: usize = 2;
 
+/// A guard against a configuration whose state space would not fit in memory.
+const MAX_STATES: usize = 60_000_000;
+
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 enum Kind {
     A,
@@ -88,7 +91,14 @@ struct Cfg {
     polite: bool,
     /// Prune on state digests (off: every distinct schedule is run).
     memo: bool,
+    /// The kinds of arm the guest may make.
+    kinds: &'static [Kind],
+    /// Breadth-first, keeping the state graph: minimal counterexamples and the exact number of
+    /// complete schedules. Off: depth-first over a visited set only (a far smaller footprint).
+    count: bool,
 }
+
+const ALL_KINDS: &[Kind] = &[Kind::A, Kind::B, Kind::All];
 
 type Rows = BTreeMap<u64, Vec<(u64, u64, u64, u32)>>;
 
@@ -108,19 +118,13 @@ struct World {
     lost_rearm: bool,
 }
 
-/// ★ The manager's observation of the port — exactly the production loop's step
-/// (`device.rs`, `va_loop`): read the armed request, skip a sequence already taken, queue it.
+/// ★ The manager's observation of the port — the production loop's step (`device.rs`, `va_loop`).
 fn observe(
     m: &mut VaManager<ModelWalker, FakeHost>,
     port: &InvalidatePort,
-    last: &mut Option<u64>,
+    after: &mut Option<u64>,
 ) {
-    if let Some(req) = port.armed_request()
-        && *last != Some(req.seq)
-    {
-        *last = Some(req.seq);
-        m.on_invalidate(req, port.trigger());
-    }
+    m.observe_port(port, after);
 }
 
 impl World {
@@ -150,7 +154,7 @@ impl World {
         let mut v = Vec::new();
         match self.gp {
             Gp::Idle if self.started < cfg.n && (!cfg.polite || !self.busy()) => {
-                v.extend([Kind::A, Kind::B, Kind::All].map(Ev::Prep));
+                v.extend(cfg.kinds.iter().copied().map(Ev::Prep));
             }
             Gp::Idle => {}
             Gp::Prepped(_) => v.push(Ev::Arm),
@@ -340,6 +344,17 @@ impl World {
                     .to_string(),
             ));
         }
+        let t = self.r.port.trigger();
+        if t.issued() != t.completed() {
+            v.push((
+                "I6",
+                format!(
+                    "{} arms issued but {} completed: an arm was never accounted for",
+                    t.issued(),
+                    t.completed()
+                ),
+            ));
+        }
         if late.is_some() || self.r.m.pending() > 0 || self.r.m.in_flight() {
             v.push((
                 "I6",
@@ -354,7 +369,18 @@ impl World {
         v
     }
 
-    fn digest(&self) -> String {
+    fn digest(&self) -> u128 {
+        let text = self.digest_text();
+        use std::hash::{Hash, Hasher};
+        let mut a = std::collections::hash_map::DefaultHasher::new();
+        let mut b = std::collections::hash_map::DefaultHasher::new();
+        0xA5A5u16.hash(&mut b);
+        text.hash(&mut a);
+        text.hash(&mut b);
+        (u128::from(a.finish()) << 64) | u128::from(b.finish())
+    }
+
+    fn digest_text(&self) -> String {
         let m = &self.r.m;
         let w = m.walker();
         let wants = |ws: &mut dyn Iterator<Item = &Want>| -> String {
@@ -448,13 +474,24 @@ impl Report {
 
 fn explore(cfg: Cfg) -> Report {
     let mut rep = Report::default();
-    let mut ids: HashMap<String, usize> = HashMap::new();
+    let mut ids: HashMap<u128, usize> = HashMap::new();
+    let mut next_id = 1usize;
     let mut edges: Vec<Vec<usize>> = Vec::new();
     let mut queue: VecDeque<(Vec<Ev>, usize)> = VecDeque::new();
     ids.insert(World::new().digest(), 0);
     edges.push(Vec::new());
     queue.push_back((Vec::new(), 0));
-    while let Some((path, id)) = queue.pop_front() {
+    loop {
+        let next = if cfg.count {
+            queue.pop_front()
+        } else {
+            queue.pop_back()
+        };
+        let Some((path, id)) = next else { break };
+        assert!(
+            next_id <= MAX_STATES,
+            "the state space exceeds {MAX_STATES} states: shrink the configuration"
+        );
         let w = replay(&path);
         rep.max_pending = rep.max_pending.max(w.r.m.pending());
         let en = w.enabled(cfg);
@@ -475,19 +512,27 @@ fn explore(cfg: Cfg) -> Report {
             let nid = match ids.get(&d) {
                 Some(&n) if cfg.memo => n,
                 _ => {
-                    let n = edges.len();
+                    let n = next_id;
+                    next_id += 1;
                     ids.insert(d, n);
-                    edges.push(Vec::new());
+                    if cfg.count {
+                        edges.push(Vec::new());
+                    }
                     let mut p = path.clone();
                     p.push(ev);
                     queue.push_back((p, n));
                     n
                 }
             };
-            edges[id].push(nid);
+            if cfg.count {
+                edges[id].push(nid);
+            }
         }
     }
-    rep.states = edges.len();
+    rep.states = next_id;
+    if !cfg.count {
+        return rep;
+    }
     // Complete schedules = paths in the (acyclic) state graph from the root to a sink.
     let mut memo: Vec<Option<f64>> = vec![None; edges.len()];
     fn paths(s: usize, edges: &[Vec<usize>], memo: &mut Vec<Option<f64>>) -> f64 {
@@ -520,111 +565,96 @@ fn show(name: &str, cfg: Cfg, rep: &Report) {
     );
 }
 
+fn cfg(n: usize, polite: bool, kinds: &'static [Kind], count: bool) -> Cfg {
+    Cfg {
+        n,
+        polite,
+        memo: true,
+        kinds,
+        count,
+    }
+}
+
 /// RM's discipline (the next arm only after the bit reads idle): every invariant, exhaustively.
 #[test]
 fn polite_guest_n4_every_invariant_over_every_interleaving() {
-    let cfg = Cfg {
-        n: 4,
-        polite: true,
-        memo: true,
-    };
-    let rep = explore(cfg);
-    show("polite", cfg, &rep);
+    let c = cfg(4, true, ALL_KINDS, true);
+    let rep = explore(c);
+    show("polite", c, &rep);
     rep.assert_holds(&["I1", "I2", "I3", "I5", "I6"]);
 }
 
 /// ★ The adversarial guest (a timed-out invalidate, a hostile guest): arms back to back, any pdb,
-/// any mix of specific and ALL_PDB, during every window of the manager. I1/I2: no stale clear, no
-/// lost re-arm, no arm missed (a specific is never dropped because another space was walked).
+/// any mix of specific and ALL_PDB, during every window of the manager. I1/I2/I4: no stale clear,
+/// no lost re-arm, no arm missed (a specific is never dropped because another space was walked).
 #[test]
 fn adversarial_guest_n3_no_stale_clear_and_no_lost_arm() {
-    let cfg = Cfg {
-        n: 3,
-        polite: false,
-        memo: true,
-    };
-    let rep = explore(cfg);
-    show("adversarial", cfg, &rep);
+    let c = cfg(3, false, ALL_KINDS, true);
+    let rep = explore(c);
+    show("adversarial", c, &rep);
     rep.assert_holds(&["I1", "I2"]);
-}
-
-/// ★ I3: the pending work is bounded by the spaces, not by the arms.
-#[test]
-fn adversarial_guest_n4_pending_work_is_bounded() {
-    let cfg = Cfg {
-        n: 4,
-        polite: false,
-        memo: true,
-    };
-    let rep = explore(cfg);
-    show("adversarial", cfg, &rep);
-    rep.assert_holds(&["I3"]);
 }
 
 /// I5 and I6 over the adversarial schedules.
 #[test]
 fn adversarial_guest_n3_walks_never_exceed_arms_and_progress_needs_no_timer() {
-    let cfg = Cfg {
-        n: 3,
-        polite: false,
-        memo: true,
-    };
-    let rep = explore(cfg);
-    rep.assert_holds(&["I5", "I6"]);
+    let c = cfg(3, false, ALL_KINDS, true);
+    let rep = explore(c);
+    rep.assert_holds(&["I3", "I5", "I6"]);
 }
 
-/// The digest memo hides nothing: with and without it the same violations are found.
+/// ★ I3 with four arms: pending work is bounded by the spaces, not by the arms. (Two specific
+/// spaces, every window; the three-kind four-arm space is the `#[ignore]`d test below.)
+#[test]
+fn adversarial_guest_n4_two_spaces_every_invariant() {
+    let c = cfg(4, false, &[Kind::A, Kind::B], false);
+    let rep = explore(c);
+    show("adversarial-AB", c, &rep);
+    rep.assert_holds(&["I1", "I2", "I3", "I5", "I6"]);
+}
+
+/// The full four-arm space (specific A, specific B, ALL_PDB). Minutes and gigabytes: run with
+/// `cargo test --release -p kf-mem interleave -- --ignored --nocapture`.
+#[test]
+#[ignore = "minutes; the exhaustive four-arm, three-kind space"]
+fn adversarial_guest_n4_three_kinds_every_invariant() {
+    let c = cfg(4, false, ALL_KINDS, false);
+    let rep = explore(c);
+    show("adversarial-ABG", c, &rep);
+    rep.assert_holds(&["I1", "I2", "I3", "I5", "I6"]);
+}
+
+/// The digest memo hides nothing: with and without it the same schedules, the same violations.
 #[test]
 fn the_state_digest_memo_hides_no_schedule() {
-    let a = explore(Cfg {
-        n: 2,
-        polite: false,
-        memo: true,
-    });
-    let b = explore(Cfg {
-        n: 2,
-        polite: false,
-        memo: false,
-    });
+    let ca = cfg(2, false, ALL_KINDS, true);
+    let a = explore(ca);
+    let mut cb = ca;
+    cb.memo = false;
+    let b = explore(cb);
     assert_eq!(
         a.first.keys().collect::<Vec<_>>(),
         b.first.keys().collect::<Vec<_>>()
     );
     assert_eq!(a.max_pending, b.max_pending);
     assert_eq!(a.terminals > 0, b.terminals > 0);
-    show(
-        "memo",
-        Cfg {
-            n: 2,
-            polite: false,
-            memo: true,
-        },
-        &a,
+    assert_eq!(
+        a.schedules as u64, b.terminals as u64,
+        "the memoised graph counts exactly the schedules the un-memoised run executes"
     );
-    show(
-        "nomemo",
-        Cfg {
-            n: 2,
-            polite: false,
-            memo: false,
-        },
-        &b,
-    );
+    show("memo", ca, &a);
+    show("nomemo", cb, &b);
 }
 
 /// Run `path`, then let the manager and the GPU finish (the guest does nothing more), and return
 /// the world at quiescence.
 fn settle_world(path: &[Ev]) -> World {
     let mut w = replay(path);
-    let cfg = Cfg {
-        n: 0,
-        polite: false,
-        memo: true,
-    };
+    let c = cfg(0, false, ALL_KINDS, false);
     // The guest first completes the arm it is in the middle of.
-    while let Some(&e) = w.enabled(cfg).first() {
+    while let Some(&e) = w.enabled(c).first() {
         w.apply(e);
-        if w.enabled(cfg).is_empty() {
+        if w.enabled(c).is_empty() {
             break;
         }
     }
@@ -723,4 +753,535 @@ fn a_storm_of_arms_during_one_walk_leaves_one_bounded_follow_up() {
         "{K} arms during one walk: one walk, then exactly one follow-up"
     );
     assert_clean(&w);
+}
+
+// ---------------------------------------------------------------------------------------------
+// Real threads. The model above fixes WHICH interleavings exist; this runs the same port and the
+// same manager against real concurrent guests, so the atomics' orderings (record before arm, arm
+// before signal, compare-and-clear) are exercised by the hardware too. Seeds fix each guest's
+// choices; the OS schedule is whatever it is, and every assertion is schedule-independent.
+// ---------------------------------------------------------------------------------------------
+
+use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
+use std::sync::{Arc, Mutex};
+use std::time::{Duration, Instant};
+
+struct Rng(u64);
+
+impl Rng {
+    fn next(&mut self) -> u64 {
+        self.0 ^= self.0 << 13;
+        self.0 ^= self.0 >> 7;
+        self.0 ^= self.0 << 17;
+        self.0
+    }
+}
+
+/// `(pdb, va, at)` per PTE the guests have written, in write order.
+type Ptes = Arc<Mutex<Vec<(u64, u64, u64)>>>;
+
+fn stress(seed: u64, polite: bool) {
+    const GUESTS: u64 = 3;
+    const ARMS: u64 = 40;
+    let port = Arc::new(InvalidatePort::new(
+        InvalidateRegs::from_usermode_base(0xBB_0000).unwrap(),
+    ));
+    let ptes: Ptes = Arc::default();
+    // Guests serialise the latch+trigger writes (one vCPU's trap); RM's lock additionally covers
+    // the wait for the bit when `polite`.
+    let rm_lock = Arc::new(Mutex::new(()));
+    let trap_lock = Arc::new(Mutex::new(()));
+    let wake = Arc::new(AtomicBool::new(false));
+    let done = Arc::new(AtomicBool::new(false));
+    let completed_ver = Arc::new(AtomicU64::new(0));
+    let total_arms = GUESTS * ARMS;
+
+    let mgr = {
+        let (port, ptes, wake, done, completed_ver) = (
+            port.clone(),
+            ptes.clone(),
+            wake.clone(),
+            done.clone(),
+            completed_ver.clone(),
+        );
+        std::thread::spawn(move || {
+            let mut r = rig_with(port.clone());
+            let cur_ver = Rc::new(std::cell::Cell::new(0u64));
+            {
+                // The version of the walk is published the moment the walker REPORTS it (before
+                // any clear), so a guest that sees the bit idle finds it there.
+                let (cur_ver, completed_ver) = (cur_ver.clone(), completed_ver.clone());
+                r.m.walker_mut().on_collect = Some(Box::new(move || {
+                    completed_ver.fetch_max(cur_ver.get(), Ordering::AcqRel);
+                }));
+            }
+            {
+                let (tables, ptes, cur_ver) = (r.tables.clone(), ptes.clone(), cur_ver.clone());
+                let mut synced = 0usize;
+                r.m.walker_mut().pre_submit = Some(Box::new(move || {
+                    let g = ptes.lock().unwrap();
+                    for &(pdb, va, at) in &g[synced..] {
+                        tables
+                            .borrow_mut()
+                            .entry(pdb)
+                            .or_default()
+                            .push((va, at, 0x1000, 0));
+                    }
+                    synced = g.len();
+                    cur_ver.set(g.len() as u64);
+                }));
+            }
+            let mut rng = Rng(seed ^ 0x9E37_79B9_7F4A_7C15);
+            let mut after: Option<u64> = None;
+            let started = Instant::now();
+            let mut max_pending = 0;
+            loop {
+                assert!(
+                    started.elapsed() < Duration::from_secs(60),
+                    "seed {seed}: the manager is stuck (bit busy={}, pending={})",
+                    busy(&port),
+                    r.m.pending()
+                );
+                let woke = wake.swap(false, Ordering::AcqRel);
+                r.m.observe_port(&port, &mut after);
+                for _ in 0..(rng.next() % 64) {
+                    std::hint::spin_loop();
+                }
+                let out = r.m.on_walk_ready(port.trigger());
+                max_pending = max_pending.max(r.m.pending());
+                assert!(
+                    r.m.pending() <= BOUND_PENDING,
+                    "seed {seed}: pending {} exceeds {BOUND_PENDING}",
+                    r.m.pending()
+                );
+                if woke || out.collected || r.m.in_flight() || r.m.pending() > 0 {
+                    continue;
+                }
+                if done.load(Ordering::Acquire) {
+                    // The guests are gone. Anything still armed that we have not taken is a lost wake.
+                    if port.armed_since(after).is_none() {
+                        break;
+                    }
+                    continue;
+                }
+                // Event-driven: sleep until a guest signals. The timeout is a WATCHDOG only; if it
+                // fires with the bit busy and nothing to do, a wake was lost.
+                std::thread::park_timeout(Duration::from_secs(10));
+                if !wake.load(Ordering::Acquire) && !done.load(Ordering::Acquire) {
+                    assert!(
+                        !busy(&port) || port.armed_since(after).is_some(),
+                        "seed {seed}: LOST WAKE - the bit is busy, nothing is pending and nobody signalled"
+                    );
+                }
+            }
+            // Quiescent: idle bit, every PTE any guest wrote is on the host, walks <= arms.
+            assert!(!busy(&port), "seed {seed}: the bit is busy at quiescence");
+            let host = {
+                let mut h = BTreeMap::new();
+                for (op, _) in r.ops.borrow().iter() {
+                    if let Op::Map(va, off, _) = op {
+                        h.insert(*va, *off);
+                    }
+                }
+                h
+            };
+            for &(_, va, at) in ptes.lock().unwrap().iter() {
+                assert_eq!(
+                    host.get(&va),
+                    Some(&at),
+                    "seed {seed}: PTE {va:#x} never reached the host"
+                );
+            }
+            let walks = r.m.walker().submits.len() as u64;
+            assert!(
+                walks <= total_arms,
+                "seed {seed}: {walks} walks for {total_arms} arms"
+            );
+            (walks, max_pending)
+        })
+    };
+    let mgr_thread = mgr.thread().clone();
+
+    let guests: Vec<_> = (0..GUESTS)
+        .map(|g| {
+            let (port, ptes, rm_lock, trap_lock, wake, completed_ver, mgr_thread) = (
+                port.clone(),
+                ptes.clone(),
+                rm_lock.clone(),
+                trap_lock.clone(),
+                wake.clone(),
+                completed_ver.clone(),
+                mgr_thread.clone(),
+            );
+            std::thread::spawn(move || {
+                let mut rng = Rng(seed.wrapping_mul(0x2545_F491_4F6C_DD1D) ^ (g + 1));
+                for i in 0..ARMS {
+                    let kind = [Kind::A, Kind::B, Kind::All][(rng.next() % 3) as usize];
+                    let _rm = polite.then(|| rm_lock.lock().unwrap());
+                    let idx = g * ARMS + i;
+                    let my_ver = {
+                        let mut p = ptes.lock().unwrap();
+                        let spaces: &[u64] = match kind {
+                            Kind::A => &[PDB_A],
+                            Kind::B => &[PDB_B],
+                            Kind::All => &[PDB_A, PDB_B],
+                        };
+                        for &pdb in spaces {
+                            let (va0, at0) = if pdb == PDB_A {
+                                (0x1000_0000u64, 0x0200_0000u64)
+                            } else {
+                                (0x2000_0000, 0x0210_0000)
+                            };
+                            p.push((pdb, va0 + idx * 0x10000, at0 + idx * 0x10000));
+                        }
+                        p.len() as u64
+                    };
+                    {
+                        let _t = trap_lock.lock().unwrap();
+                        let regs = port.regs();
+                        if kind != Kind::All {
+                            let pdb = if kind == Kind::A { PDB_A } else { PDB_B };
+                            let (lo, hi) = Invalidate::encode_pdb(pdb, PdbAperture::Vidmem);
+                            port.write(regs.pdb, lo);
+                            port.write(regs.upper_pdb, hi);
+                        }
+                        let word = kf_trap::mmuinval::TRIGGER_BIT
+                            | 1
+                            | if kind == Kind::All { 0b10 } else { 0 };
+                        assert!(matches!(
+                            port.write(regs.trigger, word),
+                            PortWrite::Publish(_)
+                        ));
+                    }
+                    wake.store(true, Ordering::Release);
+                    mgr_thread.unpark();
+                    // The guest polls the bit. Polite: until it reads idle. Hostile: a few reads and on.
+                    let t0 = Instant::now();
+                    let mut spins = 0u32;
+                    loop {
+                        if !busy(&port) {
+                            // I1 with real atomics: an idle bit means a walk submitted after my
+                            // PTE write has been collected.
+                            assert!(
+                                completed_ver.load(Ordering::Acquire) >= my_ver,
+                                "seed {seed}: guest {g} arm {i}: the bit reads idle but no walk of version >= {my_ver} completed"
+                            );
+                            break;
+                        }
+                        spins += 1;
+                        if !polite && spins > 200 {
+                            break;
+                        }
+                        assert!(
+                            t0.elapsed() < Duration::from_secs(60),
+                            "seed {seed}: guest {g} arm {i} never saw the bit clear"
+                        );
+                        std::hint::spin_loop();
+                    }
+                }
+            })
+        })
+        .collect();
+    for g in guests {
+        g.join().unwrap();
+    }
+    done.store(true, Ordering::Release);
+    mgr_thread.unpark();
+    let (walks, max_pending) = mgr.join().unwrap();
+    eprintln!(
+        "stress seed {seed} polite={polite}: {total_arms} arms, {walks} walks, max pending {max_pending}"
+    );
+}
+
+#[test]
+fn real_threads_polite_guests_never_see_a_stale_clear_or_a_lost_wake() {
+    for seed in 1..=12 {
+        stress(seed, true);
+    }
+}
+
+#[test]
+fn real_threads_hostile_arm_storms_lose_no_pte_and_build_no_backlog() {
+    for seed in 1..=12 {
+        stress(seed, false);
+    }
+}
+
+// ---------------------------------------------------------------------------------------------
+// The merge rules, one by one (the checker above proves them over every schedule; these name them).
+// ---------------------------------------------------------------------------------------------
+
+/// A rig whose walks stay on the "GPU" until `release`d, and the manager's `after` cursor.
+struct Held {
+    r: Rig,
+    after: Option<u64>,
+}
+
+impl Held {
+    fn new() -> Held {
+        let mut r = rig();
+        r.m.walker_mut().hold_walks = true;
+        Held { r, after: None }
+    }
+
+    /// The guest arms (PDB latches + trigger) and the manager looks.
+    fn arm(&mut self, pdb: u64, all_pdb: bool) -> InvalidateRequest {
+        let q = guest_invalidate(&self.r.port, pdb, all_pdb);
+        self.r.m.observe_port(&self.r.port, &mut self.after);
+        q
+    }
+
+    /// The guest arms several times, then the manager looks once.
+    fn arm_unobserved(&mut self, pdb: u64, all_pdb: bool) -> InvalidateRequest {
+        guest_invalidate(&self.r.port, pdb, all_pdb)
+    }
+
+    fn look(&mut self) {
+        self.r.m.observe_port(&self.r.port, &mut self.after);
+    }
+
+    /// The GPU finishes the walk in flight and the manager collects it.
+    fn release(&mut self) -> Reconciled {
+        self.r.m.walker_mut().hold = false;
+        self.r.m.on_walk_ready(self.r.port.trigger())
+    }
+
+    /// What is waiting, as words.
+    fn shape(&self) -> Vec<String> {
+        let name = |s: Scope| match s {
+            Scope::All => "All".to_string(),
+            Scope::Pdb(p, _) if p == PDB_A => "A".to_string(),
+            Scope::Pdb(p, _) if p == PDB_B => "B".to_string(),
+            Scope::Pdb(p, _) => format!("{p:#x}"),
+        };
+        self.r
+            .m
+            .pending
+            .iter()
+            .map(|w| match w {
+                Want::Invalidate(r, _) => format!("Inv({})", name(scope_of(r))),
+                Want::Refresh(s, _) => format!("Ref({})", name(*s)),
+                Want::Root(k) => format!("Root({k:?})"),
+                Want::Split { ticket, .. } => format!("Split({ticket})"),
+            })
+            .collect()
+    }
+}
+
+/// A global arrival subsumes every waiting specific: they are dropped, not queued beside it.
+#[test]
+fn a_global_arm_subsumes_every_waiting_specific() {
+    let mut h = Held::new();
+    h.arm(PDB_A, false);
+    assert!(h.r.m.in_flight());
+    h.arm(PDB_B, false);
+    assert_eq!(h.shape(), ["Inv(B)"]);
+    h.arm(PDB_A, false);
+    assert_eq!(
+        h.shape(),
+        ["Inv(A)", "Ref(B)"],
+        "the older specific is kept as a scope"
+    );
+    h.arm(0, true);
+    assert_eq!(h.shape(), ["Inv(All)"], "one global covers both");
+}
+
+/// A specific arriving after a global keeps the global beside it (the global's scope is not lost,
+/// and the specific carries the trigger's sequence); the follow-up walk covers both spaces.
+#[test]
+fn a_specific_arm_after_a_global_keeps_the_global_scope_and_clears() {
+    let mut h = Held::new();
+    h.arm(PDB_A, false);
+    h.arm(0, true);
+    h.arm(PDB_B, false);
+    assert_eq!(h.shape(), ["Inv(B)", "Ref(All)"]);
+    h.release();
+    assert!(h.r.m.in_flight(), "ONE follow-up walk");
+    assert_eq!(h.r.m.pending(), 0);
+    let out = h.release();
+    assert!(!busy(&h.r.port));
+    assert_eq!(
+        out.completed.last().map(|c| c.1),
+        Some(ClearOutcome::Cleared)
+    );
+    let mut second = h.r.m.walker().submits[1].clone();
+    second.sort_unstable();
+    assert_eq!(second, vec![PDB_A, PDB_B], "the global's scope was walked");
+    assert_eq!(h.r.m.walker().submits.len(), 2);
+}
+
+/// ★ I4: a specific refresh is not dropped because ANOTHER space's walk completed.
+#[test]
+fn a_specific_arm_is_kept_when_another_spaces_walk_completes() {
+    let mut h = Held::new();
+    h.r.tables
+        .borrow_mut()
+        .insert(PDB_A, vec![(0x1000_0000, 0x0200_0000, 0x1000, 0)]);
+    h.r.tables
+        .borrow_mut()
+        .insert(PDB_B, vec![(0x2000_0000, 0x0210_0000, 0x1000, 0)]);
+    h.arm(PDB_A, false);
+    h.arm(PDB_B, false);
+    assert_eq!(h.r.m.walker().submits, vec![vec![PDB_A]]);
+    let out = h.release();
+    assert!(busy(&h.r.port), "A's walk must not clear B");
+    assert_eq!(out.completed.len(), 1);
+    assert!(
+        h.r.m.in_flight(),
+        "B's own walk follows, submitted after B's arm"
+    );
+    h.release();
+    assert!(!busy(&h.r.port));
+    assert_eq!(h.r.m.walker().submits, vec![vec![PDB_A], vec![PDB_B]]);
+    assert!(ops(&h.r).contains(&Op::Map(0x2000_0000, 0x0210_0000, 0x1000)));
+}
+
+/// ★ Several arms the manager never looked at: all refreshed by the walk it starts when it does.
+#[test]
+fn arms_the_manager_never_looked_at_are_all_refreshed_by_one_walk() {
+    let mut h = Held::new();
+    for i in 0..5u64 {
+        let (pdb, va, at) = if i % 2 == 0 {
+            (PDB_A, 0x1000_0000 + i * 0x10000, 0x0200_0000 + i * 0x10000)
+        } else {
+            (PDB_B, 0x2000_0000 + i * 0x10000, 0x0210_0000 + i * 0x10000)
+        };
+        h.r.tables
+            .borrow_mut()
+            .entry(pdb)
+            .or_default()
+            .push((va, at, 0x1000, 0));
+        h.arm_unobserved(pdb, false);
+    }
+    h.look();
+    let mut s = h.r.m.walker().submits[0].clone();
+    s.sort_unstable();
+    assert_eq!(
+        s,
+        vec![PDB_A, PDB_B],
+        "one walk names both spaces the arms named"
+    );
+    h.release();
+    assert!(!busy(&h.r.port));
+    assert_eq!(h.r.m.walker().submits.len(), 1);
+    assert_eq!(
+        ops(&h.r)
+            .iter()
+            .filter(|o| matches!(o, Op::Map(..)))
+            .count(),
+        5
+    );
+    let t = h.r.port.trigger();
+    assert_eq!(
+        (t.issued(), t.completed()),
+        (5, 5),
+        "every arm accounted for"
+    );
+}
+
+/// More unobserved arms than the port remembers: the walk covers everything (the overflow is a
+/// global refresh), so no PTE is lost even though their scopes are unknown.
+#[test]
+fn more_unobserved_arms_than_the_port_remembers_refresh_everything() {
+    let mut h = Held::new();
+    let n = 3 * kf_trap::mmuinval::ARM_RING as u64;
+    for i in 0..n {
+        let (pdb, va, at) = if i % 2 == 0 {
+            (PDB_A, 0x1000_0000 + i * 0x10000, 0x0200_0000 + i * 0x10000)
+        } else {
+            (PDB_B, 0x2000_0000 + i * 0x10000, 0x0210_0000 + i * 0x10000)
+        };
+        h.r.tables
+            .borrow_mut()
+            .entry(pdb)
+            .or_default()
+            .push((va, at, 0x1000, 0));
+        h.arm_unobserved(pdb, false);
+    }
+    h.look();
+    h.release();
+    assert!(!busy(&h.r.port));
+    assert_eq!(
+        ops(&h.r)
+            .iter()
+            .filter(|o| matches!(o, Op::Map(..)))
+            .count() as u64,
+        n,
+        "every PTE any arm wrote reached the host"
+    );
+}
+
+/// A hostile guest naming arbitrary page directories cannot grow the queue: a directory no space
+/// is rooted at names nothing that can be stale.
+#[test]
+fn arms_naming_unknown_page_directories_build_no_backlog() {
+    let mut h = Held::new();
+    h.arm(PDB_A, false);
+    for i in 0..500u64 {
+        h.arm(0x4000_0000 + i * 0x1000, false);
+        assert!(
+            h.r.m.pending() <= 1,
+            "pending {} after {i} arms",
+            h.r.m.pending()
+        );
+    }
+    assert_eq!(
+        h.r.m.stats.named_missed, 499,
+        "each superseded unknown directory was counted"
+    );
+}
+
+/// Root walks for one space are not queued twice: they would be the same walk.
+#[test]
+fn root_walks_for_one_space_are_queued_once() {
+    let mut h = Held::new();
+    h.arm(PDB_A, false);
+    for _ in 0..50 {
+        h.r.m.schedule_walk(K_B, h.r.port.trigger());
+    }
+    assert_eq!(h.shape(), [format!("Root({K_B:?})")]);
+    assert_eq!(h.r.m.abandon_life().roots, 1);
+}
+
+/// A want that must walk again (a partial diff) is merged with the newer arm that arrived while
+/// it walked: one trigger-bearing invalidate in the follow-up walk, not two.
+#[test]
+fn a_requeued_invalidate_merges_with_the_newer_arm() {
+    let mut h = Held::new();
+    h.r.m.walker_mut().cap = 2;
+    h.r.tables.borrow_mut().insert(
+        PDB_A,
+        vec![
+            (0x1000, 0x10_0000, 0x1000, 0),
+            (0x3000, 0x20_0000, 0x1000, 0),
+        ],
+    );
+    h.r.m.walker_mut().hold_walks = false;
+    settle(&mut h.r, PDB_A);
+    h.r.m.walker_mut().hold_walks = true;
+    h.r.tables.borrow_mut().insert(
+        PDB_A,
+        vec![
+            (0x3000, 0x30_0000, 0x1000, 0),
+            (0x5000, 0x40_0000, 0x1000, 0),
+        ],
+    );
+    let a1 = h.arm(PDB_A, false);
+    let a2 = h.arm(PDB_A, false);
+    assert_eq!(h.shape(), ["Inv(A)"]);
+    h.release();
+    // The partial diff withheld its maps; A1 walks again - merged with A2, not beside it.
+    let inflight = h.r.m.inflight.as_ref().expect("walked again at once");
+    let seqs: Vec<u64> = inflight
+        .wants
+        .iter()
+        .filter_map(|(w, _, _)| match w {
+            Want::Invalidate(r, _) => Some(r.seq),
+            _ => None,
+        })
+        .collect();
+    assert_eq!(seqs, vec![a2.seq], "only the newest carries the sequence");
+    assert!(a1.seq < a2.seq);
+    h.release();
+    assert!(!busy(&h.r.port));
 }

@@ -132,9 +132,23 @@ impl Trigger {
     /// `fetch_max`, not `store`: two vCPUs racing here must leave the trigger naming the LATER
     /// write, or completing the earlier one would clear the later one early (§5.5's corruption).
     pub fn arm_next(&self) -> u64 {
-        let seq = self.issued.fetch_add(1, Ordering::AcqRel);
-        self.armed_at.fetch_max(seq + 1, Ordering::AcqRel);
+        let seq = self.mint();
+        self.arm_minted(seq);
         seq
+    }
+
+    /// The first half of [`Trigger::arm_next`]: take the next sequence, arm NOTHING. A caller that
+    /// must record what the arm is FOR (the invalidate port records the arm's scope) does so
+    /// between this and [`Trigger::arm_minted`], so the record is visible to whoever observes the
+    /// arm.
+    pub fn mint(&self) -> u64 {
+        self.issued.fetch_add(1, Ordering::AcqRel)
+    }
+
+    /// The second half of [`Trigger::arm_next`]: arm under a sequence from [`Trigger::mint`].
+    /// `fetch_max`, so a racing later arm is never lowered.
+    pub fn arm_minted(&self, seq: u64) {
+        self.armed_at.fetch_max(seq + 1, Ordering::AcqRel);
     }
 
     /// ★ P4: the sequence the trigger is currently armed at, or `None` when idle — what the VA

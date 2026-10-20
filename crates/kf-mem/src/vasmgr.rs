@@ -53,7 +53,7 @@
 use crate::apply::{Applied, ApplyCfg, DiffRun, apply_entry};
 use crate::ledger::{MapTarget, Settle};
 use kf_cuda::WalkEntry;
-use kf_trap::{ClearOutcome, InvalidateRequest, PdbAperture, Trigger};
+use kf_trap::{ClearOutcome, InvalidatePort, InvalidateRequest, PdbAperture, Trigger};
 
 /// ★ Owner ruling 2026-10-09 (`OWNER_RULINGS.md` §AA): an invalidate completes although the guest's
 /// tables hold leaves we cannot map (hardware completes it too; a bad leaf faults when USED).
@@ -621,6 +621,7 @@ fn maplog_want(w: &Want) -> String {
             format!("split ticket={ticket} pdb={pdb:x?} space={key:?}")
         }
         Want::Root(k) => format!("root {k:?}"),
+        Want::Refresh(s, at) => format!("refresh {s:?} age_us={}", at.elapsed().as_micros()),
     }
 }
 
@@ -660,6 +661,11 @@ enum Want {
     /// A root changed with no invalidate behind it (Q10), or a partial diff's follow-up;
     /// nothing to clear.
     Root(VasKey),
+    /// ★ A scope that must be walked after its arm, with NO trigger to clear: an arm that a later
+    /// arm superseded (the later one carries the sequence and clears), or a scope the port could
+    /// not name exactly. Merged on arrival (see [`VaManager::queue_invalidate`]), so the waiting
+    /// work is bounded by the spaces, never by the number of arms.
+    Refresh(Scope, std::time::Instant),
     /// ★ P6: a Translated channel's `MEM_OP` TLB invalidate (the split, `THE_TRANSLATED_PLANE.md`
     /// §5/§24.2): `pdb` (`None` = `PDB_ALL`) walked and applied, then `ticket` reported done
     /// through [`VaManager::take_splits`] — no trigger is involved.
@@ -672,6 +678,34 @@ enum Want {
         /// the triggering channel's own space; `pdb` is then `None` and ignored).
         key: Option<VasKey>,
     },
+}
+
+/// Queue a walk of `key`'s root unless one is already waiting.
+fn push_root(pending: &mut Vec<Want>, key: VasKey) {
+    if !pending
+        .iter()
+        .any(|w| matches!(w, Want::Root(k) if *k == key))
+    {
+        pending.push(Want::Root(key));
+    }
+}
+
+/// What a scope-only refresh walks.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum Scope {
+    /// Every rooted space (`ALL_PDB`): covers any other scope.
+    All,
+    /// The spaces rooted at this page directory.
+    Pdb(u64, PdbAperture),
+}
+
+/// The scope an invalidate names.
+fn scope_of(r: &InvalidateRequest) -> Scope {
+    if r.inval.all_pdb {
+        Scope::All
+    } else {
+        Scope::Pdb(r.inval.pdb, r.inval.pdb_aperture)
+    }
 }
 
 /// What [`VaManager::abandon_life`] dropped.
@@ -1036,7 +1070,7 @@ impl<W: Walker, T: MapTarget> VaManager<W, T> {
         for w in core::mem::take(&mut self.pending) {
             match w {
                 Want::Invalidate(..) => out.invalidates = out.invalidates.saturating_add(1),
-                Want::Root(_) => out.roots = out.roots.saturating_add(1),
+                Want::Root(_) | Want::Refresh(..) => out.roots = out.roots.saturating_add(1),
                 Want::Split { ticket, .. } => out.split_tickets.push(ticket),
             }
         }
@@ -1160,9 +1194,151 @@ impl<W: Walker, T: MapTarget> VaManager<W, T> {
                     .map_or("none".to_string(), |b| format!("#{}", b.id))
             );
         }
-        self.pending
-            .push(Want::Invalidate(req, std::time::Instant::now()));
+        self.queue_invalidate(req, std::time::Instant::now(), trigger);
         self.pump(trigger);
+    }
+
+    /// ★★★ **The device loop's one look at the port**: take every arm newer than `*after` (the
+    /// newest sequence already taken), queue them, and start a walk if none is in flight.
+    ///
+    /// The newest arm carries the trigger's sequence and is what clears; each earlier arm it
+    /// overwrote is completed as superseded and its recorded SCOPE is queued as a refresh, so no
+    /// arm's space is ever dropped. Never blocks.
+    pub fn observe_port(&mut self, port: &InvalidatePort, after: &mut Option<u64>) {
+        let trigger = port.trigger();
+        let Some(armed) = port.armed_since(*after) else {
+            return;
+        };
+        *after = Some(armed.newest.seq);
+        let now = std::time::Instant::now();
+        if armed.overflow {
+            self.pending.push(Want::Refresh(Scope::All, now));
+        }
+        for e in &armed.earlier {
+            self.stats.outcome(trigger.complete(e.seq));
+            self.add_refresh(scope_of(e), now);
+        }
+        self.on_invalidate(armed.newest, trigger);
+    }
+
+    /// ★ At most ONE trigger-bearing invalidate waits: the NEWEST (only the newest can clear the
+    /// trigger; an older one is superseded by construction). An older one is completed as
+    /// superseded and its scope kept as a scope-only refresh, so it is walked in the same batch.
+    /// Then the waiting work is normalised ([`Self::normalize`]): bounded by the spaces.
+    fn queue_invalidate(
+        &mut self,
+        req: InvalidateRequest,
+        at: std::time::Instant,
+        trigger: &Trigger,
+    ) {
+        let Some(i) = self
+            .pending
+            .iter()
+            .position(|w| matches!(w, Want::Invalidate(..)))
+        else {
+            self.pending.push(Want::Invalidate(req, at));
+            self.normalize();
+            return;
+        };
+        let Want::Invalidate(old, old_at) = self.pending.remove(i) else {
+            return;
+        };
+        if old.seq == req.seq {
+            self.pending.insert(i, Want::Invalidate(old, old_at));
+            return;
+        }
+        let (keep, keep_at, lose, lose_at) = if old.seq < req.seq {
+            (req, at, old, old_at)
+        } else {
+            (old, old_at, req, at)
+        };
+        self.stats.outcome(trigger.complete(lose.seq));
+        self.pending.insert(i, Want::Invalidate(keep, keep_at));
+        self.add_refresh(scope_of(&lose), lose_at);
+        self.normalize();
+    }
+
+    /// Queue a scope-only refresh. A named page directory that no space of ours is rooted at
+    /// names nothing that can be stale (the walk of a space rooted there later is its own root
+    /// statement's), so it is counted and dropped here: that is what keeps a hostile guest naming
+    /// arbitrary directories from growing the queue.
+    fn add_refresh(&mut self, scope: Scope, at: std::time::Instant) {
+        if let Scope::Pdb(pdb, ap) = scope
+            && (ap == PdbAperture::Sysmem || self.table.keys_for_pdb(pdb).is_empty())
+        {
+            self.stats.named_missed = self.stats.named_missed.saturating_add(1);
+            return;
+        }
+        self.pending.push(Want::Refresh(scope, at));
+        self.normalize();
+    }
+
+    /// ★ Keep the waiting refresh work minimal AND bounded, never losing a scope: a global covers
+    /// every specific (they are dropped), equal specifics merge, a specific the waiting
+    /// invalidate already names is dropped, and more distinct specifics than there are spaces fold
+    /// into one global (which covers them all).
+    fn normalize(&mut self) {
+        let inv = self.pending.iter().find_map(|w| match w {
+            Want::Invalidate(r, _) => Some(scope_of(r)),
+            _ => None,
+        });
+        let inv_all = inv == Some(Scope::All);
+        let any_all = inv_all
+            || self
+                .pending
+                .iter()
+                .any(|w| matches!(w, Want::Refresh(Scope::All, _)));
+        let mut seen: Vec<Scope> = inv.into_iter().collect();
+        let mut kept_all = false;
+        let mut earliest: Option<std::time::Instant> = None;
+        let mut specifics = 0usize;
+        let waiting = core::mem::take(&mut self.pending);
+        for w in waiting {
+            match w {
+                Want::Refresh(Scope::All, at) => {
+                    if inv_all || kept_all {
+                        continue;
+                    }
+                    kept_all = true;
+                    self.pending.push(Want::Refresh(Scope::All, at));
+                }
+                Want::Refresh(sc, at) => {
+                    earliest = Some(earliest.map_or(at, |e| e.min(at)));
+                    if any_all || seen.contains(&sc) {
+                        continue;
+                    }
+                    seen.push(sc);
+                    specifics = specifics.saturating_add(1);
+                    self.pending.push(Want::Refresh(sc, at));
+                }
+                other => self.pending.push(other),
+            }
+        }
+        if specifics > self.table.len().max(1) {
+            self.pending.retain(|w| !matches!(w, Want::Refresh(..)));
+            self.pending.push(Want::Refresh(
+                Scope::All,
+                earliest.unwrap_or_else(std::time::Instant::now),
+            ));
+        }
+    }
+
+    /// Queue a walk of `key`'s root unless one is already waiting (it would be the same walk).
+    fn enqueue_root(&mut self, key: VasKey) {
+        push_root(&mut self.pending, key);
+    }
+
+    /// Put a want that must walk again back in the queue, through the same merging as a new one.
+    fn requeue(&mut self, w: Want, trigger: &Trigger) {
+        match w {
+            Want::Invalidate(r, at) => self.queue_invalidate(r, at, trigger),
+            Want::Refresh(..) => {
+                self.pending.push(w);
+                self.normalize();
+            }
+            Want::Root(k) => self.enqueue_root(k),
+            Want::Split { .. } => self.pending.insert(0, w),
+        }
     }
 
     /// ★ P6: a Translated channel reached a `MEM_OP` TLB invalidate naming `pdb` (`None` =
@@ -1230,7 +1406,7 @@ impl<W: Walker, T: MapTarget> VaManager<W, T> {
                     .map_or("none".to_string(), |b| format!("#{}", b.id))
             );
         }
-        self.pending.push(Want::Root(key));
+        self.enqueue_root(key);
         self.pump(trigger);
     }
 
@@ -1257,6 +1433,9 @@ impl<W: Walker, T: MapTarget> VaManager<W, T> {
                 // names nothing of ours — a miss, like an unknown vidmem PDB.
                 Want::Invalidate(r, _) if r.inval.pdb_aperture == PdbAperture::Sysmem => Vec::new(),
                 Want::Invalidate(r, _) => self.table.keys_for_pdb(r.inval.pdb),
+                Want::Refresh(Scope::All, _) => self.table.rooted(),
+                Want::Refresh(Scope::Pdb(_, PdbAperture::Sysmem), _) => Vec::new(),
+                Want::Refresh(Scope::Pdb(p, _), _) => self.table.keys_for_pdb(p),
                 Want::Root(k) => self.table.root(k).map(|_| vec![k]).unwrap_or_default(),
                 Want::Split { key: Some(k), .. } => {
                     self.table.root(k).map(|_| vec![k]).unwrap_or_default()
@@ -1272,6 +1451,12 @@ impl<W: Walker, T: MapTarget> VaManager<W, T> {
                     self.stats.split_missed = self.stats.split_missed.saturating_add(1);
                 }
                 self.splits_done.push((ticket, Ok(())));
+                continue;
+            }
+            if let Want::Refresh(..) = w
+                && keys.is_empty()
+            {
+                // A scope that names nothing of ours (its space was removed or re-rooted since).
                 continue;
             }
             if let Want::Invalidate(r, _) = w
@@ -1293,7 +1478,7 @@ impl<W: Walker, T: MapTarget> VaManager<W, T> {
                 }
             }
             let at = match w {
-                Want::Invalidate(_, at) => at,
+                Want::Invalidate(_, at) | Want::Refresh(_, at) => at,
                 Want::Root(_) | Want::Split { .. } => std::time::Instant::now(),
             };
             batch.wants.push((w, keys, at));
@@ -1387,7 +1572,7 @@ impl<W: Walker, T: MapTarget> VaManager<W, T> {
                     self.stats.unreconciled = self.stats.unreconciled.saturating_add(1)
                 }
                 Want::Split { ticket, .. } => self.splits_done.push((*ticket, Err(why.clone()))),
-                Want::Root(_) => {}
+                Want::Root(_) | Want::Refresh(..) => {}
             }
         }
         self.stats.refuse(why);
@@ -1477,7 +1662,7 @@ impl<W: Walker, T: MapTarget> VaManager<W, T> {
                 // The root changed after the walk was submitted: this diff does not describe it.
                 failed.insert(key);
                 rewalk.insert(key);
-                self.pending.push(Want::Root(key));
+                push_root(&mut self.pending, key);
                 self.stats.refuse(format!(
                     "{key:?}: root {walked_root:#x} changed during the walk; re-walking"
                 ));
@@ -1797,7 +1982,7 @@ impl<W: Walker, T: MapTarget> VaManager<W, T> {
                 Want::Invalidate(r, _) => Want::Invalidate(r, at),
                 other => other,
             };
-            self.pending.insert(0, w);
+            self.requeue(w, trigger);
         }
         self.pump(trigger);
         out
@@ -1854,6 +2039,11 @@ mod tests {
         hold_walks: bool,
         /// Whether the walk in flight is still held (set at submit from `hold_walks`).
         hold: bool,
+        /// ★ Real-thread stress: runs at the start of every submit, before the tables are
+        /// snapshotted — pulls the guest threads' PTE writes into `tables`.
+        pre_submit: Option<Box<dyn FnMut()>>,
+        /// ★ Real-thread stress: runs when `poll` hands the report over (before any clear).
+        on_collect: Option<Box<dyn FnMut()>>,
     }
 
     impl ModelWalker {
@@ -1875,6 +2065,8 @@ mod tests {
                 refuse_in: None,
                 hold_walks: false,
                 hold: false,
+                pre_submit: None,
+                on_collect: None,
             }
         }
     }
@@ -1882,6 +2074,9 @@ mod tests {
     impl Walker for ModelWalker {
         fn submit(&mut self, entries: &[WalkEntry]) -> Result<(), String> {
             assert!(self.queued.is_none(), "one walk at a time");
+            if let Some(f) = self.pre_submit.as_mut() {
+                f();
+            }
             // The GPU's first node: commit the verdict on the last report, then the resets.
             if let (Some((g, codes)), Some((lg, runs))) = (self.verdict.take(), self.last.as_ref())
                 && g == *lg
@@ -1952,6 +2147,9 @@ mod tests {
                 return Ok(None);
             };
             self.generation += 1;
+            if let Some(f) = self.on_collect.as_mut() {
+                f();
+            }
             let mut entries = Vec::new();
             let mut last = Vec::new();
             let mut first = 0usize;
@@ -2114,9 +2312,13 @@ mod tests {
     }
 
     fn rig() -> Rig {
-        let port = Arc::new(InvalidatePort::new(
+        rig_with(Arc::new(InvalidatePort::new(
             InvalidateRegs::from_usermode_base(0xBB_0000).unwrap(),
-        ));
+        )))
+    }
+
+    /// A rig over a port the caller shares (the real-thread stress hands it to guest threads).
+    fn rig_with(port: Arc<InvalidatePort>) -> Rig {
         let tables: Tables = Rc::default();
         let ops: Rc<RefCell<Vec<(Op, bool)>>> = Rc::default();
         let m = VaManager::new(
