@@ -833,7 +833,7 @@ fn the_ruled_list_is_pinned_cited_disjoint_and_served() {
         indices,
         vec![
             1, 2, 4, 7, 12, 23, 24, 26, 120, 122, 33, 34, 45, 139, 43, 44, 113, 157, 158, 178, 182,
-            197
+            197, 196
         ]
     );
     let mut p = policy();
