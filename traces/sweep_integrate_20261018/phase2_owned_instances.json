@@ -146,5 +146,21 @@
     "cost_upper_bound_usd": 1.2058674381777779,
     "cost_note": "Runtime estimate and shared-account credit delta are observations, not settled attribution. Budget guard reserves1USD for delayed transfer billing until invoices reconcile.",
     "auto_destroy_cancelled_after_absence": true
+  },
+  {
+    "id": 56816419,
+    "role": "Ada",
+    "offer": 48798407,
+    "gpu_offer": "RTX 4090",
+    "quote_dph": 0.5616666666666668,
+    "disk_gb_requested": 180,
+    "created_utc": "2026-10-20T01:06:38.988158+00:00",
+    "product_head": "dae55560b8ee05b7a36600e16f5bfcbdfcaf966f",
+    "credit_before": 39.761315098462546,
+    "auto_destroy_minutes": 180,
+    "destroyed": false,
+    "auto_destroy_pid": 294763,
+    "auto_destroy_armed_utc": "2026-10-20T01:06:39.013972+00:00",
+    "auto_destroy_verified": true
   }
 ]
