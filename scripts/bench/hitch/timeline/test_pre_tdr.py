@@ -138,8 +138,23 @@ class PreTdr(unittest.TestCase):
             with self.subTest(error=error):
                 self.assertEqual(run(error=error)["pre_tdr_windows"][0]["status"], "UNKNOWN")
 
+    def test_large_clock_error_prevents_even_a_large_rate_decline(self):
+        rows = evidence()
+        rows[1]["ts_ns"] = 9*SEC
+        rows[1]["end_ns"] = 21*SEC
+        self.assertEqual(run(rows, error=SEC)["pre_tdr_windows"][0]["status"], "UNKNOWN")
+
+    def test_small_nonzero_clock_error_still_allows_a_clear_decline(self):
+        rows = evidence()
+        rows[1]["ts_ns"] -= 2000
+        rows[1]["end_ns"] += 2000
+        row = run(rows, error=1000)["pre_tdr_windows"][0]
+        self.assertEqual(row["status"], "DECLINE_OBSERVED")
+        self.assertEqual(row["boundary_error_ns"], 2000)
+
     def test_boundary_uncertainty_retains_count_bounds(self):
         rows = evidence([0]*10)
+        rows[1].update(ts_ns=9*SEC, end_ns=21*SEC)
         rows.append(dict(kind="guest_present", ts_ns=12*SEC-100, pid=PID))
         row = run(rows, error=1000)["pre_tdr_windows"][0]
         self.assertEqual(row["early"]["count_lower"], 0)
@@ -148,11 +163,25 @@ class PreTdr(unittest.TestCase):
 
     def test_boundary_ambiguity_cannot_forge_decline(self):
         rows = evidence([0]*10)
+        rows[1].update(ts_ns=9*SEC, end_ns=21*SEC)
         rows.extend([dict(kind="guest_present", ts_ns=12*SEC-100, pid=PID),
                      dict(kind="guest_present", ts_ns=12*SEC-200, pid=PID),
                      dict(kind="guest_present", ts_ns=19*SEC, pid=PID)])
         row = run(rows, error=1000)["pre_tdr_windows"][0]
         self.assertNotEqual(row["status"], "DECLINE_OBSERVED")
+
+    def test_other_process_early_burst_cannot_forge_game_degradation(self):
+        rows = evidence([1]*10)
+        rows.extend(dict(kind="guest_present", ts_ns=11*SEC, pid=999) for _ in range(100))
+        self.assertEqual(run(rows)["pre_tdr_windows"][0]["status"], "NO_DECLINE_OBSERVED")
+
+    def test_repeat_only_bin_is_a_measured_zero_new_content_bin(self):
+        broker = [dict(ts_ns=9*SEC, seq=1, new=True),
+                  dict(ts_ns=11*SEC, seq=1, new=False),
+                  dict(ts_ns=21*SEC, seq=2, new=True)]
+        row = run(broker=broker)["pre_tdr_windows"][0]
+        self.assertEqual(row["bins"][1]["broker_new_count"], 0)
+        self.assertEqual(row["bins"][1]["broker_new_per_s"], 0)
 
     def test_s9_context_preserves_first_stage_causal_class(self):
         rows = evidence()
@@ -165,6 +194,12 @@ class PreTdr(unittest.TestCase):
         self.assertEqual(r["gaps"][0]["class"], "S1")
         self.assertEqual(r["gaps"][0]["pre_tdr_window_indices"], [0])
         self.assertEqual(r["pre_tdr_windows"][0]["status"], "DECLINE_OBSERVED")
+
+    def test_s9_context_preserves_unknown_cause(self):
+        r = run()
+        self.assertEqual(r["gaps"][0]["class"], "UNKNOWN")
+        self.assertEqual(r["gaps"][0]["pre_tdr_window_indices"], [0])
+        self.assertEqual(r["pre_tdr_windows"][0]["causal_class"], "UNKNOWN")
 
     def test_all_tdr_windows_and_overlaps_are_retained(self):
         r = run(evidence()+evidence([60]*10, tdr_at=40*SEC),

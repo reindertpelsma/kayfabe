@@ -1,11 +1,12 @@
 # H1 offline timeline tools
 
-STATUS: RESEARCH, 2026-10-19. These tools analyze normalized evidence. The
-runtime recorder, raw dump/ETL adapters and live collectors are not implemented.
+STATUS: RESEARCH, updated 2026-10-20. These tools analyze normalized evidence.
+K1 owns the single runtime profiler/hooks/collectors; H1 builds no runtime ring.
+The K1 importer awaits a concrete JSONL format on origin; raw ETL is not parsed.
 No file here is authorization to access the owner VM or GPU. Hardware requires
 coordinator `go` and the collection/budget decisions in the preregistration.
 
-MEASURED: 84 unit tests, EXPECTED RED stages before implementation; mutation
+MEASURED: 115 unit tests, EXPECTED RED stages before implementation; mutation
 tables and read-only evidence in `traces/hitch_timeline_20261019/`.
 
 ```sh
@@ -77,3 +78,36 @@ timestamp is not equivalent. Missing identities remain UNKNOWN in JSON/TSV.
 NOT VERIFIED: real-data collection compatibility, instrumentation overhead,
 three-hour recorder operation, peak residency or any cause of the owner stalls.
 The three-hour unit case and CLI smoke are synthetic analyzer checks only.
+
+## S9 pre-TDR observations
+
+S9 is a separate degradation phenotype, not a replacement for the first-stage
+S1–S8/UNKNOWN causal class. The result includes `pre_tdr_windows`, a status
+summary and `pre_tdr_window_indices` on overlapping gaps. Every supplied
+`guest_tdr` remains visible, including unknown/unverified cases. Generic Event
+153 rows are not converted to TDRs. These are H1 normalized fields, not a claim
+about the pending K1 JSON schema:
+
+- `guest_tdr`: aligned `ts_ns`, actual positive integer `pid`, explicit
+  `tdr_verified: true` only from a verified reset observation.
+- `guest_present`: aligned individual `ts_ns` and that PID.
+- `workload_active`: observed `ts_ns`, `end_ns`, PID, covering the entire
+  ten-second window plus clock-error margins; contiguous segments are allowed.
+- Context coverage: `guest: true`, measured `guest_start_ns` / `guest_end_ns`
+  covering the window plus margins. `broker: true` and bracketing broker
+  observations are required for host rates. Known loss invalidates exactness.
+
+Ten one-second half-open bins retain guest Present and broker new-content
+observations separately. First/last two-second counts are compared using
+conservative bounds from twice the measured calibration error. Printed rates
+use nominal aligned timestamps; count bounds preserve boundary uncertainty.
+Missing coverage yields null rates and bounds, including observed zero counts.
+No positive early baseline, unclear clock/identity/activity or ambiguous count
+bounds yields UNKNOWN. DECLINE_OBSERVED describes a covered rate decrease;
+NO_DECLINE_OBSERVED describes a covered nondecrease for this window only.
+Neither establishes the cause of the TDR or rules out other kinds of hitch.
+
+CLI guest rows use `qpc` / `end_qpc` as above; the same measured calibration
+aligns TDR, activity and Presents. Normalized Python callers provide all rows
+in CLOCK_MONOTONIC ns plus `clock_error_ns`. No wall-clock correction or
+per-second aggregate is accepted as individual Present evidence.

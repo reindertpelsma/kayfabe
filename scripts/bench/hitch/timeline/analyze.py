@@ -13,6 +13,7 @@ import pathlib
 
 from gap_context import gap_context
 from reply_waits import inventory, overlap
+from pre_tdr import pre_tdr_windows
 
 KINDS = {"mmu_wait": "S1", "mmu_walk": "S1", "mmu_plan": "S1",
          "mmu_apply": "S1", "rm_call": "S1", "tick_wait": "S2",
@@ -163,10 +164,17 @@ def analyze(events, broker, *, threshold_ms=80, coverage=False, lost=0, clock_er
         longest.append(dict(row, stall_overlaps=spans))
     longest.sort(key=lambda r: r["arrive_to_post_ns"] if r["arrive_to_post_ns"] is not None else -1,
                  reverse=True)
+    pre_tdr = pre_tdr_windows(events, broker, gaps, context_coverage, lost, clock_error_ns,
+                              threshold, vm_start_ns)
+    for index, gap in enumerate(gaps):
+        gap["pre_tdr_window_indices"] = [i for i, row in enumerate(pre_tdr) if index in row["gap_indices"]]
     return dict(gaps=gaps, summary=summary, metrics=metrics, lost=lost,
                 classification="INFERRED", clock_error_ns=clock_error_ns, vm_start_ns=vm_start_ns,
                 uptime_bins=_uptime_bins(gaps, times, vm_start_ns, width),
-                reply_wait_inventory=replies, longest_reply_waits=longest)
+                reply_wait_inventory=replies, longest_reply_waits=longest,
+                pre_tdr_windows=pre_tdr,
+                pre_tdr_summary={status: sum(r["status"] == status for r in pre_tdr)
+                                 for status in ("DECLINE_OBSERVED", "NO_DECLINE_OBSERVED", "UNKNOWN")})
 
 
 def read_jsonl(path):
@@ -186,7 +194,7 @@ def main():
     parser.add_argument("--lost", type=int, default=0)
     parser.add_argument("--vm-start-ns", type=int, help="measured VM start on host CLOCK_MONOTONIC")
     parser.add_argument("--uptime-bin-minutes", type=float, default=10)
-    parser.add_argument("--context-coverage", help="JSON assertions: mmu, completions, guest, replies; only after loss validation")
+    parser.add_argument("--context-coverage", help="validated JSON coverage: mmu/completions/guest/replies/broker; S9 also needs guest_start_ns/end_ns")
     parser.add_argument("--out", required=True)
     args = parser.parse_args()
     events = read_jsonl(args.events)
@@ -225,6 +233,8 @@ def main():
         print("INFERRED classes by MEASURED uptime/exposure " + json.dumps(row, sort_keys=True))
     for row in result["longest_reply_waits"]:
         print("MEASURED reply phases/overlap; guest blocking needs verification " + json.dumps(row, sort_keys=True))
+    for row in result["pre_tdr_windows"]:
+        print("S9 pre-TDR observations; causal class separate " + json.dumps(row, sort_keys=True))
 
 
 if __name__ == "__main__":

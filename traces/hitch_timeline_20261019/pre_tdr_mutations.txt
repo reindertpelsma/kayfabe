@@ -1,0 +1,36 @@
+MEASURED: seven hand-written S9/offline integration mutants; full 115-test suite.
+Each mutant is restored before the next; minimum two distinct killing test methods.
+P1 reverse decline comparison: 9 killing tests
+  test_pre_tdr.PreTdr.test_all_tdr_windows_and_overlaps_are_retained
+  test_pre_tdr.PreTdr.test_boundary_ambiguity_cannot_forge_decline
+  test_pre_tdr.PreTdr.test_contiguous_active_segments_cover_but_a_hole_does_not
+  test_pre_tdr.PreTdr.test_increasing_rate_does_not_claim_degradation
+  test_pre_tdr.PreTdr.test_missing_broker_exposure_keeps_exact_rates_unknown
+  test_pre_tdr.PreTdr.test_other_process_presents_do_not_fill_the_game_timeline
+  test_pre_tdr.PreTdr.test_reports_full_ten_second_guest_series
+  test_pre_tdr.PreTdr.test_s9_context_preserves_first_stage_causal_class
+  test_pre_tdr.PreTdr.test_small_nonzero_clock_error_still_allows_a_clear_decline
+P2 grant complete guest exposure despite loss/missing capture: 6 killing tests
+  test_pre_tdr.PreTdr.test_guest_capture_must_cover_the_entire_window
+  test_pre_tdr.PreTdr.test_large_clock_error_prevents_even_a_large_rate_decline
+  test_pre_tdr.PreTdr.test_loss_prevents_exact_rates_and_s9_conclusion
+  test_pre_tdr.PreTdr.test_missing_capture_end_is_not_complete_exposure
+  test_pre_tdr.PreTdr.test_missing_guest_coverage_keeps_zero_unknown
+  test_pre_tdr.PreTdr.test_missing_or_uncertain_guest_clock_prevents_ordering
+P3 ignore active workload coverage: 3 killing tests
+  test_pre_tdr.PreTdr.test_activity_must_cover_the_entire_window
+  test_pre_tdr.PreTdr.test_contiguous_active_segments_cover_but_a_hole_does_not
+  test_pre_tdr.PreTdr.test_other_process_activity_is_insufficient
+P4 mix guest processes: 2 killing tests
+  test_pre_tdr.PreTdr.test_other_process_early_burst_cannot_forge_game_degradation
+  test_pre_tdr.PreTdr.test_other_process_presents_do_not_fill_the_game_timeline
+P5 discard timestamp boundary uncertainty: 3 killing tests
+  test_pre_tdr.PreTdr.test_boundary_ambiguity_cannot_forge_decline
+  test_pre_tdr.PreTdr.test_boundary_uncertainty_retains_count_bounds
+  test_pre_tdr.PreTdr.test_small_nonzero_clock_error_still_allows_a_clear_decline
+P6 count repeated broker presents as new content: 2 killing tests
+  test_pre_tdr.PreTdr.test_broker_bins_count_actual_new_content_only
+  test_pre_tdr.PreTdr.test_repeat_only_bin_is_a_measured_zero_new_content_bin
+P7 replace first-stage cause with S9 phenotype: 2 killing tests
+  test_pre_tdr.PreTdr.test_s9_context_preserves_first_stage_causal_class
+  test_pre_tdr.PreTdr.test_s9_context_preserves_unknown_cause
