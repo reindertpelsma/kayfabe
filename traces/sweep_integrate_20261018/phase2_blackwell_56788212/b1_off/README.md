@@ -1,6 +1,10 @@
 # GB202 Windows580.88 display-off arm
 
 STATUS: LIVE,2026-10-19. INCOMPLETE/initunresponsive;Code43/TDRUNVERIFIED.
+Owner follow-up, 2026-10-20: explicitly approved omitting the GOP ROM for the
+display-off arm. The reply arrived after the valid arm and teardown described
+below. That earlier run used the existing section2 authorization; no additional
+initialization was performed in response to this later approval.
 Second/finalmeasuredWindowsinitializationthislease. Samefrozenstoppedparent
 hash49b96c...5414ca recheckedOK; freshchild, originalTPM/SBidentity, accepted
 QEMU24906bf33/P19allasserted. Initialcontradictory-ROMrefusalwasNOTRUN.

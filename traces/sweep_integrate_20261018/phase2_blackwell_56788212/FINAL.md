@@ -60,6 +60,8 @@ with contradictory nonempty-ROM/GOP-off arguments was refused and is NOTRUN,
 preserved in `b1_off_refused/`. The extra approval question was unnecessary:
 section 2 already authorized the valid display-off configuration, which an
 existing positive test and unchanged guard support.
+The owner subsequently explicitly approved omitting the GOP ROM on 2026-10-20,
+after this arm and the lease teardown. The reply is recorded without a new run.
 
 Read-only extraction of persisted ON event logs parsed 748 records and found no
 positive TDR or Code 43 event in the ON window. Missing persisted events after an
