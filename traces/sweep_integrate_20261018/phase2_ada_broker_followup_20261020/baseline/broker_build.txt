@@ -1,0 +1,13 @@
+BROKER_HOST_PREPARE_START 2026-10-20T03:20:21+00:00
+Name=kfbench
+Seat=seat0
+Type=x11
+Active=yes
+LockedHint=no
+93200 /usr/lib/xorg/Xorg -nolisten tcp :0 -seat seat0 -auth /var/run/lightdm/root/:0 -nolisten tcp vt7 -novtswitch
+localuser:kfbench being added to access control list
+001791413c1ab10c4eed8fbd60cd6bf7d55842774ab4060e5c573fdccefd25b8  broker/nvkvm-display-broker
+001791413c1ab10c4eed8fbd60cd6bf7d55842774ab4060e5c573fdccefd25b8  broker/nvkvm-display-broker
+001791413c1ab10c4eed8fbd60cd6bf7d55842774ab4060e5c573fdccefd25b8  /opt/sweep-broker/nvkvm-display-broker
+BROKER_HOST_READY source=7f22d18dfff8083345cdb54a4666018dca845384 actual_binary=/opt/sweep-broker/nvkvm-display-broker 2026-10-20T03:20:29+00:00
+BROKER_HOST_PREPARE_EXIT rc=0 2026-10-20T03:20:29+00:00

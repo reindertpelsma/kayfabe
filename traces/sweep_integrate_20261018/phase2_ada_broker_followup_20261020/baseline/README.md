@@ -1,0 +1,3 @@
+# New Ada broker lease native baseline
+
+STATUS: LIVE, 2026-10-20. Own56829120, current product7f22d18df, native open595.91.07. StrictSOUND/derivedAD102/gates9+gate10/USER12/raw30/CUDA4PASS; native graphics completed before guest desktop. n1 per suite, spreadN/A; raw negative fault arms may emit intentional hostXid31, so no wholelease zeroXid claim. Current-product broker SHA001791413c1ab10c4eed8fbd60cd6bf7d55842774ab4060e5c573fdccefd25b8. Public nvkvm-pv reference pinned badf2d707da47a625e0ce69172a84785d20f81b8 before unchanged prep. Guest broker suite still pending; these native results do not imply a desktop PASS. Source/export hashes and canonical CUDA4rows retained.

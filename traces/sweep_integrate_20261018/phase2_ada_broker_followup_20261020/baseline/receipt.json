@@ -1,0 +1,89 @@
+{
+  "utc": "2026-10-20T03:21:32.793582+00:00",
+  "own_id": 56829120,
+  "source": "7f22d18dfff8083345cdb54a4666018dca845384",
+  "files": [
+    {
+      "source": "/root/prov/sweep_product_source",
+      "source_sha256": "7ad2bb26d24811351c2f74f197a81cea5833692c628aaae7927b7aa3218cf005",
+      "export": "source.txt",
+      "export_sha256": "7ad2bb26d24811351c2f74f197a81cea5833692c628aaae7927b7aa3218cf005"
+    },
+    {
+      "source": "/root/prov/sweep_qemu_sha256",
+      "source_sha256": "f8b4e494c82cc618580b59ab2ed9518a2ee51f18f7a27edb96391f0973496969",
+      "export": "qemu_sha256.txt",
+      "export_sha256": "f8b4e494c82cc618580b59ab2ed9518a2ee51f18f7a27edb96391f0973496969"
+    },
+    {
+      "source": "/root/prov/sweep_host_preflight.log",
+      "source_sha256": "417c78b38f3402eeb7d2e26de0f6098b1913098a32183378122062c66dc2ab2d",
+      "export": "health.txt",
+      "export_sha256": "417c78b38f3402eeb7d2e26de0f6098b1913098a32183378122062c66dc2ab2d"
+    },
+    {
+      "source": "/root/prov/sweep_host_die.log",
+      "source_sha256": "eaa077056390eedaa858865dfb11c6ffae7067ffaf5560cfaf710dbae2eaf63b",
+      "export": "die.txt",
+      "export_sha256": "eaa077056390eedaa858865dfb11c6ffae7067ffaf5560cfaf710dbae2eaf63b"
+    },
+    {
+      "source": "/root/prov/sweep_gates.log",
+      "source_sha256": "1f9cdee1a911a08e6c4dcffc9d7d6011b9d854c6dfe1c9791c168e408997961c",
+      "export": "gates.txt",
+      "export_sha256": "75ba69f0af0f4d00b989e317a1d167bbdd09215f225c63c50ad61e70b8b94fd8"
+    },
+    {
+      "source": "/root/prov/sweep_bare595.log",
+      "source_sha256": "6fb1697e3e1d7bb90be698e1cee0f679643aad265dc471f40fe9e8dcfbc4f47b",
+      "export": "native_raw595.txt",
+      "export_sha256": "1f308abe548df9fc6a5d2281c0b124a37b5a3563114c0309addc77c8f63b8369"
+    },
+    {
+      "source": "/root/prov/sweep_cuda_host.log",
+      "source_sha256": "1f82d176152deb4c47800f8a947743cee83be9e73051513bf851b22ec9d54d99",
+      "export": "native_cuda_controller.txt",
+      "export_sha256": "1f82d176152deb4c47800f8a947743cee83be9e73051513bf851b22ec9d54d99"
+    },
+    {
+      "source": "/root/prov/sweep_native_baseline.log",
+      "source_sha256": "4ae60111b70297627c5e69a9ec45aa286abbd607d34774379398de3e78280466",
+      "export": "native_controller.txt",
+      "export_sha256": "4ae60111b70297627c5e69a9ec45aa286abbd607d34774379398de3e78280466"
+    },
+    {
+      "source": "/root/prov/sweep_broker_native_gfx.log",
+      "source_sha256": "f873d2eaa67ecd479529415f4f0ffe4113c072f0b0a944cbc8d8eb7916d5f852",
+      "export": "native_graphics.txt",
+      "export_sha256": "ae98594fcbd22f558c75d1e138d0c529fd0e0f2e7ff674fb176286bfe2370277"
+    },
+    {
+      "source": "/root/prov/sweep_broker_host_prepare.log",
+      "source_sha256": "80743a64c7a0ff50efef2ac7b5f05970be608aeba93002050b3311bf939caa38",
+      "export": "broker_build.txt",
+      "export_sha256": "80743a64c7a0ff50efef2ac7b5f05970be608aeba93002050b3311bf939caa38"
+    },
+    {
+      "source": "/root/prov/sweep_broker_reference_revision.txt",
+      "source_sha256": "249b37f081c0a4d0a67995e3d8366fc8d03489d5ea614348b0099cbd332792d9",
+      "export": "reference_pin.txt",
+      "export_sha256": "249b37f081c0a4d0a67995e3d8366fc8d03489d5ea614348b0099cbd332792d9"
+    },
+    {
+      "source": "/root/prov/sweep_stage_linux.log",
+      "source_sha256": "8546e1abba019b974543171de3959233f22b582449e820f41fe00b47a2256de6",
+      "export": "linux_staging.txt",
+      "export_sha256": "8546e1abba019b974543171de3959233f22b582449e820f41fe00b47a2256de6"
+    },
+    {
+      "source": "/workspace/bench/cl_sweep7f22d18d_ad102_host.out",
+      "source_sha256": "55d009dc49a1b7329a697b655e2de3c02d99c27cc22d355a589f6c3867755d27",
+      "export": "native_cuda595.txt",
+      "export_sha256": "55d009dc49a1b7329a697b655e2de3c02d99c27cc22d355a589f6c3867755d27"
+    }
+  ],
+  "native_raw": "30/30",
+  "native_cuda": "4/4",
+  "reference_pin": "badf2d707da47a625e0ce69172a84785d20f81b8",
+  "guest_broker": "UNRUN while preparation active"
+}
