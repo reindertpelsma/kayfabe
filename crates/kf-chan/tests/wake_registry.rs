@@ -12,6 +12,28 @@
 //!    `LOOK_EVERY` consecutive busy passes, the count restarting on an idle pass.
 //!
 //! Production behaviour is not touched by any of this: the registry is a `const`, the rest is tests.
+//!
+//! ## Mutation table (2026-10-20; each mutant applied alone to `worker.rs`; run: `cargo test --release -p kf-chan --lib --test wake_registry --test relay_fairness`)
+//!
+//! | mutant | killed by |
+//! |---|---|
+//! | M1 registry entry removed: completions | 4 (`dispatch_handles_no_tag_class_the_registry_does_not_list`, `dispatch_has_exactly_as_many_branches_...`, `every_call_dispatch_makes_is_a_registered_handler_or_mechanical`, `every_peek_reason_the_loop_uses_is_registered_...`) |
+//! | M1c registry entry removed: doorbell | 3 (the first three above) |
+//! | M1b registry entry removed: peek Event | 2 (`the_registry_names_every_peek_reason`, `every_peek_reason_the_loop_uses_is_registered_...`) |
+//! | M2a `dispatch` handles a new tag class (known handler) | 2 (`dispatch_handles_no_tag_class_...`, `dispatch_has_exactly_as_many_branches_...`) |
+//! | M2b `dispatch` handles a new tag class (new handler) | 3 (the two above, `every_call_dispatch_makes_is_a_registered_handler_or_mechanical`) |
+//! | M3 Look arm skips `dispatch` | 4 (`the_busy_look_makes_exactly_the_calls_...`, `the_busy_look_and_the_idle_spin_visit_what_the_registry_says`, `relay_fairness::pin_the_busy_look_dispatches_events_and_completions`, `relay_fairness::pin_the_busy_look_order_...`) |
+//! | M4 Look arm skips `peek(Event)` | 4 (same shape) |
+//! | M5 Look arm skips `peek(Spin)` | 4 (same shape, `pin_the_busy_look_peeks_the_waiting_relays`) |
+//! | M5b Look arm polls with a timeout instead of `Immediate` | 4 (same shape) |
+//! | M6a `LOOK_EVERY` 5 | 3 (`look_every_is_the_value_the_design_document_states`, `relay_fairness::pin_a_busy_pass_asks_the_policy`, the baton model `p11_two_workers_...`) |
+//! | M6b `LOOK_EVERY` 8 (doubled) | 4 (the three above, `p12_two_workers_...`) |
+//! | M6c `LOOK_EVERY` 3 (still fair; a drift of the documented value) | 2 (`look_every_is_the_value_the_design_document_states`, `pin_a_busy_pass_asks_the_policy`) |
+//! | M7a `>` instead of `>=` in `after_pass` | 5 (the random-sequence property, the window test, `an_idle_pass_restarts_...`, the worker unit test, `p11_two_workers_...`) |
+//! | M7b counts served tokens, not passes | 4 (the random-sequence property, the window test, `an_idle_pass_restarts_...`, the worker unit test) |
+//! | M7c an idle pass keeps the count | 4 (the random-sequence property, `an_idle_pass_restarts_...`, the worker unit test, `p11_two_workers_...`) |
+//! | M7d a Look keeps the count | 3 (the random-sequence property, the window test, the worker unit test) |
+//! | M7e the policy never looks | 16 |
 #![allow(clippy::too_many_lines, missing_docs)]
 
 use kf_chan::user_loop::Peek;
@@ -398,12 +420,9 @@ fn the_busy_loop_asks_the_policy_after_a_pass_that_served() {
 
 #[test]
 fn tag_classes_are_disjoint_and_ordered() {
-    assert!(
-        WORKER_EFD_TAG < COMPLETIONS_TAG
-            && COMPLETIONS_TAG < OTHER_TAG_BASE
-            && OTHER_TAG_BASE < TICK_TAG
-    );
-    assert_eq!(WORKER_EFD_TAG, 0);
+    let tags = std::hint::black_box([WORKER_EFD_TAG, COMPLETIONS_TAG, OTHER_TAG_BASE, TICK_TAG]);
+    assert!(tags.windows(2).all(|w| w[0] < w[1]), "{tags:?}");
+    assert_eq!(tags[0], 0);
 }
 
 // ------------------------------------------------------------------------------------------------
@@ -526,13 +545,14 @@ fn an_idle_pass_restarts_the_count_whatever_came_before() {
 #[test]
 fn look_every_is_the_value_the_design_document_states() {
     // the delay a busy worker adds to any wait is bounded by LOOK_EVERY passes (section 10); the bound and the text move together
-    assert!(LOOK_EVERY >= 1, "a look every 0 passes is not a policy");
+    let look_every = std::hint::black_box(LOOK_EVERY);
+    assert!(look_every >= 1, "a look every 0 passes is not a policy");
     assert!(
         DESIGN.contains(&format!("`LOOK_EVERY = {LOOK_EVERY}`")),
         "docs/design/V3_USER_RING_EVENT_LOOP_20261014.md section 10 does not state LOOK_EVERY = {LOOK_EVERY}"
     );
     assert!(
-        LOOK_EVERY <= 4,
+        look_every <= 4,
         "the fairness bound of the model (K = 16 passes) assumes a look at least every 4 busy passes"
     );
 }
