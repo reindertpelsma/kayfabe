@@ -25,3 +25,11 @@ host.ce_object_class()))` is added at the same owned-ring construction site.
 No unresolved semantic conflict: F-2 touches bound-class GR address widths;
 CE2 adds an independently filtered default CE tier. Guest SET_OBJECT wins.
 No USER-ring relay, scheduling, TSG, lazy-observe or pacing change is imported.
+
+
+CODE READ L5 integration, 2026-10-20: the source tests' insertion context used
+an older formatter; the two complete test blocks were inserted at the same
+semantic anchors without changing assertions. No production conflict exists.
+The typed ScrubError change retains C5's existing bootclean outcome/generation
+checks; it changes only whether a stale-life refusal permits reseeding. No scrub
+fixture/cache-key None change or surface-address import is present.
