@@ -257,6 +257,11 @@ def main():
     if (out/'trig.log').exists():
         try:
             result['trace_archives']=archive.preserve(out,guest_root,agent)
+            for earlier in sorted(ROOT.glob('*-*/RESULT.json')):
+                previous=earlier.parent
+                if previous==out or not (previous/'trig.log').exists() or not (previous/'guest.json').exists(): continue
+                info=json.loads((previous/'guest.json').read_text())
+                archive.preserve(previous,info['root'],agent)
             (out/'RESULT.json').write_text(json.dumps(result,indent=2))
         except Exception:
             (out/'ARCHIVE_ERROR.txt').write_text(traceback.format_exc())

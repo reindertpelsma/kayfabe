@@ -5,6 +5,7 @@ import base64
 import gzip
 import hashlib
 import json
+import os
 from pathlib import Path
 import re
 
@@ -29,7 +30,11 @@ def preserve(out, guest_root, agent):
         for packet in parsed['files']:
             raw=verify(packet)
             dest=target/(packet['name']+'.gz')
-            dest.write_bytes(base64.b64decode(packet['gzip']))
+            with dest.open('wb') as stream:
+                stream.write(base64.b64decode(packet['gzip'])); stream.flush(); os.fsync(stream.fileno())
+            directory=os.open(target,os.O_RDONLY)
+            try: os.fsync(directory)
+            finally: os.close(directory)
             # Read back the durable host file before authorizing a redundant-copy removal.
             if hashlib.sha256(gzip.decompress(dest.read_bytes())).hexdigest()!=packet['sha256']:
                 raise ValueError('host trace readback failed')
