@@ -148,6 +148,38 @@ is the same revision built with `cargo build ... -p kf-qemu` after enabling `kf-
 (a one-line feature edit, not done on this branch). Diagnostics: `KF3_DIAG_PROGRESS=1000` prints `PROGRESS_STRAND` (a relay with
 an obligation untouched >= 1 s while a worker kept iterating); endpoint: no `PROGRESS_STRAND` line, `backstop_found_work == 0`.
 
+### 5.4 Grader round (2026-10-20, branch claude/relay-grade-20261020 merged; MEASURED unless marked)
+
+* **G9 Watched unsourced (`fc8e97315`, real bug).** With `KF3_DIAG_PROGRESS` on, the diagnostic's wrapper answered the trait
+  default `false` for `unsourced()`, so a worker could park beside the retry set -- in real operation the B arm of the hardware
+  plan runs with that flag. Fixed: forwarded, the trait method has no default (a wrapper that forgets it does not compile), the
+  block decision is one pure fn `worker::must_spin`. Behavioural tests: the wrapper answers like the wrapped relay, and wrapper
+  and bare relay make the same block decision in all 24 obligation/pass states; mutant `Watched::unsourced -> false` killed by both.
+* **G5 act-hold spin (`985e52776`).** Real operation: the 5080 / context act holds the record for a host RM call (ms); a serve that
+  lost the record left demand and the worker spun at timeout 0 for the whole call. Now the act holds the record through
+  `Cell::act_lock`, whose release re-rings a relay with demand and wakes the worker on every path (errors included), so the
+  demand is a COVERED obligation and the worker blocks. SeqCst on `retry` / `act_hold` (one side always sees the other). Other
+  holders (a look, the diagnostic, birth/free paths not converted) still make the worker spin. Model: hidden spins 0.
+* **G5 phantom demand (`297de1e99`).** Real operation, 2 workers: `enter()` set the demand flag before its `try_lock`, so a peer's
+  look in the turn's window saw "demand + record busy" and rang a finished relay again, possibly for ever under an adversarial
+  schedule. Now demand is set only when the first `try_lock` loses (then one more try); the `pt`-lost arm makes demand durable
+  itself. Model phantom cycles: W=2 25 -> 0, W=3 1949 -> 0; **W=2 with an act holder: 2 cycles remain (OPEN)**. An extra rule
+  (no ring when a worker owns the token) was tried and reverted: it did not remove them.
+* **Grade model W=3 + `pt` holder exceeds the explorer's 6 M-state budget** (`g1_models_exhaustive_three_workers`,
+  `g2_sleep_safety_...`): MEASURED already at the merge `983fcca15` (before this round's fixes) and at 12 M; not raised (budget).
+* **Real-thread G5 idle test under load** (10 runs beside 8 busy loops): 8 x I7 (1-5 serves in the quiet window) + 2 x "never
+  settled": redundant doorbell rings (legal by the doorbell contract) whose wakes land after the guests are done, and a wake
+  that ended before the window re-parking inside it; timeout-0 looks stayed 0 (no hidden spin). The harnesses now wait until
+  nothing is rung, owned or demanded and count WAKEUPS: 10/10 under load.
+* **Default stress runtime**: `relay_stress` + `grade_stress` 95 s (no features) / 97 s (`chaos-hooks`); seed 1 of the I6 seeds
+  moved to an ignored test (sometimes ~570 s on a loaded box, open).
+
+**Tests weakened / loosened in this branch (owner rule 2):** relay_stress I7 HARD -> SOFT (`0e0e054d1`); I6 monitor "wake in
+flight" and kernel-view exclusions (classified false positives, §5.1); the quiet-window precondition (no token rung / owned, no
+demand) and wakeups instead of parks (this round); `i6_classified` seed 1 moved to `#[ignore]`; `i1` a documented 6 M bound
+under ReadIndex; the moot lifecycle / lazy tests restated per policy (§5.1); the stress expected-reds' assertion
+`backstop_contended == 0` kept and two stronger ones added. None of these change production code.
+
 ## 6. Risks
 
 * **R1** (Change A vs pushbuffer reuse / idle): open kernel RM 595.91.07 reads USERD `GPGet` only for its own CE channel's slot
