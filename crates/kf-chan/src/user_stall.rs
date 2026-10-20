@@ -53,7 +53,10 @@ impl Setting {
     /// The threshold the switch selects in milliseconds; 0 (off) for [`Setting::Off`] and [`Setting::Invalid`].
     #[must_use]
     pub const fn threshold_ms(self) -> u64 {
-        0
+        match self {
+            Self::On(ms) => ms,
+            Self::Off | Self::Invalid => 0,
+        }
     }
 }
 

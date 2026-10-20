@@ -35,10 +35,11 @@ pub(super) fn init() {
     static ONCE: std::sync::Once = std::sync::Once::new();
     ONCE.call_once(|| {
         let value = std::env::var(kf_chan::user_stall::ENV).ok();
-        match stall::parse_setting(value.as_deref()) {
+        let setting = stall::parse_setting(value.as_deref());
+        THRESHOLD_MS.store(setting.threshold_ms(), Ordering::Relaxed);
+        match setting {
             stall::Setting::Off => {}
             stall::Setting::On(ms) => {
-                THRESHOLD_MS.store(ms, Ordering::Relaxed);
                 eprintln!(
                     "kf3: USER_RING_STALL_DIAG ARMED threshold_ms={ms:#x} ({}; measurement only: reads, never decides; one report block per channel per condition)",
                     stall::ENV

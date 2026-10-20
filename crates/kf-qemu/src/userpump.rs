@@ -3786,7 +3786,10 @@ mod tests {
     // ---- 2026-10-20: KF3_DIAG_USER_STALL (default off, measurement only): where it may run and what it may touch
 
     fn diag_source() -> &'static str {
-        include_str!("userdiag.rs").split("#[cfg(test)]").next().unwrap()
+        include_str!("userdiag.rs")
+            .split("#[cfg(test)]")
+            .next()
+            .unwrap()
     }
     fn pump_source() -> &'static str {
         include_str!("userpump.rs")
@@ -3832,12 +3835,20 @@ mod tests {
     #[test]
     fn the_stall_diagnostic_reads_the_environment_in_one_place() {
         let d = diag_source();
-        assert_eq!(d.matches("std::env::var(").count(), 1, "one read of the environment");
+        assert_eq!(
+            d.matches("std::env::var(").count(),
+            1,
+            "one read of the environment"
+        );
         assert_eq!(d.matches("kf_chan::user_stall::ENV").count(), 1);
         let init = d.split("pub(super) fn init()").nth(1).unwrap();
         let init = init.split("/// The threshold; 0 when off").next().unwrap();
         assert!(init.contains("std::env::var("), "the one read is in init");
         assert!(init.contains("Once"), "and runs once");
+        assert!(
+            init.contains("THRESHOLD_MS.store(setting.threshold_ms(), Ordering::Relaxed);"),
+            "what is stored is what the parser selected"
+        );
     }
 
     /// `init` is called once, from `Pump::new` (the first relay), never from a turn or a look.
@@ -3854,9 +3865,18 @@ mod tests {
     #[test]
     fn the_stall_diagnostic_switch_is_never_read_per_turn() {
         let pump = pump_source();
-        let turns = pump.split("fn turn(&mut self, me: &ChanPlane").nth(1).unwrap();
-        let turns = turns.split("/// Measurement only: the final scan refusal").next().unwrap();
-        assert!(!turns.contains("env::var") && !turns.contains("diag::init"), "no read per turn");
+        let turns = pump
+            .split("fn turn(&mut self, me: &ChanPlane")
+            .nth(1)
+            .unwrap();
+        let turns = turns
+            .split("/// Measurement only: the final scan refusal")
+            .next()
+            .unwrap();
+        assert!(
+            !turns.contains("env::var") && !turns.contains("diag::init"),
+            "no read per turn"
+        );
         for body in [peek_body(), serve_body(), refresh_body()] {
             assert!(!body.contains("env::var") && !body.contains("diag::init"));
         }
@@ -3896,7 +3916,9 @@ mod tests {
         ] {
             let text = text.split("#[cfg(test)]").next().unwrap();
             assert!(
-                !text.contains("user_ring_diag") && !text.contains("userdiag") && !text.contains("diag::"),
+                !text.contains("user_ring_diag")
+                    && !text.contains("userdiag")
+                    && !text.contains("diag::"),
                 "{name} must not reach the stall diagnostic"
             );
         }
@@ -3906,8 +3928,14 @@ mod tests {
     #[test]
     fn the_stall_diagnostic_runs_from_the_worker_tick_before_the_trace_returns() {
         let refresh = refresh_body();
-        let (diag_at, trace_at) = (refresh.find("self.user_ring_diag()"), refresh.find("if !tracing()"));
-        assert!(diag_at.is_some() && diag_at < trace_at, "the diagnostic runs before the trace's early return");
+        let (diag_at, trace_at) = (
+            refresh.find("self.user_ring_diag()"),
+            refresh.find("if !tracing()"),
+        );
+        assert!(
+            diag_at.is_some() && diag_at < trace_at,
+            "the diagnostic runs before the trace's early return"
+        );
     }
 
     /// One caller of the diagnostic's entry, and one caller of the tick (the worker's, in chan.rs).
@@ -3930,7 +3958,10 @@ mod tests {
     #[test]
     fn the_stall_diagnostic_notes_every_look_that_rings_a_relay() {
         let peek = peek_body();
-        assert!(peek.matches("p.diag_wake(why)").count() >= 3, "every ring of the relay by a look is noted");
+        assert!(
+            peek.matches("p.diag_wake(why)").count() >= 3,
+            "every ring of the relay by a look is noted"
+        );
         assert_eq!(
             peek.matches("return ring(self)").count(),
             peek.matches("p.diag_wake(why);\n                return ring(self)")
@@ -4025,9 +4056,15 @@ mod tests {
         let d = diag_source();
         let entry = d.split("fn user_ring_diag(&self)").nth(1).unwrap();
         let first = entry.split('{').nth(1).unwrap();
-        assert!(first.trim_start().starts_with("let ms = threshold_ms();"), "{first}");
+        assert!(
+            first.trim_start().starts_with("let ms = threshold_ms();"),
+            "{first}"
+        );
         let guard = entry.find("if ms == 0").unwrap();
-        assert!(guard < entry.find("try_lock").unwrap(), "the off test precedes every lock");
+        assert!(
+            guard < entry.find("try_lock").unwrap(),
+            "the off test precedes every lock"
+        );
         assert!(guard < entry.find("now_ms()").unwrap(), "and the clock");
     }
 
@@ -4042,5 +4079,72 @@ mod tests {
             "the armed line, the invalid line, the report lines, the period line"
         );
         assert!(!d.contains("{:?}"), "no Debug of guest-derived data");
+    }
+
+    /// The glue stores the threshold the parser selected, in one place, and nothing else writes it.
+    #[test]
+    fn the_stall_diagnostic_stores_the_threshold_the_parser_selected() {
+        let d = diag_source();
+        assert_eq!(d.matches("THRESHOLD_MS.store(").count(), 1);
+        assert!(d.contains("THRESHOLD_MS.store(setting.threshold_ms(), Ordering::Relaxed);"));
+        assert!(d.contains("stall::parse_setting(value.as_deref())"));
+    }
+
+    /// Hook inventory: three notes in the look, one in the serve, one state per relay, one init.
+    #[test]
+    fn the_stall_diagnostic_hook_inventory_is_exactly_the_documented_one() {
+        let pump = pump_source();
+        assert_eq!(pump.matches(".diag_wake(why)").count(), 3);
+        assert_eq!(pump.matches(".diag_turn()").count(), 1);
+        assert_eq!(pump.matches("diag::channel_state()").count(), 1);
+        assert_eq!(pump.matches("diag::init()").count(), 1);
+        assert_eq!(pump.matches("self.user_ring_diag()").count(), 1);
+        assert!(
+            pump_new_body().find("diag::init()") < pump_new_body().find("diag::channel_state()"),
+            "the switch is read before the first relay's state is decided"
+        );
+        let d = diag_source();
+        assert!(d.contains("(threshold_ms() != 0).then("));
+        assert_eq!(
+            d.matches("pub(super) fn ").count(),
+            7,
+            "init, threshold_ms, channel_state, refusal_name, diag_wake, diag_turn, user_ring_diag"
+        );
+    }
+
+    /// The entry takes the relay map and each record with `try_lock`, and returns on an off switch first.
+    #[test]
+    fn the_stall_diagnostic_entry_is_off_first_then_try_lock_only() {
+        let d = diag_source();
+        let entry = d.split("fn user_ring_diag(&self)").nth(1).unwrap();
+        let entry = entry.split("fn ").next().unwrap_or(entry);
+        assert!(entry.contains(
+            "let ms = threshold_ms();\n        if ms == 0 {\n            return;\n        }"
+        ));
+        assert!(entry.contains("self.user_rings.try_lock()"));
+        assert!(entry.contains("record.try_lock()"));
+        assert!(!entry.contains(".lock()"));
+        assert!(
+            d.contains("self.0.passive_prepare(spans)"),
+            "the store is only read passively"
+        );
+    }
+
+    /// The names printed for refused reads are the documented ones.
+    #[test]
+    fn the_stall_diagnostic_refusal_names_are_the_documented_ones() {
+        let d = diag_source();
+        for line in [
+            "userread::Refusal::Bounds => \"bounds\"",
+            "userread::Refusal::Busy => \"busy\"",
+            "userread::Refusal::Changed => \"changed\"",
+            "userread::Refusal::Missing(_) => \"unmapped\"",
+            "userread::Refusal::Topology => \"topology\"",
+            "userread::Refusal::Store => \"vidmem\"",
+            "userread::Refusal::Allocation => \"alloc\"",
+            "userread::Refusal::Poisoned => \"poisoned\"",
+        ] {
+            assert!(d.contains(line), "{line}");
+        }
     }
 }

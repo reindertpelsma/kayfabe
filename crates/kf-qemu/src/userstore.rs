@@ -558,6 +558,27 @@ mod tests {
     }
 
     #[test]
+    fn the_passive_prepare_checks_the_stores_bound_on_the_end_of_the_span() {
+        let mut c = Cache::create(Fake::default(), BYTES * 64).unwrap();
+        c.prepare(&[span(63 * BYTES, 64)]).unwrap();
+        // the last bytes of the store lie in the armed last window
+        assert_eq!(c.passive_prepare(&[span(BYTES * 64 - 8, 8)]), Ok(()));
+        // one byte more than the store holds is out of bounds, whatever is armed
+        assert_eq!(
+            c.passive_prepare(&[span(BYTES * 64 - 8, 9)]),
+            Err(Refusal::Bounds)
+        );
+        assert_eq!(
+            c.passive_prepare(&[span(BYTES * 64 - 8, 16)]),
+            Err(Refusal::Bounds)
+        );
+        assert_eq!(
+            c.passive_prepare(&[span(u64::MAX - 4, 8)]),
+            Err(Refusal::Bounds)
+        );
+    }
+
+    #[test]
     fn a_window_whose_mapping_failed_half_way_is_not_ready_for_the_passive_read() {
         let mut c = Cache::create(Fake::default(), BYTES * 64).unwrap();
         c.host.partial_arm.set(true);
