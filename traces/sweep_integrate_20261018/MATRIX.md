@@ -92,3 +92,9 @@ Public guest ABI for historical 580.88 is 580.65.06; for 581.51 it is
 MEASURED GA104580 R34 matched candidate-4 control0452613b5: PASS159s versus integrated e8553e6c timeout180s, n=1 each, fixed180s budget. Evidence phase2_ga104_56808180/c4_ce_control/. Subsequent Linux arms deferred for owner Windows priority.
 
 2026-10-20 paired Windows refresh: AD10256816419 and GB20256816449 at0c87acda802b18a610739e75f2b50049a9247067/P19 planned. Both native595 gates9/9+gate10/raw30/CUDA4 PASS; generic LTSC installation active, nested Windows suite UNRUN. Separate unmerged native-tracer FMC topic f09ee369f, draftPR52, CPU49/49 and unsigned Windows cross-build PASS; load/capture UNRUN.
+
+| Refresh die | Guest actual build | Measured source / configuration | Result | Evidence |
+|---|---|---|---|---|
+| AD10256816419 | Windows580.88/32.0.15.8088 | `0c87acda8`, P19+RPC diagnostics, display/GOPon | PASS desktop/CUDA3/hardwareDX11+12/426.09s zero4101hold | `phase2_windows_ad102_56816419/windows580_pass/` |
+| GB20256816449 | SameWindowsbuild | `0c87acda8`, P19+RPC diagnostics, OFF/OFF/emptyROM | FAIL verifiedCode43;357RPCs/unload356 precleanup;noNV0073/CA70/CA7A;0System4101 | `phase2_windows_gb202_56816449/b1_off/` |
+| GB20256816449 | SameWindowsbuild | Same source+flags, ON/ON/signedROM | FAIL verifiedCode43;386RPCs/unload385 precleanup;CA70/CA7A present;0System4101 | `phase2_windows_gb202_56816449/b1_on/` |
