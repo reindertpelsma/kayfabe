@@ -2733,6 +2733,59 @@ mod tests {
         }
     }
 
+    // Public580resource_list.h uses NvdecContext and optional NV_BSP params
+    // for these aliases; IDs/seams are independently pinned by generated matrix.
+    #[test]
+    fn nvdec_cfb0_570_constructor_is_admitted() {
+        assert!(CAPS_570_86_15.alloc_class(ClassId(0xcfb0)).is_permitted());
+    }
+    #[test]
+    fn nvdec_cfb0_580_inventory_has_public_name_once() {
+        let rows: Vec<_> = CAPS_580_65_06.all_classes().filter(|e| e.class == 0xcfb0).collect();
+        assert_eq!(rows.len(), 1);
+        assert_eq!(rows[0].name, "NVCFB0_VIDEO_DECODER");
+    }
+    #[test]
+    fn nvdec_ceb0_580_constructor_is_admitted() {
+        assert!(CAPS_580_65_06.alloc_class(ClassId(0xceb0)).is_permitted());
+    }
+    #[test]
+    fn nvdec_ceb0_610_inventory_has_public_name_once() {
+        let rows: Vec<_> = CAPS_610_43_02.all_classes().filter(|e| e.class == 0xceb0).collect();
+        assert_eq!(rows.len(), 1);
+        assert_eq!(rows[0].name, "NVCEB0_VIDEO_DECODER");
+    }
+    #[test]
+    fn nvdec_d1b0_580_constructor_is_admitted() {
+        assert!(CAPS_580_65_06.alloc_class(ClassId(0xd1b0)).is_permitted());
+    }
+    #[test]
+    fn nvdec_d1b0_610_inventory_has_public_name_once() {
+        let rows: Vec<_> = CAPS_610_43_02.all_classes().filter(|e| e.class == 0xd1b0).collect();
+        assert_eq!(rows.len(), 1);
+        assert_eq!(rows[0].name, "NVD1B0_VIDEO_DECODER");
+    }
+    #[test]
+    fn nvdec_cfb0_does_not_leak_to_550() {
+        assert!(!CAPS_550_54_04.alloc_class(ClassId(0xcfb0)).is_permitted());
+    }
+    #[test]
+    fn nvdec_cfb0_does_not_leak_to_560() {
+        assert!(!CAPS_560_28_03.alloc_class(ClassId(0xcfb0)).is_permitted());
+    }
+    #[test]
+    fn nvdec_580_aliases_do_not_leak_to_570() {
+        for c in [0xceb0, 0xd1b0] {
+            assert!(!CAPS_570_86_15.alloc_class(ClassId(c)).is_permitted());
+        }
+    }
+    #[test]
+    fn nvdec_580_aliases_do_not_leak_to_575() {
+        for c in [0xceb0, 0xd1b0] {
+            assert!(!CAPS_575_51_02.alloc_class(ClassId(c)).is_permitted());
+        }
+    }
+
     /// Every listed class is answered by its own row.
     #[test]
     fn every_listed_class_is_the_reason_it_is_permitted() {
