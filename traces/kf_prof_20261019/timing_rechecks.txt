@@ -1,0 +1,25 @@
+MEASURED: lane isolated #1, 2026-10-20 01:33:12 UTC, nice0, exit=0
+
+running 1 test
+test batch::tests::the_act_thread_waits_for_a_chunk_not_for_the_operation ... act thread: 3066 hand-overs in 1303 ms (VA thread operations [586, 383, 322] ms); longest lock WAIT 8918 us, longest whole hand-over 8920 us; longest hold 9367 us (2048 entries); VA thread yielded 225 times (longest 2000 us)
+ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 183 filtered out; finished in 1.30s
+
+
+MEASURED: unmodified base f8f9d1a5f isolated #1, 2026-10-20 01:35:24 UTC, nice0, exit=0
+
+running 1 test
+test batch::tests::the_act_thread_waits_for_a_chunk_not_for_the_operation ... act thread: 3048 hand-overs in 1179 ms (VA thread operations [464, 382, 323] ms); longest lock WAIT 9213 us, longest whole hand-over 9216 us; longest hold 9280 us (2048 entries); VA thread yielded 57 times (longest 2943 us)
+ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 183 filtered out; finished in 1.18s
+
+
+MEASURED: lane isolated #2, 2026-10-20 01:36:19 UTC, nice0, exit=0
+
+running 1 test
+test batch::tests::the_act_thread_waits_for_a_chunk_not_for_the_operation ... act thread: 3160 hand-overs in 1381 ms (VA thread operations [398, 625, 348] ms); longest lock WAIT 9455 us, longest whole hand-over 9458 us; longest hold 8542 us (2048 entries); VA thread yielded 235 times (longest 3594 us)
+ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 183 filtered out; finished in 1.39s

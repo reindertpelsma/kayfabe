@@ -52,3 +52,23 @@ This resolves OPEN 1; the shared-lock builder cannot be invoked unchanged.
 INFERRED: conservatively retain the original 10-hour wall deadline, 2026-10-20
 03:12:09 UTC, or stop at stage 8 if earlier. Prioritise stage 3 then stage 5 and
 the kf-qemu/kf-chan/kf-trap wrappers if remaining time requires that ordering.
+
+## Coordinator resume — 2026-10-20 01:31 UTC
+
+CODE READ: coordinator authorises nice0 isolated execution of the unchanged
+lock-wait test up to five moments and one unmodified-base run. Builds remain
+nice19/release/-j2. A timing flake is reported as baseline equality, not a STOP;
+only correctness failures introduced by K1 stop subsequent implementation.
+New deadline:2026-10-20 04:30 UTC (06:30 CEST). Existing thresholds remain intact.
+
+INFERRED, hypothesis T1 before isolated runs: the timing assertion is a baseline
+flake. Falsifier: reproducible lane-only failure with an isolated base passing,
+or changed correctness results/production logic. Record every attempt, exits,
+latencies and moments; a pass does not establish scheduler causality.
+
+CODE READ: additional required source is per-relay private-ring GP_GET/GP_PUT/
+REFERENCE, parked Wait kind/target, last doorbell and wake reason. Falsifiers
+before integration: a guest GET is reported as private GET, GET fabricates marker
+processing, unchanged GET refreshes its change age, generation reuse aliases a
+record, a missing observation becomes zero, or a profiler read/poll changes the
+relay's event behavior. Consume only existing reads; mark unknown/stale data.
