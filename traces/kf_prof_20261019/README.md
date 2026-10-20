@@ -1,4 +1,13 @@
-STATUS: RESEARCH, 2026-10-19. K1 Part A is PARTIAL; implementation stopped at a failed mutation gate.
+STATUS: RESEARCH, 2026-10-20. K1 resumed with coordinator authorisation.
+
+MEASURED: stage 2 core GREEN: 40 tests; all nine mutants killed by at least two
+tests (header geometry now three). New independent cases reject a declared file
+ending inside producer slices and a u64-overflowing declared file length.
+CODE READ: runtime/source integration remains in progress; historical STOP
+evidence below is retained as history, superseded by this resume and the current
+[mutation table](core_mutations.txt). No production claim follows from core tests.
+
+Historical report (2026-10-19, superseded by authorised resume above).
 
 CODE READ: branch `codex/kf-prof-20261019`, base `f8f9d1a5f`.
 MEASURED: design checkpoint `f21637743` and EXPECTED RED checkpoints

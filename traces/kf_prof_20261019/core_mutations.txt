@@ -1,39 +1,10 @@
-MEASURED 2026-10-19: bounded mutation run exited 1 at the header geometry gate.
-All nine hand mutations restored their source in finally blocks. This is NOT a
-passing mutation stage. No implementation commit was made after this refusal.
-
-seqlock ordering: 3 killing tests:
-  seqlock_reader_orders_acquire_validation_after_payload
-  seqlock_model_requires_fences_on_both_sides
-  seqlock_writer_orders_odd_before_payload_and_release_commit
-ring slot wrap: 4 killing tests:
-  ring_overflow_is_counted_without_claiming_a_slot
-  ring_wrap_preserves_fifo_over_many_laps
-  ring_wrapped_partial_batches_match_reference_queue
-  ring_concurrent_stress_has_no_loss_among_accepted_records
-histogram bucket: 3 killing tests:
-  histogram_all_octave_edges_and_zero_are_exact_buckets
-  histogram_seeded_property_matches_log2_reference
-  histogram_conserves_samples_and_arg_of_first_max
-ring overflow count: 2 killing tests:
-  ring_overflow_is_counted_without_claiming_a_slot
-  ring_repeated_full_laps_count_all_drops
-clock calibration: 2 killing tests:
-  clock_calibration_converts_frequency_and_anchor
-  clock_rational_frequency_and_large_integers_do_not_use_floats
-ledger slot reuse: 2 killing tests:
-  ledger_reuse_rejects_stale_close
-  ledger_same_id_on_reused_slot_has_new_generation
-ledger overflow count: 2 killing tests:
-  ledger_full_kinds_are_independent
-  ledger_overflow_does_not_overwrite_and_is_counted
-exclusive residence: 2 killing tests:
-  thread_exact_residence_conserves_elapsed_time_across_reentry
-  thread_nested_spans_integrate_exclusive_time_and_restore_parent
-header geometry: REJECTED, only 1 killing test:
-  header_rejects_truncated_wrong_version_and_wrong_geometry
-  mutant run: 37 passed; 1 failed; 0 ignored; exit 101
-
-Required minimum is 2 killing tests for EVERY behavior change. Eight passing
-mutants do not compensate for the rejected ninth mutant. STOP rule applied;
-no test rewrite, scope reduction or rerun was used to bypass this refusal.
+MEASURED: each mutant changes only production source; test names below killed it.
+seqlock ordering: 3 killing tests: seqlock_model_requires_fences_on_both_sides, seqlock_reader_orders_acquire_validation_after_payload, seqlock_writer_orders_odd_before_payload_and_release_commit
+ring slot wrap: 4 killing tests: ring_overflow_is_counted_without_claiming_a_slot, ring_wrap_preserves_fifo_over_many_laps, ring_wrapped_partial_batches_match_reference_queue, ring_concurrent_stress_has_no_loss_among_accepted_records
+histogram bucket: 3 killing tests: histogram_all_octave_edges_and_zero_are_exact_buckets, histogram_conserves_samples_and_arg_of_first_max, histogram_seeded_property_matches_log2_reference
+ring overflow count: 2 killing tests: ring_repeated_full_laps_count_all_drops, ring_overflow_is_counted_without_claiming_a_slot
+clock calibration: 2 killing tests: clock_calibration_converts_frequency_and_anchor, clock_rational_frequency_and_large_integers_do_not_use_floats
+ledger slot reuse: 2 killing tests: ledger_reuse_rejects_stale_close, ledger_same_id_on_reused_slot_has_new_generation
+ledger overflow count: 2 killing tests: ledger_full_kinds_are_independent, ledger_overflow_does_not_overwrite_and_is_counted
+exclusive residence: 2 killing tests: thread_exact_residence_conserves_elapsed_time_across_reentry, thread_nested_spans_integrate_exclusive_time_and_restore_parent
+header geometry: 3 killing tests: header_declared_file_ending_inside_producer_slices_is_rejected, header_rejects_truncated_wrong_version_and_wrong_geometry, header_overflowing_declared_length_cannot_expand_reader_bounds

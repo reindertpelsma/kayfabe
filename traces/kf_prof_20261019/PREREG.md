@@ -38,3 +38,17 @@ INFERRED: the following hypotheses/falsifiers are prospective tests, not results
 | C6: interrupt stages remain distinct and observable | injection becomes ack, shared vector invents engine ack, or coalescing/loss disappears | source/injection/ack fixtures with two-test mutants |
 
 CODE READ: no new experiment or source-coverage claim accompanies this addendum.
+
+## Authorised resume — 2026-10-20 00:12:40 UTC
+
+CODE READ: coordinator explicitly authorises strengthening geometry tests,
+rerunning the full mutation table, committing the core GREEN checkpoint and
+continuing stages 3–9. The header is fixed-layout: independent malformed-length
+cases truncate producer geometry and overflow the declared file length, rather
+than inventing variable slice fields in reserved header bytes.
+CODE READ: CPU-only host build is authorised inside its unique revision-prof
+output directory, with no lock, GPU, VM, replacement or other /data writes.
+This resolves OPEN 1; the shared-lock builder cannot be invoked unchanged.
+INFERRED: conservatively retain the original 10-hour wall deadline, 2026-10-20
+03:12:09 UTC, or stop at stage 8 if earlier. Prioritise stage 3 then stage 5 and
+the kf-qemu/kf-chan/kf-trap wrappers if remaining time requires that ordering.

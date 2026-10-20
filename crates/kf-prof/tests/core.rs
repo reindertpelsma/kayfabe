@@ -31,7 +31,9 @@ fn layout_regions_are_bounded_aligned_and_disjoint() {
     assert_eq!(THREAD_BASE, HEADER_BYTES);
     assert_eq!(THREAD_BASE + THREADS * THREAD_BYTES, LEDGER_BASE);
     assert_eq!(LEDGER_BASE + LEDGER_BYTES, RECORD_BASE);
-    assert!(RECORD_BASE + RECORDS * RECORD_BYTES <= FILE_BYTES);
+    const {
+        assert!(RECORD_BASE + RECORDS * RECORD_BYTES <= FILE_BYTES);
+    }
     for x in [
         THREAD_BASE,
         THREAD_BYTES,
@@ -165,11 +167,11 @@ fn seqlock_concurrent_snapshots_never_mix_generations() {
             }
         });
         for _ in 0..100_000 {
-            if let Ok([x, y, z]) = read_record::<3>(&s, 0) {
-                if x != 0 {
-                    assert_eq!(y, !x);
-                    assert_eq!(z, x ^ 0x1234);
-                }
+            if let Ok([x, y, z]) = read_record::<3>(&s, 0)
+                && x != 0
+            {
+                assert_eq!(y, !x);
+                assert_eq!(z, x ^ 0x1234);
             }
         }
     });
@@ -582,23 +584,30 @@ fn tables_have_stable_unique_ids_and_every_kind_has_a_bound() {
 
 #[test]
 fn thread_exact_residence_conserves_elapsed_time_across_reentry() {
-    use kf_prof::{thread::ThreadState,tables::{State,Site}};
-    let mut t=ThreadState::new(0);
-    let a=t.enter(State::Running,Site::TrapDispatch,1,10).unwrap();
-    let b=t.enter(State::EventWait,Site::WorkerPark,2,20).unwrap();
-    assert!(t.leave(b,30));
-    let c=t.enter(State::HostIoctl,Site::HostRmIoctl,3,40).unwrap();
-    assert!(t.leave(c,60));assert!(t.leave(a,80));
-    assert_eq!(t.exclusive_ns(State::Running),40);
-    assert_eq!(t.exclusive_ns(State::EventWait),10);
-    assert_eq!(t.exclusive_ns(State::HostIoctl),20);
-    assert_eq!(t.exclusive_ns(State::Idle),10);
-    let total=State::ALL.iter().map(|s| t.exclusive_ns(*s)).sum::<u64>();assert_eq!(total,80);
+    use kf_prof::{
+        tables::{Site, State},
+        thread::ThreadState,
+    };
+    let mut t = ThreadState::new(0);
+    let a = t.enter(State::Running, Site::TrapDispatch, 1, 10).unwrap();
+    let b = t.enter(State::EventWait, Site::WorkerPark, 2, 20).unwrap();
+    assert!(t.leave(b, 30));
+    let c = t.enter(State::HostIoctl, Site::HostRmIoctl, 3, 40).unwrap();
+    assert!(t.leave(c, 60));
+    assert!(t.leave(a, 80));
+    assert_eq!(t.exclusive_ns(State::Running), 40);
+    assert_eq!(t.exclusive_ns(State::EventWait), 10);
+    assert_eq!(t.exclusive_ns(State::HostIoctl), 20);
+    assert_eq!(t.exclusive_ns(State::Idle), 10);
+    let total = State::ALL.iter().map(|s| t.exclusive_ns(*s)).sum::<u64>();
+    assert_eq!(total, 80);
 }
 #[test]
 fn header_rejects_unknown_endianness_without_interpreting_counts() {
-    let mut b=Header::default().encode();b[12..16].reverse();b[168..176].copy_from_slice(&u64::MAX.to_le_bytes());
-    assert_eq!(Header::decode(&b),Err(LayoutError::Version));
+    let mut b = Header::default().encode();
+    b[12..16].reverse();
+    b[168..176].copy_from_slice(&u64::MAX.to_le_bytes());
+    assert_eq!(Header::decode(&b), Err(LayoutError::Version));
 }
 
 #[test]
