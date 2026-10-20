@@ -688,6 +688,8 @@ struct Shared {
     irq_pending_since: AtomicU64,
     /// Park waits that ended (hook `WorkerAfterWait`); `WorkerStats::parks - after_waits` = workers in a blocking wait now.
     after_waits: Arc<AtomicU64>,
+    /// FORENSICS (I6): the worker threads' kernel tids.
+    worker_tids: Mutex<Vec<i64>>,
     /// FORENSICS (I6): the last engine-event dispatch and the last irq raise (ns).
     last_dispatch_ns: AtomicU64,
     last_raise_ns: AtomicU64,
@@ -1263,12 +1265,47 @@ fn sleep_safety_monitor(
     ws: &WorkerStats,
     workers: usize,
     irqs: &Mutex<BinaryHeap<Due>>,
+    wake: &Notifier,
+    ev: &Notifier,
 ) {
+    // ★ ASK THE KERNEL (2026-10-20, coordinator's falsifier): the monitor's own level-triggered epoll on the SAME eventfds the
+    // workers watch. A ready fd means a wake is pending for the workers (they are runnable or about to be), whatever the
+    // counters say; only an empty ready set with every worker asleep in epoll_wait is a missing wake.
+    let kpoll = Poller::create().expect("epoll");
+    kpoll.watch(wake.as_source_fd(), 0).unwrap();
+    kpoll.watch(ev.as_source_fd(), 1).unwrap();
+    let kernel_ready = || {
+        let mut r = kf_linux_raw::ReadyTokens::new();
+        matches!(kpoll.wait(&mut r, kf_linux_raw::PollTimeout::Immediate), Ok(k) if k > 0)
+    };
+    let worker_states = || {
+        sh.worker_tids
+            .lock()
+            .map(|t| {
+                t.iter()
+                    .map(|tid| {
+                        let stat = std::fs::read_to_string(format!("/proc/self/task/{tid}/stat"))
+                            .unwrap_or_default();
+                        let state = stat
+                            .rsplit(')')
+                            .next()
+                            .and_then(|r| r.split_whitespace().next())
+                            .unwrap_or("?")
+                            .to_string();
+                        let wchan = std::fs::read_to_string(format!("/proc/self/task/{tid}/wchan"))
+                            .unwrap_or_default();
+                        format!("{tid}:{state}:{wchan}")
+                    })
+                    .collect::<Vec<_>>()
+            })
+            .unwrap_or_default()
+    };
     // an interrupt the fake hardware has raised but not yet delivered is a wake IN FLIGHT, not a missing one
     // a wake IN FLIGHT is not a missing one: an interrupt the fake hardware has queued, or one it raised (eventfd signalled)
     // that no worker has dispatched yet (I6 classification 2026-10-20: the false positives were exactly these)
     let in_flight = || {
-        irqs.lock().map_or(true, |q| !q.is_empty())
+        kernel_ready()
+            || irqs.lock().map_or(true, |q| !q.is_empty())
             || sh.last_raise_ns.load(Ordering::Acquire)
                 >= sh.last_dispatch_ns.load(Ordering::Acquire)
                 && sh.last_raise_ns.load(Ordering::Acquire) != 0
@@ -1361,7 +1398,13 @@ fn sleep_safety_monitor(
                         rt.plane.tokens.get(first.0).map(|w| format!("{:?}", w.load())).unwrap_or_default(),
                     )
                 });
-                eprintln!("I6 FORENSICS relay {}: {:?}", first.0, forensic);
+                eprintln!(
+                    "I6 FORENSICS relay {}: {:?} kernel_ready_fd={} workers(tid:state:wchan)={:?}",
+                    first.0,
+                    forensic,
+                    kernel_ready(),
+                    worker_states()
+                );
             }
             report(format!(
                 "I6 every worker is in a blocking wait while relay {} holds an obligation with no wake source (demand={} carried={})",
@@ -1791,6 +1834,7 @@ fn run_scenario(sc: &Scenario) -> Outcome {
         stop_gpu: AtomicBool::new(false),
         stop_workers: AtomicBool::new(false),
         after_waits: Arc::new(AtomicU64::new(0)),
+        worker_tids: Mutex::new(Vec::new()),
         last_dispatch_ns: AtomicU64::new(0),
         last_raise_ns: AtomicU64::new(0),
         last_efd_signal_ns: AtomicU64::new(0),
@@ -1871,6 +1915,15 @@ fn run_scenario(sc: &Scenario) -> Outcome {
             let sc = sc.clone();
             worker_handles.push(s.spawn(move || {
                 chaos_install(sc.seed, 10 + wi as u64, sc.chaos);
+                if let Ok(link) = std::fs::read_link("/proc/thread-self") {
+                    if let Some(tid) = link
+                        .file_name()
+                        .and_then(|f| f.to_str())
+                        .and_then(|f| f.parse().ok())
+                    {
+                        sh.worker_tids.lock().unwrap().push(tid);
+                    }
+                }
                 AFTER_WAITS.with(|a| {
                     *a.borrow_mut() =
                         Some((sh.after_waits.clone(), sh.last_after_wait_ns.clone(), sh.t0))
@@ -1923,7 +1976,8 @@ fn run_scenario(sc: &Scenario) -> Outcome {
         let irq = s.spawn(|| irq_thread(&sh, &ev, &irqs));
         // ★ I6 SLEEP SAFETY (2026-10-20): every worker in a blocking wait while a relay holds an obligation no registered wake
         // source announces (demand left behind = the retry set, or a `Wait::Popped`), seen twice 3 ms apart = a violation.
-        let monitor = s.spawn(|| sleep_safety_monitor(&sh, &rt, &ws, sc.workers, &irqs));
+        let monitor =
+            s.spawn(|| sleep_safety_monitor(&sh, &rt, &ws, sc.workers, &irqs, &wake, &ev));
         let holder = sc
             .holder
             .on
