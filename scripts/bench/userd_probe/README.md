@@ -40,9 +40,14 @@ options: --pid, --log, --lowmem, --interval, --stuck-after S (2), --lazy-bound N
    So `PUT != GET` with a small, frozen gap (up to about 16-19 entries here) is the normal resting state of a
    quiet relay (flag `frozen-lazy?`); it does **not** show that the GPU did not fetch. Only a gap larger than
    `--lazy-bound`, frozen, is flagged `STUCK`, and even that is a candidate, not a proof.
-2. The decisive pair (private `GP_GET` vs private `GP_PUT`) is in vidmem behind a kayfabe CPU view. It is not
-   in guest RAM and not in any log line; this tool does not read it (that would be a read through a GPU BAR
-   mapping of the running QEMU, and the mapping for a given channel is not logged).
+2. The decisive pair (the GPU's private `GP_GET` vs kayfabe's private `GP_PUT`) is in vidmem, in a 1 MiB
+   storage object per channel (`kf_chan::user_storage`: `USERD_OFFSET` 0xf0000, GET +0x88, PUT +0x8c, ring of
+   512 private entries). Each storage is a 1 MiB `rw-s /dev/nvidia0` mapping of the QEMU process and IS readable
+   with `pread` on `/proc/<pid>/mem` (measured). v2 reads all of them every 20 ms and prints a mapping-free
+   `REAL-BEHIND private storage <addr>: GPU GET=.. PUT=.. frozen Ns` line when GET != PUT for >= `--stuck-after`
+   seconds. Which storage belongs to which guest channel is NOT logged: the tool guesses by co-change
+   (Jaccard of change events of guest PUT/GET and private GET/PUT), column `J`; unmatched or ambiguous
+   channels show no real columns. Use `--no-real` to skip these reads.
 3. Unreadable: a channel whose USERD is not `Sysmem` (the row is counted `unreadable`).
 4. Liveness is reconstructed from log births and `act free: .. passthrough` lines; a channel freed without that
    line (client teardown) stays listed until its address is reused by a later birth. A USERD address is reused
