@@ -343,6 +343,19 @@ mod runtime {
         s.stop().unwrap();std::fs::remove_dir_all(p).unwrap();
     }
 
+    #[test]
+    fn private_depth_counts_a_wrap_at_the_real_storage_capacity() {
+        let p=dir();let s=Session::create_diagnostic(&p).unwrap();let mut a=s.register_relay(7).unwrap();
+        a.observe(Observation{private_get:Some(511),private_put:Some(3),..Observation::default()});assert_eq!(s.snapshot()["relays"][0]["private_depth"],4);
+        s.stop().unwrap();std::fs::remove_dir_all(p).unwrap();
+    }
+    #[test]
+    fn private_depth_uses_the_reported_capacity_for_a_different_wrap() {
+        let p=dir();let s=Session::create_diagnostic(&p).unwrap();let mut a=s.register_relay(7).unwrap();
+        a.observe(Observation{private_get:Some(7),private_put:Some(1),private_entries:8,..Observation::default()});assert_eq!(s.snapshot()["relays"][0]["private_depth"],2);
+        s.stop().unwrap();std::fs::remove_dir_all(p).unwrap();
+    }
+
 }
 
 #[cfg(feature = "prof-inject")]

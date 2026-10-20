@@ -17,6 +17,8 @@ class RelayReaderTests(unittest.TestCase):
     def test_private_ring_is_read_without_an_aggregator_record(self):
         data=self.read(self.profile(self.values()));self.assertEqual(data['records'],[])
         q=data['relays'][0];self.assertEqual((q['private_get'],q['private_put'],q['reference'],q['private_depth']),(511,3,19,4));self.assertEqual(q['wait'],{'kind':1,'target':22,'birth_ns':70})
+    def test_private_depth_handles_a_different_capacity_and_wrap(self):
+        v=self.values();v[7]=7;v[8]=1;v[25]=8;self.assertEqual(self.read(self.profile(v))['relays'][0]['private_depth'],2)
     def test_unknown_private_words_do_not_become_zero_progress(self):
         v=self.values();v[6]=0;q=self.read(self.profile(v))['relays'][0]
         self.assertIsNone(q['private_get']);self.assertIsNone(q['private_put']);self.assertIsNone(q['reference']);self.assertIsNone(q['private_depth'])
