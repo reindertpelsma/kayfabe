@@ -78,28 +78,28 @@ impl CapsPage {
 /// Capabilities for the opt-in SDR path: one DIRECT10 table per stage,
 /// surface loading and one bounded linear TMO with no chroma correction.
 /// Sizes are implementation limits, not board facts.
-/// Physical-address families omit legacy OLUT capability fields; no other
-/// family's field is substituted for them.
+/// The public CA73 layout reports an OLUT sample count instead of legacy LOGSZ.
+/// Its capacity comes from the bounded color decoder, excluding the four-entry header.
 pub fn sdr_page(
     t: &ClassTable,
     r: &Regs,
     caps: u32,
-    core: u32,
+    _core: u32,
     heads: u32,
     windows: u32,
 ) -> Result<CapsPage, Missing> {
     let mut p = page(t, r, caps, heads, windows)?;
-    let physical_output = t.a(core, "HEAD_SET_SURFACE_ADDRESS_LO_OLUT", 0).is_some();
-    for (register, stage, count) in [
-        ("PRECOMP_WIN_PIPE_HDR_CAPB", "ILUT", windows),
-        ("POSTCOMP_HEAD_HDR_CAPB", "OLUT", heads),
+    let olut = if t.v(caps, "POSTCOMP_HDR_CAPB__SIZE_1").is_some() {
+        let samples = u32::try_from(crate::color::LUT_BYTES / 8 - 4)
+            .map_err(|_| Missing("output LUT sample capacity".into()))?;
+        ("POSTCOMP_HDR_CAPB", "SZ", samples)
+    } else {
+        ("POSTCOMP_HEAD_HDR_CAPB", "LOGSZ", 10)
+    };
+    for (register, stage, count, size_field, size) in [
+        ("PRECOMP_WIN_PIPE_HDR_CAPB", "ILUT", windows, "LOGSZ", 10),
+        (olut.0, "OLUT", heads, olut.1, olut.2),
     ] {
-        if physical_output
-            && stage == "OLUT"
-            && t.f(caps, "POSTCOMP_HEAD_HDR_CAPB_OLUT_LOGSZ").is_none()
-        {
-            continue;
-        }
         let max = t
             .v(caps, &format!("{register}__SIZE_1"))
             .filter(|n| count <= *n && *n as usize <= PAGE / 4)
@@ -110,7 +110,12 @@ pub fn sdr_page(
                 .filter(|n| *n % 4 == 0 && (*n as usize) < PAGE)
                 .ok_or_else(|| Missing(format!("NV{caps:04X}_{register}({i})")))?;
             let mut word = p.word(off);
-            for (suffix, value) in [("LOGSZ", 10), ("LOGNR", 0), ("DIRECT", 1), ("SFCLOAD", 1)] {
+            for (suffix, value) in [
+                (size_field, size),
+                ("LOGNR", 0),
+                ("DIRECT", 1),
+                ("SFCLOAD", 1),
+            ] {
                 let name = format!("{register}_{stage}_{suffix}");
                 let field = t
                     .f(caps, &name)
