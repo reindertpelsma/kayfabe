@@ -57,8 +57,18 @@ pub enum Setting {
 
 /// Parse [`ENV`]'s value.
 #[must_use]
-pub fn parse_setting(_value: Option<&str>) -> Setting {
-    todo!("EXPECTED RED")
+pub fn parse_setting(value: Option<&str>) -> Setting {
+    let Some(v) = value.filter(|v| !v.is_empty()) else {
+        return Setting::Off;
+    };
+    if !v.bytes().all(|b| b.is_ascii_digit()) {
+        return Setting::Invalid;
+    }
+    match v.parse::<u64>() {
+        Ok(0) => Setting::Off,
+        Ok(ms) if ms <= MAX_THRESHOLD_MS => Setting::On(ms),
+        _ => Setting::Invalid,
+    }
 }
 
 /// Whether a point must keep being visited by a BUSY worker.
@@ -120,27 +130,107 @@ pub struct Def {
 }
 
 /// THE table, in [`Point::index`] order.
-pub const TABLE: [Def; POINTS] = [Def {
-    point: Point::Scan,
-    name: "",
-    due: Due::Informational,
-    site: "",
-}; POINTS];
+pub const TABLE: [Def; POINTS] = [
+    Def {
+        point: Point::Scan,
+        name: "scan",
+        due: Due::WhenBusy,
+        site: "kf-chan worker.rs run_with_relay: after plane.worker_pass (Tap::end_pass)",
+    },
+    Def {
+        point: Point::Serve,
+        name: "serve",
+        due: Due::Informational,
+        site: "kf-chan worker.rs run_with_relay: a pass with n > 0 (Tap::end_pass)",
+    },
+    Def {
+        point: Point::Poll,
+        name: "poll",
+        due: Due::WhenBusy,
+        site: "kf-chan worker.rs run_with_relay: every poller.wait (Tap::look, spin, park_end)",
+    },
+    Def {
+        point: Point::Look,
+        name: "look",
+        due: Due::Informational,
+        site: "kf-chan worker.rs run_with_relay: the AfterPass::Look arm (Tap::look)",
+    },
+    Def {
+        point: Point::SpinLook,
+        name: "spin_look",
+        due: Due::Informational,
+        site: "kf-chan worker.rs run_with_relay: each idle spin iteration (Tap::spin)",
+    },
+    Def {
+        point: Point::ParkWake,
+        name: "park_wake",
+        due: Due::Informational,
+        site: "kf-chan worker.rs run_with_relay: after the park wait (Tap::park_end)",
+    },
+    Def {
+        point: Point::DispatchOther,
+        name: "dispatch_other",
+        due: Due::Informational,
+        site: "kf-chan worker.rs run_with_relay: dispatch, tag >= OTHER_TAG_BASE (Tap::dispatch_other)",
+    },
+    Def {
+        point: Point::DispatchCompletions,
+        name: "dispatch_completions",
+        due: Due::Informational,
+        site: "kf-chan worker.rs run_with_relay: dispatch, COMPLETIONS_TAG (Tap::dispatch_completions)",
+    },
+    Def {
+        point: Point::DoorbellDrain,
+        name: "doorbell_drain",
+        due: Due::Informational,
+        site: "kf-chan worker.rs run_with_relay: dispatch, the worker eventfd drain (Tap::doorbell_drain)",
+    },
+    Def {
+        point: Point::PeekEvent,
+        name: "peek_event",
+        due: Due::Informational,
+        site: "kf-chan worker.rs Watched::peek(Peek::Event)",
+    },
+    Def {
+        point: Point::PeekSpin,
+        name: "peek_spin",
+        due: Due::Informational,
+        site: "kf-chan worker.rs Watched::peek(Peek::Spin)",
+    },
+    Def {
+        point: Point::PeekBackstop,
+        name: "peek_backstop",
+        due: Due::Informational,
+        site: "kf-chan worker.rs Watched::peek(Peek::Backstop)",
+    },
+    Def {
+        point: Point::RelayTurn,
+        name: "relay_turn",
+        due: Due::Informational,
+        site: "kf-qemu userpump.rs ChanPlane::user_ring_serve, before pump.turn",
+    },
+    Def {
+        point: Point::RelayRing,
+        name: "relay_ring",
+        due: Due::Informational,
+        site: "kf-qemu userpump.rs ChanPlane::user_ring_peek_one, the ring closure",
+    },
+];
 
 impl Point {
     /// Position in [`TABLE`].
     #[must_use]
-    pub fn index(self) -> usize {
-        todo!("EXPECTED RED")
+    pub const fn index(self) -> usize {
+        self as usize
     }
     /// The table row.
     #[must_use]
-    pub fn def(self) -> &'static Def {
+    pub const fn def(self) -> &'static Def {
         &TABLE[self.index()]
     }
     /// The name.
     #[must_use]
-    pub fn name(self) -> &'static str {
+    pub const fn name(self) -> &'static str {
         self.def().name
     }
 }
@@ -151,7 +241,11 @@ pub const START_NS: u64 = 1;
 /// The monotonic clock of the board: ns since the first call, never 0.
 #[must_use]
 pub fn now_ns() -> u64 {
-    todo!("EXPECTED RED")
+    static START: std::sync::OnceLock<std::time::Instant> = std::sync::OnceLock::new();
+    let start = START.get_or_init(std::time::Instant::now);
+    u64::try_from(start.elapsed().as_nanos())
+        .unwrap_or(u64::MAX - 1)
+        .saturating_add(START_NS)
 }
 
 /// A worker's state word.
@@ -261,8 +355,13 @@ pub enum Age {
 impl Snapshot {
     /// The age of `p`.
     #[must_use]
-    pub fn age(&self, _p: Point) -> Age {
-        todo!("EXPECTED RED")
+    pub fn age(&self, p: Point) -> Age {
+        let last = self.points[p.index()].last_ns;
+        if last == 0 {
+            Age::Never(self.now_ns.saturating_sub(self.start_ns))
+        } else {
+            Age::Since(self.now_ns.saturating_sub(last))
+        }
     }
 }
 
@@ -292,37 +391,129 @@ impl Board {
         }
     }
     /// Stamp `p` at `now_ns` and count it.
-    pub fn hit(&self, _p: Point, _now_ns: u64) {
-        todo!("EXPECTED RED")
+    pub fn hit(&self, p: Point, now_ns: u64) {
+        let i = p.index();
+        self.last[i].fetch_max(now_ns.max(1), Ordering::Relaxed);
+        self.hits[i].fetch_add(1, Ordering::Relaxed);
     }
     /// Register a worker; `None` past [`MAX_WORKERS`].
     pub fn register(&self) -> Option<usize> {
-        todo!("EXPECTED RED")
+        let mut n = self.next_worker.load(Ordering::Relaxed);
+        loop {
+            if n >= MAX_WORKERS {
+                return None;
+            }
+            match self.next_worker.compare_exchange_weak(
+                n,
+                n + 1,
+                Ordering::Relaxed,
+                Ordering::Relaxed,
+            ) {
+                Ok(_) => {
+                    self.workers[n]
+                        .state
+                        .store(state::RUNNING, Ordering::Relaxed);
+                    return Some(n);
+                }
+                Err(now) => n = now,
+            }
+        }
     }
     /// A worker begins a pass.
-    pub fn begin_pass(&self, _w: usize, _now_ns: u64) {
-        todo!("EXPECTED RED")
+    pub fn begin_pass(&self, w: usize, now_ns: u64) {
+        let Some(c) = self.workers.get(w) else {
+            return;
+        };
+        c.pass_ns.store(now_ns.max(1), Ordering::Relaxed);
+        c.passes.fetch_add(1, Ordering::Relaxed);
+        c.state.store(state::RUNNING, Ordering::Relaxed);
     }
     /// A worker's pass returned having served `served` tokens.
-    pub fn end_pass(&self, _w: usize, _served: usize, _now_ns: u64) {
-        todo!("EXPECTED RED")
+    pub fn end_pass(&self, w: usize, served: usize, now_ns: u64) {
+        self.hit(Point::Scan, now_ns);
+        if served > 0 {
+            self.hit(Point::Serve, now_ns);
+            if let Some(c) = self.workers.get(w) {
+                c.since_poll.fetch_add(1, Ordering::Relaxed);
+            }
+        }
     }
     /// A worker polled (`Point::Poll` and the per-worker word); `look` also stamps the busy look.
-    pub fn poll(&self, _w: usize, _now_ns: u64, _look: bool) {
-        todo!("EXPECTED RED")
+    pub fn poll(&self, w: usize, now_ns: u64, look: bool) {
+        self.hit(Point::Poll, now_ns);
+        if look {
+            self.hit(Point::Look, now_ns);
+        }
+        let Some(c) = self.workers.get(w) else {
+            return;
+        };
+        c.poll_ns.store(now_ns.max(1), Ordering::Relaxed);
+        c.polls.fetch_add(1, Ordering::Relaxed);
+        c.since_poll.store(0, Ordering::Relaxed);
+        if look {
+            c.look_ns.store(now_ns.max(1), Ordering::Relaxed);
+            c.looks.fetch_add(1, Ordering::Relaxed);
+        }
     }
     /// A worker entered (`true`) or left the park wait.
-    pub fn park(&self, _w: usize, _parked: bool, _now_ns: u64) {
-        todo!("EXPECTED RED")
+    pub fn park(&self, w: usize, parked: bool, now_ns: u64) {
+        if !parked {
+            self.hit(Point::ParkWake, now_ns);
+        }
+        if let Some(c) = self.workers.get(w) {
+            if parked {
+                c.parks.fetch_add(1, Ordering::Relaxed);
+            }
+            c.park_ns.store(now_ns.max(1), Ordering::Relaxed);
+            let s = if parked {
+                state::PARKED
+            } else {
+                state::RUNNING
+            };
+            c.state.store(s, Ordering::Relaxed);
+        }
     }
     /// What a worker is serving.
-    pub fn serving(&self, _w: usize, _token: Option<u32>) {
-        todo!("EXPECTED RED")
+    pub fn serving(&self, w: usize, token: Option<u32>) {
+        if let Some(c) = self.workers.get(w) {
+            let v = token.map_or(0, |t| (1 << 63) | u64::from(t));
+            c.serving.store(v, Ordering::Relaxed);
+        }
     }
     /// Read everything.
     #[must_use]
-    pub fn snapshot(&self, _now_ns: u64, _start_ns: u64) -> Snapshot {
-        todo!("EXPECTED RED")
+    pub fn snapshot(&self, now_ns: u64, start_ns: u64) -> Snapshot {
+        let g = |a: &AtomicU64| a.load(Ordering::Relaxed);
+        let mut points = [PointSnap::default(); POINTS];
+        for (i, p) in points.iter_mut().enumerate() {
+            *p = PointSnap {
+                last_ns: g(&self.last[i]),
+                hits: g(&self.hits[i]),
+            };
+        }
+        let n = self.next_worker.load(Ordering::Relaxed).min(MAX_WORKERS);
+        let workers = self.workers[..n]
+            .iter()
+            .map(|c| WorkerSnap {
+                pass_ns: g(&c.pass_ns),
+                poll_ns: g(&c.poll_ns),
+                look_ns: g(&c.look_ns),
+                passes: g(&c.passes),
+                looks: g(&c.looks),
+                polls: g(&c.polls),
+                since_poll: c.since_poll.load(Ordering::Relaxed),
+                state: c.state.load(Ordering::Relaxed),
+                serving: g(&c.serving),
+                parks: g(&c.parks),
+                park_ns: g(&c.park_ns),
+            })
+            .collect();
+        Snapshot {
+            now_ns,
+            start_ns,
+            points,
+            workers,
+        }
     }
 }
 
@@ -335,21 +526,37 @@ impl Default for Board {
 /// The process-wide board (one device per process).
 pub static BOARD: Board = Board::new();
 
+static THRESHOLD_MS: AtomicU64 = AtomicU64::new(0);
+static SETTING: std::sync::OnceLock<Setting> = std::sync::OnceLock::new();
+
 /// Read [`ENV`] once; idempotent. Returns the setting in force.
 pub fn init_from_env() -> Setting {
-    todo!("EXPECTED RED")
+    *SETTING.get_or_init(|| {
+        let v = std::env::var(ENV).ok();
+        let s = parse_setting(v.as_deref());
+        if let Setting::On(ms) = s {
+            THRESHOLD_MS.store(ms, Ordering::Relaxed);
+            let _ = now_ns(); // the board's clock starts now
+        }
+        s
+    })
 }
 
 /// The threshold in ms in force (0 = off): a relaxed load.
 #[must_use]
 pub fn threshold_ms() -> u64 {
-    todo!("EXPECTED RED")
+    THRESHOLD_MS.load(Ordering::Relaxed)
 }
 
 /// Whether the diagnostic is on.
 #[must_use]
 pub fn on() -> bool {
     threshold_ms() != 0
+}
+
+thread_local! {
+    /// The calling thread's worker cell, once registered.
+    static WORKER_SLOT: std::cell::Cell<Option<usize>> = const { std::cell::Cell::new(None) };
 }
 
 /// What the worker loop holds when the diagnostic is on.
@@ -362,7 +569,12 @@ impl Tap {
     /// Register the calling thread as a worker; `None` with the diagnostic off or past [`MAX_WORKERS`].
     #[must_use]
     pub fn register() -> Option<Self> {
-        todo!("EXPECTED RED")
+        if !on() {
+            return None;
+        }
+        let w = BOARD.register()?;
+        WORKER_SLOT.with(|c| c.set(Some(w)));
+        Some(Self { w })
     }
     /// The worker's cell index.
     #[must_use]
@@ -371,54 +583,73 @@ impl Tap {
     }
     /// See [`Board::begin_pass`].
     pub fn begin_pass(&self) {
-        todo!("EXPECTED RED")
+        BOARD.begin_pass(self.w, now_ns());
     }
     /// See [`Board::end_pass`].
-    pub fn end_pass(&self, _served: usize) {
-        todo!("EXPECTED RED")
+    pub fn end_pass(&self, served: usize) {
+        BOARD.end_pass(self.w, served, now_ns());
     }
     /// A busy look began.
     pub fn look(&self) {
-        todo!("EXPECTED RED")
+        let now = now_ns();
+        BOARD.poll(self.w, now, true);
     }
     /// An idle spin iteration.
     pub fn spin(&self) {
-        todo!("EXPECTED RED")
+        let now = now_ns();
+        BOARD.poll(self.w, now, false);
+        BOARD.hit(Point::SpinLook, now);
     }
     /// The park wait is about to start.
     pub fn park_begin(&self) {
-        todo!("EXPECTED RED")
+        BOARD.park(self.w, true, now_ns());
     }
     /// The park wait ended.
     pub fn park_end(&self) {
-        todo!("EXPECTED RED")
+        let now = now_ns();
+        BOARD.park(self.w, false, now);
+        BOARD.poll(self.w, now, false);
     }
     /// A tag was dispatched: engine event.
     pub fn dispatch_other(&self) {
-        todo!("EXPECTED RED")
+        BOARD.hit(Point::DispatchOther, now_ns());
     }
     /// A tag was dispatched: completions.
     pub fn dispatch_completions(&self) {
-        todo!("EXPECTED RED")
+        BOARD.hit(Point::DispatchCompletions, now_ns());
     }
     /// The doorbell eventfd was drained.
     pub fn doorbell_drain(&self) {
-        todo!("EXPECTED RED")
+        BOARD.hit(Point::DoorbellDrain, now_ns());
     }
     /// `relay.peek(why)` is about to run.
-    pub fn peek(&self, _why: Peek) {
-        todo!("EXPECTED RED")
+    pub fn peek(&self, why: Peek) {
+        let p = match why {
+            Peek::Event => Point::PeekEvent,
+            Peek::Spin => Point::PeekSpin,
+            Peek::Backstop => Point::PeekBackstop,
+        };
+        BOARD.hit(p, now_ns());
     }
 }
 
 /// Hit `p` from the calling worker thread's context (the relay path in `kf-qemu`); nothing when the diagnostic is off.
-pub fn hit_point(_p: Point) {
-    todo!("EXPECTED RED")
+pub fn hit_point(p: Point) {
+    if on() {
+        BOARD.hit(p, now_ns());
+    }
 }
 
 /// Record (`Some`) or clear (`None`) the host token the calling worker is serving; nothing when the diagnostic is off or the thread is no worker.
-pub fn set_serving(_token: Option<u32>) {
-    todo!("EXPECTED RED")
+pub fn set_serving(token: Option<u32>) {
+    if !on() {
+        return;
+    }
+    WORKER_SLOT.with(|c| {
+        if let Some(w) = c.get() {
+            BOARD.serving(w, token);
+        }
+    });
 }
 
 /// A violation the monitor found.
@@ -466,12 +697,68 @@ pub struct Monitor {
 impl Monitor {
     /// A monitor whose first window starts at `snap` (hits counted from there).
     #[must_use]
-    pub fn new(_threshold_ms: u64, _snap: &Snapshot) -> Self {
-        todo!("EXPECTED RED")
+    pub fn new(threshold_ms: u64, snap: &Snapshot) -> Self {
+        Self {
+            threshold_ns: threshold_ms.saturating_mul(1_000_000),
+            window_start_ns: snap.now_ns,
+            serve_at_start: snap.points[Point::Serve.index()].hits,
+            emitted_poll: [0; MAX_WORKERS],
+            emitted_stuck: [0; MAX_WORKERS],
+        }
     }
     /// Evaluate `snap`: point violations once per window, worker violations at most once per threshold each.
-    pub fn evaluate(&mut self, _snap: &Snapshot) -> Vec<Starved> {
-        todo!("EXPECTED RED")
+    pub fn evaluate(&mut self, snap: &Snapshot) -> Vec<Starved> {
+        let now = snap.now_ns;
+        let t = self.threshold_ns;
+        let mut out = Vec::new();
+        // the rate limit: a worker rule repeats at most once per threshold
+        let due = |last: &mut u64| {
+            if *last == 0 || now.saturating_sub(*last) >= t {
+                *last = now;
+                true
+            } else {
+                false
+            }
+        };
+        for (w, ws) in snap.workers.iter().enumerate().take(MAX_WORKERS) {
+            if ws.since_poll > BOUND_PASSES && due(&mut self.emitted_poll[w]) {
+                out.push(Starved::WorkerPoll {
+                    w,
+                    passes: ws.since_poll,
+                    age_ns: now.saturating_sub(ws.poll_ns),
+                });
+            }
+            let stuck =
+                ws.state == state::RUNNING && ws.pass_ns != 0 && now.saturating_sub(ws.pass_ns) > t;
+            if stuck && due(&mut self.emitted_stuck[w]) {
+                out.push(Starved::WorkerStuck {
+                    w,
+                    age_ns: now.saturating_sub(ws.pass_ns),
+                    serving: ws.serving,
+                });
+            }
+        }
+        if now.saturating_sub(self.window_start_ns) >= t {
+            let serve = snap.points[Point::Serve.index()].hits;
+            let serve_delta = serve.saturating_sub(self.serve_at_start);
+            if serve_delta > 0 {
+                for d in TABLE.iter().filter(|d| d.due == Due::WhenBusy) {
+                    let age_ns = match snap.age(d.point) {
+                        Age::Never(a) | Age::Since(a) => a,
+                    };
+                    if age_ns > t {
+                        out.push(Starved::Point {
+                            point: d.point,
+                            age_ns,
+                            serve_delta,
+                        });
+                    }
+                }
+            }
+            self.window_start_ns = now;
+            self.serve_at_start = serve;
+        }
+        out
     }
 }
 
@@ -489,8 +776,12 @@ pub enum WaitKind {
 impl WaitKind {
     /// The name in the block.
     #[must_use]
-    pub fn name(self) -> &'static str {
-        todo!("EXPECTED RED")
+    pub const fn name(self) -> &'static str {
+        match self {
+            Self::Marker => "marker",
+            Self::Popped => "popped",
+            Self::Contended => "contended",
+        }
     }
 }
 
@@ -506,15 +797,32 @@ pub struct WaitKey {
 impl WaitKey {
     /// From the relay's [`Wait`].
     #[must_use]
-    pub fn of(_w: Wait) -> Self {
-        todo!("EXPECTED RED")
+    pub const fn of(w: Wait) -> Self {
+        match w {
+            Wait::Marker { target } => Self {
+                kind: WaitKind::Marker,
+                target,
+            },
+            Wait::Popped { target } => Self {
+                kind: WaitKind::Popped,
+                target,
+            },
+            Wait::Contended => Self {
+                kind: WaitKind::Contended,
+                target: 0,
+            },
+        }
     }
 }
 
 /// The start of a satisfied-but-unpeeked interval: the later of the first time it was seen true and the last look.
 #[must_use]
-pub fn interval_start(_first_true_ns: u64, _last_peek_ns: u64) -> u64 {
-    todo!("EXPECTED RED")
+pub const fn interval_start(first_true_ns: u64, last_peek_ns: u64) -> u64 {
+    if first_true_ns > last_peek_ns {
+        first_true_ns
+    } else {
+        last_peek_ns
+    }
 }
 
 /// Tracks, per relay, how long its wait has been satisfied while no look evaluated it.
@@ -543,23 +851,69 @@ impl Tracker {
     /// unsatisfied reading re-arms it.
     pub fn observe(
         &mut self,
-        _now_ns: u64,
-        _id: u64,
-        _wait: Option<WaitKey>,
-        _satisfied: bool,
-        _last_peek_ns: u64,
-        _threshold_ns: u64,
+        now_ns: u64,
+        id: u64,
+        wait: Option<WaitKey>,
+        satisfied: bool,
+        last_peek_ns: u64,
+        threshold_ns: u64,
     ) -> Option<u64> {
-        todo!("EXPECTED RED")
+        let idx = if let Some(i) = self.slots.iter().position(|s| s.id == id) {
+            i
+        } else {
+            if self.slots.len() >= MAX_RELAYS {
+                return None;
+            }
+            self.slots.push(Slot {
+                id,
+                key: None,
+                since: None,
+                reported: false,
+            });
+            self.slots.len() - 1
+        };
+        let slot = &mut self.slots[idx];
+        let Some(key) = wait.filter(|_| satisfied) else {
+            slot.key = wait;
+            slot.since = None;
+            slot.reported = false;
+            return None;
+        };
+        if slot.key != Some(key) {
+            slot.key = Some(key);
+            slot.since = None;
+            slot.reported = false;
+        }
+        let peek = last_peek_ns.min(now_ns);
+        let since = match slot.since {
+            None => interval_start(now_ns, peek),
+            Some(s) if peek > s => {
+                slot.reported = false; // a look re-arms the condition
+                peek
+            }
+            Some(s) => s,
+        };
+        slot.since = Some(since);
+        let age = now_ns.saturating_sub(since);
+        if age > threshold_ns && !slot.reported {
+            slot.reported = true;
+            Some(age)
+        } else {
+            None
+        }
     }
     /// The current age of `id`'s interval, if one is open (for the model comparison).
     #[must_use]
-    pub fn open_age_ns(&self, _id: u64, _now_ns: u64) -> Option<u64> {
-        todo!("EXPECTED RED")
+    pub fn open_age_ns(&self, id: u64, now_ns: u64) -> Option<u64> {
+        self.slots
+            .iter()
+            .find(|s| s.id == id)
+            .and_then(|s| s.since)
+            .map(|since| now_ns.saturating_sub(since))
     }
     /// Forget every relay not in `live`.
-    pub fn retain(&mut self, _live: &[u64]) {
-        todo!("EXPECTED RED")
+    pub fn retain(&mut self, live: &[u64]) {
+        self.slots.retain(|s| live.contains(&s.id));
     }
     /// Relays followed.
     #[must_use]
@@ -590,8 +944,25 @@ pub struct ThreadCpu {
 
 /// Parse a `/proc/<pid>/task/<tid>/stat` line.
 #[must_use]
-pub fn parse_thread_stat(_tid: u64, _stat: &str) -> Option<ThreadCpu> {
-    todo!("EXPECTED RED")
+pub fn parse_thread_stat(tid: u64, stat: &str) -> Option<ThreadCpu> {
+    let open = stat.find('(')?;
+    let close = stat.rfind(')')?;
+    if close < open {
+        return None;
+    }
+    let comm: String = stat[open + 1..close].chars().take(15).collect();
+    let rest: Vec<&str> = stat[close + 1..].split_whitespace().collect();
+    // after the name: state, ppid, pgrp, session, tty, tpgid, flags, minflt, cminflt, majflt, cmajflt, utime, stime
+    if rest.len() < 13 {
+        return None;
+    }
+    Some(ThreadCpu {
+        tid,
+        comm,
+        state: rest[0].chars().next()?,
+        utime: rest[11].parse().ok()?,
+        stime: rest[12].parse().ok()?,
+    })
 }
 
 /// What a relay block reports about one relay.
@@ -649,43 +1020,254 @@ pub struct RelayBrief {
     pub walk_waiters: Option<u64>,
 }
 
+fn yes_no(b: bool) -> &'static str {
+    if b { "yes" } else { "no" }
+}
+
+fn maybe(b: Option<bool>) -> &'static str {
+    b.map_or("unknown", yes_no)
+}
+
+const fn ns_to_ms(ns: u64) -> u64 {
+    ns / 1_000_000
+}
+
+fn serving_text(serving: u64) -> String {
+    if serving == 0 {
+        "none".to_string()
+    } else {
+        format!("{:#x}", serving & !(1 << 63))
+    }
+}
+
+fn age_text(a: Age) -> String {
+    match a {
+        Age::Never(_) => "never".to_string(),
+        Age::Since(ns) => format!("{:#x}", ns_to_ms(ns)),
+    }
+}
+
+/// `since` as an age against `now` (`never` for a stamp of 0).
+fn stamp_age(stamp_ns: u64, now_ns: u64) -> Age {
+    if stamp_ns == 0 {
+        Age::Never(0)
+    } else {
+        Age::Since(now_ns.saturating_sub(stamp_ns))
+    }
+}
+
+fn budget(used: &mut u32, max: u32) -> Admit {
+    if *used < max {
+        *used += 1;
+        Admit::Yes
+    } else if *used == max {
+        *used = used.saturating_add(1);
+        Admit::Suppress
+    } else {
+        Admit::No
+    }
+}
+
+/// The age table of ALL points, four per line, the board's time first.
+fn render_points(snap: &Snapshot) -> Vec<String> {
+    let entries: Vec<String> = TABLE
+        .iter()
+        .map(|d| {
+            format!(
+                "{}={}/{:#x}",
+                d.name,
+                age_text(snap.age(d.point)),
+                snap.points[d.point.index()].hits
+            )
+        })
+        .collect();
+    entries
+        .chunks(4)
+        .enumerate()
+        .map(|(i, chunk)| {
+            let mut l = String::from("kf3: PROGRESS_POINTS");
+            if i == 0 {
+                l.push_str(&format!(
+                    " now_ms={:#x} (name=age_ms/hits)",
+                    ns_to_ms(snap.now_ns)
+                ));
+            }
+            for e in chunk {
+                l.push(' ');
+                l.push_str(e);
+            }
+            l
+        })
+        .collect()
+}
+
+/// Every registered worker, one line each.
+fn render_workers(snap: &Snapshot) -> Vec<String> {
+    snap.workers
+        .iter()
+        .take(MAX_WORKERS)
+        .enumerate()
+        .map(|(i, w)| {
+            let state = match w.state {
+                state::RUNNING => "running",
+                state::PARKED => "parked",
+                _ => "none",
+            };
+            format!(
+                "kf3: PROGRESS_WORKER w={i:#x} state={state} serving={} passes_since_poll={:#x} poll_age_ms={} look_age_ms={} parks={:#x} park_age_ms={} passes={:#x} polls={:#x} looks={:#x}",
+                serving_text(w.serving),
+                w.since_poll,
+                age_text(stamp_age(w.poll_ns, snap.now_ns)),
+                age_text(stamp_age(w.look_ns, snap.now_ns)),
+                w.parks,
+                age_text(stamp_age(w.park_ns, snap.now_ns)),
+                w.passes,
+                w.polls,
+                w.looks
+            )
+        })
+        .collect()
+}
+
 /// Render one relay's state line (H-64: `h64_backstop_only=yes` when only the safety net may still re-ring it).
 #[must_use]
-pub fn render_relay_state(_b: &RelayBrief) -> String {
-    todo!("EXPECTED RED")
+pub fn render_relay_state(b: &RelayBrief) -> String {
+    let wait = b.wait.map_or("none", |w| w.kind.name());
+    let stranded =
+        (b.pending || b.waiting) && b.contended_run >= crate::user_loop::CONTENTION_RETRIES;
+    format!(
+        "kf3: PROGRESS_RELAY_STATE relay={:#x}:{:#x} host={:#x} wait={wait} contended_run={:#x} retry_budget={:#x} h64_backstop_only={} retry_flag={} pending={} waiting_flag={} canceled={} stopped={} disabled={} walk_busy={} walk_waiters={}",
+        b.key.0,
+        b.key.1,
+        b.host,
+        b.contended_run,
+        crate::user_loop::CONTENTION_RETRIES,
+        yes_no(stranded),
+        yes_no(b.retry),
+        yes_no(b.pending),
+        yes_no(b.waiting),
+        yes_no(b.canceled),
+        maybe(b.stopped),
+        maybe(b.disabled),
+        yes_no(b.walk_busy),
+        b.walk_waiters
+            .map_or_else(|| "unknown".to_string(), |n| format!("{n:#x}")),
+    )
 }
 
 /// Render named counters, six per line, at most [`MAX_COUNTERS`] of them.
 #[must_use]
-pub fn render_counters(_c: &[(&'static str, u64)]) -> Vec<String> {
-    todo!("EXPECTED RED")
+pub fn render_counters(c: &[(&'static str, u64)]) -> Vec<String> {
+    c.iter()
+        .take(MAX_COUNTERS)
+        .collect::<Vec<_>>()
+        .chunks(6)
+        .map(|chunk| {
+            let mut l = String::from("kf3: PROGRESS_COUNTERS");
+            for (name, v) in chunk {
+                l.push_str(&format!(" {name}={v:#x}"));
+            }
+            l
+        })
+        .collect()
 }
 
 /// The per-second summary's context: up to [`MAX_SUMMARY_RELAYS`] relay state lines (waiting, pending and contended first), the
 /// counters and every worker. Hex-only, at most [`MAX_CONTEXT_LINES`] lines.
 #[must_use]
 pub fn render_summary_context(
-    _snap: &Snapshot,
-    _counters: &[(&'static str, u64)],
-    _relays: &[RelayBrief],
+    snap: &Snapshot,
+    counters: &[(&'static str, u64)],
+    relays: &[RelayBrief],
 ) -> Vec<String> {
-    todo!("EXPECTED RED")
+    let rank = |b: &RelayBrief| {
+        if (b.pending || b.waiting) && b.contended_run >= crate::user_loop::CONTENTION_RETRIES {
+            0
+        } else if b.pending || b.waiting || b.contended_run > 0 {
+            1
+        } else {
+            2
+        }
+    };
+    let mut order: Vec<&RelayBrief> = relays.iter().collect();
+    order.sort_by_key(|b| rank(b));
+    let mut out: Vec<String> = order
+        .into_iter()
+        .take(MAX_SUMMARY_RELAYS)
+        .map(render_relay_state)
+        .collect();
+    out.extend(render_counters(counters));
+    out.extend(render_workers(snap));
+    out
 }
 
 /// Render one relay's block: the relay line, the age table of ALL points, every worker, the listed threads. Hex-only, bounded.
 #[must_use]
-pub fn render_relay_block(
-    _f: &RelayFacts,
-    _snap: &Snapshot,
-    _threads: &[ThreadCpu],
-) -> Vec<String> {
-    todo!("EXPECTED RED")
+pub fn render_relay_block(f: &RelayFacts, snap: &Snapshot, threads: &[ThreadCpu]) -> Vec<String> {
+    let mut out = Vec::with_capacity(MAX_BLOCK_LINES);
+    out.push(format!(
+        "kf3: PROGRESS_STARVED_RELAY relay={:#x}:{:#x} host={:#x} wait={} target={:#x} marks={:#x} popped={:#x} satisfied_unpeeked_ms={:#x} last_peek_age_ms={} threshold_ms={:#x}",
+        f.key.0,
+        f.key.1,
+        f.host,
+        f.wait.kind.name(),
+        f.wait.target,
+        f.marks,
+        f.popped,
+        f.unpeeked_ms,
+        f.last_peek_age_ms
+            .map_or_else(|| "never".to_string(), |a| format!("{a:#x}")),
+        f.threshold_ms,
+    ));
+    out.push(render_relay_state(&f.brief));
+    out.extend(render_counters(&f.counters));
+    out.extend(render_points(snap));
+    out.extend(render_workers(snap));
+    for t in threads.iter().take(MAX_THREADS) {
+        out.push(format!(
+            "kf3: PROGRESS_THREAD tid={:#x} comm={} state={} utime_ticks={:#x} stime_ticks={:#x}",
+            t.tid,
+            t.comm
+                .chars()
+                .map(|c| if c.is_ascii_alphanumeric() || c == '-' {
+                    c
+                } else {
+                    '_'
+                })
+                .collect::<String>(),
+            t.state,
+            t.utime,
+            t.stime
+        ));
+    }
+    out
 }
 
 /// Render one [`Starved`] as its single `PROGRESS_STARVED` line.
 #[must_use]
-pub fn render_starved(_s: &Starved, _threshold_ms: u64) -> String {
-    todo!("EXPECTED RED")
+pub fn render_starved(s: &Starved, threshold_ms: u64) -> String {
+    let t = threshold_ms;
+    match *s {
+        Starved::Point {
+            point,
+            age_ns,
+            serve_delta,
+        } => format!(
+            "kf3: PROGRESS_STARVED point={} age_ms={:#x} serve_delta={:#x} threshold_ms={t:#x}",
+            point.name(),
+            ns_to_ms(age_ns),
+            serve_delta
+        ),
+        Starved::WorkerPoll { w, passes, age_ns } => format!(
+            "kf3: PROGRESS_STARVED point=worker_poll age_ms={:#x} w={w:#x} passes_since_poll={passes:#x} bound={BOUND_PASSES:#x}",
+            ns_to_ms(age_ns)
+        ),
+        Starved::WorkerStuck { w, age_ns, serving } => format!(
+            "kf3: PROGRESS_STARVED point=worker_stuck age_ms={:#x} w={w:#x} serving={}",
+            ns_to_ms(age_ns),
+            serving_text(serving)
+        ),
+    }
 }
 
 /// Output budget of the diagnostic thread.
@@ -709,18 +1291,25 @@ pub enum Admit {
 impl Printer {
     /// Admit a relay block?
     pub fn block(&mut self) -> Admit {
-        todo!("EXPECTED RED")
+        budget(&mut self.blocks, MAX_BLOCKS)
     }
     /// Admit a `PROGRESS_STARVED` summary line?
     pub fn starved(&mut self) -> Admit {
-        todo!("EXPECTED RED")
+        budget(&mut self.starved, MAX_STARVED_LINES)
     }
 }
 
 /// The suppression line.
 #[must_use]
-pub fn suppression_line(_what: &str) -> String {
-    todo!("EXPECTED RED")
+pub fn suppression_line(what: &str) -> String {
+    let limit = if what == "blocks" {
+        MAX_BLOCKS
+    } else {
+        MAX_STARVED_LINES
+    };
+    format!(
+        "kf3: PROGRESS_SUPPRESSED {what}: the output budget of this run is spent limit={limit:#x}"
+    )
 }
 
 #[cfg(test)]
@@ -1725,6 +2314,50 @@ mod tests {
         );
     }
 
+    /// The example in the design doc (section 11) is what the renderer prints.
+    #[test]
+    fn the_documented_example_block_is_what_the_renderer_prints() {
+        let b = Board::new();
+        let w0 = b.register().unwrap();
+        let w1 = b.register().unwrap();
+        for (w, t) in [(w0, 4_900), (w1, 4_950)] {
+            b.begin_pass(w, t * MS);
+            b.end_pass(w, 2, t * MS + 1);
+            b.serving(w, Some(0x3f));
+        }
+        b.poll(w0, 3_900 * MS, true);
+        b.park(w1, true, 4_000 * MS);
+        b.park(w1, false, 4_050 * MS);
+        b.hit(Point::DispatchOther, 3_100 * MS);
+        b.hit(Point::RelayTurn, 4_990 * MS);
+        let lines = render_relay_block(&facts(), &b.snapshot(5_000 * MS, 1), &threads(1));
+        let want = [
+            "kf3: PROGRESS_STARVED_RELAY relay=0x1c:0x5 host=0x3f wait=marker target=0x2a marks=0x29 popped=0x30 satisfied_unpeeked_ms=0x3f0 last_peek_age_ms=0x3f2 threshold_ms=0x3e8",
+            "kf3: PROGRESS_RELAY_STATE relay=0x1c:0x5 host=0x3f wait=marker contended_run=0x40 retry_budget=0x40 h64_backstop_only=yes retry_flag=yes pending=yes waiting_flag=yes canceled=no stopped=no disabled=unknown walk_busy=no walk_waiters=0x2",
+            "kf3: PROGRESS_COUNTERS contended_turns=0x1234 wake_backstop=0x7 backstop_contended=0x3 backstop_found_work=0x0 busy_looks=0x15ba7",
+            "kf3: PROGRESS_POINTS now_ms=0x1388 (name=age_ms/hits) scan=0x31/0x2 serve=0x31/0x2 poll=0x44c/0x1 look=0x44c/0x1",
+            "kf3: PROGRESS_POINTS spin_look=never/0x0 park_wake=0x3b6/0x1 dispatch_other=0x76c/0x1 dispatch_completions=never/0x0",
+            "kf3: PROGRESS_POINTS doorbell_drain=never/0x0 peek_event=never/0x0 peek_spin=never/0x0 peek_backstop=never/0x0",
+            "kf3: PROGRESS_POINTS relay_turn=0xa/0x1 relay_ring=never/0x0",
+            "kf3: PROGRESS_WORKER w=0x0 state=running serving=0x3f passes_since_poll=0x0 poll_age_ms=0x44c look_age_ms=0x44c parks=0x0 park_age_ms=never passes=0x1 polls=0x1 looks=0x1",
+            "kf3: PROGRESS_WORKER w=0x1 state=running serving=0x3f passes_since_poll=0x1 poll_age_ms=never look_age_ms=never parks=0x1 park_age_ms=0x3b6 passes=0x1 polls=0x0 looks=0x0",
+            "kf3: PROGRESS_THREAD tid=0x3e8 comm=kf3-worker0 state=R utime_ticks=0x3039 stime_ticks=0x2a6",
+        ];
+        assert_eq!(lines, want);
+        let starved = render_starved(
+            &Starved::Point {
+                point: Point::Poll,
+                age_ns: 1_100 * MS,
+                serve_delta: 0x1f4,
+            },
+            1000,
+        );
+        assert_eq!(
+            starved,
+            "kf3: PROGRESS_STARVED point=poll age_ms=0x44c serve_delta=0x1f4 threshold_ms=0x3e8"
+        );
+    }
+
     // ---- the hot path stays cheap and the switch is read once (source pins)
 
     fn production() -> &'static str {
@@ -1800,7 +2433,7 @@ mod tests {
         assert_eq!(src.matches("std::env::var").count(), 1);
         assert!(src.contains("OnceLock"));
         assert_eq!(
-            src.matches("Instant::now()").count(),
+            src.matches("Instant::now").count(),
             1,
             "the one clock read lives in now_ns"
         );

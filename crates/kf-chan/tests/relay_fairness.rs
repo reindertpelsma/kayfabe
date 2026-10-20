@@ -987,10 +987,12 @@ fn the_fixed_loop_never_triggers_the_detector_on_any_walk() {
 /// walks are not vacuous (some of them do reach the violation).
 #[test]
 fn on_the_controls_walks_the_detector_condition_equals_the_models_p11() {
-    for (name, cfg) in [
-        ("W=1 marker", negctl(1, 1, WaitKind::Marker, V_P11)),
-        ("W=1 popped", negctl(1, 1, WaitKind::Popped, V_P11)),
-        ("W=2 baton", negctl(2, 1, WaitKind::Marker, V_P11)),
+    // the baton (W=2) needs both workers to stay busy on the one hot token in lock step: a random walk rarely does, so its
+    // exactness is checked on the walks that do reach it and its reachability by the exhaustive test above
+    for (name, cfg, must_reach) in [
+        ("W=1 marker", negctl(1, 1, WaitKind::Marker, V_P11), true),
+        ("W=1 popped", negctl(1, 1, WaitKind::Popped, V_P11), true),
+        ("W=2 baton", negctl(2, 1, WaitKind::Marker, V_P11), false),
     ] {
         let (mut violations, mut walks_n) = (0, 0);
         walks(&cfg, 300, 120, |path| {
@@ -1014,7 +1016,7 @@ fn on_the_controls_walks_the_detector_condition_equals_the_models_p11() {
             }
         });
         assert!(
-            violations > 0,
+            violations > 0 || !must_reach,
             "{name}: no walk of {walks_n} reached the starvation; the check is vacuous"
         );
     }
@@ -1045,18 +1047,19 @@ fn run_body() -> &'static str {
         .expect("pin")
 }
 
-/// Every hook is one line `if let Some(t) = &tap { t.NAME(..); }`: no clock, lock or allocation outside the `Some` branch.
+/// Every hook is one `hook!(tap, name(..));` line (a call on the registered `Tap`, nothing when the diagnostic is off): no clock, lock
+/// or allocation outside the `Some` branch.
 #[test]
 fn pin_every_progress_hook_is_a_single_guarded_line_and_the_inventory_is_exact() {
     let body = run_body();
     let mut names: Vec<String> = Vec::new();
-    for line in body.lines().filter(|l| l.contains("&tap {")) {
+    for line in body.lines().filter(|l| l.contains("hook!(")) {
         let l = line.trim();
         assert!(
-            l.starts_with("if let Some(t) = &tap { t.") && l.ends_with("; }"),
-            "hook not in the guarded one-line form: {l}"
+            l.starts_with("hook!(tap, ") && l.ends_with(");"),
+            "hook not in the one-line form: {l}"
         );
-        let name = l["if let Some(t) = &tap { t.".len()..]
+        let name = l["hook!(tap, ".len()..]
             .split('(')
             .next()
             .unwrap()
@@ -1080,6 +1083,10 @@ fn pin_every_progress_hook_is_a_single_guarded_line_and_the_inventory_is_exact()
         "hook inventory"
     );
     assert!(
+        !body.contains("&tap {"),
+        "no open-coded hook: every hook is the macro"
+    );
+    assert!(
         !body.contains("progress::now_ns"),
         "the worker never reads the clock itself"
     );
@@ -1088,12 +1095,23 @@ fn pin_every_progress_hook_is_a_single_guarded_line_and_the_inventory_is_exact()
         "registered once, before the loop"
     );
     assert_eq!(body.matches("Tap::register()").count(), 1);
+    let mac = WORKER
+        .split("macro_rules! hook {")
+        .nth(1)
+        .expect("pin: the hook macro")
+        .split("/// The relay seen")
+        .next()
+        .unwrap();
+    assert!(mac.contains("if let Some(t) = &$tap {"), "{mac}");
 }
 
 #[test]
 fn pin_the_hooks_sit_in_the_arm_they_describe() {
     let l = look_arm();
-    assert!(l.contains("t.look()"), "the Look arm announces itself: {l}");
+    assert!(
+        l.contains("hook!(tap, look())"),
+        "the Look arm announces itself: {l}"
+    );
     let body = run_body();
     let spin = body
         .split("for _ in 0..user_loop::SPIN {")
@@ -1102,7 +1120,7 @@ fn pin_the_hooks_sit_in_the_arm_they_describe() {
         .split("std::hint::spin_loop();")
         .next()
         .expect("pin");
-    assert!(spin.contains("t.spin()"), "{spin}");
+    assert!(spin.contains("hook!(tap, spin())"), "{spin}");
     let dispatch = body
         .split("let dispatch =")
         .nth(1)
@@ -1111,23 +1129,23 @@ fn pin_the_hooks_sit_in_the_arm_they_describe() {
         .next()
         .expect("pin");
     for h in [
-        "t.dispatch_other()",
-        "t.dispatch_completions()",
-        "t.doorbell_drain()",
+        "hook!(tap, dispatch_other())",
+        "hook!(tap, dispatch_completions())",
+        "hook!(tap, doorbell_drain())",
     ] {
         assert!(dispatch.contains(h), "{h} missing from dispatch");
     }
     // the pass hooks bracket worker_pass
-    let b = body.find("t.begin_pass()").expect("pin");
+    let b = body.find("hook!(tap, begin_pass())").expect("pin");
     let p = body.find("plane.worker_pass(").expect("pin");
-    let e = body.find("t.end_pass(n)").expect("pin");
+    let e = body.find("hook!(tap, end_pass(n))").expect("pin");
     assert!(b < p && p < e, "begin_pass < worker_pass < end_pass");
     // the park hooks bracket the park wait
-    let pb = body.find("t.park_begin()").expect("pin");
+    let pb = body.find("hook!(tap, park_begin())").expect("pin");
     let w = body
         .find("poller.wait(&mut ready, PollTimeout::Millis(park))")
         .expect("pin");
-    let pe = body.find("t.park_end()").expect("pin");
+    let pe = body.find("hook!(tap, park_end())").expect("pin");
     assert!(pb < w && w < pe);
 }
 

@@ -3526,6 +3526,12 @@ impl Device {
         }
     }
 
+    /// ★ `KF3_DIAG_PROGRESS` (measurement only): the diagnostic thread's body. Started only with the switch on; never a vCPU, never the
+    /// drainer, never a worker; `try_lock` only.
+    pub fn progress_loop(&self) {
+        self.chans.progress_loop(&self.stop);
+    }
+
     /// Stop the device's threads.
     pub fn stop(&self) {
         // ★ 2026-10-14: the USER-ring event loop's bounded counters, one line (always; a backstop
@@ -4001,7 +4007,10 @@ impl HostOps for Device {
         let _ = self.rm.doorbell(host_token);
     }
     fn run_translated(&self, host_token: u32, _up_to_seq: u64) -> bool {
+        // ★ `KF3_DIAG_PROGRESS`: what this worker is serving, for the starvation block (a relaxed store, nothing with the switch off).
+        kf_chan::progress::set_serving(Some(host_token));
         let r = self.chans.serve(host_token);
+        kf_chan::progress::set_serving(None);
         // ★ GR tier (owner requirement 2026-10-07): the host's non-stall event woke this pump
         // (`FIFO_EVENT_MTHD`; measured at 01870988, `gr-tier-native-run32.log`: GR0's notifier does
         // not fire for the ring's NSI), and the pump found entries the ENGINE retired — its GP_GET

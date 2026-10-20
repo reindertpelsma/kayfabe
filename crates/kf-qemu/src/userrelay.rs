@@ -51,6 +51,9 @@ pub(super) struct Cell<T = Record> {
     waiting: AtomicBool,
     /// Consecutive turns that found a lock / admission busy (`kf_chan::user_loop::may_retry`).
     contended: AtomicU32,
+    /// MEASUREMENT ONLY (`KF3_DIAG_PROGRESS`): when a look last evaluated this relay's wait, or its turn last ran (`progress::now_ns`,
+    /// 0 = never). Written only with the diagnostic on.
+    looked_ns: AtomicU64,
     inner: Mutex<T>,
 }
 impl<T> Cell<T> {
@@ -61,6 +64,7 @@ impl<T> Cell<T> {
             canceled: AtomicBool::new(false),
             waiting: AtomicBool::new(false),
             contended: AtomicU32::new(0),
+            looked_ns: AtomicU64::new(0),
             inner: Mutex::new(value),
         }
     }
@@ -108,6 +112,15 @@ impl<T> Cell<T> {
     }
     pub fn is_canceled(&self) -> bool {
         self.canceled.load(Ordering::Acquire)
+    }
+    /// MEASUREMENT ONLY: stamp now as the last look/turn (the progress diagnostic's `last_peek`).
+    pub fn stamp_look(&self) {
+        self.looked_ns
+            .store(kf_chan::progress::now_ns(), Ordering::Relaxed);
+    }
+    /// MEASUREMENT ONLY: the last stamp (0 = never).
+    pub fn last_look_ns(&self) -> u64 {
+        self.looked_ns.load(Ordering::Relaxed)
     }
     /// Consecutive contended turns so far.
     pub fn contended_run(&self) -> u32 {

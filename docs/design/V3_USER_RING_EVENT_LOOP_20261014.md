@@ -526,3 +526,66 @@ Hardware check: two-client runs on the relay route, 20 runs; the stall must not 
 
 **Not modelled / cannot be seen GPU-free**: whether `try_lock` on `pt` / the record is lost for long against a busy neighbour (hold times; the model treats a lost try_lock as an adversary with a
 budget and shows the re-ring needs a look); GPU-side starvation (time-slicing of the twins' TSGs); the relay's own turn cost (a long `Pump::turn` delays every look by one turn).
+
+## 11. Required visit points (2026-10-20): `KF3_DIAG_PROGRESS`, and the one-binary A/B `KF3_NEGCTL_NO_BUSY_LOOK`
+
+**STATUS: LIVE (code and GPU-free tests; NOT yet run on hardware), 2026-10-20.** Branch `claude/progress-watchdog-20261020` (from `claude/relay-fairness-20261020`). Labels as in §9.
+Why: §10's hardware A/B was inconclusive (control 1/6 starved, fix 1/8, one fix-arm starvation of 6.2 s with `busy_looks=88727`), and every existing diagnostic (`KF3_DIAG_USER_STALL`: GET != PUT; the
+relay backstop counters) stayed silent: they are CONSEQUENCE detectors. This instruments the cause. The owner's idea: name the places a busy system must keep visiting; when one has not been
+visited for T while the system is busy, say which, then look at it live (`gdb`) to see why nothing calls it.
+
+**Switches (both read once, default off, the default behaviour is byte-identical to §10's fix).**
+`KF3_DIAG_PROGRESS=<ms>` (decimal, 1..=3600000; empty/0 = off; anything else prints `PROGRESS_INVALID` and stays off). `KF3_NEGCTL_NO_BUSY_LOOK=1` (exactly `1`) makes
+`LoopPolicy::after_pass` never answer `Look` (the pre-fix loop; prints one `NEGATIVE CONTROL` line). Two arms of an A/B are therefore ONE binary:
+fix arm `KF3_DEBUG=1 KF3_DEBUG_FORCE_MIGRATABLE=1 KF3_DIAG_PROGRESS=1000`; control arm the same plus `KF3_NEGCTL_NO_BUSY_LOOK=1`.
+
+**Cost.** Off: workers hold `tap = None` and every hook is one untaken branch (`hook!(tap, ..)`); nothing else runs, no thread is started. On: relaxed stores and one monotonic clock read
+(`Instant`, vDSO) per hook on the worker; no lock, no allocation, no syscall, no print on the worker path (pinned by source tests); a thread `kf3-progress` (never a vCPU, never the drainer, never a
+worker; the worker tick is silent exactly when the worker is busy) wakes every `clamp(T/4, 5, 250)` ms, takes only `try_lock`s (relay map, record, storage, plane table, walk list) and never holds one across its
+sleep. A record lock it holds for microseconds can make a worker's `enter()` see contention once; that is a perturbation of the measurement and is why the diagnostic is opt-in.
+
+**Progress points** (`kf_chan::progress::TABLE`; derived from `worker::run_with_relay`, `ChanPlane::user_ring_serve`, `user_ring_peek_one`; a hit = relaxed `last` timestamp + counter).
+`scan` (after `worker_pass`), `serve` (a pass with n > 0), `poll` (every `poller.wait`: busy look, idle spin iteration, park), `look` (the `AfterPass::Look` arm), `spin_look` (idle spin iteration),
+`park_wake`, `dispatch_other` (a tag >= `OTHER_TAG_BASE`: engine event -> the guest's completion interrupt), `dispatch_completions`, `doorbell_drain`, `peek_event`, `peek_spin`, `peek_backstop`,
+`relay_turn` (`user_ring_serve` before `pump.turn`), `relay_ring` (a look rang a relay). Per worker: passes since the last poll (counted over SERVED passes), state running/parked/none, the host token it is
+serving, last poll/look/park age, parks, polls, looks. Only `scan` and `poll` are `Due::WhenBusy`; the others are event-driven or idle-only and are shown, never flagged by age alone (flagging
+`dispatch_other` after 1 s of no engine event would be a false alarm in every idle guest). Event delivery is covered structurally: events are dispatched only at a poll, so a bounded poll age IS the
+bound on event latency.
+
+**Detectors.**
+1. *Point age* (summary): once per window of T, when `serve` advanced and a `WhenBusy` point's age (or time since the board started, if never hit) exceeds T:
+   `kf3: PROGRESS_STARVED point=<name> age_ms=<hex> serve_delta=<hex> threshold_ms=<hex>`.
+2. *Worker bound*: a worker served more than `BOUND_PASSES = 16` (4 x `LOOK_EVERY`; the model's K) passes since its last poll: `point=worker_poll`; a worker not parked and inside no new pass for more than T:
+   `point=worker_stuck`. Each at most once per T per worker.
+3. *Satisfied-but-unpeeked (the sharp one)*: for each relay with a recorded wait (`Marker`, `Popped`, `Contended`) the thread reads the SAME private words the worker's look reads
+   (`gpu_get`, `gpu_reference`, `Fetch::peek`, `Marks::peek`) and evaluates `Wait::satisfied(marks, popped)`. The relay record carries `looked_ns`, stamped by every look that was entitled to act on the wait
+   (`user_ring_peek_one`; a contended wait whose retry budget is spent is NOT stamped by spin/event looks) and by every turn. The interval starts at the later of "first seen satisfied" and "last stamp"; when it
+   exceeds T ONE block is printed for that relay and condition; a stamp, a changed wait or an unsatisfied reading re-arms it. Caps: 32 blocks and 64 `PROGRESS_STARVED` lines per run (then one `PROGRESS_SUPPRESSED`).
+
+**Block format** (hex only, <= 25 lines; this is the renderer's output, pinned by `the_documented_example_block_is_what_the_renderer_prints`):
+```
+kf3: PROGRESS_STARVED_RELAY relay=0x1c:0x5 host=0x3f wait=marker target=0x2a marks=0x29 popped=0x30 satisfied_unpeeked_ms=0x3f0 last_peek_age_ms=0x3f2 threshold_ms=0x3e8
+kf3: PROGRESS_RELAY_STATE relay=0x1c:0x5 host=0x3f wait=marker contended_run=0x40 retry_budget=0x40 h64_backstop_only=yes retry_flag=yes pending=yes waiting_flag=yes canceled=no stopped=no disabled=unknown walk_busy=no walk_waiters=0x2
+kf3: PROGRESS_COUNTERS contended_turns=0x1234 wake_backstop=0x7 backstop_contended=0x3 backstop_found_work=0x0 busy_looks=0x15ba7
+kf3: PROGRESS_POINTS now_ms=0x1388 (name=age_ms/hits) scan=0x31/0x2 serve=0x31/0x2 poll=0x44c/0x1 look=0x44c/0x1
+kf3: PROGRESS_POINTS spin_look=never/0x0 park_wake=0x3b6/0x1 dispatch_other=0x76c/0x1 dispatch_completions=never/0x0
+ ... (two more PROGRESS_POINTS lines)
+kf3: PROGRESS_WORKER w=0x0 state=running serving=0x3f passes_since_poll=0x0 poll_age_ms=0x44c look_age_ms=0x44c parks=0x0 park_age_ms=never passes=0x1 polls=0x1 looks=0x1
+kf3: PROGRESS_THREAD tid=0x3e8 comm=kf3-worker0 state=R utime_ticks=0x3039 stime_ticks=0x2a6
+```
+`PROGRESS_THREAD` (state letter and CPU ticks of the `kf3-*` threads, from `/proc/self/task`) answers "is the worker spinning (R) or asleep (S)". Every `PROGRESS_STARVED` line is followed by the summary context
+(<= 19 lines): the stranded / waiting / contended relays' `PROGRESS_RELAY_STATE` lines, the counters, every worker.
+
+**H-64 (coordinator, from the Opus review): a relay that lost `try_lock` `CONTENTION_RETRIES` (64) times in a row can be re-rung only by `Peek::Backstop`, which needs a park timeout, which never comes beside a hot relay.**
+`h64_backstop_only=yes` is `(pending || waiting) && contended_run >= 64`. Falsifier at a stall: the stranded relay's `contended_run` < 0x40, or `wake_backstop` / `backstop_contended` do not increase when the stall ends.
+`stopped` / `disabled` (a cleared `retry`, `user_ring_serve`) and `walk_busy` / `walk_waiters` (the walk the publisher waits for) are in the same line.
+
+**Live debugging.** `scripts/bench/progress_gdb.sh <qemu-pid> <log>` waits for `PROGRESS_STARVED`, runs `gdb -p <pid> -batch -ex 'set pagination off' -ex 'thread apply all bt 16' -ex detach` into a time-named file, at most
+3 attachments per boot, one per 20 s burst. Each attach stops the whole process for about a second; the VM is disturbed only AFTER the detection. `gdb` exists on the trusted host (`/usr/bin/gdb`; `eu-stack`, `pstack` do not).
+Without gdb the script writes `/proc/<pid>/task/*/{stat,wchan,syscall,stack}` instead and says so.
+
+**What the model ties.** `tests/relay_fairness.rs`: with `LoopPolicy::without_busy_look()` the model's P11 failing schedule makes the production `Tracker` (fake clock, 1 pass = 1 tick, T = K ticks) report at exactly the violating
+state; on random schedules of the control the tracker's condition equals the model's P11 at every state; on 1200 random schedules of the fix it never fires. Not tied: Wait kinds beyond Marker/Popped in the model, real time, lock hold times.
+
+**What only hardware can confirm.** That the thread's `try_lock`s do not mask a starvation by their own contention; that a real starvation shows `poll` / `worker_poll` / a relay block (and which); the H-64 numbers; that `kf3-progress` does not
+change the starvation rate (compare fix-arm rates with and without the switch before trusting the diagnostic arm); that the threshold T is above normal park/turn latency in a nested-KVM box (T=1000 assumed).

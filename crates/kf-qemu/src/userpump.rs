@@ -7,6 +7,11 @@ use crate::mem::userread::{self, Mapping, Snapshot};
 use kf_chan::user_loop::Stats;
 use kf_chan::user_scan::{Fetch, Scan, Trigger};
 
+/// ★ 2026-10-20 MEASUREMENT ONLY (`KF3_DIAG_PROGRESS`, default off): the glue of the progress diagnostic. A child of this module so
+/// that it can read the pump's private state; it only reads.
+#[path = "progdiag.rs"]
+mod progdiag;
+
 /// Retry means no native publication/action was attempted. An uncertain write or
 /// native doorbell error is always terminal; issued credits are never rolled back.
 /// (The type lives in `kf_chan::user_turn`, whose per-entry turn runs on these accessors.)
@@ -2771,6 +2776,11 @@ impl ChanPlane {
         if let Some(t) = pump.trace.as_mut() {
             t.wake(woke);
         }
+        // ★ `KF3_DIAG_PROGRESS`: a turn counts as a look at this relay, and as a visit of the relay path.
+        if kf_chan::progress::on() {
+            record.stamp_look();
+            kf_chan::progress::hit_point(kf_chan::progress::Point::RelayTurn);
+        }
         let outcome = pump.turn(self, &mut r);
         r.pump = Some(pump);
         match outcome {
@@ -2881,6 +2891,7 @@ impl ChanPlane {
         // number of times in a row (else the spin is an endless busy loop); the safety net always may
         let retry_ok = kf_chan::user_loop::may_retry(record.contended_run(), why);
         let ring = |this: &Self| {
+            kf_chan::progress::hit_point(kf_chan::progress::Point::RelayRing);
             if this.plane.ring_internal(record.idx) {
                 let _ = this.wake.signal();
             }
@@ -2898,6 +2909,11 @@ impl ChanPlane {
             return false;
         };
         if let Some(w) = p.wait {
+            // ★ `KF3_DIAG_PROGRESS`: a look that was entitled to act on this wait stamps the relay (a contended wait whose retry budget is spent is
+            // NOT looked at by the spin / event looks: only the safety net may re-ring it).
+            if kf_chan::progress::on() && (retry_ok || !matches!(w, kf_chan::user_loop::Wait::Contended)) {
+                record.stamp_look();
+            }
             // The private words: `GP_GET` (entries popped) and the tagged `REFERENCE` (markers
             // processed) are the proofs; the interrupt is only the hint.
             let mut pops = false;
@@ -3789,8 +3805,8 @@ mod tests {
         assert!(d.contains("self.user_rings.try_lock()"));
         assert!(d.contains("record.try_lock()"));
         assert_eq!(d.matches("thread::sleep").count(), 1, "the one sleep is the tick, outside every lock");
-        assert!(d.contains("kf_chan::progress::render_relay_block("));
-        assert!(d.contains("kf_chan::progress::render_starved("));
+        assert!(d.contains("progress::render_relay_block("));
+        assert!(d.contains("progress::render_starved("));
         assert!(!d.contains("{:?}"), "no Debug of guest-derived data");
     }
 
@@ -3816,28 +3832,50 @@ mod tests {
         }
     }
 
-    /// The relay stamps: the look when it was entitled to act on a wait, the serve before its turn; both only with the diagnostic on.
+    fn peek_one_prod() -> &'static str {
+        let pump = pump_prod();
+        let peek = pump.split("fn user_ring_peek_one(").nth(1).unwrap();
+        peek.split("pub(crate) fn user_ring_poll_due").next().unwrap()
+    }
+    fn serve_prod() -> &'static str {
+        let pump = pump_prod();
+        let serve = pump.split("pub(super) fn user_ring_serve(").nth(1).unwrap();
+        serve.split("fn user_ring_arm").next().unwrap()
+    }
+
+    /// Inventory: the relay is stamped in exactly two places (the look and the serve), and the relay path's two points are hit once each.
     #[test]
-    fn the_relay_is_stamped_by_every_look_that_may_act_and_by_every_turn() {
+    fn the_relay_stamp_and_point_inventory_is_exact() {
         let pump = pump_prod();
         assert_eq!(pump.matches("record.stamp_look()").count(), 2, "the look and the serve");
-        let peek = pump.split("fn user_ring_peek_one(").nth(1).unwrap();
-        let peek = peek.split("pub(crate) fn user_ring_poll_due").next().unwrap();
+        assert!(pump.contains("kf_chan::progress::hit_point(kf_chan::progress::Point::RelayRing)"));
+        assert_eq!(pump.matches("Point::RelayRing").count(), 1);
+        assert_eq!(pump.matches("Point::RelayTurn").count(), 1);
+    }
+
+    /// The look stamps only when it was entitled to act on the wait (a contended wait whose retry budget is spent is NOT looked at by the
+    /// spin / event looks), only with the diagnostic on, and before it reads the private words.
+    #[test]
+    fn the_look_stamps_the_relay_only_when_entitled_and_only_with_the_switch_on() {
+        let peek = peek_one_prod();
         let w = peek.find("if let Some(w) = p.wait {").unwrap();
         let stamp = peek.find("record.stamp_look()").unwrap();
         let satisfied = peek.find("let satisfied = match").unwrap();
         assert!(w < stamp && stamp < satisfied, "stamped on entering the wait evaluation, before the reads");
-        let guard = &peek[..stamp];
-        let line = guard.lines().last().unwrap();
-        assert!(line.contains("retry_ok") || peek[stamp - 160..stamp].contains("retry_ok"), "only a look entitled to act: {line}");
-        assert!(peek[stamp - 200..stamp].contains("kf_chan::progress::on()"));
-        let serve = pump.split("pub(super) fn user_ring_serve(").nth(1).unwrap();
-        let serve = serve.split("fn user_ring_arm").next().unwrap();
-        assert!(serve.find("record.stamp_look()").unwrap() < serve.find("pump.turn(self").unwrap());
-        assert!(serve.find("Point::RelayTurn").unwrap() < serve.find("pump.turn(self").unwrap());
-        assert!(pump.contains("kf_chan::progress::hit_point(kf_chan::progress::Point::RelayRing)"));
-        assert_eq!(pump.matches("Point::RelayRing").count(), 1);
-        assert_eq!(pump.matches("Point::RelayTurn").count(), 1);
+        let cond = &peek[w..stamp];
+        assert!(cond.contains("kf_chan::progress::on()"), "{cond}");
+        assert!(cond.contains("retry_ok || !matches!(w, kf_chan::user_loop::Wait::Contended)"), "{cond}");
+    }
+
+    /// A turn stamps the relay and hits the relay-turn point before it runs.
+    #[test]
+    fn the_serve_stamps_the_relay_before_its_turn() {
+        let serve = serve_prod();
+        let turn = serve.find("pump.turn(self").unwrap();
+        assert!(serve.find("record.stamp_look()").unwrap() < turn);
+        assert!(serve.find("Point::RelayTurn").unwrap() < turn);
+        let guard = serve.find("kf_chan::progress::on()").unwrap();
+        assert!(guard < serve.find("record.stamp_look()").unwrap());
     }
 
     /// The device clears the worker's `serving` word after every serve, and sets it before.
@@ -3851,6 +3889,15 @@ mod tests {
         let serve = f.find("self.chans.serve(host_token)").unwrap();
         let clear = f.find("kf_chan::progress::set_serving(None)").unwrap();
         assert!(set < serve && serve < clear);
+    }
+
+    /// Exactly one set and one clear of the worker's serving word, both in `run_translated`.
+    #[test]
+    fn the_serving_word_is_set_once_and_cleared_once() {
+        let dev = include_str!("device.rs");
+        let dev = dev.split("#[cfg(test)]").next().unwrap();
+        assert_eq!(dev.matches("progress::set_serving(Some(").count(), 1);
+        assert_eq!(dev.matches("progress::set_serving(None)").count(), 1);
     }
 
     /// The thread exists only when the switch is on, and is started in the one place workers are started.
@@ -3881,8 +3928,7 @@ mod tests {
             "self.pt.try_lock()",
             "t.stopped",
             "t.disabled",
-            "kf_chan::progress::render_relay_state(",
-            "kf_chan::progress::render_summary_context(",
+            "progress::render_summary_context(",
             "(\"contended_turns\",",
             "(\"wake_backstop\",",
             "(\"backstop_contended\",",

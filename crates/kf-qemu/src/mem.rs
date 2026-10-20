@@ -2321,6 +2321,16 @@ impl Inbox {
             || self.split_tokens.lock().is_ok_and(|m| !m.is_empty())
     }
 
+    /// MEASUREMENT ONLY (`KF3_DIAG_PROGRESS`): the walk state without a blocking lock: `(a walk is in flight or unsettled, tokens waiting
+    /// for it)`, the second `None` when the list was busy.
+    #[must_use]
+    pub fn walk_diag(&self) -> (bool, Option<u64>) {
+        (
+            self.walk_busy.load(Ordering::Acquire) || !self.all_settled(),
+            self.walk_waiters.try_lock().ok().map(|w| w.len() as u64),
+        )
+    }
+
     /// The VA thread, at the end of every loop: whether it has a walk in flight or pending.
     pub fn set_walk_busy(&self, busy: bool) {
         self.walk_busy.store(busy, Ordering::Release);

@@ -9,6 +9,7 @@
 //! lived here at gate 4).
 
 use crate::completions::Completions;
+use crate::progress::{self, Tap};
 use crate::user_loop::{self, Peek, Stats as RelayStats};
 use kf_core::{HostOps, Plane};
 use kf_linux_raw::{Notifier, PollTimeout, Poller, ReadyTokens};
@@ -112,14 +113,23 @@ pub const NEGCTL_NO_BUSY_LOOK: &str = "KF3_NEGCTL_NO_BUSY_LOOK";
 
 /// Whether [`NEGCTL_NO_BUSY_LOOK`]'s value turns the control on: exactly `1`.
 #[must_use]
-pub fn parse_negctl_no_busy_look(_value: Option<&str>) -> bool {
-    todo!("EXPECTED RED")
+pub fn parse_negctl_no_busy_look(value: Option<&str>) -> bool {
+    value == Some("1")
 }
 
 /// The control's setting, read from the environment once.
 #[must_use]
 pub fn negctl_no_busy_look() -> bool {
-    todo!("EXPECTED RED")
+    static ON: std::sync::OnceLock<bool> = std::sync::OnceLock::new();
+    *ON.get_or_init(|| {
+        let on = parse_negctl_no_busy_look(std::env::var(NEGCTL_NO_BUSY_LOOK).ok().as_deref());
+        if on {
+            eprintln!(
+                "kf3: ⚠ NEGATIVE CONTROL {NEGCTL_NO_BUSY_LOOK}=1: a busy worker NEVER looks (the loop as it was before the bounded-fairness fix)"
+            );
+        }
+        on
+    })
 }
 
 /// After this many consecutive busy passes (each served something) the loop looks once. A pass serves a hot token up to
@@ -130,7 +140,10 @@ impl LoopPolicy {
     /// The policy of the pre-fix loop: never a busy look (the negative control).
     #[must_use]
     pub fn without_busy_look() -> Self {
-        todo!("EXPECTED RED")
+        Self {
+            busy_passes: 0,
+            look: false,
+        }
     }
     /// The policy the worker runs: the fix, unless the negative control is on.
     #[must_use]
@@ -149,6 +162,9 @@ impl LoopPolicy {
     /// What follows a pass that served `served` tokens.
     pub fn after_pass(&mut self, served: usize) -> AfterPass {
         if served > 0 {
+            if !self.look {
+                return AfterPass::Continue;
+            }
             self.busy_passes += 1;
             if self.busy_passes >= LOOK_EVERY {
                 self.busy_passes = 0;
@@ -160,6 +176,32 @@ impl LoopPolicy {
             self.busy_passes = 0;
             AfterPass::Idle
         }
+    }
+}
+
+/// One progress hook: a call on the worker's [`Tap`] when the diagnostic registered one, nothing otherwise (one untaken branch).
+macro_rules! hook {
+    ($tap:expr, $method:ident($($arg:expr),*)) => {
+        if let Some(t) = &$tap {
+            t.$method($($arg),*);
+        }
+    };
+}
+
+/// The relay seen through the progress diagnostic (`KF3_DIAG_PROGRESS`): every look is announced to the board first. Only built when the
+/// diagnostic is on; `run_with_relay` shadows `relay` with it, so the call sites are the same lines either way.
+struct Watched<'a> {
+    inner: &'a dyn RelayLoop,
+    tap: &'a progress::Tap,
+}
+
+impl RelayLoop for Watched<'_> {
+    fn waiting(&self) -> bool {
+        self.inner.waiting()
+    }
+    fn peek(&self, why: Peek) -> bool {
+        self.tap.peek(why);
+        self.inner.peek(why)
     }
 }
 
@@ -230,15 +272,24 @@ pub fn run_with_relay(
     relay: &dyn RelayLoop,
     relay_stats: &RelayStats,
 ) {
+    // ★ 2026-10-20 `KF3_DIAG_PROGRESS`: with the diagnostic off `tap` is `None` and every hook below is one untaken branch.
+    let tap = Tap::register();
+    let watched = tap.as_ref().map(|tap| Watched { inner: relay, tap });
+    let relay: &dyn RelayLoop = match &watched {
+        Some(w) => w,
+        None => relay,
+    };
     // The ready tags of one wait, dispatched. Returns (doorbell eventfd, engine/completion/other event).
     let dispatch = |ready: &ReadyTokens| -> (bool, bool) {
         let (mut doorbell, mut event) = (false, false);
         for tag in ready.iter() {
             if tag >= OTHER_TAG_BASE {
                 event = true;
+                hook!(tap, dispatch_other());
                 on_other(tag);
             } else if tag == COMPLETIONS_TAG {
                 event = true;
+                hook!(tap, dispatch_completions());
                 completions.for_each_inflight(|t| {
                     stats.host_rings.fetch_add(1, Ordering::Relaxed);
                     if plane.ring_internal(t) {
@@ -248,6 +299,7 @@ pub fn run_with_relay(
                 on_completion();
             } else {
                 doorbell = true;
+                hook!(tap, doorbell_drain());
                 let _ = efd.drain();
             }
         }
@@ -262,7 +314,9 @@ pub fn run_with_relay(
         let owed = on_tick();
         // §5.3: every `seen` load happens-before the scan.
         let seen = plane.worker_wake().seen();
+        hook!(tap, begin_pass());
         let n = plane.worker_pass(host, &mut scratch, SCAN_LIMIT);
+        hook!(tap, end_pass(n));
         if n > 0 {
             stats.served.fetch_add(n as u64, Ordering::Relaxed);
             if after_timeout {
@@ -276,6 +330,7 @@ pub fn run_with_relay(
                     // hot token to each other) must still look at the world: the engine's events (the guest's completion
                     // interrupts), the completions, and the waiting relays' private words. Same look as the idle spin's, once.
                     RelayStats::bump(&relay_stats.busy_looks);
+                    hook!(tap, look());
                     let mut ready = ReadyTokens::new();
                     if matches!(poller.wait(&mut ready, PollTimeout::Immediate), Ok(k) if k > 0) {
                         let (doorbell, event) = dispatch(&ready);
@@ -300,6 +355,7 @@ pub fn run_with_relay(
         if user_loop::idle(relay.waiting(), user_loop::SPIN) == user_loop::Idle::Spin {
             let mut woke = false;
             for _ in 0..user_loop::SPIN {
+                hook!(tap, spin());
                 let mut ready = ReadyTokens::new();
                 if matches!(poller.wait(&mut ready, PollTimeout::Immediate), Ok(n) if n > 0) {
                     let (doorbell, event) = dispatch(&ready);
@@ -339,7 +395,9 @@ pub fn run_with_relay(
             stats.max_busy_ns.fetch_max(b, Ordering::Relaxed);
         }
         let park = if owed { OWED_PARK_MS } else { PARK_MS };
+        hook!(tap, park_begin());
         let got = poller.wait(&mut ready, PollTimeout::Millis(park));
+        hook!(tap, park_end());
         if let Some(tw) = tw {
             busy_from = std::time::Instant::now();
             let w = u64::try_from(busy_from.duration_since(tw).as_nanos()).unwrap_or(u64::MAX);
