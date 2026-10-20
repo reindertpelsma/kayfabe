@@ -1,6 +1,7 @@
 # SPDX-License-Identifier: Apache-2.0 OR GPL-2.0-or-later
 param([string]$Root)
 $ErrorActionPreference='Stop'
+. "$PSScriptRoot\transport.ps1"
 $m=Get-Content "$Root\start.json" -Raw | ConvertFrom-Json
 $m | Add-Member -NotePropertyName end_qpc -NotePropertyValue ([Diagnostics.Stopwatch]::GetTimestamp())
 $files=@{}
@@ -17,4 +18,5 @@ $files['trig.log']=Pack 'C:\kf\hang\trig.log' $m.trig_offset
 foreach($f in Get-ChildItem "$Root\*" -File | Where-Object {$_.Extension -in @('.tsv','.txt')}) { $files[$f.Name]=Pack $f.FullName }
 $procs=@(Get-Process | Where-Object {$_.Name -in @('Heaven','GravityMark')} | Select-Object Id,Name,Responding)
 $etls=@(Get-ChildItem C:\kf\hang\t_*.etl | Select-Object Name,Length,LastWriteTime)
-@{meta=$m; files=$files; processes=$procs; etls=$etls} | ConvertTo-Json -Depth 8 -Compress
+$health=(& "$PSScriptRoot\health.ps1" -Root $Root) | ConvertFrom-Json
+ConvertTo-N1Json @{meta=$m; files=$files; processes=$procs; etls=$etls; health=$health}

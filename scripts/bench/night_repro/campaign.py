@@ -2,13 +2,15 @@
 # SPDX-License-Identifier: Apache-2.0 OR GPL-2.0-or-later
 """Hold the shared lock, consume a reviewable arm queue, then restore the owner.
 
-No automatic retry after an instrumentation/safety refusal. A missing next arm
+Collector errors preserve raw payloads and invalidate the run; repair is authorized.
+Host safety failures stop the campaign and restore the owner. A missing next arm
 leaves the lease held while the operator reviews results. A finish marker or
 hard deadline ends the campaign. Restoration hands the lease to the standard
 owner launcher; no QEMU is force-killed.
 """
 import datetime as dt
 import json
+import importlib
 import os
 from pathlib import Path
 import re
@@ -55,6 +57,8 @@ def restore():
 def main():
     run.verify_lock()
     finished=set()
+    history=run.ROOT/'finished-v2.json'
+    if history.exists(): finished=set(json.loads(history.read_text()))
     deadline=dt.datetime.fromisoformat(os.environ['N1_DEADLINE']).timestamp()
     try:
         while time.time()<deadline and not (run.ROOT/'finish').exists():
@@ -65,9 +69,10 @@ def main():
                 continue
             job=pending[0]
             sys.argv=[str(run.SCRIPTS/'run.py')]+job['args']
+            importlib.reload(run)
             run.main()
             finished.add(job['id'])
-            (run.ROOT/'finished.json').write_text(json.dumps(sorted(finished)))
+            history.write_text(json.dumps(sorted(finished)))
     except Exception as e:
         (run.ROOT/'STOPPED.txt').write_text(f'{type(e).__name__}: {e}\n')
         run.log('STOPPED '+repr(e))

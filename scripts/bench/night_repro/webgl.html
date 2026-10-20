@@ -1,0 +1,11 @@
+<!doctype html><meta charset="utf-8"><title>N1 WebGL rotation</title>
+<canvas id="c" width="960" height="640"></canvas><pre id="info"></pre>
+<script>
+const gl=c.getContext('webgl');
+if(!gl) throw Error('WebGL unavailable');
+const d=gl.getExtension('WEBGL_debug_renderer_info');
+info.textContent=d?gl.getParameter(d.UNMASKED_RENDERER_WEBGL):gl.getParameter(gl.RENDERER);
+function shader(type,src){const s=gl.createShader(type);gl.shaderSource(s,src);gl.compileShader(s);if(!gl.getShaderParameter(s,gl.COMPILE_STATUS))throw Error(gl.getShaderInfoLog(s));return s;}
+const p=gl.createProgram();gl.attachShader(p,shader(gl.VERTEX_SHADER,'attribute vec2 v;uniform float t;void main(){float s=sin(t),c=cos(t);gl_Position=vec4(c*v.x-s*v.y,s*v.x+c*v.y,0.,1.);}'));gl.attachShader(p,shader(gl.FRAGMENT_SHADER,'precision mediump float;void main(){gl_FragColor=vec4(.2,.8,.5,1.);}'));gl.linkProgram(p);gl.useProgram(p);
+const b=gl.createBuffer();gl.bindBuffer(gl.ARRAY_BUFFER,b);gl.bufferData(gl.ARRAY_BUFFER,new Float32Array([0,.8,-.8,-.6,.8,-.6]),gl.STATIC_DRAW);let v=gl.getAttribLocation(p,'v');gl.enableVertexAttribArray(v);gl.vertexAttribPointer(v,2,gl.FLOAT,false,0,0);let t=gl.getUniformLocation(p,'t');function frame(ms){gl.clearColor(.04,.05,.08,1);gl.clear(gl.COLOR_BUFFER_BIT);gl.uniform1f(t,ms*.001);for(let i=0;i<2000;i++)gl.drawArrays(gl.TRIANGLES,0,3);requestAnimationFrame(frame);}requestAnimationFrame(frame);
+</script>

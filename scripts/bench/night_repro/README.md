@@ -1,16 +1,26 @@
 # Windows multi-client night reproducer
 
-STATUS: BLOCKED / UNQUALIFIED, 2026-10-20. Scripts and observations only; no product fix.
+STATUS: RESEARCH / TRANSPORT REPAIRED, 2026-10-20. No product fix.
 
-MEASURED: the first hardware collection failed with `PresentMon header absent`.
-PowerShell serialized `pm_header` as a metadata object; collection prepended its
-string rendering before the actual CSV header. The parser refused that preamble.
-The lane's mandatory STOP rule ended experiments and restored the owner session.
-This transport defect remains unfixed. Do not use this harness for an A/B claim
-until a later authorized session adds a failing transport regression, corrects
-serialization, and completes A/A validation. `RESULT.json` from this campaign is
-an explicit failure receipt with null silence metrics, written during reporting.
-The 25 passing Python tests do not cover PowerShell serialization.
+MEASURED: the initial transport failed on a decorated PowerShell string. The
+coordinator authorized test-first repair and continuation. Real Windows
+PowerShell 5.1 tests first reproduced that exact failure in a separate EXPECTED
+RED commit, then passed with shared recursive JSON normalization. Provider
+metadata is stripped from all exported DTO values, not only the header.
+Collector errors preserve raw payloads and invalidate that run while repairs
+continue. Host safety conditions or a new host Xid end the campaign and restore
+the owner. Hardware A/A qualification is recorded separately from unit results.
+
+CODE READ: every result separates DEVICE_LOST_TDR (first nvlddmkm Event 153 or
+logged device loss) from INDEPENDENT_FREEZE (selected-client silences without
+153/device loss). The generic Kernel-Boot Event 153 is excluded. Event-log time
+is relative to the instrumentation start, calibrated in guest UTC; stderr times
+are relative to the relevant client start. Runs without a failure are labeled
+NO_EVENT_OBSERVED; they do not establish absence. `--pair` selects heaven-gravity,
+heaven-heaven, heaven-blender, or heaven-edge. Two Heaven processes remain
+separate by PID. The Vulkan pair's early device-loss failure is its own class.
+`--transport-preflight` captures a real production transport receipt and a
+bounded header-object mutant before starting GPU load, then restores the helper.
 
 CODE READ: this harness starts a fresh VM from a copy of the owner launcher,
 restarts the existing vCPU watchdog and PresentMon monitor, runs windowed Heaven

@@ -8,3 +8,6 @@ ignore_lifetime	2	1
 ignore_context	2	1
 ignore_sequence	2	1
 drop_pending	5	1
+classes_drop_event153	3	1
+classes_drop_device_loss	2	1
+classes_mix_independent	2	1

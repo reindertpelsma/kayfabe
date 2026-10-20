@@ -11,6 +11,8 @@ import datetime as dt
 import gzip
 import hashlib
 import json
+import importlib
+import traceback
 import os
 from pathlib import Path
 import re
@@ -25,6 +27,10 @@ LAUNCHER = Path(os.environ['N1_LAUNCHER'])
 AGENT = os.environ['N1_AGENT']
 STOP = Path(os.environ['N1_STOP'])
 SCRIPTS = Path(__file__).resolve().parent
+
+
+class HostSafetyError(RuntimeError):
+    pass
 
 
 def log(s):
@@ -121,6 +127,8 @@ def main():
     p.add_argument('--flags', default='KF3_LIFECYCLE_COUNT=1 KF3_LIFECYCLE_PERIOD_S=5 KF3_TSG_MIRROR=0')
     p.add_argument('--drop', default='')
     p.add_argument('--qbin')
+    p.add_argument('--transport-preflight',action='store_true')
+    p.add_argument('--pair', choices=['heaven-gravity','heaven-heaven','heaven-blender','heaven-edge'], default='heaven-gravity')
     args = p.parse_args()
     if not 0 < args.minutes <= 15:
         raise RuntimeError('REFUSED: duration outside (0,15] minutes')
@@ -131,7 +139,7 @@ def main():
         raise RuntimeError('REFUSED: insufficient time for run and clean restoration')
     free = os.statvfs(W).f_bavail*os.statvfs(W).f_frsize
     if free <= 53687091200+500_000_000:
-        raise RuntimeError('REFUSED: insufficient host disk restoration margin')
+        raise HostSafetyError('REFUSED: insufficient host disk restoration margin')
     # Never start against another VM using the persistent owner disk.
     for cmd in Path('/proc').glob('[0-9]*/cmdline'):
         try:
@@ -166,12 +174,17 @@ def main():
         raise RuntimeError('REFUSED: guest agent unavailable')
     guest_root = f'C:\\kf\\n1\\run{n}'
     installer = ['$ErrorActionPreference="Stop"', 'New-Item -ItemType Directory -Force C:\\kf\\n1 | Out-Null']
-    for name in ['load.ps1','post_boot.ps1','collect.ps1']:
+    for name in ['load.ps1','post_boot.ps1','collect.ps1','transport.ps1','health.ps1','viewport.py','webgl.html','test_transport.ps1','preflight.ps1']:
         data = base64.b64encode((SCRIPTS/name).read_bytes()).decode()
         installer.append(f'[IO.File]::WriteAllBytes("C:\\kf\\n1\\{name}",[Convert]::FromBase64String("{data}"))')
-    installer.append(f'& C:\\kf\\n1\\post_boot.ps1 -Root {guest_root} -Seconds {int(args.minutes*60)}')
+    if args.transport_preflight:
+        installer.append(f'& C:\\kf\\n1\\preflight.ps1 -Scripts C:\\kf\\n1 -Root {guest_root}\\transport-preflight')
+    installer.append(f'& C:\\kf\\n1\\post_boot.ps1 -Root {guest_root} -Seconds {int(args.minutes*60)} -Pair {args.pair}')
     boot = agent('\n'.join(installer), 90)
     (out/'post-boot.txt').write_text(boot)
+    for tag in ['GREEN','MUTANT']:
+        match=re.search(r'PREFLIGHT_'+tag+r'=([A-Za-z0-9+/=]+)',boot)
+        if match: (out/f'transport-{tag.lower()}.json').write_bytes(base64.b64decode(match.group(1)))
     if 'POST_BOOT_OK' not in boot:
         raise RuntimeError('REFUSED: post-boot instrumentation/load setup failed')
     actual = json.loads((W/f'boundary-kayfabe-{n}'/'command.json').read_text())
@@ -186,23 +199,39 @@ def main():
     (out/'collectors.json').write_text(json.dumps([gpu.pid]+([probe.pid] if probe else [])))
     log('LOAD_STARTED '+str(out))
     until=time.monotonic()+args.minutes*60
+    last_safety=0
     while time.monotonic() < until:
         if not alive(pid):
             raise RuntimeError('REFUSED: test VM exited during load')
         if time.time() >= deadline:
             raise RuntimeError('REFUSED: hard stop reached')
+        if time.monotonic()-last_safety>=5:
+            last_safety=time.monotonic()
+            if snapshot(out/'nvrm-live.txt')>before:
+                raise HostSafetyError('new host Xid; stop experiments and restore owner')
+            fs=os.statvfs(W)
+            if fs.f_bavail*fs.f_frsize<=53687091200+200_000_000:
+                raise HostSafetyError('host disk restoration reserve reached')
         time.sleep(min(1,max(0,until-time.monotonic())))
-    payload = agent(f'& C:\\kf\\n1\\collect.ps1 -Root {guest_root}', 90)
-    (out/'guest-payload.json').write_text(payload)
-    pack=json.loads(payload.lstrip('\ufeff'))
-    (out/'guest.json').write_text(json.dumps(pack['meta'], indent=2))
-    (out/'guest-state.json').write_text(json.dumps({k:v for k,v in pack.items() if k!='files'}, indent=2))
-    for name, data in pack['files'].items():
-        if Path(name).name != name:
-            raise RuntimeError('REFUSED: unsafe guest evidence filename')
-        (out/name).write_bytes(gzip.decompress(base64.b64decode(data)))
-    result = metric.analyze(out)
+    try:
+        payload = agent(f'& C:\\kf\\n1\\collect.ps1 -Root {guest_root}', 90)
+        (out/'guest-payload.json').write_text(payload)
+        pack=json.loads(payload.lstrip('\ufeff'))
+        (out/'guest.json').write_text(json.dumps(pack['meta'], indent=2))
+        (out/'guest-state.json').write_text(json.dumps({k:v for k,v in pack.items() if k!='files'}, indent=2))
+        for name, data in pack['files'].items():
+            if Path(name).name != name:
+                raise RuntimeError('REFUSED: unsafe guest evidence filename')
+            (out/name).write_bytes(gzip.decompress(base64.b64decode(data)))
+        importlib.reload(metric)
+        result = metric.analyze(out)
+    except Exception as error:
+        (out/'COLLECTOR_ERROR.txt').write_text(traceback.format_exc())
+        log('COLLECTOR_ERROR retained for test-first repair: '+repr(error))
+        result=dict(schema=2,load_present=False,metric_status='COLLECTOR_ERROR',error=repr(error),apps={},classes=None)
     after = snapshot(out/'nvrm-after.txt')
+    if after>before:
+        raise HostSafetyError('new host Xid at collection; restore owner')
     qlog=W/f'boundary-kayfabe-{n}'/'qemu.log'
     counter_lines=[]; diag=[]
     with qlog.open(errors='replace') as f:
@@ -210,11 +239,11 @@ def main():
             if re.search(r'USER_RING|BACKSTOP|HELD.REPLY|LIFECYCLE', line):
                 counter_lines.append(line.rstrip())
                 counter_lines=counter_lines[-200:]
-            if re.search(r'USER.STALL|SEMAPHORE|SEM_ACQ',line,re.I):
+            if 'USER_RING_STALL_DIAG' in line or re.search(r'SEMAPHORE|SEM_ACQ',line,re.I):
                 diag.append(line.rstrip())
     (out/'host-counters.txt').write_text('\n'.join(counter_lines)+'\n')
     (out/'stall-diag.txt').write_text('\n'.join(diag)+'\n')
-    result.update(arm=args.arm, rev=args.rev, run=n, flags=actual['flags'], xid_before=before,
+    result.update(pair=args.pair,arm=args.arm, rev=args.rev, run=n, flags=actual['flags'], xid_before=before,
                   xid_after=after, xid_delta=after-before, duration_requested_min=args.minutes,
                   gpu=meta['gpu'], host_module=meta['host_module'])
     (out/'RESULT.json').write_text(json.dumps(result, indent=2))
@@ -224,6 +253,14 @@ def main():
         probe.terminate(); probe.wait(timeout=10)
     stop_session(pid, out/'launch.log')
     launcher.wait(timeout=30)
+    final_xid=snapshot(out/'nvrm-after-stop.txt')
+    result['xid_after_clean_stop']=final_xid
+    with qlog.open(errors='replace') as f:
+        summaries=[line.rstrip() for line in f if 'USER_RING_LOOP SUMMARY' in line]
+    (out/'ring-summary-final.txt').write_text('\n'.join(summaries)+'\n')
+    (out/'RESULT.json').write_text(json.dumps(result,indent=2))
+    if final_xid>before:
+        raise HostSafetyError('new host Xid during cleanup; restore owner')
     log('RUN_COMPLETE '+str(out))
 
 
