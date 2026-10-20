@@ -26,3 +26,7 @@ own_tooling	42f5ba5a8	test(tooling): prove expected Cargo diagnostics and wrappe
 release_install	744eb8afe	test(build): EXPECTED RED published bundle must include generated firmware and trace data	1	55	0
 release_install	480a88d66	build: generate QEMU bundle data before immutable revision publication	5	57	1
 release_install	26c12d860	docs(broker): point protocol readers to the maintained header and eighth command	1	4	4
+verification_cleanup	b20859e26	docs(ffi): place guest OS string safety contract beside the conversion	1	1	1
+verification_cleanup	896cfea8c	refactor(display): group immutable selection inputs and retire orphan flag comments	5	24	30
+verification_cleanup	0d0249092	test(doctor): EXPECTED RED missing udmabuf must allow the existing shared-memory tier	1	8	6
+verification_cleanup	7211e357a	doctor: preserve the existing shared-memory fallback and document console startup	5	46	13

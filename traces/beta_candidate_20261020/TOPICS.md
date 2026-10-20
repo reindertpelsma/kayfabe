@@ -10,7 +10,8 @@ MEASURED: Stage 1 ledger was published first at `3c4731eec`. Subsequent
 coordinator instructions lifted the guest-OS/caps and own-wrapper stops.
 Scoped caps `b930e7778`, profile `26a690d5a`, F-2 `ea9dcd315`, CE2
 `8acb1e8d5`, L5 `1f693b79c` and heartbeat `effdd0271` are integrated as
-separate failing-first/fix groups. Launcher/install/version is `1f08be5e2`.
+separate failing-first/fix groups. Launcher/install/version starts at `1f08be5e2`; final script/docs correction
+is `7211e357a`, with separate failing-first udmabuf and bundle fixtures.
 This is a BETA CANDIDATE assembly, not a release or hardware verdict.
 The base is candidate-5 `f8f9d1a5f0aae58fc8ccf0da740cf12682cd284e`.
 Source heads below were queried read-only; only selected scopes are imported.
@@ -89,3 +90,11 @@ INFERRED acceptance falsifier registered before integration for each pure fix: a
 boundary, lost candidate-5 test, mutant with fewer than two killing tests,
 unresolved protected conflict, or hardware regression beyond measured spread
 invalidates promotion. Hardware remains unscheduled, n=0 for C6.
+
+MEASURED final integration checks: all22 release crates3713/0/21 versus
+candidate-53620/0/19, no crate pass count decreases; affected post-constructor
+QEMU retest398/0/0. All67 C6 mutants have at least two named kills. Raw QEMU
+clippy retains the baseline89 denied diagnostics; union423 normalized sites
+equal, no new sites, remaining21 crates complete clippy. CPU artifact and
+layout smoke pass at7211e357a. Hardware n=0; diagnostic cost qualification
+remains partial, as recorded in [DIAGNOSTIC_COST_LIMIT](DIAGNOSTIC_COST_LIMIT.md).

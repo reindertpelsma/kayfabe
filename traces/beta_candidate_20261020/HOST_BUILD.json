@@ -1,14 +1,14 @@
 {
   "evidence": "MEASURED CPU-only build; no device realization, GPU or VM operation",
-  "source_sha": "480a88d66d458f6b82afed6d10d5dcec1ac8ef53",
+  "source_sha": "7211e357a2b652c0abbc35abf07f1022fa97d582",
   "host_prefix": "/data/codex-C6",
-  "qemu_binary": "kf3-bins/480a88d6/qemu-system-x86_64",
-  "qemu_sha256": "f490b2c7e58e15fc092f60cff241f3f1efb62fa36de80748fb7301f3687087dc",
-  "broker_binary": "source/broker/nvkvm-display-broker",
+  "qemu_binary": "kf3-bins/7211e357/qemu-system-x86_64",
+  "qemu_sha256": "2bd1de507da1fb3e691829e70ab35d31c73506ab918207927d512e4bbe332298",
+  "broker_binary": "kf3-bins/7211e357/nvkvm-display-broker",
   "broker_sha256": "cb2a3b3197bf4bdd6077867c004e606483b9362b114d098807712ec1e1466f0c",
   "qemu_source_version": "10.2.4",
   "qemu_archive_sha256": "821b545b92f165e57dddccac5077d76d4d436a226595b8813ad59306bbfd0746",
-  "archive_signature_verified": false,
+  "archive_signature_verified": true,
   "extraction_omission": "Unbuilt upstream EDK2 Mac X11 include symlink with absolute external target; all other members passed the standard data extraction filter.",
   "canonical_version": "0.1.0-beta.1",
   "cpu_checks": [
@@ -18,14 +18,19 @@
   ],
   "build_exit": 0,
   "initial_source_sha": "c271348467e3a991b1f262bff41334385056d476",
-  "correction": "Generated 13 dangling firmware/trace data targets before publishing; same binary hashes as c27134846, existing revision binary untouched.",
+  "correction": "Exact final launcher/docs rebuilt and staged after the shared-memory preflight correction. Rust constructor revision896cfea8c has identical binary hash; earlier revision binaries remain untouched.",
   "layout_smoke": {
-    "source_sha": "480a88d66d458f6b82afed6d10d5dcec1ac8ef53",
-    "staging_directory": "/data/codex-C6/release-layout-480a88d66",
+    "source_sha": "7211e357a2b652c0abbc35abf07f1022fa97d582",
+    "staging_directory": "/data/codex-C6/release-layout-7211e357a",
     "temporary_prefix_removed": true,
     "manifest_files_verified": 174,
     "versions_match": true,
     "exit": 0,
     "no_device_realization": true
-  }
+  },
+  "archive_signing_fingerprint": "CEACC9E15534EBABB82D3FA03353C9CEF108B584",
+  "signing_key_source": "https://www.qemu.org/download/",
+  "signature_source": "https://download.qemu.org/qemu-10.2.4.tar.xz.sig",
+  "archive_verification": "Official archive download SHA256 equals the original build archive; GPG VALIDSIG matches the fingerprint published on QEMU download page. No Web-of-Trust certification is asserted.",
+  "prior_source_sha": "896cfea8cd63635292cc83edb94f6d6f5d0ba293"
 }

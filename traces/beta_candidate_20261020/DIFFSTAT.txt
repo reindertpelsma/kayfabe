@@ -1,4 +1,4 @@
-MEASURED committed net diff from candidate-5 to 480a88d66 before final verification evidence.
+MEASURED committed net diff candidate-5..7211e357a; report-only verification evidence follows.
  .gitignore                                         |   5 +
  VERSION                                            |   1 +
  broker/Makefile                                    |   8 +
@@ -35,16 +35,16 @@ MEASURED committed net diff from candidate-5 to 480a88d66 before final verificat
  crates/kf-host/src/timer.rs                        |   2 +-
  crates/kf-mem/src/cpuwin.rs                        |  61 ++-
  crates/kf-qemu/src/bar1phys.rs                     | 100 +++-
- crates/kf-qemu/src/chan.rs                         |  49 +-
- crates/kf-qemu/src/device.rs                       |  58 +-
- crates/kf-qemu/src/display.rs                      | 336 ++++++------
+ crates/kf-qemu/src/chan.rs                         |  58 +-
+ crates/kf-qemu/src/device.rs                       |  62 ++-
+ crates/kf-qemu/src/display.rs                      | 355 ++++++------
  crates/kf-qemu/src/ffi_unsafe.rs                   |  21 +-
  crates/kf-qemu/src/gop.rs                          |   6 +-
  crates/kf-qemu/src/heartbeat.rs                    | 273 ++++++++++
  crates/kf-qemu/src/lib.rs                          |   2 +
  crates/kf-qemu/tests/gpu_uuid_property.rs          |   1 +
  crates/kf-qemu/tests/max_fps_property.rs           |   1 +
- crates/kf-rm/src/chanlink.rs                       |  86 ++-
+ crates/kf-rm/src/chanlink.rs                       |  92 +++-
  crates/kf-rm/src/display.rs                        |  18 +-
  crates/kf-rm/src/display_ctrl_probe.rs             |   7 +-
  crates/kf-rm/src/lib.rs                            | 105 +++-
@@ -52,8 +52,8 @@ MEASURED committed net diff from candidate-5 to 480a88d66 before final verificat
  crates/kf-rm/src/sw_runlist_host.rs                |   7 +-
  crates/kf-rm/tests/memory_list_chain.rs            |  10 +-
  crates/kf-rm/tests/sw_runlist_probe_chain.rs       |   9 +-
- docs/INSTALL.md                                    | 109 ++++
- docs/RUNNING_KAYFABE.md                            | 114 ++++
+ docs/INSTALL.md                                    | 111 ++++
+ docs/RUNNING_KAYFABE.md                            | 132 +++++
  docs/SUPPORT_MATRIX.md                             |  22 +
  docs/SUPPORT_MATRIX.tsv                            |   6 +
  docs/design/V3_DISPLAY_CAPS_DERIVATION_20261014.md |  30 +
@@ -82,24 +82,32 @@ MEASURED committed net diff from candidate-5 to 480a88d66 before final verificat
  scripts/tests/test_build_bundle.py                 |  55 ++
  scripts/tests/test_flag_policy.py                  |  45 ++
  scripts/tests/test_guest_profile_wiring.py         |  53 ++
- scripts/tests/test_kayfabe_install.py              | 172 ++++++
+ scripts/tests/test_kayfabe_install.py              | 174 ++++++
  scripts/tests/test_mutation_result.py              |  39 ++
  scripts/tests/test_release_version.py              |  41 ++
  traces/beta_candidate_20261020/BASELINE_COUNTS.tsv |  23 +
  traces/beta_candidate_20261020/CAPS_REVIEW.md      |  95 ++++
  traces/beta_candidate_20261020/CE2_REVIEW.md       |  23 +
  traces/beta_candidate_20261020/CONFLICTS.md        |  45 ++
+ traces/beta_candidate_20261020/DIFFSTAT.txt        | 112 ++++
+ traces/beta_candidate_20261020/FLAG_AUDIT.json     |  15 +
  traces/beta_candidate_20261020/HEARTBEAT_REVIEW.md |  36 ++
+ traces/beta_candidate_20261020/HOST_BUILD.json     |  31 ++
  traces/beta_candidate_20261020/HW_PLAN.md          |  36 ++
- traces/beta_candidate_20261020/INSTALL_REVIEW.md   |  53 ++
- traces/beta_candidate_20261020/README.md           |  85 +++
+ traces/beta_candidate_20261020/INSTALL_REVIEW.md   |  56 ++
+ traces/beta_candidate_20261020/README.md           |  87 +++
  traces/beta_candidate_20261020/RESUME.md           |  20 +
+ traces/beta_candidate_20261020/SECRET_SCAN.json    |   8 +
+ traces/beta_candidate_20261020/SHELLCHECK.json     |  50 ++
+ traces/beta_candidate_20261020/TEST_RETENTION.json | 175 ++++++
  traces/beta_candidate_20261020/TOPICS.md           |  91 ++++
+ traces/beta_candidate_20261020/TOPIC_COMMITS.tsv   |  28 +
+ .../beta_candidate_20261020/audit-mutations.json   |  12 +
  traces/beta_candidate_20261020/baseline.json       |  47 ++
  .../build-bundle-mutations.json                    |  12 +
  traces/beta_candidate_20261020/ce2-mutations.json  |  90 +++
  traces/beta_candidate_20261020/checks.json         | 106 ++++
- .../beta_candidate_20261020/doctor-mutations.json  |  12 +
+ .../beta_candidate_20261020/doctor-mutations.json  |  22 +
  traces/beta_candidate_20261020/f2-mutations.json   |  44 ++
  .../heartbeat-mutations.json                       | 108 ++++
  .../beta_candidate_20261020/install-mutations.json |  59 ++
@@ -109,4 +117,4 @@ MEASURED committed net diff from candidate-5 to 480a88d66 before final verificat
  .../tick-pacing-mutation.json                      |   8 +
  traces/beta_candidate_20261020/verification.txt    |  28 +
  .../beta_candidate_20261020/wrapper-mutations.json |  22 +
- 110 files changed, 7006 insertions(+), 399 deletions(-)
+ 118 files changed, 7490 insertions(+), 421 deletions(-)

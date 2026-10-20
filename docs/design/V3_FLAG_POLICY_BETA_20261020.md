@@ -1,6 +1,6 @@
 # Beta flag policy
 
-STATUS: LIVE / GPU-FREE VALIDATION IN PROGRESS, 2026-10-20. BETA CANDIDATE;
+STATUS: LIVE / GPU-FREE CONFIGURATION VERIFIED; COST QUALIFICATION PARTIAL, 2026-10-20. BETA CANDIDATE;
 no supported external-user path. Hardware acceptance waits for Stage 5.
 
 CODE READ: the coordinator approved `guest-os=windows|linux`, default Linux,
@@ -62,7 +62,8 @@ parent diagnostic. Existing construction-only/cached boolean gates are retained;
 read-trace is absent from the production trap path when unset; step meters and
 event ring keep their baseline gating tests. No new diagnostic hot-path cost is
 introduced. This is not a claim that every existing gate compiles to a relaxed
-load: cached OnceLock readers and their baseline costs remain. Control flags
+load: cached OnceLock readers and their baseline costs remain. See the
+[remaining cost qualification](../../traces/beta_candidate_20261020/DIAGNOSTIC_COST_LIMIT.md). Control flags
 are not renamed or removed. Every row has required_to_boot=false and
 active_when_unset=false for the optional environment override, not for the
 underlying production feature. Boot behaviour is in GuestProfile::settings.

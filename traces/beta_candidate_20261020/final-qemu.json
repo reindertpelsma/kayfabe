@@ -1,0 +1,28 @@
+{
+  "label": "final-qemu",
+  "revision": "896cfea8cd63635292cc83edb94f6d6f5d0ba293",
+  "command": [
+    "nice",
+    "-n",
+    "19",
+    "flock",
+    "-w",
+    "60",
+    "/tmp/claude-0/kf-local-cargo.lock",
+    "cargo",
+    "test",
+    "-j2",
+    "--release",
+    "--locked",
+    "-p",
+    "kf-qemu"
+  ],
+  "exit": 0,
+  "seconds": 201.196,
+  "totals": {
+    "passed": 398,
+    "failed": 0,
+    "ignored": 0
+  },
+  "log_sha256": "0b42fb755946611c560be24b13b0809a4833980c54d8d88ab06b6845c39bdae6"
+}

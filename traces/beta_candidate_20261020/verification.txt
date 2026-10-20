@@ -1,28 +1,23 @@
-C6 documentation-only stop verification, 2026-10-19 (MEASURED)
+C6 final GPU-free verification (MEASURED), 2026-10-20
 
-Stage 1 commit: 3c4731eec682f62f9e9d55e5dde00d3ded393fd3
-git ls-remote --heads origin integration/beta-candidate-1-20261020:
-  exactly matched the above local HEAD after Stage 1 push.
+Supersedes the initial documentation-only stop. Full commands/log hashes are in
+FINAL_CHECKS.json; early checks.json is historical, not the current verdict.
 
-git diff --exit-code f8f9d1a5f -- crates qemu broker scripts: PASS
-git diff --cached --check before each commit: PASS
-All 15 relative Markdown links in the new ledger/report/policy: targets exist.
-P19 decision-table rows: 19 unique names, all 19 retained without implementation.
+All22 release crates: before3620/0/19; after3713/0/21; none below baseline.
+Post-constructor QEMU398/0/0. Python42/0. C6 mutants67, every mutant>=2 named kills.
+Clippy:423 normalized sites in both trees, zero new; raw QEMU retains89 denied
+baseline diagnostics; other21 crates complete all-target clippy successfully.
+Broker check and sanitize pass; only CPU/test backend. Changed Rustfmt42 files;
+shellcheck8 changed scripts, zero new diagnostics (30 inherited info sites).
+Docs checker6 local links,7 shell blocks,3 repo command paths; no VM executed.
+Flag audit155 lexical source names vs156 rows;19 P19 env selectors retired.
+Strict caps/native oracle: expected RED100 differing words; not an equality pass.
+Final CPU build/staging at7211e357a:174 manifest hashes, versions, install/uninstall
+pass. Upstream archive digest and release signature verify; binary release unsigned.
 
-Staged diff scans before each commit: PASS for credential assignments/tokens,
-private-key markers, prohibited source paths/address, private host paths and
-global IPv4 addresses. This is a bounded pattern scan, not a security proof.
-
-Cargo build/test/clippy/fmt: NOT RUN (stop before implementation).
-Broker make check/check-sanitize: NOT RUN.
-Shellcheck/install command checks: NOT RUN (no launcher/install work).
-Behaviour mutation campaign: N/A, no product behaviour changes.
-Every-reader KF3 inventory/default/zero-cost audit: NOT DONE.
-GPU/VM/host build/guest diagnostic operations: NOT RUN, hardware n=0.
-C6 target directory: never created, absent at stop.
-No persistent C6 process or acquired shared/host lock.
-
-The candidate-5 reference 3620/0/19 is CODE READ from existing evidence,
-not a C6 execution. No inferred after-count is substituted for a rerun.
-Final publication SHA and post-push remote equality are recorded in the
-external C6 report and final session reply after this report is committed.
+Universal inherited diagnostic gate cost bound remains unproved. Guest ABI is
+explicit and direct Linux QOM defaults remain; launcher derives resource values.
+Hardware n=0; no trusted-host GPU/VM operation or owner-VM stop. Stage5 slot needed.
+All C6 jobs exited; dev/host Cargo targets removed; own locks released. QEMU build
+firmware tree and final artifacts retained as required. Final publication head
+and origin equality are recorded after push in the external report/final reply.

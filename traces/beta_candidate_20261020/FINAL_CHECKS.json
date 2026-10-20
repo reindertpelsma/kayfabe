@@ -1,0 +1,246 @@
+{
+  "evidence": "MEASURED GPU-free checks; hardware acceptance is not implied",
+  "full_release": {
+    "label": "final-all",
+    "revision": "c271348467e3a991b1f262bff41334385056d476",
+    "command": [
+      "nice",
+      "-n",
+      "19",
+      "flock",
+      "-w",
+      "60",
+      "/tmp/claude-0/kf-local-cargo.lock",
+      "cargo",
+      "test",
+      "-j2",
+      "--release",
+      "--no-fail-fast",
+      "-p",
+      "kf-abi",
+      "-p",
+      "kf-arch",
+      "-p",
+      "kf-broker",
+      "-p",
+      "kf-census",
+      "-p",
+      "kf-chan",
+      "-p",
+      "kf-chip",
+      "-p",
+      "kf-core",
+      "-p",
+      "kf-crec",
+      "-p",
+      "kf-cuda",
+      "-p",
+      "kf-disp",
+      "-p",
+      "kf-gop-image",
+      "-p",
+      "kf-gsp",
+      "-p",
+      "kf-harness",
+      "-p",
+      "kf-host",
+      "-p",
+      "kf-linux-raw",
+      "-p",
+      "kf-mem",
+      "-p",
+      "kf-oprom",
+      "-p",
+      "kf-qemu",
+      "-p",
+      "kf-rm",
+      "-p",
+      "kf-trace",
+      "-p",
+      "kf-trap",
+      "-p",
+      "kf-util"
+    ],
+    "exit": 0,
+    "seconds": 1470.574,
+    "totals": {
+      "passed": 3713,
+      "failed": 0,
+      "ignored": 21
+    },
+    "log_sha256": "8dea136bff10966e80368c7c76c06a6fa41f0d18ef96ac7821f3cce9a9aae7a9"
+  },
+  "post_constructor_qemu": {
+    "label": "final-qemu",
+    "revision": "896cfea8cd63635292cc83edb94f6d6f5d0ba293",
+    "command": [
+      "nice",
+      "-n",
+      "19",
+      "flock",
+      "-w",
+      "60",
+      "/tmp/claude-0/kf-local-cargo.lock",
+      "cargo",
+      "test",
+      "-j2",
+      "--release",
+      "--locked",
+      "-p",
+      "kf-qemu"
+    ],
+    "exit": 0,
+    "seconds": 201.196,
+    "totals": {
+      "passed": 398,
+      "failed": 0,
+      "ignored": 0
+    },
+    "log_sha256": "0b42fb755946611c560be24b13b0809a4833980c54d8d88ab06b6845c39bdae6"
+  },
+  "python": {
+    "passed": 42,
+    "failed": 0,
+    "scope": "launcher/doctor/prefix20, version/publication4, bundle2, policy5, wiring6, mutation wrapper5"
+  },
+  "mutations": {
+    "mutants": 67,
+    "minimum_named_kills": 2,
+    "faults_counted_as_kills": 0
+  },
+  "rustfmt": {
+    "edition": "2024",
+    "changed_files": 42,
+    "skip_children": true,
+    "exit": 0
+  },
+  "shellcheck": {
+    "changed_scripts": 8,
+    "new_diagnostics": 0,
+    "new_wrappers_and_builder_exit": 0,
+    "inherited_info_diagnostics": 30
+  },
+  "broker": {
+    "make_check_exit": 0,
+    "make_check_sanitize_exit": 0,
+    "cursor_checks": 66138,
+    "geometry_checks": 65431,
+    "xor_checks": 80752,
+    "tick_checks": 566237,
+    "inherited_xor_mutants": 29,
+    "backend": "test only; no GPU/compositor"
+  },
+  "docs": {
+    "local_links": 6,
+    "shell_blocks": 7,
+    "repository_command_paths": 3,
+    "vm_or_install_commands_executed_by_checker": 0,
+    "limit": "Shell syntax and repository paths; external package availability and new-guest walkthrough are not certified."
+  },
+  "flags": {
+    "lexical_source_names_before": 155,
+    "lexical_source_names_after": 155,
+    "policy_rows": 156,
+    "unknown_source_names": 0,
+    "p19_env_selectors_retired": 19,
+    "windows_behavior_settings_on": 18,
+    "derived_caps_windows_only": true,
+    "mirror_absent_off": true
+  },
+  "caps_strict_oracle": {
+    "exit": 1,
+    "differing_words": 100,
+    "expected_limitation": true,
+    "not_a_passing_native_equality_claim": true
+  },
+  "cpu_artifact": {
+    "source_sha": "7211e357a2b652c0abbc35abf07f1022fa97d582",
+    "layout_manifest_files": 174,
+    "private_prefix_install_uninstall_exit": 0,
+    "gpu_or_vm_used": false
+  },
+  "clippy": {
+    "baseline_unique_sites": 423,
+    "candidate_unique_sites": 423,
+    "new_sites": 0,
+    "qemu_raw_denied_diagnostics_in_both": 89,
+    "remaining_21_crates_exit": 0
+  },
+  "qualification_gaps": [
+    "Universal inherited diagnostic gate cost bound is not established.",
+    "Direct Linux QOM defaults retained; host-derived values are in the launcher.",
+    "Guest ABI remains explicit; no sound host-only pre-fn1 derivation is claimed."
+  ],
+  "hardware": {
+    "runs": 0,
+    "spread": "N/A",
+    "coordinator_slot_granted": false
+  },
+  "log_hashes": [
+    {
+      "log": "final-all.txt",
+      "sha256": "8dea136bff10966e80368c7c76c06a6fa41f0d18ef96ac7821f3cce9a9aae7a9",
+      "bytes": 402209
+    },
+    {
+      "log": "final-qemu.txt",
+      "sha256": "0b42fb755946611c560be24b13b0809a4833980c54d8d88ab06b6845c39bdae6",
+      "bytes": 77056
+    },
+    {
+      "log": "final-python.txt",
+      "sha256": "3b9d71efd6736ee43f816a5de7f6a2fd519e4838d63f1009c5a9c2a026776300",
+      "bytes": 6423
+    },
+    {
+      "log": "final-rustfmt.txt",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0
+    },
+    {
+      "log": "broker-check-fixed.txt",
+      "sha256": "709bd2c0e3ff6512480bab63b2ef90e15e9bb31924f2c521c84838b14827a80c",
+      "bytes": 30151
+    },
+    {
+      "log": "broker-sanitize.txt",
+      "sha256": "3fa73030c57639af634d5123f1ec940fdb9ee147fac2a820843732b467a6660c",
+      "bytes": 45529
+    },
+    {
+      "log": "host-build-final.txt",
+      "sha256": "0f9615172dce06c7dc1e3f34fb404f522149f638909ad9ca9bfbf1ad759b69fe",
+      "bytes": 1256
+    },
+    {
+      "log": "host-layout-final.txt",
+      "sha256": "51215f89793db4cc8105000df877a477d926c1e17f0f1802add734292a920128",
+      "bytes": 484
+    },
+    {
+      "log": "host-provenance.txt",
+      "sha256": "014e211a550e1752688225adcf4bce6bb7d5060988507f196dd207d52c510656",
+      "bytes": 1215
+    },
+    {
+      "log": "doctor-shm-red.txt",
+      "sha256": "e3892df739d6035f1477a3184305ae921d6ca17695f6fb709a6d592a71ff7a5d",
+      "bytes": 1727
+    },
+    {
+      "log": "build-bundle-red.txt",
+      "sha256": "cca711f3e63fdf1d6b542c515c544fd50479536e0ae552d2556d8e64cbc287bd",
+      "bytes": 1311
+    }
+  ],
+  "cleanup": {
+    "local_cargo_target_removed": true,
+    "host_cargo_target_removed": true,
+    "local_broker_outputs_cleaned": true,
+    "temporary_installed_prefix_removed": true,
+    "qemu_firmware_build_retained_for_required_links": true,
+    "gpu_lock_acquired": false,
+    "jobs_running": 0,
+    "host_build_lock_verified_released": true
+  }
+}

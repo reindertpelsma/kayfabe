@@ -1,0 +1,145 @@
+{
+  "evidence": "MEASURED C6 named-test mutation campaigns; faults excluded; all sources restored",
+  "mutants": 67,
+  "campaigns": [
+    {
+      "campaign": "mutations.json",
+      "mutants": 6,
+      "kills": [
+        4,
+        6,
+        10,
+        6,
+        2,
+        2
+      ]
+    },
+    {
+      "campaign": "profile-mutations.json",
+      "mutants": 23,
+      "kills": [
+        2,
+        2,
+        2,
+        2,
+        2,
+        2,
+        2,
+        2,
+        2,
+        2,
+        2,
+        2,
+        2,
+        2,
+        2,
+        2,
+        2,
+        2,
+        2,
+        2,
+        3,
+        2,
+        2
+      ]
+    },
+    {
+      "campaign": "f2-mutations.json",
+      "mutants": 4,
+      "kills": [
+        3,
+        2,
+        2,
+        3
+      ]
+    },
+    {
+      "campaign": "ce2-mutations.json",
+      "mutants": 8,
+      "kills": [
+        2,
+        2,
+        2,
+        10,
+        2,
+        2,
+        2,
+        2
+      ]
+    },
+    {
+      "campaign": "l5-mutations.json",
+      "mutants": 2,
+      "kills": [
+        2,
+        2
+      ]
+    },
+    {
+      "campaign": "heartbeat-mutations.json",
+      "mutants": 10,
+      "kills": [
+        7,
+        3,
+        2,
+        2,
+        2,
+        2,
+        2,
+        2,
+        2,
+        2
+      ]
+    },
+    {
+      "campaign": "install-mutations.json",
+      "mutants": 7,
+      "kills": [
+        3,
+        2,
+        2,
+        2,
+        2,
+        2,
+        2
+      ]
+    },
+    {
+      "campaign": "tick-pacing-mutation.json",
+      "mutants": 1,
+      "kills": [
+        2
+      ]
+    },
+    {
+      "campaign": "doctor-mutations.json",
+      "mutants": 2,
+      "kills": [
+        2,
+        2
+      ]
+    },
+    {
+      "campaign": "wrapper-mutations.json",
+      "mutants": 2,
+      "kills": [
+        2,
+        2
+      ]
+    },
+    {
+      "campaign": "audit-mutations.json",
+      "mutants": 1,
+      "kills": [
+        2
+      ]
+    },
+    {
+      "campaign": "build-bundle-mutations.json",
+      "mutants": 1,
+      "kills": [
+        2
+      ]
+    }
+  ]
+}

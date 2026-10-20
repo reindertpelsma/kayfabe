@@ -1,6 +1,6 @@
 # Install path review
 
-STATUS: GPU-FREE VERIFICATION IN PROGRESS, 2026-10-20.
+STATUS: GPU-FREE FUNCTIONAL CHECKS PASSED / HARDWARE WALK-THROUGH PENDING, 2026-10-20.
 
 INFERRED falsifier registered before mutation: removing VRAM/BAR headroom,
 changing the selected OS, accepting mixed component versions, launching/writing
@@ -54,3 +54,9 @@ unbuildable or external missing targets refuse publication. Two tests pass;
 removing the builder call kills both. The corrected real layout smoke passed at480a88d66 and896cfea8c:
 174 manifest hashes, matching versions, private prefix installed/uninstalled.
 No guest or GPU operation is part of that check.
+
+MEASURED final script/docs revision7211e357a: full42-test Python suite and all
+installer/doctor/bundle mutants pass; final CPU build and174-file private-prefix
+smoke pass. Missing udmabuf WARNs and preserves the existing shared-memory tier.
+The minimal *working* guest invocation and unfamiliar-person install remain
+Stage5. Direct Linux defaults and explicit guest ABI are retained for correctness.
