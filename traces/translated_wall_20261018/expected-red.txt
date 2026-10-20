@@ -1,0 +1,14 @@
+test translated_slot::tests::translated_a_final_doorbell_makes_progress_within_one_pass_after_release ... FAILED
+test translated_slot::tests::translated_lost_attempt_under_probe_guard_is_rung_too ... FAILED
+test translated_slot::tests::translated_lost_worker_attempt_is_rung_on_holder_release ... FAILED
+test translated_slot::tests::translated_multiple_losers_coalesce_but_keep_the_obligation ... FAILED
+test translated_slot::tests::translated_quiet_slot_does_not_ring_itself_forever ... ok
+test translated_slot::tests::translated_real_threads_one_worker ... FAILED
+test translated_slot::tests::translated_real_threads_three_workers ... FAILED
+test translated_slot::tests::translated_real_threads_two_workers ... FAILED
+test translated_slot::tests::translated_release_rings_after_unlock ... FAILED
+test translated_slot::tests::translated_busy_schedule_disable_defers_without_blocking ... FAILED
+test translated_slot::tests::translated_busy_schedule_enable_defers_without_blocking ... FAILED
+test translated_slot::tests::translated_group_query_does_not_wait_for_the_pump ... FAILED
+test translated_slot::tests::translated_token_query_does_not_wait_for_the_pump ... FAILED
+test result: FAILED. 1 passed; 12 failed; 0 ignored; 0 measured; 366 filtered out; finished in 2.01s

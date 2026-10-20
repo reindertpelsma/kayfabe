@@ -73,10 +73,10 @@ mod userpump;
 mod userquota;
 #[path = "userrelay.rs"]
 mod userrelay;
-#[path = "userstrand.rs"]
-mod userstrand;
 #[path = "usershadow.rs"]
 mod usershadow;
+#[path = "userstrand.rs"]
+mod userstrand;
 
 /// `NV_ERR_INVALID_STATE`.
 const NV_ERR_INVALID_STATE: u32 = 0x40;
@@ -3565,14 +3565,29 @@ impl ChanPlane {
             })
             .collect();
         if !members.is_empty() {
-            for ht in members {
-                if let ChanAnswer::Refused { status, why } =
-                    self.schedule_translated(client, object, ht, enable)
-                {
-                    return ChanAnswer::Refused { status, why };
-                }
-            }
-            return ChanAnswer::Done;
+            // One held reply covers every member. Busy slots and restarted host
+            // rings are resolved on the act thread, in statement order.
+            let slots: Option<Vec<_>> = members
+                .into_iter()
+                .map(|ht| self.slot(ht).map(|slot| (ht, slot)))
+                .collect();
+            let Some(slots) = slots else {
+                return ChanAnswer::Refused {
+                    status: NV_ERR_INVALID_STATE,
+                    why: "translated group member retired during schedule admission".into(),
+                };
+            };
+            return self.defer(
+                "schedule translated group",
+                Box::new(move |me: &ChanPlane| {
+                    let mut lines = Vec::new();
+                    for (ht, slot) in &slots {
+                        lines
+                            .push(me.apply_translated_schedule(slot, client, object, *ht, enable)?);
+                    }
+                    Ok(lines.join("; "))
+                }),
+            );
         }
         // ★ P5b: a user channel (or its group) — the twin's own schedule, as an act.
         let twins: Vec<((u32, u32), kf_host::Channel)> = self
@@ -3731,10 +3746,7 @@ impl ChanPlane {
                     .ok()
                     .and_then(|m| m.get(&(client, object)).copied())
                 {
-                    return match self
-                        .slot(ht)
-                        .and_then(|s| s.identity().map(|id| id.idx))
-                    {
+                    return match self.slot(ht).and_then(|s| s.identity().map(|id| id.idx)) {
                         // ★ The token is OUR doorbell's vocabulary (we are the host): the table
                         // index, in the VECTOR field the trap masks (`kf_trap::trap`).
                         Some(idx) => ChanAnswer::Token(idx),
@@ -4696,50 +4708,79 @@ impl ChanPlane {
         let Some(slot) = self.slot(ht) else {
             return ChanAnswer::NotOurs;
         };
-        // ★ v3-chanctl: a STOPPED Translated channel's host ring was disabled and taken off its
-        // runlist — re-enable it (host verbs: an act) before the pump may fetch again.
-        if enable && slot.try_lock().is_ok_and(|g| g.stopped) {
-            return self.defer(
-                "restart translated",
-                Box::new(move |me: &ChanPlane| {
-                    let slot = me.slot(ht).ok_or_else(|| (NV_ERR_INVALID_STATE, format!("host {ht:#x}: slot gone")))?;
-                    let (host, disabled) = slot
-                        .lock()
-                        .map(|g| (g.chan.host().channel(), g.disabled))
-                        .map_err(|_| (NV_ERR_INVALID_STATE, "slot poisoned".to_string()))?;
-                    if !disabled {
-                        me.rm.disable_channels(&[host], false, false, false).map_err(|e| (NV_ERR_INVALID_STATE, format!("host ring {ht:#x} re-enable: {e:?}")))?;
-                    }
-                    me.rm.schedule_enable(host, true).map_err(|e| (NV_ERR_INVALID_STATE, format!("host ring {ht:#x} schedule: {e:?}")))?;
-                    let idx = slot.lock().map(|mut g| {
-                        g.stopped = false;
-                        g.scheduled = true;
-                        g.guest_idx
-                    });
-                    if let Ok(i) = idx
-                        && me.plane.ring_internal(i)
-                    {
-                        let _ = me.wake.signal();
-                    }
-                    Ok(format!("{client:#x}:{object:#x} GPFIFO_SCHEDULE enable=true: Translated ring host {ht:#x} restarted after STOP"))
-                }),
-            );
+        // Every schedule goes through the same act queue, including a free
+        // slot: a later statement cannot overtake an earlier deferred edit.
+        // Capture the cell, not just a reusable numeric handle: this statement
+        // cannot mutate a later channel allocated under the same guest object.
+        self.defer(
+            "schedule translated",
+            Box::new(move |me: &ChanPlane| {
+                me.apply_translated_schedule(&slot, client, object, ht, enable)
+            }),
+        )
+    }
+
+    /// Act-thread half of a busy or host-restarting schedule statement.
+    fn apply_translated_schedule(
+        &self,
+        slot: &Arc<crate::translated_slot::Cell<Slot>>,
+        client: u32,
+        object: u32,
+        ht: u32,
+        enable: bool,
+    ) -> Result<String, (u32, String)> {
+        // Reset/free acts ahead of this one may have retired the captured cell.
+        // Never apply the statement to a replacement using the same host token.
+        if !self.slot(ht).is_some_and(|live| Arc::ptr_eq(&live, slot)) {
+            return Err((
+                NV_ERR_INVALID_STATE,
+                format!("host {ht:#x}: slot retired or replaced"),
+            ));
         }
-        let idx = match slot.edit(|g| {
-            g.scheduled = enable;
-            g.guest_idx
-        }) {
-            Some(idx) => idx,
-            None => {
-                return ChanAnswer::Refused {
-                    status: NV_ERR_INVALID_STATE,
-                    why: "slot poisoned".into(),
-                };
+        let (idx, restart) = {
+            let mut g = slot
+                .lock()
+                .map_err(|_| (NV_ERR_INVALID_STATE, "slot poisoned".to_string()))?;
+            let restart = (enable && g.stopped).then(|| (g.chan.host().channel(), g.disabled));
+            if restart.is_none() {
+                g.scheduled = enable;
             }
+            (g.guest_idx, restart)
         };
-        eprintln!(
-            "kf3: chan {client:#x}:{object:#x} GPFIFO_SCHEDULE enable={enable} (token {idx:#x}, host {ht:#x})"
-        );
+        if let Some((host, disabled)) = restart {
+            if !disabled {
+                self.rm
+                    .disable_channels(&[host], false, false, false)
+                    .map_err(|e| {
+                        (
+                            NV_ERR_INVALID_STATE,
+                            format!("host ring {ht:#x} re-enable: {e:?}"),
+                        )
+                    })?;
+            }
+            self.rm.schedule_enable(host, true).map_err(|e| {
+                (
+                    NV_ERR_INVALID_STATE,
+                    format!("host ring {ht:#x} schedule: {e:?}"),
+                )
+            })?;
+            let mut g = slot
+                .lock()
+                .map_err(|_| (NV_ERR_INVALID_STATE, "slot poisoned".to_string()))?;
+            g.stopped = false;
+            g.scheduled = true;
+        }
+        Ok(self.translated_scheduled(client, object, ht, idx, enable))
+    }
+
+    fn translated_scheduled(
+        &self,
+        client: u32,
+        object: u32,
+        ht: u32,
+        idx: u32,
+        enable: bool,
+    ) -> String {
         if enable {
             self.bar0trace.schedule_served(crate::bar0trace::TraceChan {
                 client,
@@ -4747,11 +4788,14 @@ impl ChanPlane {
                 host: ht,
             });
         }
-        // Work the guest queued before scheduling is picked up now.
+        // Work queued before scheduling is picked up now, including a doorbell
+        // the pump saw while the channel was disabled or stopped.
         if enable && self.plane.ring_internal(idx) {
             let _ = self.wake.signal();
         }
-        ChanAnswer::Done
+        format!(
+            "chan {client:#x}:{object:#x} GPFIFO_SCHEDULE enable={enable} (token {idx:#x}, host {ht:#x})"
+        )
     }
 
     /// ★ P5b: an engine object under a PASSTHROUGH twin — allocated on the twin with the guest's
@@ -7433,15 +7477,41 @@ impl ChanPlane {
     }
 
     /// ★ DIAGNOSTIC (`KF3_BAR0_TRACE`, default off; drainer, once per run): the first 64 words of
-    /// the traced channel's USERD and the four words of its error notifier, as they are when the
-    /// guest's teardown starts. Reads only; nothing is written or forwarded.
+    /// the traced channel's USERD and the four words of its error notifier. Queued before the
+    /// guest's teardown act: the drainer never waits for the snapshot or host view calls.
+    /// Reads only; nothing is written or forwarded.
     pub fn bar0trace_dump(&self, t: crate::bar0trace::TraceChan) -> Vec<String> {
+        let captured = self.slot(t.host);
+        let answer = self.defer(
+            "bar0 trace dump",
+            Box::new(move |me: &ChanPlane| {
+                for line in me.bar0trace_dump_act(t, captured.as_ref()) {
+                    eprintln!("{line}");
+                }
+                Ok(String::new())
+            }),
+        );
+        if matches!(answer, ChanAnswer::Deferred(_)) {
+            Vec::new()
+        } else {
+            vec!["kf3: BAR0-TRACE dump not queued: act thread unavailable".into()]
+        }
+    }
+
+    fn bar0trace_dump_act(
+        &self,
+        t: crate::bar0trace::TraceChan,
+        captured: Option<&Arc<crate::translated_slot::Cell<Slot>>>,
+    ) -> Vec<String> {
         let tag = format!(
             "kf3: BAR0-TRACE dump chan {:#x}:{:#x} (host {:#x})",
             t.client, t.object, t.host
         );
-        let Some(slot) = self.slot(t.host) else {
-            return vec![format!("{tag}: no Translated slot (already retired?)")];
+        let Some(slot) = captured.filter(|captured| {
+            self.slot(t.host)
+                .is_some_and(|live| Arc::ptr_eq(&live, captured))
+        }) else {
+            return vec![format!("{tag}: no Translated slot (retired or replaced)")];
         };
         let Ok(g) = slot.lock() else {
             return vec![format!("{tag}: slot poisoned")];
@@ -7725,7 +7795,8 @@ impl ChanPlane {
         let Some(slot) = self.slot(ht) else {
             return false;
         };
-        // ★ The token's BUSY state is the exclusion; this lock must never be contended.
+        // A lost attempt belongs to the holder: Cell::enter registers before
+        // giving up, and every guard rings it after unlocking.
         let Ok(mut g) = slot.enter() else {
             self.contended.fetch_add(1, Ordering::Relaxed);
             return false;

@@ -1,0 +1,3 @@
+test translated_adapter_tests::translated_diagnostic_drainer_never_takes_the_pump_lock ... FAILED
+test translated_adapter_tests::translated_diagnostic_drainer_queues_host_views_to_the_act_thread ... FAILED
+test result: FAILED. 0 passed; 2 failed; 0 ignored; 0 measured; 387 filtered out; finished in 0.00s
