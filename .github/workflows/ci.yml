@@ -280,6 +280,8 @@ jobs:
           python3 -B -m unittest discover -s scripts/bench/prof -p 'test_*.py'
           bash scripts/bench/qemu_identity_selftest.sh
           bash scripts/bench/box/birth_census.sh --selftest
+      - name: Profiler core/runtime helper coverage (GPU/VM-free)
+        run: cargo test --locked -p kf-prof --features prof-inject -j2 --release
       # ★ The hexagonal boundary gate (l1_concurrency.md §6.2, decision #37). The
       # completion-source reactor's MODEL is core-owned and PURE: the core says
       # "notifiable source" and "completion source", full stop. The OS half — the

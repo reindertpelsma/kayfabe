@@ -31,7 +31,7 @@ def typed(s):
 CARGO=['nice','-n','19','cargo']
 RUST=CARGO+['test','-p','kf-prof','--features','prof-inject','--test','runtime','-j2','--release']
 SINK=CARGO+['test','-p','kf-prof','--features','prof-inject','--test','sink','-j2','--release']
-PYTHON=['python3','-B','-m','unittest','discover','-s','scripts/bench/prof','-p','test_*.py']
+PYTHON=['python3','-B','-m','unittest','discover','-s','scripts/bench/prof','-p','test_reader.py']
 CASES=[
  ('mmap mirror',RUNTIME,replace('let _ = self.map.store_u64(HostOffset::new((i as u64) * 8), v);',''),RUST),
  ('completed guard',RUNTIME,replace('if c.state.leave(token, now) {','if false {'),RUST),

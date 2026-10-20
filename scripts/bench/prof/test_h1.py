@@ -15,9 +15,12 @@ class H1Export(unittest.TestCase):
   try:
    spec=importlib.util.spec_from_file_location('pinned_h1',Path(root)/'analyze.py');a=importlib.util.module_from_spec(spec);spec.loader.exec_module(a)
   finally:sys.path[:]=old
-  events=h1_export.context_records([self.row()])
+  row=self.row();row['end_ns']=400000000;events=h1_export.context_records([row])
   with tempfile.TemporaryDirectory() as d:
    p=Path(d)/'context.jsonl';p.write_text(''.join(json.dumps(e)+'\n'for e in events));loaded=a.read_jsonl(p)
   result=a.analyze(loaded,[{'ts_ns':0,'seq':1,'new':True},{'ts_ns':200000000,'seq':2,'new':True}],coverage=False)
-  self.assertEqual(len(result['gaps']),1);self.assertEqual(result['gaps'][0]['class'],'UNKNOWN');self.assertTrue(any(e['kind']=='prof_snapshot'for e in result['gaps'][0]['events']))
+  self.assertEqual(len(result['gaps']),1);self.assertEqual(result['gaps'][0]['class'],'UNKNOWN');self.assertTrue(any(e['kind']=='prof_snapshot'for e in result['gaps'][0]['events']));self.assertEqual(next(e['prof']for e in result['gaps'][0]['events']if e['kind']=='prof_snapshot'),row)
+ def test_actual_writer_fixture_preserves_the_clock_and_loss_coverage(self):
+  import reader
+  fixture=Path(__file__).resolve().parents[3]/'traces/kf_prof_20261019/format_fixture.jsonl';rows=reader.read_jsonl(fixture);self.assertEqual(len(rows),1);e=h1_export.context_records(rows)[0];self.assertEqual(e['prof']['clock_mode'],'diagnostic_os_clock');self.assertEqual(e['prof']['coverage'],rows[0]['coverage']);self.assertFalse(e['full_causal_coverage'])
 if __name__=='__main__':unittest.main()

@@ -1,0 +1,7 @@
+MEASURED: actual diagnostic record_fixture output, captured before owned child SIGKILL.
+CODE READ: diagnostic CLOCK_MONOTONIC syscall fixtures, not native invariant-TSC evidence.
+Coverage explicitly incomplete; numeric PID/TID and timing are host derived.
+Binary rev in this fixture header is UNKNOWN; do not infer production provenance.
+H1_PIN.txt pins the read-only consumer contract. h1_export.py emits context only.
+No frame IDs, waiter linkage or causal coverage are fabricated.
+MEASURED: separate live/crash reader tests in the117-test suite verify SIGKILL readability.

@@ -1,0 +1,23 @@
+MEASURED: isolated old-broker sanitizer case current-1, exit=0
+-- a broker that predates ticks (CAP_TICK clear): a VMM must not opt in
+  PASS HELLO does not advertise CAP_TICK
+  PASS no ticks
+  PASS CAPS(0) is fine
+  PASS CLIENT_TICK on a broker that did not advertise it is a violation
+
+MEASURED: isolated old-broker sanitizer case base, exit=0
+-- a broker that predates ticks (CAP_TICK clear): a VMM must not opt in
+  PASS HELLO does not advertise CAP_TICK
+  PASS no ticks
+  PASS CAPS(0) is fine
+  PASS CLIENT_TICK on a broker that did not advertise it is a violation
+
+MEASURED: isolated old-broker sanitizer case current-2, exit=0
+-- a broker that predates ticks (CAP_TICK clear): a VMM must not opt in
+  PASS HELLO does not advertise CAP_TICK
+  PASS no ticks
+  PASS CAPS(0) is fine
+  PASS CLIENT_TICK on a broker that did not advertise it is a violation
+CODE READ: old-broker test and bind/listen readiness protocol are unchanged on base.
+MEASURED: full latest prof sanitizer recheck PASS after the isolated attempts; no timeout changes.
+INFERRED: results are consistent with a baseline readiness race; identical loaded-base failure was not reproduced.

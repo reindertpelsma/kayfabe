@@ -39,7 +39,7 @@ class MergeTests(unittest.TestCase):
  def test_other_boot_does_not_get_a_host_timestamp(self):
   self.assertIsNone(m.align_guest({'qpc':1000,'guest_boot_id':70},self.cal())['ts_ns'])
  def test_before_validity_is_also_unaligned(self):
-  self.assertIsNone(m.align_guest({'qpc':0,'guest_boot_id':7},self.cal())['ts_ns'])
+  self.assertIsNone(m.align_guest({'qpc':980,'guest_boot_id':7},self.cal())['ts_ns'])
  def test_a_long_ignored_guest_text_field_cannot_bypass_the_line_bound(self):
   with tempfile.TemporaryDirectory() as d:
    p=Path(d)/'guest.csv';p.write_text('qpc,guest_boot_id,guest_text\n1000,7,'+'x'*5000+'\n')
@@ -51,5 +51,11 @@ class MergeTests(unittest.TestCase):
  def test_overflowing_qpc_is_rejected(self):
   with tempfile.TemporaryDirectory() as d:
    p=Path(d)/'guest.csv';p.write_text('qpc,guest_boot_id,event_id\n18446744073709551616,7,153\n')
+   with self.assertRaises(ValueError):m.read_guest_csv(p)
+ def test_uncertainty_bounds_include_clock_drift(self):
+  r=m.align_guest({'qpc':3000,'guest_boot_id':7},self.cal());self.assertEqual(r['clock_lower_ns'],2099);self.assertEqual(r['clock_upper_ns'],2121)
+ def test_a_long_ignored_header_cannot_bypass_the_line_bound(self):
+  with tempfile.TemporaryDirectory() as d:
+   p=Path(d)/'guest.csv';p.write_text('qpc,guest_boot_id,'+'x'*5000+'\n1000,7,x\n')
    with self.assertRaises(ValueError):m.read_guest_csv(p)
 if __name__=='__main__':unittest.main()

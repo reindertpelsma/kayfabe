@@ -22,6 +22,7 @@
 #                                             and no guest cursor on X11)
 #   X11 rel. motion : libxcb-xinput-dev      (optional; see the report below)
 
+.DEFAULT_GOAL := all
 PKG_CONFIG ?= pkg-config
 PREFIX     ?= /usr/local
 BIN         = nvkvm-display-broker
@@ -39,6 +40,22 @@ LDFLAGS += -Wl,-z,relro,-z,now
 OBJS = nvkvm_broker.o nb_common.o nb_cursor.o nb_geom.o nb_placeholder.o \
        nb_frame.o nb_xor.o nb_tick.o \
        nb_session_x11.o nb_session_wl.o nb_session_test.o
+
+# Optional profiling compiles away completely in ordinary broker builds.
+PROF_ID = off
+ifeq ($(PROF),1)
+PROF_REV ?= $(shell git rev-parse HEAD)
+PROF_ID = prof-$(PROF_REV)
+CFLAGS += -DNB_PROF -DNB_PROF_REV=$(PROF_REV)
+OBJS += nb_prof.o
+endif
+
+# CFLAGS are not dependencies in make: invalidate all objects when switching
+# profiling mode or the revision embedded in a profiling binary.
+.PHONY: force-prof-mode
+.prof-mode: force-prof-mode
+	@test -f $@ && test "$$(cat $@)" = "$(PROF_ID)" || printf '%s\n' "$(PROF_ID)" > $@
+$(OBJS): .prof-mode
 
 # The broker -- and only the broker -- may start one helper thread: the one
 # that closes a client fd whose close() could wait on its filesystem
@@ -216,12 +233,14 @@ test-geom: test/test_geom.c nb_geom.c nvkvm_broker.h \
 # (test/stall_fuse.py: mount(2) as root, fusermount3 otherwise -- package
 # fuse3).  Where FUSE is unusable that case prints SKIP; NB_REQUIRE_FUSE=1,
 # as CI sets it, makes that a failure instead.
-check: all test-utf8 test-cursor test-geom test-xor test-tick
+check: all test-utf8 test-cursor test-geom test-xor test-tick test-prof
 	./test-utf8
 	./test-cursor
 	./test-geom
 	./test-xor
 	./test-tick
+	python3 test/test_prof.py ./test-prof
+	KF_PROF_C_BIN="$(CURDIR)/test-prof" python3 ../scripts/bench/prof/test_broker_reader.py
 	python3 test/mutate_xor.py
 	python3 test/mutate_tick.py
 	bash selftest.sh
@@ -272,7 +291,10 @@ install: $(BIN)
 	install -d $(DESTDIR)$(PREFIX)/bin
 	install -m 0755 $(BIN) $(DESTDIR)$(PREFIX)/bin/$(BIN)
 
+test-prof: test/test_prof.c nb_prof.c nb_prof.h
+	$(CC) $(CFLAGS) -DNB_PROF -o $@ test/test_prof.c nb_prof.c $(LDFLAGS)
+
 clean:
 	rm -f $(BIN) $(TESTCLIENT) $(RELAY) $(DMASRC) wl-tick-probe test-tick *.o *.d \
 	      *-client-protocol.h *-protocol.c test-utf8 test-cursor test-geom test-xor test-tick \
-	      test/utf8_extracted.inc
+	      test/utf8_extracted.inc test-prof .prof-mode

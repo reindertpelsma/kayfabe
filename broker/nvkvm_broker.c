@@ -67,6 +67,7 @@
 #include <sys/vfs.h>
 
 #include "nvkvm_broker.h"
+#include "nb_prof.h"
 
 /*
  * The filesystem magic of the anonymous inode every dma-buf lives on.  This is
@@ -891,6 +892,7 @@ void nb_sink_frame(struct nb_sink *s)
 
 void nb_sink_release(struct nb_sink *s, uint64_t buf_id)
 {
+    nb_prof_released();
     nb_emit(s, NVKVM_BROKER_EV_RELEASE, 0, 0,
             (uint32_t)buf_id, (uint32_t)(buf_id >> 32));
 }
@@ -963,6 +965,7 @@ void nb_sink_stats_poll(struct nb_sink *s)
 {
     char line[NB_TICK_STATS_LINE_MAX];
 
+    nb_prof_poll();
     if (!s->cfg->stats_line || s->client_fd < 0 || !s->tick.on) {
         return;
     }
@@ -995,6 +998,8 @@ bool nb_sink_refresh(struct nb_sink *s, uint64_t now_ns, uint64_t present_ns,
         s->host_mhz = (unsigned)((1000000000000ull + host_period_ns / 2) /
                                  host_period_ns);
     }
+    nb_prof_feedback(now_ns, present_ns, host_period_ns,
+                     (flags & NVKVM_BROKER_TICK_F_CLOCK_ONLY) != 0);
     if (!nb_tick_refresh(&s->tick, now_ns, present_ns, host_period_ns, flags,
                          nb_hz_mode, nb_hz_fixed, &o)) {
         return false;
@@ -1028,7 +1033,8 @@ void nb_sink_note_discarded(struct nb_sink *s)
 
 void nb_sink_note_present(struct nb_sink *s, uint64_t present_ns)
 {
-    if (s->cfg->stats_line && s->client_fd >= 0 && s->tick.on) {
+    if ((s->cfg->stats_line || nb_prof_on()) && s->client_fd >= 0 && s->tick.on) {
+        nb_prof_content(present_ns, s->tick.commits_since_present != 0);
         nb_tick_content_present(&s->tick, present_ns);
     }
 }
@@ -2669,6 +2675,7 @@ static void nb_handle_cmd(struct nb_sink *s, const struct nvkvm_broker_cmd *c,
             return;
         }
         s->n_commit++;
+        nb_prof_received();
         r = ss->ops->commit(ss, s);
         if (r != 0 && r != -ENOENT) {
             nb_err("COMMIT failed: %s", strerror(-r));
@@ -3886,6 +3893,7 @@ int main(int argc, char **argv)
     bool client_lost = false;
     sigset_t mask;
 
+    nb_prof_boot();
     memset(&cfg, 0, sizeof(cfg));
     cfg.backend = "auto";
     cfg.scale_mode = NB_SCALE_ASPECT;   /* preserve aspect, black bars */
@@ -4224,6 +4232,7 @@ int main(int argc, char **argv)
 
             t0 = nb_stats_now_ns(cfg.stats_line);
             pr = poll(pfd, (nfds_t)(n + nsess), tmo);
+            nb_prof_poll();
             t1 = nb_stats_now_ns(cfg.stats_line);
             if (pr == 0 && tmo > 0 && t1 - t0 > (uint64_t)tmo * 1000000ull) {
                 nb_sink_note_loop(&sink, t1 - t0 - (uint64_t)tmo * 1000000ull, 0);

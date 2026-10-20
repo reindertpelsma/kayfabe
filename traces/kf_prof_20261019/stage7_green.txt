@@ -1,0 +1,12 @@
+MEASURED:117 scoped Python tests passed with live/crash, C and pinned H1 fixtures;0 skips.
+MEASURED: broker make check baseline PASS; prof normal make check PASS (then13 added C cases).
+MEASURED: latest prof make check-sanitize PASS:14 C cases+4 shared-reader cases; existing counts preserved.
+MEASURED: existing C tests: cursor66138, geometry65431, XOR80752, tick566237 checks; selftest82; clock5.
+MEASURED: new mutation groups: broker16, merge/pacing14, H1 context3; all>=2 named kills.
+MEASURED: persistent runtime21-case table rerun, all>=2; reader cases scoped to original reader suite, preventing unrelated EXPECTED RED tests from inflating kills.
+MEASURED: one intermediate full sanitizer run hit existing old-broker ConnectionRefused readiness case; two isolated current and one base passed; full recheck PASS.
+CODE READ: C header frequency/anchors use exact Rust offsets, native clock flag4; no observed feedback is null.
+CODE READ: broker Wayland accepted-commit/feedback/release subset wired; credits and other backends incomplete.
+CODE READ: guest merge validates measured brackets, explicit uncertainty/drift/validity; live diag measurement UNRUN.
+CODE READ: H1 consumes snapshots as context with false causal coverage; individual frame linkage remains unavailable.
+CODE READ: display/guest pacing, full old-instrument absorption and most required production sources remain incomplete.

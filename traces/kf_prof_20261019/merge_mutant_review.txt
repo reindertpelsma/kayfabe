@@ -1,0 +1,4 @@
+CODE READ: pre-validity fixture initially converted to a negative host timestamp;
+the independent unsigned-timestamp guard rejected it even without validity.
+Fixture now converts to positive90ns, before its100ns validity start, so the
+validity mutant must be killed independently on both sides of the window.

@@ -99,7 +99,7 @@ def read_mmap(path):
                 if len(after)!=8 or struct.unpack('<Q',after)[0]!=v[0]:continue
                 relays.append(_relay(i,v))
         rows.sort(key=lambda r:r['end_ns'])
-        return dict(header={'last_update_ns':struct.unpack_from('<Q',h,56)[0],'clock_mode':'diagnostic_os_clock' if struct.unpack_from('<Q',h,40)[0]&1 else 'calibrated_tsc'},records=rows,threads=threads,relays=relays)
+        return dict(header={'last_update_ns':struct.unpack_from('<Q',h,56)[0],'clock_mode':'diagnostic_os_clock' if struct.unpack_from('<Q',h,40)[0]&1 else 'broker_monotonic' if struct.unpack_from('<Q',h,40)[0]&4 else 'calibrated_tsc'},records=rows,threads=threads,relays=relays)
     finally:os.close(fd)
 
 def read_jsonl(path):
@@ -127,6 +127,18 @@ def ratios(row):
             out[f'{label}_per_{dlabel}']=n/d if n is not None and d else None
     return out
 
+def pacing(row):
+    c=row.get('counters',{});g=row.get('pacing',{});b=row.get('broker',{})
+    c=c if isinstance(c,dict) else {}
+    g=g if isinstance(g,dict) else {}
+    b=b if isinstance(b,dict) else {}
+    elapsed=row.get('end_ns',0)-row.get('start_ns',0);frames=_count(c,'broker_presented_new_frames')
+    repeats=_count(b,'repeated')
+    def low(key):
+        gap=_count(g,key)
+        return 1e9/gap if gap is not None and gap>0 else None
+    return dict(start_ns=row.get('start_ns'),end_ns=row.get('end_ns'),new_fps=frames*1e9/elapsed if frames is not None and elapsed>0 else None,repeated_per_second=repeats*1e9/elapsed if frames is not None and repeats is not None and elapsed>0 else None,low_1pct_fps=low('p99_gap_ns'),low_01pct_fps=low('p999_gap_ns'),basis=g.get('basis','UNKNOWN'))
+
 def summarize(rows):
     covered=[]
     for r in rows:
@@ -136,7 +148,7 @@ def summarize(rows):
     for r in covered:
         for k,v in r.get('counters',{}).items():
             if _count(r['counters'],k) is not None:sums[k]=sums.get(k,0)+v
-    return dict(records=len(rows),ratio_covered_records=len(covered),counters=sums,ratios=ratios({'counters':sums}))
+    return dict(pacing_per_second=[pacing(r) for r in rows if 'pacing' in r],records=len(rows),ratio_covered_records=len(covered),counters=sums,ratios=ratios({'counters':sums}))
 
 def load(path):
     p=Path(path)
@@ -153,13 +165,18 @@ def main():
         if name=='window':a.add_argument('t0',type=int);a.add_argument('t1',type=int)
         if name=='summary':a.add_argument('range',nargs='?')
         if name=='hangs':a.add_argument('--stuck-ms',type=float,default=100)
+    m=sub.add_parser('merge');m.add_argument('host');m.add_argument('broker');m.add_argument('--guest');m.add_argument('--calibration')
     args=p.parse_args()
     try:
+        if args.command=='merge':
+            from merge import merge_files
+            print(json.dumps(merge_files(args.host,args.broker,args.guest,args.calibration),allow_nan=False));return
         while True:
             data=load(args.file);rows=data['records']
             if args.command=='tail':
                 r=rows[-1] if rows else {};c=r.get('counters',{});v=ratios(r)['rmcontrol_per_display_new']
                 print(f"mono_ns={r.get('end_ns','UNKNOWN')} last_update_ns={data['header'].get('last_update_ns','UNKNOWN')} RmControl/frame[display_new]={v if v is not None else 'N/A/UNKNOWN'} calls={c.get('rmcontrol_seen','UNKNOWN')} frames={c.get('display_new_frames','UNKNOWN')}",flush=True)
+                if 'pacing' in r:print(json.dumps(pacing(r),allow_nan=False),flush=True)
                 for q in data.get('relays',[])[:64]:
                     now=time.monotonic_ns();get_age=(now-q['private_get_changed_ns'])/1e6 if q['private_get'] is not None else None
                     print(f"relay={q['key']:x}/{q['generation']} private_GET/PUT/REF={q['private_get']}/{q['private_put']}/{q['reference']} depth={q['private_depth']} Wait={q['wait']} get_change_age_ms={get_age} doorbells={q['doorbell_count']} doorbell_seen_ns={q['last_doorbell_observed_ns']} wake={q['wake_reason']} sample_ns={q['private_observed_ns']}",flush=True)

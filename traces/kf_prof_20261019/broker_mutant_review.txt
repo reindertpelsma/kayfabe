@@ -1,0 +1,4 @@
+MEASURED: initial max-instead-of-quantile mutant killed only quantile-tail.
+CODE READ: the first quantile test used substring matching:1000000 matched
+the incorrect100000000 prefix. Test helper now requires a JSON delimiter
+after every expected number. Gate stays>=2 independent tests per mutant.
