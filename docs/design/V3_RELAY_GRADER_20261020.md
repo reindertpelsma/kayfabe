@@ -80,11 +80,61 @@ rebuilding with the const flipped (no runtime switch exists; adding one would be
 
 ## 6. Results on the relay-simple head (`ab6193aff` + this branch; MEASURED)
 
-@@RESULTS@@
+Branch head graded: `ab6193aff` (relay-simple, local head at the time; ahead of `origin/claude/relay-simple-20261020` 7d9a3948d by 6
+commits) plus the grader. MEASURED on the dev box, release build, park infinite:
+
+| group | new tests | result | red tests and why |
+|---|---|---|---|
+| G1 | 10 (+1 ignored OPEN) | **GREEN** (models; existing G1 files not re-run here) | -- |
+| G2 | 2 | **GREEN** (model; kernel view 12 seeds) | -- |
+| G3 | 2 default (+2 ignored deep/nightly) | **GREEN** (24 seeds x 0.3 s, 8..32 channels, 1..4 address spaces); deep / nightly NOT RUN | -- |
+| G4 | 2 | **GREEN** | -- |
+| G5 | 3 | **RED** | `g5_efficiency_model_no_hidden_spin`: (a) **act-hold spin**: a serve that lost the record to the ACT thread leaves demand, `unsourced()` is true, the worker spins with timeout 0 for the whole act hold although the act's release rings (`user_ring_wake`) -- a covered obligation treated as uncovered; (b) **phantom-demand ring** (2 workers): `enter()` sets the demand flag before the record `try_lock`; a peer look that lands in [`request()`, `retry.swap(false)`] sees demand + record busy and rings the token again; under an adversarial schedule this repeats for ever after the client's batch is done (25 cycles found for W=2; every quiet state CAN still settle, so INFERRED rare in practice, not measured on real threads). The real-thread G5 test is green (1 s quiet window held; parks 1725-3238 for ~1300 doorbells). |
+| G6 | 3 | **GREEN** | baton (2 workers, 4 hot, 1 cold): cold resp p99 <= 2 us, max 0.11 ms with ~18 000 serves during a response (MEASURED under load); huge-delta fillers beside a cold client: max 3.34 ms |
+| G7 | 1 (+ the existing TOCTOU unit test) | **GREEN** | GP_GET policy `Popped` not graded (const, section 4) |
+| G8 | 4 | **GREEN** | negative controls red as required |
+| G9 | 5 (+ wake_registry) | **RED** | `g9_watched_forwards_every_relayloop_method`: **CODE READ `crates/kf-chan/src/worker.rs` `impl RelayLoop for Watched`** forwards `waiting` and `peek` but not `unsourced`, so with `KF3_DIAG_PROGRESS` on the trait default (`false`) decides the block: the worker can park with the retry set non-empty (the hardware plan runs with the diagnostic on). |
+| G10 | -- | mutation **NOT RUN** (time box); validity: section 7 | -- |
+| G11 | 2 | **GREEN** (81 entries: 47 pinned, 5 hardware/process-gated, 29 open) | -- |
+
+Grade on this head: **9 of 11 groups green; RED: G5 (model), G9 (Watched)**; G10a not run. Production code was not changed
+(owner rule): both reds are reported, not fixed. Runtime: `grade_model` ~110 s, `grade_locks` + `grade_static` < 1 s,
+`grade_stress` 1490 s **under a concurrent 4-revision validity build** (MEASURED; unloaded per-test timing in section 6a).
+
+
+### 6a. Real-thread runtime and one unexplained red (MEASURED)
+
+Per test, alone, before the default seed counts were cut (box load average 10-17 from other agents' jobs: wall times are upper
+bounds): `g2_sleep_safety_kernel_view` 232 s (12 seeds), `g3_stress_default_seed_list` 195 s (24 seeds),
+`g4_spin_reference_stress_equivalence` 200 s (8 x 2 runs), g5 5 s, g6 baton 4 s, g6 huge-delta 3 s, g7 14 s. Each scenario costs
+~10-20 s of wall time (start, the guests' final drain, the quiet window, stop), not its 0.3 s of traffic. Defaults are now
+G2 4 seeds (`RS_GRADE_G2`), G3 4 seeds (`RS_GRADE_SEEDS`), G4 2 seeds (`RS_GRADE_G4`); the full counts run with the env knobs or
+in `g3_stress_full_seed_list`. Reduced default `grade_stress`: 17.4 min wall under that load (MEASURED once); NOT the "fast
+default" the owner asked for -- the harness's per-scenario drain/stop cost has to come down first (INFERRED: the fixed 5 s
+waits and 1 ms polls in `run_scenario`), or `grade_stress` moves behind `#[ignore]` with the model groups as the default.
+In that reduced run `g5_efficiency_stress_idle_blocks_for_one_second` was RED once (the failure text was not captured); 3
+immediate re-runs alone were green (parks 1565-3836 for 1181-1475 doorbells). Unexplained: either a quiet-window wake under heavy
+load or the parks ceiling; open, re-run with `--nocapture` to classify.
 
 ## 7. Validity: the suite against known-bad revisions (`scripts/relay_validity.sh`, MEASURED)
 
-@@VALIDITY@@
+`scripts/relay_validity.sh 0d325edab cfdcaf73b 82830cd5e edde750cd` (19.6 min). The grader files overlaid, lineage detected,
+`grade_model` + `grade_locks` + `grade_static` run; `grade_stress` NOT APPLICABLE on these lineages (listed, not a pass).
+Every red below is a test that compiled and ran (the "COMPILE ERRORS" banner in that run was a false match on cargo's
+`error: test failed` line, fixed in the script).
+
+| revision | lineage | red / ran | red groups (tests) |
+|---|---|---|---|
+| `0d325edab` fairness refactor, no fix | budget | 16 / 25 | G1 (f1, f3, f5, act, popped, exhaustive 1/2/3), G2, G4, G5, G6, G8 (lineage protocol), G9 (heuristics: `may_retry`, `CONTENTION_RETRIES`, `Peek::Backstop`, spin; blocking), G11 |
+| `cfdcaf73b` LOOK_EVERY fix | look_every | 14 / 25 | as above minus `g1_f3` and `g1_f5` (LOOK_EVERY does fix the busy-worker look) |
+| `82830cd5e` fairness review | look_every | 14 / 25 | same 14 |
+| `edde750cd` claude/relay-fairness-2 head | look_every | 14 / 25 | same 14 (its `Handoff` module is not exercised by the adapter; the convoy/budget path still is the lineage's) |
+| `ab6193aff` + grader (relay-simple) | simple | 2 / 33 default | G5 model, G9 Watched (section 6) |
+
+Expected-red criteria met: 0d325edab red on G1 and G6 (G3 not applicable: no harness hooks on that lineage); cfdcaf73b /
+82830cd5e red on the exhausted-try_lock cases in G1 (`g1_f1_convoy_past_budget_is_served`) and G8
+(`g8_lineage_protocol_never_strands`). G11 is red on old revisions partly because cited tests do not exist there (not a
+behavioural signal); G9 heuristics red there for the right reason (the budget / period / backstop lines).
 
 ## 8. A new implementation plugs in by
 

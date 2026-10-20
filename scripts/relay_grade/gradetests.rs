@@ -54,10 +54,10 @@ fn grade_seeds(seeds: impl Iterator<Item = u64>, secs: f64) -> Vec<String> {
     failed
 }
 
-/// G3 (default suite): 24 seeds x 0.3 s, strict, infinite park. `RS_GRADE_SEEDS` / `RS_GRADE_SECS` override.
+/// G3 (default suite): 4 seeds x 0.3 s (each run ~10-20 s of wall time with its drain; the deep list is `g3_stress_full_seed_list`), strict, infinite park. `RS_GRADE_SEEDS` / `RS_GRADE_SECS` override.
 #[test]
 fn g3_stress_default_seed_list() {
-    let n = env_u("RS_GRADE_SEEDS", 24);
+    let n = env_u("RS_GRADE_SEEDS", 4);
     let failed = grade_seeds(1000..1000 + n, env_f("RS_GRADE_SECS", 0.3));
     assert!(failed.is_empty(), "{HARNESS_FROM}: {} failed:\n{}", failed.len(), failed.join("\n"));
 }
@@ -84,7 +84,7 @@ fn g3_stress_nightly_range() {
 #[test]
 fn g2_sleep_safety_kernel_view() {
     let mut failed = Vec::new();
-    for seed in 0..12u64 {
+    for seed in 0..env_u("RS_GRADE_G2", 4) {
         let mut sc = Scenario::grade(2000 + seed, 0.4);
         sc.workers = 1 + (seed as usize % 3);
         sc.sync_p = [32, 256][seed as usize % 2];
@@ -109,7 +109,7 @@ fn g2_sleep_safety_kernel_view() {
 #[test]
 fn g4_spin_reference_stress_equivalence() {
     let mut bad = Vec::new();
-    for seed in 3000..3008u64 {
+    for seed in 3000..3000 + env_u("RS_GRADE_G4", 2) {
         let sc = Scenario::grade(seed, 0.3);
         let b = grade_run(&sc);
         let s = grade_run(&Scenario {

@@ -38,7 +38,8 @@ for rev in "$@"; do
   ( cd "$wt" && RUSTFLAGS="--cfg kf_grade_lineage=\"$lineage\"" nice -n 19 cargo test --release -p kf-chan -j2 "${tests[@]}" \
       --no-fail-fast -- --test-threads=2 ) > "$log" 2>&1 || true
   grep -E '^test .* \.\.\. (ok|FAILED|ignored)' "$log" | sed -E 's/^test (.*) \.\.\. (ok|FAILED|ignored).*/\1 \2/' | sort > "$scratch/$short.tests" || true
-  if grep -q '^error\(\[E[0-9]*\]\)\?:' "$log"; then echo "   COMPILE ERRORS (see $log):"; grep -E '^error' "$log" | sort | uniq -c | head -5; fi
+  if grep -E '^error(\[E[0-9]+\])?: ' "$log" | grep -qvE 'test failed|targets? failed'; then
+    echo "   COMPILE ERRORS (see $log):"; grep -E '^error' "$log" | grep -vE 'test failed|targets? failed' | sort | uniq -c | head -5; fi
   echo "   red: $(grep -c ' FAILED$' "$scratch/$short.tests" || true)  green: $(grep -c ' ok$' "$scratch/$short.tests" || true)"
   grep ' FAILED$' "$scratch/$short.tests" | sed 's/^/   RED /' || true
   [ "${KF_VALIDITY_KEEP:-0}" = 1 ] || git -C "$here" worktree remove --force "$wt"
