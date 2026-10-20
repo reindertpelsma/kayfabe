@@ -34,7 +34,13 @@ pub const MAX_STARVED_LINES: u32 = 64;
 /// same `K = 16` the fairness model (`tests/relay_fairness.rs`) uses.
 pub const BOUND_PASSES: u32 = 16;
 /// Lines of one relay block, at most.
-pub const MAX_BLOCK_LINES: usize = 1 + 3 + MAX_WORKERS + MAX_THREADS;
+pub const MAX_BLOCK_LINES: usize = 1 + 1 + 3 + 4 + MAX_WORKERS + MAX_THREADS;
+/// Named counters a block or a summary lists.
+pub const MAX_COUNTERS: usize = 16;
+/// Relays the summary context lists (the waiting, pending and contended ones first).
+pub const MAX_SUMMARY_RELAYS: usize = 8;
+/// Lines of the summary context, at most.
+pub const MAX_CONTEXT_LINES: usize = MAX_SUMMARY_RELAYS + 3 + MAX_WORKERS;
 /// Characters of one line, at most.
 pub const MAX_LINE_CHARS: usize = 400;
 
@@ -179,6 +185,10 @@ pub struct WorkerCell {
     pub state: AtomicU8,
     /// 0 = serving nothing, else `(1 << 63) | host_token`.
     pub serving: AtomicU64,
+    /// Park waits entered.
+    pub parks: AtomicU64,
+    /// Last park activity (entered or left, ns; 0 = never parked).
+    pub park_ns: AtomicU64,
 }
 
 /// The board: per-point last-hit timestamps and hit counters, plus the worker cells.
@@ -220,6 +230,10 @@ pub struct WorkerSnap {
     pub state: u8,
     /// See [`WorkerCell`].
     pub serving: u64,
+    /// See [`WorkerCell`].
+    pub parks: u64,
+    /// See [`WorkerCell`].
+    pub park_ns: u64,
 }
 
 /// The whole board at one instant.
@@ -270,6 +284,8 @@ impl Board {
                     since_poll: AtomicU32::new(0),
                     state: AtomicU8::new(0),
                     serving: AtomicU64::new(0),
+                    parks: AtomicU64::new(0),
+                    park_ns: AtomicU64::new(0),
                 }
             }; MAX_WORKERS],
             next_worker: AtomicUsize::new(0),
@@ -597,6 +613,63 @@ pub struct RelayFacts {
     pub last_peek_age_ms: Option<u64>,
     /// The threshold in ms.
     pub threshold_ms: u64,
+    /// The relay's contention and demand state (hypothesis H-64: after `CONTENTION_RETRIES` lost turns only the backstop re-rings).
+    pub brief: RelayBrief,
+    /// Worker-level counters, `(name, value)`, at most [`MAX_COUNTERS`] are listed.
+    pub counters: Vec<(&'static str, u64)>,
+}
+
+/// One relay's contention, demand and lifecycle flags, read without a lock where the record has an atomic (all of them but the
+/// twin's `stopped` / `disabled`, which need the plane's table and are `None` when it was busy).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct RelayBrief {
+    /// Guest `(client, object)`.
+    pub key: (u32, u32),
+    /// Host token.
+    pub host: u32,
+    /// The recorded wait, if any.
+    pub wait: Option<WaitKey>,
+    /// Consecutive contended turns (`Cell::contended_run`).
+    pub contended_run: u32,
+    /// `Cell::retry` (the durable demand flag, raw).
+    pub retry: bool,
+    /// `Cell::pending()` (`retry` and not canceled): what a look treats as demand.
+    pub pending: bool,
+    /// `Cell::is_waiting()` (the wait mirror a look reads).
+    pub waiting: bool,
+    /// `Cell::is_canceled()`.
+    pub canceled: bool,
+    /// The twin's `stopped` (`None` = the table was busy).
+    pub stopped: Option<bool>,
+    /// The twin's `disabled` (`None` = the table was busy).
+    pub disabled: Option<bool>,
+    /// `Inbox::walk_busy` flag.
+    pub walk_busy: bool,
+    /// Tokens waiting for a walk (`None` = the list was busy).
+    pub walk_waiters: Option<u64>,
+}
+
+/// Render one relay's state line (H-64: `h64_backstop_only=yes` when only the safety net may still re-ring it).
+#[must_use]
+pub fn render_relay_state(_b: &RelayBrief) -> String {
+    todo!("EXPECTED RED")
+}
+
+/// Render named counters, six per line, at most [`MAX_COUNTERS`] of them.
+#[must_use]
+pub fn render_counters(_c: &[(&'static str, u64)]) -> Vec<String> {
+    todo!("EXPECTED RED")
+}
+
+/// The per-second summary's context: up to [`MAX_SUMMARY_RELAYS`] relay state lines (waiting, pending and contended first), the
+/// counters and every worker. Hex-only, at most [`MAX_CONTEXT_LINES`] lines.
+#[must_use]
+pub fn render_summary_context(
+    _snap: &Snapshot,
+    _counters: &[(&'static str, u64)],
+    _relays: &[RelayBrief],
+) -> Vec<String> {
+    todo!("EXPECTED RED")
 }
 
 /// Render one relay's block: the relay line, the age table of ALL points, every worker, the listed threads. Hex-only, bounded.
@@ -1240,7 +1313,39 @@ mod tests {
             unpeeked_ms: 0x3f0,
             last_peek_age_ms: Some(0x3f2),
             threshold_ms: 1000,
+            brief: brief(0x40),
+            counters: counters(),
         }
+    }
+
+    fn brief(run: u32) -> RelayBrief {
+        RelayBrief {
+            key: (0x1c, 0x5),
+            host: 0x3f,
+            wait: Some(WaitKey {
+                kind: WaitKind::Marker,
+                target: 0x2a,
+            }),
+            contended_run: run,
+            retry: true,
+            pending: true,
+            waiting: true,
+            canceled: false,
+            stopped: Some(false),
+            disabled: None,
+            walk_busy: false,
+            walk_waiters: Some(2),
+        }
+    }
+
+    fn counters() -> Vec<(&'static str, u64)> {
+        vec![
+            ("contended_turns", 0x1234),
+            ("wake_backstop", 0x7),
+            ("backstop_contended", 0x3),
+            ("backstop_found_work", 0),
+            ("busy_looks", 0x15ba7),
+        ]
     }
 
     fn threads(n: usize) -> Vec<ThreadCpu> {
@@ -1415,6 +1520,209 @@ mod tests {
         assert!(parse_thread_stat(1, "garbage").is_none());
         assert!(parse_thread_stat(1, "1 (x) S 1 2").is_none(), "too short");
         assert!(parse_thread_stat(1, "1 (x) S 1 1 1 0 -1 0 0 0 0 0 notanumber 3 0 0").is_none());
+    }
+
+    // ---- 2026-10-20 (coordinator H-64): contention / demand state in every block and in the summary
+
+    #[test]
+    fn the_relay_state_line_prints_the_contention_demand_and_lifecycle_flags() {
+        let l = render_relay_state(&brief(0x40));
+        assert!(l.starts_with("kf3: PROGRESS_RELAY_STATE "), "{l}");
+        for needle in [
+            "relay=0x1c:0x5",
+            "host=0x3f",
+            "wait=marker",
+            "contended_run=0x40",
+            "retry_budget=0x40",
+            "retry_flag=yes",
+            "pending=yes",
+            "waiting_flag=yes",
+            "canceled=no",
+            "stopped=no",
+            "disabled=unknown",
+            "walk_busy=no",
+            "walk_waiters=0x2",
+        ] {
+            assert!(l.contains(needle), "{needle} not in {l}");
+        }
+        assert_hex_only(&l);
+        assert!(l.len() <= MAX_LINE_CHARS);
+    }
+
+    /// H-64: the budget is `CONTENTION_RETRIES` lost turns; at or beyond it only the backstop may re-ring the relay.
+    #[test]
+    fn the_h64_flag_is_set_exactly_when_only_the_backstop_may_re_ring() {
+        let budget = crate::user_loop::CONTENTION_RETRIES;
+        for (run, want) in [
+            (0, "no"),
+            (budget - 1, "no"),
+            (budget, "yes"),
+            (budget + 1, "yes"),
+            (u32::MAX, "yes"),
+        ] {
+            let l = render_relay_state(&brief(run));
+            assert!(
+                l.contains(&format!("h64_backstop_only={want}")),
+                "run {run}: {l}"
+            );
+        }
+        // the flag agrees with the production predicate for every Peek kind
+        for run in [0, budget - 1, budget, budget + 1] {
+            let spin_may = crate::user_loop::may_retry(run, Peek::Spin);
+            let l = render_relay_state(&brief(run));
+            assert_eq!(l.contains("h64_backstop_only=yes"), !spin_may, "run {run}");
+            assert!(crate::user_loop::may_retry(run, Peek::Backstop));
+        }
+        // a relay with no demand and no wait is never "stranded"
+        let mut idle = brief(budget + 5);
+        idle.pending = false;
+        idle.retry = false;
+        idle.waiting = false;
+        idle.wait = None;
+        assert!(render_relay_state(&idle).contains("h64_backstop_only=no"));
+    }
+
+    #[test]
+    fn flags_read_yes_no_or_unknown_never_a_number() {
+        let mut b = brief(1);
+        b.retry = false;
+        b.pending = false;
+        b.waiting = false;
+        b.canceled = true;
+        b.stopped = Some(true);
+        b.disabled = Some(false);
+        b.walk_busy = true;
+        b.walk_waiters = None;
+        b.wait = None;
+        let l = render_relay_state(&b);
+        for needle in [
+            "retry_flag=no",
+            "pending=no",
+            "waiting_flag=no",
+            "canceled=yes",
+            "stopped=yes",
+            "disabled=no",
+            "walk_busy=yes",
+            "walk_waiters=unknown",
+            "wait=none",
+        ] {
+            assert!(l.contains(needle), "{needle} in {l}");
+        }
+        assert_hex_only(&l);
+    }
+
+    #[test]
+    fn counters_are_hex_six_per_line_and_bounded() {
+        let lines = render_counters(&counters());
+        assert_eq!(lines.len(), 1);
+        for needle in [
+            "contended_turns=0x1234",
+            "wake_backstop=0x7",
+            "backstop_contended=0x3",
+            "backstop_found_work=0x0",
+            "busy_looks=0x15ba7",
+        ] {
+            assert!(lines[0].contains(needle), "{needle} in {}", lines[0]);
+        }
+        let many: Vec<(&'static str, u64)> = (0..100).map(|_| ("busy_looks", u64::MAX)).collect();
+        let lines = render_counters(&many);
+        assert_eq!(lines.len(), MAX_COUNTERS.div_ceil(6));
+        assert_eq!(
+            lines
+                .iter()
+                .map(|l| l.matches("busy_looks=").count())
+                .sum::<usize>(),
+            MAX_COUNTERS
+        );
+        for l in &lines {
+            assert!(l.starts_with("kf3: PROGRESS_COUNTERS "), "{l}");
+            assert!(l.len() <= MAX_LINE_CHARS, "{}", l.len());
+            assert_hex_only(l);
+        }
+        assert!(render_counters(&[]).is_empty());
+    }
+
+    #[test]
+    fn a_relay_block_carries_the_state_the_counters_and_each_workers_parks() {
+        let b = Board::new();
+        let w = b.register().unwrap();
+        b.park(w, true, 100 * MS);
+        b.park(w, false, 120 * MS);
+        b.park(w, true, 130 * MS);
+        b.park(w, false, 140 * MS);
+        let w2 = b.register().unwrap();
+        let _ = w2;
+        let lines = render_relay_block(&facts(), &b.snapshot(1000 * MS, 1), &[]);
+        let all = lines.join("\n");
+        assert!(all.contains("PROGRESS_RELAY_STATE "));
+        assert!(all.contains("contended_run=0x40"));
+        assert!(all.contains("PROGRESS_COUNTERS "));
+        assert!(all.contains("contended_turns=0x1234"));
+        assert!(all.contains("PROGRESS_WORKER w=0x0 "));
+        assert!(all.contains("parks=0x2 park_age_ms=0x35c "), "{all}");
+        assert!(all.contains("PROGRESS_WORKER w=0x1 "));
+        assert!(all.contains("parks=0x0 park_age_ms=never"), "{all}");
+        for l in &lines {
+            assert_hex_only(l);
+        }
+    }
+
+    #[test]
+    fn the_board_counts_parks_and_stamps_the_last_park() {
+        let b = Board::new();
+        let w = b.register().unwrap();
+        b.park(w, true, 10);
+        b.park(w, false, 20);
+        b.park(w, true, 30);
+        let s = b.snapshot(40, 1);
+        assert_eq!((s.workers[0].parks, s.workers[0].park_ns), (2, 30));
+        b.park(w, false, 50);
+        assert_eq!(b.snapshot(60, 1).workers[0].park_ns, 50);
+    }
+
+    #[test]
+    fn the_summary_context_lists_the_stranded_relays_first_the_counters_and_every_worker() {
+        let budget = crate::user_loop::CONTENTION_RETRIES;
+        let mut quiet = brief(0);
+        quiet.host = 1;
+        quiet.waiting = false;
+        quiet.pending = false;
+        quiet.retry = false;
+        quiet.wait = None;
+        let mut stranded = brief(budget);
+        stranded.host = 2;
+        let mut relays: Vec<RelayBrief> = (0..20).map(|_| quiet.clone()).collect();
+        relays.push(stranded);
+        let lines = render_summary_context(&full_snapshot(), &counters(), &relays);
+        assert!(lines.len() <= MAX_CONTEXT_LINES, "{} lines", lines.len());
+        let states: Vec<&String> = lines
+            .iter()
+            .filter(|l| l.contains("PROGRESS_RELAY_STATE"))
+            .collect();
+        assert_eq!(states.len(), MAX_SUMMARY_RELAYS);
+        assert!(
+            states[0].contains("host=0x2") && states[0].contains("h64_backstop_only=yes"),
+            "the stranded relay comes first: {}",
+            states[0]
+        );
+        assert!(lines.iter().any(|l| l.contains("PROGRESS_COUNTERS")));
+        assert_eq!(
+            lines
+                .iter()
+                .filter(|l| l.contains("PROGRESS_WORKER"))
+                .count(),
+            MAX_WORKERS
+        );
+        for l in &lines {
+            assert!(l.starts_with("kf3: PROGRESS"), "{l}");
+            assert!(l.len() <= MAX_LINE_CHARS);
+            assert_hex_only(l);
+        }
+        assert!(
+            render_summary_context(&full_snapshot(), &[], &[])
+                .iter()
+                .all(|l| l.contains("PROGRESS_WORKER"))
+        );
     }
 
     // ---- the hot path stays cheap and the switch is read once (source pins)

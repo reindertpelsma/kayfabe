@@ -3865,4 +3865,38 @@ mod tests {
         assert!(ffi.find("kf_chan::progress::init_from_env()").unwrap() < ffi.find("Device::realize(&cfg)").unwrap(), "the switch is read before the workers exist");
         assert!(ffi.contains("progress_loop"));
     }
+
+    /// Coordinator H-64: every block and every summary carries the contention / demand / lifecycle state of the relays and the
+    /// worker-level counters the hypothesis is decided by, read passively.
+    #[test]
+    fn the_progress_diagnostic_reads_the_contention_state_and_the_counters_the_h64_falsifier_needs() {
+        let d: String = prog_source().split_whitespace().collect();
+        for needle in [
+            "record.contended_run()",
+            "record.pending()",
+            "record.is_waiting()",
+            "record.is_canceled()",
+            "record.retry.load(",
+            "self.inbox.walk_diag()",
+            "self.pt.try_lock()",
+            "t.stopped",
+            "t.disabled",
+            "kf_chan::progress::render_relay_state(",
+            "kf_chan::progress::render_summary_context(",
+            "(\"contended_turns\",",
+            "(\"wake_backstop\",",
+            "(\"backstop_contended\",",
+            "(\"backstop_found_work\",",
+            "(\"backstop_carried\",",
+            "(\"busy_looks\",",
+            "(\"event_without_progress\",",
+            "self.relay_stats",
+        ] {
+            assert!(d.contains(needle), "{needle}");
+        }
+        let mem = include_str!("mem.rs");
+        let diag = mem.split("pub fn walk_diag(").nth(1).expect("Inbox::walk_diag");
+        let diag = diag.split("\n    }\n").next().unwrap();
+        assert!(diag.contains("try_lock") && !diag.contains(".lock()"), "walk_diag never blocks: {diag}");
+    }
 }
