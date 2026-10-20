@@ -1,0 +1,24 @@
+ARM_EXTRA KF3_DIAG_CAPS_PAGE_FILE=/root/bwr/precomp.txt
+ARM_START run=caps_pre_on prod=fix3c source=0752115a7cdb929ea358dd257dab4598f9042450 bin=0752115a profile=on 2026-10-20T18:53:50+00:00
+[2026-10-20T18:53:50Z] detached: tag=caps_pre_on, log logs/caps_pre_on_run.log (stdout logs/caps_pre_on_run.out)
+KF_SSH_UP
+{"pid": 252590, "exe": "/workspace/bench/kf3-bins/0752115a/qemu-system-x86_64", "sha256": "c90f37663fea862553e39c60b6d61162802c612ae3d22996b5345ee95aa305e4", "kf3_device": "kf3-gpu,fb-mb=8192,bar1-size=134217728,bar2-size=33554432,display=on,gop=on,gop-efi=/workspace/bwr-win/secureboot/kf-gop.7f22d18d.signed.efi,id=kf0,guest-driver=580.65.06"}
+STAGE580_READY=1 actual=32.0.15.8088 device_disabled=1 GSP_flags=1; fresh QEMU580.65.06 then one enable
+ENABLE580_START actual=32.0.15.8088 UTC=2026-10-20T18:56:38.8386341Z
+Microsoft PnP Utility
+
+Enabling device:          PCI\VEN_10DE&DEV_2B85&SUBSYS_53011462&REV_A1\3&11583659&0&28
+Device enabled successfully.
+
+ENABLE580_PNPUTIL_RC=0
+{"Name":"NVIDIA GeForce RTX 5090","DriverVersion":"32.0.15.8088","ConfigManagerErrorCode":43}
+{"FriendlyName":"NVIDIA GeForce RTX 5090","Status":"Error","Problem":43}
+ENABLE580_OBSERVED UTC=2026-10-20T18:57:20.4950277Z; device status is verdict, not this command rc
+BW580_RESULT {"utc":"2026-10-20T18:58:02.6364345Z","driver":"32.0.15.8088","inf":"oem7.inf","problem":43,"code":43,"tdr4101":0,"dwm":1,"explorer":0,"logonui":1}
+/workspace/bwr-win/kfwin/logs/shots/caps_pre_on.png
+{"rpcs": 384, "unload_ordinals": [383], "teardown_start_ordinal": 276, "last_nonfree_before_teardown": [[273, "103", "RmAlloc", "0", "0xca7a", "0x0"], [274, "76", "RmControl", "0", "0x20800a58", "0x0"], [275, "103", "RmAlloc", "0", "0xca7a", "0x0"]]}
+ARM_DIAGNOSTIC_READY run=caps_pre_on 2026-10-20T18:58:17+00:00
+[2026-10-20T18:58:17Z] stopping kfwin (pid 252590)
+[2026-10-20T18:59:26Z] stopped
+QEMU_STOPPED
+ARM_EXIT run=caps_pre_on rc=0 2026-10-20T18:59:29+00:00

@@ -1,0 +1,5 @@
+crates/kf-abi/src/capability.rs
+crates/kf-abi/tests/capability_policy_550.rs
+== kf3 build: QEMU 10.2.4 rev 844eb167
+FIXBUILD_READY name=fix1 bin=844eb167 2026-10-20T16:21:58+00:00
+FIXBUILD_EXIT name=fix1 rc=0 2026-10-20T16:21:58+00:00

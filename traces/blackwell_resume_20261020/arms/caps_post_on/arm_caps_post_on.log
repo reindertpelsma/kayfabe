@@ -1,0 +1,21 @@
+ARM_EXTRA KF3_DIAG_CAPS_PAGE_FILE=/root/bwr/postcomp.txt
+ARM_START run=caps_post_on prod=fix3c source=0752115a7cdb929ea358dd257dab4598f9042450 bin=0752115a profile=on 2026-10-20T18:49:56+00:00
+[2026-10-20T18:49:56Z] detached: tag=caps_post_on, log logs/caps_post_on_run.log (stdout logs/caps_post_on_run.out)
+KF_SSH_UP
+{"pid": 251787, "exe": "/workspace/bench/kf3-bins/0752115a/qemu-system-x86_64", "sha256": "c90f37663fea862553e39c60b6d61162802c612ae3d22996b5345ee95aa305e4", "kf3_device": "kf3-gpu,fb-mb=8192,bar1-size=134217728,bar2-size=33554432,display=on,gop=on,gop-efi=/workspace/bwr-win/secureboot/kf-gop.7f22d18d.signed.efi,id=kf0,guest-driver=580.65.06"}
+STAGE580_READY=1 actual=32.0.15.8088 device_disabled=1 GSP_flags=1; fresh QEMU580.65.06 then one enable
+ENABLE580_START actual=32.0.15.8088 UTC=2026-10-20T18:52:44.1011483Z
+Microsoft PnP Utility
+
+Enabling device:          PCI\VEN_10DE&DEV_2B85&SUBSYS_53011462&REV_A1\3&11583659&0&28
+Device enabled successfully.
+
+ENABLE580_PNPUTIL_RC=0
+Connection to 127.0.0.1 closed by remote host.
+ssh: connect to host 127.0.0.1 port 2224: Connection refused
+[2026-10-20T18:53:46Z] REFUSED: no QEMU running for kfwin
+{"rpcs": 276, "unload_ordinals": [], "teardown_start_ordinal": null, "last_nonfree_before_teardown": []}
+ARM_DIAGNOSTIC_READY run=caps_post_on 2026-10-20T18:53:46+00:00
+[2026-10-20T18:53:46Z] not running
+QEMU_STOPPED
+ARM_EXIT run=caps_post_on rc=0 2026-10-20T18:53:50+00:00

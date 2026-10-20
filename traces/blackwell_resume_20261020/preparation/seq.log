@@ -1,0 +1,55 @@
+SEQ_START base_off_1:base:off cand_off_1:cand:off base_on_1:base:on cand_on_1:cand:on base_off_2:base:off cand_off_2:cand:off base_on_2:base:on cand_on_2:cand:on 2026-10-20T16:06:43+00:00
+SEQ_ARM_DONE base_off_1 ARM_EXIT run=base_off_1 rc=0 2026-10-20T16:11:33+00:00 BW580_RESULT {"utc":"2026-10-20T16:10:58.4918914Z","driver":"32.0.15.8088","inf":"oem7.inf","problem":43,"code":43,"tdr4101":0,"dwm":1,"explorer":0,"logonui":1}
+SEQ_ARM_DONE cand_off_1 ARM_EXIT run=cand_off_1 rc=0 2026-10-20T16:16:40+00:00 BW580_RESULT {"utc":"2026-10-20T16:16:05.6971081Z","driver":"32.0.15.8088","inf":"oem7.inf","problem":43,"code":43,"tdr4101":0,"dwm":1,"explorer":0,"logonui":1}
+SEQ_ARM_DONE base_on_1 ARM_EXIT run=base_on_1 rc=0 2026-10-20T16:22:09+00:00 BW580_RESULT {"utc":"2026-10-20T16:20:54.2855037Z","driver":"32.0.15.8088","inf":"oem7.inf","problem":43,"code":43,"tdr4101":0,"dwm":1,"explorer":0,"logonui":1}
+SEQ_ARM_DONE cand_on_1 ARM_EXIT run=cand_on_1 rc=0 2026-10-20T16:26:46+00:00 
+SEQ_ARM_DONE base_off_2 ARM_EXIT run=base_off_2 rc=2 2026-10-20T16:28:33+00:00 
+SEQ_STOP qemu still running after base_off_2
+SEQ_NOTE base_off_2 aborted at harness syntax error (arm.sh replaced mid-run), 0 RPCs, no enable; rerun as base_off_2b
+SEQ_START base_off_2b:base:off cand_off_2:cand:off fix1_off_1:fix1:off base_on_2:base:on cand_on_2:cand:on fix1_off_2:fix1:off 2026-10-20T16:29:29+00:00
+SEQ_ARM_DONE base_off_2b ARM_EXIT run=base_off_2b rc=0 2026-10-20T16:34:21+00:00 BW580_RESULT {"utc":"2026-10-20T16:33:45.7850049Z","driver":"32.0.15.8088","inf":"oem7.inf","problem":43,"code":43,"tdr4101":0,"dwm":1,"explorer":0,"logonui":1}
+SEQ_ARM_DONE cand_off_2 ARM_EXIT run=cand_off_2 rc=0 2026-10-20T16:39:26+00:00 BW580_RESULT {"utc":"2026-10-20T16:38:46.1085537Z","driver":"32.0.15.8088","inf":"oem7.inf","problem":43,"code":43,"tdr4101":0,"dwm":1,"explorer":0,"logonui":1}
+SEQ_ARM_DONE fix1_off_1 ARM_EXIT run=fix1_off_1 rc=0 2026-10-20T16:44:18+00:00 BW580_RESULT {"utc":"2026-10-20T16:43:37.6756335Z","driver":"32.0.15.8088","inf":"oem7.inf","problem":43,"code":43,"tdr4101":0,"dwm":1,"explorer":0,"logonui":1}
+SEQ_ARM_DONE base_on_2 ARM_EXIT run=base_on_2 rc=0 2026-10-20T16:49:40+00:00 BW580_RESULT {"utc":"2026-10-20T16:48:24.6440344Z","driver":"32.0.15.8088","inf":"oem7.inf","problem":43,"code":43,"tdr4101":0,"dwm":1,"explorer":0,"logonui":1}
+SEQ_ARM_DONE cand_on_2 ARM_EXIT run=cand_on_2 rc=0 2026-10-20T16:54:57+00:00 BW580_RESULT {"utc":"2026-10-20T16:53:41.8453984Z","driver":"32.0.15.8088","inf":"oem7.inf","problem":43,"code":43,"tdr4101":0,"dwm":1,"explorer":0,"logonui":1}
+SEQ_ARM_DONE fix1_off_2 ARM_EXIT run=fix1_off_2 rc=0 2026-10-20T17:00:01+00:00 BW580_RESULT {"utc":"2026-10-20T16:59:23.9956735Z","driver":"32.0.15.8088","inf":"oem7.inf","problem":43,"code":43,"tdr4101":0,"dwm":1,"explorer":0,"logonui":1}
+SEQ_EXIT 2026-10-20T17:00:01+00:00
+SEQ_START fix1d_off_1:fix1d:off 2026-10-20T17:09:15+00:00
+SEQ_ARM_DONE fix1d_off_1 ARM_EXIT run=fix1d_off_1 rc=0 2026-10-20T17:14:01+00:00 BW580_RESULT {"utc":"2026-10-20T17:13:25.3893292Z","driver":"32.0.15.8088","inf":"oem7.inf","problem":43,"code":43,"tdr4101":0,"dwm":1,"explorer":0,"logonui":1}
+SEQ_EXIT 2026-10-20T17:14:01+00:00
+SEQ_START trace_on_1:base:on 2026-10-20T17:14:01+00:00
+SEQ_ARM_DONE trace_on_1 ARM_EXIT run=trace_on_1 rc=0 2026-10-20T17:19:42+00:00 BW580_RESULT {"utc":"2026-10-20T17:18:26.1312776Z","driver":"32.0.15.8088","inf":"oem7.inf","problem":43,"code":43,"tdr4101":0,"dwm":1,"explorer":0,"logonui":1}
+SEQ_EXIT 2026-10-20T17:19:43+00:00
+SEQ_START fix2_off_1:fix2:off fix2_off_2:fix2:off 2026-10-20T17:19:43+00:00
+SEQ_ARM_DONE fix2_off_1 ARM_EXIT run=fix2_off_1 rc=0 2026-10-20T17:23:54+00:00 
+SEQ_ARM_DONE fix2_off_2 ARM_EXIT run=fix2_off_2 rc=0 2026-10-20T17:28:03+00:00 
+SEQ_EXIT 2026-10-20T17:28:03+00:00
+SEQ_START fix2_on_1:fix2:on 2026-10-20T17:28:15+00:00
+SEQ_ARM_DONE fix2_on_1 ARM_EXIT run=fix2_on_1 rc=0 2026-10-20T17:33:42+00:00 BW580_RESULT {"utc":"2026-10-20T17:32:29.8812400Z","driver":"32.0.15.8088","inf":"oem7.inf","problem":43,"code":43,"tdr4101":0,"dwm":1,"explorer":0,"logonui":1}
+SEQ_EXIT 2026-10-20T17:33:42+00:00
+SEQ_START dtrace_on_1:base:on 2026-10-20T17:34:52+00:00
+SEQ_ARM_DONE dtrace_on_1 ARM_EXIT run=dtrace_on_1 rc=0 2026-10-20T17:40:28+00:00 BW580_RESULT {"utc":"2026-10-20T17:39:12.2625238Z","driver":"32.0.15.8088","inf":"oem7.inf","problem":43,"code":43,"tdr4101":0,"dwm":1,"explorer":0,"logonui":1}
+SEQ_EXIT 2026-10-20T17:40:28+00:00
+SEQ_START fix3_on_1:fix3:on fix3_on_2:fix3:on fix3_off_1:fix3:off 2026-10-20T18:09:59+00:00
+SEQ_ARM_DONE fix3_on_1 ARM_EXIT run=fix3_on_1 rc=0 2026-10-20T18:15:25+00:00 BW580_RESULT {"utc":"2026-10-20T18:14:09.9714934Z","driver":"32.0.15.8088","inf":"oem7.inf","problem":43,"code":43,"tdr4101":0,"dwm":1,"explorer":0,"logonui":1}
+SEQ_ARM_DONE fix3_on_2 ARM_EXIT run=fix3_on_2 rc=0 2026-10-20T18:21:01+00:00 BW580_RESULT {"utc":"2026-10-20T18:19:44.9544666Z","driver":"32.0.15.8088","inf":"oem7.inf","problem":43,"code":43,"tdr4101":0,"dwm":1,"explorer":0,"logonui":1}
+SEQ_ARM_DONE fix3_off_1 ARM_EXIT run=fix3_off_1 rc=0 2026-10-20T18:25:06+00:00 
+SEQ_EXIT 2026-10-20T18:25:06+00:00
+SEQ_START capsdiag_on_1:fix3c:on 2026-10-20T18:25:13+00:00
+SEQ_ARM_DONE capsdiag_on_1 ARM_EXIT run=capsdiag_on_1 rc=0 2026-10-20T18:29:53+00:00 
+SEQ_EXIT 2026-10-20T18:29:53+00:00
+SEQ_START caps_lowa_on:fix3c:on 2026-10-20T18:33:22+00:00
+SEQ_ARM_DONE caps_lowa_on ARM_EXIT run=caps_lowa_on rc=0 2026-10-20T18:38:52+00:00 BW580_RESULT {"utc":"2026-10-20T18:37:35.3897564Z","driver":"32.0.15.8088","inf":"oem7.inf","problem":43,"code":43,"tdr4101":0,"dwm":1,"explorer":0,"logonui":1}
+SEQ_EXIT 2026-10-20T18:38:53+00:00
+SEQ_START caps_highb_on:fix3c:on 2026-10-20T18:38:53+00:00
+SEQ_ARM_DONE caps_highb_on ARM_EXIT run=caps_highb_on rc=0 2026-10-20T18:43:25+00:00 
+SEQ_EXIT 2026-10-20T18:43:25+00:00
+SEQ_START caps_ctl_on:fix3c:on 2026-10-20T18:43:25+00:00
+SEQ_ARM_DONE caps_ctl_on ARM_EXIT run=caps_ctl_on rc=0 2026-10-20T18:49:54+00:00 BW580_RESULT {"utc":"2026-10-20T18:48:37.9326918Z","driver":"32.0.15.8088","inf":"oem7.inf","problem":43,"code":43,"tdr4101":0,"dwm":1,"explorer":0,"logonui":1}
+SEQ_EXIT 2026-10-20T18:49:54+00:00
+SEQ_START caps_post_on:fix3c:on 2026-10-20T18:49:56+00:00
+SEQ_ARM_DONE caps_post_on ARM_EXIT run=caps_post_on rc=0 2026-10-20T18:53:50+00:00 
+SEQ_EXIT 2026-10-20T18:53:50+00:00
+SEQ_START caps_pre_on:fix3c:on 2026-10-20T18:53:50+00:00
+SEQ_ARM_DONE caps_pre_on ARM_EXIT run=caps_pre_on rc=0 2026-10-20T18:59:29+00:00 BW580_RESULT {"utc":"2026-10-20T18:58:02.6364345Z","driver":"32.0.15.8088","inf":"oem7.inf","problem":43,"code":43,"tdr4101":0,"dwm":1,"explorer":0,"logonui":1}
+SEQ_EXIT 2026-10-20T18:59:29+00:00

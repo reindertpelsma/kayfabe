@@ -9,8 +9,16 @@
     "created_utc": "2026-10-20T15:04:21.173336+00:00",
     "credit_before": 35.87498823126339,
     "auto_destroy_minutes": 360,
-    "destroyed": false,
+    "destroyed": true,
     "auto_destroy_pid": 1026967,
-    "auto_destroy_armed_utc": "2026-10-20T15:04:21.212193+00:00"
+    "auto_destroy_armed_utc": "2026-10-20T15:04:21.212193+00:00",
+    "destroy_requested_utc": "2026-10-20T19:08:58+00:00",
+    "api_absent_verified_utc": "2026-10-20T19:09:18+00:00",
+    "auto_destroy_timer_cancelled_after_absence": true,
+    "started_utc": "2026-10-20T15:04:20+00:00",
+    "runtime_s_at_destroy": 14674.5,
+    "invoice_gpu_usd": 4.553,
+    "invoice_storage_usd": 0.203,
+    "invoice_total_usd": 4.756
   }
 ]

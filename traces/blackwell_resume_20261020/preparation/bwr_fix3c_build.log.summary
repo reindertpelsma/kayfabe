@@ -1,0 +1,11 @@
+crates/kf-abi/src/capability.rs
+crates/kf-abi/src/eventnotify.rs
+crates/kf-abi/tests/capability_policy_550.rs
+crates/kf-disp/data/caps_measured.tsv
+crates/kf-disp/tests/caps_derive.rs
+crates/kf-disp/tests/gb202_caps_word.rs
+crates/kf-qemu/src/display.rs
+crates/kf-rm/tests/event_set_notification.rs
+== kf3 build: QEMU 10.2.4 rev 0752115a
+FIXBUILD_READY name=fix3c bin=0752115a 2026-10-20T18:19:07+00:00
+FIXBUILD_EXIT name=fix3c rc=0 2026-10-20T18:19:07+00:00

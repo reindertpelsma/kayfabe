@@ -1,0 +1,1 @@
+/workspace/bwr-win/kfwin/logs/caps_ctl_on_b1_qemu.log	rpcs=384	no teardown

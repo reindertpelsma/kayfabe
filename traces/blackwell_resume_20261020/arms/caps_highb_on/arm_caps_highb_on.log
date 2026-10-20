@@ -1,0 +1,24 @@
+ARM_EXTRA KF3_DIAG_CAPS_PAGE_FILE=/root/bwr/highB.txt
+ARM_START run=caps_highb_on prod=fix3c source=0752115a7cdb929ea358dd257dab4598f9042450 bin=0752115a profile=on 2026-10-20T18:38:53+00:00
+[2026-10-20T18:38:53Z] detached: tag=caps_highb_on, log logs/caps_highb_on_run.log (stdout logs/caps_highb_on_run.out)
+KF_SSH_UP
+{"pid": 248430, "exe": "/workspace/bench/kf3-bins/0752115a/qemu-system-x86_64", "sha256": "c90f37663fea862553e39c60b6d61162802c612ae3d22996b5345ee95aa305e4", "kf3_device": "kf3-gpu,fb-mb=8192,bar1-size=134217728,bar2-size=33554432,display=on,gop=on,gop-efi=/workspace/bwr-win/secureboot/kf-gop.7f22d18d.signed.efi,id=kf0,guest-driver=580.65.06"}
+STAGE580_READY=1 actual=32.0.15.8088 device_disabled=1 GSP_flags=1; fresh QEMU580.65.06 then one enable
+ENABLE580_START actual=32.0.15.8088 UTC=2026-10-20T18:41:37.5592530Z
+Microsoft PnP Utility
+
+Enabling device:          PCI\VEN_10DE&DEV_2B85&SUBSYS_53011462&REV_A1\3&11583659&0&28
+Device enabled successfully.
+
+ENABLE580_PNPUTIL_RC=0
+{"Name":"NVIDIA GeForce RTX 5090","DriverVersion":"32.0.15.8088","ConfigManagerErrorCode":0}
+{"FriendlyName":"NVIDIA GeForce RTX 5090","Status":"OK","Problem":0}
+ENABLE580_OBSERVED UTC=2026-10-20T18:42:21.3761740Z; device status is verdict, not this command rc
+Connection timed out during banner exchange
+/workspace/bwr-win/kfwin/logs/shots/caps_highb_on.png
+{"rpcs": 5017, "unload_ordinals": [5016], "teardown_start_ordinal": 4592, "last_nonfree_before_teardown": [[4589, "76", "RmControl", "0", "0xc3700104", "0x0"], [4590, "76", "RmControl", "0", "0xc3700104", "0x0"], [4591, "76", "RmControl", "0", "0xc3700104", "0x0"]]}
+ARM_DIAGNOSTIC_READY run=caps_highb_on 2026-10-20T18:43:09+00:00
+[2026-10-20T18:43:09Z] stopping kfwin (pid 248430)
+[2026-10-20T18:43:22Z] stopped
+QEMU_STOPPED
+ARM_EXIT run=caps_highb_on rc=0 2026-10-20T18:43:25+00:00
