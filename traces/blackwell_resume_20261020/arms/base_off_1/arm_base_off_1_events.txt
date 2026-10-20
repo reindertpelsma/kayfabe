@@ -1,0 +1,14 @@
+EVENTS_SINCE boot=2026-10-20T16:06:59.5000000Z
+EVT log=System t=2026-10-20T22:47:54.2596209Z prov=Microsoft-Windows-UserPnp id=20003 lvl=Information msg=Driver Management has concluded the process to add Service Parport for Device Instance ID ACPI\PNP0400\1 with the following status: 0.
+EVT log=System t=2026-10-20T22:47:56.2131059Z prov=Microsoft-Windows-UserPnp id=20003 lvl=Information msg=Driver Management has concluded the process to add Service Serial for Device Instance ID ACPI\PNP0501\1 with the following status: 0.
+EVT log=System t=2026-10-20T22:47:56.3078756Z prov=Microsoft-Windows-UserPnp id=20003 lvl=Information msg=Driver Management has concluded the process to add Service Serenum for Device Instance ID ACPI\PNP0501\1 with the following status: 0.
+Get-WinEvent : There is not an event provider on the localhost computer that matches "NVIDIA 
+OpenGL Driver".
+At C:\kf\events.ps1:10 char:14
++ ... try { $ev=@(Get-WinEvent -FilterHashtable $h -ErrorAction Stop) } cat ...
++                 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : ObjectNotFound: (NVIDIA OpenGL Driver:String) [Get-WinEvent], Excep 
+   tion
+    + FullyQualifiedErrorId : NoMatchingProvidersFound,Microsoft.PowerShell.Commands.GetWinEventC 
+   ommand
+ 

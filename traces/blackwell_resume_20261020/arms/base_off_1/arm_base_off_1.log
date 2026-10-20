@@ -1,0 +1,23 @@
+ARM_START run=base_off_1 prod=base source=7f22d18dfff8083345cdb54a4666018dca845384 bin=7f22d18d profile=off 2026-10-20T16:06:43+00:00
+[2026-10-20T16:06:43Z] detached: tag=base_off_1, log logs/base_off_1_run.log (stdout logs/base_off_1_run.out)
+KF_SSH_UP
+{"pid": 111287, "exe": "/workspace/bench/kf3-bins/7f22d18d/qemu-system-x86_64", "sha256": "b33394dd23e515994a4478747a52311d05f1a1bffbb300eb4415f2a0e22220ef", "kf3_device": "kf3-gpu,fb-mb=8192,bar1-size=134217728,bar2-size=33554432,display=on,gop=on,gop-efi=/workspace/bwr-win/secureboot/kf-gop.7f22d18d.signed.efi,id=kf0,guest-driver=580.65.06,display=off,gop=off,gop-efi="}
+STAGE580_READY=1 actual=32.0.15.8088 device_disabled=1 GSP_flags=1; fresh QEMU580.65.06 then one enable
+ENABLE580_START actual=32.0.15.8088 UTC=2026-10-20T16:09:33.5980969Z
+Microsoft PnP Utility
+
+Enabling device:          PCI\VEN_10DE&DEV_2B85&SUBSYS_53011462&REV_A1\3&11583659&0&28
+Device enabled successfully.
+
+ENABLE580_PNPUTIL_RC=0
+{"Name":"NVIDIA GeForce RTX 5090","DriverVersion":"32.0.15.8088","ConfigManagerErrorCode":43}
+{"FriendlyName":"NVIDIA GeForce RTX 5090","Status":"Error","Problem":43}
+ENABLE580_OBSERVED UTC=2026-10-20T16:10:16.6085789Z; device status is verdict, not this command rc
+BW580_RESULT {"utc":"2026-10-20T16:10:58.4918914Z","driver":"32.0.15.8088","inf":"oem7.inf","problem":43,"code":43,"tdr4101":0,"dwm":1,"explorer":0,"logonui":1}
+/workspace/bwr-win/kfwin/logs/shots/base_off_1.png
+{"rpcs": 354, "unload_ordinals": [353], "teardown_start_ordinal": 275, "last_nonfree_before_teardown": [[272, "103", "RmAlloc", "0", "0x5080", "0x0"], [273, "76", "RmControl", "0", "0x2080012b", "0x0"], [274, "103", "RmAlloc", "0", "0xcfb0", "0x56"]]}
+ARM_DIAGNOSTIC_READY run=base_off_1 2026-10-20T16:11:10+00:00
+[2026-10-20T16:11:10Z] stopping kfwin (pid 111287)
+[2026-10-20T16:11:30Z] stopped
+QEMU_STOPPED
+ARM_EXIT run=base_off_1 rc=0 2026-10-20T16:11:33+00:00

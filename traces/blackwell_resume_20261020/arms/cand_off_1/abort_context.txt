@@ -1,0 +1,518 @@
+2132: kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x2080012b client=H object=H result=0x0
+2134: kf3: act promote translated context: 0xc1d00016:0xff04000b GPU_PROMOTE_CTX satisfied by Translated host 0x40080002 GR=None VIDEO=Some((cafe0073, cfb7, 3f)) entries=0 init_ids=0x0 va_ids=0x0 bound=false — no guest buffer touched (5 us, off the GSP lock)
+2135: kf3: GSP rpc RmControl seq=0
+2137: kf3: w#416 bar0 @0x110c00 = 0x0 phase=Running
+2138: kf-rm: rpc-trace fn=103 RmAlloc seq=0 class=0xcfb7 client=H parent=H handle=H result=0x0
+2140: kf3: GSP rpc RmAlloc seq=0
+2141: kf3: w#417 bar0 @0x110c00 = 0x0 phase=Running
+2142: kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x0080170f client=H object=H result=0x0
+2143: kf-rm: channel-property-facts envelope=0xc1d00016:0xff020000 channel=0xff04000b property=0x0 value=0xfa0
+2145: kf3: GSP rpc RmControl seq=0
+2146: kf3: act channel timeslice: 0xc1d00016:0xff04000b SET_CHANNEL_PROPERTIES ENGINE_TIMESLICE 4000 us on host group 0xcafe0071 (twin 0x40080002) (319 us, off the GSP lock)
+2148: kf3: w#418 bar0 @0x110c00 = 0x0 phase=Running
+2149: kf3: chan 0xc1d00016:0xff04000b GPFIFO_SCHEDULE enable=true (token 0x380d, host 0x40080002)
+2150: kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0xa06f0103 client=H object=H result=0x0
+2151: kf3: GSP rpc RmControl seq=0
+2152: kf3: w#419 bar0 @0x110c00 = 0x0 phase=Running
+2153: kf-rm: chanlink: client 0xc1d00017 root: kernel=false internal=false
+2154: kf-rm: rpc-trace fn=103 RmAlloc seq=0 class=0x0000 client=H parent=H handle=H result=0x0
+2156: kf3: GSP rpc RmAlloc seq=0
+2157: kf3: w#420 bar0 @0x110c00 = 0x0 phase=Running
+2158: kf-rm: rpc-trace fn=103 RmAlloc seq=0 class=0x0080 client=H parent=H handle=H device_facts=DeviceAllocFacts { device_id: 0, h_client_share: c1d00002, h_target_client: c1d00002, h_target_device: ff010000, flags: 38, va_space_size: 10000000000, va_mode: 0 } result=0x0
+2160: kf3: GSP rpc RmAlloc seq=0
+2161: kf3: w#421 bar0 @0x110c00 = 0x0 phase=Running
+2162: kf-rm: rpc-trace fn=103 RmAlloc seq=0 class=0x2080 client=H parent=H handle=H result=0x0
+2164: kf3: GSP rpc RmAlloc seq=0
+2165: kf3: w#422 bar0 @0x110c00 = 0x0 phase=Running
+2166: kf-rm: rpc-trace fn=103 RmAlloc seq=0 class=0x0070 client=H parent=H handle=H result=0x0
+2168: kf3: GSP rpc RmAlloc seq=0
+2169: kf3: w#423 bar0 @0x110c00 = 0x0 phase=Running
+2170: kf-rm: rpc-trace fn=103 RmAlloc seq=0 class=0x0070 client=H parent=H handle=H result=0x0
+2172: kf3: GSP rpc RmAlloc seq=0
+2173: kf3: w#424 bar0 @0x110c00 = 0x0 phase=Running
+2174: kf3: FIFO_GET_LATENCY_BUFFER_SIZE engine 0x33: gp=0x40 pb=0x100 (the host's answer)
+2175: kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x0080170e client=H object=H result=0x0
+2176: kf3: GSP rpc RmControl seq=0
+2177: kf3: mem t=192.542s walk reconciled [0xc1d00002ff000870:+1-0r0] completed=[(234, Cleared)] unreconciled=[]
+2178: kf3: w#425 bar0 @0x110c00 = 0x0 phase=Running
+2179: kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x20802a08 client=H object=H result=0x0
+2180: kf3: GSP rpc RmControl seq=0
+2181: kf3: mem t=192.549s walk reconciled [0xffffffff00000002:+1-0r0] completed=[(235, Cleared)] unreconciled=[]
+2182: kf3: w#426 bar0 @0x110c00 = 0x0 phase=Running
+2183: kf-rm: chanlink: CLASSIFY 0xc1d00017:0xff04000c kernel work -> Translated (the kernel driver's own process)
+2185: kf-rm: rpc-trace fn=103 RmAlloc seq=0 class=0xca6f client=H parent=H handle=H result=0x0
+2187: kf3: GSP rpc RmAlloc seq=0
+2188: kf-host: channel birth h=0xcafe0076 engine=0x33 reply_flags=0x00000080 PRIVILEGED_CHANNEL=0 privilege=USER cap_sys_admin=cleared-for-call
+2192: kf3: w#427 bar0 @0x110c00 = 0x0 phase=Running
+2193: kf3: chan 0xc1d00017:0xff04000c: NV50_DEFERRED_API 0xff1fe010 ADMITTED on Translated host 0x40150001, software classID Some(1) (OWNER_RULINGS §U.1)
+2194: kf-rm: rpc-trace fn=103 RmAlloc seq=0 class=0x5080 client=H parent=H handle=H result=0x0
+2196: kf3: GSP rpc RmAlloc seq=0
+2197: kf3: mem t=192.558s walk reconciled [0xffffffff00000002:+1-0r0] completed=[(236, Cleared)] unreconciled=[]
+2198: kf3: mem t=192.559s walk reconciled [0xc1d00002ff000870:+1-0r0] completed=[(237, Cleared)] unreconciled=[]
+2199: kf3: w#428 bar0 @0x110c00 = 0x0 phase=Running
+2200: kf-rm: chanlink: GPU_PROMOTE_CTX on 0xc1d00017:0xff030000 params=560 rpc_flags=0x0
+2201: kf-rm: chanlink: falcon ctx promote 0xc1d00017:0xff04000c engine 0x33 guest ctx buffer VA 0x120582000+0x1000
+2202: kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x2080012b client=H object=H result=0x0
+2204: kf3: act promote translated context: 0xc1d00017:0xff04000c GPU_PROMOTE_CTX satisfied by Translated host 0x40150001 GR=None VIDEO=Some((cafe0077, cffa, 33)) entries=0 init_ids=0x0 va_ids=0x0 bound=false — no guest buffer touched (6 us, off the GSP lock)
+2205: kf3: GSP rpc RmControl seq=0
+2207: kf3: w#429 bar0 @0x110c00 = 0x0 phase=Running
+2208: kf-rm: RPC-REFUSED #2 AllocClassNotPermitted { class: 53242, denial: NotOnAllowlist } ⇒ answered NV_ERR_NOT_SUPPORTED (0x56). ⊘ The guest sees only the status; this line is the only place the REASON exists. (printing the first 24; the total rides the refusal census)
+2209: kf-rm: rpc-trace fn=103 RmAlloc seq=0 class=0xcffa client=H parent=H handle=H result=0x56
+2211: kf3: GSP rpc RmAlloc seq=0
+2212: kf3: GSP REFUSED fn103/0x0000cffa=0x56 (GSP_RM_ALLOC) first_seq=0 — the guest read a non-OK status
+2213: kf3: mem t=192.561s walk reconciled [0xc1d00002ff000870:+0-1r0] completed=[(238, Cleared)] unreconciled=[]
+2214: kf3: w#430 bar0 @0x110c00 = 0x0 phase=Running
+2215: kf-rm: rpc-trace fn=10 Free seq=0  result=0x0
+2216: kf3: GSP rpc Free seq=0
+2217: kf3: w#431 bar0 @0x110c00 = 0x0 phase=Running
+2218: kf-rm: rpc-trace fn=10 Free seq=0  result=0x0
+2220: kf3: GSP rpc Free seq=0
+2221: kf3: TSPACE-RETIRE tok=0x400e host=0x40150001 key=VasKey(13965662457344034928) ring_va=0xff00d00000 released=true stale_binds=0/0 late=0 indeterminate=0 unresolved[walk=0 acquire=0 refused=0]
+2222: kf3: DOORBELL-LEDGER tok=0x0000400e route=translated emulated=0 forwarded=0 host=0x40150001 fast=0
+2223: kf3: chan token 0x400e (host 0x40150001) RETIRED, forwarded=0 submissions=0 splits=0/0 serves=0 last_put=None gp_get=None store_views=0 privilege=Some(ChannelPrivilege { level: 2, uvm_owned: false }) dead=None inca=[refused_methods=0 subdevice_masks=0 control_entries=0 ext_base_unapplied=0] gr_tier=false gr[methods=0 inert_binds=0 objects=[]] gp_get_by_engine=(false, 0)
+2224: kf3: act free: 0xc1d00017:0xff04000c: translated host 0x40150001 (2629 us, off the GSP lock)
+2226: kf3: mem t=192.569s walk reconciled [0xc1d00002ff000870:+0-1r0] completed=[(239, Cleared)] unreconciled=[]
+2227: kf3: w#432 bar0 @0x110c00 = 0x0 phase=Running
+2228: kf-rm: rpc-trace fn=10 Free seq=0  result=0x0
+2229: kf3: GSP rpc Free seq=0
+2230: kf3: w#433 bar0 @0x110c00 = 0x0 phase=Running
+2231: kf-rm: rpc-trace fn=10 Free seq=0  result=0x0
+2232: kf3: GSP rpc Free seq=0
+2233: kf3: w#434 bar0 @0x110c00 = 0x0 phase=Running
+2234: kf-rm: rpc-trace fn=10 Free seq=0  result=0x0
+2235: kf3: GSP rpc Free seq=0
+2236: kf3: w#435 bar0 @0x110c00 = 0x0 phase=Running
+2237: kf-rm: rpc-trace fn=10 Free seq=0  result=0x0
+2238: kf3: GSP rpc Free seq=0
+2239: kf3: w#436 bar0 @0x110c00 = 0x0 phase=Running
+2240: kf-rm: rpc-trace fn=10 Free seq=0  result=0x0
+2241: kf3: GSP rpc Free seq=0
+2242: kf3: w#437 bar0 @0x110c00 = 0x0 phase=Running
+2243: kf-rm: rpc-trace fn=10 Free seq=0  result=0x0
+2244: kf3: GSP rpc Free seq=0
+2245: kf3: w#438 bar0 @0x110c00 = 0x0 phase=Running
+2246: kf-rm: rpc-trace fn=10 Free seq=0  result=0x0
+2247: kf3: GSP rpc Free seq=0
+2248: kf3: w#439 bar0 @0x110c00 = 0x0 phase=Running
+2249: kf-rm: rpc-trace fn=10 Free seq=0  result=0x0
+2251: kf3: GSP rpc Free seq=0
+2252: kf3: TSPACE-RETIRE tok=0x1805 host=0x40090001 key=VasKey(13965662457344034928) ring_va=0xff00400000 released=true stale_binds=0/0 late=0 indeterminate=0 unresolved[walk=0 acquire=0 refused=0]
+2253: kf3: DOORBELL-LEDGER tok=0x00001805 route=translated emulated=0 forwarded=0 host=0x40090001 fast=0
+2254: kf3: chan token 0x1805 (host 0x40090001) RETIRED, forwarded=0 submissions=0 splits=0/0 serves=1 last_put=Some(0) gp_get=None store_views=0 privilege=Some(ChannelPrivilege { level: 2, uvm_owned: false }) dead=None inca=[refused_methods=0 subdevice_masks=0 control_entries=0 ext_base_unapplied=0] gr_tier=false gr[methods=0 inert_binds=0 objects=[]] gp_get_by_engine=(false, 0)
+2255: kf3: act free: 0xc1d0000e:0xff040003: translated host 0x40090001 (2627 us, off the GSP lock)
+2257: kf3: w#440 bar0 @0x110c00 = 0x0 phase=Running
+2258: kf-rm: rpc-trace fn=10 Free seq=0  result=0x0
+2259: kf3: GSP rpc Free seq=0
+2260: kf3: w#441 bar0 @0x110c00 = 0x0 phase=Running
+2261: kf-rm: rpc-trace fn=10 Free seq=0  result=0x0
+2262: kf3: GSP rpc Free seq=0
+2263: kf3: w#442 bar0 @0x110c00 = 0x0 phase=Running
+2264: kf-rm: rpc-trace fn=10 Free seq=0  result=0x0
+2265: kf3: GSP rpc Free seq=0
+2266: kf3: w#443 bar0 @0x110c00 = 0x0 phase=Running
+2267: kf-rm: rpc-trace fn=10 Free seq=0  result=0x0
+2268: kf3: GSP rpc Free seq=0
+2269: kf3: w#444 bar0 @0x110c00 = 0x0 phase=Running
+2270: kf-rm: rpc-trace fn=10 Free seq=0  result=0x0
+2271: kf3: GSP rpc Free seq=0
+2272: kf3: w#445 bar0 @0x110c00 = 0x0 phase=Running
+2273: kf-rm: rpc-trace fn=10 Free seq=0  result=0x0
+2274: kf3: GSP rpc Free seq=0
+2275: kf3: w#446 bar0 @0x110c00 = 0x0 phase=Running
+2276: kf-rm: rpc-trace fn=10 Free seq=0  result=0x0
+2277: kf3: GSP rpc Free seq=0
+2278: kf3: w#447 bar0 @0x110c00 = 0x0 phase=Running
+2279: kf-rm: rpc-trace fn=10 Free seq=0  result=0x0
+2281: kf3: GSP rpc Free seq=0
+2282: kf3: TSPACE-RETIRE tok=0x2006 host=0x400c0001 key=VasKey(13965662457344034928) ring_va=0xff00500000 released=true stale_binds=0/0 late=0 indeterminate=0 unresolved[walk=0 acquire=0 refused=0]
+2283: kf3: DOORBELL-LEDGER tok=0x00002006 route=translated emulated=0 forwarded=0 host=0x400c0001 fast=0
+2284: kf3: chan token 0x2006 (host 0x400c0001) RETIRED, forwarded=0 submissions=0 splits=0/0 serves=1 last_put=Some(0) gp_get=None store_views=0 privilege=Some(ChannelPrivilege { level: 2, uvm_owned: false }) dead=None inca=[refused_methods=0 subdevice_masks=0 control_entries=0 ext_base_unapplied=0] gr_tier=false gr[methods=0 inert_binds=0 objects=[]] gp_get_by_engine=(false, 0)
+2285: kf3: act free: 0xc1d0000f:0xff040004: translated host 0x400c0001 (2533 us, off the GSP lock)
+2287: kf3: w#448 bar0 @0x110c00 = 0x0 phase=Running
+2288: kf-rm: rpc-trace fn=10 Free seq=0  result=0x0
+2289: kf3: GSP rpc Free seq=0
+2290: kf3: w#449 bar0 @0x110c00 = 0x0 phase=Running
+2291: kf-rm: rpc-trace fn=10 Free seq=0  result=0x0
+2292: kf3: GSP rpc Free seq=0
+2293: kf3: w#450 bar0 @0x110c00 = 0x0 phase=Running
+2294: kf-rm: rpc-trace fn=10 Free seq=0  result=0x0
+2295: kf3: GSP rpc Free seq=0
+2296: kf3: w#451 bar0 @0x110c00 = 0x0 phase=Running
+2297: kf-rm: rpc-trace fn=10 Free seq=0  result=0x0
+2298: kf3: GSP rpc Free seq=0
+2299: kf3: w#452 bar0 @0x110c00 = 0x0 phase=Running
+2300: kf-rm: rpc-trace fn=10 Free seq=0  result=0x0
+2301: kf3: GSP rpc Free seq=0
+2302: kf3: w#453 bar0 @0x110c00 = 0x0 phase=Running
+2303: kf-rm: rpc-trace fn=10 Free seq=0  result=0x0
+2304: kf3: GSP rpc Free seq=0
+2305: kf3: w#454 bar0 @0x110c00 = 0x0 phase=Running
+2306: kf-rm: rpc-trace fn=10 Free seq=0  result=0x0
+2307: kf3: GSP rpc Free seq=0
+2308: kf3: w#455 bar0 @0x110c00 = 0x0 phase=Running
+2309: kf-rm: rpc-trace fn=10 Free seq=0  result=0x0
+2311: kf3: GSP rpc Free seq=0
+2312: kf3: TSPACE-RETIRE tok=0x807 host=0x400d000d key=VasKey(13965662457344034928) ring_va=0xff00600000 released=true stale_binds=0/0 late=0 indeterminate=0 unresolved[walk=0 acquire=0 refused=0]
+2313: kf3: DOORBELL-LEDGER tok=0x00000807 route=translated emulated=0 forwarded=0 host=0x400d000d fast=0
+2314: kf3: chan token 0x807 (host 0x400d000d) RETIRED, forwarded=0 submissions=0 splits=0/0 serves=1 last_put=Some(0) gp_get=None store_views=0 privilege=Some(ChannelPrivilege { level: 2, uvm_owned: false }) dead=None inca=[refused_methods=0 subdevice_masks=0 control_entries=0 ext_base_unapplied=0] gr_tier=false gr[methods=0 inert_binds=0 objects=[]] gp_get_by_engine=(false, 0)
+2315: kf3: act free: 0xc1d00010:0xff040005: translated host 0x400d000d (2342 us, off the GSP lock)
+2318: kf3: w#456 bar0 @0x110c00 = 0x0 phase=Running
+2319: kf-rm: rpc-trace fn=10 Free seq=0  result=0x0
+2320: kf3: GSP rpc Free seq=0
+2321: kf3: w#457 bar0 @0x110c00 = 0x0 phase=Running
+2322: kf-rm: rpc-trace fn=10 Free seq=0  result=0x0
+2323: kf3: GSP rpc Free seq=0
+2324: kf3: w#458 bar0 @0x110c00 = 0x0 phase=Running
+2325: kf-rm: rpc-trace fn=10 Free seq=0  result=0x0
+2326: kf3: GSP rpc Free seq=0
+2327: kf3: w#459 bar0 @0x110c00 = 0x0 phase=Running
+2328: kf-rm: rpc-trace fn=10 Free seq=0  result=0x0
+2329: kf3: GSP rpc Free seq=0
+2330: kf3: w#460 bar0 @0x110c00 = 0x0 phase=Running
+2331: kf-rm: rpc-trace fn=10 Free seq=0  result=0x0
+2332: kf3: GSP rpc Free seq=0
+2333: kf3: w#461 bar0 @0x110c00 = 0x0 phase=Running
+2334: kf-rm: rpc-trace fn=10 Free seq=0  result=0x0
+2335: kf3: GSP rpc Free seq=0
+2336: kf3: w#462 bar0 @0x110c00 = 0x0 phase=Running
+2337: kf-rm: rpc-trace fn=10 Free seq=0  result=0x0
+2338: kf3: GSP rpc Free seq=0
+2339: kf3: w#463 bar0 @0x110c00 = 0x0 phase=Running
+2340: kf-rm: rpc-trace fn=10 Free seq=0  result=0x0
+2341: kf3: GSP rpc Free seq=0
+2342: kf3: w#464 bar0 @0x110c00 = 0x0 phase=Running
+2343: kf-rm: rpc-trace fn=10 Free seq=0  result=0x0
+2345: kf3: GSP rpc Free seq=0
+2346: kf3: TSPACE-RETIRE tok=0x2808 host=0x40060001 key=VasKey(13965662457344034928) ring_va=0xff00700000 released=true stale_binds=0/0 late=0 indeterminate=0 unresolved[walk=0 acquire=0 refused=0]
+2347: kf3: DOORBELL-LEDGER tok=0x00002808 route=translated emulated=0 forwarded=0 host=0x40060001 fast=0
+2348: kf3: chan token 0x2808 (host 0x40060001) RETIRED, forwarded=0 submissions=0 splits=0/0 serves=1 last_put=Some(0) gp_get=None store_views=0 privilege=Some(ChannelPrivilege { level: 2, uvm_owned: false }) dead=None inca=[refused_methods=0 subdevice_masks=0 control_entries=0 ext_base_unapplied=0] gr_tier=false gr[methods=0 inert_binds=0 objects=[]] gp_get_by_engine=(false, 0)
+2349: kf3: act free: 0xc1d00011:0xff040006: translated host 0x40060001 (2771 us, off the GSP lock)
+2351: kf3: w#465 bar0 @0x110c00 = 0x0 phase=Running
+2352: kf-rm: rpc-trace fn=10 Free seq=0  result=0x0
+2353: kf3: GSP rpc Free seq=0
+2354: kf3: w#466 bar0 @0x110c00 = 0x0 phase=Running
+2355: kf-rm: rpc-trace fn=10 Free seq=0  result=0x0
+2356: kf3: GSP rpc Free seq=0
+2357: kf3: w#467 bar0 @0x110c00 = 0x0 phase=Running
+2358: kf-rm: rpc-trace fn=10 Free seq=0  result=0x0
+2359: kf3: GSP rpc Free seq=0
+2360: kf3: w#468 bar0 @0x110c00 = 0x0 phase=Running
+2361: kf-rm: rpc-trace fn=10 Free seq=0  result=0x0
+2362: kf3: GSP rpc Free seq=0
+2363: kf3: w#469 bar0 @0x110c00 = 0x0 phase=Running
+2364: kf-rm: rpc-trace fn=10 Free seq=0  result=0x0
+2365: kf3: GSP rpc Free seq=0
+2366: kf3: w#470 bar0 @0x110c00 = 0x0 phase=Running
+2367: kf-rm: rpc-trace fn=10 Free seq=0  result=0x0
+2368: kf3: GSP rpc Free seq=0
+2369: kf3: w#471 bar0 @0x110c00 = 0x0 phase=Running
+2370: kf-rm: rpc-trace fn=10 Free seq=0  result=0x0
+2371: kf3: GSP rpc Free seq=0
+2372: kf3: w#472 bar0 @0x110c00 = 0x0 phase=Running
+2373: kf-rm: rpc-trace fn=10 Free seq=0  result=0x0
+2375: kf3: GSP rpc Free seq=0
+2376: kf3: TSPACE-RETIRE tok=0x3009 host=0x40070001 key=VasKey(13965662457344034928) ring_va=0xff00800000 released=true stale_binds=0/0 late=0 indeterminate=0 unresolved[walk=0 acquire=0 refused=0]
+2377: kf3: DOORBELL-LEDGER tok=0x00003009 route=translated emulated=0 forwarded=0 host=0x40070001 fast=0
+2378: kf3: chan token 0x3009 (host 0x40070001) RETIRED, forwarded=0 submissions=0 splits=0/0 serves=1 last_put=Some(0) gp_get=None store_views=0 privilege=Some(ChannelPrivilege { level: 2, uvm_owned: false }) dead=None inca=[refused_methods=0 subdevice_masks=0 control_entries=0 ext_base_unapplied=0] gr_tier=false gr[methods=0 inert_binds=0 objects=[]] gp_get_by_engine=(false, 0)
+2379: kf3: act free: 0xc1d00012:0xff040007: translated host 0x40070001 (2575 us, off the GSP lock)
+2381: kf3: w#473 bar0 @0x110c00 = 0x0 phase=Running
+2382: kf-rm: rpc-trace fn=10 Free seq=0  result=0x0
+2383: kf3: GSP rpc Free seq=0
+2384: kf3: w#474 bar0 @0x110c00 = 0x0 phase=Running
+2385: kf-rm: rpc-trace fn=10 Free seq=0  result=0x0
+2386: kf3: GSP rpc Free seq=0
+2387: kf3: w#475 bar0 @0x110c00 = 0x0 phase=Running
+2388: kf-rm: rpc-trace fn=10 Free seq=0  result=0x0
+2389: kf3: GSP rpc Free seq=0
+2390: kf3: w#476 bar0 @0x110c00 = 0x0 phase=Running
+2391: kf-rm: rpc-trace fn=10 Free seq=0  result=0x0
+2392: kf3: GSP rpc Free seq=0
+2393: kf3: w#477 bar0 @0x110c00 = 0x0 phase=Running
+2394: kf-rm: rpc-trace fn=10 Free seq=0  result=0x0
+2395: kf3: GSP rpc Free seq=0
+2396: kf3: w#478 bar0 @0x110c00 = 0x0 phase=Running
+2397: kf-rm: rpc-trace fn=10 Free seq=0  result=0x0
+2398: kf3: GSP rpc Free seq=0
+2399: kf3: w#479 bar0 @0x110c00 = 0x0 phase=Running
+2400: kf-rm: rpc-trace fn=10 Free seq=0  result=0x0
+2401: kf3: GSP rpc Free seq=0
+2402: kf3: w#480 bar0 @0x110c00 = 0x0 phase=Running
+2403: kf-rm: rpc-trace fn=10 Free seq=0  result=0x0
+2405: kf3: GSP rpc Free seq=0
+2406: kf3: TSPACE-RETIRE tok=0x380a host=0x40080001 key=VasKey(13965662457344034928) ring_va=0xff00900000 released=true stale_binds=0/0 late=0 indeterminate=0 unresolved[walk=0 acquire=0 refused=0]
+2407: kf3: DOORBELL-LEDGER tok=0x0000380a route=translated emulated=0 forwarded=0 host=0x40080001 fast=0
+2408: kf3: chan token 0x380a (host 0x40080001) RETIRED, forwarded=0 submissions=0 splits=0/0 serves=1 last_put=Some(0) gp_get=None store_views=0 privilege=Some(ChannelPrivilege { level: 2, uvm_owned: false }) dead=None inca=[refused_methods=0 subdevice_masks=0 control_entries=0 ext_base_unapplied=0] gr_tier=false gr[methods=0 inert_binds=0 objects=[]] gp_get_by_engine=(false, 0)
+2409: kf3: act free: 0xc1d00013:0xff040008: translated host 0x40080001 (2553 us, off the GSP lock)
+2411: kf3: w#481 bar0 @0x110c00 = 0x0 phase=Running
+2412: kf-rm: rpc-trace fn=10 Free seq=0  result=0x0
+2413: kf3: GSP rpc Free seq=0
+2414: kf3: w#482 bar0 @0x110c00 = 0x0 phase=Running
+2415: kf-rm: rpc-trace fn=10 Free seq=0  result=0x0
+2416: kf3: GSP rpc Free seq=0
+2417: kf3: w#483 bar0 @0x110c00 = 0x0 phase=Running
+2418: kf-rm: rpc-trace fn=10 Free seq=0  result=0x0
+2419: kf3: GSP rpc Free seq=0
+2420: kf3: w#484 bar0 @0x110c00 = 0x0 phase=Running
+2421: kf-rm: rpc-trace fn=10 Free seq=0  result=0x0
+2422: kf3: GSP rpc Free seq=0
+2423: kf3: w#485 bar0 @0x110c00 = 0x0 phase=Running
+2424: kf-rm: rpc-trace fn=10 Free seq=0  result=0x0
+2425: kf3: GSP rpc Free seq=0
+2426: kf3: w#486 bar0 @0x110c00 = 0x0 phase=Running
+2427: kf-rm: rpc-trace fn=10 Free seq=0  result=0x0
+2428: kf3: GSP rpc Free seq=0
+2429: kf3: w#487 bar0 @0x110c00 = 0x0 phase=Running
+2430: kf-rm: rpc-trace fn=10 Free seq=0  result=0x0
+2431: kf3: GSP rpc Free seq=0
+2432: kf3: w#488 bar0 @0x110c00 = 0x0 phase=Running
+2433: kf-rm: rpc-trace fn=10 Free seq=0  result=0x0
+2435: kf3: GSP rpc Free seq=0
+2436: kf3: TSPACE-RETIRE tok=0x280b host=0x40060002 key=VasKey(13965662457344034928) ring_va=0xff00a00000 released=true stale_binds=0/0 late=0 indeterminate=0 unresolved[walk=0 acquire=0 refused=0]
+2437: kf3: DOORBELL-LEDGER tok=0x0000280b route=translated emulated=0 forwarded=0 host=0x40060002 fast=0
+2438: kf3: chan token 0x280b (host 0x40060002) RETIRED, forwarded=0 submissions=0 splits=0/0 serves=1 last_put=Some(0) gp_get=None store_views=0 privilege=Some(ChannelPrivilege { level: 2, uvm_owned: false }) dead=None inca=[refused_methods=0 subdevice_masks=0 control_entries=0 ext_base_unapplied=0] gr_tier=false gr[methods=0 inert_binds=0 objects=[]] gp_get_by_engine=(false, 0)
+2439: kf3: act free: 0xc1d00014:0xff040009: translated host 0x40060002 (2494 us, off the GSP lock)
+2441: kf3: w#489 bar0 @0x110c00 = 0x0 phase=Running
+2442: kf-rm: rpc-trace fn=10 Free seq=0  result=0x0
+2443: kf3: GSP rpc Free seq=0
+2444: kf3: w#490 bar0 @0x110c00 = 0x0 phase=Running
+2445: kf-rm: rpc-trace fn=10 Free seq=0  result=0x0
+2446: kf3: GSP rpc Free seq=0
+2447: kf3: w#491 bar0 @0x110c00 = 0x0 phase=Running
+2448: kf-rm: rpc-trace fn=10 Free seq=0  result=0x0
+2449: kf3: GSP rpc Free seq=0
+2450: kf3: w#492 bar0 @0x110c00 = 0x0 phase=Running
+2451: kf-rm: rpc-trace fn=10 Free seq=0  result=0x0
+2452: kf3: GSP rpc Free seq=0
+2453: kf3: w#493 bar0 @0x110c00 = 0x0 phase=Running
+2454: kf-rm: rpc-trace fn=10 Free seq=0  result=0x0
+2455: kf3: GSP rpc Free seq=0
+2456: kf3: w#494 bar0 @0x110c00 = 0x0 phase=Running
+2457: kf-rm: rpc-trace fn=10 Free seq=0  result=0x0
+2458: kf3: GSP rpc Free seq=0
+2459: kf3: w#495 bar0 @0x110c00 = 0x0 phase=Running
+2460: kf-rm: rpc-trace fn=10 Free seq=0  result=0x0
+2461: kf3: GSP rpc Free seq=0
+2462: kf3: w#496 bar0 @0x110c00 = 0x0 phase=Running
+2463: kf-rm: rpc-trace fn=10 Free seq=0  result=0x0
+2465: kf3: GSP rpc Free seq=0
+2466: kf3: TSPACE-RETIRE tok=0x300c host=0x40070002 key=VasKey(13965662457344034928) ring_va=0xff00b00000 released=true stale_binds=0/0 late=0 indeterminate=0 unresolved[walk=0 acquire=0 refused=0]
+2467: kf3: DOORBELL-LEDGER tok=0x0000300c route=translated emulated=0 forwarded=0 host=0x40070002 fast=0
+2468: kf3: chan token 0x300c (host 0x40070002) RETIRED, forwarded=0 submissions=0 splits=0/0 serves=1 last_put=Some(0) gp_get=None store_views=0 privilege=Some(ChannelPrivilege { level: 2, uvm_owned: false }) dead=None inca=[refused_methods=0 subdevice_masks=0 control_entries=0 ext_base_unapplied=0] gr_tier=false gr[methods=0 inert_binds=0 objects=[]] gp_get_by_engine=(false, 0)
+2469: kf3: act free: 0xc1d00015:0xff04000a: translated host 0x40070002 (2561 us, off the GSP lock)
+2471: kf3: w#497 bar0 @0x110c00 = 0x0 phase=Running
+2472: kf-rm: rpc-trace fn=10 Free seq=0  result=0x0
+2473: kf3: GSP rpc Free seq=0
+2474: kf3: w#498 bar0 @0x110c00 = 0x0 phase=Running
+2475: kf-rm: rpc-trace fn=10 Free seq=0  result=0x0
+2476: kf3: GSP rpc Free seq=0
+2477: kf3: w#499 bar0 @0x110c00 = 0x0 phase=Running
+2478: kf-rm: rpc-trace fn=10 Free seq=0  result=0x0
+2479: kf3: GSP rpc Free seq=0
+2480: kf3: w#500 bar0 @0x110c00 = 0x0 phase=Running
+2481: kf-rm: rpc-trace fn=10 Free seq=0  result=0x0
+2482: kf3: GSP rpc Free seq=0
+2483: kf3: w#501 bar0 @0x110c00 = 0x0 phase=Running
+2484: kf-rm: rpc-trace fn=10 Free seq=0  result=0x0
+2485: kf3: GSP rpc Free seq=0
+2486: kf3: w#502 bar0 @0x110c00 = 0x0 phase=Running
+2487: kf-rm: rpc-trace fn=10 Free seq=0  result=0x0
+2488: kf3: GSP rpc Free seq=0
+2489: kf3: w#503 bar0 @0x110c00 = 0x0 phase=Running
+2490: kf-rm: rpc-trace fn=10 Free seq=0  result=0x0
+2491: kf3: GSP rpc Free seq=0
+2492: kf3: w#504 bar0 @0x110c00 = 0x0 phase=Running
+2493: kf-rm: rpc-trace fn=10 Free seq=0  result=0x0
+2495: kf3: GSP rpc Free seq=0
+2496: kf3: TSPACE-RETIRE tok=0x380d host=0x40080002 key=VasKey(13965662457344034928) ring_va=0xff00c00000 released=true stale_binds=0/0 late=0 indeterminate=0 unresolved[walk=0 acquire=0 refused=0]
+2497: kf3: DOORBELL-LEDGER tok=0x0000380d route=translated emulated=0 forwarded=0 host=0x40080002 fast=0
+2498: kf3: chan token 0x380d (host 0x40080002) RETIRED, forwarded=0 submissions=0 splits=0/0 serves=1 last_put=Some(0) gp_get=None store_views=0 privilege=Some(ChannelPrivilege { level: 2, uvm_owned: false }) dead=None inca=[refused_methods=0 subdevice_masks=0 control_entries=0 ext_base_unapplied=0] gr_tier=false gr[methods=0 inert_binds=0 objects=[]] gp_get_by_engine=(false, 0)
+2499: kf3: act free: 0xc1d00016:0xff04000b: translated host 0x40080002 (2591 us, off the GSP lock)
+2501: kf3: w#505 bar0 @0x110c00 = 0x0 phase=Running
+2502: kf-rm: rpc-trace fn=10 Free seq=0  result=0x0
+2503: kf3: GSP rpc Free seq=0
+2504: kf3: w#506 bar0 @0x110c00 = 0x0 phase=Running
+2505: kf-rm: rpc-trace fn=10 Free seq=0  result=0x0
+2506: kf3: GSP rpc Free seq=0
+2507: kf3: w#507 bar0 @0x110c00 = 0x0 phase=Running
+2508: kf-rm: rpc-trace fn=10 Free seq=0  result=0x0
+2509: kf3: GSP rpc Free seq=0
+2510: kf3: w#508 bar0 @0x110c00 = 0x0 phase=Running
+2511: kf-rm: rpc-trace fn=10 Free seq=0  result=0x0
+2512: kf3: GSP rpc Free seq=0
+2513: kf3: w#509 bar0 @0x110c00 = 0x0 phase=Running
+2514: kf-rm: rpc-trace fn=10 Free seq=0  result=0x0
+2515: kf3: GSP rpc Free seq=0
+2516: kf3: w#510 bar0 @0x110c00 = 0x0 phase=Running
+2517: kf-rm: rpc-trace fn=10 Free seq=0  result=0x0
+2518: kf3: GSP rpc Free seq=0
+2519: kf3: w#511 bar0 @0x110c00 = 0x0 phase=Running
+2520: kf-rm: rpc-trace fn=10 Free seq=0  result=0x0
+2521: kf3: GSP rpc Free seq=0
+2522: kf-rm: rpc-trace fn=10 Free seq=0  result=0x0
+2523: kf3: GSP rpc Free seq=0
+2524: kf-rm: rpc-trace fn=10 Free seq=0  result=0x0
+2525: kf3: GSP rpc Free seq=0
+2526: kf-rm: rpc-trace fn=10 Free seq=0  result=0x0
+2527: kf3: GSP rpc Free seq=0
+2528: kf-rm: rpc-trace fn=10 Free seq=0  result=0x0
+2529: kf3: GSP rpc Free seq=0
+2530: kf-rm: rpc-trace fn=10 Free seq=0  result=0x0
+2531: kf3: GSP rpc Free seq=0
+2532: kf-rm: rpc-trace fn=10 Free seq=0  result=0x0
+2534: kf3: GSP rpc Free seq=0
+2535: kf3: TSPACE-RETIRE tok=0x802 host=0x400d000b key=VasKey(13965662457344034928) ring_va=0xff00100000 released=true stale_binds=0/0 late=0 indeterminate=0 unresolved[walk=0 acquire=0 refused=0]
+2536: kf3: DOORBELL-LEDGER tok=0x00000802 route=translated emulated=0 forwarded=0 host=0x400d000b fast=0
+2537: kf3: chan token 0x802 (host 0x400d000b) RETIRED, forwarded=0 submissions=0 splits=0/0 serves=1 last_put=Some(0) gp_get=None store_views=0 privilege=Some(ChannelPrivilege { level: 2, uvm_owned: false }) dead=None inca=[refused_methods=0 subdevice_masks=0 control_entries=0 ext_base_unapplied=0] gr_tier=false gr[methods=0 inert_binds=0 objects=[]] gp_get_by_engine=(false, 0)
+2538: kf3: act free: 0xc1d0000a:0xff040000: translated host 0x400d000b (2273 us, off the GSP lock)
+2540: kf-rm: rpc-trace fn=10 Free seq=0  result=0x0
+2541: kf3: GSP rpc Free seq=0
+2542: kf-rm: rpc-trace fn=10 Free seq=0  result=0x0
+2543: kf3: GSP rpc Free seq=0
+2544: kf-rm: rpc-trace fn=10 Free seq=0  result=0x0
+2545: kf3: GSP rpc Free seq=0
+2546: kf-rm: rpc-trace fn=10 Free seq=0  result=0x0
+2547: kf3: GSP rpc Free seq=0
+2548: kf-rm: rpc-trace fn=10 Free seq=0  result=0x0
+2549: kf3: GSP rpc Free seq=0
+2550: kf-rm: rpc-trace fn=10 Free seq=0  result=0x0
+2551: kf3: GSP rpc Free seq=0
+2552: kf-rm: rpc-trace fn=10 Free seq=0  result=0x0
+2553: kf3: GSP rpc Free seq=0
+2554: kf-rm: rpc-trace fn=10 Free seq=0  result=0x0
+2555: kf3: GSP rpc Free seq=0
+2556: kf-rm: rpc-trace fn=10 Free seq=0  result=0x0
+2557: kf3: GSP rpc Free seq=0
+2558: kf-rm: rpc-trace fn=10 Free seq=0  result=0x0
+2559: kf3: GSP rpc Free seq=0
+2560: kf-rm: rpc-trace fn=10 Free seq=0  result=0x0
+2561: kf3: GSP rpc Free seq=0
+2562: kf-rm: rpc-trace fn=10 Free seq=0  result=0x0
+2563: kf3: GSP rpc Free seq=0
+2564: kf-rm: rpc-trace fn=10 Free seq=0  result=0x0
+2566: kf3: GSP rpc Free seq=0
+2567: kf3: TSPACE-RETIRE tok=0x3 host=0x4000000a key=VasKey(13965662457344034928) ring_va=0xff00200000 released=true stale_binds=0/0 late=0 indeterminate=0 unresolved[walk=0 acquire=0 refused=0]
+2568: kf3: DOORBELL-LEDGER tok=0x00000003 route=translated emulated=0 forwarded=0 host=0x4000000a fast=0
+2570: kf3: act free: 0xc1d0000c:0xff040001: translated host 0x4000000a (4236 us, off the GSP lock)
+2572: kf-rm: rpc-trace fn=10 Free seq=0  result=0x0
+2573: kf3: GSP rpc Free seq=0
+2574: kf-rm: rpc-trace fn=10 Free seq=0  result=0x0
+2575: kf3: GSP rpc Free seq=0
+2576: kf-rm: rpc-trace fn=10 Free seq=0  result=0x0
+2577: kf3: GSP rpc Free seq=0
+2578: kf-rm: rpc-trace fn=10 Free seq=0  result=0x0
+2579: kf3: GSP rpc Free seq=0
+2580: kf-rm: rpc-trace fn=10 Free seq=0  result=0x0
+2581: kf3: GSP rpc Free seq=0
+2582: kf-rm: rpc-trace fn=10 Free seq=0  result=0x0
+2583: kf3: GSP rpc Free seq=0
+2584: kf-rm: rpc-trace fn=10 Free seq=0  result=0x0
+2585: kf3: GSP rpc Free seq=0
+2586: kf-rm: rpc-trace fn=10 Free seq=0  result=0x0
+2587: kf3: GSP rpc Free seq=0
+2588: kf-rm: rpc-trace fn=10 Free seq=0  result=0x0
+2590: kf3: GSP rpc Free seq=0
+2591: kf3: TSPACE-RETIRE tok=0x804 host=0x400d000c key=VasKey(13965662457344034928) ring_va=0xff00300000 released=true stale_binds=0/0 late=0 indeterminate=0 unresolved[walk=0 acquire=0 refused=0]
+2592: kf3: DOORBELL-LEDGER tok=0x00000804 route=translated emulated=0 forwarded=0 host=0x400d000c fast=0
+2593: kf3: chan token 0x804 (host 0x400d000c) RETIRED, forwarded=0 submissions=0 splits=0/0 serves=1 last_put=Some(0) gp_get=None store_views=0 privilege=Some(ChannelPrivilege { level: 2, uvm_owned: false }) dead=None inca=[refused_methods=0 subdevice_masks=0 control_entries=0 ext_base_unapplied=0] gr_tier=false gr[methods=0 inert_binds=0 objects=[]] gp_get_by_engine=(false, 0)
+2594: kf3: act free: 0xc1d0000d:0xff040002: translated host 0x400d000c (2529 us, off the GSP lock)
+2596: kf-rm: rpc-trace fn=10 Free seq=0  result=0x0
+2597: kf3: GSP rpc Free seq=0
+2598: kf-rm: rpc-trace fn=10 Free seq=0  result=0x0
+2599: kf3: GSP rpc Free seq=0
+2600: kf-rm: rpc-trace fn=10 Free seq=0  result=0x0
+2601: kf3: GSP rpc Free seq=0
+2602: kf-rm: rpc-trace fn=10 Free seq=0  result=0x0
+2603: kf3: GSP rpc Free seq=0
+2604: kf-rm: rpc-trace fn=10 Free seq=0  result=0x0
+2605: kf3: GSP rpc Free seq=0
+2606: kf-rm: rpc-trace fn=10 Free seq=0  result=0x0
+2607: kf3: GSP rpc Free seq=0
+2608: kf-rm: rpc-trace fn=10 Free seq=0  result=0x0
+2609: kf3: GSP rpc Free seq=0
+2610: kf-rm: rpc-trace fn=10 Free seq=0  result=0x0
+2611: kf3: GSP rpc Free seq=0
+2612: kf3: bar1db view REMOVED #1: BAR1 0x7f00000+0x10000 (doorbells through BAR1 views so far: 0)
+2613: kf-rm: EXPERIMENT software-runlist diagnostic control=0x20801111 params_bytes=40 raw_u32_le=[ff008250,00000000,ff000100,00000000,00006000,00000000,00000001,00000000,00000000,00000000]; observation only
+2614: kf-rm: SW-RUNLIST HOST-OWNED 0x20801111 client=H object=H: NV_OK, request echoed, contents ignored (kernel channels are scheduled at birth) — AWAITING OWNER CONFIRMATION #2
+2615: kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x20801111 client=H object=H result=0x0
+2616: kf3: GSP rpc RmControl seq=0
+2617: kf-rm: rpc-trace fn=10 Free seq=0  result=0x0
+2618: kf3: GSP rpc Free seq=0
+2619: kf-rm: rpc-trace fn=10 Free seq=0  result=0x0
+2620: kf3: GSP rpc Free seq=0
+2621: kf-rm: rpc-trace fn=10 Free seq=0  result=0x0
+2622: kf3: GSP rpc Free seq=0
+2623: kf-rm: FECS-TRACE GET_FECS_TRACE_HW_ENABLE 0x20800a38: NV_OK bEnable=NV_FALSE (no guest ctxsw trace; the SETs stay unserviced) #6
+2624: kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x20800a38 client=H object=H result=0x0
+2625: kf3: GSP rpc RmControl seq=0
+2626: kf-rm: EXPERIMENT software-runlist diagnostic control=0x20801111 params_bytes=40 raw_u32_le=[ff008254,00000000,ff000104,00000000,00006000,00000000,00000001,00000000,00000000,00000000]; observation only
+2627: kf-rm: SW-RUNLIST HOST-OWNED 0x20801111 client=H object=H: NV_OK, request echoed, contents ignored (kernel channels are scheduled at birth) — AWAITING OWNER CONFIRMATION #3
+2628: kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x20801111 client=H object=H result=0x0
+2629: kf3: GSP rpc RmControl seq=0
+2630: kf-rm: rpc-trace fn=10 Free seq=0  result=0x0
+2631: kf3: GSP rpc Free seq=0
+2632: kf-rm: rpc-trace fn=10 Free seq=0  result=0x0
+2633: kf3: GSP rpc Free seq=0
+2634: kf-rm: rpc-trace fn=10 Free seq=0  result=0x0
+2635: kf3: GSP rpc Free seq=0
+2636: kf-rm: rpc-trace fn=10 Free seq=0  result=0x0
+2637: kf3: GSP rpc Free seq=0
+2638: kf-rm: rpc-trace fn=10 Free seq=0  result=0x0
+2639: kf3: GSP rpc Free seq=0
+2640: kf-rm: rpc-trace fn=10 Free seq=0  result=0x0
+2641: kf3: GSP rpc Free seq=0
+2642: kf-rm: rpc-trace fn=10 Free seq=0  result=0x0
+2643: kf3: GSP rpc Free seq=0
+2644: kf-rm: rpc-trace fn=10 Free seq=0  result=0x0
+2645: kf3: GSP rpc Free seq=0
+2646: kf-rm: rpc-trace fn=10 Free seq=0  result=0x0
+2647: kf3: GSP rpc Free seq=0
+2648: kf-rm: rpc-trace fn=10 Free seq=0  result=0x0
+2650: kf3: GSP rpc Free seq=0
+2651: kf3: TSPACE-RETIRE tok=0x1 host=0x400d000a key=VasKey(13970166074168049674) ring_va=0xff00000000 released=true stale_binds=0/0 late=0 indeterminate=0 unresolved[walk=0 acquire=0 refused=0]
+2652: kf3: DOORBELL-LEDGER tok=0x00000001 route=translated emulated=0 forwarded=0 host=0x400d000a fast=0
+2653: kf3: chan token 0x1 (host 0x400d000a) RETIRED, forwarded=0 submissions=0 splits=0/0 serves=1 last_put=Some(0) gp_get=None store_views=0 privilege=Some(ChannelPrivilege { level: 2, uvm_owned: false }) dead=None inca=[refused_methods=0 subdevice_masks=0 control_entries=0 ext_base_unapplied=0] gr_tier=false gr[methods=0 inert_binds=0 objects=[]] gp_get_by_engine=(false, 0)
+2654: kf3: act free: 0xc1e00007:0x2: translated host 0x400d000a (3107 us, off the GSP lock)
+2656: kf-rm: rpc-trace fn=10 Free seq=0  result=0x0
+2657: kf3: GSP rpc Free seq=0
+2658: kf-rm: rpc-trace fn=10 Free seq=0  result=0x0
+2659: kf3: GSP rpc Free seq=0
+2660: kf-rm: rpc-trace fn=10 Free seq=0  result=0x0
+2661: kf3: GSP rpc Free seq=0
+2662: kf-rm: rpc-trace fn=10 Free seq=0  result=0x0
+2663: kf3: GSP rpc Free seq=0
+2664: kf-rm: rpc-trace fn=10 Free seq=0  result=0x0
+2665: kf3: GSP rpc Free seq=0
+2666: kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x20800a6c client=H object=H result=0x0
+2667: kf3: GSP rpc RmControl seq=0
+2668: kf3: mem t=193.115s the guest wrote NV_VIRTUAL_FUNCTION_PRIV_FUNC_BAR1_BLOCK_LOW_ADDR = 0x0 (MODE PHYSICAL) at GSP phase Running
+2669: kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x20800ab4 client=H object=H result=none
+2670: kf3: GSP rpc RmControl seq=0
+2671: kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 0 }
+2672: kf3: GSP REFUSED fn76/0x20800ab4=0x56 (GSP_RM_CONTROL) first_seq=0 — the guest read a non-OK status
+2673: kf-rm: rpc-trace fn=10 Free seq=0  result=0x0
+2674: kf3: GSP rpc Free seq=0
+2675: kf-rm: rpc-trace fn=10 Free seq=0  result=0x0
+2676: kf3: GSP rpc Free seq=0
+2677: kf-rm: rpc-trace fn=10 Free seq=0  result=0x0
+2678: kf3: GSP rpc Free seq=0
+2679: kf-rm: FECS-TRACE GET_FECS_TRACE_HW_ENABLE 0x20800a38: NV_OK bEnable=NV_FALSE (no guest ctxsw trace; the SETs stay unserviced) #7
+2680: kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x20800a38 client=H object=H result=0x0
+2681: kf3: GSP rpc RmControl seq=0
+2682: kf-rm: rpc-trace fn=70 UpdateBarPde seq=0  result=0x0
+2684: kf3: GSP rpc UpdateBarPde seq=0
+2686: kf-rm: rpc-trace fn=10 Free seq=0  result=0x0
+2687: kf3: GSP rpc Free seq=0
+2688: kf-rm: rpc-trace fn=10 Free seq=0  result=0x0
+2689: kf3: GSP rpc Free seq=0
+2690: kf-rm: rpc-trace fn=10 Free seq=0  result=0x0
+2691: kf3: GSP rpc Free seq=0
+2692: kf-rm: rpc-trace fn=10 Free seq=0  result=0x0
+2693: kf3: GSP rpc Free seq=0
+2694: kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x20800afe client=H object=H result=none
+2695: kf3: GSP rpc RmControl seq=0
+2696: kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 0 }
+2697: kf-rm: rpc-trace fn=47 UnloadingGuestDriver seq=0  result=0x0
+2698: kf3: GSP rpc UnloadingGuestDriver seq=0
+2699: kf3: GSP fn 47 UNLOADING_GUEST_DRIVER seq=0: bInPMTransition=false bGc6Entering=false newLevel=0 — the guest's RM gives BAR1 up
+2700: kf3: GSP phase Running -> Halted

@@ -1,0 +1,1 @@
+/workspace/bwr-win/kfwin/logs/cand_off_1_b1_qemu.log	rpcs=540	teardown_at=388	last=fn103/cffa 	result=0x56

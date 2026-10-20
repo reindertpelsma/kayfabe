@@ -38,3 +38,14 @@ unload (fn 47) ordinal, Code/problem, 4101 count, System/Application events (nvl
 Kernel-PnP, DriverFrameworks-UserMode, WER), posted allocation headers (public rpc_gsp_rm_alloc_v03_00
 class/status/paramsSize), kayfabe host log lines (non-body) from 15 RPCs before teardown to the unload.
 Raw bodies, qemu logs, images and binaries stay on the rental.
+
+## Addendum 16:35 UTC — stated BEFORE the fix1 arms (no fix1 arm had started)
+
+MEASURED so far (n=1 each): base_off_1 aborts at CFB0 (ordinal 274, refused NotOnAllowlist 0x56),
+cand_off_1 accepts CFB0 x2 and CFB7 x6 and aborts at the next refused constructor, NVCFFA_VIDEO_OFA
+(ordinal 387, 0x56); both ON arms abort after the 4th CA7A (ordinal 275), identical for base and cand.
+
+- **H-OFA-OFF** (CFFA refusal is the next OFF wall). Product fix1 = 844eb167f (branch
+  claude/blackwell-ofa-20261020, PR53 + public CFFA admission, tests first). *Falsifier:* in fix1_off
+  CFFA is accepted and the guest tears down immediately after it (no new non-Free RPC) with Code 43.
+  *Support:* progress past CFFA (a later abort or Code 0).

@@ -1,0 +1,97 @@
+{
+ "log_sha256": "d7d8e173fe11b3266a8139a6c04267f6f897b2fe006c582e1a7cf590201ee62f",
+ "rpcs": 354,
+ "unload_ordinals": [
+  353
+ ],
+ "teardown_start_ordinal": 275,
+ "last_nonfree_before_teardown": [
+  [
+   272,
+   "103",
+   "RmAlloc",
+   "0",
+   "0x5080",
+   "0x0"
+  ],
+  [
+   273,
+   "76",
+   "RmControl",
+   "0",
+   "0x2080012b",
+   "0x0"
+  ],
+  [
+   274,
+   "103",
+   "RmAlloc",
+   "0",
+   "0xcfb0",
+   "0x56"
+  ]
+ ],
+ "policy_nonok": [
+  [
+   100,
+   "76",
+   "RmControl",
+   "0",
+   "0x20809064",
+   "0x56"
+  ],
+  [
+   141,
+   "103",
+   "RmAlloc",
+   "0",
+   "0xcbcb",
+   "0x56"
+  ],
+  [
+   274,
+   "103",
+   "RmAlloc",
+   "0",
+   "0xcfb0",
+   "0x56"
+  ]
+ ],
+ "alloc_posted_nonzero_body_status": [
+  {
+   "body_status": "0x56",
+   "body_truncated_on_rental": false,
+   "class_from_header": "0x0",
+   "class_selector": "0x0",
+   "declared_params_bytes": 0,
+   "diagnostic_record": 27,
+   "envelope_private_result": "0x56",
+   "envelope_result": "0x56",
+   "function": "0x67",
+   "header_decode": "PUBLIC_FIXED_HEADER",
+   "posted_message_sequence": 142,
+   "posted_payload_bytes": 32,
+   "private_body_exported": false,
+   "saved_bytes_on_rental": 32
+  },
+  {
+   "body_status": "0x56",
+   "body_truncated_on_rental": false,
+   "class_from_header": "0x0",
+   "class_selector": "0x0",
+   "declared_params_bytes": 0,
+   "diagnostic_record": 88,
+   "envelope_private_result": "0x56",
+   "envelope_result": "0x56",
+   "function": "0x67",
+   "header_decode": "PUBLIC_FIXED_HEADER",
+   "posted_message_sequence": 278,
+   "posted_payload_bytes": 32,
+   "private_body_exported": false,
+   "saved_bytes_on_rental": 32
+  }
+ ],
+ "cfb0_posted": [],
+ "ca7a_posted": [],
+ "cbcb_posted": []
+}
