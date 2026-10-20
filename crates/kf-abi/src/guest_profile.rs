@@ -69,7 +69,7 @@ pub struct Settings {
     pub memory_list_probe: bool,
     /// Replaces `KF3_DISPLAY_SDR_COLOR`; selected only by the explicit Windows profile.
     pub display_sdr_color: bool,
-    /// Replaces `KF3_DISPLAY_CAPS_PROBE`; selected only by the explicit Windows profile.
+    /// Retired `KF3_DISPLAY_CAPS_PROBE` selector; always false in both profiles.
     pub display_caps_probe: bool,
     /// Replaces `KF3_DISPLAY_LUT_MIRROR`; selected only by the explicit Windows profile.
     pub display_lut_mirror: bool,

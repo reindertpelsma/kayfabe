@@ -1146,8 +1146,6 @@ fn twin_defapi_plan(switch_on: bool, user_work: bool) -> TwinDefapiPlan {
     }
 }
 
-/// ⚠ EXPERIMENT switch (default off): [`ChanPlane::twin_defapi_act`].
-
 /// Default-off compatibility experiment: decline the privileged FIFO migration at
 /// registration, allowing Windows to choose its own fallback. No trigger is consumed.
 pub(crate) struct PtFifoUpdateFilter(&'static ChanPlane);
@@ -1817,13 +1815,6 @@ fn negctl_twin() -> bool {
 /// rewriter emits changes. ⊘ 2026-10-10: the shadow itself ran only beside the legacy rewriter
 /// (deleted with `KF3_TSPACE`), so `KF3_TSHADOW` now turns on the census only, and
 /// `KF3_NEGCTL_SHADOW` (the shadow's positive control) has nothing left to control.
-/// ⚠ AWAITING OWNER CONFIRMATION (default off, `KF3_SW_RUNLIST_HOST_OWNED=1`): software-runlist
-/// option (b), host-owned scheduling (`kf_rm::sw_runlist_host`). A Translated (kernel) channel's
-/// host ring is scheduled on the host at birth already (`kf_chan::host`); with the flag on, the
-/// guest-side gate is opened at birth too, so the channel runs whether or not the guest ever
-/// schedules it (Windows schedules its second graphics TSG only through `0x20801111`). The guest's
-/// own `GPFIFO_SCHEDULE(false)`, STOP and EVICT still close it.
-
 fn tcensus_on() -> bool {
     static ON: std::sync::OnceLock<bool> = std::sync::OnceLock::new();
     *ON.get_or_init(|| {

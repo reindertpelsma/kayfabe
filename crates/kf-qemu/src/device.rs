@@ -938,18 +938,20 @@ impl Device {
                 let fd = export.fd_number();
                 let plane = on_cuda_thread("kf3-cuda-disp", || {
                     crate::display::DisplayPlane::build(
-                        row,
+                        crate::display::DisplaySelection {
+                            row,
+                            settings: cfg.guest_profile.settings(),
+                            die: kf_disp::capsderive::Die {
+                                architecture,
+                                implementation,
+                            },
+                        },
                         table,
                         &bdf,
                         fd,
                         fb_length,
                         broker,
                         cfg.display_max_fps,
-                        cfg.guest_profile.settings(),
-                        kf_disp::capsderive::Die {
-                            architecture,
-                            implementation,
-                        },
                     )
                 })?
                 .with_boot(gop.as_ref().map(crate::display::BootScan::of).transpose()?);

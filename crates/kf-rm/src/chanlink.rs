@@ -255,9 +255,9 @@ pub struct ChannelAlloc {
     pub user_ring_permit: Option<WindowsUserRingPermit>,
 }
 
-/// ★ 2026-10-08: `KF3_ASYNC_PREEMPT=1` (default off) serves `DISABLE_CHANNELS` with a
-/// `pRunlistPreemptEvent` ([`async_preempt_admitted`]).
-
+/// The Windows compatibility setting permits `DISABLE_CHANNELS` with a
+/// `pRunlistPreemptEvent`; the old `KF3_ASYNC_PREEMPT` selector is retired.
+///
 /// ★ 2026-10-08 — may a `DISABLE_CHANNELS` carrying `pRunlistPreemptEvent = ev` reach the plane?
 /// The synchronous form (`ev == 0`) always may; the asynchronous one only with the switch on AND
 /// as a DISABLE (`bDisable`): a preempt-complete is posted only for a host disable+preempt that

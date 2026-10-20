@@ -112,14 +112,6 @@ fn armed_defaults_on() -> bool {
     *ON.get_or_init(|| std::env::var("KF3_DISPLAY_ARMED_DEFAULTS").is_ok_and(|v| v == "1"))
 }
 
-/// ⚠ EXPERIMENTS (default off, 2026-10-09, H-mirror; `KF3_DISPLAY_LUT_MIRROR=1`,
-/// `KF3_DISPLAY_ILUT_OFFSET_256=1`, read once; `traces/windows_reset_20261009/`). `[measured,
-/// runs 98/99, RTX 4070]` Windows' first colour program (window 0 ILUT and head 0 OLUT, control
-/// `0x4050a` = DIRECT10 + MIRROR; ILUT offset `0x21`) is refused by the SDR decoder, the refusal
-/// halts every display channel, no later flip or core update is consumed, and ~17.5 s later the
-/// guest resets the display and bugchecks 0x116. See `kf_disp::color::Experiments` for what each
-/// flag changes and why it is exact.
-
 /// `nvkms-evo3.c:1437-1438`'s default `MIN_FRAME_IDLE` (H-armeddefault): leading, trailing lines.
 const MIN_FRAME_IDLE_DEFAULT: (u32, u32) = (2, 1);
 
@@ -1788,6 +1780,16 @@ fn selftest_pack(gpu: &mut DisplayGpu, sid: kf_cuda::display::SlotId) -> Result<
     Ok(())
 }
 
+/// Immutable chip and compatibility inputs used to select the display caps.
+pub struct DisplaySelection {
+    /// The existing display-family row selected from host facts.
+    pub row: &'static kf_chip::display::DisplayRow,
+    /// The explicit per-device compatibility settings.
+    pub settings: kf_abi::guest_profile::Settings,
+    /// Exact host die used for measured caps-row admission.
+    pub die: kf_disp::capsderive::Die,
+}
+
 /// ★ The plane (leaked for the process, like the device).
 pub struct DisplayPlane {
     /// The model the served chain answers from — shared across `ReselectAtFn1` rebuilds.
@@ -1972,16 +1974,15 @@ impl DisplayPlane {
     /// # Errors
     /// By name — `display=on` never starts on a guessed display.
     pub fn build(
-        row: &'static kf_chip::display::DisplayRow,
+        selection: DisplaySelection,
         table: &kf_abi::versions::DriverAbiTable,
         bdf: &str,
         store_fd: i32,
         store_bytes: u64,
         broker: Option<BrokerVram>,
         max_fps: u32,
-        settings: kf_abi::guest_profile::Settings,
-        die: kf_disp::capsderive::Die,
     ) -> Result<DisplayPlane, String> {
+        let DisplaySelection { row, settings, die } = selection;
         kf_disp::pace::check(true, max_fps)?;
         let version = table.driver_version().to_string();
         let regs = Regs::for_ip(&version, row.ip_version).ok_or_else(|| {
