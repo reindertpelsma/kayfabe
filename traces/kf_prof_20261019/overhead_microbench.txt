@@ -1,0 +1,51 @@
+MEASURED: dev-box CPU-only microbenchmark; nice19, release, Rust1.99.0.
+MEASURED:7 batches; core20000 operations/batch; runtime5000 operations/worker/batch.
+CODE READ: runtime samples are7*N per-thread averages, correlated within each batch.
+CODE READ: diagnostic runtime uses libc CLOCK_MONOTONIC; vDSO/syscall route not measured.
+MEASURED: native invariant-TSC mode is unavailable on this dev CPU; native cost UNRUN.
+CODE READ: span_pair deliberately escapes the guard to black_box; call_wrapper follows the real adapter API.
+CODE READ: concurrent ring reports attempts including counted drops, not accepted trap-record latency.
+CODE READ: ring transport is a surrogate; complete integrated trap-census cost UNMEASURED.
+
+FEATURE OFF
+batch_ops=20000; seven repetitions; ns per operation; CPU-only; no GPU/VM
+feature_off_span_pair: n=7 median_ns=0.272 min_ns=0.271 max_ns=0.634
+feature_off_call_wrapper: n=7 median_ns=0.272 min_ns=0.271 max_ns=0.636
+core_span_pair: n=7 median_ns=10.775 min_ns=10.774 max_ns=13.159
+core_ledger_open_close: n=7 median_ns=3.228 min_ns=3.228 max_ns=4.008
+core_histogram: n=7 median_ns=2.692 min_ns=2.691 max_ns=3.081
+clock_conversion: n=7 median_ns=2.427 min_ns=2.425 max_ns=3.422
+trap_event_ring_roundtrip_uncontended: n=7 median_ns=17.274 min_ns=10.639 max_ns=17.852
+trap_event_ring_attempt_concurrent_consumer: n=7 median_ns=3.919 min_ns=1.475 max_ns=7.699
+concurrent_ring_dropped=99919; counted refusals; no producer retries
+
+DIAGNOSTIC CLOCK
+warning: missing documentation for a function
+warning: missing documentation for a function
+warning: missing documentation for a function
+warning: `kf-util` (lib) generated 3 warnings
+warning: missing documentation for a method
+warning: `kf-linux-raw` (lib) generated 1 warning
+batch_ops=20000; seven repetitions; ns per operation; CPU-only; no GPU/VM
+runtime_off_span_pair: n=7 median_ns=15.351 min_ns=14.563 max_ns=68.529
+runtime_off_call_wrapper: n=7 median_ns=3.672 min_ns=3.613 max_ns=3.706
+core_span_pair: n=7 median_ns=18.894 min_ns=18.080 max_ns=20.854
+core_ledger_open_close: n=7 median_ns=3.178 min_ns=3.163 max_ns=4.441
+core_histogram: n=7 median_ns=3.315 min_ns=3.273 max_ns=3.741
+clock_conversion: n=7 median_ns=4.395 min_ns=4.288 max_ns=5.128
+trap_event_ring_roundtrip_uncontended: n=7 median_ns=7.189 min_ns=6.976 max_ns=16.426
+trap_event_ring_attempt_concurrent_consumer: n=7 median_ns=1.829 min_ns=1.690 max_ns=1.973
+concurrent_ring_dropped=132832; counted refusals; no producer retries
+enabled_runtime_clock=DIAGNOSTIC_OS_CLOCK via libc; vDSO/syscall not distinguished; native invariant-TSC cost UNMEASURED
+diagnostic_runtime_span_pair_threads_1: n=7 median_ns=560.482 min_ns=492.745 max_ns=1247.580
+diagnostic_runtime_ledger_pair_threads_1: n=7 median_ns=324.824 min_ns=238.921 max_ns=950.530
+diagnostic_runtime_relay_observation_threads_1: n=7 median_ns=220.231 min_ns=126.514 max_ns=230.000
+diagnostic_runtime_call_wrapper_threads_1: n=7 median_ns=510.434 min_ns=495.354 max_ns=1447.314
+diagnostic_runtime_span_pair_threads_4: n=28 median_ns=1328.996 min_ns=507.527 max_ns=2105.540
+diagnostic_runtime_ledger_pair_threads_4: n=28 median_ns=422.391 min_ns=355.770 max_ns=3414.114
+diagnostic_runtime_relay_observation_threads_4: n=28 median_ns=221.207 min_ns=119.104 max_ns=682.734
+diagnostic_runtime_call_wrapper_threads_4: n=28 median_ns=1368.581 min_ns=317.121 max_ns=2412.538
+diagnostic_runtime_span_pair_threads_8: n=56 median_ns=958.198 min_ns=320.299 max_ns=2328.420
+diagnostic_runtime_ledger_pair_threads_8: n=56 median_ns=397.468 min_ns=372.820 max_ns=2203.163
+diagnostic_runtime_relay_observation_threads_8: n=56 median_ns=205.099 min_ns=119.130 max_ns=563.213
+diagnostic_runtime_call_wrapper_threads_8: n=56 median_ns=876.042 min_ns=335.604 max_ns=5980.070

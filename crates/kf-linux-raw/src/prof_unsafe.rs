@@ -80,7 +80,7 @@ pub fn thread_id() -> u64 {
 }
 
 /// Direct CLOCK_MONOTONIC read for setup and explicit diagnostic fixtures only.
-/// The production publisher uses counter(), never this syscall.
+/// The production publisher uses counter(), never this libc clock path.
 pub fn monotonic_ns() -> Option<u64> {
     os_clock(libc::CLOCK_MONOTONIC)
 }

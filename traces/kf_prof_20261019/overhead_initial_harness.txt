@@ -1,0 +1,36 @@
+MEASURED: initial harness before adding call_wrapper and opaque calibration; do not pool with final harness.
+CODE READ: historical "includes syscall" label meant libc clock_gettime, which can use vDSO.
+batch_ops=20000; seven repetitions; ns per operation; CPU-only; no GPU/VM
+feature_off_span_pair: n=7 median_ns=0.578 min_ns=0.570 max_ns=0.585
+core_span_pair: n=7 median_ns=21.452 min_ns=21.051 max_ns=22.758
+core_ledger_open_close: n=7 median_ns=3.736 min_ns=3.721 max_ns=4.138
+core_histogram: n=7 median_ns=4.706 min_ns=4.664 max_ns=5.330
+clock_conversion: n=7 median_ns=1.330 min_ns=1.313 max_ns=1.333
+trap_event_ring_roundtrip_uncontended: n=7 median_ns=7.948 min_ns=7.866 max_ns=8.522
+trap_event_ring_attempt_concurrent_consumer: n=7 median_ns=3.462 min_ns=2.248 max_ns=11.075
+concurrent_ring_dropped=112543; counted refusals; no producer retries
+warning: missing documentation for a function
+warning: missing documentation for a function
+warning: missing documentation for a function
+warning: `kf-util` (lib) generated 3 warnings
+warning: missing documentation for a method
+warning: `kf-linux-raw` (lib) generated 1 warning
+batch_ops=20000; seven repetitions; ns per operation; CPU-only; no GPU/VM
+runtime_off_span_pair: n=7 median_ns=15.228 min_ns=14.819 max_ns=15.562
+core_span_pair: n=7 median_ns=21.333 min_ns=20.662 max_ns=22.363
+core_ledger_open_close: n=7 median_ns=3.730 min_ns=3.724 max_ns=4.124
+core_histogram: n=7 median_ns=4.756 min_ns=4.740 max_ns=5.419
+clock_conversion: n=7 median_ns=1.041 min_ns=1.028 max_ns=1.048
+trap_event_ring_roundtrip_uncontended: n=7 median_ns=8.109 min_ns=7.987 max_ns=8.623
+trap_event_ring_attempt_concurrent_consumer: n=7 median_ns=12.691 min_ns=2.549 max_ns=18.686
+concurrent_ring_dropped=61657; counted refusals; no producer retries
+enabled_runtime_clock=DIAGNOSTIC_OS_CLOCK; includes syscall; native invariant-TSC cost UNMEASURED
+diagnostic_runtime_span_pair_threads_1: n=7 median_ns=294.379 min_ns=284.945 max_ns=483.972
+diagnostic_runtime_ledger_pair_threads_1: n=7 median_ns=205.670 min_ns=201.857 max_ns=216.603
+diagnostic_runtime_relay_observation_threads_1: n=7 median_ns=120.959 min_ns=115.399 max_ns=217.562
+diagnostic_runtime_span_pair_threads_4: n=28 median_ns=499.816 min_ns=328.547 max_ns=1024.180
+diagnostic_runtime_ledger_pair_threads_4: n=28 median_ns=377.316 min_ns=202.244 max_ns=964.358
+diagnostic_runtime_relay_observation_threads_4: n=28 median_ns=211.667 min_ns=121.079 max_ns=405.124
+diagnostic_runtime_span_pair_threads_8: n=56 median_ns=514.977 min_ns=285.981 max_ns=2078.082
+diagnostic_runtime_ledger_pair_threads_8: n=56 median_ns=371.612 min_ns=202.452 max_ns=1362.253
+diagnostic_runtime_relay_observation_threads_8: n=56 median_ns=215.981 min_ns=119.001 max_ns=1065.887
