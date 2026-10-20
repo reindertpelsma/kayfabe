@@ -72,3 +72,10 @@ before integration: a guest GET is reported as private GET, GET fabricates marke
 processing, unchanged GET refreshes its change age, generation reuse aliases a
 record, a missing observation becomes zero, or a profiler read/poll changes the
 relay's event behavior. Consume only existing reads; mark unknown/stale data.
+
+INFERRED, table-driven diagnostic injection falsifiers (2026-10-20): a Site from
+Site::ALL that does not publish its state before the delay, loses the injected
+maximum/exclusive residence, or consumes another Site's injection disproves the
+coverage helper. Each Kind::ALL must remain open and OVERDUE after its advisory
+bound until its real token closes. This proves the table/helper, not production
+reachability of currently unwired sites/kinds. Injection is prof-inject only.
