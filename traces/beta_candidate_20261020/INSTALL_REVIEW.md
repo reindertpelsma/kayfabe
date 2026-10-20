@@ -31,10 +31,15 @@ before Stage 5. Prefix installation is an unsigned local staging path, not a
 published relocatable binary release with a certified glibc/library floor.
 
 
-MEASURED: 17 launcher/doctor/prefix tests, 4 version/publication tests pass.
+MEASURED: 20 launcher/doctor/prefix tests, 4 version/publication tests pass.
 All seven installer mutants are killed by at least two named tests (3/2/2/2/2/2/2).
 An initial BAR mutant exposed a headless test gap; the resource invariant now
 covers both display and headless modes and the entire campaign was rerun.
 The docs checker validates 5 local links, 7 shell blocks and 3 repository command
 paths without executing a VM or install. Four thin shell wrappers and the build
 script pass shellcheck. Full changed-tree Rust and broker checks are Stage 4.
+
+MEASURED: preflight omission reproduced in tests-only `762e54a87`: both OS
+display checks failed before udmabuf validation. Display now requires read/write
+access; headless does not. Removing this check kills two named tests. Doctor
+remains fixture-tested only; no occupied-host GPU query was performed.

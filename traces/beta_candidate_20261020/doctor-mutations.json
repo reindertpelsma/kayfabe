@@ -1,0 +1,12 @@
+[
+  {
+    "mutant": "skip-udmabuf-access",
+    "status": "killed",
+    "kills": 2,
+    "tests": [
+      "test_linux_broker_refuses_missing_udmabuf_access (test_kayfabe_install.InstallPath.test_linux_broker_refuses_missing_udmabuf_access)",
+      "test_windows_display_refuses_missing_udmabuf_access (test_kayfabe_install.InstallPath.test_windows_display_refuses_missing_udmabuf_access)"
+    ],
+    "errors": []
+  }
+]

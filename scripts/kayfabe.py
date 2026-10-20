@@ -126,6 +126,9 @@ def doctor_rows(facts, version, display):
         'sudo usermod -aG kvm "$USER"; log out and back in')
     row('permissions', 'PASS' if facts.get('devices') else 'FAIL', 'NVIDIA control/GPU/UVM device access',
         'ls -l /dev/nvidia* /dev/kvm; sudo usermod -aG video,render,kvm "$USER"')
+    row('udmabuf', 'PASS' if not display or facts.get('udmabuf') else 'FAIL',
+        '/dev/udmabuf read/write for display export',
+        'ls -l /dev/udmabuf; sudo usermod -aG kvm "$USER"; log out and back in')
     driver = facts.get('driver', 'unknown')
     matrix_path=ROOT/'docs/SUPPORT_MATRIX.tsv'
     matrix=list(csv.DictReader(matrix_path.read_text().splitlines(),delimiter='\t')) if matrix_path.exists() else []
@@ -190,6 +193,7 @@ def collect_facts(prefix, minor=0):
     facts = dict(total_mb=int(float(total)),free_mb=int(float(free)),bar1_mb=(hi-lo+1)//MIB,
                  driver=driver,model=model,family=family,kvm=os.access('/dev/kvm',os.R_OK|os.W_OK),
                  devices=all(os.access(path,os.R_OK|os.W_OK) for path in ['/dev/nvidiactl',f'/dev/nvidia{minor}','/dev/nvidia-uvm']),
+                 udmabuf=os.access('/dev/udmabuf',os.R_OK|os.W_OK),
                  graphical=bool(os.environ.get('WAYLAND_DISPLAY') or os.environ.get('DISPLAY')),
                  disk_free=shutil.disk_usage(Path.cwd()).free,hugepages=int(meminfo.get('HugePages_Total','0').strip()),
                  memlock=resource.getrlimit(resource.RLIMIT_MEMLOCK)[0],memcg=memcg,
