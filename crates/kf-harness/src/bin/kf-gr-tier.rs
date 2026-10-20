@@ -719,3 +719,75 @@ fn run(l: &mut Checks) -> Result<(), String> {
     );
     Ok(())
 }
+
+#[cfg(test)]
+mod fixture_tests {
+    use super::*;
+    use kf_abi::submit::{SET_OBJECT, method_header_decode};
+    use kf_chan::grtables::GrClass;
+
+    fn allocated(family: kf_chip::Family) -> Option<Vec<u32>> {
+        let classes = kf_chip::classes::classes_for(family);
+        [
+            GrClass::TwoD,
+            GrClass::InlineToMemory,
+            GrClass::ThreeD,
+            GrClass::Compute,
+        ]
+        .iter()
+        .map(|k| classes.of_kind(k.kind()).last().copied())
+        .collect()
+    }
+
+    #[test]
+    fn native_fixture_only_binds_graphics_objects_allocated_for_that_family() {
+        let mut families = 0;
+        for family in kf_chip::Family::ALL {
+            let Some(classes) = allocated(family) else {
+                continue;
+            };
+            families += 1;
+            let words = gr_segment(&classes).unwrap();
+            let mut at = 0;
+            let mut binds = 0;
+            while at < words.len() {
+                let header = method_header_decode(words[at]).unwrap();
+                if header.method == SET_OBJECT && GrClass::of_class(words[at + 1]).is_some() {
+                    assert!(
+                        classes.contains(&words[at + 1]),
+                        "{family:?}: unallocated class {:#x}",
+                        words[at + 1]
+                    );
+                    binds += 1;
+                }
+                at += 1 + header.arg_words;
+            }
+            assert_eq!(binds, 4);
+        }
+        assert!(families >= 4);
+    }
+
+    #[test]
+    fn blackwell_fixture_selects_its_own_i2m_3d_and_compute_objects() {
+        let classes = allocated(kf_chip::Family::Blackwell).unwrap();
+        let words = gr_segment(&classes).unwrap();
+        assert_eq!(words[5], classes[1], "I2M binding");
+        assert_eq!(words[RUN31_GR.len() + 3], classes[2], "3D binding");
+        assert_eq!(words[RUN31_GR.len() + 9], classes[3], "compute binding");
+        let mut original = RUN31_GR.to_vec();
+        original.extend_from_slice(&RUN32_GR_TAIL);
+        for (i, value) in original.iter().enumerate() {
+            if ![5, 7, RUN31_GR.len() + 3, RUN31_GR.len() + 9].contains(&i) {
+                assert_eq!(words[i], *value, "non-graphics operand {i}");
+            }
+        }
+    }
+
+    #[test]
+    fn an_unallocated_graphics_object_refuses_the_oracle_fixture() {
+        assert!(gr_segment(&[]).is_err());
+        let mut classes = allocated(kf_chip::Family::Blackwell).unwrap();
+        classes.retain(|c| GrClass::of_class(*c) != Some(GrClass::ThreeD));
+        assert!(gr_segment(&classes).is_err());
+    }
+}
