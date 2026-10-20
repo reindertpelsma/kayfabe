@@ -73,12 +73,32 @@ CPU / another channel has no ring we own; forwarding the acquire lets the hardwa
   re-rings: `V3_USER_RING_EVENT_LOOP_20261014.md:91`); vCPU inline on migratable channels conflicts with
   `docs/OWNER_RULINGS.md:1215-1216` ("always-worker dispatch for ... migration-capable channels").
 
-## 5. Results (MEASURED, dev box, `cargo test --release -p kf-chan --features chaos-hooks`)
+## 5. Results (MEASURED on the dev box, `cargo test --release -p kf-chan --features chaos-hooks`; nothing on hardware)
 
-See the branch's final report for the per-test table. Key: the stress expected-reds (exhausted try_lock; seed 18) are GREEN
-un-ignored with an infinite park; the stress harness found a real lost wake in this design (seed 20, 3/3 runs: a look that
-consumed an engine event and found the record busy did not ring the waiting relay) — fixed; after the fix seed 20 passes 2/3,
-the third trips the new I6 (a satisfied wait nobody rang while every worker blocks): **open, unclassified**.
+| finding | old code (merged base) | simple relay |
+|---|---|---|
+| F1 convoy past 64 lost try_locks (breaker :1109/:1119, fairness P13, stress exhausted-try_lock) | RED (5 breaker reds, P13 red, stress expected-red) | GREEN, bodies unchanged, infinite park |
+| F2 Popped partial pops never written back (breaker :1172/:1182) | RED | GREEN under Change B (look rings pops for every wait); MOOT under Change A (no write-back; restated: the guest sees space once the relay READ the entries) |
+| F3 busy worker never looks (P11-P13) | green with LOOK_EVERY | green, a look every iteration |
+| F4 stress seed 18 | expected-red (ignored) | GREEN un-ignored (6 runs, infinite park) |
+| F5 VA-refresh / lost-wake classes (relay_fairness, v2) | green | green (v2: not every test re-run after the last edit) |
+| NEW: busy-record look dropped a consumed engine event (stress seed 20, 3/3; v1 model independently) | latent (the 50 ms net hid it) | FIXED `aad1e9ff4` |
+| NEW: I6 "a satisfied wait nobody rang while every worker blocks" | not checked | **OPEN**: 6 of 60 seeds x 0.3 s; report-only runs complete (a later unrelated wake resolves it; seed 1 resp max 347 ms) |
+| NEW: GP_GET/REFERENCE visible only after the interrupt (v1 model) | covered by the 50 ms net | **uncovered** with an infinite park; production's net covers it |
+
+Full suite with Change A on (`41d42ee98`+), MEASURED: lib 261/261, relay_fairness 40/40, user_loop_model 46/46, wake_registry
+19/19, user_lazy_turn 27/27, user_turn_unit 23/24 (`the_guest_ring_is_full_when_gp_put_leaves_one_slot...` is RED on the merged
+base too, untouched), relay_stress 3/5 (smoke and seed 18 trip the OPEN I6), user_lifecycle_props 37/38 (`lazy_d6_...`: moot by
+design under Change A like user_lazy_turn's D6, not yet restated), user_lifecycle_model 59/63: `l1_latched_markers_off...` and
+`m1_no_pointer_markers...` expect a full guest ring to DEADLOCK without looks/markers -- under Change A it no longer needs pops, so
+the expected deadlock is gone (moot by design, to be restated); `i1_pointer_mode_...` exceeds its 6 M state cap (the per-turn GET
+write-back adds states; not a property failure); `lazy_every_other_scenario...` (same l1 scenario). v2: see the final report.
+
+Changed / replaced tests: listed per file in the commit messages of `31297a6e4` (v3 Pointer, fairness) and the v1/v2/registry
+commit; every replaced test pinned a deleted mechanism (budget, period, backstop, a source line) and was replaced by the property
+or a pin of the new line. Stress: `I6` sleep safety, `I7` no hidden spin, the two expected-reds un-ignored. New invariant mutants:
+`unsourced_ignores_carried` found by 3 (Pointer) + 4 (fairness, W=1/2/3) + 3 (v1) tests; `unsourced_ignores_demand` is EQUIVALENT
+with the real look (it rings every demand before the block decision), found only together with a weakened look.
 
 ## 6. Risks
 
