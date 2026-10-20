@@ -256,6 +256,7 @@ def main():
     log('RESULT '+json.dumps({a:{k:r[k] for k in ['count','longest_s','right_censored']} for a,r in result['apps'].items()}))
     if (out/'trig.log').exists():
         try:
+            importlib.reload(archive)
             result['trace_archives']=archive.preserve(out,guest_root,agent)
             for earlier in sorted(ROOT.glob('*-*/RESULT.json')):
                 previous=earlier.parent

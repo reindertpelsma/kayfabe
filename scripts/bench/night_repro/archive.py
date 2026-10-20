@@ -24,6 +24,10 @@ def preserve(out, guest_root, agent):
     receipts=[]
     if not names: return receipts
     target=out/'etl'; target.mkdir(exist_ok=True)
+    manifest=target/'manifest.json'
+    if manifest.exists(): receipts=json.loads(manifest.read_text())
+    done={r['name'] for r in receipts if any(f.get('deleted') for f in r.get('delete_receipt',{}).get('files',[]))}
+    names=[name for name in names if name not in done]
     for name in names:
         payload=agent(f'& C:\\kf\\n1\\archive.ps1 -Root {guest_root} -Names {name}',90)
         parsed=json.loads(payload)
