@@ -1,0 +1,21 @@
+# G9c allowlist (grade_static::g9_blocking_calls_are_audited). file | substring (or `fn:<name> <text>`) | status | why
+# Worker-reachable = the worker loop (worker.rs), the turn (Pump, user_ring_serve/arm), the look (user_ring_peek*). Statuses from
+# docs/design/V3_BLOCKING_AUDIT_20261020.md (branch claude/blocking-audit-20261020, W<n> = its row): OK, SUSPECT, VIOLATION-DIAG,
+# OK-ACT (act / birth / free threads, not reachable from the worker), OK-NONBLOCKING (timeout 0).
+worker.rs | poller.wait(&mut ready, PollTimeout::Immediate) | OK-NONBLOCKING | the timeout-0 wait of the spin
+worker.rs | let got = poller.wait(&mut ready, timeout); | OK | THE one blocking point (epoll_wait)
+userpump.rs | fn:hw_words .lock() | OK-LATENT | W12: blocking storage.lock in the turn; the VA thread only try_locks it (structurally excluded while a record lives, INFERRED)
+userpump.rs | fn:trace_stall .lock() | VIOLATION-DIAG | trace only (KF3_USER_RING_TRACE): blocking storage.lock
+userpump.rs | fn:trace_stall let native_get = r.lease.storage.lock() | VIOLATION-DIAG | trace only
+userpump.rs | fn:user_ring_peek let Ok(rings) = self.user_rings.lock() else { | SUSPECT | W9: blocking user_rings.lock held across every relay's look; a peer worker or the act thread holds it briefly
+userpump.rs | fn:user_ring_software_object | OK-ACT | the 5080 software-object act (act thread)
+userpump.rs | fn:user_ring_ctx_act | OK-ACT | context act (act thread)
+userrelay.rs | fn:lock self.inner.lock() | OK-ACT | Cell::lock: used by act / birth / free paths only (the worker uses enter / try_lock)
+userrelay.rs | fn:run | OK-ACT | the birth act (act thread)
+userrelay.rs | fn:birth_user_ring | OK-ACT | birth (act)
+userrelay.rs | fn:user_ring_record self.user_rings.lock() | OK | W10: brief map lookup per serve (us); holders brief except W9
+userrelay.rs | fn:finish_user_ring_free | OK-ACT | free (act)
+userrelay.rs | fn:retain_user_ring_notifier | OK-ACT | notifier retain (act)
+userrelay.rs | fn:release_never_born_record | OK-ACT | free (act)
+userrelay.rs | fn:withdraw_user_ring | OK-ACT | withdraw (act)
+userpump.rs | fn:trace_refusal std::thread::sleep | VIOLATION-DIAG | W15: 1+20+200 ms of sleeps on a worker per refused channel, only under KF3_USER_RING_TRACE (default off)

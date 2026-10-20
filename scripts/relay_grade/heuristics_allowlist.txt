@@ -1,0 +1,13 @@
+# G9b allowlist (grade_static::g9_no_banned_heuristics). file | substring (or `fn:<name> <text>`) | status | why
+# status: NET (the last-resort net, tests run it infinite), MEASUREMENT (no decision reads it), SUSPECT (a heuristic awaiting an
+# owner decision; listed in docs/design/V3_RELAY_GRADER_20261020.md), VIOLATION-DIAG (only under a default-off diagnostic), OK-ACT (act thread, not the worker).
+worker.rs | let mut busy_from = std::time::Instant::now(); | MEASUREMENT | WorkerStats.prof busy/wait accounting
+worker.rs | prof.then(std::time::Instant::now) | MEASUREMENT | WorkerStats.prof
+worker.rs | busy_from = std::time::Instant::now(); | MEASUREMENT | WorkerStats.prof
+worker.rs | PollTimeout::Millis(OWED_PARK_MS) | OK-NOT-RELAY | the Passthrough NSI Pacer's owed raise (a rate, on_tick), not the USER-ring relay
+worker.rs | PollTimeout::Millis(PARK_MS) | NET | the 50 ms last-resort net; every grader test runs with set_park_net(false); a timeout that finds work is counted
+userpump.rs | kf_chan::user_gate::REFUSE_RETRIES | SUSPECT | Grace (user_gate.rs:36-50): a COUNT of scan-refusal re-reads before a refusal is final; a budget, outside the wake path; owner review
+userpump.rs | if t.verified % 5000 == 0 { | MEASUREMENT | KF3_USER_RING_TRACE print rate
+userpump.rs | fn:trace_refusal std::thread::sleep | VIOLATION-DIAG | blocking audit W15: 1+20+200 ms of sleeps on a worker, only under KF3_USER_RING_TRACE
+userpump.rs | std::time::Instant::now() | MEASUREMENT | trace / progress / gate-drain timestamps (964 gate_at = drain histogram, CODE READ; the others INFERRED from their fields: born, progress, last_turn, last_wake, trace)
+userrelay.rs | fn:run std::time::Instant::now | OK-ACT | the birth's scheduler spacing (delay_act) on the act thread

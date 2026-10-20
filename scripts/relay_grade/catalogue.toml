@@ -97,7 +97,7 @@ expected = "With an infinite park (no timer) seed 18 completes with violations e
 tests = [
   "kf-chan:relay_stress:expected_red_seed_18_marker_wait_found_only_by_the_backstop",
   "kf-chan:relay_stress:i6_classified_seeds_hold_the_sleep_invariant",
-  "kf-chan:grade_stress:g3_strict_seed_list",
+  "kf-chan:grade_stress:g3_stress_default_seed_list",
 ]
 hardware_gate = ""
 status = "pinned"
@@ -120,7 +120,7 @@ tests = [
   "kf-chan:user_loop_model:the_retired_loop_waited_for_the_tick_after_a_busy_record_lock",
   "kf-chan:user_loop_model:mutant_lost_wakeup_is_found",
   "kf-chan:grade_model:g1_f5_busy_record_look_keeps_the_event",
-  "kf-chan:grade_stress:g2_kernel_view_sleep_safety",
+  "kf-chan:grade_stress:g2_sleep_safety_kernel_view",
 ]
 hardware_gate = ""
 status = "pinned"
@@ -177,7 +177,7 @@ root_cause_label = "MEASURED"
 expected = "I6 asks the kernel (ready fd on the workers' eventfds, thread state) and fires only for a satisfied obligation with no wake in flight."
 tests = [
   "kf-chan:relay_stress:i6_classified_seeds_hold_the_sleep_invariant",
-  "kf-chan:grade_stress:g2_kernel_view_sleep_safety",
+  "kf-chan:grade_stress:g2_sleep_safety_kernel_view",
 ]
 hardware_gate = ""
 status = "pinned"
