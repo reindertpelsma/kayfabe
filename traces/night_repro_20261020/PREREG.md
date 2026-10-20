@@ -57,3 +57,11 @@ independent pair, then ten-minute B/G/E independent-pair trials if qualified and
 time/disk permit. Try Blender/Edge separately with explicitly stated durations.
 Interleave arms where available. G follows B as soon as its binary/report exists.
 The original C binary exists, but coordinator-prioritized B/G/E take precedence.
+
+CODE READ, 04:12 CEST, before G/C runs: G source 98a7bbfb8 branches at f8f9d1a5f,
+not 0d7ba743; it contains no TSG mirror module. It cannot isolate adding diagnostics
+to A. Add the existing f8f9d1a5 C control, preserve exact product revisions/flags,
+and report G's actual lineage. FALSIFIER for diagnostic-only causal attribution:
+A and G differ in product source outside diagnostics (already found); do not
+attribute any A/G outcome difference solely to KF3_DIAG_USER_STALL. No product
+rebase or modification is performed by N1.
