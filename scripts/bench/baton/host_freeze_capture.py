@@ -27,6 +27,16 @@ def parse_trigger(text):
     return m[1], float(m[2])
 
 
+def perf_command(tids, out):
+    if not tids:
+        return None
+    if len(tids) > 128 or any(type(tid) is not int or tid <= 0 for tid in tids):
+        raise ValueError("invalid thread selection")
+    filt = " || ".join(f"(prev_pid=={tid} || next_pid=={tid})" for tid in tids)
+    return ["perf", "record", "-a", "-e", "sched:sched_switch", "--filter", filt,
+            "-g", "-o", str(out / "offcpu.data")]
+
+
 def snapshot(pid):
     rows = []
     for p in Path(f"/proc/{pid}/task").glob("*"):
@@ -53,6 +63,7 @@ def main():
     ap.add_argument("--kvmthreads", required=True)
     ap.add_argument("--port", type=int, default=39021)
     ap.add_argument("--seconds", type=int, default=7200)
+    ap.add_argument("--perf", action="store_true", help="also record filtered scheduler callchains")
     args = ap.parse_args()
     root = Path(args.root)
     root.mkdir(parents=True, exist_ok=True)
@@ -128,6 +139,10 @@ def main():
                         resource.setrlimit(resource.RLIMIT_FSIZE, (32 * 1024 * 1024, 32 * 1024 * 1024))
                     proc = subprocess.Popen(command, stdout=subprocess.DEVNULL, stderr=(out / "strace-status.txt").open("w"), preexec_fn=limit_trace)
                     active.append((proc, time.monotonic() + 10, out, pid))
+                    if args.perf:
+                        perf = subprocess.Popen(perf_command(tids, out), stdout=subprocess.DEVNULL,
+                                                stderr=(out / "perf-status.txt").open("w"), preexec_fn=limit_trace)
+                        active.append((perf, time.monotonic() + 10, out, pid))
     finally:
         for proc, _, _, _ in active:
             if proc.poll() is None:
