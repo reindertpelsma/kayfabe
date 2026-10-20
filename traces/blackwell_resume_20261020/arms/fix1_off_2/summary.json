@@ -1,0 +1,114 @@
+{
+ "log_sha256": "b3c448ab13e0deaa7a4a9529bd1e9d50b3a5c31b5da91ecbe7aab25cf614d93a",
+ "rpcs": 595,
+ "unload_ordinals": [
+  594
+ ],
+ "teardown_start_ordinal": 417,
+ "last_nonfree_before_teardown": [
+  [
+   414,
+   "76",
+   "RmControl",
+   "0",
+   "0x20800301",
+   "0x0"
+  ],
+  [
+   415,
+   "103",
+   "RmAlloc",
+   "0",
+   "0x0078",
+   "0x0"
+  ],
+  [
+   416,
+   "76",
+   "RmControl",
+   "0",
+   "0x20800301",
+   "0x56"
+  ]
+ ],
+ "policy_nonok": [
+  [
+   100,
+   "76",
+   "RmControl",
+   "0",
+   "0x20809064",
+   "0x56"
+  ],
+  [
+   141,
+   "103",
+   "RmAlloc",
+   "0",
+   "0xcbcb",
+   "0x56"
+  ],
+  [
+   416,
+   "76",
+   "RmControl",
+   "0",
+   "0x20800301",
+   "0x56"
+  ]
+ ],
+ "alloc_posted_nonzero_body_status": [
+  {
+   "body_status": "0x56",
+   "body_truncated_on_rental": false,
+   "class_from_header": "0x0",
+   "class_selector": "0x0",
+   "declared_params_bytes": 0,
+   "diagnostic_record": 27,
+   "envelope_private_result": "0x56",
+   "envelope_result": "0x56",
+   "function": "0x67",
+   "header_decode": "PUBLIC_FIXED_HEADER",
+   "posted_message_sequence": 142,
+   "posted_payload_bytes": 32,
+   "private_body_exported": false,
+   "saved_bytes_on_rental": 32
+  }
+ ],
+ "cfb0_posted": [
+  {
+   "body_status": "0x0",
+   "body_truncated_on_rental": false,
+   "class_from_header": "0xcfb0",
+   "class_selector": "0xcfb0",
+   "declared_params_bytes": 0,
+   "diagnostic_record": 88,
+   "envelope_private_result": "0x0",
+   "envelope_result": "0x0",
+   "function": "0x67",
+   "header_decode": "PUBLIC_FIXED_HEADER",
+   "posted_message_sequence": 278,
+   "posted_payload_bytes": 32,
+   "private_body_exported": false,
+   "saved_bytes_on_rental": 32
+  },
+  {
+   "body_status": "0x0",
+   "body_truncated_on_rental": false,
+   "class_from_header": "0xcfb0",
+   "class_selector": "0xcfb0",
+   "declared_params_bytes": 12,
+   "diagnostic_record": 96,
+   "envelope_private_result": "0x0",
+   "envelope_result": "0x0",
+   "function": "0x67",
+   "header_decode": "PUBLIC_FIXED_HEADER",
+   "posted_message_sequence": 290,
+   "posted_payload_bytes": 44,
+   "private_body_exported": false,
+   "saved_bytes_on_rental": 44
+  }
+ ],
+ "ca7a_posted": [],
+ "cbcb_posted": []
+}
