@@ -1,0 +1,47 @@
+PC9	pair1	A	35.5	36.8	1.28	0	no watchdog episode (stall < 2 s)
+PF15	pair1	B	34.0	52.9	18.87	132016	GPU_NOT_COMPLETE; main: tid=202 futex wchan=futex_do_wait; streamq=NOT_READY
+SC11	pair1	A	102.7	108.5	5.83	0	GPU_NOT_COMPLETE; main: tid=202 futex wchan=futex_do_wait; streamq=NOT_READY
+SC3	pair1	A	49.0	50.5	1.57	0	no watchdog episode (stall < 2 s)
+SCb2	pair1	A	37.3	39.7	2.38	0	GPU_NOT_COMPLETE; main: tid=200 futex wchan=futex_do_wait; streamq=NOT_READY
+SCb2	pair1	B	69.5	71.1	1.61	0	no watchdog episode (stall < 2 s)
+SCb2	pair2	A	19.3	22.3	3.01	0	GPU_NOT_COMPLETE; main: tid=514 futex wchan=futex_do_wait; streamq=NOT_READY
+SCb3	pair2	A	40.8	58.4	17.59	0	GPU_NOT_COMPLETE; main: tid=512 futex wchan=futex_do_wait; streamq=NOT_READY
+SCb6	pair2	B	78.4	81.9	3.47	0	GPU_NOT_COMPLETE; main: tid=513 futex wchan=futex_do_wait; streamq=NOT_READY
+SCb7	pair1	A	29.4	39.6	10.24	0	GPU_NOT_COMPLETE; main: tid=201 futex wchan=futex_do_wait; streamq=NOT_READY
+SCb7	pair2	A	15.6	16.8	1.13	0	no watchdog episode (stall < 2 s)
+SF12	pair2	A	95.9	100.2	4.33	68364	GPU_NOT_COMPLETE; main: tid=511 futex wchan=futex_do_wait; streamq=NOT_READY
+SF13	pair1	A	105.7	106.8	1.08	88536	no watchdog episode (stall < 2 s)
+SF5	pair2	A	52.2	55.6	3.38	81563	GPU_NOT_COMPLETE; main: tid=513 futex wchan=futex_do_wait; streamq=NOT_READY
+WC2	pair1	B	56.6	63.0	6.46	0	GPU_NOT_COMPLETE; main: tid=202 futex wchan=futex_do_wait; streamq=NOT_READY
+WF1	pair1	B	1.4	6.9	5.42	111179	GPU_NOT_COMPLETE; main: tid=200 futex wchan=futex_do_wait; streamq=NOT_READY
+WF4	pair1	B	55.1	56.4	1.28	85906	no watchdog episode (stall < 2 s)
+===
+fp1_C	backstop_found(work=0 carried=0 contended=4)	15 pointer_chans	wakes(doorbell=70464 event=71497 spin=18285316 backstop=967)
+PC1	backstop_found(work=0 carried=0 contended=0)	15 pointer_chans	wakes(doorbell=62050 event=72317 spin=10945268 backstop=956)
+PC8	backstop_found(work=0 carried=0 contended=0)	15 pointer_chans	wakes(doorbell=69128 event=69302 spin=7196423 backstop=974)
+PC9	backstop_found(work=0 carried=0 contended=1)	15 pointer_chans	wakes(doorbell=71352 event=69845 spin=7218088 backstop=956)
+PC16	backstop_found(work=0 carried=0 contended=0)	15 pointer_chans	wakes(doorbell=72865 event=65067 spin=7328466 backstop=963)
+PF2	backstop_found(work=0 carried=0 contended=11)	15 pointer_chans	wakes(doorbell=62647 event=72708 spin=4261437 backstop=940 busy_looks=102235)
+PF7	backstop_found(work=0 carried=0 contended=1)	15 pointer_chans	wakes(doorbell=71731 event=66093 spin=3675495 backstop=961 busy_looks=83931)
+PF10	backstop_found(work=0 carried=0 contended=0)	15 pointer_chans	wakes(doorbell=61231 event=73778 spin=4188958 backstop=968 busy_looks=92366)
+PF15	backstop_found(work=0 carried=0 contended=1)	15 pointer_chans	wakes(doorbell=72781 event=68049 spin=8878177 backstop=955 busy_looks=132016)
+SC3	backstop_found(work=0 carried=0 contended=17)	0 pointer_chans	wakes(doorbell=69116 event=65471 spin=4055848 backstop=984)
+SC6	backstop_found(work=0 carried=0 contended=1)	0 pointer_chans	wakes(doorbell=71054 event=66553 spin=4018795 backstop=980)
+SC11	backstop_found(work=0 carried=0 contended=1)	0 pointer_chans	wakes(doorbell=71314 event=69101 spin=7048649 backstop=959)
+SC14	backstop_found(work=0 carried=0 contended=1)	0 pointer_chans	wakes(doorbell=69379 event=67853 spin=4912111 backstop=964)
+SF4	backstop_found(work=0 carried=0 contended=0)	0 pointer_chans	wakes(doorbell=67251 event=68083 spin=4030143 backstop=950 busy_looks=77513)
+SF5	backstop_found(work=0 carried=0 contended=1)	0 pointer_chans	wakes(doorbell=68246 event=65344 spin=5097872 backstop=959 busy_looks=81563)
+SF12	backstop_found(work=0 carried=0 contended=1)	0 pointer_chans	wakes(doorbell=73957 event=64062 spin=3678873 backstop=961 busy_looks=68364)
+SF13	backstop_found(work=0 carried=0 contended=1)	0 pointer_chans	wakes(doorbell=64766 event=69583 spin=5194081 backstop=952 busy_looks=88536)
+WF1	backstop_found(work=0 carried=0 contended=1)	15 pointer_chans	wakes(doorbell=67083 event=72600 spin=5007247 backstop=945 busy_looks=111179)
+WC2	backstop_found(work=0 carried=0 contended=1)	15 pointer_chans	wakes(doorbell=75024 event=64773 spin=6287747 backstop=903 busy_looks=0)
+WC3	backstop_found(work=0 carried=0 contended=0)	15 pointer_chans	wakes(doorbell=66617 event=68372 spin=4640372 backstop=939 busy_looks=0)
+WF4	backstop_found(work=0 carried=0 contended=1)	15 pointer_chans	wakes(doorbell=64363 event=68346 spin=3418265 backstop=950 busy_looks=85906)
+SPb1	backstop_found(work=670 carried=0 contended=18)	0 pointer_chans	wakes(doorbell=3677 event=100936 spin=27228533 backstop=97292749)
+SPb4	backstop_found(work=390 carried=0 contended=19)	0 pointer_chans	wakes(doorbell=3746 event=100725 spin=16835202 backstop=103576031)
+SPb5	backstop_found(work=733 carried=0 contended=18)	0 pointer_chans	wakes(doorbell=3637 event=100717 spin=23706788 backstop=103181310)
+SPb8	backstop_found(work=412 carried=0 contended=13)	0 pointer_chans	wakes(doorbell=3604 event=100020 spin=19092192 backstop=102233781)
+SCb2	backstop_found(work=0 carried=0 contended=4)	0 pointer_chans	wakes(doorbell=73395 event=63624 spin=5174318 backstop=966)
+SCb3	backstop_found(work=0 carried=0 contended=1)	0 pointer_chans	wakes(doorbell=78184 event=66245 spin=12669061 backstop=964)
+SCb6	backstop_found(work=0 carried=0 contended=3)	0 pointer_chans	wakes(doorbell=69266 event=63624 spin=5840487 backstop=970)
+SCb7	backstop_found(work=0 carried=0 contended=2)	0 pointer_chans	wakes(doorbell=76879 event=63080 spin=8544172 backstop=976)

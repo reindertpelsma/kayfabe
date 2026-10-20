@@ -201,3 +201,79 @@ semaphore (`uvm_tracker.c:331-358`); only libcuda's blocking sync uses RM non-st
   identical to the control (cargo mtimes) and was deleted and rebuilt (md5 differs, `busy_looks` string present).
 - The stall probe (`stallprobe`) never fired (needs >= 1.5 s stall in a pair with detection); the stop-the-others experiment is untested.
 - Owner VM: stopped cleanly 13:32:16 (exit 0, 5 min after READY), restored 15:52 as run 3432 (READY 15:52:03, `hostname` answers), host Xid count 25 throughout.
+
+---
+
+# Baton Pointer-mode and worker-spin runs, 2026-10-20 (branch claude/baton-pointer-20261020)
+
+STATUS: RESEARCH, 2026-10-20 18:40. MEASURED / CODE READ / INFERRED kept apart. Host root@172.22.1.20 (RTX 4070, 595.91.07), host Xid count 25 before,
+during and after. Fast guest 6 GiB, 4 vCPUs, `KF3_DEBUG=1 KF3_DEBUG_FORCE_MIGRATABLE=1 KF3_TSG_MIRROR=0`, plain `pair`, K = 5 ms, blocking sync,
+2 x 120 s pairs per boot (session3.sh). Data: `results-pointer-20261020/` (`results_fp.tsv` = every pair, `events_and_counters.txt`,
+`wd_*.txt` = six guest watchdog dumps); `fp_table.py` makes the tables. Evidence on the host: `/data/claude-baton-debug-20261020/{runs,qp,results_fp.tsv}`.
+The owner's VM was restored as run 3433 (READY 18:31:25, `hostname` = kayfabe-windows).
+
+## T1. Why the Linux baton channels never reach Pointer mode
+
+CODE READ: Scan -> Pointer is exactly one transition, `Lifecycle::entry` `Mode::Scan`, `o.sw_mask != 0` with no live registration
+(`user_lifecycle.rs`; `Cause::SoftwareBound`). `sw_mask` is the set of subchannels 5-7 on which a SCANNED `SET_OBJECT` bound the channel's SOFTWARE object
+(`user_scan.rs software_mask`), and that object exists only if the guest allocated a class 0x5080 (`NV50_DEFERRED_API_CLASS`) child on the channel before
+its first publication (`userpump.rs user_ring_software_object`, sets `t.user_defapi`). Windows dxgkrnl does that on every channel; libcuda/UVM on Linux never does.
+Not conditions of the switch: ring size, SYNC_WAIT use, a window trigger, `KF3_DEBUG`. `KF3_LIFECYCLE_COUNT` and `KF3_LIFECYCLE_PERIOD_S` (the owner launcher's
+WIN_FLAGS) appear in NO binary (`grep -c` = 0 in 0d7ba743 and 0d325edab) and in no source: they do nothing, and no PERIOD line exists in any log.
+MEASURED: all 80 channels of an old Linux session (rf4_C): `scan_no_software: 1`, `set_object_5080_total: 0`, `mode=Scan`. Windows run 3432 qemu.log: 96 lifecycle lines,
+89 `mode=Pointer` with `set_object_5080_total: 1`, 7 Scan with 0. (The hypotheses "ring size / SYNC_WAIT / window / KF3_DEBUG" are dead by code, so no n = 3 runs
+were spent on them; falsifier that would have revived them: a Linux channel with `set_object_5080_total > 0` still in Scan: none in the 28 Linux sessions' lifecycle lines.)
+
+How to get Pointer on Linux: no guest-only way (the guest would have to allocate the 5080 object AND emit `SET_OBJECT` into libcuda's pushbuffer). Added a
+MEASUREMENT-ONLY mode `KF3_LIFECYCLE_MODE=force_pointer` (`user_lifecycle.rs`, `FORCE_POINTER_AFTER` = 16 scanned entries, then the same
+transition as `SoftwareBound` with no registration; not in `LifecycleMode::ALL`, unit test added). MEASURED: 15 of 80 channels (all the CUDA compute ones)
+`mode=Pointer`, `entries_pointer` 20k-26k, `pointer_markers` 13k-17k, `pointer_pb_read_violation` 0, `pointer_backstop` 0-1, in every force_pointer session (13 sessions). `USER_RING_LOOP SUMMARY`
+IS printed with `markers` > 0 in Pointer mode, so the missing summary in Windows run 3432 is not "Pointer has no markers" (INFERRED: the VM was not torn down
+cleanly enough to print "all relays gone"; not checked).
+
+## T2. Hit rates (pairs; >= 1 s / >= 2 s / >= 4 s starved, max s). Binaries: C = 0d325edab, F = cfdcaf73b (busy-look fix), both + force_pointer patch (default mode unchanged)
+
+    arm                                n    >=1s  >=2s  >=4s  max
+    Pointer, C   (PC, 5 boots)        10     2     1     1   15.4
+    Pointer, F   (PF, 4 boots)         8     1     1     1   18.9
+    Scan,    C   (SC, 4 boots)         8     2     1     1    5.8
+    Scan,    F   (SF, 4 boots)         8     3     2     1    4.3
+    Pointer, pw fix  (WF, KF3_DIAG_PROGRESS=1000)            4     2     1     1    5.4   (2 boots only, see below)
+    Pointer, pw ctl  (WC, + KF3_NEGCTL_NO_BUSY_LOOK=1)       4     1     1     1    6.5
+
+MEASURED, interleaved ABBA blocks (C F ... / F C ... per boot order in `qp/`). Pointer mode does not remove the stall and does not visibly worsen it (C: Pointer 2/10 vs Scan 2/8; F: 1/8 vs 3/8;
+n far too small to rank). The fix does not separate from the control in either mode (Scan C 2/8 vs F 3/8; Pointer C 2/10 vs F 1/8). The reproducer rate in this campaign (2-3 of 8 at >= 1 s, 1 of 8 at >= 4 s) is
+lower than the earlier 44 % (the SCb arm below, same binary and config, gave 6/8): the rate varies by boot batch. pw arms: only 2 boots per arm run (WF1 WC2 WC3 WF4; the second ABBA half
+was parked for time): n = 4 pairs each, NOT an A/B result. Same host state, same guest, same pair script.
+
+## T2b. H-WAKE falsifier: the worker never blocks (separate commit, `KF3_DEBUG_WORKER_SPIN=1`)
+
+Stated before the run: H-WAKE = the baton is a lost/late-wake class; with a worker whose park wait is `epoll_wait(0)` (every empty pass ends in the relays' backstop peek) the >= 1 s rate falls
+to ~0; falsifier: rate stays >= 20 % at n >= 8 pairs. Binary 0d325edab-fp-spin (C + force_pointer patch + the spin diagnostic; Scan mode, env only on the spin arm), interleaved SP SC SC SP SP SC SC SP (4 boots per arm).
+
+    arm                      pairs  >=1s  >=2s  >=4s  max gap
+    SP  worker never blocks    8      0     0     0    0.01 s (every pair, both clients)
+    SC  control (same binary)  8      6     5     2    17.6 s       (one-sided Fisher 0/8 vs 6/8: p = 0.0035; pairs of one boot are not independent)
+
+H-WAKE NOT falsified: SP stayed at 0 of 8 against 6 of 8 in the interleaved control. Confounds, MEASURED: the sampler shows both `kf3-worker` threads in state R in ~88 % of 0.25 s samples with SP
+(1887/2134, 1903/2146, 1871/2144, 1896/2146) versus 6-12 % with SC (127/1924, 240/1931, 165/1928, 208/1932), i.e. two cores at ~100 %; host has 24 cores, guest 4 vCPUs in both arms. SP also changes more than the wake:
+it bypasses `user_loop::may_retry` (the 64-contended-turn limit) because the backstop peek always rings, and `backstop_found(work=...)` is 390-733 per SP session versus 0 in all SC sessions (INFERRED, ambiguous: work found
+by a constant poll can be a few microseconds ahead of the normal wake, or work the normal wake would only find at the 50 ms backstop; the counters cannot tell). So the result says "a worker that polls everything continuously
+removes the stalls" (wake/look class, or the contended-retry limit), it does not by itself separate a lost wake from the retry limit. Next discriminator: spin only the doorbell/event wake but keep `may_retry` (not built).
+
+## T3. Evidence of the starvations (six guest watchdog dumps in `results-pointer-20261020/wd_*`; events in `events_and_counters.txt`)
+
+MEASURED, identical in every watchdog episode of this campaign (14 episodes >= 2 s, in Pointer and Scan, C, F and pw arms; e.g. PF15 18.9 s, SCb3 17.6 s, SCb7 10.2 s, SC11 5.8 s, WF1 5.4 s, WC2 6.5 s): the main thread in `cuStreamSynchronize` = `futex_do_wait`
+(syscall 202), `cuda...06` in `poll` with infinite timeout, no thread in an nvidia ioctl, `cuStreamQuery` = NOT_READY, the peer's last completion 0-6 ms old. Nothing in guest dmesg.
+Host side, pw build (`PROGRESS_*` blocks): in WF1 (fix arm, 5.4 s stall at 1.4-6.9 s) and WF4 (1.3 s stall) the host printed ONLY `PROGRESS_ARMED`: no required visit point starved and no relay was
+"satisfied but unpeeked" for the 1 s threshold during the stall. In the negative-control arm WC2/WC3 the blocks appear (`PROGRESS_STARVED point=worker_poll passes_since_poll=0x16..0xa2 bound=0x10`, age 3-6 ms: the count
+rule, expected without busy looks) with `contended_run=0x0`, `busy_looks=0x0`, `backstop_contended=0x0` and relay states `wait=marker waiting_flag=yes`; they also fire in WC3, which had NO stall (6 STARVED lines), so they
+mark the missing busy look, not the starvation. `backstop_found(contended)` (last summary of the session): 1 in stalled sessions SCb3, SC11, PF15, WF1, SF5, SF12; 2-4 in SCb2/SCb6/SCb7/fp1_C; 0 in stalled-free PC1, PC16, PF10, WC3, SF4 but also 1 in stall-free SC6, SC14, PF7 and 11 in PF2, 17 in SC3 (sub-2 s or no stall). A weaker correlation than the "14/14" of the earlier note: >= 1 is necessary in this data (every stalled session has it) but not sufficient.
+INFERRED (from the fix-arm silence): the stale object during a starvation is NOT a worker that failed to visit a poll point and NOT a satisfied relay wait left unlooked; the stalled client's relay was waiting on a wait that
+was not satisfied (private ring progress / marker / completion not produced), i.e. downstream of the relay's looks, or the worker was not the thing that had to move. That fits SP (which also looks at unsatisfied waits much more often)
+only if the wake of the guest-visible completion, not the relay's wait, is what lags. What is missing: the relay state AT the stall (the diagnostic dumps only on its rules). Next: an `unsatisfied for > N s while the peer completes` block in progress.rs.
+
+## Caveats
+
+n is small and boots are the unit of correlation; the SP vs SC difference is large, the Pointer vs Scan and F vs C differences are not resolved. `force_pointer` forwards without ever scanning (a bench switch; not a product mode).
+The pw binary is the progress-watchdog branch (299fd0ed5) + the force_pointer patch, built here. The second ABBA half of the pw arms was parked for time.

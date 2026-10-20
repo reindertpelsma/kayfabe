@@ -1,0 +1,87 @@
+fp1_C	files	pair1	hit=1	starved=A 15.4s	gaps=A:15.38,B:2.40	iters=A:10107,B:13037
+fp1_C	files	pair2	hit=0	starved=- 0.0s	gaps=A:0.01,B:0.07	iters=A:11580,B:11569
+fp1_C	files	TOTAL	1/2
+PC1	files	pair1	hit=0	starved=- 0.0s	gaps=A:0.01,B:0.01	iters=A:11493,B:11493
+PC1	files	pair2	hit=0	starved=- 0.0s	gaps=A:0.01,B:0.01	iters=A:11509,B:11508
+PC1	files	TOTAL	0/2
+PF2	files	pair1	hit=0	starved=- 0.0s	gaps=A:0.01,B:0.01	iters=A:11575,B:11575
+PF2	files	pair2	hit=0	starved=- 0.0s	gaps=A:0.01,B:0.01	iters=A:11560,B:11560
+PF2	files	TOTAL	0/2
+SC3	files	pair1	hit=0	starved=- 0.0s	gaps=A:1.57,B:0.01	iters=A:11429,B:11730
+SC3	files	pair2	hit=0	starved=- 0.0s	gaps=A:0.01,B:0.25	iters=A:11613,B:11568
+SC3	files	TOTAL	0/2
+SF4	files	pair1	hit=0	starved=- 0.0s	gaps=A:0.01,B:0.01	iters=A:11523,B:11524
+SF4	files	pair2	hit=0	starved=- 0.0s	gaps=A:0.01,B:0.01	iters=A:11517,B:11518
+SF4	files	TOTAL	0/2
+SF5	files	pair1	hit=0	starved=- 0.0s	gaps=A:0.01,B:0.01	iters=A:11600,B:11599
+SF5	files	pair2	hit=0	starved=- 0.0s	gaps=A:3.38,B:0.01	iters=A:11285,B:11929
+SF5	files	TOTAL	0/2
+SC6	files	pair1	hit=0	starved=- 0.0s	gaps=A:0.01,B:0.01	iters=A:11581,B:11581
+SC6	files	pair2	hit=0	starved=- 0.0s	gaps=A:0.56,B:0.01	iters=A:11527,B:11632
+SC6	files	TOTAL	0/2
+PF7	files	pair1	hit=0	starved=- 0.0s	gaps=A:0.01,B:0.01	iters=A:11597,B:11598
+PF7	files	pair2	hit=0	starved=- 0.0s	gaps=A:0.01,B:0.84	iters=A:11693,B:11530
+PF7	files	TOTAL	0/2
+PC8	files	pair1	hit=0	starved=- 0.0s	gaps=A:0.01,B:0.01	iters=A:11602,B:11603
+PC8	files	pair2	hit=0	starved=- 0.0s	gaps=A:0.01,B:0.01	iters=A:11598,B:11598
+PC8	files	TOTAL	0/2
+PC9	files	pair1	hit=0	starved=- 0.0s	gaps=A:1.28,B:0.01	iters=A:11481,B:11729
+PC9	files	pair2	hit=0	starved=- 0.0s	gaps=A:0.01,B:0.01	iters=A:11632,B:11632
+PC9	files	TOTAL	0/2
+PF10	files	pair1	hit=0	starved=- 0.0s	gaps=A:0.01,B:0.01	iters=A:11598,B:11598
+PF10	files	pair2	hit=0	starved=- 0.0s	gaps=A:0.01,B:0.01	iters=A:11600,B:11601
+PF10	files	TOTAL	0/2
+SC11	files	pair1	hit=1	starved=A 5.8s	gaps=A:5.83,B:0.01	iters=A:11042,B:12163
+SC11	files	pair2	hit=0	starved=- 0.0s	gaps=A:0.01,B:0.01	iters=A:11574,B:11574
+SC11	files	TOTAL	1/2
+SF12	files	pair1	hit=0	starved=- 0.0s	gaps=A:0.01,B:0.01	iters=A:11588,B:11589
+SF12	files	pair2	hit=1	starved=A 4.3s	gaps=A:4.33,B:0.01	iters=A:11172,B:12008
+SF12	files	TOTAL	1/2
+SF13	files	pair1	hit=0	starved=- 0.0s	gaps=A:1.08,B:0.01	iters=A:11503,B:11710
+SF13	files	pair2	hit=0	starved=- 0.0s	gaps=A:0.01,B:0.01	iters=A:11603,B:11603
+SF13	files	TOTAL	0/2
+SC14	files	pair1	hit=0	starved=- 0.0s	gaps=A:0.01,B:0.01	iters=A:11609,B:11609
+SC14	files	pair2	hit=0	starved=- 0.0s	gaps=A:0.01,B:0.44	iters=A:11650,B:11568
+SC14	files	TOTAL	0/2
+PF15	files	pair1	hit=1	starved=B 18.9s	gaps=A:0.01,B:18.87	iters=A:13408,B:9771
+PF15	files	pair2	hit=0	starved=- 0.0s	gaps=A:0.01,B:0.01	iters=A:11582,B:11581
+PF15	files	TOTAL	1/2
+PC16	files	pair1	hit=0	starved=- 0.0s	gaps=A:0.01,B:0.01	iters=A:11557,B:11558
+PC16	files	pair2	hit=0	starved=- 0.0s	gaps=A:0.01,B:0.01	iters=A:11577,B:11576
+PC16	files	TOTAL	0/2
+WF1	files	pair1	hit=1	starved=B 5.4s	gaps=A:0.01,B:5.42	iters=A:12100,B:11053
+WF1	files	pair2	hit=0	starved=- 0.0s	gaps=A:0.01,B:0.01	iters=A:11562,B:11562
+WF1	files	TOTAL	1/2
+WC2	files	pair1	hit=1	starved=B 6.5s	gaps=A:0.01,B:6.46	iters=A:12224,B:10968
+WC2	files	pair2	hit=0	starved=- 0.0s	gaps=A:0.01,B:0.01	iters=A:11592,B:11591
+WC2	files	TOTAL	1/2
+WC3	files	pair1	hit=0	starved=- 0.0s	gaps=A:0.01,B:0.01	iters=A:11578,B:11579
+WC3	files	pair2	hit=0	starved=- 0.0s	gaps=A:0.01,B:0.01	iters=A:11588,B:11588
+WC3	files	TOTAL	0/2
+WF4	files	pair1	hit=0	starved=- 0.0s	gaps=A:0.01,B:1.28	iters=A:11630,B:11388
+WF4	files	pair2	hit=0	starved=- 0.0s	gaps=A:0.01,B:0.01	iters=A:11501,B:11501
+WF4	files	TOTAL	0/2
+SPb1	files	pair1	hit=0	starved=- 0.0s	gaps=A:0.01,B:0.01	iters=A:11621,B:11621
+SPb1	files	pair2	hit=0	starved=- 0.0s	gaps=A:0.01,B:0.01	iters=A:11636,B:11636
+SPb1	files	TOTAL	0/2
+SCb2	files	pair1	hit=0	starved=- 0.0s	gaps=A:2.38,B:1.61	iters=A:11469,B:11706
+SCb2	files	pair2	hit=0	starved=- 0.0s	gaps=A:3.01,B:0.01	iters=A:11303,B:11883
+SCb2	files	TOTAL	0/2
+SCb3	files	pair1	hit=0	starved=- 0.0s	gaps=A:0.01,B:0.01	iters=A:11629,B:11628
+SCb3	files	pair2	hit=1	starved=A 17.6s	gaps=A:17.59,B:0.01	iters=A:9913,B:13311
+SCb3	files	TOTAL	1/2
+SPb4	files	pair1	hit=0	starved=- 0.0s	gaps=A:0.01,B:0.01	iters=A:11574,B:11574
+SPb4	files	pair2	hit=0	starved=- 0.0s	gaps=A:0.01,B:0.01	iters=A:11574,B:11574
+SPb4	files	TOTAL	0/2
+SPb5	files	pair1	hit=0	starved=- 0.0s	gaps=A:0.01,B:0.01	iters=A:11632,B:11632
+SPb5	files	pair2	hit=0	starved=- 0.0s	gaps=A:0.01,B:0.01	iters=A:11647,B:11647
+SPb5	files	TOTAL	0/2
+SCb6	files	pair1	hit=0	starved=- 0.0s	gaps=A:0.31,B:0.01	iters=A:11555,B:11614
+SCb6	files	pair2	hit=0	starved=- 0.0s	gaps=A:0.01,B:3.47	iters=A:11949,B:11218
+SCb6	files	TOTAL	0/2
+SCb7	files	pair1	hit=1	starved=A 10.2s	gaps=A:10.24,B:0.01	iters=A:10583,B:12545
+SCb7	files	pair2	hit=0	starved=- 0.0s	gaps=A:1.13,B:0.01	iters=A:11467,B:11679
+SCb7	files	TOTAL	1/2
+SPb8	files	pair1	hit=0	starved=- 0.0s	gaps=A:0.01,B:0.01	iters=A:11577,B:11577
+SPb8	files	pair2	hit=0	starved=- 0.0s	gaps=A:0.01,B:0.01	iters=A:11573,B:11574
+SPb8	files	TOTAL	0/2

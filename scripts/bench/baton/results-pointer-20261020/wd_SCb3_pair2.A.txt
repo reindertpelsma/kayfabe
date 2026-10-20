@@ -1,0 +1,383 @@
+WD_BEGIN label=A pid=512 t=42.833 epoch=1792512416.833 idle_ms=2062.0 iters=3949 launched=3950 sync_active=1 again=0
+HB label=B age_ms=2.1 iters=4347
+STREAMQ rc=600 name=NOT_READY
+TASK tid=512 comm=baton state=S wchan=futex_do_wait syscall=202 args=0x7ffea9d60c80,0x189,0x0
+STAT tid=512 512 (baton) S 160 0 0 0 -1 4194560 5835 0 0 0 20 71 0 0 20 0 5 0 13790 5126684672 23906 18446744073709551615 105296316895232 105296316906545 140731747800912 0 0 0 0 4 16386 1 0 0 17 1 0 0 0 0 0 105296316918896 105296316919848 105297197842432 140731747802698 140731747802887 140731747802887 140731747803117 0
+STACK tid=512
+[<0>] futex_do_wait+0x48/0x90
+[<0>] __futex_wait+0x9c/0x110
+[<0>] futex_wait+0x7b/0x140
+[<0>] do_futex+0x102/0x260
+[<0>] __x64_sys_futex+0x120/0x210
+[<0>] x64_sys_call+0x198e/0x2390
+[<0>] do_syscall_64+0x105/0x5a0
+[<0>] entry_SYSCALL_64_after_hwframe+0x76/0x7e
+ENDSTACK
+CTXT tid=512 voluntary_ctxt_switches:	4140
+nonvoluntary_ctxt_switches:	5
+x86_Thread_features:	
+x86_Thread_features_locked:	
+TASK tid=519 comm=cuda00001400006 state=S wchan=poll_schedule_timeout.constprop.0 syscall=7 args=0x5fc46a142a80,0x3,0xffffffffffffffff
+STAT tid=519 519 (cuda00001400006) S 160 0 0 0 -1 4194368 3 0 0 0 0 0 0 0 20 0 5 0 13790 5126684672 23906 18446744073709551615 105296316895232 105296316906545 140731747800912 0 0 0 0 4 16386 1 0 0 -1 0 0 0 0 0 0 105296316918896 105296316919848 105297197842432 140731747802698 140731747802887 140731747802887 140731747803117 0
+STACK tid=519
+[<0>] poll_schedule_timeout.constprop.0+0x3e/0xa0
+[<0>] do_poll.constprop.0+0x240/0x340
+[<0>] do_sys_poll+0x1e5/0x290
+[<0>] __x64_sys_poll+0x4e/0x190
+[<0>] x64_sys_call+0xbe8/0x2390
+[<0>] do_syscall_64+0x105/0x5a0
+[<0>] entry_SYSCALL_64_after_hwframe+0x76/0x7e
+ENDSTACK
+CTXT tid=519 voluntary_ctxt_switches:	2
+nonvoluntary_ctxt_switches:	0
+x86_Thread_features:	
+x86_Thread_features_locked:	
+TASK tid=534 comm=cuda-EvtHandlr state=S wchan=poll_schedule_timeout.constprop.0 syscall=7 args=0x7c6528000c30,0xa,0x40
+STAT tid=534 534 (cuda-EvtHandlr) S 160 0 0 0 -1 4194368 3 0 0 0 9 15 0 0 20 0 5 0 13824 5126684672 23906 18446744073709551615 105296316895232 105296316906545 140731747800912 0 0 0 0 4 16386 1 0 0 -1 3 0 0 0 0 0 105296316918896 105296316919848 105297197842432 140731747802698 140731747802887 140731747802887 140731747803117 0
+STACK tid=534
+[<0>] poll_schedule_timeout.constprop.0+0x3e/0xa0
+[<0>] do_poll.constprop.0+0x240/0x340
+[<0>] do_sys_poll+0x1e5/0x290
+[<0>] __x64_sys_poll+0xcb/0x190
+[<0>] x64_sys_call+0xbe8/0x2390
+[<0>] do_syscall_64+0x105/0x5a0
+[<0>] entry_SYSCALL_64_after_hwframe+0x76/0x7e
+ENDSTACK
+CTXT tid=534 voluntary_ctxt_switches:	12934
+nonvoluntary_ctxt_switches:	0
+x86_Thread_features:	
+x86_Thread_features_locked:	
+TASK tid=536 comm=baton state=S wchan=poll_schedule_timeout.constprop.0 syscall=7 args=0x5fc46aadfa00,0x2,0x64
+STAT tid=536 536 (baton) S 160 0 0 0 -1 4194368 2 0 0 0 0 0 0 0 20 0 5 0 13860 5126684672 23906 18446744073709551615 105296316895232 105296316906545 140731747800912 0 0 0 0 4 16386 1 0 0 -1 2 0 0 0 0 0 105296316918896 105296316919848 105297197842432 140731747802698 140731747802887 140731747802887 140731747803117 0
+STACK tid=536
+[<0>] poll_schedule_timeout.constprop.0+0x3e/0xa0
+[<0>] do_poll.constprop.0+0x240/0x340
+[<0>] do_sys_poll+0x1e5/0x290
+[<0>] __x64_sys_poll+0xcb/0x190
+[<0>] x64_sys_call+0xbe8/0x2390
+[<0>] do_syscall_64+0x105/0x5a0
+[<0>] entry_SYSCALL_64_after_hwframe+0x76/0x7e
+ENDSTACK
+CTXT tid=536 voluntary_ctxt_switches:	495
+nonvoluntary_ctxt_switches:	0
+x86_Thread_features:	
+x86_Thread_features_locked:	
+TASK tid=551 comm=baton state=R wchan=0 syscall=0 args=0x28,0x7c651bffd950,0x9f
+STAT tid=551 551 (baton) R 160 0 0 0 -1 4194368 6 0 0 0 0 0 0 0 20 0 5 0 14527 5126684672 23906 18446744073709551615 105296316895232 105296316906545 140731747800912 0 0 0 0 4 16386 0 0 0 -1 1 0 0 0 0 0 105296316918896 105296316919848 105297197842432 140731747802698 140731747802887 140731747802887 140731747803117 0
+STACK tid=551
+[<0>] proc_pid_stack+0xdf/0x160
+[<0>] proc_single_show+0x59/0xf0
+[<0>] seq_read_iter+0x130/0x4a0
+[<0>] seq_read+0x11b/0x160
+[<0>] vfs_read+0xbf/0x3a0
+[<0>] ksys_read+0x71/0xf0
+[<0>] __x64_sys_read+0x19/0x30
+[<0>] x64_sys_call+0x1ff1/0x2390
+[<0>] do_syscall_64+0x105/0x5a0
+[<0>] entry_SYSCALL_64_after_hwframe+0x76/0x7e
+ENDSTACK
+CTXT tid=551 voluntary_ctxt_switches:	428
+nonvoluntary_ctxt_switches:	0
+x86_Thread_features:	
+x86_Thread_features_locked:	
+FD 0 -> /dev/null
+FD 1 -> /tmp/o/pair2.A.log
+FD 2 -> /tmp/o/pair2.A.err
+FD 3 -> anon_inode:[eventfd]
+FD 4 -> pipe:[2841]
+FD 5 -> pipe:[2841]
+FD 6 -> pipe:[2842]
+FD 7 -> pipe:[2842]
+FD 8 -> /dev/nvidiactl
+FD 9 -> /dev/nvidia-uvm
+FD 10 -> /dev/nvidia-uvm
+FD 11 -> /dev/nvidia0
+FD 12 -> /dev/nvidia0
+FD 13 -> /dev/nvidia0
+FD 14 -> /dev/nvidia0
+FD 15 -> socket:[2845]
+FD 16 -> anon_inode:[eventfd]
+FD 17 -> /dev/nvidia0
+FD 18 -> /dev/nvidia0
+FD 19 -> /dev/nvidia0
+FD 20 -> /dev/nvidia0
+FD 21 -> /dev/nvidia0
+FD 22 -> /dev/nvidia0
+FD 23 -> anon_inode:[eventfd]
+FD 24 -> /dev/nvidia0
+FD 25 -> /dev/nvidia0
+FD 26 -> /dev/nvidia0
+FD 27 -> /dev/nvidia0
+FD 28 -> /dev/nvidia0
+FD 29 -> /dev/nvidia0
+FD 30 -> /dev/nvidia0
+FD 31 -> /dev/nvidia0
+FD 32 -> pipe:[2848]
+FD 33 -> pipe:[2848]
+FD 34 -> anon_inode:[eventfd]
+FD 35 -> pipe:[2849]
+FD 36 -> pipe:[2849]
+FD 37 -> /tmp/o/pair2.A.csv
+FD 38 -> /tmp/o/pair2.A.wd
+FD 39 -> /proc/512/fd
+PROC /proc/driver/nvidia/gpus/0000:00:03.0/power
+Runtime D3 status:          Disabled by default
+Tegra iGPU Rail-Gating:     Disabled
+Video Memory:               Active
+
+GPU Hardware Support:
+ Video Memory Self Refresh: Not Supported
+ Video Memory Off:          Not Supported
+
+S0ix Power Management:
+ Platform Support:          Not Supported
+ Status:                    Disabled
+
+Notebook Dynamic Boost:     Not Supported
+ENDPROC
+PROC /proc/driver/nvidia/gpus/0000:00:03.0/registry
+Binary: ""
+ENDPROC
+PROC /proc/driver/nvidia/gpus/0000:00:03.0/information
+Model: 		 NVIDIA GeForce RTX 4070
+IRQ:   		 23
+GPU UUID: 	 GPU-71f7ceb1-1cbe-e71f-f2ec-9f4cef901167
+Video BIOS: 	 95.04.3e.08.be
+Bus Type: 	 PCI
+DMA Size: 	 47 bits
+DMA Mask: 	 0x7fffffffffff
+Bus Location: 	 0000:00:03.0
+Device Minor: 	 0
+GPU Firmware: 	 595.91.07
+GPU Excluded:	 No
+ENDPROC
+PROC /proc/driver/nvidia-uvm/gpus/1/info
+GPU ID 1: GPU-71f7ceb1-1cbe-e71f-f2ec-9f4cef901167 GI-71f7ceb1-1cbe-e71f-f2ec-9f4cef901167
+retained_count                         2
+ecc                                    disabled
+nvlink status and recovery             disabled
+closest_cpu_numa_node                  n/a
+ENDPROC
+PROC /proc/driver/nvidia-uvm/gpus/GI-71f7ceb1-1cbe-e71f-f2ec-9f4cef901167/info
+GPU ID 1: GPU-71f7ceb1-1cbe-e71f-f2ec-9f4cef901167 GI-71f7ceb1-1cbe-e71f-f2ec-9f4cef901167
+retained_count                         2
+ecc                                    disabled
+nvlink status and recovery             disabled
+closest_cpu_numa_node                  n/a
+ENDPROC
+PROC /proc/driver/nvidia-uvm/gpus/GPU-71f7ceb1-1cbe-e71f-f2ec-9f4cef901167/0/info
+GPU ID 1: GPU-71f7ceb1-1cbe-e71f-f2ec-9f4cef901167 GI-71f7ceb1-1cbe-e71f-f2ec-9f4cef901167
+retained_count                         2
+ecc                                    disabled
+nvlink status and recovery             disabled
+closest_cpu_numa_node                  n/a
+ENDPROC
+PROC /proc/interrupts(nvidia|virtio)
+           CPU0       CPU1       CPU2       CPU3       
+ 24:          0          0          0          0 PCI-MSIX-0000:00:04.0   0-edge      virtio0-config
+ 25:          0          0          0      47408 PCI-MSIX-0000:00:04.0   1-edge      virtio0-virtqueues
+ 26:          0          0          0       9848 PCI-MSIX-0000:00:03.0   0-edge      nvidia
+ 27:          0          0          0          0 PCI-MSIX-0000:00:03.0   1-edge      nvidia
+ 28:          0          0          0          0 PCI-MSIX-0000:00:03.0   2-edge      nvidia
+ 29:          0          0          0          0 PCI-MSIX-0000:00:03.0   3-edge      nvidia
+ 30:          0          0          0          0 PCI-MSIX-0000:00:03.0   4-edge      nvidia
+ 31:          0          0          0          0 PCI-MSIX-0000:00:03.0   5-edge      nvidia
+ 32:          0          0          0          0 PCI-MSIX-0000:00:03.0   6-edge      nvidia
+ 33:          0          0          0          0 PCI-MSIX-0000:00:03.0   7-edge      nvidia
+ENDPROC
+PROC /proc/loadavg
+0.00 0.00 0.00 1/122 639
+ENDPROC
+WD_END label=A
+WD_BEGIN label=A pid=512 t=52.842 epoch=1792512426.842 idle_ms=12071.4 iters=3949 launched=3950 sync_active=1 again=1
+HB label=B age_ms=4.4 iters=6271
+STREAMQ rc=600 name=NOT_READY
+TASK tid=512 comm=baton state=S wchan=futex_do_wait syscall=202 args=0x7ffea9d60c80,0x189,0x0
+STAT tid=512 512 (baton) S 160 0 0 0 -1 4194560 5835 0 0 0 20 71 0 0 20 0 5 0 13790 5126684672 23906 18446744073709551615 105296316895232 105296316906545 140731747800912 0 0 0 0 4 16386 1 0 0 17 1 0 0 0 0 0 105296316918896 105296316919848 105297197842432 140731747802698 140731747802887 140731747802887 140731747803117 0
+STACK tid=512
+[<0>] futex_do_wait+0x48/0x90
+[<0>] __futex_wait+0x9c/0x110
+[<0>] futex_wait+0x7b/0x140
+[<0>] do_futex+0x102/0x260
+[<0>] __x64_sys_futex+0x120/0x210
+[<0>] x64_sys_call+0x198e/0x2390
+[<0>] do_syscall_64+0x105/0x5a0
+[<0>] entry_SYSCALL_64_after_hwframe+0x76/0x7e
+ENDSTACK
+CTXT tid=512 voluntary_ctxt_switches:	4140
+nonvoluntary_ctxt_switches:	5
+x86_Thread_features:	
+x86_Thread_features_locked:	
+TASK tid=519 comm=cuda00001400006 state=S wchan=poll_schedule_timeout.constprop.0 syscall=7 args=0x5fc46a142a80,0x3,0xffffffffffffffff
+STAT tid=519 519 (cuda00001400006) S 160 0 0 0 -1 4194368 3 0 0 0 0 0 0 0 20 0 5 0 13790 5126684672 23906 18446744073709551615 105296316895232 105296316906545 140731747800912 0 0 0 0 4 16386 1 0 0 -1 0 0 0 0 0 0 105296316918896 105296316919848 105297197842432 140731747802698 140731747802887 140731747802887 140731747803117 0
+STACK tid=519
+[<0>] poll_schedule_timeout.constprop.0+0x3e/0xa0
+[<0>] do_poll.constprop.0+0x240/0x340
+[<0>] do_sys_poll+0x1e5/0x290
+[<0>] __x64_sys_poll+0x4e/0x190
+[<0>] x64_sys_call+0xbe8/0x2390
+[<0>] do_syscall_64+0x105/0x5a0
+[<0>] entry_SYSCALL_64_after_hwframe+0x76/0x7e
+ENDSTACK
+CTXT tid=519 voluntary_ctxt_switches:	2
+nonvoluntary_ctxt_switches:	0
+x86_Thread_features:	
+x86_Thread_features_locked:	
+TASK tid=534 comm=cuda-EvtHandlr state=S wchan=poll_schedule_timeout.constprop.0 syscall=7 args=0x7c6528000c30,0xa,0xc
+STAT tid=534 534 (cuda-EvtHandlr) S 160 0 0 0 -1 4194368 3 0 0 0 11 17 0 0 20 0 5 0 13824 5126684672 23906 18446744073709551615 105296316895232 105296316906545 140731747800912 0 0 0 0 4 16386 1 0 0 -1 1 0 0 0 0 0 105296316918896 105296316919848 105297197842432 140731747802698 140731747802887 140731747802887 140731747803117 0
+STACK tid=534
+[<0>] poll_schedule_timeout.constprop.0+0x3e/0xa0
+[<0>] do_poll.constprop.0+0x240/0x340
+[<0>] do_sys_poll+0x1e5/0x290
+[<0>] __x64_sys_poll+0xcb/0x190
+[<0>] x64_sys_call+0xbe8/0x2390
+[<0>] do_syscall_64+0x105/0x5a0
+[<0>] entry_SYSCALL_64_after_hwframe+0x76/0x7e
+ENDSTACK
+CTXT tid=534 voluntary_ctxt_switches:	14948
+nonvoluntary_ctxt_switches:	0
+x86_Thread_features:	
+x86_Thread_features_locked:	
+TASK tid=536 comm=baton state=S wchan=poll_schedule_timeout.constprop.0 syscall=7 args=0x5fc46aadfa00,0x2,0x64
+STAT tid=536 536 (baton) S 160 0 0 0 -1 4194368 2 0 0 0 0 0 0 0 20 0 5 0 13860 5126684672 23906 18446744073709551615 105296316895232 105296316906545 140731747800912 0 0 0 0 4 16386 1 0 0 -1 0 0 0 0 0 0 105296316918896 105296316919848 105297197842432 140731747802698 140731747802887 140731747802887 140731747803117 0
+STACK tid=536
+[<0>] poll_schedule_timeout.constprop.0+0x3e/0xa0
+[<0>] do_poll.constprop.0+0x240/0x340
+[<0>] do_sys_poll+0x1e5/0x290
+[<0>] __x64_sys_poll+0xcb/0x190
+[<0>] x64_sys_call+0xbe8/0x2390
+[<0>] do_syscall_64+0x105/0x5a0
+[<0>] entry_SYSCALL_64_after_hwframe+0x76/0x7e
+ENDSTACK
+CTXT tid=536 voluntary_ctxt_switches:	595
+nonvoluntary_ctxt_switches:	0
+x86_Thread_features:	
+x86_Thread_features_locked:	
+TASK tid=551 comm=baton state=R wchan=0 syscall=0 args=0x28,0x7c651bffd950,0x9f
+STAT tid=551 551 (baton) R 160 0 0 0 -1 4194368 10 0 0 0 0 0 0 0 20 0 5 0 14527 5126684672 23906 18446744073709551615 105296316895232 105296316906545 140731747800912 0 0 0 0 4 16386 0 0 0 -1 2 0 0 0 0 0 105296316918896 105296316919848 105297197842432 140731747802698 140731747802887 140731747802887 140731747803117 0
+STACK tid=551
+[<0>] proc_pid_stack+0xdf/0x160
+[<0>] proc_single_show+0x59/0xf0
+[<0>] seq_read_iter+0x130/0x4a0
+[<0>] seq_read+0x11b/0x160
+[<0>] vfs_read+0xbf/0x3a0
+[<0>] ksys_read+0x71/0xf0
+[<0>] __x64_sys_read+0x19/0x30
+[<0>] x64_sys_call+0x1ff1/0x2390
+[<0>] do_syscall_64+0x105/0x5a0
+[<0>] entry_SYSCALL_64_after_hwframe+0x76/0x7e
+ENDSTACK
+CTXT tid=551 voluntary_ctxt_switches:	528
+nonvoluntary_ctxt_switches:	0
+x86_Thread_features:	
+x86_Thread_features_locked:	
+FD 0 -> /dev/null
+FD 1 -> /tmp/o/pair2.A.log
+FD 2 -> /tmp/o/pair2.A.err
+FD 3 -> anon_inode:[eventfd]
+FD 4 -> pipe:[2841]
+FD 5 -> pipe:[2841]
+FD 6 -> pipe:[2842]
+FD 7 -> pipe:[2842]
+FD 8 -> /dev/nvidiactl
+FD 9 -> /dev/nvidia-uvm
+FD 10 -> /dev/nvidia-uvm
+FD 11 -> /dev/nvidia0
+FD 12 -> /dev/nvidia0
+FD 13 -> /dev/nvidia0
+FD 14 -> /dev/nvidia0
+FD 15 -> socket:[2845]
+FD 16 -> anon_inode:[eventfd]
+FD 17 -> /dev/nvidia0
+FD 18 -> /dev/nvidia0
+FD 19 -> /dev/nvidia0
+FD 20 -> /dev/nvidia0
+FD 21 -> /dev/nvidia0
+FD 22 -> /dev/nvidia0
+FD 23 -> anon_inode:[eventfd]
+FD 24 -> /dev/nvidia0
+FD 25 -> /dev/nvidia0
+FD 26 -> /dev/nvidia0
+FD 27 -> /dev/nvidia0
+FD 28 -> /dev/nvidia0
+FD 29 -> /dev/nvidia0
+FD 30 -> /dev/nvidia0
+FD 31 -> /dev/nvidia0
+FD 32 -> pipe:[2848]
+FD 33 -> pipe:[2848]
+FD 34 -> anon_inode:[eventfd]
+FD 35 -> pipe:[2849]
+FD 36 -> pipe:[2849]
+FD 37 -> /tmp/o/pair2.A.csv
+FD 38 -> /tmp/o/pair2.A.wd
+FD 39 -> /proc/512/fd
+PROC /proc/driver/nvidia/gpus/0000:00:03.0/power
+Runtime D3 status:          Disabled by default
+Tegra iGPU Rail-Gating:     Disabled
+Video Memory:               Active
+
+GPU Hardware Support:
+ Video Memory Self Refresh: Not Supported
+ Video Memory Off:          Not Supported
+
+S0ix Power Management:
+ Platform Support:          Not Supported
+ Status:                    Disabled
+
+Notebook Dynamic Boost:     Not Supported
+ENDPROC
+PROC /proc/driver/nvidia/gpus/0000:00:03.0/registry
+Binary: ""
+ENDPROC
+PROC /proc/driver/nvidia/gpus/0000:00:03.0/information
+Model: 		 NVIDIA GeForce RTX 4070
+IRQ:   		 23
+GPU UUID: 	 GPU-71f7ceb1-1cbe-e71f-f2ec-9f4cef901167
+Video BIOS: 	 95.04.3e.08.be
+Bus Type: 	 PCI
+DMA Size: 	 47 bits
+DMA Mask: 	 0x7fffffffffff
+Bus Location: 	 0000:00:03.0
+Device Minor: 	 0
+GPU Firmware: 	 595.91.07
+GPU Excluded:	 No
+ENDPROC
+PROC /proc/driver/nvidia-uvm/gpus/1/info
+GPU ID 1: GPU-71f7ceb1-1cbe-e71f-f2ec-9f4cef901167 GI-71f7ceb1-1cbe-e71f-f2ec-9f4cef901167
+retained_count                         2
+ecc                                    disabled
+nvlink status and recovery             disabled
+closest_cpu_numa_node                  n/a
+ENDPROC
+PROC /proc/driver/nvidia-uvm/gpus/GI-71f7ceb1-1cbe-e71f-f2ec-9f4cef901167/info
+GPU ID 1: GPU-71f7ceb1-1cbe-e71f-f2ec-9f4cef901167 GI-71f7ceb1-1cbe-e71f-f2ec-9f4cef901167
+retained_count                         2
+ecc                                    disabled
+nvlink status and recovery             disabled
+closest_cpu_numa_node                  n/a
+ENDPROC
+PROC /proc/driver/nvidia-uvm/gpus/GPU-71f7ceb1-1cbe-e71f-f2ec-9f4cef901167/0/info
+GPU ID 1: GPU-71f7ceb1-1cbe-e71f-f2ec-9f4cef901167 GI-71f7ceb1-1cbe-e71f-f2ec-9f4cef901167
+retained_count                         2
+ecc                                    disabled
+nvlink status and recovery             disabled
+closest_cpu_numa_node                  n/a
+ENDPROC
+PROC /proc/interrupts(nvidia|virtio)
+           CPU0       CPU1       CPU2       CPU3       
+ 24:          0          0          0          0 PCI-MSIX-0000:00:04.0   0-edge      virtio0-config
+ 25:          0          0          0      47408 PCI-MSIX-0000:00:04.0   1-edge      virtio0-virtqueues
+ 26:          0          0          0      11993 PCI-MSIX-0000:00:03.0   0-edge      nvidia
+ 27:          0          0          0          0 PCI-MSIX-0000:00:03.0   1-edge      nvidia
+ 28:          0          0          0          0 PCI-MSIX-0000:00:03.0   2-edge      nvidia
+ 29:          0          0          0          0 PCI-MSIX-0000:00:03.0   3-edge      nvidia
+ 30:          0          0          0          0 PCI-MSIX-0000:00:03.0   4-edge      nvidia
+ 31:          0          0          0          0 PCI-MSIX-0000:00:03.0   5-edge      nvidia
+ 32:          0          0          0          0 PCI-MSIX-0000:00:03.0   6-edge      nvidia
+ 33:          0          0          0          0 PCI-MSIX-0000:00:03.0   7-edge      nvidia
+ENDPROC
+PROC /proc/loadavg
+0.00 0.00 0.00 1/122 659
+ENDPROC
+WD_END label=A
+WD_RECOVER label=A t=58.440 gap_ms=17669.2
