@@ -773,11 +773,11 @@ mod fixture_tests {
         let words = gr_segment(&classes).unwrap();
         assert_eq!(words[4], classes[1], "I2M binding");
         assert_eq!(words[RUN31_GR.len() + 3], classes[2], "3D binding");
-        assert_eq!(words[RUN31_GR.len() + 9], classes[3], "compute binding");
+        assert_eq!(words[RUN31_GR.len() + 8], classes[3], "compute binding");
         let mut original = RUN31_GR.to_vec();
         original.extend_from_slice(&RUN32_GR_TAIL);
         for (i, value) in original.iter().enumerate() {
-            if ![4, 6, RUN31_GR.len() + 3, RUN31_GR.len() + 9].contains(&i) {
+            if ![4, 6, RUN31_GR.len() + 3, RUN31_GR.len() + 8].contains(&i) {
                 assert_eq!(words[i], *value, "non-graphics operand {i}");
             }
         }
