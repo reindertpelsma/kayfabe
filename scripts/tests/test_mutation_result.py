@@ -16,6 +16,12 @@ class MutationResult(unittest.TestCase):
         log = 'test one ... FAILED\ntest two ... FAILED\ntest result: FAILED. 0 passed; 2 failed; 0 ignored;\nerror: test failed, to rerun pass --test focused\n'
         self.assertEqual(self.module.classify(101, log)['status'], 'killed')
 
+    def test_lib_target_cargo_diagnostic_keeps_named_failures(self):
+        log = 'test config::linux ... FAILED\ntest config::windows ... FAILED\ntest result: FAILED. 3 passed; 2 failed; 0 ignored;\nerror: test failed, to rerun pass -p kf-abi --lib\n'
+        result = self.module.classify(101, log)
+        self.assertEqual(result['status'], 'killed')
+        self.assertEqual(result['tests'], ['config::linux', 'config::windows'])
+
     def test_build_errors_are_faults_even_with_stale_failure_lines(self):
         log = 'test one ... FAILED\ntest two ... FAILED\nerror[E0432]: unresolved import\nerror: could not compile package\n'
         self.assertEqual(self.module.classify(101, log)['status'], 'fault')

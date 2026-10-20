@@ -1,0 +1,22 @@
+[
+  {
+    "mutant": "expected-diagnostic-is-error",
+    "status": "killed",
+    "kills": 2,
+    "tests": [
+      "test_expected_cargo_test_diagnostic_is_a_kill (test_mutation_result.MutationResult.test_expected_cargo_test_diagnostic_is_a_kill)",
+      "test_lib_target_cargo_diagnostic_keeps_named_failures (test_mutation_result.MutationResult.test_lib_target_cargo_diagnostic_keeps_named_failures)"
+    ],
+    "errors": []
+  },
+  {
+    "mutant": "ignore-faults",
+    "status": "killed",
+    "kills": 2,
+    "tests": [
+      "test_build_errors_are_faults_even_with_stale_failure_lines (test_mutation_result.MutationResult.test_build_errors_are_faults_even_with_stale_failure_lines)",
+      "test_harness_errors_and_missing_results_are_faults (test_mutation_result.MutationResult.test_harness_errors_and_missing_results_are_faults)"
+    ],
+    "errors": []
+  }
+]
