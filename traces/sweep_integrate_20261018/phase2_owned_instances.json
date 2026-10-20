@@ -162,5 +162,21 @@
     "auto_destroy_pid": 294763,
     "auto_destroy_armed_utc": "2026-10-20T01:06:39.013972+00:00",
     "auto_destroy_verified": true
+  },
+  {
+    "id": 56816449,
+    "role": "Blackwell",
+    "offer": 52870669,
+    "gpu_offer": "RTX 5090",
+    "quote_dph": 1.0013888888888889,
+    "disk_gb_requested": 180,
+    "created_utc": "2026-10-20T01:07:05.308337+00:00",
+    "product_head": "0c87acda802b18a610739e75f2b50049a9247067",
+    "credit_before": 39.761315098462546,
+    "auto_destroy_minutes": 180,
+    "destroyed": false,
+    "auto_destroy_pid": 295834,
+    "auto_destroy_armed_utc": "2026-10-20T01:07:05.358023+00:00",
+    "auto_destroy_verified": true
   }
 ]
