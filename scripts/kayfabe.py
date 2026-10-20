@@ -126,8 +126,8 @@ def doctor_rows(facts, version, display):
         'sudo usermod -aG kvm "$USER"; log out and back in')
     row('permissions', 'PASS' if facts.get('devices') else 'FAIL', 'NVIDIA control/GPU/UVM device access',
         'ls -l /dev/nvidia* /dev/kvm; sudo usermod -aG video,render,kvm "$USER"')
-    row('udmabuf', 'PASS' if not display or facts.get('udmabuf') else 'FAIL',
-        '/dev/udmabuf read/write for display export',
+    row('udmabuf', 'PASS' if not display or facts.get('udmabuf') else 'WARN',
+        '/dev/udmabuf optional DMA-BUF tier; shared memory fallback remains available',
         'ls -l /dev/udmabuf; sudo usermod -aG kvm "$USER"; log out and back in')
     driver = facts.get('driver', 'unknown')
     matrix_path=ROOT/'docs/SUPPORT_MATRIX.tsv'

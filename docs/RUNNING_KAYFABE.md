@@ -40,6 +40,9 @@ no TPM/QEMU. GPU-free tests use offline facts, never the real device.
 ```
 
 CODE READ: remove --print to launch. --ram defaults8G and --cpus defaults8.
+The candidate retains QEMU's --no-reboot: a guest reboot exits QEMU. Run the same
+launcher command again to continue installation; remove the ISO after setup.
+The existing disk, UEFI variables and TPM state are reused.
 --no-display selects headless Linux; use a guest configured for serial access
 or networking. The minimal direct device is `-device kf3-gpu,id=gpu0` plus normal
 QEMU VM arguments, but its legacy8GiB/256MiB/32MiB resource defaults do not fit
@@ -57,7 +60,8 @@ every card. The launcher derives safer host-sized arguments, as described below.
 4. Obtain stock Windows580.88 from [NVIDIA's driver downloads](https://www.nvidia.com/en-us/drivers/).
    Follow [WINDOWS_GUEST_SETUP](WINDOWS_GUEST_SETUP.md) to enable GSP in the adapter
    and service keys before first driver start, set the documented DWM workaround,
-   and reboot. These are guest driver prerequisites, not host environment flags.
+   and reboot. Relaunch the same command after the reboot exits QEMU. These are
+   guest driver prerequisites, not host environment flags.
 5. Remove both --iso options after installation. --network on explicitly enables
    outbound slirp after offline setup. Sleep/wake remains unsupported. All C6
    boot/workload claims await Stage 5; do not change TDR timers as a workaround.
@@ -99,6 +103,20 @@ instead. Socket defaults to `$XDG_RUNTIME_DIR/kayfabe/broker.sock`, uid to the
 invoking user, UUID to existing device auto derivation. No pacing/tick source,
 cursor or timeout policy is changed. The launcher reports cgroup limitations;
 it does not promise host memory isolation when memory.max is unlimited.
+
+## Display without a broker
+
+CODE READ: the retained QEMU console can show the display without a broker.
+For that diagnostic path, take the printed QEMU line, retain device
+`display=on,gop=on`, remove `display-broker` and `display-broker-uid`, and use
+`-display vnc=127.0.0.1:1` in place of `-display none`. Connect a local VNC viewer
+to port5901. This is the [QEMU VNC frontend](https://www.qemu.org/docs/master/system/invocation.html),
+not a launcher mode; the build enables VNC and disables GTK/SDL. Keep the listener
+on loopback. The console/screendump fallback retains its existing pacing and
+cursor behavior; no C6 performance or desktop acceptance is claimed for it.
+`--no-display` instead disables the display device path for headless Linux.
+The [display design](design/V3_DISPLAY.md) distinguishes the diagnostic console
+from the product broker path. Both real display paths wait for Stage5 retest.
 
 ## Troubleshooting and evidence
 

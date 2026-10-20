@@ -1,11 +1,21 @@
 [
   {
-    "mutant": "skip-udmabuf-access",
+    "mutant": "hide-optional-dmabuf-warning",
     "status": "killed",
     "kills": 2,
     "tests": [
-      "test_linux_broker_refuses_missing_udmabuf_access (test_kayfabe_install.InstallPath.test_linux_broker_refuses_missing_udmabuf_access)",
-      "test_windows_display_refuses_missing_udmabuf_access (test_kayfabe_install.InstallPath.test_windows_display_refuses_missing_udmabuf_access)"
+      "test_linux_broker_warns_and_preserves_shared_memory_fallback (__main__.InstallPath.test_linux_broker_warns_and_preserves_shared_memory_fallback)",
+      "test_windows_display_warns_and_preserves_shared_memory_fallback (__main__.InstallPath.test_windows_display_warns_and_preserves_shared_memory_fallback)"
+    ],
+    "errors": []
+  },
+  {
+    "mutant": "refuse-valid-shared-memory-tier",
+    "status": "killed",
+    "kills": 2,
+    "tests": [
+      "test_linux_broker_warns_and_preserves_shared_memory_fallback (__main__.InstallPath.test_linux_broker_warns_and_preserves_shared_memory_fallback)",
+      "test_windows_display_warns_and_preserves_shared_memory_fallback (__main__.InstallPath.test_windows_display_warns_and_preserves_shared_memory_fallback)"
     ],
     "errors": []
   }

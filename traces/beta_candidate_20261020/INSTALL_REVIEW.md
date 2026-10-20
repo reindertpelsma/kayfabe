@@ -39,15 +39,18 @@ The docs checker validates 5 local links, 7 shell blocks and 3 repository comman
 paths without executing a VM or install. Four thin shell wrappers and the build
 script pass shellcheck. Full changed-tree Rust and broker checks are Stage 4.
 
-MEASURED: preflight omission reproduced in tests-only `762e54a87`: both OS
-display checks failed before udmabuf validation. Display now requires read/write
-access; headless does not. Removing this check kills two named tests. Doctor
-remains fixture-tested only; no occupied-host GPU query was performed.
+MEASURED correction: the initial udmabuf preflight was too strict. CODE READ:
+BrokerSeat explicitly falls back to shared memory when its open fails. Tests-only
+0d0249092 reproduces two OS failures against the over-strict rule. Missing
+udmabuf now WARNs without refusing that tier; headless needs no udmabuf.
+Two mutants (hide warning / refuse valid fallback) each kill two named tests.
+No occupied-host doctor/GPU query was performed.
 
 MEASURED real CPU layout check found dangling generated firmware/trace links
 when only the QEMU executable target was built. Tests-only `744eb8afe` reproduced
 both missing outputs with a synthetic real-Ninja fixture. The builder now
 resolves missing bundle data via declared Ninja targets before publication;
 unbuildable or external missing targets refuse publication. Two tests pass;
-removing the builder call kills both. The real layout check will be rerun on
-the corrected revision; no guest or GPU operation is part of that check.
+removing the builder call kills both. The corrected real layout smoke passed at480a88d66 and896cfea8c:
+174 manifest hashes, matching versions, private prefix installed/uninstalled.
+No guest or GPU operation is part of that check.

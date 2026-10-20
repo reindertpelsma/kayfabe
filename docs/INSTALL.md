@@ -78,9 +78,11 @@ prefix requiring administrator permission. The prefix must not already exist.
 CODE READ: doctor is read-only. It reports PASS/WARN/FAIL and prints corrective
 commands; it never executes the printed fixes, installs a driver, changes groups,
 raises limits or starts a VM/CUDA workload. It queries nvidia-smi and sysfs BAR
-resources, checks KVM/NVIDIA permissions and display udmabuf access, historical driver/family evidence,
+resources, checks KVM/NVIDIA permissions and optional display udmabuf access, historical driver/family evidence,
 free VRAM, versions, desktop session, groups, disk, memlock, hugepages and cgroup.
 WARN on historical/untested support and unlimited cgroup memory is intentional.
+Missing udmabuf access warns about the unavailable DMA-BUF tier; the existing
+shared-memory broker path remains available.
 The launcher does not invent the still-unmeasured QEMU cgroup overhead allowance.
 Use the desktop user for both broker and QEMU. Logout/login after a group change.
 Do not run doctor against an occupied validation GPU during a reserved lane.
