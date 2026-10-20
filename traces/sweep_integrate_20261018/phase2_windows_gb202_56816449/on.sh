@@ -29,6 +29,8 @@ echo 'H_B1 falsifier: display-off still Code43 without CA70/NV0073/CA7A; exact t
 extra=()
 [ "$profile" = on ] || extra=(--kf3-extra display=off,gop=off)
 bash "$W" run --overlay "bw580_${profile}" --arm B --guest-driver 580.65.06 --once --max-boots 1 --tag "bw580_${profile}" "${extra[@]}" --detach
+python3 -B /root/sweep_time_sampler.py "$VM/logs/bw580_${profile}_b1_qemu.log" "/root/prov/bw580_${profile}_timeline.jsonl" --seconds 900 --interval 10 >"/root/prov/bw580_${profile}_sampler.log" 2>&1 &
+echo $! >"/root/prov/bw580_${profile}_sampler.pid"
 for i in $(seq 1 90); do
  if timeout 20 bash "$W" ssh 'echo KF_SSH_UP' </dev/null 2>/dev/null | grep -q KF_SSH_UP; then break; fi
  sleep 5
