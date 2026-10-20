@@ -10,4 +10,16 @@ class PacingTests(unittest.TestCase):
   p=reader.pacing(self.row());self.assertEqual(p['low_1pct_fps'],50);self.assertEqual(p['low_01pct_fps'],20)
  def test_missing_counts_and_zero_gaps_are_unknown(self):
   p=reader.pacing({'start_ns':0,'end_ns':100,'counters':{},'pacing':{'p99_gap_ns':0}});self.assertIsNone(p['new_fps']);self.assertIsNone(p['low_1pct_fps']);self.assertIsNone(p['low_01pct_fps'])
+ def test_lows_keep_a_distinct_long_tail(self):
+  r=self.row();r['pacing']={'p99_gap_ns':1000000000,'p999_gap_ns':2000000000};p=reader.pacing(r);self.assertEqual(p['low_1pct_fps'],1);self.assertEqual(p['low_01pct_fps'],.5)
+ def test_unobserved_feedback_does_not_invent_a_repeat_rate(self):
+  r=self.row();r['counters']['broker_presented_new_frames']=None;p=reader.pacing(r);self.assertIsNone(p['new_fps']);self.assertIsNone(p['repeated_per_second'])
+ def test_hostile_pacing_container_is_unknown(self):
+  r=self.row();r['pacing']=[];self.assertIsNone(reader.pacing(r)['low_1pct_fps'])
+ def test_hostile_broker_container_is_unknown(self):
+  r=self.row();r['broker']=[];self.assertIsNone(reader.pacing(r)['repeated_per_second'])
+ def test_overflowing_gap_is_unknown_without_a_float_conversion(self):
+  r=self.row();r['pacing']['p99_gap_ns']=2**4096;self.assertIsNone(reader.pacing(r)['low_1pct_fps'])
+ def test_overflowing_repeat_count_is_unknown_without_a_float_conversion(self):
+  r=self.row();r['broker']['repeated']=2**4096;self.assertIsNone(reader.pacing(r)['repeated_per_second'])
 if __name__=='__main__':unittest.main()
