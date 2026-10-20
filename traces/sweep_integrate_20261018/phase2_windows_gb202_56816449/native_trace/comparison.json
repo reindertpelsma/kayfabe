@@ -1,0 +1,12 @@
+{
+  "native_cfb0_successful_declared_parameter_sizes": [
+    0,
+    12
+  ],
+  "native_public_ccu_sample_size": 17296,
+  "virtual_display_off_cfb0": {
+    "ordinal": 277,
+    "status": "0x56"
+  },
+  "interpretation": "Public constructor admission is missing in product ABI. Native success does not prove it is the sole Code43 cause. CBCB and other private replies are not licensed constants. Native headless is not the display reference."
+}

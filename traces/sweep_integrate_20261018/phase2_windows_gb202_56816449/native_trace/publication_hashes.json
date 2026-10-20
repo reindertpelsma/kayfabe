@@ -1,0 +1,18 @@
+{
+  "revisit.ps1": "b3ab8293c7fcab522a0d0accab1674ee07b1295447c267e5df8f5921e10f5d7e",
+  "PLAN.md": "6edd78d35ab1767bdb76446545758183587d56e4e54e619610c6aa15bc7739a9",
+  "export_public.ps1": "d99412af4e79c880cbc2cc2f970668dbbfb983c7890bd5454577ba4782f0777d",
+  "sequence.tsv": "03c4117d3b0f1dcf5bfd18162c35ae6e756ef274770dd0dabf95389347ce3d4c",
+  "controls.tsv": "3aaeef83d3cc2fc2301a5e9e15911a5f4603f033c88d808b237f342eddbfebed",
+  "run_revisit.ps1": "b403f9b30f57a4cb0bd9292530f47840ac4e010e7590d3a093535ac72ea5d0ca",
+  "public_ccu_sample.tsv": "00a0a2a6311ac069537c4a9c383adaee9db318acd7a18c17848afbd74139422e",
+  "probe.ps1": "adc9d8556513d90d51167030de17ad7e52172a682513b69ff7d0f3c896fafe3d",
+  "decoders.txt": "aeb952bd7e8e07a8e08583ef3024c3c9bebdd639a1c37b423b3e742867a1821f",
+  "RESULT.md": "3e03ee7ebfd70bc6b9ec259cf63d3db3ade9d68a49bd2e72984e7ce0686d1f07",
+  "native_gsp_cuda3.txt": "698af5f617b3d499b0d1deff4e5b4436a6f9b59bce5fbffb537a5851df74a854",
+  "first_public_receipt.json": "84e8c1f8ce0d3ba6f0f2eac1715d38d0ffe7ce2a9fbea673d799f81314e38bc5",
+  "comparison.json": "591b6c2c52a4053b9e24fee6edf75d482e08735d87b42fae09e5f646b1942fc2",
+  "final_public_receipt.json": "ad8a69e8fd5df8f2bc056e6022e6373db8ffe956e5346f20a3b6c99a4b1d1c5a",
+  "project_final.ps1": "66cbb3371d307225cdf7d84267a332425163a21bd0f5b0edc5e2ba2c55f1d215",
+  "native_default_cuda3.txt": "bb09094bfd152f41510f48e2f3a67961886e377a55c6bddc379784bb71b88d27"
+}

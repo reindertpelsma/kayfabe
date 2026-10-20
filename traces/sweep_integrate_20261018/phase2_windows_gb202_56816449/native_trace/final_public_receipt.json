@@ -1,0 +1,113 @@
+{
+    "driver":  {
+                   "Name":  "NVIDIA GeForce RTX 5090",
+                   "DriverVersion":  "32.0.15.8088",
+                   "ConfigManagerErrorCode":  0,
+                   "Status":  "OK"
+               },
+    "firmware":  "GSP Firmware Version                  : 580.65.05",
+    "module_service":  "Stopped",
+    "signed_module_sha256":  "AC42A30632C45F175ABA0074258A449BF1BE137312694473000D55AD1BBFF441",
+    "signature":  "Valid",
+    "signer_thumbprint":  "7522A6F7C033433BA6D57CB3FD5C01D40960AA23",
+    "source":  "8f9bd4e519fdd085c5b90e39542e0a3454145d75",
+    "final_controller_rc":  0,
+    "complete_prefix":  true,
+    "raw_stays_on_rental":  true,
+    "arms":  [
+                 {
+                     "arm":  "seedwindow580",
+                     "raw_bytes":  5387328,
+                     "raw_sha256":  "4B05289E66C4A61AFCC56FE82A984022A3C7ACEA3DD9E2BA7004ACF6A35781F6",
+                     "discovery":  {
+                                       "method":  2,
+                                       "layout":  1,
+                                       "mailbox_reads":  1241,
+                                       "mailbox_status":  2,
+                                       "scan_passes":  0,
+                                       "scan_bytes":  3629768704
+                                   },
+                     "stats":  {
+                                   "steps":  31856,
+                                   "attaches":  1,
+                                   "detaches":  1,
+                                   "messages_cmd":  326,
+                                   "messages_status":  326,
+                                   "lost_messages_exact":  0,
+                                   "seq_gap_messages":  0,
+                                   "lapped_messages":  0,
+                                   "loss_records":  2,
+                                   "torn_reads":  0,
+                                   "invalid_elements":  0,
+                                   "unsupported":  0,
+                                   "read_failures":  0,
+                                   "resyncs":  2,
+                                   "sink_dropped":  0,
+                                   "records_refused":  0
+                               },
+                     "capture":  {
+                                     "records":  668,
+                                     "end_seen":  1,
+                                     "file_ok":  1,
+                                     "by_kind":  {
+                                                     "bind":  2,
+                                                     "elements":  663,
+                                                     "loss_overflow":  0,
+                                                     "loss_unreadable":  0,
+                                                     "loss_unknown":  2,
+                                                     "end":  1
+                                                 }
+                                 },
+                     "collector_exit_code":  0,
+                     "strict_census_rc":  1,
+                     "sequence_rc":  1
+                 },
+                 {
+                     "arm":  "revisitwindow580",
+                     "raw_bytes":  38244992,
+                     "raw_sha256":  "43A38B5DD853EB705B92A2F7AF8ABA1060E26F3D820130574839CD4093B4DF76",
+                     "discovery":  {
+                                       "method":  4,
+                                       "layout":  1,
+                                       "mailbox_reads":  221,
+                                       "mailbox_status":  3,
+                                       "scan_passes":  0,
+                                       "scan_bytes":  11856248832
+                                   },
+                     "stats":  {
+                                   "steps":  83278,
+                                   "attaches":  1,
+                                   "detaches":  1,
+                                   "messages_cmd":  3804,
+                                   "messages_status":  3863,
+                                   "lost_messages_exact":  0,
+                                   "seq_gap_messages":  0,
+                                   "lapped_messages":  0,
+                                   "loss_records":  0,
+                                   "torn_reads":  0,
+                                   "invalid_elements":  0,
+                                   "unsupported":  0,
+                                   "read_failures":  0,
+                                   "resyncs":  2,
+                                   "sink_dropped":  0,
+                                   "records_refused":  0
+                               },
+                     "capture":  {
+                                     "records":  7694,
+                                     "end_seen":  1,
+                                     "file_ok":  1,
+                                     "by_kind":  {
+                                                     "bind":  2,
+                                                     "elements":  7691,
+                                                     "loss_overflow":  0,
+                                                     "loss_unreadable":  0,
+                                                     "loss_unknown":  0,
+                                                     "end":  1
+                                                 }
+                                 },
+                     "collector_exit_code":  0,
+                     "strict_census_rc":  0,
+                     "sequence_rc":  0
+                 }
+             ]
+}
