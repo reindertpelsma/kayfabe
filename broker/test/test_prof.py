@@ -1,7 +1,7 @@
 # SPDX-License-Identifier: Apache-2.0 OR GPL-2.0-or-later
 """Run independent C cases separately so every mutation reports all kills."""
 import os,resource,subprocess,sys,tempfile,unittest
-CASES=['content','repeat-gap','gap-threshold','quantile','overflow','second-window','exclusive','wire','overflow-next','quantile-tail']
+CASES=['content','repeat-gap','gap-threshold','quantile','overflow','second-window','exclusive','wire','overflow-next','quantile-tail','existing-json','counter-saturation','release-saturation','source-unknown']
 exe=sys.argv.pop(1) if len(sys.argv)>1 else './test-prof'
 class ProfCases(unittest.TestCase):pass
 def case(name):

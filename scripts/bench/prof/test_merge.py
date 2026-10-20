@@ -30,4 +30,26 @@ class MergeTests(unittest.TestCase):
  def test_guest_csv_prints_only_bounded_integer_fields(self):
   with tempfile.TemporaryDirectory() as d:
    p=Path(d)/'guest.csv';p.write_text('qpc,guest_boot_id,event_id,pid,tid,guest_text\n1000,7,153,2,3,untrusted\n');rows=m.read_guest_csv(p);self.assertEqual(rows,[{'qpc':1000,'guest_boot_id':7,'event_id':153,'pid':2,'tid':3}])
+ def test_forged_clock_uncertainty_cannot_override_the_measured_bracket(self):
+  c=self.cal();c['error_ns']=0
+  with self.assertRaises(ValueError):m.align_guest({'qpc':1000,'guest_boot_id':7},c)
+ def test_forged_midpoint_cannot_override_the_measured_bracket(self):
+  c=self.cal();c['host_ns0']=101
+  with self.assertRaises(ValueError):m.align_guest({'qpc':1000,'guest_boot_id':7},c)
+ def test_other_boot_does_not_get_a_host_timestamp(self):
+  self.assertIsNone(m.align_guest({'qpc':1000,'guest_boot_id':70},self.cal())['ts_ns'])
+ def test_before_validity_is_also_unaligned(self):
+  self.assertIsNone(m.align_guest({'qpc':0,'guest_boot_id':7},self.cal())['ts_ns'])
+ def test_a_long_ignored_guest_text_field_cannot_bypass_the_line_bound(self):
+  with tempfile.TemporaryDirectory() as d:
+   p=Path(d)/'guest.csv';p.write_text('qpc,guest_boot_id,guest_text\n1000,7,'+'x'*5000+'\n')
+   with self.assertRaises(ValueError):m.read_guest_csv(p)
+ def test_negative_guest_event_id_is_rejected(self):
+  with tempfile.TemporaryDirectory() as d:
+   p=Path(d)/'guest.csv';p.write_text('qpc,guest_boot_id,event_id\n1000,7,-1\n')
+   with self.assertRaises(ValueError):m.read_guest_csv(p)
+ def test_overflowing_qpc_is_rejected(self):
+  with tempfile.TemporaryDirectory() as d:
+   p=Path(d)/'guest.csv';p.write_text('qpc,guest_boot_id,event_id\n18446744073709551616,7,153\n')
+   with self.assertRaises(ValueError):m.read_guest_csv(p)
 if __name__=='__main__':unittest.main()

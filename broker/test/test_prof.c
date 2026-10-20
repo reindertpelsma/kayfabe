@@ -34,7 +34,10 @@ static void check_line(const char *needle) {
   ssize_t n = read(f, b, sizeof b - 1);
   assert(n > 0);
   b[n] = 0;
-  assert(strstr(b, needle));
+  const char *found = strstr(b, needle);
+  assert(found);
+  char next = found[strlen(needle)];
+  assert(next == ',' || next == '}' || next == ']');
   close(f);
 }
 int main(int argc, char **argv) {
@@ -115,6 +118,28 @@ int main(int argc, char **argv) {
     assert(nb_prof_open(&other, mp, jp, 900) != 0);
     assert(stat(mp, &after) == 0);
     assert(before.st_ino == after.st_ino && before.st_size == after.st_size);
+  } else if (!strcmp(argv[1], "existing-json")) {
+    struct nb_prof other;
+    char other_map[280];
+    snprintf(other_map, sizeof other_map, "%s.other", mp);
+    struct stat before, after;
+    assert(stat(jp, &before) == 0);
+    assert(nb_prof_open(&other, other_map, jp, 900) != 0);
+    assert(stat(jp, &after) == 0);
+    assert(before.st_ino == after.st_ino && before.st_size == after.st_size);
+    assert(access(other_map, F_OK) != 0);
+  } else if (!strcmp(argv[1], "counter-saturation")) {
+    p.new_frames = UINT64_MAX - 1;
+    nb_prof_present(&p, 1000, true, 0);
+    nb_prof_present(&p, 2000, true, 0);
+    assert(p.new_frames == UINT64_MAX);
+  } else if (!strcmp(argv[1], "release-saturation")) {
+    p.released = UINT64_MAX;
+    nb_prof_release(&p);
+    assert(p.released == UINT64_MAX);
+  } else if (!strcmp(argv[1], "source-unknown")) {
+    assert(nb_prof_record(&p, 1000000100) == 0);
+    check_line("\"broker_presented_new_frames\":null");
   } else if (!strcmp(argv[1], "wire")) {
     nb_prof_receive(&p);
     nb_prof_release(&p);
