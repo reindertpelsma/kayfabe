@@ -5,16 +5,64 @@ import json
 import os
 from pathlib import Path
 import re
+import select
+import signal
 import subprocess
 import sys
 import time
 
 
+def pin_descendants(root, pinned):
+    """Pin only observed descendants; validate start time against PID reuse."""
+    for key, fd in list(pinned.items()):
+        poll = select.poll()
+        poll.register(fd, select.POLLIN)
+        if poll.poll(0):
+            os.close(fd)
+            del pinned[key]
+    facts = {}
+    for p in Path("/proc").glob("[0-9]*"):
+        try:
+            f = (p / "stat").read_text().rsplit(")", 1)[1].split()
+            facts[int(p.name)] = (int(f[1]), f[19])
+        except (OSError, IndexError, ValueError):
+            continue
+    owned = {root}
+    while True:
+        more = {pid for pid, (parent, _) in facts.items() if parent in owned}
+        if more <= owned:
+            break
+        owned |= more
+    for pid in owned - {root}:
+        key = (pid, facts[pid][1])
+        if key in pinned:
+            continue
+        try:
+            fd = os.pidfd_open(pid)
+            f = Path(f"/proc/{pid}/stat").read_text().rsplit(")", 1)[1].split()
+            if (int(f[1]), f[19]) != facts[pid]:
+                os.close(fd)
+                continue
+            pinned[key] = fd
+        except (OSError, IndexError, ValueError):
+            continue
+
+
+def signal_pinned(pinned, sig):
+    for fd in pinned.values():
+        try:
+            signal.pidfd_send_signal(fd, sig)
+        except ProcessLookupError:
+            pass
+
+
 def monitor_owned(proc, seconds, xid_count, baseline, sample):
     deadline = time.monotonic() + seconds
     reason = "exit"
+    pinned = {}
     while proc.poll() is None:
         sample()
+        pin_descendants(proc.pid, pinned)
         if xid_count() > baseline:
             reason = "new_xid"
             break
@@ -26,6 +74,7 @@ def monitor_owned(proc, seconds, xid_count, baseline, sample):
         except subprocess.TimeoutExpired:
             pass
     if proc.poll() is None:
+        signal_pinned(pinned, signal.SIGTERM)
         proc.terminate()
         try:
             proc.wait(timeout=3)
@@ -33,6 +82,17 @@ def monitor_owned(proc, seconds, xid_count, baseline, sample):
             print("OWNED_CHILD_HUNG: ignored TERM after " + reason, flush=True)
             proc.kill()
             proc.wait()
+        for (pid, _), fd in pinned.items():
+            poll = select.poll()
+            poll.register(fd, select.POLLIN)
+            if not poll.poll(3000):
+                print(f"OWNED_DESCENDANT_HUNG: pid={pid} ignored TERM after {reason}", flush=True)
+                try:
+                    signal.pidfd_send_signal(fd, signal.SIGKILL)
+                except ProcessLookupError:
+                    pass
+    for fd in pinned.values():
+        os.close(fd)
     return reason, proc.returncode
 
 

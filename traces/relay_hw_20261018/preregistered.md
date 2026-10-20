@@ -56,3 +56,20 @@ H-B-IDLE: the dedicated grader G5 test observes a real settled one-second
 quiet window and blocks idle workers. FALSIFIER before execution: the test
 fails, including its explicit quiet_checked assertion, or does not complete.
 Run exact B', chaos-hooks, original defaults and thresholds, one test thread.
+
+H-WIN-M: M removes independent multi-app freezes. FALSIFIER before Windows
+measurement: any >=4-second per-PID PresentMon silence while load is present,
+independently classified from nvlddmkm153/device-loss. First workload is two
+Heaven D3D11 clients (three fresh boots, >=12 minutes each); the earlier mixed
+Vulkan workload also has a distinct TDR class. Capture CPU/thread state, ring
+state, and all PROGRESS diagnostics; no strand line alone proves progress.
+
+H-NOMAD-M: the verified M binary causes the reported score loss. FALSIFIER:
+fresh interleaved M-without-diagnostics scores do not consistently fall below
+production-without-diagnostics scores outside their observed run spread.
+H-NOMAD-DIAG: the diagnostic flag causes the loss. FALSIFIER: M-with-diag does
+not consistently trail M-without-diag outside their observed spread. Three
+runs per arm, same host desktop GPU and benchmark settings; report raw values,
+range and paired differences, without asserting equivalence from small n.
+The owner's earlier 2050 score has no verified M run receipt: the inspected
+owner process was still production 0d7ba743.
