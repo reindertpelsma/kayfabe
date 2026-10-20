@@ -1,0 +1,12 @@
+[
+  {
+    "mutant": "die",
+    "kills": 4,
+    "tests": [
+      "an_unmeasured_die_gets_the_clean_page_and_the_notice_never_a_neighbours_row",
+      "a_second_dies_row_is_served_to_that_die_only",
+      "the_ad102_580_caps_word_has_its_own_native_measurement",
+      "the_gb206_580_caps_word_requires_its_own_native_measurement"
+    ]
+  }
+]

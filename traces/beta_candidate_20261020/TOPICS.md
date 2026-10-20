@@ -1,6 +1,14 @@
 # C6 beta candidate topic ledger
 
-STATUS: LIVE, 2026-10-19. CODE READ unless a row explicitly says otherwise.
+STATUS: LIVE, updated 2026-10-20. CODE READ unless a row explicitly says otherwise.
+
+CODE READ supersession: coordinator approved explicit `guest-os=windows|linux`
+(default Linux), then separately approved the sweep-derived caps replacement.
+This lifts the earlier guest-OS decision stop below. Only the scoped caps
+module/data/helpers/tests are approved from the sweep; no full sweep merge.
+MEASURED: new derived-caps EXPECTED RED tests are committed at `b1ea24127`;
+implementation remains uncommitted after the mutation-wrapper stop documented
+in [the report](README.md). No new product topic is accepted yet.
 This is a BETA CANDIDATE assembly plan, not a release or hardware verdict.
 
 MEASURED: the branch was cut from origin candidate-5

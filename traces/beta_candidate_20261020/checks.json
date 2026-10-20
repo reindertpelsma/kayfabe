@@ -1,0 +1,106 @@
+[
+  {
+    "label": "caps-red",
+    "revision": "d374c0cdf4cdf62e58e16e84c626ded71afd82e2",
+    "command": [
+      "nice",
+      "-n",
+      "19",
+      "cargo",
+      "test",
+      "-j2",
+      "--release",
+      "-p",
+      "kf-disp",
+      "--test",
+      "caps_derive"
+    ],
+    "exit": 101,
+    "seconds": 0.399,
+    "totals": {
+      "passed": 0,
+      "failed": 0,
+      "ignored": 0
+    },
+    "log_sha256": "310f82814ecf89fbbfe5dbebb41b82efc9f95bc0dc4e89c336601de61cd0fc82"
+  },
+  {
+    "label": "caps-green",
+    "revision": "b1ea241271e6a254efac3fee3ce74bbc0b2190e1",
+    "command": [
+      "nice",
+      "-n",
+      "19",
+      "cargo",
+      "test",
+      "-j2",
+      "--release",
+      "-p",
+      "kf-disp",
+      "--test",
+      "caps_derive",
+      "--example",
+      "caps_oracle"
+    ],
+    "exit": 0,
+    "seconds": 14.411,
+    "totals": {
+      "passed": 20,
+      "failed": 0,
+      "ignored": 2
+    },
+    "log_sha256": "062b9957fa423844e9fd40a5ebbcec6ec51f6a3c1bbc5db51ebf2d5f7dbd39c1"
+  },
+  {
+    "label": "profile-red",
+    "revision": "b1ea241271e6a254efac3fee3ce74bbc0b2190e1",
+    "command": [
+      "nice",
+      "-n",
+      "19",
+      "cargo",
+      "test",
+      "-j2",
+      "--release",
+      "-p",
+      "kf-abi",
+      "--test",
+      "guest_profile"
+    ],
+    "exit": 101,
+    "seconds": 15.685,
+    "totals": {
+      "passed": 0,
+      "failed": 0,
+      "ignored": 0
+    },
+    "log_sha256": "a006b5acd57d510fb8e532ef4bf130d30e3f6b22366a2bd678f9a84498ebd84f"
+  },
+  {
+    "label": "caps-mutant-die",
+    "revision": "b1ea241271e6a254efac3fee3ce74bbc0b2190e1",
+    "command": [
+      "nice",
+      "-n",
+      "19",
+      "cargo",
+      "test",
+      "-j2",
+      "--release",
+      "-p",
+      "kf-disp",
+      "--test",
+      "caps_derive",
+      "--example",
+      "caps_oracle"
+    ],
+    "exit": 101,
+    "seconds": 20.853,
+    "totals": {
+      "passed": 14,
+      "failed": 4,
+      "ignored": 2
+    },
+    "log_sha256": "e049d52c23b21cf966c01a8083398bfa78aea1c6509fa3b8d9aee6a1c390cf46"
+  }
+]

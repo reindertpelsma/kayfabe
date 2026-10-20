@@ -1,4 +1,23 @@
+STATUS: PARTIAL / VALIDATION STOPPED, 2026-10-20.
+
+CODE READ update: both coordinator choices below are APPROVED: explicit
+`guest-os=windows|linux`, default Linux, and a separately reviewed sweep-derived
+caps replacement. The old guest-OS decision stop is superseded. No property
+implementation is accepted yet. C6 stopped on its mutation-wrapper rejection;
+see [the current report](../../traces/beta_candidate_20261020/README.md).
+Complete every-reader inventory, KEEP-default audit and final migration table
+remain outstanding. No flags have been removed from the published product.
+
 # Beta flag policy: guest-OS selection decision
+
+STATUS: IMPLEMENTATION AUTHORIZED, 2026-10-20. CODE READ: the coordinator, with
+the owner's delegated decision for tonight, approved explicit
+`guest-os=windows|linux`, default `linux`, as the single replacement of the
+nineteen Windows environment selectors. Preserve Linux behaviour; keep
+non-derived Windows behaviour behind the property; do not hardwire the captured
+probe set. Continue tests-first GPU-free Stages 2–4; hardware belongs to the
+night reproduction lane and remains deferred to Stage 5. This supersedes the
+stop below. The original decision evidence remains the construction rationale.
 
 STATUS: RESEARCH / STOPPED BEFORE IMPLEMENTATION, 2026-10-19. CODE READ at
 candidate-5 `f8f9d1a5f`. BETA CANDIDATE; no supported external-user install path
