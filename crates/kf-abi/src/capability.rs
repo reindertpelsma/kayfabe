@@ -1495,6 +1495,40 @@ pub(crate) static CLASSES_FROM_560_28_03: &[ClassEntry] = &[
     },
 ];
 
+// Derive a class ID and its introduction from committed public-header facts.
+// Admission policy names the modeled constructor; no physical-die class list is
+// authored here. A changed/disappearing ID fails the build instead of borrowing it.
+const fn public_class_since(facts: &crate::matrix::ValueRuns, since: crate::DriverVersion) -> u32 {
+    let mut chosen = None;
+    let mut i = 0;
+    while i < facts.runs.len() {
+        let run = &facts.runs[i];
+        match (chosen, run.value) {
+            (None, None) => {}
+            (None, Some(value)) => {
+                assert!(
+                    run.first.major == since.major
+                        && run.first.minor == since.minor
+                        && run.first.patch == since.patch,
+                    "public class introduction changed"
+                );
+                assert!(value <= 0xffff_ffff, "public class wider than32bits");
+                chosen = Some(value);
+            }
+            (Some(value), Some(next)) => assert!(value == next, "public class ID changed"),
+            (Some(_), None) => panic!("public class disappeared"),
+        }
+        i += 1;
+    }
+    match chosen {
+        Some(value) => {
+            let b = value.to_le_bytes();
+            u32::from_le_bytes([b[0], b[1], b[2], b[3]])
+        }
+        None => panic!("public class never declared"),
+    }
+}
+
 pub(crate) static CLASSES_FROM_570_86_15: &[ClassEntry] = &[
     ClassEntry {
         class: 0x0000c761,
@@ -1520,6 +1554,20 @@ pub(crate) static CLASSES_FROM_570_86_15: &[ClassEntry] = &[
         class: 0x0000cec0,
         name: "BLACKWELL_COMPUTE_B",
         origin: Origin::Nvproxy,
+    },
+    // Public580resource_list.h:1723: NvdecContext under KernelChannel,
+    // optional NV_BSP_ALLOCATION_PARAMETERS, same modeled constructor as C9B0.
+    ClassEntry {
+        class: public_class_since(
+            &crate::generated::matrix::CLASS_IDS_NVCFB0_VIDEO_DECODER,
+            crate::DriverVersion {
+                major: 570,
+                minor: 86,
+                patch: 15,
+            },
+        ),
+        name: "NVCFB0_VIDEO_DECODER",
+        origin: Origin::Mode2Rpc,
     },
     ClassEntry {
         class: 0x0000cfb7,
@@ -1550,9 +1598,33 @@ pub(crate) static CLASSES_FROM_580_65_06: &[ClassEntry] = &[
         origin: Origin::Mode2Rpc,
     },
     ClassEntry {
+        class: public_class_since(
+            &crate::generated::matrix::CLASS_IDS_NVCEB0_VIDEO_DECODER,
+            crate::DriverVersion {
+                major: 580,
+                minor: 65,
+                patch: 6,
+            },
+        ),
+        name: "NVCEB0_VIDEO_DECODER",
+        origin: Origin::Mode2Rpc,
+    },
+    ClassEntry {
         class: 0x0000ceb7,
         name: "NVCEB7_VIDEO_ENCODER",
         origin: Origin::Nvproxy,
+    },
+    ClassEntry {
+        class: public_class_since(
+            &crate::generated::matrix::CLASS_IDS_NVD1B0_VIDEO_DECODER,
+            crate::DriverVersion {
+                major: 580,
+                minor: 65,
+                patch: 6,
+            },
+        ),
+        name: "NVD1B0_VIDEO_DECODER",
+        origin: Origin::Mode2Rpc,
     },
     ClassEntry {
         class: 0x0000d1b7,
@@ -2595,9 +2667,15 @@ mod tests {
             // +1 on 2026-10-05: source-audited NV01_TIMER allocation bookkeeping.
             // +1 at580+ on2026-10-07: source-audited Deferred API constructor.
             // +1 more at 580+ on 2026-10-07: NV01_EVENT_KERNEL_CALLBACK (Windows StartDevice).
+            // +1 at570+, +2 at580+ on2026-10-20: public NVDEC aliases; all original assertions retained.
             assert_eq!(
                 t.all_classes().count(),
-                *n_cls + 18 + 1 + 2 * usize::from(*a >= 580),
+                *n_cls
+                    + 18
+                    + 1
+                    + 2 * usize::from(*a >= 580)
+                    + usize::from(*a >= 570)
+                    + 2 * usize::from(*a >= 580),
                 "{label} classes"
             );
             let mut got: Vec<&str> = t
@@ -2741,7 +2819,10 @@ mod tests {
     }
     #[test]
     fn nvdec_cfb0_580_inventory_has_public_name_once() {
-        let rows: Vec<_> = CAPS_580_65_06.all_classes().filter(|e| e.class == 0xcfb0).collect();
+        let rows: Vec<_> = CAPS_580_65_06
+            .all_classes()
+            .filter(|e| e.class == 0xcfb0)
+            .collect();
         assert_eq!(rows.len(), 1);
         assert_eq!(rows[0].name, "NVCFB0_VIDEO_DECODER");
     }
@@ -2751,7 +2832,10 @@ mod tests {
     }
     #[test]
     fn nvdec_ceb0_610_inventory_has_public_name_once() {
-        let rows: Vec<_> = CAPS_610_43_02.all_classes().filter(|e| e.class == 0xceb0).collect();
+        let rows: Vec<_> = CAPS_610_43_02
+            .all_classes()
+            .filter(|e| e.class == 0xceb0)
+            .collect();
         assert_eq!(rows.len(), 1);
         assert_eq!(rows[0].name, "NVCEB0_VIDEO_DECODER");
     }
@@ -2761,7 +2845,10 @@ mod tests {
     }
     #[test]
     fn nvdec_d1b0_610_inventory_has_public_name_once() {
-        let rows: Vec<_> = CAPS_610_43_02.all_classes().filter(|e| e.class == 0xd1b0).collect();
+        let rows: Vec<_> = CAPS_610_43_02
+            .all_classes()
+            .filter(|e| e.class == 0xd1b0)
+            .collect();
         assert_eq!(rows.len(), 1);
         assert_eq!(rows[0].name, "NVD1B0_VIDEO_DECODER");
     }
@@ -3237,12 +3324,12 @@ mod tests {
         );
         assert_eq!(
             at(570, 86, 15).all_classes().count(),
-            92 + 18 + 1,
+            92 + 18 + 1 + 1,
             "classes at 570"
         );
         assert_eq!(
             bench().all_classes().count(),
-            94 + 18 + 1 + 1 + 1,
+            94 + 18 + 1 + 1 + 1 + 3,
             "classes at 580"
         );
         assert_eq!(bench().all_denied_controls().count(), 10, "denied controls");
