@@ -1,3 +1,15 @@
+STATUS: RESEARCH / RESUMED, 2026-10-20 01:31 UTC, deadline06:30 CEST.
+
+MEASURED: the loaded timing failure below is superseded as a STOP by explicit
+coordinator authorisation. Two isolated lane runs passed (max waits8918/9455us),
+and one unmodified-base run passed (9213us); unchanged60000us assertion.
+This is reported as a known baseline timing flake, not a correctness fix or a
+scheduler-causality finding. [Exact attempts](timing_rechecks.txt).
+MEASURED: QEMU wrappers/registration now356/356 prof tests,20 scoped Python
+wait-audit tests, four source-audit mutants>=2 kills, and base-equal clippy
+(132 diagnostic keys;89 errors/43 warnings;new0). The earlier STOP/draft report
+below is historical. Source/ledger integration continues under coordinator scope.
+
 STATUS: RESEARCH / STOP, 2026-10-20. Part A incomplete; unchanged baseline failed.
 
 1. Lane, branch, checkpoint and assignment

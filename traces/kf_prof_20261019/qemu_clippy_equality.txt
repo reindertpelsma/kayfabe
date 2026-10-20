@@ -1,0 +1,2 @@
+MEASURED: candidate-5 base and prof adapter draft clippy --lib --no-deps have identical diagnostic multisets: 132 diagnostics. Keys compare severity/code/message/source text, not shifted line numbers.
+Errors: 89; new diagnostics:0.

@@ -359,12 +359,32 @@ impl Drop for Up<'_> {
     }
 }
 
+macro_rules! prof_wait {
+    ($site:ident, $operation:expr) => {{
+        #[cfg(feature = "prof")]
+        {
+            kf_prof::call(
+                kf_prof::tables::Site::$site,
+                kf_prof::tables::State::EventWait,
+                0,
+                || $operation,
+            )
+        }
+        #[cfg(not(feature = "prof"))]
+        {
+            $operation
+        }
+    }};
+}
+
 impl Device {
     /// ★ Realize: host session → family → store → derived BAR0 → GSP FSM + answers → plane.
     ///
     /// # Errors
     /// Any refusal, by name — the VM must not start on a guessed device.
     pub fn realize(cfg: &Config) -> Result<Device, String> {
+        #[cfg(feature = "prof")]
+        let _ = kf_prof::runtime::init_from_env();
         cfg.check()?;
         // ★ EXPERIMENT `KF3_GSS_NATIVE` (default off): read once, here, and said once.
         let gss_native = kf_rm::gssnative::enabled()
@@ -1961,6 +1981,14 @@ impl Device {
     /// the drainer, invalidates from a vCPU) and the walker's completion eventfd — and never
     /// blocks on the GPU: a walk is submitted and collected on its fd.
     pub fn va_loop(&self) {
+        #[cfg(feature = "prof")]
+        let _prof_binding = kf_prof::runtime::bind_current_global(3);
+        #[cfg(feature = "prof")]
+        let _prof_running = kf_prof::site(
+            kf_prof::tables::Site::QemuVaRun,
+            kf_prof::tables::State::Running,
+            0,
+        );
         let Some(mut m) = self.va.lock().ok().and_then(|mut g| g.take()) else {
             return;
         };
@@ -2046,7 +2074,7 @@ impl Device {
             if prof {
                 self.prof.vamgr.busy(tw.saturating_sub(va_busy_from));
             }
-            let got = poller.wait(&mut ready, PollTimeout::Millis(50));
+            let got = prof_wait!(QemuVaPark, poller.wait(&mut ready, PollTimeout::Millis(50)));
             if prof {
                 va_busy_from = crate::prof::now_ns();
                 self.prof
@@ -2513,6 +2541,14 @@ impl Device {
     /// ★ The register drainer's loop: apply the privileged ring in order, park on its own wake
     /// word when empty. Runs on ONE thread (an ordered ring drained by many is not ordered).
     pub fn drainer_loop(&self) {
+        #[cfg(feature = "prof")]
+        let _prof_binding = kf_prof::runtime::bind_current_global(2);
+        #[cfg(feature = "prof")]
+        let _prof_running = kf_prof::site(
+            kf_prof::tables::Site::QemuDrainerRun,
+            kf_prof::tables::State::Running,
+            0,
+        );
         // ★ 2026-09-30: ONE readiness set for the drainer's wake AND every doorbell eventfd the fast
         // path registers (`DbFast::poller`, tags >= `DB_TAG_BASE`): a doorbell wakes the drainer
         // exactly as a privileged write does, and is never queued behind a timer.
@@ -2611,7 +2647,10 @@ impl Device {
                 }
                 if self.reset.pending() {
                     let mut ready = ReadyTokens::new();
-                    let got = poller.wait(&mut ready, PollTimeout::Millis(1));
+                    let got = prof_wait!(
+                        QemuDrainerResetPark,
+                        poller.wait(&mut ready, PollTimeout::Millis(1))
+                    );
                     let _ = self.drainer_efd.drain();
                     if got.is_ok() {
                         let _ = self
@@ -2661,7 +2700,10 @@ impl Device {
             if prof {
                 self.prof.drainer.busy(tw.saturating_sub(busy_from));
             }
-            let got = poller.wait(&mut ready, PollTimeout::Millis(50));
+            let got = prof_wait!(
+                QemuDrainerPark,
+                poller.wait(&mut ready, PollTimeout::Millis(50))
+            );
             let t_wake = std::time::Instant::now();
             if prof {
                 busy_from = crate::prof::now_ns();
@@ -3552,6 +3594,14 @@ impl Device {
     /// plane: a doorbell or a host completion wakes it; it claims a token and pumps the channel.
     /// ⊘ Never a vCPU; never waits on the GPU (a completion is an fd in its epoll set).
     pub fn worker_loop(&self) {
+        #[cfg(feature = "prof")]
+        let _prof_binding = kf_prof::runtime::bind_current_global(1);
+        #[cfg(feature = "prof")]
+        let _prof_running = kf_prof::site(
+            kf_prof::tables::Site::QemuWorkerRun,
+            kf_prof::tables::State::Running,
+            0,
+        );
         self.worker_stats
             .prof
             .store(crate::prof::on(), Ordering::Relaxed);

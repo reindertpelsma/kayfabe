@@ -17,11 +17,11 @@ def tokens(source):
                 else:i+=1
             continue
         # Rust strings, including raw strings, are not executable expressions.
-        raw=re.match(r'(?:b)?r(#+)?"',source[i:])
+        raw=re.compile(r'(?:b)?r(#+)?"').match(source,i)
         if raw:
-            marker='"'+(raw.group(1) or '');i+=raw.end();end=source.find(marker,i);i=len(source) if end<0 else end+len(marker);continue
-        char=re.match(r"'(?:\\(?:x[0-9A-Fa-f]{2}|u\{[0-9A-Fa-f_]+\}|.)|[^'\\\n])'",source[i:])
-        if char:i+=char.end();continue
+            marker='"'+(raw.group(1) or '');i=raw.end();end=source.find(marker,i);i=len(source) if end<0 else end+len(marker);continue
+        char=re.compile(r"'(?:\\(?:x[0-9A-Fa-f]{2}|u\{[0-9A-Fa-f_]+\}|.)|[^'\\\n])'").match(source,i)
+        if char:i=char.end();continue
         if source[i]=='"':
             i+=1
             while i<len(source):
@@ -29,8 +29,8 @@ def tokens(source):
                 if c=='\\':i+=1
                 elif c=='"':break
             continue
-        name=re.match(r'(?:r#)?([A-Za-z_][A-Za-z_0-9]*)',source[i:])
-        if name:out.append((name.group(1),i));i+=name.end()
+        name=re.compile(r'(?:r#)?([A-Za-z_][A-Za-z_0-9]*)').match(source,i)
+        if name:out.append((name.group(1),i));i=name.end()
         elif source[i].isspace():i+=1
         else:out.append((source[i],i));i+=1
     return out
@@ -49,7 +49,8 @@ def unwrapped(source):
 
 def main():
     root=Path(__file__).resolve().parents[3]
-    path=root/'crates/kf-chan/src/worker.rs';bad=unwrapped(path.read_text())
-    if bad:raise SystemExit(f'{path.relative_to(root)}: unprofiled waits at lines {bad}')
-    print('PASS: channel worker poll expressions; other files are outside this scoped gate')
+    for name in ['crates/kf-chan/src/worker.rs','crates/kf-qemu/src/device.rs']:
+        path=root/name;bad=unwrapped(path.read_text())
+        if bad:raise SystemExit(f'{name}: unprofiled waits at lines {bad}')
+    print('PASS: channel worker and QEMU device poll expressions; other methods/files remain uncovered')
 if __name__=='__main__':main()

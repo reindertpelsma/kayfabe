@@ -1,4 +1,4 @@
-STATUS: UNCOMMITTED DRAFT, STOP before final clippy/checkpoint.
+STATUS: GREEN wrapper checkpoint, coordinator-resumed 2026-10-20.
 MEASURED: patch SHA256 6b1a4e2587ded13fbc55da3c486d927bba1f97bd318ab1beb3439922c95cd96f
 MEASURED: device.rs SHA256 6172328602375a99b73c2acb81a9e7955549d27fb626a39a97896bf8ed6b7a8a
 MEASURED: default QEMU baseline356 passed; prof draft356 passed; no ignored/failed.
@@ -7,6 +7,8 @@ were shown RED against committed expected-red source2825a5cce. Four source-audit
 mutants of the draft have>=2 kills. No hardware injection claim follows.
 CODE READ: profiler registration at worker/VA/drainer setup; three poll wrappers;
 feature/default-off/boot preservation. Native TSC clock validation UNRUN.
-NOT GREEN: final draft clippy, normal full adapter source-audit rerun after mutations,
-feature-off artifact size/symbol proof and checkpoint commit remain UNRUN.
-The expected-red adapter tests on origin intentionally await this draft.
+MEASURED: coordinator-resumed final tests356/356;20 scoped wait-audit tests passed.
+MEASURED: base/current clippy diagnostic multisets identical132 (89 errors,
+43 warnings), source-text keys; new diagnostics0. Existing non-test deny-lint
+errors were not relaxed. Production artifact size/symbol proof remains UNRUN.
+CODE READ: this checkpoint contains wrappers/registration only, not full coverage.

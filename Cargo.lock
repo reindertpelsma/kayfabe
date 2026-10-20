@@ -427,6 +427,7 @@ dependencies = [
  "kf-linux-raw",
  "kf-mem",
  "kf-oprom",
+ "kf-prof",
  "kf-rm",
  "kf-trap",
 ]

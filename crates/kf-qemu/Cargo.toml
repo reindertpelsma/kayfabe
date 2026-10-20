@@ -8,7 +8,12 @@ license.workspace = true
 [lib]
 crate-type = ["rlib", "staticlib"]
 
+[features]
+# Diagnostic only; the production dependency graph and paths remain unchanged.
+prof = ["dep:kf-prof", "kf-prof/prof", "kf-chan/prof"]
+
 [dependencies]
+kf-prof = { workspace = true, optional = true }
 kf-abi.workspace = true
 kf-arch.workspace = true
 kf-chip.workspace = true
