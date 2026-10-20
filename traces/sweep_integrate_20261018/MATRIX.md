@@ -1,22 +1,12 @@
-# Sweep matrix on candidate-5 integration
+# Sweep matrix
 
-STATUS: LIVE, 2026-10-20. Latest refresh: active own AD10256816419 Windows580 PASS426.09s; Linux580/595 raw30+CUDA4 PASS. Active own GB20256816449 Windows580 ON/OFF verifiedCode43; forced-GSP native trace partial. Tables below retain earlier measurements with their original revisions; newer results are in the refresh table. No family is complete.
+STATUS: LIVE, 2026-10-20. All six own rentals destroyed/API-absent. Latest AD102 refresh Windows580PASS426.09s and Linux580/595 raw30+CUDA4+gfx5steps/10hashesPASS; brokerSTOPPED before boot at missing pinned reference guard. Latest GB202 Windows580 ON/OFF verifiedCode43; complete native forced-GSP prefix reference captured. No family has full acceptance.
 
-Blackwell closeout, falsifier results and remaining questions:
-`phase2_blackwell_56788212/FINAL.md`. All three own instance IDs were verified
-absent after the last box was destroyed at 2026-10-19 23:41:48 UTC. Own invoiced
-charges so far: 3.598 USD, not asserted final settlement; cap 25 / stop renting 20.
+Phase1:14release crates3338/0/21,49mutants with>=2killers; C4/C5 tests retained, candidate5f8f9d1a5f merged. The accepted product24906bf33 and rental0c87acda8 have identical Rust/QEMU/Cargo trees. Subsequent main commits record evidence; draftPR51/52/53 remain unmerged. Every pre-candidate4 PASS is STALE. The trusted host remains off-limits and untouched.
 
-MEASURED Phase1 accepted:14release crates3338/0/21,49mutants>=2kills,
-no C4/C5test removed. Candidate5 f8f9d1a5f is an ancestor. Runtime product is
-frozen24906bf33; subsequent commits are evidence-only and accepted product trees
-remain equal. Every historical PASS is STALE. Own56765201 destroyed after
-preflight; own56766467 AD102 destroyed/API absence20:44:59UTC before20:53deadline.
-Actual current host open595.91.07; guest580/595 are separate axes and no current
-host580 result is implied. Native AD102 gates9/9+gate10/USER12,raw30,Cuda4 PASS.
-AD104 CPU oracles pass; strict native page equality RED100words. Fresh AD102
-native read has99nonzero words and strict equality is also RED100words; neither
-establishes a cause. Evidence under phase2_ad102_56766467/. Host remains off-limits.
+Observed own invoices6.773USD (may lag), runtime estimate6.944920USD, conservative runtime+six1USDreserves12.944920USD (not spend). Cap30/stop25; credit36.768756USD, reserve5 intact at02:58UTC. Final cost and per-ID absence receipts are in phase2_cost_final_20261020.json and phase2_owned_instances.json. Last teardown02:56:45UTC, before both three-hour and06:30CESTlimits.
+
+The first table preserves earlier measurements and original source revisions. Latest refreshed results follow below. A later pass on another box does not erase an earlier measured failure or establish a universal timing result. AD104 CPU oracles pass, but strict native caps equality remains RED100words; see AD104_PATH_AUDIT.md.
 
 | Die | Guest OS / actual driver build | Current source | Current result | Historical result, now STALE | Historical source / evidence |
 |---|---|---|---|---|---|
@@ -91,14 +81,15 @@ Public guest ABI for historical 580.88 is 580.65.06; for 581.51 it is
 
 MEASURED GA104580 R34 matched candidate-4 control0452613b5: PASS159s versus integrated e8553e6c timeout180s, n=1 each, fixed180s budget. Evidence phase2_ga104_56808180/c4_ce_control/. Subsequent Linux arms deferred for owner Windows priority.
 
-2026-10-20 paired Windows refresh: AD10256816419 and GB20256816449 at0c87acda802b18a610739e75f2b50049a9247067/P19 planned. Both native595 gates9/9+gate10/raw30/CUDA4 PASS; generic LTSC installation active, nested Windows suite UNRUN. Separate unmerged native-tracer FMC topic f09ee369f, draftPR52, CPU49/49 and unsigned Windows cross-build PASS; load/capture UNRUN.
+Latest paired refresh, completed2026-10-20. Native595 gates9/9+gate10/USER12/raw30/CUDA4 PASS on both boxes before guests. Windows LTSC2024 is nested under kayfabe on Linux. Blackwell was subsequently reimaged with unmodified windows-on-vast for the separate native reference; no native result is a kayfabe Windows PASS.
 
 | Refresh die | Guest actual build | Measured source / configuration | Result | Evidence |
 |---|---|---|---|---|
 | AD10256816419 | Windows580.88/32.0.15.8088 | `0c87acda8`, P19+RPC diagnostics, display/GOPon | PASS desktop/CUDA3/hardwareDX11+12/426.09s zero4101hold | `phase2_windows_ad102_56816419/windows580_pass/` |
 | GB20256816449 | SameWindowsbuild | `0c87acda8`, P19+RPC diagnostics, OFF/OFF/emptyROM | FAIL verifiedCode43;357RPCs/unload356 precleanup;noNV0073/CA70/CA7A;0System4101 | `phase2_windows_gb202_56816449/b1_off/` |
 | GB20256816449 | SameWindowsbuild | Same source+flags, ON/ON/signedROM | FAIL verifiedCode43;386RPCs/unload385 precleanup;CA70/CA7A present;0System4101 | `phase2_windows_gb202_56816449/b1_on/` |
+| AD10256816419 | Linux580.159.04 | `0c87acda8`, native595 | raw30/30 + CUDA4/4 + gfx5/5steps,10/10hashesPASS; brokerSTOP before VM | `phase2_windows_ad102_56816419/linux/` |
+| AD10256816419 | Linux595.91.07 | `0c87acda8`, native595 | raw30/30 + CUDA4/4 + gfx5/5steps,10/10hashesPASS;1562raw-zeroHBwarnings; brokerSTOP | Same |
+| GB20256816449 native | Windows580.88 / GSP580.65.05 | reference e8883e231 + tracer8f9bd4e51, productN/A | Code0+forcedGSP CUDA3PASS; final3804cmd/3863status fromseq0,strictdecoders0/0loss; firstpartial retained | `phase2_windows_gb202_56816449/native_trace/` |
 
-| AD10256816419 | Linux580.159.04 | `0c87acda8`, native595 | raw30/30 + CUDA4/4 PASS; graphics/broker pending | `phase2_windows_ad102_56816419/linux/` |
-| AD10256816419 | Linux595.91.07 | `0c87acda8`, native595 | raw30/30 + CUDA4/4 PASS; heartbeat warnings retained; graphics/broker pending | Same |
-| GB20256816449 native | Windows580.88 / GSP580.65.05 | reference e8883e231 + tracer8f9bd4e51, productN/A | Code0; first trace prefix INCOMPLETE, strictcensus1; final retained-table arm pending | `phase2_windows_gb202_56816449/native_trace/` |
+Candidate NVDEC admission: draftPR53 aa8fdea9c, expectedRED340c12909/fixf71c1ce5e,1908releasePASS,5mutants each2killers,clippy0new; hardwareUNRUN. NativeCFB0 success supports a missing public policy row, not a complete Code43 cause. ON reports fourCA7A trace_result0allocations then tears down beforeCFB0; effective posted-result equality unavailable. TracerPR52 b9e246281 signed/loaded, complete capture uses existing nearby method4; added FMC runtime path NOTPROVED.

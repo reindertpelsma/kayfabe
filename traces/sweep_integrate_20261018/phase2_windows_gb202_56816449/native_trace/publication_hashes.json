@@ -8,11 +8,12 @@
   "public_ccu_sample.tsv": "00a0a2a6311ac069537c4a9c383adaee9db318acd7a18c17848afbd74139422e",
   "probe.ps1": "adc9d8556513d90d51167030de17ad7e52172a682513b69ff7d0f3c896fafe3d",
   "decoders.txt": "aeb952bd7e8e07a8e08583ef3024c3c9bebdd639a1c37b423b3e742867a1821f",
-  "RESULT.md": "3e03ee7ebfd70bc6b9ec259cf63d3db3ade9d68a49bd2e72984e7ce0686d1f07",
+  "RESULT.md": "cb5877baa4a4c9ee080f5932caa46a754904106b9f51c96b4ea234b5f4c94255",
   "native_gsp_cuda3.txt": "698af5f617b3d499b0d1deff4e5b4436a6f9b59bce5fbffb537a5851df74a854",
   "first_public_receipt.json": "84e8c1f8ce0d3ba6f0f2eac1715d38d0ffe7ce2a9fbea673d799f81314e38bc5",
   "comparison.json": "591b6c2c52a4053b9e24fee6edf75d482e08735d87b42fae09e5f646b1942fc2",
   "final_public_receipt.json": "ad8a69e8fd5df8f2bc056e6022e6373db8ffe956e5346f20a3b6c99a4b1d1c5a",
+  "class_comparison.json": "1b88baec7c5c75b399be6850507ebe3b3f7b23abc68c86a44578f50df3923e4e",
   "project_final.ps1": "66cbb3371d307225cdf7d84267a332425163a21bd0f5b0edc5e2ba2c55f1d215",
   "native_default_cuda3.txt": "bb09094bfd152f41510f48e2f3a67961886e377a55c6bddc379784bb71b88d27"
 }

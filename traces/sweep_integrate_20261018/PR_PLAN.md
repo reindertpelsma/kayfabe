@@ -1,7 +1,19 @@
-# Proposed review plan
+# Current review topics
+
+STATUS: LIVE, 2026-10-20. Base for all three existing drafts: codex/sweep-integrate-20261018, the accepted candidate5 integration. No draft merged, no external source repository changed.
+
+| Draft | Head | Validation and limitation |
+|---|---|---|
+| PR51 public display DMA ring format | codex/sweep-display-dma-20261019 70afcac481a861def36a4368595524f3a41d8a57 | CPU719pass,9mutants>=2; Blackwell desktop remains black |
+| PR52 public FMC tracer indirection | codex/sweep-tracer-fmc-20261020 b9e2462811ef0310b72fa029c7af2a7325d06289 | C49pass,7mutants>=2; module load and nearby-method4complete native prefixPASS; added FMC path runtimeUNVERIFIED |
+| PR53 generated NVDEC constructor admission | codex/sweep-nvdec-abi-20261020 aa8fdea9cb0e00fd4e5ec148461d1e805d308e0c | ExpectedRED340c12909,fixf71c1ce5e;1908releasePASS,5mutantsx2,clippy0new; WindowscandidateUNRUN |
+
+Full original integration split proposal follows, retained as a historical plan. The obsolete batching/measurement topic and dependent edits remain excluded.
+
+# Earlier proposed review plan
 
 STATUS: DESIGN-ONLY, 2026-10-19. Candidate5 base recommendation APPROVED; no old PR retarget authorized.
-Only codex/sweep-integrate-20261018 is pushed. Heads below are planned, not created.
+Historical checkpoint: heads in the table below were planned rather than separately cut. The accepted import series is pushed on codex/sweep-integrate-20261018.
 Base recommendation: clean candidate5 f8f9d1a5f, then stack by actual dependencies.
 Each proposed head contains code/tests only; evidence stays on the integrate/evidence refs.
 

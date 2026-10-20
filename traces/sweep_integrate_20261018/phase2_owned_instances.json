@@ -158,10 +158,19 @@
     "product_head": "dae55560b8ee05b7a36600e16f5bfcbdfcaf966f",
     "credit_before": 39.761315098462546,
     "auto_destroy_minutes": 180,
-    "destroyed": false,
+    "destroyed": true,
     "auto_destroy_pid": 294763,
     "auto_destroy_armed_utc": "2026-10-20T01:06:39.013972+00:00",
-    "auto_destroy_verified": true
+    "auto_destroy_verified": true,
+    "observed_dph_total": 0.62,
+    "absence_verified_utc": "2026-10-20T02:56:45.488082+00:00",
+    "credit_after_observed": 36.803434387463085,
+    "observed_account_credit_delta": 2.9578807109994614,
+    "elapsed_hours_until_absence": 1.8355006055555554,
+    "runtime_cost_estimate_usd": 1.1380103754444444,
+    "cost_upper_bound_usd": 2.9578807109994614,
+    "cost_note": "Runtime estimate and shared-account credit delta are observations, not settled attribution. Budget guard reserves1USD for delayed transfer billing until invoices reconcile.",
+    "auto_destroy_cancelled_after_absence": true
   },
   {
     "id": 56816449,
@@ -174,9 +183,18 @@
     "product_head": "0c87acda802b18a610739e75f2b50049a9247067",
     "credit_before": 39.761315098462546,
     "auto_destroy_minutes": 180,
-    "destroyed": false,
+    "destroyed": true,
     "auto_destroy_pid": 295834,
     "auto_destroy_armed_utc": "2026-10-20T01:07:05.358023+00:00",
-    "auto_destroy_verified": true
+    "auto_destroy_verified": true,
+    "observed_dph_total": 1.05,
+    "absence_verified_utc": "2026-10-20T02:56:39.710069+00:00",
+    "credit_after_observed": 36.803434387463085,
+    "observed_account_credit_delta": 2.9578807109994614,
+    "elapsed_hours_until_absence": 1.8265869647222222,
+    "runtime_cost_estimate_usd": 1.9179163129583334,
+    "cost_upper_bound_usd": 2.9578807109994614,
+    "cost_note": "Runtime estimate and shared-account credit delta are observations, not settled attribution. Budget guard reserves1USD for delayed transfer billing until invoices reconcile.",
+    "auto_destroy_cancelled_after_absence": true
   }
 ]

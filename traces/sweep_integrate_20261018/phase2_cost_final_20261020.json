@@ -1,0 +1,119 @@
+{
+  "utc": "2026-10-20T02:58:01.945720+00:00",
+  "all_own_ids_api_absent": true,
+  "own_invoiced_so_far_usd": 6.773,
+  "per_id_invoiced_usd": {
+    "56765201": 0.017,
+    "56766467": 1.391,
+    "56788212": 2.19,
+    "56808180": 0.202,
+    "56816419": 1.108,
+    "56816449": 1.865
+  },
+  "rows": [
+    {
+      "instance_id": 56788212,
+      "amount": "2.046",
+      "type": "charge",
+      "quantity": "2.790",
+      "rate": "0.7333",
+      "timestamp": 1792368000
+    },
+    {
+      "instance_id": 56788212,
+      "amount": "0.144",
+      "type": "charge",
+      "quantity": "2.880",
+      "rate": "0.0500",
+      "timestamp": 1792368000
+    },
+    {
+      "instance_id": 56765201,
+      "amount": "0.010",
+      "type": "charge",
+      "quantity": "0.077",
+      "rate": "0.1333",
+      "timestamp": 1792368000
+    },
+    {
+      "instance_id": 56765201,
+      "amount": "0.007",
+      "type": "charge",
+      "quantity": "0.161",
+      "rate": "0.0417",
+      "timestamp": 1792368000
+    },
+    {
+      "instance_id": 56766467,
+      "amount": "1.247",
+      "type": "charge",
+      "quantity": "2.835",
+      "rate": "0.4400",
+      "timestamp": 1792368000
+    },
+    {
+      "instance_id": 56766467,
+      "amount": "0.144",
+      "type": "charge",
+      "quantity": "2.882",
+      "rate": "0.0500",
+      "timestamp": 1792368000
+    },
+    {
+      "instance_id": 56808180,
+      "amount": "0.167",
+      "type": "charge",
+      "quantity": "1.250",
+      "rate": "0.1333",
+      "timestamp": 1792454400
+    },
+    {
+      "instance_id": 56808180,
+      "amount": "0.035",
+      "type": "charge",
+      "quantity": "1.305",
+      "rate": "0.0267",
+      "timestamp": 1792454400
+    },
+    {
+      "instance_id": 56816449,
+      "amount": "1.774",
+      "type": "charge",
+      "quantity": "1.774",
+      "rate": "1.0000",
+      "timestamp": 1792454400
+    },
+    {
+      "instance_id": 56816449,
+      "amount": "0.091",
+      "type": "charge",
+      "quantity": "1.816",
+      "rate": "0.0500",
+      "timestamp": 1792454400
+    },
+    {
+      "instance_id": 56816419,
+      "amount": "0.999",
+      "type": "charge",
+      "quantity": "1.783",
+      "rate": "0.5600",
+      "timestamp": 1792454400
+    },
+    {
+      "instance_id": 56816419,
+      "amount": "0.109",
+      "type": "charge",
+      "quantity": "1.823",
+      "rate": "0.0600",
+      "timestamp": 1792454400
+    }
+  ],
+  "settlement": "Observed charges only; delayed billing may still arrive. Shared account credit delta is not own spend.",
+  "account_credit_usd": 36.768756487463065,
+  "reserve_usd": 5,
+  "reserve_intact": true,
+  "spend_cap_usd": 30,
+  "report_stop_usd": 25,
+  "runtime_estimate_all_own_usd": 6.944919828064353,
+  "runtime_guard_plus_1usd_per_lease": 12.944919828064352
+}

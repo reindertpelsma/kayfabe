@@ -1,3 +1,7 @@
+# Campaign closeout update
+
+STATUS: LIVE, 2026-10-20. The Phase1 acceptance below remains valid; its old Phase2-pending/spend-zero statements are historical. Current results and limitations are in FINAL_20261020.md and MATRIX.md. All six own rentals are destroyed/API-absent; native Blackwell trace COMPLETE via retained-table method4, while Blackwell kayfabe Windows remains Code43. Three draft topics are pushed separately and unmerged; no full-family PASS. Budget now30/stop25/reserve5, own invoiced6.773USD, all teardown completed02:56:45UTC.
+
 # Phase1 accepted, 2026-10-19
 
 STATUS: LIVE. Both protected decisions approved and implemented. Phase1 GPU-free

@@ -1,0 +1,210 @@
+{
+  "0xca70": {
+    "native_cmd": [
+      {
+        "ordinal": "4560",
+        "element_sequence": "2270",
+        "declared_params_bytes": "0"
+      }
+    ],
+    "native_status": [
+      {
+        "ordinal": "4562",
+        "element_sequence": "2288",
+        "rpc_result": "0x0",
+        "declared_params_bytes": "0"
+      }
+    ],
+    "b1_on": [
+      {
+        "ordinal": "233",
+        "function": "103",
+        "kind": "RmAlloc",
+        "rpc_sequence": "0",
+        "control_or_class": "0xca70",
+        "trace_result": "0x0",
+        "effective_result": "unknown"
+      }
+    ],
+    "b1_off": []
+  },
+  "0xca7a": {
+    "native_cmd": [
+      {
+        "ordinal": "4632",
+        "element_sequence": "2308",
+        "declared_params_bytes": "16"
+      },
+      {
+        "ordinal": "4634",
+        "element_sequence": "2310",
+        "declared_params_bytes": "16"
+      },
+      {
+        "ordinal": "4642",
+        "element_sequence": "2312",
+        "declared_params_bytes": "16"
+      },
+      {
+        "ordinal": "4644",
+        "element_sequence": "2314",
+        "declared_params_bytes": "16"
+      }
+    ],
+    "native_status": [
+      {
+        "ordinal": "4639",
+        "element_sequence": "2326",
+        "rpc_result": "0x0",
+        "declared_params_bytes": "16"
+      },
+      {
+        "ordinal": "4645",
+        "element_sequence": "2328",
+        "rpc_result": "0x0",
+        "declared_params_bytes": "16"
+      },
+      {
+        "ordinal": "4647",
+        "element_sequence": "2330",
+        "rpc_result": "0x0",
+        "declared_params_bytes": "16"
+      },
+      {
+        "ordinal": "4649",
+        "element_sequence": "2332",
+        "rpc_result": "0x0",
+        "declared_params_bytes": "16"
+      }
+    ],
+    "b1_on": [
+      {
+        "ordinal": "271",
+        "function": "103",
+        "kind": "RmAlloc",
+        "rpc_sequence": "0",
+        "control_or_class": "0xca7a",
+        "trace_result": "0x0",
+        "effective_result": "unknown"
+      },
+      {
+        "ordinal": "273",
+        "function": "103",
+        "kind": "RmAlloc",
+        "rpc_sequence": "0",
+        "control_or_class": "0xca7a",
+        "trace_result": "0x0",
+        "effective_result": "unknown"
+      },
+      {
+        "ordinal": "275",
+        "function": "103",
+        "kind": "RmAlloc",
+        "rpc_sequence": "0",
+        "control_or_class": "0xca7a",
+        "trace_result": "0x0",
+        "effective_result": "unknown"
+      },
+      {
+        "ordinal": "277",
+        "function": "103",
+        "kind": "RmAlloc",
+        "rpc_sequence": "0",
+        "control_or_class": "0xca7a",
+        "trace_result": "0x0",
+        "effective_result": "unknown"
+      }
+    ],
+    "b1_off": []
+  },
+  "0xcbcb": {
+    "native_cmd": [
+      {
+        "ordinal": "350",
+        "element_sequence": "166",
+        "declared_params_bytes": "0"
+      },
+      {
+        "ordinal": "4519",
+        "element_sequence": "2252",
+        "declared_params_bytes": "0"
+      }
+    ],
+    "native_status": [
+      {
+        "ordinal": "359",
+        "element_sequence": "184",
+        "rpc_result": "0x0",
+        "declared_params_bytes": "0"
+      },
+      {
+        "ordinal": "4526",
+        "element_sequence": "2270",
+        "rpc_result": "0x0",
+        "declared_params_bytes": "0"
+      }
+    ],
+    "b1_on": [
+      {
+        "ordinal": "150",
+        "function": "103",
+        "kind": "RmAlloc",
+        "rpc_sequence": "0",
+        "control_or_class": "0xcbcb",
+        "trace_result": "0x56",
+        "effective_result": "unknown"
+      }
+    ],
+    "b1_off": [
+      {
+        "ordinal": "141",
+        "function": "103",
+        "kind": "RmAlloc",
+        "rpc_sequence": "0",
+        "control_or_class": "0xcbcb",
+        "trace_result": "0x56",
+        "effective_result": "unknown"
+      }
+    ]
+  },
+  "0xcfb0": {
+    "native_cmd": [
+      {
+        "ordinal": "4871",
+        "element_sequence": "2425",
+        "declared_params_bytes": "0"
+      },
+      {
+        "ordinal": "4895",
+        "element_sequence": "2437",
+        "declared_params_bytes": "12"
+      }
+    ],
+    "native_status": [
+      {
+        "ordinal": "4874",
+        "element_sequence": "2445",
+        "rpc_result": "0x0",
+        "declared_params_bytes": "0"
+      },
+      {
+        "ordinal": "4904",
+        "element_sequence": "2459",
+        "rpc_result": "0x0",
+        "declared_params_bytes": "12"
+      }
+    ],
+    "b1_on": [],
+    "b1_off": [
+      {
+        "ordinal": "277",
+        "function": "103",
+        "kind": "RmAlloc",
+        "rpc_sequence": "0",
+        "control_or_class": "0xcfb0",
+        "trace_result": "0x56",
+        "effective_result": "unknown"
+      }
+    ]
+  }
+}
