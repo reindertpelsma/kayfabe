@@ -13,9 +13,18 @@
     "credit_before": 29.717979920862604,
     "auto_destroy_minutes": 175,
     "global_teardown_utc": "2026-10-21T04:30:00+00:00",
-    "destroyed": false,
+    "destroyed": true,
     "auto_destroy_pid": 1382696,
     "auto_destroy_armed_utc": "2026-10-20T20:49:07.454726+00:00",
-    "auto_destroy_verified": true
+    "auto_destroy_verified": true,
+    "observed_dph_total": 1.1166666666666667,
+    "absence_verified_utc": "2026-10-20T22:51:33.625781+00:00",
+    "credit_after_observed": 27.555193234062926,
+    "observed_account_credit_delta": 2.1627866867996772,
+    "elapsed_hours_until_absence": 2.040909084722222,
+    "runtime_cost_estimate_usd": 2.2790151446064817,
+    "cost_upper_bound_usd": 3.2790151446064817,
+    "cost_note": "Runtime estimate and shared-account credit delta are observations, not settled attribution. Budget guard reserves1USD for delayed transfer billing until invoices reconcile.",
+    "auto_destroy_cancelled_after_absence": true
   }
 ]
