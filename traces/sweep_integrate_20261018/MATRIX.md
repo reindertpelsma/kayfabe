@@ -90,3 +90,5 @@ Public guest ABI for historical 580.88 is 580.65.06; for 581.51 it is
 580.94.02. A native firmware version is a separately recorded fact.
 
 MEASURED GA104580 R34 matched candidate-4 control0452613b5: PASS159s versus integrated e8553e6c timeout180s, n=1 each, fixed180s budget. Evidence phase2_ga104_56808180/c4_ce_control/. Subsequent Linux arms deferred for owner Windows priority.
+
+2026-10-20 paired Windows refresh: AD10256816419 and GB20256816449 at0c87acda802b18a610739e75f2b50049a9247067/P19 planned. Both native595 gates9/9+gate10/raw30/CUDA4 PASS; generic LTSC installation active, nested Windows suite UNRUN. Separate unmerged native-tracer FMC topic f09ee369f, draftPR52, CPU49/49 and unsigned Windows cross-build PASS; load/capture UNRUN.
