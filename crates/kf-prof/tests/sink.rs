@@ -74,3 +74,16 @@ fn invalid_limits_cannot_create_an_output_file() {
     for n in [0,32*1024*1024+1,usize::MAX] {assert!(JsonSink::create(&path,n).is_err());assert!(!path.exists());}
     std::fs::remove_dir_all(p).unwrap();
 }
+
+#[test]
+fn a_foreign_previous_link_cannot_displace_the_current_chunk() {
+    let p=dir();let path=p.join("prof.jsonl");
+    std::os::unix::fs::symlink("missing-directory/missing-file",p.join("prof.jsonl.previous")).unwrap();
+    let mut s=JsonSink::create(&path,8).unwrap();s.append(b"1111111\n").unwrap();let _=s.append(b"2222222\n");
+    assert_eq!(std::fs::read(path).unwrap(),b"1111111\n");drop(s);std::fs::remove_dir_all(p).unwrap();
+}
+#[test]
+fn oversized_wire_record_does_not_emit_into_a_large_sink() {
+    let p=dir();let path=p.join("prof.jsonl");let mut s=JsonSink::create(&path,32*1024*1024).unwrap();
+    assert!(s.append(&vec![b'x';65536]).is_err());assert!(std::fs::read(path).unwrap().is_empty());drop(s);std::fs::remove_dir_all(p).unwrap();
+}

@@ -103,4 +103,13 @@ class ReaderTests(unittest.TestCase):
             data=reader.read_mmap(Path(self.tmp.name)/'prof.mmap')
             self.assertTrue(data['records']);self.assertGreater(data['header']['last_update_ns'],0)
             self.assertEqual(data['records'][-1]['ledger']['oldest'][0]['id'],42)
+    def test_overflowing_declared_file_length_is_independently_rejected(self):
+        b,_=fixture();struct.pack_into('<Q',b,16,2**64-1)
+        with self.assertRaises(reader.InvalidProfile):reader.read_mmap(self.file(b))
+    def test_actual_file_ending_in_ledger_cannot_be_accepted(self):
+        b,_=fixture()
+        with self.assertRaises(reader.InvalidProfile):reader.read_mmap(self.file(b[:12587008+64]))
+    def test_backwards_interval_is_rejected_before_summary(self):
+        _,r=fixture();r['end_ns']=0;p=Path(self.tmp.name)/'prof.jsonl';p.write_text(json.dumps(r)+'\n')
+        self.assertEqual(reader.read_jsonl(p),[])
 if __name__=='__main__':unittest.main()
