@@ -14,6 +14,19 @@ use kf_core::{HostOps, Plane};
 use kf_linux_raw::{Notifier, PollTimeout, Poller, ReadyTokens};
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 
+/// ★ 2026-10-20: what the loop needs from the session's [`Completions`]: the tokens with a fence in flight. A trait (and
+/// generic parameters on [`run`] / [`run_with_relay`], monomorphised to the same code for `Completions`) so that the GPU-free stress
+/// harness (`tests/relay_stress.rs`) can run THE loop without a host RM; behaviour-neutral.
+pub trait Inflight {
+    /// Call `f` for every token with a fence in flight.
+    fn for_each_inflight(&self, f: &mut dyn FnMut(u32));
+}
+impl Inflight for Completions {
+    fn for_each_inflight(&self, f: &mut dyn FnMut(u32)) {
+        Completions::for_each_inflight(self, f);
+    }
+}
+
 /// The poller tag of the worker eventfd.
 pub const WORKER_EFD_TAG: u64 = 0;
 /// The poller tag of the session's completion fd ([`Completions`]).
@@ -140,7 +153,7 @@ pub fn run(
     host: &dyn HostOps,
     poller: &Poller,
     efd: &Notifier,
-    completions: &Completions,
+    completions: &(impl Inflight + ?Sized),
     stats: &WorkerStats,
     stop: &AtomicBool,
     on_other: &dyn Fn(u64),
@@ -173,7 +186,7 @@ pub fn run_with_relay(
     host: &dyn HostOps,
     poller: &Poller,
     efd: &Notifier,
-    completions: &Completions,
+    completions: &(impl Inflight + ?Sized),
     stats: &WorkerStats,
     stop: &AtomicBool,
     on_other: &dyn Fn(u64),
@@ -191,7 +204,7 @@ pub fn run_with_relay(
                 on_other(tag);
             } else if tag == COMPLETIONS_TAG {
                 event = true;
-                completions.for_each_inflight(|t| {
+                completions.for_each_inflight(&mut |t| {
                     stats.host_rings.fetch_add(1, Ordering::Relaxed);
                     if plane.ring_internal(t) {
                         let _ = efd.signal();
@@ -214,6 +227,8 @@ pub fn run_with_relay(
         let owed = on_tick();
         // §5.3: every `seen` load happens-before the scan.
         let seen = plane.worker_wake().seen();
+        #[cfg(feature = "chaos-hooks")]
+        kf_trap::chaos::at(kf_trap::chaos::Point::WorkerAfterSeen);
         let n = plane.worker_pass(host, &mut scratch, SCAN_LIMIT);
         if n > 0 {
             stats.served.fetch_add(n as u64, Ordering::Relaxed);
@@ -279,6 +294,8 @@ pub fn run_with_relay(
                 continue;
             }
         }
+        #[cfg(feature = "chaos-hooks")]
+        kf_trap::chaos::at(kf_trap::chaos::Point::WorkerBeforePark);
         if !plane.worker_wake().try_park(seen) {
             continue;
         }
@@ -302,6 +319,8 @@ pub fn run_with_relay(
                 stats.timeouts.fetch_add(1, Ordering::Relaxed);
             }
         }
+        #[cfg(feature = "chaos-hooks")]
+        kf_trap::chaos::at(kf_trap::chaos::Point::WorkerAfterWait);
         plane.worker_wake().unpark();
         if got.is_ok() {
             let (doorbell, event) = dispatch(&ready);

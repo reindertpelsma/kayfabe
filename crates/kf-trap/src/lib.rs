@@ -25,6 +25,8 @@
 
 pub mod bar1db;
 pub mod bitmap;
+#[cfg(feature = "chaos-hooks")]
+pub mod chaos;
 pub mod cacheop;
 pub mod cpuintr;
 pub mod fspemem;

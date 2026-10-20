@@ -255,6 +255,11 @@ pub trait Env {
     fn write_guest_get_busy(&mut self) -> bool {
         false
     }
+    /// ★ 2026-10-20 (relay stress): the source guards / admission of `site` (`"gp_put"`, `"load"`, `"read_pb"`) are busy:
+    /// the turn ends with `Fail::Retry` (production: `AccessError::Busy`, `Refusal::Busy`). Default: never.
+    fn busy_at(&mut self, _site: &'static str) -> bool {
+        false
+    }
     /// ★ lazy observe (A): the relay uses `put` WITHOUT having read `GP_PUT` this turn. Is it a value the guest really
     /// wrote, that is not beyond the guest's current `GP_PUT` (forward from `cursor`)? Default: not checked.
     fn cached_put_ok(&mut self, _put: u32, _cursor: u32) -> bool {
@@ -342,6 +347,9 @@ impl<E: Env> Io for EnvIo<'_, E> {
         kf_chan::user_storage::MAX_SOURCE_BYTES
     }
     fn gp_put(&mut self) -> Turn<Option<u32>> {
+        if self.env.busy_at("gp_put") {
+            return Err(Fail::Retry);
+        }
         if self.turn.put.is_some() {
             self.env.event(Ev::BeyondPut); // GP_PUT is loaded ONCE per turn
         }
@@ -360,6 +368,9 @@ impl<E: Env> Io for EnvIo<'_, E> {
         }
     }
     fn load_dword(&mut self, slot: u32, hi: bool) -> Turn<u32> {
+        if !hi && self.env.busy_at("load") {
+            return Err(Fail::Retry);
+        }
         // I8: only the slot at the cursor, and only while the loaded GP_PUT is ahead of it
         let n = self.env.src_entries();
         let ahead = self
@@ -394,6 +405,9 @@ impl<E: Env> Io for EnvIo<'_, E> {
         sw(value)
     }
     fn read_pb(&mut self, entry: u64, _seg: &GpSegment) -> Turn<(Vec<u32>, bool)> {
+        if self.env.busy_at("read_pb") {
+            return Err(Fail::Retry);
+        }
         if self.turn.loaded != Some(entry) {
             self.env.event(Ev::BeyondPut); // a pushbuffer only for the entry loaded in this turn
         }
@@ -467,6 +481,10 @@ pub struct Relay {
     validated: u64,
     turn_io: TurnIo,
     pub cursor_after_switch: Cursor,
+    /// ★ 2026-10-20: the last micro-step ended the turn with a `Fail::Retry` (the pump's `Err(Failure::Retry)`).
+    pub last_retry: bool,
+    /// ★ 2026-10-20: the last micro-step ended the relay with this refusal.
+    pub last_refused: Option<String>,
 }
 
 impl Deref for Relay {
@@ -498,6 +516,8 @@ impl Relay {
             validated: 0,
             turn_io: TurnIo::default(),
             cursor_after_switch: Cursor::Zero,
+            last_retry: false,
+            last_refused: None,
         }
     }
 
@@ -548,6 +568,8 @@ impl Relay {
         debug_assert!(self.idle());
         self.core.segment_pending = self.staged.is_some();
         self.turn_io = TurnIo::default();
+        self.last_retry = false;
+        self.last_refused = None;
         self.core.claim();
     }
 
@@ -588,7 +610,9 @@ impl Relay {
                     self.core.step(&mut io)
                 };
                 match r {
-                    Ok(Step::More | Step::Shadow) | Err(_) => {}
+                    Err(Fail::Retry) => self.last_retry = true,
+                    Err(Fail::Refused(why)) => self.last_refused = Some(why),
+                    Ok(Step::More | Step::Shadow) => {}
                     Ok(Step::Idle { .. }) => {}
                     Ok(Step::Segment) => self.sub = Sub::SegTurn,
                     Ok(Step::Scanned { rare }) => {
