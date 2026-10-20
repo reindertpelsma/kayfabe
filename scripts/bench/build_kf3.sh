@@ -77,6 +77,8 @@ if [ ! -f "$BUILD/build.ninja" ] || [ "$(cat "$BUILD/.kf3-configure" 2>/dev/null
   printf '%s' "$CONF_FLAGS" > "$BUILD/.kf3-configure"
 fi
 ninja -j2 -C "$BUILD" qemu-system-x86_64
+# The executable target alone leaves generated firmware/trace bundle links dangling.
+python3 "$REPO/scripts/release/build_bundle.py" "$BUILD"
 REV=$(git -C "$REPO" rev-parse --short=8 HEAD)
 [ -z "$(git -C "$REPO" status --porcelain --untracked-files=no)" ] || REV="$REV-dirty"
 PRIV="$(dirname "$BUILD")/kf3-bins/$REV"

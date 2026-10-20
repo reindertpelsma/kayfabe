@@ -43,3 +43,11 @@ MEASURED: preflight omission reproduced in tests-only `762e54a87`: both OS
 display checks failed before udmabuf validation. Display now requires read/write
 access; headless does not. Removing this check kills two named tests. Doctor
 remains fixture-tested only; no occupied-host GPU query was performed.
+
+MEASURED real CPU layout check found dangling generated firmware/trace links
+when only the QEMU executable target was built. Tests-only `744eb8afe` reproduced
+both missing outputs with a synthetic real-Ninja fixture. The builder now
+resolves missing bundle data via declared Ninja targets before publication;
+unbuildable or external missing targets refuse publication. Two tests pass;
+removing the builder call kills both. The real layout check will be rerun on
+the corrected revision; no guest or GPU operation is part of that check.

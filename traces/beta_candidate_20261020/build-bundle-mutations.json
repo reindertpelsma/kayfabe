@@ -1,0 +1,12 @@
+[
+  {
+    "mutant": "publish-binary-without-generated-bundle-data",
+    "status": "killed",
+    "kills": 2,
+    "tests": [
+      "test_published_bundle_has_generated_firmware (__main__.BuildBundle.test_published_bundle_has_generated_firmware)",
+      "test_published_bundle_has_generated_trace_data (__main__.BuildBundle.test_published_bundle_has_generated_trace_data)"
+    ],
+    "errors": []
+  }
+]

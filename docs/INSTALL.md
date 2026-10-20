@@ -44,7 +44,9 @@ repository path. The builder compiles the Rust archive and QEMU C overlay as one
 binary, checks the archive by cargo's successful fingerprints, and publishes
 `.build/kf3-bins/<revision>/qemu-system-x86_64`. Existing revision binaries are
 never overwritten. Its pc-bios/qemu-bundle links point to its own QEMU build;
-keep that build until making a self-contained staging directory.
+keep that build until making a self-contained staging directory. The builder
+also resolves dangling bundle links through Ninja's declared generated-data
+targets before publishing; it refuses missing data without a build target.
 
 ```sh
 REV=$(git rev-parse --short=8 HEAD)
