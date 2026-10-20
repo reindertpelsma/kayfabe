@@ -75,3 +75,16 @@ Windows order (kf-rm tests/code43_startdevice_batch.rs) has CE3 (26) in that pos
   PR53 + CFFA + a §S.1 stub row for 196, tests first). *Falsifier:* fix2_off serves the 196 arming (0x0)
   and the guest still tears down right after it with Code 43 (no further non-Free RPC beyond the
   arming sequence). *Support:* progress past it (a later abort or Code 0).
+
+## Addendum 17:52 UTC — before dtrace_on_1 (not started)
+
+MEASURED: fix2_off_1/2 reach **Code 0** (Status OK 20 s after enable), then a guest bugcheck 0x116
+VIDEO_TDR_FAILURE (P3 0xC000009A) ~40 s later; fix2_on_1 unchanged (abort after the 4th CA7A, Code 43).
+trace_on_1: no trapped display-range BAR0 access between the last CA7A doorbell and the teardown
+doorbell, only MMU-invalidate writes (the tracer cannot see untrapped display user-area accesses, so
+H-ON-DISP is NOT settled by it).
+
+- **H-ON-METHODS** (after the cursor allocations the guest pushes display methods whose completion
+  kf-disp does not deliver as the Blackwell driver expects). dtrace_on_1 = base ON with
+  KF3_DISPLAY_TRACE=1 KF3_DISPLAY_METHOD_TRACE=1 (diagnostic logs only). *Falsifier:* no display
+  method/update/notifier activity is logged between the 4th CA7A allocation and the first teardown RPC.

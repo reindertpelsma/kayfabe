@@ -1,0 +1,118 @@
+2:kf3: host facts: GSS 0x2080a028 [(0, 1), (8, 1), (c, 100000), (20c, 100000)]: the background probe was refused or changed the answer — zero-probe bytes only
+3:kf3: host facts: GSS 0x2080a028 [(0, 1), (8, 1), (c, 1), (20c, 1)]: the background probe was refused or changed the answer — zero-probe bytes only
+4:kf-host: HOST-ABI REFUSED control 0x2080852e: host control 0x2080852e has no public header (zero request measured NV_OK on AD103 575.51.03 and GSP 580.65.05; INVALID_ARGUMENT at 595.91.07); its layout at host driver 595.91.07 was never measured
+5:kf3: host facts: GSS 0x2080852e [] refused by the host (HostRefusal { status: None, detail: "Other(19314)" }) — not served
+6:kf-host: HOST-ABI REFUSED control 0x2080853a: host control 0x2080853a has no public header (zero request measured NV_OK on AD103 575.51.03 and GSP 580.65.05; INVALID_ARGUMENT at 595.91.07); its layout at host driver 595.91.07 was never measured
+7:kf3: host facts: GSS 0x2080853a [] refused by the host (HostRefusal { status: None, detail: "Other(19314)" }) — not served
+8:kf-host: HOST-ABI REFUSED control 0x2080a618: host control 0x2080a618 has no public header (zero request measured NV_OK on AD103 575.51.03 and GSP 580.65.05; INVALID_ARGUMENT at 595.91.07); its layout at host driver 595.91.07 was never measured
+9:kf3: host facts: GSS 0x2080a618 [] refused by the host (HostRefusal { status: None, detail: "Other(19314)" }) — not served
+10:kf-host: HOST-ABI REFUSED control 0x2080852e: host control 0x2080852e has no public header (zero request measured NV_OK on AD103 575.51.03 and GSP 580.65.05; INVALID_ARGUMENT at 595.91.07); its layout at host driver 595.91.07 was never measured
+11:kf3: host facts: GSS 0x2080852e [] refused by the host (HostRefusal { status: None, detail: "Other(19314)" }) — not served
+12:kf-host: HOST-ABI REFUSED control 0x2080853a: host control 0x2080853a has no public header (zero request measured NV_OK on AD103 575.51.03 and GSP 580.65.05; INVALID_ARGUMENT at 595.91.07); its layout at host driver 595.91.07 was never measured
+13:kf3: host facts: GSS 0x2080853a [] refused by the host (HostRefusal { status: None, detail: "Other(19314)" }) — not served
+14:kf-host: HOST-ABI REFUSED control 0x2080a618: host control 0x2080a618 has no public header (zero request measured NV_OK on AD103 575.51.03 and GSP 580.65.05; INVALID_ARGUMENT at 595.91.07); its layout at host driver 595.91.07 was never measured
+15:kf3: host facts: GSS 0x2080a618 [] refused by the host (HostRefusal { status: None, detail: "Other(19314)" }) — not served
+16:kf-host: HOST-ABI REFUSED control 0x2080853b: host control 0x2080853b has no row in kf_abi::hostabi::HOST_CONTROLS, and host driver 595.91.07 is outside the interval the host encoders were written for — its layout is unknown
+17:kf3: host facts: GSS 0x2080853b [(4, 1)] refused by the host (HostRefusal { status: None, detail: "Other(19314)" }) — not served
+18:kf-host: HOST-ABI REFUSED control 0x2080852a: : body is 1716 bytes, its layout is 1784
+19:kf3: host facts: GSS 0x2080852a [] refused by the host (HostRefusal { status: None, detail: "Other(19314)" }) — not served
+20:kf-host: HOST-ABI REFUSED control 0x2080a618: host control 0x2080a618 has no public header (zero request measured NV_OK on AD103 575.51.03 and GSP 580.65.05; INVALID_ARGUMENT at 595.91.07); its layout at host driver 595.91.07 was never measured
+21:kf3: host facts: GSS 0x2080a618 [] refused by the host (HostRefusal { status: None, detail: "Other(19314)" }) — not served
+22:kf-host: HOST-ABI REFUSED control 0x2080a618: host control 0x2080a618 has no public header (zero request measured NV_OK on AD103 575.51.03 and GSP 580.65.05; INVALID_ARGUMENT at 595.91.07); its layout at host driver 595.91.07 was never measured
+23:kf3: host facts: GSS 0x2080a618 [] refused by the host (HostRefusal { status: None, detail: "Other(19314)" }) — not served
+24:kf-host: HOST-ABI REFUSED control 0x2080852e: host control 0x2080852e has no public header (zero request measured NV_OK on AD103 575.51.03 and GSP 580.65.05; INVALID_ARGUMENT at 595.91.07); its layout at host driver 595.91.07 was never measured
+25:kf3: host facts: GSS 0x2080852e [] refused by the host (HostRefusal { status: None, detail: "Other(19314)" }) — not served
+27:kf3: channel budget 1789 per runlist (Derived; derived default 1789, host limit 2045; the count the guest is told AND the enforced cap, refused by name past it — property channel-budget, docs/design/V3_CHANNEL_BUDGET.md)
+30:kf3: permission policy: READ_ONLY+VOLATILE carried to the host map, PRIVILEGED leaves withheld from user twins, ATOMIC_DISABLE not carried (KF3_CARRY_ATOMIC_DISABLE=1 enables it once fault delivery exists) (key_perm=0x68)
+66:kf3: display: display-max-fps unset — every head's vblank tick is capped at 75 Hz; copies without a flip are made at the console head's tick, while watched, and sent only when the frame's checksum changed
+72:kf3: device reset #1 COMPLETE — the device is as realize left it; guest writes accepted again (dropped while in reset: 0)
+73:kf3: device reset #1 complete before the vCPUs resume (the main loop waited 0 us)
+252:kf-rm: the guest is Windows 580.88 (r580_78-7), the Windows build of Linux 580.65.06 (one changelist, 36308443): keyed as 580.65.06
+293:kf3: GSP REFUSED fn76/0x20800a87=0x56 (GSP_RM_CONTROL) first_seq=0 — the guest read a non-OK status
+348:W349AUTHORED key=rm.0x20802a08 die=GB202 branch=580: rm.0x20802a08: unmeasured on GB202 branch 580 (measured on: GA106/570, GA106/575, GA106/580, GA106/590, GA106/595, GA106/610, GA104/595) — refused, a neighbour's row is never served; serving the AUTHORED value (CE fault-method buffer size: A
+355:kf3: GSP REFUSED fn76/0x20800afe=0x56 (GSP_RM_CONTROL) first_seq=0 — the guest read a non-OK status
+360:kf3: GSP REFUSED fn76/0x20800aff=0x56 (GSP_RM_CONTROL) first_seq=0 — the guest read a non-OK status
+382:W349AUTHORED key=rm.0x20800a59 die=GB202 branch=580: rm.0x20800a59: unmeasured on GB202 branch 580 (measured on: GA106/570, GA106/575, GA106/580, GA106/590, GA106/595, GA106/610, GA104/595) — refused, a neighbour's row is never served; serving the AUTHORED value (GMMU fault-buffer sizes: AUTHO
+389:kf3: GSP REFUSED fn76/0x20800aaf=0x56 (GSP_RM_CONTROL) first_seq=0 — the guest read a non-OK status
+436:kf3: GSP REFUSED fn76/0x00800292=0x56 (GSP_RM_CONTROL) first_seq=0 — the guest read a non-OK status
+441:kf3: GSP REFUSED fn76/0x20800a80=0x56 (GSP_RM_CONTROL) first_seq=0 — the guest read a non-OK status
+462:kf3: GSP REFUSED fn76/0x20800a89=0x56 (GSP_RM_CONTROL) first_seq=0 — the guest read a non-OK status
+480:kf3: GSP REFUSED fn76/0x20802a0f=0x56 (GSP_RM_CONTROL) first_seq=0 — the guest read a non-OK status
+485:kf3: GSP REFUSED fn76/0x20800ab2=0x56 (GSP_RM_CONTROL) first_seq=0 — the guest read a non-OK status
+496:kf3: GSP REFUSED fn76/0x2080017e=0x56 (GSP_RM_CONTROL) first_seq=0 — the guest read a non-OK status
+544:kf3: GSP REFUSED fn76/0x20800a30=0x56 (GSP_RM_CONTROL) first_seq=0 — the guest read a non-OK status
+552:kf3: GSP REFUSED fn76/0x20800a2e=0x56 (GSP_RM_CONTROL) first_seq=0 — the guest read a non-OK status
+560:kf3: GSP REFUSED fn76/0x20800b03=0x56 (GSP_RM_CONTROL) first_seq=0 — the guest read a non-OK status
+565:kf3: GSP REFUSED fn76/0x20800b05=0x56 (GSP_RM_CONTROL) first_seq=0 — the guest read a non-OK status
+573:kf3: GSP REFUSED fn76/0x20800a3f=0x56 (GSP_RM_CONTROL) first_seq=0 — the guest read a non-OK status
+591:kf3: boot display seed [0x0, +0x7f0000) retired at the first change: no placement inside it (no console adopted); 0x7f0000 bytes re-pointed to scratch
+593:kf3: mem t=178.054s BAR1 boot framebuffer [0x0, +0x7f0000) after BAR1 change #1: guest views []; 0x7f0000 bytes show SCRATCH
+608:kf-rm: chanlink: FERMI_VASPACE_A 0xc1e00007:0xbaba0042 under 0xcaf00000 (device default for it: 0xbaba0042) VAS-FACTS index=Some(0) flags=Some(2000) bigPageSize=Some(0) vaBase(lo32)=Some(0) vaSize(lo32)=Some(0)
+635:kf-rm: chanlink: CHAN-FACTS 0xc1e00007:0xbaba0045 parent=H class=0xca6f engine=Some(1) flags=0x200120 hVASpace=0xbaba0042 ctxShare=0x0 vas=0xc1e00007:Some(baba0042) tsg=None device=0xcaf00000 kernel=true privilege=Some(ChannelPrivilege { level: 2, uvm_owned: false }) internalFlags=Some(16) Proce
+707:kf3: TSPACE-RETIRE tok=0x1 host=0x40000012 key=VasKey(13970166077300801602) ring_va=0xff00000000 released=true stale_binds=0/0 late=0 indeterminate=0 unresolved[walk=0 acquire=0 refused=0]
+709:kf3: chan token 0x1 (host 0x40000012) RETIRED, forwarded=0 submissions=0 splits=0/0 serves=0 last_put=None gp_get=None store_views=0 privilege=Some(ChannelPrivilege { level: 2, uvm_owned: false }) dead=None inca=[refused_methods=0 subdevice_masks=0 control_entries=0 ext_base_unapplied=0] gr_tier
+723:kf3: mem t=178.170s retire VasKey(13970166077300801602): 0 row(s) unmapped (0 refused) in 4 us, 0 host call(s), host space 0xcafe0021 kept as a spare — host RM over its life: 8 map call(s) (8 per-run, 0 batch(es) x2 carrying 0 runs, 0 batch(es) refused) in 2 ms; 8 unmap call(s) (8 range(s)) + 
+748:kf-rm: chanlink: FERMI_VASPACE_A 0xc1e00008:0xa under 0xb (device default for it: 0xa) VAS-FACTS index=Some(0) flags=Some(2d00) bigPageSize=Some(0) vaBase(lo32)=Some(0) vaSize(lo32)=Some(4006c008)
+783:kf3: mem invalidate seq 103 CLEARED OVER ABSENCE (Some(VasKey(13970166078463016970))): its refused leaves are absent on the host (a GPU access faults on that space's twin); KF3_INVALIDATE_CLEAR_OVER_ABSENT
+785:kf3: mem t=178.381s REFUSED VasKey(13970166078463016970) root 0x1efba2000: 1 run(s) not applied: leaf 0x30fc00000+0x10400000 names store 0x1efc00000, inside the firmware carve-out at 0x1efbe0000 — a twin maps no kayfabe memory (§Q)
+790:kf3: mem invalidate seq 107 CLEARED OVER ABSENCE (Some(VasKey(13970166078463016970))): its refused leaves are absent on the host (a GPU access faults on that space's twin); KF3_INVALIDATE_CLEAR_OVER_ABSENT
+792:kf3: mem t=178.389s REFUSED VasKey(13970166078463016970) root 0x1efba2000: 1 run(s) not applied: leaf 0x30fc00000+0x10400000 names store 0x1efc00000, inside the firmware carve-out at 0x1efbe0000 — a twin maps no kayfabe memory (§Q)
+793:kf3: mem invalidate seq 108 CLEARED OVER ABSENCE (Some(VasKey(13970166078463016970))): its refused leaves are absent on the host (a GPU access faults on that space's twin); KF3_INVALIDATE_CLEAR_OVER_ABSENT
+795:kf3: mem t=178.390s REFUSED VasKey(13970166078463016970) root 0x1efba2000: 1 run(s) not applied: leaf 0x30fc00000+0x10400000 names store 0x1efc00000, inside the firmware carve-out at 0x1efbe0000 — a twin maps no kayfabe memory (§Q)
+802:kf-rm: chanlink: CHAN-FACTS 0xc1e00008:0x2 parent=H class=0xca6f engine=Some(9) flags=0xa00120 hVASpace=0xa ctxShare=0x0 vas=0xc1e00008:Some(a) tsg=None device=0xb kernel=true privilege=Some(ChannelPrivilege { level: 2, uvm_owned: false }) internalFlags=Some(1a) ProcessID=Some(4) SubProcessID=So
+835:kf3: GSP REFUSED fn76/0x2080013f=0x56 (GSP_RM_CONTROL) first_seq=0 — the guest read a non-OK status
+844:W349REFUSE cmd=0x20809064 why=consttab cudart.0x20809064: unmeasured on GB202 branch 580 (measured on: GA106/580, AD104/595) — refused, a neighbour's row is never served (refusals so far: 5)
+847:kf3: GSP REFUSED fn76/0x20809064=0x56 (GSP_RM_CONTROL) first_seq=0 — the guest read a non-OK status
+855:kf3: GSP REFUSED fn76/0x00801306=0x56 (GSP_RM_CONTROL) first_seq=0 — the guest read a non-OK status
+860:kf3: GSP REFUSED fn76/0x20810108=0x56 (GSP_RM_CONTROL) first_seq=0 — the guest read a non-OK status
+937:kf3: GSP REFUSED fn76/0x20800ab8=0x56 (GSP_RM_CONTROL) first_seq=0 — the guest read a non-OK status
+942:kf3: GSP REFUSED fn76/0x20800173=0x56 (GSP_RM_CONTROL) first_seq=0 — the guest read a non-OK status
+950:kf3: GSP REFUSED fn76/0x20802a12=0x56 (GSP_RM_CONTROL) first_seq=0 — the guest read a non-OK status
+981:kf3: GSP REFUSED fn76/0x20800160=0x56 (GSP_RM_CONTROL) first_seq=0 — the guest read a non-OK status
+983:kf-rm: RPC-REFUSED #1 AllocClassNotPermitted { class: 52171, denial: NotOnAllowlist } ⇒ answered NV_ERR_NOT_SUPPORTED (0x56). ⊘ The guest sees only the status; this line is the only place the REASON exists. (printing the first 24; the total rides the refusal census)
+987:kf3: GSP REFUSED fn103/0x0000cbcb=0x56 (GSP_RM_ALLOC) first_seq=0 — the guest read a non-OK status
+989:W349REFUSE key=rm.0x20802801 die=GB202 branch=580: rm.0x20802801: unmeasured on GB202 branch 580 (measured on: GA106/570, GA106/575, GA106/580, GA106/590, GA106/595, GA106/610, GA104/595, AD102/580, TU106/580) — refused, a neighbour's row is never served (refusals so far: 6)
+993:kf3: GSP REFUSED fn76/0x20802801=0x56 (GSP_RM_CONTROL) first_seq=0 — the guest read a non-OK status
+1001:kf3: GSP REFUSED fn76/0x2080012f=0x56 (GSP_RM_CONTROL) first_seq=0 — the guest read a non-OK status
+1028:W349REFUSE key=rm.0x20802806 die=GB202 branch=580: rm.0x20802806: unmeasured on GB202 branch 580 (measured on: GA106/570, GA106/575, GA106/580, GA106/590, GA106/595, GA106/610, GA104/595, AD102/580, TU106/580) — refused, a neighbour's row is never served (refusals so far: 7)
+1032:kf3: GSP REFUSED fn76/0x20802806=0x56 (GSP_RM_CONTROL) first_seq=0 — the guest read a non-OK status
+1058:kf3: GSP REFUSED fn76/0x2080205b=0x56 (GSP_RM_CONTROL) first_seq=0 — the guest read a non-OK status
+1064:kf3: GSP REFUSED fn76/0x2080a060=0x56 (GSP_RM_CONTROL) first_seq=0 — the guest read a non-OK status
+1069:kf3: GSP REFUSED fn76/0x20802068=0x56 (GSP_RM_CONTROL) first_seq=0 — the guest read a non-OK status
+1074:kf3: GSP REFUSED fn76/0x00800106=0x56 (GSP_RM_CONTROL) first_seq=0 — the guest read a non-OK status
+1085:kf3: GSP REFUSED fn76/0x2080a801=0x56 (GSP_RM_CONTROL) first_seq=0 — the guest read a non-OK status
+1121:kf3: GSP REFUSED fn76/0x2080a02f=0x56 (GSP_RM_CONTROL) first_seq=0 — the guest read a non-OK status
+1131:kf3: GSP REFUSED fn76/0x208081ea=0x56 (GSP_RM_CONTROL) first_seq=0 — the guest read a non-OK status
+1187:kf3: GSP REFUSED fn76/0x00730285=0x56 (GSP_RM_CONTROL) first_seq=0 — the guest read a non-OK status
+1264:kf3: GSP REFUSED fn76/0x20800a3a=0x56 (GSP_RM_CONTROL) first_seq=0 — the guest read a non-OK status
+1269:kf3: GSP REFUSED fn76/0x20801110=0x56 (GSP_RM_CONTROL) first_seq=0 — the guest read a non-OK status
+1315:kf3: GSP REFUSED fn76/0x2080080b=0x56 (GSP_RM_CONTROL) first_seq=0 — the guest read a non-OK status
+1321:kf-rm: chanlink: FERMI_VASPACE_A 0xc1d00002:0xff000870 under 0xff010000 (device default for it: 0xff000870) VAS-FACTS index=Some(3) flags=Some(0) bigPageSize=Some(0) vaBase(lo32)=Some(0) vaSize(lo32)=Some(0)
+1353:kf3: mem t=179.071s BAR1 boot framebuffer [0x0, +0x7f0000) after BAR1 change #3: guest views [(0, 10000, Some(1e7b20000))]; 0x7e0000 bytes show SCRATCH
+1357:kf3: mem t=179.077s BAR1 boot framebuffer [0x0, +0x7f0000) after BAR1 change #4: guest views [(0, 10000, Some(1e7b20000)), (10000, 10000, Some(1e7b30000))]; 0x7d0000 bytes show SCRATCH
+1361:kf3: mem t=179.083s BAR1 boot framebuffer [0x0, +0x7f0000) after BAR1 change #5: guest views [(0, 10000, Some(1e7b20000)), (10000, 10000, Some(1e7b30000)), (20000, 10000, Some(1e7b40000))]; 0x7c0000 bytes show SCRATCH
+1368:kf3: mem t=179.097s BAR1 boot framebuffer [0x0, +0x7f0000) after BAR1 change #6: guest views [(0, 10000, Some(1e7b20000)), (10000, 10000, Some(1e7b30000)), (20000, 10000, Some(1e7b40000)), (30000, 80000, Some(1e7b50000))]; 0x740000 bytes show SCRATCH
+1372:kf3: mem t=179.111s BAR1 boot framebuffer [0x0, +0x7f0000) after BAR1 change #7: guest views [(0, 10000, Some(1e7b20000)), (10000, 10000, Some(1e7b30000)), (20000, 10000, Some(1e7b40000)), (30000, 80000, Some(1e7b50000)), (b0000, 80000, Some(1e7bd0000))]; 0x6c0000 bytes show SCRATCH
+1376:kf3: mem t=179.126s BAR1 boot framebuffer [0x0, +0x7f0000) after BAR1 change #8: guest views [(0, 10000, Some(1e7b20000)), (10000, 10000, Some(1e7b30000)), (20000, 10000, Some(1e7b40000)), (30000, 80000, Some(1e7b50000)), (b0000, 80000, Some(1e7bd0000)), (130000, 80000, Some(1e7c50000))]; 0x640
+1381:kf3: mem t=179.146s BAR1 boot framebuffer [0x0, +0x7f0000) after BAR1 change #9: guest views [(0, 10000, Some(1e7b20000)), (10000, 10000, Some(1e7b30000)), (20000, 10000, Some(1e7b40000)), (30000, 80000, Some(1e7b50000)), (b0000, 80000, Some(1e7bd0000)), (130000, 80000, Some(1e7c50000)), (1b000
+1403:kf3: mem t=179.396s BAR1 boot framebuffer [0x0, +0x7f0000) after BAR1 change #10: guest views [(0, 10000, Some(1e7b20000)), (10000, 10000, Some(1e7b30000)), (20000, 10000, Some(1e7b40000)), (30000, 80000, Some(1e7b50000)), (b0000, 80000, Some(1e7bd0000)), (130000, 80000, Some(1e7c50000)), (1b00
+1588:kf3: mem t=179.529s BAR1 boot framebuffer [0x0, +0x7f0000) after BAR1 change #11: guest views [(0, 10000, Some(1e7b20000)), (10000, 10000, Some(1e7b30000)), (20000, 10000, Some(1e7b40000)), (30000, 80000, Some(1e7b50000)), (b0000, 80000, Some(1e7bd0000)), (130000, 80000, Some(1e7c50000)), (1b00
+1592:kf3: mem t=179.539s BAR1 boot framebuffer [0x0, +0x7f0000) after BAR1 change #12: guest views [(0, 10000, Some(1e7b20000)), (10000, 10000, Some(1e7b30000)), (20000, 10000, Some(1e7b40000)), (30000, 80000, Some(1e7b50000)), (b0000, 80000, Some(1e7bd0000)), (130000, 80000, Some(1e7c50000)), (1b00
+1596:kf3: mem t=179.548s BAR1 boot framebuffer [0x0, +0x7f0000) after BAR1 change #13: guest views [(0, 10000, Some(1e7b20000)), (10000, 10000, Some(1e7b30000)), (20000, 10000, Some(1e7b40000)), (30000, 80000, Some(1e7b50000)), (b0000, 80000, Some(1e7bd0000)), (130000, 80000, Some(1e7c50000)), (1b00
+1598:kf3: mem t=179.560s BAR1 boot framebuffer [0x0, +0x7f0000) after BAR1 change #14: guest views [(0, 10000, Some(1e7b20000)), (10000, 10000, Some(1e7b30000)), (20000, 10000, Some(1e7b40000)), (30000, 80000, Some(1e7b50000)), (b0000, 80000, Some(1e7bd0000)), (130000, 80000, Some(1e7c50000)), (1b00
+1601:kf3: mem t=179.566s BAR1 boot framebuffer [0x0, +0x7f0000) after BAR1 change #15: guest views [(0, 10000, Some(1e7b20000)), (10000, 10000, Some(1e7b30000)), (20000, 10000, Some(1e7b40000)), (30000, 80000, Some(1e7b50000)), (b0000, 80000, Some(1e7bd0000)), (130000, 80000, Some(1e7c50000)), (1b00
+1604:kf3: mem t=179.570s BAR1 boot framebuffer [0x0, +0x7f0000) after BAR1 change #16: guest views [(0, 10000, Some(1e7b20000)), (10000, 10000, Some(1e7b30000)), (20000, 10000, Some(1e7b40000)), (30000, 80000, Some(1e7b50000)), (b0000, 80000, Some(1e7bd0000)), (130000, 80000, Some(1e7c50000)), (1b00
+1801:kf3: mem t=179.622s BAR1 boot framebuffer [0x0, +0x7f0000) after BAR1 change #17: guest views [(0, 10000, Some(1e7b20000)), (10000, 10000, Some(1e7b30000)), (20000, 10000, Some(1e7b40000)), (30000, 80000, Some(1e7b50000)), (b0000, 80000, Some(1e7bd0000)), (130000, 80000, Some(1e7c50000)), (1b00
+1825:kf3: mem t=179.631s BAR1 boot framebuffer [0x0, +0x7f0000) after BAR1 change #18: guest views [(0, 10000, Some(1e7b20000)), (10000, 10000, Some(1e7b30000)), (20000, 10000, Some(1e7b40000)), (b0000, 80000, Some(1e7bd0000)), (130000, 80000, Some(1e7c50000)), (1b0000, 80000, Some(1e7cd0000))]; 0x6
+1828:kf3: mem t=179.636s BAR1 boot framebuffer [0x0, +0x7f0000) after BAR1 change #19: guest views [(0, 10000, Some(1e7b20000)), (10000, 10000, Some(1e7b30000)), (20000, 10000, Some(1e7b40000)), (130000, 80000, Some(1e7c50000)), (1b0000, 80000, Some(1e7cd0000))]; 0x6c0000 bytes show SCRATCH
+1831:kf3: mem t=179.640s BAR1 boot framebuffer [0x0, +0x7f0000) after BAR1 change #20: guest views [(0, 10000, Some(1e7b20000)), (10000, 10000, Some(1e7b30000)), (20000, 10000, Some(1e7b40000)), (1b0000, 80000, Some(1e7cd0000))]; 0x740000 bytes show SCRATCH
+1834:kf3: mem t=179.645s BAR1 boot framebuffer [0x0, +0x7f0000) after BAR1 change #21: guest views [(0, 10000, Some(1e7b20000)), (10000, 10000, Some(1e7b30000)), (20000, 10000, Some(1e7b40000))]; 0x7c0000 bytes show SCRATCH
+1839:kf3: mem t=179.660s BAR1 boot framebuffer [0x0, +0x7f0000) after BAR1 change #22: guest views [(10000, 10000, Some(1e7b30000)), (20000, 10000, Some(1e7b40000))]; 0x7d0000 bytes show SCRATCH
+1843:kf3: mem t=179.667s BAR1 boot framebuffer [0x0, +0x7f0000) after BAR1 change #23: guest views [(20000, 10000, Some(1e7b40000))]; 0x7e0000 bytes show SCRATCH
+1847:kf3: mem t=179.674s BAR1 boot framebuffer [0x0, +0x7f0000) after BAR1 change #24: guest views []; 0x7f0000 bytes show SCRATCH
+1907:kf3: mem t=179.946s retire VasKey(13965662457344034928): 0 row(s) unmapped (0 refused) in 3 us, 0 host call(s), host space 0xcafe001c kept as a spare — host RM over its life: 10 map call(s) (10 per-run, 0 batch(es) x2 carrying 0 runs, 0 batch(es) refused) in 1 ms; 10 unmap call(s) (10 range(s
+1918:kf3: TSPACE-RETIRE tok=0x1 host=0x400d000e key=VasKey(13970166078463016970) ring_va=0xff00000000 released=true stale_binds=0/0 late=0 indeterminate=0 unresolved[walk=0 acquire=0 refused=0]
+1920:kf3: chan token 0x1 (host 0x400d000e) RETIRED, forwarded=0 submissions=0 splits=0/0 serves=1 last_put=Some(0) gp_get=None store_views=0 privilege=Some(ChannelPrivilege { level: 2, uvm_owned: false }) dead=None inca=[refused_methods=0 subdevice_masks=0 control_entries=0 ext_base_unapplied=0] gr_
+1932:kf3: mem t=180.096s retire VasKey(13970166078463016970): 0 row(s) unmapped (0 refused) in 1 us, 0 host call(s), host space 0xcafe0021 kept as a spare — host RM over its life: 5 map call(s) (3 per-run, 1 batch(es) x2 carrying 2 runs, 0 batch(es) refused) in 169 ms; 3 unmap call(s) (3 range(s))
+1951:kf3: mem t=180.146s BAR1 back to its physical view: [0x0, +0x7f0000) shows store [0x0, +0x7f0000) again (seed life 2) — the guest's RM gave BAR1 up; boot framebuffer scrub REFUSED: not scrubbed: a newer guest RM life began (fn 72) after this unload
+1956:kf3: GSP REFUSED fn76/0x20800ab4=0x56 (GSP_RM_CONTROL) first_seq=0 — the guest read a non-OK status

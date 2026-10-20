@@ -1,0 +1,138 @@
+2:kf3: host facts: GSS 0x2080a028 [(0, 1), (8, 1), (c, 100000), (20c, 100000)]: the background probe was refused or changed the answer — zero-probe bytes only
+3:kf3: host facts: GSS 0x2080a028 [(0, 1), (8, 1), (c, 1), (20c, 1)]: the background probe was refused or changed the answer — zero-probe bytes only
+4:kf-host: HOST-ABI REFUSED control 0x2080852e: host control 0x2080852e has no public header (zero request measured NV_OK on AD103 575.51.03 and GSP 580.65.05; INVALID_ARGUMENT at 595.91.07); its layout at host driver 595.91.07 was never measured
+5:kf3: host facts: GSS 0x2080852e [] refused by the host (HostRefusal { status: None, detail: "Other(19314)" }) — not served
+6:kf-host: HOST-ABI REFUSED control 0x2080853a: host control 0x2080853a has no public header (zero request measured NV_OK on AD103 575.51.03 and GSP 580.65.05; INVALID_ARGUMENT at 595.91.07); its layout at host driver 595.91.07 was never measured
+7:kf3: host facts: GSS 0x2080853a [] refused by the host (HostRefusal { status: None, detail: "Other(19314)" }) — not served
+8:kf-host: HOST-ABI REFUSED control 0x2080a618: host control 0x2080a618 has no public header (zero request measured NV_OK on AD103 575.51.03 and GSP 580.65.05; INVALID_ARGUMENT at 595.91.07); its layout at host driver 595.91.07 was never measured
+9:kf3: host facts: GSS 0x2080a618 [] refused by the host (HostRefusal { status: None, detail: "Other(19314)" }) — not served
+10:kf-host: HOST-ABI REFUSED control 0x2080852e: host control 0x2080852e has no public header (zero request measured NV_OK on AD103 575.51.03 and GSP 580.65.05; INVALID_ARGUMENT at 595.91.07); its layout at host driver 595.91.07 was never measured
+11:kf3: host facts: GSS 0x2080852e [] refused by the host (HostRefusal { status: None, detail: "Other(19314)" }) — not served
+12:kf-host: HOST-ABI REFUSED control 0x2080853a: host control 0x2080853a has no public header (zero request measured NV_OK on AD103 575.51.03 and GSP 580.65.05; INVALID_ARGUMENT at 595.91.07); its layout at host driver 595.91.07 was never measured
+13:kf3: host facts: GSS 0x2080853a [] refused by the host (HostRefusal { status: None, detail: "Other(19314)" }) — not served
+14:kf-host: HOST-ABI REFUSED control 0x2080a618: host control 0x2080a618 has no public header (zero request measured NV_OK on AD103 575.51.03 and GSP 580.65.05; INVALID_ARGUMENT at 595.91.07); its layout at host driver 595.91.07 was never measured
+15:kf3: host facts: GSS 0x2080a618 [] refused by the host (HostRefusal { status: None, detail: "Other(19314)" }) — not served
+16:kf-host: HOST-ABI REFUSED control 0x2080853b: host control 0x2080853b has no row in kf_abi::hostabi::HOST_CONTROLS, and host driver 595.91.07 is outside the interval the host encoders were written for — its layout is unknown
+17:kf3: host facts: GSS 0x2080853b [(4, 1)] refused by the host (HostRefusal { status: None, detail: "Other(19314)" }) — not served
+18:kf-host: HOST-ABI REFUSED control 0x2080852a: : body is 1716 bytes, its layout is 1784
+19:kf3: host facts: GSS 0x2080852a [] refused by the host (HostRefusal { status: None, detail: "Other(19314)" }) — not served
+20:kf-host: HOST-ABI REFUSED control 0x2080a618: host control 0x2080a618 has no public header (zero request measured NV_OK on AD103 575.51.03 and GSP 580.65.05; INVALID_ARGUMENT at 595.91.07); its layout at host driver 595.91.07 was never measured
+21:kf3: host facts: GSS 0x2080a618 [] refused by the host (HostRefusal { status: None, detail: "Other(19314)" }) — not served
+22:kf-host: HOST-ABI REFUSED control 0x2080a618: host control 0x2080a618 has no public header (zero request measured NV_OK on AD103 575.51.03 and GSP 580.65.05; INVALID_ARGUMENT at 595.91.07); its layout at host driver 595.91.07 was never measured
+23:kf3: host facts: GSS 0x2080a618 [] refused by the host (HostRefusal { status: None, detail: "Other(19314)" }) — not served
+24:kf-host: HOST-ABI REFUSED control 0x2080852e: host control 0x2080852e has no public header (zero request measured NV_OK on AD103 575.51.03 and GSP 580.65.05; INVALID_ARGUMENT at 595.91.07); its layout at host driver 595.91.07 was never measured
+25:kf3: host facts: GSS 0x2080852e [] refused by the host (HostRefusal { status: None, detail: "Other(19314)" }) — not served
+27:kf3: channel budget 1789 per runlist (Derived; derived default 1789, host limit 2045; the count the guest is told AND the enforced cap, refused by name past it — property channel-budget, docs/design/V3_CHANNEL_BUDGET.md)
+30:kf3: permission policy: READ_ONLY+VOLATILE carried to the host map, PRIVILEGED leaves withheld from user twins, ATOMIC_DISABLE not carried (KF3_CARRY_ATOMIC_DISABLE=1 enables it once fault delivery exists) (key_perm=0x68)
+54:kf3: device reset #1 COMPLETE — the device is as realize left it; guest writes accepted again (dropped while in reset: 0)
+55:kf3: device reset #1 complete before the vCPUs resume (the main loop waited 0 us)
+179:kf-rm: the guest is Windows 580.88 (r580_78-7), the Windows build of Linux 580.65.06 (one changelist, 36308443): keyed as 580.65.06
+220:kf3: GSP REFUSED fn76/0x20800a87=0x56 (GSP_RM_CONTROL) first_seq=0 — the guest read a non-OK status
+240:kf3: GSP REFUSED fn76/0x20800a4b=0x56 (GSP_RM_CONTROL) first_seq=0 — the guest read a non-OK status
+260:W349AUTHORED key=rm.0x20802a08 die=GB202 branch=580: rm.0x20802a08: unmeasured on GB202 branch 580 (measured on: GA106/570, GA106/575, GA106/580, GA106/590, GA106/595, GA106/610, GA104/595) — refused, a neighbour's row is never served; serving the AUTHORED value (CE fault-method buffer size: A
+267:kf3: GSP REFUSED fn76/0x20800afe=0x56 (GSP_RM_CONTROL) first_seq=0 — the guest read a non-OK status
+272:kf3: GSP REFUSED fn76/0x20800aff=0x56 (GSP_RM_CONTROL) first_seq=0 — the guest read a non-OK status
+294:W349AUTHORED key=rm.0x20800a59 die=GB202 branch=580: rm.0x20800a59: unmeasured on GB202 branch 580 (measured on: GA106/570, GA106/575, GA106/580, GA106/590, GA106/595, GA106/610, GA104/595) — refused, a neighbour's row is never served; serving the AUTHORED value (GMMU fault-buffer sizes: AUTHO
+301:kf3: GSP REFUSED fn76/0x20800aaf=0x56 (GSP_RM_CONTROL) first_seq=0 — the guest read a non-OK status
+335:kf3: GSP REFUSED fn76/0x00800292=0x56 (GSP_RM_CONTROL) first_seq=0 — the guest read a non-OK status
+340:kf3: GSP REFUSED fn76/0x20800a80=0x56 (GSP_RM_CONTROL) first_seq=0 — the guest read a non-OK status
+361:kf3: GSP REFUSED fn76/0x20800a89=0x56 (GSP_RM_CONTROL) first_seq=0 — the guest read a non-OK status
+372:kf3: GSP REFUSED fn76/0x20802a0f=0x56 (GSP_RM_CONTROL) first_seq=0 — the guest read a non-OK status
+377:kf3: GSP REFUSED fn76/0x20800ab2=0x56 (GSP_RM_CONTROL) first_seq=0 — the guest read a non-OK status
+388:kf3: GSP REFUSED fn76/0x2080017e=0x56 (GSP_RM_CONTROL) first_seq=0 — the guest read a non-OK status
+436:kf3: GSP REFUSED fn76/0x20800a30=0x56 (GSP_RM_CONTROL) first_seq=0 — the guest read a non-OK status
+444:kf3: GSP REFUSED fn76/0x20800a2e=0x56 (GSP_RM_CONTROL) first_seq=0 — the guest read a non-OK status
+452:kf3: GSP REFUSED fn76/0x20800b03=0x56 (GSP_RM_CONTROL) first_seq=0 — the guest read a non-OK status
+457:kf3: GSP REFUSED fn76/0x20800b05=0x56 (GSP_RM_CONTROL) first_seq=0 — the guest read a non-OK status
+465:kf3: GSP REFUSED fn76/0x20800a3f=0x56 (GSP_RM_CONTROL) first_seq=0 — the guest read a non-OK status
+498:kf-rm: chanlink: FERMI_VASPACE_A 0xc1e00006:0xbaba0042 under 0xcaf00000 (device default for it: 0xbaba0042) VAS-FACTS index=Some(0) flags=Some(2000) bigPageSize=Some(0) vaBase(lo32)=Some(0) vaSize(lo32)=Some(0)
+526:kf-rm: chanlink: CHAN-FACTS 0xc1e00006:0xbaba0045 parent=H class=0xca6f engine=Some(1) flags=0x200120 hVASpace=0xbaba0042 ctxShare=0x0 vas=0xc1e00006:Some(baba0042) tsg=None device=0xcaf00000 kernel=true privilege=Some(ChannelPrivilege { level: 2, uvm_owned: false }) internalFlags=Some(16) Proce
+598:kf3: TSPACE-RETIRE tok=0x1 host=0x4000000a key=VasKey(13970166073005834306) ring_va=0xff00000000 released=true stale_binds=0/0 late=0 indeterminate=0 unresolved[walk=0 acquire=0 refused=0]
+600:kf3: chan token 0x1 (host 0x4000000a) RETIRED, forwarded=0 submissions=0 splits=0/0 serves=0 last_put=None gp_get=None store_views=0 privilege=Some(ChannelPrivilege { level: 2, uvm_owned: false }) dead=None inca=[refused_methods=0 subdevice_masks=0 control_entries=0 ext_base_unapplied=0] gr_tier
+615:kf3: mem t=170.516s retire VasKey(13970166073005834306): 0 row(s) unmapped (0 refused) in 4 us, 0 host call(s), host space 0xcafe0021 kept as a spare — host RM over its life: 8 map call(s) (8 per-run, 0 batch(es) x2 carrying 0 runs, 0 batch(es) refused) in 2 ms; 8 unmap call(s) (8 range(s)) + 
+639:kf-rm: chanlink: FERMI_VASPACE_A 0xc1e00007:0xa under 0xb (device default for it: 0xa) VAS-FACTS index=Some(0) flags=Some(2d00) bigPageSize=Some(0) vaBase(lo32)=Some(0) vaSize(lo32)=Some(4006c008)
+674:kf3: mem invalidate seq 101 CLEARED OVER ABSENCE (Some(VasKey(13970166074168049674))): its refused leaves are absent on the host (a GPU access faults on that space's twin); KF3_INVALIDATE_CLEAR_OVER_ABSENT
+676:kf3: mem t=170.726s REFUSED VasKey(13970166074168049674) root 0x1efba3000: 1 run(s) not applied: leaf 0x30fc00000+0x10400000 names store 0x1efc00000, inside the firmware carve-out at 0x1efbe0000 — a twin maps no kayfabe memory (§Q)
+681:kf3: mem invalidate seq 105 CLEARED OVER ABSENCE (Some(VasKey(13970166074168049674))): its refused leaves are absent on the host (a GPU access faults on that space's twin); KF3_INVALIDATE_CLEAR_OVER_ABSENT
+683:kf3: mem t=170.733s REFUSED VasKey(13970166074168049674) root 0x1efba3000: 1 run(s) not applied: leaf 0x30fc00000+0x10400000 names store 0x1efc00000, inside the firmware carve-out at 0x1efbe0000 — a twin maps no kayfabe memory (§Q)
+684:kf3: mem invalidate seq 106 CLEARED OVER ABSENCE (Some(VasKey(13970166074168049674))): its refused leaves are absent on the host (a GPU access faults on that space's twin); KF3_INVALIDATE_CLEAR_OVER_ABSENT
+686:kf3: mem t=170.735s REFUSED VasKey(13970166074168049674) root 0x1efba3000: 1 run(s) not applied: leaf 0x30fc00000+0x10400000 names store 0x1efc00000, inside the firmware carve-out at 0x1efbe0000 — a twin maps no kayfabe memory (§Q)
+693:kf-rm: chanlink: CHAN-FACTS 0xc1e00007:0x2 parent=H class=0xca6f engine=Some(9) flags=0xa00120 hVASpace=0xa ctxShare=0x0 vas=0xc1e00007:Some(a) tsg=None device=0xb kernel=true privilege=Some(ChannelPrivilege { level: 2, uvm_owned: false }) internalFlags=Some(1a) ProcessID=Some(4) SubProcessID=So
+726:kf3: GSP REFUSED fn76/0x2080013f=0x56 (GSP_RM_CONTROL) first_seq=0 — the guest read a non-OK status
+735:W349REFUSE cmd=0x20809064 why=consttab cudart.0x20809064: unmeasured on GB202 branch 580 (measured on: GA106/580, AD104/595) — refused, a neighbour's row is never served (refusals so far: 5)
+738:kf3: GSP REFUSED fn76/0x20809064=0x56 (GSP_RM_CONTROL) first_seq=0 — the guest read a non-OK status
+746:kf3: GSP REFUSED fn76/0x00801306=0x56 (GSP_RM_CONTROL) first_seq=0 — the guest read a non-OK status
+751:kf3: GSP REFUSED fn76/0x20810108=0x56 (GSP_RM_CONTROL) first_seq=0 — the guest read a non-OK status
+828:kf3: GSP REFUSED fn76/0x20800ab8=0x56 (GSP_RM_CONTROL) first_seq=0 — the guest read a non-OK status
+833:kf3: GSP REFUSED fn76/0x20800173=0x56 (GSP_RM_CONTROL) first_seq=0 — the guest read a non-OK status
+841:kf3: GSP REFUSED fn76/0x20802a12=0x56 (GSP_RM_CONTROL) first_seq=0 — the guest read a non-OK status
+872:kf3: GSP REFUSED fn76/0x20800160=0x56 (GSP_RM_CONTROL) first_seq=0 — the guest read a non-OK status
+874:kf-rm: RPC-REFUSED #1 AllocClassNotPermitted { class: 52171, denial: NotOnAllowlist } ⇒ answered NV_ERR_NOT_SUPPORTED (0x56). ⊘ The guest sees only the status; this line is the only place the REASON exists. (printing the first 24; the total rides the refusal census)
+878:kf3: GSP REFUSED fn103/0x0000cbcb=0x56 (GSP_RM_ALLOC) first_seq=0 — the guest read a non-OK status
+880:W349REFUSE key=rm.0x20802801 die=GB202 branch=580: rm.0x20802801: unmeasured on GB202 branch 580 (measured on: GA106/570, GA106/575, GA106/580, GA106/590, GA106/595, GA106/610, GA104/595, AD102/580, TU106/580) — refused, a neighbour's row is never served (refusals so far: 6)
+884:kf3: GSP REFUSED fn76/0x20802801=0x56 (GSP_RM_CONTROL) first_seq=0 — the guest read a non-OK status
+892:kf3: GSP REFUSED fn76/0x2080012f=0x56 (GSP_RM_CONTROL) first_seq=0 — the guest read a non-OK status
+919:W349REFUSE key=rm.0x20802806 die=GB202 branch=580: rm.0x20802806: unmeasured on GB202 branch 580 (measured on: GA106/570, GA106/575, GA106/580, GA106/590, GA106/595, GA106/610, GA104/595, AD102/580, TU106/580) — refused, a neighbour's row is never served (refusals so far: 7)
+923:kf3: GSP REFUSED fn76/0x20802806=0x56 (GSP_RM_CONTROL) first_seq=0 — the guest read a non-OK status
+928:kf3: GSP REFUSED fn76/0x2080205b=0x56 (GSP_RM_CONTROL) first_seq=0 — the guest read a non-OK status
+934:kf3: GSP REFUSED fn76/0x2080a060=0x56 (GSP_RM_CONTROL) first_seq=0 — the guest read a non-OK status
+939:kf3: GSP REFUSED fn76/0x20802068=0x56 (GSP_RM_CONTROL) first_seq=0 — the guest read a non-OK status
+944:kf3: GSP REFUSED fn76/0x00800106=0x56 (GSP_RM_CONTROL) first_seq=0 — the guest read a non-OK status
+955:kf3: GSP REFUSED fn76/0x2080a801=0x56 (GSP_RM_CONTROL) first_seq=0 — the guest read a non-OK status
+991:kf3: GSP REFUSED fn76/0x2080a02f=0x56 (GSP_RM_CONTROL) first_seq=0 — the guest read a non-OK status
+1000:kf3: GSP REFUSED fn76/0x208081ea=0x56 (GSP_RM_CONTROL) first_seq=0 — the guest read a non-OK status
+1031:kf3: GSP REFUSED fn76/0x20800a3a=0x56 (GSP_RM_CONTROL) first_seq=0 — the guest read a non-OK status
+1036:kf3: GSP REFUSED fn76/0x20801110=0x56 (GSP_RM_CONTROL) first_seq=0 — the guest read a non-OK status
+1082:kf3: GSP REFUSED fn76/0x2080080b=0x56 (GSP_RM_CONTROL) first_seq=0 — the guest read a non-OK status
+1088:kf-rm: chanlink: FERMI_VASPACE_A 0xc1d00002:0xff000870 under 0xff010000 (device default for it: 0xff000870) VAS-FACTS index=Some(3) flags=Some(0) bigPageSize=Some(0) vaBase(lo32)=Some(0) vaSize(lo32)=Some(0)
+1143:kf3: GSP REFUSED fn76/0x20801220=0x56 (GSP_RM_CONTROL) first_seq=0 — the guest read a non-OK status
+1148:kf3: GSP REFUSED fn76/0x20801222=0x56 (GSP_RM_CONTROL) first_seq=0 — the guest read a non-OK status
+1200:kf-rm: chanlink: CHAN-FACTS 0xc1d0000a:0xff040000 parent=H class=0xca6f engine=Some(d) flags=0x200220 hVASpace=0x0 ctxShare=0x0 vas=0xc1d00002:Some(ff000870) tsg=Some(ff0e0000) device=0xff010000 kernel=true privilege=Some(ChannelPrivilege { level: 2, uvm_owned: false }) internalFlags=Some(16) P
+1289:kf-rm: chanlink: CHAN-FACTS 0xc1d0000c:0xff040001 parent=H class=0xca6f engine=Some(1) flags=0x200320 hVASpace=0x0 ctxShare=0x0 vas=0xc1d00002:Some(ff000870) tsg=Some(ff0e0000) device=0xff010000 kernel=true privilege=Some(ChannelPrivilege { level: 2, uvm_owned: false }) internalFlags=Some(16) P
+1422:kf-rm: chanlink: FERMI_VASPACE_A 0xc1d00002:0xff000870 under 0xff030000 (device default for it: 0xff000870) VAS-FACTS index=Some(1) flags=Some(0) bigPageSize=Some(0) vaBase(lo32)=Some(0) vaSize(lo32)=Some(0)
+1429:kf-rm: chanlink: FERMI_VASPACE_A 0xc1d00002:0xff000850 under 0xff010000 (device default for it: 0xff000870) VAS-FACTS index=Some(3) flags=Some(0) bigPageSize=Some(0) vaBase(lo32)=Some(0) vaSize(lo32)=Some(0)
+1438:kf-rm: chanlink: FERMI_VASPACE_A 0xc1d00002:0xff000850 under 0xff010000 (device default for it: 0xff000870) VAS-FACTS index=Some(0) flags=Some(0) bigPageSize=Some(10000) vaBase(lo32)=Some(0) vaSize(lo32)=Some(0)
+1458:kf3: mem t=171.665s retire VasKey(13965662457344034896): 0 row(s) unmapped (0 refused) in 2 us, 0 host call(s), host space 0xcafe0017 kept as a spare — host RM over its life: 0 map call(s) (0 per-run, 0 batch(es) x2 carrying 0 runs, 0 batch(es) refused) in 0 ms; 0 unmap call(s) (0 range(s)) +
+1461:kf-rm: chanlink: FERMI_VASPACE_A 0xc1d00002:0xff000850 under 0xff010000 (device default for it: 0xff000870) VAS-FACTS index=Some(0) flags=Some(0) bigPageSize=Some(20000) vaBase(lo32)=Some(0) vaSize(lo32)=Some(0)
+1482:kf3: mem t=171.677s retire VasKey(13965662457344034896): 0 row(s) unmapped (0 refused) in 2 us, 0 host call(s), host space 0xcafe0017 kept as a spare — host RM over its life: 0 map call(s) (0 per-run, 0 batch(es) x2 carrying 0 runs, 0 batch(es) refused) in 0 ms; 0 unmap call(s) (0 range(s)) +
+1517:kf-rm: chanlink: CHAN-FACTS 0xc1d0000d:0xff040002 parent=H class=0xca6f engine=Some(d) flags=0x2200420 hVASpace=0x0 ctxShare=0x0 vas=0xc1d00002:Some(ff000870) tsg=None device=0xff020000 kernel=true privilege=Some(ChannelPrivilege { level: 2, uvm_owned: false }) internalFlags=Some(16) ProcessID=
+1578:kf-rm: chanlink: CHAN-FACTS 0xc1d0000e:0xff040003 parent=H class=0xca6f engine=Some(13) flags=0x200520 hVASpace=0x0 ctxShare=0x0 vas=0xc1d00002:Some(ff000870) tsg=None device=0xff020000 kernel=true privilege=Some(ChannelPrivilege { level: 2, uvm_owned: false }) internalFlags=Some(16) ProcessID=
+1642:kf-rm: chanlink: CHAN-FACTS 0xc1d0000f:0xff040004 parent=H class=0xca6f engine=Some(16) flags=0x200620 hVASpace=0x0 ctxShare=0x0 vas=0xc1d00002:Some(ff000870) tsg=None device=0xff020000 kernel=true privilege=Some(ChannelPrivilege { level: 2, uvm_owned: false }) internalFlags=Some(16) ProcessID=
+1712:kf-rm: chanlink: CHAN-FACTS 0xc1d00010:0xff040005 parent=H class=0xca6f engine=Some(d) flags=0x200720 hVASpace=0x0 ctxShare=0x0 vas=0xc1d00002:Some(ff000870) tsg=Some(ff0e0000) device=0xff020000 kernel=true privilege=Some(ChannelPrivilege { level: 2, uvm_owned: false }) internalFlags=Some(16) P
+1772:kf-rm: chanlink: CHAN-FACTS 0xc1d00011:0xff040006 parent=H class=0xca6f engine=Some(1c) flags=0x201020 hVASpace=0x0 ctxShare=0x0 vas=0xc1d00002:Some(ff000870) tsg=None device=0xff020000 kernel=true privilege=Some(ChannelPrivilege { level: 2, uvm_owned: false }) internalFlags=Some(16) ProcessID=
+1836:kf-rm: chanlink: CHAN-FACTS 0xc1d00012:0xff040007 parent=H class=0xca6f engine=Some(1d) flags=0x201120 hVASpace=0x0 ctxShare=0x0 vas=0xc1d00002:Some(ff000870) tsg=None device=0xff020000 kernel=true privilege=Some(ChannelPrivilege { level: 2, uvm_owned: false }) internalFlags=Some(16) ProcessID=
+1900:kf-rm: chanlink: CHAN-FACTS 0xc1d00013:0xff040008 parent=H class=0xca6f engine=Some(3f) flags=0x201220 hVASpace=0x0 ctxShare=0x0 vas=0xc1d00002:Some(ff000870) tsg=None device=0xff020000 kernel=true privilege=Some(ChannelPrivilege { level: 2, uvm_owned: false }) internalFlags=Some(16) ProcessID=
+1964:kf-rm: chanlink: CHAN-FACTS 0xc1d00014:0xff040009 parent=H class=0xca6f engine=Some(1c) flags=0x201320 hVASpace=0x0 ctxShare=0x0 vas=0xc1d00002:Some(ff000870) tsg=None device=0xff020000 kernel=true privilege=Some(ChannelPrivilege { level: 2, uvm_owned: false }) internalFlags=Some(16) ProcessID=
+2035:kf-rm: chanlink: CHAN-FACTS 0xc1d00015:0xff04000a parent=H class=0xca6f engine=Some(1d) flags=0x201420 hVASpace=0x0 ctxShare=0x0 vas=0xc1d00002:Some(ff000870) tsg=None device=0xff020000 kernel=true privilege=Some(ChannelPrivilege { level: 2, uvm_owned: false }) internalFlags=Some(16) ProcessID=
+2106:kf-rm: chanlink: CHAN-FACTS 0xc1d00016:0xff04000b parent=H class=0xca6f engine=Some(3f) flags=0x201520 hVASpace=0x0 ctxShare=0x0 vas=0xc1d00002:Some(ff000870) tsg=None device=0xff020000 kernel=true privilege=Some(ChannelPrivilege { level: 2, uvm_owned: false }) internalFlags=Some(16) ProcessID=
+2177:kf-rm: chanlink: CHAN-FACTS 0xc1d00017:0xff04000c parent=H class=0xca6f engine=Some(33) flags=0x201620 hVASpace=0x0 ctxShare=0x0 vas=0xc1d00002:Some(ff000870) tsg=None device=0xff020000 kernel=true privilege=Some(ChannelPrivilege { level: 2, uvm_owned: false }) internalFlags=Some(16) ProcessID=
+2305:kf3: GSP REFUSED fn76/0x20800301=0x56 (GSP_RM_CONTROL) first_seq=0 — the guest read a non-OK status
+2320:kf3: TSPACE-RETIRE tok=0x1805 host=0x40090001 key=VasKey(13965662457344034928) ring_va=0xff00400000 released=true stale_binds=0/0 late=0 indeterminate=0 unresolved[walk=0 acquire=0 refused=0]
+2322:kf3: chan token 0x1805 (host 0x40090001) RETIRED, forwarded=0 submissions=0 splits=0/0 serves=1 last_put=Some(0) gp_get=None store_views=0 privilege=Some(ChannelPrivilege { level: 2, uvm_owned: false }) dead=None inca=[refused_methods=0 subdevice_masks=0 control_entries=0 ext_base_unapplied=0] 
+2351:kf3: TSPACE-RETIRE tok=0x2006 host=0x400c0001 key=VasKey(13965662457344034928) ring_va=0xff00500000 released=true stale_binds=0/0 late=0 indeterminate=0 unresolved[walk=0 acquire=0 refused=0]
+2353:kf3: chan token 0x2006 (host 0x400c0001) RETIRED, forwarded=0 submissions=0 splits=0/0 serves=1 last_put=Some(0) gp_get=None store_views=0 privilege=Some(ChannelPrivilege { level: 2, uvm_owned: false }) dead=None inca=[refused_methods=0 subdevice_masks=0 control_entries=0 ext_base_unapplied=0] 
+2381:kf3: TSPACE-RETIRE tok=0x807 host=0x400d000d key=VasKey(13965662457344034928) ring_va=0xff00600000 released=true stale_binds=0/0 late=0 indeterminate=0 unresolved[walk=0 acquire=0 refused=0]
+2383:kf3: chan token 0x807 (host 0x400d000d) RETIRED, forwarded=0 submissions=0 splits=0/0 serves=1 last_put=Some(0) gp_get=None store_views=0 privilege=Some(ChannelPrivilege { level: 2, uvm_owned: false }) dead=None inca=[refused_methods=0 subdevice_masks=0 control_entries=0 ext_base_unapplied=0] g
+2414:kf3: TSPACE-RETIRE tok=0x2808 host=0x40060001 key=VasKey(13965662457344034928) ring_va=0xff00700000 released=true stale_binds=0/0 late=0 indeterminate=0 unresolved[walk=0 acquire=0 refused=0]
+2416:kf3: chan token 0x2808 (host 0x40060001) RETIRED, forwarded=0 submissions=0 splits=0/0 serves=1 last_put=Some(0) gp_get=None store_views=0 privilege=Some(ChannelPrivilege { level: 2, uvm_owned: false }) dead=None inca=[refused_methods=0 subdevice_masks=0 control_entries=0 ext_base_unapplied=0] 
+2444:kf3: TSPACE-RETIRE tok=0x3009 host=0x40070001 key=VasKey(13965662457344034928) ring_va=0xff00800000 released=true stale_binds=0/0 late=0 indeterminate=0 unresolved[walk=0 acquire=0 refused=0]
+2446:kf3: chan token 0x3009 (host 0x40070001) RETIRED, forwarded=0 submissions=0 splits=0/0 serves=1 last_put=Some(0) gp_get=None store_views=0 privilege=Some(ChannelPrivilege { level: 2, uvm_owned: false }) dead=None inca=[refused_methods=0 subdevice_masks=0 control_entries=0 ext_base_unapplied=0] 
+2474:kf3: TSPACE-RETIRE tok=0x380a host=0x40080001 key=VasKey(13965662457344034928) ring_va=0xff00900000 released=true stale_binds=0/0 late=0 indeterminate=0 unresolved[walk=0 acquire=0 refused=0]
+2476:kf3: chan token 0x380a (host 0x40080001) RETIRED, forwarded=0 submissions=0 splits=0/0 serves=1 last_put=Some(0) gp_get=None store_views=0 privilege=Some(ChannelPrivilege { level: 2, uvm_owned: false }) dead=None inca=[refused_methods=0 subdevice_masks=0 control_entries=0 ext_base_unapplied=0] 
+2504:kf3: TSPACE-RETIRE tok=0x280b host=0x40060002 key=VasKey(13965662457344034928) ring_va=0xff00a00000 released=true stale_binds=0/0 late=0 indeterminate=0 unresolved[walk=0 acquire=0 refused=0]
+2506:kf3: chan token 0x280b (host 0x40060002) RETIRED, forwarded=0 submissions=0 splits=0/0 serves=1 last_put=Some(0) gp_get=None store_views=0 privilege=Some(ChannelPrivilege { level: 2, uvm_owned: false }) dead=None inca=[refused_methods=0 subdevice_masks=0 control_entries=0 ext_base_unapplied=0] 
+2526:kf3: TSPACE-RETIRE tok=0x300c host=0x40070002 key=VasKey(13965662457344034928) ring_va=0xff00b00000 released=true stale_binds=0/0 late=0 indeterminate=0 unresolved[walk=0 acquire=0 refused=0]
+2528:kf3: chan token 0x300c (host 0x40070002) RETIRED, forwarded=0 submissions=0 splits=0/0 serves=1 last_put=Some(0) gp_get=None store_views=0 privilege=Some(ChannelPrivilege { level: 2, uvm_owned: false }) dead=None inca=[refused_methods=0 subdevice_masks=0 control_entries=0 ext_base_unapplied=0] 
+2548:kf3: TSPACE-RETIRE tok=0x380d host=0x40080002 key=VasKey(13965662457344034928) ring_va=0xff00c00000 released=true stale_binds=0/0 late=0 indeterminate=0 unresolved[walk=0 acquire=0 refused=0]
+2550:kf3: chan token 0x380d (host 0x40080002) RETIRED, forwarded=0 submissions=0 splits=0/0 serves=1 last_put=Some(0) gp_get=None store_views=0 privilege=Some(ChannelPrivilege { level: 2, uvm_owned: false }) dead=None inca=[refused_methods=0 subdevice_masks=0 control_entries=0 ext_base_unapplied=0] 
+2570:kf3: TSPACE-RETIRE tok=0x400e host=0x40150001 key=VasKey(13965662457344034928) ring_va=0xff00d00000 released=true stale_binds=0/0 late=0 indeterminate=0 unresolved[walk=0 acquire=0 refused=0]
+2572:kf3: chan token 0x400e (host 0x40150001) RETIRED, forwarded=0 submissions=0 splits=0/0 serves=1 last_put=Some(0) gp_get=None store_views=0 privilege=Some(ChannelPrivilege { level: 2, uvm_owned: false }) dead=None inca=[refused_methods=0 subdevice_masks=0 control_entries=0 ext_base_unapplied=0] 
+2602:kf3: TSPACE-RETIRE tok=0x802 host=0x400d000b key=VasKey(13965662457344034928) ring_va=0xff00100000 released=true stale_binds=0/0 late=0 indeterminate=0 unresolved[walk=0 acquire=0 refused=0]
+2604:kf3: chan token 0x802 (host 0x400d000b) RETIRED, forwarded=0 submissions=0 splits=0/0 serves=1 last_put=Some(0) gp_get=None store_views=0 privilege=Some(ChannelPrivilege { level: 2, uvm_owned: false }) dead=None inca=[refused_methods=0 subdevice_masks=0 control_entries=0 ext_base_unapplied=0] g
+2634:kf3: TSPACE-RETIRE tok=0x3 host=0x4000000a key=VasKey(13965662457344034928) ring_va=0xff00200000 released=true stale_binds=0/0 late=0 indeterminate=0 unresolved[walk=0 acquire=0 refused=0]
+2636:kf3: chan token 0x3 (host 0x4000000a) RETIRED, forwarded=0 submissions=0 splits=0/0 serves=1 last_put=Some(0) gp_get=None store_views=0 privilege=Some(ChannelPrivilege { level: 2, uvm_owned: false }) dead=None inca=[refused_methods=0 subdevice_masks=0 control_entries=0 ext_base_unapplied=0] gr_
+2658:kf3: TSPACE-RETIRE tok=0x804 host=0x400d000c key=VasKey(13965662457344034928) ring_va=0xff00300000 released=true stale_binds=0/0 late=0 indeterminate=0 unresolved[walk=0 acquire=0 refused=0]
+2660:kf3: chan token 0x804 (host 0x400d000c) RETIRED, forwarded=0 submissions=0 splits=0/0 serves=1 last_put=Some(0) gp_get=None store_views=0 privilege=Some(ChannelPrivilege { level: 2, uvm_owned: false }) dead=None inca=[refused_methods=0 subdevice_masks=0 control_entries=0 ext_base_unapplied=0] g
+2766:kf3: TSPACE-RETIRE tok=0x1 host=0x400d000a key=VasKey(13970166074168049674) ring_va=0xff00000000 released=true stale_binds=0/0 late=0 indeterminate=0 unresolved[walk=0 acquire=0 refused=0]
+2768:kf3: chan token 0x1 (host 0x400d000a) RETIRED, forwarded=0 submissions=0 splits=0/0 serves=1 last_put=Some(0) gp_get=None store_views=0 privilege=Some(ChannelPrivilege { level: 2, uvm_owned: false }) dead=None inca=[refused_methods=0 subdevice_masks=0 control_entries=0 ext_base_unapplied=0] gr_
+2788:kf3: GSP REFUSED fn76/0x20800ab4=0x56 (GSP_RM_CONTROL) first_seq=0 — the guest read a non-OK status

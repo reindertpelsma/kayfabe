@@ -1,0 +1,1 @@
+/workspace/bwr-win/kfwin/logs/fix2_off_1_b1_qemu.log	rpcs=3872	teardown_at=3606	last=fn76/20801111 	result=0x0

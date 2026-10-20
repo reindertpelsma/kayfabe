@@ -1,0 +1,9 @@
+{
+  "source_bytes": 622952,
+  "source_sha256": "fb9f54e26e79b88498243029fda79afc8e70f54d13d54429b3609fabd55f7467",
+  "posted_allocation_records": 67,
+  "allocation_header_layout": "public rpc_gsp_rm_alloc_v03_00, min32,class12,status16,paramsSize20",
+  "raw_payloads_remain_rental": true,
+  "diagnostic_limit": "512records/256KiB across selected replies; no full transport/event completeness claim",
+  "export_sha256": "c3774297597bb49fbee83d4d855f930aa96eb4d0d05186ff8c731b626faa700c"
+}

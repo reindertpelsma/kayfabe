@@ -1,0 +1,16 @@
+EVENTS_SINCE boot=2026-10-20T17:14:18.5000000Z now=2026-10-20T17:18:35.8767133Z
+EVTQ_NONE log=System prov=nvlddmkm id= why=NoMatchingEventsFound
+EVTQ_NONE log=System prov=Display id= why=NoMatchingEventsFound
+EVTQ_NONE log=System prov=Microsoft-Windows-Kernel-PnP id= why=NoMatchingEventsFound
+EVTQ_NONE log=System prov=Microsoft-Windows-DriverFrameworks-UserMode id= why=NoMatchingEventsFound
+EVT log=System t=2026-10-20T22:47:54.2596209Z prov=Microsoft-Windows-UserPnp id=20003 lvl=Information msg=Driver Management has concluded the process to add Service Parport for Device Instance ID ACPI\PNP0400\1 with the following status: 0.
+EVT log=System t=2026-10-20T22:47:56.2131059Z prov=Microsoft-Windows-UserPnp id=20003 lvl=Information msg=Driver Management has concluded the process to add Service Serial for Device Instance ID ACPI\PNP0501\1 with the following status: 0.
+EVT log=System t=2026-10-20T22:47:56.3078756Z prov=Microsoft-Windows-UserPnp id=20003 lvl=Information msg=Driver Management has concluded the process to add Service Serenum for Device Instance ID ACPI\PNP0501\1 with the following status: 0.
+EVTQ_NONE log=System prov=Microsoft-Windows-Dxgkrnl id= why=LogsAndProvidersDontOverlap
+EVTQ_NONE log=System prov= id=4101 why=NoMatchingEventsFound
+EVTQ_NONE log=Application prov=Application Error id= why=NoMatchingEventsFound
+EVTQ_NONE log=Application prov=Windows Error Reporting id= why=NoMatchingEventsFound
+EVTQ_NONE log=Application prov=nvlddmkm id= why=LogsAndProvidersDontOverlap
+PNP id=PCI\VEN_10DE&DEV_2B85&SUBSYS_53011462&REV_A1\3&11583659&0&28 class=Display status=Error problem=CM_PROB_FAILED_POST_START
+PNP_PROBLEM_STATUS 0
+EVENTS_DONE

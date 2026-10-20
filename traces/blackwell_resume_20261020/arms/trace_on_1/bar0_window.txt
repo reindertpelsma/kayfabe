@@ -1,0 +1,142 @@
+# BAR0 trace (WINVM_TRACE=1 KF3_BAR0_READ_TRACE=1, display-range reads + all trapped writes), doorbells 268..290; PDB address values masked
+268 2026-10-20T17:17:10.041047Z vfio_region_write  (0000:00:07.0:region0+0x110c00, 0x0, 4)
+269 2026-10-20T17:17:10.042421Z vfio_region_write  (0000:00:07.0:region0+0x110c00, 0x0, 4)
+270 2026-10-20T17:17:10.042731Z vfio_region_write  (0000:00:07.0:region0+0x110c00, 0x0, 4)
+271 2026-10-20T17:17:10.043981Z vfio_region_write  (0000:00:07.0:region0+0x110c00, 0x0, 4)
+272 2026-10-20T17:17:10.044318Z vfio_region_write  (0000:00:07.0:region0+0x110c00, 0x0, 4)
+273 2026-10-20T17:17:10.045284Z vfio_region_write  (0000:00:07.0:region0+0x110c00, 0x0, 4)
+274 2026-10-20T17:17:10.045630Z vfio_region_write  (0000:00:07.0:region0+0x110c00, 0x0, 4)
+275 2026-10-20T17:17:10.046729Z vfio_region_write  (0000:00:07.0:region0+0x110c00, 0x0, 4)
+276 2026-10-20T17:17:10.047000Z vfio_region_write  (0000:00:07.0:region0+0x110c00, 0x0, 4)
+277 2026-10-20T17:17:10.048014Z vfio_region_write  (0000:00:07.0:region0+0x110c00, 0x0, 4)
+278 2026-10-20T17:17:10.048162Z vfio_region_write  (0000:00:07.0:region0+0x110c00, 0x0, 4)
+279 2026-10-20T17:17:10.049070Z vfio_region_write  (0000:00:07.0:region0+0x110c00, 0x0, 4)
+280 2026-10-20T17:17:10.049229Z vfio_region_write  (0000:00:07.0:region0+0x110c00, 0x0, 4)
+280 2026-10-20T17:17:10.050594Z vfio_region_write  (0000:00:07.0:region0+0xb830a0, PDB, 4)
+280 2026-10-20T17:17:10.050627Z vfio_region_write  (0000:00:07.0:region0+0xb830a4, 0x0, 4)
+280 2026-10-20T17:17:10.050674Z vfio_region_write  (0000:00:07.0:region0+0xb830b0, 0x80010005, 4)
+280 2026-10-20T17:17:10.052100Z vfio_region_write  (0000:00:07.0:region0+0xb830a0, PDB, 4)
+280 2026-10-20T17:17:10.052150Z vfio_region_write  (0000:00:07.0:region0+0xb830a4, 0x0, 4)
+280 2026-10-20T17:17:10.052187Z vfio_region_write  (0000:00:07.0:region0+0xb830b0, 0x80010001, 4)
+280 2026-10-20T17:17:10.053952Z vfio_region_write  (0000:00:07.0:region0+0xb830a0, PDB, 4)
+280 2026-10-20T17:17:10.053984Z vfio_region_write  (0000:00:07.0:region0+0xb830a4, 0x0, 4)
+280 2026-10-20T17:17:10.054020Z vfio_region_write  (0000:00:07.0:region0+0xb830b0, 0x80010005, 4)
+280 2026-10-20T17:17:10.055214Z vfio_region_write  (0000:00:07.0:region0+0xb830a0, PDB, 4)
+280 2026-10-20T17:17:10.055263Z vfio_region_write  (0000:00:07.0:region0+0xb830a4, 0x0, 4)
+280 2026-10-20T17:17:10.055299Z vfio_region_write  (0000:00:07.0:region0+0xb830b0, 0x80010005, 4)
+280 2026-10-20T17:17:10.060440Z vfio_region_write  (0000:00:07.0:region0+0xb830a0, PDB, 4)
+280 2026-10-20T17:17:10.060481Z vfio_region_write  (0000:00:07.0:region0+0xb830a4, 0x0, 4)
+280 2026-10-20T17:17:10.060581Z vfio_region_write  (0000:00:07.0:region0+0xb830b0, 0x80010001, 4)
+280 2026-10-20T17:17:10.062472Z vfio_region_write  (0000:00:07.0:region0+0xb830a0, PDB, 4)
+280 2026-10-20T17:17:10.062541Z vfio_region_write  (0000:00:07.0:region0+0xb830a4, 0x0, 4)
+280 2026-10-20T17:17:10.062578Z vfio_region_write  (0000:00:07.0:region0+0xb830b0, 0x80010005, 4)
+280 2026-10-20T17:17:10.063771Z vfio_region_write  (0000:00:07.0:region0+0xb830a0, PDB, 4)
+280 2026-10-20T17:17:10.063851Z vfio_region_write  (0000:00:07.0:region0+0xb830a4, 0x0, 4)
+280 2026-10-20T17:17:10.063888Z vfio_region_write  (0000:00:07.0:region0+0xb830b0, 0x80010005, 4)
+280 2026-10-20T17:17:10.067855Z vfio_region_write  (0000:00:07.0:region0+0xb830a0, PDB, 4)
+280 2026-10-20T17:17:10.067895Z vfio_region_write  (0000:00:07.0:region0+0xb830a4, 0x0, 4)
+280 2026-10-20T17:17:10.067932Z vfio_region_write  (0000:00:07.0:region0+0xb830b0, 0x80010001, 4)
+280 2026-10-20T17:17:10.069467Z vfio_region_write  (0000:00:07.0:region0+0xb830a0, PDB, 4)
+280 2026-10-20T17:17:10.069499Z vfio_region_write  (0000:00:07.0:region0+0xb830a4, 0x0, 4)
+280 2026-10-20T17:17:10.069535Z vfio_region_write  (0000:00:07.0:region0+0xb830b0, 0x80010005, 4)
+280 2026-10-20T17:17:10.070683Z vfio_region_write  (0000:00:07.0:region0+0xb830a0, PDB, 4)
+280 2026-10-20T17:17:10.070749Z vfio_region_write  (0000:00:07.0:region0+0xb830a4, 0x0, 4)
+280 2026-10-20T17:17:10.070790Z vfio_region_write  (0000:00:07.0:region0+0xb830b0, 0x80010005, 4)
+280 2026-10-20T17:17:10.081676Z vfio_region_write  (0000:00:07.0:region0+0xb830a0, PDB, 4)
+280 2026-10-20T17:17:10.081726Z vfio_region_write  (0000:00:07.0:region0+0xb830a4, 0x0, 4)
+280 2026-10-20T17:17:10.081770Z vfio_region_write  (0000:00:07.0:region0+0xb830b0, 0x80010005, 4)
+280 2026-10-20T17:17:10.084953Z vfio_region_write  (0000:00:07.0:region0+0xb830a0, PDB, 4)
+280 2026-10-20T17:17:10.085124Z vfio_region_write  (0000:00:07.0:region0+0xb830a4, 0x0, 4)
+280 2026-10-20T17:17:10.085160Z vfio_region_write  (0000:00:07.0:region0+0xb830b0, 0x80010001, 4)
+280 2026-10-20T17:17:10.087820Z vfio_region_write  (0000:00:07.0:region0+0xb830a0, PDB, 4)
+280 2026-10-20T17:17:10.087867Z vfio_region_write  (0000:00:07.0:region0+0xb830a4, 0x0, 4)
+280 2026-10-20T17:17:10.087939Z vfio_region_write  (0000:00:07.0:region0+0xb830b0, 0x80010005, 4)
+280 2026-10-20T17:17:10.090376Z vfio_region_write  (0000:00:07.0:region0+0xb830a0, PDB, 4)
+280 2026-10-20T17:17:10.090408Z vfio_region_write  (0000:00:07.0:region0+0xb830a4, 0x0, 4)
+280 2026-10-20T17:17:10.090444Z vfio_region_write  (0000:00:07.0:region0+0xb830b0, 0x80010001, 4)
+280 2026-10-20T17:17:10.092455Z vfio_region_write  (0000:00:07.0:region0+0xb830a0, PDB, 4)
+280 2026-10-20T17:17:10.092529Z vfio_region_write  (0000:00:07.0:region0+0xb830a4, 0x0, 4)
+280 2026-10-20T17:17:10.092586Z vfio_region_write  (0000:00:07.0:region0+0xb830b0, 0x80010005, 4)
+280 2026-10-20T17:17:10.095147Z vfio_region_write  (0000:00:07.0:region0+0xb830a0, PDB, 4)
+280 2026-10-20T17:17:10.095231Z vfio_region_write  (0000:00:07.0:region0+0xb830a4, 0x0, 4)
+280 2026-10-20T17:17:10.095305Z vfio_region_write  (0000:00:07.0:region0+0xb830b0, 0x80010001, 4)
+281 2026-10-20T17:17:10.097494Z vfio_region_write  (0000:00:07.0:region0+0x110c00, 0x0, 4)
+282 2026-10-20T17:17:10.098203Z vfio_region_write  (0000:00:07.0:region0+0x110c00, 0x0, 4)
+283 2026-10-20T17:17:10.099403Z vfio_region_write  (0000:00:07.0:region0+0x110c00, 0x0, 4)
+284 2026-10-20T17:17:10.100289Z vfio_region_write  (0000:00:07.0:region0+0x110c00, 0x0, 4)
+285 2026-10-20T17:17:10.101118Z vfio_region_write  (0000:00:07.0:region0+0x110c00, 0x0, 4)
+286 2026-10-20T17:17:10.101777Z vfio_region_write  (0000:00:07.0:region0+0x110c00, 0x0, 4)
+287 2026-10-20T17:17:10.102620Z vfio_region_write  (0000:00:07.0:region0+0x110c00, 0x0, 4)
+288 2026-10-20T17:17:10.103129Z vfio_region_write  (0000:00:07.0:region0+0x110c00, 0x0, 4)
+289 2026-10-20T17:17:10.104074Z vfio_region_write  (0000:00:07.0:region0+0x110c00, 0x0, 4)
+290 2026-10-20T17:17:10.104563Z vfio_region_write  (0000:00:07.0:region0+0x110c00, 0x0, 4)
+# whole-run read offsets (count):
+     32 region0+0x6400
+     32 region0+0x6401
+     32 region0+0x6402
+     32 region0+0x6403
+     32 region0+0x6404
+     32 region0+0x6405
+     32 region0+0x6406
+     32 region0+0x6407
+     32 region0+0x6408
+     32 region0+0x6409
+     32 region0+0x640a
+     32 region0+0x640b
+     32 region0+0x640c
+     32 region0+0x640d
+     32 region0+0x640e
+     32 region0+0x640f
+# whole-run trapped write offsets (count):
+    925 region0+0xb81410
+    925 region0+0xb81408
+    924 region0+0xb81610
+    388 region0+0x110c00
+    191 region0+0xb830b0
+    191 region0+0xb830a4
+    191 region0+0xb830a0
+     14 region0+0xb81210
+     11 region0+0x10fd40
+      9 region0+0xb81200
+      6 region0+0x8f2ac4
+      4 region0+0xb81208
+      4 region0+0x8f2ac0
+      2 region0+0xb8143c
+      2 region0+0xb81438
+      2 region0+0xb81434
+      2 region0+0xb81430
+      2 region0+0xb8142c
+      2 region0+0xb81428
+      2 region0+0xb81424
+      2 region0+0xb81420
+      2 region0+0xb8141c
+      2 region0+0xb81418
+      2 region0+0xb81414
+      2 region0+0xb8140c
+      2 region0+0xb81404
+      2 region0+0xb81400
+      2 region0+0x8f2c84
+      2 region0+0x8f2c80
+      2 region0+0x8f2c04
+      2 region0+0x8f2c00
+      2 region0+0x8a1d5c
+      2 region0+0x8a1d58
+      2 region0+0x1103c0
+      1 region0+0xb81608
+      1 region0+0xb80f70
+      1 region0+0xb80f60
+      1 region0+0x118df8
+      1 region0+0x118df4
+      1 region0+0x111684
+      1 region0+0x111680
+      1 region0+0x11167c
+      1 region0+0x111678
+      1 region0+0x111674
+      1 region0+0x111670
+      1 region0+0x11166c
+      1 region0+0x111668
+      1 region0+0x111388
+      1 region0+0x110804
+      1 region0+0x110080
+      1 region0+0x110044
+      1 region0+0x110040
