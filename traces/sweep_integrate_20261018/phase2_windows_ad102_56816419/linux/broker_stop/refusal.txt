@@ -1,0 +1,7 @@
+DESKTOP595_PREP_START 2026-10-20T02:52:15+00:00
+CUDA_NEXT_EXIT rc=0 2026-10-20T02:43:47+00:00
+GFX_ARM_EXIT version=580 rc=0 2026-10-20T02:51:34+00:00
+BROKER_HOST_READY source=0c87acda802b18a610739e75f2b50049a9247067 actual_binary=/opt/sweep-broker/nvkvm-display-broker 2026-10-20T02:52:15+00:00
+fatal: cannot change to '/root/nvkvm-pv': No such file or directory
+[interactive] ★ nvkvm-pv badf2d7 not in /root/nvkvm-pv
+DESKTOP595_PREP_EXIT rc=2 2026-10-20T02:52:15+00:00
