@@ -145,13 +145,21 @@ pub const NOTIFY_ALLOWED: [Row; 2] = [
 /// ⊘ A family row, by hand (allowed: `AGENTS.md`, *Derive, never capture*): the method offsets and
 /// every `D` field are identical in the public `TURING_A`, `AMPERE_A`, `AMPERE_B`, `ADA_A` and
 /// `HOPPER_A` headers (`clc597.h`, `clc697.h`, `clc797.h`, `clc997.h`, `clcb97.h`, compared field by
-/// field 2026-10-07); `BLACKWELL_A/B`'s (`clcd97.h`, `clce97.h`) name only the class id, so the rows
-/// are not admitted there.
-pub const REPORT_SEMAPHORE_FAMILIES: [kf_chip::Family; 4] = [
+/// field 2026-10-07); `BLACKWELL_A/B`'s OGKM headers (`clcd97.h`, `clce97.h`) name only the class id.
+///
+/// ★ 2026-10-20 (bw-resume, OWNER REVIEW: a new public reference): NVIDIA's own public class headers,
+/// `NVIDIA/open-gpu-doc` @ `9fdf5c4062007929d9f4e6cbad9c9771fe61b880`
+/// (`classes/3d/clcd97.h:4025-4034`, `classes/3d/clce97.h:4042-4051`), define
+/// `SET_REPORT_SEMAPHORE_A..D` for `BLACKWELL_A/B` at the same offsets with every `D` field equal to
+/// `clc997.h`'s and `A.OFFSET_UPPER` widened to 24:0 ([`address_upper_bits`]). Compared line by line;
+/// the only difference is that width. [measured GB202 Windows 580.88] refusing them killed the kernel
+/// GR channel and ended in bugcheck 0x116.
+pub const REPORT_SEMAPHORE_FAMILIES: [kf_chip::Family; 5] = [
     kf_chip::Family::Turing,
     kf_chip::Family::Ampere,
     kf_chip::Family::Ada,
     kf_chip::Family::Hopper,
+    kf_chip::Family::Blackwell,
 ];
 
 /// The payload word the engine writes for a `STRUCTURE_SIZE_ONE_WORD` report.
@@ -388,12 +396,13 @@ pub fn reauthor(r: &Row, v: u32) -> Result<u32, &'static str> {
 }
 
 /// Upper address width declared by the class header; an id-only header stays narrow.
-/// `clcb97.h` (ogkm 580.65.06) and `clcdc0.h` (ogkm 595.91.07) declare 24:0;
+/// `clcb97.h` (ogkm 580.65.06) and `clcdc0.h` (ogkm 595.91.07) declare 24:0, and so do
+/// `clcd97.h`/`clce97.h` in NVIDIA open-gpu-doc @9fdf5c40 (see [`REPORT_SEMAPHORE_FAMILIES`]);
 /// the other supported field layouts declare 7:0 or supply no wider definition.
 #[must_use]
 pub const fn address_upper_bits(class: u32) -> u32 {
     match class {
-        0xCB97 | 0xCDC0 => 25,
+        0xCB97 | 0xCDC0 | 0xCD97 | 0xCE97 => 25,
         _ => 8,
     }
 }
@@ -536,7 +545,10 @@ mod tests {
             assert_eq!(address_upper_bits(c), 25, "{c:#x}");
         }
         let a = REPORT_SEMAPHORE_ALLOWED[0];
-        assert_eq!(reauthor_in_class(Some(0xCE97), &a, 0x01FF_FFFF), Ok(0x01FF_FFFF));
+        assert_eq!(
+            reauthor_in_class(Some(0xCE97), &a, 0x01FF_FFFF),
+            Ok(0x01FF_FFFF)
+        );
         assert!(reauthor_in_class(Some(0xCE97), &a, 0x0200_0000).is_err());
         // The trigger keeps the one-word plain RELEASE rule on Blackwell too.
         assert!(reauthor_report_semaphore_d(0x1000_f011).is_err());
