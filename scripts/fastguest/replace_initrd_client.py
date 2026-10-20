@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Replace only bin/kftool in a newc initrd; never extract guest paths."""
+"""Replace one known raw-client entry in newc; never extract guest paths."""
 import argparse
 import gzip
 from pathlib import Path
@@ -23,7 +23,7 @@ def replace_client(data, client):
         if not name.endswith(b"\0"):
             raise ValueError("unterminated archive name")
         name = name[:-1]
-        if name in (b"bin/kftool", b"./bin/kftool"):
+        if name in (b"bin/kftool", b"./bin/kftool", b"bin/rmladder", b"./bin/rmladder"):
             if fields[1] & 0o170000 != 0o100000 or fields[4] != 1:
                 raise ValueError("client must be a regular unlinked file")
             found += 1
