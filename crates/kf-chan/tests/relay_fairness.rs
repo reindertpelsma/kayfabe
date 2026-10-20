@@ -1135,3 +1135,38 @@ fn pin_every_pt_release_hands_off() {
         .expect("pin: then the hub is told");
     assert!(release < tell);
 }
+
+// ---- the knob and the unannounced check, as the loop uses them (second killers beside the unit tests / pins in worker.rs)
+
+#[test]
+fn the_park_timeout_knob_makes_the_wait_infinite_and_nothing_else_does() {
+    use kf_chan::user_loop::BACKSTOP_MS as PARK_MS;
+    use kf_chan::worker::park_timeout;
+    use kf_linux_raw::PollTimeout;
+    assert!(matches!(park_timeout(false, true), PollTimeout::Blocking));
+    assert!(matches!(
+        park_timeout(false, false),
+        PollTimeout::Millis(PARK_MS)
+    ));
+    // the paced relay's trailing raise is a timer's business, whatever the knob says
+    assert!(!matches!(park_timeout(true, true), PollTimeout::Blocking));
+}
+
+#[test]
+fn pin_the_worker_spins_on_an_unannounced_obligation_before_it_may_park() {
+    let l = loop_body();
+    let flat: String = l.split_whitespace().collect();
+    let order = [
+        "user_loop::idle(relay.unannounced())==user_loop::Idle::Spin",
+        "unannounced_spins",
+        "continue;",
+        "try_park(seen)",
+    ];
+    let mut at = 0;
+    for o in order {
+        let i = flat[at..]
+            .find(o)
+            .unwrap_or_else(|| panic!("pin: {o:?} missing or out of order before the park"));
+        at += i + o.len();
+    }
+}

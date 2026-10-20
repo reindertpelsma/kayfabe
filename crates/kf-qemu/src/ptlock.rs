@@ -170,6 +170,57 @@ mod tests {
         );
     }
 
+    /// A hub whose ring records whether the lock was FREE at ring time (a woken loser retries at once: it must win).
+    fn lock_whose_ring_probes_the_lock() -> (Arc<PtLock<u32>>, Arc<AtomicU64>, Arc<AtomicU64>) {
+        let slot: Arc<std::sync::OnceLock<Arc<PtLock<u32>>>> = Arc::new(std::sync::OnceLock::new());
+        let (free, busy) = (Arc::new(AtomicU64::new(0)), Arc::new(AtomicU64::new(0)));
+        let (s2, f2, b2) = (Arc::clone(&slot), Arc::clone(&free), Arc::clone(&busy));
+        let hub = Arc::new(HandoffHub::new(move |_who| {
+            let l = s2.get().expect("lock set");
+            if l.try_lock().is_ok() {
+                f2.fetch_add(1, Ordering::SeqCst);
+            } else {
+                b2.fetch_add(1, Ordering::SeqCst);
+            }
+        }));
+        let lock = Arc::new(PtLock::new(0, hub));
+        let _ = slot.set(Arc::clone(&lock));
+        (lock, free, busy)
+    }
+
+    /// The ring comes AFTER the release: a loser rung by the holder finds the lock free (one loser).
+    #[test]
+    fn the_ring_finds_the_lock_free_one_loser() {
+        let (lock, free, busy) = lock_whose_ring_probes_the_lock();
+        let g = lock.lock().unwrap();
+        let seen = lock.hub.prepare();
+        assert!(matches!(lock.try_lock(), Err(TryLockError::WouldBlock)));
+        assert!(!lock.hub.lost(1, seen));
+        drop(g);
+        assert_eq!(
+            (free.load(Ordering::SeqCst), busy.load(Ordering::SeqCst)),
+            (1, 0),
+            "the ring happened while the lock was still held"
+        );
+    }
+
+    /// The same for several losers and for a guard taken through `try_lock`.
+    #[test]
+    fn the_ring_finds_the_lock_free_for_every_loser() {
+        let (lock, free, busy) = lock_whose_ring_probes_the_lock();
+        let g = lock.try_lock().unwrap();
+        let seen = lock.hub.prepare();
+        for who in [3, 4, 5] {
+            assert!(!lock.hub.lost(who, seen));
+        }
+        drop(g);
+        assert_eq!(
+            (free.load(Ordering::SeqCst), busy.load(Ordering::SeqCst)),
+            (3, 0),
+            "a loser was rung while the lock was still held"
+        );
+    }
+
     /// The wrapper is a std mutex otherwise: exclusion, deref, mutation, poisoning.
     #[test]
     fn the_wrapper_is_a_mutex() {

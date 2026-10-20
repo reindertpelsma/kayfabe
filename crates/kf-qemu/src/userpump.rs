@@ -4055,4 +4055,52 @@ mod tests {
         let admit = migrate.find("ring.admit(|| {").unwrap();
         assert!(admit < installed);
     }
+
+    /// ★ 2026-10-20 (section 10.0): a relay that loses a lock REGISTERS with the holder before it gives up, and reads the epoch BEFORE its
+    /// first attempt (the lost-registration race). Source pin (whitespace-insensitive).
+    #[test]
+    fn a_relay_that_loses_a_lock_registers_with_the_holder_before_giving_up() {
+        let pump = include_str!("userpump.rs");
+        let flat: String = pump
+            .split("#[cfg(test)]")
+            .next()
+            .unwrap()
+            .split_whitespace()
+            .collect();
+        let order = [
+            "lete0=self.handoff.prepare();",
+            "record.enter()",
+            "self.pt.try_lock()",
+            "ifself.handoff.lost(record.idx,e0){",
+            "self.plane.ring_internal(record.idx)",
+        ];
+        let mut at = 0;
+        for o in order {
+            let i = flat[at..]
+                .find(o)
+                .unwrap_or_else(|| panic!("pin: {o:?} missing or out of order in user_ring_serve"));
+            at += i + o.len();
+        }
+    }
+
+    /// The arm path registers its lost admission lock the same way.
+    #[test]
+    fn the_arm_registers_a_lost_admission_lock_with_the_holder() {
+        let pump = include_str!("userpump.rs");
+        let flat: String = pump
+            .split("#[cfg(test)]")
+            .next()
+            .unwrap()
+            .split_whitespace()
+            .collect();
+        let arm = flat
+            .split("fnuser_ring_arm(&self")
+            .nth(1)
+            .expect("pin: user_ring_arm");
+        let arm = arm.split("pub(crate)fnuser_ring_waiting").next().unwrap();
+        assert!(
+            arm.contains("ifself.handoff.lost(idx,e0){"),
+            "pin: the arm's Contended path no longer registers with the holder"
+        );
+    }
 }

@@ -2428,8 +2428,10 @@ fn pin_user_ring_serve_order_is_the_models() {
     let serve = after(USERPUMP, "pub(super) fn user_ring_serve(&self, ht: u32)");
     let serve = serve.split("fn user_ring_arm").next().unwrap();
     let order = [
+        "self.handoff.prepare()",
         "record.enter()",
         "self.pt.try_lock()",
+        "self.handoff.lost(record.idx, e0)",
         "t.stopped || t.disabled",
         "record.retry.store(false, Ordering::Release)",
         "record.retry.swap(false, Ordering::AcqRel)",

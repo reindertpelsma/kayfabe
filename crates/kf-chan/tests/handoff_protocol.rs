@@ -327,3 +327,27 @@ fn real_threads_never_lose_a_wake() {
     }
     assert_eq!(*m.lock().unwrap(), u64::from(THREADS * ITERS));
 }
+
+/// `lost` answers "retry now" exactly when a holder released since the attempt began, and counts that retry (the production summary).
+#[test]
+fn lost_retries_exactly_when_a_release_intervened_and_counts_it() {
+    let h = Handoff::new();
+    for round in 0..3u32 {
+        let seen = h.prepare();
+        assert!(
+            !h.lost(7, seen),
+            "round {round}: no release since the attempt"
+        );
+        h.bump();
+        assert!(
+            h.lost(7, seen),
+            "round {round}: a release intervened: retry"
+        );
+        let fresh = h.prepare();
+        assert!(
+            !h.lost(7, fresh),
+            "round {round}: the retry's own attempt starts after the release"
+        );
+    }
+    assert!(h.summary().contains("retried=3"), "{}", h.summary());
+}
