@@ -402,6 +402,146 @@ impl StorageHost for HostRm {
     }
 }
 
+/// The private `GP_PUT` word: the last word every private publication stores before its doorbell.
+const PUT_WORD: u64 = USERD_OFFSET + kf_abi::submit::USERD_GP_PUT;
+
+/// The word accesses of the PUT publication step, so the step can be exercised with a recording double
+/// (no GPU). The production implementation is the private CPU mapping ([`VolatileRegion`]).
+pub trait PutWords {
+    /// One aligned dword store.
+    ///
+    /// # Errors
+    /// Out of the mapping.
+    fn store_u32(&self, offset: u64, value: u32) -> Result<(), String>;
+    /// One aligned dword load: a non-posted read from the device.
+    ///
+    /// # Errors
+    /// Out of the mapping.
+    fn load_u32(&self, offset: u64) -> Result<u32, String>;
+    /// Drain the CPU's earlier stores (`sfence`): orders CPU stores only.
+    fn release_fence(&self);
+    /// Compiler-only barrier: the read-back is not hoisted above the stores nor sunk below what follows.
+    fn read_fence(&self);
+}
+
+impl PutWords for VolatileRegion {
+    fn store_u32(&self, offset: u64, value: u32) -> Result<(), String> {
+        VolatileRegion::store_u32(self, HostOffset::new(offset), value).map_err(|e| format!("{e:?}"))
+    }
+    fn load_u32(&self, offset: u64) -> Result<u32, String> {
+        VolatileRegion::load_u32(self, HostOffset::new(offset)).map_err(|e| format!("{e:?}"))
+    }
+    fn release_fence(&self) {
+        kf_linux_raw::release_fence();
+    }
+    fn read_fence(&self) {
+        core::sync::atomic::compiler_fence(core::sync::atomic::Ordering::SeqCst);
+    }
+}
+
+/// What the read-back after a PUT store saw.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ReadBack {
+    /// The word read back equals the PUT just stored.
+    Confirmed,
+    /// The word read back differs (the PUT is written by the CPU only: a bug or a foreign writer).
+    Mismatch {
+        /// The PUT that was stored.
+        wrote: u32,
+        /// What the read returned.
+        read: u32,
+    },
+    /// The read failed. There is no retry: the doorbell rings anyway.
+    Unreadable,
+}
+
+/// Bounded counters of the read-back (process-wide through [`readback_stats`], or local to a test).
+#[derive(Debug, Default)]
+pub struct ReadbackStats {
+    /// Publications whose read-back returned the PUT.
+    pub confirmed: core::sync::atomic::AtomicU64,
+    /// Publications whose read-back returned another value.
+    pub mismatched: core::sync::atomic::AtomicU64,
+    /// Publications whose read-back failed.
+    pub unreadable: core::sync::atomic::AtomicU64,
+}
+
+/// The process-wide read-back counters.
+#[must_use]
+pub fn readback_stats() -> &'static ReadbackStats {
+    static STATS: ReadbackStats = ReadbackStats {
+        confirmed: core::sync::atomic::AtomicU64::new(0),
+        mismatched: core::sync::atomic::AtomicU64::new(0),
+        unreadable: core::sync::atomic::AtomicU64::new(0),
+    };
+    &STATS
+}
+
+impl ReadbackStats {
+    /// Count one outcome; returns this outcome class's new total.
+    pub fn record(&self, outcome: &ReadBack) -> u64 {
+        use core::sync::atomic::Ordering::Relaxed;
+        let c = match outcome {
+            ReadBack::Confirmed => &self.confirmed,
+            ReadBack::Mismatch { .. } => &self.mismatched,
+            ReadBack::Unreadable => &self.unreadable,
+        };
+        c.fetch_add(1, Relaxed) + 1
+    }
+    /// Whether any publication has been counted (the diagnostic line is printed only then).
+    #[must_use]
+    pub fn any(&self) -> bool {
+        use core::sync::atomic::Ordering::Relaxed;
+        self.confirmed.load(Relaxed) + self.mismatched.load(Relaxed) + self.unreadable.load(Relaxed) != 0
+    }
+    /// One bounded line.
+    #[must_use]
+    pub fn summary(&self) -> String {
+        use core::sync::atomic::Ordering::Relaxed;
+        format!(
+            "USER_RING_READBACK confirmed={} mismatched={} unreadable={}",
+            self.confirmed.load(Relaxed),
+            self.mismatched.load(Relaxed),
+            self.unreadable.load(Relaxed)
+        )
+    }
+}
+
+/// Whether the `n`th event of a class is reported on stderr: the first three, then each power of two.
+#[must_use]
+pub const fn report_due(n: u64) -> bool {
+    n <= 3 || n.is_power_of_two()
+}
+
+/// ★ The PUT publication step: fence, store the PUT, fence, then READ THE SAME WORD BACK.
+///
+/// MEASURED (unattended reproducer run 3418): a Windows USER channel idles with published private entries the
+/// PBDMA never fetched (`gp_put - gp_get == 3`, previous segment fully consumed). INFERRED (not measured):
+/// the CPU stores reach video memory through BAR1, the doorbell is a store into BAR0 -- a different BAR -- and
+/// `sfence` orders CPU stores only, so the doorbell can reach the PBDMA before the data has landed; the PBDMA
+/// then reads a stale PUT and idles. A PCIe read is non-posted and cannot pass earlier posted writes to the
+/// same device, so the read of the last word written closes the window. Falsifier: the stall rate with the
+/// read-back equals the control within A/A spread.
+///
+/// One read per publication (never per entry); no retry and no timer: a failed or mismatching read is counted
+/// and returned, the caller rings regardless (a missed event is the bug).
+///
+/// # Errors
+/// Out-of-ring PUT, or the store failed.
+pub fn publish_put_via<W: PutWords>(w: &W, put: u32, stats: &ReadbackStats) -> Result<ReadBack, String> {
+    if put >= ENTRIES {
+        return Err("USER_STORAGE_PUT_BOUND".into());
+    }
+    w.release_fence();
+    w.store_u32(PUT_WORD, put)
+        .map_err(|e| format!("USER_STORAGE_PUT_WRITE: {e}"))?;
+    w.release_fence();
+    // STUB (EXPECTED RED): the read-back is not issued yet.
+    let outcome = ReadBack::Unreadable;
+    stats.record(&outcome);
+    Ok(outcome)
+}
+
 impl Storage<CpuView> {
     /// Author one complete command batch and its HOST-consumption barrier.
     /// Caller reserves the three GP credits through user_consumption FIRST.
@@ -637,21 +777,24 @@ impl Storage<CpuView> {
     /// Publish a private PUT after commands and GP descriptors are stored. The
     /// native channel's own doorbell is a separate authored host action.
     ///
+    /// ★ 2026-10-20 (H-RB, `docs/design/V3_USER_RING_EVENT_LOOP_20261014.md` section 9.2): the PUT store is
+    /// followed by ONE read of the same word through the same mapping, so that the caller's usermode doorbell
+    /// (a store into a different BAR) cannot overtake the entry, marker and PUT stores (see [`publish_put_via`]).
+    ///
     /// # Errors
-    /// Out-of-ring PUT or released CPU view.
+    /// Out-of-ring PUT or released CPU view. A failed or mismatching read-back is counted
+    /// ([`readback_stats`]) and never an error: the doorbell must still ring.
     pub fn publish_put(&self, put: u32) -> Result<(), String> {
-        if put >= ENTRIES {
-            return Err("USER_STORAGE_PUT_BOUND".into());
-        }
-        kf_linux_raw::release_fence();
-        self.cpu()?
-            .store_u32(
-                HostOffset::new(USERD_OFFSET + kf_abi::submit::USERD_GP_PUT),
-                put,
-            )
-            .map_err(|e| format!("USER_STORAGE_PUT_WRITE: {e:?}"))?;
-        kf_linux_raw::release_fence();
-        Ok(())
+        self.publish_put_counted(put, readback_stats())
+            .map(|_| ())
+    }
+
+    /// [`Self::publish_put`] with the counters and the outcome explicit (tests; the pump uses `publish_put`).
+    ///
+    /// # Errors
+    /// As [`Self::publish_put`].
+    pub fn publish_put_counted(&self, put: u32, stats: &ReadbackStats) -> Result<ReadBack, String> {
+        publish_put_via(self.cpu()?, put, stats)
     }
 
     /// Actual private hardware GET. Fetch progress is not engine completion.
@@ -1223,6 +1366,180 @@ mod tests {
             assert!(error.retained.released());
             assert!(host.calls.borrow().is_empty());
         }
+    }
+
+    // ---- 2026-10-20: H-RB, the read-back of the PUT word before the doorbell (`publish_put_via`) ----
+
+    use core::sync::atomic::Ordering::Relaxed;
+    use std::collections::HashMap;
+
+    #[derive(Debug, Clone, PartialEq, Eq)]
+    enum Ev {
+        Fence,
+        Store(u64, u32),
+        Load(u64),
+        ReadFence,
+    }
+
+    /// A recording stand-in for the private mapping: memory that remembers its stores, the order of every
+    /// access, and optionally a failing or lying read.
+    #[derive(Default)]
+    struct Rec {
+        events: RefCell<Vec<Ev>>,
+        mem: RefCell<HashMap<u64, u32>>,
+        load_result: RefCell<Option<Result<u32, String>>>,
+        store_fails: bool,
+    }
+
+    impl PutWords for Rec {
+        fn store_u32(&self, offset: u64, value: u32) -> Result<(), String> {
+            self.events.borrow_mut().push(Ev::Store(offset, value));
+            if self.store_fails {
+                return Err("store".into());
+            }
+            self.mem.borrow_mut().insert(offset, value);
+            Ok(())
+        }
+        fn load_u32(&self, offset: u64) -> Result<u32, String> {
+            self.events.borrow_mut().push(Ev::Load(offset));
+            if let Some(r) = self.load_result.borrow().clone() {
+                return r;
+            }
+            Ok(self.mem.borrow().get(&offset).copied().unwrap_or(0))
+        }
+        fn release_fence(&self) {
+            self.events.borrow_mut().push(Ev::Fence);
+        }
+        fn read_fence(&self) {
+            self.events.borrow_mut().push(Ev::ReadFence);
+        }
+    }
+
+    const PUT_AT: u64 = USERD_OFFSET + kf_abi::submit::USERD_GP_PUT;
+
+    /// RB1: the doorbell follows the publication, so the LAST access of the publication must be the read of the
+    /// word just stored (the read cannot pass the earlier posted stores), followed by a compiler barrier only.
+    #[test]
+    fn the_put_store_is_followed_by_a_read_of_the_same_word_and_nothing_else() {
+        let rec = Rec::default();
+        let stats = ReadbackStats::default();
+        assert_eq!(publish_put_via(&rec, 7, &stats), Ok(ReadBack::Confirmed));
+        assert_eq!(
+            *rec.events.borrow(),
+            [
+                Ev::Fence,
+                Ev::Store(PUT_AT, 7),
+                Ev::Fence,
+                Ev::Load(PUT_AT),
+                Ev::ReadFence
+            ]
+        );
+    }
+
+    /// RB2: exactly one read per publication, at the PUT word (not GET, not a ring word), after the store.
+    #[test]
+    fn one_publication_issues_exactly_one_read_and_it_is_the_put_word() {
+        let rec = Rec::default();
+        let stats = ReadbackStats::default();
+        publish_put_via(&rec, 3, &stats).unwrap();
+        let ev = rec.events.borrow();
+        let loads: Vec<_> = ev.iter().filter(|e| matches!(e, Ev::Load(_))).collect();
+        assert_eq!(loads, [&Ev::Load(PUT_AT)], "one read, of the PUT word");
+        let store = ev.iter().position(|e| matches!(e, Ev::Store(..))).unwrap();
+        let load = ev.iter().position(|e| matches!(e, Ev::Load(_))).unwrap();
+        assert!(store < load, "the read follows the store");
+        assert_ne!(PUT_AT, USERD_OFFSET + kf_abi::submit::USERD_GP_GET);
+    }
+
+    /// RB3: the read-back is of the value stored; a lying read is counted as a mismatch, not retried, not an error.
+    #[test]
+    fn a_mismatching_read_is_counted_once_and_never_retried() {
+        let rec = Rec::default();
+        *rec.load_result.borrow_mut() = Some(Ok(99));
+        let stats = ReadbackStats::default();
+        assert_eq!(
+            publish_put_via(&rec, 5, &stats),
+            Ok(ReadBack::Mismatch { wrote: 5, read: 99 })
+        );
+        assert_eq!((stats.confirmed.load(Relaxed), stats.mismatched.load(Relaxed), stats.unreadable.load(Relaxed)), (0, 1, 0));
+        let ev = rec.events.borrow();
+        assert_eq!(ev.iter().filter(|e| matches!(e, Ev::Load(_))).count(), 1, "no retry loop");
+        assert_eq!(ev.iter().filter(|e| matches!(e, Ev::Store(..))).count(), 1, "no second store");
+    }
+
+    /// RB4: a read that fails is the bounded fallback: counted, one attempt, the publication still succeeds so the
+    /// caller rings the doorbell (a missed event is the bug).
+    #[test]
+    fn an_unreadable_word_is_counted_and_the_publication_still_succeeds() {
+        let rec = Rec::default();
+        *rec.load_result.borrow_mut() = Some(Err("load".into()));
+        let stats = ReadbackStats::default();
+        assert_eq!(publish_put_via(&rec, 5, &stats), Ok(ReadBack::Unreadable));
+        assert_eq!((stats.confirmed.load(Relaxed), stats.mismatched.load(Relaxed), stats.unreadable.load(Relaxed)), (0, 0, 1));
+        assert_eq!(
+            rec.events.borrow().iter().filter(|e| matches!(e, Ev::Load(_))).count(),
+            1,
+            "one attempt, no retry"
+        );
+    }
+
+    /// RB5: nothing is read when nothing was written: an out-of-ring PUT touches no word, and a failed store
+    /// is an error with no read-back.
+    #[test]
+    fn nothing_is_read_when_nothing_was_written() {
+        let rec = Rec::default();
+        let stats = ReadbackStats::default();
+        assert!(publish_put_via(&rec, ENTRIES, &stats).is_err());
+        assert!(rec.events.borrow().is_empty());
+        let rec = Rec { store_fails: true, ..Rec::default() };
+        assert!(publish_put_via(&rec, 1, &stats).is_err());
+        assert!(!rec.events.borrow().iter().any(|e| matches!(e, Ev::Load(_) | Ev::ReadFence)));
+        assert!(!stats.any(), "nothing counted");
+    }
+
+    /// RB6: the real mapping type: the production accessors read back what the publication stored, once per
+    /// publication, for each of the pump's publication shapes (entry, gate = barrier + marker, marker alone,
+    /// shadow entry, staged prefix + barrier + marker), however many words the shape wrote before the PUT.
+    #[test]
+    fn every_publication_shape_on_the_real_mapping_is_confirmed_once() {
+        let s = anonymous_live_storage();
+        let stats = ReadbackStats::default();
+        let shapes: [(&str, Box<dyn Fn(&Storage<CpuView>) -> Result<(), String>>, u32); 5] = [
+            ("entry", Box::new(|s| s.write_user_gp(0, kf_abi::submit::gp_entry(0x420000, 4096).unwrap())), 1),
+            ("gate", Box::new(|s| s.write_host_barrier(1).and_then(|()| s.write_host_marker(2, 0x4b46_0001))), 3),
+            ("marker", Box::new(|s| s.write_host_marker(3, 0x4b46_0002)), 4),
+            ("shadow", Box::new(|s| s.write_shadow_gp(4, 1 << 40)), 5),
+            (
+                "staged",
+                Box::new(|s| {
+                    s.write_gp_level(5, 0, 64, false, true)?;
+                    s.write_host_barrier(6)?;
+                    s.write_host_marker(7, 0x4b46_0003)
+                }),
+                8,
+            ),
+        ];
+        for (name, writes, put) in shapes {
+            writes(&s).unwrap_or_else(|e| panic!("{name}: {e}"));
+            assert_eq!(s.publish_put_counted(put, &stats), Ok(ReadBack::Confirmed), "{name}");
+            assert_eq!(s.userd_words().unwrap()[35], put, "{name}: GP_PUT");
+        }
+        assert_eq!(stats.confirmed.load(Relaxed), 5, "one read-back per publication, not per entry");
+        assert_eq!(stats.mismatched.load(Relaxed) + stats.unreadable.load(Relaxed), 0);
+    }
+
+    /// RB7: the process-wide counters are what `publish_put` feeds, and the stderr report is bounded.
+    #[test]
+    fn the_production_call_feeds_the_process_counters_and_the_report_is_bounded() {
+        let s = anonymous_live_storage();
+        let before = readback_stats().confirmed.load(Relaxed);
+        s.publish_put(2).unwrap();
+        assert!(readback_stats().confirmed.load(Relaxed) > before);
+        assert!(readback_stats().any());
+        assert!(readback_stats().summary().starts_with("USER_RING_READBACK confirmed="));
+        let due: Vec<u64> = (1..=20).filter(|n| report_due(*n)).collect();
+        assert_eq!(due, [1, 2, 3, 4, 8, 16]);
+        assert!(!report_due(1_000_003) && report_due(1 << 20));
     }
 }
 

@@ -2615,26 +2615,68 @@ fn the_exploration_reaches_every_race_it_claims_to_cover() {
     }
 }
 
-/// EXPECTED RED (2026-10-20). P10 under the inferred hardware ordering (`hw_db_races_stores`, see the model tests above)
-/// needs the pump to read a private word back between its video-memory stores and `rm.doorbell`. Today `publish_guarded`
-/// (and `Storage::publish_put`) have release fences only: the entry and its marker (PUT - GET == 2) can be stranded until the
-/// channel's next doorbell. The hardware ordering is NOT measured; this test pins the gap, the owner decides (docs section 9.2).
+const USER_STORAGE: &str = include_str!("../src/user_storage.rs");
+
+/// P10 (2026-10-20, hypothesis H-RB; docs section 9.2). MEASURED: a Windows USER channel idles with published private entries
+/// the PBDMA never fetched. INFERRED, NOT measured: the CPU stores reach video memory through BAR1 and the doorbell is a
+/// store into BAR0, so `sfence` alone does not order the data before the doorbell; a PCIe read of the last word written
+/// (non-posted, cannot pass earlier posted writes to the device) closes the window. Falsifier on hardware: the freeze rate
+/// with the read-back equals the control within A/A spread.
+///
+/// The production-level pin: the PUT publication step stores `GP_PUT`, then reads the SAME word back, then only a compiler
+/// barrier and the counters follow; `Storage::publish_put` is that step with the process-wide counters. (The behaviour is
+/// pinned with a recording double in `kf_chan::user_storage` unit tests RB1..RB7.)
 #[test]
-#[ignore = "OPEN (EXPECTED RED since the previous commit): owner decision on a read-back before the private doorbell; docs/design/V3_USER_RING_EVENT_LOOP_20261014.md section 9.2"]
 fn p10_publish_reads_back_before_the_native_doorbell() {
-    let p = after(USERPUMP, "fn publish_guarded(")
-        .split("fn snapshot_with")
+    let body = after(USER_STORAGE, "pub fn publish_put_via<")
+        .split("\n}\n")
         .next()
         .unwrap();
-    let admit = p
+    let store = body
+        .find("w.store_u32(PUT_WORD")
+        .expect("pin: the PUT store");
+    let load = body
+        .find("w.load_u32(PUT_WORD")
+        .expect("P10: the PUT publication step reads the stored word back (no read-back found)");
+    let fence = body.find("w.read_fence()").expect("pin: the compiler barrier after the read");
+    let tail = body.find("stats.record(").expect("pin: the counter");
+    assert!(store < load && load < fence && fence < tail, "store, then read-back, then barrier, then counters");
+    assert_eq!(body.matches("load_u32(").count(), 1, "one read per publication, never per entry");
+    assert_eq!(body.matches("store_u32(").count(), 1, "the step stores exactly the PUT");
+    // the production publish_put is that step with the process counters, not a second implementation
+    let publish = after(USER_STORAGE, "pub fn publish_put(&self, put: u32)")
+        .split("\n    }\n")
+        .next()
+        .unwrap();
+    assert!(publish.contains("publish_put_counted(put, readback_stats())"), "publish_put feeds the process counters");
+    let counted = after(USER_STORAGE, "pub fn publish_put_counted(")
+        .split("\n    }\n")
+        .next()
+        .unwrap();
+    assert!(counted.contains("publish_put_via(self.cpu()?, put, stats)"), "through the live CPU view only");
+}
+
+/// P10 (every publication path): the pump has ONE doorbell for private publications, rung after the guarded publication
+/// returns; every closure handed to the guarded publication ends in `storage.publish_put(put)` (the read-back step) with no
+/// store after it; there are six such closures (entry, gate, marker, shadow entry, segment entry, segment prefix).
+#[test]
+fn p10_every_publication_path_ends_in_the_read_back_step_before_the_single_doorbell() {
+    let pump = USERPUMP.split("#[cfg(test)]").next().unwrap();
+    assert_eq!(pump.matches(".doorbell(").count(), 1, "one private doorbell in the pump");
+    let publish = after(pump, "fn publish_guarded(").split("fn snapshot_with").next().unwrap();
+    let admit = publish
         .find(".map_err(|e| access_error(e, \"USER_RING_USERD_ADMISSION\"))??;")
         .expect("pin: admit end");
-    let bell = p.find("me.rm\n        .doorbell(").expect("pin: doorbell");
-    let between = &p[admit..bell];
-    assert!(
-        between.contains("gpu_get()")
-            || between.contains("read_back")
-            || between.contains("load_u32"),
-        "publish_guarded rings the native doorbell with no read-back of the private stores before it (P10)"
-    );
+    let bell = publish.find("me.rm\n        .doorbell(").expect("pin: doorbell");
+    assert!(admit < bell, "the doorbell is rung after the guarded publication");
+    assert!(!publish[..admit].contains(".doorbell("), "no doorbell inside the publication");
+    assert!(publish[admit..bell].lines().all(|l| l.trim().is_empty() || l.contains("USER_RING_USERD_ADMISSION")));
+    assert_eq!(pump.matches("storage.publish_put(put)").count(), 6, "six publication closures");
+    for part in pump.split("storage.publish_put(put)").skip(1) {
+        assert!(
+            part.trim_start().starts_with('}'),
+            "a store follows the PUT publication in a closure: {:?}",
+            &part[..part.len().min(80)]
+        );
+    }
 }
