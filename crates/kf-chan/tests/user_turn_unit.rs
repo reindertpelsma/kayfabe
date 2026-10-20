@@ -786,3 +786,52 @@ fn the_switch_forgets_the_old_rings_gp_put_boundaries_so_no_marker_lands_at_a_st
         "the unannounced wake is counted instead"
     );
 }
+
+// ------------------------------------------------------------------------------------------------
+// ★ 2026-10-20 (simple relay, Change A): COPY BEFORE GET (hostile guest, TOCTOU)
+
+/// Whatever the guest-visible `GP_GET` semantics (`user_turn::GUEST_GET`), the relay forwards a slot's value as it was BEFORE the
+/// guest-visible `GP_GET` passed that slot: the guest overwrites every slot as soon as `GP_GET` passes it (legal: `GP_GET` says
+/// the slot is free) and nothing it writes afterwards may reach the private ring. FALSIFIER: a published entry equal to a
+/// post-GET overwrite, or the guest's `GP_GET` never reaching `GP_PUT`.
+#[test]
+fn copy_before_get_a_slot_overwritten_after_get_passed_it_is_never_forwarded() {
+    let mut io = Mock::new(16);
+    let mut r = pointer_relay(&mut io);
+    let mut written: u32 = 2; // the guest GET after the prelude (slots 0 and 1 consumed)
+    let originals: Vec<u64> = (2u8..12).map(|i| ge(i, Kind::Plain).raw()).collect();
+    for (k, raw) in originals.iter().enumerate() {
+        io.ring[2 + k] = *raw;
+    }
+    io.put = 12;
+    let garbage = ge(0x77, Kind::Plain).raw();
+    for _ in 0..200 {
+        // the PBDMA pops everything published so far (the Popped semantics need it to free the guest)
+        io.hw_get = (r.fetch.issued() % 16) as u32;
+        turn(&mut r, &mut io).unwrap();
+        let get = io
+            .calls
+            .iter()
+            .rev()
+            .find_map(|c| if let Call::WriteGuestGet(g) = c { Some(*g) } else { None })
+            .unwrap_or(written);
+        // the hostile guest reuses every slot the visible GET passed, at once
+        let mut s = written;
+        while s != get {
+            io.ring[s as usize] = garbage;
+            s = (s + 1) % 16;
+        }
+        written = get;
+        if written == io.put && r.cursor == io.put {
+            break;
+        }
+    }
+    let forwarded: Vec<u64> = io
+        .calls
+        .iter()
+        .filter_map(|c| if let Call::Entry(_, e) = c { Some(*e) } else { None })
+        .collect();
+    assert_eq!(written, io.put, "the guest's GP_GET reached GP_PUT");
+    assert!(!forwarded.contains(&garbage), "a post-GET overwrite was forwarded: {forwarded:x?}");
+    assert_eq!(forwarded, originals, "what was forwarded is exactly what the guest wrote before GET passed it");
+}
