@@ -230,11 +230,14 @@ impl S {
             if w.satisfied(marks, popped) && (retry_ok || !matches!(w, Wait::Contended)) {
                 self.wait = None;
                 self.ring(cold);
+                // review 2026-10-20: P13 is a bound PER demand episode; the counter was never reset (cumulative budget)
+                self.since_demand = 0;
                 return true;
             }
         }
         if self.demand && retry_ok {
             self.ring(cold);
+            self.since_demand = 0;
             return true;
         }
         false
@@ -576,6 +579,35 @@ fn p13_one_worker_a_lost_try_lock_is_re_rung_within_k_passes() {
     let mut c = base(1, 1, WaitKind::Popped);
     c.fails = 2;
     holds("W=1 hot=1 lock convoy", &c);
+}
+
+/// ⚠ EXPECTED RED (review 2026-10-20, claude/relay-fairness-review-20261020). The convoy above has `fails = 2`, far below
+/// `user_loop::CONTENTION_RETRIES` (64), so `may_retry` is always true in the model and the budget never runs out. CODE READ:
+/// once a relay has `CONTENTION_RETRIES` consecutive contended turns, only `Peek::Backstop` may re-ring it
+/// (`user_loop::may_retry`, userpump.rs `user_ring_peek_one` lines 2882/2891/2927/2975); the busy Look peeks with `Spin` and
+/// `Event` only (worker.rs 239/242); and `Backstop` happens only after a park TIMEOUT (worker.rs 317), which a worker beside a
+/// hot relay never reaches (the hot relay's ring bumps the wake word, so `try_park(seen)` refuses, worker.rs 282). The
+/// contended run is reached with no holder ring for a `pt` / storage `try_lock`, a USERD `AccessError::Busy` or a
+/// `userread` `Busy`/`Changed` (v2 model, section 1 item 6: "no wake exists: spin + backstop only"). Here: 64 lost try_locks,
+/// then the lock is free, and nothing rings the cold relay while the hot neighbour runs (W = 1: the worker is never idle, so
+/// a missing park timeout is not a modelling artefact).
+#[test]
+fn p13_expected_red_a_convoy_past_contention_retries_is_still_re_rung_within_k_passes_beside_a_hot_relay() {
+    let mut c = base(1, 1, WaitKind::Popped);
+    c.track = V_P13;
+    c.cold_rings = 0;
+    c.fails = u8::try_from(ul::CONTENTION_RETRIES).expect("small");
+    holds("W=1 hot=1 convoy past CONTENTION_RETRIES", &c);
+}
+
+/// Control for the red test above: one lost try_lock fewer than the budget, and the busy Look re-rings every episode within K.
+#[test]
+fn p13_control_a_convoy_just_below_contention_retries_is_re_rung_within_k_passes() {
+    let mut c = base(1, 1, WaitKind::Popped);
+    c.track = V_P13;
+    c.cold_rings = 0;
+    c.fails = u8::try_from(ul::CONTENTION_RETRIES - 1).expect("small");
+    holds("W=1 hot=1 convoy below CONTENTION_RETRIES", &c);
 }
 
 /// The BATON: with two workers and ONE hot relay the workers hand the hot token to each other. The worker that finishes its
