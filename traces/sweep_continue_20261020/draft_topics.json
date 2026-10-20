@@ -1,0 +1,52 @@
+[
+  {
+    "topic": "ofa",
+    "branch": "codex/sweep-blackwell-ofa-20261020",
+    "head": "844eb167f3a4a5b86e6b001e62ba3f6f7078402b",
+    "base": "codex/sweep-nvdec-abi-20261020",
+    "title": "Admit the public Blackwell OFA constructor",
+    "number": 55,
+    "url": "https://github.com/reindertpelsma/kayfabe/pull/55",
+    "isDraft": true
+  },
+  {
+    "topic": "gc6",
+    "branch": "codex/sweep-blackwell-gc6-20261020",
+    "head": "c58989dab89e8e033efc9ab807a29771b3d0006c",
+    "base": "codex/sweep-blackwell-ofa-20261020",
+    "title": "Review silent arming of Blackwell GC6 threshold notifier196",
+    "number": 56,
+    "url": "https://github.com/reindertpelsma/kayfabe/pull/56",
+    "isDraft": true
+  },
+  {
+    "topic": "caps-word",
+    "branch": "codex/sweep-blackwell-caps-word-20261020",
+    "head": "ccb4b706c36b23e1f2947dc0dae9487269e09140",
+    "base": "codex/sweep-blackwell-gc6-20261020",
+    "title": "Add the independently measured GB202 branch580 caps scalar",
+    "number": 57,
+    "url": "https://github.com/reindertpelsma/kayfabe/pull/57",
+    "isDraft": true
+  },
+  {
+    "topic": "grsem",
+    "branch": "codex/sweep-blackwell-grsem-20261020",
+    "head": "95b7b6ff67fa958f190f8d9aa6d69df82ed26664",
+    "base": "codex/sweep-blackwell-caps-word-20261020",
+    "title": "Admit public Blackwell kernel GR report-semaphore releases",
+    "number": 58,
+    "url": "https://github.com/reindertpelsma/kayfabe/pull/58",
+    "isDraft": true
+  },
+  {
+    "topic": "postcomp",
+    "branch": "codex/sweep-blackwell-postcomp-20261020",
+    "head": "048c28b9c645190adf5bcaf859284adb8eb222ed",
+    "base": "codex/sweep-blackwell-grsem-20261020",
+    "title": "Derive Blackwell POSTCOMP tile capabilities from public layouts",
+    "number": 59,
+    "url": "https://github.com/reindertpelsma/kayfabe/pull/59",
+    "isDraft": true
+  }
+]
