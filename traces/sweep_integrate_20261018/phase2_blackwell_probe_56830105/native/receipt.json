@@ -1,0 +1,60 @@
+{
+  "utc": "2026-10-20T03:39:56.175042+00:00",
+  "own_id": 56830105,
+  "source": "7f22d18dfff8083345cdb54a4666018dca845384",
+  "native_raw": "30/30",
+  "native_cuda": "4/4",
+  "n": 1,
+  "spread": "N/A",
+  "files": [
+    {
+      "source": "/root/prov/sweep_product_source",
+      "source_sha256": "7ad2bb26d24811351c2f74f197a81cea5833692c628aaae7927b7aa3218cf005",
+      "export": "source.txt",
+      "export_sha256": "7ad2bb26d24811351c2f74f197a81cea5833692c628aaae7927b7aa3218cf005"
+    },
+    {
+      "source": "/root/prov/sweep_qemu_sha256",
+      "source_sha256": "f8b4e494c82cc618580b59ab2ed9518a2ee51f18f7a27edb96391f0973496969",
+      "export": "qemu_sha256.txt",
+      "export_sha256": "f8b4e494c82cc618580b59ab2ed9518a2ee51f18f7a27edb96391f0973496969"
+    },
+    {
+      "source": "/root/prov/sweep_host_preflight.log",
+      "source_sha256": "bcfd43146983b7bc92aeb01d83a5ab4962853207248a30a36a98672f73c38c52",
+      "export": "health.txt",
+      "export_sha256": "bcfd43146983b7bc92aeb01d83a5ab4962853207248a30a36a98672f73c38c52"
+    },
+    {
+      "source": "/root/prov/sweep_host_die.log",
+      "source_sha256": "80382a199728d81675045b68439835785afab17d61eec7c080741ab22f4cb38c",
+      "export": "die.txt",
+      "export_sha256": "80382a199728d81675045b68439835785afab17d61eec7c080741ab22f4cb38c"
+    },
+    {
+      "source": "/root/prov/sweep_gates.log",
+      "source_sha256": "581875001df51146365908e9eb017c09064cc2ca112aaf2f4bbdb67cee3c49f2",
+      "export": "gates.txt",
+      "export_sha256": "524bf9c212025e15bbd48d639abe8fb3b6dc64452fee2295c678eb472f708386"
+    },
+    {
+      "source": "/root/prov/sweep_bare595.log",
+      "source_sha256": "2fa0c01d0251d9d09e35321980c1e30fe443ad9da0964da5635a446851f459be",
+      "export": "raw595.txt",
+      "export_sha256": "4e278f3e09cd2f8b3ae7c18190d1d4d1ff7947ea28a2d2854b567a500ae46327"
+    },
+    {
+      "source": "/workspace/bench/cl_sweep7f22d18d_gb202_host.out",
+      "source_sha256": "c65d136c17c80ff8cac99fba11ce4493ae82cbc26a6636b0f09f48ef00b7281d",
+      "export": "cuda595.txt",
+      "export_sha256": "c65d136c17c80ff8cac99fba11ce4493ae82cbc26a6636b0f09f48ef00b7281d"
+    },
+    {
+      "source": "/root/prov/sweep_native_baseline.log",
+      "source_sha256": "082b12151263ebb93d130b8326ed609d2333ccd75b9a68e3c39de7dc19633ab8",
+      "export": "controller.txt",
+      "export_sha256": "082b12151263ebb93d130b8326ed609d2333ccd75b9a68e3c39de7dc19633ab8"
+    }
+  ],
+  "windows": "UNRUN while generic VGA preparation active"
+}
