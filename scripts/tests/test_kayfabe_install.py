@@ -17,7 +17,7 @@ class InstallPath(unittest.TestCase):
     def facts(self):
         return dict(total_mb=12288, free_mb=11000, bar1_mb=256, kvm=True,
                     uefi_code='/firmware/OVMF_CODE.fd',uefi_vars_template='/firmware/OVMF_VARS.fd',
-                    devices=True, driver='595.91.07', family='Ada', model='RTX 4070',
+                    devices=True, udmabuf=True, driver='595.91.07', family='Ada', model='RTX 4070',
                     qemu_version='0.1.0-beta.1', broker_version='0.1.0-beta.1',
                     graphical=True, disk_free=8<<30, hugepages=0, memlock=8<<20,
                     memcg='max', groups=['kvm'], runtime='/run/user/1000', uid=1000)
@@ -71,6 +71,27 @@ class InstallPath(unittest.TestCase):
         for check in ['kvm','permissions']:
             row=next(row for row in rows if row['check']==check)
             self.assertEqual(row['status'],'FAIL');self.assertTrue(row['fix'])
+
+    def _display_requires_udmabuf(self, os_name):
+        facts=self.facts();facts['udmabuf']=False
+        options=self.options('--os',os_name,'--broker','/tmp/fixture.sock')
+        self.assertFalse(options.no_display)
+        rows=self.k.doctor_rows(facts,'0.1.0-beta.1',True)
+        row=next(row for row in rows if row['check']=='udmabuf')
+        self.assertEqual(row['status'],'FAIL')
+        self.assertIn('/dev/udmabuf',row['detail'])
+        self.assertIn('kvm',row['fix'])
+
+    def test_windows_display_refuses_missing_udmabuf_access(self):
+        self._display_requires_udmabuf('windows')
+
+    def test_linux_broker_refuses_missing_udmabuf_access(self):
+        self._display_requires_udmabuf('linux')
+
+    def test_headless_does_not_require_udmabuf(self):
+        facts=self.facts();facts['udmabuf']=False
+        rows=self.k.doctor_rows(facts,'0.1.0-beta.1',False)
+        self.assertFalse(any(row['check']=='udmabuf' and row['status']=='FAIL' for row in rows))
 
     def test_no_hugepages_or_small_memlock_does_not_invent_a_root_requirement(self):
         rows=self.k.doctor_rows(self.facts(),'0.1.0-beta.1',True)
