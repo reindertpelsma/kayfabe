@@ -276,3 +276,23 @@ fn concurrent_thread_snapshots_keep_histogram_counts_coherent() {
         }}child.join().unwrap();
     });s.stop().unwrap();std::fs::remove_dir_all(p).unwrap();
 }
+
+fn paused_publication(s:&Session) {
+    let deadline=std::time::Instant::now()+Duration::from_secs(2);
+    while !s.publication_paused() {assert!(std::time::Instant::now()<deadline,"bounded publication fixture");std::thread::yield_now();}
+}
+#[test]
+fn publishing_thread_is_not_sampled_halfway_through_a_histogram_update() {
+    let p=directory();let s=Session::create_diagnostic(&p).unwrap();s.inject_publication_delay_ms(200).unwrap();
+    std::thread::scope(|scope| {let session=&s;scope.spawn(move || {let _b=session.bind_current(1).unwrap();let _g=kf_prof::site(Site::WorkerPark,State::Mutex,1);});
+        paused_publication(&s);assert!(s.snapshot()["threads"].as_array().unwrap().is_empty());
+    });s.stop().unwrap();std::fs::remove_dir_all(p).unwrap();
+}
+#[test]
+fn mapped_thread_sequence_stays_odd_until_the_whole_update_is_committed() {
+    let p=directory();let s=Session::create_diagnostic(&p).unwrap();s.inject_publication_delay_ms(200).unwrap();
+    std::thread::scope(|scope| {let session=&s;scope.spawn(move || {let _b=session.bind_current(1).unwrap();let _g=kf_prof::site(Site::WorkerPark,State::Mutex,1);});
+        paused_publication(&s);let bytes=std::fs::read(p.join("prof.mmap")).unwrap();let base=kf_prof::layout::THREAD_BASE;
+        assert_eq!(u64::from_le_bytes(bytes[base..base+8].try_into().unwrap())%2,1);
+    });s.stop().unwrap();std::fs::remove_dir_all(p).unwrap();
+}
