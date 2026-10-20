@@ -4147,4 +4147,79 @@ mod tests {
             assert!(d.contains(line), "{line}");
         }
     }
+
+    // ---- 2026-10-20: KF3_DIAG_USER_STALL_RERING (EXPERIMENT: rings a doorbell; opt-in measurement only)
+
+    /// The experiment's switch is read once, in `init`, and is only on together with the diagnostic.
+    #[test]
+    fn the_rering_experiment_is_read_once_and_needs_the_diagnostic() {
+        let d = diag_source();
+        assert_eq!(d.matches("kf_chan::user_stall::ENV_RERING").count(), 1);
+        assert_eq!(
+            d.matches("std::env::var(").count(),
+            2,
+            "the threshold and the experiment, both in init"
+        );
+        assert!(d.contains("static RERING: AtomicBool"));
+        let init = d.split("pub(super) fn init()").nth(1).unwrap();
+        let init = init.split("/// The threshold; 0 when off").next().unwrap();
+        assert!(init.contains("kf_chan::user_stall::ENV_RERING"));
+        assert!(init.contains("stall::rering_enabled(") && init.contains("threshold_ms() != 0"));
+        assert_eq!(d.matches("RERING.store(").count(), 1);
+    }
+
+    /// The doorbell is rung from exactly one place: after the block is printed, behind the pure decision and the
+    /// switch, on the worker, once, with its time and GET recorded.
+    #[test]
+    fn the_rering_doorbell_is_rung_once_in_the_look_after_the_block_behind_the_decision() {
+        let d = diag_source();
+        assert_eq!(d.matches(".doorbell(").count(), 1);
+        let look = d.split("fn diag_look(").nth(1).unwrap();
+        let (render_at, decide_at, ring_at, begin_at) = (
+            look.find("kf_chan::user_stall::render(").unwrap(),
+            look.find("stall::should_rering(").unwrap(),
+            look.find(".doorbell(").unwrap(),
+            look.find(".rering_begin(").unwrap(),
+        );
+        assert!(render_at < decide_at && decide_at < ring_at && ring_at < begin_at);
+        assert!(
+            look.contains("RERING.load(Ordering::Relaxed)")
+                || look.contains("RERING.load(Relaxed)")
+        );
+        assert!(look.contains("stall::looks_idle(") && look.contains("rering_rang_text("));
+        assert!(look.contains("rering_ready()"));
+    }
+
+    /// The act times are noted where the host DISABLE_CHANNELS verbs return, through one forwarding function.
+    #[test]
+    fn the_act_times_are_noted_where_the_host_disable_and_enable_verbs_return() {
+        let chan = include_str!("chan.rs")
+            .split("#[cfg(test)]")
+            .next()
+            .unwrap();
+        assert!(
+            chan.matches("userpump::stall_note_act(").count() >= 3,
+            "STOP, the DISABLE_CHANNELS act, the restart"
+        );
+        assert!(chan.contains("stall_acts"));
+        let pump = pump_source();
+        assert!(pump.contains("pub(super) fn stall_note_act("));
+        let f = pump.split("pub(super) fn stall_note_act(").nth(1).unwrap();
+        let f = f.split("\n}\n").next().unwrap();
+        assert!(
+            f.contains("diag::threshold_ms() == 0"),
+            "nothing is recorded with the diagnostic off"
+        );
+        assert!(f.contains(".try_lock()") && !f.contains(".lock()"));
+    }
+
+    /// The block carries the twin's state and the doorbell token.
+    #[test]
+    fn the_stall_block_reads_the_twins_flags_and_the_act_ages_with_try_lock() {
+        let d = diag_source();
+        assert!(d.contains("stall::TwinFacts {"));
+        assert!(d.contains("me.pt.try_lock()"));
+        assert!(d.contains("stall_acts.try_lock()"));
+        assert!(d.contains(".disabled") && d.contains(".stopped"));
+    }
 }

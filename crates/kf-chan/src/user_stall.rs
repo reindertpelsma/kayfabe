@@ -787,6 +787,8 @@ pub struct Report {
     pub segment: Segment,
     /// Cumulative diagnostic counters (`StallStats::summary`).
     pub totals: String,
+    /// The host channel's doorbell token and scheduling state.
+    pub twin: TwinFacts,
 }
 
 /// Render the report: at most [`MAX_LINES`] lines of at most [`MAX_LINE_CHARS`] characters, every
@@ -1105,6 +1107,92 @@ impl StallStats {
     }
 }
 
+/// The host channel behind a relay: the token its doorbell is rung on and what the twin's scheduling state says.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub struct TwinFacts {
+    /// The doorbell token (`rm.doorbell(token)`).
+    pub token: u32,
+    /// `(t.disabled, t.stopped)` of the guest channel's twin, when readable.
+    pub flags: Option<(bool, bool)>,
+    /// Ms since the last host `DISABLE_CHANNELS(disable)` act for this host channel.
+    pub disable_act_ago_ms: Option<u64>,
+    /// Ms since the last host enable act for this host channel.
+    pub enable_act_ago_ms: Option<u64>,
+}
+
+/// Most host channels whose act times are remembered.
+pub const ACT_ROWS: usize = 512;
+
+/// When the host last disabled / re-enabled each host channel (`DISABLE_CHANNELS` acts). Bounded.
+#[derive(Debug, Default)]
+pub struct ActTimes {
+    rows: Vec<(u32, Option<u64>, Option<u64>)>,
+}
+
+impl ActTimes {
+    /// A disable (`disable`) or an enable act on `token` finished at `now_ms`.
+    pub fn note(&mut self, _token: u32, _disable: bool, _now_ms: u64) {}
+    /// `(ms since the last disable act, ms since the last enable act)` of `token`.
+    #[must_use]
+    pub fn ages(&self, _token: u32, _now_ms: u64) -> (Option<u64>, Option<u64>) {
+        (None, None)
+    }
+}
+
+/// `KF3_DIAG_USER_STALL_RERING=1`: ring the doorbell once, EXPERIMENT (mutates scheduling state).
+pub const ENV_RERING: &str = "KF3_DIAG_USER_STALL_RERING";
+/// How long the re-ring's effect is watched.
+pub const RERING_WINDOW_MS: u64 = 3000;
+
+/// Whether the experiment is on: the value is `1` AND the diagnostic itself is on.
+#[must_use]
+pub fn rering_enabled(_value: Option<&str>, _stall_on: bool) -> bool {
+    false
+}
+
+/// Whether the PBDMA looks idle: `PB_GET == PB_PUT`, or no private row holds `PB_GET`.
+#[must_use]
+pub fn looks_idle(_private: &Private, _segment: &Segment) -> bool {
+    false
+}
+
+/// The one decision: ring only when enabled, entries are outstanding, the PBDMA looks idle and this
+/// condition has not been rung yet.
+#[must_use]
+pub fn should_rering(_enabled: bool, _outstanding: bool, _idle: bool, _ready: bool) -> bool {
+    false
+}
+
+/// What one look found about a running re-ring watch.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum RereingPoll {
+    /// Nothing is being watched.
+    NotWatching,
+    /// `ms` since the ring; `GP_GET` now; whether it moved from its value at the ring.
+    Line {
+        /// Ms since the ring.
+        ms: u64,
+        /// `GP_GET` now.
+        gp_get: u32,
+        /// It moved.
+        moved: bool,
+    },
+    /// The window passed with no movement.
+    Expired,
+}
+
+/// The line printed for a poll (`None` for [`RereingPoll::NotWatching`]).
+#[must_use]
+pub fn rering_text(_key: (u32, u32), _poll: RereingPoll) -> Option<String> {
+    None
+}
+
+/// The line printed when the doorbell was rung.
+#[must_use]
+pub fn rering_rang_text(_key: (u32, u32), _token: u32, _gp_get: u32, _ok: bool) -> String {
+    String::new()
+}
+
 /// Per-channel diagnostic state: the detector and the facts the report quotes.
 #[derive(Debug, Clone, Copy, Default)]
 pub struct ChannelDiag {
@@ -1115,9 +1203,40 @@ pub struct ChannelDiag {
     db_count: u64,
     db_ms: Option<u64>,
     db_seen: bool,
+    rering: Rering,
+}
+
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+enum Rering {
+    #[default]
+    Ready,
+    Watching {
+        at_ms: u64,
+        get: u32,
+    },
+    Done,
 }
 
 impl ChannelDiag {
+    /// One look: the running re-ring watch first (it needs the `GP_GET` of this look), then the detector, then the
+    /// once-per-condition gate is re-armed when the condition is over.
+    pub fn look(
+        &mut self,
+        _now_ms: u64,
+        _get: u32,
+        _put: u32,
+        _entries: u32,
+        _threshold_ms: u64,
+    ) -> (Verdict, RereingPoll) {
+        (Verdict::Quiet, RereingPoll::NotWatching)
+    }
+    /// Whether this condition may still be re-rung.
+    #[must_use]
+    pub fn rering_ready(&self) -> bool {
+        false
+    }
+    /// The doorbell was rung at `now_ms` with `GP_GET == get`.
+    pub fn rering_begin(&mut self, _now_ms: u64, _get: u32) {}
     /// A fresh state.
     #[must_use]
     pub const fn new() -> Self {
@@ -1128,6 +1247,7 @@ impl ChannelDiag {
             db_count: 0,
             db_ms: None,
             db_seen: false,
+            rering: Rering::Ready,
         }
     }
     /// A look rang the relay.
@@ -1233,6 +1353,8 @@ pub struct Inputs {
     pub entries_by_mode: (u64, u64, u64),
     /// Cumulative counters text.
     pub totals: String,
+    /// The host channel's doorbell token and scheduling state.
+    pub twin: TwinFacts,
 }
 
 /// Build the report. `read(gpu_va, bytes)` reads guest memory through the relay's placement view
@@ -1354,6 +1476,7 @@ pub fn build_report(
         rows: inp.rows,
         segment,
         totals: inp.totals,
+        twin: inp.twin,
     }
 }
 
@@ -2132,6 +2255,12 @@ mod tests {
                 }],
             },
             totals: "stall_conditions=0x1".into(),
+            twin: TwinFacts {
+                token: 0x59,
+                flags: Some((false, false)),
+                disable_act_ago_ms: None,
+                enable_act_ago_ms: Some(0x2710),
+            },
         }
     }
 
@@ -3294,6 +3423,7 @@ mod tests {
             turns: 99,
             entries_by_mode: (1, 2, 3),
             totals: String::new(),
+            twin: TwinFacts::default(),
         }
     }
 
@@ -3579,5 +3709,305 @@ mod tests {
         assert!(!period_due(PERIOD_MS, 0, 0, 0), "nothing counted");
         assert!(!period_due(PERIOD_MS * 9, 0, 5, 5), "nothing new");
         assert!(!period_due(3, 10_000_000, 5, 0), "clock ran backwards");
+    }
+
+    // ------------------------------------------------------------------ the re-ring EXPERIMENT (opt-in, mutates scheduling state)
+    #[test]
+    fn the_rering_switch_needs_the_value_one_and_the_diagnostic_itself() {
+        assert!(rering_enabled(Some("1"), true));
+        assert!(
+            !rering_enabled(Some("1"), false),
+            "only together with KF3_DIAG_USER_STALL"
+        );
+        for v in [
+            None,
+            Some(""),
+            Some("0"),
+            Some("2"),
+            Some("11"),
+            Some("true"),
+            Some(" 1"),
+            Some("1 "),
+        ] {
+            assert!(!rering_enabled(v, true), "{v:?}");
+        }
+        assert_eq!(ENV_RERING, "KF3_DIAG_USER_STALL_RERING");
+    }
+
+    #[test]
+    fn the_pbdma_looks_idle_when_pb_get_equals_pb_put_or_no_segment_holds_it() {
+        let seg = incident_report().segment;
+        let p = |get, put| Private {
+            pb_get: get,
+            pb_put: put,
+            ..Private::default()
+        };
+        assert!(
+            looks_idle(&p(0xff_000e_2310, 0xff_000e_2310), &seg),
+            "fully consumed"
+        );
+        assert!(looks_idle(&p(0, 0), &seg));
+        assert!(
+            looks_idle(&p(0x1000, 0x2000), &Segment::NotFound),
+            "no segment holds PB_GET"
+        );
+        assert!(
+            !looks_idle(&p(0x1000, 0x2000), &seg),
+            "inside a decoded segment"
+        );
+        let unread = Segment::Unread {
+            slot: 1,
+            va: 0,
+            len_bytes: 4,
+            why: "x",
+        };
+        assert!(
+            !looks_idle(&p(0x1000, 0x2000), &unread),
+            "a segment holds it, it just could not be read"
+        );
+        assert!(looks_idle(&p(0x40, 0x40), &unread));
+    }
+
+    #[test]
+    fn rering_is_decided_only_when_every_condition_holds() {
+        for bits in 0..16u32 {
+            let (e, o, i, r) = (bits & 1 != 0, bits & 2 != 0, bits & 4 != 0, bits & 8 != 0);
+            assert_eq!(
+                should_rering(e, o, i, r),
+                bits == 15,
+                "enabled={e} outstanding={o} idle={i} ready={r}"
+            );
+        }
+    }
+
+    #[test]
+    fn a_condition_is_rung_once_and_the_gate_reopens_when_it_is_over() {
+        let mut d = ChannelDiag::new();
+        assert!(d.rering_ready());
+        assert_eq!(
+            d.look(0, 5, 7, 512, 100),
+            (Verdict::Quiet, RereingPoll::NotWatching)
+        );
+        let (v, poll) = d.look(100, 5, 7, 512, 100);
+        assert_eq!(
+            (v, poll),
+            (Verdict::Fire { stalled_ms: 100 }, RereingPoll::NotWatching)
+        );
+        d.rering_begin(100, 5);
+        assert!(!d.rering_ready(), "rung: not again for this condition");
+        // still stuck: one line per look, moved=no
+        let (v, poll) = d.look(150, 5, 7, 512, 100);
+        assert_eq!(v, Verdict::Quiet);
+        assert_eq!(
+            poll,
+            RereingPoll::Line {
+                ms: 50,
+                gp_get: 5,
+                moved: false
+            }
+        );
+        let (_, poll) = d.look(400, 5, 7, 512, 100);
+        assert_eq!(
+            poll,
+            RereingPoll::Line {
+                ms: 300,
+                gp_get: 5,
+                moved: false
+            }
+        );
+        assert!(!d.rering_ready());
+        // GET moves: the result line says yes, once, and the next stall may be rung again
+        let (v, poll) = d.look(450, 6, 7, 512, 100);
+        assert_eq!(
+            poll,
+            RereingPoll::Line {
+                ms: 350,
+                gp_get: 6,
+                moved: true
+            }
+        );
+        assert_eq!(v, Verdict::Quiet);
+        assert!(d.rering_ready(), "the condition ended with the move");
+        assert_eq!(
+            d.look(460, 6, 7, 512, 100).1,
+            RereingPoll::NotWatching,
+            "watch over"
+        );
+    }
+
+    #[test]
+    fn a_watch_that_sees_nothing_for_three_seconds_expires_once() {
+        let mut d = ChannelDiag::new();
+        d.look(0, 5, 7, 512, 100);
+        d.look(100, 5, 7, 512, 100);
+        d.rering_begin(100, 5);
+        assert_eq!(
+            d.look(3099, 5, 7, 512, 100).1,
+            RereingPoll::Line {
+                ms: 2999,
+                gp_get: 5,
+                moved: false
+            }
+        );
+        assert_eq!(d.look(3100, 5, 7, 512, 100).1, RereingPoll::Expired);
+        assert_eq!(
+            d.look(3200, 5, 7, 512, 100).1,
+            RereingPoll::NotWatching,
+            "one Expired line"
+        );
+        assert!(
+            !d.rering_ready(),
+            "the same condition is never rung twice, however long it lasts"
+        );
+        assert_eq!(RERING_WINDOW_MS, 3000);
+    }
+
+    #[test]
+    fn the_ring_draining_to_empty_ends_the_watch_as_moved_and_reopens_the_gate() {
+        let mut d = ChannelDiag::new();
+        d.look(0, 5, 7, 512, 100);
+        d.look(100, 5, 7, 512, 100);
+        d.rering_begin(100, 5);
+        assert_eq!(
+            d.look(120, 7, 7, 512, 100).1,
+            RereingPoll::Line {
+                ms: 20,
+                gp_get: 7,
+                moved: true
+            }
+        );
+        assert!(d.rering_ready());
+    }
+
+    #[test]
+    fn nothing_is_watched_unless_the_doorbell_was_rung() {
+        let mut d = ChannelDiag::new();
+        for t in 0..10u64 {
+            assert_eq!(d.look(t * 100, 5, 7, 512, 100).1, RereingPoll::NotWatching);
+        }
+        assert!(
+            d.rering_ready(),
+            "ringing is the glue's decision, never the detector's"
+        );
+    }
+
+    #[test]
+    fn the_result_lines_are_hex_and_name_the_channel() {
+        let k = (0xc1d0_0085, 0xff04_002d);
+        assert_eq!(
+            rering_text(
+                k,
+                RereingPoll::Line {
+                    ms: 50,
+                    gp_get: 0x130,
+                    moved: false
+                }
+            )
+            .unwrap(),
+            "kf3: USER_RING_STALL_DIAG 0xc1d00085:0xff04002d RERING_RESULT +0x32 gp_get=0x130 moved=no"
+        );
+        assert_eq!(
+            rering_text(
+                k,
+                RereingPoll::Line {
+                    ms: 0x15e,
+                    gp_get: 0x131,
+                    moved: true
+                }
+            )
+            .unwrap(),
+            "kf3: USER_RING_STALL_DIAG 0xc1d00085:0xff04002d RERING_RESULT +0x15e gp_get=0x131 moved=yes"
+        );
+        assert_eq!(
+            rering_text(k, RereingPoll::Expired).unwrap(),
+            "kf3: USER_RING_STALL_DIAG 0xc1d00085:0xff04002d RERING_RESULT none"
+        );
+        assert_eq!(rering_text(k, RereingPoll::NotWatching), None);
+        assert_eq!(
+            rering_rang_text(k, 0x59, 0x130, true),
+            "kf3: USER_RING_STALL_DIAG 0xc1d00085:0xff04002d RERING rang doorbell_token=0x59 gp_get=0x130 (EXPERIMENT: mutates scheduling state; never a fix)"
+        );
+        assert!(
+            rering_rang_text(k, 0x59, 0x130, false)
+                .contains("RERING doorbell_failed doorbell_token=0x59")
+        );
+    }
+
+    #[test]
+    fn act_times_remember_the_last_disable_and_enable_per_host_channel() {
+        let mut a = ActTimes::default();
+        assert_eq!(a.ages(0x59, 100), (None, None));
+        a.note(0x59, true, 1000);
+        assert_eq!(a.ages(0x59, 1500), (Some(500), None));
+        a.note(0x59, false, 1200);
+        assert_eq!(a.ages(0x59, 1500), (Some(500), Some(300)));
+        a.note(0x59, true, 1400);
+        assert_eq!(a.ages(0x59, 1500), (Some(100), Some(300)));
+        assert_eq!(a.ages(0x5a, 1500), (None, None), "another channel");
+        assert_eq!(
+            a.ages(0x59, 10),
+            (Some(0), Some(0)),
+            "a clock that ran backwards reads as zero"
+        );
+    }
+
+    #[test]
+    fn act_times_are_bounded_and_known_channels_still_update_when_full() {
+        let mut a = ActTimes::default();
+        for t in 0..(ACT_ROWS as u32 + 50) {
+            a.note(t, true, 10);
+        }
+        assert_eq!(a.ages(0, 20), (Some(10), None));
+        assert_eq!(a.ages(ACT_ROWS as u32 - 1, 20), (Some(10), None));
+        assert_eq!(
+            a.ages(ACT_ROWS as u32, 20),
+            (None, None),
+            "the table is full: new channels are not remembered"
+        );
+        a.note(3, false, 15);
+        assert_eq!(
+            a.ages(3, 20),
+            (Some(10), Some(5)),
+            "a remembered channel still updates"
+        );
+    }
+
+    #[test]
+    fn the_twin_line_names_the_token_the_flags_and_the_act_ages() {
+        let text = all(&render(&incident_report()));
+        assert!(
+            text.contains("TWIN doorbell_token=0x59 disabled=0x0 stopped=0x0 last_disable_act_ago_ms=none last_enable_act_ago_ms=0x2710"),
+            "{text}"
+        );
+        let mut r = incident_report();
+        r.twin = TwinFacts {
+            token: 0x59,
+            flags: Some((true, false)),
+            disable_act_ago_ms: Some(0x1f40),
+            enable_act_ago_ms: None,
+        };
+        let text = all(&render(&r));
+        assert!(text.contains("disabled=0x1 stopped=0x0 last_disable_act_ago_ms=0x1f40 last_enable_act_ago_ms=none"), "{text}");
+        r.twin = TwinFacts {
+            token: 0x59,
+            flags: Some((false, true)),
+            ..TwinFacts::default()
+        };
+        assert!(all(&render(&r)).contains("disabled=0x0 stopped=0x1"));
+        r.twin = TwinFacts::default();
+        assert!(all(&render(&r)).contains("disabled=UNREAD stopped=UNREAD"));
+    }
+
+    #[test]
+    fn build_report_carries_the_twin_facts() {
+        let mut inp = inputs(Vec::new(), 0x1000);
+        inp.twin = TwinFacts {
+            token: 0x59,
+            flags: Some((true, true)),
+            disable_act_ago_ms: Some(7),
+            enable_act_ago_ms: Some(9),
+        };
+        let rep = build_report(inp.clone(), &mut |_, _| Err("x"), &StallStats::default());
+        assert_eq!(rep.twin, inp.twin);
     }
 }

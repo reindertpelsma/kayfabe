@@ -209,6 +209,7 @@ impl Pump {
             turns: self.core.lazy.counts.turns,
             entries_by_mode: (life.entries_scan, life.entries_pointer, life.entries_window),
             totals: me.relay_stats.life.stall.summary(),
+            twin: stall::TwinFacts::default(),
         };
         let (cache, generation) = (&self.cache, self.ram_generation);
         let mut read = |va: u64, bytes: usize| -> Result<Vec<u8>, &'static str> {
