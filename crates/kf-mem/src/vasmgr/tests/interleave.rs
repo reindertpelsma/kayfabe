@@ -1427,6 +1427,8 @@ fn a_space_re_rooted_between_arms_cannot_grow_the_queue() {
             .table
             .set_root(K_A, root, PdbAperture::Vidmem)
             .unwrap();
+        // The second arm demotes the first to a refresh while the space is still rooted there.
+        h.arm(root, false);
         h.arm(root, false);
         assert!(
             h.r.m.pending() <= BOUND_PENDING,
@@ -1449,6 +1451,7 @@ fn a_re_rooted_space_is_refreshed_through_the_fold() {
             .table
             .set_root(K_A, root, PdbAperture::Vidmem)
             .unwrap();
+        h.arm(root, false);
         h.arm(root, false);
     }
     h.r.tables
