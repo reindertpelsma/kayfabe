@@ -655,3 +655,80 @@ fn runtime_guest_wrap_uses_eight_entries_not_the_private_geometry() {
 fn runtime_guest_wrap_uses_512_entries_even_when_private_ring_is_smaller() {
     runtime_guest_geometry(511, 3, 512, 16, 4);
 }
+
+#[test]
+fn retiring_a_producer_preserves_its_unanswered_processing_wait() {
+    let mut g = RelayGauge::new(1, 4, 10);
+    g.observe(
+        20,
+        Observation {
+            private_get: Some(1),
+            wait: Wait::Marker(9),
+            ..Observation::default()
+        },
+    )
+    .unwrap();
+    let w = g.retire(40).unwrap();
+    assert_eq!(w[23], 0);
+    assert_eq!((w[9], w[10], w[27]), (1, 9, 20));
+    assert_eq!(w[25], 20);
+}
+#[test]
+fn retirement_has_its_own_observation_without_fabricating_descriptor_progress() {
+    let mut g = RelayGauge::new(2, 7, 10);
+    g.observe(
+        20,
+        Observation {
+            private_get: Some(3),
+            private_put: Some(6),
+            reference: Some(1),
+            wait: Wait::Popped(7),
+            ..Observation::default()
+        },
+    )
+    .unwrap();
+    let w = g.retire(50).unwrap();
+    assert_eq!((w[23], w[4]), (0, 50));
+    assert_eq!(
+        (w[6], w[7], w[8], w[15], w[25], w[27]),
+        (3, 6, 1, 20, 20, 20)
+    );
+}
+#[cfg(feature = "prof-inject")]
+#[test]
+fn dropped_relay_probe_is_retired_in_the_live_file() {
+    let path = std::env::temp_dir().join(format!("kf-prof-k1-retired-live-{}", std::process::id()));
+    std::fs::create_dir(&path).unwrap();
+    let s = kf_prof::runtime::Session::create_diagnostic(&path).unwrap();
+    let mut r = s.register_relay(1).unwrap();
+    r.observe(Observation {
+        wait: Wait::Marker(9),
+        ..Observation::default()
+    });
+    drop(r);
+    let row = s.snapshot();
+    assert_eq!(row["relays"][0]["active"], false);
+    assert_eq!(row["ledger"]["counts"][12], 1);
+    s.stop().unwrap();
+    std::fs::remove_dir_all(path).unwrap();
+}
+#[cfg(feature = "prof-inject")]
+#[test]
+fn dropping_a_descriptor_wait_does_not_close_an_unanswered_obligation() {
+    let path =
+        std::env::temp_dir().join(format!("kf-prof-k1-retired-pending-{}", std::process::id()));
+    std::fs::create_dir(&path).unwrap();
+    let s = kf_prof::runtime::Session::create_diagnostic(&path).unwrap();
+    let mut r = s.register_relay(2).unwrap();
+    r.observe(Observation {
+        wait: Wait::Popped(17),
+        ..Observation::default()
+    });
+    drop(r);
+    let row = s.snapshot();
+    assert_eq!(row["relays"][0]["active"], false);
+    assert_eq!(row["ledger"]["oldest"][0]["kind"], 12);
+    assert_eq!(row["ledger"]["oldest"][0]["source_active"], false);
+    s.stop().unwrap();
+    std::fs::remove_dir_all(path).unwrap();
+}

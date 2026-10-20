@@ -79,3 +79,9 @@ maximum/exclusive residence, or consumes another Site's injection disproves the
 coverage helper. Each Kind::ALL must remain open and OVERDUE after its advisory
 bound until its real token closes. This proves the table/helper, not production
 reachability of currently unwired sites/kinds. Injection is prof-inject only.
+
+INFERRED, retirement falsifier before implementation: dropping a producer must
+mark its gauge inactive, preserve last GET/PUT/REFERENCE observation times and
+retain any unanswered Wait. A teardown is not successful processing. Conservatively
+keep retired pending waits in the ledger with source_active=false; actual
+cancellation/settlement attribution remains OPEN. No production decision changes.
