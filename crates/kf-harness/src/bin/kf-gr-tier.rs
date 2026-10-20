@@ -129,9 +129,24 @@ const RUN31_CE: [u32; 7] = [
 ];
 
 /// Build the native GR oracle's segment separately from its placement and GPU run.
-fn gr_segment(_classes: &[u32]) -> Result<Vec<u32>, String> {
+fn gr_segment(classes: &[u32]) -> Result<Vec<u32>, String> {
     let mut words = RUN31_GR.to_vec();
     words.extend_from_slice(&RUN32_GR_TAIL);
+    let mut at = 0;
+    while at < words.len() {
+        let h = kf_abi::submit::method_header_decode(words[at]).ok_or("native fixture header")?;
+        if h.method == kf_abi::submit::SET_OBJECT
+            && h.arg_words == 1
+            && let Some(kind) = kf_chan::grtables::GrClass::of_class(words[at + 1])
+        {
+            words[at + 1] = classes
+                .iter()
+                .copied()
+                .find(|c| kf_chan::grtables::GrClass::of_class(*c) == Some(kind))
+                .ok_or_else(|| format!("native fixture requires allocated {}", kind.name()))?;
+        }
+        at += 1 + h.arg_words;
+    }
     Ok(words)
 }
 
@@ -375,7 +390,7 @@ fn run(l: &mut Checks) -> Result<(), String> {
         off: CHAN,
         gp_get_cpu_stores: Cell::new(0),
     };
-    // GP 0: run32's whole 46-word segment, unchanged (it releases nothing: GP_GET is its
+    // GP 0: run32's 46-word segment, with allocated native-family classes (it releases nothing: GP_GET is its
     // completion). GP 1: a semaphore release. GP 2 (hostile): a 3D notifier address no row covers.
 
     let mut host = HostRing::on_engine_layout(
