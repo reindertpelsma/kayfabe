@@ -117,7 +117,12 @@ thread_local! {
     static CHAOS: RefCell<Option<Chaos>> = const { RefCell::new(None) };
 }
 fn chaos_install(seed: u64, stream: u64, cfg: ChaosCfg) {
-    CHAOS.with(|c| *c.borrow_mut() = Some(Chaos { rng: Rng::new(seed, 0xC4A05 + stream), cfg }));
+    CHAOS.with(|c| {
+        *c.borrow_mut() = Some(Chaos {
+            rng: Rng::new(seed, 0xC4A05 + stream),
+            cfg,
+        })
+    });
 }
 fn chaos_remove() {
     CHAOS.with(|c| *c.borrow_mut() = None);
@@ -140,7 +145,9 @@ fn chaos() {
             std::thread::sleep(Duration::ZERO);
         }
         if ch.rng.p(cfg.nap_p) && cfg.nap_us_max > 0 {
-            std::thread::sleep(Duration::from_micros(ch.rng.range(1, u64::from(cfg.nap_us_max))));
+            std::thread::sleep(Duration::from_micros(
+                ch.rng.range(1, u64::from(cfg.nap_us_max)),
+            ));
         }
     });
 }
@@ -160,7 +167,11 @@ struct Hist {
 }
 impl Default for Hist {
     fn default() -> Self {
-        Self { b: [0; 40], n: 0, max_ns: 0 }
+        Self {
+            b: [0; 40],
+            n: 0,
+            max_ns: 0,
+        }
     }
 }
 impl Hist {
@@ -271,7 +282,9 @@ impl<T> Cell<T> {
     fn contended_note(&self) {
         let _ = self
             .contended
-            .fetch_update(Ordering::AcqRel, Ordering::Acquire, |n| Some(n.saturating_add(1)));
+            .fetch_update(Ordering::AcqRel, Ordering::Acquire, |n| {
+                Some(n.saturating_add(1))
+            });
     }
     fn contended_clear(&self) {
         self.contended.store(0, Ordering::Release);
@@ -375,11 +388,46 @@ impl Scenario {
             });
         }
         let gpu = match r.below(5) {
-            0 => GpuCfg { burst: 4096, stall_p: 0, stall_us_max: 0, cost_us: 0, barrier_us_max: 0, irq_jitter_us: 0 },
-            1 => GpuCfg { burst: 64, stall_p: 40, stall_us_max: 3000, cost_us: 0, barrier_us_max: 200, irq_jitter_us: 300 },
-            2 => GpuCfg { burst: 16, stall_p: 8, stall_us_max: 30000, cost_us: 2, barrier_us_max: 1000, irq_jitter_us: 2000 },
-            3 => GpuCfg { burst: 512, stall_p: 100, stall_us_max: 800, cost_us: 0, barrier_us_max: 50, irq_jitter_us: 100 },
-            _ => GpuCfg { burst: 1, stall_p: 0, stall_us_max: 0, cost_us: 20, barrier_us_max: 100, irq_jitter_us: 500 },
+            0 => GpuCfg {
+                burst: 4096,
+                stall_p: 0,
+                stall_us_max: 0,
+                cost_us: 0,
+                barrier_us_max: 0,
+                irq_jitter_us: 0,
+            },
+            1 => GpuCfg {
+                burst: 64,
+                stall_p: 40,
+                stall_us_max: 3000,
+                cost_us: 0,
+                barrier_us_max: 200,
+                irq_jitter_us: 300,
+            },
+            2 => GpuCfg {
+                burst: 16,
+                stall_p: 8,
+                stall_us_max: 30000,
+                cost_us: 2,
+                barrier_us_max: 1000,
+                irq_jitter_us: 2000,
+            },
+            3 => GpuCfg {
+                burst: 512,
+                stall_p: 100,
+                stall_us_max: 800,
+                cost_us: 0,
+                barrier_us_max: 50,
+                irq_jitter_us: 100,
+            },
+            _ => GpuCfg {
+                burst: 1,
+                stall_p: 0,
+                stall_us_max: 0,
+                cost_us: 20,
+                barrier_us_max: 100,
+                irq_jitter_us: 500,
+            },
         };
         let holder = if r.p(512) {
             HolderCfg {
@@ -389,13 +437,36 @@ impl Scenario {
                 gap_us_max: [100, 1000, 10000][r.below(3) as usize],
             }
         } else {
-            HolderCfg { on: false, hold_us_max: 0, rings_after_p: 0, gap_us_max: 0 }
+            HolderCfg {
+                on: false,
+                hold_us_max: 0,
+                rings_after_p: 0,
+                gap_us_max: 0,
+            }
         };
         let chaos = match r.below(4) {
             0 => ChaosCfg::OFF,
-            1 => ChaosCfg { yield_p: 64, spin_p: 16, sleep0_p: 16, nap_p: 0, nap_us_max: 0 },
-            2 => ChaosCfg { yield_p: 256, spin_p: 128, sleep0_p: 128, nap_p: 4, nap_us_max: 200 },
-            _ => ChaosCfg { yield_p: 512, spin_p: 256, sleep0_p: 256, nap_p: 16, nap_us_max: 1000 },
+            1 => ChaosCfg {
+                yield_p: 64,
+                spin_p: 16,
+                sleep0_p: 16,
+                nap_p: 0,
+                nap_us_max: 0,
+            },
+            2 => ChaosCfg {
+                yield_p: 256,
+                spin_p: 128,
+                sleep0_p: 128,
+                nap_p: 4,
+                nap_us_max: 200,
+            },
+            _ => ChaosCfg {
+                yield_p: 512,
+                spin_p: 256,
+                sleep0_p: 256,
+                nap_p: 16,
+                nap_us_max: 1000,
+            },
         };
         let mut sc = Scenario {
             seed,
@@ -441,7 +512,12 @@ impl Scenario {
         match std::env::var("RS_HOLDER").as_deref() {
             Ok("0") => self.holder.on = false,
             Ok("1") if !self.holder.on => {
-                self.holder = HolderCfg { on: true, hold_us_max: 2000, rings_after_p: 1024, gap_us_max: 1000 };
+                self.holder = HolderCfg {
+                    on: true,
+                    hold_us_max: 2000,
+                    rings_after_p: 1024,
+                    gap_us_max: 1000,
+                };
             }
             _ => {}
         }
@@ -458,7 +534,14 @@ impl Scenario {
             self.sync_p = v.parse().unwrap_or(0);
         }
         if std::env::var("RS_GPU").as_deref() == Ok("fast") {
-            self.gpu = GpuCfg { burst: 4096, stall_p: 0, stall_us_max: 0, cost_us: 0, barrier_us_max: 0, irq_jitter_us: 0 };
+            self.gpu = GpuCfg {
+                burst: 4096,
+                stall_p: 0,
+                stall_us_max: 0,
+                cost_us: 0,
+                barrier_us_max: 0,
+                irq_jitter_us: 0,
+            };
         }
     }
 
@@ -470,8 +553,20 @@ impl Scenario {
         s.synth_hot = env_u("RS_SYNTH", 4) as usize;
         s.turn_us = 100;
         s.workers = env_u("RS_WORKERS", 2) as usize;
-        s.gpu = GpuCfg { burst: 4096, stall_p: 0, stall_us_max: 0, cost_us: 0, barrier_us_max: 0, irq_jitter_us: 0 };
-        s.holder = HolderCfg { on: false, hold_us_max: 0, rings_after_p: 0, gap_us_max: 0 };
+        s.gpu = GpuCfg {
+            burst: 4096,
+            stall_p: 0,
+            stall_us_max: 0,
+            cost_us: 0,
+            barrier_us_max: 0,
+            irq_jitter_us: 0,
+        };
+        s.holder = HolderCfg {
+            on: false,
+            hold_us_max: 0,
+            rings_after_p: 0,
+            gap_us_max: 0,
+        };
         s.busy_p = 0;
         s.sync_p = 0;
         s.chaos = ChaosCfg::OFF;
@@ -482,7 +577,12 @@ impl Scenario {
     /// the two workers busy.
     fn contention(seed: u64, secs: f64) -> Self {
         let mut s = Self::baton(seed, secs);
-        s.holder = HolderCfg { on: true, hold_us_max: 3000, rings_after_p: 0, gap_us_max: 300 };
+        s.holder = HolderCfg {
+            on: true,
+            hold_us_max: 3000,
+            rings_after_p: 0,
+            gap_us_max: 300,
+        };
         s
     }
 }
@@ -649,17 +749,25 @@ impl Env for ClientEnv<'_> {
         if raw & !support::SYNC == support::ge(0, support::Kind::SetObj).raw() {
             return support::ge(0, support::Kind::SetObj).words();
         }
-        vec![kf_abi::submit::method_header_inc(0, 0x100, 1).expect("header"), entry_n(raw) as u32]
+        vec![
+            kf_abi::submit::method_header_inc(0, 0x100, 1).expect("header"),
+            entry_n(raw) as u32,
+        ]
     }
     fn publish(&mut self, p: Pub) {
         chaos();
         if let Pub::Guest { tested, stored, .. } = p {
             if tested != stored {
-                self.sh.violation(format!("I7 tested {tested:#x} != stored {stored:#x}"));
+                self.sh
+                    .violation(format!("I7 tested {tested:#x} != stored {stored:#x}"));
             }
         }
         self.c.published.fetch_add(1, Ordering::Relaxed);
-        self.c.pq.lock().unwrap_or_else(|e| e.into_inner()).push_back(p);
+        self.c
+            .pq
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .push_back(p);
     }
     fn write_guest_get(&mut self, v: u32) {
         chaos();
@@ -677,7 +785,10 @@ impl Env for ClientEnv<'_> {
     }
     fn executed(&mut self, _migrate: bool) {}
     fn event(&mut self, e: Ev) {
-        if matches!(e, Ev::BeyondPut | Ev::PutBound | Ev::EntryRefused | Ev::ScanRefused) {
+        if matches!(
+            e,
+            Ev::BeyondPut | Ev::PutBound | Ev::EntryRefused | Ev::ScanRefused
+        ) {
             self.sh.violation(format!("I5 relay event {e:?}"));
         }
     }
@@ -768,7 +879,8 @@ impl Rt<'_> {
             rec.relay.step(&mut env);
             steps += 1;
             if steps > 4096 {
-                self.sh.violation("I5 a turn did not end within 4096 micro-steps".into());
+                self.sh
+                    .violation("I5 a turn did not end within 4096 micro-steps".into());
                 record.cancel();
                 return Some(false);
             }
@@ -878,13 +990,15 @@ impl Rt<'_> {
 impl RelayLoop for Rt<'_> {
     /// MIRROR of `user_ring_waiting`.
     fn waiting(&self) -> bool {
-        self.rings
-            .try_lock()
-            .map_or(true, |rings| rings.iter().any(|c| c.is_waiting() || c.pending()))
+        self.rings.try_lock().map_or(true, |rings| {
+            rings.iter().any(|c| c.is_waiting() || c.pending())
+        })
     }
     /// MIRROR of `user_ring_peek`.
     fn peek(&self, why: Peek) -> bool {
-        let Ok(rings) = self.rings.lock() else { return false };
+        let Ok(rings) = self.rings.lock() else {
+            return false;
+        };
         let mut rang = false;
         for record in rings.iter() {
             rang |= self.peek_one(record, why);
@@ -967,7 +1081,14 @@ fn sleep_or_spin(us: u64) {
     }
 }
 
-fn gpu_thread(sh: &Shared, clients: &[Arc<Client>], cfg: GpuCfg, irqs: &Mutex<BinaryHeap<Due>>, seed: u64, ch: ChaosCfg) {
+fn gpu_thread(
+    sh: &Shared,
+    clients: &[Arc<Client>],
+    cfg: GpuCfg,
+    irqs: &Mutex<BinaryHeap<Due>>,
+    seed: u64,
+    ch: ChaosCfg,
+) {
     chaos_install(seed, 900, ch);
     let mut rng = Rng::new(seed, 900);
     let mut popped_total = vec![0u64; clients.len()];
@@ -1015,14 +1136,17 @@ fn gpu_thread(sh: &Shared, clients: &[Arc<Client>], cfg: GpuCfg, irqs: &Mutex<Bi
                     Pub::Marker(_) | Pub::Staged { .. } => {}
                 }
                 popped_total[ci] += 1;
-                c.hw_get.store((popped_total[ci] as u32) & (PRIV_N - 1), Ordering::Release);
+                c.hw_get
+                    .store((popped_total[ci] as u32) & (PRIV_N - 1), Ordering::Release);
                 c.last_pop_ns.store(sh.now(), Ordering::Release);
                 if let Pub::Marker(n) = item {
                     chaos();
                     // the marker processed: REFERENCE, then the non-stall interrupt (delayed, reordered across markers)
                     c.hw_ref.store(Marks::value(n), Ordering::Release);
                     let due = sh.now() + rng.below(u64::from(cfg.irq_jitter_us) + 1) * 1000;
-                    irqs.lock().unwrap_or_else(|e| e.into_inner()).push(Due(due));
+                    irqs.lock()
+                        .unwrap_or_else(|e| e.into_inner())
+                        .push(Due(due));
                     sh.irqs_raised.fetch_add(1, Ordering::Relaxed);
                 }
             }
@@ -1051,7 +1175,12 @@ fn irq_thread(sh: &Shared, ev: &Notifier, irqs: &Mutex<BinaryHeap<Due>>) {
         };
         match next {
             Some(_) => {
-                let _ = sh.irq_pending_since.compare_exchange(0, sh.now(), Ordering::AcqRel, Ordering::Acquire);
+                let _ = sh.irq_pending_since.compare_exchange(
+                    0,
+                    sh.now(),
+                    Ordering::AcqRel,
+                    Ordering::Acquire,
+                );
                 let _ = ev.signal();
             }
             None => std::thread::sleep(Duration::from_micros(50)),
@@ -1076,9 +1205,12 @@ fn holder_thread(sh: &Shared, rt: &Rt<'_>, cfg: HolderCfg, seed: u64, ch: ChaosC
                 }
                 if rng.p(cfg.rings_after_p) {
                     if cell.request() {
-                        cell.wake_if(|_| true, |idx| {
-                            rt.ring_token(idx);
-                        });
+                        cell.wake_if(
+                            |_| true,
+                            |idx| {
+                                rt.ring_token(idx);
+                            },
+                        );
                     }
                 }
             }
@@ -1120,11 +1252,22 @@ struct Pending {
     serves_at_hw: u64,
 }
 
-fn guest(sh: &Shared, plane: &Plane<'_>, wake: &Notifier, c: &Client, role: Role, sc: &Scenario, deadline: Instant) -> GuestReport {
+fn guest(
+    sh: &Shared,
+    plane: &Plane<'_>,
+    wake: &Notifier,
+    c: &Client,
+    role: Role,
+    sc: &Scenario,
+    deadline: Instant,
+) -> GuestReport {
     let seed = sc.seed;
     chaos_install(seed, 100 + u64::from(c.idx), sc.chaos);
     let mut rng = Rng::new(seed, 100 + u64::from(c.idx));
-    let mut rep = GuestReport { role: Some(role), ..Default::default() };
+    let mut rep = GuestReport {
+        role: Some(role),
+        ..Default::default()
+    };
     let mut put_abs: u64 = 0;
     let mut gg_abs: u64 = 0;
     let mut last_gg: u32 = 0;
@@ -1132,7 +1275,9 @@ fn guest(sh: &Shared, plane: &Plane<'_>, wake: &Notifier, c: &Client, role: Role
     let hard = Duration::from_millis(env_u("RS_HARD_MS", 5_000));
     let ring = |rep: &mut GuestReport, style_dup: bool| {
         let go = || {
-            if plane.trap_write(Class::Doorbell, 0, DB_OFF, u64::from(c.idx), 4) == Action::WakeWorker {
+            if plane.trap_write(Class::Doorbell, 0, DB_OFF, u64::from(c.idx), 4)
+                == Action::WakeWorker
+            {
                 let _ = wake.signal();
             }
         };
@@ -1149,7 +1294,10 @@ fn guest(sh: &Shared, plane: &Plane<'_>, wake: &Notifier, c: &Client, role: Role
         i % 2 == 0
     }
     // Poll completions: updates gg_abs, pending bookkeeping, latency, I2.
-    let poll = |gg_abs: &mut u64, last_gg: &mut u32, pend: &mut VecDeque<Pending>, rep: &mut GuestReport| {
+    let poll = |gg_abs: &mut u64,
+                last_gg: &mut u32,
+                pend: &mut VecDeque<Pending>,
+                rep: &mut GuestReport| {
         let gg = c.gp_get.load(Ordering::Acquire);
         *gg_abs += u64::from(gg.wrapping_sub(*last_gg) & (GUEST_N - 1));
         *last_gg = gg;
@@ -1170,7 +1318,10 @@ fn guest(sh: &Shared, plane: &Plane<'_>, wake: &Notifier, c: &Client, role: Role
             let total = now.saturating_sub(p.t_submit);
             rep.resp.add(resp);
             rep.total.add(total);
-            let served_meanwhile = sh.serves.load(Ordering::Relaxed).saturating_sub(p.serves_at_hw);
+            let served_meanwhile = sh
+                .serves
+                .load(Ordering::Relaxed)
+                .saturating_sub(p.serves_at_hw);
             rep.max_serves_during_resp = rep.max_serves_during_resp.max(served_meanwhile);
             // STARVED = slow while the workers kept serving OTHER tokens (a loaded dev box makes everything slow, but the workers then
             // serve little; the baton is slow while they serve millions)
@@ -1191,7 +1342,13 @@ fn guest(sh: &Shared, plane: &Plane<'_>, wake: &Notifier, c: &Client, role: Role
             pend.pop_front();
         }
     };
-    let wait_for = |abs: u64, gg_abs: &mut u64, last_gg: &mut u32, pend: &mut VecDeque<Pending>, rep: &mut GuestReport, what: &str| -> bool {
+    let wait_for = |abs: u64,
+                    gg_abs: &mut u64,
+                    last_gg: &mut u32,
+                    pend: &mut VecDeque<Pending>,
+                    rep: &mut GuestReport,
+                    what: &str|
+     -> bool {
         // STUCK = no progress of the guest-visible GET for `hard` (a slow run on a loaded box is not stuck)
         let mut t = Instant::now();
         let mut seen_gg = *gg_abs;
@@ -1253,14 +1410,26 @@ fn guest(sh: &Shared, plane: &Plane<'_>, wake: &Notifier, c: &Client, role: Role
                 rep.full_events += 1;
                 let t = Instant::now();
                 let target = gg_abs + 1;
-                if !wait_for(target, &mut gg_abs, &mut last_gg, &mut pend, &mut rep, "ring full") {
+                if !wait_for(
+                    target,
+                    &mut gg_abs,
+                    &mut last_gg,
+                    &mut pend,
+                    &mut rep,
+                    "ring full",
+                ) {
                     break 'outer;
                 }
                 rep.full_wait.add(t.elapsed().as_nanos() as u64);
                 continue;
             }
             // a run of entries up to the next full slot, one PUT store
-            let room = (c.gp_get.load(Ordering::Acquire).wrapping_sub(put).wrapping_sub(1) & (GUEST_N - 1)) as u64;
+            let room = (c
+                .gp_get
+                .load(Ordering::Acquire)
+                .wrapping_sub(put)
+                .wrapping_sub(1)
+                & (GUEST_N - 1)) as u64;
             let run = (count - written).min(room.max(1)).min(rng.range(1, 512));
             for k in 0..run {
                 let slot = put.wrapping_add(k as u32) & (GUEST_N - 1);
@@ -1273,9 +1442,17 @@ fn guest(sh: &Shared, plane: &Plane<'_>, wake: &Notifier, c: &Client, role: Role
             written += run;
             put_abs += run;
             chaos(); // between the entry stores and the PUT store
-            c.gp_put.store(put.wrapping_add(run as u32) & (GUEST_N - 1), Ordering::Release);
+            c.gp_put.store(
+                put.wrapping_add(run as u32) & (GUEST_N - 1),
+                Ordering::Release,
+            );
             rung_since_put = false;
-            pend.push_back(Pending { abs: put_abs, t_submit: sh.now(), t_hw: None, serves_at_hw: 0 });
+            pend.push_back(Pending {
+                abs: put_abs,
+                t_submit: sh.now(),
+                t_hw: None,
+                serves_at_hw: 0,
+            });
             rep.entries += run;
             chaos(); // between the PUT store and the doorbell
             let last_run = written >= count;
@@ -1293,13 +1470,27 @@ fn guest(sh: &Shared, plane: &Plane<'_>, wake: &Notifier, c: &Client, role: Role
             ring(&mut rep, false);
         }
         if wait_done {
-            if !wait_for(put_abs, &mut gg_abs, &mut last_gg, &mut pend, &mut rep, "cold wait") {
+            if !wait_for(
+                put_abs,
+                &mut gg_abs,
+                &mut last_gg,
+                &mut pend,
+                &mut rep,
+                "cold wait",
+            ) {
                 break 'outer;
             }
         } else if kind == Role::Filler {
             // wait until half a ring has drained
             let target = put_abs.saturating_sub(u64::from(GUEST_N) / 2);
-            if !wait_for(target, &mut gg_abs, &mut last_gg, &mut pend, &mut rep, "filler drain") {
+            if !wait_for(
+                target,
+                &mut gg_abs,
+                &mut last_gg,
+                &mut pend,
+                &mut rep,
+                "filler drain",
+            ) {
                 break 'outer;
             }
         }
@@ -1311,7 +1502,14 @@ fn guest(sh: &Shared, plane: &Plane<'_>, wake: &Notifier, c: &Client, role: Role
     // final drain: everything published must be completed (guest GET covers PUT)
     if !sh.abort.load(Ordering::Acquire) {
         ring(&mut rep, false);
-        let _ = wait_for(put_abs, &mut gg_abs, &mut last_gg, &mut pend, &mut rep, "final drain");
+        let _ = wait_for(
+            put_abs,
+            &mut gg_abs,
+            &mut last_gg,
+            &mut pend,
+            &mut rep,
+            "final drain",
+        );
     }
     chaos_remove();
     rep
@@ -1339,46 +1537,49 @@ struct Outcome {
 }
 
 fn bound_ms() -> u64 {
-    std::env::var("RS_BOUND_MS").ok().and_then(|v| v.parse().ok()).unwrap_or(250)
+    std::env::var("RS_BOUND_MS")
+        .ok()
+        .and_then(|v| v.parse().ok())
+        .unwrap_or(250)
 }
 
 /// RS_DUMP=1: the state of every relay at the moment a run was aborted (before the workers are stopped).
 fn dump_state(rt: &Rt<'_>, clients: &[Arc<Client>]) {
-        for (i, cell) in rt.cells.iter().enumerate() {
-            let c = &clients[i];
-            if let Ok(r) = cell.try_lock() {
-                let k = &r.relay.core;
-                eprintln!(
-                    "DUMP relay {i}: need={:?} wait={:?} again={} dead={:?} cursor={} put={} gp_get={} written_get={} guest_get_owed={:?} fetch(issued={} fetched={} avail={}) marks(issued={} seen={}) hw_get={} hw_ref={:#x} pq={} unnotified={} marker_event={} gate_target={} sync_waiting={} cell(retry={} waiting={} contended_run={} canceled={})",
-                    k.need,
-                    r.wait,
-                    k.again,
-                    r.dead,
-                    k.cursor,
-                    c.gp_put.load(Ordering::Relaxed),
-                    c.gp_get.load(Ordering::Relaxed),
-                    k.written_get,
-                    k.guest_get,
-                    k.fetch.issued(),
-                    k.fetch.fetched(),
-                    k.fetch.available(),
-                    k.marks.issued(),
-                    k.marks.seen(),
-                    c.hw_get.load(Ordering::Relaxed),
-                    c.hw_ref.load(Ordering::Relaxed),
-                    c.pq.lock().map(|q| q.len()).unwrap_or(0),
-                    k.unnotified,
-                    k.marker_event,
-                    k.gate_target,
-                    k.sync.waiting(),
-                    cell.retry.load(Ordering::Relaxed),
-                    cell.waiting.load(Ordering::Relaxed),
-                    cell.contended_run(),
-                    cell.is_canceled(),
-                );
-            }
+    for (i, cell) in rt.cells.iter().enumerate() {
+        let c = &clients[i];
+        if let Ok(r) = cell.try_lock() {
+            let k = &r.relay.core;
+            eprintln!(
+                "DUMP relay {i}: need={:?} wait={:?} again={} dead={:?} cursor={} put={} gp_get={} written_get={} guest_get_owed={:?} fetch(issued={} fetched={} avail={}) marks(issued={} seen={}) hw_get={} hw_ref={:#x} pq={} unnotified={} marker_event={} gate_target={} sync_waiting={} cell(retry={} waiting={} contended_run={} canceled={})",
+                k.need,
+                r.wait,
+                k.again,
+                r.dead,
+                k.cursor,
+                c.gp_put.load(Ordering::Relaxed),
+                c.gp_get.load(Ordering::Relaxed),
+                k.written_get,
+                k.guest_get,
+                k.fetch.issued(),
+                k.fetch.fetched(),
+                k.fetch.available(),
+                k.marks.issued(),
+                k.marks.seen(),
+                c.hw_get.load(Ordering::Relaxed),
+                c.hw_ref.load(Ordering::Relaxed),
+                c.pq.lock().map(|q| q.len()).unwrap_or(0),
+                k.unnotified,
+                k.marker_event,
+                k.gate_target,
+                k.sync.waiting(),
+                cell.retry.load(Ordering::Relaxed),
+                cell.waiting.load(Ordering::Relaxed),
+                cell.contended_run(),
+                cell.is_canceled(),
+            );
         }
     }
+}
 
 fn run_scenario(sc: &Scenario) -> Outcome {
     #[cfg(feature = "chaos-hooks")]
@@ -1418,12 +1619,27 @@ fn run_scenario(sc: &Scenario) -> Outcome {
     let clients: Vec<Arc<Client>> = (0..n as u32).map(|i| Arc::new(Client::new(i))).collect();
     let mut cells = Vec::new();
     for i in 0..n as u32 {
-        let life = if sc.always_scan { Lifecycle::always_scan() } else { Lifecycle::new() };
-        let relay = Relay::new(PRIV_N, life, Scan::for_subdevice(1).unwrap(), Glue::default())
-            .with_lazy(kf_chan::user_lazy::LazyConfig::ON);
+        let life = if sc.always_scan {
+            Lifecycle::always_scan()
+        } else {
+            Lifecycle::new()
+        };
+        let relay = Relay::new(
+            PRIV_N,
+            life,
+            Scan::for_subdevice(1).unwrap(),
+            Glue::default(),
+        )
+        .with_lazy(kf_chan::user_lazy::LazyConfig::ON);
         cells.push(Arc::new(Cell::new(
             i,
-            Rec { relay, env_rng_seed: sc.seed ^ (u64::from(i) << 40), wait: None, dead: None, turns: 0 },
+            Rec {
+                relay,
+                env_rng_seed: sc.seed ^ (u64::from(i) << 40),
+                wait: None,
+                dead: None,
+                turns: 0,
+            },
         )));
     }
     let rt = Rt {
@@ -1450,14 +1666,21 @@ fn run_scenario(sc: &Scenario) -> Outcome {
         // workers
         let mut worker_handles = Vec::new();
         for wi in 0..sc.workers {
-            let (rt, sh, plane, wake, ev, comp_fd, ws, stats) = (&rt, &sh, &plane, &wake, &ev, &comp_fd, &ws, &stats);
+            let (rt, sh, plane, wake, ev, comp_fd, ws, stats) =
+                (&rt, &sh, &plane, &wake, &ev, &comp_fd, &ws, &stats);
             let sc = sc.clone();
             worker_handles.push(s.spawn(move || {
                 chaos_install(sc.seed, 10 + wi as u64, sc.chaos);
                 let poller = Poller::create().expect("epoll");
-                poller.watch(wake.as_source_fd(), worker::WORKER_EFD_TAG).unwrap();
-                poller.watch(comp_fd.as_source_fd(), worker::COMPLETIONS_TAG).unwrap();
-                poller.watch(ev.as_source_fd(), worker::OTHER_TAG_BASE).unwrap();
+                poller
+                    .watch(wake.as_source_fd(), worker::WORKER_EFD_TAG)
+                    .unwrap();
+                poller
+                    .watch(comp_fd.as_source_fd(), worker::COMPLETIONS_TAG)
+                    .unwrap();
+                poller
+                    .watch(ev.as_source_fd(), worker::OTHER_TAG_BASE)
+                    .unwrap();
                 let on_other = |tag: u64| {
                     if tag == worker::TICK_TAG {
                         return;
@@ -1467,7 +1690,10 @@ fn run_scenario(sc: &Scenario) -> Outcome {
                     let since = sh.irq_pending_since.swap(0, Ordering::AcqRel);
                     if since != 0 {
                         let lat = sh.now().saturating_sub(since);
-                        sh.irq_hist.lock().unwrap_or_else(|e| e.into_inner()).add(lat);
+                        sh.irq_hist
+                            .lock()
+                            .unwrap_or_else(|e| e.into_inner())
+                            .add(lat);
                         sh.irqs_dispatched.fetch_add(1, Ordering::Relaxed);
                     }
                 };
@@ -1490,7 +1716,10 @@ fn run_scenario(sc: &Scenario) -> Outcome {
         }
         let gpu = s.spawn(|| gpu_thread(&sh, &clients, sc.gpu, &irqs, sc.seed, sc.chaos));
         let irq = s.spawn(|| irq_thread(&sh, &ev, &irqs));
-        let holder = sc.holder.on.then(|| s.spawn(|| holder_thread(&sh, &rt, sc.holder, sc.seed, sc.chaos)));
+        let holder = sc
+            .holder
+            .on
+            .then(|| s.spawn(|| holder_thread(&sh, &rt, sc.holder, sc.seed, sc.chaos)));
         let mut guest_handles = Vec::new();
         for (i, role) in sc.roles.iter().enumerate() {
             let (sh, plane, wake, c) = (&sh, &plane, &wake, &clients[i]);
@@ -1513,7 +1742,10 @@ fn run_scenario(sc: &Scenario) -> Outcome {
         if !sh.abort.load(Ordering::Acquire) {
             let t = Instant::now();
             while t.elapsed() < Duration::from_secs(5) {
-                if clients.iter().all(|c| c.pq.lock().map(|q| q.is_empty()).unwrap_or(true)) {
+                if clients
+                    .iter()
+                    .all(|c| c.pq.lock().map(|q| q.is_empty()).unwrap_or(true))
+                {
                     break;
                 }
                 std::thread::sleep(Duration::from_millis(1));
@@ -1525,7 +1757,9 @@ fn run_scenario(sc: &Scenario) -> Outcome {
         let _ = ev.signal();
         // keep waking until the workers are gone (a worker may be mid-wait)
         let t = Instant::now();
-        while worker_handles.iter().any(|h| !h.is_finished()) && t.elapsed() < Duration::from_secs(5) {
+        while worker_handles.iter().any(|h| !h.is_finished())
+            && t.elapsed() < Duration::from_secs(5)
+        {
             let _ = wake.signal();
             std::thread::sleep(Duration::from_millis(1));
         }
@@ -1568,7 +1802,9 @@ fn run_scenario(sc: &Scenario) -> Outcome {
     let served = g(&ws.served);
     let calls = rt.serve_calls.load(Ordering::Relaxed);
     if served != calls {
-        sh.violation(format!("I4 WorkerStats.served {served} != run_translated calls {calls}"));
+        sh.violation(format!(
+            "I4 WorkerStats.served {served} != run_translated calls {calls}"
+        ));
     }
     if g(&stats.busy_looks) * u64::from(worker::LOOK_EVERY) > served {
         sh.violation(format!(
@@ -1635,7 +1871,15 @@ fn run_scenario(sc: &Scenario) -> Outcome {
         soft,
         summary: format!(
             "seed {} clients={:?} workers={} scan={} sync_p={} gpu={:?} holder={:?} busy_p={} chaos={:?} wall={:.2}s",
-            sc.seed, sc.roles, sc.workers, sc.always_scan, sc.sync_p, sc.gpu, sc.holder, sc.busy_p, sc.chaos,
+            sc.seed,
+            sc.roles,
+            sc.workers,
+            sc.always_scan,
+            sc.sync_p,
+            sc.gpu,
+            sc.holder,
+            sc.busy_p,
+            sc.chaos,
             elapsed.as_secs_f64()
         ),
         entries,
@@ -1672,10 +1916,16 @@ fn failed_run(o: &Outcome) -> bool {
 }
 
 fn env_f(name: &str, d: f64) -> f64 {
-    std::env::var(name).ok().and_then(|v| v.parse().ok()).unwrap_or(d)
+    std::env::var(name)
+        .ok()
+        .and_then(|v| v.parse().ok())
+        .unwrap_or(d)
 }
 fn env_u(name: &str, d: u64) -> u64 {
-    std::env::var(name).ok().and_then(|v| v.parse().ok()).unwrap_or(d)
+    std::env::var(name)
+        .ok()
+        .and_then(|v| v.parse().ok())
+        .unwrap_or(d)
 }
 
 // ------------------------------------------------------------------------------------------------
@@ -1690,7 +1940,12 @@ fn smoke_a_few_seeds_hold_every_invariant() {
         if !o.violations.is_empty() || !o.soft.is_empty() {
             report(&o);
         }
-        assert!(!failed_run(&o), "seed {seed}: {:?} {:?}", o.violations, o.soft);
+        assert!(
+            !failed_run(&o),
+            "seed {seed}: {:?} {:?}",
+            o.violations,
+            o.soft
+        );
         assert!(o.entries > 0, "seed {seed}: nothing ran");
     }
 }
@@ -1739,7 +1994,27 @@ fn expected_red_exhausted_try_lock_retries_leave_a_relay_to_the_backstop() {
         assert!(o.violations.is_empty(), "seed {seed}: {:?}", o.violations);
     }
     println!("worst response {worst:.1} ms, backstop_contended total {contended}");
-    assert_eq!(contended, 0, "a contended relay was re-rung only by the 50 ms safety net");
+    assert_eq!(
+        contended, 0,
+        "a contended relay was re-rung only by the 50 ms safety net"
+    );
+}
+
+/// ★ EXPECTED RED, UNCLASSIFIED (2026-10-20): `backstop_found_work > 0` -- the 50 ms safety net found a satisfied marker wait that no
+/// look had rung (a lost or never-delivered announcement). MEASURED: seed 18 (2 workers, 7 clients, SYNC_WAIT on 1/4 of the entries, scan
+/// mode, fast GPU with short stalls) shows 1-2 per 0.25 s run in 2 of 4 runs. HYPOTHESIS (not proven): the same family as the exhausted
+/// try_lock above -- a look that finds the record lock held by the serving worker rings only while `may_retry`, and `contended_run` is
+/// far past 64 in this run (`contended_turns` 335-747). FALSIFIER: the counter stays 0 in 20 runs of this seed after the exhausted-retry
+/// repair; if it does not, the loss is somewhere else (the arm/peek ordering in `user_ring_arm`).
+#[test]
+#[ignore = "EXPECTED RED: a satisfied marker wait found only by the backstop (seed 18); flaky by nature, run it several times"]
+fn expected_red_seed_18_marker_wait_found_only_by_the_backstop() {
+    let mut found = 0;
+    for _ in 0..6 {
+        let o = run_scenario(&Scenario::from_seed(18, 0.25));
+        found += o.backstop_found_work;
+    }
+    assert_eq!(found, 0, "backstop_found_work over 6 runs of seed 18");
 }
 
 /// Many seeds (the long run). `RS_FROM`, `RS_TO`, `RS_SECS` (per seed), `RS_PRESET=baton|contention|random`.
@@ -1810,8 +2085,16 @@ fn one_seed() {
 /// re-read (the test names the line).
 #[test]
 fn a_source_pin_the_mirrored_glue_still_matches_production() {
-    let src = std::fs::read_to_string(concat!(env!("CARGO_MANIFEST_DIR"), "/../kf-qemu/src/userpump.rs")).unwrap();
-    let relay = std::fs::read_to_string(concat!(env!("CARGO_MANIFEST_DIR"), "/../kf-qemu/src/userrelay.rs")).unwrap();
+    let src = std::fs::read_to_string(concat!(
+        env!("CARGO_MANIFEST_DIR"),
+        "/../kf-qemu/src/userpump.rs"
+    ))
+    .unwrap();
+    let relay = std::fs::read_to_string(concat!(
+        env!("CARGO_MANIFEST_DIR"),
+        "/../kf-qemu/src/userrelay.rs"
+    ))
+    .unwrap();
     for pin in [
         "let Ok(mut r) = record.enter() else {",
         "Err(std::sync::TryLockError::WouldBlock) => {\n                record.contended_note();\n                return Some(false);",
@@ -1828,13 +2111,19 @@ fn a_source_pin_the_mirrored_glue_still_matches_production() {
         "let storage = self\n            .r\n            .lease\n            .storage\n            .lock()",
         "Err(kf_rm::memory_list::AccessError::Busy) => Ok(false),",
     ] {
-        assert!(src.contains(pin), "userpump.rs no longer contains the mirrored line: {pin}");
+        assert!(
+            src.contains(pin),
+            "userpump.rs no longer contains the mirrored line: {pin}"
+        );
     }
     for pin in [
         "self.inner.try_lock().inspect_err(|e| {",
         "pub fn contended_note(&self) {",
         "if self.canceled.load(Ordering::Acquire) {\n            return false;\n        }\n        self.retry.store(true, Ordering::Release);",
     ] {
-        assert!(relay.contains(pin), "userrelay.rs no longer contains the mirrored line: {pin}");
+        assert!(
+            relay.contains(pin),
+            "userrelay.rs no longer contains the mirrored line: {pin}"
+        );
     }
 }
