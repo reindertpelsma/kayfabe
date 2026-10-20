@@ -93,7 +93,8 @@ run)
     [ -n "${SMI:-}" ] && kill "$SMI" 2>/dev/null
     sudo dmesg 2>/dev/null | grep -E 'Xid|Flip event timeout|nvAssert' | tail -20 > "$OUT/dmesg.txt"
     echo "PHASE_END mode=$MODE abort=$ABORT guest_xid_delta=$(( $(sudo dmesg 2>/dev/null | grep -c 'Xid') - XID0 )) flip_timeout_delta=$(( $(sudo dmesg 2>/dev/null | grep -c 'Flip event timeout') - FLIP0 )) $(date -Is)"
-    for f in "$OUT"/*.err; do [ -s "$f" ] && { echo "ERR $f:"; head -3 "$f"; }; done
+    for f in "$OUT"/*.err; do if [ -s "$f" ]; then echo "ERR $f:"; head -3 "$f"; fi; done
+    exit 0
     ;;
 *) echo "usage: $0 info|wait-desktop|build|calibrate|run" >&2; exit 2 ;;
 esac

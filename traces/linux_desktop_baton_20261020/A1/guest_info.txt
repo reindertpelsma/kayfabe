@@ -1,0 +1,10 @@
+kernel=6.8.0-142-generic driver=NVRM version: NVIDIA UNIX Open Kernel Module for x86_64  580.159.04  Release Build  (dvs-builder@U22-I3-AF04-09-6)  Wed 
+screen=1920 1080
+OpenGL vendor string: NVIDIA Corporation
+OpenGL renderer string: NVIDIA GeForce RTX 4070/PCIe/SSE2
+OpenGL version string: 4.6.0 NVIDIA 580.159.04
+composite_ext=2
+cm_selection=_NET_WM_CM_S0:  not found.
+wm=_NET_SUPPORTING_WM_CHECK(WINDOW): window id # 0x2000006
+1732 cinnamon --replace
+1040 /usr/lib/xorg/Xorg -core :0 -seat seat0 -auth /var/run/lightdm/root/:0 -nolisten tcp vt7 -novtswitch

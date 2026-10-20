@@ -1,0 +1,10 @@
+WINDOWS_START kf3=0d7ba743 run=/var/lib/kf-windows-20261005/boundary-kayfabe-3431 checkout=6fafcc6e xid_before=25 2026-10-20T13:27:01+02:00
+[windows] broker: backend wayland, socket /run/user/1000/nvkvm/windows-run3431.sock, title 'kayfabe Windows 11 (run 3431, 0d7ba743)' (log /var/lib/kf-windows-20261005/boundary-kayfabe-3431/broker-20261020-132701.log)
+[windows] QEMU pid 302735, kf3 0d7ba743, run /var/lib/kf-windows-20261005/boundary-kayfabe-3431 (qemu.log, serial.log, command.json, marker.txt)
+
+  ┌ kayfabe Windows window: "kayfabe Windows 11 (run 3431, 0d7ba743)" on ubuntu's desktop ┐
+  │ hover = absolute USB tablet; CTRL+ALT+G grab (PS/2 relative mouse); CTRL+ALT+F fullscreen
+  │ guest PowerShell as SYSTEM: scripts/bench/windows/qga_run_ps.py 3431 <file.ps1>
+  │ stop: /data/claude-gap/broker_gap_io.sh stop 3431
+  └────────────────────────────────────────────────────────────────────────────────────────────┘
+OWNER_SESSION_READY=2026-10-20T13:27:03+02:00 run=3431 rev=0d7ba743 install=win11x64.iso qpid=302735

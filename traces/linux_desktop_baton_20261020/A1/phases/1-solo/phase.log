@@ -1,0 +1,5 @@
+PHASE_START mode=solo dur=30 layers=1015 screen=1920x1080 win=945x700 start_at=1792494961.635 pids=2256 2026-10-20T11:15:53+00:00
+WINDOWS         0x2a00002 "glwin-A": ()  945x700+10+45  +10+77
+WINDOWS _NET_ACTIVE_WINDOW(WINDOW): window id # 0x2a00002
+PHASE_END mode=solo abort=0 guest_xid_delta=0 flip_timeout_delta=0 2026-10-20T11:16:34+00:00
+PHASE_SSH_RC=1

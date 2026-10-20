@@ -1,0 +1,1 @@
+HOST_SESSION user=ubuntu uid=1000 type=wayland locked=no idle=no active=yes

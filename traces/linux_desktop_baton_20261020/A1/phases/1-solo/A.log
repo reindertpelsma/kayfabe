@@ -1,0 +1,38 @@
+# baton v1
+# label=A pid=2256 k_ms=0.000 cycles=671422500 grid=945x700 duration_s=30 kernel=glwin layers=1015 vsync=0 canary=0 swapctl=EXT device="NVIDIA GeForce RTX 4070/PCIe/SSE2" driver="4.6.0 NVIDIA 580.159.04"
+# t0_epoch=1792494961.649758
+sec iterations max_iter_ms
+0 210 25.954
+1 226 4.650
+2 227 4.649
+3 225 10.790
+4 227 4.654
+5 226 4.653
+6 227 4.652
+7 225 6.792
+8 226 4.660
+9 226 4.684
+10 227 4.656
+11 226 6.997
+12 225 6.694
+13 226 4.665
+14 227 4.656
+15 226 4.666
+16 225 6.517
+17 226 4.598
+18 226 4.599
+19 227 4.609
+20 226 4.606
+21 225 7.650
+22 226 4.611
+23 226 4.615
+24 226 4.609
+25 225 6.172
+26 226 6.805
+27 226 4.611
+28 226 4.620
+29 226 4.612
+30 1 4.455
+SUMMARY iterations=6765 busy_ms=29990.959 work_cycles=6866475 longest_gap_ms=25.955 longest_gap_end_s=0.169 first_done_ms=4.947 zero_sec=0 mean_iter_ms=4.433 iters_per_s=225.500 aborted=0
+SLOW_CSV_BEGIN idx,start_s,dur_ms,done_s
+SLOW_CSV_END

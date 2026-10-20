@@ -1,0 +1,4 @@
+Traceback (most recent call last):
+  File "/data/claude-ldb-wt/scripts/bench/baton/desktop_baton_parse.py", line 27, in <module>
+    import baton_parse as bp
+ModuleNotFoundError: No module named 'baton_parse'

@@ -1,0 +1,2 @@
+        0x2a00002 "glwin-A": ()  945x700+10+45  +10+77
+_NET_ACTIVE_WINDOW(WINDOW): window id # 0x2a00002

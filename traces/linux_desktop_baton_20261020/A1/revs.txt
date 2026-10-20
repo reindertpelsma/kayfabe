@@ -1,0 +1,4 @@
+revs: kayfabe= kf3=0d7ba743 qemu_sha=d2c8d7490cc24cff
+broker=/data/claude-cursor6/nvkvm-display-broker sha=f4286897eaaa06b5 rev=0452613b5c71cb175271230b3e14c8e3c3eef2db
+host: NVIDIA GeForce RTX 4070, 595.91.07, 302 MiB, 12282 MiB
+env_arm=KF3_TSG_MIRROR=0

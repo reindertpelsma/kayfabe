@@ -1,0 +1,22 @@
+fatal: not a git repository (or any of the parent directories): .git
+INTERACTIVE_START kf3=0d7ba743 checkout= 2026-10-20T13:15:24+02:00
+[interactive] session: ubuntu (uid 1000) session 179034 type=wayland wayland=wayland-0 x=none; locked=no
+[interactive] broker: pid 296357, backend wayland, socket /run/user/1000/nvkvm/display.sock, 0452613b5c71cb175271230b3e14c8e3c3eef2db (/data/claude-cursor6/nvkvm-display-broker)
+[interactive] QEMU pid 296369, kf3 0d7ba743 (/data/claude-desktop-baton-A1/bench/kf3-bins/0d7ba743/qemu-system-x86_64)
+
+  ┌──────────────────────────────────────────────────────────────────────────────┐
+  │ kayfabe guest window: "kayfabe guest" on ubuntu's desktop
+  │   pointer      hover = absolute tablet (the guest pointer follows yours)
+  │   CTRL+ALT+G   GRAB: keyboard + pointer locked to the guest, relative mouse (GNOME asks
+  │                once whether to allow inhibiting shortcuts: click Allow);
+  │                press CTRL+ALT+G again to RELEASE (focus loss also releases)
+  │   CTRL+ALT+F   fullscreen on/off
+  │   grub menu    10 s after TianoCore; arrows, e and Enter work in the window
+  │   desktop      Cinnamon logs in by itself as 'ubuntu' (~60-90 s)
+  │   stop         Ctrl-C here, or: /data/claude-ldb-wt/scripts/bench/display/interactive.sh stop  (or close the window: it asks the
+  │                guest to power down)
+  │   guest ssh    ssh -i /data/claude-desktop-baton-A1/bench/guest_key ubuntu@192.168.77.2
+  │   logs         /data/claude-desktop-baton-A1/run
+  └──────────────────────────────────────────────────────────────────────────────┘
+[interactive] QEMU exited rc=0 (log /data/claude-desktop-baton-A1/run/qemu.log)
+INTERACTIVE_EXIT rc=0 2026-10-20T13:27:01+02:00

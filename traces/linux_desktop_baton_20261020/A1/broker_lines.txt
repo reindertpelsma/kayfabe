@@ -1,0 +1,8 @@
+nvkvm-broker: no zxdg_decoration_manager_v1: the window will have no title bar, no close button and no resize grips, and --title will render nowhere.  That is the compositor's choice, not a bug here.
+nvkvm-broker: resize borders: 14 px of grabbable edge around the window
+nvkvm-broker: title bar: mapped, 1920x28 at the top of the window
+nvkvm-broker: backend 'wayland': window 1920x1080
+nvkvm-broker: GRAB IS TOTAL: under CTRL+ALT+G every key reaches the guest and the pointer is locked to the window.
+nvkvm-broker: client attached: window 1920x1080, capabilities 0x3fff, display device render node 226:128
+nvkvm-broker: frames arrive as dma-buf (zero-copy)
+nvkvm-broker: Present: COPY - the compositor is compositing it  (refresh 16.667 ms)

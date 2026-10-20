@@ -1,0 +1,40 @@
+kf3: display: ChannelAllocated { kind: Window, instance: 2, offset: 0, client: 3251634177, pb: Some(Pushbuffer { addr_space: 1, phys: 4696420352, limit: 4095, size_enum: 0 }), life: 3 }
+kf3: display: ChannelAllocated { kind: WindowImm, instance: 2, offset: 0, client: 3251634177, pb: Some(Pushbuffer { addr_space: 1, phys: 4696465408, limit: 4095, size_enum: 0 }), life: 3 }
+kf3: display: ChannelAllocated { kind: Window, instance: 3, offset: 0, client: 3251634177, pb: Some(Pushbuffer { addr_space: 1, phys: 4696494080, limit: 4095, size_enum: 0 }), life: 3 }
+kf3: display: ChannelAllocated { kind: WindowImm, instance: 3, offset: 0, client: 3251634177, pb: Some(Pushbuffer { addr_space: 1, phys: 4696444928, limit: 4095, size_enum: 0 }), life: 3 }
+kf3: display: ChannelAllocated { kind: Window, instance: 4, offset: 0, client: 3251634177, pb: Some(Pushbuffer { addr_space: 1, phys: 4696428544, limit: 4095, size_enum: 0 }), life: 3 }
+kf3: display: ChannelAllocated { kind: WindowImm, instance: 4, offset: 0, client: 3251634177, pb: Some(Pushbuffer { addr_space: 1, phys: 4696469504, limit: 4095, size_enum: 0 }), life: 3 }
+kf3: display: ChannelAllocated { kind: Window, instance: 5, offset: 0, client: 3251634177, pb: Some(Pushbuffer { addr_space: 1, phys: 4696457216, limit: 4095, size_enum: 0 }), life: 3 }
+kf3: display: ChannelAllocated { kind: WindowImm, instance: 5, offset: 0, client: 3251634177, pb: Some(Pushbuffer { addr_space: 1, phys: 4696485888, limit: 4095, size_enum: 0 }), life: 3 }
+kf3: display: ChannelAllocated { kind: Window, instance: 6, offset: 0, client: 3251634177, pb: Some(Pushbuffer { addr_space: 1, phys: 4696477696, limit: 4095, size_enum: 0 }), life: 3 }
+kf3: display: ChannelAllocated { kind: WindowImm, instance: 6, offset: 0, client: 3251634177, pb: Some(Pushbuffer { addr_space: 1, phys: 4696506368, limit: 4095, size_enum: 0 }), life: 3 }
+kf3: display: ChannelAllocated { kind: Window, instance: 7, offset: 0, client: 3251634177, pb: Some(Pushbuffer { addr_space: 1, phys: 4696498176, limit: 4095, size_enum: 0 }), life: 3 }
+kf3: display: ChannelAllocated { kind: WindowImm, instance: 7, offset: 0, client: 3251634177, pb: Some(Pushbuffer { addr_space: 1, phys: 4696526848, limit: 4095, size_enum: 0 }), life: 3 }
+kf3: display: ChannelAllocated { kind: Cursor, instance: 0, offset: 0, client: 3251634177, pb: None, life: 3 }
+kf3: display: ChannelAllocated { kind: Cursor, instance: 1, offset: 0, client: 3251634177, pb: None, life: 3 }
+kf3: display: ChannelAllocated { kind: Cursor, instance: 2, offset: 0, client: 3251634177, pb: None, life: 3 }
+kf3: display: ChannelAllocated { kind: Cursor, instance: 3, offset: 0, client: 3251634177, pb: None, life: 3 }
+kf3: display: +691825 ms head 3 tick source -> FREE-RUNNING clock (no broker tick event within the silence deadline)
+kf3: display: ChannelFreed { kind: Cursor, instance: 0, preserve: false }
+kf3: display: ChannelFreed { kind: Cursor, instance: 1, preserve: false }
+kf3: display: ChannelFreed { kind: Cursor, instance: 2, preserve: false }
+kf3: display: ChannelFreed { kind: Cursor, instance: 3, preserve: false }
+kf3: display: ChannelFreed { kind: WindowImm, instance: 0, preserve: false }
+kf3: display: ChannelFreed { kind: Window, instance: 0, preserve: false }
+kf3: display: ChannelFreed { kind: WindowImm, instance: 1, preserve: false }
+kf3: display: ChannelFreed { kind: Window, instance: 1, preserve: false }
+kf3: display: ChannelFreed { kind: WindowImm, instance: 2, preserve: false }
+kf3: display: ChannelFreed { kind: Window, instance: 2, preserve: false }
+kf3: display: ChannelFreed { kind: WindowImm, instance: 3, preserve: false }
+kf3: display: ChannelFreed { kind: Window, instance: 3, preserve: false }
+kf3: display: ChannelFreed { kind: WindowImm, instance: 4, preserve: false }
+kf3: display: ChannelFreed { kind: Window, instance: 4, preserve: false }
+kf3: display: ChannelFreed { kind: WindowImm, instance: 5, preserve: false }
+kf3: display: ChannelFreed { kind: Window, instance: 5, preserve: false }
+kf3: display: ChannelFreed { kind: WindowImm, instance: 6, preserve: false }
+kf3: display: ChannelFreed { kind: Window, instance: 6, preserve: false }
+kf3: display: ChannelFreed { kind: WindowImm, instance: 7, preserve: false }
+kf3: display: ChannelFreed { kind: Window, instance: 7, preserve: false }
+kf3: display: ChannelFreed { kind: Core, instance: 0, preserve: false }
+kf3: display: SharedData(None)
+kf3: display: +691908 ms the guest's display life ENDED (its RM unloaded): 0 model channel(s), 0 queued completion(s) dropped (never written) — the boot layer is shown again

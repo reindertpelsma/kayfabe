@@ -21,10 +21,12 @@ with no completion at all is one censored gap, and every gap >= min_gap is class
 """
 import argparse
 import math
+import os
 import re
 import sys
 
-import baton_parse as bp
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))  # python3 -I drops the script dir
+import baton_parse as bp  # noqa: E402
 
 KIND_PRIORITY = ["BATON", "APP_STALL_COMPOSITOR_ALIVE", "COMPOSITOR_STALL_APPS_ALIVE",
                  "GLOBAL_STALL", "SOLO_STALL"]

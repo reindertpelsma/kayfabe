@@ -1,0 +1,1 @@
+CALIBRATE K_MS=5 LAYERS=1015 (glwin: calibrate 1024 layers = 5.043 ms/frame (renderer NVIDIA GeForce RTX 4070/PCIe/SSE2, swap control EXT) )
