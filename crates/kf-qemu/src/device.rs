@@ -268,6 +268,8 @@ pub struct Device {
     fsp_replies_type: std::sync::atomic::AtomicU32,
     pub(crate) ram: &'static crate::mem::RamMap,
     gsp: Mutex<Gsp>,
+    /// Shared bounded fn72 metadata; heartbeat reads never author host actions.
+    heartbeat_system_info: kf_gsp::SystemInfoCell,
     /// ★ w828: the SAME register model the drainer's FSM answers from, shared lock-free with the
     /// vCPU for ONE question — [`GspModel::answer_on_store`] (what a register reads back the
     /// instant the guest's write lands, when the write alone decides it).
@@ -862,8 +864,8 @@ impl Device {
         let census = kf_rm::census::ControlCensusLog::new();
         // ★ The boot display: fn 72's body, kept by the GSP state machine for fn 65's encoder —
         // ONE cell across every `ReselectAtFn1` rebuild, like the census (`kf_gsp::sysinfo`) — with
-        // `gop=on` only. ONE decision for both halves (`crate::gop::ConsoleWiring`): with `gop=off`
-        // there is no cell and no seat, so fn 72 is dropped unread and fn 65 is today's.
+        // Console seats remain GOP-only. Heartbeat clock metadata is retained separately
+        // even with GOP off; fn65's console wiring stays unchanged.
         let console = crate::gop::ConsoleWiring::for_plan(gop.as_ref(), cfg.bar1_bytes);
         // ★ v3-display (`docs/design/V3_DISPLAY.md` §4.1): the chip's display row, when asked for.
         // ⊘ A chip whose bare metal has no display engine (GA100, GH100, GB10x datacenter) is
@@ -1052,8 +1054,14 @@ impl Device {
             Some((0, off)) => off,
             _ => u64::MAX,
         };
+        let heartbeat_system_info = console
+            .seat()
+            .map(|seat| seat.system_info)
+            .unwrap_or_default();
         let gsp = Gsp {
-            fsm: console.fsm(abi),
+            fsm: console
+                .fsm(abi)
+                .with_system_info_cell(heartbeat_system_info.clone()),
             model,
             policy,
             published: std::collections::HashMap::new(),
@@ -1215,6 +1223,7 @@ impl Device {
             staged: Mutex::new(Vec::new()),
             ram,
             gsp: Mutex::new(gsp),
+            heartbeat_system_info,
             store_model,
             holes: kf_trap::memmap::holes_for(family)
                 .iter()
@@ -2537,8 +2546,9 @@ impl Device {
         let mut beat = (std::time::Instant::now(), String::new());
         // ★ The GSP heartbeats (`kf_chip::Family::gsp_heartbeat_mailboxes`): a 595.84+ guest reads
         // them after every RPC poll. Stored on this thread (never a vCPU) every 0.5 s — well inside
-        // the guest's 1.3 × default-timeout window — in ms of the host GPU clock the guest itself
-        // reads through the aliased usermode page.
+        // the guest's 1.3 × default-timeout window — in the validated mapped timer's epoch,
+        // with this life's fn72 guest offset removed. Busy metadata skips a tick; no RM
+        // ioctl, allocation or blocking mutex acquisition belongs in this heartbeat path.
         let heartbeat = self.plane.family.gsp_heartbeat_mailboxes();
         let mut hb_at = std::time::Instant::now() - std::time::Duration::from_secs(1);
         let mut prof_beat = std::time::Instant::now();
@@ -2568,8 +2578,13 @@ impl Device {
                 && hb_at.elapsed() >= std::time::Duration::from_millis(500)
             {
                 hb_at = std::time::Instant::now();
-                if let Ok(ns) = self.rm.gpu_time_ns() {
-                    let ms = u64::from((ns / 1_000_000) as u32);
+                if let Some(ms) = crate::heartbeat::try_sample(
+                    &self.gsp,
+                    &self.heartbeat_system_info,
+                    |g| g.fsm.has_current_system_info().then(|| g.policy.current()),
+                    || self.timer.as_ref()?.read_ns().ok(),
+                ) {
+                    let ms = u64::from(ms);
                     self.shadow_store(gsprm, ms, 4);
                     self.shadow_store(libos, ms, 4);
                 }

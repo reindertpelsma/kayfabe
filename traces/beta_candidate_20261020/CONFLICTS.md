@@ -33,3 +33,12 @@ semantic anchors without changing assertions. No production conflict exists.
 The typed ScrubError change retains C5's existing bootclean outcome/generation
 checks; it changes only whether a stale-life refusal permits reseeding. No scrub
 fixture/cache-key None change or surface-address import is present.
+
+
+CODE READ heartbeat integration, 2026-10-20: source32eebb3ab's exhaustive FSM
+fixture mentioned later reply-trace diagnostics absent from C5. Those diagnostic
+fields are not imported. The new readiness field is added to C5's actual
+exhaustive fixture and its equality assertion; all existing fields/assertions
+stay. The production changes match the approved narrow series: constructor/fn72
+readiness, fresh-queue clear, try-lock cell read, mapped timer and current-life
+Device wiring. No unresolved reset/scrub/drainer semantic conflict remains.

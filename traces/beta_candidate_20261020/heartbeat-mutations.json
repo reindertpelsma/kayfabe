@@ -1,0 +1,108 @@
+[
+  {
+    "status": "killed",
+    "kills": 7,
+    "tests": [
+      "heartbeat::tests::fractional_operands_are_rounded_separately_again",
+      "heartbeat::tests::absent_offset_does_not_even_read_the_clock",
+      "heartbeat::tests::missing_offset_never_publishes_wrong_epoch",
+      "heartbeat::tests::hostile_offset_extremes_are_bounded_clock_arithmetic",
+      "heartbeat::tests::public595_formula_applies_guest_offset_once",
+      "heartbeat::tests::round_before_subtracting_like_guest_not_after",
+      "heartbeat::tests::millisecond_wrap_is_unsigned_in_both_operands"
+    ],
+    "errors": [],
+    "mutant": "offset"
+  },
+  {
+    "status": "killed",
+    "kills": 3,
+    "tests": [
+      "heartbeat::tests::fractional_operands_are_rounded_separately_again",
+      "heartbeat::tests::hostile_offset_extremes_are_bounded_clock_arithmetic",
+      "heartbeat::tests::round_before_subtracting_like_guest_not_after"
+    ],
+    "errors": [],
+    "mutant": "rounding"
+  },
+  {
+    "status": "killed",
+    "kills": 2,
+    "tests": [
+      "heartbeat::tests::missing_clock_never_forges_freshness",
+      "heartbeat::tests::second_failed_clock_cannot_publish_freshness"
+    ],
+    "errors": [],
+    "mutant": "missing-clock"
+  },
+  {
+    "status": "killed",
+    "kills": 2,
+    "tests": [
+      "heartbeat::tests::truncated_or_wrong_size_or_unknown_abi_is_refused",
+      "heartbeat::tests::wrong_declaration_never_supplies_an_offset"
+    ],
+    "errors": [],
+    "mutant": "declaration"
+  },
+  {
+    "status": "killed",
+    "kills": 2,
+    "tests": [
+      "heartbeat::tests::busy_gsp_state_never_enters_clock_read",
+      "heartbeat::tests::busy_gsp_state_returns_without_waiting"
+    ],
+    "errors": [],
+    "mutant": "state-lock"
+  },
+  {
+    "status": "killed",
+    "kills": 2,
+    "tests": [
+      "heartbeat::tests::actual_drainer_uses_nonblocking_clock_path_at_500ms",
+      "heartbeat::tests::drainer_composes_current_metadata_with_its_mapped_timer"
+    ],
+    "errors": [],
+    "mutant": "clock-wiring"
+  },
+  {
+    "status": "killed",
+    "kills": 2,
+    "tests": [
+      "sysinfo::tests::heartbeat_busy_empty_cell_returns_without_waiting",
+      "sysinfo::tests::heartbeat_busy_populated_cell_returns_without_waiting"
+    ],
+    "errors": [],
+    "mutant": "metadata-lock"
+  },
+  {
+    "status": "killed",
+    "kills": 2,
+    "tests": [
+      "boot::device_reset_from_every_phase::heartbeat_falcon_new_life_rejects_old_fn72_after_other_commands",
+      "boot::device_reset_from_every_phase::heartbeat_fsp_new_life_rejects_old_fn72_after_other_commands"
+    ],
+    "errors": [],
+    "mutant": "life-readiness"
+  },
+  {
+    "status": "killed",
+    "kills": 2,
+    "tests": [
+      "boot::device_reset_from_every_phase::heartbeat_fsp_fresh_queue_needs_its_own_fn72",
+      "boot::device_reset_from_every_phase::heartbeat_falcon_fresh_queue_needs_its_own_fn72"
+    ],
+    "errors": [],
+    "mutant": "fresh-queue"
+  },
+  {
+    "status": "killed",
+    "kills": 2,
+    "tests": [
+      "boot::device_reset_from_every_phase::heartbeat_fsp_new_life_rejects_old_fn72_after_other_commands",
+      "boot::device_reset_from_every_phase::heartbeat_falcon_new_life_rejects_old_fn72_after_other_commands"
+    ],
+    "errors": [],
+    "mutant": "constructor"
+  }
+]

@@ -1050,6 +1050,8 @@ pub struct GspFsm {
     /// (`kf_qemu::gop::ConsoleWiring`; before that every kf3 device carried one).
     /// ⊘ Survives [`GspFsm::device_reset`]: it is the chain's, not one driver life's.
     system_info: Option<crate::sysinfo::SystemInfoCell>,
+    /// Only this life's fn72 authorizes heartbeat conversion.
+    system_info_current: bool,
 }
 
 /// ★★★ v3-initrace — **FWSEC's FRTS command, read out of the DMEM image RM loaded it from.**
@@ -1135,6 +1137,7 @@ impl GspFsm {
             frts_image: None,
             frts_offset: None,
             system_info: None,
+            system_info_current: false,
         }
     }
 
@@ -1190,10 +1193,10 @@ impl GspFsm {
         self.cmd_seq
     }
 
-    /// Whether command progress could supply heartbeat metadata (initial test seam).
+    /// Whether fn72 supplied this GSP life's heartbeat metadata.
     #[must_use]
     pub fn has_current_system_info(&self) -> bool {
-        self.command_seq() != 0
+        self.system_info_current
     }
 
     /// The abstract observation the register model serves from — §3.2's table, and
@@ -1888,6 +1891,7 @@ impl GspFsm {
             }
         );
         if !same_instance {
+            self.system_info_current = false;
             self.stat_seq = 0;
             self.cmd_seq = 0;
             self.cmd_read_ptr = 0;
@@ -2454,6 +2458,7 @@ impl GspFsm {
                 && let Some(cell) = &self.system_info
             {
                 cell.store(&cmd.payload, cmd.sequence);
+                self.system_info_current = true;
             }
             return Ok(());
         }
@@ -4592,6 +4597,7 @@ mod device_reset_from_every_phase {
             frts_image,
             frts_offset,
             system_info,
+            system_info_current,
         } = d.fsm;
         let GspFsm {
             pending_command_doorbells: p0,
@@ -4622,6 +4628,7 @@ mod device_reset_from_every_phase {
             frts_image: fr0,
             frts_offset: fo0,
             system_info: si0,
+            system_info_current: sic0,
         } = GspFsm::new(abi());
         assert_eq!(pending_command_doorbells, p0);
         assert_eq!(held, h0);
@@ -4651,6 +4658,7 @@ mod device_reset_from_every_phase {
         assert_eq!(frts_image, fr0);
         assert_eq!(frts_offset, fo0);
         assert_eq!(system_info, si0);
+        assert_eq!(system_info_current, sic0);
     }
 
     // ---- 2. reset after reset ------------------------------------------------------------------
@@ -4972,7 +4980,10 @@ mod device_reset_from_every_phase {
         fn a_pm_suspended_life_survives_the_wake_reset_and_resumes_without_a_publish() {
             let mut d = suspended(true);
             let (stat_seq, cmd_seq) = (d.fsm.stat_seq, d.fsm.command_seq());
-            assert!(stat_seq > 0 && cmd_seq > 0, "the streams moved before the suspend");
+            assert!(
+                stat_seq > 0 && cmd_seq > 0,
+                "the streams moved before the suspend"
+            );
             let wp = stat_wp(&mut d);
             let hdr_before = {
                 let mut b = vec![0u8; 32];
@@ -4995,14 +5006,19 @@ mod device_reset_from_every_phase {
             assert!(out.contains("E15"), "{out}");
             assert!(!out.contains("E6"), "a resume never publishes: {out}");
             assert_eq!(d.fsm.phase(), BootPhase::Booted);
-            assert!(d.fsm.observe().riscv_active, "kflcnIsRiscvActive after Booter Load");
+            assert!(
+                d.fsm.observe().riscv_active,
+                "kflcnIsRiscvActive after Booter Load"
+            );
             assert!(!d.fsm.resumable(), "the saved life is consumed");
 
             // GSP_INIT_DONE at the stream's next sequence number, in the slot after the last reply
             assert_eq!(stat_wp(&mut d), (wp + 1) % COUNT as u32);
             assert_eq!(stat_seq_at(&mut d, u64::from(wp)), stat_seq);
             let mut hdr_after = vec![0u8; 32];
-            d.ram.read(REGION + STAT_OFF, &mut hdr_after).expect("mapped");
+            d.ram
+                .read(REGION + STAT_OFF, &mut hdr_after)
+                .expect("mapped");
             assert_eq!(
                 hdr_after[..16],
                 hdr_before[..16],
@@ -5019,7 +5035,10 @@ mod device_reset_from_every_phase {
             assert!(out.contains("Running"), "{out}");
             assert_eq!(d.fsm.phase(), BootPhase::Running);
             assert_eq!(d.fsm.command_seq(), cmd_seq + 1);
-            assert_eq!(stat_seq_at(&mut d, u64::from((wp + 1) % COUNT as u32)), stat_seq + 1);
+            assert_eq!(
+                stat_seq_at(&mut d, u64::from((wp + 1) % COUNT as u32)),
+                stat_seq + 1
+            );
         }
 
         /// The same life suspended and resumed three times in one boot.
@@ -5042,7 +5061,11 @@ mod device_reset_from_every_phase {
                 assert!(d.ring().contains("E7"), "cycle {cycle}");
                 assert_eq!(d.fsm.phase(), BootPhase::Running, "cycle {cycle}");
                 assert_eq!(d.fsm.command_seq(), cmd_seq + 1, "cycle {cycle}");
-                assert_eq!(d.fsm.stat_seq, stat_seq + 2, "cycle {cycle}: INIT_DONE + reply");
+                assert_eq!(
+                    d.fsm.stat_seq,
+                    stat_seq + 2,
+                    "cycle {cycle}: INIT_DONE + reply"
+                );
                 d.guest_drains_status();
             }
         }
@@ -5125,8 +5148,7 @@ mod device_reset_from_every_phase {
             assert_eq!(f.wake_reset(), Some(Transition::E14));
             f.note_command_doorbells(1);
             assert!(
-                f.service_one_deferred_command(&mut ram, &mut Live)
-                    .is_ok(),
+                f.service_one_deferred_command(&mut ram, &mut Live).is_ok(),
                 "Cold after the wake: E12, zero reads"
             );
         }
@@ -5138,8 +5160,8 @@ mod device_reset_from_every_phase {
             d.ram
                 .read(REGION + STAT_OFF + ELEM + slot * ELEM, &mut first)
                 .expect("mapped");
-            let len = peek_len(&abi.element, &first, ELEM as u32, abi.element_size_max)
-                .expect("a reply");
+            let len =
+                peek_len(&abi.element, &first, ELEM as u32, abi.element_size_max).expect("a reply");
             let seq = peek_seq_num(&abi.element, &first).expect("seq");
             let m = decode_message(&abi.element, &first, len, seq, &abi.driver).expect("decodes");
             (
@@ -5169,7 +5191,13 @@ mod device_reset_from_every_phase {
                 abi.element_size_max as usize - abi.element.hdr_size() - crate::large::RPC_HEADER;
             let pages = head_len / 8 + 10;
             let mut body = vec![0u8; 56 + pages * 8];
-            for (off, v) in [(0usize, 1u32), (4, 2), (8, 0x77), (12, 0x81), (40, pages as u32)] {
+            for (off, v) in [
+                (0usize, 1u32),
+                (4, 2),
+                (8, 0x77),
+                (12, 0x81),
+                (40, pages as u32),
+            ] {
                 body[off..off + 4].copy_from_slice(&v.to_le_bytes());
             }
             assert_eq!(cell.declared_len(&body[..head_len]), Some(body.len()));
@@ -5179,14 +5207,21 @@ mod device_reset_from_every_phase {
             let wp = stat_wp(&mut d);
             let out = d.ring();
             assert!(out.contains("Ok"), "{out}");
-            assert_eq!(stat_wp(&mut d), (wp + 1) % COUNT as u32, "exactly one reply");
+            assert_eq!(
+                stat_wp(&mut d),
+                (wp + 1) % COUNT as u32,
+                "exactly one reply"
+            );
             assert_eq!(reply_at(&mut d, u64::from(wp)), (4, head_seq, 0, 0));
             // the stream goes on: the next command is answered at its own sequence
             d.guest_drains_status();
             let next_seq = 100 + d.guest_seq;
             d.send(abi.rpc.codes.free, vec![0; 16]);
             d.ring();
-            assert_eq!(reply_at(&mut d, u64::from((wp + 1) % COUNT as u32)).1, next_seq);
+            assert_eq!(
+                reply_at(&mut d, u64::from((wp + 1) % COUNT as u32)).1,
+                next_seq
+            );
         }
 
         /// The FSP regime's firmware halts itself at fn 47 (E13); the device decodes the body

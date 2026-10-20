@@ -144,10 +144,10 @@ impl SystemInfoCell {
         }
     }
 
-    /// Borrow bounded fn72 metadata without cloning it; heartbeat test seam.
-    /// Initial extraction keeps the existing serialized access until its tests land.
+    /// Borrow bounded fn72 metadata without waiting or allocating. Busy or poisoned
+    /// metadata is unavailable for this tick; the ordinary console reader is unchanged.
     pub fn try_with_latest<R>(&self, read: impl FnOnce(&StashedSystemInfo) -> R) -> Option<R> {
-        let guard = self.0.lock().ok()?;
+        let guard = self.0.try_lock().ok()?;
         guard.as_ref().map(read)
     }
 
