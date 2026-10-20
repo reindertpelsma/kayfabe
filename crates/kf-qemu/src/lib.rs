@@ -42,3 +42,6 @@ pub(crate) mod userbirth;
 pub(crate) mod userstore;
 pub mod userva;
 pub mod vblankgate;
+
+#[cfg(test)]
+mod translated_adapter_tests;
