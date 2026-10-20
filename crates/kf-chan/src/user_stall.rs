@@ -49,6 +49,14 @@ pub enum Setting {
     Invalid,
 }
 
+impl Setting {
+    /// The threshold the switch selects in milliseconds; 0 (off) for [`Setting::Off`] and [`Setting::Invalid`].
+    #[must_use]
+    pub const fn threshold_ms(self) -> u64 {
+        0
+    }
+}
+
 /// Parse the variable's value.
 #[must_use]
 pub fn parse_setting(value: Option<&str>) -> Setting {
@@ -1398,6 +1406,30 @@ mod tests {
     }
 
     // ------------------------------------------------------------------ the switch
+    #[test]
+    fn the_setting_selects_a_threshold_and_only_on_selects_one() {
+        assert_eq!(Setting::On(2000).threshold_ms(), 2000);
+        assert_eq!(Setting::On(1).threshold_ms(), 1);
+        assert_eq!(Setting::On(MAX_MS).threshold_ms(), MAX_MS);
+        assert_eq!(Setting::Off.threshold_ms(), 0);
+        assert_eq!(Setting::Invalid.threshold_ms(), 0);
+    }
+
+    #[test]
+    fn every_value_of_the_variable_maps_to_one_threshold_through_the_parser() {
+        for (v, want) in [
+            (None, 0u64),
+            (Some(""), 0),
+            (Some("0"), 0),
+            (Some("2000"), 2000),
+            (Some("7"), 7),
+            (Some("junk"), 0),
+            (Some("99999999999"), MAX_MS),
+        ] {
+            assert_eq!(parse_setting(v).threshold_ms(), want, "{v:?}");
+        }
+    }
+
     #[test]
     fn the_switch_parses_milliseconds_and_everything_else_is_off_or_loud() {
         let t = [
