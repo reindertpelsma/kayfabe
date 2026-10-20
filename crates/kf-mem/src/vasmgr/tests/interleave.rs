@@ -1414,9 +1414,9 @@ fn root_walks_queued_once_make_one_wanted_walk() {
     assert_eq!(inflight.wants.len(), 1, "{:?}", inflight.wants);
 }
 
-/// A space re-rooted between arms names a different directory each time. The refreshes that
-/// wait are bounded by the spaces (more distinct directories than spaces fold into one global),
-/// not by the arms.
+/// A space re-rooted between arms names a different directory each time. The work that waits is
+/// bounded by the spaces - the one invalidate plus at most one refresh per space; more distinct
+/// directories than spaces fold into one global - not by the arms.
 #[test]
 fn a_space_re_rooted_between_arms_cannot_grow_the_queue() {
     let mut h = Held::new();
@@ -1427,11 +1427,12 @@ fn a_space_re_rooted_between_arms_cannot_grow_the_queue() {
             .table
             .set_root(K_A, root, PdbAperture::Vidmem)
             .unwrap();
-        // The second arm demotes the first to a refresh while the space is still rooted there.
+        // An arm for the other space demotes this one to a refresh while A is still rooted here;
+        // A is then re-rooted, so the refresh is stale, and a new one builds up every round.
         h.arm(root, false);
-        h.arm(root, false);
+        h.arm(PDB_B, false);
         assert!(
-            h.r.m.pending() <= BOUND_PENDING,
+            h.r.m.pending() <= 1 + h.r.m.table.len(),
             "pending {} after {i} arms",
             h.r.m.pending()
         );
@@ -1452,12 +1453,13 @@ fn a_re_rooted_space_is_refreshed_through_the_fold() {
             .set_root(K_A, root, PdbAperture::Vidmem)
             .unwrap();
         h.arm(root, false);
-        h.arm(root, false);
+        h.arm(PDB_B, false);
     }
+    h.arm(root, false);
     h.r.tables
         .borrow_mut()
         .insert(root, vec![(0x1000_0000, 0x0200_0000, 0x1000, 0)]);
-    assert!(h.r.m.pending() <= BOUND_PENDING);
+    assert!(h.r.m.pending() <= 1 + h.r.m.table.len());
     h.release();
     h.release();
     assert!(!busy(&h.r.port));
