@@ -19,6 +19,7 @@ import sys
 import time
 
 import run
+import identity
 
 
 def restore():
@@ -29,14 +30,15 @@ def restore():
         if not state.exists():
             continue
         pid=int(re.search(r'^QPID=(\d+)$',state.read_text(),re.M).group(1))
-        if run.alive(pid):
+        if run.alive(pid) and identity.is_qemu(Path(f'/proc/{pid}/cmdline').read_bytes().decode().strip('\0').split('\0'),number):
             run.stop_session(pid, f.parent/'launch.log')
     for f in run.ROOT.glob('*-*/collectors.json'):
         for pid in json.loads(f.read_text()):
             if run.alive(pid):
                 # Only a recorded collector started by our runner, never QEMU.
-                cmd=Path(f'/proc/{pid}/cmdline').read_bytes()
-                if b'nvidia-smi' in cmd or b'userd_probe' in cmd:
+                cmd=Path(f'/proc/{pid}/cmdline').read_bytes().decode().strip('\0').split('\0')
+                env=dict(x.split('=',1) for x in Path(f'/proc/{pid}/environ').read_bytes().decode().strip('\0').split('\0') if '=' in x)
+                if identity.is_collector(cmd,env,str(run.ROOT)):
                     os.kill(pid, 15)
     n=run.next_run()
     out=run.ROOT/f'owner-morning-{n}.log'

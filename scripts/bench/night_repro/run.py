@@ -20,6 +20,7 @@ import subprocess as sp
 import time
 
 import metric
+import identity
 
 ROOT = Path(os.environ['N1_ROOT'])
 W = Path(os.environ['N1_WINDOWS'])
@@ -65,6 +66,10 @@ def wait_for(f, seconds, what):
 
 def stop_session(pid, launch_log):
     if alive(pid):
+        metadata=json.loads((Path(launch_log).parent/'run.json').read_text())
+        argv=Path(f'/proc/{pid}/cmdline').read_bytes().decode().strip('\0').split('\0')
+        if not identity.is_qemu(argv,metadata['run']):
+            raise HostSafetyError('recorded QEMU PID identity changed; no action taken')
         log(f'clean shutdown requested for owned/authorized QEMU {pid}')
         agent('shutdown.exe /s /t 5; "N1_SHUTDOWN_REQUESTED"', 30)
         wait_for(lambda: not alive(pid), 180, 'clean QEMU exit (no force-kill permitted)')

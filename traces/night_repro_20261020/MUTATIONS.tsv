@@ -11,3 +11,6 @@ drop_pending	5	1
 classes_drop_event153	3	1
 classes_drop_device_loss	2	1
 classes_mix_independent	2	1
+qemu_pid_reuse	3	1
+collector_no_marker	2	1
+ps_header_rehydration	3	1
