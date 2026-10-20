@@ -126,3 +126,11 @@ Bisection pages (caps/*.txt; derived fix3 words with this die's own words overla
   *Falsifier for "the needed words are in highB":* Code 43 with the CA7A abort.
 - caps_ctl_on (control): the derived page alone through the same hook. *Expected:* Code 43 (else the
   hook itself changes behaviour and every caps arm is void).
+
+## Addendum 18:46 UTC — after caps_lowa_on / caps_highb_on, before caps_post_on / caps_pre_on
+
+MEASURED: caps_lowa_on (native 0x000..0x624) **Code 43** (CA7A abort); caps_highb_on (native
+0x680..0xfff) **Code 0**. So the decisive words are in public NVCA73 POSTCOMP_HDR_CAP*(i) (0x680+32i)
+and/or PRECOMP_WIN_PIPE_HDR_CAP*(i) (0x780+32i) (clca73.h, ogkm 580.65.06).
+- caps_post_on: native POSTCOMP only. *Falsifier for "POSTCOMP decides":* Code 43.
+- caps_pre_on: native PRECOMP only. *Falsifier for "PRECOMP decides":* Code 43.
