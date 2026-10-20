@@ -2273,6 +2273,8 @@ pub struct ChanPlane {
     /// Exact pending Windows USER births, canceled before live subtree removal.
     user_births: crate::userbirth::Book,
     user_rings: Mutex<HashMap<u32, Arc<userrelay::Cell>>>,
+    /// ★ 2026-10-20 measurement only (`KF3_DIAG_USER_STALL`): when the host last disabled / enabled each host channel.
+    stall_acts: Mutex<kf_chan::user_stall::ActTimes>,
     /// ★ 2026-10-14 (`kf_chan::user_loop`): the USER-ring relays' bounded production counters.
     pub relay_stats: kf_chan::user_loop::Stats,
     /// Summary lines printed when the last USER-ring relay went away.
@@ -2952,6 +2954,7 @@ impl ChanPlane {
             pt: Mutex::new(HashMap::new()),
             user_births,
             user_rings: Mutex::new(HashMap::new()),
+            stall_acts: Mutex::new(kf_chan::user_stall::ActTimes::default()),
             relay_stats: kf_chan::user_loop::Stats::default(),
             relay_reports: AtomicU64::new(0),
             user_birth_holds: Mutex::new(Vec::new()),
@@ -3576,6 +3579,7 @@ impl ChanPlane {
                                 me.rm
                                     .disable_channels(&[*c], false, false, false)
                                     .map_err(|e| (NV_ERR_INVALID_STATE, format!("host {:#x} re-enable after STOP: {e:?}", c.token)))?;
+                                userpump::stall_note_act(me, &[c.token], false);
                             }
                             restarted = restarted.saturating_add(1);
                             if let Ok(mut m) = me.pt.lock()
@@ -4143,6 +4147,7 @@ impl ChanPlane {
                 me.rm
                     .disable_channels(&[chan], true, false, false)
                     .map_err(|e| (NV_ERR_INVALID_STATE, format!("host {:#x} DISABLE_CHANNELS: {e:?}", chan.token)))?;
+                userpump::stall_note_act(me, &[chan.token], true);
                 me.rm.schedule_enable(chan, false).map_err(|e| (NV_ERR_INVALID_STATE, format!("host {:#x} GPFIFO_SCHEDULE(false): {e:?}", chan.token)))?;
                 if let Ok(mut m) = me.pt.lock()
                     && let Some(v) = m.get_mut(&(client, object))
@@ -4358,6 +4363,10 @@ impl ChanPlane {
                 me.rm
                     .disable_channels(&hosts, disable, only_scheduling, rewind)
                     .map_err(|e| (NV_ERR_INVALID_STATE, format!("host DISABLE_CHANNELS over {} channel(s): {e:?}", hosts.len())))?;
+                {
+                    let tokens: Vec<u32> = hosts.iter().map(|h| h.token).collect();
+                    userpump::stall_note_act(me, &tokens, disable);
+                }
                 if let Ok(mut m) = me.pt.lock() {
                     for (k, _) in &pt {
                         if let Some(v) = m.get_mut(k) {

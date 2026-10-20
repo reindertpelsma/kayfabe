@@ -823,6 +823,15 @@ pub fn render(r: &Report) -> Vec<String> {
         hex_or(r.wake.map(|(t, _)| t), "none"),
         hex_or(r.turn_ago_ms, "unknown"),
     ));
+    let t = &r.twin;
+    out.push(format!(
+        "{p} TWIN doorbell_token={:#x} disabled={} stopped={} last_disable_act_ago_ms={} last_enable_act_ago_ms={}",
+        t.token,
+        hex_or(t.flags.map(|f| u64::from(f.0)), "UNREAD"),
+        hex_or(t.flags.map(|f| u64::from(f.1)), "UNREAD"),
+        hex_or(t.disable_act_ago_ms, "none"),
+        hex_or(t.enable_act_ago_ms, "none"),
+    ));
     out.push(format!(
         "{p} COUNTERS issued={:#x} fetched={:#x} marks_issued={:#x} marks_seen={:#x} turns={:#x} entries_scan={:#x} entries_pointer={:#x} entries_window={:#x}",
         r.issued, r.fetched, r.marks_issued, r.marks_seen, r.turns, r.entries.0, r.entries.1, r.entries.2
@@ -1131,11 +1140,35 @@ pub struct ActTimes {
 
 impl ActTimes {
     /// A disable (`disable`) or an enable act on `token` finished at `now_ms`.
-    pub fn note(&mut self, _token: u32, _disable: bool, _now_ms: u64) {}
+    pub fn note(&mut self, token: u32, disable: bool, now_ms: u64) {
+        let at = match self.rows.iter().position(|r| r.0 == token) {
+            Some(i) => i,
+            None if self.rows.len() < ACT_ROWS => {
+                self.rows.push((token, None, None));
+                self.rows.len() - 1
+            }
+            // full: a channel not remembered yet is not remembered (a diagnostic, never unbounded)
+            None => return,
+        };
+        let row = &mut self.rows[at];
+        if disable {
+            row.1 = Some(now_ms);
+        } else {
+            row.2 = Some(now_ms);
+        }
+    }
     /// `(ms since the last disable act, ms since the last enable act)` of `token`.
     #[must_use]
-    pub fn ages(&self, _token: u32, _now_ms: u64) -> (Option<u64>, Option<u64>) {
-        (None, None)
+    pub fn ages(&self, token: u32, now_ms: u64) -> (Option<u64>, Option<u64>) {
+        self.rows
+            .iter()
+            .find(|r| r.0 == token)
+            .map_or((None, None), |r| {
+                (
+                    r.1.map(|t| now_ms.saturating_sub(t)),
+                    r.2.map(|t| now_ms.saturating_sub(t)),
+                )
+            })
     }
 }
 
@@ -1146,21 +1179,21 @@ pub const RERING_WINDOW_MS: u64 = 3000;
 
 /// Whether the experiment is on: the value is `1` AND the diagnostic itself is on.
 #[must_use]
-pub fn rering_enabled(_value: Option<&str>, _stall_on: bool) -> bool {
-    false
+pub fn rering_enabled(value: Option<&str>, stall_on: bool) -> bool {
+    stall_on && value == Some("1")
 }
 
 /// Whether the PBDMA looks idle: `PB_GET == PB_PUT`, or no private row holds `PB_GET`.
 #[must_use]
-pub fn looks_idle(_private: &Private, _segment: &Segment) -> bool {
-    false
+pub fn looks_idle(private: &Private, segment: &Segment) -> bool {
+    private.pb_get == private.pb_put || matches!(segment, Segment::NotFound)
 }
 
 /// The one decision: ring only when enabled, entries are outstanding, the PBDMA looks idle and this
 /// condition has not been rung yet.
 #[must_use]
-pub fn should_rering(_enabled: bool, _outstanding: bool, _idle: bool, _ready: bool) -> bool {
-    false
+pub fn should_rering(enabled: bool, outstanding: bool, idle: bool, ready: bool) -> bool {
+    enabled && outstanding && idle && ready
 }
 
 /// What one look found about a running re-ring watch.
@@ -1183,14 +1216,27 @@ pub enum RereingPoll {
 
 /// The line printed for a poll (`None` for [`RereingPoll::NotWatching`]).
 #[must_use]
-pub fn rering_text(_key: (u32, u32), _poll: RereingPoll) -> Option<String> {
-    None
+pub fn rering_text(key: (u32, u32), poll: RereingPoll) -> Option<String> {
+    let p = format!("{PREFIX} {:#x}:{:#x}", key.0, key.1);
+    match poll {
+        RereingPoll::NotWatching => None,
+        RereingPoll::Line { ms, gp_get, moved } => Some(format!(
+            "{p} RERING_RESULT +{ms:#x} gp_get={gp_get:#x} moved={}",
+            if moved { "yes" } else { "no" }
+        )),
+        RereingPoll::Expired => Some(format!("{p} RERING_RESULT none")),
+    }
 }
 
 /// The line printed when the doorbell was rung.
 #[must_use]
-pub fn rering_rang_text(_key: (u32, u32), _token: u32, _gp_get: u32, _ok: bool) -> String {
-    String::new()
+pub fn rering_rang_text(key: (u32, u32), token: u32, gp_get: u32, ok: bool) -> String {
+    format!(
+        "{PREFIX} {:#x}:{:#x} RERING {} doorbell_token={token:#x} gp_get={gp_get:#x} (EXPERIMENT: mutates scheduling state; never a fix)",
+        key.0,
+        key.1,
+        if ok { "rang" } else { "doorbell_failed" }
+    )
 }
 
 /// Per-channel diagnostic state: the detector and the facts the report quotes.
@@ -1222,21 +1268,53 @@ impl ChannelDiag {
     /// once-per-condition gate is re-armed when the condition is over.
     pub fn look(
         &mut self,
-        _now_ms: u64,
-        _get: u32,
-        _put: u32,
-        _entries: u32,
-        _threshold_ms: u64,
+        now_ms: u64,
+        get: u32,
+        put: u32,
+        entries: u32,
+        threshold_ms: u64,
     ) -> (Verdict, RereingPoll) {
-        (Verdict::Quiet, RereingPoll::NotWatching)
+        let poll = match self.rering {
+            Rering::Watching { at_ms, get: get0 } => {
+                let ms = now_ms.saturating_sub(at_ms);
+                if get != get0 {
+                    self.rering = Rering::Done;
+                    RereingPoll::Line {
+                        ms,
+                        gp_get: get,
+                        moved: true,
+                    }
+                } else if ms >= RERING_WINDOW_MS {
+                    self.rering = Rering::Done;
+                    RereingPoll::Expired
+                } else {
+                    RereingPoll::Line {
+                        ms,
+                        gp_get: get,
+                        moved: false,
+                    }
+                }
+            }
+            Rering::Ready | Rering::Done => RereingPoll::NotWatching,
+        };
+        let verdict = self
+            .detector
+            .observe(now_ms, get, put, entries, threshold_ms);
+        // the once-per-condition gate reopens when the condition (the unfired detector) is over
+        if self.rering == Rering::Done && !self.detector.fired() {
+            self.rering = Rering::Ready;
+        }
+        (verdict, poll)
     }
     /// Whether this condition may still be re-rung.
     #[must_use]
     pub fn rering_ready(&self) -> bool {
-        false
+        self.rering == Rering::Ready
     }
     /// The doorbell was rung at `now_ms` with `GP_GET == get`.
-    pub fn rering_begin(&mut self, _now_ms: u64, _get: u32) {}
+    pub fn rering_begin(&mut self, now_ms: u64, get: u32) {
+        self.rering = Rering::Watching { at_ms: now_ms, get };
+    }
     /// A fresh state.
     #[must_use]
     pub const fn new() -> Self {
@@ -4009,5 +4087,247 @@ mod tests {
         };
         let rep = build_report(inp.clone(), &mut |_, _| Err("x"), &StallStats::default());
         assert_eq!(rep.twin, inp.twin);
+    }
+
+    // ------------------------------------------------------------------ re-ring: second killers
+    #[test]
+    fn rering_follows_the_diagnostic_switch_for_every_value() {
+        for stall_on in [false, true] {
+            for v in [
+                None,
+                Some(""),
+                Some("0"),
+                Some("1"),
+                Some("01"),
+                Some("1\n"),
+                Some("yes"),
+                Some("2"),
+            ] {
+                assert_eq!(
+                    rering_enabled(v, stall_on),
+                    stall_on && v == Some("1"),
+                    "{stall_on} {v:?}"
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn idle_is_decided_over_every_pb_get_pb_put_and_segment_combination() {
+        let decoded = incident_report().segment;
+        let unread = Segment::Unread {
+            slot: 1,
+            va: 0x1000,
+            len_bytes: 8,
+            why: "x",
+        };
+        for (equal, seg, want) in [
+            (true, &decoded, true),
+            (true, &unread, true),
+            (true, &Segment::NotFound, true),
+            (false, &decoded, false),
+            (false, &unread, false),
+            (false, &Segment::NotFound, true),
+        ] {
+            let p = Private {
+                pb_get: 0x1000,
+                pb_put: if equal { 0x1000 } else { 0x1008 },
+                ..Private::default()
+            };
+            assert_eq!(looks_idle(&p, seg), want, "equal={equal}");
+        }
+    }
+
+    #[test]
+    fn the_run_3418_case_is_rung_and_the_run_3094_case_is_not() {
+        // 3418: 3 published entries not fetched, PB_GET == PB_PUT: idle -> ring
+        let p3418 = Private {
+            gp_get: 0x130,
+            gp_put: 0x133,
+            pb_get: 0xff_000e_2310,
+            pb_put: 0xff_000e_2310,
+            ..Private::default()
+        };
+        let d = ChannelDiag::new();
+        let out = p3418.gp_get != p3418.gp_put;
+        assert!(should_rering(
+            true,
+            out,
+            looks_idle(&p3418, &Segment::NotFound),
+            d.rering_ready()
+        ));
+        assert!(
+            !should_rering(
+                false,
+                out,
+                looks_idle(&p3418, &Segment::NotFound),
+                d.rering_ready()
+            ),
+            "switch off"
+        );
+        // 3094: mid-segment, PB_GET != PB_PUT, a decoded segment holds it: not idle -> never ring
+        let p3094 = Private {
+            gp_get: 0x1a8,
+            gp_put: 0x1aa,
+            pb_get: 0x3_0472_0040,
+            pb_put: 0x1_2036_1d40,
+            ..Private::default()
+        };
+        let seg = incident_report().segment;
+        assert!(!should_rering(true, true, looks_idle(&p3094, &seg), true));
+        // nothing outstanding: never ring
+        assert!(!should_rering(true, false, true, true));
+        // already rung for this condition
+        let mut d = ChannelDiag::new();
+        d.look(0, 5, 7, 512, 100);
+        d.look(100, 5, 7, 512, 100);
+        d.rering_begin(100, 5);
+        assert!(!should_rering(true, true, true, d.rering_ready()));
+    }
+
+    #[test]
+    fn the_watch_window_boundary_is_exact_wherever_it_starts() {
+        let mut d = ChannelDiag::new();
+        d.look(4000, 9, 12, 512, 50);
+        assert_eq!(
+            d.look(4050, 9, 12, 512, 50).0,
+            Verdict::Fire { stalled_ms: 50 }
+        );
+        d.rering_begin(5000, 9);
+        assert_eq!(
+            d.look(7999, 9, 12, 512, 50).1,
+            RereingPoll::Line {
+                ms: 2999,
+                gp_get: 9,
+                moved: false
+            }
+        );
+        assert_eq!(d.look(8000, 9, 12, 512, 50).1, RereingPoll::Expired);
+        assert_eq!(d.look(8001, 9, 12, 512, 50).1, RereingPoll::NotWatching);
+    }
+
+    #[test]
+    fn an_expired_watch_stays_closed_until_the_condition_really_ends() {
+        let mut d = ChannelDiag::new();
+        d.look(0, 5, 7, 512, 100);
+        d.look(100, 5, 7, 512, 100);
+        d.rering_begin(100, 5);
+        assert!(!d.rering_ready(), "watching");
+        assert_eq!(d.look(3100, 5, 7, 512, 100).1, RereingPoll::Expired);
+        for t in [3200u64, 6000, 60_000] {
+            d.look(t, 5, 7, 512, 100);
+            assert!(!d.rering_ready(), "still the same condition at {t}");
+        }
+        // GET finally moves: a new condition may be rung
+        assert_eq!(d.look(61_000, 6, 7, 512, 100).1, RereingPoll::NotWatching);
+        assert!(d.rering_ready());
+        d.look(61_100, 6, 7, 512, 100);
+        assert!(d.rering_ready(), "the detector has not fired again yet");
+    }
+
+    #[test]
+    fn a_whole_rering_timeline_prints_exactly_these_lines() {
+        fn step(d: &mut ChannelDiag, lines: &mut Vec<String>, t: u64, get: u32, put: u32) {
+            let (_, poll) = d.look(t, get, put, 512, 100);
+            if let Some(l) = rering_text((0xc1d0_0085, 0xff04_002d), poll) {
+                lines.push(l.replace("kf3: USER_RING_STALL_DIAG 0xc1d00085:0xff04002d ", ""));
+            }
+        }
+        let mut d = ChannelDiag::new();
+        let mut lines = Vec::new();
+        step(&mut d, &mut lines, 1000, 0x130, 0x133);
+        step(&mut d, &mut lines, 1100, 0x130, 0x133); // Fire
+        d.rering_begin(1100, 0x130);
+        step(&mut d, &mut lines, 1150, 0x130, 0x133);
+        step(&mut d, &mut lines, 1250, 0x130, 0x133);
+        step(&mut d, &mut lines, 1400, 0x131, 0x133);
+        step(&mut d, &mut lines, 1450, 0x131, 0x133);
+        assert_eq!(
+            lines,
+            [
+                "RERING_RESULT +0x32 gp_get=0x130 moved=no",
+                "RERING_RESULT +0x96 gp_get=0x130 moved=no",
+                "RERING_RESULT +0x12c gp_get=0x131 moved=yes",
+            ]
+        );
+        let mut d = ChannelDiag::new();
+        let mut lines = Vec::new();
+        step(&mut d, &mut lines, 0, 0x130, 0x133);
+        step(&mut d, &mut lines, 100, 0x130, 0x133);
+        d.rering_begin(100, 0x130);
+        step(&mut d, &mut lines, 3099, 0x130, 0x133);
+        step(&mut d, &mut lines, 3100, 0x130, 0x133);
+        step(&mut d, &mut lines, 3200, 0x130, 0x133);
+        assert_eq!(
+            lines,
+            [
+                "RERING_RESULT +0xbb7 gp_get=0x130 moved=no",
+                "RERING_RESULT none"
+            ]
+        );
+    }
+
+    #[test]
+    fn the_rang_line_for_another_channel_and_a_failed_ring() {
+        let ok = rering_rang_text((1, 2), 0x7, 0x20, true);
+        assert_eq!(
+            ok,
+            "kf3: USER_RING_STALL_DIAG 0x1:0x2 RERING rang doorbell_token=0x7 gp_get=0x20 (EXPERIMENT: mutates scheduling state; never a fix)"
+        );
+        let bad = rering_rang_text((1, 2), 0x7, 0x20, false);
+        assert!(bad.starts_with("kf3: USER_RING_STALL_DIAG 0x1:0x2 RERING doorbell_failed doorbell_token=0x7 gp_get=0x20 "), "{bad}");
+        assert!(!bad.contains("rang"));
+    }
+
+    #[test]
+    fn act_times_fill_exactly_to_the_cap_whatever_the_token_numbers() {
+        let mut a = ActTimes::default();
+        for i in 0..ACT_ROWS as u32 + 3 {
+            a.note(1000 + i, false, 100);
+        }
+        assert_eq!(a.ages(1000, 150), (None, Some(50)));
+        assert_eq!(a.ages(1000 + ACT_ROWS as u32 - 1, 150), (None, Some(50)));
+        assert_eq!(a.ages(1000 + ACT_ROWS as u32, 150), (None, None));
+        assert_eq!(a.ages(1000 + ACT_ROWS as u32 + 2, 150), (None, None));
+        // disable and enable are separate columns and a backwards clock reads zero in both
+        a.note(1000, true, 400);
+        assert_eq!(a.ages(1000, 50), (Some(0), Some(0)));
+        assert_eq!(a.ages(1000, 500), (Some(100), Some(400)));
+    }
+
+    #[test]
+    fn a_built_report_renders_the_twin_it_was_given() {
+        let mut inp = inputs(Vec::new(), 0x1000);
+        inp.twin = TwinFacts {
+            token: 0x1234,
+            flags: Some((true, false)),
+            disable_act_ago_ms: Some(0x20),
+            enable_act_ago_ms: Some(0x40),
+        };
+        let text = all(&render(&build_report(
+            inp,
+            &mut |_, _| Err("x"),
+            &StallStats::default(),
+        )));
+        assert!(
+            text.contains("TWIN doorbell_token=0x1234 disabled=0x1 stopped=0x0 last_disable_act_ago_ms=0x20 last_enable_act_ago_ms=0x40"),
+            "{text}"
+        );
+        let mut inp = inputs(Vec::new(), 0x1000);
+        inp.twin = TwinFacts {
+            token: 0x59,
+            flags: Some((false, true)),
+            disable_act_ago_ms: None,
+            enable_act_ago_ms: None,
+        };
+        let text = all(&render(&build_report(
+            inp,
+            &mut |_, _| Err("x"),
+            &StallStats::default(),
+        )));
+        assert!(
+            text.contains("TWIN doorbell_token=0x59 disabled=0x0 stopped=0x1 last_disable_act_ago_ms=none last_enable_act_ago_ms=none"),
+            "{text}"
+        );
     }
 }

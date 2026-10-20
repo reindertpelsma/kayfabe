@@ -493,6 +493,20 @@ pub(super) struct Pump {
     diag: Option<Box<kf_chan::user_stall::ChannelDiag>>,
 }
 
+/// ★ 2026-10-20 measurement only (`KF3_DIAG_USER_STALL`): a host `DISABLE_CHANNELS` act on `tokens` returned (`disable`:
+/// disabled, else enabled). Nothing is recorded with the diagnostic off; `try_lock` only (a lost note is acceptable).
+pub(super) fn stall_note_act(me: &ChanPlane, tokens: &[u32], disable: bool) {
+    if diag::threshold_ms() == 0 {
+        return;
+    }
+    if let Ok(mut acts) = me.stall_acts.try_lock() {
+        let now = diag::now_ms();
+        for t in tokens {
+            acts.note(*t, disable, now);
+        }
+    }
+}
+
 /// What the I/O of the per-entry turn keeps between its micro-steps and its reporting counters.
 #[derive(Default)]
 struct Aux {
@@ -3837,10 +3851,10 @@ mod tests {
         let d = diag_source();
         assert_eq!(
             d.matches("std::env::var(").count(),
-            1,
-            "one read of the environment"
+            2,
+            "the threshold and the experiment, both in init"
         );
-        assert_eq!(d.matches("kf_chan::user_stall::ENV").count(), 1);
+        assert_eq!(d.matches("kf_chan::user_stall::ENV)").count(), 1);
         let init = d.split("pub(super) fn init()").nth(1).unwrap();
         let init = init.split("/// The threshold; 0 when off").next().unwrap();
         assert!(init.contains("std::env::var("), "the one read is in init");
@@ -4075,7 +4089,7 @@ mod tests {
         assert!(d.contains("kf_chan::user_stall::render("));
         assert!(d.contains("kf_chan::user_stall::build_report("));
         assert!(
-            d.matches("eprintln!").count() <= 4,
+            d.matches("eprintln!").count() <= 8,
             "the armed line, the invalid line, the report lines, the period line"
         );
         assert!(!d.contains("{:?}"), "no Debug of guest-derived data");
@@ -4107,8 +4121,8 @@ mod tests {
         assert!(d.contains("(threshold_ms() != 0).then("));
         assert_eq!(
             d.matches("pub(super) fn ").count(),
-            7,
-            "init, threshold_ms, channel_state, refusal_name, diag_wake, diag_turn, user_ring_diag"
+            8,
+            "init, threshold_ms, now_ms, channel_state, refusal_name, diag_wake, diag_turn, user_ring_diag"
         );
     }
 
@@ -4193,10 +4207,7 @@ mod tests {
     /// The act times are noted where the host DISABLE_CHANNELS verbs return, through one forwarding function.
     #[test]
     fn the_act_times_are_noted_where_the_host_disable_and_enable_verbs_return() {
-        let chan = include_str!("chan.rs")
-            .split("#[cfg(test)]")
-            .next()
-            .unwrap();
+        let chan = include_str!("chan.rs");
         assert!(
             chan.matches("userpump::stall_note_act(").count() >= 3,
             "STOP, the DISABLE_CHANNELS act, the restart"
@@ -4216,10 +4227,105 @@ mod tests {
     /// The block carries the twin's state and the doorbell token.
     #[test]
     fn the_stall_block_reads_the_twins_flags_and_the_act_ages_with_try_lock() {
-        let d = diag_source();
-        assert!(d.contains("stall::TwinFacts {"));
+        let d: String = diag_source().split_whitespace().collect();
+        assert!(d.contains("stall::TwinFacts{"));
         assert!(d.contains("me.pt.try_lock()"));
         assert!(d.contains("stall_acts.try_lock()"));
         assert!(d.contains(".disabled") && d.contains(".stopped"));
+    }
+
+    /// Needles every build of the experiment's glue must contain (checked twice, with two normalisations).
+    const RERING_NEEDLES: [&str; 11] = [
+        "if RERING.load(Ordering::Relaxed) {",
+        "let outstanding = report.private.gp_get != report.private.gp_put;",
+        "let idle = stall::looks_idle(&report.private, &report.segment);",
+        "let ready = self.diag.as_ref().is_some_and(|d| d.rering_ready());",
+        "if stall::should_rering(true, outstanding, idle, ready) {",
+        "let ok = me.rm.doorbell(v.host).is_ok();",
+        "d.rering_begin(now_ms(), report.private.gp_get);",
+        "RERING.store(rering_on, Ordering::Relaxed);",
+        "stall::rering_enabled(rering.as_deref(), setting.threshold_ms() != 0)",
+        ".map_or((None, None), |a| a.ages(v.host, now));",
+        "token: v.host,",
+    ];
+    /// Needles of the act notes: (the verb's last words, the note that must follow it).
+    const ACT_NEEDLES: [(&str, &str); 3] = [
+        (
+            "re-enable after STOP: {e:?}\", c.token)))?;",
+            "userpump::stall_note_act(me, &[c.token], false);",
+        ),
+        (
+            "DISABLE_CHANNELS: {e:?}\", chan.token)))?;",
+            "userpump::stall_note_act(me, &[chan.token], true);",
+        ),
+        (
+            "host DISABLE_CHANNELS over {} channel(s): {e:?}\", hosts.len())))?;",
+            "let tokens: Vec<u32> = hosts.iter().map(|h| h.token).collect(); userpump::stall_note_act(me, &tokens, disable);",
+        ),
+    ];
+    const NOTE_FN_NEEDLES: [&str; 3] = [
+        "if diag::threshold_ms() == 0 { return; }",
+        "if let Ok(mut acts) = me.stall_acts.try_lock() { let now = diag::now_ms();",
+        "acts.note(*t, disable, now);",
+    ];
+    fn strip_ws(s: &str) -> String {
+        s.split_whitespace().collect()
+    }
+    fn squash(s: &str) -> String {
+        s.chars()
+            .filter(|c| c.is_alphanumeric() || *c == '_')
+            .collect()
+    }
+
+    /// The experiment's decision reads the report and the relay, never constants; the ring is the pump's own doorbell verb.
+    #[test]
+    fn the_rering_decision_is_made_from_the_report_and_the_relays_own_state() {
+        let d = strip_ws(diag_source());
+        for n in RERING_NEEDLES {
+            assert!(d.contains(&strip_ws(n)), "{n}");
+        }
+    }
+
+    /// The same, squashed to identifiers and numbers (a second, independent look at the same text).
+    #[test]
+    fn the_rering_glue_text_survives_a_second_normalisation() {
+        let d = squash(diag_source());
+        for n in RERING_NEEDLES {
+            assert!(d.contains(&squash(n)), "{n}");
+        }
+    }
+
+    /// Each host verb that disables or enables a channel notes it, with the right direction and the right tokens.
+    #[test]
+    fn the_act_notes_have_the_right_direction_and_tokens_after_their_verbs() {
+        let chan = strip_ws(include_str!("chan.rs"));
+        for (verb, note) in ACT_NEEDLES {
+            let (verb, note) = (strip_ws(verb), strip_ws(note));
+            let at = chan.find(&verb).unwrap_or_else(|| panic!("verb {verb}"));
+            let after = &chan[at + verb.len()..];
+            assert!(
+                after.starts_with(&note) || after.starts_with(&format!("{{{note}")),
+                "{note}"
+            );
+        }
+        let pump = strip_ws(pump_source());
+        for n in NOTE_FN_NEEDLES {
+            assert!(pump.contains(&strip_ws(n)), "{n}");
+        }
+    }
+
+    /// The same act notes, squashed.
+    #[test]
+    fn the_act_notes_survive_a_second_normalisation() {
+        let chan = squash(include_str!("chan.rs"));
+        for (verb, note) in ACT_NEEDLES {
+            let (verb, note) = (squash(verb), squash(note));
+            let at = chan.find(&verb).unwrap_or_else(|| panic!("verb {verb}"));
+            assert!(chan[at + verb.len()..].starts_with(&note), "{note}");
+        }
+        let pump = squash(pump_source());
+        for n in NOTE_FN_NEEDLES {
+            assert!(pump.contains(&squash(n)), "{n}");
+        }
     }
 }

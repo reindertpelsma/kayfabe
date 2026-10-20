@@ -540,3 +540,31 @@ rows (else `UNREAD(unmapped)`) and not in an unarmed video-memory window (`UNREA
 `USERD` is as fresh as the outside reader saw it; and the rate of reports under a real freeze (one block per channel per
 condition by construction).
 
+### 9.7 EXPERIMENT `KF3_DIAG_USER_STALL_RERING=1` -- ring the idle channel's doorbell once (2026-10-20, opt-in measurement, MUTATES scheduling state)
+
+**Never a fix.** A timer-based re-ring would violate the owner rule; this is a one-shot probe of a hypothesis, default off, only effective
+together with `KF3_DIAG_USER_STALL` (read once in `init`; a value other than `1` is off).
+
+**Why [measured, run 3418, INDEPENDENT_FREEZE]:** a stall block with `gp_get=0x130 gp_put=0x133` (three published entries not fetched),
+`pb_get == pb_put` (the previous 16-byte relay segment fully consumed: the PBDMA is **idle**), `wait=Marker(target=0xe8)` with
+`marks_seen=0xe7`, `last_wake=Spin` ~2 s ago. An idle PBDMA with pending entries is a lost doorbell or a channel that is not
+scheduled. The release fence before the doorbell is present (`release_fence` is an `sfence`), so a missing barrier is not the explanation.
+
+**What it does.** When a stall block was printed for a channel whose private `GP_GET != GP_PUT` and the PBDMA looks idle
+(`kf_chan::user_stall::looks_idle`: `PB_GET == PB_PUT`, or no private row holds `PB_GET`; a segment that holds it but could not be read is
+*not* idle), and this condition has not been rung (`ChannelDiag::rering_ready`: once per condition; the gate reopens when `GP_GET` moves or the
+ring empties), the diagnostic rings that channel's doorbell **once** with the same verb the publication uses (`rm.doorbell(token)`), from the
+relay worker, `try_lock` rules unchanged (the pure decision is `should_rering(enabled, outstanding, idle, ready)`). It prints
+`RERING rang doorbell_token=<hex> gp_get=<hex>` and, at each following relay tick, `RERING_RESULT +<ms> gp_get=<hex> moved=<yes|no>` until `GP_GET`
+moves (`moved=yes`) or 3 s pass (`RERING_RESULT none`). **Reading it:** `moved=yes` shortly after the ring means the doorbell (or the
+scheduling it implies) had been lost, not the GPU's work; `RERING_RESULT none` means a second doorbell does not wake it, so look at the
+channel's scheduling state (next paragraph). **Falsifier of "lost doorbell":** `moved=no` for 3 s.
+
+**New block line `TWIN`:** `doorbell_token`, the guest channel twin's `disabled` / `stopped` flags (`pt` map, `try_lock`), and the ms since the last
+host `DISABLE_CHANNELS` disable act and enable act for this host channel (`ActTimes`, noted where the three host verbs return: STOP, the
+`DISABLE_CHANNELS` act, the re-enable after STOP; nothing recorded with the diagnostic off). It separates the competing explanation: a channel left
+disabled by an async preempt act (`disabled=0x1`, a disable act age with no later enable age).
+
+Tests: `kf-chan` `user_stall` (decision truth table, once per condition, 3 s window boundaries, result lines, act-time table and its cap, the TWIN line),
+`kf-qemu` `userpump` (switch read once, the doorbell is rung in one place after the block and behind the decision, the act notes after their verbs).
+

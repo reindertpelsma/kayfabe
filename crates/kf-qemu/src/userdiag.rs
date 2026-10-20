@@ -22,11 +22,14 @@
 
 use super::*;
 use kf_chan::user_stall as stall;
-use std::sync::atomic::{AtomicU64, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 
 /// The threshold in milliseconds; 0 = off. Written once by [`init`], read relaxed.
 static THRESHOLD_MS: AtomicU64 = AtomicU64::new(0);
 /// When the cumulative counter line was last printed (ms), and the counters' sum at that time.
+/// ★ EXPERIMENT `KF3_DIAG_USER_STALL_RERING=1` (only with the diagnostic): ring the idle channel's doorbell once per condition.
+/// It MUTATES scheduling state; opt-in measurement only, never a fix. Written once by [`init`].
+static RERING: AtomicBool = AtomicBool::new(false);
 static PERIOD_AT_MS: AtomicU64 = AtomicU64::new(0);
 static PERIOD_SUM: AtomicU64 = AtomicU64::new(0);
 
@@ -37,6 +40,15 @@ pub(super) fn init() {
         let value = std::env::var(kf_chan::user_stall::ENV).ok();
         let setting = stall::parse_setting(value.as_deref());
         THRESHOLD_MS.store(setting.threshold_ms(), Ordering::Relaxed);
+        let rering = std::env::var(kf_chan::user_stall::ENV_RERING).ok();
+        let rering_on = stall::rering_enabled(rering.as_deref(), setting.threshold_ms() != 0);
+        RERING.store(rering_on, Ordering::Relaxed);
+        if rering_on {
+            eprintln!(
+                "kf3: USER_RING_STALL_DIAG RERING_EXPERIMENT ON ({}): a stall block for an idle PBDMA rings that channel's doorbell once; this mutates scheduling state; opt-in measurement only, never a fix",
+                stall::ENV_RERING
+            );
+        }
         match setting {
             stall::Setting::Off => {}
             stall::Setting::On(ms) => {
@@ -64,7 +76,7 @@ pub(super) fn channel_state() -> Option<Box<stall::ChannelDiag>> {
 }
 
 /// Milliseconds since the first call. Only reached with the diagnostic on.
-fn now_ms() -> u64 {
+pub(super) fn now_ms() -> u64 {
     static START: std::sync::OnceLock<std::time::Instant> = std::sync::OnceLock::new();
     u64::try_from(
         START
@@ -146,10 +158,11 @@ impl Pump {
         let Some((get, put)) = cursors else {
             return;
         };
-        let kf_chan::user_stall::Verdict::Fire { stalled_ms } =
-            d.detector
-                .observe(now, get, put, kf_chan::user_storage::ENTRIES, threshold)
-        else {
+        let (verdict, poll) = d.look(now, get, put, kf_chan::user_storage::ENTRIES, threshold);
+        if let Some(line) = stall::rering_text(v.key, poll) {
+            eprintln!("{line}");
+        }
+        let kf_chan::user_stall::Verdict::Fire { stalled_ms } = verdict else {
             return;
         };
         let (doorbells, wake, turn_ago_ms) = (d.doorbells(now), d.last_wake(now), d.last_turn(now));
@@ -184,6 +197,11 @@ impl Pump {
                 .ok()
                 .map(|()| u32::from_le_bytes(b))
         };
+        let acts = me
+            .stall_acts
+            .try_lock()
+            .ok()
+            .map_or((None, None), |a| a.ages(v.host, now));
         let life = self.core.life.counts();
         let inputs = stall::Inputs {
             key: v.key,
@@ -209,7 +227,16 @@ impl Pump {
             turns: self.core.lazy.counts.turns,
             entries_by_mode: (life.entries_scan, life.entries_pointer, life.entries_window),
             totals: me.relay_stats.life.stall.summary(),
-            twin: stall::TwinFacts::default(),
+            twin: stall::TwinFacts {
+                token: v.host,
+                flags: me
+                    .pt
+                    .try_lock()
+                    .ok()
+                    .and_then(|pt| pt.get(&v.key).map(|t| (t.disabled, t.stopped))),
+                disable_act_ago_ms: acts.0,
+                enable_act_ago_ms: acts.1,
+            },
         };
         let (cache, generation) = (&self.cache, self.ram_generation);
         let mut read = |va: u64, bytes: usize| -> Result<Vec<u8>, &'static str> {
@@ -228,6 +255,24 @@ impl Pump {
         let report = kf_chan::user_stall::build_report(inputs, &mut read, stats);
         for line in kf_chan::user_stall::render(&report) {
             eprintln!("{line}");
+        }
+        // ★ EXPERIMENT (opt-in, mutates scheduling state, never a fix): the private ring holds entries the PBDMA
+        // has not fetched and the PBDMA looks idle -> ring this channel's doorbell once for this condition, then
+        // watch GP_GET (`ChannelDiag::look`, a line per relay tick until it moves or 3 s pass).
+        if RERING.load(Ordering::Relaxed) {
+            let outstanding = report.private.gp_get != report.private.gp_put;
+            let idle = stall::looks_idle(&report.private, &report.segment);
+            let ready = self.diag.as_ref().is_some_and(|d| d.rering_ready());
+            if stall::should_rering(true, outstanding, idle, ready) {
+                let ok = me.rm.doorbell(v.host).is_ok();
+                eprintln!(
+                    "{}",
+                    stall::rering_rang_text(v.key, v.host, report.private.gp_get, ok)
+                );
+                if let Some(d) = self.diag.as_mut() {
+                    d.rering_begin(now_ms(), report.private.gp_get);
+                }
+            }
         }
     }
 }
