@@ -93,14 +93,21 @@ pub trait RelayLoop {
     fn waiting(&self) -> bool;
     /// ★ 2026-10-20 (simple relay): some relay holds an obligation with NO registered wake source: durable demand left behind
     /// (the RETRY SET: a turn that lost a `try_lock` on a lock whose holder rings nobody) or a wait no interrupt announces
-    /// (`Wait::Popped`). While one exists the worker never blocks (epoll timeout 0). Default: no relays, never.
-    fn unsourced(&self) -> bool {
-        false
-    }
+    /// (`Wait::Popped`). While one exists the worker never blocks (epoll timeout 0). REQUIRED (no default, G9 2026-10-20): a
+    /// wrapper that forgot it silently answered `false` and let the worker park beside the retry set.
+    fn unsourced(&self) -> bool;
     /// Look at the waiting relays' not-yet-fd state and ring what is satisfied. Returns whether
     /// anything was rung. `why` names the caller for the counters (a backstop peek that finds work is
     /// a bug counter, never the normal path).
     fn peek(&self, why: Peek) -> bool;
+}
+
+/// ★ The block decision of [`run_with_relay`], one pure function (G9: a wrapper that changed it would show here): the loop must
+/// NOT block (epoll timeout 0) after a pass that served `n` tokens, a look that `rang`, or while the relays hold an obligation
+/// with no registered wake source.
+#[must_use]
+pub fn must_spin(n: usize, rang: bool, relay: &dyn RelayLoop) -> bool {
+    n > 0 || rang || relay.unsourced()
 }
 
 /// What the worker loop does after a `worker_pass` that served `served` tokens (`docs/design/V3_USER_RING_EVENT_LOOP_20261014.md`
@@ -322,12 +329,19 @@ impl RelayLoop for Watched<'_> {
         self.tap.peek(why);
         self.inner.peek(why)
     }
+    // ★ G9 (grader 2026-10-20, 'Watched unsourced'): forwarded; the trait has no default any more, so a wrapper cannot forget it.
+    fn unsourced(&self) -> bool {
+        self.inner.unsourced()
+    }
 }
 
 /// No relays (the harness): the loop is the old one minus the timer-driven refresh.
 pub struct NoRelay;
 impl RelayLoop for NoRelay {
     fn waiting(&self) -> bool {
+        false
+    }
+    fn unsourced(&self) -> bool {
         false
     }
     fn peek(&self, _why: Peek) -> bool {
@@ -466,7 +480,7 @@ pub fn run_with_relay(
         }
         after_timeout = false;
         // An obligation without a registered wake source keeps the loop spinning (timeout 0); exactly these.
-        let spin = n > 0 || rang || relay.unsourced();
+        let spin = must_spin(n, rang, relay);
         let mut ready = ReadyTokens::new();
         let got = if spin {
             if n == 0 && !rang {
@@ -653,6 +667,9 @@ mod tests {
 
     struct Fake(std::cell::Cell<u32>);
     impl RelayLoop for Fake {
+        fn unsourced(&self) -> bool {
+            false
+        }
         fn waiting(&self) -> bool {
             true
         }
@@ -707,17 +724,71 @@ mod tests {
         for waiting in [false, true] {
             for unsourced in [false, true] {
                 let inner = S(waiting, unsourced);
-                let w = Watched { inner: &inner, tap: &tap };
-                assert_eq!(w.unsourced(), inner.unsourced(), "waiting={waiting} unsourced={unsourced}");
+                let w = Watched {
+                    inner: &inner,
+                    tap: &tap,
+                };
+                assert_eq!(
+                    w.unsourced(),
+                    inner.unsourced(),
+                    "waiting={waiting} unsourced={unsourced}"
+                );
                 assert_eq!(w.waiting(), inner.waiting());
             }
         }
+    }
+
+    /// ★ G9: the wrapper and the bare relay make IDENTICAL block decisions for every obligation state and pass result.
+    #[test]
+    fn the_watched_relay_and_the_bare_relay_make_the_same_block_decision() {
+        struct S(bool, bool);
+        impl RelayLoop for S {
+            fn waiting(&self) -> bool {
+                self.0
+            }
+            fn peek(&self, _why: Peek) -> bool {
+                false
+            }
+            fn unsourced(&self) -> bool {
+                self.1
+            }
+        }
+        let board: &'static progress::Board = Box::leak(Box::new(progress::Board::new()));
+        let tap = Tap::on_board(board, board.register().unwrap());
+        let mut blocks = 0;
+        for waiting in [false, true] {
+            for unsourced in [false, true] {
+                for n in [0usize, 1, 7] {
+                    for rang in [false, true] {
+                        let inner = S(waiting, unsourced);
+                        let w = Watched {
+                            inner: &inner,
+                            tap: &tap,
+                        };
+                        assert_eq!(
+                            must_spin(n, rang, &w),
+                            must_spin(n, rang, &inner),
+                            "w={waiting} u={unsourced} n={n} rang={rang}"
+                        );
+                        assert_eq!(must_spin(n, rang, &inner), n > 0 || rang || unsourced);
+                        blocks += usize::from(!must_spin(n, rang, &w));
+                    }
+                }
+            }
+        }
+        assert_eq!(
+            blocks, 2,
+            "only an idle pass with no ring and no unsourced obligation blocks"
+        );
     }
 
     #[test]
     fn the_watched_relay_forwards_a_refusal_unchanged() {
         struct No;
         impl RelayLoop for No {
+            fn unsourced(&self) -> bool {
+                false
+            }
             fn waiting(&self) -> bool {
                 false
             }
