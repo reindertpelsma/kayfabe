@@ -857,6 +857,22 @@ fn b_d6_a_guest_ring_that_looks_full_is_written_back_by_the_very_next_turn() {
     // the guest filled its ring up to the GET it sees (written_get = 0 at birth, so PUT = 63 is "full")
     feed(&mut io, 2, 63);
     let t = run(&mut r, &mut io, 40);
+    if !kf_chan::user_turn::guest_get_follows_pops() {
+        // ★ 2026-10-20 (simple relay, Change A): MOOT BY DESIGN. D6 exists so that a full guest ring is not left waiting for a
+        // pop write-back a lazy turn skipped. With GuestGet::ReadIndex the guest's GP_GET is the relay's read index, written by
+        // the next turn without any look at the private words. Restated property: the guest sees free space as soon as the
+        // relay has READ the entries (written GP_GET == cursor after the run), and a full ring never needs a forced look.
+        let _ = run(&mut r, &mut io, 40);
+        assert_eq!(
+            r.cursor, 63,
+            "everything the full ring held was read: {t:?}"
+        );
+        assert_eq!(
+            r.written_get, r.cursor,
+            "the guest's GP_GET is the relay's read index"
+        );
+        return;
+    }
     let mut checked = 0;
     for w in t.windows(2) {
         let (obs, _, full) = w[0];

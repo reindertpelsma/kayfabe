@@ -61,7 +61,7 @@ pub enum GuestGet {
 }
 
 /// THE switch of Change A: one line, hardware-gated (canary plan in the design note).
-pub const GUEST_GET: GuestGet = GuestGet::Popped;
+pub const GUEST_GET: GuestGet = GuestGet::ReadIndex;
 
 /// Whether the guest's `GP_GET` follows the PBDMA's pops ([`GUEST_GET`]).
 #[must_use]
