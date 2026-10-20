@@ -50,6 +50,12 @@ def _json(body):
         if not isinstance(e,dict) or any(k in e and not uint(e[k]) for k in ['id','kind','birth_ns','age_ns','generation','thread']):raise InvalidProfile('invalid obligation')
     return row
 
+def _relay(index,v):
+    known=lambda mask,at:v[at] if v[6]&mask else None
+    get,put,entries=known(1,7),known(2,8),v[25]
+    depth=(put+entries-get)%entries if get is not None and put is not None and entries>0 and get<entries and put<entries else None
+    return dict(source_slot=index,generation=v[2],key=v[3],token=v[4],observed_ns=v[5],private_get=get,private_put=put,reference=known(4,9),private_depth=depth,wait=dict(kind=v[10],target=v[11],birth_ns=v[28]),doorbell_count=known(32,12),last_doorbell_observed_ns=v[13],wake_reason=v[14],wake_observed_ns=v[15],private_get_changed_ns=v[16],guest_get=known(8,17),guest_put=known(16,18),guest_entries=v[19],guest_observed_ns=v[20],issued=v[21],fetched=v[22],markers_issued=v[23],active=bool(v[24]),private_entries=entries,private_observed_ns=v[26],private_put_observed_ns=v[27],birth_ns=v[29])
+
 def read_mmap(path):
     # pread handles concurrent truncation as a short read, never a SIGBUS.
     fd=os.open(path,os.O_RDONLY)
@@ -62,7 +68,7 @@ def read_mmap(path):
         if declared!=FILE_BYTES:raise InvalidProfile('invalid declared geometry')
         thread_count=struct.unpack_from('<Q',h,168)[0]
         if thread_count>64:raise InvalidProfile('invalid thread count')
-        rows=[];threads=[]
+        rows=[];threads=[];relays=[]
         for i in range(RECORDS):
             off=RECORD_BASE+i*RECORD_BYTES
             prefix=os.pread(fd,64,off)
@@ -76,14 +82,22 @@ def read_mmap(path):
             except InvalidProfile:continue
             if row.get('start_ns')!=start or row.get('end_ns')!=end:continue
             rows.append(row)
-        for i in range(thread_count):
-            off=THREAD_BASE+i*THREAD_BYTES;body=os.pread(fd,64,off);after=os.pread(fd,8,off)
-            if len(body)!=64 or len(after)!=8:continue
-            seq,tid,role,state,arg,since,site,dropped=struct.unpack('<8Q',body)
+        for i in range(64):
+            off=THREAD_BASE+i*THREAD_BYTES;body=os.pread(fd,112,off);after=os.pread(fd,8,off)
+            if len(body)!=112 or len(after)!=8:continue
+            seq,tid,role,state,arg,since,site,dropped,_,_,_,_,born,retired=struct.unpack('<14Q',body)
             if seq==0 or seq&1 or struct.unpack('<Q',after)[0]!=seq:continue
-            threads.append(dict(slot=i,tid=tid,role=role,state=state,arg=arg,since_ns=since,site=site,dropped=dropped))
+            threads.append(dict(slot=i,tid=tid,role=role,state=state,arg=arg,since_ns=since,site=site,dropped=dropped,birth_ns=born,retired_ns=retired,active=retired==0))
+        sources=os.pread(fd,1048576,12587008)
+        if len(sources)==1048576:
+            for i in range(4096):
+                v=struct.unpack_from('<32Q',sources,i*256)
+                if v[0]==0 or v[0]&1 or v[1]!=1:continue
+                after=os.pread(fd,8,12587008+i*256)
+                if len(after)!=8 or struct.unpack('<Q',after)[0]!=v[0]:continue
+                relays.append(_relay(i,v))
         rows.sort(key=lambda r:r['end_ns'])
-        return dict(header={'last_update_ns':struct.unpack_from('<Q',h,56)[0],'clock_mode':'diagnostic_os_clock' if struct.unpack_from('<Q',h,40)[0]&1 else 'calibrated_tsc'},records=rows,threads=threads)
+        return dict(header={'last_update_ns':struct.unpack_from('<Q',h,56)[0],'clock_mode':'diagnostic_os_clock' if struct.unpack_from('<Q',h,40)[0]&1 else 'calibrated_tsc'},records=rows,threads=threads,relays=relays)
     finally:os.close(fd)
 
 def read_jsonl(path):
@@ -131,7 +145,7 @@ def load(path):
 
 def main():
     p=argparse.ArgumentParser(description=__doc__);sub=p.add_subparsers(dest='command',required=True)
-    for name in ['tail','summary','window','hangs']:
+    for name in ['tail','summary','window','hangs','relays']:
         a=sub.add_parser(name);a.add_argument('file')
         if name=='tail':a.add_argument('--once',action='store_true')
         if name=='window':a.add_argument('t0',type=int);a.add_argument('t1',type=int)
@@ -144,9 +158,13 @@ def main():
             if args.command=='tail':
                 r=rows[-1] if rows else {};c=r.get('counters',{});v=ratios(r)['rmcontrol_per_display_new']
                 print(f"mono_ns={r.get('end_ns','UNKNOWN')} last_update_ns={data['header'].get('last_update_ns','UNKNOWN')} RmControl/frame[display_new]={v if v is not None else 'N/A/UNKNOWN'} calls={c.get('rmcontrol_seen','UNKNOWN')} frames={c.get('display_new_frames','UNKNOWN')}",flush=True)
+                for q in data.get('relays',[])[:64]:
+                    now=time.monotonic_ns();get_age=(now-q['private_get_changed_ns'])/1e6 if q['private_get'] is not None else None
+                    print(f"relay={q['key']:x}/{q['generation']} private_GET/PUT/REF={q['private_get']}/{q['private_put']}/{q['reference']} depth={q['private_depth']} Wait={q['wait']} get_change_age_ms={get_age} doorbells={q['doorbell_count']} doorbell_seen_ns={q['last_doorbell_observed_ns']} wake={q['wake_reason']} sample_ns={q['private_observed_ns']}",flush=True)
                 if args.once:break
                 time.sleep(1);continue
-            if args.command=='window':rows=[r for r in rows if r.get('start_ns',0)<args.t1 and r.get('end_ns',0)>args.t0];out=rows
+            if args.command=='relays':out=data.get('relays',[])
+            elif args.command=='window':rows=[r for r in rows if r.get('start_ns',0)<args.t1 and r.get('end_ns',0)>args.t0];out=rows
             elif args.command=='hangs':
                 last=rows[-1] if rows else {};now=last.get('end_ns',data['header'].get('last_update_ns',0))
                 out=dict(last_update_ns=now,stale_age_ns=max(0,time.monotonic_ns()-now),threads=[t for t in data['threads'] if t.get('active',True) and t.get('state') not in (0,17) and now-t.get('since_ns',now)>args.stuck_ms*1e6],ledger=[e for e in last.get('ledger',{}).get('oldest',[]) if e.get('overdue')])

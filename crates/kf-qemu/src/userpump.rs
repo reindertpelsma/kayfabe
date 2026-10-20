@@ -466,6 +466,8 @@ fn software_snapshot(me: &ChanPlane, r: &userrelay::Record) -> Turn<Option<Softw
 }
 
 pub(super) struct Pump {
+    #[cfg(feature = "prof")]
+    profile: Option<kf_prof::runtime::RelayProbe>,
     cache: crate::userstore::Cache,
     ram_generation: u64,
     source_admitted: bool,
@@ -489,6 +491,18 @@ pub(super) struct Pump {
 /// What the I/O of the per-entry turn keeps between its micro-steps and its reporting counters.
 #[derive(Default)]
 struct Aux {
+    #[cfg(feature = "prof")]
+    prof_private_get: Option<u32>,
+    #[cfg(feature = "prof")]
+    prof_private_put: Option<u32>,
+    #[cfg(feature = "prof")]
+    prof_reference: Option<u32>,
+    #[cfg(feature = "prof")]
+    prof_guest_get: Option<u32>,
+    #[cfg(feature = "prof")]
+    prof_guest_put: Option<u32>,
+    #[cfg(feature = "prof")]
+    prof_wake: Option<kf_prof::relay::Wake>,
     ring: Option<Mapping<'static>>,
     source: Option<Snapshot<'static>>,
     entry: u64,
@@ -550,7 +564,9 @@ fn publish_guarded(
     ring: Option<&Mapping<'static>>,
     gp: Option<&Snapshot<'static>>,
     pb: Option<&Snapshot<'static>>,
-    write: impl FnOnce(&kf_chan::user_storage::Storage<kf_chan::user_storage::CpuView>) -> Result<(), String>,
+    write: impl FnOnce(
+        &kf_chan::user_storage::Storage<kf_chan::user_storage::CpuView>,
+    ) -> Result<(), String>,
 ) -> Turn<()> {
     if me.inbox.walk_busy() {
         me.inbox.wait_walk(r.idx);
@@ -656,13 +672,29 @@ struct PumpIo<'a> {
 
 impl kf_chan::user_turn::Io for PumpIo<'_> {
     fn hw_words(&mut self) -> Turn<(u32, u32)> {
+        #[cfg(feature = "prof")]
+        let storage = kf_prof::call(
+            kf_prof::tables::Site::RelayStorage,
+            kf_prof::tables::State::Mutex,
+            0,
+            || self.r.lease.storage.lock(),
+        )
+        .map_err(|_| "USER_RING_STORAGE_POISONED")?;
+        #[cfg(not(feature = "prof"))]
         let storage = self
             .r
             .lease
             .storage
             .lock()
             .map_err(|_| "USER_RING_STORAGE_POISONED")?;
-        Ok((storage.gpu_get()?, storage.gpu_reference()?))
+        let get = storage.gpu_get()?;
+        let reference = storage.gpu_reference()?;
+        #[cfg(feature = "prof")]
+        {
+            self.aux.prof_private_get = Some(get);
+            self.aux.prof_reference = Some(reference);
+        }
+        Ok((get, reference))
     }
     fn write_guest_get(&mut self, get: u32) -> Turn<bool> {
         let r = self.r;
@@ -674,7 +706,13 @@ impl kf_chan::user_turn::Io for PumpIo<'_> {
             kf_abi::submit::USERD_GP_GET,
             &get.to_le_bytes(),
         ) {
-            Ok(()) => Ok(true),
+            Ok(()) => {
+                #[cfg(feature = "prof")]
+                {
+                    self.aux.prof_guest_get = Some(get);
+                }
+                Ok(true)
+            }
             Err(kf_rm::memory_list::AccessError::Busy) => Ok(false),
             Err(e) => Err(format!("USER_RING_GET_WRITE {e:?}").into()),
         }
@@ -699,7 +737,13 @@ impl kf_chan::user_turn::Io for PumpIo<'_> {
         self.aux.doorbells = me.queued(r.idx);
         let mut put = [0u8; 4];
         r.userd
-            .read(me, r.key, &r.allocation, kf_abi::submit::USERD_GP_PUT, &mut put)
+            .read(
+                me,
+                r.key,
+                &r.allocation,
+                kf_abi::submit::USERD_GP_PUT,
+                &mut put,
+            )
             .map_err(|e| match e {
                 // The USERD's allocation is no longer the channel's current one: the guest's free is retiring
                 // this relay (`retire_user_ring_token` cancels the record next). Not a refusal -- nothing was
@@ -707,7 +751,12 @@ impl kf_chan::user_turn::Io for PumpIo<'_> {
                 kf_rm::memory_list::AccessError::Gone => Failure::Retry,
                 e => access_error(e, "USER_RING_PUT_READ"),
             })?;
-        Ok(Some(u32::from_le_bytes(put)))
+        let put = u32::from_le_bytes(put);
+        #[cfg(feature = "prof")]
+        {
+            self.aux.prof_guest_put = Some(put);
+        }
+        Ok(Some(put))
     }
     fn begin_entry(&mut self, _put: u32) {
         let doorbells = self.aux.doorbells;
@@ -850,7 +899,14 @@ impl kf_chan::user_turn::Io for PumpIo<'_> {
                     .publish(Some((generation, guest_get)))
                     .map_err(str::to_owned)?;
                 storage.write_user_gp(slot, entry)?;
-                storage.publish_put(put)
+                {
+                    let result = storage.publish_put(put);
+                    #[cfg(feature = "prof")]
+                    if result.is_ok() {
+                        self.aux.prof_private_put = Some(put);
+                    }
+                    result
+                }
             },
         )?;
         *self.source_admitted = true;
@@ -878,7 +934,14 @@ impl kf_chan::user_turn::Io for PumpIo<'_> {
                 let (n, value) = marks.issue().map_err(str::to_owned)?;
                 count = n;
                 storage.write_host_marker(slot, value)?;
-                storage.publish_put(put)
+                {
+                    let result = storage.publish_put(put);
+                    #[cfg(feature = "prof")]
+                    if result.is_ok() {
+                        self.aux.prof_private_put = Some(put);
+                    }
+                    result
+                }
             },
         )?;
         *self.source_admitted = true;
@@ -902,7 +965,14 @@ impl kf_chan::user_turn::Io for PumpIo<'_> {
                 let (slot, put) = fetch.publish(None).map_err(str::to_owned)?;
                 let (_, value) = marks.issue().map_err(str::to_owned)?;
                 storage.write_host_marker(slot, value)?;
-                storage.publish_put(put)
+                {
+                    let result = storage.publish_put(put);
+                    #[cfg(feature = "prof")]
+                    if result.is_ok() {
+                        self.aux.prof_private_put = Some(put);
+                    }
+                    result
+                }
             },
         )?;
         Stats::bump(&self.me.relay_stats.markers);
@@ -965,6 +1035,38 @@ impl kf_chan::user_turn::Io for PumpIo<'_> {
 }
 
 impl Pump {
+    #[cfg(feature = "prof")]
+    fn prof_observe(&mut self, me: &ChanPlane, idx: u32, entries: u32, active: bool) {
+        if !kf_prof::runtime::is_on() {
+            return;
+        }
+        if let Some(profile) = &mut self.profile {
+            use kf_prof::relay::{Observation, Wait};
+            let wait = match self.wait {
+                None => Wait::None,
+                Some(kf_chan::user_loop::Wait::Marker { target }) => Wait::Marker(target),
+                Some(kf_chan::user_loop::Wait::Popped { target }) => Wait::Popped(target),
+                Some(kf_chan::user_loop::Wait::Contended) => Wait::Contended,
+            };
+            profile.observe(Observation {
+                token: idx,
+                private_get: self.aux.prof_private_get.take(),
+                private_put: self.aux.prof_private_put.take(),
+                reference: self.aux.prof_reference.take(),
+                wait,
+                doorbells: Some(me.queued(idx)),
+                wake: self.aux.prof_wake.take(),
+                guest_get: self.aux.prof_guest_get.take(),
+                guest_put: self.aux.prof_guest_put.take(),
+                guest_entries: entries,
+                issued: self.core.fetch.issued(),
+                fetched: self.core.fetch.fetched(),
+                markers: self.core.marks.issued(),
+                active,
+                private_entries: kf_chan::user_storage::ENTRIES,
+            });
+        }
+    }
     pub(super) fn new(me: &ChanPlane, subdevice_id: u32, key: (u32, u32)) -> Result<Self, String> {
         let scan = if userrelay::shadow_enabled() {
             Scan::default()
@@ -973,6 +1075,10 @@ impl Pump {
             Scan::for_subdevice(subdevice_id).map_err(str::to_owned)?
         };
         Ok(Self {
+            #[cfg(feature = "prof")]
+            profile: kf_prof::runtime::register_relay_global(
+                (u64::from(key.0) << 32) | u64::from(key.1),
+            ),
             cache: crate::userstore::Cache::new(
                 me.rm,
                 me.store,
@@ -1003,7 +1109,11 @@ impl Pump {
     pub(super) fn release(&mut self, stats: &kf_chan::user_loop::Stats) -> Result<(), String> {
         {
             let c = self.core.life.counts();
-            if c.entries_scan.saturating_add(c.entries_pointer).saturating_add(c.entries_window) != 0 {
+            if c.entries_scan
+                .saturating_add(c.entries_pointer)
+                .saturating_add(c.entries_window)
+                != 0
+            {
                 eprintln!(
                     "kf3: USER_RING_LIFECYCLE {:x?} mode={:?} {c:?}",
                     self.key,
@@ -1110,10 +1220,18 @@ impl Pump {
             return;
         };
         match p {
-            Published::Entry { kind, cursor, entry } => self.trace_slots(|| {
+            Published::Entry {
+                kind,
+                cursor,
+                entry,
+            } => self.trace_slots(|| {
                 vec![format!(
                     "guest {} cursor={cursor} entry={entry:#018x}",
-                    if kind == PubKind::Pointer { "pointer" } else { "control" }
+                    if kind == PubKind::Pointer {
+                        "pointer"
+                    } else {
+                        "control"
+                    }
                 )]
             }),
             Published::Gate { count } => self.trace_slots(|| {
@@ -1689,7 +1807,8 @@ impl Pump {
         if entries.is_power_of_two() && entries >= 2 {
             for k in 0..24u32 {
                 let idx = self
-                    .core.cursor
+                    .core
+                    .cursor
                     .wrapping_add(entries)
                     .wrapping_sub(16)
                     .wrapping_add(k)
@@ -1699,7 +1818,11 @@ impl Pump {
                     .snapshot(me, r, at, 8)
                     .ok()
                     .and_then(|s| s.bytes.as_slice().try_into().ok().map(u64::from_le_bytes));
-                let mark = if idx == self.core.cursor { " <= cursor" } else { "" };
+                let mark = if idx == self.core.cursor {
+                    " <= cursor"
+                } else {
+                    ""
+                };
                 let _ = writeln!(out, "  {idx}: {e:#018x?}{mark}");
             }
         }
@@ -1817,6 +1940,12 @@ impl Pump {
     /// [`Need`](kf_chan::user_loop::Need) -- progress (`Again`), nothing (`Idle`), or what it waits
     /// for. No tick: the caller arms the wake ([`ChanPlane::user_ring_serve`]).
     fn turn(&mut self, me: &ChanPlane, r: &mut userrelay::Record) -> Turn<bool> {
+        #[cfg(feature = "prof")]
+        let _prof_span = kf_prof::site(
+            kf_prof::tables::Site::RelayTurn,
+            kf_prof::tables::State::Relay,
+            (u64::from(r.key.0) << 32) | u64::from(r.key.1),
+        );
         use kf_chan::user_loop::Need;
         self.core.need = Need::Idle;
         self.core.again = false;
@@ -1938,7 +2067,11 @@ impl Pump {
                 Step::Segment => break,
                 Step::Scanned { rare } => {
                     let pb = self.aux.pb.take().ok_or("USER_RING_SCAN_PB_ABSENT")?;
-                    let source = self.aux.source.take().ok_or("USER_RING_SCAN_SOURCE_ABSENT")?;
+                    let source = self
+                        .aux
+                        .source
+                        .take()
+                        .ok_or("USER_RING_SCAN_SOURCE_ABSENT")?;
                     let software = self.aux.software.take();
                     if self.trace.is_some()
                         && let Some(kf_chan::user_stream::Source::Segment(d)) = self.core.desc
@@ -2123,11 +2256,19 @@ impl Pump {
             None,
             |pump, storage| {
                 let (slot, put) = pump
-                    .core.fetch
+                    .core
+                    .fetch
                     .publish(Some((pump.core.generation, guest_get)))
                     .map_err(str::to_owned)?;
                 storage.write_shadow_gp(slot, entry)?;
-                storage.publish_put(put)
+                {
+                    let result = storage.publish_put(put);
+                    #[cfg(feature = "prof")]
+                    if result.is_ok() {
+                        pump.aux.prof_private_put = Some(put);
+                    }
+                    result
+                }
             },
         );
         shadow.finish_publication(publication.is_ok());
@@ -2223,11 +2364,19 @@ impl Pump {
                 Some(&s.pb),
                 |pump, storage| {
                     let (slot, put) = pump
-                        .core.fetch
+                        .core
+                        .fetch
                         .publish(Some((s.generation, s.guest_get)))
                         .map_err(str::to_owned)?;
                     storage.write_user_gp(slot, s.entry)?;
-                    storage.publish_put(put)
+                    {
+                        let result = storage.publish_put(put);
+                        #[cfg(feature = "prof")]
+                        if result.is_ok() {
+                            pump.aux.prof_private_put = Some(put);
+                        }
+                        result
+                    }
                 },
             )?;
             let (cursor, entry, n) = (self.core.cursor, s.entry, s.words.len());
@@ -2241,7 +2390,9 @@ impl Pump {
             });
             self.source_admitted = true;
             self.core.scan = next;
-            self.core.life.segment_scanned(self.core.scan.carried().is_some());
+            self.core
+                .life
+                .segment_scanned(self.core.scan.carried().is_some());
             self.core.cursor = s.guest_get;
             self.core.note_relayed(s.entry);
             self.core.unnotified = true;
@@ -2307,7 +2458,14 @@ impl Pump {
                 let (witness, put) = pump.core.fetch.publish(None).map_err(str::to_owned)?;
                 let (_, value) = pump.core.marks.issue().map_err(str::to_owned)?;
                 storage.write_host_marker(witness, value)?;
-                storage.publish_put(put)
+                {
+                    let result = storage.publish_put(put);
+                    #[cfg(feature = "prof")]
+                    if result.is_ok() {
+                        pump.aux.prof_private_put = Some(put);
+                    }
+                    result
+                }
             },
         )?;
         let (at, entry, staged) = (s.at, s.entry, s.staged);
@@ -2329,7 +2487,9 @@ impl Pump {
         }
         s.staged = true;
         self.core.scan = next;
-        self.core.life.segment_scanned(self.core.scan.carried().is_some());
+        self.core
+            .life
+            .segment_scanned(self.core.scan.carried().is_some());
         s.wait = Some(Wait {
             witness: self.core.marks.issued(),
             trigger,
@@ -2482,7 +2642,8 @@ impl Pump {
             return Err("USER_RING_MIGRATION_DECLARATION".into());
         }
         let generation = self
-            .core.generation
+            .core
+            .generation
             .checked_add(1)
             .ok_or("USER_RING_SOURCE_SEQUENCE")?;
         if self.trace.is_some() {
@@ -2504,7 +2665,8 @@ impl Pump {
             if entries.is_power_of_two() && entries >= 2 {
                 for k in 0..12u32 {
                     let idx = self
-                        .core.cursor
+                        .core
+                        .cursor
                         .wrapping_add(entries)
                         .wrapping_sub(4)
                         .wrapping_add(k)
@@ -2572,7 +2734,13 @@ impl Pump {
         {
             let mut b = [0u8; 4];
             if r.userd
-                .read(me, r.key, &r.allocation, kf_abi::submit::USERD_GP_GET, &mut b)
+                .read(
+                    me,
+                    r.key,
+                    &r.allocation,
+                    kf_abi::submit::USERD_GP_GET,
+                    &mut b,
+                )
                 .is_ok()
                 && self.core.new_ring_get(u32::from_le_bytes(b))
             {
@@ -2771,6 +2939,10 @@ impl ChanPlane {
         if let Some(t) = pump.trace.as_mut() {
             t.wake(woke);
         }
+        #[cfg(feature = "prof")]
+        if woke && pump.aux.prof_wake.is_none() {
+            pump.aux.prof_wake = Some(kf_prof::relay::Wake::Demand);
+        }
         let outcome = pump.turn(self, &mut r);
         r.pump = Some(pump);
         match outcome {
@@ -2815,6 +2987,10 @@ impl ChanPlane {
         };
         let need = p.core.need;
         p.wait = wait_of(need);
+        #[cfg(feature = "prof")]
+        {
+            p.prof_observe(self, r.idx, r.source.1, true);
+        }
         record.set_waiting(p.wait.is_some());
         match need {
             Need::Again => {
@@ -2850,9 +3026,24 @@ impl ChanPlane {
     /// ahead of the cursor with no doorbell is information (the contract allows it between a guest's
     /// `GP_PUT` write and its ring).
     pub(crate) fn user_ring_peek(&self, why: kf_chan::user_loop::Peek) -> bool {
+        #[cfg(feature = "prof")]
+        let _prof_span = kf_prof::site(
+            kf_prof::tables::Site::RelayPeek,
+            kf_prof::tables::State::Relay,
+            why as u64,
+        );
         // The map's holders (birth / free) keep it for a handful of instructions and never wait on the
         // worker; the look only reads atomics, `try_lock`s the records and rings.
-        let Ok(rings) = self.user_rings.lock() else {
+        #[cfg(feature = "prof")]
+        let rings = kf_prof::call(
+            kf_prof::tables::Site::RelayMapLock,
+            kf_prof::tables::State::Mutex,
+            0,
+            || self.user_rings.lock(),
+        );
+        #[cfg(not(feature = "prof"))]
+        let rings = self.user_rings.lock();
+        let Ok(rings) = rings else {
             return false;
         };
         let mut rang = false;
@@ -2903,19 +3094,40 @@ impl ChanPlane {
             let mut pops = false;
             let satisfied = match r.lease.storage.try_lock() {
                 Ok(storage) => match (storage.gpu_get(), storage.gpu_reference()) {
-                    (Ok(get), Ok(reference)) => match p.core.fetch.peek(get) {
-                        Ok(popped) => {
-                            // pops the guest's `GP_GET` write-back has not shown yet (they carry no event)
-                            pops = popped > p.core.fetch.fetched();
-                            w.satisfied(p.core.marks.peek(reference), popped)
+                    (Ok(get), Ok(reference)) => {
+                        #[cfg(feature = "prof")]
+                        {
+                            p.aux.prof_private_get = Some(get);
+                            p.aux.prof_reference = Some(reference);
                         }
-                        // outside the ring / beyond what was issued: the turn refuses it by name
-                        Err(_) => true,
-                    },
+                        match p.core.fetch.peek(get) {
+                            Ok(popped) => {
+                                // pops the guest's `GP_GET` write-back has not shown yet (they carry no event)
+                                pops = popped > p.core.fetch.fetched();
+                                w.satisfied(p.core.marks.peek(reference), popped)
+                            }
+                            // outside the ring / beyond what was issued: the turn refuses it by name
+                            Err(_) => true,
+                        }
+                    }
                     _ => true,
                 },
                 Err(_) => true,
             };
+            #[cfg(feature = "prof")]
+            {
+                if (satisfied && (retry_ok || !matches!(w, kf_chan::user_loop::Wait::Contended)))
+                    || (!satisfied && pops && matches!(w, kf_chan::user_loop::Wait::Marker { .. }))
+                {
+                    use kf_prof::relay::Wake;
+                    p.aux.prof_wake = Some(match why {
+                        Peek::Event => Wake::Event,
+                        Peek::Spin => Wake::Spin,
+                        Peek::Backstop => Wake::Backstop,
+                    });
+                }
+                p.prof_observe(self, r.idx, r.source.1, true);
+            }
             if !satisfied && pops && matches!(w, kf_chan::user_loop::Wait::Marker { .. }) {
                 // A gate (or batch) is still draining, but the PBDMA has popped more entries than the
                 // guest's `GP_GET` shows. The wait stays; the turn only writes the guest's `GP_GET` back
@@ -2942,8 +3154,13 @@ impl ChanPlane {
                     if p.core.life.mode() == kf_chan::user_lifecycle::Mode::Pointer {
                         static START: std::sync::OnceLock<std::time::Instant> =
                             std::sync::OnceLock::new();
-                        let now_ms = u64::try_from(START.get_or_init(std::time::Instant::now).elapsed().as_millis())
-                            .unwrap_or(u64::MAX);
+                        let now_ms = u64::try_from(
+                            START
+                                .get_or_init(std::time::Instant::now)
+                                .elapsed()
+                                .as_millis(),
+                        )
+                        .unwrap_or(u64::MAX);
                         let loud = kf_chan::user_loop::loud_rate(p.aux.pointer_backstop_ms, now_ms);
                         p.aux.pointer_backstop_ms = Some(now_ms);
                         p.core.life.pointer_backstop(loud);

@@ -32,6 +32,11 @@ use std::{
     vec::Vec,
 };
 
+const KINDS: usize = Kind::ALL.len();
+const LEDGER_SLOTS: usize = KINDS * 16;
+const SOURCES: usize = 4096;
+const SOURCE_BYTES: usize = 256;
+
 static ON: AtomicBool = AtomicBool::new(false);
 static OWNERS: AtomicU64 = AtomicU64::new(1);
 std::thread_local! {static LOCAL:RefCell<Option<Context>>=const {RefCell::new(None)};}
@@ -69,6 +74,8 @@ struct Engine {
     owner: u64,
     claimed: [AtomicBool; THREADS],
     thread_count: AtomicU64,
+    source_count: AtomicU64,
+    source_dropped: AtomicU64,
     stop: AtomicBool,
     origin: prof_clock::ClockPair,
     #[cfg(feature = "prof-inject")]
@@ -90,7 +97,7 @@ impl Engine {
         let now = self.now();
         let mut threads = Vec::new();
         let mut oldest = Vec::new();
-        let mut kinds = [0u64; 12];
+        let mut kinds = [0u64; KINDS];
         let mut expected_threads = 0usize;
         for slot in 0..THREADS {
             if !self.claimed[slot].load(Ordering::Acquire) {
@@ -169,17 +176,37 @@ impl Engine {
                     let age =
                         observed.saturating_sub(entry["birth_ns"].as_u64().unwrap_or(observed));
                     entry["age_ns"] = json!(age);
-                    let k = entry["kind"].as_u64().unwrap_or(12) as usize;
+                    let k = entry["kind"].as_u64().unwrap_or(KINDS as u64) as usize;
                     entry["overdue"] =
                         json!(Kind::ALL.get(k).is_some_and(|kind| age > kind.bound_ns()));
                 }
+            }
+        }
+        let mut relays = Vec::new();
+        let registered = self
+            .source_count
+            .load(Ordering::Acquire)
+            .min(SOURCES as u64);
+        for index in 0..registered as usize {
+            let base = (LEDGER_BASE + index * SOURCE_BYTES) / 8;
+            if let Ok(v) = read_record::<31>(&self.words, base) {
+                if v[0] != 1 {
+                    continue;
+                }
+                if v[9] != 0 && v[23] != 0 {
+                    kinds[Kind::RelayDrain as usize] =
+                        kinds[Kind::RelayDrain as usize].saturating_add(1);
+                    let age = now.saturating_sub(v[27]);
+                    oldest.push(json!({"source":index,"kind":Kind::RelayDrain as u16,"generation":v[1],"id":v[2],"birth_ns":v[27],"age_ns":age,"observed_ns":v[4],"last_known":true,"overdue":age>Kind::RelayDrain.bound_ns()}));
+                }
+                relays.push(relay_row(index, &v));
             }
         }
         oldest.sort_by_key(|e| core::cmp::Reverse(e["age_ns"].as_u64().unwrap_or(0)));
         oldest.truncate(16);
         let now = self.now();
         json!({"clock_mode":if self.diagnostic_clock {"diagnostic_os_clock"} else {"calibrated_tsc"},"schema":1,"start_ns":self.origin.monotonic_ns,"end_ns":now,"threads":threads,
-            "ledger":{"counts":kinds,"oldest":oldest},"counters":{"rmcontrol_seen":null,"host_rm_calls":null,"display_new_frames":null,"broker_presented_new_frames":null},
+            "relays":relays,"relay_registered":registered,"relay_dropped":self.source_dropped.load(Ordering::Relaxed),"ledger":{"counts":kinds,"oldest":oldest},"counters":{"rmcontrol_seen":null,"host_rm_calls":null,"display_new_frames":null,"broker_presented_new_frames":null},
             "coverage":{"registered_threads_only":true,"production_sources":false,"thread_samples_expected":expected_threads,"thread_samples_complete":threads.len()==expected_threads},"aggregator_lag_ns":0})
     }
 }
@@ -195,9 +222,9 @@ struct Context {
     state_seq: [u64; 32],
     site_seq: [u64; 64],
     sites: [Histogram; 64],
-    ledger: Ledger<12, 16>,
-    entries: [[u64; 7]; 192],
-    entry_seq: [u64; 192],
+    ledger: Ledger<KINDS, 16>,
+    entries: [[u64; 7]; LEDGER_SLOTS],
+    entry_seq: [u64; LEDGER_SLOTS],
 }
 impl Context {
     fn base(&self) -> usize {
@@ -545,6 +572,8 @@ impl Session {
             owner: OWNERS.fetch_add(1, Ordering::Relaxed),
             claimed: core::array::from_fn(|_| AtomicBool::new(false)),
             thread_count: AtomicU64::new(0),
+            source_count: AtomicU64::new(0),
+            source_dropped: AtomicU64::new(0),
             stop: AtomicBool::new(false),
             origin: a,
             #[cfg(feature = "prof-inject")]
@@ -623,8 +652,8 @@ impl Session {
             site_seq: [0; 64],
             sites: [Histogram::new(); 64],
             ledger: Ledger::new(self.engine.owner.wrapping_mul(64).wrapping_add(slot as u64)),
-            entries: [[0; 7]; 192],
-            entry_seq: [0; 192],
+            entries: [[0; 7]; LEDGER_SLOTS],
+            entry_seq: [0; LEDGER_SLOTS],
         };
         c.publish();
         self.engine
@@ -635,6 +664,34 @@ impl Session {
             owner: self.engine.owner,
             _local: PhantomData,
         })
+    }
+    /// Reserve a source slot during channel birth, off every vCPU/drainer operation.
+    pub fn register_relay(&self, key: u64) -> io::Result<RelayProbe> {
+        let slot = self
+            .engine
+            .source_count
+            .try_update(Ordering::AcqRel, Ordering::Relaxed, |n| {
+                (n < SOURCES as u64).then(|| n + 1)
+            });
+        let slot = match slot {
+            Ok(n) => n as usize,
+            Err(_) => {
+                let _ = self.engine.source_dropped.try_update(
+                    Ordering::Relaxed,
+                    Ordering::Relaxed,
+                    |n| Some(n.saturating_add(1)),
+                );
+                return Err(error("relay source capacity exhausted"));
+            }
+        };
+        let mut probe = RelayProbe {
+            engine: Arc::clone(&self.engine),
+            slot,
+            seq: 0,
+            gauge: crate::relay::RelayGauge::new(slot as u64 + 1, key, self.engine.now()),
+        };
+        probe.publish();
+        Ok(probe)
     }
     /// Arm a bounded mid-publication diagnostic delay, absent from normal prof builds.
     #[cfg(feature = "prof-inject")]
@@ -694,12 +751,7 @@ fn aggregate(e: &Engine, file: &mut JsonSink) -> io::Result<()> {
             row["aggregator_lag_ns"] =
                 json!(now.saturating_sub(last).saturating_sub(1_000_000_000));
             row["json_sink_ok"] = json!(sink_ok);
-            let mut body = serde_json::to_vec(&row).map_err(raw_error)?;
-            if body.len() > RECORD_BYTES - 64 {
-                row["threads"] = json!([]);
-                row["coverage"]["payload_truncated"] = json!(true);
-                body = serde_json::to_vec(&row).map_err(raw_error)?;
-            }
+            let mut body = bounded_record(&mut row)?;
             record += 1;
             let base = (RECORD_BASE + ((record - 1) as usize % RECORDS) * RECORD_BYTES) / 8;
             e.words.store(base, record * 2 - 1, Ordering::Relaxed);
@@ -728,6 +780,8 @@ fn aggregate(e: &Engine, file: &mut JsonSink) -> io::Result<()> {
                 (56, now),
                 (168, e.thread_count.load(Ordering::Acquire)),
                 (176, record),
+                (200, e.source_count.load(Ordering::Acquire)),
+                (208, e.source_dropped.load(Ordering::Relaxed)),
             ] {
                 e.words.store(offset / 8, v, Ordering::Relaxed);
             }
@@ -936,4 +990,97 @@ pub fn init_from_env() -> bool {
 /// Register a worker at its thread entry, outside all hot operations and locks.
 pub fn bind_current_global(role: u64) -> Option<Binding> {
     GLOBAL.get()?.as_ref()?.bind_current(role).ok()
+}
+
+/// One relay's single-writer output. It can move from birth setup to its worker;
+/// callers serialize observations through the relay's existing private exclusion.
+pub struct RelayProbe {
+    engine: Arc<Engine>,
+    slot: usize,
+    seq: u64,
+    gauge: crate::relay::RelayGauge,
+}
+impl RelayProbe {
+    fn publish(&mut self) {
+        let _ = write_record(
+            &self.engine.words,
+            (LEDGER_BASE + self.slot * SOURCE_BYTES) / 8,
+            self.gauge.words(),
+            &mut self.seq,
+        );
+    }
+    /// Publish cached observations only; no hardware reads or completion decisions.
+    pub fn observe(&mut self, o: crate::relay::Observation) {
+        if self.gauge.observe(self.engine.now(), o).is_ok() {
+            self.publish();
+        }
+    }
+}
+fn relay_row(index: usize, v: &[u64; 31]) -> Value {
+    let known = |mask, index| {
+        if v[5] & mask != 0 {
+            Some(v[index])
+        } else {
+            None
+        }
+    };
+    let get = known(1, 6);
+    let put = known(2, 7);
+    let entries = v[24];
+    let depth = get
+        .zip(put)
+        .filter(|&(g, p)| entries > 0 && g < entries && p < entries)
+        .map(|(g, p)| (p + entries - g) % entries);
+    json!({"source_slot":index,"generation":v[1],"key":v[2],"token":v[3],"observed_ns":v[4],"private_get":get,"private_put":put,"reference":known(4,8),"private_depth":depth,"wait":{"kind":v[9],"target":v[10],"birth_ns":v[27]},"doorbell_count":known(32,11),"last_doorbell_observed_ns":v[12],"wake_reason":v[13],"wake_observed_ns":v[14],"private_get_changed_ns":v[15],"guest_get":known(8,16),"guest_put":known(16,17),"guest_entries":v[18],"guest_observed_ns":v[19],"issued":v[20],"fetched":v[21],"markers_issued":v[22],"active":v[23]!=0,"private_entries":entries,"private_observed_ns":v[25],"private_put_observed_ns":v[26],"birth_ns":v[28]})
+}
+/// Bound the exact wire payload before publishing any byte of a circular record.
+/// Full live source gauges remain in mmap when summaries omit rows.
+pub fn bounded_record(row: &mut Value) -> io::Result<Vec<u8>> {
+    if let Some(rows) = row["relays"].as_array_mut()
+        && rows.len() > 64
+    {
+        let n = rows.len() - 64;
+        rows.truncate(64);
+        row["coverage"]["relay_rows_omitted"] = json!(n);
+        row["coverage"]["payload_truncated"] = json!(true);
+    }
+    let mut body = serde_json::to_vec(row).map_err(raw_error)?;
+    if body.len() > RECORD_BYTES - 64 {
+        if let Some(threads) = row["threads"].as_array_mut() {
+            for t in threads {
+                t["states"] = json!([]);
+                t["sites"] = json!([]);
+            }
+        }
+        row["coverage"]["payload_truncated"] = json!(true);
+        body = serde_json::to_vec(row).map_err(raw_error)?;
+    }
+    for _ in 0..128 {
+        if body.len() <= RECORD_BYTES - 64 {
+            return Ok(body);
+        }
+        if let Some(rows) = row["relays"].as_array_mut()
+            && rows.pop().is_some()
+        {
+            let omitted = row["coverage"]["relay_rows_omitted"].as_u64().unwrap_or(0);
+            row["coverage"]["relay_rows_omitted"] = json!(omitted + 1);
+        } else if let Some(threads) = row["threads"].as_array_mut()
+            && threads.pop().is_some()
+        {
+        } else {
+            return Err(error("irreducible profiler record exceeds wire budget"));
+        }
+        body = serde_json::to_vec(row).map_err(raw_error)?;
+    }
+    Err(error("profiler record reduction bound exhausted"))
+}
+/// Channel-birth registration only; no lazy registration on a producer path.
+pub fn register_relay_global(key: u64) -> Option<RelayProbe> {
+    GLOBAL.get()?.as_ref()?.register_relay(key).ok()
+}
+
+/// Runtime-disabled instrumentation is one relaxed load.
+#[inline(always)]
+pub fn is_on() -> bool {
+    ON.load(Ordering::Relaxed)
 }

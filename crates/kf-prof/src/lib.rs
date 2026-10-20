@@ -9,6 +9,7 @@ pub mod histogram;
 pub mod layout;
 pub mod ledger;
 pub mod publication;
+pub mod relay;
 pub mod ring;
 pub mod tables;
 pub mod thread;

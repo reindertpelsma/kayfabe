@@ -20,10 +20,10 @@ table! {Site,"Initial reserved Site families; integration must assign individual
 Unknown=0,Init=1,TrapDispatch=2,WorkerPark=3,RelayCompletion=4,DrainerPark=5,VaManagerPark=6,
 HostRmIoctl=7,MappingApply=8,DisplayWake=9,DisplayCopy=10,BrokerReceive=11,BrokerSend=12,
 HeldReply=13,ShutdownJoin=14,ProfAggregator=15,ChanWorkerImmediate=16,ChanWorkerPark=17,QemuVaPark=18,QemuDrainerResetPark=19,QemuDrainerPark=20,
-QemuVaRun=21,QemuDrainerRun=22,QemuWorkerRun=23}
+QemuVaRun=21,QemuDrainerRun=22,QemuWorkerRun=23,RelayStorage=24,RelayTurn=25,RelayPeek=26,RelayMapLock=27}
 table! {Kind,"Outstanding obligation kind. Bounds are advisory only.";
 DoorbellCompletion=0,GpPutObserved=1,HeldReply=2,MmuInvalidate=3,MappingApply=4,FlipCompletion=5,
-FrameRequested=6,BrokerCredit=7,ForwardedRm=8,InterruptAck=9,ChannelBirth=10,ChannelTeardown=11}
+FrameRequested=6,BrokerCredit=7,ForwardedRm=8,InterruptAck=9,ChannelBirth=10,ChannelTeardown=11,RelayDrain=12}
 impl Kind {
     /// Provisional age threshold, nanoseconds; never a timeout/decision input.
     pub const fn bound_ns(self) -> u64 {
@@ -32,7 +32,8 @@ impl Kind {
             | Self::HeldReply
             | Self::MmuInvalidate
             | Self::MappingApply
-            | Self::ForwardedRm => 12_000_000,
+            | Self::ForwardedRm
+            | Self::RelayDrain => 12_000_000,
             Self::FlipCompletion => 50_000_000,
             Self::ChannelBirth | Self::ChannelTeardown => 1_000_000_000,
             _ => 100_000_000,

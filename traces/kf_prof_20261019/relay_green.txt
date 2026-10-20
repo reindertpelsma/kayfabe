@@ -1,0 +1,6 @@
+MEASURED: kf-prof diagnostic suite: 96 passed (40 core,26 relay,23 runtime,7 sink).
+MEASURED: real relay source QEMU build/test:356 passed,0 failed,0 ignored.
+MEASURED: passive relay17 mutants and real source integration6 mutants: all>=2 kills.
+CODE READ: relay observations reuse existing GET/REFERENCE/PUT operations; no new poll.
+CODE READ: last doorbell is worker-observed count change, not the vCPU edge timestamp.
+CODE READ: slots never reused (4096 bound), overflow counted; no complete lifetime coverage claim.
