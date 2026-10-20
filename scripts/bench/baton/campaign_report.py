@@ -5,7 +5,7 @@ A session directory holds files NAME.LABEL.{log,csv,wd} (as split from the seria
 session3.sh).  A run is a HIT when some client is starved >= --min-gap seconds while another
 client completes (baton_parse.detect_batons).
 
-  python3 -I campaign_report.py DIR [DIR...]   one TSV line per run
+  python3 -I campaign_report.py [--min-gap S] DIR [DIR...]   one TSV line per run (default 4 s)
 """
 import glob
 import os
@@ -54,8 +54,11 @@ def rate(runs):
 
 
 def main(argv):
+    min_gap = 4.0
+    if argv and argv[0] == "--min-gap":
+        min_gap, argv = float(argv[1]), argv[2:]
     for d in argv:
-        runs = [analyze_run(d, n) for n in group_runs(d)]
+        runs = [analyze_run(d, n, min_gap) for n in group_runs(d)]
         for r in runs:
             print("%s\t%s\thit=%d\tstarved=%s %.1fs\tgaps=%s\titers=%s" % (
                 os.path.basename(d.rstrip("/")), r["run"], r["hit"], r["starved_label"] or "-", r["max_starved_s"],

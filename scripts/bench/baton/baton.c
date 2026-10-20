@@ -332,7 +332,7 @@ static void usage(void) {
         "             [--kernel burn|clock]  (burn = fixed work, default; clock = spin on %%clock64)\n"
         "             [--start-at EPOCH_SEC] [--dump-all FILE] [--slow-ms MS] [--blocks N]\n"
         "             [--threads N] [--device N] [--spin] [--burst N]\n"
-        "             [--wd-ms MS (2000, 0=off)] [--wd-out FILE] [--hb-dir DIR]\n");
+        "             [--wd-ms MS (2000, 0=off)] [--wd-out FILE] [--hb-dir DIR] [--sleep-ms MS (after each iteration)]\n");
     exit(1);
 }
 
@@ -340,6 +340,7 @@ int main(int argc, char **argv) {
     double duration = 10, k_ms = 5, cpm_override = 0, start_at = 0, slow_ms = 50;
     const char *label = "A", *dump_path = NULL;
     int calibrate_only = 0, device = 0, spin = 0, burst = 1;
+    double sleep_ms = 0;
     const char *kernel = "burn";
     for (int i = 1; i < argc; i++) {
         const char *a = argv[i];
@@ -356,6 +357,7 @@ int main(int argc, char **argv) {
         else if (ARG("--kernel")) kernel = argv[++i];
         else if (ARG("--device")) device = atoi(argv[++i]);
         else if (ARG("--burst")) burst = atoi(argv[++i]);
+        else if (ARG("--sleep-ms")) sleep_ms = atof(argv[++i]);
         else if (ARG("--wd-ms")) g_wd_ms = atof(argv[++i]);
         else if (ARG("--wd-out")) g_wd_path = argv[++i];
         else if (ARG("--hb-dir")) g_hb_dir = argv[++i];
@@ -466,6 +468,7 @@ int main(int argc, char **argv) {
         }
         cur_cnt++;
         if (dur > cur_max) cur_max = dur;
+        if (sleep_ms > 0) usleep((useconds_t)(sleep_ms * 1000.0));
     }
     g_done = 1;
     if (wd_on) pthread_join(wdt, NULL);
