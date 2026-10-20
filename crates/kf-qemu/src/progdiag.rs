@@ -41,6 +41,12 @@ impl ChanPlane {
         let mut printer = progress::Printer::default();
         let first = progress::BOARD.snapshot(progress::now_ns(), progress::START_NS);
         let mut monitor = progress::Monitor::new(ms, &first);
+        // ★ PROGRESS_STRAND (2026-10-20, adapted to the simple relay from the baton branch's pw-strand-diag.patch): a relay with an
+        // OBLIGATION (demand or a recorded wait) that no turn and no look has touched for >= the threshold WHILE some worker kept
+        // iterating (the board's `scan` point advanced: a worker spun or woke). host id -> (first seen, scan hits then, announced).
+        let mut strands: std::collections::HashMap<u64, (std::time::Instant, u64, bool)> =
+            std::collections::HashMap::new();
+        let mut strand_lines = 0u32;
         while !stop.load(std::sync::atomic::Ordering::Acquire) {
             std::thread::sleep(std::time::Duration::from_millis(tick_ms));
             let now = progress::now_ns();
@@ -55,6 +61,47 @@ impl ChanPlane {
                 tracker.retain(&live);
             }
             let counters = self.progress_counters();
+            if complete {
+                let nowi = std::time::Instant::now();
+                let scans = snap.points[progress::Point::Scan.index()].hits;
+                let mut seen: Vec<u64> = Vec::new();
+                for r in &readings {
+                    let b = &r.brief;
+                    let untouched_ms = now.saturating_sub(r.last_look_ns) / 1_000_000;
+                    if (b.pending || b.waiting) && !b.canceled && untouched_ms >= u64::from(ms) {
+                        let id = u64::from(b.host);
+                        seen.push(id);
+                        let e = strands.entry(id).or_insert((nowi, scans, false));
+                        let for_ms = nowi.duration_since(e.0).as_millis();
+                        let workers_ran = scans > e.1;
+                        if !e.2 && workers_ran && for_ms >= u128::from(ms) && strand_lines < 64 {
+                            e.2 = true;
+                            strand_lines += 1;
+                            eprintln!(
+                                "{} untouched_ms={untouched_ms:#x}",
+                                progress::render_relay_state(b).replacen(
+                                    "PROGRESS_RELAY_STATE",
+                                    &format!("PROGRESS_STRAND for_ms={for_ms:#x}"),
+                                    1
+                                )
+                            );
+                        }
+                    }
+                }
+                strands.retain(|id, (t0, _, announced)| {
+                    if seen.contains(id) {
+                        return true;
+                    }
+                    if *announced && strand_lines < 128 {
+                        strand_lines += 1;
+                        eprintln!(
+                            "kf3: PROGRESS_STRAND_END host={id:#x} total_ms={:#x}",
+                            nowi.duration_since(*t0).as_millis()
+                        );
+                    }
+                    false
+                });
+            }
             let mut threads: Option<Vec<progress::ThreadCpu>> = None;
             for r in &readings {
                 let Some(eval) = &r.wait_eval else {

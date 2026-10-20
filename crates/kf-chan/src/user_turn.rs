@@ -60,8 +60,14 @@ pub enum GuestGet {
     ReadIndex,
 }
 
-/// THE switch of Change A: one line, hardware-gated (canary plan in the design note).
-pub const GUEST_GET: GuestGet = GuestGet::ReadIndex;
+/// THE switch of Change A, hardware-gated (canary plan in the design note). Default: today's behaviour (`Popped`), owner
+/// decision 2026-10-20 (decouple Change A from the structural change). The cargo feature `guest-get-read-index` turns Change A
+/// on, so the suites run under BOTH policies (`cargo test -p kf-chan` and `cargo test -p kf-chan --features guest-get-read-index`).
+pub const GUEST_GET: GuestGet = if cfg!(feature = "guest-get-read-index") {
+    GuestGet::ReadIndex
+} else {
+    GuestGet::Popped
+};
 
 /// Whether the guest's `GP_GET` follows the PBDMA's pops ([`GUEST_GET`]).
 #[must_use]
