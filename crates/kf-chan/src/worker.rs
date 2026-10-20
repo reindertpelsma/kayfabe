@@ -686,6 +686,34 @@ mod tests {
         );
     }
 
+    /// ★ G9 (grader, 2026-10-20): the diagnostic's wrapper must answer `unsourced()` exactly as the relay it wraps, for every
+    /// obligation state -- else with `KF3_DIAG_PROGRESS` on the worker parks while the retry set is non-empty.
+    #[test]
+    fn the_watched_relay_answers_unsourced_like_the_relay_it_wraps() {
+        struct S(bool, bool);
+        impl RelayLoop for S {
+            fn waiting(&self) -> bool {
+                self.0
+            }
+            fn peek(&self, _why: Peek) -> bool {
+                false
+            }
+            fn unsourced(&self) -> bool {
+                self.1
+            }
+        }
+        let board: &'static progress::Board = Box::leak(Box::new(progress::Board::new()));
+        let tap = Tap::on_board(board, board.register().unwrap());
+        for waiting in [false, true] {
+            for unsourced in [false, true] {
+                let inner = S(waiting, unsourced);
+                let w = Watched { inner: &inner, tap: &tap };
+                assert_eq!(w.unsourced(), inner.unsourced(), "waiting={waiting} unsourced={unsourced}");
+                assert_eq!(w.waiting(), inner.waiting());
+            }
+        }
+    }
+
     #[test]
     fn the_watched_relay_forwards_a_refusal_unchanged() {
         struct No;
