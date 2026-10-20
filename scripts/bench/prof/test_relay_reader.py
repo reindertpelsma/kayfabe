@@ -20,6 +20,11 @@ class RelayReaderTests(unittest.TestCase):
     def test_unknown_private_words_do_not_become_zero_progress(self):
         v=self.values();v[6]=0;q=self.read(self.profile(v))['relays'][0]
         self.assertIsNone(q['private_get']);self.assertIsNone(q['private_put']);self.assertIsNone(q['reference']);self.assertIsNone(q['private_depth'])
+    def test_missing_put_does_not_invent_zero_depth(self):
+        v=self.values();v[6]=1;q=self.read(self.profile(v))['relays'][0]
+        self.assertIsNone(q['private_put']);self.assertIsNone(q['private_depth'])
+    def test_put_beyond_capacity_is_not_a_wrapped_backlog(self):
+        v=self.values();v[8]=2**64-1;q=self.read(self.profile(v))['relays'][0];self.assertIsNone(q['private_depth'])
     def test_odd_relay_record_is_not_a_completed_observation(self):
         v=self.values();v[0]=3;self.assertEqual(self.read(self.profile(v))['relays'],[])
     def test_odd_relay_record_with_valid_hardware_values_is_still_rejected(self):
