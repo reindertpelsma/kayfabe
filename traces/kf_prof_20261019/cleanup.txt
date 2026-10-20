@@ -1,0 +1,5 @@
+MEASURED: own local/host process scans empty after all completed children were reaped.
+MEASURED: /workspace/k1-target deleted; failed host revision rust-target/tmp/cache deleted.
+MEASURED: 255 known profiler test scratch directories removed; 0 live/older namespace matches retained.
+CODE READ: no GPU/VM/shared build lock acquired; none of ours remains held.
+MEASURED: failed host private source/configuration/log directory retained; no final binary exists.

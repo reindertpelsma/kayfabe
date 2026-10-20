@@ -1,0 +1,7 @@
+MEASURED: default-feature QEMU build and356 tests PASS; dependency tree contains no kf-prof.
+MEASURED: base and current feature-off archives contain0 new-profiler definitions;12481 normalized public definitions each.
+MEASURED: current minus base: archive bytes -878; text +1; data0; bss0;207 added/207 removed symbol identities.
+CODE READ: new adapter operations are cfg-gated; optional dependency absence is a compile check of reachable production modules.
+INFERRED: strict production-zero-cost claim is NOT established by these results; the one-byte text difference is unexplained.
+CODE READ: prof-build/runtime-off relay observation caches still execute cfg-prof stores; the one-relaxed-load contract is incomplete at those adapters.
+MEASURED: zero-cost audit helper4 unit tests passed; its mutation gate and a complete production-binary equality proof remain NOT DONE.

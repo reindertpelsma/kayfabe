@@ -1,0 +1,32 @@
+{
+  "base": {
+    "bytes": 50507774,
+    "sha256": "33f3491a2e2c12d1c9032cc4d008ce8b9a124e500f8719264a7035f11e38f55e",
+    "sections": {
+      "text": 9120672,
+      "data": 1201692,
+      "bss": 86392
+    },
+    "public_symbols": 12481,
+    "profiler_symbols": []
+  },
+  "current": {
+    "bytes": 50506896,
+    "sha256": "11d915dc86b33953316226f2ec5591a6bc891466e8a3d3805d19ca997e9b23d5",
+    "sections": {
+      "text": 9120673,
+      "data": 1201692,
+      "bss": 86392
+    },
+    "public_symbols": 12481,
+    "profiler_symbols": []
+  },
+  "section_deltas": {
+    "text": 1,
+    "data": 0,
+    "bss": 0
+  },
+  "added_public_symbols": 207,
+  "removed_public_symbols": 207,
+  "scope": "archive comparison; source paths and panic metadata can change size; no hardware overhead claim"
+}

@@ -1,0 +1,11 @@
+MEASURED: host CPU-only build source revision fd2b44ebe0ec88cc85e255ddc0a0dae946064ab1; niceness19; Rust1.99.0; QEMU10.2.4.
+MEASURED: Rust prof archive compilation succeeded; Meson configuration exited1 before final binaries were published.
+MEASURED: Meson: ERROR: Tried to enter directory "hw/misc/kf3", which has already been visited.
+MEASURED: read-only comparison: shared source has1 kf3 subdir include; private copy has2, at lines165 and167.
+CODE READ: build_host_prof.sh used grep basic-regex matching with escaped parentheses inherited from an rg pattern; it missed the existing literal include and appended another.
+INFERRED hypothesis/falsifier before comparison: duplicate was introduced by the guard; original shared source already duplicated would falsify it. Comparison did not show that falsifier.
+MEASURED: no final qemu-system-x86_64 or broker-prof was published in the private output directory.
+CODE READ: STOP on K1-introduced correctness failure/refusal; no guard repair or build retry was made after the failure.
+MEASURED: own host process scan empty; rust-target/tmp/cache removed. Private source/configuration/logs retained for diagnosis.
+HOST_OUTPUT=/data/codex-K1/kf3-bins/fd2b44ebe0ec88cc85e255ddc0a0dae946064ab1-prof/
+HOST_LOG=/data/codex-K1/kf3-bins/fd2b44ebe0ec88cc85e255ddc0a0dae946064ab1-prof/build.log

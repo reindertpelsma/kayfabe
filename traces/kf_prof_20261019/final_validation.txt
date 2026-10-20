@@ -1,0 +1,37 @@
+MEASURED: final completed validations; large local build logs omitted from Git.
+
+nice19 cargo test -p kf-prof --features prof-inject -j2 --release
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+test result: ok. 40 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.02s
+test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 2.74s
+test result: ok. 34 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 1.94s
+test result: ok. 23 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.72s
+test result: ok. 7 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+nice19 cargo test -p kf-qemu --no-default-features --lib --locked -j2 --release
+test result: ok. 356 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 3.28s
+
+Python stage7 suites with owned C/live/crash/pinned H1 fixtures (excludes stage8 audit)
+Ran 117 tests in 7.994s
+OK
+
+Python symbol audit helper
+Ran 4 tests in 0.001s
+OK
+
+nice19 make -C broker -j2 PROF=1 check-sanitize
+test_cursor: 66138 checks, 0 failed
+test_xor: 80752 checks, 0 failed
+test_tick: 566237 checks, 0 failed
+Ran 14 tests in 1.284s
+OK
+Ran 4 tests in 0.629s
+OK
+82 checks run
+all checks passed
+tick tests passed
+Ran 5 tests in 0.727s
+OK
+MEASURED: kf-prof default all-targets no-deps -Dclippy::all PASS
+MEASURED: kf-prof prof-inject all-targets no-deps -Dclippy::all PASS
