@@ -1053,7 +1053,7 @@ fn pin_the_one_loop_order_is_pass_policy_level_look_spin_decision_wait_dispatch(
         "plane.worker_pass(",
         "policy.after_pass(n)",
         "relay.peek(Peek::Spin)",
-        "let spin = n > 0 || rang || relay.unsourced();",
+        "let spin = must_spin(n, rang, relay);",
         "PollTimeout::Immediate",
         "try_park(seen)",
         "PollTimeout::Blocking",

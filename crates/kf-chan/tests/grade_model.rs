@@ -436,7 +436,7 @@ impl Sys {
                 n.w[i].pc = Pc::Decide;
             }
             Pc::Decide => {
-                let uns = adapter::unsourced(n.demand, n.waiting, n.carried);
+                let uns = adapter::unsourced(n.demand, n.waiting, n.carried, n.holding && self.c.holder == HolderKind::RecordAct);
                 let spin = wk.served > 0 || wk.rang || uns || self.c.force_spin;
                 let mid_turn = n.tok.iter().any(|t| t.busy) || matches!(n.rec, Rec::Worker(_)) || n.tok.iter().any(|t| t.rung) || n.efd || n.evfd;
                 if spin && wk.served == 0 && !wk.rang && !mid_turn && self.unsourced_truth(&n).is_none() && !self.c.force_spin {

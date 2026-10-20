@@ -388,7 +388,7 @@ impl S {
     /// `ChanPlane::user_ring_unsourced` (+ the model-only mutants): demand left behind, or a wait no interrupt announces.
     fn unsourced(&self) -> bool {
         !self.relay.dead
-            && ((self.retry && !self.mut_demand)
+            && ((self.retry && !self.rec_held && !self.mut_demand)
                 || (self.waiting && self.carried && !self.mut_carried))
     }
 
@@ -1430,7 +1430,7 @@ fn pin_the_budget_and_the_backstop_look_are_gone_and_the_loop_is_one_level_loop(
         "plane.worker_pass(",
         "policy.after_pass(n)",
         "relay.peek(Peek::Spin)",
-        "let spin = n > 0 || rang || relay.unsourced();",
+        "let spin = must_spin(n, rang, relay);",
         "PollTimeout::Immediate",
         "try_park(seen)",
         "PollTimeout::Blocking",
@@ -1446,7 +1446,7 @@ fn pin_the_budget_and_the_backstop_look_are_gone_and_the_loop_is_one_level_loop(
         "plane.worker_pass(",
         "policy.after_pass(n)",
         "relay.peek(Peek::Spin)",
-        "let spin = n > 0 || rang || relay.unsourced();",
+        "let spin = must_spin(n, rang, relay);",
         "try_park(seen)",
         "dispatch(&ready)",
     ] {
@@ -1482,7 +1482,7 @@ fn pin_the_peek_calls_look_the_arm_re_requests_and_unsourced_is_demand_or_carrie
         arm.contains("record.set_carried(p.core.wait_unannounced(p.wait));")
     );
     assert!(
-        p.contains("record.pending() || (record.is_waiting() && record.carried())"),
+        p.contains("(record.pending() && !record.act_held())"),
         "unsourced() changed: revisit the mutants"
     );
 }

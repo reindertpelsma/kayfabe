@@ -52,6 +52,10 @@ pub(super) struct Cell<T = Record> {
     /// ★ 2026-10-20 (simple relay): the recorded wait is one no interrupt announces (`Wait::Popped`): an UNSOURCED obligation
     /// the worker spins on (`ChanPlane::user_ring_unsourced`). Written with `waiting`, under the record lock.
     carried: AtomicBool,
+    /// ★ 2026-10-20 (grader G5): the ACT thread holds the record through [`Cell::act_lock`], whose release ALWAYS re-rings a relay
+    /// with demand and wakes the worker. Demand left by a serve that lost the record to such a holder is COVERED (the worker
+    /// blocks); any other holder rings nobody and the worker spins. SeqCst with `retry` (Dekker: one side sees the other).
+    act_hold: AtomicBool,
     /// Consecutive turns that found a lock / admission busy (MEASUREMENT only since 2026-10-20: no decision reads it).
     contended: AtomicU32,
     /// MEASUREMENT ONLY (`KF3_DIAG_PROGRESS`): when a look last evaluated this relay's wait, or its turn last ran (`progress::now_ns`,
@@ -67,6 +71,7 @@ impl<T> Cell<T> {
             canceled: AtomicBool::new(false),
             waiting: AtomicBool::new(false),
             carried: AtomicBool::new(false),
+            act_hold: AtomicBool::new(false),
             contended: AtomicU32::new(0),
             looked_ns: AtomicU64::new(0),
             inner: Mutex::new(value),
@@ -102,7 +107,8 @@ impl<T> Cell<T> {
         if self.canceled.load(Ordering::Acquire) {
             return false;
         }
-        self.retry.store(true, Ordering::Release);
+        // SeqCst: pairs with `act_hold` (see `ActHold::drop`)
+        self.retry.store(true, Ordering::SeqCst);
         // Cancellation may race the request, but pending() and the guarded
         // index publisher also check cancellation. No canceled idx is rung.
         if self.canceled.load(Ordering::Acquire) {
@@ -146,6 +152,27 @@ impl<T> Cell<T> {
     pub fn is_waiting(&self) -> bool {
         !self.is_canceled() && self.waiting.load(Ordering::Acquire)
     }
+    /// The record is held by an act whose release rings (see [`Cell::act_lock`]).
+    pub fn act_held(&self) -> bool {
+        self.act_hold.load(Ordering::SeqCst)
+    }
+    /// ★ The ACT thread's hold of the record: the release (guard drop) clears the hold and, if demand was left meanwhile,
+    /// re-rings the relay through `ring` and ALWAYS lets it wake the worker -- on every path, errors included.
+    pub fn act_lock<'a>(&'a self, ring: &'a dyn Fn(u32)) -> Result<ActHold<'a, T>, ()> {
+        self.act_hold.store(true, Ordering::SeqCst);
+        match self.inner.lock() {
+            Ok(guard) => Ok(ActHold {
+                cell: self,
+                guard: Some(guard),
+                ring,
+            }),
+            Err(_) => {
+                self.act_hold.store(false, Ordering::SeqCst);
+                ring(self.idx);
+                Err(())
+            }
+        }
+    }
     /// See [`Cell::carried`].
     pub fn carried(&self) -> bool {
         self.carried.load(Ordering::Acquire)
@@ -170,6 +197,34 @@ impl<T> Cell<T> {
             if !self.canceled.load(Ordering::Acquire) && active(&r) {
                 ring(self.idx);
             }
+        }
+    }
+}
+
+/// The act's hold of a relay record ([`Cell::act_lock`]).
+pub(super) struct ActHold<'a, T = Record> {
+    cell: &'a Cell<T>,
+    guard: Option<std::sync::MutexGuard<'a, T>>,
+    ring: &'a dyn Fn(u32),
+}
+impl<T> std::ops::Deref for ActHold<'_, T> {
+    type Target = T;
+    fn deref(&self) -> &T {
+        self.guard.as_ref().expect("held until drop")
+    }
+}
+impl<T> std::ops::DerefMut for ActHold<'_, T> {
+    fn deref_mut(&mut self) -> &mut T {
+        self.guard.as_mut().expect("held until drop")
+    }
+}
+impl<T> Drop for ActHold<'_, T> {
+    fn drop(&mut self) {
+        drop(self.guard.take());
+        self.cell.act_hold.store(false, Ordering::SeqCst);
+        // the serve that lost the record left demand (`request()` before its `try_lock`): the release is its wake
+        if self.cell.retry.load(Ordering::SeqCst) && !self.cell.is_canceled() {
+            (self.ring)(self.cell.idx);
         }
     }
 }

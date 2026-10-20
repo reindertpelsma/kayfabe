@@ -11,6 +11,7 @@ userpump.rs | fn:user_ring_peek let Ok(rings) = self.user_rings.lock() else { | 
 userpump.rs | fn:user_ring_software_object | OK-ACT | the 5080 software-object act (act thread)
 userpump.rs | fn:user_ring_ctx_act | OK-ACT | context act (act thread)
 userrelay.rs | fn:lock self.inner.lock() | OK-ACT | Cell::lock: used by act / birth / free paths only (the worker uses enter / try_lock)
+userrelay.rs | fn:act_lock self.inner.lock() | OK-ACT | Cell::act_lock (2026-10-20 G5): the ACT thread's record hold whose release rings; never the worker or a vCPU
 userrelay.rs | fn:run | OK-ACT | the birth act (act thread)
 userrelay.rs | fn:birth_user_ring | OK-ACT | birth (act)
 userrelay.rs | fn:user_ring_record self.user_rings.lock() | OK | W10: brief map lookup per serve (us); holders brief except W9

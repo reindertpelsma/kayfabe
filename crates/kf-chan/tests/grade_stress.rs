@@ -237,6 +237,7 @@ struct Cell<T> {
     canceled: AtomicBool,
     waiting: AtomicBool,
     carried: AtomicBool,
+    act_hold: AtomicBool,
     contended: AtomicU32,
     inner: Mutex<T>,
 }
@@ -248,6 +249,7 @@ impl<T> Cell<T> {
             canceled: AtomicBool::new(false),
             waiting: AtomicBool::new(false),
             carried: AtomicBool::new(false),
+            act_hold: AtomicBool::new(false),
             contended: AtomicU32::new(0),
             inner: Mutex::new(value),
         }
@@ -272,7 +274,7 @@ impl<T> Cell<T> {
         if self.canceled.load(Ordering::Acquire) {
             return false;
         }
-        self.retry.store(true, Ordering::Release);
+        self.retry.store(true, Ordering::SeqCst);
         if self.canceled.load(Ordering::Acquire) {
             self.retry.store(false, Ordering::Release);
             return false;
@@ -304,6 +306,21 @@ impl<T> Cell<T> {
     fn set_waiting(&self, waiting: bool) {
         self.waiting.store(waiting, Ordering::Release);
     }
+    /// MIRROR of `Cell::act_held` / `Cell::act_lock` (userrelay.rs, 2026-10-20 G5).
+    fn act_held(&self) -> bool {
+        self.act_hold.load(Ordering::SeqCst)
+    }
+    fn act_lock<'a>(&'a self, ring: &'a dyn Fn(u32)) -> Option<ActHold<'a, T>> {
+        self.act_hold.store(true, Ordering::SeqCst);
+        match self.inner.lock() {
+            Ok(guard) => Some(ActHold { cell: self, guard: Some(guard), ring }),
+            Err(_) => {
+                self.act_hold.store(false, Ordering::SeqCst);
+                ring(self.idx);
+                None
+            }
+        }
+    }
     fn carried(&self) -> bool {
         self.carried.load(Ordering::Acquire)
     }
@@ -326,6 +343,22 @@ impl<T> Cell<T> {
 
 // ------------------------------------------------------------------------------------------------
 // scenario
+
+/// MIRROR of `userrelay::ActHold`.
+struct ActHold<'a, T> {
+    cell: &'a Cell<T>,
+    guard: Option<std::sync::MutexGuard<'a, T>>,
+    ring: &'a dyn Fn(u32),
+}
+impl<T> Drop for ActHold<'_, T> {
+    fn drop(&mut self) {
+        drop(self.guard.take());
+        self.cell.act_hold.store(false, Ordering::SeqCst);
+        if self.cell.retry.load(Ordering::SeqCst) && !self.cell.is_canceled() {
+            (self.ring)(self.cell.idx);
+        }
+    }
+}
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 enum Role {
@@ -1067,7 +1100,7 @@ impl RelayLoop for Rt<'_> {
         self.rings.try_lock().map_or(true, |rings| {
             rings
                 .iter()
-                .any(|c| c.pending() || (c.is_waiting() && c.carried()))
+                .any(|c| (c.pending() && !c.act_held()) || (c.is_waiting() && c.carried()))
         })
     }
     /// MIRROR of `user_ring_peek`.
@@ -1421,11 +1454,23 @@ fn holder_thread(sh: &Shared, rt: &Rt<'_>, cfg: HolderCfg, seed: u64, ch: ChaosC
         match rng.below(4) {
             0 | 1 => {
                 let cell = &rt.cells[i];
-                {
+                // ★ 2026-10-20 (G5): an ACT (rings after) holds the record through `act_lock` (MIRROR): its release re-rings a
+                // relay with demand and wakes the worker, so the worker may block during the hold; a silent holder does not.
+                let act = rng.p(cfg.rings_after_p);
+                let ring = |idx: u32| {
+                    rt.ring_token(idx);
+                    sh.last_efd_signal_ns.store(sh.now(), Ordering::Release);
+                    let _ = rt.wake.signal();
+                };
+                if act {
+                    if let Some(_g) = cell.act_lock(&ring) {
+                        sleep_or_spin(rng.range(1, u64::from(cfg.hold_us_max.max(1))));
+                    }
+                } else {
                     let _g = cell.lock();
                     sleep_or_spin(rng.range(1, u64::from(cfg.hold_us_max.max(1))));
                 }
-                if rng.p(cfg.rings_after_p) {
+                if act {
                     // MIRROR of `ChanPlane::user_ring_wake`: request, ring if the record is free, and ALWAYS wake the worker
                     // ("even when metadata is busy, wake the worker to observe durable demand"). The mirror lacked the last
                     // line until 2026-10-20 (found by I6 on seed 1: demand set, record try_lock lost, nobody woken).
@@ -2476,7 +2521,7 @@ fn g3_stress_harness_glue_still_matches_production() {
         "return matches!(look(i), Look::Ring { .. }) && ring(self);",
         "get_follows_pops: kf_chan::user_turn::guest_get_follows_pops(),",
         "record.set_waiting(false);\n                    record.set_carried(false);",
-        "record.pending() || (record.is_waiting() && record.carried())",
+        "(record.pending() && !record.act_held())",
         "let storage = self\n            .r\n            .lease\n            .storage\n            .lock()",
         "Err(kf_rm::memory_list::AccessError::Busy) => Ok(false),",
     ] {

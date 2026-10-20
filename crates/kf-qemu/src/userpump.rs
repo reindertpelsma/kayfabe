@@ -2720,10 +2720,16 @@ impl ChanPlane {
             let record = me
                 .user_ring_record(native.token)
                 .ok_or_else(|| fail("USER_RING_RECORD_GONE"))?;
-            // Off-drainer: exclude publication and native Free through this RM verb.
+            // Off-drainer: exclude publication and native Free through this RM verb. ★ 2026-10-20 (G5): an ACT hold -- its
+            // release re-rings a relay whose serve lost the record meanwhile and wakes the worker, on every path, so the worker
+            // may block during the hold instead of spinning.
+            let ring = |idx: u32| {
+                let _ = me.plane.ring_internal(idx);
+                let _ = me.wake.signal();
+            };
             let r = record
-                .lock()
-                .map_err(|_| fail("USER_RING_RECORD_POISONED"))?;
+                .act_lock(&ring)
+                .map_err(|()| fail("USER_RING_RECORD_POISONED"))?;
             if r.free_attempted
                 || r.retired
                 || !Arc::ptr_eq(&r.allocation, &allocation)
@@ -3014,9 +3020,10 @@ impl ChanPlane {
     /// wake source announces: demand left behind (the retry set) or a wait no interrupt announces (`Wait::Popped`).
     pub(crate) fn user_ring_unsourced(&self) -> bool {
         self.user_rings.try_lock().map_or(true, |rings| {
-            rings
-                .values()
-                .any(|record| record.pending() || (record.is_waiting() && record.carried()))
+            rings.values().any(|record| {
+                (record.pending() && !record.act_held())
+                    || (record.is_waiting() && record.carried())
+            })
         })
     }
 

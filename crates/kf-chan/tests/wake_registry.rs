@@ -386,7 +386,7 @@ fn the_loop_has_exactly_one_look_site_and_none_of_the_deleted_mechanisms() {
     assert_eq!(t.matches("poller.wait(").count(), 2, "one immediate wait and one park wait");
     assert_eq!(t.matches("PollTimeout::Immediate").count(), 1);
     assert_eq!(t.matches("try_park(").count(), 1);
-    assert_eq!(t.matches("relay.unsourced()").count(), 1);
+    assert_eq!(t.matches("must_spin(").count(), 1, "one block decision (2026-10-20: `worker::must_spin`)");
     assert_eq!(t.matches("policy.after_pass(").count(), 1);
     assert_eq!(t.matches("worker_pass(").count(), 1);
     // no peek inside dispatch (the next iteration's level evaluation covers an event), and none after it
@@ -515,9 +515,21 @@ fn the_loop_blocks_only_without_an_unsourced_obligation_and_never_with_a_timer_d
     let t = loop_squashed();
     // the one spin condition: work served, a relay rung by the evaluation, or an obligation without a wake source
     assert!(
-        t.contains("letspin=n>0||rang||relay.unsourced();"),
-        "the spin condition changed: it must be `n > 0 || rang || relay.unsourced()`"
+        t.contains("letspin=must_spin(n,rang,relay);"),
+        "the loop must take its block decision from `must_spin`"
     );
+    // ... and `must_spin` IS `n > 0 || rang || relay.unsourced()` (behaviour: worker.rs unit tests; text: here)
+    let ms: String = WORKER
+        .split("pub fn must_spin(")
+        .nth(1)
+        .expect("pin: must_spin")
+        .split('}')
+        .next()
+        .unwrap()
+        .chars()
+        .filter(|c| !c.is_whitespace())
+        .collect();
+    assert!(ms.contains("n>0||rang||relay.unsourced()"), "{ms}");
     // the immediate wait is the `if spin` branch; the park is the else branch and is refused (not blocked) when `seen` moved
     assert!(t.contains("letgot=ifspin{"));
     let park = park_branch();
@@ -647,7 +659,7 @@ fn no_look_every_period_exists_any_more() {
 #[test]
 fn every_iteration_reaches_the_one_poll_after_the_block_decision() {
     let body = run_with_relay_text();
-    let from = body.find("let spin = n > 0 || rang || relay.unsourced();").expect("the block decision");
+    let from = body.find("let spin = must_spin(n, rang, relay);").expect("the block decision");
     let tail = &body[from..];
     let poll = tail.find("poller.wait(&mut ready, PollTimeout::Immediate)").expect("the timeout-0 poll");
     let between = &tail[..poll];

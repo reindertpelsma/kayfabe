@@ -169,15 +169,16 @@ mod imp {
         None
     }
     /// MIRROR of `user_ring_unsourced`: demand, or a carried (pop) wait.
-    pub fn unsourced(demand: bool, waiting: bool, carried: bool) -> bool {
-        demand || (waiting && carried)
+    pub fn unsourced(demand: bool, waiting: bool, carried: bool, act_hold: bool) -> bool {
+        // 2026-10-20 G5: demand while an ACT holds the record is covered (the act's release rings)
+        (demand && !act_hold) || (waiting && carried)
     }
     /// The lines of the glue the mirrors above transliterate (file relative to the workspace root, text).
     pub const PINS: &[(&str, &str)] = &[
         ("crates/kf-qemu/src/userpump.rs", "return matches!(look(i), Look::Ring { .. }) && ring(self);"),
         ("crates/kf-qemu/src/userpump.rs", "record.contended_note();\n                let _ = record.request();"),
-        ("crates/kf-qemu/src/userpump.rs", "record.pending() || (record.is_waiting() && record.carried())"),
-        ("crates/kf-chan/src/worker.rs", "let spin = n > 0 || rang || relay.unsourced();"),
+        ("crates/kf-qemu/src/userpump.rs", "(record.pending() && !record.act_held())"),
+        ("crates/kf-chan/src/worker.rs", "let spin = must_spin(n, rang, relay);"),
     ];
 }
 
@@ -254,7 +255,7 @@ mod imp {
         Some(AWait::Contended)
     }
     /// The old loop has no unsourced notion: it parks after the spin whatever is outstanding.
-    pub fn unsourced(_demand: bool, _waiting: bool, _carried: bool) -> bool {
+    pub fn unsourced(_demand: bool, _waiting: bool, _carried: bool, _act_hold: bool) -> bool {
         false
     }
     pub const PINS: &[(&str, &str)] = &[

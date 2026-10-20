@@ -2599,7 +2599,7 @@ fn pin_the_arm_mapping_and_the_peek_decision_are_the_models() {
         .next()
         .unwrap();
     assert!(
-        unsourced.contains("record.pending() || (record.is_waiting() && record.carried())"),
+        unsourced.contains("(record.pending() && !record.act_held())"),
         "pin: user_ring_unsourced is not `demand || (waiting && carried)`"
     );
 }

@@ -594,7 +594,7 @@ impl Proto for LostLock {
                 n.w[t] = 2;
             }
             2 => {
-                let spin = s.w_rang[t] || adapter::unsourced(s.demand, s.waiting, false);
+                let spin = s.w_rang[t] || adapter::unsourced(s.demand, s.waiting, false, false);
                 n.w[t] = if spin {
                     n.efd = false;
                     0
