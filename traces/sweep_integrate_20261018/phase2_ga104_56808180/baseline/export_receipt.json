@@ -39,11 +39,12 @@
     },
     {
       "source": "/root/prov/sweep_cuda_host.log",
-      "export": "native_cuda595.txt",
+      "export": "native_cuda595_cli.txt",
       "source_bytes": 2379,
       "source_sha256": "23f8a9a18842c243770e0b73da574129f3edba08b97f11f6e21a395f18a1a608",
       "export_sha256": "23f8a9a18842c243770e0b73da574129f3edba08b97f11f6e21a395f18a1a608",
-      "gpu_identifier_redactions": 0
+      "gpu_identifier_redactions": 0,
+      "note": "CLI stdout repeats the first three rows before printing the canonical table; retained, not graded as seven rungs."
     },
     {
       "source": "/root/prov/sweep_product_source",
@@ -68,6 +69,16 @@
       "source_sha256": "92e601ee0eec5c6487cad52a421b86489ca65a7885040bca0337285e3c1ddca0",
       "export_sha256": "92e601ee0eec5c6487cad52a421b86489ca65a7885040bca0337285e3c1ddca0",
       "gpu_identifier_redactions": 0
+    },
+    {
+      "source": "/workspace/bench/cl_sweepe855_ga104_host.out",
+      "export": "native_cuda595.txt",
+      "source_bytes": 1726,
+      "source_sha256": "d70691016ee4b027e4a44cda33d6b1e4d0cb68ec5455604b9bc03c6001694ddc",
+      "export_sha256": "d70691016ee4b027e4a44cda33d6b1e4d0cb68ec5455604b9bc03c6001694ddc",
+      "gpu_identifier_redactions": 0,
+      "note": "Canonical exactly-four-rung table graded by the native controller before guest execution."
     }
-  ]
+  ],
+  "canonical_cuda_export_added_utc": "2026-10-20T00:24:20.265282+00:00"
 }

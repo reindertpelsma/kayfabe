@@ -12,7 +12,7 @@
   "actual_ram_mib": 50565,
   "initial_driver": "575.51.03",
   "planned_host_driver": "595.91.07",
-  "product_results": "native gates PASS; raw/CUDA/graphics/desktop and Windows UNRUN",
+  "product_results": "native baseline PASS; guest raw595 ACTIVE; other guest workloads UNRUN",
   "utc": "2026-10-19T23:52:20.824798+00:00",
   "initial_resources_export": {
     "original_sha256": "9ff95e2711bf783a26baedeb9d6e2a21e0336ad7a18b0ad6d56b5c6e260e8493",
@@ -26,5 +26,7 @@
   "native_gates_exit_utc": "2026-10-20T00:03:42Z",
   "native_reference_install_source": "windows-on-vast e8883e231f9e416dd9e496e8c6ef9f48946899de",
   "native_reference_install_sha256": "ac7faa15a606116ea162b2df95af9a5f7a163f0436989cfda92f2b7ab3e65af0",
-  "native_reference_install_status": "staged on rental unchanged; NOT STARTED"
+  "native_reference_install_status": "staged on rental unchanged; NOT STARTED",
+  "native_baseline": "gates9/9 + gate10 PASS, USER12/12; raw30/30; CUDA4/4",
+  "native_baseline_completed_utc": "2026-10-20T00:20:53Z"
 }
