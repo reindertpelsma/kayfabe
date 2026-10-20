@@ -1,0 +1,31 @@
+[
+  {
+    "branch": "codex/sweep-ca73-olut-20261021",
+    "head": "f62ec368f68a204a23b3707a135178cbeb6ba9f9",
+    "base": "codex/sweep-blackwell-postcomp-20261020",
+    "commits": [
+      "9e32fb973",
+      "26691c14a"
+    ],
+    "draft": true,
+    "validation": "GPU-free accepted on sweep branch; changed file bytes verified equal; hardware pending",
+    "pr": 60,
+    "url": "https://github.com/reindertpelsma/kayfabe/pull/60"
+  },
+  {
+    "branch": "codex/sweep-native-gr-fixture-20261021",
+    "head": "97dc65cc8ec9a1317bb2dcf9b828c2fb8780688c",
+    "base": "codex/sweep-blackwell-postcomp-20261020",
+    "commits": [
+      "441fb1e07",
+      "ee1c88915",
+      "e1b51dc3c",
+      "f3030f096",
+      "8326086ee"
+    ],
+    "draft": true,
+    "validation": "GPU-free accepted on sweep branch; changed file bytes verified equal; hardware pending",
+    "pr": 61,
+    "url": "https://github.com/reindertpelsma/kayfabe/pull/61"
+  }
+]
