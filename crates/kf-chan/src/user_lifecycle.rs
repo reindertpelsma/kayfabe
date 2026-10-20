@@ -323,6 +323,12 @@ macro_rules! lifecycle_stats {
                     self.set_object_5080_max_per_channel.load(Relaxed)
                 ));
                 s.push_str(&format!("window_entries_max={}", self.window_entries_max.load(Relaxed)));
+                // the stall diagnostic's counters (nothing when it is off or has counted nothing)
+                let stall = self.stall.summary();
+                if !stall.is_empty() {
+                    s.push(' ');
+                    s.push_str(&stall);
+                }
                 s
             }
         }
@@ -2387,17 +2393,48 @@ mod tests {
         assert_eq!(fresh.mode(), Mode::Scan);
     }
 
+    /// 2026-10-20: with the diagnostic off (nothing counted) the lifecycle counters line is byte for byte what it was.
+    #[test]
+    fn the_summary_line_is_unchanged_while_the_stall_diagnostic_counted_nothing() {
+        let stats = LifecycleStats::default();
+        stats
+            .entries_scan
+            .fetch_add(3, std::sync::atomic::Ordering::Relaxed);
+        let line = stats.summary();
+        assert!(line.ends_with("window_entries_max=0"), "{line}");
+        assert_eq!(line.matches("diag").count(), 0);
+        assert!(
+            !line.contains("  ") && !line.ends_with(' '),
+            "no stray separator: {line}"
+        );
+    }
+
     /// 2026-10-20: the stall diagnostic's counters ride the existing lifecycle counters line, and only when counted.
     #[test]
     fn the_stall_diagnostic_counters_join_the_summary_line_only_when_counted() {
         use std::sync::atomic::Ordering::Relaxed;
         let stats = LifecycleStats::default();
-        assert!(!stats.summary().contains("diag_user_stall"), "{}", stats.summary());
+        assert!(
+            !stats.summary().contains("diag_user_stall"),
+            "{}",
+            stats.summary()
+        );
         let before = stats.summary();
+        assert!(
+            !before.ends_with(' ') && before.ends_with("window_entries_max=0"),
+            "{before}"
+        );
         stats.stall.conditions.fetch_add(2, Relaxed);
         stats.stall.acquires.fetch_add(5, Relaxed);
         let line = stats.summary();
-        assert!(line.starts_with(&before), "the existing fields keep their place: {line}");
+        assert!(
+            line.starts_with(&before),
+            "the existing fields keep their place: {line}"
+        );
+        assert!(
+            line.starts_with(&format!("{before} diag_user_stall_conditions=0x2 ")),
+            "{line}"
+        );
         assert!(line.contains("diag_user_stall_conditions=0x2"), "{line}");
         assert!(line.contains("diag_user_stall_acquires=0x5"), "{line}");
         assert!(!line.contains('\n'));

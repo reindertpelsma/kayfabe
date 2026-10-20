@@ -178,8 +178,17 @@ impl<H: Host> Cache<H> {
     /// MEASUREMENT ONLY (`KF3_DIAG_USER_STALL`): the diagnostic's read-only `prepare`. It succeeds only when every
     /// window the spans need is ALREADY armed and ready; it never arms, evicts, releases or calls RM, so a
     /// diagnostic read cannot disturb the relay's working set. `Refusal::Store` names a window that is not armed.
-    pub(crate) fn passive_prepare(&self, _spans: &[Span]) -> Result<(), Refusal> {
-        Err(Refusal::Store)
+    pub(crate) fn passive_prepare(&self, spans: &[Span]) -> Result<(), Refusal> {
+        let required = required(self.bound, spans)?;
+        if required.iter().all(|&(off, len)| {
+            self.views
+                .iter()
+                .any(|v| v.ready && v.off == off && v.len == len)
+        }) {
+            Ok(())
+        } else {
+            Err(Refusal::Store)
+        }
     }
 
     /// Release the least recently used ready view that `required` does not name. A refused release
@@ -469,25 +478,82 @@ mod tests {
         c.prepare(&[span(0, 64), span(3 * BYTES, 64)]).unwrap();
         let before = (counts(&c), c.views.len(), c.tick, c.stats());
         assert_eq!(c.passive_prepare(&[span(0, 64)]), Ok(()));
-        assert_eq!(c.passive_prepare(&[span(BYTES / 2, 128)]), Ok(()), "any bytes of an armed window");
-        assert_eq!(c.passive_prepare(&[span(0, 64), span(3 * BYTES + 8, 4)]), Ok(()));
+        assert_eq!(
+            c.passive_prepare(&[span(BYTES / 2, 128)]),
+            Ok(()),
+            "any bytes of an armed window"
+        );
+        assert_eq!(
+            c.passive_prepare(&[span(0, 64), span(3 * BYTES + 8, 4)]),
+            Ok(())
+        );
         // a window that is not armed is refused by name, and nothing is armed, evicted or released
-        assert_eq!(c.passive_prepare(&[span(5 * BYTES, 64)]), Err(Refusal::Store));
-        assert_eq!(c.passive_prepare(&[span(0, 64), span(5 * BYTES, 64)]), Err(Refusal::Store));
-        assert_eq!(c.passive_prepare(&[span(0, BYTES + 1)]), Err(Refusal::Store), "straddles an unarmed window");
+        assert_eq!(
+            c.passive_prepare(&[span(5 * BYTES, 64)]),
+            Err(Refusal::Store)
+        );
+        assert_eq!(
+            c.passive_prepare(&[span(0, 64), span(5 * BYTES, 64)]),
+            Err(Refusal::Store)
+        );
+        assert_eq!(
+            c.passive_prepare(&[span(0, BYTES + 1)]),
+            Err(Refusal::Store),
+            "straddles an unarmed window"
+        );
         assert_eq!((counts(&c), c.views.len(), c.tick, c.stats()), before);
-        assert!(c.host.events.borrow().iter().all(|e| e.0 == "arm"), "no release, no copy");
+        assert!(
+            c.host.events.borrow().iter().all(|e| e.0 == "arm"),
+            "no release, no copy"
+        );
+        // a window that is armed but not ready (its mapping failed) does not count
+        c.views[0].ready = false;
+        assert_eq!(c.passive_prepare(&[span(0, 64)]), Err(Refusal::Store));
+        c.views[0].ready = true;
+        assert_eq!(c.passive_prepare(&[span(0, 64)]), Ok(()));
+    }
+
+    #[test]
+    fn an_armed_window_elsewhere_does_not_stand_in_for_the_one_asked_for() {
+        let mut c = Cache::create(Fake::default(), BYTES * 64).unwrap();
+        c.prepare(&[span(0, 64)]).unwrap();
+        // every window has the same length: only the offset tells them apart
+        assert_eq!(c.passive_prepare(&[span(BYTES, 64)]), Err(Refusal::Store));
+        assert_eq!(
+            c.passive_prepare(&[span(63 * BYTES, 64)]),
+            Err(Refusal::Store)
+        );
+        // two spans: both must be armed
+        c.prepare(&[span(BYTES, 64)]).unwrap();
+        assert_eq!(c.passive_prepare(&[span(0, 64), span(BYTES, 64)]), Ok(()));
+        assert_eq!(
+            c.passive_prepare(&[span(0, 64), span(2 * BYTES, 64)]),
+            Err(Refusal::Store)
+        );
+        assert_eq!(
+            c.passive_prepare(&[span(2 * BYTES, 64), span(0, 64)]),
+            Err(Refusal::Store)
+        );
     }
 
     #[test]
     fn the_passive_prepare_needs_no_window_for_ram_and_keeps_the_bounds() {
         let c = Cache::create(Fake::default(), BYTES * 64).unwrap();
-        let ram = Span { ram: true, ..span(0, 4096) };
+        let ram = Span {
+            ram: true,
+            ..span(0, 4096)
+        };
         assert_eq!(c.passive_prepare(&[ram]), Ok(()));
         assert_eq!(c.passive_prepare(&[]), Ok(()));
         // past the store bound, or too many spans: the same refusals as `prepare`
-        assert_eq!(c.passive_prepare(&[span(BYTES * 64, 4)]), Err(Refusal::Bounds));
-        assert_eq!(c.passive_prepare(&vec![ram; SPANS + 1]), Err(Refusal::Bounds));
+        assert_eq!(
+            c.passive_prepare(&[span(BYTES * 64, 4)]),
+            Err(Refusal::Bounds)
+        );
+        assert_eq!(
+            c.passive_prepare(&vec![ram; SPANS + 1]),
+            Err(Refusal::Bounds)
+        );
         assert_eq!(counts(&c), (0, 0));
     }
 

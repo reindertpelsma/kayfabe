@@ -1062,6 +1062,14 @@ impl StallStats {
     pub fn any(&self) -> bool {
         self.fields().iter().any(|(_, c)| c.load(Relaxed) != 0)
     }
+    /// The sum of all counters (monotonic: it moves exactly when something was counted).
+    #[must_use]
+    pub fn sum(&self) -> u64 {
+        self.fields()
+            .iter()
+            .map(|(_, c)| c.load(Relaxed))
+            .fold(0, u64::saturating_add)
+    }
     fn fields(&self) -> [(&'static str, &AtomicU64); 6] {
         [
             ("conditions", &self.conditions),
@@ -1162,8 +1170,16 @@ impl Private {
     /// `Nvc56fControl`: PUT 0x40, GET 0x44, REFERENCE 0x48, PUT_HI 0x4c, TOP_LEVEL_GET 0x58/0x5c,
     /// GET_HI 0x60, GP_GET 0x88, GP_PUT 0x8c).
     #[must_use]
-    pub fn from_userd(_w: &[u32; 36]) -> Self {
-        Self::default()
+    pub fn from_userd(w: &[u32; 36]) -> Self {
+        let pair = |lo: usize, hi: usize| (u64::from(w[hi]) << 32) | u64::from(w[lo]);
+        Self {
+            gp_get: w[34],
+            gp_put: w[35],
+            reference: w[18],
+            pb_get: pair(17, 24),
+            pb_put: pair(16, 19),
+            top_level_get: pair(22, 23),
+        }
     }
 }
 
@@ -1212,41 +1228,129 @@ pub struct Inputs {
 /// (never more than `bytes`; the reason is a short literal); it is called at most
 /// `1 + MAX_PROBES` times.
 pub fn build_report(
-    _inp: Inputs,
-    _read: &mut dyn FnMut(u64, usize) -> Result<Vec<u8>, &'static str>,
-    _stats: &StallStats,
+    inp: Inputs,
+    read: &mut dyn FnMut(u64, usize) -> Result<Vec<u8>, &'static str>,
+    stats: &StallStats,
 ) -> Report {
+    stats.conditions.fetch_add(1, Relaxed);
+    let private = Private::from_userd(&inp.userd);
+    let pairs: Vec<(u32, u64)> = inp.rows.iter().map(|r| (r.slot, r.entry)).collect();
+    let held = pick_segment(&pairs, private.gp_get, inp.entries, private.pb_get).and_then(|slot| {
+        pairs
+            .iter()
+            .find(|(s, _)| *s == slot)
+            .and_then(|&(s, entry)| match gp_entry_classify(entry) {
+                GpEntryKind::Segment(g) => Some((s, g)),
+                GpEntryKind::Control { .. } => None,
+            })
+    });
+    let segment = match held {
+        None => {
+            stats.no_segment.fetch_add(1, Relaxed);
+            Segment::NotFound
+        }
+        Some((slot, g)) => {
+            let want =
+                usize::try_from(g.len_bytes.min(MAX_PB_BYTES as u64)).unwrap_or(MAX_PB_BYTES) & !3;
+            match read(g.gpu_va, want) {
+                Err(why) => {
+                    stats.no_segment.fetch_add(1, Relaxed);
+                    Segment::Unread {
+                        slot,
+                        va: g.gpu_va,
+                        len_bytes: g.len_bytes,
+                        why,
+                    }
+                }
+                Ok(bytes) => {
+                    // whole words only, never more than asked for
+                    let words: Vec<u32> = bytes
+                        .get(..bytes.len().min(want) & !3)
+                        .unwrap_or(&[])
+                        .as_chunks::<4>()
+                        .0
+                        .iter()
+                        .map(|c| u32::from_le_bytes(*c))
+                        .collect();
+                    let stream = decode(&words, MAX_METHODS);
+                    let probes: Vec<Probe> = probe_plan(&stream)
+                        .iter()
+                        .map(|rq| {
+                            let current = match read(rq.addr, rq.bytes) {
+                                Ok(b) if b.len() >= rq.bytes => Current::Value(
+                                    b.iter()
+                                        .take(rq.bytes)
+                                        .rev()
+                                        .fold(0u64, |acc, &x| (acc << 8) | u64::from(x)),
+                                ),
+                                Ok(_) => Current::Unread("short"),
+                                Err(why) => Current::Unread(why),
+                            };
+                            Probe {
+                                item: rq.item,
+                                current,
+                            }
+                        })
+                        .collect();
+                    stats.acquires.fetch_add(probes.len() as u64, Relaxed);
+                    for pr in &probes {
+                        match (pr.current, stream.items.get(pr.item).map(|d| d.kind)) {
+                            (Current::Unread(_), _) => {
+                                stats.unread.fetch_add(1, Relaxed);
+                            }
+                            (Current::Value(c), Some(Kind::SemExecute(e)))
+                                if e.payload
+                                    .and_then(|a| name_says_pass(e.op, c, a, e.payload64))
+                                    == Some(true) =>
+                            {
+                                stats.would_pass.fetch_add(1, Relaxed);
+                            }
+                            _ => {}
+                        }
+                    }
+                    Segment::Decoded {
+                        slot,
+                        va: g.gpu_va,
+                        len_bytes: g.len_bytes,
+                        read_bytes: words.len() * 4,
+                        stream,
+                        probes,
+                    }
+                }
+            }
+        }
+    };
     Report {
-        key: (0, 0),
-        host: 0,
-        stalled_ms: 0,
-        threshold_ms: 0,
-        guest_put: None,
-        guest_get: None,
-        private: Private::default(),
-        wait: None,
-        doorbells: 0,
-        doorbell_ago_ms: None,
-        wake: None,
-        turn_ago_ms: None,
-        issued: 0,
-        fetched: 0,
-        marks_issued: 0,
-        marks_seen: 0,
-        cursor: 0,
-        turns: 0,
-        entries: (0, 0, 0),
-        rows: Vec::new(),
-        segment: Segment::NotFound,
-        totals: String::new(),
+        key: inp.key,
+        host: inp.host,
+        stalled_ms: inp.stalled_ms,
+        threshold_ms: inp.threshold_ms,
+        guest_put: inp.guest_put,
+        guest_get: inp.guest_get,
+        private,
+        wait: inp.wait,
+        doorbells: inp.doorbells.0,
+        doorbell_ago_ms: inp.doorbells.1,
+        wake: inp.wake,
+        turn_ago_ms: inp.turn_ago_ms,
+        issued: inp.receipts.0,
+        fetched: inp.receipts.1,
+        marks_issued: inp.receipts.2,
+        marks_seen: inp.receipts.3,
+        cursor: inp.cursor,
+        turns: inp.turns,
+        entries: inp.entries_by_mode,
+        rows: inp.rows,
+        segment,
+        totals: inp.totals,
     }
 }
 
 /// Whether the cumulative counter line is due: at least [`PERIOD_MS`] since the last one and the
 /// counters (summed) moved.
 #[must_use]
-pub fn period_due(_now_ms: u64, _last_ms: u64, _sum: u64, _last_sum: u64) -> bool {
-    false
+pub fn period_due(now_ms: u64, last_ms: u64, sum: u64, last_sum: u64) -> bool {
+    now_ms >= last_ms && now_ms - last_ms >= PERIOD_MS && sum != last_sum
 }
 
 #[cfg(test)]
@@ -1719,7 +1823,7 @@ mod tests {
     fn legacy_semaphore_methods_decode_onto_the_same_shape() {
         // SEMAPHOREA (0x10) OFFSET_UPPER 7:0, B (0x14) OFFSET_LOWER 31:2, C (0x18) PAYLOAD, D (0x1c)
         let d = 1 | (1 << 24); // ACQUIRE, SIZE_4BYTE
-        let w = inc(0, 0x10, &[0x3, 0x1000_0008, 0x55, d]);
+        let w = inc(0, 0x10, &[0x3, 0x1000_000B, 0x55, d]);
         let s = decode(&w, 64);
         assert_eq!(s.items[0].kind, Kind::SemAddrHi);
         assert_eq!(s.items[1].kind, Kind::SemAddrLo);
@@ -2546,6 +2650,94 @@ mod tests {
     }
 
     #[test]
+    fn the_counter_sum_moves_exactly_when_something_is_counted() {
+        use std::sync::atomic::Ordering::Relaxed;
+        let s = StallStats::default();
+        assert_eq!(s.sum(), 0);
+        s.conditions.fetch_add(1, Relaxed);
+        s.skipped_busy.fetch_add(4, Relaxed);
+        assert_eq!(s.sum(), 5);
+        s.unread.store(u64::MAX, Relaxed);
+        assert_eq!(
+            s.sum(),
+            u64::MAX,
+            "saturates, never wraps to a smaller number"
+        );
+    }
+
+    #[test]
+    fn a_one_increment_packet_puts_only_the_first_datum_on_its_own_method() {
+        // ONE_INC (sec_op 5) at SEM_PAYLOAD_LO: the first datum there, the second at +4
+        let w = vec![(5u32 << 29) | (2 << 16) | (0x64 / 4), 0xA1, 0xB2];
+        let s = decode(&w, 64);
+        let got: Vec<(u32, u32)> = s.items.iter().map(|i| (i.method, i.data)).collect();
+        assert_eq!(got, [(0x64, 0xA1), (0x68, 0xB2)]);
+        assert_eq!(s.items[0].kind, Kind::SemPayloadLo);
+        assert_eq!(s.items[1].kind, Kind::SemPayloadHi);
+        // an incrementing packet of two is the same; a non-incrementing one is not
+        let w = inc(0, 0x64, &[0xA1, 0xB2]);
+        assert_eq!(
+            decode(&w, 64)
+                .items
+                .iter()
+                .map(|i| i.method)
+                .collect::<Vec<_>>(),
+            [0x64, 0x68]
+        );
+        let w = non_inc(0, 0x64, &[0xA1, 0xB2]);
+        assert_eq!(
+            decode(&w, 64)
+                .items
+                .iter()
+                .map(|i| i.method)
+                .collect::<Vec<_>>(),
+            [0x64, 0x64]
+        );
+    }
+
+    #[test]
+    fn a_view_that_returns_more_than_asked_for_the_pushbuffer_is_cut_to_what_was_asked() {
+        let rows = vec![Row {
+            slot: 0x1a7,
+            entry: gp_entry(0x4_0000, 64).unwrap(),
+        }];
+        // 64 bytes asked; 4096 returned, every word a NOP header except the planted NON_STALL_INTERRUPT after byte 64
+        let mut bytes = vec![0u8; 4096];
+        let nsi = method_header_inc(0, 0x20, 1).unwrap().to_le_bytes();
+        bytes[64..68].copy_from_slice(&nsi);
+        let rep = build_report(
+            inputs(rows, 0x4_0000),
+            &mut |_, _| Ok(bytes.clone()),
+            &StallStats::default(),
+        );
+        let Segment::Decoded {
+            read_bytes, stream, ..
+        } = &rep.segment
+        else {
+            panic!()
+        };
+        assert_eq!(*read_bytes, 64);
+        assert!(
+            stream.items.is_empty(),
+            "nothing beyond the asked-for bytes is decoded"
+        );
+        // a length that is not a multiple of four is rounded down to whole words (gp_entry itself refuses one,
+        // so build the entry by hand: 3 dwords)
+        let entry = (1u64 << 42 >> 42) | ((3u64) << (32 + 10)) | 0x4_0000;
+        let rows = vec![Row { slot: 0x1a7, entry }];
+        let mut asked = Vec::new();
+        let _ = build_report(
+            inputs(rows, 0x4_0000),
+            &mut |a, n| {
+                asked.push((a, n));
+                Err("x")
+            },
+            &StallStats::default(),
+        );
+        assert_eq!(asked, [(0x4_0000, 12)]);
+    }
+
+    #[test]
     fn peek_reasons_have_stable_names() {
         assert_eq!(peek_name(Peek::Spin), "Spin");
         assert_eq!(peek_name(Peek::Event), "Event");
@@ -2623,10 +2815,11 @@ mod tests {
     #[test]
     fn the_report_reads_the_segment_decodes_it_and_reads_each_acquires_semaphore() {
         let mut pb = vec![0u32; 4];
-        pb.extend(sem(0x2000, 0x2a, 3)); // items 4..=8: circular acquire, exec = item 8
-        pb.extend(sem(0x2008, 7, 0)); // items 9..=13: acquire, exec = item 13
-        pb.extend(sem(0x20_0000_0000, 1, 0)); // items 14..=18: unmapped semaphore
-        pb.extend(sem(0x2010, 9, 1)); // items 19..=23: a release, never read
+        // the four NOP words are no methods; each semaphore op is five methods
+        pb.extend(sem(0x2000, 0x2a, 3)); // items 0..=4: circular acquire, exec = item 4
+        pb.extend(sem(0x2008, 7, 0)); // items 5..=9: acquire, exec = item 9
+        pb.extend(sem(0x20_0000_0000, 1, 0)); // items 10..=14: unmapped semaphore, exec = item 14
+        pb.extend(sem(0x2010, 9, 1)); // items 15..=19: a release, never read
         let mut mem = Mem(
             vec![(0x4_0000, le(&pb)), (0x2000, le(&[0x29, 0, 7, 0, 0, 0]))],
             Vec::new(),
@@ -2676,7 +2869,7 @@ mod tests {
         };
         assert_eq!(
             (*slot, *va, *len_bytes, *read_bytes),
-            (0x1a7, 0x4_0000, 96, 96)
+            (0x1a7, 0x4_0000, 112, 112)
         );
         assert_eq!(stream.items.len(), 20);
         let got: Vec<(usize, Current)> = probes.iter().map(|p| (p.item, p.current)).collect();
@@ -2692,7 +2885,7 @@ mod tests {
         assert_eq!(
             mem.1,
             [
-                (0x4_0000, 96),
+                (0x4_0000, 112),
                 (0x2000, 4),
                 (0x2008, 4),
                 (0x20_0000_0000, 4)
@@ -2836,7 +3029,12 @@ mod tests {
             panic!()
         };
         assert_eq!(*read_bytes, 8, "whole words only");
-        assert_eq!(stream.items.len(), 2);
+        assert_eq!(
+            stream.items.len(),
+            1,
+            "the header and one datum of a five-datum packet"
+        );
+        assert!(stream.truncated);
         assert!(probes.is_empty(), "no acquire decoded from two words");
         assert_eq!(calls, 1);
     }

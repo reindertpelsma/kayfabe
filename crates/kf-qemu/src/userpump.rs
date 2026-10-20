@@ -489,6 +489,8 @@ pub(super) struct Pump {
     sw: Option<Software>,
     /// Measurement only ([`trace_dir`]).
     pub(super) trace: Option<Box<Trace>>,
+    /// ★ 2026-10-20 measurement only (`KF3_DIAG_USER_STALL`, default off): present only when the switch is on.
+    diag: Option<Box<kf_chan::user_stall::ChannelDiag>>,
 }
 
 /// What the I/O of the per-entry turn keeps between its micro-steps and its reporting counters.
@@ -971,6 +973,8 @@ impl kf_chan::user_turn::Io for PumpIo<'_> {
 
 impl Pump {
     pub(super) fn new(me: &ChanPlane, subdevice_id: u32, key: (u32, u32)) -> Result<Self, String> {
+        // ★ 2026-10-20: the stall diagnostic's switch is read here, once (the first relay), never per turn.
+        diag::init();
         let scan = if userrelay::shadow_enabled() {
             Scan::default()
         } else {
@@ -1003,6 +1007,7 @@ impl Pump {
             aux: Aux::default(),
             sw: None,
             trace: trace_dir().map(|_| Box::new(Trace::new())),
+            diag: diag::channel_state(),
         })
     }
     pub(super) fn release(&mut self, stats: &kf_chan::user_loop::Stats) -> Result<(), String> {
@@ -2776,6 +2781,7 @@ impl ChanPlane {
         if let Some(t) = pump.trace.as_mut() {
             t.wake(woke);
         }
+        pump.diag_turn();
         let outcome = pump.turn(self, &mut r);
         r.pump = Some(pump);
         match outcome {
@@ -2927,6 +2933,7 @@ impl ChanPlane {
                 // (a guest blocked on a full ring behind its OWN gate would otherwise wait for the
                 // marker, which waits for the guest).
                 Stats::bump(&self.relay_stats.pop_writebacks);
+                p.diag_wake(why);
                 return ring(self);
             }
             if satisfied && (retry_ok || !matches!(w, kf_chan::user_loop::Wait::Contended)) {
@@ -2971,6 +2978,7 @@ impl ChanPlane {
                 }
                 p.wait = None;
                 record.set_waiting(false);
+                p.diag_wake(why);
                 return ring(self);
             }
             if why == Peek::Event {
@@ -2981,6 +2989,7 @@ impl ChanPlane {
             if backstop {
                 Stats::bump(&self.relay_stats.backstop_contended);
             }
+            p.diag_wake(why);
             return ring(self);
         }
         false
@@ -3006,6 +3015,8 @@ impl ChanPlane {
     /// report run here; with the trace off this does nothing, and in production no relay is ever
     /// rung by a tick.
     pub(super) fn user_ring_refresh(&self) {
+        // ★ 2026-10-20 (`KF3_DIAG_USER_STALL`): one relaxed load and a return when off.
+        self.user_ring_diag();
         if !tracing() {
             return;
         }
@@ -3777,55 +3788,168 @@ mod tests {
     fn diag_source() -> &'static str {
         include_str!("userdiag.rs").split("#[cfg(test)]").next().unwrap()
     }
+    fn pump_source() -> &'static str {
+        include_str!("userpump.rs")
+            .split("#[cfg(test)]")
+            .next()
+            .unwrap()
+    }
+    fn pump_new_body() -> &'static str {
+        let birth = pump_source()
+            .split("pub(super) fn new(me: &ChanPlane")
+            .nth(1)
+            .unwrap();
+        birth.split("pub(super) fn release").next().unwrap()
+    }
+    fn refresh_body() -> &'static str {
+        let refresh = pump_source()
+            .split("pub(super) fn user_ring_refresh(&self)")
+            .nth(1)
+            .unwrap();
+        refresh
+            .split("/// Measurement only: a pump that has had no turn")
+            .next()
+            .unwrap()
+    }
+    fn peek_body() -> &'static str {
+        let peek = pump_source()
+            .split("fn user_ring_peek_one(")
+            .nth(1)
+            .unwrap();
+        peek.split("pub(crate) fn user_ring_poll_due")
+            .next()
+            .unwrap()
+    }
+    fn serve_body() -> &'static str {
+        let serve = pump_source()
+            .split("pub(super) fn user_ring_serve(")
+            .nth(1)
+            .unwrap();
+        serve.split("fn user_ring_arm").next().unwrap()
+    }
 
-    /// The switch is read ONCE, when the first relay is created, from one place; no turn and no look reads it.
+    /// The switch is read from ONE place in the environment, in `init`, and nowhere else in the diagnostic.
     #[test]
-    fn the_stall_diagnostic_switch_is_read_once_at_relay_creation_and_never_per_turn() {
+    fn the_stall_diagnostic_reads_the_environment_in_one_place() {
         let d = diag_source();
         assert_eq!(d.matches("std::env::var(").count(), 1, "one read of the environment");
         assert_eq!(d.matches("kf_chan::user_stall::ENV").count(), 1);
-        let pump = include_str!("userpump.rs").split("#[cfg(test)]").next().unwrap();
-        let birth = pump.split("pub(super) fn new(me: &ChanPlane").nth(1).unwrap();
-        let birth = birth.split("pub(super) fn release").next().unwrap();
-        assert!(birth.contains("diag::init()"), "the one read is in Pump::new");
-        assert!(birth.contains("diag::channel_state()"));
-        assert_eq!(pump.matches("diag::init()").count(), 1);
+        let init = d.split("pub(super) fn init()").nth(1).unwrap();
+        let init = init.split("/// The threshold; 0 when off").next().unwrap();
+        assert!(init.contains("std::env::var("), "the one read is in init");
+        assert!(init.contains("Once"), "and runs once");
+    }
+
+    /// `init` is called once, from `Pump::new` (the first relay), never from a turn or a look.
+    #[test]
+    fn the_stall_diagnostic_switch_is_read_when_the_first_relay_is_created() {
+        assert!(
+            pump_new_body().contains("diag::init()"),
+            "the read is in Pump::new"
+        );
+        assert_eq!(pump_source().matches("diag::init()").count(), 1);
+    }
+
+    /// No turn, look or tick reads the environment or re-reads the switch.
+    #[test]
+    fn the_stall_diagnostic_switch_is_never_read_per_turn() {
+        let pump = pump_source();
         let turns = pump.split("fn turn(&mut self, me: &ChanPlane").nth(1).unwrap();
         let turns = turns.split("/// Measurement only: the final scan refusal").next().unwrap();
         assert!(!turns.contains("env::var") && !turns.contains("diag::init"), "no read per turn");
-        assert!(!diag_source().contains("OnceLock<Instant>") || diag_source().contains("fn now_ms"));
+        for body in [peek_body(), serve_body(), refresh_body()] {
+            assert!(!body.contains("env::var") && !body.contains("diag::init"));
+        }
+        let d = diag_source();
+        let look = d.split("fn diag_look(").nth(1).unwrap();
+        assert!(!look.contains("env::var") && !look.contains("fn init"));
     }
 
-    /// It runs on the relay worker only: from the worker tick (`user_ring_refresh`) and, for two plain field writes, from
-    /// the look and the serve. Nothing else names it; in particular no vCPU, drainer or act path.
+    /// A relay carries its diagnostic state only when the switch is on, decided at birth.
     #[test]
-    fn the_stall_diagnostic_is_reachable_only_from_the_worker_tick_and_the_relay_hooks() {
+    fn the_stall_diagnostic_state_is_created_with_the_relay() {
+        assert!(pump_new_body().contains("diag: diag::channel_state()"));
+        assert_eq!(pump_source().matches("diag::channel_state()").count(), 1);
+        let d = diag_source();
+        let state = d.split("pub(super) fn channel_state()").nth(1).unwrap();
+        assert!(
+            state
+                .split('}')
+                .next()
+                .unwrap()
+                .contains("threshold_ms() != 0")
+        );
+    }
+
+    /// The diagnostic is not reachable from any vCPU, drainer, act or birth file.
+    #[test]
+    fn the_stall_diagnostic_is_named_by_no_other_file() {
         for (name, text) in [
-            ("chan.rs", include_str!("chan.rs").replace("mod diag", "")),
-            ("device.rs", include_str!("device.rs").to_owned()),
-            ("twin.rs", include_str!("twin.rs").to_owned()),
-            ("userrelay.rs", include_str!("userrelay.rs").to_owned()),
-            ("userbirth.rs", include_str!("userbirth.rs").to_owned()),
-            ("mem.rs", include_str!("mem.rs").to_owned()),
+            ("chan.rs", include_str!("chan.rs")),
+            ("device.rs", include_str!("device.rs")),
+            ("twin.rs", include_str!("twin.rs")),
+            ("userrelay.rs", include_str!("userrelay.rs")),
+            ("userbirth.rs", include_str!("userbirth.rs")),
+            ("mem.rs", include_str!("mem.rs")),
+            ("userstore.rs", include_str!("userstore.rs")),
+            ("userread.rs", include_str!("userread.rs")),
         ] {
+            let text = text.split("#[cfg(test)]").next().unwrap();
             assert!(
                 !text.contains("user_ring_diag") && !text.contains("userdiag") && !text.contains("diag::"),
                 "{name} must not reach the stall diagnostic"
             );
         }
-        let pump = include_str!("userpump.rs").split("#[cfg(test)]").next().unwrap();
-        let refresh = pump.split("pub(super) fn user_ring_refresh(&self)").nth(1).unwrap();
-        let refresh = refresh.split("/// Measurement only: a pump that has had no turn").next().unwrap();
+    }
+
+    /// The tick is the diagnostic's one entry, and it runs before the trace's early return.
+    #[test]
+    fn the_stall_diagnostic_runs_from_the_worker_tick_before_the_trace_returns() {
+        let refresh = refresh_body();
         let (diag_at, trace_at) = (refresh.find("self.user_ring_diag()"), refresh.find("if !tracing()"));
         assert!(diag_at.is_some() && diag_at < trace_at, "the diagnostic runs before the trace's early return");
-        assert_eq!(pump.matches("self.user_ring_diag()").count(), 1, "one caller");
-        assert_eq!(pump.matches("user_ring_refresh()").count(), 1, "the tick's one caller is the worker tick in chan.rs");
-        let peek = pump.split("fn user_ring_peek_one(").nth(1).unwrap();
-        let peek = peek.split("pub(crate) fn user_ring_poll_due").next().unwrap();
+    }
+
+    /// One caller of the diagnostic's entry, and one caller of the tick (the worker's, in chan.rs).
+    #[test]
+    fn the_stall_diagnostic_entry_has_exactly_one_caller() {
+        assert_eq!(pump_source().matches("self.user_ring_diag()").count(), 1);
+        assert_eq!(
+            include_str!("chan.rs")
+                .matches("self.user_ring_refresh()")
+                .count(),
+            1,
+            "the tick's one caller is the worker tick (relay_refresh_all) in chan.rs"
+        );
+        let d = diag_source();
+        assert_eq!(d.matches("fn user_ring_diag(").count(), 1);
+        assert_eq!(d.matches("p.diag_look(").count(), 1);
+    }
+
+    /// Every ring of a relay by a look is noted (the field write), at every `ring(self)` of the look.
+    #[test]
+    fn the_stall_diagnostic_notes_every_look_that_rings_a_relay() {
+        let peek = peek_body();
         assert!(peek.matches("p.diag_wake(why)").count() >= 3, "every ring of the relay by a look is noted");
-        let serve = pump.split("pub(super) fn user_ring_serve(").nth(1).unwrap();
-        let serve = serve.split("fn user_ring_arm").next().unwrap();
-        assert_eq!(serve.matches("pump.diag_turn()").count(), 1);
+        assert_eq!(
+            peek.matches("return ring(self)").count(),
+            peek.matches("p.diag_wake(why);\n                return ring(self)")
+                .count()
+                + peek
+                    .matches("p.diag_wake(why);\n            return ring(self)")
+                    .count(),
+            "each ring is preceded by its note"
+        );
+    }
+
+    /// The serve notes its turn once.
+    #[test]
+    fn the_stall_diagnostic_notes_each_serve_once() {
+        assert_eq!(serve_body().matches("pump.diag_turn()").count(), 1);
+        assert!(
+            serve_body().find("pump.diag_turn()") < serve_body().find("pump.turn(self"),
+            "before the turn runs"
+        );
     }
 
     /// It takes no lock a vCPU takes and blocks on nothing: `try_lock` only, no sleep, no condvar, no join, no channel.
@@ -3833,43 +3957,90 @@ mod tests {
     fn the_stall_diagnostic_only_tries_locks_and_never_waits() {
         let d = diag_source();
         for banned in [
-            ".lock()", ".read()", ".write()", "sleep", "Condvar", ".join(", ".recv(", ".wait(", "park", "spin_loop", "block_on",
-            "unsafe", "Instant::now()",
+            ".lock()",
+            ".read()",
+            ".write()",
+            "sleep",
+            "Condvar",
+            ".join(",
+            ".recv(",
+            ".wait(",
+            "park",
+            "spin_loop",
+            "block_on",
+            "unsafe",
         ] {
-            let allowed = banned == "Instant::now()";
-            assert!(allowed || !d.contains(banned), "userdiag.rs must not contain {banned:?}");
+            assert!(
+                !d.contains(banned),
+                "userdiag.rs must not contain {banned:?}"
+            );
         }
-        assert!(d.contains(".try_lock()"));
-        assert!(d.matches("Instant::now()").count() <= 1, "one clock read, in now_ms");
-        assert!(d.contains("Passive") || d.contains("passive_prepare"), "the reader never arms a window");
-        assert!(!d.contains("prepare(&mut") && !d.contains("&mut self.cache") && !d.contains("&mut p.cache"));
+        assert!(d.matches(".try_lock()").count() >= 4);
+        assert!(
+            d.matches("Instant::now()").count() == 0,
+            "one clock, in now_ms, by function path"
+        );
     }
 
-    /// Off costs one relaxed load: the entry point returns on a zero threshold before any lock, and the threshold is a
-    /// relaxed atomic.
+    /// The reader never arms a window: the store is read through the passive prepare only.
     #[test]
-    fn the_stall_diagnostic_costs_one_relaxed_load_when_off() {
+    fn the_stall_diagnostic_reads_the_store_passively() {
+        let d = diag_source();
+        assert!(d.contains("self.0.passive_prepare(spans)"));
+        assert!(d.contains("&mut Passive(cache)"));
+        assert!(
+            !d.contains(".prepare(")
+                && !d.contains("&mut self.cache")
+                && !d.contains("&mut p.cache")
+        );
+        assert!(d.contains("let (cache, generation) = (&self.cache, self.ram_generation);"));
+        assert!(
+            d.contains("Refusal::Store => \"vidmem\""),
+            "a store window that is not armed reads as vidmem"
+        );
+    }
+
+    /// Off costs one relaxed load: the threshold is a relaxed atomic.
+    #[test]
+    fn the_stall_diagnostic_threshold_is_a_relaxed_atomic() {
         let d = diag_source();
         assert!(d.contains("static THRESHOLD_MS: AtomicU64"));
         let get = d.split("fn threshold_ms()").nth(1).unwrap();
-        assert!(get.split('}').next().unwrap().contains("THRESHOLD_MS.load(Ordering::Relaxed)"));
+        assert!(
+            get.split('}')
+                .next()
+                .unwrap()
+                .contains("THRESHOLD_MS.load(Ordering::Relaxed)")
+        );
+        assert_eq!(
+            d.matches("THRESHOLD_MS.store(").count(),
+            1,
+            "written once, in init"
+        );
+    }
+
+    /// The entry point returns on a zero threshold before any lock or clock.
+    #[test]
+    fn the_stall_diagnostic_entry_returns_before_any_lock_when_off() {
+        let d = diag_source();
         let entry = d.split("fn user_ring_diag(&self)").nth(1).unwrap();
         let first = entry.split('{').nth(1).unwrap();
         assert!(first.trim_start().starts_with("let ms = threshold_ms();"), "{first}");
         let guard = entry.find("if ms == 0").unwrap();
         assert!(guard < entry.find("try_lock").unwrap(), "the off test precedes every lock");
-        let pump = include_str!("userpump.rs").split("#[cfg(test)]").next().unwrap();
-        let wake = pump.split("fn diag_wake").nth(1).unwrap_or("");
-        assert!(wake.is_empty() || !wake.contains("Instant"));
+        assert!(guard < entry.find("now_ms()").unwrap(), "and the clock");
     }
 
-    /// What it prints is bounded and goes to stderr as lines the pure renderer made.
+    /// What it prints goes through the pure renderer, to stderr, a bounded number of print sites.
     #[test]
     fn the_stall_diagnostic_prints_only_what_the_renderer_made() {
         let d = diag_source();
         assert!(d.contains("kf_chan::user_stall::render("));
-        assert!(d.matches("eprintln!").count() <= 4, "the armed line, the invalid line, the report lines, the period line");
-        assert!(!d.contains("{:?}") || !d.contains("guest"), "no Debug of guest-derived data");
         assert!(d.contains("kf_chan::user_stall::build_report("));
+        assert!(
+            d.matches("eprintln!").count() <= 4,
+            "the armed line, the invalid line, the report lines, the period line"
+        );
+        assert!(!d.contains("{:?}"), "no Debug of guest-derived data");
     }
 }

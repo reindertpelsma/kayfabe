@@ -704,15 +704,27 @@ impl Storage<CpuView> {
     /// # Errors
     /// Released CPU view/load failure.
     pub fn gpu_cursors(&self) -> Result<(u32, u32), String> {
-        Err("USER_STORAGE_STUB".into())
+        let cpu = self.cpu()?;
+        let get = cpu
+            .load_u32(HostOffset::new(USERD_OFFSET + kf_abi::submit::USERD_GP_GET))
+            .map_err(|e| format!("USER_STORAGE_GET_READ: {e:?}"))?;
+        let put = cpu
+            .load_u32(HostOffset::new(USERD_OFFSET + kf_abi::submit::USERD_GP_PUT))
+            .map_err(|e| format!("USER_STORAGE_PUT_READ: {e:?}"))?;
+        Ok((get, put))
     }
 
     /// MEASUREMENT ONLY (`KF3_DIAG_USER_STALL`): one private GP ring entry as it stands, 8 bytes.
     ///
     /// # Errors
     /// A slot outside the ring, or a released CPU view/load failure.
-    pub fn read_gp(&self, _slot: u32) -> Result<u64, String> {
-        Err("USER_STORAGE_STUB".into())
+    pub fn read_gp(&self, slot: u32) -> Result<u64, String> {
+        if slot >= ENTRIES {
+            return Err("USER_STORAGE_GP_BOUND".into());
+        }
+        self.cpu()?
+            .load_u64(HostOffset::new(GP_OFFSET + u64::from(slot) * 8))
+            .map_err(|e| format!("USER_STORAGE_GP_READ: {e:?}"))
     }
 }
 
@@ -753,17 +765,52 @@ mod tests {
     fn the_diagnostic_reads_the_private_cursors_and_entries_without_writing() {
         let s = anonymous_live_storage();
         let cpu = s.cpu().unwrap();
-        cpu.store_u32(HostOffset::new(USERD_OFFSET + kf_abi::submit::USERD_GP_GET), 0x1a8).unwrap();
+        cpu.store_u32(
+            HostOffset::new(USERD_OFFSET + kf_abi::submit::USERD_GP_GET),
+            0x1a8,
+        )
+        .unwrap();
         s.publish_put(0x1aa).unwrap();
         assert_eq!(s.gpu_cursors().unwrap(), (0x1a8, 0x1aa));
         let entry = kf_abi::submit::gp_entry(0x3_0472_0000, 500).unwrap() | (1 << 41);
         s.write_user_gp(0x1a7, entry).unwrap();
-        s.write_user_gp(ENTRIES - 1, 0x1234_5678_9abc_def0 & !(1 << 63)).ok();
+        s.write_user_gp(ENTRIES - 1, 0x1234_5678_9abc_def0 & !(1 << 63))
+            .ok();
         assert_eq!(s.read_gp(0x1a7).unwrap(), entry);
-        assert_eq!(s.read_gp(0x1a8).unwrap(), 0, "a slot never written reads zero");
+        assert_eq!(
+            s.read_gp(0x1a8).unwrap(),
+            0,
+            "a slot never written reads zero"
+        );
+        // the slot is an 8-byte stride from the ring base, whatever the slot
+        for slot in [0u32, 1, 3, 255, ENTRIES - 1] {
+            let e = kf_abi::submit::gp_entry(0x1000 + u64::from(slot) * 0x100, 64).unwrap();
+            s.write_user_gp(slot, e).unwrap();
+            assert_eq!(s.read_gp(slot).unwrap(), e, "slot {slot}");
+        }
         // reading changed nothing
         assert_eq!(s.gpu_cursors().unwrap(), (0x1a8, 0x1aa));
         assert_eq!(s.read_gp(0x1a7).unwrap(), entry);
+    }
+
+    #[test]
+    fn the_diagnostic_cursors_are_get_then_put_whatever_their_values() {
+        let s = anonymous_live_storage();
+        let cpu = s.cpu().unwrap();
+        for (get, put) in [(1u32, 2u32), (500, 3), (0, 0), (0x1a8, 0x1aa)] {
+            cpu.store_u32(
+                HostOffset::new(USERD_OFFSET + kf_abi::submit::USERD_GP_GET),
+                get,
+            )
+            .unwrap();
+            cpu.store_u32(
+                HostOffset::new(USERD_OFFSET + kf_abi::submit::USERD_GP_PUT),
+                put,
+            )
+            .unwrap();
+            assert_eq!(s.gpu_cursors().unwrap(), (get, put));
+            assert_eq!(s.gpu_get().unwrap(), get, "the same word the relay reads");
+        }
     }
 
     #[test]
