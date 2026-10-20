@@ -161,3 +161,19 @@ OFFSET_UPPER 24:0.
   (minidump presence, System 1001/41/4101, WER) is read in a following boot WITHOUT kf3 (collect.sh).
 - The relay-branch arm (KF3_DIAG_PROGRESS) is conditional on a lost completion/interrupt on a USER ring;
   the measured stall is a KERNEL channel behind a refused GR method, so it runs only if H-TDR-GRSEM falls.
+
+## Addendum 19:50 UTC — display-on derivation, before any phase-2 arm
+
+CODE READ (public): Blackwell's caps class names the per-tile pipe `NVCA73_POSTCOMP_HDR_CAP*(i)`;
+kayfabe's class vocabulary lacked it (derive spec only had Ada's `POSTCOMP_HEAD_HDR_CAP`), so the page
+carried no POSTCOMP word. Public NVKMS (ogkm 580.65.06 nvkms-evo4.c:1826-1831) reads
+`POSTCOMP_HDR_CAPA(tile)` for every usable tile and asserts OCSC0/OCSC1/HCLPF/OSCAN/DTH/DSC present.
+Product fix5 = 048c28b9c (fix4 + vocabulary regenerated + those six fields per virtual tile, SCLR/
+VFILTER absent; widths unclaimed; tests first).
+
+- **H-POSTCOMP-DERIVED** (the derived POSTCOMP_HDR_CAPA words are what the display-on init needs).
+  *Falsifier:* fix5_on still aborts right after the 4th CA7A (ordinal 275) with Code 43. (A Code 0
+  followed by a different failure supports only this wall.)
+
+Arm order: fix3_off_1 (+ crash collection boot), fix4_off_1 (240 s hold + CUDA/D3D), fix5_on_1
+(180 s hold + CUDA/D3D), then n=2 repeats as time allows.
