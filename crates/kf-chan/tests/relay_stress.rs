@@ -1849,7 +1849,19 @@ fn run_scenario(sc: &Scenario) -> Outcome {
         }
         // ★ I7 NO HIDDEN SPIN: with everything executed and nothing outstanding, the workers block and stay blocked (infinite
         // park): no pass, no park, no timeout-0 look in a quiet window.
-        if !sh.abort.load(Ordering::Acquire) && env_u("RS_PARK_NET", 0) == 0 && sc.synth_hot == 0 {
+        // Precondition of "nothing outstanding": no synthetic hot token, no lock-holder thread (it keeps acting), and every guest's
+        // visible GP_GET at its GP_PUT (else the relay still owes reads or write-backs).
+        let settled = || {
+            clients
+                .iter()
+                .all(|c| c.gp_get.load(Ordering::Acquire) == c.gp_put.load(Ordering::Acquire))
+        };
+        if !sh.abort.load(Ordering::Acquire)
+            && env_u("RS_PARK_NET", 0) == 0
+            && sc.synth_hot == 0
+            && !sc.holder.on
+            && settled()
+        {
             std::thread::sleep(Duration::from_millis(20));
             let quiet = |ws: &WorkerStats, st: &RelayStats| {
                 (
