@@ -354,6 +354,11 @@ struct Scenario {
     style_dup_p: u32,
     style_late_p: u32,
     style_skip_p: u32,
+    /// SYNTHETIC hot tokens (after the real clients): a token whose every serve makes progress and rings itself again (a relay with
+    /// unbounded input and credit). They are the "hot neighbours" of the baton, without depending on how fast the fake GPU is.
+    synth_hot: usize,
+    /// Cost of one turn / one synthetic serve (us of spin): the real pump's guarded accessors take tens of us (`RS_TURN_US` overrides).
+    turn_us: u64,
 }
 
 impl Scenario {
@@ -392,7 +397,7 @@ impl Scenario {
             2 => ChaosCfg { yield_p: 256, spin_p: 128, sleep0_p: 128, nap_p: 4, nap_us_max: 200 },
             _ => ChaosCfg { yield_p: 512, spin_p: 256, sleep0_p: 256, nap_p: 16, nap_us_max: 1000 },
         };
-        Scenario {
+        let mut sc = Scenario {
             seed,
             roles,
             workers: [1, 2, 2, 2, 3][r.below(5) as usize],
@@ -406,14 +411,65 @@ impl Scenario {
             style_dup_p: 100,
             style_late_p: 100,
             style_skip_p: 100,
+            synth_hot: 0,
+            turn_us: 0,
+        };
+        sc.apply_overrides();
+        sc
+    }
+
+    /// Minimisation knobs (env): `RS_CLIENTS` (keep the first n), `RS_WORKERS`, `RS_HOLDER=0|1`, `RS_CHAOS=0`, `RS_BUSY=0`, `RS_SCAN=0|1`,
+    /// `RS_SYNC`, `RS_GPU=fast`.
+    fn apply_overrides(&mut self) {
+        if let Ok(v) = std::env::var("RS_CLIENTS") {
+            self.roles.truncate(v.parse().unwrap_or(8));
+        }
+        if let Ok(v) = std::env::var("RS_ROLES") {
+            self.roles = v
+                .chars()
+                .map(|c| match c {
+                    'H' => Role::Hot,
+                    'C' => Role::Cold,
+                    'F' => Role::Filler,
+                    _ => Role::Mixed,
+                })
+                .collect();
+        }
+        if std::env::var("RS_WORKERS").is_ok() {
+            self.workers = env_u("RS_WORKERS", 2) as usize;
+        }
+        match std::env::var("RS_HOLDER").as_deref() {
+            Ok("0") => self.holder.on = false,
+            Ok("1") if !self.holder.on => {
+                self.holder = HolderCfg { on: true, hold_us_max: 2000, rings_after_p: 1024, gap_us_max: 1000 };
+            }
+            _ => {}
+        }
+        if std::env::var("RS_CHAOS").as_deref() == Ok("0") {
+            self.chaos = ChaosCfg::OFF;
+        }
+        if std::env::var("RS_BUSY").as_deref() == Ok("0") {
+            self.busy_p = 0;
+        }
+        if let Ok(v) = std::env::var("RS_SCAN") {
+            self.always_scan = v == "1";
+        }
+        if let Ok(v) = std::env::var("RS_SYNC") {
+            self.sync_p = v.parse().unwrap_or(0);
+        }
+        if std::env::var("RS_GPU").as_deref() == Ok("fast") {
+            self.gpu = GpuCfg { burst: 4096, stall_p: 0, stall_us_max: 0, cost_us: 0, barrier_us_max: 0, irq_jitter_us: 0 };
         }
     }
 
     /// The baton shape of the hardware report: two hot relays for two workers, a cold sync client, a free fast GPU, no lock holder.
     fn baton(seed: u64, secs: f64) -> Self {
         let mut s = Self::from_seed(seed, secs);
-        s.roles = vec![Role::Hot, Role::Hot, Role::Cold];
-        s.workers = 2;
+        s.roles = vec![Role::Hot; env_u("RS_HOT", 0) as usize];
+        s.roles.push(Role::Cold);
+        s.synth_hot = env_u("RS_SYNTH", 4) as usize;
+        s.turn_us = 100;
+        s.workers = env_u("RS_WORKERS", 2) as usize;
         s.gpu = GpuCfg { burst: 4096, stall_p: 0, stall_us_max: 0, cost_us: 0, barrier_us_max: 0, irq_jitter_us: 0 };
         s.holder = HolderCfg { on: false, hold_us_max: 0, rings_after_p: 0, gap_us_max: 0 };
         s.busy_p = 0;
@@ -542,6 +598,7 @@ struct ClientEnv<'a> {
     sh: &'a Shared,
     rng: Rng,
     busy_p: u32,
+    turn_us: u64,
 }
 impl ClientEnv<'_> {
     fn busy(&mut self) -> bool {
@@ -554,6 +611,10 @@ impl Env for ClientEnv<'_> {
     }
     fn gp_put(&mut self) -> u32 {
         chaos();
+        if self.turn_us > 0 {
+            // production's guarded USERD / ring accessors cost far more than an atomic load
+            sleep_or_spin(self.turn_us);
+        }
         self.c.gp_put.load(Ordering::Acquire)
     }
     fn gp_dword(&mut self, slot: u32, hi: bool) -> u32 {
@@ -643,6 +704,10 @@ struct Rt<'a> {
     wake: &'a Notifier,
     stats: &'a RelayStats,
     busy_p: u32,
+    /// Spin per turn (`RS_TURN_US`): the cost of the guarded accessors of the real pump.
+    turn_us: u64,
+    /// Tokens at or above this are synthetic hot tokens.
+    n_real: u32,
     /// "run_translated calls" -- must equal `WorkerStats::served` (I4).
     serve_calls: AtomicU64,
 }
@@ -693,6 +758,7 @@ impl Rt<'_> {
             sh: self.sh,
             rng: Rng::new(rec.env_rng_seed, rec.turns),
             busy_p: self.busy_p,
+            turn_us: self.turn_us,
         };
         rec.turns += 1;
         // `Pump::turn` + `turn_body`: claim, steps until the turn is over
@@ -834,6 +900,14 @@ impl HostOps for Rt<'_> {
     fn run_translated(&self, ht: u32, _: u64) -> bool {
         self.sh.serves.fetch_add(1, Ordering::Relaxed);
         self.serve_calls.fetch_add(1, Ordering::Relaxed);
+        if ht >= self.n_real {
+            // a synthetic hot relay: progress, and its own token rung again (`Need::Again` -> `ring_internal`)
+            if self.turn_us > 0 {
+                sleep_or_spin(self.turn_us);
+            }
+            self.ring_token(ht);
+            return true;
+        }
         self.serve(ht).unwrap_or(false)
     }
     fn run_emulated(&self, _: u32, _: u64) {
@@ -967,7 +1041,7 @@ fn irq_thread(sh: &Shared, ev: &Notifier, irqs: &Mutex<BinaryHeap<Due>>) {
             match q.peek() {
                 Some(Due(d)) if *d <= sh.now() => q.pop().map(|d| d.0),
                 Some(Due(d)) => {
-                    let wait = *d - sh.now();
+                    let wait = d.saturating_sub(sh.now());
                     drop(q);
                     std::thread::sleep(Duration::from_nanos(wait.min(200_000)));
                     continue;
@@ -1262,6 +1336,44 @@ fn bound_ms() -> u64 {
     std::env::var("RS_BOUND_MS").ok().and_then(|v| v.parse().ok()).unwrap_or(250)
 }
 
+/// RS_DUMP=1: the state of every relay at the moment a run was aborted (before the workers are stopped).
+fn dump_state(rt: &Rt<'_>, clients: &[Arc<Client>]) {
+        for (i, cell) in rt.cells.iter().enumerate() {
+            let c = &clients[i];
+            if let Ok(r) = cell.try_lock() {
+                let k = &r.relay.core;
+                eprintln!(
+                    "DUMP relay {i}: need={:?} wait={:?} again={} dead={:?} cursor={} put={} gp_get={} written_get={} guest_get_owed={:?} fetch(issued={} fetched={} avail={}) marks(issued={} seen={}) hw_get={} hw_ref={:#x} pq={} unnotified={} marker_event={} gate_target={} sync_waiting={} cell(retry={} waiting={} contended_run={} canceled={})",
+                    k.need,
+                    r.wait,
+                    k.again,
+                    r.dead,
+                    k.cursor,
+                    c.gp_put.load(Ordering::Relaxed),
+                    c.gp_get.load(Ordering::Relaxed),
+                    k.written_get,
+                    k.guest_get,
+                    k.fetch.issued(),
+                    k.fetch.fetched(),
+                    k.fetch.available(),
+                    k.marks.issued(),
+                    k.marks.seen(),
+                    c.hw_get.load(Ordering::Relaxed),
+                    c.hw_ref.load(Ordering::Relaxed),
+                    c.pq.lock().map(|q| q.len()).unwrap_or(0),
+                    k.unnotified,
+                    k.marker_event,
+                    k.gate_target,
+                    k.sync.waiting(),
+                    cell.retry.load(Ordering::Relaxed),
+                    cell.waiting.load(Ordering::Relaxed),
+                    cell.contended_run(),
+                    cell.is_canceled(),
+                );
+            }
+        }
+    }
+
 fn run_scenario(sc: &Scenario) -> Outcome {
     #[cfg(feature = "chaos-hooks")]
     kf_trap::chaos::set_hook(hook);
@@ -1269,7 +1381,7 @@ fn run_scenario(sc: &Scenario) -> Outcome {
     let vmm = Vmm::default();
     let plane = Plane::new(&vmm, 16, 15);
     let mut caps = VmCaps::from_declared(16, 8, 8, 8);
-    for i in 0..n as u32 {
+    for i in 0..(n + sc.synth_hot) as u32 {
         plane
             .allocate_channel(&mut caps, i, Route::Translated, i, Owner::User)
             .expect("allocate");
@@ -1317,9 +1429,14 @@ fn run_scenario(sc: &Scenario) -> Outcome {
         wake: &wake,
         stats: &stats,
         busy_p: sc.busy_p,
+        turn_us: env_u("RS_TURN_US", sc.turn_us),
+        n_real: n as u32,
         serve_calls: AtomicU64::new(0),
     };
     let irqs: Mutex<BinaryHeap<Due>> = Mutex::new(BinaryHeap::new());
+    for k in 0..sc.synth_hot as u32 {
+        rt.ring_token(n as u32 + k);
+    }
     let t_start = Instant::now();
     let deadline = t_start + Duration::from_secs_f64(sc.secs);
     let reports: Mutex<Vec<(usize, GuestReport)>> = Mutex::new(Vec::new());
@@ -1383,6 +1500,9 @@ fn run_scenario(sc: &Scenario) -> Outcome {
                 sh.violation("I5 a guest thread panicked".into());
             }
         }
+        if sh.abort.load(Ordering::Acquire) && std::env::var("RS_DUMP").is_ok() {
+            dump_state(&rt, &clients);
+        }
         // the guests are done; let the hardware finish (I1: everything published was executed), then stop
         if !sh.abort.load(Ordering::Acquire) {
             let t = Instant::now();
@@ -1411,7 +1531,9 @@ fn run_scenario(sc: &Scenario) -> Outcome {
         if gpu.join().is_err() {
             sh.violation("I5 the fake GPU thread panicked".into());
         }
-        let _ = irq.join();
+        if irq.join().is_err() {
+            sh.violation("I5 the fake interrupt thread panicked".into());
+        }
         if let Some(h) = holder {
             let _ = h.join();
         }
