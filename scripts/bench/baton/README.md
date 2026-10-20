@@ -79,3 +79,19 @@ Burn kernel (shares are valid), K = 5 ms, heavy K = 50 ms, clients on a shared s
 Clock kernel, longer runs (gaps valid, shares not): solo 60 s 197.2 it/s, gap 6.0 ms; pair 180 s
 109.0 it/s each, gaps 12.2 / 10.4 ms; heavylight 120 s light 135.3 it/s gap 10.5 ms, heavy 19.3 it/s
 gap 59.5 ms.  No zero-second anywhere, 0 BATON events in all runs.  GPU util at 1 Hz: 99-100 %.
+
+## Linux desktop guest (kayfabe + broker): desktop_baton.sh
+
+STATUS: LIVE, 2026-10-20 (tooling GPU-free tested; hardware runs recorded under traces/ when done).
+
+Two windowed GL clients (`glwin.c`, per-frame logs in baton format; libX11/libGL are dlopen()ed, no -dev
+packages) side by side in the Cinnamon/Xorg guest image (`broker-interactive/desktop.qcow2`), presented by
+the host broker in the GNOME/Wayland session.  `desktop_baton.sh run TAG` waits for the host, stops the
+owner's Windows VM cleanly, boots the guest through `scripts/bench/display/interactive.sh`
+(display=on, display-broker=..., broker started by that script), runs the phases of `PLAN`
+(default `solo:30 pair:300 canary:300`; the canary is a small vsynced window whose cadence shows what the
+compositor lets a client present), analyses each with `desktop_baton_parse.py` and restores the owner's VM
+(campaign.py restore() recipe).  `desktop_baton.sh plan` prints everything and touches nothing.
+Verdicts: BATON, APP_STALL_COMPOSITOR_ALIVE, COMPOSITOR_STALL_APPS_ALIVE, GLOBAL_STALL, NO_EVENT_OBSERVED;
+tail gaps (silent to the end of the window) are right-censored events, which `baton_parse.py` cannot see.
+Tests (GPU-free): `python3 test_desktop_baton_parse.py`, `test_glwin.py` (Xvfb/llvmpipe), `test_desktop_baton_sh.py`.
