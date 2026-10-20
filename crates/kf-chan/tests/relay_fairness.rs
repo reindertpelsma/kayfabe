@@ -133,6 +133,8 @@ struct Cfg {
     m: Mutant,
     /// Which of P11/P12/P13 are tracked (the counters multiply the state space).
     track: u32,
+    /// The negative control: the production policy `LoopPolicy::without_busy_look()` (`KF3_NEGCTL_NO_BUSY_LOOK=1`).
+    negctl: bool,
 }
 
 #[derive(Clone, PartialEq, Eq, Hash)]
@@ -155,6 +157,8 @@ struct S {
     since_demand: u8,
     since_rung: u8,
     viol: u32,
+    /// The LAST STEP evaluated the cold relay's wait (a look that was entitled to act): the progress detector's `last_peek` stamp.
+    peeked_now: bool,
 }
 
 fn new_state(cfg: &Cfg) -> S {
@@ -188,7 +192,11 @@ fn new_state(cfg: &Cfg) -> S {
                 cur: 0,
                 round: 0,
                 n: 0,
-                policy: LoopPolicy::default(),
+                policy: if cfg.negctl {
+                    LoopPolicy::without_busy_look()
+                } else {
+                    LoopPolicy::default()
+                },
             })
             .collect(),
         lead: vec![0; cfg.workers],
@@ -197,6 +205,7 @@ fn new_state(cfg: &Cfg) -> S {
         since_demand: 0,
         since_rung: 0,
         viol: 0,
+        peeked_now: false,
     }
 }
 
@@ -226,6 +235,10 @@ impl S {
         }
         let retry_ok = ul::may_retry(u32::from(self.run), why);
         if let Some(w) = self.wait {
+            // `ChanPlane::user_ring_peek_one` stamps the relay when the look was entitled to act on its wait
+            if retry_ok || !matches!(w, Wait::Contended) {
+                self.peeked_now = true;
+            }
             let (marks, popped) = if self.sat { (1, 1) } else { (0, 0) };
             if w.satisfied(marks, popped) && (retry_ok || !matches!(w, Wait::Contended)) {
                 self.wait = None;
@@ -250,6 +263,12 @@ impl S {
 }
 
 fn successors(cfg: &Cfg, s: &S) -> Vec<(String, S)> {
+    // the stamp describes one step only
+    let cleared = S {
+        peeked_now: false,
+        ..s.clone()
+    };
+    let s = &cleared;
     let cold = cfg.hot;
     let mut out: Vec<(String, S)> = Vec::new();
     // ---- environment
@@ -479,6 +498,8 @@ fn invariant(s: &S) -> u32 {
 struct Counterexample {
     why: Vec<&'static str>,
     trace: Vec<String>,
+    /// The states along the minimal schedule, the violating one last (the start state first).
+    path: Vec<S>,
     states: usize,
 }
 
@@ -495,15 +516,19 @@ fn explore(cfg: &Cfg) -> Result<usize, Counterexample> {
         let v = invariant(&s);
         if v != 0 {
             let mut trace = Vec::new();
+            let mut path = vec![s.clone()];
             let mut cur = s.clone();
             while let Some((Some(p), l)) = seen.get(&cur) {
                 trace.push(l.clone());
+                path.push(p.clone());
                 cur = p.clone();
             }
             trace.reverse();
+            path.reverse();
             return Err(Counterexample {
                 why: names(v),
                 trace,
+                path,
                 states,
             });
         }
@@ -551,6 +576,7 @@ fn base(workers: usize, hot: usize, wait: WaitKind) -> Cfg {
         irq: true,
         m: Mutant::default(),
         track: V_P11 | V_P12 | V_P13 | V_TOKEN,
+        negctl: false,
     }
 }
 
@@ -629,6 +655,7 @@ fn explore_with(cfg: &Cfg, init: impl Fn(&mut S)) -> Result<usize, Counterexampl
             return Err(Counterexample {
                 why: names(v),
                 trace: vec![],
+                path: vec![],
                 states,
             });
         }
@@ -765,4 +792,353 @@ fn pin_the_busy_look_order_is_poll_dispatch_event_peek_then_spin_peek() {
             .unwrap_or_else(|| panic!("pin: {o:?} missing or out of order in the Look arm"));
         at += i + o.len();
     }
+}
+
+// ------------------------------------------------------------------------------------------------
+// 2026-10-20 -- the NEGATIVE CONTROL and the PROGRESS DETECTOR tied to the model's property (P11)
+//
+// `KF3_NEGCTL_NO_BUSY_LOOK=1` selects the production policy `LoopPolicy::without_busy_look()` (the pre-fix loop); the runtime
+// detector `kf_chan::progress::Tracker` (`KF3_DIAG_PROGRESS`) is driven here along the model's schedules with a FAKE CLOCK (one
+// worker pass = one tick, threshold = K ticks). The property: the detector's condition "wait satisfied and not looked at for longer
+// than the threshold" holds in a model state EXACTLY when the model flags P11, so (a) the failing schedule the model produces for
+// the control triggers the detector at its last step and (b) no schedule of the fixed loop ever triggers it.
+
+use kf_chan::progress::{Tracker, WaitKey};
+
+const TICK_NS: u64 = 1_000_000;
+const THRESHOLD_NS: u64 = K as u64 * TICK_NS;
+const COLD_ID: u64 = 1;
+
+/// The detector's view of the model along a path: returns, per state, whether the tracker's open interval exceeds the threshold,
+/// and the index of the first state at which `observe` reported.
+struct Replay {
+    first_report: Option<usize>,
+    /// per state: the open interval is longer than the threshold
+    over: Vec<bool>,
+}
+
+fn replay(path: &[S]) -> Replay {
+    let mut t = Tracker::new();
+    let (mut clock, mut last_peek) = (TICK_NS, 0u64);
+    let mut out = Replay {
+        first_report: None,
+        over: Vec::new(),
+    };
+    for (i, cur) in path.iter().enumerate() {
+        if i > 0 {
+            let prev = &path[i - 1];
+            // a worker pass = a Scan step
+            if prev
+                .wk
+                .iter()
+                .zip(&cur.wk)
+                .any(|(a, b)| a.pc == Pc::Scan && b.pc == Pc::Claim)
+            {
+                clock += TICK_NS;
+            }
+        }
+        if cur.peeked_now {
+            last_peek = clock;
+        }
+        let wait = cur.wait.map(WaitKey::of);
+        let satisfied = cur.wait.is_some() && cur.sat;
+        let reported = t.observe(clock, COLD_ID, wait, satisfied, last_peek, THRESHOLD_NS);
+        if reported.is_some() && out.first_report.is_none() {
+            out.first_report = Some(i);
+        }
+        out.over.push(
+            satisfied
+                && t.open_age_ns(COLD_ID, clock)
+                    .is_some_and(|a| a > THRESHOLD_NS),
+        );
+    }
+    out
+}
+
+fn negctl(workers: usize, hot: usize, wait: WaitKind, track: u32) -> Cfg {
+    Cfg {
+        negctl: true,
+        track,
+        ..base(workers, hot, wait)
+    }
+}
+
+/// With the look off the model's P11 failing schedule makes the detector report, at the very state where the model flags P11.
+#[test]
+fn the_control_s_p11_schedule_triggers_the_detector_at_the_violating_state() {
+    for (name, cfg) in [
+        ("W=1 marker", negctl(1, 1, WaitKind::Marker, V_P11)),
+        ("W=1 popped", negctl(1, 1, WaitKind::Popped, V_P11)),
+        ("W=2 baton", negctl(2, 1, WaitKind::Marker, V_P11)),
+    ] {
+        let e = finds(name, &cfg, "P11");
+        let r = replay(&e.path);
+        assert_eq!(
+            r.first_report,
+            Some(e.path.len() - 1),
+            "{name}: the detector must report exactly when the model flags P11 (schedule: {:#?})",
+            e.trace
+        );
+        // and never earlier: the condition is false in every state before the violating one
+        assert!(r.over[..e.path.len() - 1].iter().all(|o| !o), "{name}");
+        assert!(r.over[e.path.len() - 1], "{name}");
+    }
+}
+
+/// The control IS the retired behaviour: the same minimal failing schedule as the `policy_continue_only` mutant.
+#[test]
+fn the_control_policy_is_the_continue_only_mutant() {
+    for wait in [WaitKind::Marker, WaitKind::Popped] {
+        let ctl = negctl(1, 1, wait, V_P11);
+        let mutant = w1(
+            wait,
+            V_P11,
+            Mutant {
+                policy_continue_only: true,
+                ..Mutant::default()
+            },
+        );
+        let (a, b) = (finds("ctl", &ctl, "P11"), finds("mutant", &mutant, "P11"));
+        assert_eq!(a.trace.len(), b.trace.len());
+    }
+}
+
+/// Deterministic random walks over the model's successors.
+fn walks(cfg: &Cfg, n: usize, len: usize, mut f: impl FnMut(&[S])) {
+    let mut seed = 0x9e37_79b9_7f4a_7c15_u64;
+    let mut rnd = move |m: usize| {
+        seed = seed
+            .wrapping_mul(6_364_136_223_846_793_005)
+            .wrapping_add(1_442_695_040_888_963_407);
+        ((seed >> 33) as usize) % m
+    };
+    for _ in 0..n {
+        let mut path = vec![new_state(cfg)];
+        for _ in 0..len {
+            let succ = successors(cfg, path.last().unwrap());
+            if succ.is_empty() {
+                break;
+            }
+            let pick = rnd(succ.len());
+            let (_, next) = succ.into_iter().nth(pick).unwrap();
+            let bad = invariant(&next) & V_P11 != 0;
+            path.push(next);
+            if bad {
+                break;
+            }
+        }
+        f(&path);
+    }
+}
+
+/// With the look ON no schedule reaches the detector's condition, and the model's bound holds (K passes) on every walk.
+#[test]
+fn the_fixed_loop_never_triggers_the_detector_on_any_walk() {
+    for (name, cfg) in [
+        (
+            "W=1 marker",
+            Cfg {
+                track: V_P11,
+                ..base(1, 1, WaitKind::Marker)
+            },
+        ),
+        (
+            "W=1 popped",
+            Cfg {
+                track: V_P11,
+                ..base(1, 1, WaitKind::Popped)
+            },
+        ),
+        (
+            "W=2 baton",
+            Cfg {
+                track: V_P11,
+                ..base(2, 1, WaitKind::Marker)
+            },
+        ),
+        (
+            "W=1 lock convoy",
+            Cfg {
+                track: V_P11,
+                fails: 2,
+                ..base(1, 1, WaitKind::Popped)
+            },
+        ),
+    ] {
+        let mut total = 0usize;
+        walks(&cfg, 300, 120, |path| {
+            let r = replay(path);
+            assert_eq!(
+                r.first_report, None,
+                "{name}: the fixed loop must never trigger the detector"
+            );
+            assert!(r.over.iter().all(|o| !o), "{name}");
+            assert_eq!(invariant(path.last().unwrap()) & V_P11, 0, "{name}");
+            total += path.len();
+        });
+        assert!(
+            total > 300 * 20,
+            "{name}: walks too short to mean anything ({total} states)"
+        );
+    }
+}
+
+/// Exactness on random schedules of the control: the detector's condition holds in a state iff the model flags P11 there; and the
+/// walks are not vacuous (some of them do reach the violation).
+#[test]
+fn on_the_controls_walks_the_detector_condition_equals_the_models_p11() {
+    for (name, cfg) in [
+        ("W=1 marker", negctl(1, 1, WaitKind::Marker, V_P11)),
+        ("W=1 popped", negctl(1, 1, WaitKind::Popped, V_P11)),
+        ("W=2 baton", negctl(2, 1, WaitKind::Marker, V_P11)),
+    ] {
+        let (mut violations, mut walks_n) = (0, 0);
+        walks(&cfg, 300, 120, |path| {
+            walks_n += 1;
+            let r = replay(path);
+            for (i, s) in path.iter().enumerate() {
+                assert_eq!(
+                    r.over[i],
+                    invariant(s) & V_P11 != 0,
+                    "{name}: state {i} of a {}-state walk",
+                    path.len()
+                );
+            }
+            if r.first_report.is_some() {
+                violations += 1;
+                assert_eq!(
+                    r.first_report,
+                    Some(path.len() - 1),
+                    "{name}: reported at the violating state"
+                );
+            }
+        });
+        assert!(
+            violations > 0,
+            "{name}: no walk of {walks_n} reached the starvation; the check is vacuous"
+        );
+    }
+}
+
+/// The control's engine-event starvation (P12) is the same cause: with the look off the event waits; with it on it does not.
+#[test]
+fn the_control_starves_the_engine_event_too_and_the_fix_does_not() {
+    finds("ctl P12", &negctl(1, 1, WaitKind::Marker, V_P12), "P12");
+    holds(
+        "fix P12",
+        &Cfg {
+            track: V_P12,
+            ..base(1, 1, WaitKind::Marker)
+        },
+    );
+}
+
+// ---- the production loop carries its hooks where the model's steps are (source pins)
+
+fn run_body() -> &'static str {
+    WORKER
+        .split("pub fn run_with_relay(")
+        .nth(1)
+        .expect("pin")
+        .split("#[cfg(test)]")
+        .next()
+        .expect("pin")
+}
+
+/// Every hook is one line `if let Some(t) = &tap { t.NAME(..); }`: no clock, lock or allocation outside the `Some` branch.
+#[test]
+fn pin_every_progress_hook_is_a_single_guarded_line_and_the_inventory_is_exact() {
+    let body = run_body();
+    let mut names: Vec<String> = Vec::new();
+    for line in body.lines().filter(|l| l.contains("&tap {")) {
+        let l = line.trim();
+        assert!(
+            l.starts_with("if let Some(t) = &tap { t.") && l.ends_with("; }"),
+            "hook not in the guarded one-line form: {l}"
+        );
+        let name = l["if let Some(t) = &tap { t.".len()..]
+            .split('(')
+            .next()
+            .unwrap()
+            .to_string();
+        names.push(name);
+    }
+    names.sort();
+    assert_eq!(
+        names,
+        [
+            "begin_pass",
+            "dispatch_completions",
+            "dispatch_other",
+            "doorbell_drain",
+            "end_pass",
+            "look",
+            "park_begin",
+            "park_end",
+            "spin",
+        ],
+        "hook inventory"
+    );
+    assert!(
+        !body.contains("progress::now_ns"),
+        "the worker never reads the clock itself"
+    );
+    assert!(
+        body.contains("Tap::register()"),
+        "registered once, before the loop"
+    );
+    assert_eq!(body.matches("Tap::register()").count(), 1);
+}
+
+#[test]
+fn pin_the_hooks_sit_in_the_arm_they_describe() {
+    let l = look_arm();
+    assert!(l.contains("t.look()"), "the Look arm announces itself: {l}");
+    let body = run_body();
+    let spin = body
+        .split("for _ in 0..user_loop::SPIN {")
+        .nth(1)
+        .expect("pin")
+        .split("std::hint::spin_loop();")
+        .next()
+        .expect("pin");
+    assert!(spin.contains("t.spin()"), "{spin}");
+    let dispatch = body
+        .split("let dispatch =")
+        .nth(1)
+        .expect("pin")
+        .split("let mut scratch")
+        .next()
+        .expect("pin");
+    for h in [
+        "t.dispatch_other()",
+        "t.dispatch_completions()",
+        "t.doorbell_drain()",
+    ] {
+        assert!(dispatch.contains(h), "{h} missing from dispatch");
+    }
+    // the pass hooks bracket worker_pass
+    let b = body.find("t.begin_pass()").expect("pin");
+    let p = body.find("plane.worker_pass(").expect("pin");
+    let e = body.find("t.end_pass(n)").expect("pin");
+    assert!(b < p && p < e, "begin_pass < worker_pass < end_pass");
+    // the park hooks bracket the park wait
+    let pb = body.find("t.park_begin()").expect("pin");
+    let w = body
+        .find("poller.wait(&mut ready, PollTimeout::Millis(park))")
+        .expect("pin");
+    let pe = body.find("t.park_end()").expect("pin");
+    assert!(pb < w && w < pe);
+}
+
+/// The relay's peeks are stamped by a wrapper that shadows `relay`, so the call sites (and the pins above) are unchanged.
+#[test]
+fn pin_peeks_are_stamped_by_a_wrapper_not_at_each_call() {
+    let body = run_body();
+    assert!(body.contains("struct Watched") || WORKER.contains("struct Watched"));
+    assert!(body.contains("let relay: &dyn RelayLoop ="));
+    assert_eq!(body.matches("relay.peek(Peek::Event)").count(), 3);
+    assert_eq!(body.matches("relay.peek(Peek::Spin)").count(), 2);
+    assert_eq!(body.matches("relay.peek(Peek::Backstop)").count(), 1);
+    assert!(WORKER.contains("self.tap.peek(why)"));
 }

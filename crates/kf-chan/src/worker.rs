@@ -88,9 +88,38 @@ pub enum AfterPass {
 }
 
 /// The worker loop's per-iteration policy state.
-#[derive(Debug, Clone, Default, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct LoopPolicy {
     busy_passes: u32,
+    /// Whether a busy worker ever looks (`true` = the bounded-fairness fix; `false` only under the negative control).
+    look: bool,
+}
+
+impl Default for LoopPolicy {
+    /// The fix: a busy worker looks every [`LOOK_EVERY`] passes.
+    fn default() -> Self {
+        Self {
+            busy_passes: 0,
+            look: true,
+        }
+    }
+}
+
+/// ★ 2026-10-20 NEGATIVE CONTROL (default off, read once): `KF3_NEGCTL_NO_BUSY_LOOK=1` makes [`LoopPolicy::after_pass`] never answer
+/// [`AfterPass::Look`] -- the loop as it was before the bounded-fairness fix -- so ONE binary can run both arms of an A/B by one
+/// environment variable.
+pub const NEGCTL_NO_BUSY_LOOK: &str = "KF3_NEGCTL_NO_BUSY_LOOK";
+
+/// Whether [`NEGCTL_NO_BUSY_LOOK`]'s value turns the control on: exactly `1`.
+#[must_use]
+pub fn parse_negctl_no_busy_look(_value: Option<&str>) -> bool {
+    todo!("EXPECTED RED")
+}
+
+/// The control's setting, read from the environment once.
+#[must_use]
+pub fn negctl_no_busy_look() -> bool {
+    todo!("EXPECTED RED")
 }
 
 /// After this many consecutive busy passes (each served something) the loop looks once. A pass serves a hot token up to
@@ -98,6 +127,25 @@ pub struct LoopPolicy {
 pub const LOOK_EVERY: u32 = 4;
 
 impl LoopPolicy {
+    /// The policy of the pre-fix loop: never a busy look (the negative control).
+    #[must_use]
+    pub fn without_busy_look() -> Self {
+        todo!("EXPECTED RED")
+    }
+    /// The policy the worker runs: the fix, unless the negative control is on.
+    #[must_use]
+    pub fn from_env() -> Self {
+        Self::from_setting(negctl_no_busy_look())
+    }
+    /// The policy for a given control setting.
+    #[must_use]
+    pub fn from_setting(no_busy_look: bool) -> Self {
+        if no_busy_look {
+            Self::without_busy_look()
+        } else {
+            Self::default()
+        }
+    }
     /// What follows a pass that served `served` tokens.
     pub fn after_pass(&mut self, served: usize) -> AfterPass {
         if served > 0 {
@@ -206,7 +254,7 @@ pub fn run_with_relay(
         (doorbell, event)
     };
     let mut scratch = Vec::with_capacity(SCAN_LIMIT);
-    let mut policy = LoopPolicy::default();
+    let mut policy = LoopPolicy::from_env();
     let prof = stats.prof.load(Ordering::Relaxed);
     let mut busy_from = std::time::Instant::now();
     let mut after_timeout = false;
@@ -348,5 +396,87 @@ mod tests {
             assert_eq!(p.after_pass(1), AfterPass::Continue, "the count restarted");
         }
         assert_eq!(p.after_pass(1), AfterPass::Look);
+    }
+
+    /// The default IS the fix: the byte-identical behaviour of the fairness branch.
+    #[test]
+    fn the_default_policy_is_the_fix() {
+        assert_eq!(LoopPolicy::default(), LoopPolicy::from_setting(false));
+        let mut p = LoopPolicy::default();
+        for _ in 1..LOOK_EVERY {
+            assert_eq!(p.after_pass(1), AfterPass::Continue);
+        }
+        assert_eq!(p.after_pass(1), AfterPass::Look);
+    }
+
+    /// The control never looks, however long the worker stays busy; an empty pass still idles (the park is not the control's business).
+    #[test]
+    fn the_negative_control_never_looks_however_busy_the_worker() {
+        let mut p = LoopPolicy::without_busy_look();
+        for i in 0..10_000 {
+            assert_eq!(p.after_pass(1 + i % 7), AfterPass::Continue, "pass {i}");
+        }
+        assert_eq!(p.after_pass(0), AfterPass::Idle);
+        for _ in 0..(10 * LOOK_EVERY) {
+            assert_eq!(p.after_pass(3), AfterPass::Continue);
+        }
+    }
+
+    /// The control's state is bounded (the model hashes it): it does not count passes.
+    #[test]
+    fn the_negative_controls_state_does_not_grow() {
+        let mut p = LoopPolicy::without_busy_look();
+        let before = p.clone();
+        for _ in 0..1000 {
+            p.after_pass(1);
+        }
+        assert_eq!(p, before);
+    }
+
+    /// The two policies differ in exactly one answer.
+    #[test]
+    fn the_control_and_the_fix_differ_only_in_the_look() {
+        let (mut fix, mut ctl) = (LoopPolicy::default(), LoopPolicy::without_busy_look());
+        let mut looks = 0;
+        for i in 0..200usize {
+            let served = [0usize, 1, 1, 1, 1, 2, 3][i % 7];
+            let (a, b) = (fix.after_pass(served), ctl.after_pass(served));
+            if a == AfterPass::Look {
+                looks += 1;
+                assert_eq!(b, AfterPass::Continue);
+            } else {
+                assert_eq!(a, b, "pass {i}");
+            }
+        }
+        assert!(looks > 0);
+    }
+
+    /// OFF unless the value is exactly `1`.
+    #[test]
+    fn the_negative_control_is_off_unless_exactly_one() {
+        assert!(!parse_negctl_no_busy_look(None));
+        for off in ["", "0", "true", "yes", "2", " 1", "1 ", "01", "on"] {
+            assert!(!parse_negctl_no_busy_look(Some(off)), "{off:?}");
+        }
+        assert!(parse_negctl_no_busy_look(Some("1")));
+    }
+
+    /// The environment is read in one place, once, and the name is the repo's control class.
+    #[test]
+    fn the_negative_control_is_read_once_from_a_negctl_name() {
+        let src = include_str!("worker.rs");
+        let prod = src.split("#[cfg(test)]").next().unwrap();
+        assert_eq!(NEGCTL_NO_BUSY_LOOK, "KF3_NEGCTL_NO_BUSY_LOOK");
+        assert_eq!(
+            prod.matches("std::env::var").count(),
+            1,
+            "one read of the environment in worker.rs"
+        );
+        assert!(prod.contains("OnceLock"), "read once");
+        assert!(
+            prod.contains("LoopPolicy::from_env()"),
+            "the loop asks for its policy once, outside the loop"
+        );
+        assert_eq!(prod.matches("LoopPolicy::from_env()").count(), 1);
     }
 }

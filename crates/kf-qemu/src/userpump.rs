@@ -3766,4 +3766,103 @@ mod tests {
         let admit = migrate.find("ring.admit(|| {").unwrap();
         assert!(admit < installed);
     }
+
+    // ---- 2026-10-20: KF3_DIAG_PROGRESS (default off, measurement only): where it may run, what it may touch, what it stamps
+
+    fn prog_source() -> &'static str {
+        include_str!("progdiag.rs").split("#[cfg(test)]").next().unwrap()
+    }
+    fn pump_prod() -> &'static str {
+        include_str!("userpump.rs").split("#[cfg(test)]").next().unwrap()
+    }
+
+    /// The diagnostic is a dedicated thread's work: it takes locks only with `try_lock`, never sleeps under one, runs no unsafe
+    /// and reads no environment (the switch was read once by `kf_chan::progress::init_from_env`).
+    #[test]
+    fn the_progress_diagnostic_only_tries_locks_and_never_reads_the_environment() {
+        let d = prog_source();
+        assert!(d.len() > 500, "progdiag.rs is not written yet");
+        for banned in [".lock()", ".read()", ".write()", "Condvar", ".join(", ".recv(", "block_on", "unsafe", "env::var", "park"] {
+            assert!(!d.contains(banned), "progdiag.rs must not contain {banned:?}");
+        }
+        assert!(d.matches(".try_lock()").count() >= 4, "the map, the record and the storage are all try_lock");
+        assert!(d.contains("self.user_rings.try_lock()"));
+        assert!(d.contains("record.try_lock()"));
+        assert_eq!(d.matches("thread::sleep").count(), 1, "the one sleep is the tick, outside every lock");
+        assert!(d.contains("kf_chan::progress::render_relay_block("));
+        assert!(d.contains("kf_chan::progress::render_starved("));
+        assert!(!d.contains("{:?}"), "no Debug of guest-derived data");
+    }
+
+    /// Its passive reads are the worker look's own (`gpu_get`, `gpu_reference`, `Fetch::peek`, `Marks::peek`) and the same
+    /// `Wait::satisfied` decides.
+    #[test]
+    fn the_progress_diagnostic_evaluates_the_same_satisfied_predicate_on_the_same_passive_reads() {
+        let d: String = prog_source().split_whitespace().collect();
+        for needle in [
+            "storage.gpu_get()",
+            "storage.gpu_reference()",
+            "p.core.fetch.peek(get)",
+            "p.core.marks.peek(reference)",
+            "w.satisfied(marks,popped)",
+        ] {
+            assert!(d.contains(needle), "{needle}");
+        }
+        let peek = pump_prod().split("fn user_ring_peek_one(").nth(1).unwrap();
+        let peek = peek.split("pub(crate) fn user_ring_poll_due").next().unwrap();
+        let peek: String = peek.split_whitespace().collect();
+        for needle in ["storage.gpu_get()", "storage.gpu_reference()", "p.core.fetch.peek(get)", "p.core.marks.peek(reference)", "w.satisfied(p.core.marks.peek(reference),popped)"] {
+            assert!(peek.contains(needle), "the look reads {needle}");
+        }
+    }
+
+    /// The relay stamps: the look when it was entitled to act on a wait, the serve before its turn; both only with the diagnostic on.
+    #[test]
+    fn the_relay_is_stamped_by_every_look_that_may_act_and_by_every_turn() {
+        let pump = pump_prod();
+        assert_eq!(pump.matches("record.stamp_look()").count(), 2, "the look and the serve");
+        let peek = pump.split("fn user_ring_peek_one(").nth(1).unwrap();
+        let peek = peek.split("pub(crate) fn user_ring_poll_due").next().unwrap();
+        let w = peek.find("if let Some(w) = p.wait {").unwrap();
+        let stamp = peek.find("record.stamp_look()").unwrap();
+        let satisfied = peek.find("let satisfied = match").unwrap();
+        assert!(w < stamp && stamp < satisfied, "stamped on entering the wait evaluation, before the reads");
+        let guard = &peek[..stamp];
+        let line = guard.lines().last().unwrap();
+        assert!(line.contains("retry_ok") || peek[stamp - 160..stamp].contains("retry_ok"), "only a look entitled to act: {line}");
+        assert!(peek[stamp - 200..stamp].contains("kf_chan::progress::on()"));
+        let serve = pump.split("pub(super) fn user_ring_serve(").nth(1).unwrap();
+        let serve = serve.split("fn user_ring_arm").next().unwrap();
+        assert!(serve.find("record.stamp_look()").unwrap() < serve.find("pump.turn(self").unwrap());
+        assert!(serve.find("Point::RelayTurn").unwrap() < serve.find("pump.turn(self").unwrap());
+        assert!(pump.contains("kf_chan::progress::hit_point(kf_chan::progress::Point::RelayRing)"));
+        assert_eq!(pump.matches("Point::RelayRing").count(), 1);
+        assert_eq!(pump.matches("Point::RelayTurn").count(), 1);
+    }
+
+    /// The device clears the worker's `serving` word after every serve, and sets it before.
+    #[test]
+    fn the_device_records_what_the_worker_is_serving() {
+        let dev = include_str!("device.rs");
+        let dev = dev.split("#[cfg(test)]").next().unwrap();
+        let f = dev.split("fn run_translated(&self, host_token: u32").nth(1).unwrap();
+        let f = f.split("fn run_emulated").next().unwrap();
+        let set = f.find("kf_chan::progress::set_serving(Some(host_token))").unwrap();
+        let serve = f.find("self.chans.serve(host_token)").unwrap();
+        let clear = f.find("kf_chan::progress::set_serving(None)").unwrap();
+        assert!(set < serve && serve < clear);
+    }
+
+    /// The thread exists only when the switch is on, and is started in the one place workers are started.
+    #[test]
+    fn the_progress_thread_is_started_only_with_the_switch_on() {
+        let ffi = include_str!("ffi_unsafe.rs");
+        assert_eq!(ffi.matches("kf3-progress").count(), 1);
+        let at = ffi.find("kf3-progress").unwrap();
+        let before = &ffi[at.saturating_sub(700)..at];
+        assert!(before.contains("kf_chan::progress::Setting::On"), "{before}");
+        assert!(ffi.contains("kf_chan::progress::init_from_env()"));
+        assert!(ffi.find("kf_chan::progress::init_from_env()").unwrap() < ffi.find("Device::realize(&cfg)").unwrap(), "the switch is read before the workers exist");
+        assert!(ffi.contains("progress_loop"));
+    }
 }
