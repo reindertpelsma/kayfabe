@@ -119,6 +119,35 @@ with the real look (it rings every demand before the block decision), found only
 * **Mutation, fairness script:** 5 of 6 mutants killed by >= 3 tests. `busy_pass_never_polls` survived every model; a new
   wake-registry pin kills it (1 test).
 
+### 5.2 Third pass (owner adjustments: decouple Change A; MEASURED)
+
+* **Change A is OFF by default** (`GUEST_GET = Popped`; cargo feature `guest-get-read-index` turns it on). Switching it off
+  exposed one more unannounced obligation (v3 model break2 control): with GP_GET following pops, a wait while the guest's ring
+  looked FULL and pops are unaccounted has no interrupt. Defined rule `Relay::wait_unannounced` (put_full && fetched < issued):
+  the worker spins on exactly it. With ReadIndex the obligation does not exist -- the strongest argument for Change A.
+* **Both policies, fast suites (lib, fairness 1/2/3 workers, v3, registry, v1, lazy_turn, lifecycle_props, turn_unit, stress,
+  progress_model, gate_rules, lazy_model): all green under Popped and under ReadIndex** (head `aaceb73cb`).
+  `user_lifecycle_model` restated tests green under ReadIndex (§5.1); not re-run under Popped in this pass. v2: 49 of 52 ok,
+  0 failed, 3 slow tests unfinished at the 90 min timeout (p7 oracle + 2 new mutant tests).
+* **Stress:** 300-seed run (ReadIndex binary, strict) stopped at about seed 125 for time: 2 failures, both the old HARD I7 (now
+  SOFT), no I6, no stall. Baton preset 4 seeds: 0 failed, resp max 10.9 ms; negative control (`KF3_NEGCTL_NO_BUSY_LOOK=1`):
+  3 of 4 failed, resp max 3.2 s -- the harness still sees the baton.
+* **Mutation, stress script (6 seeds x 0.5 s):** killed control_look_removed 6/6, wake_not_bumped 2/6, marker_not_repeeked 2/6,
+  unsourced_ignores_carried 2/6 (I6); survived idle_only_evaluation (needs the baton preset), unsourced_ignores_demand
+  (equivalent, shown by the models), busy_look_ignores_wait (needs seed 20; found 2/2 there). Unmutated: 1 of 6 seeds tripped
+  the old HARD I7.
+* **Credit waits:** the marker per forwarded batch exists (`end_batch`); a credit wait waits for the NEXT outstanding marker.
+  The remaining no-source case (one batch larger than the private ring in Pointer mode, packet open in Scan, markers latched
+  off) is an OWNER DECISION (§3): spin on exactly it, or a private ring larger than the largest batch.
+
+### 5.3 Hardware-ready head and build
+
+Head `aaceb73cb` (Change A OFF) builds GPU-free (`cargo check -p kf-qemu`). On the trusted host, from a checkout of that
+revision: `bash scripts/bench/build_kf3.sh <qemu-source-tree>` (installs `kf3-bins/<rev>/qemu-system-x86_64`); the Change A arm
+is the same revision built with `cargo build ... -p kf-qemu` after enabling `kf-chan/guest-get-read-index` in `crates/kf-qemu/Cargo.toml`
+(a one-line feature edit, not done on this branch). Diagnostics: `KF3_DIAG_PROGRESS=1000` prints `PROGRESS_STRAND` (a relay with
+an obligation untouched >= 1 s while a worker kept iterating); endpoint: no `PROGRESS_STRAND` line, `backstop_found_work == 0`.
+
 ## 6. Risks
 
 * **R1** (Change A vs pushbuffer reuse / idle): open kernel RM 595.91.07 reads USERD `GPGet` only for its own CE channel's slot
