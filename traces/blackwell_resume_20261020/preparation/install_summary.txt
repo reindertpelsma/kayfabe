@@ -1,0 +1,29 @@
+WIN_BASE_INSTALL_START std-VGA generic LTSC 2026-10-20T15:30:45+00:00
+[2026-10-20T15:31:00Z] WINVM_INSTALL_START name=kfwin repo=7f22d18d qemu=/workspace/bench/kf3-bins/7f22d18d/qemu-system-x86_64 host_driver=595.91.07
+[2026-10-20T15:31:00Z] START prereqs
+[2026-10-20T15:31:00Z] EXIT prereqs rc=0
+[2026-10-20T15:31:00Z] START fetch
+[2026-10-20T15:31:26Z] EXIT fetch rc=0
+[2026-10-20T15:31:26Z] START apparmor
+[2026-10-20T15:31:26Z] EXIT apparmor rc=0
+[2026-10-20T15:31:26Z] START secrets
+[2026-10-20T15:31:26Z] EXIT secrets rc=0
+[2026-10-20T15:31:26Z] START secureboot-key
+[2026-10-20T15:31:27Z] EXIT secureboot-key rc=0
+[2026-10-20T15:31:27Z] START ovmf-vars
+[2026-10-20T15:31:28Z] EXIT ovmf-vars rc=0
+[2026-10-20T15:31:28Z] START tpm-manufacture
+[2026-10-20T15:31:29Z] EXIT tpm-manufacture rc=0
+[2026-10-20T15:31:29Z] START disk
+[2026-10-20T15:31:29Z] EXIT disk rc=0
+[2026-10-20T15:31:29Z] START unattend
+[2026-10-20T15:31:29Z] EXIT unattend rc=0
+[2026-10-20T15:31:29Z] START install-boot
+[2026-10-20T15:31:30Z] QEMU_START tag=install boot=1 pid=95981 log=logs/install_b1_qemu.log
+[2026-10-20T15:54:38Z] EXIT install-boot rc=0
+[2026-10-20T15:54:38Z] START check-boot
+[2026-10-20T15:54:38Z] QEMU_START tag=installcheck boot=1 pid=108820 log=logs/installcheck_b1_qemu.log
+[2026-10-20T15:57:26Z] EXIT check-boot rc=0
+[2026-10-20T15:57:26Z] START seal
+[2026-10-20T15:57:26Z] EXIT seal rc=0
+WIN_BASE_INSTALL_EXIT rc=0 2026-10-20T15:57:27+00:00
