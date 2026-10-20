@@ -563,6 +563,7 @@ thread_local! {
 #[derive(Debug)]
 pub struct Tap {
     w: usize,
+    board: &'static Board,
 }
 
 impl Tap {
@@ -574,7 +575,12 @@ impl Tap {
         }
         let w = BOARD.register()?;
         WORKER_SLOT.with(|c| c.set(Some(w)));
-        Some(Self { w })
+        Some(Self { w, board: &BOARD })
+    }
+    /// A tap on another board (the tests': the process-wide switch stays off).
+    #[must_use]
+    pub fn on_board(board: &'static Board, w: usize) -> Self {
+        Self { w, board }
     }
     /// The worker's cell index.
     #[must_use]
@@ -583,44 +589,44 @@ impl Tap {
     }
     /// See [`Board::begin_pass`].
     pub fn begin_pass(&self) {
-        BOARD.begin_pass(self.w, now_ns());
+        self.board.begin_pass(self.w, now_ns());
     }
     /// See [`Board::end_pass`].
     pub fn end_pass(&self, served: usize) {
-        BOARD.end_pass(self.w, served, now_ns());
+        self.board.end_pass(self.w, served, now_ns());
     }
     /// A busy look began.
     pub fn look(&self) {
         let now = now_ns();
-        BOARD.poll(self.w, now, true);
+        self.board.poll(self.w, now, true);
     }
     /// An idle spin iteration.
     pub fn spin(&self) {
         let now = now_ns();
-        BOARD.poll(self.w, now, false);
-        BOARD.hit(Point::SpinLook, now);
+        self.board.poll(self.w, now, false);
+        self.board.hit(Point::SpinLook, now);
     }
     /// The park wait is about to start.
     pub fn park_begin(&self) {
-        BOARD.park(self.w, true, now_ns());
+        self.board.park(self.w, true, now_ns());
     }
     /// The park wait ended.
     pub fn park_end(&self) {
         let now = now_ns();
-        BOARD.park(self.w, false, now);
-        BOARD.poll(self.w, now, false);
+        self.board.park(self.w, false, now);
+        self.board.poll(self.w, now, false);
     }
     /// A tag was dispatched: engine event.
     pub fn dispatch_other(&self) {
-        BOARD.hit(Point::DispatchOther, now_ns());
+        self.board.hit(Point::DispatchOther, now_ns());
     }
     /// A tag was dispatched: completions.
     pub fn dispatch_completions(&self) {
-        BOARD.hit(Point::DispatchCompletions, now_ns());
+        self.board.hit(Point::DispatchCompletions, now_ns());
     }
     /// The doorbell eventfd was drained.
     pub fn doorbell_drain(&self) {
-        BOARD.hit(Point::DoorbellDrain, now_ns());
+        self.board.hit(Point::DoorbellDrain, now_ns());
     }
     /// `relay.peek(why)` is about to run.
     pub fn peek(&self, why: Peek) {
@@ -629,7 +635,7 @@ impl Tap {
             Peek::Spin => Point::PeekSpin,
             Peek::Backstop => Point::PeekBackstop,
         };
-        BOARD.hit(p, now_ns());
+        self.board.hit(p, now_ns());
     }
 }
 
@@ -2356,6 +2362,306 @@ mod tests {
             starved,
             "kf3: PROGRESS_STARVED point=poll age_ms=0x44c serve_delta=0x1f4 threshold_ms=0x3e8"
         );
+    }
+
+    // ---- second killers (mutation check): each rule is pinned from two sides
+
+    #[test]
+    fn the_largest_threshold_is_one_hour_and_one_millisecond_more_is_invalid() {
+        assert_eq!(MAX_THRESHOLD_MS, 3_600_000);
+        assert_eq!(parse_setting(Some("3600000")), Setting::On(3_600_000));
+        assert_eq!(parse_setting(Some("3600001")), Setting::Invalid);
+        assert_eq!(
+            parse_setting(Some("18446744073709551616")),
+            Setting::Invalid
+        );
+    }
+
+    #[test]
+    fn a_look_every_half_threshold_keeps_a_satisfied_wait_quiet_for_ever() {
+        let mut t = Tracker::new();
+        for k in 0..200u64 {
+            let now = k * T / 2 + 1;
+            let last_look = if k == 0 { 0 } else { now - 1 };
+            assert_eq!(
+                t.observe(now, 1, key(3), true, last_look, T),
+                None,
+                "tick {k}"
+            );
+        }
+    }
+
+    #[test]
+    fn a_report_is_made_once_however_long_the_condition_lasts() {
+        let mut t = Tracker::new();
+        let mut reports = 0;
+        for k in 0..400u64 {
+            if t.observe(k * T / 4, 1, key(3), true, 0, T).is_some() {
+                reports += 1;
+            }
+        }
+        assert_eq!(reports, 1);
+    }
+
+    /// Drive the PRODUCTION policy over the board the way `run_with_relay` does: a busy pass, and a poll (the look) when the policy asks.
+    fn drive(
+        policy: &mut crate::worker::LoopPolicy,
+        passes: u64,
+        mon: &mut Monitor,
+        b: &Board,
+        w: usize,
+    ) -> Vec<(u64, Starved)> {
+        let mut found = Vec::new();
+        for i in 0..passes {
+            let t = 1 + (i + 1) * MS;
+            b.begin_pass(w, t);
+            b.end_pass(w, 1, t);
+            if policy.after_pass(1) == crate::worker::AfterPass::Look {
+                b.poll(w, t, true);
+            }
+            for s in mon.evaluate(&b.snapshot(t, 1)) {
+                found.push((i + 1, s));
+            }
+        }
+        found
+    }
+
+    #[test]
+    fn the_bound_is_four_look_periods_and_the_fix_never_exceeds_one() {
+        assert_eq!(BOUND_PASSES, 4 * crate::worker::LOOK_EVERY);
+        let b = Board::new();
+        let w = b.register().unwrap();
+        let mut mon = Monitor::new(1_000_000, &b.snapshot(1, 1));
+        let mut p = crate::worker::LoopPolicy::default();
+        let found = drive(&mut p, 5_000, &mut mon, &b, w);
+        assert!(
+            found
+                .iter()
+                .all(|(_, s)| !matches!(s, Starved::WorkerPoll { .. })),
+            "{found:?}"
+        );
+        assert!(b.snapshot(1, 1).workers[0].since_poll <= crate::worker::LOOK_EVERY);
+    }
+
+    /// The control's worker is flagged at the first pass beyond the bound, not at it.
+    #[test]
+    fn the_control_is_flagged_by_the_worker_bound_at_exactly_one_pass_past_it() {
+        let b = Board::new();
+        let w = b.register().unwrap();
+        let mut mon = Monitor::new(1_000_000, &b.snapshot(1, 1));
+        let mut p = crate::worker::LoopPolicy::without_busy_look();
+        let found = drive(&mut p, 100, &mut mon, &b, w);
+        let first = found
+            .iter()
+            .find(|(_, s)| matches!(s, Starved::WorkerPoll { .. }))
+            .expect("the control starves the world");
+        assert_eq!(first.0, u64::from(BOUND_PASSES) + 1);
+    }
+
+    #[test]
+    fn a_stale_poll_is_not_starved_when_the_window_served_nothing() {
+        let b = Board::new();
+        let w = b.register().unwrap();
+        b.hit(Point::Poll, 1);
+        let mut m = Monitor::new(100, &b.snapshot(1, 1));
+        // window 1: one served pass -> reported; windows 2..: no pass at all -> silent
+        b.begin_pass(w, 5);
+        b.end_pass(w, 1, 6);
+        let first = m.evaluate(&b.snapshot(150 * MS, 1));
+        assert!(
+            first.iter().any(|s| matches!(
+                s,
+                Starved::Point {
+                    point: Point::Poll,
+                    ..
+                }
+            )),
+            "{first:?}"
+        );
+        for k in 2..20 {
+            let f = m.evaluate(&b.snapshot(k * 150 * MS, 1));
+            assert!(
+                f.iter().all(|s| !matches!(s, Starved::Point { .. })),
+                "window {k}: {f:?}"
+            );
+        }
+    }
+
+    #[test]
+    fn an_idle_worker_parked_for_seconds_is_not_stuck_but_a_running_one_is() {
+        let b = Board::new();
+        let w = b.register().unwrap();
+        let mut m = Monitor::new(100, &b.snapshot(1, 1));
+        for i in 0..50u64 {
+            let t = 1 + i * 400 * MS;
+            b.begin_pass(w, t);
+            b.end_pass(w, 0, t + 1);
+            b.park(w, true, t + 2);
+            let f = m.evaluate(&b.snapshot(t + 390 * MS, 1));
+            assert!(
+                f.iter().all(|s| !matches!(s, Starved::WorkerStuck { .. })),
+                "park {i}: {f:?}"
+            );
+            b.park(w, false, t + 399 * MS);
+        }
+        // left running with no new pass for longer than the threshold: stuck
+        let f = m.evaluate(&b.snapshot(50 * 400 * MS + 500 * MS, 1));
+        assert!(
+            f.iter().any(|s| matches!(s, Starved::WorkerStuck { .. })),
+            "{f:?}"
+        );
+    }
+
+    #[test]
+    fn empty_passes_never_count_toward_the_poll_bound() {
+        let b = Board::new();
+        let w = b.register().unwrap();
+        let mut mon = Monitor::new(1_000_000, &b.snapshot(1, 1));
+        let mut p = crate::worker::LoopPolicy::default();
+        for i in 0..1_000u64 {
+            b.begin_pass(w, 1 + i);
+            b.end_pass(w, 0, 1 + i);
+            assert_eq!(p.after_pass(0), crate::worker::AfterPass::Idle);
+            assert!(
+                mon.evaluate(&b.snapshot(2 + i, 1))
+                    .iter()
+                    .all(|s| !matches!(s, Starved::WorkerPoll { .. }))
+            );
+        }
+        assert_eq!(b.snapshot(5_000, 1).workers[0].since_poll, 0);
+    }
+
+    #[test]
+    fn the_budget_message_is_announced_once_not_on_every_refusal() {
+        let mut p = Printer::default();
+        let mut suppress = 0;
+        for _ in 0..1_000 {
+            if p.block() == Admit::Suppress {
+                suppress += 1;
+            }
+        }
+        assert_eq!(suppress, 1);
+        let mut s = 0;
+        for _ in 0..1_000 {
+            if p.starved() == Admit::Suppress {
+                s += 1;
+            }
+        }
+        assert_eq!(s, 1);
+    }
+
+    fn leaked_tap() -> (&'static Board, Tap) {
+        let b: &'static Board = Box::leak(Box::new(Board::new()));
+        let w = b.register().unwrap();
+        (b, Tap::on_board(b, w))
+    }
+
+    /// Each hook of the worker's `Tap` hits the point it is named for and nothing else.
+    #[test]
+    fn each_tap_hook_hits_exactly_its_point() {
+        type Hook = fn(&Tap);
+        let hooks: [(&str, Hook, &[Point]); 6] = [
+            ("look", Tap::look, &[Point::Poll, Point::Look]),
+            ("spin", Tap::spin, &[Point::Poll, Point::SpinLook]),
+            (
+                "dispatch_other",
+                Tap::dispatch_other,
+                &[Point::DispatchOther],
+            ),
+            (
+                "dispatch_completions",
+                Tap::dispatch_completions,
+                &[Point::DispatchCompletions],
+            ),
+            (
+                "doorbell_drain",
+                Tap::doorbell_drain,
+                &[Point::DoorbellDrain],
+            ),
+            ("park_end", Tap::park_end, &[Point::ParkWake, Point::Poll]),
+        ];
+        for (name, hook, want) in hooks {
+            let (b, tap) = leaked_tap();
+            hook(&tap);
+            let s = b.snapshot(now_ns(), START_NS);
+            for d in &TABLE {
+                let hit = s.points[d.point.index()].hits;
+                assert_eq!(
+                    hit,
+                    u64::from(want.contains(&d.point)),
+                    "{name}: point {}",
+                    d.name
+                );
+            }
+        }
+        for (why, point) in [
+            (Peek::Event, Point::PeekEvent),
+            (Peek::Spin, Point::PeekSpin),
+            (Peek::Backstop, Point::PeekBackstop),
+        ] {
+            let (b, tap) = leaked_tap();
+            tap.peek(why);
+            let s = b.snapshot(now_ns(), START_NS);
+            for d in &TABLE {
+                assert_eq!(
+                    s.points[d.point.index()].hits,
+                    u64::from(d.point == point),
+                    "{why:?}: {}",
+                    d.name
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn the_tap_look_is_a_busy_look_and_the_spin_and_park_are_plain_polls() {
+        let (b, tap) = leaked_tap();
+        tap.spin();
+        tap.park_begin();
+        assert_eq!(
+            b.snapshot(now_ns(), START_NS).workers[0].state,
+            state::PARKED
+        );
+        tap.park_end();
+        let w = &b.snapshot(now_ns(), START_NS).workers[0];
+        assert_eq!(
+            (w.looks, w.polls, w.parks, w.state),
+            (0, 2, 1, state::RUNNING)
+        );
+        tap.look();
+        let w = &b.snapshot(now_ns(), START_NS).workers[0];
+        assert_eq!((w.looks, w.polls), (1, 3));
+        assert_ne!(w.look_ns, 0);
+        tap.begin_pass();
+        tap.end_pass(3);
+        let w = &b.snapshot(now_ns(), START_NS).workers[0];
+        assert_eq!((w.passes, w.since_poll), (1, 1));
+    }
+
+    /// The same drive as the loop's, through the `Tap`: the policy decides, the tap records, the monitor judges.
+    #[test]
+    fn a_worker_driven_through_the_tap_is_flagged_only_under_the_control() {
+        for (policy, flagged) in [
+            (crate::worker::LoopPolicy::default(), false),
+            (crate::worker::LoopPolicy::without_busy_look(), true),
+        ] {
+            let (b, tap) = leaked_tap();
+            let mut mon = Monitor::new(1_000_000, &b.snapshot(now_ns(), START_NS));
+            let mut p = policy;
+            let mut any = false;
+            for _ in 0..200 {
+                tap.begin_pass();
+                tap.end_pass(1);
+                if p.after_pass(1) == crate::worker::AfterPass::Look {
+                    tap.look();
+                }
+                any |= mon
+                    .evaluate(&b.snapshot(now_ns(), START_NS))
+                    .iter()
+                    .any(|s| matches!(s, Starved::WorkerPoll { .. }));
+            }
+            assert_eq!(any, flagged);
+        }
     }
 
     // ---- the hot path stays cheap and the switch is read once (source pins)

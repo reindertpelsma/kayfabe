@@ -3792,22 +3792,35 @@ mod tests {
         include_str!("userpump.rs").split("#[cfg(test)]").next().unwrap()
     }
 
-    /// The diagnostic is a dedicated thread's work: it takes locks only with `try_lock`, never sleeps under one, runs no unsafe
-    /// and reads no environment (the switch was read once by `kf_chan::progress::init_from_env`).
+    /// It takes every lock with `try_lock` and sleeps once, outside every lock.
     #[test]
-    fn the_progress_diagnostic_only_tries_locks_and_never_reads_the_environment() {
+    fn the_progress_diagnostic_takes_every_lock_with_try_lock() {
         let d = prog_source();
         assert!(d.len() > 500, "progdiag.rs is not written yet");
-        for banned in [".lock()", ".read()", ".write()", "Condvar", ".join(", ".recv(", "block_on", "unsafe", "env::var", "park"] {
-            assert!(!d.contains(banned), "progdiag.rs must not contain {banned:?}");
-        }
         assert!(d.matches(".try_lock()").count() >= 4, "the map, the record and the storage are all try_lock");
         assert!(d.contains("self.user_rings.try_lock()"));
         assert!(d.contains("record.try_lock()"));
         assert_eq!(d.matches("thread::sleep").count(), 1, "the one sleep is the tick, outside every lock");
+    }
+
+    /// Nothing in it can block.
+    #[test]
+    fn the_progress_diagnostic_never_blocks() {
+        let d = prog_source();
+        for banned in [".lock()", ".read()", ".write()", "Condvar", ".join(", ".recv(", "block_on", "park"] {
+            assert!(!d.contains(banned), "progdiag.rs must not contain {banned:?}");
+        }
+    }
+
+    /// It reads no environment (the switch was read once by `init_from_env`), runs no unsafe, prints through the pure renderers.
+    #[test]
+    fn the_progress_diagnostic_reads_no_environment_and_prints_only_rendered_lines() {
+        let d = prog_source();
+        for banned in ["unsafe", "env::var", "{:?}"] {
+            assert!(!d.contains(banned), "progdiag.rs must not contain {banned:?}");
+        }
         assert!(d.contains("progress::render_relay_block("));
         assert!(d.contains("progress::render_starved("));
-        assert!(!d.contains("{:?}"), "no Debug of guest-derived data");
     }
 
     /// Its passive reads are the worker look's own (`gpu_get`, `gpu_reference`, `Fetch::peek`, `Marks::peek`) and the same
@@ -3865,6 +3878,18 @@ mod tests {
         let cond = &peek[w..stamp];
         assert!(cond.contains("kf_chan::progress::on()"), "{cond}");
         assert!(cond.contains("retry_ok || !matches!(w, kf_chan::user_loop::Wait::Contended)"), "{cond}");
+    }
+
+    /// The stamp's entitlement is the SAME retry budget the ring decision uses (`may_retry`), computed once before both.
+    #[test]
+    fn the_look_stamp_uses_the_retry_budget_of_the_ring_decision() {
+        let peek = peek_one_prod();
+        let budget = peek.find("let retry_ok = kf_chan::user_loop::may_retry(record.contended_run(), why);").unwrap();
+        assert!(budget < peek.find("record.stamp_look()").unwrap());
+        assert!(budget < peek.find("retry_ok && ring(self)").unwrap());
+        let stamp = peek.find("record.stamp_look()").unwrap();
+        let cond = peek[..stamp].rfind("if kf_chan::progress::on()").unwrap();
+        assert!(peek[cond..stamp].contains("retry_ok"), "the stamp's own condition names the budget");
     }
 
     /// A turn stamps the relay and hits the relay-turn point before it runs.

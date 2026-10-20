@@ -537,4 +537,80 @@ mod tests {
         );
         assert_eq!(prod.matches("LoopPolicy::from_env()").count(), 1);
     }
+
+    /// `from_setting` is the one place the switch picks the policy.
+    #[test]
+    fn the_switch_picks_the_policy_in_one_place() {
+        assert_eq!(LoopPolicy::from_setting(false), LoopPolicy::default());
+        assert_eq!(
+            LoopPolicy::from_setting(true),
+            LoopPolicy::without_busy_look()
+        );
+        assert_ne!(
+            LoopPolicy::from_setting(true),
+            LoopPolicy::from_setting(false)
+        );
+        // the value `1` is the only way to the control
+        for v in [None, Some("0"), Some("true")] {
+            let mut p = LoopPolicy::from_setting(parse_negctl_no_busy_look(v));
+            let looks = (0..8)
+                .filter(|_| p.after_pass(1) == AfterPass::Look)
+                .count();
+            assert_eq!(looks, 2, "{v:?} must leave the fix in force");
+        }
+        let mut p = LoopPolicy::from_setting(parse_negctl_no_busy_look(Some("1")));
+        assert!((0..8).all(|_| p.after_pass(1) == AfterPass::Continue));
+    }
+
+    struct Fake(std::cell::Cell<u32>);
+    impl RelayLoop for Fake {
+        fn waiting(&self) -> bool {
+            true
+        }
+        fn peek(&self, _why: Peek) -> bool {
+            self.0.set(self.0.get() + 1);
+            true
+        }
+    }
+
+    /// The diagnostic's wrapper announces every look to the board, then asks the real relay and returns its answer.
+    #[test]
+    fn the_watched_relay_announces_each_peek_then_forwards_it() {
+        let board: &'static progress::Board = Box::leak(Box::new(progress::Board::new()));
+        let tap = Tap::on_board(board, board.register().unwrap());
+        let inner = Fake(std::cell::Cell::new(0));
+        let w = Watched {
+            inner: &inner,
+            tap: &tap,
+        };
+        assert!(w.peek(Peek::Spin));
+        assert!(w.peek(Peek::Event));
+        assert!(w.waiting());
+        assert_eq!(inner.0.get(), 2);
+        let s = board.snapshot(progress::now_ns(), progress::START_NS);
+        assert_eq!(s.points[progress::Point::PeekSpin.index()].hits, 1);
+        assert_eq!(s.points[progress::Point::PeekEvent.index()].hits, 1);
+        assert_eq!(s.points[progress::Point::PeekBackstop.index()].hits, 0);
+    }
+
+    #[test]
+    fn the_watched_relay_forwards_a_refusal_unchanged() {
+        struct No;
+        impl RelayLoop for No {
+            fn waiting(&self) -> bool {
+                false
+            }
+            fn peek(&self, _why: Peek) -> bool {
+                false
+            }
+        }
+        let board: &'static progress::Board = Box::leak(Box::new(progress::Board::new()));
+        let tap = Tap::on_board(board, board.register().unwrap());
+        let w = Watched {
+            inner: &No,
+            tap: &tap,
+        };
+        assert!(!w.peek(Peek::Backstop));
+        assert!(!w.waiting());
+    }
 }
