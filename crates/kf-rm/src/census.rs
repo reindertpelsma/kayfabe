@@ -478,6 +478,8 @@ pub struct ControlCensus<P> {
     log: ControlCensusLog,
     inner: P,
     promotion_records_left: u8,
+    // DIAGNOSTIC (bw-resume 2026-10-20, diag branch only): bounded arming facts.
+    arming_records_left: u8,
 }
 
 impl<P: CommandPolicy> ControlCensus<P> {
@@ -489,6 +491,7 @@ impl<P: CommandPolicy> ControlCensus<P> {
             log,
             inner,
             promotion_records_left: 16,
+            arming_records_left: 64,
         }
     }
 
@@ -530,6 +533,27 @@ impl<P: CommandPolicy> CommandPolicy for ControlCensus<P> {
             trace_line(&self.driver, cmd, req.as_ref(), reply.as_ref());
             if let Some(record) = self.take_promotion_record(cmd, req.as_ref()) {
                 eprintln!("{record}");
+            }
+            // DIAGNOSTIC (diag branch only): the arming's event/action words, bounded to 64
+            // lines per device; a pure read of the request, nothing is answered from it.
+            if let Some(q) = req
+                .as_ref()
+                .filter(|q| q.cmd == NV2080_CTRL_CMD_EVENT_SET_NOTIFICATION)
+            {
+                if self.arming_records_left > 0 {
+                    self.arming_records_left -= 1;
+                    let w = |off: usize| {
+                        cmd.payload
+                            .get(q.params_at + off..q.params_at + off + 4)
+                            .map(|b| u32::from_le_bytes([b[0], b[1], b[2], b[3]]))
+                    };
+                    eprintln!(
+                        "kf-rm: arming-facts event={:?} action={:?} result={:?}",
+                        w(0),
+                        w(4),
+                        reply.as_ref().map(|r| r.rpc_result)
+                    );
+                }
             }
         }
         if let Some(req) = req {
