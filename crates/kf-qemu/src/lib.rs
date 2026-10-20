@@ -35,6 +35,7 @@ pub mod readtrace;
 pub mod reset;
 pub mod rmfacts;
 pub mod scrub;
+pub(crate) mod translated_slot;
 pub mod tspace;
 pub mod twin;
 pub(crate) mod userbirth;

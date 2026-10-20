@@ -2242,7 +2242,7 @@ pub struct ChanPlane {
     pub completions: Completions,
     caps: Arc<Mutex<VmCaps>>,
     /// Host token → channel.
-    slots: RwLock<HashMap<u32, Arc<Mutex<Slot>>>>,
+    slots: RwLock<HashMap<u32, Arc<crate::translated_slot::Cell<Slot>>>>,
     /// `(hClient, hObject)` → host token.
     by_obj: Mutex<HashMap<(u32, u32), u32>>,
     /// ★ OWNER_RULINGS §U: each Translated channel's software objects, by host token.
@@ -3561,7 +3561,7 @@ impl ChanPlane {
             .into_iter()
             .filter(|ht| {
                 self.slot(*ht)
-                    .is_some_and(|s| s.lock().is_ok_and(|g| g.tsg == Some(object)))
+                    .is_some_and(|s| s.identity().is_some_and(|id| id.tsg == Some(object)))
             })
             .collect();
         if !members.is_empty() {
@@ -3733,7 +3733,7 @@ impl ChanPlane {
                 {
                     return match self
                         .slot(ht)
-                        .and_then(|s| s.lock().ok().map(|g| g.guest_idx))
+                        .and_then(|s| s.identity().map(|id| id.idx))
                     {
                         // ★ The token is OUR doorbell's vocabulary (we are the host): the table
                         // index, in the VECTOR field the trap masks (`kf_trap::trap`).
@@ -4725,12 +4725,12 @@ impl ChanPlane {
                 }),
             );
         }
-        let idx = match slot.lock() {
-            Ok(mut g) => {
-                g.scheduled = enable;
-                g.guest_idx
-            }
-            Err(_) => {
+        let idx = match slot.edit(|g| {
+            g.scheduled = enable;
+            g.guest_idx
+        }) {
+            Some(idx) => idx,
+            None => {
                 return ChanAnswer::Refused {
                     status: NV_ERR_INVALID_STATE,
                     why: "slot poisoned".into(),
@@ -6609,7 +6609,7 @@ impl ChanPlane {
         Ok(())
     }
 
-    fn slot(&self, ht: u32) -> Option<Arc<Mutex<Slot>>> {
+    fn slot(&self, ht: u32) -> Option<Arc<crate::translated_slot::Cell<Slot>>> {
         self.slots.read().ok()?.get(&ht).cloned()
     }
 
@@ -7251,8 +7251,17 @@ impl ChanPlane {
                 if gr_tier {
                     me.engine_tlive(engine, true);
                 }
+                let (plane, wake) = (me.plane, me.wake);
                 if let Ok(mut s) = me.slots.write() {
-                    s.insert(ht, Arc::new(Mutex::new(slot)));
+                    s.insert(ht, Arc::new(crate::translated_slot::Cell::new(
+                        slot,
+                        crate::translated_slot::Identity { idx, tsg: a.tsg },
+                        move |idx| {
+                            if plane.ring_internal(idx) {
+                                let _ = wake.signal();
+                            }
+                        },
+                    )));
                 }
                 if let Ok(mut m) = me.by_obj.lock() {
                     m.insert((a.client, a.handle), ht);
@@ -7717,7 +7726,7 @@ impl ChanPlane {
             return false;
         };
         // ★ The token's BUSY state is the exclusion; this lock must never be contended.
-        let Ok(mut g) = slot.try_lock() else {
+        let Ok(mut g) = slot.enter() else {
             self.contended.fetch_add(1, Ordering::Relaxed);
             return false;
         };
