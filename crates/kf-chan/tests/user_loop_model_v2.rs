@@ -1202,7 +1202,11 @@ fn peek_one(cfg: &Cfg, n: &mut World, c: usize, why: ul::Peek) -> bool {
             ),
             Err(_) => (true, false),
         };
-        if !satisfied && pops && matches!(w, Wait::Marker { .. }) && !cfg.m.no_pop_writeback_ring {
+        if !satisfied
+            && pops
+            && matches!(w, Wait::Marker { .. } | Wait::Popped { .. })
+            && !cfg.m.no_pop_writeback_ring
+        {
             n.ring(c);
             return true;
         }
@@ -2444,7 +2448,7 @@ fn pin_the_arm_mapping_and_the_peek_decision_are_the_models() {
         "may_retry(record.contended_run(), why)",
         "w.satisfied(p.core.marks.peek(reference), popped)",
         "pops = popped > p.core.fetch.fetched()",
-        "matches!(w, kf_chan::user_loop::Wait::Marker { .. })",
+        "kf_chan::user_loop::Wait::Marker { .. } | kf_chan::user_loop::Wait::Popped { .. }",
         "if demand && retry_ok",
     ] {
         assert!(peek.contains(o), "pin: {o:?} left user_ring_peek_one");

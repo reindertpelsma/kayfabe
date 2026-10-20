@@ -90,28 +90,32 @@ pub enum AfterPass {
 /// The worker loop's per-iteration policy state.
 #[derive(Debug, Clone, Default, PartialEq, Eq, Hash)]
 pub struct LoopPolicy {
-    busy_passes: u32,
+    passes: u32,
 }
 
-/// After this many consecutive busy passes (each served something) the loop looks once. A pass serves a hot token up to
-/// `REACT_ROUNDS + 1` times, so the delay a busy worker adds to any wait is bounded by `LOOK_EVERY` passes, whatever the neighbours do.
+/// After this many consecutive passes WITHOUT a successful park (busy ones, or idle ones whose `try_park` was refused because a ring
+/// moved the wake word) the loop looks once. A pass serves a hot token up to `REACT_ROUNDS + 1` times, so the delay a worker adds to any
+/// wait is bounded by `LOOK_EVERY` passes of that worker whatever the neighbours do -- two workers handing a hot token to each other see
+/// an EMPTY pass now and then (the token is BUSY at their scan), and an empty pass must not restart the count.
 pub const LOOK_EVERY: u32 = 4;
 
 impl LoopPolicy {
     /// What follows a pass that served `served` tokens.
     pub fn after_pass(&mut self, served: usize) -> AfterPass {
-        if served > 0 {
-            self.busy_passes += 1;
-            if self.busy_passes >= LOOK_EVERY {
-                self.busy_passes = 0;
-                AfterPass::Look
-            } else {
-                AfterPass::Continue
-            }
+        self.passes += 1;
+        if self.passes >= LOOK_EVERY {
+            self.passes = 0;
+            AfterPass::Look
+        } else if served > 0 {
+            AfterPass::Continue
         } else {
-            self.busy_passes = 0;
             AfterPass::Idle
         }
+    }
+
+    /// The worker slept (a park wait returned): it was not busy, the count restarts.
+    pub fn slept(&mut self) {
+        self.passes = 0;
     }
 }
 
@@ -303,6 +307,7 @@ pub fn run_with_relay(
             }
         }
         plane.worker_wake().unpark();
+        policy.slept();
         if got.is_ok() {
             let (doorbell, event) = dispatch(&ready);
             if doorbell {
@@ -327,10 +332,9 @@ pub fn run_with_relay(
 mod tests {
     use super::*;
 
-    /// A pass that served something continues; every `LOOK_EVERY`-th consecutive busy pass looks first; an empty pass idles and
-    /// restarts the count.
+    /// Every `LOOK_EVERY`-th consecutive pass without a park looks first, busy or empty; a sleep restarts the count.
     #[test]
-    fn a_busy_worker_looks_every_look_every_passes_and_an_empty_pass_idles() {
+    fn a_worker_looks_every_look_every_passes_without_a_park_and_a_sleep_restarts_the_count() {
         let mut p = LoopPolicy::default();
         for round in 0..3 {
             for i in 1..LOOK_EVERY {
@@ -342,11 +346,21 @@ mod tests {
             }
             assert_eq!(p.after_pass(3), AfterPass::Look, "round {round}");
         }
+        // empty passes (the baton: the token was BUSY at this worker's scan) do not restart the count
         assert_eq!(p.after_pass(1), AfterPass::Continue);
         assert_eq!(p.after_pass(0), AfterPass::Idle);
+        assert_eq!(p.after_pass(1), AfterPass::Continue);
+        assert_eq!(p.after_pass(0), AfterPass::Look);
+        // a quiet worker: idle, idle, ... until it parks
+        assert_eq!(p.after_pass(0), AfterPass::Idle);
+        p.slept();
         for _ in 1..LOOK_EVERY {
-            assert_eq!(p.after_pass(1), AfterPass::Continue, "the count restarted");
+            assert_ne!(
+                p.after_pass(0),
+                AfterPass::Look,
+                "the sleep restarted the count"
+            );
         }
-        assert_eq!(p.after_pass(1), AfterPass::Look);
+        assert_eq!(p.after_pass(0), AfterPass::Look);
     }
 }

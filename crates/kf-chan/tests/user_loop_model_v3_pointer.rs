@@ -147,8 +147,6 @@ struct Cfg {
     /// MODEL-ONLY candidate fix 1: an ENGINE EVENT look may re-ring a contended relay past the budget (events are hardware
     /// edges, so this is not a busy loop): `may_retry(run, Event)` true.
     fix_event_retry: bool,
-    /// MODEL-ONLY candidate fix 2: the peek's pop write-back also for `Wait::Popped` (userpump.rs 2919: `Marker` only).
-    fix_popped_writeback: bool,
 }
 
 impl Cfg {
@@ -169,7 +167,6 @@ impl Cfg {
             contended_at_start: 0,
             max_states: 3_000_000,
             fix_event_retry: false,
-            fix_popped_writeback: false,
         }
     }
 }
@@ -413,11 +410,7 @@ impl S {
                 }
                 Err(_) => true,
             };
-            if !satisfied
-                && pops
-                && (matches!(w, Wait::Marker { .. })
-                    || (self.fix.1 && matches!(w, Wait::Popped { .. })))
-            {
+            if !satisfied && pops && matches!(w, Wait::Marker { .. } | Wait::Popped { .. }) {
                 self.ring();
                 return true;
             }
@@ -856,7 +849,7 @@ fn initial(cfg: &Cfg) -> S {
         c_space: 0,
         flags: 0,
         backstops: 0,
-        fix: (cfg.fix_event_retry, cfg.fix_popped_writeback),
+        fix: (cfg.fix_event_retry, false),
     }
 }
 
@@ -1221,13 +1214,6 @@ fn fix1_candidate_an_event_look_may_re_ring_a_contended_relay_closes_break1_and_
     }
 }
 
-#[test]
-fn fix2_candidate_a_pop_write_back_for_popped_waits_closes_break2() {
-    let mut cfg = cyclic_ring_full(LifecycleMode::NoPointerMarkers);
-    cfg.fix_popped_writeback = true;
-    holds("fix2/break2", &cfg);
-}
-
 // ------------------------------------------------------------------------------------------------
 // pins: the transliterated production lines this model rests on (a change there must revisit the model)
 
@@ -1252,11 +1238,11 @@ fn pin_only_the_safety_net_may_re_ring_past_the_contention_budget() {
 }
 
 #[test]
-fn pin_the_peeks_pop_write_back_is_for_marker_waits_only() {
+fn pin_the_peeks_pop_write_back_covers_marker_and_popped_waits() {
     let p = src("../kf-qemu/src/userpump.rs");
     assert!(
         p.contains(
-            "if !satisfied && pops && matches!(w, kf_chan::user_loop::Wait::Marker { .. }) {"
+            "kf_chan::user_loop::Wait::Marker { .. } | kf_chan::user_loop::Wait::Popped { .. }"
         ),
         "the pop write-back condition changed: revisit break 2"
     );

@@ -446,12 +446,14 @@ fn successors(cfg: &Cfg, s: &S) -> Vec<(String, S)> {
                     let mut n = s.clone();
                     n.efd = false;
                     n.wk[i].pc = Pc::Scan;
+                    n.wk[i].policy.slept();
                     out.push((me("woken by the doorbell eventfd"), n));
                 }
                 if s.ev {
                     let mut n = s.clone();
                     n.dispatch_event(cfg, cold);
                     n.wk[i].pc = Pc::Scan;
+                    n.wk[i].policy.slept();
                     out.push((me("woken by an engine event"), n));
                 }
                 if cfg.timer && !s.efd && !s.ev {
@@ -459,6 +461,7 @@ fn successors(cfg: &Cfg, s: &S) -> Vec<(String, S)> {
                     let mut n = s.clone();
                     n.peek(cfg, cold, Peek::Backstop);
                     n.wk[i].pc = Pc::Scan;
+                    n.wk[i].policy.slept();
                     out.push((me("park timeout (50 ms): safety-net look"), n));
                 }
             }
@@ -499,21 +502,26 @@ struct Counterexample {
 
 fn explore(cfg: &Cfg) -> Result<usize, Counterexample> {
     let start = new_state(cfg);
-    let mut seen: HashMap<S, (Option<S>, String)> = HashMap::new();
-    let mut q = VecDeque::new();
-    seen.insert(start.clone(), (None, String::new()));
-    q.push_back(start);
+    // each state is stored ONCE (the key of `seen`); the parent chain is an index into `parents` (memory: tens of millions of states)
+    let mut seen: HashMap<S, u32> = HashMap::new();
+    let mut parents: Vec<(u32, u32)> = Vec::new(); // (parent index, label id)
+    let mut labels: Vec<String> = Vec::new();
+    let mut label_ids: HashMap<String, u32> = HashMap::new();
+    let mut q: VecDeque<(S, u32)> = VecDeque::new();
+    seen.insert(start.clone(), 0);
+    parents.push((u32::MAX, 0));
+    q.push_back((start, 0));
     let mut states = 0usize;
-    while let Some(s) = q.pop_front() {
+    while let Some((s, idx)) = q.pop_front() {
         states += 1;
-        assert!(states < 8_000_000, "state space exceeded");
+        assert!(states < 24_000_000, "state space exceeded");
         let v = invariant(&s);
         if v != 0 {
             let mut trace = Vec::new();
-            let mut cur = s.clone();
-            while let Some((Some(p), l)) = seen.get(&cur) {
-                trace.push(l.clone());
-                cur = p.clone();
+            let mut cur = idx;
+            while parents[cur as usize].0 != u32::MAX {
+                trace.push(labels[parents[cur as usize].1 as usize].clone());
+                cur = parents[cur as usize].0;
             }
             trace.reverse();
             return Err(Counterexample {
@@ -524,8 +532,14 @@ fn explore(cfg: &Cfg) -> Result<usize, Counterexample> {
         }
         for (label, n) in successors(cfg, &s) {
             if !seen.contains_key(&n) {
-                seen.insert(n.clone(), (Some(s.clone()), label));
-                q.push_back(n);
+                let lid = *label_ids.entry(label.clone()).or_insert_with(|| {
+                    labels.push(label);
+                    (labels.len() - 1) as u32
+                });
+                let id = parents.len() as u32;
+                parents.push((idx, lid));
+                seen.insert(n.clone(), id);
+                q.push_back((n, id));
             }
         }
     }
@@ -813,6 +827,10 @@ fn pin_a_busy_pass_asks_the_policy() {
         "pin: run_with_relay no longer asks LoopPolicy after a busy pass"
     );
     assert!(WORKER.contains("pub const LOOK_EVERY: u32 = 4;"));
+    assert!(
+        WORKER.contains("policy.slept();"),
+        "pin: a sleep must restart the pass count"
+    );
 }
 
 #[test]

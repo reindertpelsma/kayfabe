@@ -2916,7 +2916,16 @@ impl ChanPlane {
                 },
                 Err(_) => true,
             };
-            if !satisfied && pops && matches!(w, kf_chan::user_loop::Wait::Marker { .. }) {
+            // pops the guest's `GP_GET` write-back has not shown yet carry no event: a draining marker wait AND a carried
+            // (`Popped`, Pointer markers latched off) wait both need the turn that writes the partial pops back, or a guest that
+            // waits for ring space the hardware already freed waits for the whole batch (and possibly for ever)
+            if !satisfied
+                && pops
+                && matches!(
+                    w,
+                    kf_chan::user_loop::Wait::Marker { .. } | kf_chan::user_loop::Wait::Popped { .. }
+                )
+            {
                 // A gate (or batch) is still draining, but the PBDMA has popped more entries than the
                 // guest's `GP_GET` shows. The wait stays; the turn only writes the guest's `GP_GET` back
                 // (a guest blocked on a full ring behind its OWN gate would otherwise wait for the
