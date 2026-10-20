@@ -1182,7 +1182,7 @@ fn arm(n: &mut World, c: usize, need: Need) {
     let ch = &mut n.ch[c];
     ch.p_wait = ul::wait_of(need);
     ch.waiting_flag = ch.p_wait.is_some();
-    ch.carried = ch.p_wait.is_some_and(Wait::carried);
+    ch.carried = ch.relay.core.wait_unannounced(ch.p_wait);
     match need {
         Need::Again => n.ring(c),
         Need::Contended => {
@@ -2115,7 +2115,8 @@ fn pointer_without_markers_is_carried_by_the_spin_only() {
 /// the loop spinning at `epoll_wait(0)` until the pops are visible. The old `spin(0)` setting is gone (nothing to turn off) and
 /// no net is needed; a loop whose `unsourced` forgot the carried wait is FOUND by the sleep invariant (two scenarios).
 #[test]
-fn pointer_without_markers_is_carried_by_the_unsourced_spin_and_needs_neither_spin_budget_nor_net() {
+fn pointer_without_markers_is_carried_by_the_unsourced_spin_and_needs_neither_spin_budget_nor_net()
+{
     let ids: Vec<u8> = (1..=6).collect();
     let mut rest = Vec::new();
     for chunk in ids.chunks(3) {
@@ -2465,7 +2466,12 @@ fn p6_a_pt_window_inside_a_turn_across_two_batches_is_the_retry_set() {
     let mut m = cfg.clone();
     m.m.unsourced_ignores_demand = true;
     m.m.eval_never_rings_demand = true;
-    finds("pt-in-turn/no-retry-set/two-batches", &m, 0, &["SLEEP", "DEADLOCK"]);
+    finds(
+        "pt-in-turn/no-retry-set/two-batches",
+        &m,
+        0,
+        &["SLEEP", "DEADLOCK"],
+    );
 }
 
 /// ★ REPLACES `p6_a_pt_window_across_two_batches_is_covered_by_the_counted_backstop`.
@@ -2553,7 +2559,7 @@ fn pin_the_arm_mapping_and_the_peek_decision_are_the_models() {
         "let _ = record.request();",
         "record.contended_note()",
         "record.contended_clear()",
-        "record.set_carried(p.wait.is_some_and(kf_chan::user_loop::Wait::carried))",
+        "record.set_carried(p.core.wait_unannounced(p.wait))",
     ] {
         assert!(arm.contains(o), "pin: {o:?} left user_ring_arm");
     }
@@ -2576,8 +2582,17 @@ fn pin_the_arm_mapping_and_the_peek_decision_are_the_models() {
     ] {
         assert!(peek.contains(o), "pin: {o:?} left user_ring_peek_one");
     }
-    for gone in ["may_retry", "retry_ok", "Wait::Contended", "Peek::Backstop", "found("] {
-        assert!(!peek.contains(gone), "pin: {gone:?} is back in user_ring_peek_one");
+    for gone in [
+        "may_retry",
+        "retry_ok",
+        "Wait::Contended",
+        "Peek::Backstop",
+        "found(",
+    ] {
+        assert!(
+            !peek.contains(gone),
+            "pin: {gone:?} is back in user_ring_peek_one"
+        );
     }
     let unsourced = after(USERPUMP, "pub(crate) fn user_ring_unsourced(&self)")
         .split("pub(crate) fn user_ring_poll_due")
@@ -2663,7 +2678,10 @@ fn nomark(cache: bool) -> Cfg {
     }
     let mut cfg = Cfg {
         mode: LifecycleMode::NoPointerMarkers,
-        ..Cfg::new(vec![pointer_chan(rest, ids)]).src(4).privr(128).pop_depth(0)
+        ..Cfg::new(vec![pointer_chan(rest, ids)])
+            .src(4)
+            .privr(128)
+            .pop_depth(0)
     };
     if !cache {
         cfg = cfg.lazy(LazyConfig::ON.with_put_cache(false));

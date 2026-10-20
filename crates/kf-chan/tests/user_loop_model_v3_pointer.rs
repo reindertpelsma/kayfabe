@@ -195,17 +195,11 @@ enum Pc {
     /// About to run a pass.
     Top,
     /// Inside the target relay's turn (micro-steps); `served` of the pass so far.
-    InTurn {
-        served: u8,
-    },
+    InTurn { served: u8 },
     /// The pass is over: the after-pass decision.
-    After {
-        served: u8,
-    },
+    After { served: u8 },
     /// The peek is done; `spin` = `n > 0 || rang`. Next: `|| unsourced()` decides poll(0) or park.
-    Decide {
-        spin: bool,
-    },
+    Decide { spin: bool },
     /// `epoll_wait(timeout 0)` then dispatch.
     Poll,
     /// In the BLOCKING `epoll_wait` (no timeout).
@@ -394,7 +388,8 @@ impl S {
     /// `ChanPlane::user_ring_unsourced` (+ the model-only mutants): demand left behind, or a wait no interrupt announces.
     fn unsourced(&self) -> bool {
         !self.relay.dead
-            && ((self.retry && !self.mut_demand) || (self.waiting && self.carried && !self.mut_carried))
+            && ((self.retry && !self.mut_demand)
+                || (self.waiting && self.carried && !self.mut_carried))
     }
 
     /// `ring(self)` in the peek: `plane.ring_internal` + `wake.signal()`.
@@ -481,7 +476,7 @@ impl S {
             Need::Contended => self.retry = true,
             Need::Idle | Need::Marker { .. } | Need::Popped { .. } => {}
         }
-        self.carried = self.wait.is_some_and(Wait::carried);
+        self.carried = self.relay.core.wait_unannounced(self.wait);
     }
 
     /// Is the target's recorded wait satisfied by the hardware words right now (the obligation of `V_WAIT`)?
@@ -568,10 +563,7 @@ fn sleep_unsafe(s: &S) -> bool {
     if s.pc != Pc::Parked || s.efd || s.engine_event || s.relay.dead || s.rec_held {
         return false;
     }
-    s.t_rung
-        || s.retry
-        || (s.waiting && s.carried)
-        || (s.wait.is_some() && s.wait_satisfied_now())
+    s.t_rung || s.retry || (s.waiting && s.carried) || (s.wait.is_some() && s.wait_satisfied_now())
 }
 
 fn guest_step(cfg: &Cfg, s: &S, out: &mut Vec<(String, S)>, limit_prelude: Option<usize>) {
@@ -1277,7 +1269,8 @@ fn break1_control_a_record_lock_convoy_is_rung_by_the_acts_completion_even_with_
 /// Replaces fix1's "closes break 1 and 1b": the convoy stays live with the lock taken again and again, a hot neighbour AND a
 /// peer interrupt stream, whatever the order.
 #[test]
-fn simple_relay_a_repeated_pt_convoy_beside_a_hot_neighbour_and_peer_interrupts_is_live_and_bounded() {
+fn simple_relay_a_repeated_pt_convoy_beside_a_hot_neighbour_and_peer_interrupts_is_live_and_bounded()
+ {
     let mut cfg = convoy();
     cfg.hot = true;
     cfg.peer_events = true;
@@ -1307,10 +1300,7 @@ fn negctl_no_busy_look_strands_a_satisfied_carried_wait_beside_a_hot_neighbour()
     ]));
     cfg.mode = LifecycleMode::NoPointerMarkers;
     cfg.hot = true;
-    holds(
-        "negctl-control",
-        &cfg,
-    );
+    holds("negctl-control", &cfg);
     cfg.no_busy_look = true;
     breaks("negctl", &cfg, V_WAIT | V_DEMAND | V_STALL | V_SPACE);
 }
@@ -1330,7 +1320,11 @@ fn carried_scenarios() -> Vec<(&'static str, Cfg)> {
     let b = cyclic_ring_full(LifecycleMode::NoPointerMarkers);
     let mut c = a.clone();
     c.peer_events = true;
-    vec![("carried/batch", a), ("carried/ring-full", b), ("carried/peer", c)]
+    vec![
+        ("carried/batch", a),
+        ("carried/ring-full", b),
+        ("carried/peer", c),
+    ]
 }
 
 /// Demand left behind when the worker would block: a `pt` lock (nobody rings at its release) or a record-lock act held across a
@@ -1442,7 +1436,10 @@ fn pin_the_budget_and_the_backstop_look_are_gone_and_the_loop_is_one_level_loop(
         "PollTimeout::Blocking",
         "dispatch(&ready)",
     ] {
-        assert!(w.contains(order), "pin: {order:?} missing from run_with_relay");
+        assert!(
+            w.contains(order),
+            "pin: {order:?} missing from run_with_relay"
+        );
     }
     let mut at = 0;
     for o in [
@@ -1453,7 +1450,9 @@ fn pin_the_budget_and_the_backstop_look_are_gone_and_the_loop_is_one_level_loop(
         "try_park(seen)",
         "dispatch(&ready)",
     ] {
-        let i = w[at..].find(o).unwrap_or_else(|| panic!("{o:?} out of order"));
+        let i = w[at..]
+            .find(o)
+            .unwrap_or_else(|| panic!("{o:?} out of order"));
         at += i + o.len();
     }
 }
@@ -1464,8 +1463,14 @@ fn pin_the_budget_and_the_backstop_look_are_gone_and_the_loop_is_one_level_loop(
 fn pin_the_peek_calls_look_the_arm_re_requests_and_unsourced_is_demand_or_carried() {
     let p = src("../kf-qemu/src/userpump.rs");
     let peek = p.split("fn user_ring_peek_one(").nth(1).expect("peek_one");
-    let peek = peek.split("pub(crate) fn user_ring_unsourced").next().unwrap();
-    assert!(peek.contains("match look(i) {"), "the peek no longer calls user_loop::look");
+    let peek = peek
+        .split("pub(crate) fn user_ring_unsourced")
+        .next()
+        .unwrap();
+    assert!(
+        peek.contains("match look(i) {"),
+        "the peek no longer calls user_loop::look"
+    );
     assert!(!peek.contains("may_retry"));
     let arm = p.split("fn user_ring_arm(").nth(1).expect("arm");
     let arm = arm.split("pub(crate) fn user_ring_waiting").next().unwrap();
@@ -1473,7 +1478,9 @@ fn pin_the_peek_calls_look_the_arm_re_requests_and_unsourced_is_demand_or_carrie
         arm.contains("Need::Contended => {") && arm.contains("let _ = record.request();"),
         "Contended must re-set the demand flag"
     );
-    assert!(arm.contains("record.set_carried(p.wait.is_some_and(kf_chan::user_loop::Wait::carried));"));
+    assert!(
+        arm.contains("record.set_carried(p.core.wait_unannounced(p.wait));")
+    );
     assert!(
         p.contains("record.pending() || (record.is_waiting() && record.carried())"),
         "unsourced() changed: revisit the mutants"

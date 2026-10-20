@@ -514,6 +514,21 @@ impl Relay {
         }
     }
 
+    /// ★ 2026-10-20 (simple relay): whether the recorded wait `w` has NO registered wake source (the worker must not block
+    /// while it stands): a `Wait::Popped` (no marker announces pops), or -- only while the guest's `GP_GET` follows pops
+    /// ([`GuestGet::Popped`]) -- a wait while the guest's ring looked FULL at the last `GP_PUT` read and published entries are
+    /// not yet accounted popped: the guest is blocked on a pop write-back, and pops raise no interrupt (v3 model break2
+    /// control). With [`GuestGet::ReadIndex`] that obligation does not exist.
+    #[must_use]
+    pub fn wait_unannounced(&self, w: Option<crate::user_loop::Wait>) -> bool {
+        w.is_some_and(|w| {
+            w.carried()
+                || (guest_get_follows_pops()
+                    && self.put_full
+                    && self.fetch.fetched() < self.fetch.issued())
+        })
+    }
+
     /// No turn is running.
     #[must_use]
     pub fn idle(&self) -> bool {

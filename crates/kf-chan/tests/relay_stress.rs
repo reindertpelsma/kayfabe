@@ -964,7 +964,7 @@ impl Rt<'_> {
             }
             Need::Idle | Need::Marker { .. } | Need::Popped { .. } => record.contended_clear(),
         }
-        record.set_carried(r.wait.is_some_and(Wait::carried));
+        record.set_carried(r.relay.core.wait_unannounced(r.wait));
     }
 
     /// MIRROR of `ChanPlane::user_ring_peek_one` (2026-10-20 simple relay: the one decision `user_loop::look`).
@@ -2429,7 +2429,7 @@ fn a_source_pin_the_mirrored_glue_still_matches_production() {
         "Ok(_) if self.core.again => self.core.need = Need::Again,",
         "Need::Again => {\n                record.contended_clear();\n                if self.plane.ring_internal(idx) {\n                    let _ = self.wake.signal();\n                }\n            }",
         "record.contended_note();\n                let _ = record.request();",
-        "record.set_carried(p.wait.is_some_and(kf_chan::user_loop::Wait::carried));",
+        "record.set_carried(p.core.wait_unannounced(p.wait));",
         "return matches!(look(i), Look::Ring { .. }) && ring(self);",
         "get_follows_pops: kf_chan::user_turn::guest_get_follows_pops(),",
         "record.set_waiting(false);\n                    record.set_carried(false);",

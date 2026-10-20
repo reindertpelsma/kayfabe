@@ -2884,7 +2884,7 @@ impl ChanPlane {
             }
             Need::Idle | Need::Marker { .. } | Need::Popped { .. } => record.contended_clear(),
         }
-        record.set_carried(p.wait.is_some_and(kf_chan::user_loop::Wait::carried));
+        record.set_carried(p.core.wait_unannounced(p.wait));
     }
 
     /// Some relay waits for something only a look can find: a private-ring wait
