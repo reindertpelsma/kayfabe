@@ -251,6 +251,10 @@ pub trait Env {
     fn software_gone(&self) -> bool {
         false
     }
+    /// The guest `GP_GET` write finds the USERD admission / pt lock busy (`Ok(false)`: look again). Default: never.
+    fn write_guest_get_busy(&mut self) -> bool {
+        false
+    }
     /// ★ lazy observe (A): the relay uses `put` WITHOUT having read `GP_PUT` this turn. Is it a value the guest really
     /// wrote, that is not beyond the guest's current `GP_PUT` (forward from `cursor`)? Default: not checked.
     fn cached_put_ok(&mut self, _put: u32, _cursor: u32) -> bool {
@@ -325,6 +329,9 @@ impl<E: Env> Io for EnvIo<'_, E> {
         Ok((get, reference))
     }
     fn write_guest_get(&mut self, get: u32) -> Turn<bool> {
+        if self.env.write_guest_get_busy() {
+            return Ok(false);
+        }
         self.env.write_guest_get(get);
         Ok(true)
     }

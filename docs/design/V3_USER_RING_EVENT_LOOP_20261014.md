@@ -415,3 +415,78 @@ table bounds the relay's share per SYNC_WAIT at <= 4 ms per 3 gates before and ~
 5. **Not measured**: Windows (the coordinator schedules it); the staged-trigger path (`segment_turn` rare packets, Windows migration) now waits on markers
    too but no Linux traffic reaches it; GP_GET/REFERENCE visibility lag after an interrupt is modelled, not observed (`event_without_progress`
    is 12-205 per run, spurious or early events, never a stalled wait: `backstop_found(work)` stayed 0).
+
+## 9. Model v2 (2026-10-20): the real turn under the worker, several channels, the act windows and the private doorbell
+
+**STATUS: LIVE (GPU-free; nothing here ran on hardware), 2026-10-20.** Branch `claude/user-relay-model-20261020`, `crates/kf-chan/tests/user_loop_model_v2.rs`
+(module doc = the CODE READ list of every state a turn reads / writes and every wake source with its guarantee), `scripts/v2_mutation_check.py`.
+Labels: **MEASURED** = a test result named here; **CODE READ** = file:line of the revision `f8f9d1a5f`; **INFERRED** = reasoning or a hardware assumption.
+Trigger: the owner's Windows freezes (Minecraft + Heaven; GPU idle, host quiet, relay safety-net counters 0) and the question "have we tested that this is race free?".
+
+What changed against §4.1: the model drives the REAL `kf_chan::user_turn::Relay` (through `tests/lifecycle_support`) with lazy observe at the production defaults
+(PUT cache, `observe_interval = 16` on a 32-entry guest ring, private ring 128 so the credit floor does not force every look), the real `Lifecycle` in Pointer mode
+(entered by a prelude), several channels with global semaphores (`rel` / `acq` of a segment), the disable/enable acts, record / pt windows, the private
+doorbell as its own step, an ORACLE (no relay) to attribute a stall to the relay. Only the worker / token / peek / serve / arm layer is still a transliteration
+(`userpump.rs` `user_ring_serve`, `user_ring_arm`, `user_ring_peek_one`, `chan.rs` `disable_channels`); it is guarded by source pins in the test file
+(`pin_*`), and the pure decisions it calls are the production ones (`look_needed`, `may_retry`, `Wait::satisfied`, `found`, `wait_of`, `idle`).
+**Proposed refactor, NOT done** (the decision part of `user_ring_peek_one` has no existing test beyond a source pin, so it fails the "behaviour-neutral and
+covered" bar): `fn look(why, demand, waiting_flag, run, wait, lock_free, words) -> Look { ring, clear_wait, pop_writeback, found, event_without_progress }` in
+`user_loop.rs`, called by `user_ring_peek_one` after it reads the two private words; the model would then call it instead of its copy.
+
+### 9.1 Results (MEASURED, `cargo test --release -p kf-chan --test user_loop_model_v2`)
+
+* **Relay logic, benign hardware: no violation of P6, P7, P8, P9** in any scenario explored. State counts: production interval 16 on a 32-entry ring 2 900; stale-cache
+  batches 68 621; lapped 4-entry ring with lazy observe 293 314; disable/enable window with a doorbell inside it 99 080 (+ record-lock window around the enable);
+  main + sub channel with an acquire / release across them 4 199; gated entries in Scan mode releasing each other 17 763; **two clients x (main + sub) = four channels,
+  cross-client acquires, 1 385 166 states, no violation, the oracle completes too**; a stuck neighbour does not hold up the other channel.
+* **P8 holds by construction**: a serve that meets `t.disabled` clears `retry` and returns (`userpump.rs` 2756-2759), the enable act calls `user_ring_wake` after
+  `v.disabled = false` (`chan.rs` 4392); a mutant without that call is found by two scenarios. `disable_usermode(false)` (`chan.rs` 4181-4259) sets no flag and calls no wake:
+  it needs none for the RELAY (turns are never refused), see 9.2 for the NATIVE doorbell.
+* **Documented gaps reproduced, not new**: (a) a `pt` / USERD-admission release is announced by nobody (`Wait::Contended`): with the net disabled a doorbell served inside the window
+  is stranded (found); with the net armed it is found and counted (`backstop_contended`). (b) Markers latched off (`NoPointerMarkers`): a `Popped` wait has no interrupt; the bounded spin
+  carries it (holds with spin 1, DEADLOCK with spin 0 and no net). GP_GET visibility lag after the interrupt and a lost marker interrupt: lag alone is covered by the spin; a lost
+  interrupt needs the counted net.
+
+### 9.2 P10 -- the one trace that ends with a covered entry unpopped forever (private entries PUT - GET == 2; relay idle, host quiet)
+
+`P10: no private entry the relay published stays unknown to the hardware`. It fails in exactly two ways, **both need a HARDWARE assumption that nothing GPU-free can decide**:
+
+1. **The native doorbell overtakes the private stores** (`hw_db_races_stores`; INFERRED: BAR0 doorbell vs BAR1 video-memory stores of the private GPFIFO entry and
+   `GP_PUT`, `publish_guarded` `userpump.rs` 545-621 and `Storage::publish_put` `user_storage.rs` 642-657 have release fences but NO read-back). An IDLE channel latches the old `GP_PUT`;
+   the batch's entry and its marker (exactly two entries) stay unpopped until that channel's NEXT doorbell. Minimal trace: `Submit[1]`; the worker serves, publishes entry, doorbell,
+   publishes marker, doorbell (stores not yet landed); parks with `Wait::Marker`. Nothing else ever rings. A read-back before the doorbell (`readback`) makes both channels live.
+   **This matches the freeze signature** (GPU idle, nothing outstanding on the host, safety-net counters 0, PUT - GET == 2 for seconds, independent of lazy observe / PUT cache / mirror,
+   several packets of one process stuck at once, worse under load that slows video-memory writes). Falsifier on hardware: read back the last stored private word before `rm.doorbell` (a
+   measurement switch) and the freezes must disappear; or a stranded channel must recover when the probe agent rings its doorbell by hand.
+2. **A doorbell dropped by a host-disabled channel** (`hw_drops_db_when_off`): `disable_channels` sets `v.disabled` only AFTER the host verb returned (`chan.rs` 4364) and
+   `rm.doorbell` is rung after the pt lock is released, so a publish + doorbell can land on an already host-disabled channel; neither enable path re-rings the native doorbell
+   (`disable_usermode` has the window for the whole act). Benign hardware (the doorbell is latched pending, or the enable re-reads `GP_PUT`) is live; adversarial hardware strands the
+   entries. The probe agent saw no disable/enable act within 230 s of the onset of two freezes, which falsifies this for those two.
+
+**Not fixed here**: a read-back adds one uncached BAR1 read per publish on the hot path (owner rule: MMIO reads are slow), and the hardware hypothesis is unproven. Options for the
+owner: (i) measurement switch with a read-back before every doorbell, run Minecraft + Heaven; (ii) if confirmed, one read-back per turn (coalesce the doorbells of a turn to one after the
+last publish), (iii) a native re-ring at the enable of every twin with `PUT != GET` (closes 2 only). A source-pin test `p10_publish_reads_back_before_the_native_doorbell` records the gap.
+
+### 9.3 Mutation check (MEASURED; `scripts/v2_mutation_check.py`, the unmutated v2 suite is green first; heaviest four scenarios skipped in the mutant runs)
+
+Harness mutants of the transliterated worker / act layer, each FOUND by two scenarios (the scenario without the mutant holds): `enable_skips_wake` (the enable act does not call
+`user_ring_wake`), `unlock_no_wake`, `event_deaf` (the worker never peeks on an engine event), `peek_never_rings`, `no_seq_check` (`try_park` without the sequence compare), `drop_busy_rung`.
+Production mutants of `kf-chan` (exact-text patches, file restored after each run):
+
+| mutant | v2 killers | older suites |
+|---|---|---|
+| `put_cache_idles_on_a_cached_read` (cache used when cursor == cached) | 35 | - |
+| `look_needed_ignores_demand` | 2 (`p6_a_pt_admission_window...`, `p6_a_pt_window_across_two_batches...`) | - |
+| `marker_wait_satisfied_by_pops` (the retired GP_GET proof) | 4 | - |
+| `popped_wait_target_off_by_one_high` | 3 | - |
+| `contended_wait_never_satisfied` | 2 (`p6_a_pt_window_inside_a_turn_across_two_batches...`, `p6_a_pt_window_across_two_batches...`) | `design_pt_admission_contention_is_spin_then_the_counted_backstop` |
+| `b_skips_while_a_wait_is_pending`, `wait_never_latched`, `end_batch_forgets_work_in_flight` | 0 | `b_a_turn_after_a_wait_always_observes`, `b_a_wait_forces_a_look_on_every_turn_until_it_is_over` |
+
+The last three survive v2 **by construction**: they are redundant defences (D6 `ring_full` guard, credit floor, the wait latch) whose loss costs staleness / latency of the guest's
+`GP_GET`, not liveness, and v2 checks liveness. They are killed by `user_lazy_turn`.
+
+### 9.4 What v2 still does not cover
+
+GPU time-slicing between the twins' TSGs (a blocked acquire holding a time slice); the BAR1-store / BAR0-doorbell ordering itself (assumed in 9.2, not decidable GPU-free); the shared software
+object / registry of the channels of one client; `segment_turn` triggers (Window, ring growth: `user_lifecycle_model`); the 32768-entry guest ring (the model uses 4-32 slots, the lazy interval
+is capped at half the ring so the same code path runs); `serve`/`peek`/`arm` run as a transliteration (guarded by pins, see the proposed `look()` refactor above).
