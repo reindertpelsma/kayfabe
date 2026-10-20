@@ -1,0 +1,47 @@
+tag	arm	pairs	ge1	ge2	ge4	max_gap	strand_lines	bf_work	bf_carried	bf_contended	worker_cores_max
+ZB2	ZB	2	0	0	0	0.01	0	735	0	0	0.011
+IXB	IXB	1	1	0	0	1.00	0	18	0	0	0.013
+IXC	IXC	1	1	0	0	1.01	0	0	0	0	0.001
+ZC3	ZC	2	1	1	1	8.89	1	0	0	1	0.093
+ZC4	ZC	2	0	0	0	0.13	0	0	0	1	0.091
+ZB5	ZB	2	0	0	0	0.01	0	594	0	0	0.011
+ZC6	ZC	2	0	0	0	0.52	0	0	0	1	0.087
+ZB7	ZB	2	0	0	0	0.01	0	716	0	0	0.010
+ZB8	ZB	2	0	0	0	0.01	0	497	0	0	0.011
+ZC9	ZC	2	0	0	0	0.01	0	0	0	0	0.090
+YB20	YB	2	0	0	0	0.01	0	346	0	0	0.011
+YM21	YM	2	0	0	0	0.01	0	0	0	0	0.016
+YC22	YC	2	1	1	1	4.31	2	0	0	2	0.092
+YC23	YC	2	1	1	1	12.59	1	0	0	1	0.098
+YM24	YM	2	0	0	0	0.01	0	0	0	0	0.016
+YB25	YB	2	0	0	0	0.01	0	681	0	0	0.011
+YM26	YM	2	0	0	0	0.01	0	0	0	0	0.016
+YB27	YB	2	0	0	0	0.01	0	376	0	0	0.014
+YC28	YC	2	1	1	1	10.10	3	0	0	3	0.100
+YC29	YC	2	1	1	0	2.88	1	0	0	2	0.090
+YB30	YB	2	0	0	0	0.01	0	533	0	0	0.015
+YM31	YM	2	0	0	0	0.01	0	0	0	0	0.016
+YB32	YB	2	0	0	0	0.02	0	303	0	0	0.011
+YM33	YM	2	0	0	0	0.01	0	0	0	0	0.016
+YC34	YC	2	1	1	1	5.46	1	0	0	1	0.094
+YC35	YC	2	0	0	0	0.01	0	0	0	0	0.091
+YM36	YM	2	0	0	0	0.01	0	0	0	0	0.017
+YT37	YT	2	0	0	0	0.01	0	366	0	0	0.011
+YMI40	YMI	2	0	0	0	0.01	0	0	0	0	0.016
+IXT	IXT	1	1	0	0	1.00	0	7	0	0	0.001
+IXM	IXM	1	1	0	0	1.01	0	0	0	0	0.013
+YT50	YT	2	0	0	0	0.01	0	662	0	0	0.011
+YC51	YC	2	0	0	0	0.57	0	0	0	1	0.090
+YC52	YC	2	0	0	0	0.01	0	0	0	8	0.087
+ARM_TOTALS arm boots pairs ge1 ge2 ge4 maxgap strands bf_work
+IXB	boots=1	pairs=1	ge1=1	ge2=0	ge4=0	max=1.00	strands=0	bf_work=18
+IXC	boots=1	pairs=1	ge1=1	ge2=0	ge4=0	max=1.01	strands=0	bf_work=0
+IXM	boots=1	pairs=1	ge1=1	ge2=0	ge4=0	max=1.01	strands=0	bf_work=0
+IXT	boots=1	pairs=1	ge1=1	ge2=0	ge4=0	max=1.00	strands=0	bf_work=7
+YB	boots=5	pairs=10	ge1=0	ge2=0	ge4=0	max=0.02	strands=0	bf_work=2239
+YC	boots=8	pairs=16	ge1=5	ge2=5	ge4=4	max=12.59	strands=8	bf_work=0
+YM	boots=6	pairs=12	ge1=0	ge2=0	ge4=0	max=0.01	strands=0	bf_work=0
+YMI	boots=1	pairs=2	ge1=0	ge2=0	ge4=0	max=0.01	strands=0	bf_work=0
+YT	boots=2	pairs=4	ge1=0	ge2=0	ge4=0	max=0.01	strands=0	bf_work=1028
+ZB	boots=4	pairs=8	ge1=0	ge2=0	ge4=0	max=0.01	strands=0	bf_work=2542
+ZC	boots=4	pairs=8	ge1=1	ge2=1	ge4=1	max=8.89	strands=1	bf_work=0
