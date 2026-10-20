@@ -63,3 +63,15 @@ H-OFA-OFF supported (not falsified). The refused event index is not in the logs.
   reply). trace_on_1 = base product ON with WINVM_TRACE=1 KF3_BAR0_READ_TRACE=1 (display-range reads,
   all writes). *Falsifier:* between the doorbell of the 4th CA7A allocation and the doorbell of the
   first teardown RPC the trace holds no display-range (0x610000..0x6fffff) access at all.
+
+## Addendum 17:18 UTC — before the fix2 arms (none started)
+
+MEASURED fix1d_off_1 (diagnostic log): armings in order 194, 35, then 44, 43, 113, 120, 4, 33, 139,
+157, 197, 122, 158, 2 (all NV_OK), then **196 = NV2080_NOTIFIERS_USE_GC6_REDUCED_THRESHOLD, REPEAT,
+refused 0x56 (86)**, then the 12 served ones are disabled (action 0) and teardown follows. Ada's
+Windows order (kf-rm tests/code43_startdevice_batch.rs) has CE3 (26) in that position and never arms 196.
+
+- **H-GC6-OFF** (the 196 refusal is the next OFF wall). Product fix2 = c58989dab (claude/blackwell-ofa-20261020:
+  PR53 + CFFA + a §S.1 stub row for 196, tests first). *Falsifier:* fix2_off serves the 196 arming (0x0)
+  and the guest still tears down right after it with Code 43 (no further non-Free RPC beyond the
+  arming sequence). *Support:* progress past it (a later abort or Code 0).
