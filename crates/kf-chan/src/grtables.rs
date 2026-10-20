@@ -518,6 +518,30 @@ mod tests {
         }
     }
 
+    // [measured 2026-10-20, GB202 Windows 580.88, traces/blackwell_resume_20261020/arms/fix2_off_*]
+    // Windows' kernel GR channel's first segment carries SET_REPORT_SEMAPHORE_A..D on BLACKWELL_B
+    // (0xCE97); refusing it kills the channel, a paging copy channel then stops at GP_GET 6877 of
+    // 7084 and Windows bugchecks 0x116. NVIDIA's own public class headers (open-gpu-doc @9fdf5c40,
+    // classes/3d/clcd97.h:4025-4034, clce97.h:4042-4051) define the rows at the same offsets with
+    // every D field identical to clc997.h and OFFSET_UPPER widened to 24:0.
+    #[test]
+    fn blackwell_3d_report_semaphore_rows_are_admitted_from_the_vendor_public_header() {
+        for c in [0xCD97, 0xCE97] {
+            for m in [0x1B00, 0x1B04, 0x1B08, 0x1B0C] {
+                assert!(
+                    matches!(report_semaphore(c, m), Some(Disposition::Allowed(_))),
+                    "{c:#x} {m:#x}"
+                );
+            }
+            assert_eq!(address_upper_bits(c), 25, "{c:#x}");
+        }
+        let a = REPORT_SEMAPHORE_ALLOWED[0];
+        assert_eq!(reauthor_in_class(Some(0xCE97), &a, 0x01FF_FFFF), Ok(0x01FF_FFFF));
+        assert!(reauthor_in_class(Some(0xCE97), &a, 0x0200_0000).is_err());
+        // The trigger keeps the one-word plain RELEASE rule on Blackwell too.
+        assert!(reauthor_report_semaphore_d(0x1000_f011).is_err());
+    }
+
     #[test]
     fn report_semaphore_rows_are_the_3d_class_of_the_header_families_only() {
         for f in kf_chip::Family::ALL {
