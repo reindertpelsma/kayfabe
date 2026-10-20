@@ -36,6 +36,8 @@ def read_csv(lines):
             skipped += 1
     if header is None:
         raise ValueError('PresentMon header absent')
+    # PresentMon emits completed records; event timestamps can arrive out of order.
+    rows.sort(key=lambda row: row[0])
     return rows, skipped
 
 
