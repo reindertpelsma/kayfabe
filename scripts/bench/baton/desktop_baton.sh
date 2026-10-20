@@ -125,6 +125,7 @@ stop_owner() {
     pids=$(owner_pids); [ -n "$pids" ] || { say "no owner launcher running: nothing to stop"; return 0; }
     log=$(owner_log_of); [ -n "$log" ] || die "owner launcher running but its log is not found; no action taken" 30
     say "stopping the owner VM cleanly: touch $OWNER_STOP (log $log)"
+    OWNER_TOUCHED=1
     touch "$OWNER_STOP"
     local i
     for i in $(seq 80); do   # 400 s: ACPI 180 s + guest agent 120 s inside the launcher
@@ -139,6 +140,7 @@ stop_owner() {
 restore_owner() {
     [ "${NO_OWNER_RESTORE:-0}" = 1 ] && { say "NO_OWNER_RESTORE=1: owner VM NOT restored"; return 0; }
     if [ -n "$(owner_pids)" ]; then say "owner launcher already running: nothing to restore"; return 0; fi
+    [ "${OWNER_TOUCHED:-0}" = 1 ] || { say "the owner VM was never stopped or displaced by this run: nothing to restore"; return 0; }
     if any_qemu; then say "a QEMU is running (not ours to judge): NOT restoring; coordinator must"; return 0; fi
     local n out; n=$(next_run); out=$OUTROOT/owner-restore-$n.log
     rm -f "$OWNER_STOP"
@@ -167,6 +169,7 @@ stage1() {
     trap 'rc=$?; say "restoring (exit rc=$rc)"; restore_owner; echo "DESKTOP_BATON_EXIT rc=$rc $(date -Is)" | tee "$OUTROOT/EXIT"' EXIT
     wait_for_host
     stop_owner
+    OWNER_TOUCHED=1   # from here the host is ours; the owner VM is restored at exit (it was down or just stopped)
     flock -w 300 -o "$LOCK" env BATON_STAGE2=1 OUTROOT="$OUTROOT" TAG="$TAG" bash "${BASH_SOURCE[0]}" stage2 "$TAG"
     return $?
 }
@@ -194,7 +197,13 @@ stage2() {
     TAG=${1:?tag}; OUT=${OUTROOT:?}
     [ "${BATON_STAGE2:-0}" = 1 ] || die "stage2 runs under the lock only (use: run TAG)"
     any_qemu && die "a QEMU is running after the lock was taken: $(pgrep -a -x qemu-system-x86 | cut -c1-120)" 31
-    session_info | tee "$OUT/host_session.txt" || die "no graphical session on seat0" 32
+    session_info > "$OUT/host_session.txt" || die "no graphical session on seat0" 32
+    cat "$OUT/host_session.txt"
+    # keep the host session awake for the run (an idle/blanked GNOME would stop the broker window's frame callbacks);
+    # the inhibitor is a `sleep` that expires by itself, never signalled
+    local est=900 ph2; for ph2 in $PLAN; do est=$(( est + ${ph2##*:} + 60 )); done
+    runuser -u "$SU" -- env XDG_RUNTIME_DIR="/run/user/$SUID" DBUS_SESSION_BUS_ADDRESS="unix:path=/run/user/$SUID/bus" \
+        gnome-session-inhibit --inhibit idle --reason "kayfabe desktop baton" sleep "$est" > "$OUT/inhibit.log" 2>&1 < /dev/null &
     XID0=$(xid_count); echo "HOST_XID_BEFORE $XID0" | tee "$OUT/host_xid.txt"
     mkdir -p "$OUT/bench/kf3-bins" "$OUT/phases"
     ln -sfn "$W/kf3-bins/$REV" "$OUT/bench/kf3-bins/$REV"; ln -sfn "$KEY" "$OUT/bench/guest_key"
