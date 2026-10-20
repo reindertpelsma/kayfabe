@@ -128,6 +128,28 @@ const RUN31_CE: [u32; 7] = [
     0x0000_0001,
 ];
 
+/// Build the native GR oracle's segment separately from its placement and GPU run.
+fn gr_segment(classes: &[u32]) -> Result<Vec<u32>, String> {
+    let mut words = RUN31_GR.to_vec();
+    words.extend_from_slice(&RUN32_GR_TAIL);
+    let mut at = 0;
+    while at < words.len() {
+        let h = kf_abi::submit::method_header_decode(words[at]).ok_or("native fixture header")?;
+        if h.method == kf_abi::submit::SET_OBJECT
+            && h.arg_words == 1
+            && let Some(kind) = kf_chan::grtables::GrClass::of_class(words[at + 1])
+        {
+            words[at + 1] = classes
+                .iter()
+                .copied()
+                .find(|c| kf_chan::grtables::GrClass::of_class(*c) == Some(kind))
+                .ok_or_else(|| format!("native fixture requires allocated {}", kind.name()))?;
+        }
+        at += 1 + h.arg_words;
+    }
+    Ok(words)
+}
+
 fn main() {
     let mut l = Checks::default();
     if let Err(e) = run(&mut l) {
@@ -368,19 +390,8 @@ fn run(l: &mut Checks) -> Result<(), String> {
         off: CHAN,
         gp_get_cpu_stores: Cell::new(0),
     };
-    // GP 0: run32's whole 46-word segment, unchanged (it releases nothing: GP_GET is its
+    // GP 0: run32's 46-word segment, with allocated native-family classes (it releases nothing: GP_GET is its
     // completion). GP 1: a semaphore release. GP 2 (hostile): a 3D notifier address no row covers.
-    let mut gp0 = RUN31_GR.to_vec();
-    gp0.extend_from_slice(&RUN32_GR_TAIL);
-    // ★ Batch 3: GP 1 is run44's 3D report-semaphore release first, then the host release.
-    let mut gp1 = report_release(VA_CHAN + SEM_3D, P3);
-    gp1.extend(release(P1));
-    let gp2 = m(0, 0x0104, &[0x5, 0]);
-    stage(&walk, CHAN, VA_CHAN, &[&gp0, &gp1, &gp2])?;
-    walk.write_store(CHAN + SEM_GR, &0u32.to_le_bytes())
-        .map_err(|e| e.to_string())?;
-    walk.write_store(CHAN + SEM_3D, &0u32.to_le_bytes())
-        .map_err(|e| e.to_string())?;
 
     let mut host = HostRing::on_engine_layout(
         &rm,
@@ -414,6 +425,17 @@ fn run(l: &mut Checks) -> Result<(), String> {
         },
         format!("{objects:x?} context={:x?}", host.gr_context()),
     );
+    let gp0 = gr_segment(&classes)?;
+    // ★ Batch 3: GP 1 is run44's 3D report-semaphore release first, then the host release.
+    let mut gp1 = report_release(VA_CHAN + SEM_3D, P3);
+    gp1.extend(release(P1));
+    let gp2 = m(0, 0x0104, &[0x5, 0]);
+    stage(&walk, CHAN, VA_CHAN, &[&gp0, &gp1, &gp2])?;
+    walk.write_store(CHAN + SEM_GR, &0u32.to_le_bytes())
+        .map_err(|e| e.to_string())?;
+    walk.write_store(CHAN + SEM_3D, &0u32.to_le_bytes())
+        .map_err(|e| e.to_string())?;
+
     let gp_get_at = win
         .fb(CHAN + USERD + kf_abi::submit::USERD_GP_GET, 4)
         .ok_or("USERD GP_GET outside the store window")?;
@@ -711,4 +733,76 @@ fn run(l: &mut Checks) -> Result<(), String> {
         freed.join(" | "),
     );
     Ok(())
+}
+
+#[cfg(test)]
+mod fixture_tests {
+    use super::*;
+    use kf_abi::submit::{SET_OBJECT, method_header_decode};
+    use kf_chan::grtables::GrClass;
+
+    fn allocated(family: kf_chip::Family) -> Option<Vec<u32>> {
+        let classes = kf_chip::classes::classes_for(family);
+        [
+            GrClass::TwoD,
+            GrClass::InlineToMemory,
+            GrClass::ThreeD,
+            GrClass::Compute,
+        ]
+        .iter()
+        .map(|k| classes.of_kind(k.kind()).last().copied())
+        .collect()
+    }
+
+    #[test]
+    fn native_fixture_only_binds_graphics_objects_allocated_for_that_family() {
+        let mut families = 0;
+        for family in kf_chip::Family::ALL {
+            let Some(classes) = allocated(family) else {
+                continue;
+            };
+            families += 1;
+            let words = gr_segment(&classes).unwrap();
+            let mut at = 0;
+            let mut binds = 0;
+            while at < words.len() {
+                let header = method_header_decode(words[at]).unwrap();
+                if header.method == SET_OBJECT && GrClass::of_class(words[at + 1]).is_some() {
+                    assert!(
+                        classes.contains(&words[at + 1]),
+                        "{family:?}: unallocated class {:#x}",
+                        words[at + 1]
+                    );
+                    binds += 1;
+                }
+                at += 1 + header.arg_words;
+            }
+            assert_eq!(binds, 4);
+        }
+        assert!(families >= 4);
+    }
+
+    #[test]
+    fn blackwell_fixture_selects_its_own_i2m_3d_and_compute_objects() {
+        let classes = allocated(kf_chip::Family::Blackwell).unwrap();
+        let words = gr_segment(&classes).unwrap();
+        assert_eq!(words[4], classes[1], "I2M binding");
+        assert_eq!(words[RUN31_GR.len() + 3], classes[2], "3D binding");
+        assert_eq!(words[RUN31_GR.len() + 8], classes[3], "compute binding");
+        let mut original = RUN31_GR.to_vec();
+        original.extend_from_slice(&RUN32_GR_TAIL);
+        for (i, value) in original.iter().enumerate() {
+            if ![4, 6, RUN31_GR.len() + 3, RUN31_GR.len() + 8].contains(&i) {
+                assert_eq!(words[i], *value, "non-graphics operand {i}");
+            }
+        }
+    }
+
+    #[test]
+    fn an_unallocated_graphics_object_refuses_the_oracle_fixture() {
+        assert!(gr_segment(&[]).is_err());
+        let mut classes = allocated(kf_chip::Family::Blackwell).unwrap();
+        classes.retain(|c| GrClass::of_class(*c) != Some(GrClass::ThreeD));
+        assert!(gr_segment(&classes).is_err());
+    }
 }
