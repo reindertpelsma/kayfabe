@@ -1,0 +1,3 @@
+[2026-10-20T18:25:06Z] WINVM_BOOT_END boot=1 rc=0 reason=guest-reset kf3_lines=10460 host_xid=0
+[2026-10-20T18:25:06Z]   GUEST_PANICKED in boot 1: {"timestamp": {"seconds": 1792520685, "microseconds": 231884}, "event": "GUEST_PANICKED", "data": {"action": "run", "info": {"arg5": 4, "arg4": 18446744072635809946, "arg3": 18446735304143096112, "arg2": 18446630877098300512, "arg1": 278, "type": "hyper-v"}}}
+[2026-10-20T18:25:06Z] WINVM_RUN_END tag=fix3_off_1 boots=1 reason=guest-reset

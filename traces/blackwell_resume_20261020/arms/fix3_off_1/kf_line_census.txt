@@ -1,0 +1,80 @@
+1760	kfN: GSP rpc RmAlloc seq=N
+1457	kfN: GSP rpc Free seq=N
+657	kfN: GSP rpc RmControl seq=N
+483	kfN: w#N barN @N = N phase=Running
+394	kfN: GSP rpc UNSERVICED Unserviced { code: N, sequence: N }
+328	kf-rm: chanlink: client N root: kernel=false internal=false
+239	kfN: mem t=N.Ns walk reconciled [N:+N-NrN] completed=[(N, Cleared)] unreconciled=[]
+49	kfN: GSP REFUSED fnN/N=N (GSP_RM_CONTROL) first_seq=N — the guest read a non-OK status
+40	kf-mem: PRIVILEGED leaf N+N (ap=N at=N kind=N) WITHHELD from a user twin — the guest kernel marked it privileged and the
+27	kfN: w#N barN @N = N phase=Cold
+23	kf-rm: RPC-REFUSED #N AllocClassNotPermitted { class: N, denial: Refused { name: "NVN_INC", why: NoPhysicalBoardBus } } 
+20	kfN: VasKey(N) root N: N privileged run(s) mirrored — a guest-kernel space or CPU window
+20	kfN: PT-NSI host FIFO_EVENT_MTHD edge #N: Raise(N) (guest armed=true, vector Some(N))
+19	kf-host: map_scattered N pieces N bytes: stitch N us, descriptor N us, hand view to reaper N us, map N us
+18	kf-host: channel birth h=N engine=N reply_flags=N PRIVILEGED_CHANNEL=N privilege=USER cap_sys_admin=cleared-for-call
+18	kfN: NSI RELAY host non-stall (FIFO_EVENT_MTHD) -> guest CEN vector N: a Translated copy-engine ring retired work after 
+17	kfN: TSPACE-RETIRE tok=N host=N key=VasKey(N) ring_va=N released=true stale_binds=N/N late=N indeterminate=N unresolved[
+17	kfN: DOORBELL-LEDGER tok=N route=translated emulated=N forwarded=N host=N fast=N
+17	kfN: act free: N:N: translated host N (N us, off the GSP lock)
+16	kfN: FIFO_GET_LATENCY_BUFFER_SIZE engine N: gp=N pb=N (the host's answer)
+15	kfN: chan N:N GPFIFO_SCHEDULE enable=true (token N, host N)
+15	kfN: chan N:N: NVN_DEFERRED_API N ADMITTED on Translated host N, software classID Some(N) (OWNER_RULINGS §U.N)
+15	kfN: VasKey(N) root N: N privileged run(s) (N bytes) withheld — a user twin
+14	kf-rm: chanlink: GPU_PROMOTE_CTX on N:N params=N rpc_flags=N
+13	kf-rm: chanlink: CLASSIFY N:N kernel work -> Translated (the kernel driver's own process)
+12	kfN: PT-NSI host CEN notifier wake #N: NotArmed (vector Some(N), live twins N)
+12	kfN: chan token N (host N) RETIRED, forwarded=N submissions=N splits=N/N serves=N last_put=Some(N) gp_get=None store_vie
+10	kfN: host facts: GSS N [] refused by the host (HostRefusal { status: None, detail: "Other(N)" }) — not served
+10	kf-rm: chanlink: FERMI_VASPACE_A N:N under N (device default for it: N) VAS-FACTS index=Some(N) flags=Some(N) bigPageSiz
+9	kf-host: HOST-ABI REFUSED control N: host control N has no public header (zero request measured NV_OK on ADN N.N.N and G
+9	kf-rm: chanlink: falcon ctx promote N:N engine N guest ctx buffer VA N+N
+8	kf-rm: FECS-TRACE GET_FECS_TRACE_HW_ENABLE N: NV_OK bEnable=NV_FALSE (no guest ctxsw trace; the SETs stay unserviced) #N
+7	kfN: mem t=N.Ns walk reconciled [N:+N-NrN] completed=[] unreconciled=[]
+6	kf-rm: chanlink: VAS-DECL N:N vaBase=N vaSize=N end=None shared_management=false
+6	kfN: VasKey(N) mirror space=N: windows=none rings=none (recycled)
+6	kf-rm: EXPERIMENT software-runlist diagnostic control=N params_bytes=N raw_uN_le=[ffN,N,ffN,N,N,N,N,N,N,N]; observation 
+6	kf-rm: SW-RUNLIST HOST-OWNED N client=N object=N: NV_OK, request echoed, contents ignored (kernel channels are scheduled
+5	kf-rm: chanlink: client N root: kernel=false internal=true
+5	kfN: mem t=N.Ns pagedir VasKey(N) root=N First
+5	kfN: act timeslice: N:N SET_TIMESLICE N us on N twin group(s) (N us, off the GSP lock)
+5	kfN: act channel timeslice: N:N SET_CHANNEL_PROPERTIES ENGINE_TIMESLICE N us on host group N (twin N) (N us, off the GSP
+5	kf-rm: channel-property-facts envelope=N:N channel=N property=N value=N
+5	kfN: act free: N:N: engine object host N freed (N us, off the GSP lock)
+4	kf-rm: EXPERIMENT software-runlist request engine=N maxTSGs=N qosIntrEnableMask=N; metadata only
+4	kfN: act promote translated context: N:N GPU_PROMOTE_CTX satisfied by Translated host N GR=None VIDEO=Some((cafeN, cfbN,
+4	kf-rm: chanlink: VAS-DECL N:N vaBase=N vaSize=N end=Some(N) shared_management=true
+4	kf-rm: chanlink: Device N:N default VA space set to N (SET_DEFAULT_VASPACE)
+4	kf-gsp: large RPC fn N seq N joined from N fragment(s), N bytes, answered in N replies (rpc_result N)
+3	kfN: mem t=N.Ns [N/N] prewarm: spare host space N ready before the guest runs — windows=none (vaspace N us, ram_obj N us
+3	kfN: mem t=N.Ns retire VasKey(N): N row(s) unmapped (N refused) in N us, N host call(s), host space N kept as a spare — 
+3	kfN: mem invalidate seq N CLEARED OVER ABSENCE (Some(VasKey(N))): its refused leaves are absent on the host (a GPU acces
+3	kfN: mem t=N.Ns REFUSED VasKey(N) root N: N run(s) not applied: leaf N+N names store N, inside the firmware carve-out at
+3	kfN: GSS N answered from the host's realize-time reply
+3	kf-rm: EXPERIMENT software-runlist diagnostic function=N ALLOC_MEMORY payload_bytes=N prefix_only=true hClient=N hDevice
+3	kfN: GSP rpc Other(N) seq=N
+3	kfN: VasKey(N) mirror space=N: windows=none rings=none (N us: vaspace N ram_obj N)
+3	kf-rm: DEFERRED-API N on N:N hApiHandle=N cmd=N psz=N -> N
+3	kf-rm: PROBE KFN_PREEMPT_BIND_PROBE N client=N object=N flags=N hClient=N hChannel=N gfxp=N cilp=N: NV_OK, request echoe
+2	kfN: host facts: GSS N [(N, N), (N, N), (c, N), (Nc, N)]: the background probe was refused or changed the answer — zero-
+2	kfN: BARN scratch: tile N x N over N (host RAM bound N)
+2	kf-gsp: fn N GSP_SET_SYSTEM_INFO seq=N N bytes: bGspNocatEnabled=N at +N (driver N.N.N's layout; N = a Windows-built RM,
+2	kfN: GSP rpc GspSetSystemInfo seq=N
+2	kfN: GSP rpc SetRegistry seq=N
+2	kfN: w#N barN @N = N phase=Booted
+2	kfN: GSP rpc UpdateBarPde seq=N
+2	kf-rm: chanlink: CLASSIFY N:N kernel work -> Translated (an RM-internal client)
+2	kfN: GSP REFUSED fnN/N=N (GSP_RM_ALLOC) first_seq=N — the guest read a non-OK status
+2	kfN: VasKey(N) is a guest-KERNEL space (Translated chan N:N): privileged leaves are mirrored here
+2	kf-rm: chanlink: CLASSIFY N:N kernel work -> Translated (no context share (the kernel driver's own channels declare none
+2	kf-chan: GR tier admitted host channel N (token N) reply_flags=N privilege=USER objects=[(Nd, cafeN), (cdN, cafeN), (ceN
+2	kfN: NSI RELAY host non-stall (FIFO_EVENT_MTHD) -> guest GRN vector N: a Translated GR-tier ring retired engine-written 
+2	kfN: PT-NSI host GRN notifier wake #N: Raise(N) (vector Some(N), live twins N)
+2	kf-rm: server-context-only PDE copy client=N vaspace=N page_size=N levels=[shiftN phys=N size=N ap=N] (inert)
+2	kfN: act promote ctx: chan N:N GPU_PROMOTE_CTX SATISFIED BY TWIN host N (host GR object(s) [] — none yet: the engine obj
+2	kfN: chan token N (host N) RETIRED, forwarded=N submissions=N splits=N/N serves=N last_put=Some(N) gp_get=Some(N) store_
+2	kfN: GSP command service REFUSED: QueueNotBound
+1	kf-host: host tier: stock
+1	kf-host: HOST-ABI REFUSED control N: host control N has no row in kf_abi::hostabi::HOST_CONTROLS, and host driver N.N.N 
+1	kfN: host facts: GSS N [(N, N)] refused by the host (HostRefusal { status: None, detail: "Other(N)" }) — not served
+1	kf-host: HOST-ABI REFUSED control N: : body is N bytes, its layout is N

@@ -1,0 +1,2 @@
+[2026-10-20T18:20:59Z] WINVM_BOOT_END boot=1 rc=0 reason=guest-shutdown kf3_lines=2070 host_xid=0
+[2026-10-20T18:20:59Z] WINVM_RUN_END tag=fix3_on_2 boots=1 reason=guest-shutdown

@@ -1,0 +1,1 @@
+/workspace/bwr-win/kfwin/logs/capsdiag_on_1_b1_qemu.log	rpcs=5111	teardown_at=4417	last=fn76/20801211 	result=0x0

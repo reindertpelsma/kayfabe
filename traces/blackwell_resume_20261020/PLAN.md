@@ -112,3 +112,17 @@ The served page has 40 derived words; this die's own read has 127 non-zero words
   branch claude/blackwell-diag2-20261020 (0752115a7, NOT for merge) with KF3_DIAG_CAPS_PAGE_FILE = this
   box's own Linux 580.159.04 read (oracle only, never shipped). *Falsifier:* with the full own-die
   page served, ON still aborts right after the 4th CA7A with Code 43.
+
+## Addendum 18:42 UTC — after capsdiag_on_1, before the caps bisection arms (none started)
+
+MEASURED capsdiag_on_1: with the whole own-die page (127 words) served, **ON reaches Code 0**
+(5111 RPCs) and then bugchecks like the OFF Code-0 arms: H-CAPS-ANY supported, H-CAPS-ON (0x00c alone)
+falsified (fix3_on_1/2, n=2). fix3_off_1: Code 0 then bugcheck (as fix2).
+
+Bisection pages (caps/*.txt; derived fix3 words with this die's own words overlaid in one region):
+- caps_lowA_on: native words in 0x000..0x624 (core/head/SOR region), rest derived. *Falsifier for
+  "the needed words are in lowA":* Code 43 with the CA7A abort.
+- caps_highB_on: native words in 0x680..0xfff (per-head and window precomp caps), rest derived.
+  *Falsifier for "the needed words are in highB":* Code 43 with the CA7A abort.
+- caps_ctl_on (control): the derived page alone through the same hook. *Expected:* Code 43 (else the
+  hook itself changes behaviour and every caps arm is void).
