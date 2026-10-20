@@ -46,7 +46,15 @@ pub enum LifecycleMode {
     NoPointerMarkers,
     /// A Window starts at the first entry that sees the registration (PHASE 1 behaviour), not at the anchor.
     NoAnchoredWindows,
+    /// MEASUREMENT ONLY (2026-10-20, baton Pointer-mode reproducer; not in [`Self::ALL`]): a Scan-mode channel with no
+    /// software object (a Linux guest never allocates the 5080 object, so it never reaches Pointer) is treated as bound
+    /// after [`FORCE_POINTER_AFTER`] scanned entries, and goes to Pointer exactly as `Cause::SoftwareBound` does with
+    /// no live registration. Unsafe as a product mode (the guest's SET_OBJECT is never seen); a bench switch.
+    ForcePointer,
 }
+
+/// Scanned entries after which `ForcePointer` switches a channel to Pointer.
+pub const FORCE_POINTER_AFTER: u64 = 16;
 
 impl LifecycleMode {
     /// The environment variable.
@@ -66,12 +74,16 @@ impl LifecycleMode {
             Self::AlwaysScan => "always_scan",
             Self::NoPointerMarkers => "no_pointer_markers",
             Self::NoAnchoredWindows => "no_anchored_windows",
+            Self::ForcePointer => "force_pointer",
         }
     }
     /// The mode a value names (`None` for an unknown name).
     #[must_use]
     pub fn parse(value: &str) -> Option<Self> {
-        Self::ALL.into_iter().find(|m| m.name() == value)
+        Self::ALL
+            .into_iter()
+            .chain([Self::ForcePointer])
+            .find(|m| m.name() == value)
     }
 }
 
@@ -802,6 +814,14 @@ impl Lifecycle {
                         self.window_segments = 0;
                         self.counts.to_window_exact += 1;
                     }
+                } else if self.kind == LifecycleMode::ForcePointer
+                    && self.live == 0
+                    && self.counts.entries_scan >= FORCE_POINTER_AFTER
+                {
+                    self.go(Mode::Pointer, Cause::SoftwareBound);
+                    self.counts.to_pointer += 1;
+                    self.pointer_stretch = 0;
+                    self.anchor(o);
                 } else if !o.have_software && !self.no_software_counted {
                     self.no_software_counted = true;
                     self.counts.scan_no_software += 1;
@@ -1223,6 +1243,39 @@ mod tests {
             })
         );
         assert_eq!(l.counts().to_pointer, 1);
+    }
+
+    #[test]
+    fn force_pointer_switches_a_channel_without_a_software_object_after_the_threshold() {
+        let mut l = Lifecycle::new().with_mode(LifecycleMode::ForcePointer);
+        for i in 0..FORCE_POINTER_AFTER {
+            assert!(matches!(
+                l.entry(&obs(i, 0x1000, 0, 0), || 0),
+                Plan::Scan { .. }
+            ));
+            l.forwarded(i, 0x1000);
+        }
+        assert_eq!(l.mode(), Mode::Scan);
+        assert_eq!(
+            l.entry(&obs(FORCE_POINTER_AFTER, 0x1000, 0, 0), || 0),
+            Plan::Forward
+        );
+        assert_eq!(l.mode(), Mode::Pointer);
+        assert_eq!(l.counts().to_pointer, 1);
+        // the default mode never does that
+        let mut d = Lifecycle::new();
+        for i in 0..=FORCE_POINTER_AFTER {
+            assert!(matches!(
+                d.entry(&obs(i, 0x1000, 0, 0), || 0),
+                Plan::Scan { .. }
+            ));
+            d.forwarded(i, 0x1000);
+        }
+        assert_eq!(d.mode(), Mode::Scan);
+        assert_eq!(
+            LifecycleMode::parse("force_pointer"),
+            Some(LifecycleMode::ForcePointer)
+        );
     }
 
     #[test]
