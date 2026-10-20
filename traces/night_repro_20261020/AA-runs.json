@@ -1,0 +1,181 @@
+{
+  "label": "MEASURED",
+  "runs": [
+    {
+      "run": 3404,
+      "rev": "0d7ba743",
+      "flags": {
+        "KF3_WIN_USER_CHANNELS_PASSTHROUGH": "1",
+        "KF3_WIN_TWIN_DEFAPI_OBJECT": "1",
+        "KF3_KERNEL_GR_CE": "1",
+        "KF3_KERNEL_GR_WORK": "1",
+        "KF3_TRANSLATED_CE_RELAY": "1",
+        "KF3_DEFERRED_API": "1",
+        "KF3_PREEMPT_BIND_PROBE": "1",
+        "KF3_DISPLAY_IMP_ENABLE": "1",
+        "KF3_DISPLAY_CTRL_PROBE": "1",
+        "KF3_ZCULL_BIND_PROBE": "1",
+        "KF3_SW_RUNLIST_HOST_OWNED": "1",
+        "KF3_ASYNC_PREEMPT": "1",
+        "KF3_GFX_POOL_PROBE": "1",
+        "KF3_SW_RUNLIST_PROBE": "1",
+        "KF3_MEMORY_LIST_PROBE": "1",
+        "KF3_DISPLAY_SDR_COLOR": "1",
+        "KF3_DISPLAY_CAPS_PROBE": "1",
+        "KF3_DISPLAY_LUT_MIRROR": "1",
+        "KF3_DISPLAY_ILUT_OFFSET_256": "1",
+        "KF3_LIFECYCLE_COUNT": "1",
+        "KF3_LIFECYCLE_PERIOD_S": "5",
+        "KF3_TSG_MIRROR": "0"
+      },
+      "pair": "heaven-gravity",
+      "duration_s": 724.6694191,
+      "expected_apps": [
+        "Heaven.exe",
+        "GravityMark.exe"
+      ],
+      "load_present": true,
+      "malformed_rows": 0,
+      "classes": {
+        "failure_class": "DEVICE_LOST_TDR",
+        "time_to_first_event153_s": 61.882548099999994,
+        "time_to_first_device_loss_s": 64.2225605,
+        "time_to_first_failure_s": 61.882548099999994,
+        "event153_count": 3,
+        "device_loss_records": 1,
+        "independent_silences_count": 0
+      },
+      "xid_before": 21,
+      "xid_after": 21,
+      "xid_after_clean_stop": 21,
+      "apps": {
+        "Heaven.exe": {
+          "count": 1,
+          "total_s": 43.497414,
+          "longest_s": 43.497414,
+          "right_censored": 0,
+          "presents": 1033,
+          "pids": [
+            13620
+          ],
+          "intervals": [
+            {
+              "pid": 13620,
+              "begin_qpc": 438946623,
+              "end_qpc": 873920763,
+              "duration_s": 43.497414,
+              "right_censored": false
+            }
+          ]
+        },
+        "GravityMark.exe": {
+          "count": 1,
+          "total_s": 666.0103689,
+          "longest_s": 666.0103689,
+          "right_censored": 1,
+          "presents": 19656,
+          "pids": [
+            13616
+          ],
+          "intervals": [
+            {
+              "pid": 13616,
+              "begin_qpc": 769626634,
+              "end_qpc": 7429730323,
+              "duration_s": 666.0103689,
+              "right_censored": true
+            }
+          ]
+        }
+      }
+    },
+    {
+      "run": 3405,
+      "rev": "0d7ba743",
+      "flags": {
+        "KF3_WIN_USER_CHANNELS_PASSTHROUGH": "1",
+        "KF3_WIN_TWIN_DEFAPI_OBJECT": "1",
+        "KF3_KERNEL_GR_CE": "1",
+        "KF3_KERNEL_GR_WORK": "1",
+        "KF3_TRANSLATED_CE_RELAY": "1",
+        "KF3_DEFERRED_API": "1",
+        "KF3_PREEMPT_BIND_PROBE": "1",
+        "KF3_DISPLAY_IMP_ENABLE": "1",
+        "KF3_DISPLAY_CTRL_PROBE": "1",
+        "KF3_ZCULL_BIND_PROBE": "1",
+        "KF3_SW_RUNLIST_HOST_OWNED": "1",
+        "KF3_ASYNC_PREEMPT": "1",
+        "KF3_GFX_POOL_PROBE": "1",
+        "KF3_SW_RUNLIST_PROBE": "1",
+        "KF3_MEMORY_LIST_PROBE": "1",
+        "KF3_DISPLAY_SDR_COLOR": "1",
+        "KF3_DISPLAY_CAPS_PROBE": "1",
+        "KF3_DISPLAY_LUT_MIRROR": "1",
+        "KF3_DISPLAY_ILUT_OFFSET_256": "1",
+        "KF3_LIFECYCLE_COUNT": "1",
+        "KF3_LIFECYCLE_PERIOD_S": "5",
+        "KF3_TSG_MIRROR": "0"
+      },
+      "pair": "heaven-gravity",
+      "duration_s": 725.5358294,
+      "expected_apps": [
+        "Heaven.exe",
+        "GravityMark.exe"
+      ],
+      "load_present": true,
+      "malformed_rows": 0,
+      "classes": {
+        "failure_class": "DEVICE_LOST_TDR",
+        "time_to_first_event153_s": 64.44596779999999,
+        "time_to_first_device_loss_s": 66.5816666,
+        "time_to_first_failure_s": 64.44596779999999,
+        "event153_count": 3,
+        "device_loss_records": 1,
+        "independent_silences_count": 0
+      },
+      "xid_before": 21,
+      "xid_after": 21,
+      "xid_after_clean_stop": 21,
+      "apps": {
+        "Heaven.exe": {
+          "count": 1,
+          "total_s": 48.263852099999994,
+          "longest_s": 48.263852099999994,
+          "right_censored": 0,
+          "presents": 875,
+          "pids": [
+            13844
+          ],
+          "intervals": [
+            {
+              "pid": 13844,
+              "begin_qpc": 418185651,
+              "end_qpc": 900824172,
+              "duration_s": 48.263852099999994,
+              "right_censored": false
+            }
+          ]
+        },
+        "GravityMark.exe": {
+          "count": 1,
+          "total_s": 664.3130313,
+          "longest_s": 664.3130313,
+          "right_censored": 1,
+          "presents": 21327,
+          "pids": [
+            13852
+          ],
+          "intervals": [
+            {
+              "pid": 13852,
+              "begin_qpc": 790489441,
+              "end_qpc": 7433619754,
+              "duration_s": 664.3130313,
+              "right_censored": true
+            }
+          ]
+        }
+      }
+    }
+  ]
+}
