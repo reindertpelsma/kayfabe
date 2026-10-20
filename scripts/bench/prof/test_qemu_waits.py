@@ -19,6 +19,16 @@ class QemuWaitTests(unittest.TestCase):
         for name,role in [('va_loop',3),('drainer_loop',2),('worker_loop',1)]:
             body=self.code().split('pub fn '+name+'(&self) {',1)[1][:500]
             self.assertIn('bind_current_global('+str(role)+')',body)
+    def test_va_execution_is_not_misattributed_as_idle_between_waits(self):
+        body=self.code().split('pub fn va_loop(&self) {',1)[1][:600]
+        self.assertIn('Site::QemuVaRun',body);self.assertIn('State::Running',body)
+    def test_drainer_execution_is_not_misattributed_as_idle_between_waits(self):
+        body=self.code().split('pub fn drainer_loop(&self) {',1)[1][:600]
+        self.assertIn('Site::QemuDrainerRun',body);self.assertIn('State::Running',body)
+    def test_startup_initializes_exactly_once_before_device_setup(self):
+        body=self.code().split('pub fn realize(cfg: &Config)',1)[1][:600]
+        self.assertEqual(body.count('init_from_env()'),1)
+        self.assertLess(body.index('init_from_env()'),body.index('cfg.check()?;'))
     def test_startup_is_compile_gated_and_does_not_gate_boot(self):
         body=self.code().split('pub fn realize(cfg: &Config)',1)[1][:600]
         self.assertRegex(body,r'#\[cfg\(feature = "prof"\)\]\s*let _ = kf_prof::runtime::init_from_env\(\);')
