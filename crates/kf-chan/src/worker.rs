@@ -419,9 +419,8 @@ pub fn run_with_relay(
                 on_other(tag);
             } else if tag == COMPLETIONS_TAG {
                 event = true;
-                completions.for_each_inflight(&mut |t| {
                 hook!(tap, dispatch_completions());
-                completions.for_each_inflight(|t| {
+                completions.for_each_inflight(&mut |t| {
                     stats.host_rings.fetch_add(1, Ordering::Relaxed);
                     if plane.ring_internal(t) {
                         let _ = efd.signal();
