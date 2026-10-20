@@ -168,12 +168,19 @@ pub fn run_with_relay(
     let prof = stats.prof.load(Ordering::Relaxed);
     let mut busy_from = std::time::Instant::now();
     let mut after_timeout = false;
-    // ★ DIAGNOSTIC (2026-10-20, baton H-WAKE falsifier; default OFF, read once): `KF3_DEBUG_WORKER_SPIN=1` makes the worker
-    // NEVER block: the park wait is `epoll_wait(timeout=0)`, so every empty pass ends in the relays' backstop peek (a pure
-    // super-loop; one core per worker at 100 %). Never a product setting.
-    let worker_spin = std::env::var("KF3_DEBUG_WORKER_SPIN").is_ok_and(|v| v == "1");
-    if worker_spin {
-        eprintln!("kf3: ⚠ DIAGNOSTIC KF3_DEBUG_WORKER_SPIN=1: the worker never blocks (epoll timeout 0)");
+    // ★ DIAGNOSTIC (2026-10-20, baton H-WAKE / H-BUDGET; default OFF, read once): `KF3_DEBUG_WORKER_SPIN` makes the worker NEVER
+    // block: the park wait is `epoll_wait(timeout=0)`, so every empty pass reaches the look that follows a park timeout.
+    //  `=1`: that look is the relays' backstop peek (`Peek::Backstop`: ignores the retry budget). A pure super-loop.
+    //  `=2`: that look is `Peek::Spin` (the retry budget IS respected: a relay with `CONTENTION_RETRIES` consecutive contended turns is
+    //        refused, exactly as for the idle spin and the event look) and no `Peek::Backstop` is ever issued, not even the 50 ms net.
+    // Never a product setting.
+    let worker_spin: u8 = match std::env::var("KF3_DEBUG_WORKER_SPIN").as_deref() {
+        Ok("1") => 1,
+        Ok("2") => 2,
+        _ => 0,
+    };
+    if worker_spin != 0 {
+        eprintln!("kf3: ⚠ DIAGNOSTIC KF3_DEBUG_WORKER_SPIN={worker_spin}: the worker never blocks (epoll timeout 0), park-timeout look = {}", if worker_spin == 2 { "Peek::Spin (budget respected, no Backstop)" } else { "Peek::Backstop" });
     }
     while !stop.load(Ordering::Acquire) {
         let owed = on_tick();
@@ -233,7 +240,7 @@ pub fn run_with_relay(
             stats.max_busy_ns.fetch_max(b, Ordering::Relaxed);
         }
         let park = if owed { OWED_PARK_MS } else { PARK_MS };
-        let timeout = if worker_spin {
+        let timeout = if worker_spin != 0 {
             PollTimeout::Immediate
         } else {
             PollTimeout::Millis(park)
@@ -262,8 +269,14 @@ pub fn run_with_relay(
             // A timeout of the long park is the relays' safety net: look at everything once. The
             // short park of a paced raise (`owed`) is the Pacer's, not the net's.
             if matches!(got, Ok(0)) && !owed {
-                RelayStats::bump(&relay_stats.wake_backstop);
-                let _ = relay.peek(Peek::Backstop);
+                if worker_spin == 2 {
+                    if relay.peek(Peek::Spin) {
+                        RelayStats::bump(&relay_stats.wake_spin);
+                    }
+                } else {
+                    RelayStats::bump(&relay_stats.wake_backstop);
+                    let _ = relay.peek(Peek::Backstop);
+                }
             }
         }
         on_other(TICK_TAG);
