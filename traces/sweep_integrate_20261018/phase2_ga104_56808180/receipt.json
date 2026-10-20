@@ -12,7 +12,7 @@
   "actual_ram_mib": 50565,
   "initial_driver": "575.51.03",
   "planned_host_driver": "595.91.07",
-  "product_results": "native baseline + Linux595raw30 PASS; Linux580raw and CUDA follow-on active",
+  "product_results": "native baseline and Linux595raw30 PASS; Linux580rawR34TIMEOUT; matchedC4controlACTIVE; CUDA/gfx/broker/WindowsUNRUN",
   "utc": "2026-10-19T23:52:20.824798+00:00",
   "initial_resources_export": {
     "original_sha256": "9ff95e2711bf783a26baedeb9d6e2a21e0336ad7a18b0ad6d56b5c6e260e8493",
@@ -31,5 +31,8 @@
   "native_baseline_completed_utc": "2026-10-20T00:20:53Z",
   "linux595_raw": "30/30 PASS; full serial captures exported",
   "followon_pid": 116484,
-  "native_caps_scope": "privileged read-only host595 oracle only; no captured page shipped"
+  "native_caps_scope": "privileged read-only host595 oracle only; no captured page shipped",
+  "linux580_raw": "FAIL29/30; R34 CE guest-RAM TIMEOUT180; C4 control ACTIVE",
+  "followon_state": "stopped rc1 before CUDA",
+  "c4_controller_pid": 121302
 }
