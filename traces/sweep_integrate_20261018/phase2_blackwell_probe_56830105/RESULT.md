@@ -11,3 +11,5 @@ The GPU-free differential and three hypotheses/falsifiers were published before 
 Own56830105 auto-destroy60min was armed first, original expiry~04:17UTC. Setup receipts are exported before orderly stop/destruction; final API absence and cost follow in phase2_owned_instances.json and COST.md. No third product initialization, additional lease, trusted-host access, or PR merge.
 
 MEASURED disabled binding completed04:06:09UTC: actual32.0.15.8088/oem7.inf, CM_PROB_DISABLED, both forced-GSP values1. Original harness stopped the setup VM cleanly; final pre-teardown confirms no QEMU/NBD/controller remains, native host healthy. The cutoff remains unchanged; neither arm was started.
+
+CLOSED own56830105 API-absent04:06:46.246382UTC, timer661435 cancelled only after absence, well before original expiry/global cutoff. All eight campaign IDs absent; observed campaign invoices7.676USD at04:07UTC, not final settlement. See phase2_cost_followup_final_20261020.json.
