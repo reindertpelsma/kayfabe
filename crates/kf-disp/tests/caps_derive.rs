@@ -526,8 +526,21 @@ fn the_gb206_580_caps_word_requires_its_own_native_measurement() {
         assert_eq!(d.page.word(0x00c), 0);
         assert_eq!(d.unmeasured.len(), 1);
     }
-    // GB205 now has its own independently measured580 row; GB202/203 remain unmeasured.
-    for implementation in [0x2, 0x3] {
+    // GB205 now has its own independently measured580 row; GB203 remains unmeasured.
+    // ★ 2026-10-20 (bw-resume): GB202 (impl 2) has its OWN measured 580 row now; it is served
+    // from that row, never from GB205/GB206.
+    {
+        let die = Die {
+            implementation: 0x2,
+            ..GB206
+        };
+        let d = go(&BLACKWELL_GB20X, die, true, true, "580");
+        assert_eq!(d.page.word(0x00c), 0x102);
+        assert!(d.unmeasured.is_empty());
+        let p = d.provenance.iter().find(|p| p.offset == 0x00c).unwrap();
+        assert!(p.why.contains("GB202"), "{}", p.why);
+    }
+    for implementation in [0x3] {
         let die = Die {
             implementation,
             ..GB206
