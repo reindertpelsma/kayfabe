@@ -40,6 +40,8 @@ fn pre_535_extension_policies_change_only_by_the_audited_software_constructors()
         (0xcfb0, "NVCFB0_VIDEO_DECODER", 4),
         (0xceb0, "NVCEB0_VIDEO_DECODER", 2),
         (0xd1b0, "NVD1B0_VIDEO_DECODER", 2),
+        // 2026-10-20 (bw-resume): the measured next GB202 wall after CFB0, same boundaries.
+        (0xcffa, "NVCFFA_VIDEO_OFA", 4),
     ] {
         let row = format!(
             "CLASS {id:08x} {name} Mode2Rpc => Listed {{ name: \"{name}\", origin: Mode2Rpc }}\n"

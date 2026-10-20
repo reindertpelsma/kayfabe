@@ -1574,6 +1574,21 @@ pub(crate) static CLASSES_FROM_570_86_15: &[ClassEntry] = &[
         name: "NVCFB7_VIDEO_ENCODER",
         origin: Origin::Nvproxy,
     },
+    // Public580resource_list.h:1877: OfaContext under KernelChannel, optional
+    // NV_OFA_ALLOCATION_PARAMETERS, the same modeled constructor as admitted C9FA.
+    // [measured GB202 Win580.88] the guest's next wall once CFB0 is admitted.
+    ClassEntry {
+        class: public_class_since(
+            &crate::generated::matrix::CLASS_IDS_NVCFFA_VIDEO_OFA,
+            crate::DriverVersion {
+                major: 570,
+                minor: 86,
+                patch: 15,
+            },
+        ),
+        name: "NVCFFA_VIDEO_OFA",
+        origin: Origin::Mode2Rpc,
+    },
 ];
 
 pub(crate) static CLASSES_FROM_580_65_06: &[ClassEntry] = &[
@@ -2668,6 +2683,7 @@ mod tests {
             // +1 at580+ on2026-10-07: source-audited Deferred API constructor.
             // +1 more at 580+ on 2026-10-07: NV01_EVENT_KERNEL_CALLBACK (Windows StartDevice).
             // +1 at570+, +2 at580+ on2026-10-20: public NVDEC aliases; all original assertions retained.
+            // +1 more at570+ on2026-10-20 (bw-resume): public NVCFFA_VIDEO_OFA constructor.
             assert_eq!(
                 t.all_classes().count(),
                 *n_cls
@@ -2675,7 +2691,8 @@ mod tests {
                     + 1
                     + 2 * usize::from(*a >= 580)
                     + usize::from(*a >= 570)
-                    + 2 * usize::from(*a >= 580),
+                    + 2 * usize::from(*a >= 580)
+                    + usize::from(*a >= 570),
                 "{label} classes"
             );
             let mut got: Vec<&str> = t
@@ -2871,6 +2888,33 @@ mod tests {
         for c in [0xceb0, 0xd1b0] {
             assert!(!CAPS_575_51_02.alloc_class(ClassId(c)).is_permitted());
         }
+    }
+
+    // [measured 2026-10-20, GB202 Windows 580.88 / ABI 580.65.06, own lease 56909569,
+    // traces/blackwell_resume_20261020/arms/cand_off_1] with CFB0 admitted the guest's
+    // next wall is the NVCFFA_VIDEO_OFA constructor (refused NotOnAllowlist, then teardown
+    // and Code 43). Public 580 resource_list.h:1877 gives it the same shape as the admitted
+    // NVC9FA (OfaContext under KernelChannel, optional NV_OFA_ALLOCATION_PARAMETERS).
+    #[test]
+    fn nvofa_cffa_570_constructor_is_admitted() {
+        assert!(CAPS_570_86_15.alloc_class(ClassId(0xcffa)).is_permitted());
+    }
+    #[test]
+    fn nvofa_cffa_580_constructor_is_admitted() {
+        assert!(CAPS_580_65_06.alloc_class(ClassId(0xcffa)).is_permitted());
+    }
+    #[test]
+    fn nvofa_cffa_580_inventory_has_public_name_once() {
+        let rows: Vec<_> = CAPS_580_65_06
+            .all_classes()
+            .filter(|e| e.class == 0xcffa)
+            .collect();
+        assert_eq!(rows.len(), 1);
+        assert_eq!(rows[0].name, "NVCFFA_VIDEO_OFA");
+    }
+    #[test]
+    fn nvofa_cffa_does_not_leak_to_560() {
+        assert!(!CAPS_560_28_03.alloc_class(ClassId(0xcffa)).is_permitted());
     }
 
     /// Every listed class is answered by its own row.
@@ -3324,12 +3368,12 @@ mod tests {
         );
         assert_eq!(
             at(570, 86, 15).all_classes().count(),
-            92 + 18 + 1 + 1,
+            92 + 18 + 1 + 1 + 1,
             "classes at 570"
         );
         assert_eq!(
             bench().all_classes().count(),
-            94 + 18 + 1 + 1 + 1 + 3,
+            94 + 18 + 1 + 1 + 1 + 3 + 1,
             "classes at 580"
         );
         assert_eq!(bench().all_denied_controls().count(), 10, "denied controls");
