@@ -2941,10 +2941,13 @@ impl ChanPlane {
         };
         // ★ 2026-10-20 (simple relay): ONE level decision (`kf_chan::user_loop::look`), no budget, no reason-dependent arm.
         let Ok(mut r) = record.try_lock() else {
+            // the wait itself cannot be read: `Some(_)` stands for "the waiting flag is set" (a ring is a hint; the turn reads it)
             let i = LookIn {
                 demand,
                 record_busy: true,
-                wait: None,
+                wait: record
+                    .is_waiting()
+                    .then_some(kf_chan::user_loop::Wait::Marker { target: u64::MAX }),
                 words: None,
                 fetched: 0,
                 get_follows_pops: false,

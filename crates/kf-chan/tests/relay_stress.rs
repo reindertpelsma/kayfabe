@@ -957,7 +957,9 @@ impl Rt<'_> {
             let i = LookIn {
                 demand,
                 record_busy: true,
-                wait: None,
+                wait: record
+                    .is_waiting()
+                    .then_some(Wait::Marker { target: u64::MAX }),
                 words: None,
                 fetched: 0,
                 get_follows_pops: false,
@@ -1232,11 +1234,30 @@ fn sleep_safety_monitor(sh: &Shared, rt: &Rt<'_>, ws: &WorkerStats, workers: usi
             .saturating_sub(sh.after_waits.load(Ordering::Acquire))
             >= workers as u64
     };
+    // demand (the retry set), a carried wait, or a recorded wait the hardware words already satisfy (its wake was consumed)
     let obligation = || {
         rt.cells
             .iter()
             .enumerate()
-            .find(|(_, c)| c.pending() || (c.is_waiting() && c.carried()))
+            .find(|(i, c)| {
+                c.pending()
+                    || (c.is_waiting() && c.carried())
+                    || c.try_lock().is_ok_and(|r| {
+                        let cl = &rt.clients[*i];
+                        r.wait.is_some_and(|w| {
+                            r.relay
+                                .core
+                                .fetch
+                                .peek(cl.hw_get.load(Ordering::Acquire))
+                                .is_ok_and(|popped| {
+                                    w.satisfied(
+                                        r.relay.core.marks.peek(cl.hw_ref.load(Ordering::Acquire)),
+                                        popped,
+                                    )
+                                })
+                        })
+                    })
+            })
             .map(|(i, c)| (i, c.pending(), c.carried()))
     };
     while !sh.stop_gpu.load(Ordering::Acquire) {

@@ -121,7 +121,8 @@ pub struct LookIn {
     pub demand: bool,
     /// The record lock is held elsewhere (the look cannot read the relay's wait).
     pub record_busy: bool,
-    /// The recorded wait, if any.
+    /// The recorded wait, if any. With `record_busy` the wait cannot be read: `Some(_)` (any value) stands for "the relay's
+    /// waiting flag is set" -- a look that consumed an engine event must not leave a waiting relay unrung (stress seed 20).
     pub wait: Option<Wait>,
     /// The private words, read fresh: `(markers processed, entries popped)`; `None` = unreadable now (a lock busy, or a
     /// value the turn must refuse by name): the turn decides.
