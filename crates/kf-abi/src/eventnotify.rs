@@ -674,6 +674,17 @@ pub const RULED_NOTIFIERS: &[RuledNotifier] = &[
               which goes with the RC-recovery stub (kf_rm::vfguest). Its producer is the guest's own \
               CPU-RM (ogkm-580: kernel_rc_callback.c:360)",
     },
+    RuledNotifier {
+        notifier:
+            &crate::generated::matrix::NV2080_NOTIFIERS_NV2080_NOTIFIERS_USE_GC6_REDUCED_THRESHOLD,
+        class: RuledClass::Stub,
+        why: "NV2080_NOTIFIERS_USE_GC6_REDUCED_THRESHOLD (ogkm-580: cl2080_notification.h:237, \
+              payload :572-574, a DLCC workload type): which GC6 entry threshold the physical \
+              board's power controller uses. Host power management under owner ruling S.1 and \
+              its PSTATE_CHANGE precedent (arm silently, never post); this device performs no GC6 \
+              (see SILENT_NOTIFIERS) and no OGKM producer exists. [measured 2026-10-20, GB202 \
+              Windows 580.88] armed REPEAT after CFB0/CFFA; its refusal was followed by Code 43",
+    },
 ];
 
 /// One row of [`RULED_NOTIFIERS`].
