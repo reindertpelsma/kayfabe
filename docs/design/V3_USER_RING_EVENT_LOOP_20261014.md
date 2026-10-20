@@ -463,7 +463,16 @@ covered" bar): `fn look(why, demand, waiting_flag, run, wait, lock_free, words) 
    (`disable_usermode` has the window for the whole act). Benign hardware (the doorbell is latched pending, or the enable re-reads `GP_PUT`) is live; adversarial hardware strands the
    entries. The probe agent saw no disable/enable act within 230 s of the onset of two freezes, which falsifies this for those two.
 
-**Not fixed here**: a read-back adds one uncached BAR1 read per publish on the hot path (owner rule: MMIO reads are slow), and the hardware hypothesis is unproven. Options for the
+**2026-10-20 -- IMPLEMENTED (branch `claude/doorbell-readback-20261020`; hardware effect NOT yet measured).** `Storage::publish_put` is now `kf_chan::user_storage::publish_put_via`:
+fence, store `GP_PUT`, fence, then ONE read of the same word through the same CPU view, then a compiler barrier -- once per publication (not per entry), unconditionally (no flag).
+All six publication closures of the pump end in it and the single private doorbell follows the guarded publication (source pins: `p10_*`, `every_private_publication_ends_in_the_read_back_step`;
+behaviour with a recording double: `user_storage` tests RB1-RB7). A failed or mismatching read is counted (`USER_RING_READBACK` summary, printed only when a counter moved; stderr
+for the first three and each power of two), never retried, and never suppresses the doorbell. MEASURED GPU-free: the tests. INFERRED: the BAR1-store / BAR0-doorbell race and that
+a read closes it (PCIe: a non-posted read cannot pass earlier posted writes to the device). Falsifier on hardware: the freeze rate with the read-back equals the control within A/A spread.
+The VRAM read cost (expected ~1 us, per publication) is measurable only on hardware. Not covered: the other doorbell users (`userd_relay` for Translated channels,
+`HostRing::fence_releasing`) -- they publish the HOST channel's own USERD, not the Windows USER relay's private ring, and are unchanged.
+
+(SUPERSEDED by the paragraph above, kept as the record.) **Not fixed here**: a read-back adds one uncached BAR1 read per publish on the hot path (owner rule: MMIO reads are slow), and the hardware hypothesis is unproven. Options for the
 owner: (i) measurement switch with a read-back before every doorbell, run Minecraft + Heaven; (ii) if confirmed, one read-back per turn (coalesce the doorbells of a turn to one after the
 last publish), (iii) a native re-ring at the enable of every twin with `PUT != GET` (closes 2 only). A source-pin test `p10_publish_reads_back_before_the_native_doorbell` records the gap.
 
