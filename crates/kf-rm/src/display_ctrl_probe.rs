@@ -1,3 +1,8 @@
+//! CODE READ supersession, 2026-10-20: coordinator approved this existing P19
+//! compatibility behavior only under explicit guest-os=windows. Legacy env selectors
+//! are retired; Linux defaults and all command/identity/admission checks stay unchanged.
+//! Historical probe rationale below remains the source evidence, not current activation policy.
+//!
 //! ⚠⚠ **PROBE — default off (`KF3_DISPLAY_CTRL_PROBE=1`), never a shipped behaviour.**
 //!
 //! 2026-10-08 (Windows 580.88, H-modeset): `[measured, run53 at 80169b57 and run55 at a88764b3,
@@ -38,7 +43,7 @@ pub const ECHOED: [(u32, usize); 6] = [
 /// Whether the flag is on (`=1`).
 #[must_use]
 pub fn enabled() -> bool {
-    std::env::var(FLAG).as_deref() == Ok("1")
+    false // Legacy callers retain Linux defaults; production uses the per-device profile.
 }
 
 /// The probe link.

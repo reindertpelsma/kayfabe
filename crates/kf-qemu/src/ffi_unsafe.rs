@@ -73,7 +73,8 @@ use std::os::unix::ffi::OsStrExt as _;
 /// [`kf3_device_reset_wait`] (the `exit` phase's bounded wait) joins.
 /// 30 (2026-10-15, `claude/perf-fix-20261015`, `docs/design/V3_WINDOWS_PERF_20261015.md`): `kf3_realize` gains
 /// `user_view_keep` (the `user-view-keep` property; 0 = the default, 16) after `channel_budget`.
-pub const KF3_ABI: u32 = 30;
+/// 31: per-device guest-os compatibility profile, appended before the output handle.
+pub const KF3_ABI: u32 = 31;
 
 /// The PCI identity the C device presents.
 #[repr(C)]
@@ -140,7 +141,7 @@ pub extern "C" fn kf3_abi_version() -> u32 {
 /// Realize the device and start its register drainer. Returns 0 and a handle, or -1 with a message.
 ///
 /// # Safety
-/// `guest_driver`, `gop_efi`, `gpu_uuid` and `vm_id` are each null or a NUL-terminated string; `out` is writable; `err`
+/// `guest_driver`, `gop_efi`, `gpu_uuid`, `vm_id` and `guest_os` are each null or a NUL-terminated string; `out` is writable; `err`
 /// is null or writable for `err_len` bytes.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn kf3_realize(
@@ -160,6 +161,7 @@ pub unsafe extern "C" fn kf3_realize(
     pci_devfn: u32,
     channel_budget: u32,
     user_view_keep: u32,
+    guest_os: *const c_char,
     out: *mut *mut c_void,
     err: *mut c_char,
     err_len: usize,
@@ -181,6 +183,20 @@ pub unsafe extern "C" fn kf3_realize(
             return -1;
         }
     };
+    // SAFETY: the caller promises guest_os is null or a NUL-terminated property string.
+    // Unlike optional paths, an explicitly empty guest-os is an error.
+    let guest_os_text = if guest_os.is_null() {
+        None
+    } else {
+        Some(unsafe { CStr::from_ptr(guest_os) }.to_string_lossy())
+    };
+    let guest_profile = match kf_abi::guest_profile::GuestProfile::parse(guest_os_text.as_deref()) {
+        Ok(profile) => profile,
+        Err(message) => {
+            write_err(err, err_len, message);
+            return -1;
+        }
+    };
     let guest = text(guest_driver);
     let gop_efi = text(gop_efi);
     let gpu_uuid = text(gpu_uuid);
@@ -191,6 +207,7 @@ pub unsafe extern "C" fn kf3_realize(
         bar1_bytes,
         bar2_bytes,
         guest_driver: guest,
+        guest_profile,
         display: display != 0,
         gop: gop != 0,
         x11_dispsw: x11_dispsw != 0,

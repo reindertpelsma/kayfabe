@@ -1,143 +1,234 @@
-STATUS: PARTIAL / VALIDATION STOPPED, 2026-10-20.
+# Beta flag policy
 
-CODE READ update: both coordinator choices below are APPROVED: explicit
-`guest-os=windows|linux`, default Linux, and a separately reviewed sweep-derived
-caps replacement. The old guest-OS decision stop is superseded. No property
-implementation is accepted yet. C6 stopped on its mutation-wrapper rejection;
-see [the current report](../../traces/beta_candidate_20261020/README.md).
-Complete every-reader inventory, KEEP-default audit and final migration table
-remain outstanding. No flags have been removed from the published product.
+STATUS: LIVE / GPU-FREE VALIDATION IN PROGRESS, 2026-10-20. BETA CANDIDATE;
+no supported external-user path. Hardware acceptance waits for Stage 5.
 
-# Beta flag policy: guest-OS selection decision
+CODE READ: the coordinator approved `guest-os=windows|linux`, default Linux,
+and separately approved a reviewed sweep-derived caps replacement. The property
+is immutable per device; it does not change the existing `GuestOs` wire-layout
+interpretation, infer authority from a declaration, or bypass fn1/channel/VA
+ownership checks. Invalid/empty/auto values are refused before host devices open.
+No environment selector is needed for the Windows compatibility profile.
 
-STATUS: IMPLEMENTATION AUTHORIZED, 2026-10-20. CODE READ: the coordinator, with
-the owner's delegated decision for tonight, approved explicit
-`guest-os=windows|linux`, default `linux`, as the single replacement of the
-nineteen Windows environment selectors. Preserve Linux behaviour; keep
-non-derived Windows behaviour behind the property; do not hardwire the captured
-probe set. Continue tests-first GPU-free Stages 2–4; hardware belongs to the
-night reproduction lane and remains deferred to Stage 5. This supersedes the
-stop below. The original decision evidence remains the construction rationale.
+CODE READ: Linux keeps the existing no-env settings. Windows enables 18 P19
+behaviours and selects derived caps. The captured CAPS_PROBE environment reader
+and production page path are removed; the old full-page oracle remains inside
+the existing test module only. [Derivation](V3_DISPLAY_CAPS_DERIVATION_20261014.md)
+uses public class fields/family rules and exact-die measured rows; it does not
+claim native full-page equality. Unknown dies/branches do not borrow a row.
 
-STATUS: RESEARCH / STOPPED BEFORE IMPLEMENTATION, 2026-10-19. CODE READ at
-candidate-5 `f8f9d1a5f`. BETA CANDIDATE; no supported external-user install path
-is offered. This is a partial policy and decision record, **not** the completed
-Stage 2 inventory, an implemented configuration API, or a no-flag boot claim.
+INFERRED falsifier, registered before implementation: any mismatch in the
+selected effective settings, Linux default change, lost existing test,
+process-global OS switch, captured production page or ownership bypass defeats
+this change. Runtime no-env Windows boot/performance is NOT yet measured.
 
-## Stop and falsifier
+CODE READ alternatives: early automatic OS detection is not established.
+Display/caps construction occurs before reliable fn1 identity; fn72's provisional
+layout hint is diagnostic, not authority. A global Windows default changes Linux.
+The explicit property is the approved conservative selection. guest-driver still
+selects ABI layouts independently, with existing pre-fn1 surface refusal rules.
 
-INFERRED question registered before reading the flag paths: can guest facts
-already available in the device select the Windows behaviour while preserving
-the Linux default? FALSIFIER registered before that read: any setting must be
-chosen before a reliable guest-OS fact is available. The Stage 2 item 2 stop
-applies when that choice cannot be derived with confidence.
+## P19 migration and evidence
 
-CODE READ result: the falsifier fires for the current construction path.
-Windows identity exists later; it is not currently a complete, early, per-device
-configuration authority. The missing fact is not evidence that Windows is
-intrinsically undetectable, and it is not an invitation to infer OS from a PID,
-USERD layout or channel kind. No hardwiring or property change was made.
+CODE READ: the 2026-10-10 ablations used binary `89721` and reported clean idle
+holds for removing SDR/LUT, async preempt and translated CE groups. These are
+not loaded-workload equivalence proofs. TIMER_MAP was needed in an older run
+604 (Code43 without it), but is already automatic in candidate-5. Several probes
+were explicitly NOT YET TESTED. See the [ablation record](../../traces/windows_flag_ablation_20261010/README.md).
+No one of the 18 remaining functional settings is deleted as proven redundant
+across workloads. All 19 environment selectors are retired: 18 become Windows
+property settings; captured CAPS_PROBE is replaced, not globally hardwired.
+Software-runlist object admission remains distinct from host-owned submission.
 
-## Evidence for the decision
+CODE READ: TSG_MIRROR stays absent/OFF; no mirror topic is imported. Existing
+lifecycle Default, PUT cache and lazy observe stay ON; alternate measurement
+arms stay inactive. TIMER_MAP/TSPACE/INCA/video-context/late-join/PID4 legacy
+selectors already have no reader; their existing production defaults remain.
+The default-ON features' opt-out controls do not mean default-ON instrumentation.
 
-| CODE READ source at candidate-5 | Finding | Implication |
-|---|---|---|
-| `crates/kf-qemu/src/device.rs:367`, `:924-940`; `crates/kf-qemu/src/display.rs:2146-2210` | `Device::realize` calls `DisplayPlane::build` and selects SDR processing and the caps page from environment before guest RPC contact | A flag-to-fn1 substitution is insufficient for these construction-time settings. No current fn1 callback rebuilds the display plane. |
-| `crates/kf-rm/src/lib.rs:331-379`; `crates/kf-abi/src/guestsysinfo.rs:200-252` | Fn1 has a strict reported-version/Windows-twin decoder; matching a Linux ABI version returns `twin=None`, and a known Windows twin can select the same Linux ABI key | There is a declared Windows identity, but version-key equality does not carry a complete OS/profile decision or rebuild the display. `guest-driver=` is an ABI selection, not an OS selector. |
-| `crates/kf-gsp/src/sysinfo.rs:12-18`, `:44-90` | Fn72 precedes fn1. `bGspNocatEnabled` is logged at the provisional layout; the code explicitly says it is never decided on, and layout/length disagreement is reported rather than resolved | The earlier hint does not establish safe automatic selection for every supported version or construction-time setting. A proof must account for provisional-layout ambiguity. |
-| `crates/kf-rm/src/chanlink.rs:914-943` | `ChannelPolicy::new` snapshots `KF3_WIN_USER_CHANNELS_PASSTHROUGH`; Windows identity starts false | The existing later identity check does not automatically enable the user-work route when no flag is set. Both the feature selection and channel-admission facts matter. |
-| `crates/kf-qemu/src/chan.rs:1733-1754` | Kernel-GR CE/work selectors default off. The source explains that enabling them changes a kernel channel created by Linux | Globally enabling the Windows profile violates the instruction to retain Linux default behaviour. |
-| `crates/kf-qemu/src/device.rs:968-975`, `:999-1005`; `crates/kf-abi/src/guest_os.rs:250-264` | The live object/memory recipe supplies `GuestOs::Linux`. The separate `GuestOs::Windows.client_kind_rule()` returns `None` | Adding an OS property cannot safely be implemented by globally swapping this pre-existing enum. Behaviour selection and existing ABI/privilege interpretation must be reviewed separately. |
-| `qemu/hw/misc/kf3/kf3.c:1936-1985` | QOM exposes `guest-driver` and display choices, but no `guest-os` property | The recommended property below is proposed, not a command that works on this branch. |
-| `crates/kf-qemu/src/display.rs:146-157`, `:2189-2208`; [T-space policy](V3_TSPACE_HARDWIRED.md) | The P19 caps selector is explicitly a captured-page probe that may not ship as written | Choosing the OS source does not resolve the independent requirement to replace captured/experimental behaviour. Keep the binding provenance rule; do not promote the probe merely by deleting its environment read. |
+## Inventory, interpretation and cost
 
-INFERRED: confidence is insufficient for automatic selection of the complete P19
-profile. This is a concrete construction/identity gap, not a measured failed boot.
-No GPU, guest or host observation has been made by C6.
+CODE READ: the TSV is the canonical machine-readable policy; this table is its
+readable rendering. The source audit covers every lexical KF3 name in product
+source and scripts, a deliberate superset of environment reads that catches
+indirect constant/dynamic reads. Protocol macros, compile-time constants and
+historical script names are labelled separately; they are not live env flags.
+DELETE on those rows means remove from operator configuration, not delete a
+protocol constant. HARDWIRE ON is conditional on the explicit Windows profile.
 
-## Options for the owner/coordinator
+CODE READ: KEEP measurement/debug/control rows are optional, unset/inactive and
+never required to boot. A parameter's nonzero fallback does not activate its
+parent diagnostic. Existing construction-only/cached boolean gates are retained;
+read-trace is absent from the production trap path when unset; step meters and
+event ring keep their baseline gating tests. No new diagnostic hot-path cost is
+introduced. This is not a claim that every existing gate compiles to a relaxed
+load: cached OnceLock readers and their baseline costs remain. Control flags
+are not renamed or removed. Every row has required_to_boot=false and
+active_when_unset=false for the optional environment override, not for the
+underlying production feature. Boot behaviour is in GuestProfile::settings.
 
-| Option | Contract | Risk / proof required | Recommendation |
-|---|---|---|---|
-| INFERRED A: one explicit device property, proposed `guest-os=windows\|linux`, default `linux` | Linux follows existing no-env settings; Windows selects an audited per-device behaviour profile before display/policy construction. The future launcher maps `--os windows` to this property and sets zero `KF3_*` environment flags | Requires plumbing through QOM/FFI, construction and the current process-global `OnceLock` readers. Preserve current `GuestOs` ABI interpretation until separately proven; reject invalid names before effects. Retain hostile-guest admission/permissions even when a guest declares Windows | **Recommend A.** It is the conservative fallback allowed by Stage 2 item 2. Await the requested written choice before implementation. |
-| INFERRED B: automatic profile from fn1 or validated fn72, with explicit override | No OS property needed for a recognised stock guest | Must prove early identity/layout correctness, all pre-fn1 observable state, safe publication before consumption, unknown/conflicting identity behaviour, life/reset transitions and multi-device separation. No vCPU wait or timer/poll workaround. The current code does not provide that proof | Defer until proof exists; do not silently ship an `auto` heuristic. |
-| CODE READ / INFERRED C: enable P19 globally | Both OSes receive Windows settings | Changes Linux kernel-GR and other defaults; contradicts Stage 2 item 2 and the existing Linux privilege/mapping restrictions | Reject under the current instruction. |
+MEASURED test contracts: table-driven P19/default-Linux configuration, strict
+parsing, per-device independence, KEEP names outside the boot settings, source
+inventory coverage and QOM/FFI/construction wiring. Mutation receipts and final
+counts are recorded in the [lane report](../../traces/beta_candidate_20261020/README.md).
 
-CODE READ: the owner already authorized replacing redundant behaviour flags and
-permits a single explicit Windows property. This stop asks for the exact profile
-selection decision mandated by the lane, not generic permission to edit files.
-The existing captured-page prohibition is binding and is not put to a new vote.
-The deferred sweep's derived-page replacement needs scoped review and hardware
-acceptance; full sweep inclusion is a separate ledger decision.
+CODE READ lexical policy counts: 42 DELETE, 1 HARDWIRE OFF, 18 HARDWIRE ON, 95 KEEP; 156 registered names. These are policy rows, not a count of live readers removed.
 
-## Partial inventory: historical P19 migration inputs
-
-CODE READ: this list is the exact nineteen `=1` names in the sweep source
-`codex/sweep-integrate-20261018` at `b6accbca2`,
-`traces/sweep_integrate_20261018/MATRIX.md` (the named historical P19 profile).
-It is not inferred from the older, different generic Windows launcher. The
-current launcher `scripts/bench/windows/windows_broker.sh:284` still mixes
-measurement names and obsolete `KF3_TIMER_MAP`; it is not the P19 authority.
-
-CODE READ: every selector below is OFF when unset in candidate-5. All nineteen
-historical requests are ON. These are **selector defaults**, not a claim that
-every path is effective: driver/cell/route gates still apply; the host-owned
-runlist policy precedes the older runlist probe. No single effective-config
-struct or table-driven P19 equivalence test was implemented in this stopped
-work. All proposed migration verdicts await the OS decision and path review.
-
-| Name (CODE READ) | Class in this partial audit | Reader | No-env selector / historical P19 | Migration status |
+| Name | Class | Effective default | Verdict | Reader / evidence |
 |---|---|---|---|---|
-| `KF3_WIN_USER_CHANNELS_PASSTHROUGH` | Windows behaviour | `kf-rm/src/chanlink.rs`; `kf-host/src/channel.rs` | OFF / ON | Pending per-device Windows profile; preserve Linux native route. |
-| `KF3_WIN_TWIN_DEFAPI_OBJECT` | Windows behaviour | `kf-qemu/src/chan.rs::twin_defapi_object` | OFF / ON | Pending profile and existing user-work/identity admission. |
-| `KF3_KERNEL_GR_CE` | OS-sensitive behaviour | `kf-qemu/src/chan.rs::kernel_gr_ce` | OFF / ON | Pending; never turn on globally for Linux. |
-| `KF3_KERNEL_GR_WORK` | OS-sensitive behaviour | `kf-qemu/src/chan.rs::kernel_gr_work` | OFF / ON | Pending; paired with kernel GR/CE, allowlists and USER assertion retained. |
-| `KF3_TRANSLATED_CE_RELAY` | Completion behaviour | `kf-qemu/src/chan.rs::translated_ce_relay` | OFF / ON | Pending; idle-only ablation is not load evidence. |
-| `KF3_DEFERRED_API` | Translated software-method behaviour | `kf-qemu/src/chan.rs::deferred_api_trigger` | OFF / ON | Pending; retain owner U's admission and ordering contract. |
-| `KF3_PREEMPT_BIND_PROBE` | Behaviour despite probe name | `kf-rm/src/preempt_bind_probe.rs` | OFF / ON | Review stub contract before promotion; no measurement exemption. |
-| `KF3_DISPLAY_IMP_ENABLE` | Display behaviour | `kf-rm/src/display.rs` | OFF / ON | Pending profile and supported display cell. |
-| `KF3_DISPLAY_CTRL_PROBE` | Behaviour despite probe name | `kf-rm/src/display_ctrl_probe.rs` | OFF / ON | Review authored/public reply contract; not blanket hardwire permission. |
-| `KF3_ZCULL_BIND_PROBE` | Behaviour despite probe name | `kf-rm/src/preempt_bind_probe.rs` | OFF / ON | Review current cross-client stub contract. |
-| `KF3_SW_RUNLIST_HOST_OWNED` | Scheduling behaviour | `kf-rm/src/sw_runlist_host.rs`; `kf-qemu/src/chan.rs` | OFF / ON | Pending; retain source warning and owner W decision record. |
-| `KF3_ASYNC_PREEMPT` | Completion/recovery behaviour | `kf-rm/src/chanlink.rs::async_preempt_enabled` | OFF / ON | Pending; idle-only ablation is not recovery/load evidence. |
-| `KF3_GFX_POOL_PROBE` | Behaviour despite probe name | `kf-rm/src/lib.rs`; `gfxpool_probe.rs` | OFF / ON | Review fabricated sizing/lifecycle contract before promotion. |
-| `KF3_SW_RUNLIST_PROBE` | Behaviour despite probe name | `kf-rm/src/lib.rs`; `sw_runlist_probe.rs` | OFF / ON | Check actual shadowing/redundancy against host-owned runlist first. |
-| `KF3_MEMORY_LIST_PROBE` | Registration behaviour | `kf-rm/src/lib.rs`; `rmrpc/policy.rs` | OFF / ON | Pending; retain bounds and ownership validation. |
-| `KF3_DISPLAY_SDR_COLOR` | Display behaviour | `kf-qemu/src/display.rs::DisplayPlane::build` | OFF / ON | Requires a construction-time Windows choice or proven safe reconfiguration. |
-| `KF3_DISPLAY_CAPS_PROBE` | Captured-page diagnostic behaviour, prohibited as shipped product | `kf-qemu/src/display.rs::caps_probe_on` | OFF / ON | Do not hardwire captured page; select/review derived replacement separately. |
-| `KF3_DISPLAY_LUT_MIRROR` | Display behaviour | `kf-qemu/src/display.rs::color_experiments` | OFF / ON | Pending, coupled to SDR processing. |
-| `KF3_DISPLAY_ILUT_OFFSET_256` | Display behaviour | `kf-qemu/src/display.rs::color_experiments` | OFF / ON | Pending, coupled to SDR processing. |
-
-CODE READ evidence limits: [flag inventory](V3_FLAG_INVENTORY.md) and
-[ablation record](../../traces/windows_flag_ablation_20261010/README.md) distinguish
-measured boot requirements from guesses. The latter uses `89721ca4`, six runs,
-idle desktop plus Edge for 180 seconds. It is not candidate-5 load/aging
-certification. In particular, dropping ASYNC_PREEMPT or TRANSLATED_CE_RELAY
-being clean there does not justify deleting those completion paths.
-
-## Defaults and rules that must survive the resume
-
-CODE READ: `KF3_TSG_MIRROR` is absent from the candidate-5 product; no mirror is
-imported. `KF3_TIMER_MAP` has no reader in the audited product source roots:
-validated native timer mapping is already automatic. Existing T-space and
-kernel-video hardwiring is documented in [V3_TSPACE_HARDWIRED.md](V3_TSPACE_HARDWIRED.md).
-
-CODE READ: production lifecycle is `default`; PUT cache and lazy observe default
-ON, while the optional lifecycle measurement mode is inactive when unset.
-Preserve these production behaviours and their owner-retained controls. An
-unset measurement control must not be confused with disabling its underlying
-production optimisation. `KF3_DIAG_STEP_METERS` and `KF3_DIAG_EVENT_RING` are
-optional/off and never boot prerequisites. Owner AB protects measurement,
-diagnostic and negative-control names; no rename was requested.
-
-MEASURED: C6 changed zero flag readers/defaults/launcher exports. Scoped P19
-names before/after are 19/19; hardwired 0; deleted 0. The total number of
-`KF3_*` reads across all required roots and launchers, their complete
-classifications/KEEP-default audit and effective config comparison are
-**NOT DONE**, rather than assigned misleading lexical-grep totals.
-
-CODE READ: remaining work after a written choice is the complete inventory,
-config design, tests-only EXPECTED RED commit, hardwiring fix, ≥2 killing tests
-per mutant, full per-crate count retention, launcher migration and all Stages
-3–4 install/preflight/build checks. No continuation or hardware slot is implied
-by this decision document.
+| `KF3_ABI` | dead | protocol/compile-time constant, not env | DELETE | crates/kf-qemu/src/ffi_unsafe.rs; qemu/hw/misc/kf3/kf3.c; qemu/hw/misc/kf3/kf3.h; CODE READ: lexical superset metadata, not an environment selector |
+| `KF3_ASYNC_PREEMPT` | behaviour required for Windows | Linux OFF; Windows ON via guest-os=windows | HARDWIRE ON | crates/kf-abi/src/guest_profile.rs; crates/kf-disp/src/model.rs; crates/kf-qemu/src/chan.rs; crates/kf-qemu/src/device.rs; crates/kf-rm/src/chanlink.rs; crates/kf-rm/src/display.rs; CODE READ: P19 + 2026-10-10 ablation; idle-only removal is not a loaded-workload verdict |
+| `KF3_ASYNC_PREEMPT_REENABLE_NOACT` | behaviour optional | unset => OFF | KEEP | crates/kf-qemu/src/chan.rs; CODE READ: readers listed; optional control is not required for boot |
+| `KF3_BAR0_READ_TRACE` | measurement | unset => OFF | KEEP | crates/kf-qemu/src/device.rs; crates/kf-qemu/src/ffi_unsafe.rs; crates/kf-qemu/src/readtrace.rs; qemu/hw/misc/kf3/kf3.c; qemu/hw/misc/kf3/kf3.h; CODE READ: readers listed; optional control is not required for boot |
+| `KF3_BAR0_TRACE` | measurement | unset => OFF | KEEP | crates/kf-qemu/src/bar0trace.rs; crates/kf-qemu/src/chan.rs; crates/kf-qemu/src/device.rs; crates/kf-qemu/src/ffi_unsafe.rs; crates/kf-qemu/src/raw_unsafe.rs; qemu/hw/misc/kf3/kf3.c; qemu/hw/misc/kf3/kf3.h; CODE READ: readers listed; optional control is not required for boot |
+| `KF3_BAR1_OVERLAYS_DEFAULT` | dead | protocol/compile-time constant, not env | DELETE | qemu/hw/misc/kf3/kf3.c; CODE READ: lexical superset metadata, not an environment selector |
+| `KF3_BATCH_MICRO_RESERVE` | dead | no env reader; existing hardwired behavior retained | DELETE | crates/kf-qemu/src/mem.rs; CODE READ: historical selector/comment; not a live environment read |
+| `KF3_BIN` | debug | launcher-local or historical setting; not a product env read | KEEP | scripts only (lexical inventory); CODE READ: script-local setting only; not part of release launcher configuration |
+| `KF3_BINS` | debug | launcher-local or historical setting; not a product env read | KEEP | scripts only (lexical inventory); CODE READ: script-local setting only; not part of release launcher configuration |
+| `KF3_BROKER_` | dead | protocol/compile-time constant, not env | DELETE | qemu/hw/misc/kf3/kf3.h; CODE READ: lexical superset metadata, not an environment selector |
+| `KF3_BROKER_ON` | dead | protocol/compile-time constant, not env | DELETE | qemu/hw/misc/kf3/kf3.c; qemu/hw/misc/kf3/kf3.h; CODE READ: lexical superset metadata, not an environment selector |
+| `KF3_BROKER_SURFACE` | dead | protocol/compile-time constant, not env | DELETE | qemu/hw/misc/kf3/kf3.h; CODE READ: lexical superset metadata, not an environment selector |
+| `KF3_BROKER_VRAM_` | dead | protocol/compile-time constant, not env | DELETE | qemu/hw/misc/kf3/kf3.h; CODE READ: lexical superset metadata, not an environment selector |
+| `KF3_BROKER_VRAM_AUTO` | dead | protocol/compile-time constant, not env | DELETE | qemu/hw/misc/kf3/kf3.c; qemu/hw/misc/kf3/kf3.h; CODE READ: lexical superset metadata, not an environment selector |
+| `KF3_BROKER_VRAM_OFF` | dead | protocol/compile-time constant, not env | DELETE | qemu/hw/misc/kf3/kf3.c; qemu/hw/misc/kf3/kf3.h; CODE READ: lexical superset metadata, not an environment selector |
+| `KF3_BROKER_VRAM_ON` | dead | protocol/compile-time constant, not env | DELETE | qemu/hw/misc/kf3/kf3.c; qemu/hw/misc/kf3/kf3.h; CODE READ: lexical superset metadata, not an environment selector |
+| `KF3_BROKER_VRAM_SHIFT` | dead | protocol/compile-time constant, not env | DELETE | qemu/hw/misc/kf3/kf3.c; qemu/hw/misc/kf3/kf3.h; CODE READ: lexical superset metadata, not an environment selector |
+| `KF3_BTN_` | dead | protocol/compile-time constant, not env | DELETE | crates/kf-qemu/src/raw_unsafe.rs; CODE READ: lexical superset metadata, not an environment selector |
+| `KF3_BTN_EXTRA` | dead | protocol/compile-time constant, not env | DELETE | qemu/hw/misc/kf3/kf3.c; qemu/hw/misc/kf3/kf3.h; CODE READ: lexical superset metadata, not an environment selector |
+| `KF3_BTN_LEFT` | dead | protocol/compile-time constant, not env | DELETE | qemu/hw/misc/kf3/kf3.c; qemu/hw/misc/kf3/kf3.h; CODE READ: lexical superset metadata, not an environment selector |
+| `KF3_BTN_MIDDLE` | dead | protocol/compile-time constant, not env | DELETE | qemu/hw/misc/kf3/kf3.c; qemu/hw/misc/kf3/kf3.h; CODE READ: lexical superset metadata, not an environment selector |
+| `KF3_BTN_RIGHT` | dead | protocol/compile-time constant, not env | DELETE | qemu/hw/misc/kf3/kf3.c; qemu/hw/misc/kf3/kf3.h; CODE READ: lexical superset metadata, not an environment selector |
+| `KF3_BTN_SIDE` | dead | protocol/compile-time constant, not env | DELETE | qemu/hw/misc/kf3/kf3.c; qemu/hw/misc/kf3/kf3.h; CODE READ: lexical superset metadata, not an environment selector |
+| `KF3_BUILD_RC` | debug | launcher-local or historical setting; not a product env read | KEEP | scripts only (lexical inventory); CODE READ: script-local setting only; not part of release launcher configuration |
+| `KF3_BUILT` | debug | launcher-local or historical setting; not a product env read | KEEP | scripts only (lexical inventory); CODE READ: script-local setting only; not part of release launcher configuration |
+| `KF3_CARRY_ATOMIC_DISABLE` | behaviour optional | unset => OFF | KEEP | crates/kf-cuda/src/abi.rs; crates/kf-cuda/src/diffmodel.rs; crates/kf-harness/src/bin/kf-gate9.rs; crates/kf-mem/src/apply.rs; crates/kf-qemu/src/device.rs; CODE READ: readers listed; optional control is not required for boot |
+| `KF3_COMPLETION_PROBE` | measurement | None; when selected invalid value becomes 1000 ms | KEEP | crates/kf-chan/src/census.rs; crates/kf-chan/src/host.rs; crates/kf-chan/src/translated.rs; crates/kf-qemu/src/chan.rs; crates/kf-qemu/src/device.rs; crates/kf-qemu/src/ffi_unsafe.rs; crates/kf-qemu/src/mem.rs; CODE READ: readers listed; optional control is not required for boot |
+| `KF3_CURSOR_DEFINE` | dead | protocol/compile-time constant, not env | DELETE | qemu/hw/misc/kf3/kf3.h; CODE READ: lexical superset metadata, not an environment selector |
+| `KF3_CURSOR_MAX_DIM` | dead | protocol/compile-time constant, not env | DELETE | qemu/hw/misc/kf3/kf3.c; qemu/hw/misc/kf3/kf3.h; CODE READ: lexical superset metadata, not an environment selector |
+| `KF3_DBFAST_PROBE` | debug | None | KEEP | crates/kf-qemu/src/device.rs; CODE READ: readers listed; optional control is not required for boot |
+| `KF3_DBFAST_SPIN_US` | debug | None (no spinning) | KEEP | crates/kf-qemu/src/device.rs; CODE READ: readers listed; optional control is not required for boot |
+| `KF3_DEBUG` | debug | unset => OFF | KEEP | crates/kf-harness/src/bin/kf-syncwait-stress.rs; crates/kf-rm/src/chanlink.rs; CODE READ: readers listed; optional control is not required for boot |
+| `KF3_DEBUG_CURSOR` | measurement | unset => OFF | KEEP | crates/kf-disp/src/scanout.rs; crates/kf-qemu/src/display.rs; CODE READ: readers listed; optional control is not required for boot |
+| `KF3_DEBUG_FORCE_MIGRATABLE` | debug | unset => OFF | KEEP | crates/kf-harness/src/bin/kf-syncwait-stress.rs; crates/kf-qemu/src/userrelay.rs; crates/kf-rm/src/chanlink.rs; CODE READ: readers listed; optional control is not required for boot |
+| `KF3_DEFERRED_API` | behaviour required for Windows | Linux OFF; Windows ON via guest-os=windows | HARDWIRE ON | crates/kf-abi/src/guest_profile.rs; crates/kf-chan/src/tmode.rs; crates/kf-chan/src/tmode_gr_tests.rs; CODE READ: P19 + 2026-10-10 ablation; idle-only removal is not a loaded-workload verdict |
+| `KF3_DEV_EXTRA` | debug | launcher-local or historical setting; not a product env read | KEEP | scripts only (lexical inventory); CODE READ: script-local setting only; not part of release launcher configuration |
+| `KF3_DIAG_EVENT_RING` | measurement | unset => OFF | KEEP | crates/kf-broker/src/ticks.rs; CODE READ: readers listed; optional control is not required for boot |
+| `KF3_DIAG_STEP_METERS` | measurement | unset => OFF | KEEP | crates/kf-qemu/src/display.rs; CODE READ: readers listed; optional control is not required for boot |
+| `KF3_DIAG_UNMAP_DELAY_MS` | debug | None (no delay) | KEEP | crates/kf-mem/src/maplog.rs; crates/kf-mem/src/vasmgr.rs; CODE READ: readers listed; optional control is not required for boot |
+| `KF3_DIAG_ZERO_OK` | dead | no env reader; existing hardwired behavior retained | DELETE | crates/kf-rm/src/hoststub.rs; CODE READ: historical selector/comment; not a live environment read |
+| `KF3_DISPLAY_ARMED_DEFAULTS` | behaviour optional | unset => OFF | KEEP | crates/kf-qemu/src/display.rs; CODE READ: readers listed; optional control is not required for boot |
+| `KF3_DISPLAY_BLANK_STATE` | behaviour optional | unset => OFF | KEEP | crates/kf-qemu/src/display.rs; CODE READ: readers listed; optional control is not required for boot |
+| `KF3_DISPLAY_CAPS_PROBE` | behaviour required for Windows | Linux OFF; Windows OFF; derived_caps ON replaces captured page | DELETE | crates/kf-abi/src/guest_profile.rs; crates/kf-qemu/src/display.rs; CODE READ: P19 + 2026-10-10 ablation; idle-only removal is not a loaded-workload verdict |
+| `KF3_DISPLAY_CORE_AT_VBLANK` | behaviour optional | unset => OFF | KEEP | crates/kf-disp/src/engine.rs; crates/kf-qemu/src/display.rs; CODE READ: readers listed; optional control is not required for boot |
+| `KF3_DISPLAY_CTRL_PROBE` | behaviour required for Windows | Linux OFF; Windows ON via guest-os=windows | HARDWIRE ON | crates/kf-abi/src/guest_profile.rs; crates/kf-rm/src/display_ctrl_probe.rs; CODE READ: P19 + 2026-10-10 ablation; idle-only removal is not a loaded-workload verdict |
+| `KF3_DISPLAY_FLAGS` | debug | launcher-local or historical setting; not a product env read | KEEP | scripts only (lexical inventory); CODE READ: script-local setting only; not part of release launcher configuration |
+| `KF3_DISPLAY_HDCP_STATE` | behaviour optional | unset => OFF | KEEP | crates/kf-disp/src/model.rs; crates/kf-rm/src/display.rs; CODE READ: readers listed; optional control is not required for boot |
+| `KF3_DISPLAY_HDMI_PROBE` | behaviour optional | unset => OFF | KEEP | crates/kf-rm/src/display_ctrl_probe.rs; CODE READ: readers listed; optional control is not required for boot |
+| `KF3_DISPLAY_HEAD_TIMING_EN_BASE` | behaviour optional | None (no override) | KEEP | crates/kf-qemu/src/display.rs; CODE READ: readers listed; optional control is not required for boot |
+| `KF3_DISPLAY_HOTPLUG_EDID_SEEN` | behaviour optional | unset => OFF | KEEP | crates/kf-disp/src/model.rs; crates/kf-rm/src/display.rs; CODE READ: readers listed; optional control is not required for boot |
+| `KF3_DISPLAY_ILUT_CONSTRUCTOR_PROBE` | behaviour optional | unset => OFF | KEEP | crates/kf-qemu/src/display.rs; CODE READ: readers listed; optional control is not required for boot |
+| `KF3_DISPLAY_ILUT_OFFSET_256` | behaviour required for Windows | Linux OFF; Windows ON via guest-os=windows | HARDWIRE ON | crates/kf-abi/src/guest_profile.rs; crates/kf-disp/src/color.rs; crates/kf-qemu/src/display.rs; CODE READ: P19 + 2026-10-10 ablation; idle-only removal is not a loaded-workload verdict |
+| `KF3_DISPLAY_IMP_ENABLE` | behaviour required for Windows | Linux OFF; Windows ON via guest-os=windows | HARDWIRE ON | crates/kf-abi/src/guest_profile.rs; crates/kf-disp/src/model.rs; CODE READ: P19 + 2026-10-10 ablation; idle-only removal is not a loaded-workload verdict |
+| `KF3_DISPLAY_LOADV` | behaviour optional | unset => OFF | KEEP | crates/kf-qemu/src/display.rs; CODE READ: readers listed; optional control is not required for boot |
+| `KF3_DISPLAY_LUT_MIRROR` | behaviour required for Windows | Linux OFF; Windows ON via guest-os=windows | HARDWIRE ON | crates/kf-abi/src/guest_profile.rs; crates/kf-disp/src/color.rs; crates/kf-qemu/src/display.rs; CODE READ: P19 + 2026-10-10 ablation; idle-only removal is not a loaded-workload verdict |
+| `KF3_DISPLAY_METHOD_TRACE` | measurement | unset => OFF | KEEP | crates/kf-qemu/src/display.rs; CODE READ: readers listed; optional control is not required for boot |
+| `KF3_DISPLAY_OLUT_CONSTRUCTOR_PROBE` | behaviour optional | unset => OFF | KEEP | crates/kf-qemu/src/display.rs; CODE READ: readers listed; optional control is not required for boot |
+| `KF3_DISPLAY_PRIVATE_PROBE` | behaviour optional | unset => OFF | KEEP | crates/kf-rm/src/display_ctrl_probe.rs; CODE READ: readers listed; optional control is not required for boot |
+| `KF3_DISPLAY_SDR_COLOR` | behaviour required for Windows | Linux OFF; Windows ON via guest-os=windows | HARDWIRE ON | crates/kf-abi/src/guest_profile.rs; crates/kf-qemu/src/display.rs; CODE READ: P19 + 2026-10-10 ablation; idle-only removal is not a loaded-workload verdict |
+| `KF3_DISPLAY_TMO_CONSTRUCTOR_PROBE` | behaviour optional | unset => OFF | KEEP | crates/kf-qemu/src/display.rs; CODE READ: readers listed; optional control is not required for boot |
+| `KF3_DISPLAY_TMO_SURFACE_CONSTRUCTOR_PROBE` | behaviour optional | unset => OFF | KEEP | crates/kf-qemu/src/display.rs; CODE READ: readers listed; optional control is not required for boot |
+| `KF3_DISPLAY_TRACE` | measurement | unset => OFF | KEEP | crates/kf-qemu/src/display.rs; CODE READ: readers listed; optional control is not required for boot |
+| `KF3_DISPLAY_TRACE_CAP` | measurement | 4096 lines, inactive without trace gate | KEEP | crates/kf-qemu/src/display.rs; CODE READ: readers listed; optional control is not required for boot |
+| `KF3_DISPLAY_WRITE_TRACE` | measurement | unset => OFF | KEEP | crates/kf-qemu/src/display.rs; CODE READ: readers listed; optional control is not required for boot |
+| `KF3_DISPLAY_XBAR_PROBE` | behaviour optional | unset => OFF | KEEP | crates/kf-rm/src/display_ctrl_probe.rs; CODE READ: readers listed; optional control is not required for boot |
+| `KF3_DOORBELL_CPL` | measurement | unset => OFF | KEEP | qemu/hw/misc/kf3/kf3.c; CODE READ: readers listed; optional control is not required for boot |
+| `KF3_DUMMY_OFF` | dead | protocol/compile-time constant, not env | DELETE | qemu/hw/misc/kf3/kf3.c; CODE READ: lexical superset metadata, not an environment selector |
+| `KF3_EXTRA` | debug | launcher-local or historical setting; not a product env read | KEEP | scripts only (lexical inventory); CODE READ: script-local setting only; not part of release launcher configuration |
+| `KF3_FAILCLOSED_CHILD` | debug | unset; cfg(test) only | KEEP | crates/kf-qemu/src/failclosed.rs; CODE READ: readers listed; optional control is not required for boot |
+| `KF3_FB_MB` | debug | launcher-local or historical setting; not a product env read | KEEP | scripts only (lexical inventory); CODE READ: script-local setting only; not part of release launcher configuration |
+| `KF3_GFX_POOL_PROBE` | behaviour required for Windows | Linux OFF; Windows ON via guest-os=windows | HARDWIRE ON | crates/kf-abi/src/guest_profile.rs; crates/kf-rm/src/gfxpool_probe.rs; CODE READ: P19 + 2026-10-10 ablation; idle-only removal is not a loaded-workload verdict |
+| `KF3_GOP_H` | dead | protocol/compile-time constant, not env | DELETE | qemu/hw/misc/kf3/kf3_gop.h; CODE READ: lexical superset metadata, not an environment selector |
+| `KF3_GPUS` | debug | launcher-local or historical setting; not a product env read | KEEP | scripts only (lexical inventory); CODE READ: script-local setting only; not part of release launcher configuration |
+| `KF3_GSP_OBSERVER` | dead | protocol/compile-time constant, not env | DELETE | qemu/hw/misc/kf3/kf3.c; CODE READ: lexical superset metadata, not an environment selector |
+| `KF3_GSS_NATIVE` | behaviour optional | unset => OFF | KEEP | crates/kf-gsp/src/boot.rs; crates/kf-host/src/lib.rs; crates/kf-qemu/src/chan.rs; crates/kf-qemu/src/device.rs; crates/kf-rm/src/gssnative.rs; crates/kf-rm/src/rmrpc/policy.rs; CODE READ: readers listed; optional control is not required for boot |
+| `KF3_GUEST_RAM_H` | dead | protocol/compile-time constant, not env | DELETE | qemu/hw/misc/kf3/kf3_guest_ram.h; CODE READ: lexical superset metadata, not an environment selector |
+| `KF3_H` | dead | protocol/compile-time constant, not env | DELETE | qemu/hw/misc/kf3/kf3.h; CODE READ: lexical superset metadata, not an environment selector |
+| `KF3_INCA_REFUSE` | dead | no env reader; existing hardwired behavior retained | DELETE | crates/kf-chan/src/translated.rs; crates/kf-qemu/src/chan.rs; crates/kf-qemu/src/tspace.rs; CODE READ: historical selector/comment; not a live environment read |
+| `KF3_INJECT_FWSEC_FAIL` | negative control | 0 | KEEP | crates/kf-qemu/src/device.rs; CODE READ: readers listed; optional control is not required for boot |
+| `KF3_INJECT_STALE_USERD` | negative control | None | KEEP | crates/kf-chan/src/host.rs; crates/kf-qemu/src/chan.rs; CODE READ: readers listed; optional control is not required for boot |
+| `KF3_INVALIDATE_CLEAR_OVER_ABSENT` | behaviour optional | production ON; opt-out only when explicitly 0 | KEEP | crates/kf-mem/src/vasmgr.rs; CODE READ: readers listed; optional control is not required for boot |
+| `KF3_KERNEL_` | debug | launcher-local or historical setting; not a product env read | KEEP | scripts only (lexical inventory); CODE READ: script-local setting only; not part of release launcher configuration |
+| `KF3_KERNEL_GR_CE` | behaviour required for Windows | Linux OFF; Windows ON via guest-os=windows | HARDWIRE ON | crates/kf-abi/src/guest_profile.rs; crates/kf-qemu/src/chan.rs; CODE READ: P19 + 2026-10-10 ablation; idle-only removal is not a loaded-workload verdict |
+| `KF3_KERNEL_GR_WORK` | behaviour required for Windows | Linux OFF; Windows ON via guest-os=windows | HARDWIRE ON | crates/kf-abi/src/guest_profile.rs; crates/kf-qemu/src/chan.rs; CODE READ: P19 + 2026-10-10 ablation; idle-only removal is not a loaded-workload verdict |
+| `KF3_KERNEL_NVDEC_CTX` | dead | no env reader; existing hardwired behavior retained | DELETE | crates/kf-qemu/src/chan.rs; CODE READ: historical selector/comment; not a live environment read |
+| `KF3_KERNEL_NVENC_CTX` | dead | no env reader; existing hardwired behavior retained | DELETE | scripts only (lexical inventory); CODE READ: historical selector/comment; not a live environment read |
+| `KF3_KERNEL_OFA_CTX` | dead | no env reader; existing hardwired behavior retained | DELETE | scripts only (lexical inventory); CODE READ: historical selector/comment; not a live environment read |
+| `KF3_LAZY_OBSERVE` | measurement | production ON; opt-out only when explicitly 0 | KEEP | crates/kf-chan/src/user_lazy.rs; crates/kf-qemu/src/userpump.rs; CODE READ: readers listed; optional control is not required for boot |
+| `KF3_LIFECYCLE_COUNT` | debug | launcher-local or historical setting; not a product env read | KEEP | scripts only (lexical inventory); CODE READ: script-local setting only; not part of release launcher configuration |
+| `KF3_LIFECYCLE_MODE` | measurement | default; all alternate modes inactive | KEEP | crates/kf-chan/src/user_lifecycle.rs; crates/kf-qemu/src/userpump.rs; CODE READ: readers listed; optional control is not required for boot |
+| `KF3_LIFECYCLE_PERIOD_S` | debug | launcher-local or historical setting; not a product env read | KEEP | scripts only (lexical inventory); CODE READ: script-local setting only; not part of release launcher configuration |
+| `KF3_MAPLOG` | measurement | unset => OFF | KEEP | crates/kf-mem/src/maplog.rs; crates/kf-mem/src/vasmgr.rs; crates/kf-qemu/src/chan.rs; crates/kf-qemu/src/device.rs; CODE READ: readers listed; optional control is not required for boot |
+| `KF3_MAX_PIECES` | dead | protocol/compile-time constant, not env | DELETE | qemu/hw/misc/kf3/kf3.c; CODE READ: lexical superset metadata, not an environment selector |
+| `KF3_MAX_VECTORS` | dead | protocol/compile-time constant, not env | DELETE | qemu/hw/misc/kf3/kf3.c; CODE READ: lexical superset metadata, not an environment selector |
+| `KF3_MEMORY_LIST_PROBE` | behaviour required for Windows | Linux OFF; Windows ON via guest-os=windows | HARDWIRE ON | crates/kf-abi/src/guest_profile.rs; CODE READ: P19 + 2026-10-10 ablation; idle-only removal is not a loaded-workload verdict |
+| `KF3_MSIX_BAR` | dead | protocol/compile-time constant, not env | DELETE | qemu/hw/misc/kf3/kf3.c; CODE READ: lexical superset metadata, not an environment selector |
+| `KF3_NEGCTL_CARVE` | negative control | unset => inactive | KEEP | crates/kf-mem/src/apply.rs; crates/kf-qemu/src/device.rs; crates/kf-qemu/src/tspace.rs; CODE READ: readers listed; optional control is not required for boot |
+| `KF3_NEGCTL_HEAP` | negative control | unset => inactive | KEEP | crates/kf-qemu/src/chan.rs; CODE READ: readers listed; optional control is not required for boot |
+| `KF3_NEGCTL_NO_BAR1_DOORBELL` | negative control | unset => inactive | KEEP | crates/kf-qemu/src/device.rs; CODE READ: readers listed; optional control is not required for boot |
+| `KF3_NEGCTL_NO_MICRO_RESERVE` | negative control | unset => micro reservation ON | KEEP | crates/kf-mem/src/batch.rs; crates/kf-mem/src/sim/tests.rs; crates/kf-qemu/src/mem.rs; CODE READ: readers listed; optional control is not required for boot |
+| `KF3_NEGCTL_SHADOW` | dead | no env reader; existing hardwired behavior retained | DELETE | crates/kf-chan/src/host.rs; crates/kf-chan/src/tmode.rs; crates/kf-qemu/src/chan.rs; CODE READ: historical selector/comment; not a live environment read |
+| `KF3_NEGCTL_SKIP_CAP_BRACKET` | negative control | unset => inactive | KEEP | crates/kf-host/src/birth.rs; crates/kf-host/src/channel.rs; CODE READ: readers listed; optional control is not required for boot |
+| `KF3_NEGCTL_STALE_BIND` | negative control | unset => inactive | KEEP | crates/kf-chan/src/host.rs; crates/kf-chan/src/tmode.rs; crates/kf-qemu/src/chan.rs; CODE READ: readers listed; optional control is not required for boot |
+| `KF3_NEGCTL_TSPACE_OVERSIZE` | negative control | unset => inactive | KEEP | crates/kf-qemu/src/tspace.rs; CODE READ: readers listed; optional control is not required for boot |
+| `KF3_NEGCTL_TWIN` | negative control | unset => inactive | KEEP | crates/kf-qemu/src/chan.rs; CODE READ: readers listed; optional control is not required for boot |
+| `KF3_NEGCTL_TWIN_WINDOW` | negative control | unset => inactive | KEEP | crates/kf-qemu/src/mem.rs; CODE READ: readers listed; optional control is not required for boot |
+| `KF3_NO_BATCHED_MAP` | behaviour optional | unset => batched mapping ON | KEEP | crates/kf-mem/src/batch.rs; crates/kf-mem/src/sim.rs; crates/kf-mem/src/sim/tests.rs; crates/kf-qemu/src/mem.rs; CODE READ: readers listed; optional control is not required for boot |
+| `KF3_NO_GUEST_VA_RESERVE` | behaviour optional | unset => guest VA reservation ON | KEEP | crates/kf-host/src/channel.rs; crates/kf-qemu/src/chan.rs; CODE READ: readers listed; optional control is not required for boot |
+| `KF3_PREEMPT_BIND_PROBE` | behaviour required for Windows | Linux OFF; Windows ON via guest-os=windows | HARDWIRE ON | crates/kf-abi/src/guest_profile.rs; crates/kf-rm/src/preempt_bind_probe.rs; CODE READ: P19 + 2026-10-10 ablation; idle-only removal is not a loaded-workload verdict |
+| `KF3_PROF` | measurement | unset => OFF | KEEP | crates/kf-qemu/src/device.rs; crates/kf-qemu/src/prof.rs; CODE READ: readers listed; optional control is not required for boot |
+| `KF3_PT_NSI_` | dead | protocol/compile-time constant, not env | DELETE | crates/kf-qemu/src/chan.rs; CODE READ: lexical superset metadata, not an environment selector |
+| `KF3_PT_NSI_MIN_INTERVAL_US` | behaviour optional | 0 (no coalescing), control inactive | KEEP | crates/kf-chan/src/ptnsi.rs; crates/kf-qemu/src/chan.rs; CODE READ: readers listed; optional control is not required for boot |
+| `KF3_PT_NSI_RELAY` | behaviour optional | production ON; opt-out only when explicitly 0 | KEEP | crates/kf-chan/src/ptnsi.rs; crates/kf-qemu/src/chan.rs; CODE READ: readers listed; optional control is not required for boot |
+| `KF3_PT_STALL_SNAPSHOT` | measurement | unset => OFF | KEEP | crates/kf-qemu/src/chan.rs; crates/kf-qemu/src/device.rs; CODE READ: readers listed; optional control is not required for boot |
+| `KF3_PT_STALL_SNAPSHOT_MS` | measurement | 1000 ms (200..10000), inactive without snapshot gate | KEEP | crates/kf-qemu/src/chan.rs; CODE READ: readers listed; optional control is not required for boot |
+| `KF3_PUT_CACHE` | measurement | production ON; opt-out only when explicitly 0 | KEEP | crates/kf-chan/src/user_lazy.rs; crates/kf-qemu/src/userpump.rs; CODE READ: readers listed; optional control is not required for boot |
+| `KF3_RC` | debug | launcher-local or historical setting; not a product env read | KEEP | scripts only (lexical inventory); CODE READ: script-local setting only; not part of release launcher configuration |
+| `KF3_READ_TRACE_MAX_BYTES` | measurement | 512 MiB, inactive without BAR0_READ_TRACE | KEEP | crates/kf-qemu/src/readtrace.rs; CODE READ: readers listed; optional control is not required for boot |
+| `KF3_READ_TRACE_MAX_RECORDS` | measurement | 8000000, inactive without BAR0_READ_TRACE | KEEP | crates/kf-qemu/src/readtrace.rs; CODE READ: readers listed; optional control is not required for boot |
+| `KF3_READ_TRACE_RANGES` | measurement | display range, inactive without BAR0_READ_TRACE | KEEP | crates/kf-qemu/src/readtrace.rs; CODE READ: readers listed; optional control is not required for boot |
+| `KF3_REFRESH_BACKSTOP_MS` | dead | protocol/compile-time constant, not env | DELETE | qemu/hw/misc/kf3/kf3.c; CODE READ: lexical superset metadata, not an environment selector |
+| `KF3_RELAY_GET_REFRESH` | behaviour optional | unset => OFF | KEEP | crates/kf-chan/src/userd_relay.rs; crates/kf-chan/src/worker.rs; crates/kf-qemu/src/chan.rs; crates/kf-qemu/src/device.rs; CODE READ: readers listed; optional control is not required for boot |
+| `KF3_RELAY_PB_PEEK` | measurement | unset => OFF | KEEP | crates/kf-qemu/src/chan.rs; CODE READ: readers listed; optional control is not required for boot |
+| `KF3_REPO` | debug | launcher-local or historical setting; not a product env read | KEEP | scripts only (lexical inventory); CODE READ: script-local setting only; not part of release launcher configuration |
+| `KF3_REV` | debug | launcher-local or historical setting; not a product env read | KEEP | scripts only (lexical inventory); CODE READ: script-local setting only; not part of release launcher configuration |
+| `KF3_REV_BIN` | debug | launcher-local or historical setting; not a product env read | KEEP | scripts only (lexical inventory); CODE READ: script-local setting only; not part of release launcher configuration |
+| `KF3_RPC_TRACE` | measurement | unset => OFF | KEEP | crates/kf-rm/src/census.rs; CODE READ: readers listed; optional control is not required for boot |
+| `KF3_SCHEDULE_LATE_JOINERS` | dead | no env reader; existing hardwired behavior retained | DELETE | crates/kf-qemu/src/latejoin.rs; CODE READ: historical selector/comment; not a live environment read |
+| `KF3_STRESS_SECS` | debug | 3 seconds; cfg(test) only | KEEP | crates/kf-qemu/src/userstore.rs; CODE READ: readers listed; optional control is not required for boot |
+| `KF3_STRESS_SEED` | debug | system-time seed; cfg(test) only | KEEP | crates/kf-qemu/src/userstore.rs; CODE READ: readers listed; optional control is not required for boot |
+| `KF3_STRESS_THREADS` | debug | 8; cfg(test) only | KEEP | crates/kf-qemu/src/userstore.rs; CODE READ: readers listed; optional control is not required for boot |
+| `KF3_SW_RUNLIST_HOST_OWNED` | behaviour required for Windows | Linux OFF; Windows ON via guest-os=windows | HARDWIRE ON | crates/kf-abi/src/guest_profile.rs; crates/kf-qemu/src/chan.rs; crates/kf-rm/src/sw_runlist_host.rs; CODE READ: P19 + 2026-10-10 ablation; idle-only removal is not a loaded-workload verdict |
+| `KF3_SW_RUNLIST_PROBE` | behaviour required for Windows | Linux OFF; Windows ON via guest-os=windows | HARDWIRE ON | crates/kf-abi/src/guest_profile.rs; CODE READ: P19 + 2026-10-10 ablation; idle-only removal is not a loaded-workload verdict |
+| `KF3_SW_SUBCH_INERT` | behaviour optional | unset => OFF | KEEP | crates/kf-qemu/src/chan.rs; CODE READ: readers listed; optional control is not required for boot |
+| `KF3_TCENSUS` | measurement | unset => OFF | KEEP | crates/kf-qemu/src/chan.rs; CODE READ: readers listed; optional control is not required for boot |
+| `KF3_TEAR_GATE` | dead | no env reader; existing hardwired behavior retained | DELETE | crates/kf-qemu/src/display.rs; CODE READ: historical selector/comment; not a live environment read |
+| `KF3_TIMER_MAP` | dead | no env reader; existing hardwired behavior retained | DELETE | scripts only (lexical inventory); CODE READ: historical selector/comment; not a live environment read |
+| `KF3_TRACE_NAME` | measurement | device-selected name, inactive without BAR0_READ_TRACE | KEEP | crates/kf-qemu/src/ffi_unsafe.rs; crates/kf-qemu/src/readtrace.rs; CODE READ: readers listed; optional control is not required for boot |
+| `KF3_TRANSLATED_CE_RELAY` | behaviour required for Windows | Linux OFF; Windows ON via guest-os=windows | HARDWIRE ON | crates/kf-abi/src/guest_profile.rs; crates/kf-harness/src/bin/kf-gr-tier.rs; crates/kf-qemu/src/chan.rs; crates/kf-qemu/src/device.rs; CODE READ: P19 + 2026-10-10 ablation; idle-only removal is not a loaded-workload verdict |
+| `KF3_TSG_MIRROR` | behaviour optional | absent/OFF | HARDWIRE OFF | no reader in candidate; CODE READ: mirror excluded; combined-load acceptance unresolved |
+| `KF3_TSHADOW` | measurement | unset => OFF | KEEP | crates/kf-chan/src/tmode.rs; crates/kf-qemu/src/chan.rs; CODE READ: readers listed; optional control is not required for boot |
+| `KF3_TSPACE` | dead | no env reader; existing hardwired behavior retained | DELETE | crates/kf-chan/src/translated.rs; crates/kf-mem/src/apply.rs; crates/kf-qemu/src/chan.rs; crates/kf-qemu/src/device.rs; crates/kf-qemu/src/exposure.rs; crates/kf-qemu/src/mem.rs; crates/kf-qemu/src/tspace.rs; crates/kf-qemu/src/twin.rs; CODE READ: historical selector/comment; not a live environment read |
+| `KF3_TWIN_VA_BASE` | dead | no env reader; existing hardwired behavior retained | DELETE | crates/kf-host/src/channel.rs; CODE READ: historical selector/comment; not a live environment read |
+| `KF3_USERD_RELAY_OFF` | behaviour optional | unset => OFF | KEEP | crates/kf-qemu/src/chan.rs; CODE READ: readers listed; optional control is not required for boot |
+| `KF3_USER_RING_TRACE` | measurement | unset => OFF | KEEP | crates/kf-chan/src/user_storage.rs; crates/kf-qemu/src/chan.rs; crates/kf-qemu/src/device.rs; crates/kf-qemu/src/userpump.rs; CODE READ: readers listed; optional control is not required for boot |
+| `KF3_VRAM_ATTRS` | behaviour optional | s1-nvkms-offscreen; optional explicit control | KEEP | crates/kf-qemu/src/gpucopy.rs; CODE READ: readers listed; optional control is not required for boot |
+| `KF3_WALK_REFUSAL_DUMP` | measurement | unset => OFF | KEEP | crates/kf-mem/src/refusal_dump.rs; crates/kf-mem/src/vasmgr.rs; CODE READ: readers listed; optional control is not required for boot |
+| `KF3_WIN_KERNEL_PID4` | dead | no env reader; existing hardwired behavior retained | DELETE | crates/kf-qemu/src/device.rs; crates/kf-qemu/src/twin.rs; crates/kf-rm/src/chanlink.rs; CODE READ: historical selector/comment; not a live environment read |
+| `KF3_WIN_REFUSE_PT_FIFO_UPDATE` | behaviour optional | unset => OFF | KEEP | crates/kf-qemu/src/chan.rs; crates/kf-rm/src/defapi.rs; CODE READ: readers listed; optional control is not required for boot |
+| `KF3_WIN_TWIN_DEFAPI_OBJECT` | behaviour required for Windows | Linux OFF; Windows ON via guest-os=windows | HARDWIRE ON | crates/kf-abi/src/guest_profile.rs; crates/kf-host/src/channel.rs; crates/kf-qemu/src/chan.rs; crates/kf-rm/src/chanlink.rs; CODE READ: P19 + 2026-10-10 ablation; idle-only removal is not a loaded-workload verdict |
+| `KF3_WIN_USER_CHANNELS_PASSTHROUGH` | behaviour required for Windows | Linux OFF; Windows ON via guest-os=windows | HARDWIRE ON | crates/kf-abi/src/guest_profile.rs; crates/kf-host/src/channel.rs; crates/kf-qemu/src/chan.rs; crates/kf-rm/src/chanlink.rs; CODE READ: P19 + 2026-10-10 ablation; idle-only removal is not a loaded-workload verdict |
+| `KF3_WIN_USER_RING_RELAY` | behaviour optional | production ON; opt-out only when explicitly 0 | KEEP | crates/kf-qemu/src/userrelay.rs; CODE READ: readers listed; optional control is not required for boot |
+| `KF3_WIN_USER_RING_SHADOW` | behaviour optional | unset => OFF | KEEP | crates/kf-qemu/src/userrelay.rs; CODE READ: readers listed; optional control is not required for boot |
+| `KF3_WRITE_TRACE_RANGES` | measurement | all, inactive without BAR0_READ_TRACE | KEEP | crates/kf-qemu/src/readtrace.rs; CODE READ: readers listed; optional control is not required for boot |
+| `KF3_X` | debug | launcher-local or historical setting; not a product env read | KEEP | scripts only (lexical inventory); CODE READ: script-local setting only; not part of release launcher configuration |
+| `KF3_ZCULL_BIND_PROBE` | behaviour required for Windows | Linux OFF; Windows ON via guest-os=windows | HARDWIRE ON | crates/kf-abi/src/guest_profile.rs; crates/kf-rm/src/preempt_bind_probe.rs; CODE READ: P19 + 2026-10-10 ablation; idle-only removal is not a loaded-workload verdict |

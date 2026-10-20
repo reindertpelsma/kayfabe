@@ -13,6 +13,7 @@ fn config(display: bool, display_max_fps: u32) -> Config {
         bar1_bytes: 256 << 20,
         bar2_bytes: 32 << 20,
         guest_driver: None,
+        guest_profile: Default::default(),
         display,
         x11_dispsw: false,
         display_broker: false,

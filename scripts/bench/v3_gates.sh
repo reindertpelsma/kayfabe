@@ -67,7 +67,7 @@ export PATH="$PATH:$HOME/.cargo/bin"
   if [ ! -x "$bin10" ]; then
     echo "MISSING_GATE=kf-micro-reserve-probe"
   else
-    out10=$(KF3_WIN_USER_CHANNELS_PASSTHROUGH=1 timeout 180 "$bin10" reserve 2>&1); rc10=$?
+    out10=$(timeout 180 "$bin10" reserve --guest-os windows 2>&1); rc10=$?
     echo "$out10"
     births=$((births + $(echo "$out10" | grep -ac 'kf-host: channel birth ')))
     user=$((user + $(echo "$out10" | grep -a 'kf-host: channel birth ' | grep -ac ' PRIVILEGED_CHANNEL=0 privilege=USER ')))

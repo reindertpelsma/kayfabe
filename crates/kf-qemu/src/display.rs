@@ -119,159 +119,9 @@ fn armed_defaults_on() -> bool {
 /// halts every display channel, no later flip or core update is consumed, and ~17.5 s later the
 /// guest resets the display and bugchecks 0x116. See `kf_disp::color::Experiments` for what each
 /// flag changes and why it is exact.
-fn color_experiments() -> kf_disp::color::Experiments {
-    static X: std::sync::OnceLock<kf_disp::color::Experiments> = std::sync::OnceLock::new();
-    *X.get_or_init(|| {
-        let on = |n: &str| std::env::var(n).is_ok_and(|v| v == "1");
-        let x = kf_disp::color::Experiments {
-            lut_mirror: on("KF3_DISPLAY_LUT_MIRROR"),
-            ilut_offset_256: on("KF3_DISPLAY_ILUT_OFFSET_256"),
-        };
-        if x.lut_mirror {
-            eprintln!(
-                "kf3: display: EXPERIMENT KF3_DISPLAY_LUT_MIRROR=1 — MIRROR accepted on DIRECT ILUT/OLUT where no negative input can reach it"
-            );
-        }
-        if x.ilut_offset_256 {
-            eprintln!(
-                "kf3: display: EXPERIMENT KF3_DISPLAY_ILUT_OFFSET_256=1 — SET_OFFSET_ILUT read in 256-byte units (as OLUT/TMO)"
-            );
-        }
-        x
-    })
-}
 
 /// `nvkms-evo3.c:1437-1438`'s default `MIN_FRAME_IDLE` (H-armeddefault): leading, trailing lines.
 const MIN_FRAME_IDLE_DEFAULT: (u32, u32) = (2, 1);
-
-/// ⚠⚠ PROBE (default off, 2026-10-09, H-caps; `KF3_DISPLAY_CAPS_PROBE=1`, read once) — never a
-/// shipped behaviour, and a CAPTURED table (the defect v3 exists to end), so it may only ever be a
-/// probe. `[measured, VFIO DVI reference boot3, RTX 4070, 2026-10-08]` (record
-/// `traces/display_reply_diff_20261008/` §0 row P16r) Windows reads the whole caps page
-/// (`NV_PDISP_FE_SW`) at 10.9488 s and 0.12 s later initialises only windows 0/2/4/6 — the windows
-/// whose `PRECOMP_WIN_PIPE_HDR_CAPA` has the scaler and TMO; the odd windows have CSC11 only — while
-/// under kf3 (every window alike) it initialises all eight. 101 of the page's 1024 words differ.
-/// Under the probe kf3 publishes the real GPU's page, for its caps class and page base only.
-fn caps_probe_on() -> bool {
-    static ON: std::sync::OnceLock<bool> = std::sync::OnceLock::new();
-    *ON.get_or_init(|| std::env::var("KF3_DISPLAY_CAPS_PROBE").is_ok_and(|v| v == "1"))
-}
-
-/// The caps class and page base the probe's page was measured with (RTX 4070, 2026-10-08).
-const CAPS_PROBE_AT: (u32, u64) = (0xC773, 0x0064_0000);
-
-/// The real GPU's caps page: every non-zero word, `(byte offset, value)` (VFIO DVI reference boot3,
-/// 8-byte reads 10.948826-10.953350 s; RTX 4070, 2026-10-08).
-const CAPS_PROBE_WORDS: [(u32, u32); 99] = [
-    (0x000, 0x00000f0f),
-    (0x004, 0x000000ff),
-    (0x008, 0x00000432),
-    (0x00c, 0x00000100),
-    (0x010, 0x81f22b20),
-    (0x018, 0x00001822),
-    (0x048, 0x00000a00),
-    (0x058, 0x00000a00),
-    (0x068, 0x00000a00),
-    (0x078, 0x00000a00),
-    (0x0c0, 0x00000010),
-    (0x0d0, 0x00000010),
-    (0x0e0, 0x00000010),
-    (0x0f0, 0x00000010),
-    (0x144, 0x1b000300),
-    (0x14c, 0x1b000300),
-    (0x154, 0x1b000300),
-    (0x15c, 0x1b000300),
-    (0x5e4, 0x00000086),
-    (0x5e8, 0x00000086),
-    (0x5ec, 0x00000086),
-    (0x5f0, 0x00000086),
-    (0x5f4, 0x00000086),
-    (0x5f8, 0x00000086),
-    (0x5fc, 0x00000086),
-    (0x600, 0x00000086),
-    (0x604, 0x00000086),
-    (0x608, 0x003c0051),
-    (0x60c, 0x003c0051),
-    (0x610, 0x003c0051),
-    (0x614, 0x003c0051),
-    (0x618, 0x003c0051),
-    (0x61c, 0x003c0051),
-    (0x620, 0x003c0051),
-    (0x624, 0x003c0051),
-    (0x680, 0x00ff01d0),
-    (0x684, 0x0000d681),
-    (0x688, 0x03580e0e),
-    (0x68c, 0x0a001400),
-    (0x690, 0x00000506),
-    (0x694, 0x00001400),
-    (0x6a0, 0x00ff01d0),
-    (0x6a4, 0x0000d680),
-    (0x6a8, 0x03580e0e),
-    (0x6ac, 0x0a001400),
-    (0x6b0, 0x00000506),
-    (0x6b4, 0x00001400),
-    (0x6c0, 0x00ff01d0),
-    (0x6c4, 0x0000d680),
-    (0x6c8, 0x03580e0e),
-    (0x6cc, 0x0a001400),
-    (0x6d0, 0x00000506),
-    (0x6d4, 0x00001400),
-    (0x6e0, 0x00ff01d0),
-    (0x6e4, 0x0000d680),
-    (0x6e8, 0x03580e0e),
-    (0x6ec, 0x0a001400),
-    (0x6f0, 0x00000506),
-    (0x6f4, 0x00001400),
-    (0x780, 0x01df21d0),
-    (0x784, 0x0000da90),
-    (0x788, 0x000e164e),
-    (0x78c, 0x5075816a),
-    (0x790, 0x000e1a4e),
-    (0x794, 0x0a001400),
-    (0x7a0, 0x010021d0),
-    (0x7a4, 0x0000da90),
-    (0x7b0, 0x000e0000),
-    (0x7b4, 0x0a001400),
-    (0x7c0, 0x01df21d0),
-    (0x7c4, 0x0000da90),
-    (0x7c8, 0x000e164e),
-    (0x7cc, 0x5075816a),
-    (0x7d0, 0x000e1a4e),
-    (0x7d4, 0x0a001400),
-    (0x7e0, 0x010021d0),
-    (0x7e4, 0x0000da90),
-    (0x7f0, 0x000e0000),
-    (0x7f4, 0x0a001400),
-    (0x800, 0x01df21d0),
-    (0x804, 0x0000da90),
-    (0x808, 0x000e164e),
-    (0x80c, 0x5075816a),
-    (0x810, 0x000e1a4e),
-    (0x814, 0x0a001400),
-    (0x820, 0x010021d0),
-    (0x824, 0x0000da90),
-    (0x830, 0x000e0000),
-    (0x834, 0x0a001400),
-    (0x840, 0x01df21d0),
-    (0x844, 0x0000da90),
-    (0x848, 0x000e164e),
-    (0x84c, 0x5075816a),
-    (0x850, 0x000e1a4e),
-    (0x854, 0x0a001400),
-    (0x860, 0x010021d0),
-    (0x864, 0x0000da90),
-    (0x870, 0x000e0000),
-    (0x874, 0x0a001400),
-];
-
-/// H-caps: the measured page (VFIO DVI reference boot3, RTX 4070, 2026-10-08) for the caps class and
-/// page base it was measured with, else `None`.
-fn caps_probe_page(base: u64, caps_class: u32) -> Option<kf_disp::caps::CapsPage> {
-    ((caps_class, base) == CAPS_PROBE_AT).then(|| kf_disp::caps::CapsPage {
-        base,
-        words: CAPS_PROBE_WORDS.to_vec(),
-    })
-}
 
 /// Lines per kind the display write trace prints in a run.
 const DISPLAY_TRACE_CAP_DEFAULT: u32 = 4096;
@@ -1516,10 +1366,11 @@ fn resolve_window_colors(
     io: &mut Io<'_>,
     sdr: (&'static kf_disp::class::ClassTable, u32, u32),
     so: &kf_disp::engine::Scanout,
+    colors_config: kf_disp::color::Experiments,
 ) -> Result<(), String> {
     let (t, win, _core) = sdr;
     let armed = |m| engine.armed(ChannelKind::Window, so.window, m).unwrap_or(0);
-    let lut = kf_disp::color::input(t, win, armed, color_experiments()).map_err(str::to_owned)?;
+    let lut = kf_disp::color::input(t, win, armed, colors_config).map_err(str::to_owned)?;
     let life = engine
         .generation(so.chn)
         .ok_or("no colour window incarnation")?;
@@ -1965,6 +1816,7 @@ pub struct DisplayPlane {
     /// Bounded SDR colour implementation, enabled for verification independently of
     /// constructor probes. Those probes still refuse all display methods.
     sdr_color: Option<(&'static kf_disp::class::ClassTable, u32, u32)>,
+    colors: kf_disp::color::Experiments,
     /// ★ Display step 3d: the cursor methods the composition's top layer reads (`None`: the
     /// family's table lacks one — its cursor is not composed).
     cursor_vocab: Option<kf_disp::engine::CursorVocab>,
@@ -2127,6 +1979,8 @@ impl DisplayPlane {
         store_bytes: u64,
         broker: Option<BrokerVram>,
         max_fps: u32,
+        settings: kf_abi::guest_profile::Settings,
+        die: kf_disp::capsderive::Die,
     ) -> Result<DisplayPlane, String> {
         kf_disp::pace::check(true, max_fps)?;
         let version = table.driver_version().to_string();
@@ -2163,11 +2017,11 @@ impl DisplayPlane {
         } else {
             kf_disp::caps::page
         };
-        let sdr_color = std::env::var("KF3_DISPLAY_SDR_COLOR").as_deref() == Ok("1");
-        if sdr_color {
-            // read (and confirm in the log) the decoder experiments at birth, not at first use
-            let _ = color_experiments();
-        }
+        let sdr_color = settings.display_sdr_color;
+        let colors = kf_disp::color::Experiments {
+            lut_mirror: settings.display_lut_mirror,
+            ilut_offset_256: settings.display_ilut_offset_256,
+        };
         if sdr_color && constructor_probe {
             return Err(
                 "display=on: SDR processing cannot be combined with constructor-only probes".into(),
@@ -2186,24 +2040,28 @@ impl DisplayPlane {
             caps_author(t, &regs, row.classes.caps, row.heads, row.windows)
         }
         .map_err(|e| format!("display=on: caps page: {}", e.0))?;
-        // ⚠⚠ PROBE (default off, H-caps): the real GPU's caps page instead of the authored one
-        let caps = if caps_probe_on() {
-            match caps_probe_page(caps.base, row.classes.caps) {
-                Some(p) => {
-                    eprintln!(
-                        "kf3: display: PROBE KF3_DISPLAY_CAPS_PROBE=1 — the caps page is the real GPU's measured page ({} words; H-caps probe, not a shipped behaviour)",
-                        p.words.len()
-                    );
-                    p
-                }
-                None => {
-                    eprintln!(
-                        "kf3: display: PROBE KF3_DISPLAY_CAPS_PROBE=1 REFUSED — caps class {:#x} / page {:#x} is not the measured one; the authored page stays",
-                        row.classes.caps, caps.base
-                    );
-                    caps
-                }
-            }
+        let caps = if settings.derived_caps {
+            let branch = version
+                .split('.')
+                .next()
+                .ok_or("missing guest driver branch")?;
+            let derived = kf_disp::capsderive::derive(
+                t,
+                &regs,
+                row,
+                die,
+                sdr_color,
+                kf_disp::capsderive::shipped_rows(),
+                kf_disp::capsderive::shipped_measured(),
+                branch,
+                &kf_disp::capsderive::HostFacts::default(),
+            )
+            .map_err(|e| format!("display=on: derived caps: {}", e.0))?;
+            eprintln!(
+                "kf3: derived caps die={die:?} branch={branch} unmeasured={:?}",
+                derived.unmeasured
+            );
+            derived.page
         } else {
             caps
         };
@@ -2329,6 +2187,7 @@ impl DisplayPlane {
             broker,
             scan,
             sdr_color: sdr_color.then_some((t, classes.window, classes.core)),
+            colors,
             cursor_vocab,
             ui_request: AtomicU64::new(0),
             life_reset: crate::reset::Ack::default(),
@@ -3563,6 +3422,7 @@ impl Device {
                                     &mut io,
                                     sdr,
                                     &so,
+                                    dp.colors,
                                 );
                             }
                             dp.counters.lat_resolve.finish(t_res);
@@ -5130,7 +4990,7 @@ impl ScanState {
                 // is simply not among `planned.layers`: the colour frame is composed without it.
                 // It used to fail the whole copy, and `failed` halted the guest's display.
                 let mut inputs = Vec::new();
-                let x = color_experiments();
+                let x = dp.colors;
                 let mut matrices = Vec::new();
                 let mut ilut_mirror = false;
                 for layer in &planned.layers {
@@ -5772,6 +5632,132 @@ impl ScanState {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// ⚠⚠ PROBE (default off, 2026-10-09, H-caps; `KF3_DISPLAY_CAPS_PROBE=1`, read once) — never a
+    /// shipped behaviour, and a CAPTURED table (the defect v3 exists to end), so it may only ever be a
+    /// probe. `[measured, VFIO DVI reference boot3, RTX 4070, 2026-10-08]` (record
+    /// `traces/display_reply_diff_20261008/` §0 row P16r) Windows reads the whole caps page
+    /// (`NV_PDISP_FE_SW`) at 10.9488 s and 0.12 s later initialises only windows 0/2/4/6 — the windows
+    /// whose `PRECOMP_WIN_PIPE_HDR_CAPA` has the scaler and TMO; the odd windows have CSC11 only — while
+    /// under kf3 (every window alike) it initialises all eight. 101 of the page's 1024 words differ.
+    /// Under the probe kf3 publishes the real GPU's page, for its caps class and page base only.
+
+    /// The caps class and page base the probe's page was measured with (RTX 4070, 2026-10-08).
+    const CAPS_PROBE_AT: (u32, u64) = (0xC773, 0x0064_0000);
+
+    /// The real GPU's caps page: every non-zero word, `(byte offset, value)` (VFIO DVI reference boot3,
+    /// 8-byte reads 10.948826-10.953350 s; RTX 4070, 2026-10-08).
+    const CAPS_PROBE_WORDS: [(u32, u32); 99] = [
+        (0x000, 0x00000f0f),
+        (0x004, 0x000000ff),
+        (0x008, 0x00000432),
+        (0x00c, 0x00000100),
+        (0x010, 0x81f22b20),
+        (0x018, 0x00001822),
+        (0x048, 0x00000a00),
+        (0x058, 0x00000a00),
+        (0x068, 0x00000a00),
+        (0x078, 0x00000a00),
+        (0x0c0, 0x00000010),
+        (0x0d0, 0x00000010),
+        (0x0e0, 0x00000010),
+        (0x0f0, 0x00000010),
+        (0x144, 0x1b000300),
+        (0x14c, 0x1b000300),
+        (0x154, 0x1b000300),
+        (0x15c, 0x1b000300),
+        (0x5e4, 0x00000086),
+        (0x5e8, 0x00000086),
+        (0x5ec, 0x00000086),
+        (0x5f0, 0x00000086),
+        (0x5f4, 0x00000086),
+        (0x5f8, 0x00000086),
+        (0x5fc, 0x00000086),
+        (0x600, 0x00000086),
+        (0x604, 0x00000086),
+        (0x608, 0x003c0051),
+        (0x60c, 0x003c0051),
+        (0x610, 0x003c0051),
+        (0x614, 0x003c0051),
+        (0x618, 0x003c0051),
+        (0x61c, 0x003c0051),
+        (0x620, 0x003c0051),
+        (0x624, 0x003c0051),
+        (0x680, 0x00ff01d0),
+        (0x684, 0x0000d681),
+        (0x688, 0x03580e0e),
+        (0x68c, 0x0a001400),
+        (0x690, 0x00000506),
+        (0x694, 0x00001400),
+        (0x6a0, 0x00ff01d0),
+        (0x6a4, 0x0000d680),
+        (0x6a8, 0x03580e0e),
+        (0x6ac, 0x0a001400),
+        (0x6b0, 0x00000506),
+        (0x6b4, 0x00001400),
+        (0x6c0, 0x00ff01d0),
+        (0x6c4, 0x0000d680),
+        (0x6c8, 0x03580e0e),
+        (0x6cc, 0x0a001400),
+        (0x6d0, 0x00000506),
+        (0x6d4, 0x00001400),
+        (0x6e0, 0x00ff01d0),
+        (0x6e4, 0x0000d680),
+        (0x6e8, 0x03580e0e),
+        (0x6ec, 0x0a001400),
+        (0x6f0, 0x00000506),
+        (0x6f4, 0x00001400),
+        (0x780, 0x01df21d0),
+        (0x784, 0x0000da90),
+        (0x788, 0x000e164e),
+        (0x78c, 0x5075816a),
+        (0x790, 0x000e1a4e),
+        (0x794, 0x0a001400),
+        (0x7a0, 0x010021d0),
+        (0x7a4, 0x0000da90),
+        (0x7b0, 0x000e0000),
+        (0x7b4, 0x0a001400),
+        (0x7c0, 0x01df21d0),
+        (0x7c4, 0x0000da90),
+        (0x7c8, 0x000e164e),
+        (0x7cc, 0x5075816a),
+        (0x7d0, 0x000e1a4e),
+        (0x7d4, 0x0a001400),
+        (0x7e0, 0x010021d0),
+        (0x7e4, 0x0000da90),
+        (0x7f0, 0x000e0000),
+        (0x7f4, 0x0a001400),
+        (0x800, 0x01df21d0),
+        (0x804, 0x0000da90),
+        (0x808, 0x000e164e),
+        (0x80c, 0x5075816a),
+        (0x810, 0x000e1a4e),
+        (0x814, 0x0a001400),
+        (0x820, 0x010021d0),
+        (0x824, 0x0000da90),
+        (0x830, 0x000e0000),
+        (0x834, 0x0a001400),
+        (0x840, 0x01df21d0),
+        (0x844, 0x0000da90),
+        (0x848, 0x000e164e),
+        (0x84c, 0x5075816a),
+        (0x850, 0x000e1a4e),
+        (0x854, 0x0a001400),
+        (0x860, 0x010021d0),
+        (0x864, 0x0000da90),
+        (0x870, 0x000e0000),
+        (0x874, 0x0a001400),
+    ];
+
+    /// H-caps: the measured page (VFIO DVI reference boot3, RTX 4070, 2026-10-08) for the caps class and
+    /// page base it was measured with, else `None`.
+    fn caps_probe_page(base: u64, caps_class: u32) -> Option<kf_disp::caps::CapsPage> {
+        ((caps_class, base) == CAPS_PROBE_AT).then(|| kf_disp::caps::CapsPage {
+            base,
+            words: CAPS_PROBE_WORDS.to_vec(),
+        })
+    }
+
     use kf_broker::CursorImage;
 
     /// ★ §8.18, the interleaving of runs e1-a…d (2026-10-08): the first copy is queued at +0.3 s,

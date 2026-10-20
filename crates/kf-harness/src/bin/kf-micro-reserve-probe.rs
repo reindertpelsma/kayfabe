@@ -12,8 +12,8 @@
 //! over FREE VA is expected to be accepted (inferred, which is what this measures).
 //!
 //! ```text
-//! KF3_WIN_USER_CHANNELS_PASSTHROUGH=1 kf-micro-reserve-probe reserve        # the decision
-//! KF3_WIN_USER_CHANNELS_PASSTHROUGH=1 kf-micro-reserve-probe nv01-control   # the root cause, on hardware
+//! kf-micro-reserve-probe reserve --guest-os windows        # the decision
+//! kf-micro-reserve-probe nv01-control --guest-os windows   # the root cause, on hardware
 //! ```
 //!
 //! - `reserve` (safe): a census of small reservations at Windows-like VAs (and the old LARGE one),
@@ -130,13 +130,22 @@ fn word(page: u64, w: u64) -> u32 {
 fn main() {
     let args: Vec<String> = std::env::args().collect();
     let arm = args.get(1).map_or("reserve", String::as_str);
+    let profile = kf_abi::guest_profile::GuestProfile::parse(
+        args.windows(2)
+            .find(|pair| pair[0] == "--guest-os")
+            .map(|pair| pair[1].as_str()),
+    )
+    .unwrap_or_else(|e| {
+        eprintln!("{e}");
+        std::process::exit(2)
+    });
     let mut l = Ledger::default();
     println!("MICRO_RESERVE_START arm={arm} pid={}", std::process::id());
     // ★ Gate 10 (2026-10-10, review item 6): a reservation host RM REFUSES is not a failure — the
     // batched map falls back to the 4 KiB grain (`V3_BATCHED_MAP.md` §8.8.3) — so it is a distinct,
     // loudly printed verdict, FALLBACK. FAIL is an INCONSISTENCY: a reservation host RM accepted
     // whose remnants do not read, or any error after the accept.
-    let fallback = match run(&mut l, arm) {
+    let fallback = match run(&mut l, arm, profile) {
         Ok(f) => f,
         Err(e) => {
             l.check("run", false, e);
@@ -159,14 +168,24 @@ fn main() {
 }
 
 #[allow(clippy::too_many_lines)]
-fn run(l: &mut Ledger, arm: &str) -> Result<bool, String> {
+fn run(
+    l: &mut Ledger,
+    arm: &str,
+    profile: kf_abi::guest_profile::GuestProfile,
+) -> Result<bool, String> {
     let dev = DevDir::open(c"/dev").map_err(|e| format!("open /dev: {e:?}"))?;
     let rm = HostRm::open(&dev, kf_harness::gate_gpu(), &kf_chip::choose_host_classes)
-        .map_err(|e| e.to_string())?;
+        .map_err(|e| e.to_string())?
+        .with_guest_profile(profile);
     l.measure("session", format!("driver {}", rm.driver_version()));
     l.measure(
         "space_start",
-        format!("{:?}", kf_host::channel::MirrorVaStart::from_env()),
+        format!(
+            "{:?}",
+            kf_host::channel::MirrorVaStart::select(
+                profile.settings().win_user_channels_passthrough
+            )
+        ),
     );
     let space = rm.alloc_vaspace().map_err(|e| format!("vaspace: {e:?}"))?;
 
@@ -331,7 +350,9 @@ fn run(l: &mut Ledger, arm: &str) -> Result<bool, String> {
                             0,
                             MapPerm::READ_WRITE,
                         )
-                        .map_err(|e| format!("map the 2 MiB leaf through its reservation: {e:?}"))?;
+                        .map_err(|e| {
+                            format!("map the 2 MiB leaf through its reservation: {e:?}")
+                        })?;
                         let first = read(&rm, alias_va, 4, 0)?;
                         let end = read(&rm, alias_va + last * P, 5, last)?;
                         rm.unmap_in(h2, alias_va, leaf, false)
@@ -477,7 +498,10 @@ fn run(l: &mut Ledger, arm: &str) -> Result<bool, String> {
                     }
                     rm.free(hu).map_err(|e| format!("free: {e:?}"))?;
                 }
-                Err(e) => l.measure("reserve_rounding_below_unaligned_start", format!("refused: {e:?}")),
+                Err(e) => l.measure(
+                    "reserve_rounding_below_unaligned_start",
+                    format!("refused: {e:?}"),
+                ),
             }
             // (3) THE GATE: an aligned 64 KiB reservation holds exactly 64 KiB.
             let ha = rm
@@ -583,7 +607,10 @@ mod tests {
     fn only_a_host_rm_refusal_status_is_a_refusal() {
         assert_eq!(classify(&Ok(1)), Answer::Accepted);
         assert_eq!(classify(&Err(RmError::NoMemory)), Answer::Refused);
-        assert_eq!(classify(&Err(RmError::InsufficientPermissions)), Answer::Refused);
+        assert_eq!(
+            classify(&Err(RmError::InsufficientPermissions)),
+            Answer::Refused
+        );
         // An RM status the driver returned (NV_ERR_INVALID_ARGUMENT 0x1F, NV_ERR_NOT_SUPPORTED 0x56…).
         assert_eq!(classify(&Err(RmError::Other(0x1F))), Answer::Refused);
         // This crate's own codes, a cancelled syscall and a mis-placed FIXED map are not refusals.
@@ -607,7 +634,10 @@ mod tests {
     fn the_fallback_posture_needs_all_five_small_refused_by_status() {
         use Answer::*;
         assert_eq!(posture(&[Accepted; 5]), Posture::Expected);
-        assert_eq!(posture(&[Accepted, Accepted, Accepted, Accepted, Refused]), Posture::Expected);
+        assert_eq!(
+            posture(&[Accepted, Accepted, Accepted, Accepted, Refused]),
+            Posture::Expected
+        );
         assert_eq!(posture(&[Refused; 5]), Posture::AllRefused);
         // Mixed (1-3 accepted): inconsistent.
         for k in 1..4 {
@@ -616,8 +646,14 @@ mod tests {
             assert_eq!(posture(&v), Posture::Inconsistent, "{k} accepted");
         }
         // One transport error among refusals (or acceptances) is not a fallback.
-        assert_eq!(posture(&[Refused, Refused, Refused, Refused, Error]), Posture::Inconsistent);
-        assert_eq!(posture(&[Accepted, Accepted, Accepted, Accepted, Error]), Posture::Inconsistent);
+        assert_eq!(
+            posture(&[Refused, Refused, Refused, Refused, Error]),
+            Posture::Inconsistent
+        );
+        assert_eq!(
+            posture(&[Accepted, Accepted, Accepted, Accepted, Error]),
+            Posture::Inconsistent
+        );
         assert_eq!(posture(&[]), Posture::Inconsistent);
     }
 

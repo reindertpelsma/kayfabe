@@ -257,10 +257,6 @@ pub struct ChannelAlloc {
 
 /// ★ 2026-10-08: `KF3_ASYNC_PREEMPT=1` (default off) serves `DISABLE_CHANNELS` with a
 /// `pRunlistPreemptEvent` ([`async_preempt_admitted`]).
-fn async_preempt_enabled() -> bool {
-    static ON: std::sync::OnceLock<bool> = std::sync::OnceLock::new();
-    *ON.get_or_init(|| std::env::var_os("KF3_ASYNC_PREEMPT").is_some_and(|v| v == "1"))
-}
 
 /// ★ 2026-10-08 — may a `DISABLE_CHANNELS` carrying `pRunlistPreemptEvent = ev` reach the plane?
 /// The synchronous form (`ev == 0`) always may; the asynchronous one only with the switch on AND
@@ -323,12 +319,17 @@ pub const DEBUG_PROFILE: &str = "KF3_DEBUG";
 
 /// Whether [`FORCE_MIGRATABLE`] is requested AND allowed by the environment given. Pure, for tests.
 #[must_use]
-pub fn force_migratable_allowed(force: Option<&str>, debug: Option<&str>) -> (bool, Option<&'static str>) {
+pub fn force_migratable_allowed(
+    force: Option<&str>,
+    debug: Option<&str>,
+) -> (bool, Option<&'static str>) {
     match (force, debug) {
         (Some("1"), Some("1")) => (true, None),
         (Some("1"), _) => (
             false,
-            Some("KF3_DEBUG_FORCE_MIGRATABLE=1 REFUSED: it is a debug-profile switch and needs KF3_DEBUG=1; the production profile cannot enable it"),
+            Some(
+                "KF3_DEBUG_FORCE_MIGRATABLE=1 REFUSED: it is a debug-profile switch and needs KF3_DEBUG=1; the production profile cannot enable it",
+            ),
         ),
         _ => (false, None),
     }
@@ -843,6 +844,7 @@ struct DeviceVaDeclaration {
 /// ★★★ The link. Seated at the FRONT of the chain (ahead of the object seat, which terminates
 /// `GSP_RM_ALLOC`/`GSP_RM_FREE`, and of the ledger, which would record the controls unserviced).
 pub struct ChannelPolicy {
+    settings: kf_abi::guest_profile::Settings,
     abi: DriverAbiTable,
     guest_os: kf_abi::GuestOs,
     sink: ChanSink,
@@ -915,6 +917,7 @@ impl ChannelPolicy {
         let chan_props = kf_abi::fifoctl::ChannelPropsLayout::at(abi.driver_version());
         let default_vas = DefaultVaspaceCtl::at(abi.driver_version());
         ChannelPolicy {
+            settings: Default::default(),
             abi,
             guest_os,
             sink,
@@ -934,7 +937,7 @@ impl ChannelPolicy {
             carried: 0,
             refused: 0,
             display_sw_twins: false,
-            user_work_flag: std::env::var(USER_WORK_FLAG).as_deref() == Ok("1"),
+            user_work_flag: false,
             windows_identity: false,
             windows_kernel_pid: None,
             system_pid_is_kernel: kernel_pid4_enabled(),
@@ -947,6 +950,20 @@ impl ChannelPolicy {
     #[must_use]
     pub fn with_kernel_pid4(mut self, on: bool) -> ChannelPolicy {
         self.system_pid_is_kernel = on;
+        self
+    }
+
+    /// Set compatibility independently of guest identity and channel ownership admission.
+    #[must_use]
+    pub fn with_guest_profile(self, profile: kf_abi::guest_profile::GuestProfile) -> Self {
+        self.with_settings(profile.settings())
+    }
+
+    /// Explicit settings for the composition root and isolated integration fixtures.
+    #[must_use]
+    pub fn with_settings(mut self, settings: kf_abi::guest_profile::Settings) -> Self {
+        self.settings = settings;
+        self.user_work_flag = settings.win_user_channels_passthrough;
         self
     }
 
@@ -1957,7 +1974,7 @@ impl ChannelPolicy {
                 // dereferenced. [measured, runs 78/79] the refusal is followed by the TDR exactly
                 // TdrDelay later.
                 if !async_preempt_admitted(
-                    async_preempt_enabled(),
+                    self.settings.async_preempt,
                     d.runlist_preempt_event,
                     d.disable,
                 ) {
@@ -1981,7 +1998,7 @@ impl ChannelPolicy {
                 // synchronous form (bDisable=0, no event); refusing it left them disabled and the
                 // next work on them TDR'd — so the re-enable is admitted the same way (switch on).
                 let cross_client_ok =
-                    d.runlist_preempt_event != 0 || (async_preempt_enabled() && !d.disable);
+                    d.runlist_preempt_event != 0 || (self.settings.async_preempt && !d.disable);
                 if !cross_client_ok
                     && let Some((c, ch)) = d.list.iter().find(|(c, _)| *c != h.client)
                 {
@@ -3873,9 +3890,14 @@ mod tests {
             );
         }
         assert_eq!(
-            link.respond(&ctl(c, 0x5c00_0002, DISABLE_USERMODE_CHANNELS, &[1, 0, 0, 0]))
-                .expect("refused")
-                .rpc_result,
+            link.respond(&ctl(
+                c,
+                0x5c00_0002,
+                DISABLE_USERMODE_CHANNELS,
+                &[1, 0, 0, 0]
+            ))
+            .expect("refused")
+            .rpc_result,
             NV_ERR_INVALID_ARGUMENT
         );
         let d = |list: Vec<(u32, u32)>, ev: u64| {
@@ -4269,7 +4291,10 @@ mod tests {
         }
         assert_eq!(
             *seen.lock().unwrap(),
-            [(Some((0, 0)), Some(0)), (Some((0xff00_a004, 0x800)), Some(4))]
+            [
+                (Some((0, 0)), Some(0)),
+                (Some((0xff00_a004, 0x800)), Some(4))
+            ]
         );
     }
 
@@ -4368,7 +4393,10 @@ mod forced_tests {
     fn force_migratable_needs_the_debug_profile() {
         assert_eq!(force_migratable_allowed(None, None), (false, None));
         assert_eq!(force_migratable_allowed(None, Some("1")), (false, None));
-        assert_eq!(force_migratable_allowed(Some("0"), Some("1")), (false, None));
+        assert_eq!(
+            force_migratable_allowed(Some("0"), Some("1")),
+            (false, None)
+        );
         assert_eq!(force_migratable_allowed(Some("1"), Some("1")), (true, None));
         for debug in [None, Some("0"), Some("")] {
             let (on, why) = force_migratable_allowed(Some("1"), debug);
@@ -4388,16 +4416,34 @@ mod forced_tests {
             assert!(windows_user_ring_permit(&linux_user(e)).is_ok());
         }
         for f in [
-            UserWorkFacts { kernel_stamped: true, ..linux_user(gr) },
-            UserWorkFacts { uvm_owned: true, ..linux_user(gr) },
-            UserWorkFacts { rm_internal: true, ..linux_user(gr) },
-            UserWorkFacts { engine: None, ..linux_user(gr) },
+            UserWorkFacts {
+                kernel_stamped: true,
+                ..linux_user(gr)
+            },
+            UserWorkFacts {
+                uvm_owned: true,
+                ..linux_user(gr)
+            },
+            UserWorkFacts {
+                rm_internal: true,
+                ..linux_user(gr)
+            },
+            UserWorkFacts {
+                engine: None,
+                ..linux_user(gr)
+            },
             linux_user(0x7f), // not a graphics, copy or video engine
         ] {
             assert!(windows_user_ring_permit(&f).is_err(), "{f:?}");
         }
-        let off = UserWorkFacts { force_migratable: false, ..linux_user(gr) };
-        assert!(windows_user_ring_permit(&off).is_err(), "no switch, no Windows identity: no permit");
+        let off = UserWorkFacts {
+            force_migratable: false,
+            ..linux_user(gr)
+        };
+        assert!(
+            windows_user_ring_permit(&off).is_err(),
+            "no switch, no Windows identity: no permit"
+        );
         // forcing never reclassifies a channel as Windows user work (the Passthrough conversion)
         assert!(windows_user_work(&linux_user(gr)).is_err());
     }

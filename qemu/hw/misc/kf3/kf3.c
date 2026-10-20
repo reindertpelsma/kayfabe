@@ -138,6 +138,7 @@ struct Kf3State {
     uint64_t bar2_size;
     uint32_t msix_vectors;
     char *guest_driver;
+    char *guest_os; /* Explicit compatibility profile; null preserves Linux. */
     /* state */
     void *h;
     MemoryRegion bar0;
@@ -1606,7 +1607,7 @@ static void kf3_dev_realize(PCIDevice *pci, Error **errp)
     const char *vm_id = (s->vm_id && s->vm_id[0]) ? s->vm_id : qemu_vm_id;
     int32_t realize_rc = kf3_realize(s->gpu_minor, s->fb_mb, s->bar1_size, s->bar2_size, s->guest_driver, s->display ? 1 : 0,
                     s->gop ? 1 : 0, s->x11_dispsw ? 1 : 0, broker_word, s->display_max_fps, s->gop_efi,
-                    s->gpu_uuid, vm_id, (uint32_t)pci->devfn, s->channel_budget, s->user_view_keep, &s->h, err, sizeof(err));
+                    s->gpu_uuid, vm_id, (uint32_t)pci->devfn, s->channel_budget, s->user_view_keep, s->guest_os, &s->h, err, sizeof(err));
     g_free(qemu_vm_id); /* Rust copied what it keeps during the call */
     if (realize_rc != 0) {
         error_setg(errp, "kf3: realize refused: %s", err);
@@ -1942,6 +1943,7 @@ static const Property kf3_properties[] = {
     DEFINE_PROP_UINT64("bar2-size", Kf3State, bar2_size, 32 * MiB),
     DEFINE_PROP_UINT32("msix-vectors", Kf3State, msix_vectors, 32),
     DEFINE_PROP_STRING("guest-driver", Kf3State, guest_driver),
+    DEFINE_PROP_STRING("guest-os", Kf3State, guest_os),
     DEFINE_PROP_BOOL("dummy-bar", Kf3State, dummy_bar, false),
     DEFINE_PROP_BOOL("display", Kf3State, display, false),
     /* ★ 2026-10-03: the boot display (docs/design/V3_DISPLAY.md §4.11). OFF = today's device. */

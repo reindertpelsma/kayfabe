@@ -384,6 +384,15 @@ impl DisplayPolicy {
         }
     }
 
+    /// Select the virtual IMP answer at construction, before guest requests.
+    #[must_use]
+    pub fn reporting_imp_enabled(self, on: bool) -> Self {
+        if on && let Some(model) = &self.model {
+            lock(model).report_imp_enabled(true);
+        }
+        self
+    }
+
     /// ★ EXPERIMENT `x11-dispsw` (default off): offer the `GF100_DISP_SW` object — the model answers
     /// its constructor's `GET_ACTIVE_DISPLAY_DEVICES` query instead of refusing it
     /// ([`DisplayModel::offer_display_sw`]). `false` touches nothing (no lock is taken), so a
@@ -393,15 +402,6 @@ impl DisplayPolicy {
     /// With no derived layouts (the M0 link) the query is not claimed and stays refused.
     #[must_use]
     pub fn offering_display_sw(mut self, on: bool) -> DisplayPolicy {
-        // ⚠ PROBE (default off, 2026-10-08, Windows run56): report IMP enabled, as the real GPU does.
-        if std::env::var("KF3_DISPLAY_IMP_ENABLE").as_deref() == Ok("1")
-            && let Some(m) = &self.model
-        {
-            lock(m).report_imp_enabled(true);
-            eprintln!(
-                "kf-rm: display: PROBE KF3_DISPLAY_IMP_ENABLE=1 — IMP_SET_GET_PARAMETER GET IMP_ENABLE answered TRUE (real-GPU answer; IS_MODE_POSSIBLE already says possible)"
-            );
-        }
         // ⚠ EXPERIMENT (default off, 2026-10-08, H-hdcp): see [`Self::answering_hdcp_state`].
         if std::env::var("KF3_DISPLAY_HDCP_STATE").as_deref() == Ok("1") && self.model.is_some() {
             self = self.answering_hdcp_state();

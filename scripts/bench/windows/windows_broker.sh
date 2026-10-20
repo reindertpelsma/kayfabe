@@ -47,7 +47,7 @@
 # refuses to add devices; its env (KF3_RPC_TRACE=1 and the flag list) is reproduced here.
 #
 # env: KF3_REV (kf3 binary under $W/kf3-bins; required), WIN_FLAGS (space-separated extra KF3_*
-#   flags set to 1, e.g. "KF3_PREEMPT_BIND_PROBE"), WIN_STDVGA (0), WIN_MAX_SECONDS (0 = no bound),
+#   flags set to 1, e.g. "KF3_MAPLOG"), WIN_STDVGA (0), WIN_MAX_SECONDS (0 = no bound),
 #   WIN_TITLE ("kayfabe Windows"), WIN_RAM_MB (8192), WIN_FB_MB (4096; the store is real host VRAM:
 #   [measured, run54 at a88764b3, 2026-10-08] beside the Linux guest (fb-mb=8192) a 4096 MiB store is
 #   refused NoMemory on the 12 GiB RTX 4070, so 2048 there).
@@ -246,7 +246,7 @@ stamp=$(date +%Y%m%d-%H%M%S)
 echo "WINDOWS_START kf3=$KF3_REV run=$RUN checkout=$(git -C "$HERE/../../.." rev-parse --short=8 HEAD 2>/dev/null) xid_before=$(xid_count) $(date -Is)" | tee -a "$RUN/marker.txt"
 broker_up "$RUN/broker-$stamp.log"
 
-KF3="kf3-gpu,fb-mb=${WIN_FB_MB:-4096},bar1-size=134217728,bar2-size=33554432,display=on,guest-driver=580.65.06,bus=pci.0,addr=0x6,id=kf0,display-broker=$SOCK,display-broker-uid=$SUID"
+KF3="kf3-gpu,guest-os=windows,fb-mb=${WIN_FB_MB:-4096},bar1-size=134217728,bar2-size=33554432,display=on,guest-driver=580.65.06,bus=pci.0,addr=0x6,id=kf0,display-broker=$SOCK,display-broker-uid=$SUID"
 VGA=()
 if [ "${WIN_STDVGA:-0}" = 1 ]; then VGA=(-device VGA,addr=0x9); else KF3+=",gop=on"; fi
 # shellcheck disable=SC2054
@@ -281,8 +281,9 @@ fi
 # the harness's flag list (pc_boundary_experiment.py FLAGS + pc_sdr_experiment.py) and KF3_DEFERRED_API
 # 2026-10-10 (OWNER_RULINGS §AB): KF3_TSPACE, KF3_INCA_REFUSE and KF3_KERNEL_{NVDEC,NVENC,OFA}_CTX are
 # deleted (their behaviour is hardwired ON); they are no longer listed.
-FLAGS="KF3_GFX_POOL_PROBE KF3_TIMER_MAP KF3_SW_RUNLIST_PROBE KF3_MEMORY_LIST_PROBE KF3_DISPLAY_SDR_COLOR KF3_DISPLAY_METHOD_TRACE KF3_KERNEL_GR_CE KF3_KERNEL_GR_WORK KF3_SW_SUBCH_INERT KF3_TRANSLATED_CE_RELAY KF3_BAR0_TRACE KF3_MAPLOG KF3_DEFERRED_API ${WIN_FLAGS:-}"
-ENV=(KF3_RPC_TRACE=1); for f in $FLAGS; do case $f in *=*) ENV+=("$f") ;; *) ENV+=("$f=1") ;; esac; done
+# Compatibility is selected by the device property. Diagnostics are opt-in.
+FLAGS="${WIN_FLAGS:-}"
+ENV=(); for f in $FLAGS; do case $f in *=*) ENV+=("$f") ;; *) ENV+=("$f=1") ;; esac; done
 python3 - "$RUN/command.json" "$KF3_REV" "$QBIN" "${ENV[@]}" -- "$QBIN" "${ARGS[@]}" <<'PY'
 import json, sys, datetime
 out, rev, qbin = sys.argv[1:4]

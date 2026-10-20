@@ -1,0 +1,233 @@
+[
+  {
+    "status": "killed",
+    "kills": 2,
+    "tests": [
+      "windows_dump_preserves_every_required_behavior_without_captured_caps",
+      "windows_no_env_configuration_has_one_row_per_p19_selector"
+    ],
+    "errors": [],
+    "mutant": "win_user_channels_passthrough"
+  },
+  {
+    "status": "killed",
+    "kills": 2,
+    "tests": [
+      "windows_dump_preserves_every_required_behavior_without_captured_caps",
+      "windows_no_env_configuration_has_one_row_per_p19_selector"
+    ],
+    "errors": [],
+    "mutant": "win_twin_defapi_object"
+  },
+  {
+    "status": "killed",
+    "kills": 2,
+    "tests": [
+      "windows_dump_preserves_every_required_behavior_without_captured_caps",
+      "windows_no_env_configuration_has_one_row_per_p19_selector"
+    ],
+    "errors": [],
+    "mutant": "kernel_gr_ce"
+  },
+  {
+    "status": "killed",
+    "kills": 2,
+    "tests": [
+      "windows_dump_preserves_every_required_behavior_without_captured_caps",
+      "windows_no_env_configuration_has_one_row_per_p19_selector"
+    ],
+    "errors": [],
+    "mutant": "kernel_gr_work"
+  },
+  {
+    "status": "killed",
+    "kills": 2,
+    "tests": [
+      "windows_dump_preserves_every_required_behavior_without_captured_caps",
+      "windows_no_env_configuration_has_one_row_per_p19_selector"
+    ],
+    "errors": [],
+    "mutant": "translated_ce_relay"
+  },
+  {
+    "status": "killed",
+    "kills": 2,
+    "tests": [
+      "windows_dump_preserves_every_required_behavior_without_captured_caps",
+      "windows_no_env_configuration_has_one_row_per_p19_selector"
+    ],
+    "errors": [],
+    "mutant": "deferred_api"
+  },
+  {
+    "status": "killed",
+    "kills": 2,
+    "tests": [
+      "windows_dump_preserves_every_required_behavior_without_captured_caps",
+      "windows_no_env_configuration_has_one_row_per_p19_selector"
+    ],
+    "errors": [],
+    "mutant": "preempt_bind_probe"
+  },
+  {
+    "status": "killed",
+    "kills": 2,
+    "tests": [
+      "windows_dump_preserves_every_required_behavior_without_captured_caps",
+      "windows_no_env_configuration_has_one_row_per_p19_selector"
+    ],
+    "errors": [],
+    "mutant": "display_imp_enable"
+  },
+  {
+    "status": "killed",
+    "kills": 2,
+    "tests": [
+      "windows_no_env_configuration_has_one_row_per_p19_selector",
+      "windows_dump_preserves_every_required_behavior_without_captured_caps"
+    ],
+    "errors": [],
+    "mutant": "display_ctrl_probe"
+  },
+  {
+    "status": "killed",
+    "kills": 2,
+    "tests": [
+      "windows_dump_preserves_every_required_behavior_without_captured_caps",
+      "windows_no_env_configuration_has_one_row_per_p19_selector"
+    ],
+    "errors": [],
+    "mutant": "zcull_bind_probe"
+  },
+  {
+    "status": "killed",
+    "kills": 2,
+    "tests": [
+      "windows_dump_preserves_every_required_behavior_without_captured_caps",
+      "windows_no_env_configuration_has_one_row_per_p19_selector"
+    ],
+    "errors": [],
+    "mutant": "sw_runlist_host_owned"
+  },
+  {
+    "status": "killed",
+    "kills": 2,
+    "tests": [
+      "windows_dump_preserves_every_required_behavior_without_captured_caps",
+      "windows_no_env_configuration_has_one_row_per_p19_selector"
+    ],
+    "errors": [],
+    "mutant": "async_preempt"
+  },
+  {
+    "status": "killed",
+    "kills": 2,
+    "tests": [
+      "windows_dump_preserves_every_required_behavior_without_captured_caps",
+      "windows_no_env_configuration_has_one_row_per_p19_selector"
+    ],
+    "errors": [],
+    "mutant": "gfx_pool_probe"
+  },
+  {
+    "status": "killed",
+    "kills": 2,
+    "tests": [
+      "windows_dump_preserves_every_required_behavior_without_captured_caps",
+      "windows_no_env_configuration_has_one_row_per_p19_selector"
+    ],
+    "errors": [],
+    "mutant": "sw_runlist_probe"
+  },
+  {
+    "status": "killed",
+    "kills": 2,
+    "tests": [
+      "windows_dump_preserves_every_required_behavior_without_captured_caps",
+      "windows_no_env_configuration_has_one_row_per_p19_selector"
+    ],
+    "errors": [],
+    "mutant": "memory_list_probe"
+  },
+  {
+    "status": "killed",
+    "kills": 2,
+    "tests": [
+      "windows_dump_preserves_every_required_behavior_without_captured_caps",
+      "windows_no_env_configuration_has_one_row_per_p19_selector"
+    ],
+    "errors": [],
+    "mutant": "display_sdr_color"
+  },
+  {
+    "status": "killed",
+    "kills": 2,
+    "tests": [
+      "windows_dump_preserves_every_required_behavior_without_captured_caps",
+      "windows_no_env_configuration_has_one_row_per_p19_selector"
+    ],
+    "errors": [],
+    "mutant": "display_caps_probe"
+  },
+  {
+    "status": "killed",
+    "kills": 2,
+    "tests": [
+      "windows_dump_preserves_every_required_behavior_without_captured_caps",
+      "windows_no_env_configuration_has_one_row_per_p19_selector"
+    ],
+    "errors": [],
+    "mutant": "display_lut_mirror"
+  },
+  {
+    "status": "killed",
+    "kills": 2,
+    "tests": [
+      "windows_dump_preserves_every_required_behavior_without_captured_caps",
+      "windows_no_env_configuration_has_one_row_per_p19_selector"
+    ],
+    "errors": [],
+    "mutant": "display_ilut_offset_256"
+  },
+  {
+    "status": "killed",
+    "kills": 2,
+    "tests": [
+      "windows_dump_preserves_every_required_behavior_without_captured_caps",
+      "windows_no_env_configuration_has_one_row_per_p19_selector"
+    ],
+    "errors": [],
+    "mutant": "derived_caps"
+  },
+  {
+    "status": "killed",
+    "kills": 3,
+    "tests": [
+      "a_default_profile_never_grants_windows_channel_or_display_behavior",
+      "default_and_explicit_linux_keep_every_p19_behavior_off",
+      "two_devices_can_select_different_profiles_without_process_state"
+    ],
+    "errors": [],
+    "mutant": "linux-default"
+  },
+  {
+    "status": "killed",
+    "kills": 2,
+    "tests": [
+      "default_and_explicit_linux_keep_every_p19_behavior_off",
+      "a_default_profile_never_grants_windows_channel_or_display_behavior"
+    ],
+    "errors": [],
+    "mutant": "default-enum"
+  },
+  {
+    "status": "killed",
+    "kills": 2,
+    "tests": [
+      "an_unconfigured_alias_cannot_silently_become_linux",
+      "invalid_property_values_are_refused_instead_of_guessed"
+    ],
+    "errors": [],
+    "mutant": "invalid-alias"
+  }
+]

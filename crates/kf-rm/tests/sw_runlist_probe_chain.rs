@@ -1,3 +1,4 @@
+//! C6 migration: isolated test configuration is explicit; all assertions and test names retained.
 //! The real served chain, with opt-in isolated in child processes (no unsafe set_var).
 #[path = "support/ga106.rs"]
 mod ga106;
@@ -15,8 +16,6 @@ fn full_chain_in_separate_environment() {
         let result = std::process::Command::new(std::env::current_exe().unwrap())
             .args(["--exact", "child_case", "--nocapture"])
             .env("KF_RUNLIST_CHAIN_TEST", enabled)
-            .env("KF3_SW_RUNLIST_PROBE", enabled)
-            .env_remove("KF3_GFX_POOL_PROBE")
             .output()
             .unwrap();
         assert!(
@@ -94,13 +93,17 @@ fn child_case() {
         })),
         ..Default::default()
     };
-    let mut policy = kf_rm::served_policy(
+    let mut policy = kf_rm::served_policy_with_settings(
         ga106::board(),
         ga106::host(),
         driver,
         Default::default(),
         Default::default(),
         links,
+        kf_abi::guest_profile::Settings {
+            sw_runlist_probe: enabled == "1",
+            ..Default::default()
+        },
     );
     let command = |function, payload| RpcCommand {
         function,

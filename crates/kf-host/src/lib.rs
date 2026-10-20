@@ -453,6 +453,7 @@ impl HostClasses for UnchosenClasses {
 /// ★ The one host RM session.
 #[derive(Debug)]
 pub struct HostRm {
+    guest_profile: kf_abi::guest_profile::GuestProfile,
     ctl: CharDevice,
     gpu: CharDevice,
     dev: DevDir,
@@ -490,6 +491,13 @@ pub struct HostRm {
 }
 
 impl HostRm {
+    /// Select this session's immutable compatibility behavior before allocating mirror spaces.
+    #[must_use]
+    pub fn with_guest_profile(mut self, profile: kf_abi::guest_profile::GuestProfile) -> Self {
+        self.guest_profile = profile;
+        self
+    }
+
     /// Open the one host RM session on GPU `gpu`: `nvidiactl` + `nvidia<N>`, version gate,
     /// `REGISTER_FD`, our own root client, device and subdevice, and the usermode window.
     ///
@@ -560,6 +568,7 @@ impl HostRm {
         let client = rung("R4 NV01_ROOT_CLIENT", OwnClient::allocate_root(&ctl))?;
 
         let conn = HostRm {
+            guest_profile: Default::default(),
             ctl,
             gpu: gpu_node,
             dev: held,

@@ -35,6 +35,19 @@ class GuestProfileWiring(unittest.TestCase):
                      "cfg.guest_profile.settings()", "pub guest_profile:"]:
             self.assertTrue(call in source, f"missing profile construction boundary: {call}")
 
+    def test_captured_oracle_is_below_the_existing_test_module_boundary(self):
+        source = (ROOT / "crates/kf-qemu/src/display.rs").read_text()
+        boundary = source.index("#[cfg(test)]")
+        for token in ["const CAPS_PROBE_AT:", "const CAPS_PROBE_WORDS:", "fn caps_probe_page("]:
+            self.assertGreater(source.index(token), boundary)
+
+    def test_production_display_cannot_select_a_captured_page(self):
+        source = (ROOT / "crates/kf-qemu/src/display.rs").read_text().split("#[cfg(test)]")[0]
+        self.assertNotIn("CAPS_PROBE_WORDS", source)
+        self.assertNotIn("caps_probe_page(", source)
+        self.assertNotIn('std::env::var("KF3_DISPLAY_CAPS_PROBE")', source)
+        self.assertIn("if settings.derived_caps", source)
+
 
 if __name__ == "__main__":
     unittest.main()

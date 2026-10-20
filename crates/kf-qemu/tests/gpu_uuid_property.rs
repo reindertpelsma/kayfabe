@@ -15,6 +15,7 @@ fn config(gpu_uuid: Option<&str>, vm_id: Option<&str>, devfn: u32) -> Config {
         bar1_bytes: 256 << 20,
         bar2_bytes: 32 << 20,
         guest_driver: None,
+        guest_profile: Default::default(),
         display: false,
         x11_dispsw: false,
         display_broker: false,

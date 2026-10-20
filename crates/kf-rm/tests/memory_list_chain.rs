@@ -1,3 +1,4 @@
+//! C6 migration: isolated test configuration is explicit; all assertions and test names retained.
 //! Real served-chain opt-in, tested in isolated process environments.
 #[path = "support/ga106.rs"]
 mod ga106;
@@ -29,9 +30,6 @@ fn memory_list_full_chain_independent_optin() {
         let output = std::process::Command::new(std::env::current_exe().unwrap())
             .args(["--exact", "memory_list_child", "--nocapture"])
             .env("KF_MEMORY_LIST_CHAIN_TEST", enabled)
-            .env("KF3_MEMORY_LIST_PROBE", enabled)
-            .env_remove("KF3_SW_RUNLIST_PROBE")
-            .env_remove("KF3_GFX_POOL_PROBE")
             .output()
             .unwrap();
         assert!(
@@ -83,7 +81,7 @@ fn memory_list_child() {
             })
             .unwrap();
     }
-    let mut policy = kf_rm::served_policy(
+    let mut policy = kf_rm::served_policy_with_settings(
         ga106::board(),
         ga106::host(),
         driver,
@@ -99,6 +97,10 @@ fn memory_list_child() {
             channels: Some(std::sync::Arc::new(|s| {
                 panic!("unexpected channel action {s:?}")
             })),
+            ..Default::default()
+        },
+        kf_abi::guest_profile::Settings {
+            memory_list_probe: enabled == "1",
             ..Default::default()
         },
     );

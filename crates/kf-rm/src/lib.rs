@@ -31,8 +31,8 @@ pub mod hostquery;
 pub mod hoststub;
 pub mod inert;
 pub mod inittables;
-pub mod memory_list;
 pub mod memory_access;
+pub mod memory_list;
 pub mod osevent;
 pub mod pmsr;
 pub mod preempt_bind_probe;
@@ -244,6 +244,42 @@ pub fn served_policy(
     census: census::ControlCensusLog,
     links: ObjectLinks,
 ) -> Box<dyn kf_gsp::CommandPolicy> {
+    served_policy_with_profile(
+        board,
+        host,
+        driver,
+        logs,
+        census,
+        links,
+        kf_abi::guest_profile::GuestProfile::Linux,
+    )
+}
+
+/// Construct the same policy with a per-device compatibility profile.
+#[must_use]
+pub fn served_policy_with_profile(
+    board: std::sync::Arc<BoardFacts>,
+    host: std::sync::Arc<HostFacts>,
+    driver: kf_abi::versions::DriverAbiTable,
+    logs: ChainLogs,
+    census: census::ControlCensusLog,
+    links: ObjectLinks,
+    profile: kf_abi::guest_profile::GuestProfile,
+) -> Box<dyn kf_gsp::CommandPolicy> {
+    served_policy_with_settings(board, host, driver, logs, census, links, profile.settings())
+}
+
+/// Explicit immutable settings seam for isolated composition tests; QOM accepts only GuestProfile.
+#[must_use]
+pub fn served_policy_with_settings(
+    board: std::sync::Arc<BoardFacts>,
+    host: std::sync::Arc<HostFacts>,
+    driver: kf_abi::versions::DriverAbiTable,
+    logs: ChainLogs,
+    census: census::ControlCensusLog,
+    links: ObjectLinks,
+    settings: kf_abi::guest_profile::Settings,
+) -> Box<dyn kf_gsp::CommandPolicy> {
     // ★ The notifier PROBE SET comes out of the census log: "the set the report states" and
     // "the set the event-plane arm consults" are ONE stored value.
     let probe_arm = census.snapshot().probe_arm;
@@ -252,7 +288,7 @@ pub fn served_policy(
         census,
         sticky::StickyAnswerGuard::new(
             driver,
-            served_chain(board, host, driver, logs, probe_arm, links),
+            served_chain_with_settings(board, host, driver, logs, probe_arm, links, settings),
         ),
     ))
 }
@@ -475,6 +511,50 @@ pub fn served_chain(
     probe_arm: kf_abi::eventnotify::ProbeArmSet,
     links: ObjectLinks,
 ) -> Box<dyn kf_gsp::CommandPolicy> {
+    served_chain_with_profile(
+        board,
+        host,
+        driver,
+        logs,
+        probe_arm,
+        links,
+        kf_abi::guest_profile::GuestProfile::Linux,
+    )
+}
+
+/// Construct the same policy with a per-device compatibility profile.
+#[must_use]
+pub fn served_chain_with_profile(
+    board: std::sync::Arc<BoardFacts>,
+    host: std::sync::Arc<HostFacts>,
+    driver: kf_abi::versions::DriverAbiTable,
+    logs: ChainLogs,
+    probe_arm: kf_abi::eventnotify::ProbeArmSet,
+    links: ObjectLinks,
+    profile: kf_abi::guest_profile::GuestProfile,
+) -> Box<dyn kf_gsp::CommandPolicy> {
+    served_chain_with_settings(
+        board,
+        host,
+        driver,
+        logs,
+        probe_arm,
+        links,
+        profile.settings(),
+    )
+}
+
+/// Explicit immutable settings seam for isolated composition tests; QOM accepts only GuestProfile.
+#[must_use]
+pub fn served_chain_with_settings(
+    board: std::sync::Arc<BoardFacts>,
+    host: std::sync::Arc<HostFacts>,
+    driver: kf_abi::versions::DriverAbiTable,
+    logs: ChainLogs,
+    probe_arm: kf_abi::eventnotify::ProbeArmSet,
+    links: ObjectLinks,
+    settings: kf_abi::guest_profile::Settings,
+) -> Box<dyn kf_gsp::CommandPolicy> {
     // ★★★ EXHAUSTIVE: a latch added to `ChainLogs` and not seated below is a compile error.
     let ChainLogs {
         unserviced,
@@ -498,7 +578,7 @@ pub fn served_chain(
         static_info = static_info.with_name(n, sn);
     }
     let mut chain: Vec<Box<dyn kf_gsp::CommandPolicy>> = Vec::new();
-    if std::env::var("KF3_SW_RUNLIST_PROBE").as_deref() == Ok("1")
+    if settings.sw_runlist_probe
         && let Some(policy) = objects.take()
     {
         let (probe, observer) =
@@ -518,7 +598,7 @@ pub fn served_chain(
     // ⚠ AWAITING OWNER CONFIRMATION (default off): the software-runlist submit as host-owned
     // scheduling, option (b) — `sw_runlist_host.rs`. kf-qemu opens every kernel channel at birth
     // under the same flag.
-    if sw_runlist_host::enabled() {
+    if settings.sw_runlist_host_owned {
         chain.push(Box::new(sw_runlist_host::SwRunlistHostOwnedPolicy::new(
             driver,
         )));
@@ -529,14 +609,14 @@ pub fn served_chain(
     }
     // ⚠ PROBE (default off): H-preempt-bind, 2026-10-08 — `preempt_bind_probe.rs`. Answers
     // `GR_CTXSW_PREEMPTION_BIND` NV_OK with nothing sent to the host; never a shipped behaviour.
-    if preempt_bind_probe::enabled() {
+    if settings.preempt_bind_probe {
         chain.push(Box::new(preempt_bind_probe::PreemptBindProbe::new(driver)));
         eprintln!(
             "kf-rm: PROBE {}=1: GR_CTXSW_PREEMPTION_BIND answered NV_OK, NOTHING bound on the host (H-preempt-bind probe, not a shipped behaviour)",
             preempt_bind_probe::FLAG
         );
     }
-    if preempt_bind_probe::zcull_enabled() {
+    if settings.zcull_bind_probe {
         chain.push(Box::new(preempt_bind_probe::ZcullBindProbe::new(driver)));
         eprintln!(
             "kf-rm: PROBE {}=1: a cross-client GR_CTXSW_ZCULL_BIND answered NV_OK, NOTHING bound on the host (probe, not a shipped behaviour)",
@@ -544,7 +624,7 @@ pub fn served_chain(
         );
     }
     // ⚠ PROBE (default off): H-modeset, 2026-10-08 — `display_ctrl_probe.rs`.
-    if display_ctrl_probe::enabled() {
+    if settings.display_ctrl_probe {
         chain.push(Box::new(display_ctrl_probe::DisplayCtrlProbe::new(driver)));
         eprintln!(
             "kf-rm: PROBE {}=1: six NV0073 controls answered NV_OK with the request echoed (H-modeset probe, not a shipped behaviour)",
@@ -581,7 +661,7 @@ pub fn served_chain(
             u8::from(xbar)
         );
     }
-    if std::env::var("KF3_MEMORY_LIST_PROBE").as_deref() == Ok("1")
+    if settings.memory_list_probe
         && let Some(policy) = objects.take()
     {
         objects = Some(policy.with_memory_list_probe());
@@ -594,7 +674,7 @@ pub fn served_chain(
     // ⊘ Without a channel plane there is nothing to twin with, so the object is not offered at all
     // (an offered object with no host twin is run m3c: 186 host Xid 32).
     let x11_dispsw = channels.is_some() && display.as_ref().is_some_and(|s| s.x11_dispsw);
-    if std::env::var("KF3_GFX_POOL_PROBE").as_deref() == Ok("1") {
+    if settings.gfx_pool_probe {
         eprintln!(
             "kf-rm: EXPERIMENT virtual GfxP pool sizing enabled; lifecycle is not implemented"
         );
@@ -610,7 +690,8 @@ pub fn served_chain(
             Some(shared) => display::DisplayPolicy::over_shared(driver, seat.row, shared),
             None => display::DisplayPolicy::new(driver, seat.row),
         }
-        .offering_display_sw(x11_dispsw);
+        .offering_display_sw(x11_dispsw)
+        .reporting_imp_enabled(settings.display_imp_enable);
         if let Some(mut registry) = policy.registry() {
             objects = objects.map(|p| p.with_accepted_observer(move |cmd| registry.observe(cmd)));
         }
@@ -623,7 +704,9 @@ pub fn served_chain(
             .as_ref()
             .map_or(kf_abi::GuestOs::Linux, |m| m.guest_os);
         chain.push(Box::new(
-            chanlink::ChannelPolicy::new(driver, guest_os, sink).with_display_sw_twins(x11_dispsw),
+            chanlink::ChannelPolicy::new(driver, guest_os, sink)
+                .with_display_sw_twins(x11_dispsw)
+                .with_settings(settings),
         ));
     }
     // ★ P4: the page-directory carrier is FIRST — ahead of `InitTablePolicy`, which terminates

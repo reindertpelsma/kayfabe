@@ -1,3 +1,8 @@
+//! CODE READ supersession, 2026-10-20: coordinator approved this existing P19
+//! compatibility behavior only under explicit guest-os=windows. Legacy env selectors
+//! are retired; Linux defaults and all command/identity/admission checks stay unchanged.
+//! Historical probe rationale below remains the source evidence, not current activation policy.
+//!
 //! ⚠⚠ **AWAITING OWNER CONFIRMATION — default off (`KF3_SW_RUNLIST_HOST_OWNED=1`).**
 //!
 //! 2026-10-07 (Windows Code43, task B): the software-runlist submit treated as **host-owned
@@ -38,7 +43,7 @@ pub const FLAG: &str = "KF3_SW_RUNLIST_HOST_OWNED";
 /// Whether the flag is on (`=1`).
 #[must_use]
 pub fn enabled() -> bool {
-    std::env::var(FLAG).as_deref() == Ok("1")
+    false // Legacy callers retain Linux defaults; production uses the per-device profile.
 }
 
 /// The link.

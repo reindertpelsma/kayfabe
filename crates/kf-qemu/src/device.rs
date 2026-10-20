@@ -44,6 +44,8 @@ pub struct Config {
     pub bar2_bytes: u64,
     /// The GUEST driver's version (its GSP wire layout), e.g. `580.159.04`. Defaults to the host's.
     pub guest_driver: Option<String>,
+    /// Compatibility property, independent of wire-layout/client classification.
+    pub guest_profile: kf_abi::guest_profile::GuestProfile,
     /// ★ v3-display: present the virtual NVDisplay (`display=on`, `docs/design/V3_DISPLAY.md`).
     /// Off is today's displayless posture. On a chip whose bare metal has no display engine the
     /// device REFUSES to realize rather than invent one.
@@ -366,6 +368,11 @@ impl Device {
     /// Any refusal, by name — the VM must not start on a guessed device.
     pub fn realize(cfg: &Config) -> Result<Device, String> {
         cfg.check()?;
+        eprintln!(
+            "kf3: effective-config guest-os={:?} settings={:?}",
+            cfg.guest_profile,
+            cfg.guest_profile.settings()
+        );
         // ★ EXPERIMENT `KF3_GSS_NATIVE` (default off): read once, here, and said once.
         let gss_native = kf_rm::gssnative::enabled()
             .then(|| std::sync::Arc::new(kf_rm::gssnative::Stats::new()));
@@ -395,7 +402,8 @@ impl Device {
                 kf_arch::ids::GpuId(cfg.gpu_minor),
                 &kf_chip::choose_host_classes,
             )
-            .map_err(|e| e.to_string())?,
+            .map_err(|e| e.to_string())?
+            .with_guest_profile(cfg.guest_profile),
         ));
         let (architecture, implementation, revision) = rm.arch_info();
         let family = Family::from_arch(architecture, implementation)
@@ -829,6 +837,7 @@ impl Device {
                 host.fifo_channels.channels_per_runlist,
                 dbfast,
                 token_fmt,
+                cfg.guest_profile.settings(),
             )?));
         chans.start()?;
         // ★ OWNER_RULINGS §U: the VM's deferred-API tables — filled by the object seat (the guest's
@@ -933,6 +942,11 @@ impl Device {
                         fb_length,
                         broker,
                         cfg.display_max_fps,
+                        cfg.guest_profile.settings(),
+                        kf_disp::capsderive::Die {
+                            architecture,
+                            implementation,
+                        },
                     )
                 })?
                 .with_boot(gop.as_ref().map(crate::display::BootScan::of).transpose()?);
@@ -954,6 +968,7 @@ impl Device {
             let memory_access = chans.memory_access.clone();
             let memory_list_fb = layout.clone();
             let x11_dispsw = cfg.x11_dispsw;
+            let guest_profile = cfg.guest_profile;
             let gss_native = gss_native.clone();
             let (board, host, chain_logs, census, inbox, console, defapi_reg) = (
                 board.clone(),
@@ -986,7 +1001,7 @@ impl Device {
                         stats: stats.clone(),
                     });
                 }
-                kf_rm::served_policy(
+                kf_rm::served_policy_with_profile(
                     board.clone(),
                     host.clone(),
                     t,
@@ -1015,6 +1030,7 @@ impl Device {
                         // console with `gop=on`; with `gop=off` there is no seat (today's table).
                         console: console.seat(),
                     },
+                    guest_profile,
                 )
             })
         };
@@ -4282,6 +4298,7 @@ mod config_tests {
             bar1_bytes: 256 << 20,
             bar2_bytes: 32 << 20,
             guest_driver: None,
+            guest_profile: Default::default(),
             display,
             x11_dispsw,
             display_broker: false,

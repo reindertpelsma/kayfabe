@@ -265,18 +265,7 @@ pub enum MirrorVaStart {
 }
 
 impl MirrorVaStart {
-    /// The rule's switch: [`MirrorVaStart::GuestFloor`] iff Windows per-process work may run on twins
-    /// (`KF3_WIN_USER_CHANNELS_PASSTHROUGH=1`, default off).
-    #[must_use]
-    pub fn from_env() -> Self {
-        // Read once: this runs on the VA thread for every mirror-space alloc (an env-lock round trip each).
-        static CACHED: std::sync::OnceLock<MirrorVaStart> = std::sync::OnceLock::new();
-        *CACHED.get_or_init(|| {
-            Self::select(std::env::var("KF3_WIN_USER_CHANNELS_PASSTHROUGH").as_deref() == Ok("1"))
-        })
-    }
-
-    /// Pure form of [`MirrorVaStart::from_env`].
+    /// Select from this session's explicit compatibility profile.
     #[must_use]
     pub const fn select(windows_user_twins: bool) -> Self {
         if windows_user_twins {
@@ -696,7 +685,7 @@ impl HostRm {
         // `KF3_TWIN_VA_BASE=<hex>` (a guest-independent but operator-chosen base, with NO reservation
         // keeping host RM's own buffers out of the low range it opened).
         let start = if reserve_guest {
-            MirrorVaStart::from_env()
+            MirrorVaStart::select(self.guest_profile.settings().win_user_channels_passthrough)
         } else {
             MirrorVaStart::HostDefault
         };

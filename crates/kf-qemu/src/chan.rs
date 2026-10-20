@@ -1147,10 +1147,6 @@ fn twin_defapi_plan(switch_on: bool, user_work: bool) -> TwinDefapiPlan {
 }
 
 /// ⚠ EXPERIMENT switch (default off): [`ChanPlane::twin_defapi_act`].
-fn twin_defapi_object() -> bool {
-    static ON: std::sync::OnceLock<bool> = std::sync::OnceLock::new();
-    *ON.get_or_init(|| std::env::var("KF3_WIN_TWIN_DEFAPI_OBJECT").as_deref() == Ok("1"))
-}
 
 /// Default-off compatibility experiment: decline the privileged FIFO migration at
 /// registration, allowing Windows to choose its own fallback. No trigger is consumed.
@@ -1738,20 +1734,12 @@ struct Slot {
 // context — and no Linux run with it exists; ON without `KF3_KERNEL_GR_WORK` (which §S.2 keeps
 // default-off "until proven") it is a ring that refuses every GR segment. The two are an owner
 // ruling together; the Windows profile sets both.
-fn kernel_gr_ce() -> bool {
-    static ON: std::sync::OnceLock<bool> = std::sync::OnceLock::new();
-    *ON.get_or_init(|| std::env::var_os("KF3_KERNEL_GR_CE").is_some_and(|v| v == "1"))
-}
 
 // ★ Owner rulings 2026-10-07 (`OWNER_RULINGS.md` §S items 1-6): the kernel-GR tier. With
 // `KF3_KERNEL_GR_CE` and T-mode, a guest-kernel GR channel's host ring also holds host objects of
 // the allowlisted graphics classes (`kf_chan::grtables`) after a USER assertion, its decoder
 // re-authors their admitted methods, the ENGINE writes the guest's GP_GET, its completions wake
 // the plane on GR0 and are relayed to the guest's GR0 vector. Default off.
-fn kernel_gr_work() -> bool {
-    static ON: std::sync::OnceLock<bool> = std::sync::OnceLock::new();
-    *ON.get_or_init(|| std::env::var_os("KF3_KERNEL_GR_WORK").is_some_and(|v| v == "1"))
-}
 
 // ★ Owner ruling 2026-10-07 (§S item 4): on a T-mode Translated ring, a SET_OBJECT on a software
 // subchannel (5-7) of a value no family lists as a class is accepted silently; any later software
@@ -1766,20 +1754,12 @@ fn sw_subch_inert() -> bool {
 // by the deferred-API path (class 5080: host-authored equivalents) or refused by name. Default off
 // until native-validated; the class-5080 admission (Translated-only) and its registration controls
 // are served regardless.
-fn deferred_api_trigger() -> bool {
-    static ON: std::sync::OnceLock<bool> = std::sync::OnceLock::new();
-    *ON.get_or_init(|| std::env::var_os("KF3_DEFERRED_API").is_some_and(|v| v == "1"))
-}
 
 // ★ 2026-10-07 (hypothesis 2 after run34; `OWNER_RULINGS.md` §S item 7): a Translated
 // COPY-ENGINE ring's completion is relayed to the guest's vector of the ring's own guest engine
 // (CEn), exactly as the GR tier relays GR0: only when the pump found entries retired after their
 // HOST fence was reached (the guest's GP_GET and semaphores are already written), on the worker,
 // never on a vCPU or under a lock a vCPU takes. Default off.
-fn translated_ce_relay() -> bool {
-    static ON: std::sync::OnceLock<bool> = std::sync::OnceLock::new();
-    *ON.get_or_init(|| std::env::var_os("KF3_TRANSLATED_CE_RELAY").is_some_and(|v| v == "1"))
-}
 
 // ★ 2026-10-08 (`V3_USERD_RELAY.md` §2.2's follow-up; H-getget after run76): a relayed twin's
 // engine-written GP_GET is also written into the guest's slot on every host non-stall wake (before the
@@ -1843,10 +1823,6 @@ fn negctl_twin() -> bool {
 /// guest-side gate is opened at birth too, so the channel runs whether or not the guest ever
 /// schedules it (Windows schedules its second graphics TSG only through `0x20801111`). The guest's
 /// own `GPFIFO_SCHEDULE(false)`, STOP and EVICT still close it.
-fn sw_runlist_host_owned() -> bool {
-    static ON: std::sync::OnceLock<bool> = std::sync::OnceLock::new();
-    *ON.get_or_init(kf_rm::sw_runlist_host::enabled)
-}
 
 fn tcensus_on() -> bool {
     static ON: std::sync::OnceLock<bool> = std::sync::OnceLock::new();
@@ -2218,6 +2194,7 @@ fn heap_gate(
 
 /// ★★★ The channel plane.
 pub struct ChanPlane {
+    settings: kf_abi::guest_profile::Settings,
     /// ★ GR tier (2026-10-07): GR-tier pumps that retired engine-written work since the worker
     /// last relayed it to the guest's GR0 vector ([`ChanPlane::take_gr_relay`]).
     gr_relay: AtomicU64,
@@ -2775,6 +2752,7 @@ impl ChanPlane {
         channel_budget: u32,
         dbfast: &'static kf_chan::dbfast::DbFast,
         token_fmt: Option<kf_trap::tokenindex::GuestTokenFormat>,
+        settings: kf_abi::guest_profile::Settings,
     ) -> Result<ChanPlane, String> {
         // ★ Authored, never the guest's engine number: the first HOST copy engine that is not a
         // graphics CE. ⊘ A GRCE shares the GR runlist and routes subchannels 0-3 to GR — RM's
@@ -2915,6 +2893,7 @@ impl ChanPlane {
             })
         };
         Ok(ChanPlane {
+            settings,
             gr_relay: AtomicU64::new(0),
             bar0trace: crate::bar0trace::Bar0Trace::from_env(),
             rm,
@@ -4978,7 +4957,8 @@ impl ChanPlane {
             // carry reaches the host engine as a software method with no host object behind it,
             // and the host RCs that channel (fail closed). `[measured, runs 47-57]` Windows' deferred
             // triggers all ran on its kernel GR channel.
-            if twin_defapi_plan(twin_defapi_object(), user_work) == TwinDefapiPlan::AuthorHostObject
+            if twin_defapi_plan(self.settings.win_twin_defapi_object, user_work)
+                == TwinDefapiPlan::AuthorHostObject
             {
                 return self.twin_defapi_act(client, parent, handle);
             }
@@ -6604,8 +6584,9 @@ impl ChanPlane {
         // `KF3_KERNEL_NVDEC_CTX`/`_NVENC_CTX`/`_OFA_CTX` are deleted and hardwired ON (the
         // Windows profile's values; measured required, runs 21-24); `KF3_KERNEL_GR_CE` stays a
         // switch ([`kernel_gr_ce`] says why).
-        let kernel_gr =
-            kernel_work && engine == kf_abi::submit::ENGINE_TYPE_GRAPHICS && kernel_gr_ce();
+        let kernel_gr = kernel_work
+            && engine == kf_abi::submit::ENGINE_TYPE_GRAPHICS
+            && self.settings.kernel_gr_ce;
         let kernel_nvdec =
             kernel_work && kf_abi::submit::nvdec_index_of_engine_type(engine).is_some();
         let kernel_nvenc =
@@ -7109,7 +7090,7 @@ impl ChanPlane {
                 let ring_va = host.va();
                 // ★★★ GR tier (owner rulings 2026-10-07): USER assertion, then the allowlisted host
                 // objects — refused by name, the ring freed, the birth refused, on any failure.
-                let gr_tier = kernel_gr && kernel_gr_work();
+                let gr_tier = kernel_gr && me.settings.kernel_gr_work;
                 let gr_gp_get = if gr_tier {
                     let at = match a.userd {
                         Some(kf_arch::UserdMem::Framebuffer { base, .. }) => {
@@ -7145,7 +7126,7 @@ impl ChanPlane {
                 let gr_cfg = kf_chan::tmode::GrConfig {
                     tier: gr_tier,
                     inert_sw_subch: sw_subch_inert(),
-                    deferred_api: deferred_api_trigger(),
+                    deferred_api: me.settings.deferred_api,
                     video: video_class,
                 };
                 let mut chan = {
@@ -7196,7 +7177,7 @@ impl ChanPlane {
                     guest_engine: engine,
                     ctx: CtxBind::default(),
                     // ⚠ Host-owned scheduling (default off, awaiting owner confirmation).
-                    scheduled: sw_runlist_host_owned(),
+                    scheduled: me.settings.sw_runlist_host_owned,
                     dead: None,
                     serves: 0,
                     last_put: None,
@@ -7243,7 +7224,7 @@ impl ChanPlane {
                     kernel_by(&a),
                     gr_gp_get.is_some(),
                     gr_cfg.inert_sw_subch,
-                    sw_runlist_host_owned()
+                    me.settings.sw_runlist_host_owned
                 ))
             }),
         )
@@ -7767,7 +7748,7 @@ impl ChanPlane {
             &NoMirrorWindow,
         );
         if !g.gr_tier
-            && translated_ce_relay()
+            && self.settings.translated_ce_relay
             && is_copy_engine(g.guest_engine)
             && g.chan.last_gp_get() != gp_before
         {

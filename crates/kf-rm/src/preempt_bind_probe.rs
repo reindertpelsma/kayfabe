@@ -1,3 +1,8 @@
+//! CODE READ supersession, 2026-10-20: coordinator approved this existing P19
+//! compatibility behavior only under explicit guest-os=windows. Legacy env selectors
+//! are retired; Linux defaults and all command/identity/admission checks stay unchanged.
+//! Historical probe rationale below remains the source evidence, not current activation policy.
+//!
 //! ⚠⚠ **PROBE — default off (`KF3_PREEMPT_BIND_PROBE=1`), never a shipped behaviour.**
 //!
 //! 2026-10-08 (Windows 580.88, H-preempt-bind): `[measured, run53 at 80169b57, 2026-10-08]` every
@@ -28,7 +33,7 @@ pub const FLAG: &str = "KF3_PREEMPT_BIND_PROBE";
 /// Whether the flag is on (`=1`).
 #[must_use]
 pub fn enabled() -> bool {
-    std::env::var(FLAG).as_deref() == Ok("1")
+    false // Legacy callers retain Linux defaults; production uses the per-device profile.
 }
 
 /// The command id and params layout at one driver version.
@@ -149,7 +154,7 @@ pub const ZCULL_FLAG: &str = "KF3_ZCULL_BIND_PROBE";
 /// Whether the ZCULL probe flag is on (`=1`).
 #[must_use]
 pub fn zcull_enabled() -> bool {
-    std::env::var(ZCULL_FLAG).as_deref() == Ok("1")
+    false // Legacy callers retain Linux defaults; production uses the per-device profile.
 }
 
 /// The ZCULL cross-client probe link.
