@@ -37,8 +37,10 @@ fn mmap_jsonl_and_completed_span_survive_shutdown() {
     s.stop().unwrap();
     let b = std::fs::read(p.join("prof.mmap")).unwrap();
     assert_eq!(b.len(), kf_prof::layout::FILE_BYTES);
-    let off=kf_prof::layout::RECORD_BASE;let seq=u64::from_le_bytes(b[off..off+8].try_into().unwrap());assert!(seq>0 && seq%2==0);
-    assert_eq!(u64::from_le_bytes(b[40..48].try_into().unwrap()),1);
+    let off = kf_prof::layout::RECORD_BASE;
+    let seq = u64::from_le_bytes(b[off..off + 8].try_into().unwrap());
+    assert!(seq > 0 && seq % 2 == 0);
+    assert_eq!(u64::from_le_bytes(b[40..48].try_into().unwrap()), 1);
     assert!(kf_prof::layout::Header::decode(&b).is_ok());
     assert!(u64::from_le_bytes(b[56..64].try_into().unwrap()) > 0);
     let lines = std::fs::read_to_string(p.join("prof.jsonl")).unwrap();
@@ -119,6 +121,7 @@ fn final_mmap_record_and_jsonl_have_matching_committed_endpoints() {
     let s = Session::create_diagnostic(&p).unwrap();
     s.stop().unwrap();
     let b = std::fs::read(p.join("prof.mmap")).unwrap();
+    assert_eq!(u64::from_le_bytes(b[40..48].try_into().unwrap()), 1);
     let base = kf_prof::layout::RECORD_BASE;
     let word = |off| u64::from_le_bytes(b[base + off..base + off + 8].try_into().unwrap());
     assert!(word(0) > 0);
@@ -145,24 +148,81 @@ fn production_clock_gate_does_not_use_the_diagnostic_fixture() {
 
 #[test]
 fn completed_spans_reconcile_histogram_and_site_counts() {
-    let p=directory();let s=Session::create_diagnostic(&p).unwrap();let b=s.bind_current(1).unwrap();
-    for arg in [7,8] {let _g=kf_prof::site(Site::WorkerPark,State::Mutex,arg);std::thread::sleep(Duration::from_millis(1));}
-    let row=s.snapshot();let state=row["threads"][0]["states"].as_array().unwrap().iter().find(|r|r["state"]==State::Mutex as u16).unwrap();
-    assert_eq!(state["count"],2);assert_eq!(state["histogram"].as_array().unwrap().iter().map(|n|n.as_u64().unwrap()).sum::<u64>(),2);
-    assert_eq!(row["threads"][0]["sites"][0]["count"],2);assert!(state["total_ns"].as_u64().unwrap()>=2_000_000);
-    drop(b);s.stop().unwrap();std::fs::remove_dir_all(p).unwrap();
+    let p = directory();
+    let s = Session::create_diagnostic(&p).unwrap();
+    let b = s.bind_current(1).unwrap();
+    for arg in [7, 8] {
+        let _g = kf_prof::site(Site::WorkerPark, State::Mutex, arg);
+        std::thread::sleep(Duration::from_millis(1));
+    }
+    let row = s.snapshot();
+    let state = row["threads"][0]["states"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|r| r["state"] == State::Mutex as u16)
+        .unwrap();
+    assert_eq!(state["count"], 2);
+    assert_eq!(
+        state["histogram"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .map(|n| n.as_u64().unwrap())
+            .sum::<u64>(),
+        2
+    );
+    assert_eq!(row["threads"][0]["sites"][0]["count"], 2);
+    assert!(state["total_ns"].as_u64().unwrap() >= 2_000_000);
+    drop(b);
+    s.stop().unwrap();
+    std::fs::remove_dir_all(p).unwrap();
 }
 #[test]
 fn ledger_slot_reuse_keeps_only_the_new_lifetime_open() {
-    let p=directory();let s=Session::create_diagnostic(&p).unwrap();let b=s.bind_current(1).unwrap();
-    let old=kf_prof::ledger_open(Kind::ForwardedRm,4).unwrap();assert!(kf_prof::ledger_close(old));
-    let new=kf_prof::ledger_open(Kind::ForwardedRm,5).unwrap();assert!(!kf_prof::ledger_close(old));
-    let row=s.snapshot();assert_eq!(row["ledger"]["oldest"].as_array().unwrap().len(),1);assert_eq!(row["ledger"]["oldest"][0]["id"],5);
-    assert!(kf_prof::ledger_close(new));drop(b);s.stop().unwrap();std::fs::remove_dir_all(p).unwrap();
+    let p = directory();
+    let s = Session::create_diagnostic(&p).unwrap();
+    let b = s.bind_current(1).unwrap();
+    let old = kf_prof::ledger_open(Kind::ForwardedRm, 4).unwrap();
+    assert!(kf_prof::ledger_close(old));
+    let new = kf_prof::ledger_open(Kind::ForwardedRm, 5).unwrap();
+    assert!(!kf_prof::ledger_close(old));
+    let row = s.snapshot();
+    assert_eq!(row["ledger"]["oldest"].as_array().unwrap().len(), 1);
+    assert_eq!(row["ledger"]["oldest"][0]["id"], 5);
+    assert!(kf_prof::ledger_close(new));
+    drop(b);
+    s.stop().unwrap();
+    std::fs::remove_dir_all(p).unwrap();
 }
 #[test]
 fn unavailable_production_clock_reports_its_refusal_explicitly() {
-    if kf_linux_raw::prof_clock::counter_available() {return;}
-    let p=directory();let e=Session::create(&p).err().expect("unsupported production clock must refuse");
-    assert!(e.to_string().contains("invariant TSC unavailable"));std::fs::remove_dir_all(p).unwrap();
+    if kf_linux_raw::prof_clock::counter_available() {
+        return;
+    }
+    let p = directory();
+    let e = Session::create(&p)
+        .err()
+        .expect("unsupported production clock must refuse");
+    assert!(e.to_string().contains("invariant TSC unavailable"));
+    std::fs::remove_dir_all(p).unwrap();
+}
+
+#[test]
+fn unfinished_state_residence_is_exact_without_sampling_estimates() {
+    let p=directory();let s=Session::create_diagnostic(&p).unwrap();let b=s.bind_current(1).unwrap();
+    let g=kf_prof::site(Site::BrokerReceive,State::Receive,3);std::thread::sleep(Duration::from_millis(2));
+    let row=s.snapshot();let t=&row["threads"][0];let state=t["states"].as_array().unwrap().iter().find(|x|x["state"]==State::Receive as u16).unwrap();
+    assert_eq!(state["exclusive_ns"].as_u64().unwrap(),row["end_ns"].as_u64().unwrap()-t["since_ns"].as_u64().unwrap());
+    assert_eq!(state["count"],0);drop(g);drop(b);s.stop().unwrap();std::fs::remove_dir_all(p).unwrap();
+}
+#[test]
+fn resumed_parent_residence_excludes_the_completed_child() {
+    let p=directory();let s=Session::create_diagnostic(&p).unwrap();let b=s.bind_current(1).unwrap();
+    let parent=kf_prof::site(Site::TrapDispatch,State::Running,3);
+    {let _child=kf_prof::site(Site::WorkerPark,State::EventWait,4);std::thread::sleep(Duration::from_millis(2));}
+    let row=s.snapshot();let t=&row["threads"][0];let states=t["states"].as_array().unwrap();
+    let running=states.iter().find(|x|x["state"]==State::Running as u16).unwrap();let child=states.iter().find(|x|x["state"]==State::EventWait as u16).unwrap();
+    assert_eq!(running["exclusive_ns"].as_u64().unwrap(),row["end_ns"].as_u64().unwrap()-t["since_ns"].as_u64().unwrap()-child["total_ns"].as_u64().unwrap());
+    drop(parent);drop(b);s.stop().unwrap();std::fs::remove_dir_all(p).unwrap();
 }
