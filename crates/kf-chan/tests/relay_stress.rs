@@ -38,7 +38,9 @@ mod support;
 use kf_chan::completions::Completions;
 use kf_chan::user_gate::Marks;
 use kf_chan::user_lifecycle::Lifecycle;
-use kf_chan::user_loop::{self as ul, Need, Peek, Stats as RelayStats, Wait, wait_of};
+use kf_chan::user_loop::{
+    self as ul, Look, LookIn, Need, Peek, Stats as RelayStats, Wait, wait_of,
+};
 use kf_chan::user_scan::Scan;
 use kf_chan::worker::{self, Inflight, RelayLoop, WorkerStats};
 use kf_core::{HostOps, HostSlice, Owner, Plane, Translatable, VmCaps, Vmm};
@@ -151,8 +153,18 @@ fn chaos() {
         }
     });
 }
-/// The production hook points (`kf_trap::chaos`, feature `chaos-hooks`).
-fn hook(_p: kf_trap::chaos::Point) {
+thread_local! {
+    static AFTER_WAITS: RefCell<Option<Arc<AtomicU64>>> = const { RefCell::new(None) };
+}
+/// The production hook points (`kf_trap::chaos`, feature `chaos-hooks`). `WorkerAfterWait` also counts ended park waits (I6).
+fn hook(p: kf_trap::chaos::Point) {
+    if p == kf_trap::chaos::Point::WorkerAfterWait {
+        AFTER_WAITS.with(|a| {
+            if let Some(a) = a.borrow().as_ref() {
+                a.fetch_add(1, Ordering::AcqRel);
+            }
+        });
+    }
     chaos();
 }
 
@@ -229,6 +241,7 @@ struct Cell<T> {
     retry: AtomicBool,
     canceled: AtomicBool,
     waiting: AtomicBool,
+    carried: AtomicBool,
     contended: AtomicU32,
     inner: Mutex<T>,
 }
@@ -239,6 +252,7 @@ impl<T> Cell<T> {
             retry: AtomicBool::new(false),
             canceled: AtomicBool::new(false),
             waiting: AtomicBool::new(false),
+            carried: AtomicBool::new(false),
             contended: AtomicU32::new(0),
             inner: Mutex::new(value),
         }
@@ -294,6 +308,12 @@ impl<T> Cell<T> {
     }
     fn set_waiting(&self, waiting: bool) {
         self.waiting.store(waiting, Ordering::Release);
+    }
+    fn carried(&self) -> bool {
+        self.carried.load(Ordering::Acquire)
+    }
+    fn set_carried(&self, carried: bool) {
+        self.carried.store(carried, Ordering::Release);
     }
     fn cancel(&self) {
         self.canceled.store(true, Ordering::Release);
@@ -659,6 +679,8 @@ struct Shared {
     forges: AtomicU64,
     /// The first undelivered engine raise (ns, 0 = none) and the interrupt latency histogram.
     irq_pending_since: AtomicU64,
+    /// Park waits that ended (hook `WorkerAfterWait`); `WorkerStats::parks - after_waits` = workers in a blocking wait now.
+    after_waits: Arc<AtomicU64>,
     irq_hist: Mutex<Hist>,
     irqs_raised: AtomicU64,
     irqs_dispatched: AtomicU64,
@@ -914,76 +936,82 @@ impl Rt<'_> {
             }
             Need::Contended => {
                 record.contended_note();
+                let _ = record.request();
                 RelayStats::bump(&self.stats.contended);
             }
             Need::Idle | Need::Marker { .. } | Need::Popped { .. } => record.contended_clear(),
         }
+        record.set_carried(r.wait.is_some_and(Wait::carried));
     }
 
-    /// MIRROR of `ChanPlane::user_ring_peek_one`.
+    /// MIRROR of `ChanPlane::user_ring_peek_one` (2026-10-20 simple relay: the one decision `user_loop::look`).
     fn peek_one(&self, record: &Arc<Cell<Rec>>, why: Peek) -> bool {
-        use ul::{Found, found};
         if record.is_canceled() {
             return false;
         }
-        let backstop = why == Peek::Backstop;
         let demand = record.pending();
         if !ul::look_needed(why, demand, record.is_waiting()) {
             return false;
         }
-        let retry_ok = ul::may_retry(record.contended_run(), why);
         let Ok(mut r) = record.try_lock() else {
-            return retry_ok && self.ring_token(record.idx);
+            let i = LookIn {
+                demand,
+                record_busy: true,
+                wait: None,
+                words: None,
+                fetched: 0,
+                get_follows_pops: false,
+            };
+            return matches!(ul::look(i), Look::Ring { .. }) && self.ring_token(record.idx);
         };
         if r.dead.is_some() {
             return false;
         }
         let r = &mut *r;
         let client = &self.clients[record.idx as usize];
-        if let Some(w) = r.wait {
-            let mut pops = false;
-            let satisfied = match client.storage.try_lock() {
-                Ok(_storage) => {
-                    let get = client.hw_get.load(Ordering::Acquire);
-                    let reference = client.hw_ref.load(Ordering::Acquire);
-                    match r.relay.core.fetch.peek(get) {
-                        Ok(popped) => {
-                            pops = popped > r.relay.core.fetch.fetched();
-                            w.satisfied(r.relay.core.marks.peek(reference), popped)
-                        }
-                        Err(_) => true,
-                    }
-                }
-                Err(_) => true,
-            };
-            if !satisfied && pops && matches!(w, Wait::Marker { .. }) {
-                RelayStats::bump(&self.stats.pop_writebacks);
-                return self.ring_token(record.idx);
+        let words = r.wait.and_then(|_| match client.storage.try_lock() {
+            Ok(_storage) => {
+                let get = client.hw_get.load(Ordering::Acquire);
+                let reference = client.hw_ref.load(Ordering::Acquire);
+                r.relay
+                    .core
+                    .fetch
+                    .peek(get)
+                    .ok()
+                    .map(|popped| (r.relay.core.marks.peek(reference), popped))
             }
-            if satisfied && (retry_ok || !matches!(w, Wait::Contended)) {
-                if backstop {
-                    let counter = match found(w) {
-                        Found::Work => &self.stats.backstop_found_work,
-                        Found::Carried => &self.stats.backstop_carried,
-                        Found::Contended => &self.stats.backstop_contended,
-                    };
-                    counter.fetch_add(1, Ordering::Relaxed);
+            Err(_) => None,
+        });
+        let i = LookIn {
+            demand,
+            record_busy: false,
+            wait: r.wait,
+            words,
+            fetched: r.relay.core.fetch.fetched(),
+            get_follows_pops: kf_chan::user_turn::guest_get_follows_pops(),
+        };
+        match ul::look(i) {
+            Look::Leave => {
+                if why == Peek::Event && r.wait.is_some() {
+                    RelayStats::bump(&self.stats.event_without_progress);
                 }
-                r.wait = None;
-                record.set_waiting(false);
-                return self.ring_token(record.idx);
+                false
             }
-            if why == Peek::Event {
-                RelayStats::bump(&self.stats.event_without_progress);
+            Look::Ring {
+                clear_wait,
+                pops_only,
+            } => {
+                if pops_only {
+                    RelayStats::bump(&self.stats.pop_writebacks);
+                }
+                if clear_wait {
+                    r.wait = None;
+                    record.set_waiting(false);
+                    record.set_carried(false);
+                }
+                self.ring_token(record.idx)
             }
         }
-        if demand && retry_ok {
-            if backstop {
-                RelayStats::bump(&self.stats.backstop_contended);
-            }
-            return self.ring_token(record.idx);
-        }
-        false
     }
 }
 
@@ -992,6 +1020,14 @@ impl RelayLoop for Rt<'_> {
     fn waiting(&self) -> bool {
         self.rings.try_lock().map_or(true, |rings| {
             rings.iter().any(|c| c.is_waiting() || c.pending())
+        })
+    }
+    /// MIRROR of `user_ring_unsourced`.
+    fn unsourced(&self) -> bool {
+        self.rings.try_lock().map_or(true, |rings| {
+            rings
+                .iter()
+                .any(|c| c.pending() || (c.is_waiting() && c.carried()))
         })
     }
     /// MIRROR of `user_ring_peek`.
@@ -1184,6 +1220,38 @@ fn irq_thread(sh: &Shared, ev: &Notifier, irqs: &Mutex<BinaryHeap<Due>>) {
                 let _ = ev.signal();
             }
             None => std::thread::sleep(Duration::from_micros(50)),
+        }
+    }
+}
+
+/// I6: see `run_scenario`. Ground truth from the relay records' own flags (independent of `RelayLoop::unsourced`).
+fn sleep_safety_monitor(sh: &Shared, rt: &Rt<'_>, ws: &WorkerStats, workers: usize) {
+    let blocked = || {
+        ws.parks
+            .load(Ordering::Acquire)
+            .saturating_sub(sh.after_waits.load(Ordering::Acquire))
+            >= workers as u64
+    };
+    let obligation = || {
+        rt.cells
+            .iter()
+            .enumerate()
+            .find(|(_, c)| c.pending() || (c.is_waiting() && c.carried()))
+            .map(|(i, c)| (i, c.pending(), c.carried()))
+    };
+    while !sh.stop_gpu.load(Ordering::Acquire) {
+        std::thread::sleep(Duration::from_millis(1));
+        if !blocked() {
+            continue;
+        }
+        let Some(first) = obligation() else { continue };
+        std::thread::sleep(Duration::from_millis(3));
+        if blocked() && obligation() == Some(first) && !sh.stop_gpu.load(Ordering::Acquire) {
+            sh.violation(format!(
+                "I6 every worker is in a blocking wait while relay {} holds an obligation with no wake source (demand={} carried={})",
+                first.0, first.1, first.2
+            ));
+            return;
         }
     }
 }
@@ -1584,6 +1652,8 @@ fn dump_state(rt: &Rt<'_>, clients: &[Arc<Client>]) {
 fn run_scenario(sc: &Scenario) -> Outcome {
     #[cfg(feature = "chaos-hooks")]
     kf_trap::chaos::set_hook(hook);
+    // ★ 2026-10-20 (owner): designed and tested as if the park were INFINITE; `RS_PARK_NET=1` restores production's 50 ms net.
+    worker::set_park_net(env_u("RS_PARK_NET", 0) != 0);
     let n = sc.roles.len();
     let vmm = Vmm::default();
     let plane = Plane::new(&vmm, 16, 15);
@@ -1597,6 +1667,7 @@ fn run_scenario(sc: &Scenario) -> Outcome {
         t0: Instant::now(),
         stop_gpu: AtomicBool::new(false),
         stop_workers: AtomicBool::new(false),
+        after_waits: Arc::new(AtomicU64::new(0)),
         abort: AtomicBool::new(false),
         violations: Mutex::new(Vec::new()),
         soft: Mutex::new(Vec::new()),
@@ -1671,6 +1742,7 @@ fn run_scenario(sc: &Scenario) -> Outcome {
             let sc = sc.clone();
             worker_handles.push(s.spawn(move || {
                 chaos_install(sc.seed, 10 + wi as u64, sc.chaos);
+                AFTER_WAITS.with(|a| *a.borrow_mut() = Some(sh.after_waits.clone()));
                 let poller = Poller::create().expect("epoll");
                 poller
                     .watch(wake.as_source_fd(), worker::WORKER_EFD_TAG)
@@ -1716,6 +1788,9 @@ fn run_scenario(sc: &Scenario) -> Outcome {
         }
         let gpu = s.spawn(|| gpu_thread(&sh, &clients, sc.gpu, &irqs, sc.seed, sc.chaos));
         let irq = s.spawn(|| irq_thread(&sh, &ev, &irqs));
+        // ★ I6 SLEEP SAFETY (2026-10-20): every worker in a blocking wait while a relay holds an obligation no registered wake
+        // source announces (demand left behind = the retry set, or a `Wait::Popped`), seen twice 3 ms apart = a violation.
+        let monitor = s.spawn(|| sleep_safety_monitor(&sh, &rt, &ws, sc.workers));
         let holder = sc
             .holder
             .on
@@ -1751,6 +1826,30 @@ fn run_scenario(sc: &Scenario) -> Outcome {
                 std::thread::sleep(Duration::from_millis(1));
             }
         }
+        // ★ I7 NO HIDDEN SPIN: with everything executed and nothing outstanding, the workers block and stay blocked (infinite
+        // park): no pass, no park, no timeout-0 look in a quiet window.
+        if !sh.abort.load(Ordering::Acquire) && env_u("RS_PARK_NET", 0) == 0 && sc.synth_hot == 0 {
+            std::thread::sleep(Duration::from_millis(20));
+            let quiet = |ws: &WorkerStats, st: &RelayStats| {
+                (
+                    ws.parks.load(Ordering::Relaxed),
+                    st.retry_looks.load(Ordering::Relaxed),
+                    rt.serve_calls.load(Ordering::Relaxed),
+                )
+            };
+            let before = quiet(&ws, &stats);
+            std::thread::sleep(Duration::from_millis(30));
+            let after = quiet(&ws, &stats);
+            if before != after
+                && clients
+                    .iter()
+                    .all(|c| c.pq.lock().map(|q| q.is_empty()).unwrap_or(true))
+            {
+                sh.violation(format!(
+                    "I7 the workers were not quiet with nothing outstanding: (parks, timeout-0 looks, serves) {before:?} -> {after:?}"
+                ));
+            }
+        }
         sh.stop_gpu.store(true, Ordering::Release);
         sh.stop_workers.store(true, Ordering::Release);
         let _ = wake.signal();
@@ -1773,6 +1872,9 @@ fn run_scenario(sc: &Scenario) -> Outcome {
         }
         if irq.join().is_err() {
             sh.violation("I5 the fake interrupt thread panicked".into());
+        }
+        if monitor.join().is_err() {
+            sh.violation("I5 the sleep-safety monitor panicked".into());
         }
         if let Some(h) = holder {
             let _ = h.join();
@@ -1806,9 +1908,9 @@ fn run_scenario(sc: &Scenario) -> Outcome {
             "I4 WorkerStats.served {served} != run_translated calls {calls}"
         ));
     }
-    if g(&stats.busy_looks) * u64::from(worker::LOOK_EVERY) > served {
+    if g(&stats.busy_looks) > served {
         sh.violation(format!(
-            "I4 busy_looks {} x LOOK_EVERY > served {served}",
+            "I4 busy_looks {} > served {served} (a busy look is one per busy pass)",
             g(&stats.busy_looks)
         ));
     }
@@ -1978,8 +2080,10 @@ fn the_baton_a_cold_client_is_answered_beside_hot_neighbours() {
 /// 2.5 s run, a HOT client answered up to 2.4 s late while the workers served up to 600 000 tokens meanwhile. CODE: `userpump.rs`
 /// `user_ring_serve` (the `record.enter()` failure arm and the `pt.try_lock()` arm both `contended_note` and return), `user_ring_peek_one`
 /// (`retry_ok = may_retry(record.contended_run(), why)`), `user_loop.rs` `may_retry` / `CONTENTION_RETRIES`.
+/// ★ 2026-10-20 (simple relay): GREEN and un-ignored. The retry budget is deleted; the park is INFINITE in this harness, so a
+/// relay re-rung only by a timer would hang the run (HARD). The old assertion (`backstop_contended == 0`) is kept and two that
+/// do not depend on the deleted counter are added: no SOFT finding (I2 bounded response) and no timeout found work.
 #[test]
-#[ignore = "EXPECTED RED: exhausted try_lock retries are re-rung only by the 50 ms backstop (see the doc comment)"]
 fn expected_red_exhausted_try_lock_retries_leave_a_relay_to_the_backstop() {
     let mut worst = 0f64;
     let mut contended = 0;
@@ -1992,6 +2096,8 @@ fn expected_red_exhausted_try_lock_retries_leave_a_relay_to_the_backstop() {
         worst = worst.max(o.resp_max_ms);
         contended += o.backstop_contended;
         assert!(o.violations.is_empty(), "seed {seed}: {:?}", o.violations);
+        assert!(o.soft.is_empty(), "seed {seed}: {:?}", o.soft);
+        assert_eq!(o.timeouts_with_work, 0, "seed {seed}");
     }
     println!("worst response {worst:.1} ms, backstop_contended total {contended}");
     assert_eq!(
@@ -2006,12 +2112,14 @@ fn expected_red_exhausted_try_lock_retries_leave_a_relay_to_the_backstop() {
 /// try_lock above -- a look that finds the record lock held by the serving worker rings only while `may_retry`, and `contended_run` is
 /// far past 64 in this run (`contended_turns` 335-747). FALSIFIER: the counter stays 0 in 20 runs of this seed after the exhausted-retry
 /// repair; if it does not, the loss is somewhere else (the arm/peek ordering in `user_ring_arm`).
+/// ★ 2026-10-20 (simple relay): GREEN and un-ignored (infinite park: a wait only a timer finds would hang the run; with
+/// `RS_PARK_NET=1` the counter below is the check).
 #[test]
-#[ignore = "EXPECTED RED: a satisfied marker wait found only by the backstop (seed 18); flaky by nature, run it several times"]
 fn expected_red_seed_18_marker_wait_found_only_by_the_backstop() {
     let mut found = 0;
     for _ in 0..6 {
         let o = run_scenario(&Scenario::from_seed(18, 0.25));
+        assert!(o.violations.is_empty(), "{:?}", o.violations);
         found += o.backstop_found_work;
     }
     assert_eq!(found, 0, "backstop_found_work over 6 runs of seed 18");
@@ -2102,12 +2210,12 @@ fn a_source_pin_the_mirrored_glue_still_matches_production() {
         "Err(Failure::Retry) => self.core.need = Need::Contended,",
         "Ok(_) if self.core.again => self.core.need = Need::Again,",
         "Need::Again => {\n                record.contended_clear();\n                if self.plane.ring_internal(idx) {\n                    let _ = self.wake.signal();\n                }\n            }",
-        "let retry_ok = kf_chan::user_loop::may_retry(record.contended_run(), why);",
-        "return retry_ok && ring(self);",
-        "if satisfied && (retry_ok || !matches!(w, kf_chan::user_loop::Wait::Contended)) {",
-        "if demand && retry_ok {",
-        "if !satisfied && pops && matches!(w, kf_chan::user_loop::Wait::Marker { .. }) {",
-        ".any(|record| record.is_waiting() || record.pending())",
+        "record.contended_note();\n                let _ = record.request();",
+        "record.set_carried(p.wait.is_some_and(kf_chan::user_loop::Wait::carried));",
+        "return matches!(look(i), Look::Ring { .. }) && ring(self);",
+        "get_follows_pops: kf_chan::user_turn::guest_get_follows_pops(),",
+        "record.set_waiting(false);\n                    record.set_carried(false);",
+        "record.pending() || (record.is_waiting() && record.carried())",
         "let storage = self\n            .r\n            .lease\n            .storage\n            .lock()",
         "Err(kf_rm::memory_list::AccessError::Busy) => Ok(false),",
     ] {

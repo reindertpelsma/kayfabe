@@ -3000,6 +3000,7 @@ impl ChanPlane {
                 if clear_wait {
                     p.wait = None;
                     record.set_waiting(false);
+                    record.set_carried(false);
                 }
                 ring(self)
             }
