@@ -2791,6 +2791,8 @@ impl ChanPlane {
             Ok(pt) => pt,
             Err(std::sync::TryLockError::WouldBlock) => {
                 record.contended_note();
+                // the demand stays durable (`enter` no longer sets it when it wins the record at once): the retry set
+                let _ = record.request();
                 return Some(false);
             }
             Err(std::sync::TryLockError::Poisoned(_)) => {

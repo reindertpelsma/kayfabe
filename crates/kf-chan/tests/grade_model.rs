@@ -372,8 +372,10 @@ impl Sys {
                         Self::ring(&mut n, t);
                         Self::finish_token(&mut n, t);
                     } else {
-                        // `user_ring_serve`: `record.enter()` = request() then try_lock
-                        n.demand = true;
+                        // `user_ring_serve`: `record.enter()` (2026-10-20): try_lock; ONLY on a loss request() and try again
+                        if n.rec != Rec::Free {
+                            n.demand = true;
+                        }
                         if n.rec == Rec::Free {
                             n.rec = Rec::Worker(i as u8);
                             n.w[i].cur = t as u8;
@@ -388,8 +390,9 @@ impl Sys {
             Pc::ColdTurn => {
                 let t = wk.cur as usize;
                 if n.holding && self.c.holder == HolderKind::Pt {
-                    // the pt try_lock lost before the turn: demand stays (set by enter), contended_note
+                    // the pt try_lock lost before the turn: contended_note, and the demand is made durable (`record.request()`)
                     n.crun = (n.crun + 1).min(self.crun_cap());
+                    n.demand = true;
                 } else {
                     n.demand = false; // retry.swap(false)
                     let owes_work = n.phase == 0 || (n.phase == 1 && n.sat);
@@ -901,7 +904,9 @@ fn cfg(workers: usize, hot: usize, holder: HolderKind, kind: AWait) -> Cfg {
     }
 }
 
-const CAP: usize = 6_000_000;
+// 2026-10-20: 12 M (was 6 M): W=3 with a `pt` holder exceeded 6 M on the merged head (MEASURED at 983fcca15, before this
+// branch's G5 fixes); a budget of the explorer, not a property.
+const CAP: usize = 12_000_000;
 /// The bounded-wait bound K: worker steps the cold relay may wait while serviceable (all workers' steps counted).
 fn k_bound(c: &Cfg) -> usize {
     60 * c.workers + 20 * c.hot + 40

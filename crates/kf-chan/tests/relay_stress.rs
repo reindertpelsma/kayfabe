@@ -269,7 +269,20 @@ impl<T> Cell<T> {
     fn try_lock(&self) -> std::sync::TryLockResult<std::sync::MutexGuard<'_, T>> {
         self.inner.try_lock()
     }
+    /// MIRROR of `Cell::enter` (2026-10-20 G5 phantom demand: demand only when the first try loses, then one more try).
     fn enter(&self) -> std::sync::TryLockResult<std::sync::MutexGuard<'_, T>> {
+        if self.is_canceled() {
+            return Err(std::sync::TryLockError::WouldBlock);
+        }
+        match self.inner.try_lock() {
+            Err(std::sync::TryLockError::WouldBlock) => {}
+            first => {
+                if matches!(first, Err(std::sync::TryLockError::Poisoned(_))) {
+                    self.retry.store(false, Ordering::Release);
+                }
+                return first;
+            }
+        }
         if !self.request() {
             return Err(std::sync::TryLockError::WouldBlock);
         }
@@ -928,6 +941,7 @@ impl Rt<'_> {
             Ok(pt) => pt,
             Err(std::sync::TryLockError::WouldBlock) => {
                 record.contended_note();
+                let _ = record.request();
                 return Some(false);
             }
             Err(std::sync::TryLockError::Poisoned(_)) => {
@@ -2472,7 +2486,7 @@ fn a_source_pin_the_mirrored_glue_still_matches_production() {
     .unwrap();
     for pin in [
         "let Ok(mut r) = record.enter() else {",
-        "Err(std::sync::TryLockError::WouldBlock) => {\n                record.contended_note();\n                return Some(false);",
+        "Err(std::sync::TryLockError::WouldBlock) => {\n                record.contended_note();\n                // the demand stays durable (`enter` no longer sets it when it wins the record at once): the retry set\n                let _ = record.request();\n                return Some(false);",
         "let woke = record.retry.swap(false, Ordering::AcqRel);",
         "Err(Failure::Retry) => self.core.need = Need::Contended,",
         "Ok(_) if self.core.again => self.core.need = Need::Again,",
@@ -2494,7 +2508,7 @@ fn a_source_pin_the_mirrored_glue_still_matches_production() {
     for pin in [
         "self.inner.try_lock().inspect_err(|e| {",
         "pub fn contended_note(&self) {",
-        "if self.canceled.load(Ordering::Acquire) {\n            return false;\n        }\n        self.retry.store(true, Ordering::Release);",
+        "if self.canceled.load(Ordering::Acquire) {\n            return false;\n        }\n        // SeqCst: pairs with `act_hold` (see `ActHold::drop`)\n        self.retry.store(true, Ordering::SeqCst);",
     ] {
         assert!(
             relay.contains(pin),
