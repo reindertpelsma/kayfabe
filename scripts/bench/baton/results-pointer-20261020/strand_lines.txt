@@ -1,0 +1,4 @@
+kf3: PROGRESS_STRAND for_ms=0x3e8 relay=0xc1d00010:0x5c00001f host=0x9 wait=none contended_run=0x40 retry_budget=0x40 h64_backstop_only=yes retry_flag=yes pending=yes waiting_flag=no canceled=no stopped=no disabled=no walk_busy=no walk_waiters=0x0
+kf3: PROGRESS_STRAND_END host=0x9 total_ms=0x39a0
+kf3: PROGRESS_STRAND for_ms=0x3e8 relay=0xc1d00010:0x5c00001f host=0x9 wait=none contended_run=0x40 retry_budget=0x40 h64_backstop_only=yes retry_flag=yes pending=yes waiting_flag=no canceled=no stopped=no disabled=no walk_busy=no walk_waiters=0x0
+kf3: PROGRESS_STRAND_END host=0x9 total_ms=0x7d0

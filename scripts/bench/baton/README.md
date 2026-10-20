@@ -277,3 +277,36 @@ only if the wake of the guest-visible completion, not the relay's wait, is what 
 
 n is small and boots are the unit of correlation; the SP vs SC difference is large, the Pointer vs Scan and F vs C differences are not resolved. `force_pointer` forwards without ever scanning (a bench switch; not a product mode).
 The pw binary is the progress-watchdog branch (299fd0ed5) + the force_pointer patch, built here. The second ABBA half of the pw arms was parked for time.
+
+---
+
+# S2: budget vs latency (KF3_DEBUG_WORKER_SPIN=2), 2026-10-20 19:40
+
+STATUS: RESEARCH. Binary `pw3f4b9e82-s2` = progress-watchdog branch 3f4b9e82d + `KF3_DEBUG_WORKER_SPIN` (1|2, commit 527fb1ed7 on this branch, same hunks) + `PROGRESS_STRAND` diagnostic
+(`pw-strand-diag.patch`). One binary, env-only arms, Scan mode, plain pair 2 x 120 s per boot, 4 vCPUs, `KF3_DIAG_PROGRESS=1000` in both arms:
+C = `KF3_NEGCTL_NO_BUSY_LOOK=1` (the pre-fix loop = control), S2 = C + `KF3_DEBUG_WORKER_SPIN=2` (epoll timeout 0 always; the look after the "park" is `Peek::Spin`, so the retry budget
+`CONTENTION_RETRIES` = 64 IS respected; `Peek::Backstop` is never issued, not even the 50 ms net). Boots interleaved C S S C C S S C C S S C. Owner VM (run 3433) stopped per the flag procedure at 18:39
+(no `/tmp/kf-owner-playing`), restored as run 3434 (READY 19:35, `hostname` = kayfabe-windows); host Xid 25 throughout.
+
+Stated before the run: H-BUDGET = the baton is the exhausted-budget strand; S2 returns to the control level (>= 4/8 pairs >= 1 s) and `backstop_found(contended)` stays ~0.
+H-LATENCY = S2 stays <= 1/8, the cause is worker wake latency.
+
+MEASURED (`results-pointer-20261020/results_s2.tsv`, `strand_lines.txt`):
+
+    arm                        boots  pairs  >=1s  >=2s  >=4s  max gap
+    C   control (no busy look)   6     12     2     1     1    14.74 s  (+ two sub-second: 0.59 s, 0.16 s)
+    S2  never blocks, budget     6     12     0     0     0     0.01 s  (every pair, both clients)
+
+CPU states (0.25 s sampler): `kf3-worker` threads R in 1863-1909 of 2144-2150 samples with S2 (about 88 %, two cores), 163-203 of 1925-1930 with C (about 9 %). Guest 4 vCPUs, host 24 cores in both arms.
+Neither hypothesis is falsified by the RATE: the control level in this batch was only 2/12 (earlier batches: 2/8, 6/8), far below the >= 4/8 H-BUDGET needs, so S2 0/12 vs C 2/12 is one-sided Fisher p = 0.24.
+The precondition of the test failed; do not read the rate as a result.
+
+The new datum is the strand line (`PROGRESS_STRAND`, my addition: a relay that is `pending||waiting` with `contended_run >= 64`, announced after 1 s, end line with the total):
+
+    KC6: guest stall A 14.74 s (80.4-95.1 s)  <->  PROGRESS_STRAND relay=0xc1d00010:0x5c00001f contended_run=0x40 h64_backstop_only=yes retry_flag=yes pending=yes, STRAND_END total_ms=0x39a0 (14752 ms)
+    KC9: guest stall A 1.77 s                 <->  same relay, contended_run=0x40, STRAND_END total_ms=0x7d0 (2000 ms; tick 250 ms)
+
+Both >= 1 s control stalls coincide with an exhausted-budget strand whose length equals the stall (within one tick); the 10 other C/S2 boots (and all 6 S2 boots) printed no strand. The 0.59 s and 0.16 s stalls are below the 1 s threshold, not checked.
+So the stall IS the strand in 2 of 2 cases (MEASURED correlation, n = 2, strand ends when something finally re-rings the relay). In S2 no strand formed even though the budget rule was active and no Backstop fired:
+INFERRED: with a worker that looks continuously the 64-consecutive-contended-turn count does not accumulate (the contention clears within a few prompt retries), i.e. budget exhaustion is a consequence of late/rare looks, so
+"budget" and "latency" are not separable by this knob; S2 does not distinguish them. The minimal-fix binary (relay-fairness-2) did not exist under /data/claude-*/kf3-bins/ when I looked; the F arms earlier (busy look, no budget change) did not remove the stalls.

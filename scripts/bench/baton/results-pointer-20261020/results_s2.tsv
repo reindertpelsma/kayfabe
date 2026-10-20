@@ -1,0 +1,36 @@
+KC1	files	pair1	hit=0	starved=- 0.0s	gaps=A:0.01,B:0.01	iters=A:11530,B:11531
+KC1	files	pair2	hit=0	starved=- 0.0s	gaps=A:0.01,B:0.01	iters=A:11512,B:11512
+KC1	files	TOTAL	0/2
+KS2	files	pair1	hit=0	starved=- 0.0s	gaps=A:0.01,B:0.01	iters=A:11520,B:11520
+KS2	files	pair2	hit=0	starved=- 0.0s	gaps=A:0.01,B:0.01	iters=A:11506,B:11505
+KS2	files	TOTAL	0/2
+KC3	files	pair1	hit=0	starved=- 0.0s	gaps=A:0.16,B:0.01	iters=A:11606,B:11636
+KC3	files	pair2	hit=0	starved=- 0.0s	gaps=A:0.01,B:0.01	iters=A:11619,B:11619
+KC3	files	TOTAL	0/2
+KS4	files	pair1	hit=0	starved=- 0.0s	gaps=A:0.01,B:0.01	iters=A:11623,B:11623
+KS4	files	pair2	hit=0	starved=- 0.0s	gaps=A:0.01,B:0.01	iters=A:11627,B:11627
+KS4	files	TOTAL	0/2
+KS5	files	pair1	hit=0	starved=- 0.0s	gaps=A:0.01,B:0.01	iters=A:11580,B:11580
+KS5	files	pair2	hit=0	starved=- 0.0s	gaps=A:0.01,B:0.01	iters=A:11579,B:11579
+KS5	files	TOTAL	0/2
+KC6	files	pair1	hit=1	starved=A 14.7s	gaps=A:14.74,B:0.01	iters=A:10174,B:13011
+KC6	files	pair2	hit=0	starved=- 0.0s	gaps=A:0.01,B:0.01	iters=A:11593,B:11593
+KC6	files	TOTAL	1/2
+KS7	files	pair1	hit=0	starved=- 0.0s	gaps=A:0.01,B:0.01	iters=A:11616,B:11616
+KS7	files	pair2	hit=0	starved=- 0.0s	gaps=A:0.01,B:0.01	iters=A:11632,B:11632
+KS7	files	TOTAL	0/2
+KC8	files	pair1	hit=0	starved=- 0.0s	gaps=A:0.01,B:0.01	iters=A:11509,B:11508
+KC8	files	pair2	hit=0	starved=- 0.0s	gaps=A:0.01,B:0.01	iters=A:11508,B:11507
+KC8	files	TOTAL	0/2
+KC9	files	pair1	hit=0	starved=- 0.0s	gaps=A:1.77,B:0.01	iters=A:11591,B:11939
+KC9	files	pair2	hit=0	starved=- 0.0s	gaps=A:0.01,B:0.01	iters=A:11767,B:11767
+KC9	files	TOTAL	0/2
+KS10	files	pair1	hit=0	starved=- 0.0s	gaps=A:0.01,B:0.01	iters=A:11528,B:11528
+KS10	files	pair2	hit=0	starved=- 0.0s	gaps=A:0.01,B:0.01	iters=A:11526,B:11525
+KS10	files	TOTAL	0/2
+KS11	files	pair1	hit=0	starved=- 0.0s	gaps=A:0.01,B:0.01	iters=A:11632,B:11632
+KS11	files	pair2	hit=0	starved=- 0.0s	gaps=A:0.01,B:0.01	iters=A:11614,B:11614
+KS11	files	TOTAL	0/2
+KC12	files	pair1	hit=0	starved=- 0.0s	gaps=A:0.59,B:0.01	iters=A:11532,B:11644
+KC12	files	pair2	hit=0	starved=- 0.0s	gaps=A:0.01,B:0.01	iters=A:11569,B:11569
+KC12	files	TOTAL	0/2

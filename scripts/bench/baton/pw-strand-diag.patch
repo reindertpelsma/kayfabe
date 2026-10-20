@@ -1,0 +1,50 @@
+diff --git a/crates/kf-qemu/src/progdiag.rs b/crates/kf-qemu/src/progdiag.rs
+index eef7f9c02..d84bac278 100644
+--- a/crates/kf-qemu/src/progdiag.rs
++++ b/crates/kf-qemu/src/progdiag.rs
+@@ -41,6 +41,10 @@ impl ChanPlane {
+         let mut printer = progress::Printer::default();
+         let first = progress::BOARD.snapshot(progress::now_ns(), progress::START_NS);
+         let mut monitor = progress::Monitor::new(ms, &first);
++        // ★ BATON DIAGNOSTIC (2026-10-20, H-BUDGET): relays that are pending/waiting with the retry budget exhausted
++        // (`contended_run >= CONTENTION_RETRIES`): the strand only the 50 ms net may re-ring. host id -> (first seen, announced).
++        let mut strands: std::collections::HashMap<u64, (std::time::Instant, bool)> = std::collections::HashMap::new();
++        let mut strand_lines = 0u32;
+         while !stop.load(std::sync::atomic::Ordering::Acquire) {
+             std::thread::sleep(std::time::Duration::from_millis(tick_ms));
+             let now = progress::now_ns();
+@@ -55,6 +59,34 @@ impl ChanPlane {
+                 tracker.retain(&live);
+             }
+             let counters = self.progress_counters();
++            if complete {
++                let nowi = std::time::Instant::now();
++                let mut seen: Vec<u64> = Vec::new();
++                for r in &readings {
++                    let b = &r.brief;
++                    if (b.pending || b.waiting) && b.contended_run >= kf_chan::user_loop::CONTENTION_RETRIES {
++                        let id = u64::from(b.host);
++                        seen.push(id);
++                        let e = strands.entry(id).or_insert((nowi, false));
++                        let for_ms = nowi.duration_since(e.0).as_millis();
++                        if !e.1 && for_ms >= u128::from(ms) && strand_lines < 64 {
++                            e.1 = true;
++                            strand_lines += 1;
++                            eprintln!("{}", progress::render_relay_state(b).replacen("PROGRESS_RELAY_STATE", &format!("PROGRESS_STRAND for_ms={for_ms:#x}"), 1));
++                        }
++                    }
++                }
++                strands.retain(|id, (t0, announced)| {
++                    if seen.contains(id) {
++                        return true;
++                    }
++                    if *announced && strand_lines < 128 {
++                        strand_lines += 1;
++                        eprintln!("kf3: PROGRESS_STRAND_END host={id:#x} total_ms={:#x}", nowi.duration_since(*t0).as_millis());
++                    }
++                    false
++                });
++            }
+             let mut threads: Option<Vec<progress::ThreadCpu>> = None;
+             for r in &readings {
+                 let Some(eval) = &r.wait_eval else {
