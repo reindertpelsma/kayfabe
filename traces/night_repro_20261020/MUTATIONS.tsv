@@ -15,3 +15,5 @@ qemu_pid_reuse	3	1
 collector_no_marker	2	1
 ps_header_rehydration	3	1
 no_event_time_sort	2	1
+archive_ignore_digest	2	1
+archive_ignore_name	2	1
