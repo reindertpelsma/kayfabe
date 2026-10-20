@@ -1,0 +1,74 @@
+{
+  "schema": "kayfabe-driver-pe-check/1",
+  "image": "kfwc.sys",
+  "sha256": "0f0e8525ee7a66f0cab31013e7c5cda2a4cb4ab7f17e96353999ee434444b7dd",
+  "dll_characteristics": 480,
+  "sections": [
+    {
+      "name": ".text",
+      "rva": 4096,
+      "size": 27558,
+      "raw": 1024,
+      "raw_size": 27648,
+      "attributes": 1744830496
+    },
+    {
+      "name": ".rdata",
+      "rva": 32768,
+      "size": 5336,
+      "raw": 28672,
+      "raw_size": 5632,
+      "attributes": 1207959616
+    },
+    {
+      "name": ".data",
+      "rva": 40960,
+      "size": 672,
+      "raw": 34304,
+      "raw_size": 1024,
+      "attributes": 3355443264
+    },
+    {
+      "name": ".pdata",
+      "rva": 45056,
+      "size": 960,
+      "raw": 35328,
+      "raw_size": 1024,
+      "attributes": 1207959616
+    },
+    {
+      "name": ".retplne",
+      "rva": 49152,
+      "size": 1172,
+      "raw": 36352,
+      "raw_size": 1536,
+      "attributes": 1073741824
+    },
+    {
+      "name": "INIT",
+      "rva": 53248,
+      "size": 144,
+      "raw": 37888,
+      "raw_size": 512,
+      "attributes": 1610612768
+    },
+    {
+      "name": "PAGE",
+      "rva": 57344,
+      "size": 7270,
+      "raw": 38400,
+      "raw_size": 7680,
+      "attributes": 1610612768
+    },
+    {
+      "name": ".reloc",
+      "rva": 65536,
+      "size": 68,
+      "raw": 46080,
+      "raw_size": 512,
+      "attributes": 1107296320
+    }
+  ],
+  "static_checks_passed": true,
+  "windows_runtime_tested": false
+}
