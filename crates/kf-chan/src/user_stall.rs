@@ -1456,6 +1456,9 @@ mod tests {
             d.observe(100, 5, 7, 512, 100),
             Verdict::Fire { stalled_ms: 100 }
         );
+        assert!(d.fired(), "the condition is marked reported");
+        assert_eq!(d.observe(120, 5, 7, 512, 100), Verdict::Quiet, "once");
+        assert_eq!(d.observe(149, 5, 7, 512, 100), Verdict::Quiet, "once");
         // GET moved by one: a new condition whose clock starts now
         assert_eq!(d.observe(150, 6, 7, 512, 100), Verdict::Quiet);
         assert!(!d.fired());
@@ -2264,6 +2267,10 @@ mod tests {
             .collect();
         r.totals = "x=0xffffffffffffffff ".repeat(200);
         let lines = render(&r);
+        assert!(
+            lines.iter().filter(|l| l.contains(" RING slot=")).count() <= MAX_RING_ROWS,
+            "the ring rows are capped"
+        );
         assert!(lines.len() <= MAX_LINES, "{} lines", lines.len());
         for l in &lines {
             assert!(
@@ -2317,6 +2324,8 @@ mod tests {
         d.note_turn(260);
         assert_eq!(d.last_wake(300), Some((50, Peek::Event)));
         assert_eq!(d.last_turn(300), Some(40));
+        // a clock that ran backwards reads as zero, not as a huge number
+        assert_eq!(d.last_turn(10), Some(0));
         // a clock that ran backwards reads as zero, not as a huge number
         assert_eq!(d.last_wake(10), Some((0, Peek::Event)));
     }
@@ -2737,6 +2746,447 @@ mod tests {
         assert_eq!(asked, [(0x4_0000, 12)]);
     }
 
+    // ------------------------------------------------------------------ third killers
+    #[test]
+    fn a_moving_get_restarts_the_clock_even_before_the_first_report() {
+        let mut d = Detector::new();
+        assert_eq!(d.observe(0, 5, 7, 512, 100), Verdict::Quiet);
+        assert_eq!(d.observe(90, 6, 7, 512, 100), Verdict::Quiet); // moved: the clock restarts at 90
+        assert_eq!(
+            d.observe(180, 6, 7, 512, 100),
+            Verdict::Quiet,
+            "90 ms since the move"
+        );
+        assert_eq!(
+            d.observe(190, 6, 7, 512, 100),
+            Verdict::Fire { stalled_ms: 100 }
+        );
+        // and a GET that moves backwards in the ring (a wrap) is a move too
+        let mut d = Detector::new();
+        assert_eq!(d.observe(0, 500, 7, 512, 50), Verdict::Quiet);
+        assert_eq!(d.observe(40, 2, 7, 512, 50), Verdict::Quiet);
+        assert_eq!(d.observe(80, 2, 7, 512, 50), Verdict::Quiet);
+        assert_eq!(
+            d.observe(90, 2, 7, 512, 50),
+            Verdict::Fire { stalled_ms: 50 }
+        );
+    }
+
+    #[test]
+    fn the_ring_bounds_are_exact() {
+        let mut d = Detector::new();
+        // PUT == entries is outside the ring, GET == entries too
+        assert_eq!(d.observe(0, 511, 512, 512, 1), Verdict::Quiet);
+        assert_eq!(d.observe(5, 511, 512, 512, 1), Verdict::Quiet);
+        assert_eq!(d.observe(10, 512, 0, 512, 1), Verdict::Quiet);
+        assert_eq!(d.observe(15, 512, 0, 512, 1), Verdict::Quiet);
+        // the last slots are inside it
+        assert_eq!(d.observe(20, 0, 511, 512, 1), Verdict::Quiet);
+        assert_eq!(
+            d.observe(25, 0, 511, 512, 1),
+            Verdict::Fire { stalled_ms: 5 }
+        );
+        let mut d = Detector::new();
+        assert_eq!(d.observe(0, 511, 0, 512, 1), Verdict::Quiet);
+        assert_eq!(
+            d.observe(1, 511, 0, 512, 1),
+            Verdict::Fire { stalled_ms: 1 }
+        );
+    }
+
+    #[test]
+    fn a_zero_threshold_switches_a_running_condition_off() {
+        let mut d = Detector::new();
+        assert_eq!(d.observe(0, 1, 3, 512, 100), Verdict::Quiet);
+        assert_eq!(d.observe(1000, 1, 3, 512, 0), Verdict::Quiet);
+        assert!(!d.fired());
+        // and the clock does not survive it
+        assert_eq!(d.observe(1001, 1, 3, 512, 100), Verdict::Quiet);
+        assert_eq!(d.observe(1100, 1, 3, 512, 100), Verdict::Quiet, "99 ms");
+        assert_eq!(
+            d.observe(1101, 1, 3, 512, 100),
+            Verdict::Fire { stalled_ms: 100 }
+        );
+    }
+
+    #[test]
+    fn the_legacy_acquire_and_geq_operations_decode_through_the_stream() {
+        for (raw, op) in [
+            (1u32, SemOp::Acquire),
+            (2, SemOp::Release),
+            (4, SemOp::AcqGeq),
+            (8, SemOp::AcqAnd),
+            (0x10, SemOp::Reduction),
+        ] {
+            let mut w = inc(0, 0x10, &[0, 0x2000, 5]);
+            w.extend(inc(0, 0x1c, &[raw | (1 << 24)]));
+            let e = exec_of(&decode(&w, 64).items[3]);
+            assert_eq!(e.op, op, "raw {raw:#x}");
+            assert!(
+                e.legacy && !e.timestamp,
+                "a 4-byte legacy release is not timestamped"
+            );
+            assert_eq!((e.addr, e.payload), (Some(0x2000), Some(5)));
+        }
+        // a legacy 16-byte (timestamped) release
+        let mut w = inc(0, 0x10, &[0, 0x2000, 5]);
+        w.extend(inc(0, 0x1c, &[2]));
+        assert!(exec_of(&decode(&w, 64).items[3]).timestamp);
+    }
+
+    #[test]
+    fn the_address_halves_keep_exactly_their_header_bits() {
+        // HI is 24:0: bit 24 stays, bit 25 goes
+        let e = exec_of(&decode(&inc(0, 0x5c, &[0x1000, 0x0300_0080, 1, 0, 0]), 64).items[4]);
+        assert_eq!(e.addr, Some((0x0100_0080u64 << 32) | 0x1000));
+        // LO is 31:2: the two low bits are not part of the address, the others are
+        let e = exec_of(&decode(&inc(0, 0x5c, &[0xFFFF_FFFF, 0, 1, 0, 0]), 64).items[4]);
+        assert_eq!(e.addr, Some(0xFFFF_FFFC));
+        // the legacy halves: A (OFFSET_UPPER) is 7:0, B (OFFSET_LOWER) is 31:2
+        let w = inc(0, 0x10, &[0x1FF, 0xABCD_EF03, 9, 1]);
+        let e = exec_of(&decode(&w, 64).items[3]);
+        assert_eq!(e.addr, Some((0xFFu64 << 32) | 0xABCD_EF00));
+    }
+
+    #[test]
+    fn each_execute_flag_bit_alone_sets_only_its_own_field() {
+        let bit = |b: u32| exec_of(&decode(&inc(0, 0x6c, &[1 << b]), 64).items[0]);
+        let flags = |e: Exec| {
+            (
+                e.acquire_switch,
+                e.release_wfi,
+                e.payload64,
+                e.timestamp,
+                e.reduction_unsigned,
+                e.reduction,
+            )
+        };
+        assert_eq!(flags(bit(12)), (true, false, false, false, false, 0));
+        assert_eq!(flags(bit(20)), (false, true, false, false, false, 0));
+        assert_eq!(flags(bit(24)), (false, false, true, false, false, 0));
+        assert_eq!(flags(bit(25)), (false, false, false, true, false, 0));
+        assert_eq!(flags(bit(31)), (false, false, false, false, true, 0));
+        for (b, want) in [(27u32, 1u32), (28, 2), (29, 4), (30, 8)] {
+            assert_eq!(
+                flags(bit(b)),
+                (false, false, false, false, false, want),
+                "bit {b}"
+            );
+        }
+        // bits 3..=11 and 13..=19 mean nothing here
+        for b in (3..12).chain(13..20) {
+            assert_eq!(
+                flags(bit(b)),
+                (false, false, false, false, false, 0),
+                "bit {b}"
+            );
+            assert_eq!(bit(b).op, SemOp::Acquire);
+        }
+    }
+
+    #[test]
+    fn a_legacy_packet_cut_short_is_truncated_too() {
+        // COUNT_OLD = 3 but only one word follows
+        let w = vec![(3u32 << 18) | 0x40, 9];
+        let s = decode(&w, 64);
+        assert!(s.truncated && s.items.is_empty());
+        // exactly as many as it says: not truncated
+        let w = vec![(2u32 << 18) | 0x40, 9, 9];
+        let s = decode(&w, 64);
+        assert!(!s.truncated && s.items.is_empty());
+        // and the decode continues after it
+        let mut w = vec![(1u32 << 18) | 0x40, 9];
+        w.extend(inc(0, 0x78, &[1]));
+        assert_eq!(decode(&w, 64).items[0].kind, Kind::Wfi);
+    }
+
+    #[test]
+    fn the_class_of_set_object_ignores_the_engine_field_for_the_copy_binding() {
+        // ENGINE (20:16) set: the class is still 0xC6B5, and the copy methods decode
+        let mut w = inc(4, 0x0, &[0x0003_C6B5]);
+        w.extend(inc(4, 0x244, &[0x1000]));
+        let s = decode(&w, 64);
+        assert_eq!(s.items[0].kind, Kind::SetObject { class: 0xC6B5 });
+        assert_eq!(s.items[1].kind, Kind::CeSemB);
+    }
+
+    #[test]
+    fn the_ring_window_starts_three_slots_behind_get() {
+        for entries in [8u32, 64, 512] {
+            for get in 0..entries {
+                let (start, _) = ring_window(get, get, entries);
+                assert_eq!(
+                    start,
+                    get.wrapping_sub(3) & (entries - 1),
+                    "{entries} {get}"
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn the_segment_lookup_prefers_behind_and_reaches_three_back_across_the_wrap() {
+        let seg = |va| seg_entry(va, 0x40);
+        // a row behind GET and a row at GET both hold the address: the one behind wins
+        let rows = [(99u32, seg(0x1000)), (100, seg(0x1000))];
+        assert_eq!(pick_segment(&rows, 100, 512, 0x1010), Some(99));
+        // exactly three behind, across the wrap
+        let rows = [(509u32, seg(0x7000))];
+        assert_eq!(pick_segment(&rows, 0, 512, 0x7010), Some(509));
+        // four behind is not looked at
+        let rows = [(508u32, seg(0x7000))];
+        assert_eq!(pick_segment(&rows, 0, 512, 0x7010), None);
+    }
+
+    #[test]
+    fn a_circular_acquire_passes_when_the_value_equals_the_payload() {
+        for (cur, aw, p64, want) in [
+            (5u64, 5u64, false, true),
+            (0, 0, false, true),
+            (u64::MAX, u64::MAX, true, true),
+            (0x7FFF_FFFF, 0, false, true),
+            (0x8000_0000, 0, false, false),
+            (0x8000_0000_0000_0000, 0, true, false),
+        ] {
+            assert_eq!(
+                name_says_pass(SemOp::AcqCircGeq, cur, aw, p64),
+                Some(want),
+                "{cur:#x} {aw:#x}"
+            );
+        }
+    }
+
+    #[test]
+    fn a_32_bit_acquire_ignores_the_high_words_in_every_comparison() {
+        for op in [
+            SemOp::Acquire,
+            SemOp::AcqStrictGeq,
+            SemOp::AcqGeq,
+            SemOp::AcqCircGeq,
+        ] {
+            assert_eq!(
+                name_says_pass(op, 0xFFFF_FFFF_0000_0007, 7, false),
+                Some(true),
+                "{op:?}"
+            );
+            assert_eq!(
+                name_says_pass(op, 7, 0xFFFF_FFFF_0000_0007, false),
+                Some(true),
+                "{op:?}"
+            );
+        }
+        assert_eq!(
+            name_says_pass(
+                SemOp::AcqAnd,
+                0xFFFF_FFFF_0000_0000,
+                0xFFFF_FFFF_0000_0000,
+                false
+            ),
+            Some(false)
+        );
+        assert_eq!(
+            name_says_pass(
+                SemOp::AcqAnd,
+                0xFFFF_FFFF_0000_0000,
+                0xFFFF_FFFF_0000_0000,
+                true
+            ),
+            Some(true)
+        );
+    }
+
+    #[test]
+    fn the_setting_overflow_and_garbage_cases() {
+        assert_eq!(
+            parse_setting(Some("99999999999999999999999999")),
+            Setting::On(MAX_MS)
+        );
+        assert_eq!(parse_setting(Some("+5")), Setting::Invalid);
+        assert_eq!(parse_setting(Some("5 5")), Setting::Invalid);
+        assert_eq!(
+            parse_setting(Some("５")),
+            Setting::Invalid,
+            "a full-width digit is not a digit here"
+        );
+        assert_eq!(parse_setting(Some("2e3")), Setting::Invalid);
+    }
+
+    #[test]
+    fn the_output_buffer_keeps_one_line_for_omitted_and_one_for_end() {
+        let mut o = Out::default();
+        for i in 0..MAX_LINES - 1 {
+            o.push(format!("line {i}"));
+        }
+        let lines = o.finish("END".to_owned());
+        assert_eq!(lines.len(), MAX_LINES);
+        assert_eq!(lines[MAX_LINES - 1], "END");
+        assert!(lines[MAX_LINES - 2].starts_with("kf3: USER_RING_STALL_DIAG OMITTED lines=0x1"));
+        assert_eq!(lines[MAX_LINES - 3], format!("line {}", MAX_LINES - 3));
+    }
+
+    #[test]
+    fn the_rendered_text_is_ascii_even_when_the_free_text_fields_are_not() {
+        let mut r = incident_report();
+        r.totals = "t=0x1\u{1b}[31m\u{e9}\r\n".to_owned();
+        for l in render(&r) {
+            assert!(l.chars().all(|c| (' '..='~').contains(&c)), "{l:?}");
+        }
+    }
+
+    #[test]
+    fn at_most_eight_ring_rows_are_listed() {
+        let mut r = incident_report();
+        r.rows = (0..20u32)
+            .map(|s| Row {
+                slot: 0x1a0 + s,
+                entry: gp_entry(0x1000 + u64::from(s) * 0x100, 64).unwrap(),
+            })
+            .collect();
+        let rows = render(&r)
+            .iter()
+            .filter(|l| l.contains(" RING slot="))
+            .count();
+        assert_eq!(rows, MAX_RING_ROWS);
+        r.rows.truncate(3);
+        assert_eq!(
+            render(&r)
+                .iter()
+                .filter(|l| l.contains(" RING slot="))
+                .count(),
+            3
+        );
+    }
+
+    #[test]
+    fn a_doorbell_count_that_never_changes_never_gets_a_time() {
+        let mut d = ChannelDiag::new();
+        for t in [100, 200, 300, 400] {
+            d.note_doorbells(t, 5);
+            assert_eq!(d.doorbells(t + 1), (5, None));
+        }
+        // a count seen to move, then to go back down, is a change each time
+        d.note_doorbells(500, 6);
+        assert_eq!(d.doorbells(510), (6, Some(10)));
+        d.note_doorbells(520, 5);
+        assert_eq!(d.doorbells(530), (5, Some(10)));
+    }
+
+    #[test]
+    fn a_clock_that_ran_backwards_reads_as_zero_for_the_turn_too() {
+        let mut d = ChannelDiag::new();
+        d.note_turn(260);
+        assert_eq!(d.last_turn(10), Some(0));
+        assert_eq!(d.last_turn(300), Some(40));
+        d.note_wake(250, Peek::Spin);
+        assert_eq!(d.last_wake(10), Some((0, Peek::Spin)));
+        d.note_doorbells(1, 1);
+        d.note_doorbells(300, 2);
+        assert_eq!(d.doorbells(10), (2, Some(0)));
+    }
+
+    #[test]
+    fn the_read_size_is_the_segment_length_up_to_the_cap() {
+        for (len, want) in [
+            (64u64, 64usize),
+            (2000, 2000),
+            (2048, 2048),
+            (2052, 2048),
+            (4096, 2048),
+            (0x1_0000, 2048),
+        ] {
+            let rows = vec![Row {
+                slot: 0x1a7,
+                entry: gp_entry(0x4_0000, len).unwrap(),
+            }];
+            let mut asked = Vec::new();
+            let _ = build_report(
+                inputs(rows, 0x4_0000),
+                &mut |a, n| {
+                    asked.push((a, n));
+                    Err("x")
+                },
+                &StallStats::default(),
+            );
+            assert_eq!(asked, [(0x4_0000, want)], "segment of {len:#x} bytes");
+        }
+    }
+
+    #[test]
+    fn a_view_that_ignores_the_size_it_was_asked_cannot_widen_the_read() {
+        let rows = vec![Row {
+            slot: 0x1a7,
+            entry: gp_entry(0x4_0000, 0x10000).unwrap(),
+        }];
+        let rep = build_report(
+            inputs(rows, 0x4_0000),
+            &mut |_, _| Ok(vec![0u8; 5000]),
+            &StallStats::default(),
+        );
+        let Segment::Decoded { read_bytes, .. } = &rep.segment else {
+            panic!()
+        };
+        assert_eq!(*read_bytes, MAX_PB_BYTES);
+        let rows = vec![Row {
+            slot: 0x1a7,
+            entry: gp_entry(0x4_0000, 64).unwrap(),
+        }];
+        let rep = build_report(
+            inputs(rows, 0x4_0000),
+            &mut |_, _| Ok(vec![0u8; 5000]),
+            &StallStats::default(),
+        );
+        let Segment::Decoded { read_bytes, .. } = &rep.segment else {
+            panic!()
+        };
+        assert_eq!(*read_bytes, 64);
+    }
+
+    #[test]
+    fn the_private_userd_words_reach_the_report_unmixed() {
+        let rows = vec![Row {
+            slot: 0x1a7,
+            entry: gp_entry(0x4_0000, 64).unwrap(),
+        }];
+        let mut inp = inputs(rows, 0x4_0000);
+        inp.userd[16] = 0x1111_1111;
+        inp.userd[19] = 0x2;
+        inp.userd[18] = 0xAAAA_0001;
+        inp.userd[22] = 0x3333_3333;
+        inp.userd[23] = 0x7;
+        let rep = build_report(inp, &mut |_, _| Err("x"), &StallStats::default());
+        assert_eq!(rep.private.pb_put, 0x2_1111_1111);
+        assert_eq!(rep.private.reference, 0xAAAA_0001);
+        assert_eq!(rep.private.top_level_get, 0x7_3333_3333);
+        assert_eq!((rep.private.gp_get, rep.private.gp_put), (0x1a8, 0x1aa));
+    }
+
+    #[test]
+    fn the_period_boundary_and_the_moved_counters_are_separate_conditions() {
+        // exactly one period: due; one millisecond short: not
+        assert!(period_due(10_000 + PERIOD_MS, 10_000, 2, 1));
+        assert!(!period_due(10_000 + PERIOD_MS - 1, 10_000, 2, 1));
+        // the period elapsed but the counters did not move: not due, however long it has been
+        assert!(!period_due(10_000 + 100 * PERIOD_MS, 10_000, 7, 7));
+        // the counters moved a lot but the period did not elapse
+        assert!(!period_due(10_001, 10_000, 70, 1));
+    }
+
+    #[test]
+    fn the_counter_sum_saturates_and_counts_each_field_once() {
+        use std::sync::atomic::Ordering::Relaxed;
+        let s = StallStats::default();
+        s.conditions.store(1, Relaxed);
+        s.acquires.store(2, Relaxed);
+        s.unread.store(4, Relaxed);
+        s.would_pass.store(8, Relaxed);
+        s.no_segment.store(16, Relaxed);
+        s.skipped_busy.store(32, Relaxed);
+        assert_eq!(s.sum(), 63);
+        s.conditions.store(u64::MAX, Relaxed);
+        s.acquires.store(u64::MAX, Relaxed);
+        assert_eq!(s.sum(), u64::MAX);
+    }
+
     #[test]
     fn peek_reasons_have_stable_names() {
         assert_eq!(peek_name(Peek::Spin), "Spin");
@@ -2754,7 +3204,7 @@ mod tests {
         w[24] = 0x3; // GetHi
         w[18] = 0x4b46_6dd4; // Reference
         w[22] = 0x4720_0000; // TopLevelGet
-        w[23] = 0x3; // TopLevelGetHi
+        w[23] = 0x7; // TopLevelGetHi
         w[34] = 0x1a8; // GPGet
         w[35] = 0x1aa; // GPPut
         let p = Private::from_userd(&w);
@@ -2763,7 +3213,7 @@ mod tests {
         assert_eq!(p.reference, 0x4b46_6dd4);
         assert_eq!(p.pb_get, 0x3_4720_0040);
         assert_eq!(p.pb_put, 0x2_1111_1111);
-        assert_eq!(p.top_level_get, 0x3_4720_0000);
+        assert_eq!(p.top_level_get, 0x7_4720_0000);
     }
 
     /// A fake placement view: a few byte ranges of guest memory.

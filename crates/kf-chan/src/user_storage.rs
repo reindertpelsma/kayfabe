@@ -788,6 +788,7 @@ mod tests {
             s.write_user_gp(slot, e).unwrap();
             assert_eq!(s.read_gp(slot).unwrap(), e, "slot {slot}");
         }
+        assert!(s.read_gp(ENTRIES).is_err(), "the first slot past the ring");
         // reading changed nothing
         assert_eq!(s.gpu_cursors().unwrap(), (0x1a8, 0x1aa));
         assert_eq!(s.read_gp(0x1a7).unwrap(), entry);

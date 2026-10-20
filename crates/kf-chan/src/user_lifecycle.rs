@@ -2403,6 +2403,15 @@ mod tests {
         let line = stats.summary();
         assert!(line.ends_with("window_entries_max=0"), "{line}");
         assert_eq!(line.matches("diag").count(), 0);
+        stats
+            .stall
+            .skipped_busy
+            .fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+        let with = stats.summary();
+        assert!(
+            with.starts_with(&format!("{line} diag_user_stall_conditions=0x0 ")),
+            "one space between the lifecycle fields and the diagnostic's: {with}"
+        );
         assert!(
             !line.contains("  ") && !line.ends_with(' '),
             "no stray separator: {line}"
