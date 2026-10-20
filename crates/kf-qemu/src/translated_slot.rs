@@ -50,3 +50,7 @@ impl<T> Cell<T> {
         self.inner.lock().ok().map(|mut g| f(&mut *g))
     }
 }
+
+#[cfg(test)]
+#[path = "translated_slot_tests.rs"]
+mod tests;
