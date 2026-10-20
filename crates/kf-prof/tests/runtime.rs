@@ -210,19 +210,69 @@ fn unavailable_production_clock_reports_its_refusal_explicitly() {
 
 #[test]
 fn unfinished_state_residence_is_exact_without_sampling_estimates() {
-    let p=directory();let s=Session::create_diagnostic(&p).unwrap();let b=s.bind_current(1).unwrap();
-    let g=kf_prof::site(Site::BrokerReceive,State::Receive,3);std::thread::sleep(Duration::from_millis(2));
-    let row=s.snapshot();let t=&row["threads"][0];let state=t["states"].as_array().unwrap().iter().find(|x|x["state"]==State::Receive as u16).unwrap();
-    assert_eq!(state["exclusive_ns"].as_u64().unwrap(),row["end_ns"].as_u64().unwrap()-t["since_ns"].as_u64().unwrap());
-    assert_eq!(state["count"],0);drop(g);drop(b);s.stop().unwrap();std::fs::remove_dir_all(p).unwrap();
+    let p = directory();
+    let s = Session::create_diagnostic(&p).unwrap();
+    let b = s.bind_current(1).unwrap();
+    let g = kf_prof::site(Site::BrokerReceive, State::Receive, 3);
+    std::thread::sleep(Duration::from_millis(2));
+    let row = s.snapshot();
+    let t = &row["threads"][0];
+    let state = t["states"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|x| x["state"] == State::Receive as u16)
+        .unwrap();
+    assert_eq!(
+        state["exclusive_ns"].as_u64().unwrap(),
+        t["observed_ns"].as_u64().unwrap() - t["since_ns"].as_u64().unwrap()
+    );
+    assert_eq!(state["count"], 0);
+    drop(g);
+    drop(b);
+    s.stop().unwrap();
+    std::fs::remove_dir_all(p).unwrap();
 }
 #[test]
 fn resumed_parent_residence_excludes_the_completed_child() {
-    let p=directory();let s=Session::create_diagnostic(&p).unwrap();let b=s.bind_current(1).unwrap();
-    let parent=kf_prof::site(Site::TrapDispatch,State::Running,3);
-    {let _child=kf_prof::site(Site::WorkerPark,State::EventWait,4);std::thread::sleep(Duration::from_millis(2));}
-    let row=s.snapshot();let t=&row["threads"][0];let states=t["states"].as_array().unwrap();
-    let running=states.iter().find(|x|x["state"]==State::Running as u16).unwrap();let child=states.iter().find(|x|x["state"]==State::EventWait as u16).unwrap();
-    assert_eq!(running["exclusive_ns"].as_u64().unwrap(),row["end_ns"].as_u64().unwrap()-t["since_ns"].as_u64().unwrap()-child["total_ns"].as_u64().unwrap());
-    drop(parent);drop(b);s.stop().unwrap();std::fs::remove_dir_all(p).unwrap();
+    let p = directory();
+    let s = Session::create_diagnostic(&p).unwrap();
+    let b = s.bind_current(1).unwrap();
+    let parent = kf_prof::site(Site::TrapDispatch, State::Running, 3);
+    {
+        let _child = kf_prof::site(Site::WorkerPark, State::EventWait, 4);
+        std::thread::sleep(Duration::from_millis(2));
+    }
+    let row = s.snapshot();
+    let t = &row["threads"][0];
+    let states = t["states"].as_array().unwrap();
+    let running = states
+        .iter()
+        .find(|x| x["state"] == State::Running as u16)
+        .unwrap();
+    let child = states
+        .iter()
+        .find(|x| x["state"] == State::EventWait as u16)
+        .unwrap();
+    assert_eq!(
+        running["exclusive_ns"].as_u64().unwrap(),
+        row["end_ns"].as_u64().unwrap()
+            - t["since_ns"].as_u64().unwrap()
+            - child["total_ns"].as_u64().unwrap()
+    );
+    drop(parent);
+    drop(b);
+    s.stop().unwrap();
+    std::fs::remove_dir_all(p).unwrap();
+}
+
+#[test]
+fn concurrent_thread_snapshots_keep_histogram_counts_coherent() {
+    let p=directory();let s=Session::create_diagnostic(&p).unwrap();
+    std::thread::scope(|scope| {let session=&s;let child=scope.spawn(move || {let _b=session.bind_current(1).unwrap();for i in 0..1000 {let _g=kf_prof::site(Site::WorkerPark,State::Mutex,i);}});
+        for _ in 0..100 {let row=s.snapshot();for t in row["threads"].as_array().unwrap() {
+            assert!(t["observed_ns"].as_u64().unwrap()<=row["end_ns"].as_u64().unwrap());
+            for h in t["states"].as_array().unwrap() {assert_eq!(h["histogram"].as_array().unwrap().iter().map(|n|n.as_u64().unwrap()).sum::<u64>(),h["count"].as_u64().unwrap());}
+        }}child.join().unwrap();
+    });s.stop().unwrap();std::fs::remove_dir_all(p).unwrap();
 }
