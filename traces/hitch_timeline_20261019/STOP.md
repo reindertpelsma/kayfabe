@@ -1,7 +1,13 @@
-# H1 stop: collection prerequisites differ from the lane description
+# Historical H1 stop: superseded by the single-profiler decision
 
-STATUS: RESEARCH, 2026-10-19. CODE READ. The initial runtime-recorder stop remains
-unresolved. Coordinator additions 2–4 were implemented independently in the
+STATUS: SUPERSEDED, 2026-10-20. CODE READ: the coordinator assigned runtime
+recording/hooks/collectors to K1 and explicitly forbade an H1 ring. H1 continues
+offline analysis; its importer awaits K1's concrete JSONL format. The historical
+findings below remain relevant acceptance conditions, not a pending request to
+approve a second recorder. See [K1_IMPORT.md](K1_IMPORT.md) and [PREREG.md](PREREG.md).
+
+HISTORICAL STATUS: RESEARCH, 2026-10-19. CODE READ. At that time the runtime
+contract remained unresolved. Coordinator additions 2–4 were implemented in the
 offline analyzer/inventory tools; no runtime instrumentation or launcher
 behavior was changed. H1's binding instruction is: "If something contradicts
 the code or these instructions, STOP and write down options; never improvise

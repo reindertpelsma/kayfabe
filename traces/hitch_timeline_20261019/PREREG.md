@@ -1,6 +1,6 @@
 # Hitch timeline preregistration
 
-STATUS: DESIGN-ONLY, 2026-10-19. Lane H1. No hardware experiment is authorized
+STATUS: DESIGN-ONLY, updated 2026-10-20. Lane H1. No hardware experiment is authorized
 until the coordinator writes `go` in this session. All hypotheses below are
 INFERRED; none is an attribution of the owner's hitches.
 
@@ -16,6 +16,7 @@ INFERRED; none is an attribution of the owner's hitches.
 | S5 GPU | Correlated submitted work has a late real GPU completion, with timely CPU execution | Real completion is timely; no GPU completion coverage means UNKNOWN, not removal |
 | S6 guest app / OS | Aligned ETW first stops producing presents, with preceding host stages healthy | Guest continues producing frames during the host-side gap |
 | S7 reclaim / compaction / runqueue | A same-thread reclaim, compaction or runqueue interval covers the first delayed stage | Complete thread tracing shows no such interval; global PSI/vmstat alone cannot assign S7 |
+| S9 pre-TDR degradation (phenomenon, separate from causal S1–S8) | Aligned, complete active-game Present timeline falls during the ten seconds before a verified TDR | Complete aligned active-game trace shows no decline before the TDR; missing traces cannot remove S9 |
 
 Classification is an evidence-supported inference, never a proof from temporal
 coincidence. Missing correlation, uncertain clocks, dropped recorder events,
@@ -61,15 +62,18 @@ No claims that diagnostics are neutral until the control comparison passes.
 
 ## Recorder and analysis gates
 
-INFERRED design: a compile-time `hitch-timeline` feature plus default-off
-`KF3_DIAG_TIMELINE=1`; one host CLOCK_MONOTONIC nanosecond domain; fixed-capacity
-atomic ring; bounded nonblocking producers; explicit drops; off-thread text
-drain at exit and on request. No strings, allocation, file IO, mutex, environment
-lookup or lazy initialization in a vCPU producer. Diagnostic arguments are not
-evaluated in feature-off builds. Tests precede implementation in EXPECTED RED
-commits. Each behavior mutation must fail at least two tests before promotion.
+CODE READ (coordinator's consolidated instruction): K1 owns the single runtime
+profiler, hooks and collectors. H1 must not build another ring. The previous
+H1 `hitch-timeline` / `KF3_DIAG_TIMELINE` proposal is superseded. K1's design is
+`docs/design/V3_PROFILER_20261019.md` on `codex/kf-prof-20261019`; outputs are
+`prof.jsonl` and `prof.mmap`, using host CLOCK_MONOTONIC ns. H1 owns the offline
+analyzer and the importer once a concrete JSONL format lands on origin.
+Feature-off cost, bounded producer/storage behavior, loss and rotation remain
+acceptance requirements for K1, not claims about implemented H1 runtime code.
+Tests precede H1 behavior changes in EXPECTED RED commits; every behavior
+mutant must fail at least two tests before promotion.
 
-Prepared collectors must remain inactive in Part A. Part B samples pressure,
+K1-owned collectors must remain inactive in Part A. Part B samples pressure,
 vmstat, schedstat and supported task delay accounting every 100 ms; captures
 same-clock per-thread reclaim/compaction/runqueue intervals; records IRQ and
 frequency/C-state evidence and broker compositor timestamps. Unsupported
@@ -215,3 +219,56 @@ No host timestamp overlap or opaque RM client handle alone proves the presenting
 guest thread waited for that RPC. A spinning kernel waiter may not generate a
 sleep interval; absence of CSwitch is not its falsifier. Without verified guest
 linkage, show the host reply interval but keep causal attribution UNKNOWN.
+
+## Consolidated update: K1 handoff, Java and S9
+
+MEASURED by coordinator, not independently reconstructed by H1: Minecraft Java
+run 3017 (`0d7ba743`, mirror OFF, iothread disk) reached TDR at 2026-10-19
+16:04:30 CEST. Display fps fell from 57 to 45 at :20, 31 at :22, 2.9 at :28,
+and zero at :30, before nvlddmkm 153 x3. Disk await was 0.1–0.5 ms, with no
+inflight IO during the degradation. Storage is excluded as the trigger for
+that observed window; this does not remove all guest/disk causes in other runs.
+REFUSED/absence/unsettled counts matched production run 3011; their presence
+is not a new regression signal. Preserve the ten-second lead-in rather than
+starting the analysis at the reset/event-log messages.
+
+CODE READ: a read-only origin fetch pinned K1 at
+`9b5f12f292c7ede0867b2834d7be427eda15d5e1`. Its design is still explicitly
+proposed; the source has no JSONL writer or reader. The document specifies
+`schema:1` and conceptual interval fields, but no complete canonical JSON
+object, event-tag encoding, coverage/loss representation or example. H1 must
+not invent those names/semantics. The importer remains pending that contract;
+aggregate per-second data cannot become individual presentation timestamps.
+See [K1_IMPORT.md](K1_IMPORT.md) for the pinned compatibility requirements.
+
+MEASURED read-only check, 2026-10-20: the named saved `sampler.tsv` has 362 lines
+including its header, wall-clock-only labels 02:09:04 through 02:15:04 and no
+run/boot or host-monotonic identity. This snapshot cannot independently align
+the coordinator's 16:04:20–:30 event. Do not relabel it as run 3017 or infer a
+timezone/clock correction. The coordinator's run-3017 measurements above retain
+their stated provenance. Saved source: `/data/claude-stall10s-20261019/sampler.tsv`.
+
+INFERRED preregistered S9 analysis: retain ten one-second bins immediately
+before each explicitly verified guest TDR, using normalized, aligned individual
+guest Presents for that PID. Keep host new-content bins alongside them as a
+separate observation. Compare the first two seconds with the last two seconds;
+report DECLINE_OBSERVED only when the early count's uncertainty lower bound is
+greater than the late count's upper bound. Report NO_DECLINE_OBSERVED only with
+a positive early baseline and the converse nondecrease established; otherwise
+UNKNOWN. Use twice measured guest/host calibration error for boundary bounds.
+Require complete ten-second capture/exposure, no loss, verified TDR/PID and a
+recorded active workload covering the entire window. An Event 153 line alone
+is not a verified TDR timestamp. Unknown coverage is not measured zero fps.
+This is a descriptive S9 phenotype, never a root-cause attribution: retain
+S1–S8/UNKNOWN for each gap and attach overlapping pre-TDR windows separately.
+
+Fourth workload: Minecraft Java world load plus the same registered walking
+policy in a disposable world copy. After `go` with the coordinator's `-prof`
+binary, discover and record actual Java/game/mod/renderer versions, process,
+world, settings and input schedule. Separate load/walk/idle/exit phases and
+capture TDR/reset events plus the ten-second prehistory. Do not substitute
+Bedrock/RenderDragon or assume a rendering API. Add this arm to the fresh-boot
+and matched-uptime comparison; never silently reduce the registered boot count.
+The 251 min 40 s workload-only lower bound above now excludes both Minecraft
+workloads and the VRAM study; it remains a lower bound, not a feasible budget.
+Part B remains NOT GO, pending the binary and explicit coordinator release.
