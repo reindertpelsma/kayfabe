@@ -1283,7 +1283,14 @@ fn sleep_safety_monitor(
             && obligation() == Some(first)
             && !sh.stop_gpu.load(Ordering::Acquire)
         {
-            sh.violation(format!(
+            let report = |m: String| {
+                if env_u("RS_I6_SOFT", 0) != 0 {
+                    sh.soft(m)
+                } else {
+                    sh.violation(m)
+                }
+            };
+            report(format!(
                 "I6 every worker is in a blocking wait while relay {} holds an obligation with no wake source (demand={} carried={})",
                 first.0, first.1, first.2
             ));
@@ -1870,6 +1877,9 @@ fn run_scenario(sc: &Scenario) -> Outcome {
             clients
                 .iter()
                 .all(|c| c.gp_get.load(Ordering::Acquire) == c.gp_put.load(Ordering::Acquire))
+                // no recorded wait (a batch marker's late interrupt legitimately rings one more turn) and no interrupt in flight
+                && rt.cells.iter().all(|c| !c.is_waiting())
+                && irqs.lock().map_or(false, |q| q.is_empty())
         };
         if !sh.abort.load(Ordering::Acquire)
             && env_u("RS_PARK_NET", 0) == 0
