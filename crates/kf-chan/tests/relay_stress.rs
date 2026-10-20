@@ -631,6 +631,8 @@ struct Client {
     storage: Mutex<()>,
     /// Wall time (ns) of the last pop, for the response latency.
     last_pop_ns: AtomicU64,
+    /// FORENSICS (I6): when the fake PBDMA last stored REFERENCE.
+    ref_ns: AtomicU64,
 }
 impl Client {
     fn new(idx: u32) -> Self {
@@ -647,6 +649,7 @@ impl Client {
             published: AtomicU64::new(0),
             storage: Mutex::new(()),
             last_pop_ns: AtomicU64::new(0),
+            ref_ns: AtomicU64::new(0),
         }
     }
 }
@@ -681,6 +684,9 @@ struct Shared {
     irq_pending_since: AtomicU64,
     /// Park waits that ended (hook `WorkerAfterWait`); `WorkerStats::parks - after_waits` = workers in a blocking wait now.
     after_waits: Arc<AtomicU64>,
+    /// FORENSICS (I6): the last engine-event dispatch and the last irq raise (ns).
+    last_dispatch_ns: AtomicU64,
+    last_raise_ns: AtomicU64,
     irq_hist: Mutex<Hist>,
     irqs_raised: AtomicU64,
     irqs_dispatched: AtomicU64,
@@ -825,6 +831,10 @@ struct Rec {
     wait: Option<Wait>,
     dead: Option<String>,
     turns: u64,
+    /// FORENSICS (I6): when the current wait was armed (ns).
+    armed_ns: u64,
+    /// FORENSICS (I6): the last look that held the record: (ns, words read, verdict).
+    last_look: Option<(u64, Option<(u64, u64)>, Look)>,
 }
 
 struct Rt<'a> {
@@ -928,6 +938,7 @@ impl Rt<'_> {
         let idx = record.idx;
         let need = r.relay.core.need;
         r.wait = wait_of(need);
+        r.armed_ns = self.sh.now();
         record.set_waiting(r.wait.is_some());
         match need {
             Need::Again => {
@@ -957,9 +968,14 @@ impl Rt<'_> {
             let i = LookIn {
                 demand,
                 record_busy: true,
-                wait: record
-                    .is_waiting()
-                    .then_some(Wait::Marker { target: u64::MAX }),
+                // MUTANT (RS_MUT_BUSY_LOOK_IGNORES_WAIT=1): the pre-aad1e9ff4 call site, for the mutation check of I6
+                wait: if env_u("RS_MUT_BUSY_LOOK_IGNORES_WAIT", 0) != 0 {
+                    None
+                } else {
+                    record
+                        .is_waiting()
+                        .then_some(Wait::Marker { target: u64::MAX })
+                },
                 words: None,
                 fetched: 0,
                 get_follows_pops: false,
@@ -992,7 +1008,9 @@ impl Rt<'_> {
             fetched: r.relay.core.fetch.fetched(),
             get_follows_pops: kf_chan::user_turn::guest_get_follows_pops(),
         };
-        match ul::look(i) {
+        let verdict = ul::look(i);
+        r.last_look = Some((self.sh.now(), words, verdict));
+        match verdict {
             Look::Leave => {
                 if why == Peek::Event && r.wait.is_some() {
                     RelayStats::bump(&self.stats.event_without_progress);
@@ -1181,6 +1199,7 @@ fn gpu_thread(
                     chaos();
                     // the marker processed: REFERENCE, then the non-stall interrupt (delayed, reordered across markers)
                     c.hw_ref.store(Marks::value(n), Ordering::Release);
+                    c.ref_ns.store(sh.now(), Ordering::Release);
                     let due = sh.now() + rng.below(u64::from(cfg.irq_jitter_us) + 1) * 1000;
                     irqs.lock()
                         .unwrap_or_else(|e| e.into_inner())
@@ -1219,6 +1238,7 @@ fn irq_thread(sh: &Shared, ev: &Notifier, irqs: &Mutex<BinaryHeap<Due>>) {
                     Ordering::AcqRel,
                     Ordering::Acquire,
                 );
+                sh.last_raise_ns.store(sh.now(), Ordering::Release);
                 let _ = ev.signal();
             }
             None => std::thread::sleep(Duration::from_micros(50)),
@@ -1235,7 +1255,14 @@ fn sleep_safety_monitor(
     irqs: &Mutex<BinaryHeap<Due>>,
 ) {
     // an interrupt the fake hardware has raised but not yet delivered is a wake IN FLIGHT, not a missing one
-    let in_flight = || irqs.lock().map_or(true, |q| !q.is_empty());
+    // a wake IN FLIGHT is not a missing one: an interrupt the fake hardware has queued, or one it raised (eventfd signalled)
+    // that no worker has dispatched yet (I6 classification 2026-10-20: the false positives were exactly these)
+    let in_flight = || {
+        irqs.lock().map_or(true, |q| !q.is_empty())
+            || sh.last_raise_ns.load(Ordering::Acquire)
+                >= sh.last_dispatch_ns.load(Ordering::Acquire)
+                && sh.last_raise_ns.load(Ordering::Acquire) != 0
+    };
     let blocked = || {
         ws.parks
             .load(Ordering::Acquire)
@@ -1266,7 +1293,11 @@ fn sleep_safety_monitor(
                         })
                     })
             })
-            .map(|(i, c)| (i, c.pending(), c.carried()))
+            .map(|(i, c)| {
+                // the obligation's IDENTITY: the same wait (kind and target) must persist across the window
+                let wait = c.try_lock().ok().and_then(|r| r.wait);
+                (i, c.pending(), c.carried(), wait)
+            })
     };
     while !sh.stop_gpu.load(Ordering::Acquire) {
         std::thread::sleep(Duration::from_millis(1));
@@ -1290,10 +1321,38 @@ fn sleep_safety_monitor(
                     sh.violation(m)
                 }
             };
+            {
+                let c = &rt.cells[first.0];
+                let cl = &rt.clients[first.0];
+                let now = sh.now();
+                let forensic = c.try_lock().map(|r| {
+                    format!(
+                        "wait={:?} armed_ago_us={} last_look={:?} ago_us={:?} need={:?} again={} marks(issued={} seen={}) fetch(issued={} fetched={}) hw_get={} hw_ref_n={:?} ref_store_ago_us={} last_dispatch_ago_us={} last_raise_ago_us={} token={}",
+                        r.wait,
+                        now.saturating_sub(r.armed_ns) / 1000,
+                        r.last_look.map(|l| (l.1, l.2)),
+                        r.last_look.map(|l| now.saturating_sub(l.0) / 1000),
+                        r.relay.core.need,
+                        r.relay.core.again,
+                        r.relay.core.marks.issued(),
+                        r.relay.core.marks.seen(),
+                        r.relay.core.fetch.issued(),
+                        r.relay.core.fetch.fetched(),
+                        cl.hw_get.load(Ordering::Acquire),
+                        r.relay.core.marks.peek(cl.hw_ref.load(Ordering::Acquire)),
+                        now.saturating_sub(cl.ref_ns.load(Ordering::Acquire)) / 1000,
+                        now.saturating_sub(sh.last_dispatch_ns.load(Ordering::Acquire)) / 1000,
+                        now.saturating_sub(sh.last_raise_ns.load(Ordering::Acquire)) / 1000,
+                        rt.plane.tokens.get(first.0).map(|w| format!("{:?}", w.load())).unwrap_or_default(),
+                    )
+                });
+                eprintln!("I6 FORENSICS relay {}: {:?}", first.0, forensic);
+            }
             report(format!(
                 "I6 every worker is in a blocking wait while relay {} holds an obligation with no wake source (demand={} carried={})",
                 first.0, first.1, first.2
             ));
+            let _ = first.3;
             return;
         }
     }
@@ -1711,6 +1770,8 @@ fn run_scenario(sc: &Scenario) -> Outcome {
         stop_gpu: AtomicBool::new(false),
         stop_workers: AtomicBool::new(false),
         after_waits: Arc::new(AtomicU64::new(0)),
+        last_dispatch_ns: AtomicU64::new(0),
+        last_raise_ns: AtomicU64::new(0),
         abort: AtomicBool::new(false),
         violations: Mutex::new(Vec::new()),
         soft: Mutex::new(Vec::new()),
@@ -1753,6 +1814,8 @@ fn run_scenario(sc: &Scenario) -> Outcome {
                 wait: None,
                 dead: None,
                 turns: 0,
+                armed_ns: 0,
+                last_look: None,
             },
         )));
     }
@@ -1802,6 +1865,7 @@ fn run_scenario(sc: &Scenario) -> Outcome {
                     }
                     // the engine's non-stall event: the guest's completion interrupt would be raised here
                     let _ = ev.drain();
+                    sh.last_dispatch_ns.store(sh.now(), Ordering::Release);
                     let since = sh.irq_pending_since.swap(0, Ordering::AcqRel);
                     if since != 0 {
                         let lat = sh.now().saturating_sub(since);
@@ -2181,6 +2245,20 @@ fn expected_red_seed_18_marker_wait_found_only_by_the_backstop() {
         found += o.backstop_found_work;
     }
     assert_eq!(found, 0, "backstop_found_work over 6 runs of seed 18");
+}
+
+/// ★ 2026-10-20: the seeds on which I6 fired before its classification (0, 1, 3, 18: monitor false positives -- a wake in
+/// flight and an obligation compared without its identity; 20: the real busy-record lost wake fixed in `aad1e9ff4`). They
+/// must hold every invariant, I6 included, with the infinite park.
+#[test]
+fn i6_classified_seeds_hold_the_sleep_invariant() {
+    for seed in [0u64, 1, 3, 18, 20] {
+        let o = run_scenario(&Scenario::from_seed(seed, 0.3));
+        if !o.violations.is_empty() {
+            report(&o);
+        }
+        assert!(o.violations.is_empty(), "seed {seed}: {:?}", o.violations);
+    }
 }
 
 /// Many seeds (the long run). `RS_FROM`, `RS_TO`, `RS_SECS` (per seed), `RS_PRESET=baton|contention|random`.
