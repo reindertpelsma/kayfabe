@@ -280,6 +280,8 @@ def main():
     (out/'RESULT.json').write_text(json.dumps(result,indent=2))
     if final_xid>before:
         raise HostSafetyError('new host Xid during cleanup; restore owner')
+    (out/'collectors.json').rename(out/'collectors.completed.json')
+    (out/'run.json').rename(out/'run.completed.json')
     log('RUN_COMPLETE '+str(out))
 
 
