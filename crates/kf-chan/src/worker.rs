@@ -128,6 +128,124 @@ impl LoopPolicy {
     }
 }
 
+/// How the worker loop visits one wake source (see [`WAKE_SOURCES`]).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Visit {
+    /// Through `dispatch`: the ready tag's branch. The text is the branch condition as `run_with_relay` writes it, with the
+    /// whitespace removed (`"else"` for the final fall-through branch).
+    Dispatch(&'static str),
+    /// Through `RelayLoop::peek` with this reason.
+    Peek(Peek),
+    /// The bounded-period tick after a park (`on_other(TICK_TAG)`); no fd carries it.
+    Tick,
+}
+
+/// One wake source of the worker loop and where the loop visits it.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct WakeSource {
+    /// A short name for messages.
+    pub name: &'static str,
+    /// How the loop reaches it.
+    pub visit: Visit,
+    /// For a [`Visit::Dispatch`] source: the calls its branch makes, as `run_with_relay` writes them.
+    pub handlers: &'static [&'static str],
+    /// Visited by the busy `AfterPass::Look`.
+    pub look: bool,
+    /// Visited by the bounded idle spin.
+    pub idle_spin: bool,
+    /// Visited after the park wait ends.
+    pub park: bool,
+    /// Why a `false` above is intended (empty when everything is `true`).
+    pub why_not: &'static str,
+}
+
+/// ★ **Every wake source `run_with_relay` visits, and where** (2026-10-20; the structural guard of
+/// `docs/design/V3_USER_RING_EVENT_LOOP_20261014.md` section 10 and `docs/design/V3_FOUND_IN_PRODUCTION.md`).
+///
+/// Derived from the code, not invented: the `dispatch` closure's three branches (the ready tag's class), the three reasons a
+/// relay is peeked ([`Peek`]) and the post-park tick. The bounded-fairness defect was a source the idle spin visited and the busy
+/// loop did not; `crates/kf-chan/tests/wake_registry.rs` reads `worker.rs` and fails when
+///  * `dispatch` handles a tag class not listed here (or a listed one is gone), or calls a handler nobody listed;
+///  * a [`Peek`] reason or an `on_*` callback of `run_with_relay` is not accounted for here;
+///  * the busy `AfterPass::Look` arm and the idle spin differ in the calls they make, or visit something other than what `look`
+///    and `idle_spin` say.
+///
+/// **To add a wake source:** add the branch (or peek reason) to the loop, add its entry here, make the Look arm and the idle spin
+/// visit it (they must stay the same look), then add a model scenario to `tests/relay_fairness.rs` if the source can be starved.
+/// A source that is intentionally not visited in a look says so in `why_not`.
+pub const WAKE_SOURCES: &[WakeSource] = &[
+    WakeSource {
+        name: "doorbell eventfd",
+        visit: Visit::Dispatch("else"),
+        handlers: &["efd.drain()"],
+        look: true,
+        idle_spin: true,
+        park: true,
+        why_not: "",
+    },
+    WakeSource {
+        name: "completions fd (COMPLETIONS_TAG)",
+        visit: Visit::Dispatch("tag==COMPLETIONS_TAG"),
+        handlers: &[
+            "completions.for_each_inflight",
+            "plane.ring_internal(t)",
+            "on_completion()",
+        ],
+        look: true,
+        idle_spin: true,
+        park: true,
+        why_not: "",
+    },
+    WakeSource {
+        name: "engine and other events (OTHER_TAG_BASE and above)",
+        visit: Visit::Dispatch("tag>=OTHER_TAG_BASE"),
+        handlers: &["on_other(tag)"],
+        look: true,
+        idle_spin: true,
+        park: true,
+        why_not: "",
+    },
+    WakeSource {
+        name: "relay peek after an event",
+        visit: Visit::Peek(Peek::Event),
+        handlers: &[],
+        look: true,
+        idle_spin: true,
+        park: true,
+        why_not: "",
+    },
+    WakeSource {
+        name: "relay peek of the waiting relays' private words",
+        visit: Visit::Peek(Peek::Spin),
+        handlers: &[],
+        look: true,
+        idle_spin: true,
+        park: false,
+        why_not: "a park is a wait on fds; the private words are looked at before it (the spin) and after it by the event peek",
+    },
+    WakeSource {
+        name: "relay peek by the backstop (safety net)",
+        visit: Visit::Peek(Peek::Backstop),
+        handlers: &[],
+        look: false,
+        idle_spin: false,
+        park: true,
+        why_not: "the net is the TIMEOUT of the long park: by definition not reached while the worker is busy or spinning; a find is a bug counter",
+    },
+    WakeSource {
+        name: "post-park tick (TICK_TAG)",
+        visit: Visit::Tick,
+        handlers: &[],
+        look: false,
+        idle_spin: false,
+        park: true,
+        why_not: "a bounded-period tick of the PARK (measurement and the opt-in KF3_RELAY_GET_REFRESH only); no correctness rests on it",
+    },
+];
+
+/// Callbacks of `run_with_relay` that run once per loop iteration, whatever the pass did (the Pacer's timer).
+pub const EVERY_ITERATION: &[&str] = &["on_tick"];
+
 /// No relays (the harness): the loop is the old one minus the timer-driven refresh.
 pub struct NoRelay;
 impl RelayLoop for NoRelay {

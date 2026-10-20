@@ -1,5 +1,7 @@
 # Status and handoff — where kayfabe v3 stands, and how to resume
 
+**2026-10-20 — bugs found by production-like workloads, the tests they became, and the property classes to check when adding a wake source, a protocol or a lock: `docs/design/V3_FOUND_IN_PRODUCTION.md`.**
+
 ## UPDATE 2026-10-18 — hitch measurement gates
 
 CODE READ: `codex/hitch-gates-20261018` makes display step timing and the relay event
