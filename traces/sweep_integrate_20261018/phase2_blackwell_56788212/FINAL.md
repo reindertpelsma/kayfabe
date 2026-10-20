@@ -128,6 +128,8 @@ relay paths and all timing constants remain unchanged.
    between the guest ring and broker; the header codec fix is not the cure.
 4. B3: correlate heartbeat publication with guest epoch/lifecycle transitions
    without blocking the drainer or changing its 500 ms period.
+   `B3_CODE_REVIEW.md` rejects one metadata ordering race and states a falsifier
+   for the still-unproved mailbox value / epoch transition lead.
 5. Ampere and Turing current-product regression remains UNRUN. GA104 Windows
    still requires a verified native/VFIO binding using unmodified windows-on-vast
    before any kayfabe Windows acceptance attempt. No extra lease is left active.
