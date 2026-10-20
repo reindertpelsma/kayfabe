@@ -554,6 +554,25 @@ mod tests {
         assert!(reauthor_report_semaphore_d(0x1000_f011).is_err());
     }
 
+    // BLACKWELL_A (0xCD97) on its own: the measured Windows release shape (A=1, lower, payload,
+    // D=0x1000f010) passes, and an upper address above 7:0 but within 24:0 is carried.
+    #[test]
+    fn blackwell_a_release_shape_and_wide_upper_are_carried() {
+        let rows = REPORT_SEMAPHORE_ALLOWED;
+        for (m, v) in [
+            (0x1B00, 1),
+            (0x1B04, 0x2028_6060),
+            (0x1B08, 7),
+            (0x1B0C, 0x1000_f010),
+        ] {
+            let Some(Disposition::Allowed(r)) = report_semaphore(0xCD97, m) else {
+                panic!("{m:#x} refused on BLACKWELL_A");
+            };
+            assert!(reauthor_in_class(Some(0xCD97), &r, v).is_ok(), "{m:#x}");
+        }
+        assert_eq!(reauthor_in_class(Some(0xCD97), &rows[0], 0x100), Ok(0x100));
+    }
+
     #[test]
     fn report_semaphore_rows_are_the_3d_class_of_the_header_families_only() {
         for f in kf_chip::Family::ALL {
