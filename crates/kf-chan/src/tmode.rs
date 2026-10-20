@@ -365,6 +365,8 @@ pub struct TState {
     video_payload64: Option<(u32, u32)>,
     /// ★ VIDEO tier: video methods admitted over the channel's life (for the log).
     pub video_methods: u64,
+    /// ★ 2026-10-19 — the CE-IMPLICIT binding. STUB (tests first): not yet read.
+    pub ce_object: u32,
 }
 
 /// ★ Owner rulings 2026-10-07 (`OWNER_RULINGS.md` §S, items 1-4): what a Translated channel's
@@ -389,6 +391,10 @@ pub struct GrConfig {
     /// derived table instead of the copy engine's.
     pub video: u32,
 }
+
+#[cfg(test)]
+#[path = "tmode_ce_tests.rs"]
+mod ce_tier_tests;
 
 #[cfg(test)]
 #[path = "tmode_gr_tests.rs"]

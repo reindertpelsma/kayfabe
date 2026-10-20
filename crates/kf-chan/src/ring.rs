@@ -228,6 +228,13 @@ impl TranslatedRing {
         }
     }
 
+    /// ★ 2026-10-19 — STUB (tests first): the CE-implicit class is not yet read.
+    pub fn set_ce_object(&mut self, class: u32) {
+        if let Some((st, _)) = self.tmode.as_deref_mut() {
+            st.ce_object = class;
+        }
+    }
+
     /// `(GR-tier methods re-authored, inert software-subchannel binds)` so far (T-mode only).
     #[must_use]
     pub fn gr_counts(&self) -> (u64, u64) {
