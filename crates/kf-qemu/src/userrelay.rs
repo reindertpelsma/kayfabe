@@ -49,8 +49,9 @@ pub(super) struct Cell<T = Record> {
     /// can find (mirrors `Pump::wait`, written under the record lock, read by the spin / backstop
     /// peeks without it).
     waiting: AtomicBool,
-    /// Consecutive turns that found a lock / admission busy (`kf_chan::user_loop::may_retry`).
-    contended: AtomicU32,
+    /// ★ 2026-10-20 (owner): the relay holds an obligation NO registered wake source announces (`kf_chan::user_loop::Obligation::Popped` /
+    /// `Lagging`): the worker must not block while any relay has this set (written under the record lock, read without it).
+    unannounced: AtomicBool,
     inner: Mutex<T>,
 }
 impl<T> Cell<T> {
@@ -60,7 +61,7 @@ impl<T> Cell<T> {
             retry: AtomicBool::new(false),
             canceled: AtomicBool::new(false),
             waiting: AtomicBool::new(false),
-            contended: AtomicU32::new(0),
+            unannounced: AtomicBool::new(false),
             inner: Mutex::new(value),
         }
     }
@@ -109,19 +110,13 @@ impl<T> Cell<T> {
     pub fn is_canceled(&self) -> bool {
         self.canceled.load(Ordering::Acquire)
     }
-    /// Consecutive contended turns so far.
-    pub fn contended_run(&self) -> u32 {
-        self.contended.load(Ordering::Acquire)
+    /// See [`Cell::unannounced`].
+    pub fn is_unannounced(&self) -> bool {
+        !self.is_canceled() && self.unannounced.load(Ordering::Acquire)
     }
-    /// A turn found a lock / admission busy.
-    pub fn contended_note(&self) {
-        let _ = self
-            .contended
-            .fetch_update(Ordering::AcqRel, Ordering::Acquire, |n| Some(n.saturating_add(1)));
-    }
-    /// A turn ran without contention (or the holder rang).
-    pub fn contended_clear(&self) {
-        self.contended.store(0, Ordering::Release);
+    /// Set / clear [`Cell::unannounced`].
+    pub fn set_unannounced(&self, unannounced: bool) {
+        self.unannounced.store(unannounced, Ordering::Release);
     }
     /// See [`Cell::waiting`].
     pub fn is_waiting(&self) -> bool {
@@ -136,6 +131,7 @@ impl<T> Cell<T> {
         self.canceled.store(true, Ordering::Release);
         self.retry.store(false, Ordering::Release);
         self.waiting.store(false, Ordering::Release);
+        self.unannounced.store(false, Ordering::Release);
     }
     /// Keep the same private exclusion as retirement through idx publication.
     pub fn wake_if(&self, active: impl FnOnce(&T) -> bool, ring: impl FnOnce(u32)) {
@@ -164,11 +160,7 @@ pub(super) struct StoreUserd {
 }
 impl StoreUserd {
     /// Arm the view of the page holding the USERD at store offset `base`.
-    pub(super) fn new(
-        rm: &'static kf_host::HostRm,
-        store: u32,
-        base: u64,
-    ) -> Result<Self, String> {
+    pub(super) fn new(rm: &'static kf_host::HostRm, store: u32, base: u64) -> Result<Self, String> {
         let page = base & !0xFFF;
         if base & 0x1ff != 0 {
             return Err("USER_RING_STORE_USERD_ALIGN".into());
@@ -206,7 +198,11 @@ impl StoreUserd {
             at: base - page,
         })
     }
-    fn word(&self, offset: u64, len: usize) -> Result<kf_linux_raw::HostOffset, kf_rm::memory_list::AccessError> {
+    fn word(
+        &self,
+        offset: u64,
+        len: usize,
+    ) -> Result<kf_linux_raw::HostOffset, kf_rm::memory_list::AccessError> {
         use kf_rm::memory_list::AccessError;
         if len != 4 || offset & 3 != 0 || offset.checked_add(4).is_none_or(|e| e > 0x200) {
             return Err(AccessError::Bounds);
@@ -278,7 +274,7 @@ impl UserdSource {
         me: &'a ChanPlane,
         key: (u32, u32),
         allocation: &Arc<()>,
-    ) -> Result<std::sync::MutexGuard<'a, PtMap>, kf_rm::memory_list::AccessError> {
+    ) -> Result<crate::ptlock::PtGuard<'a, PtMap>, kf_rm::memory_list::AccessError> {
         use kf_rm::memory_list::AccessError;
         let pt = me.pt.try_lock().map_err(|e| match e {
             std::sync::TryLockError::WouldBlock => AccessError::Busy,
@@ -468,7 +464,9 @@ impl Birth {
                 // ★ DEBUG ONLY: only a channel the debug switch made a user ring can be here with a
                 // framebuffer USERD (a Windows permit is never granted for one: the scope decision
                 // of V3_WINDOWS_USER_RING_RELAY.md §10 stands for the production route).
-                Some(kf_arch::UserdMem::Framebuffer { base, .. }) if kf_rm::chanlink::force_migratable_enabled() => {
+                Some(kf_arch::UserdMem::Framebuffer { base, .. })
+                    if kf_rm::chanlink::force_migratable_enabled() =>
+                {
                     StoreUserd::new(me.rm, me.store, base)
                         .map(|view| (UserdSource::Store(Arc::new(view)), native_id))
                 }
@@ -484,16 +482,14 @@ impl Birth {
                 return Err(fail(format!("{why}; storage cleanup {cleanup:?}")));
             }
         };
-        let pump =
-            match super::userpump::Pump::new(me, native_id, (a.client, a.handle))
-            {
-                Ok(pump) => pump,
-                Err(why) => {
-                    let cleanup = me.inbox.user_va.release_after_channel_free(lease);
-                    let _ = me.inbox.wake.signal();
-                    return Err(fail(format!("{why}; never-born cleanup {cleanup:?}")));
-                }
-            };
+        let pump = match super::userpump::Pump::new(me, native_id, (a.client, a.handle)) {
+            Ok(pump) => pump,
+            Err(why) => {
+                let cleanup = me.inbox.user_va.release_after_channel_free(lease);
+                let _ = me.inbox.wake.signal();
+                return Err(fail(format!("{why}; never-born cleanup {cleanup:?}")));
+            }
+        };
         let notifier = self
             .err_at
             .and_then(|(obj, off, at)| me.arm_notifier(a.client, a.handle, obj, off, at));
@@ -838,13 +834,16 @@ impl ChanPlane {
             let Ok(mut r) = record.lock() else { return };
             r.retired = true;
             record.cancel();
-            let sources_ok = r.pump.as_mut().is_none_or(|p| match p.release(&self.relay_stats) {
-                Ok(()) => true,
-                Err(why) => {
-                    eprintln!("kf3: {why}; source views retained until session close");
-                    false
-                }
-            });
+            let sources_ok = r
+                .pump
+                .as_mut()
+                .is_none_or(|p| match p.release(&self.relay_stats) {
+                    Ok(()) => true,
+                    Err(why) => {
+                        eprintln!("kf3: {why}; source views retained until session close");
+                        false
+                    }
+                });
             (
                 r.lease.clone(),
                 r.allocation.clone(),
@@ -873,12 +872,21 @@ impl ChanPlane {
             if last {
                 let n = self.relay_reports.fetch_add(1, Ordering::Relaxed) + 1;
                 if n <= 16 || n.is_power_of_two() {
-                    eprintln!("kf3: USER_RING_LOOP SUMMARY (all relays gone, #{n}) {}", self.relay_stats.summary());
+                    eprintln!(
+                        "kf3: USER_RING_LOOP SUMMARY (all relays gone, #{n}) {}",
+                        self.relay_summary()
+                    );
                     if self.relay_stats.life.any() {
-                        eprintln!("kf3: USER_RING_LIFECYCLE SUMMARY (all relays gone, #{n}) {}", self.relay_stats.life.summary());
+                        eprintln!(
+                            "kf3: USER_RING_LIFECYCLE SUMMARY (all relays gone, #{n}) {}",
+                            self.relay_stats.life.summary()
+                        );
                     }
                     if self.relay_stats.lazy.any() {
-                        eprintln!("kf3: USER_RING_LAZY_OBSERVE SUMMARY (all relays gone, #{n}) {}", self.relay_stats.lazy.summary());
+                        eprintln!(
+                            "kf3: USER_RING_LAZY_OBSERVE SUMMARY (all relays gone, #{n}) {}",
+                            self.relay_stats.lazy.summary()
+                        );
                     }
                     eprintln!("kf3: {}", crate::userstore::summary());
                 }
@@ -918,13 +926,16 @@ impl ChanPlane {
             let Ok(mut r) = record.lock() else { return };
             r.retired = true;
             record.cancel();
-            let sources_ok = r.pump.as_mut().is_none_or(|p| match p.release(&self.relay_stats) {
-                Ok(()) => true,
-                Err(why) => {
-                    eprintln!("kf3: {why}; source views retained until session close");
-                    false
-                }
-            });
+            let sources_ok = r
+                .pump
+                .as_mut()
+                .is_none_or(|p| match p.release(&self.relay_stats) {
+                    Ok(()) => true,
+                    Err(why) => {
+                        eprintln!("kf3: {why}; source views retained until session close");
+                        false
+                    }
+                });
             (
                 r.lease.clone(),
                 r.allocation.clone(),

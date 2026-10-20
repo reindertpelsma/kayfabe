@@ -50,7 +50,6 @@ use kf_chan::user_lazy::LazyConfig;
 use kf_chan::user_lifecycle::{Lifecycle, LifecycleMode, Mode};
 use kf_chan::user_loop::{self as ul, Need, Peek, Wait};
 use kf_chan::user_scan::Scan;
-use kf_chan::worker::{AfterPass, LoopPolicy};
 use std::collections::{HashMap, VecDeque};
 use support::*;
 
@@ -140,13 +139,10 @@ struct Cfg {
     lock_holds: u8,
     /// The lock is held when the exploration starts.
     lock_at_start: bool,
-    /// `Cell::contended` when the exploration starts (a convoy before it).
-    contended_at_start: u32,
     /// Exploration cap (a test that hits it fails loudly).
     max_states: usize,
-    /// MODEL-ONLY candidate fix 1: an ENGINE EVENT look may re-ring a contended relay past the budget (events are hardware
-    /// edges, so this is not a busy loop): `may_retry(run, Event)` true.
-    fix_event_retry: bool,
+    /// The retired behaviour: the pt holder does not hand off (no registration, no ring).
+    no_handoff: bool,
 }
 
 impl Cfg {
@@ -160,13 +156,12 @@ impl Cfg {
             script,
             hot: false,
             peer_events: false,
-            backstop: true,
+            backstop: false,
             lock: LockKind::Pt,
             lock_holds: 0,
             lock_at_start: false,
-            contended_at_start: 0,
             max_states: 3_000_000,
-            fix_event_retry: false,
+            no_handoff: false,
         }
     }
 }
@@ -193,7 +188,6 @@ enum Pc {
     After {
         served: u8,
     },
-    Spin(u8),
     Parked,
 }
 
@@ -307,7 +301,10 @@ struct S {
     // the record (`userrelay::Cell`) and `Pump::wait`
     retry: bool,
     waiting: bool,
-    contended: u32,
+    /// Registered with the pt holder after losing the lock (`kf_chan::handoff`).
+    reg: bool,
+    /// An interrupt came and the words did not show the progress yet: the worker may not block.
+    lagging: bool,
     wait: Option<Wait>,
     rec_held: bool,
     holds_left: u8,
@@ -317,20 +314,18 @@ struct S {
     engine_event: bool,
     // the worker
     pc: Pc,
-    policy: LoopPolicy,
     // bounded-wait counters (ticks since the obligation began; capped)
     c_wait: u8,
     c_demand: u8,
     c_space: u8,
     flags: u32,
     backstops: u8,
-    fix: (bool, bool),
 }
 
 impl S {
     fn key(&self) -> String {
         format!(
-            "{}|{:?}|{}|{}{}{}{}|{:?}|{}{}|{}{}{}|{:?}|{:?}|{},{},{}|{:x}|{}",
+            "{}|{:?}|{}|{}{}{}{}|{:?}|{}{}|{}{}{}|{:?}|{},{},{}|{:x}|{}",
             self.relay.key(),
             (
                 &self.g.ring,
@@ -348,7 +343,7 @@ impl S {
             self.pc_guest,
             u8::from(self.retry),
             u8::from(self.waiting),
-            self.contended.min(ul::CONTENTION_RETRIES + 1),
+            u32::from(self.reg) * 2 + u32::from(self.lagging),
             u8::from(self.rec_held),
             self.wait,
             self.holds_left,
@@ -357,7 +352,6 @@ impl S {
             u8::from(self.engine_event),
             u8::from(false),
             self.pc,
-            self.policy,
             self.c_wait,
             self.c_demand,
             self.c_space,
@@ -370,9 +364,19 @@ impl S {
         !self.g.pt_held && !self.rec_held
     }
 
-    /// `ChanPlane::user_ring_waiting` (userpump.rs 2837-2843).
+    /// `ChanPlane::user_ring_waiting`: a recorded private-word wait.
     fn waiting_any(&self) -> bool {
-        (self.waiting || self.retry) && !self.relay.dead
+        self.waiting && !self.relay.dead
+    }
+
+    /// `ChanPlane::user_ring_unannounced`: an obligation no wake source announces (a carried wait, a spent hint).
+    fn unannounced(&self) -> bool {
+        !self.relay.dead
+            && (matches!(self.wait, Some(Wait::Popped { .. }))
+                || self.lagging
+                // the guest's ring looked full at the last `GP_PUT` read and pops are still owed to it (they carry no event)
+                || (self.relay.core.put_full
+                    && self.relay.core.fetch.fetched() < self.relay.core.fetch.issued()))
     }
 
     /// `ring(self)` in the peek: `plane.ring_internal` + `wake.signal()`.
@@ -381,23 +385,19 @@ impl S {
         self.efd = true;
     }
 
-    /// `ChanPlane::user_ring_peek_one` (userpump.rs 2865-2982), transliterated. Returns whether it rang.
+    /// `ChanPlane::user_ring_peek_one`, transliterated. Returns whether it rang. Contention is the lock holder's business: no look acts on
+    /// it (`look_needed` ignores demand).
     fn peek(&mut self, why: Peek) -> bool {
         if self.relay.dead {
             return false;
         }
         let backstop = why == Peek::Backstop;
-        let demand = self.retry;
-        if !ul::look_needed(why, demand, self.waiting) {
+        if !ul::look_needed(why, false, self.waiting) {
             return false;
         }
-        let retry_ok = ul::may_retry(self.contended, why) || (self.fix.0 && why == Peek::Event);
         if self.rec_held || matches!(self.pc, Pc::InTurn { .. }) {
-            // record held elsewhere (2889-2892)
-            if retry_ok {
-                self.ring();
-            }
-            return retry_ok;
+            // record held elsewhere: its completion rings (`user_ring_wake`) / the arm picks the demand up
+            return false;
         }
         if let Some(w) = self.wait {
             let get = self.g.hw_get();
@@ -414,39 +414,51 @@ impl S {
                 self.ring();
                 return true;
             }
-            if satisfied && (retry_ok || !matches!(w, Wait::Contended)) {
+            if satisfied && !matches!(w, Wait::Contended) {
                 if backstop {
                     self.backstops = self.backstops.saturating_add(1);
                 }
                 self.wait = None;
                 self.waiting = false;
+                self.lagging = false;
                 self.ring();
                 return true;
             }
-        }
-        if demand && retry_ok {
-            self.ring();
-            return true;
+            if why == Peek::Event {
+                self.lagging = true;
+            }
         }
         false
     }
 
-    /// `ChanPlane::user_ring_arm` (userpump.rs 2810-2832).
-    fn arm(&mut self) {
-        // `Pump::turn` (userpump.rs 1842-1846): a turn that made progress ends `Again` whatever else it said
+    /// `ChanPlane::user_ring_arm`.
+    fn arm(&mut self, no_handoff: bool) {
+        // `Pump::turn`: a turn that made progress ends `Again` whatever else it said
         if self.relay.core.again && !self.relay.core.dead {
             self.relay.core.need = Need::Again;
         }
         let need = self.relay.core.need;
         self.wait = ul::wait_of(need);
-        self.waiting = self.wait.is_some();
+        self.waiting = matches!(self.wait, Some(Wait::Marker { .. } | Wait::Popped { .. }));
+        if !self.waiting {
+            self.lagging = false;
+        }
         match need {
-            Need::Again => {
-                self.contended = 0;
-                self.ring();
+            Need::Again => self.ring(),
+            Need::Contended => {
+                // register with the holder BEFORE giving up; a lock already free means a holder released since the attempt: serve again
+                if self.g.pt_held {
+                    self.reg = !no_handoff;
+                } else {
+                    self.ring();
+                }
+                self.wait = None;
             }
-            Need::Contended => self.contended = self.contended.saturating_add(1),
-            Need::Idle | Need::Marker { .. } | Need::Popped { .. } => self.contended = 0,
+            Need::Idle | Need::Marker { .. } | Need::Popped { .. } => {}
+        }
+        // demand that arrived while the turn ran (an act's `user_ring_wake` found the record held and could only request): serve again
+        if self.retry {
+            self.ring();
         }
     }
 
@@ -629,7 +641,17 @@ fn adversary_steps(cfg: &Cfg, s: &S, out: &mut Vec<(String, S)>) {
     if !s.lock_free() {
         let mut n = s.clone();
         match cfg.lock {
-            LockKind::Pt => n.g.pt_held = false,
+            LockKind::Pt => {
+                n.g.pt_held = false;
+                // ★ the holder's hand-off: after releasing, ring the relay that registered
+                if n.reg && !cfg.no_handoff {
+                    n.reg = false;
+                    if !in_turn(&n) {
+                        n.t_rung = true;
+                    }
+                    n.efd = true;
+                }
+            }
             LockKind::Record => {
                 n.rec_held = false;
                 // the act's completion: `user_ring_wake`
@@ -641,7 +663,10 @@ fn adversary_steps(cfg: &Cfg, s: &S, out: &mut Vec<(String, S)>) {
             }
         }
         out.push((
-            format!("the {:?} lock is released (pt: nobody is told)", cfg.lock),
+            format!(
+                "the {:?} lock is released (pt: the holder rings the registered relay)",
+                cfg.lock
+            ),
             n,
         ));
     }
@@ -661,17 +686,17 @@ fn worker_steps(cfg: &Cfg, s: &S, out: &mut Vec<(String, S)>, timeouts: bool) {
                 n.t_rung = false;
                 n.retry = true; // `record.enter()` -> `request()`
                 if n.rec_held {
-                    n.contended = n.contended.saturating_add(1);
                     n.pc = Pc::After {
                         served: 1 + u8::from(cfg.hot),
                     };
-                    "pass: serve -> record busy (contended_note, no turn)".into()
+                    "pass: serve -> record busy (the act's completion rings)".into()
                 } else if n.g.pt_held {
-                    n.contended = n.contended.saturating_add(1);
+                    // register with the holder BEFORE giving up (the lock IS held at this step)
+                    n.reg = !cfg.no_handoff;
                     n.pc = Pc::After {
                         served: 1 + u8::from(cfg.hot),
                     };
-                    "pass: serve -> pt busy (contended_note, no turn)".into()
+                    "pass: serve -> pt busy (registered with the holder)".into()
                 } else {
                     n.retry = false;
                     n.relay.claim();
@@ -696,7 +721,7 @@ fn worker_steps(cfg: &Cfg, s: &S, out: &mut Vec<(String, S)>, timeouts: bool) {
                 n.flags |= V_DEAD;
             }
             if n.relay.idle() {
-                n.arm();
+                n.arm(cfg.no_handoff);
                 n.pc = Pc::After {
                     served: served + u8::from(cfg.hot),
                 };
@@ -708,43 +733,20 @@ fn worker_steps(cfg: &Cfg, s: &S, out: &mut Vec<(String, S)>, timeouts: bool) {
                 format!("turn step {before:?}")
             }
         }
-        Pc::After { served } => match n.policy.after_pass(served as usize) {
-            AfterPass::Continue => {
+        Pc::After { served } => {
+            // ★ the ONE evaluation per iteration: drain the ready fds (an engine event peeks with Peek::Event), evaluate every recorded wait
+            dispatch(&mut n);
+            let _ = n.peek(Peek::Spin);
+            if served > 0 {
                 n.pc = Pc::Top;
-                "busy: continue".into()
-            }
-            AfterPass::Look => {
-                dispatch(&mut n);
-                if n.waiting_any() {
-                    let _ = n.peek(Peek::Spin);
-                }
+                "after a busy pass: evaluate, next pass".into()
+            } else if ul::idle(n.unannounced()) == ul::Idle::Spin {
                 n.pc = Pc::Top;
-                "busy LOOK (poll, peek(Event) if an event, peek(Spin))".into()
-            }
-            AfterPass::Idle => {
-                if ul::idle(n.waiting_any(), u32::from(SPIN_M)) == ul::Idle::Spin {
-                    n.pc = Pc::Spin(SPIN_M);
-                    "idle: spin".into()
-                } else {
-                    park(&mut n);
-                    "idle: park".into()
-                }
-            }
-        },
-        Pc::Spin(k) => {
-            if n.efd || n.engine_event {
-                dispatch(&mut n);
-                n.pc = Pc::Top;
-                "spin: an fd is ready, dispatch".into()
-            } else if n.peek(Peek::Spin) {
-                n.pc = Pc::Top;
-                "spin: peek(Spin) rang the relay".into()
-            } else if !n.waiting_any() || k <= 1 {
-                park(&mut n);
-                format!("spin: nothing (contended run {}), park", n.contended)
+                "idle with an obligation no wake source announces: evaluate again (epoll timeout 0)"
+                    .into()
             } else {
-                n.pc = Pc::Spin(k - 1);
-                "spin".into()
+                park(&mut n);
+                "idle, every obligation announced: park".into()
             }
         }
         Pc::Parked => {
@@ -835,7 +837,8 @@ fn initial(cfg: &Cfg) -> S {
         script: std::rc::Rc::new(cfg.script.clone()),
         retry: false,
         waiting: false,
-        contended: 0,
+        reg: false,
+        lagging: false,
         wait: None,
         rec_held: false,
         holds_left: cfg.lock_holds,
@@ -843,13 +846,11 @@ fn initial(cfg: &Cfg) -> S {
         efd: false,
         engine_event: false,
         pc: Pc::Parked,
-        policy: LoopPolicy::default(),
         c_wait: 0,
         c_demand: 0,
         c_space: 0,
         flags: 0,
         backstops: 0,
-        fix: (cfg.fix_event_retry, false),
     }
 }
 
@@ -892,8 +893,6 @@ fn settle(cfg: &Cfg) -> S {
     assert_eq!(s.pc, Pc::Parked);
     s.flags = 0;
     s.g.flags = 0;
-    s.policy = LoopPolicy::default();
-    s.contended = cfg.contended_at_start;
     if cfg.lock_at_start {
         match cfg.lock {
             LockKind::Pt => s.g.pt_held = true,
@@ -1075,12 +1074,12 @@ fn one_pt_window_across_a_doorbell_is_re_rung_within_k_ticks() {
 // ------------------------------------------------------------------------------------------------
 // BREAK 1: a contended relay past CONTENTION_RETRIES is stranded while ANY engine interrupt keeps the park from timing out
 
-/// One doorbell; the `pt` lock (or USERD admission) is held across it by another thread and released with no announcement.
-fn convoy(contended_at_start: u32) -> Cfg {
+/// One doorbell; the `pt` lock (or USERD admission) is held across it by another thread. The relay registers with the holder before giving
+/// up and the holder rings it after releasing (owner design, `kf_chan::handoff`).
+fn convoy() -> Cfg {
     let mut cfg = Cfg::new(script(vec![Op::Push(vec![plain(1)]), Op::SetPut, Op::Ring]));
     cfg.lock = LockKind::Pt;
     cfg.lock_at_start = true;
-    cfg.contended_at_start = contended_at_start;
     cfg
 }
 
@@ -1088,7 +1087,7 @@ fn convoy(contended_at_start: u32) -> Cfg {
 /// `backstop_found(contended)`), within the bound.
 #[test]
 fn break1_control_a_convoy_past_the_retry_budget_on_a_quiet_worker_is_rescued_by_the_safety_net() {
-    holds("break1-control", &convoy(ul::CONTENTION_RETRIES));
+    holds("break1-control", &convoy());
 }
 
 /// ★ EXPECTED RED (break 1, NOT the busy-Look case: the worker is IDLE). After `CONTENTION_RETRIES` consecutive
@@ -1100,7 +1099,7 @@ fn break1_control_a_convoy_past_the_retry_budget_on_a_quiet_worker_is_rescued_by
 /// 50 ms of the peer, counted as `backstop_found(contended)`.
 #[test]
 fn break1_expected_red_a_convoy_past_the_retry_budget_is_stranded_by_a_peers_interrupt_stream() {
-    let mut cfg = convoy(ul::CONTENTION_RETRIES);
+    let mut cfg = convoy();
     cfg.peer_events = true;
     holds("break1", &cfg);
 }
@@ -1110,7 +1109,7 @@ fn break1_expected_red_a_convoy_past_the_retry_budget_is_stranded_by_a_peers_int
 /// by ONE lock hold that outlasts 64 looks (microseconds on a spinning worker).
 #[test]
 fn break1b_expected_red_one_long_pt_hold_spends_the_budget_and_strands_the_relay() {
-    let mut cfg = convoy(0);
+    let mut cfg = convoy();
     cfg.peer_events = true;
     holds("break1b", &cfg);
 }
@@ -1120,7 +1119,7 @@ fn break1b_expected_red_one_long_pt_hold_spends_the_budget_and_strands_the_relay
 /// cross-check of this model against `relay_fairness.rs` (EXPECTED RED until that fix lands).
 #[test]
 fn known_p13_expected_red_a_convoy_past_the_retry_budget_beside_a_hot_neighbour() {
-    let mut cfg = convoy(ul::CONTENTION_RETRIES);
+    let mut cfg = convoy();
     cfg.hot = true;
     holds("known-p13", &cfg);
 }
@@ -1193,7 +1192,7 @@ fn break2b_expected_red_a_carried_wait_delays_the_guests_ring_space_until_the_wh
 /// the `GP_GET` write-back's admission) does.
 #[test]
 fn break1_control_a_record_lock_convoy_is_rung_by_the_acts_completion_even_with_peer_interrupts() {
-    let mut cfg = convoy(ul::CONTENTION_RETRIES);
+    let mut cfg = convoy();
     cfg.lock = LockKind::Record;
     cfg.peer_events = true;
     holds("break1-control-record", &cfg);
@@ -1202,15 +1201,43 @@ fn break1_control_a_record_lock_convoy_is_rung_by_the_acts_completion_even_with_
 // ------------------------------------------------------------------------------------------------
 // candidate fixes, MODEL ONLY (production is unchanged on this branch): each turns its break green
 
+/// The checker has teeth: remove the hand-off (the holder tells nobody) and the SAME schedules strand the relay, with a peer's interrupt
+/// stream or beside a hot neighbour -- the red tests of the adversary, red again by construction.
 #[test]
-fn fix1_candidate_an_event_look_may_re_ring_a_contended_relay_closes_break1_and_1b() {
-    for (name, mut cfg) in [
-        ("fix1/break1", convoy(ul::CONTENTION_RETRIES)),
-        ("fix1/break1b", convoy(0)),
-    ] {
-        cfg.peer_events = true;
-        cfg.fix_event_retry = true;
-        holds(name, &cfg);
+fn without_the_hand_off_break1_strands_the_relay_again() {
+    let mut cfg = convoy();
+    cfg.peer_events = true;
+    cfg.no_handoff = true;
+    breaks("no-handoff/break1", &cfg, V_DEMAND | V_STALL);
+}
+
+#[test]
+fn without_the_hand_off_the_hot_neighbour_case_strands_the_relay_again() {
+    let mut cfg = convoy();
+    cfg.hot = true;
+    cfg.no_handoff = true;
+    breaks("no-handoff/known-p13", &cfg, V_DEMAND | V_STALL);
+}
+
+/// The sleep invariant on this model: blocked (parked) means no obligation without a wake source.
+#[test]
+fn the_parked_worker_holds_no_unannounced_obligation() {
+    for cfg in [convoy(), cyclic_ring_full(LifecycleMode::NoPointerMarkers)] {
+        let s0 = settle(&cfg);
+        let mut stack = vec![s0];
+        let mut seen = std::collections::HashSet::new();
+        while let Some(s) = stack.pop() {
+            if !seen.insert(s.key()) {
+                continue;
+            }
+            assert!(
+                !(s.pc == Pc::Parked && s.unannounced()),
+                "parked with an unannounced obligation"
+            );
+            for (_, n) in successors(&cfg, &s) {
+                stack.push(n);
+            }
+        }
     }
 }
 
@@ -1223,33 +1250,36 @@ fn src(path: &str) -> String {
 }
 
 #[test]
-fn pin_only_the_safety_net_may_re_ring_past_the_contention_budget() {
+fn pin_nothing_is_budgeted_and_no_look_rings_for_contention() {
     let l = src("src/user_loop.rs");
     assert!(
-        l.contains("matches!(why, Peek::Backstop) || run < CONTENTION_RETRIES"),
-        "may_retry changed: revisit break 1"
+        !l.contains("CONTENTION_RETRIES") && !l.contains("fn may_retry"),
+        "the budget is back"
+    );
+    assert!(
+        l.contains("pub const fn look_needed(_why: Peek, _demand: bool, waiting: bool) -> bool")
     );
     let w = src("src/worker.rs");
     assert!(
         w.contains("if matches!(got, Ok(0)) && !owed {")
             && w.contains("relay.peek(Peek::Backstop)"),
-        "the backstop is a park TIMEOUT only: revisit break 1"
+        "the backstop is a park TIMEOUT only (a firing that finds work is a counted bug)"
     );
 }
 
 #[test]
 fn pin_the_peeks_pop_write_back_covers_marker_and_popped_waits() {
     let p = src("../kf-qemu/src/userpump.rs");
+    let flat: String = p.split_whitespace().collect();
     assert!(
-        p.contains(
-            "kf_chan::user_loop::Wait::Marker { .. } | kf_chan::user_loop::Wait::Popped { .. }"
+        flat.contains(
+            &"kf_chan::user_loop::Wait::Marker { .. } | kf_chan::user_loop::Wait::Popped { .. }"
+                .split_whitespace()
+                .collect::<String>()
         ),
         "the pop write-back condition changed: revisit break 2"
     );
-    assert!(
-        p.contains("let retry_ok = kf_chan::user_loop::may_retry(record.contended_run(), why);")
-    );
-    assert!(p.contains("if demand && retry_ok {"));
+    assert!(p.contains("look_needed(why, false, record.is_waiting())"));
 }
 
 #[test]

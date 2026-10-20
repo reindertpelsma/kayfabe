@@ -18,6 +18,9 @@ pub struct Handoff {
     epoch: AtomicU64,
     waiters: AtomicU32,
     list: Mutex<Vec<u32>>,
+    registered: AtomicU64,
+    rung: AtomicU64,
+    retried: AtomicU64,
 }
 
 impl Handoff {
@@ -28,6 +31,9 @@ impl Handoff {
             epoch: AtomicU64::new(0),
             waiters: AtomicU32::new(0),
             list: Mutex::new(Vec::new()),
+            registered: AtomicU64::new(0),
+            rung: AtomicU64::new(0),
+            retried: AtomicU64::new(0),
         }
     }
 
@@ -44,24 +50,31 @@ impl Handoff {
         {
             l.push(who);
             self.waiters.fetch_add(1, Ordering::SeqCst);
+            self.registered.fetch_add(1, Ordering::Relaxed);
         }
     }
 
     /// The loser, AFTER registering: did a holder release since the attempt began? (`true` = retry now.)
     #[must_use]
-    pub fn changed_since(&self, _seen: u64) -> bool {
-        false
+    pub fn changed_since(&self, seen: u64) -> bool {
+        self.epoch.load(Ordering::SeqCst) != seen
     }
 
     /// The loser: a failed attempt that began at `seen`. Registers; `true` = retry now (the holder may have released already).
     #[must_use]
     pub fn lost(&self, who: u32, seen: u64) -> bool {
         self.register(who);
-        self.changed_since(seen)
+        let again = self.changed_since(seen);
+        if again {
+            self.retried.fetch_add(1, Ordering::Relaxed);
+        }
+        again
     }
 
     /// The holder, AFTER releasing the lock: the first half of [`Handoff::released`].
-    pub fn bump(&self) {}
+    pub fn bump(&self) {
+        self.epoch.fetch_add(1, Ordering::SeqCst);
+    }
 
     /// Registered waiters (a cheap check).
     #[must_use]
@@ -86,8 +99,20 @@ impl Handoff {
         self.bump();
         if self.waiters() != 0 {
             for who in self.take() {
+                self.rung.fetch_add(1, Ordering::Relaxed);
                 ring(who);
             }
         }
+    }
+
+    /// One bounded line for the loop summary: registrations, rings by a holder, immediate retries (the lost-registration race answered).
+    #[must_use]
+    pub fn summary(&self) -> String {
+        format!(
+            "handoff(registered={} rung={} retried={})",
+            self.registered.load(Ordering::Relaxed),
+            self.rung.load(Ordering::Relaxed),
+            self.retried.load(Ordering::Relaxed)
+        )
     }
 }

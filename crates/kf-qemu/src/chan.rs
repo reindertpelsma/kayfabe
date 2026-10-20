@@ -2269,7 +2269,9 @@ pub struct ChanPlane {
     /// The host family (its generated class sets check a guest engine-object class).
     family: kf_chip::Family,
     /// ★ P5b: the guest's user channels' twins, by `(hClient, hChannel)`.
-    pt: Mutex<HashMap<(u32, u32), PtChan>>,
+    pt: crate::ptlock::PtLock<HashMap<(u32, u32), PtChan>>,
+    /// ★ 2026-10-20: the lock holders' hand-off (`kf_chan::handoff`): a relay that lost a `try_lock` registers, the holder rings it.
+    handoff: std::sync::Arc<crate::ptlock::HandoffHub>,
     /// Exact pending Windows USER births, canceled before live subtree removal.
     user_births: crate::userbirth::Book,
     user_rings: Mutex<HashMap<u32, Arc<userrelay::Cell>>>,
@@ -2454,7 +2456,7 @@ struct EngineObject {
 
 #[cfg(test)]
 fn engine_owner_current(
-    pt: &Mutex<PtMap>,
+    pt: &crate::ptlock::PtLock<PtMap>,
     key: (u32, u32),
     allocation: &Arc<()>,
     chan: kf_host::Channel,
@@ -2466,7 +2468,7 @@ fn engine_owner_current(
 }
 
 fn engine_object_pending(
-    pt: &Mutex<PtMap>,
+    pt: &crate::ptlock::PtLock<PtMap>,
     key: (u32, u32),
     allocation: &Arc<()>,
     chan: kf_host::Channel,
@@ -2514,7 +2516,7 @@ fn admit_engine_object(
     Ok(allocation)
 }
 
-fn cancel_pending_engine_objects(pt: &Mutex<PtMap>, client: u32, object: u32) {
+fn cancel_pending_engine_objects(pt: &crate::ptlock::PtLock<PtMap>, client: u32, object: u32) {
     if let Ok(mut pt) = pt.lock() {
         for ((owner, _), channel) in pt.iter_mut() {
             if *owner == client {
@@ -2526,7 +2528,7 @@ fn cancel_pending_engine_objects(pt: &Mutex<PtMap>, client: u32, object: u32) {
 
 /// One brief metadata transaction; caller performs no host verb under either lock.
 fn keep_engine_object(
-    pt: &Mutex<PtMap>,
+    pt: &crate::ptlock::PtLock<PtMap>,
     index: &Mutex<ObjIndex>,
     key: (u32, u32),
     allocation: &Arc<()>,
@@ -2586,7 +2588,7 @@ fn attach_engine_withdraw(
 }
 
 fn withdraw_engine_object(
-    pt: &Mutex<PtMap>,
+    pt: &crate::ptlock::PtLock<PtMap>,
     index: &Mutex<ObjIndex>,
     key: (u32, u32),
     channel: &Arc<()>,
@@ -2620,7 +2622,7 @@ fn withdraw_engine_object(
 /// free takes its twin out at statement time, so a freed channel's twins stop counting at once.
 /// `host_refused_before`: the twin's mark ([`dispsw_mark_host_refused`]). A poisoned map counts as
 /// full (`usize::MAX`), so the caps refuse.
-fn dispsw_live(pt: &Mutex<PtMap>, key: (u32, u32)) -> crate::dispsw::Live {
+fn dispsw_live(pt: &crate::ptlock::PtLock<PtMap>, key: (u32, u32)) -> crate::dispsw::Live {
     pt.lock().map_or(
         crate::dispsw::Live {
             chan: usize::MAX,
@@ -2638,7 +2640,11 @@ fn dispsw_live(pt: &Mutex<PtMap>, key: (u32, u32)) -> crate::dispsw::Live {
 /// ★ x11-dispsw (review 2026-10-03, LOW): a host display-SW alloc on channel `key`'s twin was
 /// refused ([`crate::dispsw::twin_watched`]) — mark the twin, so every later display-SW alloc on it
 /// is refused by name. Only while the map still holds THAT twin (`chan`); `true` when marked.
-fn dispsw_mark_host_refused(pt: &Mutex<PtMap>, key: (u32, u32), chan: kf_host::Channel) -> bool {
+fn dispsw_mark_host_refused(
+    pt: &crate::ptlock::PtLock<PtMap>,
+    key: (u32, u32),
+    chan: kf_host::Channel,
+) -> bool {
     pt.lock().is_ok_and(|mut m| match m.get_mut(&key) {
         Some(v) if v.chan == chan => {
             v.dispsw_host_refused = true;
@@ -2651,7 +2657,7 @@ fn dispsw_mark_host_refused(pt: &Mutex<PtMap>, key: (u32, u32), chan: kf_host::C
 /// ★ x11-dispsw (review 2026-10-03, MEDIUM; its test, LOW): the guest numbered another `ENG_SW`
 /// object under channel `key` ([`ChanPlane::software_object`]) — that twin's mirror advances, and
 /// no other channel's. `None`: no twin holds the channel; `Some(None)`: the mirror lost the count.
-fn register_other_sw(pt: &Mutex<PtMap>, key: (u32, u32)) -> Option<Option<u16>> {
+fn register_other_sw(pt: &crate::ptlock::PtLock<PtMap>, key: (u32, u32)) -> Option<Option<u16>> {
     pt.lock()
         .ok()
         .and_then(|mut m| m.get_mut(&key).map(|v| v.sw_ids.register()))
@@ -2694,7 +2700,7 @@ fn attach_dispsw_withdraw(
 /// still name it ([`crate::dispsw::withdraw_disp_sw`]), and free it on the host. The log line.
 fn withdraw_kept<H: crate::dispsw::DispSwHost>(
     host: &H,
-    pt: &Mutex<PtMap>,
+    pt: &crate::ptlock::PtLock<PtMap>,
     pt_objs: &Mutex<ObjIndex>,
     key: (u32, u32),
     handle: u32,
@@ -2914,6 +2920,12 @@ impl ChanPlane {
                 let _ = inbox.wake.signal();
             })
         };
+        // ★ 2026-10-20: the lock holders' hand-off rings through the plane's token and the worker eventfd
+        let handoff = std::sync::Arc::new(crate::ptlock::HandoffHub::new(move |token| {
+            if plane.ring_internal(token) {
+                let _ = wake.signal();
+            }
+        }));
         Ok(ChanPlane {
             gr_relay: AtomicU64::new(0),
             bar0trace: crate::bar0trace::Bar0Trace::from_env(),
@@ -2949,7 +2961,8 @@ impl ChanPlane {
             engine_table: engine_table.to_vec(),
             stop: AtomicBool::new(false),
             family,
-            pt: Mutex::new(HashMap::new()),
+            pt: crate::ptlock::PtLock::new(HashMap::new(), handoff.clone()),
+            handoff,
             user_births,
             user_rings: Mutex::new(HashMap::new()),
             relay_stats: kf_chan::user_loop::Stats::default(),
@@ -3052,6 +3065,18 @@ impl ChanPlane {
     /// order, off the drainer and off every lock the drainer holds.
     ///
     /// # Errors
+    /// ★ 2026-10-20 (`kf_chan::handoff`): a lock holder -- the drainer after a pass, the VA thread after a loop, the act thread after an act -- has released what it held:
+    /// ring the relays that lost a `try_lock` and registered. One atomic add and one atomic load when nobody waits. Never blocks.
+    pub fn handoff_released(&self) {
+        self.handoff.released();
+    }
+
+    /// The relay loop's counters and the hand-off's, one bounded line.
+    #[must_use]
+    pub fn relay_summary(&self) -> String {
+        format!("{} {}", self.relay_stats.summary(), self.handoff.summary())
+    }
+
     /// The spawn.
     pub fn start(&'static self) -> Result<(), String> {
         let (tx, rx) = std::sync::mpsc::channel::<(Act, kf_gsp::Deferred, &'static str)>();
@@ -3064,6 +3089,8 @@ impl ChanPlane {
                     self.acts_parked.store(q.parked(), Ordering::Release);
                     let t0 = std::time::Instant::now();
                     let r = act(self);
+                    // ★ 2026-10-20: a checkpoint of the lock holders' hand-off. Whatever the act held is released; tell the relays that lost a try_lock to it.
+                    self.handoff.released();
                     // Retries the act parked (a steer waiting for a map in flight to end).
                     for (when, a, dd, w) in
                         ACT_DELAYED.with(|c| std::mem::take(&mut *c.borrow_mut()))
@@ -8556,7 +8583,15 @@ mod dispsw_tests {
 
     /// Two clients, three twinned channels — client A's `CH1` and `CH2`, and client B's `CH1` (the
     /// same handle in another client): 3 + 1 + 2 display-SW twins.
-    fn plane_map() -> Mutex<PtMap> {
+    /// A detached `pt` lock around `m` (no relay to ring).
+    fn pt_lock(m: PtMap) -> crate::ptlock::PtLock<PtMap> {
+        crate::ptlock::PtLock::new(
+            m,
+            std::sync::Arc::new(crate::ptlock::HandoffHub::detached()),
+        )
+    }
+
+    fn plane_map() -> crate::ptlock::PtLock<PtMap> {
         let mut m = PtMap::new();
         m.insert(
             (A, CH1),
@@ -8564,7 +8599,10 @@ mod dispsw_tests {
         );
         m.insert((A, CH2), twin(2, &[(0x73, 0xa3)]));
         m.insert((B, CH1), twin(3, &[(0x70, 0xb0), (0x71, 0xb1)]));
-        Mutex::new(m)
+        crate::ptlock::PtLock::new(
+            m,
+            std::sync::Arc::new(crate::ptlock::HandoffHub::detached()),
+        )
     }
 
     fn live(chan: usize, vm: usize) -> Live {
@@ -8580,7 +8618,7 @@ mod dispsw_tests {
         let old = twin(1, &[]);
         let allocation = old.allocation.clone();
         let chan = old.chan;
-        let pt = Mutex::new(HashMap::from([((A, CH1), old)]));
+        let pt = pt_lock(HashMap::from([((A, CH1), old)]));
         let index = Mutex::new(HashMap::new());
         assert!(engine_owner_current(&pt, (A, CH1), &allocation, chan));
         // Exact guest key and ALL numeric host fields repeat; allocation does not.
@@ -8616,7 +8654,7 @@ mod dispsw_tests {
         let v = twin(1, &[(0x20, 0xb2)]);
         let allocation = v.allocation.clone();
         let chan = v.chan;
-        let pt = Mutex::new(HashMap::from([((A, CH1), v)]));
+        let pt = pt_lock(HashMap::from([((A, CH1), v)]));
         let index = Mutex::new(HashMap::from([((A, 0x30), (A, CH2))]));
         let object_allocation = admit_engine_object(
             pt.lock().unwrap().get_mut(&(A, CH1)).unwrap(),
@@ -8684,7 +8722,7 @@ mod dispsw_tests {
         let chan = v.chan;
         let key = (A, CH1);
         let old = admit_engine_object(&mut v, &HashMap::new(), key, 0x10).unwrap();
-        let pt = Mutex::new(HashMap::from([(key, v)]));
+        let pt = pt_lock(HashMap::from([(key, v)]));
         let index = Mutex::new(HashMap::new());
         assert!(engine_object_pending(&pt, key, &channel, chan, 0x10, &old));
         cancel_pending_engine_objects(&pt, B, 0x10);
