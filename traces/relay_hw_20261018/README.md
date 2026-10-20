@@ -1,6 +1,12 @@
 # HW2 relay hardware validation — 2026-10-20
 
-STATUS: BLOCKED / PARTIAL. No HW2 hardware test boot has been run. All hardware numbers below
+STATUS: LIVE / RESUMED, 2026-10-21. The owner's amended briefing authorizes
+freedom of method and tests-first repairs. The lane-owned harness repair is
+green, with two killing tests for each of its mutants. A new C/M ABBA cohort is
+running; M uses infinite park. Native/fast qualification and Windows capture
+are queued. See `RESUME_20261021.md` for current results.
+
+Historical preflight snapshot, 2026-10-20: BLOCKED / PARTIAL. No HW2 hardware test boot had been run. All hardware numbers below
 are inherited measurements, independently extracted from the completed baton
 campaign. Production code and the existing binaries are unchanged.
 
