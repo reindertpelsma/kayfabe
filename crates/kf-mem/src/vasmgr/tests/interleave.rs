@@ -44,6 +44,9 @@ const BOUND_PENDING: usize = 2;
 /// A guard against a configuration whose state space would not fit in memory.
 const MAX_STATES: usize = 60_000_000;
 
+/// A bound on a schedule's length that only has to catch a loop (`show` prints the longest real one).
+const MAX_DEPTH: usize = 120;
+
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 enum Kind {
     A,
@@ -444,6 +447,8 @@ struct Report {
     /// Distinct complete schedules (event sequences from the start to a terminal state).
     schedules: f64,
     max_pending: usize,
+    /// The longest schedule explored.
+    max_depth: usize,
     /// The shortest schedule that breaks each invariant.
     first: BTreeMap<&'static str, (Vec<Ev>, String)>,
 }
@@ -492,7 +497,24 @@ fn explore(cfg: Cfg) -> Report {
             next_id <= MAX_STATES,
             "the state space exceeds {MAX_STATES} states: shrink the configuration"
         );
+        if path.len() > MAX_DEPTH {
+            // Every event of a schedule is caused by an arm, a walk or a wake; a schedule longer
+            // than the arms can account for is work that keeps making work.
+            rep.note(
+                &path,
+                Ev::Ready,
+                vec![(
+                    "I6",
+                    format!(
+                        "LIVELOCK: a schedule of more than {MAX_DEPTH} events for {} arms",
+                        cfg.n
+                    ),
+                )],
+            );
+            continue;
+        }
         let w = replay(&path);
+        rep.max_depth = rep.max_depth.max(path.len());
         rep.max_pending = rep.max_pending.max(w.r.m.pending());
         let en = w.enabled(cfg);
         if en.is_empty() {
@@ -553,13 +575,14 @@ fn explore(cfg: Cfg) -> Report {
 
 fn show(name: &str, cfg: Cfg, rep: &Report) {
     eprintln!(
-        "interleave[{name}] n={} polite={}: {} states, {} transitions, {} terminal states, {:.0} complete schedules, max pending {}, violations: {:?}",
+        "interleave[{name}] n={} polite={}: {} states, {} transitions, {} terminal states, {:.0} complete schedules, longest {} events, max pending {}, violations: {:?}",
         cfg.n,
         cfg.polite,
         rep.states,
         rep.transitions,
         rep.terminals,
         rep.schedules,
+        rep.max_depth,
         rep.max_pending,
         rep.first.keys().collect::<Vec<_>>()
     );
@@ -604,8 +627,10 @@ fn adversarial_guest_n3_walks_never_exceed_arms_and_progress_needs_no_timer() {
 }
 
 /// ★ I3 with four arms: pending work is bounded by the spaces, not by the arms. (Two specific
-/// spaces, every window; the three-kind four-arm space is the `#[ignore]`d test below.)
+/// spaces, every window: about 3 million states, two minutes; the three-kind four-arm space is the
+/// next test.) Run with `cargo test --release -p kf-mem interleave -- --ignored --nocapture`.
 #[test]
+#[ignore = "two minutes; the exhaustive four-arm, two-space schedules"]
 fn adversarial_guest_n4_two_spaces_every_invariant() {
     let c = cfg(4, false, &[Kind::A, Kind::B], false);
     let rep = explore(c);
