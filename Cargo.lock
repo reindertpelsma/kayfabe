@@ -403,6 +403,10 @@ version = "0.1.0"
 [[package]]
 name = "kf-prof"
 version = "0.1.0"
+dependencies = [
+ "kf-linux-raw",
+ "serde_json",
+]
 
 [[package]]
 name = "kf-qemu"

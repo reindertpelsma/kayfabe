@@ -1,0 +1,12 @@
+MEASURED: restored stage-3 runtime, release -j2, nice 19, own target.
+kf-prof: 40 core +21 runtime +7 sink =68 passed; 0 failed, 0 ignored.
+Python reader: 25 tests including four owned-process live/crash/residence tests.
+kf-linux-raw profiler clock: 2 added tests (selective test target).
+Core mutation table: nine cases, >=2 kills each (header geometry:3).
+Runtime/reader mutation table:20 cases, >=2 kills each.
+rustfmt --check: PASS for changed Rust crates.
+Unsafe-count script:4 passed. Raw perimeter adds three documented blocks only.
+Whole-dependency clippy -Dclippy::all reports nine pre-existing kf-util errors;
+changed-crate --no-deps checks are recorded separately, without modifying dependencies.
+Diagnostic fixtures: CPUID invariant-TSC unavailable; fixture OS-clock flag=1.
+Production source integration, native enabled overhead and GPU A/B: UNRUN.

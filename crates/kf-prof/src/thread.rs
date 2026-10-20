@@ -133,6 +133,11 @@ impl ThreadState {
     pub fn snapshot(&self) -> StateSnapshot {
         self.current
     }
+    /// Start of the current exclusive residence segment (parent resumes get a fresh segment).
+    pub fn segment_since_ns(&self) -> u64 {
+        self.segment_ns
+    }
+
     /// Exact residence integrated through the last transition, excluding child states.
     pub fn exclusive_ns(&self, state: State) -> u64 {
         self.exclusive[state as usize]

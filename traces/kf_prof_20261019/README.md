@@ -1,11 +1,37 @@
-STATUS: RESEARCH, 2026-10-20. K1 resumed with coordinator authorisation.
+STATUS: RESEARCH, 2026-10-20. K1 resumed; core and persistent-runtime checkpoints.
 
-MEASURED: stage 2 core GREEN: 40 tests; all nine mutants killed by at least two
-tests (header geometry now three). New independent cases reject a declared file
-ending inside producer slices and a u64-overflowing declared file length.
-CODE READ: runtime/source integration remains in progress; historical STOP
-evidence below is retained as history, superseded by this resume and the current
-[mutation table](core_mutations.txt). No production claim follows from core tests.
+MEASURED: core GREEN checkpoint `9b5f12f29`: 40 tests; nine hand mutants,
+each killed by >=2 tests, header geometry by three. Stage-3 runtime has 21 tests
+and seven sink tests; all 20 runtime/reader mutants have >=2 independent killing
+tests. Named results: [core](core_mutations.txt), [runtime](runtime_mutations.txt).
+CODE READ: production integrations, all-source coverage, mapped event-ring drain,
+merge, broker writer and overhead proof are still unfinished. Missing frame/call
+sources are UNKNOWN rather than zero. No hardware or production-cost claim.
+
+MEASURED: the runtime writes a fixed 16 MiB mmap and bounded rotating JSONL; tests
+exercise live reads, SIGKILL persistence, torn records, bad geometry/version,
+hostile payloads, nested residence, slot reuse and foreign-file preservation.
+The dev CPU does not advertise invariant TSC; ordinary production Session creation
+refuses before output files. Explicit prof-inject fixtures use a marked diagnostic
+OS clock. This is not a production-clock or hot-path overhead measurement.
+
+CODE READ: reader commands (host MONOTONIC ns):
+
+```sh
+python3 scripts/bench/prof/reader.py tail /path/to/prof.mmap --once
+python3 scripts/bench/prof/reader.py summary /path/to/prof.jsonl
+python3 scripts/bench/prof/reader.py window /path/to/prof.mmap T0 T1
+python3 scripts/bench/prof/reader.py hangs /path/to/prof.mmap --stuck-ms 100
+```
+
+CODE READ: print per-second RmControl-per-frame, retaining raw RmControl counts
+and distinct display/broker new-content frame denominators. The coordinator
+reports that its fall preceded the run-3017 slide; this is motivation supplied by
+the coordinator, not an independently measured K1 causal result. Zero denominators
+are unavailable and missing sources UNKNOWN; summary uses ratio of summed counts.
+
+Historical first-stop report follows; statuses and counts below refer only to
+that stopped run and are superseded by the authorised resume above.
 
 Historical report (2026-10-19, superseded by authorised resume above).
 

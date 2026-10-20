@@ -2,7 +2,9 @@
 #![cfg(feature = "prof")]
 #[test]
 fn profiler_counter_is_monotonic_when_supported() {
-    let Some(a) = kf_linux_raw::prof_clock::counter() else {return;};
+    let Some(a) = kf_linux_raw::prof_clock::counter() else {
+        return;
+    };
     let b = kf_linux_raw::prof_clock::counter().unwrap();
     assert!(a > 0 && b >= a);
 }

@@ -7,8 +7,16 @@ license.workspace = true
 
 [features]
 default = []
-prof = []
+prof = ["dep:kf-linux-raw", "kf-linux-raw/prof", "dep:serde_json"]
 prof-inject = ["prof"]
+
+[dependencies]
+kf-linux-raw = { workspace = true, optional = true }
+serde_json = { version = "1.0", optional = true }
 
 [lints]
 workspace = true
+
+[[example]]
+name = "record_fixture"
+required-features = ["prof-inject"]

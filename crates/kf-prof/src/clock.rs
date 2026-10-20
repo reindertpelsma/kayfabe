@@ -74,6 +74,18 @@ impl Calibration {
         Self::new(c0, ns0, numerator, dt / g, error_ns)
     }
 
+    /// Immutable wire fields: counter/monotonic anchors, frequency numerator,
+    /// frequency denominator, and measured bracket uncertainty.
+    pub fn parts(self) -> [u64; 5] {
+        [
+            self.counter_anchor,
+            self.monotonic_anchor,
+            self.frequency_num,
+            self.frequency_den,
+            self.error_ns,
+        ]
+    }
+
     /// Convert without floating point; invalid/backward/overflow is explicit.
     pub fn to_ns(self, counter: u64) -> Result<u64, ClockError> {
         let delta = counter
