@@ -1,0 +1,3 @@
+STATUS: LIVE,2026-10-20T01:48:03.011142+00:00. MEASURED OFF Code43 (actual8088/oem7),0System4101, SSH reachable.357GSPRPCs; explicit function47 unload ordinal356 recorded before any cleanup request. No0073/CA70/CA7A allocation or NV0073control. QOM display=false,gop=false,ROMempty,ABI580.65.06 verified; source0c87acda8/P19+RPC diagnostics. One enable from the frozen disabled parent, no replay.
+
+Falsified the necessity of display initialization for THIS observed Code43; shared root cause with ON remains to be aligned. No full suite PASS or TDR claimed. Opaque bodies/rawWindowslog remain rental; only publicmetadata/projections exported. Native CBCB/CCU remain unresolved, no guessed replies.
