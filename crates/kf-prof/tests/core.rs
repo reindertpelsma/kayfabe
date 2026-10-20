@@ -1,17 +1,28 @@
 //! K1 core contracts, authored before the implementation.
-use kf_prof::{clock::Calibration, histogram::Histogram, layout::*, ledger::Ledger,
-    publication::{AtomicWords, ReadError, WordStorage, read_record, write_record}, ring::{Event, Ring}};
-use std::sync::atomic::Ordering;
+use kf_prof::{
+    clock::Calibration,
+    histogram::Histogram,
+    layout::*,
+    ledger::Ledger,
+    publication::{AtomicWords, ReadError, WordStorage, read_record, write_record},
+    ring::{Event, Ring},
+};
 use std::sync::Mutex;
+use std::sync::atomic::Ordering;
 
 #[test]
 fn header_exact_offsets_and_zero_reserved_bytes() {
-    let h = Header { pid: 42, flags: 7, start_ns: 900, revision: [b'a';40] };
+    let h = Header {
+        pid: 42,
+        flags: 7,
+        start_ns: 900,
+        revision: [b'a'; 40],
+    };
     let b = h.encode();
     assert_eq!(&b[..8], b"KFPROF01");
-    assert_eq!(u64::from_le_bytes(b[32..40].try_into().unwrap()),42);
-    assert_eq!(u64::from_le_bytes(b[48..56].try_into().unwrap()),900);
-    assert_eq!(&b[128..168], &[b'a';40]);
+    assert_eq!(u64::from_le_bytes(b[32..40].try_into().unwrap()), 42);
+    assert_eq!(u64::from_le_bytes(b[48..56].try_into().unwrap()), 900);
+    assert_eq!(&b[128..168], &[b'a'; 40]);
     assert!(b[200..].iter().all(|&b| b == 0));
     assert_eq!(Header::decode(&b), Ok(h));
 }
@@ -21,250 +32,594 @@ fn layout_regions_are_bounded_aligned_and_disjoint() {
     assert_eq!(THREAD_BASE + THREADS * THREAD_BYTES, LEDGER_BASE);
     assert_eq!(LEDGER_BASE + LEDGER_BYTES, RECORD_BASE);
     assert!(RECORD_BASE + RECORDS * RECORD_BYTES <= FILE_BYTES);
-    for x in [THREAD_BASE, THREAD_BYTES, LEDGER_BASE, RECORD_BASE, RECORD_BYTES] { assert_eq!(x % 64, 0); }
+    for x in [
+        THREAD_BASE,
+        THREAD_BYTES,
+        LEDGER_BASE,
+        RECORD_BASE,
+        RECORD_BYTES,
+    ] {
+        assert_eq!(x % 64, 0);
+    }
     assert_eq!(FILE_BYTES, 16 * 1024 * 1024);
 }
 #[test]
 fn header_rejects_truncated_wrong_version_and_wrong_geometry() {
     let b = Header::default().encode();
-    for n in 0..HEADER_BYTES { assert!(Header::decode(&b[..n]).is_err()); }
-    for offset in [0,8,12,16] { let mut bad=b; bad[offset] ^= 0xff; assert!(Header::decode(&bad).is_err()); }
+    for n in 0..HEADER_BYTES {
+        assert!(Header::decode(&b[..n]).is_err());
+    }
+    for offset in [0, 8, 12, 16] {
+        let mut bad = b;
+        bad[offset] ^= 0xff;
+        assert!(Header::decode(&bad).is_err());
+    }
 }
 #[test]
 fn header_hostile_bytes_never_panic() {
-    let mut seed=17u64;
+    let mut seed = 17u64;
     for _ in 0..1000 {
-        let mut b=[0;HEADER_BYTES];
-        for c in &mut b { seed=seed.wrapping_mul(6364136223846793005).wrapping_add(1); *c=(seed>>32) as u8; }
+        let mut b = [0; HEADER_BYTES];
+        for c in &mut b {
+            seed = seed.wrapping_mul(6364136223846793005).wrapping_add(1);
+            *c = (seed >> 32) as u8;
+        }
         assert!(Header::decode(&b).is_err());
     }
 }
 
-#[derive(Debug,PartialEq)]
-enum Op { Load(usize,Ordering), Store(usize,u64,Ordering), Fence(Ordering) }
-struct Spy { words: AtomicWords<8>, ops: Mutex<Vec<Op>> }
-impl Spy { fn new()->Self {Self { words:AtomicWords::new(),ops:Mutex::new(Vec::new()) }} }
+#[derive(Debug, PartialEq)]
+enum Op {
+    Load(usize, Ordering),
+    Store(usize, u64, Ordering),
+    Fence(Ordering),
+}
+struct Spy {
+    words: AtomicWords<8>,
+    ops: Mutex<Vec<Op>>,
+}
+impl Spy {
+    fn new() -> Self {
+        Self {
+            words: AtomicWords::new(),
+            ops: Mutex::new(Vec::new()),
+        }
+    }
+}
 impl WordStorage for Spy {
-    fn len(&self)->usize { 8 }
-    fn load(&self,i:usize,o:Ordering)->u64 { self.ops.lock().unwrap().push(Op::Load(i,o));self.words.load(i,o) }
-    fn store(&self,i:usize,v:u64,o:Ordering) {self.ops.lock().unwrap().push(Op::Store(i,v,o));self.words.store(i,v,o);}
-    fn fence(&self,o:Ordering) {self.ops.lock().unwrap().push(Op::Fence(o));std::sync::atomic::fence(o);}
+    fn len(&self) -> usize {
+        8
+    }
+    fn load(&self, i: usize, o: Ordering) -> u64 {
+        self.ops.lock().unwrap().push(Op::Load(i, o));
+        self.words.load(i, o)
+    }
+    fn store(&self, i: usize, v: u64, o: Ordering) {
+        self.ops.lock().unwrap().push(Op::Store(i, v, o));
+        self.words.store(i, v, o);
+    }
+    fn fence(&self, o: Ordering) {
+        self.ops.lock().unwrap().push(Op::Fence(o));
+        std::sync::atomic::fence(o);
+    }
 }
 #[test]
 fn seqlock_writer_orders_odd_before_payload_and_release_commit() {
-    let s=Spy::new(); let mut seq=0;
-    write_record(&s,0,&[10,20],&mut seq).unwrap();
-    assert_eq!(*s.ops.lock().unwrap(), vec![Op::Store(0,1,Ordering::Relaxed),Op::Fence(Ordering::Release),
-        Op::Store(1,10,Ordering::Relaxed),Op::Store(2,20,Ordering::Relaxed),Op::Store(0,2,Ordering::Release)]);
-    assert_eq!(seq,2);
+    let s = Spy::new();
+    let mut seq = 0;
+    write_record(&s, 0, &[10, 20], &mut seq).unwrap();
+    assert_eq!(
+        *s.ops.lock().unwrap(),
+        vec![
+            Op::Store(0, 1, Ordering::Relaxed),
+            Op::Fence(Ordering::Release),
+            Op::Store(1, 10, Ordering::Relaxed),
+            Op::Store(2, 20, Ordering::Relaxed),
+            Op::Store(0, 2, Ordering::Release)
+        ]
+    );
+    assert_eq!(seq, 2);
 }
 #[test]
 fn seqlock_reader_orders_acquire_validation_after_payload() {
-    let s=Spy::new();let mut seq=0;write_record(&s,0,&[1,2],&mut seq).unwrap();s.ops.lock().unwrap().clear();
-    assert_eq!(read_record::<2>(&s,0),Ok([1,2]));
-    assert_eq!(*s.ops.lock().unwrap(),vec![Op::Load(0,Ordering::Acquire),Op::Load(1,Ordering::Relaxed),
-        Op::Load(2,Ordering::Relaxed),Op::Fence(Ordering::Acquire),Op::Load(0,Ordering::Relaxed)]);
+    let s = Spy::new();
+    let mut seq = 0;
+    write_record(&s, 0, &[1, 2], &mut seq).unwrap();
+    s.ops.lock().unwrap().clear();
+    assert_eq!(read_record::<2>(&s, 0), Ok([1, 2]));
+    assert_eq!(
+        *s.ops.lock().unwrap(),
+        vec![
+            Op::Load(0, Ordering::Acquire),
+            Op::Load(1, Ordering::Relaxed),
+            Op::Load(2, Ordering::Relaxed),
+            Op::Fence(Ordering::Acquire),
+            Op::Load(0, Ordering::Relaxed)
+        ]
+    );
 }
 #[test]
 fn seqlock_interrupted_writer_is_busy_without_waiting() {
-    let s=AtomicWords::<8>::new();s.store(0,1,Ordering::Relaxed);
-    assert_eq!(read_record::<2>(&s,0),Err(ReadError::Busy));
+    let s = AtomicWords::<8>::new();
+    s.store(0, 1, Ordering::Relaxed);
+    assert_eq!(read_record::<2>(&s, 0), Err(ReadError::Busy));
 }
 #[test]
 fn seqlock_bounds_and_generation_exhaustion_make_no_stores() {
-    let s=Spy::new();let mut seq=u64::MAX-1;
-    assert!(write_record(&s,0,&[1],&mut seq).is_err());
+    let s = Spy::new();
+    let mut seq = u64::MAX - 1;
+    assert!(write_record(&s, 0, &[1], &mut seq).is_err());
     assert!(s.ops.lock().unwrap().is_empty());
-    assert!(write_record(&s,usize::MAX,&[1],&mut 0).is_err());
+    assert!(write_record(&s, usize::MAX, &[1], &mut 0).is_err());
     assert!(s.ops.lock().unwrap().is_empty());
-    assert_eq!(read_record::<8>(&s,0),Err(ReadError::Bounds));
+    assert_eq!(read_record::<8>(&s, 0), Err(ReadError::Bounds));
 }
 #[test]
 fn seqlock_concurrent_snapshots_never_mix_generations() {
-    let s=AtomicWords::<4>::new();
+    let s = AtomicWords::<4>::new();
     std::thread::scope(|scope| {
-        scope.spawn(|| {let mut seq=0;for i in 1..100_000u64 {write_record(&s,0,&[i,!i,i^0x1234],&mut seq).unwrap();}});
-        for _ in 0..100_000 {if let Ok([x,y,z])=read_record::<3>(&s,0) {if x!=0 {assert_eq!(y,!x);assert_eq!(z,x^0x1234);}}}
+        scope.spawn(|| {
+            let mut seq = 0;
+            for i in 1..100_000u64 {
+                write_record(&s, 0, &[i, !i, i ^ 0x1234], &mut seq).unwrap();
+            }
+        });
+        for _ in 0..100_000 {
+            if let Ok([x, y, z]) = read_record::<3>(&s, 0) {
+                if x != 0 {
+                    assert_eq!(y, !x);
+                    assert_eq!(z, x ^ 0x1234);
+                }
+            }
+        }
     });
 }
 
-fn event(n:u64)->Event {Event {ts_ns:n,tag:1,site:2,arg:n,value:!n,scope:0,clock:1}}
+fn event(n: u64) -> Event {
+    Event {
+        ts_ns: n,
+        tag: 1,
+        site: 2,
+        arg: n,
+        value: !n,
+        scope: 0,
+        clock: 1,
+    }
+}
 #[test]
 fn ring_wrap_preserves_fifo_over_many_laps() {
-    let mut r=Ring::<4>::new().unwrap();let (mut w,mut rd)=r.split();
-    for lap in 0..1000 {for i in 0..4 {assert!(w.push(event(lap*4+i)));} for i in 0..4 {assert_eq!(rd.pop(),Some(event(lap*4+i)));}}
-    assert_eq!(rd.pop(),None);
+    let mut r = Ring::<4>::new().unwrap();
+    let (mut w, mut rd) = r.split();
+    for lap in 0..1000 {
+        for i in 0..4 {
+            assert!(w.push(event(lap * 4 + i)));
+        }
+        for i in 0..4 {
+            assert_eq!(rd.pop(), Some(event(lap * 4 + i)));
+        }
+    }
+    assert_eq!(rd.pop(), None);
 }
 #[test]
 fn ring_wrapped_partial_batches_match_reference_queue() {
     use std::collections::VecDeque;
-    let mut r=Ring::<8>::new().unwrap();let (mut w,mut rd)=r.split();let mut q=VecDeque::new();let mut seed=3u64;
-    for i in 0..20_000 {seed=seed.wrapping_mul(6364136223846793005).wrapping_add(1);
-        if seed>>63==0 {let accepted=w.push(event(i));assert_eq!(accepted,q.len()<8);if accepted {q.push_back(event(i));}}
-        else {assert_eq!(rd.pop(),q.pop_front());}}
-    while let Some(e)=q.pop_front() {assert_eq!(rd.pop(),Some(e));}
+    let mut r = Ring::<8>::new().unwrap();
+    let (mut w, mut rd) = r.split();
+    let mut q = VecDeque::new();
+    let mut seed = 3u64;
+    for i in 0..20_000 {
+        seed = seed.wrapping_mul(6364136223846793005).wrapping_add(1);
+        if seed >> 63 == 0 {
+            let accepted = w.push(event(i));
+            assert_eq!(accepted, q.len() < 8);
+            if accepted {
+                q.push_back(event(i));
+            }
+        } else {
+            assert_eq!(rd.pop(), q.pop_front());
+        }
+    }
+    while let Some(e) = q.pop_front() {
+        assert_eq!(rd.pop(), Some(e));
+    }
 }
 #[test]
 fn ring_overflow_is_counted_without_claiming_a_slot() {
-    let mut r=Ring::<2>::new().unwrap();let (mut w,mut rd)=r.split();
-    assert!(w.push(event(1)));assert!(w.push(event(2)));
-    for _ in 0..3 {assert!(!w.push(event(99)));} assert_eq!(w.dropped(),3);
-    assert_eq!(rd.pop(),Some(event(1)));assert!(w.push(event(3)));
-    assert_eq!(rd.pop(),Some(event(2)));assert_eq!(rd.pop(),Some(event(3)));assert_eq!(rd.pop(),None);
+    let mut r = Ring::<2>::new().unwrap();
+    let (mut w, mut rd) = r.split();
+    assert!(w.push(event(1)));
+    assert!(w.push(event(2)));
+    for _ in 0..3 {
+        assert!(!w.push(event(99)));
+    }
+    assert_eq!(w.dropped(), 3);
+    assert_eq!(rd.pop(), Some(event(1)));
+    assert!(w.push(event(3)));
+    assert_eq!(rd.pop(), Some(event(2)));
+    assert_eq!(rd.pop(), Some(event(3)));
+    assert_eq!(rd.pop(), None);
 }
 #[test]
 fn ring_repeated_full_laps_count_all_drops() {
-    let mut r=Ring::<2>::new().unwrap();let (mut w,mut rd)=r.split();
-    for lap in 0..100 {assert!(w.push(event(lap)));assert!(w.push(event(lap)));for _ in 0..7 {assert!(!w.push(event(9)));}rd.pop();rd.pop();}
-    assert_eq!(w.dropped(),700);
+    let mut r = Ring::<2>::new().unwrap();
+    let (mut w, mut rd) = r.split();
+    for lap in 0..100 {
+        assert!(w.push(event(lap)));
+        assert!(w.push(event(lap)));
+        for _ in 0..7 {
+            assert!(!w.push(event(9)));
+        }
+        rd.pop();
+        rd.pop();
+    }
+    assert_eq!(w.dropped(), 700);
 }
 #[test]
-fn ring_invalid_capacity_is_rejected() {assert!(Ring::<0>::new().is_err());assert!(Ring::<3>::new().is_err());}
+fn ring_invalid_capacity_is_rejected() {
+    assert!(Ring::<0>::new().is_err());
+    assert!(Ring::<3>::new().is_err());
+}
 #[test]
 fn ring_concurrent_stress_has_no_loss_among_accepted_records() {
-    let mut r=Ring::<64>::new().unwrap();let (mut w,mut rd)=r.split();
-    std::thread::scope(|s| {let t=s.spawn(move || {let mut accepted=Vec::new();for n in 1..50_000 {if w.push(event(n)) {accepted.push(n);}} accepted});
-        let mut got=Vec::new();while !t.is_finished() {if let Some(e)=rd.pop() {assert_eq!(e.value,!e.arg);got.push(e.arg);}else {std::thread::yield_now();}}
-        while let Some(e)=rd.pop() {got.push(e.arg);}assert_eq!(got,t.join().unwrap());});
+    let mut r = Ring::<64>::new().unwrap();
+    let (mut w, mut rd) = r.split();
+    std::thread::scope(|s| {
+        let t = s.spawn(move || {
+            let mut accepted = Vec::new();
+            for n in 1..50_000 {
+                if w.push(event(n)) {
+                    accepted.push(n);
+                }
+            }
+            accepted
+        });
+        let mut got = Vec::new();
+        while !t.is_finished() {
+            if let Some(e) = rd.pop() {
+                assert_eq!(e.value, !e.arg);
+                got.push(e.arg);
+            } else {
+                std::thread::yield_now();
+            }
+        }
+        while let Some(e) = rd.pop() {
+            got.push(e.arg);
+        }
+        assert_eq!(got, t.join().unwrap());
+    });
 }
 
 #[test]
 fn histogram_all_octave_edges_and_zero_are_exact_buckets() {
-    assert_eq!(Histogram::bucket(0),0);
-    for bit in 0..64 {let lo=1u64<<bit;assert_eq!(Histogram::bucket(lo),bit+1);if bit>0 {assert_eq!(Histogram::bucket(lo-1),bit);}}
-    assert_eq!(Histogram::bucket(u64::MAX),64);
+    assert_eq!(Histogram::bucket(0), 0);
+    for bit in 0..64 {
+        let lo = 1u64 << bit;
+        assert_eq!(Histogram::bucket(lo), bit + 1);
+        if bit > 0 {
+            assert_eq!(Histogram::bucket(lo - 1), bit);
+        }
+    }
+    assert_eq!(Histogram::bucket(u64::MAX), 64);
 }
 #[test]
 fn histogram_conserves_samples_and_arg_of_first_max() {
-    let mut h=Histogram::new();for (ns,arg) in [(0,1),(1,2),(2,3),(3,4),(3,5),(8,6)] {h.record(ns,arg);}
-    assert_eq!(h.count,6);assert_eq!(h.total_ns,17);assert_eq!(h.max_ns,8);assert_eq!(h.max_arg,6);
-    assert_eq!(h.buckets[0],1);assert_eq!(h.buckets[1],1);assert_eq!(h.buckets[2],3);assert_eq!(h.buckets[4],1);
-    let mut tie=Histogram::new();tie.record(5,10);tie.record(5,11);assert_eq!(tie.max_arg,10);
+    let mut h = Histogram::new();
+    for (ns, arg) in [(0, 1), (1, 2), (2, 3), (3, 4), (3, 5), (8, 6)] {
+        h.record(ns, arg);
+    }
+    assert_eq!(h.count, 6);
+    assert_eq!(h.total_ns, 17);
+    assert_eq!(h.max_ns, 8);
+    assert_eq!(h.max_arg, 6);
+    assert_eq!(h.buckets[0], 1);
+    assert_eq!(h.buckets[1], 1);
+    assert_eq!(h.buckets[2], 3);
+    assert_eq!(h.buckets[4], 1);
+    let mut tie = Histogram::new();
+    tie.record(5, 10);
+    tie.record(5, 11);
+    assert_eq!(tie.max_arg, 10);
 }
 #[test]
 fn histogram_saturates_instead_of_wrapping() {
-    let mut h=Histogram::new();h.record(u64::MAX,1);h.record(1,2);assert_eq!(h.total_ns,u64::MAX);assert!(h.saturated);
+    let mut h = Histogram::new();
+    h.record(u64::MAX, 1);
+    h.record(1, 2);
+    assert_eq!(h.total_ns, u64::MAX);
+    assert!(h.saturated);
 }
 #[test]
 fn histogram_seeded_property_matches_log2_reference() {
-    let mut s=5u64;let mut h=Histogram::new();let mut buckets=[0u64;65];
-    for _ in 0..5000 {s=s.wrapping_mul(6364136223846793005).wrapping_add(1);let n=s>>32;let mut q=n;let mut b=0;while q>0 {b+=1;q>>=1;}buckets[b]+=1;h.record(n,0);}
-    assert_eq!(h.buckets,buckets);assert_eq!(h.buckets.iter().sum::<u64>(),h.count);
+    let mut s = 5u64;
+    let mut h = Histogram::new();
+    let mut buckets = [0u64; 65];
+    for _ in 0..5000 {
+        s = s.wrapping_mul(6364136223846793005).wrapping_add(1);
+        let n = s >> 32;
+        let mut q = n;
+        let mut b = 0;
+        while q > 0 {
+            b += 1;
+            q >>= 1;
+        }
+        buckets[b] += 1;
+        h.record(n, 0);
+    }
+    assert_eq!(h.buckets, buckets);
+    assert_eq!(h.buckets.iter().sum::<u64>(), h.count);
 }
 
 #[test]
 fn clock_calibration_converts_frequency_and_anchor() {
-    let c=Calibration::new(100,5000,3_000_000_000,1,10).unwrap();
-    assert_eq!(c.to_ns(100),Ok(5000));assert_eq!(c.to_ns(3100),Ok(6000));assert_eq!(c.to_ns(3_000_000_100),Ok(1_000_005_000));
+    let c = Calibration::new(100, 5000, 3_000_000_000, 1, 10).unwrap();
+    assert_eq!(c.to_ns(100), Ok(5000));
+    assert_eq!(c.to_ns(3100), Ok(6000));
+    assert_eq!(c.to_ns(3_000_000_100), Ok(1_000_005_000));
 }
 #[test]
 fn clock_rational_frequency_and_large_integers_do_not_use_floats() {
-    let c=Calibration::new(0,1,5_000_000_000,2,1).unwrap();assert_eq!(c.to_ns(25),Ok(11));
-    let c=Calibration::new(0,0,1_000_000_000,1,0).unwrap();let t=(1u64<<60)+37;assert_eq!(c.to_ns(t),Ok(t));
+    let c = Calibration::new(0, 1, 5_000_000_000, 2, 1).unwrap();
+    assert_eq!(c.to_ns(25), Ok(11));
+    let c = Calibration::new(0, 0, 1_000_000_000, 1, 0).unwrap();
+    let t = (1u64 << 60) + 37;
+    assert_eq!(c.to_ns(t), Ok(t));
 }
 #[test]
 fn clock_invalid_backwards_and_overflow_are_explicit() {
-    assert!(Calibration::new(0,0,0,1,0).is_err());assert!(Calibration::new(0,0,1,0,0).is_err());
-    let c=Calibration::new(10,u64::MAX,1,1,0).unwrap();assert!(c.to_ns(9).is_err());assert!(c.to_ns(11).is_err());
-    let c=Calibration::new(0,0,1,u64::MAX,0).unwrap();assert!(c.to_ns(u64::MAX).is_err());
+    assert!(Calibration::new(0, 0, 0, 1, 0).is_err());
+    assert!(Calibration::new(0, 0, 1, 0, 0).is_err());
+    let c = Calibration::new(10, u64::MAX, 1, 1, 0).unwrap();
+    assert!(c.to_ns(9).is_err());
+    assert!(c.to_ns(11).is_err());
+    let c = Calibration::new(0, 0, 1, u64::MAX, 0).unwrap();
+    assert!(c.to_ns(u64::MAX).is_err());
 }
 #[test]
 fn clock_pair_estimator_matches_observed_interval() {
-    let c=Calibration::from_pair(100,5000,3100,6000,10).unwrap();assert_eq!(c.to_ns(1600),Ok(5500));
-    assert!(Calibration::from_pair(100,5000,99,6000,0).is_err());assert!(Calibration::from_pair(100,5000,200,5000,0).is_err());
+    let c = Calibration::from_pair(100, 5000, 3100, 6000, 10).unwrap();
+    assert_eq!(c.to_ns(1600), Ok(5500));
+    assert!(Calibration::from_pair(100, 5000, 99, 6000, 0).is_err());
+    assert!(Calibration::from_pair(100, 5000, 200, 5000, 0).is_err());
 }
 
 #[test]
 fn ledger_reuse_rejects_stale_close() {
-    let mut l=Ledger::<2,2>::new(1);let a=l.open(0,99,10).unwrap();assert!(l.close(a,20));
-    let b=l.open(0,99,30).unwrap();assert!(!l.close(a,40));assert_eq!(l.entries().count(),1);assert!(l.close(b,50));
+    let mut l = Ledger::<2, 2>::new(1);
+    let a = l.open(0, 99, 10).unwrap();
+    assert!(l.close(a, 20));
+    let b = l.open(0, 99, 30).unwrap();
+    assert!(!l.close(a, 40));
+    assert_eq!(l.entries().count(), 1);
+    assert!(l.close(b, 50));
 }
 #[test]
 fn ledger_same_id_on_reused_slot_has_new_generation() {
-    let mut l=Ledger::<1,1>::new(1);let a=l.open(0,7,10).unwrap();assert!(l.close(a,20));let b=l.open(0,7,30).unwrap();
-    assert_eq!(a.slot(),b.slot());assert_ne!(a.generation(),b.generation());assert!(!l.close(a,40));assert!(l.close(b,50));
+    let mut l = Ledger::<1, 1>::new(1);
+    let a = l.open(0, 7, 10).unwrap();
+    assert!(l.close(a, 20));
+    let b = l.open(0, 7, 30).unwrap();
+    assert_eq!(a.slot(), b.slot());
+    assert_ne!(a.generation(), b.generation());
+    assert!(!l.close(a, 40));
+    assert!(l.close(b, 50));
 }
 #[test]
 fn ledger_kind_and_owner_identity_cannot_cross_close() {
-    let mut a=Ledger::<2,2>::new(1);let mut b=Ledger::<2,2>::new(2);
-    let x=a.open(1,42,0).unwrap();let y=b.open(1,42,0).unwrap();assert!(!b.close(x,1));assert!(!a.close(y,1));assert!(a.close(x,1));assert!(b.close(y,1));
+    let mut a = Ledger::<2, 2>::new(1);
+    let mut b = Ledger::<2, 2>::new(2);
+    let x = a.open(1, 42, 0).unwrap();
+    let y = b.open(1, 42, 0).unwrap();
+    assert!(!b.close(x, 1));
+    assert!(!a.close(y, 1));
+    assert!(a.close(x, 1));
+    assert!(b.close(y, 1));
 }
 #[test]
 fn ledger_overflow_does_not_overwrite_and_is_counted() {
-    let mut l=Ledger::<2,1>::new(1);let a=l.open(0,1,10).unwrap();assert!(l.open(0,2,20).is_none());assert_eq!(l.dropped(),1);
-    assert_eq!(l.entries().next().unwrap().id,1);assert!(l.close(a,30));assert!(l.open(0,3,40).is_some());
+    let mut l = Ledger::<2, 1>::new(1);
+    let a = l.open(0, 1, 10).unwrap();
+    assert!(l.open(0, 2, 20).is_none());
+    assert_eq!(l.dropped(), 1);
+    assert_eq!(l.entries().next().unwrap().id, 1);
+    assert!(l.close(a, 30));
+    assert!(l.open(0, 3, 40).is_some());
 }
 #[test]
 fn ledger_overdue_is_advisory_and_boundary_is_strict() {
-    let mut l=Ledger::<1,2>::new(1);let a=l.open(0,42,100).unwrap();
-    let e=*l.entries().next().unwrap();assert_eq!(e.age_ns(90),0);assert!(!e.overdue(200,100));assert!(e.overdue(201,100));assert!(l.close(a,202));
+    let mut l = Ledger::<1, 2>::new(1);
+    let a = l.open(0, 42, 100).unwrap();
+    let e = *l.entries().next().unwrap();
+    assert_eq!(e.age_ns(90), 0);
+    assert!(!e.overdue(200, 100));
+    assert!(e.overdue(201, 100));
+    assert!(l.close(a, 202));
 }
 #[test]
 fn ledger_full_kinds_are_independent() {
-    let mut l=Ledger::<3,1>::new(1);for k in 0..3 {assert!(l.open(k,k as u64,0).is_some());}for k in 0..3 {assert!(l.open(k,9,0).is_none());}
-    assert_eq!(l.dropped(),3);assert_eq!(l.entries().count(),3);assert!(l.open(3,0,0).is_none());
+    let mut l = Ledger::<3, 1>::new(1);
+    for k in 0..3 {
+        assert!(l.open(k, k as u64, 0).is_some());
+    }
+    for k in 0..3 {
+        assert!(l.open(k, 9, 0).is_none());
+    }
+    assert_eq!(l.dropped(), 3);
+    assert_eq!(l.entries().count(), 3);
+    assert!(l.open(3, 0, 0).is_none());
 }
 
 #[test]
 fn seqlock_model_requires_fences_on_both_sides() {
     // Observing a new payload word must carry the writer's odd sequence before
     // the reader's final validation. Assert the actual backend operation trace.
-    let s=Spy::new();let mut seq=0;write_record(&s,0,&[1,2,3],&mut seq).unwrap();
-    assert!(s.ops.lock().unwrap().contains(&Op::Fence(Ordering::Release)));
-    s.ops.lock().unwrap().clear();read_record::<3>(&s,0).unwrap();
-    assert!(s.ops.lock().unwrap().contains(&Op::Fence(Ordering::Acquire)));
+    let s = Spy::new();
+    let mut seq = 0;
+    write_record(&s, 0, &[1, 2, 3], &mut seq).unwrap();
+    assert!(
+        s.ops
+            .lock()
+            .unwrap()
+            .contains(&Op::Fence(Ordering::Release))
+    );
+    s.ops.lock().unwrap().clear();
+    read_record::<3>(&s, 0).unwrap();
+    assert!(
+        s.ops
+            .lock()
+            .unwrap()
+            .contains(&Op::Fence(Ordering::Acquire))
+    );
 }
 #[test]
 fn seqlock_every_writer_commit_is_release_and_every_reader_starts_acquire() {
-    let s=Spy::new();let mut seq=0;
-    for _ in 0..10 {s.ops.lock().unwrap().clear();write_record(&s,0,&[7],&mut seq).unwrap();
-        assert_eq!(s.ops.lock().unwrap().last(),Some(&Op::Store(0,seq,Ordering::Release)));
-        s.ops.lock().unwrap().clear();read_record::<1>(&s,0).unwrap();
-        assert_eq!(s.ops.lock().unwrap().first(),Some(&Op::Load(0,Ordering::Acquire)));}
+    let s = Spy::new();
+    let mut seq = 0;
+    for _ in 0..10 {
+        s.ops.lock().unwrap().clear();
+        write_record(&s, 0, &[7], &mut seq).unwrap();
+        assert_eq!(
+            s.ops.lock().unwrap().last(),
+            Some(&Op::Store(0, seq, Ordering::Release))
+        );
+        s.ops.lock().unwrap().clear();
+        read_record::<1>(&s, 0).unwrap();
+        assert_eq!(
+            s.ops.lock().unwrap().first(),
+            Some(&Op::Load(0, Ordering::Acquire))
+        );
+    }
 }
 #[test]
 fn ledger_seeded_model_preserves_every_live_obligation() {
-    let mut l=Ledger::<2,4>::new(1);let mut live=Vec::new();let mut seed=11u64;
-    for id in 0..10_000 {seed=seed.wrapping_mul(6364136223846793005).wrapping_add(1);
-        if seed&1==0 {if let Some(t)=l.open(((seed>>20)&1) as usize,id,id) {live.push((t,id));}}
-        else if !live.is_empty() {let index=(seed as usize)%live.len();let (t,_)=live.swap_remove(index);assert!(l.close(t,id));assert!(!l.close(t,id));}
-        let mut actual=l.entries().map(|e| e.id).collect::<Vec<_>>();let mut expected=live.iter().map(|e| e.1).collect::<Vec<_>>();actual.sort_unstable();expected.sort_unstable();assert_eq!(actual,expected);
+    let mut l = Ledger::<2, 4>::new(1);
+    let mut live = Vec::new();
+    let mut seed = 11u64;
+    for id in 0..10_000 {
+        seed = seed.wrapping_mul(6364136223846793005).wrapping_add(1);
+        if seed & 1 == 0 {
+            if let Some(t) = l.open(((seed >> 20) & 1) as usize, id, id) {
+                live.push((t, id));
+            }
+        } else if !live.is_empty() {
+            let index = (seed as usize) % live.len();
+            let (t, _) = live.swap_remove(index);
+            assert!(l.close(t, id));
+            assert!(!l.close(t, id));
+        }
+        let mut actual = l.entries().map(|e| e.id).collect::<Vec<_>>();
+        let mut expected = live.iter().map(|e| e.1).collect::<Vec<_>>();
+        actual.sort_unstable();
+        expected.sort_unstable();
+        assert_eq!(actual, expected);
     }
 }
 
 #[test]
 fn thread_slice_is_cache_line_aligned_and_bounded() {
     use kf_prof::thread::ThreadState;
-    assert_eq!(std::mem::align_of::<ThreadState>(),64);
-    assert!(std::mem::size_of::<ThreadState>()<=THREAD_BYTES);
+    assert_eq!(std::mem::align_of::<ThreadState>(), 64);
+    assert!(std::mem::size_of::<ThreadState>() <= THREAD_BYTES);
 }
 #[test]
 fn thread_nested_spans_integrate_exclusive_time_and_restore_parent() {
-    use kf_prof::{thread::ThreadState,tables::{State,Site}};
-    let mut t=ThreadState::new(100);
-    let a=t.enter(State::Running,Site::TrapDispatch,7,110).unwrap();
-    let b=t.enter(State::Mutex,Site::WorkerPark,9,120).unwrap();
-    assert_eq!(t.snapshot().site,Site::WorkerPark);assert_eq!(t.snapshot().enter_ns,120);
-    assert!(t.leave(b,150));assert_eq!(t.snapshot().arg,7);assert_eq!(t.snapshot().enter_ns,110);
-    assert!(t.leave(a,180));assert_eq!(t.exclusive_ns(State::Running),40);
-    assert_eq!(t.exclusive_ns(State::Mutex),30);assert_eq!(t.histogram(State::Running).total_ns,70);
-    assert_eq!(t.histogram(State::Mutex).max_arg,9);assert_eq!(t.snapshot().state,State::Idle);
+    use kf_prof::{
+        tables::{Site, State},
+        thread::ThreadState,
+    };
+    let mut t = ThreadState::new(100);
+    let a = t.enter(State::Running, Site::TrapDispatch, 7, 110).unwrap();
+    let b = t.enter(State::Mutex, Site::WorkerPark, 9, 120).unwrap();
+    assert_eq!(t.snapshot().site, Site::WorkerPark);
+    assert_eq!(t.snapshot().enter_ns, 120);
+    assert!(t.leave(b, 150));
+    assert_eq!(t.snapshot().arg, 7);
+    assert_eq!(t.snapshot().enter_ns, 110);
+    assert!(t.leave(a, 180));
+    assert_eq!(t.exclusive_ns(State::Running), 40);
+    assert_eq!(t.exclusive_ns(State::Mutex), 30);
+    assert_eq!(t.histogram(State::Running).total_ns, 70);
+    assert_eq!(t.histogram(State::Mutex).max_arg, 9);
+    assert_eq!(t.snapshot().state, State::Idle);
 }
 #[test]
 fn thread_span_overflow_and_bad_close_never_corrupt_current_state() {
-    use kf_prof::{thread::ThreadState,tables::{State,Site}};
-    let mut t=ThreadState::new(0);let mut tokens=Vec::new();
-    for n in 0..8 {tokens.push(t.enter(State::Running,Site::TrapDispatch,n,n).unwrap());}
-    assert!(t.enter(State::Mutex,Site::Init,99,10).is_err());assert_eq!(t.dropped(),1);
-    let before=t.snapshot();assert!(!t.leave(tokens[0],20));assert_eq!(t.snapshot(),before);
-    assert!(!t.leave(*tokens.last().unwrap(),0));assert_eq!(t.snapshot(),before);
-    for token in tokens.into_iter().rev() {assert!(t.leave(token,30));}
-    assert_eq!(t.snapshot().state,State::Idle);
+    use kf_prof::{
+        tables::{Site, State},
+        thread::ThreadState,
+    };
+    let mut t = ThreadState::new(0);
+    let mut tokens = Vec::new();
+    for n in 0..8 {
+        tokens.push(t.enter(State::Running, Site::TrapDispatch, n, n).unwrap());
+    }
+    assert!(t.enter(State::Mutex, Site::Init, 99, 10).is_err());
+    assert_eq!(t.dropped(), 1);
+    let before = t.snapshot();
+    assert!(!t.leave(tokens[0], 20));
+    assert_eq!(t.snapshot(), before);
+    assert!(!t.leave(*tokens.last().unwrap(), 0));
+    assert_eq!(t.snapshot(), before);
+    for token in tokens.into_iter().rev() {
+        assert!(t.leave(token, 30));
+    }
+    assert_eq!(t.snapshot().state, State::Idle);
 }
 #[test]
 fn tables_have_stable_unique_ids_and_every_kind_has_a_bound() {
-    use kf_prof::tables::{State,Site,Kind};
-    assert_eq!(Kind::ALL.len(),12);assert_eq!(Site::Init as u16,1);assert_eq!(State::Trap as u16,10);
-    for (i,k) in Kind::ALL.iter().enumerate() {assert_eq!(*k as usize,i);assert!(k.bound_ns()>0);}
-    for (i,s) in Site::ALL.iter().enumerate() {assert_eq!(*s as usize,i);assert!(!s.name().is_empty());}
+    use kf_prof::tables::{Kind, Site, State};
+    assert_eq!(Kind::ALL.len(), 12);
+    assert_eq!(Site::Init as u16, 1);
+    assert_eq!(State::Trap as u16, 10);
+    for (i, k) in Kind::ALL.iter().enumerate() {
+        assert_eq!(*k as usize, i);
+        assert!(k.bound_ns() > 0);
+    }
+    for (i, s) in Site::ALL.iter().enumerate() {
+        assert_eq!(*s as usize, i);
+        assert!(!s.name().is_empty());
+    }
+}
+
+#[test]
+fn thread_exact_residence_conserves_elapsed_time_across_reentry() {
+    use kf_prof::{thread::ThreadState,tables::{State,Site}};
+    let mut t=ThreadState::new(0);
+    let a=t.enter(State::Running,Site::TrapDispatch,1,10).unwrap();
+    let b=t.enter(State::EventWait,Site::WorkerPark,2,20).unwrap();
+    assert!(t.leave(b,30));
+    let c=t.enter(State::HostIoctl,Site::HostRmIoctl,3,40).unwrap();
+    assert!(t.leave(c,60));assert!(t.leave(a,80));
+    assert_eq!(t.exclusive_ns(State::Running),40);
+    assert_eq!(t.exclusive_ns(State::EventWait),10);
+    assert_eq!(t.exclusive_ns(State::HostIoctl),20);
+    assert_eq!(t.exclusive_ns(State::Idle),10);
+    let total=State::ALL.iter().map(|s| t.exclusive_ns(*s)).sum::<u64>();assert_eq!(total,80);
+}
+#[test]
+fn header_rejects_unknown_endianness_without_interpreting_counts() {
+    let mut b=Header::default().encode();b[12..16].reverse();b[168..176].copy_from_slice(&u64::MAX.to_le_bytes());
+    assert_eq!(Header::decode(&b),Err(LayoutError::Version));
+}
+
+#[test]
+fn header_declared_file_ending_inside_producer_slices_is_rejected() {
+    // Fixed v1 never imports slice offsets/sizes from hostile header bytes.
+    // A forged file length which cannot contain even its fixed slices is invalid.
+    let mut header = Header::default().encode();
+    for len in [0, HEADER_BYTES as u64, (LEDGER_BASE - 1) as u64] {
+        header[16..24].copy_from_slice(&len.to_le_bytes());
+        assert_eq!(Header::decode(&header), Err(LayoutError::Geometry));
+    }
+}
+
+#[test]
+fn header_overflowing_declared_length_cannot_expand_reader_bounds() {
+    let mut header = Header::default().encode();
+    header[16..24].copy_from_slice(&u64::MAX.to_le_bytes());
+    let result = std::panic::catch_unwind(|| Header::decode(&header));
+    assert_eq!(result.unwrap(), Err(LayoutError::Geometry));
+    // Validation operates only on the provided header. No attacker-sized read.
+    for n in [0, 23, HEADER_BYTES - 1] {
+        assert_eq!(Header::decode(&header[..n]), Err(LayoutError::Truncated));
+    }
 }
