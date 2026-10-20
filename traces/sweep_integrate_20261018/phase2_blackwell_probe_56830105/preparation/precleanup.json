@@ -1,0 +1,13 @@
+{
+  "utc": "2026-10-20T04:05:12.233914+00:00",
+  "generic_install_log_sha256": "e0cab8883110460d9ee1228c5e085ca87e733d605512a511e2c7d021c373cdf9",
+  "generic_install_selected_lines": [
+    "[2026-10-20T03:56:31Z] START check-boot",
+    "[2026-10-20T03:56:31Z] QEMU_START tag=installcheck boot=1 pid=95566 log=logs/installcheck_b1_qemu.log",
+    "[2026-10-20T03:58:51Z] EXIT check-boot rc=0"
+  ],
+  "setup_rpc_trace_lines": 0,
+  "baseline_started": false,
+  "candidate_started": false,
+  "setup_qemu_log_sha256": "9b4cde524fc18e16d1c259d0bcb5cc7b11d8d902869caf640a0ed4a546c34626"
+}

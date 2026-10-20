@@ -1,0 +1,10 @@
+{
+  "baseline": "7f22d18dfff8083345cdb54a4666018dca845384",
+  "candidate": "aa8fdea9cb0e00fd4e5ec148461d1e805d308e0c",
+  "changed_code_paths": [
+    "crates/kf-abi/src/capability.rs",
+    "crates/kf-abi/tests/capability_policy_550.rs",
+    "crates/kf-chip/src/classes.rs"
+  ],
+  "merged": false
+}

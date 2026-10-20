@@ -1,0 +1,13 @@
+{
+  "utc": "2026-10-20T04:04:23.615289+00:00",
+  "own_id": 56830105,
+  "baseline_source": "7f22d18dfff8083345cdb54a4666018dca845384",
+  "candidate_source": "aa8fdea9cb0e00fd4e5ec148461d1e805d308e0c",
+  "baseline_result": "UNRUN",
+  "candidate_result": "UNRUN",
+  "reason": "Final baseline latest-start 04:04 UTC reached while disabled Windows 580 binding preparation was unfinished. No arm was invoked. Paired same-parent experiment cannot be completed within the fixed operational window; do not extend, do not start unmatched candidate.",
+  "product_gpu_initializations": 0,
+  "guard_refusals": 0,
+  "falsifier_outcome": "H-NVDEC-OFF remains untested; no PASS, Code43, or runtime efficacy conclusion from this lease. Native Linux validation and generic Windows provisioning are measured separately.",
+  "next_action": "Export preparation receipts, orderly stop own setup VM, push, destroy exact own ID and verify API absence. No further lease."
+}

@@ -1,0 +1,33 @@
+B1_BIND_ONLY_NO_ENABLE; not a measured GPU initialization arm. H_WIN580: falsified by wrong driver, Code!=0, missing desktop, CUDA/D3D failure, blank image, or System4101 during >=421s hold.
+WINDOWS580_START source=7f22d18dfff8083345cdb54a4666018dca845384 2026-10-20T03:59:24+00:00
+KF3_WIN_USER_CHANNELS_PASSTHROUGH=1
+KF3_WIN_TWIN_DEFAPI_OBJECT=1
+KF3_KERNEL_GR_CE=1
+KF3_KERNEL_GR_WORK=1
+KF3_TRANSLATED_CE_RELAY=1
+KF3_DEFERRED_API=1
+KF3_PREEMPT_BIND_PROBE=1
+KF3_DISPLAY_IMP_ENABLE=1
+KF3_DISPLAY_CTRL_PROBE=1
+KF3_ZCULL_BIND_PROBE=1
+KF3_SW_RUNLIST_HOST_OWNED=1
+KF3_ASYNC_PREEMPT=1
+KF3_GFX_POOL_PROBE=1
+KF3_SW_RUNLIST_PROBE=1
+KF3_MEMORY_LIST_PROBE=1
+KF3_DISPLAY_SDR_COLOR=1
+KF3_DISPLAY_CAPS_PROBE=1
+KF3_DISPLAY_LUT_MIRROR=1
+KF3_DISPLAY_ILUT_OFFSET_256=1
+KF_GOP_EXPORT target=x86_64-unknown-uefi bytes=9216 out=/workspace/sweep-win-56830105/secureboot/kf-gop.7f22d18d.efi
+Signing Unsigned original image
+Signature verification OK
+[2026-10-20T03:59:24Z] KF_GOP_SIGNED /workspace/sweep-win-56830105/secureboot/kf-gop.7f22d18d.signed.efi sha256=7f9c173b88061ba0c8c29b45a4250d86c6e8ab20ca1744b0409f4003432bc8cc unsigned_sha256=e2616ad8d4cb09da88399218144b6bdea9d2cb3148b701964f926604b7d6dff6
+[2026-10-20T03:59:24Z] detached: tag=bw580_bind_bind, log logs/bw580_bind_bind_run.log (stdout logs/bw580_bind_bind_run.out)
+KF_SSH_UP
+{"pid": 96977, "source": "7f22d18dfff8083345cdb54a4666018dca845384", "exe": "/workspace/bench/kf3-bins/7f22d18d/qemu-system-x86_64", "sha256": "b33394dd23e515994a4478747a52311d05f1a1bffbb300eb4415f2a0e22220ef", "argv": ["/workspace/bench/kf3-bins/7f22d18d/qemu-system-x86_64", "-name", "kfwin,debug-threads=on", "-object", "memory-backend-memfd,id=ram0,size=8192M,share=on", "-machine", "pc-q35-10.2,accel=kvm,smm=on,memory-backend=ram0", "-m", "8192", "-smp", "8,sockets=1,cores=8,threads=1", "-global", "driver=cfi.pflash01,property=secure,value=on", "-drive", "if=pflash,format=raw,unit=0,readonly=on,file=/usr/share/OVMF/OVMF_CODE_4M.secboot.fd", "-drive", "if=pflash,format=raw,unit=1,file=/workspace/sweep-win-56830105/kfwin/firmware/OVMF_VARS.fd", "-global", "ICH9-LPC.disable_s3=1", "-global", "ICH9-LPC.disable_s4=1", "-rtc", "base=utc,driftfix=slew", "-global", "kvm-pit.lost_tick_policy=discard", "-chardev", "socket,id=chrtpm,path=/workspace/sweep-win-56830105/kfwin/run/swtpm.sock", "-tpmdev", "emulator,id=tpm0,chardev=chrtpm", "-device", "tpm-crb,tpmdev=tpm0", "-netdev", "user,id=n0,restrict=on,hostfwd=tcp:127.0.0.1:2224-:22", "-device", "virtio-net-pci,netdev=n0,mac=52:54:00:4b:46:57", "-device", "virtio-serial-pci,id=vser0", "-chardev", "socket,id=qga0,path=/workspace/sweep-win-56830105/kfwin/run/qga.sock,server=on,wait=off", "-device", "virtserialport,bus=vser0.0,chardev=qga0,name=org.qemu.guest_agent.0", "-object", "rng-random,id=rng0,filename=/dev/urandom", "-device", "virtio-rng-pci,rng=rng0", "-device", "pvpanic", "-display", "none", "-vnc", "unix:/workspace/sweep-win-56830105/kfwin/run/vnc.sock", "-qmp", "unix:/workspace/sweep-win-56830105/kfwin/run/qmp.sock,server=on,wait=off", "-qmp", "unix:/workspace/sweep-win-56830105/kfwin/run/qmp-ev.sock,server=on,wait=off", "-msg", "timestamp=on", "-cpu", "host,-vmx,hv-relaxed,hv-vapic,hv-spinlocks=0x1fff,hv-time,hv-vpindex,hv-synic,hv-stimer,hv-crash", "-action", "reboot=shutdown,panic=none", "-drive", "file=/workspace/sweep-win-56830105/kfwin/disk/bw580_bind.qcow2,if=none,id=sys,format=qcow2,discard=unmap", "-device", "virtio-blk-pci,drive=sys,bootindex=0", "-vga", "none", "-device", "kf3-gpu,fb-mb=8192,bar1-size=134217728,bar2-size=33554432,display=on,gop=on,gop-efi=/workspace/sweep-win-56830105/secureboot/kf-gop.7f22d18d.signed.efi,id=kf0,guest-driver=580.65.06", "-serial", "file:/workspace/sweep-win-56830105/kfwin/logs/bw580_bind_bind_b1_serial.log"], "flags": {"KF3_KERNEL_GR_WORK": "1", "KF3_GFX_POOL_PROBE": "1", "KF3_RPC_BODY_TRACE": "1", "KF3_TRANSLATED_CE_RELAY": "1", "KF3_RPC_TRACE": "1", "KF3_DISPLAY_CTRL_PROBE": "1", "KF3_MEMORY_LIST_PROBE": "1", "KF3_WIN_USER_CHANNELS_PASSTHROUGH": "1", "KF3_SW_RUNLIST_PROBE": "1", "KF3_ZCULL_BIND_PROBE": "1", "KF3_DEFERRED_API": "1", "KF3_WIN_TWIN_DEFAPI_OBJECT": "1", "KF3_DISPLAY_ILUT_OFFSET_256": "1", "KF3_SW_RUNLIST_HOST_OWNED": "1", "KF3_DISPLAY_SDR_COLOR": "1", "KF3_KERNEL_GR_CE": "1", "KF3_DISPLAY_LUT_MIRROR": "1", "KF3_ASYNC_PREEMPT": "1", "KF3_DISPLAY_IMP_ENABLE": "1", "KF3_PREEMPT_BIND_PROBE": "1", "KF3_DISPLAY_CAPS_PROBE": "1"}, "p19_count": 19}
+[2026-10-20T04:01:01Z] START nv-extract
+[2026-10-20T04:01:28Z] NV_EXTRACTED /workspace/sweep-win-56830105/cache/nv580.88/Display.Driver (2.6G)
+[2026-10-20T04:01:28Z] EXIT nv-extract rc=0
+[2026-10-20T04:01:36Z] START nv-copy
+[2026-10-20T04:03:25Z] EXIT nv-copy rc=0

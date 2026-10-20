@@ -1,0 +1,37 @@
+{
+  "utc": "2026-10-20T04:05:12.264469+00:00",
+  "own_id": 56830105,
+  "kind": "preparation only; no product initialization; both paired arms UNRUN",
+  "files": [
+    {
+      "source": "/root/prov/sweep_20261020_provision.log",
+      "source_sha256": "e6c240ad0edcaa2472d97e0e33d276988091339c45fe57a3eb5534974ef130ed",
+      "export": "provision.txt",
+      "export_sha256": "e6c240ad0edcaa2472d97e0e33d276988091339c45fe57a3eb5534974ef130ed"
+    },
+    {
+      "source": "/root/prov/sweep_candidate_build.log",
+      "source_sha256": "d0891e91177f5087a9d6877b8d3a519b16f3a3da6807e3336bede4eee936d704",
+      "export": "candidate_build.txt",
+      "export_sha256": "5c7a72268adba018f430747fe715eecb27f4ad1e2eb8bed93578a1de21355637"
+    },
+    {
+      "source": "/root/prov/sweep_candidate_scope.json",
+      "source_sha256": "907d331dabbd6718258be46f617787d9ff996fa480b79469e822e9039f357d5a",
+      "export": "candidate_scope.json",
+      "export_sha256": "907d331dabbd6718258be46f617787d9ff996fa480b79469e822e9039f357d5a"
+    },
+    {
+      "source": "/root/prov/sweep_probe_binary_hashes.txt",
+      "source_sha256": "53aab9ccb3b582c8bc51b31c05e09df80f8be8daf3d9b196f19c0beb4e5a4cf0",
+      "export": "binary_hashes.txt",
+      "export_sha256": "53aab9ccb3b582c8bc51b31c05e09df80f8be8daf3d9b196f19c0beb4e5a4cf0"
+    },
+    {
+      "source": "/root/prov/sweep_windows580.log",
+      "source_sha256": "3592506850b0b66c8c5a1bc23f8e735aed9d751a634934dbbf1bd1cfb52884c2",
+      "export": "windows580_binding.txt",
+      "export_sha256": "45ade34f2343567f1526a4714768193999469b1f035b333623023ab78d19df9f"
+    }
+  ]
+}
