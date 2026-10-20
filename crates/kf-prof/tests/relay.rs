@@ -558,3 +558,52 @@ fn repeated_zero_after_get_wrap_does_not_reset_the_change_time() {
         .unwrap();
     assert_eq!(w[15], 20);
 }
+
+#[test]
+fn unchanged_guest_get_retains_its_own_change_time() {
+    let mut g = RelayGauge::new(1, 1, 10);
+    g.observe(
+        20,
+        Observation {
+            guest_get: Some(7),
+            ..Observation::default()
+        },
+    )
+    .unwrap();
+    let w = g
+        .observe(
+            40,
+            Observation {
+                guest_get: Some(7),
+                private_get: Some(3),
+                ..Observation::default()
+            },
+        )
+        .unwrap();
+    assert_eq!(w[30], 20);
+    assert_eq!(w[15], 40);
+}
+#[test]
+fn guest_get_wrap_changes_once_and_no_fresh_read_keeps_its_age() {
+    let mut g = RelayGauge::new(1, 1, 10);
+    g.observe(
+        20,
+        Observation {
+            guest_get: Some(7),
+            ..Observation::default()
+        },
+    )
+    .unwrap();
+    assert_eq!(
+        g.observe(
+            30,
+            Observation {
+                guest_get: Some(0),
+                ..Observation::default()
+            }
+        )
+        .unwrap()[30],
+        30
+    );
+    assert_eq!(g.observe(90, Observation::default()).unwrap()[30], 30);
+}

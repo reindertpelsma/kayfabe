@@ -37,4 +37,10 @@ class RelayReaderTests(unittest.TestCase):
     def test_declared_source_count_cannot_expand_reader_work(self):
         b=self.profile(self.values());struct.pack_into('<Q',b,200,2**64-1)
         self.assertEqual(len(self.read(b)['relays']),1)
+    def test_guest_depth_and_change_time_are_separate_from_private_ring(self):
+        v=self.values();v[6]|=24;v[17]=7;v[18]=1;v[19]=8;v[31]=60
+        q=self.read(self.profile(v))['relays'][0];self.assertEqual(q['guest_depth'],2);self.assertEqual(q['guest_get_changed_ns'],60);self.assertEqual(q['private_depth'],4)
+    def test_missing_guest_get_never_invents_depth_or_change_age(self):
+        v=self.values();v[6]|=16;v[18]=1;v[19]=8
+        q=self.read(self.profile(v))['relays'][0];self.assertIsNone(q['guest_depth']);self.assertIsNone(q['guest_get_changed_ns'])
 if __name__=='__main__':unittest.main()
