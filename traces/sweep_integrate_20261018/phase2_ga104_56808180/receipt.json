@@ -34,5 +34,15 @@
   "native_caps_scope": "privileged read-only host595 oracle only; no captured page shipped",
   "linux580_raw": "FAIL29/30; R34 CE guest-RAM TIMEOUT180; C4 control ACTIVE",
   "followon_state": "stopped rc1 before CUDA",
-  "c4_controller_pid": 121302
+  "c4_controller_pid": 121302,
+  "c4_r34_control": {
+    "revision": "0452613b5c71cb175271230b3e14c8e3c3eef2db",
+    "result": "PASS",
+    "elapsed_seconds": 159,
+    "budget_seconds": 180,
+    "n": 1,
+    "client_rc": 0,
+    "evidence": "c4_ce_control/",
+    "interpretation": "Integrated timeout vs candidate4 pass; causality/variance unresolved; no third arm"
+  }
 }

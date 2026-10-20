@@ -88,3 +88,5 @@ KF3_DISPLAY_ILUT_OFFSET_256=1
 
 Public guest ABI for historical 580.88 is 580.65.06; for 581.51 it is
 580.94.02. A native firmware version is a separately recorded fact.
+
+MEASURED GA104580 R34 matched candidate-4 control0452613b5: PASS159s versus integrated e8553e6c timeout180s, n=1 each, fixed180s budget. Evidence phase2_ga104_56808180/c4_ce_control/. Subsequent Linux arms deferred for owner Windows priority.

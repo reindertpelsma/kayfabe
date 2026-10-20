@@ -71,3 +71,5 @@ Entries below will record every created ID and actual/conservative cost.
   before SSH. Observed rate0.16USD/h with180GBdisk, maximum runtime0.48USD plus
   transfer. Harddeadline2026-10-20T02:48:46Z, cleanup reserve02:40UTC. Resource
   and driver-health preflight pending; no hardware result is implied.
+
+2026-10-20 01:05UTC owner Windows-night amendment: API credit39.7773407655USD. Cap30USD total sweep, stop/report25USD; reserve5USD; at most Ada+Blackwell Windows two boxes, <=180min each, ALL teardown by2026-10-20 04:30UTC (06:30CEST). Credit>=35 qualifies conservatively. Own settled invoices so far3.782USD including partial GA1040.184USD; not final charges. Shared credit is not own spend attribution.
