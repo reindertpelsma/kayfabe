@@ -1,6 +1,8 @@
 **STATUS: LIVE in the code, 2026-10-14** (branch `claude/userring-eventloop-20261014`: tests-first commit `95a9ad422`, then the
 fix; GPU-free results in §5-§6, Linux hardware validation in §8). Written DESIGN-ONLY first; §2 and §5 keep the
 state of the code BEFORE the fix (77eaf7620) as the record of what the tests found.
+**ADDENDUM 2026-10-20 (§9):** the default-off stall diagnostic `KF3_DIAG_USER_STALL=<ms>` (measurement only; branch
+`claude/user-stall-diag-20261020`) is described in §9. It changes nothing above.
 Labels: **[measured]** = a run or a test result named here; **[read]** = public hardware text (`dev_pbdma.ref`,
 `dev_ram.ref`, ogkm 580) or kayfabe code; **[inferred]** = reasoning, never evidence.
 
@@ -415,3 +417,126 @@ table bounds the relay's share per SYNC_WAIT at <= 4 ms per 3 gates before and ~
 5. **Not measured**: Windows (the coordinator schedules it); the staged-trigger path (`segment_turn` rare packets, Windows migration) now waits on markers
    too but no Linux traffic reaches it; GP_GET/REFERENCE visibility lag after an interrupt is modelled, not observed (`event_without_progress`
    is 12-205 per run, spurious or early events, never a stalled wait: `backstop_found(work)` stayed 0).
+
+## 9. `KF3_DIAG_USER_STALL=<ms>` -- why is the private ring not draining? (2026-10-20, DIAGNOSTIC, default off)
+
+**STATUS: LIVE in the code, 2026-10-20, measurement only.** Never required to boot, never a decision input, never a fix.
+Labels as above: **[measured]**, **[read]** (code or public headers), **[inferred]**.
+
+### 9.1 The question
+
+**[measured, owner's Windows guest, run 3094, outside reader of the private ring]** In 2 of 9 app freezes (Minecraft + Unigine
+Heaven, windowed) the private ring stayed at `PUT - GET = 2` for 7-27 s with the PBDMA *inside* an earlier entry
+(`USERD.PB_GET = 0x304720040`, a 500 byte guest pushbuffer at GPU VA `0x304720000`, `LEVEL = SUBROUTINE`; the next entries, a
+40 byte guest pushbuffer and the relay marker, not begun; `REFERENCE` one marker behind). Kicks did nothing; in 5 of 9 freezes
+the GPU had consumed everything. The outside reader could not resolve guest GPU VAs, so *what the stuck segment waits on* was unread.
+
+**H-ACQ [hypothesis]:** the PBDMA is blocked in a semaphore `ACQUIRE` inside that segment, waiting for a release that never comes
+(a release by another context whose own work is held or not yet published by the relay, or written somewhere the acquirer
+does not read). **Falsifiers, stated before the run:** (a) the report's decode of the segment holds *no* acquire at or before
+`PB_GET`; (b) it holds one, but the semaphore's `current=` already passes by the operation's name (`name_says_pass=yes`) -- then
+the PBDMA is not waiting on that value; (c) `current=UNREAD(...)` for every acquire is *no* evidence either way; (d) the
+segment is decoded as copy-engine or graphics work with no acquire and `SEM_EXECUTE RELEASE` with `release_wfi` -- then the stall
+is a wait-for-idle on the engine, not on a semaphore.
+
+### 9.2 What it does
+
+`KF3_DIAG_USER_STALL=2000` (milliseconds; unset, empty or `0` = off; a non-number is ignored with one loud line). Read **once**,
+when the first Windows USER-ring relay is created (`Pump::new`). On the relay **worker's tick** (`ChanPlane::user_ring_refresh`,
+once per wait of the worker loop, at most every `BACKSTOP_MS` = 50 ms) it looks at each relay; for a relay whose private
+`GP_GET != GP_PUT` for longer than the threshold it prints **one block, once per condition**; the condition re-arms when `GP_GET`
+moves or the ring empties.
+
+* **Where it may run:** the relay worker only. Not a vCPU, not the drainer, not the act thread. Two plain field writes
+  (`Pump::diag_wake` in the look, `Pump::diag_turn` in the serve) record the last look that rang a relay (Spin / Event /
+  Backstop) and the last turn. Pinned by source tests in `userpump.rs` (`the_stall_diagnostic_*`).
+* **What it takes:** `try_lock` only -- the relay map, each relay's record (a record the act thread holds is skipped and counted
+  `skipped_busy`) and its private storage. No wait, no sleep, no new thread, no timer of its own, no `unsafe` (the only new
+  memory accessors are `Storage::gpu_cursors` / `read_gp`, safe wrappers over the existing CPU view).
+* **What it reads:** the private `USERD` (36 words) and the private GP ring rows around `GP_GET` (at most 8); the guest's `GP_PUT` /
+  `GP_GET` through the relay's own `UserdSource::read` (try-lock, `UNREAD` when busy); for the entry whose segment holds
+  `PB_GET` (nearest behind `GP_GET` first), the guest pushbuffer (at most `MAX_PB_BYTES` = 2048 bytes from the segment start)
+  and each acquire's semaphore (at most 8, 4 or 8 bytes) through **the relay's own reader** (`userread::snapshot` over the
+  channel's placement rows, the same path that reads guest pushbuffers to parse `SYNC_WAIT` gates). The store reader is
+  **passive** (`Cache::passive_prepare`): a video-memory window that is not already armed is not armed for the diagnostic
+  (that could evict the relay's working set), so such a semaphore prints `current=UNREAD(vidmem)`.
+* **What it prints:** the lines of `kf_chan::user_stall::render`: at most 112 lines of at most 320 printable-ASCII characters,
+  **every integer in hex**, nothing from guest memory but integers (a method stream is decoded, never echoed).
+* **Cost off:** one relaxed load per worker tick; a `None` test per look and per turn; nothing at boot.
+* **Counters:** `diag_user_stall_{conditions,acquires,unread,would_pass,no_segment,skipped_busy}` are appended to the existing
+  `USER_RING_LIFECYCLE SUMMARY` line (only when counted) and printed as `USER_RING_LIFECYCLE PERIOD <line>` at most every
+  10 s, only when they moved.
+
+### 9.3 The decode (`kf_chan::user_stall::decode`, pure)
+
+Methods per ogkm `clc56f.h` / `clc86f.h` / `clc6b5.h` (595.84 and 615.71): `SEM_ADDR_LO 0x5c` (`31:2`), `SEM_ADDR_HI 0x60`
+(`24:0`), `SEM_PAYLOAD_LO 0x64`, `SEM_PAYLOAD_HI 0x68`, `SEM_EXECUTE 0x6c` (`OPERATION 2:0` = `ACQUIRE 0`, `RELEASE 1`,
+`ACQ_STRICT_GEQ 2`, `ACQ_CIRC_GEQ 3`, `ACQ_AND 4`, `ACQ_NOR 5`, `REDUCTION 6`; `ACQUIRE_SWITCH_TSG 12`, `RELEASE_WFI 20`,
+`PAYLOAD_SIZE 24` = 64 bit, `RELEASE_TIMESTAMP 25`, `REDUCTION 30:27`, `REDUCTION_FORMAT 31`), the legacy
+`SEMAPHOREA..D 0x10..0x1c`, `NON_STALL_INTERRUPT 0x20`, `SET_REFERENCE 0x50`, `WFI 0x78`, `SET_OBJECT 0x0` (class `15:0`), and --
+only on a subchannel bound to an `xxB5` copy class -- `SET_SEMAPHORE_A/B/PAYLOAD 0x240/0x244/0x248` and `LAUNCH_DMA 0x300`
+(`SEMAPHORE_TYPE 4:3`). All header forms (incrementing, non-incrementing, one-increment, immediate) are walked; the legacy
+`GRP0/GRP2` forms are sized and skipped; a reserved header stops the decode (`malformed_at`), `END_PB_SEGMENT` stops it
+(`ended_at`), a cut packet is `truncated`, the 64 method cap is `capped`.
+
+Limits, said plainly: **[inferred]** the decode starts at the segment's first word and assumes it is a packet header; a segment that
+begins inside a packet opened by an earlier entry (the lifecycle already reports `PUT_BOUNDARY_OPEN` for such guests) decodes
+as garbage or `malformed_at=0x0`. `name_says_pass` is **inferred from the operation's name** (`ACQUIRE` equality, `GEQ` unsigned,
+`CIRC_GEQ` signed difference, `AND` non-zero; `NOR` and the rest print `n/a`), never measured. The semaphore's value is a CPU
+read through the relay's placement view at report time, not the value the PBDMA last saw. `PB_GET` is the *fetch* position: the
+method the PBDMA executes may be a little before it, so the `<== PB_GET` marker sits on the first decoded method at or after it
+and an acquire *before* it is the candidate.
+
+### 9.4 Output format
+
+One block per channel per condition (every line starts `kf3: USER_RING_STALL_DIAG`; the channel key `client:object` repeats on
+each line after BEGIN). Lines: `BEGIN` (key, host id, `stalled_ms`, `threshold_ms`), `TOTALS`, `GUEST` (guest `GP_PUT`, `GP_GET`,
+the relay's cursor), `PRIVATE` (`gp_get gp_put reference pb_get pb_put top_level_get`), `RELAY` (the parked `wait=`, `last_doorbell_ago_ms`
+-- resolved to the look interval, `unknown` before the count first changes --, `doorbells`, `last_wake` + `last_wake_ago_ms`,
+`last_turn_ago_ms`), `COUNTERS` (`issued fetched marks_issued marks_seen turns entries_*`), `RING` rows (`<== GP_GET`,
+`<== SEGMENT_ROW`), `SEGMENT` (`slot va len_bytes read_bytes pb_get_off methods capped truncated malformed_at ended_at`), one `M +<byte offset>`
+line per interesting method (`<== PB_GET` on one), `OTHER` (count and the first four method numbers of the uninteresting rest),
+`NOTE`, `END`.
+
+```
+# Example: the shape of the 2026-10-20 incident, built from synthetic words by the pure renderer (GPU-free; NOT a hardware capture).
+# The acquire, its address and the current value 0x29 are invented to show the format; a real block is what the owner's run prints.
+kf3: USER_RING_STALL_DIAG BEGIN 0xc1d00001:0x5c000010 host=0x1c0 stalled_ms=0x7d3 threshold_ms=0x7d0
+kf3: USER_RING_STALL_DIAG 0xc1d00001:0x5c000010 TOTALS diag_user_stall_conditions=0x1 diag_user_stall_acquires=0x1 diag_user_stall_unread=0x0 diag_user_stall_would_pass=0x0 diag_user_stall_no_segment=0x0 diag_user_stall_skipped_busy=0x0
+kf3: USER_RING_STALL_DIAG 0xc1d00001:0x5c000010 GUEST guest_put=0x1ab guest_get=0x1a7 relay_cursor=0x1ab
+kf3: USER_RING_STALL_DIAG 0xc1d00001:0x5c000010 PRIVATE gp_get=0x1a8 gp_put=0x1aa reference=0x4b466dd4 pb_get=0x304720040 pb_put=0x120361d40 top_level_get=0x304720000
+kf3: USER_RING_STALL_DIAG 0xc1d00001:0x5c000010 RELAY wait=Marker(target=0x1234) last_doorbell_ago_ms=0x1f40 doorbells=0x77 last_wake=Backstop last_wake_ago_ms=0x30 last_turn_ago_ms=0x32
+kf3: USER_RING_STALL_DIAG 0xc1d00001:0x5c000010 COUNTERS issued=0x1aa fetched=0x1a8 marks_issued=0x20 marks_seen=0x1f turns=0x400 entries_scan=0x0 entries_pointer=0x123 entries_window=0x0
+kf3: USER_RING_STALL_DIAG 0xc1d00001:0x5c000010 RING slot=0x1a6 entry=0x400120300000 va=0x120300000 len=0x40 subroutine=0x0 sync_wait=0x0
+kf3: USER_RING_STALL_DIAG 0xc1d00001:0x5c000010 RING slot=0x1a7 entry=0x1f40304720000 va=0x304720000 len=0x1f4 subroutine=0x0 sync_wait=0x0 <== SEGMENT_ROW
+kf3: USER_RING_STALL_DIAG 0xc1d00001:0x5c000010 RING slot=0x1a8 entry=0x280120361d18 va=0x120361d18 len=0x28 subroutine=0x0 sync_wait=0x0 <== GP_GET
+kf3: USER_RING_STALL_DIAG 0xc1d00001:0x5c000010 RING slot=0x1a9 entry=0x100304730000 va=0x304730000 len=0x10 subroutine=0x0 sync_wait=0x0
+kf3: USER_RING_STALL_DIAG 0xc1d00001:0x5c000010 SEGMENT slot=0x1a7 va=0x304720000 len_bytes=0x1f4 read_bytes=0x1f4 pb_get_off=0x40 methods=0x8 capped=0x0 truncated=0x0 malformed_at=none ended_at=none
+kf3: USER_RING_STALL_DIAG 0xc1d00001:0x5c000010 M +0x24 SET_OBJECT sub=0x4 class=0xc6b5
+kf3: USER_RING_STALL_DIAG 0xc1d00001:0x5c000010 M +0x2c SEM_ADDR_LO value=0x20361000
+kf3: USER_RING_STALL_DIAG 0xc1d00001:0x5c000010 M +0x30 SEM_ADDR_HI value=0x1
+kf3: USER_RING_STALL_DIAG 0xc1d00001:0x5c000010 M +0x34 SEM_PAYLOAD_LO value=0x2a
+kf3: USER_RING_STALL_DIAG 0xc1d00001:0x5c000010 M +0x38 SEM_PAYLOAD_HI value=0x0
+kf3: USER_RING_STALL_DIAG 0xc1d00001:0x5c000010 M +0x3c SEM_EXECUTE ACQ_CIRC_GEQ raw=0x1003 addr=0x120361000 awaited=0x2a wfi=0x0 payload64=0x0 timestamp=0x0 acquire_switch=0x1 current=0x29 name_says_pass=no
+kf3: USER_RING_STALL_DIAG 0xc1d00001:0x5c000010 M +0x44 SET_REFERENCE value=0x4b466dd5 <== PB_GET
+kf3: USER_RING_STALL_DIAG 0xc1d00001:0x5c000010 M +0x4c NON_STALL_INTERRUPT
+kf3: USER_RING_STALL_DIAG 0xc1d00001:0x5c000010 NOTE name_says_pass is inferred from the operation name, never measured; current is read from memory through the relay's placement view, not by the GPU
+kf3: USER_RING_STALL_DIAG 0xc1d00001:0x5c000010 END
+```
+
+### 9.5 Tests (GPU-free)
+
+`kf-chan` `user_stall` (table tests built from the ogkm method numbers, hostile-stream fuzz, bounded-output and hex-only
+checks, a fake placement view for `build_report`), `user_storage` (the two new reads), `user_lifecycle` (the counters line),
+`kf-qemu` `userstore` (`passive_prepare` never arms or evicts), `userdiag` (`refusal_name`) and `userpump` (source tests
+pinning where it runs, `try_lock` only, one relaxed load off, switch read once). Mutation results and counts are in the commit
+message of the branch head and the hand-off report.
+
+### 9.6 What only hardware can confirm
+
+That the tick runs while the freeze lasts (a worker stuck inside a long turn prints nothing); that the stuck segment's start is a
+packet boundary (else `malformed_at`); that the guest semaphores sit in guest system memory covered by the channel's placement
+rows (else `UNREAD(unmapped)`) and not in an unarmed video-memory window (`UNREAD(vidmem)`); that `PB_GET` in the private
+`USERD` is as fresh as the outside reader saw it; and the rate of reports under a real freeze (one block per channel per
+condition by construction).
+
