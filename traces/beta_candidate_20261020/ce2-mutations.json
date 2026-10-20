@@ -1,0 +1,90 @@
+[
+  {
+    "status": "killed",
+    "kills": 2,
+    "tests": [
+      "ce_implicit::tests::no_class_reaches_a_user_tier_or_non_copy_engine_channel",
+      "ce_implicit::tests::a_user_tier_channel_never_gains_it"
+    ],
+    "errors": [],
+    "mutant": "kernel-admission"
+  },
+  {
+    "status": "killed",
+    "kills": 2,
+    "tests": [
+      "ce_implicit::tests::a_non_copy_engine_channel_never_gains_it",
+      "ce_implicit::tests::no_class_reaches_a_user_tier_or_non_copy_engine_channel"
+    ],
+    "errors": [],
+    "mutant": "engine-admission"
+  },
+  {
+    "status": "killed",
+    "kills": 2,
+    "tests": [
+      "ce_implicit::tests::a_number_next_to_a_copy_class_gets_nothing",
+      "ce_implicit::tests::a_video_or_graphics_class_gets_nothing"
+    ],
+    "errors": [],
+    "mutant": "class-filter"
+  },
+  {
+    "status": "killed",
+    "kills": 10,
+    "tests": [
+      "tmode::ce_tier_tests::emission_is_bounded_by_the_segment",
+      "tmode::ce_tier_tests::methods_outside_the_ce_set_are_still_refused",
+      "tmode::ce_tier_tests::the_census_counts_a_run_under_the_derived_class",
+      "tmode::ce_tier_tests::the_census_names_the_derived_class",
+      "tmode::ce_tier_tests::the_measured_run3017_segment_is_decoded_against_the_rings_own_ce_class",
+      "tmode::ce_tier_tests::the_guests_binding_wins_over_the_derived_class_when_older",
+      "tmode::ce_tier_tests::the_host_semaphore_width_follows_the_derived_class",
+      "tmode::ce_tier_tests::the_measured_segment_binds_through_the_windows_and_emits_no_guest_va",
+      "tmode::ce_tier_tests::the_tier_follows_the_configured_class",
+      "tmode::ce_tier_tests::the_wide_host_semaphore_field_is_still_bounded"
+    ],
+    "errors": [],
+    "mutant": "fallback"
+  },
+  {
+    "status": "killed",
+    "kills": 2,
+    "tests": [
+      "tmode::ce_tier_tests::the_guests_binding_wins_over_the_derived_class_when_newer",
+      "tmode::ce_tier_tests::the_guests_binding_wins_over_the_derived_class_when_older"
+    ],
+    "errors": [],
+    "mutant": "guest-override"
+  },
+  {
+    "status": "killed",
+    "kills": 2,
+    "tests": [
+      "tmode::ce_tier_tests::the_host_semaphore_width_follows_the_derived_class",
+      "tmode::ce_tier_tests::the_wide_host_semaphore_field_is_still_bounded"
+    ],
+    "errors": [],
+    "mutant": "host-sem-width"
+  },
+  {
+    "status": "killed",
+    "kills": 2,
+    "tests": [
+      "tmode::ce_tier_tests::the_census_counts_a_run_under_the_derived_class",
+      "tmode::ce_tier_tests::the_census_names_the_derived_class"
+    ],
+    "errors": [],
+    "mutant": "census"
+  },
+  {
+    "status": "killed",
+    "kills": 2,
+    "tests": [
+      "a_kernel_ce_ring_with_its_class_still_refuses_what_the_table_does_not_name",
+      "a_kernel_ce_ring_with_no_set_object_runs_gp_34_with_its_own_ce_class"
+    ],
+    "errors": [],
+    "mutant": "ring-config"
+  }
+]

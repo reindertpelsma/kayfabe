@@ -7132,6 +7132,10 @@ impl ChanPlane {
                 let mut chan = {
                     let mut ring = TranslatedRing::new_tmode(a.gpfifo_va, entries, 0);
                     ring.set_gr(gr_cfg);
+                    // The class belongs to this ring's owned host CE object; never guest bytes.
+                    ring.set_ce_object(kf_chan::ce_implicit::implicit_ce_class(
+                        kernel_work, is_copy_engine(engine), host.ce_object_class(),
+                    ));
                     let mut c = TranslatedChannel::new(ring, host, idx);
                     c.set_tspace(t.windows(privileged), negctl_stale_bind());
                     c

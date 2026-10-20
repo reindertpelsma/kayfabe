@@ -15,3 +15,13 @@ CODE READ: keep current behaviour unless the imported topic is explicitly its
 replacement. Stop on any unresolved protected semantic conflict. Record the
 source revision, affected hunk, competing contracts, concrete options and
 written coordinator decision here before proceeding.
+
+
+CODE READ CE2 integration, 2026-10-20: the source birth hunk's context named
+`deferred_api_trigger()`, now replaced by this device's immutable
+`me.settings.deferred_api`. The current profile selection is retained. Only
+`ring.set_ce_object(implicit_ce_class(kernel_work, is_copy_engine(engine),
+host.ce_object_class()))` is added at the same owned-ring construction site.
+No unresolved semantic conflict: F-2 touches bound-class GR address widths;
+CE2 adds an independently filtered default CE tier. Guest SET_OBJECT wins.
+No USER-ring relay, scheduling, TSG, lazy-observe or pacing change is imported.

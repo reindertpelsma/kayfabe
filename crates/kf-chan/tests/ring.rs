@@ -711,3 +711,33 @@ fn an_unconfigured_ring_keeps_refusing_after_set_gr_with_other_fields() {
         }
     ));
 }
+
+/// With the ring's CE class set, a method the CE table does not name is still refused at its
+/// entry (the leniency removes the missing-object refusal only), and the refusal is by name.
+#[test]
+fn a_kernel_ce_ring_with_its_class_still_refuses_what_the_table_does_not_name() {
+    let mut mem = Mem::default();
+    for gp in 0..3 {
+        mem.entry(gp, control(0, 0));
+    }
+    seg(&mut mem, 3, PB, &m(4, 0x104, &[0]));
+    let mut r = TranslatedRing::new_tmode(GPFIFO, 64, 0);
+    r.set_ce_object(CE_CLASS);
+    let end = loop {
+        match r.next(4, &mut mem, is_ce, &W) {
+            Ok(Next::Idle) => panic!("idle"),
+            Ok(_) => {}
+            Err(e) => break e,
+        }
+    };
+    assert_eq!(
+        end,
+        RingRefusal::Rewrite {
+            gp: 3,
+            why: Refusal::Unclassified {
+                subch: 4,
+                method: 0x104
+            }
+        }
+    );
+}

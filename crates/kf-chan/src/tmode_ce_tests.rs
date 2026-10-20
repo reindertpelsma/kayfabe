@@ -333,3 +333,78 @@ fn the_host_semaphore_width_follows_the_derived_class() {
         );
     }
 }
+
+/// The guest's own `SET_OBJECT` decides from then on, in BOTH directions: a newer class than the
+/// ring's host class admits that class's methods (REQ_ATTR is `CAB5`-only), an older one refuses
+/// the methods only the host's newer class defines (`SCRUB_PARAMETERS` is `C8B5`+).
+#[test]
+fn the_guests_binding_wins_over_the_derived_class_when_newer() {
+    let mut st = cfg(C7B5);
+    decode(&[h(4, 0, 1), 0xCAB5], is_ce, &mut st, None).expect("bind");
+    assert!(decode(&[h(4, 0x754, 1), 0], is_ce, &mut st, None).is_ok());
+}
+
+#[test]
+fn the_guests_binding_wins_over_the_derived_class_when_older() {
+    let mut st = cfg(0xC8B5);
+    decode(&[h(4, 0, 1), 0xC7B5], is_ce, &mut st, None).expect("bind");
+    assert_eq!(
+        decode(&[h(4, 0x6FC, 1), 0], is_ce, &mut st, None),
+        Err(Refusal::Unclassified {
+            subch: 4,
+            method: 0x6FC
+        })
+    );
+    // and the derived class alone does admit it
+    assert!(decode(&[h(4, 0x6FC, 1), 0], is_ce, &mut cfg(0xC8B5), None).is_ok());
+}
+
+/// The wide host-semaphore field has its own limit (25 bits on `C8B5`+): a bit above it is refused.
+#[test]
+fn the_wide_host_semaphore_field_is_still_bounded() {
+    let pb = |hi: u32| [h(0, 0x5C, 5), 0x2023_3060, hi, 7, 0, 1];
+    assert!(decode(&pb(0x1FF_FFFF), is_ce, &mut cfg(0xC8B5), None).is_ok());
+    assert!(matches!(
+        decode(&pb(0x200_0000), is_ce, &mut cfg(0xC8B5), None),
+        Err(Refusal::FieldValue { .. })
+    ));
+}
+
+/// The count-only census files a derived-class method under the DERIVED class (not under class 0,
+/// "no CE bound"), so a census of a kernel CE ring says which table decoded it.
+#[test]
+fn the_census_names_the_derived_class() {
+    use crate::census::{Census, SubKind};
+    let mut c = Census::default();
+    decode(&RUN3017_GP34, is_ce, &mut cfg(C7B5), Some(&mut c)).expect("decoded");
+    assert_eq!(c.count(C7B5, SubKind::Ce, 0x240), 1);
+    assert_eq!(c.count(C7B5, SubKind::Ce, 0x300), 1);
+    assert_eq!(c.launches_of(C7B5, 0x4c), 1);
+    assert_eq!(
+        c.count(0, SubKind::Ce, 0x240),
+        0,
+        "not filed under 'no class'"
+    );
+}
+
+#[test]
+fn the_census_files_a_refused_unconfigured_method_under_no_class() {
+    use crate::census::{Census, SubKind};
+    let mut c = Census::default();
+    assert!(decode(&RUN3017_GP34, is_ce, &mut cfg(0), Some(&mut c)).is_err());
+    assert_eq!(c.count(0, SubKind::Ce, 0x240), 1);
+}
+
+#[test]
+fn the_census_counts_a_run_under_the_derived_class() {
+    use crate::census::{Census, SubKind};
+    let mut c = Census::default();
+    let mut seg = Vec::new();
+    for _ in 0..8 {
+        seg.extend_from_slice(&RUN3017_GP34);
+    }
+    decode(&seg, is_ce, &mut cfg(0xC9B5), Some(&mut c)).expect("decoded");
+    assert_eq!(c.count(0xC9B5, SubKind::Ce, 0x244), 8);
+    assert_eq!(c.launches_of(0xC9B5, 0x4c), 8);
+    assert_eq!(c.count(0, SubKind::Ce, 0x244), 0);
+}

@@ -7,6 +7,8 @@
 //! holds a copy-engine object of a class the T-mode CE table knows. Anything else gets `0` (the
 //! strict `NoCeObject` behaviour).
 
+use crate::ttables::Tier;
+
 /// The CE class a Translated ring decodes copy-engine methods against when the guest sends no
 /// `SET_OBJECT`, or `0` for none.
 ///
@@ -16,8 +18,10 @@
 ///   ([`crate::host::HostRing::ce_object_class`]), `None` on a graphics or video ring.
 #[must_use]
 pub fn implicit_ce_class(kernel_work: bool, copy_engine: bool, host_ce: Option<u32>) -> u32 {
-    let _ = (kernel_work, copy_engine, host_ce);
-    0 // STUB (tests first)
+    match host_ce {
+        Some(class) if kernel_work && copy_engine && Tier::of_ce_class(class).is_some() => class,
+        _ => 0,
+    }
 }
 
 #[cfg(test)]
@@ -43,10 +47,31 @@ mod tests {
     }
 
     #[test]
-    fn a_ring_with_no_host_ce_object_or_a_foreign_class_gets_nothing() {
+    fn a_ring_with_no_host_ce_object_gets_nothing() {
         assert_eq!(implicit_ce_class(true, true, None), 0);
-        for class in [0, 0xC9B0, 0xC997, 0xC7B4, 0xC7B6, 0xDEAD, u32::MAX] {
+        assert_eq!(implicit_ce_class(true, true, Some(0)), 0);
+    }
+
+    #[test]
+    fn a_video_or_graphics_class_gets_nothing() {
+        for class in [0xC9B0, 0xC7B0, 0xC997, 0xC7C0, 0x5080, 0xC56F] {
             assert_eq!(implicit_ce_class(true, true, Some(class)), 0, "{class:#x}");
+        }
+    }
+
+    #[test]
+    fn a_number_next_to_a_copy_class_gets_nothing() {
+        for class in [0xC7B4, 0xC7B6, 0xCBB5, 0xC4B5, 0xDEAD, u32::MAX] {
+            assert_eq!(implicit_ce_class(true, true, Some(class)), 0, "{class:#x}");
+        }
+    }
+
+    #[test]
+    fn no_class_reaches_a_user_tier_or_non_copy_engine_channel() {
+        for class in [0xC5B5, 0xC6B5, 0xC7B5, 0xC8B5, 0xC9B5, 0xCAB5] {
+            assert_eq!(implicit_ce_class(false, true, Some(class)), 0);
+            assert_eq!(implicit_ce_class(true, false, Some(class)), 0);
+            assert_eq!(implicit_ce_class(false, false, Some(class)), 0);
         }
     }
 }
