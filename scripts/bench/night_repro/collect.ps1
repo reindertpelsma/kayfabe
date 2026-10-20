@@ -16,7 +16,7 @@ function Pack([string]$Path, [long]$Offset=0, [string]$Prefix='') {
 $files['pm_live.csv']=Pack 'C:\kf\hang\pm_live.csv' $m.pm_offset $m.pm_header
 $files['trig.log']=Pack 'C:\kf\hang\trig.log' $m.trig_offset
 foreach($f in Get-ChildItem "$Root\*" -File | Where-Object {$_.Extension -in @('.tsv','.txt')}) { $files[$f.Name]=Pack $f.FullName }
-$procs=@(Get-Process | Where-Object {$_.Name -in @('Heaven','GravityMark')} | Select-Object Id,Name,Responding)
+$procs=@(Get-Process | Where-Object {$_.Name -in @('Heaven','GravityMark','blender','msedge')} | Select-Object Id,Name,Responding)
 $etls=@(Get-ChildItem C:\kf\hang\t_*.etl | Select-Object Name,Length,LastWriteTime)
 $health=(& "$PSScriptRoot\health.ps1" -Root $Root) | ConvertFrom-Json
 ConvertTo-N1Json @{meta=$m; files=$files; processes=$procs; etls=$etls; health=$health}

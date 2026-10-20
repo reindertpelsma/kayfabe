@@ -29,3 +29,31 @@ CODE READ: D is excluded by the owner's cabling constraint. F equals the current
 C is available as a prebuilt candidate-5 binary; all comparisons require fresh
 boots and at least two runs. A zero-freeze arm needs two further repeats and a
 longer load before any absence claim. No product behavior will be changed.
+
+## Coordinator-authorized continuation, 2026-10-20 03:31 CEST
+
+CODE READ: authorization supersedes the earlier stop on collector-format errors:
+repair those test-first and continue; host safety conditions or new host Xids
+stop experiments and restore the original owner session. Existing deadlines hold.
+
+INFERRED H-fast: the Vulkan pair repeatedly reaches DEVICE_LOST_TDR within 90 s.
+FALSIFIER before the next complete result: a qualified fresh A run reaches 90 s
+without nvlddmkm Event 153 or device-loss output. Report censored times and all
+runs, not just failures. A/A still runs twelve minutes per boot. Kernel-Boot
+Event 153 is not nvlddmkm Event 153. Silence rates from a device-loss run are
+retained separately and never counted as the independent-freeze class.
+
+INFERRED H-pair: two Heavens, Heaven+Blender viewport animation, or Heaven+Edge
+WebGL can produce >=4s per-PID silences without Event 153/device loss. FALSIFIER
+for a particular trial: the pair produces Event 153/device loss, does not actually
+present on both clients, or has no qualifying silence during its stated window.
+A no-event window is not an absence or stability claim. Arrange non-Vulkan pair
+windows so both remain partly visible; otherwise normal occlusion could imitate
+silence. Do not change guest resolution, product behavior or timers.
+
+CODE READ planned budget: twelve-minute A/A for the Vulkan pair; fresh three-
+minute fast trials on B/G/E (>=2 each); twelve-minute A/A for a candidate
+independent pair, then ten-minute B/G/E independent-pair trials if qualified and
+time/disk permit. Try Blender/Edge separately with explicitly stated durations.
+Interleave arms where available. G follows B as soon as its binary/report exists.
+The original C binary exists, but coordinator-prioritized B/G/E take precedence.

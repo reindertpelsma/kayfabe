@@ -16,7 +16,7 @@ foreach($name in @('kf-vcpuwatch','kf-pmmon')) { if((Get-ScheduledTask $name).St
 $principal=(Get-ScheduledTask kfogl-heaven_d3d11_win).Principal
 $clients=switch($Pair) { 'heaven-heaven' {@('Heaven','Heaven2')}; 'heaven-blender' {@('Heaven','Blender')}; 'heaven-edge' {@('Heaven','Edge')}; default {@('Heaven','GravityMark')} }
 foreach($client in $clients) {
-    $a=New-ScheduledTaskAction -Execute powershell.exe -Argument "-NoProfile -NonInteractive -ExecutionPolicy Bypass -File C:\kf\n1\load.ps1 -Client $client -Root $Root -Seconds $Seconds"
+    $a=New-ScheduledTaskAction -Execute powershell.exe -Argument "-NoProfile -NonInteractive -ExecutionPolicy Bypass -File C:\kf\n1\load.ps1 -Client $client -Root $Root -Seconds $Seconds -Pair $Pair"
     $settings=New-ScheduledTaskSettingsSet -ExecutionTimeLimit (New-TimeSpan -Minutes 20)
     Register-ScheduledTask -TaskName "kf-n1-$client" -Action $a -Principal $principal -Settings $settings -Force | Out-Null
     Start-ScheduledTask "kf-n1-$client"
