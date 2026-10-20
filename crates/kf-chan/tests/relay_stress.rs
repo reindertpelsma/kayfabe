@@ -1227,7 +1227,15 @@ fn irq_thread(sh: &Shared, ev: &Notifier, irqs: &Mutex<BinaryHeap<Due>>) {
 }
 
 /// I6: see `run_scenario`. Ground truth from the relay records' own flags (independent of `RelayLoop::unsourced`).
-fn sleep_safety_monitor(sh: &Shared, rt: &Rt<'_>, ws: &WorkerStats, workers: usize) {
+fn sleep_safety_monitor(
+    sh: &Shared,
+    rt: &Rt<'_>,
+    ws: &WorkerStats,
+    workers: usize,
+    irqs: &Mutex<BinaryHeap<Due>>,
+) {
+    // an interrupt the fake hardware has raised but not yet delivered is a wake IN FLIGHT, not a missing one
+    let in_flight = || irqs.lock().map_or(true, |q| !q.is_empty());
     let blocked = || {
         ws.parks
             .load(Ordering::Acquire)
@@ -1265,9 +1273,16 @@ fn sleep_safety_monitor(sh: &Shared, rt: &Rt<'_>, ws: &WorkerStats, workers: usi
         if !blocked() {
             continue;
         }
+        if in_flight() {
+            continue;
+        }
         let Some(first) = obligation() else { continue };
         std::thread::sleep(Duration::from_millis(3));
-        if blocked() && obligation() == Some(first) && !sh.stop_gpu.load(Ordering::Acquire) {
+        if blocked()
+            && !in_flight()
+            && obligation() == Some(first)
+            && !sh.stop_gpu.load(Ordering::Acquire)
+        {
             sh.violation(format!(
                 "I6 every worker is in a blocking wait while relay {} holds an obligation with no wake source (demand={} carried={})",
                 first.0, first.1, first.2
@@ -1811,7 +1826,7 @@ fn run_scenario(sc: &Scenario) -> Outcome {
         let irq = s.spawn(|| irq_thread(&sh, &ev, &irqs));
         // ★ I6 SLEEP SAFETY (2026-10-20): every worker in a blocking wait while a relay holds an obligation no registered wake
         // source announces (demand left behind = the retry set, or a `Wait::Popped`), seen twice 3 ms apart = a violation.
-        let monitor = s.spawn(|| sleep_safety_monitor(&sh, &rt, &ws, sc.workers));
+        let monitor = s.spawn(|| sleep_safety_monitor(&sh, &rt, &ws, sc.workers, &irqs));
         let holder = sc
             .holder
             .on
