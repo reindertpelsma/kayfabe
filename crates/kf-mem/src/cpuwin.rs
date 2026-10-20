@@ -1156,6 +1156,47 @@ mod tests {
         );
     }
 
+    /// A reboot before RM ever takes BAR1 must remove the live firmware view too.
+    /// The seed lives outside `placed`; otherwise it remains reachable during a refused scrub.
+    #[test]
+    fn sink_all_removes_the_boot_seed_before_the_first_bar1_change() {
+        let r = Rec::default();
+        let w = CpuWindow::new(&r, 256 << 20);
+        w.seed(0, 0, 0x80_0000).unwrap();
+        r.ops.lock().unwrap().clear();
+        let rep = w.sink_all();
+        assert_eq!(w.seeded(), None, "a CPU view survived scrub preparation: {rep:?}");
+        assert_eq!(w.placements(), 0);
+        assert_eq!(
+            *r.ops.lock().unwrap(),
+            [Op::Sink(0, 0x80_0000), Op::Release(0)],
+            "scratch must precede release even when no guest placement ever existed"
+        );
+        assert_eq!(w.reset_to_boot().seed, Some(Reseed::Placed { life: 2 }));
+    }
+
+    /// An unload can restore the seed before a later reboot, without a new RM taking it.
+    /// Preparing that reboot must remove this second-life view, then remain idempotent.
+    #[test]
+    fn sink_all_removes_a_reseeded_boot_view_before_a_later_reboot() {
+        let r = Rec::default();
+        let w = CpuWindow::new(&r, 256 << 20);
+        w.seed(0, 0, 0x80_0000).unwrap();
+        w.map(&d(0, 0x10_0000, 0x1000, false), true).unwrap();
+        w.invalidate().unwrap();
+        w.unmap(0, false).unwrap();
+        w.invalidate().unwrap();
+        assert_eq!(w.reseed(), Ok(Reseed::Placed { life: 2 }));
+        r.ops.lock().unwrap().clear();
+        let rep = w.sink_all();
+        assert_eq!(w.seeded(), None, "the restored boot view survived: {rep:?}");
+        let once = r.ops.lock().unwrap().clone();
+        assert_eq!(once, [Op::Sink(0, 0x80_0000), Op::Release(0)]);
+        w.sink_all();
+        assert_eq!(*r.ops.lock().unwrap(), once, "a retry must not release twice");
+        assert_eq!(w.reset_to_boot().seed, Some(Reseed::Placed { life: 3 }));
+    }
+
     /// `sink_all` keeps a placement whose scratch re-point the host refuses (the guest could still
     /// reach it), as `reset_to_boot` does, and says so.
     #[test]
