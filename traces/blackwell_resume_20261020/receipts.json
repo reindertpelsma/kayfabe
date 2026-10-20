@@ -20,5 +20,19 @@
     "invoice_gpu_usd": 4.553,
     "invoice_storage_usd": 0.203,
     "invoice_total_usd": 4.756
+  },
+  {
+    "id": 56939139,
+    "role": "BlackwellResume2TDR",
+    "offer": 41357771,
+    "gpu": "RTX 5090",
+    "quote_dph": 0.9085185185185186,
+    "geo": "United Kingdom, GB",
+    "created_utc": "2026-10-20T19:12:50.969624+00:00",
+    "credit_before": 31.041572435962507,
+    "auto_destroy_minutes": 240,
+    "destroyed": false,
+    "auto_destroy_pid": 1258630,
+    "auto_destroy_armed_utc": "2026-10-20T19:12:51.008154+00:00"
   }
 ]
