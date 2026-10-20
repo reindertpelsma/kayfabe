@@ -1,0 +1,1 @@
+5ce70d1cc7781b9d46b73cdbba8ff3054a891a995068421b4d44a8a86ef21e12  /workspace/bwr-win/kfwin/disk/bw580_bind.qcow2
