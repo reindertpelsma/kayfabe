@@ -2,6 +2,9 @@
 """Profiler reader contracts, committed before its implementation."""
 import importlib.util
 import json
+import os
+import subprocess
+from contextlib import contextmanager
 from pathlib import Path
 import struct
 import tempfile
@@ -77,4 +80,27 @@ class ReaderTests(unittest.TestCase):
             _,r=fixture();r[key]=value
             p=Path(self.tmp.name)/'prof.jsonl';p.write_text(json.dumps(r)+'\n')
             self.assertEqual(reader.read_jsonl(p),[])
+    @contextmanager
+    def child(self):
+        exe=os.environ.get('KF_PROF_FIXTURE_BIN')
+        if not exe:self.skipTest('set KF_PROF_FIXTURE_BIN for owned-process live/crash tests')
+        child=subprocess.Popen([exe,self.tmp.name],stdout=subprocess.PIPE,stderr=subprocess.PIPE,text=True)
+        try:
+            self.assertEqual(child.stdout.readline().strip(),'READY')
+            yield child
+        finally:
+            if child.poll() is None:child.kill()
+            child.communicate(timeout=10)
+    def test_live_writer_is_readable_while_a_wait_is_outstanding(self):
+        with self.child():
+            data=reader.read_mmap(Path(self.tmp.name)/'prof.mmap')
+            self.assertGreater(data['header']['last_update_ns'],0)
+            self.assertEqual(data['threads'][0]['site'],11)
+            self.assertTrue(data['records'][-1]['ledger']['oldest'][0]['overdue'])
+    def test_kill9_leaves_a_committed_record_and_unanswered_ledger(self):
+        with self.child() as child:
+            child.kill();child.wait(timeout=10)
+            data=reader.read_mmap(Path(self.tmp.name)/'prof.mmap')
+            self.assertTrue(data['records']);self.assertGreater(data['header']['last_update_ns'],0)
+            self.assertEqual(data['records'][-1]['ledger']['oldest'][0]['id'],42)
 if __name__=='__main__':unittest.main()

@@ -1,10 +1,8 @@
+//! OS clock perimeter fixtures; these do not prove invariant/synchronized TSC.
 #![cfg(feature = "prof")]
 #[test]
 fn profiler_counter_is_monotonic_when_supported() {
-    if !kf_linux_raw::prof_clock::counter_available() {
-        return;
-    }
-    let a = kf_linux_raw::prof_clock::counter().unwrap();
+    let Some(a) = kf_linux_raw::prof_clock::counter() else {return;};
     let b = kf_linux_raw::prof_clock::counter().unwrap();
     assert!(a > 0 && b >= a);
 }
