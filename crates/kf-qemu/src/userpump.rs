@@ -555,7 +555,9 @@ fn publish_guarded(
     ring: Option<&Mapping<'static>>,
     gp: Option<&Snapshot<'static>>,
     pb: Option<&Snapshot<'static>>,
-    write: impl FnOnce(&kf_chan::user_storage::Storage<kf_chan::user_storage::CpuView>) -> Result<(), String>,
+    write: impl FnOnce(
+        &kf_chan::user_storage::Storage<kf_chan::user_storage::CpuView>,
+    ) -> Result<(), String>,
 ) -> Turn<()> {
     if me.inbox.walk_busy() {
         me.inbox.wait_walk(r.idx);
@@ -704,7 +706,13 @@ impl kf_chan::user_turn::Io for PumpIo<'_> {
         self.aux.doorbells = me.queued(r.idx);
         let mut put = [0u8; 4];
         r.userd
-            .read(me, r.key, &r.allocation, kf_abi::submit::USERD_GP_PUT, &mut put)
+            .read(
+                me,
+                r.key,
+                &r.allocation,
+                kf_abi::submit::USERD_GP_PUT,
+                &mut put,
+            )
             .map_err(|e| match e {
                 // The USERD's allocation is no longer the channel's current one: the guest's free is retiring
                 // this relay (`retire_user_ring_token` cancels the record next). Not a refusal -- nothing was
@@ -1008,7 +1016,11 @@ impl Pump {
     pub(super) fn release(&mut self, stats: &kf_chan::user_loop::Stats) -> Result<(), String> {
         {
             let c = self.core.life.counts();
-            if c.entries_scan.saturating_add(c.entries_pointer).saturating_add(c.entries_window) != 0 {
+            if c.entries_scan
+                .saturating_add(c.entries_pointer)
+                .saturating_add(c.entries_window)
+                != 0
+            {
                 eprintln!(
                     "kf3: USER_RING_LIFECYCLE {:x?} mode={:?} {c:?}",
                     self.key,
@@ -1115,10 +1127,18 @@ impl Pump {
             return;
         };
         match p {
-            Published::Entry { kind, cursor, entry } => self.trace_slots(|| {
+            Published::Entry {
+                kind,
+                cursor,
+                entry,
+            } => self.trace_slots(|| {
                 vec![format!(
                     "guest {} cursor={cursor} entry={entry:#018x}",
-                    if kind == PubKind::Pointer { "pointer" } else { "control" }
+                    if kind == PubKind::Pointer {
+                        "pointer"
+                    } else {
+                        "control"
+                    }
                 )]
             }),
             Published::Gate { count } => self.trace_slots(|| {
@@ -1694,7 +1714,8 @@ impl Pump {
         if entries.is_power_of_two() && entries >= 2 {
             for k in 0..24u32 {
                 let idx = self
-                    .core.cursor
+                    .core
+                    .cursor
                     .wrapping_add(entries)
                     .wrapping_sub(16)
                     .wrapping_add(k)
@@ -1704,7 +1725,11 @@ impl Pump {
                     .snapshot(me, r, at, 8)
                     .ok()
                     .and_then(|s| s.bytes.as_slice().try_into().ok().map(u64::from_le_bytes));
-                let mark = if idx == self.core.cursor { " <= cursor" } else { "" };
+                let mark = if idx == self.core.cursor {
+                    " <= cursor"
+                } else {
+                    ""
+                };
                 let _ = writeln!(out, "  {idx}: {e:#018x?}{mark}");
             }
         }
@@ -1943,7 +1968,11 @@ impl Pump {
                 Step::Segment => break,
                 Step::Scanned { rare } => {
                     let pb = self.aux.pb.take().ok_or("USER_RING_SCAN_PB_ABSENT")?;
-                    let source = self.aux.source.take().ok_or("USER_RING_SCAN_SOURCE_ABSENT")?;
+                    let source = self
+                        .aux
+                        .source
+                        .take()
+                        .ok_or("USER_RING_SCAN_SOURCE_ABSENT")?;
                     let software = self.aux.software.take();
                     if self.trace.is_some()
                         && let Some(kf_chan::user_stream::Source::Segment(d)) = self.core.desc
@@ -2128,7 +2157,8 @@ impl Pump {
             None,
             |pump, storage| {
                 let (slot, put) = pump
-                    .core.fetch
+                    .core
+                    .fetch
                     .publish(Some((pump.core.generation, guest_get)))
                     .map_err(str::to_owned)?;
                 storage.write_shadow_gp(slot, entry)?;
@@ -2228,7 +2258,8 @@ impl Pump {
                 Some(&s.pb),
                 |pump, storage| {
                     let (slot, put) = pump
-                        .core.fetch
+                        .core
+                        .fetch
                         .publish(Some((s.generation, s.guest_get)))
                         .map_err(str::to_owned)?;
                     storage.write_user_gp(slot, s.entry)?;
@@ -2246,7 +2277,9 @@ impl Pump {
             });
             self.source_admitted = true;
             self.core.scan = next;
-            self.core.life.segment_scanned(self.core.scan.carried().is_some());
+            self.core
+                .life
+                .segment_scanned(self.core.scan.carried().is_some());
             self.core.cursor = s.guest_get;
             self.core.note_relayed(s.entry);
             self.core.unnotified = true;
@@ -2334,7 +2367,9 @@ impl Pump {
         }
         s.staged = true;
         self.core.scan = next;
-        self.core.life.segment_scanned(self.core.scan.carried().is_some());
+        self.core
+            .life
+            .segment_scanned(self.core.scan.carried().is_some());
         s.wait = Some(Wait {
             witness: self.core.marks.issued(),
             trigger,
@@ -2487,7 +2522,8 @@ impl Pump {
             return Err("USER_RING_MIGRATION_DECLARATION".into());
         }
         let generation = self
-            .core.generation
+            .core
+            .generation
             .checked_add(1)
             .ok_or("USER_RING_SOURCE_SEQUENCE")?;
         if self.trace.is_some() {
@@ -2509,7 +2545,8 @@ impl Pump {
             if entries.is_power_of_two() && entries >= 2 {
                 for k in 0..12u32 {
                     let idx = self
-                        .core.cursor
+                        .core
+                        .cursor
                         .wrapping_add(entries)
                         .wrapping_sub(4)
                         .wrapping_add(k)
@@ -2577,7 +2614,13 @@ impl Pump {
         {
             let mut b = [0u8; 4];
             if r.userd
-                .read(me, r.key, &r.allocation, kf_abi::submit::USERD_GP_GET, &mut b)
+                .read(
+                    me,
+                    r.key,
+                    &r.allocation,
+                    kf_abi::submit::USERD_GP_GET,
+                    &mut b,
+                )
                 .is_ok()
                 && self.core.new_ring_get(u32::from_le_bytes(b))
             {
@@ -2834,11 +2877,14 @@ impl ChanPlane {
                 }
             }
             Need::Contended => {
+                // ★ simple relay: the turn lost a lock: back into the retry set (the durable demand flag), no wait
                 record.contended_note();
+                let _ = record.request();
                 Stats::bump(&self.relay_stats.contended);
             }
             Need::Idle | Need::Marker { .. } | Need::Popped { .. } => record.contended_clear(),
         }
+        record.set_carried(p.wait.is_some_and(kf_chan::user_loop::Wait::carried));
     }
 
     /// Some relay waits for something only a look can find: a private-ring wait
@@ -2877,19 +2923,15 @@ impl ChanPlane {
         record: &Arc<userrelay::Cell>,
         why: kf_chan::user_loop::Peek,
     ) -> bool {
-        use kf_chan::user_loop::{Found, Peek, found};
+        use kf_chan::user_loop::{Look, LookIn, look};
         if record.is_canceled() {
             return false;
         }
-        let backstop = why == Peek::Backstop;
         let demand = record.pending();
         // Doorbell contract: no look has a reason to touch an idle relay (no `GP_PUT` poll).
         if !kf_chan::user_loop::look_needed(why, demand, record.is_waiting()) {
             return false;
         }
-        // a relay that keeps finding a busy lock is re-rung by the spin / event looks only a bounded
-        // number of times in a row (else the spin is an endless busy loop); the safety net always may
-        let retry_ok = kf_chan::user_loop::may_retry(record.contended_run(), why);
         let ring = |this: &Self| {
             kf_chan::progress::hit_point(kf_chan::progress::Point::RelayRing);
             if this.plane.ring_internal(record.idx) {
@@ -2897,9 +2939,17 @@ impl ChanPlane {
             }
             true
         };
+        // ★ 2026-10-20 (simple relay): ONE level decision (`kf_chan::user_loop::look`), no budget, no reason-dependent arm.
         let Ok(mut r) = record.try_lock() else {
-            // Held elsewhere (the act thread): ring, the turn handles the contention itself.
-            return retry_ok && ring(self);
+            let i = LookIn {
+                demand,
+                record_busy: true,
+                wait: None,
+                words: None,
+                fetched: 0,
+                get_follows_pops: false,
+            };
+            return matches!(look(i), Look::Ring { .. }) && ring(self);
         };
         if r.retired || r.free_attempted || r.dead.is_some() {
             return false;
@@ -2908,93 +2958,62 @@ impl ChanPlane {
         let Some(p) = r.pump.as_mut() else {
             return false;
         };
-        if let Some(w) = p.wait {
-            // ★ `KF3_DIAG_PROGRESS`: a look that was entitled to act on this wait stamps the relay (a contended wait whose retry budget is spent is
-            // NOT looked at by the spin / event looks: only the safety net may re-ring it).
-            if kf_chan::progress::on() && (retry_ok || !matches!(w, kf_chan::user_loop::Wait::Contended)) {
-                record.stamp_look();
-            }
-            // The private words: `GP_GET` (entries popped) and the tagged `REFERENCE` (markers
-            // processed) are the proofs; the interrupt is only the hint.
-            let mut pops = false;
-            let satisfied = match r.lease.storage.try_lock() {
-                Ok(storage) => match (storage.gpu_get(), storage.gpu_reference()) {
-                    (Ok(get), Ok(reference)) => match p.core.fetch.peek(get) {
-                        Ok(popped) => {
-                            // pops the guest's `GP_GET` write-back has not shown yet (they carry no event)
-                            pops = popped > p.core.fetch.fetched();
-                            w.satisfied(p.core.marks.peek(reference), popped)
-                        }
-                        // outside the ring / beyond what was issued: the turn refuses it by name
-                        Err(_) => true,
-                    },
-                    _ => true,
-                },
-                Err(_) => true,
-            };
-            if !satisfied && pops && matches!(w, kf_chan::user_loop::Wait::Marker { .. }) {
-                // A gate (or batch) is still draining, but the PBDMA has popped more entries than the
-                // guest's `GP_GET` shows. The wait stays; the turn only writes the guest's `GP_GET` back
-                // (a guest blocked on a full ring behind its OWN gate would otherwise wait for the
-                // marker, which waits for the guest).
-                Stats::bump(&self.relay_stats.pop_writebacks);
-                return ring(self);
-            }
-            if satisfied && (retry_ok || !matches!(w, kf_chan::user_loop::Wait::Contended)) {
-                if backstop {
-                    let (counter, name) = match found(w) {
-                        Found::Work => {
-                            (&self.relay_stats.backstop_found_work, "BACKSTOP_FOUND_WORK")
-                        }
-                        Found::Carried => (&self.relay_stats.backstop_carried, "BACKSTOP_CARRIED"),
-                        Found::Contended => {
-                            (&self.relay_stats.backstop_contended, "BACKSTOP_CONTENDED")
-                        }
-                    };
-                    let n = counter.fetch_add(1, Ordering::Relaxed) + 1;
-                    // ★ PHASE 1b (review D3): a Pointer-mode channel woken by the 50 ms backstop is a timer carrying
-                    // progress ("performance never depends on timing"). Counted always, LOUD beyond about one a
-                    // second (`kf_chan::user_loop::loud_rate`).
-                    if p.core.life.mode() == kf_chan::user_lifecycle::Mode::Pointer {
-                        static START: std::sync::OnceLock<std::time::Instant> =
-                            std::sync::OnceLock::new();
-                        let now_ms = u64::try_from(START.get_or_init(std::time::Instant::now).elapsed().as_millis())
-                            .unwrap_or(u64::MAX);
-                        let loud = kf_chan::user_loop::loud_rate(p.aux.pointer_backstop_ms, now_ms);
-                        p.aux.pointer_backstop_ms = Some(now_ms);
-                        p.core.life.pointer_backstop(loud);
-                        if loud {
-                            let c = p.core.life.counts().pointer_backstop_loud;
-                            if c <= 8 || c.is_power_of_two() {
-                                eprintln!(
-                                    "kf3: USER_RING_POINTER_BACKSTOP {:#x}:{:#x} #{c}: a Pointer-mode channel was woken by the 50 ms safety net more than once a second (no marker could announce its wait {w:?})",
-                                    r.key.0, r.key.1
-                                );
-                            }
-                        }
-                    }
-                    if matches!(found(w), Found::Work) && (n <= 8 || n.is_power_of_two()) {
-                        eprintln!(
-                            "kf3: USER_RING_{name} {:#x}:{:#x} #{n}: the safety net found a satisfied wait {w:?} (an interrupt should have announced it)",
-                            r.key.0, r.key.1
-                        );
-                    }
+        if kf_chan::progress::on() && p.wait.is_some() {
+            record.stamp_look();
+        }
+        // The private words: `GP_GET` (entries popped) and the tagged `REFERENCE` (markers processed) are the proofs; the
+        // interrupt is only the hint.
+        let words = p.wait.and_then(|_| match r.lease.storage.try_lock() {
+            Ok(storage) => match (storage.gpu_get(), storage.gpu_reference()) {
+                (Ok(get), Ok(reference)) => p
+                    .core
+                    .fetch
+                    .peek(get)
+                    .ok()
+                    .map(|popped| (p.core.marks.peek(reference), popped)),
+                _ => None,
+            },
+            Err(_) => None,
+        });
+        let i = LookIn {
+            demand,
+            record_busy: false,
+            wait: p.wait,
+            words,
+            fetched: p.core.fetch.fetched(),
+            get_follows_pops: kf_chan::user_turn::guest_get_follows_pops(),
+        };
+        match look(i) {
+            Look::Leave => {
+                if why == kf_chan::user_loop::Peek::Event && p.wait.is_some() {
+                    Stats::bump(&self.relay_stats.event_without_progress);
                 }
-                p.wait = None;
-                record.set_waiting(false);
-                return ring(self);
+                false
             }
-            if why == Peek::Event {
-                Stats::bump(&self.relay_stats.event_without_progress);
+            Look::Ring {
+                clear_wait,
+                pops_only,
+            } => {
+                if pops_only {
+                    Stats::bump(&self.relay_stats.pop_writebacks);
+                }
+                if clear_wait {
+                    p.wait = None;
+                    record.set_waiting(false);
+                }
+                ring(self)
             }
         }
-        if demand && retry_ok {
-            if backstop {
-                Stats::bump(&self.relay_stats.backstop_contended);
-            }
-            return ring(self);
-        }
-        false
+    }
+
+    /// ★ 2026-10-20 (simple relay, `kf_chan::worker::RelayLoop::unsourced`): some relay holds an obligation that no registered
+    /// wake source announces: demand left behind (the retry set) or a wait no interrupt announces (`Wait::Popped`).
+    pub(crate) fn user_ring_unsourced(&self) -> bool {
+        self.user_rings.try_lock().map_or(true, |rings| {
+            rings
+                .values()
+                .any(|record| record.pending() || (record.is_waiting() && record.carried()))
+        })
     }
 
     /// Selects the worker's short park interval ONLY for the measurement trace's deferred re-reads
@@ -3165,6 +3184,9 @@ impl kf_chan::worker::RelayLoop for ChanPlane {
     }
     fn peek(&self, why: kf_chan::user_loop::Peek) -> bool {
         self.user_ring_peek(why)
+    }
+    fn unsourced(&self) -> bool {
+        self.user_ring_unsourced()
     }
 }
 
@@ -3430,10 +3452,22 @@ mod tests {
             ("kf-qemu/chan.rs", include_str!("chan.rs")),
             ("kf-qemu/twin.rs", include_str!("twin.rs")),
             ("kf-qemu/userbirth.rs", include_str!("userbirth.rs")),
-            ("kf-chan/passthrough.rs", include_str!("../../kf-chan/src/passthrough.rs")),
-            ("kf-chan/translated.rs", include_str!("../../kf-chan/src/translated.rs")),
-            ("kf-chan/tmode.rs", include_str!("../../kf-chan/src/tmode.rs")),
-            ("kf-chan/userd_relay.rs", include_str!("../../kf-chan/src/userd_relay.rs")),
+            (
+                "kf-chan/passthrough.rs",
+                include_str!("../../kf-chan/src/passthrough.rs"),
+            ),
+            (
+                "kf-chan/translated.rs",
+                include_str!("../../kf-chan/src/translated.rs"),
+            ),
+            (
+                "kf-chan/tmode.rs",
+                include_str!("../../kf-chan/src/tmode.rs"),
+            ),
+            (
+                "kf-chan/userd_relay.rs",
+                include_str!("../../kf-chan/src/userd_relay.rs"),
+            ),
         ];
         for (name, text) in others {
             assert!(
@@ -3442,7 +3476,10 @@ mod tests {
             );
         }
         let relay = include_str!("userrelay.rs");
-        assert!(!relay.contains("Lifecycle::new"), "only the pump constructs it");
+        assert!(
+            !relay.contains("Lifecycle::new"),
+            "only the pump constructs it"
+        );
         assert_eq!(
             relay.matches("userpump::Pump::new(").count(),
             1,
@@ -3451,7 +3488,8 @@ mod tests {
         let pump = include_str!("userpump.rs");
         let pump = pump.split("#[cfg(test)]").next().unwrap();
         assert_eq!(
-            pump.matches("kf_chan::user_lifecycle::Lifecycle::new()").count(),
+            pump.matches("kf_chan::user_lifecycle::Lifecycle::new()")
+                .count(),
             1,
             "one machine per pump"
         );
@@ -3466,10 +3504,22 @@ mod tests {
             ("kf-qemu/chan.rs", include_str!("chan.rs")),
             ("kf-qemu/twin.rs", include_str!("twin.rs")),
             ("kf-qemu/userbirth.rs", include_str!("userbirth.rs")),
-            ("kf-chan/passthrough.rs", include_str!("../../kf-chan/src/passthrough.rs")),
-            ("kf-chan/translated.rs", include_str!("../../kf-chan/src/translated.rs")),
-            ("kf-chan/tmode.rs", include_str!("../../kf-chan/src/tmode.rs")),
-            ("kf-chan/userd_relay.rs", include_str!("../../kf-chan/src/userd_relay.rs")),
+            (
+                "kf-chan/passthrough.rs",
+                include_str!("../../kf-chan/src/passthrough.rs"),
+            ),
+            (
+                "kf-chan/translated.rs",
+                include_str!("../../kf-chan/src/translated.rs"),
+            ),
+            (
+                "kf-chan/tmode.rs",
+                include_str!("../../kf-chan/src/tmode.rs"),
+            ),
+            (
+                "kf-chan/userd_relay.rs",
+                include_str!("../../kf-chan/src/userd_relay.rs"),
+            ),
         ];
         for (name, text) in others {
             assert!(
@@ -3478,10 +3528,17 @@ mod tests {
             );
         }
         let relay = include_str!("userrelay.rs");
-        assert!(!relay.contains("user_lazy") && !relay.contains("with_lazy"), "only the pump configures it");
+        assert!(
+            !relay.contains("user_lazy") && !relay.contains("with_lazy"),
+            "only the pump configures it"
+        );
         let pump = include_str!("userpump.rs");
         let pump = pump.split("#[cfg(test)]").next().unwrap();
-        assert_eq!(pump.matches(".with_lazy(").count(), 1, "one relay constructor, one opt-in");
+        assert_eq!(
+            pump.matches(".with_lazy(").count(),
+            1,
+            "one relay constructor, one opt-in"
+        );
     }
 
     /// D3: `KF3_PUT_CACHE` / `KF3_LAZY_OBSERVE` (default ON, measurement class) are read ONCE, by the relay's birth, never
@@ -3493,14 +3550,32 @@ mod tests {
         assert_eq!(pump.matches("std::env::var(ENV_PUT_CACHE)").count(), 1);
         assert_eq!(pump.matches("std::env::var(ENV_LAZY_OBSERVE)").count(), 1);
         assert_eq!(pump.matches("std::sync::OnceLock<LazyConfig>").count(), 1);
-        assert_eq!(pump.matches("lazy_config()").count(), 2, "its definition and the one call");
-        let birth = pump.split("pub(super) fn new(me: &ChanPlane").nth(1).unwrap();
+        assert_eq!(
+            pump.matches("lazy_config()").count(),
+            2,
+            "its definition and the one call"
+        );
+        let birth = pump
+            .split("pub(super) fn new(me: &ChanPlane")
+            .nth(1)
+            .unwrap();
         let birth = birth.split("pub(super) fn release").next().unwrap();
-        assert!(birth.contains(".with_lazy(lazy_config())"), "the call is in Pump::new");
-        let turns = pump.split("fn turn(&mut self, me: &ChanPlane").nth(1).unwrap();
-        let turns = turns.split("/// Measurement only: the final scan refusal").next().unwrap();
         assert!(
-            !turns.contains("lazy_config") && !turns.contains("env::var") && !turns.contains("ENV_"),
+            birth.contains(".with_lazy(lazy_config())"),
+            "the call is in Pump::new"
+        );
+        let turns = pump
+            .split("fn turn(&mut self, me: &ChanPlane")
+            .nth(1)
+            .unwrap();
+        let turns = turns
+            .split("/// Measurement only: the final scan refusal")
+            .next()
+            .unwrap();
+        assert!(
+            !turns.contains("lazy_config")
+                && !turns.contains("env::var")
+                && !turns.contains("ENV_"),
             "no read per turn"
         );
         // and the pure relay never touches the environment either (kf-chan pins the same from its side)
@@ -3519,28 +3594,60 @@ mod tests {
     fn the_pump_wires_the_lazy_counters_the_retire_hook_and_the_walk_gate() {
         let pump = include_str!("userpump.rs");
         let pump = pump.split("#[cfg(test)]").next().unwrap();
-        let turn = pump.split("fn turn(&mut self, me: &ChanPlane").nth(1).unwrap();
+        let turn = pump
+            .split("fn turn(&mut self, me: &ChanPlane")
+            .nth(1)
+            .unwrap();
         let turn = turn.split("fn turn_body(").next().unwrap();
-        for needle in ["self.core.lazy.flush_due()", "me.relay_stats.lazy.add(", "take_delta()"] {
+        for needle in [
+            "self.core.lazy.flush_due()",
+            "me.relay_stats.lazy.add(",
+            "take_delta()",
+        ] {
             assert!(turn.contains(needle), "turn() must call {needle}");
         }
         let release = pump.split("pub(super) fn release(").nth(1).unwrap();
         let release = release.split("fn ").next().unwrap();
-        for needle in ["self.core.retire();", "stats.lazy.add(", "USER_RING_LAZY_OBSERVE"] {
+        for needle in [
+            "self.core.retire();",
+            "stats.lazy.add(",
+            "USER_RING_LAZY_OBSERVE",
+        ] {
             assert!(release.contains(needle), "release() must contain {needle}");
         }
-        assert!(!release.contains("life.teardown"), "the relay's retire() tears the machine down");
-        assert_eq!(pump.matches("\"kf3: USER_RING_LAZY_OBSERVE {").count(), 1, "one line per relay, in one place");
-        let io = pump.split("impl kf_chan::user_turn::Io for PumpIo").nth(1).unwrap();
-        let io = io.split("fn begin_entry").next().unwrap();
-        let after = pump.split("fn gp_put(&mut self) -> Turn<Option<u32>> {").nth(1).unwrap();
-        let gp_put = after.split("fn begin_entry").next().unwrap();
-        assert!(io.contains("fn walk_busy(&mut self) -> bool"), "the gate is the Io's");
         assert!(
-            io.contains("me.inbox.walk_busy()") && io.contains("wait_walk(r.idx)") && io.contains("return true;"),
+            !release.contains("life.teardown"),
+            "the relay's retire() tears the machine down"
+        );
+        assert_eq!(
+            pump.matches("\"kf3: USER_RING_LAZY_OBSERVE {").count(),
+            1,
+            "one line per relay, in one place"
+        );
+        let io = pump
+            .split("impl kf_chan::user_turn::Io for PumpIo")
+            .nth(1)
+            .unwrap();
+        let io = io.split("fn begin_entry").next().unwrap();
+        let after = pump
+            .split("fn gp_put(&mut self) -> Turn<Option<u32>> {")
+            .nth(1)
+            .unwrap();
+        let gp_put = after.split("fn begin_entry").next().unwrap();
+        assert!(
+            io.contains("fn walk_busy(&mut self) -> bool"),
+            "the gate is the Io's"
+        );
+        assert!(
+            io.contains("me.inbox.walk_busy()")
+                && io.contains("wait_walk(r.idx)")
+                && io.contains("return true;"),
             "and it reports the walk after registering the wait"
         );
-        assert!(!gp_put.contains("walk_busy"), "gp_put no longer checks it: the relay does, before the cache");
+        assert!(
+            !gp_put.contains("walk_busy"),
+            "gp_put no longer checks it: the relay does, before the cache"
+        );
     }
     /// Retiring a pump goes through the relay (`Relay::retire`: the cache is dropped and the machine torn down); the pump
     /// does not tear the machine down itself.
@@ -3549,7 +3656,11 @@ mod tests {
         let pump = include_str!("userpump.rs");
         let pump = pump.split("#[cfg(test)]").next().unwrap();
         assert_eq!(pump.matches("self.core.retire()").count(), 1);
-        assert_eq!(pump.matches("life.teardown()").count(), 0, "only the relay tears its machine down");
+        assert_eq!(
+            pump.matches("life.teardown()").count(),
+            0,
+            "only the relay tears its machine down"
+        );
     }
 
     /// The per-relay lazy counters reach the VM-wide ones every 256th turn (a relay that lives for minutes must not keep
@@ -3568,7 +3679,10 @@ mod tests {
     fn the_walk_gate_registers_the_wait_and_tells_the_relay_to_stop() {
         let pump = include_str!("userpump.rs");
         let pump = pump.split("#[cfg(test)]").next().unwrap();
-        let gate = pump.split("fn walk_busy(&mut self) -> bool {").nth(1).unwrap();
+        let gate = pump
+            .split("fn walk_busy(&mut self) -> bool {")
+            .nth(1)
+            .unwrap();
         let gate = gate.split("fn gp_put").next().unwrap();
         assert!(gate.contains("me.inbox.walk_busy()"));
         assert!(gate.contains("me.inbox.wait_walk(r.idx);"));
@@ -3580,9 +3694,16 @@ mod tests {
     fn turn_reads_no_lazy_switch() {
         let pump = include_str!("userpump.rs");
         let pump = pump.split("#[cfg(test)]").next().unwrap();
-        let turn = pump.split("fn turn(&mut self, me: &ChanPlane").nth(1).unwrap();
+        let turn = pump
+            .split("fn turn(&mut self, me: &ChanPlane")
+            .nth(1)
+            .unwrap();
         let turn = turn.split("fn report_lifecycle_notices").next().unwrap();
-        assert!(!turn.contains("ENV_PUT_CACHE") && !turn.contains("ENV_LAZY_OBSERVE") && !turn.contains("env::var"));
+        assert!(
+            !turn.contains("ENV_PUT_CACHE")
+                && !turn.contains("ENV_LAZY_OBSERVE")
+                && !turn.contains("env::var")
+        );
     }
 
     /// PHASE 1c (review 2, N2): `KF3_LIFECYCLE_MODE` selects the measurement-class mode; nothing about it is required
@@ -3606,15 +3727,39 @@ mod tests {
     fn the_lifecycle_mode_is_read_once_at_relay_creation_and_never_per_turn() {
         let pump = include_str!("userpump.rs");
         let pump = pump.split("#[cfg(test)]").next().unwrap();
-        assert_eq!(pump.matches("LifecycleMode::ENV").count(), 3, "read + two notes, all in one place");
-        assert_eq!(pump.matches("std::sync::OnceLock<kf_chan::user_lifecycle::LifecycleMode>").count(), 1);
-        assert_eq!(pump.matches("lifecycle_mode()").count(), 2, "its definition and the one call");
-        let birth = pump.split("pub(super) fn new(me: &ChanPlane").nth(1).unwrap();
+        assert_eq!(
+            pump.matches("LifecycleMode::ENV").count(),
+            3,
+            "read + two notes, all in one place"
+        );
+        assert_eq!(
+            pump.matches("std::sync::OnceLock<kf_chan::user_lifecycle::LifecycleMode>")
+                .count(),
+            1
+        );
+        assert_eq!(
+            pump.matches("lifecycle_mode()").count(),
+            2,
+            "its definition and the one call"
+        );
+        let birth = pump
+            .split("pub(super) fn new(me: &ChanPlane")
+            .nth(1)
+            .unwrap();
         let birth = birth.split("pub(super) fn release").next().unwrap();
-        assert!(birth.contains("with_mode(lifecycle_mode())"), "the call is in Pump::new");
+        assert!(
+            birth.contains("with_mode(lifecycle_mode())"),
+            "the call is in Pump::new"
+        );
         let turn = pump.split("fn turn_body(").nth(1).unwrap();
-        let turn = turn.split("/// Measurement only: the final scan refusal").next().unwrap();
-        assert!(!turn.contains("lifecycle_mode") && !turn.contains("env::var"), "no read per turn");
+        let turn = turn
+            .split("/// Measurement only: the final scan refusal")
+            .next()
+            .unwrap();
+        assert!(
+            !turn.contains("lifecycle_mode") && !turn.contains("env::var"),
+            "no read per turn"
+        );
     }
     /// PHASE 1c: the pump gives every channel the VM's marker latch, says aloud what the machine queued and hands the
     /// scan's SET_OBJECT tally over, at the end of EVERY turn (the machine and the relay have no I/O).
@@ -3623,11 +3768,15 @@ mod tests {
         let pump = include_str!("userpump.rs");
         let pump = pump.split("#[cfg(test)]").next().unwrap();
         assert_eq!(
-            pump.matches(".with_latch(me.relay_stats.life.latch.clone())").count(),
+            pump.matches(".with_latch(me.relay_stats.life.latch.clone())")
+                .count(),
             1,
             "one latch per VM, handed to every channel at birth"
         );
-        let turn = pump.split("fn turn(&mut self, me: &ChanPlane").nth(1).unwrap();
+        let turn = pump
+            .split("fn turn(&mut self, me: &ChanPlane")
+            .nth(1)
+            .unwrap();
         let turn = turn.split("fn turn_body(").next().unwrap();
         for needle in [
             "self.report_lifecycle_notices();",
@@ -3636,8 +3785,16 @@ mod tests {
         ] {
             assert!(turn.contains(needle), "turn() must call {needle}");
         }
-        for line in ["USER_RING_PUT_BOUNDARY_OPEN", "USER_RING_WINDOW_FRESH", "USER_RING_POINTER_MARKERS_LATCHED_OFF"] {
-            assert_eq!(pump.matches(line).count(), 1, "{line} is printed in one place");
+        for line in [
+            "USER_RING_PUT_BOUNDARY_OPEN",
+            "USER_RING_WINDOW_FRESH",
+            "USER_RING_POINTER_MARKERS_LATCHED_OFF",
+        ] {
+            assert_eq!(
+                pump.matches(line).count(),
+                1,
+                "{line} is printed in one place"
+            );
         }
     }
     // ---- PHASE 1c (review 2, mutants R and W): the two pump lines that decide whether a Window ever opens
@@ -3677,27 +3834,75 @@ mod tests {
         const OBJECT: u32 = 0xff1f_e010;
         let reg = Registry::new(Bounds::default());
         let sw = test_software(OBJECT);
-        assert_eq!(live_registrations(Some(&reg), CLIENT, Some(&sw)), 0, "nothing registered");
-        register_on(&reg, ObjKey { client: CLIENT, object: OBJECT }, 0x4000_0001);
+        assert_eq!(
+            live_registrations(Some(&reg), CLIENT, Some(&sw)),
+            0,
+            "nothing registered"
+        );
+        register_on(
+            &reg,
+            ObjKey {
+                client: CLIENT,
+                object: OBJECT,
+            },
+            0x4000_0001,
+        );
         assert_eq!(
             live_registrations(Some(&reg), CLIENT, Some(&sw)),
             1,
             "a registration on the software object opens the Window"
         );
-        register_on(&reg, ObjKey { client: CLIENT, object: OBJECT }, 0x4000_0002);
+        register_on(
+            &reg,
+            ObjKey {
+                client: CLIENT,
+                object: OBJECT,
+            },
+            0x4000_0002,
+        );
         assert_eq!(live_registrations(Some(&reg), CLIENT, Some(&sw)), 2);
         // registrations on the CHANNEL's handle, on another client's object and on another object are not this object's
-        register_on(&reg, ObjKey { client: CLIENT, object: CHANNEL }, 0x4000_0003);
-        register_on(&reg, ObjKey { client: CLIENT + 1, object: OBJECT }, 0x4000_0004);
-        register_on(&reg, ObjKey { client: CLIENT, object: OBJECT + 1 }, 0x4000_0005);
+        register_on(
+            &reg,
+            ObjKey {
+                client: CLIENT,
+                object: CHANNEL,
+            },
+            0x4000_0003,
+        );
+        register_on(
+            &reg,
+            ObjKey {
+                client: CLIENT + 1,
+                object: OBJECT,
+            },
+            0x4000_0004,
+        );
+        register_on(
+            &reg,
+            ObjKey {
+                client: CLIENT,
+                object: OBJECT + 1,
+            },
+            0x4000_0005,
+        );
         assert_eq!(live_registrations(Some(&reg), CLIENT, Some(&sw)), 2);
         // the channel's own handle is not the software object (a mutant keyed by it would see exactly 1 here)
         let channel_as_object = test_software(CHANNEL);
-        assert_eq!(live_registrations(Some(&reg), CLIENT, Some(&channel_as_object)), 1);
+        assert_eq!(
+            live_registrations(Some(&reg), CLIENT, Some(&channel_as_object)),
+            1
+        );
         // no registry, or no software object: nothing to open a Window for
         assert_eq!(live_registrations(None, CLIENT, Some(&sw)), 0);
         assert_eq!(live_registrations(Some(&reg), CLIENT, None), 0);
-        assert_eq!(software_key(CLIENT, &sw), ObjKey { client: CLIENT, object: OBJECT });
+        assert_eq!(
+            software_key(CLIENT, &sw),
+            ObjKey {
+                client: CLIENT,
+                object: OBJECT
+            }
+        );
     }
 
     /// R, second angle: the key of a software object is built in ONE place and every reader of the registry uses it
@@ -3712,14 +3917,21 @@ mod tests {
             "the key is built only in software_key, from the OBJECT's handle"
         );
         assert!(!pump.contains("object: self.r.key") && !pump.contains("object: r.key"));
-        assert_eq!(pump.matches("software_key(").count(), 4, "its definition and three readers");
+        assert_eq!(
+            pump.matches("software_key(").count(),
+            4,
+            "its definition and three readers"
+        );
     }
 
     fn registry_live_body() -> String {
         let pump = include_str!("userpump.rs");
         let pump = pump.split("#[cfg(test)]").next().unwrap();
         let live = pump.split("fn registry_live(&mut self)").nth(1).unwrap();
-        live.split("fn software(&mut self, refresh").next().unwrap().to_owned()
+        live.split("fn software(&mut self, refresh")
+            .next()
+            .unwrap()
+            .to_owned()
     }
 
     /// R, third angle: `registry_live` hands the channel's CLIENT and its software object to the one counting function.
@@ -3748,7 +3960,12 @@ mod tests {
         let pump = pump.split("#[cfg(test)]").next().unwrap();
         let migrate = pump.split("    fn migrate(").nth(1).unwrap();
         let migrate = migrate.split("\n}\n").next().unwrap();
-        assert_eq!(migrate.matches("self.core.switch_source(generation);").count(), 1);
+        assert_eq!(
+            migrate
+                .matches("self.core.switch_source(generation);")
+                .count(),
+            1
+        );
         assert_eq!(migrate.matches("self.core.new_ring_get(").count(), 1);
         for banned in [
             "self.core.generation =",
@@ -3763,7 +3980,10 @@ mod tests {
             );
         }
         for banned in ["life.source_switched", "life.switch_cursor_mismatch"] {
-            assert!(!pump.contains(banned), "the pump must not call {banned}: Relay::switch_source / new_ring_get do");
+            assert!(
+                !pump.contains(banned),
+                "the pump must not call {banned}: Relay::switch_source / new_ring_get do"
+            );
         }
     }
 
@@ -3775,10 +3995,17 @@ mod tests {
         let pump = pump.split("#[cfg(test)]").next().unwrap();
         let migrate = pump.split("    fn migrate(").nth(1).unwrap();
         let migrate = migrate.split("\n}\n").next().unwrap();
-        let installed = migrate.find("r.source = (u.gpfifo_va, u.entries);").unwrap();
-        let call = migrate.find("self.core.switch_source(generation);").unwrap();
+        let installed = migrate
+            .find("r.source = (u.gpfifo_va, u.entries);")
+            .unwrap();
+        let call = migrate
+            .find("self.core.switch_source(generation);")
+            .unwrap();
         let logged = migrate.find("USER_RING_MIGRATED").unwrap();
-        assert!(installed < call && call < logged, "install < switch_source < MIGRATED line");
+        assert!(
+            installed < call && call < logged,
+            "install < switch_source < MIGRATED line"
+        );
         let admit = migrate.find("ring.admit(|| {").unwrap();
         assert!(admit < installed);
     }
@@ -3786,10 +4013,16 @@ mod tests {
     // ---- 2026-10-20: KF3_DIAG_PROGRESS (default off, measurement only): where it may run, what it may touch, what it stamps
 
     fn prog_source() -> &'static str {
-        include_str!("progdiag.rs").split("#[cfg(test)]").next().unwrap()
+        include_str!("progdiag.rs")
+            .split("#[cfg(test)]")
+            .next()
+            .unwrap()
     }
     fn pump_prod() -> &'static str {
-        include_str!("userpump.rs").split("#[cfg(test)]").next().unwrap()
+        include_str!("userpump.rs")
+            .split("#[cfg(test)]")
+            .next()
+            .unwrap()
     }
 
     /// It takes every lock with `try_lock` and sleeps once, outside every lock.
@@ -3797,18 +4030,30 @@ mod tests {
     fn the_progress_diagnostic_takes_every_lock_with_try_lock() {
         let d = prog_source();
         assert!(d.len() > 500, "progdiag.rs is not written yet");
-        assert!(d.matches(".try_lock()").count() >= 4, "the map, the record and the storage are all try_lock");
+        assert!(
+            d.matches(".try_lock()").count() >= 4,
+            "the map, the record and the storage are all try_lock"
+        );
         assert!(d.contains("self.user_rings.try_lock()"));
         assert!(d.contains("record.try_lock()"));
-        assert_eq!(d.matches("thread::sleep").count(), 1, "the one sleep is the tick, outside every lock");
+        assert_eq!(
+            d.matches("thread::sleep").count(),
+            1,
+            "the one sleep is the tick, outside every lock"
+        );
     }
 
     /// Nothing in it can block.
     #[test]
     fn the_progress_diagnostic_never_blocks() {
         let d = prog_source();
-        for banned in [".lock()", ".read()", ".write()", "Condvar", ".join(", ".recv(", "block_on", "park"] {
-            assert!(!d.contains(banned), "progdiag.rs must not contain {banned:?}");
+        for banned in [
+            ".lock()", ".read()", ".write()", "Condvar", ".join(", ".recv(", "block_on", "park",
+        ] {
+            assert!(
+                !d.contains(banned),
+                "progdiag.rs must not contain {banned:?}"
+            );
         }
     }
 
@@ -3817,7 +4062,10 @@ mod tests {
     fn the_progress_diagnostic_reads_no_environment_and_prints_only_rendered_lines() {
         let d = prog_source();
         for banned in ["unsafe", "env::var", "{:?}"] {
-            assert!(!d.contains(banned), "progdiag.rs must not contain {banned:?}");
+            assert!(
+                !d.contains(banned),
+                "progdiag.rs must not contain {banned:?}"
+            );
         }
         assert!(d.contains("progress::render_relay_block("));
         assert!(d.contains("progress::render_starved("));
@@ -3838,9 +4086,18 @@ mod tests {
             assert!(d.contains(needle), "{needle}");
         }
         let peek = pump_prod().split("fn user_ring_peek_one(").nth(1).unwrap();
-        let peek = peek.split("pub(crate) fn user_ring_poll_due").next().unwrap();
+        let peek = peek
+            .split("pub(crate) fn user_ring_poll_due")
+            .next()
+            .unwrap();
         let peek: String = peek.split_whitespace().collect();
-        for needle in ["storage.gpu_get()", "storage.gpu_reference()", "p.core.fetch.peek(get)", "p.core.marks.peek(reference)", "w.satisfied(p.core.marks.peek(reference),popped)"] {
+        for needle in [
+            "storage.gpu_get()",
+            "storage.gpu_reference()",
+            "p.core.fetch.peek(get)",
+            "p.core.marks.peek(reference)",
+            "w.satisfied(p.core.marks.peek(reference),popped)",
+        ] {
             assert!(peek.contains(needle), "the look reads {needle}");
         }
     }
@@ -3848,7 +4105,9 @@ mod tests {
     fn peek_one_prod() -> &'static str {
         let pump = pump_prod();
         let peek = pump.split("fn user_ring_peek_one(").nth(1).unwrap();
-        peek.split("pub(crate) fn user_ring_poll_due").next().unwrap()
+        peek.split("pub(crate) fn user_ring_poll_due")
+            .next()
+            .unwrap()
     }
     fn serve_prod() -> &'static str {
         let pump = pump_prod();
@@ -3860,7 +4119,11 @@ mod tests {
     #[test]
     fn the_relay_stamp_and_point_inventory_is_exact() {
         let pump = pump_prod();
-        assert_eq!(pump.matches("record.stamp_look()").count(), 2, "the look and the serve");
+        assert_eq!(
+            pump.matches("record.stamp_look()").count(),
+            2,
+            "the look and the serve"
+        );
         assert!(pump.contains("kf_chan::progress::hit_point(kf_chan::progress::Point::RelayRing)"));
         assert_eq!(pump.matches("Point::RelayRing").count(), 1);
         assert_eq!(pump.matches("Point::RelayTurn").count(), 1);
@@ -3874,22 +4137,33 @@ mod tests {
         let w = peek.find("if let Some(w) = p.wait {").unwrap();
         let stamp = peek.find("record.stamp_look()").unwrap();
         let satisfied = peek.find("let satisfied = match").unwrap();
-        assert!(w < stamp && stamp < satisfied, "stamped on entering the wait evaluation, before the reads");
+        assert!(
+            w < stamp && stamp < satisfied,
+            "stamped on entering the wait evaluation, before the reads"
+        );
         let cond = &peek[w..stamp];
         assert!(cond.contains("kf_chan::progress::on()"), "{cond}");
-        assert!(cond.contains("retry_ok || !matches!(w, kf_chan::user_loop::Wait::Contended)"), "{cond}");
+        assert!(
+            cond.contains("retry_ok || !matches!(w, kf_chan::user_loop::Wait::Contended)"),
+            "{cond}"
+        );
     }
 
     /// The stamp's entitlement is the SAME retry budget the ring decision uses (`may_retry`), computed once before both.
     #[test]
     fn the_look_stamp_uses_the_retry_budget_of_the_ring_decision() {
         let peek = peek_one_prod();
-        let budget = peek.find("let retry_ok = kf_chan::user_loop::may_retry(record.contended_run(), why);").unwrap();
+        let budget = peek
+            .find("let retry_ok = kf_chan::user_loop::may_retry(record.contended_run(), why);")
+            .unwrap();
         assert!(budget < peek.find("record.stamp_look()").unwrap());
         assert!(budget < peek.find("retry_ok && ring(self)").unwrap());
         let stamp = peek.find("record.stamp_look()").unwrap();
         let cond = peek[..stamp].rfind("if kf_chan::progress::on()").unwrap();
-        assert!(peek[cond..stamp].contains("retry_ok"), "the stamp's own condition names the budget");
+        assert!(
+            peek[cond..stamp].contains("retry_ok"),
+            "the stamp's own condition names the budget"
+        );
     }
 
     /// A turn stamps the relay and hits the relay-turn point before it runs.
@@ -3908,9 +4182,14 @@ mod tests {
     fn the_device_records_what_the_worker_is_serving() {
         let dev = include_str!("device.rs");
         let dev = dev.split("#[cfg(test)]").next().unwrap();
-        let f = dev.split("fn run_translated(&self, host_token: u32").nth(1).unwrap();
+        let f = dev
+            .split("fn run_translated(&self, host_token: u32")
+            .nth(1)
+            .unwrap();
         let f = f.split("fn run_emulated").next().unwrap();
-        let set = f.find("kf_chan::progress::set_serving(Some(host_token))").unwrap();
+        let set = f
+            .find("kf_chan::progress::set_serving(Some(host_token))")
+            .unwrap();
         let serve = f.find("self.chans.serve(host_token)").unwrap();
         let clear = f.find("kf_chan::progress::set_serving(None)").unwrap();
         assert!(set < serve && serve < clear);
@@ -3932,16 +4211,24 @@ mod tests {
         assert_eq!(ffi.matches("kf3-progress").count(), 1);
         let at = ffi.find("kf3-progress").unwrap();
         let before = &ffi[at.saturating_sub(700)..at];
-        assert!(before.contains("kf_chan::progress::Setting::On"), "{before}");
+        assert!(
+            before.contains("kf_chan::progress::Setting::On"),
+            "{before}"
+        );
         assert!(ffi.contains("kf_chan::progress::init_from_env()"));
-        assert!(ffi.find("kf_chan::progress::init_from_env()").unwrap() < ffi.find("Device::realize(&cfg)").unwrap(), "the switch is read before the workers exist");
+        assert!(
+            ffi.find("kf_chan::progress::init_from_env()").unwrap()
+                < ffi.find("Device::realize(&cfg)").unwrap(),
+            "the switch is read before the workers exist"
+        );
         assert!(ffi.contains("progress_loop"));
     }
 
     /// Coordinator H-64: every block and every summary carries the contention / demand / lifecycle state of the relays and the
     /// worker-level counters the hypothesis is decided by, read passively.
     #[test]
-    fn the_progress_diagnostic_reads_the_contention_state_and_the_counters_the_h64_falsifier_needs() {
+    fn the_progress_diagnostic_reads_the_contention_state_and_the_counters_the_h64_falsifier_needs()
+    {
         let d: String = prog_source().split_whitespace().collect();
         for needle in [
             "record.contended_run()",
@@ -3966,8 +4253,14 @@ mod tests {
             assert!(d.contains(needle), "{needle}");
         }
         let mem = include_str!("mem.rs");
-        let diag = mem.split("pub fn walk_diag(").nth(1).expect("Inbox::walk_diag");
+        let diag = mem
+            .split("pub fn walk_diag(")
+            .nth(1)
+            .expect("Inbox::walk_diag");
         let diag = diag.split("\n    }\n").next().unwrap();
-        assert!(diag.contains("try_lock") && !diag.contains(".lock()"), "walk_diag never blocks: {diag}");
+        assert!(
+            diag.contains("try_lock") && !diag.contains(".lock()"),
+            "walk_diag never blocks: {diag}"
+        );
     }
 }

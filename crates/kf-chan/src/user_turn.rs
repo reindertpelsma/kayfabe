@@ -47,6 +47,28 @@ impl From<&str> for Fail {
 /// A fallible step.
 pub type Turn<T> = Result<T, Fail>;
 
+/// ★ 2026-10-20 (simple relay, Change A; `docs/design/V3_RELAY_SIMPLE_20261020.md` section 3): what the guest's USERD `GP_GET`
+/// of a relayed ring says.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum GuestGet {
+    /// The PBDMA's pops of the private ring, written back (the code until 2026-10-20). Needs pop write-backs while a wait goes
+    /// on (`user_loop::LookIn::get_follows_pops`).
+    Popped,
+    /// The relay's OWN reading pointer: the slots it has loaded, validated and COPIED (the 8-byte entry is in host-owned
+    /// private storage before the cursor passes it). `GP_GET` guards slot reuse only (owner ruling 2026-10-20); the hardware's
+    /// `GP_GET` runs ahead of execution too. Run-ahead over the PBDMA is bounded by the private ring's capacity.
+    ReadIndex,
+}
+
+/// THE switch of Change A: one line, hardware-gated (canary plan in the design note).
+pub const GUEST_GET: GuestGet = GuestGet::Popped;
+
+/// Whether the guest's `GP_GET` follows the PBDMA's pops ([`GUEST_GET`]).
+#[must_use]
+pub const fn guest_get_follows_pops() -> bool {
+    matches!(GUEST_GET, GuestGet::Popped)
+}
+
 /// The refusal text of a partial-suffix trigger (counted with the scan refusals of a Fresh window).
 pub const PARTIAL_SUFFIX: &str = "USER_RING_TRIGGER_PARTIAL_SUFFIX_UNSUPPORTED";
 
@@ -475,6 +497,17 @@ impl Relay {
         self.life.teardown();
     }
 
+    /// ★ Change A's one function: the guest `GP_GET` this turn owes the guest, if any ([`GUEST_GET`]).
+    #[must_use]
+    pub fn guest_get_value(&self) -> Option<(u64, u32)> {
+        match GUEST_GET {
+            GuestGet::Popped => self.guest_get,
+            GuestGet::ReadIndex => {
+                (self.cursor != self.written_get).then_some((self.generation, self.cursor))
+            }
+        }
+    }
+
     /// No turn is running.
     #[must_use]
     pub fn idle(&self) -> bool {
@@ -547,7 +580,7 @@ impl Relay {
                     let (get, reference) = io.hw_words()?;
                     self.marks.observe(reference);
                     for (generation, get) in self.fetch.observe(get).map_err(str::to_owned)? {
-                        if generation == self.generation {
+                        if generation == self.generation && guest_get_follows_pops() {
                             self.guest_get = Some((generation, get));
                         }
                     }
@@ -557,7 +590,7 @@ impl Relay {
                 Ok(Step::More)
             }
             Phase::Wb => {
-                if let Some((generation, get)) = self.guest_get {
+                if let Some((generation, get)) = self.guest_get_value() {
                     if generation == self.generation {
                         if io.write_guest_get(get)? {
                             self.written_get = get;

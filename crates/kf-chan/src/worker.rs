@@ -33,9 +33,18 @@ pub const WORKER_EFD_TAG: u64 = 0;
 /// The poller tag of the session's completion fd ([`Completions`]).
 pub const COMPLETIONS_TAG: u64 = 1 << 32;
 const SCAN_LIMIT: usize = 64;
-/// How long a parked worker sleeps before re-checking `stop` and the relays' safety net
-/// ([`user_loop::BACKSTOP_MS`]): never a correctness timeout, every firing that finds work is counted.
+/// ★ 2026-10-20 (owner): the park's LAST-RESORT net ([`user_loop::BACKSTOP_MS`]). Designed and tested as if it were infinite
+/// ([`set_park_net`]`(false)`, the models and the stress harness): no logic, counter reset, retry or state depends on it; a
+/// timeout runs the SAME next iteration as any other wake, and one after which that iteration finds work is a counted BUG
+/// (`timeouts_with_work`, `backstop_found_work`).
 const PARK_MS: u32 = user_loop::BACKSTOP_MS;
+
+static PARK_NET: AtomicBool = AtomicBool::new(true);
+
+/// Test knob: `false` makes the park wait INFINITE (no net at all). Production never calls it.
+pub fn set_park_net(on: bool) {
+    PARK_NET.store(on, Ordering::Relaxed);
+}
 /// ★ 2026-10-08: how long a parked worker sleeps while `on_tick` says a raise is owed (the
 /// paced Passthrough relay's trailing raise, `kf_chan::ptnsi::Pacer::flush`).
 const OWED_PARK_MS: u32 = 1;
@@ -82,6 +91,12 @@ pub const TICK_TAG: u64 = u64::MAX;
 pub trait RelayLoop {
     /// Some relay is waiting for private-ring progress (the spin is worth doing).
     fn waiting(&self) -> bool;
+    /// ★ 2026-10-20 (simple relay): some relay holds an obligation with NO registered wake source: durable demand left behind
+    /// (the RETRY SET: a turn that lost a `try_lock` on a lock whose holder rings nobody) or a wait no interrupt announces
+    /// (`Wait::Popped`). While one exists the worker never blocks (epoll timeout 0). Default: no relays, never.
+    fn unsourced(&self) -> bool {
+        false
+    }
     /// Look at the waiting relays' not-yet-fd state and ring what is satisfied. Returns whether
     /// anything was rung. `why` names the caller for the counters (a backstop peek that finds work is
     /// a bug counter, never the normal path).
@@ -104,18 +119,14 @@ pub enum AfterPass {
 /// The worker loop's per-iteration policy state.
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct LoopPolicy {
-    busy_passes: u32,
     /// Whether a busy worker ever looks (`true` = the bounded-fairness fix; `false` only under the negative control).
     look: bool,
 }
 
 impl Default for LoopPolicy {
-    /// The fix: a busy worker looks every [`LOOK_EVERY`] passes.
+    /// The fix: a busy worker looks after EVERY pass (2026-10-20, simple relay: the `LOOK_EVERY = 4` period is deleted).
     fn default() -> Self {
-        Self {
-            busy_passes: 0,
-            look: true,
-        }
+        Self { look: true }
     }
 }
 
@@ -145,18 +156,11 @@ pub fn negctl_no_busy_look() -> bool {
     })
 }
 
-/// After this many consecutive busy passes (each served something) the loop looks once. A pass serves a hot token up to
-/// `REACT_ROUNDS + 1` times, so the delay a busy worker adds to any wait is bounded by `LOOK_EVERY` passes, whatever the neighbours do.
-pub const LOOK_EVERY: u32 = 4;
-
 impl LoopPolicy {
     /// The policy of the pre-fix loop: never a busy look (the negative control).
     #[must_use]
     pub fn without_busy_look() -> Self {
-        Self {
-            busy_passes: 0,
-            look: false,
-        }
+        Self { look: false }
     }
     /// The policy the worker runs: the fix, unless the negative control is on.
     #[must_use]
@@ -175,18 +179,12 @@ impl LoopPolicy {
     /// What follows a pass that served `served` tokens.
     pub fn after_pass(&mut self, served: usize) -> AfterPass {
         if served > 0 {
-            if !self.look {
-                return AfterPass::Continue;
-            }
-            self.busy_passes += 1;
-            if self.busy_passes >= LOOK_EVERY {
-                self.busy_passes = 0;
+            if self.look {
                 AfterPass::Look
             } else {
                 AfterPass::Continue
             }
         } else {
-            self.busy_passes = 0;
             AfterPass::Idle
         }
     }
@@ -279,22 +277,13 @@ pub const WAKE_SOURCES: &[WakeSource] = &[
         why_not: "",
     },
     WakeSource {
-        name: "relay peek of the waiting relays' private words",
+        name: "relay peek of the waiting relays' private words (level re-evaluation; also the retry-set look)",
         visit: Visit::Peek(Peek::Spin),
         handlers: &[],
         look: true,
         idle_spin: true,
-        park: false,
-        why_not: "a park is a wait on fds; the private words are looked at before it (the spin) and after it by the event peek",
-    },
-    WakeSource {
-        name: "relay peek by the backstop (safety net)",
-        visit: Visit::Peek(Peek::Backstop),
-        handlers: &[],
-        look: false,
-        idle_spin: false,
         park: true,
-        why_not: "the net is the TIMEOUT of the long park: by definition not reached while the worker is busy or spinning; a find is a bug counter",
+        why_not: "",
     },
     WakeSource {
         name: "post-park tick (TICK_TAG)",
@@ -383,10 +372,9 @@ pub fn run(
     );
 }
 
-/// [`run`] with the USER-ring relays' event hooks ([`RelayLoop`]) and their counters: with nothing
-/// to serve the worker SPINS a bounded [`user_loop::SPIN`] iterations (`epoll_wait(timeout=0)` + a
-/// peek) while a relay waits, then parks for at most [`PARK_MS`] ([`user_loop::BACKSTOP_MS`]); a
-/// timeout is the relays' safety net (a peek whose findings are counted), never their clock.
+/// [`run`] with the USER-ring relays' hooks ([`RelayLoop`]) and their counters: ONE loop, one `epoll_wait` per iteration,
+/// timeout 0 while an obligation without a wake source exists ([`RelayLoop::unsourced`]), else a park whose last-resort net
+/// ([`PARK_MS`]) nothing depends on.
 #[allow(clippy::too_many_arguments)]
 pub fn run_with_relay(
     plane: &Plane<'_>,
@@ -440,6 +428,13 @@ pub fn run_with_relay(
     let prof = stats.prof.load(Ordering::Relaxed);
     let mut busy_from = std::time::Instant::now();
     let mut after_timeout = false;
+    // ★★ 2026-10-20 THE ONE LOOP (simple relay, owner's rule; `docs/design/V3_RELAY_SIMPLE_20261020.md` section 2). Each iteration:
+    // serve (per-visit bound: `REACT_ROUNDS`, `SCAN_LIMIT`), evaluate ALL outstanding relay state level-triggered (`relay.peek`),
+    // then ONE `epoll_wait`: timeout 0 when anything is outstanding that has no registered wake source (work served, a relay
+    // rung by the look, the retry set, a wait no interrupt announces), else BLOCKING. Every wake source is drained by `dispatch`
+    // BEFORE the next evaluation (race free: an edge after the evaluation leaves its fd ready). No timer, no budget, no second
+    // spin loop: the big loop is the one spin loop. Interrupts and doorbells are hints that end a blocking wait; the state
+    // decides.
     while !stop.load(Ordering::Acquire) {
         let owed = on_tick();
         // §5.3: every `seen` load happens-before the scan.
@@ -451,156 +446,114 @@ pub fn run_with_relay(
         hook!(tap, end_pass(n));
         if n > 0 {
             stats.served.fetch_add(n as u64, Ordering::Relaxed);
-            if after_timeout {
-                stats.timeouts_with_work.fetch_add(1, Ordering::Relaxed);
+        }
+        // Level evaluation of every relay (a pass that served nothing too: cheap, two atomics per idle relay). Skipped only by
+        // the negative control's busy pass (`KF3_NEGCTL_NO_BUSY_LOOK=1`: the pre-fix starvation, for the A/B).
+        let after = policy.after_pass(n);
+        let rang = if after == AfterPass::Continue {
+            false
+        } else {
+            if after == AfterPass::Look {
+                RelayStats::bump(&relay_stats.busy_looks);
+                hook!(tap, look());
             }
-            after_timeout = false;
-            match policy.after_pass(n) {
-                AfterPass::Continue | AfterPass::Idle => continue,
-                AfterPass::Look => {
-                    // ★ BOUNDED FAIRNESS: a busy worker (a hot relay rings its own token after every turn; two workers can hand one
-                    // hot token to each other) must still look at the world: the engine's events (the guest's completion
-                    // interrupts), the completions, and the waiting relays' private words. Same look as the idle spin's, once.
-                    RelayStats::bump(&relay_stats.busy_looks);
-                    hook!(tap, look());
-                    let mut ready = ReadyTokens::new();
-                    if matches!(poller.wait(&mut ready, PollTimeout::Immediate), Ok(k) if k > 0) {
-                        let (doorbell, event) = dispatch(&ready);
-                        if doorbell {
-                            RelayStats::bump(&relay_stats.wake_doorbell);
-                        }
-                        if event {
-                            RelayStats::bump(&relay_stats.wake_event);
-                            let _ = relay.peek(Peek::Event);
-                        }
-                    }
-                    if relay.waiting() && relay.peek(Peek::Spin) {
-                        RelayStats::bump(&relay_stats.wake_spin);
-                    }
-                    continue;
-                }
-            }
+            relay.peek(Peek::Spin)
+        };
+        if after_timeout && (n > 0 || rang) {
+            // the net found work no wake source announced: a BUG, counted, nothing else
+            stats.timeouts_with_work.fetch_add(1, Ordering::Relaxed);
+            RelayStats::bump(&relay_stats.backstop_found_work);
         }
         after_timeout = false;
-        // ★ The bounded SPIN: only while some relay waits for something that only a look can find,
-        // and never instead of the park (a latency optimisation; the model proves liveness with 0).
-        if user_loop::idle(relay.waiting(), user_loop::SPIN) == user_loop::Idle::Spin {
-            let mut woke = false;
-            for _ in 0..user_loop::SPIN {
+        // An obligation without a registered wake source keeps the loop spinning (timeout 0); exactly these.
+        let spin = n > 0 || rang || relay.unsourced();
+        let mut ready = ReadyTokens::new();
+        let got = if spin {
+            if n == 0 && !rang {
+                // spinning on an unsourced obligation only (the retry set, a carried wait)
+                RelayStats::bump(&relay_stats.retry_looks);
                 hook!(tap, spin());
-                let mut ready = ReadyTokens::new();
-                if matches!(poller.wait(&mut ready, PollTimeout::Immediate), Ok(n) if n > 0) {
-                    let (doorbell, event) = dispatch(&ready);
-                    if doorbell {
-                        RelayStats::bump(&relay_stats.wake_doorbell);
-                    }
-                    if event {
-                        RelayStats::bump(&relay_stats.wake_event);
-                        let _ = relay.peek(Peek::Event);
-                    }
-                    woke = true;
-                    break;
-                }
-                if relay.peek(Peek::Spin) {
-                    RelayStats::bump(&relay_stats.wake_spin);
-                    woke = true;
-                    break;
-                }
-                if !relay.waiting() {
-                    break;
-                }
-                std::hint::spin_loop();
             }
-            if woke {
+            poller.wait(&mut ready, PollTimeout::Immediate)
+        } else {
+            #[cfg(feature = "chaos-hooks")]
+            kf_trap::chaos::at(kf_trap::chaos::Point::WorkerBeforePark);
+            if !plane.worker_wake().try_park(seen) {
                 continue;
             }
-        }
-        #[cfg(feature = "chaos-hooks")]
-        kf_trap::chaos::at(kf_trap::chaos::Point::WorkerBeforePark);
-        if !plane.worker_wake().try_park(seen) {
-            continue;
-        }
-        stats.parks.fetch_add(1, Ordering::Relaxed);
-        let mut ready = ReadyTokens::new();
-        let tw = prof.then(std::time::Instant::now);
-        if let Some(tw) = tw {
-            let b = u64::try_from(tw.duration_since(busy_from).as_nanos()).unwrap_or(u64::MAX);
-            stats.busy_ns.fetch_add(b, Ordering::Relaxed);
-            stats.max_busy_ns.fetch_max(b, Ordering::Relaxed);
-        }
-        let park = if owed { OWED_PARK_MS } else { PARK_MS };
-        hook!(tap, park_begin());
-        let got = poller.wait(&mut ready, PollTimeout::Millis(park));
-        hook!(tap, park_end());
-        if let Some(tw) = tw {
-            busy_from = std::time::Instant::now();
-            let w = u64::try_from(busy_from.duration_since(tw).as_nanos()).unwrap_or(u64::MAX);
-            stats.wait_ns.fetch_add(w, Ordering::Relaxed);
-            stats.waits.fetch_add(1, Ordering::Relaxed);
-            after_timeout = matches!(got, Ok(0));
-            if after_timeout {
-                stats.timeouts.fetch_add(1, Ordering::Relaxed);
+            stats.parks.fetch_add(1, Ordering::Relaxed);
+            let tw = prof.then(std::time::Instant::now);
+            if let Some(tw) = tw {
+                let b = u64::try_from(tw.duration_since(busy_from).as_nanos()).unwrap_or(u64::MAX);
+                stats.busy_ns.fetch_add(b, Ordering::Relaxed);
+                stats.max_busy_ns.fetch_max(b, Ordering::Relaxed);
             }
-        }
-        #[cfg(feature = "chaos-hooks")]
-        kf_trap::chaos::at(kf_trap::chaos::Point::WorkerAfterWait);
-        plane.worker_wake().unpark();
-        if got.is_ok() {
+            // The Passthrough NSI Pacer's owed raise (`on_tick`, not the relay's) is a rate, not a state: a 1 ms park. Otherwise
+            // the park is BLOCKING; the last-resort net bounds it in production and nothing depends on it.
+            let timeout = if owed {
+                PollTimeout::Millis(OWED_PARK_MS)
+            } else if PARK_NET.load(Ordering::Relaxed) {
+                PollTimeout::Millis(PARK_MS)
+            } else {
+                PollTimeout::Blocking
+            };
+            hook!(tap, park_begin());
+            let got = poller.wait(&mut ready, timeout);
+            hook!(tap, park_end());
+            if let Some(tw) = tw {
+                busy_from = std::time::Instant::now();
+                let w = u64::try_from(busy_from.duration_since(tw).as_nanos()).unwrap_or(u64::MAX);
+                stats.wait_ns.fetch_add(w, Ordering::Relaxed);
+                stats.waits.fetch_add(1, Ordering::Relaxed);
+                if matches!(got, Ok(0)) {
+                    stats.timeouts.fetch_add(1, Ordering::Relaxed);
+                }
+            }
+            #[cfg(feature = "chaos-hooks")]
+            kf_trap::chaos::at(kf_trap::chaos::Point::WorkerAfterWait);
+            plane.worker_wake().unpark();
+            on_other(TICK_TAG);
+            if matches!(got, Ok(0)) && !owed {
+                RelayStats::bump(&relay_stats.wake_backstop);
+                after_timeout = true;
+            }
+            got
+        };
+        if matches!(got, Ok(k) if k > 0) {
             let (doorbell, event) = dispatch(&ready);
             if doorbell {
                 RelayStats::bump(&relay_stats.wake_doorbell);
             }
             if event {
                 RelayStats::bump(&relay_stats.wake_event);
-                let _ = relay.peek(Peek::Event);
-            }
-            // A timeout of the long park is the relays' safety net: look at everything once. The
-            // short park of a paced raise (`owed`) is the Pacer's, not the net's.
-            if matches!(got, Ok(0)) && !owed {
-                RelayStats::bump(&relay_stats.wake_backstop);
-                let _ = relay.peek(Peek::Backstop);
+                hook!(tap, peek(Peek::Event));
             }
         }
-        on_other(TICK_TAG);
     }
+    // Two workers share the doorbell eventfd: the stop signal one of them drained is passed on.
+    let _ = efd.signal();
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
 
-    /// A pass that served something continues; every `LOOK_EVERY`-th consecutive busy pass looks first; an empty pass idles and
-    /// restarts the count.
+    /// ★ Replaces the `LOOK_EVERY` period tests: a busy pass ALWAYS looks; an empty pass idles.
     #[test]
-    fn a_busy_worker_looks_every_look_every_passes_and_an_empty_pass_idles() {
+    fn a_busy_worker_looks_after_every_pass_and_an_empty_pass_idles() {
         let mut p = LoopPolicy::default();
-        for round in 0..3 {
-            for i in 1..LOOK_EVERY {
-                assert_eq!(
-                    p.after_pass(3),
-                    AfterPass::Continue,
-                    "round {round} pass {i}"
-                );
-            }
-            assert_eq!(p.after_pass(3), AfterPass::Look, "round {round}");
+        for i in 0..100usize {
+            assert_eq!(p.after_pass(1 + i % 5), AfterPass::Look, "pass {i}");
         }
-        assert_eq!(p.after_pass(1), AfterPass::Continue);
         assert_eq!(p.after_pass(0), AfterPass::Idle);
-        for _ in 1..LOOK_EVERY {
-            assert_eq!(p.after_pass(1), AfterPass::Continue, "the count restarted");
-        }
         assert_eq!(p.after_pass(1), AfterPass::Look);
     }
 
-    /// The default IS the fix: the byte-identical behaviour of the fairness branch.
+    /// The default IS the fix.
     #[test]
     fn the_default_policy_is_the_fix() {
         assert_eq!(LoopPolicy::default(), LoopPolicy::from_setting(false));
-        let mut p = LoopPolicy::default();
-        for _ in 1..LOOK_EVERY {
-            assert_eq!(p.after_pass(1), AfterPass::Continue);
-        }
-        assert_eq!(p.after_pass(1), AfterPass::Look);
+        assert_eq!(LoopPolicy::default().after_pass(1), AfterPass::Look);
     }
 
     /// The control never looks, however long the worker stays busy; an empty pass still idles (the park is not the control's business).
@@ -611,7 +564,7 @@ mod tests {
             assert_eq!(p.after_pass(1 + i % 7), AfterPass::Continue, "pass {i}");
         }
         assert_eq!(p.after_pass(0), AfterPass::Idle);
-        for _ in 0..(10 * LOOK_EVERY) {
+        for _ in 0..40 {
             assert_eq!(p.after_pass(3), AfterPass::Continue);
         }
     }
@@ -692,7 +645,7 @@ mod tests {
             let looks = (0..8)
                 .filter(|_| p.after_pass(1) == AfterPass::Look)
                 .count();
-            assert_eq!(looks, 2, "{v:?} must leave the fix in force");
+            assert_eq!(looks, 8, "{v:?} must leave the fix in force");
         }
         let mut p = LoopPolicy::from_setting(parse_negctl_no_busy_look(Some("1")));
         assert!((0..8).all(|_| p.after_pass(1) == AfterPass::Continue));
@@ -726,7 +679,11 @@ mod tests {
         let s = board.snapshot(progress::now_ns(), progress::START_NS);
         assert_eq!(s.points[progress::Point::PeekSpin.index()].hits, 1);
         assert_eq!(s.points[progress::Point::PeekEvent.index()].hits, 1);
-        assert_eq!(s.points[progress::Point::PeekBackstop.index()].hits, 0);
+        assert_eq!(
+            s.points[progress::Point::PeekBackstop.index()].hits,
+            0,
+            "no backstop look exists"
+        );
     }
 
     #[test]
@@ -746,7 +703,7 @@ mod tests {
             inner: &No,
             tap: &tap,
         };
-        assert!(!w.peek(Peek::Backstop));
+        assert!(!w.peek(Peek::Spin));
         assert!(!w.waiting());
     }
 }

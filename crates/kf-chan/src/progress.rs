@@ -30,8 +30,11 @@ pub const MAX_THREADS: usize = 8;
 pub const MAX_BLOCKS: u32 = 32;
 /// `PROGRESS_STARVED` summary lines printed per run (then one suppression line).
 pub const MAX_STARVED_LINES: u32 = 64;
-/// A worker may serve this many passes without polling before the count rule fires: four times [`crate::worker::LOOK_EVERY`], the
-/// same `K = 16` the fairness model (`tests/relay_fairness.rs`) uses.
+/// ★ 2026-10-20 (simple relay): the old retry budget's value, kept ONLY as the convoy length the block flags (`h64_backstop_only`
+/// is the old binary's hypothesis; on the simple relay a convoy is re-rung by every look and the flag means "a long convoy").
+pub const H64_RUN: u32 = 64;
+/// A worker may serve this many passes without polling before the count rule fires. Since 2026-10-20 a busy worker polls after
+/// EVERY pass (`worker::LoopPolicy`); 16 is the slack the fairness model (`tests/relay_fairness.rs`, `K = 16`) uses.
 pub const BOUND_PASSES: u32 = 16;
 /// Lines of one relay block, at most.
 pub const MAX_BLOCK_LINES: usize = 1 + 1 + 3 + 4 + MAX_WORKERS + MAX_THREADS;
@@ -201,7 +204,7 @@ pub const TABLE: [Def; POINTS] = [
         point: Point::PeekBackstop,
         name: "peek_backstop",
         due: Due::Informational,
-        site: "kf-chan worker.rs Watched::peek(Peek::Backstop)",
+        site: "none since 2026-10-20 (simple relay: no backstop look; the point is never hit)",
     },
     Def {
         point: Point::RelayTurn,
@@ -633,7 +636,6 @@ impl Tap {
         let p = match why {
             Peek::Event => Point::PeekEvent,
             Peek::Spin => Point::PeekSpin,
-            Peek::Backstop => Point::PeekBackstop,
         };
         self.board.hit(p, now_ns());
     }
@@ -812,10 +814,6 @@ impl WaitKey {
             Wait::Popped { target } => Self {
                 kind: WaitKind::Popped,
                 target,
-            },
-            Wait::Contended => Self {
-                kind: WaitKind::Contended,
-                target: 0,
             },
         }
     }
@@ -1139,15 +1137,14 @@ fn render_workers(snap: &Snapshot) -> Vec<String> {
 #[must_use]
 pub fn render_relay_state(b: &RelayBrief) -> String {
     let wait = b.wait.map_or("none", |w| w.kind.name());
-    let stranded =
-        (b.pending || b.waiting) && b.contended_run >= crate::user_loop::CONTENTION_RETRIES;
+    let stranded = (b.pending || b.waiting) && b.contended_run >= H64_RUN;
     format!(
         "kf3: PROGRESS_RELAY_STATE relay={:#x}:{:#x} host={:#x} wait={wait} contended_run={:#x} retry_budget={:#x} h64_backstop_only={} retry_flag={} pending={} waiting_flag={} canceled={} stopped={} disabled={} walk_busy={} walk_waiters={}",
         b.key.0,
         b.key.1,
         b.host,
         b.contended_run,
-        crate::user_loop::CONTENTION_RETRIES,
+        H64_RUN,
         yes_no(stranded),
         yes_no(b.retry),
         yes_no(b.pending),
@@ -1187,7 +1184,7 @@ pub fn render_summary_context(
     relays: &[RelayBrief],
 ) -> Vec<String> {
     let rank = |b: &RelayBrief| {
-        if (b.pending || b.waiting) && b.contended_run >= crate::user_loop::CONTENTION_RETRIES {
+        if (b.pending || b.waiting) && b.contended_run >= H64_RUN {
             0
         } else if b.pending || b.waiting || b.contended_run > 0 {
             1
@@ -1844,13 +1841,6 @@ mod tests {
             }
         );
         assert_eq!(
-            WaitKey::of(Wait::Contended),
-            WaitKey {
-                kind: WaitKind::Contended,
-                target: 0
-            }
-        );
-        assert_eq!(
             [
                 WaitKind::Marker.name(),
                 WaitKind::Popped.name(),
@@ -2147,7 +2137,7 @@ mod tests {
     /// H-64: the budget is `CONTENTION_RETRIES` lost turns; at or beyond it only the backstop may re-ring the relay.
     #[test]
     fn the_h64_flag_is_set_exactly_when_only_the_backstop_may_re_ring() {
-        let budget = crate::user_loop::CONTENTION_RETRIES;
+        let budget = H64_RUN;
         for (run, want) in [
             (0, "no"),
             (budget - 1, "no"),
@@ -2161,13 +2151,7 @@ mod tests {
                 "run {run}: {l}"
             );
         }
-        // the flag agrees with the production predicate for every Peek kind
-        for run in [0, budget - 1, budget, budget + 1] {
-            let spin_may = crate::user_loop::may_retry(run, Peek::Spin);
-            let l = render_relay_state(&brief(run));
-            assert_eq!(l.contains("h64_backstop_only=yes"), !spin_may, "run {run}");
-            assert!(crate::user_loop::may_retry(run, Peek::Backstop));
-        }
+        // (2026-10-20: the production budget `may_retry` is deleted; the flag is a convoy-length marker only)
         // a relay with no demand and no wait is never "stranded"
         let mut idle = brief(budget + 5);
         idle.pending = false;
@@ -2277,7 +2261,7 @@ mod tests {
 
     #[test]
     fn the_summary_context_lists_the_stranded_relays_first_the_counters_and_every_worker() {
-        let budget = crate::user_loop::CONTENTION_RETRIES;
+        let budget = H64_RUN;
         let mut quiet = brief(0);
         quiet.host = 1;
         quiet.waiting = false;
@@ -2428,7 +2412,7 @@ mod tests {
 
     #[test]
     fn the_bound_is_four_look_periods_and_the_fix_never_exceeds_one() {
-        assert_eq!(BOUND_PASSES, 4 * crate::worker::LOOK_EVERY);
+        assert_eq!(BOUND_PASSES, 16);
         let b = Board::new();
         let w = b.register().unwrap();
         let mut mon = Monitor::new(1_000_000, &b.snapshot(1, 1));
@@ -2440,7 +2424,7 @@ mod tests {
                 .all(|(_, s)| !matches!(s, Starved::WorkerPoll { .. })),
             "{found:?}"
         );
-        assert!(b.snapshot(1, 1).workers[0].since_poll <= crate::worker::LOOK_EVERY);
+        assert!(b.snapshot(1, 1).workers[0].since_poll <= 1);
     }
 
     /// The control's worker is flagged at the first pass beyond the bound, not at it.
@@ -2597,7 +2581,6 @@ mod tests {
         for (why, point) in [
             (Peek::Event, Point::PeekEvent),
             (Peek::Spin, Point::PeekSpin),
-            (Peek::Backstop, Point::PeekBackstop),
         ] {
             let (b, tap) = leaked_tap();
             tap.peek(why);
