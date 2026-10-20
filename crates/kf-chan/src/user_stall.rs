@@ -16,6 +16,8 @@
 //! [`MAX_LINE_CHARS`] characters.
 
 use crate::user_loop::{Peek, Wait};
+use kf_abi::submit::{GpEntryKind, MethodForm, gp_entry_classify, method_header_decode};
+use std::sync::atomic::{AtomicU64, Ordering::Relaxed};
 
 /// The environment variable (milliseconds; unset, empty or `0` = off).
 pub const ENV: &str = "KF3_DIAG_USER_STALL";
@@ -49,8 +51,22 @@ pub enum Setting {
 
 /// Parse the variable's value.
 #[must_use]
-pub fn parse_setting(_value: Option<&str>) -> Setting {
-    Setting::Invalid
+pub fn parse_setting(value: Option<&str>) -> Setting {
+    let Some(v) = value.map(str::trim) else {
+        return Setting::Off;
+    };
+    if v.is_empty() {
+        return Setting::Off;
+    }
+    if !v.bytes().all(|b| b.is_ascii_digit()) {
+        return Setting::Invalid;
+    }
+    match v.parse::<u64>() {
+        Ok(0) => Setting::Off,
+        Ok(n) => Setting::On(n.min(MAX_MS)),
+        // more digits than a u64 holds: certainly beyond the clamp
+        Err(_) => Setting::On(MAX_MS),
+    }
 }
 
 /// The detector's answer for one look.
@@ -86,12 +102,39 @@ impl Detector {
     /// One look at the private `GP_GET` / `GP_PUT` (ring of `entries`, a power of two) at `now_ms`.
     pub fn observe(
         &mut self,
-        _now_ms: u64,
-        _get: u32,
-        _put: u32,
-        _entries: u32,
-        _threshold_ms: u64,
+        now_ms: u64,
+        get: u32,
+        put: u32,
+        entries: u32,
+        threshold_ms: u64,
     ) -> Verdict {
+        // words outside the ring are not a position; a zero threshold is "off"
+        if threshold_ms == 0 || !entries.is_power_of_two() || get >= entries || put >= entries {
+            *self = Self::new();
+            return Verdict::Quiet;
+        }
+        // nothing outstanding: the ring drained, the condition (if any) is over
+        if get == put {
+            *self = Self::new();
+            return Verdict::Quiet;
+        }
+        if self.get != Some(get) {
+            // GET moved (or this is the first look): a new condition whose clock starts now
+            *self = Self {
+                get: Some(get),
+                since_ms: now_ms,
+                fired: false,
+            };
+            return Verdict::Quiet;
+        }
+        if self.fired {
+            return Verdict::Quiet;
+        }
+        let stalled_ms = now_ms.saturating_sub(self.since_ms);
+        if stalled_ms >= threshold_ms {
+            self.fired = true;
+            return Verdict::Fire { stalled_ms };
+        }
         Verdict::Quiet
     }
     /// Whether this condition was already reported.
@@ -128,23 +171,57 @@ pub enum SemOp {
 impl SemOp {
     /// The operation of a `SEM_EXECUTE` word.
     #[must_use]
-    pub fn of_execute(_raw: u32) -> Self {
-        Self::Reserved(u32::MAX)
+    pub fn of_execute(raw: u32) -> Self {
+        match raw & 0x7 {
+            0 => Self::Acquire,
+            1 => Self::Release,
+            2 => Self::AcqStrictGeq,
+            3 => Self::AcqCircGeq,
+            4 => Self::AcqAnd,
+            5 => Self::AcqNor,
+            6 => Self::Reduction,
+            v => Self::Reserved(v),
+        }
     }
     /// The operation of a legacy `SEMAPHORED` word.
     #[must_use]
-    pub fn of_legacy(_raw: u32) -> Self {
-        Self::Reserved(u32::MAX)
+    pub fn of_legacy(raw: u32) -> Self {
+        match raw & 0x1F {
+            0x01 => Self::Acquire,
+            0x02 => Self::Release,
+            0x04 => Self::AcqGeq,
+            0x08 => Self::AcqAnd,
+            0x10 => Self::Reduction,
+            v => Self::Reserved(v),
+        }
     }
     /// Whether the operation waits for a value.
     #[must_use]
     pub fn is_acquire(self) -> bool {
-        false
+        matches!(
+            self,
+            Self::Acquire
+                | Self::AcqStrictGeq
+                | Self::AcqCircGeq
+                | Self::AcqAnd
+                | Self::AcqNor
+                | Self::AcqGeq
+        )
     }
     /// The name printed.
     #[must_use]
     pub fn name(self) -> &'static str {
-        "?"
+        match self {
+            Self::Acquire => "ACQUIRE",
+            Self::Release => "RELEASE",
+            Self::AcqStrictGeq => "ACQ_STRICT_GEQ",
+            Self::AcqCircGeq => "ACQ_CIRC_GEQ",
+            Self::AcqAnd => "ACQ_AND",
+            Self::AcqNor => "ACQ_NOR",
+            Self::Reduction => "REDUCTION",
+            Self::AcqGeq => "ACQ_GEQ",
+            Self::Reserved(_) => "RESERVED",
+        }
     }
 }
 
@@ -250,8 +327,230 @@ pub struct Stream {
 
 /// Decode a pushbuffer method stream, at most `max_methods` methods.
 #[must_use]
-pub fn decode(_words: &[u32], _max_methods: usize) -> Stream {
-    Stream::default()
+pub fn decode(words: &[u32], max_methods: usize) -> Stream {
+    let mut s = Stream::default();
+    let mut latch = Latch::default();
+    let mut classes = [None::<u32>; 8];
+    let mut i = 0usize;
+    while i < words.len() {
+        let hdr = i;
+        let Some(h) = method_header_decode(words[i]) else {
+            s.malformed_at = Some(hdr);
+            return s;
+        };
+        i += 1;
+        match h.form {
+            MethodForm::EndPbSegment => {
+                s.ended_at = Some(hdr);
+                return s;
+            }
+            MethodForm::SubDeviceMask => {}
+            // sized, never interpreted: a header this decoder cannot size would desynchronise it
+            MethodForm::Legacy => {
+                i = i.saturating_add(h.arg_words);
+                if i > words.len() {
+                    s.truncated = true;
+                    return s;
+                }
+            }
+            MethodForm::Immediate => {
+                if !push(
+                    &mut s,
+                    &mut latch,
+                    &mut classes,
+                    max_methods,
+                    hdr,
+                    h.subchannel,
+                    h.method,
+                    h.immd,
+                ) {
+                    return s;
+                }
+            }
+            MethodForm::Incrementing | MethodForm::NonIncrementing | MethodForm::IncrementOnce => {
+                for k in 0..h.arg_words {
+                    let Some(&data) = words.get(i) else {
+                        s.truncated = true;
+                        return s;
+                    };
+                    let step = match h.form {
+                        MethodForm::Incrementing => k,
+                        MethodForm::IncrementOnce => usize::from(k > 0),
+                        _ => 0,
+                    };
+                    let method = h
+                        .method
+                        .saturating_add(u32::try_from(step * 4).unwrap_or(u32::MAX));
+                    if !push(
+                        &mut s,
+                        &mut latch,
+                        &mut classes,
+                        max_methods,
+                        i,
+                        h.subchannel,
+                        method,
+                        data,
+                    ) {
+                        return s;
+                    }
+                    i += 1;
+                }
+            }
+        }
+    }
+    s
+}
+
+/// The `SEM_*` / `SEMAPHORE*` / copy-engine values latched so far in one decode.
+#[derive(Default)]
+struct Latch {
+    lo: Option<u32>,
+    hi: Option<u32>,
+    pay_lo: Option<u32>,
+    pay_hi: Option<u32>,
+}
+
+/// Classify and record one method; `false` when the method cap stopped the decode.
+#[allow(clippy::too_many_arguments)]
+fn push(
+    s: &mut Stream,
+    latch: &mut Latch,
+    classes: &mut [Option<u32>; 8],
+    max_methods: usize,
+    word: usize,
+    subchannel: u32,
+    method: u32,
+    data: u32,
+) -> bool {
+    if s.items.len() >= max_methods {
+        s.capped = true;
+        return false;
+    }
+    let kind = classify(latch, classes, subchannel, method, data);
+    s.items.push(Decoded {
+        word,
+        subchannel,
+        method,
+        data,
+        kind,
+    });
+    s.methods = s.items.len();
+    true
+}
+
+fn classify(
+    latch: &mut Latch,
+    classes: &mut [Option<u32>; 8],
+    sub: u32,
+    method: u32,
+    data: u32,
+) -> Kind {
+    match method {
+        // NVC56F_SET_OBJECT_NVCLASS is 15:0; 20:16 is the engine
+        0x00 => {
+            let class = data & 0xFFFF;
+            if let Some(c) = classes.get_mut(sub as usize) {
+                *c = Some(class);
+            }
+            Kind::SetObject { class }
+        }
+        // legacy SEMAPHOREA (OFFSET_UPPER 7:0) .. SEMAPHORED
+        0x10 => {
+            latch.hi = Some(data & 0xFF);
+            Kind::SemAddrHi
+        }
+        0x14 => {
+            latch.lo = Some(data & !3);
+            Kind::SemAddrLo
+        }
+        0x18 => {
+            latch.pay_lo = Some(data);
+            Kind::SemPayloadLo
+        }
+        0x1C => Kind::SemExecute(exec_of(latch, data, true)),
+        0x20 => Kind::NonStallInterrupt,
+        0x50 => Kind::SetReference,
+        // SEM_ADDR_LO_OFFSET 31:2, SEM_ADDR_HI_OFFSET 24:0 (clc86f.h; 7:0 on clc56f)
+        0x5C => {
+            latch.lo = Some(data & !3);
+            Kind::SemAddrLo
+        }
+        0x60 => {
+            latch.hi = Some(data & 0x01FF_FFFF);
+            Kind::SemAddrHi
+        }
+        0x64 => {
+            latch.pay_lo = Some(data);
+            Kind::SemPayloadLo
+        }
+        0x68 => {
+            latch.pay_hi = Some(data);
+            Kind::SemPayloadHi
+        }
+        0x6C => Kind::SemExecute(exec_of(latch, data, false)),
+        0x78 => Kind::Wfi,
+        m if m >= 0x100
+            && classes
+                .get(sub as usize)
+                .copied()
+                .flatten()
+                .is_some_and(is_copy_class) =>
+        {
+            match m {
+                0x240 => Kind::CeSemA,
+                0x244 => Kind::CeSemB,
+                0x248 => Kind::CeSemPayload,
+                0x300 => Kind::CeLaunch {
+                    semaphore_type: (data >> 3) & 0x3,
+                },
+                _ => Kind::Other,
+            }
+        }
+        _ => Kind::Other,
+    }
+}
+
+fn exec_of(latch: &Latch, raw: u32, legacy: bool) -> Exec {
+    let addr = match (latch.lo, latch.hi) {
+        (Some(lo), Some(hi)) => Some((u64::from(hi) << 32) | u64::from(lo)),
+        _ => None,
+    };
+    let payload64 = !legacy && raw & (1 << 24) != 0;
+    let payload = if payload64 {
+        match (latch.pay_lo, latch.pay_hi) {
+            (Some(lo), Some(hi)) => Some((u64::from(hi) << 32) | u64::from(lo)),
+            _ => None,
+        }
+    } else {
+        latch.pay_lo.map(u64::from)
+    };
+    Exec {
+        op: if legacy {
+            SemOp::of_legacy(raw)
+        } else {
+            SemOp::of_execute(raw)
+        },
+        raw,
+        legacy,
+        addr,
+        payload,
+        payload64,
+        // clc56f.h: SEM_EXECUTE_RELEASE_WFI_EN = 1; legacy SEMAPHORED_RELEASE_WFI_EN = 0
+        release_wfi: if legacy {
+            raw & (1 << 20) == 0
+        } else {
+            raw & (1 << 20) != 0
+        },
+        // SEM_EXECUTE_RELEASE_TIMESTAMP_EN = 1 (25); legacy RELEASE_SIZE_16BYTE = 0 (24)
+        timestamp: if legacy {
+            raw & (1 << 24) == 0
+        } else {
+            raw & (1 << 25) != 0
+        },
+        acquire_switch: raw & (1 << 12) != 0,
+        reduction: (raw >> 27) & 0xF,
+        reduction_unsigned: raw & (1 << 31) != 0,
+    }
 }
 
 /// The stream's methods as a list (see [`decode`]).
@@ -262,16 +561,31 @@ pub fn decode_methods(words: &[u32]) -> Vec<Decoded> {
 
 /// Whether `class` is a copy-engine class (`xxB5`).
 #[must_use]
-pub fn is_copy_class(_class: u32) -> bool {
-    false
+pub fn is_copy_class(class: u32) -> bool {
+    class > 0xFF && class <= 0xFFFF && class & 0xFF == 0xB5
 }
 
 /// What the name of the acquire operation says about whether `current` passes `awaited`
 /// (`None` when the name does not say: NOR, REDUCTION, RELEASE, reserved). Inferred from the
 /// operation name, never measured.
 #[must_use]
-pub fn name_says_pass(_op: SemOp, _current: u64, _awaited: u64, _payload64: bool) -> Option<bool> {
-    None
+pub fn name_says_pass(op: SemOp, current: u64, awaited: u64, payload64: bool) -> Option<bool> {
+    let (c, a) = if payload64 {
+        (current, awaited)
+    } else {
+        (current & 0xFFFF_FFFF, awaited & 0xFFFF_FFFF)
+    };
+    match op {
+        SemOp::Acquire => Some(c == a),
+        SemOp::AcqStrictGeq | SemOp::AcqGeq => Some(c >= a),
+        SemOp::AcqCircGeq => Some(if payload64 {
+            (c.wrapping_sub(a) as i64) >= 0
+        } else {
+            (c.wrapping_sub(a) as u32 as i32) >= 0
+        }),
+        SemOp::AcqAnd => Some(c & a != 0),
+        SemOp::AcqNor | SemOp::Release | SemOp::Reduction | SemOp::Reserved(_) => None,
+    }
 }
 
 /// A semaphore word the glue should read.
@@ -287,20 +601,55 @@ pub struct ProbeReq {
 
 /// The acquires of a stream whose address is known, at most [`MAX_PROBES`].
 #[must_use]
-pub fn probe_plan(_stream: &Stream) -> Vec<ProbeReq> {
-    Vec::new()
+pub fn probe_plan(stream: &Stream) -> Vec<ProbeReq> {
+    stream
+        .items
+        .iter()
+        .enumerate()
+        .filter_map(|(item, d)| match d.kind {
+            Kind::SemExecute(e) if e.op.is_acquire() => e.addr.map(|addr| ProbeReq {
+                item,
+                addr,
+                bytes: if e.payload64 { 8 } else { 4 },
+            }),
+            _ => None,
+        })
+        .take(MAX_PROBES)
+        .collect()
 }
 
 /// The private ring rows to list: `(first slot, count)`.
 #[must_use]
-pub fn ring_window(_get: u32, _put: u32, _entries: u32) -> (u32, u32) {
-    (0, 0)
+pub fn ring_window(get: u32, put: u32, entries: u32) -> (u32, u32) {
+    if !entries.is_power_of_two() {
+        return (0, 0);
+    }
+    let mask = entries - 1;
+    let outstanding = put.wrapping_sub(get) & mask;
+    let count = (3 + outstanding).min(MAX_RING_ROWS as u32).min(entries);
+    (get.wrapping_sub(3) & mask, count)
 }
 
 /// The private slot whose segment holds `pb_get`, among `rows` (`(slot, entry)`).
 #[must_use]
-pub fn pick_segment(_rows: &[(u32, u64)], _get: u32, _entries: u32, _pb_get: u64) -> Option<u32> {
-    None
+pub fn pick_segment(rows: &[(u32, u64)], get: u32, entries: u32, pb_get: u64) -> Option<u32> {
+    if !entries.is_power_of_two() {
+        return None;
+    }
+    let mask = entries - 1;
+    // nearest behind GET first (the PBDMA is inside the entry it popped last), then GET and ahead
+    let behind = (1..=3u32).map(|d| get.wrapping_sub(d) & mask);
+    let ahead = (0..rows.len() as u32).map(|k| get.wrapping_add(k) & mask);
+    behind.chain(ahead).find(|slot| {
+        rows.iter().any(|&(s, entry)| {
+            s == *slot
+                && matches!(
+                    gp_entry_classify(entry),
+                    GpEntryKind::Segment(e)
+                        if e.gpu_va <= pb_get && pb_get - e.gpu_va < e.len_bytes
+                )
+        })
+    })
 }
 
 /// The semaphore's value, or why it could not be read.
@@ -432,37 +781,308 @@ pub struct Report {
 /// Render the report: at most [`MAX_LINES`] lines of at most [`MAX_LINE_CHARS`] characters, every
 /// integer in hex.
 #[must_use]
-pub fn render(_report: &Report) -> Vec<String> {
-    Vec::new()
+pub fn render(r: &Report) -> Vec<String> {
+    let mut out = Out::default();
+    let k = format!("{:#x}:{:#x}", r.key.0, r.key.1);
+    let p = format!("{PREFIX} {k}");
+    out.push(format!(
+        "{PREFIX} BEGIN {k} host={:#x} stalled_ms={:#x} threshold_ms={:#x}",
+        r.host, r.stalled_ms, r.threshold_ms
+    ));
+    out.push(format!("{p} TOTALS {}", r.totals));
+    out.push(format!(
+        "{p} GUEST guest_put={} guest_get={} relay_cursor={:#x}",
+        hex_or(r.guest_put, "UNREAD"),
+        hex_or(r.guest_get, "UNREAD"),
+        r.cursor
+    ));
+    let v = &r.private;
+    out.push(format!(
+        "{p} PRIVATE gp_get={:#x} gp_put={:#x} reference={:#x} pb_get={:#x} pb_put={:#x} top_level_get={:#x}",
+        v.gp_get, v.gp_put, v.reference, v.pb_get, v.pb_put, v.top_level_get
+    ));
+    out.push(format!(
+        "{p} RELAY wait={} last_doorbell_ago_ms={} doorbells={:#x} last_wake={} last_wake_ago_ms={} last_turn_ago_ms={}",
+        wait_text(r.wait),
+        hex_or(r.doorbell_ago_ms, "unknown"),
+        r.doorbells,
+        r.wake.map_or("none", |(_, w)| peek_name(w)),
+        hex_or(r.wake.map(|(t, _)| t), "none"),
+        hex_or(r.turn_ago_ms, "unknown"),
+    ));
+    out.push(format!(
+        "{p} COUNTERS issued={:#x} fetched={:#x} marks_issued={:#x} marks_seen={:#x} turns={:#x} entries_scan={:#x} entries_pointer={:#x} entries_window={:#x}",
+        r.issued, r.fetched, r.marks_issued, r.marks_seen, r.turns, r.entries.0, r.entries.1, r.entries.2
+    ));
+    let held = match &r.segment {
+        Segment::NotFound => None,
+        Segment::Unread { slot, .. } | Segment::Decoded { slot, .. } => Some(*slot),
+    };
+    for row in r.rows.iter().take(MAX_RING_ROWS) {
+        let mut line = format!("{p} RING slot={:#x} entry={:#x}", row.slot, row.entry);
+        match gp_entry_classify(row.entry) {
+            GpEntryKind::Segment(e) => line.push_str(&format!(
+                " va={:#x} len={:#x} subroutine={:#x} sync_wait={:#x}",
+                e.gpu_va,
+                e.len_bytes,
+                u8::from(e.subroutine),
+                u8::from(e.sync_wait)
+            )),
+            GpEntryKind::Control { opcode, operand } => {
+                line.push_str(&format!(" control opcode={opcode:#x} operand={operand:#x}"));
+            }
+        }
+        if row.slot == v.gp_get {
+            line.push_str(" <== GP_GET");
+        }
+        if held == Some(row.slot) {
+            line.push_str(" <== SEGMENT_ROW");
+        }
+        out.push(line);
+    }
+    match &r.segment {
+        Segment::NotFound => out.push(format!(
+            "{p} SEGMENT none: no listed private row holds pb_get={:#x}",
+            v.pb_get
+        )),
+        Segment::Unread {
+            slot,
+            va,
+            len_bytes,
+            why,
+        } => out.push(format!(
+            "{p} SEGMENT slot={slot:#x} va={va:#x} len_bytes={len_bytes:#x} UNREAD({})",
+            clean(why)
+        )),
+        Segment::Decoded {
+            slot,
+            va,
+            len_bytes,
+            read_bytes,
+            stream,
+            probes,
+        } => {
+            let off = v.pb_get.checked_sub(*va).filter(|o| o < len_bytes);
+            let pb_word = off.map(|o| usize::try_from(o / 4).unwrap_or(usize::MAX));
+            let beyond = pb_word.is_some_and(|w| w >= read_bytes / 4);
+            out.push(format!(
+                "{p} SEGMENT slot={slot:#x} va={va:#x} len_bytes={len_bytes:#x} read_bytes={read_bytes:#x} pb_get_off={} methods={:#x} capped={:#x} truncated={:#x} malformed_at={} ended_at={}",
+                match (off, beyond) {
+                    (None, _) => "outside".to_owned(),
+                    (Some(o), true) => format!("{o:#x}(beyond_read_window)"),
+                    (Some(o), false) => format!("{o:#x}"),
+                },
+                stream.methods,
+                u8::from(stream.capped),
+                u8::from(stream.truncated),
+                hex_or(stream.malformed_at.map(|w| w as u64), "none"),
+                hex_or(stream.ended_at.map(|w| w as u64), "none"),
+            ));
+            let mark = pb_word
+                .filter(|_| !beyond)
+                .and_then(|w| stream.items.iter().position(|i| i.word >= w));
+            let (mut others, mut first_other, mut any_acquire) = (0usize, Vec::new(), false);
+            for (idx, d) in stream.items.iter().enumerate() {
+                let at = format!("+{:#x}", d.word * 4);
+                let text = match d.kind {
+                    Kind::Other => {
+                        others += 1;
+                        if first_other.len() < 4 {
+                            first_other.push(format!("{:#x}", d.method));
+                        }
+                        continue;
+                    }
+                    Kind::SetObject { class } => {
+                        format!("SET_OBJECT sub={:#x} class={class:#x}", d.subchannel)
+                    }
+                    Kind::SemAddrLo => format!("SEM_ADDR_LO value={:#x}", d.data),
+                    Kind::SemAddrHi => format!("SEM_ADDR_HI value={:#x}", d.data),
+                    Kind::SemPayloadLo => format!("SEM_PAYLOAD_LO value={:#x}", d.data),
+                    Kind::SemPayloadHi => format!("SEM_PAYLOAD_HI value={:#x}", d.data),
+                    Kind::NonStallInterrupt => "NON_STALL_INTERRUPT".to_owned(),
+                    Kind::SetReference => format!("SET_REFERENCE value={:#x}", d.data),
+                    Kind::Wfi => format!("WFI scope={:#x}", d.data),
+                    Kind::CeSemA => format!("CE_SET_SEMAPHORE_A value={:#x}", d.data),
+                    Kind::CeSemB => format!("CE_SET_SEMAPHORE_B value={:#x}", d.data),
+                    Kind::CeSemPayload => format!("CE_SET_SEMAPHORE_PAYLOAD value={:#x}", d.data),
+                    Kind::CeLaunch { semaphore_type } => {
+                        format!(
+                            "CE_LAUNCH_DMA semaphore_type={semaphore_type:#x} raw={:#x}",
+                            d.data
+                        )
+                    }
+                    Kind::SemExecute(e) => {
+                        let acq = e.op.is_acquire();
+                        any_acquire |= acq;
+                        let mut t = format!(
+                            "SEM_EXECUTE {} raw={:#x} addr={} {}={} wfi={:#x} payload64={:#x} timestamp={:#x} acquire_switch={:#x}",
+                            e.op.name(),
+                            e.raw,
+                            e.addr.map_or("unknown".to_owned(), |a| format!("{a:#x}")),
+                            if acq { "awaited" } else { "payload" },
+                            e.payload
+                                .map_or("unknown".to_owned(), |a| format!("{a:#x}")),
+                            u8::from(e.release_wfi),
+                            u8::from(e.payload64),
+                            u8::from(e.timestamp),
+                            u8::from(e.acquire_switch),
+                        );
+                        if let SemOp::Reserved(v) = e.op {
+                            t.push_str(&format!(" op_value={v:#x}"));
+                        }
+                        if acq {
+                            let cur = probes.iter().find(|pr| pr.item == idx).map(|pr| pr.current);
+                            match (e.addr, cur) {
+                                (None, _) => t.push_str(" current=NOADDR"),
+                                (Some(_), None) => t.push_str(" current=UNPROBED"),
+                                (Some(_), Some(Current::Unread(why))) => {
+                                    t.push_str(&format!(" current=UNREAD({})", clean(why)));
+                                }
+                                (Some(_), Some(Current::Value(c))) => {
+                                    t.push_str(&format!(" current={c:#x}"));
+                                    let verdict = e
+                                        .payload
+                                        .and_then(|a| name_says_pass(e.op, c, a, e.payload64));
+                                    t.push_str(match verdict {
+                                        Some(true) => " name_says_pass=yes",
+                                        Some(false) => " name_says_pass=no",
+                                        None => " name_says_pass=n/a",
+                                    });
+                                }
+                            }
+                        }
+                        t
+                    }
+                };
+                out.push(format!(
+                    "{p} M {at} {text}{}",
+                    if mark == Some(idx) { " <== PB_GET" } else { "" }
+                ));
+            }
+            if others != 0 {
+                out.push(format!(
+                    "{p} OTHER methods={others:#x} first=[{}]",
+                    first_other.join(",")
+                ));
+            }
+            if any_acquire {
+                out.push(format!(
+                    "{p} NOTE name_says_pass is inferred from the operation name, never measured; current is read from memory through the relay's placement view, not by the GPU"
+                ));
+            }
+        }
+    }
+    out.finish(format!("{p} END"))
+}
+
+const PREFIX: &str = "kf3: USER_RING_STALL_DIAG";
+
+/// Bounded output: at most [`MAX_LINES`] lines (the last one is always the END line), each at most
+/// [`MAX_LINE_CHARS`] printable-ASCII characters.
+#[derive(Default)]
+struct Out {
+    lines: Vec<String>,
+    omitted: usize,
+}
+
+impl Out {
+    fn push(&mut self, line: String) {
+        // one slot is kept for the "omitted" note and one for END
+        if self.lines.len() + 2 >= MAX_LINES {
+            self.omitted += 1;
+            return;
+        }
+        self.lines.push(clip(line));
+    }
+    fn finish(mut self, end: String) -> Vec<String> {
+        if self.omitted != 0 {
+            let n = self.omitted;
+            self.lines.push(format!("{PREFIX} OMITTED lines={n:#x}"));
+        }
+        self.lines.push(clip(end));
+        self.lines
+    }
+}
+
+/// Printable ASCII only, one line, at most [`MAX_LINE_CHARS`] characters.
+fn clip(line: String) -> String {
+    let mut s: String = line
+        .chars()
+        .map(|c| if (' '..='~').contains(&c) { c } else { '?' })
+        .take(MAX_LINE_CHARS)
+        .collect();
+    if s.chars().count() == MAX_LINE_CHARS {
+        s.truncate(MAX_LINE_CHARS - 1);
+        s.push('~');
+    }
+    s
+}
+
+/// A reason string made of the characters of a name (the glue passes literals only).
+fn clean(why: &str) -> String {
+    why.chars()
+        .filter(|c| c.is_ascii_alphanumeric() || *c == '_' || *c == '-')
+        .take(32)
+        .collect()
+}
+
+fn hex_or<T: Into<u64>>(v: Option<T>, none: &str) -> String {
+    v.map_or_else(|| none.to_owned(), |v| format!("{:#x}", v.into()))
+}
+
+fn wait_text(w: Option<Wait>) -> String {
+    match w {
+        None => "none".to_owned(),
+        Some(Wait::Marker { target }) => format!("Marker(target={target:#x})"),
+        Some(Wait::Popped { target }) => format!("Popped(target={target:#x})"),
+        Some(Wait::Contended) => "Contended".to_owned(),
+    }
 }
 
 /// The diagnostic's cumulative counters (VM wide).
 #[derive(Debug, Default)]
 pub struct StallStats {
     /// Conditions reported.
-    pub conditions: std::sync::atomic::AtomicU64,
+    pub conditions: AtomicU64,
     /// Acquires listed.
-    pub acquires: std::sync::atomic::AtomicU64,
+    pub acquires: AtomicU64,
     /// Acquires whose semaphore could not be read.
-    pub unread: std::sync::atomic::AtomicU64,
+    pub unread: AtomicU64,
     /// Acquires whose current value passes by the name of the operation.
-    pub would_pass: std::sync::atomic::AtomicU64,
+    pub would_pass: AtomicU64,
     /// Conditions whose segment was not found / not readable.
-    pub no_segment: std::sync::atomic::AtomicU64,
+    pub no_segment: AtomicU64,
     /// Looks skipped because a lock was busy.
-    pub skipped_busy: std::sync::atomic::AtomicU64,
+    pub skipped_busy: AtomicU64,
 }
 
 impl StallStats {
     /// Whether anything was counted.
     #[must_use]
     pub fn any(&self) -> bool {
-        false
+        self.fields().iter().any(|(_, c)| c.load(Relaxed) != 0)
+    }
+    fn fields(&self) -> [(&'static str, &AtomicU64); 6] {
+        [
+            ("conditions", &self.conditions),
+            ("acquires", &self.acquires),
+            ("unread", &self.unread),
+            ("would_pass", &self.would_pass),
+            ("no_segment", &self.no_segment),
+            ("skipped_busy", &self.skipped_busy),
+        ]
     }
     /// One bounded fragment (hex), for the lifecycle counters line.
     #[must_use]
     pub fn summary(&self) -> String {
-        String::new()
+        if !self.any() {
+            return String::new();
+        }
+        self.fields()
+            .iter()
+            .map(|(n, c)| format!("diag_user_stall_{n}={:#x}", c.load(Relaxed)))
+            .collect::<Vec<_>>()
+            .join(" ")
     }
 }
 
@@ -475,6 +1095,7 @@ pub struct ChannelDiag {
     turn_ms: Option<u64>,
     db_count: u64,
     db_ms: Option<u64>,
+    db_seen: bool,
 }
 
 impl ChannelDiag {
@@ -487,35 +1108,53 @@ impl ChannelDiag {
             turn_ms: None,
             db_count: 0,
             db_ms: None,
+            db_seen: false,
         }
     }
     /// A look rang the relay.
-    pub fn note_wake(&mut self, _now_ms: u64, _why: Peek) {}
+    pub fn note_wake(&mut self, now_ms: u64, why: Peek) {
+        self.wake = Some((now_ms, why));
+    }
     /// The relay had a turn.
-    pub fn note_turn(&mut self, _now_ms: u64) {}
+    pub fn note_turn(&mut self, now_ms: u64) {
+        self.turn_ms = Some(now_ms);
+    }
     /// The doorbell count read at `now_ms`.
-    pub fn note_doorbells(&mut self, _now_ms: u64, _count: u64) {}
+    pub fn note_doorbells(&mut self, now_ms: u64, count: u64) {
+        if !self.db_seen {
+            // the first look cannot say when the last doorbell was rung
+            self.db_seen = true;
+            self.db_count = count;
+        } else if count != self.db_count {
+            self.db_count = count;
+            self.db_ms = Some(now_ms);
+        }
+    }
     /// `(doorbells, ms since the count last changed)`.
     #[must_use]
-    pub fn doorbells(&self, _now_ms: u64) -> (u64, Option<u64>) {
-        (0, None)
+    pub fn doorbells(&self, now_ms: u64) -> (u64, Option<u64>) {
+        (self.db_count, self.db_ms.map(|t| now_ms.saturating_sub(t)))
     }
     /// `(ms since the last ring, its reason)`.
     #[must_use]
-    pub fn last_wake(&self, _now_ms: u64) -> Option<(u64, Peek)> {
-        None
+    pub fn last_wake(&self, now_ms: u64) -> Option<(u64, Peek)> {
+        self.wake.map(|(t, w)| (now_ms.saturating_sub(t), w))
     }
     /// Ms since the last turn.
     #[must_use]
-    pub fn last_turn(&self, _now_ms: u64) -> Option<u64> {
-        None
+    pub fn last_turn(&self, now_ms: u64) -> Option<u64> {
+        self.turn_ms.map(|t| now_ms.saturating_sub(t))
     }
 }
 
 /// The name printed for a look's reason.
 #[must_use]
-pub fn peek_name(_why: Peek) -> &'static str {
-    "?"
+pub fn peek_name(why: Peek) -> &'static str {
+    match why {
+        Peek::Spin => "Spin",
+        Peek::Event => "Event",
+        Peek::Backstop => "Backstop",
+    }
 }
 
 #[cfg(test)]
@@ -546,7 +1185,13 @@ mod tests {
         inc(
             0,
             0x5c,
-            &[addr as u32, (addr >> 32) as u32, payload as u32, (payload >> 32) as u32, exec],
+            &[
+                addr as u32,
+                (addr >> 32) as u32,
+                payload as u32,
+                (payload >> 32) as u32,
+                exec,
+            ],
         )
     }
     fn exec_of(it: &Decoded) -> Exec {
@@ -594,9 +1239,16 @@ mod tests {
         let mut d = Detector::new();
         assert_eq!(d.observe(1000, 5, 7, 512, 2000), Verdict::Quiet);
         assert_eq!(d.observe(2999, 5, 7, 512, 2000), Verdict::Quiet);
-        assert_eq!(d.observe(3000, 5, 7, 512, 2000), Verdict::Fire { stalled_ms: 2000 });
+        assert_eq!(
+            d.observe(3000, 5, 7, 512, 2000),
+            Verdict::Fire { stalled_ms: 2000 }
+        );
         assert!(d.fired());
-        assert_eq!(d.observe(9000, 5, 7, 512, 2000), Verdict::Quiet, "once per condition");
+        assert_eq!(
+            d.observe(9000, 5, 7, 512, 2000),
+            Verdict::Quiet,
+            "once per condition"
+        );
         assert_eq!(d.observe(90_000, 5, 7, 512, 2000), Verdict::Quiet);
     }
 
@@ -604,12 +1256,18 @@ mod tests {
     fn the_condition_is_re_armed_when_get_moves() {
         let mut d = Detector::new();
         assert_eq!(d.observe(0, 5, 7, 512, 100), Verdict::Quiet);
-        assert_eq!(d.observe(100, 5, 7, 512, 100), Verdict::Fire { stalled_ms: 100 });
+        assert_eq!(
+            d.observe(100, 5, 7, 512, 100),
+            Verdict::Fire { stalled_ms: 100 }
+        );
         // GET moved by one: a new condition whose clock starts now
         assert_eq!(d.observe(150, 6, 7, 512, 100), Verdict::Quiet);
         assert!(!d.fired());
         assert_eq!(d.observe(249, 6, 7, 512, 100), Verdict::Quiet);
-        assert_eq!(d.observe(250, 6, 7, 512, 100), Verdict::Fire { stalled_ms: 100 });
+        assert_eq!(
+            d.observe(250, 6, 7, 512, 100),
+            Verdict::Fire { stalled_ms: 100 }
+        );
     }
 
     #[test]
@@ -619,7 +1277,10 @@ mod tests {
         assert_eq!(d.observe(90, 7, 7, 512, 100), Verdict::Quiet); // drained
         assert_eq!(d.observe(1000, 7, 9, 512, 100), Verdict::Quiet); // new work, new clock
         assert_eq!(d.observe(1099, 7, 9, 512, 100), Verdict::Quiet);
-        assert_eq!(d.observe(1100, 7, 9, 512, 100), Verdict::Fire { stalled_ms: 100 });
+        assert_eq!(
+            d.observe(1100, 7, 9, 512, 100),
+            Verdict::Fire { stalled_ms: 100 }
+        );
     }
 
     #[test]
@@ -627,7 +1288,10 @@ mod tests {
         let mut d = Detector::new();
         assert_eq!(d.observe(0, 5, 6, 512, 100), Verdict::Quiet);
         assert_eq!(d.observe(60, 5, 9, 512, 100), Verdict::Quiet);
-        assert_eq!(d.observe(100, 5, 12, 512, 100), Verdict::Fire { stalled_ms: 100 });
+        assert_eq!(
+            d.observe(100, 5, 12, 512, 100),
+            Verdict::Fire { stalled_ms: 100 }
+        );
     }
 
     #[test]
@@ -635,11 +1299,17 @@ mod tests {
         let mut d = Detector::new();
         // GET 510, PUT 1 on a 512-entry ring: three entries outstanding
         assert_eq!(d.observe(0, 510, 1, 512, 10), Verdict::Quiet);
-        assert_eq!(d.observe(10, 510, 1, 512, 10), Verdict::Fire { stalled_ms: 10 });
+        assert_eq!(
+            d.observe(10, 510, 1, 512, 10),
+            Verdict::Fire { stalled_ms: 10 }
+        );
         // GET 1, PUT 510 is also outstanding (509 of them), not "empty"
         let mut e = Detector::new();
         assert_eq!(e.observe(0, 1, 510, 512, 10), Verdict::Quiet);
-        assert_eq!(e.observe(10, 1, 510, 512, 10), Verdict::Fire { stalled_ms: 10 });
+        assert_eq!(
+            e.observe(10, 1, 510, 512, 10),
+            Verdict::Fire { stalled_ms: 10 }
+        );
     }
 
     #[test]
@@ -723,7 +1393,10 @@ mod tests {
         assert!(!e.legacy);
         assert_eq!(e.raw, 0);
         // word indexes name the datum words (the header is word 0)
-        assert_eq!(s.items.iter().map(|i| i.word).collect::<Vec<_>>(), [1, 2, 3, 4, 5]);
+        assert_eq!(
+            s.items.iter().map(|i| i.word).collect::<Vec<_>>(),
+            [1, 2, 3, 4, 5]
+        );
         assert!(!s.capped && !s.truncated && s.malformed_at.is_none() && s.ended_at.is_none());
     }
 
@@ -746,7 +1419,11 @@ mod tests {
         assert!(e.acquire_switch && e.release_wfi && e.payload64 && e.timestamp);
         assert_eq!(e.reduction, 5);
         assert!(e.reduction_unsigned);
-        assert_eq!(e.payload, Some(0x1_0000_0002), "64-bit payload joins HI and LO");
+        assert_eq!(
+            e.payload,
+            Some(0x1_0000_0002),
+            "64-bit payload joins HI and LO"
+        );
         // none of them set
         let e = exec_of(&decode(&sem(0x1000, 2, 1), 64).items[4]);
         assert!(!e.acquire_switch && !e.release_wfi && !e.payload64 && !e.timestamp);
@@ -840,10 +1517,14 @@ mod tests {
 
     #[test]
     fn copy_classes_are_the_xxb5_family() {
-        for c in [0xA0B5u32, 0xC0B5, 0xC3B5, 0xC5B5, 0xC6B5, 0xC7B5, 0xC8B5, 0xC9B5, 0x85B5] {
+        for c in [
+            0xA0B5u32, 0xC0B5, 0xC3B5, 0xC5B5, 0xC6B5, 0xC7B5, 0xC8B5, 0xC9B5, 0x85B5,
+        ] {
             assert!(is_copy_class(c), "{c:#x}");
         }
-        for c in [0xC997u32, 0xC9C0, 0xC86F, 0xC56F, 0x0, 0xB5, 0xC6B4, 0x1_C6B5] {
+        for c in [
+            0xC997u32, 0xC9C0, 0xC86F, 0xC56F, 0x0, 0xB5, 0xC6B4, 0x1_C6B5,
+        ] {
             assert!(!is_copy_class(c), "{c:#x}");
         }
     }
@@ -862,7 +1543,14 @@ mod tests {
         let got: Vec<(u32, u32)> = s.items.iter().map(|i| (i.method, i.data)).collect();
         assert_eq!(
             got,
-            [(0x20, 0x123), (0x64, 11), (0x64, 22), (0x5c, 0xA0), (0x60, 0xB0), (0x60, 0xC0)]
+            [
+                (0x20, 0x123),
+                (0x64, 11),
+                (0x64, 22),
+                (0x5c, 0xA0),
+                (0x60, 0xB0),
+                (0x60, 0xC0)
+            ]
         );
         assert_eq!(s.items[0].kind, Kind::NonStallInterrupt);
         assert!(!s.truncated && s.malformed_at.is_none());
@@ -915,7 +1603,11 @@ mod tests {
     fn the_method_cap_is_exact() {
         let w64 = inc(0, 0x64, &vec![0; 64]);
         let s = decode(&w64, 64);
-        assert_eq!((s.items.len(), s.capped), (64, false), "exactly 64 methods fit");
+        assert_eq!(
+            (s.items.len(), s.capped),
+            (64, false),
+            "exactly 64 methods fit"
+        );
         let w65 = inc(0, 0x64, &vec![0; 65]);
         let s = decode(&w65, 64);
         assert_eq!((s.items.len(), s.methods, s.capped), (64, 64, true));
@@ -971,8 +1663,12 @@ mod tests {
                     if r & 3 == 0 {
                         (r >> 8) as u32
                     } else {
-                        method_header_inc(((r >> 3) % 8) as u32, ((r >> 8) % 0x300 * 4) as u32 & !3, ((r >> 30) % 70 + 1) as u32)
-                            .unwrap_or(0x2000_0000)
+                        method_header_inc(
+                            ((r >> 3) % 8) as u32,
+                            ((r >> 8) % 0x300 * 4) as u32 & !3,
+                            ((r >> 30) % 70 + 1) as u32,
+                        )
+                        .unwrap_or(0x2000_0000)
                     }
                 })
                 .collect();
@@ -981,7 +1677,10 @@ mod tests {
             assert!(s.items.len() <= cap, "round {round}");
             assert_eq!(s.methods, s.items.len());
             assert!(s.items.iter().all(|i| i.word < words.len().max(1)));
-            assert!(s.items.windows(2).all(|p| p[0].word < p[1].word), "word order, round {round}");
+            assert!(
+                s.items.windows(2).all(|p| p[0].word < p[1].word),
+                "word order, round {round}"
+            );
             let _ = probe_plan(&s);
         }
     }
@@ -1012,7 +1711,11 @@ mod tests {
             (Acquire, 0xFFFF_FFFF_0000_0005, 5, false, Some(true)),
         ];
         for (op, cur, aw, p64, want) in t {
-            assert_eq!(name_says_pass(op, cur, aw, p64), want, "{op:?} cur={cur:#x} awaited={aw:#x} p64={p64}");
+            assert_eq!(
+                name_says_pass(op, cur, aw, p64),
+                want,
+                "{op:?} cur={cur:#x} awaited={aw:#x} p64={p64}"
+            );
         }
     }
 
@@ -1028,9 +1731,21 @@ mod tests {
         assert_eq!(
             plan,
             [
-                ProbeReq { item: 4, addr: 0x1000, bytes: 4 },
-                ProbeReq { item: 14, addr: 0x3000, bytes: 8 },
-                ProbeReq { item: 15, addr: 0x3000, bytes: 4 },
+                ProbeReq {
+                    item: 4,
+                    addr: 0x1000,
+                    bytes: 4
+                },
+                ProbeReq {
+                    item: 14,
+                    addr: 0x3000,
+                    bytes: 8
+                },
+                ProbeReq {
+                    item: 15,
+                    addr: 0x3000,
+                    bytes: 4
+                },
             ]
         );
         // an execute whose address was never written is not planned
@@ -1049,7 +1764,10 @@ mod tests {
         let plan = probe_plan(&s);
         assert_eq!(plan.len(), MAX_PROBES);
         assert_eq!(plan[0].addr, 0x1000);
-        assert_eq!(plan[MAX_PROBES - 1].addr, 0x1000 + (MAX_PROBES as u64 - 1) * 4);
+        assert_eq!(
+            plan[MAX_PROBES - 1].addr,
+            0x1000 + (MAX_PROBES as u64 - 1) * 4
+        );
     }
 
     // ------------------------------------------------------------------ which private entry
@@ -1102,7 +1820,10 @@ mod tests {
 
     #[test]
     fn the_segment_lookup_wraps_around_the_ring() {
-        let rows = [(511u32, seg_entry(0x7000, 0x40)), (0, seg_entry(0x8000, 0x40))];
+        let rows = [
+            (511u32, seg_entry(0x7000, 0x40)),
+            (0, seg_entry(0x8000, 0x40)),
+        ];
         // GET 0: slot 511 is GET - 1
         assert_eq!(pick_segment(&rows, 0, 512, 0x7020), Some(511));
     }
@@ -1111,13 +1832,19 @@ mod tests {
     fn incident_report() -> Report {
         // the 2026-10-20 incident's shape: a 500 B guest pushbuffer at 0x304720000, PB_GET at +0x40,
         // two entries outstanding, REFERENCE one marker behind
-        let mut pb = Vec::new();
+        // eight NOP words, SET_OBJECT, the acquire, SET_REFERENCE, NON_STALL_INTERRUPT: PB_GET (+0x40
+        // = word 16) lies after the acquire, which the PBDMA is blocked in
+        let mut pb = vec![0u32; 8];
         pb.extend(inc(4, 0x0, &[0xC6B5]));
         pb.extend(sem(0x0000_0001_2036_1000, 0x2a, 3 | (1 << 12)));
         pb.extend(inc(0, 0x50, &[0x4b46_6dd5]));
         pb.extend(inc(0, 0x20, &[0]));
         let stream = decode(&pb, MAX_METHODS);
-        let acq = stream.items.iter().position(|i| matches!(i.kind, Kind::SemExecute(_))).unwrap();
+        let acq = stream
+            .items
+            .iter()
+            .position(|i| matches!(i.kind, Kind::SemExecute(_)))
+            .unwrap();
         Report {
             key: (0xc1d0_0001, 0x5c00_0010),
             host: 0x1c0,
@@ -1146,9 +1873,18 @@ mod tests {
             turns: 0x400,
             entries: (0, 0x123, 0),
             rows: vec![
-                Row { slot: 0x1a7, entry: gp_entry(0x3_0472_0000, 500).unwrap() },
-                Row { slot: 0x1a8, entry: gp_entry(0x1_2036_1d18, 40).unwrap() },
-                Row { slot: 0x1a9, entry: gp_entry(0x3_ffff_0000, 8).unwrap() },
+                Row {
+                    slot: 0x1a7,
+                    entry: gp_entry(0x3_0472_0000, 500).unwrap(),
+                },
+                Row {
+                    slot: 0x1a8,
+                    entry: gp_entry(0x1_2036_1d18, 40).unwrap(),
+                },
+                Row {
+                    slot: 0x1a9,
+                    entry: gp_entry(0x3_ffff_0000, 8).unwrap(),
+                },
             ],
             segment: Segment::Decoded {
                 slot: 0x1a7,
@@ -1156,7 +1892,10 @@ mod tests {
                 len_bytes: 500,
                 read_bytes: 500,
                 stream,
-                probes: vec![Probe { item: acq, current: Current::Value(0x29) }],
+                probes: vec![Probe {
+                    item: acq,
+                    current: Current::Value(0x29),
+                }],
             },
             totals: "stall_conditions=0x1".into(),
         }
@@ -1207,12 +1946,18 @@ mod tests {
     fn the_pb_get_marker_sits_on_the_first_method_at_or_after_pb_get() {
         // PB_GET = segment + 0x40 -> word 16; the marker is on the first item whose word >= 16
         let mut r = incident_report();
-        let Segment::Decoded { stream, .. } = &r.segment else { panic!() };
+        let Segment::Decoded { stream, .. } = &r.segment else {
+            panic!()
+        };
         let first_at_or_after = stream.items.iter().find(|i| i.word >= 16).unwrap().word;
         let lines = render(&r);
         let marked: Vec<_> = lines.iter().filter(|l| l.contains("<== PB_GET")).collect();
         assert_eq!(marked.len(), 1, "{marked:?}");
-        assert!(marked[0].contains(&format!("+{:#x}", first_at_or_after * 4)), "{}", marked[0]);
+        assert!(
+            marked[0].contains(&format!("+{:#x}", first_at_or_after * 4)),
+            "{}",
+            marked[0]
+        );
         // PB_GET outside the segment: no marker, and the segment header says so
         r.private.pb_get = 0x9_9999_0000;
         let text = all(&render(&r));
@@ -1222,11 +1967,15 @@ mod tests {
     #[test]
     fn an_unreadable_semaphore_says_so_and_a_vidmem_one_says_vidmem() {
         let mut r = incident_report();
-        let Segment::Decoded { probes, .. } = &mut r.segment else { panic!() };
+        let Segment::Decoded { probes, .. } = &mut r.segment else {
+            panic!()
+        };
         probes[0].current = Current::Unread("vidmem");
         let text = all(&render(&r));
         assert!(text.contains("current=UNREAD(vidmem)"), "{text}");
-        let Segment::Decoded { probes, .. } = &mut r.segment else { panic!() };
+        let Segment::Decoded { probes, .. } = &mut r.segment else {
+            panic!()
+        };
         probes.clear();
         let text = all(&render(&r));
         assert!(text.contains("current=UNPROBED"), "{text}");
@@ -1246,7 +1995,12 @@ mod tests {
         r.segment = Segment::NotFound;
         let text = all(&render(&r));
         assert!(text.contains("SEGMENT none"), "{text}");
-        r.segment = Segment::Unread { slot: 0x1a7, va: 0x3_0472_0000, len_bytes: 500, why: "Missing" };
+        r.segment = Segment::Unread {
+            slot: 0x1a7,
+            va: 0x3_0472_0000,
+            len_bytes: 500,
+            why: "Missing",
+        };
         let text = all(&render(&r));
         assert!(text.contains("UNREAD(Missing)"), "{text}");
         assert!(text.contains("slot=0x1a7"), "{text}");
@@ -1259,7 +2013,7 @@ mod tests {
         assert!(text.contains("len=0x1f4"), "{text}");
         assert!(text.contains("va=0x120361d18"), "{text}");
         assert!(text.contains("<== GP_GET"), "{text}");
-        assert!(text.contains("<== PB_GET row"), "{text}");
+        assert!(text.contains("<== SEGMENT_ROW"), "{text}");
     }
 
     #[test]
@@ -1267,7 +2021,9 @@ mod tests {
         for r in [incident_report()] {
             for line in render(&r) {
                 for tok in line.split_whitespace() {
-                    let Some((_, v)) = tok.split_once('=') else { continue };
+                    let Some((_, v)) = tok.split_once('=') else {
+                        continue;
+                    };
                     let v = v.trim_matches(|c: char| "()[]{},".contains(c));
                     if v.starts_with(|c: char| c.is_ascii_digit()) {
                         assert!(
@@ -1297,16 +2053,28 @@ mod tests {
             read_bytes: MAX_PB_BYTES,
             probes: probe_plan(&stream)
                 .iter()
-                .map(|p| Probe { item: p.item, current: Current::Value(u64::MAX) })
+                .map(|p| Probe {
+                    item: p.item,
+                    current: Current::Value(u64::MAX),
+                })
                 .collect(),
             stream,
         };
-        r.rows = (0..64).map(|s| Row { slot: s, entry: u64::MAX }).collect();
+        r.rows = (0..64)
+            .map(|s| Row {
+                slot: s,
+                entry: u64::MAX,
+            })
+            .collect();
         r.totals = "x=0xffffffffffffffff ".repeat(200);
         let lines = render(&r);
         assert!(lines.len() <= MAX_LINES, "{} lines", lines.len());
         for l in &lines {
-            assert!(l.chars().count() <= MAX_LINE_CHARS, "{} chars: {l}", l.chars().count());
+            assert!(
+                l.chars().count() <= MAX_LINE_CHARS,
+                "{} chars: {l}",
+                l.chars().count()
+            );
             assert!(!l.contains('\n'));
         }
     }
@@ -1314,7 +2082,10 @@ mod tests {
     #[test]
     fn rendering_prints_only_printable_ascii() {
         let text = all(&render(&incident_report()));
-        assert!(text.chars().all(|c| c == '\n' || (' '..='~').contains(&c)), "{text}");
+        assert!(
+            text.chars().all(|c| c == '\n' || (' '..='~').contains(&c)),
+            "{text}"
+        );
     }
 
     #[test]
@@ -1329,7 +2100,12 @@ mod tests {
         r.rows.clear();
         r.segment = Segment::NotFound;
         let text = all(&render(&r));
-        for needle in ["guest_put=UNREAD", "wait=none", "last_wake=none", "last_doorbell_ago_ms=unknown"] {
+        for needle in [
+            "guest_put=UNREAD",
+            "wait=none",
+            "last_wake=none",
+            "last_doorbell_ago_ms=unknown",
+        ] {
             assert!(text.contains(needle), "missing {needle:?} in:\n{text}");
         }
     }
@@ -1389,6 +2165,292 @@ mod tests {
             assert!(t.contains(needle), "missing {needle:?} in {t:?}");
         }
         assert!(t.len() < 300);
+    }
+
+    // ------------------------------------------------------------------ second killers
+    #[test]
+    fn a_setting_is_never_on_at_zero_and_never_above_the_clamp() {
+        for v in ["0", "00", "000", " 0 "] {
+            assert_eq!(parse_setting(Some(v)), Setting::Off, "{v:?}");
+        }
+        for v in [
+            "1",
+            "50",
+            "2000",
+            "3600000",
+            "3600001",
+            "18446744073709551615",
+            "184467440737095516160",
+        ] {
+            match parse_setting(Some(v)) {
+                Setting::On(ms) => assert!((1..=MAX_MS).contains(&ms), "{v}: {ms}"),
+                other => panic!("{v:?} -> {other:?}"),
+            }
+        }
+        assert_eq!(parse_setting(Some("3600000")), Setting::On(MAX_MS));
+        assert_eq!(parse_setting(Some("3600001")), Setting::On(MAX_MS));
+    }
+
+    #[test]
+    fn the_detector_fires_at_every_ring_position_not_only_the_small_ones() {
+        for (get, put) in [(0u32, 1u32), (255, 256), (511, 0), (300, 100), (1, 0)] {
+            let mut d = Detector::new();
+            assert_eq!(
+                d.observe(10, get, put, 512, 5),
+                Verdict::Quiet,
+                "{get}->{put}"
+            );
+            assert_eq!(
+                d.observe(15, get, put, 512, 5),
+                Verdict::Fire { stalled_ms: 5 },
+                "{get}->{put}"
+            );
+        }
+        // a smaller ring: 8 entries, GET 7 PUT 0 is one outstanding entry
+        let mut d = Detector::new();
+        assert_eq!(d.observe(0, 7, 0, 8, 1), Verdict::Quiet);
+        assert_eq!(d.observe(1, 7, 0, 8, 1), Verdict::Fire { stalled_ms: 1 });
+        // an entry count that is not a power of two is not a ring
+        let mut d = Detector::new();
+        assert_eq!(d.observe(0, 1, 2, 500, 1), Verdict::Quiet);
+        assert_eq!(d.observe(9, 1, 2, 500, 1), Verdict::Quiet);
+    }
+
+    #[test]
+    fn a_class_numbered_b5_is_not_a_copy_engine() {
+        let mut w = inc(4, 0x0, &[0xB5]);
+        w.extend(inc(4, 0x240, &[1]));
+        w.extend(inc(4, 0x300, &[8]));
+        let s = decode(&w, 64);
+        assert_eq!(s.items[0].kind, Kind::SetObject { class: 0xB5 });
+        assert_eq!(s.items[1].kind, Kind::Other);
+        assert_eq!(s.items[2].kind, Kind::Other);
+    }
+
+    #[test]
+    fn copy_engine_methods_follow_the_subchannel_binding_not_the_stream_order() {
+        // sub 4 is a copy engine; sub 1 is rebound from copy to graphics: only sub 4 stays decoded
+        let mut w = inc(4, 0x0, &[0xC6B5]);
+        w.extend(inc(1, 0x0, &[0xC7B5]));
+        w.extend(inc(1, 0x0, &[0xC997]));
+        w.extend(inc(4, 0x248, &[5]));
+        w.extend(inc(1, 0x248, &[6]));
+        let s = decode(&w, 64);
+        assert_eq!(s.items[3].kind, Kind::CeSemPayload);
+        assert_eq!(s.items[4].kind, Kind::Other);
+        // the launch word's SEMAPHORE_TYPE is bits 4:3 only
+        let s = decode(
+            &[w[..2].to_vec(), inc(4, 0x300, &[0xFFFF_FFE7])].concat(),
+            64,
+        );
+        assert_eq!(s.items[1].kind, Kind::CeLaunch { semaphore_type: 0 });
+        let s = decode(&[w[..2].to_vec(), inc(4, 0x300, &[0x18])].concat(), 64);
+        assert_eq!(s.items[1].kind, Kind::CeLaunch { semaphore_type: 3 });
+    }
+
+    #[test]
+    fn the_segment_end_is_exclusive_even_when_a_neighbour_row_would_take_it() {
+        let rows = [
+            (98u32, seg_entry(0x1000, 0x40)),
+            (99, seg_entry(0x5000, 0x40)),
+        ];
+        assert_eq!(pick_segment(&rows, 100, 512, 0x1040), None);
+        assert_eq!(pick_segment(&rows, 100, 512, 0x103c), Some(98));
+        assert_eq!(pick_segment(&rows, 100, 512, 0x0fff), None);
+    }
+
+    #[test]
+    fn a_row_behind_get_wins_over_a_row_at_or_ahead_of_it() {
+        let rows = [
+            (99u32, seg_entry(0x1000, 0x100)),
+            (100, seg_entry(0x1000, 0x100)),
+            (101, seg_entry(0x1000, 0x100)),
+        ];
+        assert_eq!(pick_segment(&rows, 100, 512, 0x1010), Some(99));
+        let rows = [
+            (100u32, seg_entry(0x1000, 0x100)),
+            (101, seg_entry(0x1000, 0x100)),
+        ];
+        assert_eq!(pick_segment(&rows, 100, 512, 0x1010), Some(100));
+        // three behind is the farthest looked at
+        let rows = [
+            (97u32, seg_entry(0x1000, 0x100)),
+            (96, seg_entry(0x2000, 0x100)),
+        ];
+        assert_eq!(pick_segment(&rows, 100, 512, 0x1010), Some(97));
+        assert_eq!(pick_segment(&rows, 100, 512, 0x2010), None);
+    }
+
+    #[test]
+    fn the_ring_window_always_lists_the_entry_before_get_and_never_exceeds_its_bounds() {
+        for entries in [4u32, 8, 64, 512] {
+            for get in 0..entries {
+                for put in [0, 1, get, get.wrapping_add(1) % entries, entries - 1] {
+                    let (start, count) = ring_window(get, put, entries);
+                    assert!(
+                        start < entries
+                            && count <= entries
+                            && count as usize <= MAX_RING_ROWS
+                            && count >= 3.min(entries)
+                    );
+                    let slots: Vec<u32> = (0..count).map(|i| (start + i) & (entries - 1)).collect();
+                    assert!(
+                        slots.contains(&(get.wrapping_sub(1) & (entries - 1))),
+                        "{entries} {get} {put}"
+                    );
+                    if put != get && count >= 4 {
+                        assert!(slots.contains(&get), "{entries} {get} {put}");
+                    }
+                    let mut u = slots.clone();
+                    u.sort_unstable();
+                    u.dedup();
+                    assert_eq!(u.len(), slots.len(), "each slot once");
+                }
+            }
+        }
+        assert_eq!(ring_window(1, 2, 500), (0, 0), "not a ring");
+    }
+
+    #[test]
+    fn name_says_pass_is_rendered_for_each_acquire_flavour() {
+        fn line_for(op: u32, cur: u64, awaited: u64) -> String {
+            let mut r = incident_report();
+            let stream = decode(&sem(0x1000, awaited, op), MAX_METHODS);
+            r.private.pb_get = 0;
+            r.segment = Segment::Decoded {
+                slot: 0x1a7,
+                va: 0x1000,
+                len_bytes: 64,
+                read_bytes: 64,
+                probes: vec![Probe {
+                    item: 4,
+                    current: Current::Value(cur),
+                }],
+                stream,
+            };
+            all(&render(&r))
+        }
+        assert!(line_for(0, 7, 7).contains("current=0x7 name_says_pass=yes"));
+        assert!(line_for(0, 8, 7).contains("current=0x8 name_says_pass=no"));
+        assert!(line_for(2, 8, 7).contains("name_says_pass=yes"));
+        assert!(line_for(2, 6, 7).contains("name_says_pass=no"));
+        assert!(line_for(3, 0xffff_ffff, 1).contains("name_says_pass=no"));
+        assert!(line_for(3, 1, 0xffff_ffff).contains("name_says_pass=yes"));
+        assert!(line_for(4, 6, 4).contains("name_says_pass=yes"));
+        assert!(line_for(5, 6, 4).contains("name_says_pass=n/a"));
+        // a RELEASE is not an acquire: no current, no verdict, a payload not an awaited value
+        let text = line_for(1, 6, 4);
+        assert!(
+            !text.contains("name_says_pass")
+                && !text.contains("current=")
+                && text.contains("payload=0x4")
+        );
+    }
+
+    #[test]
+    fn legacy_release_size_and_sub_device_masks_are_decoded_exactly() {
+        // legacy SEMAPHORED RELEASE_SIZE (24:24): 16BYTE = 0 is a timestamped release, 4BYTE = 1 is not
+        assert!(exec_of(&decode(&inc(0, 0x1c, &[2]), 64).items[0]).timestamp);
+        assert!(!exec_of(&decode(&inc(0, 0x1c, &[2 | (1 << 24)]), 64).items[0]).timestamp);
+        // the new family: RELEASE_TIMESTAMP (25:25) EN = 1
+        assert!(!exec_of(&decode(&inc(0, 0x6c, &[1]), 64).items[0]).timestamp);
+        assert!(exec_of(&decode(&inc(0, 0x6c, &[1 | (1 << 25)]), 64).items[0]).timestamp);
+        // a sub-device-mask header (sec_op 0, TERT_OP != 0) is header-only
+        let mut w = vec![1u32 << 16];
+        w.extend(inc(0, 0x20, &[0]));
+        let s = decode(&w, 64);
+        assert_eq!(s.items.len(), 1);
+        assert_eq!(s.items[0].kind, Kind::NonStallInterrupt);
+        assert_eq!(s.items[0].word, 2);
+    }
+
+    #[test]
+    fn a_legacy_packet_longer_than_the_words_left_is_truncated() {
+        let w = vec![(5u32 << 18) | 0x40, 1, 2];
+        let s = decode(&w, 64);
+        assert!(s.truncated);
+        assert!(s.items.is_empty());
+    }
+
+    #[test]
+    fn the_output_buffer_is_bounded_and_always_ends_with_the_end_line() {
+        let mut o = Out::default();
+        for i in 0..500 {
+            o.push(format!("line {i}"));
+        }
+        let lines = o.finish("END".to_owned());
+        assert_eq!(lines.len(), MAX_LINES);
+        assert_eq!(lines.last().unwrap(), "END");
+        assert!(
+            lines[MAX_LINES - 2].contains("OMITTED lines=0x"),
+            "{:?}",
+            lines[MAX_LINES - 2]
+        );
+        assert_eq!(lines[0], "line 0");
+        // exactly as many lines as fit: nothing is omitted
+        let mut o = Out::default();
+        for i in 0..MAX_LINES - 2 {
+            o.push(format!("line {i}"));
+        }
+        let lines = o.finish("END".to_owned());
+        assert_eq!(lines.len(), MAX_LINES - 1);
+        assert!(!lines.iter().any(|l| l.contains("OMITTED")));
+    }
+
+    #[test]
+    fn one_line_is_clipped_to_the_character_cap_and_to_printable_ascii() {
+        let long = "x".repeat(MAX_LINE_CHARS * 3);
+        let c = clip(long);
+        assert_eq!(c.chars().count(), MAX_LINE_CHARS);
+        assert!(c.ends_with('~'));
+        assert_eq!(clip("a\nb\u{1b}[0m\u{e9}".to_owned()), "a?b?[0m?");
+        let exact = "y".repeat(MAX_LINE_CHARS - 1);
+        assert_eq!(clip(exact.clone()), exact);
+        // hostile text in the report's free-form fields is neutralised
+        let mut r = incident_report();
+        r.totals = "t=0x1\nINJECTED\u{7}".to_owned();
+        let text = all(&render(&r));
+        assert!(!text.contains("\nINJECTED") && text.contains("t=0x1?INJECTED?"));
+        r.segment = Segment::Unread {
+            slot: 1,
+            va: 0,
+            len_bytes: 4,
+            why: "a b\nc",
+        };
+        assert!(all(&render(&r)).contains("UNREAD(abc)"));
+    }
+
+    #[test]
+    fn a_doorbell_count_that_goes_down_is_a_change_too() {
+        let mut d = ChannelDiag::new();
+        d.note_doorbells(10, 50);
+        d.note_doorbells(20, 3); // the token was reused
+        assert_eq!(d.doorbells(30), (3, Some(10)));
+    }
+
+    #[test]
+    fn each_counter_alone_makes_the_summary_non_empty() {
+        use std::sync::atomic::Ordering::Relaxed;
+        let each: [fn(&StallStats) -> &AtomicU64; 6] = [
+            |s| &s.conditions,
+            |s| &s.acquires,
+            |s| &s.unread,
+            |s| &s.would_pass,
+            |s| &s.no_segment,
+            |s| &s.skipped_busy,
+        ];
+        for f in each {
+            let s = StallStats::default();
+            assert!(!s.any());
+            f(&s).fetch_add(1, Relaxed);
+            assert!(s.any());
+            assert!(s.summary().contains("=0x1"));
+            assert_eq!(
+                s.summary().matches("=0x").count(),
+                6,
+                "every field is printed"
+            );
+        }
     }
 
     #[test]
