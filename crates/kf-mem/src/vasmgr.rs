@@ -18,6 +18,14 @@
 //!    apply it through the object's [`MapTarget`] ([`crate::apply::apply_entry`]: deferred unmaps,
 //!    deferred maps, ONE invalidate), then hand the walker one verdict per run
 //!    ([`Walker::ack`]); the next walk commits exactly the acknowledged runs.
+//!    ★ **Refreshes coalesce like doorbells** (owner requirement 2026-10-20): the thread is serial, so
+//!    what waits behind the walk in flight is ONE follow-up batch - at most one trigger-bearing
+//!    invalidate (the newest; only it can clear) plus scope-only refreshes ([`Want::Refresh`]) of
+//!    the arms it overwrote, merged per page directory, subsumed by a global, bounded by the number
+//!    of spaces. Every arm's scope is recorded in its own trap and read back by sequence
+//!    ([`VaManager::observe_port`], `InvalidatePort::armed_since`), never rebuilt from latches the
+//!    guest may be rewriting; a record that is gone is answered by `ALL_PDB`, never dropped. Proven
+//!    over every interleaving by `tests/interleave.rs`.
 //! 3. **Only then** `Trigger::complete(seq)` — a compare-and-set, so a request the guest already
 //!    abandoned (it timed out and re-issued) is `Superseded` and never clears the later one (§5.5).
 //!

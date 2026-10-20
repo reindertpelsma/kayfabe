@@ -33,6 +33,28 @@
 //! - I3 pending work is bounded by the number of spaces, never by the number of arms.
 //! - I5 walks submitted <= arms.
 //! - I6 quiescence (no event enabled): nothing pending or in flight, every arm retired.
+//!
+//! ## Mutation table (2026-10-20; each mutant applied alone, `cargo test --release -p kf-mem -p kf-trap --lib`)
+//!
+//! | mutant | killed by |
+//! |---|---|
+//! | M1 clear without the sequence compare (`Trigger::complete` blind) | 8 tests (`a_rearmed_trigger_is_superseded…`, `a_specific_arm_is_kept…`, both adversarial n=3 runs, …) |
+//! | M2 no follow-up walk after a collect | 10 (`a_partial_diff_walks_again…`, the storm, both adversarial n=3 runs, …) |
+//! | M3 a global does not subsume waiting specifics | 2 (`a_global_arm_subsumes…`, the storm) |
+//! | M4 pending grows with the arms (no merge in `queue_invalidate`) | 6 (the storm, `arms_naming_unknown…`, …) |
+//! | M5 a demoted arm's scope dropped | 7 (both adversarial n=3 runs, `a_specific_arm_after_a_global…`, …) |
+//! | M5b an overwritten arm's scope dropped in `observe_port` | 5 (both adversarial n=3 runs, `an_unobserved_specific_arm…`, …) |
+//! | M6 scope rebuilt from the PDB latches, not the arm's record | 6 (`a_later_pdb_latch…`, both adversarial n=3 runs, …) |
+//! | M7 ring overflow ignored | 2 (`more_unobserved_arms_than_the_ring_keeps…` in kf-trap, `…port_remembers…` here) |
+//! | M8 an unreadable record guessed instead of ALL_PDB | 2 (kf-trap `an_arm_without_a_readable_record…`, `an_arm_whose_record_is_not_there…`) |
+//! | M9 `observe_port` does not advance its cursor | 9 (livelock bound, I5, the storm, …) |
+//! | M10 a requeued invalidate bypasses the merge | 2 (`a_requeued_invalidate_merges…`, `…covered_by_a_newer_global`) |
+//! | M11 root walks queued twice | 2 (`root_walks_for_one_space_are_queued_once`, `root_walks_queued_once_make_one_wanted_walk`) |
+//! | M13 overwritten arms not completed (issued != completed) | 3 (adversarial n=3 I6 balance, `an_unobserved_specific_arm…`, `arms_the_manager_never_looked_at…`) |
+//! | M14 a demoted arm not completed | 3 (the storm, adversarial n=3, `requests_arriving_during_a_walk_coalesce…`) |
+//! | M17 more specifics than spaces not folded into a global | 2 (`a_space_re_rooted_between_arms…`, `a_re_rooted_space_is_refreshed_through_the_fold`) |
+//! | M18 a refresh naming no space kept | 3 (`arms_naming_unknown…`, `unknown_directories_leave_nothing_waiting…`, `a_space_re_rooted…`) |
+//! | M16 arm published BEFORE its record | 1, probabilistic (kf-trap `a_reader_never_sees_an_arm_before_its_record`); EQUIVALENT for safety: an unreadable record is answered by ALL_PDB, so the order costs a global walk, never a lost refresh |
 
 use super::*;
 use std::collections::{BTreeMap, HashMap, VecDeque};
