@@ -640,3 +640,17 @@ fn no_look_every_period_exists_any_more() {
     assert!(!squash(&code_text()).contains("LOOK_EVERY"));
     assert!(!USER_LOOP.contains("pub const SPIN"), "user_loop::SPIN (the pre-park spin budget) is back");
 }
+
+/// ★ 2026-10-20 (simple relay; kills `fair_mutation_check.py`'s `busy_pass_never_polls`, which survived every model): between the
+/// block decision and the one `epoll_wait` no path leaves the iteration, so a BUSY iteration polls (timeout 0) and dispatches the
+/// engine events like an idle one (P12: the guest's completion interrupts are never starved by a hot relay).
+#[test]
+fn every_iteration_reaches_the_one_poll_after_the_block_decision() {
+    let body = run_with_relay_text();
+    let from = body.find("let spin = n > 0 || rang || relay.unsourced();").expect("the block decision");
+    let tail = &body[from..];
+    let poll = tail.find("poller.wait(&mut ready, PollTimeout::Immediate)").expect("the timeout-0 poll");
+    let between = &tail[..poll];
+    assert!(!between.contains("continue"), "an iteration may leave before polling: {between}");
+    assert!(!between.contains("break"), "an iteration may leave before polling: {between}");
+}
