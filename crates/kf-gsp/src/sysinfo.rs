@@ -144,6 +144,13 @@ impl SystemInfoCell {
         }
     }
 
+    /// Borrow bounded fn72 metadata without cloning it; heartbeat test seam.
+    /// Initial extraction keeps the existing serialized access until its tests land.
+    pub fn try_with_latest<R>(&self, read: impl FnOnce(&StashedSystemInfo) -> R) -> Option<R> {
+        let guard = self.0.lock().ok()?;
+        guard.as_ref().map(read)
+    }
+
     /// The last fn 72 stored, if any.
     #[must_use]
     pub fn latest(&self) -> Option<StashedSystemInfo> {
