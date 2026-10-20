@@ -22,7 +22,7 @@
   {
     "topic": "caps-word",
     "branch": "codex/sweep-blackwell-caps-word-20261020",
-    "head": "ccb4b706c36b23e1f2947dc0dae9487269e09140",
+    "head": "1bba760c4c6f0d32cb48f9e11a13ccc663786300",
     "base": "codex/sweep-blackwell-gc6-20261020",
     "title": "Add the independently measured GB202 branch580 caps scalar",
     "number": 57,
@@ -32,7 +32,7 @@
   {
     "topic": "grsem",
     "branch": "codex/sweep-blackwell-grsem-20261020",
-    "head": "95b7b6ff67fa958f190f8d9aa6d69df82ed26664",
+    "head": "d04f8ae9ad9a6169da7bb2de68bbf0f63d4c6778",
     "base": "codex/sweep-blackwell-caps-word-20261020",
     "title": "Admit public Blackwell kernel GR report-semaphore releases",
     "number": 58,
@@ -42,7 +42,7 @@
   {
     "topic": "postcomp",
     "branch": "codex/sweep-blackwell-postcomp-20261020",
-    "head": "048c28b9c645190adf5bcaf859284adb8eb222ed",
+    "head": "680efbb32c7742026812303604cd60e37ede53e1",
     "base": "codex/sweep-blackwell-grsem-20261020",
     "title": "Derive Blackwell POSTCOMP tile capabilities from public layouts",
     "number": 59,
