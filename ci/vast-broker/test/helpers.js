@@ -59,7 +59,7 @@ export class MockCloud {
     if(u.hostname!=='console.vast.ai')throw Error('Unapproved external host');
     if(this.vastError)return new Response('PRIVATE-UPSTREAM',{status:this.vastError});
     if(u.pathname==='/api/v0/users/current')return Response.json({balance:this.credit});
-    if(u.pathname==='/api/v0/bundles')return Response.json({offers:[{...this.offer,dph_total:this.price}]});
+    if(u.pathname==='/api/v0/bundles'){if(body.type!=='ondemand')return new Response('invalid type',{status:400});return Response.json({offers:[{...this.offer,dph_total:this.price}]});}
     if(u.pathname==='/api/v0/asks/5'){
       this.creates++;
       this.instances.set('900',{id:900,label:body.label,onstart:body.onstart,image_uuid:body.image,actual_status:'running'});
