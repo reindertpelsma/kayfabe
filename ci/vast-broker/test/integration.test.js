@@ -20,3 +20,13 @@ test('local HTTP integration: owner rent to async logs to automatic destroy',asy
    const result=await response.json();assert.equal(result.verdict,'PASS');assert.match(result.log,/\[box\] ::error/);assert.deepEqual(cloud.deletes,['900']);
  }finally{server.closeAllConnections();await new Promise(resolve=>server.close(resolve));}
 });
+test('scheduled binding reaches Durable Object cleanup',async()=>{
+ const source=await import('../src/index.js');let swept=0;
+ const object=new source.BrokerLedger({storage:new MemoryStorage()},env);object.service={sweep:async()=>{swept++;},fetch:async()=>new Response('not cleanup',{status:404})};
+ let promise;source.default.scheduled({}, {LEDGER:{idFromName:n=>n,get:()=>object}}, {waitUntil:p=>promise=p});await promise;assert.equal(swept,1);
+});
+test('public request cannot invoke the internal cron route',async()=>{
+ const source=await import('../src/index.js');let forwarded=0;
+ const response=await source.default.fetch(new Request('https://broker.example/cron',{method:'POST'}),{LEDGER:{idFromName:n=>n,get:()=>({fetch:()=>{forwarded++;return new Response('bad');}})}});
+ assert.equal(response.status,404);assert.equal(forwarded,0);
+});

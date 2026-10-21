@@ -46,8 +46,8 @@ for(const change of ['old-head','fork','different-branch','closed','ambiguous','
  test('PR identity rejects '+change,async()=>{const h=await setup();const p=h.cloud.prs[0];
    if(change==='old-head')p.head.sha='d'.repeat(40);if(change==='fork')p.head.repo.full_name='fork/repo';
    if(change==='different-branch')p.head.ref='other';if(change==='closed')p.state='closed';
-   if(change==='ambiguous')h.cloud.prs.push({...p,number:8});if(change==='unknown')h.cloud.prs=[];
-   assert.notEqual((await h.call()).status,200);assert.equal(h.cloud.creates,0);
+   if(change==='ambiguous'){h.cloud.prs.push({...p,number:8});h.cloud.run.event='workflow_dispatch';}if(change==='unknown')h.cloud.prs=[];
+   assert.notEqual((await h.call('/rent',change==='ambiguous'?{claims:{event_name:'workflow_dispatch',sha,ref:'refs/heads/owner-pr'}}:{})).status,200);assert.equal(h.cloud.creates,0);
  });
 }
 for(const scenario of ['none','old-head','wrong-id','dismissed','changes-requested']){
