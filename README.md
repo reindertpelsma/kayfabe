@@ -60,7 +60,8 @@ Master is the current working version (relay fix `89fc8a222`, 2026-10-21); newer
 | CUDA in the guest | works: `nvidia-smi` shows CUDA 13.0; matrix multiply (N=2048) about 1.9 TFLOPS; Blender 5.2 Cycles renders with CUDA and OptiX (OptiX 5.3 s against 3.4 s native, 1.57x slower; measured 2026-10-15 on branch `claude/perf-win-20261015`) |
 | SolidWorks 2026 (student edition) | installs, renders, passes its builtin Performance Test; loads and renders sample projects fine; evidence not yet committed |
 | Blender on Windows | Renders sample files properly, needs more testing |
-| 3DMark demo on Steam | Steel Nomad gets around 30 fps, VFIO around 40 fps (both owner-measured; result files not committed yet) |
+| 3DMark demo on Steam | Steel Nomad (full, DX12) scores 2050 to 2991, i.e. 20 to 30 fps, depending on revision and what else is running (latest run 2227 with Minecraft, OBS and a video playing at the same time); native VFIO on the same GPU scores about 3800 to 3960 (38 to 40 fps). Result files are not committed yet |
+| OBS Studio on Windows | Recorded the desktop, Unigine Heaven and 3DMark Steel Nomad successfully, OBS reports NVENC was used (OBS log: `obs_nvenc_h264_tex`; the host GPU's encoder showed 21% load attributed to the VM process). MP4 video playback has no issues that I noticed. Result is not commited yet |
 | Office 365 | No issues so far |
 
 Minecraft, Blender, Office, Edge, Steam, 3DMark, Unigine and SolidWorks run unmodified, from the vendors' official, complete installers (nothing stripped down or patched). All apps except Office are confirmed to be using the NVIDIA GPU, not software rendering: Steel Nomad and the SolidWorks performance test report it, Unigine and Minecraft show up in the guest's `nvidia-smi`, Minecraft Java's F3 screen names the RTX 4070, and Blender has it selected in its settings.
