@@ -1,9 +1,11 @@
-import test from 'node:test';
+import test,{after} from 'node:test';
 import assert from 'node:assert/strict';
-import {readFile,mkdtemp,writeFile} from 'node:fs/promises';
+import {readFile,mkdtemp,writeFile,rm} from 'node:fs/promises';
 import {tmpdir} from 'node:os';
 import {join} from 'node:path';
 import {spawnSync} from 'node:child_process';
+const fixtures=[];
+after(async()=>{for(const path of fixtures)await rm(path,{recursive:true});});
 const root=new URL('../../../',import.meta.url);
 const workflow=new URL('.github/workflows/gpu-vast.yml',root);
 const moduleGuard=()=>import('../workflow-guard.js');
@@ -23,6 +25,7 @@ test('box deliberate control exits failure on missing evidence',async()=>{const 
 test('box harness accepts only a deliberately failed control',async()=>{const path=new URL('scripts/ci/vast_box_main.sh',root);await readFile(path);const r=spawnSync('bash',[path.pathname,'--check-control'],{encoding:'utf8',timeout:5000});assert.equal(r.status,0,r.stderr);assert.match(r.stdout,/MUST_FAIL_CONTROL_FAILED_AS_REQUIRED/);});
 for(const defect of ['none','guest-fail','bare-fail','gate-fail','missing'])test('box suite evidence validation '+defect,async()=>{
  const path=new URL('scripts/ci/vast_box_main.sh',root);await readFile(path);const dir=await mkdtemp(join(tmpdir(),'v1-box-test-'));
+ fixtures.push(dir);
  const files={'gates.log':'V3_GATES_SUMMARY pass=9 fail=0 gate10=PASS\n','bare.log':'BARE_SUITE_PASS=30 BARE_SUITE_FAIL=0 BARE_SUITE_CRASH=0 ARMS=30\n','suite.log':'FAST_SUITE_PASS=30 FAST_SUITE_FAIL=0 FAST_SUITE_CRASH=0 NOTRUN=0 ARMS=30\n','births.log':'BIRTH_CENSUS_OK arms=30\n'};
  for(const [name,text] of Object.entries(files))if(!(defect==='missing'&&name==='births.log'))await writeFile(join(dir,name),text.replace(defect==='guest-fail'?'FAST_SUITE_PASS=30':defect==='bare-fail'?'BARE_SUITE_PASS=30':defect==='gate-fail'?'pass=9':'__never__','bad'));
  const r=spawnSync('bash',[path.pathname,'--check-results',dir],{encoding:'utf8',timeout:5000});assert.equal(r.status===0,defect==='none',r.stderr);
@@ -30,3 +33,8 @@ for(const defect of ['none','guest-fail','bare-fail','gate-fail','missing'])test
 test('flow-style attestation job cannot bypass the dependency guard',async()=>{const {checkWorkflows}=await moduleGuard();assert.ok(checkWorkflows({'gpu-vast.yml':simple('  attest: {needs: gpu, steps: [{uses: actions/attest@v2}]}\n')}).length);});
 test('flow-style release dependency cannot be silently ignored',async()=>{const {checkWorkflows}=await moduleGuard();assert.ok(checkWorkflows({'gpu-vast.yml':simple('  release: {needs: gpu, steps: []}\n')}).length);});
 test('quoted release job cannot bypass structural parsing',async()=>{const {checkWorkflows}=await moduleGuard();assert.ok(checkWorkflows({'gpu-vast.yml':simple("  'release':\n    needs: gpu\n    steps: []\n")}).length);});
+for(const bytes of ['22000000000','59999999999','60000000000','unknown'])test('cold-box disk preflight '+bytes,async()=>{const path=new URL('scripts/ci/vast_box_main.sh',root);await readFile(path);const dir=await mkdtemp(join(tmpdir(),'v1-disk-test-'));fixtures.push(dir);
+ await writeFile(join(dir,'df'),'#!/bin/sh\nprintf "Available\\n'+bytes+'\\n"\n',{mode:0o700});
+ const r=spawnSync('bash',[path.pathname,'--check-disk'],{encoding:'utf8',timeout:5000,env:{...process.env,PATH:dir+':'+process.env.PATH}});
+ assert.equal(r.status===0,bytes==='60000000000');if(bytes!=='60000000000')assert.match(r.stdout,/VAST_CI_DISK_UNAVAILABLE/);
+});
