@@ -9,7 +9,8 @@ as an ordinary client. Written in Rust.
 **Status: research, 2026-10-17.** It runs real applications, but there is no installer, no stable interface, and no security audit yet.
 Master is not the newest code: the latest Windows performance work lives on branches (see below).
 
-![Windows 11 on kayfabe: desktop and nvidia-smi under the stock 580.88 driver (photo, 2026-10-09)](traces/windows_on_kayfabe.png)
+<img alt="windows desktop with apps while host keeps gpu" src="traces/20261021_131847.jpg" width="1000" height="432" />
+<i>Windows 11 on kayfabe: desktop and nvidia-smi under the stock 580.88 drive. On windows, displayed using nvkvm-broker on a ubuntu desktop: Minecraft bedrock/windows only edition, unigine heaven benchmark, nvidia-smi in powershell, big buck bunny blender youtube on Edge. On linux left screen: Blender and nvidia-smi showing single gpu being used for all apps in the screenshots and Firefox in background (host keeps gpu). There is no PCIe/DMA copy of frames for this windows desktop.</i>
 
 ## Why it is interesting
 
