@@ -9,9 +9,9 @@ after(async()=>{for(const path of fixtures)await rm(path,{recursive:true});});
 const root=new URL('../../../',import.meta.url);
 const workflow=new URL('.github/workflows/gpu-vast.yml',root);
 const moduleGuard=()=>import('../workflow-guard.js');
-const simple=extra=>`name: Fixture\non: workflow_dispatch\njobs:\n  gpu:\n    permissions:\n      contents: read\n      id-token: write\n      statuses: write\n    steps:\n      - run: true\n${extra}`;
+const simple=extra=>`name: Fixture\non: workflow_dispatch\njobs:\n  gpu:\n    permissions:\n      contents: read\n      id-token: write\n      pull-requests: read\n    steps:\n      - run: true\n${extra}`;
 test('actual repository has safe workflow boundaries',async()=>{const {checkRepository}=await moduleGuard();assert.deepEqual(await checkRepository(root),[]);});
-test('poll job permits exactly content OIDC and status',async()=>{const {checkWorkflows}=await moduleGuard();const text=await readFile(workflow,'utf8');assert.deepEqual(checkWorkflows({'gpu-vast.yml':text}),[]);assert.match(text,/statuses: write/);assert.doesNotMatch(text,/merge_group:|upload-artifact|ssh /);});
+test('poll job permits exactly read-only GitHub and OIDC',async()=>{const {checkWorkflows}=await moduleGuard();const text=await readFile(workflow,'utf8');assert.deepEqual(checkWorkflows({'gpu-vast.yml':text}),[]);assert.match(text,/statuses: write/);assert.doesNotMatch(text,/merge_group:|upload-artifact|ssh /);});
 for(const permission of ['attestations: write','actions: write','contents: write','packages: write'])test('extra workflow permission fails '+permission,async()=>{const {checkWorkflows}=await moduleGuard();const t=await readFile(workflow,'utf8');assert.ok(checkWorkflows({'gpu-vast.yml':t.replace('contents: read',permission)}).length);});
 test('direct attestation dependency is rejected',async()=>{const {checkWorkflows}=await moduleGuard();assert.ok(checkWorkflows({'gpu-vast.yml':simple('  attest:\n    needs: gpu\n    steps:\n      - uses: actions/attest@v2\n')}).length);});
 test('transitive release dependency is rejected',async()=>{const {checkWorkflows}=await moduleGuard();assert.ok(checkWorkflows({'gpu-vast.yml':simple('  bridge:\n    needs: [gpu]\n    steps: []\n  release:\n    needs: bridge\n    steps:\n      - run: gh release create x\n')}).length);});
@@ -38,3 +38,6 @@ for(const bytes of ['22000000000','59999999999','60000000000','unknown'])test('c
  const r=spawnSync('bash',[path.pathname,'--check-disk'],{encoding:'utf8',timeout:5000,env:{...process.env,PATH:dir+':'+process.env.PATH}});
  assert.equal(r.status===0,bytes==='60000000000');if(bytes!=='60000000000')assert.match(r.stdout,/VAST_CI_DISK_UNAVAILABLE/);
 });
+
+test('read-only broker token and status writer tokens stay separate',async()=>{const t=await readFile(workflow,'utf8');const gpu=t.split('  gpu:\n')[1].split('  report:\n')[0];assert.match(gpu,/pull-requests: read/);assert.doesNotMatch(gpu,/statuses: write|\/statuses\//);assert.match(gpu,/X-GH-Token: \$GH_TOKEN/);for(const id of ['pending','report']){const block=t.split('  '+id+':\n')[1]?.split(/\n  [\w-]+:\n/)[0];assert.ok(block);assert.match(block,/statuses: write/);assert.doesNotMatch(block,/X-GH-Token|id-token: write/);}});
+test('final status job runs even on skipped or failed broker',async()=>{const t=await readFile(workflow,'utf8');const block=t.split('  report:\n')[1];assert.ok(block);assert.ok(block.includes('if: ${{ always() }}'));assert.match(block,/needs: \[pending, gpu\]/);});
