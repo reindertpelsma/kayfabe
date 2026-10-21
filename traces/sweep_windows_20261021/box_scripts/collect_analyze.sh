@@ -34,6 +34,9 @@ bash "$W" scp-to /root/sweep2/collect_crash.ps1 C:/kf/collect_crash.ps1
 timeout 180 bash "$W" ssh 'powershell -NoProfile -ExecutionPolicy Bypass -File C:\kf\collect_crash.ps1' </dev/null >"/root/prov/collect_${run}.txt" 2>&1
 grep '^COLLECT_DONE' "/root/prov/collect_${run}.txt"
 echo "COLLECT_METADATA_READY $(date -u -Is)"
+bash "$W" scp-to /root/sweep2/wer_times.ps1 C:/kf/wer_times.ps1
+timeout 120 bash "$W" ssh 'powershell -NoProfile -ExecutionPolicy Bypass -File C:\kf\wer_times.ps1' </dev/null >"/root/prov/wer_times_${run}.txt" 2>&1
+grep '^WER_TIMES_DONE' "/root/prov/wer_times_${run}.txt"
 if grep -q '^FILE .*\.dmp ' "/root/prov/collect_${run}.txt"; then
  # Old 7z rejected the outer ZIP64 headers; the same downloaded bundle was
  # successfully CRC-checked by Python. Keep both extraction receipts.
