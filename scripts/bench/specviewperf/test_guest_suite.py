@@ -44,6 +44,14 @@ class SuitePlanTests(unittest.TestCase):
         for marker in ['SUITE_STARTED','SUITE_EXIT','SPECviewperf-CLI.exe','cli-stdout.log']:
             self.assertIn(marker,text)
 
+    def test_completed_task_emits_fps_csv(self):
+        self.assertIn('subtest-fps.csv',render_task(WORKLOADS,2,r'C:\Users\Public\codex-VF1'))
+
+    def test_report_uses_all_stdout_xml_fragments(self):
+        text=render_task(WORKLOADS,2,r'C:\Users\Public\codex-VF1')
+        self.assertIn('[regex]::Matches',text)
+        self.assertIn("GetAttribute('FPS_'",text)
+
     def test_no_timeout_tuning(self):
         text=render_task(WORKLOADS,2,r'C:\Users\Public\codex-VF1')
         self.assertNotIn('--set-timeout',text)
