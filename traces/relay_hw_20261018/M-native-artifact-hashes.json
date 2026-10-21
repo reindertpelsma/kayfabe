@@ -1,0 +1,14 @@
+{
+  "raw-client": {
+    "sha256": "2e324691cf1385e89b8892e125047797ead0a920202bef878b4b93c8fa594923",
+    "bytes": 5022576
+  },
+  "fast-initrd": {
+    "sha256": "d6f83905ab37fd66a60bec4b6d69ac33d589b912706b3796dc6fd8f9d0b07ce9",
+    "bytes": 385924135
+  },
+  "fast-kernel": {
+    "sha256": "7efd88a7facf80874d781ccb2c2421f0aaaa575e3b94760430619e826f490117",
+    "bytes": 17303944
+  }
+}

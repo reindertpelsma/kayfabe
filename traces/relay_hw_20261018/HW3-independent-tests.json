@@ -1,0 +1,39 @@
+{
+  "source_rev": "7c87cb7ea504a7afe23d44fe718c90b17a2076cc",
+  "code_rev": "1e6e64314ce23df59cd61202e633e10801ebb887",
+  "baseline_rev": "89fc8a22291dd7bda69c3077ba829b1e934b11db",
+  "command": "cargo test -j2 --release -p kf-chan -p kf-qemu --tests",
+  "exit_code": 0,
+  "baseline": {
+    "targets": 34,
+    "passed": 1023,
+    "failed": 0,
+    "ignored": 4
+  },
+  "current": {
+    "targets": 35,
+    "passed": 1051,
+    "failed": 0,
+    "ignored": 5
+  },
+  "baseline_case_status_entries": 1027,
+  "missing_case_status_entries": 0,
+  "holdout": {
+    "command": "cargo test -j2 --release -p kf-qemu --lib translated_holdout_seeds -- --ignored --nocapture",
+    "seed_from": 2305843009213694065,
+    "seed_count": 64,
+    "workers": [
+      1,
+      2,
+      3
+    ],
+    "scenarios": 192,
+    "entries": 46080,
+    "passed_tests": 1,
+    "failed_tests": 0,
+    "elapsed_s": 0.23
+  },
+  "source_edits": false,
+  "hardware_runs": 0,
+  "ready_handoff": false
+}

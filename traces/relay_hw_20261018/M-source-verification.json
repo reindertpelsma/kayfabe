@@ -1,0 +1,9 @@
+{
+  "source_rev": "89fc8a22291dd7bda69c3077ba829b1e934b11db",
+  "verified_git_blobs": 1065,
+  "mismatches": [],
+  "manifest_sha256": "9ea173636274993b4996a9d12e9c8469c92f04ae3de7d0415365729b09335690",
+  "build_config": "[build]\njobs = 2\n",
+  "git_metadata": false,
+  "at": 1792540352.4719634
+}

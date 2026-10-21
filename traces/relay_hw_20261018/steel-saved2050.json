@@ -1,0 +1,24 @@
+{
+  "schema": 1,
+  "result_sha256": "edceec9f6c453054852b5cc21c24f7f9bb13a732f42076b2692cda0b1db278a0",
+  "benchmark": "Steel Nomad DX12",
+  "score": 2050,
+  "average_fps": 20.5,
+  "application_version": "2.32.8919 s64",
+  "guest_start": "2026-10-20T22:42:24.198623100+02:00",
+  "guest_finish": "2026-10-20T22:44:02.539616100+02:00",
+  "clock_correction_seconds": 7200,
+  "host_start_cest": "2026-10-21T00:42:24+02:00",
+  "host_finish_cest": "2026-10-21T00:44:02+02:00",
+  "temporal_association": {
+    "run": 3435,
+    "rev": "0d7ba743",
+    "ready_cest": "2026-10-20T23:42:30+02:00",
+    "exit_cest": "2026-10-21T00:54:01+02:00",
+    "claim": "INFERRED from internal timestamp plus independently measured launcher receipt",
+    "direct_binary_revision_in_export": false
+  },
+  "fresh_arm_count": 0,
+  "exported_gpu": "NVIDIA GeForce RTX 4070",
+  "exported_driver": "NVIDIA 580.88"
+}

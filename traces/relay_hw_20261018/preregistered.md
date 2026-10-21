@@ -1,0 +1,116 @@
+# HW2 preregistration — 2026-10-20
+
+CODE READ, amendment 2026-10-21: the owner's complete overnight briefing
+authorizes freedom of method, hardware access and tests-first fixes. HW2 resumes
+with an owned-child harness. H-FIX falsifiers below remain unchanged. New cohort:
+C/M/M/C repeated three times, six boots each, M infinite park, profiling on in
+both arms, same existing binary hashes and fg5 guest, 2 x 120-second pairs.
+One boot per arm includes a 60-second idle-context sample. Inherited boots are
+reported separately. Native and fast gates precede Windows deployment of M.
+
+H-OWNERSHIP: startup and abort preserve a foreign matching process. FALSIFIER:
+the test-created foreign process is signalled. MEASURED tests first: normal and
+budget startup cases both failed on inherited code; owned-abort support tests
+were committed before introduction. Each of two mutants is killed by two tests.
+
+CODE READ: lane instructions read completely; branch arms are C pw3f4b9e82-s2,
+M 89fc8a22291dd7bda69c3077ba829b1e934b11db, B' c452ca7cb412852a3e6ca68d18e94f92ac625599.
+
+H-FIX (each fixed arm): no baton. FALSIFIER, before hardware execution:
+any guest completion gap >= 1 s; any actual PROGRESS_STRAND event (exclude the
+diagnostic-enabled banner); timeouts_with_work or backstop_found_work > 0;
+a hang with M's KF3_WORKER_PARK_INFINITE=1; M registered > rung+retried at
+quiescence. Minimum 12 boots / 24 pairs per arm, interleaved C/M/M/C and
+C/B'/B'/C blocks; keep C until >=4 stalled pairs or report insufficient power.
+All arms: 4 vCPUs, forced migratable, mirror off, DIAG_PROGRESS=1000,
+pair:120,pair:120, K=5 ms, blocking sync. Preserve native binaries.
+
+H-M-UNIT: exact M lineage passes GPU-free kf-chan and kf-qemu library suites.
+FALSIFIER, before execution: any failed test, abnormal exit, or incomplete
+suite. An incomplete run is not a pass. No source edits or feature overlays
+in this initial run. Run nice 19, release, j2, own target, global cargo lock.
+
+CODE READ review questions: watcher touch is not progress; a watcher restricted
+to moving worker iteration counters cannot diagnose all-workers-blocked stalls.
+H-WATCH: absence of strand events alone establishes progress. FALSIFIER before
+further review: watcher resets on unsuccessful evaluation, excludes parked or
+blocked workers, or caps event output without a complete counter. Guest gaps
+and worker diagnostics must be retained independently.
+
+MEASURED: first host flock -w 50 attempt timed out without host changes.
+
+H-M-HANDOFF-NONBLOCK: the new handoff does not add a blocking lock on a
+vCPU/main-loop RAM callback path. FALSIFIER before tracing those callbacks:
+one of those paths calls handoff released/take with a blocking Mutex lock
+shared with worker registration. Check source call edges; do not assert a
+measured stall from a reachable path alone.
+
+H-B-HOLDOUT: the exact B' head passes fresh relay_stress seeds with the
+safety net disabled and strict soft findings enabled. FALSIFIER before run:
+any failed seed, panic, incomplete execution or abnormal test exit. Holdout:
+RS_STRICT=1, RS_FROM=4294967296, RS_TO=4294967328 (exclusive), RS_SECS=0.5,
+RS_PARK_NET=0, chaos-hooks enabled, one test thread. No threshold adjustments.
+This does not establish I7 coverage where its settled precondition is skipped.
+
+H-B-IDLE: the dedicated grader G5 test observes a real settled one-second
+quiet window and blocks idle workers. FALSIFIER before execution: the test
+fails, including its explicit quiet_checked assertion, or does not complete.
+Run exact B', chaos-hooks, original defaults and thresholds, one test thread.
+
+H-WIN-M: M removes independent multi-app freezes. FALSIFIER before Windows
+measurement: any >=4-second per-PID PresentMon silence while load is present,
+independently classified from nvlddmkm153/device-loss. First workload is two
+Heaven D3D11 clients (three fresh boots, >=12 minutes each); the earlier mixed
+Vulkan workload also has a distinct TDR class. Capture CPU/thread state, ring
+state, and all PROGRESS diagnostics; no strand line alone proves progress.
+
+H-WIN-BLOCK (before Windows captures): a remaining freeze is caused by a
+worker/drainer blocked in a host RM ioctl or on a shared lock. FALSIFIER for
+a fully observed freeze: those threads remain runnable or in their ordinary
+epoll waits, and no matching long ioctl/futex or blocked-stack interval covers
+the silence. One-second all-thread snapshots retain the pre-trigger interval;
+10-second strace and filtered scheduler stacks supplement them. An incomplete
+trace cannot falsify this hypothesis. M has no worker_stuck detector.
+
+H-WIN-TRANSLATED (before Windows captures): a kernel Translated ring loses its
+final wake. FALSIFIER for a fully observed candidate: the relevant Translated
+ring continues draining through the freeze or has no outstanding work. The
+existing USERD probe covers USER channels, so its silence alone cannot prove
+a Translated-ring stall. Classify unobserved ring state as unknown. A subsequent
+HW3 comparison uses the same workload, not the absence of a strand message.
+
+H-NOMAD-M: the verified M binary causes the reported score loss. FALSIFIER:
+fresh interleaved M-without-diagnostics scores do not consistently fall below
+production-without-diagnostics scores outside their observed run spread.
+H-NOMAD-DIAG: the diagnostic flag causes the loss. FALSIFIER: M-with-diag does
+not consistently trail M-without-diag outside their observed spread. Three
+runs per arm, same host desktop GPU and benchmark settings; report raw values,
+range and paired differences, without asserting equivalence from small n.
+The owner's earlier 2050 score has no verified M run receipt: the inspected
+owner process was still production 0d7ba743.
+
+H-COUNTER-ATTRIBUTION: B' backstop_found_work>0 establishes a missing wake for
+an old obligation. FALSIFIER before the probe: the real production worker
+counts fresh direct-token work or fresh relay demand submitted after timeout,
+with its registered eventfd already signalled before the next pass. Use the
+existing chaos hook only to schedule that window; no production edit, no
+private-word wait, no contention. A positive counter in this construction is
+a counter-attribution false positive, not evidence that every hardware hit is
+explained. Probe source remains outside ordinary product test targets.
+
+H-SN-OLD-RECEIPT (before inspecting saved result contents): the saved 2050
+result's internal timestamp falls in the verified 0d7ba743 run-3435 interval
+after the known two-hour guest-clock correction. FALSIFIER: a conflicting
+internal timestamp, a different test/hardware context, or an unreadable result.
+This can support a temporal association; a result without a QEMU revision
+cannot independently prove the binary identity. Fresh score arms remain unrun.
+
+H-HW3-INDEPENDENT (before execution): exact HW3 head 7c87cb7ea504a7afe23d44fe718c90b17a2076cc
+(code 1e6e64314) preserves the full M --tests baseline and passes a fresh
+Translated holdout. FALSIFIER: any failed test, panic, incomplete run, a drop
+below M's1023 passed tests, an upstream ignore/test removed, or a holdout
+control that does not exercise contention. Run all kf-chan/kf-qemu --tests,
+then existing ignored translated_holdout_seeds with HW3_SEED_FROM=2305843009213694065,
+HW3_SEED_COUNT=64 (192scenarios across1–3workers). No source changes; own
+target, shared cargo lock, nice19/release/j2. This does not authorize hardware
+or overrule HW3's NOT READY handoff.

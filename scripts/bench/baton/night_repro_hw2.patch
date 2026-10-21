@@ -1,0 +1,24 @@
+--- a/scripts/bench/night_repro/run.py
++++ b/scripts/bench/night_repro/run.py
+@@ -180,7 +180,7 @@
+         raise RuntimeError('REFUSED: guest agent unavailable')
+     guest_root = f'C:\\kf\\n1\\run{n}'
+     installer = ['$ErrorActionPreference="Stop"', 'New-Item -ItemType Directory -Force C:\\kf\\n1 | Out-Null']
+-    for name in ['load.ps1','post_boot.ps1','collect.ps1','transport.ps1','health.ps1','viewport.py','webgl.html','test_transport.ps1','preflight.ps1','archive.ps1','pm_tail.ps1']:
++    for name in ['load.ps1','post_boot.ps1','collect.ps1','transport.ps1','health.ps1','viewport.py','webgl.html','test_transport.ps1','preflight.ps1','archive.ps1','pm_tail.ps1','hw2_trigger_relay.ps1']:
+         data = base64.b64encode((SCRIPTS/name).read_bytes()).decode()
+         installer.append(f'[IO.File]::WriteAllBytes("C:\\kf\\n1\\{name}",[Convert]::FromBase64String("{data}"))')
+     if args.transport_preflight:
+--- a/scripts/bench/night_repro/post_boot.ps1
++++ b/scripts/bench/night_repro/post_boot.ps1
+@@ -15,6 +15,10 @@
+ foreach($name in @('kf-vcpuwatch','kf-pmmon')) { if((Get-ScheduledTask $name).State -ne 'Running') { Start-ScheduledTask $name } }
+ $principal=(Get-ScheduledTask kfogl-heaven_d3d11_win).Principal
+ $clients=switch($Pair) { 'heaven-heaven' {@('Heaven','Heaven2')}; 'heaven-blender' {@('Heaven','Blender')}; 'heaven-edge' {@('Heaven','Edge')}; default {@('Heaven','GravityMark')} }
++$relayAction=New-ScheduledTaskAction -Execute powershell.exe -Argument '-NoProfile -NonInteractive -ExecutionPolicy Bypass -File C:\kf\n1\hw2_trigger_relay.ps1 -Port 39021'
++$relaySettings=New-ScheduledTaskSettingsSet -ExecutionTimeLimit (New-TimeSpan -Minutes 15)
++Register-ScheduledTask -TaskName 'kf-hw2-trigger' -Action $relayAction -Principal $principal -Settings $relaySettings -Force | Out-Null
++Start-ScheduledTask 'kf-hw2-trigger'
+ foreach($client in $clients) {
+     $a=New-ScheduledTaskAction -Execute powershell.exe -Argument "-NoProfile -NonInteractive -ExecutionPolicy Bypass -File C:\kf\n1\load.ps1 -Client $client -Root $Root -Seconds $Seconds -Pair $Pair"
+     $settings=New-ScheduledTaskSettingsSet -ExecutionTimeLimit (New-TimeSpan -Minutes 20)

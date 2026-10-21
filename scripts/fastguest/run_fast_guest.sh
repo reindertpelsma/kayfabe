@@ -50,8 +50,8 @@ rm -f "$SER"
 
 # ★★★★★ **SERIALIZE, OR TWO RUNS DESTROY EACH OTHER — measured 2026-09-20 (w812).**
 #
-# The `pkill` below is deliberate (a clean slate per boot), and that makes ANY two concurrent
-# invocations mutually destructive: each kills the other's QEMU, and the loser leaves a
+# Historically a startup `pkill` made concurrent invocations mutually destructive:
+# each killed the other's QEMU, and the loser left a
 # **zero-byte serial log** behind. ⊘ `[measured w812]` two arms re-run in parallel with a
 # timeout sweep produced exactly that — two 0-byte logs, freshly timestamped, which read as
 # *"the arm produced no output"* rather than *"the arm was shot"*. That is the repo's own
@@ -70,13 +70,9 @@ else
     echo "run_fast_guest: ⚠ no flock(1) — CONCURRENT RUNS WILL KILL EACH OTHER; run serially" >&2
 fi
 
-# ⊘ `pkill` on its own line and with the bracket trick: a pattern that appears later on the same
-# command line matches the shell running it, and then everything after silently never runs
-# (`nvkvm-pv`, 2026-08-17).
-# ★ 2026-09-26 (V3_MULTI_GPU_AUDIT §2 harness): kill ONLY this lane's own QEMUs — the ones started
-# with `-name kf-fastguest` below — never every `qemu-system-x86` on the box (that shot other VMs,
-# and ruled out several VMs per host by construction). The lock above already serializes this lane.
-pkill -9 -f '[k]f-fastguest' 2>/dev/null
+# Process names do not establish ownership. The timeout below owns its child;
+# an existing process, including a matching fast guest, belongs to its creator.
+# The resource lock serializes runs; stale processes require explicit review.
 sleep 1
 
 # ⊘⊘⊘ **ONE WHITESPACE-FREE TOKEN, OR THE ARMS SILENTLY DO NOT ARRIVE.** The kernel command
