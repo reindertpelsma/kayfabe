@@ -26,7 +26,7 @@ test('same SHA cache grants another run without rebilling',async()=>{const h=awa
  assert.equal((await (await h.call('/status/900',{claims:{run_id:'124'}})).json()).verdict,'PASS');
 });
 test('same SHA cache survives process restart',async()=>{const h=await setup();await rent(h);await finish(h);h.restart();h.cloud.run.id=124;await h.call('/rent',{claims:{run_id:'124'}});assert.equal(h.cloud.creates,1);});
-test('cached verdict never bypasses content approval',async()=>{const h=await setup();await rent(h);await finish(h);h.cloud.run.id=124;h.cloud.prs[0].user.id=43;assert.equal(await state(await h.call('/rent',{claims:{run_id:'124'}})),'NEEDS_APPROVAL');});
+test('cached verdict never bypasses content approval',async()=>{const h=await setup();await rent(h);await finish(h);h.cloud.run.id=124;h.cloud.reviews=[{id:2,user:{id:42},state:'DISMISSED',commit_id:sha}];assert.equal(await state(await h.call('/rent',{claims:{run_id:'124'}})),'NEEDS_APPROVAL');});
 test('force rerun still requires minimum SHA gap',async()=>{const h=await setup();await rent(h);await finish(h);h.cloud.run.run_attempt=2;assert.equal(await state(await h.call('/rent',{claims:{run_attempt:'2'}})),'UNAVAILABLE_BUDGET');assert.equal(h.cloud.creates,1);});
 test('force gap survives restart',async()=>{const h=await setup();await rent(h);await finish(h);h.restart();h.cloud.run.run_attempt=2;assert.equal(await state(await h.call('/rent',{claims:{run_attempt:'2'}})),'UNAVAILABLE_BUDGET');});
 for(const kind of ['daily','rolling','rentals'])test('budget prevents admission '+kind,async()=>{const h=await setup();await h.storage.put('cost:old',{started:clock-1000,ended:clock,price:kind==='rentals'?0:20000});
@@ -54,3 +54,10 @@ test('cron reads marker and destroys without polling runner',async()=>{const h=a
 test('failed delete retains liability for retry',async()=>{const h=await setup();await rent(h);h.cloud.vastError=500;await h.call('/destroy/900');h.cloud.vastError=0;await h.call('/destroy/900');assert.deepEqual(h.cloud.deletes,['900']);});
 test('explicit destroy is idempotent',async()=>{const h=await setup();await rent(h);await h.call('/destroy/900');await h.call('/destroy/900');assert.deepEqual(h.cloud.deletes,['900']);});
 test('completed run without marker is cleaned',async()=>{const h=await setup();await rent(h);h.cloud.run.status='completed';await h.service.sweep();assert.deepEqual(h.cloud.deletes,['900']);});
+test('draft owner push does not rent',async()=>{const h=await setup();h.cloud.prs[0].draft=true;assert.equal(await state(await h.call()),'NEEDS_APPROVAL');assert.equal(h.cloud.creates,0);});
+test('draft review does not override default refusal',async()=>{const h=await setup();h.cloud.prs[0].draft=true;h.cloud.reviews=[{id:1,user:{id:42},state:'APPROVED',commit_id:sha}];assert.equal(await state(await h.call()),'NEEDS_APPROVAL');assert.equal(h.cloud.creates,0);});
+test('draft rental is explicitly configurable',async()=>{const h=await setup({RENT_DRAFTS:'true'});h.cloud.prs[0].draft=true;assert.equal((await h.call()).status,200);});
+for(const restart of [false,true])test('superseding push destroys old instance and returns BUSY '+restart,async()=>{const h=await setup();await rent(h);if(restart)h.restart();const newSha='e'.repeat(40);h.cloud.run.id=124;h.cloud.run.head_sha=newSha;h.cloud.run.pull_requests[0].head.sha=newSha;h.cloud.prs[0].head.sha=newSha;
+ assert.equal(await state(await h.call('/rent',{claims:{run_id:'124',sha:'f'.repeat(40)}})),'BUSY');assert.equal(h.cloud.creates,1);assert.deepEqual(h.cloud.deletes,['900']);
+});
+test('cron destroys superseded PR without incoming run',async()=>{const h=await setup();await rent(h);h.cloud.prs[0].head.sha='e'.repeat(40);await h.service.sweep();assert.deepEqual(h.cloud.deletes,['900']);});

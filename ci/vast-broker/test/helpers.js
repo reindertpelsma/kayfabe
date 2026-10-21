@@ -5,7 +5,7 @@ export const nonce = 'b'.repeat(32);
 export const owner = '42';
 export const repo = 'reindertpelsma/kayfabe';
 export const env = {RENTING_ENABLED:'true',OWNER_GITHUB_ID:owner,REPOSITORY:repo,
-  WORKER_URL:'https://broker.example',APPROVAL_MODE:'review_or_author',
+  WORKER_URL:'https://broker.example',APPROVAL_MODE:'owner_push_or_review',RENT_DRAFTS:'false',
   CREDIT_RESERVE_USD:'8',MAX_PRICE_USD_HOUR:'0.5',TTL_MINUTES:'150',DAILY_RENTALS:'4',
   DAILY_SPEND_USD:'3',ROLLING_SPEND_USD:'30',SHA_GAP_HOURS:'24',
   VAST_API_KEY:'mock-vast-binding',GITHUB_READ_TOKEN:'mock-read-binding'};
@@ -13,8 +13,8 @@ const pair = await webcrypto.subtle.generateKey({name:'RSASSA-PKCS1-v1_5',modulu
   publicExponent:new Uint8Array([1,0,1]),hash:'SHA-256'},true,['sign','verify']);
 export const jwk = {...await webcrypto.subtle.exportKey('jwk',pair.publicKey),kid:'test-key',alg:'RS256',use:'sig'};
 export const baseClaims = {iss:'https://token.actions.githubusercontent.com',aud:env.WORKER_URL,
-  exp:clock/1000+300,nbf:clock/1000-1,repository:repo,event_name:'workflow_dispatch',actor_id:owner,
-  sha,ref:'refs/heads/owner-pr',run_id:'123',run_attempt:'1'};
+  exp:clock/1000+300,nbf:clock/1000-1,repository:repo,event_name:'pull_request',actor_id:owner,
+  sha:'d'.repeat(40),ref:'refs/pull/7/merge',run_id:'123',run_attempt:'1'};
 export async function jwt(patch={},header={},key=pair.privateKey) {
   const enc = v=>Buffer.from(JSON.stringify(v)).toString('base64url');
   const input=enc({alg:'RS256',kid:'test-key',...header})+'.'+enc({...baseClaims,...patch});
@@ -33,9 +33,9 @@ export class MemoryStorage {
 export class MockCloud {
   credit=20; price=.2; creates=0; deletes=[]; inspected=[]; calls=[]; ambiguous=false;
   githubError=0; vastError=0; logReady=true; logText='building\n'; logStatus=200; logHeaders={};
-  run={id:123,run_attempt:1,event:'workflow_dispatch',head_sha:sha,head_branch:'owner-pr',
-    actor:{id:42},triggering_actor:{id:42},status:'in_progress',repository:{full_name:repo}};
-  prs=[{number:7,state:'open',user:{id:42},head:{sha,ref:'owner-pr',repo:{full_name:repo}},base:{repo:{full_name:repo}}}];
+  run={id:123,run_attempt:1,event:'pull_request',head_sha:sha,head_branch:'owner-pr',
+    pull_requests:[{number:7,head:{sha}}],actor:{id:42},triggering_actor:{id:42},status:'in_progress',repository:{full_name:repo}};
+  prs=[{number:7,state:'open',draft:false,user:{id:42},head:{sha,ref:'owner-pr',repo:{full_name:repo}},base:{repo:{full_name:repo}}}];
   reviews=[]; reviewPages=null;
   offer={id:5,verified:true,vms_enabled:true,rentable:true,rented:false,num_gpus:1,
     gpu_name:'RTX_4070',reliability:.999,disk_space:200};
@@ -48,6 +48,7 @@ export class MockCloud {
       if(this.githubError)return new Response('PRIVATE-UPSTREAM', {status:this.githubError});
       if(/\/actions\/runs\/\d+$/.test(u.pathname))return Response.json(this.run);
       if(/\/commits\/[a-f0-9]+\/pulls$/.test(u.pathname))return Response.json(this.prs);
+      if(/\/pulls\/7$/.test(u.pathname))return Response.json(this.prs[0]);
       if(/\/pulls\/7\/reviews$/.test(u.pathname))return Response.json(this.reviewPages?.[Number(u.searchParams.get('page')||1)-1]||this.reviews);
       throw Error('Unexpected GitHub endpoint '+u.pathname);
     }
