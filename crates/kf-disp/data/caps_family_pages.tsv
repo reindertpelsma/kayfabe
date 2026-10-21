@@ -25,27 +25,35 @@
 0xC573	0x6e4	0x0000c280	Rule	authored base page (class header + family row)
 0xC573	0x780	0x01df0000	Rule	window-layer model, main layer: main layer has a precomp scaler (console scales; limit fields 0; AD104 bisection f5)
 0xC573	0x784	0x0000c280	Rule	authored base page (class header + family row)
+0xC573	0x788	0x000e000e	Rule	window-layer model, main layer: public NVKMS S5.14 CSC coefficients; existing matrix stage
 0xC573	0x78c	0x0000010a	Rule	authored base page (class header + family row)
 0xC573	0x7a0	0x01d70000	Rule	authored base page (class header + family row)
 0xC573	0x7a4	0x0000c280	Rule	authored base page (class header + family row)
+0xC573	0x7a8	0x000e000e	Rule	window-layer model, overlay layer: public NVKMS S5.14 CSC coefficients; existing matrix stage
 0xC573	0x7ac	0x0000010a	Rule	authored base page (class header + family row)
 0xC573	0x7c0	0x01df0000	Rule	window-layer model, main layer: main layer has a precomp scaler (console scales; limit fields 0; AD104 bisection f5)
 0xC573	0x7c4	0x0000c280	Rule	authored base page (class header + family row)
+0xC573	0x7c8	0x000e000e	Rule	window-layer model, main layer: public NVKMS S5.14 CSC coefficients; existing matrix stage
 0xC573	0x7cc	0x0000010a	Rule	authored base page (class header + family row)
 0xC573	0x7e0	0x01d70000	Rule	authored base page (class header + family row)
 0xC573	0x7e4	0x0000c280	Rule	authored base page (class header + family row)
+0xC573	0x7e8	0x000e000e	Rule	window-layer model, overlay layer: public NVKMS S5.14 CSC coefficients; existing matrix stage
 0xC573	0x7ec	0x0000010a	Rule	authored base page (class header + family row)
 0xC573	0x800	0x01df0000	Rule	window-layer model, main layer: main layer has a precomp scaler (console scales; limit fields 0; AD104 bisection f5)
 0xC573	0x804	0x0000c280	Rule	authored base page (class header + family row)
+0xC573	0x808	0x000e000e	Rule	window-layer model, main layer: public NVKMS S5.14 CSC coefficients; existing matrix stage
 0xC573	0x80c	0x0000010a	Rule	authored base page (class header + family row)
 0xC573	0x820	0x01d70000	Rule	authored base page (class header + family row)
 0xC573	0x824	0x0000c280	Rule	authored base page (class header + family row)
+0xC573	0x828	0x000e000e	Rule	window-layer model, overlay layer: public NVKMS S5.14 CSC coefficients; existing matrix stage
 0xC573	0x82c	0x0000010a	Rule	authored base page (class header + family row)
 0xC573	0x840	0x01df0000	Rule	window-layer model, main layer: main layer has a precomp scaler (console scales; limit fields 0; AD104 bisection f5)
 0xC573	0x844	0x0000c280	Rule	authored base page (class header + family row)
+0xC573	0x848	0x000e000e	Rule	window-layer model, main layer: public NVKMS S5.14 CSC coefficients; existing matrix stage
 0xC573	0x84c	0x0000010a	Rule	authored base page (class header + family row)
 0xC573	0x860	0x01d70000	Rule	authored base page (class header + family row)
 0xC573	0x864	0x0000c280	Rule	authored base page (class header + family row)
+0xC573	0x868	0x000e000e	Rule	window-layer model, overlay layer: public NVKMS S5.14 CSC coefficients; existing matrix stage
 0xC573	0x86c	0x0000010a	Rule	authored base page (class header + family row)
 0xC573	0x00c	-	Unmeasured	no class header names it; needed by the Windows display driver together with the window-layer pipelines
 0xC673	0x000	0x00000f0f	Rule	authored base page (class header + family row)
@@ -73,27 +81,35 @@
 0xC673	0x6e4	0x0000c280	Rule	authored base page (class header + family row)
 0xC673	0x780	0x01df0000	Rule	window-layer model, main layer: main layer has a precomp scaler (console scales; limit fields 0; AD104 bisection f5)
 0xC673	0x784	0x0000c280	Rule	authored base page (class header + family row)
+0xC673	0x788	0x000e000e	Rule	window-layer model, main layer: public NVKMS S5.14 CSC coefficients; existing matrix stage
 0xC673	0x78c	0x0000010a	Rule	authored base page (class header + family row)
 0xC673	0x7a0	0x01d70000	Rule	authored base page (class header + family row)
 0xC673	0x7a4	0x0000c280	Rule	authored base page (class header + family row)
+0xC673	0x7a8	0x000e000e	Rule	window-layer model, overlay layer: public NVKMS S5.14 CSC coefficients; existing matrix stage
 0xC673	0x7ac	0x0000010a	Rule	authored base page (class header + family row)
 0xC673	0x7c0	0x01df0000	Rule	window-layer model, main layer: main layer has a precomp scaler (console scales; limit fields 0; AD104 bisection f5)
 0xC673	0x7c4	0x0000c280	Rule	authored base page (class header + family row)
+0xC673	0x7c8	0x000e000e	Rule	window-layer model, main layer: public NVKMS S5.14 CSC coefficients; existing matrix stage
 0xC673	0x7cc	0x0000010a	Rule	authored base page (class header + family row)
 0xC673	0x7e0	0x01d70000	Rule	authored base page (class header + family row)
 0xC673	0x7e4	0x0000c280	Rule	authored base page (class header + family row)
+0xC673	0x7e8	0x000e000e	Rule	window-layer model, overlay layer: public NVKMS S5.14 CSC coefficients; existing matrix stage
 0xC673	0x7ec	0x0000010a	Rule	authored base page (class header + family row)
 0xC673	0x800	0x01df0000	Rule	window-layer model, main layer: main layer has a precomp scaler (console scales; limit fields 0; AD104 bisection f5)
 0xC673	0x804	0x0000c280	Rule	authored base page (class header + family row)
+0xC673	0x808	0x000e000e	Rule	window-layer model, main layer: public NVKMS S5.14 CSC coefficients; existing matrix stage
 0xC673	0x80c	0x0000010a	Rule	authored base page (class header + family row)
 0xC673	0x820	0x01d70000	Rule	authored base page (class header + family row)
 0xC673	0x824	0x0000c280	Rule	authored base page (class header + family row)
+0xC673	0x828	0x000e000e	Rule	window-layer model, overlay layer: public NVKMS S5.14 CSC coefficients; existing matrix stage
 0xC673	0x82c	0x0000010a	Rule	authored base page (class header + family row)
 0xC673	0x840	0x01df0000	Rule	window-layer model, main layer: main layer has a precomp scaler (console scales; limit fields 0; AD104 bisection f5)
 0xC673	0x844	0x0000c280	Rule	authored base page (class header + family row)
+0xC673	0x848	0x000e000e	Rule	window-layer model, main layer: public NVKMS S5.14 CSC coefficients; existing matrix stage
 0xC673	0x84c	0x0000010a	Rule	authored base page (class header + family row)
 0xC673	0x860	0x01d70000	Rule	authored base page (class header + family row)
 0xC673	0x864	0x0000c280	Rule	authored base page (class header + family row)
+0xC673	0x868	0x000e000e	Rule	window-layer model, overlay layer: public NVKMS S5.14 CSC coefficients; existing matrix stage
 0xC673	0x86c	0x0000010a	Rule	authored base page (class header + family row)
 0xC673	0x00c	-	Unmeasured	no class header names it; needed by the Windows display driver together with the window-layer pipelines
 0xC773	0x000	0x00000f0f	Rule	authored base page (class header + family row)
@@ -121,27 +137,35 @@
 0xC773	0x6e4	0x0000c280	Rule	authored base page (class header + family row)
 0xC773	0x780	0x01df0000	Rule	window-layer model, main layer: main layer has a precomp scaler (console scales; limit fields 0; AD104 bisection f5)
 0xC773	0x784	0x0000c280	Rule	authored base page (class header + family row)
+0xC773	0x788	0x000e000e	Rule	window-layer model, main layer: public NVKMS S5.14 CSC coefficients; existing matrix stage
 0xC773	0x78c	0x0000010a	Rule	authored base page (class header + family row)
 0xC773	0x7a0	0x01d70000	Rule	authored base page (class header + family row)
 0xC773	0x7a4	0x0000c280	Rule	authored base page (class header + family row)
+0xC773	0x7a8	0x000e000e	Rule	window-layer model, overlay layer: public NVKMS S5.14 CSC coefficients; existing matrix stage
 0xC773	0x7ac	0x0000010a	Rule	authored base page (class header + family row)
 0xC773	0x7c0	0x01df0000	Rule	window-layer model, main layer: main layer has a precomp scaler (console scales; limit fields 0; AD104 bisection f5)
 0xC773	0x7c4	0x0000c280	Rule	authored base page (class header + family row)
+0xC773	0x7c8	0x000e000e	Rule	window-layer model, main layer: public NVKMS S5.14 CSC coefficients; existing matrix stage
 0xC773	0x7cc	0x0000010a	Rule	authored base page (class header + family row)
 0xC773	0x7e0	0x01d70000	Rule	authored base page (class header + family row)
 0xC773	0x7e4	0x0000c280	Rule	authored base page (class header + family row)
+0xC773	0x7e8	0x000e000e	Rule	window-layer model, overlay layer: public NVKMS S5.14 CSC coefficients; existing matrix stage
 0xC773	0x7ec	0x0000010a	Rule	authored base page (class header + family row)
 0xC773	0x800	0x01df0000	Rule	window-layer model, main layer: main layer has a precomp scaler (console scales; limit fields 0; AD104 bisection f5)
 0xC773	0x804	0x0000c280	Rule	authored base page (class header + family row)
+0xC773	0x808	0x000e000e	Rule	window-layer model, main layer: public NVKMS S5.14 CSC coefficients; existing matrix stage
 0xC773	0x80c	0x0000010a	Rule	authored base page (class header + family row)
 0xC773	0x820	0x01d70000	Rule	authored base page (class header + family row)
 0xC773	0x824	0x0000c280	Rule	authored base page (class header + family row)
+0xC773	0x828	0x000e000e	Rule	window-layer model, overlay layer: public NVKMS S5.14 CSC coefficients; existing matrix stage
 0xC773	0x82c	0x0000010a	Rule	authored base page (class header + family row)
 0xC773	0x840	0x01df0000	Rule	window-layer model, main layer: main layer has a precomp scaler (console scales; limit fields 0; AD104 bisection f5)
 0xC773	0x844	0x0000c280	Rule	authored base page (class header + family row)
+0xC773	0x848	0x000e000e	Rule	window-layer model, main layer: public NVKMS S5.14 CSC coefficients; existing matrix stage
 0xC773	0x84c	0x0000010a	Rule	authored base page (class header + family row)
 0xC773	0x860	0x01d70000	Rule	authored base page (class header + family row)
 0xC773	0x864	0x0000c280	Rule	authored base page (class header + family row)
+0xC773	0x868	0x000e000e	Rule	window-layer model, overlay layer: public NVKMS S5.14 CSC coefficients; existing matrix stage
 0xC773	0x86c	0x0000010a	Rule	authored base page (class header + family row)
 0xC773	0x00c	-	Unmeasured	no class header names it; needed by the Windows display driver together with the window-layer pipelines
 0xCA73	0x000	0x00000f0f	Rule	authored base page (class header + family row)
@@ -170,26 +194,34 @@
 0xCA73	0x6e4	0x00060802	Rule	authored base page (class header + family row)
 0xCA73	0x780	0x01df0000	Rule	window-layer model, main layer: main layer has a precomp scaler (console scales; limit fields 0; AD104 bisection f5)
 0xCA73	0x784	0x0000c280	Rule	authored base page (class header + family row)
+0xCA73	0x788	0x000e000e	Rule	window-layer model, main layer: public NVKMS S5.14 CSC coefficients; existing matrix stage
 0xCA73	0x78c	0x0000010a	Rule	authored base page (class header + family row)
 0xCA73	0x7a0	0x01d70000	Rule	authored base page (class header + family row)
 0xCA73	0x7a4	0x0000c280	Rule	authored base page (class header + family row)
+0xCA73	0x7a8	0x000e000e	Rule	window-layer model, overlay layer: public NVKMS S5.14 CSC coefficients; existing matrix stage
 0xCA73	0x7ac	0x0000010a	Rule	authored base page (class header + family row)
 0xCA73	0x7c0	0x01df0000	Rule	window-layer model, main layer: main layer has a precomp scaler (console scales; limit fields 0; AD104 bisection f5)
 0xCA73	0x7c4	0x0000c280	Rule	authored base page (class header + family row)
+0xCA73	0x7c8	0x000e000e	Rule	window-layer model, main layer: public NVKMS S5.14 CSC coefficients; existing matrix stage
 0xCA73	0x7cc	0x0000010a	Rule	authored base page (class header + family row)
 0xCA73	0x7e0	0x01d70000	Rule	authored base page (class header + family row)
 0xCA73	0x7e4	0x0000c280	Rule	authored base page (class header + family row)
+0xCA73	0x7e8	0x000e000e	Rule	window-layer model, overlay layer: public NVKMS S5.14 CSC coefficients; existing matrix stage
 0xCA73	0x7ec	0x0000010a	Rule	authored base page (class header + family row)
 0xCA73	0x800	0x01df0000	Rule	window-layer model, main layer: main layer has a precomp scaler (console scales; limit fields 0; AD104 bisection f5)
 0xCA73	0x804	0x0000c280	Rule	authored base page (class header + family row)
+0xCA73	0x808	0x000e000e	Rule	window-layer model, main layer: public NVKMS S5.14 CSC coefficients; existing matrix stage
 0xCA73	0x80c	0x0000010a	Rule	authored base page (class header + family row)
 0xCA73	0x820	0x01d70000	Rule	authored base page (class header + family row)
 0xCA73	0x824	0x0000c280	Rule	authored base page (class header + family row)
+0xCA73	0x828	0x000e000e	Rule	window-layer model, overlay layer: public NVKMS S5.14 CSC coefficients; existing matrix stage
 0xCA73	0x82c	0x0000010a	Rule	authored base page (class header + family row)
 0xCA73	0x840	0x01df0000	Rule	window-layer model, main layer: main layer has a precomp scaler (console scales; limit fields 0; AD104 bisection f5)
 0xCA73	0x844	0x0000c280	Rule	authored base page (class header + family row)
+0xCA73	0x848	0x000e000e	Rule	window-layer model, main layer: public NVKMS S5.14 CSC coefficients; existing matrix stage
 0xCA73	0x84c	0x0000010a	Rule	authored base page (class header + family row)
 0xCA73	0x860	0x01d70000	Rule	authored base page (class header + family row)
 0xCA73	0x864	0x0000c280	Rule	authored base page (class header + family row)
+0xCA73	0x868	0x000e000e	Rule	window-layer model, overlay layer: public NVKMS S5.14 CSC coefficients; existing matrix stage
 0xCA73	0x86c	0x0000010a	Rule	authored base page (class header + family row)
 0xCA73	0x00c	-	Unmeasured	no class header names it; needed by the Windows display driver together with the window-layer pipelines

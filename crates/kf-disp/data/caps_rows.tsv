@@ -7,3 +7,10 @@
 # Only rows that a hardware bisection showed the Windows display driver needs are here
 # (docs/design/V3_DISPLAY_CAPS_DERIVATION_20261014.md §3); the rest of the measured page is not claimed.
 LAYER	main	PRECOMP_WIN_PIPE_HDR_CAPA	SCLR_PRESENT	TRUE	required	main layer has a precomp scaler (console scales; limit fields 0; AD104 bisection f5)
+# T1 source: ogkm580.159.04 b81d58ee0224d1d290bef1c080592b619e184042 nvkms-evo3.c:374-432
+# documents the existing CSC matrices as S5.14 (in S5.16 method encoding). These are precision
+# declarations for those matrices, not a native CAPC word or additional LUT capability.
+LAYER	main	PRECOMP_WIN_PIPE_HDR_CAPC	CSC00_PRECISION	14	required	public NVKMS S5.14 CSC coefficients; existing matrix stage
+LAYER	overlay	PRECOMP_WIN_PIPE_HDR_CAPC	CSC00_PRECISION	14	required	public NVKMS S5.14 CSC coefficients; existing matrix stage
+LAYER	main	PRECOMP_WIN_PIPE_HDR_CAPC	CSC01_PRECISION	14	required	public NVKMS S5.14 CSC coefficients; existing matrix stage
+LAYER	overlay	PRECOMP_WIN_PIPE_HDR_CAPC	CSC01_PRECISION	14	required	public NVKMS S5.14 CSC coefficients; existing matrix stage
