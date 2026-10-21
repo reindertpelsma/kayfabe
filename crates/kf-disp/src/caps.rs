@@ -648,6 +648,91 @@ pub fn page(
 mod tests {
     use super::*;
 
+    // Public NVKMS EvoParseCapabilityNotifierC5C6Common requires UNIT_WIDTH=16
+    // for each usable output. CA calls the same parser through C6.
+    #[test]
+    fn postcomp_units_match_public_nvkms_for_every_family() {
+        for version in [
+            "580.65.06",
+            "580.94.02",
+            "580.159.04",
+            "590.48.01",
+            "595.91.07",
+        ] {
+            let t = crate::class::for_version(version).unwrap();
+            for row in kf_chip::display::ALL {
+                let r = Regs::for_ip(version, row.ip_version).unwrap();
+                let c = row.classes.caps;
+                let reg = if t.v(c, "POSTCOMP_HDR_CAPA__SIZE_1").is_some() {
+                    "POSTCOMP_HDR_CAPA"
+                } else {
+                    "POSTCOMP_HEAD_HDR_CAPA"
+                };
+                let field = t.f(c, &format!("{reg}_UNIT_WIDTH")).unwrap();
+                for heads in [1, row.heads] {
+                    let p = page(t, &r, c, heads, heads * 2).unwrap();
+                    for i in 0..t.v(c, &format!("{reg}__SIZE_1")).unwrap() {
+                        assert_eq!(
+                            get(p.word(t.a(c, reg, i).unwrap()), field),
+                            if i < heads { 16 } else { 0 },
+                            "{version} NV{c:04X} head/tile {i}, heads={heads}"
+                        );
+                    }
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn postcomp_units_follow_the_generated_register_and_field_layout() {
+        for raw in [
+            include_str!("../data/classes-580.65.06.tsv"),
+            include_str!("../data/classes-595.91.07.tsv"),
+        ] {
+            let text = format!(
+                "{raw}\nA\tNVCA73_POSTCOMP_HDR_CAPA\t3072\t64\nF\tNVCA73_POSTCOMP_HDR_CAPA_UNIT_WIDTH\t15\t11\n"
+            );
+            let t = ClassTable::parse(&text);
+            let row = &kf_chip::display::BLACKWELL_GB20X;
+            let r = Regs::for_ip(&t.version, row.ip_version).unwrap();
+            let c = row.classes.caps;
+            let p = page(&t, &r, c, row.heads, row.windows).unwrap();
+            for i in 0..8 {
+                assert_eq!(
+                    get(p.word(3072 + i * 64), (15, 11)),
+                    if i < row.heads { 16 } else { 0 },
+                    "{} relocated tile {i}",
+                    t.version
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn postcomp_units_refuse_a_missing_public_field() {
+        let raw = include_str!("../data/classes-580.65.06.tsv");
+        for row in kf_chip::display::ALL {
+            let reg = if row.classes.caps == 0xCA73 {
+                "POSTCOMP_HDR_CAPA"
+            } else {
+                "POSTCOMP_HEAD_HDR_CAPA"
+            };
+            let key = format!("F\tNV{:04X}_{reg}_UNIT_WIDTH\t", row.classes.caps);
+            let text = raw
+                .lines()
+                .filter(|l| !l.starts_with(&key))
+                .collect::<Vec<_>>()
+                .join("\n");
+            let t = ClassTable::parse(&text);
+            let r = Regs::for_ip("580.65.06", row.ip_version).unwrap();
+            let e = page(&t, &r, row.classes.caps, row.heads, row.windows).unwrap_err();
+            assert_eq!(
+                e,
+                Missing(format!("NV{:04X}_{reg}_UNIT_WIDTH", row.classes.caps))
+            );
+        }
+    }
+
     #[test]
     fn blackwell_virtual_heads_have_contiguous_single_output_tiles() {
         let t = crate::class::for_version("580.159.04").unwrap();
