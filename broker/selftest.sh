@@ -392,6 +392,15 @@ b 272 0
 '
 nocheck "no BTN unfocused and outside" 'BTN' "$CASE_OUT"
 
+# Losing keyboard focus does not move the pointer: the pointer is still over the window, so hover keeps flowing
+# (the pointer_in state belongs to pointer enter/leave, not to focus).
+run_case 'f 1
+p 1
+f 0
+a 10 20
+'
+check "ABS keeps flowing after focus loss while the pointer is still inside" '[[:space:]]ABS[[:space:]]+flags=-- x=10 y=20' "$CASE_OUT"
+
 # a button held when focus goes away must still get its release (no stuck button)
 run_case 'f 1
 p 1
