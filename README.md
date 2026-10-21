@@ -10,7 +10,7 @@ as an ordinary client. Written in Rust.
 Master is not the newest code: the latest Windows performance work lives on branches (see below).
 
 <img alt="windows desktop with apps while host keeps gpu" src="traces/20261021_131847.jpg" width="1000" height="432" />
-<i>Windows 11 on kayfabe: desktop and nvidia-smi under the stock 580.88 drive. On windows, displayed using nvkvm-broker on a ubuntu desktop: Minecraft bedrock/windows only edition, unigine heaven benchmark, nvidia-smi in powershell, big buck bunny blender youtube on Edge. On linux left screen: Blender and nvidia-smi showing single gpu being used for all apps in the screenshots and Firefox in background (host keeps gpu). There is no PCIe/DMA copy of frames for this windows desktop.</i>
+<i>Windows 11 on kayfabe: desktop and nvidia-smi under the stock 580.88 driver. On Windows, displayed using nvkvm broker on an Ubuntu desktop: Minecraft Bedrock/Windows only edition, Unigine Heaven benchmark, nvidia-smi in powershell, Big Buck Bunny Blender on Youtube in Edge. On Linux left screen: Blender, nvidia-smi showing a single gpu being used for all the apps in the screenshots and Firefox in background (host keeps gpu). There is no PCIe/DMA copy of frames for this windows desktop.</i>
 
 ## Why it is interesting
 
@@ -53,14 +53,17 @@ Master is not the newest code: the latest Windows performance work lives on bran
 
 | app | result |
 |---|---|
-| Minecraft Java | in a world, 6 minutes walking |
-| Unigine Heaven, Direct3D 11 and OpenGL | pass; fps in the table above |
-| GravityMark | Direct3D 12 and Vulkan pass (134 and 96 fps at that revision) |
+| Minecraft Java and Bedrock | in a world, no issues so far. Multiplayer works fine |
+| Unigine Heaven, Direct3D 9, Direct3D 11 and OpenGL | pass; fps in the table above |
+| GravityMark | Direct3D 12 and Vulkan pass (134 and 96 fps at that revision, need a new benchmark to confirm fps with performance fixes) |
 | Edge + YouTube 4K60, hardware decode (NVDEC) | 10:34 played to the end |
 | CUDA in the guest | works: `nvidia-smi` shows CUDA 13.0; matrix multiply (N=2048) about 1.9 TFLOPS; Blender 5.2 Cycles renders with CUDA and OptiX (OptiX 5.3 s against 3.4 s native, 1.57x slower; measured 2026-10-15 on branch `claude/perf-win-20261015`) |
-| SolidWorks 2026 | reported by the owner (installs, renders, passes its Performance Test); evidence not yet committed |
+| SolidWorks 2026 (student edition) | installs, renders, passes its builtin Performance Test; loads and renders sample projects fine; evidence not yet committed |
+| Blender on Windows | Renders sample files properly, needs more testing |
+| 3DMark demo on Steam | Steel Nomad gets around 30fps, benchmark result not committed yet. VFIO gets around 40fps. |
+| Office 365 | No issues so far |
 
-Minecraft, Blender and SolidWorks run unmodified, from the vendors' official, complete installers (nothing stripped down or patched).
+Minecraft, Blender, Office, Edge, Steam, 3DMark, Unigine and SolidWorks run unmodified, from the vendors' official, complete installers (nothing stripped down or patched). All apps except Office are confirmed to be using the NVIDIA GPU, not software rendering.
 
 **Linux guest** (NVIDIA's stock driver, unmodified, nothing to set): the 30-arm suite passes (also with the relay forced on); gates 9/9 on the real GPU; a desktop with display planes (overlay, YUV)
 and 3 of 3 suspend/resume cycles; **61 of 65 CUDA apps** (CUDA samples, PyTorch, Hugging Face generation, llama.cpp), 6 of 6 stream probes and 100 processes in one boot, with
