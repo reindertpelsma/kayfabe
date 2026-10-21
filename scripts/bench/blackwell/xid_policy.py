@@ -21,15 +21,20 @@ EXCEPTION_MAX = 2
 
 def judge(lines, arm: str, qemu_pid: int, code0_seen: bool) -> dict:
     xids = []
+    unparsed = []
     for l in lines:
         m = XID.search(l)
         if m:
             xids.append({"code": int(m[1]), "pid": int(m[2]), "channel": m[3], "intr": m[4], "line": l.strip()[:240]})
+        elif "NVRM: Xid" in l:
+            unparsed.append(l.strip()[:240])
+    if unparsed:
+        return {"verdict": "FATAL", "xids": xids, "unparsed_xids": unparsed}
     if not xids:
         return {"verdict": "CLEAN", "xids": []}
     chans = [int(x["channel"], 16) for x in xids]
     plain = [c for c in chans if c < 0x100]
-    high = [c for c in chans if c >> 24 == 0x0E]
+    high = [c for c in chans if c & ~0xFF == 0x0E000000]
     shape_ok = len(set(chans)) == len(chans) and len(plain) <= 1 and len(high) <= 1 and len(plain) + len(high) == len(chans)
     arm_ok = arm == "off_c" or arm.startswith("on_")
     allowed = (
