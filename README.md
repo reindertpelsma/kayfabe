@@ -61,7 +61,7 @@ Master is not the newest code: the latest Windows performance work lives on bran
 | SolidWorks 2026 (student edition) | installs, renders, passes its builtin Performance Test; loads and renders sample projects fine; evidence not yet committed |
 | Blender on Windows | Renders sample files properly, needs more testing |
 | 3DMark demo on Steam | Steel Nomad gets around 30fps, benchmark result not committed yet. VFIO gets around 40fps. |
-| OBS Studio on Windows | Recorded 3DMark Steel Nomad successfully, NVENC being used. Result is not commited yet |
+| OBS Studio on Windows | Recorded the desktop, Unigine Heaven and 3DMark Steel Nomad successfully, OBS reports NVENC was used. MP4 video playback has no issues that I noticed. Result is not commited yet |
 | Office 365 | No issues so far |
 
 Minecraft, Blender, Office, Edge, Steam, 3DMark, Unigine and SolidWorks run unmodified, from the vendors' official, complete installers (nothing stripped down or patched). All apps except Office are confirmed to be using the NVIDIA GPU, not software rendering.
