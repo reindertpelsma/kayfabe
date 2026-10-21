@@ -8,6 +8,8 @@ import argparse
 import datetime as dt
 import json
 import os
+import re
+import select
 from pathlib import Path
 import signal
 import socket
@@ -17,6 +19,82 @@ import time
 GPU = '0000:01:00.0'
 AUDIO = '0000:01:00.1'
 PCI = Path('/sys/bus/pci/devices')
+
+
+
+DESKTOP_NAMES = {'gnome-shell', 'Xwayland', 'Xorg', 'nvidia-smi', 'nvtop',
+                 'nvkvm-display-b', 'nvkvm-display-br', 'firefox', 'firefox-bin'}
+
+
+def cleanup_names(holders):
+    """The owner override covers desktop names, never unknown/compute holders."""
+    for pid, name in holders.items():
+        if (pid == 1 and name == 'systemd') or name == 'systemd-logind':
+            continue  # Release logind's DRM descriptors through its service.
+        if name not in DESKTOP_NAMES:
+            raise RuntimeError(f'PROTECTED_GPU_USER pid={pid} name={name}')
+    return sorted({name for pid, name in holders.items()
+                   if pid != 1 and name != 'systemd-logind'})
+
+
+def open_holders(nodes):
+    if not nodes:
+        return {}
+    r = subprocess.run(['fuser', '-v', *nodes], text=True, capture_output=True, timeout=20)
+    print('FUSER_LIST_BEFORE_ACTION', r.stderr.strip(), r.stdout.strip(), flush=True)
+    holders = {}
+    for token in re.findall(r'\b[0-9]+\b', r.stdout):
+        pid = int(token)
+        try:
+            name = (Path('/proc') / str(pid) / 'comm').read_text().strip()
+            holders[pid] = name
+            print('GPU_HOLDER', pid, name, flush=True)
+        except FileNotFoundError:
+            pass
+    return holders
+
+
+def close_desktop_users():
+    for unit in ['gdm', 'gdm3']:
+        run('systemctl', 'stop', unit, check=False)
+    run('loginctl', 'terminate-user', 'ubuntu', check=False)
+    run('systemctl', 'stop', 'nvidia-persistenced', check=False)
+    nodes = sorted({*gpu_nodes(), *(str(p) for p in Path('/dev/dri').glob('*') if not p.is_dir())})
+    holders = open_holders(nodes)
+    names = cleanup_names(holders)  # Refuse the entire kill set if any holder is protected.
+    waiters = select.poll()
+    handles = []
+    for pid, name in holders.items():
+        if name not in names:
+            continue
+        try:
+            fd = os.pidfd_open(pid)
+            handles.append(fd)
+            waiters.register(fd, select.POLLIN)
+        except ProcessLookupError:
+            pass
+    try:
+        for name in names:
+            print('AUTHORIZED_DESKTOP_TERM_BY_NAME', name, flush=True)
+            run('pkill', '-TERM', '-x', '--', name, check=False)
+        pending = set(handles)
+        until = time.monotonic() + 30
+        while pending and time.monotonic() < until:
+            for fd, event in waiters.poll(max(1, int((until-time.monotonic())*1000))):
+                pending.discard(fd)
+                waiters.unregister(fd)
+        if pending:
+            raise RuntimeError('SAFETY_REFUSED: authorized desktop process did not exit')
+    finally:
+        for fd in handles:
+            os.close(fd)
+    # logind and PID 1 may retain DRM fdstore references after the desktop exits.
+    # systemctl documents stopping the unit and cleaning only its fdstore.
+    run('systemctl', 'stop', 'systemd-logind')
+    run('systemctl', 'clean', '--what=fdstore', 'systemd-logind')
+    remaining = open_holders(nodes)
+    if remaining:
+        raise RuntimeError('SAFETY_REFUSED: GPU nodes remain open after authorized cleanup')
 
 
 def make_argv(owner, root):
@@ -131,6 +209,7 @@ def main():
     p = argparse.ArgumentParser(description=__doc__)
     p.add_argument('--root', type=Path, required=True)
     p.add_argument('--owner-command', type=Path, required=True)
+    p.add_argument('--desktop-takeover', action='store_true', help='owner-authorized desktop cleanup')
     p.add_argument('--restore-at', required=True, help='ISO-8601 deadline with timezone')
     a = p.parse_args()
     root = a.root.resolve()
@@ -162,6 +241,8 @@ def main():
     write(root / 'supervisor.pid', str(os.getpid()))
     (root / 'command.json').write_text(json.dumps({'source_rev': owner.get('kf3_rev'),
         'argv': argv, 'xid_before': baseline, 'restore_at': a.restore_at}, indent=2)+'\n')
+    persist_was_active = subprocess.run(['systemctl', 'is-active', '--quiet', 'nvidia-persistenced']).returncode == 0
+    logind_was_active = subprocess.run(['systemctl', 'is-active', '--quiet', 'systemd-logind']).returncode == 0
     proc = None
     touched = False
     requested = False
@@ -175,13 +256,13 @@ def main():
     signal.signal(signal.SIGINT, stop_signal)
     try:
         touched = True
-        run('systemctl', 'stop', 'display-manager')
-        run('systemctl', 'stop', 'nvidia-persistenced', check=False)
-        nodes = gpu_nodes()
-        if nodes:
-            users = run('fuser', *nodes, check=False)
-            if users.stdout.strip():
-                raise RuntimeError('SAFETY_REFUSED: GPU nodes still open; no foreign PIDs killed')
+        if a.desktop_takeover:
+            close_desktop_users()
+        else:
+            run('systemctl', 'stop', 'display-manager')
+            run('systemctl', 'stop', 'nvidia-persistenced', check=False)
+            if open_holders(gpu_nodes()):
+                raise RuntimeError('SAFETY_REFUSED: GPU nodes still open; desktop takeover not selected')
         for module in ['nvidia_drm', 'nvidia_modeset', 'nvidia_uvm']:
             run('modprobe', '-r', module)
         run('modprobe', 'vfio-pci')
@@ -255,14 +336,22 @@ def main():
                     write(PCI / bdf / 'driver_override', '')
                 except Exception as error:
                     errors.append(str(error))
-            for args in [('modprobe', 'nvidia_uvm'), ('modprobe', 'nvidia_modeset'),
+            restore_commands = [('modprobe', 'nvidia_uvm'), ('modprobe', 'nvidia_modeset'),
                          ('modprobe', 'nvidia_drm', 'modeset=1', 'fbdev=1'),
-                         ('systemctl', 'start', 'display-manager')]:
+                         ]
+            if logind_was_active:
+                restore_commands.append(('systemctl', 'start', 'systemd-logind'))
+            if persist_was_active:
+                restore_commands.append(('systemctl', 'start', 'nvidia-persistenced'))
+            restore_commands.append(('systemctl', 'start', 'gdm'))
+            for args in restore_commands:
                 try:
                     run(*args)
                 except Exception as error:
                     errors.append(str(error))
-            run('nvidia-smi', '--query-gpu=name,driver_version', '--format=csv,noheader', check=False)
+            smi = run('nvidia-smi', '--query-gpu=name,driver_version', '--format=csv,noheader', check=False)
+            if smi.returncode:
+                errors.append('nvidia-smi failed after restoration')
             run('loginctl', 'list-sessions', '--no-legend', check=False)
             restored = not errors and driver(GPU) == 'nvidia' and driver(AUDIO) == 'snd_hda_intel'
             print('RESTORED', restored, 'ERRORS', errors, flush=True)

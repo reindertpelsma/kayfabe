@@ -1,5 +1,15 @@
 # VF1 SPECviewperf 15 physical-GPU reference — 2026-10-22
 
+STATUS: RESUMED 2026-10-22 at 01:41 CEST after a new explicit owner override.
+CODE READ (owner instruction): terminate ubuntu sessions and listed desktop/
+monitoring GPU users by name; protect other lanes' QEMU/CUDA users; recheck no
+holders before detach. Stop/clean logind's documented fdstore if it retains DRM
+handles; restore its service afterwards. GDM greeter is sufficient tonight.
+Any new host Xid still aborts. The renewed five-hour budget extends beyond the
+hard 06:30 CEST restoration deadline, so the supervisor starts restoration by
+06:10 CEST. The previous attempt's disposition below is historical evidence.
+
+
 MEASURED: lane started 2026-10-21 23:19 UTC (01:19 CEST); five-hour stop is
 06:19 CEST, before the 06:30 desktop restoration deadline. Host initial Xid count
 26. Branch starts at origin/master e64b8e5f6. GPU PCI ID 10de:2786 (RTX 4070),
@@ -32,7 +42,7 @@ SPEC documents at least 15 GB available RAM; this lane explicitly requires the
 owner's 12 GiB VM configuration. Treat these as diagnostic reference runs, not
 submission-compliant SPEC scores, and keep resolution/settings attached to rows.
 
-## Final disposition — safety stop
+## Previous attempt — safety stop (superseded by the owner override above)
 
 MEASURED: **desktop restoration is PARTIAL**. NVIDIA remains bound to the GPU,
 `snd_hda_intel` remains bound to audio, GDM is active, `nvidia-smi` reports RTX 4070
