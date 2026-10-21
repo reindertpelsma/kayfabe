@@ -95,3 +95,17 @@ fn stamped_internal_scrubber_channels_remain_kernel_channels() {
         }
     }
 }
+
+#[test]
+fn internal_handle_census_excludes_other_ranges() {
+    use kf_rm::chanlink::is_rm_internal_client;
+    for h in [0xc1f0_0000, 0xe1e0_0000, u32::MAX] {
+        assert!(
+            !is_rm_internal_client(h),
+            "out-of-range census handle {h:#x}"
+        );
+    }
+    for h in [0xc1e0_0000, 0xc1ef_ffff] {
+        assert!(is_rm_internal_client(h));
+    }
+}
