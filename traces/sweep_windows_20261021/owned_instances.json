@@ -18,7 +18,7 @@
     "reservation_usd": 4.529658564814815,
     "auto_destroy_minutes": 175,
     "hard_teardown_utc": "2026-10-21T18:30:00+00:00",
-    "destroyed": false,
+    "destroyed": true,
     "auto_destroy_pid": 1903926,
     "auto_destroy_verified": true,
     "auto_destroy_armed_utc": "2026-10-21T11:42:55.336253+00:00",
@@ -33,6 +33,14 @@
       "root_free_gb": 167,
       "kvm_present": true
     },
-    "stage": "Native595 gates9+10/raw30/CUDA4/correctedGRoracle PASS; generic LTSC installation active, product Windows init UNRUN"
+    "stage": "CLOSED: nativePASS, ON0x50, OFFCode0then116/twoXid32; LinuxguestUNRUN afterGPUstop; allVM/NBD stopped before APIabsence",
+    "absence_verified_utc": "2026-10-21T14:00:44.532324+00:00",
+    "credit_after_observed": 22.013140080063295,
+    "observed_account_credit_delta": 2.714425910899422,
+    "elapsed_hours_until_absence": 2.2972915827777776,
+    "runtime_cost_estimate_usd": 2.871614478472222,
+    "cost_upper_bound_usd": 3.871614478472222,
+    "cost_note": "Runtime estimate and shared-account credit delta are observations, not settled attribution. Budget guard reserves1USD for delayed transfer billing until invoices reconcile.",
+    "auto_destroy_cancelled_after_absence": true
   }
 ]
