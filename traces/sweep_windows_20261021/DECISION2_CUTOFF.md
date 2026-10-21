@@ -1,0 +1,17 @@
+STATUS: LIVE, 2026-10-21 18:01UTC. Owner decision2 accepted; hardware continuation UNRUN because the lease-start deadline has passed. No new lease or GPU job was started. All three owned IDs remain API-absent; trusted host untouched.
+
+MEASURED: the first clock read after receiving decision2 was 18:01:23UTC, after the binding 18:00UTC lease-start cutoff. At 18:01:53UTC, the Vast API again showed own IDs57046541,57064037,57081143 absent. No extra lease was attempted; all owned resources were already destroyed well before the18:30UTC teardown deadline. No full-pipeline estimate can authorize a lease after the start cutoff.
+
+Owner decision2 authorizes ONLY pinned-suite intentional guest controls proved from this run's source FAULT_MARK address/type, actual QEMU PID, host-twin/guest channel correlation and positive recovery, validated after each negative arm before the next phase. No wildcard Xid31; Xid32 and unrelated31 stay fatal; all30arms retained. This supersedes the earlier pending guest-scope question. It does not retrospectively supply missing evidence or turn the previous aborted suite into a PASS. The guest-proof extension was not implemented or deployed before the cutoff; the existing native-only guard remains fail-closed, with23tests green from the preceding fix. No new production or guard behavior was changed in this closeout.
+
+Route difference, CODE READ: the Linux guest missing-page arm forces --probe-launch-dma, whereas the native missing-page baseline used sem-release. Prior guest Xids consequently cannot be admitted using the native GR0_PBDMA0/HUBCLIENT_ESC shape. Four guest defer-liveness faults have retained source/channel proof; the fifth missing-page event lacks exported physical-channel proof and remains only an inferred association, never an approved measured baseline. Future execution must derive its actual route and channel from that run and prove positive recovery before proceeding.
+
+Final current-stretch hardware state:
+- AD106 native595.91.07/source74aa78abe: PASS (SOUND, gates9/9+10, raw30/30, CUDA4/4, corrected nativeGR); five source-matched native controls proved.
+- AD106 Linuxguest595/source74aa78abe: ABORTED,13PASS/1abort-inducedVMM_DIED/16unrun; no full-suite PASS. Decision2 final repeat UNRUN.
+- AD106 Windows580.88 bind+ON: UNRUN. No current Code0/43/TDR result for this die; prior standard-VGA OS preparation was not NVIDIA validation.
+- Earlier GB202/sourceaf8 remains unresolved: ON0x50 after fourthcursor legacy275/canonical277; OFFCode0 then116/141 andtwoXid32. No new result or diagnosis claimed.
+
+Cost: no additional rental spend; combined runtime estimate3.540056USD for this stretch, below6USD stop. Latest shared-account credit21.381071USD, above5USD reserve. Opening-minus-current credit3.346495USD is a separate shared-account observation, not an exclusively attributed or settled bill. Cap8USD/stop6USD remain unchanged. Three own leases all<3h, timers cancelled only after verified absence. Receipt: decision2_cutoff_receipt.json. Existing per-ID source/cost/teardown records: owned_instances.json.
+
+Pending independent items: public-symbol local-image method remains unapproved/unrun, fresh dump reproduction would be required; PR65 stays draft/unmerged/hardwareUNRUN. This deadline closeout requires no further owner decision. A future hardware campaign needs a new time/budget window and the scoped guest-proof implementation with failing-first tests and mutation checks before renting. No new lease is authorized by this document.

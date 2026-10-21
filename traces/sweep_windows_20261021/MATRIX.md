@@ -2,6 +2,8 @@
 
 STATUS: LIVE, 2026-10-21. MEASURED rows carry the actual source. No historical PASS is promoted to the merged revision.
 
+Final update18:01UTC: owner decision2 APPROVED the narrowly proved guest controls. First clock read18:01:23UTC was past the18:00UTC lease-start cutoff, so no final lease was created. Full Linux595 repeat and Windows580.88 bind+ON remain UNRUN. See DECISION2_CUTOFF.md and API-absence receipt; all30arms retained and no previous ABORTED result promoted to PASS.
+
 | Die | OS / driver | Source | Flags | Result | Evidence / scope |
 |---|---|---|---|---|---|
 | GB202 | Native Linux595.91.07 | af8bdcda4 | stock; GR oracle KF3_TRANSLATED_CE_RELAY=1 | PASS, n1 | lease_57046541/native/: SOUND, unprivileged die probe, gates9/9+10, raw30/30, CUDA4/4, corrected native GR GPU payload/GET/session event and hostile-entry checks |
@@ -13,10 +15,10 @@ STATUS: LIVE, 2026-10-21. MEASURED rows carry the actual source. No historical P
 | AD102 | Windows580.88 | 0c87acda8 | historicalP19 +RPC | Prior PASS, STALE for af8bdcda4 | desktop/CUDA3/DX11+12/426.09s zero-TDR, n1; prior own phase2_windows_ad102_56816419/windows580_pass |
 | AD102 | Linux580.159.04 and595.91.07 broker | 7f22d18df | actual per-lane flags | Prior PASS both, STALE for af8bdcda4 | prior own phase2_ada_broker_followup_20261020, n1each |
 | AD106 | Native Linux595.91.07 | 74aa78abe | stock; native GR translated CE | PASS, n1 | lease_57081143/native/: raw30/30, CUDA4/4, GR oracle; five native controls proved/accepted |
-| AD106 | Linux guest595 | 74aa78abe | configured fast_suite default, KF_DEVICE=kf3 | ABORTED; no full PASS | lease_57081143/linux_stop/: 13PASS/1abort-inducedVMM_DIED/16unrun; five new QEMU31 outside native-only approval; descendant abort defect disclosed/fixed GPU-free |
-| AD106 | Windows580.88 bind/ON | 74aa78abe planned | P19+RPC/BODY/DIAG1000 planned | UNRUN | lease_57081143/GUEST_NEGATIVE_STOP.md; no installation/binding/ON attempted after Linux STOP |
+| AD106 | Linux guest595 | 74aa78abe | configured fast_suite default, KF_DEVICE=kf3 | ABORTED; no full PASS | lease_57081143/linux_stop/: 13PASS/1abort-inducedVMM_DIED/16unrun; five new QEMU31 outside the approval in force at that run; descendant abort defect disclosed/fixed GPU-free; decision2 subsequently approved only proved controls, no repeat before deadline |
+| AD106 | Windows580.88 bind/ON | 74aa78abe planned | P19+RPC/BODY/DIAG1000 planned | UNRUN | lease_57081143/GUEST_NEGATIVE_STOP.md; no installation/binding/ON attempted after Linux STOP; final decision2 lease UNRUN past18:00UTC cutoff |
 | AD106 | Native Linux595.91.07 | 1ce11cf4d; product unchanged vs af8 | stock; native GR translated CE | PASS, n1 | lease_57064037/native/: actual unprivileged die, SOUND, gates9/9+10, raw30/30, CUDA4/4, nativeGR; five intentional native Xid31 faults documented |
-| AD106 | Linux guest595 / Windows580.88 | 1ce11cf4d | planned lane flags; no guest launched | UNRUN / STOP; lease closed | lease_57064037/NATIVE_XID_STOP.md: extra absolute-zero-Xid benchmark guard rejected intentional native faults; approval pending; generic LTSC standard-VGA setup/check passed, no NVIDIA bind |
+| AD106 | Linux guest595 / Windows580.88 | 1ce11cf4d | planned lane flags; no guest launched | UNRUN / STOP; lease closed | lease_57064037/NATIVE_XID_STOP.md: extra absolute-zero-Xid benchmark guard rejected intentional native faults; subsequently resolved by decision1, not rerun on that lease; generic LTSC standard-VGA setup/check passed, no NVIDIA bind |
 | AD103 | Windows580.88 | current revision planned | P19 planned, actual receipt required | UNRUN | no die inferred from marketed GPU name |
 | GA104 | Windows580.88 | current revision planned | P19 planned | UNRUN | native verified580.88 binding through documented windows-on-vast flow first; no installer replay |
 | TU106 | Windows580.88 regression | current revision planned | P19 planned | UNRUN | preserve die/driver policy |

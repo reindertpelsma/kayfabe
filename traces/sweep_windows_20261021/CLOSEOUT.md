@@ -1,3 +1,5 @@
+STATUS: SUPERSEDED, 2026-10-21 18:01UTC. This15:14UTC checkpoint is retained as history. Current closeout is DECISION2_CUTOFF.md and MATRIX.md: native decision1 implemented, guest decision2 approved but final hardware repeat UNRUN past lease-start deadline; all three owned leases absent, runtime estimate3.540056USD.
+
 STATUS: LIVE, 2026-10-21 15:14UTC. Lane SW2; campaign PARTIAL at a decision checkpoint. Own worktrees only; trusted host/GPU/VM/locks untouched. All owned leases are destroyed and API-absent. No PR/master/integration merge performed.
 
 Branch codex/sweep-win-20261021: sweep + candidateM89fc8a222 clean merge d93cf38e5. Frozen GB202 runtime af8bdcda4c700d8b40163ee3bf27feb7cfa6539c; frozen AD106 runtime1ce11cf4d640087d5be41b14b4f0b70cfc77e8c6, product directories byte-identical. Later main-branch changes are evidence/bench metadata only. Origin heads are verified again after this closeout commit.

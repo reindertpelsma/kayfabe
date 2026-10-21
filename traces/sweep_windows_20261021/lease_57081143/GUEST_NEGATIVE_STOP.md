@@ -1,3 +1,7 @@
+STATUS UPDATE: ANSWERED, 2026-10-21 18:01UTC. Owner decision2 APPROVED the exact scoped guest-control proposal below. This supersedes its pending-decision language. The first clock read after approval was18:01:23UTC, past the18:00UTC lease-start cutoff; no new lease or exception implementation was started. Linux full repeat and Windows bind+ON remain UNRUN. See ../DECISION2_CUTOFF.md. Missing-page physical-channel proof remains absent; approval does not repair that evidence gap. The abort fix is already committed/pushed e39ccc4d5 with23tests green.
+
+Historical stop record follows:
+
 STATUS: LIVE, 2026-10-21 16:44UTC. New guest-fault scope STOP; no exemption beyond owner decision1. Lease57081143 destroyed/API-absent16:41:56.259511UTC. All GPU activity stopped, Windows unrun.
 
 MEASURED: five approved native controls matched; native595 raw30/CUDA4/GR PASS. During guest --defer-liveness, four new Xid31 CE0/HUBCLIENT_CE1 FAULT_PTE VIRT_READ records for QEMUpid91947 at16:36:33.934643,37.072583,40.089611,43.221583UTC. Addresses6000010000,6200010000 twice,6400010000; physical channels1b,1b,1c,1b. Saved guest FAULT_MARK/DOORBELL lines identify guest channels3/4; saved QEMU RC metadata explicitly maps hosttwin1b->guestchid3 and1c->guestchid4, except_type1f. Guest positive controls/recovery and RUNG_defer_liveness PASS. These are outside the approved native baseline, so none was silently accepted. Source-matched intentional guest controls is an inference supported by these measured records, not a newly approved fault exception.
