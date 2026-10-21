@@ -108,10 +108,10 @@ Format: id, severity, location, what the guest controls, impact, scenario, evide
 - **Guest controls:** the client handle of its `NV01_ROOT` allocation. Guest userspace can do this with the ioctls
   every GPU process already uses.
 - **Claim in the code:** the doc at `chanlink.rs:2394-2398` says a client that asks for a fixed handle "is
-  RE-ENCODED onto the user base `0xC1D00000` (`rs_server.c:3267-3271`), so no guest process can hold one in this
-  range". Read at ogkm-580.159.04: that re-encode is inside `#if !(RS_COMPATABILITY_MODE)` (`rs_server.c:3268`)
-  and `src/nvidia/Makefile:130` sets `CFLAGS += -DRS_COMPATABILITY_MODE=1`, so it is compiled out;
-  `serverAllocClient` takes `hClient = pParams->hClient` (`rs_server.c:612`; the reject guard at `:613` is out as
+  RE-ENCODED onto the user base `0xC1D00000` (`ogkm-580: rs_server.c:3267-3271`), so no guest process can hold one in this
+  range". Read at ogkm-580.159.04: that re-encode is inside `#if !(RS_COMPATABILITY_MODE)` (`ogkm-580: rs_server.c:3268`)
+  and `ogkm-580: src/nvidia/Makefile:130` sets `CFLAGS += -DRS_COMPATABILITY_MODE=1`, so it is compiled out;
+  `serverAllocClient` takes `hClient = pParams->hClient` (`ogkm-580: rs_server.c:612`; the reject guard at `:613` is out as
   well). The repository agrees with itself elsewhere: `rmgraph.rs:1963-1967` says "hRoot is caller-supplied in the
   shipped Linux driver". The mask is also wider than the range (`RS_CLIENT_HANDLE_MAX` is `0x100000`): it accepts
   `0xC1F00000` and `0xFFFFFFFF`.
@@ -134,7 +134,7 @@ Format: id, severity, location, what the guest controls, impact, scenario, evide
   consumers). The end-to-end behaviour on a Linux guest is INFERRED: UNCERTAIN U1 asks for the dynamic check.
   MEASURED: `is_rm_internal_client(0xC1F00000)` and `(0xFFFFFFFF)` return true (EXPECTED RED test).
 - **Fix:** do not derive privilege from a handle range. Use only a fact the guest kernel stamps after clearing
-  `internalFlags` (`kernel_channel.c:220`, `:1058`, `:2805` in ogkm-580), or identify RM's internal clients by the
+  `internalFlags` (`ogkm-580: kernel_channel.c:220`, `:1058`, `:2805`), or identify RM's internal clients by the
   allocation path (they are allocated by the guest kernel RM before any user ioctl can run, and the first client
   with that handle is recorded as such); at minimum bound the predicate to the exact range and refuse a user root
   alloc whose handle falls in it.
