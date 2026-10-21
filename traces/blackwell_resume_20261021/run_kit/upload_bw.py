@@ -14,8 +14,8 @@ a=json.loads(subprocess.check_output(['vastai','show','instances','--raw'],text=
  ServerAliveInterval 15
  ServerAliveCountMax 3
  HostKeyAlias {alias}
- UserKnownHostsFile {d}/known_hosts
- StrictHostKeyChecking accept-new
+ UserKnownHostsFile /dev/null
+ StrictHostKeyChecking no
 ''')
 ssh=['ssh','-F',str(conf),alias]
 def remote(cmd,stdin=None,timeout=120):

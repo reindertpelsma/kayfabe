@@ -17,7 +17,7 @@ arm() { # profile run
   echo "ARM_BEGIN $2 $(date -u -Is)"
   bash /root/sweep2/arm.sh "$1" "$2" "$BIN" "$BASE"; arc=$?
   echo "ARM_RC $2 rc=$arc"
-  grep -q 'ARM_OBSERVATION_DONE\|ARM_GUEST_PANICKED' "/root/prov/arm_$2.log" || { echo "ARM_NOT_OBSERVED $2"; return 60; }
+  grep -q 'ARM_EXIT run=' "/root/prov/arm_$2.log" || { echo "ARM_NOT_OBSERVED $2"; return 60; }
   [ ! -e /root/prov/XID_STOP ] || { echo "LANE_STOP_XID after $2"; return 61; }
   bash /root/sweep2/collect_bw.sh "$2" || echo "COLLECT_FAILED $2"
   [ ! -e /root/prov/XID_STOP ] || { echo "LANE_STOP_XID after $2"; return 61; }

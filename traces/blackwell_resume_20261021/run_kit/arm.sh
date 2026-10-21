@@ -40,7 +40,7 @@ cleanup(){
 if [ "$launched" = 1 ]; then
  python3 -I /root/sweep2/keyline_times.py "$QLOG" "/root/prov/arms/$run/rpc_timing.jsonl" "/root/prov/arms/$run/keylines.jsonl" PROBE-DUMP "chan token" "BORN " "GSP REFUSED fn76/0x906f0102" GUEST_PANICKED RC_TRIGGERED "kf3: GSP" UNLOADING || echo KEYLINES_FAILED
  code0=0; grep -q '"code":0' "/root/prov/arm_${run}_diag.txt" 2>/dev/null && code0=1
- grep -a 'Xid' "/root/prov/arms/$run/host_kernel.log" 2>/dev/null | python3 -I /root/sweep2/xid_policy.py "$run" "${owned_pid:-0}" "$code0" >"/root/prov/arms/$run/xid_policy.json"; xrc=$?
+ { grep -a 'Xid' "/root/prov/arms/$run/host_kernel.log" 2>/dev/null || true; } | python3 -I /root/sweep2/xid_policy.py "$run" "${owned_pid:-0}" "$code0" >"/root/prov/arms/$run/xid_policy.json"; xrc=$?
  echo "XID_POLICY run=$run rc=$xrc $(cat "/root/prov/arms/$run/xid_policy.json" | cut -c1-300)"
  if [ "$xrc" != 0 ]; then date -u -Is >/root/prov/XID_STOP; fi
 fi
