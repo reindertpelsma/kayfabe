@@ -62,12 +62,12 @@
     "reservation_usd": 1.9546064814814812,
     "auto_destroy_minutes": 175,
     "hard_teardown_utc": "2026-10-21T18:30:00+00:00",
-    "destroyed": false,
+    "destroyed": true,
     "auto_destroy_pid": 2034630,
     "auto_destroy_verified": true,
     "auto_destroy_armed_utc": "2026-10-21T14:04:00.899456+00:00",
     "observed_dph_total": 0.4473333333333333,
-    "stage": "NativePASS; GPU checkpointSTOP rc7 pending exact native31 baseline decision. Generic LTSC stdVGA install/checkPASS/sealed15:08:44UTC, no QEMU processes, exactnativeXidlogunchanged. NVIDIA bind/ON/LinuxguestUNRUN; teardown next to avoid idle lease.",
+    "stage": "CLOSED/API-absent15:11:49UTC: nativeAD106595PASS; genericLTSCsetup/checkPASS/sealed. GPU checkpointSTOP native31-baseline decision unanswered; Linuxguest/NVIDIAbind/ONUNRUN. All rental disks disposed; no QEMU before teardown.",
     "gpu_offer_ram_mb": 16380,
     "actual_die": "AD106",
     "controller_pid": 1634,
@@ -86,6 +86,14 @@
     "media_exit": 0,
     "standard_vga_install_pid": 90624,
     "standard_vga_install_exit": 0,
-    "standard_vga_check_failures": 0
+    "standard_vga_check_failures": 0,
+    "absence_verified_utc": "2026-10-21T15:11:49.348162+00:00",
+    "credit_after_observed": 21.555282221362972,
+    "observed_account_credit_delta": 0.45785785870032214,
+    "elapsed_hours_until_absence": 1.130412046388889,
+    "runtime_cost_estimate_usd": 0.5056709887512962,
+    "cost_upper_bound_usd": 1.5056709887512962,
+    "cost_note": "Runtime estimate and shared-account credit delta are observations, not settled attribution. Budget guard reserves1USD for delayed transfer billing until invoices reconcile.",
+    "auto_destroy_cancelled_after_absence": true
   }
 ]
