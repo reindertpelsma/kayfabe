@@ -150,6 +150,11 @@ fn gr_segment(classes: &[u32]) -> Result<Vec<u32>, String> {
     Ok(words)
 }
 
+// Native CE fixture seam, separate from placement and execution.
+fn ce_segment(_host_ce_class: u32) -> Result<Vec<u32>, String> {
+    Ok(RUN31_CE.to_vec())
+}
+
 fn main() {
     let mut l = Checks::default();
     if let Err(e) = run(&mut l) {
@@ -575,7 +580,7 @@ fn run(l: &mut Checks) -> Result<(), String> {
         off: CHAN2,
         gp_get_cpu_stores: Cell::new(0),
     };
-    let mut c0 = RUN31_CE.to_vec();
+    let mut c0 = ce_segment(rm.ce_class_id())?;
     c0.extend(release(P2));
     let c1 = m(5, 0x0100, &[0]);
     stage(&walk, CHAN2, VA_CHAN, &[&c0, &c1])?;
