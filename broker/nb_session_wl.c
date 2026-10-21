@@ -2383,6 +2383,22 @@ static void xo_eval(struct nb_wl *w, const struct nb_wl_buf *fb,
         v.ptr_y = nb_xor_ptr_to_frame(w->ptr_fy, ny, dy, fb->h);
     }
     nb_xor_eval(&w->xo, &v, r);
+    {
+        /* Why the host pointer is shown or hidden over the guest, logged when the
+         * inputs of the decision change (hover mode hides it when the guest
+         * cursor is undefined/invisible, no frame is shown, or the enter serial
+         * is missing): a hidden cursor must be explainable from the log. */
+        static unsigned last_key = ~0u;
+        const unsigned key = (w->gcur && w->gcur->defined ? 1u : 0u) | (w->gcur && w->gcur->visible ? 2u : 0u) |
+                             (v.shown_ok ? 4u : 0u) | (v.ptr_inside ? 8u : 0u) | (v.serial_ok ? 16u : 0u) |
+                             (v.grabbed ? 32u : 0u) | ((unsigned)r->act.ptr << 8);
+
+        if (nb_verbose && key != last_key) {
+            last_key = key;
+            nb_log("cursor: decision defined=%d visible=%d frame_shown=%d pointer_on_content=%d enter_serial=%d grabbed=%d -> host pointer action %d",
+                   !!(key & 1), !!(key & 2), !!(key & 4), !!(key & 8), !!(key & 16), !!(key & 32), (int)r->act.ptr);
+        }
+    }
     if (r->choice_changed && (r->act.choice == NB_XC_COMPOSED ||
                               r->act.choice == NB_XC_APPROX)) {
         char line[256];

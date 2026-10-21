@@ -1455,8 +1455,92 @@ static void test_hot_scripted_stream(void)
     CHECK(hot_cur.hot_x == 0 && hot_cur.hot_y == 0, "not latched by one settled MOVE");
 }
 
+
+/* ── the host pointer image is cropped to the drawn part ─────────────────── */
+static void crop_fill(struct nb_cursor *c, uint32_t w, uint32_t h, uint32_t hx, uint32_t hy)
+{
+    memset(c, 0, sizeof *c);
+    c->gen = 7;
+    c->defined = true;
+    c->visible = true;
+    c->w = w;
+    c->h = h;
+    c->hot_x = hx;
+    c->hot_y = hy;
+}
+
+static unsigned crop_count(const struct nb_cursor *c)
+{
+    unsigned n = 0, i;
+
+    for (i = 0; i < c->w * c->h; i++) {
+        n += c->px[i] != 0;
+    }
+    return n;
+}
+
+static void test_crop(void)
+{
+    struct nb_cursor *s = calloc(1, sizeof *s), *d = calloc(1, sizeof *d);
+    uint32_t x, y;
+
+    /* an arrow-sized block at (40,50), 12x19, hot spot at its top-left */
+    crop_fill(s, 256, 256, 40, 50);
+    for (y = 50; y < 69; y++) {
+        for (x = 40; x < 52; x++) {
+            s->px[y * 256 + x] = 0xff000000u | (y * 256 + x);
+        }
+    }
+    CHECK(nb_cursor_crop(s, d), "an arrow in a big buffer is cropped");
+    CHECK(d->w >= 12 && d->w <= 14 && d->h >= 19 && d->h <= 21,
+          "the crop is the drawn box plus at most a one pixel margin (%ux%u)", d->w, d->h);
+    CHECK(d->hot_x < d->w && d->hot_y < d->h, "the hot spot is inside the crop");
+    CHECK(d->px[d->hot_y * d->w + d->hot_x] == s->px[50 * 256 + 40],
+          "the hot pixel is the same pixel as before (offset applied to the hot spot too)");
+    CHECK(crop_count(d) == crop_count(s), "no drawn pixel is lost or invented");
+    CHECK(d->gen == s->gen && d->defined && d->visible && !d->xor, "gen/defined/visible carried, no xor mask");
+
+    /* a hot spot outside the drawn box is still inside the crop */
+    crop_fill(s, 256, 256, 3, 4);
+    for (y = 100; y < 110; y++) {
+        for (x = 120; x < 130; x++) {
+            s->px[y * 256 + x] = 0xff112233u;
+        }
+    }
+    CHECK(nb_cursor_crop(s, d), "cropped with a distant hot spot");
+    CHECK(d->hot_x == 3 && d->hot_y == 4 && d->w > 120 && d->h > 100,
+          "the crop grows to contain the hot spot (hot %u,%u size %ux%u)", d->hot_x, d->hot_y, d->w, d->h);
+    CHECK(crop_count(d) == 100, "all 100 drawn pixels survive");
+
+    /* nothing drawn: nothing to crop to */
+    crop_fill(s, 256, 256, 0, 0);
+    CHECK(!nb_cursor_crop(s, d), "a fully clear image is not cropped");
+
+    /* already tight: a full 32x32 block */
+    crop_fill(s, 32, 32, 5, 5);
+    for (x = 0; x < 32 * 32; x++) {
+        s->px[x] = 0xff00ff00u;
+    }
+    CHECK(!nb_cursor_crop(s, d), "an image with no clear border is left alone");
+
+    /* undefined */
+    crop_fill(s, 256, 256, 0, 0);
+    s->defined = false;
+    s->px[100] = 0xff000000u;
+    CHECK(!nb_cursor_crop(s, d), "an undefined cursor is not cropped");
+
+    /* the box touching the image edge: no read or write outside the image */
+    crop_fill(s, 64, 64, 63, 63);
+    s->px[63 * 64 + 63] = 0xffffffffu;
+    CHECK(nb_cursor_crop(s, d) && d->w <= 2 && d->h <= 2 && crop_count(d) == 1,
+          "an edge pixel crops to at most 2x2 without leaving the image (%ux%u)", d->w, d->h);
+    free(s);
+    free(d);
+}
+
 int main(void)
 {
+    test_crop();
     test_hot_scripted_stream();
     test_hot_latch();
     test_move();

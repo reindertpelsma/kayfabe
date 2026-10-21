@@ -719,3 +719,9 @@ uint32_t nb_cursor_hash(const struct nb_cursor *c)
     }
     return h;
 }
+
+bool nb_cursor_crop(const struct nb_cursor *src, struct nb_cursor *dst)
+{
+    (void)src; (void)dst;
+    return false;   /* EXPECTED RED stub */
+}
