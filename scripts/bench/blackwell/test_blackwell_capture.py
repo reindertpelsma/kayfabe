@@ -1,6 +1,6 @@
 """Tests for the Blackwell resume capture helpers (dump header, key-line times, Xid policy).
 
-Run: python3 -I -m unittest scripts/bench/blackwell/test_blackwell_capture.py  (from the repo root)
+Run: cd scripts/bench/blackwell && python3 -m unittest test_blackwell_capture
 """
 import json
 import struct
