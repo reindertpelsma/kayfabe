@@ -401,10 +401,6 @@ fn scan_end(
 fn head<T>(s: &[T], n: usize) -> &[T] {
     s.get(..n.min(s.len())).unwrap_or_default()
 }
-/// One little-endian word from exactly four bytes; any other length is `None`.
-fn le_word(w: &[u8]) -> Option<u32> {
-    <[u8; 4]>::try_from(w).ok().map(u32::from_le_bytes)
-}
 /// `base + 8 * idx`, saturating: a slot address that cannot exist makes the read that uses it refuse.
 fn ring_slot_va(base: u64, idx: u32) -> u64 {
     base.saturating_add(u64::from(idx).saturating_mul(8))
@@ -1497,7 +1493,12 @@ impl Pump {
             let mut backing_now = None;
             let fresh: Option<Vec<u32>> = self.snapshot(me, r, x.va, x.bytes).ok().map(|s| {
                 backing_now = Some((s.describe(), s.epoch));
-                s.bytes.chunks_exact(4).filter_map(le_word).collect()
+                s.bytes
+                    .as_chunks::<4>()
+                    .0
+                    .iter()
+                    .map(|w| u32::from_le_bytes(*w))
+                    .collect()
             });
             let moved = backing_now.as_ref().map(|b| b.0 != x.backing.0);
             let epoch = backing_now.as_ref().map(|b| (x.backing.1, b.1));
@@ -1779,7 +1780,12 @@ impl Pump {
                         pb.epoch,
                         s.epoch
                     ));
-                    s.bytes.chunks_exact(4).filter_map(le_word).collect()
+                    s.bytes
+                        .as_chunks::<4>()
+                        .0
+                        .iter()
+                        .map(|w| u32::from_le_bytes(*w))
+                        .collect()
                 });
             let (changed, first) = words2.as_ref().map_or((None, None), |w2| {
                 let diffs = differing(w2, words);
@@ -4098,6 +4104,41 @@ mod tests {
                 .unwrap_or_else(|| panic!("pin: {o:?} missing or out of order in user_ring_serve"));
             at += i + o.len();
         }
+    }
+
+    /// The trace helpers that replaced indexing and `+` on guest-sized values never panic and never wrap.
+    #[test]
+    fn trace_helpers_clamp_instead_of_panicking() {
+        // `head`: shorter than the cap, exactly the cap, longer, empty.
+        assert_eq!(head(&[1u32, 2, 3], 8), [1, 2, 3]);
+        assert_eq!(head(&[1u32, 2, 3], 3), [1, 2, 3]);
+        assert_eq!(head(&[1u32, 2, 3], 2), [1, 2]);
+        assert_eq!(head::<u32>(&[], 5), [] as [u32; 0]);
+        assert_eq!(head(&[1u32, 2], usize::MAX), [1, 2]);
+        // `ring_slot_va`: the slot address saturates, so the read that uses it refuses.
+        assert_eq!(ring_slot_va(0x1000, 3), 0x1018);
+        assert_eq!(ring_slot_va(u64::MAX, 1), u64::MAX);
+        assert_eq!(ring_slot_va(u64::MAX - 4, u32::MAX), u64::MAX);
+        // `differing`: the common prefix only, whatever the lengths.
+        assert_eq!(differing(&[1, 2, 3], &[1, 9, 3]), [1]);
+        assert_eq!(differing(&[1, 2, 3, 4], &[1, 2]), Vec::<usize>::new());
+        assert_eq!(differing(&[], &[1]), Vec::<usize>::new());
+        // `after`: a deadline the clock cannot represent is "due at once", never a panic.
+        let now = std::time::Instant::now();
+        assert_eq!(after(now, std::time::Duration::ZERO), now);
+        assert!(after(now, std::time::Duration::from_millis(5)) > now);
+        assert_eq!(after(now, std::time::Duration::MAX), now);
+    }
+
+    /// `words_text` numbers its rows by byte offset; the multiplication saturates rather than overflows.
+    #[test]
+    fn words_text_rows_are_numbered_by_byte_offset() {
+        let mut out = String::new();
+        words_text(&mut out, &[0xa, 0xb, 0xc, 0xd, 0xe, 0xf, 0x10, 0x11, 0x12]);
+        let rows: Vec<&str> = out.lines().collect();
+        assert_eq!(rows.len(), 2);
+        assert!(rows[0].starts_with("      0: 0000000a"));
+        assert!(rows[1].starts_with("      8: 00000012"));
     }
 
     /// The arm path registers its lost admission lock the same way.

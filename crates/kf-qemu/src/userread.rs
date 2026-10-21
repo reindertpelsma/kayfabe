@@ -408,6 +408,41 @@ mod tests {
         assert!(snapshot(&rows, &log, &ram, generation, 0x100004, bytes, &mut NoStore).is_err());
     }
 
+    /// A row whose backing offset cannot hold the requested span (offset + length would wrap) is refused,
+    /// as is a request that starts past the last row; neither reads, panics or loops.
+    #[test]
+    fn rows_with_unrepresentable_backing_offsets_refuse() {
+        let (ram, _, rows, log, generation) = fixture();
+        rows.write().unwrap().clear();
+        rows.write().unwrap().insert(
+            0x10000,
+            (0x2000, u64::MAX - 0x10, true, MapPerm::READ_WRITE),
+        );
+        assert_eq!(
+            snapshot(&rows, &log, &ram, generation, 0x10000, 0x100, &mut NoStore).err(),
+            Some(Refusal::Bounds)
+        );
+        // Starting at the second page of the row: the offset still wraps.
+        assert_eq!(
+            snapshot(&rows, &log, &ram, generation, 0x11000, 0x100, &mut NoStore).err(),
+            Some(Refusal::Bounds)
+        );
+        // Past the end of the only row: missing, by address.
+        assert_eq!(
+            snapshot(&rows, &log, &ram, generation, 0x12000, 0x100, &mut NoStore).err(),
+            Some(Refusal::Missing(0x12000))
+        );
+        // A span that runs off the end of the row: the hole is named.
+        rows.write().unwrap().clear();
+        rows.write()
+            .unwrap()
+            .insert(0x10000, (0x1000, 0, true, MapPerm::READ_WRITE));
+        assert_eq!(
+            snapshot(&rows, &log, &ram, generation, 0x10f00, 0x200, &mut NoStore).err(),
+            Some(Refusal::Missing(0x11000))
+        );
+    }
+
     #[test]
     fn full_eight_mib_ring_at_four_kib_grain_is_bounded_and_admitted() {
         let (ram, _, rows, log, generation) = fixture();

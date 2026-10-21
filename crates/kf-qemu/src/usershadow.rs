@@ -51,17 +51,16 @@ impl From<Refusal> for Class {
 
 /// CPU observation allocation is bounded independently of a guest GP descriptor.
 pub(super) fn decode_words(bytes: &[u8], maximum: usize) -> Result<Vec<u32>, &'static str> {
-    if bytes.len() > maximum || bytes.len() % 4 != 0 {
+    if bytes.len() > maximum || !bytes.len().is_multiple_of(4) {
         return Err("observation word budget/alignment");
     }
     let mut words = Vec::new();
     words
         .try_reserve_exact(bytes.len() / 4)
         .map_err(|_| "observation allocation")?;
-    for b in bytes.chunks_exact(4) {
-        // `chunks_exact(4)` yields only 4-byte chunks; a chunk of any other length is refused, never indexed.
-        let word = <[u8; 4]>::try_from(b).map_err(|_| "observation word alignment")?;
-        words.push(u32::from_le_bytes(word));
+    // The length is a multiple of four (checked above), so `as_chunks` leaves no remainder.
+    for b in bytes.as_chunks::<4>().0 {
+        words.push(u32::from_le_bytes(*b));
     }
     Ok(words)
 }
