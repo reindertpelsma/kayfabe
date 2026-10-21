@@ -64,6 +64,21 @@ Heaven D3D11 clients (three fresh boots, >=12 minutes each); the earlier mixed
 Vulkan workload also has a distinct TDR class. Capture CPU/thread state, ring
 state, and all PROGRESS diagnostics; no strand line alone proves progress.
 
+H-WIN-BLOCK (before Windows captures): a remaining freeze is caused by a
+worker/drainer blocked in a host RM ioctl or on a shared lock. FALSIFIER for
+a fully observed freeze: those threads remain runnable or in their ordinary
+epoll waits, and no matching long ioctl/futex or blocked-stack interval covers
+the silence. One-second all-thread snapshots retain the pre-trigger interval;
+10-second strace and filtered scheduler stacks supplement them. An incomplete
+trace cannot falsify this hypothesis. M has no worker_stuck detector.
+
+H-WIN-TRANSLATED (before Windows captures): a kernel Translated ring loses its
+final wake. FALSIFIER for a fully observed candidate: the relevant Translated
+ring continues draining through the freeze or has no outstanding work. The
+existing USERD probe covers USER channels, so its silence alone cannot prove
+a Translated-ring stall. Classify unobserved ring state as unknown. A subsequent
+HW3 comparison uses the same workload, not the absence of a strand message.
+
 H-NOMAD-M: the verified M binary causes the reported score loss. FALSIFIER:
 fresh interleaved M-without-diagnostics scores do not consistently fall below
 production-without-diagnostics scores outside their observed run spread.
@@ -82,3 +97,10 @@ existing chaos hook only to schedule that window; no production edit, no
 private-word wait, no contention. A positive counter in this construction is
 a counter-attribution false positive, not evidence that every hardware hit is
 explained. Probe source remains outside ordinary product test targets.
+
+H-SN-OLD-RECEIPT (before inspecting saved result contents): the saved 2050
+result's internal timestamp falls in the verified 0d7ba743 run-3435 interval
+after the known two-hour guest-clock correction. FALSIFIER: a conflicting
+internal timestamp, a different test/hardware context, or an unreadable result.
+This can support a temporal association; a result without a QEMU revision
+cannot independently prove the binary identity. Fresh score arms remain unrun.

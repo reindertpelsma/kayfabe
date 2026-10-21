@@ -1,0 +1,15 @@
+FAST_SUITE_STARTED=2026-10-21T01:55:28+02:00 arms=30 budget=180s
+rev=?
+ARM                          VERDICT   secs  why
+--timer                      PASS      4s    4s
+FAST_CELL_ARM arm=timer verdict=PASS secs=4 client_ms=419
+--engines                    PASS      4s    4s
+FAST_CELL_ARM arm=engines verdict=PASS secs=4 client_ms=549
+--doorbell-census            PASS      5s    5s
+FAST_CELL_ARM arm=doorbell-census verdict=PASS secs=5 client_ms=640
+--gpu-info-sweep             PASS      4s    4s
+FAST_CELL_ARM arm=gpu-info-sweep verdict=PASS secs=4 client_ms=390
+--bus-info-sweep             PASS      7s    7s
+FAST_CELL_ARM arm=bus-info-sweep verdict=PASS secs=7 client_ms=3600
+--concurrency                PASS      7s    7s
+FAST_CELL_ARM arm=concurrency verdict=PASS secs=7 client_ms=3370

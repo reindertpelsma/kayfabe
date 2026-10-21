@@ -12,7 +12,14 @@ MEASURED (read-only host log extraction, inherited runs): YT37 final work=366,
 carried=0, contended=0; YT50 final work=662, carried=0, contended=0. These are
 cumulative final summaries, not sums of the three summaries in each boot.
 
-INFERRED: a new normal ring arriving after a timed-out epoll_wait returns and
+MEASURED UPDATE 2026-10-21: the real-worker probe committed alongside these
+results reproduced this observation race twice on exact B'. Fresh direct-token
+work and fresh relay demand, each with an already-signalled doorbell, both
+incremented work=1 and timeouts_with_work=1 while completing successfully.
+Neither case had a Marker/Popped/Contended obligation. This proves the counters
+can count normal Work; it does not attribute the inherited hardware instances.
+
+Original INFERRED mechanism: a new normal ring arriving after a timed-out epoll_wait returns and
 before the next worker_pass can increment this counter despite a ready wake
 source. Likewise rang may be pop writeback, record/storage busy, demand, or a
 satisfied marker. Existing logs cannot attribute the 1028 hits to a wait type
@@ -37,11 +44,18 @@ name with the old LOOK_EVERY/budget lineage. Current M has none of Look/LookIn,
 LoopPolicy, set_park_net or may_retry. An unmodified overlay cannot grade the
 handoff lineage faithfully. Do not relabel it as the old budget lineage.
 
-CODE READ, harness blocker: inherited session3.sh uses a name-wide TERM pkill
+RESOLVED 2026-10-21, MEASURED: the amended owner grant authorized repairs;
+startup ownership and owned-child/descendant aborts now have EXPECTED RED
+commits, passing tests and at least two mutant killers for each change. The
+running cohort uses a lane-owned direct-child runner; native/fast uses the
+separately deployed descendant guardian. Inherited scripts remain read-only.
+
+Historical CODE READ, harness blocker: inherited session3.sh uses a name-wide TERM pkill
 on Xid; its run_fast_guest.sh unconditionally uses name-wide pkill -9 before
 startup. Neither proves process ownership. Neither has been executed by HW2.
 Options reported to owner: authorize tested lane-owned harness repair, or stop
-hardware work and restore previous production. Required approval is pending.
+hardware work and restore previous production. That earlier approval request
+was superseded by the complete amended owner briefing.
 
 CODE READ, M handoff blocking concern (H-M-HANDOFF-NONBLOCK): Handoff::register
 and take use a blocking Mutex<Vec<u32>>. Device::ram_add / ram_del now call
@@ -60,6 +74,13 @@ does not itself report an I7 violation. RS_STRICT=1 cannot promote an assertion
 that was skipped into coverage. The separate generated grade_stress G5 test
 does carry quiet_checked and asserts it. Do not use a random relay_stress
 holdout alone to claim idle-efficiency coverage.
+
+CODE READ, B' declared loosenings (design note section 5.4): I7 HARD to SOFT;
+I6 wake-in-flight and kernel-view exclusions; quiet-window preconditions and
+wakeup counts replacing park counts; seed 1 moved to ignored; ReadIndex i1
+bounded at six million states; lifecycle/lazy tests restated by GP_GET policy.
+The act-holder phantom-demand case remains red, and two three-worker explorer
+cases exceed their state budget. Our passing holdout does not erase those reds.
 
 MEASURED: exact B' did pass fresh strict random seeds 4294967296..4294967328
 (exclusive upper bound), infinite park, chaos-hooks: 32 seeds, zero failures,

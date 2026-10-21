@@ -64,7 +64,11 @@ def main():
     ap.add_argument("--port", type=int, default=39021)
     ap.add_argument("--seconds", type=int, default=7200)
     ap.add_argument("--perf", action="store_true", help="also record filtered scheduler callchains")
+    ap.add_argument("--userd-module", type=Path, help="existing read-only USERD probe module")
+    ap.add_argument("--lowmem", type=lambda x: int(x, 0), help="verified guest RAM split for Translated probe")
     args = ap.parse_args()
+    if args.userd_module and args.lowmem is None:
+        ap.error("--userd-module requires the verified --lowmem split")
     root = Path(args.root)
     root.mkdir(parents=True, exist_ok=True)
     sys.path.insert(0, args.scripts)
@@ -79,6 +83,11 @@ def main():
     sock.bind(("127.0.0.1", args.port))
     sock.settimeout(1)
     current, cpu, active, sequence, notifications = None, None, [], 0, 0
+    last_snapshot = 0
+    full_journals = set()
+    progress = None
+    progress_tail = ""
+    translated = None
     until = time.monotonic() + args.seconds
     try:
         with (root / "live-events.jsonl").open("a", buffering=1) as events:
@@ -96,6 +105,14 @@ def main():
                 selected = max(candidates, default=None)
                 target = (selected[1], selected[2]) if selected else None
                 if target != current:
+                    if translated and translated.poll() is None:
+                        translated.terminate()
+                        translated.wait(timeout=5)
+                    translated = None
+                    if progress:
+                        progress.close()
+                        progress = None
+                    progress_tail = ""
                     if cpu and cpu.poll() is None:
                         cpu.terminate()
                         cpu.wait(timeout=5)
@@ -103,6 +120,41 @@ def main():
                     if current:
                         pid, out = current
                         cpu = subprocess.Popen([sys.executable, args.kvmthreads, str(pid), str(args.seconds), str(out / "thread-cpu.tsv")])
+                        try:
+                            stderr = Path(f"/proc/{pid}/fd/2").resolve()
+                            if stderr.is_file():
+                                progress = stderr.open(errors="replace")
+                        except OSError:
+                            pass  # the verified VM may have just exited
+                        if progress and args.userd_module:
+                            translated = subprocess.Popen([
+                                sys.executable, str(Path(__file__).with_name("translated_probe.py")),
+                                "--pid", str(pid), "--log", str(stderr),
+                                "--out", str(out / "translated.jsonl"),
+                                "--userd-module", str(args.userd_module), "--lowmem", str(args.lowmem),
+                                "--seconds", str(args.seconds),
+                            ], stdout=(out / "translated-status.txt").open("w"), stderr=subprocess.STDOUT)
+                if progress and current:
+                    lines = (progress_tail + progress.read(4 * 1024 * 1024)).split("\n")
+                    progress_tail = lines.pop()[-16384:]
+                    selected_lines = [line[:16384] for line in lines if "PROGRESS_" in line or "worker_stuck" in line]
+                    journal = current[1] / "progress-live.jsonl"
+                    if selected_lines and (not journal.exists() or journal.stat().st_size < 8 * 1024 * 1024):
+                        with journal.open("a") as f:
+                            for line in selected_lines:
+                                f.write(json.dumps(dict(observed_epoch=time.time(), line=line)) + "\n")
+                # Retain quiet/blocked threads too, including the seconds before
+                # the live monitor can first detect a four-second silence.
+                if current and time.monotonic() - last_snapshot >= 1:
+                    last_snapshot = time.monotonic()
+                    pid, out = current
+                    journal = out / "thread-state.jsonl"
+                    if not journal.exists() or journal.stat().st_size < 64 * 1024 * 1024:
+                        with journal.open("a") as f:
+                            f.write(json.dumps(snapshot(pid)) + "\n")
+                    elif journal not in full_journals:
+                        full_journals.add(journal)
+                        events.write(json.dumps(dict(snapshot_limit=True, epoch=time.time(), run=out.name)) + "\n")
                 for proc, end, out, pid in list(active):
                     if time.monotonic() >= end or proc.poll() is not None:
                         if proc.poll() is None:
@@ -122,7 +174,7 @@ def main():
                 parsed = parse_trigger(text)
                 entry = dict(epoch=time.time(), notification=text, parsed=parsed, run=str(current[1].name) if current else None)
                 events.write(json.dumps(entry) + "\n")
-                if not parsed or not current or active or sequence >= 32:
+                if not parsed or not current or active or sequence >= 128:
                     continue
                 pid, run_dir = current
                 sequence += 1
@@ -144,6 +196,11 @@ def main():
                                                 stderr=(out / "perf-status.txt").open("w"), preexec_fn=limit_trace)
                         active.append((perf, time.monotonic() + 10, out, pid))
     finally:
+        if translated and translated.poll() is None:
+            translated.terminate()
+            translated.wait(timeout=5)
+        if progress:
+            progress.close()
         for proc, _, _, _ in active:
             if proc.poll() is None:
                 proc.terminate()

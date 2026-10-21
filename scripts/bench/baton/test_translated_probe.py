@@ -40,6 +40,22 @@ class TranslatedProbe(unittest.TestCase):
         state.line("kf3: TSPACE-RETIRE tok=0x3 host=0x4 key=VasKey(7)")
         self.assertEqual(state.sample(lambda *_: self.fail("retired channel")), [])
 
+    def test_old_retirement_cannot_remove_replacement(self):
+        state = load().TranslatedLog()
+        state.line(birth())
+        state.line(birth(token="0x5"))
+        state.line("kf3: TSPACE-RETIRE tok=0x3 host=0x4 key=VasKey(7)")
+        rows = state.sample(lambda *_: struct.pack("<II", 15, 2))
+        self.assertEqual(len(rows), 1)
+        self.assertEqual((rows[0]["token"], rows[0]["delta"]), (5, 3))
+
+    def test_unreadable_pair_stays_unknown(self):
+        state = load().TranslatedLog()
+        state.line(birth())
+        rows = state.sample(lambda *_: None)
+        self.assertEqual(rows[0]["status"], "unreadable")
+        self.assertNotIn("put", rows[0])
+
 
 if __name__ == "__main__":
     unittest.main()

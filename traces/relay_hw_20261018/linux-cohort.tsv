@@ -1,0 +1,13 @@
+tag	arm	boots	pairs	stalls_ge_1_2_4s	max_gap_s	strand_starts	backstop_work_carried_contended	timeouts_with_work	unannounced_spins	handoff_registered_rung_retried	xid_before_after	failed
+H2C01	C	1	2	1/1/1	73.396652	1	0/0/1	15	-	-	25/25	False
+H2C04	C	1	2	0/0/0	0.013326	0	0/0/0	9	-	-	25/25	False
+H2C05	C	1	2	0/0/0	0.013629	0	0/0/0	27	-	-	25/25	False
+H2C08	C	1	2	1/1/0	2.624005	1	1/0/1	23	-	-	25/25	False
+H2C09	C	1	2	0/0/0	0.012421	0	0/0/0	35	-	-	25/25	False
+H2C12	C	1	2	1/1/1	6.567470	1	0/0/1	47	-	-	25/25	False
+H2M02	M	1	2	0/0/0	0.012068	0	0/0/0	0	743646	754/754/626	25/25	False
+H2M03	M	1	2	0/0/0	0.012089	0	0/0/0	0	880411	706/706/579	25/25	False
+H2M06	M	1	2	0/0/0	0.012094	0	0/0/0	0	985355	669/669/577	25/25	False
+H2M07	M	1	2	0/0/0	0.012587	0	0/0/0	0	17077785	807/807/695	25/25	False
+H2M10	M	1	2	0/0/0	0.012159	0	0/0/0	0	827765	680/680/560	25/25	False
+H2M11	M	1	2	0/0/0	0.012190	0	0/0/0	0	1051072	822/822/723	25/25	False
