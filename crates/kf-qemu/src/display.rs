@@ -112,39 +112,36 @@ fn armed_defaults_on() -> bool {
     *ON.get_or_init(|| std::env::var("KF3_DISPLAY_ARMED_DEFAULTS").is_ok_and(|v| v == "1"))
 }
 
-/// ⚠ EXPERIMENTS (default off, 2026-10-09, H-mirror; `KF3_DISPLAY_LUT_MIRROR=1`,
-/// `KF3_DISPLAY_ILUT_OFFSET_256=1`, read once; `traces/windows_reset_20261009/`). `[measured,
-/// runs 98/99, RTX 4070]` Windows' first colour program (window 0 ILUT and head 0 OLUT, control
-/// `0x4050a` = DIRECT10 + MIRROR; ILUT offset `0x21`) is refused by the SDR decoder, the refusal
-/// halts every display channel, no later flip or core update is consumed, and ~17.5 s later the
-/// guest resets the display and bugchecks 0x116. See `kf_disp::color::Experiments` for what each
-/// flag changes and why it is exact.
+/// CODE READ: production LUT decoder settings, read once. The production launcher enables
+/// both existing rules; `=0` keeps each old decoder arm available for research.
+/// Source derivation and the bounded MIRROR admission are in `kf_disp::color::Experiments`;
+/// no captured caps page is enabled by these defaults.
 fn color_experiments() -> kf_disp::color::Experiments {
     static X: std::sync::OnceLock<kf_disp::color::Experiments> = std::sync::OnceLock::new();
     *X.get_or_init(|| {
-        let on = |n: &str| std::env::var(n).is_ok_and(|v| v == "1");
+        let on = |n: &str| std::env::var(n).map_or(true, |v| v != "0");
         let x = kf_disp::color::Experiments {
             lut_mirror: on("KF3_DISPLAY_LUT_MIRROR"),
             ilut_offset_256: on("KF3_DISPLAY_ILUT_OFFSET_256"),
         };
         if x.lut_mirror {
             eprintln!(
-                "kf3: display: EXPERIMENT KF3_DISPLAY_LUT_MIRROR=1 — MIRROR accepted on DIRECT ILUT/OLUT where no negative input can reach it"
+                "kf3: display: MIRROR accepted on DIRECT ILUT/OLUT where no negative input can reach it (KF3_DISPLAY_LUT_MIRROR=0 selects the old arm)"
             );
         }
         if x.ilut_offset_256 {
             eprintln!(
-                "kf3: display: EXPERIMENT KF3_DISPLAY_ILUT_OFFSET_256=1 — SET_OFFSET_ILUT read in 256-byte units (as OLUT/TMO)"
+                "kf3: display: SET_OFFSET_ILUT read in 256-byte units, as OLUT/TMO (KF3_DISPLAY_ILUT_OFFSET_256=0 selects the old byte-offset arm)"
             );
         }
         x
     })
 }
 
-// Keep the configured SDR arm separate from GPU bring-up so the shipped configuration
+// CODE READ: keep the configured SDR arm separate from GPU bring-up so the shipped configuration
 // can be exercised by the GPU-free colour regression tests.
 fn sdr_color_on() -> bool {
-    std::env::var("KF3_DISPLAY_SDR_COLOR").as_deref() == Ok("1")
+    std::env::var("KF3_DISPLAY_SDR_COLOR").map_or(true, |v| v != "0")
 }
 
 /// `nvkms-evo3.c:1437-1438`'s default `MIN_FRAME_IDLE` (H-armeddefault): leading, trailing lines.

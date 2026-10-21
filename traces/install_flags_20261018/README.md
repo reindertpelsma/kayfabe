@@ -43,3 +43,31 @@ MEASURED: `nice -n 19 make -C broker -j2 check` completed successfully with the 
 capabilities reported by make. Its built-in checks include 80,752 XOR and 566,237 tick assertions;
 **29 XOR and 28 tick mutants** were each killed by >=2 distinct checks. This is local protocol/unit
 coverage, not compositor import/presentation or hardware validation.
+
+## Colour-default proof
+
+MEASURED: a behavior-preserving helper extraction passed all 370 `kf-qemu` library tests.
+Test-only EXPECTED RED commit `ff4cbeec6` then added 8 isolated-process checks: **2 passed,
+6 failed** on the prior defaults. The explicit `=0` legacy arm and explicit `=1` production
+profile already passed. With the three production defaults selected: **8/8 pass**.
+
+MEASURED: each mutant reverts one selection independently, leaving the other two fixed.
+Injection requires one exact occurrence in production code; the outer suite must reach exactly
+8 tests, return the test-failure exit code, and fail at least 2. The fixed file is restored in
+`finally`, followed by a restored-default 8/8 run.
+
+| Mutant | Independent failing tests | Result |
+|---|---|---|
+| Restore opt-in SDR | absent setting selects pipeline; empty setting keeps production default | 2, KILLED |
+| Restore opt-in MIRROR | source-derived input LUT decode; separate output LUT decode | 2, KILLED |
+| Restore opt-in ILUT units | Turing DMA binding/bounds; Ada DMA binding/bounds | 2, KILLED |
+
+MEASURED instrumentation note: the first SDR accounting attempt read an individual child's
+one-failure summary; the outer suite was already 6 passed / 2 failed. The runner was corrected
+to require the final outer summary and 8 reached tests; all three mutants were then run with
+that accounting. The gate remains >=2 distinct failed tests, without counting duplicate child output.
+
+MEASURED: `cargo clippy --release -j2 -p kf-qemu --all-targets --message-format=json` completed
+before/after: **348 warning diagnostics -> 348, 0 added**, comparing package, lint code, primary
+file and message multiplicities while ignoring line shifts. Existing warning debt was not changed.
+Rustfmt checks pass for the changed Rust files. No hardware compatibility claim follows.
