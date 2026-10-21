@@ -8,7 +8,7 @@ export const env = {RENTING_ENABLED:'true',OWNER_GITHUB_ID:owner,REPOSITORY:repo
   WORKER_URL:'https://broker.example',APPROVAL_MODE:'owner_push_or_review',RENT_DRAFTS:'false',
   CREDIT_RESERVE_USD:'8',MAX_PRICE_USD_HOUR:'0.5',TTL_MINUTES:'150',DAILY_RENTALS:'4',
   DAILY_SPEND_USD:'3',ROLLING_SPEND_USD:'30',SHA_GAP_HOURS:'24',
-  VAST_API_KEY:'mock-vast-binding',GITHUB_READ_TOKEN:'mock-read-binding'};
+  VAST_API_KEY:'mock-vast-binding'};
 const pair = await webcrypto.subtle.generateKey({name:'RSASSA-PKCS1-v1_5',modulusLength:2048,
   publicExponent:new Uint8Array([1,0,1]),hash:'SHA-256'},true,['sign','verify']);
 export const jwk = {...await webcrypto.subtle.exportKey('jwk',pair.publicKey),kid:'test-key',alg:'RS256',use:'sig'};
@@ -35,8 +35,8 @@ export class MockCloud {
   githubError=0; vastError=0; logReady=true; logText='building\n'; logStatus=200; logHeaders={};
   run={id:123,run_attempt:1,event:'pull_request',head_sha:sha,head_branch:'owner-pr',
     pull_requests:[{number:7,head:{sha}}],actor:{id:42},triggering_actor:{id:42},status:'in_progress',repository:{full_name:repo}};
-  prs=[{number:7,state:'open',draft:false,user:{id:42},head:{sha,ref:'owner-pr',repo:{full_name:repo}},base:{repo:{full_name:repo}}}];
-  reviews=[]; reviewPages=null;
+  prs=[{number:7,state:'open',draft:false,user:{id:42},head:{sha,ref:'owner-pr',repo:{full_name:repo}},base:{ref:'master',repo:{full_name:repo}},changed_files:1}];
+  reviews=[]; reviewPages=null; files=[{filename:'crates/kf-core/src/lib.rs',status:'modified'}]; filePages=null; filesError=0;
   offer={id:5,verified:true,vms_enabled:true,rentable:true,rented:false,num_gpus:1,
     gpu_name:'RTX_4070',reliability:.999,disk_space:200};
   instances=new Map([['777',{id:777,label:'owner-dev'}],['888',{id:888,label:'kf-ci-unrecorded'}]]);
@@ -47,6 +47,8 @@ export class MockCloud {
     if(u.hostname==='api.github.com'){
       if(this.githubError)return new Response('PRIVATE-UPSTREAM', {status:this.githubError});
       if(/\/actions\/runs\/\d+$/.test(u.pathname))return Response.json(this.run);
+      if(/\/commits\/[a-f0-9]+$/.test(u.pathname))return Response.json({sha:this.run.head_sha});
+      if(/\/pulls\/\d+\/files$/.test(u.pathname)){if(this.filesError)return new Response('PRIVATE-UPSTREAM',{status:this.filesError});return Response.json(this.filePages?.[Number(u.searchParams.get('page')||1)-1]??this.files);}
       if(/\/commits\/[a-f0-9]+\/pulls$/.test(u.pathname))return Response.json(this.prs);
       if(/\/pulls\/[0-9]+$/.test(u.pathname))return Response.json(this.prs.find(p=>String(p.number)===u.pathname.split('/').at(-1)));
       if(/\/pulls\/7\/reviews$/.test(u.pathname))return Response.json(this.reviewPages?.[Number(u.searchParams.get('page')||1)-1]||this.reviews);
@@ -83,9 +85,9 @@ export async function setup(overrides={}) {
   let service=createService({env:bindings,storage,fetch:cloud.fetch,now:()=>time.value,random:()=>nonce});
   const harness={cloud,storage,time,bindings,get service(){return service;},
     restart(){service=createService({env:bindings,storage,fetch:cloud.fetch,now:()=>time.value,random:()=>nonce});},
-    async call(path='/rent',{claims={},body,method=path.startsWith('/status')?'GET':'POST',token}={}){
+    async call(path='/rent',{claims={},body,method=path.startsWith('/status')?'GET':'POST',token,ghToken='mock-job-token'}={}){
       const authorization=token??await jwt(claims);
-      return service.fetch(new Request(bindings.WORKER_URL+path,{method,headers:{Authorization:'Bearer '+authorization},...(body===undefined?{}:{body:JSON.stringify(body)})}));
+      return service.fetch(new Request(bindings.WORKER_URL+path,{method,headers:{Authorization:'Bearer '+authorization,...(ghToken?{'X-GH-Token':ghToken}:{})},...(body===undefined?{}:{body:JSON.stringify(body)})}));
     }};
   return harness;
 }

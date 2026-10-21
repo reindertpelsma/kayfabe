@@ -5,3 +5,4 @@ import './logs.test.js';
 import './workflow.test.js';
 import './integration.test.js';
 import './client.test.js';
+import './eligibility.test.js';
