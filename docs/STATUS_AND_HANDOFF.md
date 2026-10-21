@@ -1,5 +1,17 @@
 # Status and handoff — where kayfabe v3 stands, and how to resume
 
+## UPDATE 2026-10-22 — G1 oversized-descriptor design stop (no runtime change)
+
+CODE READ: the staging budget is applied before Pointer/Scan selection and is
+checked again by the native descriptor writer. INFERRED: an authored
+continuation needs an explicit contract for the opaque Pointer history and
+staging reuse; arbitrary native splits can change END_PB_SEGMENT semantics.
+G1 stopped under its lane's no-improvised-design-change rule. Options, exact
+current semantics and outstanding tests/hardware work:
+[`V3_USER_DESCRIPTOR_BOUND_20261022.md`](design/V3_USER_DESCRIPTOR_BOUND_20261022.md).
+MEASURED: no product edits, Rust tests, clippy, mutants or hardware runs.
+Resume on `codex/descriptor-bound-20261022`; this is not a TDR fix.
+
 ## UPDATE 2026-10-22 — run 3440 SPECviewperf TDR research (T1)
 
 MEASURED: `codex/tdr-analysis-20261022` preserves twelve USER-ring
