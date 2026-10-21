@@ -2622,6 +2622,26 @@ static bool gc_render(struct nb_wl *w)
     w->gc_geom = g;
     w->gc_bgeom = b;
     if (nb_verbose) {
+        /* what the image really holds, so "invisible" can be told from "empty": counts by alpha and the alpha box */
+        uint32_t k, n_nz = 0, n_a = 0, n_opq = 0, ax0 = c->w, ay0 = c->h, ax1 = 0, ay1 = 0;
+
+        for (k = 0; k < c->w * c->h; k++) {
+            const uint32_t v = c->px[k], a = v >> 24;
+
+            n_nz += v != 0;
+            n_a += a != 0;
+            n_opq += a == 255;
+            if (a != 0) {
+                const uint32_t px_x = k % c->w, px_y = k / c->w;
+
+                ax0 = px_x < ax0 ? px_x : ax0;
+                ax1 = px_x > ax1 ? px_x : ax1;
+                ay0 = px_y < ay0 ? px_y : ay0;
+                ay1 = px_y > ay1 ? px_y : ay1;
+            }
+        }
+        nb_log("cursor: image content %ux%u: %u non-zero px, %u with alpha, %u opaque, alpha box x %u..%u y %u..%u, xor=%d",
+               c->w, c->h, n_nz, n_a, n_opq, ax0, ax1, ay0, ay1, (int)c->xor);
         nb_log("cursor: host pointer image %ux%u (buffer %ux%u, buffer_scale %u), hot spot %u,%u of the "
                "guest's %u,%u, frame fit %d/%d, output scale %u/120", g.w, g.h, b.w, b.h, b.w / g.w,
                g.hot_x, g.hot_y, c->hot_x, c->hot_y, w->fit_w, w->buf_w, w->scale_120);
