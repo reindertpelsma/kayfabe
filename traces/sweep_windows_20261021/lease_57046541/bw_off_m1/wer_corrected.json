@@ -1,0 +1,59 @@
+{
+  "run": "bw_off_m1",
+  "readonly": true,
+  "reports": [
+    {
+      "path": "ReportQueue/Kernel_116_ac151a17e9be904cd57fb4c430de7291be6a5ef_00000000_5e2baf9f-9101-498e-b1a4-52a34fbcd8ec/Report.wer",
+      "source_sha256": "103e5ae3720675ff1c83014f74a043059936b53da4ed5c5a0b615d5485cefb6b",
+      "event_utc": "2026-10-21T13:45:43.829201+00:00",
+      "fields": {
+        "EventType": "BlueScreen",
+        "EventTime": "134370639438292015",
+        "ReportIdentifier": "5e2baf9f-9101-498e-b1a4-52a34fbcd8ec",
+        "Sig[0].Name": "Code",
+        "Sig[0].Value": "116",
+        "Sig[1].Name": "Parameter 1",
+        "Sig[1].Value": "ffff868ee2921010",
+        "Sig[2].Name": "Parameter 2",
+        "Sig[2].Value": "fffff80129944930",
+        "Sig[3].Name": "Parameter 3",
+        "Sig[3].Value": "ffffffffc000009a",
+        "Sig[4].Name": "Parameter 4",
+        "Sig[4].Value": "4",
+        "Sig[5].Name": "OS version",
+        "Sig[5].Value": "10_0_26100",
+        "Sig[6].Name": "Service Pack",
+        "Sig[6].Value": "0_0",
+        "Sig[7].Name": "Product",
+        "Sig[7].Value": "256_1"
+      }
+    },
+    {
+      "path": "ReportQueue/Kernel_141_d668e25488f0adcd97aa9166300dec77a16a2ce_00000000_1bc0c81a-34cd-4142-9048-1dbee01aa37e/Report.wer",
+      "source_sha256": "b8923c7c8e981ef675996d22615ed555bc91efa79d37ecd4876467f952b28524",
+      "event_utc": "2026-10-21T13:45:42.736825+00:00",
+      "fields": {
+        "EventType": "LiveKernelEvent",
+        "EventTime": "134370639427368254",
+        "ReportIdentifier": "1bc0c81a-34cd-4142-9048-1dbee01aa37e",
+        "Sig[0].Name": "Code",
+        "Sig[0].Value": "141",
+        "Sig[1].Name": "Parameter 1",
+        "Sig[1].Value": "ffff868ee29102e0",
+        "Sig[2].Name": "Parameter 2",
+        "Sig[2].Value": "fffff80129944580",
+        "Sig[3].Name": "Parameter 3",
+        "Sig[3].Value": "0",
+        "Sig[4].Name": "Parameter 4",
+        "Sig[4].Value": "ffff868edfc27080",
+        "Sig[5].Name": "OS version",
+        "Sig[5].Value": "10_0_26100",
+        "Sig[6].Name": "Service Pack",
+        "Sig[6].Value": "0_0",
+        "Sig[7].Name": "Product",
+        "Sig[7].Value": "256_1"
+      }
+    }
+  ],
+  "note": "Corrected noncapturing suffix projection; exact FILETIME retained; ISO resolution1microsecond. Original broken1601/null projection invalid."
+}

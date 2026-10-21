@@ -41,12 +41,26 @@
     "normalization": "trailing whitespace and newline only",
     "export_sha256": "a5c79ffceb519451adee901799c76d511584ef1dc649b258a185b6094839573f"
   },
+  "collect_bw_on_m1.txt": {
+    "rental_path": "/root/prov/collect_bw_on_m1.txt",
+    "original_bytes": 2852,
+    "original_sha256": "d96639fc16997303780a15621f8877c13b1d90b405c81c35897e0b9080f46790",
+    "normalization": "trailing whitespace and newline only",
+    "export_sha256": "96d9ef82f0525f0e47594b3cfde6c618e39128682cb3062f091e23f6118741ae"
+  },
   "collect_bw_on_m1.log": {
     "rental_path": "/root/prov/collect_bw_on_m1.log",
-    "original_bytes": 211,
-    "original_sha256": "a4aa92885dacb4b23c2722265793af5d84ff2afed329a075391f1f9f0f16253b",
+    "original_bytes": 561,
+    "original_sha256": "1f63193e766379f634cf6f743d8e801a5bc45a383a4237e557024eab3014384d",
     "normalization": "trailing whitespace and newline only",
-    "export_sha256": "a4aa92885dacb4b23c2722265793af5d84ff2afed329a075391f1f9f0f16253b"
+    "export_sha256": "ee38e9282b3dfadcbcf03ae9cd64202e45d22e2e0fcf6a0b7f57ea1dc9940985"
+  },
+  "public_analysis_bw_on_m1.txt": {
+    "rental_path": "/root/prov/public_analysis_bw_on_m1.txt",
+    "original_bytes": 371,
+    "original_sha256": "a4f2e6a1d6e294f5eb6aa7aa29f1c84723ba11f810bc6dfa2f955fe9425a9773",
+    "normalization": "trailing whitespace and newline only",
+    "export_sha256": "def5777caa1170bed0c78fe4a1b5c5d86f34fc593e7cd7773eac655939c1bf52"
   },
   "api.tsv": {
     "rental_path": "/root/prov/arms/bw_on_m1/api.tsv",

@@ -30,5 +30,13 @@
   "last_selector": "0xca7a fourthcursor",
   "actual_PROGRESS_STRAND_lines": 0,
   "host_xid_count_reported_by_harness": 0,
-  "interpretation": "Not the old0x116 TDR. LastRPC observed25ms after QMP fault timestamp reflects observation/buffering latency, not RPC generation after crash. No cause assigned to OLUT or M without isolated evidence. Public-symbol dump analysis pending on rental; original crash child preserved."
+  "interpretation": "Not the old0x116 TDR. LastRPC observed25ms after QMP fault timestamp reflects observation/buffering latency, not RPC generation after crash. No cause assigned to OLUT or M without isolated evidence. Public-symbol dump analysis pending on rental; original crash child preserved. Canonical RPC order recovered from immutable source with twoOther(4) records; original observer receipt preserved.",
+  "legacy_parsed_rpc_records": 276,
+  "complete_stream_rpc_records": 278,
+  "legacy_last_ordinal": 275,
+  "complete_stream_last_ordinal": 277,
+  "missing_original_observation_times_for_complete_ordinals": [
+    213,
+    219
+  ]
 }
