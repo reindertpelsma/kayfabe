@@ -1,0 +1,19 @@
+{
+  "run": 3438,
+  "rev": "0d7ba743",
+  "flags": "KF3_LIFECYCLE_COUNT=1 KF3_LIFECYCLE_PERIOD_S=5 KF3_TSG_MIRROR=0 KF3_DIAG_PROGRESS=1000 KF3_PROF=1",
+  "hostname": "kayfabe-windows",
+  "ready_cest": "2026-10-21T02:40:26+02:00",
+  "xid": 26,
+  "prof_armed": true,
+  "pointer_seen": true,
+  "lazy_observe": "put_cache=true observe_interval=16",
+  "diag_progress_supported": false,
+  "diag_progress_support_evidence": "CODE READ: absent from0d7ba743 source",
+  "test_helpers_running": 0,
+  "qemu_count": 1,
+  "native_target_absent": true,
+  "dev_target_absent": true,
+  "test_lease_released": true,
+  "owner_lifetime_lease": "intentionally held by owner launcher"
+}
