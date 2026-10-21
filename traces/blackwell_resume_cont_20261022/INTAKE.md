@@ -1,3 +1,5 @@
+STATUS UPDATE: ANSWERED, 2026-10-22 CEST. Missing pin resolved by exact authenticated-console/endpoint key match, strict SSH retained; evidence exported/pushed, lease destroyed/API-absent23:28:51UTC. Current memo: ../../docs/design/V3_BLACKWELL_CONTINUATION_20261022.md. Native unmatched32 discovered in final audit; no further hardware. Original intake below is historical.
+
 STATUS: LIVE-RESEARCH, 2026-10-21 23:20UTC (2026-10-22 CEST). Owner transferred Blackwell lease57117614 to SW2. Worktree/branch codex/bw-resume-cont-20261022; Claude branch read-only.
 
 MEASURED local inherited watcher: on_c0 PANIC50/278RPC; on_c1 types0,1,2 FIXED/4542RPC; on_c2 types0,1 PANIC50/278RPC; on_c3 led to minimal_candidate2; off_c began23:04:52, armrc255; laneDONE/EXIT0 at23:11:18UTC. These are controller projections, not yet independently verified arm outcomes. FIXED in the lane means only no0x50 and>=1000RPC; it does not mean Windows validation PASS.
