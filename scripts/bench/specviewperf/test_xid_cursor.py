@@ -1,11 +1,27 @@
 """Kernel ring-buffer rollover must not erase the new-Xid safety condition."""
 import json
+import subprocess
 import unittest
 from unittest.mock import patch
 from vfio_session import xid_events_after
 
 
 class XidCursorTests(unittest.TestCase):
+    def test_journal_no_match_exit_one_is_empty_interval(self):
+        error=subprocess.CalledProcessError(1,['journalctl'],output='',stderr='')
+        with patch('vfio_session.subprocess.check_output',side_effect=error):
+            self.assertEqual(xid_events_after('s=before'),[])
+
+    def test_journal_no_match_with_whitespace_is_empty_interval(self):
+        error=subprocess.CalledProcessError(1,['journalctl'],output='\n',stderr='')
+        with patch('vfio_session.subprocess.check_output',side_effect=error):
+            self.assertEqual(xid_events_after('s=before'),[])
+
+    def test_journal_read_failure_is_never_silenced(self):
+        error=subprocess.CalledProcessError(2,['journalctl'],output='',stderr='Read failed')
+        with patch('vfio_session.subprocess.check_output',side_effect=error):
+            with self.assertRaises(subprocess.CalledProcessError):xid_events_after('s=before')
+
     def test_empty_interval_has_no_new_xid(self):
         with patch('vfio_session.subprocess.check_output', return_value='') as query:
             self.assertEqual(xid_events_after('s=before-gpu-detach'), [])
