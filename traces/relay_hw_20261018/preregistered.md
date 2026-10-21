@@ -104,3 +104,13 @@ after the known two-hour guest-clock correction. FALSIFIER: a conflicting
 internal timestamp, a different test/hardware context, or an unreadable result.
 This can support a temporal association; a result without a QEMU revision
 cannot independently prove the binary identity. Fresh score arms remain unrun.
+
+H-HW3-INDEPENDENT (before execution): exact HW3 head 7c87cb7ea504a7afe23d44fe718c90b17a2076cc
+(code 1e6e64314) preserves the full M --tests baseline and passes a fresh
+Translated holdout. FALSIFIER: any failed test, panic, incomplete run, a drop
+below M's1023 passed tests, an upstream ignore/test removed, or a holdout
+control that does not exercise contention. Run all kf-chan/kf-qemu --tests,
+then existing ignored translated_holdout_seeds with HW3_SEED_FROM=2305843009213694065,
+HW3_SEED_COUNT=64 (192scenarios across1–3workers). No source changes; own
+target, shared cargo lock, nice19/release/j2. This does not authorize hardware
+or overrule HW3's NOT READY handoff.

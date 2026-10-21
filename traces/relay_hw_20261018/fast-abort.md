@@ -15,7 +15,7 @@ FAULT_MARK=defer_liveness_prime arm=PLAIN(rig-control) va=0x0000006000010000
 
 The same line explicitly says that the host dmesg WILL carry Xid 31 for this
 channel and that this is the test's point. CODE READ: the raw client's
-`defer_liveness_arm` deliberately reads the absent leaf before testing a
+`dl_arm_body` deliberately reads the absent leaf before testing a
 subsequent deferred mapping. This is an expected negative-test fault.
 
 MEASURED kernel record:
