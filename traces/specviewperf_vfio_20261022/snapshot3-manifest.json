@@ -1,0 +1,146 @@
+{
+  "captured_utc": "2026-10-21T23:22:18.035816+00:00",
+  "files": [
+    {
+      "path": "run-log.txt",
+      "guest_bytes": 864,
+      "export_utf8_bytes": 864,
+      "sha256": "24461da701389003c5a2f50b70c759cbaa50283c7c956007480abf813f241ff0"
+    },
+    {
+      "path": "blender-01/log.txt",
+      "guest_bytes": 10041,
+      "export_utf8_bytes": 10041,
+      "sha256": "39a0c6743c0387e0241328894f25ca9924a730f17c964fa73008ae40f4972c9a"
+    },
+    {
+      "path": "blender-01/results.xml",
+      "guest_bytes": 265,
+      "export_utf8_bytes": 265,
+      "sha256": "8fe2118155ada31dd0e6f91b89c111879f195400af8bb6a1689af43ba5df71d5"
+    },
+    {
+      "path": "blender-01/run-log.txt",
+      "guest_bytes": 1282,
+      "export_utf8_bytes": 1282,
+      "sha256": "03f3778892cb8489a32d735c0cfd8d16e74fa2b67a1d07ed813d2495004001e6"
+    },
+    {
+      "path": "blender-01/stdout.log",
+      "guest_bytes": 8528,
+      "export_utf8_bytes": 8528,
+      "sha256": "7835957769707185024e87b5f49b78f0bd9ce444e97fb47188f1269ade2f2cb5"
+    },
+    {
+      "path": "catia-07/log.txt",
+      "guest_bytes": 8955,
+      "export_utf8_bytes": 8955,
+      "sha256": "5e835fff9383aa2b391b005dc39718edb22e8b3d43b5d0f562907d89219bb86d"
+    },
+    {
+      "path": "catia-07/results.xml",
+      "guest_bytes": 0,
+      "export_utf8_bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "catia-07/run-log.txt",
+      "guest_bytes": 1030,
+      "export_utf8_bytes": 1030,
+      "sha256": "9d28f7fb8a3604ff6fdd5ec89a83954af37a95c0dafe6c3bf3b7d95f59a2039b"
+    },
+    {
+      "path": "catia-07/stdout.log",
+      "guest_bytes": 6874,
+      "export_utf8_bytes": 6874,
+      "sha256": "73e48dab1125bf3f93da4b31fecf897c7509b6e48fb1bcd93daa2a16e52ddfbf"
+    },
+    {
+      "path": "creo-04/log.txt",
+      "guest_bytes": 17952,
+      "export_utf8_bytes": 17952,
+      "sha256": "a76ab85daef0125f6f5321d21fd985ad8a442d13ea75429fb4b44f62fed51104"
+    },
+    {
+      "path": "creo-04/results.xml",
+      "guest_bytes": 0,
+      "export_utf8_bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "creo-04/run-log.txt",
+      "guest_bytes": 2436,
+      "export_utf8_bytes": 2436,
+      "sha256": "b6259c957c2c206e10609661157fe598585e48ea00a8793e9985bd61948e96e7"
+    },
+    {
+      "path": "creo-04/stdout.log",
+      "guest_bytes": 13027,
+      "export_utf8_bytes": 13027,
+      "sha256": "9a963f563fd5ede30573f2045d95cd2d0d2d8eb4e3bbe35f0d09e7e5ab910eed"
+    },
+    {
+      "path": "energy-04/log.txt",
+      "guest_bytes": 9813,
+      "export_utf8_bytes": 9813,
+      "sha256": "be0d47dd5f6aad3bc1bfd6ac5d1edc451a902597fabfa65d9623521a18bac1b9"
+    },
+    {
+      "path": "energy-04/results.xml",
+      "guest_bytes": 264,
+      "export_utf8_bytes": 264,
+      "sha256": "ffebc5c9c48281e61b9b24dd13160833d59480130919d80e9e2dd3ffab6ba5e2"
+    },
+    {
+      "path": "energy-04/run-log.txt",
+      "guest_bytes": 1020,
+      "export_utf8_bytes": 1020,
+      "sha256": "db73d7d22d2618a5bc06e991bad9077138deac7da75f7d505f1c2cb969387b45"
+    },
+    {
+      "path": "energy-04/stdout.log",
+      "guest_bytes": 5933,
+      "export_utf8_bytes": 5933,
+      "sha256": "d75482de03e74bacab14786c802500c37cdfa74bde0d5829c00b8384fcadc711"
+    },
+    {
+      "path": "enscape-01/log.txt",
+      "guest_bytes": 13058,
+      "export_utf8_bytes": 13058,
+      "sha256": "f8c886e04ca4e3471ab1793afbd3b59ad8235cc7383896b9973d88d7ad9363c9"
+    },
+    {
+      "path": "enscape-01/results.xml",
+      "guest_bytes": 0,
+      "export_utf8_bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "enscape-01/run-log.txt",
+      "guest_bytes": 1508,
+      "export_utf8_bytes": 1508,
+      "sha256": "8c8ef1b8dd1d9e9964af7a70c47e17c070749d3bbc159ce56057b424e11f72f2"
+    },
+    {
+      "path": "enscape-01/stdout.log",
+      "guest_bytes": 7768,
+      "export_utf8_bytes": 7768,
+      "sha256": "fec84f08d5192a3440791cfcfc34450ce9f8f36ccae4d3b665543216214d0e82"
+    },
+    {
+      "path": "qemu.log.snapshot3",
+      "bytes": 68014597,
+      "sha256": "c8c27014a1b123495ae7459f9e7e7a87cc73a8ade117183afe607caf70c6803c"
+    },
+    {
+      "path": "broker.log.snapshot3",
+      "bytes": 189842,
+      "sha256": "4e30195da4ffa2ff19fabcc8bbf441da55f8f6acc07f8747288430aaae4085d5"
+    },
+    {
+      "path": "guest_events_snapshot3.txt",
+      "bytes": 27675,
+      "sha256": "5c8038c08aab82798ac31a05f0845dbe825c478ee8782b432148104725494b62"
+    }
+  ]
+}
