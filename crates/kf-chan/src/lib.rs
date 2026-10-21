@@ -21,6 +21,7 @@ pub mod handoff;
 pub mod host;
 pub mod passthrough;
 pub mod ptnsi;
+pub mod rc;
 pub mod ring;
 pub mod swmethod;
 pub mod tmode;
