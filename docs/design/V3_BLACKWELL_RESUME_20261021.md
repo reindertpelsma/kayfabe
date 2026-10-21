@@ -181,19 +181,24 @@ verified API absence, then write the lease into `traces/die_driver_sweep_2026101
    (`/root/kf-private-data/blackwell_20261021/`), never to the public repository. Under the owner's rules
    RE would be for diagnosis only, notes and decompiles only in `/root/kayfabe-private-clone`, nothing
    derived from it becomes a constant or code value, and this public memo would say only "diagnosed with
-   private tooling". **No RE has been done and none is started by this plan.** (Sections 6's D1/D2/D4 are
-   superseded by this ruling for the dump-copy question; the Microsoft-symbol part remains as written.)
+   private tooling". **No RE has been done and none is started by this plan.** (Section 6's D1/D2/D4 are
+   superseded by items 2 and 5 for the dump-copy question; the Microsoft-symbol part remains as written.)
 3. **Budget.** Lane stop stays 6 USD until a first lease shows progress; then this memo / the final message
    asks for the next cap instead of stopping silently. (Part 5's 4.0 USD proposal is inside it.)
-4. **Notifier 196 (GC6 reduced-threshold, PR56, section S.1 versus S.3): undecided.** The run revision
-   contains the stub row (it is in the frozen af8 stack). What changes without it: MEASURED
-   `blackwell_resume_20261020` fix1 arms (no stub, n=3) stop at the refused 196 arming with **Code 43** on
-   the display-OFF path (RPC ordinal 416), so **arm 3 and every display-OFF question exist only with the stub**
-   (without it there is no Code 0, hence no 141/0x116 to explain). The display-ON arms 1-2 do not depend on it:
-   ON aborts or crashes at ordinal 275, long before the 196 arming (ordinal 416 in the OFF flow; MEASURED
-   H-ON-INDEPENDENT, n=10). So the plan works either way for ON; for OFF it states its dependence and
-   makes no claim about the stub's correctness. If the owner rules the stub out, arm 3 is dropped and (b) is
-   not reachable on GB202 until another route past 196 exists.
+4. **Notifier 196 (GC6 reduced-threshold, PR56, section S.1): APPROVED as the silent stub** (owner,
+   same evening: power is managed by the host driver and GSP; the guest does not manage it; the system stays
+   unprivileged; monitoring is never a reason to allow a privileged verb; S.3 power events matter only if
+   needed for correctness, which is unlikely). The plan therefore assumes the stub is in; no event is posted,
+   no host action. Recorded for the record: without it the display-OFF path stops at Code 43 (MEASURED, fix1
+   arms, n=3), and display-ON never reaches it (ordinal 275 versus 416).
+5. **RE scope (binding).** Any inspection of NVIDIA's non-open code, compiled or decompiled (disassembly,
+   Ghidra, decompile output, dump disassembly), is RE and follows the RE rules. Traces (interfaces, ordinals,
+   RPC and event logs, behaviour) are not RE. Consequence for this plan: the capture kit reads only dump
+   **header** fields defined by Microsoft's public structure (bugcheck code, parameters, SystemTime), WER
+   fields, event logs and file times; it does not read module lists, code bytes or stacks. Resolving P3 to a
+   module and RVA is held back as a step to confirm with the coordinator, together with the private-clone
+   setup (read `/root/kayfabe-private-clone` first, do not duplicate its earlier work). Nothing is done on
+   that side in this memo.
 
 # 6. Symbols: what can and cannot be analysed (owner decisions listed, nothing assumed)
 
