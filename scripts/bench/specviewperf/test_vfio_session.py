@@ -16,6 +16,10 @@ class PlanTests(unittest.TestCase):
                       '-device', 'kf3-gpu,id=kf0,addr=0x6', '-uuid', 'example-uuid']
         self.argv = make_argv(self.owner, self.root)
 
+    def test_standalone_qemu_switches_are_supported(self):
+        owner = self.owner + ['-no-shutdown']
+        self.assertEqual(make_argv(owner, self.root)[-1], '-no-shutdown')
+
     def test_no_kayfabe_device_in_native_reference(self):
         self.assertFalse(any('kf3-gpu' in a for a in self.argv))
 
@@ -62,6 +66,9 @@ class AbortTests(unittest.TestCase):
 
     def test_fifteen_minutes_no_progress_aborts(self):
         self.assertEqual(self.check(now=1900, progress_at=1000), 'NO_PROGRESS_15_MIN')
+
+    def test_overdue_progress_aborts(self):
+        self.assertEqual(self.check(now=1901, progress_at=1000), 'NO_PROGRESS_15_MIN')
 
     def test_recent_progress_continues(self):
         self.assertIsNone(self.check(now=1899, progress_at=1000))
