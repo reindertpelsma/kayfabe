@@ -1,0 +1,17 @@
+[
+  {
+    "mutant": "discard-parsed-fps",
+    "failing_tests": 5,
+    "rc": 1
+  },
+  {
+    "mutant": "accept-invalid-fps",
+    "failing_tests": 2,
+    "rc": 1
+  },
+  {
+    "mutant": "erase-workload-failure",
+    "failing_tests": 2,
+    "rc": 1
+  }
+]

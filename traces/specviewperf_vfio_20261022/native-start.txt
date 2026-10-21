@@ -1,0 +1,24 @@
+MEASURED: resumed VFIO QEMU started 2026-10-21 23:50:13.885559 UTC,
+01:50:13.885559 CEST, PID 1135352, in codex-vf1-supervisor.service.
+The service owns flock -o /tmp/kayfabe-fastguest.lock for the session.
+CODE READ: native argv retains owner CPU, 12 GiB RAM, 8 vCPUs, virtio/cache=none/
+aio=threads/iothread and owner virtual identity, with lane CoW/UEFI copies.
+MEASURED: Windows 11 Pro build 26200, active kfadmin console session 1,
+NVIDIA GeForce RTX 4070 / driver 32.0.15.8088 (580.88), physical desktop
+3840x2160 / CurrentRefreshRate=59. No vsync/profile override applied.
+MEASURED: interactive task Codex-VF1-SPEC started; supported SPEC CLI selected
+blender-01,catia-07,creo-04,energy-04,enscape-01,maya-07,medical-04,
+solidworks-08,unreal_engine-01; iterations=2; resolution=FullHD.
+MEASURED: first native subtest blender 01 produced 12.79 FPS (297 frames,
+23.22 s), despite wgl cleanup warnings also seen in the kayfabe logs. This is
+one subtest, not a composite or a complete suite verdict.
+MEASURED: guest wall clock is two hours behind host local time; the first
+result directory is result_2026-10-21-23-51-37. No timer adjustment made.
+MEASURED: before this stable boot, an SSH-scope launch was stopped when logind
+closed SSH scopes. Its restoration exposed the wrong module-load ordering;
+NVIDIA was subsequently restored successfully after unbinding VFIO first.
+CODE READ: those ordering and journal-empty-interval defects have separate
+EXPECTED RED commits, passing fixes and mutation checks. The supervisor now
+runs in an independent system service. Old kernel messages rolled out of the
+ring during module-probe logging; new-Xid monitoring uses a journal cursor.
+MEASURED: journal contains zero new host Xids since the 01:41 CEST resume.
