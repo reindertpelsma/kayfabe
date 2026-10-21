@@ -115,7 +115,7 @@
     "reservation_usd": 1.447572222222222,
     "auto_destroy_minutes": 114,
     "hard_teardown_utc": "2026-10-21T18:30:00+00:00",
-    "destroyed": false,
+    "destroyed": true,
     "auto_destroy_pid": 2103544,
     "auto_destroy_verified": true,
     "auto_destroy_armed_utc": "2026-10-21T16:20:07.379097+00:00",
@@ -131,6 +131,17 @@
       "root_free_gb": 167,
       "kvm_present": true
     },
-    "stage": "Provisioning active, native-derived baseline guard fixed/tested under owner decision1; Linux595 then Windows580 bind+ON scheduled, actualdie probe pending"
+    "stage": "CLOSED/APIabsent16:41:56UTC: nativePASS; LinuxguestABORTED on five newQEMU31 outside native approval. 13PASS/1inducedVMM_DIED/16unrun, no wholePASS. PGID-only abort defect found; owned tree terminated. Windowsbind/ONUNRUN.",
+    "absence_verified_utc": "2026-10-21T16:41:56.259511+00:00",
+    "credit_after_observed": 21.391158517962822,
+    "observed_account_credit_delta": 0.14899893140022868,
+    "elapsed_hours_until_absence": 0.36386955666666665,
+    "runtime_cost_estimate_usd": 0.1627709816822222,
+    "cost_upper_bound_usd": 1.1627709816822223,
+    "cost_note": "Runtime estimate and shared-account credit delta are observations, not settled attribution. Budget guard reserves1USD for delayed transfer billing until invoices reconcile.",
+    "auto_destroy_cancelled_after_absence": true,
+    "controller_exit": 143,
+    "native_approved_xids": 5,
+    "new_guest_xids": 5
   }
 ]
