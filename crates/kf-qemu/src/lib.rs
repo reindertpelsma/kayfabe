@@ -29,6 +29,7 @@ pub mod latejoin;
 pub mod mem;
 pub mod memreset;
 pub mod prof;
+pub mod ptlock;
 pub mod raw_unsafe;
 pub mod readtrace;
 pub mod reset;

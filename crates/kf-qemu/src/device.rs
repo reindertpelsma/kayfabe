@@ -1844,7 +1844,7 @@ impl Device {
             ws.timeouts_with_work.load(o),
             self.chans.contended.load(o),
             self.chans.poisoned.load(o),
-            self.chans.relay_stats.summary()
+            self.chans.relay_summary()
         )
     }
 
@@ -1881,6 +1881,8 @@ impl Device {
             fd,
             fd_off,
         });
+        // the main loop was a holder of the RAM topology lock (a relay's `admit_user_generation` answers Busy): ring the relays that lost to it
+        self.chans.handoff_released();
     }
 
     /// ★ P4: the host address of `[base, base+len)` of a disposition-A region — PRAMIN (BAR0),
@@ -1902,6 +1904,7 @@ impl Device {
     /// Unregister the guest RAM block at `gpa`.
     pub fn ram_del(&self, gpa: u64) {
         self.ram.del(gpa);
+        self.chans.handoff_released();
     }
 
     /// ★ P4: re-publish the invalidate trigger's word into the BAR0 read shadow — after the VA
@@ -2407,6 +2410,8 @@ impl Device {
                 || !self.mem.inbox.all_settled()
                 || self.mem.port.armed_request().is_some();
             self.mem.inbox.set_walk_busy(walk_busy);
+            // the VA thread is a holder too (the source mapping swap, the RAM views): ring the relays that lost a try_lock to it
+            self.chans.handoff_released();
             if !walk_busy {
                 for tok in self.mem.inbox.take_walk_waiters() {
                     if self.plane.ring_internal(tok) {
@@ -2646,6 +2651,8 @@ impl Device {
             }
             let seen = self.plane.drainer_wake.seen();
             if self.plane.drainer_pass(self, 256) > 0 {
+                // a holder of the RM graph / `pt` (the register handlers ran) has released: ring the relays that lost a try_lock to it
+                self.chans.handoff_released();
                 if after_timeout {
                     self.prof
                         .drainer
@@ -3561,7 +3568,7 @@ impl Device {
             eprintln!("kf3: USER_RING_LAZY_OBSERVE SUMMARY {}", rs.lazy.summary());
         }
         if rs.gates.load(Ordering::Relaxed) + rs.markers.load(Ordering::Relaxed) > 0 {
-            eprintln!("kf3: USER_RING_LOOP SUMMARY {}", rs.summary());
+            eprintln!("kf3: USER_RING_LOOP SUMMARY {}", self.chans.relay_summary());
             eprintln!("kf3: {}", crate::userstore::summary());
         }
         self.stop.store(true, Ordering::Release);

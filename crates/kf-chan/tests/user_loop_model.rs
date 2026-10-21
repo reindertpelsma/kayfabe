@@ -43,6 +43,26 @@ use std::collections::{HashMap, VecDeque};
 use std::hash::{Hash, Hasher};
 
 // ------------------------------------------------------------------------------------------------
+// ★ SUPERSEDED IN PART, 2026-10-20: this file models the 2026-10-14 loop (demand-driven looks, a bounded pre-park spin, the safety net as a
+// declared wake). Production no longer works that way (`user_loop::look_needed` ignores demand, `idle` takes no spin budget, contention is
+// handed off by the lock holder: `kf_chan::handoff`, models `user_loop_model_v2.rs` / `relay_fairness.rs`). The two decisions the retired
+// design made are kept here as local copies so that this historical model keeps checking what it checked.
+
+/// The 2026-10-14 `user_loop::look_needed`.
+fn legacy_look_needed(demand: bool, waiting: bool) -> bool {
+    demand || waiting
+}
+
+/// The 2026-10-14 `user_loop::idle`: spin while a relay waits and the budget is not spent.
+fn legacy_idle(waiting: bool, spin_left: u32) -> ul::Idle {
+    if waiting && spin_left > 0 {
+        ul::Idle::Spin
+    } else {
+        ul::Idle::Park
+    }
+}
+
+// ------------------------------------------------------------------------------------------------
 // vocabulary
 
 /// Guest GP ring slots (a power of two; one slot is always empty).
@@ -847,7 +867,7 @@ fn peek(n: &mut World, c: usize, why: ul::Peek, spin: u8, polls_put: bool) -> bo
     let backstop = why == ul::Peek::Backstop;
     let demand = ch.retry;
     // the production decision (`kf_chan::user_loop::look_needed`); the retired idle poll is the mutant
-    if !ul::look_needed(why, demand, ch.waiting.is_some()) && !(backstop && polls_put) {
+    if !legacy_look_needed(demand, ch.waiting.is_some()) && !(backstop && polls_put) {
         return false;
     }
     let cause = match why {
@@ -929,7 +949,7 @@ fn worker_steps(cfg: &Cfg, w: &World, out: &mut Vec<Step>) {
                 n.pc = Pc::T(T0);
                 out.push(step(format!("w:claim c{c} ({:?})", w.ch[c].cause), n));
             } else if design
-                && ul::idle(
+                && legacy_idle(
                     w.ch.iter()
                         .any(|c| c.alive() && (c.waiting.is_some() || c.retry)),
                     u32::from(w.spin_left),
