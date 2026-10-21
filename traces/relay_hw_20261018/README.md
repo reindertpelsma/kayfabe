@@ -88,3 +88,16 @@ The lane's stop-on-refusal rule was followed: no alternate deletion command was
 attempted. The 256 MiB target directory remains. No HW2 cargo/test job remains.
 The hardware campaign never acquired a lasting lease; the restored owner's
 launcher holds its own intentional lifetime lease.
+
+Windows capture wiring: the N1 source is pinned at
+`7ede125d84aca37d5a69345bf8bd1f966596a461` on
+`codex/night-repro-20261020`. Apply
+`scripts/bench/baton/night_repro_hw2.patch` to a lane-owned copy, and copy
+`hw2_trigger_relay.ps1` into its `scripts/bench/night_repro/` directory.
+The observer takes that copy via `--scripts`, the lane receipt directory via
+`--root`, and an existing read-only USERD probe module via `--userd-module`.
+The latter must export `guest_ram(pid, argv)` and O_RDONLY `GuestMem.read`;
+`--lowmem` is the verified QEMU RAM split, not a guessed GPU address.
+Use `--perf` for bounded filtered scheduler captures. The standalone guest
+`test_trigger_relay.ps1` sends synthetic inputs on separate port39022; the
+recorded real PowerShell fixture result is `ps-relay-fixture.json`.
