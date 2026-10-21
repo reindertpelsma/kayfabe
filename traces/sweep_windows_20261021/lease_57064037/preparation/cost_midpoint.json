@@ -1,0 +1,10 @@
+{
+  "utc": "2026-10-21T15:05:51.161084+00:00",
+  "own_instance": 57064037,
+  "actual_status": "running",
+  "observed_dph_total": 0.4473333333333333,
+  "credit": 21.600325971362963,
+  "stretch_credit_delta": 3.1272400195997534,
+  "stretch_runtime_estimate": 3.3326515706227773,
+  "note": "Not settled billing; account is shared. New stretch stop6/cap8/reserve5."
+}
