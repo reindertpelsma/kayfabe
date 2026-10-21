@@ -509,6 +509,7 @@ struct nb_wl {
      * it, so a frame whose scale did not change costs one comparison.
      */
     const struct nb_cursor *gcur;
+    struct nb_cursor       *gcrop;      /* the host pointer's cropped copy (gc_ptr_view), lazily allocated */
     struct wl_surface      *gc_surf;
     /*
      * HiDPI: the cursor buffer is gc_bgeom = gc_geom x ceil(output scale)
@@ -2351,6 +2352,42 @@ static void gc_geom_now(const struct nb_wl *w, struct nb_cursor_geom *g,
 }
 
 /*
+ * What the HOST POINTER is drawn from: the guest cursor cropped to its drawn
+ * box (nb_cursor_crop()), not the whole 256x256 hardware-cursor buffer.  The
+ * grab overlay keeps the full image (it is placed by the guest's own top-left),
+ * so only the pointer path uses this.
+ */
+static const struct nb_cursor *gc_ptr_view(struct nb_wl *w)
+{
+    if (!w->gcur || !w->gcur->defined) {
+        return w->gcur;
+    }
+    if (!w->gcrop) {
+        w->gcrop = calloc(1, sizeof *w->gcrop);
+        if (!w->gcrop) {
+            return w->gcur;
+        }
+    }
+    return nb_cursor_crop(w->gcur, w->gcrop) ? w->gcrop : w->gcur;
+}
+
+static void gc_ptr_geom_now(struct nb_wl *w, struct nb_cursor_geom *g,
+                            struct nb_cursor_geom *b)
+{
+    uint32_t nx, dx, ny, dy;
+    struct nb_cursor_surface sf;
+
+    gc_scale_now(w, &nx, &dx, &ny, &dy);
+    nb_cursor_surface_geom(gc_ptr_view(w), nx, dx, ny, dy, w->scale_120,
+                           NB_CURSOR_SURFACE_MAX_BUF, &sf);
+    *g = sf.g;
+    b->w = sf.bw;
+    b->h = sf.bh;
+    b->hot_x = sf.g.hot_x * sf.scale;
+    b->hot_y = sf.g.hot_y * sf.scale;
+}
+
+/*
  * Gather what the XOR decision needs and run it (nb_xor_eval(): the pure
  * table, the frame read, the compose).  The ONLY Wayland-specific part of the
  * XOR cursor is this gathering and the three places that obey the answer:
@@ -2535,7 +2572,7 @@ static bool gc_render(struct nb_wl *w)
     if (!gc_ensure(w)) {
         return false;
     }
-    gc_geom_now(w, &g, &b);
+    gc_ptr_geom_now(w, &g, &b);
     if (gc_up_to_date(w, &g, &b)) {
         return true;
     }
@@ -2563,7 +2600,7 @@ static bool gc_render(struct nb_wl *w)
         return fallback;
     }
     px = w->gc_px + (size_t)slot * NB_GC_SLOT_PX;
-    nb_cursor_scale(c, px, b.w, b.h);
+    nb_cursor_scale(gc_ptr_view(w), px, b.w, b.h);
     buf = wl_shm_pool_create_buffer(w->gc_pool,
                                     (int32_t)((size_t)slot * NB_GC_SLOT_BYTES),
                                     (int32_t)b.w, (int32_t)b.h,
@@ -2611,7 +2648,7 @@ static void gc_refresh_ptr(struct nb_wl *w)
     if (want && w->gc_on) {
         struct nb_cursor_geom g, b;
 
-        gc_geom_now(w, &g, &b);
+        gc_ptr_geom_now(w, &g, &b);
         if (gc_up_to_date(w, &g, &b)) {
             return;
         }

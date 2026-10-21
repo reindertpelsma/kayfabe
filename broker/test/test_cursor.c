@@ -1508,7 +1508,8 @@ static void test_crop(void)
         }
     }
     CHECK(nb_cursor_crop(s, d), "cropped with a distant hot spot");
-    CHECK(d->hot_x == 3 && d->hot_y == 4 && d->w > 120 && d->h > 100,
+    /* box = hot (3,4) .. drawn (129,109), one pixel margin: origin (2,3), so the hot spot is (1,1) there */
+    CHECK(d->hot_x == 1 && d->hot_y == 1 && d->w == 129 && d->h == 108,
           "the crop grows to contain the hot spot (hot %u,%u size %ux%u)", d->hot_x, d->hot_y, d->w, d->h);
     CHECK(crop_count(d) == 100, "all 100 drawn pixels survive");
 
