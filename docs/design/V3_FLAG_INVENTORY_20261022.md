@@ -241,3 +241,11 @@ CODE READ: resource inputs (`fb-mb`, BAR apertures, host minor) cannot be replac
 ### Inherited QEMU inputs
 
 CODE READ (QEMU 10.2.4 `hw/pci/pci.c`, official release source used for the build): `romfile` defaults unset, `rombar` to -1 (automatic) and `romsize` to UINT32_MAX (automatic). They are PRODUCTION-BEHAVIOUR inputs read by kf3's GOP conflict/ROM builder, omitted by production, and not needed with the embedded GOP. `addr` defaults -1 (automatic), `id` unset, and `bus` to QEMU's available default bus; production explicitly names slot 6, id kf0 and pci.0. These optional placement identifiers are read by QEMU and by kf3 for logging/auto-GPU-UUID slot identity, not measurement flags. Omitting them has not been hardware-tested by D1.
+
+## D1 implementation result (GPU-free)
+
+CODE READ: the existing SDR pipeline, inert-MIRROR admission and 256-byte ILUT decoding are now selected by default. Only an exact `=0` selects each prior arm. The decoder, colour kernels, capability derivation and captured-page probe are unchanged. Constructor-only probes remain opt-in and need `KF3_DISPLAY_SDR_COLOR=0` to select their old no-processing arm.
+
+CODE READ: the main `scripts/bench/windows/windows_broker.sh` no longer inserts RPC trace, BAR0 window trace, map logging or display-method trace into the default environment. Explicit `WIN_FLAGS=NAME=1` still enables each diagnostic. It also drops dead `KF3_TIMER_MAP`; the hitch launcher's extra list defaults empty instead of passing dead lifecycle counter/period names. Historical launchers and run records are retained. The read-only host launcher was not modified.
+
+MEASURED: test-only EXPECTED RED commits and mutation results are in [D1 evidence](../../traces/install_flags_20261018/README.md). These checks establish the selected configuration and GPU-free decode/launcher behavior; all new default combinations and reduced guest commands remain hardware-UNVERIFIED. No relay/VA/lock/timer/poll implementation changed. All parked dependent-channel and captured/fabricated-reply decisions above remain unresolved; this is not a flag-free Windows boot claim.
