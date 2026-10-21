@@ -56,3 +56,37 @@ diagnostics. Hardware testing is outside T1 authorization.
 ## Findings
 
 Pending evidence inspection. No causal verdict or runtime change yet.
+
+### H3 refinement, preregistered before inspecting the refusal context
+
+MEASURED: initial bounded scan found a `USER_RING_GP_FORMAT Budget` refusal at
+snapshot2 line 113366, followed by refused `RESET_CHANNEL` (`0x906f0102`) at
+113470, ahead of the 9761.968 s unload. INFERRED: H3 now includes a relay
+parser/publication refusal as well as a lost notification. FALSIFIER for the
+specific refusal-causes-first-failure candidate: the driver had already begun
+recovery before the refusal, or an equivalent refusal is shown to preserve and
+complete that channel's work without reset. Check chronology, parser budget
+meaning, and earlier healthy-channel refusals before attributing causation.
+
+### First bounded result (before deeper lifetime comparison)
+
+MEASURED: snapshot2 has 178,253 lines, eight USER-ring Budget refusals, and
+5,058 status samples, all with `unreconciled=0` and `root_moves=0`. Public
+extraction: `traces/tdr_specviewperf_20261018/snapshot2-summary.json` (source
+hashes, original line numbers, nominal last 90 heartbeats and bounded excerpts).
+The eight refused entries decode, using the repository's public C56F format,
+to 979,592–1,026,596 bytes, above `MAX_SOURCE_BYTES = 0xe0000 = 917,504`.
+
+CODE READ: `user_stream::inspect_entry` rejects that size before selecting
+Scan/Pointer handling; `userpump::user_ring_serve` marks the relay dead and
+cancels its obligation. This is a compatibility boundary in the existing
+staging design, not evidence of a missing wake. Raising the constant is NOT a
+proposed cure. A bounded continuation or a complete admitted mode needs its
+own design and owner review; no runtime change is made here.
+
+INFERRED: this repeatable refusal now ranks above the memory and retained-life
+candidates for the app-kill loop. It does not prove the descriptor was stable,
+exclude a preceding guest fault, or establish the cause of the separate
+run-3004 slowdown. The untimestamped refusal lines prevent exact wall-clock
+latency attribution; preserve that limitation instead of assigning synthetic
+operation timestamps.
