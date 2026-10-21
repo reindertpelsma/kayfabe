@@ -33,3 +33,54 @@ impl RcWatch {
         None
     }
 }
+
+/// Allocation-time routing facts, never decoded from the host's notifier payload.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct RcRoute {
+    /// Guest chid, including its runlist bits where applicable.
+    pub chid: u32,
+    /// Guest-declared engine (the host execution engine may differ).
+    pub engine: u32,
+    /// Our host token, for attribution only.
+    pub host_token: u32,
+}
+
+/// One host error, routed to the guest whose channel owns the private notifier.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct RoutedRc {
+    /// Allocation-time identity.
+    pub route: RcRoute,
+    /// Host-observed Xid.
+    pub except_type: u32,
+}
+
+/// Bounded observation/publication state for one Translated allocation.
+/// DESIGN STUB: extended EXPECTED RED tests precede implementation.
+pub struct RcDelivery;
+
+impl RcDelivery {
+    /// Arm a new allocation over its private host record.
+    #[must_use]
+    pub fn armed(_route: RcRoute, _at_arm: [u32; 4]) -> Self {
+        Self
+    }
+
+    /// Whether a host error has made this channel unusable.
+    #[must_use]
+    pub fn failed(&self) -> bool {
+        false
+    }
+
+    /// Observe host words, then publish four guest words with the status word last.
+    /// A failed store retains the error for a later call; an event follows publication only.
+    ///
+    /// # Errors
+    /// The guest write port's refusal.
+    pub fn poll<E>(
+        &mut self,
+        _words: [u32; 4],
+        _store: impl FnMut(u64, u32) -> Result<(), E>,
+    ) -> Result<Option<RoutedRc>, E> {
+        Ok(None)
+    }
+}
