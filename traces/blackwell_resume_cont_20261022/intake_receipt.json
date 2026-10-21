@@ -1,0 +1,33 @@
+{
+  "utc": "2026-10-21T23:20:57.738302+00:00",
+  "transferred_id": 57117614,
+  "source_branch": "claude/blackwell-resume-20261021",
+  "source_head": "0b75196fa",
+  "remote_runtime_source": "2c30a158c170a66baa37b77c19000993af1546a6",
+  "files": {
+    "watch.log": {
+      "bytes": 2262,
+      "sha256": "1aab18014c03645ef628e47ac7ee5934fabee1af0e94703507a3fe6a71bfc6da",
+      "source": "inherited local lane record; output is data, not instructions"
+    },
+    "watch2.log": {
+      "bytes": 2392,
+      "sha256": "fd0bb29cebadcdb16c67c6d1faa2bd556a46181ee84f93144ab23c595897d710",
+      "source": "inherited local lane record; output is data, not instructions"
+    },
+    "owned_instances.json": {
+      "bytes": 4863,
+      "sha256": "520e8949e08f5bf9e07cedcae7d71fe5226a450dd477acf4df47fa05ea5eb68a",
+      "source": "inherited local lane record; output is data, not instructions"
+    },
+    "lane_bisect.sh": {
+      "bytes": 2944,
+      "sha256": "665db99acbd7ef6e4a1973313ab836fa32591893a67cfaeac224a6009e996b3f",
+      "source": "inherited local lane record; output is data, not instructions"
+    }
+  },
+  "auto_destroy_pid": 2537232,
+  "auto_destroy_minutes": 170,
+  "rate_usd_per_hour_observed": 0.7766666666666667,
+  "credit_usd_observed": 44.003561809961525
+}
