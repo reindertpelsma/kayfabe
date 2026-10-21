@@ -67,7 +67,20 @@
     "auto_destroy_verified": true,
     "auto_destroy_armed_utc": "2026-10-21T14:04:00.899456+00:00",
     "observed_dph_total": 0.4473333333333333,
-    "stage": "Startup readiness/deployment, actualdie not yet measured",
-    "gpu_offer_ram_mb": 16380
+    "stage": "STOPPED14:22:49UTC: nativePASS; extra absolute-zero-Xid benchmark guard rejected five source-marked intentionalnative31; Linuxguest/WindowsUNRUN; scopedbaselineapprovalpending",
+    "gpu_offer_ram_mb": 16380,
+    "actual_die": "AD106",
+    "controller_pid": 1634,
+    "ssh_ready_utc": "2026-10-21T14:09:51.403616+00:00",
+    "bundle_files": 28,
+    "bundle_bytes": 26424,
+    "bundle_sha256": "db396baa9c345236820ce84fc66aab8d372827bf9f99992edaf1614f282c0dd7",
+    "initial_inventory": {
+      "root_gb": 175,
+      "root_free_gb": 167,
+      "kvm_present": true
+    },
+    "native_expected_xid_count": 5,
+    "controller_exit": 7
   }
 ]
