@@ -1,0 +1,27 @@
+[
+  {
+    "mutant": "restore-before-unbind",
+    "failing_tests": 2,
+    "rc": 1
+  },
+  {
+    "mutant": "ignore-journal-xids",
+    "failing_tests": 2,
+    "rc": 1
+  },
+  {
+    "mutant": "discard-complete-cli-selection",
+    "failing_tests": 3,
+    "rc": 1
+  },
+  {
+    "mutant": "accept-invalid-workloads",
+    "failing_tests": 3,
+    "rc": 1
+  },
+  {
+    "mutant": "drop-interactive-user-principal",
+    "failing_tests": 2,
+    "rc": 1
+  }
+]

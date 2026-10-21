@@ -161,6 +161,28 @@ def xid_count():
     return subprocess.check_output(['dmesg'], text=True).count('NVRM: Xid')
 
 
+
+def kernel_cursor():
+    output = subprocess.check_output(['journalctl', '-k', '-n', '0', '--show-cursor', '--no-pager'], text=True, timeout=15)
+    match = re.search(r'^-- cursor: (.+)$', output, re.MULTILINE)
+    if not match:
+        raise RuntimeError('SAFETY_REFUSED: kernel journal cursor unavailable')
+    return match.group(1)
+
+
+def xid_events_after(cursor):
+    output = subprocess.check_output(['journalctl', '-k', '--after-cursor', cursor,
+        '--grep', 'NVRM: Xid', '--output=json', '--no-pager'], text=True, timeout=15)
+    events = []
+    for line in output.splitlines():
+        if not line.strip():
+            continue
+        record = json.loads(line)
+        if 'NVRM: Xid' in str(record.get('MESSAGE', '')):
+            events.append(record)
+    return events
+
+
 def driver(bdf):
     link = PCI / bdf / 'driver'
     return link.resolve().name if link.exists() else 'unbound'
@@ -177,6 +199,20 @@ def bind(bdf, target):
     write('/sys/bus/pci/drivers_probe', bdf)
     if driver(bdf) != target:
         raise RuntimeError(f'{bdf} did not bind {target}')
+
+
+
+def restore_device(bdf, target):
+    """Release VFIO before loading a native module that needs a probeable GPU."""
+    if driver(bdf) != target:
+        if driver(bdf) != 'unbound':
+            write(PCI / bdf / 'driver/unbind', bdf)
+        write(PCI / bdf / 'driver_override', target)
+        run('modprobe', target)
+        write('/sys/bus/pci/drivers_probe', bdf)
+        if driver(bdf) != target:
+            raise RuntimeError(f'{bdf} native restore did not bind {target}')
+    write(PCI / bdf / 'driver_override', '')
 
 
 def qmp(root, command):
@@ -235,12 +271,13 @@ def main():
             p.error('missing precondition: ' + needed)
     if driver(GPU) != 'nvidia' or driver(AUDIO) != 'snd_hda_intel':
         p.error('unexpected initial GPU/audio binding')
-    baseline = xid_count()
-    if baseline != 26:
-        p.error('host Xid count changed from lane baseline 26; abort before detach')
+    cursor = kernel_cursor()
+    dmesg_at_start = xid_count()
+    baseline = 0  # New events after the anchored journal cursor, independent of ring rollover.
     write(root / 'supervisor.pid', str(os.getpid()))
     (root / 'command.json').write_text(json.dumps({'source_rev': owner.get('kf3_rev'),
-        'argv': argv, 'xid_before': baseline, 'restore_at': a.restore_at}, indent=2)+'\n')
+        'argv': argv, 'xid_before': baseline, 'xid_monitor': 'kernel journal after start cursor',
+        'dmesg_count_at_start': dmesg_at_start, 'restore_at': a.restore_at}, indent=2)+'\n')
     persist_was_active = subprocess.run(['systemctl', 'is-active', '--quiet', 'nvidia-persistenced']).returncode == 0
     logind_was_active = subprocess.run(['systemctl', 'is-active', '--quiet', 'systemd-logind']).returncode == 0
     proc = None
@@ -268,7 +305,7 @@ def main():
         run('modprobe', 'vfio-pci')
         bind(AUDIO, 'vfio-pci')
         bind(GPU, 'vfio-pci')
-        if xid_count() != baseline:
+        if xid_events_after(cursor):
             raise RuntimeError('NEW_HOST_XID during detach')
         with (root / 'qemu.log').open('wb') as log:
             proc = subprocess.Popen(argv, stdin=subprocess.DEVNULL, stdout=log, stderr=log)
@@ -279,7 +316,10 @@ def main():
         next_probe = 0
         while True:
             now = time.time()
-            reason = abort_reason(xid_before=baseline, xid_now=xid_count(), now=now,
+            xid_events = xid_events_after(cursor)
+            if xid_events:
+                (root / 'new-xids.json').write_text(json.dumps(xid_events, indent=2)+'\n')
+            reason = abort_reason(xid_before=baseline, xid_now=len(xid_events), now=now,
                 deadline=deadline, progress_at=progress_at, alive=proc.poll() is None,
                 stop=requested or (root / 'stop').exists())
             if reason:
@@ -330,10 +370,7 @@ def main():
             errors = []
             for bdf, target in [(GPU, 'nvidia'), (AUDIO, 'snd_hda_intel')]:
                 try:
-                    run('modprobe', target)
-                    if driver(bdf) != target:
-                        bind(bdf, target)
-                    write(PCI / bdf / 'driver_override', '')
+                    restore_device(bdf, target)
                 except Exception as error:
                     errors.append(str(error))
             restore_commands = [('modprobe', 'nvidia_uvm'), ('modprobe', 'nvidia_modeset'),
@@ -356,7 +393,7 @@ def main():
             restored = not errors and driver(GPU) == 'nvidia' and driver(AUDIO) == 'snd_hda_intel'
             print('RESTORED', restored, 'ERRORS', errors, flush=True)
         summary = {'reason': reason, 'restored': restored, 'xid_before': baseline,
-                   'xid_after': xid_count(), 'qemu_exit': None if proc is None else proc.poll(),
+                   'xid_after': len(xid_events_after(cursor)), 'xid_monitor': 'kernel journal after start cursor', 'qemu_exit': None if proc is None else proc.poll(),
                    'ended_utc': dt.datetime.now(dt.timezone.utc).isoformat()}
         (root / 'session-result.json').write_text(json.dumps(summary, indent=2)+'\n')
     return 0 if restored else 1
