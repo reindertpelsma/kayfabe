@@ -8313,3 +8313,7 @@ mod lut_life_tests {
         }
     }
 }
+
+#[cfg(test)]
+#[path = "display_defaults_tests.rs"]
+mod production_color_defaults_tests;
