@@ -1,0 +1,27 @@
+{
+  "source": "Prior trusted MinGW probes; native GB202 forcedGSP CUDA3 and AdaWindowsCUDA/DX validation receipts retained. Outbound only.",
+  "files": [
+    {
+      "file": "cup2.exe",
+      "sha256": "86039b888dc7d17b1bd92736c5a5589a4a67a897a5aa9859f7a7ed9d280d95b8",
+      "bytes": 271550
+    },
+    {
+      "file": "cup3.exe",
+      "sha256": "41681173e42c40ba94cafd33be22c90f419b64436b9be88993ba6bd286a19460",
+      "bytes": 273542
+    },
+    {
+      "file": "cup8.exe",
+      "sha256": "7401a67a58288e0789a8fa214be4696316715c5306b690781996847f5baffcf6",
+      "bytes": 276450
+    },
+    {
+      "file": "kf_dxprobe.exe",
+      "sha256": "8f049e04196db99275d901119e9c860058d423e2250920acb717062ed8303f3a",
+      "bytes": 592402
+    }
+  ],
+  "acceptance_recipe_sha256": "5253c987350965962f3c6d3642078b4aaa2ef6bc264f9667d4caa1ca4ab0c96f",
+  "arm_recipe_sha256": "d6049171f159ad0c538230a7fd0b84591c370621c0ba7815427097f6a45250bb"
+}

@@ -10,6 +10,7 @@ exec >"/root/prov/arm_${run}.log" 2>&1
 QLOG=$VM/logs/${run}_b1_qemu.log
 launched=0
 observer_pid=
+held_seconds=0
 owned_pid=
 cleanup(){
  rc=$?; trap - EXIT; set +e
@@ -49,7 +50,7 @@ python3 - "$profile" "$run" "$source" "$binary" <<'PY'
 import pathlib,json,datetime,sys,hashlib
 p=pathlib.Path('/root/sweep2/lease.json');r=json.loads(p.read_text());now=datetime.datetime.now(datetime.timezone.utc);created=datetime.datetime.fromisoformat(r['created_utc']);end=created+datetime.timedelta(minutes=r['auto_destroy_minutes']-25);assert now<end,'latest-start guard: leave25min for observation/export/teardown'
 counts=pathlib.Path('/root/prov/arm_counts.json');j=json.loads(counts.read_text()) if counts.exists() else {'on':0,'off':0};assert j[sys.argv[1]]<2,'max2 per redcell/lease';j[sys.argv[1]]+=1;counts.write_text(json.dumps(j,indent=2)+'\n')
-out={'utc':now.isoformat(),'own_id':r['id'],'profile':sys.argv[1],'run':sys.argv[2],'source':sys.argv[3],'binary':sys.argv[4],'binary_sha256':hashlib.sha256(pathlib.Path(sys.argv[4]).read_bytes()).hexdigest(),'cell_attempt':j[sys.argv[1]],'latest_start_utc':end.isoformat()};pathlib.Path('/root/prov/arm_'+sys.argv[2]+'_start_receipt.json').write_text(json.dumps(out,indent=2)+'\n')
+out={'utc':now.isoformat(),'own_id':r['id'],'profile':sys.argv[1],'run':sys.argv[2],'source':sys.argv[3],'binary':sys.argv[4],'binary_sha256':hashlib.sha256(pathlib.Path(sys.argv[4]).read_bytes()).hexdigest(),'harness_sha256':hashlib.sha256(pathlib.Path('/root/sweep2/arm.sh').read_bytes()).hexdigest(),'rpc_observer_sha256':hashlib.sha256(pathlib.Path('/root/sweep2/rpc_timing.py').read_bytes()).hexdigest(),'cell_attempt':j[sys.argv[1]],'latest_start_utc':end.isoformat()};pathlib.Path('/root/prov/arm_'+sys.argv[2]+'_start_receipt.json').write_text(json.dumps(out,indent=2)+'\n')
 PY
 date -u -Is >"/root/prov/arm_${run}.started"
 parent=$VM/disk/bw580_bind.qcow2; child=$VM/disk/$run.qcow2
@@ -96,13 +97,27 @@ if grep -q '"code":0' "/root/prov/arm_${run}_diag.txt"; then
  start_seconds=$SECONDS
  while [ $((SECONDS-start_seconds)) -lt 600 ]; do
   if grep -q GUEST_PANICKED "$VM/logs/${run}_run.log" 2>/dev/null; then echo ARM_GUEST_PANICKED; break; fi
-  if [ -f "$VM/run/qemu.pid" ] && [ ! -e "/proc/$(cat "$VM/run/qemu.pid")/exe" ]; then echo ARM_VM_EXITED_DURING_HOLD; break; fi
+  if [ ! -e "/proc/$owned_pid/exe" ]; then echo ARM_VM_EXITED_DURING_HOLD; break; fi
   sleep 5
  done
- echo "ARM_HOLD_OBSERVED seconds=$((SECONDS-start_seconds)) $(date -u -Is)"
+ held_seconds=$((SECONDS-start_seconds))
+ echo "ARM_HOLD_OBSERVED seconds=$held_seconds $(date -u -Is)"
 fi
 if ! grep -q GUEST_PANICKED "$VM/logs/${run}_run.log" 2>/dev/null && pgrep -x qemu-system-x86 >/dev/null; then
  timeout 120 bash "$W" ssh 'powershell -NoProfile -ExecutionPolicy Bypass -File C:\kf\diag_min.ps1' </dev/null >"/root/prov/arm_${run}_diag_after.txt" 2>&1 || true
  bash "$W" shot "$run" || true
+fi
+if [ "$profile" = on ] && [ "$held_seconds" -ge 600 ] && grep -q '"code":0' "/root/prov/arm_${run}_diag_after.txt" 2>/dev/null; then
+ timeout 30 bash "$W" ssh 'powershell -NoProfile -Command "New-Item -ItemType Directory -Force C:\ProgramData\KayfabeSweep | Out-Null"' </dev/null
+ for app in cup2 cup3 cup8 kf_dxprobe; do
+  bash "$W" scp-to "/root/sweep2/apps/$app.exe" "C:/ProgramData/KayfabeSweep/$app.exe"
+ done
+ bash "$W" scp-to /root/sweep2/probes/accept580.ps1 C:/kf/accept580.ps1
+ timeout 240 bash "$W" ssh 'powershell -NoProfile -ExecutionPolicy Bypass -File C:\kf\accept580.ps1' </dev/null >"/root/prov/arm_${run}_accept.txt" 2>&1
+ grep '^WIN_ACCEPT_EXIT rc=0 ' "/root/prov/arm_${run}_accept.txt"
+ bash "$W" scp-to /root/sweep2/collect_crash.ps1 C:/kf/collect_crash.ps1
+ timeout 180 bash "$W" ssh 'powershell -NoProfile -ExecutionPolicy Bypass -File C:\kf\collect_crash.ps1' </dev/null >"/root/prov/arm_${run}_live_events.txt" 2>&1
+ grep '^COLLECT_DONE' "/root/prov/arm_${run}_live_events.txt"
+ bash "$W" shot "${run}_apps" || true
 fi
 echo "ARM_OBSERVATION_DONE $(date -u -Is)"
