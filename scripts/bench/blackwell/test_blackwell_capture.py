@@ -13,6 +13,7 @@ sys.path.insert(0, str(Path(__file__).parent))
 
 import dump_header  # noqa: E402
 import keyline_times  # noqa: E402
+import page_subset  # noqa: E402
 import xid_policy  # noqa: E402
 
 
@@ -124,6 +125,52 @@ class XidPolicy(unittest.TestCase):
         self.assertEqual(xid_policy.judge([], "on_a", 1, False)["verdict"], "CLEAN")
         noise = ["2026-10-21T13:39:14.975419+0000 ubuntu kernel: NVRM:unknown NVRM ioctl command: 0xf0"]
         self.assertEqual(xid_policy.judge(noise, "on_a", 1, False)["verdict"], "CLEAN")
+
+
+ORACLE = (
+    "# version=580.65.06 differences=3\n"
+    "offset\tderived\tnative_oracle\theader\tb\tn\n"
+    "0x680\t0x007b0200\t0x02ff01d0\tx\ty\tz\n"      # POSTCOMP: always derived
+    "0x780\t0x01df0000\t0x01df21d0\tx\ty\tz\n"      # PRECOMP window 0, type 0 (CAPA)
+    "0x788\t0x00000000\t0x000e200e\tx\ty\tz\n"      # window 0, type 2 (CAPC): derived zero
+    "0x7a8\t0x00000000\t0x000e200e\tx\ty\tz\n"      # window 1, type 2
+)
+NATIVE = "\n".join(
+    ["WORD 0x004 0x000000ff", "WORD 0x680 0x02ff01d0", "WORD 0x780 0x01df21d0", "WORD 0x784 0x0000da90",
+     "WORD 0x788 0x000e200e", "WORD 0x7a8 0x000e200e", "# end words=6"]
+)
+
+
+class PageSubset(unittest.TestCase):
+    def test_no_native_types_is_the_derived_page(self):
+        w = page_subset.build(ORACLE, NATIVE, set())
+        self.assertEqual(w[0x680], 0x007B0200)
+        self.assertEqual(w[0x780], 0x01DF0000)
+        self.assertNotIn(0x788, w)  # derived zero drops the word
+        self.assertEqual(w[0x784], 0x0000DA90)  # equal in both: kept
+        self.assertEqual(w[0x004], 0xFF)
+
+    def test_selected_precomp_types_take_the_native_word_everywhere_and_nothing_else_moves(self):
+        w = page_subset.build(ORACLE, NATIVE, {2})
+        self.assertEqual(w[0x788], 0x000E200E)
+        self.assertEqual(w[0x7A8], 0x000E200E)
+        self.assertEqual(w[0x780], 0x01DF0000)
+        self.assertEqual(w[0x680], 0x007B0200)  # POSTCOMP stays derived whatever the subset
+        w0 = page_subset.build(ORACLE, NATIVE, {0})
+        self.assertEqual(w0[0x780], 0x01DF21D0)
+        self.assertNotIn(0x788, w0)
+
+    def test_all_six_types_equals_the_previous_page_b_for_the_precomp_region(self):
+        w = page_subset.build(ORACLE, NATIVE, {0, 1, 2, 3, 4, 5})
+        self.assertEqual(w[0x780], 0x01DF21D0)
+        self.assertEqual(w[0x788], 0x000E200E)
+
+    def test_text_form_round_trips_and_bounds_the_type_set(self):
+        text = page_subset.render(page_subset.build(ORACLE, NATIVE, set()), "t")
+        self.assertIn("WORD 0x680 0x007b0200", text)
+        self.assertTrue(text.rstrip().endswith("# end words=%d" % text.count("WORD ")))
+        with self.assertRaises(ValueError):
+            page_subset.build(ORACLE, NATIVE, {6})
 
 
 if __name__ == "__main__":
