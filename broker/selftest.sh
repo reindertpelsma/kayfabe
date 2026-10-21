@@ -365,7 +365,7 @@ check "ABS flows when focused and inside" '[[:space:]]ABS[[:space:]]+flags=-F x=
 run_case 'p 1
 a 10 20
 '
-check "ABS flows unfocused but inside (hover)" '[[:space:]]ABS[[:space:]]+flags=-F x=10 y=20' "$CASE_OUT"
+check "ABS flows unfocused but inside (hover)" '[[:space:]]ABS[[:space:]]+flags=-- x=10 y=20' "$CASE_OUT"
 
 run_case 'a 10 20
 '
@@ -384,8 +384,8 @@ run_case 'p 1
 b 272 1
 b 272 0
 '
-check "BTN press flows unfocused but inside (the click that focuses)" 'BTN[[:space:]]+flags=-F x=272 y=1' "$CASE_OUT"
-check "BTN release flows unfocused but inside" 'BTN[[:space:]]+flags=-F x=272 y=0' "$CASE_OUT"
+check "BTN press flows unfocused but inside (the click that focuses)" 'BTN[[:space:]]+flags=-- x=272 y=1' "$CASE_OUT"
+check "BTN release flows unfocused but inside" 'BTN[[:space:]]+flags=-- x=272 y=0' "$CASE_OUT"
 
 run_case 'b 272 1
 b 272 0

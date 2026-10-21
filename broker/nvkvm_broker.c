@@ -725,11 +725,24 @@ void nb_sink_key(struct nb_sink *s, unsigned code, bool down)
 
 void nb_sink_btn(struct nb_sink *s, unsigned code, bool down)
 {
-    if (code >= 768 || !s->focused) {
+    if (code >= 768) {
         return;
     }
-    /* Without a grab, a click outside the window is not ours to forward. */
-    if (!s->grabbed && !s->pointer_in) {
+    /*
+     * Under a grab the window is, by construction, the focused one (focus loss
+     * drops the grab).  Without a grab, a button is forwarded when the host
+     * pointer is over this window, focused or not: the compositor focuses a
+     * window on the click that is delivered to it (click-to-focus), so gating
+     * on focus would drop exactly the click that activates the window.  A
+     * click outside the window is not ours to forward.  A RELEASE of a button
+     * we sent a press for is always forwarded, so a button cannot stay down in
+     * the guest because focus or the pointer moved away first.
+     */
+    if (down) {
+        if (s->grabbed ? !s->focused : !s->pointer_in) {
+            return;
+        }
+    } else if (!bit_get(s->key_down, code)) {
         return;
     }
     if (down == bit_get(s->key_down, code)) {
@@ -741,8 +754,13 @@ void nb_sink_btn(struct nb_sink *s, unsigned code, bool down)
 
 void nb_sink_abs(struct nb_sink *s, int x, int y, unsigned w, unsigned h)
 {
-    /* Under grab the client must never learn where the host pointer is. */
-    if (s->grabbed || !s->focused || !s->pointer_in) {
+    /*
+     * Under grab the client must never learn where the host pointer is.  Without
+     * a grab, hover is NOT focus-gated: the compositor delivers pointer events
+     * only for the visible surface under the pointer, so "pointer_in" already
+     * means the window is not hidden behind another one (owner, 2026-10-21).
+     */
+    if (s->grabbed || !s->pointer_in) {
         return;
     }
     nb_emit(s, NVKVM_BROKER_EV_ABS, x, y, w, h);
@@ -761,7 +779,9 @@ void nb_sink_rel(struct nb_sink *s, int dx, int dy)
 
 void nb_sink_wheel(struct nb_sink *s, int v, int h)
 {
-    if (!s->focused || (!s->grabbed && !s->pointer_in)) {
+    /* Scroll follows the hover rule: under grab only while focused, otherwise
+     * whenever the pointer is over the window. */
+    if (s->grabbed ? !s->focused : !s->pointer_in) {
         return;
     }
     nb_emit(s, NVKVM_BROKER_EV_WHEEL, v, h, 0, 0);
