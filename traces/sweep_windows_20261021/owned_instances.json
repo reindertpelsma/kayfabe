@@ -67,7 +67,7 @@
     "auto_destroy_verified": true,
     "auto_destroy_armed_utc": "2026-10-21T14:04:00.899456+00:00",
     "observed_dph_total": 0.4473333333333333,
-    "stage": "NativePASS; GPU checkpoint STOP rc7 pending exact native31 baseline decision. Independent generic LTSC install boot exit0 at15:06:12UTC; standardVGA check boot93698 active. NVIDIA bind/ON and LinuxguestUNRUN.",
+    "stage": "NativePASS; GPU checkpointSTOP rc7 pending exact native31 baseline decision. Generic LTSC stdVGA install/checkPASS/sealed15:08:44UTC, no QEMU processes, exactnativeXidlogunchanged. NVIDIA bind/ON/LinuxguestUNRUN; teardown next to avoid idle lease.",
     "gpu_offer_ram_mb": 16380,
     "actual_die": "AD106",
     "controller_pid": 1634,
@@ -84,6 +84,8 @@
     "controller_exit": 7,
     "media_pid": 90395,
     "media_exit": 0,
-    "standard_vga_install_pid": 90624
+    "standard_vga_install_pid": 90624,
+    "standard_vga_install_exit": 0,
+    "standard_vga_check_failures": 0
   }
 ]
