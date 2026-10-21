@@ -810,4 +810,45 @@ mod fixture_tests {
         classes.retain(|c| GrClass::of_class(*c) != Some(GrClass::ThreeD));
         assert!(gr_segment(&classes).is_err());
     }
+    #[test]
+    fn native_ce_fixture_uses_the_allocated_class_for_every_family() {
+        for family in kf_chip::Family::ALL {
+            for &class in
+                kf_chip::classes::classes_for(family).of_kind(kf_chip::classes::Kind::DmaCopy)
+            {
+                let words = ce_segment(class).unwrap();
+                assert_eq!(
+                    words[4], class,
+                    "{family:?}: native bind must select its allocated host object"
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn blackwell_ce_fixture_changes_only_the_class_operand() {
+        let classes = kf_chip::classes::classes_for(kf_chip::Family::Blackwell);
+        let class = *classes
+            .of_kind(kf_chip::classes::Kind::DmaCopy)
+            .last()
+            .unwrap();
+        let words = ce_segment(class).unwrap();
+        assert_ne!(class, RUN31_CE[4]);
+        assert_eq!(words[4], class);
+        for i in 0..RUN31_CE.len() {
+            if i != 4 {
+                assert_eq!(words[i], RUN31_CE[i], "operand{i}");
+            }
+        }
+    }
+
+    #[test]
+    fn native_ce_fixture_refuses_a_zero_class() {
+        assert!(ce_segment(0).is_err());
+    }
+
+    #[test]
+    fn native_ce_fixture_refuses_a_graphics_class() {
+        assert!(ce_segment(0x902d).is_err());
+    }
 }
