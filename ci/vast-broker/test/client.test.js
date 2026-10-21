@@ -13,7 +13,7 @@ async function client(state,verdict='UNAVAILABLE',code=200,pending=false){
   const curl=join(directory,'curl');
   await writeFile(curl,`#!/usr/bin/env node
 const fs=require('node:fs');const args=process.argv.slice(2);const url=args.at(-1);
-if(url.includes('/statuses/')){const body=args[args.indexOf('--data-binary')+1].slice(1);fs.appendFileSync(process.env.STATUS_LOG,fs.readFileSync(body)+'\\n');process.stdout.write('{}');}
+if(url.includes('/statuses/')){const body=args[args.indexOf('--data-binary')+1].slice(1);fs.appendFileSync(process.env.STATUS_LOG,JSON.stringify(JSON.parse(fs.readFileSync(body,'utf8')))+'\\n');process.stdout.write('{}');}
 else if(url.includes('oidc.example'))process.stdout.write(JSON.stringify({value:'mock.jwt.value'}));
 else{const previous=fs.existsSync(process.env.CALL_LOG)?fs.readFileSync(process.env.CALL_LOG,'utf8').trim().split('\\n').length:0;fs.appendFileSync(process.env.CALL_LOG,'worker\\n');if(previous>=2)process.exit(77);let response=JSON.parse(process.env.MOCK_RESPONSE);if(process.env.FIRST_PENDING==='1'&&previous===0){response.state='RUNNING';response.verdict='UNAVAILABLE';}fs.writeFileSync(args[args.indexOf('-o')+1],JSON.stringify(response));process.stdout.write(process.env.MOCK_CODE);}
 `);await chmod(curl,0o700);
