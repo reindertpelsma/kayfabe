@@ -33,6 +33,6 @@
       "root_free_gb": 167,
       "kvm_present": true
     },
-    "stage": "Controller provisioning; no Windows init yet"
+    "stage": "Native595 gates9+10/raw30/CUDA4/correctedGRoracle PASS; generic LTSC installation active, product Windows init UNRUN"
   }
 ]

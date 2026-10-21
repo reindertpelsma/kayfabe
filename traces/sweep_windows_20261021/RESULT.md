@@ -1,4 +1,4 @@
-STATUS: LIVE, 2026-10-21. GPU-free merged source accepted; hardware pending.
+STATUS: LIVE, 2026-10-21. GPU-free merged source accepted; native GB202 passed, Windows preparation active.
 
 Owner task6: merge into new codex/sweep-win-20261021, WindowsONfirst onGB202,19flags+DIAG_PROGRESS1000,600secondCode0hold. Automatic source merge d93cf38e5 with candidate89fc8a222, no conflict/manualresolution. DraftPR55–61unmerged.
 
@@ -6,4 +6,4 @@ Release before/after:M2696/0/7, sweep2750/0/8, integrated2875/0/9; everycrate>=b
 
 SelectedincomingMmutants:drop-holder-re-ring2killers, ignoreunannounced2, omitretryregistration3. Sourcesrestored; protocol/sourcepins/kf-qemu396librarytests passagain. Prior13ownedsemanticmutants retainedunchanged. ThreeownRustfilesrustfmtpass. ImportedMlegacy helpercopies scope38historicalmodelcaseslistedexplicitly, notrepresented ascurrentproductioncoverage.
 
-Oldovernightleases closed: invoice56949833=2.189USD,56964717=2.802USD,total4.991. Theseareoutside new8cap/6stopstretch. Initialnewcredit24.727566; no newrentalsyet. SSHbundle istextonly/checksummed/timeoutbounded, hasexplicitcontrollerPIDandautomaticteardownondeployfailure. Producttimeouts/heartbeat/TDRpolicy unchanged.
+Oldovernightleases closed: invoice56949833=2.189USD,56964717=2.802USD,total4.991. Theseareoutside new8cap/6stopstretch. Initialnewcredit24.727566; own57046541 active, auto-destroy14:37:55UTC armed first. Native595 health/gates/raw30/CUDA4/correctedGRoracle PASS; Windows LTSC installation active at12:16UTC (screenshot81percent), actual product initialization still UNRUN. SSHbundle istextonly/checksummed/timeoutbounded, hasexplicitcontrollerPIDandautomaticteardownondeployfailure. Producttimeouts/heartbeat/TDRpolicy unchanged.
