@@ -1,0 +1,2 @@
+{"bugcheck": "0x116", "parameters": ["0xffff8485b160e010", "0xfffff80020bf4930", "0xffffffffc000009a", "0x4"], "system_time_filetime": "134370976677345985", "system_time_utc": "2026-10-21T23:07:47.734598+00:00", "file": "C:/Windows/Minidump/102126-35640-01.dmp", "bytes": 2083576}
+{"bugcheck": "0x193", "parameters": ["0x815", "0x2", "0xffff8485ac6a0080", "0x0"], "system_time_filetime": "134370976381228884", "system_time_utc": "2026-10-21T23:07:18.122888+00:00", "file": "C:/Windows/LiveKernelReports/WATCHDOG-20261021-2307.dmp", "bytes": 1051373568}
