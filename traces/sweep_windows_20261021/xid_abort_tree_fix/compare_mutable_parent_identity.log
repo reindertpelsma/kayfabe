@@ -1,0 +1,28 @@
+test_reparented_owned_child_is_resumed_for_queued_term (test_xid_abort_tree.AbortIdentityTests.test_reparented_owned_child_is_resumed_for_queued_term) ... FAIL
+test_reparented_owned_child_still_receives_term (test_xid_abort_tree.AbortIdentityTests.test_reparented_owned_child_still_receives_term) ... FAIL
+test_reused_pid_does_not_inherit_abort_ownership (test_xid_abort_tree.AbortIdentityTests.test_reused_pid_does_not_inherit_abort_ownership) ... ok
+test_new_xid_terminates_nested_timeout_group (test_xid_abort_tree.AbortTreeTests.test_new_xid_terminates_nested_timeout_group) ... ok
+test_new_xid_terminates_owned_setsid_descendant (test_xid_abort_tree.AbortTreeTests.test_new_xid_terminates_owned_setsid_descendant) ... ok
+
+======================================================================
+FAIL: test_reparented_owned_child_is_resumed_for_queued_term (test_xid_abort_tree.AbortIdentityTests.test_reparented_owned_child_is_resumed_for_queued_term)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/workspace/sweep-wt2/scripts/bench/tests/test_xid_abort_tree.py", line 104, in test_reparented_owned_child_is_resumed_for_queued_term
+    self.assertIn((801,signal.SIGCONT),self.run_identity_case(False))
+    ~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: (801, <Signals.SIGCONT: 18>) not found in [(800, <Signals.SIGSTOP: 19>), (800, <Signals.SIGSTOP: 19>), (801, <Signals.SIGSTOP: 19>), (800, <Signals.SIGSTOP: 19>), (801, <Signals.SIGSTOP: 19>), (800, <Signals.SIGSTOP: 19>), (801, <Signals.SIGSTOP: 19>), (800, <Signals.SIGTERM: 15>), (801, <Signals.SIGTERM: 15>), (800, <Signals.SIGCONT: 18>)]
+
+======================================================================
+FAIL: test_reparented_owned_child_still_receives_term (test_xid_abort_tree.AbortIdentityTests.test_reparented_owned_child_still_receives_term)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/workspace/sweep-wt2/scripts/bench/tests/test_xid_abort_tree.py", line 108, in test_reparented_owned_child_still_receives_term
+    self.assertIn((801,signal.SIGTERM),signals)
+    ~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: (801, <Signals.SIGTERM: 15>) not found in [(800, <Signals.SIGSTOP: 19>), (800, <Signals.SIGSTOP: 19>), (801, <Signals.SIGSTOP: 19>), (800, <Signals.SIGSTOP: 19>), (801, <Signals.SIGSTOP: 19>), (800, <Signals.SIGSTOP: 19>), (801, <Signals.SIGSTOP: 19>), (800, <Signals.SIGTERM: 15>), (800, <Signals.SIGCONT: 18>)]
+
+----------------------------------------------------------------------
+Ran 5 tests in 0.347s
+
+FAILED (failures=2)

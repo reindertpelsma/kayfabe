@@ -1,6 +1,9 @@
 #!/usr/bin/env python3
 """The real sweep waits behind timeout groups; abort must reach owned descendants."""
 import json
+import importlib.util
+from types import SimpleNamespace
+from unittest import mock
 import os
 from pathlib import Path
 import signal
@@ -76,6 +79,39 @@ class AbortTreeTests(unittest.TestCase):
 
     def test_new_xid_terminates_owned_setsid_descendant(self):
         self.run_case('setsid')
+
+
+class AbortIdentityTests(unittest.TestCase):
+    def run_identity_case(self, reuse):
+        spec=importlib.util.spec_from_file_location('abort_guard_identity',GUARD)
+        guard=importlib.util.module_from_spec(spec);spec.loader.exec_module(guard)
+        identities={800:(1,100),801:(800,200)}
+        signals=[]
+        def kill(pid,sig):
+            signals.append((pid,sig))
+            if reuse is True and pid==800 and sig==signal.SIGTERM:
+                identities[801]=(999,201)
+            elif reuse=='reparent_before' and pid==800 and sig==signal.SIGTERM:
+                identities[801]=(1,200)
+            elif reuse is False and pid==801 and sig==signal.SIGTERM:
+                identities[801]=(1,200)
+        directory=SimpleNamespace(iterdir=lambda:iter([SimpleNamespace(name='800'),SimpleNamespace(name='801')]))
+        with mock.patch.object(guard,'Path',return_value=directory), mock.patch.object(guard,'process_identity',side_effect=lambda pid:identities.get(pid)), mock.patch.object(guard.os,'getpid',return_value=900), mock.patch.object(guard.os,'getpgrp',return_value=800), mock.patch.object(guard.os,'getpgid',return_value=800), mock.patch.object(guard.os,'kill',side_effect=kill), mock.patch.object(guard.os,'killpg'):
+            guard.terminate_owned_tree(800)
+        return signals
+
+    def test_reparented_owned_child_is_resumed_for_queued_term(self):
+        self.assertIn((801,signal.SIGCONT),self.run_identity_case(False))
+
+    def test_reparented_owned_child_still_receives_term(self):
+        signals=self.run_identity_case('reparent_before')
+        self.assertIn((801,signal.SIGTERM),signals)
+        self.assertIn((801,signal.SIGCONT),signals)
+
+    def test_reused_pid_does_not_inherit_abort_ownership(self):
+        signals=self.run_identity_case(True)
+        self.assertNotIn((801,signal.SIGTERM),signals)
+        self.assertNotIn((801,signal.SIGCONT),signals)
 
 
 if __name__=='__main__':unittest.main()

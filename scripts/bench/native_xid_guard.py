@@ -113,6 +113,84 @@ def kernel_snapshot():
             p.wait(timeout=10)
 
 
+def process_identity(pid):
+    try:
+        with Path('/proc', str(pid), 'stat').open() as f:
+            text = f.read(4097)
+        if len(text) > 4096:
+            raise GuardRefused('process identity byte bound exceeded')
+        fields = text.rpartition(')')[2].split()
+        return int(fields[1]), int(fields[19])  # PPid and starttime, after comm.
+    except FileNotFoundError:
+        return None
+
+
+def terminate_owned_tree(root):
+    """Freeze and terminate the recorded controller's descendants, across PGIDs.
+
+    timeout/setsid can create new groups. A group signal alone leaves those GPU
+    jobs alive while a shell waits to run its TERM trap. Starttimes prevent PID
+    reuse from extending ownership to another process.
+    """
+    current = os.getpid()
+    if root <= 1 or os.getpgrp() != root or os.getpgid(root) != root:
+        raise GuardRefused('abort target is not the own controller group')
+    frozen = {}
+
+    def same(pid, identity):
+        now = process_identity(pid)
+        # Parentage proves the original tree, but changes when a parent exits.
+        # The immutable starttime, rather than PPid, identifies the same task.
+        return now is not None and now[1] == identity[1]
+
+    try:
+        identity = process_identity(root)
+        if root != current and identity is not None:
+            os.kill(root, signal.SIGSTOP)
+            frozen[root] = identity
+        for _ in range(3):
+            records = {}
+            for p in Path('/proc').iterdir():
+                if not p.name.isdigit():
+                    continue
+                if len(records) >= 16384:
+                    raise GuardRefused('owned-tree process bound exceeded')
+                identity = process_identity(int(p.name))
+                if identity is not None:
+                    records[int(p.name)] = identity
+            owned = {root}
+            while True:
+                found = {pid for pid, (parent, _) in records.items() if parent in owned}
+                if found <= owned:
+                    break
+                owned |= found
+            for pid in owned - {current}:
+                identity = records.get(pid)
+                if identity is not None and same(pid, identity):
+                    try:
+                        os.kill(pid, signal.SIGSTOP)
+                        frozen[pid] = identity
+                    except ProcessLookupError:
+                        pass
+    finally:
+        # Queue every TERM while the tree is frozen; resume children before the
+        # controller so its EXIT trap cannot kill this watcher prematurely.
+        for pid, identity in frozen.items():
+            if same(pid, identity):
+                try:
+                    os.kill(pid, signal.SIGTERM)
+                except ProcessLookupError:
+                    pass
+        order = [pid for pid in frozen if pid != root] + ([root] if root in frozen else [])
+        for pid in order:
+            if same(pid, frozen[pid]):
+                try:
+                    os.kill(pid, signal.SIGCONT)
+                except ProcessLookupError:
+                    pass
+        os.killpg(root, signal.SIGTERM)
+
+
 def main():
     p = argparse.ArgumentParser(description=__doc__)
     sub = p.add_subparsers(dest='mode', required=True)
@@ -138,7 +216,7 @@ def main():
                     try:
                         Path(a.fatal_receipt).write_text(json.dumps({'STOP': str(error), 'owned_pgid': a.owned_pgid}) + '\n')
                     finally:
-                        os.killpg(a.owned_pgid, signal.SIGTERM)
+                        terminate_owned_tree(a.owned_pgid)
                     raise
                 time.sleep(1)  # Bench observation only; no product timer is changed.
     except (GuardRefused, OSError, ValueError, subprocess.SubprocessError) as error:
