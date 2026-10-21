@@ -774,7 +774,10 @@ licence, compiled or decompiled (disassembly, Ghidra, decompiler output, disasse
 is reverse engineering and falls under the RE rules (the constant ruling, kayfabe-private only, nothing
 derived, no public references), not only the use of RE tools. Traces (interfaces, ordinals, RPC and
 event logs, observed behaviour) are not about the code and may be inspected freely. Earlier private RE
-work may be built upon.
+work may be built upon. Following assembly of open-source-licensed code is NOT RE: the open GPU kernel
+modules (ogkm) are OSS-licensed, so a disassembly of a full ogkm build, whether built by us or
+distributed by NVIDIA, contains nothing proprietary and may be inspected freely. That applies only to
+full ogkm builds (Linux guests), not to the proprietary driver, whose binaries stay under the RE rules.
 
 ## T. Directives recovered from earlier sessions (filtered 2026-10-08)
 
