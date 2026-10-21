@@ -61,3 +61,6 @@ for(const restart of [false,true])test('superseding push destroys old instance a
  assert.equal(await state(await h.call('/rent',{claims:{run_id:'124',sha:'f'.repeat(40)}})),'BUSY');assert.equal(h.cloud.creates,1);assert.deepEqual(h.cloud.deletes,['900']);
 });
 test('cron destroys superseded PR without incoming run',async()=>{const h=await setup();await rent(h);h.cloud.prs[0].head.sha='e'.repeat(40);await h.service.sweep();assert.deepEqual(h.cloud.deletes,['900']);});
+test('documented Vast verification string is accepted without boolean alias',async()=>{const h=await setup();delete h.cloud.offer.verified;h.cloud.offer.verification='verified';assert.equal((await h.call()).status,200);});
+test('documented display GPU names map to the fixed model allowlist',async()=>{const h=await setup();h.cloud.offer.gpu_name='RTX 4070';assert.equal((await h.call()).status,200);});
+test('offer request uses documented ondemand enum and selected disk',async()=>{const h=await setup();await h.call();const q=h.cloud.calls.find(c=>c.url.endsWith('/bundles')).body;assert.equal(q.type,'ondemand');assert.equal(q.allocated_storage,120);});
