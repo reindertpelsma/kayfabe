@@ -1,0 +1,13 @@
+MEASURED: supervisor output, before any GPU unbind or VFIO launch
+/dev/nvidia-modeset: 867201 869795 871167 4102873
+/dev/nvidia0:        867201m 869795m 871167m 4102873m
+/dev/nvidiactl:      867201m 869795m 871167m 4102873m
+/dev/dri/renderD128: 867201 869795 871167 4102873
+/dev/dri/card1:          1  2135 869795 4102873m
+SESSION_ERROR SAFETY_REFUSED: GPU nodes still open; no foreign PIDs killed
+NVIDIA GeForce RTX 4070, 595.91.07
+RESTORED True ERRORS []
+
+MEASURED: RESTORED True above checks drivers/commands only. Subsequent loginctl
+verification shows a GDM greeter, no ubuntu desktop; full desktop restoration
+is PARTIAL. No retry after the safety refusal.

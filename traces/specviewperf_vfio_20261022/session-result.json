@@ -1,0 +1,8 @@
+{
+  "reason": "SAFETY_REFUSED: GPU nodes still open; no foreign PIDs killed",
+  "restored": true,
+  "xid_before": 26,
+  "xid_after": 26,
+  "qemu_exit": null,
+  "ended_utc": "2026-10-21T23:26:23.792482+00:00"
+}

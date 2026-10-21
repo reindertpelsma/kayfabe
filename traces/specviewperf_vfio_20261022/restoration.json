@@ -1,0 +1,19 @@
+{
+  "evidence": "MEASURED",
+  "verified_utc": "2026-10-21T23:27:55.975251+00:00",
+  "gpu_driver": "nvidia",
+  "audio_driver": "snd_hda_intel",
+  "display_manager": "active",
+  "nvidia_smi": "RTX 4070; driver 595.91.07; success",
+  "desktop_session": "GDM greeter on seat0; no ubuntu desktop session",
+  "full_desktop_restored": false,
+  "ssh_reachable": true,
+  "host_xid_before": 26,
+  "host_xid_after": 26,
+  "vfio_boots": 0,
+  "live_lane_pids": 0,
+  "overlay_removed": true,
+  "gpu_lock_released": true,
+  "cargo_builds": 0,
+  "lane_target_created": false
+}
