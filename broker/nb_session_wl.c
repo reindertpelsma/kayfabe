@@ -509,6 +509,7 @@ struct nb_wl {
      * it, so a frame whose scale did not change costs one comparison.
      */
     const struct nb_cursor *gcur;
+    unsigned                xo_log_key; /* last inputs of the host-pointer decision that were logged (xo_eval) */
     struct nb_cursor       *gcrop;      /* the host pointer's cropped copy (gc_ptr_view), lazily allocated */
     struct wl_surface      *gc_surf;
     /*
@@ -2425,13 +2426,12 @@ static void xo_eval(struct nb_wl *w, const struct nb_wl_buf *fb,
          * inputs of the decision change (hover mode hides it when the guest
          * cursor is undefined/invisible, no frame is shown, or the enter serial
          * is missing): a hidden cursor must be explainable from the log. */
-        static unsigned last_key = ~0u;
         const unsigned key = (w->gcur && w->gcur->defined ? 1u : 0u) | (w->gcur && w->gcur->visible ? 2u : 0u) |
                              (v.shown_ok ? 4u : 0u) | (v.ptr_inside ? 8u : 0u) | (v.serial_ok ? 16u : 0u) |
                              (v.grabbed ? 32u : 0u) | ((unsigned)r->act.ptr << 8);
 
-        if (nb_verbose && key != last_key) {
-            last_key = key;
+        if (nb_verbose && key != w->xo_log_key) {
+            w->xo_log_key = key;
             nb_log("cursor: decision defined=%d visible=%d frame_shown=%d pointer_on_content=%d enter_serial=%d grabbed=%d -> host pointer action %d",
                    !!(key & 1), !!(key & 2), !!(key & 4), !!(key & 8), !!(key & 16), !!(key & 32), (int)r->act.ptr);
         }
@@ -2622,26 +2622,6 @@ static bool gc_render(struct nb_wl *w)
     w->gc_geom = g;
     w->gc_bgeom = b;
     if (nb_verbose) {
-        /* what the image really holds, so "invisible" can be told from "empty": counts by alpha and the alpha box */
-        uint32_t k, n_nz = 0, n_a = 0, n_opq = 0, ax0 = c->w, ay0 = c->h, ax1 = 0, ay1 = 0;
-
-        for (k = 0; k < c->w * c->h; k++) {
-            const uint32_t v = c->px[k], a = v >> 24;
-
-            n_nz += v != 0;
-            n_a += a != 0;
-            n_opq += a == 255;
-            if (a != 0) {
-                const uint32_t px_x = k % c->w, px_y = k / c->w;
-
-                ax0 = px_x < ax0 ? px_x : ax0;
-                ax1 = px_x > ax1 ? px_x : ax1;
-                ay0 = px_y < ay0 ? px_y : ay0;
-                ay1 = px_y > ay1 ? px_y : ay1;
-            }
-        }
-        nb_log("cursor: image content %ux%u: %u non-zero px, %u with alpha, %u opaque, alpha box x %u..%u y %u..%u, xor=%d",
-               c->w, c->h, n_nz, n_a, n_opq, ax0, ax1, ay0, ay1, (int)c->xor);
         nb_log("cursor: host pointer image %ux%u (buffer %ux%u, buffer_scale %u), hot spot %u,%u of the "
                "guest's %u,%u, frame fit %d/%d, output scale %u/120", g.w, g.h, b.w, b.h, b.w / g.w,
                g.hot_x, g.hot_y, c->hot_x, c->hot_y, w->fit_w, w->buf_w, w->scale_120);
@@ -3083,6 +3063,8 @@ static void gc_drop(struct nb_wl *w)
         munmap(w->gc_px, NB_GC_SLOTS * NB_GC_SLOT_BYTES);
         w->gc_px = NULL;
     }
+    free(w->gcrop);
+    w->gcrop = NULL;
     w->gc_valid = false;
     w->gc_on = false;
 }
