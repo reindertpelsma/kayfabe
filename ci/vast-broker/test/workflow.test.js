@@ -29,3 +29,4 @@ for(const defect of ['none','guest-fail','bare-fail','gate-fail','missing'])test
 });
 test('flow-style attestation job cannot bypass the dependency guard',async()=>{const {checkWorkflows}=await moduleGuard();assert.ok(checkWorkflows({'gpu-vast.yml':simple('  attest: {needs: gpu, steps: [{uses: actions/attest@v2}]}\n')}).length);});
 test('flow-style release dependency cannot be silently ignored',async()=>{const {checkWorkflows}=await moduleGuard();assert.ok(checkWorkflows({'gpu-vast.yml':simple('  release: {needs: gpu, steps: []}\n')}).length);});
+test('quoted release job cannot bypass structural parsing',async()=>{const {checkWorkflows}=await moduleGuard();assert.ok(checkWorkflows({'gpu-vast.yml':simple("  'release':\n    needs: gpu\n    steps: []\n")}).length);});
