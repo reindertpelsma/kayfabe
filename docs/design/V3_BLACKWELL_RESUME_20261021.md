@@ -165,6 +165,36 @@ SystemTime of every dump, `LiveKernelReports` listing with times, System/Applica
 On the dev box only (not git): `abort_context`, raw logs, minidump, live dump headers. Teardown by id with
 verified API absence, then write the lease into `traces/die_driver_sweep_20261015/COST.md`.
 
+# 5a. Owner rulings relayed during the session (2026-10-21 evening) and what they change
+
+1. **Blackwell is the priority; the card does not matter; constants follow the table.** Anything this lane
+   would ship must come from the per-die constant table's tier order (`kf_rm::consttab`; public ogkm, then
+   host-derived, then the VFIO reference), never from a captured page. The `KF3_DIAG_CAPS_PAGE_FILE` arm
+   (A1) reads this box's own die and therefore stays a **diagnostic on a separate, never-merged branch**
+   (`claude/blackwell-resume-diag-20261021`); it can only say *which* words matter, and the fix would then
+   be re-derived from public headers. Nothing in that file is copied into the repository.
+2. **Black box first, time-boxed.** Time-box: **this lease's arms 1-3 (about 50 minutes of arms) plus the
+   GPU-free read of their output (about 60 minutes) are the whole black-box phase.** If they do not
+   locate the cause, I stop and message the coordinator **before** any reverse engineering so the setup can be
+   confirmed. The rental copies needed for that (small minidump, live-dump header, the guest's own
+   `nvlddmkm.sys` and Microsoft images) go to a directory outside every git tree on the dev box
+   (`/root/kf-private-data/blackwell_20261021/`), never to the public repository. Under the owner's rules
+   RE would be for diagnosis only, notes and decompiles only in `/root/kayfabe-private-clone`, nothing
+   derived from it becomes a constant or code value, and this public memo would say only "diagnosed with
+   private tooling". **No RE has been done and none is started by this plan.** (Sections 6's D1/D2/D4 are
+   superseded by this ruling for the dump-copy question; the Microsoft-symbol part remains as written.)
+3. **Budget.** Lane stop stays 6 USD until a first lease shows progress; then this memo / the final message
+   asks for the next cap instead of stopping silently. (Part 5's 4.0 USD proposal is inside it.)
+4. **Notifier 196 (GC6 reduced-threshold, PR56, section S.1 versus S.3): undecided.** The run revision
+   contains the stub row (it is in the frozen af8 stack). What changes without it: MEASURED
+   `blackwell_resume_20261020` fix1 arms (no stub, n=3) stop at the refused 196 arming with **Code 43** on
+   the display-OFF path (RPC ordinal 416), so **arm 3 and every display-OFF question exist only with the stub**
+   (without it there is no Code 0, hence no 141/0x116 to explain). The display-ON arms 1-2 do not depend on it:
+   ON aborts or crashes at ordinal 275, long before the 196 arming (ordinal 416 in the OFF flow; MEASURED
+   H-ON-INDEPENDENT, n=10). So the plan works either way for ON; for OFF it states its dependence and
+   makes no claim about the stub's correctness. If the owner rules the stub out, arm 3 is dropped and (b) is
+   not reachable on GB202 until another route past 196 exists.
+
 # 6. Symbols: what can and cannot be analysed (owner decisions listed, nothing assumed)
 
 Public Microsoft symbols for `ntoskrnl` and `dxgkrnl` are fine. The earlier CDB run failed because it had the
