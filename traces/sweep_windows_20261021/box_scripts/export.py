@@ -4,7 +4,7 @@ from pathlib import Path
 log=Path(sys.argv[1]); out=Path(sys.argv[2]); out.mkdir(parents=True,exist_ok=True)
 data=log.read_bytes(); assert len(data)<512*1024*1024
 lines=data.decode('utf-8','replace').splitlines()
-TR=re.compile(r'kf-rm: rpc-trace fn=(\d+) (\w+) seq=(\d+) ?(?:cmd=(0x[0-9a-f]+)|class=(0x[0-9a-f]+))?.*? result=(\S+)')
+TR=re.compile(r'kf-rm: rpc-trace fn=(\d+) ([A-Za-z0-9_]+(?:\(\d+\))?) seq=(\d+) ?(?:cmd=(0x[0-9a-f]+)|class=(0x[0-9a-f]+))?.*? result=(\S+)')
 rows=[];idx=[]
 for i,l in enumerate(lines):
   m=TR.search(l)

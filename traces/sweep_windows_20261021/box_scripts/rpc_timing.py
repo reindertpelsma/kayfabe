@@ -6,7 +6,7 @@ log,out,pid=Path(sys.argv[1]),Path(sys.argv[2]),int(sys.argv[3]);assert log.is_f
 def stopped(*_):
  global stop;stop=True
 signal.signal(signal.SIGTERM,stopped)
-pat=re.compile(r'kf-rm: rpc-trace fn=(\d+) (\w+) seq=(\d+) ?(?:cmd=(0x[0-9a-f]+)|class=(0x[0-9a-f]+))?.*? result=(\S+)')
+pat=re.compile(r'kf-rm: rpc-trace fn=(\d+) ([A-Za-z0-9_]+(?:\(\d+\))?) seq=(\d+) ?(?:cmd=(0x[0-9a-f]+)|class=(0x[0-9a-f]+))?.*? result=(\S+)')
 start=time.monotonic();rows=bad=0;reason='duration_limit';source_bytes=0;identity=log.stat().st_ino;pending=b''
 with log.open('rb') as src,out.open('w') as sink:
  while time.monotonic()-start<900 and rows<32768 and source_bytes<64*1024*1024:
