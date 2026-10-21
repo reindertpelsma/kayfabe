@@ -42,5 +42,32 @@
     "cost_upper_bound_usd": 3.871614478472222,
     "cost_note": "Runtime estimate and shared-account credit delta are observations, not settled attribution. Budget guard reserves1USD for delayed transfer billing until invoices reconcile.",
     "auto_destroy_cancelled_after_absence": true
+  },
+  {
+    "id": 57064037,
+    "role": "Owner task6 remaining AdaAD106 Windows580.88 displayON and Linux595 guest suite,16GB board",
+    "offer": 49744624,
+    "machine_id": 16592,
+    "gpu_offer": "RTX 4060 Ti",
+    "quote_dph": 0.3987222222222222,
+    "disk_gb_requested": 180,
+    "created_utc": "2026-10-21T14:04:00.877481+00:00",
+    "product_head": "1ce11cf4d640087d5be41b14b4f0b70cfc77e8c6",
+    "candidate": "89fc8a22291dd7bda69c3077ba829b1e934b11db",
+    "credit_before": 22.013140080063295,
+    "stretch_start_credit": 24.727565990962717,
+    "budget_cap": 8,
+    "budget_stop": 6,
+    "credit_reserve": 5,
+    "reservation_usd": 1.9546064814814812,
+    "auto_destroy_minutes": 175,
+    "hard_teardown_utc": "2026-10-21T18:30:00+00:00",
+    "destroyed": false,
+    "auto_destroy_pid": 2034630,
+    "auto_destroy_verified": true,
+    "auto_destroy_armed_utc": "2026-10-21T14:04:00.899456+00:00",
+    "observed_dph_total": 0.4473333333333333,
+    "stage": "Startup readiness/deployment, actualdie not yet measured",
+    "gpu_offer_ram_mb": 16380
   }
 ]
