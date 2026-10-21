@@ -127,6 +127,24 @@ class XidPolicy(unittest.TestCase):
         self.assertEqual(xid_policy.judge(noise, "on_a", 1, False)["verdict"], "CLEAN")
 
 
+class XidFailClosed(unittest.TestCase):
+    def test_unparsed_mmu_fault_is_fatal_even_in_exception_arm(self):
+        line = "NVRM: Xid (PCI:0000:00:07): 31, pid=99683, name=qemu-system-x86, channel 0x0000000c, MMU Fault: ENGINE CE0 HUBCLIENT_CE1 faulted @ 0x60_00010000. Fault is of type FAULT_PTE ACCESS_TYPE_VIRT_READ"
+        self.assertEqual(xid_policy.judge([line], "on_c3", 99683, True)["verdict"], "FATAL")
+
+    def test_malformed_xid_cannot_be_ignored_as_clean_noise(self):
+        line = "NVRM: Xid (PCI:0000:00:07): 32, pid=99683, name=qemu-system-x86, channel 0x0000000c intr UNKNOWN"
+        self.assertEqual(xid_policy.judge([line], "off_c", 99683, True)["verdict"], "FATAL")
+
+    def test_high_channel_must_have_only_an_eight_bit_suffix(self):
+        line = (XID % 99683).replace("0x0000000c", "0x0e000100")
+        self.assertEqual(xid_policy.judge([line], "on_c3", 99683, True)["verdict"], "FATAL")
+
+    def test_arbitrary_channel_under_the_high_prefix_is_fatal(self):
+        line = (XID % 99683).replace("0x0000000c", "0x0e123456")
+        self.assertEqual(xid_policy.judge([line], "off_c", 99683, True)["verdict"], "FATAL")
+
+
 ORACLE = (
     "# version=580.65.06 differences=3\n"
     "offset\tderived\tnative_oracle\theader\tb\tn\n"
