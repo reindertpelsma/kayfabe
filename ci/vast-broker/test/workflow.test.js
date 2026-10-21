@@ -27,3 +27,5 @@ for(const defect of ['none','guest-fail','bare-fail','gate-fail','missing'])test
  for(const [name,text] of Object.entries(files))if(!(defect==='missing'&&name==='births.log'))await writeFile(join(dir,name),text.replace(defect==='guest-fail'?'FAST_SUITE_PASS=30':defect==='bare-fail'?'BARE_SUITE_PASS=30':defect==='gate-fail'?'pass=9':'__never__','bad'));
  const r=spawnSync('bash',[path.pathname,'--check-results',dir],{encoding:'utf8',timeout:5000});assert.equal(r.status===0,defect==='none',r.stderr);
 });
+test('flow-style attestation job cannot bypass the dependency guard',async()=>{const {checkWorkflows}=await moduleGuard();assert.ok(checkWorkflows({'gpu-vast.yml':simple('  attest: {needs: gpu, steps: [{uses: actions/attest@v2}]}\n')}).length);});
+test('flow-style release dependency cannot be silently ignored',async()=>{const {checkWorkflows}=await moduleGuard();assert.ok(checkWorkflows({'gpu-vast.yml':simple('  release: {needs: gpu, steps: []}\n')}).length);});

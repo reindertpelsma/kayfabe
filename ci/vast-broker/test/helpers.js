@@ -48,7 +48,7 @@ export class MockCloud {
       if(this.githubError)return new Response('PRIVATE-UPSTREAM', {status:this.githubError});
       if(/\/actions\/runs\/\d+$/.test(u.pathname))return Response.json(this.run);
       if(/\/commits\/[a-f0-9]+\/pulls$/.test(u.pathname))return Response.json(this.prs);
-      if(/\/pulls\/7$/.test(u.pathname))return Response.json(this.prs[0]);
+      if(/\/pulls\/[0-9]+$/.test(u.pathname))return Response.json(this.prs.find(p=>String(p.number)===u.pathname.split('/').at(-1)));
       if(/\/pulls\/7\/reviews$/.test(u.pathname))return Response.json(this.reviewPages?.[Number(u.searchParams.get('page')||1)-1]||this.reviews);
       throw Error('Unexpected GitHub endpoint '+u.pathname);
     }

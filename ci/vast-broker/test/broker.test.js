@@ -68,3 +68,10 @@ test('complete documented display offer remains within fixed capability',async()
 for(const restart of [false,true])test('SHA cache does not rebill after gap expires '+restart,async()=>{const h=await setup();await rent(h);await finish(h);h.time.value+=25*3600000;h.cloud.run.id=124;if(restart)h.restart();
  const r=await h.call('/rent',{claims:{run_id:'124',exp:h.time.value/1000+300,nbf:h.time.value/1000-1}});assert.equal(r.status,200);assert.equal((await r.json()).verdict,'PASS');assert.equal(h.cloud.creates,1);
 });
+for(const restart of [false,true])test('another PR cannot create a second live rental '+restart,async()=>{const h=await setup();await rent(h);if(restart)h.restart();h.cloud.run.id=124;h.cloud.run.head_sha='e'.repeat(40);h.cloud.run.head_branch='other-pr';h.cloud.run.pull_requests=[{number:8,head:{sha:'e'.repeat(40)}}];
+ h.cloud.prs.push({number:8,state:'open',draft:false,user:{id:42},head:{sha:'e'.repeat(40),ref:'other-pr',repo:{full_name:'reindertpelsma/kayfabe'}},base:{repo:{full_name:'reindertpelsma/kayfabe'}}});
+ // This run needs its own reviews endpoint in the mock.
+ const original=h.cloud.fetch;h.cloud.fetch=async(u,i)=>String(u).includes('/pulls/8/reviews')?Response.json([]):original(u,i);h.restart();
+ assert.equal(await state(await h.call('/rent',{claims:{run_id:'124',ref:'refs/pull/8/merge'}})),'UNAVAILABLE_BUDGET');assert.equal(h.cloud.creates,1);
+});
+test('reconciliation cannot adopt a changed image',async()=>{const h=await setup();h.cloud.ambiguous=true;await h.call();h.cloud.instances.get('900').image_uuid='foreign';h.cloud.ambiguous=false;assert.equal(await state(await h.call()),'UNAVAILABLE');assert.deepEqual(h.cloud.inspected,[]);assert.deepEqual(h.cloud.deletes,[]);});
