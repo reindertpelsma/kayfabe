@@ -89,7 +89,7 @@ XID = "2026-10-21T13:42:27.205488+0000 ubuntu kernel: NVRM: Xid (PCI:0000:00:07)
 
 class XidPolicy(unittest.TestCase):
     def test_any_xid_in_a_non_exception_arm_is_fatal(self):
-        v = xid_policy.judge([XID % 99683], arm="on_a", qemu_pid=99683, code0_seen=True)
+        v = xid_policy.judge([XID % 99683], arm="native_x", qemu_pid=99683, code0_seen=True)
         self.assertEqual(v["verdict"], "FATAL")
 
     def test_the_exact_exception_allows_two_matching_xids_after_code0_only(self):
@@ -106,6 +106,19 @@ class XidPolicy(unittest.TestCase):
         self.assertEqual(xid_policy.judge([base.replace(": 32,", ": 31,")], "off_c", 99683, True)["verdict"], "FATAL")
         self.assertEqual(xid_policy.judge([XID % 1], "off_c", 99683, True)["verdict"], "FATAL")
         self.assertEqual(xid_policy.judge([base.replace("00200000", "00800000")], "off_c", 99683, True)["verdict"], "FATAL")
+
+    def test_on_arms_get_the_same_exception_only_after_full_init_and_only_in_the_observed_shape(self):
+        pair = [XID % 99683, (XID % 99683).replace("0x0000000c", "0x0e00000b")]
+        self.assertEqual(xid_policy.judge(pair, "on_b", 99683, True)["verdict"], "EXPECTED")
+        self.assertEqual(xid_policy.judge(pair, "on_b", 99683, False)["verdict"], "FATAL")
+        self.assertEqual(xid_policy.judge(pair, "on_c3", 99683, True)["verdict"], "EXPECTED")
+        # shape: one plain chid and one 0x0e0000xx chid, never two of a kind, never the same twice
+        plain2 = [XID % 99683, (XID % 99683).replace("0x0000000c", "0x00000014")]
+        self.assertEqual(xid_policy.judge(plain2, "on_b", 99683, True)["verdict"], "FATAL")
+        dup = [XID % 99683, XID % 99683]
+        self.assertEqual(xid_policy.judge(dup, "off_c", 99683, True)["verdict"], "FATAL")
+        single = [XID % 99683]
+        self.assertEqual(xid_policy.judge(single, "on_b", 99683, True)["verdict"], "EXPECTED")
 
     def test_no_xid_is_clean_and_non_xid_lines_are_ignored(self):
         self.assertEqual(xid_policy.judge([], "on_a", 1, False)["verdict"], "CLEAN")
