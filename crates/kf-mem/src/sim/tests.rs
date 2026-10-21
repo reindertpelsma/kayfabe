@@ -1740,7 +1740,7 @@ fn run_seed(
         let splits = m.bv.unsafe_splits.load(Relaxed);
         if splits != 0 {
             return Err(format!(
-                "step {step} ({what}): {splits} range(s) refused as unsafe splits"
+                "step {step} ({what}): {splits} range(s) refused as splits that are not safe"
             ));
         }
         // A range over a gap is a defect — except the retry of a range host RM answered with an

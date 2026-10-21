@@ -197,7 +197,7 @@ The rule for the default layer (owner, 2026-10-13: unknown means off): the id is
 
 #### Risk table: each of the 34
 
-"ogkm" is the 221-tag search of section 6 (*the 87 unknown controls*) (33 of the 34 are absent from every tag; `0x00730122` exists only before 555.42.02, as a different control. ogkm therefore **cannot** say what any of them returns, which is why no row says "ogkm: returns X"). "calls" are requests/replies over the five captures [M]; "screen" is `body_screen.py` over every distinct request and reply body (a = printable run, h = random-looking window, r = ROM signature).
+"ogkm" is the 221-tag search of section 6 (*the 87 unknown controls*) (33 of the 34 are absent from every tag; `0x00730122` exists only before 555.42.02, as a different control. ogkm therefore **cannot** say what any of them returns, which is why no row says "ogkm returns X"). "calls" are requests/replies over the five captures [M]; "screen" is `body_screen.py` over every distinct request and reply body (a = printable run, h = random-looking window, r = ROM signature).
 
 | id | what the constants page says | calls req/rep | reply B | distinct replies | screen | decision |
 |---|---|---:|---:|---:|---|---|

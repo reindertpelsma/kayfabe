@@ -14,8 +14,10 @@ Revisit only if (a) a displayless profile for custom (`GRID_BUILD`) guests becom
 measured lines imply. `REPO` = a statement in the kayfabe tree at `origin/integration/windows-20261010`
 (`8006168d4`), read, not re-run. **Nothing here was run.**
 
-**Paths.** `ogkm:` = `/workspace/ogkm-tars/open-gpu-kernel-modules-595.84` (public ogkm 595.84 tree, the
-only ogkm version used; no host reads were needed). `kf:` = the kayfabe repo at the revision above.
+**Paths.** `ogkm-595:` = `/workspace/ogkm-tars/open-gpu-kernel-modules-595.84` (public ogkm 595.84 tree, the
+only ogkm version used; no host reads were needed). ⊘ 2026-10-21: every citation below was written as a bare `ogkm` + colon
+(CI's untagged-citation ratchet); it is now tagged `ogkm-595:`, the one tree this document names. The tag was applied
+mechanically from that statement; the citations were not re-read. `kf:` = the kayfabe repo at the revision above.
 
 ---
 
@@ -85,51 +87,51 @@ protocol's own down-negotiation (it cannot make `rpc_result` and `rpc_result_pri
 
 | Step | What happens | Source |
 |---|---|---|
-| a | Before the GPU object exists, RM reads `NV_PMC_BOOT_0/1/42` from BAR0 | `ogkm: src/nvidia/src/kernel/gpu_mgr/gpu_mgr.c:1228-1262` |
-| b | `isVirtual = (NV_PMC_BOOT_1[17:16] == _VF)`; `_VF = 2`, `_PV = 1` | `gpu_mgr.c:993-1011` (`gpumgrGetGpuHalFactorOfVirtual`); field in `ogkm: src/common/inc/swref/published/nv_ref.h:145-148` |
+| a | Before the GPU object exists, RM reads `NV_PMC_BOOT_0/1/42` from BAR0 | `ogkm-595: src/nvidia/src/kernel/gpu_mgr/gpu_mgr.c:1228-1262` |
+| b | `isVirtual = (NV_PMC_BOOT_1[17:16] == _VF)`; `_VF = 2`, `_PV = 1` | `gpu_mgr.c:993-1011` (`gpumgrGetGpuHalFactorOfVirtual`); field in `ogkm-595: src/common/inc/swref/published/nv_ref.h:145-148` |
 | c | Runtime variant: `PLATFORM_GSP/DCE -> UCODE; else if isVirtual -> VF; else if isFwClient -> PF_KERNEL_ONLY; else PF_MONOLITHIC`. **VF is tested before the firmware policy**, so a VF never becomes a GSP client | `gpu_mgr.c:1279-1292` |
-| d | `RmVariantHal: VF` row exists in the generated HAL, so the VF variant is real, selectable code, not a stub | `ogkm: src/nvidia/generated/g_chips2halspec_nvoc.c:190-203`, `g_chips2halspec_nvoc.h:107-124` |
-| e | NVOC field `isVirtual = TRUE` for VF; `isGspClient = FALSE` for VF (and TRUE for PF_KERNEL_ONLY except Tegra display) | `ogkm: src/nvidia/generated/g_gpu_nvoc.c:560-585` |
-| f | Macros: `IS_VIRTUAL(g) = g->isVirtual`; `IS_VIRTUAL_WITH_SRIOV(g)` from a **second** `PMC_BOOT_1` read in `gpuConstruct` and again in `gpuDetermineVirtualMode` (asserts both agree) | `ogkm: src/nvidia/generated/g_gpu_nvoc.h:5845-5857`; `ogkm: src/nvidia/src/kernel/gpu/gpu.c:378-392`, `:4342-4380` |
-| g | `bVgpuGspPluginOffloadEnabled` for a VF = `PDB_PROP_GPU_VGPU_OFFLOAD_CAPABLE`, which is TRUE only for **AD10x, GH100, GB10x/GB20x** (Blackwell). Turing/Ampere VF guests have no supported path in 595.84 | `ogkm: src/nvidia/src/kernel/gpu/gpu_registry.c:139-142`; `g_gpu_nvoc.c:402-412` |
-| h | The pre-GSP "legacy" vGPU is gone: `RMCFG_FEATURE_VIRTUALIZATION_LEGACY 0`; `initRpcInfrastructure_VGPU` returns `NV_ERR_NOT_SUPPORTED` when plugin offload is off | `ogkm: src/nvidia/generated/rmconfig.h:288`; `ogkm: src/nvidia/src/kernel/vgpu/rpc.c:1660-1685`, `:1494-1505` |
+| d | `RmVariantHal: VF` row exists in the generated HAL, so the VF variant is real, selectable code, not a stub | `ogkm-595: src/nvidia/generated/g_chips2halspec_nvoc.c:190-203`, `g_chips2halspec_nvoc.h:107-124` |
+| e | NVOC field `isVirtual = TRUE` for VF; `isGspClient = FALSE` for VF (and TRUE for PF_KERNEL_ONLY except Tegra display) | `ogkm-595: src/nvidia/generated/g_gpu_nvoc.c:560-585` |
+| f | Macros: `IS_VIRTUAL(g) = g->isVirtual`; `IS_VIRTUAL_WITH_SRIOV(g)` from a **second** `PMC_BOOT_1` read in `gpuConstruct` and again in `gpuDetermineVirtualMode` (asserts both agree) | `ogkm-595: src/nvidia/generated/g_gpu_nvoc.h:5845-5857`; `ogkm-595: src/nvidia/src/kernel/gpu/gpu.c:378-392`, `:4342-4380` |
+| g | `bVgpuGspPluginOffloadEnabled` for a VF = `PDB_PROP_GPU_VGPU_OFFLOAD_CAPABLE`, which is TRUE only for **AD10x, GH100, GB10x/GB20x** (Blackwell). Turing/Ampere VF guests have no supported path in 595.84 | `ogkm-595: src/nvidia/src/kernel/gpu/gpu_registry.c:139-142`; `g_gpu_nvoc.c:402-412` |
+| h | The pre-GSP "legacy" vGPU is gone: `RMCFG_FEATURE_VIRTUALIZATION_LEGACY 0`; `initRpcInfrastructure_VGPU` returns `NV_ERR_NOT_SUPPORTED` when plugin offload is off | `ogkm-595: src/nvidia/generated/rmconfig.h:288`; `ogkm-595: src/nvidia/src/kernel/vgpu/rpc.c:1660-1685`, `:1494-1505` |
 
 INFERRED: a hypervisor-hidden guest (CPUID signature absent) still gets `isVirtual=1` from step b, because
 step b does not look at CPUID; but the firmware-request gate in 1.2 does. See *Unknowns U6*.
 
 ### 1.2 Who does NOT load GSP in a vGPU guest (MEASURED)
 
-* `rm_set_rm_firmware_requested` is called per device at probe (`ogkm: kernel-open/nvidia/nv-pci.c:2101`). It
-  sets `request_firmware = TRUE` and then **FALSE if `rm_get_is_gsp_capable_vgpu`** (`ogkm:
+* `rm_set_rm_firmware_requested` is called per device at probe (`ogkm-595: kernel-open/nvidia/nv-pci.c:2101`). It
+  sets `request_firmware = TRUE` and then **FALSE if `rm_get_is_gsp_capable_vgpu`** (`ogkm-595:
   src/nvidia/arch/nvalloc/unix/src/osapi.c:5036-5047`).
 * `rm_get_is_gsp_capable_vgpu` = (`pHypervisor->bIsHVMGuest`) and (`PMC_BOOT_1 == VF`) and
   (`gpumgrIsVgxRmFirmwareCapableChip(PMC_BOOT_42)`) (`osapi.c:4995-5030`). The chip test is `arch >= GB100 ||
   arch == GH100 || arch == AD100` (`gpu_mgr.c:1071-1075`).
-* `RmInitAdapter` fetches the firmware image only if `request_firmware` (`ogkm:
+* `RmInitAdapter` fetches the firmware image only if `request_firmware` (`ogkm-595:
   src/nvidia/arch/nvalloc/unix/src/osinit.c:2062-2080`); no image -> no `kgspInitRm`, no
-  `_kgspBootGspRm` (`ogkm: src/nvidia/src/kernel/gpu/gsp/kernel_gsp.c:4709`, `:4791`).
-* `kgspConfigureFalcon` and the other `KernelGsp` HAL entries bind to a stub for the VF row (`ogkm:
+  `_kgspBootGspRm` (`ogkm-595: src/nvidia/src/kernel/gpu/gsp/kernel_gsp.c:4709`, `:4791`).
+* `kgspConfigureFalcon` and the other `KernelGsp` HAL entries bind to a stub for the VF row (`ogkm-595:
   src/nvidia/generated/g_kernel_gsp_nvoc.c:587-770`, e.g. `kgspConfigureFalcon_f2d351` at `:589`).
 * The boot of a *GSP-RM proxy* is skipped too: `if (!IS_GSP_CLIENT && !IS_VIRTUAL) gpuBootGspRmProxy`
   (`osinit.c:2131-2135`).
 * Hypervisor detection is x86 CPUID leaf scan `0x40000000..0x40001000` for the signatures in the
-  `HYPERVISOR_OPS` table (`KVMKVMKVM`, ...) (`ogkm: src/nvidia/src/kernel/virtualization/hypervisor/hypervisor.c:82-132,
+  `HYPERVISOR_OPS` table (`KVMKVMKVM`, ...) (`ogkm-595: src/nvidia/src/kernel/virtualization/hypervisor/hypervisor.c:82-132,
   134-165`; `.../kvm/kvm.c:19-23`); for KVM `hypervisorPostDetection` always says "HVM guest"
   (`kvm.c:42-46`).
 
 ### 1.3 How the VF guest talks to the host (MEASURED)
 
-Entry: `gpuPostConstruct` -> (if `IS_VIRTUAL`) `vgpuCreateObject` (`ogkm: src/nvidia/src/kernel/gpu/gpu.c:535-565`,
-`ogkm: src/nvidia/src/kernel/vgpu/objvgpu.c:49-129`) -> `initRpcInfrastructure_VGPU` (`rpc.c:1660-1771`):
+Entry: `gpuPostConstruct` -> (if `IS_VIRTUAL`) `vgpuCreateObject` (`ogkm-595: src/nvidia/src/kernel/gpu/gpu.c:535-565`,
+`ogkm-595: src/nvidia/src/kernel/vgpu/objvgpu.c:49-129`) -> `initRpcInfrastructure_VGPU` (`rpc.c:1660-1771`):
 
 1. `initRpcObject` — the **same** `OBJRPC` constructor the GSP-client uses; it pre-sets the RPC version to the
-   guest's own `VGX_*` (`ogkm: src/nvidia/src/kernel/rmapi/rpc_common.c:96-107`).
+   guest's own `VGX_*` (`ogkm-595: src/nvidia/src/kernel/rmapi/rpc_common.c:96-107`).
 2. `vgpuGspSetupBuffers` (`rpc.c:1494-1612`) installs `_rpcSendMessage_VGPUGSP` / `_rpcRecvPoll_VGPUGSP`
    as the transport (`rpc.c:1514-1515`, `:1818-1830`) and allocates:
    * **control buffer** 4 KiB sysmem (guest writes, plugin reads), `VGPU_GSP_CTRL_BUF_V1`: `version`
      (guest writes `VGPU_GSP_CTRL_BUF_V2_VERSION = 2`, `rpc.c:1320`, `dev_vgpu.h:212`), `requestId`,
      `responseBuf`/`msgBuf`/`sharedMem`/`eventBuf`/`debugBuf` addresses, `getEventBuf`, `guestEccStatus`,
-     `sysmemBitMapTablePfn`, `guestOsType`, `requestedGspCaps`, hibernation indices (`ogkm:
+     `sysmemBitMapTablePfn`, `guestOsType`, `requestedGspCaps`, hibernation indices (`ogkm-595:
      src/nvidia/inc/kernel/vgpu/dev_vgpu.h:176-242`);
    * **response buffer** 4 KiB (plugin writes), `VGPU_GSP_RESPONSE_BUF_V1`: `responseId`, `putEventBuf`,
      `hostEccStatus`, `usmType`, `enabledGspCaps`, hibernation indices (`dev_vgpu.h:244-280`);
@@ -147,20 +149,20 @@ Entry: `gpuPostConstruct` -> (if `IS_VIRTUAL`) `vgpuCreateObject` (`ogkm: src/nv
    `NV_RM_RPC_GET_STATIC_DATA` (`objvgpu.c:116`).
 
 BAR0 registers touched (the VF's own BAR0; `virtualRegPhysOffset = 0` for a VF, `0xB80000` on a PF —
-`ogkm: src/nvidia/src/kernel/gpu/arch/turing/kern_gpu_tu102.c:94-100`, macro `GPU_VREG_WR32` in
+`ogkm-595: src/nvidia/src/kernel/gpu/arch/turing/kern_gpu_tu102.c:94-100`, macro `GPU_VREG_WR32` in
 `g_gpu_access_nvoc.h:256-259`):
 
 | Register | Offset in VF BAR0 | Used for | Source |
 |---|---|---|---|
 | `NV_PMC_BOOT_0/1/42` | chip-global | HAL select, VF detection | `gpu_mgr.c:1228-1262` |
-| `NV_VIRTUAL_FUNCTION_PRIV_MAILBOX_SCRATCH(2)` / `(3)` | `0x2108` / `0x210C` | control-buffer address LO / HI (`NV_VF_SCRATCH_REGISTER_GUEST_RPC_LO/HI = 2/3`) | `ogkm: src/nvidia/src/kernel/vgpu/arch/ampere/rpcga102.c:35-43`; `nv_sriov_defines.h:93-96`; `dev_vm.h` (ga100) `:132` |
+| `NV_VIRTUAL_FUNCTION_PRIV_MAILBOX_SCRATCH(2)` / `(3)` | `0x2108` / `0x210C` | control-buffer address LO / HI (`NV_VF_SCRATCH_REGISTER_GUEST_RPC_LO/HI = 2/3`) | `ogkm-595: src/nvidia/src/kernel/vgpu/arch/ampere/rpcga102.c:35-43`; `nv_sriov_defines.h:93-96`; `dev_vm.h` (ga100) `:132` |
 | `NV_VIRTUAL_FUNCTION_PRIV_DOORBELL` | `0x2200` | value `NVBIT(0)` = setup request, `NVBIT(1)` = RPC message | `rpcga102.c:45-48`; `nv_sriov_defines.h:37-45`; `dev_vm.h` (ga100) `:126` |
 | `NV_VIRTUAL_FUNCTION_PRIV_CPU_INTR_*` | `0x1000-0x1640` | VF interrupt tree | `dev_vm.h` (tu102) `:31-66` |
 
 GSP-client flow for contrast (MEASURED): `kgspInitRm` loads the ELF, checks `.fwversion`, builds radix-3 and
 the WPR meta (`GSP_FW_WPR_META_MAGIC 0xdc3aae21371a60b3`, `REVISION 1`, `kernel_gsp_tu102.c:861-862`,
 `gsp_fw_wpr_meta.h:211-212`), boots falcon/FSP/SEC2, and thereafter uses `NV_PGSP_QUEUE_HEAD(i)` as the
-command-queue doorbell (`ogkm: src/nvidia/src/kernel/gpu/gsp/arch/turing/kernel_gsp_tu102.c:327-338`;
+command-queue doorbell (`ogkm-595: src/nvidia/src/kernel/gpu/gsp/arch/turing/kernel_gsp_tu102.c:327-338`;
 send path `kernel_gsp.c:395-440`) with `_kgspRpcSendMessage`/`_kgspRpcRecvPoll` installed on the same
 `OBJRPC` (`kernel_gsp.c:3014-3031`). So: **BAR0 footprint of a VF guest = `PMC_BOOT_*` + 2 scratch + 1
 doorbell + the VF interrupt tree + normal `NV_VIRTUAL_FUNCTION_PRIV` register traffic; BAR0 footprint of a
@@ -172,8 +174,8 @@ registers outside these during engine init was not exhaustively traced - *Unknow
 | | GSP client | vGPU guest |
 |---|---|---|
 | RPC | `GET_GSP_STATIC_INFO` (fn 65) | `GET_STATIC_DATA` (chunked by `offset`/`size`), then `GET_CONSOLIDATED_GR_STATIC_INFO` |
-| Decode | one `portMemCopy(pSCI, sizeof(*pSCI), rpcInfo, sizeof(*rpcInfo))` of the compile-time `GspStaticConfigInfo` (`rpc.c:9962-9994`) - **no versioning at all** | `getStaticDataRpcBufferSize` + `copyPayloadToStaticData` through the **per-version** deserialisers `deserialize_VGPU_STATIC_DATA_v25_0E / v27_00 / v27_01 / v2A_07 / v2B_08 / v2D_00` (`ogkm: src/nvidia/src/kernel/vgpu/rpcstructurecopy.c:1372-1703`) |
-| Call chosen by | fixed | `rpcGetStaticData` = `_v25_0E` for `0x250E0000-0x2700FFFF`, `_v27_01` for `0x27010000-0x2CFFFFFF`, `_v2D_00` for `>= 0x2D000000` (`ogkm: src/nvidia/generated/g_rpc_private.h:3246-3251`) |
+| Decode | one `portMemCopy(pSCI, sizeof(*pSCI), rpcInfo, sizeof(*rpcInfo))` of the compile-time `GspStaticConfigInfo` (`rpc.c:9962-9994`) - **no versioning at all** | `getStaticDataRpcBufferSize` + `copyPayloadToStaticData` through the **per-version** deserialisers `deserialize_VGPU_STATIC_DATA_v25_0E / v27_00 / v27_01 / v2A_07 / v2B_08 / v2D_00` (`ogkm-595: src/nvidia/src/kernel/vgpu/rpcstructurecopy.c:1372-1703`) |
+| Call chosen by | fixed | `rpcGetStaticData` = `_v25_0E` for `0x250E0000-0x2700FFFF`, `_v27_01` for `0x27010000-0x2CFFFFFF`, `_v2D_00` for `>= 0x2D000000` (`ogkm-595: src/nvidia/generated/g_rpc_private.h:3246-3251`) |
 
 ---
 
@@ -181,16 +183,16 @@ registers outside these during engine init was not exhaustively traced - *Unknow
 
 ### 2.1 Constants (MEASURED)
 
-* `VGX_MAJOR_VERSION_NUMBER 0x2D`, `VGX_MINOR_VERSION_NUMBER 0x03` (`ogkm:
+* `VGX_MAJOR_VERSION_NUMBER 0x2D`, `VGX_MINOR_VERSION_NUMBER 0x03` (`ogkm-595:
   src/nvidia/inc/kernel/vgpu/vgpu_version.h:33-34`). Wire packing `RPC_VERSION_FROM_VGX_VERSION(major, minor) =
   major<<24 | minor<<16` (`:28-31`). Named releases: `VGPU_17_0 = 0x25`, `18_0 = 0x29.0x0B`, `19_0 =
   0x2B.0x13` (`:36-40`).
 * **Min supported internal host pair** `NV_VGPU_GRIDSW_VERSION_MIN_SUPPORTED_INTERNAL = 0x25.0x0E`
-  (`ogkm: src/nvidia/generated/g_rpc-structures.h:12822-12825`, included via `vgpu_version.h:94-97`).
+  (`ogkm-595: src/nvidia/generated/g_rpc-structures.h:12822-12825`, included via `vgpu_version.h:94-97`).
 * External (migration-compat) window: `MIN 0x18.01`, `MAX 0x1C.01` (`vgpu_version.h:110-117`), and the
   internal->external mapping table `NV_VGPU_GRIDSW_INTERNAL_TO_EXTERNAL_VERSION_MAPPING` (`:52-80`, e.g.
   `{{0x2D,0x00},{0x2D,0x03},{0x1C,0x01}}`). Registry keys `RM_SET_VGPU_VERSION_MIN/MAX` let a user narrow the
-  window; the result is handed to the vGPU manager (`ogkm: src/nvidia/src/kernel/vgpu/objvgpu.c:206-234`;
+  window; the result is handed to the vGPU manager (`ogkm-595: src/nvidia/src/kernel/vgpu/objvgpu.c:206-234`;
   `kernel_vgpu_mgr.c:1953-1985`). These are **host-manager migration** knobs, not the guest handshake.
 * Message envelope: `header_version = 3.0` (`rpc_headers.h:56-59`), `signature = 0x43505256`
   (`:61`); the guest writes both (`rpc_common.c:154-156`). `ogkm` never **reads** either back on the guest side
@@ -198,11 +200,11 @@ registers outside these during engine init was not exhaustively traced - *Unknow
 * Fn 1 struct (`rpc_set_guest_system_info_v03_00`, 6 x `NvU32` then 3 x `char[0x100]`):
   `vgxVersionMajorNum, vgxVersionMinorNum, guestDriverVersionBufferLength, guestVersionBufferLength,
   guestTitleBufferLength, guestClNum, guestDriverVersion[256], guestVersion[256], guestTitle[256]`
-  (`ogkm: src/nvidia/generated/g_rpc-structures.h:36-47`). Fn 64 `SET_GUEST_SYSTEM_INFO_EXT`:
+  (`ogkm-595: src/nvidia/generated/g_rpc-structures.h:36-47`). Fn 64 `SET_GUEST_SYSTEM_INFO_EXT`:
   `v15_02 = {guestDriverBranch[256], domain, bus, device}`, `v25_1B` adds `gridBuildCsp` (`:51-66`),
   chosen by version range: `<= 0x251AFFFF -> v15_02`, `>= 0x251B0000 -> v25_1B` (`g_rpc_private.h:3432-3435`).
 
-### 2.2 The handshake itself - `RmRpcSetGuestSystemInfo` (`ogkm: src/nvidia/src/kernel/vgpu/rpc.c:8836-9017`) (MEASURED)
+### 2.2 The handshake itself - `RmRpcSetGuestSystemInfo` (`ogkm-595: src/nvidia/src/kernel/vgpu/rpc.c:8836-9017`) (MEASURED)
 
 1. Skip rule: on a multi-GPU box the second and later GPUs reuse the first GPU's agreed pair, **except** for
    GSP clients and for VGPU-GSP-offload guests, which always handshake (`rpc.c:8838-8880`).
@@ -241,10 +243,10 @@ registers outside these during engine init was not exhaustively traced - *Unknow
 What the guest does if the handshake fails at init: `initRpcInfrastructure_VGPU` logs "SET_GUEST_SYSTEM_INFO :
 failed" and, for `NV_ERR_NOT_SUPPORTED`, `nvErrorLog_va(VGPU_START_ERROR, "vGPU type is not supported")`
 (`rpc.c:1711-1727`); `gpuPostConstruct` turns `NV_ERR_LIB_RM_VERSION_MISMATCH` (0x6A, "Library version doesn't
-match driver version", `ogkm: kernel-open/common/inc/nvstatuscodes.h:135`) into `nvErrorLog_va(VGPU_START_ERROR,
+match driver version", `ogkm-595: kernel-open/common/inc/nvstatuscodes.h:135`) into `nvErrorLog_va(VGPU_START_ERROR,
 "Guest driver is incompatible with host driver")` (`gpu.c:556-566`) and fails device construction. The
 protocol's dedicated code for this is `NV_VGPU_MSG_RESULT_GUEST_HOST_DRIVER_MISMATCH =
-NV_ERR_LIB_RM_VERSION_MISMATCH` (`ogkm: src/nvidia/inc/kernel/vgpu/rpc_headers.h:116`); nothing in ogkm
+NV_ERR_LIB_RM_VERSION_MISMATCH` (`ogkm-595: src/nvidia/inc/kernel/vgpu/rpc_headers.h:116`); nothing in ogkm
 **uses** it (it is for the closed plugin) - *INFERRED*.
 
 ### 2.3 (a) vGPU-guest-only vs (b) also-in-GSP-client (MEASURED)
@@ -260,9 +262,9 @@ NV_ERR_LIB_RM_VERSION_MISMATCH` (`ogkm: src/nvidia/inc/kernel/vgpu/rpc_headers.h
 | `NV_ERR_LIB_RM_VERSION_MISMATCH` -> VGPU_START_ERROR | yes (`gpu.c:560`) | not reached |
 
 **The one comparison of the driver's version against the firmware's in an ordinary GSP-client driver**
-(MEASURED, `ogkm: src/nvidia/src/kernel/gpu/gsp/kernel_gsp.c:5571-5624`): `_kgspFwContainerVerifyVersion`
+(MEASURED, `ogkm-595: src/nvidia/src/kernel/gpu/gsp/kernel_gsp.c:5571-5624`): `_kgspFwContainerVerifyVersion`
 reads the ELF section `.fwversion` (`GSP_VERSION_SECTION_NAME`, `g_kernel_gsp_nvoc.h:271`) of the firmware
-image the OS handed over (`nvidia/<NV_VERSION_STRING>/gsp_*.bin`, `ogkm: kernel-open/nvidia/nv.c:27`) and
+image the OS handed over (`nvidia/<NV_VERSION_STRING>/gsp_*.bin`, `ogkm-595: kernel-open/nvidia/nv.c:27`) and
 requires `fwversionSize == strlen(NV_VERSION_STRING)+1` **and** `memcmp == 0`. Mismatch -> logs "GSP firmware
 image version mismatch: got version X, expected version Y" (or "unknown or malformed") and returns
 `NV_ERR_INVALID_DATA` (`:5607-5622`). Called for the main image (`:5689`, from `kgspInitRm` `:4924`) and for the
@@ -275,8 +277,8 @@ in closed firmware (*Unknowns U1*).
 
 Other (non-vGPU, non-GSP) version comparisons in ogkm, for completeness (MEASURED): userspace library vs
 kernel module `NV_ESC_CHECK_VERSION_STR` - exact-match or "relaxed" (compare to first `.`), mismatch logs
-"API mismatch" and returns `NV_ERR_GENERIC` (`ogkm: src/nvidia/arch/nvalloc/unix/src/osapi.c:1128-1228`);
-Tegra DCE: logs a **warning only** "Possibly incompatible DCE RM version" and continues (`ogkm:
+"API mismatch" and returns `NV_ERR_GENERIC` (`ogkm-595: src/nvidia/arch/nvalloc/unix/src/osapi.c:1128-1228`);
+Tegra DCE: logs a **warning only** "Possibly incompatible DCE RM version" and continues (`ogkm-595:
 src/nvidia/src/kernel/gpu/dce_client/dce_client_rpc.c:703-720`) - the only place ogkm tolerates a
 driver-string disagreement.
 
@@ -284,35 +286,35 @@ driver-string disagreement.
 
 ## 3. Q3 evidence — display in a vGPU guest (MEASURED)
 
-* `PDB_PROP_KDISP_IS_MISSING = TRUE` for `RmVariantHal: VF`, `FALSE` for `PF_KERNEL_ONLY` (`ogkm:
+* `PDB_PROP_KDISP_IS_MISSING = TRUE` for `RmVariantHal: VF`, `FALSE` for `PF_KERNEL_ONLY` (`ogkm-595:
   src/nvidia/generated/g_kern_disp_nvoc.c:278-286`). `kdispConstructEngine` begins with
   `NV_ASSERT(IS_VIRTUAL(pGpu) || IS_FW_CLIENT(pGpu) || RMCFG_MODULE_DISP)` then
-  `if (IS_MISSING) return NV_ERR_NOT_SUPPORTED` (`ogkm: src/nvidia/src/kernel/gpu/disp/kern_disp.c:95-122`); the
+  `if (IS_MISSING) return NV_ERR_NOT_SUPPORTED` (`ogkm-595: src/nvidia/src/kernel/gpu/disp/kern_disp.c:95-122`); the
   engine is dropped by the "engine removal = `ConstructEngine` returns `NV_ERR_NOT_SUPPORTED`" convention
   (`kern_gpu_tu102.c:103-107` comment). Result: `GPU_GET_KERNEL_DISPLAY(pGpu) == NULL`.
-* `DispCommon`/display-API allocation returns `NV_ERR_NOT_SUPPORTED` when `pKernelDisplay == NULL` (`ogkm:
+* `DispCommon`/display-API allocation returns `NV_ERR_NOT_SUPPORTED` when `pKernelDisplay == NULL` (`ogkm-595:
   src/nvidia/src/kernel/gpu/disp/disp_objs.c:96-99`). So **no NV0073, no heads, no SORs, no DFP** in a VF guest.
 * **Substitute: `NVA083_GRID_DISPLAYLESS`**. It is allocatable only if there is **no** `KernelDisplay` (classes are
   mutually exclusive) **and** `osIsGridSupported()` (= `os_is_grid_supported()` [`GRID_BUILD`] ||
-  `os_get_grid_csp_support()` || `hypervisorIsVgxHyper()`) (`ogkm: src/nvidia/src/kernel/gpu/gpu.c:1959-1982`,
-  class pruned otherwise at `:2281-2284`; `ogkm: src/nvidia/arch/nvalloc/unix/src/os-hypervisor.c:918-921`).
+  `os_get_grid_csp_support()` || `hypervisorIsVgxHyper()`) (`ogkm-595: src/nvidia/src/kernel/gpu/gpu.c:1959-1982`,
+  class pruned otherwise at `:2281-2284`; `ogkm-595: src/nvidia/arch/nvalloc/unix/src/os-hypervisor.c:918-921`).
   `RMCFG_CLASS_NVA083_GRID_DISPLAYLESS 1` is compiled in (`rmconfig.h:613`).
 * Its data: number of heads, max heads, max resolution per head, max pixels, "display active" flags. In a VF guest
   the constructor does **not** fill defaults (`if (!IS_VIRTUAL) griddisplaylessSet...`,
-  `ogkm: src/nvidia/src/kernel/griddisplayless/objgriddisplayless.c:111-122`); the plugin supplies them in
+  `ogkm-595: src/nvidia/src/kernel/griddisplayless/objgriddisplayless.c:111-122`); the plugin supplies them in
   `VGPU_DISPLAYLESS_INFO` inside `GET_STATIC_DATA` (`rpcstructurecopy.c:1302-1370`, versions `v24_08`,
   `v2D_00`). The ctrls `NVA083_CTRL_CMD_VIRTUAL_DISPLAY_{GET_NUM_HEADS,GET_MAX_RESOLUTION,GET_DEFAULT_EDID,
-  IS_ACTIVE,IS_CONNECTED,GET_MAX_PIXELS}` (`ogkm: src/common/sdk/nvidia/inc/ctrl/ctrla083.h:80-219`) are answered
+  IS_ACTIVE,IS_CONNECTED,GET_MAX_PIXELS}` (`ogkm-595: src/common/sdk/nvidia/inc/ctrl/ctrla083.h:80-219`) are answered
   **locally** (`griddisplaylessctrl.c`), with a built-in 256-byte EDID ("NVIDIA VGX", DVI-D or VGA variants,
   `objgriddisplayless.c:67-109`, selected by `griddisplaylessGetDefaultEDID_IMPL`).
-* Console / VGA: a VF is never primary (`ogkm: src/nvidia/arch/nvalloc/unix/src/osinit.c:1108-1116`), skips the
+* Console / VGA: a VF is never primary (`ogkm-595: src/nvidia/arch/nvalloc/unix/src/osinit.c:1108-1116`), skips the
   Unix console save/restore (`unix_console.c:90`, `:159`), and "restore low-res mode" becomes an RPC to the
   host (`NV_RM_RPC_SWITCH_TO_VGA`, `unix_console.c:237-243`).
-* Other display-adjacent: NvFBC sessions branch on `IS_VIRTUAL` (`ogkm: src/nvidia/src/kernel/disp/nvfbc_session.c:84,
+* Other display-adjacent: NvFBC sessions branch on `IS_VIRTUAL` (`ogkm-595: src/nvidia/src/kernel/disp/nvfbc_session.c:84,
   179, 318`); `RM_USER_SHARED_DATA` is removed for virtual GPUs (`gpu.c:2287-2290`).
 * Control routing: in a VF guest a `ROUTE_TO_PHYSICAL` control without `ROUTE_TO_VGPU_HOST` or
   `PHYSICAL_IMPLEMENTED_ON_VGPU_GUEST` is rejected locally `NV_ERR_NOT_SUPPORTED` and logged
-  "Unsupported ROUTE_TO_PHYSICAL control ... on vGPU guest" (`ogkm: src/nvidia/src/kernel/rmapi/control.c:774-785`).
+  "Unsupported ROUTE_TO_PHYSICAL control ... on vGPU guest" (`ogkm-595: src/nvidia/src/kernel/rmapi/control.c:774-785`).
   That is the general mechanism by which "which controls the guest forwards vs handles locally" is decided.
 
 INFERRED: nvidia-modeset / nvidia-drm in a VF guest therefore see a GPU with no display class; I did not read
@@ -350,19 +352,19 @@ INFERRED: nvidia-modeset / nvidia-drm in a VF guest therefore see a GPU with no 
   driver" (section 2.3). The repo already measures the per-tag layout moves (`kf-gsp/src/element.rs:22`
   "break is (595.84, 610.43.02]").
 * **vGPU-only parts are compiled in a stock build but refuse to bind.** Compiled: `rpc.c`, `rpcstructurecopy.c`,
-  `objvgpu.c`, `vgpu_util.c`, `vgpuapi.c`, hypervisor files are all in the build list (`ogkm:
+  `objvgpu.c`, `vgpu_util.c`, `vgpuapi.c`, hypervisor files are all in the build list (`ogkm-595:
   src/nvidia/srcs.mk:892-913`); `RMCFG_MODULE_RPC 1`, `RMCFG_MODULE_RPCSTRUCTURECOPY 1`,
   `RMCFG_MODULE_KERNEL_VGPUMGR 1`, `RMCFG_MODULE_VGPUMGR 0` (`rmconfig.h:769-770, 808-809`). Runtime gates:
   * `nv_pci_probe`: for `pci_dev->is_virtfn` (a VF seen **by the host**) the stock build **ignores** the device
     (`return -1`, "Ignoring probe for VF"); with `NV_VGPU_KVM_BUILD` (`VGX_KVM_BUILD`) it returns 0 after an IOMMU
-    check (`ogkm: kernel-open/nvidia/nv-pci.c:1790-1818`). This concerns the **host side**; a *guest* sees an
+    check (`ogkm-595: kernel-open/nvidia/nv-pci.c:1790-1818`). This concerns the **host side**; a *guest* sees an
     ordinary PCI function (the hypervisor shows no SR-IOV capability), so `is_virtfn` is 0 in a guest.
   * Guest-side: `rm_is_supported_device` -> `rm_is_vgpu_supported_device` (`osapi.c:3733-3747`;
     `os-hypervisor.c:949-991`): *if* (HVM guest detected) *and* (`PMC_BOOT_1` is PV or VF): VF requires
     `os_is_grid_supported()` (compile-time `GRID_BUILD`, `os-interface.c:1441-1447`) **and**
     `gpumgrIsVgxRmFirmwareCapableChip` **and** the device's PCI `device_id` + `subsystem_id` in
     `sVgpuUsmTypes[]` (1124 entries, e.g. `{0x2BB5, ...}`, `{0x1EB8, 0x130C, "GRID T4-1Q"}`;
-    `ogkm: src/common/shared/inc/g_vgpu_chip_flags.h:23-1146`); otherwise `NV_ERR_NOT_SUPPORTED` and the log
+    `ogkm-595: src/common/shared/inc/g_vgpu_chip_flags.h:23-1146`); otherwise `NV_ERR_NOT_SUPPORTED` and the log
     "NVIDIA vGPU ... is not supported by open nvidia.ko". If CPUID shows no hypervisor the function returns
     `NV_OK` (VF treated as a normal device).
   * `GRID_BUILD`, `GRID_BUILD_CSP`, `VGX_BUILD`, `VGX_KVM_BUILD`, `VGX_DEVICE_VM_BUILD` are read **only** by
@@ -371,7 +373,7 @@ INFERRED: nvidia-modeset / nvidia-drm in a VF guest therefore see a GPU with no 
 * **What identifies a device as a vGPU to the driver (MEASURED):** (1) `NV_PMC_BOOT_1[17:16]` (`_PV=1`, `_VF=2`)
   - the *only* test used to select the runtime variant; (2) the CPUID hypervisor signature (`bIsHVMGuest`) for the
   firmware-request and probe gates; (3) PCI `vendor 0x10de`, class `0x0300`/`0x0302` as for any NVIDIA GPU
-  (`ogkm: kernel-open/nvidia/nv-pci-table.c:39-56`); (4) *only in GRID builds* the `(device_id, subsystem_id)` allowlist. There is no
+  (`ogkm-595: kernel-open/nvidia/nv-pci-table.c:39-56`); (4) *only in GRID builds* the `(device_id, subsystem_id)` allowlist. There is no
   config-space signature byte and no special PCI ID range other than the allowlist. `NV_XVE_ID_DEVICE_CHIP_VGPU
   0xf00` is defined in `dev_vgpu.h:187-189` but referenced nowhere else in the tree.
 
@@ -401,9 +403,9 @@ All paths are `kf:` at `origin/integration/windows-20261010`.
 | **Refusal shape** | `Reply{ rpc_result: NV_ERR_NOT_SUPPORTED, body: [] }`; `Reply.rpc_result` is written to **both** `rpc_result` and `rpc_result_private` | `kf-rm/src/guestsysinfo.rs:160-165`; `kf-gsp/src/boot.rs:341-343, 2985`. The guest sees `SET_GUEST_SYSTEM_INFO failed: 0x56` (`kf-rm/src/guestsysinfo.rs:19-28`, the run `t127a`) |
 | **Down-negotiation** | **Not built** (documented): "The down-negotiation branch is NOT built" | `kf-abi/src/guestsysinfo.rs` module docs, last section |
 | **Firmware version** (`NV2080_CTRL_CMD_GSP_GET_FEATURES` `0x20803601`, `firmwareVersion[64]`) | the **guest's own `NV_VERSION_STRING`**, latched from its fn 1 and validated as printable ASCII <= 63 bytes; refused until fn 1 has been seen. Not the host's version, and not the table row's | `kf-rm/src/inittables.rs:992-1000, 252-274, 1552`; `kf-abi/src/gspfeatures.rs:40-125`. The comparison with ogkm's own `NV2080_CTRL_CMD_GSP_GET_FEATURES`: the control is a stub on every variant except the GSP-RM (physical) side - `kf-rm/inittables.rs:985-990` (`REPO`) |
-| `GspStaticConfigInfo` (fn 65) | **has no version-string field at 595.84** (only `bVbiosValid`, `vbiosSubVendor/SubDevice`, `isGridBuild`, `gridBuildCsp` -> `ogkm: src/nvidia/inc/kernel/gpu/gsp/gsp_static_config.h:130-132, 206-208`). Wire shape per tag: `Pre610 / From610_43_02 / Unencoded` | `kf-abi/src/versions.rs:696-705` |
+| `GspStaticConfigInfo` (fn 65) | **has no version-string field at 595.84** (only `bVbiosValid`, `vbiosSubVendor/SubDevice`, `isGridBuild`, `gridBuildCsp` -> `ogkm-595: src/nvidia/inc/kernel/gpu/gsp/gsp_static_config.h:130-132, 206-208`). Wire shape per tag: `Pre610 / From610_43_02 / Unencoded` | `kf-abi/src/versions.rs:696-705` |
 | **Host driver version** (595.91.07) | read once from the host with `NV_ESC_CHECK_VERSION_STR` (query form) on `/dev/nvidiactl`; selects host-side encoders (`rm.host_abi()`), e.g. NVOS46 `kindOverride` availability `>= 580.65.06`; **never** put into a guest-visible field | `kf-abi/src/host_driver.rs:51-66`; `kf-qemu/src/device.rs:1003-1013`; `crates/kayfabe-isolate-host/src/hostabi.rs:874-882` (accepted host set includes `595.91.07`) |
-| Guest `firmware` ELF | not emulated: the guest loads its own `/lib/firmware/nvidia/<its version>/gsp_*.bin`, so `.fwversion == NV_VERSION_STRING` holds by construction in the guest; kayfabe never sees the ELF check | `ogkm: kernel-open/nvidia/nv.c:27`; `kernel_gsp.c:5571-5624` |
+| Guest `firmware` ELF | not emulated: the guest loads its own `/lib/firmware/nvidia/<its version>/gsp_*.bin`, so `.fwversion == NV_VERSION_STRING` holds by construction in the guest; kayfabe never sees the ELF check | `ogkm-595: kernel-open/nvidia/nv.c:27`; `kernel_gsp.c:5571-5624` |
 
 So the three version-like numbers in play are: **guest = whatever the guest driver is** (declared by
 `guest-driver=` or defaulted to the host's, verified at fn 1); **vgx pair = the guest-driver row's**;

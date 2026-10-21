@@ -7,8 +7,8 @@
 //!
 //! The host's own unprivileged answer, `NV2080_CTRL_CMD_FIFO_GET_INFO` (`RMCTRL_FLAGS_NON_PRIVILEGED`),
 //! index `MAX_CHANNEL_GROUPS_PER_ENGINE` (8: the channel count of that engine's runlist, `kfifoChidMgrGetNumChannels`,
-//! `ogkm: kernel_fifo_ctrl.c:317-326`) minus index `CHANNEL_GROUPS_IN_USE_PER_ENGINE` (9: what the host and every
-//! other client already hold on it, `:327-334`), asked once per host-driven engine the VM serves.
+//! `ogkm-580: kernel_fifo_ctrl.c:289-298`, read at 580.159.04; not re-read at 610) minus index `CHANNEL_GROUPS_IN_USE_PER_ENGINE` (9: what the host and every
+//! other client already hold on it, `ogkm-580: :299-306`), asked once per host-driven engine the VM serves.
 //!
 //! * **limit** = the smallest `free = total - in_use` over those runlists, capped at [`MAX_CHANNEL_BUDGET`]
 //!   (the token table's per-runlist extent). An explicit `channel-budget` above it is refused.

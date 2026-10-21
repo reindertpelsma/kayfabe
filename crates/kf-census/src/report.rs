@@ -54,8 +54,8 @@ pub fn controls_tsv(r: &Report) -> String {
             hist(&c.rpc_results, true),
             c.distinct_replies,
             c.scrubbed,
-            c.ogkm.word(),
-            c.ogkm.basis(),
+            c.ogkm_answer.word(),
+            c.ogkm_answer.basis(),
         );
     }
     s
@@ -221,8 +221,8 @@ pub fn json(r: &Report) -> String {
             jhist(&c.rpc_results),
             c.distinct_replies,
             c.scrubbed,
-            c.ogkm.word(),
-            esc(&c.ogkm.basis()),
+            c.ogkm_answer.word(),
+            esc(&c.ogkm_answer.basis()),
         );
     }
     o.push_str("]}\n");
