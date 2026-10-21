@@ -135,7 +135,21 @@
       "trace_result": "0x0",
       "file_offset_after": 1446599
     },
-    "acceptance": "FAIL; exploratory only because unmatched native Xid32 preceded Windows arms"
+    "acceptance": "FAIL; exploratory only because unmatched native Xid32 preceded Windows arms",
+    "init_before_xid_proof": [
+      {
+        "xid_utc": "2026-10-21T22:57:19.237021+00:00",
+        "rpcs_observed_before_xid": 4033,
+        "last_observed_ordinal_before_xid": 4032,
+        "full_init_proxy_already_satisfied": true
+      },
+      {
+        "xid_utc": "2026-10-21T22:57:19.268682+00:00",
+        "rpcs_observed_before_xid": 4033,
+        "last_observed_ordinal_before_xid": 4032,
+        "full_init_proxy_already_satisfied": true
+      }
+    ]
   },
   "on_c2": {
     "source": "2c30a158c170a66baa37b77c19000993af1546a6",
@@ -273,7 +287,21 @@
       "trace_result": "0x0",
       "file_offset_after": 1441047
     },
-    "acceptance": "FAIL; exploratory only because unmatched native Xid32 preceded Windows arms"
+    "acceptance": "FAIL; exploratory only because unmatched native Xid32 preceded Windows arms",
+    "init_before_xid_proof": [
+      {
+        "xid_utc": "2026-10-21T23:04:07.866094+00:00",
+        "rpcs_observed_before_xid": 4009,
+        "last_observed_ordinal_before_xid": 4008,
+        "full_init_proxy_already_satisfied": true
+      },
+      {
+        "xid_utc": "2026-10-21T23:04:07.904674+00:00",
+        "rpcs_observed_before_xid": 4009,
+        "last_observed_ordinal_before_xid": 4008,
+        "full_init_proxy_already_satisfied": true
+      }
+    ]
   },
   "off_c": {
     "source": "2c30a158c170a66baa37b77c19000993af1546a6",
@@ -436,6 +464,20 @@
       "scope": "Translated slots readable by probe, busy slots skipped; not a complete fault-time host-channel map"
     },
     "canonical_teardown_start_ordinal": 3686,
-    "canonical_last_nonfree_before_teardown": 3685
+    "canonical_last_nonfree_before_teardown": 3685,
+    "init_before_xid_proof": [
+      {
+        "xid_utc": "2026-10-21T23:07:37.411873+00:00",
+        "rpcs_observed_before_xid": 3553,
+        "last_observed_ordinal_before_xid": 3552,
+        "full_init_proxy_already_satisfied": true
+      },
+      {
+        "xid_utc": "2026-10-21T23:07:37.425634+00:00",
+        "rpcs_observed_before_xid": 3553,
+        "last_observed_ordinal_before_xid": 3552,
+        "full_init_proxy_already_satisfied": true
+      }
+    ]
   }
 }
