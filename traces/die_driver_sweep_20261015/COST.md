@@ -1,3 +1,7 @@
+STATUS: LIVE, 2026-10-21 midday. Owner task6 replaces the overnight budget for a NEW stretch: cap8USD / stop6 / reserve5; initialAPIcredit24.727566USD. No new rental before integration+GPU-free acceptance; stop newleases20:00CEST, allgone20:30CEST.
+
+Close overnight own56964717: automatic teardown02:02:35UTC, APIabsence observed11:00UTC. Deployment SCP stalled; controller/Windows never launched. Runtime estimate2.82USD, accountcredit27.529453→24.727566USD(shared delta2.801887, not invoice attribution). Old ledger preserved; no running instances.
+
 STATUS: LIVE, 2026-10-21. Latest owner briefing: SHARED night cap20USD / stop15 / reserve5, hard teardown06:30CEST. Supersedes earlier continuation15/12 and prior30/25.
 
 Own SW2 lease56949833: created2026-10-20T20:49:07Z; timer175min armedfirst; destroyed/APIabsent22:51:33Z. Host health/gates/native raw/CUDA green; native GR oracle refused before Windows, lease stopped. Observedrate1.116667USD/h; runtime estimate2.279015USD; credit29.717980→27.555193USD (shared delta2.162787USD, not invoice attribution). Transferreserve1USD is a budget guard, not spend. Other lanes/predecessors must be reconciled against the shared budget before another rental.

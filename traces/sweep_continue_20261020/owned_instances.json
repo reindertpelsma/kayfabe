@@ -46,9 +46,17 @@
     "reservation_usd": 3.7249228395061724,
     "auto_destroy_minutes": 175,
     "global_teardown_utc": "2026-10-21T04:30:00+00:00",
-    "destroyed": false,
+    "destroyed": true,
     "auto_destroy_pid": 1509322,
     "auto_destroy_verified": true,
-    "auto_destroy_armed_utc": "2026-10-20T23:07:18.255012+00:00"
+    "auto_destroy_armed_utc": "2026-10-20T23:07:18.255012+00:00",
+    "absence_verified_utc": "2026-10-21T11:02:03.857332+00:00",
+    "auto_destroy_completed_utc": "2026-10-21T02:02:35+00:00",
+    "observed_dph_total": 0.9666666666666666,
+    "credit_after_observed": 24.727565990962717,
+    "observed_account_credit_delta": 2.8018865231001655,
+    "runtime_cost_estimate_usd": 2.823947031435185,
+    "windows_result": "UNRUN: bounded lease auto-destroyed while the outbound deployment SCP remained stalled; set-e prevented controller launch after that SCP failed.",
+    "cost_note": "Runtime inferred from armed timer completion, not the much later APIabsence observation; shared credit delta is not settled exclusive attribution."
   }
 ]
