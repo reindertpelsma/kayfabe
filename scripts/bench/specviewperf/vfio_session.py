@@ -171,8 +171,14 @@ def kernel_cursor():
 
 
 def xid_events_after(cursor):
-    output = subprocess.check_output(['journalctl', '-k', '--after-cursor', cursor,
-        '--grep', 'NVRM: Xid', '--output=json', '--no-pager'], text=True, timeout=15)
+    try:
+        output = subprocess.check_output(['journalctl', '-k', '--after-cursor', cursor,
+            '--grep', 'NVRM: Xid', '--output=json', '--no-pager'], text=True,
+            stderr=subprocess.PIPE, timeout=15)
+    except subprocess.CalledProcessError as error:
+        if error.returncode == 1 and not (error.output or '').strip() and not (error.stderr or '').strip():
+            return []  # journalctl --grep uses 1 for no matching entries.
+        raise
     events = []
     for line in output.splitlines():
         if not line.strip():
