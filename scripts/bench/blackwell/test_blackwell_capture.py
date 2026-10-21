@@ -35,6 +35,17 @@ class DumpHeader(unittest.TestCase):
         self.assertEqual(d["parameters"], ["0xffffdb047809fcc7", "0x2", "0xfffff80735efa1b0", "0x2"])
         self.assertEqual(d["system_time_utc"], "2026-10-21T13:42:45.709353+00:00")
 
+    def test_hex_lines_from_the_guest_collector_round_trip(self):
+        raw = header(0x193, [1, 2, 3, 4], 134370637168629955)
+        line = "HDR C:/Windows/LiveKernelReports/WATCHDOG/x.dmp 1007878144 " + raw[: dump_header.HEADER_BYTES].hex()
+        d = dump_header.parse_hexline(line)
+        self.assertEqual(d["file"], "C:/Windows/LiveKernelReports/WATCHDOG/x.dmp")
+        self.assertEqual(d["bytes"], 1007878144)
+        self.assertEqual(d["bugcheck"], "0x193")
+        self.assertEqual(d["system_time_utc"], "2026-10-21T13:41:56.862995+00:00")
+        with self.assertRaises(ValueError):
+            dump_header.parse_hexline("HDR only-two-fields")
+
     def test_refuses_a_wrong_signature_and_a_short_buffer(self):
         with self.assertRaises(ValueError):
             dump_header.parse(b"X" * 8192)
