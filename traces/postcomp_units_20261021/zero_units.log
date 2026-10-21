@@ -1,0 +1,30 @@
+running 3 tests
+test caps::tests::postcomp_units_follow_the_generated_register_and_field_layout ... FAILED
+test caps::tests::postcomp_units_match_public_nvkms_for_every_family ... FAILED
+test caps::tests::postcomp_units_refuse_a_missing_public_field ... ok
+
+failures:
+
+---- caps::tests::postcomp_units_follow_the_generated_register_and_field_layout stdout ----
+
+thread 'caps::tests::postcomp_units_follow_the_generated_register_and_field_layout' (2072008) panicked at crates/kf-disp/src/caps.rs:714:17:
+assertion `left == right` failed: 580.65.06 relocated tile 0
+  left: 0
+ right: 16
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+
+---- caps::tests::postcomp_units_match_public_nvkms_for_every_family stdout ----
+
+thread 'caps::tests::postcomp_units_match_public_nvkms_for_every_family' (2072009) panicked at crates/kf-disp/src/caps.rs:688:25:
+assertion `left == right` failed: 580.65.06 NVC573 head/tile 0, heads=1
+  left: 0
+ right: 16
+
+
+failures:
+    caps::tests::postcomp_units_follow_the_generated_register_and_field_layout
+    caps::tests::postcomp_units_match_public_nvkms_for_every_family
+
+test result: FAILED. 1 passed; 2 failed; 0 ignored; 0 measured; 248 filtered out; finished in 0.01s
+
+error: test failed, to rerun pass `-p kf-disp --lib`

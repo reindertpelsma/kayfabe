@@ -523,6 +523,19 @@ pub fn page(
             set(off, fa("SYS_CAPC_TILE_EXISTS", h)?, 1);
         }
     }
+    // Public NVKMS EvoParseCapabilityNotifierC5C6Common asserts UNIT_WIDTH=16
+    // for every usable output (ogkm 580.159.04, nvkms-evo3.c:5858-5863).
+    // EvoParseCapabilityNotifierCA calls that parser through C6 as well; only
+    // the generated register name differs for its per-tile POSTCOMP layout.
+    let postcomp = if t.v(caps, "POSTCOMP_HDR_CAPA__SIZE_1").is_some() {
+        "POSTCOMP_HDR_CAPA"
+    } else {
+        "POSTCOMP_HEAD_HDR_CAPA"
+    };
+    let unit_width = f(&format!("{postcomp}_UNIT_WIDTH"))?;
+    for h in 0..heads {
+        set(a(postcomp, h)?, unit_width, 16);
+    }
     // ★ 2026-10-20 (bw-resume): the per-TILE post-composition pipe of a class that names it
     // `POSTCOMP_HDR_CAPA(i)` (CA73; Turing..Ada name a per-head `POSTCOMP_HEAD_HDR_*` and are untouched).
     // Public NVKMS reads it for every usable tile and asserts OCSC0/OCSC1/HCLPF/OSCAN/DTH/DSC present
@@ -1192,6 +1205,23 @@ mod tests {
         assert_eq!(sor0 & (1 << 8), 1 << 8, "SINGLE_TMDS_A");
         assert_eq!(sor0 & (1 << 28), 1 << 28, "HDMI_FRL (C6 HAL asserts it)");
         assert_ne!(p.word(1920) & (1 << 24), 0, "window 0 CSC11");
-        assert_eq!(p.word(1664), 0, "no postcomp scaler");
+        let t = crate::class::for_version("580.159.04").unwrap();
+        assert_eq!(
+            p.word(1664),
+            put(
+                0,
+                t.f(0xC673, "POSTCOMP_HEAD_HDR_CAPA_UNIT_WIDTH").unwrap(),
+                16
+            ),
+            "only the public unit width; no postcomp features"
+        );
+        assert_eq!(
+            get(
+                p.word(1664),
+                t.f(0xC673, "POSTCOMP_HEAD_HDR_CAPA_SCLR_PRESENT").unwrap()
+            ),
+            0,
+            "no postcomp scaler"
+        );
     }
 }

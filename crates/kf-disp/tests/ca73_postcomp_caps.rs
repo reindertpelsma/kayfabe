@@ -54,17 +54,31 @@ fn every_virtual_tile_has_the_postcomp_pipe_nvkms_asserts() {
 }
 
 #[test]
-fn ada_page_gains_no_postcomp_word() {
+fn ada_page_gains_no_postcomp_features() {
     let t = for_version("580.65.06").unwrap();
     let row = &kf_chip::display::ADA;
     let r = Regs::for_ip("580.65.06", row.ip_version).unwrap();
     let p = page(t, &r, row.classes.caps, row.heads, row.windows).unwrap();
     for i in 0..row.heads {
         let off = t.a(row.classes.caps, "POSTCOMP_HEAD_HDR_CAPA", i).unwrap();
+        let unit = t
+            .f(row.classes.caps, "POSTCOMP_HEAD_HDR_CAPA_UNIT_WIDTH")
+            .unwrap();
+        // The shared NVKMS fixed-point unit contract applies to Ada too; every
+        // other bit, including the Blackwell pipe presence bits, stays zero.
         assert_eq!(
             p.word(off),
+            16 << unit.1,
+            "Ada POSTCOMP_HEAD_HDR_CAPA({i}) has units only"
+        );
+        assert_eq!(
+            get(
+                p.word(off),
+                t.f(row.classes.caps, "POSTCOMP_HEAD_HDR_CAPA_SCLR_PRESENT")
+                    .unwrap()
+            ),
             0,
-            "Ada POSTCOMP_HEAD_HDR_CAPA({i}) stays unclaimed"
+            "Ada postcomp scaler remains absent"
         );
     }
 }
