@@ -1,3 +1,5 @@
+STATUS UPDATE: RESEARCH, 2026-10-22. See ../../../docs/design/V3_PRECOMP_CSC_PRECISION_20261022.md for the exact source boundary: the header supplies layout and can encode14, but does not prescribe14. The numeric basis is public NVKMS S5.14 documentation; FVLUT semantics and sufficiency remain unresolved. This topic was extracted with -x from the continuation lineage; hardware remains UNRUN.
+
 STATUS: LIVE-RESEARCH, 2026-10-22 CEST. Partial T1 candidate, hardware UNRUN.
 
 FALSIFIER before implementation: a declared CSC stage still reports zero precision, uses a fixed address/bit layout instead of the generated class fields, or claims extra LUT/clamp features. The EXPECTED RED commit7b8cdc550 fails two behavior tests (third feature-scope test already passes), then four family-layer rows declare the public precision for main/overlay CSC00/01. No production Rust logic changes; no per-die captured value/row, no host privilege and no diagnostic caps-file hook imported.
