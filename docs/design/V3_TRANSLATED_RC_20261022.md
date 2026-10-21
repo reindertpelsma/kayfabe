@@ -1,4 +1,4 @@
-**STATUS: DESIGN-ONLY, 2026-10-22.** B1; GPU-free implementation and validation follow.
+**STATUS: DESIGN-ONLY, 2026-10-22.** B1 stopped at the baseline denied-Clippy gate; no implementation.
 Labels: CODE READ means public source/repository code; MEASURED means a named test artifact;
 INFERRED means a prediction requiring hardware validation.
 
@@ -62,5 +62,13 @@ corrupt its own notification, request invalid destinations, churn its own channe
 GPU work to fail; none supplies a host address, host verb flags, cross-VM destination or unbounded
 per-wake list. Retired pending events are pruned. No relay, worker algorithm or VA change is needed.
 
-MEASURED baseline: `traces/translated_rc_20261018/` will record before/after counts, isolated
+MEASURED baseline: `traces/translated_rc_20261018/` records baseline/EXPECTED RED counts, isolated
 EXPECTED RED commits, mutation killers and clippy delta. Hardware numbers: n=0 in this lane.
+
+CODE READ stop/options: the required continuation base has 93 denied Clippy diagnostics in
+six unchanged channel/relay files (51 in `kf-qemu/src/userpump.rs`), which B1 may not repair
+beyond the narrow RC hook. MEASURED: the unchanged-file hashes and diagnostics are recorded with the evidence. The no-op delivery API
+and tests are a reviewable checkpoint only. Recommendation: repair that baseline in a
+separately scoped lane, then resume implementation; alternatively explicitly expand B1's
+scope. Do not suppress the denies. No behavior fix, mutation result or hardware success is
+claimed. No public observation verb is missing; the blocking issue is the existing safety gate.

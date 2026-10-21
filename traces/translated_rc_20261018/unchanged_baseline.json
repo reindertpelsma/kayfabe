@@ -1,0 +1,38 @@
+[
+  {
+    "file": "crates/kf-qemu/src/chan.rs",
+    "errors": 10,
+    "local_blob": "33e2c9ccd3ebbdb95677b019eb78d6f85ea8d0d0",
+    "base_blob": "33e2c9ccd3ebbdb95677b019eb78d6f85ea8d0d0"
+  },
+  {
+    "file": "crates/kf-qemu/src/userpump.rs",
+    "errors": 51,
+    "local_blob": "3714a0b5530fbaa70da36db02935b1a6ebdfb593",
+    "base_blob": "3714a0b5530fbaa70da36db02935b1a6ebdfb593"
+  },
+  {
+    "file": "crates/kf-qemu/src/userread.rs",
+    "errors": 16,
+    "local_blob": "85f4369d200cd9ee9db72501bc8c5ddc90628c45",
+    "base_blob": "85f4369d200cd9ee9db72501bc8c5ddc90628c45"
+  },
+  {
+    "file": "crates/kf-qemu/src/userrelay.rs",
+    "errors": 3,
+    "local_blob": "9a692db9b33ea1c929e61f2f2fe077ede85ff46b",
+    "base_blob": "9a692db9b33ea1c929e61f2f2fe077ede85ff46b"
+  },
+  {
+    "file": "crates/kf-qemu/src/usershadow.rs",
+    "errors": 9,
+    "local_blob": "22e8719ea61be0d1e0d576cc1c24211dca8b88ea",
+    "base_blob": "22e8719ea61be0d1e0d576cc1c24211dca8b88ea"
+  },
+  {
+    "file": "crates/kf-qemu/src/userstrand.rs",
+    "errors": 4,
+    "local_blob": "93cdb845c4bd06b9ce7e5b1653f2a39016e8f84d",
+    "base_blob": "93cdb845c4bd06b9ce7e5b1653f2a39016e8f84d"
+  }
+]
