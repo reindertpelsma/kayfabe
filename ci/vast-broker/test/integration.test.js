@@ -30,3 +30,14 @@ test('public request cannot invoke the internal cron route',async()=>{
  const response=await source.default.fetch(new Request('https://broker.example/cron',{method:'POST'}),{LEDGER:{idFromName:n=>n,get:()=>({fetch:()=>{forwarded++;return new Response('bad');}})}});
  assert.equal(response.status,404);assert.equal(forwarded,0);
 });
+test('bundled scheduled binding reaches Durable Object cleanup',async()=>{
+ const {spawnSync}=await import('node:child_process');assert.equal(spawnSync(process.execPath,['bundle.js'],{cwd:new URL('../',import.meta.url)}).status,0);
+ const source=await import('../dist/worker.js');let swept=0;const object=new source.BrokerLedger({storage:new MemoryStorage()},env);
+ object.service={sweep:async()=>{swept++;},fetch:async()=>new Response('not cleanup',{status:404})};let promise;
+ source.default.scheduled({}, {LEDGER:{idFromName:n=>n,get:()=>object}}, {waitUntil:p=>promise=p});await promise;assert.equal(swept,1);
+});
+test('bundled public request cannot invoke internal cron route',async()=>{
+ const source=await import('../dist/worker.js');let forwarded=0;
+ const response=await source.default.fetch(new Request('https://broker.example/cron',{method:'POST'}),{LEDGER:{idFromName:n=>n,get:()=>({fetch:()=>{forwarded++;return new Response('bad');}})}});
+ assert.equal(response.status,404);assert.equal(forwarded,0);
+});

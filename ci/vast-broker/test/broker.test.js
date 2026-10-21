@@ -65,3 +65,6 @@ test('documented Vast verification string is accepted without boolean alias',asy
 test('documented display GPU names map to the fixed model allowlist',async()=>{const h=await setup();h.cloud.offer.gpu_name='RTX 4070';assert.equal((await h.call()).status,200);});
 test('offer request uses documented ondemand enum and selected disk',async()=>{const h=await setup();await h.call();const q=h.cloud.calls.find(c=>c.url.endsWith('/bundles')).body;assert.equal(q.type,'ondemand');assert.equal(q.allocated_storage,120);});
 test('complete documented display offer remains within fixed capability',async()=>{const h=await setup();delete h.cloud.offer.verified;h.cloud.offer.verification='verified';h.cloud.offer.gpu_name='RTX 4070';assert.equal((await h.call()).status,200);});
+for(const restart of [false,true])test('SHA cache does not rebill after gap expires '+restart,async()=>{const h=await setup();await rent(h);await finish(h);h.time.value+=25*3600000;h.cloud.run.id=124;if(restart)h.restart();
+ const r=await h.call('/rent',{claims:{run_id:'124',exp:h.time.value/1000+300,nbf:h.time.value/1000-1}});assert.equal(r.status,200);assert.equal((await r.json()).verdict,'PASS');assert.equal(h.cloud.creates,1);
+});
