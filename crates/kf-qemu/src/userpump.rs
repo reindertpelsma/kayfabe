@@ -1497,10 +1497,7 @@ impl Pump {
             let mut backing_now = None;
             let fresh: Option<Vec<u32>> = self.snapshot(me, r, x.va, x.bytes).ok().map(|s| {
                 backing_now = Some((s.describe(), s.epoch));
-                s.bytes
-                    .chunks_exact(4)
-                    .filter_map(le_word)
-                    .collect()
+                s.bytes.chunks_exact(4).filter_map(le_word).collect()
             });
             let moved = backing_now.as_ref().map(|b| b.0 != x.backing.0);
             let epoch = backing_now.as_ref().map(|b| (x.backing.1, b.1));
@@ -1625,7 +1622,9 @@ impl Pump {
                 diffs.len(),
                 diffs.first()
             );
-            if x.delay_ms == 200 && let Some(dir) = trace_dir() {
+            if x.delay_ms == 200
+                && let Some(dir) = trace_dir()
+            {
                 let mut out = format!(
                     "STRADDLE {:#x}:{:#x} seq={} pb_va={:#x} bytes={}\nas scanned:\n",
                     r.key.0, r.key.1, x.seq, x.va, x.bytes
@@ -1780,10 +1779,7 @@ impl Pump {
                         pb.epoch,
                         s.epoch
                     ));
-                    s.bytes
-                        .chunks_exact(4)
-                        .filter_map(le_word)
-                        .collect()
+                    s.bytes.chunks_exact(4).filter_map(le_word).collect()
                 });
             let (changed, first) = words2.as_ref().map_or((None, None), |w2| {
                 let diffs = differing(w2, words);
@@ -1801,7 +1797,9 @@ impl Pump {
                 me.queued(r.idx)
             );
             let _ = writeln!(out, "{line}");
-            if let (Some(w2), Some(n)) = (&words2, changed) && n > 0 {
+            if let (Some(w2), Some(n)) = (&words2, changed)
+                && n > 0
+            {
                 let _ = writeln!(out, "  reread words:");
                 words_text(&mut out, head(w2, TRACE_WORDS));
             }

@@ -10,7 +10,7 @@
 //! then channel. A private worker-state mutex is allowed only when no graph,
 //! RAM, channel-metadata or drainer path acquires it; Busy immediately unwinds.
 
-use crate::memory_list::{lookup, MAX_ACCESS};
+use crate::memory_list::{MAX_ACCESS, lookup};
 use crate::rmgraph::{NodeKey, ResourceLifetime, RmEvent};
 use crate::rmrpc::{GraphObjects, ObjectsRefusal, PageDirStatement, RmObjects};
 use kf_arch::ids::{HClient, HObject};

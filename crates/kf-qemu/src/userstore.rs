@@ -36,14 +36,16 @@ static KEEP: std::sync::atomic::AtomicUsize = std::sync::atomic::AtomicUsize::ne
 pub(crate) static ARM_RETRY_OK: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
 /// RM refused twice: the cache fell back to today's behaviour (released every view the read does not
 /// need, then armed) and that satisfied it.
-pub(crate) static ARM_FALLBACK_OK: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
+pub(crate) static ARM_FALLBACK_OK: std::sync::atomic::AtomicU64 =
+    std::sync::atomic::AtomicU64::new(0);
 /// RM refused even after the fallback: the read was refused (`Refusal::Store`), as it always was.
 pub(crate) static ARM_FAILED: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
 
 /// Views armed (RM map + mmap), all channels, since the process started.
 pub(crate) static VIEWS_ARMED: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
 /// Views released because a channel was at its limit (quota full) - a workload that thrashes shows here.
-pub(crate) static VIEWS_EVICTED: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
+pub(crate) static VIEWS_EVICTED: std::sync::atomic::AtomicU64 =
+    std::sync::atomic::AtomicU64::new(0);
 
 /// One line for the shutdown summary (next to `USER_RING_LOOP SUMMARY`): totals by name.
 pub(crate) fn summary() -> String {
@@ -61,7 +63,11 @@ pub(crate) fn summary() -> String {
 
 /// Realize: the operator's `user-view-keep` (0 = the default).
 pub(crate) fn configure(keep: u32) {
-    let k = if keep == 0 { DEFAULT_KEEP } else { (keep as usize).min(256) };
+    let k = if keep == 0 {
+        DEFAULT_KEEP
+    } else {
+        (keep as usize).min(256)
+    };
     KEEP.store(k, std::sync::atomic::Ordering::Relaxed);
 }
 
@@ -153,7 +159,15 @@ impl<H: Host> Cache<H> {
             .try_reserve_exact(VIEWS)
             .map_err(|_| Refusal::Allocation)?;
         let keep = KEEP.load(std::sync::atomic::Ordering::Relaxed);
-        Ok(Self { host, bound, views, keep, tick: 0, armed: 0, evicted: 0 })
+        Ok(Self {
+            host,
+            bound,
+            views,
+            keep,
+            tick: 0,
+            armed: 0,
+            evicted: 0,
+        })
     }
 
     /// Bounded worker-only cleanup. On error Self still owns every unreleased
@@ -205,14 +219,26 @@ impl<H: Host> Cache<H> {
     fn try_arm(&mut self, off: u64, len: u64) -> Result<bool, Refusal> {
         match self.host.arm(off, len) {
             Ok(native) => {
-                self.views.push(View { off, len, ready: true, used: self.tick, native });
+                self.views.push(View {
+                    off,
+                    len,
+                    ready: true,
+                    used: self.tick,
+                    native,
+                });
                 self.armed += 1;
                 VIEWS_ARMED.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
                 Ok(true)
             }
             Err(error) => match error.retained {
                 Some(native) => {
-                    self.views.push(View { off, len, ready: false, used: self.tick, native });
+                    self.views.push(View {
+                        off,
+                        len,
+                        ready: false,
+                        used: self.tick,
+                        native,
+                    });
                     Err(Refusal::Store)
                 }
                 None => Ok(false),
@@ -247,11 +273,19 @@ impl<H: Host> Cache<H> {
         let _ = self.evict_all_unrequired(required);
         if self.try_arm(off, len)? {
             let n = ARM_FALLBACK_OK.fetch_add(1, Relaxed) + 1;
-            note("arm refused twice by RM; fell back to arm/release for this read (satisfied)", n, &format!("window {off:#x}+{len:#x}"));
+            note(
+                "arm refused twice by RM; fell back to arm/release for this read (satisfied)",
+                n,
+                &format!("window {off:#x}+{len:#x}"),
+            );
             return Ok(());
         }
         let n = ARM_FAILED.fetch_add(1, Relaxed) + 1;
-        note("arm refused by RM even after the fallback; the read is refused", n, &format!("window {off:#x}+{len:#x}"));
+        note(
+            "arm refused by RM even after the fallback; the read is refused",
+            n,
+            &format!("window {off:#x}+{len:#x}"),
+        );
         Err(Refusal::Store)
     }
 }
@@ -463,18 +497,27 @@ mod tests {
         for in_ram in [true, false] {
             let ram = RamMap::default();
             let (mem, fd) = crate::raw_unsafe::test_owned_ram(bytes + 4096);
-            ram.add(RamBlock { gpa: 0x2000, mem, fd: Some(fd), fd_off: 0 });
+            ram.add(RamBlock {
+                gpa: 0x2000,
+                mem,
+                fd: Some(fd),
+                fd_off: 0,
+            });
             assert!(mem.write_from(4, &[7]));
             assert!(mem.write_from(bytes + 3, &[11]));
             let generation = ram.try_generation().unwrap();
             let rows = PlacedRows::default();
             for offset in (0..bytes + 4096).step_by(4096) {
-                rows.write().unwrap().insert(0x100000 + offset as u64,
-                    (4096, offset as u64, in_ram, kf_host::MapPerm::READ_WRITE));
+                rows.write().unwrap().insert(
+                    0x100000 + offset as u64,
+                    (4096, offset as u64, in_ram, kf_host::MapPerm::READ_WRITE),
+                );
             }
             let mut cache = Cache::create(Fake::default(), bytes as u64 + BYTES).unwrap();
             let log = RowsLog::default();
-            let source = userread::snapshot(&rows, &log, &ram, generation, 0x100004, bytes, &mut cache).unwrap();
+            let source =
+                userread::snapshot(&rows, &log, &ram, generation, 0x100004, bytes, &mut cache)
+                    .unwrap();
             assert_eq!(source.bytes.len(), bytes);
             if in_ram {
                 assert!(cache.host.events.borrow().is_empty());
@@ -485,7 +528,10 @@ mod tests {
             }
             source.admit(|| ()).unwrap();
             rows.write().unwrap().remove(&(0x100000 + bytes as u64));
-            assert_eq!(source.admit(|| ()), Err(Refusal::Missing(0x100000 + bytes as u64)));
+            assert_eq!(
+                source.admit(|| ()),
+                Err(Refusal::Missing(0x100000 + bytes as u64))
+            );
             cache.release().unwrap();
         }
     }
@@ -567,7 +613,11 @@ mod tests {
             c.prepare(&[span(0, 64)]).unwrap();
             c.prepare(&[span(3 * BYTES, 64)]).unwrap();
         }
-        assert_eq!(counts(&c), (2, 0), "each window armed once, nothing released");
+        assert_eq!(
+            counts(&c),
+            (2, 0),
+            "each window armed once, nothing released"
+        );
         let mut out = [0u8; 4];
         c.copy(3 * BYTES, &mut out).unwrap();
     }
@@ -575,8 +625,9 @@ mod tests {
     fn many_channels_many_slices_arm_each_slice_once() {
         // N channels x M distinct windows each (M <= keep): total arms == N x M however long it runs.
         let (n, m) = (24usize, 6u64);
-        let mut chans: Vec<Cache<Fake>> =
-            (0..n).map(|_| Cache::create(Fake::default(), BYTES * 64).unwrap()).collect();
+        let mut chans: Vec<Cache<Fake>> = (0..n)
+            .map(|_| Cache::create(Fake::default(), BYTES * 64).unwrap())
+            .collect();
         for round in 0..400u64 {
             for c in chans.iter_mut() {
                 c.prepare(&[span((round % m) * BYTES, 32)]).unwrap();
@@ -594,7 +645,14 @@ mod tests {
             c.prepare(&[span(i * BYTES, 4)]).unwrap();
         }
         assert_eq!(c.views.len(), 4, "held at the limit");
-        let released: Vec<u64> = c.host.events.borrow().iter().filter(|e| e.0 == "release").map(|e| e.1).collect();
+        let released: Vec<u64> = c
+            .host
+            .events
+            .borrow()
+            .iter()
+            .filter(|e| e.0 == "release")
+            .map(|e| e.1)
+            .collect();
         assert_eq!(released, vec![0, BYTES, 2 * BYTES], "oldest first");
         // touching window 3 makes it the newest: the next eviction takes window 4, not 3
         c.prepare(&[span(3 * BYTES, 4)]).unwrap();
@@ -614,7 +672,11 @@ mod tests {
         }
         // the next small snapshot trims back to the limit, least recently used first
         c.prepare(&[span(5 * BYTES, 4)]).unwrap();
-        assert_eq!(c.views.len(), 6, "trimming happens only when a new window needs a slot");
+        assert_eq!(
+            c.views.len(),
+            6,
+            "trimming happens only when a new window needs a slot"
+        );
     }
     #[test]
     fn an_rm_refusal_evicts_the_channels_own_lru_view_and_retries_once() {
@@ -626,7 +688,10 @@ mod tests {
         c.host.refuse_arms.set(1);
         c.prepare(&[span(2 * BYTES, 4)]).unwrap();
         // refused arm, LRU window 0 released, retry armed window 2; window 1 untouched
-        assert_eq!(*c.host.events.borrow(), [("arm", 2 * BYTES), ("release", 0), ("arm", 2 * BYTES)]);
+        assert_eq!(
+            *c.host.events.borrow(),
+            [("arm", 2 * BYTES), ("release", 0), ("arm", 2 * BYTES)]
+        );
         assert!(c.views.iter().any(|v| v.off == BYTES && v.ready));
         assert!(c.views.iter().any(|v| v.off == 2 * BYTES && v.ready));
         assert!(ARM_RETRY_OK.load(std::sync::atomic::Ordering::Relaxed) > before);
@@ -656,7 +721,11 @@ mod tests {
         c.host.refuse_arms.set(3);
         assert_eq!(c.prepare(&[span(5 * BYTES, 4)]), Err(Refusal::Store));
         assert!(ARM_FAILED.load(std::sync::atomic::Ordering::Relaxed) > before);
-        assert_eq!(c.copy(5 * BYTES, &mut [0; 4]), Err(Refusal::Store), "never readable");
+        assert_eq!(
+            c.copy(5 * BYTES, &mut [0; 4]),
+            Err(Refusal::Store),
+            "never readable"
+        );
         // the channel is not poisoned: the next read arms normally
         c.prepare(&[span(5 * BYTES, 4)]).unwrap();
         c.copy(5 * BYTES, &mut [0; 4]).unwrap();
@@ -715,10 +784,14 @@ mod tests {
                     self.c.arm_refused.fetch_add(1, Relaxed);
                     return Err(ArmError { retained: None });
                 }
-                let ram = kf_linux_raw::SharedRam::create_named(c"kf-stress", len).map_err(|_| ArmError { retained: None })?;
+                let ram = kf_linux_raw::SharedRam::create_named(c"kf-stress", len)
+                    .map_err(|_| ArmError { retained: None })?;
                 let page = HostPageSize::query();
                 let fill = kf_linux_raw::MappedRegion::map(
-                    Backing::SharedFile { fd: ram.as_backing_fd(), offset: 0 },
+                    Backing::SharedFile {
+                        fd: ram.as_backing_fd(),
+                        offset: 0,
+                    },
                     len,
                     kf_linux_raw::HostProt::ReadWrite,
                     CachePolicy::WriteBack,
@@ -726,10 +799,14 @@ mod tests {
                 )
                 .map_err(|_| ArmError { retained: None })?;
                 let bytes: Vec<u8> = (0..len).map(|i| pattern(off + i)).collect();
-                fill.write_from(HostOffset::new(0), &bytes).map_err(|_| ArmError { retained: None })?;
+                fill.write_from(HostOffset::new(0), &bytes)
+                    .map_err(|_| ArmError { retained: None })?;
                 drop(fill);
                 let view = VolatileRegion::map_read_only(
-                    Backing::SharedFile { fd: ram.as_backing_fd(), offset: 0 },
+                    Backing::SharedFile {
+                        fd: ram.as_backing_fd(),
+                        offset: 0,
+                    },
                     len,
                     CachePolicy::WriteBack,
                     page,
@@ -741,7 +818,9 @@ mod tests {
                     // the RM mapping exists but the CPU mapping failed: ownership must be retained
                     drop(view);
                     self.c.partial.fetch_add(1, Relaxed);
-                    return Err(ArmError { retained: Some(StubView { region: None }) });
+                    return Err(ArmError {
+                        retained: Some(StubView { region: None }),
+                    });
                 }
                 self.c.live_regions.fetch_add(1, Relaxed);
                 Ok(StubView { region: Some(view) })
@@ -761,11 +840,19 @@ mod tests {
             fn copy(&self, view: &StubView, off: u64, bytes: &mut [u8]) -> Result<(), Refusal> {
                 self.c.reads.fetch_add(1, Relaxed);
                 self.c.bytes.fetch_add(bytes.len() as u64, Relaxed);
-                view.region.as_ref().ok_or(Refusal::Store)?.copy_out(HostOffset::new(off), bytes).map_err(|_| Refusal::Store)
+                view.region
+                    .as_ref()
+                    .ok_or(Refusal::Store)?
+                    .copy_out(HostOffset::new(off), bytes)
+                    .map_err(|_| Refusal::Store)
             }
         }
         fn maps_with_name() -> usize {
-            std::fs::read_to_string("/proc/self/maps").unwrap().lines().filter(|l| l.contains("kf-stress")).count()
+            std::fs::read_to_string("/proc/self/maps")
+                .unwrap()
+                .lines()
+                .filter(|l| l.contains("kf-stress"))
+                .count()
         }
         fn fds() -> usize {
             std::fs::read_dir("/proc/self/fd").unwrap().count()
@@ -773,11 +860,24 @@ mod tests {
 
         #[test]
         fn eight_threads_arm_evict_and_read_real_mappings_with_injected_failures() {
-            let secs: u64 = std::env::var("KF3_STRESS_SECS").ok().and_then(|v| v.parse().ok()).unwrap_or(3);
-            let seed: u64 = std::env::var("KF3_STRESS_SEED").ok().and_then(|v| v.parse().ok()).unwrap_or_else(|| {
-                std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_nanos() as u64 | 1
-            });
-            let threads: usize = std::env::var("KF3_STRESS_THREADS").ok().and_then(|v| v.parse().ok()).unwrap_or(8);
+            let secs: u64 = std::env::var("KF3_STRESS_SECS")
+                .ok()
+                .and_then(|v| v.parse().ok())
+                .unwrap_or(3);
+            let seed: u64 = std::env::var("KF3_STRESS_SEED")
+                .ok()
+                .and_then(|v| v.parse().ok())
+                .unwrap_or_else(|| {
+                    std::time::SystemTime::now()
+                        .duration_since(std::time::UNIX_EPOCH)
+                        .unwrap()
+                        .as_nanos() as u64
+                        | 1
+                });
+            let threads: usize = std::env::var("KF3_STRESS_THREADS")
+                .ok()
+                .and_then(|v| v.parse().ok())
+                .unwrap_or(8);
             eprintln!("userstore stress: seed={seed} threads={threads} secs={secs}");
             let (maps0, fds0) = (maps_with_name(), fds());
             let c = Arc::new(Counters::default());
@@ -825,18 +925,37 @@ mod tests {
                     })
                 })
                 .collect();
-            let snaps: u64 = handles.into_iter().map(|h| h.join().expect("a stress thread panicked (seed logged above)")).sum();
+            let snaps: u64 = handles
+                .into_iter()
+                .map(|h| {
+                    h.join()
+                        .expect("a stress thread panicked (seed logged above)")
+                })
+                .sum();
             let (maps, unmaps) = (c.rm_maps.load(Relaxed), c.rm_unmaps.load(Relaxed));
             eprintln!(
                 "userstore stress: snapshots={snaps} reads={} bytes={} rm_maps={maps} rm_unmaps={unmaps} arm_refused={} release_refused={} partial={}",
-                c.reads.load(Relaxed), c.bytes.load(Relaxed), c.arm_refused.load(Relaxed), c.release_refused.load(Relaxed), c.partial.load(Relaxed)
+                c.reads.load(Relaxed),
+                c.bytes.load(Relaxed),
+                c.arm_refused.load(Relaxed),
+                c.release_refused.load(Relaxed),
+                c.partial.load(Relaxed)
             );
-            assert_eq!(maps, unmaps, "arms - releases must be zero once every cache released");
+            assert_eq!(
+                maps, unmaps,
+                "arms - releases must be zero once every cache released"
+            );
             assert_eq!(c.live_rm.load(Relaxed), 0);
             assert_eq!(c.live_regions.load(Relaxed), 0);
             assert_eq!(maps_with_name(), maps0, "no leaked mapping");
             assert!(fds() <= fds0 + 1, "descriptors back to baseline");
-            assert!(snaps > 0 && c.arm_refused.load(Relaxed) > 0 && c.release_refused.load(Relaxed) > 0 && c.partial.load(Relaxed) > 0, "the injections ran");
+            assert!(
+                snaps > 0
+                    && c.arm_refused.load(Relaxed) > 0
+                    && c.release_refused.load(Relaxed) > 0
+                    && c.partial.load(Relaxed) > 0,
+                "the injections ran"
+            );
         }
     }
 }

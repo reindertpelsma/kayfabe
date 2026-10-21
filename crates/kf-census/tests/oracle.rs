@@ -615,7 +615,14 @@ fn several_tier1_tables_are_merged_and_the_first_one_wins() {
     let runs = runs_of(&msgs, &natural_seqs(&msgs));
     stream::read(&mut an, "t", capture(&runs, 4, true).as_slice()).unwrap();
     let r = an.finish();
-    let word = |c: u32| r.controls.iter().find(|x| x.cmd == c).unwrap().ogkm_answer.word();
+    let word = |c: u32| {
+        r.controls
+            .iter()
+            .find(|x| x.cmd == c)
+            .unwrap()
+            .ogkm_answer
+            .word()
+    };
     assert_eq!(word(0x0073_0128), "absent_all_tags");
     assert_eq!(word(0x0073_011a), "defined");
 }

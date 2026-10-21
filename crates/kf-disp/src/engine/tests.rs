@@ -508,7 +508,10 @@ fn a_plane_disable_raises_one_awaken_through_the_flipped_away_entry() {
     };
     let flip = |r: &mut Ring, iso: u32, notifier: u32, idx: u32| {
         r.m(m(WIN, "SET_CONTEXT_DMA_NOTIFIER"), notifier);
-        r.m(m(WIN, "SET_NOTIFIER_CONTROL"), if notifier == 0 { 0 } else { ctl(idx) });
+        r.m(
+            m(WIN, "SET_NOTIFIER_CONTROL"),
+            if notifier == 0 { 0 } else { ctl(idx) },
+        );
         r.m(ma(WIN, "SET_CONTEXT_DMA_ISO", 0), iso);
         r.m(m(WIN, "SET_WINDOW_INTERLOCK_FLAGS"), 1 << 1);
         r.m(m(WIN, "UPDATE"), 0);
@@ -536,7 +539,12 @@ fn a_plane_disable_raises_one_awaken_through_the_flipped_away_entry() {
     flip(&mut r, 0x3_0002, 0xA0, 1);
     e.step(w1, &r.bytes(), r.put(), &mut all_ok);
     let s = e.vblank(0, &mut all_ok);
-    assert_eq!(awakens(&s), vec![(true, false), (false, true)], "{:?}", s.effects);
+    assert_eq!(
+        awakens(&s),
+        vec![(true, false), (false, true)],
+        "{:?}",
+        s.effects
+    );
     // the plane's disable: no surface, no notifier — the flipped-away entry's FINISHED raises the AWAKEN
     flip(&mut r, 0, 0, 0);
     e.step(w1, &r.bytes(), r.put(), &mut all_ok);

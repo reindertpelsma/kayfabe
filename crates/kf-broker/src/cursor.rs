@@ -560,7 +560,11 @@ pub fn want_of(
                 hot.hot(&pixels, seq, now_ms, derived, programmed)
             };
             let i = CursorImage::new(size, size, at, pixels)?;
-            Ok(CursorWant::Image(Arc::new(if xor { i.into_xor() } else { i })))
+            Ok(CursorWant::Image(Arc::new(if xor {
+                i.into_xor()
+            } else {
+                i
+            })))
         }
     }
 }
@@ -739,23 +743,49 @@ mod tests {
     fn the_stream_hides_what_is_not_drawn_and_composes_nothing() {
         let mut hot = HotTracker::default();
         let mut w = |r: CursorRead, stream: bool| want_of(r, stream, &mut hot, 0, 0, None).unwrap();
-        assert_eq!(w(CursorRead::PlaneOff, true), CursorWant::Hidden, "plane off: HIDE");
+        assert_eq!(
+            w(CursorRead::PlaneOff, true),
+            CursorWant::Hidden,
+            "plane off: HIDE"
+        );
         assert_eq!(w(CursorRead::PlaneOff, false), CursorWant::Hidden);
         assert_eq!(w(CursorRead::Empty, true), CursorWant::Hidden);
         assert_eq!(w(CursorRead::Unshowable, false), CursorWant::Composed);
-        assert_eq!(w(CursorRead::Unshowable, true), CursorWant::Hidden, "nothing composes under the stream");
-        let img = |xor| CursorRead::Image { size: 4, hot: (1, 2), pixels: vec![9; 64], xor };
-        let CursorWant::Image(a) = w(img(false), true) else { panic!() };
-        let CursorWant::Image(x) = w(img(true), true) else { panic!() };
+        assert_eq!(
+            w(CursorRead::Unshowable, true),
+            CursorWant::Hidden,
+            "nothing composes under the stream"
+        );
+        let img = |xor| CursorRead::Image {
+            size: 4,
+            hot: (1, 2),
+            pixels: vec![9; 64],
+            xor,
+        };
+        let CursorWant::Image(a) = w(img(false), true) else {
+            panic!()
+        };
+        let CursorWant::Image(x) = w(img(true), true) else {
+            panic!()
+        };
         assert!(!a.is_xor() && x.is_xor());
         assert_eq!((a.width(), a.hot()), (4, (1, 2)));
         assert_ne!(a.digest(), x.digest());
         // a bad image is an error by name, not a panic
-        let bad = CursorRead::Image { size: 4, hot: (9, 9), pixels: vec![0; 64], xor: false };
+        let bad = CursorRead::Image {
+            size: 4,
+            hot: (9, 9),
+            pixels: vec![0; 64],
+            xor: false,
+        };
         assert!(want_of(bad, true, &mut HotTracker::default(), 0, 0, None).is_err());
         // composes: the stream never; otherwise the mode's rule
         for m in [CursorMode::Off, CursorMode::Grabbed, CursorMode::Hover] {
-            for want in [CursorWant::Hidden, CursorWant::Composed, CursorWant::Image(a.clone())] {
+            for want in [
+                CursorWant::Hidden,
+                CursorWant::Composed,
+                CursorWant::Image(a.clone()),
+            ] {
                 assert!(!composes(m, true, &want), "{m:?} {want:?}");
                 assert_eq!(composes(m, false, &want), m.composes(&want));
             }
@@ -767,7 +797,12 @@ mod tests {
     #[test]
     fn the_stream_sends_the_programmed_hot_spot_and_the_fallback_the_derived_one() {
         let img = |stream| {
-            let read = CursorRead::Image { size: 8, hot: (1, 2), pixels: vec![9; 8 * 8 * 4], xor: false };
+            let read = CursorRead::Image {
+                size: 8,
+                hot: (1, 2),
+                pixels: vec![9; 8 * 8 * 4],
+                xor: false,
+            };
             let CursorWant::Image(i) =
                 want_of(read, stream, &mut HotTracker::default(), 1, 0, Some((5, 6))).unwrap()
             else {
@@ -775,15 +810,25 @@ mod tests {
             };
             i.hot()
         };
-        assert_eq!(img(true), (1, 2), "stream: programmed, whatever the pointer says");
-        assert_eq!(img(false), (5, 6), "fallback: derived at once for a new image");
+        assert_eq!(
+            img(true),
+            (1, 2),
+            "stream: programmed, whatever the pointer says"
+        );
+        assert_eq!(
+            img(false),
+            (5, 6),
+            "fallback: derived at once for a new image"
+        );
     }
 
     /// The XOR bit is part of an image's identity and of the share the relay writes.
     #[test]
     fn the_xor_bit_is_in_the_digest_and_the_share_carries_the_brokers_yes() {
         let a = img(8, 8, (0, 0), 3);
-        let x = CursorImage::new(8, 8, (0, 0), a.pixels().to_vec()).unwrap().into_xor();
+        let x = CursorImage::new(8, 8, (0, 0), a.pixels().to_vec())
+            .unwrap()
+            .into_xor();
         assert!(x.is_xor() && !a.is_xor());
         assert_ne!(a.digest(), x.digest());
         assert_eq!(x.clone().into_xor().digest(), x.digest(), "idempotent");

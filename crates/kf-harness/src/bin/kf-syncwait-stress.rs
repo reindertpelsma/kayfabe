@@ -32,7 +32,8 @@
 #![allow(clippy::too_many_lines)]
 
 use kf_abi::submit::{
-    ENGINE_TYPE_GRAPHICS, USERD_GP_GET, USERD_GP_PUT, USERD_REFERENCE_C56F, fifo, gp_entry, method_header_inc,
+    ENGINE_TYPE_GRAPHICS, USERD_GP_GET, USERD_GP_PUT, USERD_REFERENCE_C56F, fifo, gp_entry,
+    method_header_inc,
 };
 use kf_host::{Channel, HostRm, MapNode, MapPerm, RingSpec, VaSpace, ViewAccess};
 use kf_linux_raw::{Backing, CachePolicy, DevDir, HostOffset, HostPageSize, VolatileRegion};
@@ -65,7 +66,9 @@ struct Buffer {
 
 impl Buffer {
     fn new(rm: &HostRm, space: VaSpace, perm: Option<MapPerm>) -> Result<Self, String> {
-        let memory = rm.alloc_device_local(BYTES).map_err(|e| format!("memory: {e:?}"))?;
+        let memory = rm
+            .alloc_device_local(BYTES)
+            .map_err(|e| format!("memory: {e:?}"))?;
         let va = perm
             .map(|p| rm.map_window_perm(space, memory, BYTES, false, p))
             .transpose()
@@ -83,21 +86,34 @@ impl Buffer {
             HostPageSize::query(),
         )
         .map_err(|e| format!("mmap: {e:?}"))?;
-        let b = Self { memory, _node: node, cookie, cpu, va };
+        let b = Self {
+            memory,
+            _node: node,
+            cookie,
+            cpu,
+            va,
+        };
         for off in (0..BYTES).step_by(4) {
             b.store(off, 0)?;
         }
         Ok(b)
     }
     fn store(&self, off: u64, value: u32) -> Result<(), String> {
-        self.cpu.store_u32(HostOffset::new(off), value).map_err(|e| format!("store: {e:?}"))
+        self.cpu
+            .store_u32(HostOffset::new(off), value)
+            .map_err(|e| format!("store: {e:?}"))
     }
     fn load(&self, off: u64) -> Result<u32, String> {
-        self.cpu.load_u32(HostOffset::new(off)).map_err(|e| format!("load: {e:?}"))
+        self.cpu
+            .load_u32(HostOffset::new(off))
+            .map_err(|e| format!("load: {e:?}"))
     }
     fn close(self, rm: &HostRm, space: VaSpace) {
         drop(self.cpu);
-        let _ = rm.release_cpu_view(kf_host::CpuViewRelease { h_memory: self.memory, p_linear_address: self.cookie });
+        let _ = rm.release_cpu_view(kf_host::CpuViewRelease {
+            h_memory: self.memory,
+            p_linear_address: self.cookie,
+        });
         if let Some(va) = self.va {
             let _ = rm.unmap(space, va, false);
         }
@@ -142,7 +158,13 @@ fn sem_reduce_add(w: &mut Vec<u32>, va: u64, value: u32) -> Result<(), String> {
 }
 fn sem_acquire(w: &mut Vec<u32>, va: u64, value: u32) -> Result<(), String> {
     w.push(hdr(fifo::SEM_ADDR_LO, 5)?);
-    w.extend_from_slice(&[va as u32, (va >> 32) as u32 & 0xff, value, 0, fifo::SEM_EXECUTE_ACQUIRE_32BIT]);
+    w.extend_from_slice(&[
+        va as u32,
+        (va >> 32) as u32 & 0xff,
+        value,
+        0,
+        fifo::SEM_EXECUTE_ACQUIRE_32BIT,
+    ]);
     Ok(())
 }
 
@@ -215,7 +237,9 @@ fn cut_into(len: usize, cuts: &[usize]) -> Vec<(usize, usize)> {
 }
 
 fn random_cuts(r: &mut Rng, len: usize, n: usize) -> Vec<usize> {
-    let mut v: Vec<usize> = (0..n).map(|_| 1 + r.below(len as u64 - 1) as usize).collect();
+    let mut v: Vec<usize> = (0..n)
+        .map(|_| 1 + r.below(len as u64 - 1) as usize)
+        .collect();
     v.sort_unstable();
     v.dedup();
     v
@@ -230,7 +254,12 @@ fn plan_random(
     (max_units, max_cuts, max_ents): (u64, u64, usize),
 ) -> Result<Plan, String> {
     let n = 1 + r.below(max_units) as usize;
-    let units: Vec<Unit> = (0..n).map(|k| Unit { slot: k, payload: 0x1000 + k as u32 }).collect();
+    let units: Vec<Unit> = (0..n)
+        .map(|k| Unit {
+            slot: k,
+            payload: 0x1000 + k as u32,
+        })
+        .collect();
     let mut words = Vec::new();
     units_words(out_va, &units, &mut words)?;
     let ncut = r.below(max_cuts + 1) as usize;
@@ -243,7 +272,11 @@ fn plan_random(
     };
     ctl(r, &mut ents); // first
     for (from, to) in cut_into(words.len(), &cuts) {
-        ents.push(Ent::Seg { from, to, sync: r.coin(50) });
+        ents.push(Ent::Seg {
+            from,
+            to,
+            sync: r.coin(50),
+        });
         ctl(r, &mut ents); // between, back to back, last
     }
     while ents.len() > max_ents {
@@ -258,7 +291,15 @@ fn plan_random(
         2 => Doorbell::PutAhead,
         _ => Doorbell::Skipped,
     });
-    Ok(Plan { name, words, units: n, ents, mode, late: Vec::new(), settle_ms: 0 })
+    Ok(Plan {
+        name,
+        words,
+        units: n,
+        ents,
+        mode,
+        late: Vec::new(),
+        settle_ms: 0,
+    })
 }
 
 fn plan_late(name: String, r: &mut Rng, out_va: u64) -> Result<Plan, String> {
@@ -271,7 +312,10 @@ fn plan_late(name: String, r: &mut Rng, out_va: u64) -> Result<Plan, String> {
         let n = 1 + r.below(3) as usize;
         let units: Vec<Unit> = (0..n)
             .map(|_| {
-                let u = Unit { slot, payload: 0x2000 + slot as u32 };
+                let u = Unit {
+                    slot,
+                    payload: 0x2000 + slot as u32,
+                };
                 slot += 1;
                 u
             })
@@ -302,15 +346,28 @@ fn plan_late(name: String, r: &mut Rng, out_va: u64) -> Result<Plan, String> {
             }
             // the first segment of a late phase carries SYNC_WAIT (it IS the gated entry); the others random
             let first_of_phase = seg_from == phase_from;
-            let sync = if p > 0 && first_of_phase { true } else { r.coin(40) };
+            let sync = if p > 0 && first_of_phase {
+                true
+            } else {
+                r.coin(40)
+            };
             if p > 0 && first_of_phase {
                 // optionally a LENGTH==0 SYNC_WAIT control entry right at the boundary
                 if r.coin(30) {
                     ents.push(Ent::Ctl { sync: true });
                 }
-                late.push(Late { from: phase_from, to: usize::MAX, gate: (p - 1) as u32, before_ent: 0 });
+                late.push(Late {
+                    from: phase_from,
+                    to: usize::MAX,
+                    gate: (p - 1) as u32,
+                    before_ent: 0,
+                });
             }
-            ents.push(Ent::Seg { from: seg_from, to, sync });
+            ents.push(Ent::Seg {
+                from: seg_from,
+                to,
+                sync,
+            });
             seg_from = to;
         }
     }
@@ -333,7 +390,10 @@ fn plan_late(name: String, r: &mut Rng, out_va: u64) -> Result<Plan, String> {
         if matches!(ents[b], Ent::Ctl { .. }) {
             b -= 1;
         }
-        fixed.push(Late { before_ent: b, ..l.clone() });
+        fixed.push(Late {
+            before_ent: b,
+            ..l.clone()
+        });
     }
     let units = slot;
     Ok(Plan {
@@ -341,7 +401,11 @@ fn plan_late(name: String, r: &mut Rng, out_va: u64) -> Result<Plan, String> {
         words,
         units,
         ents,
-        mode: if r.coin(50) { Doorbell::End } else { Doorbell::PutAhead },
+        mode: if r.coin(50) {
+            Doorbell::End
+        } else {
+            Doorbell::PutAhead
+        },
         late: fixed,
         settle_ms: [0, 1, 5][r.below(3) as usize],
     })
@@ -367,7 +431,9 @@ struct Chan<'a> {
 
 impl<'a> Chan<'a> {
     fn new(rm: &'a HostRm, engine: u32, entries: u32) -> Result<Self, String> {
-        let space = rm.alloc_vaspace_bare().map_err(|e| format!("space: {e:?}"))?;
+        let space = rm
+            .alloc_vaspace_bare()
+            .map_err(|e| format!("space: {e:?}"))?;
         let ring = Buffer::new(rm, space, Some(MapPerm::READ_WRITE))?;
         let out = Buffer::new(rm, space, Some(MapPerm::READ_WRITE))?;
         let userd = Buffer::new(rm, space, None)?;
@@ -388,7 +454,19 @@ impl<'a> Chan<'a> {
             .map_err(|e| format!("birth: {e:?}"))?;
         chan.assert_user().map_err(str::to_string)?;
         rm.schedule(chan).map_err(|e| format!("schedule: {e:?}"))?;
-        Ok(Self { rm, space, ring, out, userd, chan, entries, put: 0, ring_va, out_va, poll: Duration::from_micros(300) })
+        Ok(Self {
+            rm,
+            space,
+            ring,
+            out,
+            userd,
+            chan,
+            entries,
+            put: 0,
+            ring_va,
+            out_va,
+            poll: Duration::from_micros(300),
+        })
     }
 
     fn close(self) {
@@ -415,7 +493,9 @@ impl<'a> Chan<'a> {
         Ok(())
     }
     fn ring_db(&self) -> Result<(), String> {
-        self.rm.doorbell(self.chan.token).map_err(|e| format!("doorbell: {e:?}"))
+        self.rm
+            .doorbell(self.chan.token)
+            .map_err(|e| format!("doorbell: {e:?}"))
     }
     fn write_entry(&self, index: u32, raw: u64) -> Result<(), String> {
         let at = GP_OFF + u64::from(index % self.entries) * 8;
@@ -442,7 +522,8 @@ impl<'a> Chan<'a> {
         // pushbuffer: real words, POISON in the late ranges
         let is_late = |i: usize| plan.late.iter().any(|l| i >= l.from && i < l.to);
         for (i, &w) in plan.words.iter().enumerate() {
-            self.ring.store(PB_OFF + 4 * i as u64, if is_late(i) { POISON } else { w })?;
+            self.ring
+                .store(PB_OFF + 4 * i as u64, if is_late(i) { POISON } else { w })?;
         }
         // GP entries
         let base = self.put;
@@ -450,8 +531,11 @@ impl<'a> Chan<'a> {
         for e in &plan.ents {
             raws.push(match *e {
                 Ent::Seg { from, to, sync } => {
-                    let g = gp_entry(self.ring_va + PB_OFF + 4 * from as u64, 4 * (to - from) as u64)
-                        .ok_or("GP encoding")?;
+                    let g = gp_entry(
+                        self.ring_va + PB_OFF + 4 * from as u64,
+                        4 * (to - from) as u64,
+                    )
+                    .ok_or("GP encoding")?;
                     g | (u64::from(sync) << 63)
                 }
                 Ent::Ctl { sync } => u64::from(sync) << 63,
@@ -520,7 +604,9 @@ impl<'a> Chan<'a> {
                 break;
             }
             if Instant::now() > deadline {
-                let missing: Vec<usize> = (0..plan.units).filter(|k| self.slot_count(*k).unwrap_or(0) == 0).collect();
+                let missing: Vec<usize> = (0..plan.units)
+                    .filter(|k| self.slot_count(*k).unwrap_or(0) == 0)
+                    .collect();
                 return Err(format!(
                     "TIMEOUT after {timeout:?}: units not executed {missing:?}, GP_GET {} GP_PUT {} (put {})",
                     self.gp_get()?,
@@ -575,7 +661,12 @@ impl Tally {
                 if self.first.len() < 4 {
                     self.first.push(format!(
                         "{}: {why}\n      mode={:?} ents={:?} late={:?} settle_ms={} words={}",
-                        plan.name, plan.mode, plan.ents, plan.late, plan.settle_ms, plan.words.len()
+                        plan.name,
+                        plan.mode,
+                        plan.ents,
+                        plan.late,
+                        plan.settle_ms,
+                        plan.words.len()
                     ));
                 }
                 false
@@ -584,7 +675,12 @@ impl Tally {
     }
     fn report(&mut self, family: &str) {
         self.lat.sort_unstable();
-        let pick = |q: f64| self.lat.get(((self.lat.len() as f64 - 1.0) * q) as usize).copied().unwrap_or(0);
+        let pick = |q: f64| {
+            self.lat
+                .get(((self.lat.len() as f64 - 1.0) * q) as usize)
+                .copied()
+                .unwrap_or(0)
+        };
         println!(
             "STRESS family={family} pass={} fail={} latency_us p50={} p99={} max={}",
             self.pass,
@@ -638,7 +734,11 @@ fn main() {
     let scale: u64 = arg("--scale", "1").parse().unwrap_or(1);
     let families = arg("--families", "split,random,late,wrap,storm,conc");
     let timeout = Duration::from_secs(arg("--timeout-s", "20").parse().unwrap_or(20));
-    let engine = if arg("--engine", "gr") == "gr" { ENGINE_TYPE_GRAPHICS } else { kf_abi::submit::ENGINE_TYPE_COPY0 };
+    let engine = if arg("--engine", "gr") == "gr" {
+        ENGINE_TYPE_GRAPHICS
+    } else {
+        kf_abi::submit::ENGINE_TYPE_COPY0
+    };
 
     let dev = match DevDir::open(c"/dev") {
         Ok(d) => d,
@@ -654,7 +754,10 @@ fn main() {
             std::process::exit(2);
         }
     };
-    println!("STRESS_START driver={} seed={seed} scale={scale} families={families} engine={engine:#x}", rm.driver_version());
+    println!(
+        "STRESS_START driver={} seed={seed} scale={scale} families={families} engine={engine:#x}",
+        rm.driver_version()
+    );
     // the out VA is per channel; plans need it at authoring time, so plans are generated lazily
     // against a probe channel's layout: every channel maps `out` at the same VA (fresh space, first map)
     let mut total_fail = 0u32;
@@ -687,22 +790,46 @@ fn main() {
                 ch.poll = Duration::ZERO;
                 let t0 = Instant::now();
                 for i in 0..n {
-                    let units: Vec<Unit> = (0..4).map(|k| Unit { slot: k, payload: 0x1000 + k as u32 }).collect();
+                    let units: Vec<Unit> = (0..4)
+                        .map(|k| Unit {
+                            slot: k,
+                            payload: 0x1000 + k as u32,
+                        })
+                        .collect();
                     let mut words = Vec::new();
                     units_words(ch.out_va, &units, &mut words)?;
                     // each unit is 14 words: boundary cuts at 14/28/42; open cuts 3 words into the next unit
-                    let cuts: Vec<usize> = if open { vec![17, 31, 45] } else { vec![14, 28, 42] };
+                    let cuts: Vec<usize> = if open {
+                        vec![17, 31, 45]
+                    } else {
+                        vec![14, 28, 42]
+                    };
                     let ents: Vec<Ent> = cut_into(words.len(), &cuts)
                         .into_iter()
                         .enumerate()
-                        .map(|(k, (from, to))| Ent::Seg { from, to, sync: k > 0 })
+                        .map(|(k, (from, to))| Ent::Seg {
+                            from,
+                            to,
+                            sync: k > 0,
+                        })
                         .collect();
-                    let p = Plan { name: format!("rate-{variant}#{i}"), words, units: 4, ents, mode: Doorbell::End, late: Vec::new(), settle_ms: 0 };
+                    let p = Plan {
+                        name: format!("rate-{variant}#{i}"),
+                        words,
+                        units: 4,
+                        ents,
+                        mode: Doorbell::End,
+                        late: Vec::new(),
+                        settle_ms: 0,
+                    };
                     let r = ch.run(&p, timeout);
                     t.record(&p, r);
                 }
                 let secs = t0.elapsed().as_secs_f64();
-                println!("STRESS_RATE variant={variant} plans={n} entries_per_plan=4 sync_waits_per_plan=3 plans_per_s={:.0}", n as f64 / secs);
+                println!(
+                    "STRESS_RATE variant={variant} plans={n} entries_per_plan=4 sync_waits_per_plan=3 plans_per_s={:.0}",
+                    n as f64 / secs
+                );
                 ch.close();
                 Ok(())
             })();
@@ -723,7 +850,10 @@ fn main() {
         for variant in ["ctl-then-seg", "sync-seg"] {
             let r = (|| -> Result<(), String> {
                 let mut ch = Chan::new(&rm, engine, 64)?;
-                let units = [Unit { slot: 0, payload: 0x1000 }];
+                let units = [Unit {
+                    slot: 0,
+                    payload: 0x1000,
+                }];
                 let mut after = Vec::new();
                 units_words(ch.out_va, &units, &mut after)?;
                 // the witness candidate: SET_REFERENCE (a host method that writes USERD.REFERENCE when the
@@ -736,7 +866,11 @@ fn main() {
                     ch.ring.store(PB_OFF + 4 * i as u64, w)?;
                 }
                 let g0 = gp_entry(ch.ring_va + PB_OFF, 4 * first.len() as u64).ok_or("gp")?;
-                let g1 = gp_entry(ch.ring_va + PB_OFF + 4 * first.len() as u64, 4 * after.len() as u64).ok_or("gp")?;
+                let g1 = gp_entry(
+                    ch.ring_va + PB_OFF + 4 * first.len() as u64,
+                    4 * after.len() as u64,
+                )
+                .ok_or("gp")?;
                 ch.write_entry(0, g0)?;
                 let n = if variant == "ctl-then-seg" {
                     ch.write_entry(1, 1 << 63)?;
@@ -752,7 +886,12 @@ fn main() {
                 let mut samples = Vec::new();
                 for ms in [1u64, 5, 20, 50] {
                     std::thread::sleep(Duration::from_millis(ms));
-                    samples.push((ms, ch.gp_get()?, ch.slot_count(0)?, ch.userd.load(USERD_REFERENCE_C56F)?));
+                    samples.push((
+                        ms,
+                        ch.gp_get()?,
+                        ch.slot_count(0)?,
+                        ch.userd.load(USERD_REFERENCE_C56F)?,
+                    ));
                 }
                 println!(
                     "STRESS_BARRIER variant={variant} entries={n} while_the_acquire_is_stalled: (after_ms, GP_GET, unit_executed, USERD.REFERENCE)={samples:?}"
@@ -776,7 +915,12 @@ fn main() {
     if want("split") {
         // every single cut position of a 3-unit stream, SYNC_WAIT on the second segment or not
         let mut base = Vec::new();
-        let units: Vec<Unit> = (0..3).map(|k| Unit { slot: k, payload: 0x1000 + k as u32 }).collect();
+        let units: Vec<Unit> = (0..3)
+            .map(|k| Unit {
+                slot: k,
+                payload: 0x1000 + k as u32,
+            })
+            .collect();
         units_words(out_va, &units, &mut base).expect("words");
         let mut plans = Vec::new();
         for cut in 1..base.len() {
@@ -786,8 +930,16 @@ fn main() {
                     words: base.clone(),
                     units: 3,
                     ents: vec![
-                        Ent::Seg { from: 0, to: cut, sync: false },
-                        Ent::Seg { from: cut, to: base.len(), sync },
+                        Ent::Seg {
+                            from: 0,
+                            to: cut,
+                            sync: false,
+                        },
+                        Ent::Seg {
+                            from: cut,
+                            to: base.len(),
+                            sync,
+                        },
                     ],
                     mode: Doorbell::End,
                     late: Vec::new(),
@@ -805,7 +957,9 @@ fn main() {
     }
     if want("random") {
         let n = 150 * scale;
-        let plans: Vec<_> = (0..n).map(|i| plan_random(format!("random#{i}"), &mut rng, out_va, None, (8, 5, 40))).collect();
+        let plans: Vec<_> = (0..n)
+            .map(|i| plan_random(format!("random#{i}"), &mut rng, out_va, None, (8, 5, 40)))
+            .collect();
         let mut t = Tally::default();
         if let Err(e) = run_family(&rm, engine, 64, plans.into_iter(), timeout, &mut t) {
             println!("STRESS_FAMILY_ERROR random {e}");
@@ -816,7 +970,9 @@ fn main() {
     }
     if want("late") {
         let n = 60 * scale;
-        let plans: Vec<_> = (0..n).map(|i| plan_late(format!("late#{i}"), &mut rng, out_va)).collect();
+        let plans: Vec<_> = (0..n)
+            .map(|i| plan_late(format!("late#{i}"), &mut rng, out_va))
+            .collect();
         let mut t = Tally::default();
         if let Err(e) = run_family(&rm, engine, 64, plans.into_iter(), timeout, &mut t) {
             println!("STRESS_FAMILY_ERROR late {e}");
@@ -829,7 +985,15 @@ fn main() {
         // a 8-entry ring lapped many times; every plan 1-4 entries, half with SYNC_WAIT
         let n = 200 * scale;
         let plans: Vec<_> = (0..n)
-            .map(|i| plan_random(format!("wrap#{i}"), &mut rng, out_va, Some(Doorbell::End), (3, 2, 6)))
+            .map(|i| {
+                plan_random(
+                    format!("wrap#{i}"),
+                    &mut rng,
+                    out_va,
+                    Some(Doorbell::End),
+                    (3, 2, 6),
+                )
+            })
             .collect();
         let mut t = Tally::default();
         if let Err(e) = run_family(&rm, engine, 8, plans.into_iter(), timeout, &mut t) {
@@ -844,7 +1008,13 @@ fn main() {
         let r = (|| -> Result<(), String> {
             let mut ch = Chan::new(&rm, engine, 64)?;
             for i in 0..30 * scale {
-                let mut p = plan_random(format!("storm#{i}"), &mut rng, out_va, Some(Doorbell::End), (6, 3, 20))?;
+                let mut p = plan_random(
+                    format!("storm#{i}"),
+                    &mut rng,
+                    out_va,
+                    Some(Doorbell::End),
+                    (6, 3, 20),
+                )?;
                 p.name = format!("storm#{i}");
                 // the burst: 40 extra doorbells right after the plan's own
                 let r = ch.run(&p, timeout);
@@ -867,13 +1037,21 @@ fn main() {
         // three channels, plans interleaved round-robin: each step authors ONE plan on the next channel
         let mut t = Tally::default();
         let r = (|| -> Result<(), String> {
-            let mut chans: Vec<Chan> = (0..3).map(|_| Chan::new(&rm, engine, 64)).collect::<Result<_, _>>()?;
+            let mut chans: Vec<Chan> = (0..3)
+                .map(|_| Chan::new(&rm, engine, 64))
+                .collect::<Result<_, _>>()?;
             for i in 0..40 * scale {
                 for (c, ch) in chans.iter_mut().enumerate() {
                     let p = if c == 2 {
                         plan_late(format!("conc#{i}.{c}"), &mut rng, ch.out_va)?
                     } else {
-                        plan_random(format!("conc#{i}.{c}"), &mut rng, ch.out_va, None, (6, 3, 30))?
+                        plan_random(
+                            format!("conc#{i}.{c}"),
+                            &mut rng,
+                            ch.out_va,
+                            None,
+                            (6, 3, 30),
+                        )?
                     };
                     let r = ch.run(&p, timeout);
                     t.record(&p, r);

@@ -887,7 +887,10 @@ impl ChanPlane {
             // ★ 2026-10-14: the event loop's counters whenever the last relay goes (bounded: the first
             // 16 times, then each power of two) -- the device may never see `stop` (a guest power-off).
             if last {
-                let n = self.relay_reports.fetch_add(1, Ordering::Relaxed).saturating_add(1);
+                let n = self
+                    .relay_reports
+                    .fetch_add(1, Ordering::Relaxed)
+                    .saturating_add(1);
                 if n <= 16 || n.is_power_of_two() {
                     eprintln!(
                         "kf3: USER_RING_LOOP SUMMARY (all relays gone, #{n}) {}",

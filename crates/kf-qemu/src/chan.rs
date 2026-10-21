@@ -73,10 +73,10 @@ mod userpump;
 mod userquota;
 #[path = "userrelay.rs"]
 mod userrelay;
-#[path = "userstrand.rs"]
-mod userstrand;
 #[path = "usershadow.rs"]
 mod usershadow;
+#[path = "userstrand.rs"]
+mod userstrand;
 
 /// `NV_ERR_INVALID_STATE`.
 const NV_ERR_INVALID_STATE: u32 = 0x40;

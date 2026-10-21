@@ -23,9 +23,7 @@ use kf_broker::wire::{
     CMD_COMMIT, CMD_NO_CHANGE, CMD_SIZE, CMD_WINDOW, Cmd, EV_FRAME, EV_HELLO, EV_RELEASE,
     FOURCC_XR24, PKT_SIZE, Pkt, TickPkt, seq_newer,
 };
-use kf_broker::{
-    FrameGeom, FrameRing, Host, Relay, RelayConfig, SlotFds, TickShare, UnixLink,
-};
+use kf_broker::{FrameGeom, FrameRing, Host, Relay, RelayConfig, SlotFds, TickShare, UnixLink};
 use kf_disp::engine::HeadMode;
 use kf_disp::lockstep::CreditGate;
 use kf_disp::pace::{Mailbox, Pacer, flip_completion_need};
@@ -269,7 +267,10 @@ fn broker_thread(
             sh.beat(T_BROKER, base);
             let now = Instant::now();
             // the timeline
-            while tl.front().is_some_and(|(t, _)| base.elapsed().as_millis() as u64 >= *t) {
+            while tl
+                .front()
+                .is_some_and(|(t, _)| base.elapsed().as_millis() as u64 >= *t)
+            {
                 let (_, a) = tl.pop_front().unwrap();
                 match a {
                     Act::Steady | Act::Silent | Act::Flood(_) => mode = a,
@@ -347,7 +348,12 @@ fn broker_thread(
             if b.unpresented.is_some_and(|t| now >= t) {
                 b.unpresented = None;
             }
-            let due: Vec<u64> = b.released.iter().filter(|(t, _)| *t <= now).map(|(_, id)| *id).collect();
+            let due: Vec<u64> = b
+                .released
+                .iter()
+                .filter(|(t, _)| *t <= now)
+                .map(|(_, id)| *id)
+                .collect();
             b.released.retain(|(t, _)| *t > now);
             for id in due {
                 b.push(
@@ -374,8 +380,20 @@ fn broker_thread(
             }
             // noise of other kinds now and then
             if rng.range(0, 40) == 0 {
-                b.push(&sh, Pkt { ty: EV_FRAME, ..Pkt::default() });
-                b.push(&sh, Pkt { ty: 900 + rng.range(0, 50) as u16, ..Pkt::default() });
+                b.push(
+                    &sh,
+                    Pkt {
+                        ty: EV_FRAME,
+                        ..Pkt::default()
+                    },
+                );
+                b.push(
+                    &sh,
+                    Pkt {
+                        ty: 900 + rng.range(0, 50) as u16,
+                        ..Pkt::default()
+                    },
+                );
             }
             b.flush();
             std::thread::sleep(Duration::from_micros(150));
@@ -386,10 +404,14 @@ fn broker_thread(
 }
 
 fn emit_tick(b: &mut BrokerEnd, sh: &Shared, scn: &Scn, now: Instant, rng: &mut Rng) {
-    if b.unpresented.is_some_and(|t| now >= t + Duration::from_millis(100)) {
+    if b.unpresented
+        .is_some_and(|t| now >= t + Duration::from_millis(100))
+    {
         b.unpresented = None;
     }
-    let timed_out = b.b_open.is_some_and(|(_, at)| now >= at + Duration::from_millis(100));
+    let timed_out = b
+        .b_open
+        .is_some_and(|(_, at)| now >= at + Duration::from_millis(100));
     let want = scn.always_want || ((b.b_open.is_none() || timed_out) && b.unpresented.is_none());
     b.tick_seq = match b.tick_seq.wrapping_add(1) {
         0 => 1,
@@ -436,11 +458,11 @@ fn release_old(b: &mut BrokerEnd, ring: &FrameRing, now: Instant) {
     for j in 0..ring.slots() {
         if held & (1 << j) != 0 && Some(j) != newest.map(|n| n.1) {
             if let Some(f) = ring.fds(j) {
-                b.released.push((now + Duration::from_millis(3), f.memfd_id()));
+                b.released
+                    .push((now + Duration::from_millis(3), f.memfd_id()));
             }
         }
     }
-
 }
 
 fn on_cmd(b: &mut BrokerEnd, sh: &Shared, ring: &FrameRing, cmd: Cmd, now: Instant) {
@@ -449,7 +471,10 @@ fn on_cmd(b: &mut BrokerEnd, sh: &Shared, ring: &FrameRing, cmd: Cmd, now: Insta
         CMD_CAPS => {
             b.opted = cmd.width & CLIENT_TICK != 0;
             if b.opted && cmd.height != 60 {
-                sh.bad(format!("CAPS opted in with ceiling {}, expected the VMM's 60", cmd.height));
+                sh.bad(format!(
+                    "CAPS opted in with ceiling {}, expected the VMM's 60",
+                    cmd.height
+                ));
             }
         }
         CMD_COMMIT => {
@@ -468,10 +493,16 @@ fn on_cmd(b: &mut BrokerEnd, sh: &Shared, ring: &FrameRing, cmd: Cmd, now: Insta
                     sh.unsolicited.fetch_add(1, Ordering::Relaxed);
                 } else {
                     if !b.open.contains(&label) {
-                        sh.bad(format!("COMMIT.seq {label} is not an open request ({:?})", b.open));
+                        sh.bad(format!(
+                            "COMMIT.seq {label} is not an open request ({:?})",
+                            b.open
+                        ));
                     }
                     if b.last_label.is_some_and(|l| !seq_newer(label, l)) {
-                        sh.bad(format!("request {label} answered again / out of order (last {:?})", b.last_label));
+                        sh.bad(format!(
+                            "request {label} answered again / out of order (last {:?})",
+                            b.last_label
+                        ));
                     }
                     b.last_label = Some(label);
                     b.open.remove(&label);
@@ -489,7 +520,10 @@ fn on_cmd(b: &mut BrokerEnd, sh: &Shared, ring: &FrameRing, cmd: Cmd, now: Insta
             sh.no_changes.fetch_add(1, Ordering::Relaxed);
             let label = cmd.width;
             if !b.open.contains(&label) {
-                sh.bad(format!("NO_CHANGE({label}) answers no open request ({:?})", b.open));
+                sh.bad(format!(
+                    "NO_CHANGE({label}) answers no open request ({:?})",
+                    b.open
+                ));
             }
             if b.last_label.is_some_and(|l| !seq_newer(label, l)) {
                 sh.bad(format!("request {label} answered twice (NO_CHANGE)"));
@@ -555,7 +589,9 @@ fn relay_thread(
             let d = relay.counters().packets - p0;
             sh.max_turn_packets.fetch_max(d, Ordering::Relaxed);
             if d > READ_BATCH as u64 {
-                sh.bad(format!("a relay turn processed {d} packets (budget {READ_BATCH})"));
+                sh.bad(format!(
+                    "a relay turn processed {d} packets (budget {READ_BATCH})"
+                ));
             }
         }
         let c = relay.connected();
@@ -564,7 +600,8 @@ fn relay_thread(
         }
         was_conn = c;
         let c = relay.counters();
-        sh.relay_dropped.fetch_max(c.dropped + c.uncommitted, Ordering::Relaxed);
+        sh.relay_dropped
+            .fetch_max(c.dropped + c.uncommitted, Ordering::Relaxed);
         let held = u64::from(ring.held_mask().count_ones());
         sh.max_held.fetch_max(held, Ordering::Relaxed);
         if held > 2 {
@@ -676,7 +713,9 @@ fn worker_thread(
                 if t.from == Source::Broker {
                     let guard = pacer.source(0).map_or(P / 2, |s| s.guard_ns());
                     if gap + 300_000 < guard {
-                        sh.bad(format!("a double tick: {gap} ns after the previous (guard {guard})"));
+                        sh.bad(format!(
+                            "a double tick: {gap} ns after the previous (guard {guard})"
+                        ));
                     }
                 }
             }
@@ -727,7 +766,10 @@ fn worker_thread(
             let slot = ring.fill_target(None);
             match slot {
                 Some(s) if ring.held_mask() & (1 << s) == 0 && ring.broker_ready() != Some(s) => {}
-                other => sh.bad(format!("the fill target {other:?} is held or ready (held {:#x})", ring.held_mask())),
+                other => sh.bad(format!(
+                    "the fill target {other:?} is held or ready (held {:#x})",
+                    ring.held_mask()
+                )),
             }
             started += 1;
             copies += 1;
@@ -736,7 +778,9 @@ fn worker_thread(
             inflight = Some((started, now_i + Duration::from_micros(us), slot));
         }
         if copies > free_ticks + credits_seen + 1 {
-            sh.bad(format!("{copies} copies but {free_ticks} free ticks and {credits_seen} credits"));
+            sh.bad(format!(
+                "{copies} copies but {free_ticks} free ticks and {credits_seen} credits"
+            ));
             copies = 0;
         }
         while queue.front().is_some_and(|(need, _)| *need <= finished) {
@@ -779,12 +823,17 @@ fn guest_thread(
             match done.recv_timeout(Duration::from_millis(20)) {
                 Ok(d) if d == id => break,
                 Ok(d) => {
-                    sh.bad(format!("flip {d} completed while flip {id} was outstanding"));
+                    sh.bad(format!(
+                        "flip {d} completed while flip {id} was outstanding"
+                    ));
                 }
                 Err(mpsc::RecvTimeoutError::Timeout) => {
                     sh.beat(T_GUEST, base);
                     if t0.elapsed() > Duration::from_millis(400) {
-                        sh.bad(format!("flip {id} ({}) did not complete in 400 ms", if imm { "immediate" } else { "vsync" }));
+                        sh.bad(format!(
+                            "flip {id} ({}) did not complete in 400 ms",
+                            if imm { "immediate" } else { "vsync" }
+                        ));
                         return;
                     }
                 }
@@ -794,7 +843,9 @@ fn guest_thread(
         let ms = t0.elapsed().as_millis() as u64;
         sh.max_flip_ms.fetch_max(ms, Ordering::Relaxed);
         if imm && ms > 60 {
-            sh.bad(format!("an immediate flip took {ms} ms (it waits for the copy in flight and nothing else)"));
+            sh.bad(format!(
+                "an immediate flip took {ms} ms (it waits for the copy in flight and nothing else)"
+            ));
         }
         sh.flips.fetch_add(1, Ordering::Relaxed);
     }
@@ -810,7 +861,11 @@ struct Result {
 
 fn run(scn: Scn) -> Result {
     let base = Instant::now();
-    let dir = std::env::temp_dir().join(format!("kf-lockstep-threads-{}-{}", std::process::id(), scn.name));
+    let dir = std::env::temp_dir().join(format!(
+        "kf-lockstep-threads-{}-{}",
+        std::process::id(),
+        scn.name
+    ));
     let _ = std::fs::remove_dir_all(&dir);
     std::fs::create_dir_all(&dir).unwrap();
     let path = dir.join("display.sock");
@@ -829,15 +884,33 @@ fn run(scn: Scn) -> Result {
     let mut handles = Vec::new();
     {
         let (sh, scn, ring) = (sh.clone(), scn.clone(), ring.clone());
-        handles.push(std::thread::spawn(move || broker_thread(listener, sh, scn, ring, base)));
+        handles.push(std::thread::spawn(move || {
+            broker_thread(listener, sh, scn, ring, base)
+        }));
     }
     {
-        let (sh, ring, share, fw, path) = (sh.clone(), ring.clone(), share.clone(), frame_wake.clone(), path.clone());
-        handles.push(std::thread::spawn(move || relay_thread(path, sh, ring, share, fw, base)));
+        let (sh, ring, share, fw, path) = (
+            sh.clone(),
+            ring.clone(),
+            share.clone(),
+            frame_wake.clone(),
+            path.clone(),
+        );
+        handles.push(std::thread::spawn(move || {
+            relay_thread(path, sh, ring, share, fw, base)
+        }));
     }
     {
-        let (sh, scn, ring, share, fw) = (sh.clone(), scn.clone(), ring.clone(), share.clone(), frame_wake.clone());
-        handles.push(std::thread::spawn(move || worker_thread(sh, scn, ring, share, fw, from_g, done_tx, base)));
+        let (sh, scn, ring, share, fw) = (
+            sh.clone(),
+            scn.clone(),
+            ring.clone(),
+            share.clone(),
+            frame_wake.clone(),
+        );
+        handles.push(std::thread::spawn(move || {
+            worker_thread(sh, scn, ring, share, fw, from_g, done_tx, base)
+        }));
     }
     let guest = {
         let (sh, scn) = (sh.clone(), scn.clone());
@@ -856,14 +929,23 @@ fn run(scn: Scn) -> Result {
             let last = b.load(Ordering::Relaxed);
             if i != T_GUEST || !done_flips {
                 if last != 0 && now_us.saturating_sub(last) > 1_500_000 {
-                    sh.bad(format!("the {} thread made no progress for {} ms: it is BLOCKED", NAMES[i], (now_us - last) / 1000));
+                    sh.bad(format!(
+                        "the {} thread made no progress for {} ms: it is BLOCKED",
+                        NAMES[i],
+                        (now_us - last) / 1000
+                    ));
                     sh.stop.store(true, Ordering::Relaxed);
                 }
             }
         }
         if sh.stop.load(Ordering::Relaxed) || Instant::now() > deadline {
             if Instant::now() > deadline {
-                sh.bad(format!("the run did not finish in {:?}: {} of {} flips", scn.limit, sh.flips.load(Ordering::Relaxed), scn.flips));
+                sh.bad(format!(
+                    "the run did not finish in {:?}: {} of {} flips",
+                    scn.limit,
+                    sh.flips.load(Ordering::Relaxed),
+                    scn.flips
+                ));
             }
             break;
         }
@@ -890,8 +972,20 @@ fn run(scn: Scn) -> Result {
 
 fn check(r: &Result, scn: &Scn) {
     let v = r.sh.violations.lock().unwrap();
-    assert!(v.is_empty(), "{}: {} violation(s): {:#?}", scn.name, v.len(), *v);
-    assert!(r.sh.flips.load(Ordering::Relaxed) >= scn.flips, "{}: {} of {} flips", scn.name, r.sh.flips.load(Ordering::Relaxed), scn.flips);
+    assert!(
+        v.is_empty(),
+        "{}: {} violation(s): {:#?}",
+        scn.name,
+        v.len(),
+        *v
+    );
+    assert!(
+        r.sh.flips.load(Ordering::Relaxed) >= scn.flips,
+        "{}: {} of {} flips",
+        scn.name,
+        r.sh.flips.load(Ordering::Relaxed),
+        scn.flips
+    );
     assert!(r.sh.max_turn_packets.load(Ordering::Relaxed) <= READ_BATCH as u64);
     assert!(r.sh.max_held.load(Ordering::Relaxed) <= 2);
 }
@@ -931,7 +1025,10 @@ fn lockstep_threads_steady() {
     check(&r, &scn);
     report(&r, &scn);
     let s = &r.sh;
-    assert!(s.answered.load(Ordering::Relaxed) > 50, "frames must flow on requests");
+    assert!(
+        s.answered.load(Ordering::Relaxed) > 50,
+        "frames must flow on requests"
+    );
     assert_eq!(s.unsolicited.load(Ordering::Relaxed), 0);
     assert_eq!(s.worker_fallbacks.load(Ordering::Relaxed), 0);
 }
@@ -964,7 +1061,10 @@ fn lockstep_threads_flood() {
     let r = run(scn.clone());
     check(&r, &scn);
     report(&r, &scn);
-    assert!(r.sh.max_turn_packets.load(Ordering::Relaxed) >= 60, "the budget must have bound");
+    assert!(
+        r.sh.max_turn_packets.load(Ordering::Relaxed) >= 60,
+        "the budget must have bound"
+    );
 }
 
 /// The broker goes silent for 200 ms twice: the clock takes over, frames keep flowing on the legacy
@@ -984,7 +1084,10 @@ fn lockstep_threads_silence_and_return() {
     check(&r, &scn);
     report(&r, &scn);
     assert!(r.sh.worker_fallbacks.load(Ordering::Relaxed) >= 2);
-    assert!(r.sh.unsolicited.load(Ordering::Relaxed) >= 1, "frames must flow in the fallback");
+    assert!(
+        r.sh.unsolicited.load(Ordering::Relaxed) >= 1,
+        "frames must flow in the fallback"
+    );
 }
 
 /// The broker stops READING while it still ticks: the relay's sends meet a full socket, frames are
@@ -999,7 +1102,10 @@ fn lockstep_threads_broker_never_reads() {
     let r = run(scn.clone());
     check(&r, &scn);
     report(&r, &scn);
-    assert!(r.sh.relay_dropped.load(Ordering::Relaxed) > 0, "the socket buffer must really have filled (a send met EAGAIN and the frame was dropped and counted)");
+    assert!(
+        r.sh.relay_dropped.load(Ordering::Relaxed) > 0,
+        "the socket buffer must really have filled (a send met EAGAIN and the frame was dropped and counted)"
+    );
 }
 
 /// A partial packet and then nothing: the relay drops the connection at its read deadline (500 ms),
@@ -1012,8 +1118,14 @@ fn lockstep_threads_partial_packet_then_nothing() {
     let r = run(scn.clone());
     check(&r, &scn);
     report(&r, &scn);
-    assert!(r.sh.relay_lost.load(Ordering::Relaxed) >= 1, "the stalled connection must be dropped");
-    assert!(r.sh.connections.load(Ordering::Relaxed) >= 2, "and the relay must reconnect");
+    assert!(
+        r.sh.relay_lost.load(Ordering::Relaxed) >= 1,
+        "the stalled connection must be dropped"
+    );
+    assert!(
+        r.sh.connections.load(Ordering::Relaxed) >= 2,
+        "and the relay must reconnect"
+    );
 }
 
 /// The broker crashes and a new one accepts: the relay reconnects, the new connection's numbering

@@ -281,7 +281,8 @@ pub(crate) fn snapshot<'a>(
     let mut ram_pieces = 0usize;
     for span in &spans {
         let len = usize::try_from(span.len).map_err(|_| Refusal::Bounds)?;
-        let dest = out.get_mut(done..done.checked_add(len).ok_or(Refusal::Bounds)?)
+        let dest = out
+            .get_mut(done..done.checked_add(len).ok_or(Refusal::Bounds)?)
             .ok_or(Refusal::Bounds)?;
         if !span.ram {
             store.copy(span.off, dest)?;

@@ -387,7 +387,10 @@ fn flat_alias(host: AliasHost) {
         let (placed, amp) = m.bv.budget_spent();
         let leaves = CARVE / LEAF;
         assert_eq!(leaves, 3965);
-        assert!(amp >= 2 * leaves && amp <= m.bv.amplification_budget, "{amp}");
+        assert!(
+            amp >= 2 * leaves && amp <= m.bv.amplification_budget,
+            "{amp}"
+        );
         assert!(placed <= m.bv.placement_budget, "{placed}");
         assert_eq!(m.bv.budget_refused.load(Relaxed), 0);
         assert!(m.bv.leaf_reserved.load(Relaxed) >= leaves);
@@ -904,7 +907,11 @@ fn a_batch_leaves_no_unrecorded_pad_the_guest_cannot_map() {
         );
         for (&_h, &(lo, hi)) in &sim.0.borrow().resv {
             assert!(
-                m.bv.micro.lock().unwrap().get(&lo).is_some_and(|r| r.hi == hi),
+                m.bv.micro
+                    .lock()
+                    .unwrap()
+                    .get(&lo)
+                    .is_some_and(|r| r.hi == hi),
                 "first={first} n={n}: the host's block {lo:#x}..{hi:#x} is exactly the ledger's record"
             );
         }
@@ -917,7 +924,11 @@ fn a_batch_leaves_no_unrecorded_pad_the_guest_cannot_map() {
             .collect();
         map_ram(&m, &mut c, &pads);
         ok(&sim, &c, &BTreeMap::new());
-        assert_eq!(m.bv.held_ours.load(Relaxed), 0, "first={first} n={n}: HELD-BY-OURSELVES");
+        assert_eq!(
+            m.bv.held_ours.load(Relaxed),
+            0,
+            "first={first} n={n}: HELD-BY-OURSELVES"
+        );
         assert!(
             c.values().all(|x| !x.held),
             "first={first} n={n}: no leaf acknowledged HELD without a foreign occupant"
@@ -941,8 +952,16 @@ fn a_foreign_buffer_in_the_pad_makes_the_reservation_impossible_not_the_leaf_sil
     let m = SimMirror::new(&sim, true, true);
     let mut c = BTreeMap::new();
     map_ram(&m, &mut c, &scattered(64, 12));
-    assert_eq!(sim.0.borrow().resv.len(), 0, "the unit is not ours to reserve");
-    assert_eq!(sim.0.borrow().maps.len(), 12 + 1, "per run at the grain + the foreign buffer");
+    assert_eq!(
+        sim.0.borrow().resv.len(),
+        0,
+        "the unit is not ours to reserve"
+    );
+    assert_eq!(
+        sim.0.borrow().maps.len(),
+        12 + 1,
+        "per run at the grain + the foreign buffer"
+    );
     let f = BTreeMap::from([(1u32, (pg(78), P))]);
     ok(&sim, &c, &f);
 }
@@ -1052,13 +1071,19 @@ fn a_steer_that_did_not_complete_still_lets_the_walkers_unmap_reach_the_host() {
     });
     let over = m.bv.hand_to_host(va, row);
     sim.0.borrow_mut().fail_unmaps = None;
-    assert!(matches!(over, crate::batch::HandOver::Refused(_)), "{over:?}");
+    assert!(
+        matches!(over, crate::batch::HandOver::Refused(_)),
+        "{over:?}"
+    );
     assert_eq!(
         crate::batch::steer_step(&over, 0, std::time::Duration::ZERO),
         crate::batch::SteerStep::Retry,
         "the host alloc does not go ahead on a refused hand-over"
     );
-    assert!(!m.bv.own.lock().unwrap().is_empty(), "our mappings are still there");
+    assert!(
+        !m.bv.own.lock().unwrap().is_empty(),
+        "our mappings are still there"
+    );
     // The walker's UNMAP of the placement (the guest dropped the page), through the real apply.
     let out = apply_and_commit(&m, &[unmap_run(va, &c[&va])], &mut c);
     assert_eq!(out.refused, 0, "{:?}", out.first_refusal);
@@ -1088,7 +1113,11 @@ fn a_second_alloc_after_a_refused_steer_never_runs_the_host_alloc_unsteered() {
     let step = |over: &HandOver| steer_step(over, 0, std::time::Duration::ZERO);
     // First alloc: row removed, host RM refuses the unmap.
     let row = m.rows.borrow_mut().remove(&va).unwrap();
-    sim.0.borrow_mut().fail_unmaps = Some(UnmapFault { every: 1, after: false, seen: 0 });
+    sim.0.borrow_mut().fail_unmaps = Some(UnmapFault {
+        every: 1,
+        after: false,
+        seen: 0,
+    });
     let over = m.bv.hand_to_host(va, row);
     assert!(matches!(over, HandOver::Refused(_)));
     assert_ne!(step(&over), SteerStep::Done);
@@ -1930,13 +1959,19 @@ fn a_run_whose_rows_fit_a_budget_alone_but_not_together_places_nothing_and_leave
         let before = sim.0.borrow().n.rm_total();
         let out = apply_entry(&m, &[run], &cfg);
         calls.push(sim.0.borrow().n.rm_total() - before);
-        assert_eq!(out.budget_refused, 1, "walk {walk}: refused for the budget, by name");
+        assert_eq!(
+            out.budget_refused, 1,
+            "walk {walk}: refused for the budget, by name"
+        );
         assert_eq!(
             (out.mapped, out.taken_down),
             (1, 1),
             "walk {walk}: the row that fit landed and was taken down with its run"
         );
-        assert!(sim.0.borrow().maps.is_empty(), "walk {walk}: nothing left on the host");
+        assert!(
+            sim.0.borrow().maps.is_empty(),
+            "walk {walk}: nothing left on the host"
+        );
         assert_eq!(m.bv.leftovers(), 0);
     }
     // Each walk is one refresh with a fresh budget: the same bounded cost, never growing.
@@ -1947,4 +1982,3 @@ fn a_run_whose_rows_fit_a_budget_alone_but_not_together_places_nothing_and_leave
 fn kf_mem_budget() -> u64 {
     crate::batch::REFRESH_PLACEMENT_BUDGET
 }
-
