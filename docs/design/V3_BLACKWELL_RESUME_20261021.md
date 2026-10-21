@@ -68,6 +68,19 @@ this document is derived from a closed binary; no closed-driver bytes were opene
    interrupt by the same table (INFERRED from the table order, `dev_pbdma.ref` not re-read tonight). A
    PBDMA-level METHOD error says the host front-end rejected a method or subchannel binding on a channel
    QEMU owns; it does not name the method.
+9. **MEASURED, the existing native reference already answers part of the owner's reference-arm question**
+   (`0bbf3c55f:traces/sweep_integrate_20261018/phase2_windows_gb202_56816449/native_trace/sequence.tsv`, the
+   real Windows 580.88 driver on real GB202, 4k commands; metadata only, no timestamps). The display-ON
+   object order is the **same** as kayfabe's up to the crash: `CA70`, `CA7D` (core), `CA7E` x8, `CA7B` x8
+   (kayfabe 237-269), `CA7A` x4 interleaved with `0x20800a58` (native ordinals 4632-4644, kayfabe 271-277).
+   **What the real driver does next** (native 4650-4654): `NV0073` `0x0073010c` (GET_ACTIVE, 16 B params)
+   x4, then `0xc3700201` (36 B), then a fresh client/device/subdevice and `0x7e` allocations. In kayfabe the
+   stream ends at the 4th `CA7A` reply: the guest bugchecks **before issuing the first `0x0073010c`**. So the
+   crash is in the guest's own post-cursor-allocation step (A5 below), not in a reply kayfabe refused, and
+   the first 60 s timing of the real driver is the one thing the existing trace does not give (no
+   timestamps). A new native capture is therefore only needed for timing; it needs a windows-on-vast box
+   (Windows is the rented guest itself; a KVM rental cannot pass the GPU through to a nested Windows), so it
+   cannot share a lease with the kayfabe arms.
 
 # 2. Is the Xid32 a product defect or a consequence of the crash?
 
@@ -95,6 +108,7 @@ Falsifiers are stated here, before any run (part 7 records what was run).
 | A1 | **Incoherent display caps.** Serving POSTCOMP `CAPB` (output LUT capacity) opens a driver path that dereferences state initialised from the dependent fields that kayfabe leaves zero or partial (POSTCOMP `CAPC..G`, PRECOMP `CAPC/E/F` and the low half of `CAPA`, tiles 4-7). | MEASURED ladder (item 5): `CAPB` present + PRECOMP not the die's -> 0x50 in two differently served pages; both words the die's -> Code 0; `CAPB` absent -> Code 43. MEASURED same fault signature (item 3) with two different `CAPB` values, so it is the presence of the path, not a value. | n=1 per page; the oracle shows 125 other words differ and only the 0x680-0x87c ones were bisected. | **One binary, one env var:** ON with the derived page (PR65 candidate, see A2) versus the same page with ONLY the die's PRECOMP words (0x780-0x87c) from this box's own read through `KF3_DIAG_CAPS_PAGE_FILE` (diag branch, never shipped). | 0x50 persists with the same low-16-bit P3 / low-24-bit P1 signature while PRECOMP is the die's. |
 | A2 | **Missing width contract.** POSTCOMP `CAPA` lacks `FULL_WIDTH/UNIT_WIDTH`; the driver divides or shifts by it (Codex's PR65 `296636c66` derives the unit width from public NVKMS). | CODE READ: public NVKMS asserts the unit width on this family; served `CAPA=0x007b0000` has the low half zero where the die has it set (item 4). Fix5 (`CAPA` without widths) gave Code 43, af8 (plus `CAPB`) gives 0x50: consistent with widths being needed but not sufficient. | GPU-free tested only; widths are the least-informed of the missing bits. | The PR65 candidate in the ON arm, no other change. | PR65 candidate still 0x50 with the same signature. |
 | A3 | Display memory the driver maps after the 4th cursor allocation is not backed (a mapping kayfabe must provide). | the crash is guest-VA, immediately after the last reply. | MEASURED: both pages that reach it bugcheck at identical offsets irrespective of what is mapped; Code 0 is reached with a native-equivalent page and the same mappings. P1 is a guest VA (not a host fault). | module + RVA of P3 from a fresh dump (loader facts only, part 6), then BAR0 display access trace across the window (no trapped access seen in `trace_on_1`, untrapped accesses invisible). | P3 resolves into a Microsoft module, or the BAR0 trace shows display access the host did not serve. |
+| A5 | **The crash is in the guest's own step between the 4th `CA7A` reply and the first `0x0073010c` (MEASURED, item 9).** Candidates: a mapping of the four cursor channels' control area or of the display user area that is not set up, or per-head state derived from the caps words (A1/A2). | item 9 (same object order; real driver continues with GET_ACTIVE x4); identical fault offsets across pages. | no guest-side symbol; BAR0 reads are not trapped. | ON arm with a bounded BAR0 display-region access trace (read and write, host clock) for the last 2 s before the bugcheck, or the dump's faulting module (RE step, to confirm with the coordinator first). | The trace shows no display-region access by the guest between the 4th `CA7A` and the crash (then the fault is not an I/O mapping). |
 | A4 | An unobserved GSP reply or event (quiet events, CA7A reply params 16 B) is wrong. | `current_blackwell_differential` cannot falsify it; selective logs are not a journal. | Successful headers; a wrong reply would not give a fixed code offset across different caps pages. | Export the four CA7A reply param words (public struct) with the capture kit and compare with the VFIO reference. | The words equal the reference. |
 
 Ranking reason: A1 and A2 are testable with one binary in two ON arms and carry the measured ladder; A3/A4
