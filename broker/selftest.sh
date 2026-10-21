@@ -358,6 +358,49 @@ a 10 20
 '
 check "ABS flows when focused and inside" '[[:space:]]ABS[[:space:]]+flags=-F x=10 y=20' "$CASE_OUT"
 
+# Hover is NOT focus-gated (owner 2026-10-21, "like chrome tabs"): while the pointer is over the window and
+# no grab is active, absolute motion, scroll and clicks reach the guest even if the window is not the active one.
+# The compositor only delivers pointer events for the visible surface under the pointer, so "inside" already
+# means "not hidden behind another window".  Keys stay focus-gated.
+run_case 'p 1
+a 10 20
+'
+check "ABS flows unfocused but inside (hover)" '[[:space:]]ABS[[:space:]]+flags=-F x=10 y=20' "$CASE_OUT"
+
+run_case 'a 10 20
+'
+nocheck "no ABS unfocused and outside" '[[:space:]]ABS[[:space:]]' "$CASE_OUT"
+
+run_case 'p 1
+w 1 0
+'
+check "WHEEL flows unfocused but inside" '[[:space:]]WHEEL[[:space:]]' "$CASE_OUT"
+
+run_case 'w 1 0
+'
+nocheck "no WHEEL unfocused and outside" '[[:space:]]WHEEL[[:space:]]' "$CASE_OUT"
+
+run_case 'p 1
+b 272 1
+b 272 0
+'
+check "BTN press flows unfocused but inside (the click that focuses)" 'BTN[[:space:]]+flags=-F x=272 y=1' "$CASE_OUT"
+check "BTN release flows unfocused but inside" 'BTN[[:space:]]+flags=-F x=272 y=0' "$CASE_OUT"
+
+run_case 'b 272 1
+b 272 0
+'
+nocheck "no BTN unfocused and outside" 'BTN' "$CASE_OUT"
+
+# a button held when focus goes away must still get its release (no stuck button)
+run_case 'f 1
+p 1
+b 272 1
+f 0
+b 272 0
+'
+check "BTN release still flows after focus loss (no stuck button)" 'BTN[[:space:]]+flags=.* x=272 y=0' "$CASE_OUT"
+
 # 29=LEFTCTRL 56=LEFTALT 34=G
 run_case 'f 1
 p 1
