@@ -5,10 +5,10 @@ foreach($root in $roots){
  foreach($f in @(Get-ChildItem -LiteralPath $root -Recurse -Filter Report.wer -ErrorAction Stop)){
   $map=@{}
   foreach($line in Get-Content -LiteralPath $f.FullName -ErrorAction Stop){
-   if($line -match '^(EventType|EventTime|ReportIdentifier|Sig\[\d+\]\.(Name|Value))=(.*)$'){$map[$matches[1]]=$matches[2]}
+   if($line -match '^(EventType|EventTime|ReportIdentifier|Sig\[\d+\]\.(?:Name|Value))=(.*)$'){$map[$matches[1]]=$matches[2]}
   }
   $utc=$null
-  if($map.ContainsKey('EventTime')){$utc=[DateTime]::FromFileTimeUtc([int64]$map['EventTime']).ToString('o')}
+  if([string]$map['EventTime'] -match '^[1-9][0-9]{15,19}$'){$utc=[DateTime]::FromFileTimeUtc([int64]$map['EventTime']).ToString('o')}
   [ordered]@{path=$f.FullName;lastWriteUtc=$f.LastWriteTimeUtc.ToString('o');eventUtc=$utc;fields=$map}|ConvertTo-Json -Depth 4 -Compress
  }
 }
