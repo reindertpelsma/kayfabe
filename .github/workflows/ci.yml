@@ -646,8 +646,12 @@ jobs:
             crate=$(echo "$file" | sed -nE 's|^\./(crates/[^/]+)/.*|\1|p')
 
             # The type name: the next `struct`/`union`/`enum` at or after the attribute.
-            ty=$(tail -n +"$line" "$file" \
-                 | grep -m1 -oE '(struct|union|enum) [A-Za-z_][A-Za-z0-9_]*' \
+            # ⊘ 2026-10-21: under `pipefail`, `grep -m1` exiting early SIGPIPEs `tail` (141) whenever the
+            # rest of the file outgrows the 64 KiB pipe buffer (`kf-cuda/src/abi.rs` did), and a file with
+            # no named type after the attribute made `grep` exit 1: either aborted the whole gate. Neither
+            # is a verdict. `ty` empty is the verdict "the attribute is not on a named type", reported below.
+            ty=$({ tail -n +"$line" "$file" || true; } \
+                 | { grep -m1 -oE '(struct|union|enum) [A-Za-z_][A-Za-z0-9_]*' || true; } \
                  | awk '{print $2}')
 
             # PROOF (1) — a repository-local header declares the SAME NAME.

@@ -1,14 +1,15 @@
 // SPDX-License-Identifier: Apache-2.0 OR GPL-2.0-or-later
 //! ★★★ **`kf-broker` — the display-broker relay, VMM-agnostic** (`docs/design/V3_DISPLAY.md` §8).
 //!
-//! nvkvm-pv's display broker (`nvkvm-pv src/broker/`, pinned at `368d2db`, installed
-//! separately) is a separate process that owns the host window, the compositor connection and
+//! The display broker (`broker/` in this repository, imported from nvkvm-pv `badf2d7`, 2026-10-15, and
+//! maintained here from then on; nvkvm-pv's copy is no longer the one to change) is a separate process
+//! that owns the host window, the compositor connection and
 //! the input grab. The VMM holds one unix socket: frames cross as descriptors (`ATTACH` +
 //! `SCM_RIGHTS`) and come back as `RELEASE`; input, pacing and window state come back as fixed
 //! 24-byte packets. This crate is the VMM half, with the wire protocol unchanged:
 //!
-//! - [`wire`] — protocol v2, byte-compatible with `proto/nvkvm_broker_proto.h` (vendored
-//!   verbatim; `tests/proto_mirror.rs` compares the two);
+//! - [`wire`] — protocol v2, byte-compatible with `broker/common/nvkvm_broker_proto.h` (the
+//!   broker's own header; `tests/proto_mirror.rs` compares the two);
 //! - [`slots`] — the [`FrameRing`]: the display's copy targets, shared by the display worker,
 //!   the VMM's console and this relay through ONE atomic word;
 //! - [`conn`] — the [`Relay`]: connect, peer check, HELLO, replay, the owed frame, pacing,
@@ -29,7 +30,7 @@
 //! through `kf-qemu`).
 //!
 //! Attribution: protocol semantics and the input mapping are ported from nvkvm-pv
-//! `src/qemu/nvkvm_display_relay.c` at `368d2db` (Apache-2.0, same author); the vendored header
+//! `src/qemu/nvkvm_display_relay.c` at `368d2db` (Apache-2.0, same author); the broker's header
 //! keeps its own SPDX line (`GPL-2.0 OR Apache-2.0`).
 
 pub mod conn;
@@ -39,16 +40,23 @@ pub mod gpucopy;
 pub mod input;
 pub mod link;
 pub mod slots;
+pub mod ticks;
 pub mod wire;
 
-pub use conn::{Counters, Host, Input, Link, Pointer, Recv, Relay, RelayConfig, Rung, Sent};
+pub use conn::{
+    Counters, DMABUF_PITCH_ALIGN, Host, Input, Link, Pointer, Recv, Relay, RelayConfig, Rung, Sent,
+    dmabuf_pitch_ok,
+};
 #[doc(hidden)]
 pub use conn::{LogCapture, capture_log};
 pub use console::{
     ConsoleCursor, ConsoleCursorUpdate, CursorPoint, CursorShape, CursorSink, FrameCursors,
     ShownFrame,
 };
-pub use cursor::{CursorImage, CursorMode, CursorShare, CursorWant, HotTracker, PointerAbs};
+pub use cursor::{
+    CursorImage, CursorMode, CursorRead, CursorShare, CursorWant, HotTracker, PointerAbs, composes,
+    guest_point, want_of,
+};
 pub use input::{
     AbsRange, Button, InputCounters, InputPolicy, InputSink, PointerDevice, PowerRequest,
 };
@@ -56,3 +64,4 @@ pub use link::{MAX_BROKER_UID, UnixLink, broker_uid_property, broker_uids, effec
 pub use slots::{
     FrameGeom, FrameRing, InstallRefusal, Kind, SlotFds, Take, VramFds, VramGeom, frame_bytes,
 };
+pub use ticks::{TickCounters, TickShare, TickSnap};

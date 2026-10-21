@@ -129,17 +129,83 @@ impl ScanFormats {
         // and the packed 4:2:2 ones (YUY2/UYVY) — everything a semi-planar-capable page lets NVKMS
         // offer (`caps::page`); 3-plane formats stay out (left out by name).
         let yuv_names = [
-            ("SET_PARAMS_FORMAT_Y8___U8V8_N444", 0, 0, false, YUV_SEMI_PLANAR_8),
-            ("SET_PARAMS_FORMAT_Y8___U8V8_N422", 1, 0, false, YUV_SEMI_PLANAR_8),
-            ("SET_PARAMS_FORMAT_Y8___V8U8_N420", 1, 1, true, YUV_SEMI_PLANAR_8),
-            ("SET_PARAMS_FORMAT_Y10___U10V10_N444", 0, 0, false, YUV_SEMI_PLANAR_16),
-            ("SET_PARAMS_FORMAT_Y10___U10V10_N422", 1, 0, false, YUV_SEMI_PLANAR_16),
-            ("SET_PARAMS_FORMAT_Y10___V10U10_N420", 1, 1, true, YUV_SEMI_PLANAR_16),
-            ("SET_PARAMS_FORMAT_Y12___U12V12_N444", 0, 0, false, YUV_SEMI_PLANAR_16),
-            ("SET_PARAMS_FORMAT_Y12___U12V12_N422", 1, 0, false, YUV_SEMI_PLANAR_16),
-            ("SET_PARAMS_FORMAT_Y12___V12U12_N420", 1, 1, true, YUV_SEMI_PLANAR_16),
-            ("SET_PARAMS_FORMAT_Y8_U8__Y8_V8_N422", 1, 0, false, YUV_PACKED_YUYV),
-            ("SET_PARAMS_FORMAT_U8_Y8__V8_Y8_N422", 1, 0, false, YUV_PACKED_UYVY),
+            (
+                "SET_PARAMS_FORMAT_Y8___U8V8_N444",
+                0,
+                0,
+                false,
+                YUV_SEMI_PLANAR_8,
+            ),
+            (
+                "SET_PARAMS_FORMAT_Y8___U8V8_N422",
+                1,
+                0,
+                false,
+                YUV_SEMI_PLANAR_8,
+            ),
+            (
+                "SET_PARAMS_FORMAT_Y8___V8U8_N420",
+                1,
+                1,
+                true,
+                YUV_SEMI_PLANAR_8,
+            ),
+            (
+                "SET_PARAMS_FORMAT_Y10___U10V10_N444",
+                0,
+                0,
+                false,
+                YUV_SEMI_PLANAR_16,
+            ),
+            (
+                "SET_PARAMS_FORMAT_Y10___U10V10_N422",
+                1,
+                0,
+                false,
+                YUV_SEMI_PLANAR_16,
+            ),
+            (
+                "SET_PARAMS_FORMAT_Y10___V10U10_N420",
+                1,
+                1,
+                true,
+                YUV_SEMI_PLANAR_16,
+            ),
+            (
+                "SET_PARAMS_FORMAT_Y12___U12V12_N444",
+                0,
+                0,
+                false,
+                YUV_SEMI_PLANAR_16,
+            ),
+            (
+                "SET_PARAMS_FORMAT_Y12___U12V12_N422",
+                1,
+                0,
+                false,
+                YUV_SEMI_PLANAR_16,
+            ),
+            (
+                "SET_PARAMS_FORMAT_Y12___V12U12_N420",
+                1,
+                1,
+                true,
+                YUV_SEMI_PLANAR_16,
+            ),
+            (
+                "SET_PARAMS_FORMAT_Y8_U8__Y8_V8_N422",
+                1,
+                0,
+                false,
+                YUV_PACKED_YUYV,
+            ),
+            (
+                "SET_PARAMS_FORMAT_U8_Y8__V8_Y8_N422",
+                1,
+                0,
+                false,
+                YUV_PACKED_UYVY,
+            ),
         ];
         ScanFormats {
             map: names
@@ -709,7 +775,9 @@ pub fn plan_yuv(
         return Ok(None);
     }
     if dw > 16_384 || dh > 16_384 {
-        return no(format!("a {dw}x{dh} destination is larger than the kernel's 16384 limit"));
+        return no(format!(
+            "a {dw}x{dh} destination is larger than the kernel's 16384 limit"
+        ));
     }
     // the last source column/row the kernel can touch (nearest sampling stays inside the rectangle)
     let x_end = u64::from(s.x) + u64::from(s.width); // luma, exclusive
@@ -769,8 +837,16 @@ pub fn plan_yuv(
             ))
         }
     };
-    let (y_src, y_extent, y_pitch) =
-        bound("luma", y_dma, s.offset, s.pitch, f.luma_bytes(), x_end, y_end).map_err(refuse)?;
+    let (y_src, y_extent, y_pitch) = bound(
+        "luma",
+        y_dma,
+        s.offset,
+        s.pitch,
+        f.luma_bytes(),
+        x_end,
+        y_end,
+    )
+    .map_err(refuse)?;
     let fmt = if s.fmt == [0; 12] {
         BT709_LIMITED
     } else {
@@ -823,9 +899,16 @@ pub fn plan_yuv(
     } else {
         s.offset1
     };
-    let (c_src, c_extent, c_pitch) =
-        bound("chroma", c_dma, chroma_off, s.pitch1, f.chroma_bytes(), cx_end, cy_end)
-            .map_err(refuse)?;
+    let (c_src, c_extent, c_pitch) = bound(
+        "chroma",
+        c_dma,
+        chroma_off,
+        s.pitch1,
+        f.chroma_bytes(),
+        cx_end,
+        cy_end,
+    )
+    .map_err(refuse)?;
     Ok(Some(YuvPlan {
         window: s.window,
         y_src,
@@ -1150,13 +1233,16 @@ pub const CURSOR_LAYER: u32 = u32::MAX - 1;
 /// alpha), and its only cursor format is `A8R8G8B8` (`nvkms-evo3.c:6517-6524`); no factor pair can
 /// invert either (`out = src*fs + dst*fd` with both factors in 0..=1). So an XOR or inverting
 /// cursor reaches the head only from a guest that writes the core channel itself — a hostile one,
-/// or another OS's driver — and the class header names the mode without saying what it computes.
+/// or another OS's driver (2026-10-15: Windows' text I-beam is one, see `V3_DISPLAY_CURSOR_FORMATS.md`)
+/// — and the class header names the mode without saying what it computes.
 /// The literal reading is taken: the colour is XORed into what lies below, so an all-zero image
 /// composes to nothing and a white pixel inverts. ⚠ The masked-colour reading (alpha as the AND
 /// mask, so one surface can carry opaque pixels too — what a Windows monochrome pointer needs) is
 /// the alternative; it can be settled only on hardware, by a producer that programs the mode.
-/// `A1R5G5B5` (`clc37d.h:836`), the class's other cursor format and the classic AND/XOR one, stays
-/// refused: the kernel moves 32-bit pixels.
+/// `A1R5G5B5` (`clc37d.h:836`), the class's other cursor format, is NOT a layer the kernel can read
+/// (it moves 32-bit pixels): [`plan_cursor_any`] plans it as a [`CursorExpand`] — the same
+/// geometry, 16 bits a pixel — whose pixels the VMM expands to 32 bits from the GPU's copy of the
+/// image. This function refuses it, by name.
 ///
 /// # Errors
 /// [`Refused`], naming the bound: a non-`A8R8G8B8` format, an unknown composition mode, a
@@ -1168,9 +1254,28 @@ pub fn plan_cursor(
     fw: u32,
     fh: u32,
 ) -> Result<Option<LayerPlan>, Refused> {
-    let no = |why: String| Err(Refused(format!("cursor head {}: {why}", c.head)));
     if !c.argb8888 {
-        return no("only an A8R8G8B8 cursor is composable".into());
+        return Err(Refused(format!(
+            "cursor head {}: only an A8R8G8B8 cursor is composable",
+            c.head
+        )));
+    }
+    plan_cursor_bpp(c, dma, fw, fh, 4)
+}
+
+/// The geometry, bounds and blend shared by both cursor formats: `bpp` bytes a source pixel (4 for
+/// `A8R8G8B8`, 2 for `A1R5G5B5`), rows `max(size * bpp, 256)` bytes apart. For `bpp` 2 the
+/// returned plan describes the 16-bit SOURCE ([`CursorExpand`]).
+fn plan_cursor_bpp(
+    c: &CursorScan,
+    dma: &CtxDma,
+    fw: u32,
+    fh: u32,
+    bpp: u32,
+) -> Result<Option<LayerPlan>, Refused> {
+    let no = |why: String| Err(Refused(format!("cursor head {}: {why}", c.head)));
+    if !matches!(c.size, 32 | 64 | 128 | 256) {
+        return no(format!("{0}x{0} is not a cursor size", c.size));
     }
     let xor = match c.mode {
         0 => false,
@@ -1181,7 +1286,7 @@ pub fn plan_cursor(
         return no("the cursor surface is not pitch video memory".into());
     }
     let size = c.size;
-    let pitch = (size * 4).max(256);
+    let pitch = (size * bpp).max(256);
     let left = i64::from(c.x) - i64::from(c.hot_x);
     let top = i64::from(c.y) - i64::from(c.hot_y);
     // the part of the image left of / above the frame is clipped away
@@ -1206,8 +1311,8 @@ pub fn plan_cursor(
         as_u32(width)?,
         as_u32(rows)?,
     );
-    let first = c.offset + u64::from(cy0) * u64::from(pitch) + u64::from(cx0) * 4;
-    let extent = u64::from(rows - 1) * u64::from(pitch) + u64::from(width) * 4;
+    let first = c.offset + u64::from(cy0) * u64::from(pitch) + u64::from(cx0) * u64::from(bpp);
+    let extent = u64::from(rows - 1) * u64::from(pitch) + u64::from(width) * u64::from(bpp);
     let Some(src) = dma.span(first, extent) else {
         return no(format!(
             "[{first:#x}, +{extent:#x}) leaves context DMA {:#x}..={:#x}",
@@ -1224,7 +1329,7 @@ pub fn plan_cursor(
             ));
         };
         let opaque = f == ((255, 0), (0, 0));
-        // A8R8G8B8 carries alpha; no red/blue swap
+        // both formats carry alpha (A1R5G5B5 expands to 0 or 255); no red/blue swap
         (COMPOSE_ALPHA | if opaque { COMPOSE_OPAQUE } else { 0 }, f)
     };
     Ok(Some(LayerPlan {
@@ -1246,6 +1351,211 @@ pub fn plan_cursor(
         a_d,
         b_d,
     }))
+}
+
+/// ★ `A1R5G5B5` (`ogkm-580: clc37d.h:836`, value `0xE9`, the same in every family's header), one
+/// 16-bit little-endian pixel: bit 15 the alpha, 14:10 red, 9:5 green, 4:0 blue. As `[B, G, R, A]`
+/// bytes (a little-endian `0xAARRGGBB` word): a 5-bit channel `v` widens to `v << 3 | v >> 2` (31
+/// is 255), the 1-bit alpha to 0 or 255. A transparent pixel keeps its colour only with
+/// `keep_colour`: a blend of premultiplied pixels must not add colour where nothing is covered,
+/// and an XOR must not flip pixels the alpha bit leaves out.
+#[must_use]
+pub fn a1r5g5b5_to_bgra(w: u16, keep_colour: bool) -> [u8; 4] {
+    let wide = |v: u16| u8::try_from(((v & 31) << 3) | ((v & 31) >> 2)).unwrap_or(u8::MAX);
+    let opaque = w & 0x8000 != 0;
+    if !opaque && !keep_colour {
+        return [0; 4];
+    }
+    [
+        wide(w),
+        wide(w >> 5),
+        wide(w >> 10),
+        if opaque { 255 } else { 0 },
+    ]
+}
+
+/// ★ A cursor the kernel cannot read as it is: `A1R5G5B5`. The plan of its 16-bit SOURCE (the
+/// store span the GPU copies, never clipped past the frame) and, after [`Self::expand`], the 32-bit
+/// layer the kernel composes from a buffer the VMM owns. The CPU reads only the GPU's copy of the
+/// span (`THE_CONSTRAINTS.md` §38), exactly as for the host cursor.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct CursorExpand {
+    read: LayerPlan,
+}
+
+/// ★ What [`plan_cursor_any`] plans: a layer the kernel reads from the store, or an image to expand.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum CursorPlan {
+    /// `A8R8G8B8`: one pitch layer over the guest's own surface.
+    Layer(LayerPlan),
+    /// `A1R5G5B5`: expand first.
+    Expand(CursorExpand),
+}
+
+/// ★ [`plan_cursor`] for both formats the class has. Everything but the format is the same plan
+/// (geometry, clipping, bounds inside the context DMA, `MODE` and factors); `A1R5G5B5` reads rows
+/// `max(size * 2, 256)` bytes apart, ⊘ the pitch rule NVKMS follows for `A8R8G8B8`
+/// (`nvkms-evo3.c:6531-6552`) taken at 16 bits — nothing programs this format in the open sources
+/// (`HEAD_SET_CONTROL_CURSOR_FORMAT_A1R5G5B5` appears only in the class headers), so it is
+/// INFERRED; `KF3_DEBUG_CURSOR` dumps what a guest really writes.
+///
+/// # Errors
+/// As [`plan_cursor`], for a format that is neither.
+pub fn plan_cursor_any(
+    c: &CursorScan,
+    dma: &CtxDma,
+    fw: u32,
+    fh: u32,
+) -> Result<Option<CursorPlan>, Refused> {
+    if c.argb8888 {
+        return Ok(plan_cursor(c, dma, fw, fh)?.map(CursorPlan::Layer));
+    }
+    if !c.a1r5g5b5 {
+        return Err(Refused(format!(
+            "cursor head {}: only an A8R8G8B8 or A1R5G5B5 cursor is composable (format {:#x})",
+            c.head, c.format
+        )));
+    }
+    Ok(plan_cursor_bpp(c, dma, fw, fh, 2)?.map(|read| CursorPlan::Expand(CursorExpand { read })))
+}
+
+impl CursorExpand {
+    /// Store offset of the first 16-bit source byte.
+    #[must_use]
+    pub fn src(&self) -> u64 {
+        self.read.src
+    }
+
+    /// Bytes the GPU copies from [`Self::src`] (bounded by the context DMA, at most 256 rows of 512
+    /// bytes).
+    #[must_use]
+    pub fn extent(&self) -> u64 {
+        self.read.extent
+    }
+
+    /// ★ The 32-bit layer and its tight pixels (`width * rows * 4` bytes, row pitch `width * 4`) from
+    /// `raw`, the [`Self::extent`] bytes copied from [`Self::src`]. The layer's `src` is 0: the
+    /// caller composes it from wherever it keeps the pixels. XOR: the colour of every pixel (the alpha
+    /// bit is not a mask: measured), so an all-zero image composes to nothing and a white pixel inverts.
+    /// Blend: opaque pixels, transparent ones empty (an OPAQUE composition stores every pixel,
+    /// alpha ignored, as for `A8R8G8B8`).
+    ///
+    /// # Errors
+    /// [`Refused`]: `raw` is not the extent.
+    pub fn expand(&self, raw: &[u8]) -> Result<(LayerPlan, Vec<u8>), Refused> {
+        let r = &self.read;
+        if raw.len() as u64 != r.extent {
+            return Err(Refused(format!(
+                "cursor: {} bytes copied for a {:#x}-byte image",
+                raw.len(),
+                r.extent
+            )));
+        }
+        let (w, rows, pitch) = (r.width as usize, r.rows as usize, r.pitch as usize);
+        // XOR keeps the colour of every pixel: the alpha bit is NOT a mask there. The real Windows I-beam
+        // (measured, KF3_DEBUG_CURSOR dump 2026-10-15) is white 0x7fff pixels with the alpha bit CLEAR.
+        let keep = r.flags & (COMPOSE_OPAQUE | COMPOSE_XOR) != 0;
+        let mut px = Vec::with_capacity(w * rows * 4);
+        for y in 0..rows {
+            let line = raw
+                .get(y * pitch..y * pitch + w * 2)
+                .ok_or_else(|| Refused(format!("cursor: row {y} leaves the copied image")))?;
+            let (line, _) = line.as_chunks::<2>();
+            for p in line {
+                px.extend_from_slice(&a1r5g5b5_to_bgra(u16::from_le_bytes(*p), keep));
+            }
+        }
+        let layer = LayerPlan {
+            src: 0,
+            extent: px.len() as u64,
+            pitch: r.width * 4,
+            ..*r
+        };
+        Ok((layer, px))
+    }
+}
+
+/// ★ Measurement only (`KF3_DEBUG_CURSOR`, never required to boot): the most of a cursor surface a
+/// debug dump reads — 128 rows of 512 bytes, bounded whatever the guest programmed.
+pub const CURSOR_DEBUG_BYTES: u64 = 64 * 1024;
+
+/// ★ Measurement only: the store span of the start of a cursor's surface that the debug dump may
+/// copy — at most [`CURSOR_DEBUG_BYTES`], and only if it lies wholly inside the context DMA of
+/// video memory (nothing past it is ever read). `None` otherwise.
+#[must_use]
+pub fn cursor_debug_span(c: &CursorScan, dma: &CtxDma) -> Option<(u64, u64)> {
+    if dma.target != Target::Vidmem || dma.block_linear {
+        return None;
+    }
+    let size = u64::from(c.size.min(256));
+    let pitch = (size * 4).max(256);
+    let extent = ((size - 1) * pitch + size * 4).min(CURSOR_DEBUG_BYTES);
+    dma.span(c.offset, extent).map(|src| (src, extent))
+}
+
+/// 64-bit FNV-1a, for naming an image in a log.
+#[must_use]
+pub fn fnv1a(bytes: &[u8]) -> u64 {
+    bytes.iter().fold(0xcbf2_9ce4_8422_2325, |h, b| {
+        (h ^ u64::from(*b)).wrapping_mul(0x0000_0100_0000_01b3)
+    })
+}
+
+/// ★ Measurement only: the dump of one cursor the host refused or the kernel cannot compose — a
+/// header (the format, composition word, size, hot spot, point, surface offset, assumed 16-bit
+/// pitch, bytes copied, non-zero bytes, FNV hash), the first 64 bytes in hex, and — when `art` —
+/// the image read as `A1R5G5B5` at rows `max(size * 2, 256)` bytes apart, as at most 32 text rows:
+/// ` ` empty, `.` transparent with colour, `#` opaque light, `o` opaque dark, `+` opaque other.
+/// Bounded: `raw` is cut to [`CURSOR_DEBUG_BYTES`], the output to 34 lines.
+#[must_use]
+pub fn cursor_debug_text(c: &CursorScan, raw: &[u8], art: bool) -> Vec<String> {
+    let raw = &raw[..raw.len().min(CURSOR_DEBUG_BYTES as usize)];
+    let (word, mode) = cursor_composition(c);
+    let pitch16 = (c.size * 2).max(256);
+    let nz = raw.iter().filter(|b| **b != 0).count();
+    let hex: String = raw.iter().take(64).map(|b| format!("{b:02x}")).collect();
+    let mut out = vec![format!(
+        "format {:#04x} (A8R8G8B8 {}, A1R5G5B5 {}) composition {word:#07x} = {mode} mode {} size \
+         {sz}x{sz} hot {},{} point {},{} offset {:#x} pitch16 {pitch16}: {} bytes copied, {nz} non-zero, \
+         fnv {:016x}; first 64 bytes {hex}",
+        c.format,
+        c.argb8888,
+        c.a1r5g5b5,
+        c.mode,
+        c.hot_x,
+        c.hot_y,
+        c.x,
+        c.y,
+        c.offset,
+        raw.len(),
+        fnv1a(raw),
+        sz = c.size
+    )];
+    if art {
+        for y in 0..c.size.min(32) as usize {
+            let Some(row) =
+                raw.get(y * pitch16 as usize..y * pitch16 as usize + 2 * c.size.min(64) as usize)
+            else {
+                break;
+            };
+            let line: String = row
+                .chunks_exact(2)
+                .map(|p| {
+                    let w = u16::from_le_bytes([p[0], p[1]]);
+                    let (r, g, b) = ((w >> 10) & 31, (w >> 5) & 31, w & 31);
+                    match (w & 0x8000 != 0, w & 0x7fff) {
+                        (false, 0) => ' ',
+                        (false, _) => '.',
+                        (true, 0) => 'o',
+                        (true, _) if r > 20 && g > 20 && b > 20 => '#',
+                        (true, _) => '+',
+                    }
+                })
+                .collect();
+            out.push(format!("|{}|", line.trim_end()));
+        }
+    }
+    out
 }
 
 /// The cursor's blend as `((a_s, b_s), (a_d, b_d))` in the compose kernel's factor numbering
@@ -1277,7 +1587,9 @@ pub struct HostCursorSrc {
     pub extent: u64,
     /// The image's edge (32, 64, 128 or 256; square).
     pub size: u32,
-    /// Bytes from one row to the next (`size * 4`, at least 256).
+    /// Bytes a source pixel takes: 4 (`A8R8G8B8`) or 2 (`A1R5G5B5`).
+    pub bpp: u32,
+    /// Bytes from one row to the next (`size * bpp`, at least 256).
     pub pitch: u32,
     /// The hot spot, inside the image.
     pub hot: (u32, u32),
@@ -1285,6 +1597,9 @@ pub struct HostCursorSrc {
     src_factor: (i32, i32),
     /// The viewport's (destination) factor, likewise.
     dst_factor: (i32, i32),
+    /// ★ An XOR cursor planned for a broker that shows XOR cursors itself
+    /// (`CAP_XOR_CURSOR`): [`Self::image`] is the inversion mask ([`xor_mask`]), not a blend.
+    xor: bool,
 }
 
 /// ★ Plan head `c.head`'s cursor for the host ([`HostCursorSrc`]). A cursor the host cannot show
@@ -1293,15 +1608,40 @@ pub struct HostCursorSrc {
 /// ([`HostCursorSrc::image`]).
 ///
 /// # Errors
-/// [`Refused`], naming why: a non-`A8R8G8B8` format; `XOR` composition (no ARGB "over" expresses
-/// it); a system-memory or block-linear surface; a hot spot outside the image; an unknown factor;
+/// [`Refused`], naming why: a format that is neither `A8R8G8B8` nor `A1R5G5B5` (the latter is
+/// converted to premultiplied ARGB with the blend, [`a1r5g5b5_to_bgra`]); `XOR` composition (no
+/// ARGB "over" expresses it); a system-memory or block-linear surface; a hot spot outside the image; an unknown factor;
 /// any byte outside the context DMA.
 pub fn plan_host_cursor(c: &CursorScan, dma: &CtxDma) -> Result<HostCursorSrc, Refused> {
+    plan_host_cursor_xor(c, dma, false)
+}
+
+/// ★ [`plan_host_cursor`] for a broker that advertised `CAP_XOR_CURSOR` (`xor_ok`): an XOR cursor
+/// is then planned (its composition factors are irrelevant: XOR reads none) and
+/// [`HostCursorSrc::image`] is its inversion mask ([`HostCursorSrc::is_xor`]), which the broker
+/// turns into a visible cursor. Without `xor_ok` it is refused by name, exactly as before, and the
+/// caller composes it into the frame.
+///
+/// # Errors
+/// As [`plan_host_cursor`].
+pub fn plan_host_cursor_xor(
+    c: &CursorScan,
+    dma: &CtxDma,
+    xor_ok: bool,
+) -> Result<HostCursorSrc, Refused> {
     let no = |why: String| Err(Refused(format!("host cursor head {}: {why}", c.head)));
-    if !c.argb8888 {
-        return no("only an A8R8G8B8 cursor can be the host's".into());
+    if !c.argb8888 && !c.a1r5g5b5 {
+        return no(format!(
+            "only an A8R8G8B8 or A1R5G5B5 cursor can be the host's (format {:#x})",
+            c.format
+        ));
     }
-    if c.mode != 0 {
+    if !matches!(c.size, 32 | 64 | 128 | 256) {
+        return no(format!("{0}x{0} is not a cursor size", c.size));
+    }
+    let bpp = if c.argb8888 { 4 } else { 2 };
+    let xor = c.mode != 0;
+    if xor && !xor_ok {
         return no("an XOR cursor has no ARGB equivalent".into());
     }
     if dma.target != Target::Vidmem || dma.block_linear {
@@ -1313,7 +1653,12 @@ pub fn plan_host_cursor(c: &CursorScan, dma: &CtxDma) -> Result<HostCursorSrc, R
             c.hot_x, c.hot_y, c.size, c.size
         ));
     }
-    let Some((src_factor, dst_factor)) = cursor_blend(c) else {
+    let blend = if xor {
+        Some(((0, 0), (0, 0)))
+    } else {
+        cursor_blend(c)
+    };
+    let Some((src_factor, dst_factor)) = blend else {
         return no(format!(
             "composition factors {:#x}/{:#x} are not known",
             c.cursor_factor, c.viewport_factor
@@ -1328,8 +1673,8 @@ pub fn plan_host_cursor(c: &CursorScan, dma: &CtxDma) -> Result<HostCursorSrc, R
         ));
     }
     let size = c.size;
-    let pitch = (size * 4).max(256);
-    let extent = u64::from(size - 1) * u64::from(pitch) + u64::from(size) * 4;
+    let pitch = (size * bpp).max(256);
+    let extent = u64::from(size - 1) * u64::from(pitch) + u64::from(size) * u64::from(bpp);
     let Some(src) = dma.span(c.offset, extent) else {
         return no(format!(
             "[{:#x}, +{extent:#x}) leaves context DMA {:#x}..={:#x}",
@@ -1340,11 +1685,47 @@ pub fn plan_host_cursor(c: &CursorScan, dma: &CtxDma) -> Result<HostCursorSrc, R
         src,
         extent,
         size,
+        bpp,
         pitch,
         hot: (c.hot_x, c.hot_y),
         src_factor,
         dst_factor,
+        xor,
     })
+}
+
+/// ★ An XOR cursor as the broker takes it (`CURSOR_F_XOR`, `docs/design/V3_DISPLAY_CURSOR_FORMATS.md`):
+/// an XOR cursor inverts what lies below every pixel whose COLOUR is non-zero (the alpha bit is not a
+/// mask there, §O), and the host cannot invert — so the image sent is the inversion MASK: premultiplied
+/// `ARGB8888` as `[B, G, R, A]`, `size` x `size`, rows tight, with `A = 255` and the XOR colour where
+/// the cursor inverts and all zero elsewhere. The broker draws the visible substitute from it. `None`
+/// when nothing inverts (the guest shows no cursor). `raw` is the copied image (`pitch` apart rows,
+/// `bpp` 2 = `A1R5G5B5` or 4 = `A8R8G8B8` bytes a pixel). `O(size^2)`, `size <= 256`.
+fn xor_mask(raw: &[u8], size: usize, pitch: usize, bpp: usize) -> Option<Vec<u8>> {
+    let mut out = vec![0u8; size * size * 4];
+    let mut any = false;
+    for y in 0..size {
+        let row = &raw[y * pitch..y * pitch + size * bpp];
+        for x in 0..size {
+            let px = if bpp == 2 {
+                let w = u16::from_le_bytes([row[x * 2], row[x * 2 + 1]]);
+                (w & 0x7fff != 0).then(|| {
+                    let [b, g, r, _] = a1r5g5b5_to_bgra(w, true);
+                    [b, g, r, 255]
+                })
+            } else {
+                row[x * 4..x * 4 + 3]
+                    .iter()
+                    .any(|c| *c != 0)
+                    .then(|| [row[x * 4], row[x * 4 + 1], row[x * 4 + 2], 255])
+            };
+            if let Some(px) = px {
+                out[(y * size + x) * 4..(y * size + x) * 4 + 4].copy_from_slice(&px);
+                any = true;
+            }
+        }
+    }
+    any.then_some(out)
 }
 
 /// ★ The cursor's `HEAD_SET_CONTROL_CURSOR_COMPOSITION` word as programmed (`K1` 7:0,
@@ -1465,6 +1846,26 @@ pub fn hot_from_pointer(
 }
 
 impl HostCursorSrc {
+    /// Pixel `x` of a row of the copied image as `[B, G, R, A]`: the bytes themselves
+    /// (`A8R8G8B8`), or [`a1r5g5b5_to_bgra`] (`A1R5G5B5`; a transparent pixel keeps its colour only
+    /// in an opaque composition, which ignores alpha). `row` holds the image's row.
+    fn pixel(&self, row: &[u8], x: usize) -> [u8; 4] {
+        if self.bpp == 2 {
+            let w = u16::from_le_bytes([row[x * 2], row[x * 2 + 1]]);
+            let opaque = self.src_factor == (255, 0) && self.dst_factor == (0, 0);
+            a1r5g5b5_to_bgra(w, opaque)
+        } else {
+            [row[x * 4], row[x * 4 + 1], row[x * 4 + 2], row[x * 4 + 3]]
+        }
+    }
+
+    /// ★ This is an XOR cursor planned for the broker ([`plan_host_cursor_xor`]): [`Self::image`] is
+    /// its inversion mask and the broker is sent it with `CURSOR_F_XOR`.
+    #[must_use]
+    pub fn is_xor(&self) -> bool {
+        self.xor
+    }
+
     /// ★ The [`AlphaCensus`] of the image `raw` (the [`Self::extent`] bytes copied from
     /// [`Self::src`]); `None` when `raw` is not that extent.
     #[must_use]
@@ -1475,9 +1876,9 @@ impl HostCursorSrc {
         let (n, pitch) = (self.size as usize, self.pitch as usize);
         let mut c = AlphaCensus::default();
         for y in 0..n {
-            let row = raw.get(y * pitch..y * pitch + n * 4)?;
-            let (px, _) = row.as_chunks::<4>();
-            for p in px {
+            let row = raw.get(y * pitch..y * pitch + n * self.bpp as usize)?;
+            for x in 0..n {
+                let p = self.pixel(row, x);
                 c.partial += u32::from(p[3] != 0 && p[3] != 255);
                 c.above_alpha += u32::from(p[..3].iter().any(|ch| *ch > p[3]));
             }
@@ -1505,6 +1906,9 @@ impl HostCursorSrc {
         }
         let n = self.size as usize;
         let pitch = self.pitch as usize;
+        if self.xor {
+            return Ok(xor_mask(raw, n, pitch, self.bpp as usize));
+        }
         let ((a_s, b_s), (a_d, b_d)) = (self.src_factor, self.dst_factor);
         // round(v / d) for v >= 0
         let div = |v: i64, d: i64| (v + d / 2) / d;
@@ -1512,7 +1916,7 @@ impl HostCursorSrc {
         let mut any = false;
         for y in 0..n {
             for x in 0..n {
-                let p = &raw[y * pitch + x * 4..y * pitch + x * 4 + 4];
+                let p = &self.pixel(&raw[y * pitch..y * pitch + n * self.bpp as usize], x);
                 let a = i64::from(p[3]);
                 // both in 0..=255*255 (the factors were checked in range at both ends)
                 let fs = i64::from(a_s) * 255 + i64::from(b_s) * a;
@@ -1767,7 +2171,10 @@ mod tests {
         );
         assert_eq!((p010.luma_bytes(), p010.chroma_bytes()), (2, 4));
         let yuy2 = f.yuv_of(v("SET_PARAMS_FORMAT_Y8_U8__Y8_V8_N422")).unwrap();
-        assert_eq!((yuy2.layout, yuy2.sub_y_log2, yuy2.chroma_bytes()), (YUV_PACKED_YUYV, 0, 0));
+        assert_eq!(
+            (yuy2.layout, yuy2.sub_y_log2, yuy2.chroma_bytes()),
+            (YUV_PACKED_YUYV, 0, 0)
+        );
         let uyvy = f.yuv_of(v("SET_PARAMS_FORMAT_U8_Y8__V8_Y8_N422")).unwrap();
         assert_eq!(uyvy.layout, YUV_PACKED_UYVY);
         assert!(f.yuv_of(v("SET_PARAMS_FORMAT_Y8___U8___V8_N420")).is_none());
@@ -1826,7 +2233,18 @@ mod tests {
             0
         );
         assert!(
-            plan_yuv(&Scanout { out_width: 20_000, ..s }, yf, &dma, &dma, 1920, 1080).is_err(),
+            plan_yuv(
+                &Scanout {
+                    out_width: 20_000,
+                    ..s
+                },
+                yf,
+                &dma,
+                &dma,
+                1920,
+                1080
+            )
+            .is_err(),
             "a hostile destination size is refused by name"
         );
         assert_eq!(
@@ -2146,6 +2564,8 @@ mod tests {
             offset: 0x1000,
             size: 64,
             argb8888: true,
+            a1r5g5b5: false,
+            format: 0xCF,
             hot_x: 0,
             hot_y: 0,
             x,
@@ -2568,5 +2988,513 @@ mod tests {
         assert_eq!(h.image(&raw), Ok(None));
         let (h, raw) = host32(2, 7, 255, [0; 4]);
         assert!(h.image(&raw[1..]).unwrap_err().0.contains("bytes copied"));
+    }
+
+    // ---- 2026-10-15: A1R5G5B5 cursors (Windows' text I-beam) ----
+
+    /// A 16-bit pixel: alpha bit, then 5-bit red, green, blue.
+    fn px16(a: u16, r: u16, g: u16, b: u16) -> u16 {
+        a << 15 | r << 10 | g << 5 | b
+    }
+
+    fn cursor16(x: i32, y: i32, mode: u32) -> CursorScan {
+        CursorScan {
+            argb8888: false,
+            a1r5g5b5: true,
+            format: 0xE9,
+            mode,
+            ..cursor(x, y)
+        }
+    }
+
+    /// A 64x64 `A1R5G5B5` image in a 16-bit surface, rows 256 bytes apart (`max(size * 2, 256)`),
+    /// with the pixels `at` (x, y, word) set; the copy the GPU hands the CPU for `plan`.
+    fn surface16(extent: u64, at: &[(usize, usize, u16)]) -> Vec<u8> {
+        let mut raw = vec![0u8; extent as usize];
+        for &(x, y, w) in at {
+            raw[y * 256 + x * 2..y * 256 + x * 2 + 2].copy_from_slice(&w.to_le_bytes());
+        }
+        raw
+    }
+
+    fn expand16(c: &CursorScan, at: &[(usize, usize, u16)]) -> (LayerPlan, Vec<u8>) {
+        let dma = vid(0x4000_0000, 1 << 20);
+        let Some(CursorPlan::Expand(x)) = plan_cursor_any(c, &dma, 1920, 1080).unwrap() else {
+            panic!("an A1R5G5B5 cursor is planned to be expanded");
+        };
+        assert_eq!(
+            x.src(),
+            0x4000_0000 + c.offset,
+            "unclipped: the surface's start"
+        );
+        x.expand(&surface16(x.extent(), at)).unwrap()
+    }
+
+    /// The five-bit widening, the alpha bit, and a transparent pixel's colour: kept only when asked.
+    #[test]
+    fn an_a1r5g5b5_pixel_widens_to_bgra() {
+        assert_eq!(
+            a1r5g5b5_to_bgra(0xffff, false),
+            [255, 255, 255, 255],
+            "white"
+        );
+        assert_eq!(
+            a1r5g5b5_to_bgra(0x8000, false),
+            [0, 0, 0, 255],
+            "opaque black"
+        );
+        assert_eq!(a1r5g5b5_to_bgra(0x0000, false), [0; 4]);
+        assert_eq!(
+            a1r5g5b5_to_bgra(0x7fff, false),
+            [0; 4],
+            "transparent: no colour"
+        );
+        assert_eq!(
+            a1r5g5b5_to_bgra(0x7fff, true),
+            [255, 255, 255, 0],
+            "unless kept"
+        );
+        assert_eq!(
+            a1r5g5b5_to_bgra(px16(1, 31, 0, 0), false),
+            [0, 0, 255, 255],
+            "red"
+        );
+        assert_eq!(
+            a1r5g5b5_to_bgra(px16(1, 0, 31, 0), false),
+            [0, 255, 0, 255],
+            "green"
+        );
+        assert_eq!(
+            a1r5g5b5_to_bgra(px16(1, 0, 0, 31), false),
+            [255, 0, 0, 255],
+            "blue"
+        );
+        assert_eq!(
+            a1r5g5b5_to_bgra(px16(1, 0, 0, 1), false),
+            [8, 0, 0, 255],
+            "1 -> 8"
+        );
+        assert_eq!(
+            a1r5g5b5_to_bgra(px16(1, 16, 0, 0), false)[2],
+            132,
+            "16 -> 132"
+        );
+        for v in 0..32u16 {
+            let b = a1r5g5b5_to_bgra(px16(1, 0, 0, v), false)[0];
+            assert_eq!(u16::from(b) >> 3, v, "the widening keeps the five bits");
+        }
+    }
+
+    /// ★ A blend-mode A1R5G5B5 cursor is a plan to expand — the 16-bit span, at the pitch rule — and
+    /// expands to the premultiplied blend over opaque / empty pixels; composed over grey, an
+    /// opaque pixel is itself and a transparent one leaves the frame as it was.
+    #[test]
+    fn an_a1r5g5b5_blend_cursor_expands_to_a_32_bit_premultiplied_layer() {
+        let c = cursor16(100, 50, 0);
+        let dma = vid(0x4000_0000, 1 << 20);
+        let Some(CursorPlan::Expand(x)) = plan_cursor_any(&c, &dma, 1920, 1080).unwrap() else {
+            panic!("expand");
+        };
+        assert_eq!(x.extent(), 63 * 256 + 64 * 2);
+        let (l, px) = expand16(
+            &c,
+            &[
+                (0, 0, 0xffff),
+                (1, 0, 0x8000),
+                (2, 0, 0x7fff),
+                (3, 0, px16(1, 31, 0, 0)),
+            ],
+        );
+        assert_eq!((l.src, l.pitch, l.width, l.rows), (0, 64 * 4, 64, 64));
+        assert_eq!((l.ox, l.oy), (100, 50));
+        assert_eq!(l.window, CURSOR_LAYER);
+        assert_eq!(l.flags, COMPOSE_ALPHA);
+        assert_eq!((l.a_s, l.b_s, l.a_d, l.b_d), (255, 0, 255, -255));
+        assert_eq!(l.extent, px.len() as u64);
+        assert_eq!(px.len(), 64 * 64 * 4);
+        assert_eq!(
+            &px[..16],
+            &[255, 255, 255, 255, 0, 0, 0, 255, 0, 0, 0, 0, 0, 0, 255, 255]
+        );
+        assert!(
+            px[16..].iter().all(|b| *b == 0),
+            "everything else transparent"
+        );
+        // composed over grey 0x80
+        let mut frame = vec![0x80u8; 1920 * 1080 * 4];
+        compose_reference(&l, &px, &mut frame, 1920, 1080).unwrap();
+        let at = |x: usize| &frame[(50 * 1920 + 100 + x) * 4..][..3];
+        assert_eq!(at(0), &[255, 255, 255], "opaque white");
+        assert_eq!(at(1), &[0, 0, 0], "opaque black");
+        assert_eq!(at(2), &[0x80, 0x80, 0x80], "transparent");
+        assert_eq!(at(3), &[0, 0, 255], "opaque red (B, G, R)");
+        assert_eq!(at(10), &[0x80, 0x80, 0x80], "untouched");
+    }
+
+    /// ★ An XOR A1R5G5B5 cursor: a white opaque pixel inverts what lies below, an all-zero image
+    /// composes to nothing, and a pixel whose alpha bit is clear leaves the frame alone whatever its
+    /// colour (⊘ the alpha bit gates the XOR — a DEFINITION; the masked-colour reading is the
+    /// alternative and is settled by the dump, `V3_DISPLAY_CURSOR_FORMATS.md`).
+    #[test]
+    fn an_a1r5g5b5_xor_cursor_inverts_under_white_and_an_empty_one_is_nothing() {
+        let c = cursor16(0, 0, 1);
+        let (l, px) = expand16(
+            &c,
+            &[
+                (0, 0, 0xffff),
+                (1, 0, px16(1, 31, 0, 0)),
+                (2, 0, 0x7fff),
+                (3, 0, 0x8000),
+            ],
+        );
+        assert_eq!(l.flags, COMPOSE_XOR);
+        assert_eq!((l.a_s, l.b_s, l.a_d, l.b_d), (0, 0, 0, 0));
+        let mut frame = vec![0u8; 1920 * 1080 * 4];
+        for p in frame.chunks_exact_mut(4) {
+            p.copy_from_slice(&[0x12, 0x34, 0x56, 0]);
+        }
+        compose_reference(&l, &px, &mut frame, 1920, 1080).unwrap();
+        assert_eq!(
+            &frame[..4],
+            &[0xed, 0xcb, 0xa9, 0],
+            "white inverts 0x563412"
+        );
+        assert_eq!(
+            &frame[4..8],
+            &[0x12, 0x34, 0x56 ^ 0xff, 0],
+            "red flips the red byte"
+        );
+        assert_eq!(
+            &frame[8..12],
+            &[0xed, 0xcb, 0xa9, 0],
+            "alpha clear, white: inverts too (the alpha bit is not a mask in XOR; the measured Windows I-beam is 0x7fff)"
+        );
+        assert_eq!(
+            &frame[12..16],
+            &[0x12, 0x34, 0x56, 0],
+            "black XOR is nothing"
+        );
+        // an all-zero image changes no pixel
+        let (l, px) = expand16(&c, &[]);
+        let mut frame = vec![0x5au8; 1920 * 1080 * 4];
+        let before = frame.clone();
+        compose_reference(&l, &px, &mut frame, 1920, 1080).unwrap();
+        assert_eq!(frame, before);
+    }
+
+    /// An OPAQUE composition ignores alpha, as it does for A8R8G8B8: the colour of a clear-alpha
+    /// pixel stays.
+    #[test]
+    fn an_opaque_a1r5g5b5_composition_keeps_every_pixel() {
+        let mut c = cursor16(0, 0, 0);
+        (c.cursor_factor, c.viewport_factor) = (2, 0);
+        let (l, px) = expand16(&c, &[(0, 0, 0x7fff)]);
+        assert_eq!(l.flags, COMPOSE_ALPHA | COMPOSE_OPAQUE);
+        assert_eq!(&px[..4], &[255, 255, 255, 0], "colour kept, alpha clear");
+    }
+
+    /// Clipping off the top-left takes the image's own pixels, 16 bits apart.
+    #[test]
+    fn an_a1r5g5b5_cursor_is_clipped_like_an_argb_one() {
+        let c = cursor16(-10, -20, 0);
+        let dma = vid(0x4000_0000, 1 << 20);
+        let Some(CursorPlan::Expand(x)) = plan_cursor_any(&c, &dma, 1920, 1080).unwrap() else {
+            panic!("expand");
+        };
+        assert_eq!(
+            x.src(),
+            0x4000_1000 + 20 * 256 + 10 * 2,
+            "starts inside the image"
+        );
+        let mut raw = vec![0u8; x.extent() as usize];
+        raw[0..2].copy_from_slice(&0xffffu16.to_le_bytes()); // image pixel (10, 20)
+        let (l, px) = x.expand(&raw).unwrap();
+        assert_eq!((l.ox, l.oy, l.width, l.rows), (0, 0, 54, 44));
+        assert_eq!(&px[..4], &[255, 255, 255, 255]);
+        assert_eq!(px.len(), 54 * 44 * 4);
+        let off = cursor16(1900, 1070, 0);
+        let Some(CursorPlan::Expand(x)) = plan_cursor_any(&off, &dma, 1920, 1080).unwrap() else {
+            panic!("expand");
+        };
+        assert_eq!(x.extent(), 9 * 256 + 20 * 2);
+        assert_eq!(
+            plan_cursor_any(&cursor16(-64, 0, 0), &dma, 1920, 1080),
+            Ok(None)
+        );
+    }
+
+    /// ⊘ Hostile: every bound refuses by name, and nothing is planned (so nothing is read).
+    #[test]
+    fn an_a1r5g5b5_cursor_is_bounded_like_every_cursor() {
+        let dma = vid(0x4000_0000, 1 << 20);
+        let err = |c: &CursorScan, d: &CtxDma| plan_cursor_any(c, d, 1920, 1080).unwrap_err().0;
+        // a format that is neither
+        let mut u = cursor16(0, 0, 0);
+        (u.a1r5g5b5, u.format) = (false, 0x77);
+        assert!(err(&u, &dma).contains("A8R8G8B8 or A1R5G5B5") && err(&u, &dma).contains("0x77"));
+        // an unknown mode
+        assert!(err(&cursor16(0, 0, 2), &dma).contains("mode 2"));
+        // a size that is not a cursor size, however large
+        for size in [0, 16, 33, 257, 512, u32::MAX] {
+            let mut b = cursor16(0, 0, 0);
+            b.size = size;
+            assert!(err(&b, &dma).contains("not a cursor size"), "{size}");
+            let mut a = cursor(0, 0);
+            a.size = size;
+            assert!(err(&a, &dma).contains("not a cursor size"), "{size}");
+            assert!(
+                plan_host_cursor(&b, &dma)
+                    .unwrap_err()
+                    .0
+                    .contains("not a cursor size")
+            );
+        }
+        // 256x256 at 16 bits is 255 * 512 + 512 bytes: one byte short of the context DMA refuses
+        let mut big = cursor16(0, 0, 0);
+        big.size = 256;
+        big.offset = 0;
+        let exact = vid(0x4000_0000, 256 * 512);
+        let Some(CursorPlan::Expand(x)) = plan_cursor_any(&big, &exact, 4096, 4096).unwrap() else {
+            panic!("expand");
+        };
+        assert_eq!(x.extent(), 256 * 512);
+        let short = vid(0x4000_0000, 256 * 512 - 1);
+        assert!(err(&big, &short).contains("leaves context DMA"));
+        big.offset = 0x100; // one 256-byte unit in: the same surface runs past the end
+        assert!(err(&big, &exact).contains("leaves context DMA"));
+        // a surface in system memory or block-linear
+        let sys = CtxDma {
+            target: Target::Sysmem,
+            ..dma
+        };
+        assert!(err(&cursor16(0, 0, 0), &sys).contains("not pitch video memory"));
+        let bl = CtxDma {
+            block_linear: true,
+            ..dma
+        };
+        assert!(err(&cursor16(0, 0, 0), &bl).contains("not pitch video memory"));
+        // the expansion takes exactly the copy it planned
+        let Some(CursorPlan::Expand(x)) =
+            plan_cursor_any(&cursor16(0, 0, 0), &dma, 1920, 1080).unwrap()
+        else {
+            panic!("expand");
+        };
+        assert!(
+            x.expand(&vec![0; x.extent() as usize - 1])
+                .unwrap_err()
+                .0
+                .contains("bytes copied")
+        );
+        assert!(x.expand(&[]).is_err());
+        // A8R8G8B8 is unchanged, and plan_cursor itself still refuses the 16-bit format by name
+        assert!(matches!(
+            plan_cursor_any(&cursor(0, 0), &dma, 1920, 1080),
+            Ok(Some(CursorPlan::Layer(_)))
+        ));
+        assert!(
+            plan_cursor(&cursor16(0, 0, 0), &dma, 1920, 1080)
+                .unwrap_err()
+                .0
+                .contains("A8R8G8B8")
+        );
+    }
+
+    /// ★ The host cursor takes an A1R5G5B5 blend-mode cursor as premultiplied ARGB; an XOR one is
+    /// still not the host's (it is composed, and visible there); an empty one is hidden.
+    #[test]
+    fn the_host_takes_an_a1r5g5b5_blend_cursor_as_premultiplied_argb() {
+        let dma = vid(0x4000_0000, 1 << 20);
+        let mut c = cursor16(0, 0, 0);
+        c.size = 32;
+        let h = plan_host_cursor(&c, &dma).unwrap();
+        assert_eq!((h.size, h.bpp, h.pitch), (32, 2, 256));
+        assert_eq!(h.extent, 31 * 256 + 32 * 2);
+        assert_eq!(h.src, 0x4000_1000);
+        let mut raw = vec![0u8; h.extent as usize];
+        raw[0..2].copy_from_slice(&0xffffu16.to_le_bytes()); // (0, 0) white
+        raw[2..4].copy_from_slice(&0x8000u16.to_le_bytes()); // (1, 0) black
+        raw[4..6].copy_from_slice(&0x7fffu16.to_le_bytes()); // (2, 0) transparent with colour
+        raw[256..258].copy_from_slice(&px16(1, 31, 0, 0).to_le_bytes()); // (0, 1) red
+        let img = h.image(&raw).unwrap().unwrap();
+        assert_eq!(img.len(), 32 * 32 * 4);
+        assert_eq!(&img[..12], &[255, 255, 255, 255, 0, 0, 0, 255, 0, 0, 0, 0]);
+        assert_eq!(
+            &img[32 * 4..32 * 4 + 4],
+            &[0, 0, 255, 255],
+            "red, premultiplied B G R A"
+        );
+        assert_eq!(
+            h.alpha_census(&raw).unwrap(),
+            AlphaCensus {
+                partial: 0,
+                above_alpha: 0
+            }
+        );
+        // all zero: nothing to show
+        assert_eq!(h.image(&vec![0; h.extent as usize]), Ok(None));
+        // XOR: not an ARGB "over"
+        let mut x = c;
+        x.mode = 1;
+        assert!(plan_host_cursor(&x, &dma).unwrap_err().0.contains("XOR"));
+        // an unknown format is refused by name, with its value
+        let mut u = c;
+        (u.a1r5g5b5, u.format) = (false, 0x01);
+        let e = plan_host_cursor(&u, &dma).unwrap_err().0;
+        assert!(e.contains("A1R5G5B5") && e.contains("0x1"), "{e}");
+        // bounds: the 16-bit extent of a 256 cursor leaves a small context DMA
+        let mut big = c;
+        big.size = 256;
+        assert!(
+            plan_host_cursor(&big, &vid(0x4000_0000, 0x2000))
+                .unwrap_err()
+                .0
+                .contains("leaves context DMA")
+        );
+        // the A8R8G8B8 host path is byte-identical (same pitch, same bytes per pixel)
+        let a = plan_host_cursor(&cursor(0, 0), &dma).unwrap();
+        assert_eq!((a.bpp, a.pitch, a.extent), (4, 256, 63 * 256 + 64 * 4));
+    }
+
+    /// The measured Windows I-beam (`/data/claude-cursor/dump/cursor-d12026f40bd56ee8.bin`, run 2990):
+    /// a 256x256 A1R5G5B5 XOR cursor, 26 pixels of 0x7fff (alpha bit clear): serifs at rows 2 and 17
+    /// (x 7..=9 and 11..=13) and a stem at x 10, rows 3..=16; everything else 0.
+    fn ibeam_pixels() -> Vec<(usize, usize)> {
+        let mut v = Vec::new();
+        for y in [2usize, 17] {
+            v.extend([7, 8, 9, 11, 12, 13].map(|x| (x, y)));
+        }
+        v.extend((3..=16).map(|y| (10usize, y)));
+        v
+    }
+
+    /// ★ A broker that shows XOR cursors itself (`CAP_XOR_CURSOR`): the measured I-beam becomes an
+    /// inversion MASK — alpha 255 and the XOR colour on the 26 inverting pixels (whatever their alpha
+    /// bit), all zero elsewhere — with the guest's hot spot. Without the capability it is refused by
+    /// the same name as always, and the default `plan_host_cursor` is that.
+    #[test]
+    fn an_xor_cursor_is_an_inversion_mask_for_a_broker_that_shows_it_itself() {
+        let dma = vid(0x4000_0000, 1 << 20);
+        let mut x = cursor16(0, 0, 1);
+        x.size = 256;
+        x.hot_x = 5;
+        x.hot_y = 6;
+        let e = plan_host_cursor(&x, &dma).unwrap_err().0;
+        assert!(e.contains("an XOR cursor has no ARGB equivalent"), "{e}");
+        let e = plan_host_cursor_xor(&x, &dma, false).unwrap_err().0;
+        assert!(e.contains("an XOR cursor has no ARGB equivalent"), "{e}");
+        let h = plan_host_cursor_xor(&x, &dma, true).unwrap();
+        assert!(h.is_xor());
+        assert!(!plan_host_cursor(&cursor16(0, 0, 0), &dma).unwrap().is_xor());
+        assert_eq!((h.size, h.bpp, h.pitch, h.hot), (256, 2, 512, (5, 6)));
+        assert_eq!(h.extent, 255 * 512 + 256 * 2);
+        let mut raw = vec![0u8; h.extent as usize];
+        let fill = ibeam_pixels();
+        assert_eq!(fill.len(), 26);
+        for &(px, py) in &fill {
+            let at = py * 512 + px * 2;
+            raw[at..at + 2].copy_from_slice(&0x7fffu16.to_le_bytes());
+        }
+        let img = h.image(&raw).unwrap().unwrap();
+        assert_eq!(img.len(), 256 * 256 * 4, "bounded by the cursor size");
+        for py in 0..256usize {
+            for px in 0..256usize {
+                let p = &img[(py * 256 + px) * 4..(py * 256 + px) * 4 + 4];
+                if fill.contains(&(px, py)) {
+                    assert_eq!(
+                        p,
+                        [255, 255, 255, 255],
+                        "inverts at {px},{py}: white XOR colour"
+                    );
+                } else {
+                    assert_eq!(p, [0; 4], "untouched at {px},{py}");
+                }
+            }
+        }
+        // deterministic
+        assert_eq!(h.image(&raw).unwrap().unwrap(), img);
+    }
+
+    /// The mask's edges: an empty XOR cursor is no cursor; the alpha bit is not a mask (a colour with
+    /// alpha clear inverts, black with alpha set does not); the XOR colour is carried (widened 5->8
+    /// bits); an A8R8G8B8 XOR cursor works on its colour bytes; a blend cursor is untouched by the
+    /// capability.
+    #[test]
+    fn the_xor_mask_hides_an_empty_cursor_and_carries_the_colour() {
+        let dma = vid(0x4000_0000, 1 << 20);
+        let mut x = cursor16(0, 0, 1);
+        x.size = 32;
+        let h = plan_host_cursor_xor(&x, &dma, true).unwrap();
+        assert_eq!(
+            h.image(&vec![0; h.extent as usize]),
+            Ok(None),
+            "empty: hidden"
+        );
+        let mut raw = vec![0u8; h.extent as usize];
+        raw[0..2].copy_from_slice(&0x8000u16.to_le_bytes()); // alpha set, colour black: no inversion
+        assert_eq!(h.image(&raw), Ok(None), "black XOR is nothing");
+        raw[0..2].copy_from_slice(&0x0001u16.to_le_bytes()); // alpha clear, a blue bit: inverts
+        raw[2..4].copy_from_slice(&px16(0, 31, 0, 0).to_le_bytes()); // red 31, alpha clear
+        let img = h.image(&raw).unwrap().unwrap();
+        assert_eq!(&img[0..4], &[8, 0, 0, 255], "blue 1 widened to 8, opaque");
+        assert_eq!(
+            &img[4..8],
+            &[0, 0, 255, 255],
+            "red 31 widened to 255, opaque"
+        );
+        assert_eq!(img.chunks(4).filter(|p| p[3] != 0).count(), 2);
+        // A8R8G8B8: the colour bytes decide, the alpha byte does not
+        let mut a = cursor(0, 0);
+        a.mode = 1;
+        let h = plan_host_cursor_xor(&a, &dma, true).unwrap();
+        let mut raw = vec![0u8; h.extent as usize];
+        raw[3] = 255; // alpha only
+        assert_eq!(h.image(&raw), Ok(None));
+        raw[1] = 7; // a green colour byte
+        let img = h.image(&raw).unwrap().unwrap();
+        assert_eq!(&img[0..4], &[0, 7, 0, 255]);
+        // a blend cursor is untouched by the capability
+        let b = cursor16(0, 0, 0);
+        assert_eq!(
+            plan_host_cursor_xor(&b, &dma, true),
+            plan_host_cursor(&b, &dma)
+        );
+    }
+
+    /// ★ Measurement only: the debug dump is bounded (the span, the text) and says what the format
+    /// field held.
+    #[test]
+    fn the_debug_dump_is_bounded_and_names_the_format() {
+        let dma = vid(0x4000_0000, 1 << 20);
+        let mut c = cursor16(0, 0, 1);
+        c.size = 256;
+        let (src, extent) = cursor_debug_span(&c, &dma).unwrap();
+        assert_eq!((src, extent), (0x4000_1000, CURSOR_DEBUG_BYTES));
+        assert_eq!(
+            cursor_debug_span(&c, &vid(0x4000_0000, 0x2000)),
+            None,
+            "past the DMA: no read"
+        );
+        let sys = CtxDma {
+            target: Target::Sysmem,
+            ..dma
+        };
+        assert_eq!(cursor_debug_span(&c, &sys), None);
+        let mut raw = vec![0u8; 256 * 512];
+        raw[..2].copy_from_slice(&0xffffu16.to_le_bytes());
+        let t = cursor_debug_text(&c, &raw, true);
+        assert!(t.len() <= 34, "{}", t.len());
+        assert!(
+            t[0].starts_with("format 0xe9 (A8R8G8B8 false, A1R5G5B5 true)"),
+            "{}",
+            t[0]
+        );
+        assert!(
+            t[0].contains("mode 1") && t[0].contains("size 256x256"),
+            "{}",
+            t[0]
+        );
+        assert!(t[0].contains("first 64 bytes ffff0000"), "{}", t[0]);
+        assert!(t[1].starts_with("|#"), "{}", t[1]);
+        assert_eq!(cursor_debug_text(&c, &raw, false).len(), 1);
     }
 }

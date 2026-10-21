@@ -1,15 +1,21 @@
 // SPDX-License-Identifier: Apache-2.0 OR GPL-2.0-or-later
-//! ★ `wire.rs` against the TEXT of the vendored `proto/nvkvm_broker_proto.h` (nvkvm-pv `368d2db`,
-//! verbatim): every value it defines, both directions — a value on one side only fails — and
-//! the record layouts, compiled from the header by the system C compiler.
+//! ★ `wire.rs` against the TEXT of the broker's own header, `broker/common/nvkvm_broker_proto.h` —
+//! the ONE copy of the protocol (the crate's vendored `proto/` copy, nvkvm-pv `368d2db`, 175 lines
+//! behind it, is gone): every value it defines, both directions — a value on one side only fails —
+//! and the record layouts (the command record and the cursor record), compiled from the header by
+//! the system C compiler.
 
 use kf_broker::wire;
 use std::collections::BTreeMap;
 use std::process::Command;
 
+/// The directory of the broker's header (`broker/common`, two levels up from the crate).
+fn header_dir() -> std::path::PathBuf {
+    std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../broker/common")
+}
+
 fn header() -> String {
-    let p = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("proto/nvkvm_broker_proto.h");
-    std::fs::read_to_string(p).expect("the vendored header")
+    std::fs::read_to_string(header_dir().join("nvkvm_broker_proto.h")).expect("the broker's header")
 }
 
 fn strip_comments(src: &str) -> String {
@@ -47,7 +53,7 @@ fn eval(v: &str, known: &BTreeMap<String, u64>) -> Option<u64> {
 }
 
 /// Every `#define NVKVM_BROKER_* <constant>` and every `NVKVM_BROKER_* = N` enum entry of the
-/// vendored header.
+/// broker's header.
 fn header_values() -> BTreeMap<String, u64> {
     values_of(&header())
 }
@@ -109,6 +115,28 @@ fn every_protocol_value_matches_the_header_text_both_ways() {
         ("NVKVM_BROKER_EV_CLOSE", u64::from(EV_CLOSE)),
         ("NVKVM_BROKER_EV_CLIPBOARD", u64::from(EV_CLIPBOARD)),
         ("NVKVM_BROKER_EV_FORMAT", u64::from(EV_FORMAT)),
+        ("NVKVM_BROKER_EV_DEVICE", u64::from(EV_DEVICE)),
+        ("NVKVM_BROKER_DEVICE_F_KNOWN", DEVICE_F_KNOWN as u64),
+        ("NVKVM_BROKER_DEVICE_F_RENDER", DEVICE_F_RENDER as u64),
+        ("NVKVM_BROKER_CAP_CURSOR", u64::from(CAP_CURSOR)),
+        ("NVKVM_BROKER_CAP_DEVICE", u64::from(CAP_DEVICE)),
+        (
+            "NVKVM_BROKER_CAP_CURSOR_STREAM",
+            u64::from(CAP_CURSOR_STREAM),
+        ),
+        ("NVKVM_BROKER_CURSOR_MOVE", u64::from(CURSOR_MOVE)),
+        ("NVKVM_BROKER_CURSOR_F_ABS", u64::from(CURSOR_F_ABS)),
+        ("NVKVM_BROKER_CURSOR_MOVE_LIMIT", CURSOR_MOVE_LIMIT as u64),
+        ("NVKVM_BROKER_CMD_CURSOR", u64::from(CMD_CURSOR)),
+        ("NVKVM_BROKER_CURSOR_SET", u64::from(CURSOR_SET)),
+        ("NVKVM_BROKER_CURSOR_HIDE", u64::from(CURSOR_HIDE)),
+        ("NVKVM_BROKER_CURSOR_SHOW", u64::from(CURSOR_SHOW)),
+        ("NVKVM_BROKER_CURSOR_F_XOR", u64::from(CURSOR_F_XOR)),
+        ("NVKVM_BROKER_CURSOR_MAX_DIM", u64::from(CURSOR_MAX_DIM)),
+        (
+            "NVKVM_BROKER_CURSOR_MAX_STRIDE",
+            u64::from(CURSOR_MAX_STRIDE),
+        ),
         ("NVKVM_BROKER_CLOSE_POWERDOWN", CLOSE_POWERDOWN as u64),
         ("NVKVM_BROKER_CLOSE_FORCE", CLOSE_FORCE as u64),
         ("NVKVM_BROKER_CAP_KEYBOARD", u64::from(CAP_KEYBOARD)),
@@ -137,6 +165,34 @@ fn every_protocol_value_matches_the_header_text_both_ways() {
         ("NVKVM_BROKER_CMD_F_ALL", u64::from(CMD_F_SHM)),
         ("NVKVM_BROKER_CLIENT_CLIPBOARD", u64::from(CLIENT_CLIPBOARD)),
         ("NVKVM_BROKER_MAX_DIM", u64::from(MAX_DIM)),
+        // phase 2 (docs/design/V3_DISPLAY_PACING_20261017.md section 11.2)
+        ("NVKVM_BROKER_CAP_TICK", u64::from(CAP_TICK)),
+        ("NVKVM_BROKER_CLIENT_TICK", u64::from(CLIENT_TICK)),
+        ("NVKVM_BROKER_EV_TICK", u64::from(EV_TICK)),
+        ("NVKVM_BROKER_CMD_NO_CHANGE", u64::from(CMD_NO_CHANGE)),
+        (
+            "NVKVM_BROKER_TICK_REFRESH_MASK",
+            u64::from(TICK_REFRESH_MASK),
+        ),
+        (
+            "NVKVM_BROKER_TICK_REFRESH_MIN_NS",
+            u64::from(TICK_REFRESH_MIN_NS),
+        ),
+        (
+            "NVKVM_BROKER_TICK_F_WANT_FRAME",
+            u64::from(TICK_F_WANT_FRAME),
+        ),
+        (
+            "NVKVM_BROKER_TICK_F_CLOCK_ONLY",
+            u64::from(TICK_F_CLOCK_ONLY),
+        ),
+        ("NVKVM_BROKER_TICK_F_RESERVED", u64::from(TICK_F_RESERVED)),
+        (
+            "NVKVM_BROKER_TICK_REQ_TIMEOUT_NS",
+            u64::from(TICK_REQ_TIMEOUT_NS),
+        ),
+        ("NVKVM_BROKER_GUEST_MAX_HZ", u64::from(GUEST_MAX_HZ)),
+        ("NVKVM_BROKER_GUEST_MIN_HZ", u64::from(GUEST_MIN_HZ)),
     ]
     .into_iter()
     .collect();
@@ -168,78 +224,17 @@ fn every_protocol_value_matches_the_header_text_both_ways() {
     }
 }
 
-/// ★ Values `wire.rs` carries AHEAD of the vendored header: nvkvm-pv's broker defines them on
-/// branch `broker-cursor-gpucopy` (2026-10-03), the vendored copy is still `368d2db`.
-fn ahead() -> Vec<(&'static str, u64)> {
-    use wire::*;
-    vec![
-        ("NVKVM_BROKER_EV_DEVICE", u64::from(EV_DEVICE)),
-        ("NVKVM_BROKER_DEVICE_F_KNOWN", DEVICE_F_KNOWN as u64),
-        ("NVKVM_BROKER_DEVICE_F_RENDER", DEVICE_F_RENDER as u64),
-        ("NVKVM_BROKER_CAP_CURSOR", u64::from(CAP_CURSOR)),
-        ("NVKVM_BROKER_CAP_DEVICE", u64::from(CAP_DEVICE)),
-        ("NVKVM_BROKER_CMD_CURSOR", u64::from(CMD_CURSOR)),
-        ("NVKVM_BROKER_CURSOR_SET", u64::from(CURSOR_SET)),
-        ("NVKVM_BROKER_CURSOR_HIDE", u64::from(CURSOR_HIDE)),
-        ("NVKVM_BROKER_CURSOR_SHOW", u64::from(CURSOR_SHOW)),
-        ("NVKVM_BROKER_CURSOR_MAX_DIM", u64::from(CURSOR_MAX_DIM)),
-        (
-            "NVKVM_BROKER_CURSOR_MAX_STRIDE",
-            u64::from(CURSOR_MAX_STRIDE),
-        ),
-    ]
-}
-
-/// ★ Each value ahead of the header is still ABSENT from the vendored copy and collides with no
-/// value of its family there. The day the vendored header gains one, this fails and the value
-/// moves into the mirrored map above, checked against the header's own.
+/// ★ The cursor record's layout, from the compiler: every field's offset as the header declares it,
+/// and `CursorCmd::encode` writing each field there (flags included: `CURSOR_F_XOR` rides in it).
 #[test]
-fn values_ahead_of_the_header_are_absent_from_it_and_collide_with_nothing() {
-    let theirs = header_values();
-    for (name, v) in ahead() {
-        assert!(
-            !theirs.contains_key(name),
-            "{name} is in the vendored header now: mirror it above and drop it from ahead()"
-        );
-        let family = &name[..name.rfind('_').unwrap() + 1];
-        let clash: Vec<_> = theirs
-            .iter()
-            .filter(|(n, x)| n.starts_with(family) && **x == v && !family.ends_with("CURSOR_"))
-            .collect();
-        assert!(clash.is_empty(), "{name} = {v} collides with {clash:?}");
-    }
-}
-
-/// ★ Against the NEWER header, when one is named (`KF_BROKER_PROTO_NEXT` = a path to nvkvm-pv's
-/// `src/common/nvkvm_broker_proto.h` at the revision that defines them): every value ahead equals
-/// the header's, and the cursor record's layout, compiled from that header, is where
-/// `CursorCmd::encode` writes each field. Without the variable it says so and asserts nothing —
-/// the vendored copy is what CI checks.
-#[test]
-fn values_ahead_of_the_header_match_the_newer_header_when_given() {
-    let Ok(path) = std::env::var("KF_BROKER_PROTO_NEXT") else {
-        eprintln!("PROTO-NEXT: SKIPPED (KF_BROKER_PROTO_NEXT is not set)");
-        return;
-    };
-    let text = std::fs::read_to_string(&path).expect("KF_BROKER_PROTO_NEXT");
-    let theirs = values_of(&text);
-    for (name, v) in ahead() {
-        assert_eq!(theirs.get(name), Some(&v), "{name} in {path}");
-    }
-    // and the other direction: every name the newer header adds is one wire.rs carries
-    let vendored = header_values();
-    let carried: Vec<&str> = ahead().iter().map(|(n, _)| *n).collect();
-    for name in theirs.keys() {
-        assert!(
-            vendored.contains_key(name)
-                || carried.contains(&name.as_str())
-                || name.starts_with("NVKVM_BROKER_CLIP_"),
-            "{name} is new in {path} and wire.rs does not carry it"
-        );
-    }
-    let dir = std::env::temp_dir().join(format!("kfb-proto-next-{}", std::process::id()));
+fn the_cursor_record_layout_matches_the_compiled_header() {
+    let dir = std::env::temp_dir().join(format!("kfb-proto-cursor-{}", std::process::id()));
     std::fs::create_dir_all(&dir).unwrap();
-    std::fs::copy(&path, dir.join("nvkvm_broker_proto.h")).unwrap();
+    std::fs::copy(
+        header_dir().join("nvkvm_broker_proto.h"),
+        dir.join("nvkvm_broker_proto.h"),
+    )
+    .unwrap();
     let fields = [
         "type",
         "flags",
@@ -290,6 +285,7 @@ fn values_ahead_of_the_header_match_the_newer_header_when_given() {
     assert_eq!(got["size"], wire::CMD_SIZE);
     // plant a distinct value per field and find it where the compiled header says it lives
     let c = wire::CursorCmd {
+        flags: 0x0a0a,
         width: 0x1111_1111,
         height: 0x2222_2222,
         stride: 0x3333_3333,
@@ -300,6 +296,7 @@ fn values_ahead_of_the_header_match_the_newer_header_when_given() {
         op: 0x0808_0808,
     };
     let b = c.encode();
+    assert_eq!(&b[got["flags"]..got["flags"] + 2], &[0x0a, 0x0a], "flags");
     for (f, v) in [
         ("width", 0x11u8),
         ("height", 0x22),
@@ -318,11 +315,28 @@ fn values_ahead_of_the_header_match_the_newer_header_when_given() {
         &wire::CMD_CURSOR.to_le_bytes()
     );
     assert_eq!(&b[got["reserved1"]..got["reserved1"] + 4], &[0; 4]);
-    eprintln!("PROTO-NEXT: RAN against {path}");
+}
+
+/// ★ The XOR flag as a command: the encoder writes `CURSOR_F_XOR` at the header's `flags`, a plain SET
+/// has none, and HIDE/SHOW never carry one.
+#[test]
+fn the_xor_flag_is_in_flags_on_a_set_only() {
+    let set = wire::CursorCmd::set(32, 32, 128, 0, (3, 4), 4096).unwrap();
+    assert_eq!(set.flags, 0);
+    assert_eq!(&set.encode()[2..4], &[0, 0]);
+    let x = set.xor();
+    assert_eq!(x.flags, wire::CURSOR_F_XOR);
+    assert_eq!(&x.encode()[2..4], &wire::CURSOR_F_XOR.to_le_bytes());
+    assert_eq!(wire::CursorCmd::hide().flags, 0);
+    assert_eq!(wire::CursorCmd::show().flags, 0);
+    // the rest of the record is the SET's
+    let (a, b) = (set.encode(), x.encode());
+    assert_eq!(a[..2], b[..2]);
+    assert_eq!(a[4..], b[4..]);
 }
 
 #[test]
-fn the_header_is_vendored_verbatim_with_its_own_licence() {
+fn the_header_is_the_brokers_own_with_its_licence() {
     let h = header();
     assert!(h.starts_with("/* SPDX-License-Identifier: GPL-2.0 OR Apache-2.0 */"));
     assert!(h.contains("#define NVKVM_BROKER_PROTO_VERSION 2u"));
@@ -374,7 +388,7 @@ fn the_record_layouts_match_the_compiled_header() {
     std::fs::write(&src, prog).unwrap();
     let build = Command::new("cc")
         .args(["-std=c11", "-Wall", "-Werror", "-I"])
-        .arg(std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("proto"))
+        .arg(header_dir())
         .arg(&src)
         .arg("-o")
         .arg(&bin)
@@ -451,4 +465,78 @@ fn the_record_layouts_match_the_compiled_header() {
         let at = want[&format!("pkt.{f}")];
         assert_eq!(p[at], i as u8 + 1, "pkt.{f} at {at}");
     }
+}
+
+/// ★ Phase 2: the `EV_TICK` overlay's layout from the compiler — every field at the offset
+/// `Pkt::tick_pkt` writes it (the doc's table: tick_seq@8, refresh word@12, present_ns@16).
+#[test]
+fn the_tick_event_layout_matches_the_compiled_header() {
+    let dir = std::env::temp_dir().join(format!("kfb-proto-tick-{}", std::process::id()));
+    std::fs::create_dir_all(&dir).unwrap();
+    std::fs::copy(
+        header_dir().join("nvkvm_broker_proto.h"),
+        dir.join("nvkvm_broker_proto.h"),
+    )
+    .unwrap();
+    let fields = [
+        "type",
+        "flags",
+        "seq",
+        "tick_seq",
+        "refresh_word",
+        "present_ns",
+    ];
+    let mut prog = String::from(
+        "#include <stdio.h>\n#include <stddef.h>\n#include \"nvkvm_broker_proto.h\"\nint main(void) {\n",
+    );
+    prog.push_str("printf(\"size %zu\\n\", sizeof(struct nvkvm_broker_tick_pkt));\n");
+    for f in fields {
+        prog.push_str(&format!(
+            "printf(\"{f} %zu\\n\", offsetof(struct nvkvm_broker_tick_pkt, {f}));\n"
+        ));
+    }
+    prog.push_str("return 0; }\n");
+    std::fs::write(dir.join("c.c"), prog).unwrap();
+    let out = Command::new("cc")
+        .args(["-std=c11", "-Wall", "-Werror", "-o"])
+        .arg(dir.join("c"))
+        .arg(dir.join("c.c"))
+        .arg("-I")
+        .arg(&dir)
+        .output()
+        .unwrap();
+    assert!(
+        out.status.success(),
+        "{}",
+        String::from_utf8_lossy(&out.stderr)
+    );
+    let run = Command::new(dir.join("c")).output().unwrap();
+    let got: BTreeMap<String, usize> = String::from_utf8(run.stdout)
+        .unwrap()
+        .lines()
+        .map(|l| {
+            let (k, v) = l.split_once(' ').unwrap();
+            (k.to_string(), v.parse().unwrap())
+        })
+        .collect();
+    let _ = std::fs::remove_dir_all(&dir);
+    assert_eq!(got["size"], wire::PKT_SIZE);
+    let t = wire::TickPkt {
+        tick_seq: 0x1111_1111,
+        refresh_ns: 0x0222_2222,
+        want: true,
+        clock_only: false,
+        present_ns: 0x4444_4444_3333_3333,
+    };
+    let b = wire::Pkt::tick_pkt(0x5555_5555, 0x0707, &t).encode();
+    let at = |name: &str, len: usize| &b[got[name]..got[name] + len];
+    assert_eq!(at("type", 2), &wire::EV_TICK.to_le_bytes());
+    assert_eq!(at("flags", 2), &0x0707u16.to_le_bytes());
+    assert_eq!(at("seq", 4), &0x5555_5555u32.to_le_bytes());
+    assert_eq!(at("tick_seq", 4), &0x1111_1111u32.to_le_bytes());
+    assert_eq!(
+        at("refresh_word", 4),
+        &(0x0222_2222u32 | wire::TICK_F_WANT_FRAME).to_le_bytes()
+    );
+    assert_eq!(at("present_ns", 8), &0x4444_4444_3333_3333u64.to_le_bytes());
 }

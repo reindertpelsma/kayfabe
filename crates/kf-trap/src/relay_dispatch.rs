@@ -91,6 +91,104 @@ pub fn inline_delta(get: u32, put: u32, entries: u32, credits: u32) -> Option<u3
     (delta <= MAX_INLINE_GP && delta <= credits).then_some(delta)
 }
 
+/// ★ 2026-10-16 (PHASE 2 protocol, model only: NO production caller yet; brief appendix C). Why an inline
+/// copy stopped short of the delta it was asked to cover. Anything but [`InlineStop::None`] means the
+/// worker must take over the rest (the caller leaves PENDING and requests a non-blocking worker wake).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum InlineStop {
+    /// Everything up to `GP_PUT` was copied.
+    None,
+    /// The entry at offset `at` carries SYNC_WAIT (bit 63): the copy stops BEFORE it. The inline path never
+    /// forwards it, nor anything after it; the worker owns the channel until it has drained to `GP_PUT`.
+    SyncWait {
+        /// Offset of the SYNC_WAIT entry in the delta.
+        at: u32,
+    },
+    /// The delta exceeds [`MAX_INLINE_GP`]: nothing is copied inline.
+    Budget,
+    /// The private ring has fewer credits than the delta: nothing is copied inline.
+    Credits,
+}
+
+/// A refusal before a single descriptor is loaded.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum InlineRefusal {
+    /// The ring is not a power of two of at least two entries.
+    Geometry,
+    /// `GP_PUT` is outside `[0, entries)` (hostile): counted, nothing copied.
+    PutBound,
+    /// The private cursor is outside `[0, entries)`.
+    GetBound,
+}
+
+/// What an inline copy does with ONE load of `GP_PUT`.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct InlinePlan {
+    /// How many leading entries of the delta the caller may store in the private ring.
+    pub copy: u32,
+    /// The entries, loaded once each and in order (`entries[..copy]`): the caller stores THESE values.
+    pub entries: [u64; MAX_INLINE_GP as usize],
+    /// Why the copy is shorter than the delta, if it is.
+    pub stop: InlineStop,
+}
+
+/// GP_ENTRY1 SYNC_WAIT as a bit of the 64-bit entry.
+const GP_SYNC_WAIT: u64 = 1 << 63;
+
+/// Plan the bounded inline copy of the GP entries in `[get, put)` of a guest ring of `entries` slots, with
+/// `credits` free private slots. `put` is the caller's single load of `GP_PUT` (the delta is computed once and
+/// a `GP_PUT` that moves during the copy is the next call's business). `load(slot)` reads one 8-byte entry and
+/// is called AT MOST once per slot, in ring order, at most [`MAX_INLINE_GP`] times, and never when a refusal
+/// or a budget / credit escalation is returned. No lock, no allocation, no OS call, no pushbuffer read.
+///
+/// # Errors
+/// See [`InlineRefusal`].
+pub fn inline_plan(
+    get: u32,
+    put: u32,
+    entries: u32,
+    credits: u32,
+    mut load: impl FnMut(u32) -> u64,
+) -> Result<InlinePlan, InlineRefusal> {
+    if entries < 2 || !entries.is_power_of_two() {
+        return Err(InlineRefusal::Geometry);
+    }
+    if get >= entries {
+        return Err(InlineRefusal::GetBound);
+    }
+    if put >= entries {
+        return Err(InlineRefusal::PutBound);
+    }
+    let mask = entries - 1;
+    let delta = put.wrapping_sub(get) & mask;
+    let mut plan = InlinePlan {
+        copy: 0,
+        entries: [0; MAX_INLINE_GP as usize],
+        stop: InlineStop::None,
+    };
+    if delta == 0 {
+        return Ok(plan);
+    }
+    if delta > MAX_INLINE_GP {
+        plan.stop = InlineStop::Budget;
+        return Ok(plan);
+    }
+    if delta > credits {
+        plan.stop = InlineStop::Credits;
+        return Ok(plan);
+    }
+    for i in 0..delta {
+        let raw = load(get.wrapping_add(i) & mask);
+        if raw & GP_SYNC_WAIT != 0 {
+            plan.stop = InlineStop::SyncWait { at: i };
+            return Ok(plan);
+        }
+        plan.entries[i as usize] = raw;
+        plan.copy = i + 1;
+    }
+    Ok(plan)
+}
+
 mod native {
     use super::*;
     use core::sync::atomic::AtomicU64;

@@ -194,6 +194,9 @@ pub struct FrameGeom {
     pub fourcc: u32,
     /// The worker's frame counter.
     pub serial: u64,
+    /// ★ The guest's cursor is composed INTO this frame's pixels (§O): the relay's host cursor
+    /// follows the frame the broker was last COMMITted, never the worker's newest want.
+    pub cursor: bool,
 }
 
 /// What [`FrameRing::take_broker`] found.
@@ -300,6 +303,7 @@ struct SlotMeta {
     stride: AtomicU32,
     fourcc: AtomicU32,
     serial: AtomicU64,
+    cursor: AtomicBool,
     gens: [OnceLock<SlotFds>; GENERATIONS],
     /// How many generations are installed; the newest is the current one.
     installed: AtomicU32,
@@ -325,6 +329,7 @@ impl Default for SlotMeta {
             stride: AtomicU32::new(0),
             fourcc: AtomicU32::new(0),
             serial: AtomicU64::new(0),
+            cursor: AtomicBool::new(false),
             gens: core::array::from_fn(|_| OnceLock::new()),
             installed: AtomicU32::new(0),
             vram: core::array::from_fn(|_| OnceLock::new()),
@@ -447,6 +452,7 @@ impl FrameRing {
         m.stride.store(g.stride, Ordering::Release);
         m.fourcc.store(g.fourcc, Ordering::Release);
         m.serial.store(g.serial, Ordering::Release);
+        m.cursor.store(g.cursor, Ordering::Release);
         m.fresh.store(Kind::Host.fresh_bit(), Ordering::Release);
     }
 
@@ -682,6 +688,7 @@ impl FrameRing {
                 stride: m.stride.load(Ordering::Acquire),
                 fourcc: m.fourcc.load(Ordering::Acquire),
                 serial: m.serial.load(Ordering::Acquire),
+                cursor: m.cursor.load(Ordering::Acquire),
             })
     }
 

@@ -489,7 +489,8 @@ mod tests {
                 let c = row.classes.caps;
                 let p = page(t, &r, c, row.heads, row.windows).unwrap();
                 let capa = p.word(t.v(c, "IHUB_COMMON_CAPA").unwrap());
-                let planar = crate::class::get(capa, t.f(c, "IHUB_COMMON_CAPA_SUPPORT_PLANAR").unwrap());
+                let planar =
+                    crate::class::get(capa, t.f(c, "IHUB_COMMON_CAPA_SUPPORT_PLANAR").unwrap());
                 if let Some(capc) = t.v(c, "IHUB_COMMON_CAPC") {
                     let semi = crate::class::get(
                         p.word(capc),

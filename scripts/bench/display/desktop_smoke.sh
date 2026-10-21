@@ -33,7 +33,7 @@ finish() {
     xid1=$(journalctl -k --no-pager 2>/dev/null | grep -c 'NVRM: Xid')
     echo "DESKTOP_HOST_XID delta=$((xid1 - xid0))"
     Q="$ROOT/run/qemu.log"
-    echo "DESKTOP_KF3 stall=$(grep -ac 'display: STALL' "$Q" 2>/dev/null) exception=$(grep -ac 'Exception' "$Q" 2>/dev/null) scanout_refused=$(grep -ac 'scanout REFUSED' "$Q" 2>/dev/null) broker_lines=$(grep -ac 'kf3: broker' "$Q" 2>/dev/null)"
+    echo "DESKTOP_KF3 stall=$(grep -ac 'display: STALL' "$Q" 2>/dev/null) exception=$(grep -ac 'Exception' "$Q" 2>/dev/null) scanout_refused=$(grep -ac 'scanout REFUSED' "$Q" 2>/dev/null) cursor_refused=$(grep -ac 'cursor REFUSED' "$Q" 2>/dev/null) broker_lines=$(grep -ac 'kf3: broker' "$Q" 2>/dev/null)"
     grep -a 'kf3: broker' "$Q" 2>/dev/null | tail -3 | cut -c1-200 | sed 's/^/DESKTOP_BROKER /'
     echo "DESKTOP_SMOKE_EXIT rc=$rc $(date -Is)" | tee "$ROOT/EXIT"
 }

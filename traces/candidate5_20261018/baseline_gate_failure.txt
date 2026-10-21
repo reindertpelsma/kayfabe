@@ -1,0 +1,21 @@
+MEASURED Amendment 3: superseded by five quiet candidate-4 memory passes (5,734–6,992 us), one quiet channel pass, load <=2.445; see baseline_isolation.json. Classified LOAD-DEPENDENT, unchanged bounds. Historical failure follows.
+
+STATUS: HISTORICAL RECORD, updated 2026-10-18.
+CODE READ: Amendment 2 authorizes quiet-box classification without changing the bound.
+MEASURED: the first merged full memory run passes 184 tests; five quiet baseline
+repeats remain pending because load has stayed above 4. No quiet failure is claimed.
+MEASURED: the separate LUT-token correction is tested and verified on origin at 9ff3dc9e9.
+Its integration merge remains pending behind the required mutation-gate ruling.
+The original stopped-state record follows; its pending owner decisions were answered.
+
+STATUS: STOPPED, 2026-10-18; baseline before Phase 0.
+MEASURED source: candidate-4 0452613b5c71cb175271230b3e14c8e3c3eef2db, unchanged.
+MEASURED command: cargo test --release -j2 --no-fail-fast across all 22 kf-* packages, nice 19, global Cargo flock, lane target.
+MEASURED result: 3532 passed / 1 failed / 19 ignored; excluding kf-gop-image (8 passed), the same 21-package scope is 3524 / 1 / 19.
+MEASURED failure: kf-mem::batch::tests::the_act_thread_waits_for_a_chunk_not_for_the_operation.
+MEASURED assertion: ledger lock wait 63117 us; source bound 60000 us, crates/kf-mem/src/batch.rs:3782 and :4225.
+MEASURED diagnostic: 3604 hand-overs in 1905 ms; VA operations [636,602,643] ms; longest whole hand-over 63124 us; longest hold 94177 us (2048 entries); 126 VA yields, max 9977 us.
+MEASURED: the previously reported kf-chan lifecycle stress test passed in this full run; isolated rerun was stopped when the new gate failure was recognized.
+CODE READ separate pending issue: ScanState::reset_life replaces ColorDmas with its default (next=0), while DisplayGpu::color_snapshot retains snapshots keyed by (src, interpolate, token, entries).
+INFERRED: identical LUT location/shape and reused token in a new life can reuse the old GPU snapshot. Not hardware-tested. Owner scope decision pending.
+MEASURED: no Phase 0 edits, no commits/pushes, no merges/builds, no READY. FAILED retained and appended in place.

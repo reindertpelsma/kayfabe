@@ -11,6 +11,30 @@ pub struct Scan {
     bindings: [u32; 8],
     pending: Option<(MethodHeader, usize)>,
     subdevice: Option<Subdevice>,
+    tally: BindTally,
+}
+
+/// ★ PHASE 1c measurement (owner request): how often the scan saw the 5080 software object bound, over the channel's
+/// scanned life (precondition P1: "the 5080 binds once"; Pointer mode cannot see a later rebind by construction, so the
+/// whole-run answer comes from `always_scan`). It commits with the scan (a refused or retried segment is not counted),
+/// decides nothing, and is invisible to equality and to the model's state key on purpose.
+#[derive(Clone, Copy, Default)]
+pub struct BindTally {
+    /// Scanned SET_OBJECTs whose class the software object accepts (every one, not only the first).
+    pub software_binds: u64,
+    /// Scanned SET_OBJECTs on a subchannel that held the software object and bound something else.
+    pub rebinds: u64,
+}
+impl PartialEq for BindTally {
+    fn eq(&self, _: &Self) -> bool {
+        true
+    }
+}
+impl Eq for BindTally {}
+impl std::fmt::Debug for BindTally {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str("-")
+    }
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -85,6 +109,39 @@ impl Scan {
             }),
             ..Self::default()
         })
+    }
+
+    /// Subchannels (bit n, n >= 5) on which a scanned SET_OBJECT bound an object `software` accepts.
+    /// The lifecycle's "the software object is bound" (`kf_chan::user_lifecycle`).
+    pub fn software_mask(&self, software: impl Fn(u32) -> bool) -> u8 {
+        (5..8usize)
+            .filter(|s| self.bindings[*s] != 0 && software(self.bindings[*s]))
+            .fold(0, |m, s| m | (1 << s))
+    }
+
+    /// The scan after an UNSCANNED stretch (Pointer mode): the bindings AND the sub-device mask state are kept as the
+    /// last scan left them, the packet in progress is forgotten (assumption P2' of
+    /// `docs/design/V3_USER_RING_LIFECYCLE_20261016.md`: the anchor, a `GP_PUT` value, is a packet boundary).
+    ///
+    /// The mask state is kept, not returned to its birth value: a guest that STOREd a mask at setup and USEs it later
+    /// would otherwise be refused ("USE with nothing stored") at the first USE after a Fresh start and lose the
+    /// channel (review D4). The kept state can be stale only if the guest changed the mask inside the unscanned
+    /// stretch, which a single-GPU Windows guest has no reason to do; an unknown mask has no conservative value
+    /// (`active = false` would hide a real trigger, `active = true` is what the birth state assumes), so the last
+    /// scanned state is the best-informed one.
+    #[must_use]
+    pub fn fresh_resume(&self) -> Self {
+        Self {
+            bindings: self.bindings,
+            pending: None,
+            subdevice: self.subdevice.clone(),
+            tally: self.tally,
+        }
+    }
+    /// The SET_OBJECT tally of the scanned life so far ([`BindTally`]).
+    #[must_use]
+    pub fn tally(&self) -> BindTally {
+        self.tally
     }
 
     /// Whether the metadata is between complete method packets. This is not
@@ -253,6 +310,11 @@ impl Scan {
             .ok_or(Refusal::MethodOverflow)?;
         let sub = h.subchannel as usize;
         if method == 0 {
+            if software(data) {
+                self.tally.software_binds += 1;
+            } else if self.bindings[sub] != 0 && software(self.bindings[sub]) {
+                self.tally.rebinds += 1;
+            }
             self.bindings[sub] = data;
         }
         // Public dev_ram.ref/dev_pbdma.ref: fixed C56F runlist mapping sends
@@ -271,7 +333,7 @@ impl Scan {
 
 /// Paired private-GP fetch receipts. These retire descriptors/source GP slots,
 /// never pushbuffer bytes, engine operands, or GPU work.
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct Fetch {
     entries: u32,
     issued: u64,
@@ -758,5 +820,109 @@ mod tests {
         assert_eq!(f.observe(put).unwrap(), vec![]);
         assert_eq!(f.observe(0), Err("USER_FETCH_UNISSUED_GET"));
         assert_eq!(f.publish(None), Err("USER_FETCH_SEQUENCE"));
+    }
+
+    #[test]
+    fn software_mask_names_the_subchannels_bound_to_the_software_object() {
+        let mut s = Scan::default();
+        assert_eq!(s.software_mask(|v| v == 0x5080), 0);
+        s.segment(
+            &[h(6, 0, 1).unwrap(), 0x5080, h(2, 0, 1).unwrap(), 0x5080],
+            |v| v == 0x5080,
+        )
+        .unwrap();
+        assert_eq!(
+            s.software_mask(|v| v == 0x5080),
+            1 << 6,
+            "sub 2 is a hardware subchannel"
+        );
+        s.segment(&[h(7, 0, 1).unwrap(), 0x5080], |v| v == 0x5080)
+            .unwrap();
+        assert_eq!(s.software_mask(|v| v == 0x5080), (1 << 6) | (1 << 7));
+        s.segment(&[h(6, 0, 1).unwrap(), 0xc7c0], |v| v == 0x5080)
+            .unwrap();
+        assert_eq!(
+            s.software_mask(|v| v == 0x5080),
+            1 << 7,
+            "rebound to another class"
+        );
+        assert_eq!(s.software_mask(|_| false), 0);
+    }
+
+    #[test]
+    fn a_fresh_resume_keeps_the_bindings_and_the_mask_state_and_forgets_only_the_open_packet() {
+        let mut s = Scan::for_subdevice(1).unwrap();
+        s.segment(&[h(6, 0, 1).unwrap(), 0x5080], |v| v == 0x5080)
+            .unwrap();
+        // the guest STOREs a mask for this sub-device at setup, SETs it active, and opens a packet (all scanned)
+        s.segment(
+            &[
+                0x20000 | (1 << 4),
+                0x10000 | (1 << 4),
+                h(1, 0x1b0, 3).unwrap(),
+                7,
+            ],
+            |v| v == 0x5080,
+        )
+        .unwrap();
+        assert!(!s.at_boundary());
+        let f = s.fresh_resume();
+        assert!(f.at_boundary(), "the packet in progress is forgotten");
+        assert_eq!(f.software_mask(|v| v == 0x5080), 1 << 6, "bindings kept");
+        // a trigger scans as a trigger
+        let mut f2 = f.clone();
+        let t = f2
+            .segment(&[h(6, 0x200, 1).unwrap(), 27], |v| v == 0x5080)
+            .unwrap()
+            .unwrap();
+        assert_eq!(t.call.data, 27);
+        // D4: the stored mask survives: a USE after the fresh resume is NOT refused
+        let mut f3 = f.clone();
+        assert_eq!(f3.segment(&[0x30000], |v| v == 0x5080), Ok(None));
+        // the original is unchanged
+        assert!(!s.at_boundary());
+        // a scan that never stored anything still refuses a USE (unchanged behaviour)
+        let g = Scan::for_subdevice(1).unwrap().fresh_resume();
+        let mut g2 = g.clone();
+        assert_eq!(
+            g2.segment(&[0x30000], |v| v == 0x5080),
+            Err(Refusal::SubDeviceMask(0x30000))
+        );
+    }
+
+    /// PHASE 1c (owner request, precondition P1): every SET_OBJECT of the software class is counted, not only the first,
+    /// and a SET_OBJECT that replaces the software object on its subchannel is a rebind. The tally commits with the
+    /// scan: a refused segment leaves it unchanged.
+    #[test]
+    fn the_tally_counts_every_software_set_object_and_every_rebind_and_commits_with_the_scan() {
+        use kf_abi::submit::method_header_inc;
+        let sw = |v: u32| v == 0x5080;
+        let set = |sub: u32, class: u32| [method_header_inc(sub, 0, 1).unwrap(), class];
+        let mut s = Scan::for_subdevice(1).unwrap();
+        let words: Vec<u32> = [
+            set(6, 0x5080),
+            set(6, 0x5080),
+            set(7, 0x5080),
+            set(0, 0xc7c0),
+        ]
+        .concat();
+        s.segment(&words, sw).unwrap();
+        assert_eq!(
+            (s.tally().software_binds, s.tally().rebinds),
+            (3, 0),
+            "a non-software class on sub0 is not a rebind"
+        );
+        s.segment(&set(6, 0xc7c0), sw).unwrap();
+        assert_eq!((s.tally().software_binds, s.tally().rebinds), (3, 1));
+        // sub6 no longer holds the software object: another class there is not a rebind of it
+        s.segment(&set(6, 0xc7b5), sw).unwrap();
+        assert_eq!(s.tally().rebinds, 1);
+        // a refused segment is not counted (the scan state is transactional); a clone scanned for a retry is discarded
+        let mut t = s.clone();
+        let bad = [set(6, 0x5080)[0], set(6, 0x5080)[1], 0xC000_1234];
+        assert!(t.segment(&bad, sw).is_err());
+        assert_eq!(s.tally().software_binds, 3);
+        // the tally survives an unscanned stretch
+        assert_eq!(s.fresh_resume().tally().software_binds, 3);
     }
 }

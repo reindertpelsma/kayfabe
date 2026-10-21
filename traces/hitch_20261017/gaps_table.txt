@@ -1,0 +1,14 @@
+Per-minute counts (benchmark window 0..260 s = 4.33 min). GUEST = gap between consecutive DXGI Present starts (ETW, per present). BROKER = gap between consecutive NEW-content presents (compositor present_ns) where the line exists.
+arm      | guest >33  >50  >100 per min, max ms, p99, p99.9 ms, 1%low/0.1%low fps | broker new fps, repeat/s, merged/s, cg>33 >50 >100 per min, max ms
+H2p1     |   517.6   5.1  0.46    173.0   46.9   61.2    21.3/ 16.3
+H2p2     |   518.5   4.6  0.46    165.2   46.9   54.4    21.3/ 18.4
+H5       |   501.5   6.7  0.92    166.0   47.0   64.4    21.3/ 15.5
+A2       |   533.5   7.2  0.46    229.6   47.1   62.9    21.2/ 15.9
+A3       |   514.8   8.3  0.92    160.2   47.1   69.4    21.2/ 14.4
+D1       |   509.3   8.1  0.46    168.1   47.1   65.1    21.2/ 15.4 | (v1 broker line: no new-content fields) timeouts in window=0
+D3       |   496.4   4.8  0.23    164.4   47.0   64.1    21.3/ 15.6 |  51.8    8.2   0.00   246.9 244.6  0.23   116.7
+B1 FIX   |   151.6   6.0  0.46    147.8   45.7   55.0    21.9/ 18.2
+B2 FIX   |   184.6   5.1  0.46    125.4   46.0   55.7    21.7/ 18.0
+B3 FIX   |   180.7   7.2  0.69    123.3   46.0   66.5    21.7/ 15.0
+C1 FIX   |   191.3   6.2  0.69    150.5   46.3   62.1    21.6/ 16.1 | (v1 broker line: no new-content fields) timeouts in window=0
+C3 FIX   |   174.5   5.3  0.23    121.6   45.9   59.1    21.8/ 16.9 |  57.1    2.8   0.00    87.0  84.5  0.00    66.7

@@ -1,4 +1,17 @@
+**Amended 2026-10-18 (CODE READ; hitch diagnostic gates):**
+`KF3_DIAG_STEP_METERS=1` enables display-worker step timing; `KF3_DIAG_EVENT_RING=1`
+enables the relay's bounded lock-step event ring. Both are class M, off when unset or
+any value other than `1`, read once at construction, and never required to boot.
+The default path takes no diagnostic timestamps, samples, ring allocation or dumps.
+Request credits, pacing decisions and the existing periodic FPS line remain active.
+The broker's existing `--stats-line` remains off by default; its poll timing clock
+is taken only with that option. GPU-free evidence: `traces/diagnostic_gates_20261018/README.md`.
+
+**Amended 2026-10-17 (lazy observe, `V3_USER_RING_LIFECYCLE_20261016.md` section 0c): two new flags, `KF3_PUT_CACHE` and `KF3_LAZY_OBSERVE`** (`crates/kf-qemu/src/userpump.rs::lazy_config`, read once at the first Windows USER-ring relay creation through a `OnceLock`, never per turn, logged as `USER_RING_LAZY_OBSERVE_MODE`). **Default ON**: `KF3_PUT_CACHE=0` turns the guest `GP_PUT` cache (rule A) off, `KF3_LAZY_OBSERVE=0` turns the lazy private-`USERD` look (rule B, interval the constant `OBSERVE_INTERVAL = 16`) off; any other value, and unset, leaves the rule on; no value changes the interval. **Class M (measurement, so that the split A / B arms and the control run from one binary); required to boot: no** (the shipped behaviour is both ON; both rules act in Pointer mode of the Windows USER-ring relay only; Linux, Translated and Emulated never read them). Not yet run on hardware. Fate: hardwire ON and delete both flags once the split arms are measured (design doc section 0c, "Debt"). The scratch `KF3_LAZY_OBSERVE=N` (N > 1 selected the interval) of `claude/d3d11-gap-20261016` is NOT this flag: here only `0` is special.
+
 # V3 FLAG INVENTORY — every `KF3_*` the Windows run profile sets or this line of work adds, what it does, and how it stops being a flag
+
+**Amended 2026-10-16 (lifecycle PHASE 1c, `V3_USER_RING_LIFECYCLE_20261016.md` section 0b): new flag `KF3_LIFECYCLE_MODE`** (`crates/kf-qemu/src/userpump.rs`, read once at the first Windows USER-ring relay creation through a `OnceLock`, never per turn). Values `default` (also unset, empty or unknown, the last one reported in the `USER_RING_LIFECYCLE_MODE` line), `always_scan` (the machine never leaves Scan; the P2' and P1 counters measure the whole run), `no_pointer_markers` (Pointer mode places no marker), `no_anchored_windows` (a Window starts at the entry that sees the registration). **Class M (measurement); required to boot: no** (it changes only how much of the lifecycle is on, and `default` is the shipped behaviour); the Linux, Translated and Emulated paths never read it. Not yet run on hardware. Fate: hardwire the chosen behaviour after P2' is measured on the app matrix and delete the unused values (design section 11).
 
 **Amended 2026-10-11 (flag-necessity ablation, `traces/windows_flag_ablation_20261010/README.md`):** measured verdicts at `89721ca4` (production profile minus the flag, scripted boot + sign-in + Edge + 180 s, idle): TIMER_MAP NEEDED (run 604, Code 43); SDR_COLOR group, ASYNC_PREEMPT, TRANSLATED_CE_RELAY clean in this lane (runs 602, 603, 605; the last two ambiguous for load). Rows annotated in place; the other flags are queued. The lane is idle-desktop only: NOT NEEDED means not needed to boot, reach the desktop and open Edge.
 

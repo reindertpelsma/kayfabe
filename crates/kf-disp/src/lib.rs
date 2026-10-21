@@ -21,7 +21,10 @@
 //! - [`pushbuf`] — the bounded NVDisplay DMA pushbuffer decoder;
 //! - [`engine`] — the emulated front end: channels, interlocked updates, arming, completions;
 //! - [`inst`] — context-DMA resolution through the guest's display instance memory;
-//! - [`pace`] — `display-max-fps`: the capped vblank tick, the meter, the non-flip copy rule.
+//! - [`pace`] — `display-max-fps`: the capped vblank tick, the meter, the non-flip copy rule, the
+//!   flip-copy mailbox;
+//! - [`lockstep`] — the worker's half of the lock step: the credit gate (G1–G5)
+//! - [`tick`] — the tick source: the free-running clock, the broker's events, the handoff rules.
 
 pub mod caps;
 pub mod class;
@@ -31,10 +34,12 @@ pub mod edid;
 pub mod engine;
 pub mod inst;
 pub mod layout;
+pub mod lockstep;
 pub mod model;
 pub mod pace;
 pub mod ports;
 pub mod pushbuf;
 pub mod regs;
 pub mod scanout;
+pub mod tick;
 pub mod vramslot;

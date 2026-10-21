@@ -1,3 +1,10 @@
+**CORRECTION 2026-10-20 (read before §0 and §8):** this document's claim that the relay is validated and that "no timer carries correctness" holds for *liveness* only (every covered entry is eventually
+relayed). It does **not** hold for *bounded fairness*: `worker::run_with_relay` looked at non-doorbell wake sources (engine events whose dispatch injects the guest's completion interrupt, the waiting
+relays' marker/carried waits, demand left by a lost `try_lock`) only when a pass served nothing, so a self-re-ringing relay (`Need::Again`) could keep the worker permanently busy and starve another
+client's wakes for seconds to a minute ("the baton": measured 6-59 s on Linux with `KF3_DEBUG_FORCE_MIGRATABLE=1`, the same signature on the Windows guest). Found by the bounded-fairness model
+(P11-P13, §10); fixed first by `LoopPolicy::after_pass` (a look every `LOOK_EVERY = 4` busy passes) -- **SUPERSEDED 2026-10-20 by §10.0** (one level-triggered loop, lock-holder handoff, sleep-safety table; no pass count, no retry budget). Hardware confirmation of the fix is pending in §10.0. The §8 Linux validation exercised the default
+Passthrough route, on which hot tokens are rung inline and the worker idles, so it could not see this.
+
 **STATUS: LIVE in the code, 2026-10-14** (branch `claude/userring-eventloop-20261014`: tests-first commit `95a9ad422`, then the
 fix; GPU-free results in §5-§6, Linux hardware validation in §8). Written DESIGN-ONLY first; §2 and §5 keep the
 state of the code BEFORE the fix (77eaf7620) as the record of what the tests found.
@@ -189,12 +196,24 @@ window of which the model reaches and the mutant without the comparison (`mutant
 
 ### 3.6 The backstop
 
+**★ CORRECTION, 2026-10-17 (owner ruling; supersedes §3.6's `GP_PUT` read and the "Doorbell-less submission" bullet in §6):** the backstop does
+NOT read `GP_PUT`. The doorbell contract is: the last doorbell covers every `GP_PUT` write before it; nothing else announces `GP_PUT`; the relay loops
+until its cursor equals the `GP_PUT` it loaded; a ring during a pass forces one more pass, repeated until a pass sees no ring; rings coalesce; a ring with
+no work is safe. §3.6 and the bullet below kept an idle `GP_PUT` read on the backstop ("information only") that also rang the relay: that was a `GP_PUT` poll
+in a different place, found by the lazy-observe review (`traces/lazy_observe_20261017/REPORT.md`, stop finding 2). Removed: the read, the
+`backstop_put_ahead` counter, and the model's allowance for it (it is now the violation `PUT_POLL`, with a mutant that must be found). The pure decision is
+`user_loop::look_needed` (a look needs demand or a recorded wait; the kind of look is never a reason). What the backstop may still do: re-look at relays that
+WAIT (`Wait::Popped`, `Wait::Contended`, and a lost marker interrupt, each counted). Pinned by `kf-trap/tests/doorbell_contract.rs` (real token word),
+`kf-qemu/tests/doorbell_no_put_poll.rs`, `kf-chan/tests/user_loop_model.rs` (`put_ahead_of_the_last_doorbell_is_owed_nothing_and_no_timer_reads_it`,
+`mutant_the_backstop_polls_gp_put_is_found`).
+
+
 `BACKSTOP_MS = 50` (the existing `PARK_MS`; unchanged idle wake rate, 20/s, an order below the guest's 2 s TDR
-detection, and the only timer in the loop). A backstop wake peeks every relay's `waiting` and `GP_PUT`. What it
+detection, and the only timer in the loop). A backstop wake peeks every relay's `waiting` (⊘ SUPERSEDED 2026-10-17: and its `GP_PUT`; see the correction above, the backstop reads no `GP_PUT`). What it
 finds is counted, not hidden: `backstop_found_work` (a satisfied non-carried wait: a lost or never-armed
-interrupt, a bug), `backstop_carried` (a satisfied control-witness wait: expected, separate), `backstop_put_ahead`
+interrupt, a bug), `backstop_carried` (a satisfied control-witness wait: expected, separate), ~~`backstop_put_ahead`
 (`GP_PUT` ahead of the cursor with no doorbell: legal in the narrow window between a guest's `GP_PUT` write and
-its ring; information about guests that skip doorbells), `event_without_progress` (an interrupt before `GP_GET`
+its ring; information about guests that skip doorbells)~~ (⊘ REMOVED 2026-10-17, the doorbell contract), `event_without_progress` (an interrupt before `GP_GET`
 was visible). The model proves the backstop is NEVER what completes a gate when interrupts are delivered
 (`design_b_no_turn_is_caused_by_a_timer_and_the_backstop_finds_nothing`) and that a lost interrupt is covered by it and counted
 (`design_a_lost_interrupt_is_covered_by_the_backstop_and_counted`).
@@ -403,3 +422,169 @@ table bounds the relay's share per SYNC_WAIT at <= 4 ms per 3 gates before and ~
 5. **Not measured**: Windows (the coordinator schedules it); the staged-trigger path (`segment_turn` rare packets, Windows migration) now waits on markers
    too but no Linux traffic reaches it; GP_GET/REFERENCE visibility lag after an interrupt is modelled, not observed (`event_without_progress`
    is 12-205 per run, spurious or early events, never a stalled wait: `backstop_found(work)` stayed 0).
+
+## 9. Model v2 (2026-10-20): the real turn under the worker, several channels, the act windows and the private doorbell
+
+**STATUS: LIVE (GPU-free; nothing here ran on hardware), 2026-10-20.** Branch `claude/user-relay-model-20261020`, `crates/kf-chan/tests/user_loop_model_v2.rs`
+(module doc = the CODE READ list of every state a turn reads / writes and every wake source with its guarantee), `scripts/v2_mutation_check.py`.
+Labels: **MEASURED** = a test result named here; **CODE READ** = file:line of the revision `f8f9d1a5f`; **INFERRED** = reasoning or a hardware assumption.
+Trigger: the owner's Windows freezes (Minecraft + Heaven; GPU idle, host quiet, relay safety-net counters 0) and the question "have we tested that this is race free?".
+
+What changed against §4.1: the model drives the REAL `kf_chan::user_turn::Relay` (through `tests/lifecycle_support`) with lazy observe at the production defaults
+(PUT cache, `observe_interval = 16` on a 32-entry guest ring, private ring 128 so the credit floor does not force every look), the real `Lifecycle` in Pointer mode
+(entered by a prelude), several channels with global semaphores (`rel` / `acq` of a segment), the disable/enable acts, record / pt windows, the private
+doorbell as its own step, an ORACLE (no relay) to attribute a stall to the relay. Only the worker / token / peek / serve / arm layer is still a transliteration
+(`userpump.rs` `user_ring_serve`, `user_ring_arm`, `user_ring_peek_one`, `chan.rs` `disable_channels`); it is guarded by source pins in the test file
+(`pin_*`), and the pure decisions it calls are the production ones (`look_needed`, `may_retry`, `Wait::satisfied`, `found`, `wait_of`, `idle`).
+**Proposed refactor, NOT done** (the decision part of `user_ring_peek_one` has no existing test beyond a source pin, so it fails the "behaviour-neutral and
+covered" bar): `fn look(why, demand, waiting_flag, run, wait, lock_free, words) -> Look { ring, clear_wait, pop_writeback, found, event_without_progress }` in
+`user_loop.rs`, called by `user_ring_peek_one` after it reads the two private words; the model would then call it instead of its copy.
+
+### 9.1 Results (MEASURED, `cargo test --release -p kf-chan --test user_loop_model_v2`)
+
+* **Relay logic, benign hardware: no violation of P6, P7, P8, P9** in any scenario explored. State counts: production interval 16 on a 32-entry ring 2 900; stale-cache
+  batches 68 621; lapped 4-entry ring with lazy observe 293 314; disable/enable window with a doorbell inside it 99 080 (+ record-lock window around the enable);
+  main + sub channel with an acquire / release across them 4 199; gated entries in Scan mode releasing each other 17 763; **two clients x (main + sub) = four channels,
+  cross-client acquires, 1 385 166 states, no violation, the oracle completes too**; a stuck neighbour does not hold up the other channel.
+* **P8 holds by construction**: a serve that meets `t.disabled` clears `retry` and returns (`userpump.rs` 2756-2759), the enable act calls `user_ring_wake` after
+  `v.disabled = false` (`chan.rs` 4392); a mutant without that call is found by two scenarios. `disable_usermode(false)` (`chan.rs` 4181-4259) sets no flag and calls no wake:
+  it needs none for the RELAY (turns are never refused), see 9.2 for the NATIVE doorbell.
+* **Documented gaps reproduced, not new**: (a) a `pt` / USERD-admission release is announced by nobody (`Wait::Contended`): with the net disabled a doorbell served inside the window
+  is stranded (found); with the net armed it is found and counted (`backstop_contended`). (b) Markers latched off (`NoPointerMarkers`): a `Popped` wait has no interrupt; the bounded spin
+  carries it (holds with spin 1, DEADLOCK with spin 0 and no net). GP_GET visibility lag after the interrupt and a lost marker interrupt: lag alone is covered by the spin; a lost
+  interrupt needs the counted net.
+
+### 9.2 P10 -- the one trace that ends with a covered entry unpopped forever (private entries PUT - GET == 2; relay idle, host quiet)
+
+`P10: no private entry the relay published stays unknown to the hardware`. It fails in exactly two ways, **both need a HARDWARE assumption that nothing GPU-free can decide**:
+
+1. **The native doorbell overtakes the private stores** (`hw_db_races_stores`; INFERRED: BAR0 doorbell vs BAR1 video-memory stores of the private GPFIFO entry and
+   `GP_PUT`, `publish_guarded` `userpump.rs` 545-621 and `Storage::publish_put` `user_storage.rs` 642-657 have release fences but NO read-back). An IDLE channel latches the old `GP_PUT`;
+   the batch's entry and its marker (exactly two entries) stay unpopped until that channel's NEXT doorbell. Minimal trace: `Submit[1]`; the worker serves, publishes entry, doorbell,
+   publishes marker, doorbell (stores not yet landed); parks with `Wait::Marker`. Nothing else ever rings. A read-back before the doorbell (`readback`) makes both channels live.
+   **This matches the freeze signature** (GPU idle, nothing outstanding on the host, safety-net counters 0, PUT - GET == 2 for seconds, independent of lazy observe / PUT cache / mirror,
+   several packets of one process stuck at once, worse under load that slows video-memory writes). Falsifier on hardware: read back the last stored private word before `rm.doorbell` (a
+   measurement switch) and the freezes must disappear; or a stranded channel must recover when the probe agent rings its doorbell by hand.
+2. **A doorbell dropped by a host-disabled channel** (`hw_drops_db_when_off`): `disable_channels` sets `v.disabled` only AFTER the host verb returned (`chan.rs` 4364) and
+   `rm.doorbell` is rung after the pt lock is released, so a publish + doorbell can land on an already host-disabled channel; neither enable path re-rings the native doorbell
+   (`disable_usermode` has the window for the whole act). Benign hardware (the doorbell is latched pending, or the enable re-reads `GP_PUT`) is live; adversarial hardware strands the
+   entries. The probe agent saw no disable/enable act within 230 s of the onset of two freezes, which falsifies this for those two.
+
+**Not fixed here**: a read-back adds one uncached BAR1 read per publish on the hot path (owner rule: MMIO reads are slow), and the hardware hypothesis is unproven. Options for the
+owner: (i) measurement switch with a read-back before every doorbell, run Minecraft + Heaven; (ii) if confirmed, one read-back per turn (coalesce the doorbells of a turn to one after the
+last publish), (iii) a native re-ring at the enable of every twin with `PUT != GET` (closes 2 only). A source-pin test `p10_publish_reads_back_before_the_native_doorbell` records the gap.
+
+### 9.3 Mutation check (MEASURED; `scripts/v2_mutation_check.py`, the unmutated v2 suite is green first; heaviest four scenarios skipped in the mutant runs)
+
+Harness mutants of the transliterated worker / act layer, each FOUND by two scenarios (the scenario without the mutant holds): `enable_skips_wake` (the enable act does not call
+`user_ring_wake`), `unlock_no_wake`, `event_deaf` (the worker never peeks on an engine event), `peek_never_rings`, `no_seq_check` (`try_park` without the sequence compare), `drop_busy_rung`.
+Production mutants of `kf-chan` (exact-text patches, file restored after each run):
+
+| mutant | v2 killers | older suites |
+|---|---|---|
+| `put_cache_idles_on_a_cached_read` (cache used when cursor == cached) | 35 | - |
+| `look_needed_ignores_demand` | 2 (`p6_a_pt_admission_window...`, `p6_a_pt_window_across_two_batches...`) | - |
+| `marker_wait_satisfied_by_pops` (the retired GP_GET proof) | 4 | - |
+| `popped_wait_target_off_by_one_high` | 3 | - |
+| `contended_wait_never_satisfied` | 2 (`p6_a_pt_window_inside_a_turn_across_two_batches...`, `p6_a_pt_window_across_two_batches...`) | `design_pt_admission_contention_is_spin_then_the_counted_backstop` |
+| `b_skips_while_a_wait_is_pending`, `wait_never_latched`, `end_batch_forgets_work_in_flight` | 0 | `b_a_turn_after_a_wait_always_observes`, `b_a_wait_forces_a_look_on_every_turn_until_it_is_over` |
+
+The last three survive v2 **by construction**: they are redundant defences (D6 `ring_full` guard, credit floor, the wait latch) whose loss costs staleness / latency of the guest's
+`GP_GET`, not liveness, and v2 checks liveness. They are killed by `user_lazy_turn`.
+
+### 9.4 What v2 still does not cover
+
+GPU time-slicing between the twins' TSGs (a blocked acquire holding a time slice); the BAR1-store / BAR0-doorbell ordering itself (assumed in 9.2, not decidable GPU-free); the shared software
+object / registry of the channels of one client; `segment_turn` triggers (Window, ring growth: `user_lifecycle_model`); the 32768-entry guest ring (the model uses 4-32 slots, the lazy interval
+is capped at half the ring so the same code path runs); `serve`/`peek`/`arm` run as a transliteration (guarded by pins, see the proposed `look()` refactor above).
+
+## 10. Bounded fairness of the worker loop (2026-10-20): the baton
+
+### 10.0 The design that replaced the fix below (2026-10-20, branch `claude/relay-fairness-2-20261020`)
+
+**STATUS: LIVE in the code, GPU-free (all models and unit tests green); NOT yet run on hardware.** §10.1 (the `LoopPolicy` "look every 4 passes" fix and its
+retry budget) is **SUPERSEDED** by this section: an Opus review found it incomplete (after 64 consecutive `try_lock` losses only `Peek::Backstop` could re-ring, and
+it needs a quiet 50 ms park a busy worker never reaches), and the owner ruled out every heuristic (no retry budget, no "every Nth pass", no timer as correctness).
+Labels: **[measured]** a test result named here, **[read]** code, **[inferred]** reasoning.
+
+**The rule (owner, 2026-10-20).** The worker never blocks while an outstanding obligation could change in a way that needs handling and no NON-MISSABLE wake source covers
+that change. Wake moments are a SUPERSET of the moments processing is needed (coarse and excessive wakes are fine). An eventfd is never ground truth (every wake re-reads the
+state) but may not miss it (armed before the state is evaluated: `seen = worker_wake().seen()` is loaded before the scan and `try_park(seen)` refuses to park if it moved).
+
+**ONE loop** (`worker::run_with_relay`): serve a pass (every flagged token, each up to `REACT_ROUNDS + 1` rounds: the per-visit bound) -> drain every ready fd (`poll(0)`, dispatch,
+`peek(Event)`) -> evaluate every waiting relay's private words (`peek(Spin)`; level-triggered) -> if the pass served, repeat -> else `idle(relay.unannounced())`:
+`Spin` = repeat at epoll timeout 0, `Park` = `try_park` then block. Blocking uses `epoll_wait` with the 50 ms safety net, or NO timeout with `KF3_WORKER_PARK_INFINITE=1`
+(measurement class, read once). A net firing that finds work is a counted bug (`timeouts_with_work`); nothing depends on it: the models and the stress harness run with the
+timeout disabled.
+
+**Sleep-safety table** (`user_loop::cover`, `may_block`; one row per obligation: the change that needs handling | the covering wake source | can it miss? | else):
+
+| obligation | change event | covering wake source | can it miss? | else |
+|---|---|---|---|---|
+| `Marker` (recorded marker wait) | the private REFERENCE reaches the count (the marker's NON_STALL interrupt) | engine event fd, in every worker's poller (level-triggered, no `EPOLLEXCLUSIVE`) | no, unless the ring looked FULL and a partial pop is owed (pops carry no event) | that case is `unannounced` -> spin |
+| `Popped` (carried wait, Pointer markers latched off) | the private GP_GET passes the target | none (pops raise nothing) | yes | spin (`unannounced_spins`) |
+| `Lagging` (the interrupt's progress not yet visible in the private words: the hint is spent) | the words catch up | none | yes | spin |
+| `Contended` (a lost `try_lock` on `pt` / the record / the GP_GET admission) | the lock is released | the LOCK HOLDER: `Handoff::released` after its release | no (see the Dekker argument) | n/a |
+
+**Lock-holder handoff** (`kf_chan::handoff`, `kf_qemu::ptlock`). The loser does `e0 = prepare()` BEFORE its attempt; on a failed attempt it `lost(who, e0)`: it REGISTERS, then
+compares the epoch; if the epoch moved the holder already released and the loser retries at once (it rings itself). The holder `released()`: it bumps the epoch FIRST, then rings every
+registered waiter. All `SeqCst`. Argument [inferred, then checked exhaustively on the real struct]: either the holder's bump precedes the loser's epoch re-read (the loser sees the
+move and retries) or the loser's registration precedes the holder's list read (the holder rings); the lost-registration interleaving "loser checks the lock, the holder releases and reads an EMPTY
+registry, the loser registers after" is precisely the case the epoch re-read answers, and `handoff_protocol.rs` shows the NAIVE loser (register, no re-read) stranded there [measured].
+`PtLock` (the `pt` map's lock) wraps the guard: `Drop` releases the mutex THEN hands off, so a loser's retry finds the lock free. Holders hand off at the end of an act, after a
+drainer pass, after the VA loop's `set_walk_busy`, in `ram_add` / `ram_del`, and (the record lock) through `user_ring_wake` as before. The owner may be the OTHER worker: the ring is
+the relay's token + the shared wake word, which reaches whichever worker scans next (every worker's wake word and poller are level-triggered).
+
+**Deleted**: `CONTENTION_RETRIES`, `may_retry`, `may_ring_contended`, the Backstop exemption, the pre-park spin (`SPIN`), `LoopPolicy` / `AfterPass` / `LOOK_EVERY`. `look_needed`
+is `waiting` and nothing else (contention is the holder's business). **Added**: `Obligation` / `WakeSource` / `Cover` / `may_block` / `idle`, `Handoff`, `PtLock`,
+`Cell.unannounced`, `unannounced_spins`.
+
+**Cost (the price of "spin where nothing announces")** [read, inferred]: a relay with a `Popped` wait, a lagging hint, or a draining marker behind a full guest ring keeps one
+worker at 100 % CPU (`epoll_wait(0)` plus two private-word reads per iteration) until the wait is satisfied. That is intended; it is counted (`unannounced_spins`) so a run
+that pays it is visible. Marker waits on a ring that did not look full cost nothing (they block).
+
+**Tests** [measured, GPU-free, `cargo test --release`]: `relay_fairness` (the loop and obligations driven by the REAL pure functions, explicit-state BFS, **1, 2 and 3 workers**;
+sleep-safety invariant: at every blocking infinite-timeout `epoll_wait` no relay holds an obligation without a registered, non-missable wake source; the inverse: an idle worker blocks
+with zero wakeups; terminal-strand and spin-quiescence detection), `handoff_protocol` (exhaustive loser/holder interleavings on the real `Handoff`, the spelled-out lost-registration
+schedule, real threads), `user_loop_model_v3_pointer` (the breaker's five `EXPECTED RED`: the two contended-relay tests, their control, and the two `Wait::Popped` write-back tests; all green),
+`user_loop_model` / `_v2` (source pins updated), kf-qemu `ptlock` (4) and the `userpump` pins. Mutation [measured]: `scripts/fair_mutation_check.py`, 13 production mutants (handoff `changed_since` / `bump` / `released` / `lost`, the cover table, `may_block`, `idle`, `look_needed`, the worker's unannounced check, the park-timeout knob, `PtLock` drop order and silence, the two `userpump` registrations), each killed by >= 2 tests; one mutant (`may_block` ignoring `can_miss`) is EQUIVALENT today (no table row has a source that can miss) and is documented in the script, not counted.
+
+**Hardware check** (not yet run): two-client runs on the relay route (Linux `KF3_DEBUG_FORCE_MIGRATABLE=1`, 20 runs, then Windows), once with `KF3_WORKER_PARK_INFINITE=1`.
+Run with `KF3_DIAG_PROGRESS=1000` (the strand watcher, `userstrand.rs`, default off: a relay holding a demand / wait / unannounced obligation that no turn or look touched for >= 1 s while a worker kept iterating prints `kf3: PROGRESS_STRAND ...` and `PROGRESS_STRAND_END ... total_ms`; the baton harness sets the same variable). Pass = no stall >= 1 s, `timeouts_with_work = 0`, `backstop_found_* = 0`, no `PROGRESS_STRAND` line. `USER_RING_LOOP SUMMARY` must show `handoff(registered=.. rung=.. retried=..)` with
+no registration left unanswered at quiescence (`register` is idempotent and an immediately-retried registration also stays listed until the next release rings it, so `rung + retried >= registered` once all relays are idle). FALSIFIER: a stall with `unannounced_spins` flat and `handoff.registered > rung + retried` (a registration nobody
+answered), or ANY `timeouts_with_work` > 0 with the net on, or a hang with the infinite knob. Residual [inferred]: the doorbell may overtake BAR1 stores (P10), unchanged.
+
+**The blocking / vCPU path** [read]: `ptlock` and the record lock are only ever `try_lock`ed by the relay (never blocked on); `PtGuard::drop` does one `SeqCst` bump, an atomic read of the waiter
+count, and, only when a loser registered, a bounded eventfd write per waiter (the same cost class as `user_ring_wake`). No path blocks a vCPU thread: the handoff adds no wait. **Residual [read, not
+re-measured]**: the worker's `user_ring_peek` holds the `user_rings` MAP lock (a blocking `lock()`) across one pass over every relay (atomics, `try_lock`s, a pop write-back, an eventfd
+write: no syscall that sleeps); the other takers of that lock (`user_ring_record` from the wake path, birth, free) can therefore wait one peek pass. They are drainer / act / worker-side threads, not vCPUs
+(only BAR0 writes trap), but a drainer that blocked there would breach the drainer-never-blocks rule: FALSIFIER = a drainer or act thread parked in `user_ring_record` for more than one pass. Not changed here.
+
+### 10.1 The first fix (SUPERSEDED by §10.0; kept as the record)
+
+**STATUS: SUPERSEDED 2026-10-20 by §10.0 for the FIX (the cause analysis below stays LIVE); was: fix in the code, GPU-free, never run on hardware.** Branch `claude/relay-fairness-20261020`. Labels as in §9.
+Symptom (hardware, owner's runs): on the relay route (Linux with `KF3_DEBUG_FORCE_MIGRATABLE=1`, the Windows guest) about one plain two-client run in three starves ONE client for
+6-59 s while the other completes thousands of iterations; GPU 94-97 %, no Xid, `KF3_DIAG_USER_STALL` never fired, `backstop_found_*` stay 0, an `strace`-wrapped run is clean (timing),
+the Passthrough route 0 of ~16. §9's liveness check ("every covered entry is eventually relayed") cannot see it: a client served after 59 s is "eventually served".
+
+**Cause [CODE READ + MEASURED in the model]** `kf_chan::worker::run_with_relay` looked at the world (epoll poll with timeout 0: engine NON_STALL events, completions, the doorbell
+eventfd; `relay.peek`: the waiting relays' private words and the demand a busy lock left) **only when a pass served nothing** (`if n > 0 { continue }`). A hot relay ends every turn
+`Need::Again` and rings its own token, so a pass always serves it (up to `REACT_ROUNDS + 1` times, then `RepublishAndMoveOn`). With one worker the loop is never idle; with TWO workers
+(`ffi_unsafe.rs`: `for i in 0..2`) the workers hand the hot token to each other (the **baton**): the one that finishes its rounds republishes the token RUNG and either worker's next scan
+claims it again; a worker is idle -- and so looks -- only if it scans in the window in which the token is BUSY, which depends on timing (hence 1 in 3, and clean under `strace`).
+What waits for a look: (P11) a cold relay's satisfied wait (the marker's interrupt is an epoll event, a `Wait::Popped` has no event at all); (P12) the engine events themselves, whose
+dispatch is what injects the guest's completion interrupt (`on_other` -> `nsi_engine_edge`) -- on the Passthrough route the hot tokens are rung inline on the vCPU, never served here, so the
+worker idles and looks; (P13) demand left behind by a lost `try_lock` (`pt`, record), whose only re-ring is a look. The 50 ms safety net is a park timeout and never fires while the worker is
+busy, which is why its counters stay 0. No ring is stuck: the cold relay's token path is fair (the scan visits every summary word, takes every flagged token of a pass, rotating start:
+`control_a_flagged_cold_token_is_claimed_within_two_passes`, and the real `RungBitmap` reaches a cold token behind 200 hot ones).
+
+**Minimal schedule (model, printed by `relay_fairness`, 1 worker; the 2-worker baton is the same with the token handed over at "pass ends")**: the cold relay's marker interrupt fires;
+the worker scans, claims the hot token, serves it 9 times, republishes it, `after_pass(9) = Continue`, scans, ... for ever; the event is never dispatched and the wait is never peeked.
+
+**Fix (event-driven, no timer)** `worker::LoopPolicy::after_pass`: every `LOOK_EVERY = 4` consecutive busy passes the loop LOOKS once (`AfterPass::Look`): the same poll(0) + dispatch +
+`peek(Event)` + `peek(Spin)` the idle spin does, then the next pass. The delay any wait suffers from a busy worker is bounded by `LOOK_EVERY` passes of that worker whatever the neighbours do.
+Cost: one `epoll_wait(0)` and, when a relay waits, its two private-word reads per four busy passes. New counter `busy_looks` (`USER_RING_LOOP SUMMARY`): non-zero on a hot run is the fix working.
+Hardware check: two-client runs on the relay route, 20 runs; the stall must not appear; `busy_looks` > 0; `backstop_found_*` still 0. Falsifier: a starvation that persists with `busy_looks` > 0.
+
+**Not modelled / cannot be seen GPU-free**: whether `try_lock` on `pt` / the record is lost for long against a busy neighbour (hold times; the model treats a lost try_lock as an adversary with a
+budget and shows the re-ring needs a look); GPU-side starvation (time-slicing of the twins' TSGs); the relay's own turn cost (a long `Pump::turn` delays every look by one turn).

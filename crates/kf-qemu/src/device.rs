@@ -417,7 +417,11 @@ impl Device {
                     channels_per_runlist: budget.per_runlist,
                 };
             }
-            None => return Err("channel budget: host facts are shared before the budget is set".into()),
+            None => {
+                return Err(
+                    "channel budget: host facts are shared before the budget is set".into(),
+                );
+            }
         }
         eprintln!(
             "kf3: channel budget {} per runlist ({:?}; derived default {}, host limit {}; the count the guest is told AND the enforced cap, refused by name past it — property channel-budget, docs/design/V3_CHANNEL_BUDGET.md)",
@@ -575,6 +579,14 @@ impl Device {
                     at += n;
                 }
             }
+            // ★ 2026-10-18: AWAIT the completion of what was written above. `cuMemcpyHtoD` from
+            // pageable memory may return once the data is staged, before the DMA reached device
+            // memory (the CUDA programming guide's API synchronization behaviour); the display
+            // worker's own context reads the boot range later, and the guest's first BAR1 write
+            // must not be overtaken by a late zero.
+            kernel
+                .sync_store()
+                .map_err(|e| format!("completion of the realize-time zeroing: {e}"))?;
             Ok(kernel)
         })?;
         // The export node stays open for the process (CUDA holds the import).
@@ -956,16 +968,14 @@ impl Device {
                 let mut objects = kf_rm::rmrpc::ObjectPolicy::over(
                     &t,
                     kf_abi::GuestOs::Linux,
-                    Box::new(
-                        kf_rm::memory_access::SharedObjects::new(
-                            kf_rm::rmrpc::GraphObjects::new(family)
-                                .with_guest_ram(std::sync::Arc::new(crate::mem::MemoryListRam(ram)))
-                                .with_guest_framebuffer(memory_list_fb.clone())
-                                .with_deferred_api(defapi_reg.clone())
-                                .with_fifo_update_filter(fifo_update_filter.clone()),
-                            &memory_access,
-                        ),
-                    ),
+                    Box::new(kf_rm::memory_access::SharedObjects::new(
+                        kf_rm::rmrpc::GraphObjects::new(family)
+                            .with_guest_ram(std::sync::Arc::new(crate::mem::MemoryListRam(ram)))
+                            .with_guest_framebuffer(memory_list_fb.clone())
+                            .with_deferred_api(defapi_reg.clone())
+                            .with_fifo_update_filter(fifo_update_filter.clone()),
+                        &memory_access,
+                    )),
                     kf_rm::rmrpc::ReasmLimits::default(),
                 );
                 // ★ EXPERIMENT `KF3_GSS_NATIVE`: the SAME counters across a chain rebuild.
@@ -1820,7 +1830,7 @@ impl Device {
             ws.timeouts_with_work.load(o),
             self.chans.contended.load(o),
             self.chans.poisoned.load(o),
-            self.chans.relay_stats.summary()
+            self.chans.relay_summary()
         )
     }
 
@@ -1857,6 +1867,8 @@ impl Device {
             fd,
             fd_off,
         });
+        // the main loop was a holder of the RAM topology lock (a relay's `admit_user_generation` answers Busy): ring the relays that lost to it
+        self.chans.handoff_released();
     }
 
     /// ★ P4: the host address of `[base, base+len)` of a disposition-A region — PRAMIN (BAR0),
@@ -1878,6 +1890,7 @@ impl Device {
     /// Unregister the guest RAM block at `gpa`.
     pub fn ram_del(&self, gpa: u64) {
         self.ram.del(gpa);
+        self.chans.handoff_released();
     }
 
     /// ★ P4: re-publish the invalidate trigger's word into the BAR0 read shadow — after the VA
@@ -1985,7 +1998,12 @@ impl Device {
         // request's notice (a change since means an RM took BAR1 again first). Two log families,
         // each with its own bound: what the boot range shows (a line only when it changes), and the
         // re-seeds.
+        // ★ Review (2026-10-18): the memory stage as a driver — prepare once, the scrub retried
+        // alone with a back-off, the reset acknowledged only when every step completed
+        let mut mem_reset = crate::memreset::Driver::default();
         let mut bar1_phys = crate::bar1phys::PhysicalViewDue::default();
+        // ★ 2026-10-18: the seed placed -> retired edge taints the boot range (`crate::bootclean`)
+        let mut seed_watch = crate::bootclean::SeedWatch::default();
         let mut bar1_view_last: Option<u64> = None;
         let mut bar1_view_lines = 0u64;
         let mut bar1_phys_lines = 0u64;
@@ -2078,7 +2096,48 @@ impl Device {
                         self.mem.inbox.user_va.serve(&m, self.rm);
                         served += 1;
                     }
-                    let line = crate::mem::reset_memory_life(&mut m, &self.mem, self.rm);
+                    // ★ FAIL CLOSED: a scrub a new OS needs that the host refuses is NOT acknowledged —
+                    // `life_reset.done` below is reached only when every step completed, so the
+                    // reset gate stays closed. What the gate's contract does at the main loop's 2 s
+                    // bound is unchanged (`V3_DEVICE_RESET.md` §3, §6 items 1 and 12): the vCPUs
+                    // resume with BAR0 gated (writes dropped, reads all ones) and this stage keeps
+                    // retrying in the background; because the prepare step ran first, the guest's
+                    // CPU views of the store are scratch meanwhile. Only the scrub is retried, with
+                    // a bounded back-off — never the retire, the root zero or the boot zero.
+                    let step = mem_reset.step(
+                        epoch,
+                        self.mem.inbox.take_full_scrub(),
+                        &mut crate::mem::VaMemOps {
+                            m: &mut m,
+                            plane: &self.mem,
+                            rm: self.rm,
+                        },
+                        std::time::Instant::now(),
+                    );
+                    let (line, boot_zeroed) = match step {
+                        crate::memreset::Step::Waiting => continue,
+                        crate::memreset::Step::Refused {
+                            why,
+                            attempt,
+                            retry_in,
+                        } => {
+                            if crate::reset::loud(attempt) {
+                                eprintln!(
+                                    "kf3: mem t={:.3}s device reset #{epoch} NOT acknowledged, scrub attempt {attempt} REFUSED: {why} — the store is NOT clean: the reset gate stays closed and the device does not open on it; retrying the scrub in {} ms",
+                                    self.born.elapsed().as_secs_f64(),
+                                    retry_in.as_millis()
+                                );
+                            }
+                            continue;
+                        }
+                        crate::memreset::Step::Done { line, boot_zeroed } => (line, boot_zeroed),
+                    };
+                    // ★ 2026-10-18: the boot layer is shown again only once the boot framebuffer's
+                    // zero COMPLETED (the display worker skips it while the range is tainted).
+                    if let Some(dp) = self.display {
+                        crate::bootclean::after_memory_stage(dp, boot_zeroed);
+                    }
+                    seed_watch = crate::bootclean::SeedWatch::default();
                     last_seq = None;
                     armed_seen = None;
                     cache_done = [0u64; kf_trap::cacheop::CacheOp::COUNT];
@@ -2244,6 +2303,18 @@ impl Device {
                     bar1_view_lines = bar1_view_lines.saturating_add(1);
                 }
             }
+            if let Some(dp) = self.display
+                && let Some(w) = m
+                    .table
+                    .target(crate::mem::K_BAR1)
+                    .and_then(crate::mem::Target::cpu_window)
+                && w.boot_range().is_some()
+                && seed_watch.observe(w.seeded().is_some())
+            {
+                // the guest's CPU writes now go to scratch and its RM owns this memory: the boot
+                // layer stops showing it (the last frame stays) until a scrub completes
+                dp.boot_tainted();
+            }
             bar1_phys.notice(self.mem.inbox.bar1_physical_requests(), || {
                 m.table
                     .target(crate::mem::K_BAR1)
@@ -2252,12 +2323,57 @@ impl Device {
             });
             if !m.in_flight()
                 && m.pending() == 0
+                // ★ Review (2026-10-18): not before the dead RM's twins are freed
+                && self.mem.inbox.unload_frees.is_open()
                 && let Some(at_change) = bar1_phys.take()
                 && let Some(line) = m
                     .table
                     .target(crate::mem::K_BAR1)
                     .and_then(crate::mem::Target::cpu_window)
-                    .and_then(|w| crate::bar1phys::restore_physical_view(w, at_change))
+                    .and_then(|w| {
+                        // ★ 2026-10-18: the boot range is zeroed on the GPU — complete — BEFORE the
+                        // seed returns (`bar1phys::restore_physical_view_scrubbed`); the boot layer
+                        // may be shown again only once that completed, and only if no newer RM life
+                        // began since this unload (fn 72 moves the generation on).
+                        let kernel = &m.walker().kernel;
+                        let progress = std::sync::atomic::AtomicU64::new(0);
+                        let life = self.mem.inbox.unload_life();
+                        let (tainted, stale) = self.display.map_or((false, false), |dp| {
+                            (
+                                !dp.boot_clean.is_clean(),
+                                crate::bootclean::BootSink::generation(dp) != life,
+                            )
+                        });
+                        let outcome = std::cell::Cell::new(crate::bootclean::UnloadScrub::NotAsked);
+                        let line = crate::bar1phys::restore_physical_view_scrubbed(
+                            w,
+                            at_change,
+                            tainted,
+                            &mut |off, len| {
+                                if stale {
+                                    outcome.set(crate::bootclean::UnloadScrub::StaleLife);
+                                    return Err(
+                                        "not scrubbed: a newer guest RM life began (fn 72) after this unload"
+                                            .to_string(),
+                                    );
+                                }
+                                match crate::scrub::zero_range(kernel, off, len, &progress) {
+                                    Ok(_) => {
+                                        outcome.set(crate::bootclean::UnloadScrub::Done);
+                                        Ok(())
+                                    }
+                                    Err(e) => {
+                                        outcome.set(crate::bootclean::UnloadScrub::Failed);
+                                        Err(e.to_string())
+                                    }
+                                }
+                            },
+                        );
+                        if let Some(dp) = self.display {
+                            crate::bootclean::after_unload_scrub(dp, life, outcome.get());
+                        }
+                        line
+                    })
             {
                 // ⊘ bounded: a guest can ask as often as it writes the register
                 if crate::bar1phys::bounded(bar1_phys_lines, 128, "BAR1 physical-view") {
@@ -2277,6 +2393,8 @@ impl Device {
                 || !self.mem.inbox.all_settled()
                 || self.mem.port.armed_request().is_some();
             self.mem.inbox.set_walk_busy(walk_busy);
+            // the VA thread is a holder too (the source mapping swap, the RAM views): ring the relays that lost a try_lock to it
+            self.chans.handoff_released();
             if !walk_busy {
                 for tok in self.mem.inbox.take_walk_waiters() {
                     if self.plane.ring_internal(tok) {
@@ -2317,7 +2435,8 @@ impl Device {
             // Existing invalidates/reconciliation have priority. One private
             // resource request and one4KiB initialization step per idle turn;
             // never drain a queue of uncached1MiB clears ahead of a trigger.
-            if !m.in_flight() && m.pending() == 0
+            if !m.in_flight()
+                && m.pending() == 0
                 && self.mem.inbox.all_settled()
                 && !self.mem.inbox.walk_busy()
                 && self.mem.port.armed_request().is_none()
@@ -2509,6 +2628,8 @@ impl Device {
             }
             let seen = self.plane.drainer_wake.seen();
             if self.plane.drainer_pass(self, 256) > 0 {
+                // a holder of the RM graph / `pt` (the register handlers ran) has released: ring the relays that lost a try_lock to it
+                self.chans.handoff_released();
                 if after_timeout {
                     self.prof
                         .drainer
@@ -2867,7 +2988,7 @@ impl Device {
                 d.scanout_refused.load(o),
                 d.scanout_us_total.load(o) / d.scanouts.load(o).max(1),
                 d.scanout_us_max.load(o)
-            ) + &{
+            ) + &d.step_fragment() + &{
                 // ★ §8.16 (`display-max-fps`): the achieved rates per path and `over`, early in
                 // the line (the worker also prints it on a line of its own)
                 let f = dp.fps_fragment();
@@ -2953,6 +3074,11 @@ impl Device {
                 }
             }
             eprintln!("kf3: GSP rpc {:?} seq={}", c.function, c.sequence);
+            // ★ 2026-10-18: fn 72 is the first RPC of every guest RM life — before it can allocate
+            // heap. From here store [0, G) is the RM's memory, not the firmware console's.
+            if let Some(dp) = self.display {
+                crate::bootclean::on_rpc(dp, c.function);
+            }
             if c.function == kf_gsp::RpcFunction::UnloadingGuestDriver {
                 pm_suspend = self.observe_unloading(c);
             }
@@ -2995,6 +3121,13 @@ impl Device {
                 // ★ GSP-RM's own unload returns BAR1 to physical mode on a real card (the same
                 // `kbusStatePreUnload`): the second of the two triggers (`crate::bar1phys`).
                 if a.reseed_bar1 {
+                    // ★ Review (2026-10-18): the RM life this unload belongs to — the VA thread's
+                    // scrub refuses to zero or clean a NEWER life's range (fn 72 moves it on)
+                    if let Some(dp) = self.display {
+                        self.mem
+                            .inbox
+                            .set_unload_life(crate::bootclean::BootSink::generation(dp));
+                    }
                     self.mem.inbox.request_bar1_physical();
                 }
                 // ★★ 2026-10-13 (owner requirement, `docs/design/V3_DEVICE_RESET.md` §3): the
@@ -3010,7 +3143,15 @@ impl Device {
                 // statements its RM would have sent (never blocks; the host acts run on the act
                 // thread). A clean unload has freed them already: nothing is found.
                 if a.free_twins {
-                    let freed = self.chans.free_dead_clients();
+                    // ★ Review (2026-10-18): the unload's scrub waits for these frees (a channel
+                    // still running writes vidmem): a barrier act behind them opens the gate
+                    let ticket = self.mem.inbox.unload_frees.request();
+                    let inbox = self.mem.inbox.clone();
+                    let freed = self
+                        .chans
+                        .free_dead_clients_then(std::sync::Arc::new(move || {
+                            inbox.unload_frees.done(ticket);
+                        }));
                     if log && !freed.is_empty() {
                         eprintln!(
                             "kf3: GSP fn 47: the guest RM unloaded with {} client(s) still holding host objects {freed:x?} — freed (the twins are dead)",
@@ -3397,8 +3538,15 @@ impl Device {
         // ★ 2026-10-14: the USER-ring event loop's bounded counters, one line (always; a backstop
         // that found work is the bug counter -- `docs/design/V3_USER_RING_EVENT_LOOP_20261014.md` §3.6).
         let rs = &self.chans.relay_stats;
+        if rs.life.any() {
+            eprintln!("kf3: USER_RING_LIFECYCLE SUMMARY {}", rs.life.summary());
+        }
+        if rs.lazy.any() {
+            eprintln!("kf3: USER_RING_LAZY_OBSERVE SUMMARY {}", rs.lazy.summary());
+        }
         if rs.gates.load(Ordering::Relaxed) + rs.markers.load(Ordering::Relaxed) > 0 {
-            eprintln!("kf3: USER_RING_LOOP SUMMARY {}", rs.summary());
+            eprintln!("kf3: USER_RING_LOOP SUMMARY {}", self.chans.relay_summary());
+            eprintln!("kf3: {}", crate::userstore::summary());
         }
         self.stop.store(true, Ordering::Release);
         let _ = self.drainer_efd.signal();
@@ -3509,8 +3657,10 @@ impl Device {
                 let _ = self.chans.nsi_fifo_edge(|v| self.latch_and_deliver(v));
             },
             // The relay's timer: what optional pacing owes goes out even if no edge comes.
-            &|| self.chans.nsi_tick(|v| self.latch_and_deliver(v))
-                || self.chans.user_ring_poll_due(),
+            &|| {
+                self.chans.nsi_tick(|v| self.latch_and_deliver(v))
+                    || self.chans.user_ring_poll_due()
+            },
             // ★ 2026-10-14: the USER-ring relays' event hooks (spin / event / safety-net looks) and
             // their bounded counters (`docs/design/V3_USER_RING_EVENT_LOOP_20261014.md`).
             &*self.chans,
@@ -3689,7 +3839,10 @@ impl crate::reset::Owners for Device {
             })
     }
 
-    fn begin_memory(&self, epoch: u64) {
+    fn begin_memory(&self, epoch: u64, scrub: bool) {
+        // ★ 2026-10-18 (`crate::scrub`): the reset decided a NEW OS follows a dirty store — the
+        // memory stage scrubs the guest-allocatable store.
+        self.mem.inbox.memory_stage_asked(scrub);
         self.mem.inbox.life_reset.request(epoch);
         let _ = self.mem.inbox.wake.signal();
     }
@@ -3963,10 +4116,7 @@ impl HostOps for Device {
         }
         while g.fsm.pending_command_doorbells() > 0 {
             self.counters.serviced.fetch_add(1, Ordering::Relaxed);
-            match g
-                .fsm
-                .service_one_deferred_command(&mut ram, &mut g.policy)
-            {
+            match g.fsm.service_one_deferred_command(&mut ram, &mut g.policy) {
                 Ok(r) => {
                     n_cmds += r.commands.len();
                     if self.log_report(&r) {

@@ -551,10 +551,9 @@ pub struct PaceCounts {
     /// Latches that completed a window of this (active) head — counted once per latch, on every
     /// path: at a tick, at once, and with the core.
     pub presents: u64,
-    /// Of those, latches holding a TEARING (immediate) flip.
+    /// Of those, latches holding a TEARING (immediate) flip. ★ 2026-10-17 (`OWNER_RULINGS.md` §AK):
+    /// they latch and complete at once; the tick bounds the COPIES, not these.
     pub tearing: u64,
-    /// Tearing flips the gate parked for the head's next tick (D1).
-    pub tear_held: u64,
     /// Latches of groups holding the CORE: they latch at once, so the tick does not bound them.
     pub core_imm: u64,
 }
@@ -581,19 +580,17 @@ pub struct Engine {
     /// ★ Always-on ring of the last [`RING_EVENTS`] interlock-relevant events (see [`RingEvent`]).
     ring: VecDeque<(u64, RingEvent)>,
     ring_seq: u64,
-    /// ★ D1 (`OWNER_RULINGS.md` §M, 2026-10-04): a TEARING (immediate) flip on an active head that
-    /// already presented since the head's last tick waits for the next one, so async flips count
-    /// against the cap too. In kayfabe a flip copies a finished buffer, so it never tears; the gate
-    /// is about rate only. On by default.
-    pub tear_gate: bool,
+    // ⊘ SUPERSEDED 2026-10-17 (`OWNER_RULINGS.md` §AK, `V3_DISPLAY_PACING_20261017.md`): D1's "tear
+    // gate" — a TEARING flip that already presented since the head's last tick waited for the next
+    // one — is REMOVED. Parking an immediate flip blocked the guest's present loop (one flip per
+    // tick), and the rate it bounded is bounded where the guest does not wait: by the copies
+    // (`pace::Mailbox`).
     /// ⚠ EXPERIMENT (default `false`, 2026-10-08, H-corelatch; `KF3_DISPLAY_CORE_AT_VBLANK=1`): an
     /// update group that includes the CORE latches at the next vblank of an active head, as the
     /// hardware's does, instead of at once. `[measured, VFIO DVI reference boot3, RTX 4070,
     /// 2026-10-08]` Windows' modeset core PUTs come one per frame (12.520125, 12.535982, 12.552647 s:
     /// it waits a frame for each), while under kf3 the same PUTs complete within 3 ms (run 93).
     pub core_latch_at_vblank: bool,
-    /// Per head: a window of it latched since its last tick (the gate's state).
-    presented: [bool; 8],
     /// Per head: presents by path.
     pub pace: [PaceCounts; 8],
 }
@@ -616,23 +613,20 @@ impl Engine {
             method_trace_configured: false,
             ring: VecDeque::new(),
             ring_seq: 0,
-            tear_gate: true,
             core_latch_at_vblank: false,
-            presented: [false; 8],
             pace: [PaceCounts::default(); 8],
         }
     }
 
     /// ★ A guest life ends (`docs/design/V3_DEVICE_RESET.md`): no channel, nothing presented, no
     /// event ring — the engine [`Engine::new`] builds, with the same vocabulary and the same
-    /// switches (trace, tear gate, core-at-vblank, the method-trace budget already spent). The
+    /// switches (trace, core-at-vblank, the method-trace budget already spent). The
     /// counters are the VM's run and stay.
     pub fn reset_life(&mut self) {
         for c in &mut self.chans {
             *c = None;
         }
         self.ring.clear();
-        self.presented = [false; 8];
     }
 
     /// Enable a bounded method diagnostic before any guest work. It cannot be replenished
@@ -796,13 +790,9 @@ impl Engine {
         st
     }
 
-    /// ★ Head `head`'s vblank: latch every update waiting for it (whose acquires hold). The head
-    /// may present again: the tearing gate's state clears first.
+    /// ★ Head `head`'s vblank: latch every update waiting for it (whose acquires hold).
     pub fn vblank(&mut self, head: u32, acquired: &mut dyn FnMut(&Acquire) -> bool) -> Step {
         let mut st = Step::default();
-        if let Some(p) = self.presented.get_mut(head as usize) {
-            *p = false;
-        }
         for group in self.latching(|h| h == Some(head)) {
             self.latch_group(&group, &mut st, acquired);
         }
@@ -1195,11 +1185,11 @@ impl Engine {
         st: &mut Step,
         acquired: &mut dyn FnMut(&Acquire) -> bool,
     ) {
-        // a non-tearing window on an active head latches at that head's vblank (with the group);
-        // ★ D1: so does a tearing one whose head already presented since its last tick
+        // a non-tearing window on an active head latches at that head's vblank (with the group); a
+        // TEARING one latches at once (★ 2026-10-17, §AK: the D1 gate that parked a second tearing flip
+        // for the next tick is gone)
         let heads = self.heads_armed();
         let mut vblank_head = None;
-        let mut tear_head = None;
         for &n in group {
             let Some(c) = self.chans[n as usize].as_ref() else {
                 continue;
@@ -1224,26 +1214,19 @@ impl Engine {
             if c.a(self.vocab.w_iso0) == 0 && c.armed(self.vocab.w_iso0) == 0 {
                 continue;
             }
-            if self.tearing(c) {
-                tear_head = Some(tear_head.unwrap_or(h));
-            } else {
+            if !self.tearing(c) {
                 vblank_head = Some(vblank_head.unwrap_or(h));
             }
         }
         let has_core = group.contains(&0);
-        let gated = tear_head
-            .filter(|h| self.tear_gate && vblank_head.is_none() && self.presented[*h as usize]);
         let park = if has_core {
             // ⚠ H-corelatch: the first active head's next vblank (none active: at once, as before)
             self.core_latch_at_vblank
                 .then(|| heads.iter().find(|m| m.period_ns > 0).map(|m| m.head))
                 .flatten()
         } else {
-            vblank_head.or(gated)
+            vblank_head
         };
-        if let Some(h) = gated.filter(|_| !has_core) {
-            self.pace[h as usize].tear_held += 1;
-        }
         let set = group.iter().fold(0, |m, n| m | bit(*n));
         for &n in group {
             if let Some(c) = self.chans[n as usize].as_mut()
@@ -1387,7 +1370,6 @@ impl Engine {
         let has_core = members.contains(&0);
         for (h, p) in presented.iter().enumerate() {
             if let Some(tearing) = *p {
-                self.presented[h] = true;
                 let pc = &mut self.pace[h];
                 pc.presents += 1;
                 pc.tearing += u64::from(tearing);
@@ -2070,6 +2052,10 @@ pub struct CursorVocab {
     /// `HEAD_SET_CONTROL_CURSOR_FORMAT_A8R8G8B8` — the only format NVKMS programs
     /// (`ogkm-580: src/nvidia-modeset/src/nvkms-evo3.c:6517-6524`).
     a8r8g8b8: u32,
+    /// `HEAD_SET_CONTROL_CURSOR_FORMAT_A1R5G5B5` — the class's other cursor format
+    /// (`ogkm-580: clc37d.h:836`, the same value `0xE9` in every family's header); resolved from
+    /// the derived table like the first, `None` where a table lacks it.
+    a1r5g5b5: Option<u32>,
     /// Core `HEAD_SET_CONTROL_CURSOR_COMPOSITION(head)`: base, head stride.
     comp: (u32, u32),
     k1: (u8, u8),
@@ -2103,6 +2089,7 @@ impl CursorVocab {
             hot_x: f("HEAD_SET_CONTROL_CURSOR_HOT_SPOT_X")?,
             hot_y: f("HEAD_SET_CONTROL_CURSOR_HOT_SPOT_Y")?,
             a8r8g8b8: t.v(core, "HEAD_SET_CONTROL_CURSOR_FORMAT_A8R8G8B8")?,
+            a1r5g5b5: t.v(core, "HEAD_SET_CONTROL_CURSOR_FORMAT_A1R5G5B5"),
             comp: a("HEAD_SET_CONTROL_CURSOR_COMPOSITION")?,
             k1: f("HEAD_SET_CONTROL_CURSOR_COMPOSITION_K1")?,
             cursor_factor: f("HEAD_SET_CONTROL_CURSOR_COMPOSITION_CURSOR_COLOR_FACTOR_SELECT")?,
@@ -2133,6 +2120,10 @@ pub struct CursorScan {
     pub size: u32,
     /// `FORMAT` is `A8R8G8B8`.
     pub argb8888: bool,
+    /// `FORMAT` is `A1R5G5B5` (1-bit alpha, 5-5-5 colour; 16 bits a pixel).
+    pub a1r5g5b5: bool,
+    /// `FORMAT` as programmed (the field's raw value), for the log of a format kf does not know.
+    pub format: u32,
     /// `HOT_SPOT_X` / `_Y` inside the image (NVKMS programs 0, `nvkms-evo3.c:6568-6569`).
     pub hot_x: u32,
     /// Hot spot row.
@@ -2182,6 +2173,8 @@ impl Engine {
             offset: u64::from(core.armed(at(cv.offset)?)) << 8,
             size: 32 << fld(ctl, cv.size).min(3),
             argb8888: fld(ctl, cv.format) == cv.a8r8g8b8,
+            a1r5g5b5: cv.a1r5g5b5 == Some(fld(ctl, cv.format)),
+            format: fld(ctl, cv.format),
             hot_x: fld(ctl, cv.hot_x),
             hot_y: fld(ctl, cv.hot_y),
             x: signed(fld(point, px)),
@@ -2248,5 +2241,11 @@ fn interlock_set(v: &Vocab, c: &Chan, update: u32) -> ChanSet {
     s
 }
 
+#[cfg(test)]
+mod lockstep_exhaustive;
+#[cfg(test)]
+mod lockstep_soak;
+#[cfg(test)]
+mod pacing_model;
 #[cfg(test)]
 mod tests;

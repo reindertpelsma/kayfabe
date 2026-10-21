@@ -323,12 +323,17 @@ pub const DEBUG_PROFILE: &str = "KF3_DEBUG";
 
 /// Whether [`FORCE_MIGRATABLE`] is requested AND allowed by the environment given. Pure, for tests.
 #[must_use]
-pub fn force_migratable_allowed(force: Option<&str>, debug: Option<&str>) -> (bool, Option<&'static str>) {
+pub fn force_migratable_allowed(
+    force: Option<&str>,
+    debug: Option<&str>,
+) -> (bool, Option<&'static str>) {
     match (force, debug) {
         (Some("1"), Some("1")) => (true, None),
         (Some("1"), _) => (
             false,
-            Some("KF3_DEBUG_FORCE_MIGRATABLE=1 REFUSED: it is a debug-profile switch and needs KF3_DEBUG=1; the production profile cannot enable it"),
+            Some(
+                "KF3_DEBUG_FORCE_MIGRATABLE=1 REFUSED: it is a debug-profile switch and needs KF3_DEBUG=1; the production profile cannot enable it",
+            ),
         ),
         _ => (false, None),
     }
@@ -3873,9 +3878,14 @@ mod tests {
             );
         }
         assert_eq!(
-            link.respond(&ctl(c, 0x5c00_0002, DISABLE_USERMODE_CHANNELS, &[1, 0, 0, 0]))
-                .expect("refused")
-                .rpc_result,
+            link.respond(&ctl(
+                c,
+                0x5c00_0002,
+                DISABLE_USERMODE_CHANNELS,
+                &[1, 0, 0, 0]
+            ))
+            .expect("refused")
+            .rpc_result,
             NV_ERR_INVALID_ARGUMENT
         );
         let d = |list: Vec<(u32, u32)>, ev: u64| {
@@ -4269,7 +4279,10 @@ mod tests {
         }
         assert_eq!(
             *seen.lock().unwrap(),
-            [(Some((0, 0)), Some(0)), (Some((0xff00_a004, 0x800)), Some(4))]
+            [
+                (Some((0, 0)), Some(0)),
+                (Some((0xff00_a004, 0x800)), Some(4))
+            ]
         );
     }
 
@@ -4368,7 +4381,10 @@ mod forced_tests {
     fn force_migratable_needs_the_debug_profile() {
         assert_eq!(force_migratable_allowed(None, None), (false, None));
         assert_eq!(force_migratable_allowed(None, Some("1")), (false, None));
-        assert_eq!(force_migratable_allowed(Some("0"), Some("1")), (false, None));
+        assert_eq!(
+            force_migratable_allowed(Some("0"), Some("1")),
+            (false, None)
+        );
         assert_eq!(force_migratable_allowed(Some("1"), Some("1")), (true, None));
         for debug in [None, Some("0"), Some("")] {
             let (on, why) = force_migratable_allowed(Some("1"), debug);
@@ -4388,16 +4404,34 @@ mod forced_tests {
             assert!(windows_user_ring_permit(&linux_user(e)).is_ok());
         }
         for f in [
-            UserWorkFacts { kernel_stamped: true, ..linux_user(gr) },
-            UserWorkFacts { uvm_owned: true, ..linux_user(gr) },
-            UserWorkFacts { rm_internal: true, ..linux_user(gr) },
-            UserWorkFacts { engine: None, ..linux_user(gr) },
+            UserWorkFacts {
+                kernel_stamped: true,
+                ..linux_user(gr)
+            },
+            UserWorkFacts {
+                uvm_owned: true,
+                ..linux_user(gr)
+            },
+            UserWorkFacts {
+                rm_internal: true,
+                ..linux_user(gr)
+            },
+            UserWorkFacts {
+                engine: None,
+                ..linux_user(gr)
+            },
             linux_user(0x7f), // not a graphics, copy or video engine
         ] {
             assert!(windows_user_ring_permit(&f).is_err(), "{f:?}");
         }
-        let off = UserWorkFacts { force_migratable: false, ..linux_user(gr) };
-        assert!(windows_user_ring_permit(&off).is_err(), "no switch, no Windows identity: no permit");
+        let off = UserWorkFacts {
+            force_migratable: false,
+            ..linux_user(gr)
+        };
+        assert!(
+            windows_user_ring_permit(&off).is_err(),
+            "no switch, no Windows identity: no permit"
+        );
         // forcing never reclassifies a channel as Windows user work (the Passthrough conversion)
         assert!(windows_user_work(&linux_user(gr)).is_err());
     }

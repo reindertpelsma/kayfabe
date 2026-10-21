@@ -1,5 +1,7 @@
 # V3 display — a virtual NVIDIA display the stock driver drives, scanned out by kayfabe
 
+**STATUS: LIVE, 2026-10-18 — §4.11.13 gains the boot-range cleanliness rule (below it: `bootclean`): the boot layer is shown only while store `[0, G)` is clean.** Measured on run 3081: the stripes on the boot screen and after an unload are the guest RM's own GPU-written vidmem, drawn as pixels — the region table declares `[0, carve)` as heap unless the guest reserves a console (Windows sent none), so the RM allocates the same low addresses every life, while the boot layer kept scanning `[0, G)` until a head was armed. Every Windows unload of the run also had its re-seed REFUSED (56 guest placements still over BAR1 `[0, G)`).
+
 **STATUS: LIVE, 2026-10-14 — the Linux plane oracle: [`V3_DISPLAY_PLANES_ORACLE.md`](V3_DISPLAY_PLANES_ORACLE.md).**
 A stock-nvidia-drm overlay test reproduced the "plane flip never completes" class and a bare-metal AD104 reference
 was measured with the same binary. Engine: an UPDATE parked only for its vblank is no longer joined by later
@@ -1853,6 +1855,16 @@ and the Windows arm in the bench scripts (B10); SPDX headers on the existing kf3
 (`OWNER_RULINGS.md` §G, task I7).
 
 
+⊘ **UPDATED 2026-10-18 (branch `claude/bootlayer-20261018`, `crates/kf-qemu/src/bootclean.rs`) — read before the text below.** The boot layer is
+chosen only while store `[0, G)` is CLEAN. It is **tainted** by fn 72 (the first RPC of every guest RM life, before any heap use; a
+generation counter moves on), by the seed's placed → retired edge, and by a device reset request; it is **cleaned** only by a scrub
+that COMPLETED: the unload's zero of `[0, G)` (issued BEFORE the seed returns, so a console that redraws afterwards is never wiped; it
+waits for the dead twins' frees and refuses to zero or clean a newer life's range) or a reset's memory stage. While tainted the last
+frame stays (no black at the first handoff) or the console is black after a scanout was lost — never the RM's bytes. An unload under
+a still-placed seed scrubs when the range is tainted, so the taint cannot stick. The unload zero is a DISPLAY rule, not the
+security scrub (`docs/OWNER_RULINGS.md` §AM). Owner decision still open: fn 72 freezes the boot spinner/console until a head arms
+(about 12 s measured); tainting only when the console reservation `C < G` would keep it live for guests that reserve one.
+
 #### 4.11.13 B5 — when RM, NVKMS or nvidia-drm lets go (measured 2026-10-03, branch `v3-gop-unload`)
 
 ⊘⊘ **CORRECTED 2026-10-04 (`v3-cand-1`) — the (a2) PASS below was TIMING, not design.** On box vmb (vast
@@ -3429,13 +3441,20 @@ straight alpha, each with or without a surface alpha in K1), EVO2's only `_ALPHA
 (`clc37d.h:836`), so an XOR cursor reaches a head only from a guest that writes the core channel
 itself — a hostile one, or another OS's driver.
 
+**⚠ CORRECTED 2026-10-15 (see [`V3_DISPLAY_CURSOR_FORMATS.md`](V3_DISPLAY_CURSOR_FORMATS.md)): `A1R5G5B5` is no longer refused.**
+Windows' text I-beam is invisible because the stock Windows driver programs a non-`A8R8G8B8` cursor (inferred:
+`A1R5G5B5`, probably with `MODE_XOR`), which both paths refused. It is now expanded to 32 bits from the GPU's copy and
+composed (blend and XOR), the host cursor converts blend-mode ones, and `KF3_DEBUG_CURSOR=1` dumps what a guest really
+programs. The paragraph below is the 2026-10-04 text, kept for its derivation; its sentence "`A1R5G5B5` stays refused by name"
+is SUPERSEDED, and the masked-colour question is still open until the dump is read.
+
 **The XOR blend, as built — a DEFINITION, stated as one:** `out = below XOR (source & 0x00ffffff)`;
 alpha and the composition factors play no part (the class header names the mode and says nothing of
 what it computes). The literal reading was taken: an all-zero image composes to nothing, a white
 pixel inverts. ⚠ The alternative is the masked-colour reading (alpha as the AND mask, which lets one
 surface carry opaque pixels too — what a Windows monochrome pointer needs); only hardware, with a
-producer that programs the mode, can settle it. `A1R5G5B5` stays refused by name (the kernel moves
-32-bit pixels). The host cursor still refuses XOR (no ARGB "over" expresses it), so in hover an XOR
+producer that programs the mode, can settle it. ~~`A1R5G5B5` stays refused by name (the kernel moves
+32-bit pixels)~~ (SUPERSEDED 2026-10-15: expanded to 32 bits and composed, `V3_DISPLAY_CURSOR_FORMATS.md`). The host cursor still refuses XOR (no ARGB "over" expresses it), so in hover an XOR
 cursor is composed AND the host's is hidden — now visibly, where before it was refused in the frame
 too.
 
@@ -3588,6 +3607,17 @@ Wayland broker.")
 
 ### 8.16 `display-max-fps` — the configurable frame-rate bound (`OWNER_RULINGS.md` §M; 2026-10-04)
 
+> ⊘ **CORRECTED 2026-10-17 (`OWNER_RULINGS.md` §AK, `V3_DISPLAY_PACING_20261017.md`): D1's tearing-flip gate is REMOVED, and
+> "flip copies are never gated" below is no longer true.** The tick still clamps everything the guest paces by vblank
+> (non-tearing flips, vblank callbacks, the frame counter). But a TEARING (immediate) flip now latches and completes at once, however
+> often the guest sends it: parking the second one for the next tick held the guest's present loop at one flip per tick (Windows 11
+> exclusive fullscreen, Unigine Heaven: ~30 fps against ~200 windowed). The rate is bounded where the guest does not wait, by the
+> COPIES: kayfabe copies the newest latched frame at most once per tick (`pace::Mailbox`), and a flip's completion waits only for the
+> copy in flight at its latch (the buffer-reuse rule, `pace::flip_completion_need`). The status line has no `held` any more; it has
+> `skipped` (latched frames replaced before a copy) and `src=`/`ho=` (who ticks, `V3_DISPLAY_PACING_20261017.md` §5), and `over`
+> judges the published frames and the NON-tearing presents. Who ticks a head is now `kf_disp::tick::TickSource`: the free-running
+> clock described here, plus (phase 2, not built) the broker's events with the clock as fallback.
+
 **STATUS: BUILT IN CODE on `v3-maxfps` (cut from `v3-broker` `82f98f42`), GPU-free tested locally and
 in CI; NOT RUN ON A BOX.** The design was reviewed adversarially before it was built (kept outside
 the repo, as §M says); the owner's decisions of 2026-10-04 are binding over it: D1 tearing flips are
@@ -3622,7 +3652,7 @@ scheduled time (from now when more than a period late — no catch-up burst). Th
 by vblank follows the tick: non-tearing flips (parked for it), NVKMS's vblank callbacks, the
 `RG_DPCA` frame counter and the head-timing interrupt.
 
-**D1, tearing flips.** `Engine::tear_gate` (on by default): a group without the core holding a
+**D1, tearing flips — ⊘ SUPERSEDED 2026-10-17 (see the correction at the top of this section; the text below is what was built on `v3-maxfps` and removed since).** `Engine::tear_gate` (on by default): a group without the core holding a
 tearing (immediate) window on an active head PARKS for the head's next tick when that head already
 presented since its last one; the first after a tick still latches at once. A flip in kayfabe copies
 a finished buffer, so it never tears; the gate is about rate only. Groups holding the core latch at
@@ -3650,8 +3680,8 @@ without a copy the host never sees those writes. The fixed 30 Hz / 4 Hz refresh 
    the console head's next tick with a check that STARTED after the request (at once when nothing
    can be copied), signals a descriptor, and kf3.c shows the newest frame and ends the wait
    (`graphic_hw_update_done`); a 1 s backstop ends it anyway.
-Flip copies are never gated and always sent (the flip is tick-paced already); they record their
-digest, so the next check compares against them. A cursor move makes no copy of its own any more
+⊘ Flip copies are tick-bounded since 2026-10-17 (`pace::Mailbox`: the newest latched frame, once per tick) and always sent; they record their
+digest, so the next check compares against them. (Before: "never gated, the flip is tick-paced already" — true only while the D1 gate parked the flips.) A cursor move makes no copy of its own any more
 (`move_recomposes` is gone): in grab the next tick's check sees the cursor moved; in hover the frame
 composes no cursor, so nothing changes and nothing is sent — §O's "coalesced to the display rate".
 
@@ -3705,7 +3735,7 @@ named test went red, restored; every run, count and command in
 | below 60: no 60 Hz mode, byte 78 = cap | `edid::a_cap_below_60_lists_no_60hz_mode`, `edid::every_authored_edid_honours_its_cap` | range max fixed at 75; extras kept |
 | above 60 the rate yields | `edid::above_60hz_the_rate_yields_not_the_size` | the old shrink loop |
 | the model serves the configured monitor | `kf-rm display::the_model_serves_the_configured_monitor` | `model_for` ignoring the property |
-| D1 gate | `engine::a_second_tearing_flip_waits_for_the_vblank` | gate off by default; `presented` ignored; not cleared at the tick |
+| ⊘ D1 gate (removed 2026-10-17) | was `engine::a_second_tearing_flip_waits_for_the_vblank`; now `engine::an_immediate_flip_latches_at_once_however_many_come_between_ticks` | the gate back |
 | presents per latch, core counted | `engine::presents_count_one_per_latch_including_core_groups` | per window; `core_imm` not counted |
 | F7 unpark | `engine::a_group_parked_on_a_head_that_goes_idle_latches` | no unpark |
 | boot check clock | `kf-qemu display::the_boot_check_clock_ticks_only_while_it_runs` | a clock that runs unwatched |
@@ -4209,3 +4239,29 @@ disjointness, name sanitising, the cursor sink); `kf-qemu` `raw_unsafe.rs`
 no QEMU); `wire_mirror.rs` (layouts of `Kf3Pointer`, `Kf3InputOps`, the 15 verb types redeclared from
 Rust, `KF3_BTN_*`, two new known-positive drifts). The relay's existing input tests are unchanged
 except the horizontal wheel.
+
+### 8.21 A window resize killed the broker: dma-buf proof is per geometry, and the pitch is 256 (2026-10-15)
+
+**STATUS: LIVE, 2026-10-15 — FIXED GPU-free (branch `claude/broker-resize-20261015`); the LIVE CHECKS
+are OWED.** Incident (run 2990, GNOME/mutter on the AMD Raphael iGPU `renderD129`, guest on the RTX
+4070): the broker window was maximized and restored; the broker SUGGESTED 2080x1171 and Windows
+applied it; mutter refused the LINEAR dma-buf import (`error 7: failed to import supplied dmabufs:
+EGL failed to allocate resources`), a Wayland protocol error, so the connection died and the broker
+exited; the relaunched broker refused the same size again and fell back to `wl_shm`.
+
+**Measured:** 1920x1080 (row 7680 = 30 x 256) and 2048x1155 (8192; odd height) imported on this
+compositor in four runs (501, 1380, 2980, 2990); 2080x1171 (row 8320 = 65 x 128) was refused twice,
+in the live broker and again after the relaunch with the guest still at that size. The host frame
+is `4·w` bytes a row (`kf-qemu` `display.rs` publish). The broker proved the pair
+(XR24, LINEAR) once, at the first buffer, and used `create_immed` for every later buffer of any
+size (`nb_session_wl.c`, `wl_attach`), and `create_immed` reports a refusal as a fatal protocol error.
+**Inferred, not proven:** that the 256-byte row alignment is the reason (public Mesa discussion
+says AMD GFX9+ takes no 128-byte linear alignment; the height 1155 case rules the height out).
+
+**Changes:** (1) `kf_broker::dmabuf_pitch_ok`: a host frame whose pitch is not a multiple of 256 goes
+as `F_SHM`, never as a dma-buf (`conn.rs`, `choose`). (2) The broker suggests widths that are a
+multiple of 64 (`nb_hint_width`, so the row is a multiple of 256 bytes). (3) Proof of import is per
+(fourcc, modifier, width, height, stride, offset) (`nb_geom_set`); an unproven geometry takes the
+asynchronous probe, so a refusal is an event and EV_FORMAT x=0 (the VMM falls back to shared memory),
+not a dead connection. **Residual:** a refusal of an already-proven geometry still ends the Wayland
+connection (the protocol makes it fatal); the broker now logs the last imported size when that happens.

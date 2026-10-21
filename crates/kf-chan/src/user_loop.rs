@@ -13,18 +13,9 @@
 
 use std::sync::atomic::{AtomicU64, Ordering};
 
-/// Bounded spin iterations (`epoll_wait(timeout=0)` + a peek of the not-yet-fd words) before the
-/// worker blocks. A LATENCY optimisation only: the model proves liveness with 0.
-pub const SPIN: u32 = 64;
-
-/// How many CONSECUTIVE contended turns of one relay (a busy lock or admission nobody announces the
-/// release of) the spin and event looks may re-ring before only the safety net does. Without this
-/// bound a held lock would turn the spin into an endless busy loop: every look "satisfies" a
-/// contended wait, so the budget would never run out.
-pub const CONTENTION_RETRIES: u32 = SPIN;
-
 /// The worker's longest sleep, and the ONLY timer of the relay: a safety net for a lost or
-/// never-armed interrupt (and the control-witness gates that have none). 50 ms is the old park
+/// never-armed interrupt (and the control-witness gates that have none). It looks only at relays
+/// that WAIT for something or left demand behind; it never reads `GP_PUT` (see [`look_needed`]). 50 ms is the old park
 /// tick, so the idle wake rate does not change (20/s), and it is far below the guest's 2 s timeout
 /// detection. Every firing that finds work is counted ([`Stats`]).
 pub const BACKSTOP_MS: u32 = 50;
@@ -116,11 +107,97 @@ pub enum Peek {
     Backstop,
 }
 
-/// Whether a look by `why` may re-ring a relay that has been contended for `run` consecutive turns.
-/// The safety net always may; the spin and event looks only while the retry budget lasts.
+/// ★ 2026-10-20 (owner design): what a relay can hold that the worker must not sleep through, and what will announce it. A relay that lost a
+/// `try_lock` (a busy `pt` map, USERD / RM-graph admission, source swap) is NOT re-rung by any look, on a budget or otherwise: that would be a
+/// poll. It registers with the lock holder ([`crate::handoff::Handoff`]) BEFORE giving up and the holder rings it after releasing.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum Obligation {
+    /// A draining marker: the batch marker's engine interrupt announces it.
+    Marker,
+    /// A carried wait (`Wait::Popped`): pops raise nothing.
+    Popped,
+    /// An interrupt came and the private words did not show the progress yet (visibility lag): the hint is spent, the state is not final.
+    Lagging,
+    /// A lost `try_lock`: registered with the lock holder before giving up.
+    Contended,
+}
+
+/// What announces an [`Obligation`] to a worker.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum WakeSource {
+    /// The host engine's non-stall event fd, in every worker's poller (level-triggered, no EPOLLEXCLUSIVE).
+    EngineEvent,
+    /// The lock holder: it rings the relay's token after releasing (`crate::handoff`), which signals the worker eventfd.
+    LockHolder,
+}
+
+/// One row of the sleep-safety table (owner, 2026-10-20): never block while an obligation could change in a way that needs handling and
+/// no NON-MISSABLE wake source covers that change. Wake moments are a SUPERSET of the moments processing is needed; an eventfd is never
+/// ground truth (every wake re-reads the state) but it may not MISS (it is armed before the state is evaluated).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct Cover {
+    /// The change that needs handling.
+    pub change: &'static str,
+    /// The wake source that covers it, if any.
+    pub source: Option<WakeSource>,
+    /// Can that wake source miss the change?
+    pub can_miss: bool,
+}
+
+/// The table: per obligation, the change event, the covering wake source, whether it can miss; where there is no non-missable source the
+/// worker does not block (it keeps evaluating inside its one loop).
 #[must_use]
-pub const fn may_retry(run: u32, why: Peek) -> bool {
-    matches!(why, Peek::Backstop) || run < CONTENTION_RETRIES
+pub const fn cover(o: Obligation) -> Cover {
+    match o {
+        Obligation::Marker => Cover {
+            change: "the private REFERENCE reaches the marker count (the marker's NON_STALL interrupt)",
+            source: Some(WakeSource::EngineEvent),
+            can_miss: false,
+        },
+        Obligation::Popped => Cover {
+            change: "the private GP_GET passes the target (pops raise nothing)",
+            source: None,
+            can_miss: true,
+        },
+        Obligation::Lagging => Cover {
+            change: "the progress an interrupt announced becomes visible in the private words (the hint is spent)",
+            source: None,
+            can_miss: true,
+        },
+        Obligation::Contended => Cover {
+            change: "the lock the relay lost is released (registered with the holder before giving up; the holder re-checks the registry)",
+            source: Some(WakeSource::LockHolder),
+            can_miss: false,
+        },
+    }
+}
+
+/// The registered wake source of `o`, if any.
+#[must_use]
+pub const fn wake_source(o: Obligation) -> Option<WakeSource> {
+    cover(o).source
+}
+
+/// Whether a worker may block in `epoll_wait` (no timeout) while `held` is outstanding: only when EVERY obligation has a wake source that
+/// cannot miss its change.
+#[must_use]
+pub fn may_block(held: impl IntoIterator<Item = Obligation>) -> bool {
+    held.into_iter().all(|o| {
+        let c = cover(o);
+        c.source.is_some() && !c.can_miss
+    })
+}
+
+/// Whether a look by `why` has any reason to touch a relay at all.
+///
+/// ★ The doorbell contract (owner, 2026-10-17): the last doorbell covers every `GP_PUT` write before
+/// it, and nothing else announces `GP_PUT`. So a look is warranted by a recorded private-word wait
+/// (`waiting`: a marker or carried wait) and by nothing else. `demand` (contention a lost `try_lock` left) is NOT a reason for any look,
+/// the safety net included: it belongs to the lock holder (hand-off). The backstop timer finding an idle relay must do nothing and
+/// read nothing (no `GP_PUT` poll).
+#[must_use]
+pub const fn look_needed(_why: Peek, _demand: bool, waiting: bool) -> bool {
+    waiting
 }
 
 /// What a BACKSTOP peek that found a wait satisfied counts as (the model's `BACKSTOP_*` bits).
@@ -144,24 +221,31 @@ pub const fn found(wait: Wait) -> Found {
     }
 }
 
+/// ★ PHASE 1b: whether a backstop wake of a Pointer-mode channel is LOUD: another one within a second of the
+/// previous (`prev_ms`, `now_ms` are milliseconds on one monotone clock). The clock only decides how loudly a timer
+/// wake is reported; nothing is decided by it.
+#[must_use]
+pub const fn loud_rate(prev_ms: Option<u64>, now_ms: u64) -> bool {
+    match prev_ms {
+        Some(p) => now_ms.saturating_sub(p) < 1000,
+        None => false,
+    }
+}
+
 /// What the worker does when no token is rung.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Idle {
-    /// Spin: poll the epoll set with timeout 0 and peek the waiting relays.
+    /// Do not block: the one loop runs again with `epoll_wait(timeout=0)` (an obligation no wake source announces is outstanding).
     Spin,
-    /// Block (`try_park` -> `epoll_wait(BACKSTOP_MS)`).
+    /// Block (`try_park`, then `epoll_wait`).
     Park,
 }
 
-/// The worker's decision with nothing to serve: spin only while some relay waits for something
-/// that only a look can find and the spin budget is not spent. Never a reason to skip the park.
+/// The worker's decision with nothing to serve: it blocks only when every obligation any relay holds has a registered wake source
+/// ([`may_block`]); otherwise it keeps evaluating inside the same loop. No spin budget, no counter, no clock.
 #[must_use]
-pub const fn idle(waiting: bool, spin_left: u32) -> Idle {
-    if waiting && spin_left > 0 {
-        Idle::Spin
-    } else {
-        Idle::Park
-    }
+pub const fn idle(unannounced: bool) -> Idle {
+    if unannounced { Idle::Spin } else { Idle::Park }
 }
 
 /// log2 buckets of microseconds: bucket `i` holds `[2^i, 2^(i+1))` us (bucket 0 also 0 us), the
@@ -179,14 +263,18 @@ pub struct Stats {
     pub wake_spin: AtomicU64,
     /// Parks that ended on the backstop timeout.
     pub wake_backstop: AtomicU64,
+    /// Looks a BUSY worker made between passes (`worker::LoopPolicy`, bounded fairness): events dispatched and waiting relays peeked
+    /// although every pass served something. Non-zero on a hot run is the fix doing its job; the starvation it prevents is silent.
+    pub busy_looks: AtomicU64,
+    /// Loop iterations spent NOT blocking because an obligation without a wake source was outstanding (a carried `Popped` wait, a lagging
+    /// marker): the cost of obeying "a worker blocks only when every obligation has a registered wake source".
+    pub unannounced_spins: AtomicU64,
     /// Backstop peeks that found a satisfied wait an interrupt should have announced (a BUG).
     pub backstop_found_work: AtomicU64,
     /// Backstop peeks that found a satisfied control-witness gate (expected, apart).
     pub backstop_carried: AtomicU64,
     /// Backstop peeks that found a contended relay.
     pub backstop_contended: AtomicU64,
-    /// Backstop peeks that found `GP_PUT` ahead of the cursor with no doorbell (information).
-    pub backstop_put_ahead: AtomicU64,
     /// Events after which no wait was satisfied (an interrupt before `GP_GET` was visible, or one
     /// of several markers).
     pub event_without_progress: AtomicU64,
@@ -207,6 +295,12 @@ pub struct Stats {
     pub markers: AtomicU64,
     /// SYNC_WAIT drain latency (gate published -> witness fetched), log2 buckets of microseconds.
     pub drain: [AtomicU64; DRAIN_BUCKETS],
+    /// ★ 2026-10-16: the USER-ring lifecycle's counters (`crate::user_lifecycle`), printed on their own
+    /// line (`USER_RING_LIFECYCLE SUMMARY`).
+    pub life: crate::user_lifecycle::LifecycleStats,
+    /// ★ 2026-10-17: lazy observe's counters (`crate::user_lazy`), printed on their own line
+    /// (`USER_RING_LAZY_OBSERVE SUMMARY`).
+    pub lazy: crate::user_lazy::LazyStats,
 }
 
 impl Stats {
@@ -225,15 +319,16 @@ impl Stats {
         let g = |c: &AtomicU64| c.load(Ordering::Relaxed);
         let drain: Vec<u64> = self.drain.iter().map(g).collect();
         format!(
-            "wakes(doorbell={} event={} spin={} backstop={}) backstop_found(work={} carried={} contended={} put_ahead={}) event_without_progress={} gates={} carried_ungated={} credit_waits={} contended_turns={} pop_writebacks={} markers={} drain_us_log2={drain:?}",
+            "wakes(doorbell={} event={} spin={} backstop={} busy_looks={} unannounced_spins={}) backstop_found(work={} carried={} contended={}) event_without_progress={} gates={} carried_ungated={} credit_waits={} contended_turns={} pop_writebacks={} markers={} drain_us_log2={drain:?}",
             g(&self.wake_doorbell),
             g(&self.wake_event),
             g(&self.wake_spin),
             g(&self.wake_backstop),
+            g(&self.busy_looks),
+            g(&self.unannounced_spins),
             g(&self.backstop_found_work),
             g(&self.backstop_carried),
             g(&self.backstop_contended),
-            g(&self.backstop_put_ahead),
             g(&self.event_without_progress),
             g(&self.gates),
             g(&self.carried_ungated),
@@ -270,13 +365,59 @@ mod tests {
         assert!(Wait::Contended.satisfied(0, 0));
     }
 
+    /// ★ The sleep invariant: a worker may block only when every obligation any relay holds has a registered wake source.
     #[test]
-    fn contended_relays_are_re_rung_by_the_spin_a_bounded_number_of_times() {
-        assert!(may_retry(0, Peek::Spin));
-        assert!(may_retry(CONTENTION_RETRIES - 1, Peek::Event));
-        assert!(!may_retry(CONTENTION_RETRIES, Peek::Spin));
-        assert!(!may_retry(u32::MAX, Peek::Event));
-        assert!(may_retry(u32::MAX, Peek::Backstop));
+    fn a_worker_blocks_only_when_every_obligation_has_a_wake_source() {
+        use Obligation::{Contended, Lagging, Marker, Popped};
+        assert!(may_block([]), "an idle worker blocks");
+        assert!(may_block([Marker, Contended, Marker]));
+        for o in [Popped, Lagging] {
+            assert_eq!(wake_source(o), None);
+            assert!(
+                !may_block([Marker, o, Contended]),
+                "{o:?} has no wake source: the worker spins"
+            );
+        }
+        assert_eq!(wake_source(Marker), Some(WakeSource::EngineEvent));
+        assert_eq!(wake_source(Contended), Some(WakeSource::LockHolder));
+        assert_eq!(idle(true), Idle::Spin);
+        assert_eq!(idle(false), Idle::Park);
+    }
+
+    /// ★ The sleep-safety table: every obligation names its change, its covering wake source and whether the source can miss; the worker blocks
+    /// exactly when none of the obligations is uncovered or missable.
+    #[test]
+    fn the_sleep_table_covers_every_obligation_and_only_non_missable_sources_allow_blocking() {
+        for (o, source, can_miss, blocks) in [
+            (
+                Obligation::Marker,
+                Some(WakeSource::EngineEvent),
+                false,
+                true,
+            ),
+            (
+                Obligation::Contended,
+                Some(WakeSource::LockHolder),
+                false,
+                true,
+            ),
+            (Obligation::Popped, None, true, false),
+            (Obligation::Lagging, None, true, false),
+        ] {
+            let c = cover(o);
+            assert!(!c.change.is_empty());
+            assert_eq!((c.source, c.can_miss), (source, can_miss), "{o:?}");
+            assert_eq!(may_block([o]), blocks, "{o:?}");
+        }
+    }
+
+    /// Contention is nobody's look: not the spin's, not the event's, not the safety net's.
+    #[test]
+    fn no_look_is_warranted_by_contention_alone() {
+        for why in [Peek::Spin, Peek::Event, Peek::Backstop] {
+            assert!(!look_needed(why, true, false), "{why:?}");
+            assert!(look_needed(why, false, true), "{why:?}");
+        }
     }
 
     #[test]
@@ -284,14 +425,56 @@ mod tests {
         assert_eq!(wait_of(Need::Idle), None);
         assert_eq!(wait_of(Need::Again), None);
         assert_eq!(wait_of(Need::Contended), Some(Wait::Contended));
-        assert_eq!(wait_of(Need::Marker { target: 3 }), Some(Wait::Marker { target: 3 }));
-        assert_eq!(wait_of(Need::Popped { target: 3 }), Some(Wait::Popped { target: 3 }));
+        assert_eq!(
+            wait_of(Need::Marker { target: 3 }),
+            Some(Wait::Marker { target: 3 })
+        );
+        assert_eq!(
+            wait_of(Need::Popped { target: 3 }),
+            Some(Wait::Popped { target: 3 })
+        );
         assert!(Wait::Popped { target: 1 }.carried());
         assert!(!Wait::Marker { target: 1 }.carried());
     }
 
+    /// ★ DOORBELL CONTRACT: no look, of any kind, has a reason to touch an idle relay -- in
+    /// particular the backstop timer never reads `GP_PUT` for one.
+    #[test]
+    fn no_look_touches_a_relay_with_no_demand_and_no_wait() {
+        for why in [Peek::Spin, Peek::Event, Peek::Backstop] {
+            assert!(
+                !look_needed(why, false, false),
+                "{why:?} must leave an idle relay alone"
+            );
+            assert!(
+                !look_needed(why, true, false),
+                "{why:?}: contention a lost try_lock left behind is the lock holder's business, not a look's"
+            );
+            assert!(
+                look_needed(why, false, true),
+                "{why:?}: a recorded wait is a reason"
+            );
+            assert!(look_needed(why, true, true));
+        }
+    }
+
     /// The backstop's classification is the model's: only a satisfied wait an interrupt should have
     /// announced is a bug.
+    #[test]
+    fn a_pointer_mode_backstop_wake_is_loud_only_beyond_about_one_a_second() {
+        assert!(!loud_rate(None, 10));
+        assert!(
+            !loud_rate(Some(0), 1000),
+            "exactly a second apart is not loud"
+        );
+        assert!(loud_rate(Some(0), 999));
+        assert!(loud_rate(Some(500), 500), "two in the same millisecond");
+        assert!(
+            loud_rate(Some(5_000), 100),
+            "a clock that went backwards saturates (loud), never panics"
+        );
+    }
+
     #[test]
     fn only_an_announced_wait_found_by_the_backstop_is_work() {
         assert_eq!(found(Wait::Popped { target: 1 }), Found::Carried);
@@ -300,20 +483,6 @@ mod tests {
     }
 
     /// The spin is bounded and never replaces the park.
-    #[test]
-    fn the_spin_is_bounded_and_needs_a_waiting_relay() {
-        assert_eq!(idle(false, SPIN), Idle::Park);
-        assert_eq!(idle(true, 0), Idle::Park);
-        assert_eq!(idle(true, 1), Idle::Spin);
-        let mut left = SPIN;
-        let mut spins = 0;
-        while idle(true, left) == Idle::Spin {
-            left -= 1;
-            spins += 1;
-        }
-        assert_eq!(spins, SPIN);
-    }
-
     #[test]
     fn the_drain_histogram_is_log2_microseconds_and_bounded() {
         let s = Stats::default();

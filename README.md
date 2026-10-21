@@ -6,8 +6,8 @@ Kayfabe is a QEMU device that shows a guest an emulated NVIDIA GPU. The guest lo
 kayfabe reads what that driver asks for and has the real host GPU do the work, from an **unprivileged** host process that talks to the host driver
 as an ordinary client. Written in Rust.
 
-**Status: research, 2026-10-17.** It runs real applications, but there is no installer, no stable interface, and no security audit yet.
-Master is not the newest code: the latest Windows performance work lives on branches (see below).
+**Status: research, 2026-10-21.** It runs real applications, but there is no installer, no stable interface, and no security audit yet.
+Master is the current working version (relay fix `89fc8a222`, 2026-10-21); newer experiments, the Blackwell display work and further performance work live on branches.
 
 <img alt="windows desktop with apps while host keeps gpu" src="traces/20261021_131847.jpg" width="1000" height="432" />
 <i>Windows 11 on kayfabe: desktop and nvidia-smi under the stock 580.88 driver. On Windows, displayed using nvkvm broker on an Ubuntu desktop: Minecraft Bedrock/Windows only edition, Unigine Heaven benchmark, nvidia-smi in powershell, Big Buck Bunny Blender on Youtube in Edge. On Linux left screen: Blender, nvidia-smi showing a single gpu being used for all the apps in the screenshots and Firefox in background (host keeps gpu). There is no PCIe/DMA copy of frames for this windows desktop (i.e both screens are directly plugged in the GPU).</i>
@@ -53,18 +53,18 @@ Master is not the newest code: the latest Windows performance work lives on bran
 
 | app | result |
 |---|---|
-| Minecraft Java and Bedrock | in a world, no issues so far. Multiplayer works fine |
+| Minecraft Java and Bedrock | in a world, multiplayer works fine; no freezes in the latest session (revision `89fc8a222`, 2026-10-21, 15+ minutes beside Unigine Heaven). Earlier revisions froze apps for seconds when several ran at once; the relay handoff fixes the measured cause (Linux: 0 of 26 stalled pairs against 3 of 12 before) |
 | Unigine Heaven, Direct3D 9, Direct3D 11 and OpenGL | pass; fps in the table above |
 | GravityMark | Direct3D 12 and Vulkan pass (134 and 96 fps at that revision, need a new benchmark to confirm fps with performance fixes) |
 | Edge + YouTube 4K60, hardware decode (NVDEC) | 10:34 played to the end |
 | CUDA in the guest | works: `nvidia-smi` shows CUDA 13.0; matrix multiply (N=2048) about 1.9 TFLOPS; Blender 5.2 Cycles renders with CUDA and OptiX (OptiX 5.3 s against 3.4 s native, 1.57x slower; measured 2026-10-15 on branch `claude/perf-win-20261015`) |
 | SolidWorks 2026 (student edition) | installs, renders, passes its builtin Performance Test; loads and renders sample projects fine; evidence not yet committed |
 | Blender on Windows | Renders sample files properly, needs more testing |
-| 3DMark demo on Steam | Steel Nomad gets around 30fps, benchmark result not committed yet. VFIO gets around 40fps. |
-| OBS Studio on Windows | Recorded the desktop, Unigine Heaven and 3DMark Steel Nomad successfully, OBS reports NVENC was used. MP4 video playback has no issues that I noticed. Result is not commited yet |
+| 3DMark demo on Steam | Steel Nomad (full, DX12) scores 2050 to 2991, i.e. 20 to 30 fps, depending on revision and what else is running (latest run 2227 with Minecraft, OBS and a video playing at the same time); native VFIO on the same GPU scores about 3800 to 3960 (38 to 40 fps). Result files are not committed yet |
+| OBS Studio on Windows | Recorded the desktop, Unigine Heaven and 3DMark Steel Nomad successfully, OBS reports NVENC was used (OBS log: `obs_nvenc_h264_tex`; the host GPU's encoder showed 21% load attributed to the VM process). MP4 video playback has no issues that I noticed. Result is not commited yet |
 | Office 365 | No issues so far |
 
-Minecraft, Blender, Office, Edge, Steam, 3DMark, Unigine and SolidWorks run unmodified, from the vendors' official, complete installers (nothing stripped down or patched). All apps except Office are confirmed to be using the NVIDIA GPU, not software rendering.
+Minecraft, Blender, Office, Edge, Steam, 3DMark, Unigine and SolidWorks run unmodified, from the vendors' official, complete installers (nothing stripped down or patched). All apps except Office are confirmed to be using the NVIDIA GPU, not software rendering: Steel Nomad and the SolidWorks performance test report it, Unigine and Minecraft show up in the guest's `nvidia-smi`, Minecraft Java's F3 screen names the RTX 4070, and Blender has it selected in its settings.
 
 **Linux guest** (NVIDIA's stock driver, unmodified, nothing to set): the 30-arm suite passes (also with the relay forced on); gates 9/9 on the real GPU; a desktop with display planes (overlay, YUV)
 and 3 of 3 suspend/resume cycles; **61 of 65 CUDA apps** (CUDA samples, PyTorch, Hugging Face generation, llama.cpp), 6 of 6 stream probes and 100 processes in one boot, with

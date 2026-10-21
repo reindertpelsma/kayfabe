@@ -4,10 +4,10 @@
 use super::*;
 use crate::class::{self, put};
 
-const CORE: u32 = 0xC67D;
-const WIN: u32 = 0xC67E;
+pub(super) const CORE: u32 = 0xC67D;
+pub(super) const WIN: u32 = 0xC67E;
 const IMM: u32 = 0xC67B;
-const CLIENT: u32 = 0xc1d0_0015;
+pub(super) const CLIENT: u32 = 0xc1d0_0015;
 
 fn t() -> &'static ClassTable {
     class::for_version("580.159.04").unwrap()
@@ -17,7 +17,7 @@ fn classes() -> Classes {
     Classes::of(&kf_chip::display::AMPERE)
 }
 
-fn engine() -> Engine {
+pub(super) fn engine() -> Engine {
     let r = Regs::for_ip("580.159.04", 0x0401_0000).unwrap();
     Engine::new(
         Vocab::resolve(t(), &classes(), &r).expect("GA10x vocabulary"),
@@ -26,26 +26,26 @@ fn engine() -> Engine {
     )
 }
 
-fn m(cl: u32, n: &str) -> u32 {
+pub(super) fn m(cl: u32, n: &str) -> u32 {
     t().v(cl, n).unwrap_or_else(|| panic!("NV{cl:04X}_{n}"))
 }
-fn ma(cl: u32, n: &str, i: u32) -> u32 {
+pub(super) fn ma(cl: u32, n: &str, i: u32) -> u32 {
     t().a(cl, n, i)
         .unwrap_or_else(|| panic!("NV{cl:04X}_{n}({i})"))
 }
-fn fl(cl: u32, n: &str) -> (u8, u8) {
+pub(super) fn fl(cl: u32, n: &str) -> (u8, u8) {
     t().f(cl, n).unwrap_or_else(|| panic!("NV{cl:04X}_{n}"))
 }
 
 /// A NVKMS-style stream: every method with its own one-word header.
-struct Ring {
-    words: Vec<u32>,
+pub(super) struct Ring {
+    pub(super) words: Vec<u32>,
 }
 impl Ring {
-    fn new() -> Ring {
+    pub(super) fn new() -> Ring {
         Ring { words: Vec::new() }
     }
-    fn m(&mut self, method: u32, data: u32) -> &mut Ring {
+    pub(super) fn m(&mut self, method: u32, data: u32) -> &mut Ring {
         self.words.push((1 << 18) | method);
         self.words.push(data);
         self
@@ -60,11 +60,11 @@ impl Ring {
     }
 }
 
-fn all_ok(_: &Acquire) -> bool {
+pub(super) fn all_ok(_: &Acquire) -> bool {
     true
 }
 
-fn pb() -> Option<PbLoc> {
+pub(super) fn pb() -> Option<PbLoc> {
     Some(PbLoc {
         sysmem: true,
         addr: 0x1000_0000,
@@ -508,7 +508,10 @@ fn a_plane_disable_raises_one_awaken_through_the_flipped_away_entry() {
     };
     let flip = |r: &mut Ring, iso: u32, notifier: u32, idx: u32| {
         r.m(m(WIN, "SET_CONTEXT_DMA_NOTIFIER"), notifier);
-        r.m(m(WIN, "SET_NOTIFIER_CONTROL"), if notifier == 0 { 0 } else { ctl(idx) });
+        r.m(
+            m(WIN, "SET_NOTIFIER_CONTROL"),
+            if notifier == 0 { 0 } else { ctl(idx) },
+        );
         r.m(ma(WIN, "SET_CONTEXT_DMA_ISO", 0), iso);
         r.m(m(WIN, "SET_WINDOW_INTERLOCK_FLAGS"), 1 << 1);
         r.m(m(WIN, "UPDATE"), 0);
@@ -536,7 +539,12 @@ fn a_plane_disable_raises_one_awaken_through_the_flipped_away_entry() {
     flip(&mut r, 0x3_0002, 0xA0, 1);
     e.step(w1, &r.bytes(), r.put(), &mut all_ok);
     let s = e.vblank(0, &mut all_ok);
-    assert_eq!(awakens(&s), vec![(true, false), (false, true)], "{:?}", s.effects);
+    assert_eq!(
+        awakens(&s),
+        vec![(true, false), (false, true)],
+        "{:?}",
+        s.effects
+    );
     // the plane's disable: no surface, no notifier — the flipped-away entry's FINISHED raises the AWAKEN
     flip(&mut r, 0, 0, 0);
     e.step(w1, &r.bytes(), r.put(), &mut all_ok);
@@ -1336,9 +1344,7 @@ fn a_head_composes_its_windows_back_to_front() {
     let front = window(0xb0, 0, 250, 250);
     e.step(3, &back.bytes(), back.put(), &mut all_ok);
     e.step(4, &front.bytes(), front.put(), &mut all_ok);
-    // ★ D1 (`display-max-fps`): the second tearing flip on head 1 waits for the head's tick
-    assert!(e.waiting(4));
-    e.vblank(1, &mut all_ok);
+    // ★ §AK (was D1: "the second tearing flip on head 1 waits for the head's tick"): it latches at once
     assert!(!e.waiting(4));
     let mut imm = Ring::new();
     imm.m(ma(IMM, "SET_POINT_OUT", 0), (50 << 16) | 100)
@@ -1419,6 +1425,7 @@ fn a_head_cursor_is_scanned_from_the_core_and_its_pio_point() {
         (cs.handle, cs.offset, cs.size, cs.argb8888),
         (0xcafe, 0x2000, 64, true)
     );
+    assert_eq!((cs.a1r5g5b5, cs.format), (false, 0xCF));
     assert_eq!((cs.x, cs.y), (-5, 40), "the point is signed");
     assert_eq!(
         (cs.k1, cs.cursor_factor, cs.viewport_factor, cs.mode),
@@ -1428,6 +1435,108 @@ fn a_head_cursor_is_scanned_from_the_core_and_its_pio_point() {
     assert_eq!((cs.client, cs.head), (CLIENT, 1));
     assert_eq!(e.cursor_scan(&cv, 0), None, "head 0 has no cursor");
     assert_eq!(e.cursor_scan(&cv, 9), None, "no such head");
+}
+
+/// ★ 2026-10-15: a head whose cursor format is `A1R5G5B5` with `MODE_XOR` (what a guest's inverting
+/// pointer would program) is scanned as that, the raw format kept; an unknown format is neither.
+#[test]
+fn an_a1r5g5b5_xor_cursor_is_scanned_as_one() {
+    let k = 0xC67A;
+    let cv = CursorVocab::resolve(t(), CORE, k).expect("GA10x cursor vocabulary");
+    for (fmt, a8, a1, raw) in [
+        ("HEAD_SET_CONTROL_CURSOR_FORMAT_A1R5G5B5", false, true, 0xE9),
+        ("HEAD_SET_CONTROL_CURSOR_FORMAT_A8R8G8B8", true, false, 0xCF),
+    ] {
+        let mut e = engine();
+        e.alloc(ChannelKind::Core, 0, CLIENT, 1, pb(), 0);
+        e.alloc(ChannelKind::Cursor, 1, CLIENT, 1, None, 0);
+        let mut ctl = put(0, fl(CORE, "HEAD_SET_CONTROL_CURSOR_ENABLE"), 1);
+        ctl = put(
+            ctl,
+            fl(CORE, "HEAD_SET_CONTROL_CURSOR_FORMAT"),
+            m(CORE, fmt),
+        );
+        ctl = put(
+            ctl,
+            fl(CORE, "HEAD_SET_CONTROL_CURSOR_SIZE"),
+            m(CORE, "HEAD_SET_CONTROL_CURSOR_SIZE_W32_H32"),
+        );
+        let comp = put(
+            0,
+            fl(CORE, "HEAD_SET_CONTROL_CURSOR_COMPOSITION_MODE"),
+            m(CORE, "HEAD_SET_CONTROL_CURSOR_COMPOSITION_MODE_XOR"),
+        );
+        let a2 = |n: &str| t().a2(CORE, n, 1, 0).unwrap_or_else(|| panic!("{n}(1, 0)"));
+        let mut c = Ring::new();
+        modeset(&mut c, 1, 2);
+        c.m(a2("HEAD_SET_CONTEXT_DMA_CURSOR"), 0xcafe)
+            .m(a2("HEAD_SET_OFFSET_CURSOR"), 0x20)
+            .m(ma(CORE, "HEAD_SET_CONTROL_CURSOR", 1), ctl)
+            .m(ma(CORE, "HEAD_SET_CONTROL_CURSOR_COMPOSITION", 1), comp)
+            .m(m(CORE, "UPDATE"), 0);
+        e.step(0, &c.bytes(), c.put(), &mut all_ok);
+        let cs = e.cursor_scan(&cv, 1).expect("enabled");
+        assert_eq!(
+            (cs.argb8888, cs.a1r5g5b5, cs.format, cs.size, cs.mode),
+            (a8, a1, raw, 32, 1)
+        );
+    }
+}
+
+/// ★ 2026-10-15: the cursor vocabulary kf plans from — the two formats and the two composition modes —
+/// is the class table's (derived from ogkm's headers by `tools/derive_display_classes.sh`) in every
+/// cursor-capable class of both table versions, and where ogkm's headers are present (`KF_OGKM_CLASS_DIR`,
+/// default the host's `/data/claude-ogkm-580` checkout) the headers themselves say the same.
+#[test]
+fn the_cursor_format_vocabulary_is_the_headers() {
+    let want = [
+        ("HEAD_SET_CONTROL_CURSOR_FORMAT_A1R5G5B5", 0xE9),
+        ("HEAD_SET_CONTROL_CURSOR_FORMAT_A8R8G8B8", 0xCF),
+        ("HEAD_SET_CONTROL_CURSOR_COMPOSITION_MODE_BLEND", 0),
+        ("HEAD_SET_CONTROL_CURSOR_COMPOSITION_MODE_XOR", 1),
+    ];
+    let classes = [
+        0xC37Du32, 0xC57D, 0xC67D, 0xC77D, 0xC97D, 0xCA7D, 0xCB7D, 0xCC7D,
+    ];
+    for ver in ["580.159.04", "580.65.06"] {
+        let tab = class::for_version(ver).unwrap();
+        let mut have = 0;
+        for c in classes {
+            if tab.v(c, want[0].0).is_none() && tab.v(c, want[1].0).is_none() {
+                continue; // a class without a cursor format row
+            }
+            have += 1;
+            for (n, v) in want {
+                assert_eq!(tab.v(c, n), Some(v), "{ver} NV{c:04X}_{n}");
+            }
+        }
+        assert!(
+            have >= 4,
+            "{ver}: only {have} cursor-capable classes in the table"
+        );
+    }
+    let dir = std::env::var("KF_OGKM_CLASS_DIR")
+        .unwrap_or_else(|_| "/data/claude-ogkm-580/src/common/sdk/nvidia/inc/class".into());
+    let mut read = 0;
+    for c in classes {
+        let Ok(h) = std::fs::read_to_string(format!("{dir}/cl{c:x}.h")) else {
+            continue;
+        };
+        read += 1;
+        for (n, v) in want {
+            let line = h
+                .lines()
+                .find(|l| l.starts_with(&format!("#define NV{c:04X}_{n} ")))
+                .unwrap_or_else(|| panic!("NV{c:04X}_{n} is not in the header"));
+            let val = line.rsplit('(').next().unwrap().trim_end_matches(')');
+            assert_eq!(
+                u32::from_str_radix(val.trim_start_matches("0x"), 16).unwrap(),
+                v,
+                "{line}"
+            );
+        }
+    }
+    eprintln!("cursor vocabulary checked against {read} ogkm class headers in {dir}");
 }
 
 /// A window flip: `SET_PRESENT_CONTROL.BEGIN_MODE` = `mode` (0 non-tearing, 1 immediate — what
@@ -1444,7 +1553,7 @@ fn flip(r: &mut Ring, mode: u32, with: u32) {
 }
 
 /// Head 0 lit (1080p60) with windows 0 and 1 on it; the core's ring for later updates.
-fn lit(e: &mut Engine) -> Ring {
+pub(super) fn lit(e: &mut Engine) -> Ring {
     e.alloc(ChannelKind::Core, 0, CLIENT, 1, pb(), 0);
     e.alloc(ChannelKind::Window, 0, CLIENT, 1, pb(), 0);
     e.alloc(ChannelKind::Window, 1, CLIENT, 1, pb(), 0);
@@ -1467,60 +1576,69 @@ fn latched(s: &Step) -> Vec<u32> {
         .collect()
 }
 
-/// ★ D1 (`display-max-fps`, owner decision of 2026-10-04): a TEARING flip on an active head that
-/// already presented since the head's tick waits for the next tick — so async flips are bounded by
-/// the cap too; the first one after a tick still latches at once (it tears as asked). Another
-/// head's tick releases nothing. Known-positive: with the gate off (the mutation) the second flip
-/// latches at once, as before the gate.
+/// ★ §AK (owner decision (a) of 2026-10-17, which REPLACES D1): a TEARING (immediate) flip latches
+/// and completes AT ONCE, however many the guest sends between two ticks — the tick no longer bounds
+/// them (the copies are bounded instead, `pace::Mailbox`). Every one is a present and a tearing present;
+/// none waits; a vblank has nothing of theirs to latch. (Replaces `a_second_tearing_flip_waits_for_the_vblank`.
+/// Mutation: the gate back — a second flip after a present parks — fails this at the second flip.)
 #[test]
-fn a_second_tearing_flip_waits_for_the_vblank() {
-    assert!(engine().tear_gate, "on by default (D1)");
-    for gate in [true, false] {
-        let mut e = engine();
-        e.tear_gate = gate;
-        lit(&mut e);
-        let mut w = Ring::new();
+fn an_immediate_flip_latches_at_once_however_many_come_between_ticks() {
+    let mut e = engine();
+    lit(&mut e);
+    let mut w = Ring::new();
+    for n in 1..=50u64 {
         flip(&mut w, 1, 0);
         let s = e.step(1, &w.bytes(), w.put(), &mut all_ok);
-        assert_eq!(
-            latched(&s),
-            vec![0],
-            "gate {gate}: the first latches at once"
-        );
-        flip(&mut w, 1, 0);
-        let s = e.step(1, &w.bytes(), w.put(), &mut all_ok);
-        if !gate {
-            assert_eq!(latched(&s), vec![0], "without the gate it latches at once");
-            assert_eq!(e.pace[0].tear_held, 0);
-            assert_eq!(e.pace[0].presents, 2);
-            continue;
-        }
-        assert!(s.effects.is_empty(), "{:?}", s.effects);
-        assert!(e.waiting(1));
-        assert_eq!(e.pace[0].tear_held, 1);
-        assert!(e.vblank(1, &mut all_ok).effects.is_empty(), "head 1's tick");
-        assert_eq!(latched(&e.vblank(0, &mut all_ok)), vec![0], "head 0's tick");
-        assert!(!e.waiting(1));
-        // presented again at that tick: the next waits again
-        flip(&mut w, 1, 0);
-        assert!(
-            e.step(1, &w.bytes(), w.put(), &mut all_ok)
-                .effects
-                .is_empty()
-        );
-        assert_eq!(e.pace[0].tear_held, 2);
-        // a tick with nothing presented since: the parked one latches, then one at once again
-        e.vblank(0, &mut all_ok);
-        e.vblank(0, &mut all_ok);
-        flip(&mut w, 1, 0);
-        assert_eq!(
-            latched(&e.step(1, &w.bytes(), w.put(), &mut all_ok)),
-            vec![0]
-        );
-        assert_eq!(e.pace[0].presents, 4);
-        assert_eq!(e.pace[0].tearing, 4);
-        assert_eq!(e.pace[1], PaceCounts::default(), "nothing on head 1");
+        assert_eq!(latched(&s), vec![0], "flip {n} latches at once");
+        assert!(!e.waiting(1), "flip {n} waits for nothing");
+        assert_eq!(e.pace[0].presents, n);
+        assert_eq!(e.pace[0].tearing, n);
     }
+    // a tick: nothing of theirs is left to latch, and the next flip is still immediate
+    assert!(e.vblank(0, &mut all_ok).effects.is_empty());
+    flip(&mut w, 1, 0);
+    assert_eq!(
+        latched(&e.step(1, &w.bytes(), w.put(), &mut all_ok)),
+        vec![0]
+    );
+    assert_eq!(e.pace[1], PaceCounts::default(), "nothing on head 1");
+}
+
+/// ★ §AK: a NON-tearing flip still waits for its tick, and an immediate flip after it does not wait
+/// for anything — including the tick the non-tearing one is parked for. A group that mixes a tearing
+/// window with a non-tearing one on the same head waits with the non-tearing one (it is a vsync
+/// update). (Replaces the gate's "first after a tick" rule, which no longer exists.)
+#[test]
+fn a_vsync_flip_waits_for_its_tick_and_an_immediate_one_beside_it_does_not() {
+    let mut e = engine();
+    lit(&mut e);
+    let (mut w0, mut w1) = (Ring::new(), Ring::new());
+    flip(&mut w0, 0, 0);
+    assert!(
+        e.step(1, &w0.bytes(), w0.put(), &mut all_ok)
+            .effects
+            .is_empty()
+    );
+    assert!(e.waiting(1), "the vsync flip is parked for head 0's tick");
+    // an immediate flip on the other window of the same head latches at once, the parked one stays
+    flip(&mut w1, 1, 0);
+    let s = e.step(2, &w1.bytes(), w1.put(), &mut all_ok);
+    assert_eq!(latched(&s), vec![1], "the immediate flip does not wait");
+    assert!(e.waiting(1));
+    assert!(e.vblank(1, &mut all_ok).effects.is_empty(), "head 1's tick");
+    assert_eq!(latched(&e.vblank(0, &mut all_ok)), vec![0], "head 0's tick");
+    assert_eq!((e.pace[0].presents, e.pace[0].tearing), (2, 1));
+    // one group: a tearing window and a non-tearing window, interlocked — a vsync update
+    flip(&mut w0, 1, 1 << 1);
+    flip(&mut w1, 0, 1 << 0);
+    e.step(1, &w0.bytes(), w0.put(), &mut all_ok);
+    assert!(
+        e.step(2, &w1.bytes(), w1.put(), &mut all_ok)
+            .effects
+            .is_empty()
+    );
+    assert_eq!(latched(&e.vblank(0, &mut all_ok)), vec![0, 1]);
+    assert_eq!((e.pace[0].presents, e.pace[0].tearing), (3, 2));
 }
 
 /// ★ `presents` counts LATCHES, once per head per latch: two windows of one head latched together

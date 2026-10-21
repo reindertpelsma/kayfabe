@@ -1,6 +1,6 @@
 # Owner rulings — the decisions that govern kayfabe v3 work
 
-**STATUS: LIVE, 2026-10-07 (§S added, then the BAR0-trace exception and the `PERF_GET_POWERSTATE` confirmation; earlier rulings dated in place); §T added 2026-10-08 (filtered recovered directives); §X added 2026-10-08 (non-stall interrupts); §Y added 2026-10-09 (diagnostic BAR0 trace mode, numbered §X on its branch, the VFIO tracer); §AB added 2026-10-10 (T-space hardwired, privilege rules for mappings).** Every ruling the owner made in the 2026-09-25 … 09-30 working sessions,
+**STATUS: LIVE, 2026-10-07 (§AM added 2026-10-18: the vidmem scrub policy; §S added, then the BAR0-trace exception and the `PERF_GET_POWERSTATE` confirmation; earlier rulings dated in place); §T added 2026-10-08 (filtered recovered directives); §X added 2026-10-08 (non-stall interrupts); §Y added 2026-10-09 (diagnostic BAR0 trace mode, numbered §X on its branch, the VFIO tracer); §AB added 2026-10-10 (T-space hardwired, privilege rules for mappings).** Every ruling the owner made in the 2026-09-25 … 09-30 working sessions,
 with its date, so work can resume from the repository alone. The architecture itself is in
 `docs/design/THE_V3_PLAN.md` and `THE_CONSTRAINTS.md`; this file records *decisions* on top of it.
 Where a ruling was later refined, the refinement is listed under it. A ruling's date is part of its
@@ -434,7 +434,14 @@ citation: ask whether its reason still holds before relying on it.
   seems not great though. The rest seems good to md"*.
   - **Mechanism:** the limit clamps kf-disp's own emulated vblank tick (the display thread's
     deadline). Nothing blocks a vCPU, and no lock is held while waiting.
-  - **D1, tearing flips are gated (adopted).** An async/tearing flip that arrives sooner than the
+  - ⊘ **D1 SUPERSEDED 2026-10-17 (§AK, below; the owner's decision (a)).** The guest's flips are
+    NEVER parked to bound the display rate: an immediate flip latches and completes at once, and the
+    rate is bounded by the COPIES (the newest latched frame, at most once per tick). `[measured,
+    Windows 11, Unigine Heaven D3D11, build 134dcb54, 2026-10-17]` the gate parked the guest's present
+    loop in exclusive fullscreen (windowed ~200 fps, fullscreen ~30 fps; design in
+    `docs/design/V3_DISPLAY_PACING_20261017.md`). The paragraph below is the superseded text, kept as
+    history; `Engine::tear_gate` and `KF3_TEAR_GATE` no longer exist.
+  - **D1, tearing flips are gated (adopted) — SUPERSEDED, see above.** An async/tearing flip that arrives sooner than the
     limit allows waits for the next tick. In kayfabe a flip copies a finished buffer, so the gate is
     about rate, not image tearing.
   - **D2, copies made without a flip (proposed by Claude in answer to the owner's question; adopted
@@ -1258,3 +1265,91 @@ worker-only submission and command inspection from birth, the owner answered:
 - This authorizes development of the revised design, not a compatibility claim.
   Native cursor, lifetime and ordering semantics still require evidence, bounded
   models, independent review and exact-revision Linux/Windows hardware tests.
+
+## §AJ. The broker owns the whole cursor plane, including true XOR inversion; kayfabe composes no cursor, 2026-10-17
+
+**STATUS: LIVE, 2026-10-17 (owner, in the coordinator session; recorded by the cursor-xor agent).**
+
+- **D2.** An XOR cursor (the Windows I-beam, an inverting cursor) is composed BY THE BROKER as a true inversion of the pixels under it. The approximation (black fill, white
+  outline, `nb_cursor_xor_approx`) is a stopgap and the fallback when composing is impossible (e.g. the frame is not readable), logged once. Kayfabe keeps sending the
+  inversion mask with `CURSOR_F_XOR`; composition does not move back into kayfabe.
+- **Kayfabe composes no cursor at all.** The pre-stream composing path (the XOR compose kernel, hiding the host pointer while an XOR cursor was composed, the COMPOSED/REFUSED
+  cursor logic in kayfabe's display code) is the wrong direction and is to be DELETED, not kept as the fallback. This **supersedes** the sentence in
+  `V3_BROKER_ROADMAP_20261015.md` section A ("the old composing path stays as the fallback ... until the owner decides to delete it": the owner has decided) and the
+  "stays the whole story for a broker that does not advertise the stream" sentence of `V3_DISPLAY_CURSOR_FORMATS.md` §8; both are corrected in place.
+- A broker without `CAP_CURSOR_STREAM` running on a test VM (it was kept only because it worked) is not the design. After the deletion such a broker shows the guest's own cursor
+  or none; kayfabe never composes.
+- The deletion is a separate change with its own tests and a Linux broker retest (list: `V3_BROKER_XOR_CURSOR_20261017.md` §6). This task did not delete code.
+- D3 (same day): the cursor is oversized on the owner's screen; the size rule and fix: `V3_BROKER_XOR_CURSOR_20261017.md` §1.
+- **D2 refinement (2026-10-17, relayed by the coordinator; binding).** The owner prefers to avoid the wl_shm tier and any unnecessary CPU copy of large frames in the present path, and to use GPU APIs when composing if that is possible.
+  Built accordingly: the broker's XOR composing does not depend on the shm tier (it reads only the cursor's rows of a sealed memfd or of a LINEAR system-memory dma-buf; tiled or device-memory frames fall back to the approximation,
+  logged once per change); a GPU path was evaluated and not built (`V3_BROKER_XOR_CURSOR_20261017.md` §8: it would put EGL/Vulkan and a vendor driver into the privileged broker; owner decision if it is ever wanted).
+  The wl_shm presentation after a broker restart was a false trip of the VMM's acknowledgement detector, not a display refusal: `V3_BROKER_PRESENT_TIER_20261017.md`.
+
+## §AK. Guest flips are never parked; the display rate is bounded by copies; the tick source falls back to the free-running clock, 2026-10-17
+
+**STATUS: LIVE, 2026-10-17 (owner, in the coordinator session; recorded by the display-pacing agent).** Design and phase-1 code: `docs/design/V3_DISPLAY_PACING_20261017.md`. These amend §M D1 and bind
+the display plane.
+
+- **(a) Flips are never parked to bound the rate.** The guest's immediate (async / tearing) flips latch and complete at once; vsync flips complete at the next vblank. The display and
+  copy rate is bounded separately: kayfabe copies only the NEWEST latched scanout frame, at most once per tick (mailbox semantics), into a free ring slot. §M D1's gate (a second tearing flip waits
+  for the next tick) is **superseded** by this and removed.
+- **(b) Flip syncing is lock step between guest and kayfabe.** The broker will later send a frame request only after it received the previous frame (credit based). Not built in phase 1; the
+  design must not preclude it (it does not: the mailbox's tick credit is the place a broker credit plugs in).
+- **(c) The free-running clock is kept.** It is the tick source when no broker is connected (headless) and the FALLBACK when the broker is silent. If no broker tick event arrives for 50 ms
+  the free-running clock takes over so the guest's vblank and flips keep going; the moment a broker tick event arrives the broker is the tick source again, automatically. The guest-visible vblank
+  is **never hard-gated by the broker**: a hung, hidden, occluded or crashed broker must not freeze the guest (Windows resets the display driver after about 2 s without a flip completion).
+  Handoffs are seamless: one tick source at a time, the vblank counter and timestamps monotonic, no double tick closer than a fraction of a period (built as one half), the clock phase
+  re-aligned to the broker's.
+- **(d) Later phases (design only, not built):** the broker as tick source over the broker protocol (a capability bit; presentation feedback; commit every refresh so frame callbacks
+  keep coming); an HDMI-over-TMDS virtual connector to lift the 75 Hz EDID cap and the 165 MHz DVI pixel clock (§M D3).
+
+## §AL. Kayfabe enforces the lock step and never trusts the broker's timing; the flip system is testable locally, 2026-10-17
+
+**STATUS: LIVE, 2026-10-17 (owner, via the coordinator; recorded by the phase-2 agent).** Design and code: `docs/design/V3_DISPLAY_PACING_20261017.md` §11. Binding on the broker-as-tick-source work (§AK (b)–(d)).
+
+- **Kayfabe enforces.** A broker tick / `WANT_FRAME` that arrives at the wrong moment (early: the previous copy or send still in flight, inside the half-period guard, out of sequence) is not acted on then; kayfabe acts
+  when the lock-step state allows (copy finished, slot free, sequence matches) — after the right moment, never before. Too-fast broker events never make kayfabe go faster and never build a backlog: credits coalesce
+  (at most one pending, extras counted and dropped), the vblank is capped by the double-tick guard, frames in flight are bounded by a named constant with a test. A flooding or hostile broker costs counted, dropped ticks.
+- **The guest's immediate flips are still never parked and never wait for a credit.** The rule governs the kayfabe→broker frame stream and the vblank clock only; the 50 ms silence fallback still applies.
+- **Local tests of the whole flip path**, GPU-free: an exhaustive bounded model, a seeded soak (>= 100 000 flips per scenario over >= 50 seeds, an ignored 10 M-flip run), a real-socket run with a fake broker, floods of every
+  kind, and broker STALLS (silence, partial messages, a slot never released, flapping around 50 ms, SIGSTOP); mutants of the harness itself. The harness's limits are stated in the doc (§11.7).
+- (Added by the agent, flagged for the owner: after a fallback to the clock the broker takes the tick back only after proving itself — one good gap, then 2, 4, 8 — so a broker flapping around 50 ms cannot flap the source
+  per tick; decision (c)'s "the first broker event takes it back at once" holds for a broker that never fell back. §11.5.)
+
+## §AM. Guest vidmem is scrubbed by trust boundary: only a guest reboot scrubs, the whole store, GPU-side, 2026-10-18
+
+**STATUS: LIVE, 2026-10-18 (owner, via the coordinator; recorded by the boot-layer agent).** Binding. Code and
+tests: `crates/kf-qemu/src/scrub.rs` (the event table), `memreset.rs` (the memory stage's driver), `reset.rs`
+(the decision), branch `claude/bootlayer-20261018`. The boot-layer rule (what the monitor shows) is separate:
+§AM.5 and `docs/design/V3_DISPLAY.md` §4.11.13.
+
+1. **Premise (owner-accepted, NOT verified by us):** the host driver does not promise zeroed memory, it promises
+   *process isolation* — an allocation can only hold stale bytes of the SAME process, never another process's
+   (like anonymous `mmap`; an RM `hMemory` behaves the same). A fresh QEMU/kayfabe process therefore gets a fresh
+   store, and a crashed previous QEMU's store was cleaned by the host on process death.
+2. **The only place a stale-bytes leak exists** is where the SAME process reuses the SAME store for a NEW OS
+   instance: a guest **reboot** (a system reset delivered on QEMU's main loop: reboot, reset button, bugcheck or
+   triple-fault reset, QMP `system_reset`). That scrubs: **the whole store `[0, fb_length)`**, on the GPU
+   (`cuMemsetD8` on the store's device mapping, chunked, the completion awaited), before the next life runs and
+   before anything from the store is shown. The firmware carve-out is NOT excluded: the guest's CPU views and GPU
+   leaves reach it (counted, not refused), so only our two root pages — rewritten by the reset's own stage after
+   the scrub — are kayfabe's.
+3. **No scrub** at: VM start (isolation premise; realize still zeroes what kayfabe itself needs zero — the roots
+   and the boot framebuffer `[0, G)` — and awaits that zero), VM teardown, an in-guest driver unload, a TDR-style
+   reset, a bus reset the guest itself issued (a vCPU thread), an S3 wake, the basic-display → NVIDIA handoff. The
+   same OS and root can already read all of its own vidmem; a real GPU does not scrub there either.
+4. **Distinguishable:** the device tells a reboot from an in-guest reset by where QEMU asked from
+   (`current_cpu != NULL` ⇒ a vCPU thread ⇒ the guest's own act) and the reset type (`RESET_TYPE_WAKEUP`). Were
+   they not distinguishable the rule would be the lazy one: scrub on every reset.
+5. **Fail closed:** a scrub the host refuses, or whose completion it refuses, is never acknowledged: the reset
+   gate stays closed, the stage retries the scrub alone with a back-off, and the device does not open on an
+   unclean store (`docs/design/V3_DEVICE_RESET.md` §6 item 14). A reboot that arrives while a guest-issued reset
+   runs still scrubs (a dirty bit, not a one-shot mark, drives it). **The store counts as dirty as soon as the gate first
+   opens** (the guest runs from there, and its BAR1/BAR2/PRAMIN/DMA writes are invisible to the device; owner, 2026-10-18),
+   so every system reset after the machine-creation reset scrubs, even if no BAR0 access was ever admitted; only that
+   creation reset (pristine) is skipped.
+6. **Boot layer (display policy, not a reason to scrub):** the boot layer is shown only while store `[0, G)` is
+   clean; a guest RM life (fn 72) taints it, only a completed scrub of the range cleans it. See §4.11.13.
+7. **Not yet measured:** the scrub's wall time (the log line carries it); hardware verification is the checklist
+   in the branch report.

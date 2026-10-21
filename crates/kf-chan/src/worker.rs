@@ -63,26 +63,54 @@ pub const OTHER_TAG_BASE: u64 = 2 << 32;
 pub const TICK_TAG: u64 = u64::MAX;
 
 /// ★ 2026-10-14 — what the worker needs from the USER-ring relays to be an EVENT loop
-/// (`docs/design/V3_USER_RING_EVENT_LOOP_20261014.md`): whether any relay waits for something only a
-/// LOOK can find (the private `GP_GET` word is not an fd), and the look itself. Neither blocks.
+/// (`docs/design/V3_USER_RING_EVENT_LOOP_20261014.md`): the look at the relays' not-yet-fd state
+/// (the private `GP_GET` / `REFERENCE` words are not an fd) and whether the worker may sleep. Neither blocks.
 pub trait RelayLoop {
-    /// Some relay is waiting for private-ring progress (the spin is worth doing).
+    /// Some relay records a private-word wait (the look has something to evaluate).
     fn waiting(&self) -> bool;
+    /// ★ 2026-10-20 (owner): some relay holds an obligation NO registered wake source will announce (a carried `Popped` wait, a marker whose
+    /// interrupt came and found the words not yet visible: [`user_loop::Obligation`]). The worker must not block while this is true: it keeps
+    /// evaluating inside its one loop. Every other obligation has a wake source that reaches EVERY worker (level-triggered fds in each
+    /// worker's own poller, the lock holder's ring through the shared token word and eventfd).
+    fn unannounced(&self) -> bool;
     /// Look at the waiting relays' not-yet-fd state and ring what is satisfied. Returns whether
     /// anything was rung. `why` names the caller for the counters (a backstop peek that finds work is
     /// a bug counter, never the normal path).
     fn peek(&self, why: Peek) -> bool;
 }
 
-/// No relays (the harness): the loop is the old one minus the timer-driven refresh.
+/// No relays (the harness).
 pub struct NoRelay;
 impl RelayLoop for NoRelay {
     fn waiting(&self) -> bool {
         false
     }
+    fn unannounced(&self) -> bool {
+        false
+    }
     fn peek(&self, _why: Peek) -> bool {
         false
     }
+}
+
+/// How long a worker that may block sleeps. `infinite` is the knob the owner asked for (design and test as if the timeout were infinite):
+/// nothing may depend on the finite value, a firing that finds work is a counted bug (`backstop_found_*`). `owed` is the paced Passthrough
+/// relay's trailing raise: its wake source IS the timer, a different subsystem.
+#[must_use]
+pub const fn park_timeout(owed: bool, infinite: bool) -> PollTimeout {
+    if owed {
+        PollTimeout::Millis(OWED_PARK_MS)
+    } else if infinite {
+        PollTimeout::Blocking
+    } else {
+        PollTimeout::Millis(PARK_MS)
+    }
+}
+
+/// `KF3_WORKER_PARK_INFINITE=1`: the worker blocks without any timeout (the safety net off). Measurement class, read once.
+fn park_infinite() -> bool {
+    static ON: std::sync::OnceLock<bool> = std::sync::OnceLock::new();
+    *ON.get_or_init(|| std::env::var("KF3_WORKER_PARK_INFINITE").is_ok_and(|v| v == "1"))
 }
 
 /// One worker thread's loop, until `stop`. `poller` watches `efd` at [`WORKER_EFD_TAG`] and
@@ -122,10 +150,11 @@ pub fn run(
     );
 }
 
-/// [`run`] with the USER-ring relays' event hooks ([`RelayLoop`]) and their counters: with nothing
-/// to serve the worker SPINS a bounded [`user_loop::SPIN`] iterations (`epoll_wait(timeout=0)` + a
-/// peek) while a relay waits, then parks for at most [`PARK_MS`] ([`user_loop::BACKSTOP_MS`]); a
-/// timeout is the relays' safety net (a peek whose findings are counted), never their clock.
+/// [`run`] with the USER-ring relays' event hooks ([`RelayLoop`]) and their counters. ONE loop, level-triggered (owner, 2026-10-20): every
+/// iteration serves the flagged tokens with a per-visit bound, drains every ready fd (`epoll_wait(timeout=0)`) and evaluates every relay's
+/// recorded wait; the worker then BLOCKS (no timeout with the `KF3_WORKER_PARK_INFINITE` knob, else [`PARK_MS`] as a safety net whose
+/// every firing that finds work is a counted bug) only when every obligation any relay holds has a registered wake source
+/// ([`user_loop::may_block`]); otherwise it iterates again. No budget, no "every Nth pass", no pre-park spin.
 #[allow(clippy::too_many_arguments)]
 pub fn run_with_relay(
     plane: &Plane<'_>,
@@ -165,6 +194,7 @@ pub fn run_with_relay(
         (doorbell, event)
     };
     let mut scratch = Vec::with_capacity(SCAN_LIMIT);
+    let infinite = park_infinite();
     let prof = stats.prof.load(Ordering::Relaxed);
     let mut busy_from = std::time::Instant::now();
     let mut after_timeout = false;
@@ -172,47 +202,41 @@ pub fn run_with_relay(
         let owed = on_tick();
         // §5.3: every `seen` load happens-before the scan.
         let seen = plane.worker_wake().seen();
+        // SERVE with a per-visit bound: every flagged token, each up to `REACT_ROUNDS + 1` rounds (kf-core `worker_pass`).
         let n = plane.worker_pass(host, &mut scratch, SCAN_LIMIT);
         if n > 0 {
             stats.served.fetch_add(n as u64, Ordering::Relaxed);
             if after_timeout {
                 stats.timeouts_with_work.fetch_add(1, Ordering::Relaxed);
             }
-            after_timeout = false;
-            continue;
         }
         after_timeout = false;
-        // ★ The bounded SPIN: only while some relay waits for something that only a look can find,
-        // and never instead of the park (a latency optimisation; the model proves liveness with 0).
-        if user_loop::idle(relay.waiting(), user_loop::SPIN) == user_loop::Idle::Spin {
-            let mut woke = false;
-            for _ in 0..user_loop::SPIN {
-                let mut ready = ReadyTokens::new();
-                if matches!(poller.wait(&mut ready, PollTimeout::Immediate), Ok(n) if n > 0) {
-                    let (doorbell, event) = dispatch(&ready);
-                    if doorbell {
-                        RelayStats::bump(&relay_stats.wake_doorbell);
-                    }
-                    if event {
-                        RelayStats::bump(&relay_stats.wake_event);
-                        let _ = relay.peek(Peek::Event);
-                    }
-                    woke = true;
-                    break;
-                }
-                if relay.peek(Peek::Spin) {
-                    RelayStats::bump(&relay_stats.wake_spin);
-                    woke = true;
-                    break;
-                }
-                if !relay.waiting() {
-                    break;
-                }
-                std::hint::spin_loop();
+        // ★ ONE LEVEL-TRIGGERED EVALUATION per iteration (owner, 2026-10-20): drain every ready fd, then evaluate every relay's recorded
+        // wait against the private words. Interrupts are hints; the state is what is read. A hot neighbour cannot keep this away
+        // (no "every Nth pass", no budget, no spin scattered elsewhere).
+        let mut ready = ReadyTokens::new();
+        if matches!(poller.wait(&mut ready, PollTimeout::Immediate), Ok(k) if k > 0) {
+            let (doorbell, event) = dispatch(&ready);
+            if doorbell {
+                RelayStats::bump(&relay_stats.wake_doorbell);
             }
-            if woke {
-                continue;
+            if event {
+                RelayStats::bump(&relay_stats.wake_event);
+                let _ = relay.peek(Peek::Event);
             }
+        }
+        if relay.waiting() && relay.peek(Peek::Spin) {
+            RelayStats::bump(&relay_stats.wake_spin);
+        }
+        if n > 0 {
+            RelayStats::bump(&relay_stats.busy_looks);
+            continue;
+        }
+        // ★ BLOCK ONLY WITH A REGISTERED WAKE SOURCE FOR EVERY OBLIGATION (`user_loop::may_block`): a carried wait (nothing announces pops) or a
+        // spent hint keeps the worker in THIS loop at epoll timeout 0 instead of in a scattered pre-park spin.
+        if user_loop::idle(relay.unannounced()) == user_loop::Idle::Spin {
+            RelayStats::bump(&relay_stats.unannounced_spins);
+            continue;
         }
         if !plane.worker_wake().try_park(seen) {
             continue;
@@ -225,8 +249,7 @@ pub fn run_with_relay(
             stats.busy_ns.fetch_add(b, Ordering::Relaxed);
             stats.max_busy_ns.fetch_max(b, Ordering::Relaxed);
         }
-        let park = if owed { OWED_PARK_MS } else { PARK_MS };
-        let got = poller.wait(&mut ready, PollTimeout::Millis(park));
+        let got = poller.wait(&mut ready, park_timeout(owed, infinite));
         if let Some(tw) = tw {
             busy_from = std::time::Instant::now();
             let w = u64::try_from(busy_from.duration_since(tw).as_nanos()).unwrap_or(u64::MAX);
@@ -247,13 +270,36 @@ pub fn run_with_relay(
                 RelayStats::bump(&relay_stats.wake_event);
                 let _ = relay.peek(Peek::Event);
             }
-            // A timeout of the long park is the relays' safety net: look at everything once. The
-            // short park of a paced raise (`owed`) is the Pacer's, not the net's.
+            // A timeout of the long park is the relays' safety net: look at everything once. A firing that FINDS work is a counted BUG
+            // (nothing may depend on it); the short park of a paced raise (`owed`) is the Pacer's, not the net's.
             if matches!(got, Ok(0)) && !owed {
                 RelayStats::bump(&relay_stats.wake_backstop);
                 let _ = relay.peek(Peek::Backstop);
             }
         }
         on_other(TICK_TAG);
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// The park timeout: the safety net's 50 ms, infinite with the knob, the pacer's 1 ms when a raise is owed.
+    #[test]
+    fn the_park_timeout_is_the_net_unless_the_knob_makes_it_infinite() {
+        assert!(matches!(
+            park_timeout(false, false),
+            PollTimeout::Millis(PARK_MS)
+        ));
+        assert!(matches!(park_timeout(false, true), PollTimeout::Blocking));
+        assert!(matches!(
+            park_timeout(true, true),
+            PollTimeout::Millis(OWED_PARK_MS)
+        ));
+        assert!(matches!(
+            park_timeout(true, false),
+            PollTimeout::Millis(OWED_PARK_MS)
+        ));
     }
 }

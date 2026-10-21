@@ -104,8 +104,9 @@ fi
 wait $SP
 grep '^KFDISP_' "$OUT/show.log" | sed 's/^/DISPLAY_/'
 # 3b. ★ `display-max-fps` (V3_DISPLAY.md §8.16, run R4; DISPLAY_ASYNC=1): ASYNC (tearing) flips —
-#     the D1 gate holds the second in a tick period for the next tick, so flip_hz stays at the tick
-#     rate (`fps[... tear=… held>0]`); a client flipping every 50 ms is never held (≈ 20 Hz)
+#     ⊘ since 2026-10-17 (OWNER_RULINGS §AK) NOTHING holds them: flip_hz follows the client, `tear` counts
+#     the latches, and the COPIES stay at one per tick (`copies=`, `skipped=` the frames replaced
+#     before a copy); a client flipping every 50 ms is ≈ 20 Hz as before
 if [ "${DISPLAY_ASYNC:-0}" = 1 ]; then
     gq "sudo ~/display/kfdisp_probe show $card 0 240 async" "$(fs 60)" > "$OUT/show_async.log"
     say "ASYNC $(grep -h '^KFDISP_FLIP_MODE\|^KFDISP_FLIPS\|^KFDISP_FAIL' "$OUT/show_async.log" | tr '\n' ' ')"

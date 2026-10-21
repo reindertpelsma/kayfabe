@@ -9,21 +9,8 @@ use kf_chan::user_scan::{Fetch, Scan, Trigger};
 
 /// Retry means no native publication/action was attempted. An uncertain write or
 /// native doorbell error is always terminal; issued credits are never rolled back.
-#[derive(Debug, PartialEq, Eq)]
-enum Failure {
-    Retry,
-    Refused(String),
-}
-impl From<String> for Failure {
-    fn from(v: String) -> Self {
-        Self::Refused(v)
-    }
-}
-impl From<&str> for Failure {
-    fn from(v: &str) -> Self {
-        Self::Refused(v.into())
-    }
-}
+/// (The type lives in `kf_chan::user_turn`, whose per-entry turn runs on these accessors.)
+use kf_chan::user_turn::Fail as Failure;
 type Turn<T> = Result<T, Failure>;
 fn locked<T>(v: std::sync::TryLockResult<T>, name: &'static str) -> Turn<T> {
     v.map_err(|e| match e {
@@ -56,6 +43,26 @@ pub(super) struct Software {
 impl Software {
     fn matches(&self, value: u32) -> bool {
         value == crate::defapi::NV50_DEFERRED_API_CLASS || value == u32::from(self.number)
+    }
+}
+/// The registry key of a channel's 5080 software object: the channel's CLIENT and the OBJECT's own guest handle
+/// (never the channel's handle: the registrations of the deferred API belong to the object).
+fn software_key(client: u32, sw: &Software) -> kf_rm::defapi::ObjKey {
+    kf_rm::defapi::ObjKey {
+        client,
+        object: sw.guest,
+    }
+}
+/// The live registrations of the channel's software object (what decides whether a Window opens): 0 when the VM has
+/// no registry or the channel no software object. Takes the registry lock; call it only when the epoch moved.
+fn live_registrations(
+    reg: Option<&kf_rm::defapi::Registry>,
+    client: u32,
+    sw: Option<&Software>,
+) -> u32 {
+    match (reg, sw) {
+        (Some(reg), Some(sw)) => reg.live_count(software_key(client, sw)),
+        _ => 0,
     }
 }
 fn same_software(a: &Option<Software>, b: &Option<Software>) -> bool {
@@ -161,6 +168,70 @@ fn trace_dir() -> Option<&'static std::path::Path> {
     })
     .as_deref()
 }
+/// ★ 2026-10-16 (PHASE 1c, second review N2) MEASUREMENT CLASS — `KF3_LIFECYCLE_MODE`
+/// (`default` | `always_scan` | `no_pointer_markers` | `no_anchored_windows`, see
+/// `kf_chan::user_lifecycle::LifecycleMode` and the design document). Never needed to boot: unset means `default`
+/// (the lifecycle fully on), an unknown value is reported loudly and also means `default`. Read ONCE, when the first
+/// relay is created, never per turn.
+fn lifecycle_mode() -> kf_chan::user_lifecycle::LifecycleMode {
+    static MODE: std::sync::OnceLock<kf_chan::user_lifecycle::LifecycleMode> =
+        std::sync::OnceLock::new();
+    *MODE.get_or_init(|| {
+        let (mode, note) = parse_lifecycle_mode(
+            std::env::var(kf_chan::user_lifecycle::LifecycleMode::ENV)
+                .ok()
+                .as_deref(),
+        );
+        eprintln!(
+            "kf3: USER_RING_LIFECYCLE_MODE {}{}",
+            mode.name(),
+            note.map_or_else(String::new, |n| format!(" ({n})"))
+        );
+        mode
+    })
+}
+/// The mode a `KF3_LIFECYCLE_MODE` value selects, and the loud note for a value that names none.
+fn parse_lifecycle_mode(
+    value: Option<&str>,
+) -> (kf_chan::user_lifecycle::LifecycleMode, Option<String>) {
+    use kf_chan::user_lifecycle::LifecycleMode;
+    match value {
+        None | Some("") => (LifecycleMode::Default, None),
+        Some(v) => LifecycleMode::parse(v).map_or_else(
+            || {
+                (
+                    LifecycleMode::Default,
+                    Some(format!(
+                        "UNKNOWN value {v:?} of {}: running the default; known values: default, always_scan, no_pointer_markers, no_anchored_windows",
+                        LifecycleMode::ENV
+                    )),
+                )
+            },
+            |m| (m, Some(format!("selected by {}", LifecycleMode::ENV))),
+        ),
+    }
+}
+/// ★ 2026-10-17 MEASUREMENT CLASS (default ON, never needed to boot) -- lazy observe, `kf_chan::user_lazy`:
+/// `KF3_PUT_CACHE=0` turns the guest `GP_PUT` cache (A) off, `KF3_LAZY_OBSERVE=0` turns the lazy private-`USERD` look (B)
+/// off, so that the split arms run from one binary. Anything else (including unset) leaves the rule on; the interval is the
+/// constant `kf_chan::user_lazy::OBSERVE_INTERVAL`. Read ONCE, when the first relay is created, never per turn. The rules
+/// act only in Pointer mode of this (Windows USER-ring) relay.
+fn lazy_config() -> kf_chan::user_lazy::LazyConfig {
+    use kf_chan::user_lazy::{ENV_LAZY_OBSERVE, ENV_PUT_CACHE, LazyConfig};
+    static CFG: std::sync::OnceLock<LazyConfig> = std::sync::OnceLock::new();
+    *CFG.get_or_init(|| {
+        let (a, b) = (
+            std::env::var(ENV_PUT_CACHE).ok(),
+            std::env::var(ENV_LAZY_OBSERVE).ok(),
+        );
+        let cfg = LazyConfig::from_switches(a.as_deref(), b.as_deref());
+        eprintln!(
+            "kf3: USER_RING_LAZY_OBSERVE_MODE put_cache={} observe_interval={} ({ENV_PUT_CACHE}={a:?} {ENV_LAZY_OBSERVE}={b:?})",
+            cfg.put_cache, cfg.interval
+        );
+        cfg
+    })
+}
 const TRACE_HISTORY: usize = 64;
 const TRACE_WORDS: usize = 16384;
 /// Per-channel cap on the words the history retains (1 MiB).
@@ -264,9 +335,9 @@ impl Trace {
         self.db_prev_put = self.db_at_put;
         self.db_at_put = doorbells;
         if doorbells > self.db_prev_put {
-            self.puts_with_db += 1;
+            self.puts_with_db = self.puts_with_db.saturating_add(1);
         } else {
-            self.puts_without_db += 1;
+            self.puts_without_db = self.puts_without_db.saturating_add(1);
         }
     }
     pub(super) fn wake(&mut self, woke: bool) {
@@ -326,10 +397,30 @@ fn scan_end(
     }
     Ok(s.carried())
 }
+/// The first `n` items of `s` (all of it when shorter). Never panics.
+fn head<T>(s: &[T], n: usize) -> &[T] {
+    s.get(..n.min(s.len())).unwrap_or_default()
+}
+/// `base + 8 * idx`, saturating: a slot address that cannot exist makes the read that uses it refuse.
+fn ring_slot_va(base: u64, idx: u32) -> u64 {
+    base.saturating_add(u64::from(idx).saturating_mul(8))
+}
+/// An instant `by` from `now`; at the clock's limit the deadline is `now` (due at once).
+fn after(now: std::time::Instant, by: std::time::Duration) -> std::time::Instant {
+    now.checked_add(by).unwrap_or(now)
+}
+/// Indices where the two word lists differ, over their common prefix.
+fn differing(a: &[u32], b: &[u32]) -> Vec<usize> {
+    a.iter()
+        .zip(b)
+        .enumerate()
+        .filter_map(|(i, (x, y))| (x != y).then_some(i))
+        .collect()
+}
 fn words_text(out: &mut String, words: &[u32]) {
     use std::fmt::Write as _;
     for (i, chunk) in words.chunks(8).enumerate() {
-        let _ = write!(out, "  {:5}:", i * 8);
+        let _ = write!(out, "  {:5}:", i.saturating_mul(8));
         for w in chunk {
             let _ = write!(out, " {w:08x}");
         }
@@ -397,43 +488,42 @@ fn software_snapshot(me: &ChanPlane, r: &userrelay::Record) -> Turn<Option<Softw
 pub(super) struct Pump {
     cache: crate::userstore::Cache,
     ram_generation: u64,
-    generation: u64,
     source_admitted: bool,
-    cursor: u32,
-    scan: Scan,
+    /// ★ 2026-10-16 (PHASE 1b): the per-entry turn and the state it shares with the segment machinery
+    /// (`kf_chan::user_turn`): lifecycle, scan, gate, markers, fetch receipts, cursor, generation, `need`.
+    core: kf_chan::user_turn::Relay,
     shadow: Option<super::usershadow::Shadow>,
     key: (u32, u32),
-    fetch: Fetch,
     segment: Option<Segment>,
-    guest_get: Option<(u64, u32)>,
-    /// ★ 2026-10-14 (`kf_chan::user_loop`): what the last turn ended needing, and what this relay
-    /// is waiting for (an event, a look, or the safety net -- never a tick).
-    need: kf_chan::user_loop::Need,
+    /// ★ 2026-10-14 (`kf_chan::user_loop`): what this relay is waiting for (an event, a look, or the safety net --
+    /// never a tick).
     pub(super) wait: Option<kf_chan::user_loop::Wait>,
-    /// Published guest work not yet followed by a batch marker.
-    unnotified: bool,
-    /// The most recent marker the relay published carries an interrupt (false = a control witness).
-    marker_event: bool,
-    /// Measurement only: when the outstanding SYNC_WAIT gate was authored.
-    gate_at: Option<std::time::Instant>,
-    /// ★ 2026-10-14 (measured: `GP_GET` runs ahead of processing): the reference-bearing markers
-    /// published and observed PROCESSED (`USERD.REFERENCE`, tagged) -- the gate's proof.
-    marks: kf_chan::user_gate::Marks,
-    /// The marker count the outstanding SYNC_WAIT gate waits for.
-    gate_target: u64,
-    again: bool,
-    /// ★ 2026-10-14 — `GP_ENTRY1_SYNC_WAIT` ([`kf_chan::user_gate::SyncGate`]): nothing at or
-    /// after a guest SYNC_WAIT entry is READ before the hardware itself would fetch it.
-    sync: kf_chan::user_gate::SyncGate,
-    /// ★ 2026-10-14: the bounded retry of a scan refusal ([`kf_chan::user_gate::Grace`]), and how
-    /// many retries this channel has reported (the first few only).
-    grace: kf_chan::user_gate::Grace,
-    grace_reported: u32,
-    grace_was_retrying: bool,
-    /// ★ 2026-10-14: guest SYNC_WAIT entries gated while a packet was open (control witness).
-    sync_carried: u64,
+    /// The loaded entry's guards and the turn's reporting state (see [`Aux`]).
+    aux: Aux,
+    /// The channel's software object once known (Scan and Window refresh it; Pointer only reads it).
+    sw: Option<Software>,
     /// Measurement only ([`trace_dir`]).
     pub(super) trace: Option<Box<Trace>>,
+}
+
+/// What the I/O of the per-entry turn keeps between its micro-steps and its reporting counters.
+#[derive(Default)]
+struct Aux {
+    ring: Option<Mapping<'static>>,
+    source: Option<Snapshot<'static>>,
+    entry: u64,
+    pb: Option<Snapshot<'static>>,
+    software: Option<Software>,
+    patched: Vec<u32>,
+    doorbells: u64,
+    /// Measurement only: when the outstanding SYNC_WAIT gate was authored.
+    gate_at: Option<std::time::Instant>,
+    /// How many scan retries this channel has reported (the first few only).
+    grace_reported: u32,
+    /// Guest SYNC_WAIT entries gated while a packet was open (control witness).
+    sync_carried: u64,
+    /// Measurement only: when the last Pointer-mode backstop wake was counted (ms since the first).
+    pointer_backstop_ms: Option<u64>,
 }
 
 struct Segment {
@@ -469,8 +559,447 @@ enum PendingAction {
     },
 }
 
+/// The guarded private-ring publication shared by the pump's segment machinery and by the per-entry turn's I/O
+/// ([`PumpIo`]): source guards, allocation / software liveness, topology generation, then `write`, then the doorbell.
+#[allow(clippy::too_many_arguments)]
+fn publish_guarded(
+    me: &ChanPlane,
+    r: &userrelay::Record,
+    ram_generation: u64,
+    software: Option<&Option<Software>>,
+    ring: Option<&Mapping<'static>>,
+    gp: Option<&Snapshot<'static>>,
+    pb: Option<&Snapshot<'static>>,
+    write: impl FnOnce(
+        &kf_chan::user_storage::Storage<kf_chan::user_storage::CpuView>,
+    ) -> Result<(), String>,
+) -> Turn<()> {
+    if me.inbox.walk_busy() {
+        me.inbox.wait_walk(r.idx);
+        return Err(Failure::Retry);
+    }
+    let userd = r.userd.clone();
+    userd
+        .admit(|| -> Turn<()> {
+            let mut pt = locked(me.pt.try_lock(), "USER_RING_PT_POISONED")?;
+            let t = pt
+                .get_mut(&r.key)
+                .filter(|t| t.user_ring && Arc::ptr_eq(&t.allocation, &r.allocation))
+                .ok_or("USER_RING_ALLOCATION_GONE")?;
+            if software.is_some_and(|expected| !same_software(expected, &t.user_defapi)) {
+                return Err(Failure::Retry);
+            }
+            if let Some(sw) = &t.user_defapi {
+                if !sw.live.load(Ordering::Acquire) {
+                    return Err("USER_RING_SOFTWARE_OBJECT_GONE".into());
+                }
+                if !sw.ready.load(Ordering::Acquire) {
+                    return Err(Failure::Retry);
+                }
+            }
+            if t.stopped || t.disabled {
+                return Err(Failure::Retry);
+            }
+            if me.stop.load(Ordering::Acquire) {
+                return Err("USER_RING_PUBLICATION_STOPPED".into());
+            }
+            let storage = locked(r.lease.storage.try_lock(), "USER_RING_STORAGE_POISONED")?;
+            // Exclude first-object admission even on an uncertain native write.
+            // A premature/hostile doorbell can only close its own admission.
+            let publish = || {
+                me.ram
+                    .admit_user_generation(ram_generation, || {
+                        t.user_published = true;
+                        write(&storage).map_err(Failure::from)
+                    })
+                    .map_err(|e| source_error(e, "USER_RING_PUBLICATION_TOPOLOGY"))?
+            };
+            let sources = || {
+                if let Some(gp) = gp {
+                    gp.admit(|| {
+                        if let Some(pb) = pb {
+                            pb.admit(publish)
+                                .map_err(|e| source_error(e, "USER_RING_PB_ADMISSION"))?
+                        } else {
+                            publish()
+                        }
+                    })
+                    .map_err(|e| source_error(e, "USER_RING_GP_ADMISSION"))?
+                } else {
+                    publish()
+                }
+            };
+            if let Some(ring) = ring {
+                ring.admit(sources)
+                    .map_err(|e| source_error(e, "USER_RING_WHOLE_RING_ADMISSION"))?
+            } else {
+                sources()
+            }
+        })
+        .map_err(|e| access_error(e, "USER_RING_USERD_ADMISSION"))??;
+    me.rm
+        .doorbell(r.chan.ok_or("USER_RING_NATIVE_ABSENT")?.token)
+        .map_err(|e| format!("USER_RING_DOORBELL_UNCERTAIN {e:?}").into())
+}
+
+fn snapshot_with(
+    cache: &mut crate::userstore::Cache,
+    ram_generation: u64,
+    me: &ChanPlane,
+    r: &userrelay::Record,
+    va: u64,
+    bytes: usize,
+) -> Turn<Snapshot<'static>> {
+    userread::snapshot(
+        &r.mirror.rows,
+        &r.mirror.log,
+        me.ram,
+        ram_generation,
+        va,
+        bytes,
+        cache,
+    )
+    .map_err(|e| source_error(e, "USER_RING_SOURCE"))
+}
+
+/// The real accessors of the per-entry turn (`kf_chan::user_turn::Io`), borrowed from the pump's fields that are not
+/// the relay core.
+struct PumpIo<'a> {
+    me: &'a ChanPlane,
+    r: &'a userrelay::Record,
+    cache: &'a mut crate::userstore::Cache,
+    ram_generation: u64,
+    source_admitted: &'a mut bool,
+    shadow_on: bool,
+    sw: &'a mut Option<Software>,
+    trace: &'a mut Option<Box<Trace>>,
+    aux: &'a mut Aux,
+}
+
+impl kf_chan::user_turn::Io for PumpIo<'_> {
+    fn hw_words(&mut self) -> Turn<(u32, u32)> {
+        let storage = self
+            .r
+            .lease
+            .storage
+            .lock()
+            .map_err(|_| "USER_RING_STORAGE_POISONED")?;
+        Ok((storage.gpu_get()?, storage.gpu_reference()?))
+    }
+    fn write_guest_get(&mut self, get: u32) -> Turn<bool> {
+        let r = self.r;
+        // Logical memory access revalidates Free/reuse and RAM topology.
+        match r.userd.write(
+            self.me,
+            r.key,
+            &r.allocation,
+            kf_abi::submit::USERD_GP_GET,
+            &get.to_le_bytes(),
+        ) {
+            Ok(()) => Ok(true),
+            Err(kf_rm::memory_list::AccessError::Busy) => Ok(false),
+            Err(e) => Err(format!("USER_RING_GET_WRITE {e:?}").into()),
+        }
+    }
+    fn src_entries(&mut self) -> u32 {
+        self.r.source.1
+    }
+    fn max_entry_bytes(&mut self) -> u64 {
+        userread::MAX_BYTES as u64
+    }
+    fn walk_busy(&mut self) -> bool {
+        let (me, r) = (self.me, self.r);
+        if me.inbox.walk_busy() {
+            me.inbox.wait_walk(r.idx);
+            return true;
+        }
+        false
+    }
+    fn gp_put(&mut self) -> Turn<Option<u32>> {
+        let (me, r) = (self.me, self.r);
+        // Doorbells counted BEFORE the PUT read (measurement only today).
+        self.aux.doorbells = me.queued(r.idx);
+        let mut put = [0u8; 4];
+        r.userd
+            .read(
+                me,
+                r.key,
+                &r.allocation,
+                kf_abi::submit::USERD_GP_PUT,
+                &mut put,
+            )
+            .map_err(|e| match e {
+                // The USERD's allocation is no longer the channel's current one: the guest's free is retiring
+                // this relay (`retire_user_ring_token` cancels the record next). Not a refusal -- nothing was
+                // read or published; the look-again budget bounds it.
+                kf_rm::memory_list::AccessError::Gone => Failure::Retry,
+                e => access_error(e, "USER_RING_PUT_READ"),
+            })?;
+        Ok(Some(u32::from_le_bytes(put)))
+    }
+    fn begin_entry(&mut self, _put: u32) {
+        let doorbells = self.aux.doorbells;
+        if let Some(t) = self.trace.as_mut() {
+            t.note_put(doorbells);
+        }
+    }
+    fn load_dword(&mut self, slot: u32, hi: bool) -> Turn<u32> {
+        if !hi {
+            let (me, r) = (self.me, self.r);
+            self.aux.ring = None;
+            self.aux.source = None;
+            self.aux.pb = None;
+            self.aux.software = None;
+            self.aux.patched.clear();
+            // Declaration admission only, not a pin. Native never fetches the guest ring; EACH current GP/PB
+            // still has fresh exact source guards.
+            self.aux.ring = if *self.source_admitted {
+                None
+            } else {
+                Some(
+                    userread::mapped(
+                        &r.mirror.rows,
+                        &r.mirror.log,
+                        me.ram,
+                        self.ram_generation,
+                        r.source.0,
+                        u64::from(r.source.1) * 8,
+                        store_read_bound(me.layout.carve()),
+                    )
+                    .map_err(|e| source_error(e, "USER_RING_WHOLE_RING"))?,
+                )
+            };
+            let va = u64::from(slot)
+                .checked_mul(8)
+                .and_then(|off| r.source.0.checked_add(off))
+                .ok_or("USER_RING_GP_ADDRESS")?;
+            let source = snapshot_with(self.cache, self.ram_generation, me, r, va, 8)?;
+            self.aux.entry = u64::from_le_bytes(
+                source
+                    .bytes
+                    .as_slice()
+                    .try_into()
+                    .map_err(|_| "USER_RING_GP_SNAPSHOT_SIZE")?,
+            );
+            self.aux.source = Some(source);
+        }
+        Ok(if hi {
+            (self.aux.entry >> 32) as u32
+        } else {
+            self.aux.entry as u32
+        })
+    }
+    fn source_va(&mut self, slot: u32) -> u64 {
+        self.r.source.0.wrapping_add(u64::from(slot) * 8)
+    }
+    fn is_shadow(&mut self) -> bool {
+        self.shadow_on
+    }
+    fn registry_epoch(&mut self) -> u64 {
+        // The entry load precedes this load; an entry published after a registration's reply is loaded after the
+        // epoch bump became visible (design section 1.1).
+        std::sync::atomic::fence(Ordering::SeqCst);
+        self.me.defapi_reg.get().map_or(0, |reg| reg.epoch())
+    }
+    fn registry_live(&mut self) -> u32 {
+        live_registrations(
+            self.me.defapi_reg.get().map(AsRef::as_ref),
+            self.r.key.0,
+            self.sw.as_ref(),
+        )
+    }
+    fn software(&mut self, refresh: bool) -> Turn<kf_chan::user_turn::SwView> {
+        if refresh && let Ok(Some(sw)) = software_snapshot(self.me, self.r) {
+            *self.sw = Some(sw);
+        }
+        Ok(kf_chan::user_turn::SwView {
+            have: self.sw.is_some(),
+            gone: self
+                .sw
+                .as_ref()
+                .is_some_and(|sw| !sw.live.load(Ordering::Acquire)),
+        })
+    }
+    fn sw_matches(&self, value: u32) -> bool {
+        self.sw.as_ref().is_some_and(|sw| sw.matches(value))
+    }
+    fn read_pb(
+        &mut self,
+        _entry: u64,
+        seg: &kf_chan::user_turn::GpSegment,
+    ) -> Turn<(Vec<u32>, bool)> {
+        let pb = snapshot_with(
+            self.cache,
+            self.ram_generation,
+            self.me,
+            self.r,
+            seg.gpu_va,
+            usize::try_from(seg.len_bytes).map_err(|_| "USER_RING_PB_SIZE")?,
+        )?;
+        let vram = pb.describe().contains("vram");
+        let mut words = Vec::new();
+        words
+            .try_reserve_exact(pb.bytes.len() / 4)
+            .map_err(|_| "USER_RING_SCAN_ALLOC")?;
+        for word in pb.bytes.chunks_exact(4) {
+            words.push(u32::from_le_bytes(
+                word.try_into().map_err(|_| "USER_RING_WORD")?,
+            ));
+        }
+        self.aux.pb = Some(pb);
+        Ok((words, vram))
+    }
+    fn stage(&mut self, scan: &Scan, words: &[u32]) -> Turn<kf_chan::user_turn::Staged> {
+        let software = software_snapshot(self.me, self.r)?;
+        let planned = stage_plan(scan, &software, words);
+        self.aux.software = software;
+        let (patched, rare) = planned?;
+        self.aux.patched = patched;
+        Ok(kf_chan::user_turn::Staged { rare })
+    }
+    fn publish_entry(
+        &mut self,
+        _kind: kf_chan::user_turn::PubKind,
+        fetch: &mut Fetch,
+        generation: u64,
+        guest_get: u32,
+        entry: u64,
+    ) -> Turn<()> {
+        publish_guarded(
+            self.me,
+            self.r,
+            self.ram_generation,
+            None,
+            self.aux.ring.as_ref(),
+            self.aux.source.as_ref(),
+            None,
+            |storage| {
+                let (slot, put) = fetch
+                    .publish(Some((generation, guest_get)))
+                    .map_err(str::to_owned)?;
+                storage.write_user_gp(slot, entry)?;
+                storage.publish_put(put)
+            },
+        )?;
+        *self.source_admitted = true;
+        Ok(())
+    }
+    fn publish_gate(
+        &mut self,
+        fetch: &mut Fetch,
+        marks: &mut kf_chan::user_gate::Marks,
+    ) -> Turn<u64> {
+        let mut count = 0;
+        // the barrier, then the marker (a packet is not open: the gate's open-packet branch)
+        publish_guarded(
+            self.me,
+            self.r,
+            self.ram_generation,
+            None,
+            self.aux.ring.as_ref(),
+            self.aux.source.as_ref(),
+            None,
+            |storage| {
+                let (barrier, _) = fetch.publish(None).map_err(str::to_owned)?;
+                storage.write_host_barrier(barrier)?;
+                let (slot, put) = fetch.publish(None).map_err(str::to_owned)?;
+                let (n, value) = marks.issue().map_err(str::to_owned)?;
+                count = n;
+                storage.write_host_marker(slot, value)?;
+                storage.publish_put(put)
+            },
+        )?;
+        *self.source_admitted = true;
+        Ok(count)
+    }
+    fn publish_marker(
+        &mut self,
+        fetch: &mut Fetch,
+        marks: &mut kf_chan::user_gate::Marks,
+    ) -> Turn<()> {
+        // No guest source is involved, so no source guard is taken.
+        publish_guarded(
+            self.me,
+            self.r,
+            self.ram_generation,
+            None,
+            None,
+            None,
+            None,
+            |storage| {
+                let (slot, put) = fetch.publish(None).map_err(str::to_owned)?;
+                let (_, value) = marks.issue().map_err(str::to_owned)?;
+                storage.write_host_marker(slot, value)?;
+                storage.publish_put(put)
+            },
+        )?;
+        Stats::bump(&self.me.relay_stats.markers);
+        Ok(())
+    }
+    fn event(&mut self, e: kf_chan::user_turn::Ev) {
+        use kf_chan::user_turn::Ev;
+        let (me, r) = (self.me, self.r);
+        match e {
+            Ev::CarriedUngated {
+                entry,
+                cursor,
+                generation,
+                carried,
+            } => {
+                Stats::bump(&me.relay_stats.carried_ungated);
+                if self.aux.sync_carried < 4 {
+                    self.aux.sync_carried = self.aux.sync_carried.saturating_add(1);
+                    eprintln!(
+                        "kf3: USER_RING_SYNC_CARRIED {:#x}:{:#x} generation={generation} cursor={cursor} entry={entry:#018x} open_packet={} (#{}) — a SYNC_WAIT entry behind an open packet cannot be gated (no witness fits inside a packet); read at once",
+                        r.key.0,
+                        r.key.1,
+                        carried_text(carried),
+                        self.aux.sync_carried
+                    );
+                } else {
+                    self.aux.sync_carried = self.aux.sync_carried.saturating_add(1);
+                }
+            }
+            Ev::Retry {
+                why,
+                was_retrying,
+                cursor,
+            } => {
+                if self.aux.grace_reported < 4 && !was_retrying {
+                    self.aux.grace_reported = self.aux.grace_reported.saturating_add(1);
+                    eprintln!(
+                        "kf3: USER_RING_SCAN_RETRY {:#x}:{:#x} cursor={cursor} (re-read and rescan up to {} times before refusing): {why}",
+                        r.key.0,
+                        r.key.1,
+                        kf_chan::user_gate::REFUSE_RETRIES
+                    );
+                }
+            }
+            Ev::GatePublished => {
+                self.aux.gate_at = Some(std::time::Instant::now());
+                Stats::bump(&me.relay_stats.gates);
+            }
+            Ev::GateProceeded => {
+                // Measurement only: the SYNC_WAIT drain latency (gate authored -> marker processed).
+                if let Some(at) = self.aux.gate_at.take() {
+                    me.relay_stats
+                        .record_drain(u64::try_from(at.elapsed().as_micros()).unwrap_or(u64::MAX));
+                }
+            }
+            Ev::CreditWait => Stats::bump(&me.relay_stats.credit_waits),
+            Ev::PutBound | Ev::EntryRefused | Ev::ScanRefused => {}
+        }
+    }
+}
+
 impl Pump {
     pub(super) fn new(me: &ChanPlane, subdevice_id: u32, key: (u32, u32)) -> Result<Self, String> {
+        let scan = if userrelay::shadow_enabled() {
+            Scan::default()
+        } else {
+            // The native birth authors this same admitted channel identity.
+            Scan::for_subdevice(subdevice_id).map_err(str::to_owned)?
+        };
         Ok(Self {
             cache: crate::userstore::Cache::new(
                 me.rm,
@@ -479,42 +1008,56 @@ impl Pump {
             )
             .map_err(|e| format!("USER_RING_CACHE {e:?}"))?,
             ram_generation: me.ram.try_generation().ok_or("USER_RING_RAM_TOPOLOGY")?,
-            generation: 1,
             source_admitted: false,
-            cursor: 0,
-            // The native birth authors this same admitted channel identity.
-            scan: if userrelay::shadow_enabled() {
-                Scan::default()
-            } else {
-                Scan::for_subdevice(subdevice_id).map_err(str::to_owned)?
-            },
+            core: kf_chan::user_turn::Relay::new(
+                kf_chan::user_storage::ENTRIES,
+                kf_chan::user_lifecycle::Lifecycle::new()
+                    .with_mode(lifecycle_mode())
+                    .with_latch(me.relay_stats.life.latch.clone()),
+                scan,
+            )
+            .map_err(str::to_owned)?
+            .with_lazy(lazy_config()),
             shadow: userrelay::shadow_enabled()
                 .then(|| super::usershadow::Shadow::new(subdevice_id)),
             key,
-            fetch: Fetch::new(kf_chan::user_storage::ENTRIES).map_err(str::to_owned)?,
             segment: None,
-            guest_get: None,
-            need: kf_chan::user_loop::Need::Idle,
             wait: None,
-            unnotified: false,
-            marker_event: false,
-            gate_at: None,
-            marks: kf_chan::user_gate::Marks::default(),
-            gate_target: 0,
-            again: false,
-            sync: kf_chan::user_gate::SyncGate::default(),
-            grace: kf_chan::user_gate::Grace::default(),
-            grace_reported: 0,
-            grace_was_retrying: false,
-            sync_carried: 0,
+            aux: Aux::default(),
+            sw: None,
             trace: trace_dir().map(|_| Box::new(Trace::new())),
         })
     }
-    pub(super) fn release(&mut self) -> Result<(), String> {
-        if self.sync_carried != 0 {
+    pub(super) fn release(&mut self, stats: &kf_chan::user_loop::Stats) -> Result<(), String> {
+        {
+            let c = self.core.life.counts();
+            if c.entries_scan
+                .saturating_add(c.entries_pointer)
+                .saturating_add(c.entries_window)
+                != 0
+            {
+                eprintln!(
+                    "kf3: USER_RING_LIFECYCLE {:x?} mode={:?} {c:?}",
+                    self.key,
+                    self.core.life.mode()
+                );
+            }
+        }
+        self.core.retire();
+        // ★ lazy observe: the remaining counters join the VM-wide ones; ONE line per relay, at retire
+        let lazy = self.core.lazy.take_delta();
+        stats.lazy.add(&lazy);
+        if self.core.lazy.counts.turns != 0 {
+            eprintln!(
+                "kf3: USER_RING_LAZY_OBSERVE {:x?} {}",
+                self.key,
+                self.core.lazy.counts.summary()
+            );
+        }
+        if self.aux.sync_carried != 0 {
             eprintln!(
                 "kf3: USER_RING_SYNC_CARRIED SUMMARY {:#x}:{:#x} sync_wait_entries_behind_an_open_packet_read_ungated={}",
-                self.key.0, self.key.1, self.sync_carried
+                self.key.0, self.key.1, self.aux.sync_carried
             );
         }
         if let Some(t) = &self.trace {
@@ -538,6 +1081,13 @@ impl Pump {
                 self.key, shadow.counts
             );
         }
+        let (armed, evicted, keep) = self.cache.stats();
+        if evicted > 0 {
+            eprintln!(
+                "kf3: USER_STORE_VIEWS channel {:x?} armed={armed} evicted_at_quota={evicted} keep={keep} (its working set exceeds the per-channel limit: raise user-view-keep)",
+                self.key
+            );
+        }
         self.cache
             .release()
             .map_err(|e| format!("USER_RING_SOURCE_CLEANUP {e:?}"))
@@ -550,16 +1100,69 @@ impl Pump {
         va: u64,
         bytes: usize,
     ) -> Turn<Snapshot<'static>> {
-        userread::snapshot(
-            &r.mirror.rows,
-            &r.mirror.log,
-            me.ram,
-            self.ram_generation,
-            va,
-            bytes,
-            &mut self.cache,
-        )
-        .map_err(|e| source_error(e, "USER_RING_SOURCE"))
+        snapshot_with(&mut self.cache, self.ram_generation, me, r, va, bytes)
+    }
+
+    /// Run `f` on the relay core with the real accessors. The core and the I/O borrow disjoint fields.
+    fn with_io<T>(
+        &mut self,
+        me: &ChanPlane,
+        r: &userrelay::Record,
+        f: impl FnOnce(&mut kf_chan::user_turn::Relay, &mut PumpIo<'_>) -> T,
+    ) -> T {
+        let Pump {
+            core,
+            cache,
+            ram_generation,
+            source_admitted,
+            shadow,
+            sw,
+            trace,
+            aux,
+            ..
+        } = self;
+        let mut io = PumpIo {
+            me,
+            r,
+            cache,
+            ram_generation: *ram_generation,
+            source_admitted,
+            shadow_on: shadow.is_some(),
+            sw,
+            trace,
+            aux,
+        };
+        f(core, &mut io)
+    }
+
+    /// Measurement only: what the last turn published on the private ring.
+    fn trace_published(&mut self) {
+        use kf_chan::user_turn::{PubKind, Published};
+        let Some(p) = self.core.published.take() else {
+            return;
+        };
+        match p {
+            Published::Entry {
+                kind,
+                cursor,
+                entry,
+            } => self.trace_slots(|| {
+                vec![format!(
+                    "guest {} cursor={cursor} entry={entry:#018x}",
+                    if kind == PubKind::Pointer {
+                        "pointer"
+                    } else {
+                        "control"
+                    }
+                )]
+            }),
+            Published::Gate { count } => self.trace_slots(|| {
+                vec![
+                    "host barrier (control NOP, SYNC_WAIT)".into(),
+                    format!("host marker #{count} (SET_REFERENCE + NON_STALL_INTERRUPT)"),
+                ]
+            }),
+        }
     }
 
     /// Measurement only: remember this scanned segment (bounded history, [`trace_dir`]).
@@ -576,29 +1179,29 @@ impl Pump {
         software: &Option<Software>,
     ) {
         let sw = |v: u32| software.as_ref().is_some_and(|s| s.matches(v));
-        let start = self.scan.carried();
-        let end = scan_end(&self.scan, words, sw);
+        let start = self.core.scan.carried();
+        let end = scan_end(&self.core.scan, words, sw);
         let carried_in = carried_text(start);
         let carried_out = match end {
             Ok(c) => carried_text(c),
             Err(i) => format!("refused@{i}"),
         };
-        let cursor = self.cursor;
-        let issued_now = self.fetch.issued();
-        let scan_in = self.scan.clone();
+        let cursor = self.core.cursor;
+        let issued_now = self.core.fetch.issued();
+        let scan_in = self.core.scan.clone();
         let Some(t) = self.trace.as_mut() else {
             return;
         };
-        t.seq += 1;
-        let kept = words[..words.len().min(TRACE_WORDS)].to_vec();
+        t.seq = t.seq.saturating_add(1);
+        let kept = head(words, TRACE_WORDS).to_vec();
         // A segment that starts at a packet boundary and ENDS inside a packet it started: legal
         // hardware framing, but the shape a desync leaves behind. Report it with deferred re-reads.
         if start.is_none() && matches!(end, Ok(Some(_))) && t.straddles < TRACE_STRADDLES {
-            t.straddles += 1;
+            t.straddles = t.straddles.saturating_add(1);
             let now = std::time::Instant::now();
             for delay_ms in [1u64, 20, 200] {
                 t.rereads.push(Reread {
-                    due: now + std::time::Duration::from_millis(delay_ms),
+                    due: after(now, std::time::Duration::from_millis(delay_ms)),
                     delay_ms,
                     verify: None,
                     seq: t.seq,
@@ -637,12 +1240,12 @@ impl Pump {
         // read bytes that are not the final ones?
         if pb.describe().contains("vram")
             && words.len() <= 1024
-            && t.verified + (t.rereads.len() as u64) < 40_000
+            && t.verified.saturating_add(t.rereads.len() as u64) < 40_000
         {
             let now = std::time::Instant::now();
             for delay_us in [200u64, 2000] {
                 t.rereads.push(Reread {
-                    due: now + std::time::Duration::from_micros(delay_us),
+                    due: after(now, std::time::Duration::from_micros(delay_us)),
                     delay_ms: delay_us,
                     verify: Some((now, carried_out.clone())),
                     seq: t.seq,
@@ -657,13 +1260,14 @@ impl Pump {
             }
         }
         while t.history.len() == TRACE_HISTORY
-            || (t.history_words + kept.len() > TRACE_HISTORY_WORDS && !t.history.is_empty())
+            || (t.history_words.saturating_add(kept.len()) > TRACE_HISTORY_WORDS
+                && !t.history.is_empty())
         {
             if let Some(old) = t.history.pop_front() {
-                t.history_words -= old.words.len();
+                t.history_words = t.history_words.saturating_sub(old.words.len());
             }
         }
-        t.history_words += kept.len();
+        t.history_words = t.history_words.saturating_add(kept.len());
         t.history.push_back(SegTrace {
             seq: t.seq,
             at: std::time::Instant::now(),
@@ -683,7 +1287,7 @@ impl Pump {
     /// Measurement only: name the descriptors the last publication issued (the last `what.len()`
     /// sequence numbers). `what` runs only with the trace on.
     fn trace_slots(&mut self, what: impl FnOnce() -> Vec<String>) {
-        let issued = self.fetch.issued();
+        let issued = self.core.fetch.issued();
         let Some(t) = self.trace.as_mut() else {
             return;
         };
@@ -693,7 +1297,7 @@ impl Pump {
             if t.slots.len() == TRACE_SLOTS {
                 t.slots.pop_front();
             }
-            t.slots.push_back((first + i as u64, d));
+            t.slots.push_back((first.saturating_add(i as u64), d));
         }
     }
 
@@ -701,10 +1305,10 @@ impl Pump {
     /// generation, private-ring issue/fetch counts) for 1.5 s while turns keep arriving.
     fn trace_stall(&mut self, me: &ChanPlane, r: &userrelay::Record) {
         let marker = (
-            self.generation,
-            self.cursor,
-            self.fetch.issued(),
-            self.fetch.fetched(),
+            self.core.generation,
+            self.core.cursor,
+            self.core.fetch.issued(),
+            self.core.fetch.fetched(),
         );
         let now = std::time::Instant::now();
         let Some(t) = self.trace.as_mut() else {
@@ -747,13 +1351,13 @@ impl Pump {
             "kf3: USER_RING_TRACE STALL {:#x}:{:#x} no progress 1.5 s: generation={} cursor={} guest_put={put:?} fetch_issued={} fetch_fetched={} native_get={native_get:?} sync={:?} grace_retrying={} segment={segment:?} guest_get_pending={:?}",
             r.key.0,
             r.key.1,
-            self.generation,
-            self.cursor,
-            self.fetch.issued(),
-            self.fetch.fetched(),
-            self.sync,
-            self.grace.retrying(),
-            self.guest_get
+            self.core.generation,
+            self.core.cursor,
+            self.core.fetch.issued(),
+            self.core.fetch.fetched(),
+            self.core.sync,
+            self.core.grace.retrying(),
+            self.core.guest_get
         );
         // ★ 2026-10-14: where the PBDMA stopped — our private USERD as last written back, the
         // descriptors around the private GP_GET, and the scanned segment holding the PB GET.
@@ -763,7 +1367,7 @@ impl Pump {
             .lock()
             .ok()
             .and_then(|s| s.userd_words().ok());
-        let fetched = self.fetch.fetched();
+        let fetched = self.core.fetch.fetched();
         if let Some(u) = userd {
             let pb_get = u64::from(u[17]) | (u64::from(u[24]) << 32);
             let top = u64::from(u[22]) | (u64::from(u[23]) << 32);
@@ -782,7 +1386,7 @@ impl Pump {
             for (seq, d) in t
                 .slots
                 .iter()
-                .filter(|(q, _)| q + 8 >= fetched && *q <= fetched + 8)
+                .filter(|(q, _)| q.saturating_add(8) >= fetched && *q <= fetched.saturating_add(8))
             {
                 let mark = if *seq == fetched {
                     " <== private GP_GET"
@@ -797,13 +1401,13 @@ impl Pump {
             // The scanned guest segment the PB GET lies in (its words at scan time).
             let hit = t.history.iter().rev().find_map(|h| {
                 let d = kf_abi::submit::gp_entry_decode_direct_c56f(h.entry)?;
-                (pb_get >= d.gpu_va && pb_get <= d.gpu_va + d.len_bytes)
-                    .then(|| (h, d.gpu_va, ((pb_get - d.gpu_va) / 4) as usize))
+                (pb_get >= d.gpu_va && pb_get <= d.gpu_va.saturating_add(d.len_bytes))
+                    .then(|| (h, d.gpu_va, (pb_get.saturating_sub(d.gpu_va) / 4) as usize))
             });
             match hit {
                 Some((h, va, at)) => {
                     let lo = at.saturating_sub(8);
-                    let hi = (at + 8).min(h.words.len());
+                    let hi = at.saturating_add(8).min(h.words.len());
                     let words: Vec<String> = h
                         .words
                         .get(lo..hi)
@@ -890,8 +1494,10 @@ impl Pump {
             let fresh: Option<Vec<u32>> = self.snapshot(me, r, x.va, x.bytes).ok().map(|s| {
                 backing_now = Some((s.describe(), s.epoch));
                 s.bytes
-                    .chunks_exact(4)
-                    .map(|w| u32::from_le_bytes([w[0], w[1], w[2], w[3]]))
+                    .as_chunks::<4>()
+                    .0
+                    .iter()
+                    .map(|w| u32::from_le_bytes(*w))
                     .collect()
             });
             let moved = backing_now.as_ref().map(|b| b.0 != x.backing.0);
@@ -906,9 +1512,7 @@ impl Pump {
                 );
                 continue;
             };
-            let diffs: Vec<usize> = (0..fresh.len().min(x.words.len()))
-                .filter(|&i| fresh[i] != x.words[i])
-                .collect();
+            let diffs = differing(&fresh, &x.words);
             let end = match scan_end(&x.scan_in, &fresh, sw) {
                 Ok(c) => carried_text(c),
                 Err(i) => format!("refused@{i}"),
@@ -917,19 +1521,19 @@ impl Pump {
                 let Some(t) = self.trace.as_mut() else {
                     continue;
                 };
-                t.verified += 1;
+                t.verified = t.verified.saturating_add(1);
                 let mut write_file = false;
                 if !diffs.is_empty() {
                     // Before the GPU began this entry: the GPU will execute the NEW bytes, the
                     // scan saw the old ones — a real mismatch. After: possibly a legitimate reuse.
-                    let prefetch = self.fetch.fetched() <= x.seq_at_scan;
+                    let prefetch = self.core.fetch.fetched() <= x.seq_at_scan;
                     if prefetch {
-                        t.stale_prefetch += 1;
+                        t.stale_prefetch = t.stale_prefetch.saturating_add(1);
                     }
-                    t.stale += 1;
+                    t.stale = t.stale.saturating_add(1);
                     let desync = *end_at_scan != end;
                     if desync {
-                        t.stale_desync += 1;
+                        t.stale_desync = t.stale_desync.saturating_add(1);
                     }
                     write_file = t.stale <= 8;
                     if t.stale <= 64 || desync && t.stale_desync <= 64 {
@@ -971,12 +1575,12 @@ impl Pump {
                         r.key.1,
                         x.seq,
                         x.cursor,
-                        self.cursor,
+                        self.core.cursor,
                         now.duration_since(*scanned_at).as_micros(),
                         x.va,
                         x.bytes,
-                        self.fetch.issued(),
-                        self.fetch.fetched()
+                        self.core.fetch.issued(),
+                        self.core.fetch.fetched()
                     );
                     words_text(&mut out, &x.words);
                     out.push_str("re-read:\n");
@@ -990,8 +1594,8 @@ impl Pump {
                                 .wrapping_add(entries)
                                 .wrapping_sub(4)
                                 .wrapping_add(k)
-                                & (entries - 1);
-                            let at = r.source.0 + u64::from(idx) * 8;
+                                & entries.saturating_sub(1);
+                            let at = ring_slot_va(r.source.0, idx);
                             let e = self.snapshot(me, r, at, 8).ok().and_then(|s| {
                                 s.bytes.as_slice().try_into().ok().map(u64::from_le_bytes)
                             });
@@ -1019,25 +1623,25 @@ impl Pump {
                 diffs.len(),
                 diffs.first()
             );
-            if x.delay_ms == 200 {
-                if let Some(dir) = trace_dir() {
-                    let mut out = format!(
-                        "STRADDLE {:#x}:{:#x} seq={} pb_va={:#x} bytes={}\nas scanned:\n",
-                        r.key.0, r.key.1, x.seq, x.va, x.bytes
-                    );
-                    words_text(&mut out, &x.words);
-                    out.push_str("re-read +200ms:\n");
-                    words_text(&mut out, &fresh[..fresh.len().min(TRACE_WORDS)]);
-                    let _ = std::fs::create_dir_all(dir).and_then(|()| {
-                        std::fs::write(
-                            dir.join(format!(
-                                "user-ring-straddle-{:x}-{:x}-{}.txt",
-                                r.key.0, r.key.1, x.seq
-                            )),
-                            out.as_bytes(),
-                        )
-                    });
-                }
+            if x.delay_ms == 200
+                && let Some(dir) = trace_dir()
+            {
+                let mut out = format!(
+                    "STRADDLE {:#x}:{:#x} seq={} pb_va={:#x} bytes={}\nas scanned:\n",
+                    r.key.0, r.key.1, x.seq, x.va, x.bytes
+                );
+                words_text(&mut out, &x.words);
+                out.push_str("re-read +200ms:\n");
+                words_text(&mut out, head(&fresh, TRACE_WORDS));
+                let _ = std::fs::create_dir_all(dir).and_then(|()| {
+                    std::fs::write(
+                        dir.join(format!(
+                            "user-ring-straddle-{:x}-{:x}-{}.txt",
+                            r.key.0, r.key.1, x.seq
+                        )),
+                        out.as_bytes(),
+                    )
+                });
             }
         }
     }
@@ -1102,20 +1706,20 @@ impl Pump {
             r.key.0,
             r.key.1,
             r.idx,
-            self.cursor,
+            self.core.cursor,
             r.source.0,
             d.gpu_va,
             d.len_bytes,
             d.sync_wait,
             d.subroutine,
-            self.generation,
-            self.fetch.issued(),
-            self.fetch.fetched(),
+            self.core.generation,
+            self.core.fetch.issued(),
+            self.core.fetch.fetched(),
             me.queued(r.idx),
             pb.describe(),
-            carried_text(self.scan.carried()),
+            carried_text(self.core.scan.carried()),
         );
-        let (chain, stop) = header_chain(&self.scan, words, sw, 512);
+        let (chain, stop) = header_chain(&self.core.scan, words, sw, 512);
         let _ = writeln!(out, "header chain (index:raw) stop={stop:?}:");
         for c in chain.chunks(8) {
             let line: Vec<String> = c.iter().map(|(i, w)| format!("{i}:{w:08x}")).collect();
@@ -1126,17 +1730,22 @@ impl Pump {
         if entries.is_power_of_two() && entries >= 2 {
             for k in 0..24u32 {
                 let idx = self
+                    .core
                     .cursor
                     .wrapping_add(entries)
                     .wrapping_sub(16)
                     .wrapping_add(k)
-                    & (entries - 1);
-                let at = r.source.0 + u64::from(idx) * 8;
+                    & entries.saturating_sub(1);
+                let at = ring_slot_va(r.source.0, idx);
                 let e = self
                     .snapshot(me, r, at, 8)
                     .ok()
                     .and_then(|s| s.bytes.as_slice().try_into().ok().map(u64::from_le_bytes));
-                let mark = if idx == self.cursor { " <= cursor" } else { "" };
+                let mark = if idx == self.core.cursor {
+                    " <= cursor"
+                } else {
+                    ""
+                };
                 let _ = writeln!(out, "  {idx}: {e:#018x?}{mark}");
             }
         }
@@ -1172,18 +1781,18 @@ impl Pump {
                         s.epoch
                     ));
                     s.bytes
-                        .chunks_exact(4)
-                        .map(|w| u32::from_le_bytes([w[0], w[1], w[2], w[3]]))
+                        .as_chunks::<4>()
+                        .0
+                        .iter()
+                        .map(|w| u32::from_le_bytes(*w))
                         .collect()
                 });
             let (changed, first) = words2.as_ref().map_or((None, None), |w2| {
-                let diffs: Vec<usize> = (0..w2.len().min(words.len()))
-                    .filter(|&i| w2[i] != words[i])
-                    .collect();
+                let diffs = differing(w2, words);
                 (Some(diffs.len()), diffs.first().copied())
             });
             let rescan = words2.as_ref().map(|w2| {
-                self.scan.locate(w2, sw).map_or_else(
+                self.core.scan.locate(w2, sw).map_or_else(
                     || "clean".to_owned(),
                     |l| format!("{:?}@{}", l.refusal, l.at),
                 )
@@ -1194,11 +1803,11 @@ impl Pump {
                 me.queued(r.idx)
             );
             let _ = writeln!(out, "{line}");
-            if let (Some(w2), Some(n)) = (&words2, changed) {
-                if n > 0 {
-                    let _ = writeln!(out, "  reread words:");
-                    words_text(&mut out, &w2[..w2.len().min(TRACE_WORDS)]);
-                }
+            if let (Some(w2), Some(n)) = (&words2, changed)
+                && n > 0
+            {
+                let _ = writeln!(out, "  reread words:");
+                words_text(&mut out, head(w2, TRACE_WORDS));
             }
             summary.push(format!(
                 "+{delay}ms:db={}:changed={}:rescan={}",
@@ -1208,7 +1817,7 @@ impl Pump {
             ));
         }
         let _ = writeln!(out, "failing segment words ({}):", words.len());
-        words_text(&mut out, &words[..words.len().min(TRACE_WORDS)]);
+        words_text(&mut out, head(words, TRACE_WORDS));
         if let Some(t) = self.trace.as_mut() {
             let _ = writeln!(out, "history (oldest first, {} segments):", t.history.len());
             for s in &t.history {
@@ -1233,7 +1842,7 @@ impl Pump {
         }
         let name = format!(
             "user-ring-refusal-{:x}-{:x}-{}.txt",
-            r.key.0, r.key.1, self.cursor
+            r.key.0, r.key.1, self.core.cursor
         );
         let written = std::fs::create_dir_all(dir)
             .and_then(|()| std::fs::write(dir.join(&name), out.as_bytes()));
@@ -1241,7 +1850,7 @@ impl Pump {
             "kf3: USER_RING_TRACE {:#x}:{:#x} cursor={} put={put} entry={entry:#018x} pb_va={:#x} bytes={} doorbell_census(translated,passthrough,other,last_other)={:x?} db_at_put={db_at} db_prev_put={db_prev} puts_with_db={pw} puts_without_db={pwo} {} file={name} written={}",
             r.key.0,
             r.key.1,
-            self.cursor,
+            self.core.cursor,
             d.gpu_va,
             d.len_bytes,
             me.doorbell_census_now(),
@@ -1255,19 +1864,79 @@ impl Pump {
     /// for. No tick: the caller arms the wake ([`ChanPlane::user_ring_serve`]).
     fn turn(&mut self, me: &ChanPlane, r: &mut userrelay::Record) -> Turn<bool> {
         use kf_chan::user_loop::Need;
-        self.need = Need::Idle;
-        self.again = false;
+        self.core.need = Need::Idle;
+        self.core.again = false;
         let out = self.turn_body(me, r);
+        self.report_lifecycle_notices();
+        self.core.sync_tally();
+        {
+            let d = self.core.life.take_delta();
+            me.relay_stats.life.add(&d);
+            me.relay_stats
+                .life
+                .set_object_max(self.core.life.counts().set_object_5080_total);
+            if self.core.life.mode() == kf_chan::user_lifecycle::Mode::Window {
+                me.relay_stats
+                    .life
+                    .window_max(self.core.life.counts().window_entries_max);
+            }
+        }
+        // lazy observe: fold the plain per-relay counters into the VM-wide atomics every 256th turn (and at retire)
+        if self.core.lazy.flush_due() {
+            me.relay_stats.lazy.add(&self.core.lazy.take_delta());
+        }
         match &out {
-            Ok(_) if self.again => self.need = Need::Again,
-            Err(Failure::Retry) => self.need = Need::Contended,
+            Ok(_) if self.core.again => self.core.need = Need::Again,
+            Err(Failure::Retry) => self.core.need = Need::Contended,
             _ => {}
         }
         out
     }
 
+    /// Say aloud what the lifecycle machine queued in this turn (it has no I/O): the P2' falsifier lines and the
+    /// per-flip Window line. Bounded by the machine (a few per channel outside a Window).
+    fn report_lifecycle_notices(&mut self) {
+        use kf_chan::user_lifecycle::Notice;
+        for n in self.core.life.take_notices() {
+            let key = self.key;
+            match n {
+                Notice::PutBoundaryOpen {
+                    mode,
+                    relayed,
+                    put_abs,
+                    nth,
+                } => eprintln!(
+                    "kf3: USER_RING_PUT_BOUNDARY_OPEN {:#x}:{:#x} mode={mode:?} nth={nth} cursor_slot={} put_slot={} relayed={relayed} put_abs={put_abs} open_packet={} — the guest's GP_PUT is NOT a packet boundary here (assumption P2' is false for this guest)",
+                    key.0,
+                    key.1,
+                    self.core.cursor,
+                    self.core.put,
+                    carried_text(self.core.put_packet)
+                ),
+                Notice::MarkersLatchedOff {
+                    mode,
+                    relayed,
+                    put_abs,
+                } => eprintln!(
+                    "kf3: USER_RING_POINTER_MARKERS_LATCHED_OFF {:#x}:{:#x} mode={mode:?} relayed={relayed} put_abs={put_abs} — first packet open at a GP_PUT boundary in this VM: Pointer-mode markers are switched OFF for every channel (performance fallback: bounded spin and the counted backstop; no entry is lost or duplicated). Anchored windows stay.",
+                    key.0, key.1
+                ),
+                Notice::WindowFresh {
+                    cursor,
+                    anchor,
+                    anchor_forwarded,
+                    seeded,
+                    stale,
+                    first,
+                } => eprintln!(
+                    "kf3: USER_RING_WINDOW_FRESH {:#x}:{:#x} cursor={cursor} anchor={anchor} anchor_forwarded={anchor_forwarded} seeded={seeded} stale_anchor={stale} first_segment={first:?}",
+                    key.0, key.1
+                ),
+            }
+        }
+    }
+
     fn turn_body(&mut self, me: &ChanPlane, r: &mut userrelay::Record) -> Turn<bool> {
-        use kf_chan::user_loop::Need;
         if self.trace.as_ref().is_some_and(|t| !t.rereads.is_empty()) {
             // Measurement only: the deferred re-reads of `KF3_USER_RING_TRACE` run on the worker's
             // trace refresh (`ChanPlane::user_ring_refresh`), never in production.
@@ -1282,335 +1951,83 @@ impl Pump {
             self.trace_stall(me, r);
         }
         let native = r.chan.ok_or("USER_RING_NATIVE_ABSENT")?;
-        let (get, reference) = {
-            let storage = r
-                .lease
-                .storage
-                .lock()
-                .map_err(|_| "USER_RING_STORAGE_POISONED")?;
-            (storage.gpu_get()?, storage.gpu_reference()?)
-        };
-        self.marks.observe(reference);
-        for (generation, get) in self.fetch.observe(get).map_err(str::to_owned)? {
-            if generation == self.generation {
-                self.guest_get = Some((generation, get));
-            }
-        }
-        if let Some((generation, get)) = self.guest_get {
-            if generation == self.generation {
-                // Logical memory access revalidates Free/reuse and RAM topology.
-                match r.userd.write(
-                    me,
-                    r.key,
-                    &r.allocation,
-                    kf_abi::submit::USERD_GP_GET,
-                    &get.to_le_bytes(),
-                ) {
-                    Ok(()) => self.guest_get = None,
-                    Err(kf_rm::memory_list::AccessError::Busy) => {
-                        // an admission lock is busy: look again (spin, then the safety net)
-                        self.need = Need::Contended;
-                        return Ok(false);
+        // ★ 2026-10-16 (PHASE 1b): observe, write back, read GP_PUT, load, plan, gate, publish / read / scan all run
+        // in `kf_chan::user_turn::Relay` (the same code the interleaving model drives); the pump takes over for a
+        // segment in flight and for a scanned segment (`segment_turn`).
+        self.core.segment_pending = self.segment.is_some();
+        self.core.phase = kf_chan::user_turn::Phase::Obs;
+        loop {
+            let step = self.with_io(me, r, |core, io| core.step(io));
+            let step = match step {
+                Ok(step) => step,
+                Err(e) => {
+                    if self.trace.is_some() && self.core.scan_failed {
+                        self.trace_scan_failure(me, r, &e);
                     }
-                    Err(e) => return Err(format!("USER_RING_GET_WRITE {e:?}").into()),
+                    self.trace_published();
+                    return Err(e);
                 }
-            } else {
-                self.guest_get = None;
-            }
-        }
-        if self.segment.is_none() {
-            if me.inbox.walk_busy() {
-                me.inbox.wait_walk(r.idx);
-                return Ok(false);
-            }
-            // Doorbells counted BEFORE the PUT read (measurement only today).
-            let doorbells = me.queued(r.idx);
-            let mut put = [0u8; 4];
-            r.userd
-                .read(
-                    me,
-                    r.key,
-                    &r.allocation,
-                    kf_abi::submit::USERD_GP_PUT,
-                    &mut put,
-                )
-                .map_err(|e| match e {
-                    // The USERD's allocation is no longer the channel's current one: the guest's
-                    // free is retiring this relay (`retire_user_ring_token` cancels the record next).
-                    // Not a refusal -- nothing was read or published; the look-again budget bounds it.
-                    kf_rm::memory_list::AccessError::Gone => Failure::Retry,
-                    e => access_error(e, "USER_RING_PUT_READ"),
-                })?;
-            let put = u32::from_le_bytes(put);
-            if put >= r.source.1 {
-                return Err("USER_RING_PUT_BOUND".into());
-            }
-            if put == self.cursor {
-                return self.end_batch(me, r);
-            }
-            if let Some(t) = self.trace.as_mut() {
-                t.note_put(doorbells);
-            }
-            // Declaration admission only, not a pin. Native never fetches the
-            // guest ring; EACH current GP/PB still has fresh exact source guards.
-            let ring = if self.source_admitted {
-                None
-            } else {
-                Some(
-                    userread::mapped(
-                        &r.mirror.rows,
-                        &r.mirror.log,
-                        me.ram,
-                        self.ram_generation,
-                        r.source.0,
-                        u64::from(r.source.1) * 8,
-                        store_read_bound(me.layout.carve()),
-                    )
-                    .map_err(|e| source_error(e, "USER_RING_WHOLE_RING"))?,
-                )
             };
-            let va = u64::from(self.cursor)
-                .checked_mul(8)
-                .and_then(|off| r.source.0.checked_add(off))
-                .ok_or("USER_RING_GP_ADDRESS")?;
-            let source = self.snapshot(me, r, va, 8)?;
-            let entry = u64::from_le_bytes(
-                source
-                    .bytes
-                    .as_slice()
-                    .try_into()
-                    .map_err(|_| "USER_RING_GP_SNAPSHOT_SIZE")?,
-            );
-            if self.shadow.is_some() {
-                return self.shadow_entry(me, r, ring, source, entry);
-            }
-            let descriptor = kf_chan::user_stream::inspect_entry(entry, userread::MAX_BYTES as u64)
-                .map_err(|e| {
-                    format!(
-                        "USER_RING_GP_FORMAT {e:?} entry={entry:#018x} source_va={va:#x} cursor={:#x} put={put:#x} entries={}",
-                        self.cursor, r.source.1
-                    )
-                })?;
-            let guest_get =
-                self.cursor.checked_add(1).ok_or("USER_RING_CURSOR")? & (r.source.1 - 1);
-            // ★★ 2026-10-14 — GP_ENTRY1_SYNC_WAIT (public dev_pbdma.ref "NV_PPBDMA_GP_ENTRY1_SYNC":
-            // Host does not begin fetching this entry's segment — and, for a LENGTH-0 entry, any
-            // later one — until the preceding segment has been PROCESSED). A guest may therefore
-            // publish entries behind a SYNC_WAIT whose pushbuffers it fills only later, gated by a
-            // semaphore acquire in the preceding segment (measured, Win11 + 580.88: every scan
-            // refusal and stale read sat behind an unfetched SYNC_WAIT NOP; the bytes were filled
-            // within ms). Reading them early scans bytes the GPU will never fetch. So: before
-            // touching anything at or after a SYNC_WAIT entry, author the same wait on our own
-            // ring (barrier NOP + witness, exactly as staged segments do) and read on only once
-            // the witness has begun processing — i.e. once the hardware itself would fetch.
-            // ★ 2026-10-14 (MEASURED, `kf-syncwait-stress --families barrier`): the proof that the
-            // barrier's wait finished is the marker's `USERD.REFERENCE` write, NOT `GP_GET` -- the
-            // PBDMA pops GP entries ahead of processing (with an acquire stalling entry 0 `GP_GET`
-            // already covered all three entries and the segment behind the barrier had not run).
-            // A SYNC_WAIT entry reached with a packet OPEN across it has no witness (no byte may
-            // enter an open packet) and the hardware does not delay it either (the split packet's
-            // header counts the preceding segment as processed): it is read at once and counted.
-            let verdict = if entry >> 63 & 1 == 1 && self.scan.carried().is_some() {
-                Stats::bump(&me.relay_stats.carried_ungated);
-                if self.sync_carried < 4 {
-                    self.sync_carried += 1;
-                    eprintln!(
-                        "kf3: USER_RING_SYNC_CARRIED {:#x}:{:#x} generation={} cursor={} entry={entry:#018x} open_packet={} (#{}) — a SYNC_WAIT entry behind an open packet cannot be gated (no witness fits inside a packet); read at once",
-                        r.key.0,
-                        r.key.1,
-                        self.generation,
-                        self.cursor,
-                        carried_text(self.scan.carried()),
-                        self.sync_carried
-                    );
-                } else {
-                    self.sync_carried = self.sync_carried.saturating_add(1);
+            use kf_chan::user_turn::Step;
+            match step {
+                Step::More => {}
+                Step::Idle { submitted } => {
+                    self.trace_published();
+                    return Ok(submitted);
                 }
-                kf_chan::user_gate::Gate::Proceed
-            } else {
-                self.sync
-                    .entry(entry, self.generation, self.cursor, self.marks.seen())
-            };
-            match verdict {
-                kf_chan::user_gate::Gate::Proceed => {
-                    // Measurement only: the SYNC_WAIT drain latency (gate authored -> marker processed).
-                    if let Some(at) = self.gate_at.take() {
-                        me.relay_stats.record_drain(
-                            u64::try_from(at.elapsed().as_micros()).unwrap_or(u64::MAX),
-                        );
+                Step::Shadow => {
+                    let entry = self.core.raw;
+                    let ring = self.aux.ring.take();
+                    let source = self.aux.source.take().ok_or("USER_RING_SHADOW_SOURCE")?;
+                    return self.shadow_entry(me, r, ring, source, entry);
+                }
+                Step::Segment => break,
+                Step::Scanned { rare } => {
+                    let pb = self.aux.pb.take().ok_or("USER_RING_SCAN_PB_ABSENT")?;
+                    let source = self
+                        .aux
+                        .source
+                        .take()
+                        .ok_or("USER_RING_SCAN_SOURCE_ABSENT")?;
+                    let software = self.aux.software.take();
+                    if self.trace.is_some()
+                        && let Some(kf_chan::user_stream::Source::Segment(d)) = self.core.desc
+                    {
+                        let (put, entry) = (self.core.put, self.core.raw);
+                        let words = std::mem::take(&mut self.core.words);
+                        self.trace_segment(r, put, entry, d, &pb, &words, rare, &software);
+                        self.core.words = words;
                     }
-                }
-                kf_chan::user_gate::Gate::Wait => {
-                    // The marker's interrupt announces it (its processing writes the reference).
-                    self.need = Need::Marker {
-                        target: self.gate_target,
-                    };
-                    return Ok(false);
-                }
-                kf_chan::user_gate::Gate::PublishBarrier => {
-                    if self.fetch.available() < 2 {
-                        return self.credit_wait(me, r);
-                    }
-                    // the barrier, then the marker (a packet is not open: the branch above)
-                    let mut count = 0;
-                    self.publish(
-                        me,
-                        r,
-                        None,
-                        ring.as_ref(),
-                        Some(&source),
-                        None,
-                        |pump, storage| {
-                            let (barrier, _) = pump.fetch.publish(None).map_err(str::to_owned)?;
-                            storage.write_host_barrier(barrier)?;
-                            let (slot, put) = pump.fetch.publish(None).map_err(str::to_owned)?;
-                            let (n, value) = pump.marks.issue().map_err(str::to_owned)?;
-                            count = n;
-                            storage.write_host_marker(slot, value)?;
-                            storage.publish_put(put)
-                        },
-                    )?;
-                    self.trace_slots(|| {
-                        vec![
-                            "host barrier (control NOP, SYNC_WAIT)".into(),
-                            format!("host marker #{count} (SET_REFERENCE + NON_STALL_INTERRUPT)"),
-                        ]
+                    self.segment = Some(Segment {
+                        ring: self.aux.ring.take(),
+                        software,
+                        source,
+                        pb,
+                        entry: self.core.raw,
+                        words: std::mem::take(&mut self.core.words),
+                        patched: std::mem::take(&mut self.aux.patched),
+                        at: 0,
+                        generation: self.core.generation,
+                        guest_get: self.core.next_get,
+                        rare,
+                        staged: false,
+                        wait: None,
                     });
-                    self.source_admitted = true;
-                    self.sync.published(count);
-                    self.gate_target = count;
-                    // the marker is this batch's marker too
-                    self.unnotified = false;
-                    self.marker_event = true;
-                    self.gate_at = Some(std::time::Instant::now());
-                    Stats::bump(&me.relay_stats.gates);
-                    self.need = Need::Marker { target: count };
-                    return Ok(true);
+                    break;
                 }
             }
-            if matches!(descriptor, kf_chan::user_stream::Source::Nop) {
-                // one slot stays back for the batch marker
-                if self.fetch.available() < 2 {
-                    return self.credit_wait(me, r);
-                }
-                self.publish(
-                    me,
-                    r,
-                    None,
-                    ring.as_ref(),
-                    Some(&source),
-                    None,
-                    |pump, storage| {
-                        let (slot, put) = pump
-                            .fetch
-                            .publish(Some((pump.generation, guest_get)))
-                            .map_err(str::to_owned)?;
-                        storage.write_user_gp(slot, entry)?;
-                        storage.publish_put(put)
-                    },
-                )?;
-                let cursor = self.cursor;
-                self.trace_slots(|| {
-                    vec![format!("guest control cursor={cursor} entry={entry:#018x}")]
-                });
-                self.source_admitted = true;
-                self.cursor = guest_get;
-                self.unnotified = true;
-                self.again = true;
-                return Ok(true);
-            }
-            let kf_chan::user_stream::Source::Segment(descriptor) = descriptor else {
-                return Err("USER_RING_GP_FORMAT".into());
-            };
-            let pb = self.snapshot(
-                me,
-                r,
-                descriptor.gpu_va,
-                usize::try_from(descriptor.len_bytes).map_err(|_| "USER_RING_PB_SIZE")?,
-            )?;
-            let mut words = Vec::new();
-            words
-                .try_reserve_exact(pb.bytes.len() / 4)
-                .map_err(|_| "USER_RING_SCAN_ALLOC")?;
-            for word in pb.bytes.chunks_exact(4) {
-                words.push(u32::from_le_bytes(
-                    word.try_into().map_err(|_| "USER_RING_WORD")?,
-                ));
-            }
-            let software = software_snapshot(me, r)?;
-            self.grace_was_retrying = self.grace.retrying();
-            let planned = match stage_plan(&self.scan, &software, &words) {
-                // ★ 2026-10-14: a scan refusal of a segment never published is re-read and rescanned
-                // `REFUSE_RETRIES` times -- a COUNT, never a clock -- before it is final
-                // (`kf_chan::user_gate::Grace`); the re-read is an immediate re-turn.
-                Err(Failure::Refused(why))
-                    if (why.starts_with("USER_RING_SCAN ")
-                        || why == "USER_RING_TRIGGER_PARTIAL_SUFFIX_UNSUPPORTED")
-                        && self.grace.refused(self.generation, self.cursor) =>
-                {
-                    if self.grace_reported < 4 && !self.grace_was_retrying {
-                        self.grace_reported += 1;
-                        eprintln!(
-                            "kf3: USER_RING_SCAN_RETRY {:#x}:{:#x} cursor={} (re-read and rescan up to {} times before refusing): {why}",
-                            r.key.0,
-                            r.key.1,
-                            self.cursor,
-                            kf_chan::user_gate::REFUSE_RETRIES
-                        );
-                    }
-                    self.again = true;
-                    return Ok(false);
-                }
-                other => other,
-            };
-            if planned.is_ok() {
-                self.grace.clear();
-            }
-            if self.trace.is_some() {
-                match &planned {
-                    Ok((_, rare)) => {
-                        self.trace_segment(r, put, entry, descriptor, &pb, &words, *rare, &software)
-                    }
-                    Err(why) => self.trace_refusal(
-                        me,
-                        r,
-                        (put, va, entry),
-                        descriptor,
-                        &pb,
-                        &words,
-                        &software,
-                        why,
-                    ),
-                }
-            }
-            let (patched, rare) = planned?;
-            self.segment = Some(Segment {
-                ring,
-                software,
-                source,
-                pb,
-                entry,
-                words,
-                patched,
-                at: 0,
-                generation: self.generation,
-                guest_get,
-                rare,
-                staged: false,
-                wait: None,
-            });
         }
         let mut segment = self.segment.take().ok_or("USER_RING_SEGMENT_ABSENT")?;
         let outcome = self.segment_turn(me, r, native, &mut segment);
         match outcome {
             Ok((submitted, finished)) => {
                 if !finished {
-                    // `segment_turn` said what it waits for (`self.need`); the segment stays
+                    // `segment_turn` said what it waits for (`self.core.need`); the segment stays
                     self.segment = Some(segment);
                 }
                 // A CPU-only action/receipt can expose a new source delta too.
                 // Preserve a durable worker pass even with no new guest ring.
-                self.again = finished || submitted;
+                self.core.again = finished || submitted;
                 Ok(submitted)
             }
             Err(e) => {
@@ -1620,99 +2037,25 @@ impl Pump {
         }
     }
 
-    /// ★ 2026-10-14 -- the batch marker (`kf_chan::user_loop`, design doc §3.3): one private segment
-    /// `[NON_STALL_INTERRUPT, 0]` behind everything published so far. Its `GP_GET` passing is the
-    /// proof every earlier entry began processing; its interrupt (the engine's non-stall event, in the
-    /// worker's epoll) is the wake. No guest source is involved, so no source guard is taken.
-    fn publish_marker(&mut self, me: &ChanPlane, r: &userrelay::Record) -> Turn<()> {
-        self.publish(me, r, None, None, None, None, |pump, storage| {
-            let (slot, put) = pump.fetch.publish(None).map_err(str::to_owned)?;
-            let (_, value) = pump.marks.issue().map_err(str::to_owned)?;
-            storage.write_host_marker(slot, value)?;
-            storage.publish_put(put)
-        })?;
-        self.unnotified = false;
-        self.marker_event = true;
-        Stats::bump(&me.relay_stats.markers);
-        Ok(())
-    }
-
-    /// The turn found `GP_PUT == cursor`. End the batch: a marker behind unannounced work when a
-    /// packet boundary allows it (a packet the scan carries open owns the next dword -- no byte may
-    /// enter), and wait for that marker to be PROCESSED: its interrupt is the wake, its reference
-    /// the proof, and processing implies the pops the guest's `GP_GET` write-back needs. With no
-    /// marker possible the relay waits for the pops themselves (spin / safety net).
-    fn end_batch(&mut self, me: &ChanPlane, r: &userrelay::Record) -> Turn<bool> {
-        use kf_chan::user_loop::Need;
-        if self.unnotified {
-            if self.scan.carried().is_some() {
-                // no marker is possible: the wake for this work is the spin or the safety net
-                self.unnotified = false;
-                self.marker_event = false;
-                self.need = Need::Popped {
-                    target: self.fetch.issued(),
-                };
-                return Ok(false);
-            }
-            if self.fetch.available() >= 1 {
-                self.publish_marker(me, r)?;
-                self.need = Need::Marker {
-                    target: self.marks.issued(),
-                };
-                return Ok(true);
-            }
-            self.need = Need::Popped {
-                target: self.fetch.fetched() + 1,
-            };
-            return Ok(false);
-        }
-        if self.fetch.fetched() < self.fetch.issued() {
-            // published work in flight: the last marker's processing frees the guest's ring (the
-            // `GP_GET` write-back)
-            self.need = if self.marker_event {
-                Need::Marker {
-                    target: self.marks.issued(),
-                }
-            } else {
-                Need::Popped {
-                    target: self.fetch.issued(),
-                }
-            };
-        }
-        Ok(false)
-    }
-
-    /// The private ring has no credit for what the turn wants to publish. Put a marker behind the
-    /// unannounced work out of the reserved slot first, so SOME interrupt announces progress.
-    fn credit_need(&mut self, me: &ChanPlane, r: &userrelay::Record) -> Turn<()> {
-        use kf_chan::user_loop::Need;
-        let mut marker = self.marker_event;
-        if self.unnotified {
-            if self.scan.carried().is_none() && self.fetch.available() >= 1 {
-                self.publish_marker(me, r)?;
-                marker = true;
-            } else {
-                self.unnotified = false;
-                self.marker_event = false;
-                marker = false;
-            }
-        }
-        Stats::bump(&me.relay_stats.credit_waits);
-        self.need = if marker {
-            Need::Marker {
-                target: self.marks.issued(),
-            }
-        } else {
-            Need::Popped {
-                target: self.fetch.fetched() + 1,
-            }
+    /// Measurement only: the final scan refusal of the turn (the relay stopped at it).
+    fn trace_scan_failure(&mut self, me: &ChanPlane, r: &userrelay::Record, why: &Failure) {
+        let Some(kf_chan::user_stream::Source::Segment(d)) = self.core.desc else {
+            return;
         };
-        Ok(())
+        let (put, entry) = (self.core.put, self.core.raw);
+        let va = ring_slot_va(r.source.0, self.core.cursor);
+        let (Some(pb), words) = (self.aux.pb.take(), std::mem::take(&mut self.core.words)) else {
+            return;
+        };
+        let software = self.aux.software.clone();
+        self.trace_refusal(me, r, (put, va, entry), d, &pb, &words, &software, why);
+        self.aux.pb = Some(pb);
+        self.core.words = words;
     }
 
-    fn credit_wait(&mut self, me: &ChanPlane, r: &userrelay::Record) -> Turn<bool> {
-        self.credit_need(me, r)?;
-        Ok(false)
+    /// The private ring has no credit for what the segment wants to publish (see `Relay::credit_need`).
+    fn credit_need(&mut self, me: &ChanPlane, r: &userrelay::Record) -> Turn<()> {
+        self.with_io(me, r, |core, io| core.credit_need(io))
     }
 
     /// No host verb inside any admission guard. The caller holds Record over
@@ -1727,9 +2070,9 @@ impl Pump {
         entry: u64,
     ) -> Turn<bool> {
         use super::usershadow::Class;
-        if self.fetch.available() == 0 {
-            self.need = kf_chan::user_loop::Need::Popped {
-                target: self.fetch.fetched() + 1,
+        if self.core.fetch.available() == 0 {
+            self.core.need = kf_chan::user_loop::Need::Popped {
+                target: self.core.fetch.fetched().saturating_add(1),
             };
             return Ok(false);
         }
@@ -1813,14 +2156,14 @@ impl Pump {
                 r.key,
                 r.idx,
                 r.chan.map(|c| (c.chan, c.token)),
-                self.generation,
-                self.fetch.issued(),
+                self.core.generation,
+                self.core.fetch.issued(),
                 class.category(),
-                self.cursor,
+                self.core.cursor,
                 source.epoch
             );
         }
-        let guest_get = (self.cursor + 1) & (r.source.1 - 1);
+        let guest_get = self.core.cursor.wrapping_add(1) & r.source.1.saturating_sub(1);
         let publication = self.publish(
             me,
             r,
@@ -1830,8 +2173,9 @@ impl Pump {
             None,
             |pump, storage| {
                 let (slot, put) = pump
+                    .core
                     .fetch
-                    .publish(Some((pump.generation, guest_get)))
+                    .publish(Some((pump.core.generation, guest_get)))
                     .map_err(str::to_owned)?;
                 storage.write_shadow_gp(slot, entry)?;
                 storage.publish_put(put)
@@ -1841,8 +2185,8 @@ impl Pump {
         self.shadow = Some(shadow);
         publication?;
         self.source_admitted = true;
-        self.cursor = guest_get;
-        self.again = true;
+        self.core.cursor = guest_get;
+        self.core.again = true;
         Ok(true)
     }
 
@@ -1859,72 +2203,10 @@ impl Pump {
             &kf_chan::user_storage::Storage<kf_chan::user_storage::CpuView>,
         ) -> Result<(), String>,
     ) -> Turn<()> {
-        if me.inbox.walk_busy() {
-            me.inbox.wait_walk(r.idx);
-            return Err(Failure::Retry);
-        }
-        let userd = r.userd.clone();
-        userd
-            .admit(|| -> Turn<()> {
-                let mut pt = locked(me.pt.try_lock(), "USER_RING_PT_POISONED")?;
-                let t = pt
-                    .get_mut(&r.key)
-                    .filter(|t| t.user_ring && Arc::ptr_eq(&t.allocation, &r.allocation))
-                    .ok_or("USER_RING_ALLOCATION_GONE")?;
-                if software.is_some_and(|expected| !same_software(expected, &t.user_defapi)) {
-                    return Err(Failure::Retry);
-                }
-                if let Some(sw) = &t.user_defapi {
-                    if !sw.live.load(Ordering::Acquire) {
-                        return Err("USER_RING_SOFTWARE_OBJECT_GONE".into());
-                    }
-                    if !sw.ready.load(Ordering::Acquire) {
-                        return Err(Failure::Retry);
-                    }
-                }
-                if t.stopped || t.disabled {
-                    return Err(Failure::Retry);
-                }
-                if me.stop.load(Ordering::Acquire) {
-                    return Err("USER_RING_PUBLICATION_STOPPED".into());
-                }
-                let storage = locked(r.lease.storage.try_lock(), "USER_RING_STORAGE_POISONED")?;
-                // Exclude first-object admission even on an uncertain native write.
-                // A premature/hostile doorbell can only close its own admission.
-                let publish = || {
-                    me.ram
-                        .admit_user_generation(self.ram_generation, || {
-                            t.user_published = true;
-                            write(self, &storage).map_err(Failure::from)
-                        })
-                        .map_err(|e| source_error(e, "USER_RING_PUBLICATION_TOPOLOGY"))?
-                };
-                let sources = || {
-                    if let Some(gp) = gp {
-                        gp.admit(|| {
-                            if let Some(pb) = pb {
-                                pb.admit(publish)
-                                    .map_err(|e| source_error(e, "USER_RING_PB_ADMISSION"))?
-                            } else {
-                                publish()
-                            }
-                        })
-                        .map_err(|e| source_error(e, "USER_RING_GP_ADMISSION"))?
-                    } else {
-                        publish()
-                    }
-                };
-                if let Some(ring) = ring {
-                    ring.admit(sources)
-                        .map_err(|e| source_error(e, "USER_RING_WHOLE_RING_ADMISSION"))?
-                } else {
-                    sources()
-                }
-            })
-            .map_err(|e| access_error(e, "USER_RING_USERD_ADMISSION"))??;
-        me.rm
-            .doorbell(r.chan.ok_or("USER_RING_NATIVE_ABSENT")?.token)
-            .map_err(|e| format!("USER_RING_DOORBELL_UNCERTAIN {e:?}").into())
+        let ram_generation = self.ram_generation;
+        publish_guarded(me, r, ram_generation, software, ring, gp, pb, |storage| {
+            write(self, storage)
+        })
     }
 
     fn segment_turn(
@@ -1935,12 +2217,12 @@ impl Pump {
         s: &mut Segment,
     ) -> Turn<(bool, bool)> {
         if let Some(mut wait) = s.wait.take() {
-            if self.marks.seen() < wait.witness {
+            if self.core.marks.seen() < wait.witness {
                 let target = wait.witness;
                 s.wait = Some(wait);
                 // the staged witness is a marker: its processing writes the reference, its
                 // interrupt is the wake
-                self.need = kf_chan::user_loop::Need::Marker { target };
+                self.core.need = kf_chan::user_loop::Need::Marker { target };
                 return Ok((false, false));
             }
             if let Some(trigger) = wait.trigger {
@@ -1971,7 +2253,7 @@ impl Pump {
             // the first representing descriptor's real fetch, independently.
             return Ok((false, true));
         }
-        let mut next = self.scan.clone();
+        let mut next = self.core.scan.clone();
         let trigger = next
             .segment(s.words.get(s.at..).ok_or("USER_RING_SCAN_BOUND")?, |v| {
                 s.software.as_ref().is_some_and(|sw| sw.matches(v))
@@ -1979,7 +2261,7 @@ impl Pump {
             .map_err(|e| format!("USER_RING_SCAN {e:?}"))?;
         if !s.rare {
             // one slot stays back for the batch marker
-            if self.fetch.available() < 2 {
+            if self.core.fetch.available() < 2 {
                 self.credit_need(me, r)?;
                 return Ok((false, false));
             }
@@ -1992,6 +2274,7 @@ impl Pump {
                 Some(&s.pb),
                 |pump, storage| {
                     let (slot, put) = pump
+                        .core
                         .fetch
                         .publish(Some((s.generation, s.guest_get)))
                         .map_err(str::to_owned)?;
@@ -1999,8 +2282,8 @@ impl Pump {
                     storage.publish_put(put)
                 },
             )?;
-            let (cursor, entry, n) = (self.cursor, s.entry, s.words.len());
-            let (cin, cout) = (self.scan.carried(), next.carried());
+            let (cursor, entry, n) = (self.core.cursor, s.entry, s.words.len());
+            let (cin, cout) = (self.core.scan.carried(), next.carried());
             self.trace_slots(|| {
                 vec![format!(
                     "guest segment cursor={cursor} entry={entry:#018x} words={n} carried_in={} carried_out={}",
@@ -2009,9 +2292,13 @@ impl Pump {
                 )]
             });
             self.source_admitted = true;
-            self.scan = next;
-            self.cursor = s.guest_get;
-            self.unnotified = true;
+            self.core.scan = next;
+            self.core
+                .life
+                .segment_scanned(self.core.scan.carried().is_some());
+            self.core.cursor = s.guest_get;
+            self.core.note_relayed(s.entry);
+            self.core.unnotified = true;
             return Ok((true, true));
         }
         let mut end = trigger.map_or(s.words.len(), |t| s.at.saturating_add(t.start));
@@ -2031,7 +2318,7 @@ impl Pump {
             .and_then(|n| n.checked_mul(4))
             .ok_or("USER_RING_PREFIX_BOUND")?;
         let credits = if bytes == 0 { 2 } else { 3 };
-        if self.fetch.available() < credits {
+        if self.core.fetch.available() < credits {
             self.credit_need(me, r)?;
             return Ok((false, false));
         }
@@ -2057,7 +2344,7 @@ impl Pump {
             |pump, storage| {
                 if bytes != 0 {
                     let source = source_receipt(s.staged, true, s.generation, s.guest_get);
-                    let (slot, _) = pump.fetch.publish(source).map_err(str::to_owned)?;
+                    let (slot, _) = pump.core.fetch.publish(source).map_err(str::to_owned)?;
                     storage.write_gp_level(
                         slot,
                         (s.at as u64)
@@ -2069,10 +2356,10 @@ impl Pump {
                     )?;
                 }
                 let source = source_receipt(s.staged, bytes == 0, s.generation, s.guest_get);
-                let (barrier, _) = pump.fetch.publish(source).map_err(str::to_owned)?;
+                let (barrier, _) = pump.core.fetch.publish(source).map_err(str::to_owned)?;
                 storage.write_host_barrier(barrier)?;
-                let (witness, put) = pump.fetch.publish(None).map_err(str::to_owned)?;
-                let (_, value) = pump.marks.issue().map_err(str::to_owned)?;
+                let (witness, put) = pump.core.fetch.publish(None).map_err(str::to_owned)?;
+                let (_, value) = pump.core.marks.issue().map_err(str::to_owned)?;
                 storage.write_host_marker(witness, value)?;
                 storage.publish_put(put)
             },
@@ -2089,14 +2376,18 @@ impl Pump {
             v.push("host witness Bytes (staged; batch marker)".into());
             v
         });
-        if !s.staged && s.generation == self.generation {
+        if !s.staged && s.generation == self.core.generation {
             self.source_admitted = true;
-            self.cursor = s.guest_get;
+            self.core.cursor = s.guest_get;
+            self.core.note_relayed(s.entry);
         }
         s.staged = true;
-        self.scan = next;
+        self.core.scan = next;
+        self.core
+            .life
+            .segment_scanned(self.core.scan.carried().is_some());
         s.wait = Some(Wait {
-            witness: self.marks.issued(),
+            witness: self.core.marks.issued(),
             trigger,
             action: None,
             gapless,
@@ -2121,10 +2412,7 @@ impl Pump {
         if !sw.matches(call.value) {
             return false;
         }
-        let key = kf_rm::defapi::ObjKey {
-            client: r.key.0,
-            object: sw.guest,
-        };
+        let key = software_key(r.key.0, &sw);
         reg.lookup(key, call.data)
             .is_ok_and(|e| matches!(e.decoded, kf_abi::defapi::Bundle::UpdateChannelInfo(_)))
     }
@@ -2164,11 +2452,7 @@ impl Pump {
         let sw = software_snapshot(me, r)?
             .filter(|sw| sw.matches(call.value))
             .ok_or("USER_RING_SOFTWARE_OBJECT_GONE")?;
-        let handle = sw.guest;
-        let key = kf_rm::defapi::ObjKey {
-            client: r.key.0,
-            object: handle,
-        };
+        let key = software_key(r.key.0, &sw);
         let entry = reg
             .lookup(key, call.data)
             .map_err(|e| format!("USER_RING_UNREGISTERED_API {e:#x}"))?;
@@ -2254,6 +2538,7 @@ impl Pump {
             return Err("USER_RING_MIGRATION_DECLARATION".into());
         }
         let generation = self
+            .core
             .generation
             .checked_add(1)
             .ok_or("USER_RING_SOURCE_SEQUENCE")?;
@@ -2276,13 +2561,14 @@ impl Pump {
             if entries.is_power_of_two() && entries >= 2 {
                 for k in 0..12u32 {
                     let idx = self
+                        .core
                         .cursor
                         .wrapping_add(entries)
                         .wrapping_sub(4)
                         .wrapping_add(k)
-                        & (entries - 1);
+                        & entries.saturating_sub(1);
                     let e = self
-                        .snapshot(me, r, r.source.0 + u64::from(idx) * 8, 8)
+                        .snapshot(me, r, ring_slot_va(r.source.0, idx), 8)
                         .ok()
                         .and_then(|s| s.bytes.as_slice().try_into().ok().map(u64::from_le_bytes));
                     around.push((idx, e));
@@ -2290,7 +2576,7 @@ impl Pump {
             }
             eprintln!(
                 "kf3: USER_RING_TRACE MIGRATING {:#x}:{:#x} old ring {:#x}x{} our_cursor={} guest put={put:?} get={get:?} entries_around_cursor={around:x?}",
-                r.key.0, r.key.1, r.source.0, entries, self.cursor
+                r.key.0, r.key.1, r.source.0, entries, self.core.cursor
             );
         }
         let userd = me
@@ -2326,11 +2612,10 @@ impl Pump {
                     r.userd = userrelay::UserdSource::Registered(userd.clone());
                     r.source = (u.gpfifo_va, u.entries);
                     t.ring_at = (u.gpfifo_va, u.entries, None);
-                    self.generation = generation;
                     self.source_admitted = false;
-                    self.cursor = 0;
-                    self.grace.clear();
-                    self.guest_get = None;
+                    // generation, cursor 0, grace, pending write-back, the guest's GET and the lifecycle's post-switch
+                    // scan: ONE production call (`kf_chan::user_turn::Relay::switch_source`, GPU-free tests)
+                    self.core.switch_source(generation);
                 })
                 .map_err(|e| source_error(e, "USER_RING_MIGRATION_ADMISSION"))
             })
@@ -2339,6 +2624,30 @@ impl Pump {
             "kf3: USER_RING_MIGRATED {:#x}:{:#x} source={:#x}x{} generation={generation}; private native ring/USERD unchanged; no host migration verb",
             r.key.0, r.key.1, u.gpfifo_va, u.entries
         );
+        // ★ PHASE 1b (review D5): the first entries of the new ring are scanned before the Window may end (done by
+        // `switch_source` above), and a nonzero GP_GET in the NEW USERD (the guest's own statement of where its ring
+        // stands) contradicts the reset-to-0 cursor loudly.
+        {
+            let mut b = [0u8; 4];
+            if r.userd
+                .read(
+                    me,
+                    r.key,
+                    &r.allocation,
+                    kf_abi::submit::USERD_GP_GET,
+                    &mut b,
+                )
+                .is_ok()
+                && self.core.new_ring_get(u32::from_le_bytes(b))
+            {
+                eprintln!(
+                    "kf3: USER_RING_SWITCH_CURSOR_MISMATCH {:#x}:{:#x} the new ring's USERD shows GP_GET={} at the switch; the relay resets its cursor to 0 (reset-to-0 is contradicted for this growth)",
+                    r.key.0,
+                    r.key.1,
+                    u32::from_le_bytes(b)
+                );
+            }
+        }
         if self.trace.is_some() {
             // Measurement only: what the guest's NEW ring holds at the switch.
             let mut word = |off: u64| {
@@ -2355,7 +2664,7 @@ impl Pump {
             let mut first = Vec::new();
             for i in 0..16u64 {
                 first.push(
-                    self.snapshot(me, r, u.gpfifo_va + i * 8, 8)
+                    self.snapshot(me, r, u.gpfifo_va.saturating_add(i.saturating_mul(8)), 8)
                         .ok()
                         .and_then(|s| s.bytes.as_slice().try_into().ok().map(u64::from_le_bytes)),
                 );
@@ -2364,9 +2673,9 @@ impl Pump {
                 "kf3: USER_RING_TRACE MIGRATED {:#x}:{:#x} new USERD put={put:?} get={get:?} first_entries={first:x?} fetch_issued={} fetch_fetched={} sync_waiting={}",
                 r.key.0,
                 r.key.1,
-                self.fetch.issued(),
-                self.fetch.fetched(),
-                self.sync.waiting()
+                self.core.fetch.issued(),
+                self.core.fetch.fetched(),
+                self.core.sync.waiting()
             );
         }
         Ok(())
@@ -2478,10 +2787,12 @@ impl ChanPlane {
 
     pub(super) fn user_ring_serve(&self, ht: u32) -> Option<bool> {
         let record = self.user_ring_record(ht)?;
+        record.touch();
+        // ★ 2026-10-20 (owner design, section 10): the epoch BEFORE the first attempt. A lock holder bumps it after releasing, so a loser that
+        // registers late learns that a release already happened (`HandoffHub::lost`).
+        let e0 = self.handoff.prepare();
         let Ok(mut r) = record.enter() else {
-            // the act thread holds the record: `retry` stays set (its completion rings; the spin
-            // looks at the demand a bounded number of times, then only the safety net does)
-            record.contended_note();
+            // the act thread holds the record: `retry` stays set and its completion's `user_ring_wake` rings (the hand-off of the record lock)
             return Some(false);
         };
         if r.retired || r.free_attempted || r.dead.is_some() {
@@ -2491,7 +2802,11 @@ impl ChanPlane {
         let pt = match self.pt.try_lock() {
             Ok(pt) => pt,
             Err(std::sync::TryLockError::WouldBlock) => {
-                record.contended_note();
+                // the `pt` map is held: register with the holder BEFORE giving up; it rings us after it releases. `lost` is true when a
+                // holder already released since `e0`: retry at once (the token is BUSY here, so the ring is a re-serve).
+                if self.handoff.lost(record.idx, e0) {
+                    let _ = self.plane.ring_internal(record.idx);
+                }
                 return Some(false);
             }
             Err(std::sync::TryLockError::Poisoned(_)) => {
@@ -2530,7 +2845,7 @@ impl ChanPlane {
         r.pump = Some(pump);
         match outcome {
             Ok(submitted) => {
-                self.user_ring_arm(&record, &mut r);
+                self.user_ring_arm(&record, &mut r, e0);
                 Some(submitted)
             }
             Err(Failure::Retry) => {
@@ -2542,7 +2857,7 @@ impl ChanPlane {
                         p.segment = None;
                     }
                 }
-                self.user_ring_arm(&record, &mut r);
+                self.user_ring_arm(&record, &mut r, e0);
                 Some(false)
             }
             Err(Failure::Refused(why)) => {
@@ -2562,27 +2877,45 @@ impl ChanPlane {
     /// token again (bounded by `REACT_ROUNDS`, so the worker stays fair); a wait is recorded for the
     /// worker's spin / event / safety-net looks ([`ChanPlane::user_ring_peek`]); nothing else.
     /// No tick, no clock: the relay is rung by its doorbell, by an event, or by a look.
-    fn user_ring_arm(&self, record: &userrelay::Cell, r: &mut userrelay::Record) {
-        use kf_chan::user_loop::{Need, wait_of};
+    fn user_ring_arm(&self, record: &userrelay::Cell, r: &mut userrelay::Record, e0: u64) {
+        use kf_chan::user_loop::{Need, Wait, wait_of};
         let idx = r.idx;
         let Some(p) = r.pump.as_mut() else {
             return;
         };
-        let need = p.need;
+        let need = p.core.need;
         p.wait = wait_of(need);
-        record.set_waiting(p.wait.is_some());
+        // only a private-word wait is a LOOK's business; contention belongs to the lock holder (hand-off)
+        record.set_waiting(matches!(
+            p.wait,
+            Some(Wait::Marker { .. } | Wait::Popped { .. })
+        ));
+        // a carried wait has no wake source (pops raise nothing), and neither has the partial pop of a draining marker that the guest -- whose
+        // ring this relay saw FULL at its last `GP_PUT` read -- may be waiting for (D6): the worker must keep evaluating, not block
+        let guest_may_wait_for_pops =
+            p.core.put_full && p.core.fetch.fetched() < p.core.fetch.issued();
+        record.set_unannounced(
+            matches!(p.wait, Some(Wait::Popped { .. })) || guest_may_wait_for_pops,
+        );
         match need {
             Need::Again => {
-                record.contended_clear();
                 if self.plane.ring_internal(idx) {
                     let _ = self.wake.signal();
                 }
             }
             Need::Contended => {
-                record.contended_note();
                 Stats::bump(&self.relay_stats.contended);
+                // a lock / admission was busy during the turn: register with its holder before giving up (a holder that released since
+                // `e0` makes `lost` true: serve again at once; the ring is a re-serve, the token is BUSY here)
+                if self.handoff.lost(idx, e0) {
+                    let _ = self.plane.ring_internal(idx);
+                }
             }
-            Need::Idle | Need::Marker { .. } | Need::Popped { .. } => record.contended_clear(),
+            Need::Idle | Need::Marker { .. } | Need::Popped { .. } => {}
+        }
+        // demand that arrived while the turn ran: an act's `user_ring_wake` found the record held and could only request. Serve again.
+        if record.pending() && self.plane.ring_internal(idx) {
+            let _ = self.wake.signal();
         }
     }
 
@@ -2591,9 +2924,14 @@ impl ChanPlane {
     /// (a lock held elsewhere). Cheap: two atomics per relay.
     pub(crate) fn user_ring_waiting(&self) -> bool {
         self.user_rings.try_lock().map_or(true, |rings| {
-            rings
-                .values()
-                .any(|record| record.is_waiting() || record.pending())
+            rings.values().any(|record| record.is_waiting())
+        })
+    }
+
+    /// ★ 2026-10-20 (owner): some relay holds an obligation no registered wake source announces. Cheap: one atomic per relay.
+    pub(crate) fn user_ring_unannounced(&self) -> bool {
+        self.user_rings.try_lock().map_or(true, |rings| {
+            rings.values().any(|record| record.is_unannounced())
         })
     }
 
@@ -2627,13 +2965,12 @@ impl ChanPlane {
             return false;
         }
         let backstop = why == Peek::Backstop;
-        let demand = record.pending();
-        if !demand && !record.is_waiting() && !backstop {
+        // Doorbell contract: no look has a reason to touch an idle relay (no `GP_PUT` poll). Contention is the lock HOLDER's business
+        // (hand-off, `kf_chan::handoff`): no look rings for it, the safety net included.
+        if !kf_chan::user_loop::look_needed(why, false, record.is_waiting()) {
             return false;
         }
-        // a relay that keeps finding a busy lock is re-rung by the spin / event looks only a bounded
-        // number of times in a row (else the spin is an endless busy loop); the safety net always may
-        let retry_ok = kf_chan::user_loop::may_retry(record.contended_run(), why);
+        record.touch();
         let ring = |this: &Self| {
             if this.plane.ring_internal(record.idx) {
                 let _ = this.wake.signal();
@@ -2641,8 +2978,8 @@ impl ChanPlane {
             true
         };
         let Ok(mut r) = record.try_lock() else {
-            // Held elsewhere (the act thread): ring, the turn handles the contention itself.
-            return retry_ok && ring(self);
+            // Held elsewhere (the act thread): its completion's `user_ring_wake` rings. The wait is evaluated by the next look.
+            return false;
         };
         if r.retired || r.free_attempted || r.dead.is_some() {
             return false;
@@ -2657,11 +2994,11 @@ impl ChanPlane {
             let mut pops = false;
             let satisfied = match r.lease.storage.try_lock() {
                 Ok(storage) => match (storage.gpu_get(), storage.gpu_reference()) {
-                    (Ok(get), Ok(reference)) => match p.fetch.peek(get) {
+                    (Ok(get), Ok(reference)) => match p.core.fetch.peek(get) {
                         Ok(popped) => {
                             // pops the guest's `GP_GET` write-back has not shown yet (they carry no event)
-                            pops = popped > p.fetch.fetched();
-                            w.satisfied(p.marks.peek(reference), popped)
+                            pops = popped > p.core.fetch.fetched();
+                            w.satisfied(p.core.marks.peek(reference), popped)
                         }
                         // outside the ring / beyond what was issued: the turn refuses it by name
                         Err(_) => true,
@@ -2670,7 +3007,17 @@ impl ChanPlane {
                 },
                 Err(_) => true,
             };
-            if !satisfied && pops && matches!(w, kf_chan::user_loop::Wait::Marker { .. }) {
+            // pops the guest's `GP_GET` write-back has not shown yet carry no event: a draining marker wait AND a carried
+            // (`Popped`, Pointer markers latched off) wait both need the turn that writes the partial pops back, or a guest that
+            // waits for ring space the hardware already freed waits for the whole batch (and possibly for ever)
+            if !satisfied
+                && pops
+                && matches!(
+                    w,
+                    kf_chan::user_loop::Wait::Marker { .. }
+                        | kf_chan::user_loop::Wait::Popped { .. }
+                )
+            {
                 // A gate (or batch) is still draining, but the PBDMA has popped more entries than the
                 // guest's `GP_GET` shows. The wait stays; the turn only writes the guest's `GP_GET` back
                 // (a guest blocked on a full ring behind its OWN gate would otherwise wait for the
@@ -2678,7 +3025,7 @@ impl ChanPlane {
                 Stats::bump(&self.relay_stats.pop_writebacks);
                 return ring(self);
             }
-            if satisfied && (retry_ok || !matches!(w, kf_chan::user_loop::Wait::Contended)) {
+            if satisfied && !matches!(w, kf_chan::user_loop::Wait::Contended) {
                 if backstop {
                     let (counter, name) = match found(w) {
                         Found::Work => {
@@ -2689,7 +3036,33 @@ impl ChanPlane {
                             (&self.relay_stats.backstop_contended, "BACKSTOP_CONTENDED")
                         }
                     };
-                    let n = counter.fetch_add(1, Ordering::Relaxed) + 1;
+                    let n = counter.fetch_add(1, Ordering::Relaxed).saturating_add(1);
+                    // ★ PHASE 1b (review D3): a Pointer-mode channel woken by the 50 ms backstop is a timer carrying
+                    // progress ("performance never depends on timing"). Counted always, LOUD beyond about one a
+                    // second (`kf_chan::user_loop::loud_rate`).
+                    if p.core.life.mode() == kf_chan::user_lifecycle::Mode::Pointer {
+                        static START: std::sync::OnceLock<std::time::Instant> =
+                            std::sync::OnceLock::new();
+                        let now_ms = u64::try_from(
+                            START
+                                .get_or_init(std::time::Instant::now)
+                                .elapsed()
+                                .as_millis(),
+                        )
+                        .unwrap_or(u64::MAX);
+                        let loud = kf_chan::user_loop::loud_rate(p.aux.pointer_backstop_ms, now_ms);
+                        p.aux.pointer_backstop_ms = Some(now_ms);
+                        p.core.life.pointer_backstop(loud);
+                        if loud {
+                            let c = p.core.life.counts().pointer_backstop_loud;
+                            if c <= 8 || c.is_power_of_two() {
+                                eprintln!(
+                                    "kf3: USER_RING_POINTER_BACKSTOP {:#x}:{:#x} #{c}: a Pointer-mode channel was woken by the 50 ms safety net more than once a second (no marker could announce its wait {w:?})",
+                                    r.key.0, r.key.1
+                                );
+                            }
+                        }
+                    }
                     if matches!(found(w), Found::Work) && (n <= 8 || n.is_power_of_two()) {
                         eprintln!(
                             "kf3: USER_RING_{name} {:#x}:{:#x} #{n}: the safety net found a satisfied wait {w:?} (an interrupt should have announced it)",
@@ -2699,34 +3072,15 @@ impl ChanPlane {
                 }
                 p.wait = None;
                 record.set_waiting(false);
+                record.set_unannounced(false);
                 return ring(self);
             }
             if why == Peek::Event {
+                // the interrupt (a hint) came and the words do not show the progress yet: the hint is spent but the obligation is not met.
+                // Level-triggered: the worker keeps evaluating (it may not block) until the state says so.
                 Stats::bump(&self.relay_stats.event_without_progress);
+                record.set_unannounced(true);
             }
-        } else if backstop && p.segment.is_none() {
-            // Information only: GP_PUT ahead of the cursor with no doorbell.
-            let mut put = [0u8; 4];
-            if r.userd
-                .read(
-                    self,
-                    r.key,
-                    &r.allocation,
-                    kf_abi::submit::USERD_GP_PUT,
-                    &mut put,
-                )
-                .is_ok()
-                && u32::from_le_bytes(put) != p.cursor
-            {
-                Stats::bump(&self.relay_stats.backstop_put_ahead);
-                return ring(self);
-            }
-        }
-        if demand && retry_ok {
-            if backstop {
-                Stats::bump(&self.relay_stats.backstop_contended);
-            }
-            return ring(self);
         }
         false
     }
@@ -2807,7 +3161,7 @@ impl ChanPlane {
             )
             .ok()
             .map(|()| u32::from_le_bytes(b));
-        let cursor = p.cursor;
+        let cursor = p.core.cursor;
         if put.is_some_and(|put| put != cursor) {
             eprintln!(
                 "kf3: USER_RING_TRACE IDLE_STALL {:#x}:{:#x} no turn for {} ms while guest PUT={put:?} != cursor={cursor} (wait={:?} pending={})",
@@ -2896,6 +3250,9 @@ impl ChanPlane {
 impl kf_chan::worker::RelayLoop for ChanPlane {
     fn waiting(&self) -> bool {
         self.user_ring_waiting()
+    }
+    fn unannounced(&self) -> bool {
+        self.user_ring_unannounced()
     }
     fn peek(&self, why: kf_chan::user_loop::Peek) -> bool {
         self.user_ring_peek(why)
@@ -3151,5 +3508,657 @@ mod tests {
             Failure::from("NATIVE_DOORBELL_UNCERTAIN"),
             Failure::Refused(_)
         ));
+    }
+
+    /// G3 (`docs/design/V3_USER_RING_LIFECYCLE_20261016.md` section 0): the lifecycle machine is reachable
+    /// only from the Windows USER-ring pump, which only the Windows birth path constructs (it needs a
+    /// `WindowsUserRingPermit`). Linux Passthrough, Translated and Emulated channels never get one. This
+    /// pins the structure: no other source file of the device or of the channel crate constructs or names
+    /// the machine (the statistics line is the one shared reader).
+    #[test]
+    fn the_lifecycle_is_reachable_only_from_the_windows_user_ring_pump() {
+        let others: [(&str, &str); 7] = [
+            ("kf-qemu/chan.rs", include_str!("chan.rs")),
+            ("kf-qemu/twin.rs", include_str!("twin.rs")),
+            ("kf-qemu/userbirth.rs", include_str!("userbirth.rs")),
+            (
+                "kf-chan/passthrough.rs",
+                include_str!("../../kf-chan/src/passthrough.rs"),
+            ),
+            (
+                "kf-chan/translated.rs",
+                include_str!("../../kf-chan/src/translated.rs"),
+            ),
+            (
+                "kf-chan/tmode.rs",
+                include_str!("../../kf-chan/src/tmode.rs"),
+            ),
+            (
+                "kf-chan/userd_relay.rs",
+                include_str!("../../kf-chan/src/userd_relay.rs"),
+            ),
+        ];
+        for (name, text) in others {
+            assert!(
+                !text.contains("user_lifecycle") && !text.contains("Lifecycle::new"),
+                "{name} must not use the USER-ring lifecycle"
+            );
+        }
+        let relay = include_str!("userrelay.rs");
+        assert!(
+            !relay.contains("Lifecycle::new"),
+            "only the pump constructs it"
+        );
+        assert_eq!(
+            relay.matches("userpump::Pump::new(").count(),
+            1,
+            "the pump has exactly one constructor call, in the Windows USER-ring birth"
+        );
+        let pump = include_str!("userpump.rs");
+        let pump = pump.split("#[cfg(test)]").next().unwrap();
+        assert_eq!(
+            pump.matches("kf_chan::user_lifecycle::Lifecycle::new()")
+                .count(),
+            1,
+            "one machine per pump"
+        );
+    }
+    // ---- 2026-10-17: lazy observe (rules A and B, `kf_chan::user_lazy`) in the Windows USER-ring relay only
+
+    /// D2: lazy observe lives in the pure relay of the Windows USER-ring pump. Linux passthrough, Translated, Emulated and
+    /// the USERD relay never name it.
+    #[test]
+    fn lazy_observe_is_reachable_only_from_the_windows_user_ring_pump() {
+        let others: [(&str, &str); 7] = [
+            ("kf-qemu/chan.rs", include_str!("chan.rs")),
+            ("kf-qemu/twin.rs", include_str!("twin.rs")),
+            ("kf-qemu/userbirth.rs", include_str!("userbirth.rs")),
+            (
+                "kf-chan/passthrough.rs",
+                include_str!("../../kf-chan/src/passthrough.rs"),
+            ),
+            (
+                "kf-chan/translated.rs",
+                include_str!("../../kf-chan/src/translated.rs"),
+            ),
+            (
+                "kf-chan/tmode.rs",
+                include_str!("../../kf-chan/src/tmode.rs"),
+            ),
+            (
+                "kf-chan/userd_relay.rs",
+                include_str!("../../kf-chan/src/userd_relay.rs"),
+            ),
+        ];
+        for (name, text) in others {
+            assert!(
+                !text.contains("user_lazy") && !text.contains("with_lazy"),
+                "{name} must not use lazy observe"
+            );
+        }
+        let relay = include_str!("userrelay.rs");
+        assert!(
+            !relay.contains("user_lazy") && !relay.contains("with_lazy"),
+            "only the pump configures it"
+        );
+        let pump = include_str!("userpump.rs");
+        let pump = pump.split("#[cfg(test)]").next().unwrap();
+        assert_eq!(
+            pump.matches(".with_lazy(").count(),
+            1,
+            "one relay constructor, one opt-in"
+        );
+    }
+
+    /// D3: `KF3_PUT_CACHE` / `KF3_LAZY_OBSERVE` (default ON, measurement class) are read ONCE, by the relay's birth, never
+    /// by a turn; the interval is the constant, not a variable.
+    #[test]
+    fn the_lazy_observe_switches_are_read_once_at_relay_creation_and_never_per_turn() {
+        let pump = include_str!("userpump.rs");
+        let pump = pump.split("#[cfg(test)]").next().unwrap();
+        assert_eq!(pump.matches("std::env::var(ENV_PUT_CACHE)").count(), 1);
+        assert_eq!(pump.matches("std::env::var(ENV_LAZY_OBSERVE)").count(), 1);
+        assert_eq!(pump.matches("std::sync::OnceLock<LazyConfig>").count(), 1);
+        assert_eq!(
+            pump.matches("lazy_config()").count(),
+            2,
+            "its definition and the one call"
+        );
+        let birth = pump
+            .split("pub(super) fn new(me: &ChanPlane")
+            .nth(1)
+            .unwrap();
+        let birth = birth.split("pub(super) fn release").next().unwrap();
+        assert!(
+            birth.contains(".with_lazy(lazy_config())"),
+            "the call is in Pump::new"
+        );
+        let turns = pump
+            .split("fn turn(&mut self, me: &ChanPlane")
+            .nth(1)
+            .unwrap();
+        let turns = turns
+            .split("/// Measurement only: the final scan refusal")
+            .next()
+            .unwrap();
+        assert!(
+            !turns.contains("lazy_config")
+                && !turns.contains("env::var")
+                && !turns.contains("ENV_"),
+            "no read per turn"
+        );
+        // and the pure relay never touches the environment either (kf-chan pins the same from its side)
+        for src in [
+            include_str!("../../kf-chan/src/user_lazy.rs"),
+            include_str!("../../kf-chan/src/user_turn.rs"),
+        ] {
+            assert!(!src.contains("std::env") && !src.contains("env::var("));
+        }
+    }
+
+    /// D5 and the walk gate: the counters reach the VM-wide stats every 256th turn and at retire (one line per relay), the
+    /// retire hook is the relay's, and the mapping-walk gate has ONE implementation that the cached and the fresh `GP_PUT`
+    /// paths both pass through (the relay asks `Io::walk_busy` before consulting the cache).
+    #[test]
+    fn the_pump_wires_the_lazy_counters_the_retire_hook_and_the_walk_gate() {
+        let pump = include_str!("userpump.rs");
+        let pump = pump.split("#[cfg(test)]").next().unwrap();
+        let turn = pump
+            .split("fn turn(&mut self, me: &ChanPlane")
+            .nth(1)
+            .unwrap();
+        let turn = turn.split("fn turn_body(").next().unwrap();
+        for needle in [
+            "self.core.lazy.flush_due()",
+            "me.relay_stats.lazy.add(",
+            "take_delta()",
+        ] {
+            assert!(turn.contains(needle), "turn() must call {needle}");
+        }
+        let release = pump.split("pub(super) fn release(").nth(1).unwrap();
+        let release = release.split("fn ").next().unwrap();
+        for needle in [
+            "self.core.retire();",
+            "stats.lazy.add(",
+            "USER_RING_LAZY_OBSERVE",
+        ] {
+            assert!(release.contains(needle), "release() must contain {needle}");
+        }
+        assert!(
+            !release.contains("life.teardown"),
+            "the relay's retire() tears the machine down"
+        );
+        assert_eq!(
+            pump.matches("\"kf3: USER_RING_LAZY_OBSERVE {").count(),
+            1,
+            "one line per relay, in one place"
+        );
+        let io = pump
+            .split("impl kf_chan::user_turn::Io for PumpIo")
+            .nth(1)
+            .unwrap();
+        let io = io.split("fn begin_entry").next().unwrap();
+        let after = pump
+            .split("fn gp_put(&mut self) -> Turn<Option<u32>> {")
+            .nth(1)
+            .unwrap();
+        let gp_put = after.split("fn begin_entry").next().unwrap();
+        assert!(
+            io.contains("fn walk_busy(&mut self) -> bool"),
+            "the gate is the Io's"
+        );
+        assert!(
+            io.contains("me.inbox.walk_busy()")
+                && io.contains("wait_walk(r.idx)")
+                && io.contains("return true;"),
+            "and it reports the walk after registering the wait"
+        );
+        assert!(
+            !gp_put.contains("walk_busy"),
+            "gp_put no longer checks it: the relay does, before the cache"
+        );
+    }
+    /// Retiring a pump goes through the relay (`Relay::retire`: the cache is dropped and the machine torn down); the pump
+    /// does not tear the machine down itself.
+    #[test]
+    fn release_retires_the_relay_through_relay_retire() {
+        let pump = include_str!("userpump.rs");
+        let pump = pump.split("#[cfg(test)]").next().unwrap();
+        assert_eq!(pump.matches("self.core.retire()").count(), 1);
+        assert_eq!(
+            pump.matches("life.teardown()").count(),
+            0,
+            "only the relay tears its machine down"
+        );
+    }
+
+    /// The per-relay lazy counters reach the VM-wide ones every 256th turn (a relay that lives for minutes must not keep
+    /// them to itself until retire).
+    #[test]
+    fn turn_folds_the_lazy_counters_into_the_vm_wide_ones() {
+        let pump = include_str!("userpump.rs");
+        let pump = pump.split("#[cfg(test)]").next().unwrap();
+        assert_eq!(pump.matches("self.core.lazy.flush_due()").count(), 1);
+        assert_eq!(pump.matches("me.relay_stats.lazy.add(").count(), 1);
+    }
+
+    /// The mapping-walk gate keeps its two halves: the wait is registered (so the VA thread rings the token when the walk
+    /// lands) and the relay is told to read nothing.
+    #[test]
+    fn the_walk_gate_registers_the_wait_and_tells_the_relay_to_stop() {
+        let pump = include_str!("userpump.rs");
+        let pump = pump.split("#[cfg(test)]").next().unwrap();
+        let gate = pump
+            .split("fn walk_busy(&mut self) -> bool {")
+            .nth(1)
+            .unwrap();
+        let gate = gate.split("fn gp_put").next().unwrap();
+        assert!(gate.contains("me.inbox.walk_busy()"));
+        assert!(gate.contains("me.inbox.wait_walk(r.idx);"));
+        assert!(gate.contains("return true;"));
+    }
+
+    /// No lazy switch is read inside `turn()` (the pump's per-turn function).
+    #[test]
+    fn turn_reads_no_lazy_switch() {
+        let pump = include_str!("userpump.rs");
+        let pump = pump.split("#[cfg(test)]").next().unwrap();
+        let turn = pump
+            .split("fn turn(&mut self, me: &ChanPlane")
+            .nth(1)
+            .unwrap();
+        let turn = turn.split("fn report_lifecycle_notices").next().unwrap();
+        assert!(
+            !turn.contains("ENV_PUT_CACHE")
+                && !turn.contains("ENV_LAZY_OBSERVE")
+                && !turn.contains("env::var")
+        );
+    }
+
+    /// PHASE 1c (review 2, N2): `KF3_LIFECYCLE_MODE` selects the measurement-class mode; nothing about it is required
+    /// to boot (unset, empty and unknown values all run the default, the last one loudly).
+    #[test]
+    fn the_lifecycle_mode_variable_selects_a_mode_and_an_unknown_value_runs_the_default_loudly() {
+        use kf_chan::user_lifecycle::LifecycleMode as M;
+        assert_eq!(parse_lifecycle_mode(None), (M::Default, None));
+        assert_eq!(parse_lifecycle_mode(Some("")), (M::Default, None));
+        for m in M::ALL {
+            assert_eq!(parse_lifecycle_mode(Some(m.name())).0, m);
+        }
+        let (m, note) = parse_lifecycle_mode(Some("always-scan"));
+        assert_eq!(m, M::Default);
+        assert!(note.is_some_and(|n| n.contains("UNKNOWN") && n.contains("always_scan")));
+    }
+
+    /// The mode is read once (a process-wide `OnceLock`) by the relay's birth, never by a turn: the variable's name
+    /// occurs in one function, and that function is called from `Pump::new` only.
+    #[test]
+    fn the_lifecycle_mode_is_read_once_at_relay_creation_and_never_per_turn() {
+        let pump = include_str!("userpump.rs");
+        let pump = pump.split("#[cfg(test)]").next().unwrap();
+        assert_eq!(
+            pump.matches("LifecycleMode::ENV").count(),
+            3,
+            "read + two notes, all in one place"
+        );
+        assert_eq!(
+            pump.matches("std::sync::OnceLock<kf_chan::user_lifecycle::LifecycleMode>")
+                .count(),
+            1
+        );
+        assert_eq!(
+            pump.matches("lifecycle_mode()").count(),
+            2,
+            "its definition and the one call"
+        );
+        let birth = pump
+            .split("pub(super) fn new(me: &ChanPlane")
+            .nth(1)
+            .unwrap();
+        let birth = birth.split("pub(super) fn release").next().unwrap();
+        assert!(
+            birth.contains("with_mode(lifecycle_mode())"),
+            "the call is in Pump::new"
+        );
+        let turn = pump.split("fn turn_body(").nth(1).unwrap();
+        let turn = turn
+            .split("/// Measurement only: the final scan refusal")
+            .next()
+            .unwrap();
+        assert!(
+            !turn.contains("lifecycle_mode") && !turn.contains("env::var"),
+            "no read per turn"
+        );
+    }
+    /// PHASE 1c: the pump gives every channel the VM's marker latch, says aloud what the machine queued and hands the
+    /// scan's SET_OBJECT tally over, at the end of EVERY turn (the machine and the relay have no I/O).
+    #[test]
+    fn the_pump_wires_the_marker_latch_the_notices_and_the_set_object_tally() {
+        let pump = include_str!("userpump.rs");
+        let pump = pump.split("#[cfg(test)]").next().unwrap();
+        assert_eq!(
+            pump.matches(".with_latch(me.relay_stats.life.latch.clone())")
+                .count(),
+            1,
+            "one latch per VM, handed to every channel at birth"
+        );
+        let turn = pump
+            .split("fn turn(&mut self, me: &ChanPlane")
+            .nth(1)
+            .unwrap();
+        let turn = turn.split("fn turn_body(").next().unwrap();
+        for needle in [
+            "self.report_lifecycle_notices();",
+            "self.core.sync_tally();",
+            "set_object_max(",
+        ] {
+            assert!(turn.contains(needle), "turn() must call {needle}");
+        }
+        for line in [
+            "USER_RING_PUT_BOUNDARY_OPEN",
+            "USER_RING_WINDOW_FRESH",
+            "USER_RING_POINTER_MARKERS_LATCHED_OFF",
+        ] {
+            assert_eq!(
+                pump.matches(line).count(),
+                1,
+                "{line} is printed in one place"
+            );
+        }
+    }
+    // ---- PHASE 1c (review 2, mutants R and W): the two pump lines that decide whether a Window ever opens
+
+    fn test_software(guest: u32) -> Software {
+        Software {
+            guest,
+            number: 1,
+            live: Arc::new(AtomicBool::new(true)),
+            ready: Arc::new(AtomicBool::new(true)),
+        }
+    }
+    fn register_on(reg: &kf_rm::defapi::Registry, key: kf_rm::defapi::ObjKey, handle: u32) {
+        use kf_abi::defapi::{Control, DefApiAbi, Form};
+        let abi = DefApiAbi::at(kf_abi::DriverVersion {
+            major: 580,
+            minor: 65,
+            patch: 6,
+        })
+        .unwrap();
+        let mut p = vec![0u8; 584];
+        p[0..4].copy_from_slice(&handle.to_le_bytes());
+        p[4..8].copy_from_slice(&abi.cmds.update_channel_info.to_le_bytes());
+        assert_eq!(
+            kf_rm::defapi::serve(reg, &abi, key, Control::Register(Form::V1), &p, |_| false),
+            0
+        );
+    }
+
+    /// R: a live registration of the channel's SOFTWARE object is what opens a Window. It is keyed by the channel's
+    /// client and the OBJECT's guest handle -- not the channel's own handle, not another client's object.
+    #[test]
+    fn a_live_registration_of_the_channels_software_object_is_counted_and_nothing_else_is() {
+        use kf_rm::defapi::{Bounds, ObjKey, Registry};
+        const CLIENT: u32 = 0xc1d0_0015;
+        const CHANNEL: u32 = 0xff04_0001;
+        const OBJECT: u32 = 0xff1f_e010;
+        let reg = Registry::new(Bounds::default());
+        let sw = test_software(OBJECT);
+        assert_eq!(
+            live_registrations(Some(&reg), CLIENT, Some(&sw)),
+            0,
+            "nothing registered"
+        );
+        register_on(
+            &reg,
+            ObjKey {
+                client: CLIENT,
+                object: OBJECT,
+            },
+            0x4000_0001,
+        );
+        assert_eq!(
+            live_registrations(Some(&reg), CLIENT, Some(&sw)),
+            1,
+            "a registration on the software object opens the Window"
+        );
+        register_on(
+            &reg,
+            ObjKey {
+                client: CLIENT,
+                object: OBJECT,
+            },
+            0x4000_0002,
+        );
+        assert_eq!(live_registrations(Some(&reg), CLIENT, Some(&sw)), 2);
+        // registrations on the CHANNEL's handle, on another client's object and on another object are not this object's
+        register_on(
+            &reg,
+            ObjKey {
+                client: CLIENT,
+                object: CHANNEL,
+            },
+            0x4000_0003,
+        );
+        register_on(
+            &reg,
+            ObjKey {
+                client: CLIENT + 1,
+                object: OBJECT,
+            },
+            0x4000_0004,
+        );
+        register_on(
+            &reg,
+            ObjKey {
+                client: CLIENT,
+                object: OBJECT + 1,
+            },
+            0x4000_0005,
+        );
+        assert_eq!(live_registrations(Some(&reg), CLIENT, Some(&sw)), 2);
+        // the channel's own handle is not the software object (a mutant keyed by it would see exactly 1 here)
+        let channel_as_object = test_software(CHANNEL);
+        assert_eq!(
+            live_registrations(Some(&reg), CLIENT, Some(&channel_as_object)),
+            1
+        );
+        // no registry, or no software object: nothing to open a Window for
+        assert_eq!(live_registrations(None, CLIENT, Some(&sw)), 0);
+        assert_eq!(live_registrations(Some(&reg), CLIENT, None), 0);
+        assert_eq!(
+            software_key(CLIENT, &sw),
+            ObjKey {
+                client: CLIENT,
+                object: OBJECT
+            }
+        );
+    }
+
+    /// R, second angle: the key of a software object is built in ONE place and every reader of the registry uses it
+    /// (the epoch count the Window flips on, the trigger peek, the trigger lookup).
+    #[test]
+    fn every_registry_lookup_of_the_software_object_goes_through_software_key() {
+        let pump = include_str!("userpump.rs");
+        let pump = pump.split("#[cfg(test)]").next().unwrap();
+        assert_eq!(
+            pump.matches("object: sw.guest").count(),
+            1,
+            "the key is built only in software_key, from the OBJECT's handle"
+        );
+        assert!(!pump.contains("object: self.r.key") && !pump.contains("object: r.key"));
+        assert_eq!(
+            pump.matches("software_key(").count(),
+            4,
+            "its definition and three readers"
+        );
+    }
+
+    fn registry_live_body() -> String {
+        let pump = include_str!("userpump.rs");
+        let pump = pump.split("#[cfg(test)]").next().unwrap();
+        let live = pump.split("fn registry_live(&mut self)").nth(1).unwrap();
+        live.split("fn software(&mut self, refresh")
+            .next()
+            .unwrap()
+            .to_owned()
+    }
+
+    /// R, third angle: `registry_live` hands the channel's CLIENT and its software object to the one counting function.
+    #[test]
+    fn registry_live_counts_the_software_objects_registrations_for_the_channels_client() {
+        let live = registry_live_body();
+        assert!(
+            live.contains("live_registrations(")
+                && live.contains("self.r.key.0,")
+                && live.contains("self.sw.as_ref()"),
+            "{live}"
+        );
+    }
+
+    /// R, fourth angle: the channel's own handle (`key.1`) is never what the registry is asked about.
+    #[test]
+    fn registry_live_never_asks_the_registry_about_the_channels_own_handle() {
+        assert!(!registry_live_body().contains("key.1"));
+    }
+
+    /// W: a ring growth goes through ONE production call that also keeps the lifecycle's post-switch scan; the pump's
+    /// `migrate` makes that call inside the admission that switches the source, and writes none of those fields itself.
+    #[test]
+    fn migrate_switches_the_relay_through_switch_source_and_nothing_else_touches_its_fields() {
+        let pump = include_str!("userpump.rs");
+        let pump = pump.split("#[cfg(test)]").next().unwrap();
+        let migrate = pump.split("    fn migrate(").nth(1).unwrap();
+        let migrate = migrate.split("\n}\n").next().unwrap();
+        assert_eq!(
+            migrate
+                .matches("self.core.switch_source(generation);")
+                .count(),
+            1
+        );
+        assert_eq!(migrate.matches("self.core.new_ring_get(").count(), 1);
+        for banned in [
+            "self.core.generation =",
+            "self.core.cursor =",
+            "self.core.guest_get =",
+            "self.core.written_get =",
+            "self.core.grace.clear()",
+        ] {
+            assert!(
+                !migrate.contains(banned),
+                "migrate must not write {banned}: it is Relay::switch_source / new_ring_get"
+            );
+        }
+        for banned in ["life.source_switched", "life.switch_cursor_mismatch"] {
+            assert!(
+                !pump.contains(banned),
+                "the pump must not call {banned}: Relay::switch_source / new_ring_get do"
+            );
+        }
+    }
+
+    /// W, second angle: the call sits inside the admission that switches the source (after the new source is installed,
+    /// before the `USER_RING_MIGRATED` line), so it cannot be skipped by an early return of the closure.
+    #[test]
+    fn the_switch_call_is_inside_the_admission_that_installs_the_new_source() {
+        let pump = include_str!("userpump.rs");
+        let pump = pump.split("#[cfg(test)]").next().unwrap();
+        let migrate = pump.split("    fn migrate(").nth(1).unwrap();
+        let migrate = migrate.split("\n}\n").next().unwrap();
+        let installed = migrate
+            .find("r.source = (u.gpfifo_va, u.entries);")
+            .unwrap();
+        let call = migrate
+            .find("self.core.switch_source(generation);")
+            .unwrap();
+        let logged = migrate.find("USER_RING_MIGRATED").unwrap();
+        assert!(
+            installed < call && call < logged,
+            "install < switch_source < MIGRATED line"
+        );
+        let admit = migrate.find("ring.admit(|| {").unwrap();
+        assert!(admit < installed);
+    }
+
+    /// ★ 2026-10-20 (section 10.0): a relay that loses a lock REGISTERS with the holder before it gives up, and reads the epoch BEFORE its
+    /// first attempt (the lost-registration race). Source pin (whitespace-insensitive).
+    #[test]
+    fn a_relay_that_loses_a_lock_registers_with_the_holder_before_giving_up() {
+        let pump = include_str!("userpump.rs");
+        let flat: String = pump
+            .split("#[cfg(test)]")
+            .next()
+            .unwrap()
+            .split_whitespace()
+            .collect();
+        let order = [
+            "lete0=self.handoff.prepare();",
+            "record.enter()",
+            "self.pt.try_lock()",
+            "ifself.handoff.lost(record.idx,e0){",
+            "self.plane.ring_internal(record.idx)",
+        ];
+        let mut at = 0;
+        for o in order {
+            let i = flat[at..]
+                .find(o)
+                .unwrap_or_else(|| panic!("pin: {o:?} missing or out of order in user_ring_serve"));
+            at += i + o.len();
+        }
+    }
+
+    /// The trace helpers that replaced indexing and `+` on guest-sized values never panic and never wrap.
+    #[test]
+    fn trace_helpers_clamp_instead_of_panicking() {
+        // `head`: shorter than the cap, exactly the cap, longer, empty.
+        assert_eq!(head(&[1u32, 2, 3], 8), [1, 2, 3]);
+        assert_eq!(head(&[1u32, 2, 3], 3), [1, 2, 3]);
+        assert_eq!(head(&[1u32, 2, 3], 2), [1, 2]);
+        assert_eq!(head::<u32>(&[], 5), [] as [u32; 0]);
+        assert_eq!(head(&[1u32, 2], usize::MAX), [1, 2]);
+        // `ring_slot_va`: the slot address saturates, so the read that uses it refuses.
+        assert_eq!(ring_slot_va(0x1000, 3), 0x1018);
+        assert_eq!(ring_slot_va(u64::MAX, 1), u64::MAX);
+        assert_eq!(ring_slot_va(u64::MAX - 4, u32::MAX), u64::MAX);
+        // `differing`: the common prefix only, whatever the lengths.
+        assert_eq!(differing(&[1, 2, 3], &[1, 9, 3]), [1]);
+        assert_eq!(differing(&[1, 2, 3, 4], &[1, 2]), Vec::<usize>::new());
+        assert_eq!(differing(&[], &[1]), Vec::<usize>::new());
+        // `after`: a deadline the clock cannot represent is "due at once", never a panic.
+        let now = std::time::Instant::now();
+        assert_eq!(after(now, std::time::Duration::ZERO), now);
+        assert!(after(now, std::time::Duration::from_millis(5)) > now);
+        assert_eq!(after(now, std::time::Duration::MAX), now);
+    }
+
+    /// `words_text` numbers its rows by byte offset; the multiplication saturates rather than overflows.
+    #[test]
+    fn words_text_rows_are_numbered_by_byte_offset() {
+        let mut out = String::new();
+        words_text(&mut out, &[0xa, 0xb, 0xc, 0xd, 0xe, 0xf, 0x10, 0x11, 0x12]);
+        let rows: Vec<&str> = out.lines().collect();
+        assert_eq!(rows.len(), 2);
+        assert!(rows[0].starts_with("      0: 0000000a"));
+        assert!(rows[1].starts_with("      8: 00000012"));
+    }
+
+    /// The arm path registers its lost admission lock the same way.
+    #[test]
+    fn the_arm_registers_a_lost_admission_lock_with_the_holder() {
+        let pump = include_str!("userpump.rs");
+        let flat: String = pump
+            .split("#[cfg(test)]")
+            .next()
+            .unwrap()
+            .split_whitespace()
+            .collect();
+        let arm = flat
+            .split("fnuser_ring_arm(&self")
+            .nth(1)
+            .expect("pin: user_ring_arm");
+        let arm = arm.split("pub(crate)fnuser_ring_waiting").next().unwrap();
+        assert!(
+            arm.contains("ifself.handoff.lost(idx,e0){"),
+            "pin: the arm's Contended path no longer registers with the holder"
+        );
     }
 }

@@ -1,0 +1,152 @@
+diff --git a/crates/kf-chan/tests/user_lifecycle_model.rs b/crates/kf-chan/tests/user_lifecycle_model.rs
+index 719d62952..4ce1add4f 100644
+--- a/crates/kf-chan/tests/user_lifecycle_model.rs
++++ b/crates/kf-chan/tests/user_lifecycle_model.rs
+@@ -77,6 +77,8 @@ pub const V_TRANSITION: u32 = 1 << 9;
+ pub const V_DEADLOCK: u32 = 1 << 10;
+ pub const V_LOST: u32 = 1 << 11;
+ pub const V_ENTRY_REFUSED: u32 = 1 << 12;
++/// REVIEW: a host marker published while the HARDWARE's view of the private stream has a packet open.
++pub const V_MARKER_IN_PACKET: u32 = 1 << 13;
+ 
+ pub fn viol_names(v: u32) -> Vec<&'static str> {
+     let mut out = Vec::new();
+@@ -114,6 +116,7 @@ pub fn viol_names(v: u32) -> Vec<&'static str> {
+             "I6 (a terminal state with covered work unrelayed and no timer)",
+         ),
+         (V_LOST, "I2 (covered entries not all relayed)"),
++        (V_MARKER_IN_PACKET, "MARKER_IN_PACKET (a host marker lands inside an open guest packet)"),
+         (
+             V_ENTRY_REFUSED,
+             "ENTRY_REFUSED (inspect_entry refused the loaded value)",
+@@ -212,6 +215,7 @@ struct ModelEnv {
+     pb_reads: u32,
+     priv_entries: u32,
+     src_entries: u32,
++    hw_scan: Scan,
+ }
+ 
+ impl ModelEnv {
+@@ -266,6 +270,40 @@ impl Env for ModelEnv {
+         words
+     }
+     fn publish(&mut self, p: Pub) {
++        // REVIEW: the hardware parses the private stream as ONE packet stream across segments.
++        let hw_words = |env: &Self, raw: u64| -> Vec<u32> {
++            entry_id(raw)
++                .and_then(|id| env.ges.get(usize::from(id)).copied().flatten())
++                .map(|g| g.words())
++                .unwrap_or_default()
++        };
++        match p {
++            Pub::Guest { stored, .. } | Pub::Staged { tested: stored } => {
++                let words = hw_words(self, stored);
++                let mut at = 0usize;
++                loop {
++                    match self.hw_scan.segment(words.get(at..).unwrap_or(&[]), sw) {
++                        Ok(Some(t)) => {
++                            at += t.end;
++                            if at >= words.len() {
++                                break;
++                            }
++                        }
++                        Ok(None) => break,
++                        Err(_) => {
++                            self.hw_scan = Scan::default();
++                            break;
++                        }
++                    }
++                }
++            }
++            Pub::Marker(_) => {
++                if self.hw_scan.carried().is_some() {
++                    self.viol |= V_MARKER_IN_PACKET;
++                }
++            }
++            Pub::Barrier => {}
++        }
+         if let Pub::Guest {
+             tested,
+             stored,
+@@ -387,6 +425,7 @@ impl Clone for World {
+                 pb_reads: self.env.pb_reads,
+                 priv_entries: self.env.priv_entries,
+                 src_entries: self.env.src_entries,
++                hw_scan: self.env.hw_scan.clone(),
+             },
+         }
+     }
+@@ -452,6 +491,7 @@ impl World {
+                 pb_reads: 0,
+                 priv_entries: cfg.priv_entries,
+                 src_entries: cfg.src_entries,
++                hw_scan: Scan::default(),
+             },
+         }
+     }
+@@ -759,6 +799,7 @@ fn empty_env() -> ModelEnv {
+         pb_reads: 0,
+         priv_entries: 4,
+         src_entries: 4,
++        hw_scan: Scan::default(),
+     }
+ }
+ 
+@@ -2009,3 +2050,57 @@ fn d_the_recorded_edge_ring_shape_behind_unreached_sync_waits_is_not_read_early_
+     let r = assert_clean(&cfg, "d-edge-shape");
+     assert_eq!(r.modes, HashSet::from([Mode::Window]));
+ }
++
++
++/// REVIEW: Pointer mode forwards a SYNC_WAIT entry and then an entry that ends inside an open packet; the
++/// registration arrives; the guest publishes the packet's tail after the reply. The seeded gate authors
++/// barrier + marker at the Fresh boundary, which is inside the open packet on the hardware's view.
++#[test]
++fn review_seeded_marker_lands_inside_an_open_packet() {
++    let script = vec![
++        Op::Push(ge(0, Kind::SetObj)),
++        Op::SetPut,
++        Op::Ring,
++        Op::Push(p(1).sync()),
++        Op::Push(ge(2, Kind::OpenHead)),
++        Op::SetPut,
++        Op::Ring,
++        Op::Register,
++        Op::AwaitReply,
++        Op::Push(ge(3, Kind::OpenTail).post()),
++        Op::Push(p(4).post()),
++        Op::SetPut,
++        Op::Ring,
++    ];
++    let mut cfg = Cfg::new(spec(script, &[0, 1, 2, 3, 4]));
++    cfg.kind = Registration::Other;
++    let r = explore(&cfg);
++    println!("review: {} states viol={:?} first={:?}", r.states, viol_names(r.viol), r.first);
++    assert!(r.viol & V_MARKER_IN_PACKET != 0, "expected the seeded marker inside the packet");
++}
++
++/// REVIEW: a1 with the SYNC_WAIT as a LENGTH-0 control entry (the Edge / Win11 shape).
++#[test]
++fn review_a1_with_a_length0_sync_wait() {
++    let script = vec![
++        Op::Push(ge(0, Kind::SetObj)),
++        Op::SetPut,
++        Op::Ring,
++        Op::Push(p(1).acq(0)),
++        Op::Push(ge(2, Kind::Nop).sync()),
++        Op::SetPut,
++        Op::Ring,
++        Op::Register,
++        Op::AwaitReply,
++        Op::Push(p(3).late().post()),
++        Op::SetPut,
++        Op::Ring,
++        Op::Fill(3),
++        Op::Release(0),
++    ];
++    let mut cfg = Cfg::new(spec(script, &[0, 1, 2, 3]));
++    cfg.kind = Registration::Other;
++    let r = explore(&cfg);
++    println!("review-len0: {} states viol={:?}", r.states, viol_names(r.viol));
++    assert_eq!(r.viol, 0);
++}

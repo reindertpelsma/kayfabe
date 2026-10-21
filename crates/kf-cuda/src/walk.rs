@@ -2014,6 +2014,33 @@ impl WalkKernel {
         self.cu.memcpy_h2d(dst, bytes, "cuMemcpyHtoD(write_store)")
     }
 
+    /// ★ 2026-10-18 (the scrub, `kf-qemu`'s `scrub` module): QUEUE a device-side zero of store
+    /// `[off, off+len)` — `cuMemsetD8` on the store's own device mapping, no host buffer and no
+    /// PCIe traffic (the GPU's memory bandwidth bounds it). Bounds-checked against the store.
+    /// ⊘ NOT complete when this returns: the memset is ordered on the legacy stream but a CUDA
+    /// device memset is asynchronous with respect to the host. [`WalkKernel::sync_store`] is the
+    /// completion — the caller (a worker, never a vCPU) waits there, once, after the last chunk.
+    ///
+    /// # Errors
+    /// Refused by name outside the store; the CUDA error otherwise.
+    pub fn zero_store_queued(&self, off: u64, len: u64) -> Result<(), CudaError> {
+        let n = usize::try_from(len)
+            .map_err(|_| refused("WalkKernel::zero_store_queued", format!("{len:#x}")))?;
+        let dst = self.store_at(off, n, "WalkKernel::zero_store_queued")?;
+        self.cu
+            .memset_d8(dst, 0, n, "cuMemsetD8(zero_store_queued)")
+    }
+
+    /// ★ The completion of every zero queued so far (`cuCtxSynchronize`): when this returns `Ok`
+    /// the bytes are zero in device memory, for this context and — the DMA/memset having retired —
+    /// for any other context that reads the store afterwards.
+    ///
+    /// # Errors
+    /// The CUDA error, including a device-side fault raised by an earlier launch.
+    pub fn sync_store(&self) -> Result<(), CudaError> {
+        self.cu.ctx_synchronize()
+    }
+
     /// ★ §13: read `buf.len()` bytes at store offset `off` (a harness check, never a data path) —
     /// bounds-checked against the store's length.
     ///
