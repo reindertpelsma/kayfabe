@@ -141,6 +141,12 @@ fn color_experiments() -> kf_disp::color::Experiments {
     })
 }
 
+// Keep the configured SDR arm separate from GPU bring-up so the shipped configuration
+// can be exercised by the GPU-free colour regression tests.
+fn sdr_color_on() -> bool {
+    std::env::var("KF3_DISPLAY_SDR_COLOR").as_deref() == Ok("1")
+}
+
 /// `nvkms-evo3.c:1437-1438`'s default `MIN_FRAME_IDLE` (H-armeddefault): leading, trailing lines.
 const MIN_FRAME_IDLE_DEFAULT: (u32, u32) = (2, 1);
 
@@ -2163,7 +2169,7 @@ impl DisplayPlane {
         } else {
             kf_disp::caps::page
         };
-        let sdr_color = std::env::var("KF3_DISPLAY_SDR_COLOR").as_deref() == Ok("1");
+        let sdr_color = sdr_color_on();
         if sdr_color {
             // read (and confirm in the log) the decoder experiments at birth, not at first use
             let _ = color_experiments();
