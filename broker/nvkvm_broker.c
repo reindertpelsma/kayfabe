@@ -806,7 +806,8 @@ void nb_sink_focus(struct nb_sink *s, bool active)
             nb_log("grab dropped: the window lost focus");
         }
         nb_release_all(s);
-        s->pointer_in = false;
+        /* pointer_in is NOT cleared: it follows pointer enter/leave, and losing
+         * keyboard focus does not move the pointer, so hover keeps flowing. */
     }
     nb_emit(s, NVKVM_BROKER_EV_FOCUS, active, 0, 0, 0);
     if (!active) {
