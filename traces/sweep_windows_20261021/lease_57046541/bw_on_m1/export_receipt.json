@@ -1,0 +1,128 @@
+{
+  "arm_bw_on_m1_start_receipt.json": {
+    "rental_path": "/root/prov/arm_bw_on_m1_start_receipt.json",
+    "original_bytes": 582,
+    "original_sha256": "d8c530a46068b5f47b98553ea80b67456f2c118cfde23988dc653569f3f556cb",
+    "normalization": "trailing whitespace and newline only",
+    "export_sha256": "d8c530a46068b5f47b98553ea80b67456f2c118cfde23988dc653569f3f556cb"
+  },
+  "arm_bw_on_m1_process_receipt.json": {
+    "rental_path": "/root/prov/arm_bw_on_m1_process_receipt.json",
+    "original_bytes": 1216,
+    "original_sha256": "ffd757400319e9a7aebd9361895fa93008f59deeaf211493ad381670b048fa85",
+    "normalization": "trailing whitespace and newline only",
+    "export_sha256": "ffd757400319e9a7aebd9361895fa93008f59deeaf211493ad381670b048fa85"
+  },
+  "arm_bw_on_m1_pre_enable.txt": {
+    "rental_path": "/root/prov/arm_bw_on_m1_pre_enable.txt",
+    "original_bytes": 426,
+    "original_sha256": "516bc701a01fd2bb19a606c486aed13d58c3a53c48b782dcd12e88ceed7cdb47",
+    "normalization": "trailing whitespace and newline only",
+    "export_sha256": "cdee624c5cc561d87591a5ed32e908ecd12a84513fc6f1d666915892bd2c6bab"
+  },
+  "arm_bw_on_m1_enable.txt": {
+    "rental_path": "/root/prov/arm_bw_on_m1_enable.txt",
+    "original_bytes": 287,
+    "original_sha256": "7d2ea190d782200b134ff90110c1b4e66e06e530002424fa333331a0beffd8a1",
+    "normalization": "trailing whitespace and newline only",
+    "export_sha256": "f542c6cc738a5f9e1b1763c9d10ca8ba98b00f1984bca7106e2c040f8472edeb"
+  },
+  "arm_bw_on_m1_cleanup_started.txt": {
+    "rental_path": "/root/prov/arm_bw_on_m1_cleanup_started.txt",
+    "original_bytes": 26,
+    "original_sha256": "d8985ca15f812f0072a3cb89c77d3c3827c4a6101de168877508e6995e53af5b",
+    "normalization": "trailing whitespace and newline only",
+    "export_sha256": "d8985ca15f812f0072a3cb89c77d3c3827c4a6101de168877508e6995e53af5b"
+  },
+  "arm_bw_on_m1.log": {
+    "rental_path": "/root/prov/arm_bw_on_m1.log",
+    "original_bytes": 1041,
+    "original_sha256": "9ded0a4786fe0719de28d3abe567120b7c71cfe29d56e72ef7854b83529ded16",
+    "normalization": "trailing whitespace and newline only",
+    "export_sha256": "a5c79ffceb519451adee901799c76d511584ef1dc649b258a185b6094839573f"
+  },
+  "collect_bw_on_m1.log": {
+    "rental_path": "/root/prov/collect_bw_on_m1.log",
+    "original_bytes": 211,
+    "original_sha256": "a4aa92885dacb4b23c2722265793af5d84ff2afed329a075391f1f9f0f16253b",
+    "normalization": "trailing whitespace and newline only",
+    "export_sha256": "a4aa92885dacb4b23c2722265793af5d84ff2afed329a075391f1f9f0f16253b"
+  },
+  "api.tsv": {
+    "rental_path": "/root/prov/arms/bw_on_m1/api.tsv",
+    "original_bytes": 8861,
+    "original_sha256": "5dc34b90366aa4ebd768913f20b11761748fc1170cb08bb4ca81d9d8238a826d",
+    "normalization": "trailing whitespace and newline only",
+    "export_sha256": "5dc34b90366aa4ebd768913f20b11761748fc1170cb08bb4ca81d9d8238a826d"
+  },
+  "allocations.jsonl": {
+    "rental_path": "/root/prov/arms/bw_on_m1/allocations.jsonl",
+    "original_bytes": 27468,
+    "original_sha256": "c3774297597bb49fbee83d4d855f930aa96eb4d0d05186ff8c731b626faa700c",
+    "normalization": "trailing whitespace and newline only",
+    "export_sha256": "c3774297597bb49fbee83d4d855f930aa96eb4d0d05186ff8c731b626faa700c"
+  },
+  "allocations.receipt.json": {
+    "rental_path": "/root/prov/arms/bw_on_m1/allocations.receipt.json",
+    "original_bytes": 488,
+    "original_sha256": "6fab307b48a246dee0c15636a5f8b5015210bad493638c1de7d60ca581d358fb",
+    "normalization": "trailing whitespace and newline only",
+    "export_sha256": "6fab307b48a246dee0c15636a5f8b5015210bad493638c1de7d60ca581d358fb"
+  },
+  "summary.json": {
+    "rental_path": "/root/prov/arms/bw_on_m1/summary.json",
+    "original_bytes": 2773,
+    "original_sha256": "e2b21cc8c576a2d463304af466bff580aa2df57fe799c2f1ba2825655fcc7e4b",
+    "normalization": "trailing whitespace and newline only",
+    "export_sha256": "e2b21cc8c576a2d463304af466bff580aa2df57fe799c2f1ba2825655fcc7e4b"
+  },
+  "abort_context.txt": {
+    "rental_path": "/root/prov/arms/bw_on_m1/abort_context.txt",
+    "original_bytes": 1,
+    "original_sha256": "01ba4719c80b6fe911b091a7c05124b64eeece964e09c058ef8f9805daca546b",
+    "normalization": "trailing whitespace and newline only",
+    "export_sha256": "01ba4719c80b6fe911b091a7c05124b64eeece964e09c058ef8f9805daca546b"
+  },
+  "kf_line_census.txt": {
+    "rental_path": "/root/prov/arms/bw_on_m1/kf_line_census.txt",
+    "original_bytes": 7734,
+    "original_sha256": "953148a9b4ff9884b238493022517cd5b8eefe665f6851f508c771e37139c40f",
+    "normalization": "trailing whitespace and newline only",
+    "export_sha256": "138263d9cc80ad79471590048eae535b921a588019346fd10960482dfbe74767"
+  },
+  "channel_state.tsv": {
+    "rental_path": "/root/prov/arms/bw_on_m1/channel_state.tsv",
+    "original_bytes": 7077,
+    "original_sha256": "6a9ec495b4a7209bacc0e6137ff77b4b51cfb89a6f0d478cb5e0254305bbb756",
+    "normalization": "trailing whitespace and newline only",
+    "export_sha256": "6a9ec495b4a7209bacc0e6137ff77b4b51cfb89a6f0d478cb5e0254305bbb756"
+  },
+  "state_receipt.json": {
+    "rental_path": "/root/prov/arms/bw_on_m1/state_receipt.json",
+    "original_bytes": 421,
+    "original_sha256": "f6eb20aea3e80d084341b162c2b590fb1dc02176b3a0d75227e4be1df9397fcf",
+    "normalization": "trailing whitespace and newline only",
+    "export_sha256": "f6eb20aea3e80d084341b162c2b590fb1dc02176b3a0d75227e4be1df9397fcf"
+  },
+  "rpc_timing.jsonl": {
+    "rental_path": "/root/prov/arms/bw_on_m1/rpc_timing.jsonl",
+    "original_bytes": 60684,
+    "original_sha256": "4aa3fb1751ee108b8cd642f1495801f633eb42256f973a43ca3150738da83c44",
+    "normalization": "trailing whitespace and newline only",
+    "export_sha256": "4aa3fb1751ee108b8cd642f1495801f633eb42256f973a43ca3150738da83c44"
+  },
+  "rpc_timing.receipt.json": {
+    "rental_path": "/root/prov/arms/bw_on_m1/rpc_timing.receipt.json",
+    "original_bytes": 393,
+    "original_sha256": "fe269a496cddf00732d90bb41ac7e3395a7d62986dacc8ca4661c15fe94c7999",
+    "normalization": "trailing whitespace and newline only",
+    "export_sha256": "fe269a496cddf00732d90bb41ac7e3395a7d62986dacc8ca4661c15fe94c7999"
+  },
+  "rpc_timing_controller.log": {
+    "rental_path": "/root/prov/arms/bw_on_m1/rpc_timing_controller.log",
+    "original_bytes": 0,
+    "original_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "normalization": "trailing whitespace and newline only",
+    "export_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  }
+}

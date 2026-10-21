@@ -1,0 +1,2 @@
+COLLECT_START run=bw_on_m1 (standard VGA, no kf3 device) 2026-10-21T12:49:45+00:00
+[2026-10-21T12:49:45Z] detached: tag=bw_on_m1_collect, log logs/bw_on_m1_collect_run.log (stdout logs/bw_on_m1_collect_run.out)
