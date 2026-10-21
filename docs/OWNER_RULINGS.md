@@ -777,7 +777,10 @@ event logs, observed behaviour) are not about the code and may be inspected free
 work may be built upon. Following assembly of open-source-licensed code is NOT RE: the open GPU kernel
 modules (ogkm) are OSS-licensed, so a disassembly of a full ogkm build, whether built by us or
 distributed by NVIDIA, contains nothing proprietary and may be inspected freely. That applies only to
-full ogkm builds (Linux guests), not to the proprietary driver, whose binaries stay under the RE rules.
+full ogkm builds (Linux guests), not to the proprietary driver, whose binaries stay under the RE rules. Only code whose licence is open source is covered: a binary
+payload that merely ships inside OSS-licensed files (the GSP firmware as a C array, for example) is
+not, because the file is open source but the meaning of the contents is not covered by that licence,
+so inspecting the contents of such a payload is RE. When in doubt, it is RE (owner's safe side).
 
 ## T. Directives recovered from earlier sessions (filtered 2026-10-08)
 
