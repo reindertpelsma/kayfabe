@@ -90,7 +90,7 @@ impl super::ChanPlane {
                         if e.touched != touched {
                             // somebody evaluated or served it: the strand clock restarts
                             if e.announced && lines < 128 {
-                                lines += 1;
+                                lines = lines.saturating_add(1);
                                 eprintln!(
                                     "kf3: PROGRESS_STRAND_END host={:#x} total_ms={:#x}",
                                     rec.idx,
@@ -112,7 +112,7 @@ impl super::ChanPlane {
                             && lines < 64
                         {
                             e.announced = true;
-                            lines += 1;
+                            lines = lines.saturating_add(1);
                             eprintln!(
                                 "kf3: PROGRESS_STRAND for_ms={for_ms:#x} relay={token:#x} host={:#x} pending={} waiting_flag={} unannounced={} handoff_waiters={:#x} iters={:#x}",
                                 rec.idx,
@@ -120,7 +120,7 @@ impl super::ChanPlane {
                                 yn(rec.is_waiting()),
                                 yn(rec.is_unannounced()),
                                 self.handoff.waiters(),
-                                iters - e.iters_then,
+                                iters.saturating_sub(e.iters_then),
                             );
                         }
                     }
@@ -129,7 +129,7 @@ impl super::ChanPlane {
                             return true;
                         }
                         if e.announced && lines < 128 {
-                            lines += 1;
+                            lines = lines.saturating_add(1);
                             eprintln!(
                                 "kf3: PROGRESS_STRAND_END host={token:#x} total_ms={:#x}",
                                 now.duration_since(e.since).as_millis()

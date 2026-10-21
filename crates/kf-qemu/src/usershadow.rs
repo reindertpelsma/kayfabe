@@ -59,7 +59,9 @@ pub(super) fn decode_words(bytes: &[u8], maximum: usize) -> Result<Vec<u32>, &'s
         .try_reserve_exact(bytes.len() / 4)
         .map_err(|_| "observation allocation")?;
     for b in bytes.chunks_exact(4) {
-        words.push(u32::from_le_bytes([b[0], b[1], b[2], b[3]]));
+        // `chunks_exact(4)` yields only 4-byte chunks; a chunk of any other length is refused, never indexed.
+        let word = <[u8; 4]>::try_from(b).map_err(|_| "observation word alignment")?;
+        words.push(u32::from_le_bytes(word));
     }
     Ok(words)
 }
@@ -72,8 +74,10 @@ pub(super) struct Shadow {
 impl Shadow {
     pub fn new(id: u32) -> Self {
         let mut counts = [0; CLASSES];
-        if id == 0 {
-            counts[Class::InitialMaskHypothesis as usize] = 1;
+        if id == 0
+            && let Some(c) = counts.get_mut(Class::InitialMaskHypothesis as usize)
+        {
+            *c = 1;
         }
         Self {
             scan: Scan::for_subdevice(if id == 0 { 1 } else { id }).ok(),
@@ -83,7 +87,10 @@ impl Shadow {
     }
     /// True only for first sample of a class. Saturation never grants authority.
     pub fn record(&mut self, class: Class) -> bool {
-        let c = &mut self.counts[class as usize];
+        // Every `Class` has a slot (test `every_class_has_a_counter_slot`); a missing slot reports "not first": no event, no credit.
+        let Some(c) = self.counts.get_mut(class as usize) else {
+            return false;
+        };
         let first = *c == 0;
         *c = c.saturating_add(1);
         first
@@ -93,7 +100,7 @@ impl Shadow {
             self.lose_history();
             false
         } else {
-            self.remaining -= bytes;
+            self.remaining = self.remaining.saturating_sub(bytes);
             true
         }
     }
@@ -125,8 +132,9 @@ impl Shadow {
             return;
         };
         let mut at = 0;
-        loop {
-            match scan.segment(&words[at..], &software) {
+        // `at` only moves by a segment's own `end`; if it ever left the slice the loop ends with the history lost (`scan` stays taken), never indexed past.
+        while let Some(rest) = words.get(at..) {
+            match scan.segment(rest, &software) {
                 Ok(Some(t)) => {
                     if self.record(Class::Trigger) {
                         event(
@@ -134,7 +142,7 @@ impl Shadow {
                             format!("sampled {:?}; NOT execution; no CPU action", t.call),
                         );
                     }
-                    at += t.end;
+                    at = at.saturating_add(t.end);
                 }
                 Ok(None) => {
                     self.scan = Some(scan);
@@ -167,6 +175,29 @@ mod tests {
         s.observe(&[header, 0x5080], |_| true, |c, _| events.push(c as usize));
         assert_eq!(events, [Class::UnknownSuffix as usize]);
         assert_eq!(s.counts[Class::Trigger as usize], 0);
+    }
+    #[test]
+    fn every_class_has_a_counter_slot() {
+        use Class::*;
+        let mut s = Shadow::new(1);
+        for c in [
+            Entry,
+            Budget,
+            Source,
+            Header,
+            Legacy,
+            Mask,
+            Packet,
+            Method,
+            Trigger,
+            UnknownSuffix,
+            ObservationBudget,
+            InitialMaskHypothesis,
+        ] {
+            assert!((c as usize) < CLASSES);
+            assert!(s.record(c), "{c:?} must have its own counter slot");
+            assert!(!s.record(c));
+        }
     }
     #[test]
     fn real_snapshot_decoder_checks_quota_alignment_and_little_endian() {

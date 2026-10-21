@@ -911,16 +911,18 @@ fn scan_sw_methods(words: &[u32]) -> SwScan {
             let args = if matches!(h.form, MethodForm::Immediate | MethodForm::Legacy) {
                 1
             } else {
-                h.arg_words.min(words.len().saturating_sub(i + 1)).max(1)
+                h.arg_words
+                    .min(words.len().saturating_sub(i.saturating_add(1)))
+                    .max(1)
             };
             if h.subchannel >= 5 {
                 for arg in 0..args {
                     let advance = match h.form {
-                        MethodForm::Incrementing => arg as u32 * 4,
+                        MethodForm::Incrementing => (arg as u32).saturating_mul(4),
                         MethodForm::IncrementOnce if arg != 0 => 4,
                         _ => 0,
                     };
-                    let method = h.method + advance;
+                    let method = h.method.saturating_add(advance);
                     let host_only = method != kf_abi::submit::SET_OBJECT && method < 0x100;
                     if !host_only {
                         out.hits.push(SwMethod {
@@ -930,7 +932,7 @@ fn scan_sw_methods(words: &[u32]) -> SwScan {
                             data: if h.form == MethodForm::Immediate {
                                 Some(h.immd)
                             } else {
-                                words.get(i + 1 + arg).copied()
+                                words.get(i.saturating_add(1).saturating_add(arg)).copied()
                             },
                         });
                     }
@@ -1572,7 +1574,10 @@ impl Publisher for VaSplit<'_> {
             .ok_or("software method started with nothing planned")?;
         let p = self.sw.plane;
         // Logged: the first 16 triggers, then powers of two (the guest's trigger rate must not grow the log).
-        let nth = p.defapi_triggers.fetch_add(1, Ordering::Relaxed) + 1;
+        let nth = p
+            .defapi_triggers
+            .fetch_add(1, Ordering::Relaxed)
+            .saturating_add(1);
         let log = nth <= 16 || nth.is_power_of_two();
         if log {
             eprintln!(
@@ -1641,7 +1646,7 @@ impl Publisher for VaSplit<'_> {
             Ok(line) => {
                 // First 16 completions, then powers of two (as the trigger line above).
                 static DONE: AtomicU64 = AtomicU64::new(0);
-                let nth = DONE.fetch_add(1, Ordering::Relaxed) + 1;
+                let nth = DONE.fetch_add(1, Ordering::Relaxed).saturating_add(1);
                 if nth <= 16 || nth.is_power_of_two() {
                     eprintln!(
                         "kf3: DEFERRED-API token {:#x} hApiHandle {:#x} DONE #{nth}: {line}",
@@ -3342,15 +3347,23 @@ impl ChanPlane {
             Some(kf_trap::Route::Translated) => 0,
             Some(kf_trap::Route::Passthrough) => 1,
             _ => {
-                self.db_census[3].store(u64::from(value), Ordering::Relaxed);
+                if let Some(last) = self.db_census.get(3) {
+                    last.store(u64::from(value), Ordering::Relaxed);
+                }
                 2
             }
         };
-        self.db_census[i].fetch_add(1, Ordering::Relaxed);
+        if let Some(count) = self.db_census.get(i) {
+            count.fetch_add(1, Ordering::Relaxed);
+        }
     }
     /// `(translated, passthrough, other, last other value)`.
     pub(crate) fn doorbell_census_now(&self) -> [u64; 4] {
-        std::array::from_fn(|i| self.db_census[i].load(Ordering::Relaxed))
+        std::array::from_fn(|i| {
+            self.db_census
+                .get(i)
+                .map_or(0, |c| c.load(Ordering::Relaxed))
+        })
     }
 
     /// Doorbells counted on guest token `idx` ([`Self::note_queued`]).
@@ -6207,7 +6220,10 @@ impl ChanPlane {
             eprintln!(
                 "kf3: chan token {:#x} RELAY-PEEK registration bundle prefix (diagnostic, <=64 bytes): {:02x?}",
                 g.idx,
-                &update.bundle[..update.bundle.len().min(64)]
+                update
+                    .bundle
+                    .get(..update.bundle.len().min(64))
+                    .unwrap_or_default()
             );
         }
         let mirror = g.mirror.clone();
@@ -6932,7 +6948,7 @@ impl ChanPlane {
                         .and_then(|mut c| me.plane.allocate_channel(&mut c, idx, if relay_host.is_some() { Route::Translated } else { Route::Passthrough }, chan.token, owner).map_err(|e| {
                             // ★ 2026-10-11: LOUD and counted by reason (a refused birth is a guest crash: the OpenGL ICD dereferences it).
                             let rl = me.plane.token_index.runlist_of(me.plane.token_index.clamp(idx));
-                            let n = me.birth_refused_cap.fetch_add(1, Ordering::Relaxed) + 1;
+                            let n = me.birth_refused_cap.fetch_add(1, Ordering::Relaxed).saturating_add(1);
                             eprintln!("kf3: ⚠ CHANNEL BUDGET EXHAUSTED on guest runlist {rl}: {e:?} (refusal #{n}; the `channel-budget` property, docs/design/V3_CHANNEL_BUDGET.md)");
                             format!("{e:?}")
                         }));

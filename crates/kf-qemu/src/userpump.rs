@@ -335,9 +335,9 @@ impl Trace {
         self.db_prev_put = self.db_at_put;
         self.db_at_put = doorbells;
         if doorbells > self.db_prev_put {
-            self.puts_with_db += 1;
+            self.puts_with_db = self.puts_with_db.saturating_add(1);
         } else {
-            self.puts_without_db += 1;
+            self.puts_without_db = self.puts_without_db.saturating_add(1);
         }
     }
     pub(super) fn wake(&mut self, woke: bool) {
@@ -397,10 +397,34 @@ fn scan_end(
     }
     Ok(s.carried())
 }
+/// The first `n` items of `s` (all of it when shorter). Never panics.
+fn head<T>(s: &[T], n: usize) -> &[T] {
+    s.get(..n.min(s.len())).unwrap_or_default()
+}
+/// One little-endian word from exactly four bytes; any other length is `None`.
+fn le_word(w: &[u8]) -> Option<u32> {
+    <[u8; 4]>::try_from(w).ok().map(u32::from_le_bytes)
+}
+/// `base + 8 * idx`, saturating: a slot address that cannot exist makes the read that uses it refuse.
+fn ring_slot_va(base: u64, idx: u32) -> u64 {
+    base.saturating_add(u64::from(idx).saturating_mul(8))
+}
+/// An instant `by` from `now`; at the clock's limit the deadline is `now` (due at once).
+fn after(now: std::time::Instant, by: std::time::Duration) -> std::time::Instant {
+    now.checked_add(by).unwrap_or(now)
+}
+/// Indices where the two word lists differ, over their common prefix.
+fn differing(a: &[u32], b: &[u32]) -> Vec<usize> {
+    a.iter()
+        .zip(b)
+        .enumerate()
+        .filter_map(|(i, (x, y))| (x != y).then_some(i))
+        .collect()
+}
 fn words_text(out: &mut String, words: &[u32]) {
     use std::fmt::Write as _;
     for (i, chunk) in words.chunks(8).enumerate() {
-        let _ = write!(out, "  {:5}:", i * 8);
+        let _ = write!(out, "  {:5}:", i.saturating_mul(8));
         for w in chunk {
             let _ = write!(out, " {w:08x}");
         }
@@ -928,7 +952,7 @@ impl kf_chan::user_turn::Io for PumpIo<'_> {
             } => {
                 Stats::bump(&me.relay_stats.carried_ungated);
                 if self.aux.sync_carried < 4 {
-                    self.aux.sync_carried += 1;
+                    self.aux.sync_carried = self.aux.sync_carried.saturating_add(1);
                     eprintln!(
                         "kf3: USER_RING_SYNC_CARRIED {:#x}:{:#x} generation={generation} cursor={cursor} entry={entry:#018x} open_packet={} (#{}) — a SYNC_WAIT entry behind an open packet cannot be gated (no witness fits inside a packet); read at once",
                         r.key.0,
@@ -946,7 +970,7 @@ impl kf_chan::user_turn::Io for PumpIo<'_> {
                 cursor,
             } => {
                 if self.aux.grace_reported < 4 && !was_retrying {
-                    self.aux.grace_reported += 1;
+                    self.aux.grace_reported = self.aux.grace_reported.saturating_add(1);
                     eprintln!(
                         "kf3: USER_RING_SCAN_RETRY {:#x}:{:#x} cursor={cursor} (re-read and rescan up to {} times before refusing): {why}",
                         r.key.0,
@@ -1172,16 +1196,16 @@ impl Pump {
         let Some(t) = self.trace.as_mut() else {
             return;
         };
-        t.seq += 1;
-        let kept = words[..words.len().min(TRACE_WORDS)].to_vec();
+        t.seq = t.seq.saturating_add(1);
+        let kept = head(words, TRACE_WORDS).to_vec();
         // A segment that starts at a packet boundary and ENDS inside a packet it started: legal
         // hardware framing, but the shape a desync leaves behind. Report it with deferred re-reads.
         if start.is_none() && matches!(end, Ok(Some(_))) && t.straddles < TRACE_STRADDLES {
-            t.straddles += 1;
+            t.straddles = t.straddles.saturating_add(1);
             let now = std::time::Instant::now();
             for delay_ms in [1u64, 20, 200] {
                 t.rereads.push(Reread {
-                    due: now + std::time::Duration::from_millis(delay_ms),
+                    due: after(now, std::time::Duration::from_millis(delay_ms)),
                     delay_ms,
                     verify: None,
                     seq: t.seq,
@@ -1220,12 +1244,12 @@ impl Pump {
         // read bytes that are not the final ones?
         if pb.describe().contains("vram")
             && words.len() <= 1024
-            && t.verified + (t.rereads.len() as u64) < 40_000
+            && t.verified.saturating_add(t.rereads.len() as u64) < 40_000
         {
             let now = std::time::Instant::now();
             for delay_us in [200u64, 2000] {
                 t.rereads.push(Reread {
-                    due: now + std::time::Duration::from_micros(delay_us),
+                    due: after(now, std::time::Duration::from_micros(delay_us)),
                     delay_ms: delay_us,
                     verify: Some((now, carried_out.clone())),
                     seq: t.seq,
@@ -1240,13 +1264,14 @@ impl Pump {
             }
         }
         while t.history.len() == TRACE_HISTORY
-            || (t.history_words + kept.len() > TRACE_HISTORY_WORDS && !t.history.is_empty())
+            || (t.history_words.saturating_add(kept.len()) > TRACE_HISTORY_WORDS
+                && !t.history.is_empty())
         {
             if let Some(old) = t.history.pop_front() {
-                t.history_words -= old.words.len();
+                t.history_words = t.history_words.saturating_sub(old.words.len());
             }
         }
-        t.history_words += kept.len();
+        t.history_words = t.history_words.saturating_add(kept.len());
         t.history.push_back(SegTrace {
             seq: t.seq,
             at: std::time::Instant::now(),
@@ -1276,7 +1301,7 @@ impl Pump {
             if t.slots.len() == TRACE_SLOTS {
                 t.slots.pop_front();
             }
-            t.slots.push_back((first + i as u64, d));
+            t.slots.push_back((first.saturating_add(i as u64), d));
         }
     }
 
@@ -1365,7 +1390,7 @@ impl Pump {
             for (seq, d) in t
                 .slots
                 .iter()
-                .filter(|(q, _)| q + 8 >= fetched && *q <= fetched + 8)
+                .filter(|(q, _)| q.saturating_add(8) >= fetched && *q <= fetched.saturating_add(8))
             {
                 let mark = if *seq == fetched {
                     " <== private GP_GET"
@@ -1380,13 +1405,13 @@ impl Pump {
             // The scanned guest segment the PB GET lies in (its words at scan time).
             let hit = t.history.iter().rev().find_map(|h| {
                 let d = kf_abi::submit::gp_entry_decode_direct_c56f(h.entry)?;
-                (pb_get >= d.gpu_va && pb_get <= d.gpu_va + d.len_bytes)
-                    .then(|| (h, d.gpu_va, ((pb_get - d.gpu_va) / 4) as usize))
+                (pb_get >= d.gpu_va && pb_get <= d.gpu_va.saturating_add(d.len_bytes))
+                    .then(|| (h, d.gpu_va, (pb_get.saturating_sub(d.gpu_va) / 4) as usize))
             });
             match hit {
                 Some((h, va, at)) => {
                     let lo = at.saturating_sub(8);
-                    let hi = (at + 8).min(h.words.len());
+                    let hi = at.saturating_add(8).min(h.words.len());
                     let words: Vec<String> = h
                         .words
                         .get(lo..hi)
@@ -1474,7 +1499,7 @@ impl Pump {
                 backing_now = Some((s.describe(), s.epoch));
                 s.bytes
                     .chunks_exact(4)
-                    .map(|w| u32::from_le_bytes([w[0], w[1], w[2], w[3]]))
+                    .filter_map(le_word)
                     .collect()
             });
             let moved = backing_now.as_ref().map(|b| b.0 != x.backing.0);
@@ -1489,9 +1514,7 @@ impl Pump {
                 );
                 continue;
             };
-            let diffs: Vec<usize> = (0..fresh.len().min(x.words.len()))
-                .filter(|&i| fresh[i] != x.words[i])
-                .collect();
+            let diffs = differing(&fresh, &x.words);
             let end = match scan_end(&x.scan_in, &fresh, sw) {
                 Ok(c) => carried_text(c),
                 Err(i) => format!("refused@{i}"),
@@ -1500,19 +1523,19 @@ impl Pump {
                 let Some(t) = self.trace.as_mut() else {
                     continue;
                 };
-                t.verified += 1;
+                t.verified = t.verified.saturating_add(1);
                 let mut write_file = false;
                 if !diffs.is_empty() {
                     // Before the GPU began this entry: the GPU will execute the NEW bytes, the
                     // scan saw the old ones — a real mismatch. After: possibly a legitimate reuse.
                     let prefetch = self.core.fetch.fetched() <= x.seq_at_scan;
                     if prefetch {
-                        t.stale_prefetch += 1;
+                        t.stale_prefetch = t.stale_prefetch.saturating_add(1);
                     }
-                    t.stale += 1;
+                    t.stale = t.stale.saturating_add(1);
                     let desync = *end_at_scan != end;
                     if desync {
-                        t.stale_desync += 1;
+                        t.stale_desync = t.stale_desync.saturating_add(1);
                     }
                     write_file = t.stale <= 8;
                     if t.stale <= 64 || desync && t.stale_desync <= 64 {
@@ -1573,8 +1596,8 @@ impl Pump {
                                 .wrapping_add(entries)
                                 .wrapping_sub(4)
                                 .wrapping_add(k)
-                                & (entries - 1);
-                            let at = r.source.0 + u64::from(idx) * 8;
+                                & entries.saturating_sub(1);
+                            let at = ring_slot_va(r.source.0, idx);
                             let e = self.snapshot(me, r, at, 8).ok().and_then(|s| {
                                 s.bytes.as_slice().try_into().ok().map(u64::from_le_bytes)
                             });
@@ -1602,25 +1625,23 @@ impl Pump {
                 diffs.len(),
                 diffs.first()
             );
-            if x.delay_ms == 200 {
-                if let Some(dir) = trace_dir() {
-                    let mut out = format!(
-                        "STRADDLE {:#x}:{:#x} seq={} pb_va={:#x} bytes={}\nas scanned:\n",
-                        r.key.0, r.key.1, x.seq, x.va, x.bytes
-                    );
-                    words_text(&mut out, &x.words);
-                    out.push_str("re-read +200ms:\n");
-                    words_text(&mut out, &fresh[..fresh.len().min(TRACE_WORDS)]);
-                    let _ = std::fs::create_dir_all(dir).and_then(|()| {
-                        std::fs::write(
-                            dir.join(format!(
-                                "user-ring-straddle-{:x}-{:x}-{}.txt",
-                                r.key.0, r.key.1, x.seq
-                            )),
-                            out.as_bytes(),
-                        )
-                    });
-                }
+            if x.delay_ms == 200 && let Some(dir) = trace_dir() {
+                let mut out = format!(
+                    "STRADDLE {:#x}:{:#x} seq={} pb_va={:#x} bytes={}\nas scanned:\n",
+                    r.key.0, r.key.1, x.seq, x.va, x.bytes
+                );
+                words_text(&mut out, &x.words);
+                out.push_str("re-read +200ms:\n");
+                words_text(&mut out, head(&fresh, TRACE_WORDS));
+                let _ = std::fs::create_dir_all(dir).and_then(|()| {
+                    std::fs::write(
+                        dir.join(format!(
+                            "user-ring-straddle-{:x}-{:x}-{}.txt",
+                            r.key.0, r.key.1, x.seq
+                        )),
+                        out.as_bytes(),
+                    )
+                });
             }
         }
     }
@@ -1714,8 +1735,8 @@ impl Pump {
                     .wrapping_add(entries)
                     .wrapping_sub(16)
                     .wrapping_add(k)
-                    & (entries - 1);
-                let at = r.source.0 + u64::from(idx) * 8;
+                    & entries.saturating_sub(1);
+                let at = ring_slot_va(r.source.0, idx);
                 let e = self
                     .snapshot(me, r, at, 8)
                     .ok()
@@ -1761,13 +1782,11 @@ impl Pump {
                     ));
                     s.bytes
                         .chunks_exact(4)
-                        .map(|w| u32::from_le_bytes([w[0], w[1], w[2], w[3]]))
+                        .filter_map(le_word)
                         .collect()
                 });
             let (changed, first) = words2.as_ref().map_or((None, None), |w2| {
-                let diffs: Vec<usize> = (0..w2.len().min(words.len()))
-                    .filter(|&i| w2[i] != words[i])
-                    .collect();
+                let diffs = differing(w2, words);
                 (Some(diffs.len()), diffs.first().copied())
             });
             let rescan = words2.as_ref().map(|w2| {
@@ -1782,11 +1801,9 @@ impl Pump {
                 me.queued(r.idx)
             );
             let _ = writeln!(out, "{line}");
-            if let (Some(w2), Some(n)) = (&words2, changed) {
-                if n > 0 {
-                    let _ = writeln!(out, "  reread words:");
-                    words_text(&mut out, &w2[..w2.len().min(TRACE_WORDS)]);
-                }
+            if let (Some(w2), Some(n)) = (&words2, changed) && n > 0 {
+                let _ = writeln!(out, "  reread words:");
+                words_text(&mut out, head(w2, TRACE_WORDS));
             }
             summary.push(format!(
                 "+{delay}ms:db={}:changed={}:rescan={}",
@@ -1796,7 +1813,7 @@ impl Pump {
             ));
         }
         let _ = writeln!(out, "failing segment words ({}):", words.len());
-        words_text(&mut out, &words[..words.len().min(TRACE_WORDS)]);
+        words_text(&mut out, head(words, TRACE_WORDS));
         if let Some(t) = self.trace.as_mut() {
             let _ = writeln!(out, "history (oldest first, {} segments):", t.history.len());
             for s in &t.history {
@@ -2022,7 +2039,7 @@ impl Pump {
             return;
         };
         let (put, entry) = (self.core.put, self.core.raw);
-        let va = r.source.0 + u64::from(self.core.cursor) * 8;
+        let va = ring_slot_va(r.source.0, self.core.cursor);
         let (Some(pb), words) = (self.aux.pb.take(), std::mem::take(&mut self.core.words)) else {
             return;
         };
@@ -2051,7 +2068,7 @@ impl Pump {
         use super::usershadow::Class;
         if self.core.fetch.available() == 0 {
             self.core.need = kf_chan::user_loop::Need::Popped {
-                target: self.core.fetch.fetched() + 1,
+                target: self.core.fetch.fetched().saturating_add(1),
             };
             return Ok(false);
         }
@@ -2142,7 +2159,7 @@ impl Pump {
                 source.epoch
             );
         }
-        let guest_get = (self.core.cursor + 1) & (r.source.1 - 1);
+        let guest_get = self.core.cursor.wrapping_add(1) & r.source.1.saturating_sub(1);
         let publication = self.publish(
             me,
             r,
@@ -2545,9 +2562,9 @@ impl Pump {
                         .wrapping_add(entries)
                         .wrapping_sub(4)
                         .wrapping_add(k)
-                        & (entries - 1);
+                        & entries.saturating_sub(1);
                     let e = self
-                        .snapshot(me, r, r.source.0 + u64::from(idx) * 8, 8)
+                        .snapshot(me, r, ring_slot_va(r.source.0, idx), 8)
                         .ok()
                         .and_then(|s| s.bytes.as_slice().try_into().ok().map(u64::from_le_bytes));
                     around.push((idx, e));
@@ -2643,7 +2660,7 @@ impl Pump {
             let mut first = Vec::new();
             for i in 0..16u64 {
                 first.push(
-                    self.snapshot(me, r, u.gpfifo_va + i * 8, 8)
+                    self.snapshot(me, r, u.gpfifo_va.saturating_add(i.saturating_mul(8)), 8)
                         .ok()
                         .and_then(|s| s.bytes.as_slice().try_into().ok().map(u64::from_le_bytes)),
                 );
@@ -3015,7 +3032,7 @@ impl ChanPlane {
                             (&self.relay_stats.backstop_contended, "BACKSTOP_CONTENDED")
                         }
                     };
-                    let n = counter.fetch_add(1, Ordering::Relaxed) + 1;
+                    let n = counter.fetch_add(1, Ordering::Relaxed).saturating_add(1);
                     // ★ PHASE 1b (review D3): a Pointer-mode channel woken by the 50 ms backstop is a timer carrying
                     // progress ("performance never depends on timing"). Counted always, LOUD beyond about one a
                     // second (`kf_chan::user_loop::loud_rate`).
