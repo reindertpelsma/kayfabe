@@ -1,0 +1,27 @@
+[
+  {
+    "mutant": "ignore-new-Xid",
+    "failing_tests": 2,
+    "rc": 1
+  },
+  {
+    "mutant": "ignore-restore-deadline",
+    "failing_tests": 2,
+    "rc": 1
+  },
+  {
+    "mutant": "ignore-fifteen-minute-hang",
+    "failing_tests": 2,
+    "rc": 1
+  },
+  {
+    "mutant": "write-owner-files",
+    "failing_tests": 2,
+    "rc": 1
+  },
+  {
+    "mutant": "omit-audio-function",
+    "failing_tests": 7,
+    "rc": 1
+  }
+]
