@@ -1,5 +1,21 @@
 # Status and handoff — where kayfabe v3 stands, and how to resume
 
+## UPDATE 2026-10-22 — run 3440 SPECviewperf TDR research (T1)
+
+MEASURED: `codex/tdr-analysis-20261022` preserves twelve USER-ring
+`GP_FORMAT Budget` refusals: 947340–1026596-byte descriptors exceed the
+917504-byte staging policy. CODE READ: admission failure marks the relay dead.
+INFERRED: this is the leading app-kill candidate; a size-constant increase is
+not a proposed remedy. MEASURED: all 6097 snapshot3 status samples have zero
+unreconciled invalidates/root moves; all 197 logged T-space releases succeed.
+The exported workload log corrects the first failing catia subtest to 03;
+several later subtests, including all energy subtests, complete after recovery.
+CODE READ: VF1's published safety stop produced zero native samples, so matched
+VFIO comparison remains unavailable. T1 used evidence-only host reads, wrote
+no runtime code and opened no draft PR. The timeline limits, four ranked
+hypotheses and default-off TEST-FIRST diagnostic design are in
+[`V3_TDR_SPECVIEWPERF_20261022.md`](design/V3_TDR_SPECVIEWPERF_20261022.md).
+
 ## UPDATE 2026-10-18 — hitch measurement gates
 
 CODE READ: `codex/hitch-gates-20261018` makes display step timing and the relay event

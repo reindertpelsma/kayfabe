@@ -324,11 +324,16 @@ ranked now by the evidence above. Experiments below are proposals, not T1 runs.
 4. **H4: workload/guest-driver failure also occurs without kayfabe.**
    FALSIFIER: repeated matched fresh kayfabe failures and VFIO success on the
    same image/driver/viewset/settings, plus an identified kayfabe progress defect.
-   MEASURED: at the reference checkpoint read in T1, VF1 had preserved source
-   evidence and published its supervisor, not completed reference scores.
-   INFERRED: unresolved. Cheapest decisive experiment: consume VF1's already
-   authorized reference when published, comparing per-subtest pass/fail and
-   settings first; obtain repeated catia-03 controls before blaming a driver.
+   CODE READ: VF1's published final disposition at `584ebaede` reports zero
+   native samples: its open-device safety gate refused before GPU detach or
+   native QEMU launch, and it stopped. The desktop restoration is reported
+   partial (GDM greeter rather than the owner's previous desktop session).
+   See [VF1's final evidence](https://github.com/reindertpelsma/kayfabe/blob/584ebaedee73eac4c46846301a023c3eb5990627/traces/specviewperf_vfio_20261022/README.md).
+   INFERRED: unresolved, with no VFIO comparison available this night. T1 did
+   not retry or work around that refusal. The cheapest decisive experiment
+   remains a future owner-authorized matched reference, comparing per-subtest
+   pass/fail and settings first; obtain repeated catia-03 controls before
+   blaming a driver.
 
 CODE READ: relevant audits are
 [`claude/audit-race-20261021`](https://github.com/reindertpelsma/kayfabe/blob/claude/audit-race-20261021/docs/audits/2026-10-21-race-correctness-audit.md)
@@ -447,9 +452,11 @@ not measured results:
 
 ## Verification and limits
 
-MEASURED: JSON parsing, source-hash/prefix checks, descriptor-field arithmetic,
-counter-delta reconstruction, reply balance and bounded excerpt cross-checks
-were performed. No code was changed; before/after Rust test counts are 0/0,
+MEASURED: thirty artifact-consistency assertions passed, covering JSON-derived
+counts, source-prefix confirmation, descriptor-field arithmetic, reply balance,
+and local document links; source hashes, counter deltas and bounded excerpts
+were also inspected. These are artifact checks, not product tests.
+No code was changed; before/after Rust test counts are 0/0,
 mutation kills and clippy comparison are not applicable. The design table above
 is unimplemented and is not a test pass. No draft PR is opened for this
 research-only branch.
