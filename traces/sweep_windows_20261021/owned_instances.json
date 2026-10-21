@@ -1,1 +1,38 @@
-[]
+[
+  {
+    "id": 57046541,
+    "role": "Owner task6 GB202 Windows580.88 displayON first, M+POSTCOMP+OLUT",
+    "offer": 56638594,
+    "machine_id": 53347,
+    "gpu_offer": "RTX 5090",
+    "quote_dph": 1.2013888888888888,
+    "disk_gb_requested": 180,
+    "created_utc": "2026-10-21T11:42:55.315809+00:00",
+    "product_head": "af8bdcda4c700d8b40163ee3bf27feb7cfa6539c",
+    "candidate": "89fc8a22291dd7bda69c3077ba829b1e934b11db",
+    "credit_before": 24.727565990962717,
+    "stretch_start_credit": 24.727565990962717,
+    "budget_cap": 8,
+    "budget_stop": 6,
+    "credit_reserve": 5,
+    "reservation_usd": 4.529658564814815,
+    "auto_destroy_minutes": 175,
+    "hard_teardown_utc": "2026-10-21T18:30:00+00:00",
+    "destroyed": false,
+    "auto_destroy_pid": 1903926,
+    "auto_destroy_verified": true,
+    "auto_destroy_armed_utc": "2026-10-21T11:42:55.336253+00:00",
+    "controller_pid": 2002,
+    "ssh_ready_utc": "2026-10-21T11:48:41+00:00",
+    "observed_dph_total": 1.25,
+    "bundle_files": 28,
+    "bundle_bytes": 25716,
+    "bundle_sha256": "8a489ac34394176a3da7552541224b564e60f8b79c29b9c680e4cb2c2046321d",
+    "initial_inventory": {
+      "root_gb": 175,
+      "root_free_gb": 167,
+      "kvm_present": true
+    },
+    "stage": "Controller provisioning; no Windows init yet"
+  }
+]
