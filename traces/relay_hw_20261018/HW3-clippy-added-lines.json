@@ -1,0 +1,35 @@
+{
+  "source_rev": "7c87cb7ea504a7afe23d44fe718c90b17a2076cc",
+  "compared_to": "89fc8a22291dd7bda69c3077ba829b1e934b11db",
+  "command": "cargo clippy -j2 --release -p kf-chan -p kf-qemu --all-targets --message-format=json",
+  "exit_code": 101,
+  "total_errors": 93,
+  "changed_line_errors": 0,
+  "changed_line_warnings": 2,
+  "changed_line_diagnostics": [
+    {
+      "level": "warning",
+      "code": "clippy::collapsible_if",
+      "message": "this `if` statement can be collapsed",
+      "locations": [
+        {
+          "file": "crates/kf-qemu/src/translated_slot_tests.rs",
+          "line": 287,
+          "end_line": 295
+        }
+      ]
+    },
+    {
+      "level": "warning",
+      "code": "clippy::collapsible_if",
+      "message": "this `if` statement can be collapsed",
+      "locations": [
+        {
+          "file": "crates/kf-qemu/src/translated_slot_tests.rs",
+          "line": 288,
+          "end_line": 294
+        }
+      ]
+    }
+  ]
+}

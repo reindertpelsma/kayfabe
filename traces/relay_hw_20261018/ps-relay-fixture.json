@@ -1,0 +1,21 @@
+{
+  "rc": 0,
+  "packets": [
+    {
+      "epoch": 1792541637.9405909,
+      "bytes": 15,
+      "text": "HW2_RELAY_READY"
+    },
+    {
+      "epoch": 1792541637.958401,
+      "bytes": 72,
+      "text": "HW2_EMULATED 02:11:00.123 TRIGGER Heaven.exe silent 4s after 12 presents"
+    },
+    {
+      "epoch": 1792541637.9584112,
+      "bytes": 69,
+      "text": "HW2_EMULATED 02:11:01.000 TRIGGER dwm.exe silent 5s after 14 presents"
+    }
+  ],
+  "guest_output": "{\"expected_datagrams\":3,\"parser_errors\":0,\"version\":\"5.1.26100.9711\",\"fixture_only\":true}\n"
+}

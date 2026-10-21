@@ -93,3 +93,12 @@ the reviewed worker/relay/handoff changes. B' chaos hooks return no decision
 value; their callback can perturb scheduling. The negative-control and optional
 diagnostic/park knobs are explicit. This is a bounded code review, not a proof
 of every source path or an exact-hardware validation.
+
+MEASURED independent HW3 follow-up: full default --tests1051/0,5ignored,
+all1027 prior M case/status entries preserved;192new holdout scenarios pass.
+Clippy independently matches93unchanged-line errors,zero new errors,two new
+test-style warnings relative to M. CODE READ: the new cell's SC release-epoch
+handshake covers late registration and unlocks before ringing; scheduling is
+queued in act order and allocation identity is checked. Generic-cell execution
+and structural adapter pins are distinct. Actual QEMU/GPU paths remain
+unmeasured; no READY handoff or worker-RM-view fix is claimed.
