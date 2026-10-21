@@ -1,0 +1,28 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import {readFile,mkdtemp,writeFile} from 'node:fs/promises';
+import {tmpdir} from 'node:os';
+import {join} from 'node:path';
+import {spawnSync} from 'node:child_process';
+const root=new URL('../../../',import.meta.url);
+const workflow=new URL('.github/workflows/gpu-vast.yml',root);
+const moduleGuard=()=>import('../workflow-guard.js');
+const simple=extra=>`name: Fixture\non: workflow_dispatch\njobs:\n  gpu:\n    permissions:\n      contents: read\n      id-token: write\n      statuses: write\n    steps:\n      - run: true\n${extra}`;
+test('actual repository has safe workflow boundaries',async()=>{const {checkRepository}=await moduleGuard();assert.deepEqual(await checkRepository(root),[]);});
+test('poll job permits exactly content OIDC and status',async()=>{const {checkWorkflows}=await moduleGuard();const text=await readFile(workflow,'utf8');assert.deepEqual(checkWorkflows({'gpu-vast.yml':text}),[]);assert.match(text,/statuses: write/);assert.doesNotMatch(text,/pull_request:|merge_group:|upload-artifact|ssh /);});
+for(const permission of ['attestations: write','actions: write','contents: write','packages: write'])test('extra workflow permission fails '+permission,async()=>{const {checkWorkflows}=await moduleGuard();const t=await readFile(workflow,'utf8');assert.ok(checkWorkflows({'gpu-vast.yml':t.replace('contents: read',permission)}).length);});
+test('direct attestation dependency is rejected',async()=>{const {checkWorkflows}=await moduleGuard();assert.ok(checkWorkflows({'gpu-vast.yml':simple('  attest:\n    needs: gpu\n    steps:\n      - uses: actions/attest@v2\n')}).length);});
+test('transitive release dependency is rejected',async()=>{const {checkWorkflows}=await moduleGuard();assert.ok(checkWorkflows({'gpu-vast.yml':simple('  bridge:\n    needs: [gpu]\n    steps: []\n  release:\n    needs: bridge\n    steps:\n      - run: gh release create x\n')}).length);});
+test('cross-workflow GPU consumer is rejected',async()=>{const {checkWorkflows}=await moduleGuard();assert.ok(checkWorkflows({'gpu-vast.yml':simple(''),'release.yml':'on:\n  workflow_run:\n    workflows: [Vast GPU]\njobs:\n  release:\n    steps:\n      - uses: actions/attest@v2\n'}).length);});
+test('reusable GPU workflow cannot hide attestation',async()=>{const {checkWorkflows}=await moduleGuard();assert.ok(checkWorkflows({'gpu-vast.yml':simple('').replace('    steps:', '    uses: ./.github/workflows/opaque.yml\n    steps:')}).length);});
+test('dashboard bundle parses and exports source handlers',async()=>{const r=spawnSync(process.execPath,['bundle.js'],{cwd:new URL('../',import.meta.url),encoding:'utf8'});assert.equal(r.status,0,r.stderr);const source=await import('../src/index.js');const bundle=await import('../dist/worker.js');assert.deepEqual(Object.keys(bundle).sort(),Object.keys(source).sort());assert.equal(typeof bundle.default.fetch,'function');assert.equal(typeof bundle.default.scheduled,'function');});
+test('bundle exercises the same refusal behavior',async()=>{const r=spawnSync(process.execPath,['bundle.js'],{cwd:new URL('../',import.meta.url),encoding:'utf8'});assert.equal(r.status,0,r.stderr);const source=await import('../src/index.js');const bundle=await import('../dist/worker.js');const {env,MemoryStorage,MockCloud}=await import('./helpers.js');
+ for(const m of [source,bundle]){const s=m.createService({env:{...env,RENTING_ENABLED:'false'},storage:new MemoryStorage(),fetch:new MockCloud().fetch});assert.equal((await s.fetch(new Request(env.WORKER_URL+'/rent',{method:'POST'}))).status,503);}
+});
+for(const index of [1,2])test('box control must fail independently '+index,async()=>{const path=new URL('scripts/ci/vast_box_main.sh',root);await readFile(path);const r=spawnSync('bash',[path.pathname,'--must-fail-control'],{encoding:'utf8',timeout:5000});assert.notEqual(r.status,0);assert.match(r.stdout+r.stderr,/BIRTH_CENSUS_FAIL/);});
+for(const defect of ['none','guest-fail','bare-fail','gate-fail','missing'])test('box suite evidence validation '+defect,async()=>{
+ const path=new URL('scripts/ci/vast_box_main.sh',root);await readFile(path);const dir=await mkdtemp(join(tmpdir(),'v1-box-test-'));
+ const files={'gates.log':'V3_GATES_SUMMARY pass=9 fail=0 gate10=PASS\n','bare.log':'BARE_SUITE_PASS=30 BARE_SUITE_FAIL=0 BARE_SUITE_CRASH=0 ARMS=30\n','suite.log':'FAST_SUITE_PASS=30 FAST_SUITE_FAIL=0 FAST_SUITE_CRASH=0 NOTRUN=0 ARMS=30\n','births.log':'BIRTH_CENSUS_OK arms=30\n'};
+ for(const [name,text] of Object.entries(files))if(!(defect==='missing'&&name==='births.log'))await writeFile(join(dir,name),text.replace(defect==='guest-fail'?'FAST_SUITE_PASS=30':defect==='bare-fail'?'BARE_SUITE_PASS=30':defect==='gate-fail'?'pass=9':'__never__','bad'));
+ const r=spawnSync('bash',[path.pathname,'--check-results',dir],{encoding:'utf8',timeout:5000});assert.equal(r.status===0,defect==='none',r.stderr);
+});

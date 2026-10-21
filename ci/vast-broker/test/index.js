@@ -1,0 +1,6 @@
+// Entry point keeps the owner's exact `node --test ci/vast-broker/test` command portable.
+import './auth.test.js';
+import './broker.test.js';
+import './logs.test.js';
+import './workflow.test.js';
+import './integration.test.js';
