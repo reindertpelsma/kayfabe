@@ -2,7 +2,7 @@
 
 Public layout (Microsoft DUMP_HEADER64): BugCheckCode @56 (u32), BugCheckParameter1..4 @64,72,80,88 (u64),
 SystemTime @4008 (FILETIME). No memory, context or module bytes are read or exported.
-Usage: dump_header.py FILE.dmp   (prints one JSON object)
+Usage: dump_header.py FILE.dmp | dump_header.py --hexlines < collector-output   (JSON per dump)
 """
 import datetime
 import json
@@ -27,7 +27,23 @@ def parse(raw: bytes) -> dict:
     }
 
 
+def parse_hexline(line: str) -> dict:
+    """`HDR <path> <file bytes> <hex of the first HEADER_BYTES bytes>` as printed by dump_hdr_hex.ps1."""
+    f = line.split()
+    if len(f) != 4 or f[0] != "HDR":
+        raise ValueError("not an HDR line")
+    d = parse(bytes.fromhex(f[3]))
+    d["file"] = f[1]
+    d["bytes"] = int(f[2])
+    return d
+
+
 def main(argv):
+    if argv[1] == "--hexlines":
+        for l in sys.stdin:
+            if l.startswith("HDR "):
+                print(json.dumps(parse_hexline(l)))
+        return
     with open(argv[1], "rb") as f:
         print(json.dumps(parse(f.read(HEADER_BYTES))))
 
