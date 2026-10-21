@@ -7,7 +7,7 @@ from common_bw import *
 iid = int(sys.argv[1]); src = sys.argv[2]
 def now(): return datetime.datetime.now(datetime.timezone.utc)
 r = next(x for x in json.loads(LEDGER.read_text()) if x['id'] == iid)
-end = now() + datetime.timedelta(minutes=5)
+end = datetime.datetime.fromisoformat(r['created_utc']) + datetime.timedelta(minutes=6)
 alias = 'bwlane-' + str(iid); conf = D / 'ssh.conf'
 
 try:

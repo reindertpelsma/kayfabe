@@ -32,7 +32,7 @@ files['sweep2/arm.sh']=generated/'arm.sh';files['sweep2/collect_bw.sh']=generate
 for name in ['rpc_timing.py','export_state.py','wer_times.ps1']:files['sweep2/'+name]=Path('/workspace/codex/sweep-win-20261021')/name
 BH=w/'scripts/bench/blackwell'
 for name in ['dump_header.py','keyline_times.py','xid_policy.py','dump_hdr_hex.ps1']:files['sweep2/'+name]=BH/name
-files['sweep2/page_b.txt']=d/'page_b.txt'
+files['sweep2/page_subset.py']=BH/'page_subset.py';files['sweep2/oracle_pr65.tsv']=d/'oracle_pr65.tsv';files['sweep2/native_page.txt']=d/'native_page.txt'
 files['prov/sweep2_provision_manifest.json']=generated/'manifest.json'
 bundle=d/(str(iid)+'_text_bundle.tar.gz')
 with tarfile.open(bundle,'w:gz') as tar:

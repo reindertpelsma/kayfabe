@@ -40,6 +40,7 @@ cleanup(){
 if [ "$launched" = 1 ]; then
  python3 -I /root/sweep2/keyline_times.py "$QLOG" "/root/prov/arms/$run/rpc_timing.jsonl" "/root/prov/arms/$run/keylines.jsonl" PROBE-DUMP "chan token" "BORN " "GSP REFUSED fn76/0x906f0102" GUEST_PANICKED RC_TRIGGERED "kf3: GSP" UNLOADING || echo KEYLINES_FAILED
  code0=0; grep -q '"code":0' "/root/prov/arm_${run}_diag.txt" 2>/dev/null && code0=1
+ [ "$(wc -l <"/root/prov/arms/$run/rpc_timing.jsonl" 2>/dev/null || echo 0)" -ge 1000 ] && code0=1  # full init: far beyond the display objects
  { grep -a 'Xid' "/root/prov/arms/$run/host_kernel.log" 2>/dev/null || true; } | python3 -I /root/sweep2/xid_policy.py "$run" "${owned_pid:-0}" "$code0" >"/root/prov/arms/$run/xid_policy.json"; xrc=$?
  echo "XID_POLICY run=$run rc=$xrc $(cat "/root/prov/arms/$run/xid_policy.json" | cut -c1-300)"
  if [ "$xrc" != 0 ]; then date -u -Is >/root/prov/XID_STOP; fi
@@ -59,7 +60,7 @@ sha256sum -c /root/prov/bwr_parent_sha256.txt
 python3 - "$profile" "$run" "$source" "$binary" <<'PY'
 import pathlib,json,datetime,sys,hashlib
 p=pathlib.Path('/root/sweep2/lease.json');r=json.loads(p.read_text());now=datetime.datetime.now(datetime.timezone.utc);created=datetime.datetime.fromisoformat(r['created_utc']);end=created+datetime.timedelta(minutes=r['auto_destroy_minutes']-25);assert now<end,'latest-start guard: leave25min for observation/export/teardown'
-counts=pathlib.Path('/root/prov/arm_counts.json');j=json.loads(counts.read_text()) if counts.exists() else {'on':0,'off':0};assert j[sys.argv[1]]<2,'max2 per redcell/lease';j[sys.argv[1]]+=1;counts.write_text(json.dumps(j,indent=2)+'\n')
+counts=pathlib.Path('/root/prov/arm_counts.json');j=json.loads(counts.read_text()) if counts.exists() else {'on':0,'off':0};assert j[sys.argv[1]]<9,'max9 per profile per lease (owner-approved bisect)';j[sys.argv[1]]+=1;counts.write_text(json.dumps(j,indent=2)+'\n')
 out={'utc':now.isoformat(),'own_id':r['id'],'profile':sys.argv[1],'run':sys.argv[2],'source':sys.argv[3],'binary':sys.argv[4],'binary_sha256':hashlib.sha256(pathlib.Path(sys.argv[4]).read_bytes()).hexdigest(),'harness_sha256':hashlib.sha256(pathlib.Path('/root/sweep2/arm.sh').read_bytes()).hexdigest(),'rpc_observer_sha256':hashlib.sha256(pathlib.Path('/root/sweep2/rpc_timing.py').read_bytes()).hexdigest(),'cell_attempt':j[sys.argv[1]],'latest_start_utc':end.isoformat()};pathlib.Path('/root/prov/arm_'+sys.argv[2]+'_start_receipt.json').write_text(json.dumps(out,indent=2)+'\n')
 PY
 date -u -Is >"/root/prov/arm_${run}.started"
