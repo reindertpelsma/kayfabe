@@ -1,0 +1,32 @@
+[
+  {
+    "command": [
+      "python3",
+      "scripts/ci/dependencies.py"
+    ],
+    "rc": 0,
+    "stdout": "V3_ISOLATION crates=22 violations=0\n",
+    "stderr": ""
+  },
+  {
+    "command": [
+      "python3",
+      "scripts/ci/debt.py",
+      "frozen"
+    ],
+    "rc": 0,
+    "stdout": "frozen prototype: files=37 changed=0\n",
+    "stderr": ""
+  },
+  {
+    "command": [
+      "make",
+      "-C",
+      "cuda/walk",
+      "check-invariants"
+    ],
+    "rc": 0,
+    "stdout": "make: Entering directory '<worktree>/cuda/walk'\nI2 ok: exactly one dereference site\nI2 ok: exactly one raw pointer cast\nI1 ok: no while loop in kf_walk_one\nI1 ok: no while loop anywhere on the PARALLEL guest-data path\nI1 ok: the parallel walk's depth is a compile-time-bounded launch loop\nI1 ok: 8 parallel loops bounded at compile time by KF_MAX_FRONTIER\nI1 ok: no goto, no recursion\nI1 ok: 6 nested loops, each bounded at compile time by KF_MAX_ENT\nI1 ok: the nesting depth and fan-out caps are #defines, not descriptor fields\nseam ok: no VER2 geometry constants left in the kernel\nI3 ok: the frontier and task caps are loud\nI3 ok: truncation raised from 9 sites\nS39(a) ok: 9 live-GPGA load sites, all distinct offsets -- no double fetch\nS39(c) ok: both emit chokepoints bound the leaf BEFORE they coalesce\nS39(e) ok: refusals are propagated before any early return\nmake: Leaving directory '<worktree>/cuda/walk'\n",
+    "stderr": ""
+  }
+]

@@ -1,0 +1,68 @@
+[
+  {
+    "name": "Hexagonal boundary gate (no OS vocabulary in the pure logic crates)",
+    "rc": 0,
+    "stdout": "",
+    "stderr": ""
+  },
+  {
+    "name": "VMM-vocabulary gate (no hypervisor API vocabulary in the core or the shell)",
+    "rc": 0,
+    "stdout": "",
+    "stderr": ""
+  },
+  {
+    "name": "Generation-name gate (no concrete chip or driver version in the logic crates)",
+    "rc": 0,
+    "stdout": "",
+    "stderr": ""
+  },
+  {
+    "name": "ABI-quarantine gate (Axis A \u2014 a C layout is quarantined, or provably own-wire)",
+    "rc": 0,
+    "stdout": "",
+    "stderr": ""
+  },
+  {
+    "name": "Unsafe-surface gate (every unsafe file is named *_unsafe.rs, so `ls` enumerates it)",
+    "rc": 0,
+    "stdout": "",
+    "stderr": ""
+  },
+  {
+    "name": "Host-pointer gate (no *mut/*const/NonNull/transmute outside *_unsafe.rs)",
+    "rc": 0,
+    "stdout": "",
+    "stderr": ""
+  },
+  {
+    "name": "Bridge-exclusivity gate (one crate names both RpcCommand and RmEvent)",
+    "rc": 0,
+    "stdout": "",
+    "stderr": ""
+  },
+  {
+    "name": "ogkm-version-tag gate (every NVIDIA citation names its tree)",
+    "rc": 0,
+    "stdout": "untagged doc citations: 172 (bar: 172)\n",
+    "stderr": ""
+  },
+  {
+    "name": "Claim-ledger gate (a measurement word names its run, not a source read)",
+    "rc": 1,
+    "stdout": "NEW traces/constraints_compat_20261018/preregistration.md|unattributed|72f0cc72b5b7d5ac0d3c127e45f0fb0ce0a8cbe3319129073d7405063189d7b3: CODE READ / MEASURED / INFERRED are separate in the report. A grep absence is a\nclaims: existing-debt=3758 new=1 resolved=0\n",
+    "stderr": ""
+  },
+  {
+    "name": "Section-number gate (no two design-doc sections share a number)",
+    "rc": 0,
+    "stdout": "SECTION_GATE files=125 offenders=0\n",
+    "stderr": ""
+  },
+  {
+    "name": "Unsafe-containment gates (A: forbid inheritance, B: the named crates, ratchet)",
+    "rc": 0,
+    "stdout": "crates/kayfabe-linux-raw: 127 relaxation(s) (bar: 127)\ncrates/kayfabe-linux-raw/src/host_fd_unsafe.rs:9\ncrates/kayfabe-linux-raw/src/scm_unsafe.rs:10\ncrates/kayfabe-linux-raw/src/spawn_unsafe.rs:17\ncrates/kayfabe-linux-raw/src/window_unsafe.rs:8\ncrates/kayfabe-linux-raw/src/epoll_unsafe.rs:3\ncrates/kayfabe-linux-raw/src/chardev_unsafe.rs:4\ncrates/kayfabe-linux-raw/src/mapping_unsafe.rs:17\ncrates/kayfabe-linux-raw/src/vcpu_unsafe.rs:8\ncrates/kayfabe-linux-raw/src/sandbox_unsafe.rs:9\ncrates/kayfabe-linux-raw/src/sysconf_unsafe.rs:1\ncrates/kayfabe-linux-raw/src/signal_unsafe.rs:25\ncrates/kayfabe-linux-raw/src/arena_unsafe.rs:6\ncrates/kayfabe-linux-raw/src/kvm_unsafe.rs:4\ncrates/kayfabe-linux-raw/src/affinity_unsafe.rs:6\ncrates/kayfabe-cuda: 43 relaxation(s) (bar: 43)\n43\ncrates/kf-linux-raw: 97 relaxation(s) (bar: 97)\ncrates/kf-linux-raw/src/host_fd_unsafe.rs:14\ncrates/kf-linux-raw/src/drm_unsafe.rs:4\ncrates/kf-linux-raw/src/capability_unsafe.rs:2\ncrates/kf-linux-raw/src/window_unsafe.rs:9\ncrates/kf-linux-raw/src/epoll_unsafe.rs:3\ncrates/kf-linux-raw/src/chardev_unsafe.rs:4\ncrates/kf-linux-raw/src/mapping_unsafe.rs:24\ncrates/kf-linux-raw/src/vcpu_unsafe.rs:8\ncrates/kf-linux-raw/src/sysconf_unsafe.rs:1\ncrates/kf-linux-raw/src/signal_unsafe.rs:6\ncrates/kf-linux-raw/src/kvm_unsafe.rs:6\ncrates/kf-linux-raw/src/affinity_unsafe.rs:6\ncrates/kf-linux-raw/src/unixsock_unsafe.rs:10\ncrates/kf-cuda: 78 relaxation(s) (bar: 78)\n78\ncrates/kf-qemu: 86 relaxation(s) (bar: 86)\ncrates/kf-qemu/src/raw_unsafe.rs:47\ncrates/kf-qemu/src/ffi_unsafe.rs:39\nfirmware/kf-gop: 78 relaxation(s) (bar: 78)\nfirmware/kf-gop/src/bin/kf-gop-test/check_unsafe.rs:22\nfirmware/kf-gop/src/driver_unsafe.rs:32\nfirmware/kf-gop/src/efi_unsafe.rs:23\nfirmware/kf-gop/src/port_unsafe.rs:1\ncrates/kf-chan: 0 relaxation(s) (bar: 0)\n0\n",
+    "stderr": ""
+  }
+]

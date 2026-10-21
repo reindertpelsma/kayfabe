@@ -1,0 +1,25 @@
+{
+  "subject": "e64b8e5f6d0f64c41c9c4d40775e74be08de7164",
+  "date": "2026-10-21",
+  "counts": {
+    "blocking_candidate_locations": 2469,
+    "qemu_rust_ffi_entries": 43,
+    "qemu_c_function_candidates": 63,
+    "environment_read_locations": 144,
+    "literal_die_driver_locations": 1242,
+    "symbolic_selector_locations": 1011,
+    "constant_definition_candidates": 6611,
+    "constant_candidates_without_nearby_tag": 5203,
+    "provenance_marker_locations": 28,
+    "literal_environment_keys": 133,
+    "design_docs": 128,
+    "doc_header_candidates": 3,
+    "claims_by_kind_state": {
+      "revision:exists": 71,
+      "path:PRESENT": 84,
+      "link:PRESENT": 60
+    },
+    "consttab_paths": []
+  },
+  "limits": "Lexical candidates include comments, test code, and string joins; no complete transitive call graph, AST proof, provenance attestation, or runtime certification."
+}

@@ -1,0 +1,1722 @@
+[
+  {
+    "doc": "README.md",
+    "line": 10,
+    "kind": "revision",
+    "value": "89fc8a222",
+    "exists_in_local_git": true,
+    "ancestor_of_subject": true
+  },
+  {
+    "doc": "README.md",
+    "line": 12,
+    "kind": "path",
+    "value": "traces/20261021_131847.jpg",
+    "normalized": "traces/20261021_131847.jpg",
+    "status": "PRESENT"
+  },
+  {
+    "doc": "README.md",
+    "line": 12,
+    "kind": "link",
+    "value": "traces/20261021_131847.jpg",
+    "normalized": "traces/20261021_131847.jpg",
+    "status": "PRESENT"
+  },
+  {
+    "doc": "README.md",
+    "line": 35,
+    "kind": "path",
+    "value": "traces/perf_status_20261017/",
+    "normalized": "traces/perf_status_20261017/",
+    "status": "PRESENT"
+  },
+  {
+    "doc": "README.md",
+    "line": 35,
+    "kind": "path",
+    "value": "traces/perf_status_20261017/README.md",
+    "normalized": "traces/perf_status_20261017/README.md",
+    "status": "PRESENT"
+  },
+  {
+    "doc": "README.md",
+    "line": 35,
+    "kind": "link",
+    "value": "traces/perf_status_20261017/README.md",
+    "normalized": "traces/perf_status_20261017/README.md",
+    "status": "PRESENT"
+  },
+  {
+    "doc": "README.md",
+    "line": 37,
+    "kind": "path",
+    "value": "docs/design/V3_LINUX_PERF_BASELINE_6692e621.md",
+    "normalized": "docs/design/V3_LINUX_PERF_BASELINE_6692e621.md",
+    "status": "PRESENT"
+  },
+  {
+    "doc": "README.md",
+    "line": 37,
+    "kind": "link",
+    "value": "docs/design/V3_LINUX_PERF_BASELINE_6692e621.md",
+    "normalized": "docs/design/V3_LINUX_PERF_BASELINE_6692e621.md",
+    "status": "PRESENT"
+  },
+  {
+    "doc": "README.md",
+    "line": 52,
+    "kind": "revision",
+    "value": "eb9f2aa3",
+    "exists_in_local_git": true,
+    "ancestor_of_subject": true
+  },
+  {
+    "doc": "README.md",
+    "line": 52,
+    "kind": "path",
+    "value": "traces/win11_userring_20261014/matrix-eb9f2aa3-20261014-2321.md",
+    "normalized": "traces/win11_userring_20261014/matrix-eb9f2aa3-20261014-2321.md",
+    "status": "PRESENT"
+  },
+  {
+    "doc": "README.md",
+    "line": 52,
+    "kind": "link",
+    "value": "docs/WINDOWS_GUEST_SETUP.md",
+    "normalized": "docs/WINDOWS_GUEST_SETUP.md",
+    "status": "PRESENT"
+  },
+  {
+    "doc": "README.md",
+    "line": 52,
+    "kind": "link",
+    "value": "traces/win11_userring_20261014/matrix-eb9f2aa3-20261014-2321.md",
+    "normalized": "traces/win11_userring_20261014/matrix-eb9f2aa3-20261014-2321.md",
+    "status": "PRESENT"
+  },
+  {
+    "doc": "README.md",
+    "line": 56,
+    "kind": "revision",
+    "value": "89fc8a222",
+    "exists_in_local_git": true,
+    "ancestor_of_subject": true
+  },
+  {
+    "doc": "README.md",
+    "line": 71,
+    "kind": "path",
+    "value": "docs/design/V3_APP_MATRIX.md",
+    "normalized": "docs/design/V3_APP_MATRIX.md",
+    "status": "PRESENT"
+  },
+  {
+    "doc": "README.md",
+    "line": 71,
+    "kind": "link",
+    "value": "docs/design/V3_APP_MATRIX.md",
+    "normalized": "docs/design/V3_APP_MATRIX.md",
+    "status": "PRESENT"
+  },
+  {
+    "doc": "README.md",
+    "line": 75,
+    "kind": "link",
+    "value": "docs/STATUS_DETAIL.md",
+    "normalized": "docs/STATUS_DETAIL.md",
+    "status": "PRESENT"
+  },
+  {
+    "doc": "README.md",
+    "line": 78,
+    "kind": "link",
+    "value": "docs/STATUS_DETAIL.md",
+    "normalized": "docs/STATUS_DETAIL.md",
+    "status": "PRESENT"
+  },
+  {
+    "doc": "README.md",
+    "line": 83,
+    "kind": "link",
+    "value": "docs/STATUS_AND_HANDOFF.md",
+    "normalized": "docs/STATUS_AND_HANDOFF.md",
+    "status": "PRESENT"
+  },
+  {
+    "doc": "README.md",
+    "line": 83,
+    "kind": "link",
+    "value": "scripts/bench/windows/README.md",
+    "normalized": "scripts/bench/windows/README.md",
+    "status": "PRESENT"
+  },
+  {
+    "doc": "README.md",
+    "line": 87,
+    "kind": "path",
+    "value": "docs/design/THE_ARCHITECTURE_v3.md",
+    "normalized": "docs/design/THE_ARCHITECTURE_v3.md",
+    "status": "PRESENT"
+  },
+  {
+    "doc": "README.md",
+    "line": 87,
+    "kind": "link",
+    "value": "ARCHITECTURE.md",
+    "normalized": "ARCHITECTURE.md",
+    "status": "PRESENT"
+  },
+  {
+    "doc": "README.md",
+    "line": 87,
+    "kind": "link",
+    "value": "docs/design/THE_ARCHITECTURE_v3.md",
+    "normalized": "docs/design/THE_ARCHITECTURE_v3.md",
+    "status": "PRESENT"
+  },
+  {
+    "doc": "README.md",
+    "line": 87,
+    "kind": "link",
+    "value": "docs/STATUS_AND_HANDOFF.md",
+    "normalized": "docs/STATUS_AND_HANDOFF.md",
+    "status": "PRESENT"
+  },
+  {
+    "doc": "README.md",
+    "line": 88,
+    "kind": "link",
+    "value": "docs/OWNER_RULINGS.md",
+    "normalized": "docs/OWNER_RULINGS.md",
+    "status": "PRESENT"
+  },
+  {
+    "doc": "README.md",
+    "line": 88,
+    "kind": "link",
+    "value": "docs/FAQ.md",
+    "normalized": "docs/FAQ.md",
+    "status": "PRESENT"
+  },
+  {
+    "doc": "README.md",
+    "line": 88,
+    "kind": "link",
+    "value": "docs/PROJECT_HISTORY.md",
+    "normalized": "docs/PROJECT_HISTORY.md",
+    "status": "PRESENT"
+  },
+  {
+    "doc": "README.md",
+    "line": 88,
+    "kind": "link",
+    "value": "AGENTS.md",
+    "normalized": "AGENTS.md",
+    "status": "PRESENT"
+  },
+  {
+    "doc": "README.md",
+    "line": 90,
+    "kind": "link",
+    "value": "LICENSE",
+    "normalized": "LICENSE",
+    "status": "PRESENT"
+  },
+  {
+    "doc": "README.md",
+    "line": 91,
+    "kind": "path",
+    "value": "docs/design/V3_PROVENANCE.md",
+    "normalized": "docs/design/V3_PROVENANCE.md",
+    "status": "PRESENT"
+  },
+  {
+    "doc": "README.md",
+    "line": 91,
+    "kind": "path",
+    "value": "docs/design/V3_PROVENANCE.md",
+    "normalized": "docs/design/V3_PROVENANCE.md",
+    "status": "PRESENT"
+  },
+  {
+    "doc": "README.md",
+    "line": 91,
+    "kind": "link",
+    "value": "docs/design/V3_PROVENANCE.md",
+    "normalized": "docs/design/V3_PROVENANCE.md",
+    "status": "PRESENT"
+  },
+  {
+    "doc": "docs/STATUS_DETAIL.md",
+    "line": 2,
+    "kind": "link",
+    "value": "../README.md",
+    "normalized": "README.md",
+    "status": "PRESENT"
+  },
+  {
+    "doc": "docs/STATUS_DETAIL.md",
+    "line": 2,
+    "kind": "link",
+    "value": "STATUS_AND_HANDOFF.md",
+    "normalized": "docs/STATUS_AND_HANDOFF.md",
+    "status": "PRESENT"
+  },
+  {
+    "doc": "docs/STATUS_DETAIL.md",
+    "line": 4,
+    "kind": "path",
+    "value": "traces/win11_userring_20261014/",
+    "normalized": "traces/win11_userring_20261014/",
+    "status": "PRESENT"
+  },
+  {
+    "doc": "docs/STATUS_DETAIL.md",
+    "line": 8,
+    "kind": "revision",
+    "value": "afb552ea",
+    "exists_in_local_git": true,
+    "ancestor_of_subject": true
+  },
+  {
+    "doc": "docs/STATUS_DETAIL.md",
+    "line": 9,
+    "kind": "path",
+    "value": "traces/v3_mc23/README.md",
+    "normalized": "traces/v3_mc23/README.md",
+    "status": "PRESENT"
+  },
+  {
+    "doc": "docs/STATUS_DETAIL.md",
+    "line": 9,
+    "kind": "link",
+    "value": "../traces/v3_mc23/README.md",
+    "normalized": "traces/v3_mc23/README.md",
+    "status": "PRESENT"
+  },
+  {
+    "doc": "docs/STATUS_DETAIL.md",
+    "line": 11,
+    "kind": "revision",
+    "value": "d883d0eb",
+    "exists_in_local_git": true,
+    "ancestor_of_subject": true
+  },
+  {
+    "doc": "docs/STATUS_DETAIL.md",
+    "line": 14,
+    "kind": "path",
+    "value": "traces/recovered_integration_20260929/README.md",
+    "normalized": "traces/recovered_integration_20260929/README.md",
+    "status": "PRESENT"
+  },
+  {
+    "doc": "docs/STATUS_DETAIL.md",
+    "line": 14,
+    "kind": "link",
+    "value": "../traces/recovered_integration_20260929/README.md",
+    "normalized": "traces/recovered_integration_20260929/README.md",
+    "status": "PRESENT"
+  },
+  {
+    "doc": "docs/STATUS_DETAIL.md",
+    "line": 15,
+    "kind": "revision",
+    "value": "4c48ca0c",
+    "exists_in_local_git": true,
+    "ancestor_of_subject": true
+  },
+  {
+    "doc": "docs/STATUS_DETAIL.md",
+    "line": 16,
+    "kind": "path",
+    "value": "design/V3_APP_MATRIX.md",
+    "normalized": "docs/design/V3_APP_MATRIX.md",
+    "status": "PRESENT"
+  },
+  {
+    "doc": "docs/STATUS_DETAIL.md",
+    "line": 16,
+    "kind": "link",
+    "value": "design/V3_APP_MATRIX.md",
+    "normalized": "docs/design/V3_APP_MATRIX.md",
+    "status": "PRESENT"
+  },
+  {
+    "doc": "docs/STATUS_DETAIL.md",
+    "line": 17,
+    "kind": "link",
+    "value": "STATUS_AND_HANDOFF.md",
+    "normalized": "docs/STATUS_AND_HANDOFF.md",
+    "status": "PRESENT"
+  },
+  {
+    "doc": "docs/STATUS_DETAIL.md",
+    "line": 19,
+    "kind": "revision",
+    "value": "74dc3113",
+    "exists_in_local_git": true,
+    "ancestor_of_subject": true
+  },
+  {
+    "doc": "docs/STATUS_DETAIL.md",
+    "line": 21,
+    "kind": "revision",
+    "value": "db038f5f",
+    "exists_in_local_git": true,
+    "ancestor_of_subject": true
+  },
+  {
+    "doc": "docs/STATUS_DETAIL.md",
+    "line": 22,
+    "kind": "revision",
+    "value": "4c48ca0c",
+    "exists_in_local_git": true,
+    "ancestor_of_subject": true
+  },
+  {
+    "doc": "docs/STATUS_DETAIL.md",
+    "line": 25,
+    "kind": "link",
+    "value": "STATUS_AND_HANDOFF.md",
+    "normalized": "docs/STATUS_AND_HANDOFF.md",
+    "status": "PRESENT"
+  },
+  {
+    "doc": "docs/STATUS_DETAIL.md",
+    "line": 28,
+    "kind": "path",
+    "value": "design/V3_FLOORSWEPT_GR.md",
+    "normalized": "docs/design/V3_FLOORSWEPT_GR.md",
+    "status": "PRESENT"
+  },
+  {
+    "doc": "docs/STATUS_DETAIL.md",
+    "line": 28,
+    "kind": "path",
+    "value": "design/V3_FLOORSWEPT_GR.md",
+    "normalized": "docs/design/V3_FLOORSWEPT_GR.md",
+    "status": "PRESENT"
+  },
+  {
+    "doc": "docs/STATUS_DETAIL.md",
+    "line": 28,
+    "kind": "link",
+    "value": "design/V3_FLOORSWEPT_GR.md",
+    "normalized": "docs/design/V3_FLOORSWEPT_GR.md",
+    "status": "PRESENT"
+  },
+  {
+    "doc": "docs/STATUS_DETAIL.md",
+    "line": 31,
+    "kind": "path",
+    "value": "design/V3_GFX_TESTSET.md",
+    "normalized": "docs/design/V3_GFX_TESTSET.md",
+    "status": "PRESENT"
+  },
+  {
+    "doc": "docs/STATUS_DETAIL.md",
+    "line": 31,
+    "kind": "path",
+    "value": "design/V3_GFX_TESTSET.md",
+    "normalized": "docs/design/V3_GFX_TESTSET.md",
+    "status": "PRESENT"
+  },
+  {
+    "doc": "docs/STATUS_DETAIL.md",
+    "line": 31,
+    "kind": "link",
+    "value": "design/V3_GFX_TESTSET.md",
+    "normalized": "docs/design/V3_GFX_TESTSET.md",
+    "status": "PRESENT"
+  },
+  {
+    "doc": "docs/STATUS_DETAIL.md",
+    "line": 37,
+    "kind": "link",
+    "value": "archive/STATUS_DETAIL_pre_v3.md",
+    "normalized": "docs/archive/STATUS_DETAIL_pre_v3.md",
+    "status": "PRESENT"
+  },
+  {
+    "doc": "docs/STATUS_DETAIL.md",
+    "line": 47,
+    "kind": "revision",
+    "value": "afb552ea",
+    "exists_in_local_git": true,
+    "ancestor_of_subject": true
+  },
+  {
+    "doc": "docs/STATUS_DETAIL.md",
+    "line": 49,
+    "kind": "path",
+    "value": "traces/v3_mc23/README.md",
+    "normalized": "traces/v3_mc23/README.md",
+    "status": "PRESENT"
+  },
+  {
+    "doc": "docs/STATUS_DETAIL.md",
+    "line": 49,
+    "kind": "link",
+    "value": "../traces/v3_mc23/README.md",
+    "normalized": "traces/v3_mc23/README.md",
+    "status": "PRESENT"
+  },
+  {
+    "doc": "docs/STATUS_DETAIL.md",
+    "line": 51,
+    "kind": "link",
+    "value": "STATUS_AND_HANDOFF.md",
+    "normalized": "docs/STATUS_AND_HANDOFF.md",
+    "status": "PRESENT"
+  },
+  {
+    "doc": "docs/STATUS_DETAIL.md",
+    "line": 61,
+    "kind": "path",
+    "value": "traces/v3_turing_master/README.md",
+    "normalized": "traces/v3_turing_master/README.md",
+    "status": "PRESENT"
+  },
+  {
+    "doc": "docs/STATUS_DETAIL.md",
+    "line": 61,
+    "kind": "link",
+    "value": "../traces/v3_turing_master/README.md",
+    "normalized": "traces/v3_turing_master/README.md",
+    "status": "PRESENT"
+  },
+  {
+    "doc": "docs/STATUS_DETAIL.md",
+    "line": 62,
+    "kind": "path",
+    "value": "traces/v3_families_master/README.md",
+    "normalized": "traces/v3_families_master/README.md",
+    "status": "PRESENT"
+  },
+  {
+    "doc": "docs/STATUS_DETAIL.md",
+    "line": 62,
+    "kind": "link",
+    "value": "../traces/v3_families_master/README.md",
+    "normalized": "traces/v3_families_master/README.md",
+    "status": "PRESENT"
+  },
+  {
+    "doc": "docs/STATUS_DETAIL.md",
+    "line": 72,
+    "kind": "path",
+    "value": "design/V3_APP_MATRIX.md",
+    "normalized": "docs/design/V3_APP_MATRIX.md",
+    "status": "PRESENT"
+  },
+  {
+    "doc": "docs/STATUS_DETAIL.md",
+    "line": 72,
+    "kind": "path",
+    "value": "design/V3_CDP.md",
+    "normalized": "docs/design/V3_CDP.md",
+    "status": "PRESENT"
+  },
+  {
+    "doc": "docs/STATUS_DETAIL.md",
+    "line": 72,
+    "kind": "link",
+    "value": "design/V3_APP_MATRIX.md",
+    "normalized": "docs/design/V3_APP_MATRIX.md",
+    "status": "PRESENT"
+  },
+  {
+    "doc": "docs/STATUS_DETAIL.md",
+    "line": 72,
+    "kind": "link",
+    "value": "design/V3_CDP.md",
+    "normalized": "docs/design/V3_CDP.md",
+    "status": "PRESENT"
+  },
+  {
+    "doc": "docs/STATUS_DETAIL.md",
+    "line": 75,
+    "kind": "path",
+    "value": "design/V3_GFX_TESTSET.md",
+    "normalized": "docs/design/V3_GFX_TESTSET.md",
+    "status": "PRESENT"
+  },
+  {
+    "doc": "docs/STATUS_DETAIL.md",
+    "line": 75,
+    "kind": "link",
+    "value": "design/V3_GFX_TESTSET.md",
+    "normalized": "docs/design/V3_GFX_TESTSET.md",
+    "status": "PRESENT"
+  },
+  {
+    "doc": "docs/STATUS_DETAIL.md",
+    "line": 80,
+    "kind": "path",
+    "value": "design/V3_DISPLAY.md",
+    "normalized": "docs/design/V3_DISPLAY.md",
+    "status": "PRESENT"
+  },
+  {
+    "doc": "docs/STATUS_DETAIL.md",
+    "line": 80,
+    "kind": "link",
+    "value": "design/V3_DISPLAY.md",
+    "normalized": "docs/design/V3_DISPLAY.md",
+    "status": "PRESENT"
+  },
+  {
+    "doc": "docs/STATUS_DETAIL.md",
+    "line": 85,
+    "kind": "path",
+    "value": "design/V3_DRIVER_MATRIX.md",
+    "normalized": "docs/design/V3_DRIVER_MATRIX.md",
+    "status": "PRESENT"
+  },
+  {
+    "doc": "docs/STATUS_DETAIL.md",
+    "line": 85,
+    "kind": "link",
+    "value": "design/V3_DRIVER_MATRIX.md",
+    "normalized": "docs/design/V3_DRIVER_MATRIX.md",
+    "status": "PRESENT"
+  },
+  {
+    "doc": "docs/STATUS_DETAIL.md",
+    "line": 92,
+    "kind": "path",
+    "value": "design/V3_UVM_B3_IMPLEMENTATION.md",
+    "normalized": "docs/design/V3_UVM_B3_IMPLEMENTATION.md",
+    "status": "PRESENT"
+  },
+  {
+    "doc": "docs/STATUS_DETAIL.md",
+    "line": 92,
+    "kind": "link",
+    "value": "design/V3_UVM_B3_IMPLEMENTATION.md",
+    "normalized": "docs/design/V3_UVM_B3_IMPLEMENTATION.md",
+    "status": "PRESENT"
+  },
+  {
+    "doc": "docs/STATUS_DETAIL.md",
+    "line": 97,
+    "kind": "revision",
+    "value": "4c48ca0c",
+    "exists_in_local_git": true,
+    "ancestor_of_subject": true
+  },
+  {
+    "doc": "docs/STATUS_DETAIL.md",
+    "line": 97,
+    "kind": "path",
+    "value": "traces/v3_app_matrix/vast53004208_rtx3060_4c48ca0c/",
+    "normalized": "traces/v3_app_matrix/vast53004208_rtx3060_4c48ca0c/",
+    "status": "PRESENT"
+  },
+  {
+    "doc": "docs/STATUS_DETAIL.md",
+    "line": 106,
+    "kind": "path",
+    "value": "design/V3_DOORBELL_IOEVENTFD.md",
+    "normalized": "docs/design/V3_DOORBELL_IOEVENTFD.md",
+    "status": "PRESENT"
+  },
+  {
+    "doc": "docs/STATUS_DETAIL.md",
+    "line": 106,
+    "kind": "link",
+    "value": "design/V3_DOORBELL_IOEVENTFD.md",
+    "normalized": "docs/design/V3_DOORBELL_IOEVENTFD.md",
+    "status": "PRESENT"
+  },
+  {
+    "doc": "docs/STATUS_DETAIL.md",
+    "line": 107,
+    "kind": "path",
+    "value": "design/V3_GUEST_DOORBELL_MODULE.md",
+    "normalized": "docs/design/V3_GUEST_DOORBELL_MODULE.md",
+    "status": "PRESENT"
+  },
+  {
+    "doc": "docs/STATUS_DETAIL.md",
+    "line": 107,
+    "kind": "link",
+    "value": "design/V3_GUEST_DOORBELL_MODULE.md",
+    "normalized": "docs/design/V3_GUEST_DOORBELL_MODULE.md",
+    "status": "PRESENT"
+  },
+  {
+    "doc": "docs/STATUS_DETAIL.md",
+    "line": 122,
+    "kind": "revision",
+    "value": "d536595d",
+    "exists_in_local_git": true,
+    "ancestor_of_subject": true
+  },
+  {
+    "doc": "docs/STATUS_DETAIL.md",
+    "line": 122,
+    "kind": "revision",
+    "value": "f703cdaf",
+    "exists_in_local_git": true,
+    "ancestor_of_subject": true
+  },
+  {
+    "doc": "docs/STATUS_DETAIL.md",
+    "line": 122,
+    "kind": "path",
+    "value": "traces/v3_int_ga106/v3_gates_d536595d.txt",
+    "normalized": "traces/v3_int_ga106/v3_gates_d536595d.txt",
+    "status": "PRESENT"
+  },
+  {
+    "doc": "docs/STATUS_DETAIL.md",
+    "line": 122,
+    "kind": "path",
+    "value": "traces/v3_appfix/v3_gates_f703cdaf.txt",
+    "normalized": "traces/v3_appfix/v3_gates_f703cdaf.txt",
+    "status": "PRESENT"
+  },
+  {
+    "doc": "docs/STATUS_DETAIL.md",
+    "line": 123,
+    "kind": "revision",
+    "value": "d536595d",
+    "exists_in_local_git": true,
+    "ancestor_of_subject": true
+  },
+  {
+    "doc": "docs/STATUS_DETAIL.md",
+    "line": 123,
+    "kind": "revision",
+    "value": "f703cdaf",
+    "exists_in_local_git": true,
+    "ancestor_of_subject": true
+  },
+  {
+    "doc": "docs/STATUS_DETAIL.md",
+    "line": 123,
+    "kind": "path",
+    "value": "traces/v3_int_ga106/fast_suite_d536595d.txt",
+    "normalized": "traces/v3_int_ga106/fast_suite_d536595d.txt",
+    "status": "PRESENT"
+  },
+  {
+    "doc": "docs/STATUS_DETAIL.md",
+    "line": 123,
+    "kind": "path",
+    "value": "traces/v3_appfix/fast_suite_f703cdaf.out",
+    "normalized": "traces/v3_appfix/fast_suite_f703cdaf.out",
+    "status": "PRESENT"
+  },
+  {
+    "doc": "docs/STATUS_DETAIL.md",
+    "line": 124,
+    "kind": "revision",
+    "value": "1d6bb323",
+    "exists_in_local_git": true,
+    "ancestor_of_subject": true
+  },
+  {
+    "doc": "docs/STATUS_DETAIL.md",
+    "line": 124,
+    "kind": "revision",
+    "value": "6ccb4585",
+    "exists_in_local_git": true,
+    "ancestor_of_subject": true
+  },
+  {
+    "doc": "docs/STATUS_DETAIL.md",
+    "line": 124,
+    "kind": "path",
+    "value": "design/V3_FAMILY_PORT_ADA.md",
+    "normalized": "docs/design/V3_FAMILY_PORT_ADA.md",
+    "status": "PRESENT"
+  },
+  {
+    "doc": "docs/STATUS_DETAIL.md",
+    "line": 124,
+    "kind": "path",
+    "value": "design/V3_FAMILY_PORT_ADA.md",
+    "normalized": "docs/design/V3_FAMILY_PORT_ADA.md",
+    "status": "PRESENT"
+  },
+  {
+    "doc": "docs/STATUS_DETAIL.md",
+    "line": 124,
+    "kind": "link",
+    "value": "design/V3_FAMILY_PORT_ADA.md",
+    "normalized": "docs/design/V3_FAMILY_PORT_ADA.md",
+    "status": "PRESENT"
+  },
+  {
+    "doc": "docs/STATUS_DETAIL.md",
+    "line": 125,
+    "kind": "revision",
+    "value": "09a3944b",
+    "exists_in_local_git": true,
+    "ancestor_of_subject": true
+  },
+  {
+    "doc": "docs/STATUS_DETAIL.md",
+    "line": 126,
+    "kind": "revision",
+    "value": "283a5304",
+    "exists_in_local_git": true,
+    "ancestor_of_subject": true
+  },
+  {
+    "doc": "docs/STATUS_DETAIL.md",
+    "line": 126,
+    "kind": "revision",
+    "value": "25edb757",
+    "exists_in_local_git": true,
+    "ancestor_of_subject": true
+  },
+  {
+    "doc": "docs/STATUS_DETAIL.md",
+    "line": 126,
+    "kind": "revision",
+    "value": "948b38e2",
+    "exists_in_local_git": true,
+    "ancestor_of_subject": true
+  },
+  {
+    "doc": "docs/STATUS_DETAIL.md",
+    "line": 126,
+    "kind": "revision",
+    "value": "2e32b7b1",
+    "exists_in_local_git": true,
+    "ancestor_of_subject": true
+  },
+  {
+    "doc": "docs/STATUS_DETAIL.md",
+    "line": 126,
+    "kind": "revision",
+    "value": "0d8426a3",
+    "exists_in_local_git": true,
+    "ancestor_of_subject": true
+  },
+  {
+    "doc": "docs/STATUS_DETAIL.md",
+    "line": 126,
+    "kind": "revision",
+    "value": "524b3d17",
+    "exists_in_local_git": true,
+    "ancestor_of_subject": true
+  },
+  {
+    "doc": "docs/STATUS_DETAIL.md",
+    "line": 126,
+    "kind": "path",
+    "value": "design/V3_FLOORSWEPT_GR.md",
+    "normalized": "docs/design/V3_FLOORSWEPT_GR.md",
+    "status": "PRESENT"
+  },
+  {
+    "doc": "docs/STATUS_DETAIL.md",
+    "line": 126,
+    "kind": "path",
+    "value": "design/V3_FLOORSWEPT_GR.md",
+    "normalized": "docs/design/V3_FLOORSWEPT_GR.md",
+    "status": "PRESENT"
+  },
+  {
+    "doc": "docs/STATUS_DETAIL.md",
+    "line": 126,
+    "kind": "path",
+    "value": "traces/v3_gpcmask/",
+    "normalized": "traces/v3_gpcmask/",
+    "status": "PRESENT"
+  },
+  {
+    "doc": "docs/STATUS_DETAIL.md",
+    "line": 126,
+    "kind": "link",
+    "value": "design/V3_FLOORSWEPT_GR.md",
+    "normalized": "docs/design/V3_FLOORSWEPT_GR.md",
+    "status": "PRESENT"
+  },
+  {
+    "doc": "docs/STATUS_DETAIL.md",
+    "line": 127,
+    "kind": "revision",
+    "value": "6fce7f54",
+    "exists_in_local_git": true,
+    "ancestor_of_subject": true
+  },
+  {
+    "doc": "docs/STATUS_DETAIL.md",
+    "line": 127,
+    "kind": "revision",
+    "value": "256ec854",
+    "exists_in_local_git": true,
+    "ancestor_of_subject": true
+  },
+  {
+    "doc": "docs/STATUS_DETAIL.md",
+    "line": 127,
+    "kind": "revision",
+    "value": "54158daa",
+    "exists_in_local_git": true,
+    "ancestor_of_subject": true
+  },
+  {
+    "doc": "docs/STATUS_DETAIL.md",
+    "line": 127,
+    "kind": "revision",
+    "value": "256ec854",
+    "exists_in_local_git": true,
+    "ancestor_of_subject": true
+  },
+  {
+    "doc": "docs/STATUS_DETAIL.md",
+    "line": 127,
+    "kind": "path",
+    "value": "design/V3_FAMILY_PORT_BLACKWELL.md",
+    "normalized": "docs/design/V3_FAMILY_PORT_BLACKWELL.md",
+    "status": "PRESENT"
+  },
+  {
+    "doc": "docs/STATUS_DETAIL.md",
+    "line": 127,
+    "kind": "path",
+    "value": "design/V3_FAMILY_PORT_BLACKWELL.md",
+    "normalized": "docs/design/V3_FAMILY_PORT_BLACKWELL.md",
+    "status": "PRESENT"
+  },
+  {
+    "doc": "docs/STATUS_DETAIL.md",
+    "line": 127,
+    "kind": "path",
+    "value": "traces/v3_blackwell/",
+    "normalized": "traces/v3_blackwell/",
+    "status": "PRESENT"
+  },
+  {
+    "doc": "docs/STATUS_DETAIL.md",
+    "line": 127,
+    "kind": "link",
+    "value": "design/V3_FAMILY_PORT_BLACKWELL.md",
+    "normalized": "docs/design/V3_FAMILY_PORT_BLACKWELL.md",
+    "status": "PRESENT"
+  },
+  {
+    "doc": "docs/STATUS_DETAIL.md",
+    "line": 128,
+    "kind": "revision",
+    "value": "db038f5f",
+    "exists_in_local_git": true,
+    "ancestor_of_subject": true
+  },
+  {
+    "doc": "docs/STATUS_DETAIL.md",
+    "line": 128,
+    "kind": "revision",
+    "value": "c0ef7b75",
+    "exists_in_local_git": true,
+    "ancestor_of_subject": true
+  },
+  {
+    "doc": "docs/STATUS_DETAIL.md",
+    "line": 128,
+    "kind": "path",
+    "value": "traces/v3_mc20/",
+    "normalized": "traces/v3_mc20/",
+    "status": "PRESENT"
+  },
+  {
+    "doc": "docs/STATUS_DETAIL.md",
+    "line": 136,
+    "kind": "revision",
+    "value": "486ab7c6",
+    "exists_in_local_git": true,
+    "ancestor_of_subject": false
+  },
+  {
+    "doc": "docs/STATUS_DETAIL.md",
+    "line": 137,
+    "kind": "revision",
+    "value": "353ff44a",
+    "exists_in_local_git": true,
+    "ancestor_of_subject": true
+  },
+  {
+    "doc": "docs/STATUS_DETAIL.md",
+    "line": 137,
+    "kind": "path",
+    "value": "design/V3_VIDEO_ENGINES.md",
+    "normalized": "docs/design/V3_VIDEO_ENGINES.md",
+    "status": "PRESENT"
+  },
+  {
+    "doc": "docs/STATUS_DETAIL.md",
+    "line": 137,
+    "kind": "path",
+    "value": "design/V3_VIDEO_ENGINES.md",
+    "normalized": "docs/design/V3_VIDEO_ENGINES.md",
+    "status": "PRESENT"
+  },
+  {
+    "doc": "docs/STATUS_DETAIL.md",
+    "line": 137,
+    "kind": "link",
+    "value": "design/V3_VIDEO_ENGINES.md",
+    "normalized": "docs/design/V3_VIDEO_ENGINES.md",
+    "status": "PRESENT"
+  },
+  {
+    "doc": "docs/STATUS_DETAIL.md",
+    "line": 138,
+    "kind": "revision",
+    "value": "670bd310",
+    "exists_in_local_git": true,
+    "ancestor_of_subject": true
+  },
+  {
+    "doc": "docs/STATUS_DETAIL.md",
+    "line": 141,
+    "kind": "revision",
+    "value": "f108f47a",
+    "exists_in_local_git": true,
+    "ancestor_of_subject": true
+  },
+  {
+    "doc": "docs/STATUS_DETAIL.md",
+    "line": 143,
+    "kind": "path",
+    "value": "docs/design/V3_APP_MATRIX.md",
+    "normalized": "docs/design/V3_APP_MATRIX.md",
+    "status": "PRESENT"
+  },
+  {
+    "doc": "docs/STATUS_DETAIL.md",
+    "line": 144,
+    "kind": "path",
+    "value": "traces/v3_app_matrix/",
+    "normalized": "traces/v3_app_matrix/",
+    "status": "PRESENT"
+  },
+  {
+    "doc": "docs/STATUS_DETAIL.md",
+    "line": 150,
+    "kind": "revision",
+    "value": "74dc3113",
+    "exists_in_local_git": true,
+    "ancestor_of_subject": true
+  },
+  {
+    "doc": "docs/STATUS_DETAIL.md",
+    "line": 151,
+    "kind": "path",
+    "value": "design/V3_BUILD.md",
+    "normalized": "docs/design/V3_BUILD.md",
+    "status": "PRESENT"
+  },
+  {
+    "doc": "docs/STATUS_DETAIL.md",
+    "line": 151,
+    "kind": "path",
+    "value": "design/V3_BUILD.md",
+    "normalized": "docs/design/V3_BUILD.md",
+    "status": "PRESENT"
+  },
+  {
+    "doc": "docs/STATUS_DETAIL.md",
+    "line": 151,
+    "kind": "link",
+    "value": "design/V3_BUILD.md",
+    "normalized": "docs/design/V3_BUILD.md",
+    "status": "PRESENT"
+  },
+  {
+    "doc": "docs/STATUS_DETAIL.md",
+    "line": 153,
+    "kind": "revision",
+    "value": "b0ceaf09",
+    "exists_in_local_git": true,
+    "ancestor_of_subject": true
+  },
+  {
+    "doc": "docs/STATUS_DETAIL.md",
+    "line": 155,
+    "kind": "revision",
+    "value": "f372f63f",
+    "exists_in_local_git": true,
+    "ancestor_of_subject": true
+  },
+  {
+    "doc": "docs/STATUS_DETAIL.md",
+    "line": 162,
+    "kind": "revision",
+    "value": "56032c46",
+    "exists_in_local_git": true,
+    "ancestor_of_subject": true
+  },
+  {
+    "doc": "docs/STATUS_DETAIL.md",
+    "line": 162,
+    "kind": "revision",
+    "value": "01b8cb5a",
+    "exists_in_local_git": true,
+    "ancestor_of_subject": true
+  },
+  {
+    "doc": "docs/STATUS_DETAIL.md",
+    "line": 163,
+    "kind": "revision",
+    "value": "393012fd",
+    "exists_in_local_git": true,
+    "ancestor_of_subject": true
+  },
+  {
+    "doc": "docs/STATUS_DETAIL.md",
+    "line": 163,
+    "kind": "path",
+    "value": "design/V3_REFUSAL_AUDIT.md",
+    "normalized": "docs/design/V3_REFUSAL_AUDIT.md",
+    "status": "PRESENT"
+  },
+  {
+    "doc": "docs/STATUS_DETAIL.md",
+    "line": 163,
+    "kind": "path",
+    "value": "design/V3_REFUSAL_AUDIT.md",
+    "normalized": "docs/design/V3_REFUSAL_AUDIT.md",
+    "status": "PRESENT"
+  },
+  {
+    "doc": "docs/STATUS_DETAIL.md",
+    "line": 163,
+    "kind": "link",
+    "value": "design/V3_REFUSAL_AUDIT.md",
+    "normalized": "docs/design/V3_REFUSAL_AUDIT.md",
+    "status": "PRESENT"
+  },
+  {
+    "doc": "docs/STATUS_DETAIL.md",
+    "line": 175,
+    "kind": "revision",
+    "value": "f740da10",
+    "exists_in_local_git": true,
+    "ancestor_of_subject": true
+  },
+  {
+    "doc": "docs/STATUS_DETAIL.md",
+    "line": 178,
+    "kind": "revision",
+    "value": "c6765f5c",
+    "exists_in_local_git": true,
+    "ancestor_of_subject": false
+  },
+  {
+    "doc": "docs/STATUS_DETAIL.md",
+    "line": 180,
+    "kind": "link",
+    "value": "OWNER_RULINGS.md",
+    "normalized": "docs/OWNER_RULINGS.md",
+    "status": "PRESENT"
+  },
+  {
+    "doc": "docs/STATUS_DETAIL.md",
+    "line": 181,
+    "kind": "path",
+    "value": "docs/design/V3_UVM_DEMAND_PAGING.md",
+    "normalized": "docs/design/V3_UVM_DEMAND_PAGING.md",
+    "status": "PRESENT"
+  },
+  {
+    "doc": "docs/STATUS_DETAIL.md",
+    "line": 184,
+    "kind": "revision",
+    "value": "59cc98a9",
+    "exists_in_local_git": true,
+    "ancestor_of_subject": true
+  },
+  {
+    "doc": "docs/STATUS_DETAIL.md",
+    "line": 188,
+    "kind": "revision",
+    "value": "283a5304",
+    "exists_in_local_git": true,
+    "ancestor_of_subject": true
+  },
+  {
+    "doc": "docs/STATUS_DETAIL.md",
+    "line": 198,
+    "kind": "revision",
+    "value": "d6959acb",
+    "exists_in_local_git": true,
+    "ancestor_of_subject": false
+  },
+  {
+    "doc": "docs/STATUS_DETAIL.md",
+    "line": 199,
+    "kind": "path",
+    "value": "traces/v3_roperm/",
+    "normalized": "traces/v3_roperm/",
+    "status": "PRESENT"
+  },
+  {
+    "doc": "docs/STATUS_DETAIL.md",
+    "line": 201,
+    "kind": "revision",
+    "value": "670bd310",
+    "exists_in_local_git": true,
+    "ancestor_of_subject": true
+  },
+  {
+    "doc": "docs/STATUS_DETAIL.md",
+    "line": 206,
+    "kind": "revision",
+    "value": "62a50c44",
+    "exists_in_local_git": true,
+    "ancestor_of_subject": true
+  },
+  {
+    "doc": "docs/STATUS_DETAIL.md",
+    "line": 206,
+    "kind": "revision",
+    "value": "283a5304",
+    "exists_in_local_git": true,
+    "ancestor_of_subject": true
+  },
+  {
+    "doc": "docs/STATUS_DETAIL.md",
+    "line": 207,
+    "kind": "revision",
+    "value": "01b8cb5a",
+    "exists_in_local_git": true,
+    "ancestor_of_subject": true
+  },
+  {
+    "doc": "docs/STATUS_DETAIL.md",
+    "line": 208,
+    "kind": "revision",
+    "value": "283a5304",
+    "exists_in_local_git": true,
+    "ancestor_of_subject": true
+  },
+  {
+    "doc": "docs/STATUS_DETAIL.md",
+    "line": 209,
+    "kind": "revision",
+    "value": "80264e63",
+    "exists_in_local_git": true,
+    "ancestor_of_subject": true
+  },
+  {
+    "doc": "docs/STATUS_DETAIL.md",
+    "line": 209,
+    "kind": "revision",
+    "value": "56032c46",
+    "exists_in_local_git": true,
+    "ancestor_of_subject": true
+  },
+  {
+    "doc": "docs/STATUS_DETAIL.md",
+    "line": 210,
+    "kind": "path",
+    "value": "traces/vh_archive/vh_apps_results.tgz",
+    "normalized": "traces/vh_archive/vh_apps_results.tgz",
+    "status": "PRESENT"
+  },
+  {
+    "doc": "docs/STATUS_DETAIL.md",
+    "line": 212,
+    "kind": "revision",
+    "value": "670bd310",
+    "exists_in_local_git": true,
+    "ancestor_of_subject": true
+  },
+  {
+    "doc": "docs/STATUS_DETAIL.md",
+    "line": 212,
+    "kind": "revision",
+    "value": "74dc3113",
+    "exists_in_local_git": true,
+    "ancestor_of_subject": true
+  },
+  {
+    "doc": "docs/STATUS_DETAIL.md",
+    "line": 217,
+    "kind": "revision",
+    "value": "670bd310",
+    "exists_in_local_git": true,
+    "ancestor_of_subject": true
+  },
+  {
+    "doc": "docs/STATUS_DETAIL.md",
+    "line": 227,
+    "kind": "path",
+    "value": "design/V3_HEADLESS_GRAPHICS.md",
+    "normalized": "docs/design/V3_HEADLESS_GRAPHICS.md",
+    "status": "PRESENT"
+  },
+  {
+    "doc": "docs/STATUS_DETAIL.md",
+    "line": 227,
+    "kind": "path",
+    "value": "design/V3_HEADLESS_GRAPHICS.md",
+    "normalized": "docs/design/V3_HEADLESS_GRAPHICS.md",
+    "status": "PRESENT"
+  },
+  {
+    "doc": "docs/STATUS_DETAIL.md",
+    "line": 227,
+    "kind": "link",
+    "value": "design/V3_HEADLESS_GRAPHICS.md",
+    "normalized": "docs/design/V3_HEADLESS_GRAPHICS.md",
+    "status": "PRESENT"
+  },
+  {
+    "doc": "docs/STATUS_DETAIL.md",
+    "line": 228,
+    "kind": "revision",
+    "value": "68fb3768",
+    "exists_in_local_git": true,
+    "ancestor_of_subject": true
+  },
+  {
+    "doc": "docs/STATUS_DETAIL.md",
+    "line": 236,
+    "kind": "revision",
+    "value": "d536595d",
+    "exists_in_local_git": true,
+    "ancestor_of_subject": true
+  },
+  {
+    "doc": "docs/STATUS_DETAIL.md",
+    "line": 236,
+    "kind": "path",
+    "value": "traces/v3_gfx/",
+    "normalized": "traces/v3_gfx/",
+    "status": "PRESENT"
+  },
+  {
+    "doc": "docs/STATUS_DETAIL.md",
+    "line": 237,
+    "kind": "path",
+    "value": "traces/v3_int_ga106/gfx_guest_d536595d.txt",
+    "normalized": "traces/v3_int_ga106/gfx_guest_d536595d.txt",
+    "status": "PRESENT"
+  },
+  {
+    "doc": "docs/STATUS_DETAIL.md",
+    "line": 238,
+    "kind": "path",
+    "value": "design/V3_GFX_TESTSET.md",
+    "normalized": "docs/design/V3_GFX_TESTSET.md",
+    "status": "PRESENT"
+  },
+  {
+    "doc": "docs/STATUS_DETAIL.md",
+    "line": 238,
+    "kind": "path",
+    "value": "design/V3_GFX_TESTSET.md",
+    "normalized": "docs/design/V3_GFX_TESTSET.md",
+    "status": "PRESENT"
+  },
+  {
+    "doc": "docs/STATUS_DETAIL.md",
+    "line": 238,
+    "kind": "link",
+    "value": "design/V3_GFX_TESTSET.md",
+    "normalized": "docs/design/V3_GFX_TESTSET.md",
+    "status": "PRESENT"
+  },
+  {
+    "doc": "docs/STATUS_DETAIL.md",
+    "line": 239,
+    "kind": "revision",
+    "value": "d06833f0",
+    "exists_in_local_git": true,
+    "ancestor_of_subject": true
+  },
+  {
+    "doc": "docs/STATUS_DETAIL.md",
+    "line": 239,
+    "kind": "revision",
+    "value": "59cc98a9",
+    "exists_in_local_git": true,
+    "ancestor_of_subject": true
+  },
+  {
+    "doc": "docs/STATUS_DETAIL.md",
+    "line": 240,
+    "kind": "revision",
+    "value": "f89f66bb",
+    "exists_in_local_git": true,
+    "ancestor_of_subject": true
+  },
+  {
+    "doc": "docs/STATUS_DETAIL.md",
+    "line": 240,
+    "kind": "revision",
+    "value": "e9c37b1c",
+    "exists_in_local_git": true,
+    "ancestor_of_subject": true
+  },
+  {
+    "doc": "docs/STATUS_DETAIL.md",
+    "line": 246,
+    "kind": "revision",
+    "value": "dd3aed08",
+    "exists_in_local_git": true,
+    "ancestor_of_subject": true
+  },
+  {
+    "doc": "docs/STATUS_DETAIL.md",
+    "line": 249,
+    "kind": "path",
+    "value": "design/V3_VIDEO_ENGINES.md",
+    "normalized": "docs/design/V3_VIDEO_ENGINES.md",
+    "status": "PRESENT"
+  },
+  {
+    "doc": "docs/STATUS_DETAIL.md",
+    "line": 249,
+    "kind": "path",
+    "value": "design/V3_VIDEO_ENGINES.md",
+    "normalized": "docs/design/V3_VIDEO_ENGINES.md",
+    "status": "PRESENT"
+  },
+  {
+    "doc": "docs/STATUS_DETAIL.md",
+    "line": 249,
+    "kind": "link",
+    "value": "design/V3_VIDEO_ENGINES.md",
+    "normalized": "docs/design/V3_VIDEO_ENGINES.md",
+    "status": "PRESENT"
+  },
+  {
+    "doc": "docs/STATUS_DETAIL.md",
+    "line": 257,
+    "kind": "revision",
+    "value": "74fced87",
+    "exists_in_local_git": true,
+    "ancestor_of_subject": true
+  },
+  {
+    "doc": "docs/STATUS_DETAIL.md",
+    "line": 257,
+    "kind": "path",
+    "value": "design/V3_MULTI_GPU_AUDIT.md",
+    "normalized": "docs/design/V3_MULTI_GPU_AUDIT.md",
+    "status": "PRESENT"
+  },
+  {
+    "doc": "docs/STATUS_DETAIL.md",
+    "line": 257,
+    "kind": "path",
+    "value": "design/V3_MULTI_GPU_AUDIT.md",
+    "normalized": "docs/design/V3_MULTI_GPU_AUDIT.md",
+    "status": "PRESENT"
+  },
+  {
+    "doc": "docs/STATUS_DETAIL.md",
+    "line": 257,
+    "kind": "link",
+    "value": "design/V3_MULTI_GPU_AUDIT.md",
+    "normalized": "docs/design/V3_MULTI_GPU_AUDIT.md",
+    "status": "PRESENT"
+  },
+  {
+    "doc": "docs/STATUS_DETAIL.md",
+    "line": 271,
+    "kind": "path",
+    "value": "traces/llm_parity/",
+    "normalized": "traces/llm_parity/",
+    "status": "PRESENT"
+  },
+  {
+    "doc": "docs/STATUS_DETAIL.md",
+    "line": 286,
+    "kind": "path",
+    "value": "design/V3_DOORBELL_IOEVENTFD.md",
+    "normalized": "docs/design/V3_DOORBELL_IOEVENTFD.md",
+    "status": "PRESENT"
+  },
+  {
+    "doc": "docs/STATUS_DETAIL.md",
+    "line": 292,
+    "kind": "path",
+    "value": "design/V3_GUEST_DOORBELL_MODULE.md",
+    "normalized": "docs/design/V3_GUEST_DOORBELL_MODULE.md",
+    "status": "PRESENT"
+  },
+  {
+    "doc": "docs/STATUS_DETAIL.md",
+    "line": 292,
+    "kind": "path",
+    "value": "design/V3_GUEST_DOORBELL_MODULE.md",
+    "normalized": "docs/design/V3_GUEST_DOORBELL_MODULE.md",
+    "status": "PRESENT"
+  },
+  {
+    "doc": "docs/STATUS_DETAIL.md",
+    "line": 292,
+    "kind": "link",
+    "value": "design/V3_GUEST_DOORBELL_MODULE.md",
+    "normalized": "docs/design/V3_GUEST_DOORBELL_MODULE.md",
+    "status": "PRESENT"
+  },
+  {
+    "doc": "docs/STATUS_DETAIL.md",
+    "line": 297,
+    "kind": "path",
+    "value": "design/V3_BATCHED_MAP.md",
+    "normalized": "docs/design/V3_BATCHED_MAP.md",
+    "status": "PRESENT"
+  },
+  {
+    "doc": "docs/STATUS_DETAIL.md",
+    "line": 297,
+    "kind": "path",
+    "value": "design/V3_BATCHED_MAP.md",
+    "normalized": "docs/design/V3_BATCHED_MAP.md",
+    "status": "PRESENT"
+  },
+  {
+    "doc": "docs/STATUS_DETAIL.md",
+    "line": 297,
+    "kind": "link",
+    "value": "design/V3_BATCHED_MAP.md",
+    "normalized": "docs/design/V3_BATCHED_MAP.md",
+    "status": "PRESENT"
+  },
+  {
+    "doc": "docs/STATUS_DETAIL.md",
+    "line": 304,
+    "kind": "revision",
+    "value": "256ec854",
+    "exists_in_local_git": true,
+    "ancestor_of_subject": true
+  },
+  {
+    "doc": "docs/STATUS_DETAIL.md",
+    "line": 304,
+    "kind": "path",
+    "value": "design/V3_FAMILY_PORT_BLACKWELL.md",
+    "normalized": "docs/design/V3_FAMILY_PORT_BLACKWELL.md",
+    "status": "PRESENT"
+  },
+  {
+    "doc": "docs/STATUS_DETAIL.md",
+    "line": 304,
+    "kind": "path",
+    "value": "design/V3_FAMILY_PORT_BLACKWELL.md",
+    "normalized": "docs/design/V3_FAMILY_PORT_BLACKWELL.md",
+    "status": "PRESENT"
+  },
+  {
+    "doc": "docs/STATUS_DETAIL.md",
+    "line": 304,
+    "kind": "link",
+    "value": "design/V3_FAMILY_PORT_BLACKWELL.md",
+    "normalized": "docs/design/V3_FAMILY_PORT_BLACKWELL.md",
+    "status": "PRESENT"
+  },
+  {
+    "doc": "docs/STATUS_DETAIL.md",
+    "line": 305,
+    "kind": "revision",
+    "value": "6fce7f54",
+    "exists_in_local_git": true,
+    "ancestor_of_subject": true
+  },
+  {
+    "doc": "docs/STATUS_DETAIL.md",
+    "line": 305,
+    "kind": "path",
+    "value": "traces/v3_blackwell/",
+    "normalized": "traces/v3_blackwell/",
+    "status": "PRESENT"
+  },
+  {
+    "doc": "docs/STATUS_DETAIL.md",
+    "line": 313,
+    "kind": "path",
+    "value": "design/V3_BAR1_DOORBELL.md",
+    "normalized": "docs/design/V3_BAR1_DOORBELL.md",
+    "status": "PRESENT"
+  },
+  {
+    "doc": "docs/STATUS_DETAIL.md",
+    "line": 313,
+    "kind": "path",
+    "value": "design/V3_BAR1_DOORBELL.md",
+    "normalized": "docs/design/V3_BAR1_DOORBELL.md",
+    "status": "PRESENT"
+  },
+  {
+    "doc": "docs/STATUS_DETAIL.md",
+    "line": 313,
+    "kind": "link",
+    "value": "design/V3_BAR1_DOORBELL.md",
+    "normalized": "docs/design/V3_BAR1_DOORBELL.md",
+    "status": "PRESENT"
+  },
+  {
+    "doc": "docs/STATUS_DETAIL.md",
+    "line": 317,
+    "kind": "revision",
+    "value": "5018bb57",
+    "exists_in_local_git": true,
+    "ancestor_of_subject": true
+  },
+  {
+    "doc": "docs/STATUS_DETAIL.md",
+    "line": 321,
+    "kind": "path",
+    "value": "design/V3_DRIVER_MATRIX.md",
+    "normalized": "docs/design/V3_DRIVER_MATRIX.md",
+    "status": "PRESENT"
+  },
+  {
+    "doc": "docs/STATUS_DETAIL.md",
+    "line": 321,
+    "kind": "path",
+    "value": "design/V3_DRIVER_MATRIX.md",
+    "normalized": "docs/design/V3_DRIVER_MATRIX.md",
+    "status": "PRESENT"
+  },
+  {
+    "doc": "docs/STATUS_DETAIL.md",
+    "line": 321,
+    "kind": "link",
+    "value": "design/V3_DRIVER_MATRIX.md",
+    "normalized": "docs/design/V3_DRIVER_MATRIX.md",
+    "status": "PRESENT"
+  },
+  {
+    "doc": "docs/STATUS_DETAIL.md",
+    "line": 322,
+    "kind": "path",
+    "value": "traces/driver_matrix/walk/",
+    "normalized": "traces/driver_matrix/walk/",
+    "status": "PRESENT"
+  },
+  {
+    "doc": "docs/STATUS_DETAIL.md",
+    "line": 324,
+    "kind": "revision",
+    "value": "a50265f8",
+    "exists_in_local_git": true,
+    "ancestor_of_subject": false
+  },
+  {
+    "doc": "docs/STATUS_DETAIL.md",
+    "line": 329,
+    "kind": "revision",
+    "value": "5dbf670b",
+    "exists_in_local_git": true,
+    "ancestor_of_subject": true
+  },
+  {
+    "doc": "docs/STATUS_DETAIL.md",
+    "line": 333,
+    "kind": "path",
+    "value": "design/V3_DISPLAY.md",
+    "normalized": "docs/design/V3_DISPLAY.md",
+    "status": "PRESENT"
+  },
+  {
+    "doc": "docs/STATUS_DETAIL.md",
+    "line": 333,
+    "kind": "path",
+    "value": "design/V3_DISPLAY.md",
+    "normalized": "docs/design/V3_DISPLAY.md",
+    "status": "PRESENT"
+  },
+  {
+    "doc": "docs/STATUS_DETAIL.md",
+    "line": 333,
+    "kind": "path",
+    "value": "traces/v3_display/m0a/",
+    "normalized": "traces/v3_display/m0a/",
+    "status": "PRESENT"
+  },
+  {
+    "doc": "docs/STATUS_DETAIL.md",
+    "line": 333,
+    "kind": "link",
+    "value": "design/V3_DISPLAY.md",
+    "normalized": "docs/design/V3_DISPLAY.md",
+    "status": "PRESENT"
+  },
+  {
+    "doc": "docs/STATUS_DETAIL.md",
+    "line": 334,
+    "kind": "revision",
+    "value": "4c48ca0c",
+    "exists_in_local_git": true,
+    "ancestor_of_subject": true
+  },
+  {
+    "doc": "docs/STATUS_DETAIL.md",
+    "line": 337,
+    "kind": "path",
+    "value": "design/THE_WINDOWS_AXIS.md",
+    "normalized": "docs/design/THE_WINDOWS_AXIS.md",
+    "status": "PRESENT"
+  },
+  {
+    "doc": "docs/STATUS_DETAIL.md",
+    "line": 338,
+    "kind": "path",
+    "value": "design/V3_WINDOWS_DOORBELL_RESEARCH.md",
+    "normalized": "docs/design/V3_WINDOWS_DOORBELL_RESEARCH.md",
+    "status": "PRESENT"
+  },
+  {
+    "doc": "docs/STATUS_DETAIL.md",
+    "line": 343,
+    "kind": "link",
+    "value": "PRODUCT_POSITIONING.md",
+    "normalized": "docs/PRODUCT_POSITIONING.md",
+    "status": "PRESENT"
+  },
+  {
+    "doc": "docs/STATUS_DETAIL.md",
+    "line": 355,
+    "kind": "revision",
+    "value": "f89f66bb",
+    "exists_in_local_git": true,
+    "ancestor_of_subject": true
+  },
+  {
+    "doc": "docs/STATUS_DETAIL.md",
+    "line": 356,
+    "kind": "revision",
+    "value": "d06833f0",
+    "exists_in_local_git": true,
+    "ancestor_of_subject": true
+  },
+  {
+    "doc": "docs/STATUS_DETAIL.md",
+    "line": 357,
+    "kind": "path",
+    "value": "design/V3_GFX_TESTSET.md",
+    "normalized": "docs/design/V3_GFX_TESTSET.md",
+    "status": "PRESENT"
+  },
+  {
+    "doc": "docs/STATUS_DETAIL.md",
+    "line": 357,
+    "kind": "path",
+    "value": "design/V3_GFX_TESTSET.md",
+    "normalized": "docs/design/V3_GFX_TESTSET.md",
+    "status": "PRESENT"
+  },
+  {
+    "doc": "docs/STATUS_DETAIL.md",
+    "line": 357,
+    "kind": "link",
+    "value": "design/V3_GFX_TESTSET.md",
+    "normalized": "docs/design/V3_GFX_TESTSET.md",
+    "status": "PRESENT"
+  }
+]

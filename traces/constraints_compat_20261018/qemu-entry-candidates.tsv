@@ -1,0 +1,107 @@
+kind	path	line	name
+Rust FFI	crates/kf-qemu/src/ffi_unsafe.rs	136	kf3_abi_version
+Rust FFI	crates/kf-qemu/src/ffi_unsafe.rs	146	kf3_realize
+Rust FFI	crates/kf-qemu/src/ffi_unsafe.rs	288	kf3_identity
+Rust FFI	crates/kf-qemu/src/ffi_unsafe.rs	315	kf3_config_word
+Rust FFI	crates/kf-qemu/src/ffi_unsafe.rs	341	kf3_memory_map
+Rust FFI	crates/kf-qemu/src/ffi_unsafe.rs	381	kf3_shadow_attach
+Rust FFI	crates/kf-qemu/src/ffi_unsafe.rs	397	kf3_shadow_seal
+Rust FFI	crates/kf-qemu/src/ffi_unsafe.rs	405	kf3_bar0_write
+Rust FFI	crates/kf-qemu/src/ffi_unsafe.rs	415	kf3_bar0_read
+Rust FFI	crates/kf-qemu/src/ffi_unsafe.rs	426	kf3_ram_add
+Rust FFI	crates/kf-qemu/src/ffi_unsafe.rs	457	kf3_bar_ram
+Rust FFI	crates/kf-qemu/src/ffi_unsafe.rs	478	kf3_ram_del
+Rust FFI	crates/kf-qemu/src/ffi_unsafe.rs	489	kf3_status
+Rust FFI	crates/kf-qemu/src/ffi_unsafe.rs	501	kf3_usermode_view
+Rust FFI	crates/kf-qemu/src/ffi_unsafe.rs	526	kf3_timer_view
+Rust FFI	crates/kf-qemu/src/ffi_unsafe.rs	548	kf3_irq_fd
+Rust FFI	crates/kf-qemu/src/ffi_unsafe.rs	556	kf3_bar1_follows_guest
+Rust FFI	crates/kf-qemu/src/ffi_unsafe.rs	568	kf3_set_bar1_overlay
+Rust FFI	crates/kf-qemu/src/ffi_unsafe.rs	597	kf3_set_read_trap
+Rust FFI	crates/kf-qemu/src/ffi_unsafe.rs	618	kf3_trace_mode
+Rust FFI	crates/kf-qemu/src/ffi_unsafe.rs	625	kf3_trace_piece
+Rust FFI	crates/kf-qemu/src/ffi_unsafe.rs	633	kf3_trace_admit
+Rust FFI	crates/kf-qemu/src/ffi_unsafe.rs	646	kf3_trace_name
+Rust FFI	crates/kf-qemu/src/ffi_unsafe.rs	657	kf3_trace_report
+Rust FFI	crates/kf-qemu/src/ffi_unsafe.rs	666	kf3_bar1_overlay_done
+Rust FFI	crates/kf-qemu/src/ffi_unsafe.rs	675	kf3_bar1_usermode_write
+Rust FFI	crates/kf-qemu/src/ffi_unsafe.rs	800	kf3_display_frame
+Rust FFI	crates/kf-qemu/src/ffi_unsafe.rs	828	kf3_display_refresh
+Rust FFI	crates/kf-qemu/src/ffi_unsafe.rs	838	kf3_display_refresh_fd
+Rust FFI	crates/kf-qemu/src/ffi_unsafe.rs	846	kf3_display_refresh_drain
+Rust FFI	crates/kf-qemu/src/ffi_unsafe.rs	862	kf3_display_cursor_apply
+Rust FFI	crates/kf-qemu/src/ffi_unsafe.rs	881	kf3_doorbell_page_offset
+Rust FFI	crates/kf-qemu/src/ffi_unsafe.rs	896	kf3_set_ioeventfd
+Rust FFI	crates/kf-qemu/src/ffi_unsafe.rs	918	kf3_doorbell_site
+Rust FFI	crates/kf-qemu/src/ffi_unsafe.rs	944	kf3_broker_start
+Rust FFI	crates/kf-qemu/src/ffi_unsafe.rs	999	kf3_broker_frame_fd
+Rust FFI	crates/kf-qemu/src/ffi_unsafe.rs	1014	kf3_broker_ready
+Rust FFI	crates/kf-qemu/src/ffi_unsafe.rs	1042	kf3_broker_stop
+Rust FFI	crates/kf-qemu/src/ffi_unsafe.rs	1056	kf3_display_ui_info
+Rust FFI	crates/kf-qemu/src/ffi_unsafe.rs	1077	kf3_option_rom
+Rust FFI	crates/kf-qemu/src/ffi_unsafe.rs	1109	kf3_device_reset
+Rust FFI	crates/kf-qemu/src/ffi_unsafe.rs	1121	kf3_device_reset_wait
+Rust FFI	crates/kf-qemu/src/ffi_unsafe.rs	1137	kf3_unrealize
+C function candidate	qemu/hw/misc/kf3/kf3.c	241	kf3_obs_mmio
+C function candidate	qemu/hw/misc/kf3/kf3.c	259	kf3_trace_rw
+C function candidate	qemu/hw/misc/kf3/kf3.c	274	kf3_piece_read
+C function candidate	qemu/hw/misc/kf3/kf3.c	291	kf3_dbcpl
+C function candidate	qemu/hw/misc/kf3/kf3.c	320	kf3_piece_write
+C function candidate	qemu/hw/misc/kf3/kf3.c	339	kf3_piece_read_trace
+C function candidate	qemu/hw/misc/kf3/kf3.c	349	kf3_piece_write_trace
+C function candidate	qemu/hw/misc/kf3/kf3.c	373	kf3_host_rom_free
+C function candidate	qemu/hw/misc/kf3/kf3.c	379	kf3_host_rom_ops
+C function candidate	qemu/hw/misc/kf3/kf3.c	406	kf3_host_rom
+C function candidate	qemu/hw/misc/kf3/kf3.c	411	kf3_bar0_build
+C function candidate	qemu/hw/misc/kf3/kf3.c	494	kf3_read_trap_bh
+C function candidate	qemu/hw/misc/kf3/kf3.c	517	kf3_read_trap
+C function candidate	qemu/hw/misc/kf3/kf3.c	532	kf3_dummy_read
+C function candidate	qemu/hw/misc/kf3/kf3.c	537	kf3_dummy_write
+C function candidate	qemu/hw/misc/kf3/kf3.c	553	kf3_bar12_read
+C function candidate	qemu/hw/misc/kf3/kf3.c	560	kf3_bar12_write
+C function candidate	qemu/hw/misc/kf3/kf3.c	576	kf3_bar_build
+C function candidate	qemu/hw/misc/kf3/kf3.c	621	kf3_bar1_um_read
+C function candidate	qemu/hw/misc/kf3/kf3.c	626	kf3_bar1_um_write
+C function candidate	qemu/hw/misc/kf3/kf3.c	693	kf3_ov_bh
+C function candidate	qemu/hw/misc/kf3/kf3.c	738	kf3_bar1_views_build
+C function candidate	qemu/hw/misc/kf3/kf3.c	811	kf3_db_section
+C function candidate	qemu/hw/misc/kf3/kf3.c	835	kf3_region_add
+C function candidate	qemu/hw/misc/kf3/kf3.c	851	kf3_region_del
+C function candidate	qemu/hw/misc/kf3/kf3.c	862	kf3_vector_use
+C function candidate	qemu/hw/misc/kf3/kf3.c	901	kf3_vector_release
+C function candidate	qemu/hw/misc/kf3/kf3.c	922	kf3_msi_user
+C function candidate	qemu/hw/misc/kf3/kf3.c	945	kf3_msi_user_off
+C function candidate	qemu/hw/misc/kf3/kf3.c	955	kf3_trace_exit
+C function candidate	qemu/hw/misc/kf3/kf3.c	1048	kf3_console_cursor
+C function candidate	qemu/hw/misc/kf3/kf3.c	1054	kf3_console_frame
+C function candidate	qemu/hw/misc/kf3/kf3.c	1079	kf3_refresh_done
+C function candidate	qemu/hw/misc/kf3/kf3.c	1096	kf3_refresh_ready
+C function candidate	qemu/hw/misc/kf3/kf3.c	1106	kf3_refresh_backstop
+C function candidate	qemu/hw/misc/kf3/kf3.c	1113	kf3_gfx_update
+C function candidate	qemu/hw/misc/kf3/kf3.c	1146	kf3_ui_info
+C function candidate	qemu/hw/misc/kf3/kf3.c	1177	kf3_broker_pump
+C function candidate	qemu/hw/misc/kf3/kf3.c	1179	kf3_broker_sock_rd
+C function candidate	qemu/hw/misc/kf3/kf3.c	1185	kf3_broker_sock_wr
+C function candidate	qemu/hw/misc/kf3/kf3.c	1191	kf3_broker_frame_rd
+C function candidate	qemu/hw/misc/kf3/kf3.c	1197	kf3_broker_timer_cb
+C function candidate	qemu/hw/misc/kf3/kf3.c	1206	kf3_broker_watch
+C function candidate	qemu/hw/misc/kf3/kf3.c	1222	kf3_broker_timer
+C function candidate	qemu/hw/misc/kf3/kf3.c	1272	kf3_in_button
+C function candidate	qemu/hw/misc/kf3/kf3.c	1283	kf3_in_wheel
+C function candidate	qemu/hw/misc/kf3/kf3.c	1298	kf3_in_abs
+C function candidate	qemu/hw/misc/kf3/kf3.c	1312	kf3_in_rel
+C function candidate	qemu/hw/misc/kf3/kf3.c	1320	kf3_in_sync
+C function candidate	qemu/hw/misc/kf3/kf3.c	1346	kf3_in_select_pointer
+C function candidate	qemu/hw/misc/kf3/kf3.c	1354	kf3_in_missing_pointer
+C function candidate	qemu/hw/misc/kf3/kf3.c	1368	kf3_in_close
+C function candidate	qemu/hw/misc/kf3/kf3.c	1380	kf3_in_resize_hint
+C function candidate	qemu/hw/misc/kf3/kf3.c	1417	kf3_broker_pump
+C function candidate	qemu/hw/misc/kf3/kf3.c	1430	kf3_broker_realize
+C function candidate	qemu/hw/misc/kf3/kf3.c	1460	kf3_broker_exit
+C function candidate	qemu/hw/misc/kf3/kf3.c	1486	kf3_option_rom_build
+C function candidate	qemu/hw/misc/kf3/kf3.c	1519	kf3_dev_realize
+C function candidate	qemu/hw/misc/kf3/kf3.c	1842	kf3_dev_exit
+C function candidate	qemu/hw/misc/kf3/kf3.c	1908	kf3_reset_hold
+C function candidate	qemu/hw/misc/kf3/kf3.c	1926	kf3_reset_exit
+C function candidate	qemu/hw/misc/kf3/kf3.c	1996	kf3_class_init
+C function candidate	qemu/hw/misc/kf3/kf3.c	2021	kf3_register_types

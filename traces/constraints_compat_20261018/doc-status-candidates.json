@@ -1,0 +1,32 @@
+[
+  {
+    "path": "docs/design/V3_BATCHED_MAP.md",
+    "status_in_first_30": false,
+    "date_in_first_30": true,
+    "status_lines": [
+      93,
+      302,
+      562,
+      756,
+      760,
+      982,
+      1166,
+      1313,
+      1406
+    ]
+  },
+  {
+    "path": "docs/design/V3_DRIVER_MATRIX.md",
+    "status_in_first_30": false,
+    "date_in_first_30": true,
+    "status_lines": [
+      98
+    ]
+  },
+  {
+    "path": "docs/design/V3_USER_RING_LIFECYCLE_REVIEW1_20261016.md",
+    "status_in_first_30": false,
+    "date_in_first_30": true,
+    "status_lines": []
+  }
+]

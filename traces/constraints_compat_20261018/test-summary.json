@@ -1,0 +1,296 @@
+{
+  "scope": "PARTIAL: stopped after accidental local KVM tests; no complete Cargo-suite verdict",
+  "cargo_exit": 143,
+  "completed_suites": 35,
+  "passed_in_completed_suites": 1123,
+  "failed_in_completed_suites": 0,
+  "ignored_in_completed_suites": 9,
+  "local_kvm_ran_markers": [
+    "every_token_refused_by_the_kernel_the_fd_limit_or_the_budget_still_works_through_the_trap",
+    "churning_births_and_frees_never_lose_a_store_or_ring_the_wrong_twin",
+    "registered_tokens_skip_the_exit_and_everything_else_traps_in_order"
+  ],
+  "last_incomplete_suite": "Running tests/user_lifecycle_model.rs ($CARGO_TARGET_DIR/release/deps/user_lifecycle_model-f94d8315736e0d2a)",
+  "suites": [
+    {
+      "suite": "Running unittests src/lib.rs ($CARGO_TARGET_DIR/release/deps/kf_abi-5619445d7555d625)",
+      "result": "ok",
+      "passed": 469,
+      "failed": 0,
+      "ignored": 0,
+      "filtered": 0
+    },
+    {
+      "suite": "Running tests/capability_policy_550.rs ($CARGO_TARGET_DIR/release/deps/capability_policy_550-dd36f64753f383c8)",
+      "result": "ok",
+      "passed": 4,
+      "failed": 0,
+      "ignored": 0,
+      "filtered": 0
+    },
+    {
+      "suite": "Running tests/driver_matrix.rs ($CARGO_TARGET_DIR/release/deps/driver_matrix-52b8fb0773841fe5)",
+      "result": "ok",
+      "passed": 11,
+      "failed": 0,
+      "ignored": 0,
+      "filtered": 0
+    },
+    {
+      "suite": "Running tests/fixed_map_page_size.rs ($CARGO_TARGET_DIR/release/deps/fixed_map_page_size-072519daff47d2e2)",
+      "result": "ok",
+      "passed": 8,
+      "failed": 0,
+      "ignored": 0,
+      "filtered": 0
+    },
+    {
+      "suite": "Running tests/fn1_negotiation_oracle.rs ($CARGO_TARGET_DIR/release/deps/fn1_negotiation_oracle-f3bd633720760ff2)",
+      "result": "ok",
+      "passed": 7,
+      "failed": 0,
+      "ignored": 0,
+      "filtered": 0
+    },
+    {
+      "suite": "Running tests/gr_static_info.rs ($CARGO_TARGET_DIR/release/deps/gr_static_info-a1b4bf00ca14e319)",
+      "result": "ok",
+      "passed": 19,
+      "failed": 0,
+      "ignored": 0,
+      "filtered": 0
+    },
+    {
+      "suite": "Running tests/gvaspace_pdes.rs ($CARGO_TARGET_DIR/release/deps/gvaspace_pdes-cf44ec3a60d09ebd)",
+      "result": "ok",
+      "passed": 8,
+      "failed": 0,
+      "ignored": 0,
+      "filtered": 0
+    },
+    {
+      "suite": "Running tests/initctrl_census.rs ($CARGO_TARGET_DIR/release/deps/initctrl_census-d03c5ca3af1764a7)",
+      "result": "ok",
+      "passed": 6,
+      "failed": 0,
+      "ignored": 0,
+      "filtered": 0
+    },
+    {
+      "suite": "Running tests/invariant_classes.rs ($CARGO_TARGET_DIR/release/deps/invariant_classes-cae15d8cdbf82eef)",
+      "result": "ok",
+      "passed": 2,
+      "failed": 0,
+      "ignored": 0,
+      "filtered": 0
+    },
+    {
+      "suite": "Running tests/mean_wire.rs ($CARGO_TARGET_DIR/release/deps/mean_wire-889e04d6ee9f248e)",
+      "result": "ok",
+      "passed": 27,
+      "failed": 0,
+      "ignored": 0,
+      "filtered": 0
+    },
+    {
+      "suite": "Running tests/oracle_layout.rs ($CARGO_TARGET_DIR/release/deps/oracle_layout-c68b9721577c87cc)",
+      "result": "ok",
+      "passed": 23,
+      "failed": 0,
+      "ignored": 0,
+      "filtered": 0
+    },
+    {
+      "suite": "Running tests/real_ga106_bodies.rs ($CARGO_TARGET_DIR/release/deps/real_ga106_bodies-c4b35dc3431cd507)",
+      "result": "ok",
+      "passed": 4,
+      "failed": 0,
+      "ignored": 0,
+      "filtered": 0
+    },
+    {
+      "suite": "Running tests/truncated_row_reads.rs ($CARGO_TARGET_DIR/release/deps/truncated_row_reads-47e2462813332434)",
+      "result": "ok",
+      "passed": 4,
+      "failed": 0,
+      "ignored": 0,
+      "filtered": 0
+    },
+    {
+      "suite": "Running unittests src/lib.rs ($CARGO_TARGET_DIR/release/deps/kf_broker-e4f3ec9b105464aa)",
+      "result": "ok",
+      "passed": 60,
+      "failed": 0,
+      "ignored": 0,
+      "filtered": 0
+    },
+    {
+      "suite": "Running tests/broker_loopback.rs ($CARGO_TARGET_DIR/release/deps/broker_loopback-cfea51602eed38b4)",
+      "result": "ok",
+      "passed": 0,
+      "failed": 0,
+      "ignored": 8,
+      "filtered": 0
+    },
+    {
+      "suite": "Running tests/broker_ticks_e2e.rs ($CARGO_TARGET_DIR/release/deps/broker_ticks_e2e-8c93bb40914807b1)",
+      "result": "ok",
+      "passed": 0,
+      "failed": 0,
+      "ignored": 1,
+      "filtered": 0
+    },
+    {
+      "suite": "Running tests/host_cursor.rs ($CARGO_TARGET_DIR/release/deps/host_cursor-2b39ce94b51ce9f9)",
+      "result": "ok",
+      "passed": 22,
+      "failed": 0,
+      "ignored": 0,
+      "filtered": 0
+    },
+    {
+      "suite": "Running tests/input_sink.rs ($CARGO_TARGET_DIR/release/deps/input_sink-28335dc7e4c13da9)",
+      "result": "ok",
+      "passed": 9,
+      "failed": 0,
+      "ignored": 0,
+      "filtered": 0
+    },
+    {
+      "suite": "Running tests/proto_mirror.rs ($CARGO_TARGET_DIR/release/deps/proto_mirror-8776f4f1ad99222e)",
+      "result": "ok",
+      "passed": 6,
+      "failed": 0,
+      "ignored": 0,
+      "filtered": 0
+    },
+    {
+      "suite": "Running tests/relay_machine.rs ($CARGO_TARGET_DIR/release/deps/relay_machine-01af874f59d2ad62)",
+      "result": "ok",
+      "passed": 65,
+      "failed": 0,
+      "ignored": 0,
+      "filtered": 0
+    },
+    {
+      "suite": "Running unittests src/lib.rs ($CARGO_TARGET_DIR/release/deps/kf_chan-f6cc2223d93f2309)",
+      "result": "ok",
+      "passed": 200,
+      "failed": 0,
+      "ignored": 0,
+      "filtered": 0
+    },
+    {
+      "suite": "Running tests/channel_formats_vs_ogkm.rs ($CARGO_TARGET_DIR/release/deps/channel_formats_vs_ogkm-82a3b41b31e5c7af)",
+      "result": "ok",
+      "passed": 6,
+      "failed": 0,
+      "ignored": 0,
+      "filtered": 0
+    },
+    {
+      "suite": "Running tests/dbfast_bench.rs ($CARGO_TARGET_DIR/release/deps/dbfast_bench-6c0a8470f2f71d4b)",
+      "result": "ok",
+      "passed": 2,
+      "failed": 0,
+      "ignored": 0,
+      "filtered": 0
+    },
+    {
+      "suite": "Running tests/dbfast_exhaust.rs ($CARGO_TARGET_DIR/release/deps/dbfast_exhaust-99610073d5db3613)",
+      "result": "ok",
+      "passed": 1,
+      "failed": 0,
+      "ignored": 0,
+      "filtered": 0
+    },
+    {
+      "suite": "Running tests/dbfast_kvm.rs ($CARGO_TARGET_DIR/release/deps/dbfast_kvm-f0a8b5a1f79b3344)",
+      "result": "ok",
+      "passed": 2,
+      "failed": 0,
+      "ignored": 0,
+      "filtered": 0
+    },
+    {
+      "suite": "Running tests/handoff_protocol.rs ($CARGO_TARGET_DIR/release/deps/handoff_protocol-16754a569c9413e3)",
+      "result": "ok",
+      "passed": 6,
+      "failed": 0,
+      "ignored": 0,
+      "filtered": 0
+    },
+    {
+      "suite": "Running tests/notifiers_vs_ogkm.rs ($CARGO_TARGET_DIR/release/deps/notifiers_vs_ogkm-e67e63356ec30a9c)",
+      "result": "ok",
+      "passed": 3,
+      "failed": 0,
+      "ignored": 0,
+      "filtered": 0
+    },
+    {
+      "suite": "Running tests/relay_fairness.rs ($CARGO_TARGET_DIR/release/deps/relay_fairness-9d8cff83ed0b97bb)",
+      "result": "ok",
+      "passed": 35,
+      "failed": 0,
+      "ignored": 0,
+      "filtered": 0
+    },
+    {
+      "suite": "Running tests/ring.rs ($CARGO_TARGET_DIR/release/deps/ring-cc2263bb66b3fd81)",
+      "result": "ok",
+      "passed": 12,
+      "failed": 0,
+      "ignored": 0,
+      "filtered": 0
+    },
+    {
+      "suite": "Running tests/tmode.rs ($CARGO_TARGET_DIR/release/deps/tmode-bdc2d57d7c4e0329)",
+      "result": "ok",
+      "passed": 23,
+      "failed": 0,
+      "ignored": 0,
+      "filtered": 0
+    },
+    {
+      "suite": "Running tests/translated_rewrite.rs ($CARGO_TARGET_DIR/release/deps/translated_rewrite-9981015a2c3469ed)",
+      "result": "ok",
+      "passed": 18,
+      "failed": 0,
+      "ignored": 0,
+      "filtered": 0
+    },
+    {
+      "suite": "Running tests/user_consumption_model.rs ($CARGO_TARGET_DIR/release/deps/user_consumption_model-4ef398aac07acae9)",
+      "result": "ok",
+      "passed": 8,
+      "failed": 0,
+      "ignored": 0,
+      "filtered": 0
+    },
+    {
+      "suite": "Running tests/user_gate_rules.rs ($CARGO_TARGET_DIR/release/deps/user_gate_rules-a06175a706a59a56)",
+      "result": "ok",
+      "passed": 9,
+      "failed": 0,
+      "ignored": 0,
+      "filtered": 0
+    },
+    {
+      "suite": "Running tests/user_lazy_model.rs ($CARGO_TARGET_DIR/release/deps/user_lazy_model-2238cdf3f3075c4c)",
+      "result": "ok",
+      "passed": 17,
+      "failed": 0,
+      "ignored": 0,
+      "filtered": 0
+    },
+    {
+      "suite": "Running tests/user_lazy_turn.rs ($CARGO_TARGET_DIR/release/deps/user_lazy_turn-1163226883d83775)",
+      "result": "ok",
+      "passed": 27,
+      "failed": 0,
+      "ignored": 0,
+      "filtered": 0
+    }
+  ]
+}
