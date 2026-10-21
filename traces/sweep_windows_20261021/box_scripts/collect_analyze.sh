@@ -35,7 +35,10 @@ timeout 180 bash "$W" ssh 'powershell -NoProfile -ExecutionPolicy Bypass -File C
 grep '^COLLECT_DONE' "/root/prov/collect_${run}.txt"
 echo "COLLECT_METADATA_READY $(date -u -Is)"
 if grep -q '^FILE .*\.dmp ' "/root/prov/collect_${run}.txt"; then
- grep -q '^PUBLIC_DEBUGGER_FETCH_EXIT rc=0 ' /root/prov/public_debugger_fetch.log
+ # Old 7z rejected the outer ZIP64 headers; the same downloaded bundle was
+ # successfully CRC-checked by Python. Keep both extraction receipts.
+ grep -q '^PUBLIC_DEBUGGER_EXTRACT_EXIT rc=0 ' /root/prov/public_debugger_extract.log
+ grep -q '^PUBLIC_DEBUGGER_EXTRACT_READY ' /root/prov/public_debugger_extract.ready
  [ -f /root/sweep2/windbg_pkg/x64/amd64/cdb.exe ]
  timeout 30 bash "$W" ssh 'powershell -NoProfile -Command "New-Item -ItemType Directory -Force C:\kf\windbg | Out-Null"' </dev/null
  timeout 300 bash "$W" scp-to /root/sweep2/windbg_pkg/x64/amd64 C:/kf/windbg/
