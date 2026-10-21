@@ -1,3 +1,5 @@
+STATUS: LIVE, 2026-10-21 task6. Newstretch cap8USD/stop6/reserve5, openingcredit24.727566USD; noleasesyet. Itemizedoldcharges verified:56949833=2.189,56964717=2.802,total4.991USD, separatefromnewbudget (see sweep_windows_20261021/old_lease_invoices.json).
+
 STATUS: LIVE, 2026-10-21 midday. Owner task6 replaces the overnight budget for a NEW stretch: cap8USD / stop6 / reserve5; initialAPIcredit24.727566USD. No new rental before integration+GPU-free acceptance; stop newleases20:00CEST, allgone20:30CEST.
 
 Close overnight own56964717: automatic teardown02:02:35UTC, APIabsence observed11:00UTC. Deployment SCP stalled; controller/Windows never launched. Runtime estimate2.82USD, accountcredit27.529453→24.727566USD(shared delta2.801887, not invoice attribution). Old ledger preserved; no running instances.

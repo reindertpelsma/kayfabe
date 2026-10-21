@@ -1,0 +1,9 @@
+STATUS: LIVE, 2026-10-21. GPU-free merged source accepted; hardware pending.
+
+Owner task6: merge into new codex/sweep-win-20261021, WindowsONfirst onGB202,19flags+DIAG_PROGRESS1000,600secondCode0hold. Automatic source merge d93cf38e5 with candidate89fc8a222, no conflict/manualresolution. DraftPR55–61unmerged.
+
+Release before/after:M2696/0/7, sweep2750/0/8, integrated2875/0/9; everycrate>=bothparents. Completepercratecounts/loghashes in gpu_free_classified.json. ClippyM583→merged585; only2extra duplicated inherited unused-self records in untouchedsweepparent inittables.rs. Exactrawparentmatchverified; effective newdiagnostics0, no suppression. The strictM-only comparator failed first and its rawresult is retained; existingowner permission that inheriteddiagnosticsarenotastop applies. CLIPPY_POLICY.md declared two-parent classification before the result was read.
+
+SelectedincomingMmutants:drop-holder-re-ring2killers, ignoreunannounced2, omitretryregistration3. Sourcesrestored; protocol/sourcepins/kf-qemu396librarytests passagain. Prior13ownedsemanticmutants retainedunchanged. ThreeownRustfilesrustfmtpass. ImportedMlegacy helpercopies scope38historicalmodelcaseslistedexplicitly, notrepresented ascurrentproductioncoverage.
+
+Oldovernightleases closed: invoice56949833=2.189USD,56964717=2.802USD,total4.991. Theseareoutside new8cap/6stopstretch. Initialnewcredit24.727566; no newrentalsyet. SSHbundle istextonly/checksummed/timeoutbounded, hasexplicitcontrollerPIDandautomaticteardownondeployfailure. Producttimeouts/heartbeat/TDRpolicy unchanged.
