@@ -184,10 +184,11 @@ fn the_decisive_words_are_in_the_page() {
     }
 }
 
-/// The derived AD104 page is, word for word, the page of hardware bisection run f5 (the authored page + the
-/// measured word 0x00c + the measured even-window CAPA presence bits), which gave a Windows desktop.
+/// Corrected 2026-10-22: the historical f5 page predates the explicit public CSC precision.
+/// Check the new fields exactly, then preserve the full historical comparison for every other word.
+/// This is not hardware validation of the new precision declaration.
 #[test]
-fn the_derived_ad104_page_is_the_page_bisection_run_f5_booted() {
+fn ad104_preserves_f5_except_explicit_public_csc_precision() {
     let regs = Regs::for_ip(VER, ADA.ip_version).unwrap();
     let c = &ADA.classes;
     let base =
@@ -202,7 +203,28 @@ fn the_derived_ad104_page_is_the_page_bisection_run_f5_booted() {
         words.insert(off, (a & !mask) | (fx.word(off) & mask));
     }
     let f5: Vec<(u32, u32)> = words.into_iter().filter(|(_, v)| *v != 0).collect();
-    assert_eq!(ad104().page.words, f5);
+    let current = ad104().page;
+    let mut legacy = current.words.clone();
+    for win in 0..ADA.windows {
+        let off = table().a(c.caps, "PRECOMP_WIN_PIPE_HDR_CAPC", win).unwrap();
+        let mut word = current.word(off);
+        for stage in ["CSC00", "CSC01"] {
+            let f = table()
+                .f(
+                    c.caps,
+                    &format!("PRECOMP_WIN_PIPE_HDR_CAPC_{stage}_PRECISION"),
+                )
+                .unwrap();
+            assert_eq!(kf_disp::class::get(word, f), 14);
+            word = kf_disp::class::put(word, f, 0);
+        }
+        assert_eq!(word, base.word(off), "no other f5 CAPC field changed");
+        if let Some((_, value)) = legacy.iter_mut().find(|(at, _)| *at == off) {
+            *value = word;
+        }
+    }
+    legacy.retain(|(_, value)| *value != 0);
+    assert_eq!(legacy, f5);
 }
 
 /// Provenance: the unnamed word is T3 with its source, the scaler bits are T1 rows, the rest is the
