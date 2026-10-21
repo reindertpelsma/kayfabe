@@ -48,6 +48,8 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+      - name: Vast broker mocks and workflow boundary
+        run: node --test ci/vast-broker/test
       - uses: dtolnay/rust-toolchain@master
         with:
           toolchain: 1.99.0   # pinned with rust-toolchain.toml; bump both together

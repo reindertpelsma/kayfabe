@@ -1,0 +1,152 @@
+name: Vast GPU
+on:
+  pull_request:
+    branches: [master]
+    types: [opened, synchronize, reopened, ready_for_review]
+  workflow_dispatch:
+    inputs:
+      pr_number:
+        description: Optional PR cross-check; dispatch from the branch to test
+        required: false
+        type: string
+permissions: {}
+env:
+  TARGET_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+  GH_TOKEN: ${{ github.token }}
+jobs:
+  pending:
+    name: Mark GPU tripwire pending
+    runs-on: ubuntu-latest
+    permissions:
+      statuses: write
+    steps:
+      - name: Post pending status without contacting the Worker
+        shell: bash
+        run: |
+          set -euo pipefail
+          [[ "$TARGET_SHA" =~ ^[0-9a-f]{40}$ ]]
+          temporary=$(mktemp)
+          jq -n --arg url "$GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID" \
+            '{state:"pending",context:"gpu-vast",description:"GPU broker pending",target_url:$url}' > "$temporary"
+          curl --silent --show-error --fail --max-time 20 \
+            -H "Authorization: Bearer $GH_TOKEN" -H 'Accept: application/vnd.github+json' \
+            -X POST --data-binary "@$temporary" \
+            "https://api.github.com/repos/$GITHUB_REPOSITORY/statuses/$TARGET_SHA" >/dev/null
+  gpu:
+    name: Worker path filter and GPU tripwire
+    needs: pending
+    runs-on: ubuntu-latest
+    environment: gpu-vast
+    timeout-minutes: 160
+    permissions:
+      contents: read
+      pull-requests: read
+      id-token: write
+    outputs:
+      state: ${{ steps.broker.outputs.state }}
+      verdict: ${{ steps.broker.outputs.verdict }}
+    env:
+      WORKER_URL: ${{ vars.VAST_BROKER_URL }}
+      PR_NUMBER: ${{ github.event.pull_request.number || inputs.pr_number }}
+    steps:
+      - name: Evaluate trusted Worker exclusions and request bounded check
+        id: broker
+        shell: bash
+        run: |
+          set -euo pipefail
+          [[ "$WORKER_URL" =~ ^https://[A-Za-z0-9.-]+/?$ ]]
+          [[ -z "$PR_NUMBER" || "$PR_NUMBER" =~ ^[1-9][0-9]*$ ]]
+          [[ "$TARGET_SHA" =~ ^[0-9a-f]{40}$ ]]
+          state=UNAVAILABLE
+          verdict=UNAVAILABLE
+          temporary=$(mktemp -d)
+          finish() {
+            rc=$?
+            trap - EXIT
+            # These are allowlisted Worker metadata, never box log bytes.
+            printf 'state=%s\nverdict=%s\n' "$state" "$verdict" >> "$GITHUB_OUTPUT"
+            exit "$rc"
+          }
+          trap finish EXIT
+          endpoint=/rent
+          method=POST
+          for attempt in $(seq 1 450); do
+            audience=$(jq -rn --arg value "$WORKER_URL" '$value|@uri')
+            curl --silent --show-error --fail --max-time 20 \
+              -H "Authorization: Bearer $ACTIONS_ID_TOKEN_REQUEST_TOKEN" \
+              "$ACTIONS_ID_TOKEN_REQUEST_URL&audience=$audience" > "$temporary/oidc.json"
+            oidc=$(jq -er '.value' "$temporary/oidc.json")
+            printf '::add-mask::%s\n' "$oidc"
+            code=$(curl --silent --show-error --max-time 20 -o "$temporary/response.json" \
+              -w '%{http_code}' -H "Authorization: Bearer $oidc" -H "X-GH-Token: $GH_TOKEN" \
+              -X "$method" "$WORKER_URL$endpoint")
+            jq -er '.log // ""' "$temporary/response.json" > "$temporary/log.txt"
+            token=$(od -An -N24 -tx1 /dev/urandom | tr -d ' \n')
+            printf '::stop-commands::%s\n' "$token"
+            cat "$temporary/log.txt"
+            printf '\n::%s::\n' "$token"
+            candidate=$(jq -er '.state' "$temporary/response.json")
+            case "$candidate" in
+              RUNNING|COMPLETE|NOT_NEEDED|NOT_ELIGIBLE|BUSY|UNAVAILABLE|UNAVAILABLE_BUDGET|NEEDS_APPROVAL|RENTING_DISABLED|UNAUTHORIZED|BAD_REQUEST|NOT_FOUND|OWNERSHIP_MISMATCH)
+                state=$candidate ;;
+              *) exit 1 ;;
+            esac
+            candidate=$(jq -er '.verdict' "$temporary/response.json")
+            case "$candidate" in PASS|FAIL|UNAVAILABLE) verdict=$candidate ;; *) exit 1 ;; esac
+            [[ "$code" = 200 ]] || exit 1
+            [[ "$(jq -er '.sha' "$temporary/response.json")" = "$TARGET_SHA" ]]
+            if [[ -n "$PR_NUMBER" ]]; then
+              [[ "$(jq -er '.pr|tostring' "$temporary/response.json")" = "$PR_NUMBER" ]]
+            fi
+            if [[ "$state" = NOT_NEEDED && "$verdict" = PASS ]]; then exit 0; fi
+            if [[ "$endpoint" = /rent ]]; then
+              id=$(jq -er '.id' "$temporary/response.json")
+              [[ "$id" =~ ^[1-9][0-9]*$ ]]
+              endpoint=/status/$id
+              method=GET
+            fi
+            if [[ "$state" = COMPLETE && "$verdict" = PASS ]]; then exit 0; fi
+            if [[ "$verdict" = FAIL ]]; then exit 1; fi
+            if [[ "$state" = COMPLETE ]]; then exit 1; fi
+            sleep 20
+          done
+          exit 1
+  report:
+    name: gpu-vast
+    if: ${{ always() }}
+    needs: [pending, gpu]
+    runs-on: ubuntu-latest
+    permissions:
+      statuses: write
+    env:
+      PENDING_RESULT: ${{ needs.pending.result }}
+      GPU_RESULT: ${{ needs.gpu.result }}
+      BROKER_STATE: ${{ needs.gpu.outputs.state }}
+      BROKER_VERDICT: ${{ needs.gpu.outputs.verdict }}
+    steps:
+      - name: Post final status and fail every unsuccessful dependency
+        shell: bash
+        run: |
+          set -euo pipefail
+          [[ "$TARGET_SHA" =~ ^[0-9a-f]{40}$ ]]
+          state=UNAVAILABLE
+          case "$BROKER_STATE" in
+            RUNNING|COMPLETE|NOT_NEEDED|NOT_ELIGIBLE|BUSY|UNAVAILABLE|UNAVAILABLE_BUDGET|NEEDS_APPROVAL|RENTING_DISABLED|UNAUTHORIZED|BAD_REQUEST|NOT_FOUND|OWNERSHIP_MISMATCH)
+              state=$BROKER_STATE ;;
+          esac
+          result=error
+          if [[ "$PENDING_RESULT" = success && "$GPU_RESULT" = success && "$BROKER_VERDICT" = PASS && ( "$state" = COMPLETE || "$state" = NOT_NEEDED ) ]]; then
+            result=success
+          elif [[ "$BROKER_VERDICT" = FAIL ]]; then
+            result=failure
+          fi
+          description="GPU broker $state"
+          temporary=$(mktemp)
+          jq -n --arg state "$result" --arg description "$description" \
+            --arg url "$GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID" \
+            '{state:$state,context:"gpu-vast",description:$description,target_url:$url}' > "$temporary"
+          curl --silent --show-error --fail --max-time 20 \
+            -H "Authorization: Bearer $GH_TOKEN" -H 'Accept: application/vnd.github+json' \
+            -X POST --data-binary "@$temporary" \
+            "https://api.github.com/repos/$GITHUB_REPOSITORY/statuses/$TARGET_SHA" >/dev/null
+          [[ "$result" = success ]]
