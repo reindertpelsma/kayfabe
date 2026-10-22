@@ -1,3 +1,16 @@
+STATUS: LIVE, 2026-10-22. Documentation-only follow-up: no new lease, hardware run or rental.
+Owner raised the Blackwell lane hard stop to **7 USD total**, preserving the **5 USD account credit
+reserve**, one lease at a time and auto-destroy first / <=3 h per box. This supersedes the earlier
+cap4/hardstop6 entries below. Runtime estimate remains **2.640451894638169 USD**; this task adds zero
+rental runtime. All four transferred IDs have verified API-absence receipts from the prior closeout;
+none was reopened or replaced. Last recorded shared credit43.89072054396138 USD is historical, not a
+fresh balance or exclusive invoice attribution. Before any later authorized rental, re-read API credit.
+At0.78 USD/h, a170 min envelope is2.21 USD; projected lane runtime total4.850452 USD, plus a separate
+0.50 USD non-runtime allowance gives a5.350452 USD budget guard, not measured spend. Rate, charges and
+credit must be checked again. Latest owner task explicitly says **no hardware, no rentals yet**.
+Plan: ../../docs/design/V3_BLACKWELL_NEXT_VALIDATION_20261022.md; guard review in the adjacent design doc.
+Prior receipts and cost entries below are preserved as history.
+
 STATUS: LIVE, 2026-10-21 23:30UTC /22OctCEST Blackwell takeover closeout. Transferred lease57117614 destroyed/API-absent23:28:51.639175UTC, elapsed helper estimate1.405678h, observed0.776667USD/h, runtimeestimate1.091743USD; auto-destroyPID2537232 cancelled onlyafterabsence (armed170min from22:04:32UTC). Lane runtime total2.640452USD including prior1.548709; cap4/hardstop6/reserve5. Sharedcredit43.890721USD afterclosure is not settled/exclusive attribution. Fivearmexports pushed before teardown; additional finaljournal locallyexported before and pushed after a helper path-list error. No second lease: native kf-gr-tier Xid32 outsideexception found in finalaudit, hardwareSTOP. Existingwindowsresults exploratory/contaminated-baseline, notacceptancePASS. Details ../blackwell_resume_cont_20261022/FATAL_NATIVE_XID.md andowned_instances.json. Prior cost entries below are history.
 
 STATUS: LIVE, 2026-10-21 18:01UTC final task6 closeout. No own active lease; all57046541/57064037/57081143 API-absent again18:01:53UTC. Owner decision2 guest-control scope APPROVED, but first clock18:01:23UTC was past18:00UTC lease-start deadline: finalAD106 Linux595/Windows580.88 repeat UNRUN, no extra spend. Runtime estimate3.540056USD; current shared credit21.381071USD (not exclusive/settled attribution); cap8/stop6/reserve5 unchanged. All leases destroyed before18:30UTC, timers cancelled after absence. Latest receipt ../sweep_windows_20261021/decision2_cutoff_receipt.json; current report ../sweep_windows_20261021/DECISION2_CUTOFF.md. This corrects the older pending-decision and noleasesyet status text below; earlier entries remain historical.

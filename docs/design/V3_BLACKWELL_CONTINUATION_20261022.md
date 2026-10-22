@@ -3,6 +3,23 @@
 all new commits are on `codex/bw-resume-cont-20261022`. Evidence prefix:
 `traces/blackwell_resume_cont_20261022/`. No hardware acceptance PASS is established.
 
+**2026-10-22 correction / current continuation:** latest owner scope is documentation and derivation
+only; no hardware or rentals. Clean CAPC draft [PR #69](https://github.com/reindertpelsma/kayfabe/pull/69)
+retains test-first history and explicitly distinguishes the public layout from the inferred precision-14
+rule; FVLUT and complete numeric fidelity remain unresolved. See
+[V3_PRECOMP_CSC_PRECISION_20261022.md](V3_PRECOMP_CSC_PRECISION_20261022.md).
+The native fault's strongest CODE READ hypothesis is the native CE fixture's old C7B5 bind on a
+Blackwell CE ring; causal sufficiency and the physical-channel mapping remain UNVERIFIED. No fault
+is excused. The classifier/controller is not ready for reuse: parsing, ownership, fault-time init
+proof and full native-to-arm coverage require completion. See
+[V3_BLACKWELL_GUARD_REVIEW_20261022.md](V3_BLACKWELL_GUARD_REVIEW_20261022.md) and the
+[future validation plan](V3_BLACKWELL_NEXT_VALIDATION_20261022.md).
+The owner raised the lane hard stop to **7 USD total**, keeping the 5 USD credit reserve; this
+supersedes the old cap4/hardstop6 language below. Spend remains 2.640452 USD; no new lease.
+The earlier “Cause is UNVERIFIED” remains true for hardware causality; the new source diagnosis
+narrows the next experiment. The old “remaining decisions” paragraph below is historical.
+
+
 The bisect isolated PRECOMP **CAPC** as a whole: replacing only those eight words moved ON beyond the
 fourth cursor allocation and into the same TDR/unload path as OFF. The derived-only control and CAPA+CAPB
 comparison still bugchecked0x50. A subsequent full-boot kernel audit found an unmatched native Xid32
