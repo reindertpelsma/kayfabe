@@ -1,4 +1,4 @@
-import { webcrypto } from 'node:crypto';
+import { webcrypto,createHmac } from 'node:crypto';
 export const clock = 1800000000000;
 export const sha = 'a'.repeat(40);
 export const nonce = 'b'.repeat(32);
@@ -8,6 +8,7 @@ export const env = {RENTING_ENABLED:'true',OWNER_GITHUB_ID:owner,REPOSITORY:repo
   WORKER_URL:'https://broker.example',APPROVAL_MODE:'owner_push_or_review',RENT_DRAFTS:'false',
   CREDIT_RESERVE_USD:'8',MAX_PRICE_USD_HOUR:'0.5',TTL_MINUTES:'150',DAILY_RENTALS:'4',
   DAILY_SPEND_USD:'3',ROLLING_SPEND_USD:'30',SHA_GAP_HOURS:'24',
+  RUN_TOKEN_SECRET:'mock-run-token-binding-only-for-unit-tests',OWNER_STOP_TOKEN:'mock-owner-stop-binding-only-for-unit-tests',
   VAST_API_KEY:'mock-vast-binding'};
 const pair = await webcrypto.subtle.generateKey({name:'RSASSA-PKCS1-v1_5',modulusLength:2048,
   publicExponent:new Uint8Array([1,0,1]),hash:'SHA-256'},true,['sign','verify']);
@@ -78,6 +79,11 @@ export class MockCloud {
     return this.instances.has(m[1])?Response.json({instances:this.instances.get(m[1])}):new Response('',{status:404});
   };
 }
+export function callbackToken(record,secret=env.RUN_TOKEN_SECRET,patch={}) {
+ const r={...record,...patch},expiry=r.reportExpiry??Math.floor((r.started+r.ttl)/1000);
+ const message=['v1',r.run,r.attempt,r.sha,r.label,expiry].join('|');
+ return ['v1',r.run,r.attempt,expiry,createHmac('sha256',secret).update(message).digest('base64url')].join('.');
+}
 export async function setup(overrides={}) {
   const {createService}=await import('../src/index.js');
   const cloud=new MockCloud();const storage=new MemoryStorage();const time={value:clock};
@@ -85,6 +91,11 @@ export async function setup(overrides={}) {
   let service=createService({env:bindings,storage,fetch:cloud.fetch,now:()=>time.value,random:()=>nonce});
   const harness={cloud,storage,time,bindings,get service(){return service;},
     restart(){service=createService({env:bindings,storage,fetch:cloud.fetch,now:()=>time.value,random:()=>nonce});},
+    async report(payload,{run='123-1',token,raw,headers={}}={}){
+      const record=await storage.get('record:'+run);
+      const bearer=token??callbackToken(record,bindings.RUN_TOKEN_SECRET);
+      return service.fetch(new Request(bindings.WORKER_URL+'/report/'+run,{method:'POST',headers:{Authorization:'Bearer '+bearer,'Content-Type':'application/json',...headers},body:raw??JSON.stringify(payload)}));
+    },
     async call(path='/rent',{claims={},body,method=path.startsWith('/status')?'GET':'POST',token,ghToken='mock-job-token'}={}){
       const authorization=token??await jwt(claims);
       return service.fetch(new Request(bindings.WORKER_URL+path,{method,headers:{Authorization:'Bearer '+authorization,...(ghToken?{'X-GH-Token':ghToken}:{})},...(body===undefined?{}:{body:JSON.stringify(body)})}));
