@@ -1,6 +1,10 @@
-# Q4 candidate-6b qualification: in progress
+# Q4 candidate-6b: stability failure; remaining qualification in progress
 
-CODE READ: candidate revision baa2977527c4509145e8033143bd664f768175a6 is pinned. The owner resumed Q4 on 2026-10-22 and explicitly exempted tool-runner command-filter rejections from the stop rule. The original stop.json and stopped report are superseded checkpoints, retained as history. No qualification verdict is claimed yet.
+CODE READ: candidate revision baa2977527c4509145e8033143bd664f768175a6 is pinned. The owner resumed Q4 on 2026-10-22 and explicitly exempted tool-runner command-filter rejections from the stop rule. The original stop.json and stopped report are superseded checkpoints, retained as history.
+
+MEASURED on 2026-10-22: traces/qualify_6b_20261018/4400/result.json records a genuine stability failure in Energy-04 subtest 05 after Blender, CATIA and Creo completed. The stock guest recorded three nvlddmkm event-153 entries and one poisoned channel. The QEMU log names one NoCeObject refusal (three mentions), subchannel 4, method 576, GP index 34, host channel 0x1002d, with 35 forwarded entries. There were zero Budget refusals, zero PROGRESS_STRAND lines and zero new host Xids. Host restoration returned cuInit 0 without a reload; the owner backing's size and mtime were unchanged. The full two-iteration attempt stopped at this failure; the four fresh Energy trials and other coverage continue.
+
+INFERRED: do not merge this candidate on Q4 evidence. The failure also occurs with SA-02 excluded; prior small-sample failure-rate differences do not establish immunity or a sole cause. This lane changes no product behavior and does not propose a speculative fix.
 
 MEASURED on 2026-10-22: traces/qualify_6b_20261018/candidate-tests.json records 3,781 passing tests, zero failed and 20 ignored across the full 22-crate kf-* release suite. traces/qualify_6b_20261018/clippy-delta.json records 532 warning sites in candidate and master, with zero added or removed. Both Clippy commands succeeded. traces/qualify_6b_20261018/rustfmt.txt records a formatting failure confined to the added all-PDB security test; the candidate was not modified.
 

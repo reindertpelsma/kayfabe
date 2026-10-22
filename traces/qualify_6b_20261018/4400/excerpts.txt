@@ -1,0 +1,19 @@
+MEASURED on 2026-10-22: run 4400 failure diagnostics; raw guest payload omitted.
+41424: kf3: GSP rpc RmControl seq=0
+41425: kf3: act timeslice: 0xc1d00099:0xff0e0000 SET_TIMESLICE 1000 us on 1 twin group(s) (316 us, off the GSP lock)
+41426: kayfabe: HELD-REPLY-POSTED n=1 — their rows are on the host now
+41427: kf3: GSP rpc RmControl seq=0
+41428: kf3: ring REFUSED segment gp 34 va 0x1205160d0 (6 words) NoCeObject { subch: 4, method: 576 }
+41429: kf3: chan token 0x806 (VasKey(13965662457344034928)) DEAD: ring: Rewrite { gp: 34, why: NoCeObject { subch: 4, method: 576 } }
+41430: kf3: chan token 0x806 death mirror: own space=0xcafe001a rows=62 log_epoch=62 last row commits (epoch, lo, hi, ms ago)=[(37, 12052a000, 12052e000, 173a56), (38, 12052e000, 12052f000, 173a56), (39, 12052f000, 120530000, 173a52), (3a, 120530000, 120533000, 173a4f), (3b, 120533000, 120534000, 173a4f), (3c, 120534000, 120536000, 173a4f), (3d, 120536000, 120537000, 173a4f), (3e, 120537000, 120538000, 173a4b)]; plane's mirror for the key now (same rows, space, rows): Some(Some((true, 3405643802, 62)))
+41431: kf3: kernel channel host 0x1002d REFUSED-AND-POISONED (§7)
+41432: kf3: display fps[cap=75(unset) h0[armed=60.000 tick=60.92 clamped=0 late_max_us=288922 kms=1.9 tear=0.0 core_imm=1 vblirq=0.0 src=free ho=0/0] copies=2.9 skipped=2919 checks=58.9 same=55679 ondemand=0 over=0 lock[ticks_coalesced=0 credits_coalesced=0 mailbox_coalesced=0 credits_deferred=1 granted=0 stale=0 probation=0]]
+41848: kayfabe: HELD-REPLY fn=Free depth=1 — this map reply WAITS for its rows
+41849: kf3: GSP rpc Free seq=0
+41850: kf3: TSPACE-RETIRE tok=0x806 host=0x1002d key=VasKey(13965662457344034928) ring_va=0xff00500000 released=true stale_binds=0/0 late=0 indeterminate=0 unresolved[walk=0 acquire=0 refused=0]
+41851: kf3: DOORBELL-LEDGER tok=0x00000806 route=translated emulated=0 forwarded=35 host=0x1002d fast=0
+41852: kf3: chan token 0x806 (host 0x1002d) RETIRED, forwarded=35 submissions=1 splits=0/0 serves=2 last_put=Some(35) gp_get=None store_views=1 privilege=Some(ChannelPrivilege { level: 2, uvm_owned: false }) dead=Some("ring: Rewrite { gp: 34, why: NoCeObject { subch: 4, method: 576 } }") inca=[refused_methods=0 subdevice_masks=0 control_entries=0 ext_base_unapplied=0] gr_tier=false gr[methods=0 inert_binds=0 objects=[]] gp_get_by_engine=(false, 0)
+41853: kf3: act free: 0xc1d00019:0xff040004: translated host 0x1002d (1502 us, off the GSP lock)
+41854: kayfabe: HELD-REPLY-POSTED n=1 — their rows are on the host now
+41855: kf3: GSP rpc Free seq=0
+41856: kf3: GSP rpc Free seq=0

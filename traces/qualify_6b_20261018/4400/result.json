@@ -1,0 +1,260 @@
+{
+  "classification": "MEASURED",
+  "evidence": "4400/result.json",
+  "run": 4400,
+  "candidate": "baa2977527c4509145e8033143bd664f768175a6",
+  "captured": "2026-10-22T11:45:43.914260+00:00",
+  "complete": true,
+  "result": {
+    "classification": "MEASURED",
+    "arm": "FULL2",
+    "run": 4400,
+    "rev": "baa2977527c4509145e8033143bd664f768175a6",
+    "workloads": [
+      "blender-01",
+      "catia-07",
+      "creo-04",
+      "energy-04",
+      "enscape-01",
+      "maya-07",
+      "medical-04",
+      "solidworks-08",
+      "unreal_engine-01"
+    ],
+    "iterations": 2,
+    "resolution": "FullHD",
+    "verdict": "FAIL",
+    "reason": "GUEST_EVENT",
+    "sample": {
+      "classification": "MEASURED",
+      "time": "2026-10-22T13:42:58.471357+02:00",
+      "arm": "FULL2",
+      "run": 4400,
+      "sample": 70,
+      "completed": false,
+      "completed_workloads": [
+        "blender-01",
+        "catia-07",
+        "creo-04"
+      ],
+      "failed": false,
+      "subtest": [
+        "energy-04",
+        "05_F3NetherlandsAnimated"
+      ],
+      "guest153": 3,
+      "guest4101": 0,
+      "boot_unchanged": true,
+      "budget_refusals": 0,
+      "counters": {
+        "pointer_large_entries": 43376,
+        "pointer_entry_max_bytes": 1043244,
+        "refused_scan_budget": 0,
+        "poisoned": 1
+      },
+      "task": 4,
+      "qemu_before": 10548521,
+      "qemu_after": 10556163,
+      "viewperf_nonzero_exits": []
+    },
+    "events": [
+      {
+        "record": 15056,
+        "time": "2026-10-22T11:42:36.1530728+02:00",
+        "provider": "nvlddmkm",
+        "id": 153,
+        "message": null
+      },
+      {
+        "record": 15055,
+        "time": "2026-10-22T11:42:36.1410334+02:00",
+        "provider": "nvlddmkm",
+        "id": 153,
+        "message": null
+      },
+      {
+        "record": 15054,
+        "time": "2026-10-22T11:42:35.4571589+02:00",
+        "provider": "nvlddmkm",
+        "id": 153,
+        "message": null
+      }
+    ],
+    "ended": "2026-10-22T13:43:11.608914+02:00",
+    "controller_exit": 0,
+    "host_stop": {
+      "classification": "MEASURED",
+      "time": "2026-10-22T13:43:12.072274+02:00",
+      "new_host_xids": 0,
+      "rm_unloads_15min": 1,
+      "reason": "COMPLETE_REQUESTED",
+      "qemu_pid": 2111419
+    },
+    "agent_exit": -15,
+    "restoration": {
+      "classification": "MEASURED",
+      "time": "2026-10-22T13:43:24.403010+02:00",
+      "cuda": {
+        "before": 0,
+        "after": 0,
+        "reloaded": false
+      },
+      "gdm": "active",
+      "nvidia_bound": true,
+      "smi_exit": 0
+    },
+    "restored": true
+  },
+  "qemu_bytes": 10788357,
+  "qemu_sha256": "aad036e149070e182f68117db7c15bb956ec718e4457f185f728a33d76ecb332",
+  "retirement_lines": 162,
+  "counter_maxima": {
+    "pointer_large_entries": 43376,
+    "pointer_entry_max_bytes": 1043244,
+    "refused_scan_budget": 0,
+    "poisoned": 1
+  },
+  "observed_retirement_counter_sums": {
+    "pointer_large_entries": 86752,
+    "pointer_entry_max_bytes": 22289660,
+    "refused_scan_budget": 0,
+    "poisoned": 0
+  },
+  "budget_diagnostics_first30": [],
+  "progress_strands_first100": [],
+  "user_ring_refusal_lines": 0,
+  "broker": {
+    "stats_windows": 1516,
+    "duration_seconds_approx": 1580.25,
+    "feedbacks": 0,
+    "new_content_presents": 0,
+    "repeat_presents": 0,
+    "discarded": 14522,
+    "errors": [
+      {
+        "line": 1568,
+        "diagnostic": "nvkvm-broker: client detached: closed the connection (14534 attach, 14534 commit, 0 rejected; 0 cursor, 0 cursor refused)"
+      }
+    ],
+    "new_content_fps_approx": 0.0,
+    "repeat_per_second_approx": 0.0,
+    "max_new_content_gap_us": 0,
+    "gaps_per_minute_approx": {
+      "cg33": 0.0,
+      "cg50": 0.0,
+      "cg100": 0.0
+    },
+    "one_percent_low": null,
+    "point_one_percent_low": null,
+    "quantile_limitation": "Stock master broker stats provide threshold counts and window maxima, not a raw new-content gap series. No percentile values inferred.",
+    "scope": "whole VM session; no-present intervals are not rendering performance scores"
+  },
+  "backing": {
+    "classification": "MEASURED",
+    "size_unchanged": true,
+    "mtime_unchanged": true
+  },
+  "flags": {
+    "KF3_WIN_USER_CHANNELS_PASSTHROUGH": "1",
+    "KF3_WIN_TWIN_DEFAPI_OBJECT": "1",
+    "KF3_KERNEL_GR_CE": "1",
+    "KF3_KERNEL_GR_WORK": "1",
+    "KF3_TRANSLATED_CE_RELAY": "1",
+    "KF3_DEFERRED_API": "1",
+    "KF3_PREEMPT_BIND_PROBE": "1",
+    "KF3_DISPLAY_IMP_ENABLE": "1",
+    "KF3_DISPLAY_CTRL_PROBE": "1",
+    "KF3_ZCULL_BIND_PROBE": "1",
+    "KF3_SW_RUNLIST_HOST_OWNED": "1",
+    "KF3_ASYNC_PREEMPT": "1",
+    "KF3_GFX_POOL_PROBE": "1",
+    "KF3_SW_RUNLIST_PROBE": "1",
+    "KF3_MEMORY_LIST_PROBE": "1",
+    "KF3_DISPLAY_SDR_COLOR": "1",
+    "KF3_DISPLAY_CAPS_PROBE": "1",
+    "KF3_DISPLAY_LUT_MIRROR": "1",
+    "KF3_DISPLAY_ILUT_OFFSET_256": "1",
+    "KF3_LIFECYCLE_COUNT": "1",
+    "KF3_LIFECYCLE_PERIOD_S": "5",
+    "KF3_TSG_MIRROR": "0",
+    "KF3_DIAG_PROGRESS": "1000"
+  },
+  "process_controls": {
+    "classification": "MEASURED",
+    "passed": true,
+    "controls": [
+      {
+        "expected": 0,
+        "pid": 5004,
+        "actual": 0
+      },
+      {
+        "expected": 7,
+        "pid": 14804,
+        "actual": 7
+      },
+      {
+        "expected": 9,
+        "pid": 14752,
+        "actual": 9
+      }
+    ],
+    "observed": [
+      {
+        "time": "2026-10-22T09:17:35.1827991Z",
+        "pid": 5004,
+        "name": "cmd.exe",
+        "exit": 0
+      },
+      {
+        "time": "2026-10-22T09:17:35.1827992Z",
+        "pid": 14804,
+        "name": "cmd.exe",
+        "exit": 7
+      },
+      {
+        "time": "2026-10-22T09:17:36.1948608Z",
+        "pid": 14752,
+        "name": "cmd.exe",
+        "exit": 9
+      }
+    ]
+  },
+  "vendor_scores": [
+    {
+      "run": "result_2026-10-22-11-17-54",
+      "version": "1.0.1",
+      "source": "result.json",
+      "composite": 40.92,
+      "renderer": "GeForce RTX 4070",
+      "workload": "blender-01"
+    },
+    {
+      "run": "result_2026-10-22-11-17-54",
+      "version": "1.0.6",
+      "source": "result.json",
+      "composite": 50.38,
+      "renderer": "GeForce RTX 4070",
+      "workload": "catia-07"
+    },
+    {
+      "run": "result_2026-10-22-11-17-54",
+      "version": "1.0.1",
+      "source": "result.json",
+      "composite": 72.71,
+      "renderer": "GeForce RTX 4070",
+      "workload": "creo-04"
+    }
+  ],
+  "export_errors": [],
+  "no_ce_object_failure_events": 1,
+  "no_ce_object_mentions": 3,
+  "failure_channel": {
+    "host": "0x1002d",
+    "guest_token": "0x806",
+    "gp": 34,
+    "forwarded": 35,
+    "subchannel": 4,
+    "method": 576
+  }
+}
