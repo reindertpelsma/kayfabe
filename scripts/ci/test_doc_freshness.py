@@ -191,6 +191,36 @@ class FreshnessTests(unittest.TestCase):
         )
         self.assertIn("stale-suspect", self.kinds())
 
+    def test_generic_environment_assignment_is_checked(self):
+        self.write("docs/ok.md", self.document(day="2026-01-01", body="`REMOVED_SETTING=1`"))
+        self.assertIn("stale-suspect", self.kinds())
+
+    def test_root_source_path_cannot_resolve_inside_archive(self):
+        self.write("archive/crates/gone/src/lib.rs", "// old implementation\n")
+        self.git("add", ".")
+        self.write("docs/ok.md", self.document(day="2026-01-01", body="`crates/gone/src/lib.rs`"))
+        self.assertIn("stale-suspect", self.kinds())
+
+    def test_root_source_path_cannot_resolve_to_unrelated_nested_path(self):
+        self.write("tools/fixture/scripts/gone.py", "# unrelated fixture\n")
+        self.git("add", ".")
+        self.write("docs/ok.md", self.document(day="2026-01-01", body="`scripts/gone.py`"))
+        self.assertIn("stale-suspect", self.kinds())
+
+    def test_existing_remote_branch_is_not_dead(self):
+        self.git(
+            "-c",
+            "user.name=Fixture",
+            "-c",
+            "user.email=fixture@example.org",
+            "commit",
+            "-qm",
+            "fixture",
+        )
+        self.git("update-ref", "refs/remotes/origin/codex/present", "HEAD")
+        self.write("docs/ok.md", self.document(day="2026-01-01", body="branch `codex/present`"))
+        self.assertEqual(self.run_check()["documents"][0]["dead_references"], [])
+
     def test_literal_relative_link_must_resolve(self):
         self.write("docs/ok.md", self.document(body="[missing](missing.md)"))
         self.assertIn("broken-link", self.kinds())
