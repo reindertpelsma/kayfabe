@@ -1,3 +1,8 @@
+MEASURED: full Phase 1 CATIA completed, official composite 50.83 (n=1),
+versus VFIO 63.10/63.13 (n=2); baseline CATIA Failed. At the checkpoint,
+large Pointer counter=8005, maximum length=1042740 bytes, zero budget refusals,
+poisoned relays, guest153/4101, RM unloads, reboots and host Xids. Creo started.
+
 MEASURED: Phase 1 CATIA 03_ThreeLoftJetsDarkMirror completed at 06:19:42
 CEST. Counter checkpoint: pointer_large_entries=30, maximum descriptor 1025068
 bytes, zero budget refusals/poisoned/guest153/4101/hostXid. The large case was

@@ -1,0 +1,33 @@
+{
+  "classification": "MEASURED",
+  "captured_host": "2026-10-22T06:21:58.373857+02:00",
+  "run": 3454,
+  "label": "fix",
+  "cuda_gate": {
+    "before": 0,
+    "after": 0,
+    "reloaded": false
+  },
+  "new_host_xids": 0,
+  "rm_unload_markers_total_log": 0,
+  "reboots_after_creation": 0,
+  "counter_maxima_observed": {
+    "pointer_large_entries": 8005,
+    "pointer_entry_max_bytes": 1042740,
+    "refused_scan_budget": 0,
+    "poisoned": 0
+  },
+  "budget_refusal_records": 0,
+  "progress_strand_records": 0,
+  "guest_153_records_observed": 0,
+  "guest_4101_records_observed": 0,
+  "application_1000_records_observed": 0,
+  "boot_values_observed": [
+    "2026-10-22T04:05:36.5000000+02:00"
+  ],
+  "failed_subtests": [],
+  "viewperf_kill_count": "UNVERIFIED; failed subtests are not an exact process-kill census",
+  "guest_event_count_scope": "baseline lower bound across saved samples; fix uses a fixed initial-boot cutoff",
+  "export_read_errors": [],
+  "unread_status_samples": []
+}
