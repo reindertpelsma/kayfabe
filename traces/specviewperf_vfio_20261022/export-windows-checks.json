@@ -1,0 +1,62 @@
+{
+  "green": {
+    "checks": [
+      {
+        "name": "exclusive-file-is-reported",
+        "passed": true
+      },
+      {
+        "name": "exclusive-file-name-is-preserved",
+        "passed": true
+      },
+      {
+        "name": "other-file-is-still-exported",
+        "passed": true
+      },
+      {
+        "name": "missing-table-is-allowed",
+        "passed": true
+      },
+      {
+        "name": "closed-file-becomes-readable",
+        "passed": true
+      },
+      {
+        "name": "completed-export-has-no-errors",
+        "passed": true
+      }
+    ],
+    "failed": 0,
+    "passed": 6
+  },
+  "mutant": {
+    "checks": [
+      {
+        "name": "exclusive-file-is-reported",
+        "passed": false
+      },
+      {
+        "name": "exclusive-file-name-is-preserved",
+        "passed": false
+      },
+      {
+        "name": "other-file-is-still-exported",
+        "passed": true
+      },
+      {
+        "name": "missing-table-is-allowed",
+        "passed": true
+      },
+      {
+        "name": "closed-file-becomes-readable",
+        "passed": true
+      },
+      {
+        "name": "completed-export-has-no-errors",
+        "passed": true
+      }
+    ],
+    "failed": 2,
+    "passed": 4
+  }
+}

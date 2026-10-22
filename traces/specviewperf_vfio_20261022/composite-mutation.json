@@ -1,0 +1,5 @@
+{
+  "mutant": "qualify-failed-or-unfinished-composites",
+  "failing_tests": 2,
+  "rc": 1
+}

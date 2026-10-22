@@ -33,6 +33,31 @@ def parse_statuses(text):
     return dict(re.findall(r'\[Workload:\s*([a-z0-9_-]+)\]\s+(Completed|Failed)\b',text))
 
 
+
+def scores_from_export(data, arm):
+    statuses = {}
+    fallback = PurePosixPath(data['root'].replace('\\', '/')).name
+    for record in data['files']:
+        parts = PurePosixPath(record['path'].replace('\\', '/')).parts
+        if parts[-1] == 'run-log.txt' and (len(parts) == 1 or parts[-2].startswith('result_')):
+            run = next((part for part in parts if part.startswith('result_')), fallback)
+            statuses[run] = parse_statuses(record['text'])
+    rows = []
+    for score in data.get('scores', []):
+        status = statuses.get(score['run'], {}).get(score['workload'], 'Incomplete')
+        reported = score.get('composite')
+        qualified = None
+        if status == 'Completed' and reported is not None:
+            qualified = float(reported)
+            if not math.isfinite(qualified) or qualified <= 0:
+                raise ValueError('invalid completed workload composite')
+        rows.append({'arm': arm, 'run': score['run'], 'workload': score['workload'],
+                     'composite': qualified, 'reported_composite': reported,
+                     'workload_status': status, 'source': score.get('source', 'result.json'),
+                     'version': score.get('version', '')})
+    return rows
+
+
 def rows_from_export(data,arm):
     fallback=PurePosixPath(data['root'].replace('\\','/')).name
     statuses={}
@@ -60,9 +85,14 @@ def main():
     p.add_argument('export',type=Path)
     p.add_argument('--arm',required=True)
     p.add_argument('--output',type=Path)
+    p.add_argument('--scores-output',type=Path)
     a=p.parse_args()
     data=json.loads(a.export.read_text(encoding='utf-8-sig'))
     rows=rows_from_export(data,a.arm)
+    if a.scores_output:
+        with a.scores_output.open('w', newline='') as scores_file:
+            writer=csv.DictWriter(scores_file,fieldnames=['arm','run','workload','composite','reported_composite','workload_status','source','version'],lineterminator='\n')
+            writer.writeheader();writer.writerows(scores_from_export(data,a.arm))
     fields=['arm','run','workload','subtest','fps','frames','seconds','workload_status']
     stream=a.output.open('w',newline='') if a.output else sys.stdout
     try:

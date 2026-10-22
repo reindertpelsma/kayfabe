@@ -1,5 +1,5 @@
 # GPU-free Windows integration tests. Run through the guest agent as SYSTEM.
-param([string]$ExportScript='C:\Users\Public\codex-VF1\export-text.ps1')
+param([string]$ExportScript='C:\Users\Public\codex-VF1\export-text.ps1',[string]$ReportPath='C:\Users\Public\codex-VF1\export-integration-last.json')
 $ErrorActionPreference='Stop'
 if (-not (Test-Path -LiteralPath $ExportScript)) {throw 'EXPECTED RED: export-text.ps1 is absent'}
 $root='C:\Users\Public\codex-VF1-export-test-'+[guid]::NewGuid().ToString('N')
@@ -21,7 +21,9 @@ try {
  Check 'closed-file-becomes-readable' (@($second.files).Count -eq 2)
  Check 'completed-export-has-no-errors' (@($second.errors).Count -eq 0)
  $passed=@($checks | Where-Object {$_.passed}).Count
- @{passed=$passed;failed=($checks.Count-$passed);checks=@($checks.ToArray())} | ConvertTo-Json -Depth 6 -Compress
+ $report=@{passed=$passed;failed=($checks.Count-$passed);checks=@($checks.ToArray())} | ConvertTo-Json -Depth 6 -Compress
+ [IO.File]::WriteAllText($ReportPath,$report)
+ $report
  if ($passed -ne $checks.Count) {throw 'Export integration checks failed'}
 } finally {
  if ($null -ne $lock) {$lock.Dispose()}
