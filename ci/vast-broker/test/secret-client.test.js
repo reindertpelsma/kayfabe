@@ -28,7 +28,7 @@ fs.writeFileSync(args[args.indexOf('-o')+1],JSON.stringify(body));process.stdout
   await writeFile(join(directory,'sleep'),'#!/bin/sh\nexit 0\n',{mode:0o700});
   const prelude="printf() { if [[ \"${1:-}\" = '::add-mask::%s\\n' ]]; then builtin printf '%s\\n' \"$2\" >> \"$MASKS\"; fi; builtin printf \"$@\"; }\n";
   const output=join(directory,'output');await writeFile(output,'');
-  const r=spawnSync('bash',[...(trace?['-x']:[]),'-c',prelude+script],{encoding:'utf8',timeout:10000,env:{...process.env,PATH:directory+':'+process.env.PATH,WORKER_URL:url,WORKER_PATH:path,PR_NUMBER:'7',TARGET_SHA:'a'.repeat(40),GH_TOKEN:'mock-job-token',ACTIONS_ID_TOKEN_REQUEST_TOKEN:'mock-request-token',ACTIONS_ID_TOKEN_REQUEST_URL:'https://oidc.example/request?test=1',GITHUB_OUTPUT:output,MASKS:join(directory,'masks'),CALLS:join(directory,'calls'),FAILURE:failure,PENDING:pending?'1':'0'}});
+  const r=spawnSync('bash',[...(trace?['-x']:[]),'-c',prelude+script],{encoding:'utf8',timeout:10000,env:{...process.env,PATH:directory+':'+process.env.PATH,WORKER_URL:url,WORKER_PATH:path,PR_NUMBER:'7',TARGET_SHA:'a'.repeat(40),GH_TOKEN:'mock-job-token',ACTIONS_ID_TOKEN_REQUEST_TOKEN:'mock-request-token',ACTIONS_ID_TOKEN_REQUEST_URL:'https://oidc.example/request?test=1',GITHUB_OUTPUT:output,GITHUB_STEP_SUMMARY:join(directory,'summary'),MASKS:join(directory,'masks'),CALLS:join(directory,'calls'),FAILURE:failure,PENDING:pending?'1':'0'}});
   const calls=await readFile(join(directory,'calls'),'utf8').then(JSON.parse).catch(()=>[]);
   return {...r,calls,outputs:await readFile(output,'utf8'),visible:r.stdout.split('\n').filter(x=>!x.startsWith('::add-mask::')).join('\n')+'\n'+r.stderr};
  }finally{await rm(directory,{recursive:true});}

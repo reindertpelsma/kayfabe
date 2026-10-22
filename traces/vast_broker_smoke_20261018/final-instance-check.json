@@ -1,0 +1,29 @@
+{
+  "run": "v3-local-20261022",
+  "real_create_attempts": 0,
+  "real_spend_usd": 0,
+  "matching_run_instances": 0,
+  "provider": {
+    "result": {
+      "keys": [
+        "success",
+        "total_instances",
+        "label_counts",
+        "instances_found",
+        "instances",
+        "next_token"
+      ],
+      "instances_type": "array",
+      "count": 0,
+      "success": true
+    },
+    "calls": [
+      {
+        "path": "/api/v1/instances/",
+        "status": 200,
+        "redirect": false,
+        "ms": 410
+      }
+    ]
+  }
+}

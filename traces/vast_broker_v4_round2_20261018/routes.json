@@ -1,0 +1,62 @@
+{
+  "run": "round2-docker-pass-and-fail",
+  "controller_routes": [
+    {
+      "route_method": "rent POST",
+      "n": 2,
+      "http_counts": {
+        "200": 2
+      },
+      "wall_ms_min": 975.773,
+      "wall_ms_max": 1081.461,
+      "response_bytes_min": 428,
+      "response_bytes_max": 429
+    },
+    {
+      "route_method": "report POST",
+      "n": 2,
+      "http_counts": {
+        "401": 2
+      },
+      "wall_ms_min": 10.918,
+      "wall_ms_max": 14.167,
+      "response_bytes_min": 97,
+      "response_bytes_max": 97
+    },
+    {
+      "route_method": "scheduled GET",
+      "n": 7,
+      "http_counts": {
+        "200": 7
+      },
+      "wall_ms_min": 8.393,
+      "wall_ms_max": 196.4,
+      "response_bytes_min": 2,
+      "response_bytes_max": 2
+    },
+    {
+      "route_method": "status GET",
+      "n": 118,
+      "http_counts": {
+        "200": 118
+      },
+      "wall_ms_min": 7.413,
+      "wall_ms_max": 958.763,
+      "response_bytes_min": 427,
+      "response_bytes_max": 1120
+    },
+    {
+      "route_method": "logs GET",
+      "n": 126,
+      "http_counts": {
+        "200": 126
+      },
+      "wall_ms_min": 5.463,
+      "wall_ms_max": 35.962,
+      "response_bytes_min": 82,
+      "response_bytes_max": 456
+    }
+  ],
+  "box_callback_counts_in": "live.json",
+  "cpu_ms": "NOT MEASURED in round 2; wall duration is not CPU; earlier native OS CPU samples remain under vast_broker_v4_20261018"
+}

@@ -1,0 +1,2 @@
+MEASURED: 2026-10-22 run v3-live-credit-20261022, instance 57212118; provider log object downloaded; sanitized excerpts below (not a VM boot proof).
+libvirt: QEMU Driver error : Domain not found: no domain with matching name 'C.57212118'

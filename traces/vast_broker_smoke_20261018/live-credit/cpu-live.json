@@ -1,0 +1,230 @@
+[
+  {
+    "route": "rent-cache",
+    "n": 5,
+    "cpu_min_ms": 7.888,
+    "cpu_max_ms": 10.338,
+    "samples": [
+      {
+        "status": 200,
+        "bytes": 181,
+        "cpu_ms": 8.959,
+        "wall_ms": 12.681
+      },
+      {
+        "status": 200,
+        "bytes": 181,
+        "cpu_ms": 10.338,
+        "wall_ms": 15.824
+      },
+      {
+        "status": 200,
+        "bytes": 181,
+        "cpu_ms": 9.999,
+        "wall_ms": 15.362
+      },
+      {
+        "status": 200,
+        "bytes": 181,
+        "cpu_ms": 9.795,
+        "wall_ms": 15.045
+      },
+      {
+        "status": 200,
+        "bytes": 181,
+        "cpu_ms": 7.888,
+        "wall_ms": 16.725
+      }
+    ]
+  },
+  {
+    "route": "status-terminal",
+    "n": 5,
+    "cpu_min_ms": 3.887,
+    "cpu_max_ms": 5.654,
+    "samples": [
+      {
+        "status": 200,
+        "bytes": 181,
+        "cpu_ms": 4.755,
+        "wall_ms": 7.62
+      },
+      {
+        "status": 200,
+        "bytes": 181,
+        "cpu_ms": 4.434,
+        "wall_ms": 7.754
+      },
+      {
+        "status": 200,
+        "bytes": 181,
+        "cpu_ms": 4.328,
+        "wall_ms": 7.244
+      },
+      {
+        "status": 200,
+        "bytes": 181,
+        "cpu_ms": 3.887,
+        "wall_ms": 7.264
+      },
+      {
+        "status": 200,
+        "bytes": 181,
+        "cpu_ms": 5.654,
+        "wall_ms": 9.383
+      }
+    ]
+  },
+  {
+    "route": "stop-idempotent",
+    "n": 5,
+    "cpu_min_ms": 4.163,
+    "cpu_max_ms": 5.314,
+    "samples": [
+      {
+        "status": 200,
+        "bytes": 181,
+        "cpu_ms": 4.707,
+        "wall_ms": 8.377
+      },
+      {
+        "status": 200,
+        "bytes": 181,
+        "cpu_ms": 4.163,
+        "wall_ms": 9.06
+      },
+      {
+        "status": 200,
+        "bytes": 181,
+        "cpu_ms": 4.3,
+        "wall_ms": 7.46
+      },
+      {
+        "status": 200,
+        "bytes": 181,
+        "cpu_ms": 4.351,
+        "wall_ms": 7.233
+      },
+      {
+        "status": 200,
+        "bytes": 181,
+        "cpu_ms": 5.314,
+        "wall_ms": 8.479
+      }
+    ]
+  },
+  {
+    "route": "report-revoked",
+    "n": 5,
+    "cpu_min_ms": 3.59,
+    "cpu_max_ms": 4.862,
+    "samples": [
+      {
+        "status": 401,
+        "bytes": 90,
+        "cpu_ms": 4.862,
+        "wall_ms": 8.504
+      },
+      {
+        "status": 401,
+        "bytes": 90,
+        "cpu_ms": 4.828,
+        "wall_ms": 9.352
+      },
+      {
+        "status": 401,
+        "bytes": 90,
+        "cpu_ms": 3.59,
+        "wall_ms": 7.917
+      },
+      {
+        "status": 401,
+        "bytes": 90,
+        "cpu_ms": 3.722,
+        "wall_ms": 8.047
+      },
+      {
+        "status": 401,
+        "bytes": 90,
+        "cpu_ms": 3.761,
+        "wall_ms": 8.13
+      }
+    ]
+  },
+  {
+    "route": "stop-all-empty",
+    "n": 5,
+    "cpu_min_ms": 4.355,
+    "cpu_max_ms": 7.032,
+    "samples": [
+      {
+        "status": 200,
+        "bytes": 19,
+        "cpu_ms": 4.451,
+        "wall_ms": 12.204
+      },
+      {
+        "status": 200,
+        "bytes": 19,
+        "cpu_ms": 4.987,
+        "wall_ms": 19.898
+      },
+      {
+        "status": 200,
+        "bytes": 19,
+        "cpu_ms": 4.608,
+        "wall_ms": 11.335
+      },
+      {
+        "status": 200,
+        "bytes": 19,
+        "cpu_ms": 7.032,
+        "wall_ms": 40.974
+      },
+      {
+        "status": 200,
+        "bytes": 19,
+        "cpu_ms": 4.355,
+        "wall_ms": 14.523
+      }
+    ]
+  },
+  {
+    "route": "cron-empty",
+    "n": 5,
+    "cpu_min_ms": 3.378,
+    "cpu_max_ms": 4.104,
+    "samples": [
+      {
+        "status": 200,
+        "bytes": 2,
+        "cpu_ms": 4.065,
+        "wall_ms": 24.554
+      },
+      {
+        "status": 200,
+        "bytes": 2,
+        "cpu_ms": 4.104,
+        "wall_ms": 15.532
+      },
+      {
+        "status": 200,
+        "bytes": 2,
+        "cpu_ms": 3.689,
+        "wall_ms": 11.323
+      },
+      {
+        "status": 200,
+        "bytes": 2,
+        "cpu_ms": 3.927,
+        "wall_ms": 19.137
+      },
+      {
+        "status": 200,
+        "bytes": 2,
+        "cpu_ms": 3.378,
+        "wall_ms": 10.5
+      }
+    ]
+  }
+]

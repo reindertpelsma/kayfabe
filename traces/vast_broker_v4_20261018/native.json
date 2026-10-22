@@ -1,0 +1,592 @@
+{
+  "mode": "NATIVE_WORKER_MOCK_PROVIDER",
+  "results": [
+    {
+      "scenario": "pass-kill",
+      "verdict": "PASS",
+      "grace_kept_before_cleanup": true,
+      "mock_provider_absent": true,
+      "ledger_settled": true,
+      "clock": "SYNTHETIC",
+      "live_box": false,
+      "slow_upload_check": "PASS"
+    },
+    {
+      "scenario": "pass-cron",
+      "verdict": "PASS",
+      "grace_kept_before_cleanup": true,
+      "mock_provider_absent": true,
+      "ledger_settled": true,
+      "clock": "SYNTHETIC",
+      "live_box": false,
+      "slow_upload_check": "NOT_RUN"
+    },
+    {
+      "scenario": "fail",
+      "verdict": "FAIL",
+      "grace_kept_before_cleanup": true,
+      "mock_provider_absent": true,
+      "ledger_settled": true,
+      "clock": "SYNTHETIC",
+      "live_box": false,
+      "slow_upload_check": "NOT_RUN"
+    }
+  ],
+  "routes": [
+    {
+      "route": "rent",
+      "method": "POST",
+      "status": 200,
+      "response_bytes": 424,
+      "wall_ms": 27.492
+    },
+    {
+      "route": "scheduled",
+      "method": "GET",
+      "status": 200,
+      "response_bytes": 2,
+      "wall_ms": 11.994
+    },
+    {
+      "route": "report",
+      "method": "POST",
+      "status": 409,
+      "response_bytes": 94,
+      "wall_ms": 18.848
+    },
+    {
+      "route": "report",
+      "method": "POST",
+      "status": 401,
+      "response_bytes": 97,
+      "wall_ms": 9.548
+    },
+    {
+      "route": "report",
+      "method": "POST",
+      "status": 200,
+      "response_bytes": 21,
+      "wall_ms": 20.547
+    },
+    {
+      "route": "report",
+      "method": "POST",
+      "status": 200,
+      "response_bytes": 21,
+      "wall_ms": 17.267
+    },
+    {
+      "route": "report",
+      "method": "POST",
+      "status": 200,
+      "response_bytes": 21,
+      "wall_ms": 14.526
+    },
+    {
+      "route": "report",
+      "method": "POST",
+      "status": 200,
+      "response_bytes": 21,
+      "wall_ms": 12.96
+    },
+    {
+      "route": "report",
+      "method": "POST",
+      "status": 200,
+      "response_bytes": 21,
+      "wall_ms": 11.698
+    },
+    {
+      "route": "report",
+      "method": "POST",
+      "status": 200,
+      "response_bytes": 21,
+      "wall_ms": 11.981
+    },
+    {
+      "route": "report",
+      "method": "POST",
+      "status": 200,
+      "response_bytes": 21,
+      "wall_ms": 12.746
+    },
+    {
+      "route": "report",
+      "method": "POST",
+      "status": 200,
+      "response_bytes": 21,
+      "wall_ms": 11.776
+    },
+    {
+      "route": "report",
+      "method": "POST",
+      "status": 200,
+      "response_bytes": 21,
+      "wall_ms": 12.469
+    },
+    {
+      "route": "report",
+      "method": "POST",
+      "status": 200,
+      "response_bytes": 21,
+      "wall_ms": 11.382
+    },
+    {
+      "route": "report",
+      "method": "POST",
+      "status": 200,
+      "response_bytes": 21,
+      "wall_ms": 11.046
+    },
+    {
+      "route": "report",
+      "method": "POST",
+      "status": 200,
+      "response_bytes": 21,
+      "wall_ms": 11.728
+    },
+    {
+      "route": "report",
+      "method": "POST",
+      "status": 200,
+      "response_bytes": 21,
+      "wall_ms": 12.166
+    },
+    {
+      "route": "logs",
+      "method": "GET",
+      "status": 200,
+      "response_bytes": 298,
+      "wall_ms": 7.463
+    },
+    {
+      "route": "logs",
+      "method": "GET",
+      "status": 200,
+      "response_bytes": 158,
+      "wall_ms": 7.604
+    },
+    {
+      "route": "logs",
+      "method": "GET",
+      "status": 200,
+      "response_bytes": 159,
+      "wall_ms": 7.637
+    },
+    {
+      "route": "logs",
+      "method": "GET",
+      "status": 200,
+      "response_bytes": 106,
+      "wall_ms": 7.391
+    },
+    {
+      "route": "logs",
+      "method": "GET",
+      "status": 200,
+      "response_bytes": 88,
+      "wall_ms": 8.116
+    },
+    {
+      "route": "logs",
+      "method": "GET",
+      "status": 200,
+      "response_bytes": 88,
+      "wall_ms": 8.481
+    },
+    {
+      "route": "report",
+      "method": "POST",
+      "status": 200,
+      "response_bytes": 53,
+      "wall_ms": 10.505
+    },
+    {
+      "route": "status",
+      "method": "GET",
+      "status": 200,
+      "response_bytes": 809,
+      "wall_ms": 7.4
+    },
+    {
+      "route": "kill",
+      "method": "POST",
+      "status": 200,
+      "response_bytes": 20,
+      "wall_ms": 26.179
+    },
+    {
+      "route": "rent",
+      "method": "POST",
+      "status": 200,
+      "response_bytes": 423,
+      "wall_ms": 19.442
+    },
+    {
+      "route": "report",
+      "method": "POST",
+      "status": 409,
+      "response_bytes": 94,
+      "wall_ms": 12.081
+    },
+    {
+      "route": "report",
+      "method": "POST",
+      "status": 401,
+      "response_bytes": 97,
+      "wall_ms": 6.946
+    },
+    {
+      "route": "report",
+      "method": "POST",
+      "status": 200,
+      "response_bytes": 21,
+      "wall_ms": 12.568
+    },
+    {
+      "route": "report",
+      "method": "POST",
+      "status": 200,
+      "response_bytes": 21,
+      "wall_ms": 12.257
+    },
+    {
+      "route": "report",
+      "method": "POST",
+      "status": 200,
+      "response_bytes": 21,
+      "wall_ms": 11.324
+    },
+    {
+      "route": "report",
+      "method": "POST",
+      "status": 200,
+      "response_bytes": 21,
+      "wall_ms": 11.426
+    },
+    {
+      "route": "report",
+      "method": "POST",
+      "status": 200,
+      "response_bytes": 21,
+      "wall_ms": 11.261
+    },
+    {
+      "route": "report",
+      "method": "POST",
+      "status": 200,
+      "response_bytes": 21,
+      "wall_ms": 13.921
+    },
+    {
+      "route": "report",
+      "method": "POST",
+      "status": 200,
+      "response_bytes": 21,
+      "wall_ms": 12.964
+    },
+    {
+      "route": "report",
+      "method": "POST",
+      "status": 200,
+      "response_bytes": 21,
+      "wall_ms": 11.361
+    },
+    {
+      "route": "report",
+      "method": "POST",
+      "status": 200,
+      "response_bytes": 21,
+      "wall_ms": 10.882
+    },
+    {
+      "route": "report",
+      "method": "POST",
+      "status": 200,
+      "response_bytes": 21,
+      "wall_ms": 11.884
+    },
+    {
+      "route": "report",
+      "method": "POST",
+      "status": 200,
+      "response_bytes": 21,
+      "wall_ms": 13.357
+    },
+    {
+      "route": "report",
+      "method": "POST",
+      "status": 200,
+      "response_bytes": 21,
+      "wall_ms": 12.008
+    },
+    {
+      "route": "report",
+      "method": "POST",
+      "status": 200,
+      "response_bytes": 21,
+      "wall_ms": 10.794
+    },
+    {
+      "route": "logs",
+      "method": "GET",
+      "status": 200,
+      "response_bytes": 298,
+      "wall_ms": 7.927
+    },
+    {
+      "route": "logs",
+      "method": "GET",
+      "status": 200,
+      "response_bytes": 158,
+      "wall_ms": 7.472
+    },
+    {
+      "route": "logs",
+      "method": "GET",
+      "status": 200,
+      "response_bytes": 159,
+      "wall_ms": 23.593
+    },
+    {
+      "route": "logs",
+      "method": "GET",
+      "status": 200,
+      "response_bytes": 106,
+      "wall_ms": 8.102
+    },
+    {
+      "route": "logs",
+      "method": "GET",
+      "status": 200,
+      "response_bytes": 88,
+      "wall_ms": 7.22
+    },
+    {
+      "route": "logs",
+      "method": "GET",
+      "status": 200,
+      "response_bytes": 88,
+      "wall_ms": 7.101
+    },
+    {
+      "route": "report",
+      "method": "POST",
+      "status": 200,
+      "response_bytes": 53,
+      "wall_ms": 11.869
+    },
+    {
+      "route": "status",
+      "method": "GET",
+      "status": 200,
+      "response_bytes": 793,
+      "wall_ms": 7.31
+    },
+    {
+      "route": "scheduled",
+      "method": "GET",
+      "status": 200,
+      "response_bytes": 2,
+      "wall_ms": 6.481
+    },
+    {
+      "route": "scheduled",
+      "method": "GET",
+      "status": 200,
+      "response_bytes": 2,
+      "wall_ms": 16.719
+    },
+    {
+      "route": "rent",
+      "method": "POST",
+      "status": 200,
+      "response_bytes": 423,
+      "wall_ms": 24.4
+    },
+    {
+      "route": "report",
+      "method": "POST",
+      "status": 409,
+      "response_bytes": 94,
+      "wall_ms": 10.796
+    },
+    {
+      "route": "report",
+      "method": "POST",
+      "status": 401,
+      "response_bytes": 97,
+      "wall_ms": 7.33
+    },
+    {
+      "route": "report",
+      "method": "POST",
+      "status": 200,
+      "response_bytes": 21,
+      "wall_ms": 12.463
+    },
+    {
+      "route": "report",
+      "method": "POST",
+      "status": 200,
+      "response_bytes": 21,
+      "wall_ms": 13.029
+    },
+    {
+      "route": "report",
+      "method": "POST",
+      "status": 200,
+      "response_bytes": 21,
+      "wall_ms": 12.862
+    },
+    {
+      "route": "report",
+      "method": "POST",
+      "status": 200,
+      "response_bytes": 21,
+      "wall_ms": 14.16
+    },
+    {
+      "route": "report",
+      "method": "POST",
+      "status": 200,
+      "response_bytes": 21,
+      "wall_ms": 11.432
+    },
+    {
+      "route": "report",
+      "method": "POST",
+      "status": 200,
+      "response_bytes": 21,
+      "wall_ms": 10.47
+    },
+    {
+      "route": "report",
+      "method": "POST",
+      "status": 200,
+      "response_bytes": 21,
+      "wall_ms": 10.577
+    },
+    {
+      "route": "report",
+      "method": "POST",
+      "status": 200,
+      "response_bytes": 21,
+      "wall_ms": 10.675
+    },
+    {
+      "route": "report",
+      "method": "POST",
+      "status": 200,
+      "response_bytes": 21,
+      "wall_ms": 11.318
+    },
+    {
+      "route": "report",
+      "method": "POST",
+      "status": 200,
+      "response_bytes": 21,
+      "wall_ms": 11.126
+    },
+    {
+      "route": "report",
+      "method": "POST",
+      "status": 200,
+      "response_bytes": 21,
+      "wall_ms": 12.513
+    },
+    {
+      "route": "report",
+      "method": "POST",
+      "status": 200,
+      "response_bytes": 21,
+      "wall_ms": 11.453
+    },
+    {
+      "route": "report",
+      "method": "POST",
+      "status": 200,
+      "response_bytes": 21,
+      "wall_ms": 10.465
+    },
+    {
+      "route": "logs",
+      "method": "GET",
+      "status": 200,
+      "response_bytes": 298,
+      "wall_ms": 7.501
+    },
+    {
+      "route": "logs",
+      "method": "GET",
+      "status": 200,
+      "response_bytes": 158,
+      "wall_ms": 7.422
+    },
+    {
+      "route": "logs",
+      "method": "GET",
+      "status": 200,
+      "response_bytes": 159,
+      "wall_ms": 6.887
+    },
+    {
+      "route": "logs",
+      "method": "GET",
+      "status": 200,
+      "response_bytes": 106,
+      "wall_ms": 6.619
+    },
+    {
+      "route": "logs",
+      "method": "GET",
+      "status": 200,
+      "response_bytes": 88,
+      "wall_ms": 7.309
+    },
+    {
+      "route": "logs",
+      "method": "GET",
+      "status": 200,
+      "response_bytes": 88,
+      "wall_ms": 7.781
+    },
+    {
+      "route": "report",
+      "method": "POST",
+      "status": 200,
+      "response_bytes": 53,
+      "wall_ms": 10.313
+    },
+    {
+      "route": "status",
+      "method": "GET",
+      "status": 200,
+      "response_bytes": 809,
+      "wall_ms": 6.671
+    },
+    {
+      "route": "scheduled",
+      "method": "GET",
+      "status": 200,
+      "response_bytes": 2,
+      "wall_ms": 6.369
+    },
+    {
+      "route": "scheduled",
+      "method": "GET",
+      "status": 200,
+      "response_bytes": 2,
+      "wall_ms": 17.487
+    },
+    {
+      "route": "stop-all",
+      "method": "POST",
+      "status": 200,
+      "response_bytes": 20,
+      "wall_ms": 7.697
+    }
+  ],
+  "rentals_created_real": 0,
+  "spend_usd": 0
+}

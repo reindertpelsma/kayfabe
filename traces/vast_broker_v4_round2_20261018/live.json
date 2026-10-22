@@ -1,0 +1,1933 @@
+{
+  "date": "2026-10-22",
+  "source_revision": "88a3dbbc4",
+  "identity": "LOCAL_FAKE_GITHUB_JWKS",
+  "provider": "REAL_VAST_DOCKER_SSH",
+  "runtime": "wrangler 4.152.0",
+  "real_elapsed_clock": true,
+  "post_result_grace_s": 300,
+  "scheduled_period_s": 60,
+  "gpu_model": "RTX 5060",
+  "hourly_price_usd": 0.1511111111111111,
+  "results": [
+    {
+      "phase": "PASS",
+      "live_provider": true,
+      "create_to_absence_s": 56.046,
+      "result_to_absence_s": 34.488,
+      "result_received": true,
+      "structured_verdict": "PASS",
+      "api_id_and_label_absent": true,
+      "estimated_usd": 0.0023525506302162456,
+      "planted_clean": true,
+      "planted_exercised": true,
+      "log_bytes": 646,
+      "unauthenticated_result_status": 401,
+      "run": "round2-docker-pass",
+      "create_to_first_report_s": 16.474,
+      "callback_response_counts": {
+        "200": 16
+      },
+      "first_callback_sample": {
+        "actual_status": "running",
+        "cur_state": "running",
+        "intended_status": "running",
+        "provider_sample_at": 1792687300545,
+        "provider_sample_age_ms": 976
+      },
+      "kill_callback_to_worker_api_absence_s": 0.914,
+      "result_to_in_box_kill_s": 30.717,
+      "provider_transitions": [
+        {
+          "after_create_s": 0.664,
+          "actual_status": null,
+          "cur_state": "running",
+          "intended_status": "running",
+          "absent": false
+        },
+        {
+          "after_create_s": 11.866,
+          "actual_status": "loading",
+          "cur_state": "running",
+          "intended_status": "running",
+          "absent": false
+        },
+        {
+          "after_create_s": 15.498,
+          "actual_status": "running",
+          "cur_state": "running",
+          "intended_status": "running",
+          "absent": false
+        },
+        {
+          "after_create_s": 52.224,
+          "actual_status": null,
+          "cur_state": null,
+          "intended_status": null,
+          "absent": true
+        }
+      ]
+    },
+    {
+      "phase": "FAIL",
+      "live_provider": true,
+      "create_to_absence_s": 358.559,
+      "result_to_absence_s": 307.509,
+      "result_received": true,
+      "structured_verdict": "FAIL",
+      "api_id_and_label_absent": true,
+      "estimated_usd": 0.01505062505227548,
+      "planted_clean": true,
+      "planted_exercised": true,
+      "log_bytes": 646,
+      "unauthenticated_result_status": 401,
+      "run": "round2-docker-fail",
+      "create_to_first_report_s": 34.607,
+      "callback_response_counts": {
+        "200": 15
+      },
+      "first_callback_sample": {
+        "actual_status": "running",
+        "cur_state": "running",
+        "intended_status": "running",
+        "provider_sample_at": 1792687379155,
+        "provider_sample_age_ms": 754
+      },
+      "provider_transitions": [
+        {
+          "after_create_s": 0.666,
+          "actual_status": null,
+          "cur_state": "running",
+          "intended_status": "running",
+          "absent": false
+        },
+        {
+          "after_create_s": 26.567,
+          "actual_status": "loading",
+          "cur_state": "running",
+          "intended_status": "running",
+          "absent": false
+        },
+        {
+          "after_create_s": 30.211,
+          "actual_status": "running",
+          "cur_state": "running",
+          "intended_status": "running",
+          "absent": false
+        },
+        {
+          "after_create_s": 353.184,
+          "actual_status": null,
+          "cur_state": null,
+          "intended_status": null,
+          "absent": true
+        }
+      ]
+    }
+  ],
+  "estimated_two_flow_runs_usd": 0.017403175682491726,
+  "ssh": {
+    "attempted": true,
+    "exit": 0,
+    "login_marker": true,
+    "kill_cli_installed": true,
+    "wall_s": 1.405,
+    "login_hook_manual_implemented": false
+  },
+  "source_overlay": {
+    "source_index_matches": true,
+    "index_sha256": "1e403a63b115f80babd1d6efe90712eae2588bfca85997763c61850682d0df8e",
+    "overlaid_files": [
+      "policy.js:MODELS and IMAGE",
+      "vast.js:local vm=false",
+      "onstart.js:tiny work and PASS-only delayed CLI"
+    ]
+  },
+  "requests": [
+    {
+      "route": "rent",
+      "method": "POST",
+      "status": 200,
+      "response_bytes": 429,
+      "wall_ms": 975.773
+    },
+    {
+      "route": "report",
+      "method": "POST",
+      "status": 401,
+      "response_bytes": 97,
+      "wall_ms": 10.918
+    },
+    {
+      "route": "scheduled",
+      "method": "GET",
+      "status": 200,
+      "response_bytes": 2,
+      "wall_ms": 172.539
+    },
+    {
+      "route": "status",
+      "method": "GET",
+      "status": 200,
+      "response_bytes": 428,
+      "wall_ms": 193.155
+    },
+    {
+      "route": "logs",
+      "method": "GET",
+      "status": 200,
+      "response_bytes": 82,
+      "wall_ms": 13.583
+    },
+    {
+      "route": "status",
+      "method": "GET",
+      "status": 200,
+      "response_bytes": 429,
+      "wall_ms": 223.374
+    },
+    {
+      "route": "logs",
+      "method": "GET",
+      "status": 200,
+      "response_bytes": 82,
+      "wall_ms": 6.366
+    },
+    {
+      "route": "status",
+      "method": "GET",
+      "status": 200,
+      "response_bytes": 428,
+      "wall_ms": 180.217
+    },
+    {
+      "route": "logs",
+      "method": "GET",
+      "status": 200,
+      "response_bytes": 82,
+      "wall_ms": 8.958
+    },
+    {
+      "route": "status",
+      "method": "GET",
+      "status": 200,
+      "response_bytes": 428,
+      "wall_ms": 188.757
+    },
+    {
+      "route": "logs",
+      "method": "GET",
+      "status": 200,
+      "response_bytes": 82,
+      "wall_ms": 9.421
+    },
+    {
+      "route": "status",
+      "method": "GET",
+      "status": 200,
+      "response_bytes": 428,
+      "wall_ms": 176.509
+    },
+    {
+      "route": "logs",
+      "method": "GET",
+      "status": 200,
+      "response_bytes": 82,
+      "wall_ms": 5.674
+    },
+    {
+      "route": "status",
+      "method": "GET",
+      "status": 200,
+      "response_bytes": 877,
+      "wall_ms": 181.41
+    },
+    {
+      "route": "logs",
+      "method": "GET",
+      "status": 200,
+      "response_bytes": 456,
+      "wall_ms": 5.503
+    },
+    {
+      "route": "logs",
+      "method": "GET",
+      "status": 200,
+      "response_bytes": 158,
+      "wall_ms": 7.272
+    },
+    {
+      "route": "logs",
+      "method": "GET",
+      "status": 200,
+      "response_bytes": 104,
+      "wall_ms": 21.37
+    },
+    {
+      "route": "logs",
+      "method": "GET",
+      "status": 200,
+      "response_bytes": 86,
+      "wall_ms": 7.483
+    },
+    {
+      "route": "status",
+      "method": "GET",
+      "status": 200,
+      "response_bytes": 1111,
+      "wall_ms": 9.356
+    },
+    {
+      "route": "logs",
+      "method": "GET",
+      "status": 200,
+      "response_bytes": 159,
+      "wall_ms": 10.449
+    },
+    {
+      "route": "logs",
+      "method": "GET",
+      "status": 200,
+      "response_bytes": 227,
+      "wall_ms": 9.785
+    },
+    {
+      "route": "logs",
+      "method": "GET",
+      "status": 200,
+      "response_bytes": 88,
+      "wall_ms": 8.976
+    },
+    {
+      "route": "status",
+      "method": "GET",
+      "status": 200,
+      "response_bytes": 1111,
+      "wall_ms": 9.594
+    },
+    {
+      "route": "logs",
+      "method": "GET",
+      "status": 200,
+      "response_bytes": 88,
+      "wall_ms": 8.882
+    },
+    {
+      "route": "status",
+      "method": "GET",
+      "status": 200,
+      "response_bytes": 1110,
+      "wall_ms": 11.258
+    },
+    {
+      "route": "logs",
+      "method": "GET",
+      "status": 200,
+      "response_bytes": 88,
+      "wall_ms": 7.689
+    },
+    {
+      "route": "status",
+      "method": "GET",
+      "status": 200,
+      "response_bytes": 1111,
+      "wall_ms": 11.204
+    },
+    {
+      "route": "logs",
+      "method": "GET",
+      "status": 200,
+      "response_bytes": 88,
+      "wall_ms": 7.568
+    },
+    {
+      "route": "status",
+      "method": "GET",
+      "status": 200,
+      "response_bytes": 1111,
+      "wall_ms": 10.647
+    },
+    {
+      "route": "logs",
+      "method": "GET",
+      "status": 200,
+      "response_bytes": 88,
+      "wall_ms": 9.45
+    },
+    {
+      "route": "status",
+      "method": "GET",
+      "status": 200,
+      "response_bytes": 1110,
+      "wall_ms": 11.449
+    },
+    {
+      "route": "logs",
+      "method": "GET",
+      "status": 200,
+      "response_bytes": 88,
+      "wall_ms": 7.751
+    },
+    {
+      "route": "status",
+      "method": "GET",
+      "status": 200,
+      "response_bytes": 1111,
+      "wall_ms": 9.179
+    },
+    {
+      "route": "logs",
+      "method": "GET",
+      "status": 200,
+      "response_bytes": 88,
+      "wall_ms": 7.707
+    },
+    {
+      "route": "status",
+      "method": "GET",
+      "status": 200,
+      "response_bytes": 1111,
+      "wall_ms": 9.396
+    },
+    {
+      "route": "logs",
+      "method": "GET",
+      "status": 200,
+      "response_bytes": 88,
+      "wall_ms": 7.838
+    },
+    {
+      "route": "status",
+      "method": "GET",
+      "status": 200,
+      "response_bytes": 1110,
+      "wall_ms": 20.22
+    },
+    {
+      "route": "logs",
+      "method": "GET",
+      "status": 200,
+      "response_bytes": 88,
+      "wall_ms": 10.85
+    },
+    {
+      "route": "status",
+      "method": "GET",
+      "status": 200,
+      "response_bytes": 1120,
+      "wall_ms": 11.871
+    },
+    {
+      "route": "rent",
+      "method": "POST",
+      "status": 200,
+      "response_bytes": 428,
+      "wall_ms": 1081.461
+    },
+    {
+      "route": "report",
+      "method": "POST",
+      "status": 401,
+      "response_bytes": 97,
+      "wall_ms": 14.167
+    },
+    {
+      "route": "scheduled",
+      "method": "GET",
+      "status": 200,
+      "response_bytes": 2,
+      "wall_ms": 196.4
+    },
+    {
+      "route": "status",
+      "method": "GET",
+      "status": 200,
+      "response_bytes": 428,
+      "wall_ms": 189.768
+    },
+    {
+      "route": "logs",
+      "method": "GET",
+      "status": 200,
+      "response_bytes": 82,
+      "wall_ms": 25.836
+    },
+    {
+      "route": "status",
+      "method": "GET",
+      "status": 200,
+      "response_bytes": 429,
+      "wall_ms": 183.678
+    },
+    {
+      "route": "logs",
+      "method": "GET",
+      "status": 200,
+      "response_bytes": 82,
+      "wall_ms": 24.593
+    },
+    {
+      "route": "status",
+      "method": "GET",
+      "status": 200,
+      "response_bytes": 428,
+      "wall_ms": 193.64
+    },
+    {
+      "route": "logs",
+      "method": "GET",
+      "status": 200,
+      "response_bytes": 82,
+      "wall_ms": 12.587
+    },
+    {
+      "route": "status",
+      "method": "GET",
+      "status": 200,
+      "response_bytes": 428,
+      "wall_ms": 227.465
+    },
+    {
+      "route": "logs",
+      "method": "GET",
+      "status": 200,
+      "response_bytes": 82,
+      "wall_ms": 13.986
+    },
+    {
+      "route": "status",
+      "method": "GET",
+      "status": 200,
+      "response_bytes": 428,
+      "wall_ms": 176.294
+    },
+    {
+      "route": "logs",
+      "method": "GET",
+      "status": 200,
+      "response_bytes": 82,
+      "wall_ms": 19.054
+    },
+    {
+      "route": "status",
+      "method": "GET",
+      "status": 200,
+      "response_bytes": 427,
+      "wall_ms": 195.567
+    },
+    {
+      "route": "logs",
+      "method": "GET",
+      "status": 200,
+      "response_bytes": 82,
+      "wall_ms": 8.787
+    },
+    {
+      "route": "status",
+      "method": "GET",
+      "status": 200,
+      "response_bytes": 428,
+      "wall_ms": 159.399
+    },
+    {
+      "route": "logs",
+      "method": "GET",
+      "status": 200,
+      "response_bytes": 82,
+      "wall_ms": 6.058
+    },
+    {
+      "route": "status",
+      "method": "GET",
+      "status": 200,
+      "response_bytes": 428,
+      "wall_ms": 204.817
+    },
+    {
+      "route": "logs",
+      "method": "GET",
+      "status": 200,
+      "response_bytes": 82,
+      "wall_ms": 6.621
+    },
+    {
+      "route": "status",
+      "method": "GET",
+      "status": 200,
+      "response_bytes": 428,
+      "wall_ms": 188.772
+    },
+    {
+      "route": "logs",
+      "method": "GET",
+      "status": 200,
+      "response_bytes": 82,
+      "wall_ms": 9.012
+    },
+    {
+      "route": "status",
+      "method": "GET",
+      "status": 200,
+      "response_bytes": 428,
+      "wall_ms": 186.715
+    },
+    {
+      "route": "logs",
+      "method": "GET",
+      "status": 200,
+      "response_bytes": 82,
+      "wall_ms": 5.463
+    },
+    {
+      "route": "status",
+      "method": "GET",
+      "status": 200,
+      "response_bytes": 767,
+      "wall_ms": 353.552
+    },
+    {
+      "route": "logs",
+      "method": "GET",
+      "status": 200,
+      "response_bytes": 419,
+      "wall_ms": 7.229
+    },
+    {
+      "route": "logs",
+      "method": "GET",
+      "status": 200,
+      "response_bytes": 85,
+      "wall_ms": 8.075
+    },
+    {
+      "route": "status",
+      "method": "GET",
+      "status": 200,
+      "response_bytes": 768,
+      "wall_ms": 191.906
+    },
+    {
+      "route": "logs",
+      "method": "GET",
+      "status": 200,
+      "response_bytes": 85,
+      "wall_ms": 5.576
+    },
+    {
+      "route": "status",
+      "method": "GET",
+      "status": 200,
+      "response_bytes": 767,
+      "wall_ms": 186.197
+    },
+    {
+      "route": "logs",
+      "method": "GET",
+      "status": 200,
+      "response_bytes": 85,
+      "wall_ms": 5.846
+    },
+    {
+      "route": "status",
+      "method": "GET",
+      "status": 200,
+      "response_bytes": 896,
+      "wall_ms": 188.93
+    },
+    {
+      "route": "logs",
+      "method": "GET",
+      "status": 200,
+      "response_bytes": 158,
+      "wall_ms": 6.938
+    },
+    {
+      "route": "logs",
+      "method": "GET",
+      "status": 200,
+      "response_bytes": 140,
+      "wall_ms": 8.184
+    },
+    {
+      "route": "logs",
+      "method": "GET",
+      "status": 200,
+      "response_bytes": 86,
+      "wall_ms": 8.139
+    },
+    {
+      "route": "status",
+      "method": "GET",
+      "status": 200,
+      "response_bytes": 1110,
+      "wall_ms": 9.804
+    },
+    {
+      "route": "logs",
+      "method": "GET",
+      "status": 200,
+      "response_bytes": 159,
+      "wall_ms": 8.746
+    },
+    {
+      "route": "logs",
+      "method": "GET",
+      "status": 200,
+      "response_bytes": 227,
+      "wall_ms": 7.565
+    },
+    {
+      "route": "logs",
+      "method": "GET",
+      "status": 200,
+      "response_bytes": 88,
+      "wall_ms": 7.056
+    },
+    {
+      "route": "status",
+      "method": "GET",
+      "status": 200,
+      "response_bytes": 1111,
+      "wall_ms": 9.228
+    },
+    {
+      "route": "logs",
+      "method": "GET",
+      "status": 200,
+      "response_bytes": 88,
+      "wall_ms": 9.789
+    },
+    {
+      "route": "status",
+      "method": "GET",
+      "status": 200,
+      "response_bytes": 1111,
+      "wall_ms": 9.512
+    },
+    {
+      "route": "logs",
+      "method": "GET",
+      "status": 200,
+      "response_bytes": 88,
+      "wall_ms": 8.964
+    },
+    {
+      "route": "scheduled",
+      "method": "GET",
+      "status": 200,
+      "response_bytes": 2,
+      "wall_ms": 8.393
+    },
+    {
+      "route": "status",
+      "method": "GET",
+      "status": 200,
+      "response_bytes": 1111,
+      "wall_ms": 8.818
+    },
+    {
+      "route": "logs",
+      "method": "GET",
+      "status": 200,
+      "response_bytes": 88,
+      "wall_ms": 7.145
+    },
+    {
+      "route": "status",
+      "method": "GET",
+      "status": 200,
+      "response_bytes": 1111,
+      "wall_ms": 9.705
+    },
+    {
+      "route": "logs",
+      "method": "GET",
+      "status": 200,
+      "response_bytes": 88,
+      "wall_ms": 6.894
+    },
+    {
+      "route": "status",
+      "method": "GET",
+      "status": 200,
+      "response_bytes": 1111,
+      "wall_ms": 10.334
+    },
+    {
+      "route": "logs",
+      "method": "GET",
+      "status": 200,
+      "response_bytes": 88,
+      "wall_ms": 7.242
+    },
+    {
+      "route": "status",
+      "method": "GET",
+      "status": 200,
+      "response_bytes": 1111,
+      "wall_ms": 10.465
+    },
+    {
+      "route": "logs",
+      "method": "GET",
+      "status": 200,
+      "response_bytes": 88,
+      "wall_ms": 7.137
+    },
+    {
+      "route": "status",
+      "method": "GET",
+      "status": 200,
+      "response_bytes": 1111,
+      "wall_ms": 10.296
+    },
+    {
+      "route": "logs",
+      "method": "GET",
+      "status": 200,
+      "response_bytes": 88,
+      "wall_ms": 7.788
+    },
+    {
+      "route": "status",
+      "method": "GET",
+      "status": 200,
+      "response_bytes": 1110,
+      "wall_ms": 9.37
+    },
+    {
+      "route": "logs",
+      "method": "GET",
+      "status": 200,
+      "response_bytes": 88,
+      "wall_ms": 8.114
+    },
+    {
+      "route": "status",
+      "method": "GET",
+      "status": 200,
+      "response_bytes": 1111,
+      "wall_ms": 10.32
+    },
+    {
+      "route": "logs",
+      "method": "GET",
+      "status": 200,
+      "response_bytes": 88,
+      "wall_ms": 7.394
+    },
+    {
+      "route": "status",
+      "method": "GET",
+      "status": 200,
+      "response_bytes": 1111,
+      "wall_ms": 10.117
+    },
+    {
+      "route": "logs",
+      "method": "GET",
+      "status": 200,
+      "response_bytes": 88,
+      "wall_ms": 7.175
+    },
+    {
+      "route": "status",
+      "method": "GET",
+      "status": 200,
+      "response_bytes": 1111,
+      "wall_ms": 9.303
+    },
+    {
+      "route": "logs",
+      "method": "GET",
+      "status": 200,
+      "response_bytes": 88,
+      "wall_ms": 9.187
+    },
+    {
+      "route": "status",
+      "method": "GET",
+      "status": 200,
+      "response_bytes": 1110,
+      "wall_ms": 9.798
+    },
+    {
+      "route": "logs",
+      "method": "GET",
+      "status": 200,
+      "response_bytes": 88,
+      "wall_ms": 12.936
+    },
+    {
+      "route": "status",
+      "method": "GET",
+      "status": 200,
+      "response_bytes": 1110,
+      "wall_ms": 9.441
+    },
+    {
+      "route": "logs",
+      "method": "GET",
+      "status": 200,
+      "response_bytes": 88,
+      "wall_ms": 7.472
+    },
+    {
+      "route": "status",
+      "method": "GET",
+      "status": 200,
+      "response_bytes": 1111,
+      "wall_ms": 8.883
+    },
+    {
+      "route": "logs",
+      "method": "GET",
+      "status": 200,
+      "response_bytes": 88,
+      "wall_ms": 8.611
+    },
+    {
+      "route": "status",
+      "method": "GET",
+      "status": 200,
+      "response_bytes": 1110,
+      "wall_ms": 9.524
+    },
+    {
+      "route": "logs",
+      "method": "GET",
+      "status": 200,
+      "response_bytes": 88,
+      "wall_ms": 7.251
+    },
+    {
+      "route": "status",
+      "method": "GET",
+      "status": 200,
+      "response_bytes": 1110,
+      "wall_ms": 10.029
+    },
+    {
+      "route": "logs",
+      "method": "GET",
+      "status": 200,
+      "response_bytes": 88,
+      "wall_ms": 8.38
+    },
+    {
+      "route": "status",
+      "method": "GET",
+      "status": 200,
+      "response_bytes": 1110,
+      "wall_ms": 9.065
+    },
+    {
+      "route": "logs",
+      "method": "GET",
+      "status": 200,
+      "response_bytes": 88,
+      "wall_ms": 8.032
+    },
+    {
+      "route": "status",
+      "method": "GET",
+      "status": 200,
+      "response_bytes": 1110,
+      "wall_ms": 9.477
+    },
+    {
+      "route": "logs",
+      "method": "GET",
+      "status": 200,
+      "response_bytes": 88,
+      "wall_ms": 6.929
+    },
+    {
+      "route": "status",
+      "method": "GET",
+      "status": 200,
+      "response_bytes": 1110,
+      "wall_ms": 10.193
+    },
+    {
+      "route": "logs",
+      "method": "GET",
+      "status": 200,
+      "response_bytes": 88,
+      "wall_ms": 7.214
+    },
+    {
+      "route": "status",
+      "method": "GET",
+      "status": 200,
+      "response_bytes": 1110,
+      "wall_ms": 9.817
+    },
+    {
+      "route": "logs",
+      "method": "GET",
+      "status": 200,
+      "response_bytes": 88,
+      "wall_ms": 8.101
+    },
+    {
+      "route": "scheduled",
+      "method": "GET",
+      "status": 200,
+      "response_bytes": 2,
+      "wall_ms": 8.637
+    },
+    {
+      "route": "status",
+      "method": "GET",
+      "status": 200,
+      "response_bytes": 1110,
+      "wall_ms": 7.413
+    },
+    {
+      "route": "logs",
+      "method": "GET",
+      "status": 200,
+      "response_bytes": 88,
+      "wall_ms": 7.636
+    },
+    {
+      "route": "status",
+      "method": "GET",
+      "status": 200,
+      "response_bytes": 1110,
+      "wall_ms": 9.796
+    },
+    {
+      "route": "logs",
+      "method": "GET",
+      "status": 200,
+      "response_bytes": 88,
+      "wall_ms": 9.247
+    },
+    {
+      "route": "status",
+      "method": "GET",
+      "status": 200,
+      "response_bytes": 1110,
+      "wall_ms": 10.774
+    },
+    {
+      "route": "logs",
+      "method": "GET",
+      "status": 200,
+      "response_bytes": 88,
+      "wall_ms": 8.24
+    },
+    {
+      "route": "status",
+      "method": "GET",
+      "status": 200,
+      "response_bytes": 1110,
+      "wall_ms": 10.776
+    },
+    {
+      "route": "logs",
+      "method": "GET",
+      "status": 200,
+      "response_bytes": 88,
+      "wall_ms": 7.414
+    },
+    {
+      "route": "status",
+      "method": "GET",
+      "status": 200,
+      "response_bytes": 1110,
+      "wall_ms": 8.998
+    },
+    {
+      "route": "logs",
+      "method": "GET",
+      "status": 200,
+      "response_bytes": 88,
+      "wall_ms": 8.228
+    },
+    {
+      "route": "status",
+      "method": "GET",
+      "status": 200,
+      "response_bytes": 1110,
+      "wall_ms": 9.479
+    },
+    {
+      "route": "logs",
+      "method": "GET",
+      "status": 200,
+      "response_bytes": 88,
+      "wall_ms": 8.822
+    },
+    {
+      "route": "status",
+      "method": "GET",
+      "status": 200,
+      "response_bytes": 1111,
+      "wall_ms": 9.146
+    },
+    {
+      "route": "logs",
+      "method": "GET",
+      "status": 200,
+      "response_bytes": 88,
+      "wall_ms": 7.265
+    },
+    {
+      "route": "status",
+      "method": "GET",
+      "status": 200,
+      "response_bytes": 1110,
+      "wall_ms": 9.601
+    },
+    {
+      "route": "logs",
+      "method": "GET",
+      "status": 200,
+      "response_bytes": 88,
+      "wall_ms": 7.355
+    },
+    {
+      "route": "status",
+      "method": "GET",
+      "status": 200,
+      "response_bytes": 1110,
+      "wall_ms": 11.609
+    },
+    {
+      "route": "logs",
+      "method": "GET",
+      "status": 200,
+      "response_bytes": 88,
+      "wall_ms": 7.497
+    },
+    {
+      "route": "status",
+      "method": "GET",
+      "status": 200,
+      "response_bytes": 1110,
+      "wall_ms": 9.433
+    },
+    {
+      "route": "logs",
+      "method": "GET",
+      "status": 200,
+      "response_bytes": 88,
+      "wall_ms": 10.207
+    },
+    {
+      "route": "status",
+      "method": "GET",
+      "status": 200,
+      "response_bytes": 1110,
+      "wall_ms": 9.778
+    },
+    {
+      "route": "logs",
+      "method": "GET",
+      "status": 200,
+      "response_bytes": 88,
+      "wall_ms": 7.736
+    },
+    {
+      "route": "status",
+      "method": "GET",
+      "status": 200,
+      "response_bytes": 1110,
+      "wall_ms": 8.765
+    },
+    {
+      "route": "logs",
+      "method": "GET",
+      "status": 200,
+      "response_bytes": 88,
+      "wall_ms": 7.246
+    },
+    {
+      "route": "status",
+      "method": "GET",
+      "status": 200,
+      "response_bytes": 1110,
+      "wall_ms": 8.974
+    },
+    {
+      "route": "logs",
+      "method": "GET",
+      "status": 200,
+      "response_bytes": 88,
+      "wall_ms": 8.401
+    },
+    {
+      "route": "status",
+      "method": "GET",
+      "status": 200,
+      "response_bytes": 1110,
+      "wall_ms": 8.974
+    },
+    {
+      "route": "logs",
+      "method": "GET",
+      "status": 200,
+      "response_bytes": 88,
+      "wall_ms": 8.078
+    },
+    {
+      "route": "status",
+      "method": "GET",
+      "status": 200,
+      "response_bytes": 1110,
+      "wall_ms": 9.476
+    },
+    {
+      "route": "logs",
+      "method": "GET",
+      "status": 200,
+      "response_bytes": 88,
+      "wall_ms": 8.718
+    },
+    {
+      "route": "status",
+      "method": "GET",
+      "status": 200,
+      "response_bytes": 1111,
+      "wall_ms": 9.912
+    },
+    {
+      "route": "logs",
+      "method": "GET",
+      "status": 200,
+      "response_bytes": 88,
+      "wall_ms": 7.926
+    },
+    {
+      "route": "status",
+      "method": "GET",
+      "status": 200,
+      "response_bytes": 1109,
+      "wall_ms": 10.314
+    },
+    {
+      "route": "logs",
+      "method": "GET",
+      "status": 200,
+      "response_bytes": 88,
+      "wall_ms": 8.703
+    },
+    {
+      "route": "status",
+      "method": "GET",
+      "status": 200,
+      "response_bytes": 1110,
+      "wall_ms": 9.476
+    },
+    {
+      "route": "logs",
+      "method": "GET",
+      "status": 200,
+      "response_bytes": 88,
+      "wall_ms": 8.065
+    },
+    {
+      "route": "scheduled",
+      "method": "GET",
+      "status": 200,
+      "response_bytes": 2,
+      "wall_ms": 9.245
+    },
+    {
+      "route": "status",
+      "method": "GET",
+      "status": 200,
+      "response_bytes": 1109,
+      "wall_ms": 11.103
+    },
+    {
+      "route": "logs",
+      "method": "GET",
+      "status": 200,
+      "response_bytes": 88,
+      "wall_ms": 8.542
+    },
+    {
+      "route": "status",
+      "method": "GET",
+      "status": 200,
+      "response_bytes": 1110,
+      "wall_ms": 10.264
+    },
+    {
+      "route": "logs",
+      "method": "GET",
+      "status": 200,
+      "response_bytes": 88,
+      "wall_ms": 8.57
+    },
+    {
+      "route": "status",
+      "method": "GET",
+      "status": 200,
+      "response_bytes": 1109,
+      "wall_ms": 9.098
+    },
+    {
+      "route": "logs",
+      "method": "GET",
+      "status": 200,
+      "response_bytes": 88,
+      "wall_ms": 6.689
+    },
+    {
+      "route": "status",
+      "method": "GET",
+      "status": 200,
+      "response_bytes": 1110,
+      "wall_ms": 9.359
+    },
+    {
+      "route": "logs",
+      "method": "GET",
+      "status": 200,
+      "response_bytes": 88,
+      "wall_ms": 7.56
+    },
+    {
+      "route": "status",
+      "method": "GET",
+      "status": 200,
+      "response_bytes": 1110,
+      "wall_ms": 8.64
+    },
+    {
+      "route": "logs",
+      "method": "GET",
+      "status": 200,
+      "response_bytes": 88,
+      "wall_ms": 6.672
+    },
+    {
+      "route": "status",
+      "method": "GET",
+      "status": 200,
+      "response_bytes": 1110,
+      "wall_ms": 9.206
+    },
+    {
+      "route": "logs",
+      "method": "GET",
+      "status": 200,
+      "response_bytes": 88,
+      "wall_ms": 13.597
+    },
+    {
+      "route": "status",
+      "method": "GET",
+      "status": 200,
+      "response_bytes": 1110,
+      "wall_ms": 9.751
+    },
+    {
+      "route": "logs",
+      "method": "GET",
+      "status": 200,
+      "response_bytes": 88,
+      "wall_ms": 6.87
+    },
+    {
+      "route": "status",
+      "method": "GET",
+      "status": 200,
+      "response_bytes": 1109,
+      "wall_ms": 9.651
+    },
+    {
+      "route": "logs",
+      "method": "GET",
+      "status": 200,
+      "response_bytes": 88,
+      "wall_ms": 7.387
+    },
+    {
+      "route": "status",
+      "method": "GET",
+      "status": 200,
+      "response_bytes": 1099,
+      "wall_ms": 8.905
+    },
+    {
+      "route": "logs",
+      "method": "GET",
+      "status": 200,
+      "response_bytes": 88,
+      "wall_ms": 8.109
+    },
+    {
+      "route": "status",
+      "method": "GET",
+      "status": 200,
+      "response_bytes": 1110,
+      "wall_ms": 9.218
+    },
+    {
+      "route": "logs",
+      "method": "GET",
+      "status": 200,
+      "response_bytes": 88,
+      "wall_ms": 7.04
+    },
+    {
+      "route": "status",
+      "method": "GET",
+      "status": 200,
+      "response_bytes": 1110,
+      "wall_ms": 9.55
+    },
+    {
+      "route": "logs",
+      "method": "GET",
+      "status": 200,
+      "response_bytes": 88,
+      "wall_ms": 7.178
+    },
+    {
+      "route": "status",
+      "method": "GET",
+      "status": 200,
+      "response_bytes": 1110,
+      "wall_ms": 8.356
+    },
+    {
+      "route": "logs",
+      "method": "GET",
+      "status": 200,
+      "response_bytes": 88,
+      "wall_ms": 7.221
+    },
+    {
+      "route": "status",
+      "method": "GET",
+      "status": 200,
+      "response_bytes": 1110,
+      "wall_ms": 14.628
+    },
+    {
+      "route": "logs",
+      "method": "GET",
+      "status": 200,
+      "response_bytes": 88,
+      "wall_ms": 10.832
+    },
+    {
+      "route": "status",
+      "method": "GET",
+      "status": 200,
+      "response_bytes": 1110,
+      "wall_ms": 13.874
+    },
+    {
+      "route": "logs",
+      "method": "GET",
+      "status": 200,
+      "response_bytes": 88,
+      "wall_ms": 7.114
+    },
+    {
+      "route": "status",
+      "method": "GET",
+      "status": 200,
+      "response_bytes": 1110,
+      "wall_ms": 8.921
+    },
+    {
+      "route": "logs",
+      "method": "GET",
+      "status": 200,
+      "response_bytes": 88,
+      "wall_ms": 7.2
+    },
+    {
+      "route": "status",
+      "method": "GET",
+      "status": 200,
+      "response_bytes": 1110,
+      "wall_ms": 9.332
+    },
+    {
+      "route": "logs",
+      "method": "GET",
+      "status": 200,
+      "response_bytes": 88,
+      "wall_ms": 7.4
+    },
+    {
+      "route": "status",
+      "method": "GET",
+      "status": 200,
+      "response_bytes": 1110,
+      "wall_ms": 15.839
+    },
+    {
+      "route": "logs",
+      "method": "GET",
+      "status": 200,
+      "response_bytes": 88,
+      "wall_ms": 8.665
+    },
+    {
+      "route": "status",
+      "method": "GET",
+      "status": 200,
+      "response_bytes": 1110,
+      "wall_ms": 10.126
+    },
+    {
+      "route": "logs",
+      "method": "GET",
+      "status": 200,
+      "response_bytes": 88,
+      "wall_ms": 7.531
+    },
+    {
+      "route": "scheduled",
+      "method": "GET",
+      "status": 200,
+      "response_bytes": 2,
+      "wall_ms": 8.896
+    },
+    {
+      "route": "status",
+      "method": "GET",
+      "status": 200,
+      "response_bytes": 1110,
+      "wall_ms": 7.892
+    },
+    {
+      "route": "logs",
+      "method": "GET",
+      "status": 200,
+      "response_bytes": 88,
+      "wall_ms": 7.137
+    },
+    {
+      "route": "status",
+      "method": "GET",
+      "status": 200,
+      "response_bytes": 1110,
+      "wall_ms": 9.258
+    },
+    {
+      "route": "logs",
+      "method": "GET",
+      "status": 200,
+      "response_bytes": 88,
+      "wall_ms": 7.23
+    },
+    {
+      "route": "status",
+      "method": "GET",
+      "status": 200,
+      "response_bytes": 1110,
+      "wall_ms": 9.376
+    },
+    {
+      "route": "logs",
+      "method": "GET",
+      "status": 200,
+      "response_bytes": 88,
+      "wall_ms": 7.411
+    },
+    {
+      "route": "status",
+      "method": "GET",
+      "status": 200,
+      "response_bytes": 1110,
+      "wall_ms": 11.853
+    },
+    {
+      "route": "logs",
+      "method": "GET",
+      "status": 200,
+      "response_bytes": 88,
+      "wall_ms": 8.671
+    },
+    {
+      "route": "status",
+      "method": "GET",
+      "status": 200,
+      "response_bytes": 1110,
+      "wall_ms": 11.027
+    },
+    {
+      "route": "logs",
+      "method": "GET",
+      "status": 200,
+      "response_bytes": 88,
+      "wall_ms": 12.824
+    },
+    {
+      "route": "status",
+      "method": "GET",
+      "status": 200,
+      "response_bytes": 1110,
+      "wall_ms": 9.839
+    },
+    {
+      "route": "logs",
+      "method": "GET",
+      "status": 200,
+      "response_bytes": 88,
+      "wall_ms": 7.972
+    },
+    {
+      "route": "status",
+      "method": "GET",
+      "status": 200,
+      "response_bytes": 1110,
+      "wall_ms": 10.182
+    },
+    {
+      "route": "logs",
+      "method": "GET",
+      "status": 200,
+      "response_bytes": 88,
+      "wall_ms": 9.994
+    },
+    {
+      "route": "status",
+      "method": "GET",
+      "status": 200,
+      "response_bytes": 1110,
+      "wall_ms": 9.369
+    },
+    {
+      "route": "logs",
+      "method": "GET",
+      "status": 200,
+      "response_bytes": 88,
+      "wall_ms": 7.011
+    },
+    {
+      "route": "status",
+      "method": "GET",
+      "status": 200,
+      "response_bytes": 1110,
+      "wall_ms": 8.863
+    },
+    {
+      "route": "logs",
+      "method": "GET",
+      "status": 200,
+      "response_bytes": 88,
+      "wall_ms": 8.053
+    },
+    {
+      "route": "status",
+      "method": "GET",
+      "status": 200,
+      "response_bytes": 1110,
+      "wall_ms": 10.393
+    },
+    {
+      "route": "logs",
+      "method": "GET",
+      "status": 200,
+      "response_bytes": 88,
+      "wall_ms": 7.093
+    },
+    {
+      "route": "status",
+      "method": "GET",
+      "status": 200,
+      "response_bytes": 1110,
+      "wall_ms": 10.173
+    },
+    {
+      "route": "logs",
+      "method": "GET",
+      "status": 200,
+      "response_bytes": 88,
+      "wall_ms": 8.331
+    },
+    {
+      "route": "status",
+      "method": "GET",
+      "status": 200,
+      "response_bytes": 1110,
+      "wall_ms": 9.093
+    },
+    {
+      "route": "logs",
+      "method": "GET",
+      "status": 200,
+      "response_bytes": 88,
+      "wall_ms": 7.217
+    },
+    {
+      "route": "status",
+      "method": "GET",
+      "status": 200,
+      "response_bytes": 1110,
+      "wall_ms": 12.551
+    },
+    {
+      "route": "logs",
+      "method": "GET",
+      "status": 200,
+      "response_bytes": 88,
+      "wall_ms": 7.491
+    },
+    {
+      "route": "status",
+      "method": "GET",
+      "status": 200,
+      "response_bytes": 1110,
+      "wall_ms": 10.101
+    },
+    {
+      "route": "logs",
+      "method": "GET",
+      "status": 200,
+      "response_bytes": 88,
+      "wall_ms": 7.455
+    },
+    {
+      "route": "status",
+      "method": "GET",
+      "status": 200,
+      "response_bytes": 1110,
+      "wall_ms": 10.861
+    },
+    {
+      "route": "logs",
+      "method": "GET",
+      "status": 200,
+      "response_bytes": 88,
+      "wall_ms": 8.197
+    },
+    {
+      "route": "status",
+      "method": "GET",
+      "status": 200,
+      "response_bytes": 1110,
+      "wall_ms": 8.926
+    },
+    {
+      "route": "logs",
+      "method": "GET",
+      "status": 200,
+      "response_bytes": 88,
+      "wall_ms": 10.073
+    },
+    {
+      "route": "status",
+      "method": "GET",
+      "status": 200,
+      "response_bytes": 1110,
+      "wall_ms": 9.831
+    },
+    {
+      "route": "logs",
+      "method": "GET",
+      "status": 200,
+      "response_bytes": 88,
+      "wall_ms": 35.962
+    },
+    {
+      "route": "status",
+      "method": "GET",
+      "status": 200,
+      "response_bytes": 1110,
+      "wall_ms": 9.21
+    },
+    {
+      "route": "logs",
+      "method": "GET",
+      "status": 200,
+      "response_bytes": 88,
+      "wall_ms": 7.204
+    },
+    {
+      "route": "scheduled",
+      "method": "GET",
+      "status": 200,
+      "response_bytes": 2,
+      "wall_ms": 10.219
+    },
+    {
+      "route": "status",
+      "method": "GET",
+      "status": 200,
+      "response_bytes": 1109,
+      "wall_ms": 7.768
+    },
+    {
+      "route": "logs",
+      "method": "GET",
+      "status": 200,
+      "response_bytes": 88,
+      "wall_ms": 7.809
+    },
+    {
+      "route": "status",
+      "method": "GET",
+      "status": 200,
+      "response_bytes": 1110,
+      "wall_ms": 15.17
+    },
+    {
+      "route": "logs",
+      "method": "GET",
+      "status": 200,
+      "response_bytes": 88,
+      "wall_ms": 7.958
+    },
+    {
+      "route": "status",
+      "method": "GET",
+      "status": 200,
+      "response_bytes": 1110,
+      "wall_ms": 9.176
+    },
+    {
+      "route": "logs",
+      "method": "GET",
+      "status": 200,
+      "response_bytes": 88,
+      "wall_ms": 8.303
+    },
+    {
+      "route": "status",
+      "method": "GET",
+      "status": 200,
+      "response_bytes": 1110,
+      "wall_ms": 11.433
+    },
+    {
+      "route": "logs",
+      "method": "GET",
+      "status": 200,
+      "response_bytes": 88,
+      "wall_ms": 16.807
+    },
+    {
+      "route": "status",
+      "method": "GET",
+      "status": 200,
+      "response_bytes": 1109,
+      "wall_ms": 9.901
+    },
+    {
+      "route": "logs",
+      "method": "GET",
+      "status": 200,
+      "response_bytes": 88,
+      "wall_ms": 8.387
+    },
+    {
+      "route": "status",
+      "method": "GET",
+      "status": 200,
+      "response_bytes": 1110,
+      "wall_ms": 10.074
+    },
+    {
+      "route": "logs",
+      "method": "GET",
+      "status": 200,
+      "response_bytes": 88,
+      "wall_ms": 7.475
+    },
+    {
+      "route": "status",
+      "method": "GET",
+      "status": 200,
+      "response_bytes": 1110,
+      "wall_ms": 9.174
+    },
+    {
+      "route": "logs",
+      "method": "GET",
+      "status": 200,
+      "response_bytes": 88,
+      "wall_ms": 7.646
+    },
+    {
+      "route": "status",
+      "method": "GET",
+      "status": 200,
+      "response_bytes": 1109,
+      "wall_ms": 9.387
+    },
+    {
+      "route": "logs",
+      "method": "GET",
+      "status": 200,
+      "response_bytes": 88,
+      "wall_ms": 7.115
+    },
+    {
+      "route": "status",
+      "method": "GET",
+      "status": 200,
+      "response_bytes": 1110,
+      "wall_ms": 8.954
+    },
+    {
+      "route": "logs",
+      "method": "GET",
+      "status": 200,
+      "response_bytes": 88,
+      "wall_ms": 6.87
+    },
+    {
+      "route": "status",
+      "method": "GET",
+      "status": 200,
+      "response_bytes": 1110,
+      "wall_ms": 8.993
+    },
+    {
+      "route": "logs",
+      "method": "GET",
+      "status": 200,
+      "response_bytes": 88,
+      "wall_ms": 9.015
+    },
+    {
+      "route": "status",
+      "method": "GET",
+      "status": 200,
+      "response_bytes": 1110,
+      "wall_ms": 11.301
+    },
+    {
+      "route": "logs",
+      "method": "GET",
+      "status": 200,
+      "response_bytes": 88,
+      "wall_ms": 7.432
+    },
+    {
+      "route": "status",
+      "method": "GET",
+      "status": 200,
+      "response_bytes": 1120,
+      "wall_ms": 958.763
+    },
+    {
+      "route": "logs",
+      "method": "GET",
+      "status": 200,
+      "response_bytes": 88,
+      "wall_ms": 6.033
+    },
+    {
+      "route": "status",
+      "method": "GET",
+      "status": 200,
+      "response_bytes": 1120,
+      "wall_ms": 11.323
+    }
+  ]
+}

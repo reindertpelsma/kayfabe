@@ -12,7 +12,7 @@ tag = "v1"
 new_sqlite_classes = ["BrokerLedger"]
 
 [triggers]
-crons = ["*/5 * * * *"]
+crons = ["* * * * *"]
 
 [vars]
 RENTING_ENABLED = "false"
@@ -24,7 +24,9 @@ ALLOWED_BASE_BRANCHES = '["master"]'
 PATH_SKIP_PATTERNS = '["**/*.md","docs/**","traces/**","archive/**","LICENSE*",".github/ISSUE_TEMPLATE/**"]'
 CREDIT_RESERVE_USD = "8"
 MAX_PRICE_USD_HOUR = "0.5"
-TTL_MINUTES = "150"
+TTL_MINUTES = "20"
+PROVISION_MINUTES = "10"
+POST_RESULT_GRACE_MINUTES = "5"
 DAILY_RENTALS = "4"
 DAILY_SPEND_USD = "3"
 ROLLING_SPEND_USD = "30"

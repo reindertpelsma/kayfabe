@@ -1,0 +1,5 @@
+Callback ingress ready: report route only, exact Vast source-IP allowlist, deny until IP configured.
+{"event":"ingress_rejected","ip_allowed":true,"source_matches":false,"route_matches":false}
+{"event":"callback_forwarded","status":401}
+{"event":"callback_forwarded","status":401}
+{"event":"callback_forwarded","status":401}

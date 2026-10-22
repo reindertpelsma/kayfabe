@@ -1,0 +1,8 @@
+{"event": "provider_response", "method": "POST", "path": "/api/v0/bundles/", "status": 200, "wall_ms": 442, "keys": ["offers", "truncated"]}
+{"event": "provider_response", "method": "GET", "path": "/api/v0/users/current/", "status": 200, "wall_ms": 130, "keys": ["balance", "credit"]}
+{"event": "intent", "label": "kf-ci-1792673075630-1", "scriptHash": "8f3f74aed7b9fde0278397f2968e3dfe7078a8afdebf9b2886ba9c583e45e5b4", "fields": ["image", "vm", "disk", "runtype", "args", "onstart", "label", "target_state", "cancel_unavail"], "vm": true, "runtype": "args", "disk": 120, "path": "/api/v0/asks/48798407/"}
+{"event": "created", "id": 57212118, "label": "kf-ci-1792673075630-1"}
+{"event": "provider_response", "method": "PUT", "path": "/api/v0/asks/48798407/", "status": 200, "wall_ms": 408, "keys": ["success", "new_contract", "instance_api_key"], "success": true}
+{"event": "provider_response", "method": "GET", "path": "/api/v0/instances/57212118/", "status": 200, "wall_ms": 348, "keys": ["instances"]}
+{"event": "provider_response", "method": "GET", "path": "/api/v0/instances/57212118/", "status": 200, "wall_ms": 158, "keys": ["instances"]}
+{"event": "provider_response", "method": "DELETE", "path": "/api/v0/instances/57212118/", "status": 200, "wall_ms": 388, "keys": ["success"]}

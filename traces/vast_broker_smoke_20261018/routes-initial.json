@@ -1,0 +1,146 @@
+[
+  {
+    "method": "GET",
+    "path": "/unknown",
+    "auth": "missing",
+    "status": 404,
+    "bytes": 9,
+    "wall_ms": 30.332,
+    "body": "Not found"
+  },
+  {
+    "method": "POST",
+    "path": "/rent",
+    "auth": "missing",
+    "status": 503,
+    "bytes": 94,
+    "wall_ms": 24.232,
+    "body": "{\"state\":\"RENTING_DISABLED\",\"verdict\":\"UNAVAILABLE\",\"log_tail_sanitised\":\"\",\"bytes_dropped\":0}"
+  },
+  {
+    "method": "POST",
+    "path": "/rent",
+    "auth": "bad",
+    "status": 503,
+    "bytes": 94,
+    "wall_ms": 8.403,
+    "body": "{\"state\":\"RENTING_DISABLED\",\"verdict\":\"UNAVAILABLE\",\"log_tail_sanitised\":\"\",\"bytes_dropped\":0}"
+  },
+  {
+    "method": "GET",
+    "path": "/rent",
+    "auth": "missing",
+    "status": 503,
+    "bytes": 94,
+    "wall_ms": 7.768,
+    "body": "{\"state\":\"RENTING_DISABLED\",\"verdict\":\"UNAVAILABLE\",\"log_tail_sanitised\":\"\",\"bytes_dropped\":0}"
+  },
+  {
+    "method": "GET",
+    "path": "/rent",
+    "auth": "bad",
+    "status": 503,
+    "bytes": 94,
+    "wall_ms": 8.465,
+    "body": "{\"state\":\"RENTING_DISABLED\",\"verdict\":\"UNAVAILABLE\",\"log_tail_sanitised\":\"\",\"bytes_dropped\":0}"
+  },
+  {
+    "method": "GET",
+    "path": "/status/123-1",
+    "auth": "missing",
+    "status": 401,
+    "bytes": 90,
+    "wall_ms": 10.561,
+    "body": "{\"state\":\"UNAUTHORIZED\",\"verdict\":\"UNAVAILABLE\",\"log_tail_sanitised\":\"\",\"bytes_dropped\":0}"
+  },
+  {
+    "method": "GET",
+    "path": "/status/123-1",
+    "auth": "bad",
+    "status": 401,
+    "bytes": 90,
+    "wall_ms": 8.61,
+    "body": "{\"state\":\"UNAUTHORIZED\",\"verdict\":\"UNAVAILABLE\",\"log_tail_sanitised\":\"\",\"bytes_dropped\":0}"
+  },
+  {
+    "method": "GET",
+    "path": "/status/124-1",
+    "auth": "missing",
+    "status": 401,
+    "bytes": 90,
+    "wall_ms": 7.839,
+    "body": "{\"state\":\"UNAUTHORIZED\",\"verdict\":\"UNAVAILABLE\",\"log_tail_sanitised\":\"\",\"bytes_dropped\":0}"
+  },
+  {
+    "method": "GET",
+    "path": "/status/124-1",
+    "auth": "bad",
+    "status": 401,
+    "bytes": 90,
+    "wall_ms": 8.839,
+    "body": "{\"state\":\"UNAUTHORIZED\",\"verdict\":\"UNAVAILABLE\",\"log_tail_sanitised\":\"\",\"bytes_dropped\":0}"
+  },
+  {
+    "method": "POST",
+    "path": "/stop/123-1",
+    "auth": "missing",
+    "status": 401,
+    "bytes": 90,
+    "wall_ms": 9.523,
+    "body": "{\"state\":\"UNAUTHORIZED\",\"verdict\":\"UNAVAILABLE\",\"log_tail_sanitised\":\"\",\"bytes_dropped\":0}"
+  },
+  {
+    "method": "POST",
+    "path": "/stop/123-1",
+    "auth": "bad",
+    "status": 400,
+    "bytes": 89,
+    "wall_ms": 8.429,
+    "body": "{\"state\":\"BAD_REQUEST\",\"verdict\":\"UNAVAILABLE\",\"log_tail_sanitised\":\"\",\"bytes_dropped\":0}"
+  },
+  {
+    "method": "POST",
+    "path": "/report/123-1",
+    "auth": "missing",
+    "status": 401,
+    "bytes": 90,
+    "wall_ms": 10.24,
+    "body": "{\"state\":\"UNAUTHORIZED\",\"verdict\":\"UNAVAILABLE\",\"log_tail_sanitised\":\"\",\"bytes_dropped\":0}"
+  },
+  {
+    "method": "POST",
+    "path": "/report/123-1",
+    "auth": "bad",
+    "status": 401,
+    "bytes": 90,
+    "wall_ms": 10.318,
+    "body": "{\"state\":\"UNAUTHORIZED\",\"verdict\":\"UNAVAILABLE\",\"log_tail_sanitised\":\"\",\"bytes_dropped\":0}"
+  },
+  {
+    "method": "POST",
+    "path": "/stop-all",
+    "auth": "missing",
+    "status": 401,
+    "bytes": 90,
+    "wall_ms": 8.929,
+    "body": "{\"state\":\"UNAUTHORIZED\",\"verdict\":\"UNAVAILABLE\",\"log_tail_sanitised\":\"\",\"bytes_dropped\":0}"
+  },
+  {
+    "method": "POST",
+    "path": "/stop-all",
+    "auth": "bad",
+    "status": 400,
+    "bytes": 89,
+    "wall_ms": 8.313,
+    "body": "{\"state\":\"BAD_REQUEST\",\"verdict\":\"UNAVAILABLE\",\"log_tail_sanitised\":\"\",\"bytes_dropped\":0}"
+  },
+  {
+    "method": "GET",
+    "path": "/cdn-cgi/local/scheduled",
+    "auth": "missing",
+    "status": 200,
+    "bytes": 2,
+    "wall_ms": 8.095,
+    "body": "ok"
+  }
+]

@@ -1,0 +1,34 @@
+{
+  "date": "2026-10-22",
+  "runs": [
+    {
+      "run": "round2-early-status",
+      "estimated_usd": 0.00027541289506135164,
+      "create_to_verified_absence_s": 6.76,
+      "exact_id_and_label_absent": true
+    },
+    {
+      "run": "round2-kvm-launch",
+      "estimated_usd": 0.017553475620570008,
+      "create_to_verified_absence_s": 231.192,
+      "exact_id_and_label_absent": true
+    },
+    {
+      "run": "round2-tunnel-error",
+      "estimated_usd": 0.018019782840322567,
+      "create_to_verified_absence_s": 237.334,
+      "exact_id_and_label_absent": true
+    },
+    {
+      "run": "round2-probe-throttle",
+      "estimated_usd": 0.0034573984352158915,
+      "create_to_verified_absence_s": 82.36743330955505,
+      "exact_id_and_label_absent": true
+    }
+  ],
+  "rental_count_including_two_flow_runs": 6,
+  "total_estimated_compute_storage_usd": 0.056709245473661546,
+  "stop_threshold_usd": 0.6,
+  "spend_cap_usd": 1,
+  "prepaid_credit_above_shipped_8usd_reserve": true
+}

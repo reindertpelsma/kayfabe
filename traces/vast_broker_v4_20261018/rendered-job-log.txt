@@ -1,0 +1,23 @@
+SYNTHETIC LOCAL NATIVE RUN; not a Vast rental or hosted Actions run.
+::group::Full bounded log: UNTRUSTED output of the rented box
+[box] Bearer [redacted]
+[box] eyJhbGciOiJSUzI1NiJ9.eyJzdWIiOiJwbGFudGVkIn0.[redacted]
+[box] color
+[box] : :error: :x
+[box] # #[group]x
+[box] [redacted]
+[box] [redacted]
+[box] [redacted]
+[box] [redacted]
+[box] [redacted]
+[box] [redacted]
+[box] [redacted]
+[box] [redacted]
+[box] [redacted]
+[box] [redacted]
+[box] [redacted]
+[box] [redacted]
+[box] [redacted]
+
+Dropped bytes: 99971
+::endgroup::
