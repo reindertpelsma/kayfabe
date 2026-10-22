@@ -1,5 +1,21 @@
 # Status and handoff — where kayfabe v3 stands, and how to resume
 
+## UPDATE 2026-10-22 — G1 Phase 1 descriptor admission GPU-free green
+
+CODE READ: the authoritative descriptor decision resolves the earlier stop.
+Pointer/NOP admission uses hardware format and forwards the intact word;
+Scan/Window above 917504 bytes now refuse as `USER_RING_SCAN_BUDGET` before
+reading PB bytes or publishing a gate. Snapshot/staging constants are unchanged.
+MEASURED: tests-only RED commits `149bc39e0` / `eb9e513e0`, runtime fix `cf79374e3`,
+strict oracle maintenance `4d49f9437`; fresh two-crate suite 1046 passed,
+0 failed, 4 existing ignores. Thirteen source mutants each have at least
+two killing tests; clippy added 0 sites/errors (379 warnings before/after).
+Evidence: [Phase 1](../traces/descriptor_bound_20261018/phase1.md).
+INFERRED: native execution and catia-07 subtest 03 remain hardware-only questions;
+require `pointer_large_entries > 0`. Draft PR #76; no merge or hardware claim.
+Resume Phase 2 separately from `codex/descriptor-bound-impl-20261022` only after
+this green handoff is pushed. The earlier stop below is historical.
+
 ## UPDATE 2026-10-22 — G1 oversized-descriptor design stop (no runtime change)
 
 CODE READ: the staging budget is applied before Pointer/Scan selection and is
