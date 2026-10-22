@@ -1750,7 +1750,7 @@ impl kf_core::HostOps for StreamFairHost<'_, '_> {
             "one Pump turn copied multiple parts"
         );
         io.hw_get = (r.fetch.issued() & 15) as u32;
-        io.hw_reference = r.marks.issued() as u32;
+        io.hw_reference = Marks::value(r.marks.issued());
         // Match user_ring_arm: Again/progress is durable, and a doorbell can
         // arrive during every serve, including while the token is BUSY.
         self.plane.ring_internal(token);
@@ -1988,7 +1988,7 @@ fn stream_wrap_completion(private_prefix: u32) {
     );
     for _ in 0..6 {
         io.hw_get = (r.fetch.issued() & 15) as u32;
-        io.hw_reference = r.marks.issued() as u32;
+        io.hw_reference = Marks::value(r.marks.issued());
         turn(&mut r, &mut io).unwrap();
     }
     assert_eq!(native_words(&io), [raw, 4, 8]);
@@ -2000,7 +2000,7 @@ fn stream_wrap_completion(private_prefix: u32) {
         "wrapped source GET is written back"
     );
     assert!(r.marks.issued() > 0);
-    assert_eq!(r.marks.processed(), r.marks.issued());
+    assert_eq!(r.marks.seen(), r.marks.issued());
     assert!(!r.dead);
 }
 #[test]
