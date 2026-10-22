@@ -68,3 +68,21 @@ ROUND 2 — 2026-10-22
 13. INFERRED decision1: recommend obtaining the missing published PCE/client mapping before another lease; no further permission question or speculative mapping was substituted.
 14. MEASURED (`round2/cleanup.json`): own ids57193877/57209908 API-absent; new leases0, Round2 rental cost$0; INFERRED conservative lane accounting$3.80362 remains below the Round2$8 stop.
 15. MEASURED (`round2/cleanup.json`): owned helper jobs0,target absent, GPU/cargo locks acquired0; claims scoped to lane changes are checked before publication; no private RE or credentials used.
+
+ROUND 3 — LIVE 2026-10-22 (supersedes preliminary coverage counts)
+
+1. CODE READ (`round3/TIER_PLAN.md`): laneS4, branch `codex/sweep-dies-20261022`; execute tiers in order, cover20 consumer/workstation dies, no harvested-route table.
+2. CODE READ (`round3/tier12_proof.json`): tier1 engine MMU fault ID and HUB CLIENT are independent packet fields; proposed equality contradicted.
+3. CODE READ (`round3/tier12_proof.json`): negative control binds COPY0; CE1 originated with the AD106 fixture, not selection of a second engine.
+4. CODE READ (`round3/tier12_proof.json`): tier2 authored3212-byte FIFO query is kernel-only; root userspace is USER_ROOT, not kernel; public table has no CLIENT field.
+5. CODE READ (`round3/coverage.json`): independently derived runtime CLIENT admission0/20; canonical negative-control journal observations3/20 before the current TU106 probe.
+6. CODE READ (`round3/coverage.json`): existing any-item constants14/20 (70%), inherited0; missingTU104/TU117/GA103/GA107/AD107/GB2076/20 (30%).
+7. MEASURED (`round3/offers_audited.json`):12 current eligible-query offers/9 model classes; no eligible candidate for any of the six missing dies, price unavailable.
+8. CODE READ (`round3/coverage.json`): explicit workstation/consumer/mobile PCI planning map; branch/vBIOS/ECC unverified; mutable masks/counts/routes reacquired from host.
+9. CODE READ (`round3/reuse_provenance.json`): old nvkvm-pv planning/availability/known-bad inventory reviewed; reuse v3 provision_full/sweep/matrix_table; no old ABI oracle or PSK.
+10. MEASURED (`round3/final_guard_green.log`, `round3/matrix_table_selftest.log`):117/117 guarded harness tests and9/9 reporter checks pass.
+11. MEASURED (`round3/collector_mutants.json`, `round3/sweep_proof_mutants.json`, `round3/native_sweep_mutants.json`):9 new mutants each killed by at least2 tests; tests-first red commits precede implementations.
+12. MEASURED (lease57262021, `lease_57262021/START.json`): own RTX2060S at$0.163333/h; auto-destroy170min armed first, pinned SSH, one lease; no new duplicate rentals planned.
+13. MEASURED (lease57262021, `lease_57262021/native_deployment.json`): stock595.91.07 open module prepared; public full provisioning currently live; native engine/Xid observation pending.
+14. MEASURED (`round3/pending_runtime_admission_red.log`): Round2 replay remains6/8 with2 expected nonpasses; Ampere/Turing Windows acceptance not resumed because derived-and-green admission remains unmet.
+15. INFERRED (`round3/TIER4_RESIDUE.md`): owner decides separate narrow private investigation after legal review; recommend current-host routing mechanism, no incomplete production table and no RE in S4.
