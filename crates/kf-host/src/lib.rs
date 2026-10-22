@@ -12,6 +12,7 @@
 pub mod birth;
 pub mod channel;
 pub mod event;
+pub mod precomp;
 pub mod tier;
 pub mod timer;
 pub use channel::{Channel, MapBacking, MapPerm, RingSpec, ScatterError, VaSpace};

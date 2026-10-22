@@ -66,9 +66,12 @@ pub struct MeasuredWord {
     pub source: String,
 }
 
-/// Facts the host's own unprivileged controls could supply (tier 2). Empty: see the module docs.
-#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
-pub struct HostFacts {}
+/// Facts obtained from the host's own unprivileged controls at realize (tier2).
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct HostFacts {
+    /// A complete same-die PRECOMP snapshot, or the unchanged derived fallback.
+    pub precomp: Option<crate::hostcaps::HostPrecomp>,
+}
 
 /// The measured words shipped with kayfabe (`data/caps_measured.tsv`).
 ///
@@ -266,7 +269,7 @@ pub fn derive(
     rows: &[LayerRow],
     measured: &[MeasuredWord],
     branch: &str,
-    _host: &HostFacts,
+    host: &HostFacts,
 ) -> Result<Derived, Missing> {
     let c = &row.classes;
     let base = if sdr {
@@ -321,6 +324,14 @@ pub fn derive(
                     ),
                 ),
             );
+        }
+    }
+    if let Some(snapshot) = &host.precomp
+        && let Some(host_words) = snapshot.words_for(t, row, die)
+    {
+        for &(offset, value) in host_words {
+            words.insert(offset, value);
+            why.insert(offset, (Tier::Host, "same-die unprivileged PRECOMP read at realize".into()));
         }
     }
     // T3: this die's measured words

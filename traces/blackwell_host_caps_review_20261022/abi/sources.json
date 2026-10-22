@@ -1,0 +1,27 @@
+{
+  "580.65.06": {
+    "commit": "307159f2623d3bf45feb9177bd2da52ffbc5ddf9",
+    "probe_sha256": "e7677b90e1698e017ad777c9205f4af21e222ac3578e5d1849a30698c86b62b1",
+    "output_sha256": "5cbad7a77e149cec2ffb077b3ba3c8ba0e4b2d3ec5f33b3d3248c7d4e4dd6429"
+  },
+  "580.94.02": {
+    "commit": "a86526f4e235ae3d9e2842a11a3bb11db77450d8",
+    "probe_sha256": "e7677b90e1698e017ad777c9205f4af21e222ac3578e5d1849a30698c86b62b1",
+    "output_sha256": "5cbad7a77e149cec2ffb077b3ba3c8ba0e4b2d3ec5f33b3d3248c7d4e4dd6429"
+  },
+  "580.159.04": {
+    "commit": "b81d58ee0224d1d290bef1c080592b619e184042",
+    "probe_sha256": "e7677b90e1698e017ad777c9205f4af21e222ac3578e5d1849a30698c86b62b1",
+    "output_sha256": "5cbad7a77e149cec2ffb077b3ba3c8ba0e4b2d3ec5f33b3d3248c7d4e4dd6429"
+  },
+  "590.48.01": {
+    "commit": "2ccbad25e1af6a6ee6f38cf569f89f8b65d658ab",
+    "probe_sha256": "e7677b90e1698e017ad777c9205f4af21e222ac3578e5d1849a30698c86b62b1",
+    "output_sha256": "5cbad7a77e149cec2ffb077b3ba3c8ba0e4b2d3ec5f33b3d3248c7d4e4dd6429"
+  },
+  "595.91.07": {
+    "commit": "9f087a6d4e86d85acc0ce1d354d6276fe5047b29",
+    "probe_sha256": "e7677b90e1698e017ad777c9205f4af21e222ac3578e5d1849a30698c86b62b1",
+    "output_sha256": "5cbad7a77e149cec2ffb077b3ba3c8ba0e4b2d3ec5f33b3d3248c7d4e4dd6429"
+  }
+}
