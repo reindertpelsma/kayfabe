@@ -1,6 +1,7 @@
 import {BrokerError,refuse,configuration,numericId} from './policy.js';
 import {RunTokens,constantTimeEqual,validSecret,sha256Hex} from './tokens.js';
 import {readReportBody,parseReport} from './reports.js';
+import {routePath,notFound,endpointSecrets} from './routes.js';
 import {OidcVerifier} from './oidc.js';
 import {Github} from './github.js';
 import {Vast} from './vast.js';
@@ -11,7 +12,7 @@ export function createService({env,storage,fetch:fetcher=fetch,now=Date.now,rand
   const ledger=new Ledger(storage),verifier=new OidcVerifier(fetcher,now),tokens=new RunTokens(env.RUN_TOKEN_SECRET),githubCache=new Map();let busy=false;
   const runKey=c=>c.run_id+'-'+c.run_attempt;
   const json=(data,status=200)=>Response.json(data,{status,headers:{'Cache-Control':'no-store','X-Content-Type-Options':'nosniff'}});
-  const secrets=[env.VAST_API_KEY,env.RUN_TOKEN_SECRET,env.OWNER_STOP_TOKEN].filter(Boolean);
+  const secrets=[env.VAST_API_KEY,env.RUN_TOKEN_SECRET,env.OWNER_STOP_TOKEN,...endpointSecrets(env)].filter(Boolean);
   const expose=(r,key=r.key,pr=r.pr)=>({run:key,id:r.id,sha:r.sha,pr,
     state:r.closed==='STOPPED'?'STOPPED':r.ended!==null?'COMPLETE':r.closed?'STOPPING':'RUNNING',
     verdict:r.ended!==null?r.verdict||'UNAVAILABLE':'UNAVAILABLE',log_tail_sanitised:r.log||'',bytes_dropped:r.bytesDropped||0});
@@ -79,18 +80,19 @@ export function createService({env,storage,fetch:fetcher=fetch,now=Date.now,rand
     }finally{await ledger.save(r);}
   }
   async function perform(request){
-    const url=new URL(request.url);
-    if(url.pathname==='/rent'&&env.RENTING_ENABLED!=='true')return json({state:'RENTING_DISABLED',verdict:'UNAVAILABLE',log_tail_sanitised:'',bytes_dropped:0},503);
+    const url=new URL(request.url),path=await routePath(request,env);
+    if(path===null)return notFound();
+    if(path==='/rent'&&env.RENTING_ENABLED!=='true')return json({state:'RENTING_DISABLED',verdict:'UNAVAILABLE',log_tail_sanitised:'',bytes_dropped:0},503);
     const cfg=configuration(env);
     if(url.search)refuse('BAD_REQUEST',400);
-    const match=/^\/(report|status|stop)\/([1-9][0-9]{0,19}-[1-9][0-9]{0,19})$/.exec(url.pathname);
-    if(!(url.pathname==='/rent'&&request.method==='POST')&&!(url.pathname==='/stop-all'&&request.method==='POST')&&!(match&&request.method===(match[1]==='status'?'GET':'POST')))refuse('NOT_FOUND',404);
+    const match=/^\/(report|status|stop)\/([1-9][0-9]{0,19}-[1-9][0-9]{0,19})$/.exec(path);
+    if(!(path==='/rent'&&request.method==='POST')&&!(path==='/stop-all'&&request.method==='POST')&&!(match&&request.method===(match[1]==='status'?'GET':'POST')))return notFound();
     const authorization=request.headers.get('Authorization');if(!authorization?.startsWith('Bearer '))refuse('UNAUTHORIZED',401);
     const bearer=authorization.slice(7),vast=new Vast(fetcher,cfg,env.VAST_API_KEY);
     if(match?.[1]==='report')return report(request,match[2],bearer,cfg,vast);
     if(request.body!==null)refuse('BAD_REQUEST',400);
     const owner=validSecret(env.OWNER_STOP_TOKEN)&&await constantTimeEqual(env.OWNER_STOP_TOKEN,bearer);
-    if(url.pathname==='/stop-all'){
+    if(path==='/stop-all'){
       if(!owner)refuse('UNAUTHORIZED',401); // MUTANT stop-auth
       const records=await ledger.openRecords();
       for(const r of records){r.closed='STOPPED';r.verdict||='FAIL';r.liveCheckedAt=null;await ledger.save(r);}
@@ -131,7 +133,7 @@ export function createService({env,storage,fetch:fetcher=fetch,now=Date.now,rand
     const n=random?random():Array.from(crypto.getRandomValues(new Uint8Array(16)),x=>x.toString(16).padStart(2,'0')).join('');
     const started=now(),r={...target,key,label:'kf-ci-'+key,nonce:n,started,ended:null,ttl:cfg.ttl,reportExpiry:Math.floor((started+cfg.ttl)/1000),
       price:offer.dph_total,id:null,closed:null,verdict:null,log:'',bytesDropped:0,reportCount:0,reportBytes:0,lastSeq:0,lastDigest:null,rateWindow:0,rateCount:0,liveCheckedAt:null};
-    const runToken=await tokens.issue(r),script=onstart(target.sha,n,cfg.ttl/60000,cfg.repo,{url:cfg.audience,run:key,token:runToken});
+    const runToken=await tokens.issue(r),script=onstart(target.sha,n,cfg.ttl/60000,cfg.repo,{url:cfg.audience,run:key,token:runToken,path:env.BROKER_PATH_PREFIX??''});
     r.scriptHash=await sha256Hex(script);
     await ledger.reserve(r);
     r.id=await vast.create(offer,r,script);await ledger.save(r);
@@ -154,6 +156,6 @@ export class BrokerLedger {
   async fetch(request){if(new URL(request.url).origin==='https://internal.invalid'&&new URL(request.url).pathname==='/cron'){await this.service.sweep();return new Response('ok');}return this.service.fetch(request);}
 }
 export default {
-  fetch(request,env){if(!/^\/(?:rent|stop-all|(?:report|status|stop)\/[1-9][0-9]{0,19}-[1-9][0-9]{0,19})$/.test(new URL(request.url).pathname))return new Response('Not found',{status:404});return env.LEDGER.get(env.LEDGER.idFromName('owner-shared-vast-account')).fetch(request);},
+  async fetch(request,env){const path=await routePath(request,env);if(path===null||!/^\/(?:rent|stop-all|(?:report|status|stop)\/[1-9][0-9]{0,19}-[1-9][0-9]{0,19})$/.test(path))return notFound();return env.LEDGER.get(env.LEDGER.idFromName('owner-shared-vast-account')).fetch(request);},
   scheduled(_event,env,ctx){ctx.waitUntil(env.LEDGER.get(env.LEDGER.idFromName('owner-shared-vast-account')).fetch(new Request('https://internal.invalid/cron',{method:'POST'})));}
 };
