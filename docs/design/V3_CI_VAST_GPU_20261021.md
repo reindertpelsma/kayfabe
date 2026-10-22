@@ -169,3 +169,10 @@ STATUS: LIVE-DESIGN, 2026-10-22 — Amendment 3/3b and endpoint-secret/prefix im
 
 
 [CODE READ: 2026-10-22 current [create API schema](https://docs.vast.ai/api-reference/instances/create-instance)] Both args (string array) and args_str (string) are documented alternatives. This supersedes treating the prototype's args array as an undocumented field. It does not establish that args plus onstart boots a keyless VM: the VM guide still specifies SSH launch, and actual VM readiness/onstart placement remains unmeasured. Preserve the STOP on unsupported no-SSH VM startup, without attributing it to an invalid array field.
+
+
+## V4 round 2 real-provider evidence (2026-10-22)
+
+[MEASURED: 2026-10-22 traces/vast_broker_v4_round2_20261018/live.json, source 88a3dbbc4] Local Wrangler and SQLite with fake GitHub/JWKS completed real Docker/SSH PASS and deliberate-FAIL runs. PASS stayed 30.717 seconds before its in-box CLI kill; Worker-verified API absence followed in 0.914 seconds. FAIL result-to-controller-verified absence was 307.509 seconds using real five-minute grace and minute cron. Authentication, sanitizer and structured verdict path remained the source Worker. No repository hardware suite, shipped KVM success, hosted Actions OIDC or Cloudflare CPU result is claimed.
+
+[MEASURED: 2026-10-22 traces/vast_broker_v4_round2_20261018/attempts.json, tests.json, mutants.json] Initial null actual_status required bounded provisioning treatment, proven by four standalone EXPECTED RED failures before fix 1fc0e9233. Null never grants callback liveness. The six real rentals, including four diagnostic attempts, are verified absent and total approximately $0.05671 estimated compute/storage. Tests increased 626 to 638; five new mutations have at least two named killers each. Keep shipped $0.50/hour, $3/day and renting-disabled defaults; the local Docker test overlays image/vm, model allowlist and tiny work. See that evidence's ANALYSIS.md for remaining owner questions and the absent login-to-MANUAL hook.
