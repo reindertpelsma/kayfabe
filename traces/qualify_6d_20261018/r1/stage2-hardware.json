@@ -1,0 +1,148 @@
+{
+  "classification": "MEASURED",
+  "evidence": "stage2-hardware.json",
+  "candidate": "01a171e63a82198eef54c54935c5f9db5ed8e81b",
+  "stage_results": [
+    {
+      "classification": "MEASURED",
+      "stage": "build",
+      "start": "2026-10-22T23:33:00.228595+00:00",
+      "exit": 0,
+      "end": "2026-10-22T23:33:32.696678+00:00"
+    },
+    {
+      "classification": "MEASURED",
+      "stage": "broker-build",
+      "start": "2026-10-22T23:33:32.696828+00:00",
+      "exit": 0,
+      "end": "2026-10-22T23:33:33.950020+00:00"
+    },
+    {
+      "classification": "MEASURED",
+      "stage": "native",
+      "start": "2026-10-22T23:33:33.950212+00:00",
+      "exit": 0,
+      "end": "2026-10-22T23:34:07.139145+00:00"
+    },
+    {
+      "classification": "MEASURED",
+      "stage": "linux",
+      "start": "2026-10-22T23:34:07.139308+00:00",
+      "exit": 0,
+      "end": "2026-10-22T23:38:14.898892+00:00"
+    }
+  ],
+  "native": {
+    "pass": 9,
+    "fail": 0,
+    "gate10": "PASS",
+    "user_births": 12,
+    "refused_births": 0,
+    "new_host_xids": 0,
+    "verdict_lines": [
+      "GATE10_VERDICT=PASS",
+      "V3_GATES_SUMMARY pass=9 fail=0 gate10=PASS",
+      "V3_GATES_BIRTHS births=12 user=12 refused=0 ok=1",
+      "V3_GATES_EXIT pass=9 fail=0 births_ok=1 gate10=PASS 2026-10-23T01:34:06+02:00"
+    ]
+  },
+  "linux_fast": {
+    "completed_arms": 30,
+    "guest_proofs": [
+      {
+        "arm": "--defer-liveness",
+        "accepted_faults": 4,
+        "serial_sha256": "ee1a71236222862561bfa6e45e11557a37e6cdeb20f9cdab77e019bc72fc9c88",
+        "qlog_sha256": "feb5c2452baaeaeacc637495651345bb3b50f09e34d56ae1c6dfa7a1a670693a"
+      },
+      {
+        "arm": "--missing-page-fault",
+        "accepted_faults": 1,
+        "serial_sha256": "bf27a119f84fb35f78f80c1833e77ebf7dd064bc20ad4f9b54561338191b6f9b",
+        "qlog_sha256": "1ef73111230982b73d1d2ce158a1caf6f91259a0849377b24350517ec41959fd"
+      }
+    ],
+    "suite_revision": "737306ee8d5055fad7441874fc2b7afab3e2bbb4",
+    "approved_new_intentional_xids": 5,
+    "unmatched_new_xids": 0,
+    "raw_receipt": "/data/codex-Q4/round-6d/r1/linux/receipt.json",
+    "arms": [
+      "--timer",
+      "--engines",
+      "--doorbell-census",
+      "--gpu-info-sweep",
+      "--bus-info-sweep",
+      "--concurrency",
+      "--defer-liveness",
+      "--blockage-coverage",
+      "--alias-two-vas",
+      "--alias-unmap-observe",
+      "--map-propagation",
+      "--late-map-race",
+      "--missing-page-fault",
+      "--uvm-invalidate",
+      "--uvm-mean",
+      "--executor-vas",
+      "--guest-ring-channel",
+      "--dictated-ring",
+      "--dictated-ring-negative",
+      "--ce-client",
+      "--ce-client-guest-ram",
+      "--guest-ram-pin",
+      "--bar1-crossing",
+      "--atomics-probe",
+      "--pce-mask-probe",
+      "--gpga-reserve-probe",
+      "--map-stress",
+      "--concurrent-fuzz",
+      "--cross-client-leak",
+      "--rpc-mixed-allocs"
+    ],
+    "suite_source_hashes": {
+      "crates/kayfabe-rm-ladder/src/main.rs": "f6d4c7c9099320cb901caf0606656a47a4337a38f26c075c08f2e1e6d6f8f3c8",
+      "scripts/fastguest/fast_suite.sh": "c34de7371f0ac514a5aa3871135ef801ff56c94dc3f45de91602215189410616",
+      "scripts/fastguest/run_fast_guest.sh": "ad2fd510fd45a8bd007e19262796ab95d9026c8f64b15319e2c761b7b8c0f2b7",
+      "scripts/fastguest/build_fast_guest.sh": "95497e770d9f7fc1ba03f6040e9ac9291ebf758194c94b611d58abc5717773f9"
+    }
+  },
+  "binaries": {
+    "kf3-bins/01a171e6/qemu-system-x86_64": "81a58091a38c2af91574b676207bb4922719ccc98b8b3aac87ee835c1282fc2d",
+    "src/broker/nvkvm-display-broker": "58c4ed6e570f57c012fb1d8eba1387bb0cdd813267cb06cd72744d695126a98c"
+  },
+  "linux_broker": {
+    "verdict": "NOT_RUN",
+    "reason": "XWAYLAND_PRECONDITION_MISSING",
+    "vm_started": false,
+    "health_exit": 0,
+    "source": "/data/codex-Q4/round-6d/r1/linux-broker/result.json"
+  },
+  "ownership_controls": {
+    "classification": "MEASURED",
+    "evidence": "ownership-controls.json",
+    "time": "2026-10-22T23:41:07.082482+00:00",
+    "passed": 4,
+    "failed": 0,
+    "rows": [
+      {
+        "case": "children=False,stale=False",
+        "passed": true,
+        "stale_receipt_refused_before_signal": false
+      },
+      {
+        "case": "children=False,stale=True",
+        "passed": true,
+        "stale_receipt_refused_before_signal": true
+      },
+      {
+        "case": "children=True,stale=False",
+        "passed": true,
+        "stale_receipt_refused_before_signal": false
+      },
+      {
+        "case": "children=True,stale=True",
+        "passed": true,
+        "stale_receipt_refused_before_signal": true
+      }
+    ]
+  }
+}

@@ -2,7 +2,7 @@
   "classification": "MEASURED",
   "evidence": "scoped-claims.json",
   "base": "70da04ffaebdee3b51e5eca6aa1eb3919e92e80d",
-  "head": "2e6accf794f0e7940e27097f287a1f723099662f",
+  "head": "3334528b19d2ad73df720944a3d597297886534c",
   "scope": "Owner-approved Q4-added/changed files only; evidence-only [skip ci]; inherited debt untouched",
   "files": [
     "traces/qualify_6d_20261018/README.md",
@@ -30,6 +30,7 @@
     "traces/qualify_6d_20261018/r1/local-not-started.json",
     "traces/qualify_6d_20261018/r1/plan.md",
     "traces/qualify_6d_20261018/r1/stage1-ci.json",
+    "traces/qualify_6d_20261018/r1/stage2-hardware.json",
     "traces/qualify_6d_20261018/rustfmt.json",
     "traces/qualify_6d_20261018/scoped-claims.json",
     "traces/qualify_6d_20261018/stable-compile-excerpt.txt"
@@ -37,5 +38,5 @@
   "new": 0,
   "sites": [],
   "inherited_ignored": 0,
-  "time": "2026-10-22T23:34:20.108699+00:00"
+  "time": "2026-10-22T23:51:36.449004+00:00"
 }

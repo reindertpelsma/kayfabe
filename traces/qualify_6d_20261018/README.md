@@ -2,7 +2,9 @@
 
 CODE READ: the controller replaced the old pin with revision 01a171e63a82198eef54c54935c5f9db5ed8e81b and requested restarting ROUND_6D at stage 1. Current evidence is under r1/. The 70da04ffa failure below is a superseded checkpoint, retained as history. The evidence branch carries documentation; actual hardware source is the separately pinned clean host checkout.
 
-MEASURED on 2026-10-22: r1/stage1-ci.json records stable, aarch64, broker and firmware green in both runs; slow is skipped. r1/candidate-tests-ci.json sums 5,760 passed / 0 failed / 21 ignored across 358 stable-job summaries, including auxiliary capability runs; this is not a unique-test count. The local fallback waited 1,573 seconds for the shared Cargo lock without starting, then only Q4's waiting process was cancelled after exact-head hosted CI passed (r1/local-not-started.json). Stage 2 has started at the exact clean host source pin.
+MEASURED on 2026-10-22: r1/stage1-ci.json records stable, aarch64, broker and firmware green in both runs; slow is skipped. r1/candidate-tests-ci.json sums 5,760 passed / 0 failed / 21 ignored across 358 stable-job summaries, including auxiliary capability runs; this is not a unique-test count. The local fallback waited 1,573 seconds for the shared Cargo lock without starting, then only Q4's waiting process was cancelled after exact-head hosted CI passed (r1/local-not-started.json). The exact clean host source pin built successfully.
+
+MEASURED at revision 01a171e63: r1/stage2-hardware.json records native 9/9 plus gate 10 PASS (12/12 USER births, zero refusals or new Xids) and Linux fast 30/30 with only five approved exact-match intentional Xids (four defer-liveness, one missing-page-fault), zero unmatched new Xids. The Linux broker script did not launch a VM because Xwayland is absent from the active GNOME session. Windows run 4600 has started with the production Wayland broker; its desktop hold and subsequent smokes remain in progress.
 
 # Round 6D: stage 1 FAIL; hardware qualification not started
 
