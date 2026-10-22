@@ -34,7 +34,7 @@ scanning/DoS-noise defence, never authentication; the box/onstart reader knows i
 | Scalar/folded run guard bypass | 0de729c3f | 39 total, 35 pass, 4 fail |
 | Reusable inheritance and step-name aliases | a8042039a | 5 total, 1 pass, 4 fail |
 
-[MEASURED: implementation checkpoint 833a1a865] The complete Node suite passes
+[MEASURED: 2026-10-22, node --test ci/vast-broker/test at commit 833a1a865] The complete Node suite passes
 473 tests with zero failures/skips. Actual generated Python sender tests now use
 a prefixed callback for both success and failure exit statuses. Root README and
 the existing CI two-line insertion are unchanged. The first 94-case campaign passed after correcting broker sink fixtures; the
