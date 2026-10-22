@@ -1,0 +1,772 @@
+{
+  "base": "e64b8e5f6",
+  "scope": "tracked text files <=3 MB, excluding archive/, traces/, third_party/, docs/archive/; basename/stem search is a candidate generator, not proof of absence",
+  "text_files_scanned": 2564,
+  "workspace_crates": 39,
+  "kf_to_kayfabe_edges": {},
+  "frozen_crates": [
+    "kayfabe-doorbell",
+    "kayfabe-rm-ladder",
+    "kayfabe-util",
+    "kayfabe-arch",
+    "kayfabe-chips",
+    "kayfabe-abi",
+    "kayfabe-mmu",
+    "kayfabe-vmm",
+    "kayfabe-cuda",
+    "kayfabe-isolate",
+    "kayfabe-isolate-host",
+    "kayfabe-completion",
+    "kayfabe-device",
+    "kayfabe-gsp",
+    "kayfabe-trace",
+    "kayfabe-mocks",
+    "kayfabe-linux-raw"
+  ],
+  "raw_ladder_closure": [
+    "kayfabe-abi",
+    "kayfabe-arch",
+    "kayfabe-chips",
+    "kayfabe-completion",
+    "kayfabe-cuda",
+    "kayfabe-device",
+    "kayfabe-doorbell",
+    "kayfabe-gsp",
+    "kayfabe-isolate",
+    "kayfabe-isolate-host",
+    "kayfabe-linux-raw",
+    "kayfabe-mmu",
+    "kayfabe-mocks",
+    "kayfabe-rm-ladder",
+    "kayfabe-trace",
+    "kayfabe-util",
+    "kayfabe-vmm",
+    "kf-abi",
+    "kf-arch",
+    "kf-util"
+  ],
+  "frozen_outside_ladder_closure": [],
+  "features": {
+    "kf-linux-raw": {
+      "force-host-page-size": []
+    },
+    "kf-chan": {
+      "lifecycle-mutants": []
+    },
+    "kf-oprom": {
+      "default": [
+        "alloc"
+      ],
+      "alloc": []
+    },
+    "kayfabe-rm-ladder": {
+      "cuda-window": [
+        "kayfabe-isolate-host/cuda-scratchpad"
+      ]
+    },
+    "kayfabe-isolate-host": {
+      "cuda-scratchpad": [
+        "dep:kayfabe-cuda"
+      ]
+    },
+    "kayfabe-device": {
+      "test-lock-probe": []
+    },
+    "kayfabe-linux-raw": {
+      "force-host-page-size": []
+    }
+  },
+  "script_files_scanned": 575,
+  "zero_basename_reference_candidates": [
+    {
+      "path": "scripts/bench/blockage_hook.sh",
+      "literal_basename_references": 0,
+      "stem_reference_files": [],
+      "stem_reference_count": 0,
+      "implicit_test_entry": false
+    },
+    {
+      "path": "scripts/bench/cup2_hook_rmtrace.sh",
+      "literal_basename_references": 0,
+      "stem_reference_files": [],
+      "stem_reference_count": 0,
+      "implicit_test_entry": false
+    },
+    {
+      "path": "scripts/bench/cup3x2_hook.sh",
+      "literal_basename_references": 0,
+      "stem_reference_files": [],
+      "stem_reference_count": 0,
+      "implicit_test_entry": false
+    },
+    {
+      "path": "scripts/bench/display/check_sdr_curve.py",
+      "literal_basename_references": 0,
+      "stem_reference_files": [],
+      "stem_reference_count": 0,
+      "implicit_test_entry": false
+    },
+    {
+      "path": "scripts/bench/display/max_fps_hook.sh",
+      "literal_basename_references": 0,
+      "stem_reference_files": [],
+      "stem_reference_count": 0,
+      "implicit_test_entry": false
+    },
+    {
+      "path": "scripts/bench/display/max_fps_x11_hook.sh",
+      "literal_basename_references": 0,
+      "stem_reference_files": [],
+      "stem_reference_count": 0,
+      "implicit_test_entry": false
+    },
+    {
+      "path": "scripts/bench/display/ppm2png.py",
+      "literal_basename_references": 0,
+      "stem_reference_files": [],
+      "stem_reference_count": 0,
+      "implicit_test_entry": false
+    },
+    {
+      "path": "scripts/bench/display/refresh_hook.sh",
+      "literal_basename_references": 0,
+      "stem_reference_files": [],
+      "stem_reference_count": 0,
+      "implicit_test_entry": false
+    },
+    {
+      "path": "scripts/bench/display/subpixel_proof.sh",
+      "literal_basename_references": 0,
+      "stem_reference_files": [],
+      "stem_reference_count": 0,
+      "implicit_test_entry": false
+    },
+    {
+      "path": "scripts/bench/display/subpixel_swap.sh",
+      "literal_basename_references": 0,
+      "stem_reference_files": [],
+      "stem_reference_count": 0,
+      "implicit_test_entry": false
+    },
+    {
+      "path": "scripts/bench/display/summarize_color_audit.py",
+      "literal_basename_references": 0,
+      "stem_reference_files": [],
+      "stem_reference_count": 0,
+      "implicit_test_entry": false
+    },
+    {
+      "path": "scripts/bench/display/test_tmo_stage.py",
+      "literal_basename_references": 0,
+      "stem_reference_files": [],
+      "stem_reference_count": 0,
+      "implicit_test_entry": true
+    },
+    {
+      "path": "scripts/bench/gfx/steps_then_hold_hook.sh",
+      "literal_basename_references": 0,
+      "stem_reference_files": [],
+      "stem_reference_count": 0,
+      "implicit_test_entry": false
+    },
+    {
+      "path": "scripts/bench/gpu_fault_containment.sh",
+      "literal_basename_references": 0,
+      "stem_reference_files": [],
+      "stem_reference_count": 0,
+      "implicit_test_entry": false
+    },
+    {
+      "path": "scripts/bench/gpu_vram_denial.sh",
+      "literal_basename_references": 0,
+      "stem_reference_files": [],
+      "stem_reference_count": 0,
+      "implicit_test_entry": false
+    },
+    {
+      "path": "scripts/bench/guest_fmt_then_wall.sh",
+      "literal_basename_references": 0,
+      "stem_reference_files": [],
+      "stem_reference_count": 0,
+      "implicit_test_entry": false
+    },
+    {
+      "path": "scripts/bench/guest_ringtrace_build.sh",
+      "literal_basename_references": 0,
+      "stem_reference_files": [],
+      "stem_reference_count": 0,
+      "implicit_test_entry": false
+    },
+    {
+      "path": "scripts/bench/guest_strace_cup2.sh",
+      "literal_basename_references": 0,
+      "stem_reference_files": [],
+      "stem_reference_count": 0,
+      "implicit_test_entry": false
+    },
+    {
+      "path": "scripts/bench/guest_uvm_isolate.sh",
+      "literal_basename_references": 0,
+      "stem_reference_files": [],
+      "stem_reference_count": 0,
+      "implicit_test_entry": false
+    },
+    {
+      "path": "scripts/bench/hitch/final_table.py",
+      "literal_basename_references": 0,
+      "stem_reference_files": [],
+      "stem_reference_count": 0,
+      "implicit_test_entry": false
+    },
+    {
+      "path": "scripts/bench/hitch/gaps_table.py",
+      "literal_basename_references": 0,
+      "stem_reference_files": [],
+      "stem_reference_count": 0,
+      "implicit_test_entry": false
+    },
+    {
+      "path": "scripts/bench/hitch/kv.py",
+      "literal_basename_references": 0,
+      "stem_reference_files": [
+        "crates/kf-abi/tests/support/fn1_oracle.rs",
+        "cuda/walk/kf_tests.cu",
+        "scripts/apps/summarize.py",
+        "scripts/apps/triage.py",
+        "scripts/bench/display/planes_table.py",
+        "scripts/bench/gfxset/compare.py",
+        "scripts/bench/gfxset/triage.py",
+        "scripts/bench/hitch/summ.py",
+        "scripts/bench/llm_parity.sh",
+        "scripts/bench/llm_parity_summary.py",
+        "scripts/bench/refusal_audit/rf_ledger.py",
+        "scripts/bench/reopen_stress.sh"
+      ],
+      "stem_reference_count": 27,
+      "implicit_test_entry": false
+    },
+    {
+      "path": "scripts/bench/hitch/launch_h.sh",
+      "literal_basename_references": 0,
+      "stem_reference_files": [],
+      "stem_reference_count": 0,
+      "implicit_test_entry": false
+    },
+    {
+      "path": "scripts/bench/hitch/queue1.sh",
+      "literal_basename_references": 0,
+      "stem_reference_files": [],
+      "stem_reference_count": 0,
+      "implicit_test_entry": false
+    },
+    {
+      "path": "scripts/bench/hitch/queue2.sh",
+      "literal_basename_references": 0,
+      "stem_reference_files": [
+        "scripts/bench/hitch/queue3.sh"
+      ],
+      "stem_reference_count": 1,
+      "implicit_test_entry": false
+    },
+    {
+      "path": "scripts/bench/hitch/queue3.sh",
+      "literal_basename_references": 0,
+      "stem_reference_files": [],
+      "stem_reference_count": 0,
+      "implicit_test_entry": false
+    },
+    {
+      "path": "scripts/bench/hitch/sample2.sh",
+      "literal_basename_references": 0,
+      "stem_reference_files": [],
+      "stem_reference_count": 0,
+      "implicit_test_entry": false
+    },
+    {
+      "path": "scripts/bench/hitch/sample_boot.sh",
+      "literal_basename_references": 0,
+      "stem_reference_files": [],
+      "stem_reference_count": 0,
+      "implicit_test_entry": false
+    },
+    {
+      "path": "scripts/bench/llm_graph_probe_hook.sh",
+      "literal_basename_references": 0,
+      "stem_reference_files": [],
+      "stem_reference_count": 0,
+      "implicit_test_entry": false
+    },
+    {
+      "path": "scripts/bench/llm_hook2.sh",
+      "literal_basename_references": 0,
+      "stem_reference_files": [],
+      "stem_reference_count": 0,
+      "implicit_test_entry": false
+    },
+    {
+      "path": "scripts/bench/nvdiff_hook.sh",
+      "literal_basename_references": 0,
+      "stem_reference_files": [],
+      "stem_reference_count": 0,
+      "implicit_test_entry": false
+    },
+    {
+      "path": "scripts/bench/probe_hook.sh",
+      "literal_basename_references": 0,
+      "stem_reference_files": [],
+      "stem_reference_count": 0,
+      "implicit_test_entry": false
+    },
+    {
+      "path": "scripts/bench/provision_bare_metal.sh",
+      "literal_basename_references": 0,
+      "stem_reference_files": [],
+      "stem_reference_count": 0,
+      "implicit_test_entry": false
+    },
+    {
+      "path": "scripts/bench/r33_hook_ce_client.sh",
+      "literal_basename_references": 0,
+      "stem_reference_files": [],
+      "stem_reference_count": 0,
+      "implicit_test_entry": false
+    },
+    {
+      "path": "scripts/bench/regression_check_e.sh",
+      "literal_basename_references": 0,
+      "stem_reference_files": [],
+      "stem_reference_count": 0,
+      "implicit_test_entry": false
+    },
+    {
+      "path": "scripts/bench/relaxation_inert_gate_selftest.sh",
+      "literal_basename_references": 0,
+      "stem_reference_files": [],
+      "stem_reference_count": 0,
+      "implicit_test_entry": false
+    },
+    {
+      "path": "scripts/bench/rmladder_suite_hook.sh",
+      "literal_basename_references": 0,
+      "stem_reference_files": [],
+      "stem_reference_count": 0,
+      "implicit_test_entry": false
+    },
+    {
+      "path": "scripts/bench/rmladder_suite_selftest.sh",
+      "literal_basename_references": 0,
+      "stem_reference_files": [],
+      "stem_reference_count": 0,
+      "implicit_test_entry": false
+    },
+    {
+      "path": "scripts/bench/route_k_phase1.sh",
+      "literal_basename_references": 0,
+      "stem_reference_files": [
+        "docs/design/w750_route_k_prereg.md"
+      ],
+      "stem_reference_count": 1,
+      "implicit_test_entry": false
+    },
+    {
+      "path": "scripts/bench/trap_stackshot.sh",
+      "literal_basename_references": 0,
+      "stem_reference_files": [],
+      "stem_reference_count": 0,
+      "implicit_test_entry": false
+    },
+    {
+      "path": "scripts/bench/user_storage_native.py",
+      "literal_basename_references": 0,
+      "stem_reference_files": [],
+      "stem_reference_count": 0,
+      "implicit_test_entry": false
+    },
+    {
+      "path": "scripts/bench/verify_autodestroy.sh",
+      "literal_basename_references": 0,
+      "stem_reference_files": [
+        "scripts/bench/verify_autodestroy.py"
+      ],
+      "stem_reference_count": 1,
+      "implicit_test_entry": false
+    },
+    {
+      "path": "scripts/bench/w392c_uvm_hook.sh",
+      "literal_basename_references": 0,
+      "stem_reference_files": [],
+      "stem_reference_count": 0,
+      "implicit_test_entry": false
+    },
+    {
+      "path": "scripts/bench/w392d_two_clients_hook.sh",
+      "literal_basename_references": 0,
+      "stem_reference_files": [],
+      "stem_reference_count": 0,
+      "implicit_test_entry": false
+    },
+    {
+      "path": "scripts/bench/windows/appmatrix/native/baseline_report.py",
+      "literal_basename_references": 0,
+      "stem_reference_files": [],
+      "stem_reference_count": 0,
+      "implicit_test_entry": false
+    },
+    {
+      "path": "scripts/bench/windows/appmatrix/native/reverdict.py",
+      "literal_basename_references": 0,
+      "stem_reference_files": [],
+      "stem_reference_count": 0,
+      "implicit_test_entry": false
+    },
+    {
+      "path": "scripts/bench/windows/appmatrix/tests/helpers.py",
+      "literal_basename_references": 0,
+      "stem_reference_files": [
+        ".github/workflows/ci.yml",
+        "broker/nb_session_x11.c",
+        "broker/nvkvm_broker.c",
+        "broker/nvkvm_broker.h",
+        "broker/test/test_xor.c",
+        "crates/kayfabe-abi/src/view.rs",
+        "crates/kayfabe-cuda/tests/walk_abi_matches_the_cu.rs",
+        "crates/kayfabe-linux-raw/src/spawn_unsafe.rs",
+        "crates/kayfabe-mmu/src/blockage.rs",
+        "crates/kf-abi/src/bringup.rs",
+        "crates/kf-abi/src/view.rs",
+        "crates/kf-chan/tests/user_loop_model.rs"
+      ],
+      "stem_reference_count": 91,
+      "implicit_test_entry": true
+    },
+    {
+      "path": "scripts/bench/windows/appmatrix/tests/test_driver.py",
+      "literal_basename_references": 0,
+      "stem_reference_files": [],
+      "stem_reference_count": 0,
+      "implicit_test_entry": true
+    },
+    {
+      "path": "scripts/bench/windows/appmatrix/tests/test_manifest.py",
+      "literal_basename_references": 0,
+      "stem_reference_files": [],
+      "stem_reference_count": 0,
+      "implicit_test_entry": true
+    },
+    {
+      "path": "scripts/bench/windows/appmatrix/tests/test_qga.py",
+      "literal_basename_references": 0,
+      "stem_reference_files": [],
+      "stem_reference_count": 0,
+      "implicit_test_entry": true
+    },
+    {
+      "path": "scripts/bench/windows/appmatrix/tests/test_summarize.py",
+      "literal_basename_references": 0,
+      "stem_reference_files": [],
+      "stem_reference_count": 0,
+      "implicit_test_entry": true
+    },
+    {
+      "path": "scripts/bench/windows/appmatrix/tests/test_verdict.py",
+      "literal_basename_references": 0,
+      "stem_reference_files": [
+        "scripts/bench/windows/appmatrix/verdict.py"
+      ],
+      "stem_reference_count": 1,
+      "implicit_test_entry": true
+    },
+    {
+      "path": "scripts/bench/windows/dxg_sched_unfinished.py",
+      "literal_basename_references": 0,
+      "stem_reference_files": [],
+      "stem_reference_count": 0,
+      "implicit_test_entry": false
+    },
+    {
+      "path": "scripts/bench/windows/glcrash/session_prep.sh",
+      "literal_basename_references": 0,
+      "stem_reference_files": [],
+      "stem_reference_count": 0,
+      "implicit_test_entry": false
+    },
+    {
+      "path": "scripts/bench/windows/glcrash/tdr-run28.sh",
+      "literal_basename_references": 0,
+      "stem_reference_files": [],
+      "stem_reference_count": 0,
+      "implicit_test_entry": false
+    },
+    {
+      "path": "scripts/bench/windows/glcrash/tdr-run29.sh",
+      "literal_basename_references": 0,
+      "stem_reference_files": [],
+      "stem_reference_count": 0,
+      "implicit_test_entry": false
+    },
+    {
+      "path": "scripts/bench/windows/glcrash/vfio_ctrl_clients.py",
+      "literal_basename_references": 0,
+      "stem_reference_files": [],
+      "stem_reference_count": 0,
+      "implicit_test_entry": false
+    },
+    {
+      "path": "scripts/bench/windows/glcrash/vfio_ctrl_cmdstats.py",
+      "literal_basename_references": 0,
+      "stem_reference_files": [],
+      "stem_reference_count": 0,
+      "implicit_test_entry": false
+    },
+    {
+      "path": "scripts/bench/windows/glcrash/vfio_ctrl_ordered.py",
+      "literal_basename_references": 0,
+      "stem_reference_files": [],
+      "stem_reference_count": 0,
+      "implicit_test_entry": false
+    },
+    {
+      "path": "scripts/bench/windows/glcrash/vfio_ctrl_window.py",
+      "literal_basename_references": 0,
+      "stem_reference_files": [],
+      "stem_reference_count": 0,
+      "implicit_test_entry": false
+    },
+    {
+      "path": "scripts/bench/windows/kfagent_ogl/marks.sh",
+      "literal_basename_references": 0,
+      "stem_reference_files": [
+        "LICENSE-APACHE",
+        "crates/kayfabe-abi/src/fmbpromote.rs",
+        "crates/kayfabe-abi/src/smcmode.rs",
+        "crates/kayfabe-abi/src/submit.rs",
+        "crates/kayfabe-device/src/inittables.rs",
+        "crates/kayfabe-device/src/lib.rs",
+        "crates/kayfabe-device/src/plane.rs",
+        "crates/kayfabe-device/src/sticky.rs",
+        "crates/kayfabe-device/tests/grmgr_get_gr_fs_info.rs",
+        "crates/kayfabe-device/tests/internal_device_info_table.rs",
+        "crates/kayfabe-doorbell/src/rmgraph.rs",
+        "crates/kayfabe-doorbell/src/vmm.rs"
+      ],
+      "stem_reference_count": 113,
+      "implicit_test_entry": false
+    },
+    {
+      "path": "scripts/bench/windows/kfagent_ogl/marks2.sh",
+      "literal_basename_references": 0,
+      "stem_reference_files": [],
+      "stem_reference_count": 0,
+      "implicit_test_entry": false
+    },
+    {
+      "path": "scripts/bench/windows/kfagent_ogl/mdthreads.py",
+      "literal_basename_references": 0,
+      "stem_reference_files": [],
+      "stem_reference_count": 0,
+      "implicit_test_entry": false
+    },
+    {
+      "path": "scripts/bench/windows/kfagent_ogl/peexp.py",
+      "literal_basename_references": 0,
+      "stem_reference_files": [],
+      "stem_reference_count": 0,
+      "implicit_test_entry": false
+    },
+    {
+      "path": "scripts/bench/windows/kfagent_ogl/upsrv.py",
+      "literal_basename_references": 0,
+      "stem_reference_files": [],
+      "stem_reference_count": 0,
+      "implicit_test_entry": false
+    },
+    {
+      "path": "scripts/bench/windows/kfagent_ogl/verify_cfg.sh",
+      "literal_basename_references": 0,
+      "stem_reference_files": [],
+      "stem_reference_count": 0,
+      "implicit_test_entry": false
+    },
+    {
+      "path": "scripts/bench/windows/pc_pool_experiment.py",
+      "literal_basename_references": 0,
+      "stem_reference_files": [],
+      "stem_reference_count": 0,
+      "implicit_test_entry": false
+    },
+    {
+      "path": "scripts/bench/windows/qga_status_sampler.py",
+      "literal_basename_references": 0,
+      "stem_reference_files": [],
+      "stem_reference_count": 0,
+      "implicit_test_entry": false
+    },
+    {
+      "path": "scripts/bench/windows/qga_status_sampler2.py",
+      "literal_basename_references": 0,
+      "stem_reference_files": [],
+      "stem_reference_count": 0,
+      "implicit_test_entry": false
+    },
+    {
+      "path": "scripts/bench/windows/recover_bugcheck.py",
+      "literal_basename_references": 0,
+      "stem_reference_files": [],
+      "stem_reference_count": 0,
+      "implicit_test_entry": false
+    },
+    {
+      "path": "scripts/bench/windows/smi_field_probe.py",
+      "literal_basename_references": 0,
+      "stem_reference_files": [],
+      "stem_reference_count": 0,
+      "implicit_test_entry": false
+    },
+    {
+      "path": "scripts/build_arch_pdf.sh",
+      "literal_basename_references": 0,
+      "stem_reference_files": [],
+      "stem_reference_count": 0,
+      "implicit_test_entry": false
+    },
+    {
+      "path": "scripts/build_arch_pdf_v3.sh",
+      "literal_basename_references": 0,
+      "stem_reference_files": [],
+      "stem_reference_count": 0,
+      "implicit_test_entry": false
+    },
+    {
+      "path": "scripts/check_v3_isolation.sh",
+      "literal_basename_references": 0,
+      "stem_reference_files": [],
+      "stem_reference_count": 0,
+      "implicit_test_entry": false
+    },
+    {
+      "path": "scripts/ci/test_debt.py",
+      "literal_basename_references": 0,
+      "stem_reference_files": [],
+      "stem_reference_count": 0,
+      "implicit_test_entry": true
+    },
+    {
+      "path": "scripts/ci/test_dependencies.py",
+      "literal_basename_references": 0,
+      "stem_reference_files": [],
+      "stem_reference_count": 0,
+      "implicit_test_entry": true
+    },
+    {
+      "path": "scripts/ci/test_doc_status_check.py",
+      "literal_basename_references": 0,
+      "stem_reference_files": [],
+      "stem_reference_count": 0,
+      "implicit_test_entry": true
+    },
+    {
+      "path": "scripts/ci/test_gpu_gate_runner.py",
+      "literal_basename_references": 0,
+      "stem_reference_files": [],
+      "stem_reference_count": 0,
+      "implicit_test_entry": true
+    },
+    {
+      "path": "scripts/ci/test_runner_namespaces.py",
+      "literal_basename_references": 0,
+      "stem_reference_files": [],
+      "stem_reference_count": 0,
+      "implicit_test_entry": true
+    },
+    {
+      "path": "scripts/ci/test_unsafe_count.py",
+      "literal_basename_references": 0,
+      "stem_reference_files": [],
+      "stem_reference_count": 0,
+      "implicit_test_entry": true
+    },
+    {
+      "path": "scripts/drivermatrix/nvdiff_cup2_hook.sh",
+      "literal_basename_references": 0,
+      "stem_reference_files": [],
+      "stem_reference_count": 0,
+      "implicit_test_entry": false
+    },
+    {
+      "path": "scripts/mutate/lockstep_extra_a.py",
+      "literal_basename_references": 0,
+      "stem_reference_files": [],
+      "stem_reference_count": 0,
+      "implicit_test_entry": false
+    },
+    {
+      "path": "scripts/mutate/lockstep_extra_b.py",
+      "literal_basename_references": 0,
+      "stem_reference_files": [],
+      "stem_reference_count": 0,
+      "implicit_test_entry": false
+    },
+    {
+      "path": "scripts/rpc_channel_census.py",
+      "literal_basename_references": 0,
+      "stem_reference_files": [],
+      "stem_reference_count": 0,
+      "implicit_test_entry": false
+    },
+    {
+      "path": "scripts/rpctrace/test_decoder_refusals.py",
+      "literal_basename_references": 0,
+      "stem_reference_files": [],
+      "stem_reference_count": 0,
+      "implicit_test_entry": true
+    }
+  ],
+  "doc_env_names_absent_from_non_doc_text": [
+    "KF3_ARTIFACT",
+    "KF3_CURSOR_",
+    "KF3_DI",
+    "KF3_DIAGNOSTICS",
+    "KF3_DIAG_BAR0_READ_TRACE",
+    "KF3_DIAG_BAR0_WINDOW_TRACE",
+    "KF3_DIAG_DISPLAY_METHODS",
+    "KF3_DIAG_DISPLAY_TRACE",
+    "KF3_DIAG_DISPLAY_TRACE_CAP",
+    "KF3_DIAG_DISPLAY_WRITES",
+    "KF3_DIAG_DOORBELL_CPL",
+    "KF3_DIAG_MAPLOG",
+    "KF3_DIAG_NO_MICRO_RESERVE",
+    "KF3_DIAG_PT_STALL_SNAPSHOT",
+    "KF3_DIAG_READ_TRACE_MAX_BYTES",
+    "KF3_DIAG_READ_TRACE_MAX_RECORDS",
+    "KF3_DIAG_READ_TRACE_RANGES",
+    "KF3_DIAG_RELAY_PB_PEEK",
+    "KF3_DIAG_RPC_TRACE",
+    "KF3_DIAG_SW_RUNLIST_WORDS",
+    "KF3_DIAG_TCENSUS",
+    "KF3_DIAG_TRACE_NAME",
+    "KF3_DIAG_USER_STALL",
+    "KF3_DIAG_WRITE_TRACE_RANGES",
+    "KF3_DISPLAY_HDMI_P",
+    "KF3_DISPLAY_HOT",
+    "KF3_GFX_POOL_",
+    "KF3_HAVE_GSP_OBSERVER",
+    "KF3_INJECT_",
+    "KF3_NEGCTL_PT_NSI_FIFO_OFF",
+    "KF3_NEGCTL_UNMAP_DELAY_MS",
+    "KF3_NEGCTL_USERD_ADOPT",
+    "KF3_NO_",
+    "KF3_PENDING_",
+    "KF3_RC_RECOVERY_ENABLED_DIAG"
+  ],
+  "design_docs_scanned": 128,
+  "design_docs_without_external_basename_references": [
+    {
+      "path": "docs/design/V3_GPU_FAIR_SHARE.md",
+      "literal_basename_reference_files": []
+    },
+    {
+      "path": "docs/design/V3_WINDOWS_POOL_AUDIT_20261005.md",
+      "literal_basename_reference_files": []
+    }
+  ]
+}

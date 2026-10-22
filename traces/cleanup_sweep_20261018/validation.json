@@ -1,0 +1,59 @@
+{
+  "date": "2026-10-22",
+  "base": "e64b8e5f6",
+  "checker_red": {
+    "tests": 27,
+    "failures": 2,
+    "cause": "YAML front matter"
+  },
+  "checker_green": {
+    "tests": 27,
+    "failures": 0
+  },
+  "ci_python_green": {
+    "tests": 66,
+    "failures": 0,
+    "seconds": 22.462
+  },
+  "cargo_check": {
+    "crates": 39,
+    "failures": 0,
+    "profile": "release",
+    "targets": "all",
+    "features": "default",
+    "rustflags": "-W dead_code",
+    "jobs": 2
+  },
+  "clippy": {
+    "command": "cargo clippy --workspace --all-targets --locked --release -j2 --message-format=json",
+    "profile": "release",
+    "rustflags": "-W dead_code",
+    "existing_debt_sites": 532,
+    "new_sites": 0,
+    "resolved_sites": 0
+  },
+  "dead_code_diagnostics": 25,
+  "dead_code_diagnostics_bound_to_existing_clippy_baseline": 25,
+  "rust_source_changes": 0,
+  "deletions": 0,
+  "hardware_runs": 0,
+  "claims": {
+    "existing_debt_sites": 3758,
+    "new_sites": 0,
+    "resolved_sites": 0
+  },
+  "docs_before": {
+    "checked": 128,
+    "violations": 28
+  },
+  "docs_after": {
+    "checked": 129,
+    "violations": 10,
+    "judgement_documents": 9
+  },
+  "literal_citation_checks": {
+    "README.md": 19,
+    "docs/STATUS_DETAIL.md": 59,
+    "missing": 0
+  }
+}

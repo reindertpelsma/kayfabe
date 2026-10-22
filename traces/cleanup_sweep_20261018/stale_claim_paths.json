@@ -1,0 +1,503 @@
+{
+  "base": "e64b8e5f6",
+  "files": {
+    "README.md": {
+      "checks": [
+        {
+          "line": 35,
+          "target": "traces/perf_status_20261017/README.md",
+          "exists_at_base": true,
+          "kind": "markdown-link"
+        },
+        {
+          "line": 37,
+          "target": "docs/design/V3_LINUX_PERF_BASELINE_6692e621.md",
+          "exists_at_base": true,
+          "kind": "markdown-link"
+        },
+        {
+          "line": 52,
+          "target": "docs/WINDOWS_GUEST_SETUP.md",
+          "exists_at_base": true,
+          "kind": "markdown-link"
+        },
+        {
+          "line": 52,
+          "target": "traces/win11_userring_20261014/matrix-eb9f2aa3-20261014-2321.md",
+          "exists_at_base": true,
+          "kind": "markdown-link"
+        },
+        {
+          "line": 71,
+          "target": "docs/design/V3_APP_MATRIX.md",
+          "exists_at_base": true,
+          "kind": "markdown-link"
+        },
+        {
+          "line": 75,
+          "target": "docs/STATUS_DETAIL.md",
+          "exists_at_base": true,
+          "kind": "markdown-link"
+        },
+        {
+          "line": 78,
+          "target": "docs/STATUS_DETAIL.md",
+          "exists_at_base": true,
+          "kind": "markdown-link"
+        },
+        {
+          "line": 83,
+          "target": "docs/STATUS_AND_HANDOFF.md",
+          "exists_at_base": true,
+          "kind": "markdown-link"
+        },
+        {
+          "line": 83,
+          "target": "scripts/bench/windows/README.md",
+          "exists_at_base": true,
+          "kind": "markdown-link"
+        },
+        {
+          "line": 87,
+          "target": "ARCHITECTURE.md",
+          "exists_at_base": true,
+          "kind": "markdown-link"
+        },
+        {
+          "line": 87,
+          "target": "docs/design/THE_ARCHITECTURE_v3.md",
+          "exists_at_base": true,
+          "kind": "markdown-link"
+        },
+        {
+          "line": 87,
+          "target": "docs/STATUS_AND_HANDOFF.md",
+          "exists_at_base": true,
+          "kind": "markdown-link"
+        },
+        {
+          "line": 88,
+          "target": "docs/OWNER_RULINGS.md",
+          "exists_at_base": true,
+          "kind": "markdown-link"
+        },
+        {
+          "line": 88,
+          "target": "docs/FAQ.md",
+          "exists_at_base": true,
+          "kind": "markdown-link"
+        },
+        {
+          "line": 88,
+          "target": "docs/PROJECT_HISTORY.md",
+          "exists_at_base": true,
+          "kind": "markdown-link"
+        },
+        {
+          "line": 88,
+          "target": "AGENTS.md",
+          "exists_at_base": true,
+          "kind": "markdown-link"
+        },
+        {
+          "line": 90,
+          "target": "LICENSE",
+          "exists_at_base": true,
+          "kind": "markdown-link"
+        },
+        {
+          "line": 91,
+          "target": "docs/design/V3_PROVENANCE.md",
+          "exists_at_base": true,
+          "kind": "markdown-link"
+        },
+        {
+          "line": 35,
+          "target": "traces/perf_status_20261017/",
+          "exists_at_base": true,
+          "kind": "inline-evidence-path"
+        }
+      ],
+      "missing": []
+    },
+    "docs/STATUS_DETAIL.md": {
+      "checks": [
+        {
+          "line": 2,
+          "target": "README.md",
+          "exists_at_base": true,
+          "kind": "markdown-link"
+        },
+        {
+          "line": 2,
+          "target": "docs/STATUS_AND_HANDOFF.md",
+          "exists_at_base": true,
+          "kind": "markdown-link"
+        },
+        {
+          "line": 9,
+          "target": "traces/v3_mc23/README.md",
+          "exists_at_base": true,
+          "kind": "markdown-link"
+        },
+        {
+          "line": 14,
+          "target": "traces/recovered_integration_20260929/README.md",
+          "exists_at_base": true,
+          "kind": "markdown-link"
+        },
+        {
+          "line": 16,
+          "target": "docs/design/V3_APP_MATRIX.md",
+          "exists_at_base": true,
+          "kind": "markdown-link"
+        },
+        {
+          "line": 17,
+          "target": "docs/STATUS_AND_HANDOFF.md",
+          "exists_at_base": true,
+          "kind": "markdown-link"
+        },
+        {
+          "line": 25,
+          "target": "docs/STATUS_AND_HANDOFF.md",
+          "exists_at_base": true,
+          "kind": "markdown-link"
+        },
+        {
+          "line": 28,
+          "target": "docs/design/V3_FLOORSWEPT_GR.md",
+          "exists_at_base": true,
+          "kind": "markdown-link"
+        },
+        {
+          "line": 31,
+          "target": "docs/design/V3_GFX_TESTSET.md",
+          "exists_at_base": true,
+          "kind": "markdown-link"
+        },
+        {
+          "line": 37,
+          "target": "docs/archive/STATUS_DETAIL_pre_v3.md",
+          "exists_at_base": true,
+          "kind": "markdown-link"
+        },
+        {
+          "line": 49,
+          "target": "traces/v3_mc23/README.md",
+          "exists_at_base": true,
+          "kind": "markdown-link"
+        },
+        {
+          "line": 51,
+          "target": "docs/STATUS_AND_HANDOFF.md",
+          "exists_at_base": true,
+          "kind": "markdown-link"
+        },
+        {
+          "line": 61,
+          "target": "traces/v3_turing_master/README.md",
+          "exists_at_base": true,
+          "kind": "markdown-link"
+        },
+        {
+          "line": 62,
+          "target": "traces/v3_families_master/README.md",
+          "exists_at_base": true,
+          "kind": "markdown-link"
+        },
+        {
+          "line": 72,
+          "target": "docs/design/V3_APP_MATRIX.md",
+          "exists_at_base": true,
+          "kind": "markdown-link"
+        },
+        {
+          "line": 72,
+          "target": "docs/design/V3_CDP.md",
+          "exists_at_base": true,
+          "kind": "markdown-link"
+        },
+        {
+          "line": 75,
+          "target": "docs/design/V3_GFX_TESTSET.md",
+          "exists_at_base": true,
+          "kind": "markdown-link"
+        },
+        {
+          "line": 80,
+          "target": "docs/design/V3_DISPLAY.md",
+          "exists_at_base": true,
+          "kind": "markdown-link"
+        },
+        {
+          "line": 85,
+          "target": "docs/design/V3_DRIVER_MATRIX.md",
+          "exists_at_base": true,
+          "kind": "markdown-link"
+        },
+        {
+          "line": 92,
+          "target": "docs/design/V3_UVM_B3_IMPLEMENTATION.md",
+          "exists_at_base": true,
+          "kind": "markdown-link"
+        },
+        {
+          "line": 106,
+          "target": "docs/design/V3_DOORBELL_IOEVENTFD.md",
+          "exists_at_base": true,
+          "kind": "markdown-link"
+        },
+        {
+          "line": 107,
+          "target": "docs/design/V3_GUEST_DOORBELL_MODULE.md",
+          "exists_at_base": true,
+          "kind": "markdown-link"
+        },
+        {
+          "line": 124,
+          "target": "docs/design/V3_FAMILY_PORT_ADA.md",
+          "exists_at_base": true,
+          "kind": "markdown-link"
+        },
+        {
+          "line": 126,
+          "target": "docs/design/V3_FLOORSWEPT_GR.md",
+          "exists_at_base": true,
+          "kind": "markdown-link"
+        },
+        {
+          "line": 127,
+          "target": "docs/design/V3_FAMILY_PORT_BLACKWELL.md",
+          "exists_at_base": true,
+          "kind": "markdown-link"
+        },
+        {
+          "line": 137,
+          "target": "docs/design/V3_VIDEO_ENGINES.md",
+          "exists_at_base": true,
+          "kind": "markdown-link"
+        },
+        {
+          "line": 151,
+          "target": "docs/design/V3_BUILD.md",
+          "exists_at_base": true,
+          "kind": "markdown-link"
+        },
+        {
+          "line": 163,
+          "target": "docs/design/V3_REFUSAL_AUDIT.md",
+          "exists_at_base": true,
+          "kind": "markdown-link"
+        },
+        {
+          "line": 180,
+          "target": "docs/OWNER_RULINGS.md",
+          "exists_at_base": true,
+          "kind": "markdown-link"
+        },
+        {
+          "line": 227,
+          "target": "docs/design/V3_HEADLESS_GRAPHICS.md",
+          "exists_at_base": true,
+          "kind": "markdown-link"
+        },
+        {
+          "line": 238,
+          "target": "docs/design/V3_GFX_TESTSET.md",
+          "exists_at_base": true,
+          "kind": "markdown-link"
+        },
+        {
+          "line": 249,
+          "target": "docs/design/V3_VIDEO_ENGINES.md",
+          "exists_at_base": true,
+          "kind": "markdown-link"
+        },
+        {
+          "line": 257,
+          "target": "docs/design/V3_MULTI_GPU_AUDIT.md",
+          "exists_at_base": true,
+          "kind": "markdown-link"
+        },
+        {
+          "line": 292,
+          "target": "docs/design/V3_GUEST_DOORBELL_MODULE.md",
+          "exists_at_base": true,
+          "kind": "markdown-link"
+        },
+        {
+          "line": 297,
+          "target": "docs/design/V3_BATCHED_MAP.md",
+          "exists_at_base": true,
+          "kind": "markdown-link"
+        },
+        {
+          "line": 304,
+          "target": "docs/design/V3_FAMILY_PORT_BLACKWELL.md",
+          "exists_at_base": true,
+          "kind": "markdown-link"
+        },
+        {
+          "line": 313,
+          "target": "docs/design/V3_BAR1_DOORBELL.md",
+          "exists_at_base": true,
+          "kind": "markdown-link"
+        },
+        {
+          "line": 321,
+          "target": "docs/design/V3_DRIVER_MATRIX.md",
+          "exists_at_base": true,
+          "kind": "markdown-link"
+        },
+        {
+          "line": 333,
+          "target": "docs/design/V3_DISPLAY.md",
+          "exists_at_base": true,
+          "kind": "markdown-link"
+        },
+        {
+          "line": 343,
+          "target": "docs/PRODUCT_POSITIONING.md",
+          "exists_at_base": true,
+          "kind": "markdown-link"
+        },
+        {
+          "line": 357,
+          "target": "docs/design/V3_GFX_TESTSET.md",
+          "exists_at_base": true,
+          "kind": "markdown-link"
+        },
+        {
+          "line": 4,
+          "target": "traces/win11_userring_20261014/",
+          "exists_at_base": true,
+          "kind": "inline-evidence-path"
+        },
+        {
+          "line": 97,
+          "target": "traces/v3_app_matrix/vast53004208_rtx3060_4c48ca0c/",
+          "exists_at_base": true,
+          "kind": "inline-evidence-path"
+        },
+        {
+          "line": 122,
+          "target": "traces/v3_int_ga106/v3_gates_d536595d.txt",
+          "exists_at_base": true,
+          "kind": "inline-evidence-path"
+        },
+        {
+          "line": 122,
+          "target": "traces/v3_appfix/v3_gates_f703cdaf.txt",
+          "exists_at_base": true,
+          "kind": "inline-evidence-path"
+        },
+        {
+          "line": 123,
+          "target": "traces/v3_int_ga106/fast_suite_d536595d.txt",
+          "exists_at_base": true,
+          "kind": "inline-evidence-path"
+        },
+        {
+          "line": 123,
+          "target": "traces/v3_appfix/fast_suite_f703cdaf.out",
+          "exists_at_base": true,
+          "kind": "inline-evidence-path"
+        },
+        {
+          "line": 126,
+          "target": "traces/v3_gpcmask/",
+          "exists_at_base": true,
+          "kind": "inline-evidence-path"
+        },
+        {
+          "line": 127,
+          "target": "traces/v3_blackwell/",
+          "exists_at_base": true,
+          "kind": "inline-evidence-path"
+        },
+        {
+          "line": 128,
+          "target": "traces/v3_mc20/",
+          "exists_at_base": true,
+          "kind": "inline-evidence-path"
+        },
+        {
+          "line": 144,
+          "target": "traces/v3_app_matrix/",
+          "exists_at_base": true,
+          "kind": "inline-evidence-path"
+        },
+        {
+          "line": 199,
+          "target": "traces/v3_roperm/",
+          "exists_at_base": true,
+          "kind": "inline-evidence-path"
+        },
+        {
+          "line": 210,
+          "target": "traces/vh_archive/vh_apps_results.tgz",
+          "exists_at_base": true,
+          "kind": "inline-evidence-path"
+        },
+        {
+          "line": 236,
+          "target": "traces/v3_gfx/",
+          "exists_at_base": true,
+          "kind": "inline-evidence-path"
+        },
+        {
+          "line": 237,
+          "target": "traces/v3_int_ga106/gfx_guest_d536595d.txt",
+          "exists_at_base": true,
+          "kind": "inline-evidence-path"
+        },
+        {
+          "line": 271,
+          "target": "traces/llm_parity/",
+          "exists_at_base": true,
+          "kind": "inline-evidence-path"
+        },
+        {
+          "line": 305,
+          "target": "traces/v3_blackwell/",
+          "exists_at_base": true,
+          "kind": "inline-evidence-path"
+        },
+        {
+          "line": 322,
+          "target": "traces/driver_matrix/walk/",
+          "exists_at_base": true,
+          "kind": "inline-evidence-path"
+        },
+        {
+          "line": 333,
+          "target": "traces/v3_display/m0a/",
+          "exists_at_base": true,
+          "kind": "inline-evidence-path"
+        }
+      ],
+      "missing": []
+    }
+  },
+  "revision_assessments": [
+    {
+      "source": "README.md:10,56",
+      "revision": "89fc8a222",
+      "ancestor_of_base": true,
+      "assessment": "valid historical relay evidence; base contains subsequent product edits; do not retag measurements as rerun"
+    },
+    {
+      "source": "README.md:51",
+      "revision": "eb9f2aa3",
+      "ancestor_of_base": true,
+      "assessment": "valid older app matrix, explicitly scoped"
+    },
+    {
+      "source": "docs/STATUS_DETAIL.md:47",
+      "revision": "afb552ea",
+      "ancestor_of_base": true,
+      "assessment": "current-master sentence superseded; section already marked historical by opening update"
+    }
+  ]
+}

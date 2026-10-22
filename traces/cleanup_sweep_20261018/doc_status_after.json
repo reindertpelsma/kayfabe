@@ -1,0 +1,65 @@
+{
+  "checked": 129,
+  "violations": [
+    {
+      "path": "docs/design/V3_BAR1_DOORBELL.md",
+      "line": 10,
+      "kind": "invalid-status",
+      "message": "use one of LIVE, SUPERSEDED, ANSWERED, DESIGN-ONLY, RESEARCH"
+    },
+    {
+      "path": "docs/design/V3_BAR1_DOORBELL.md",
+      "line": 10,
+      "kind": "misplaced-status",
+      "message": "move current STATUS before opening prose/corrections"
+    },
+    {
+      "path": "docs/design/V3_DOORBELL_IOEVENTFD.md",
+      "line": 3,
+      "kind": "invalid-status",
+      "message": "use one of LIVE, SUPERSEDED, ANSWERED, DESIGN-ONLY, RESEARCH"
+    },
+    {
+      "path": "docs/design/V3_HEADLESS_GRAPHICS.md",
+      "line": 3,
+      "kind": "invalid-status",
+      "message": "use one of LIVE, SUPERSEDED, ANSWERED, DESIGN-ONLY, RESEARCH"
+    },
+    {
+      "path": "docs/design/V3_P4_PORT_MAP.md",
+      "line": 3,
+      "kind": "invalid-status",
+      "message": "use one of LIVE, SUPERSEDED, ANSWERED, DESIGN-ONLY, RESEARCH"
+    },
+    {
+      "path": "docs/design/V3_P5_PORT_MAP.md",
+      "line": 3,
+      "kind": "invalid-status",
+      "message": "use one of LIVE, SUPERSEDED, ANSWERED, DESIGN-ONLY, RESEARCH"
+    },
+    {
+      "path": "docs/design/V3_SECURITY_AUDIT_PLAN.md",
+      "line": 3,
+      "kind": "invalid-status",
+      "message": "use one of LIVE, SUPERSEDED, ANSWERED, DESIGN-ONLY, RESEARCH"
+    },
+    {
+      "path": "docs/design/V3_SWEEP_AND_INSTALL.md",
+      "line": 3,
+      "kind": "invalid-status",
+      "message": "use one of LIVE, SUPERSEDED, ANSWERED, DESIGN-ONLY, RESEARCH"
+    },
+    {
+      "path": "docs/design/V3_USER_RING_LIFECYCLE_REVIEW1_20261016.md",
+      "line": 1,
+      "kind": "missing-status",
+      "message": "open with a dated STATUS using an allowed state"
+    },
+    {
+      "path": "docs/design/V3_UVM_B3_IMPLEMENTATION.md",
+      "line": 3,
+      "kind": "invalid-status",
+      "message": "use one of LIVE, SUPERSEDED, ANSWERED, DESIGN-ONLY, RESEARCH"
+    }
+  ]
+}
