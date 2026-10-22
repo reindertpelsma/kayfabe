@@ -1,0 +1,16 @@
+{
+  "kind": "MEASURED",
+  "lease_id": 57193877,
+  "production_source": "1700543393c34f93adc0611430e3d49ab38eca3a",
+  "harness_revision": "950b5a931fbeeb5c146ada33787a888dfc628023",
+  "receipt": "S4_RESUME_PRECONDITIONS_PASS\nS4_DESKTOP_RESUME_PID=97586",
+  "files": {
+    "/root/kayfabe/scripts/bench/diesweep/desktop/live_qemu.py": "505efce54c967a58a90524b4c523264aa28172cd57e721205d75a5bf7e350b21",
+    "/root/s2/bind.sh": "81f768562cc67b02387e94c069b88ae9f2e4c041fac7e399982577972e6d90c9",
+    "/root/s2/arm.sh": "e24f7f4a924f639c98d6ed1e1ea778cd54359222e0af061664218cc08922107e",
+    "/root/s2/native_baseline.sh": "668b5cc635100439334241b25e92782cbdc10313a8e7db7bf8bb0fd232caabbd",
+    "/root/s4/bind.sh": "81f768562cc67b02387e94c069b88ae9f2e4c041fac7e399982577972e6d90c9",
+    "/root/sweep_native_baseline.sh": "668b5cc635100439334241b25e92782cbdc10313a8e7db7bf8bb0fd232caabbd"
+  },
+  "scope": "Seal already-stopped disabled-driver parent; reuse completed native/install/bind evidence; re-arm unchanged Xid baseline; start desktop once."
+}

@@ -1,0 +1,86 @@
+{
+  "kind": "MEASURED",
+  "lease_id": 57193877,
+  "source": "1700543393c34f93adc0611430e3d49ab38eca3a",
+  "run": "ad102_s4",
+  "rpc_rows": 5720,
+  "events": [
+    {
+      "event_utc": "2026-10-22T10:56:35.5976738+00:00",
+      "nearest_observer_rpc_before": {
+        "ordinal": 4092,
+        "observed_utc": "2026-10-22T10:56:34.602601+00:00",
+        "observer_monotonic_ns": 2742888178999,
+        "function": 76,
+        "kind": "RmControl",
+        "sequence": 0,
+        "selector": "0xc3720101",
+        "trace_result": "0x0",
+        "file_offset_after": 1247989
+      },
+      "nearest_observer_rpc_after": {
+        "ordinal": 4093,
+        "observed_utc": "2026-10-22T10:56:36.214142+00:00",
+        "observer_monotonic_ns": 2744499737641,
+        "function": 76,
+        "kind": "RmControl",
+        "sequence": 0,
+        "selector": "0x20809064",
+        "trace_result": "0x56",
+        "file_offset_after": 1254306
+      }
+    },
+    {
+      "event_utc": "2026-10-22T10:56:56.4634652+00:00",
+      "nearest_observer_rpc_before": {
+        "ordinal": 4618,
+        "observed_utc": "2026-10-22T10:56:51.724323+00:00",
+        "observer_monotonic_ns": 2760009900546,
+        "function": 76,
+        "kind": "RmControl",
+        "sequence": 0,
+        "selector": "0x2080b201",
+        "trace_result": "none",
+        "file_offset_after": 1535346
+      },
+      "nearest_observer_rpc_after": {
+        "ordinal": 4619,
+        "observed_utc": "2026-10-22T10:57:08.116978+00:00",
+        "observer_monotonic_ns": 2776402572060,
+        "function": 76,
+        "kind": "RmControl",
+        "sequence": 0,
+        "selector": "0x20809064",
+        "trace_result": "0x56",
+        "file_offset_after": 1594096
+      }
+    },
+    {
+      "event_utc": "2026-10-22T10:58:36+00:00",
+      "nearest_observer_rpc_before": {
+        "ordinal": 5192,
+        "observed_utc": "2026-10-22T10:58:35.435881+00:00",
+        "observer_monotonic_ns": 2863721458207,
+        "function": 76,
+        "kind": "RmControl",
+        "sequence": 0,
+        "selector": "0x2080b201",
+        "trace_result": "none",
+        "file_offset_after": 2073636
+      },
+      "nearest_observer_rpc_after": {
+        "ordinal": 5193,
+        "observed_utc": "2026-10-22T10:58:36.644109+00:00",
+        "observer_monotonic_ns": 2864929699989,
+        "function": 76,
+        "kind": "RmControl",
+        "sequence": 0,
+        "selector": "0x20809064",
+        "trace_result": "0x56",
+        "file_offset_after": 2074022
+      }
+    }
+  ],
+  "causal_rpc": "NOT ESTABLISHED; observer timestamps are not driver-generation times",
+  "diagnostic": "One WATCHDOG live dump and three Application WER LiveKernelEvent193 reports; no nvlddmkm or Display events in the collected queries. Reason text815 remains unexplained."
+}

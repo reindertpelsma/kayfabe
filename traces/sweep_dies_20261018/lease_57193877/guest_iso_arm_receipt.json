@@ -1,0 +1,14 @@
+{
+  "kind": "MEASURED",
+  "lease_id": 57193877,
+  "production_source": "1700543393c34f93adc0611430e3d49ab38eca3a",
+  "harness_revision": "dbfb5083bfb0bea44b95997e0ae83a23a33680a9",
+  "receipt": "/workspace/sweep-win-57193877/kfwin/disk/bw580_bind.qcow2: OK\nS4_GUEST_ISO_RESUME_PID=100107",
+  "files": {
+    "/root/s2/arm.sh": "04a41fe4ae84cb8dfe13c734d59f06203de2ad5f6d35acb9491004bbe9d63696",
+    "/root/s4/desktop.sh": "f411f6cc4b9f363c50be607d10dc5807148ff8b68beabe56ce687e158bca8d47",
+    "/root/kayfabe/scripts/bench/diesweep/desktop/matrix.py": "31a8bf174f6690fedc4e942f3c7876abb27c00ef7a6873c0588c73c3325157db",
+    "/root/kayfabe/scripts/bench/diesweep/desktop/mount_app_disk.ps1": "8658a4582d682f6a2cc6d457cac5841927614c2ccce2f67ea6bb01078461abef"
+  },
+  "scope": "Second fresh child from the unchanged disabled-driver parent; copy pinned ISO before enable; use native-reference read-only Windows mount and verified probe overrides."
+}

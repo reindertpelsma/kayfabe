@@ -1,0 +1,3 @@
+{"CrashDumpEnabled":3,"AutoReboot":1,"Overwrite":1,"LogEvent":1,"MinidumpDir":"C:\\WINDOWS\\Minidump"}
+PAGEFILE C:\pagefile.sys 8192
+CRASHDUMP_READY=1 (small memory dump, effective from the next boot)
