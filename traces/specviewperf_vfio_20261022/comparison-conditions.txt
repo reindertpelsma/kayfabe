@@ -9,3 +9,16 @@ INFERRED: ratios in the render/display-capped rows are reference comparisons, no
 MEASURED: Enscape SanMiguel UltraHQ completed after about8min elapsed, reporting120frames/123.98s=0.97FPS; the elapsed interval includes setup/calibration outside that timed window.
 MEASURED: a read-only foreground observer saw EnscapeClientBench active in10/10samples, and a GPU sample showedP2/2865MHzgraphicsclock/100%utilization. No timeout or profile setting was changed.
 MEASURED: one memory sample during that heavy scene showed5590MiB GPUusage and4758844KiB free physical RAM. These are point observations, not peaks or whole-run averages.
+MEASURED: native QEMU Cpus_allowed_list=0-23, Mems_allowed_list=0.
+CODE READ: owner top-level launcher and called shell wrapper contain no taskset,
+numactl, chrt, cpuset, or nice command. Original process runtime affinity was not
+captured before exit, so this is not proof of identical scheduling history.
+MEASURED: Blender foreground window/client=1920x1080, DPI144 in iteration2.
+MEASURED: a SolidWorks client capture in iteration1 was1920x998 despite FullHD
+being requested/reported. Exact framebuffer geometry for that workload is not
+verified. Keep this separate from the Blender geometry measurement.
+MEASURED: saved result metadata explicitly lists SolidWorks FullHD window1920x998,
+matching the captured client. Shared baseline/native Blender,CATIA,Creo,Energy
+Window definitions and workloadOptions are identical; workload-window-settings.json.
+This identifies the vendor's declared dimensions; original runtime rectangles and
+vsync state are still unmeasured. No local resize/DPI override was applied.

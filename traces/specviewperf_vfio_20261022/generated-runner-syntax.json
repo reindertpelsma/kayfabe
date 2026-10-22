@@ -1,0 +1,9 @@
+{
+  "embeddedErrors": [],
+  "sha256": "C0275B5BAF6262708E6DF968A31B9C96DE0C6183AA35BADB4ACDD98323171B65",
+  "parsedPrograms": 2,
+  "outerErrors": [],
+  "embeddedRunnerCount": 1,
+  "classification": "MEASURED",
+  "note": "PowerShell parser validated installer and embedded runner without executing them; actual selected follow-up run is pending."
+}

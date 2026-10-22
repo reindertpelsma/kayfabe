@@ -1,0 +1,285 @@
+{
+  "classification": "MEASURED",
+  "matchingSharedWorkloadDefinitions": [
+    "blender-01",
+    "catia-07",
+    "creo-04",
+    "energy-04"
+  ],
+  "records": [
+    {
+      "run": "result_2026-10-21-22-27-14",
+      "workloadOptions": "",
+      "workload": "blender-01",
+      "window": [
+        {
+          "Resolution": "3840x2160",
+          "Height": 2120,
+          "Width": 3800,
+          "X": 10,
+          "Y": 20
+        },
+        {
+          "Resolution": "1920x1080",
+          "Height": 1060,
+          "Width": 1900,
+          "X": 10,
+          "Y": 20
+        }
+      ]
+    },
+    {
+      "run": "result_2026-10-21-22-27-14",
+      "workloadOptions": "",
+      "workload": "catia-07",
+      "window": [
+        {
+          "Resolution": "3840x2160",
+          "Height": 2071,
+          "Width": 3840,
+          "X": 0,
+          "Y": 0
+        },
+        {
+          "Resolution": "1920x1080",
+          "Height": 1002,
+          "Width": 1882,
+          "X": 10,
+          "Y": 20
+        }
+      ]
+    },
+    {
+      "run": "result_2026-10-21-22-27-14",
+      "workloadOptions": "",
+      "workload": "creo-04",
+      "window": [
+        {
+          "Resolution": "3840x2160",
+          "Height": 2120,
+          "Width": 3800,
+          "X": 10,
+          "Y": 20
+        },
+        {
+          "Resolution": "1920x1080",
+          "Height": 1060,
+          "Width": 1900,
+          "X": 10,
+          "Y": 20
+        }
+      ]
+    },
+    {
+      "run": "result_2026-10-21-22-27-14",
+      "workloadOptions": "",
+      "workload": "energy-04",
+      "window": [
+        {
+          "Resolution": "3840x2160",
+          "Height": 2120,
+          "Width": 3800,
+          "X": 10,
+          "Y": 20
+        },
+        {
+          "Resolution": "1920x1080",
+          "Height": 1060,
+          "Width": 1900,
+          "X": 10,
+          "Y": 20
+        }
+      ]
+    },
+    {
+      "run": "result_2026-10-21-23-51-37",
+      "workloadOptions": "",
+      "workload": "blender-01",
+      "window": [
+        {
+          "Resolution": "3840x2160",
+          "Height": 2120,
+          "Width": 3800,
+          "X": 10,
+          "Y": 20
+        },
+        {
+          "Resolution": "1920x1080",
+          "Height": 1060,
+          "Width": 1900,
+          "X": 10,
+          "Y": 20
+        }
+      ]
+    },
+    {
+      "run": "result_2026-10-21-23-51-37",
+      "workloadOptions": "",
+      "workload": "catia-07",
+      "window": [
+        {
+          "Resolution": "3840x2160",
+          "Height": 2071,
+          "Width": 3840,
+          "X": 0,
+          "Y": 0
+        },
+        {
+          "Resolution": "1920x1080",
+          "Height": 1002,
+          "Width": 1882,
+          "X": 10,
+          "Y": 20
+        }
+      ]
+    },
+    {
+      "run": "result_2026-10-21-23-51-37",
+      "workloadOptions": "",
+      "workload": "creo-04",
+      "window": [
+        {
+          "Resolution": "3840x2160",
+          "Height": 2120,
+          "Width": 3800,
+          "X": 10,
+          "Y": 20
+        },
+        {
+          "Resolution": "1920x1080",
+          "Height": 1060,
+          "Width": 1900,
+          "X": 10,
+          "Y": 20
+        }
+      ]
+    },
+    {
+      "run": "result_2026-10-21-23-51-37",
+      "workloadOptions": "",
+      "workload": "energy-04",
+      "window": [
+        {
+          "Resolution": "3840x2160",
+          "Height": 2120,
+          "Width": 3800,
+          "X": 10,
+          "Y": 20
+        },
+        {
+          "Resolution": "1920x1080",
+          "Height": 1060,
+          "Width": 1900,
+          "X": 10,
+          "Y": 20
+        }
+      ]
+    },
+    {
+      "run": "result_2026-10-21-23-51-37",
+      "workloadOptions": "",
+      "workload": "enscape-01",
+      "window": [
+        {
+          "Resolution": "3840x2160",
+          "Height": 2120,
+          "Width": 3800,
+          "X": 10,
+          "Y": 20
+        },
+        {
+          "Resolution": "1920x1080",
+          "Height": 1060,
+          "Width": 1900,
+          "X": 10,
+          "Y": 20
+        }
+      ]
+    },
+    {
+      "run": "result_2026-10-21-23-51-37",
+      "workloadOptions": "",
+      "workload": "maya-07",
+      "window": [
+        {
+          "Resolution": "3840x2160",
+          "Height": 2120,
+          "Width": 3800,
+          "X": 10,
+          "Y": 20
+        },
+        {
+          "Resolution": "1920x1080",
+          "Height": 1060,
+          "Width": 1900,
+          "X": 10,
+          "Y": 20
+        }
+      ]
+    },
+    {
+      "run": "result_2026-10-21-23-51-37",
+      "workloadOptions": "",
+      "workload": "medical-04",
+      "window": [
+        {
+          "Resolution": "3840x2160",
+          "Height": 2120,
+          "Width": 3800,
+          "X": 10,
+          "Y": 20
+        },
+        {
+          "Resolution": "1920x1080",
+          "Height": 1060,
+          "Width": 1900,
+          "X": 10,
+          "Y": 20
+        }
+      ]
+    },
+    {
+      "run": "result_2026-10-21-23-51-37",
+      "workloadOptions": "",
+      "workload": "solidworks-08",
+      "window": [
+        {
+          "Resolution": "3840x2160",
+          "Height": 2078,
+          "Width": 3840,
+          "X": 0,
+          "Y": 0
+        },
+        {
+          "Resolution": "1920x1080",
+          "Height": 998,
+          "Width": 1920,
+          "X": 0,
+          "Y": 0
+        }
+      ]
+    },
+    {
+      "run": "result_2026-10-21-23-51-37",
+      "workloadOptions": "",
+      "workload": "unreal_engine-01",
+      "window": [
+        {
+          "Resolution": "3840x2160",
+          "Height": 2120,
+          "Width": 3800,
+          "X": 10,
+          "Y": 20
+        },
+        {
+          "Resolution": "1920x1080",
+          "Height": 1060,
+          "Width": 1900,
+          "X": 10,
+          "Y": 20
+        }
+      ]
+    }
+  ],
+  "note": "Saved result.json Window definitions and workloadOptions only; no raw system info. FullHD is a vendor mode label with per-workload window dimensions. Actual original guest client rectangles and driver/application vsync remain unverified."
+}

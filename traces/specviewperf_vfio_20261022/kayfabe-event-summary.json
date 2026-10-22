@@ -1,0 +1,16 @@
+{
+  "classification": "MEASURED",
+  "source": "owner-authorized snapshot3 guest event text",
+  "guestBenchmarkStart": "2026-10-21T22:27:14+02:00",
+  "guestSnapshotTime": "2026-10-21T23:20:48.6028128+02:00",
+  "counts": [
+    {
+      "provider": "nvlddmkm",
+      "id": 153,
+      "count": 39
+    }
+  ],
+  "firstGuestEvent": "2026-10-21T22:38:57",
+  "lastGuestEvent": "2026-10-21T22:49:26",
+  "note": "Counted formatted event records in the saved interval; event153 by itself is not asserted to prove a TDR or its cause. Guest clock is two hours behind host local time."
+}

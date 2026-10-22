@@ -48,12 +48,14 @@ MEASURED: the native CoW guest booted at 01:50:13 CEST under the GPU lock.
 The first full iteration completed all nine workloads and 75 subtests at
 03:15 CEST. Official vendor results.csv is preserved in vfio-run1-vendor-results.csv;
 its nine composites agree with the selected result.json values. The second full
-iteration started immediately with unchanged settings. At03:40CEST, its first
-four workloads completed: blender60.61, catia63.13, creo103.97, energy54.67.
-Their two-sample ranges divided by mean are1.64%,0.05%,0.93%,0.18%.
+iteration started immediately with unchanged settings. At04:03CEST, its first
+five workloads completed: blender60.61, catia63.13, creo103.97, energy54.67,
+enscape37.39. Their two-sample ranges divided by mean are1.64%,0.05%,0.93%,
+0.18%,0.35%.
 Native composites: blender61.61, catia63.10, creo104.94, energy54.57,
 enscape37.26, maya162.14, medical50.54, solidworks29.51, unreal63.58.
-These remain one-sample diagnostic results, not repeatability claims.
+The final four workloads still have only one complete sample; the second full
+iteration is not yet complete. These are diagnostic reference results.
 
 INFERRED hypothesis before baseline score read: completed Energy has a saved
 vendor composite. FALSIFIER: no result.json or original run-log lacks Completed.
@@ -62,13 +64,22 @@ The file was read from the specified original directory through the native CoW.
 It does not establish any other baseline workload as completed.
 
 MEASURED: physical desktop3840x2160/60Hz; CLI/stdout request/report1920x1080.
-A captured SolidWorks client was1920x998; exact framebuffer size is not verified.
+A captured SolidWorks client was1920x998, matching its saved vendor FullHD
+Window definition. The four shared baseline/native workload Window definitions
+and workloadOptions are identical; original runtime rectangles remain unmeasured.
 Native Blender rendering reaches266.42FPS, so vendor rendering FPS is not
 uniformly capped at display refresh. No vsync/profile override was applied to
 either arm. Kayfabe broker59.996Hz output pacing is a different metric.
 Native VRAM12,282MiB versus owner's kayfabe store8,192MiB is a confound.
 No new host Xid has been reported by the journal watcher. Backing image is
 open read-only; see disk-preservation.json.
+
+MEASURED: paired-subtests.csv preserves all27baseline numeric rows against both
+native samples. Largest native-mean/baseline ratios: Blender07=4.383x,
+Enscape04=4.157x, Blender04=3.417x. Enscape04 has11.42%range/mean across its
+two native FPS values. The completed Energy composite averages54.62 versus
+baseline45.60 (+19.8%). Capacity, caps and partial baseline status limit causal
+interpretation. No overall suite composite is fabricated.
 
 ## Previous attempt — safety stop (superseded by the owner override above)
 
