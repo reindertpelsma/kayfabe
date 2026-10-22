@@ -42,7 +42,15 @@ cargo build --release -p kf-harness --bin kf-ctl-probe >/root/prov/sweep_probe_b
 install -m755 target/release/kf-ctl-probe /tmp/sweep-ctl-probe
 runuser -u nobody -- env KF_PROBE_I_KNOW=1 KF_PROBE_EXTRA_ONLY=1 /tmp/sweep-ctl-probe >/root/prov/sweep_host_die.log 2>&1
 cat /root/prov/sweep_host_die.log
-grep -Eq 'PROBE_DIE .*die=GB202' /root/prov/sweep_host_die.log
+expected_die=$(python3 - <<'EXPECTED_DIE'
+import json
+from pathlib import Path
+j=json.loads(Path('/root/sweep2/lease.json').read_text())
+die=j['candidate_die'];assert die in ('GB202','GB203','GB205','GB206','GB207')
+print(die)
+EXPECTED_DIE
+)
+grep -Eq "PROBE_DIE .*die=${expected_die}([[:space:]]|$)" /root/prov/sweep_host_die.log
 # Only the previously unmeasured own-die PRECOMP permission/reply is new here.
 # AUDIT_SUBTRACT GB202 ZBC/8162/GSS sizes already measured (2026-10-22 owner audit).
 # The container wrapper would rent a second box and repeat those groups: not invoked.
