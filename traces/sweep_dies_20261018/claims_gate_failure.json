@@ -1,0 +1,12 @@
+{
+  "kind": "MEASURED",
+  "run": "S4-claims-20261022",
+  "revision": "3f157816d7a36425edc3c6ac4cdf5358789db868",
+  "command": "python3 scripts/ci/debt.py claims",
+  "summary": "claims: existing-debt=3757 new=188 resolved=1",
+  "required_new": 0,
+  "actual_new": 188,
+  "scope": "tracked files before adding S4 evidence; imported source and evidence are included",
+  "action": "No push. Debt baselines unchanged.",
+  "utc": "2026-10-22T09:44:12.652167+00:00"
+}

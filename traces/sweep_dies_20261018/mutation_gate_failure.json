@@ -1,0 +1,20 @@
+{
+  "kind": "MEASURED",
+  "run": "S4-local-20261022",
+  "utc": "2026-10-22T09:42:47.453099+00:00",
+  "mutant": "all_153_fatal",
+  "mutation": "Use all queried events as fatal, including Kernel-Boot 153 before desktop",
+  "suite": "test_desktop_health.py",
+  "exit": 1,
+  "killers": [
+    "test_boot_153_before_desktop_does_not_refuse"
+  ],
+  "required_distinct_killers": 2,
+  "actual_distinct_killers": 1,
+  "gate": "FAIL; stop per lane instructions",
+  "remaining_mutants": "NOT RUN",
+  "proposed_changes": "proposed_health_signin.patch; inactive after restoration",
+  "hardware_runs": 0,
+  "leases_created": [],
+  "spend_usd": 0
+}

@@ -1,0 +1,66 @@
+test_boot_153_before_desktop_does_not_refuse (test_desktop_health.DesktopHealthTests.test_boot_153_before_desktop_does_not_refuse) ... FAIL
+test_boot_153_is_retained_with_its_epoch (test_desktop_health.DesktopHealthTests.test_boot_153_is_retained_with_its_epoch) ... FAIL
+test_boot_provider_after_desktop_refuses (test_desktop_health.DesktopHealthTests.test_boot_provider_after_desktop_refuses) ... FAIL
+test_clean_desktop_passes (test_desktop_health.DesktopHealthTests.test_clean_desktop_passes) ... ok
+test_display_4101_and_bugcheck_refuse (test_desktop_health.DesktopHealthTests.test_display_4101_and_bugcheck_refuse) ... ok
+test_missing_explorer_refuses_even_with_dwm (test_desktop_health.DesktopHealthTests.test_missing_explorer_refuses_even_with_dwm) ... ok
+test_no_interactive_user_refuses (test_desktop_health.DesktopHealthTests.test_no_interactive_user_refuses) ... FAIL
+test_nvidia_153_before_and_after_desktop_refuses (test_desktop_health.DesktopHealthTests.test_nvidia_153_before_and_after_desktop_refuses) ... ok
+test_unreadable_log_refuses (test_desktop_health.DesktopHealthTests.test_unreadable_log_refuses) ... ok
+
+======================================================================
+FAIL: test_boot_153_before_desktop_does_not_refuse (test_desktop_health.DesktopHealthTests.test_boot_153_before_desktop_does_not_refuse)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "CHECKOUT/scripts/bench/tests/test_desktop_health.py", line 68, in test_boot_153_before_desktop_does_not_refuse
+    self.assertEqual(p.returncode, 0, p.stdout + p.stderr)
+    ~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: 1 != 0 : S2_HEALTH {"utc":"2026-10-22T09:39:07.3221497Z","boot":"2026-10-22T04:25:15.0000000Z","system_log_readable":1,"events4101":0,"events153":1,"bugcheck1001":0,"driver":"32.0.15.8088","code":0,"dwm":1,"explorer":1}
+{"TimeCreated":"2026-10-22T04:25:20Z","Id":153,"ProviderName":"Microsoft-Windows-Kernel-Boot","Message":"fixture"}
+Exception: CHECKOUT/scripts/bench/diesweep/desktop/health.ps1:12
+Line |
+  12 |  … ents.Count){throw 'S2 desktop/driver/zero-4101-153-bugcheck guard fai …
+     |                ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+     | S2 desktop/driver/zero-4101-153-bugcheck guard failed
+
+
+======================================================================
+FAIL: test_boot_153_is_retained_with_its_epoch (test_desktop_health.DesktopHealthTests.test_boot_153_is_retained_with_its_epoch)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "CHECKOUT/scripts/bench/tests/test_desktop_health.py", line 73, in test_boot_153_is_retained_with_its_epoch
+    self.assertEqual(h.get('boot153_pre_desktop'), 1, p.stdout + p.stderr)
+    ~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: None != 1 : S2_HEALTH {"utc":"2026-10-22T09:39:07.9218244Z","boot":"2026-10-22T04:25:15.0000000Z","system_log_readable":1,"events4101":0,"events153":1,"bugcheck1001":0,"driver":"32.0.15.8088","code":0,"dwm":1,"explorer":1}
+{"TimeCreated":"2026-10-22T04:25:20Z","Id":153,"ProviderName":"Microsoft-Windows-Kernel-Boot","Message":"fixture"}
+Exception: CHECKOUT/scripts/bench/diesweep/desktop/health.ps1:12
+Line |
+  12 |  … ents.Count){throw 'S2 desktop/driver/zero-4101-153-bugcheck guard fai …
+     |                ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+     | S2 desktop/driver/zero-4101-153-bugcheck guard failed
+
+
+======================================================================
+FAIL: test_boot_provider_after_desktop_refuses (test_desktop_health.DesktopHealthTests.test_boot_provider_after_desktop_refuses)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "CHECKOUT/scripts/bench/tests/test_desktop_health.py", line 85, in test_boot_provider_after_desktop_refuses
+    self.assertEqual(h.get('unclassified153'), 1)
+    ~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: None != 1
+
+======================================================================
+FAIL: test_no_interactive_user_refuses (test_desktop_health.DesktopHealthTests.test_no_interactive_user_refuses)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "CHECKOUT/scripts/bench/tests/test_desktop_health.py", line 98, in test_no_interactive_user_refuses
+    self.assertNotEqual(p.returncode, 0, p.stdout)
+    ~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: 0 == 0 : S2_HEALTH {"utc":"2026-10-22T09:39:11.3091180Z","boot":"2026-10-22T04:25:15.0000000Z","system_log_readable":1,"events4101":0,"events153":0,"bugcheck1001":0,"driver":"32.0.15.8088","code":0,"dwm":1,"explorer":1}
+S2_HEALTH_PASS 2026-10-22T09:39:11.3382153Z
+
+
+----------------------------------------------------------------------
+Ran 9 tests in 6.427s
+
+FAILED (failures=4)

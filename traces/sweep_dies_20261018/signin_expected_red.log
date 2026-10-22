@@ -1,0 +1,64 @@
+test_configured_account_match_is_case_insensitive (test_signin_user.SigninUserTests.test_configured_account_match_is_case_insensitive) ... ERROR
+test_different_account_is_never_accepted (test_signin_user.SigninUserTests.test_different_account_is_never_accepted) ... FAIL
+test_existing_vast_caller_still_works (test_signin_user.SigninUserTests.test_existing_vast_caller_still_works) ... ok
+test_kf_session_is_verified_without_typing (test_signin_user.SigninUserTests.test_kf_session_is_verified_without_typing) ... ERROR
+
+======================================================================
+ERROR: test_configured_account_match_is_case_insensitive (test_signin_user.SigninUserTests.test_configured_account_match_is_case_insensitive)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "CHECKOUT/scripts/bench/tests/test_signin_user.py", line 31, in test_configured_account_match_is_case_insensitive
+    self.assertIn('already signed in', self.verify('KF', 'FIXTURE\\kf\n'))
+                                       ~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^
+  File "CHECKOUT/scripts/bench/tests/test_signin_user.py", line 24, in verify
+    signin.main()
+    ~~~~~~~~~~~^^
+  File "CHECKOUT/scripts/bench/windows/signin.py", line 60, in main
+    with socket.socket(socket.AF_UNIX) as sock:
+         ~~~~~~~~~~~~~^^^^^^^^^^^^^^^^
+  File "/usr/lib/python3.14/unittest/mock.py", line 1176, in __call__
+    return self._mock_call(*args, **kwargs)
+           ~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^
+  File "/usr/lib/python3.14/unittest/mock.py", line 1180, in _mock_call
+    return self._execute_mock_call(*args, **kwargs)
+           ~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^
+  File "/usr/lib/python3.14/unittest/mock.py", line 1241, in _execute_mock_call
+    raise effect
+RuntimeError: would type credentials
+
+======================================================================
+ERROR: test_kf_session_is_verified_without_typing (test_signin_user.SigninUserTests.test_kf_session_is_verified_without_typing)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "CHECKOUT/scripts/bench/tests/test_signin_user.py", line 28, in test_kf_session_is_verified_without_typing
+    self.assertIn('already signed in', self.verify('kf', 'FIXTURE\\kf\n'))
+                                       ~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^
+  File "CHECKOUT/scripts/bench/tests/test_signin_user.py", line 24, in verify
+    signin.main()
+    ~~~~~~~~~~~^^
+  File "CHECKOUT/scripts/bench/windows/signin.py", line 60, in main
+    with socket.socket(socket.AF_UNIX) as sock:
+         ~~~~~~~~~~~~~^^^^^^^^^^^^^^^^
+  File "/usr/lib/python3.14/unittest/mock.py", line 1176, in __call__
+    return self._mock_call(*args, **kwargs)
+           ~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^
+  File "/usr/lib/python3.14/unittest/mock.py", line 1180, in _mock_call
+    return self._execute_mock_call(*args, **kwargs)
+           ~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^
+  File "/usr/lib/python3.14/unittest/mock.py", line 1241, in _execute_mock_call
+    raise effect
+RuntimeError: would type credentials
+
+======================================================================
+FAIL: test_different_account_is_never_accepted (test_signin_user.SigninUserTests.test_different_account_is_never_accepted)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "CHECKOUT/scripts/bench/tests/test_signin_user.py", line 34, in test_different_account_is_never_accepted
+    with self.assertRaisesRegex(RuntimeError, 'would type'):
+         ~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: RuntimeError not raised
+
+----------------------------------------------------------------------
+Ran 4 tests in 0.004s
+
+FAILED (failures=1, errors=2)

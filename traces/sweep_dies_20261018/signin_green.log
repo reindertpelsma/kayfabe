@@ -1,0 +1,9 @@
+test_configured_account_match_is_case_insensitive (test_signin_user.SigninUserTests.test_configured_account_match_is_case_insensitive) ... ok
+test_different_account_is_never_accepted (test_signin_user.SigninUserTests.test_different_account_is_never_accepted) ... ok
+test_existing_vast_caller_still_works (test_signin_user.SigninUserTests.test_existing_vast_caller_still_works) ... ok
+test_kf_session_is_verified_without_typing (test_signin_user.SigninUserTests.test_kf_session_is_verified_without_typing) ... ok
+
+----------------------------------------------------------------------
+Ran 4 tests in 0.002s
+
+OK

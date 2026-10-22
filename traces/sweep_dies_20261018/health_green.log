@@ -1,0 +1,16 @@
+test_boot_153_before_desktop_does_not_refuse (test_desktop_health.DesktopHealthTests.test_boot_153_before_desktop_does_not_refuse) ... ok
+test_boot_153_is_retained_with_its_epoch (test_desktop_health.DesktopHealthTests.test_boot_153_is_retained_with_its_epoch) ... ok
+test_boot_provider_after_desktop_refuses (test_desktop_health.DesktopHealthTests.test_boot_provider_after_desktop_refuses) ... ok
+test_clean_desktop_passes (test_desktop_health.DesktopHealthTests.test_clean_desktop_passes) ... ok
+test_display_4101_and_bugcheck_refuse (test_desktop_health.DesktopHealthTests.test_display_4101_and_bugcheck_refuse) ... ok
+test_late_boot_event_never_claims_health_pass (test_desktop_health.DesktopHealthTests.test_late_boot_event_never_claims_health_pass) ... ok
+test_missing_explorer_refuses_even_with_dwm (test_desktop_health.DesktopHealthTests.test_missing_explorer_refuses_even_with_dwm) ... ok
+test_no_interactive_user_refuses (test_desktop_health.DesktopHealthTests.test_no_interactive_user_refuses) ... ok
+test_null_interactive_user_refuses (test_desktop_health.DesktopHealthTests.test_null_interactive_user_refuses) ... ok
+test_nvidia_153_before_and_after_desktop_refuses (test_desktop_health.DesktopHealthTests.test_nvidia_153_before_and_after_desktop_refuses) ... ok
+test_unreadable_log_refuses (test_desktop_health.DesktopHealthTests.test_unreadable_log_refuses) ... ok
+
+----------------------------------------------------------------------
+Ran 11 tests in 7.297s
+
+OK
