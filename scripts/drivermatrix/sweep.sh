@@ -30,6 +30,9 @@
 #     RESTORE_REF 1   swap back to REF_HOST at the end, so the box is left as provisioned
 #     SWEEP_ROOT /workspace/bench/sweep   QEMU_SRC /workspace/bench/qemu-10.2.4
 #     SWEEP_LOG       DRY_RUN only: preview the plan against this log (e.g. a pulled copy)
+#     SWEEP_NATIVE_PROOF  optional revision-relative .sh proof; nonzero blocks every guest,
+#                         including on resume. Success is remeasured on the current host.
+#     T_NATIVE_PROOF  900 seconds for that optional stage
 #     T_*             step timeouts in seconds (below)
 #
 # ## Output — the queue-log lines `matrix_table.py` already parses, each result line + `arch=<die>`
@@ -331,6 +334,8 @@ guests_for() {  # <host> → its guest set: the default guest; + every guest on 
 }
 canary_passed() { [ "$DRY" = 1 ] || grep -a "^CANARY host=$1 verdict=" "$LOG" 2>/dev/null | tail -1 | grep -q 'verdict=PASS'; }
 
+source "$REPO/scripts/drivermatrix/native_proof.sh"
+
 # ── preconditions, identity, resume checks ────────────────────────────────────────────────────
 if [ "$DRY" != 1 ]; then
     pre=""
@@ -445,6 +450,8 @@ for H in "${H_LIST[@]}"; do
         emit "GATES host=$H ${s:-NO_V3_GATES_SUMMARY rc=$rc} arch=$ARCH"
         row_end "gates:$H" "$rc"
     fi
+
+    native_proof || abort "native proof refused guest admission (rows/native_proof_${H}.log)"
 
     # ★ The canary: one arm of the first thin guest before 30 x budget is spent on this host.
     # `[measured 2026-09-26, hostwalk]` the first sub-580 host scored 30 TIMEOUTs in 90 minutes.

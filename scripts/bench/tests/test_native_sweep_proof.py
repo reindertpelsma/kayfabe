@@ -32,8 +32,10 @@ class NativeSweepProofTests(unittest.TestCase):
                     dest.write_text(before)
                 return pid
             self.mod.M.measure = lambda *args: {'approved_for_guest': False, 'xid_count': 5}
+            probe = Path(d) / 'source_probe'
+            probe.write_text('offline fixture; never executed')
             return self.mod.run(host, arch, REPO, Path(d), Path('/trusted/ladder'),
-                                Path('/trusted/probe'), execute=snapshot)
+                                probe, execute=snapshot)
 
     def test_successful_observation_is_not_guest_admission(self):
         self.assertEqual(self.invoke(), 3)
@@ -55,6 +57,11 @@ class NativeSweepProofTests(unittest.TestCase):
     def test_preexisting_xid_stops_before_faults(self):
         with self.assertRaises(ValueError):
             self.invoke(before='NVRM: Xid (PCI:0000:01:00): 79, unexpected\n')
+        self.assertFalse(any(c[0] == 'defer' for c in self.calls))
+
+    def test_preexisting_other_xid_stops_before_faults(self):
+        with self.assertRaises(ValueError):
+            self.invoke(before='NVRM: Xid (PCI:0000:01:00): 43, unknown reset\n')
         self.assertFalse(any(c[0] == 'defer' for c in self.calls))
 
     def test_probe_only_asks_correct_size_table(self):
