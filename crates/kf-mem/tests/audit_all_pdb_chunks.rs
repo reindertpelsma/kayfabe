@@ -260,14 +260,79 @@ fn hard_failure(key: u64) {
 }
 #[test]
 fn reset_discards_unsubmitted_chunks_of_the_old_life() {
+    reset_chunks(false);
+}
+#[test]
+fn reset_discards_the_original_obligation_during_the_final_chunk() {
+    reset_chunks(true);
+}
+fn reset_chunks(after_first: bool) {
     let mut r = rig(70);
     let req = arm(&r);
     r.va.on_invalidate(req, r.port.trigger());
+    if after_first {
+        assert!(r.va.on_walk_ready(r.port.trigger()).completed.is_empty());
+    }
     assert!(r.va.abandon_life().in_flight);
     assert!(r.port.reset());
     let out = r.va.on_walk_ready(r.port.trigger());
     assert!(out.completed.is_empty());
     assert!(!r.va.in_flight());
-    assert_eq!(r.va.walker().submitted.len(), 1);
+    assert_eq!(
+        r.va.walker().submitted.len(),
+        if after_first { 2 } else { 1 }
+    );
+    assert_eq!(r.maps.borrow().len(), if after_first { 70 } else { 64 });
+}
+
+#[test]
+fn an_all_pdb_split_over_seventy_spaces_finishes_after_both_chunks() {
+    split_chunks(70);
+}
+#[test]
+fn an_all_pdb_split_over_one_hundred_twenty_eight_spaces_finishes_after_both_chunks() {
+    split_chunks(128);
+}
+fn split_chunks(n: u64) {
+    let mut r = rig(n);
+    r.va.on_split(None, 77, r.port.trigger());
+    assert!(
+        r.va.take_splits().is_empty(),
+        "an accepted split waits for its walk"
+    );
+    assert!(r.va.on_walk_ready(r.port.trigger()).completed.is_empty());
+    assert!(
+        r.va.take_splits().is_empty(),
+        "the second chunk is still owed"
+    );
+    assert!(r.va.in_flight());
+    assert!(r.va.on_walk_ready(r.port.trigger()).completed.is_empty());
+    assert_eq!(r.va.take_splits(), vec![(77, Ok(()))]);
+    assert_eq!(r.maps.borrow().len(), n as usize);
+}
+
+#[test]
+fn a_root_move_in_the_first_completed_object_prevents_a_stale_clear() {
+    moved_after_first(0);
+}
+#[test]
+fn a_root_move_in_the_last_object_of_the_first_chunk_prevents_a_stale_clear() {
+    moved_after_first(63);
+}
+fn moved_after_first(key: u64) {
+    let mut r = rig(70);
+    let req = arm(&r);
+    r.va.on_invalidate(req, r.port.trigger());
+    assert!(r.va.on_walk_ready(r.port.trigger()).completed.is_empty());
     assert_eq!(r.maps.borrow().len(), 64);
+    r.va.table
+        .set_root(VasKey(key), 0x1000_0000, PdbAperture::Vidmem)
+        .unwrap();
+    let out = r.va.on_walk_ready(r.port.trigger());
+    assert!(
+        out.completed.is_empty(),
+        "the earlier object's new root was never walked"
+    );
+    assert_ne!(r.port.trigger().read(), 0);
+    assert!(r.va.in_flight(), "retain master's root-follow-up behavior");
 }
