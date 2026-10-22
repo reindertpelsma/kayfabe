@@ -231,6 +231,19 @@ class LineLengthTests(GitFixture):
         self.write("broker/crlf.c", "x" * 100 + "\r\n")
         self.check()
 
+    def test_unicode_separator_does_not_split_a_git_source_line(self):
+        self.write(SOURCE, "x" * 60 + "\u2028" + "y" * 60 + "\n")
+        self.check(code=1)
+
+    def test_diff_uses_git_line_numbers_with_unicode_separators(self):
+        self.write(SOURCE, "// before\u2028after\n" + LONG)
+        self.baseline({SOURCE: 1})
+        self.commit()
+        base = self.git("rev-parse", "HEAD").strip()
+        self.write(SOURCE, "// before\u2028after\n" + "y" * 101 + "\n")
+        self.commit()
+        self.assertIn(f"{SOURCE}:2", self.check("--base", base, code=1))
+
     def test_url_and_hash_only_lines_are_exempt(self):
         self.write("broker/urls.c", "https://example.org/" + "a" * 150 + "\n" + "a" * 128)
         self.check()
@@ -347,6 +360,7 @@ class LineLengthTests(GitFixture):
         output = self.check("--report")
         self.assertIn("Rust", output)
         self.assertIn("EXEMPT", output)
+        self.assertIn("EXEMPT Rust: 1 2 2 0", output)
         self.assertEqual((self.root / BASELINE).read_bytes(), before)
 
 
