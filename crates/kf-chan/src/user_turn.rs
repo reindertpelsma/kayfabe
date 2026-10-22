@@ -22,7 +22,7 @@ use crate::user_lazy::{Invalidate, Lazy, LazyConfig};
 use crate::user_lifecycle::{GP_SYNC_WAIT, Lifecycle, Mode, Obs, Plan, ScanPermit};
 use crate::user_loop::Need;
 use crate::user_scan::{Fetch, Scan};
-use crate::user_stream::{Source, inspect_entry};
+use crate::user_stream::{Source, inspect_format};
 use kf_abi::submit::MethodHeader;
 
 /// Retry means no native publication/action was attempted. An uncertain write or native doorbell error is always
@@ -99,6 +99,8 @@ pub enum Ev {
     PutBound,
     /// `inspect_entry` refused the loaded value.
     EntryRefused,
+    /// Scan/Window would require a snapshot above the trusted per-copy bound.
+    ScanBudget,
     /// The scan refused a segment for good.
     ScanRefused,
     /// A SYNC_WAIT entry behind an open packet was read at once.
@@ -202,8 +204,8 @@ pub trait Io {
     fn write_guest_get(&mut self, get: u32) -> Turn<bool>;
     /// The current source ring's entry count.
     fn src_entries(&mut self) -> u32;
-    /// The entry-size budget `inspect_entry` enforces.
-    fn max_entry_bytes(&mut self) -> u64;
+    /// Trusted per-snapshot bound, consulted only after a Scan plan is selected.
+    fn max_scan_bytes(&mut self) -> u64;
     /// A mapping walk the guest asked for has not landed: the wait is registered, end the turn WITHOUT reading anything.
     /// Asked at the top of every `GP_PUT` decision, cached or fresh (the pump's `Inbox::walk_busy` / `wait_walk`).
     fn walk_busy(&mut self) -> bool {
@@ -676,7 +678,7 @@ impl Relay {
 
     fn plan_step(&mut self, io: &mut impl Io) -> Turn<Step> {
         let entries = io.src_entries();
-        let desc = match inspect_entry(self.raw, io.max_entry_bytes()) {
+        let desc = match inspect_format(self.raw) {
             Ok(d) => d,
             Err(e) => {
                 io.event(Ev::EntryRefused);
@@ -722,6 +724,17 @@ impl Relay {
                 seed_gate,
                 permit,
             } => {
+                if let Source::Segment(d) = desc {
+                    let maximum = io.max_scan_bytes();
+                    if d.len_bytes > maximum {
+                        io.event(Ev::ScanBudget);
+                        self.life.scan_budget_refused();
+                        return Err(format!(
+                            "USER_RING_SCAN_BUDGET len={} max={maximum} mode={:?} entry={:#018x} cursor={:#x} put={:#x}",
+                            d.len_bytes, self.life.mode(), self.raw, self.cursor, self.put
+                        ).into());
+                    }
+                }
                 if restart {
                     // The first entry of a Fresh window, at the anchor (a GP_PUT value): parser state restarted,
                     // bindings and sub-device mask kept; a stale gate proof from before the unscanned stretch is

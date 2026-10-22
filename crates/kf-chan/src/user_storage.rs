@@ -18,9 +18,9 @@ use kf_linux_raw::{Backing, CachePolicy, CharDevice, HostOffset, HostPageSize, V
 pub const BYTES: u64 = 1 << 20;
 /// Pushbuffer region ends here; whole64KiB granules permit RO-only mapping.
 pub const GP_OFFSET: u64 = 0xe0000;
-/// Trusted source snapshot limit: any intercepted segment must fit completely
-/// in the existing private staging region. This is an allocation policy, not
-/// the hardware maximum GPFIFO length or a per-die compatibility constant.
+/// Trusted bound for each source snapshot and authored staging span. A Pointer
+/// descriptor copies no PB bytes and is bounded by the hardware format alone.
+/// This allocation policy is not a descriptor-length or per-die constant.
 pub const MAX_SOURCE_BYTES: u64 = GP_OFFSET;
 /// USERD starts here and has NO GPU VA mapping.
 pub const USERD_OFFSET: u64 = 0xf0000;
@@ -515,15 +515,16 @@ impl Storage<CpuView> {
     }
 
     /// Copy a direct USER descriptor unchanged into the private ring. This
-    /// validates format and the trusted scan budget ONLY: the worker must also
-    /// resolve the complete source in this channel's own restricted address
-    /// space and retain source/channel admission through PUT publication.
+    /// validates hardware format only. Pointer mode resolves no PB: native USER
+    /// privileges and the channel's own restricted VAS are its authority (§AI).
+    /// The worker retains GP/channel admission through PUT; a scanned entry also
+    /// retains its PB source guards. Copy/staging bounds are enforced separately.
     /// Never use this for privileged Translated work or bypass software triggers.
     pub fn write_user_gp(&self, slot: u32, entry: u64) -> Result<(), String> {
         if slot >= ENTRIES {
             return Err("USER_STORAGE_GP_BOUND".into());
         }
-        crate::user_stream::inspect_entry(entry, MAX_SOURCE_BYTES)
+        crate::user_stream::inspect_format(entry)
             .map_err(|why| format!("USER_STORAGE_USER_GP: {why:?}"))?;
         self.cpu()?
             .store_u64(HostOffset::new(GP_OFFSET + u64::from(slot) * 8), entry)
@@ -711,6 +712,9 @@ impl Storage<CpuView> {
 mod tests {
     use super::*;
     use std::cell::RefCell;
+    mod measured {
+        include!("../tests/fixtures/run3440.rs");
+    }
 
     // Exercise the production memory accessors on a real CPU mapping without
     // opening NVIDIA or making an RM call. No simulated GET is a GPU result.
@@ -740,6 +744,58 @@ mod tests {
         }
     }
 
+    #[test]
+    fn write_user_gp_stores_each_run3440_descriptor() {
+        let s = anonymous_live_storage();
+        for raw in measured::RUN3440 {
+            s.write_user_gp(0, raw).unwrap();
+            assert_eq!(
+                s.cpu()
+                    .unwrap()
+                    .load_u64(HostOffset::new(GP_OFFSET))
+                    .unwrap(),
+                raw
+            );
+            assert_eq!(s.gpu_get().unwrap(), 0);
+            assert_eq!(s.gpu_reference().unwrap(), 0);
+        }
+    }
+    #[test]
+    fn write_user_gp_stores_the_largest_representable_descriptor() {
+        let s = anonymous_live_storage();
+        let raw = kf_abi::submit::gp_entry(0x4000, 8_388_604).unwrap() | (1 << 63) | (1 << 41);
+        s.write_user_gp(0, raw).unwrap();
+        assert_eq!(
+            s.cpu()
+                .unwrap()
+                .load_u64(HostOffset::new(GP_OFFSET))
+                .unwrap(),
+            raw
+        );
+        assert_eq!(s.gpu_get().unwrap(), 0);
+    }
+    #[test]
+    fn write_user_gp_refuses_end_at_2_40() {
+        let s = anonymous_live_storage();
+        let raw = kf_abi::submit::gp_entry((1 << 40) - 4, 4).unwrap();
+        assert!(s.write_user_gp(0, raw).is_err());
+        assert_eq!(
+            s.cpu()
+                .unwrap()
+                .load_u64(HostOffset::new(GP_OFFSET))
+                .unwrap(),
+            0
+        );
+    }
+    #[test]
+    fn diagnostic_shadow_inspection_keeps_its_snapshot_budget() {
+        for raw in measured::RUN3440 {
+            assert_eq!(
+                crate::user_stream::inspect_entry(raw, MAX_SOURCE_BYTES),
+                Err(crate::user_stream::Refusal::Budget)
+            );
+        }
+    }
     #[test]
     fn private_ring_publication_keeps_user_addresses_and_never_forges_get_or_reference() {
         let s = anonymous_live_storage();
@@ -792,9 +848,9 @@ mod tests {
     }
 
     #[test]
-    fn large_user_descriptor_fits_staging_policy_and_keeps_real_credit_fields() {
+    fn large_user_descriptors_cross_snapshot_bound_without_changing_real_credit_fields() {
         let s = anonymous_live_storage();
-        for bytes in [100 << 10, GP_OFFSET] {
+        for bytes in [100 << 10, GP_OFFSET, GP_OFFSET + 4] {
             let entry = kf_abi::submit::gp_entry(0x420000, bytes).unwrap() | (1 << 41);
             s.write_user_gp(0, entry).unwrap();
             assert_eq!(
@@ -805,20 +861,6 @@ mod tests {
                 entry
             );
         }
-        let before = s
-            .cpu()
-            .unwrap()
-            .load_u64(HostOffset::new(GP_OFFSET))
-            .unwrap();
-        let oversized = kf_abi::submit::gp_entry(0x420000, GP_OFFSET + 4).unwrap();
-        assert!(s.write_user_gp(0, oversized).is_err());
-        assert_eq!(
-            s.cpu()
-                .unwrap()
-                .load_u64(HostOffset::new(GP_OFFSET))
-                .unwrap(),
-            before
-        );
         assert_eq!(s.gpu_get().unwrap(), 0);
         assert_eq!(s.gpu_reference().unwrap(), 0);
     }
@@ -845,7 +887,7 @@ mod tests {
         for entry in [
             1 << 32,
             u64::MAX,
-            kf_abi::submit::gp_entry(0x420000, MAX_SOURCE_BYTES + 4).unwrap(),
+            kf_abi::submit::gp_entry((1 << 40) - 4, 4).unwrap(),
         ] {
             assert!(s.write_user_gp(0, entry).is_err());
             s.write_shadow_gp(ENTRIES - 1, entry).unwrap();
@@ -878,7 +920,7 @@ mod tests {
             1 << 32, // CONTROL/ILLEGAL, not an unused NOP operand.
             good | 1,
             good | (1 << 40),
-            kf_abi::submit::gp_entry(0x420000, MAX_SOURCE_BYTES + 4).unwrap(),
+            kf_abi::submit::gp_entry((1 << 40) - 4, 4).unwrap(),
         ] {
             assert!(s.write_user_gp(0, bad).is_err(), "entry={bad:#x}");
             assert_eq!(

@@ -1,0 +1,3926 @@
+{
+  "label": "MEASURED: bounded extraction; ordinal order is not a per-operation timestamp",
+  "source_revision": "89fc8a222 (lane-supplied runtime revision)",
+  "sources": [
+    {
+      "basename": "broker.log.snapshot",
+      "bytes": 80503,
+      "sha256": "63433b75bb5c718d4a5590e7176829bf8533e578e20d83a58735ecd83fb690c9"
+    },
+    {
+      "basename": "broker.log.snapshot2",
+      "bytes": 88965,
+      "sha256": "43faedad7f804a10e25a027e2b1a5b89522fd33843cf85f56c9ebaf676789288"
+    },
+    {
+      "basename": "broker.log.snapshot3",
+      "bytes": 189842,
+      "sha256": "4e30195da4ffa2ff19fabcc8bbf441da55f8f6acc07f8747288430aaae4085d5"
+    },
+    {
+      "basename": "guest_events_60min.txt",
+      "bytes": 50827,
+      "sha256": "721614a89ccaea1109275ee84bff5cd4aad1d4fb9657df384130d7b1b1c64661"
+    },
+    {
+      "basename": "guest_events_snapshot2.txt",
+      "bytes": 415918,
+      "sha256": "db757361cdda2fa287058a8df6933ed9d123be7f94f7c314414ffc660c2f216d"
+    },
+    {
+      "basename": "guest_events_snapshot3.txt",
+      "bytes": 27675,
+      "sha256": "5c8038c08aab82798ac31a05f0845dbe825c478ee8782b432148104725494b62"
+    },
+    {
+      "basename": "host_dmesg_tail.txt",
+      "bytes": 4759,
+      "sha256": "90a3a42addabe8ef74a45bfb9d4c0508ec21f7fa95d950e51c8e82fa12725812"
+    },
+    {
+      "basename": "qemu.log.snapshot",
+      "bytes": 46489469,
+      "sha256": "d3bf48aafa273944a306643e676ad748ea92cb1deaa061beea1501535de954ea"
+    },
+    {
+      "basename": "qemu.log.snapshot2",
+      "bytes": 51508809,
+      "sha256": "de916a2f5b2da8ab12a02f86c467be055002682ce71975967dd7c85a8cd05fdc"
+    },
+    {
+      "basename": "qemu.log.snapshot3",
+      "bytes": 68014597,
+      "sha256": "c8c27014a1b123495ae7459f9e7e7a87cc73a8ade117183afe607caf70c6803c"
+    },
+    {
+      "basename": "spec_run_log_snapshot2.txt",
+      "bytes": 480,
+      "sha256": "28e32c1dcc677460d349bb920fb1eb101dff21d47e22563d9225597c08895138"
+    }
+  ],
+  "snapshot2_lines": 178253,
+  "status_lines": 5058,
+  "nonzero_unreconciled_status_lines": 0,
+  "nonzero_root_moves_status_lines": 0,
+  "progress_strand_reports": 0,
+  "unload_markers": [
+    {
+      "seed_label": 3,
+      "unload_line": 115421,
+      "unload_seconds": 9761.968,
+      "interval_since_previous_unload_seconds": null,
+      "interval_start_line": 1,
+      "user_refusals": [
+        {
+          "line": 113366,
+          "text": "kf3: USER_RING_REFUSED 0xc1d00188:0xff040031 host 0x61: USER_RING_GP_FORMAT Budget entry=0x0faa26023110102c source_va=0x4101ee0 cursor=0x3bdc put=0x3c76 entries=32768; no completion/reuse credit",
+          "clock_bracket": {
+            "previous": [
+              103661,
+              9548.766
+            ],
+            "next": [
+              113512,
+              9761.21
+            ]
+          },
+          "length_bytes": 1026596,
+          "maximum_source_bytes": 917504
+        }
+      ],
+      "held": 6370,
+      "posted": 6370,
+      "translated_retire_count": 28,
+      "translated_released_false": 0,
+      "stale_nonzero": [],
+      "last_capacity": {
+        "line": 113651,
+        "text": "kf3: walk capacity: re-walk (needs s55:1422); walk pool 1048576 runs, slot pool 2097152 runs (1949952 free), max per space 1048576, slots held 15, grows 123, retries 215, ceilings 0, largest slot 423168, largest walk 423168"
+      },
+      "large_count": 1807,
+      "large_max_ms": 126,
+      "last_status": {
+        "line": 114364,
+        "mem": "inval=15596 walks=157693/157693 cleared=15596 superseded=0 named_missed=79 unreconciled=0 absent_cleared=46 mapped=3174483 unmapped=3068340 clipped=0x0 held=0 vmm_overlaps=0 priv_withheld=1145327 priv_withheld_bytes=0xbf68c68f000 priv_mirrored=47 sked=200/0held carve_gpu=0 carve_kernel=8 carve_cpu=2 carve_clipped=0x40000 fn70=2 roots=91 root_moves=0 stmts=181/181 refused=16 pramin_repoints=37 pramin_miss=16 last_miss=0x0 pramin_worst_us=69 (map 32 mmap 34) pramin_maps=36 pramin_mmaps=37 pramin_kept=0 pramin_kept_now=0 window_advice_refused=0 inline_opens=0 reaped=35 cache_ops=0 sysmembars=5 root_unsets=0",
+        "vat": "invals=1005 arrive->clear_avg_us=239 max_us=95264 walks=1005 walk_avg_us=145 gpu_avg_us=113 plan_avg_us=0 apply_avg_us=79 leaves=2 host_calls=3068",
+        "views": "armed=5468 released=5174 refused=0 held=294",
+        "tspace": "built=yes twin_refused=0 tspace_refused=0 slots_leaked=0 twin_freeing=0",
+        "poisoned": "poisoned=1",
+        "reset": "req=2 (main=2 vcpu=0 wake=0) done=2 kept=0 pristine=1 waits_timed_out=0 stage=Idle dropped=0",
+        "refusals": "14684",
+        "reset_channel_count": "4",
+        "tokens": "0x3:fwd=192,subs=405,serves=1969,put=Some(192),gp_get=Some(192) 0x801:fwd=2,subs=2,serves=5,put=Some(2),gp_get=Some(2) 0x802:fwd=1,subs=1,serves=3,put=Some(1),gp_get=Some(1)"
+      }
+    },
+    {
+      "seed_label": 4,
+      "unload_line": 127691,
+      "unload_seconds": 9914.191,
+      "interval_since_previous_unload_seconds": 152.223,
+      "interval_start_line": 115422,
+      "user_refusals": [
+        {
+          "line": 126035,
+          "text": "kf3: USER_RING_REFUSED 0xc1d001e7:0xff04002b host 0x5a: USER_RING_GP_FORMAT Budget entry=0x0ef7d2001dd1002c source_va=0x40f6800 cursor=0x2500 put=0x2501 entries=32768; no completion/reuse credit",
+          "clock_bracket": {
+            "previous": [
+              117979,
+              9767.355
+            ],
+            "next": [
+              126128,
+              9913.504
+            ]
+          },
+          "length_bytes": 980944,
+          "maximum_source_bytes": 917504
+        }
+      ],
+      "held": 719,
+      "posted": 719,
+      "translated_retire_count": 14,
+      "translated_released_false": 0,
+      "stale_nonzero": [],
+      "last_capacity": {
+        "line": 126039,
+        "text": "kf3: walk capacity: re-walk (needs s126:84189); walk pool 1048576 runs, slot pool 2097152 runs (1918208 free), max per space 1048576, slots held 24, grows 151, retries 261, ceilings 0, largest slot 423168, largest walk 423168"
+      },
+      "large_count": 78,
+      "large_max_ms": 25,
+      "last_status": {
+        "line": 126130,
+        "mem": "inval=19882 walks=175129/175129 cleared=19882 superseded=0 named_missed=227 unreconciled=0 absent_cleared=49 mapped=3340957 unmapped=3119826 clipped=0x0 held=0 vmm_overlaps=0 priv_withheld=1268567 priv_withheld_bytes=0xd3e69692000 priv_mirrored=70 sked=226/0held carve_gpu=0 carve_kernel=12 carve_cpu=4 carve_clipped=0x60000 fn70=4 roots=123 root_moves=0 stmts=230/230 refused=16 pramin_repoints=57 pramin_miss=16 last_miss=0x0 pramin_worst_us=72 (map 38 mmap 36) pramin_maps=56 pramin_mmaps=57 pramin_kept=0 pramin_kept_now=0 window_advice_refused=0 inline_opens=0 reaped=55 cache_ops=0 sysmembars=8 root_unsets=0",
+        "vat": "invals=4 arrive->clear_avg_us=11379 max_us=95264 walks=4 walk_avg_us=321 gpu_avg_us=262 plan_avg_us=0 apply_avg_us=11034 leaves=26 host_calls=12",
+        "views": "armed=7038 released=6727 refused=0 held=311",
+        "tspace": "built=yes twin_refused=0 tspace_refused=0 slots_leaked=0 twin_freeing=0",
+        "poisoned": "poisoned=2",
+        "reset": "req=2 (main=2 vcpu=0 wake=0) done=2 kept=0 pristine=1 waits_timed_out=0 stage=Idle dropped=0",
+        "refusals": "16451",
+        "reset_channel_count": "8",
+        "tokens": "0x3:fwd=26,subs=67,serves=460,put=Some(26),gp_get=Some(26) 0xc:fwd=1,subs=1,serves=2,put=Some(1),gp_get=Some(1) 0x801:fwd=2,subs=2,serves=5,put=Some(2),gp_get=Some(2) 0x802:fwd=1,subs=1,serves=3,put=Some(1),gp_get=Some(1) 0x804:fwd=0,subs=0,serves=1,put=Some(0),gp_get=None 0x806:fwd=0,subs=0,serves=1,put=Some(0),gp_get=None 0x80b:fwd=450965,subs=91087,serves=87902,put=Some(8597),gp_get=Some(8597) 0x80d:fwd=0,subs=0,serves=1,put=Some(0),gp_get=None 0x1805:fwd=0,subs=0,serves=1,put=Some(0),gp_get=None 0x2007:fwd=0,subs=0,serves=1,put=Some(0),gp_get=None 0x2008:fwd=0,subs=0,serves=1,put=Some(0),gp_get=None 0x200a:fwd=0,subs=0,serves=1,put=Some(0),gp_get=None 0x2809:fwd=0,subs=0,serves=1,put=Some(0),gp_get=None"
+      }
+    },
+    {
+      "seed_label": 5,
+      "unload_line": 131357,
+      "unload_seconds": 9919.806,
+      "interval_since_previous_unload_seconds": 5.615,
+      "interval_start_line": 127692,
+      "user_refusals": [],
+      "held": 259,
+      "posted": 259,
+      "translated_retire_count": 14,
+      "translated_released_false": 0,
+      "stale_nonzero": [],
+      "last_capacity": {
+        "line": 130277,
+        "text": "kf3: walk capacity: re-walk (needs s22:4685); walk pool 1048576 runs, slot pool 2097152 runs (2066688 free), max per space 1048576, slots held 23, grows 153, retries 265, ceilings 0, largest slot 423168, largest walk 423168"
+      },
+      "large_count": 1,
+      "large_max_ms": 37,
+      "last_status": {
+        "line": 130603,
+        "mem": "inval=24224 walks=180256/180256 cleared=24224 superseded=0 named_missed=400 unreconciled=0 absent_cleared=52 mapped=3350338 unmapped=3122516 clipped=0x0 held=0 vmm_overlaps=0 priv_withheld=1280769 priv_withheld_bytes=0xd5ea097f000 priv_mirrored=95 sked=233/0held carve_gpu=0 carve_kernel=16 carve_cpu=6 carve_clipped=0x80000 fn70=6 roots=149 root_moves=0 stmts=302/302 refused=16 pramin_repoints=77 pramin_miss=16 last_miss=0x0 pramin_worst_us=91 (map 38 mmap 47) pramin_maps=76 pramin_mmaps=77 pramin_kept=0 pramin_kept_now=0 window_advice_refused=0 inline_opens=0 reaped=75 cache_ops=0 sysmembars=11 root_unsets=0",
+        "vat": "invals=175 arrive->clear_avg_us=219 max_us=95264 walks=175 walk_avg_us=139 gpu_avg_us=103 plan_avg_us=0 apply_avg_us=67 leaves=0 host_calls=390",
+        "views": "armed=8777 released=8491 refused=0 held=286",
+        "tspace": "built=yes twin_refused=0 tspace_refused=0 slots_leaked=0 twin_freeing=0",
+        "poisoned": "poisoned=2",
+        "reset": "req=2 (main=2 vcpu=0 wake=0) done=2 kept=0 pristine=1 waits_timed_out=0 stage=Idle dropped=0",
+        "refusals": "16636",
+        "reset_channel_count": "12",
+        "tokens": "0x3:fwd=7,subs=19,serves=117,put=Some(7),gp_get=Some(7) 0x801:fwd=2,subs=2,serves=5,put=Some(2),gp_get=Some(2) 0x802:fwd=1,subs=1,serves=3,put=Some(1),gp_get=Some(1) 0x804:fwd=0,subs=0,serves=1,put=Some(0),gp_get=None 0x806:fwd=0,subs=0,serves=1,put=Some(0),gp_get=None 0x80b:fwd=34537,subs=5726,serves=5057,put=Some(1769),gp_get=Some(1769) 0x1805:fwd=0,subs=0,serves=1,put=Some(0),gp_get=None 0x2007:fwd=0,subs=0,serves=1,put=Some(0),gp_get=None 0x2008:fwd=0,subs=0,serves=1,put=Some(0),gp_get=None 0x200a:fwd=0,subs=0,serves=1,put=Some(0),gp_get=None 0x2809:fwd=0,subs=0,serves=1,put=Some(0),gp_get=None"
+      }
+    },
+    {
+      "seed_label": 6,
+      "unload_line": 140832,
+      "unload_seconds": 9999.208,
+      "interval_since_previous_unload_seconds": 79.402,
+      "interval_start_line": 131358,
+      "user_refusals": [
+        {
+          "line": 139098,
+          "text": "kf3: USER_RING_REFUSED 0xc1d00273:0xff040029 host 0x58: USER_RING_GP_FORMAT Budget entry=0x0efa82026dd7002c source_va=0x40e7e30 cursor=0x7c6 put=0x7c7 entries=32768; no completion/reuse credit",
+          "clock_bracket": {
+            "previous": [
+              133373,
+              9924.062
+            ],
+            "next": [
+              139307,
+              9998.579
+            ]
+          },
+          "length_bytes": 981632,
+          "maximum_source_bytes": 917504
+        }
+      ],
+      "held": 604,
+      "posted": 604,
+      "translated_retire_count": 14,
+      "translated_released_false": 0,
+      "stale_nonzero": [],
+      "last_capacity": {
+        "line": 138781,
+        "text": "kf3: walk capacity: re-walk (needs s71:123083); walk pool 1048576 runs, slot pool 2097152 runs (1853184 free), max per space 1048576, slots held 25, grows 186, retries 324, ceilings 0, largest slot 423168, largest walk 423168"
+      },
+      "large_count": 131,
+      "large_max_ms": 24,
+      "last_status": {
+        "line": 139353,
+        "mem": "inval=28032 walks=194258/194258 cleared=28032 superseded=0 named_missed=475 unreconciled=0 absent_cleared=66 mapped=3576736 unmapped=3148538 clipped=0x0 held=0 vmm_overlaps=0 priv_withheld=1384135 priv_withheld_bytes=0xe72d8221000 priv_mirrored=119 sked=256/0held carve_gpu=0 carve_kernel=20 carve_cpu=8 carve_clipped=0xa0000 fn70=8 roots=179 root_moves=0 stmts=352/352 refused=16 pramin_repoints=97 pramin_miss=16 last_miss=0x0 pramin_worst_us=97 (map 38 mmap 57) pramin_maps=96 pramin_mmaps=97 pramin_kept=0 pramin_kept_now=0 window_advice_refused=0 inline_opens=0 reaped=95 cache_ops=0 sysmembars=14 root_unsets=0",
+        "vat": "invals=50 arrive->clear_avg_us=410 max_us=98949 walks=50 walk_avg_us=138 gpu_avg_us=102 plan_avg_us=0 apply_avg_us=258 leaves=2 host_calls=141",
+        "views": "armed=10004 released=9696 refused=0 held=308",
+        "tspace": "built=yes twin_refused=0 tspace_refused=0 slots_leaked=0 twin_freeing=0",
+        "poisoned": "poisoned=3",
+        "reset": "req=2 (main=2 vcpu=0 wake=0) done=2 kept=0 pristine=1 waits_timed_out=0 stage=Idle dropped=0",
+        "refusals": "17732",
+        "reset_channel_count": "16",
+        "tokens": "0x3:fwd=25,subs=64,serves=420,put=Some(25),gp_get=Some(25) 0x801:fwd=2,subs=2,serves=5,put=Some(2),gp_get=Some(2) 0x802:fwd=1,subs=1,serves=3,put=Some(1),gp_get=Some(1) 0x804:fwd=0,subs=0,serves=1,put=Some(0),gp_get=None 0x806:fwd=0,subs=0,serves=1,put=Some(0),gp_get=None 0x80b:fwd=326315,subs=65523,serves=64911,put=Some(15019),gp_get=Some(15019) 0x1805:fwd=0,subs=0,serves=1,put=Some(0),gp_get=None 0x2007:fwd=0,subs=0,serves=1,put=Some(0),gp_get=None 0x2008:fwd=0,subs=0,serves=1,put=Some(0),gp_get=None 0x200a:fwd=0,subs=0,serves=1,put=Some(0),gp_get=None 0x2809:fwd=0,subs=0,serves=1,put=Some(0),gp_get=None"
+      }
+    },
+    {
+      "seed_label": 7,
+      "unload_line": 147735,
+      "unload_seconds": 10034.814,
+      "interval_since_previous_unload_seconds": 35.606,
+      "interval_start_line": 140833,
+      "user_refusals": [
+        {
+          "line": 146095,
+          "text": "kf3: USER_RING_REFUSED 0xc1d002bc:0xff040025 host 0x54: USER_RING_GP_FORMAT Budget entry=0x0ef926027cb7002c source_va=0x1139bfb8 cursor=0x37f7 put=0x3807 entries=65536; no completion/reuse credit",
+          "clock_bracket": {
+            "previous": [
+              143683,
+              10004.49
+            ],
+            "next": [
+              146272,
+              10034.246
+            ]
+          },
+          "length_bytes": 981284,
+          "maximum_source_bytes": 917504
+        }
+      ],
+      "held": 492,
+      "posted": 492,
+      "translated_retire_count": 14,
+      "translated_released_false": 0,
+      "stale_nonzero": [],
+      "last_capacity": {
+        "line": 145933,
+        "text": "kf3: walk capacity: re-walk (needs s57:6697); walk pool 1048576 runs, slot pool 2097152 runs (1810432 free), max per space 1048576, slots held 25, grows 212, retries 372, ceilings 0, largest slot 423168, largest walk 423168"
+      },
+      "large_count": 109,
+      "large_max_ms": 31,
+      "last_status": {
+        "line": 146218,
+        "mem": "inval=32548 walks=206900/206900 cleared=32548 superseded=0 named_missed=639 unreconciled=0 absent_cleared=69 mapped=3816929 unmapped=3159342 clipped=0x0 held=0 vmm_overlaps=0 priv_withheld=1474003 priv_withheld_bytes=0xf6308933000 priv_mirrored=142 sked=274/0held carve_gpu=0 carve_kernel=24 carve_cpu=10 carve_clipped=0xc0000 fn70=10 roots=209 root_moves=0 stmts=416/416 refused=16 pramin_repoints=117 pramin_miss=16 last_miss=0x0 pramin_worst_us=97 (map 38 mmap 57) pramin_maps=116 pramin_mmaps=117 pramin_kept=0 pramin_kept_now=0 window_advice_refused=0 inline_opens=0 reaped=115 cache_ops=0 sysmembars=17 root_unsets=0",
+        "vat": "invals=0 arrive->clear_avg_us=0 max_us=98949 walks=0 walk_avg_us=0 gpu_avg_us=0 plan_avg_us=0 apply_avg_us=0 leaves=10 host_calls=0",
+        "views": "armed=11876 released=11568 refused=0 held=308",
+        "tspace": "built=yes twin_refused=0 tspace_refused=0 slots_leaked=0 twin_freeing=0",
+        "poisoned": "poisoned=4",
+        "reset": "req=2 (main=2 vcpu=0 wake=0) done=2 kept=0 pristine=1 waits_timed_out=0 stage=Idle dropped=0",
+        "refusals": "18311",
+        "reset_channel_count": "16",
+        "tokens": "0x3:fwd=18,subs=49,serves=334,put=Some(18),gp_get=Some(18) 0xc:fwd=1,subs=1,serves=2,put=Some(1),gp_get=Some(1) 0x801:fwd=2,subs=2,serves=5,put=Some(2),gp_get=Some(2) 0x802:fwd=1,subs=1,serves=3,put=Some(1),gp_get=Some(1) 0x804:fwd=0,subs=0,serves=1,put=Some(0),gp_get=None 0x806:fwd=0,subs=0,serves=1,put=Some(0),gp_get=None 0x80b:fwd=271196,subs=51979,serves=51654,put=Some(9052),gp_get=Some(9052) 0x80d:fwd=0,subs=0,serves=1,put=Some(0),gp_get=None 0x1805:fwd=0,subs=0,serves=1,put=Some(0),gp_get=None 0x2007:fwd=0,subs=0,serves=1,put=Some(0),gp_get=None 0x2008:fwd=0,subs=0,serves=1,put=Some(0),gp_get=None 0x200a:fwd=0,subs=0,serves=1,put=Some(0),gp_get=None 0x2809:fwd=0,subs=0,serves=1,put=Some(0),gp_get=None"
+      }
+    },
+    {
+      "seed_label": 8,
+      "unload_line": 154047,
+      "unload_seconds": 10056.791,
+      "interval_since_previous_unload_seconds": 21.977,
+      "interval_start_line": 147736,
+      "user_refusals": [
+        {
+          "line": 152469,
+          "text": "kf3: USER_RING_REFUSED 0xc1d00308:0xff040025 host 0x54: USER_RING_GP_FORMAT Budget entry=0x0ef28a024a28002c source_va=0x411d0e0 cursor=0x721c put=0x721e entries=32768; no completion/reuse credit",
+          "clock_bracket": {
+            "previous": [
+              151016,
+              10038.899
+            ],
+            "next": [
+              152582,
+              10056.229
+            ]
+          },
+          "length_bytes": 979592,
+          "maximum_source_bytes": 917504
+        }
+      ],
+      "held": 490,
+      "posted": 490,
+      "translated_retire_count": 14,
+      "translated_released_false": 0,
+      "stale_nonzero": [],
+      "last_capacity": {
+        "line": 152436,
+        "text": "kf3: walk capacity: re-walk (needs s109:4361); walk pool 1048576 runs, slot pool 2097152 runs (1962240 free), max per space 1048576, slots held 25, grows 233, retries 408, ceilings 0, largest slot 423168, largest walk 423168"
+      },
+      "large_count": 35,
+      "large_max_ms": 30,
+      "last_status": {
+        "line": 152534,
+        "mem": "inval=37042 walks=218766/218766 cleared=37042 superseded=0 named_missed=800 unreconciled=0 absent_cleared=72 mapped=3925274 unmapped=3170761 clipped=0x0 held=0 vmm_overlaps=0 priv_withheld=1552271 priv_withheld_bytes=0x1034237b3000 priv_mirrored=166 sked=292/0held carve_gpu=0 carve_kernel=28 carve_cpu=12 carve_clipped=0xe0000 fn70=12 roots=238 root_moves=0 stmts=479/479 refused=16 pramin_repoints=137 pramin_miss=16 last_miss=0x0 pramin_worst_us=97 (map 38 mmap 57) pramin_maps=136 pramin_mmaps=137 pramin_kept=0 pramin_kept_now=0 window_advice_refused=0 inline_opens=0 reaped=135 cache_ops=0 sysmembars=20 root_unsets=0",
+        "vat": "invals=0 arrive->clear_avg_us=0 max_us=98949 walks=13 walk_avg_us=215 gpu_avg_us=176 plan_avg_us=0 apply_avg_us=108 leaves=20 host_calls=21",
+        "views": "armed=13706 released=13399 refused=0 held=307",
+        "tspace": "built=yes twin_refused=0 tspace_refused=0 slots_leaked=0 twin_freeing=0",
+        "poisoned": "poisoned=5",
+        "reset": "req=2 (main=2 vcpu=0 wake=0) done=2 kept=0 pristine=1 waits_timed_out=0 stage=Idle dropped=0",
+        "refusals": "18767",
+        "reset_channel_count": "20",
+        "tokens": "0x3:fwd=18,subs=49,serves=350,put=Some(18),gp_get=Some(18) 0xc:fwd=1,subs=1,serves=2,put=Some(1),gp_get=Some(1) 0x801:fwd=2,subs=2,serves=5,put=Some(2),gp_get=Some(2) 0x802:fwd=1,subs=1,serves=3,put=Some(1),gp_get=Some(1) 0x804:fwd=0,subs=0,serves=1,put=Some(0),gp_get=None 0x806:fwd=0,subs=0,serves=1,put=Some(0),gp_get=None 0x80b:fwd=243328,subs=50030,serves=48128,put=Some(13952),gp_get=Some(13952) 0x80d:fwd=0,subs=0,serves=1,put=Some(0),gp_get=None 0x1805:fwd=0,subs=0,serves=1,put=Some(0),gp_get=None 0x2007:fwd=0,subs=0,serves=1,put=Some(0),gp_get=None 0x2008:fwd=0,subs=0,serves=1,put=Some(0),gp_get=None 0x200a:fwd=0,subs=0,serves=1,put=Some(0),gp_get=None 0x2809:fwd=0,subs=0,serves=1,put=Some(0),gp_get=None"
+      }
+    },
+    {
+      "seed_label": 9,
+      "unload_line": 161763,
+      "unload_seconds": 10079.804,
+      "interval_since_previous_unload_seconds": 23.013,
+      "interval_start_line": 154048,
+      "user_refusals": [
+        {
+          "line": 158444,
+          "text": "kf3: USER_RING_REFUSED 0xc1d0034f:0xff040023 host 0x52: USER_RING_GP_FORMAT Budget entry=0x0efafe02693b002c source_va=0x40f9620 cursor=0x2ac4 put=0x2ac5 entries=32768; no completion/reuse credit",
+          "clock_bracket": {
+            "previous": [
+              156836,
+              10061.181
+            ],
+            "next": [
+              160293,
+              10079.23
+            ]
+          },
+          "length_bytes": 981756,
+          "maximum_source_bytes": 917504
+        }
+      ],
+      "held": 650,
+      "posted": 650,
+      "translated_retire_count": 14,
+      "translated_released_false": 0,
+      "stale_nonzero": [],
+      "last_capacity": {
+        "line": 160041,
+        "text": "kf3: walk capacity: re-walk (needs s17:1363); walk pool 1048576 runs, slot pool 2097152 runs (1845504 free), max per space 1048576, slots held 25, grows 253, retries 445, ceilings 0, largest slot 423168, largest walk 423168"
+      },
+      "large_count": 88,
+      "large_max_ms": 29,
+      "last_status": {
+        "line": 161036,
+        "mem": "inval=42364 walks=229657/229657 cleared=42364 superseded=0 named_missed=1033 unreconciled=0 absent_cleared=75 mapped=4108578 unmapped=3192836 clipped=0x0 held=0 vmm_overlaps=0 priv_withheld=1621116 priv_withheld_bytes=0x10eb66e7d000 priv_mirrored=191 sked=313/0held carve_gpu=0 carve_kernel=32 carve_cpu=14 carve_clipped=0x100000 fn70=14 roots=268 root_moves=0 stmts=565/565 refused=16 pramin_repoints=157 pramin_miss=16 last_miss=0x0 pramin_worst_us=137 (map 69 mmap 58) pramin_maps=156 pramin_mmaps=157 pramin_kept=0 pramin_kept_now=0 window_advice_refused=0 inline_opens=0 reaped=155 cache_ops=0 sysmembars=23 root_unsets=0",
+        "vat": "invals=661 arrive->clear_avg_us=253 max_us=98949 walks=661 walk_avg_us=169 gpu_avg_us=138 plan_avg_us=0 apply_avg_us=70 leaves=2 host_calls=1902",
+        "views": "armed=16100 released=15818 refused=0 held=282",
+        "tspace": "built=yes twin_refused=0 tspace_refused=0 slots_leaked=0 twin_freeing=0",
+        "poisoned": "poisoned=6",
+        "reset": "req=2 (main=2 vcpu=0 wake=0) done=2 kept=0 pristine=1 waits_timed_out=0 stage=Idle dropped=0",
+        "refusals": "19327",
+        "reset_channel_count": "28",
+        "tokens": "0x3:fwd=24,subs=61,serves=336,put=Some(24),gp_get=Some(24) 0x801:fwd=2,subs=2,serves=5,put=Some(2),gp_get=Some(2) 0x802:fwd=1,subs=1,serves=3,put=Some(1),gp_get=Some(1)"
+      }
+    },
+    {
+      "seed_label": 10,
+      "unload_line": 169900,
+      "unload_seconds": 10137.52,
+      "interval_since_previous_unload_seconds": 57.716,
+      "interval_start_line": 161764,
+      "user_refusals": [
+        {
+          "line": 168353,
+          "text": "kf3: USER_RING_REFUSED 0xc1d003af:0xff040027 host 0x56: USER_RING_GP_FORMAT Budget entry=0x0ef906027231002c source_va=0x4102a18 cursor=0x3d43 put=0x3d44 entries=32768; no completion/reuse credit",
+          "clock_bracket": {
+            "previous": [
+              164422,
+              10084.003
+            ],
+            "next": [
+              168434,
+              10136.937
+            ]
+          },
+          "length_bytes": 981252,
+          "maximum_source_bytes": 917504
+        }
+      ],
+      "held": 530,
+      "posted": 530,
+      "translated_retire_count": 14,
+      "translated_released_false": 0,
+      "stale_nonzero": [],
+      "last_capacity": {
+        "line": 168308,
+        "text": "kf3: walk capacity: re-walk (needs s72:51757); walk pool 1048576 runs, slot pool 2097152 runs (1974784 free), max per space 1048576, slots held 25, grows 282, retries 492, ceilings 0, largest slot 423168, largest walk 423168"
+      },
+      "large_count": 361,
+      "large_max_ms": 28,
+      "last_status": {
+        "line": 168417,
+        "mem": "inval=46211 walks=244382/244382 cleared=46211 superseded=0 named_missed=1126 unreconciled=0 absent_cleared=78 mapped=4418320 unmapped=3420990 clipped=0x0 held=0 vmm_overlaps=0 priv_withheld=1727800 priv_withheld_bytes=0x12089ece7000 priv_mirrored=214 sked=333/0held carve_gpu=0 carve_kernel=36 carve_cpu=16 carve_clipped=0x120000 fn70=16 roots=299 root_moves=0 stmts=611/611 refused=16 pramin_repoints=177 pramin_miss=16 last_miss=0x0 pramin_worst_us=137 (map 69 mmap 58) pramin_maps=176 pramin_mmaps=177 pramin_kept=0 pramin_kept_now=0 window_advice_refused=0 inline_opens=0 reaped=175 cache_ops=0 sysmembars=26 root_unsets=0",
+        "vat": "invals=0 arrive->clear_avg_us=0 max_us=98949 walks=2 walk_avg_us=1460 gpu_avg_us=1391 plan_avg_us=0 apply_avg_us=2629 leaves=1004 host_calls=3",
+        "views": "armed=17419 released=17112 refused=0 held=307",
+        "tspace": "built=yes twin_refused=0 tspace_refused=0 slots_leaked=0 twin_freeing=0",
+        "poisoned": "poisoned=7",
+        "reset": "req=2 (main=2 vcpu=0 wake=0) done=2 kept=0 pristine=1 waits_timed_out=0 stage=Idle dropped=0",
+        "refusals": "20108",
+        "reset_channel_count": "28",
+        "tokens": "0x3:fwd=21,subs=55,serves=417,put=Some(21),gp_get=Some(21) 0xc:fwd=1,subs=1,serves=2,put=Some(1),gp_get=Some(1) 0x801:fwd=2,subs=2,serves=5,put=Some(2),gp_get=Some(2) 0x802:fwd=1,subs=1,serves=3,put=Some(1),gp_get=Some(1) 0x804:fwd=0,subs=0,serves=1,put=Some(0),gp_get=None 0x806:fwd=0,subs=0,serves=1,put=Some(0),gp_get=None 0x80b:fwd=354248,subs=65632,serves=66828,put=Some(10184),gp_get=Some(10184) 0x80d:fwd=0,subs=0,serves=1,put=Some(0),gp_get=None 0x1805:fwd=0,subs=0,serves=1,put=Some(0),gp_get=None 0x2007:fwd=0,subs=0,serves=1,put=Some(0),gp_get=None 0x2008:fwd=0,subs=0,serves=1,put=Some(0),gp_get=None 0x200a:fwd=0,subs=0,serves=1,put=Some(0),gp_get=None 0x2809:fwd=0,subs=0,serves=1,put=Some(0),gp_get=None"
+      }
+    },
+    {
+      "seed_label": 11,
+      "unload_line": 176466,
+      "unload_seconds": 10162.98,
+      "interval_since_previous_unload_seconds": 25.46,
+      "interval_start_line": 169901,
+      "user_refusals": [
+        {
+          "line": 174914,
+          "text": "kf3: USER_RING_REFUSED 0xc1d003f9:0xff040027 host 0x56: USER_RING_GP_FORMAT Budget entry=0x0ef7de026f3b002c source_va=0x41168b0 cursor=0x6516 put=0x6517 entries=32768; no completion/reuse credit",
+          "clock_bracket": {
+            "previous": [
+              173312,
+              10142.636
+            ],
+            "next": [
+              175005,
+              10162.372
+            ]
+          },
+          "length_bytes": 980956,
+          "maximum_source_bytes": 917504
+        }
+      ],
+      "held": 490,
+      "posted": 490,
+      "translated_retire_count": 14,
+      "translated_released_false": 0,
+      "stale_nonzero": [],
+      "last_capacity": {
+        "line": 174920,
+        "text": "kf3: walk capacity: re-walk (needs s51:163113); walk pool 1048576 runs, slot pool 2097152 runs (1806080 free), max per space 1048576, slots held 25, grows 303, retries 530, ceilings 0, largest slot 423168, largest walk 423168"
+      },
+      "large_count": 113,
+      "large_max_ms": 27,
+      "last_status": {
+        "line": 175261,
+        "mem": "inval=51176 walks=255354/255354 cleared=51176 superseded=0 named_missed=1289 unreconciled=0 absent_cleared=81 mapped=4616083 unmapped=3432701 clipped=0x0 held=0 vmm_overlaps=0 priv_withheld=1801384 priv_withheld_bytes=0x12cccf302000 priv_mirrored=239 sked=351/0held carve_gpu=0 carve_kernel=40 carve_cpu=18 carve_clipped=0x140000 fn70=18 roots=328 root_moves=0 stmts=694/694 refused=16 pramin_repoints=197 pramin_miss=16 last_miss=0x0 pramin_worst_us=137 (map 69 mmap 58) pramin_maps=196 pramin_mmaps=197 pramin_kept=0 pramin_kept_now=0 window_advice_refused=0 inline_opens=0 reaped=195 cache_ops=0 sysmembars=29 root_unsets=0",
+        "vat": "invals=466 arrive->clear_avg_us=359 max_us=98949 walks=466 walk_avg_us=197 gpu_avg_us=167 plan_avg_us=0 apply_avg_us=148 leaves=16 host_calls=1329",
+        "views": "armed=19615 released=19310 refused=0 held=305",
+        "tspace": "built=yes twin_refused=0 tspace_refused=0 slots_leaked=0 twin_freeing=0",
+        "poisoned": "poisoned=8",
+        "reset": "req=2 (main=2 vcpu=0 wake=0) done=2 kept=0 pristine=1 waits_timed_out=0 stage=Idle dropped=0",
+        "refusals": "20613",
+        "reset_channel_count": "36",
+        "tokens": "0x3:fwd=18,subs=49,serves=281,put=Some(18),gp_get=Some(18) 0x801:fwd=2,subs=2,serves=5,put=Some(2),gp_get=Some(2) 0x802:fwd=1,subs=1,serves=3,put=Some(1),gp_get=Some(1) 0x804:fwd=0,subs=0,serves=1,put=Some(0),gp_get=None 0x806:fwd=0,subs=0,serves=1,put=Some(0),gp_get=None 0x80b:fwd=207531,subs=38170,serves=37242,put=Some(10923),gp_get=Some(10923) 0x1805:fwd=0,subs=0,serves=1,put=Some(0),gp_get=None 0x2007:fwd=0,subs=0,serves=1,put=Some(0),gp_get=None 0x2008:fwd=0,subs=0,serves=1,put=Some(0),gp_get=None 0x200a:fwd=0,subs=0,serves=1,put=Some(0),gp_get=None 0x2809:fwd=0,subs=0,serves=1,put=Some(0),gp_get=None"
+      }
+    }
+  ],
+  "refusals": [
+    {
+      "line": 113366,
+      "text": "kf3: USER_RING_REFUSED 0xc1d00188:0xff040031 host 0x61: USER_RING_GP_FORMAT Budget entry=0x0faa26023110102c source_va=0x4101ee0 cursor=0x3bdc put=0x3c76 entries=32768; no completion/reuse credit",
+      "clock_bracket": {
+        "previous": [
+          103661,
+          9548.766
+        ],
+        "next": [
+          113512,
+          9761.21
+        ]
+      },
+      "length_bytes": 1026596,
+      "maximum_source_bytes": 917504
+    },
+    {
+      "line": 126035,
+      "text": "kf3: USER_RING_REFUSED 0xc1d001e7:0xff04002b host 0x5a: USER_RING_GP_FORMAT Budget entry=0x0ef7d2001dd1002c source_va=0x40f6800 cursor=0x2500 put=0x2501 entries=32768; no completion/reuse credit",
+      "clock_bracket": {
+        "previous": [
+          117979,
+          9767.355
+        ],
+        "next": [
+          126128,
+          9913.504
+        ]
+      },
+      "length_bytes": 980944,
+      "maximum_source_bytes": 917504
+    },
+    {
+      "line": 139098,
+      "text": "kf3: USER_RING_REFUSED 0xc1d00273:0xff040029 host 0x58: USER_RING_GP_FORMAT Budget entry=0x0efa82026dd7002c source_va=0x40e7e30 cursor=0x7c6 put=0x7c7 entries=32768; no completion/reuse credit",
+      "clock_bracket": {
+        "previous": [
+          133373,
+          9924.062
+        ],
+        "next": [
+          139307,
+          9998.579
+        ]
+      },
+      "length_bytes": 981632,
+      "maximum_source_bytes": 917504
+    },
+    {
+      "line": 146095,
+      "text": "kf3: USER_RING_REFUSED 0xc1d002bc:0xff040025 host 0x54: USER_RING_GP_FORMAT Budget entry=0x0ef926027cb7002c source_va=0x1139bfb8 cursor=0x37f7 put=0x3807 entries=65536; no completion/reuse credit",
+      "clock_bracket": {
+        "previous": [
+          143683,
+          10004.49
+        ],
+        "next": [
+          146272,
+          10034.246
+        ]
+      },
+      "length_bytes": 981284,
+      "maximum_source_bytes": 917504
+    },
+    {
+      "line": 152469,
+      "text": "kf3: USER_RING_REFUSED 0xc1d00308:0xff040025 host 0x54: USER_RING_GP_FORMAT Budget entry=0x0ef28a024a28002c source_va=0x411d0e0 cursor=0x721c put=0x721e entries=32768; no completion/reuse credit",
+      "clock_bracket": {
+        "previous": [
+          151016,
+          10038.899
+        ],
+        "next": [
+          152582,
+          10056.229
+        ]
+      },
+      "length_bytes": 979592,
+      "maximum_source_bytes": 917504
+    },
+    {
+      "line": 158444,
+      "text": "kf3: USER_RING_REFUSED 0xc1d0034f:0xff040023 host 0x52: USER_RING_GP_FORMAT Budget entry=0x0efafe02693b002c source_va=0x40f9620 cursor=0x2ac4 put=0x2ac5 entries=32768; no completion/reuse credit",
+      "clock_bracket": {
+        "previous": [
+          156836,
+          10061.181
+        ],
+        "next": [
+          160293,
+          10079.23
+        ]
+      },
+      "length_bytes": 981756,
+      "maximum_source_bytes": 917504
+    },
+    {
+      "line": 168353,
+      "text": "kf3: USER_RING_REFUSED 0xc1d003af:0xff040027 host 0x56: USER_RING_GP_FORMAT Budget entry=0x0ef906027231002c source_va=0x4102a18 cursor=0x3d43 put=0x3d44 entries=32768; no completion/reuse credit",
+      "clock_bracket": {
+        "previous": [
+          164422,
+          10084.003
+        ],
+        "next": [
+          168434,
+          10136.937
+        ]
+      },
+      "length_bytes": 981252,
+      "maximum_source_bytes": 917504
+    },
+    {
+      "line": 174914,
+      "text": "kf3: USER_RING_REFUSED 0xc1d003f9:0xff040027 host 0x56: USER_RING_GP_FORMAT Budget entry=0x0ef7de026f3b002c source_va=0x41168b0 cursor=0x6516 put=0x6517 entries=32768; no completion/reuse credit",
+      "clock_bracket": {
+        "previous": [
+          173312,
+          10142.636
+        ],
+        "next": [
+          175005,
+          10162.372
+        ]
+      },
+      "length_bytes": 980956,
+      "maximum_source_bytes": 917504
+    }
+  ],
+  "pre_first_tdr": {
+    "clock_bracket_seconds": [
+      9548.766,
+      9761.21
+    ],
+    "lines": [
+      103662,
+      113511
+    ],
+    "status_count": 105,
+    "nominal_last_90_heartbeats": [
+      {
+        "line": 104843,
+        "mem": {
+          "inval": "14272",
+          "walks": "115402/115402",
+          "cleared": "14272",
+          "unreconciled": "0",
+          "absent_cleared": "46",
+          "mapped": "1550106",
+          "unmapped": "1534168",
+          "held": "0",
+          "roots": "88",
+          "root_moves": "0",
+          "stmts": "156/156",
+          "refused": "16"
+        },
+        "vat": "invals=0 arrive->clear_avg_us=0 max_us=95264 walks=34 walk_avg_us=214 gpu_avg_us=141 plan_avg_us=0 apply_avg_us=161 leaves=64 host_calls=92",
+        "views": "armed=4630 released=4310 refused=0 held=320",
+        "poisoned": "poisoned=0",
+        "refusals": "12746",
+        "reset_channel_count": "0",
+        "tokens": [
+          "0x3:fwd=184,subs=388,serves=1864,put=Some(184),gp_get=Some(184)",
+          "0x80c:fwd=2758899,subs=549344,serves=551944,put=Some(6387),gp_get=Some(6387)"
+        ]
+      },
+      {
+        "line": 104907,
+        "mem": {
+          "inval": "14272",
+          "walks": "115408/115408",
+          "cleared": "14272",
+          "unreconciled": "0",
+          "absent_cleared": "46",
+          "mapped": "1550106",
+          "unmapped": "1534180",
+          "held": "0",
+          "roots": "88",
+          "root_moves": "0",
+          "stmts": "156/156",
+          "refused": "16"
+        },
+        "vat": "invals=0 arrive->clear_avg_us=0 max_us=95264 walks=6 walk_avg_us=190 gpu_avg_us=133 plan_avg_us=0 apply_avg_us=134 leaves=12 host_calls=18",
+        "views": "armed=4630 released=4310 refused=0 held=320",
+        "poisoned": "poisoned=0",
+        "refusals": "12766",
+        "reset_channel_count": "0",
+        "tokens": [
+          "0x3:fwd=184,subs=388,serves=1864,put=Some(184),gp_get=Some(184)",
+          "0x80c:fwd=2759165,subs=549385,serves=551982,put=Some(6653),gp_get=Some(6653)"
+        ]
+      },
+      {
+        "line": 104971,
+        "mem": {
+          "inval": "14272",
+          "walks": "115408/115408",
+          "cleared": "14272",
+          "unreconciled": "0",
+          "absent_cleared": "46",
+          "mapped": "1550106",
+          "unmapped": "1534180",
+          "held": "0",
+          "roots": "88",
+          "root_moves": "0",
+          "stmts": "156/156",
+          "refused": "16"
+        },
+        "vat": "invals=0 arrive->clear_avg_us=0 max_us=95264 walks=0 walk_avg_us=0 gpu_avg_us=0 plan_avg_us=0 apply_avg_us=0 leaves=12 host_calls=0",
+        "views": "armed=4630 released=4310 refused=0 held=320",
+        "poisoned": "poisoned=0",
+        "refusals": "12786",
+        "reset_channel_count": "0",
+        "tokens": [
+          "0x3:fwd=184,subs=388,serves=1864,put=Some(184),gp_get=Some(184)",
+          "0x80c:fwd=2759165,subs=549385,serves=551982,put=Some(6653),gp_get=Some(6653)"
+        ]
+      },
+      {
+        "line": 105036,
+        "mem": {
+          "inval": "14272",
+          "walks": "115409/115409",
+          "cleared": "14272",
+          "unreconciled": "0",
+          "absent_cleared": "46",
+          "mapped": "1550132",
+          "unmapped": "1534180",
+          "held": "0",
+          "roots": "88",
+          "root_moves": "0",
+          "stmts": "156/156",
+          "refused": "16"
+        },
+        "vat": "invals=0 arrive->clear_avg_us=0 max_us=95264 walks=1 walk_avg_us=259 gpu_avg_us=143 plan_avg_us=0 apply_avg_us=972 leaves=66 host_calls=16",
+        "views": "armed=4630 released=4310 refused=0 held=320",
+        "poisoned": "poisoned=0",
+        "refusals": "12806",
+        "reset_channel_count": "0",
+        "tokens": [
+          "0x3:fwd=184,subs=388,serves=1864,put=Some(184),gp_get=Some(184)",
+          "0x80c:fwd=2759203,subs=549391,serves=551988,put=Some(6691),gp_get=Some(6691)"
+        ]
+      },
+      {
+        "line": 105100,
+        "mem": {
+          "inval": "14272",
+          "walks": "115409/115409",
+          "cleared": "14272",
+          "unreconciled": "0",
+          "absent_cleared": "46",
+          "mapped": "1550132",
+          "unmapped": "1534180",
+          "held": "0",
+          "roots": "88",
+          "root_moves": "0",
+          "stmts": "156/156",
+          "refused": "16"
+        },
+        "vat": "invals=0 arrive->clear_avg_us=0 max_us=95264 walks=0 walk_avg_us=0 gpu_avg_us=0 plan_avg_us=0 apply_avg_us=0 leaves=66 host_calls=0",
+        "views": "armed=4630 released=4310 refused=0 held=320",
+        "poisoned": "poisoned=0",
+        "refusals": "12826",
+        "reset_channel_count": "0",
+        "tokens": [
+          "0x3:fwd=184,subs=388,serves=1864,put=Some(184),gp_get=Some(184)",
+          "0x80c:fwd=2759203,subs=549391,serves=551988,put=Some(6691),gp_get=Some(6691)"
+        ]
+      },
+      {
+        "line": 105164,
+        "mem": {
+          "inval": "14272",
+          "walks": "115409/115409",
+          "cleared": "14272",
+          "unreconciled": "0",
+          "absent_cleared": "46",
+          "mapped": "1550132",
+          "unmapped": "1534180",
+          "held": "0",
+          "roots": "88",
+          "root_moves": "0",
+          "stmts": "156/156",
+          "refused": "16"
+        },
+        "vat": "invals=0 arrive->clear_avg_us=0 max_us=95264 walks=0 walk_avg_us=0 gpu_avg_us=0 plan_avg_us=0 apply_avg_us=0 leaves=66 host_calls=0",
+        "views": "armed=4630 released=4310 refused=0 held=320",
+        "poisoned": "poisoned=0",
+        "refusals": "12846",
+        "reset_channel_count": "0",
+        "tokens": [
+          "0x3:fwd=184,subs=388,serves=1864,put=Some(184),gp_get=Some(184)",
+          "0x80c:fwd=2759203,subs=549391,serves=551988,put=Some(6691),gp_get=Some(6691)"
+        ]
+      },
+      {
+        "line": 105524,
+        "mem": {
+          "inval": "14338",
+          "walks": "115579/115580",
+          "cleared": "14338",
+          "unreconciled": "0",
+          "absent_cleared": "46",
+          "mapped": "1550430",
+          "unmapped": "1534229",
+          "held": "0",
+          "roots": "89",
+          "root_moves": "0",
+          "stmts": "157/157",
+          "refused": "16"
+        },
+        "vat": "invals=66 arrive->clear_avg_us=246 max_us=95264 walks=170 walk_avg_us=139 gpu_avg_us=99 plan_avg_us=0 apply_avg_us=508 leaves=10 host_calls=238",
+        "views": "armed=4636 released=4313 refused=0 held=323",
+        "poisoned": "poisoned=0",
+        "refusals": "12877",
+        "reset_channel_count": "0",
+        "tokens": [
+          "0x3:fwd=185,subs=391,serves=1876,put=Some(185),gp_get=Some(185)",
+          "0x80c:fwd=2762974,subs=550033,serves=552603,put=Some(10770),gp_get=Some(10461)"
+        ]
+      },
+      {
+        "line": 105653,
+        "mem": {
+          "inval": "14338",
+          "walks": "116125/116125",
+          "cleared": "14338",
+          "unreconciled": "0",
+          "absent_cleared": "46",
+          "mapped": "1552080",
+          "unmapped": "1534627",
+          "held": "0",
+          "roots": "89",
+          "root_moves": "0",
+          "stmts": "157/157",
+          "refused": "16"
+        },
+        "vat": "invals=0 arrive->clear_avg_us=0 max_us=95264 walks=546 walk_avg_us=188 gpu_avg_us=125 plan_avg_us=0 apply_avg_us=152 leaves=12 host_calls=1259",
+        "views": "armed=4637 released=4313 refused=0 held=324",
+        "poisoned": "poisoned=0",
+        "refusals": "12904",
+        "reset_channel_count": "0",
+        "tokens": [
+          "0x3:fwd=185,subs=391,serves=1876,put=Some(185),gp_get=Some(185)",
+          "0x80c:fwd=2780157,subs=554012,serves=556287,put=Some(11261),gp_get=Some(11261)"
+        ]
+      },
+      {
+        "line": 105719,
+        "mem": {
+          "inval": "14338",
+          "walks": "116594/116595",
+          "cleared": "14338",
+          "unreconciled": "0",
+          "absent_cleared": "46",
+          "mapped": "1552444",
+          "unmapped": "1534749",
+          "held": "0",
+          "roots": "89",
+          "root_moves": "0",
+          "stmts": "157/157",
+          "refused": "16"
+        },
+        "vat": "invals=0 arrive->clear_avg_us=0 max_us=95264 walks=469 walk_avg_us=174 gpu_avg_us=132 plan_avg_us=0 apply_avg_us=227 leaves=2 host_calls=711",
+        "views": "armed=4637 released=4313 refused=0 held=324",
+        "poisoned": "poisoned=0",
+        "refusals": "12924",
+        "reset_channel_count": "0",
+        "tokens": [
+          "0x3:fwd=185,subs=391,serves=1876,put=Some(185),gp_get=Some(185)",
+          "0x80c:fwd=2794346,subs=560499,serves=561808,put=Some(9735),gp_get=Some(9065)"
+        ]
+      },
+      {
+        "line": 105791,
+        "mem": {
+          "inval": "14338",
+          "walks": "117754/117754",
+          "cleared": "14338",
+          "unreconciled": "0",
+          "absent_cleared": "46",
+          "mapped": "1556060",
+          "unmapped": "1535515",
+          "held": "0",
+          "roots": "89",
+          "root_moves": "0",
+          "stmts": "157/157",
+          "refused": "16"
+        },
+        "vat": "invals=0 arrive->clear_avg_us=0 max_us=95264 walks=1160 walk_avg_us=371 gpu_avg_us=168 plan_avg_us=0 apply_avg_us=283 leaves=10 host_calls=2328",
+        "views": "armed=4637 released=4313 refused=0 held=324",
+        "poisoned": "poisoned=0",
+        "refusals": "12945",
+        "reset_channel_count": "0",
+        "tokens": [
+          "0x3:fwd=185,subs=391,serves=1876,put=Some(185),gp_get=Some(185)",
+          "0x80c:fwd=2827552,subs=577193,serves=575482,put=Some(9504),gp_get=Some(9504)"
+        ]
+      },
+      {
+        "line": 105866,
+        "mem": {
+          "inval": "14338",
+          "walks": "119224/119225",
+          "cleared": "14338",
+          "unreconciled": "0",
+          "absent_cleared": "46",
+          "mapped": "1563062",
+          "unmapped": "1536501",
+          "held": "0",
+          "roots": "89",
+          "root_moves": "0",
+          "stmts": "157/157",
+          "refused": "16"
+        },
+        "vat": "invals=0 arrive->clear_avg_us=0 max_us=95264 walks=1470 walk_avg_us=397 gpu_avg_us=177 plan_avg_us=0 apply_avg_us=246 leaves=10 host_calls=2413",
+        "views": "armed=4637 released=4313 refused=0 held=324",
+        "poisoned": "poisoned=0",
+        "refusals": "12965",
+        "reset_channel_count": "0",
+        "tokens": [
+          "0x3:fwd=185,subs=391,serves=1876,put=Some(185),gp_get=Some(185)",
+          "0x80c:fwd=2871429,subs=597603,serves=592944,put=Some(4724),gp_get=Some(4228)"
+        ]
+      },
+      {
+        "line": 106061,
+        "mem": {
+          "inval": "14338",
+          "walks": "119570/119571",
+          "cleared": "14338",
+          "unreconciled": "0",
+          "absent_cleared": "46",
+          "mapped": "1832358",
+          "unmapped": "1734051",
+          "held": "0",
+          "roots": "89",
+          "root_moves": "0",
+          "stmts": "157/157",
+          "refused": "16"
+        },
+        "vat": "invals=0 arrive->clear_avg_us=0 max_us=95264 walks=346 walk_avg_us=838 gpu_avg_us=699 plan_avg_us=0 apply_avg_us=4158 leaves=10 host_calls=4889",
+        "views": "armed=4637 released=4313 refused=0 held=324",
+        "poisoned": "poisoned=0",
+        "refusals": "12985",
+        "reset_channel_count": "0",
+        "tokens": [
+          "0x3:fwd=185,subs=391,serves=1876,put=Some(185),gp_get=Some(185)",
+          "0x80c:fwd=2891616,subs=602647,serves=597043,put=Some(8502),gp_get=Some(8031)"
+        ]
+      },
+      {
+        "line": 106298,
+        "mem": {
+          "inval": "14338",
+          "walks": "119726/119727",
+          "cleared": "14338",
+          "unreconciled": "0",
+          "absent_cleared": "46",
+          "mapped": "2107540",
+          "unmapped": "1897939",
+          "held": "0",
+          "roots": "89",
+          "root_moves": "0",
+          "stmts": "157/157",
+          "refused": "16"
+        },
+        "vat": "invals=0 arrive->clear_avg_us=0 max_us=95264 walks=156 walk_avg_us=2407 gpu_avg_us=2178 plan_avg_us=0 apply_avg_us=9666 leaves=16394 host_calls=398",
+        "views": "armed=4637 released=4313 refused=0 held=324",
+        "poisoned": "poisoned=0",
+        "refusals": "13005",
+        "reset_channel_count": "0",
+        "tokens": [
+          "0x3:fwd=185,subs=391,serves=1876,put=Some(185),gp_get=Some(185)",
+          "0x80c:fwd=2910183,subs=605566,serves=599451,put=Some(10684),gp_get=Some(10214)"
+        ]
+      },
+      {
+        "line": 106623,
+        "mem": {
+          "inval": "14338",
+          "walks": "119902/119902",
+          "cleared": "14338",
+          "unreconciled": "0",
+          "absent_cleared": "46",
+          "mapped": "2362154",
+          "unmapped": "2159687",
+          "held": "0",
+          "roots": "89",
+          "root_moves": "0",
+          "stmts": "157/157",
+          "refused": "16"
+        },
+        "vat": "invals=0 arrive->clear_avg_us=0 max_us=95264 walks=176 walk_avg_us=2688 gpu_avg_us=2460 plan_avg_us=0 apply_avg_us=8156 leaves=12432 host_calls=398",
+        "views": "armed=4637 released=4313 refused=0 held=324",
+        "poisoned": "poisoned=0",
+        "refusals": "13025",
+        "reset_channel_count": "0",
+        "tokens": [
+          "0x3:fwd=185,subs=391,serves=1876,put=Some(185),gp_get=Some(185)",
+          "0x80c:fwd=2934703,subs=608495,serves=601819,put=Some(1967),gp_get=Some(1967)"
+        ]
+      },
+      {
+        "line": 106847,
+        "mem": {
+          "inval": "14338",
+          "walks": "120123/120124",
+          "cleared": "14338",
+          "unreconciled": "0",
+          "absent_cleared": "46",
+          "mapped": "2503162",
+          "unmapped": "2189409",
+          "held": "0",
+          "roots": "89",
+          "root_moves": "0",
+          "stmts": "157/157",
+          "refused": "16"
+        },
+        "vat": "invals=0 arrive->clear_avg_us=0 max_us=95264 walks=221 walk_avg_us=3986 gpu_avg_us=3642 plan_avg_us=0 apply_avg_us=4060 leaves=10 host_calls=500",
+        "views": "armed=4637 released=4313 refused=0 held=324",
+        "poisoned": "poisoned=0",
+        "refusals": "13045",
+        "reset_channel_count": "0",
+        "tokens": [
+          "0x3:fwd=186,subs=393,serves=1933,put=Some(186),gp_get=Some(186)",
+          "0x80c:fwd=2943916,subs=610185,serves=603495,put=Some(11218),gp_get=Some(11179)"
+        ]
+      },
+      {
+        "line": 106916,
+        "mem": {
+          "inval": "14338",
+          "walks": "120501/120502",
+          "cleared": "14338",
+          "unreconciled": "0",
+          "absent_cleared": "46",
+          "mapped": "2507610",
+          "unmapped": "2234975",
+          "held": "0",
+          "roots": "89",
+          "root_moves": "0",
+          "stmts": "157/157",
+          "refused": "16"
+        },
+        "vat": "invals=0 arrive->clear_avg_us=0 max_us=95264 walks=378 walk_avg_us=4756 gpu_avg_us=4685 plan_avg_us=0 apply_avg_us=244 leaves=10 host_calls=483",
+        "views": "armed=4637 released=4313 refused=0 held=324",
+        "poisoned": "poisoned=0",
+        "refusals": "13065",
+        "reset_channel_count": "0",
+        "tokens": [
+          "0x3:fwd=186,subs=393,serves=1933,put=Some(186),gp_get=Some(186)",
+          "0x80c:fwd=2956759,subs=613031,serves=606580,put=Some(8226),gp_get=Some(7638)"
+        ]
+      },
+      {
+        "line": 107001,
+        "mem": {
+          "inval": "14338",
+          "walks": "120980/120981",
+          "cleared": "14338",
+          "unreconciled": "0",
+          "absent_cleared": "46",
+          "mapped": "2524226",
+          "unmapped": "2267769",
+          "held": "0",
+          "roots": "89",
+          "root_moves": "0",
+          "stmts": "157/157",
+          "refused": "16"
+        },
+        "vat": "invals=0 arrive->clear_avg_us=0 max_us=95264 walks=479 walk_avg_us=3063 gpu_avg_us=3006 plan_avg_us=0 apply_avg_us=624 leaves=10 host_calls=5002",
+        "views": "armed=4637 released=4313 refused=0 held=324",
+        "poisoned": "poisoned=0",
+        "refusals": "13085",
+        "reset_channel_count": "0",
+        "tokens": [
+          "0x3:fwd=186,subs=393,serves=1933,put=Some(186),gp_get=Some(186)",
+          "0x80c:fwd=2970900,subs=621511,serves=613310,put=Some(5397),gp_get=Some(5395)"
+        ]
+      },
+      {
+        "line": 107079,
+        "mem": {
+          "inval": "14338",
+          "walks": "121367/121368",
+          "cleared": "14338",
+          "unreconciled": "0",
+          "absent_cleared": "46",
+          "mapped": "2551334",
+          "unmapped": "2267913",
+          "held": "0",
+          "roots": "89",
+          "root_moves": "0",
+          "stmts": "157/157",
+          "refused": "16"
+        },
+        "vat": "invals=0 arrive->clear_avg_us=0 max_us=95264 walks=387 walk_avg_us=3984 gpu_avg_us=3890 plan_avg_us=0 apply_avg_us=527 leaves=10 host_calls=552",
+        "views": "armed=4637 released=4313 refused=0 held=324",
+        "poisoned": "poisoned=0",
+        "refusals": "13105",
+        "reset_channel_count": "0",
+        "tokens": [
+          "0x3:fwd=186,subs=393,serves=1933,put=Some(186),gp_get=Some(186)",
+          "0x80c:fwd=2984315,subs=625832,serves=617361,put=Some(2941),gp_get=Some(2426)"
+        ]
+      },
+      {
+        "line": 107183,
+        "mem": {
+          "inval": "14338",
+          "walks": "121706/121707",
+          "cleared": "14338",
+          "unreconciled": "0",
+          "absent_cleared": "46",
+          "mapped": "2631608",
+          "unmapped": "2331755",
+          "held": "0",
+          "roots": "89",
+          "root_moves": "0",
+          "stmts": "157/157",
+          "refused": "16"
+        },
+        "vat": "invals=0 arrive->clear_avg_us=0 max_us=95264 walks=339 walk_avg_us=3479 gpu_avg_us=3402 plan_avg_us=0 apply_avg_us=1833 leaves=10 host_calls=692",
+        "views": "armed=4637 released=4313 refused=0 held=324",
+        "poisoned": "poisoned=0",
+        "refusals": "13125",
+        "reset_channel_count": "0",
+        "tokens": [
+          "0x3:fwd=186,subs=393,serves=1933,put=Some(186),gp_get=Some(186)",
+          "0x80c:fwd=3000866,subs=632182,serves=622326,put=Some(2687),gp_get=Some(2593)"
+        ]
+      },
+      {
+        "line": 107461,
+        "mem": {
+          "inval": "14338",
+          "walks": "121807/121808",
+          "cleared": "14338",
+          "unreconciled": "0",
+          "absent_cleared": "46",
+          "mapped": "2813996",
+          "unmapped": "2411591",
+          "held": "0",
+          "roots": "89",
+          "root_moves": "0",
+          "stmts": "157/157",
+          "refused": "16"
+        },
+        "vat": "invals=0 arrive->clear_avg_us=0 max_us=95264 walks=101 walk_avg_us=7295 gpu_avg_us=6992 plan_avg_us=0 apply_avg_us=10984 leaves=12 host_calls=2603",
+        "views": "armed=4637 released=4313 refused=0 held=324",
+        "poisoned": "poisoned=0",
+        "refusals": "13145",
+        "reset_channel_count": "0",
+        "tokens": [
+          "0x3:fwd=186,subs=393,serves=1933,put=Some(186),gp_get=Some(186)",
+          "0x80c:fwd=3013997,subs=634103,serves=623939,put=Some(15726),gp_get=Some(15724)"
+        ]
+      },
+      {
+        "line": 107544,
+        "mem": {
+          "inval": "14338",
+          "walks": "122061/122061",
+          "cleared": "14338",
+          "unreconciled": "0",
+          "absent_cleared": "46",
+          "mapped": "2813996",
+          "unmapped": "2622809",
+          "held": "0",
+          "roots": "89",
+          "root_moves": "0",
+          "stmts": "157/157",
+          "refused": "16"
+        },
+        "vat": "invals=0 arrive->clear_avg_us=0 max_us=95264 walks=254 walk_avg_us=7013 gpu_avg_us=6937 plan_avg_us=0 apply_avg_us=351 leaves=10 host_calls=387",
+        "views": "armed=4637 released=4313 refused=0 held=324",
+        "poisoned": "poisoned=0",
+        "refusals": "13165",
+        "reset_channel_count": "0",
+        "tokens": [
+          "0x3:fwd=186,subs=393,serves=1933,put=Some(186),gp_get=Some(186)",
+          "0x80c:fwd=3031425,subs=636044,serves=625958,put=Some(386),gp_get=Some(384)"
+        ]
+      },
+      {
+        "line": 107629,
+        "mem": {
+          "inval": "14338",
+          "walks": "122221/122222",
+          "cleared": "14338",
+          "unreconciled": "0",
+          "absent_cleared": "46",
+          "mapped": "2830936",
+          "unmapped": "2656277",
+          "held": "0",
+          "roots": "89",
+          "root_moves": "0",
+          "stmts": "157/157",
+          "refused": "16"
+        },
+        "vat": "invals=0 arrive->clear_avg_us=0 max_us=95264 walks=160 walk_avg_us=2696 gpu_avg_us=2585 plan_avg_us=0 apply_avg_us=901 leaves=10 host_calls=297",
+        "views": "armed=4637 released=4313 refused=0 held=324",
+        "poisoned": "poisoned=0",
+        "refusals": "13185",
+        "reset_channel_count": "0",
+        "tokens": [
+          "0x3:fwd=186,subs=393,serves=1933,put=Some(186),gp_get=Some(186)",
+          "0x80c:fwd=3036814,subs=637619,serves=627447,put=Some(5775),gp_get=Some(5773)"
+        ]
+      },
+      {
+        "line": 107720,
+        "mem": {
+          "inval": "14338",
+          "walks": "123087/123087",
+          "cleared": "14338",
+          "unreconciled": "0",
+          "absent_cleared": "46",
+          "mapped": "2834330",
+          "unmapped": "2815723",
+          "held": "0",
+          "roots": "89",
+          "root_moves": "0",
+          "stmts": "157/157",
+          "refused": "16"
+        },
+        "vat": "invals=0 arrive->clear_avg_us=0 max_us=95264 walks=866 walk_avg_us=1146 gpu_avg_us=1087 plan_avg_us=0 apply_avg_us=267 leaves=10 host_calls=1645",
+        "views": "armed=4637 released=4313 refused=0 held=324",
+        "poisoned": "poisoned=0",
+        "refusals": "13205",
+        "reset_channel_count": "0",
+        "tokens": [
+          "0x3:fwd=186,subs=393,serves=1933,put=Some(186),gp_get=Some(186)",
+          "0x80c:fwd=3070353,subs=646684,serves=635785,put=Some(6545),gp_get=Some(6545)"
+        ]
+      },
+      {
+        "line": 107785,
+        "mem": {
+          "inval": "14338",
+          "walks": "124232/124233",
+          "cleared": "14338",
+          "unreconciled": "0",
+          "absent_cleared": "46",
+          "mapped": "2835352",
+          "unmapped": "2817345",
+          "held": "0",
+          "roots": "89",
+          "root_moves": "0",
+          "stmts": "157/157",
+          "refused": "16"
+        },
+        "vat": "invals=0 arrive->clear_avg_us=0 max_us=95264 walks=1145 walk_avg_us=229 gpu_avg_us=139 plan_avg_us=0 apply_avg_us=277 leaves=2 host_calls=2147",
+        "views": "armed=4637 released=4313 refused=0 held=324",
+        "poisoned": "poisoned=0",
+        "refusals": "13225",
+        "reset_channel_count": "0",
+        "tokens": [
+          "0x3:fwd=186,subs=393,serves=1933,put=Some(186),gp_get=Some(186)",
+          "0x80c:fwd=3103391,subs=665697,serves=651534,put=Some(6967),gp_get=Some(6814)"
+        ]
+      },
+      {
+        "line": 107849,
+        "mem": {
+          "inval": "14338",
+          "walks": "126399/126399",
+          "cleared": "14338",
+          "unreconciled": "0",
+          "absent_cleared": "46",
+          "mapped": "2836816",
+          "unmapped": "2818811",
+          "held": "0",
+          "roots": "89",
+          "root_moves": "0",
+          "stmts": "157/157",
+          "refused": "16"
+        },
+        "vat": "invals=0 arrive->clear_avg_us=0 max_us=95264 walks=2167 walk_avg_us=197 gpu_avg_us=133 plan_avg_us=0 apply_avg_us=258 leaves=10 host_calls=3799",
+        "views": "armed=4637 released=4313 refused=0 held=324",
+        "poisoned": "poisoned=0",
+        "refusals": "13245",
+        "reset_channel_count": "0",
+        "tokens": [
+          "0x3:fwd=186,subs=393,serves=1933,put=Some(186),gp_get=Some(186)",
+          "0x80c:fwd=3164407,subs=698520,serves=678485,put=Some(2295),gp_get=Some(2295)"
+        ]
+      },
+      {
+        "line": 107914,
+        "mem": {
+          "inval": "14338",
+          "walks": "128207/128207",
+          "cleared": "14338",
+          "unreconciled": "0",
+          "absent_cleared": "46",
+          "mapped": "2838994",
+          "unmapped": "2820965",
+          "held": "0",
+          "roots": "89",
+          "root_moves": "0",
+          "stmts": "157/157",
+          "refused": "16"
+        },
+        "vat": "invals=0 arrive->clear_avg_us=0 max_us=95264 walks=1808 walk_avg_us=198 gpu_avg_us=131 plan_avg_us=0 apply_avg_us=246 leaves=10 host_calls=3422",
+        "views": "armed=4637 released=4313 refused=0 held=324",
+        "poisoned": "poisoned=0",
+        "refusals": "13265",
+        "reset_channel_count": "0",
+        "tokens": [
+          "0x3:fwd=186,subs=393,serves=1933,put=Some(186),gp_get=Some(186)",
+          "0x80c:fwd=3217410,subs=724139,serves=700365,put=Some(6836),gp_get=Some(6109)"
+        ]
+      },
+      {
+        "line": 107978,
+        "mem": {
+          "inval": "14338",
+          "walks": "129736/129736",
+          "cleared": "14338",
+          "unreconciled": "0",
+          "absent_cleared": "46",
+          "mapped": "2842692",
+          "unmapped": "2822777",
+          "held": "0",
+          "roots": "89",
+          "root_moves": "0",
+          "stmts": "157/157",
+          "refused": "16"
+        },
+        "vat": "invals=0 arrive->clear_avg_us=0 max_us=95264 walks=1529 walk_avg_us=194 gpu_avg_us=139 plan_avg_us=0 apply_avg_us=290 leaves=12 host_calls=2928",
+        "views": "armed=4637 released=4313 refused=0 held=324",
+        "poisoned": "poisoned=0",
+        "refusals": "13285",
+        "reset_channel_count": "0",
+        "tokens": [
+          "0x3:fwd=186,subs=393,serves=1933,put=Some(186),gp_get=Some(186)",
+          "0x80c:fwd=3262741,subs=747680,serves=719790,put=Some(2325),gp_get=Some(2325)"
+        ]
+      },
+      {
+        "line": 108042,
+        "mem": {
+          "inval": "14338",
+          "walks": "130569/130570",
+          "cleared": "14338",
+          "unreconciled": "0",
+          "absent_cleared": "46",
+          "mapped": "2845166",
+          "unmapped": "2824011",
+          "held": "0",
+          "roots": "89",
+          "root_moves": "0",
+          "stmts": "157/157",
+          "refused": "16"
+        },
+        "vat": "invals=0 arrive->clear_avg_us=0 max_us=95264 walks=833 walk_avg_us=284 gpu_avg_us=181 plan_avg_us=0 apply_avg_us=228 leaves=2 host_calls=1544",
+        "views": "armed=4637 released=4313 refused=0 held=324",
+        "poisoned": "poisoned=0",
+        "refusals": "13305",
+        "reset_channel_count": "0",
+        "tokens": [
+          "0x3:fwd=186,subs=393,serves=1933,put=Some(186),gp_get=Some(186)",
+          "0x80c:fwd=3288514,subs=757465,serves=728424,put=Some(12395),gp_get=Some(11713)"
+        ]
+      },
+      {
+        "line": 108139,
+        "mem": {
+          "inval": "14338",
+          "walks": "132156/132156",
+          "cleared": "14338",
+          "unreconciled": "0",
+          "absent_cleared": "46",
+          "mapped": "2846790",
+          "unmapped": "2825349",
+          "held": "0",
+          "roots": "89",
+          "root_moves": "0",
+          "stmts": "157/157",
+          "refused": "16"
+        },
+        "vat": "invals=0 arrive->clear_avg_us=0 max_us=95264 walks=1587 walk_avg_us=266 gpu_avg_us=181 plan_avg_us=0 apply_avg_us=287 leaves=10 host_calls=3171",
+        "views": "armed=4637 released=4313 refused=0 held=324",
+        "poisoned": "poisoned=0",
+        "refusals": "13335",
+        "reset_channel_count": "0",
+        "tokens": [
+          "0x3:fwd=186,subs=393,serves=1933,put=Some(186),gp_get=Some(186)",
+          "0x80c:fwd=3334065,subs=783459,serves=749258,put=Some(8151),gp_get=Some(8112)"
+        ]
+      },
+      {
+        "line": 108203,
+        "mem": {
+          "inval": "14338",
+          "walks": "132353/132353",
+          "cleared": "14338",
+          "unreconciled": "0",
+          "absent_cleared": "46",
+          "mapped": "2846840",
+          "unmapped": "2825609",
+          "held": "0",
+          "roots": "89",
+          "root_moves": "0",
+          "stmts": "157/157",
+          "refused": "16"
+        },
+        "vat": "invals=0 arrive->clear_avg_us=0 max_us=95264 walks=197 walk_avg_us=235 gpu_avg_us=199 plan_avg_us=0 apply_avg_us=209 leaves=10 host_calls=332",
+        "views": "armed=4637 released=4313 refused=0 held=324",
+        "poisoned": "poisoned=0",
+        "refusals": "13355",
+        "reset_channel_count": "0",
+        "tokens": [
+          "0x3:fwd=186,subs=393,serves=1933,put=Some(186),gp_get=Some(186)",
+          "0x80c:fwd=3339735,subs=785798,serves=751414,put=Some(13783),gp_get=Some(13783)"
+        ]
+      },
+      {
+        "line": 108267,
+        "mem": {
+          "inval": "14338",
+          "walks": "133013/133013",
+          "cleared": "14338",
+          "unreconciled": "0",
+          "absent_cleared": "46",
+          "mapped": "2847602",
+          "unmapped": "2827593",
+          "held": "0",
+          "roots": "89",
+          "root_moves": "0",
+          "stmts": "157/157",
+          "refused": "16"
+        },
+        "vat": "invals=0 arrive->clear_avg_us=0 max_us=95264 walks=660 walk_avg_us=264 gpu_avg_us=169 plan_avg_us=0 apply_avg_us=248 leaves=124 host_calls=1294",
+        "views": "armed=4637 released=4313 refused=0 held=324",
+        "poisoned": "poisoned=0",
+        "refusals": "13375",
+        "reset_channel_count": "0",
+        "tokens": [
+          "0x3:fwd=186,subs=393,serves=1933,put=Some(186),gp_get=Some(186)",
+          "0x80c:fwd=3359496,subs=795165,serves=759357,put=Some(776),gp_get=Some(776)"
+        ]
+      },
+      {
+        "line": 108332,
+        "mem": {
+          "inval": "14338",
+          "walks": "134382/134383",
+          "cleared": "14338",
+          "unreconciled": "0",
+          "absent_cleared": "46",
+          "mapped": "2848682",
+          "unmapped": "2829159",
+          "held": "0",
+          "roots": "89",
+          "root_moves": "0",
+          "stmts": "157/157",
+          "refused": "16"
+        },
+        "vat": "invals=0 arrive->clear_avg_us=0 max_us=95264 walks=1369 walk_avg_us=240 gpu_avg_us=157 plan_avg_us=0 apply_avg_us=269 leaves=2 host_calls=2543",
+        "views": "armed=4637 released=4313 refused=0 held=324",
+        "poisoned": "poisoned=0",
+        "refusals": "13395",
+        "reset_channel_count": "0",
+        "tokens": [
+          "0x3:fwd=186,subs=393,serves=1933,put=Some(186),gp_get=Some(186)",
+          "0x80c:fwd=3400053,subs=816399,serves=776999,put=Some(9296),gp_get=Some(8564)"
+        ]
+      },
+      {
+        "line": 108396,
+        "mem": {
+          "inval": "14338",
+          "walks": "135707/135708",
+          "cleared": "14338",
+          "unreconciled": "0",
+          "absent_cleared": "46",
+          "mapped": "2849746",
+          "unmapped": "2830899",
+          "held": "0",
+          "roots": "89",
+          "root_moves": "0",
+          "stmts": "157/157",
+          "refused": "16"
+        },
+        "vat": "invals=0 arrive->clear_avg_us=0 max_us=95264 walks=1325 walk_avg_us=264 gpu_avg_us=150 plan_avg_us=0 apply_avg_us=282 leaves=10 host_calls=2553",
+        "views": "armed=4637 released=4313 refused=0 held=324",
+        "poisoned": "poisoned=0",
+        "refusals": "13415",
+        "reset_channel_count": "0",
+        "tokens": [
+          "0x3:fwd=186,subs=393,serves=1933,put=Some(186),gp_get=Some(186)",
+          "0x80c:fwd=3438596,subs=837664,serves=794403,put=Some(14823),gp_get=Some(14339)"
+        ]
+      },
+      {
+        "line": 108461,
+        "mem": {
+          "inval": "14338",
+          "walks": "136088/136088",
+          "cleared": "14338",
+          "unreconciled": "0",
+          "absent_cleared": "46",
+          "mapped": "2850078",
+          "unmapped": "2832371",
+          "held": "0",
+          "roots": "89",
+          "root_moves": "0",
+          "stmts": "157/157",
+          "refused": "16"
+        },
+        "vat": "invals=0 arrive->clear_avg_us=0 max_us=95264 walks=381 walk_avg_us=241 gpu_avg_us=148 plan_avg_us=0 apply_avg_us=279 leaves=124 host_calls=774",
+        "views": "armed=4637 released=4313 refused=0 held=324",
+        "poisoned": "poisoned=0",
+        "refusals": "13435",
+        "reset_channel_count": "0",
+        "tokens": [
+          "0x3:fwd=186,subs=393,serves=1933,put=Some(186),gp_get=Some(186)",
+          "0x80c:fwd=3449525,subs=843488,serves=798909,put=Some(8885),gp_get=Some(8885)"
+        ]
+      },
+      {
+        "line": 108525,
+        "mem": {
+          "inval": "14338",
+          "walks": "137045/137045",
+          "cleared": "14338",
+          "unreconciled": "0",
+          "absent_cleared": "46",
+          "mapped": "2850788",
+          "unmapped": "2833081",
+          "held": "0",
+          "roots": "89",
+          "root_moves": "0",
+          "stmts": "157/157",
+          "refused": "16"
+        },
+        "vat": "invals=0 arrive->clear_avg_us=0 max_us=95264 walks=957 walk_avg_us=207 gpu_avg_us=128 plan_avg_us=0 apply_avg_us=275 leaves=10 host_calls=1818",
+        "views": "armed=4637 released=4313 refused=0 held=324",
+        "poisoned": "poisoned=0",
+        "refusals": "13455",
+        "reset_channel_count": "0",
+        "tokens": [
+          "0x3:fwd=186,subs=393,serves=1933,put=Some(186),gp_get=Some(186)",
+          "0x80c:fwd=3477176,subs=858918,serves=811522,put=Some(3768),gp_get=Some(3768)"
+        ]
+      },
+      {
+        "line": 108590,
+        "mem": {
+          "inval": "14338",
+          "walks": "137552/137552",
+          "cleared": "14338",
+          "unreconciled": "0",
+          "absent_cleared": "46",
+          "mapped": "2851250",
+          "unmapped": "2833433",
+          "held": "0",
+          "roots": "89",
+          "root_moves": "0",
+          "stmts": "157/157",
+          "refused": "16"
+        },
+        "vat": "invals=0 arrive->clear_avg_us=0 max_us=95264 walks=507 walk_avg_us=244 gpu_avg_us=126 plan_avg_us=0 apply_avg_us=279 leaves=10 host_calls=980",
+        "views": "armed=4637 released=4313 refused=0 held=324",
+        "poisoned": "poisoned=0",
+        "refusals": "13475",
+        "reset_channel_count": "0",
+        "tokens": [
+          "0x3:fwd=186,subs=393,serves=1933,put=Some(186),gp_get=Some(186)",
+          "0x80c:fwd=3491649,subs=867006,serves=818201,put=Some(1857),gp_get=Some(1857)"
+        ]
+      },
+      {
+        "line": 108654,
+        "mem": {
+          "inval": "14338",
+          "walks": "138070/138070",
+          "cleared": "14338",
+          "unreconciled": "0",
+          "absent_cleared": "46",
+          "mapped": "2851636",
+          "unmapped": "2833825",
+          "held": "0",
+          "roots": "89",
+          "root_moves": "0",
+          "stmts": "157/157",
+          "refused": "16"
+        },
+        "vat": "invals=0 arrive->clear_avg_us=0 max_us=95264 walks=518 walk_avg_us=248 gpu_avg_us=127 plan_avg_us=0 apply_avg_us=262 leaves=10 host_calls=985",
+        "views": "armed=4637 released=4313 refused=0 held=324",
+        "poisoned": "poisoned=0",
+        "refusals": "13495",
+        "reset_channel_count": "0",
+        "tokens": [
+          "0x3:fwd=186,subs=393,serves=1933,put=Some(186),gp_get=Some(186)",
+          "0x80c:fwd=3506583,subs=874911,serves=824793,put=Some(407),gp_get=Some(407)"
+        ]
+      },
+      {
+        "line": 108718,
+        "mem": {
+          "inval": "14338",
+          "walks": "138573/138573",
+          "cleared": "14338",
+          "unreconciled": "0",
+          "absent_cleared": "46",
+          "mapped": "2852018",
+          "unmapped": "2834191",
+          "held": "0",
+          "roots": "89",
+          "root_moves": "0",
+          "stmts": "157/157",
+          "refused": "16"
+        },
+        "vat": "invals=0 arrive->clear_avg_us=0 max_us=95264 walks=503 walk_avg_us=242 gpu_avg_us=127 plan_avg_us=0 apply_avg_us=270 leaves=10 host_calls=958",
+        "views": "armed=4637 released=4313 refused=0 held=324",
+        "poisoned": "poisoned=0",
+        "refusals": "13515",
+        "reset_channel_count": "0",
+        "tokens": [
+          "0x3:fwd=186,subs=393,serves=1933,put=Some(186),gp_get=Some(186)",
+          "0x80c:fwd=3521097,subs=882744,serves=831197,put=Some(14921),gp_get=Some(14921)"
+        ]
+      },
+      {
+        "line": 108783,
+        "mem": {
+          "inval": "14338",
+          "walks": "139072/139073",
+          "cleared": "14338",
+          "unreconciled": "0",
+          "absent_cleared": "46",
+          "mapped": "2852392",
+          "unmapped": "2834557",
+          "held": "0",
+          "roots": "89",
+          "root_moves": "0",
+          "stmts": "157/157",
+          "refused": "16"
+        },
+        "vat": "invals=0 arrive->clear_avg_us=0 max_us=95264 walks=499 walk_avg_us=223 gpu_avg_us=127 plan_avg_us=0 apply_avg_us=270 leaves=2 host_calls=931",
+        "views": "armed=4637 released=4313 refused=0 held=324",
+        "poisoned": "poisoned=0",
+        "refusals": "13535",
+        "reset_channel_count": "0",
+        "tokens": [
+          "0x3:fwd=186,subs=393,serves=1933,put=Some(186),gp_get=Some(186)",
+          "0x80c:fwd=3535727,subs=890422,serves=837642,put=Some(13603),gp_get=Some(13166)"
+        ]
+      },
+      {
+        "line": 108848,
+        "mem": {
+          "inval": "14338",
+          "walks": "140195/140195",
+          "cleared": "14338",
+          "unreconciled": "0",
+          "absent_cleared": "46",
+          "mapped": "2853152",
+          "unmapped": "2841463",
+          "held": "0",
+          "roots": "89",
+          "root_moves": "0",
+          "stmts": "157/157",
+          "refused": "16"
+        },
+        "vat": "invals=0 arrive->clear_avg_us=0 max_us=95264 walks=1123 walk_avg_us=332 gpu_avg_us=128 plan_avg_us=0 apply_avg_us=277 leaves=10 host_calls=2279",
+        "views": "armed=4637 released=4313 refused=0 held=324",
+        "poisoned": "poisoned=0",
+        "refusals": "13555",
+        "reset_channel_count": "0",
+        "tokens": [
+          "0x3:fwd=186,subs=393,serves=1933,put=Some(186),gp_get=Some(186)",
+          "0x80c:fwd=3570351,subs=907279,serves=851661,put=Some(15023),gp_get=Some(15023)"
+        ]
+      },
+      {
+        "line": 108912,
+        "mem": {
+          "inval": "14338",
+          "walks": "141707/141707",
+          "cleared": "14338",
+          "unreconciled": "0",
+          "absent_cleared": "46",
+          "mapped": "2854382",
+          "unmapped": "2842807",
+          "held": "0",
+          "roots": "89",
+          "root_moves": "0",
+          "stmts": "157/157",
+          "refused": "16"
+        },
+        "vat": "invals=0 arrive->clear_avg_us=0 max_us=95264 walks=1512 walk_avg_us=228 gpu_avg_us=128 plan_avg_us=0 apply_avg_us=274 leaves=126 host_calls=2894",
+        "views": "armed=4637 released=4313 refused=0 held=324",
+        "poisoned": "poisoned=0",
+        "refusals": "13575",
+        "reset_channel_count": "0",
+        "tokens": [
+          "0x3:fwd=186,subs=393,serves=1933,put=Some(186),gp_get=Some(186)",
+          "0x80c:fwd=3614439,subs=931336,serves=871188,put=Some(9959),gp_get=Some(9959)"
+        ]
+      },
+      {
+        "line": 108976,
+        "mem": {
+          "inval": "14338",
+          "walks": "143245/143245",
+          "cleared": "14338",
+          "unreconciled": "0",
+          "absent_cleared": "46",
+          "mapped": "2855504",
+          "unmapped": "2843995",
+          "held": "0",
+          "roots": "89",
+          "root_moves": "0",
+          "stmts": "157/157",
+          "refused": "16"
+        },
+        "vat": "invals=0 arrive->clear_avg_us=0 max_us=95264 walks=1538 walk_avg_us=234 gpu_avg_us=131 plan_avg_us=0 apply_avg_us=266 leaves=10 host_calls=2920",
+        "views": "armed=4637 released=4313 refused=0 held=324",
+        "poisoned": "poisoned=0",
+        "refusals": "13595",
+        "reset_channel_count": "0",
+        "tokens": [
+          "0x3:fwd=186,subs=393,serves=1933,put=Some(186),gp_get=Some(186)",
+          "0x80c:fwd=3659121,subs=955529,serves=891143,put=Some(5489),gp_get=Some(5489)"
+        ]
+      },
+      {
+        "line": 109040,
+        "mem": {
+          "inval": "14338",
+          "walks": "143247/143247",
+          "cleared": "14338",
+          "unreconciled": "0",
+          "absent_cleared": "46",
+          "mapped": "2855624",
+          "unmapped": "2843995",
+          "held": "0",
+          "roots": "89",
+          "root_moves": "0",
+          "stmts": "157/157",
+          "refused": "16"
+        },
+        "vat": "invals=0 arrive->clear_avg_us=0 max_us=95264 walks=2 walk_avg_us=1208 gpu_avg_us=150 plan_avg_us=0 apply_avg_us=719 leaves=130 host_calls=3",
+        "views": "armed=4637 released=4313 refused=0 held=324",
+        "poisoned": "poisoned=0",
+        "refusals": "13615",
+        "reset_channel_count": "0",
+        "tokens": [
+          "0x3:fwd=186,subs=393,serves=1933,put=Some(186),gp_get=Some(186)",
+          "0x80c:fwd=3659195,subs=955539,serves=891159,put=Some(5563),gp_get=Some(5563)"
+        ]
+      },
+      {
+        "line": 109104,
+        "mem": {
+          "inval": "14338",
+          "walks": "144208/144208",
+          "cleared": "14338",
+          "unreconciled": "0",
+          "absent_cleared": "46",
+          "mapped": "2856448",
+          "unmapped": "2844941",
+          "held": "0",
+          "roots": "89",
+          "root_moves": "0",
+          "stmts": "157/157",
+          "refused": "16"
+        },
+        "vat": "invals=0 arrive->clear_avg_us=0 max_us=95264 walks=961 walk_avg_us=217 gpu_avg_us=128 plan_avg_us=0 apply_avg_us=279 leaves=10 host_calls=1821",
+        "views": "armed=4637 released=4313 refused=0 held=324",
+        "poisoned": "poisoned=0",
+        "refusals": "13635",
+        "reset_channel_count": "0",
+        "tokens": [
+          "0x3:fwd=186,subs=393,serves=1933,put=Some(186),gp_get=Some(186)",
+          "0x80c:fwd=3687312,subs=971010,serves=903818,put=Some(912),gp_get=Some(912)"
+        ]
+      },
+      {
+        "line": 109169,
+        "mem": {
+          "inval": "14338",
+          "walks": "144716/144716",
+          "cleared": "14338",
+          "unreconciled": "0",
+          "absent_cleared": "46",
+          "mapped": "2856966",
+          "unmapped": "2845297",
+          "held": "0",
+          "roots": "89",
+          "root_moves": "0",
+          "stmts": "157/157",
+          "refused": "16"
+        },
+        "vat": "invals=0 arrive->clear_avg_us=0 max_us=95264 walks=508 walk_avg_us=246 gpu_avg_us=126 plan_avg_us=0 apply_avg_us=273 leaves=10 host_calls=980",
+        "views": "armed=4637 released=4313 refused=0 held=324",
+        "poisoned": "poisoned=0",
+        "refusals": "13655",
+        "reset_channel_count": "0",
+        "tokens": [
+          "0x3:fwd=186,subs=393,serves=1933,put=Some(186),gp_get=Some(186)",
+          "0x80c:fwd=3701852,subs=979100,serves=910515,put=Some(15452),gp_get=Some(15452)"
+        ]
+      },
+      {
+        "line": 109233,
+        "mem": {
+          "inval": "14338",
+          "walks": "145233/145233",
+          "cleared": "14338",
+          "unreconciled": "0",
+          "absent_cleared": "46",
+          "mapped": "2857350",
+          "unmapped": "2845689",
+          "held": "0",
+          "roots": "89",
+          "root_moves": "0",
+          "stmts": "157/157",
+          "refused": "16"
+        },
+        "vat": "invals=0 arrive->clear_avg_us=0 max_us=95264 walks=517 walk_avg_us=251 gpu_avg_us=128 plan_avg_us=0 apply_avg_us=262 leaves=10 host_calls=982",
+        "views": "armed=4637 released=4313 refused=0 held=324",
+        "poisoned": "poisoned=0",
+        "refusals": "13675",
+        "reset_channel_count": "0",
+        "tokens": [
+          "0x3:fwd=186,subs=393,serves=1933,put=Some(186),gp_get=Some(186)",
+          "0x80c:fwd=3716854,subs=987006,serves=917085,put=Some(14070),gp_get=Some(14070)"
+        ]
+      },
+      {
+        "line": 109297,
+        "mem": {
+          "inval": "14338",
+          "walks": "145738/145738",
+          "cleared": "14338",
+          "unreconciled": "0",
+          "absent_cleared": "46",
+          "mapped": "2857734",
+          "unmapped": "2846057",
+          "held": "0",
+          "roots": "89",
+          "root_moves": "0",
+          "stmts": "157/157",
+          "refused": "16"
+        },
+        "vat": "invals=0 arrive->clear_avg_us=0 max_us=95264 walks=505 walk_avg_us=248 gpu_avg_us=127 plan_avg_us=0 apply_avg_us=264 leaves=10 host_calls=964",
+        "views": "armed=4637 released=4313 refused=0 held=324",
+        "poisoned": "poisoned=0",
+        "refusals": "13695",
+        "reset_channel_count": "0",
+        "tokens": [
+          "0x3:fwd=186,subs=393,serves=1933,put=Some(186),gp_get=Some(186)",
+          "0x80c:fwd=3731408,subs=994848,serves=923555,put=Some(12240),gp_get=Some(12240)"
+        ]
+      },
+      {
+        "line": 109361,
+        "mem": {
+          "inval": "14338",
+          "walks": "146266/146266",
+          "cleared": "14338",
+          "unreconciled": "0",
+          "absent_cleared": "46",
+          "mapped": "2858134",
+          "unmapped": "2846449",
+          "held": "0",
+          "roots": "89",
+          "root_moves": "0",
+          "stmts": "157/157",
+          "refused": "16"
+        },
+        "vat": "invals=0 arrive->clear_avg_us=0 max_us=95264 walks=528 walk_avg_us=239 gpu_avg_us=126 plan_avg_us=0 apply_avg_us=270 leaves=10 host_calls=1007",
+        "views": "armed=4637 released=4313 refused=0 held=324",
+        "poisoned": "poisoned=0",
+        "refusals": "13715",
+        "reset_channel_count": "0",
+        "tokens": [
+          "0x3:fwd=186,subs=393,serves=1933,put=Some(186),gp_get=Some(186)",
+          "0x80c:fwd=3746829,subs=1003154,serves=930450,put=Some(11277),gp_get=Some(11277)"
+        ]
+      },
+      {
+        "line": 109606,
+        "mem": {
+          "inval": "14359",
+          "walks": "147410/147410",
+          "cleared": "14359",
+          "unreconciled": "0",
+          "absent_cleared": "46",
+          "mapped": "2866757",
+          "unmapped": "2853184",
+          "held": "0",
+          "roots": "89",
+          "root_moves": "0",
+          "stmts": "158/158",
+          "refused": "16"
+        },
+        "vat": "invals=21 arrive->clear_avg_us=188 max_us=95264 walks=1144 walk_avg_us=196 gpu_avg_us=124 plan_avg_us=0 apply_avg_us=237 leaves=12 host_calls=2533",
+        "views": "armed=4638 released=4318 refused=0 held=320",
+        "poisoned": "poisoned=0",
+        "refusals": "13758",
+        "reset_channel_count": "0",
+        "tokens": [
+          "0x3:fwd=188,subs=396,serves=1941,put=Some(188),gp_get=Some(188)",
+          "0x80c:fwd=3783792,subs=1015787,serves=941461,put=Some(15472),gp_get=Some(15472)"
+        ]
+      },
+      {
+        "line": 109670,
+        "mem": {
+          "inval": "14359",
+          "walks": "147410/147410",
+          "cleared": "14359",
+          "unreconciled": "0",
+          "absent_cleared": "46",
+          "mapped": "2866757",
+          "unmapped": "2853184",
+          "held": "0",
+          "roots": "89",
+          "root_moves": "0",
+          "stmts": "158/158",
+          "refused": "16"
+        },
+        "vat": "invals=0 arrive->clear_avg_us=0 max_us=95264 walks=0 walk_avg_us=0 gpu_avg_us=0 plan_avg_us=0 apply_avg_us=0 leaves=12 host_calls=0",
+        "views": "armed=4638 released=4318 refused=0 held=320",
+        "poisoned": "poisoned=0",
+        "refusals": "13778",
+        "reset_channel_count": "0",
+        "tokens": [
+          "0x3:fwd=188,subs=396,serves=1941,put=Some(188),gp_get=Some(188)",
+          "0x80c:fwd=3783792,subs=1015787,serves=941461,put=Some(15472),gp_get=Some(15472)"
+        ]
+      },
+      {
+        "line": 109734,
+        "mem": {
+          "inval": "14359",
+          "walks": "147415/147415",
+          "cleared": "14359",
+          "unreconciled": "0",
+          "absent_cleared": "46",
+          "mapped": "2866757",
+          "unmapped": "2853300",
+          "held": "0",
+          "roots": "89",
+          "root_moves": "0",
+          "stmts": "158/158",
+          "refused": "16"
+        },
+        "vat": "invals=0 arrive->clear_avg_us=0 max_us=95264 walks=5 walk_avg_us=198 gpu_avg_us=133 plan_avg_us=0 apply_avg_us=150 leaves=44 host_calls=15",
+        "views": "armed=4638 released=4318 refused=0 held=320",
+        "poisoned": "poisoned=0",
+        "refusals": "13798",
+        "reset_channel_count": "0",
+        "tokens": [
+          "0x3:fwd=188,subs=396,serves=1941,put=Some(188),gp_get=Some(188)",
+          "0x80c:fwd=3783981,subs=1015816,serves=941492,put=Some(15661),gp_get=Some(15661)"
+        ]
+      },
+      {
+        "line": 109798,
+        "mem": {
+          "inval": "14359",
+          "walks": "147415/147415",
+          "cleared": "14359",
+          "unreconciled": "0",
+          "absent_cleared": "46",
+          "mapped": "2866757",
+          "unmapped": "2853300",
+          "held": "0",
+          "roots": "89",
+          "root_moves": "0",
+          "stmts": "158/158",
+          "refused": "16"
+        },
+        "vat": "invals=0 arrive->clear_avg_us=0 max_us=95264 walks=0 walk_avg_us=0 gpu_avg_us=0 plan_avg_us=0 apply_avg_us=0 leaves=44 host_calls=0",
+        "views": "armed=4638 released=4318 refused=0 held=320",
+        "poisoned": "poisoned=0",
+        "refusals": "13818",
+        "reset_channel_count": "0",
+        "tokens": [
+          "0x3:fwd=188,subs=396,serves=1941,put=Some(188),gp_get=Some(188)",
+          "0x80c:fwd=3783981,subs=1015816,serves=941492,put=Some(15661),gp_get=Some(15661)"
+        ]
+      },
+      {
+        "line": 110191,
+        "mem": {
+          "inval": "14425",
+          "walks": "147677/147677",
+          "cleared": "14425",
+          "unreconciled": "0",
+          "absent_cleared": "46",
+          "mapped": "2867433",
+          "unmapped": "2853431",
+          "held": "0",
+          "roots": "90",
+          "root_moves": "0",
+          "stmts": "159/159",
+          "refused": "16"
+        },
+        "vat": "invals=66 arrive->clear_avg_us=250 max_us=95264 walks=262 walk_avg_us=158 gpu_avg_us=109 plan_avg_us=0 apply_avg_us=375 leaves=16 host_calls=501",
+        "views": "armed=4644 released=4321 refused=0 held=323",
+        "poisoned": "poisoned=0",
+        "refusals": "13853",
+        "reset_channel_count": "0",
+        "tokens": [
+          "0x3:fwd=189,subs=399,serves=1950,put=Some(189),gp_get=Some(189)",
+          "0x80c:fwd=3791026,subs=1016986,serves=942572,put=Some(6322),gp_get=Some(6322)"
+        ]
+      },
+      {
+        "line": 110302,
+        "mem": {
+          "inval": "14425",
+          "walks": "147902/147902",
+          "cleared": "14425",
+          "unreconciled": "0",
+          "absent_cleared": "46",
+          "mapped": "2895005",
+          "unmapped": "2853575",
+          "held": "0",
+          "roots": "90",
+          "root_moves": "0",
+          "stmts": "159/159",
+          "refused": "16"
+        },
+        "vat": "invals=0 arrive->clear_avg_us=0 max_us=95264 walks=225 walk_avg_us=469 gpu_avg_us=370 plan_avg_us=0 apply_avg_us=844 leaves=12 host_calls=432",
+        "views": "armed=4645 released=4321 refused=0 held=324",
+        "poisoned": "poisoned=0",
+        "refusals": "13875",
+        "reset_channel_count": "0",
+        "tokens": [
+          "0x3:fwd=189,subs=399,serves=1950,put=Some(189),gp_get=Some(189)",
+          "0x80c:fwd=3798994,subs=1019016,serves=944550,put=Some(14290),gp_get=Some(14290)"
+        ]
+      },
+      {
+        "line": 110366,
+        "mem": {
+          "inval": "14425",
+          "walks": "147902/147902",
+          "cleared": "14425",
+          "unreconciled": "0",
+          "absent_cleared": "46",
+          "mapped": "2895005",
+          "unmapped": "2853575",
+          "held": "0",
+          "roots": "90",
+          "root_moves": "0",
+          "stmts": "159/159",
+          "refused": "16"
+        },
+        "vat": "invals=0 arrive->clear_avg_us=0 max_us=95264 walks=0 walk_avg_us=0 gpu_avg_us=0 plan_avg_us=0 apply_avg_us=0 leaves=12 host_calls=0",
+        "views": "armed=4645 released=4321 refused=0 held=324",
+        "poisoned": "poisoned=0",
+        "refusals": "13895",
+        "reset_channel_count": "0",
+        "tokens": [
+          "0x3:fwd=189,subs=399,serves=1950,put=Some(189),gp_get=Some(189)",
+          "0x80c:fwd=3798994,subs=1019016,serves=944550,put=Some(14290),gp_get=Some(14290)"
+        ]
+      },
+      {
+        "line": 110445,
+        "mem": {
+          "inval": "14425",
+          "walks": "148345/148346",
+          "cleared": "14425",
+          "unreconciled": "0",
+          "absent_cleared": "46",
+          "mapped": "2895487",
+          "unmapped": "2853737",
+          "held": "0",
+          "roots": "90",
+          "root_moves": "0",
+          "stmts": "159/159",
+          "refused": "16"
+        },
+        "vat": "invals=0 arrive->clear_avg_us=0 max_us=95264 walks=443 walk_avg_us=483 gpu_avg_us=443 plan_avg_us=0 apply_avg_us=128 leaves=2 host_calls=910",
+        "views": "armed=4645 released=4321 refused=0 held=324",
+        "poisoned": "poisoned=0",
+        "refusals": "13920",
+        "reset_channel_count": "0",
+        "tokens": [
+          "0x3:fwd=189,subs=399,serves=1950,put=Some(189),gp_get=Some(189)",
+          "0x80c:fwd=3811647,subs=1023025,serves=948106,put=Some(11088),gp_get=Some(10558)"
+        ]
+      },
+      {
+        "line": 110532,
+        "mem": {
+          "inval": "14425",
+          "walks": "149360/149361",
+          "cleared": "14425",
+          "unreconciled": "0",
+          "absent_cleared": "46",
+          "mapped": "2923773",
+          "unmapped": "2877903",
+          "held": "0",
+          "roots": "90",
+          "root_moves": "0",
+          "stmts": "159/159",
+          "refused": "16"
+        },
+        "vat": "invals=0 arrive->clear_avg_us=0 max_us=95264 walks=1015 walk_avg_us=558 gpu_avg_us=441 plan_avg_us=0 apply_avg_us=306 leaves=12 host_calls=2366",
+        "views": "armed=4645 released=4321 refused=0 held=324",
+        "poisoned": "poisoned=0",
+        "refusals": "13941",
+        "reset_channel_count": "0",
+        "tokens": [
+          "0x3:fwd=189,subs=399,serves=1950,put=Some(189),gp_get=Some(189)",
+          "0x80c:fwd=3843186,subs=1031138,serves=955854,put=Some(9481),gp_get=Some(9329)"
+        ]
+      },
+      {
+        "line": 110625,
+        "mem": {
+          "inval": "14425",
+          "walks": "150291/150292",
+          "cleared": "14425",
+          "unreconciled": "0",
+          "absent_cleared": "46",
+          "mapped": "3014707",
+          "unmapped": "2903589",
+          "held": "0",
+          "roots": "90",
+          "root_moves": "0",
+          "stmts": "159/159",
+          "refused": "16"
+        },
+        "vat": "invals=0 arrive->clear_avg_us=0 max_us=95264 walks=931 walk_avg_us=954 gpu_avg_us=816 plan_avg_us=0 apply_avg_us=710 leaves=2 host_calls=1918",
+        "views": "armed=4645 released=4321 refused=0 held=324",
+        "poisoned": "poisoned=0",
+        "refusals": "13961",
+        "reset_channel_count": "0",
+        "tokens": [
+          "0x3:fwd=189,subs=399,serves=1950,put=Some(189),gp_get=Some(189)",
+          "0x80c:fwd=3874841,subs=1039248,serves=963287,put=Some(8276),gp_get=Some(8216)"
+        ]
+      },
+      {
+        "line": 110693,
+        "mem": {
+          "inval": "14425",
+          "walks": "150714/150714",
+          "cleared": "14425",
+          "unreconciled": "0",
+          "absent_cleared": "46",
+          "mapped": "3019065",
+          "unmapped": "2950595",
+          "held": "0",
+          "roots": "90",
+          "root_moves": "0",
+          "stmts": "159/159",
+          "refused": "16"
+        },
+        "vat": "invals=0 arrive->clear_avg_us=0 max_us=95264 walks=423 walk_avg_us=1510 gpu_avg_us=1166 plan_avg_us=0 apply_avg_us=201 leaves=10 host_calls=860",
+        "views": "armed=4645 released=4321 refused=0 held=324",
+        "poisoned": "poisoned=0",
+        "refusals": "13981",
+        "reset_channel_count": "0",
+        "tokens": [
+          "0x3:fwd=189,subs=399,serves=1950,put=Some(189),gp_get=Some(189)",
+          "0x80c:fwd=3889929,subs=1042918,serves=966726,put=Some(6921),gp_get=Some(6921)"
+        ]
+      },
+      {
+        "line": 110758,
+        "mem": {
+          "inval": "14425",
+          "walks": "150717/150717",
+          "cleared": "14425",
+          "unreconciled": "0",
+          "absent_cleared": "46",
+          "mapped": "3020287",
+          "unmapped": "2950595",
+          "held": "0",
+          "roots": "90",
+          "root_moves": "0",
+          "stmts": "159/159",
+          "refused": "16"
+        },
+        "vat": "invals=0 arrive->clear_avg_us=0 max_us=95264 walks=3 walk_avg_us=473 gpu_avg_us=323 plan_avg_us=0 apply_avg_us=2189 leaves=20 host_calls=10",
+        "views": "armed=4645 released=4321 refused=0 held=324",
+        "poisoned": "poisoned=0",
+        "refusals": "14001",
+        "reset_channel_count": "0",
+        "tokens": [
+          "0x3:fwd=189,subs=399,serves=1950,put=Some(189),gp_get=Some(189)",
+          "0x80c:fwd=3890011,subs=1042941,serves=966747,put=Some(7003),gp_get=Some(7003)"
+        ]
+      },
+      {
+        "line": 110823,
+        "mem": {
+          "inval": "14425",
+          "walks": "150829/150829",
+          "cleared": "14425",
+          "unreconciled": "0",
+          "absent_cleared": "46",
+          "mapped": "3020375",
+          "unmapped": "2951901",
+          "held": "0",
+          "roots": "90",
+          "root_moves": "0",
+          "stmts": "159/159",
+          "refused": "16"
+        },
+        "vat": "invals=0 arrive->clear_avg_us=0 max_us=95264 walks=112 walk_avg_us=199 gpu_avg_us=108 plan_avg_us=0 apply_avg_us=99 leaves=10 host_calls=182",
+        "views": "armed=4645 released=4321 refused=0 held=324",
+        "poisoned": "poisoned=0",
+        "refusals": "14021",
+        "reset_channel_count": "0",
+        "tokens": [
+          "0x3:fwd=189,subs=399,serves=1950,put=Some(189),gp_get=Some(189)",
+          "0x80c:fwd=3893352,subs=1043457,serves=967363,put=Some(10344),gp_get=Some(10344)"
+        ]
+      },
+      {
+        "line": 110890,
+        "mem": {
+          "inval": "14425",
+          "walks": "151146/151146",
+          "cleared": "14425",
+          "unreconciled": "0",
+          "absent_cleared": "46",
+          "mapped": "3021751",
+          "unmapped": "2954273",
+          "held": "0",
+          "roots": "90",
+          "root_moves": "0",
+          "stmts": "159/159",
+          "refused": "16"
+        },
+        "vat": "invals=0 arrive->clear_avg_us=0 max_us=95264 walks=317 walk_avg_us=867 gpu_avg_us=712 plan_avg_us=0 apply_avg_us=167 leaves=10 host_calls=693",
+        "views": "armed=4645 released=4321 refused=0 held=324",
+        "poisoned": "poisoned=0",
+        "refusals": "14041",
+        "reset_channel_count": "0",
+        "tokens": [
+          "0x3:fwd=189,subs=399,serves=1950,put=Some(189),gp_get=Some(189)",
+          "0x80c:fwd=3902579,subs=1046244,serves=969912,put=Some(3187),gp_get=Some(3187)"
+        ]
+      },
+      {
+        "line": 110962,
+        "mem": {
+          "inval": "14425",
+          "walks": "151945/151945",
+          "cleared": "14425",
+          "unreconciled": "0",
+          "absent_cleared": "46",
+          "mapped": "3025521",
+          "unmapped": "2979865",
+          "held": "0",
+          "roots": "90",
+          "root_moves": "0",
+          "stmts": "159/159",
+          "refused": "16"
+        },
+        "vat": "invals=0 arrive->clear_avg_us=0 max_us=95264 walks=799 walk_avg_us=768 gpu_avg_us=590 plan_avg_us=0 apply_avg_us=164 leaves=10 host_calls=1649",
+        "views": "armed=4645 released=4321 refused=0 held=324",
+        "poisoned": "poisoned=0",
+        "refusals": "14061",
+        "reset_channel_count": "0",
+        "tokens": [
+          "0x3:fwd=189,subs=399,serves=1950,put=Some(189),gp_get=Some(189)",
+          "0x80c:fwd=3928056,subs=1053234,serves=976202,put=Some(12280),gp_get=Some(12280)"
+        ]
+      },
+      {
+        "line": 111030,
+        "mem": {
+          "inval": "14425",
+          "walks": "151974/151974",
+          "cleared": "14425",
+          "unreconciled": "0",
+          "absent_cleared": "46",
+          "mapped": "3026999",
+          "unmapped": "2988941",
+          "held": "0",
+          "roots": "90",
+          "root_moves": "0",
+          "stmts": "159/159",
+          "refused": "16"
+        },
+        "vat": "invals=0 arrive->clear_avg_us=0 max_us=95264 walks=29 walk_avg_us=1510 gpu_avg_us=610 plan_avg_us=0 apply_avg_us=565 leaves=104 host_calls=57",
+        "views": "armed=4645 released=4321 refused=0 held=324",
+        "poisoned": "poisoned=0",
+        "refusals": "14081",
+        "reset_channel_count": "0",
+        "tokens": [
+          "0x3:fwd=189,subs=399,serves=1950,put=Some(189),gp_get=Some(189)",
+          "0x80c:fwd=3929618,subs=1053439,serves=976428,put=Some(13842),gp_get=Some(13842)"
+        ]
+      },
+      {
+        "line": 111097,
+        "mem": {
+          "inval": "14425",
+          "walks": "152002/152002",
+          "cleared": "14425",
+          "unreconciled": "0",
+          "absent_cleared": "46",
+          "mapped": "3029047",
+          "unmapped": "2991147",
+          "held": "0",
+          "roots": "90",
+          "root_moves": "0",
+          "stmts": "159/159",
+          "refused": "16"
+        },
+        "vat": "invals=0 arrive->clear_avg_us=0 max_us=95264 walks=28 walk_avg_us=1417 gpu_avg_us=517 plan_avg_us=0 apply_avg_us=549 leaves=1034 host_calls=54",
+        "views": "armed=4645 released=4321 refused=0 held=324",
+        "poisoned": "poisoned=0",
+        "refusals": "14101",
+        "reset_channel_count": "0",
+        "tokens": [
+          "0x3:fwd=189,subs=399,serves=1950,put=Some(189),gp_get=Some(189)",
+          "0x80c:fwd=3930923,subs=1053617,serves=976640,put=Some(15147),gp_get=Some(15147)"
+        ]
+      },
+      {
+        "line": 111161,
+        "mem": {
+          "inval": "14425",
+          "walks": "152027/152027",
+          "cleared": "14425",
+          "unreconciled": "0",
+          "absent_cleared": "46",
+          "mapped": "3029047",
+          "unmapped": "2991195",
+          "held": "0",
+          "roots": "90",
+          "root_moves": "0",
+          "stmts": "159/159",
+          "refused": "16"
+        },
+        "vat": "invals=0 arrive->clear_avg_us=0 max_us=95264 walks=25 walk_avg_us=1500 gpu_avg_us=523 plan_avg_us=0 apply_avg_us=115 leaves=10 host_calls=42",
+        "views": "armed=4645 released=4321 refused=0 held=324",
+        "poisoned": "poisoned=0",
+        "refusals": "14121",
+        "reset_channel_count": "0",
+        "tokens": [
+          "0x3:fwd=189,subs=399,serves=1950,put=Some(189),gp_get=Some(189)",
+          "0x80c:fwd=3931785,subs=1053745,serves=976801,put=Some(16009),gp_get=Some(16009)"
+        ]
+      },
+      {
+        "line": 111256,
+        "mem": {
+          "inval": "14425",
+          "walks": "152050/152050",
+          "cleared": "14425",
+          "unreconciled": "0",
+          "absent_cleared": "46",
+          "mapped": "3029047",
+          "unmapped": "2991241",
+          "held": "0",
+          "roots": "90",
+          "root_moves": "0",
+          "stmts": "159/159",
+          "refused": "16"
+        },
+        "vat": "invals=0 arrive->clear_avg_us=0 max_us=95264 walks=23 walk_avg_us=1566 gpu_avg_us=518 plan_avg_us=0 apply_avg_us=108 leaves=10 host_calls=36",
+        "views": "armed=4645 released=4321 refused=0 held=324",
+        "poisoned": "poisoned=0",
+        "refusals": "14151",
+        "reset_channel_count": "0",
+        "tokens": [
+          "0x3:fwd=189,subs=399,serves=1950,put=Some(189),gp_get=Some(189)",
+          "0x80c:fwd=3932605,subs=1053862,serves=976934,put=Some(445),gp_get=Some(445)"
+        ]
+      },
+      {
+        "line": 111321,
+        "mem": {
+          "inval": "14425",
+          "walks": "152058/152058",
+          "cleared": "14425",
+          "unreconciled": "0",
+          "absent_cleared": "46",
+          "mapped": "3029047",
+          "unmapped": "2991257",
+          "held": "0",
+          "roots": "90",
+          "root_moves": "0",
+          "stmts": "159/159",
+          "refused": "16"
+        },
+        "vat": "invals=0 arrive->clear_avg_us=0 max_us=95264 walks=8 walk_avg_us=1641 gpu_avg_us=513 plan_avg_us=0 apply_avg_us=100 leaves=10 host_calls=12",
+        "views": "armed=4645 released=4321 refused=0 held=324",
+        "poisoned": "poisoned=0",
+        "refusals": "14171",
+        "reset_channel_count": "0",
+        "tokens": [
+          "0x3:fwd=189,subs=399,serves=1950,put=Some(189),gp_get=Some(189)",
+          "0x80c:fwd=3932797,subs=1053897,serves=976987,put=Some(637),gp_get=Some(637)"
+        ]
+      },
+      {
+        "line": 111389,
+        "mem": {
+          "inval": "14425",
+          "walks": "152072/152072",
+          "cleared": "14425",
+          "unreconciled": "0",
+          "absent_cleared": "46",
+          "mapped": "3030581",
+          "unmapped": "2994631",
+          "held": "0",
+          "roots": "90",
+          "root_moves": "0",
+          "stmts": "159/159",
+          "refused": "16"
+        },
+        "vat": "invals=0 arrive->clear_avg_us=0 max_us=95264 walks=14 walk_avg_us=1242 gpu_avg_us=536 plan_avg_us=0 apply_avg_us=1007 leaves=218 host_calls=24",
+        "views": "armed=4645 released=4321 refused=0 held=324",
+        "poisoned": "poisoned=0",
+        "refusals": "14191",
+        "reset_channel_count": "0",
+        "tokens": [
+          "0x3:fwd=189,subs=399,serves=1950,put=Some(189),gp_get=Some(189)",
+          "0x80c:fwd=3933577,subs=1053998,serves=977099,put=Some(1417),gp_get=Some(1417)"
+        ]
+      },
+      {
+        "line": 111458,
+        "mem": {
+          "inval": "14425",
+          "walks": "152081/152081",
+          "cleared": "14425",
+          "unreconciled": "0",
+          "absent_cleared": "46",
+          "mapped": "3032629",
+          "unmapped": "2997911",
+          "held": "0",
+          "roots": "90",
+          "root_moves": "0",
+          "stmts": "159/159",
+          "refused": "16"
+        },
+        "vat": "invals=0 arrive->clear_avg_us=0 max_us=95264 walks=9 walk_avg_us=1348 gpu_avg_us=558 plan_avg_us=0 apply_avg_us=1591 leaves=1034 host_calls=18",
+        "views": "armed=4645 released=4321 refused=0 held=324",
+        "poisoned": "poisoned=0",
+        "refusals": "14211",
+        "reset_channel_count": "0",
+        "tokens": [
+          "0x3:fwd=189,subs=399,serves=1950,put=Some(189),gp_get=Some(189)",
+          "0x80c:fwd=3934022,subs=1054056,serves=977185,put=Some(1862),gp_get=Some(1862)"
+        ]
+      },
+      {
+        "line": 111527,
+        "mem": {
+          "inval": "14425",
+          "walks": "152093/152093",
+          "cleared": "14425",
+          "unreconciled": "0",
+          "absent_cleared": "46",
+          "mapped": "3037867",
+          "unmapped": "3000983",
+          "held": "0",
+          "roots": "90",
+          "root_moves": "0",
+          "stmts": "159/159",
+          "refused": "16"
+        },
+        "vat": "invals=0 arrive->clear_avg_us=0 max_us=95264 walks=12 walk_avg_us=1499 gpu_avg_us=616 plan_avg_us=0 apply_avg_us=2448 leaves=2058 host_calls=18",
+        "views": "armed=4645 released=4321 refused=0 held=324",
+        "poisoned": "poisoned=0",
+        "refusals": "14231",
+        "reset_channel_count": "0",
+        "tokens": [
+          "0x3:fwd=189,subs=399,serves=1950,put=Some(189),gp_get=Some(189)",
+          "0x80c:fwd=3934576,subs=1054127,serves=977290,put=Some(2416),gp_get=Some(2416)"
+        ]
+      },
+      {
+        "line": 111780,
+        "mem": {
+          "inval": "14446",
+          "walks": "152595/152595",
+          "cleared": "14446",
+          "unreconciled": "0",
+          "absent_cleared": "46",
+          "mapped": "3038364",
+          "unmapped": "3022332",
+          "held": "0",
+          "roots": "90",
+          "root_moves": "0",
+          "stmts": "160/160",
+          "refused": "16"
+        },
+        "vat": "invals=21 arrive->clear_avg_us=162 max_us=95264 walks=502 walk_avg_us=307 gpu_avg_us=257 plan_avg_us=0 apply_avg_us=92 leaves=12 host_calls=1128",
+        "views": "armed=4646 released=4326 refused=0 held=320",
+        "poisoned": "poisoned=0",
+        "refusals": "14274",
+        "reset_channel_count": "0",
+        "tokens": [
+          "0x3:fwd=191,subs=402,serves=1960,put=Some(191),gp_get=Some(191)",
+          "0x80c:fwd=3953679,subs=1056861,serves=980087,put=Some(5135),gp_get=Some(5135)"
+        ]
+      },
+      {
+        "line": 111844,
+        "mem": {
+          "inval": "14446",
+          "walks": "152601/152601",
+          "cleared": "14446",
+          "unreconciled": "0",
+          "absent_cleared": "46",
+          "mapped": "3038364",
+          "unmapped": "3022416",
+          "held": "0",
+          "roots": "90",
+          "root_moves": "0",
+          "stmts": "160/160",
+          "refused": "16"
+        },
+        "vat": "invals=0 arrive->clear_avg_us=0 max_us=95264 walks=6 walk_avg_us=166 gpu_avg_us=278 plan_avg_us=0 apply_avg_us=151 leaves=30 host_calls=15",
+        "views": "armed=4646 released=4326 refused=0 held=320",
+        "poisoned": "poisoned=0",
+        "refusals": "14294",
+        "reset_channel_count": "0",
+        "tokens": [
+          "0x3:fwd=191,subs=402,serves=1960,put=Some(191),gp_get=Some(191)",
+          "0x80c:fwd=3953869,subs=1056892,serves=980119,put=Some(5325),gp_get=Some(5325)"
+        ]
+      },
+      {
+        "line": 111908,
+        "mem": {
+          "inval": "14446",
+          "walks": "152601/152601",
+          "cleared": "14446",
+          "unreconciled": "0",
+          "absent_cleared": "46",
+          "mapped": "3038364",
+          "unmapped": "3022416",
+          "held": "0",
+          "roots": "90",
+          "root_moves": "0",
+          "stmts": "160/160",
+          "refused": "16"
+        },
+        "vat": "invals=0 arrive->clear_avg_us=0 max_us=95264 walks=0 walk_avg_us=0 gpu_avg_us=0 plan_avg_us=0 apply_avg_us=0 leaves=30 host_calls=0",
+        "views": "armed=4646 released=4326 refused=0 held=320",
+        "poisoned": "poisoned=0",
+        "refusals": "14314",
+        "reset_channel_count": "0",
+        "tokens": [
+          "0x3:fwd=191,subs=402,serves=1960,put=Some(191),gp_get=Some(191)",
+          "0x80c:fwd=3953869,subs=1056892,serves=980119,put=Some(5325),gp_get=Some(5325)"
+        ]
+      },
+      {
+        "line": 111972,
+        "mem": {
+          "inval": "14446",
+          "walks": "152601/152601",
+          "cleared": "14446",
+          "unreconciled": "0",
+          "absent_cleared": "46",
+          "mapped": "3038364",
+          "unmapped": "3022416",
+          "held": "0",
+          "roots": "90",
+          "root_moves": "0",
+          "stmts": "160/160",
+          "refused": "16"
+        },
+        "vat": "invals=0 arrive->clear_avg_us=0 max_us=95264 walks=0 walk_avg_us=0 gpu_avg_us=0 plan_avg_us=0 apply_avg_us=0 leaves=30 host_calls=0",
+        "views": "armed=4646 released=4326 refused=0 held=320",
+        "poisoned": "poisoned=0",
+        "refusals": "14334",
+        "reset_channel_count": "0",
+        "tokens": [
+          "0x3:fwd=191,subs=402,serves=1960,put=Some(191),gp_get=Some(191)",
+          "0x80c:fwd=3953869,subs=1056892,serves=980119,put=Some(5325),gp_get=Some(5325)"
+        ]
+      },
+      {
+        "line": 112036,
+        "mem": {
+          "inval": "14446",
+          "walks": "152601/152601",
+          "cleared": "14446",
+          "unreconciled": "0",
+          "absent_cleared": "46",
+          "mapped": "3038364",
+          "unmapped": "3022416",
+          "held": "0",
+          "roots": "90",
+          "root_moves": "0",
+          "stmts": "160/160",
+          "refused": "16"
+        },
+        "vat": "invals=0 arrive->clear_avg_us=0 max_us=95264 walks=0 walk_avg_us=0 gpu_avg_us=0 plan_avg_us=0 apply_avg_us=0 leaves=30 host_calls=0",
+        "views": "armed=4646 released=4326 refused=0 held=320",
+        "poisoned": "poisoned=0",
+        "refusals": "14354",
+        "reset_channel_count": "0",
+        "tokens": [
+          "0x3:fwd=191,subs=402,serves=1960,put=Some(191),gp_get=Some(191)",
+          "0x80c:fwd=3953869,subs=1056892,serves=980119,put=Some(5325),gp_get=Some(5325)"
+        ]
+      },
+      {
+        "line": 112100,
+        "mem": {
+          "inval": "14446",
+          "walks": "152601/152601",
+          "cleared": "14446",
+          "unreconciled": "0",
+          "absent_cleared": "46",
+          "mapped": "3038364",
+          "unmapped": "3022416",
+          "held": "0",
+          "roots": "90",
+          "root_moves": "0",
+          "stmts": "160/160",
+          "refused": "16"
+        },
+        "vat": "invals=0 arrive->clear_avg_us=0 max_us=95264 walks=0 walk_avg_us=0 gpu_avg_us=0 plan_avg_us=0 apply_avg_us=0 leaves=30 host_calls=0",
+        "views": "armed=4646 released=4326 refused=0 held=320",
+        "poisoned": "poisoned=0",
+        "refusals": "14374",
+        "reset_channel_count": "0",
+        "tokens": [
+          "0x3:fwd=191,subs=402,serves=1960,put=Some(191),gp_get=Some(191)",
+          "0x80c:fwd=3953869,subs=1056892,serves=980119,put=Some(5325),gp_get=Some(5325)"
+        ]
+      },
+      {
+        "line": 112164,
+        "mem": {
+          "inval": "14446",
+          "walks": "152601/152601",
+          "cleared": "14446",
+          "unreconciled": "0",
+          "absent_cleared": "46",
+          "mapped": "3038364",
+          "unmapped": "3022416",
+          "held": "0",
+          "roots": "90",
+          "root_moves": "0",
+          "stmts": "160/160",
+          "refused": "16"
+        },
+        "vat": "invals=0 arrive->clear_avg_us=0 max_us=95264 walks=0 walk_avg_us=0 gpu_avg_us=0 plan_avg_us=0 apply_avg_us=0 leaves=30 host_calls=0",
+        "views": "armed=4646 released=4326 refused=0 held=320",
+        "poisoned": "poisoned=0",
+        "refusals": "14394",
+        "reset_channel_count": "0",
+        "tokens": [
+          "0x3:fwd=191,subs=402,serves=1960,put=Some(191),gp_get=Some(191)",
+          "0x80c:fwd=3953869,subs=1056892,serves=980119,put=Some(5325),gp_get=Some(5325)"
+        ]
+      },
+      {
+        "line": 112228,
+        "mem": {
+          "inval": "14446",
+          "walks": "152601/152601",
+          "cleared": "14446",
+          "unreconciled": "0",
+          "absent_cleared": "46",
+          "mapped": "3038364",
+          "unmapped": "3022416",
+          "held": "0",
+          "roots": "90",
+          "root_moves": "0",
+          "stmts": "160/160",
+          "refused": "16"
+        },
+        "vat": "invals=0 arrive->clear_avg_us=0 max_us=95264 walks=0 walk_avg_us=0 gpu_avg_us=0 plan_avg_us=0 apply_avg_us=0 leaves=30 host_calls=0",
+        "views": "armed=4646 released=4326 refused=0 held=320",
+        "poisoned": "poisoned=0",
+        "refusals": "14414",
+        "reset_channel_count": "0",
+        "tokens": [
+          "0x3:fwd=191,subs=402,serves=1960,put=Some(191),gp_get=Some(191)",
+          "0x80c:fwd=3953869,subs=1056892,serves=980119,put=Some(5325),gp_get=Some(5325)"
+        ]
+      },
+      {
+        "line": 112292,
+        "mem": {
+          "inval": "14446",
+          "walks": "152601/152601",
+          "cleared": "14446",
+          "unreconciled": "0",
+          "absent_cleared": "46",
+          "mapped": "3038364",
+          "unmapped": "3022416",
+          "held": "0",
+          "roots": "90",
+          "root_moves": "0",
+          "stmts": "160/160",
+          "refused": "16"
+        },
+        "vat": "invals=0 arrive->clear_avg_us=0 max_us=95264 walks=0 walk_avg_us=0 gpu_avg_us=0 plan_avg_us=0 apply_avg_us=0 leaves=30 host_calls=0",
+        "views": "armed=4646 released=4326 refused=0 held=320",
+        "poisoned": "poisoned=0",
+        "refusals": "14434",
+        "reset_channel_count": "0",
+        "tokens": [
+          "0x3:fwd=191,subs=402,serves=1960,put=Some(191),gp_get=Some(191)",
+          "0x80c:fwd=3953869,subs=1056892,serves=980119,put=Some(5325),gp_get=Some(5325)"
+        ]
+      },
+      {
+        "line": 112356,
+        "mem": {
+          "inval": "14446",
+          "walks": "152604/152604",
+          "cleared": "14446",
+          "unreconciled": "0",
+          "absent_cleared": "46",
+          "mapped": "3038364",
+          "unmapped": "3022504",
+          "held": "0",
+          "roots": "90",
+          "root_moves": "0",
+          "stmts": "160/160",
+          "refused": "16"
+        },
+        "vat": "invals=0 arrive->clear_avg_us=0 max_us=95264 walks=3 walk_avg_us=232 gpu_avg_us=150 plan_avg_us=0 apply_avg_us=482 leaves=66 host_calls=9",
+        "views": "armed=4646 released=4326 refused=0 held=320",
+        "poisoned": "poisoned=0",
+        "refusals": "14454",
+        "reset_channel_count": "0",
+        "tokens": [
+          "0x3:fwd=191,subs=402,serves=1960,put=Some(191),gp_get=Some(191)",
+          "0x80c:fwd=3954019,subs=1056913,serves=980140,put=Some(5475),gp_get=Some(5475)"
+        ]
+      },
+      {
+        "line": 112420,
+        "mem": {
+          "inval": "14446",
+          "walks": "152604/152604",
+          "cleared": "14446",
+          "unreconciled": "0",
+          "absent_cleared": "46",
+          "mapped": "3038364",
+          "unmapped": "3022504",
+          "held": "0",
+          "roots": "90",
+          "root_moves": "0",
+          "stmts": "160/160",
+          "refused": "16"
+        },
+        "vat": "invals=0 arrive->clear_avg_us=0 max_us=95264 walks=0 walk_avg_us=0 gpu_avg_us=0 plan_avg_us=0 apply_avg_us=0 leaves=66 host_calls=0",
+        "views": "armed=4646 released=4326 refused=0 held=320",
+        "poisoned": "poisoned=0",
+        "refusals": "14474",
+        "reset_channel_count": "0",
+        "tokens": [
+          "0x3:fwd=191,subs=402,serves=1960,put=Some(191),gp_get=Some(191)",
+          "0x80c:fwd=3954019,subs=1056913,serves=980140,put=Some(5475),gp_get=Some(5475)"
+        ]
+      },
+      {
+        "line": 112489,
+        "mem": {
+          "inval": "14446",
+          "walks": "152604/152604",
+          "cleared": "14446",
+          "unreconciled": "0",
+          "absent_cleared": "46",
+          "mapped": "3038364",
+          "unmapped": "3022504",
+          "held": "0",
+          "roots": "90",
+          "root_moves": "0",
+          "stmts": "160/160",
+          "refused": "16"
+        },
+        "vat": "invals=0 arrive->clear_avg_us=0 max_us=95264 walks=0 walk_avg_us=0 gpu_avg_us=0 plan_avg_us=0 apply_avg_us=0 leaves=66 host_calls=0",
+        "views": "armed=4646 released=4326 refused=0 held=320",
+        "poisoned": "poisoned=0",
+        "refusals": "14494",
+        "reset_channel_count": "0",
+        "tokens": [
+          "0x3:fwd=191,subs=402,serves=1960,put=Some(191),gp_get=Some(191)",
+          "0x80c:fwd=3954019,subs=1056913,serves=980140,put=Some(5475),gp_get=Some(5475)"
+        ]
+      },
+      {
+        "line": 112843,
+        "mem": {
+          "inval": "14512",
+          "walks": "152768/152768",
+          "cleared": "14512",
+          "unreconciled": "0",
+          "absent_cleared": "46",
+          "mapped": "3040972",
+          "unmapped": "3022553",
+          "held": "0",
+          "roots": "91",
+          "root_moves": "0",
+          "stmts": "161/161",
+          "refused": "16"
+        },
+        "vat": "invals=66 arrive->clear_avg_us=511 max_us=95264 walks=164 walk_avg_us=155 gpu_avg_us=107 plan_avg_us=0 apply_avg_us=646 leaves=12 host_calls=474",
+        "views": "armed=4652 released=4329 refused=0 held=323",
+        "poisoned": "poisoned=0",
+        "refusals": "14525",
+        "reset_channel_count": "0",
+        "tokens": [
+          "0x3:fwd=192,subs=405,serves=1969,put=Some(192),gp_get=Some(192)",
+          "0x80c:fwd=3957526,subs=1057516,serves=980708,put=Some(8982),gp_get=Some(8982)"
+        ]
+      },
+      {
+        "line": 113007,
+        "mem": {
+          "inval": "14512",
+          "walks": "153229/153230",
+          "cleared": "14512",
+          "unreconciled": "0",
+          "absent_cleared": "46",
+          "mapped": "3063914",
+          "unmapped": "3022815",
+          "held": "0",
+          "roots": "91",
+          "root_moves": "0",
+          "stmts": "161/161",
+          "refused": "16"
+        },
+        "vat": "invals=0 arrive->clear_avg_us=0 max_us=95264 walks=461 walk_avg_us=285 gpu_avg_us=207 plan_avg_us=0 apply_avg_us=362 leaves=10 host_calls=980",
+        "views": "armed=4653 released=4329 refused=0 held=324",
+        "poisoned": "poisoned=0",
+        "refusals": "14556",
+        "reset_channel_count": "0",
+        "tokens": [
+          "0x3:fwd=192,subs=405,serves=1969,put=Some(192),gp_get=Some(192)",
+          "0x80c:fwd=3972130,subs=1060783,serves=983825,put=Some(7660),gp_get=Some(7201)"
+        ]
+      },
+      {
+        "line": 113086,
+        "mem": {
+          "inval": "14512",
+          "walks": "154897/154897",
+          "cleared": "14512",
+          "unreconciled": "0",
+          "absent_cleared": "46",
+          "mapped": "3080398",
+          "unmapped": "3024313",
+          "held": "0",
+          "roots": "91",
+          "root_moves": "0",
+          "stmts": "161/161",
+          "refused": "16"
+        },
+        "vat": "invals=0 arrive->clear_avg_us=0 max_us=95264 walks=1668 walk_avg_us=516 gpu_avg_us=451 plan_avg_us=0 apply_avg_us=180 leaves=16 host_calls=3507",
+        "views": "armed=4653 released=4329 refused=0 held=324",
+        "poisoned": "poisoned=0",
+        "refusals": "14578",
+        "reset_channel_count": "0",
+        "tokens": [
+          "0x3:fwd=192,subs=405,serves=1969,put=Some(192),gp_get=Some(192)",
+          "0x80c:fwd=4018486,subs=1074070,serves=996096,put=Some(4406),gp_get=Some(4406)"
+        ]
+      },
+      {
+        "line": 113164,
+        "mem": {
+          "inval": "14512",
+          "walks": "155634/155634",
+          "cleared": "14512",
+          "unreconciled": "0",
+          "absent_cleared": "46",
+          "mapped": "3103098",
+          "unmapped": "3045611",
+          "held": "0",
+          "roots": "91",
+          "root_moves": "0",
+          "stmts": "161/161",
+          "refused": "16"
+        },
+        "vat": "invals=0 arrive->clear_avg_us=0 max_us=95264 walks=737 walk_avg_us=444 gpu_avg_us=360 plan_avg_us=0 apply_avg_us=333 leaves=10 host_calls=1458",
+        "views": "armed=4653 released=4329 refused=0 held=324",
+        "poisoned": "poisoned=0",
+        "refusals": "14598",
+        "reset_channel_count": "0",
+        "tokens": [
+          "0x3:fwd=192,subs=405,serves=1969,put=Some(192),gp_get=Some(192)",
+          "0x80c:fwd=4041733,subs=1079823,serves=1001694,put=Some(11269),gp_get=Some(11269)"
+        ]
+      },
+      {
+        "line": 113282,
+        "mem": {
+          "inval": "14512",
+          "walks": "155994/155994",
+          "cleared": "14512",
+          "unreconciled": "0",
+          "absent_cleared": "46",
+          "mapped": "3163516",
+          "unmapped": "3052187",
+          "held": "0",
+          "roots": "91",
+          "root_moves": "0",
+          "stmts": "161/161",
+          "refused": "16"
+        },
+        "vat": "invals=0 arrive->clear_avg_us=0 max_us=95264 walks=360 walk_avg_us=1336 gpu_avg_us=1023 plan_avg_us=0 apply_avg_us=949 leaves=10 host_calls=679",
+        "views": "armed=4653 released=4329 refused=0 held=324",
+        "poisoned": "poisoned=0",
+        "refusals": "14618",
+        "reset_channel_count": "0",
+        "tokens": [
+          "0x3:fwd=192,subs=405,serves=1969,put=Some(192),gp_get=Some(192)",
+          "0x80c:fwd=4053468,subs=1082579,serves=1004455,put=Some(6620),gp_get=Some(6620)"
+        ]
+      },
+      {
+        "line": 113368,
+        "mem": {
+          "inval": "14512",
+          "walks": "156688/156688",
+          "cleared": "14512",
+          "unreconciled": "0",
+          "absent_cleared": "46",
+          "mapped": "3172268",
+          "unmapped": "3067015",
+          "held": "0",
+          "roots": "91",
+          "root_moves": "0",
+          "stmts": "161/161",
+          "refused": "16"
+        },
+        "vat": "invals=0 arrive->clear_avg_us=0 max_us=95264 walks=694 walk_avg_us=1273 gpu_avg_us=1112 plan_avg_us=0 apply_avg_us=230 leaves=10 host_calls=1438",
+        "views": "armed=4653 released=4329 refused=0 held=324",
+        "poisoned": "poisoned=1",
+        "refusals": "14638",
+        "reset_channel_count": "0",
+        "tokens": [
+          "0x3:fwd=192,subs=405,serves=1969,put=Some(192),gp_get=Some(192)",
+          "0x80c:fwd=4074332,subs=1089060,serves=1010278,put=Some(11100),gp_get=Some(11100)"
+        ]
+      },
+      {
+        "line": 113435,
+        "mem": {
+          "inval": "14512",
+          "walks": "156688/156688",
+          "cleared": "14512",
+          "unreconciled": "0",
+          "absent_cleared": "46",
+          "mapped": "3172268",
+          "unmapped": "3067015",
+          "held": "0",
+          "roots": "91",
+          "root_moves": "0",
+          "stmts": "161/161",
+          "refused": "16"
+        },
+        "vat": "invals=0 arrive->clear_avg_us=0 max_us=95264 walks=0 walk_avg_us=0 gpu_avg_us=0 plan_avg_us=0 apply_avg_us=0 leaves=10 host_calls=0",
+        "views": "armed=4653 released=4329 refused=0 held=324",
+        "poisoned": "poisoned=1",
+        "refusals": "14659",
+        "reset_channel_count": "0",
+        "tokens": [
+          "0x3:fwd=192,subs=405,serves=1969,put=Some(192),gp_get=Some(192)",
+          "0x80c:fwd=4074332,subs=1089060,serves=1010278,put=Some(11100),gp_get=Some(11100)"
+        ]
+      }
+    ],
+    "first_status": {
+      "line": 103662,
+      "mem": "inval=14251 walks=115012/115012 cleared=14251 superseded=0 named_missed=0 unreconciled=0 absent_cleared=46 mapped=1549839 unmapped=1531185 clipped=0x0 held=0 vmm_overlaps=0 priv_withheld=838391 priv_withheld_bytes=0x8bde08e3000 priv_mirrored=46 sked=194/0held carve_gpu=0 carve_kernel=8 carve_cpu=2 carve_clipped=0x40000 fn70=2 roots=88 root_moves=0 stmts=155/155 refused=16 pramin_repoints=37 pramin_miss=16 last_miss=0x0 pramin_worst_us=69 (map 32 mmap 34) pramin_maps=36 pramin_mmaps=37 pramin_kept=0 pramin_kept_now=0 window_advice_refused=0 inline_opens=0 reaped=35 cache_ops=0 sysmembars=5 root_unsets=0",
+      "vat": "invals=0 arrive->clear_avg_us=0 max_us=95264 walks=1511 walk_avg_us=747 gpu_avg_us=138 plan_avg_us=0 apply_avg_us=96 leaves=10 host_calls=3304",
+      "views": "armed=4629 released=4305 refused=0 held=324",
+      "tspace": "built=yes twin_refused=0 tspace_refused=0 slots_leaked=0 twin_freeing=0",
+      "poisoned": "poisoned=0",
+      "reset": "req=2 (main=2 vcpu=0 wake=0) done=2 kept=0 pristine=1 waits_timed_out=0 stage=Idle dropped=0",
+      "refusals": "12407",
+      "reset_channel_count": "0",
+      "tokens": "0x3:fwd=182,subs=385,serves=1855,put=Some(182),gp_get=Some(182) 0xd:fwd=1,subs=1,serves=2,put=Some(1),gp_get=Some(1) 0x801:fwd=2,subs=2,serves=5,put=Some(2),gp_get=Some(2) 0x802:fwd=1,subs=1,serves=3,put=Some(1),gp_get=Some(1) 0x804:fwd=0,subs=0,serves=1,put=Some(0),gp_get=None 0x806:fwd=0,subs=0,serves=1,put=Some(0),gp_get=None 0x80b:fwd=0,subs=0,serves=1,put=Some(0),gp_get=None 0x80c:fwd=2745156,subs=547297,serves=549802,put=Some(9028),gp_get=Some(9028) 0x1805:fwd=0,subs=0,serves=1,put=Some(0),gp_get=None 0x2007:fwd=0,subs=0,serves=1,put=Some(0),gp_get=None 0x2008:fwd=0,subs=0,serves=1,put=Some(0),gp_get=None 0x200a:fwd=0,subs=0,serves=1,put=Some(0),gp_get=None 0x2809:fwd=0,subs=0,serves=1,put=Some(0),gp_get=None"
+    },
+    "last_status": {
+      "line": 113435,
+      "mem": "inval=14512 walks=156688/156688 cleared=14512 superseded=0 named_missed=0 unreconciled=0 absent_cleared=46 mapped=3172268 unmapped=3067015 clipped=0x0 held=0 vmm_overlaps=0 priv_withheld=1143043 priv_withheld_bytes=0xbf07a8eb000 priv_mirrored=46 sked=200/0held carve_gpu=0 carve_kernel=8 carve_cpu=2 carve_clipped=0x40000 fn70=2 roots=91 root_moves=0 stmts=161/161 refused=16 pramin_repoints=37 pramin_miss=16 last_miss=0x0 pramin_worst_us=69 (map 32 mmap 34) pramin_maps=36 pramin_mmaps=37 pramin_kept=0 pramin_kept_now=0 window_advice_refused=0 inline_opens=0 reaped=35 cache_ops=0 sysmembars=5 root_unsets=0",
+      "vat": "invals=0 arrive->clear_avg_us=0 max_us=95264 walks=0 walk_avg_us=0 gpu_avg_us=0 plan_avg_us=0 apply_avg_us=0 leaves=10 host_calls=0",
+      "views": "armed=4653 released=4329 refused=0 held=324",
+      "tspace": "built=yes twin_refused=0 tspace_refused=0 slots_leaked=0 twin_freeing=0",
+      "poisoned": "poisoned=1",
+      "reset": "req=2 (main=2 vcpu=0 wake=0) done=2 kept=0 pristine=1 waits_timed_out=0 stage=Idle dropped=0",
+      "refusals": "14659",
+      "reset_channel_count": "0",
+      "tokens": "0x3:fwd=192,subs=405,serves=1969,put=Some(192),gp_get=Some(192) 0xd:fwd=1,subs=1,serves=2,put=Some(1),gp_get=Some(1) 0x801:fwd=2,subs=2,serves=5,put=Some(2),gp_get=Some(2) 0x802:fwd=1,subs=1,serves=3,put=Some(1),gp_get=Some(1) 0x804:fwd=0,subs=0,serves=1,put=Some(0),gp_get=None 0x806:fwd=0,subs=0,serves=1,put=Some(0),gp_get=None 0x80b:fwd=0,subs=0,serves=1,put=Some(0),gp_get=None 0x80c:fwd=4074332,subs=1089060,serves=1010278,put=Some(11100),gp_get=Some(11100) 0x1805:fwd=0,subs=0,serves=1,put=Some(0),gp_get=None 0x2007:fwd=0,subs=0,serves=1,put=Some(0),gp_get=None 0x2008:fwd=0,subs=0,serves=1,put=Some(0),gp_get=None 0x200a:fwd=0,subs=0,serves=1,put=Some(0),gp_get=None 0x2809:fwd=0,subs=0,serves=1,put=Some(0),gp_get=None"
+    },
+    "large_apply_count": 455,
+    "large_apply_sum_ms": 8461,
+    "large_apply_min_ms": 0,
+    "large_apply_max_ms": 103,
+    "large_apply_over_12ms": 130,
+    "large_apply_over_50ms": 77,
+    "large_apply_top10": [
+      {
+        "line": 107410,
+        "text": "kf3: mem large apply VasKey(13965664076546705488): 17184 maps + 0 unmaps in 103 ms \u2014 6 map verb(s) (6 batch(es) carrying 17184 runs), 0 unmap verb(s) (0 range(s) carrying 0 runs), 0 fallback(s)"
+      },
+      {
+        "line": 110567,
+        "text": "kf3: mem large apply VasKey(13965664098021541968): 14830 maps + 0 unmaps in 102 ms \u2014 4 map verb(s) (4 batch(es) carrying 14830 runs), 0 unmap verb(s) (0 range(s) carrying 0 runs), 0 fallback(s)"
+      },
+      {
+        "line": 107184,
+        "text": "kf3: mem large apply VasKey(13965662590488021072): 16386 maps + 0 unmaps in 100 ms \u2014 6 map verb(s) (4 batch(es) carrying 16384 runs), 0 unmap verb(s) (0 range(s) carrying 0 runs), 0 fallback(s)"
+      },
+      {
+        "line": 107162,
+        "text": "kf3: mem large apply VasKey(13965662590488021072): 16386 maps + 0 unmaps in 98 ms \u2014 6 map verb(s) (4 batch(es) carrying 16384 runs), 0 unmap verb(s) (0 range(s) carrying 0 runs), 0 fallback(s)"
+      },
+      {
+        "line": 107411,
+        "text": "kf3: mem large apply VasKey(13965664076546705488): 17184 maps + 0 unmaps in 98 ms \u2014 6 map verb(s) (6 batch(es) carrying 17184 runs), 0 unmap verb(s) (0 range(s) carrying 0 runs), 0 fallback(s)"
+      },
+      {
+        "line": 106960,
+        "text": "kf3: mem large apply VasKey(13965662590488021072): 16232 maps + 0 unmaps in 96 ms \u2014 4025 map verb(s) (3 batch(es) carrying 12211 runs), 0 unmap verb(s) (0 range(s) carrying 0 runs), 0 fallback(s)"
+      },
+      {
+        "line": 106004,
+        "text": "kf3: mem large apply VasKey(13965662590488021072): 16382 maps + 0 unmaps in 95 ms \u2014 4100 map verb(s) (3 batch(es) carrying 12286 runs), 0 unmap verb(s) (0 range(s) carrying 0 runs), 0 fallback(s)"
+      },
+      {
+        "line": 106287,
+        "text": "kf3: mem large apply VasKey(13965664076546705488): 16384 maps + 0 unmaps in 95 ms \u2014 4 map verb(s) (4 batch(es) carrying 16384 runs), 0 unmap verb(s) (0 range(s) carrying 0 runs), 0 fallback(s)"
+      },
+      {
+        "line": 107588,
+        "text": "kf3: mem large apply VasKey(13965662590488021072): 16386 maps + 0 unmaps in 95 ms \u2014 6 map verb(s) (4 batch(es) carrying 16384 runs), 0 unmap verb(s) (0 range(s) carrying 0 runs), 0 fallback(s)"
+      },
+      {
+        "line": 106770,
+        "text": "kf3: mem large apply VasKey(13965664076546705488): 16384 maps + 0 unmaps in 94 ms \u2014 4 map verb(s) (4 batch(es) carrying 16384 runs), 0 unmap verb(s) (0 range(s) carrying 0 runs), 0 fallback(s)"
+      }
+    ],
+    "decisive_lines": [
+      {
+        "line": 113366,
+        "text": "kf3: USER_RING_REFUSED 0xc1d00188:0xff040031 host 0x61: USER_RING_GP_FORMAT Budget entry=0x0faa26023110102c source_va=0x4101ee0 cursor=0x3bdc put=0x3c76 entries=32768; no completion/reuse credit"
+      },
+      {
+        "line": 113470,
+        "text": "kf3: GSP REFUSED fn76/0x906f0102=0x56 (GSP_RM_CONTROL) first_seq=0 \u2014 the guest read a non-OK status"
+      },
+      {
+        "line": 113512,
+        "text": "kf3: display: +9761210 ms the console shows no new frame: a lit head has no window (held up to 250 ms) \u2014 the last frame stays (core channel allocated)"
+      },
+      {
+        "line": 113520,
+        "text": "kf3: TSPACE-RETIRE tok=0x80b host=0x10038 key=VasKey(13965662577603119184) ring_va=0xff00200000 released=true stale_binds=0/0 late=0 indeterminate=0 unresolved[walk=0 acquire=0 refused=0]"
+      },
+      {
+        "line": 113521,
+        "text": "kf3: DOORBELL-LEDGER tok=0x0000080b route=translated emulated=0 forwarded=0 host=0x10038 fast=0"
+      },
+      {
+        "line": 113522,
+        "text": "kf3: chan token 0x80b (host 0x10038) RETIRED, forwarded=0 submissions=0 splits=0/0 serves=1 last_put=Some(0) gp_get=None store_views=0 privilege=Some(ChannelPrivilege { level: 2, uvm_owned: false }) dead=None inca=[refused_methods=0 subdevice_masks=0 control_entries=0 ext_base_unapplied=0] gr_tier=false gr[methods=0 inert_binds=0 objects=[]] gp_get_by_engine=(false, 0)"
+      },
+      {
+        "line": 113549,
+        "text": "kf3: TSPACE-RETIRE tok=0xd host=0x3a key=VasKey(13965662590488021072) ring_va=0xff00000000 released=true stale_binds=0/2 late=0 indeterminate=0 unresolved[walk=0 acquire=0 refused=0]"
+      },
+      {
+        "line": 113550,
+        "text": "kf3: DOORBELL-LEDGER tok=0x0000000d route=translated emulated=0 forwarded=1 host=0x3a fast=0"
+      },
+      {
+        "line": 113551,
+        "text": "kf3: chan token 0xd (host 0x3a) RETIRED, forwarded=1 submissions=1 splits=0/0 serves=2 last_put=Some(1) gp_get=Some(1) store_views=0 privilege=Some(ChannelPrivilege { level: 2, uvm_owned: false }) dead=None inca=[refused_methods=0 subdevice_masks=0 control_entries=0 ext_base_unapplied=0] gr_tier=true gr[methods=21 inert_binds=0 objects=[(902d, cafe17b8), (a140, cafe17b9), (c997, cafe17ba), (c9c0, cafe17b7)]] gp_get_by_engine=(true, 1)"
+      },
+      {
+        "line": 113733,
+        "text": "kf3: display: +9761460 ms the console shows BLACK 1920x1080 (the scanout shown is lost: a lit head has had no window past the hold) (core channel allocated)"
+      },
+      {
+        "line": 113819,
+        "text": "kf3: TSPACE-RETIRE tok=0x1805 host=0x30032 key=VasKey(13965662457344034928) ring_va=0xff00800000 released=true stale_binds=0/0 late=0 indeterminate=0 unresolved[walk=0 acquire=0 refused=0]"
+      },
+      {
+        "line": 113820,
+        "text": "kf3: DOORBELL-LEDGER tok=0x00001805 route=translated emulated=0 forwarded=0 host=0x30032 fast=0"
+      },
+      {
+        "line": 113821,
+        "text": "kf3: chan token 0x1805 (host 0x30032) RETIRED, forwarded=0 submissions=0 splits=0/0 serves=1 last_put=Some(0) gp_get=None store_views=0 privilege=Some(ChannelPrivilege { level: 2, uvm_owned: false }) dead=None inca=[refused_methods=0 subdevice_masks=0 control_entries=0 ext_base_unapplied=0] gr_tier=false gr[methods=0 inert_binds=0 objects=[]] gp_get_by_engine=(false, 0)"
+      },
+      {
+        "line": 113833,
+        "text": "kf3: TSPACE-RETIRE tok=0x806 host=0x10033 key=VasKey(13965662457344034928) ring_va=0xff00700000 released=true stale_binds=0/0 late=0 indeterminate=0 unresolved[walk=0 acquire=0 refused=0]"
+      },
+      {
+        "line": 113834,
+        "text": "kf3: DOORBELL-LEDGER tok=0x00000806 route=translated emulated=0 forwarded=0 host=0x10033 fast=0"
+      },
+      {
+        "line": 113835,
+        "text": "kf3: chan token 0x806 (host 0x10033) RETIRED, forwarded=0 submissions=0 splits=0/0 serves=1 last_put=Some(0) gp_get=None store_views=0 privilege=Some(ChannelPrivilege { level: 2, uvm_owned: false }) dead=None inca=[refused_methods=0 subdevice_masks=0 control_entries=0 ext_base_unapplied=0] gr_tier=false gr[methods=0 inert_binds=0 objects=[]] gp_get_by_engine=(false, 0)"
+      },
+      {
+        "line": 113848,
+        "text": "kf3: TSPACE-RETIRE tok=0x2007 host=0xc0034 key=VasKey(13965662457344034928) ring_va=0xff00600000 released=true stale_binds=0/0 late=0 indeterminate=0 unresolved[walk=0 acquire=0 refused=0]"
+      },
+      {
+        "line": 113849,
+        "text": "kf3: DOORBELL-LEDGER tok=0x00002007 route=translated emulated=0 forwarded=0 host=0xc0034 fast=0"
+      },
+      {
+        "line": 113850,
+        "text": "kf3: chan token 0x2007 (host 0xc0034) RETIRED, forwarded=0 submissions=0 splits=0/0 serves=1 last_put=Some(0) gp_get=None store_views=0 privilege=Some(ChannelPrivilege { level: 2, uvm_owned: false }) dead=None inca=[refused_methods=0 subdevice_masks=0 control_entries=0 ext_base_unapplied=0] gr_tier=false gr[methods=0 inert_binds=0 objects=[]] gp_get_by_engine=(false, 0)"
+      },
+      {
+        "line": 113862,
+        "text": "kf3: TSPACE-RETIRE tok=0x2008 host=0xc0035 key=VasKey(13965662457344034928) ring_va=0xff00500000 released=true stale_binds=0/0 late=0 indeterminate=0 unresolved[walk=0 acquire=0 refused=0]"
+      },
+      {
+        "line": 113863,
+        "text": "kf3: DOORBELL-LEDGER tok=0x00002008 route=translated emulated=0 forwarded=0 host=0xc0035 fast=0"
+      },
+      {
+        "line": 113864,
+        "text": "kf3: chan token 0x2008 (host 0xc0035) RETIRED, forwarded=0 submissions=0 splits=0/0 serves=1 last_put=Some(0) gp_get=None store_views=0 privilege=Some(ChannelPrivilege { level: 2, uvm_owned: false }) dead=None inca=[refused_methods=0 subdevice_masks=0 control_entries=0 ext_base_unapplied=0] gr_tier=false gr[methods=0 inert_binds=0 objects=[]] gp_get_by_engine=(false, 0)"
+      },
+      {
+        "line": 113876,
+        "text": "kf3: TSPACE-RETIRE tok=0x2809 host=0x50036 key=VasKey(13965662457344034928) ring_va=0xff00400000 released=true stale_binds=0/0 late=0 indeterminate=0 unresolved[walk=0 acquire=0 refused=0]"
+      },
+      {
+        "line": 113877,
+        "text": "kf3: DOORBELL-LEDGER tok=0x00002809 route=translated emulated=0 forwarded=0 host=0x50036 fast=0"
+      },
+      {
+        "line": 113878,
+        "text": "kf3: chan token 0x2809 (host 0x50036) RETIRED, forwarded=0 submissions=0 splits=0/0 serves=1 last_put=Some(0) gp_get=None store_views=0 privilege=Some(ChannelPrivilege { level: 2, uvm_owned: false }) dead=None inca=[refused_methods=0 subdevice_masks=0 control_entries=0 ext_base_unapplied=0] gr_tier=false gr[methods=0 inert_binds=0 objects=[]] gp_get_by_engine=(false, 0)"
+      },
+      {
+        "line": 113890,
+        "text": "kf3: TSPACE-RETIRE tok=0x200a host=0xc0037 key=VasKey(13965662457344034928) ring_va=0xff00300000 released=true stale_binds=0/0 late=0 indeterminate=0 unresolved[walk=0 acquire=0 refused=0]"
+      },
+      {
+        "line": 113891,
+        "text": "kf3: DOORBELL-LEDGER tok=0x0000200a route=translated emulated=0 forwarded=0 host=0xc0037 fast=0"
+      },
+      {
+        "line": 113892,
+        "text": "kf3: chan token 0x200a (host 0xc0037) RETIRED, forwarded=0 submissions=0 splits=0/0 serves=1 last_put=Some(0) gp_get=None store_views=0 privilege=Some(ChannelPrivilege { level: 2, uvm_owned: false }) dead=None inca=[refused_methods=0 subdevice_masks=0 control_entries=0 ext_base_unapplied=0] gr_tier=false gr[methods=0 inert_binds=0 objects=[]] gp_get_by_engine=(false, 0)"
+      },
+      {
+        "line": 113904,
+        "text": "kf3: TSPACE-RETIRE tok=0x804 host=0x10031 key=VasKey(13965662457344034928) ring_va=0xff00900000 released=true stale_binds=0/0 late=0 indeterminate=0 unresolved[walk=0 acquire=0 refused=0]"
+      },
+      {
+        "line": 113905,
+        "text": "kf3: DOORBELL-LEDGER tok=0x00000804 route=translated emulated=0 forwarded=0 host=0x10031 fast=0"
+      },
+      {
+        "line": 113906,
+        "text": "kf3: chan token 0x804 (host 0x10031) RETIRED, forwarded=0 submissions=0 splits=0/0 serves=1 last_put=Some(0) gp_get=None store_views=0 privilege=Some(ChannelPrivilege { level: 2, uvm_owned: false }) dead=None inca=[refused_methods=0 subdevice_masks=0 control_entries=0 ext_base_unapplied=0] gr_tier=false gr[methods=0 inert_binds=0 objects=[]] gp_get_by_engine=(false, 0)"
+      },
+      {
+        "line": 113918,
+        "text": "kf3: TSPACE-RETIRE tok=0x80c host=0x10039 key=VasKey(13965662590488021072) ring_va=0xff00100000 released=true stale_binds=0/1149366 late=0 indeterminate=0 unresolved[walk=0 acquire=0 refused=0]"
+      },
+      {
+        "line": 113919,
+        "text": "kf3: DOORBELL-LEDGER tok=0x0000080c route=translated emulated=0 forwarded=4074332 host=0x10039 fast=0"
+      },
+      {
+        "line": 113920,
+        "text": "kf3: chan token 0x80c (host 0x10039) RETIRED, forwarded=4074332 submissions=1089060 splits=124334/124334 serves=1010278 last_put=Some(11100) gp_get=Some(11100) store_views=1 privilege=Some(ChannelPrivilege { level: 2, uvm_owned: false }) dead=None inca=[refused_methods=0 subdevice_masks=0 control_entries=0 ext_base_unapplied=0] gr_tier=false gr[methods=0 inert_binds=0 objects=[]] gp_get_by_engine=(false, 0)"
+      },
+      {
+        "line": 113954,
+        "text": "kf3: DOORBELL-LEDGER tok=0x0000000e route=passthrough rung=0 emulated=0 forwarded=0 host=0x3b trap=0 fast=0"
+      },
+      {
+        "line": 113982,
+        "text": "kf3: DOORBELL-LEDGER tok=0x0000000f route=passthrough rung=0 emulated=0 forwarded=0 host=0x3c trap=0 fast=0"
+      },
+      {
+        "line": 113994,
+        "text": "kf3: DOORBELL-LEDGER tok=0x00001010 route=passthrough rung=0 emulated=0 forwarded=0 host=0x2003d trap=0 fast=0"
+      },
+      {
+        "line": 114028,
+        "text": "kf3: DOORBELL-LEDGER tok=0x00000011 route=passthrough rung=0 emulated=0 forwarded=0 host=0x3e trap=0 fast=0"
+      },
+      {
+        "line": 114040,
+        "text": "kf3: DOORBELL-LEDGER tok=0x00001012 route=passthrough rung=0 emulated=0 forwarded=0 host=0x2003f trap=0 fast=0"
+      },
+      {
+        "line": 114074,
+        "text": "kf3: DOORBELL-LEDGER tok=0x00000013 route=passthrough rung=0 emulated=0 forwarded=0 host=0x40 trap=0 fast=0"
+      },
+      {
+        "line": 114086,
+        "text": "kf3: DOORBELL-LEDGER tok=0x00001014 route=passthrough rung=0 emulated=0 forwarded=0 host=0x20041 trap=0 fast=0"
+      },
+      {
+        "line": 114120,
+        "text": "kf3: DOORBELL-LEDGER tok=0x00000017 route=passthrough rung=0 emulated=0 forwarded=0 host=0x44 trap=0 fast=0"
+      },
+      {
+        "line": 114132,
+        "text": "kf3: DOORBELL-LEDGER tok=0x00001018 route=passthrough rung=0 emulated=0 forwarded=0 host=0x20045 trap=0 fast=0"
+      },
+      {
+        "line": 114166,
+        "text": "kf3: DOORBELL-LEDGER tok=0x00000019 route=passthrough rung=0 emulated=0 forwarded=0 host=0x46 trap=0 fast=0"
+      },
+      {
+        "line": 114178,
+        "text": "kf3: DOORBELL-LEDGER tok=0x0000101a route=passthrough rung=0 emulated=0 forwarded=0 host=0x20047 trap=0 fast=0"
+      },
+      {
+        "line": 114212,
+        "text": "kf3: DOORBELL-LEDGER tok=0x0000001b route=passthrough rung=0 emulated=0 forwarded=0 host=0x48 trap=0 fast=0"
+      },
+      {
+        "line": 114240,
+        "text": "kf3: DOORBELL-LEDGER tok=0x0000001c route=passthrough rung=0 emulated=0 forwarded=0 host=0x49 trap=0 fast=0"
+      },
+      {
+        "line": 114268,
+        "text": "kf3: DOORBELL-LEDGER tok=0x0000001e route=passthrough rung=0 emulated=0 forwarded=0 host=0x4b trap=0 fast=0"
+      },
+      {
+        "line": 114280,
+        "text": "kf3: DOORBELL-LEDGER tok=0x0000101d route=passthrough rung=0 emulated=0 forwarded=0 host=0x2004a trap=0 fast=0"
+      },
+      {
+        "line": 114298,
+        "text": "kf3: DOORBELL-LEDGER tok=0x0000101f route=passthrough rung=0 emulated=0 forwarded=0 host=0x2004c trap=0 fast=0"
+      },
+      {
+        "line": 114316,
+        "text": "kf3: DOORBELL-LEDGER tok=0x00001020 route=passthrough rung=0 emulated=0 forwarded=0 host=0x2004d trap=0 fast=0"
+      },
+      {
+        "line": 114350,
+        "text": "kf3: DOORBELL-LEDGER tok=0x00000022 route=passthrough rung=0 emulated=0 forwarded=0 host=0x4f trap=0 fast=0"
+      },
+      {
+        "line": 114362,
+        "text": "kf3: DOORBELL-LEDGER tok=0x00001023 route=passthrough rung=0 emulated=0 forwarded=0 host=0x20050 trap=0 fast=0"
+      },
+      {
+        "line": 114397,
+        "text": "kf3: DOORBELL-LEDGER tok=0x00000015 route=passthrough rung=0 emulated=0 forwarded=0 host=0x42 trap=0 fast=0"
+      },
+      {
+        "line": 114409,
+        "text": "kf3: DOORBELL-LEDGER tok=0x00001016 route=passthrough rung=0 emulated=0 forwarded=0 host=0x20043 trap=0 fast=0"
+      },
+      {
+        "line": 114443,
+        "text": "kf3: DOORBELL-LEDGER tok=0x00000021 route=passthrough rung=0 emulated=0 forwarded=0 host=0x4e trap=0 fast=0"
+      },
+      {
+        "line": 114471,
+        "text": "kf3: DOORBELL-LEDGER tok=0x00000024 route=passthrough rung=0 emulated=0 forwarded=0 host=0x51 trap=0 fast=0"
+      },
+      {
+        "line": 114483,
+        "text": "kf3: DOORBELL-LEDGER tok=0x00001025 route=passthrough rung=0 emulated=0 forwarded=0 host=0x20052 trap=0 fast=0"
+      },
+      {
+        "line": 114501,
+        "text": "kf3: DOORBELL-LEDGER tok=0x00001026 route=passthrough rung=0 emulated=0 forwarded=0 host=0x20053 trap=0 fast=0"
+      },
+      {
+        "line": 114535,
+        "text": "kf3: DOORBELL-LEDGER tok=0x00000027 route=passthrough rung=0 emulated=0 forwarded=0 host=0x54 trap=0 fast=0"
+      },
+      {
+        "line": 114546,
+        "text": "kf3: DOORBELL-LEDGER tok=0x00001028 route=passthrough rung=0 emulated=0 forwarded=0 host=0x20055 trap=0 fast=0"
+      },
+      {
+        "line": 114580,
+        "text": "kf3: DOORBELL-LEDGER tok=0x00000029 route=passthrough rung=0 emulated=0 forwarded=0 host=0x56 trap=0 fast=0"
+      },
+      {
+        "line": 114592,
+        "text": "kf3: DOORBELL-LEDGER tok=0x0000102b route=passthrough rung=0 emulated=0 forwarded=0 host=0x20058 trap=0 fast=0"
+      },
+      {
+        "line": 114626,
+        "text": "kf3: DOORBELL-LEDGER tok=0x0000002d route=passthrough rung=0 emulated=0 forwarded=0 host=0x5a trap=0 fast=0"
+      },
+      {
+        "line": 114638,
+        "text": "kf3: DOORBELL-LEDGER tok=0x0000102e route=passthrough rung=0 emulated=0 forwarded=0 host=0x2005b trap=0 fast=0"
+      },
+      {
+        "line": 114672,
+        "text": "kf3: DOORBELL-LEDGER tok=0x0000002f route=passthrough rung=0 emulated=0 forwarded=0 host=0x5c trap=0 fast=0"
+      },
+      {
+        "line": 114684,
+        "text": "kf3: DOORBELL-LEDGER tok=0x00001030 route=passthrough rung=0 emulated=0 forwarded=0 host=0x2005d trap=0 fast=0"
+      },
+      {
+        "line": 114718,
+        "text": "kf3: DOORBELL-LEDGER tok=0x0000002a route=passthrough rung=0 emulated=0 forwarded=0 host=0x57 trap=0 fast=0"
+      },
+      {
+        "line": 114729,
+        "text": "kf3: DOORBELL-LEDGER tok=0x0000102c route=passthrough rung=0 emulated=0 forwarded=0 host=0x20059 trap=0 fast=0"
+      },
+      {
+        "line": 114763,
+        "text": "kf3: DOORBELL-LEDGER tok=0x00000037 route=passthrough rung=0 emulated=0 forwarded=0 host=0x67 trap=0 fast=0"
+      },
+      {
+        "line": 114775,
+        "text": "kf3: DOORBELL-LEDGER tok=0x00001038 route=passthrough rung=0 emulated=0 forwarded=0 host=0x20068 trap=0 fast=0"
+      },
+      {
+        "line": 114809,
+        "text": "kf3: DOORBELL-LEDGER tok=0x00000031 route=passthrough rung=0 emulated=0 forwarded=0 host=0x5e trap=0 fast=0"
+      },
+      {
+        "line": 114821,
+        "text": "kf3: DOORBELL-LEDGER tok=0x00001032 route=passthrough rung=0 emulated=0 forwarded=0 host=0x2005f trap=0 fast=0"
+      },
+      {
+        "line": 114855,
+        "text": "kf3: DOORBELL-LEDGER tok=0x00000036 route=passthrough rung=0 emulated=0 forwarded=0 host=0x64 trap=0 fast=0"
+      },
+      {
+        "line": 114883,
+        "text": "kf3: DOORBELL-LEDGER tok=0x0000003a route=passthrough rung=0 emulated=0 forwarded=0 host=0x6a trap=0 fast=0"
+      },
+      {
+        "line": 114895,
+        "text": "kf3: DOORBELL-LEDGER tok=0x00001039 route=passthrough rung=0 emulated=0 forwarded=0 host=0x20069 trap=0 fast=0"
+      },
+      {
+        "line": 114913,
+        "text": "kf3: DOORBELL-LEDGER tok=0x0000103b route=passthrough rung=0 emulated=0 forwarded=0 host=0x2006b trap=0 fast=0"
+      },
+      {
+        "line": 114947,
+        "text": "kf3: DOORBELL-LEDGER tok=0x00000033 route=passthrough rung=0 emulated=0 forwarded=0 host=0x61 trap=0 fast=0"
+      },
+      {
+        "line": 114959,
+        "text": "kf3: DOORBELL-LEDGER tok=0x00000834 route=passthrough rung=0 emulated=0 forwarded=0 host=0x10062 trap=0 fast=0"
+      },
+      {
+        "line": 114981,
+        "text": "kf3: DOORBELL-LEDGER tok=0x00001035 route=passthrough rung=0 emulated=0 forwarded=0 host=0x20063 trap=0 fast=0"
+      },
+      {
+        "line": 114999,
+        "text": "kf3: TSPACE-RETIRE tok=0x802 host=0x1002f key=VasKey(13965662457344034928) ring_va=0xff00b00000 released=true stale_binds=0/0 late=0 indeterminate=0 unresolved[walk=0 acquire=0 refused=0]"
+      },
+      {
+        "line": 115000,
+        "text": "kf3: DOORBELL-LEDGER tok=0x00000802 route=translated emulated=0 forwarded=1 host=0x1002f fast=0"
+      },
+      {
+        "line": 115001,
+        "text": "kf3: chan token 0x802 (host 0x1002f) RETIRED, forwarded=1 submissions=1 splits=0/0 serves=3 last_put=Some(1) gp_get=Some(1) store_views=0 privilege=Some(ChannelPrivilege { level: 2, uvm_owned: false }) dead=None inca=[refused_methods=0 subdevice_masks=0 control_entries=0 ext_base_unapplied=0] gr_tier=false gr[methods=0 inert_binds=0 objects=[]] gp_get_by_engine=(false, 0)"
+      },
+      {
+        "line": 115018,
+        "text": "kf3: TSPACE-RETIRE tok=0x3 host=0x30 key=VasKey(13965662457344034928) ring_va=0xff00a00000 released=true stale_binds=0/810 late=0 indeterminate=0 unresolved[walk=0 acquire=0 refused=0]"
+      },
+      {
+        "line": 115019,
+        "text": "kf3: DOORBELL-LEDGER tok=0x00000003 route=translated emulated=0 forwarded=192 host=0x30 fast=0"
+      },
+      {
+        "line": 115020,
+        "text": "kf3: chan token 0x3 (host 0x30) RETIRED, forwarded=192 submissions=405 splits=0/0 serves=1969 last_put=Some(192) gp_get=Some(192) store_views=0 privilege=Some(ChannelPrivilege { level: 2, uvm_owned: false }) dead=None inca=[refused_methods=0 subdevice_masks=0 control_entries=0 ext_base_unapplied=0] gr_tier=true gr[methods=1637 inert_binds=0 objects=[(902d, cafe1785), (a140, cafe1786), (c997, cafe1787), (c9c0, cafe1784)]] gp_get_by_engine=(true, 192)"
+      },
+      {
+        "line": 115406,
+        "text": "kf3: TSPACE-RETIRE tok=0x801 host=0x1002e key=VasKey(13970166078463016970) ring_va=0xff00c00000 released=true stale_binds=0/6 late=0 indeterminate=0 unresolved[walk=0 acquire=0 refused=0]"
+      },
+      {
+        "line": 115407,
+        "text": "kf3: DOORBELL-LEDGER tok=0x00000801 route=translated emulated=0 forwarded=2 host=0x1002e fast=0"
+      },
+      {
+        "line": 115408,
+        "text": "kf3: chan token 0x801 (host 0x1002e) RETIRED, forwarded=2 submissions=2 splits=0/0 serves=5 last_put=Some(2) gp_get=Some(2) store_views=0 privilege=Some(ChannelPrivilege { level: 2, uvm_owned: false }) dead=None inca=[refused_methods=0 subdevice_masks=0 control_entries=0 ext_base_unapplied=0] gr_tier=false gr[methods=0 inert_binds=0 objects=[]] gp_get_by_engine=(false, 0)"
+      },
+      {
+        "line": 115420,
+        "text": "kf3: mem t=9761.968s the guest wrote NV_PBUS_BAR1_BLOCK = 0x0 (MODE PHYSICAL) at GSP phase Running"
+      },
+      {
+        "line": 115421,
+        "text": "kf3: mem t=9761.968s BAR1 back to its physical view: [0x0, +0x7f0000) shows store [0x0, +0x7f0000) again (seed life 3) \u2014 the guest's RM gave BAR1 up; boot framebuffer scrub REFUSED: not scrubbed: a newer guest RM life began (fn 72) after this unload"
+      },
+      {
+        "line": 115444,
+        "text": "kf3: display: +9761973 ms the guest's display life ENDED (its RM unloaded): 0 model channel(s), 0 queued completion(s) dropped (never written) \u2014 the boot layer is shown again"
+      },
+      {
+        "line": 115446,
+        "text": "kf3: display: +9761987 ms the console shows BLACK 1920x1080 (the scanout shown is lost: no head is lit) (core channel FREE)"
+      },
+      {
+        "line": 115447,
+        "text": "kf3: mem t=9762.028s BAR1 [0x0, +0x7f0000) already shows its physical view (the seed is placed); boot framebuffer store [0x0, +0x7f0000) scrubbed first"
+      },
+      {
+        "line": 115448,
+        "text": "kf3: display: +9762023 ms the console shows the BOOT layer (store 0x0, 1920x1080) (core channel FREE)"
+      },
+      {
+        "line": 115449,
+        "text": "kf3: GSP command service REFUSED: QueueNotBound"
+      },
+      {
+        "line": 115450,
+        "text": "kf3: GSP command service REFUSED: QueueNotBound"
+      }
+    ],
+    "capacity_line_count": 85,
+    "capacity_first_last": [
+      {
+        "line": 105587,
+        "text": "kf3: walk capacity: re-walk (needs s92:1184); walk pool 1048576 runs, slot pool 2097152 runs (2037248 free), max per space 1048576, slots held 24, grows 93, retries 158, ceilings 0, largest slot 423168, largest walk 423168"
+      },
+      {
+        "line": 105588,
+        "text": "kf3: walk capacity: slot 92 grown 1024 \u2192 2048 runs"
+      },
+      {
+        "line": 113210,
+        "text": "kf3: walk capacity: re-walk (needs s94:54065); walk pool 1048576 runs, slot pool 2097152 runs (1930496 free), max per space 1048576, slots held 24, grows 121, retries 211, ceilings 0, largest slot 423168, largest walk 423168"
+      },
+      {
+        "line": 113232,
+        "text": "kf3: walk capacity: re-walk (needs s94:81582); walk pool 1048576 runs, slot pool 2097152 runs (1930496 free), max per space 1048576, slots held 24, grows 121, retries 212, ceilings 0, largest slot 423168, largest walk 423168"
+      },
+      {
+        "line": 113233,
+        "text": "kf3: walk capacity: slot 94 grown 81152 \u2192 122624 runs"
+      },
+      {
+        "line": 113234,
+        "text": "kf3: walk capacity: re-walk (needs s94:81607); walk pool 1048576 runs, slot pool 2097152 runs (1889024 free), max per space 1048576, slots held 24, grows 122, retries 213, ceilings 0, largest slot 423168, largest walk 423168"
+      }
+    ]
+  },
+  "held_balance_checkpoints": [
+    {
+      "line": 103661,
+      "pending_from_logged_held_minus_posted": 0,
+      "unmatched_start": null
+    },
+    {
+      "line": 113366,
+      "pending_from_logged_held_minus_posted": 0,
+      "unmatched_start": null
+    },
+    {
+      "line": 113512,
+      "pending_from_logged_held_minus_posted": 0,
+      "unmatched_start": null
+    },
+    {
+      "line": 115421,
+      "pending_from_logged_held_minus_posted": 0,
+      "unmatched_start": null
+    },
+    {
+      "line": 161763,
+      "pending_from_logged_held_minus_posted": 0,
+      "unmatched_start": null
+    },
+    {
+      "line": 178253,
+      "pending_from_logged_held_minus_posted": 0,
+      "unmatched_start": null
+    }
+  ],
+  "life9_teardown": [
+    {
+      "line": 158713,
+      "text": "kf3: DOORBELL-LEDGER tok=0x00000023 route=passthrough rung=0 emulated=0 forwarded=0 host=0x50 trap=0 fast=0"
+    },
+    {
+      "line": 158733,
+      "text": "kf3: DOORBELL-LEDGER tok=0x00001024 route=passthrough rung=0 emulated=0 forwarded=0 host=0x20051 trap=0 fast=0"
+    },
+    {
+      "line": 160299,
+      "text": "kf3: TSPACE-RETIRE tok=0x80d host=0x1003a key=VasKey(13965665936267544656) ring_va=0xff00200000 released=true stale_binds=0/0 late=0 indeterminate=0 unresolved[walk=0 acquire=0 refused=0]"
+    },
+    {
+      "line": 160300,
+      "text": "kf3: DOORBELL-LEDGER tok=0x0000080d route=translated emulated=0 forwarded=0 host=0x1003a fast=0"
+    },
+    {
+      "line": 160301,
+      "text": "kf3: chan token 0x80d (host 0x1003a) RETIRED, forwarded=0 submissions=0 splits=0/0 serves=1 last_put=Some(0) gp_get=None store_views=0 privilege=Some(ChannelPrivilege { level: 2, uvm_owned: false }) dead=None inca=[refused_methods=0 subdevice_masks=0 control_entries=0 ext_base_unapplied=0] gr_tier=false gr[methods=0 inert_binds=0 objects=[]] gp_get_by_engine=(false, 0)"
+    },
+    {
+      "line": 160328,
+      "text": "kf3: TSPACE-RETIRE tok=0xc host=0x39 key=VasKey(13965662590488021072) ring_va=0xff00000000 released=true stale_binds=0/2 late=0 indeterminate=0 unresolved[walk=0 acquire=0 refused=0]"
+    },
+    {
+      "line": 160329,
+      "text": "kf3: DOORBELL-LEDGER tok=0x0000000c route=translated emulated=0 forwarded=1 host=0x39 fast=0"
+    },
+    {
+      "line": 160330,
+      "text": "kf3: chan token 0xc (host 0x39) RETIRED, forwarded=1 submissions=1 splits=0/0 serves=2 last_put=Some(1) gp_get=Some(1) store_views=0 privilege=Some(ChannelPrivilege { level: 2, uvm_owned: false }) dead=None inca=[refused_methods=0 subdevice_masks=0 control_entries=0 ext_base_unapplied=0] gr_tier=true gr[methods=21 inert_binds=0 objects=[(902d, cafeffe7), (a140, cafeffe8), (c997, cafeffe9), (c9c0, cafeffe6)]] gp_get_by_engine=(true, 1)"
+    },
+    {
+      "line": 160593,
+      "text": "kf3: TSPACE-RETIRE tok=0x1805 host=0x30032 key=VasKey(13965665811713493104) ring_va=0xff00800000 released=true stale_binds=0/0 late=0 indeterminate=0 unresolved[walk=0 acquire=0 refused=0]"
+    },
+    {
+      "line": 160594,
+      "text": "kf3: DOORBELL-LEDGER tok=0x00001805 route=translated emulated=0 forwarded=0 host=0x30032 fast=0"
+    },
+    {
+      "line": 160595,
+      "text": "kf3: chan token 0x1805 (host 0x30032) RETIRED, forwarded=0 submissions=0 splits=0/0 serves=1 last_put=Some(0) gp_get=None store_views=0 privilege=Some(ChannelPrivilege { level: 2, uvm_owned: false }) dead=None inca=[refused_methods=0 subdevice_masks=0 control_entries=0 ext_base_unapplied=0] gr_tier=false gr[methods=0 inert_binds=0 objects=[]] gp_get_by_engine=(false, 0)"
+    },
+    {
+      "line": 160607,
+      "text": "kf3: TSPACE-RETIRE tok=0x806 host=0x10033 key=VasKey(13965665811713493104) ring_va=0xff00700000 released=true stale_binds=0/0 late=0 indeterminate=0 unresolved[walk=0 acquire=0 refused=0]"
+    },
+    {
+      "line": 160608,
+      "text": "kf3: DOORBELL-LEDGER tok=0x00000806 route=translated emulated=0 forwarded=0 host=0x10033 fast=0"
+    },
+    {
+      "line": 160609,
+      "text": "kf3: chan token 0x806 (host 0x10033) RETIRED, forwarded=0 submissions=0 splits=0/0 serves=1 last_put=Some(0) gp_get=None store_views=0 privilege=Some(ChannelPrivilege { level: 2, uvm_owned: false }) dead=None inca=[refused_methods=0 subdevice_masks=0 control_entries=0 ext_base_unapplied=0] gr_tier=false gr[methods=0 inert_binds=0 objects=[]] gp_get_by_engine=(false, 0)"
+    },
+    {
+      "line": 160622,
+      "text": "kf3: TSPACE-RETIRE tok=0x2007 host=0xc0034 key=VasKey(13965665811713493104) ring_va=0xff00600000 released=true stale_binds=0/0 late=0 indeterminate=0 unresolved[walk=0 acquire=0 refused=0]"
+    },
+    {
+      "line": 160623,
+      "text": "kf3: DOORBELL-LEDGER tok=0x00002007 route=translated emulated=0 forwarded=0 host=0xc0034 fast=0"
+    },
+    {
+      "line": 160624,
+      "text": "kf3: chan token 0x2007 (host 0xc0034) RETIRED, forwarded=0 submissions=0 splits=0/0 serves=1 last_put=Some(0) gp_get=None store_views=0 privilege=Some(ChannelPrivilege { level: 2, uvm_owned: false }) dead=None inca=[refused_methods=0 subdevice_masks=0 control_entries=0 ext_base_unapplied=0] gr_tier=false gr[methods=0 inert_binds=0 objects=[]] gp_get_by_engine=(false, 0)"
+    },
+    {
+      "line": 160636,
+      "text": "kf3: TSPACE-RETIRE tok=0x2008 host=0xc0035 key=VasKey(13965665811713493104) ring_va=0xff00500000 released=true stale_binds=0/0 late=0 indeterminate=0 unresolved[walk=0 acquire=0 refused=0]"
+    },
+    {
+      "line": 160637,
+      "text": "kf3: DOORBELL-LEDGER tok=0x00002008 route=translated emulated=0 forwarded=0 host=0xc0035 fast=0"
+    },
+    {
+      "line": 160638,
+      "text": "kf3: chan token 0x2008 (host 0xc0035) RETIRED, forwarded=0 submissions=0 splits=0/0 serves=1 last_put=Some(0) gp_get=None store_views=0 privilege=Some(ChannelPrivilege { level: 2, uvm_owned: false }) dead=None inca=[refused_methods=0 subdevice_masks=0 control_entries=0 ext_base_unapplied=0] gr_tier=false gr[methods=0 inert_binds=0 objects=[]] gp_get_by_engine=(false, 0)"
+    },
+    {
+      "line": 160650,
+      "text": "kf3: TSPACE-RETIRE tok=0x2809 host=0x50036 key=VasKey(13965665811713493104) ring_va=0xff00400000 released=true stale_binds=0/0 late=0 indeterminate=0 unresolved[walk=0 acquire=0 refused=0]"
+    },
+    {
+      "line": 160651,
+      "text": "kf3: DOORBELL-LEDGER tok=0x00002809 route=translated emulated=0 forwarded=0 host=0x50036 fast=0"
+    },
+    {
+      "line": 160652,
+      "text": "kf3: chan token 0x2809 (host 0x50036) RETIRED, forwarded=0 submissions=0 splits=0/0 serves=1 last_put=Some(0) gp_get=None store_views=0 privilege=Some(ChannelPrivilege { level: 2, uvm_owned: false }) dead=None inca=[refused_methods=0 subdevice_masks=0 control_entries=0 ext_base_unapplied=0] gr_tier=false gr[methods=0 inert_binds=0 objects=[]] gp_get_by_engine=(false, 0)"
+    },
+    {
+      "line": 160664,
+      "text": "kf3: TSPACE-RETIRE tok=0x200a host=0xc0037 key=VasKey(13965665811713493104) ring_va=0xff00300000 released=true stale_binds=0/0 late=0 indeterminate=0 unresolved[walk=0 acquire=0 refused=0]"
+    },
+    {
+      "line": 160665,
+      "text": "kf3: DOORBELL-LEDGER tok=0x0000200a route=translated emulated=0 forwarded=0 host=0xc0037 fast=0"
+    },
+    {
+      "line": 160666,
+      "text": "kf3: chan token 0x200a (host 0xc0037) RETIRED, forwarded=0 submissions=0 splits=0/0 serves=1 last_put=Some(0) gp_get=None store_views=0 privilege=Some(ChannelPrivilege { level: 2, uvm_owned: false }) dead=None inca=[refused_methods=0 subdevice_masks=0 control_entries=0 ext_base_unapplied=0] gr_tier=false gr[methods=0 inert_binds=0 objects=[]] gp_get_by_engine=(false, 0)"
+    },
+    {
+      "line": 160678,
+      "text": "kf3: TSPACE-RETIRE tok=0x80b host=0x10038 key=VasKey(13965662590488021072) ring_va=0xff00900000 released=true stale_binds=0/41356 late=0 indeterminate=0 unresolved[walk=0 acquire=0 refused=0]"
+    },
+    {
+      "line": 160679,
+      "text": "kf3: DOORBELL-LEDGER tok=0x0000080b route=translated emulated=0 forwarded=198637 host=0x10038 fast=0"
+    },
+    {
+      "line": 160680,
+      "text": "kf3: chan token 0x80b (host 0x10038) RETIRED, forwarded=198637 submissions=36083 splits=5770/5770 serves=34827 last_put=Some(2029) gp_get=Some(2029) store_views=1 privilege=Some(ChannelPrivilege { level: 2, uvm_owned: false }) dead=None inca=[refused_methods=0 subdevice_masks=0 control_entries=0 ext_base_unapplied=0] gr_tier=false gr[methods=0 inert_binds=0 objects=[]] gp_get_by_engine=(false, 0)"
+    },
+    {
+      "line": 160693,
+      "text": "kf3: TSPACE-RETIRE tok=0x804 host=0x10031 key=VasKey(13965665811713493104) ring_va=0xff00100000 released=true stale_binds=0/0 late=0 indeterminate=0 unresolved[walk=0 acquire=0 refused=0]"
+    },
+    {
+      "line": 160694,
+      "text": "kf3: DOORBELL-LEDGER tok=0x00000804 route=translated emulated=0 forwarded=0 host=0x10031 fast=0"
+    },
+    {
+      "line": 160695,
+      "text": "kf3: chan token 0x804 (host 0x10031) RETIRED, forwarded=0 submissions=0 splits=0/0 serves=1 last_put=Some(0) gp_get=None store_views=0 privilege=Some(ChannelPrivilege { level: 2, uvm_owned: false }) dead=None inca=[refused_methods=0 subdevice_masks=0 control_entries=0 ext_base_unapplied=0] gr_tier=false gr[methods=0 inert_binds=0 objects=[]] gp_get_by_engine=(false, 0)"
+    },
+    {
+      "line": 160728,
+      "text": "kf3: DOORBELL-LEDGER tok=0x0000000e route=passthrough rung=0 emulated=0 forwarded=0 host=0x3b trap=0 fast=0"
+    },
+    {
+      "line": 160756,
+      "text": "kf3: DOORBELL-LEDGER tok=0x00000010 route=passthrough rung=0 emulated=0 forwarded=0 host=0x3d trap=0 fast=0"
+    },
+    {
+      "line": 160769,
+      "text": "kf3: DOORBELL-LEDGER tok=0x00001012 route=passthrough rung=0 emulated=0 forwarded=0 host=0x2003f trap=0 fast=0"
+    },
+    {
+      "line": 160803,
+      "text": "kf3: DOORBELL-LEDGER tok=0x00000013 route=passthrough rung=0 emulated=0 forwarded=0 host=0x40 trap=0 fast=0"
+    },
+    {
+      "line": 160831,
+      "text": "kf3: DOORBELL-LEDGER tok=0x00000014 route=passthrough rung=0 emulated=0 forwarded=0 host=0x41 trap=0 fast=0"
+    },
+    {
+      "line": 160843,
+      "text": "kf3: DOORBELL-LEDGER tok=0x00001015 route=passthrough rung=0 emulated=0 forwarded=0 host=0x20042 trap=0 fast=0"
+    },
+    {
+      "line": 160861,
+      "text": "kf3: DOORBELL-LEDGER tok=0x00001016 route=passthrough rung=0 emulated=0 forwarded=0 host=0x20043 trap=0 fast=0"
+    },
+    {
+      "line": 160895,
+      "text": "kf3: DOORBELL-LEDGER tok=0x00000017 route=passthrough rung=0 emulated=0 forwarded=0 host=0x44 trap=0 fast=0"
+    },
+    {
+      "line": 160923,
+      "text": "kf3: DOORBELL-LEDGER tok=0x00000018 route=passthrough rung=0 emulated=0 forwarded=0 host=0x45 trap=0 fast=0"
+    },
+    {
+      "line": 160951,
+      "text": "kf3: DOORBELL-LEDGER tok=0x00000019 route=passthrough rung=0 emulated=0 forwarded=0 host=0x46 trap=0 fast=0"
+    },
+    {
+      "line": 160963,
+      "text": "kf3: DOORBELL-LEDGER tok=0x0000101a route=passthrough rung=0 emulated=0 forwarded=0 host=0x20047 trap=0 fast=0"
+    },
+    {
+      "line": 160981,
+      "text": "kf3: DOORBELL-LEDGER tok=0x0000101b route=passthrough rung=0 emulated=0 forwarded=0 host=0x20048 trap=0 fast=0"
+    },
+    {
+      "line": 160999,
+      "text": "kf3: DOORBELL-LEDGER tok=0x0000101c route=passthrough rung=0 emulated=0 forwarded=0 host=0x20049 trap=0 fast=0"
+    },
+    {
+      "line": 161033,
+      "text": "kf3: DOORBELL-LEDGER tok=0x0000000f route=passthrough rung=0 emulated=0 forwarded=0 host=0x3c trap=0 fast=0"
+    },
+    {
+      "line": 161045,
+      "text": "kf3: DOORBELL-LEDGER tok=0x00001011 route=passthrough rung=0 emulated=0 forwarded=0 host=0x2003e trap=0 fast=0"
+    },
+    {
+      "line": 161079,
+      "text": "kf3: DOORBELL-LEDGER tok=0x0000001d route=passthrough rung=0 emulated=0 forwarded=0 host=0x4a trap=0 fast=0"
+    },
+    {
+      "line": 161091,
+      "text": "kf3: DOORBELL-LEDGER tok=0x0000101e route=passthrough rung=0 emulated=0 forwarded=0 host=0x2004b trap=0 fast=0"
+    },
+    {
+      "line": 161125,
+      "text": "kf3: DOORBELL-LEDGER tok=0x0000001f route=passthrough rung=0 emulated=0 forwarded=0 host=0x4c trap=0 fast=0"
+    },
+    {
+      "line": 161137,
+      "text": "kf3: DOORBELL-LEDGER tok=0x00001020 route=passthrough rung=0 emulated=0 forwarded=0 host=0x2004d trap=0 fast=0"
+    },
+    {
+      "line": 161171,
+      "text": "kf3: DOORBELL-LEDGER tok=0x00000021 route=passthrough rung=0 emulated=0 forwarded=0 host=0x4e trap=0 fast=0"
+    },
+    {
+      "line": 161183,
+      "text": "kf3: DOORBELL-LEDGER tok=0x00001022 route=passthrough rung=0 emulated=0 forwarded=0 host=0x2004f trap=0 fast=0"
+    },
+    {
+      "line": 161217,
+      "text": "kf3: DOORBELL-LEDGER tok=0x00000025 route=passthrough rung=0 emulated=0 forwarded=0 host=0x52 trap=0 fast=0"
+    },
+    {
+      "line": 161228,
+      "text": "kf3: DOORBELL-LEDGER tok=0x00000826 route=passthrough rung=0 emulated=0 forwarded=0 host=0x10053 trap=0 fast=0"
+    },
+    {
+      "line": 161245,
+      "text": "kf3: DOORBELL-LEDGER tok=0x00001027 route=passthrough rung=0 emulated=0 forwarded=0 host=0x20054 trap=0 fast=0"
+    },
+    {
+      "line": 161279,
+      "text": "kf3: DOORBELL-LEDGER tok=0x00000023 route=passthrough rung=0 emulated=0 forwarded=0 host=0x50 trap=0 fast=0"
+    },
+    {
+      "line": 161307,
+      "text": "kf3: DOORBELL-LEDGER tok=0x00000024 route=passthrough rung=0 emulated=0 forwarded=0 host=0x51 trap=0 fast=0"
+    },
+    {
+      "line": 161319,
+      "text": "kf3: DOORBELL-LEDGER tok=0x00001028 route=passthrough rung=0 emulated=0 forwarded=0 host=0x20055 trap=0 fast=0"
+    },
+    {
+      "line": 161336,
+      "text": "kf3: DOORBELL-LEDGER tok=0x00001029 route=passthrough rung=0 emulated=0 forwarded=0 host=0x20056 trap=0 fast=0"
+    },
+    {
+      "line": 161370,
+      "text": "kf3: DOORBELL-LEDGER tok=0x0000002a route=passthrough rung=0 emulated=0 forwarded=0 host=0x57 trap=0 fast=0"
+    },
+    {
+      "line": 161385,
+      "text": "kf3: DOORBELL-LEDGER tok=0x0000102b route=passthrough rung=0 emulated=0 forwarded=0 host=0x20058 trap=0 fast=0"
+    },
+    {
+      "line": 161403,
+      "text": "kf3: TSPACE-RETIRE tok=0x802 host=0x1002f key=VasKey(13965665811713493104) ring_va=0xff00b00000 released=true stale_binds=0/0 late=0 indeterminate=0 unresolved[walk=0 acquire=0 refused=0]"
+    },
+    {
+      "line": 161404,
+      "text": "kf3: DOORBELL-LEDGER tok=0x00000802 route=translated emulated=0 forwarded=1 host=0x1002f fast=0"
+    },
+    {
+      "line": 161405,
+      "text": "kf3: chan token 0x802 (host 0x1002f) RETIRED, forwarded=1 submissions=1 splits=0/0 serves=3 last_put=Some(1) gp_get=Some(1) store_views=0 privilege=Some(ChannelPrivilege { level: 2, uvm_owned: false }) dead=None inca=[refused_methods=0 subdevice_masks=0 control_entries=0 ext_base_unapplied=0] gr_tier=false gr[methods=0 inert_binds=0 objects=[]] gp_get_by_engine=(false, 0)"
+    },
+    {
+      "line": 161422,
+      "text": "kf3: TSPACE-RETIRE tok=0x3 host=0x30 key=VasKey(13965665811713493104) ring_va=0xff00a00000 released=true stale_binds=0/122 late=0 indeterminate=0 unresolved[walk=0 acquire=0 refused=0]"
+    },
+    {
+      "line": 161423,
+      "text": "kf3: DOORBELL-LEDGER tok=0x00000003 route=translated emulated=0 forwarded=24 host=0x30 fast=0"
+    },
+    {
+      "line": 161424,
+      "text": "kf3: chan token 0x3 (host 0x30) RETIRED, forwarded=24 submissions=61 splits=0/0 serves=336 last_put=Some(24) gp_get=Some(24) store_views=0 privilege=Some(ChannelPrivilege { level: 2, uvm_owned: false }) dead=None inca=[refused_methods=0 subdevice_masks=0 control_entries=0 ext_base_unapplied=0] gr_tier=true gr[methods=261 inert_binds=0 objects=[(902d, cafeffb9), (a140, cafeffba), (c997, cafeffbb), (c9c0, cafeffb8)]] gp_get_by_engine=(true, 24)"
+    },
+    {
+      "line": 161748,
+      "text": "kf3: TSPACE-RETIRE tok=0x801 host=0x1002e key=VasKey(13970169432832475146) ring_va=0xff00c00000 released=true stale_binds=0/6 late=0 indeterminate=0 unresolved[walk=0 acquire=0 refused=0]"
+    },
+    {
+      "line": 161749,
+      "text": "kf3: DOORBELL-LEDGER tok=0x00000801 route=translated emulated=0 forwarded=2 host=0x1002e fast=0"
+    },
+    {
+      "line": 161750,
+      "text": "kf3: chan token 0x801 (host 0x1002e) RETIRED, forwarded=2 submissions=2 splits=0/0 serves=5 last_put=Some(2) gp_get=Some(2) store_views=0 privilege=Some(ChannelPrivilege { level: 2, uvm_owned: false }) dead=None inca=[refused_methods=0 subdevice_masks=0 control_entries=0 ext_base_unapplied=0] gr_tier=false gr[methods=0 inert_binds=0 objects=[]] gp_get_by_engine=(false, 0)"
+    }
+  ],
+  "guest_events": [
+    {
+      "line": 2,
+      "text": "22:38:57 nvlddmkm id=153 lvl=Error :: "
+    },
+    {
+      "line": 3,
+      "text": "22:38:58 nvlddmkm id=153 lvl=Error :: "
+    },
+    {
+      "line": 4,
+      "text": "22:38:58 nvlddmkm id=153 lvl=Error :: "
+    },
+    {
+      "line": 5,
+      "text": "22:41:30 nvlddmkm id=153 lvl=Error :: "
+    },
+    {
+      "line": 6,
+      "text": "22:41:30 nvlddmkm id=153 lvl=Error :: "
+    },
+    {
+      "line": 7,
+      "text": "22:41:30 nvlddmkm id=153 lvl=Error :: "
+    },
+    {
+      "line": 8,
+      "text": "22:41:36 nvlddmkm id=153 lvl=Error :: "
+    },
+    {
+      "line": 9,
+      "text": "22:41:36 nvlddmkm id=153 lvl=Error :: "
+    },
+    {
+      "line": 10,
+      "text": "22:41:36 nvlddmkm id=153 lvl=Error :: "
+    },
+    {
+      "line": 11,
+      "text": "22:42:55 nvlddmkm id=153 lvl=Error :: "
+    },
+    {
+      "line": 12,
+      "text": "22:42:56 nvlddmkm id=153 lvl=Error :: "
+    },
+    {
+      "line": 13,
+      "text": "22:42:56 nvlddmkm id=153 lvl=Error :: "
+    },
+    {
+      "line": 14,
+      "text": "22:43:31 nvlddmkm id=153 lvl=Error :: "
+    },
+    {
+      "line": 15,
+      "text": "22:43:31 nvlddmkm id=153 lvl=Error :: "
+    },
+    {
+      "line": 16,
+      "text": "22:43:31 nvlddmkm id=153 lvl=Error :: "
+    },
+    {
+      "line": 17,
+      "text": "22:43:52 nvlddmkm id=153 lvl=Error :: "
+    },
+    {
+      "line": 18,
+      "text": "22:43:53 nvlddmkm id=153 lvl=Error :: "
+    },
+    {
+      "line": 19,
+      "text": "22:43:53 nvlddmkm id=153 lvl=Error :: "
+    },
+    {
+      "line": 20,
+      "text": "22:44:15 nvlddmkm id=153 lvl=Error :: "
+    },
+    {
+      "line": 21,
+      "text": "22:44:16 nvlddmkm id=153 lvl=Error :: "
+    },
+    {
+      "line": 22,
+      "text": "22:44:16 nvlddmkm id=153 lvl=Error :: "
+    },
+    {
+      "line": 23,
+      "text": "22:45:13 nvlddmkm id=153 lvl=Error :: "
+    },
+    {
+      "line": 24,
+      "text": "22:45:14 nvlddmkm id=153 lvl=Error :: "
+    },
+    {
+      "line": 25,
+      "text": "22:45:14 nvlddmkm id=153 lvl=Error :: "
+    },
+    {
+      "line": 26,
+      "text": "22:45:39 nvlddmkm id=153 lvl=Error :: "
+    },
+    {
+      "line": 27,
+      "text": "22:45:39 nvlddmkm id=153 lvl=Error :: "
+    },
+    {
+      "line": 28,
+      "text": "22:45:39 nvlddmkm id=153 lvl=Error :: "
+    },
+    {
+      "line": 62,
+      "text": "22:39:00 NVIDIA OpenGL Driver id=1 lvl=Error :: Unable to recover from a kernel exception. The application must close. Error code: 3 (subcode 2) (pid=17080 tid=17032 viewperf.exe 64bit)"
+    },
+    {
+      "line": 93,
+      "text": "22:41:32 NVIDIA OpenGL Driver id=1 lvl=Error :: Unable to recover from a kernel exception. The application must close. Error code: 3 (subcode 2) (pid=14056 tid=7292 viewperf.exe 64bit)"
+    },
+    {
+      "line": 190,
+      "text": "22:42:57 NVIDIA OpenGL Driver id=1 lvl=Error :: Unable to recover from a kernel exception. The application must close. Error code: 3 (subcode 2) (pid=10424 tid=17092 viewperf.exe 64bit)"
+    },
+    {
+      "line": 249,
+      "text": "22:43:32 NVIDIA OpenGL Driver id=1 lvl=Error :: Unable to recover from a kernel exception. The application must close. Error code: 3 (subcode 2) (pid=8636 tid=13052 viewperf.exe 64bit)"
+    },
+    {
+      "line": 308,
+      "text": "22:43:54 NVIDIA OpenGL Driver id=1 lvl=Error :: Unable to recover from a kernel exception. The application must close. Error code: 3 (subcode 2) (pid=16164 tid=12356 viewperf.exe 64bit)"
+    },
+    {
+      "line": 375,
+      "text": "22:44:17 NVIDIA OpenGL Driver id=1 lvl=Error :: Unable to recover from a kernel exception. The application must close. Error code: 3 (subcode 2) (pid=6420 tid=3304 viewperf.exe 64bit)"
+    },
+    {
+      "line": 434,
+      "text": "22:45:15 NVIDIA OpenGL Driver id=1 lvl=Error :: Unable to recover from a kernel exception. The application must close. Error code: 3 (subcode 2) (pid=16976 tid=11424 viewperf.exe 64bit)"
+    },
+    {
+      "line": 494,
+      "text": "22:45:41 NVIDIA OpenGL Driver id=1 lvl=Error :: Unable to recover from a kernel exception. The application must close. Error code: 3 (subcode 2) (pid=14712 tid=5808 viewperf.exe 64bit)"
+    }
+  ],
+  "host_dmesg_nvrm_lines": [
+    {
+      "line": 11,
+      "text": "[1045066.346776] NVRM:unknown NVRM ioctl command: 0xf0"
+    },
+    {
+      "line": 12,
+      "text": "[1045066.562615] NVRM:unknown NVRM ioctl command: 0xf0"
+    }
+  ],
+  "spec_run_log": "MEASURED: supplied spec_run_log_snapshot2.txt is an Invoke-Expression argument error, not a workload progress record; workload names/start supplied by lane"
+}

@@ -1,5 +1,49 @@
 # Status and handoff — where kayfabe v3 stands, and how to resume
 
+## UPDATE 2026-10-22 — G1 Phase 1 descriptor admission GPU-free green
+
+CODE READ: the authoritative descriptor decision resolves the earlier stop.
+Pointer/NOP admission uses hardware format and forwards the intact word;
+Scan/Window above 917504 bytes now refuse as `USER_RING_SCAN_BUDGET` before
+reading PB bytes or publishing a gate. Snapshot/staging constants are unchanged.
+MEASURED: tests-only RED commits `149bc39e0` / `eb9e513e0`, runtime fix `cf79374e3`,
+strict oracle maintenance `4d49f9437`; fresh two-crate suite 1046 passed,
+0 failed, 4 existing ignores. Thirteen source mutants each have at least
+two killing tests; clippy added 0 sites/errors (379 warnings before/after).
+Evidence: [Phase 1](../traces/descriptor_bound_20261018/phase1.md).
+INFERRED: native execution and catia-07 subtest 03 remain hardware-only questions;
+require `pointer_large_entries > 0`. Draft PR #76; no merge or hardware claim.
+Resume Phase 2 separately from `codex/descriptor-bound-impl-20261022` only after
+this green handoff is pushed. The earlier stop below is historical.
+
+## UPDATE 2026-10-22 — G1 oversized-descriptor design stop (no runtime change)
+
+CODE READ: the staging budget is applied before Pointer/Scan selection and is
+checked again by the native descriptor writer. INFERRED: an authored
+continuation needs an explicit contract for the opaque Pointer history and
+staging reuse; arbitrary native splits can change END_PB_SEGMENT semantics.
+G1 stopped under its lane's no-improvised-design-change rule. Options, exact
+current semantics and outstanding tests/hardware work:
+[`V3_USER_DESCRIPTOR_BOUND_20261022.md`](design/V3_USER_DESCRIPTOR_BOUND_20261022.md).
+MEASURED: no product edits, Rust tests, clippy, mutants or hardware runs.
+Resume on `codex/descriptor-bound-20261022`; this is not a TDR fix.
+
+## UPDATE 2026-10-22 — run 3440 SPECviewperf TDR research (T1)
+
+MEASURED: `codex/tdr-analysis-20261022` preserves twelve USER-ring
+`GP_FORMAT Budget` refusals: 947340–1026596-byte descriptors exceed the
+917504-byte staging policy. CODE READ: admission failure marks the relay dead.
+INFERRED: this is the leading app-kill candidate; a size-constant increase is
+not a proposed remedy. MEASURED: all 6097 snapshot3 status samples have zero
+unreconciled invalidates/root moves; all 197 logged T-space releases succeed.
+The exported workload log corrects the first failing catia subtest to 03;
+several later subtests, including all energy subtests, complete after recovery.
+CODE READ: VF1's published safety stop produced zero native samples, so matched
+VFIO comparison remains unavailable. T1 used evidence-only host reads, wrote
+no runtime code and opened no draft PR. The timeline limits, four ranked
+hypotheses and default-off TEST-FIRST diagnostic design are in
+[`V3_TDR_SPECVIEWPERF_20261022.md`](design/V3_TDR_SPECVIEWPERF_20261022.md).
+
 ## UPDATE 2026-10-18 — hitch measurement gates
 
 CODE READ: `codex/hitch-gates-20261018` makes display step timing and the relay event
