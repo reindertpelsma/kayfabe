@@ -4,6 +4,8 @@
 use crate::class::{ClassTable, get};
 use crate::inst::{CtxDma, Target};
 
+pub mod model;
+
 /// Four 8-byte VSS header entries and 1025 8-byte RGB/padding entries (nvkms-types.h).
 pub const LUT_BYTES: u64 = (4 + 1025) * 8;
 
@@ -95,6 +97,27 @@ pub struct Lut {
 #[must_use]
 pub fn mirror_inert<'a>(matrices: impl IntoIterator<Item = &'a [i32; 12]>) -> bool {
     matrices.into_iter().all(|m| m.iter().all(|&v| v >= 0))
+}
+
+/// The refusal text for a mirrored OLUT whose input may be negative (named once, so the console
+/// log, the tests and the docs quote the same words).
+pub const MIRROR_SIGNED: &str = "mirrored OLUT behind a signed matrix (input may be negative)";
+
+/// May the console render this decoded program with the kernels as they are? `matrices` are the
+/// armed window pipelines' four stages (every composed window); `out` is the head's output
+/// transform. The only refusal here is the mirrored OLUT behind a possibly-negative input.
+///
+/// # Errors
+/// [`MIRROR_SIGNED`].
+pub fn program_verdict<'a>(
+    matrices: impl IntoIterator<Item = &'a [i32; 12]>,
+    out: &'a Output,
+) -> Result<(), &'static str> {
+    if out.lut.is_some_and(|l| l.mirror) && !mirror_inert(matrices.into_iter().chain([&out.matrix]))
+    {
+        return Err(MIRROR_SIGNED);
+    }
+    Ok(())
 }
 
 /// An output transform: signed coefficients stored in the class's encoded S5.14 format.

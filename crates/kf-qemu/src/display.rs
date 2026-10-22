@@ -5202,13 +5202,7 @@ impl ScanState {
                 .map_err(str::to_owned)?;
                 // ⚠ KF3_DISPLAY_LUT_MIRROR: the kernels have no negative side, so a mirrored
                 // OLUT is taken only when no armed matrix can make its input negative
-                if out.lut.is_some_and(|l| l.mirror)
-                    && !kf_disp::color::mirror_inert(matrices.iter().chain([&out.matrix]))
-                {
-                    return Err(
-                        "mirrored OLUT behind a signed matrix (input may be negative)".into(),
-                    );
-                }
+                kf_disp::color::program_verdict(matrices.iter(), &out).map_err(str::to_owned)?;
                 if ilut_mirror || out.lut.is_some_and(|l| l.mirror) {
                     static NOTED: std::sync::Once = std::sync::Once::new();
                     NOTED.call_once(|| {
