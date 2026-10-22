@@ -1,0 +1,32 @@
+test_changed_payload_is_rejected (test_desktop_asset_guard.AssetGuardTests.test_changed_payload_is_rejected) ... ok
+test_python310_guard_emits_its_verified_marker (test_desktop_asset_guard.AssetGuardTests.test_python310_guard_emits_its_verified_marker) ... FAIL
+test_valid_disk_passes_with_python310_hashlib (test_desktop_asset_guard.AssetGuardTests.test_valid_disk_passes_with_python310_hashlib) ... FAIL
+test_wrong_size_is_rejected (test_desktop_asset_guard.AssetGuardTests.test_wrong_size_is_rejected) ... ok
+
+======================================================================
+FAIL: test_python310_guard_emits_its_verified_marker (test_desktop_asset_guard.AssetGuardTests.test_python310_guard_emits_its_verified_marker)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "CHECKOUT/scripts/bench/tests/test_desktop_asset_guard.py", line 31, in test_python310_guard_emits_its_verified_marker
+    self.assertIn('APPDISK_HASH_OK',self.guard().stdout)
+    ~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: 'APPDISK_HASH_OK' not found in ''
+
+======================================================================
+FAIL: test_valid_disk_passes_with_python310_hashlib (test_desktop_asset_guard.AssetGuardTests.test_valid_disk_passes_with_python310_hashlib)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "CHECKOUT/scripts/bench/tests/test_desktop_asset_guard.py", line 28, in test_valid_disk_passes_with_python310_hashlib
+    p=self.guard();self.assertEqual(p.returncode,0,p.stderr)
+                   ~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: 1 != 0 : Traceback (most recent call last):
+  File "<string>", line 5, in <module>
+    m=json.loads(Path('scripts/bench/windows/appmatrix/manifest.json').read_text())['image'];p=Path('/tmp/tmpmfh_0nmq/fixture.iso');assert p.stat().st_size==m['size'];assert hashlib.file_digest(p.open('rb'),'sha256').hexdigest()==m['sha256'];print('APPDISK_HASH_OK')
+                                                                                                                                                                              ^^^^^^^^^^^^^^^^^^^
+AttributeError: module 'hashlib' has no attribute 'file_digest'
+
+
+----------------------------------------------------------------------
+Ran 4 tests in 0.536s
+
+FAILED (failures=2)

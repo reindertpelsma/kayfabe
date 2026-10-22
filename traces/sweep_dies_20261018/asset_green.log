@@ -1,0 +1,9 @@
+test_changed_payload_is_rejected (test_desktop_asset_guard.AssetGuardTests.test_changed_payload_is_rejected) ... ok
+test_python310_guard_emits_its_verified_marker (test_desktop_asset_guard.AssetGuardTests.test_python310_guard_emits_its_verified_marker) ... ok
+test_valid_disk_passes_with_python310_hashlib (test_desktop_asset_guard.AssetGuardTests.test_valid_disk_passes_with_python310_hashlib) ... ok
+test_wrong_size_is_rejected (test_desktop_asset_guard.AssetGuardTests.test_wrong_size_is_rejected) ... ok
+
+----------------------------------------------------------------------
+Ran 4 tests in 0.279s
+
+OK

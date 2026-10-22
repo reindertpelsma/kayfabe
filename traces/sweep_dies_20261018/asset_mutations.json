@@ -1,0 +1,10 @@
+[
+  {
+    "mutant": "require_python311_file_digest",
+    "killers": [
+      "test_python310_guard_emits_its_verified_marker ",
+      "test_valid_disk_passes_with_python310_hashlib "
+    ],
+    "exit": 1
+  }
+]
