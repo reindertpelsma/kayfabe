@@ -300,3 +300,7 @@ MEASURED API receipt, 2026-10-22: own57280677, verifiedRTX5090 offer55630686/mac
 CLOSED MEASURED API 2026-10-22: own57280677 destroyed by exactid; absence verified22:21:09.613984UTC.
 Elapsed0.217346701h × observedall-in1.05USD/h = runtimeestimate0.228214036USD; phase total0.443617432USD<6stop, cap8/reserve5 unchanged. Shared observed credit36.880010209USD is not an exclusive lane invoice. Both timers375635/375637 cancelled only AFTER APIabsence; all10ownIDs absent.
 ActualGB202/595.91.07 own PRECOMP denied0x1f with non-admin registerpermissionfailure0x640780; native gates9/9+10,USER12/12,raw30/30,CUDA4/4 and separate correctedGRfixture618f04318 CHECK15/15PASS. Only5source-matchedintentional31s withrecovery, no32/unmatchedXid. Windows fieldON/B1UNRUN: official pinnedVirtIOmedia connectionfailed, unchangedmedia guardSTOP beforeVMcreation/bind. No guardbypass or furtherlease.
+
+### Cached-media continuation, 2026-10-22 (ACTIVE)
+
+MEASURED API 2026-10-22: own57285340, verifiedRTX5070 offer54571906/machine30498, candidateGB205, created22:49:21.872UTC. Auto-destroy armedFIRST170min at22:49:21.977UTC (pid565895), independent budgetwatch565906; deadline01:39:21UTC. Quote0.413388889USD/h, guarded exposure1.954601852USD plus prior phase0.443617432USD below6stop/cap8. Shared creditbefore36.695900907USD leaves5reserve. All4 original official media were cached and hash/size verified beforecreate; no binary committed.
