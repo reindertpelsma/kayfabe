@@ -50,6 +50,7 @@ MEASURED in T1's preserved artifacts: the first refusal word
 the twelve refusal lengths span 947340..1026596. CODE READ of T1's report:
 the failing relay was Pointer mode. INFERRED: the admission defect is a leading
 TDR explanation, not proof of exclusive causality or a repaired workload.
+Run 3440 evidence: [snapshot3/workload evidence](../../traces/tdr_specviewperf_20261018/snapshot3-and-workloads.json) (`refusals`); extraction commit e826ddb4d.
 
 ## Design question that stopped implementation
 
