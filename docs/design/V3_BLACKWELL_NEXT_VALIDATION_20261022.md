@@ -8,7 +8,11 @@ merge revision and binary hash. It stays after CAPC ON and OFF/TDR, within the u
 The B1 CI-repair parent is a comparison confounder; no RC-only causality claim. Hardware n=0.
 If preparation or the arm cannot fit, it is the first arm for a later authorized lease.
 The current lease's N0 passed; bind reached disabled Code22/580.88, then its immediate shutdown
-census failed. No Windows arm may run while the required decision remains pending.
+census failed. The lease was subsequently destroyed/API-absent01:30:18UTC without a required resume decision;
+all Windows arms remain UNRUN. No further lease is authorized by the exhausted one-lease GO.
+Before a future owner-authorized lease, deploy the post-closeout Code0 guard correction together
+with the arm-kit record-init call: RPC count alone is not an init proof. Host-observed actual
+CIM Code0/580.88 plus the RPC prefix must both predate any exception event. Native32 staysfatal.
 
 Original future-run plan, now authorized subject to its guard prerequisites: The latest owner
 task authorizes documentation/derivation only: **no hardware and no rental now**. The plan becomes

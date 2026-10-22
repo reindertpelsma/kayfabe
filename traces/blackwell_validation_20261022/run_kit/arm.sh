@@ -117,6 +117,8 @@ cat "/root/prov/arm_${run}_enable.txt"
 # This observation delay is not a product/driver timeout or TDR policy change.
 timeout 120 bash "$W" ssh 'powershell -NoProfile -ExecutionPolicy Bypass -File C:\kf\diag_min.ps1' </dev/null >"/root/prov/arm_${run}_diag.txt" 2>&1
 cat "/root/prov/arm_${run}_diag.txt"
+# Future-run guard source must include the Code0 gate; old guards fail closed here.
+python3 -E -s /root/secondary_guard/bench/blackwell/phase_xid_guard.py record-init /root/prov/phase.json "/root/prov/arm_${run}_diag.txt" "$run"
 if grep -q '"code":0' "/root/prov/arm_${run}_diag.txt"; then
  start_seconds=$SECONDS
  while [ $((SECONDS-start_seconds)) -lt 600 ]; do

@@ -111,7 +111,7 @@ def evaluate_snapshot(journal, accepted, phase_lines, arm, pid, init_utc):
 
 
 def init_time(path):
-    """Only a complete, consecutive1000-row observed prefix proves full init."""
+    """A complete consecutive1000-row prefix proves RPC progress; Code0 is separate."""
     if not path or not Path(path).exists():
         return None
     previous = None
@@ -131,6 +131,46 @@ def init_time(path):
         return previous.isoformat()
     except (OSError, ValueError, KeyError, TypeError):
         return None
+
+
+def phase_init_time(phase):
+    """Progress plus a host-observed Code0 for this exact VM life, never eventual Code0."""
+    progress = init_time(phase.get('rpc_path'))
+    proof = phase.get('windows_init')
+    if progress is None or not isinstance(proof, dict):
+        return None
+    try:
+        if type(proof['code']) is not int or proof['code'] != 0 or proof['driver'] != '32.0.15.8088':
+            return None
+        if any(proof[key] != phase[key] for key in ('arm', 'pid', 'starttime')):
+            return None
+        return max(utc(progress), utc(proof['observed_utc'])).isoformat()
+    except (KeyError, TypeError, ValueError):
+        return None
+
+
+def record_windows_init(phase_path, diag_path, arm):
+    """Host wrapper records actual CIM output and the host observation time."""
+    import hashlib
+    phase = json.loads(N.bounded(phase_path))
+    if phase['arm'] != arm:
+        raise N.GuardRefused('init observation belongs to another arm')
+    phase['expected_pci'] = phase['pci']
+    validate_phase_owner(phase)
+    with Path(diag_path).open() as f:
+        text = f.read(65537)
+    if len(text) > 65536:
+        raise N.GuardRefused('Windows diagnostic byte bound exceeded')
+    rows = [line[len('BW580_RESULT '):] for line in text.splitlines() if line.startswith('BW580_RESULT ')]
+    if len(rows) != 1:
+        raise N.GuardRefused('one actual Windows diagnostic result required')
+    row = json.loads(rows[0])
+    phase.pop('windows_init', None)
+    if type(row.get('code')) is int and row['code'] == 0 and row.get('driver') == '32.0.15.8088' and row.get('tdr4101') == 0:
+        phase['windows_init'] = dict(arm=arm, pid=phase['pid'], starttime=phase['starttime'],
+                                    code=0, driver=row['driver'], observed_utc=datetime.now().astimezone().isoformat(),
+                                    diagnostic_sha256=hashlib.sha256(text.encode()).hexdigest())
+    atomic_json(phase_path, phase)
 
 
 def atomic_json(path, data):
@@ -212,8 +252,13 @@ def main():
     for arg in ('journal', 'defer', 'missing', 'receipts', 'pci'): n.add_argument(arg)
     w = sub.add_parser('watch')
     for arg in ('receipt', 'pgid', 'phase', 'fatal'): w.add_argument(arg)
+    r = sub.add_parser('record-init')
+    for arg in ('phase', 'diag', 'arm'): r.add_argument(arg)
     a = parser.parse_args()
     try:
+        if a.mode == 'record-init':
+            record_windows_init(a.phase, a.diag, a.arm)
+            return 0
         if a.mode == 'native':
             lines = verify_native_run(N.bounded(a.journal), N.bounded(a.defer), N.bounded(a.missing), json.loads(N.bounded(a.receipts)), a.pci)
             print(json.dumps({'approved_native_xid_lines': lines, 'pci': a.pci, 'rule': 'source controls only; route names recorded, not a die constant'}))
@@ -240,7 +285,7 @@ def main():
                         owned_phase = dict(phase)
                     phase_lines = ()
                     phase_key = key
-                proof = init_time(phase.get('rpc_path'))
+                proof = phase_init_time(phase)
                 journal = N.kernel_snapshot()
                 for line in N.xid_lines(journal)[len(accepted):]:
                     if receipt.get('pci') and ('NVRM: Xid (PCI:'+receipt['pci']+'):') not in line:

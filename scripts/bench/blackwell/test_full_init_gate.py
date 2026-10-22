@@ -29,4 +29,49 @@ class FullInitWatch(unittest.TestCase):
     def test_progress_without_any_windows_code0_stops(self):self.check_no_code0(None)
     def test_progress_while_windows_reports_code43_stops(self):self.check_no_code0({'code':43,'driver':'32.0.15.8088','observed_utc':INIT})
 
+
+class Code0Proof(unittest.TestCase):
+    def setUp(self):
+        self.phase={'arm':'on_precision','pid':42,'starttime':123,'rpc_path':'unused'}
+        self.phase['windows_init']=dict(arm='on_precision',pid=42,starttime=123,code=0,driver='32.0.15.8088',observed_utc=INIT)
+    def test_actual_code0_and_prefix_prove_observed_init(self):
+        with patch.object(G,'init_time',return_value=INIT):self.assertEqual(G.phase_init_time(self.phase),INIT)
+    def test_another_pid_cannot_supply_code0(self):
+        self.phase['windows_init']['pid']=43
+        with patch.object(G,'init_time',return_value=INIT):self.assertIsNone(G.phase_init_time(self.phase))
+    def test_another_arm_cannot_supply_code0(self):
+        self.phase['windows_init']['arm']='off_c'
+        with patch.object(G,'init_time',return_value=INIT):self.assertIsNone(G.phase_init_time(self.phase))
+    def test_late_code0_cannot_retroactively_excuse_an_earlier_fault(self):
+        self.phase['windows_init']['observed_utc']='2026-10-22T01:00:03+00:00'
+        with patch.object(G,'init_time',return_value=INIT):proof=G.phase_init_time(self.phase)
+        with self.assertRaises(G.N.GuardRefused):G.evaluate_snapshot(XID,(),(),'on_precision',42,proof)
+    def test_code0_without_rpc_prefix_is_insufficient(self):
+        with patch.object(G,'init_time',return_value=None):self.assertIsNone(G.phase_init_time(self.phase))
+    def test_missing_timezone_is_not_observation_proof(self):
+        self.phase['windows_init']['observed_utc']='2026-10-22T01:00:00'
+        with patch.object(G,'init_time',return_value=INIT):self.assertIsNone(G.phase_init_time(self.phase))
+
+class ActualDiagWriter(unittest.TestCase):
+    def record(self,code,driver='32.0.15.8088',tdr=0):
+        with tempfile.TemporaryDirectory() as d:
+            phase=Path(d)/'phase';diag=Path(d)/'diag'
+            phase.write_text(json.dumps({'arm':'on_precision','pid':42,'starttime':123,'exe':'/owned/qemu','pci':'0000:00:08','windows_init':{'stale':True}}))
+            diag.write_text('BW580_RESULT '+json.dumps({'code':code,'driver':driver,'tdr4101':tdr})+'\n')
+            with patch.object(G,'validate_phase_owner',return_value=True):G.record_windows_init(phase,diag,'on_precision')
+            return json.loads(phase.read_text())
+    def test_actual_diag_code0_records_host_observation_and_vm_life(self):
+        p=self.record(0);r=p['windows_init'];self.assertEqual((r['code'],r['pid'],r['starttime'],r['arm']),(0,42,123,'on_precision'));self.assertIsNotNone(G.utc(r['observed_utc']).tzinfo);self.assertEqual(len(r['diagnostic_sha256']),64)
+    def test_code43_cannot_record_or_retain_an_old_code0(self):self.assertNotIn('windows_init',self.record(43))
+    def test_disabled_code22_cannot_record_or_retain_an_old_code0(self):self.assertNotIn('windows_init',self.record(22))
+    def test_wrong_driver_cannot_record_code0(self):self.assertNotIn('windows_init',self.record(0,'32.0.15.8199'))
+    def test_observed_tdr_cannot_record_clean_init(self):self.assertNotIn('windows_init',self.record(0,tdr=1))
+
+class PrefixTiming(unittest.TestCase):
+    def test_code0_does_not_excuse_fault_before_prefix_was_observed(self):
+        phase={'arm':'on_precision','pid':42,'starttime':123,'rpc_path':'unused',
+               'windows_init':dict(arm='on_precision',pid=42,starttime=123,code=0,driver='32.0.15.8088',observed_utc=INIT)}
+        with patch.object(G,'init_time',return_value='2026-10-22T01:00:03+00:00'):proof=G.phase_init_time(phase)
+        with self.assertRaises(G.N.GuardRefused):G.evaluate_snapshot(XID,(),(),'on_precision',42,proof)
+
 if __name__=='__main__':unittest.main()

@@ -1,7 +1,14 @@
 **STATUS: LIVE, 2026-10-22.** Owner GO supersedes the earlier documentation-only scope.
 The reviewed classifier defects below were repaired before this lease: product/guard `8f3a9bb3a`,
 allocated-class fixture `a3f39a633`, and independent detached-QEMU termination guard `a634bdc194a`.
-Native Xid 32 remains fatal. Clean N0 on lease 57132969 passed (n=1); Windows validation is held
+Native Xid 32 remains fatal. Post-closeout CPU review found one further gap: a1000-RPC prefix
+proves progress without proving actual Windows Code0. The test-first correction now additionally
+requires host-observed actual CIM Code0/580.88 for the same arm/PID/starttime, with both observations
+before the fault. Full Python72->86executions/0fail; four additional mutants>=2killers each.
+See [Code0 proof](../../traces/blackwell_validation_20261022/guard_code0/). This last fix was
+GPU-free only after lease closure; future runs must deploy it with the updated arm-kit recorder.
+The closed lease ran no Windows arm, so this gap did not contaminate its native N0 result.
+Clean N0 on lease 57132969 passed (n=1); Windows validation is held
 at the post-bind shutdown census, with every Windows arm UNRUN pending the requested decision.
 
 MEASURED correction to the historical parked-patch checkpoint below: fixture EXPECTED RED
