@@ -24,15 +24,23 @@ pub(crate) struct InlineLedger {
     pub(crate) rang: Box<[AtomicU64]>,
     pub(crate) rung_at_us: Box<[AtomicU64]>,
     trace: Trace,
+    diagnostic_on: bool,
 }
 
 impl InlineLedger {
     pub(crate) fn new(tokens: usize, trace: Trace) -> Self {
+        // Realize owns configuration and any cold clock initialization. Neither
+        // capability may run for the first time while a vCPU is in a trap.
+        let diagnostic_on = (trace.enabled)();
+        if diagnostic_on {
+            let _ = (trace.clock)();
+        }
         Self {
             rung: (0..tokens).map(|_| AtomicU64::new(0)).collect(),
             rang: (0..tokens).map(|_| AtomicU64::new(0)).collect(),
             rung_at_us: (0..tokens).map(|_| AtomicU64::new(0)).collect(),
             trace,
+            diagnostic_on,
         }
     }
 
@@ -40,16 +48,11 @@ impl InlineLedger {
         if let Some(c) = self.rung.get(idx as usize) {
             c.fetch_add(1, Ordering::Relaxed);
         }
-        if (self.trace.enabled)()
+        if self.diagnostic_on
             && let Some(c) = self.rung_at_us.get(idx as usize)
         {
             let t = (self.trace.clock)();
             c.store((t * 1e6) as u64, Ordering::Relaxed);
-            let n = self
-                .rung
-                .get(idx as usize)
-                .map_or(0, |c| c.load(Ordering::Relaxed));
-            (self.trace.emit)(Witness { idx, n, reached, t });
         }
         if reached && let Some(c) = self.rang.get(idx as usize) {
             c.fetch_add(1, Ordering::Relaxed);
@@ -65,6 +68,21 @@ impl InlineLedger {
             .rang
             .get(idx as usize)
             .map_or(0, |c| c.swap(0, Ordering::Relaxed));
+        // Existing birth/free callers run on the act owner. Formatting and the
+        // potentially unavailable sink are reached only after counter capture,
+        // never by note(). This is an aggregate since the previous take.
+        if self.diagnostic_on && rung != 0 {
+            let us = self
+                .rung_at_us
+                .get(idx as usize)
+                .map_or(0, |c| c.load(Ordering::Relaxed));
+            (self.trace.emit)(Witness {
+                idx,
+                n: rung,
+                reached: reached != 0,
+                t: us as f64 / 1e6,
+            });
+        }
         (rung, reached)
     }
 }

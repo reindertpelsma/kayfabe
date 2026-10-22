@@ -5,15 +5,32 @@
 )]
 use kf_disp::ports::{EventReg, Ports};
 
-pub(crate) fn snapshot(ports: &Ports, heads: usize) -> Vec<u32> {
-    let mut words = vec![
-        ports.event(EventReg::AwakenWin),
-        ports.event(EventReg::AwakenOther),
-        ports.event(EventReg::SemWin),
-    ];
-    for h in 0..heads {
-        words.push(ports.event(EventReg::HeadTiming(h)));
-        words.push(ports.event(EventReg::HeadTimingEn(h)));
+const WORDS: usize = 3 + 2 * kf_disp::ports::MAX_HEADS;
+
+pub(crate) fn snapshot(ports: &Ports, heads: usize) -> [u32; WORDS] {
+    let mut words = [0; WORDS];
+    for (word, event) in
+        words
+            .iter_mut()
+            .zip([EventReg::AwakenWin, EventReg::AwakenOther, EventReg::SemWin])
+    {
+        *word = ports.event(event);
+    }
+    if let Some(tail) = words.get_mut(3..) {
+        for (h, pair) in tail
+            .as_chunks_mut::<2>()
+            .0
+            .iter_mut()
+            .take(heads)
+            .enumerate()
+        {
+            for (word, event) in pair
+                .iter_mut()
+                .zip([EventReg::HeadTiming(h), EventReg::HeadTimingEn(h)])
+            {
+                *word = ports.event(event);
+            }
+        }
     }
     words
 }

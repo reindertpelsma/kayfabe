@@ -2999,7 +2999,7 @@ impl ChanPlane {
                     emit: Box::new(|w| {
                         let crate::inline_ledger::Witness { idx, n, reached, t } = w;
                         eprintln!(
-                            "kf3: maplog t={t:.6} DOORBELL chid {idx:#x} #{n} reached={reached}"
+                            "kf3: maplog t={t:.6} DOORBELL-SUMMARY chid {idx:#x} rings={n} any_reached={reached}"
                         );
                     }),
                 },
@@ -3380,7 +3380,8 @@ impl ChanPlane {
     }
 
     /// ★ **vCPU**: a doorbell on guest token `idx` was rung inline; `reached` = the host store
-    /// succeeded. Two relaxed atomics — the only thing this plane does on a vCPU.
+    /// succeeded. Fixed counter steps and an optional preinitialized timestamp;
+    /// the act owner's ledger take emits diagnostics outside the trap.
     pub fn note_inline(&self, idx: u32, reached: bool) {
         self.inline.note(idx, reached);
     }

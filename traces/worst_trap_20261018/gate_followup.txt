@@ -27,6 +27,9 @@ master   3    6828              6835    6912 PASS
 master   4    6244              6351    6224 PASS
 master   5    6674              6727    6640 PASS
 master wait min/median/max us: 5800/6585/6828; n=5.
+MEASURED: W1-gate-followup-20261022 W1 run 2's command took 849.794 s,
+including the common cargo-lock queue; subsequent isolated commands took
+under one second. Every acquisition used flock -w 3600; no held lock was broken.
 
 MEASURED: W1-gate-followup-20261022 independent scheduling probe, not part
 of the five isolated runs: parent/test pinned to one allowed CPU; loaded

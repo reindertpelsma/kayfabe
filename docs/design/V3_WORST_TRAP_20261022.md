@@ -1,7 +1,7 @@
 # V3 worst-trap inventory — 2026-10-22
 
-**STATUS: RESEARCH, 2026-10-22.** W1, source base `e9c6d39e5`; one doorbell
-readiness-loop fix, incomplete remediation. This is not a claim that a guest
+**STATUS: RESEARCH, 2026-10-22.** W1, source base `e9c6d39e5`; readiness-loop fix, off-trap inline diagnostic output and fixed display event
+snapshots; protocol-dependent remediation remains open. This is not a claim that a guest
 userspace trap is bounded end to end.
 
 CODE READ: governing rules are `THE_CONSTRAINTS.md` §§41,47,48,48.2 and
@@ -46,12 +46,12 @@ Unless stated otherwise there is no allocation, ioctl, or lock on a row.
 | T05 | CODE READ: Timer-page writes, usermode page non-doorbell writes | V / U/K | Timer early return; usermode classifier returns `None`; no queue append | BOUNDED-CONSTANT: fixed decode/drop work (optional outer diagnostics T17–19 still apply) |
 | T06 | CODE READ: Unknown/dead-token doorbell | V / U/K | Token decode/load, return; no bitmap or wake for unknown route | BOUNDED-CONSTANT: fixed decode steps |
 | T07 | CODE READ: Passthrough-token doorbell, diagnostics off | V / U/K | `HostRm::doorbell`: release fence, one pre-mapped volatile store; atomic ledger updates | BOUNDED-CONSTANT: fixed software work; stalled device MMIO latency needs hardware evidence |
-| T08 | CODE READ: `ChanPlane::note_inline`, `KF3_MAPLOG` enabled | V / U/K | Clock and `eprintln!`; stderr mutex and `write(2)`; no per-call I/O time cap | BLOCKING: another logger or filesystem can hold up the trap |
+| T08 | CODE READ: `InlineLedger::note`, `KF3_MAPLOG` selected at realize | V / U/K; act take reports | Fixed counter steps and optional warm clock read; configuration and clock anchor initialized before traps; emitter only in existing act-owned ledger take | BOUNDED-CONSTANT: no V sink, allocation, cold initialization or retry loop; host scheduling/clock latency caveat still applies |
 | T09 | CODE READ: Translated/Emulated doorbell: `TokenWord::ring` | V and D / U/K | Uncapped weak-CAS loop atomically couples state and applied sequence, bitmap publish, wake bump; at most one eventfd signal after success | UNBOUNDED: no per-caller CAS attempt limit under contention or spurious failure |
 | T10 | CODE READ: Privileged BAR0: `PrivRing::push`, `hole_store` | V / K | Ring reservation CAS retry; subword hole `fetch_update` retry, fixed shadow stores; ring-full poisons rather than waits | UNBOUNDED: fixed queue capacity does not bound a single CAS caller |
 | T11 | CODE READ: MMU invalidate writes: `invalidate_write` / `InvalidatePort::write` | V / K; U requests can lead kernel here | Plain shadow stores, trigger `fetch_add` plus `fetch_max`, one eventfd signal; no table walk or RM ioctl here | UNBOUNDED: trigger `fetch_max` requires a separate wait-free proof; no numeric bound claimed |
 | T12 | CODE READ: CPU interrupt mask/W1C/trigger and `latch_and_deliver` | V/D / K or guest work completion | Atomic bit ops; loops over host-derived leaf array; shadow stores and nonblocking irq eventfd write; hole shadow inherits T10 if selected | BOUNDED-CONSTANT: interrupt-tree operations alone, family leaf count <=16; parent includes T10 |
-| T13 | CODE READ: Display PUT, cursor, event and plain writes: `DisplayPlane::trap_write` | V / K; U control of submitted display content indirect | PUT/cursor atomics and wake; event publication <=8 passes, <=8 heads, but constructs `Vec` snapshots each pass; optional trace stderr and lazy `OnceLock` initialization | BLOCKING: allocator/logger capabilities on V; finite head/pass counts do not bound them |
+| T13 | CODE READ: Display PUT, cursor, event and plain writes: `DisplayPlane::trap_write` | V / K; U control of submitted display content indirect | PUT/cursor atomics and wake; event publication <=8 passes, <=8 heads, uses a 19-word stack snapshot after follow-up; optional trace stderr and lazy `OnceLock` initialization | BLOCKING: remaining logger/cold-flag capabilities on V; finite head/pass counts do not bound them |
 | T14 | CODE READ: PRAMIN base write: `pramin_write` -> `PraminPool::repoint` | V / K; U-induced mapping work can share locks | L1–L3, 16 slots, temporary Vecs, RM map/open/mmap/MAP_FIXED; outer loop repeats while another writer changes `pramin_want` | BLOCKING: RM and mutex wait have no finite bound; outer retry also UNBOUNDED |
 | T15 | CODE READ: `kf3_dummy_*`, `kf3_bar12_read/write` fallback | V / U/K | Return zero / ignore; no mapping on fallback | BOUNDED-CONSTANT: fixed no-op handler |
 | T16 | CODE READ: Hopper+ BAR1 overlay write: `kf3_bar1_um_write` | V / U/K | VF-relative range check then same BAR0 doorbell path T05–09; nonzero VF pages ignored | UNBOUNDED: inherits T09 for worker-served tokens; no separate inline-copy path |
@@ -128,8 +128,8 @@ verb. One uses 128 ready tokens; one signals a token immediately after delivery
 drains it. Neither uses sleeps, a guest thread scheduling assumption, or a
 wall-clock deadline.
 
-CODE READ: W1 changes only the repeated readiness-poll loop in `service_ready`
-to one poll. Level-triggered epoll retains the unconsumed suffix and stores
+CODE READ: the initial W1 change replaced the repeated readiness-poll loop in `service_ready`
+with one poll. Level-triggered epoll retains the unconsumed suffix and stores
 after drain. No timer, coalescing delay, GP_PUT poll, source inspection, mapping,
 or relay/worker algorithm change is introduced. Command sync and callback
 work still have independent open bounds. The production Sink still inherits
@@ -159,8 +159,9 @@ passes, 1 failure, 20 ignored tests; see
 `traces/worst_trap_20261018/results.txt`. The unchanged kf-mem test
 `batch::tests::the_act_thread_waits_for_a_chunk_not_for_the_operation` recorded
 a 169,729 us ledger-lock wait against its 60,000 us bound. No timeout or threshold
-was changed, and no rerun replaced the failed result. The full suite is not
-green; the changed kf-chan library's dedicated run was 202/0.
+was changed, and no rerun replaced the failed result. That run was not
+green; the changed kf-chan library's dedicated run was 202/0. The later
+follow-up product run below is a separate result after the additional fixes.
 
 MEASURED: W1-dbfast-20261022 (2026-10-22) product all-target Clippy completed
 with exit 0 and `new=0`; the claims gate also reports `new=0`. Exact commands,
@@ -174,12 +175,13 @@ handoff epoch/PtLock/worker behavior. Connecting `relay_dispatch::DispatchWord`
 is also outside decline-only hooks: its source explicitly says no VM caller,
 and production `Plane::trap_write` calls the existing `TrapPath` directly.
 
-CODE READ: open userspace-reachable items are T08,T09,T16,T17,T19,T21–22,
+CODE READ: open userspace-reachable items are T09,T16,T17,T19,T21–22,
 T25,T27–31,T35–36,T40 (some indirect admissions remain unproved). T13 and
 T11 are conservatively included for kernel-mediated user activity. They have
-not received independent adversarial tests or fixes in W1. K-only direct
+not received independent adversarial tests or fixes for their remaining
+capabilities in W1. K-only direct
 paths T10,T14,T20,T23–24,T33–34 also remain open. This lane is PARTIAL, and
-these rows must not be interpreted as resolved because the two new tests pass.
+these rows must not be interpreted as resolved because focused tests pass.
 
 INFERRED: owner choices, with recommended next work:
 
@@ -192,14 +194,14 @@ INFERRED: owner choices, with recommended next work:
 3. Audit BQL topology revocation with pinned backing lifetimes before moving
    `RamMap::del` or KVM site removal asynchronous. Deferring a raw-pointer
    unregister without keeping backing alive risks use-after-unmap.
-4. Move diagnostic formatting/I/O and lazy flag initialization off V in a
+4. Move remaining diagnostic formatting/I/O and lazy flag initialization off V in a
    separately tested diagnostic seam; default-off is not an exception to the
    userspace worst-trap rule. Retain the authorized PRAMIN behavior until its
    ordering/repoint contract has an explicit replacement.
 
 ## Default-off trap timing proposal
 
-**STATUS: DESIGN-ONLY, 2026-10-22.** No new instrumentation code or flag in W1.
+**STATUS: DESIGN-ONLY, 2026-10-22.** No per-handler timing hook or new flag is implemented in W1.
 
 CODE READ: reuse `kf-qemu/src/prof.rs` (`KF3_PROF`, selected at realize).
 `Hist` already stores max/percentiles; `Device::bar0_write` times only the
@@ -239,7 +241,41 @@ userspace admission is NOT DONE. No baseline hardware worst time, millisecond
 stall distribution, native RC containment or sub-millisecond guarantee was
 established. Class counts below apply only to the 40 listed subpaths.
 
-CODE READ: listed subpath classes after the readiness-loop fix: BLOCKING=20, BOUNDED-BY-GUEST-VALUE=0, BOUNDED-CONSTANT=14, UNBOUNDED=6 (total 40). These are inventory counts, not timing results.
+CODE READ: listed subpath classes after the W1 follow-up fixes: BLOCKING=19, BOUNDED-BY-GUEST-VALUE=0, BOUNDED-CONSTANT=15, UNBOUNDED=6 (total 40). These are inventory counts, not timing results.
+
+## Follow-up implementations without guest/worker protocol changes
+
+CODE READ: `inline_ledger.rs::note` no longer enters the diagnostic sink.
+`InlineLedger::new` latches the existing KF3_MAPLOG configuration and warms its
+clock (including the maplog uptime anchor) before a trap can run. The existing
+act birth/free ledger take captures counts then emits DOORBELL-SUMMARY,
+including the last timestamp and whether any captured ring reached the host.
+The established DOORBELL-LEDGER counts and live snapshot timestamp remain.
+Per-ring text output is replaced by off-trap aggregates; GPU doorbell delivery,
+token state, PtLock/handoff, timer policy and guest-visible results are unchanged.
+
+CODE READ: `display_events.rs::snapshot` returns a 19-word array derived from
+MAX_HEADS=8. No allocator or destructor is reached by snapshot construction.
+The existing publication stores and eight-pass stability check are unchanged;
+inactive tail slots are zero. T13 remains BLOCKING because optional display
+trace output and cold diagnostic flag lookups are separate open subpaths.
+
+MEASURED: W1-trap-regressions-20261022 (2026-10-22), EXPECTED RED commit
+`05960af7d`, recorded four failures after the 370/0 mechanical extraction run.
+Both ring outcomes entered the unavailable fake sink; one/all-head snapshots
+retained heap ownership. The fixed run is 4/0. Six hand mutants compiled and
+were killed by two tests each: inline output, late flag lookup, cold clock,
+heap snapshot, missing enable word, and missing off-trap report. See
+`traces/worst_trap_20261018/trap_followup.txt` for exact checks and limits.
+
+MEASURED: W1-trap-regressions-20261022 (2026-10-22) full GPU-free product
+suite finished with 3,755 passed, 0 failed and 20 ignored tests, exit 0.
+The original kf-mem gate failure and the separate deliberate scheduling-probe
+failure remain recorded; this run does not replace either observation.
+MEASURED: W1-trap-regressions-20261022 (2026-10-22) final kf-qemu library
+run after a lint-only array-iterator refinement passed 374/0; product
+all-target Clippy and claims both report `new=0`. The evidence distinguishes
+the full-suite source from that final equivalent iterator refinement.
 
 ## Follow-up design: ownership, ordering and tests before implementation
 
@@ -262,13 +298,13 @@ or make a lost event depend on a timer. Questions Q1–Q8 are parked for the own
 | T14 PRAMIN | INFERRED: Keep old backing pinned; prepare target views on VA owner, publish an immutable ready descriptor, and decline/requeue unavailable moves instead of RM/mmap under V. | Guest reads currently expect synchronous remap and read-back. Do not install a stale view after a newer base write; do not unmap until all CPU readers/placements have retired. A trap return with old backing needs explicit accepted guest semantics. | Concurrent base writes, stale arm completion, map failure and reset while an old CPU view is in use; count zero V RM/KVM/mmap calls. **Q4: synchronous PRAMIN exception and replacement contract.** |
 | T17 C CPL/trace/observer diagnostics | INFERRED: Copy V-local scalar data to bounded records; KVM GET_REGS/GET_SREGS, observer walks and trace backend output cannot be called by the live trap. | If privilege/RIP cannot be captured without an ioctl, mark unavailable; a later vCPU-state sample must not be attributed to the earlier access. Ordinary MMIO semantics never depend on trace capture. | Inject stalled ioctl/logger backends and ensure V does not invoke them; verify trace off/full paths and sample attribution. **Q3: accept diagnostic scope change rather than misleading deferred CPL.** |
 | T19 profiler max / offset census | INFERRED: Pre-register thread-local fixed handler slots; no offset-table scan or global max CAS on V. Off-thread aggregation combines published single-writer maxima. | Register slots before admitting traps; snapshot publication may be eventually consistent but cannot tear a sample or wrap counters into an invented maximum. Time outer handler including guard drop. | Fake clock/drop ordering, default-off no-clock, concurrent snapshot, saturation and fixed handler IDs. Kill missing outer coverage and missing max with two tests each. **Q3: profiler slot lifecycle design.** |
-| T20 RAM listeners | INFERRED: Listener revokes admission immediately; worker readers use immutable pinned backing leases. Topology replacement/removal retires old leases without waiting on V/BQL. | RawRegion is not an owning lease. QEMU must retain the memory backend/address range until outstanding CPU copies and DMA placements stop; a stale generation must never authorize new use. | Reader paused during CPU copy while delete/replace returns without waiting; backing is retained until reader release; stale publication is refused; two-use-after-unmap mutants. **Q5: QEMU backing-lifetime hook required.** |
-| T21 doorbell-site listener | INFERRED: Listener publishes desired site generation; act/control owner performs KVM_IOEVENTFD assign/deassign without BQL. Trap fallback remains active until assignment. | Do not publish a site as active before KVM success. Deassign must fence every old eventfd signal before token reuse. Delayed assign for removed/reused GPA cannot install an old generation. | Hold fake KVM ioctl, churn BAR aliases, remove/re-add a site, token retire/reuse, and assert listener never enters KVM or registry waits; all rings go through either trap or one current registration. **Q5: site-generation/revocation protocol.** |
+| T20 RAM listeners | INFERRED: Listener revokes admission immediately; worker readers use immutable pinned backing leases. Topology replacement/removal retires old leases without waiting on V/BQL. | RawRegion is not an owning lease. QEMU must retain both backend and HVA range (or give the reader its own owned mapping) until outstanding CPU copies and DMA placements stop; a retained fd alone does not keep RawRegion valid; a stale generation must never authorize new use. | Reader paused during CPU copy while delete/replace returns without waiting; backing is retained until reader release; stale publication is refused; two-use-after-unmap mutants. **Q5: QEMU backing-lifetime hook required.** |
+| T21 doorbell-site listener | INFERRED: Listener publishes desired site generation; act/control owner performs KVM_IOEVENTFD assign/deassign without BQL. Trap fallback remains active until assignment. | Do not publish a site as active before KVM success. Deassign must fence every old signal before token reuse AND before its old GPA can be repurposed as RAM/another device; topology commit needs an outside-BQL continuation, not early listener success. Delayed assign for removed/reused GPA cannot install an old generation. | Hold fake KVM ioctl, churn BAR aliases, remove/re-add a site, token retire/reuse, and assert listener never enters KVM or registry waits; all rings go through either trap or one current registration. **Q5: site-generation/revocation protocol.** |
 | T22 overlay BH queue / transactions | INFERRED: Process a fixed count of queued requests per BH and reschedule immediately when pending. Move preparation/allocation out of BQL; topology commit remains in QEMU owner. | FIFO per alias generation; do not clear an invalidate until its exact install/remove is applied. Rescheduling must retain a durable pending BH obligation. Aliases/backing cannot be freed while queued or installed. | Continuously enqueue requests while BH runs: per-turn step bound, suffix retained, FIFO unmap/remap, reset cancels old generation. KVM commit latency remains unbounded even with a turn budget. **Q5: QEMU topology operation remains a separate boundary.** |
 | T23 read-trap ROMD BH | INFERRED: Precompute selection and coalesce diagnostic desired state; execute only required ROMD changes on owner. | Latest generation wins; never attribute an access to a window not installed. KVM memslot commit is still a QEMU/BQL operation, not fixed-time work. | Stall fake topology commit; rapidly open/close/reset window, verify generation and retained state. **Q3/Q5: diagnostic capture and QEMU commit design.** |
 | T24 MSI-X route callbacks | INFERRED: Route creation/removal remains QEMU/KVM owner work; preallocate route resources and queue desired masks/messages where QEMU permits asynchronous update. | Preserve pending masked edges, message changes and deassign grace period; no early free/reuse of irqfd/vector. Generic QEMU PCI/MSI-X locking must be audited before deferring. | Mask/raise/update/unmask/free interleavings with slow fake KVM calls, exact pending-edge delivery and no stale-vector injection. **Q5: generic QEMU routing semantics.** |
 | T25 diagnostic MSI user path | INFERRED: Normal irqfd path unchanged; move observer/trace formatting out of BQL using captured vector/message scalars. | A diagnostic record can drop/count; actual IRQ cannot drop. Capture pending/mask state at the same event, not later. | Slow trace sink while raising masked/unmasked interrupts; actual IRQ path proceeds and every armed edge remains delivered. **Q3: diagnostic transport.** |
-| T27 DbFast sync / side table | INFERRED: Give command application a per-turn count and durable reschedule. Keep the table single-owner; expose immutable diagnostics rather than a peer mutex holder. | Remove final drain and ack only after all prior Add/Remove commands for that generation are applied; level-ready unknown tag must not be discarded before its Add is applied. ACK queue capacity/full policy needs a proof. | Infinite producer, Add behind budget boundary, Remove with final count and re-register same token: bounded turn, suffix durable, no ack before final delivery. **Q6: command/ack and missing-tag protocol.** |
+| T27 DbFast sync / side table | INFERRED: Give command application a per-turn count and durable reschedule. Keep the table single-owner; expose immutable diagnostics rather than a peer mutex holder. | Remove final drain and ack only after all prior Add/Remove commands for that generation are applied; level-ready unknown tag must not be discarded before its Add is applied. A discard-Remove behind the turn budget must still prevent delivering an old count into a replacement token; blindly cutting sync is unsafe. Resignal/leave unread on decline, with a generation/fairness proof and explicit ACK full policy. | Infinite producer, Add behind budget boundary, Remove with final count and re-register same token, including discard-Remove beyond the budget: bounded turn, suffix durable, no stale delivery and no ack before final delivery. **Q6: command/ack and missing-tag protocol.** |
 | T28 GSP apply / guest queue decode | INFERRED: Split decode/validation into bounded copies and drainer turns; enqueue immutable authored acts. Never perform host work while holding gsp state required by another owner. | Preserve RPC order and held-reply sequence; copy-then-check live guest data. Accepted RPC remains pending until actual result, never a fabricated error completion on contention. | Slow act/VA holder, continuously replenished RPC queue, partial large RPC, reset between decode/commit and old completion; assert exact once result and no global drainer lock wait. **Q7: GSP continuation/admission protocol.** |
 | T29 slot/pt/book/caps RPC locks | INFERRED: Immutable/atomic admission metadata and durable deferred RPC continuation; failed try-lock hands back to holder event, not immediate NV_ERR or dropped free. | PtLock/handoff epoch remains protected. Keep channel generation, source publication, pending birth and free/schedule ordering coherent; retirement must still fence DMA before release. | Pause worker pump, act retire and pending birth; concurrent schedule/free/query must return a deferred result, release resumes exactly once, reset invalidates old continuation. **Q7 and protected M/Q1.** |
 | T30 GSP guest-RAM read | INFERRED: Use bounded copy from a retained RAM lease; on absent/contended lease, retain the RPC continuation and let topology owner wake it. | No copied bytes survive a failed generation check as admitted authority; retaining a pointer without backing ownership is forbidden. | Delete/replace during partial copy and blocked writer; verify bounded copies, no stale reads and exact RPC continuation. **Q5/Q7: backing lease plus RPC state.** |
