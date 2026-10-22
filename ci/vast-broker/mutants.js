@@ -6,6 +6,27 @@ const root=new URL('../../',import.meta.url),base=new URL('./',import.meta.url);
 const replace=(old,value)=>s=>{if(!s.includes(old))throw Error('Mutation anchor missing: '+old);return s.replace(old,value);};
 const dropLine=fragment=>s=>{const lines=s.split('\n');if(lines.filter(x=>x.includes(fragment)).length!==1)throw Error('Ambiguous mutation anchor '+fragment);return lines.filter(x=>!x.includes(fragment)).join('\n');};
 const mutations=[
+ ['inherited endpoint secrets','workflow-guard.js',dropLine('// MUTANT secret-inherit')],
+ ['endpoint aliases in step metadata','workflow-guard.js',dropLine('// MUTANT secret-metadata')],
+ ['optional prefix admission','src/routes.js',dropLine('// MUTANT prefix-match')],
+ ['native constant-time prefix comparison','src/routes.js',replace("if(!await constantTimeEqual(prefix,parts[1]||''))return null;","if(prefix!==(parts[1]||''))return null;")],
+ ['public prefix gate','src/index.js',replace('async fetch(request,env){const path=await routePath(request,env);','async fetch(request,env){const path=new URL(request.url).pathname;')],
+ ['ledger service prefix gate','src/index.js',replace('const url=new URL(request.url),path=await routePath(request,env);','const url=new URL(request.url),path=new URL(request.url).pathname;')],
+ ['prefix charset and bounds','src/routes.js',replace('export const validPathPrefix=value=>','export const validPathPrefix=value=>true||')],
+ ['fixed callback prefix','src/onstart.js',replace("url='${origin}${prefix?'/'+prefix:''}/report/${callback.run}'","url='${origin}/report/${callback.run}'")],
+ ['endpoint text redaction','src/routes.js',replace('export function endpointSecrets(env){','export function endpointSecrets(env){return [];')],
+ ['Actions secret instead of variable','../../.github/workflows/gpu-vast.yml',s=>s.replaceAll('secrets.VAST_BROKER_','vars.VAST_BROKER_')],
+ ['workflow API prefix','../../.github/workflows/gpu-vast.yml',dropLine('broker_base+="/$WORKER_PATH"')],
+ ['derived hostname masks','../../.github/workflows/gpu-vast.yml',dropLine('for piece in "${host_parts[@]}"')],
+ ['encoded audience mask','../../.github/workflows/gpu-vast.yml',dropLine('mask_value "$audience"')],
+ ['shell tracing disabled','../../.github/workflows/gpu-vast.yml',dropLine('          set +x')],
+ ['transport diagnostic suppression','../../.github/workflows/gpu-vast.yml',s=>s.replaceAll('2>/dev/null','').replaceAll('2>&1','')],
+ ['secret context placement guard','workflow-guard.js',dropLine('// MUTANT secret-reference')],
+ ['secret object access guard','workflow-guard.js',dropLine('// MUTANT secret-object')],
+ ['secret alias logging guard','workflow-guard.js',dropLine('// MUTANT secret-print')],
+ ['secret job output guard','workflow-guard.js',dropLine('// MUTANT secret-output')],
+ ['secret alias job isolation','workflow-guard.js',dropLine('// MUTANT secret-alias')],
+ ['literal broker run syntax','workflow-guard.js',dropLine('// MUTANT secret-run-style')],
  ['HMAC tag and commit binding','src/tokens.js',replace("return await crypto.subtle.verify('HMAC',await this.cryptoKey(),bytes,tokenEncoder.encode(this.message(r,Number(parts[3]))));",'return true;')],
  ['closed ledger rejects reports','src/index.js',replace('||r.ended!==null||r.closed)', '||r.ended!==null||false)')],
  ['actual Vast liveness','src/index.js',dropLine('// MUTANT report-live')],
@@ -33,7 +54,7 @@ const mutations=[
  ['log line count cap','src/sanitize.js',s=>s.replaceAll('slice(-200)','slice(-20000)').replaceAll('length>200','length>20000')],
  ['log tail byte cap','src/sanitize.js',s=>s.replaceAll('size>cap','false').replaceAll('size>8192','false')],
  ['orphan index cannot block cleanup','src/ledger.js',replace("if(!record){console.log(JSON.stringify({event:'incomplete_ledger_index'}));continue;}",'if(!record)refuse();')],
- ['kill switch','src/index.js',replace("url.pathname==='/rent'&&env.RENTING_ENABLED!=='true'",'false')],
+ ['kill switch','src/index.js',replace("path==='/rent'&&env.RENTING_ENABLED!=='true'",'false')],
  ['owner numeric identity','src/github.js',replace('const ownerPush=c.actor_id===cfg.owner&&String(r.triggering_actor.id)===cfg.owner;','const ownerPush=true;')],
  ['review head SHA','src/github.js',replace("latest?.state==='APPROVED'&&latest.commit_id===p.head.sha","latest?.state==='APPROVED'")],
  ['draft refusal','src/github.js',replace('if(p.draft===true&&!cfg.drafts)','if(false)')],
@@ -66,7 +87,7 @@ const mutations=[
  ['unsupported job syntax','workflow-guard.js',dropLine('// MUTANT job-shape')],
  ['distinct client refusal','../../.github/workflows/gpu-vast.yml',replace('description="GPU broker $state"',"description='GPU broker unavailable'")],
  ['terminal client completion','../../.github/workflows/gpu-vast.yml',replace('            if [[ "$state" = COMPLETE || "$state" = STOPPED ]]; then exit 1; fi\n','')],
- ['public cron isolation','src/index.js',replace("if(!/^\\/(?:rent|stop-all|(?:report|status|stop)\\/[1-9][0-9]{0,19}-[1-9][0-9]{0,19})$/.test(new URL(request.url).pathname))return new Response('Not found',{status:404});",'')],
+ ['public cron isolation','src/index.js',replace("if(path===null||!/^\\/(?:rent|stop-all|(?:report|status|stop)\\/[1-9][0-9]{0,19}-[1-9][0-9]{0,19})$/.test(path))return notFound();",'')],
  ['automatic base allowlist','src/github.js',s=>s.replaceAll('!cfg.bases.includes','false&&!cfg.bases.includes')],
  ['docs-only exclusion result','src/index.js',replace('if(target.notNeeded)','if(false)')],
  ['unknown file-list skip','src/github.js',s=>s.replaceAll('return false;','return true;')],
@@ -84,7 +105,7 @@ const mutations=[
 ];
 if(process.env.MUTANT_PREFLIGHT){for(const [name,path,mutate] of mutations){try{const source=await readFile(new URL(path,base),'utf8');if(mutate(source)===source)throw Error('did not change');}catch(e){console.log(name+': '+e.message);process.exitCode=1;}}if(!process.exitCode)console.log('All '+mutations.length+' anchors valid');process.exit(process.exitCode||0);}
 // Client shell fixtures read only workflow YAML, never Worker source.
-const workerTests=(await readdir(new URL('test/',base))).filter(x=>x.endsWith('.test.js')&&x!=='client.test.js').map(x=>'ci/vast-broker/test/'+x);
+const workerTests=(await readdir(new URL('test/',base))).filter(x=>x.endsWith('.test.js')&&!x.endsWith('client.test.js')).map(x=>'ci/vast-broker/test/'+x);
 const results=[];
 for(const [name,path,mutate] of mutations.filter(m=>!process.env.MUTANT_FILTER||m[0].includes(process.env.MUTANT_FILTER))){
  const url=new URL(path,base),original=await readFile(url,'utf8');
@@ -103,6 +124,7 @@ for(const [name,path,mutate] of mutations.filter(m=>!process.env.MUTANT_FILTER||
  }finally{await writeFile(url,original);}
 }
 const rebuilt=spawnSync(process.execPath,['bundle.js'],{cwd:base,encoding:'utf8'});if(rebuilt.status!==0)throw Error(rebuilt.stderr);
+if(process.env.MUTANT_RESULTS_FILE)await writeFile(process.env.MUTANT_RESULTS_FILE,JSON.stringify(results,null,2)+'\n');
 if(process.env.MUTANT_FILTER){console.log('Filtered mutants passed; full table unchanged.');process.exit(0);}
-const text='# Recorded manual mutation checks\n\n[MEASURED: 2026-10-22 Amendment 3/3b mutation campaign] '+process.version+'; explicit patches in `../mutants.js`. Every source file restored in finally; syntax checked before tests. Worker mutations run all eight source-facing test files explicitly in parallel; workflow mutations also run shell-client fixtures. Those fixtures read YAML only and never import Worker source. No live APIs or GPU. Each mutant requires >=2 named failing tests.\n\n| Mutation | Tests killed | Example killers |\n| --- | ---: | --- |\n'+results.map(r=>'| '+r.name+' | '+r.count+' | '+r.examples.join('; ')+' |').join('\n')+'\n';
+const text='# Recorded manual mutation checks\n\n[MEASURED: 2026-10-22 endpoint secrecy plus Amendment 3/3b mutation campaign] '+process.version+'; explicit patches in `../mutants.js`. Every source file restored in finally; syntax checked before tests. Worker mutations run all source-facing test files explicitly in parallel; workflow mutations also run shell-client fixtures. Those fixtures read YAML only and never import Worker source. No live APIs or GPU. Each mutant requires >=2 named failing tests.\n\n| Mutation | Tests killed | Example killers |\n| --- | ---: | --- |\n'+results.map(r=>'| '+r.name+' | '+r.count+' | '+r.examples.join('; ')+' |').join('\n')+'\n';
 await writeFile(new URL('test/mutants.md',base),text);console.log('All '+results.length+' mutants killed; source restored.');
