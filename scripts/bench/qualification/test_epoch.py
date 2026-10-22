@@ -38,5 +38,24 @@ class EpochTests(unittest.TestCase):
         self.assertEqual(E.pin_binary('/tmp/'+('f'*8)+'/qemu-system-x86_64', 'f'*40), 'f'*40)
     def test_invalid_product_pin_refused(self):
         with self.assertRaises(ValueError): E.pin_binary('/tmp/ffff/qemu-system-x86_64', 'ffff')
+    def test_filtered_reader_requests_all_xids(self):
+        seen=[]
+        def run(argv, **kw):
+            seen.append((argv,kw))
+            return type('Result',(),{'returncode':0,'stdout':(OLD+'\n'+NEW+'\n').encode(),'stderr':b''})()
+        self.assertEqual(E.read_xids(run), (OLD,NEW))
+        self.assertIn('--grep=NVRM: Xid',seen[0][0])
+    def test_filtered_reader_preserves_duplicate_records(self):
+        run=lambda *a,**k:type('Result',(),{'returncode':0,'stdout':(NEW+'\n'+NEW).encode(),'stderr':b''})()
+        self.assertEqual(E.read_xids(run),(NEW,NEW))
+    def test_filtered_reader_refuses_over_bound(self):
+        run=lambda *a,**k:type('Result',(),{'returncode':0,'stdout':b'x'*(16*1024*1024+1),'stderr':b''})()
+        with self.assertRaises(ValueError): E.read_xids(run)
+    def test_filtered_reader_refuses_failed_command(self):
+        run=lambda *a,**k:type('Result',(),{'returncode':1,'stdout':b'','stderr':b'permission denied'})()
+        with self.assertRaises(ValueError): E.read_xids(run)
+    def test_filtered_reader_refuses_truncated_utf8(self):
+        run=lambda *a,**k:type('Result',(),{'returncode':0,'stdout':b'\xff','stderr':b''})()
+        with self.assertRaises(ValueError): E.read_xids(run)
 
 if __name__ == '__main__': unittest.main()
