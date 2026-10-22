@@ -2,7 +2,7 @@ import {fetchJson,refuse,IMAGE,MODELS,validOffer} from './policy.js';
 import {sha256Hex} from './tokens.js';
 export class Vast {
   constructor(fetcher,cfg,key){this.fetcher=fetcher;this.cfg=cfg;this.headers={Authorization:'Bearer '+key,'Content-Type':'application/json'};if(!key)refuse();}
-  async api(path,method='GET',body,missing=false){return fetchJson(this.fetcher,'https://console.vast.ai'+path,{method,headers:this.headers,...(body===undefined?{}:{body:JSON.stringify(body)})},missing);}
+  async api(path,method='GET',body,missing=false){const url=new URL('https://console.vast.ai'+path);if(!url.pathname.endsWith('/'))url.pathname+='/';return fetchJson(this.fetcher,url.href,{method,headers:this.headers,...(body===undefined?{}:{body:JSON.stringify(body)})},missing);}
   async offer(){
     const q={limit:20,type:'ondemand',verified:{eq:true},vms_enabled:{eq:true},rentable:{eq:true},rented:{eq:false},
       num_gpus:{eq:1},gpu_name:{in:MODELS.map(x=>x.replaceAll('_',' '))},reliability:{gte:.99},disk_space:{gte:120},dph_total:{lte:this.cfg.price},allocated_storage:120,order:[['dph_total','asc']]};
