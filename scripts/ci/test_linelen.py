@@ -14,7 +14,7 @@ SOURCE = "crates/kf-example/src/lib.rs"
 LONG = "x" * 101 + "\n"
 
 
-class LineLengthTests(unittest.TestCase):
+class GitFixture(unittest.TestCase):
     def setUp(self):
         self.directory = tempfile.TemporaryDirectory(prefix="ll1-test-")
         self.addCleanup(self.directory.cleanup)
@@ -60,6 +60,8 @@ class LineLengthTests(unittest.TestCase):
         self.assertEqual(result.returncode, code, result.stdout + result.stderr)
         return result.stdout + result.stderr
 
+
+class LineLengthTests(GitFixture):
     def test_100_columns_pass(self):
         self.write(SOURCE, "x" * 100 + "\n")
         self.check()
@@ -139,12 +141,14 @@ class LineLengthTests(unittest.TestCase):
     def test_update_lowers_and_removes_resolved_entries(self):
         self.write(SOURCE, LONG)
         self.baseline({SOURCE: 2, "broker/gone.c": 3})
+        self.commit()
         self.check("--update")
         self.assertEqual(json.loads((self.root / BASELINE).read_text()), {SOURCE: 1})
 
     def test_update_refuses_to_raise_and_does_not_write(self):
         self.write(SOURCE, LONG * 2)
         self.baseline({SOURCE: 1})
+        self.commit()
         before = (self.root / BASELINE).read_bytes()
         self.check("--update", code=1)
         self.assertEqual((self.root / BASELINE).read_bytes(), before)
@@ -208,6 +212,7 @@ class LineLengthTests(unittest.TestCase):
     def test_tracked_deleted_file_is_resolved(self):
         self.write(SOURCE, LONG)
         self.baseline({SOURCE: 1})
+        self.commit()
         (self.root / SOURCE).unlink()
         self.check("--update")
         self.assertEqual(json.loads((self.root / BASELINE).read_text()), {})
@@ -293,7 +298,7 @@ class LineLengthTests(unittest.TestCase):
             with self.subTest(path=path):
                 self.write(path, LONG)
                 self.check(code=1)
-                self.git("rm", "-q", path)
+                self.git("rm", "-qf", path)
 
     def test_markdown_json_tsv_and_lockfiles_are_exempt(self):
         for path in ("tools/a.md", "tools/a.json", "tools/a.tsv", "ci/package-lock.json"):
@@ -310,7 +315,7 @@ class LineLengthTests(unittest.TestCase):
         self.check()
 
     def test_diff_handles_spaces_quotes_and_newlines_in_paths(self):
-        for name in ('broker/a space.c', 'broker/a"quote.c', "broker/a\nnewline.c"):
+        for name in ("broker/a space.c", 'broker/a"quote.c', "broker/a\nnewline.c"):
             with self.subTest(name=name):
                 self.write(name, LONG)
                 self.baseline({name: 1})
