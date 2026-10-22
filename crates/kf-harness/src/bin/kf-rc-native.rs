@@ -102,9 +102,8 @@ fn run() -> Result<(), String> {
     })();
     let mut cleanup_error = None;
     for owned in [&mut ring, &mut bystander] {
-        if let Err(error) = rm.free_channel(owned.channel()) {
-            cleanup_error = Some(format!("channel free: {error:?}"));
-        }
+        rm.free_channel(owned.channel())
+            .map_err(|error| format!("channel free: {error:?}"))?;
         match owned.release(&rm) {
             Some(message) if !message.contains("REFUSED") => {}
             message => cleanup_error = Some(format!("private ring cleanup: {message:?}")),
