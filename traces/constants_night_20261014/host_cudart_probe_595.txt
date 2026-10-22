@@ -1,0 +1,36 @@
+# libcudart's GSS-legacy init gate asked of the HOST, unprivileged (2026-10-14, lane C)
+# Host: the trusted home host, RTX 4070 (PCI device 0x2786 = AD104), host driver 595.91.07.
+# Client: user `ubuntu` (uid 1000, no CAP_SYS_ADMIN), python3 ctypes -> libcudart.so.13.3.29 (CUDA 13.3 runtime,
+#   copied from a local container image), calls: cudaGetDeviceCount, cudaDeviceGetAttribute(ClockRate=13),
+#   cudaDeviceGetAttribute(MemoryClockRate=36). Recorder: tools/cudart_probe/nvdiff_shim.c (LD_PRELOAD,
+#   params before/after each NVOS54). Script: rtclock.py + extract_gss.py (this directory).
+# Raw trace (106 ioctl records) stays host-only: /data/claude-constants-20261014/out/rt_ad104_595.jsonl,
+#   sha256 926549c0a90e4753d9756e9191c9037b78c18997d3560e61ed628a0422805cc3 (it holds per-process handles and the
+#   GPU's GID reply, i.e. board data; only the words below are copied out).
+# Another VM (lane A's Windows guest) was running on the same GPU; this is a host process, no VM was touched.
+#
+# Falsifier stated before the run: H1 "cudart issues 0x20809064 (520 B), 0x20809001 (8 B), 0x20809009 (8 B),
+#   0x2080a084, 0x2080a026 and the host answers each NV_OK; the 0x20809064 request is {0,2,1,_,_,_,4} (inferred from the
+#   GA106 reply)" is falsified by any of them absent/non-OK or other request words. H2 "the 9001/9009 replies equal
+#   GA106 (580.159.04) and AD103 (575.51.03)" is falsified by any differing word.
+# Result: H1 and H2 hold [M]. 0x2080a001 and 0x20802209 were NOT issued (a084/a026 answered, so the fallback was not taken).
+#
+# Program output:
+RT_cudaGetDeviceCount=0 n=1 msg=no error
+RT_attr ClockRate=2490000 rc=0
+RT_attr MemoryClockRate=10501000 rc=0
+#
+# Per control (each issued twice, both calls identical in the words below). Words are u32 little-endian indices.
+# "request" = the words cudart set non-zero (other words zero, except a026, whose uninitialised stack words are
+# omitted here: they carried recorder text, not inputs); "reply" = the words the host changed.
+cmd=0x20809009 size=8   status=0x0  request={}                      reply={1:0xd}                                  -> {0x0, 0xd}
+cmd=0x20809001 size=8   status=0x0  request={}                      reply={0:0x03fc007f}                           -> {0x03fc007f, 0x0}
+cmd=0x20809064 size=520 status=0x0  request={1:0x2,2:0x1,6:0x4}     reply={3:0x1,4:0x1,5:0x64,7:0x10,8:0x1,9:0x64} -> {0,2,1,1,1,0x64,4,0x10,1,0x64}, words 10..129 zero
+cmd=0x2080a084 size=4   status=0x0  request={}                      reply={}
+cmd=0x2080a026 size=532 status=0x0  request={0:0x400,4:0x2,5:0x1,9:0x10}  reply={1:low byte 0x02,2:0x4,3:0x1,7:0x25fe90,11:0xa03b88}
+#   a026 reply words 7 and 11 are this die's max clocks in kHz (GPC 2490000, MCLK 10501000) = the two cudart attributes above.
+#
+# Comparison (equal words, measured each side):
+#   0x20809009, 0x20809001: AD104/595.91.07 == AD103/575.51.03 (traces/real_hw_20261013/probe_unpriv.txt) == GA106/580.159.04 (kf-abi cudartinit.rs)
+#   0x20809064 (cudart request): AD104/595.91.07 == GA106/580.159.04 reply words (cudartinit.rs WORDS_9064)
+#   0x2080a026: die-specific (clocks) — answered by the host at runtime, never a table row.
