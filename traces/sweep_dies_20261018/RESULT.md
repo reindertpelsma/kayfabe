@@ -27,7 +27,7 @@ is expanded. INFERRED H2, before hardware: explicit sign-in plus provider/deskto
 classification lets a healthy Ada desktop reach the app matrix and hold. FALSIFIER:
 Code43, NVIDIA153/Display4101/bugcheck, missing Explorer, or an application failure.
 
-MEASURED in `desktop_green.log`, run S4-local-20261022: 33 S4 tests pass;
+MEASURED on 2026-10-22 in `traces/sweep_dies_20261018/desktop_green.log`, at rev `228d62573`: 33 S4 tests pass;
 `appmatrix_tests.log` records 76 existing app-matrix tests passing. MEASURED in
 `health_mutations.json`, `plan_mutations.json`, `controller_mutations.json`, run
 S4-local-20261022: twelve mutants have at least two distinct killing tests each.
