@@ -15,3 +15,13 @@ def native_baseline(journal, defer, missing):
 def evaluate_snapshot(journal, accepted, phase_lines, arm, pid, init_utc):
     N.check_unchanged(journal, accepted)
     return N.xid_lines(journal)
+
+
+def verify_native_run(journal, defer, missing, receipts, pci):
+    """Native-run proof seam; ownership checks added by the following test-first topic."""
+    return native_baseline(journal, defer, missing)
+
+
+def validate_phase_owner(phase, proc_root='/proc'):
+    """Ownership seam, not yet wired to a runtime watcher."""
+    return True
