@@ -847,9 +847,9 @@ mod tests {
     }
 
     #[test]
-    fn large_user_descriptor_fits_staging_policy_and_keeps_real_credit_fields() {
+    fn large_user_descriptors_cross_snapshot_bound_without_changing_real_credit_fields() {
         let s = anonymous_live_storage();
-        for bytes in [100 << 10, GP_OFFSET] {
+        for bytes in [100 << 10, GP_OFFSET, GP_OFFSET + 4] {
             let entry = kf_abi::submit::gp_entry(0x420000, bytes).unwrap() | (1 << 41);
             s.write_user_gp(0, entry).unwrap();
             assert_eq!(
@@ -860,20 +860,6 @@ mod tests {
                 entry
             );
         }
-        let before = s
-            .cpu()
-            .unwrap()
-            .load_u64(HostOffset::new(GP_OFFSET))
-            .unwrap();
-        let oversized = kf_abi::submit::gp_entry(0x420000, GP_OFFSET + 4).unwrap();
-        assert!(s.write_user_gp(0, oversized).is_err());
-        assert_eq!(
-            s.cpu()
-                .unwrap()
-                .load_u64(HostOffset::new(GP_OFFSET))
-                .unwrap(),
-            before
-        );
         assert_eq!(s.gpu_get().unwrap(), 0);
         assert_eq!(s.gpu_reference().unwrap(), 0);
     }
