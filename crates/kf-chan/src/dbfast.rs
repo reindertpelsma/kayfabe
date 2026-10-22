@@ -45,7 +45,7 @@
 //! drainer has delivered the registration's last count — so the caller frees the twin (and a later
 //! act re-births the token) only after the old eventfd can deliver nothing more.
 
-use kf_linux_raw::{MAX_READY_BATCH, Notifier, PollTimeout, Poller, ReadyTokens};
+use kf_linux_raw::{Notifier, PollTimeout, Poller, ReadyTokens};
 use std::collections::{BTreeMap, BTreeSet, HashMap};
 use std::os::fd::BorrowedFd;
 use std::sync::atomic::{AtomicU64, Ordering};
@@ -831,24 +831,19 @@ impl DbFast {
             }
             Err(_) => return 0,
         }
-        let mut total = 0;
-        loop {
-            let mut ready = ReadyTokens::new();
-            self.counters.polls.fetch_add(1, Ordering::Relaxed);
-            let t = Instant::now();
-            let got = self
-                .poller
-                .wait(&mut ready, PollTimeout::Immediate)
-                .unwrap_or(0);
-            let n = self.on_ready(&ready, t, sink);
-            if n > 0 {
-                self.counters.poll_hits.fetch_add(1, Ordering::Relaxed);
-            }
-            total += n;
-            if got < MAX_READY_BATCH {
-                return total;
-            }
+        // One batch per turn, including when the guest keeps every fd ready.
+        // epoll is level-triggered: the suffix and stores after a counter drain
+        // remain ready for the next turn. Draining to empty would let userspace
+        // keep us here forever, starving register writes and reset progress.
+        let mut ready = ReadyTokens::new();
+        self.counters.polls.fetch_add(1, Ordering::Relaxed);
+        let t = Instant::now();
+        let _ = self.poller.wait(&mut ready, PollTimeout::Immediate);
+        let n = self.on_ready(&ready, t, sink);
+        if n > 0 {
+            self.counters.poll_hits.fetch_add(1, Ordering::Relaxed);
         }
+        n
     }
 
     /// One line for the device's status/boot log.
@@ -890,6 +885,7 @@ impl DbFast {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use kf_linux_raw::MAX_READY_BATCH;
     use std::sync::atomic::AtomicBool;
 
     /// A KVM stand-in: records placements, refuses on demand (so the refusal arms are reachable
