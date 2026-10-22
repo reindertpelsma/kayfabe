@@ -1,6 +1,6 @@
 # Q1 candidate-6 qualification
 
-STATUS: RESUMED 07:40 CEST, 2026-10-22; earlier safety stop resolved by explicit night-authority instruction.
+STATUS: RESUMED 07:40 CEST; STOPPED at native reader bound; bounded-reader approval pending, 2026-10-22. Original process/history stops remain resolved.
 
 MEASURED: candidate f7cf3ed81200077e55ee7769c635887661f3f990 fetched from origin. Q1 evidence branch: codex/qualify-cand6-20261022. Start 05:01 UTC; hard host-restoration deadline 10:00 UTC. No product behavior change was made by Q1.
 
@@ -51,3 +51,7 @@ MEASURED: resumed merged-area hand mutations killed 3 tests (descriptor budget),
 MEASURED: old production run3439 qemu.log was read completely (228633391 bytes, 1401869 lines): GP_FORMAT Budget 0, USER_RING_SCAN_BUDGET 0, USER_RING_REFUSED 0. These before-evidence counts do not substitute for candidate Heaven/Minecraft runs. See production-before.json.
 
 CODE READ: the bounded reader proposal is scripts/bench/qualification/epoch.py::read_xids. It requests all NVRM Xid records only, retains the original 16 MiB allocation/read bound and strict command/UTF-8 refusal, and preserves exact records/duplicates for the existing delta and sweep validators. MEASURED: EXPECTED RED tests-only commits precede the implementation; all 20 tests green; three reader mutants each >=2 kills. Hardware activation remains pending the explicit reader question; this proposal has not been deployed.
+
+MEASURED resumed final state at 07:55 CEST: all independent CPU checks complete; no candidate GPU workload or VM boot occurred. Local and host cargo targets deleted, master source archive deleted, own processes exited, both locks released and acquirable. Final host cuInit 0, nvidia bound, GDM active. Candidate binary and staged K1 scripts/installer remain available; no CoW or Windows arm was launched. See build.json, resume-cleanup.json and resume-final-restoration.json.
+
+INFERRED current verdict: FAIL merge qualification. Confirmed blocker: rustfmt failure in three merged Rust files. Hardware remains unqualified after the byte-bound preflight stop, with a concrete tested Xid-only reader proposal awaiting the explicit question's answer. The earlier process/history authorization is accepted; Q1 has not requested it again.

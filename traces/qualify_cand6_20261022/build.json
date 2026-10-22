@@ -1,0 +1,9 @@
+{
+  "classification": "MEASURED",
+  "candidate": "f7cf3ed81200077e55ee7769c635887661f3f990",
+  "script": "scripts/bench/build_kf3.sh",
+  "binary_revision_directory": "kf3-bins/f7cf3ed8",
+  "sha256": "07b7450c0d3e4eefd2fe16646d7957625cb6cd91b0b3c3fc44fdcef351585088",
+  "build_completed": "2026-10-22T07:42:21+02:00",
+  "hardware_executed": false
+}

@@ -1,0 +1,11 @@
+{
+  "classification": "MEASURED",
+  "time": "2026-10-22T07:55:42.979947+02:00",
+  "cuInit": 0,
+  "gdm": "active",
+  "gpu_driver": "nvidia",
+  "live_target_executables": [],
+  "host_target_deleted": true,
+  "q1_vm_boots": 0,
+  "q1_gpu_workloads": 0
+}
