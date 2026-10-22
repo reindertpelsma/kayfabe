@@ -21,7 +21,7 @@
     "budget_cutoff_minutes": 170,
     "guard_rate": 1.1515972222222222,
     "product_head": "6e3fd3fd6d809ae2c2a3504cd8be1ecd29b2b31b",
-    "destroyed": false,
+    "destroyed": true,
     "authority": "owner additional lease approval after PR97 fixture correction; prefer unmeasured GB203/205/207 over repeating GB206; actual die established by own host probe; phase cap8 stop6 reserve5",
     "auto_destroy_requested_minutes": 170,
     "auto_destroy_pid": 375635,
@@ -33,6 +33,13 @@
     "budget_watch_pid_starttime": 237247488,
     "ssh_ready_utc": "2026-10-22T22:12:04.732933+00:00",
     "ssh_hostkey_fingerprint": "SHA256:xsiU0iOlsl9hcE/C3gjgck2ZCRwdWodspg6fRyLuj3I",
-    "observed_dph_total": 1.05
+    "observed_dph_total": 1.05,
+    "absence_verified_utc": "2026-10-22T22:21:09.613984+00:00",
+    "elapsed_hours_until_absence": 0.2173467013888889,
+    "runtime_cost_estimate_usd": 0.22821403645833335,
+    "lane_runtime_total_usd": 0.44361743169703705,
+    "credit_after_observed": 36.88001020926117,
+    "auto_destroy_cancelled_after_absence": true,
+    "budget_watch_cancelled_after_absence": true
   }
 ]
