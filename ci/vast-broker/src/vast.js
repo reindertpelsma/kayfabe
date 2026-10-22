@@ -13,7 +13,7 @@ export class Vast {
   // The live account API exposes prepaid funds as credit; balance is a distinct legacy field.
   async credit(){const r=await this.api('/api/v0/users/current');return r.credit;}
   async create(offer,record,script){
-    const r=await this.api('/api/v0/asks/'+offer.id,'PUT',{image:IMAGE,vm:true,disk:120,runtype:'args',args:['sleep','infinity'],
+    const r=await this.api('/api/v0/asks/'+offer.id,'PUT',{image:IMAGE,vm:true,disk:120,runtype:'ssh_direct',
       onstart:script,label:record.label,target_state:'running',cancel_unavail:true});
     if(r.success!==true||!Number.isSafeInteger(r.new_contract)||r.new_contract<=0)refuse();return String(r.new_contract);
   }
