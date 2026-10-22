@@ -1,0 +1,144 @@
+{
+  "kind": "MEASURED",
+  "date": "2026-10-22",
+  "accepted": [
+    {
+      "file": "admission_mutations.json",
+      "mutant": "restore inherited redcell attempt cap",
+      "distinct_killers": 2
+    },
+    {
+      "file": "asset_mutations.json",
+      "mutant": "require_python311_file_digest",
+      "distinct_killers": 2
+    },
+    {
+      "file": "budget_mutations.json",
+      "mutant": "budget stop skips reserved hold",
+      "distinct_killers": 3
+    },
+    {
+      "file": "budget_selection_mutations.json",
+      "mutant": "stop all later apps at first unfit reservation",
+      "distinct_killers": 2
+    },
+    {
+      "file": "controller_mutations.json",
+      "mutant": "skip_watch",
+      "distinct_killers": 2
+    },
+    {
+      "file": "controller_mutations.json",
+      "mutant": "ignore_bind_failure",
+      "distinct_killers": 2
+    },
+    {
+      "file": "health_mutations.json",
+      "mutant": "all_153_fatal",
+      "distinct_killers": 2
+    },
+    {
+      "file": "health_mutations.json",
+      "mutant": "allow_nvidia_153",
+      "distinct_killers": 3
+    },
+    {
+      "file": "health_mutations.json",
+      "mutant": "ignore_boot_epoch",
+      "distinct_killers": 2
+    },
+    {
+      "file": "health_mutations.json",
+      "mutant": "ignore_interactive_user",
+      "distinct_killers": 2
+    },
+    {
+      "file": "health_mutations.json",
+      "mutant": "hardcode_vast",
+      "distinct_killers": 3
+    },
+    {
+      "file": "mount_mutations.json",
+      "mutant": "ignore_mount_failure",
+      "distinct_killers": 2
+    },
+    {
+      "file": "mount_mutations.json",
+      "mutant": "omit_read_only_mount",
+      "distinct_killers": 2
+    },
+    {
+      "file": "mount_mutations.json",
+      "mutant": "ignore_asset_integrity",
+      "distinct_killers": 2
+    },
+    {
+      "file": "nvrtc_mutations.json",
+      "mutant": "assume_missing_ISO_package",
+      "distinct_killers": 2
+    },
+    {
+      "file": "nvrtc_mutations.json",
+      "mutant": "accept_missing_supplement_receipt",
+      "distinct_killers": 2
+    },
+    {
+      "file": "plan_mutations.json",
+      "mutant": "forge_pass",
+      "distinct_killers": 2
+    },
+    {
+      "file": "plan_mutations.json",
+      "mutant": "ignore_restart",
+      "distinct_killers": 2
+    },
+    {
+      "file": "plan_mutations.json",
+      "mutant": "short_hold",
+      "distinct_killers": 2
+    },
+    {
+      "file": "plan_mutations.json",
+      "mutant": "omit_health",
+      "distinct_killers": 2
+    },
+    {
+      "file": "plan_mutations.json",
+      "mutant": "wrong_hotplug_bus",
+      "distinct_killers": 2
+    },
+    {
+      "file": "process_mutations.json",
+      "mutant": "count_zombies_as_live",
+      "distinct_killers": 2
+    },
+    {
+      "file": "process_mutations.json",
+      "mutant": "ignore_live_vm_refusal",
+      "distinct_killers": 2
+    },
+    {
+      "file": "provider_mutations.json",
+      "mutant": "reintroduce timestamp-dependent provider identity",
+      "distinct_killers": 2
+    },
+    {
+      "file": "signin_diag_mutations.json",
+      "mutant": "discard safe failure class",
+      "distinct_killers": 2
+    },
+    {
+      "file": "usb_mutations.json",
+      "mutant": "remove_boot_usb_controller",
+      "distinct_killers": 3
+    }
+  ],
+  "rejected_development_proofs": [
+    {
+      "file": "mutation_gate_failure.json",
+      "mutant": "all_153_fatal",
+      "distinct_killers": 1
+    }
+  ],
+  "note": "Initial one-kill all_153_fatal proof retained, superseded by later two-kill proof. Earlier ignore_boot_epoch behavior is superseded by provider-aware classification."
+}

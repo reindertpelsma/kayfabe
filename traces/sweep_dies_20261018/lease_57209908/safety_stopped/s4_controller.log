@@ -1,0 +1,16 @@
+S4_START source=e27444a6f775143c0edcda55445215d0f0eaf00b 2026-10-22T12:36:10+00:00
+From https://github.com/reindertpelsma/kayfabe
+ * branch                e27444a6f775143c0edcda55445215d0f0eaf00b -> FETCH_HEAD
+HEAD is now at e27444a6f docs(s4): verify Ada API absence and cost accounting [skip ci]
+NVIDIA GeForce RTX 3090, 595.91.07, 24576 MiB
+VERDICT=SOUND
+PROBE_START pid=76177 uid=Uid: 65534 65534 65534 65534 CapEff=0x0 cap_sys_admin=false
+kf-host: host tier: stock
+PROBE_SESSION driver=595.91.07
+PROBE_DIE arch=0x170 impl=0x2 die=GA102
+PROBE_END admin_run=false
+V3_GATES_SUMMARY pass=9 fail=0 gate10=PASS
+SWEEP_BUILD_READY source=e27444a6f775143c0edcda55445215d0f0eaf00b 2026-10-22T12:52:56+00:00
+GR_TIER_VERDICT=PASS
+NATIVE_XID_GUARD_STOP: Xid type/channel/address/source multiset differs from fault controls
+S4_EXIT rc=7 2026-10-22T12:54:20+00:00

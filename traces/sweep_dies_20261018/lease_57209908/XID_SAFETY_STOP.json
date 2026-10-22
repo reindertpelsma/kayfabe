@@ -1,0 +1,216 @@
+{
+  "kind": "MEASURED",
+  "date": "2026-10-22",
+  "lease_id": 57209908,
+  "source": "e27444a6f775143c0edcda55445215d0f0eaf00b",
+  "guard_refusal": "Xid type/channel/address/source multiset differs from fault controls",
+  "baseline_accepted": false,
+  "xid_count": 5,
+  "expected_source_faults": [
+    [
+      31,
+      4,
+      412316925952,
+      "FAULT_PTE",
+      "ACCESS_TYPE_VIRT_READ",
+      "CE0",
+      "HUBCLIENT_CE1",
+      "kayfabe-rm-ladd"
+    ],
+    [
+      31,
+      4,
+      420906860544,
+      "FAULT_PTE",
+      "ACCESS_TYPE_VIRT_READ",
+      "CE0",
+      "HUBCLIENT_CE1",
+      "kayfabe-rm-ladd"
+    ],
+    [
+      31,
+      5,
+      420906860544,
+      "FAULT_PTE",
+      "ACCESS_TYPE_VIRT_READ",
+      "CE0",
+      "HUBCLIENT_CE1",
+      "kayfabe-rm-ladd"
+    ],
+    [
+      31,
+      4,
+      429496795136,
+      "FAULT_PTE",
+      "ACCESS_TYPE_VIRT_READ",
+      "CE0",
+      "HUBCLIENT_CE1",
+      "kayfabe-rm-ladd"
+    ],
+    [
+      31,
+      5,
+      43234885632,
+      "FAULT_PDE",
+      "ACCESS_TYPE_VIRT_WRITE",
+      "GR0_PBDMA0",
+      "HUBCLIENT_ESC",
+      "kayfabe-rm-ladd"
+    ]
+  ],
+  "observed_faults": [
+    [
+      31,
+      4,
+      412316925952,
+      "FAULT_PTE",
+      "ACCESS_TYPE_VIRT_READ",
+      "CE0",
+      "HUBCLIENT_CE0",
+      "kayfabe-rm-ladd"
+    ],
+    [
+      31,
+      4,
+      420906860544,
+      "FAULT_PTE",
+      "ACCESS_TYPE_VIRT_READ",
+      "CE0",
+      "HUBCLIENT_CE0",
+      "kayfabe-rm-ladd"
+    ],
+    [
+      31,
+      5,
+      420906860544,
+      "FAULT_PTE",
+      "ACCESS_TYPE_VIRT_READ",
+      "CE0",
+      "HUBCLIENT_CE0",
+      "kayfabe-rm-ladd"
+    ],
+    [
+      31,
+      4,
+      429496795136,
+      "FAULT_PTE",
+      "ACCESS_TYPE_VIRT_READ",
+      "CE0",
+      "HUBCLIENT_CE0",
+      "kayfabe-rm-ladd"
+    ],
+    [
+      31,
+      5,
+      43234885632,
+      "FAULT_PDE",
+      "ACCESS_TYPE_VIRT_WRITE",
+      "GR0_PBDMA0",
+      "HUBCLIENT_ESC",
+      "kayfabe-rm-ladd"
+    ]
+  ],
+  "unmatched_observed": [
+    [
+      31,
+      4,
+      412316925952,
+      "FAULT_PTE",
+      "ACCESS_TYPE_VIRT_READ",
+      "CE0",
+      "HUBCLIENT_CE0",
+      "kayfabe-rm-ladd"
+    ],
+    [
+      31,
+      4,
+      420906860544,
+      "FAULT_PTE",
+      "ACCESS_TYPE_VIRT_READ",
+      "CE0",
+      "HUBCLIENT_CE0",
+      "kayfabe-rm-ladd"
+    ],
+    [
+      31,
+      5,
+      420906860544,
+      "FAULT_PTE",
+      "ACCESS_TYPE_VIRT_READ",
+      "CE0",
+      "HUBCLIENT_CE0",
+      "kayfabe-rm-ladd"
+    ],
+    [
+      31,
+      4,
+      429496795136,
+      "FAULT_PTE",
+      "ACCESS_TYPE_VIRT_READ",
+      "CE0",
+      "HUBCLIENT_CE0",
+      "kayfabe-rm-ladd"
+    ]
+  ],
+  "missing_expected": [
+    [
+      31,
+      4,
+      412316925952,
+      "FAULT_PTE",
+      "ACCESS_TYPE_VIRT_READ",
+      "CE0",
+      "HUBCLIENT_CE1",
+      "kayfabe-rm-ladd"
+    ],
+    [
+      31,
+      4,
+      420906860544,
+      "FAULT_PTE",
+      "ACCESS_TYPE_VIRT_READ",
+      "CE0",
+      "HUBCLIENT_CE1",
+      "kayfabe-rm-ladd"
+    ],
+    [
+      31,
+      5,
+      420906860544,
+      "FAULT_PTE",
+      "ACCESS_TYPE_VIRT_READ",
+      "CE0",
+      "HUBCLIENT_CE1",
+      "kayfabe-rm-ladd"
+    ],
+    [
+      31,
+      4,
+      429496795136,
+      "FAULT_PTE",
+      "ACCESS_TYPE_VIRT_READ",
+      "CE0",
+      "HUBCLIENT_CE1",
+      "kayfabe-rm-ladd"
+    ]
+  ],
+  "xid_lines": [
+    "2026-10-22T12:53:05.310303+0000 ubuntu kernel: NVRM: Xid (PCI:0000:00:07): 31, pid=89601, name=kayfabe-rm-ladd, channel 0x00000004, intr 00000000. MMU Fault: ENGINE CE0 HUBCLIENT_CE0 faulted @ 0x60_00010000. Fault is of type FAULT_PTE ACCESS_TYPE_VIRT_READ",
+    "2026-10-22T12:53:08.358116+0000 ubuntu kernel: NVRM: Xid (PCI:0000:00:07): 31, pid=89601, name=kayfabe-rm-ladd, channel 0x00000004, intr 00000000. MMU Fault: ENGINE CE0 HUBCLIENT_CE0 faulted @ 0x62_00010000. Fault is of type FAULT_PTE ACCESS_TYPE_VIRT_READ",
+    "2026-10-22T12:53:11.367139+0000 ubuntu kernel: NVRM: Xid (PCI:0000:00:07): 31, pid=89601, name=kayfabe-rm-ladd, channel 0x00000005, intr 00000000. MMU Fault: ENGINE CE0 HUBCLIENT_CE0 faulted @ 0x62_00010000. Fault is of type FAULT_PTE ACCESS_TYPE_VIRT_READ",
+    "2026-10-22T12:53:14.428110+0000 ubuntu kernel: NVRM: Xid (PCI:0000:00:07): 31, pid=89601, name=kayfabe-rm-ladd, channel 0x00000004, intr 00000000. MMU Fault: ENGINE CE0 HUBCLIENT_CE0 faulted @ 0x64_00010000. Fault is of type FAULT_PTE ACCESS_TYPE_VIRT_READ",
+    "2026-10-22T12:53:18.514117+0000 ubuntu kernel: NVRM: Xid (PCI:0000:00:07): 31, pid=89637, name=kayfabe-rm-ladd, channel 0x00000005, intr 00000000. MMU Fault: ENGINE GR0_PBDMA0 HUBCLIENT_ESC faulted @ 0xa_11000000. Fault is of type FAULT_PDE ACCESS_TYPE_VIRT_WRITE"
+  ],
+  "first_unmatched_utc": "2026-10-22T12:53:05.310303+00:00",
+  "rpc_ordinal": "N/A: stock native control; Windows/relay VM not started",
+  "first_source_submission": {
+    "marker_arm": "PLAIN(rig-control)",
+    "marker_va": "0x0000006000010000",
+    "doorbell_store_ordinal": 1,
+    "host_token": "0x00000004",
+    "runlist": 0,
+    "chid": 4,
+    "note": "Native source submission ordinal, not a relay RPC ordinal"
+  },
+  "decision": "STOP; no baseline expansion or further GPU work"
+}

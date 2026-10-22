@@ -1,0 +1,381 @@
+2026-10-22T12:34:04.666301+0000 ubuntu kernel: Linux version 6.8.0-59-generic (buildd@lcy02-amd64-117) (x86_64-linux-gnu-gcc-12 (Ubuntu 12.3.0-1ubuntu1~22.04) 12.3.0, GNU ld (GNU Binutils for Ubuntu) 2.38) #61~22.04.1-Ubuntu SMP PREEMPT_DYNAMIC Tue Apr 15 17:03:15 UTC 2 (Ubuntu 6.8.0-59.61~22.04.1-generic 6.8.12)
+2026-10-22T12:34:04.666346+0000 ubuntu kernel: Command line: BOOT_IMAGE=/boot/vmlinuz-6.8.0-59-generic root=PARTUUID=85c80741-2a2a-4df8-94fc-8525e0031367 ro console=tty1 console=ttyS0 panic=-1
+2026-10-22T12:34:04.666369+0000 ubuntu kernel: KERNEL supported cpus:
+2026-10-22T12:34:04.666391+0000 ubuntu kernel:   Intel GenuineIntel
+2026-10-22T12:34:04.666415+0000 ubuntu kernel:   AMD AuthenticAMD
+2026-10-22T12:34:04.666432+0000 ubuntu kernel:   Hygon HygonGenuine
+2026-10-22T12:34:04.666450+0000 ubuntu kernel:   Centaur CentaurHauls
+2026-10-22T12:34:04.666467+0000 ubuntu kernel:   zhaoxin   Shanghai
+2026-10-22T12:34:04.666483+0000 ubuntu kernel: BIOS-provided physical RAM map:
+2026-10-22T12:34:04.666500+0000 ubuntu kernel: BIOS-e820: [mem 0x0000000000000000-0x000000000009ffff] usable
+2026-10-22T12:34:04.666517+0000 ubuntu kernel: BIOS-e820: [mem 0x0000000000100000-0x00000000bee6ffff] usable
+2026-10-22T12:34:04.666534+0000 ubuntu kernel: BIOS-e820: [mem 0x00000000bee70000-0x00000000bef71fff] reserved
+2026-10-22T12:34:04.666551+0000 ubuntu kernel: BIOS-e820: [mem 0x00000000bef72000-0x00000000bf8edfff] usable
+2026-10-22T12:34:04.666573+0000 ubuntu kernel: BIOS-e820: [mem 0x00000000bf8ee000-0x00000000bfb6dfff] reserved
+2026-10-22T12:34:04.666593+0000 ubuntu kernel: BIOS-e820: [mem 0x00000000bfb6e000-0x00000000bfb7dfff] ACPI data
+2026-10-22T12:34:04.666611+0000 ubuntu kernel: BIOS-e820: [mem 0x00000000bfb7e000-0x00000000bfbfdfff] ACPI NVS
+2026-10-22T12:34:04.666634+0000 ubuntu kernel: BIOS-e820: [mem 0x00000000bfbfe000-0x00000000bff7bfff] usable
+2026-10-22T12:34:04.666653+0000 ubuntu kernel: BIOS-e820: [mem 0x00000000bff7c000-0x00000000bfffffff] reserved
+2026-10-22T12:34:04.666670+0000 ubuntu kernel: BIOS-e820: [mem 0x00000000ffc00000-0x00000000ffffffff] reserved
+2026-10-22T12:34:04.666692+0000 ubuntu kernel: BIOS-e820: [mem 0x0000000100000000-0x0000000cd46fffff] usable
+2026-10-22T12:34:04.666709+0000 ubuntu kernel: NX (Execute Disable) protection: active
+2026-10-22T12:34:04.666726+0000 ubuntu kernel: APIC: Static calls initialized
+2026-10-22T12:34:04.666744+0000 ubuntu kernel: e820: update [mem 0xbe180018-0xbe1b2457] usable ==> usable
+2026-10-22T12:34:04.666761+0000 ubuntu kernel: e820: update [mem 0xbe180018-0xbe1b2457] usable ==> usable
+2026-10-22T12:34:04.666779+0000 ubuntu kernel: e820: update [mem 0xbe159018-0xbe17f457] usable ==> usable
+2026-10-22T12:34:04.666796+0000 ubuntu kernel: e820: update [mem 0xbe159018-0xbe17f457] usable ==> usable
+2026-10-22T12:34:04.666812+0000 ubuntu kernel: extended physical RAM map:
+2026-10-22T12:34:04.666830+0000 ubuntu kernel: reserve setup_data: [mem 0x0000000000000000-0x000000000009ffff] usable
+2026-10-22T12:34:04.666847+0000 ubuntu kernel: reserve setup_data: [mem 0x0000000000100000-0x00000000be159017] usable
+2026-10-22T12:34:04.666864+0000 ubuntu kernel: reserve setup_data: [mem 0x00000000be159018-0x00000000be17f457] usable
+2026-10-22T12:34:04.666896+0000 ubuntu kernel: reserve setup_data: [mem 0x00000000be17f458-0x00000000be180017] usable
+2026-10-22T12:34:04.666920+0000 ubuntu kernel: reserve setup_data: [mem 0x00000000be180018-0x00000000be1b2457] usable
+2026-10-22T12:34:04.666937+0000 ubuntu kernel: reserve setup_data: [mem 0x00000000be1b2458-0x00000000bee6ffff] usable
+2026-10-22T12:34:04.666955+0000 ubuntu kernel: reserve setup_data: [mem 0x00000000bee70000-0x00000000bef71fff] reserved
+2026-10-22T12:34:04.666972+0000 ubuntu kernel: reserve setup_data: [mem 0x00000000bef72000-0x00000000bf8edfff] usable
+2026-10-22T12:34:04.666989+0000 ubuntu kernel: reserve setup_data: [mem 0x00000000bf8ee000-0x00000000bfb6dfff] reserved
+2026-10-22T12:34:04.667006+0000 ubuntu kernel: reserve setup_data: [mem 0x00000000bfb6e000-0x00000000bfb7dfff] ACPI data
+2026-10-22T12:34:04.667041+0000 ubuntu kernel: reserve setup_data: [mem 0x00000000bfb7e000-0x00000000bfbfdfff] ACPI NVS
+2026-10-22T12:34:04.667060+0000 ubuntu kernel: reserve setup_data: [mem 0x00000000bfbfe000-0x00000000bff7bfff] usable
+2026-10-22T12:34:04.667078+0000 ubuntu kernel: reserve setup_data: [mem 0x00000000bff7c000-0x00000000bfffffff] reserved
+2026-10-22T12:34:04.667118+0000 ubuntu kernel: reserve setup_data: [mem 0x00000000ffc00000-0x00000000ffffffff] reserved
+2026-10-22T12:34:04.667140+0000 ubuntu kernel: reserve setup_data: [mem 0x0000000100000000-0x0000000cd46fffff] usable
+2026-10-22T12:34:04.667158+0000 ubuntu kernel: efi: EFI v2.7 by EDK II
+2026-10-22T12:34:04.667176+0000 ubuntu kernel: efi: SMBIOS=0xbf922000 ACPI=0xbfb7d000 ACPI 2.0=0xbfb7d014 MEMATTR=0xbe200518 MOKvar=0xbf91c000
+2026-10-22T12:34:04.667200+0000 ubuntu kernel: efi: Remove mem144: MMIO range=[0xffc00000-0xffffffff] (4MB) from e820 map
+2026-10-22T12:34:04.667220+0000 ubuntu kernel: e820: remove [mem 0xffc00000-0xffffffff] reserved
+2026-10-22T12:34:04.667238+0000 ubuntu kernel: secureboot: Secure boot disabled
+2026-10-22T12:34:04.667255+0000 ubuntu kernel: SMBIOS 2.8 present.
+2026-10-22T12:34:04.667273+0000 ubuntu kernel: DMI: QEMU Standard PC (i440FX + PIIX, 1996), BIOS 0.0.0 02/06/2015
+2026-10-22T12:34:04.667291+0000 ubuntu kernel: Hypervisor detected: KVM
+2026-10-22T12:34:04.667318+0000 ubuntu kernel: kvm-clock: Using msrs 4b564d01 and 4b564d00
+2026-10-22T12:34:04.667337+0000 ubuntu kernel: kvm-clock: using sched offset of 6697222905 cycles
+2026-10-22T12:34:04.667357+0000 ubuntu kernel: clocksource: kvm-clock: mask: 0xffffffffffffffff max_cycles: 0x1cd42e4dffb, max_idle_ns: 881590591483 ns
+2026-10-22T12:34:04.667376+0000 ubuntu kernel: tsc: Detected 2298.666 MHz processor
+2026-10-22T12:34:04.667395+0000 ubuntu kernel: e820: update [mem 0x00000000-0x00000fff] usable ==> reserved
+2026-10-22T12:34:04.667414+0000 ubuntu kernel: e820: remove [mem 0x000a0000-0x000fffff] usable
+2026-10-22T12:34:04.667432+0000 ubuntu kernel: last_pfn = 0xcd4700 max_arch_pfn = 0x400000000
+2026-10-22T12:34:04.667451+0000 ubuntu kernel: MTRR map: 4 entries (2 fixed + 2 variable; max 18), built from 8 variable MTRRs
+2026-10-22T12:34:04.667469+0000 ubuntu kernel: x86/PAT: Configuration [0-7]: WB  WC  UC- UC  WB  WP  UC- WT
+2026-10-22T12:34:04.667492+0000 ubuntu kernel: last_pfn = 0xbff7c max_arch_pfn = 0x400000000
+2026-10-22T12:34:04.667512+0000 ubuntu kernel: Using GB pages for direct mapping
+2026-10-22T12:34:04.667539+0000 ubuntu kernel: secureboot: Secure boot disabled
+2026-10-22T12:34:04.667558+0000 ubuntu kernel: ACPI: Early table checksum verification disabled
+2026-10-22T12:34:04.667576+0000 ubuntu kernel: ACPI: RSDP 0x00000000BFB7D014 000024 (v02 BOCHS )
+2026-10-22T12:34:04.667595+0000 ubuntu kernel: ACPI: XSDT 0x00000000BFB7C0E8 00003C (v01 BOCHS  BXPC     00000001      01000013)
+2026-10-22T12:34:04.667614+0000 ubuntu kernel: ACPI: FACP 0x00000000BFB79000 000074 (v01 BOCHS  BXPC     00000001 BXPC 00000001)
+2026-10-22T12:34:04.667632+0000 ubuntu kernel: ACPI: DSDT 0x00000000BFB7A000 001947 (v01 BOCHS  BXPC     00000001 BXPC 00000001)
+2026-10-22T12:34:04.667651+0000 ubuntu kernel: ACPI: FACS 0x00000000BFBDC000 000040
+2026-10-22T12:34:04.667669+0000 ubuntu kernel: ACPI: APIC 0x00000000BFB78000 0000B8 (v01 BOCHS  BXPC     00000001 BXPC 00000001)
+2026-10-22T12:34:04.667692+0000 ubuntu kernel: ACPI: WAET 0x00000000BFB77000 000028 (v01 BOCHS  BXPC     00000001 BXPC 00000001)
+2026-10-22T12:34:04.667711+0000 ubuntu kernel: ACPI: Reserving FACP table memory at [mem 0xbfb79000-0xbfb79073]
+2026-10-22T12:34:04.667729+0000 ubuntu kernel: ACPI: Reserving DSDT table memory at [mem 0xbfb7a000-0xbfb7b946]
+2026-10-22T12:34:04.667748+0000 ubuntu kernel: ACPI: Reserving FACS table memory at [mem 0xbfbdc000-0xbfbdc03f]
+2026-10-22T12:34:04.667767+0000 ubuntu kernel: ACPI: Reserving APIC table memory at [mem 0xbfb78000-0xbfb780b7]
+2026-10-22T12:34:04.667785+0000 ubuntu kernel: ACPI: Reserving WAET table memory at [mem 0xbfb77000-0xbfb77027]
+2026-10-22T12:34:04.667803+0000 ubuntu kernel: No NUMA configuration found
+2026-10-22T12:34:04.667822+0000 ubuntu kernel: Faking a node at [mem 0x0000000000000000-0x0000000cd46fffff]
+2026-10-22T12:34:04.667840+0000 ubuntu kernel: NODE_DATA(0) allocated [mem 0xcd46d5000-0xcd46fffff]
+2026-10-22T12:34:04.667863+0000 ubuntu kernel: Zone ranges:
+2026-10-22T12:34:04.667903+0000 ubuntu kernel:   DMA      [mem 0x0000000000001000-0x0000000000ffffff]
+[bounded export: 1054 source lines; middle omitted]
+2026-10-22T12:52:57.227084+0000 ubuntu kernel: NVRM: GPU0 nvAssertOkFailedNoLog: Assertion failed: Requested object not found [NV_ERR_OBJECT_NOT_FOUND] (0x00000057) returned from status @ kernel_channel.c:2828
+2026-10-22T12:52:57.227197+0000 ubuntu kernel: NVRM: GPU0 nvAssertOkFailedNoLog: Assertion failed: Requested object not found [NV_ERR_OBJECT_NOT_FOUND] (0x00000057) returned from kchannelBindToRunlist(pChanNode->pKernelChannel, localEngineType, engineDesc) @ kernel_channel_group_api.c:1264
+2026-10-22T12:52:57.371113+0000 ubuntu kernel: NVRM: GPU0 nvAssertOkFailedNoLog: Assertion failed: Requested object not found [NV_ERR_OBJECT_NOT_FOUND] (0x00000057) returned from kfifoEngineInfoXlate_HAL(pGpu, pKernelFifo, ENGINE_INFO_TYPE_RM_ENGINE_TYPE, (NvU32)rmEngineType, ENGINE_INFO_TYPE_ENG_DESC, &engDesc) @ kernel_fifo_gm107.c:362
+2026-10-22T12:52:57.374070+0000 ubuntu kernel: NVRM: GPU0 nvAssertOkFailedNoLog: Assertion failed: Requested object not found [NV_ERR_OBJECT_NOT_FOUND] (0x00000057) returned from kfifoEngineInfoXlate_HAL(pGpu, pKernelFifo, ENGINE_INFO_TYPE_RM_ENGINE_TYPE, (NvU32)rmEngineType, ENGINE_INFO_TYPE_ENG_DESC, &engDesc) @ kernel_fifo_gm107.c:362
+2026-10-22T12:52:57.376079+0000 ubuntu kernel: NVRM: GPU0 nvAssertOkFailedNoLog: Assertion failed: Requested object not found [NV_ERR_OBJECT_NOT_FOUND] (0x00000057) returned from kfifoEngineInfoXlate_HAL(pGpu, GPU_GET_KERNEL_FIFO(pGpu), ENGINE_INFO_TYPE_ENG_DESC, engineDesc, ENGINE_INFO_TYPE_RUNLIST, &pKernelChannelGroupApi->pKernelChannelGroup->runlistId) @ kernel_channel_group_api.c:1252
+2026-10-22T12:52:57.377082+0000 ubuntu kernel: NVRM: GPU0 nvAssertOkFailedNoLog: Assertion failed: Requested object not found [NV_ERR_OBJECT_NOT_FOUND] (0x00000057) returned from status @ kernel_channel.c:2828
+2026-10-22T12:52:57.377195+0000 ubuntu kernel: NVRM: GPU0 nvAssertOkFailedNoLog: Assertion failed: Requested object not found [NV_ERR_OBJECT_NOT_FOUND] (0x00000057) returned from kchannelBindToRunlist(pChanNode->pKernelChannel, localEngineType, engineDesc) @ kernel_channel_group_api.c:1264
+2026-10-22T12:52:57.384072+0000 ubuntu kernel: NVRM: GPU0 nvAssertOkFailedNoLog: Assertion failed: Requested object not found [NV_ERR_OBJECT_NOT_FOUND] (0x00000057) returned from kfifoEngineInfoXlate_HAL(pGpu, pKernelFifo, ENGINE_INFO_TYPE_RM_ENGINE_TYPE, (NvU32)rmEngineType, ENGINE_INFO_TYPE_ENG_DESC, &engDesc) @ kernel_fifo_gm107.c:362
+2026-10-22T12:52:57.386067+0000 ubuntu kernel: NVRM: GPU0 nvAssertOkFailedNoLog: Assertion failed: Requested object not found [NV_ERR_OBJECT_NOT_FOUND] (0x00000057) returned from kfifoEngineInfoXlate_HAL(pGpu, pKernelFifo, ENGINE_INFO_TYPE_RM_ENGINE_TYPE, (NvU32)rmEngineType, ENGINE_INFO_TYPE_ENG_DESC, &engDesc) @ kernel_fifo_gm107.c:362
+2026-10-22T12:52:57.388078+0000 ubuntu kernel: NVRM: GPU0 nvAssertOkFailedNoLog: Assertion failed: Requested object not found [NV_ERR_OBJECT_NOT_FOUND] (0x00000057) returned from kfifoEngineInfoXlate_HAL(pGpu, GPU_GET_KERNEL_FIFO(pGpu), ENGINE_INFO_TYPE_ENG_DESC, engineDesc, ENGINE_INFO_TYPE_RUNLIST, &pKernelChannelGroupApi->pKernelChannelGroup->runlistId) @ kernel_channel_group_api.c:1252
+2026-10-22T12:52:57.389081+0000 ubuntu kernel: NVRM: GPU0 nvAssertOkFailedNoLog: Assertion failed: Requested object not found [NV_ERR_OBJECT_NOT_FOUND] (0x00000057) returned from status @ kernel_channel.c:2828
+2026-10-22T12:52:57.389190+0000 ubuntu kernel: NVRM: GPU0 nvAssertOkFailedNoLog: Assertion failed: Requested object not found [NV_ERR_OBJECT_NOT_FOUND] (0x00000057) returned from kchannelBindToRunlist(pChanNode->pKernelChannel, localEngineType, engineDesc) @ kernel_channel_group_api.c:1264
+2026-10-22T12:52:57.396070+0000 ubuntu kernel: NVRM: GPU0 nvAssertOkFailedNoLog: Assertion failed: Requested object not found [NV_ERR_OBJECT_NOT_FOUND] (0x00000057) returned from kfifoEngineInfoXlate_HAL(pGpu, pKernelFifo, ENGINE_INFO_TYPE_RM_ENGINE_TYPE, (NvU32)rmEngineType, ENGINE_INFO_TYPE_ENG_DESC, &engDesc) @ kernel_fifo_gm107.c:362
+2026-10-22T12:52:57.398075+0000 ubuntu kernel: NVRM: GPU0 nvAssertOkFailedNoLog: Assertion failed: Requested object not found [NV_ERR_OBJECT_NOT_FOUND] (0x00000057) returned from kfifoEngineInfoXlate_HAL(pGpu, pKernelFifo, ENGINE_INFO_TYPE_RM_ENGINE_TYPE, (NvU32)rmEngineType, ENGINE_INFO_TYPE_ENG_DESC, &engDesc) @ kernel_fifo_gm107.c:362
+2026-10-22T12:52:57.400074+0000 ubuntu kernel: NVRM: GPU0 nvAssertOkFailedNoLog: Assertion failed: Requested object not found [NV_ERR_OBJECT_NOT_FOUND] (0x00000057) returned from kfifoEngineInfoXlate_HAL(pGpu, GPU_GET_KERNEL_FIFO(pGpu), ENGINE_INFO_TYPE_ENG_DESC, engineDesc, ENGINE_INFO_TYPE_RUNLIST, &pKernelChannelGroupApi->pKernelChannelGroup->runlistId) @ kernel_channel_group_api.c:1252
+2026-10-22T12:52:57.401079+0000 ubuntu kernel: NVRM: GPU0 nvAssertOkFailedNoLog: Assertion failed: Requested object not found [NV_ERR_OBJECT_NOT_FOUND] (0x00000057) returned from status @ kernel_channel.c:2828
+2026-10-22T12:52:57.401189+0000 ubuntu kernel: NVRM: GPU0 nvAssertOkFailedNoLog: Assertion failed: Requested object not found [NV_ERR_OBJECT_NOT_FOUND] (0x00000057) returned from kchannelBindToRunlist(pChanNode->pKernelChannel, localEngineType, engineDesc) @ kernel_channel_group_api.c:1264
+2026-10-22T12:52:57.432087+0000 ubuntu kernel: NVRM: GPU0 nvAssertOkFailedNoLog: Assertion failed: Requested object not found [NV_ERR_OBJECT_NOT_FOUND] (0x00000057) returned from kfifoEngineInfoXlate_HAL(pGpu, pKernelFifo, ENGINE_INFO_TYPE_RM_ENGINE_TYPE, gpuGetRmEngineType(pFifoInfoParams->engineType), ENGINE_INFO_TYPE_RUNLIST, &runlistId) @ kernel_fifo_ctrl.c:329
+2026-10-22T12:52:57.432221+0000 ubuntu kernel: NVRM: GPU0 nvAssertOkFailedNoLog: Assertion failed: Requested object not found [NV_ERR_OBJECT_NOT_FOUND] (0x00000057) returned from kfifoEngineInfoXlate_HAL(pGpu, pKernelFifo, ENGINE_INFO_TYPE_RM_ENGINE_TYPE, gpuGetRmEngineType(pFifoInfoParams->engineType), ENGINE_INFO_TYPE_RUNLIST, &runlistId) @ kernel_fifo_ctrl.c:329
+2026-10-22T12:52:57.432298+0000 ubuntu kernel: NVRM: GPU0 nvAssertOkFailedNoLog: Assertion failed: Requested object not found [NV_ERR_OBJECT_NOT_FOUND] (0x00000057) returned from kfifoEngineInfoXlate_HAL(pGpu, pKernelFifo, ENGINE_INFO_TYPE_RM_ENGINE_TYPE, gpuGetRmEngineType(pFifoInfoParams->engineType), ENGINE_INFO_TYPE_RUNLIST, &runlistId) @ kernel_fifo_ctrl.c:329
+2026-10-22T12:52:57.437075+0000 ubuntu kernel: NVRM: GPU0 nvAssertOkFailedNoLog: Assertion failed: Requested object not found [NV_ERR_OBJECT_NOT_FOUND] (0x00000057) returned from kfifoEngineInfoXlate_HAL(pGpu, pKernelFifo, ENGINE_INFO_TYPE_RM_ENGINE_TYPE, gpuGetRmEngineType(pFifoInfoParams->engineType), ENGINE_INFO_TYPE_RUNLIST, &runlistId) @ kernel_fifo_ctrl.c:329
+2026-10-22T12:52:57.437188+0000 ubuntu kernel: NVRM: GPU0 nvAssertOkFailedNoLog: Assertion failed: Requested object not found [NV_ERR_OBJECT_NOT_FOUND] (0x00000057) returned from kfifoEngineInfoXlate_HAL(pGpu, pKernelFifo, ENGINE_INFO_TYPE_RM_ENGINE_TYPE, gpuGetRmEngineType(pFifoInfoParams->engineType), ENGINE_INFO_TYPE_RUNLIST, &runlistId) @ kernel_fifo_ctrl.c:329
+2026-10-22T12:52:57.437268+0000 ubuntu kernel: NVRM: GPU0 nvAssertOkFailedNoLog: Assertion failed: Requested object not found [NV_ERR_OBJECT_NOT_FOUND] (0x00000057) returned from kfifoEngineInfoXlate_HAL(pGpu, pKernelFifo, ENGINE_INFO_TYPE_RM_ENGINE_TYPE, gpuGetRmEngineType(pFifoInfoParams->engineType), ENGINE_INFO_TYPE_RUNLIST, &runlistId) @ kernel_fifo_ctrl.c:329
+2026-10-22T12:52:57.445067+0000 ubuntu kernel: NVRM: GPU0 nvAssertOkFailedNoLog: Assertion failed: Requested object not found [NV_ERR_OBJECT_NOT_FOUND] (0x00000057) returned from kfifoEngineInfoXlate_HAL(pGpu, pKernelFifo, ENGINE_INFO_TYPE_RM_ENGINE_TYPE, gpuGetRmEngineType(pFifoInfoParams->engineType), ENGINE_INFO_TYPE_RUNLIST, &runlistId) @ kernel_fifo_ctrl.c:329
+2026-10-22T12:52:57.445204+0000 ubuntu kernel: NVRM: GPU0 nvAssertOkFailedNoLog: Assertion failed: Requested object not found [NV_ERR_OBJECT_NOT_FOUND] (0x00000057) returned from kfifoEngineInfoXlate_HAL(pGpu, pKernelFifo, ENGINE_INFO_TYPE_RM_ENGINE_TYPE, gpuGetRmEngineType(pFifoInfoParams->engineType), ENGINE_INFO_TYPE_RUNLIST, &runlistId) @ kernel_fifo_ctrl.c:329
+2026-10-22T12:52:57.445296+0000 ubuntu kernel: NVRM: GPU0 nvAssertOkFailedNoLog: Assertion failed: Requested object not found [NV_ERR_OBJECT_NOT_FOUND] (0x00000057) returned from kfifoEngineInfoXlate_HAL(pGpu, pKernelFifo, ENGINE_INFO_TYPE_RM_ENGINE_TYPE, gpuGetRmEngineType(pFifoInfoParams->engineType), ENGINE_INFO_TYPE_RUNLIST, &runlistId) @ kernel_fifo_ctrl.c:329
+2026-10-22T12:52:57.449072+0000 ubuntu kernel: NVRM: GPU0 nvAssertOkFailedNoLog: Assertion failed: Requested object not found [NV_ERR_OBJECT_NOT_FOUND] (0x00000057) returned from kfifoEngineInfoXlate_HAL(pGpu, pKernelFifo, ENGINE_INFO_TYPE_RM_ENGINE_TYPE, gpuGetRmEngineType(pFifoInfoParams->engineType), ENGINE_INFO_TYPE_RUNLIST, &runlistId) @ kernel_fifo_ctrl.c:329
+2026-10-22T12:52:57.449183+0000 ubuntu kernel: NVRM: GPU0 nvAssertOkFailedNoLog: Assertion failed: Requested object not found [NV_ERR_OBJECT_NOT_FOUND] (0x00000057) returned from kfifoEngineInfoXlate_HAL(pGpu, pKernelFifo, ENGINE_INFO_TYPE_RM_ENGINE_TYPE, gpuGetRmEngineType(pFifoInfoParams->engineType), ENGINE_INFO_TYPE_RUNLIST, &runlistId) @ kernel_fifo_ctrl.c:329
+2026-10-22T12:52:57.449260+0000 ubuntu kernel: NVRM: GPU0 nvAssertOkFailedNoLog: Assertion failed: Requested object not found [NV_ERR_OBJECT_NOT_FOUND] (0x00000057) returned from kfifoEngineInfoXlate_HAL(pGpu, pKernelFifo, ENGINE_INFO_TYPE_RM_ENGINE_TYPE, gpuGetRmEngineType(pFifoInfoParams->engineType), ENGINE_INFO_TYPE_RUNLIST, &runlistId) @ kernel_fifo_ctrl.c:329
+2026-10-22T12:52:57.456072+0000 ubuntu kernel: NVRM: GPU0 nvAssertOkFailedNoLog: Assertion failed: Requested object not found [NV_ERR_OBJECT_NOT_FOUND] (0x00000057) returned from kfifoEngineInfoXlate_HAL(pGpu, pKernelFifo, ENGINE_INFO_TYPE_RM_ENGINE_TYPE, gpuGetRmEngineType(pFifoInfoParams->engineType), ENGINE_INFO_TYPE_RUNLIST, &runlistId) @ kernel_fifo_ctrl.c:329
+2026-10-22T12:52:57.456174+0000 ubuntu kernel: NVRM: GPU0 nvAssertOkFailedNoLog: Assertion failed: Requested object not found [NV_ERR_OBJECT_NOT_FOUND] (0x00000057) returned from kfifoEngineInfoXlate_HAL(pGpu, pKernelFifo, ENGINE_INFO_TYPE_RM_ENGINE_TYPE, gpuGetRmEngineType(pFifoInfoParams->engineType), ENGINE_INFO_TYPE_RUNLIST, &runlistId) @ kernel_fifo_ctrl.c:329
+2026-10-22T12:52:57.456249+0000 ubuntu kernel: NVRM: GPU0 nvAssertOkFailedNoLog: Assertion failed: Requested object not found [NV_ERR_OBJECT_NOT_FOUND] (0x00000057) returned from kfifoEngineInfoXlate_HAL(pGpu, pKernelFifo, ENGINE_INFO_TYPE_RM_ENGINE_TYPE, gpuGetRmEngineType(pFifoInfoParams->engineType), ENGINE_INFO_TYPE_RUNLIST, &runlistId) @ kernel_fifo_ctrl.c:329
+2026-10-22T12:52:57.460075+0000 ubuntu kernel: NVRM: GPU0 nvAssertOkFailedNoLog: Assertion failed: Requested object not found [NV_ERR_OBJECT_NOT_FOUND] (0x00000057) returned from kfifoEngineInfoXlate_HAL(pGpu, pKernelFifo, ENGINE_INFO_TYPE_RM_ENGINE_TYPE, gpuGetRmEngineType(pFifoInfoParams->engineType), ENGINE_INFO_TYPE_RUNLIST, &runlistId) @ kernel_fifo_ctrl.c:329
+2026-10-22T12:52:57.460175+0000 ubuntu kernel: NVRM: GPU0 nvAssertOkFailedNoLog: Assertion failed: Requested object not found [NV_ERR_OBJECT_NOT_FOUND] (0x00000057) returned from kfifoEngineInfoXlate_HAL(pGpu, pKernelFifo, ENGINE_INFO_TYPE_RM_ENGINE_TYPE, gpuGetRmEngineType(pFifoInfoParams->engineType), ENGINE_INFO_TYPE_RUNLIST, &runlistId) @ kernel_fifo_ctrl.c:329
+2026-10-22T12:52:57.460236+0000 ubuntu kernel: NVRM: GPU0 nvAssertOkFailedNoLog: Assertion failed: Requested object not found [NV_ERR_OBJECT_NOT_FOUND] (0x00000057) returned from kfifoEngineInfoXlate_HAL(pGpu, pKernelFifo, ENGINE_INFO_TYPE_RM_ENGINE_TYPE, gpuGetRmEngineType(pFifoInfoParams->engineType), ENGINE_INFO_TYPE_RUNLIST, &runlistId) @ kernel_fifo_ctrl.c:329
+2026-10-22T12:52:57.467074+0000 ubuntu kernel: NVRM: GPU0 nvAssertOkFailedNoLog: Assertion failed: Requested object not found [NV_ERR_OBJECT_NOT_FOUND] (0x00000057) returned from kfifoEngineInfoXlate_HAL(pGpu, pKernelFifo, ENGINE_INFO_TYPE_RM_ENGINE_TYPE, gpuGetRmEngineType(pFifoInfoParams->engineType), ENGINE_INFO_TYPE_RUNLIST, &runlistId) @ kernel_fifo_ctrl.c:329
+2026-10-22T12:52:57.467198+0000 ubuntu kernel: NVRM: GPU0 nvAssertOkFailedNoLog: Assertion failed: Requested object not found [NV_ERR_OBJECT_NOT_FOUND] (0x00000057) returned from kfifoEngineInfoXlate_HAL(pGpu, pKernelFifo, ENGINE_INFO_TYPE_RM_ENGINE_TYPE, gpuGetRmEngineType(pFifoInfoParams->engineType), ENGINE_INFO_TYPE_RUNLIST, &runlistId) @ kernel_fifo_ctrl.c:329
+2026-10-22T12:52:57.467279+0000 ubuntu kernel: NVRM: GPU0 nvAssertOkFailedNoLog: Assertion failed: Requested object not found [NV_ERR_OBJECT_NOT_FOUND] (0x00000057) returned from kfifoEngineInfoXlate_HAL(pGpu, pKernelFifo, ENGINE_INFO_TYPE_RM_ENGINE_TYPE, gpuGetRmEngineType(pFifoInfoParams->engineType), ENGINE_INFO_TYPE_RUNLIST, &runlistId) @ kernel_fifo_ctrl.c:329
+2026-10-22T12:52:57.471073+0000 ubuntu kernel: NVRM: GPU0 nvAssertOkFailedNoLog: Assertion failed: Requested object not found [NV_ERR_OBJECT_NOT_FOUND] (0x00000057) returned from kfifoEngineInfoXlate_HAL(pGpu, pKernelFifo, ENGINE_INFO_TYPE_RM_ENGINE_TYPE, gpuGetRmEngineType(pFifoInfoParams->engineType), ENGINE_INFO_TYPE_RUNLIST, &runlistId) @ kernel_fifo_ctrl.c:329
+2026-10-22T12:52:57.471190+0000 ubuntu kernel: NVRM: GPU0 nvAssertOkFailedNoLog: Assertion failed: Requested object not found [NV_ERR_OBJECT_NOT_FOUND] (0x00000057) returned from kfifoEngineInfoXlate_HAL(pGpu, pKernelFifo, ENGINE_INFO_TYPE_RM_ENGINE_TYPE, gpuGetRmEngineType(pFifoInfoParams->engineType), ENGINE_INFO_TYPE_RUNLIST, &runlistId) @ kernel_fifo_ctrl.c:329
+2026-10-22T12:52:57.471252+0000 ubuntu kernel: NVRM: GPU0 nvAssertOkFailedNoLog: Assertion failed: Requested object not found [NV_ERR_OBJECT_NOT_FOUND] (0x00000057) returned from kfifoEngineInfoXlate_HAL(pGpu, pKernelFifo, ENGINE_INFO_TYPE_RM_ENGINE_TYPE, gpuGetRmEngineType(pFifoInfoParams->engineType), ENGINE_INFO_TYPE_RUNLIST, &runlistId) @ kernel_fifo_ctrl.c:329
+2026-10-22T12:52:57.477070+0000 ubuntu kernel: NVRM: GPU0 nvAssertOkFailedNoLog: Assertion failed: Requested object not found [NV_ERR_OBJECT_NOT_FOUND] (0x00000057) returned from kfifoEngineInfoXlate_HAL(pGpu, pKernelFifo, ENGINE_INFO_TYPE_RM_ENGINE_TYPE, gpuGetRmEngineType(pFifoInfoParams->engineType), ENGINE_INFO_TYPE_RUNLIST, &runlistId) @ kernel_fifo_ctrl.c:329
+2026-10-22T12:52:57.477191+0000 ubuntu kernel: NVRM: GPU0 nvAssertOkFailedNoLog: Assertion failed: Requested object not found [NV_ERR_OBJECT_NOT_FOUND] (0x00000057) returned from kfifoEngineInfoXlate_HAL(pGpu, pKernelFifo, ENGINE_INFO_TYPE_RM_ENGINE_TYPE, gpuGetRmEngineType(pFifoInfoParams->engineType), ENGINE_INFO_TYPE_RUNLIST, &runlistId) @ kernel_fifo_ctrl.c:329
+2026-10-22T12:52:57.477269+0000 ubuntu kernel: NVRM: GPU0 nvAssertOkFailedNoLog: Assertion failed: Requested object not found [NV_ERR_OBJECT_NOT_FOUND] (0x00000057) returned from kfifoEngineInfoXlate_HAL(pGpu, pKernelFifo, ENGINE_INFO_TYPE_RM_ENGINE_TYPE, gpuGetRmEngineType(pFifoInfoParams->engineType), ENGINE_INFO_TYPE_RUNLIST, &runlistId) @ kernel_fifo_ctrl.c:329
+2026-10-22T12:52:57.482070+0000 ubuntu kernel: NVRM: GPU0 nvAssertOkFailedNoLog: Assertion failed: Requested object not found [NV_ERR_OBJECT_NOT_FOUND] (0x00000057) returned from kfifoEngineInfoXlate_HAL(pGpu, pKernelFifo, ENGINE_INFO_TYPE_RM_ENGINE_TYPE, gpuGetRmEngineType(pFifoInfoParams->engineType), ENGINE_INFO_TYPE_RUNLIST, &runlistId) @ kernel_fifo_ctrl.c:329
+2026-10-22T12:52:57.482172+0000 ubuntu kernel: NVRM: GPU0 nvAssertOkFailedNoLog: Assertion failed: Requested object not found [NV_ERR_OBJECT_NOT_FOUND] (0x00000057) returned from kfifoEngineInfoXlate_HAL(pGpu, pKernelFifo, ENGINE_INFO_TYPE_RM_ENGINE_TYPE, gpuGetRmEngineType(pFifoInfoParams->engineType), ENGINE_INFO_TYPE_RUNLIST, &runlistId) @ kernel_fifo_ctrl.c:329
+2026-10-22T12:52:57.482233+0000 ubuntu kernel: NVRM: GPU0 nvAssertOkFailedNoLog: Assertion failed: Requested object not found [NV_ERR_OBJECT_NOT_FOUND] (0x00000057) returned from kfifoEngineInfoXlate_HAL(pGpu, pKernelFifo, ENGINE_INFO_TYPE_RM_ENGINE_TYPE, gpuGetRmEngineType(pFifoInfoParams->engineType), ENGINE_INFO_TYPE_RUNLIST, &runlistId) @ kernel_fifo_ctrl.c:329
+2026-10-22T12:52:57.488072+0000 ubuntu kernel: NVRM: GPU0 nvAssertOkFailedNoLog: Assertion failed: Requested object not found [NV_ERR_OBJECT_NOT_FOUND] (0x00000057) returned from kfifoEngineInfoXlate_HAL(pGpu, pKernelFifo, ENGINE_INFO_TYPE_RM_ENGINE_TYPE, gpuGetRmEngineType(pFifoInfoParams->engineType), ENGINE_INFO_TYPE_RUNLIST, &runlistId) @ kernel_fifo_ctrl.c:329
+2026-10-22T12:52:57.488169+0000 ubuntu kernel: NVRM: GPU0 nvAssertOkFailedNoLog: Assertion failed: Requested object not found [NV_ERR_OBJECT_NOT_FOUND] (0x00000057) returned from kfifoEngineInfoXlate_HAL(pGpu, pKernelFifo, ENGINE_INFO_TYPE_RM_ENGINE_TYPE, gpuGetRmEngineType(pFifoInfoParams->engineType), ENGINE_INFO_TYPE_RUNLIST, &runlistId) @ kernel_fifo_ctrl.c:329
+2026-10-22T12:52:57.488263+0000 ubuntu kernel: NVRM: GPU0 nvAssertOkFailedNoLog: Assertion failed: Requested object not found [NV_ERR_OBJECT_NOT_FOUND] (0x00000057) returned from kfifoEngineInfoXlate_HAL(pGpu, pKernelFifo, ENGINE_INFO_TYPE_RM_ENGINE_TYPE, gpuGetRmEngineType(pFifoInfoParams->engineType), ENGINE_INFO_TYPE_RUNLIST, &runlistId) @ kernel_fifo_ctrl.c:329
+2026-10-22T12:52:57.493072+0000 ubuntu kernel: NVRM: GPU0 nvAssertOkFailedNoLog: Assertion failed: Requested object not found [NV_ERR_OBJECT_NOT_FOUND] (0x00000057) returned from kfifoEngineInfoXlate_HAL(pGpu, pKernelFifo, ENGINE_INFO_TYPE_RM_ENGINE_TYPE, gpuGetRmEngineType(pFifoInfoParams->engineType), ENGINE_INFO_TYPE_RUNLIST, &runlistId) @ kernel_fifo_ctrl.c:329
+2026-10-22T12:52:57.493186+0000 ubuntu kernel: NVRM: GPU0 nvAssertOkFailedNoLog: Assertion failed: Requested object not found [NV_ERR_OBJECT_NOT_FOUND] (0x00000057) returned from kfifoEngineInfoXlate_HAL(pGpu, pKernelFifo, ENGINE_INFO_TYPE_RM_ENGINE_TYPE, gpuGetRmEngineType(pFifoInfoParams->engineType), ENGINE_INFO_TYPE_RUNLIST, &runlistId) @ kernel_fifo_ctrl.c:329
+2026-10-22T12:52:57.493250+0000 ubuntu kernel: NVRM: GPU0 nvAssertOkFailedNoLog: Assertion failed: Requested object not found [NV_ERR_OBJECT_NOT_FOUND] (0x00000057) returned from kfifoEngineInfoXlate_HAL(pGpu, pKernelFifo, ENGINE_INFO_TYPE_RM_ENGINE_TYPE, gpuGetRmEngineType(pFifoInfoParams->engineType), ENGINE_INFO_TYPE_RUNLIST, &runlistId) @ kernel_fifo_ctrl.c:329
+2026-10-22T12:52:57.499069+0000 ubuntu kernel: NVRM: GPU0 nvAssertOkFailedNoLog: Assertion failed: Requested object not found [NV_ERR_OBJECT_NOT_FOUND] (0x00000057) returned from kfifoEngineInfoXlate_HAL(pGpu, pKernelFifo, ENGINE_INFO_TYPE_RM_ENGINE_TYPE, gpuGetRmEngineType(pFifoInfoParams->engineType), ENGINE_INFO_TYPE_RUNLIST, &runlistId) @ kernel_fifo_ctrl.c:329
+2026-10-22T12:52:57.499189+0000 ubuntu kernel: NVRM: GPU0 nvAssertOkFailedNoLog: Assertion failed: Requested object not found [NV_ERR_OBJECT_NOT_FOUND] (0x00000057) returned from kfifoEngineInfoXlate_HAL(pGpu, pKernelFifo, ENGINE_INFO_TYPE_RM_ENGINE_TYPE, gpuGetRmEngineType(pFifoInfoParams->engineType), ENGINE_INFO_TYPE_RUNLIST, &runlistId) @ kernel_fifo_ctrl.c:329
+2026-10-22T12:52:57.499279+0000 ubuntu kernel: NVRM: GPU0 nvAssertOkFailedNoLog: Assertion failed: Requested object not found [NV_ERR_OBJECT_NOT_FOUND] (0x00000057) returned from kfifoEngineInfoXlate_HAL(pGpu, pKernelFifo, ENGINE_INFO_TYPE_RM_ENGINE_TYPE, gpuGetRmEngineType(pFifoInfoParams->engineType), ENGINE_INFO_TYPE_RUNLIST, &runlistId) @ kernel_fifo_ctrl.c:329
+2026-10-22T12:52:57.499334+0000 ubuntu kernel: NVRM: GPU0 nvAssertOkFailedNoLog: Assertion failed: Requested object not found [NV_ERR_OBJECT_NOT_FOUND] (0x00000057) returned from kfifoEngineInfoXlate_HAL(pGpu, pKernelFifo, ENGINE_INFO_TYPE_RM_ENGINE_TYPE, (NvU32)rmEngineType, ENGINE_INFO_TYPE_ENG_DESC, &engDesc) @ kernel_fifo_gm107.c:362
+2026-10-22T12:52:57.501072+0000 ubuntu kernel: NVRM: GPU0 nvAssertOkFailedNoLog: Assertion failed: Requested object not found [NV_ERR_OBJECT_NOT_FOUND] (0x00000057) returned from kfifoEngineInfoXlate_HAL(pGpu, pKernelFifo, ENGINE_INFO_TYPE_RM_ENGINE_TYPE, (NvU32)rmEngineType, ENGINE_INFO_TYPE_ENG_DESC, &engDesc) @ kernel_fifo_gm107.c:362
+2026-10-22T12:52:57.504067+0000 ubuntu kernel: NVRM: GPU0 nvAssertOkFailedNoLog: Assertion failed: Requested object not found [NV_ERR_OBJECT_NOT_FOUND] (0x00000057) returned from kfifoEngineInfoXlate_HAL(pGpu, GPU_GET_KERNEL_FIFO(pGpu), ENGINE_INFO_TYPE_ENG_DESC, engineDesc, ENGINE_INFO_TYPE_RUNLIST, &pKernelChannelGroupApi->pKernelChannelGroup->runlistId) @ kernel_channel_group_api.c:1252
+2026-10-22T12:52:57.504183+0000 ubuntu kernel: NVRM: GPU0 nvAssertOkFailedNoLog: Assertion failed: Requested object not found [NV_ERR_OBJECT_NOT_FOUND] (0x00000057) returned from status @ kernel_channel.c:2828
+2026-10-22T12:52:57.504282+0000 ubuntu kernel: NVRM: GPU0 nvAssertOkFailedNoLog: Assertion failed: Requested object not found [NV_ERR_OBJECT_NOT_FOUND] (0x00000057) returned from kchannelBindToRunlist(pChanNode->pKernelChannel, localEngineType, engineDesc) @ kernel_channel_group_api.c:1264
+2026-10-22T12:52:57.511056+0000 ubuntu kernel: NVRM: GPU0 nvAssertOkFailedNoLog: Assertion failed: Requested object not found [NV_ERR_OBJECT_NOT_FOUND] (0x00000057) returned from kfifoEngineInfoXlate_HAL(pGpu, pKernelFifo, ENGINE_INFO_TYPE_RM_ENGINE_TYPE, gpuGetRmEngineType(pFifoInfoParams->engineType), ENGINE_INFO_TYPE_RUNLIST, &runlistId) @ kernel_fifo_ctrl.c:329
+2026-10-22T12:52:57.511164+0000 ubuntu kernel: NVRM: GPU0 nvAssertOkFailedNoLog: Assertion failed: Requested object not found [NV_ERR_OBJECT_NOT_FOUND] (0x00000057) returned from kfifoEngineInfoXlate_HAL(pGpu, pKernelFifo, ENGINE_INFO_TYPE_RM_ENGINE_TYPE, gpuGetRmEngineType(pFifoInfoParams->engineType), ENGINE_INFO_TYPE_RUNLIST, &runlistId) @ kernel_fifo_ctrl.c:329
+2026-10-22T12:52:57.511249+0000 ubuntu kernel: NVRM: GPU0 nvAssertOkFailedNoLog: Assertion failed: Requested object not found [NV_ERR_OBJECT_NOT_FOUND] (0x00000057) returned from kfifoEngineInfoXlate_HAL(pGpu, pKernelFifo, ENGINE_INFO_TYPE_RM_ENGINE_TYPE, gpuGetRmEngineType(pFifoInfoParams->engineType), ENGINE_INFO_TYPE_RUNLIST, &runlistId) @ kernel_fifo_ctrl.c:329
+2026-10-22T12:52:57.511329+0000 ubuntu kernel: NVRM: GPU0 nvAssertOkFailedNoLog: Assertion failed: Requested object not found [NV_ERR_OBJECT_NOT_FOUND] (0x00000057) returned from kfifoEngineInfoXlate_HAL(pGpu, pKernelFifo, ENGINE_INFO_TYPE_RM_ENGINE_TYPE, (NvU32)rmEngineType, ENGINE_INFO_TYPE_ENG_DESC, &engDesc) @ kernel_fifo_gm107.c:362
+2026-10-22T12:52:57.513056+0000 ubuntu kernel: NVRM: GPU0 nvAssertOkFailedNoLog: Assertion failed: Requested object not found [NV_ERR_OBJECT_NOT_FOUND] (0x00000057) returned from kfifoEngineInfoXlate_HAL(pGpu, pKernelFifo, ENGINE_INFO_TYPE_RM_ENGINE_TYPE, (NvU32)rmEngineType, ENGINE_INFO_TYPE_ENG_DESC, &engDesc) @ kernel_fifo_gm107.c:362
+2026-10-22T12:52:57.515068+0000 ubuntu kernel: NVRM: GPU0 nvAssertOkFailedNoLog: Assertion failed: Requested object not found [NV_ERR_OBJECT_NOT_FOUND] (0x00000057) returned from kfifoEngineInfoXlate_HAL(pGpu, GPU_GET_KERNEL_FIFO(pGpu), ENGINE_INFO_TYPE_ENG_DESC, engineDesc, ENGINE_INFO_TYPE_RUNLIST, &pKernelChannelGroupApi->pKernelChannelGroup->runlistId) @ kernel_channel_group_api.c:1252
+2026-10-22T12:52:57.516076+0000 ubuntu kernel: NVRM: GPU0 nvAssertOkFailedNoLog: Assertion failed: Requested object not found [NV_ERR_OBJECT_NOT_FOUND] (0x00000057) returned from status @ kernel_channel.c:2828
+2026-10-22T12:52:57.516173+0000 ubuntu kernel: NVRM: GPU0 nvAssertOkFailedNoLog: Assertion failed: Requested object not found [NV_ERR_OBJECT_NOT_FOUND] (0x00000057) returned from kchannelBindToRunlist(pChanNode->pKernelChannel, localEngineType, engineDesc) @ kernel_channel_group_api.c:1264
+2026-10-22T12:52:57.523059+0000 ubuntu kernel: NVRM: GPU0 nvAssertOkFailedNoLog: Assertion failed: Requested object not found [NV_ERR_OBJECT_NOT_FOUND] (0x00000057) returned from kfifoEngineInfoXlate_HAL(pGpu, pKernelFifo, ENGINE_INFO_TYPE_RM_ENGINE_TYPE, gpuGetRmEngineType(pFifoInfoParams->engineType), ENGINE_INFO_TYPE_RUNLIST, &runlistId) @ kernel_fifo_ctrl.c:329
+2026-10-22T12:52:57.523141+0000 ubuntu kernel: NVRM: GPU0 nvAssertOkFailedNoLog: Assertion failed: Requested object not found [NV_ERR_OBJECT_NOT_FOUND] (0x00000057) returned from kfifoEngineInfoXlate_HAL(pGpu, pKernelFifo, ENGINE_INFO_TYPE_RM_ENGINE_TYPE, gpuGetRmEngineType(pFifoInfoParams->engineType), ENGINE_INFO_TYPE_RUNLIST, &runlistId) @ kernel_fifo_ctrl.c:329
+2026-10-22T12:52:57.523197+0000 ubuntu kernel: NVRM: GPU0 nvAssertOkFailedNoLog: Assertion failed: Requested object not found [NV_ERR_OBJECT_NOT_FOUND] (0x00000057) returned from kfifoEngineInfoXlate_HAL(pGpu, pKernelFifo, ENGINE_INFO_TYPE_RM_ENGINE_TYPE, gpuGetRmEngineType(pFifoInfoParams->engineType), ENGINE_INFO_TYPE_RUNLIST, &runlistId) @ kernel_fifo_ctrl.c:329
+2026-10-22T12:52:57.523241+0000 ubuntu kernel: NVRM: GPU0 nvAssertOkFailedNoLog: Assertion failed: Requested object not found [NV_ERR_OBJECT_NOT_FOUND] (0x00000057) returned from kfifoEngineInfoXlate_HAL(pGpu, pKernelFifo, ENGINE_INFO_TYPE_RM_ENGINE_TYPE, (NvU32)rmEngineType, ENGINE_INFO_TYPE_ENG_DESC, &engDesc) @ kernel_fifo_gm107.c:362
+2026-10-22T12:52:57.525056+0000 ubuntu kernel: NVRM: GPU0 nvAssertOkFailedNoLog: Assertion failed: Requested object not found [NV_ERR_OBJECT_NOT_FOUND] (0x00000057) returned from kfifoEngineInfoXlate_HAL(pGpu, pKernelFifo, ENGINE_INFO_TYPE_RM_ENGINE_TYPE, (NvU32)rmEngineType, ENGINE_INFO_TYPE_ENG_DESC, &engDesc) @ kernel_fifo_gm107.c:362
+2026-10-22T12:52:57.527068+0000 ubuntu kernel: NVRM: GPU0 nvAssertOkFailedNoLog: Assertion failed: Requested object not found [NV_ERR_OBJECT_NOT_FOUND] (0x00000057) returned from kfifoEngineInfoXlate_HAL(pGpu, GPU_GET_KERNEL_FIFO(pGpu), ENGINE_INFO_TYPE_ENG_DESC, engineDesc, ENGINE_INFO_TYPE_RUNLIST, &pKernelChannelGroupApi->pKernelChannelGroup->runlistId) @ kernel_channel_group_api.c:1252
+2026-10-22T12:52:57.528080+0000 ubuntu kernel: NVRM: GPU0 nvAssertOkFailedNoLog: Assertion failed: Requested object not found [NV_ERR_OBJECT_NOT_FOUND] (0x00000057) returned from status @ kernel_channel.c:2828
+2026-10-22T12:52:57.528176+0000 ubuntu kernel: NVRM: GPU0 nvAssertOkFailedNoLog: Assertion failed: Requested object not found [NV_ERR_OBJECT_NOT_FOUND] (0x00000057) returned from kchannelBindToRunlist(pChanNode->pKernelChannel, localEngineType, engineDesc) @ kernel_channel_group_api.c:1264
+2026-10-22T12:53:05.310096+0000 ubuntu kernel: NVRM: GPU at PCI:0000:00:07: GPU-259fccc1-4cda-8c67-d13d-e08932415283
+2026-10-22T12:53:05.310303+0000 ubuntu kernel: NVRM: Xid (PCI:0000:00:07): 31, pid=89601, name=kayfabe-rm-ladd, channel 0x00000004, intr 00000000. MMU Fault: ENGINE CE0 HUBCLIENT_CE0 faulted @ 0x60_00010000. Fault is of type FAULT_PTE ACCESS_TYPE_VIRT_READ
+2026-10-22T12:53:08.358116+0000 ubuntu kernel: NVRM: Xid (PCI:0000:00:07): 31, pid=89601, name=kayfabe-rm-ladd, channel 0x00000004, intr 00000000. MMU Fault: ENGINE CE0 HUBCLIENT_CE0 faulted @ 0x62_00010000. Fault is of type FAULT_PTE ACCESS_TYPE_VIRT_READ
+2026-10-22T12:53:11.367139+0000 ubuntu kernel: NVRM: Xid (PCI:0000:00:07): 31, pid=89601, name=kayfabe-rm-ladd, channel 0x00000005, intr 00000000. MMU Fault: ENGINE CE0 HUBCLIENT_CE0 faulted @ 0x62_00010000. Fault is of type FAULT_PTE ACCESS_TYPE_VIRT_READ
+2026-10-22T12:53:14.428110+0000 ubuntu kernel: NVRM: Xid (PCI:0000:00:07): 31, pid=89601, name=kayfabe-rm-ladd, channel 0x00000004, intr 00000000. MMU Fault: ENGINE CE0 HUBCLIENT_CE0 faulted @ 0x64_00010000. Fault is of type FAULT_PTE ACCESS_TYPE_VIRT_READ
+2026-10-22T12:53:18.012150+0000 ubuntu kernel: NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+2026-10-22T12:53:18.514117+0000 ubuntu kernel: NVRM: Xid (PCI:0000:00:07): 31, pid=89637, name=kayfabe-rm-ladd, channel 0x00000005, intr 00000000. MMU Fault: ENGINE GR0_PBDMA0 HUBCLIENT_ESC faulted @ 0xa_11000000. Fault is of type FAULT_PDE ACCESS_TYPE_VIRT_WRITE
+2026-10-22T12:53:21.817123+0000 ubuntu kernel: NVRM: GPU0 kchannelIsSchedulable_IMPL: Cannot schedule externally-owned channel 0x0000000a with unbound allocations!
+2026-10-22T12:53:21.949167+0000 ubuntu kernel: NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+2026-10-22T12:53:21.983077+0000 ubuntu kernel: NVRM: memMap_IMPL: CPU mapping not supported for addressSpace: 0x1
+2026-10-22T12:53:22.050132+0000 ubuntu kernel: NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+2026-10-22T12:53:22.087094+0000 ubuntu kernel: NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+2026-10-22T12:54:13.193140+0000 ubuntu kernel: NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+2026-10-22T12:54:13.194050+0000 ubuntu kernel: NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+2026-10-22T12:54:13.196057+0000 ubuntu kernel: NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+2026-10-22T12:54:13.196102+0000 ubuntu kernel: NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+2026-10-22T12:54:13.197046+0000 ubuntu kernel: NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+2026-10-22T12:54:13.197085+0000 ubuntu kernel: NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+2026-10-22T12:54:13.197109+0000 ubuntu kernel: NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+2026-10-22T12:54:13.197131+0000 ubuntu kernel: NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+2026-10-22T12:54:13.213095+0000 ubuntu kernel: NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+2026-10-22T12:54:13.213233+0000 ubuntu kernel: NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+2026-10-22T12:54:13.213289+0000 ubuntu kernel: NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+2026-10-22T12:54:13.213325+0000 ubuntu kernel: NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+2026-10-22T12:54:13.215061+0000 ubuntu kernel: NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+2026-10-22T12:54:13.216066+0000 ubuntu kernel: NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+2026-10-22T12:54:13.217085+0000 ubuntu kernel: NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+2026-10-22T12:54:13.218080+0000 ubuntu kernel: NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+2026-10-22T12:54:13.220068+0000 ubuntu kernel: NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+2026-10-22T12:54:13.221069+0000 ubuntu kernel: NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+2026-10-22T12:54:13.222062+0000 ubuntu kernel: NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+2026-10-22T12:54:13.225061+0000 ubuntu kernel: NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+2026-10-22T12:54:13.226062+0000 ubuntu kernel: NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+2026-10-22T12:54:13.227064+0000 ubuntu kernel: NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+2026-10-22T12:54:13.228065+0000 ubuntu kernel: NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+2026-10-22T12:54:13.228136+0000 ubuntu kernel: NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+2026-10-22T12:54:13.229065+0000 ubuntu kernel: NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+2026-10-22T12:54:13.229134+0000 ubuntu kernel: NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+2026-10-22T12:54:13.230070+0000 ubuntu kernel: NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+2026-10-22T12:54:13.230138+0000 ubuntu kernel: NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+2026-10-22T12:54:13.232066+0000 ubuntu kernel: NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+2026-10-22T12:54:13.235063+0000 ubuntu kernel: NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+2026-10-22T12:54:13.238081+0000 ubuntu kernel: NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+2026-10-22T12:54:13.239111+0000 ubuntu kernel: NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+2026-10-22T12:54:13.240097+0000 ubuntu kernel: NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+2026-10-22T12:54:13.253128+0000 ubuntu kernel: NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+2026-10-22T12:54:13.274096+0000 ubuntu kernel: NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+2026-10-22T12:54:13.274291+0000 ubuntu kernel: NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+2026-10-22T12:54:13.274352+0000 ubuntu kernel: NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+2026-10-22T12:54:13.275074+0000 ubuntu kernel: NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+2026-10-22T12:54:13.277057+0000 ubuntu kernel: NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+2026-10-22T12:54:13.277142+0000 ubuntu kernel: NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+2026-10-22T12:54:13.279057+0000 ubuntu kernel: NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+2026-10-22T12:54:13.279129+0000 ubuntu kernel: NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+2026-10-22T12:54:13.280064+0000 ubuntu kernel: NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+2026-10-22T12:54:13.281062+0000 ubuntu kernel: NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+2026-10-22T12:54:13.281131+0000 ubuntu kernel: NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+2026-10-22T12:54:13.284055+0000 ubuntu kernel: NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+2026-10-22T12:54:13.285064+0000 ubuntu kernel: NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+2026-10-22T12:54:13.285131+0000 ubuntu kernel: NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+2026-10-22T12:54:13.287062+0000 ubuntu kernel: NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+2026-10-22T12:54:13.289055+0000 ubuntu kernel: NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+2026-10-22T12:54:13.289125+0000 ubuntu kernel: NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+2026-10-22T12:54:13.294057+0000 ubuntu kernel: NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+2026-10-22T12:54:13.295075+0000 ubuntu kernel: NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+2026-10-22T12:54:13.296072+0000 ubuntu kernel: NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+2026-10-22T12:54:13.296142+0000 ubuntu kernel: NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+2026-10-22T12:54:13.297073+0000 ubuntu kernel: NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+2026-10-22T12:54:13.298063+0000 ubuntu kernel: NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+2026-10-22T12:54:13.300076+0000 ubuntu kernel: NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+2026-10-22T12:54:13.301063+0000 ubuntu kernel: NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+2026-10-22T12:54:13.313070+0000 ubuntu kernel: NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+2026-10-22T12:54:13.357089+0000 ubuntu kernel: NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+2026-10-22T12:54:13.358068+0000 ubuntu kernel: NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+2026-10-22T12:54:13.358170+0000 ubuntu kernel: NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+2026-10-22T12:54:13.359192+0000 ubuntu kernel: NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+2026-10-22T12:54:13.359339+0000 ubuntu kernel: NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+2026-10-22T12:54:13.361080+0000 ubuntu kernel: NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+2026-10-22T12:54:13.361195+0000 ubuntu kernel: NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+2026-10-22T12:54:13.363092+0000 ubuntu kernel: NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+2026-10-22T12:54:13.365058+0000 ubuntu kernel: NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+2026-10-22T12:54:13.365138+0000 ubuntu kernel: NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+2026-10-22T12:54:13.367081+0000 ubuntu kernel: NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+2026-10-22T12:54:13.368174+0000 ubuntu kernel: NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+2026-10-22T12:54:13.369095+0000 ubuntu kernel: NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+2026-10-22T12:54:13.369217+0000 ubuntu kernel: NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+2026-10-22T12:54:13.369295+0000 ubuntu kernel: NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+2026-10-22T12:54:13.370085+0000 ubuntu kernel: NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+2026-10-22T12:54:13.371056+0000 ubuntu kernel: NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+2026-10-22T12:54:13.371169+0000 ubuntu kernel: NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+2026-10-22T12:54:13.371227+0000 ubuntu kernel: NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+2026-10-22T12:54:13.372073+0000 ubuntu kernel: NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+2026-10-22T12:54:13.373071+0000 ubuntu kernel: NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+2026-10-22T12:54:13.373152+0000 ubuntu kernel: NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+2026-10-22T12:54:13.374057+0000 ubuntu kernel: NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+2026-10-22T12:54:13.375155+0000 ubuntu kernel: NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+2026-10-22T12:54:13.376087+0000 ubuntu kernel: NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+2026-10-22T12:54:13.377109+0000 ubuntu kernel: NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+2026-10-22T12:54:13.378278+0000 ubuntu kernel: NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+2026-10-22T12:54:13.379078+0000 ubuntu kernel: NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+2026-10-22T12:54:13.379173+0000 ubuntu kernel: NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+2026-10-22T12:54:13.379222+0000 ubuntu kernel: NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+2026-10-22T12:54:13.383064+0000 ubuntu kernel: NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+2026-10-22T12:54:13.384128+0000 ubuntu kernel: NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+2026-10-22T12:54:13.386120+0000 ubuntu kernel: NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+2026-10-22T12:54:13.386197+0000 ubuntu kernel: NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+2026-10-22T12:54:13.386235+0000 ubuntu kernel: NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+2026-10-22T12:54:13.388150+0000 ubuntu kernel: NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+2026-10-22T12:54:13.389112+0000 ubuntu kernel: NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+2026-10-22T12:54:13.389317+0000 ubuntu kernel: NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+2026-10-22T12:54:13.391100+0000 ubuntu kernel: NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+2026-10-22T12:54:13.391254+0000 ubuntu kernel: NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+2026-10-22T12:54:13.391337+0000 ubuntu kernel: NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+2026-10-22T12:54:13.393082+0000 ubuntu kernel: NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+2026-10-22T12:54:13.393198+0000 ubuntu kernel: NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+2026-10-22T12:54:13.395142+0000 ubuntu kernel: NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+2026-10-22T12:54:13.395282+0000 ubuntu kernel: NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+2026-10-22T12:54:13.396096+0000 ubuntu kernel: NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+2026-10-22T12:54:13.399082+0000 ubuntu kernel: NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+2026-10-22T12:54:13.401068+0000 ubuntu kernel: NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+2026-10-22T12:54:13.401141+0000 ubuntu kernel: NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+2026-10-22T12:54:13.403088+0000 ubuntu kernel: NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+2026-10-22T12:54:13.403190+0000 ubuntu kernel: NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+2026-10-22T12:54:13.406067+0000 ubuntu kernel: NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+2026-10-22T12:54:13.407066+0000 ubuntu kernel: NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+2026-10-22T12:54:13.407158+0000 ubuntu kernel: NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+2026-10-22T12:54:13.410087+0000 ubuntu kernel: NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+2026-10-22T12:54:13.413064+0000 ubuntu kernel: NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+2026-10-22T12:54:13.416055+0000 ubuntu kernel: NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+2026-10-22T12:54:13.416147+0000 ubuntu kernel: NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+2026-10-22T12:54:13.417291+0000 ubuntu kernel: NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+2026-10-22T12:54:13.420226+0000 ubuntu kernel: NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+2026-10-22T12:54:13.420374+0000 ubuntu kernel: NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+2026-10-22T12:54:13.420484+0000 ubuntu kernel: NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+2026-10-22T12:54:13.420553+0000 ubuntu kernel: NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+2026-10-22T12:54:13.422155+0000 ubuntu kernel: NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+2026-10-22T12:54:13.426094+0000 ubuntu kernel: NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+2026-10-22T12:54:13.426235+0000 ubuntu kernel: NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+2026-10-22T12:54:13.427111+0000 ubuntu kernel: NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+2026-10-22T12:54:13.429087+0000 ubuntu kernel: NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+2026-10-22T12:54:13.431094+0000 ubuntu kernel: NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+2026-10-22T12:54:13.433085+0000 ubuntu kernel: NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+2026-10-22T12:54:13.438092+0000 ubuntu kernel: NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+2026-10-22T12:54:13.443090+0000 ubuntu kernel: NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+2026-10-22T12:54:13.445095+0000 ubuntu kernel: NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+2026-10-22T12:54:13.445242+0000 ubuntu kernel: NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+2026-10-22T12:54:13.455115+0000 ubuntu kernel: NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+2026-10-22T12:54:13.509116+0000 ubuntu kernel: NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+2026-10-22T12:54:13.509284+0000 ubuntu kernel: NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+2026-10-22T12:54:13.510089+0000 ubuntu kernel: NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+2026-10-22T12:54:13.510188+0000 ubuntu kernel: NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+2026-10-22T12:54:13.511100+0000 ubuntu kernel: NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+2026-10-22T12:54:13.514084+0000 ubuntu kernel: NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+2026-10-22T12:54:13.514215+0000 ubuntu kernel: NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+2026-10-22T12:54:13.516082+0000 ubuntu kernel: NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+2026-10-22T12:54:13.516199+0000 ubuntu kernel: NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+2026-10-22T12:54:13.519091+0000 ubuntu kernel: NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+2026-10-22T12:54:13.519207+0000 ubuntu kernel: NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+2026-10-22T12:54:13.519308+0000 ubuntu kernel: NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+2026-10-22T12:54:13.520080+0000 ubuntu kernel: NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+2026-10-22T12:54:13.522085+0000 ubuntu kernel: NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+2026-10-22T12:54:13.522209+0000 ubuntu kernel: NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+2026-10-22T12:54:13.522311+0000 ubuntu kernel: NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+2026-10-22T12:54:13.522367+0000 ubuntu kernel: NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+2026-10-22T12:54:13.523094+0000 ubuntu kernel: NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+2026-10-22T12:54:13.523169+0000 ubuntu kernel: NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+2026-10-22T12:54:13.523206+0000 ubuntu kernel: NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+2026-10-22T12:54:13.525082+0000 ubuntu kernel: NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+2026-10-22T12:54:13.525191+0000 ubuntu kernel: NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+2026-10-22T12:54:13.525278+0000 ubuntu kernel: NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+2026-10-22T12:54:13.527086+0000 ubuntu kernel: NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+2026-10-22T12:54:13.528082+0000 ubuntu kernel: NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+2026-10-22T12:54:13.528162+0000 ubuntu kernel: NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+2026-10-22T12:54:13.528229+0000 ubuntu kernel: NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+2026-10-22T12:54:13.529082+0000 ubuntu kernel: NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+2026-10-22T12:54:13.529200+0000 ubuntu kernel: NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+2026-10-22T12:54:13.530081+0000 ubuntu kernel: NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+2026-10-22T12:54:13.532089+0000 ubuntu kernel: NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+2026-10-22T12:54:13.533084+0000 ubuntu kernel: NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+2026-10-22T12:54:13.535083+0000 ubuntu kernel: NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+2026-10-22T12:54:13.539086+0000 ubuntu kernel: NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+2026-10-22T12:54:13.539178+0000 ubuntu kernel: NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+2026-10-22T12:54:13.542084+0000 ubuntu kernel: NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+2026-10-22T12:54:13.543080+0000 ubuntu kernel: NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+2026-10-22T12:54:13.545080+0000 ubuntu kernel: NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+2026-10-22T12:54:13.545167+0000 ubuntu kernel: NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+2026-10-22T12:54:13.546080+0000 ubuntu kernel: NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+2026-10-22T12:54:13.547079+0000 ubuntu kernel: NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+2026-10-22T12:54:13.547159+0000 ubuntu kernel: NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+2026-10-22T12:54:13.550074+0000 ubuntu kernel: NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+2026-10-22T12:54:13.553081+0000 ubuntu kernel: NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+2026-10-22T12:54:13.554080+0000 ubuntu kernel: NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+2026-10-22T12:54:13.555085+0000 ubuntu kernel: NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+2026-10-22T12:54:13.557080+0000 ubuntu kernel: NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+2026-10-22T12:54:13.557179+0000 ubuntu kernel: NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+2026-10-22T12:54:13.558071+0000 ubuntu kernel: NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+2026-10-22T12:54:13.558318+0000 ubuntu kernel: NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+2026-10-22T12:54:13.558389+0000 ubuntu kernel: NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+2026-10-22T12:54:13.560080+0000 ubuntu kernel: NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+2026-10-22T12:54:13.560175+0000 ubuntu kernel: NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+2026-10-22T12:54:13.561072+0000 ubuntu kernel: NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+2026-10-22T12:54:13.561159+0000 ubuntu kernel: NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+2026-10-22T12:54:13.564074+0000 ubuntu kernel: NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+2026-10-22T12:54:13.565078+0000 ubuntu kernel: NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+2026-10-22T12:54:13.565158+0000 ubuntu kernel: NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+2026-10-22T12:54:13.567075+0000 ubuntu kernel: NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+2026-10-22T12:54:13.569074+0000 ubuntu kernel: NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+2026-10-22T12:54:13.569177+0000 ubuntu kernel: NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+2026-10-22T12:54:13.569231+0000 ubuntu kernel: NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+2026-10-22T12:54:13.572072+0000 ubuntu kernel: NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+2026-10-22T12:54:13.572135+0000 ubuntu kernel: NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+2026-10-22T12:54:13.573065+0000 ubuntu kernel: NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+2026-10-22T12:54:13.574068+0000 ubuntu kernel: NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+2026-10-22T12:54:13.579077+0000 ubuntu kernel: NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+2026-10-22T12:54:13.580071+0000 ubuntu kernel: NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+2026-10-22T12:54:13.581072+0000 ubuntu kernel: NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+2026-10-22T12:54:13.581168+0000 ubuntu kernel: NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+2026-10-22T12:54:13.589075+0000 ubuntu kernel: NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+2026-10-22T12:54:13.598075+0000 ubuntu kernel: NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+2026-10-22T12:54:13.600075+0000 ubuntu kernel: NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+2026-10-22T12:54:13.603067+0000 ubuntu kernel: NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+2026-10-22T12:54:13.604068+0000 ubuntu kernel: NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+2026-10-22T12:54:18.079105+0000 ubuntu kernel: NVRM:unknown NVRM ioctl command: 0xf0

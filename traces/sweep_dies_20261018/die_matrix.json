@@ -14,5 +14,22 @@
     "lease_id": 57193877,
     "n": 1,
     "spread": "N/A"
+  },
+  {
+    "kind": "MEASURED",
+    "date": "2026-10-22",
+    "die": "GA102",
+    "gpu": "RTX3090",
+    "driver": "host595.91.07 open;Windows580.88 NOTRUN",
+    "rev": "e27444a6f775143c0edcda55445215d0f0eaf00b",
+    "flags": "stock native;planned WindowsP19/FB8192MiB/8vCPU not exercised",
+    "verdict": "FAIL",
+    "reason": "exact native Xid HUB-client route mismatch;baseline refused",
+    "coverage": "native gates9+10,raw30,CUDAladder4,GR PASS;Windows allNOTRUN",
+    "hold": "NOTRUN",
+    "evidence": "lease_57209908/AMPERE_RESULT.md",
+    "lease_id": 57209908,
+    "n": 1,
+    "spread": "N/A"
   }
 ]

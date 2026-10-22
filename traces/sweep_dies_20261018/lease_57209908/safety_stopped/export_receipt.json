@@ -1,0 +1,69 @@
+{
+  "kind": "MEASURED",
+  "lease_id": 57209908,
+  "source": "e27444a6f775143c0edcda55445215d0f0eaf00b",
+  "utc": "2026-10-22T12:58:58.123735+00:00",
+  "files": {
+    "s4_controller.log": {
+      "bytes": 854,
+      "sha256": "87e6f768d11297535d40f35c3aae087f4fb17a4fffb5c6282063e70f8db21780"
+    },
+    "sweep_host_die.log": {
+      "bytes": 209,
+      "sha256": "ddd528ff99274aed949cbf0d7ce83d5e05745f49d45f8264f348a98d589db04c"
+    },
+    "sweep_windows_media_controller.log": {
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "sweep_native_grtier.log": {
+      "bytes": 3056,
+      "sha256": "33d848370b81fcf288d53a8509cdcec845fcebcf9c195d7cc16e3c674f792fe6"
+    },
+    "sweep_host_preflight.log": {
+      "bytes": 410,
+      "sha256": "906f06be5168ec68b0dbe90ddc5b18ce69d223df8415eea33e0e660ff92c4c13"
+    },
+    "sweep_grtier_build.log": {
+      "bytes": 31462,
+      "sha256": "f2358f2519c20b88d859f422d3a2efd7405f442dfe97124100226fb0b23937c1"
+    },
+    "sweep_native_baseline.log": {
+      "bytes": 352,
+      "sha256": "abb30e45d2678d113b30aad8e8fb51131f5ca4c12f506dfa2f6b4e219a1aec63"
+    },
+    "native_xid_baseline.json": {
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "sweep_raw_build.log": {
+      "bytes": 29936,
+      "sha256": "bd0e08a804702821eef50253d29da386f908fb37559aa4af935ca6d6156c5dd2"
+    },
+    "sweep_cuda_host.log": {
+      "bytes": 2362,
+      "sha256": "ce8bc9d26dc62e10917f83574b3dbdb6eb69d1d7de38114a0f1a3c8449f1889c"
+    },
+    "sweep_gates.log": {
+      "bytes": 25215,
+      "sha256": "f6d104dc2e482a25b8b1e5a27f9698252dda0f2f57c59f9243c7422a447497b8"
+    },
+    "sweep_windows_media.log": {
+      "bytes": 20389,
+      "sha256": "3b98e265da0b28bd7da09daa3e3e9f56a6a64b02b2a0e50f36d6acae0f795ee5"
+    },
+    "sweep_bare595.log": {
+      "bytes": 5841,
+      "sha256": "e00b911ab430c0c40f08bdb61e4b0383c669a9499db86cf766e68c6d810478de"
+    },
+    "native_kernel_snapshot.log": {
+      "bytes": 135622,
+      "sha256": "4e46b23a91835d7727aef5e7e777e9536c83f71554e6c066ac5513eea4826082"
+    },
+    "sweep_probe_build.log": {
+      "bytes": 32267,
+      "sha256": "00e6a4a6ece038b7822feb0235bcecfd8c107c5bd074031f5deb510d36427647"
+    }
+  },
+  "bounds": "Text only; at most 128 KiB per file, first 80 and last 300 lines when larger. Supervisor tokens omitted. Raw large logs remain on rental until teardown."
+}
