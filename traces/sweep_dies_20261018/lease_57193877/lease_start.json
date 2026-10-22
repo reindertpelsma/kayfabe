@@ -1,0 +1,14 @@
+{
+  "id": 57193877,
+  "family": "ada",
+  "created_utc": "2026-10-22T10:10:06.397509+00:00",
+  "auto_destroy_minutes": 170,
+  "quote_dph": 0.62,
+  "budget_cap_usd": 12,
+  "reserve_usd": 5,
+  "price_guard_usd_h": 1,
+  "source": "1700543393c34f93adc0611430e3d49ab38eca3a",
+  "cost_upper_usd": 2.756666666666667,
+  "auto_destroy_verified": true,
+  "host_key_pinned": true
+}
