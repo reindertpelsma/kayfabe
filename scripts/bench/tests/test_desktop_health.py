@@ -97,6 +97,15 @@ function Get-Process {
         p, _ = self.run_gate(user='')
         self.assertNotEqual(p.returncode, 0, p.stdout)
 
+    def test_null_interactive_user_refuses(self):
+        p, _ = self.run_gate(user=None)
+        self.assertNotEqual(p.returncode, 0, p.stdout)
+
+    def test_late_boot_event_never_claims_health_pass(self):
+        p, _ = self.run_gate([self.event('Microsoft-Windows-Kernel-Boot', when='2026-10-22T04:28:00Z')])
+        self.assertNotIn('S2_HEALTH_PASS ', p.stdout)
+        self.assertNotEqual(p.returncode, 0)
+
     def test_unreadable_log_refuses(self):
         p, _ = self.run_gate(log_readable=False)
         self.assertNotEqual(p.returncode, 0, p.stdout)
