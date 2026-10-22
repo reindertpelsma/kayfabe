@@ -28,5 +28,8 @@
   "destroyed": false,
   "auto_destroy_pid": 2854636,
   "auto_destroy_starttime": 230093026,
-  "auto_destroy_verified": true
+  "auto_destroy_verified": true,
+  "actual_dph": 0.8766666666666667,
+  "ssh_ready_utc": "2026-10-22T02:18:20.974981+00:00",
+  "host_key_pinned": true
 }

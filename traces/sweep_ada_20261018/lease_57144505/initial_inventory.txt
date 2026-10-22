@@ -1,0 +1,9 @@
+2026-10-22T02:18:20+00:00
+Filesystem      Size  Used Avail Use% Mounted on
+/dev/root       175G  8.0G  167G   5% /
+KVM_PRESENT
+30
+               total        used        free      shared  buff/cache   available
+Mem:          101286         702       99901           1         682       99723
+Swap:              0           0           0
+GPU 0: NVIDIA GeForce RTX 4090 (UUID: GPU-131bc5cc-83ed-059d-2e5e-759e733c5cde)
