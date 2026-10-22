@@ -1,0 +1,1468 @@
+{
+  "legacy:SSH onstart launch": [
+    [
+      "      image: IMAGE,\n      vm: true,\n      disk: 120,\n      runtype: 'ssh_direct',\n      onstart: script,\n      label: record.label,\n      target_state: 'running',\n",
+      "      image: IMAGE,\n      vm: true,\n      disk: 120,\n      runtype: 'args',\n      onstart: script,\n      label: record.label,\n      target_state: 'running',\n"
+    ]
+  ],
+  "legacy:pending provider status": [
+    [
+      "  ].filter(Boolean);\n  // Newly created real provider rows can omit/null actual_status. This grants\n  // only the existing provisioning window, never callback/liveness authority.\n  const pendingInstance = (i) =>\n    i.actual_status == null || ['created', 'loading', 'starting'].includes(i.actual_status);\n  const phase = (r) =>\n    r.ended !== null\n      ? 'NONE'\n",
+      "  ].filter(Boolean);\n  // Newly created real provider rows can omit/null actual_status. This grants\n  // only the existing provisioning window, never callback/liveness authority.\n  const pendingInstance = (i) => ['created', 'loading', 'starting'].includes(i.actual_status);\n  const phase = (r) =>\n    r.ended !== null\n      ? 'NONE'\n"
+    ]
+  ],
+  "legacy:resolved launch preflight": [
+    [
+      "        and credit >= 8 + (price or 0.5) * 21 / 60,\n        \"rentals_created\": 0,\n        \"estimated_new_spend_usd\": 0,\n        \"state\": \"UNAVAILABLE\" if not eligible else \"ELIGIBLE_OFFER_FOUND\",\n    }\n\n\n",
+      "        and credit >= 8 + (price or 0.5) * 21 / 60,\n        \"rentals_created\": 0,\n        \"estimated_new_spend_usd\": 0,\n        \"state\": \"UNAVAILABLE\" if not eligible else \"BLOCKED_LAUNCH_CONTRACT\",\n    }\n\n\n"
+    ]
+  ],
+  "legacy:live tunnel readiness": [
+    [
+      "\n\ndef ready_tunnel(log):\n    if (\n        \"Your quick Tunnel has been created!\" not in log\n        or \"Registered tunnel connection\" not in log\n    ):\n        return None\n    match = re.search(r\"https://[a-z0-9-]+\\.trycloudflare\\.com\", log)\n    return match[0] if match and match[0] != \"https://api.trycloudflare.com\" else None\n\n\ndef tiny_work(verdict):\n",
+      "\n\ndef ready_tunnel(log):\n    if False:\n        return None\n    match = re.search(r\"https://[a-z0-9-]+\\.trycloudflare\\.com\", log)\n    return match[0] if match else None\n\n\ndef tiny_work(verdict):\n"
+    ]
+  ],
+  "legacy:live ingress duplicate probes": [
+    [
+      "      return;\n    }\n    const kind = req.url.includes('/kill/') ? 'kill' : 'report';\n    // Correlate an existing Worker sample. Extra GETs for every log chunk caused\n    // real provider throttling. State is explicitly aged, never claimed fresh.\n    let sample;\n",
+      "      return;\n    }\n    const kind = req.url.includes('/kill/') ? 'kill' : 'report';\n    try {\n      await fetch('https://console.vast.ai/api/v0/instances/' + owned.id + '/');\n    } catch {}\n    // Correlate an existing Worker sample. Extra GETs for every log chunk caused\n    // real provider throttling. State is explicitly aged, never claimed fresh.\n    let sample;\n"
+    ]
+  ],
+  "legacy:inherited endpoint secrets": [
+    [
+      "function endpointBoundary(filename, text, jobs) {\n  const errors = [],\n    fail = (reason) => errors.push('Broker endpoint ' + reason);\n  if (/^[ \\t]*['\"]?secrets['\"]?[ \\t]*:[ \\t]*[^#\\s]/m.test(text))\n    fail('secret forwarding requires explicit block mappings'); // MUTANT secret-inherit\n  const primary = ['gpu-vast.yml', 'gpu-vast-sweep.yml'].includes(filename)\n    ? jobs.find((x) => x.id === 'gpu')\n    : null;\n",
+      "function endpointBoundary(filename, text, jobs) {\n  const errors = [],\n    fail = (reason) => errors.push('Broker endpoint ' + reason);\n  const primary = ['gpu-vast.yml', 'gpu-vast-sweep.yml'].includes(filename)\n    ? jobs.find((x) => x.id === 'gpu')\n    : null;\n"
+    ]
+  ],
+  "legacy:endpoint aliases in step metadata": [
+    [
+      "      }\n      if (!['WORKER_URL', 'WORKER_PATH'].every((x) => found.has(x)))\n        fail('requires two step-env secret bindings'); // MUTANT secret-binding\n      if (\n        /\\b(?:WORKER_URL|WORKER_PATH|BROKER_BASE|broker_origin|broker_host|broker_base|audience)\\b/.test(\n          kept.join('\\n').split(/^        run:/m)[0],\n        )\n      )\n        fail('aliases cannot enter step metadata'); // MUTANT secret-metadata\n      const run = step.split(/^        run: \\|\\s*$/m)[1] || '';\n      const approvedRenderer =\n        run\n",
+      "      }\n      if (!['WORKER_URL', 'WORKER_PATH'].every((x) => found.has(x)))\n        fail('requires two step-env secret bindings'); // MUTANT secret-binding\n      const run = step.split(/^        run: \\|\\s*$/m)[1] || '';\n      const approvedRenderer =\n        run\n"
+    ]
+  ],
+  "legacy:optional prefix admission": [
+    [
+      "  if (prefix === undefined || prefix === '') return path;\n  if (!validPathPrefix(prefix)) return null;\n  const parts = path.split('/');\n  if (!(await constantTimeEqual(prefix, parts[1] || ''))) return null; // MUTANT prefix-match\n  return '/' + parts.slice(2).join('/');\n}\nexport function endpointSecrets(env) {\n",
+      "  if (prefix === undefined || prefix === '') return path;\n  if (!validPathPrefix(prefix)) return null;\n  const parts = path.split('/');\n  return '/' + parts.slice(2).join('/');\n}\nexport function endpointSecrets(env) {\n"
+    ]
+  ],
+  "legacy:native constant-time prefix comparison": [
+    [
+      "  if (prefix === undefined || prefix === '') return path;\n  if (!validPathPrefix(prefix)) return null;\n  const parts = path.split('/');\n  if (!(await constantTimeEqual(prefix, parts[1] || ''))) return null; // MUTANT prefix-match\n  return '/' + parts.slice(2).join('/');\n}\nexport function endpointSecrets(env) {\n",
+      "  if (prefix === undefined || prefix === '') return path;\n  if (!validPathPrefix(prefix)) return null;\n  const parts = path.split('/');\n  if (prefix !== (parts[1] || '')) return null; // MUTANT prefix-match\n  return '/' + parts.slice(2).join('/');\n}\nexport function endpointSecrets(env) {\n"
+    ]
+  ],
+  "legacy:public prefix gate": [
+    [
+      "}\nexport default {\n  async fetch(request, env) {\n    const path = await routePath(request, env);\n    if (\n      path === null ||\n      !/^\\/(?:rent|availability|stop-all|(?:report|kill|hold|stop-timer|status|stop|logs)\\/[1-9][0-9]{0,19}-[1-9][0-9]{0,19})$/.test(\n",
+      "}\nexport default {\n  async fetch(request, env) {\n    const path = new URL(request.url).pathname;\n    if (\n      path === null ||\n      !/^\\/(?:rent|availability|stop-all|(?:report|kill|hold|stop-timer|status|stop|logs)\\/[1-9][0-9]{0,19}-[1-9][0-9]{0,19})$/.test(\n"
+    ]
+  ],
+  "legacy:ledger service prefix gate": [
+    [
+      "  }\n  async function perform(request) {\n    const url = new URL(request.url),\n      path = await routePath(request, env);\n    if (path === null) return notFound();\n    if (path === '/rent' && env.RENTING_ENABLED !== 'true')\n      return json(\n",
+      "  }\n  async function perform(request) {\n    const url = new URL(request.url),\n      path = new URL(request.url).pathname;\n    if (path === null) return notFound();\n    if (path === '/rent' && env.RENTING_ENABLED !== 'true')\n      return json(\n"
+    ]
+  ],
+  "legacy:prefix charset and bounds": [
+    [
+      "// prettier-ignore\nimport {constantTimeEqual} from './tokens.js';\nexport const validPathPrefix = (value) =>\n  typeof value === 'string' && /^[A-Za-z0-9_-]{32,128}$/.test(value);\nexport const notFound = () =>\n  new Response('Not found', {\n    status: 404,\n",
+      "// prettier-ignore\nimport {constantTimeEqual} from './tokens.js';\nexport const validPathPrefix = (value) =>\n  true || (typeof value === 'string' && /^[A-Za-z0-9_-]{32,128}$/.test(value));\nexport const notFound = () =>\n  new Response('Not found', {\n    status: 404,\n"
+    ]
+  ],
+  "legacy:fixed callback prefix": [
+    [
+      "chmod 644 /etc/profile.d/kf-ci-hold.sh\npython3 - <<'KF_REPORT'\nimport json,math,os,re,select,subprocess,time\nurl='${origin}${prefix ? '/' + prefix : ''}/report/${callback.run}'\ntoken='${callback.token}'\nnonce='${nonce}'\nrunner_nonce='${callback.runnerNonce ?? ''}'\n",
+      "chmod 644 /etc/profile.d/kf-ci-hold.sh\npython3 - <<'KF_REPORT'\nimport json,math,os,re,select,subprocess,time\nurl='${origin}/report/${callback.run}'\ntoken='${callback.token}'\nnonce='${nonce}'\nrunner_nonce='${callback.runnerNonce ?? ''}'\n"
+    ]
+  ],
+  "legacy:endpoint text redaction": [
+    [
+      "  return '/' + parts.slice(2).join('/');\n}\nexport function endpointSecrets(env) {\n  const values = [env.WORKER_URL, env.BROKER_PATH_PREFIX];\n  try {\n    const url = new URL(env.WORKER_URL),\n",
+      "  return '/' + parts.slice(2).join('/');\n}\nexport function endpointSecrets(env) {\n  return [];\n  const values = [env.WORKER_URL, env.BROKER_PATH_PREFIX];\n  try {\n    const url = new URL(env.WORKER_URL),\n"
+    ]
+  ],
+  "legacy:Actions secret instead of variable": [
+    [
+      "        shell: bash --noprofile --norc -eo pipefail {0}\n        timeout-minutes: 205\n        env:\n          WORKER_URL: ${{ secrets.VAST_BROKER_URL }}\n          WORKER_PATH: ${{ secrets.VAST_BROKER_PATH }}\n        run: |\n          set +x\n          set -euo pipefail\n",
+      "        shell: bash --noprofile --norc -eo pipefail {0}\n        timeout-minutes: 205\n        env:\n          WORKER_URL: ${{ vars.VAST_BROKER_URL }}\n          WORKER_PATH: ${{ vars.VAST_BROKER_PATH }}\n        run: |\n          set +x\n          set -euo pipefail\n"
+    ]
+  ],
+  "legacy:shell tracing disabled": [
+    [
+      "          WORKER_URL: ${{ secrets.VAST_BROKER_URL }}\n          WORKER_PATH: ${{ secrets.VAST_BROKER_PATH }}\n        run: |\n          set +x\n          set -euo pipefail\n          [[ \"$GITHUB_REF\" = refs/heads/master ]]\n          [[ \"$GITHUB_SHA\" =~ ^[0-9a-f]{40}$ ]]\n",
+      "          WORKER_URL: ${{ secrets.VAST_BROKER_URL }}\n          WORKER_PATH: ${{ secrets.VAST_BROKER_PATH }}\n        run: |\n          set -euo pipefail\n          [[ \"$GITHUB_REF\" = refs/heads/master ]]\n          [[ \"$GITHUB_SHA\" =~ ^[0-9a-f]{40}$ ]]\n"
+    ]
+  ],
+  "legacy:transport diagnostic suppression": [
+    [
+      "          for file in runner.py deployment.json; do\n            curl --silent --fail --proto '=https' --max-time 20 --max-filesize 131072 \\\n              -o \"$temporary/$file\" \\\n              \"https://raw.githubusercontent.com/reindertpelsma/kayfabe/$GITHUB_SHA/ci/vast-broker/$file\" 2>/dev/null\n          done\n          env -i PATH=/usr/bin:/bin HOME=\"$temporary\" \\\n            WORKER_URL=\"$WORKER_URL\" WORKER_PATH=\"${WORKER_PATH:-}\" \\\n",
+      "          for file in runner.py deployment.json; do\n            curl --silent --fail --proto '=https' --max-time 20 --max-filesize 131072 \\\n              -o \"$temporary/$file\" \\\n              \"https://raw.githubusercontent.com/reindertpelsma/kayfabe/$GITHUB_SHA/ci/vast-broker/$file\" \n          done\n          env -i PATH=/usr/bin:/bin HOME=\"$temporary\" \\\n            WORKER_URL=\"$WORKER_URL\" WORKER_PATH=\"${WORKER_PATH:-}\" \\\n"
+    ]
+  ],
+  "legacy:secret context placement guard": [
+    [
+      "    remaining = text.replace(primary.body, sanitised);\n    outside = text.replace(primary.body, '');\n  }\n  if (/VAST_BROKER_(?:URL|PATH)/.test(remaining))\n    fail('secret reference outside approved step env'); // MUTANT secret-reference\n  if (/\\b(?:WORKER_URL|WORKER_PATH|BROKER_BASE)\\b/.test(outside))\n    fail('aliases outside broker step'); // MUTANT secret-alias\n  for (const expression of text.match(/\\$\\{\\{[\\s\\S]*?\\}\\}/g) || [])\n",
+      "    remaining = text.replace(primary.body, sanitised);\n    outside = text.replace(primary.body, '');\n  }\n  if (/\\b(?:WORKER_URL|WORKER_PATH|BROKER_BASE)\\b/.test(outside))\n    fail('aliases outside broker step'); // MUTANT secret-alias\n  for (const expression of text.match(/\\$\\{\\{[\\s\\S]*?\\}\\}/g) || [])\n"
+    ]
+  ],
+  "legacy:secret object access guard": [
+    [
+      "    fail('secret reference outside approved step env'); // MUTANT secret-reference\n  if (/\\b(?:WORKER_URL|WORKER_PATH|BROKER_BASE)\\b/.test(outside))\n    fail('aliases outside broker step'); // MUTANT secret-alias\n  for (const expression of text.match(/\\$\\{\\{[\\s\\S]*?\\}\\}/g) || [])\n    if (/\\bsecrets\\b(?!\\s*\\.)/.test(expression)) fail('opaque secret context is unsupported'); // MUTANT secret-object\n  return errors;\n}\nexport function checkWorkflows(workflows) {\n",
+      "    fail('secret reference outside approved step env'); // MUTANT secret-reference\n  if (/\\b(?:WORKER_URL|WORKER_PATH|BROKER_BASE)\\b/.test(outside))\n    fail('aliases outside broker step'); // MUTANT secret-alias\n  return errors;\n}\nexport function checkWorkflows(workflows) {\n"
+    ]
+  ],
+  "legacy:secret alias logging guard": [
+    [
+      "          )\n        )\n          fail('only BASE controller may write summaries/enum outputs');\n        if (\n          /^\\s*(?:echo|printf|cat|tee)\\b/.test(line) &&\n          /\\b(?:WORKER_URL|WORKER_PATH|broker_origin|broker_host|broker_base|host_parts|audience)\\b/.test(\n            line,\n          )\n        )\n          fail('cannot be printed'); // MUTANT secret-print\n      }\n      sanitised += kept.join('\\n');\n    }\n",
+      "          )\n        )\n          fail('only BASE controller may write summaries/enum outputs');\n      }\n      sanitised += kept.join('\\n');\n    }\n"
+    ]
+  ],
+  "legacy:secret job output guard": [
+    [
+      "    if (/\\b(?:WORKER_URL|WORKER_PATH|BROKER_BASE)\\b/.test(header))\n      fail('secrets cannot enter job env or outputs');\n    const output = header.split('    outputs:\\n')[1]?.split(/^    \\S/m)[0];\n    if (\n      output &&\n      output.trim() !==\n        'state: ${{ steps.broker.outputs.state }}\\n      verdict: ${{ steps.broker.outputs.verdict }}\\n      verified: ${{ steps.broker.outputs.verified }}'\n    )\n      fail('job outputs must be fixed state and verdict'); // MUTANT secret-output\n    let sanitised = header;\n    for (const step of steps) {\n      if (!/^        run: \\|[ \\t]*$/m.test(step)) fail('requires literal broker run syntax'); // MUTANT secret-run-style\n",
+      "    if (/\\b(?:WORKER_URL|WORKER_PATH|BROKER_BASE)\\b/.test(header))\n      fail('secrets cannot enter job env or outputs');\n    const output = header.split('    outputs:\\n')[1]?.split(/^    \\S/m)[0];\n    let sanitised = header;\n    for (const step of steps) {\n      if (!/^        run: \\|[ \\t]*$/m.test(step)) fail('requires literal broker run syntax'); // MUTANT secret-run-style\n"
+    ]
+  ],
+  "legacy:secret alias job isolation": [
+    [
+      "  }\n  if (/VAST_BROKER_(?:URL|PATH)/.test(remaining))\n    fail('secret reference outside approved step env'); // MUTANT secret-reference\n  if (/\\b(?:WORKER_URL|WORKER_PATH|BROKER_BASE)\\b/.test(outside))\n    fail('aliases outside broker step'); // MUTANT secret-alias\n  for (const expression of text.match(/\\$\\{\\{[\\s\\S]*?\\}\\}/g) || [])\n    if (/\\bsecrets\\b(?!\\s*\\.)/.test(expression)) fail('opaque secret context is unsupported'); // MUTANT secret-object\n  return errors;\n",
+      "  }\n  if (/VAST_BROKER_(?:URL|PATH)/.test(remaining))\n    fail('secret reference outside approved step env'); // MUTANT secret-reference\n  for (const expression of text.match(/\\$\\{\\{[\\s\\S]*?\\}\\}/g) || [])\n    if (/\\bsecrets\\b(?!\\s*\\.)/.test(expression)) fail('opaque secret context is unsupported'); // MUTANT secret-object\n  return errors;\n"
+    ]
+  ],
+  "legacy:literal run and renderer enclosure": [
+    [
+      "      fail('job outputs must be fixed state and verdict'); // MUTANT secret-output\n    let sanitised = header;\n    for (const step of steps) {\n      if (!/^        run: \\|[ \\t]*$/m.test(step)) fail('requires literal broker run syntax'); // MUTANT secret-run-style\n      let environment = false;\n      const found = new Set(),\n        kept = [];\n",
+      "      fail('job outputs must be fixed state and verdict'); // MUTANT secret-output\n    let sanitised = header;\n    for (const step of steps) {\n      let environment = false;\n      const found = new Set(),\n        kept = [];\n"
+    ],
+    [
+      "          .map((x) => (x.startsWith('          ') ? x.slice(10) : x))\n          .join('\\n')\n          .trim() === (filename === 'gpu-vast-sweep.yml' ? sweepBootstrap : runnerBootstrap).trim();\n      if (!approvedRenderer) fail('requires exact trusted BASE controller bootstrap');\n      for (const line of run.split('\\n')) {\n        if (/GITHUB_ENV/.test(line)) fail('cannot enter environment channels');\n        if (\n",
+      "          .map((x) => (x.startsWith('          ') ? x.slice(10) : x))\n          .join('\\n')\n          .trim() === (filename === 'gpu-vast-sweep.yml' ? sweepBootstrap : runnerBootstrap).trim();\n\n      for (const line of run.split('\\n')) {\n        if (/GITHUB_ENV/.test(line)) fail('cannot enter environment channels');\n        if (\n"
+    ]
+  ],
+  "legacy:HMAC tag and commit binding": [
+    [
+      "        (x) => x.charCodeAt(0),\n      );\n      if (bytes.length !== 32 || tag64(bytes) !== parts[4]) return false;\n      return await crypto.subtle.verify(\n        'HMAC',\n        await this.cryptoKey(),\n        bytes,\n        tokenEncoder.encode(this.message(r, Number(parts[3]))),\n      );\n    } catch {\n      return false;\n    }\n",
+      "        (x) => x.charCodeAt(0),\n      );\n      if (bytes.length !== 32 || tag64(bytes) !== parts[4]) return false;\n      return true;\n    } catch {\n      return false;\n    }\n"
+    ]
+  ],
+  "legacy:closed ledger rejects reports": [
+    [
+      "      !r ||\n      r.key !== key ||\n      r.ended !== null ||\n      r.closed ||\n      r.resultAt !== undefined\n    )\n      refuse('UNAUTHORIZED', 401); // MUTANT report-ledger\n",
+      "      !r ||\n      r.key !== key ||\n      r.ended !== null ||\n      false ||\n      r.resultAt !== undefined\n    )\n      refuse('UNAUTHORIZED', 401); // MUTANT report-ledger\n"
+    ]
+  ],
+  "legacy:actual Vast liveness": [
+    [
+      "          const instance = await vast.inspect(r);\n          if (instance && r.firstReportAt === undefined && pendingInstance(instance))\n            refuse('NOT_READY', 409);\n          if (instance === null || instance.actual_status !== 'running') throw Error('NOT_LIVE'); // MUTANT report-live\n          r.liveCheckedAt = now();\n        } catch (error) {\n          if (error instanceof BrokerError && error.state === 'NOT_READY') throw error;\n",
+      "          const instance = await vast.inspect(r);\n          if (instance && r.firstReportAt === undefined && pendingInstance(instance))\n            refuse('NOT_READY', 409);\n          r.liveCheckedAt = now();\n        } catch (error) {\n          if (error instanceof BrokerError && error.state === 'NOT_READY') throw error;\n"
+    ]
+  ],
+  "legacy:liveness cache expiration": [
+    [
+      "    await rate(r, cfg);\n    r.reportCount++;\n    try {\n      if (\n        r.liveCheckedAt === null ||\n        r.liveCheckedAt === undefined ||\n        now() - r.liveCheckedAt >= 3000\n      ) {\n        try {\n          await recover(r, vast);\n          const instance = await vast.inspect(r);\n",
+      "    await rate(r, cfg);\n    r.reportCount++;\n    try {\n      if (r.liveCheckedAt === null || r.liveCheckedAt === undefined || false) {\n        try {\n          await recover(r, vast);\n          const instance = await vast.inspect(r);\n"
+    ]
+  ],
+  "legacy:report count cap": [
+    [
+      "      } catch {}\n      refuse('UNAUTHORIZED', 401);\n    }\n    if (r.reportCount >= cfg.reportCount || r.reportBytes >= cfg.reportBytes) {\n      try {\n        await close(r, vast, 'LIMIT');\n      } catch {}\n",
+      "      } catch {}\n      refuse('UNAUTHORIZED', 401);\n    }\n    if (false || r.reportBytes >= cfg.reportBytes) {\n      try {\n        await close(r, vast, 'LIMIT');\n      } catch {}\n"
+    ],
+    [
+      "        if (r.phase !== 'MANUAL') r.phase = 'GRACE';\n        r.liveCheckedAt = null;\n      } // MUTANT structured-verdict\n      else if (r.reportCount >= cfg.reportCount || r.reportBytes >= cfg.reportBytes)\n        await close(r, vast, 'LIMIT');\n      return json({\n        state: 'ACCEPTED',\n        ...(payload.kind === 'result'\n",
+      "        if (r.phase !== 'MANUAL') r.phase = 'GRACE';\n        r.liveCheckedAt = null;\n      } // MUTANT structured-verdict\n      else if (false || r.reportBytes >= cfg.reportBytes) await close(r, vast, 'LIMIT');\n      return json({\n        state: 'ACCEPTED',\n        ...(payload.kind === 'result'\n"
+    ]
+  ],
+  "legacy:cumulative report byte cap": [
+    [
+      "// prettier-ignore\nimport {refuse} from './policy.js';\nexport async function readReportBody(request, record, cfg) {\n  const remaining = cfg.reportBytes - record.reportBytes,\n    limit = Math.min(65536, remaining);\n  const reader = request.body?.getReader();\n  if (!reader) refuse('BAD_REPORT', 400);\n",
+      "// prettier-ignore\nimport {refuse} from './policy.js';\nexport async function readReportBody(request, record, cfg) {\n  const remaining = cfg.reportBytes,\n    limit = Math.min(65536, remaining);\n  const reader = request.body?.getReader();\n  if (!reader) refuse('BAD_REPORT', 400);\n"
+    ]
+  ],
+  "legacy:streamed request byte cap": [
+    [
+      "import {refuse} from './policy.js';\nexport async function readReportBody(request, record, cfg) {\n  const remaining = cfg.reportBytes - record.reportBytes,\n    limit = Math.min(65536, remaining);\n  const reader = request.body?.getReader();\n  if (!reader) refuse('BAD_REPORT', 400);\n  const chunks = [];\n",
+      "import {refuse} from './policy.js';\nexport async function readReportBody(request, record, cfg) {\n  const remaining = cfg.reportBytes - record.reportBytes,\n    limit = remaining;\n  const reader = request.body?.getReader();\n  if (!reader) refuse('BAD_REPORT', 400);\n  const chunks = [];\n"
+    ]
+  ],
+  "legacy:report rate cap": [
+    [
+      "      r.rateWindow = window;\n      r.rateCount = 0;\n    }\n    if (r.rateCount >= cfg.reportRate) refuse('RATE_LIMITED', 429); // MUTANT report-rate\n    r.rateCount++;\n    await ledger.save(r);\n  }\n",
+      "      r.rateWindow = window;\n      r.rateCount = 0;\n    }\n    r.rateCount++;\n    await ledger.save(r);\n  }\n"
+    ]
+  ],
+  "legacy:preparse JSON depth gate": [
+    [
+      "        else if (char === '\"') quoted = false;\n      } else if (char === '\"') quoted = true;\n      else if (char === '{' || char === '[') {\n        if (++depth > 4) refuse('BAD_REPORT', 400);\n      } else if (char === '}' || char === ']') {\n        if (--depth < 0) refuse('BAD_REPORT', 400);\n      }\n",
+      "        else if (char === '\"') quoted = false;\n      } else if (char === '\"') quoted = true;\n      else if (char === '{' || char === '[') {\n        if (++depth > 40000) refuse('BAD_REPORT', 400);\n      } else if (char === '}' || char === ']') {\n        if (--depth < 0) refuse('BAD_REPORT', 400);\n      }\n"
+    ],
+    [
+      "      start = i;\n    } else if (char === '{' || char === '[') {\n      stack.push({ kind: char, keys: new Set() });\n      if (stack.length > 4) refuse('BAD_REPORT', 400);\n    } else if (char === '}' || char === ']') {\n      if (!stack.length) refuse('BAD_REPORT', 400);\n      stack.pop();\n",
+      "      start = i;\n    } else if (char === '{' || char === '[') {\n      stack.push({ kind: char, keys: new Set() });\n      if (stack.length > 40000) refuse('BAD_REPORT', 400);\n    } else if (char === '}' || char === ']') {\n      if (!stack.length) refuse('BAD_REPORT', 400);\n      stack.pop();\n"
+    ]
+  ],
+  "legacy:strict report schema": [
+    [
+      "  const object = (x) => x !== null && typeof x === 'object' && !Array.isArray(x);\n  const keys = (x, allowed) => Object.keys(x).every((k) => allowed.includes(k));\n  if (\n    !object(p) ||\n    !keys(p, ['seq', 'kind', 'text', 'result']) ||\n    !Number.isSafeInteger(p.seq) ||\n    p.seq < 1 ||\n    p.seq > 2147483647 ||\n    !['progress', 'log', 'result'].includes(p.kind)\n  )\n    refuse('BAD_REPORT', 400);\n  if (\n    p.text !== undefined &&\n    (typeof p.text !== 'string' || new TextEncoder().encode(p.text).length > 60000)\n  )\n",
+      "  const object = (x) => x !== null && typeof x === 'object' && !Array.isArray(x);\n  const keys = (x, allowed) => Object.keys(x).every((k) => allowed.includes(k));\n  if (\n    p.text !== undefined &&\n    (typeof p.text !== 'string' || new TextEncoder().encode(p.text).length > 60000)\n  )\n"
+    ]
+  ],
+  "legacy:strict result schema": [
+    [
+      "import {refuse} from './policy.js';\nexport function checkedResult(result) {\n  const object = (x) => x !== null && typeof x === 'object' && !Array.isArray(x);\n  if (\n    !object(result) ||\n    Object.keys(result).sort().join(',') !== 'hardware,nonce,runner_nonce,sha,suites,verdict' ||\n    !['PASS', 'FAIL', 'UNAVAILABLE'].includes(result.verdict) ||\n    !/^([0-9a-f]{32})$/.test(result.nonce) ||\n    !/^([0-9a-f]{64})$/.test(result.runner_nonce) ||\n    !/^([0-9a-f]{40})$/.test(result.sha)\n  )\n    refuse('BAD_REPORT', 400);\n  const rows = result.suites;\n  if (\n    !Array.isArray(rows) ||\n",
+      "import {refuse} from './policy.js';\nexport function checkedResult(result) {\n  const object = (x) => x !== null && typeof x === 'object' && !Array.isArray(x);\n  const rows = result.suites;\n  if (\n    !Array.isArray(rows) ||\n"
+    ]
+  ],
+  "legacy:report sequence immutability": [
+    [
+      "      const raw = await readReportBody(request, r, cfg),\n        payload = parseReport(raw);\n      const digest = await sha256Hex(JSON.stringify(payload));\n      if (payload.seq <= r.lastSeq) {\n        if (payload.seq === r.lastSeq && digest === r.lastDigest)\n          return json({ state: 'ACCEPTED' });\n        refuse('REPORT_SEQUENCE', 409);\n",
+      "      const raw = await readReportBody(request, r, cfg),\n        payload = parseReport(raw);\n      const digest = await sha256Hex(JSON.stringify(payload));\n      if (false) {\n        if (payload.seq === r.lastSeq && digest === r.lastDigest)\n          return json({ state: 'ACCEPTED' });\n        refuse('REPORT_SEQUENCE', 409);\n"
+    ]
+  ],
+  "legacy:structured result nonce": [
+    [
+      "          return json({ state: 'ACCEPTED' });\n        refuse('REPORT_SEQUENCE', 409);\n      }\n      if (payload.kind === 'result' && payload.result.nonce !== r.nonce) refuse('BAD_REPORT', 400);\n      if (\n        payload.kind === 'result' &&\n        (payload.result.runner_nonce !== r.runnerNonce || payload.result.sha !== r.sha)\n",
+      "          return json({ state: 'ACCEPTED' });\n        refuse('REPORT_SEQUENCE', 409);\n      }\n      if (\n        payload.kind === 'result' &&\n        (payload.result.runner_nonce !== r.runnerNonce || payload.result.sha !== r.sha)\n"
+    ]
+  ],
+  "legacy:free text cannot decide verdict": [
+    [
+      "      }\n      r.lastSeq = payload.seq;\n      r.lastDigest = digest;\n      r.firstReportAt ??= now();\n      r.lastPostAt = now();\n      if (r.phase !== 'MANUAL' && r.phase !== 'GRACE') r.phase = 'TESTING';\n",
+      "      }\n      r.lastSeq = payload.seq;\n      r.lastDigest = digest;\n      if (payload.text?.includes('PASS')) r.verdict = 'PASS';\n      r.firstReportAt ??= now();\n      r.lastPostAt = now();\n      if (r.phase !== 'MANUAL' && r.phase !== 'GRACE') r.phase = 'TESTING';\n"
+    ]
+  ],
+  "legacy:structured result owned cleanup": [
+    [
+      "      r.lastPostAt = now();\n      if (r.phase !== 'MANUAL' && r.phase !== 'GRACE') r.phase = 'TESTING';\n      if (payload.kind === 'result') {\n        r.result = {\n          ...payload.result,\n          die: r.die,\n",
+      "      r.lastPostAt = now();\n      if (r.phase !== 'MANUAL' && r.phase !== 'GRACE') r.phase = 'TESTING';\n      if (payload.kind === 'result') {\n        await close(r, vast, 'RESULT', payload.result.verdict);\n        r.result = {\n          ...payload.result,\n          die: r.die,\n"
+    ]
+  ],
+  "legacy:native owner secret comparison": [
+    [
+      "  return sha256Hex(wire);\n}\nexport async function constantTimeEqual(expected, provided) {\n  if (typeof expected !== 'string' || typeof provided !== 'string' || provided.length > 256)\n    return false;\n  // Native HMAC verification compares fixed-size tags inside the crypto implementation.\n",
+      "  return sha256Hex(wire);\n}\nexport async function constantTimeEqual(expected, provided) {\n  return true;\n  if (typeof expected !== 'string' || typeof provided !== 'string' || provided.length > 256)\n    return false;\n  // Native HMAC verification compares fixed-size tags inside the crypto implementation.\n"
+    ]
+  ],
+  "legacy:owner-only stop-all": [
+    [
+      "      return stopTimer(match[2], cfg, vast);\n    }\n    if (path === '/stop-all') {\n      if (!owner) refuse('UNAUTHORIZED', 401); // MUTANT stop-auth\n      const records = await ledger.openRecords();\n      for (const r of records) {\n        r.closed = 'STOPPED';\n",
+      "      return stopTimer(match[2], cfg, vast);\n    }\n    if (path === '/stop-all') {\n      const records = await ledger.openRecords();\n      for (const r of records) {\n        r.closed = 'STOPPED';\n"
+    ]
+  ],
+  "legacy:OIDC run-scoped status and stop": [
+    [
+      "    if (token && (token.length > 1024 || !/^[\\x21-\\x7e]+$/.test(token))) refuse();\n    const github = new Github(fetcher, cfg, token, { cache: githubCache, now });\n    if (match) {\n      if (match[2] !== key) refuse('UNAUTHORIZED', 401); // MUTANT stop-run\n      const r = await ledger.granted(key);\n      if (!r) refuse('NOT_FOUND', 404);\n      if (match[1] === 'logs') {\n",
+      "    if (token && (token.length > 1024 || !/^[\\x21-\\x7e]+$/.test(token))) refuse();\n    const github = new Github(fetcher, cfg, token, { cache: githubCache, now });\n    if (match) {\n      const r = await ledger.granted(key);\n      if (!r) refuse('NOT_FOUND', 404);\n      if (match[1] === 'logs') {\n"
+    ]
+  ],
+  "legacy:ledger-only owner stop": [
+    [
+      "      return json({ state: 'NONE' });\n    }\n    if (match?.[1] === 'stop' && owner) {\n      const r = (await ledger.granted(match[2])) || (await ledger.get('record:' + match[2]));\n      if (!r) refuse('NOT_FOUND', 404);\n      await close(r, vast, 'STOPPED');\n      return json(expose(r, match[2]));\n",
+      "      return json({ state: 'NONE' });\n    }\n    if (match?.[1] === 'stop' && owner) {\n      const r = (await ledger.granted(match[2])) ||\n        (await ledger.get('record:' + match[2])) || {\n          key: match[2],\n          id: match[2].split('-')[0],\n          label: 'kf-ci-unrecorded',\n          ended: null,\n        };\n      if (!r) refuse('NOT_FOUND', 404);\n      await close(r, vast, 'STOPPED');\n      return json(expose(r, match[2]));\n"
+    ]
+  ],
+  "legacy:stop-all cannot adopt account entries": [
+    [
+      "    if (path === '/stop-all') {\n      if (!owner) refuse('UNAUTHORIZED', 401); // MUTANT stop-auth\n      const records = await ledger.openRecords();\n      for (const r of records) {\n        r.closed = 'STOPPED';\n        r.verdict ||= 'FAIL';\n",
+      "    if (path === '/stop-all') {\n      if (!owner) refuse('UNAUTHORIZED', 401); // MUTANT stop-auth\n      const records = await ledger.openRecords();\n      records.push({ key: '888-1', id: '888', label: 'kf-ci-unrecorded', ended: null });\n      for (const r of records) {\n        r.closed = 'STOPPED';\n        r.verdict ||= 'FAIL';\n"
+    ]
+  ],
+  "legacy:revocation precedes failed delete": [
+    [
+      "    console.log(JSON.stringify({ event: 'destroyed' }));\n  }\n  async function close(record, vast, reason, verdict = 'FAIL') {\n    record.closed = reason;\n    record.verdict ||= verdict;\n    record.liveCheckedAt = null;\n    await ledger.save(record);\n",
+      "    console.log(JSON.stringify({ event: 'destroyed' }));\n  }\n  async function close(record, vast, reason, verdict = 'FAIL') {\n    record.closed = null;\n    record.verdict ||= verdict;\n    record.liveCheckedAt = null;\n    await ledger.save(record);\n"
+    ]
+  ],
+  "legacy:all log lines prefixed": [
+    [
+      "    shown = 0;\n  for (const line of tail ? lines.slice(-200) : lines) {\n    const safe = utf8Prefix(line, 1018);\n    const rendered = '[box] ' + safe + '\\n'; // MUTANT all-prefix\n    const length = encoder.encode(rendered).length;\n    retained.push({ rendered, length, shown: encoder.encode(safe).length + 1 });\n    size += length;\n",
+      "    shown = 0;\n  for (const line of tail ? lines.slice(-200) : lines) {\n    const safe = utf8Prefix(line, 1018);\n    const rendered = safe + '\\n'; // MUTANT all-prefix\n    const length = encoder.encode(rendered).length;\n    retained.push({ rendered, length, shown: encoder.encode(safe).length + 1 });\n    size += length;\n"
+    ]
+  ],
+  "legacy:embedded command delimiters": [
+    [
+      "    )\n    .replace(/[A-Za-z0-9_-]+/g, (value) => (value.length >= 32 ? '[redacted]' : value));\n  for (const secret of secrets) if (secret) text = text.split(secret).join('[redacted]');\n  text = text.replace(/:{2,}/g, (value) => value.split('').join(' ')).replaceAll('##[', '# #['); // MUTANT command-delimiters\n  const lines = text.split('\\n');\n  if (lines.at(-1) === '') lines.pop();\n  let retained = [],\n",
+      "    )\n    .replace(/[A-Za-z0-9_-]+/g, (value) => (value.length >= 32 ? '[redacted]' : value));\n  for (const secret of secrets) if (secret) text = text.split(secret).join('[redacted]');\n  const lines = text.split('\\n');\n  if (lines.at(-1) === '') lines.pop();\n  let retained = [],\n"
+    ]
+  ],
+  "legacy:per-line UTF8 byte cap": [
+    [
+      "    size = 0,\n    shown = 0;\n  for (const line of tail ? lines.slice(-200) : lines) {\n    const safe = utf8Prefix(line, 1018);\n    const rendered = '[box] ' + safe + '\\n'; // MUTANT all-prefix\n    const length = encoder.encode(rendered).length;\n    retained.push({ rendered, length, shown: encoder.encode(safe).length + 1 });\n",
+      "    size = 0,\n    shown = 0;\n  for (const line of tail ? lines.slice(-200) : lines) {\n    const safe = line;\n    const rendered = '[box] ' + safe + '\\n'; // MUTANT all-prefix\n    const length = encoder.encode(rendered).length;\n    retained.push({ rendered, length, shown: encoder.encode(safe).length + 1 });\n"
+    ]
+  ],
+  "legacy:log line count cap": [
+    [
+      "  let retained = [],\n    size = 0,\n    shown = 0;\n  for (const line of tail ? lines.slice(-200) : lines) {\n    const safe = utf8Prefix(line, 1018);\n    const rendered = '[box] ' + safe + '\\n'; // MUTANT all-prefix\n    const length = encoder.encode(rendered).length;\n",
+      "  let retained = [],\n    size = 0,\n    shown = 0;\n  for (const line of tail ? lines.slice(-20000) : lines) {\n    const safe = utf8Prefix(line, 1018);\n    const rendered = '[box] ' + safe + '\\n'; // MUTANT all-prefix\n    const length = encoder.encode(rendered).length;\n"
+    ],
+    [
+      "      shown -= encoder.encode(safe).length + 1;\n      break;\n    }\n    while (size > cap || (tail && retained.length > 200)) {\n      const old = retained.shift();\n      size -= old.length;\n      shown -= old.shown;\n",
+      "      shown -= encoder.encode(safe).length + 1;\n      break;\n    }\n    while (size > cap || (tail && retained.length > 20000)) {\n      const old = retained.shift();\n      size -= old.length;\n      shown -= old.shown;\n"
+    ],
+    [
+      "  const lines = ((record.log || '') + text).split('\\n');\n  if (lines.at(-1) === '') lines.pop();\n  let size = new TextEncoder().encode(lines.join('\\n') + (lines.length ? '\\n' : '')).length;\n  while (size > 8192 || lines.length > 200) {\n    const old = lines.shift();\n    const length = new TextEncoder().encode(old + '\\n').length;\n    size -= length;\n",
+      "  const lines = ((record.log || '') + text).split('\\n');\n  if (lines.at(-1) === '') lines.pop();\n  let size = new TextEncoder().encode(lines.join('\\n') + (lines.length ? '\\n' : '')).length;\n  while (size > 8192 || lines.length > 20000) {\n    const old = lines.shift();\n    const length = new TextEncoder().encode(old + '\\n').length;\n    size -= length;\n"
+    ]
+  ],
+  "legacy:log tail byte cap": [
+    [
+      "    retained.push({ rendered, length, shown: encoder.encode(safe).length + 1 });\n    size += length;\n    shown += encoder.encode(safe).length + 1;\n    if (!tail && size > cap) {\n      retained.pop();\n      shown -= encoder.encode(safe).length + 1;\n      break;\n    }\n    while (size > cap || (tail && retained.length > 200)) {\n      const old = retained.shift();\n      size -= old.length;\n      shown -= old.shown;\n",
+      "    retained.push({ rendered, length, shown: encoder.encode(safe).length + 1 });\n    size += length;\n    shown += encoder.encode(safe).length + 1;\n    if (!tail && false) {\n      retained.pop();\n      shown -= encoder.encode(safe).length + 1;\n      break;\n    }\n    while (false || (tail && retained.length > 200)) {\n      const old = retained.shift();\n      size -= old.length;\n      shown -= old.shown;\n"
+    ],
+    [
+      "  const lines = ((record.log || '') + text).split('\\n');\n  if (lines.at(-1) === '') lines.pop();\n  let size = new TextEncoder().encode(lines.join('\\n') + (lines.length ? '\\n' : '')).length;\n  while (size > 8192 || lines.length > 200) {\n    const old = lines.shift();\n    const length = new TextEncoder().encode(old + '\\n').length;\n    size -= length;\n",
+      "  const lines = ((record.log || '') + text).split('\\n');\n  if (lines.at(-1) === '') lines.pop();\n  let size = new TextEncoder().encode(lines.join('\\n') + (lines.length ? '\\n' : '')).length;\n  while (false || lines.length > 200) {\n    const old = lines.shift();\n    const length = new TextEncoder().encode(old + '\\n').length;\n    size -= length;\n"
+    ]
+  ],
+  "legacy:orphan index cannot block cleanup": [
+    [
+      "    const records = [];\n    for (const [key] of entries) {\n      const record = await this.get('record:' + key.slice(5));\n      if (!record) {\n        console.log(JSON.stringify({ event: 'incomplete_ledger_index' }));\n        continue;\n      }\n      if (record.ended !== null) {\n        await this.storage.delete(key);\n        continue;\n",
+      "    const records = [];\n    for (const [key] of entries) {\n      const record = await this.get('record:' + key.slice(5));\n      if (!record) refuse();\n      if (record.ended !== null) {\n        await this.storage.delete(key);\n        continue;\n"
+    ]
+  ],
+  "legacy:kill switch": [
+    [
+      "    const url = new URL(request.url),\n      path = await routePath(request, env);\n    if (path === null) return notFound();\n    if (path === '/rent' && env.RENTING_ENABLED !== 'true')\n      return json(\n        {\n          state: 'RENTING_DISABLED',\n",
+      "    const url = new URL(request.url),\n      path = await routePath(request, env);\n    if (path === null) return notFound();\n    if (false)\n      return json(\n        {\n          state: 'RENTING_DISABLED',\n"
+    ]
+  ],
+  "legacy:owner numeric identity": [
+    [
+      "    const latest = decisive.at(-1);\n    const blocked = latest && ['DISMISSED', 'CHANGES_REQUESTED'].includes(latest.state);\n    const approved = latest?.state === 'APPROVED' && latest.commit_id === p.head.sha;\n    const ownerPush = c.actor_id === cfg.owner && String(r.triggering_actor.id) === cfg.owner; // MUTANT owner\n    const author = String(p.user?.id) === cfg.owner;\n    const permitted =\n      cfg.mode === 'actor_only'\n",
+      "    const latest = decisive.at(-1);\n    const blocked = latest && ['DISMISSED', 'CHANGES_REQUESTED'].includes(latest.state);\n    const approved = latest?.state === 'APPROVED' && latest.commit_id === p.head.sha;\n    const ownerPush = true; // MUTANT owner\n    const author = String(p.user?.id) === cfg.owner;\n    const permitted =\n      cfg.mode === 'actor_only'\n"
+    ]
+  ],
+  "legacy:review head SHA": [
+    [
+      "    );\n    const latest = decisive.at(-1);\n    const blocked = latest && ['DISMISSED', 'CHANGES_REQUESTED'].includes(latest.state);\n    const approved = latest?.state === 'APPROVED' && latest.commit_id === p.head.sha;\n    const ownerPush = c.actor_id === cfg.owner && String(r.triggering_actor.id) === cfg.owner; // MUTANT owner\n    const author = String(p.user?.id) === cfg.owner;\n    const permitted =\n",
+      "    );\n    const latest = decisive.at(-1);\n    const blocked = latest && ['DISMISSED', 'CHANGES_REQUESTED'].includes(latest.state);\n    const approved = latest?.state === 'APPROVED';\n    const ownerPush = c.actor_id === cfg.owner && String(r.triggering_actor.id) === cfg.owner; // MUTANT owner\n    const author = String(p.user?.id) === cfg.owner;\n    const permitted =\n"
+    ]
+  ],
+  "legacy:draft refusal": [
+    [
+      "      refuse();\n    if (automatic && !cfg.bases.includes(p.base.ref)) refuse('NOT_ELIGIBLE', 403); // MUTANT base\n    const target = { sha: p.head.sha, pr: p.number, branch: r.head_branch };\n    if (p.draft === true && !cfg.drafts) refuse('NEEDS_APPROVAL', 403);\n    let reviews = [];\n    for (let page = 1; page <= 5; page++) {\n      const list = await this.get(`pulls/${p.number}/reviews?per_page=100&page=${page}`);\n",
+      "      refuse();\n    if (automatic && !cfg.bases.includes(p.base.ref)) refuse('NOT_ELIGIBLE', 403); // MUTANT base\n    const target = { sha: p.head.sha, pr: p.number, branch: r.head_branch };\n    if (false) refuse('NEEDS_APPROVAL', 403);\n    let reviews = [];\n    for (let page = 1; page <= 5; page++) {\n      const list = await this.get(`pulls/${p.number}/reviews?per_page=100&page=${page}`);\n"
+    ]
+  ],
+  "legacy:OIDC claims": [
+    [
+      "      if (!(await verify())) refuse('UNAUTHORIZED', 401);\n    }\n    const seconds = this.now() / 1000;\n    if (\n      c.iss !== this.issuer ||\n      c.aud !== audience ||\n      typeof c.exp !== 'number' ||\n      !Number.isFinite(c.exp) ||\n      c.exp <= seconds ||\n      typeof c.nbf !== 'number' ||\n      !Number.isFinite(c.nbf) ||\n      c.nbf > seconds\n    )\n      refuse('UNAUTHORIZED', 401);\n    return c;\n  }\n}\n",
+      "      if (!(await verify())) refuse('UNAUTHORIZED', 401);\n    }\n    const seconds = this.now() / 1000;\n    if (false) refuse('UNAUTHORIZED', 401);\n    return c;\n  }\n}\n"
+    ]
+  ],
+  "legacy:credit reserve": [
+    [
+      "      cost = offer.pricing.total,\n      credit = await vast.credit();\n    try {\n      if (typeof credit !== 'number' || !Number.isFinite(credit) || credit < cfg.reserve + cost)\n        refuse('UNAVAILABLE_BUDGET', 409); // MUTANT credit\n      await ledger.budgets(cfg, now(), cost);\n    } catch (e) {\n      if (e instanceof BrokerError && e.state === 'UNAVAILABLE_BUDGET')\n",
+      "      cost = offer.pricing.total,\n      credit = await vast.credit();\n    try {\n      await ledger.budgets(cfg, now(), cost);\n    } catch (e) {\n      if (e instanceof BrokerError && e.state === 'UNAVAILABLE_BUDGET')\n"
+    ]
+  ],
+  "legacy:daily rental count": [
+    [
+      "      if (v.started >= day && (v.profile ?? 'check') === (cfg.profile ?? 'check')) count++;\n      if (v.ended !== null && end < rolling) await this.storage.delete(key);\n    }\n    if (count >= cfg.dailyCount) refuse('UNAVAILABLE_BUDGET', 409); // MUTANT daily-count\n    if (daily + cost > (cfg.profile === 'sweep' ? cfg.sweepDaily : cfg.daily))\n      refuse('UNAVAILABLE_BUDGET', 409); // MUTANT daily\n    if (monthly + cost > cfg.rolling) refuse('UNAVAILABLE_BUDGET', 409); // MUTANT rolling\n",
+      "      if (v.started >= day && (v.profile ?? 'check') === (cfg.profile ?? 'check')) count++;\n      if (v.ended !== null && end < rolling) await this.storage.delete(key);\n    }\n    if (daily + cost > (cfg.profile === 'sweep' ? cfg.sweepDaily : cfg.daily))\n      refuse('UNAVAILABLE_BUDGET', 409); // MUTANT daily\n    if (monthly + cost > cfg.rolling) refuse('UNAVAILABLE_BUDGET', 409); // MUTANT rolling\n"
+    ]
+  ],
+  "legacy:daily spend": [
+    [
+      "      if (v.ended !== null && end < rolling) await this.storage.delete(key);\n    }\n    if (count >= cfg.dailyCount) refuse('UNAVAILABLE_BUDGET', 409); // MUTANT daily-count\n    if (daily + cost > (cfg.profile === 'sweep' ? cfg.sweepDaily : cfg.daily))\n      refuse('UNAVAILABLE_BUDGET', 409); // MUTANT daily\n    if (monthly + cost > cfg.rolling) refuse('UNAVAILABLE_BUDGET', 409); // MUTANT rolling\n  }\n}\n",
+      "      if (v.ended !== null && end < rolling) await this.storage.delete(key);\n    }\n    if (count >= cfg.dailyCount) refuse('UNAVAILABLE_BUDGET', 409); // MUTANT daily-count\n    if (monthly + cost > cfg.rolling) refuse('UNAVAILABLE_BUDGET', 409); // MUTANT rolling\n  }\n}\n"
+    ]
+  ],
+  "legacy:rolling 30-day spend": [
+    [
+      "    if (count >= cfg.dailyCount) refuse('UNAVAILABLE_BUDGET', 409); // MUTANT daily-count\n    if (daily + cost > (cfg.profile === 'sweep' ? cfg.sweepDaily : cfg.daily))\n      refuse('UNAVAILABLE_BUDGET', 409); // MUTANT daily\n    if (monthly + cost > cfg.rolling) refuse('UNAVAILABLE_BUDGET', 409); // MUTANT rolling\n  }\n}\n",
+      "    if (count >= cfg.dailyCount) refuse('UNAVAILABLE_BUDGET', 409); // MUTANT daily-count\n    if (daily + cost > (cfg.profile === 'sweep' ? cfg.sweepDaily : cfg.daily))\n      refuse('UNAVAILABLE_BUDGET', 409); // MUTANT daily\n  }\n}\n"
+    ]
+  ],
+  "legacy:one live instance": [
+    [
+      "      return json(expose(prior, key, target.pr));\n    }\n    const active = await ledger.active();\n    if (active && active.ended === null) {\n      if (\n        ((active.pr !== null && active.pr === target.pr) ||\n          (active.pr === null && target.pr === null && active.branch === target.branch)) &&\n",
+      "      return json(expose(prior, key, target.pr));\n    }\n    const active = await ledger.active();\n    if (false) {\n      if (\n        ((active.pr !== null && active.pr === target.pr) ||\n          (active.pr === null && target.pr === null && active.branch === target.branch)) &&\n"
+    ]
+  ],
+  "legacy:superseding push": [
+    [
+      "    }\n    const active = await ledger.active();\n    if (active && active.ended === null) {\n      if (\n        ((active.pr !== null && active.pr === target.pr) ||\n          (active.pr === null && target.pr === null && active.branch === target.branch)) &&\n        active.sha !== target.sha\n      ) {\n        await close(active, vast, 'SUPERSEDED');\n        refuse('BUSY', 409);\n      }\n",
+      "    }\n    const active = await ledger.active();\n    if (active && active.ended === null) {\n      if (false) {\n        await close(active, vast, 'SUPERSEDED');\n        refuse('BUSY', 409);\n      }\n"
+    ]
+  ],
+  "legacy:same SHA minimum gap": [
+    [
+      "    const cached = await ledger.get('sha:' + target.sha),\n      force = c.event_name === 'workflow_dispatch' && Number(c.run_attempt) > 1;\n    if (cached && !force) refuse('UNAVAILABLE_BUDGET', 409); // A fresh runner nonce may not inherit another run's result.\n    if (cached && now() - cached.started < cfg.gap) refuse('UNAVAILABLE_BUDGET', 409); // MUTANT gap\n    if (!validSecret(env.RUN_TOKEN_SECRET) || !validSecret(env.OWNER_STOP_TOKEN)) refuse();\n    const chosen = await offers.select(\n        await offers.evaluate(vast, cfg, ledger, profile),\n",
+      "    const cached = await ledger.get('sha:' + target.sha),\n      force = c.event_name === 'workflow_dispatch' && Number(c.run_attempt) > 1;\n    if (cached && !force) refuse('UNAVAILABLE_BUDGET', 409); // A fresh runner nonce may not inherit another run's result.\n    if (!validSecret(env.RUN_TOKEN_SECRET) || !validSecret(env.OWNER_STOP_TOKEN)) refuse();\n    const chosen = await offers.select(\n        await offers.evaluate(vast, cfg, ledger, profile),\n"
+    ]
+  ],
+  "legacy:live label ownership": [
+    [
+      "    if (response === null) return null;\n    const i = response.instances;\n    if (i === null) return null;\n    if (\n      !i ||\n      String(i.id) !== record.id ||\n      !record.label.startsWith('kf-ci-') ||\n      i.label !== record.label\n    )\n      refuse('OWNERSHIP_MISMATCH', 409);\n    return i;\n  }\n",
+      "    if (response === null) return null;\n    const i = response.instances;\n    if (i === null) return null;\n    if (!i || String(i.id) !== record.id || !record.label.startsWith('kf-ci-') || false)\n      refuse('OWNERSHIP_MISMATCH', 409);\n    return i;\n  }\n"
+    ]
+  ],
+  "legacy:ambiguous-create binding": [
+    [
+      "    const matches = r.instances.filter((x) => x.label === record.label);\n    if (matches.length !== 1) refuse();\n    const candidate = matches[0];\n    if (\n      typeof candidate.onstart !== 'string' ||\n      (await sha256Hex(candidate.onstart)) !== record.scriptHash ||\n      candidate.image_uuid !== IMAGE ||\n      !Number.isSafeInteger(candidate.id) ||\n      candidate.id <= 0\n    )\n      refuse();\n    return String(candidate.id);\n  }\n  async inspect(record) {\n",
+      "    const matches = r.instances.filter((x) => x.label === record.label);\n    if (matches.length !== 1) refuse();\n    const candidate = matches[0];\n    return String(candidate.id);\n  }\n  async inspect(record) {\n"
+    ]
+  ],
+  "legacy:TTL destruction": [
+    [
+      "      return;\n    }\n    let reason;\n    if (record.hardDeadline !== null && now() >= record.hardDeadline) reason = 'HARD_TIMEOUT';\n    else if (record.phase === 'MANUAL' && now() >= record.manualDeadline) reason = 'MANUAL_TIMEOUT';\n    else if (\n      record.phase !== 'MANUAL' &&\n",
+      "      return;\n    }\n    let reason;\n    if (false) reason = 'HARD_TIMEOUT';\n    else if (record.phase === 'MANUAL' && now() >= record.manualDeadline) reason = 'MANUAL_TIMEOUT';\n    else if (\n      record.phase !== 'MANUAL' &&\n"
+    ]
+  ],
+  "legacy:SHA/nonce shell validation": [
+    [
+      "// prettier-ignore\nimport {validPathPrefix} from './routes.js';\nexport function onstart(sha, nonce, minutes, repo = 'reindertpelsma/kayfabe', callback) {\n  if (\n    !hexSha(sha) ||\n    typeof nonce !== 'string' ||\n    !/^[0-9a-f]{32}$/.test(nonce) ||\n    !Number.isInteger(minutes) ||\n    minutes < 1 ||\n    minutes > DEFAULTS.maxMinutes ||\n    !/^[-\\w.]+\\/[-\\w.]+$/.test(repo)\n  )\n    throw Error('Invalid fixed onstart inputs');\n  let origin;\n  try {\n    const u = new URL(callback.url);\n",
+      "// prettier-ignore\nimport {validPathPrefix} from './routes.js';\nexport function onstart(sha, nonce, minutes, repo = 'reindertpelsma/kayfabe', callback) {\n  let origin;\n  try {\n    const u = new URL(callback.url);\n"
+    ]
+  ],
+  "legacy:callback shell validation": [
+    [
+      "  } catch {\n    throw Error('Invalid callback origin');\n  }\n  if (\n    !/^[1-9][0-9]{0,19}-[1-9][0-9]{0,19}$/.test(callback.run) ||\n    !/^v1\\.[1-9][0-9]{0,19}\\.[1-9][0-9]{0,19}\\.[1-9][0-9]{0,12}\\.[A-Za-z0-9_-]{43}$/.test(\n      callback.token,\n    ) ||\n    callback.token.split('.').slice(1, 3).join('-') !== callback.run\n  )\n    throw Error('Invalid callback capability');\n  const prefix = callback.path ?? '';\n  if (prefix !== '' && !validPathPrefix(prefix)) throw Error('Invalid callback prefix');\n  const grace = callback.graceMinutes ?? DEFAULTS.failGraceMinutes;\n",
+      "  } catch {\n    throw Error('Invalid callback origin');\n  }\n  const prefix = callback.path ?? '';\n  if (prefix !== '' && !validPathPrefix(prefix)) throw Error('Invalid callback prefix');\n  const grace = callback.graceMinutes ?? DEFAULTS.failGraceMinutes;\n"
+    ]
+  ],
+  "legacy:fixed offer admission": [
+    [
+      "  cfg,\n  { profile = 'check', median = offer.dlperf, badMachines = [] } = {},\n) {\n  const q = cfg.quality[profile],\n    reasons = [],\n    die = gpuClass(offer, cfg),\n",
+      "  cfg,\n  { profile = 'check', median = offer.dlperf, badMachines = [] } = {},\n) {\n  return [];\n  const q = cfg.quality[profile],\n    reasons = [],\n    die = gpuClass(offer, cfg),\n"
+    ]
+  ],
+  "legacy:documented verification representation": [
+    [
+      "    price = offerPrice(offer, cfg);\n  const enough = (key, floor) =>\n    typeof offer[key] === 'number' && Number.isFinite(offer[key]) && offer[key] >= floor;\n  if (\n    !(\n      offer.verified === true ||\n      (offer.verified === undefined && offer.verification === 'verified')\n    )\n  )\n    reasons.push('VERIFICATION');\n  if (\n    !Number.isSafeInteger(offer.id) ||\n    offer.id <= 0 ||\n",
+      "    price = offerPrice(offer, cfg);\n  const enough = (key, floor) =>\n    typeof offer[key] === 'number' && Number.isFinite(offer[key]) && offer[key] >= floor;\n  if (!offer.verified === true) reasons.push('VERIFICATION');\n  if (\n    !Number.isSafeInteger(offer.id) ||\n    offer.id <= 0 ||\n"
+    ]
+  ],
+  "legacy:documented model representation": [
+    [
+      "    return null;\n  const name = offer.gpu_name\n    .toUpperCase()\n    .replace(/ /g, '_')\n    .replace(/^NVIDIA_/, '')\n    .replace(/^GEFORCE_/, '')\n    .replace(/^QUADRO_/, '');\n",
+      "    return null;\n  const name = offer.gpu_name\n    .toUpperCase()\n    .replace(/ /g, ' ')\n    .replace(/^NVIDIA_/, '')\n    .replace(/^GEFORCE_/, '')\n    .replace(/^QUADRO_/, '');\n"
+    ]
+  ],
+  "legacy:outbound requested storage": [
+    [
+      "      rented: { eq: false },\n      num_gpus: { eq: 1 },\n      disk_space: { gte: 120 },\n      allocated_storage: 120,\n      order: [['dph_total', 'asc']],\n    };\n    const result = await this.api('/api/v0/bundles', 'POST', q);\n",
+      "      rented: { eq: false },\n      num_gpus: { eq: 1 },\n      disk_space: { gte: 120 },\n      allocated_storage: 8,\n      order: [['dph_total', 'asc']],\n    };\n    const result = await this.api('/api/v0/bundles', 'POST', q);\n"
+    ]
+  ],
+  "legacy:documented offer pricing type": [
+    [
+      "    // mandatory verification. Admission always rechecks the returned fields.\n    const q = {\n      limit: 100,\n      type: 'ondemand',\n      gpu_arch: { eq: 'nvidia' },\n      compute_cap: { gte: 750 },\n      dph_total: { lte: Math.max(this.cfg.price, this.cfg.sweepPrice) },\n",
+      "    // mandatory verification. Admission always rechecks the returned fields.\n    const q = {\n      limit: 100,\n      type: 'on-demand',\n      gpu_arch: { eq: 'nvidia' },\n      compute_cap: { gte: 750 },\n      dph_total: { lte: Math.max(this.cfg.price, this.cfg.sweepPrice) },\n"
+    ]
+  ],
+  "legacy:poll permissions guard": [
+    [
+      "  const primary = gpu.find((x) => x.id === 'gpu');\n  if (!primary) errors.push('GPU poll job missing');\n  if (\n    primary &&\n    JSON.stringify(Object.entries(primary.grants).sort()) !==\n      JSON.stringify(Object.entries({ 'id-token': 'write' }).sort())\n",
+      "  const primary = gpu.find((x) => x.id === 'gpu');\n  if (!primary) errors.push('GPU poll job missing');\n  if (\n    false &&\n    primary &&\n    JSON.stringify(Object.entries(primary.grants).sort()) !==\n      JSON.stringify(Object.entries({ 'id-token': 'write' }).sort())\n"
+    ]
+  ],
+  "legacy:attestation dependency guard": [
+    [
+      "        errors.push(filename + ': unsupported dynamic permission/needs in ' + job.id);\n      if (filename === gpuName && job.opaque)\n        errors.push('GPU workflow cannot call opaque reusable workflow');\n      if (job.danger && (filename === gpuName || reaches(job)))\n        errors.push(filename + ': attestation/release consumes GPU workflow');\n    }\n    if (\n      filename !== gpuName &&\n",
+      "        errors.push(filename + ': unsupported dynamic permission/needs in ' + job.id);\n      if (filename === gpuName && job.opaque)\n        errors.push('GPU workflow cannot call opaque reusable workflow');\n      if (false) errors.push(filename + ': attestation/release consumes GPU workflow');\n    }\n    if (\n      filename !== gpuName &&\n"
+    ]
+  ],
+  "legacy:cold-box disk guard": [
+    [
+      "check_disk() {\n  local available\n  available=$(df -B1 --output=avail / | tail -n1 | tr -d ' ')\n  if [[ ! \"$available\" =~ ^[0-9]{1,15}$ ]] || [[ \"$available\" -lt 60000000000 ]]; then\n    echo 'VAST_CI_DISK_UNAVAILABLE: at least 60 GB free required'\n    return 1\n  fi\n",
+      "check_disk() {\n  local available\n  available=$(df -B1 --output=avail / | tail -n1 | tr -d ' ')\n  if [[ ! \"$available\" =~ ^[0-9]{1,15}$ ]] || [[ false == true ]]; then\n    echo 'VAST_CI_DISK_UNAVAILABLE: at least 60 GB free required'\n    return 1\n  fi\n"
+    ]
+  ],
+  "legacy:must-fail control": [
+    [
+      "  bash \"$source_root/scripts/bench/box/birth_census.sh\" \"$control_dir\" missing \"$control_dir/missing.log\"\n  control_rc=$?\n  rmdir \"$control_dir\"\n  exit \"$control_rc\"\nfi\ncheck_control() {\n  if bash \"$0\" --must-fail-control; then\n",
+      "  bash \"$source_root/scripts/bench/box/birth_census.sh\" \"$control_dir\" missing \"$control_dir/missing.log\"\n  control_rc=$?\n  rmdir \"$control_dir\"\n  exit 0\nfi\ncheck_control() {\n  if bash \"$0\" --must-fail-control; then\n"
+    ]
+  ],
+  "legacy:scheduled cleanup wiring": [
+    [
+      "      new URL(request.url).origin === 'https://internal.invalid' &&\n      new URL(request.url).pathname === '/cron'\n    ) {\n      await this.service.sweep();\n      return new Response('ok');\n    }\n    return this.service.fetch(request);\n",
+      "      new URL(request.url).origin === 'https://internal.invalid' &&\n      new URL(request.url).pathname === '/cron'\n    ) {\n      await Promise.resolve();\n      return new Response('ok');\n    }\n    return this.service.fetch(request);\n"
+    ]
+  ],
+  "legacy:Unicode format sanitizer": [
+    [
+      "    .replace(/\\x1b\\[[0-?]*[ -/]*[@-~]/g, '')\n    .replace(/\\x1b[ -/]*[@-~]/g, '')\n    .replace(/[\\x00-\\x08\\x0b-\\x1f\\x7f-\\x9f]/g, '')\n    .replace(/\\p{Cf}/gu, '') // MUTANT unicode-format\n    .replace(\n      /\\b(?:gh[pousr]_[A-Za-z0-9]{20,255}|github_pat_[A-Za-z0-9_]{20,255}|v1\\.[0-9]+\\.[0-9]+\\.[0-9]+\\.[A-Za-z0-9_-]{43})\\b/g,\n      '[redacted]',\n",
+      "    .replace(/\\x1b\\[[0-?]*[ -/]*[@-~]/g, '')\n    .replace(/\\x1b[ -/]*[@-~]/g, '')\n    .replace(/[\\x00-\\x08\\x0b-\\x1f\\x7f-\\x9f]/g, '')\n    .replace(\n      /\\b(?:gh[pousr]_[A-Za-z0-9]{20,255}|github_pat_[A-Za-z0-9_]{20,255}|v1\\.[0-9]+\\.[0-9]+\\.[0-9]+\\.[A-Za-z0-9_-]{43})\\b/g,\n      '[redacted]',\n"
+    ]
+  ],
+  "legacy:unsupported job syntax": [
+    [
+      "    if (match) {\n      current = { id: match[1], lines: [] };\n      jobs.push(current);\n    } else if (/^  [^\\s#].*:/.test(line)) {\n      current = { id: 'unsupported-' + jobs.length, lines: [], unsupported: true };\n      jobs.push(current);\n    } // MUTANT job-shape\n    else if (current) current.lines.push(line);\n  }\n  return jobs.map((job) => {\n    const body = job.lines.join('\\n');\n",
+      "    if (match) {\n      current = { id: match[1], lines: [] };\n      jobs.push(current);\n    } else if (current) current.lines.push(line);\n  }\n  return jobs.map((job) => {\n    const body = job.lines.join('\\n');\n"
+    ]
+  ],
+  "legacy:distinct client refusal": [
+    [
+      "          elif [[ \"$BROKER_VERDICT\" = FAIL ]]; then\n            result=failure\n          fi\n          description=\"GPU broker $state\"\n          temporary=$(mktemp)\n          jq -n --arg state \"$result\" --arg description \"$description\" \\\n            --arg url \"$GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID\" \\\n",
+      "          elif [[ \"$BROKER_VERDICT\" = FAIL ]]; then\n            result=failure\n          fi\n          description='GPU broker unavailable'\n          temporary=$(mktemp)\n          jq -n --arg state \"$result\" --arg description \"$description\" \\\n            --arg url \"$GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID\" \\\n"
+    ]
+  ],
+  "legacy:public cron isolation": [
+    [
+      "export default {\n  async fetch(request, env) {\n    const path = await routePath(request, env);\n    if (\n      path === null ||\n      !/^\\/(?:rent|availability|stop-all|(?:report|kill|hold|stop-timer|status|stop|logs)\\/[1-9][0-9]{0,19}-[1-9][0-9]{0,19})$/.test(\n        path,\n      )\n    )\n      return notFound();\n    let buffered;\n    try {\n      buffered = await detachedUpload(request, path);\n",
+      "export default {\n  async fetch(request, env) {\n    const path = await routePath(request, env);\n    if (false) return notFound();\n    let buffered;\n    try {\n      buffered = await detachedUpload(request, path);\n"
+    ]
+  ],
+  "legacy:automatic base allowlist": [
+    [
+      "      p.base?.repo?.full_name !== cfg.repo\n    )\n      refuse();\n    if (automatic && !cfg.bases.includes(p.base.ref)) refuse('NOT_ELIGIBLE', 403); // MUTANT base\n    const target = { sha: p.head.sha, pr: p.number, branch: r.head_branch };\n    if (p.draft === true && !cfg.drafts) refuse('NEEDS_APPROVAL', 403);\n    let reviews = [];\n",
+      "      p.base?.repo?.full_name !== cfg.repo\n    )\n      refuse();\n    if (automatic && false && !cfg.bases.includes(p.base.ref)) refuse('NOT_ELIGIBLE', 403); // MUTANT base\n    const target = { sha: p.head.sha, pr: p.number, branch: r.head_branch };\n    if (p.draft === true && !cfg.drafts) refuse('NEEDS_APPROVAL', 403);\n    let reviews = [];\n"
+    ],
+    [
+      "    const notNeeded = automatic && (await this.allSkipped(p));\n    const current = await this.pr(p.number);\n    if (current.head?.sha !== target.sha || current.state !== 'open') refuse();\n    if (automatic && !cfg.bases.includes(current.base?.ref)) refuse('NOT_ELIGIBLE', 403);\n    return { ...target, run: c.run_id, attempt: c.run_attempt, notNeeded };\n  }\n}\n",
+      "    const notNeeded = automatic && (await this.allSkipped(p));\n    const current = await this.pr(p.number);\n    if (current.head?.sha !== target.sha || current.state !== 'open') refuse();\n    if (automatic && false && !cfg.bases.includes(current.base?.ref)) refuse('NOT_ELIGIBLE', 403);\n    return { ...target, run: c.run_id, attempt: c.run_attempt, notNeeded };\n  }\n}\n"
+    ]
+  ],
+  "legacy:docs-only exclusion result": [
+    [
+      "    const target = await github.authorize(c, rentRequest);\n    if (rentRequest.tested_sha !== target.sha || rentRequest.pr_number !== target.pr)\n      refuse('BINDING_MISMATCH', 409);\n    if (target.notNeeded)\n      return json({\n        ...expose({\n          ...target,\n",
+      "    const target = await github.authorize(c, rentRequest);\n    if (rentRequest.tested_sha !== target.sha || rentRequest.pr_number !== target.pr)\n      refuse('BINDING_MISMATCH', 409);\n    if (false)\n      return json({\n        ...expose({\n          ...target,\n"
+    ]
+  ],
+  "legacy:unknown file-list skip": [
+    [
+      "  }\n  async allSkipped(p) {\n    const count = p.changed_files;\n    if (!Number.isSafeInteger(count) || count <= 0 || count >= 3000) return false;\n    const files = [];\n    for (let page = 1; page <= Math.ceil(count / 100); page++) {\n      const list = await this.get(`pulls/${p.number}/files?per_page=100&page=${page}`);\n      if (!Array.isArray(list) || list.length !== Math.min(100, count - files.length)) return false;\n      files.push(...list);\n    }\n    return skippedFiles(files, count, this.cfg.patterns);\n",
+      "  }\n  async allSkipped(p) {\n    const count = p.changed_files;\n    if (!Number.isSafeInteger(count) || count <= 0 || count >= 3000) return true;\n    const files = [];\n    for (let page = 1; page <= Math.ceil(count / 100); page++) {\n      const list = await this.get(`pulls/${p.number}/files?per_page=100&page=${page}`);\n      if (!Array.isArray(list) || list.length !== Math.min(100, count - files.length)) return true;\n      files.push(...list);\n    }\n    return skippedFiles(files, count, this.cfg.patterns);\n"
+    ]
+  ],
+  "legacy:canonical path validation": [
+    [
+      "\n// Exclusions apply only to canonical API paths. Unknown names are always relevant.\nexport function skippedPath(path, patterns) {\n  if (\n    typeof path !== 'string' ||\n    !path ||\n    path.length > 4096 ||\n    !/^[A-Za-z0-9_ ./-]+$/.test(path) ||\n    path.split('/').some((x) => !x || x === '.' || x === '..') ||\n    path.startsWith('ci/vast-broker/')\n  )\n    return false;\n  return patterns.some((pattern) => {\n    let expression = '^';\n    for (let i = 0; i < pattern.length; i++) {\n",
+      "\n// Exclusions apply only to canonical API paths. Unknown names are always relevant.\nexport function skippedPath(path, patterns) {\n  return patterns.some((pattern) => {\n    let expression = '^';\n    for (let i = 0; i < pattern.length; i++) {\n"
+    ]
+  ],
+  "legacy:renamed previous path": [
+    [
+      "      ['added', 'modified', 'removed', 'renamed', 'copied', 'changed'].includes(x.status) &&\n      skippedPath(x.filename, patterns) &&\n      (!['renamed', 'copied'].includes(x.status) || typeof x.previous_filename === 'string') &&\n      (x.previous_filename === undefined || skippedPath(x.previous_filename, patterns)),\n  );\n}\n",
+      "      ['added', 'modified', 'removed', 'renamed', 'copied', 'changed'].includes(x.status) &&\n      skippedPath(x.filename, patterns) &&\n      (!['renamed', 'copied'].includes(x.status) || typeof x.previous_filename === 'string') &&\n      true,\n  );\n}\n"
+    ]
+  ],
+  "legacy:request bearer transport": [
+    [
+      "        refuse('BAD_REQUEST', 400);\n      }\n    }\n    const token = request.headers.get('X-GH-Token');\n    if (token && (token.length > 1024 || !/^[\\x21-\\x7e]+$/.test(token))) refuse();\n    const github = new Github(fetcher, cfg, token, { cache: githubCache, now });\n    if (match) {\n",
+      "        refuse('BAD_REQUEST', 400);\n      }\n    }\n    const token = null;\n    if (token && (token.length > 1024 || !/^[\\x21-\\x7e]+$/.test(token))) refuse();\n    const github = new Github(fetcher, cfg, token, { cache: githubCache, now });\n    if (match) {\n"
+    ]
+  ],
+  "legacy:request bearer retention": [
+    [
+      "        softDeadline: r.softDeadline,\n      });\n    r.scriptHash = await sha256Hex(script);\n    await ledger.reserve(r);\n    await workerLine(\n      r,\n",
+      "        softDeadline: r.softDeadline,\n      });\n    r.scriptHash = await sha256Hex(script);\n    r.githubToken = token;\n    await ledger.reserve(r);\n    await workerLine(\n      r,\n"
+    ]
+  ],
+  "legacy:public GitHub fallback": [
+    [
+      "      refuse();\n    const publicFallback = async (url, init) => {\n      const response = await this.fetcher(url, init);\n      if (this.headers.Authorization && [401, 403].includes(response.status)) {\n        await response.body?.cancel();\n        const headers = { ...this.headers };\n        delete headers.Authorization;\n",
+      "      refuse();\n    const publicFallback = async (url, init) => {\n      const response = await this.fetcher(url, init);\n      if (false) {\n        await response.body?.cancel();\n        const headers = { ...this.headers };\n        delete headers.Authorization;\n"
+    ]
+  ],
+  "legacy:owner branch without PR": [
+    [
+      "      );\n      if (exact.length > 1) refuse();\n      p = exact[0];\n      if (!p)\n        return {\n          sha: r.head_sha,\n",
+      "      );\n      if (exact.length > 1) refuse();\n      p = exact[0];\n      if (!p) refuse();\n      if (!p)\n        return {\n          sha: r.head_sha,\n"
+    ]
+  ],
+  "legacy:immutable API cache": [
+    [
+      "    // Cache only immutable commit facts. Admission/run/review/file/head reads stay fresh.\n    const immutable = /^commits\\/[0-9a-f]{40}$/.test(path),\n      cached = this.cache.get(path);\n    if (immutable && cached && this.now() - cached.at < 5000) return structuredClone(cached.value);\n    if (!/^[A-Za-z0-9_/?=&.-]+$/.test(path) || path.includes('..') || path.startsWith('/'))\n      refuse();\n    const publicFallback = async (url, init) => {\n",
+      "    // Cache only immutable commit facts. Admission/run/review/file/head reads stay fresh.\n    const immutable = /^commits\\/[0-9a-f]{40}$/.test(path),\n      cached = this.cache.get(path);\n    if (false && immutable && cached && this.now() - cached.at < 5000)\n      return structuredClone(cached.value);\n    if (!/^[A-Za-z0-9_/?=&.-]+$/.test(path) || path.includes('..') || path.startsWith('/'))\n      refuse();\n    const publicFallback = async (url, init) => {\n"
+    ]
+  ],
+  "legacy:mandatory status writer jobs": [
+    [
+      "  if (/actions\\/checkout|cache@|upload-artifact|download-artifact/.test(workflows[gpuName]))\n    errors.push('GPU runner cannot consume source/artifact/cache actions');\n\n  if (!gpu.some((x) => x.id === 'pending') || !gpu.some((x) => x.id === 'report'))\n    errors.push('GPU status writers missing'); // MUTANT writers\n  const report = gpu.find((x) => x.id === 'report');\n  if (\n    report &&\n",
+      "  if (/actions\\/checkout|cache@|upload-artifact|download-artifact/.test(workflows[gpuName]))\n    errors.push('GPU runner cannot consume source/artifact/cache actions');\n\n  const report = gpu.find((x) => x.id === 'report');\n  if (\n    report &&\n"
+    ]
+  ],
+  "legacy:token-shaped log redaction": [
+    [
+      "    .replace(/\\x1b\\[[0-?]*[ -/]*[@-~]/g, '')\n    .replace(/\\x1b[ -/]*[@-~]/g, '')\n    .replace(/[\\x00-\\x08\\x0b-\\x1f\\x7f-\\x9f]/g, '')\n    .replace(/\\p{Cf}/gu, '') // MUTANT unicode-format\n    .replace(\n      /\\b(?:gh[pousr]_[A-Za-z0-9]{20,255}|github_pat_[A-Za-z0-9_]{20,255}|v1\\.[0-9]+\\.[0-9]+\\.[0-9]+\\.[A-Za-z0-9_-]{43})\\b/g,\n      '[redacted]',\n    ); // MUTANT token-shape\n  text = text\n    .replace(/\\bBearer\\s+[^\\s]+/gi, 'Bearer [redacted]')\n    .replace(/\\b(?:[0-9]{1,3}\\.){3}[0-9]{1,3}\\b/g, '[address]')\n",
+      "    .replace(/\\x1b\\[[0-?]*[ -/]*[@-~]/g, '')\n    .replace(/\\x1b[ -/]*[@-~]/g, '')\n    .replace(/[\\x00-\\x08\\x0b-\\x1f\\x7f-\\x9f]/g, '')\n    .replace(/\\p{Cf}/gu, ''); // MUTANT unicode-format\n  text = text\n    .replace(/\\bBearer\\s+[^\\s]+/gi, 'Bearer [redacted]')\n    .replace(/\\b(?:[0-9]{1,3}\\.){3}[0-9]{1,3}\\b/g, '[address]')\n"
+    ]
+  ],
+  "legacy:isolated writer permissions": [
+    [
+      "  )\n    errors.push('GPU permissions must be exactly id-token/write');\n  for (const job of gpu.filter((x) => ['pending', 'report'].includes(x.id))) {\n    if (\n      JSON.stringify(Object.entries(job.grants)) !== JSON.stringify([['statuses', 'write']]) ||\n      /X-GH-Token|WORKER_URL|id-token:/.test(job.body)\n    )\n      errors.push('Status writer must not send its token to Worker');\n  }\n  for (const [filename, text] of Object.entries(workflows)) {\n    if (filename === 'gpu-vast-sweep.yml') {\n",
+      "  )\n    errors.push('GPU permissions must be exactly id-token/write');\n  for (const job of gpu.filter((x) => ['pending', 'report'].includes(x.id))) {\n  }\n  for (const [filename, text] of Object.entries(workflows)) {\n    if (filename === 'gpu-vast-sweep.yml') {\n"
+    ]
+  ],
+  "v4:no-result-grace": [
+    [
+      "      r.lastPostAt = now();\n      if (r.phase !== 'MANUAL' && r.phase !== 'GRACE') r.phase = 'TESTING';\n      if (payload.kind === 'result') {\n        r.result = {\n          ...payload.result,\n          die: r.die,\n",
+      "      r.lastPostAt = now();\n      if (r.phase !== 'MANUAL' && r.phase !== 'GRACE') r.phase = 'TESTING';\n      if (payload.kind === 'result') {\n        await close(r, vast, 'RESULT', payload.result.verdict);\n        r.result = {\n          ...payload.result,\n          die: r.die,\n"
+    ]
+  ],
+  "v4:kill-no-destroy": [
+    [
+      "    await rate(r, cfg);\n    await readBounded(request, 256);\n    r.boxKilled = true;\n    await close(r, vast, 'STOPPED');\n    return json({ state: 'NONE' });\n  }\n  async function report(request, key, bearer, cfg, vast) {\n",
+      "    await rate(r, cfg);\n    await readBounded(request, 256);\n    r.boxKilled = true;\n    return json({ state: 'NONE' });\n  }\n  async function report(request, key, bearer, cfg, vast) {\n"
+    ]
+  ],
+  "v4:kill-no-capability": [
+    [
+      "  }\n  async function kill(request, key, bearer, cfg, vast) {\n    const r = await ledger.get('record:' + key);\n    if (!r || r.key !== key || !(await tokens.verify(bearer, r)) || now() >= r.reportExpiry * 1000)\n      refuse('UNAUTHORIZED', 401);\n    // An ended kill receipt is idempotent but grants no live authority or provider calls.\n    if (r.ended !== null) {\n      if (r.boxKilled) return json({ state: 'NONE' });\n",
+      "  }\n  async function kill(request, key, bearer, cfg, vast) {\n    const r = await ledger.get('record:' + key);\n    if (!r || r.key !== key || false || now() >= r.reportExpiry * 1000) refuse('UNAUTHORIZED', 401);\n    // An ended kill receipt is idempotent but grants no live authority or provider calls.\n    if (r.ended !== null) {\n      if (r.boxKilled) return json({ state: 'NONE' });\n"
+    ]
+  ],
+  "v4:kill-wrong-route": [
+    [
+      "#!/bin/sh\nset -eu\n# Only this run's limited capability; neither account nor owner credentials.\nexec curl --silent --show-error --fail --max-time 20 --proto '=https' --request POST --header 'Authorization: Bearer ${callback.token}' --data-binary \"\\${1:-box-request}\" '${origin}${prefix ? '/' + prefix : ''}/kill/${callback.run}'\nKF_KILL\nchmod 700 /usr/local/bin/kf-box-kill\ncat > /usr/local/bin/kf-box-hold <<'KF_HOLD'\n",
+      "#!/bin/sh\nset -eu\n# Only this run's limited capability; neither account nor owner credentials.\nexec curl --silent --show-error --fail --max-time 20 --proto '=https' --request POST --header 'Authorization: Bearer ${callback.token}' --data-binary \"\\${1:-box-request}\" '${origin}${prefix ? '/' + prefix : ''}/report/${callback.run}'\nKF_KILL\nchmod 700 /usr/local/bin/kf-box-kill\ncat > /usr/local/bin/kf-box-hold <<'KF_HOLD'\n"
+    ]
+  ],
+  "v4:no-absence-verification": [
+    [
+      "    const r = await this.api('/api/v0/instances/' + record.id, 'DELETE');\n    if (r.success !== true) refuse();\n    // Acknowledgement is not absence. Retain liability and retry via cron if still present.\n    if ((await this.inspect(record)) !== null) refuse();\n  }\n}\n",
+      "    const r = await this.api('/api/v0/instances/' + record.id, 'DELETE');\n    if (r.success !== true) refuse();\n    // Acknowledgement is not absence. Retain liability and retry via cron if still present.\n    /* mutant trusts ACK */\n  }\n}\n"
+    ]
+  ],
+  "v4:no-provision-deadline": [
+    [
+      "      now() >= record.resultDeadline\n    )\n      reason = 'RESULT';\n    else if (\n      record.phase !== 'MANUAL' &&\n      record.firstReportAt === undefined &&\n      now() >= record.bootDeadline\n    )\n      reason = 'BOOT_TIMEOUT';\n    else if (\n      record.phase !== 'MANUAL' &&\n      record.lastPostAt !== null &&\n",
+      "      now() >= record.resultDeadline\n    )\n      reason = 'RESULT';\n    else if (false) reason = 'BOOT_TIMEOUT';\n    else if (\n      record.phase !== 'MANUAL' &&\n      record.lastPostAt !== null &&\n"
+    ]
+  ],
+  "v4:no-cron-reserve": [
+    [
+      "    computeStorage,\n    bandwidth,\n    effective,\n    total: (computeStorage * (cfg.hard + cfg.cronPeriod)) / 3600000 + bandwidth,\n  };\n}\nexport function offerRejections(\n",
+      "    computeStorage,\n    bandwidth,\n    effective,\n    total: (computeStorage * cfg.hard) / 3600000 + bandwidth,\n  };\n}\nexport function offerRejections(\n"
+    ]
+  ],
+  "v4:no-hard-ttl": [
+    [
+      "      return;\n    }\n    let reason;\n    if (record.hardDeadline !== null && now() >= record.hardDeadline) reason = 'HARD_TIMEOUT';\n    else if (record.phase === 'MANUAL' && now() >= record.manualDeadline) reason = 'MANUAL_TIMEOUT';\n    else if (\n      record.phase !== 'MANUAL' &&\n",
+      "      return;\n    }\n    let reason;\n    if (false) reason = 'HARD_TIMEOUT';\n    else if (record.phase === 'MANUAL' && now() >= record.manualDeadline) reason = 'MANUAL_TIMEOUT';\n    else if (\n      record.phase !== 'MANUAL' &&\n"
+    ]
+  ],
+  "v4:no-rate-limit": [
+    [
+      "      r.rateWindow = window;\n      r.rateCount = 0;\n    }\n    if (r.rateCount >= cfg.reportRate) refuse('RATE_LIMITED', 429); // MUTANT report-rate\n    r.rateCount++;\n    await ledger.save(r);\n  }\n",
+      "      r.rateWindow = window;\n      r.rateCount = 0;\n    }\n    if (false) refuse('RATE_LIMITED', 429); // MUTANT report-rate\n    r.rateCount++;\n    await ledger.save(r);\n  }\n"
+    ]
+  ],
+  "v4:address-scrub": [
+    [
+      "    ); // MUTANT token-shape\n  text = text\n    .replace(/\\bBearer\\s+[^\\s]+/gi, 'Bearer [redacted]')\n    .replace(/\\b(?:[0-9]{1,3}\\.){3}[0-9]{1,3}\\b/g, '[address]')\n    .replace(\n      /(?<![A-Za-z0-9_:-])(?:[0-9a-f]{0,4}:){2,7}[0-9a-f]{0,4}(?:%[A-Za-z0-9]{1,32})?(?![A-Za-z0-9_:-])/gi,\n      '[address]',\n    )\n    .replace(/[A-Za-z0-9_-]+/g, (value) => (value.length >= 32 ? '[redacted]' : value));\n  for (const secret of secrets) if (secret) text = text.split(secret).join('[redacted]');\n  text = text.replace(/:{2,}/g, (value) => value.split('').join(' ')).replaceAll('##[', '# #['); // MUTANT command-delimiters\n",
+      "    ); // MUTANT token-shape\n  text = text\n    .replace(/\\bBearer\\s+[^\\s]+/gi, 'Bearer [redacted]')\n    .replace(/[A-Za-z0-9_-]+/g, (value) => (value.length >= 32 ? '[redacted]' : value));\n  for (const secret of secrets) if (secret) text = text.split(secret).join('[redacted]');\n  text = text.replace(/:{2,}/g, (value) => value.split('').join(' ')).replaceAll('##[', '# #['); // MUTANT command-delimiters\n"
+    ]
+  ],
+  "v4:opaque-token-scrub": [
+    [
+      "      /(?<![A-Za-z0-9_:-])(?:[0-9a-f]{0,4}:){2,7}[0-9a-f]{0,4}(?:%[A-Za-z0-9]{1,32})?(?![A-Za-z0-9_:-])/gi,\n      '[address]',\n    )\n    .replace(/[A-Za-z0-9_-]+/g, (value) => (value.length >= 32 ? '[redacted]' : value));\n  for (const secret of secrets) if (secret) text = text.split(secret).join('[redacted]');\n  text = text.replace(/:{2,}/g, (value) => value.split('').join(' ')).replaceAll('##[', '# #['); // MUTANT command-delimiters\n  const lines = text.split('\\n');\n",
+      "      /(?<![A-Za-z0-9_:-])(?:[0-9a-f]{0,4}:){2,7}[0-9a-f]{0,4}(?:%[A-Za-z0-9]{1,32})?(?![A-Za-z0-9_:-])/gi,\n      '[address]',\n    )\n    .replace(/[A-Za-z0-9_-]+/g, (value) => value);\n  for (const secret of secrets) if (secret) text = text.split(secret).join('[redacted]');\n  text = text.replace(/:{2,}/g, (value) => value.split('').join(' ')).replaceAll('##[', '# #['); // MUTANT command-delimiters\n  const lines = text.split('\\n');\n"
+    ]
+  ],
+  "v4:instance-scrub": [
+    [
+      "        refuse('BAD_REPORT', 400);\n      if (payload.text !== undefined) {\n        const bytes = new TextEncoder().encode(payload.text),\n          redactions = [...secrets, bearer, r.id, r.label, r.nonce];\n        const safe = sanitizeBoxText(\n          bytes,\n          Math.max(0, cfg.reportBytes - (r.fullBytes ?? 0)),\n",
+      "        refuse('BAD_REPORT', 400);\n      if (payload.text !== undefined) {\n        const bytes = new TextEncoder().encode(payload.text),\n          redactions = [...secrets, bearer, r.nonce];\n        const safe = sanitizeBoxText(\n          bytes,\n          Math.max(0, cfg.reportBytes - (r.fullBytes ?? 0)),\n"
+    ]
+  ],
+  "v4:full-log-retention": [
+    [
+      "          redactions,\n          { tail: false },\n        );\n        await ledger.appendLog(r, safe.text);\n        r.fullBytes = (r.fullBytes ?? 0) + new TextEncoder().encode(safe.text).length;\n        r.fullBytesDropped = (r.fullBytesDropped ?? 0) + safe.bytesDropped;\n        appendBoxText(r, bytes, redactions);\n",
+      "          redactions,\n          { tail: false },\n        );\n        await ledger.appendLog(r, '');\n        r.fullBytes = (r.fullBytes ?? 0) + new TextEncoder().encode(safe.text).length;\n        r.fullBytesDropped = (r.fullBytesDropped ?? 0) + safe.bytesDropped;\n        appendBoxText(r, bytes, redactions);\n"
+    ]
+  ],
+  "v4:rendered-cap": [
+    [
+      "      if (payload.text !== undefined) {\n        const bytes = new TextEncoder().encode(payload.text),\n          redactions = [...secrets, bearer, r.id, r.label, r.nonce];\n        const safe = sanitizeBoxText(\n          bytes,\n          Math.max(0, cfg.reportBytes - (r.fullBytes ?? 0)),\n          redactions,\n          { tail: false },\n        );\n        await ledger.appendLog(r, safe.text);\n        r.fullBytes = (r.fullBytes ?? 0) + new TextEncoder().encode(safe.text).length;\n        r.fullBytesDropped = (r.fullBytesDropped ?? 0) + safe.bytesDropped;\n",
+      "      if (payload.text !== undefined) {\n        const bytes = new TextEncoder().encode(payload.text),\n          redactions = [...secrets, bearer, r.id, r.label, r.nonce];\n        const safe = sanitizeBoxText(bytes, 4194304, redactions, { tail: false });\n        await ledger.appendLog(r, safe.text);\n        r.fullBytes = (r.fullBytes ?? 0) + new TextEncoder().encode(safe.text).length;\n        r.fullBytesDropped = (r.fullBytesDropped ?? 0) + safe.bytesDropped;\n"
+    ]
+  ],
+  "v4:summary-verdict": [
+    [
+      "    return re.sub(r':{2,}',lambda match:' '.join(match[0]),text).replace('##[','# #[')\nstate=data.get('state','UNAVAILABLE')\nif state not in {'RUNNING','STOPPING','STOPPED','COMPLETE','NOT_NEEDED','NOT_ELIGIBLE','NEEDS_APPROVAL','RENTING_DISABLED','BUSY','UNAVAILABLE','UNAVAILABLE_BUDGET','UNAUTHORIZED','NOT_FOUND'}: state='UNAVAILABLE'\nverdict=data.get('verdict','UNAVAILABLE')\nif verdict not in {'PASS','FAIL','UNAVAILABLE'}: verdict='UNAVAILABLE'\nif mode=='live':\n    print(clean(data.get('log_increment_sanitised','')),end='')\n",
+      "    return re.sub(r':{2,}',lambda match:' '.join(match[0]),text).replace('##[','# #[')\nstate=data.get('state','UNAVAILABLE')\nif state not in {'RUNNING','STOPPING','STOPPED','COMPLETE','NOT_NEEDED','NOT_ELIGIBLE','NEEDS_APPROVAL','RENTING_DISABLED','BUSY','UNAVAILABLE','UNAVAILABLE_BUDGET','UNAUTHORIZED','NOT_FOUND'}: state='UNAVAILABLE'\nverdict='FAIL' if 'FAIL' in data.get('log_tail_sanitised','') else 'PASS'\nif verdict not in {'PASS','FAIL','UNAVAILABLE'}: verdict='UNAVAILABLE'\nif mode=='live':\n    print(clean(data.get('log_increment_sanitised','')),end='')\n"
+    ]
+  ],
+  "v4:summary-fence": [
+    [
+      "    print('::endgroup::')\nelif mode=='summary':\n    tail=clean(data.get('log_tail_sanitised',''))[:8192]\n    fence=chr(96)*max(3,1+max([len(x) for x in re.findall(chr(96)+r'+',tail)]+[0]))\n    gpu=data.get('gpu_model','unknown')\n    if gpu not in {'RTX 4070','RTX 4070 Super','RTX 4080','RTX 4090','RTX_4070','RTX_4070_Super','RTX_4080','RTX_4090'}: gpu='unknown'\n    sha=data.get('sha','unknown')\n",
+      "    print('::endgroup::')\nelif mode=='summary':\n    tail=clean(data.get('log_tail_sanitised',''))[:8192]\n    fence=chr(96)*3\n    gpu=data.get('gpu_model','unknown')\n    if gpu not in {'RTX 4070','RTX 4070 Super','RTX 4080','RTX 4090','RTX_4070','RTX_4070_Super','RTX_4080','RTX_4090'}: gpu='unknown'\n    sha=data.get('sha','unknown')\n"
+    ]
+  ],
+  "v4:renderer-commands": [
+    [
+      "def clean(text):\n    text=re.sub(r'\\x1b\\[[0-?]*[ -/]*[@-~]','',str(text))\n    text=re.sub(r'[\\x00-\\x08\\x0b-\\x1f\\x7f-\\x9f]','',text)\n    return re.sub(r':{2,}',lambda match:' '.join(match[0]),text).replace('##[','# #[')\nstate=data.get('state','UNAVAILABLE')\nif state not in {'RUNNING','STOPPING','STOPPED','COMPLETE','NOT_NEEDED','NOT_ELIGIBLE','NEEDS_APPROVAL','RENTING_DISABLED','BUSY','UNAVAILABLE','UNAVAILABLE_BUDGET','UNAUTHORIZED','NOT_FOUND'}: state='UNAVAILABLE'\nverdict=data.get('verdict','UNAVAILABLE')\n",
+      "def clean(text):\n    text=re.sub(r'\\x1b\\[[0-?]*[ -/]*[@-~]','',str(text))\n    text=re.sub(r'[\\x00-\\x08\\x0b-\\x1f\\x7f-\\x9f]','',text)\n    return text\nstate=data.get('state','UNAVAILABLE')\nif state not in {'RUNNING','STOPPING','STOPPED','COMPLETE','NOT_NEEDED','NOT_ELIGIBLE','NEEDS_APPROVAL','RENTING_DISABLED','BUSY','UNAVAILABLE','UNAVAILABLE_BUDGET','UNAUTHORIZED','NOT_FOUND'}: state='UNAVAILABLE'\nverdict=data.get('verdict','UNAVAILABLE')\n"
+    ]
+  ],
+  "v4:sender-discards-prefix": [
+    [
+      "            data=os.read(child.stdout.fileno(),8192)\n            if not data: break\n            local.write(data);local.flush()\n            pending+=data\n        current=time.monotonic()\n        if pending and (len(pending)>=8192 or current-last>=1):\n            post('log',pending.decode('utf-8',errors='replace'));pending=b'';last=current\n        if current-heartbeat>=${DEFAULTS.heartbeatMinutes * 60}:\n            post('log','');heartbeat=current\n",
+      "            data=os.read(child.stdout.fileno(),8192)\n            if not data: break\n            local.write(data);local.flush()\n            pending=(pending+data)[-8192:]\n        current=time.monotonic()\n        if pending and current-last>=1:\n            post('log',pending.decode('utf-8',errors='replace'));pending=b'';last=current\n        if current-heartbeat>=${DEFAULTS.heartbeatMinutes * 60}:\n            post('log','');heartbeat=current\n"
+    ]
+  ],
+  "v4:sender-repeats-tail": [
+    [
+      "except (ValueError,TypeError,KeyError,OSError,UnicodeError):pass\nif rc==124 and not any(r['name']=='timeout' for r in result['suites']):result['suites'].append({'name':'timeout','pass':0,'fail':1,'skip':0})\nif runner_nonce:result['runner_nonce']=runner_nonce\nack=post('result','Suite complete; sender omitted '+str(omitted)+' raw bytes beyond its bounded transport allowance.',result)\nseconds=ack.get('grace_remaining_seconds') if isinstance(ack,dict) else None\nremaining=str(math.ceil(seconds/60)) if type(seconds) is int and 0<=seconds<=${grace * 60} else 'unknown'\nprint('Use kf-box-kill [reason] to end this box early; configured maximum ${grace} minutes; Worker reports '+remaining+' minutes remaining (hard TTL included).')\n",
+      "except (ValueError,TypeError,KeyError,OSError,UnicodeError):pass\nif rc==124 and not any(r['name']=='timeout' for r in result['suites']):result['suites'].append({'name':'timeout','pass':0,'fail':1,'skip':0})\nif runner_nonce:result['runner_nonce']=runner_nonce\nack=post('result',tail,result)\nseconds=ack.get('grace_remaining_seconds') if isinstance(ack,dict) else None\nremaining=str(math.ceil(seconds/60)) if type(seconds) is int and 0<=seconds<=${grace * 60} else 'unknown'\nprint('Use kf-box-kill [reason] to end this box early; configured maximum ${grace} minutes; Worker reports '+remaining+' minutes remaining (hard TTL included).')\n"
+    ]
+  ],
+  "v4:unreleased-upload": [
+    [
+      "          e instanceof BrokerError ? e.status : 503,\n        );\n      } finally {\n        await releaseUpload(request);\n        busy = false;\n      }\n    },\n",
+      "          e instanceof BrokerError ? e.status : 503,\n        );\n      } finally {\n        busy = false;\n      }\n    },\n"
+    ]
+  ],
+  "v4:direct-network-body": [
+    [
+      "      return notFound();\n    let buffered;\n    try {\n      buffered = await detachedUpload(request, path);\n    } catch {\n      return Response.json(\n        { state: 'UNAVAILABLE', verdict: 'UNAVAILABLE', log_tail_sanitised: '', bytes_dropped: 0 },\n",
+      "      return notFound();\n    let buffered;\n    try {\n      buffered = request;\n    } catch {\n      return Response.json(\n        { state: 'UNAVAILABLE', verdict: 'UNAVAILABLE', log_tail_sanitised: '', bytes_dropped: 0 },\n"
+    ]
+  ],
+  "v4:unbounded-forward-body": [
+    [
+      "    while (length < limit) {\n      const { value, done } = await reader.read();\n      if (done) break;\n      const kept = value.slice(0, limit - length);\n      chunks.push(kept);\n      length += kept.byteLength;\n    }\n",
+      "    while (length < limit) {\n      const { value, done } = await reader.read();\n      if (done) break;\n      const kept = value;\n      chunks.push(kept);\n      length += kept.byteLength;\n    }\n"
+    ]
+  ],
+  "v4:remaining-grace-ttl-cap": [
+    [
+      "      return json({\n        state: 'ACCEPTED',\n        ...(payload.kind === 'result'\n          ? { grace_remaining_seconds: Math.max(0, Math.floor((nextDeadline(r) - now()) / 1000)) }\n          : {}),\n      });\n    } catch (error) {\n",
+      "      return json({\n        state: 'ACCEPTED',\n        ...(payload.kind === 'result'\n          ? { grace_remaining_seconds: Math.max(0, Math.floor((r.resultDeadline - now()) / 1000)) }\n          : {}),\n      });\n    } catch (error) {\n"
+    ]
+  ],
+  "v4:remaining-grace-ack": [
+    [
+      "        await close(r, vast, 'LIMIT');\n      return json({\n        state: 'ACCEPTED',\n        ...(payload.kind === 'result'\n          ? { grace_remaining_seconds: Math.max(0, Math.floor((nextDeadline(r) - now()) / 1000)) }\n          : {}),\n      });\n",
+      "        await close(r, vast, 'LIMIT');\n      return json({\n        state: 'ACCEPTED',\n        ...(false\n          ? { grace_remaining_seconds: Math.max(0, Math.floor((nextDeadline(r) - now()) / 1000)) }\n          : {}),\n      });\n"
+    ]
+  ],
+  "v4:sender-ignores-grace-ack": [
+    [
+      "if rc==124 and not any(r['name']=='timeout' for r in result['suites']):result['suites'].append({'name':'timeout','pass':0,'fail':1,'skip':0})\nif runner_nonce:result['runner_nonce']=runner_nonce\nack=post('result','Suite complete; sender omitted '+str(omitted)+' raw bytes beyond its bounded transport allowance.',result)\nseconds=ack.get('grace_remaining_seconds') if isinstance(ack,dict) else None\nremaining=str(math.ceil(seconds/60)) if type(seconds) is int and 0<=seconds<=${grace * 60} else 'unknown'\nprint('Use kf-box-kill [reason] to end this box early; configured maximum ${grace} minutes; Worker reports '+remaining+' minutes remaining (hard TTL included).')\nraise SystemExit(rc if rc else (0 if result['verdict']=='PASS' else 1))\n",
+      "if rc==124 and not any(r['name']=='timeout' for r in result['suites']):result['suites'].append({'name':'timeout','pass':0,'fail':1,'skip':0})\nif runner_nonce:result['runner_nonce']=runner_nonce\nack=post('result','Suite complete; sender omitted '+str(omitted)+' raw bytes beyond its bounded transport allowance.',result)\nseconds=None\nremaining=str(math.ceil(seconds/60)) if type(seconds) is int and 0<=seconds<=${grace * 60} else 'unknown'\nprint('Use kf-box-kill [reason] to end this box early; configured maximum ${grace} minutes; Worker reports '+remaining+' minutes remaining (hard TTL included).')\nraise SystemExit(rc if rc else (0 if result['verdict']=='PASS' else 1))\n"
+    ]
+  ],
+  "v4:lose-result-after-box-kill": [
+    [
+      "    pr,\n    state: phase(r),\n    verdict:\n      r.ended !== null || r.resultAt !== undefined ? r.verdict || 'UNAVAILABLE' : 'UNAVAILABLE',\n    cleanup_pending: r.ended === null,\n    result_at: r.resultAt ?? null,\n    ended_at: r.ended,\n",
+      "    pr,\n    state: phase(r),\n    verdict:\n      r.ended !== null || r.resultAt !== undefined\n        ? (r.boxKilled ? 'UNAVAILABLE' : r.verdict) || 'UNAVAILABLE'\n        : 'UNAVAILABLE',\n    cleanup_pending: r.ended === null,\n    result_at: r.resultAt ?? null,\n    ended_at: r.ended,\n"
+    ]
+  ],
+  "v4:overlapping-worker-delimiters": [
+    [
+      "    )\n    .replace(/[A-Za-z0-9_-]+/g, (value) => (value.length >= 32 ? '[redacted]' : value));\n  for (const secret of secrets) if (secret) text = text.split(secret).join('[redacted]');\n  text = text.replace(/:{2,}/g, (value) => value.split('').join(' ')).replaceAll('##[', '# #['); // MUTANT command-delimiters\n  const lines = text.split('\\n');\n  if (lines.at(-1) === '') lines.pop();\n  let retained = [],\n",
+      "    )\n    .replace(/[A-Za-z0-9_-]+/g, (value) => (value.length >= 32 ? '[redacted]' : value));\n  for (const secret of secrets) if (secret) text = text.split(secret).join('[redacted]');\n  text = text.replaceAll('::', ': :').replaceAll('##[', '# #['); // MUTANT command-delimiters\n  const lines = text.split('\\n');\n  if (lines.at(-1) === '') lines.pop();\n  let retained = [],\n"
+    ]
+  ],
+  "v4:overlapping-renderer-delimiters": [
+    [
+      "def clean(text):\n    text=re.sub(r'\\x1b\\[[0-?]*[ -/]*[@-~]','',str(text))\n    text=re.sub(r'[\\x00-\\x08\\x0b-\\x1f\\x7f-\\x9f]','',text)\n    return re.sub(r':{2,}',lambda match:' '.join(match[0]),text).replace('##[','# #[')\nstate=data.get('state','UNAVAILABLE')\nif state not in {'RUNNING','STOPPING','STOPPED','COMPLETE','NOT_NEEDED','NOT_ELIGIBLE','NEEDS_APPROVAL','RENTING_DISABLED','BUSY','UNAVAILABLE','UNAVAILABLE_BUDGET','UNAUTHORIZED','NOT_FOUND'}: state='UNAVAILABLE'\nverdict=data.get('verdict','UNAVAILABLE')\n",
+      "def clean(text):\n    text=re.sub(r'\\x1b\\[[0-?]*[ -/]*[@-~]','',str(text))\n    text=re.sub(r'[\\x00-\\x08\\x0b-\\x1f\\x7f-\\x9f]','',text)\n    return text.replace('::',': :').replace('##[','# #[')\nstate=data.get('state','UNAVAILABLE')\nif state not in {'RUNNING','STOPPING','STOPPED','COMPLETE','NOT_NEEDED','NOT_ELIGIBLE','NEEDS_APPROVAL','RENTING_DISABLED','BUSY','UNAVAILABLE','UNAVAILABLE_BUDGET','UNAUTHORIZED','NOT_FOUND'}: state='UNAVAILABLE'\nverdict=data.get('verdict','UNAVAILABLE')\n"
+    ]
+  ],
+  "r3:runner-scrub": [
+    [
+      "    \"\"\"\n    if isinstance(raw, str):\n        raw = raw.encode(\"utf-8\", errors=\"replace\")\n    original = len(raw)\n    text = raw.decode(\"utf-8\", errors=\"replace\")\n    for secret in sorted(set(redactions), key=len, reverse=True):\n",
+      "    \"\"\"\n    if isinstance(raw, str):\n        raw = raw.encode(\"utf-8\", errors=\"replace\")\n    return raw.decode(\"utf-8\", errors=\"replace\"), 0\n    original = len(raw)\n    text = raw.decode(\"utf-8\", errors=\"replace\")\n    for secret in sorted(set(redactions), key=len, reverse=True):\n"
+    ]
+  ],
+  "r3:runner-schema": [
+    [
+      "    def pairs(items):\n        result = {}\n        for key, value in items:\n            if key in result:\n                raise Invalid()\n            result[key] = value\n        return result\n",
+      "    def pairs(items):\n        result = {}\n        for key, value in items:\n            if False:\n                raise Invalid()\n            result[key] = value\n        return result\n"
+    ],
+    [
+      "\n\ndef validate_status(data, ctx, manifest, http_status):\n    if (\n        not set(data) <= STATUS_KEYS\n        or data.get(\"state\") not in STATES\n        or data.get(\"verdict\") not in VERDICTS\n    ):\n        raise Invalid()\n    for key in [\"log_tail_sanitised\", \"gpu_model\"]:\n        if key in data and (\n",
+      "\n\ndef validate_status(data, ctx, manifest, http_status):\n    if False or data.get(\"state\") not in STATES or data.get(\"verdict\") not in VERDICTS:\n        raise Invalid()\n    for key in [\"log_tail_sanitised\", \"gpu_model\"]:\n        if key in data and (\n"
+    ],
+    [
+      "        if \"selection\" in data:\n            validate_selection(data[\"selection\"])\n        return data\n    if set(data) != STATUS_KEYS:\n        raise Invalid()\n    if (\n        data[\"run\"] != ctx[\"run\"]\n",
+      "        if \"selection\" in data:\n            validate_selection(data[\"selection\"])\n        return data\n    if False:\n        raise Invalid()\n    if (\n        data[\"run\"] != ctx[\"run\"]\n"
+    ]
+  ],
+  "r3:runner-binding": [
+    [
+      "        return data\n    if set(data) != STATUS_KEYS:\n        raise Invalid()\n    if (\n        data[\"run\"] != ctx[\"run\"]\n        or data[\"sha\"] != ctx[\"sha\"]\n        or data[\"pr\"] != ctx[\"pr\"]\n        or type(data[\"pr\"]) not in {int, type(None)}\n    ):\n        raise Invalid()\n    if data[\"runner_nonce\"] != ctx[\"nonce\"] or not hex_value(data[\"log_sha256\"], 64):\n        raise Invalid()\n    for key in manifest:\n        if type(data[key]) is not type(manifest[key]) or data[key] != manifest[key]:\n",
+      "        return data\n    if set(data) != STATUS_KEYS:\n        raise Invalid()\n    if False:\n        raise Invalid()\n    if False:\n        raise Invalid()\n    for key in manifest:\n        if type(data[key]) is not type(manifest[key]) or data[key] != manifest[key]:\n"
+    ]
+  ],
+  "r3:runner-log-hash": [
+    [
+      "                if self.raw_size > MAX_LOG:\n                    raise Invalid()\n                self.raw.append(chunk)\n            if data[\"log_sha256\"] != self.hash:\n                raise Invalid()\n            self.cursor = data[\"next_cursor\"]\n            self.show(\"\".join(chunks))\n",
+      "                if self.raw_size > MAX_LOG:\n                    raise Invalid()\n                self.raw.append(chunk)\n            if False:\n                raise Invalid()\n            self.cursor = data[\"next_cursor\"]\n            self.show(\"\".join(chunks))\n"
+    ],
+    [
+      "                    or data[\"state\"] in {\"GRACE\", \"MANUAL\", \"NONE\"}\n                    and data[\"result_at\"] is not None\n                ):\n                    if self.cursor != data[\"log_cursor\"] or self.hash != data[\"log_sha256\"]:\n                        raise Invalid()\n                    self.metadata = data\n                    terminal = True\n",
+      "                    or data[\"state\"] in {\"GRACE\", \"MANUAL\", \"NONE\"}\n                    and data[\"result_at\"] is not None\n                ):\n                    if False:\n                        raise Invalid()\n                    self.metadata = data\n                    terminal = True\n"
+    ]
+  ],
+  "r3:runner-version": [
+    [
+      "    if data[\"runner_nonce\"] != ctx[\"nonce\"] or not hex_value(data[\"log_sha256\"], 64):\n        raise Invalid()\n    for key in manifest:\n        if type(data[key]) is not type(manifest[key]) or data[key] != manifest[key]:\n            raise Invalid()\n    if data[\"id\"] is not None and (\n        not isinstance(data[\"id\"], str) or not re.fullmatch(\"[1-9][0-9]{0,19}\", data[\"id\"])\n",
+      "    if data[\"runner_nonce\"] != ctx[\"nonce\"] or not hex_value(data[\"log_sha256\"], 64):\n        raise Invalid()\n    for key in manifest:\n        if False:\n            raise Invalid()\n    if data[\"id\"] is not None and (\n        not isinstance(data[\"id\"], str) or not re.fullmatch(\"[1-9][0-9]{0,19}\", data[\"id\"])\n"
+    ]
+  ],
+  "r3:runner-redirect": [
+    [
+      "    def read(self, route, method=\"GET\", body=None):\n        reply = self.client(route, method, body)\n        if (\n            reply.status in {301, 302, 303, 307, 308}\n            or reply.headers.get(\"content-type\", \"\").split(\";\")[0].strip() != \"application/json\"\n        ):\n            raise Invalid()\n        return reply.status, strict_json(reply.body)\n\n    def show(self, text):\n        if self.displayed >= 65000 or self.display_lines >= 200:\n",
+      "    def read(self, route, method=\"GET\", body=None):\n        reply = self.client(route, method, body)\n        if (\n            False\n            or reply.headers.get(\"content-type\", \"\").split(\";\")[0].strip() != \"application/json\"\n        ):\n            raise Invalid()\n        return 200, strict_json(reply.body)\n\n    def show(self, text):\n        if self.displayed >= 65000 or self.display_lines >= 200:\n"
+    ]
+  ],
+  "r3:runner-deadline": [
+    [
+      "        raise Invalid()\n    connection = http.client.HTTPSConnection(u.hostname, u.port or 443, timeout=20)\n    try:\n        with deadline(20):\n            connection.request(\n                method,\n                u.path + (\"?\" + u.query if u.query else \"\"),\n",
+      "        raise Invalid()\n    connection = http.client.HTTPSConnection(u.hostname, u.port or 443, timeout=20)\n    try:\n        with contextlib.nullcontext():\n            connection.request(\n                method,\n                u.path + (\"?\" + u.query if u.query else \"\"),\n"
+    ]
+  ],
+  "r3:runner-display-budget": [
+    [
+      "        return reply.status, strict_json(reply.body)\n\n    def show(self, text):\n        if self.displayed >= 65000 or self.display_lines >= 200:\n            self.display_dropped += len(text.encode())\n            return\n        safe, dropped = scrub(\n            text,\n            max_bytes=max(0, 65000 - self.displayed - 256),\n            max_lines=max(0, 199 - self.display_lines),\n            redactions=self.ctx.get(\"redactions\", ()),\n        )\n        self.display_dropped += dropped\n        self.display_lines += len(safe.splitlines())\n",
+      "        return reply.status, strict_json(reply.body)\n\n    def show(self, text):\n        if False:\n            self.display_dropped += len(text.encode())\n            return\n        safe, dropped = scrub(\n            text, max_bytes=65536, max_lines=200, redactions=self.ctx.get(\"redactions\", ())\n        )\n        self.display_dropped += dropped\n        self.display_lines += len(safe.splitlines())\n"
+    ]
+  ],
+  "r3:nonce-response": [
+    [
+      "    log_tail_sanitised: r.log || '',\n    bytes_dropped: r.fullBytesDropped ?? r.bytesDropped ?? 0,\n    tail_bytes_dropped: r.bytesDropped || 0,\n    runner_nonce: r.runnerNonce ?? '',\n    log_sha256: r.logHash ?? '0'.repeat(64),\n    profile: r.profile ?? 'check',\n    die: r.die ?? 'unknown',\n",
+      "    log_tail_sanitised: r.log || '',\n    bytes_dropped: r.fullBytesDropped ?? r.bytesDropped ?? 0,\n    tail_bytes_dropped: r.bytesDropped || 0,\n    runner_nonce: '',\n    log_sha256: r.logHash ?? '0'.repeat(64),\n    profile: r.profile ?? 'check',\n    die: r.die ?? 'unknown',\n"
+    ]
+  ],
+  "r3:rent-head-binding": [
+    [
+      "    )\n      refuse('BAD_REQUEST', 400);\n    const target = await github.authorize(c, rentRequest);\n    if (rentRequest.tested_sha !== target.sha || rentRequest.pr_number !== target.pr)\n      refuse('BINDING_MISMATCH', 409);\n    if (target.notNeeded)\n      return json({\n        ...expose({\n",
+      "    )\n      refuse('BAD_REQUEST', 400);\n    const target = await github.authorize(c, rentRequest);\n    if (false) refuse('BINDING_MISMATCH', 409);\n    if (target.notNeeded)\n      return json({\n        ...expose({\n"
+    ]
+  ],
+  "r3:box-result-binding": [
+    [
+      "        refuse('REPORT_SEQUENCE', 409);\n      }\n      if (payload.kind === 'result' && payload.result.nonce !== r.nonce) refuse('BAD_REPORT', 400);\n      if (\n        payload.kind === 'result' &&\n        (payload.result.runner_nonce !== r.runnerNonce || payload.result.sha !== r.sha)\n      )\n        refuse('BAD_REPORT', 400);\n      if (payload.text !== undefined) {\n        const bytes = new TextEncoder().encode(payload.text),\n          redactions = [...secrets, bearer, r.id, r.label, r.nonce];\n",
+      "        refuse('REPORT_SEQUENCE', 409);\n      }\n      if (payload.kind === 'result' && payload.result.nonce !== r.nonce) refuse('BAD_REPORT', 400);\n      if (false) refuse('BAD_REPORT', 400);\n      if (payload.text !== undefined) {\n        const bytes = new TextEncoder().encode(payload.text),\n          redactions = [...secrets, bearer, r.id, r.label, r.nonce];\n"
+    ]
+  ],
+  "r3:log-chain": [
+    [
+      "    record.logChunks ??= 0;\n    const flush = async () => {\n      if (chunk) {\n        record.logHash = await logChain(record.logHash ?? '0'.repeat(64), chunk);\n        await this.put('log:' + record.key + ':' + record.logChunks, chunk);\n        await this.put('log-hash:' + record.key + ':' + record.logChunks, record.logHash);\n        record.logChunks++;\n",
+      "    record.logChunks ??= 0;\n    const flush = async () => {\n      if (chunk) {\n        record.logHash = '0'.repeat(64);\n        await this.put('log:' + record.key + ':' + record.logChunks, chunk);\n        await this.put('log-hash:' + record.key + ':' + record.logChunks, record.logHash);\n        record.logChunks++;\n"
+    ]
+  ],
+  "r3:nonce-ingress": [
+    [
+      "// unfinished network upload must never hold its busy flag or block cron.\nasync function detachedUpload(request, path) {\n  if (!request.body) return request;\n  const limit =\n    (/^\\/report\\//.test(path)\n      ? 65536\n      : /^\\/kill\\//.test(path)\n        ? 256\n        : path === '/rent'\n          ? 2048\n          : 0) + 1;\n  const reader = request.body.getReader(),\n    chunks = [];\n  let length = 0;\n",
+      "// unfinished network upload must never hold its busy flag or block cron.\nasync function detachedUpload(request, path) {\n  if (!request.body) return request;\n  const limit = (/^\\/report\\//.test(path) ? 65536 : /^\\/kill\\//.test(path) ? 256 : 0) + 1;\n  const reader = request.body.getReader(),\n    chunks = [];\n  let length = 0;\n"
+    ]
+  ],
+  "r3:nonce-cache": [
+    [
+      "    }\n    const cached = await ledger.get('sha:' + target.sha),\n      force = c.event_name === 'workflow_dispatch' && Number(c.run_attempt) > 1;\n    if (cached && !force) refuse('UNAVAILABLE_BUDGET', 409); // A fresh runner nonce may not inherit another run's result.\n    if (cached && now() - cached.started < cfg.gap) refuse('UNAVAILABLE_BUDGET', 409); // MUTANT gap\n    if (!validSecret(env.RUN_TOKEN_SECRET) || !validSecret(env.OWNER_STOP_TOKEN)) refuse();\n    const chosen = await offers.select(\n",
+      "    }\n    const cached = await ledger.get('sha:' + target.sha),\n      force = c.event_name === 'workflow_dispatch' && Number(c.run_attempt) > 1;\n    if (cached && !force) {\n      const r = await ledger.get('record:' + cached.key);\n      if (r?.verdict && r.ended !== null) {\n        await ledger.grant(key, r, target.pr);\n        return json(expose(r, key, target.pr));\n      }\n      refuse();\n    } // A fresh runner nonce may not inherit another run's result.\n    if (cached && now() - cached.started < cfg.gap) refuse('UNAVAILABLE_BUDGET', 409); // MUTANT gap\n    if (!validSecret(env.RUN_TOKEN_SECRET) || !validSecret(env.OWNER_STOP_TOKEN)) refuse();\n    const chosen = await offers.select(\n"
+    ]
+  ],
+  "r3:runner-drop-count": [
+    [
+      "            break\n        rows.append(rendered)\n        size += length\n        kept += len(safe.encode()) + int(had_lf)\n    dropped = max(0, original - kept)\n    return (\n        \"\".join(rows) + (\"[\" + str(dropped) + \" bytes dropped by runner]\\n\" if dropped else \"\"),\n",
+      "            break\n        rows.append(rendered)\n        size += length\n        kept += len(safe.encode()) + 1\n    dropped = max(0, original - kept)\n    return (\n        \"\".join(rows) + (\"[\" + str(dropped) + \" bytes dropped by runner]\\n\" if dropped else \"\"),\n"
+    ]
+  ],
+  "r3:runner-API-prefix": [
+    [
+      "            ctx[\"redactions\"].append(token)\n            print(\"::add-mask::\" + token, flush=True)\n            return https_request(\n                origin + (\"/\" + prefix if prefix else \"\") + route,\n                method,\n                {\"Authorization\": \"Bearer \" + token, \"Content-Type\": \"application/json\"},\n                None if body is None else json.dumps(body, separators=(\",\", \":\")).encode(),\n",
+      "            ctx[\"redactions\"].append(token)\n            print(\"::add-mask::\" + token, flush=True)\n            return https_request(\n                origin + route,\n                method,\n                {\"Authorization\": \"Bearer \" + token, \"Content-Type\": \"application/json\"},\n                None if body is None else json.dumps(body, separators=(\",\", \":\")).encode(),\n"
+    ]
+  ],
+  "r3:runner-hostname-masks": [
+    [
+      "            and not re.fullmatch(\"[A-Za-z0-9_-]{32,128}\", prefix)\n        ):\n            raise Invalid()\n        for value in [\n            origin,\n            urllib.parse.urlsplit(origin).hostname,\n            prefix,\n            *urllib.parse.urlsplit(origin).hostname.split(\".\"),\n        ]:\n            if value:\n                print(\"::add-mask::\" + value, flush=True)\n        print(\n",
+      "            and not re.fullmatch(\"[A-Za-z0-9_-]{32,128}\", prefix)\n        ):\n            raise Invalid()\n        for value in [origin, urllib.parse.urlsplit(origin).hostname, prefix]:\n            if value:\n                print(\"::add-mask::\" + value, flush=True)\n        print(\n"
+    ]
+  ],
+  "r3:runner-audience-mask": [
+    [
+      "\n        def client(route, method=\"GET\", body=None):\n            audience = urllib.parse.quote(origin, safe=\"\")\n            print(\"::add-mask::\" + audience, flush=True)\n            token_reply = https_request(\n                os.environ[\"ACTIONS_ID_TOKEN_REQUEST_URL\"] + \"&audience=\" + audience,\n                headers={\"Authorization\": \"Bearer \" + os.environ[\"ACTIONS_ID_TOKEN_REQUEST_TOKEN\"]},\n",
+      "\n        def client(route, method=\"GET\", body=None):\n            audience = urllib.parse.quote(origin, safe=\"\")\n            token_reply = https_request(\n                os.environ[\"ACTIONS_ID_TOKEN_REQUEST_URL\"] + \"&audience=\" + audience,\n                headers={\"Authorization\": \"Bearer \" + os.environ[\"ACTIONS_ID_TOKEN_REQUEST_TOKEN\"]},\n"
+    ]
+  ],
+  "r3:run-idempotence": [
+    [
+      "        state: 'NOT_NEEDED',\n      });\n    const prior = await ledger.granted(key);\n    if (prior) {\n      if (prior.runnerNonce !== rentRequest.runner_nonce) refuse('BINDING_MISMATCH', 409);\n      await recover(prior, vast);\n      return json(expose(prior, key, target.pr));\n",
+      "        state: 'NOT_NEEDED',\n      });\n    const prior = await ledger.granted(key);\n    if (false) {\n      if (prior.runnerNonce !== rentRequest.runner_nonce) refuse('BINDING_MISMATCH', 409);\n      await recover(prior, vast);\n      return json(expose(prior, key, target.pr));\n"
+    ]
+  ],
+  "r3:runner-terminal-grace": [
+    [
+      "                    if self.cursor != data[\"log_cursor\"] or self.hash != data[\"log_sha256\"]:\n                        raise Invalid()\n                    self.metadata = data\n                    terminal = True\n                    result = {\"state\": data[\"state\"], \"verdict\": data[\"verdict\"], \"verified\": 1}\n                    self.show(data[\"gpu_model\"])\n                    break\n",
+      "                    if self.cursor != data[\"log_cursor\"] or self.hash != data[\"log_sha256\"]:\n                        raise Invalid()\n                    self.metadata = data\n                    terminal = False\n                    result = {\"state\": data[\"state\"], \"verdict\": data[\"verdict\"], \"verified\": 1}\n                    self.show(data[\"gpu_model\"])\n                    break\n"
+    ]
+  ],
+  "r3:runner-fresh-nonce": [
+    [
+      "            \"sha\": sha,\n            \"run\": run,\n            \"pr\": pr,\n            \"nonce\": secrets.token_hex(32),\n            \"redactions\": [\n                origin,\n                urllib.parse.urlsplit(origin).hostname,\n",
+      "            \"sha\": sha,\n            \"run\": run,\n            \"pr\": pr,\n            \"nonce\": \"0\" * 64,\n            \"redactions\": [\n                origin,\n                urllib.parse.urlsplit(origin).hostname,\n"
+    ]
+  ],
+  "r3:diagnostic-binding": [
+    [
+      "            \"POST\",\n            body={\"runner_nonce\": self.runner_nonce, \"tested_sha\": tested_sha, \"pr_number\": pr},\n        )\n        if code == 200 and (\n            data.get(\"runner_nonce\") != self.runner_nonce or data.get(\"sha\") != tested_sha\n        ):\n            raise Stop(\"RENT_BINDING\")\n        return code, data\n\n",
+      "            \"POST\",\n            body={\"runner_nonce\": self.runner_nonce, \"tested_sha\": tested_sha, \"pr_number\": pr},\n        )\n        if code == 200 and (False):\n            raise Stop(\"RENT_BINDING\")\n        return code, data\n\n"
+    ]
+  ],
+  "r3:diagnostic-reserve": [
+    [
+      "        \"reserve_plus_one_21min_run_met\": isinstance(credit, (int, float))\n        and not isinstance(credit, bool)\n        and math.isfinite(credit)\n        and credit >= 8 + (price or 0.5) * 21 / 60,\n        \"rentals_created\": 0,\n        \"estimated_new_spend_usd\": 0,\n        \"state\": \"UNAVAILABLE\" if not eligible else \"ELIGIBLE_OFFER_FOUND\",\n",
+      "        \"reserve_plus_one_21min_run_met\": isinstance(credit, (int, float))\n        and not isinstance(credit, bool)\n        and math.isfinite(credit)\n        and credit >= 5 + (price or 0.5) * 21 / 60,\n        \"rentals_created\": 0,\n        \"estimated_new_spend_usd\": 0,\n        \"state\": \"UNAVAILABLE\" if not eligible else \"ELIGIBLE_OFFER_FOUND\",\n"
+    ]
+  ],
+  "r3:diagnostic-BASE-claims": [
+    [
+      "        actor_id: String(owner),\n        sha: 'd'.repeat(40),\n        ref: 'refs/heads/master',\n        workflow_ref: repo + '/.github/workflows/gpu-vast.yml@refs/heads/master',\n        workflow_sha: 'd'.repeat(40),\n        run_id: selected.run,\n        run_attempt: '1',\n      };\n",
+      "        actor_id: String(owner),\n        sha: 'd'.repeat(40),\n        ref: 'refs/heads/master',\n        obsolete_ref: repo + '/.github/workflows/gpu-vast.yml@refs/heads/master',\n        obsolete_sha: 'd'.repeat(40),\n        run_id: selected.run,\n        run_attempt: '1',\n      };\n"
+    ]
+  ],
+  "r3:runner-summary-fields": [
+    [
+      "                (\"Runner dropped bytes\", str(dropped)),\n            ]:\n                self.summary.write(\"| \" + key + \" | \" + value + \" |\\n\")\n            if self.metadata is not None:\n                d = self.metadata\n                gpu, _ = scrub(\n                    d[\"gpu_model\"],\n",
+      "                (\"Runner dropped bytes\", str(dropped)),\n            ]:\n                self.summary.write(\"| \" + key + \" | \" + value + \" |\\n\")\n            if False:\n                d = self.metadata\n                gpu, _ = scrub(\n                    d[\"gpu_model\"],\n"
+    ]
+  ],
+  "r3:target-base-binding": [
+    [
+      "    if (c.event_name === 'pull_request_target') {\n      if (\n        c.ref !== 'refs/heads/master' ||\n        c.sha !== r.head_sha ||\n        c.workflow_sha !== r.head_sha ||\n        c.workflow_ref !== cfg.repo + '/.github/workflows/gpu-vast.yml@refs/heads/master' ||\n        !Number.isSafeInteger(hint?.pr_number)\n      )\n",
+      "    if (c.event_name === 'pull_request_target') {\n      if (\n        c.ref !== 'refs/heads/master' ||\n        c.workflow_ref !== cfg.repo + '/.github/workflows/gpu-vast.yml@refs/heads/master' ||\n        !Number.isSafeInteger(hint?.pr_number)\n      )\n"
+    ]
+  ],
+  "r3:target-PR-membership": [
+    [
+      "      const member = r.pull_requests?.filter(\n        (x) => x.number === hint.pr_number && x.head?.sha === hint.tested_sha,\n      );\n      if (member?.length !== 1) refuse('UNAUTHORIZED', 401);\n      p = await this.pr(hint.pr_number);\n      if (p.head?.repo?.full_name !== cfg.repo) refuse('NOT_ELIGIBLE', 403);\n      if (p.head?.sha !== hint.tested_sha) refuse('UNAUTHORIZED', 401);\n",
+      "      const member = r.pull_requests?.filter(\n        (x) => x.number === hint.pr_number && x.head?.sha === hint.tested_sha,\n      );\n      if (false) refuse('UNAUTHORIZED', 401);\n      p = await this.pr(hint.pr_number);\n      if (p.head?.repo?.full_name !== cfg.repo) refuse('NOT_ELIGIBLE', 403);\n      if (p.head?.sha !== hint.tested_sha) refuse('UNAUTHORIZED', 401);\n"
+    ]
+  ],
+  "r3:runner-local-redaction": [
+    [
+      "    original = len(raw)\n    text = raw.decode(\"utf-8\", errors=\"replace\")\n    for secret in sorted(set(redactions), key=len, reverse=True):\n        if secret:\n            text = text.replace(secret, \"[redacted]\")\n    text = re.sub(r\"(?:\\x1b\\]|\\x9d)[\\s\\S]*?(?:\\x07|\\x1b\\\\|\\x9c|$)\", \"\", text)\n    text = re.sub(r\"(?:\\x1b[P^_]|[\\x90\\x98\\x9e\\x9f])[\\s\\S]*?(?:\\x1b\\\\|\\x9c|$)\", \"\", text)\n",
+      "    original = len(raw)\n    text = raw.decode(\"utf-8\", errors=\"replace\")\n    for secret in sorted(set(redactions), key=len, reverse=True):\n        if False:\n            text = text.replace(secret, \"[redacted]\")\n    text = re.sub(r\"(?:\\x1b\\]|\\x9d)[\\s\\S]*?(?:\\x07|\\x1b\\\\|\\x9c|$)\", \"\", text)\n    text = re.sub(r\"(?:\\x1b[P^_]|[\\x90\\x98\\x9e\\x9f])[\\s\\S]*?(?:\\x1b\\\\|\\x9c|$)\", \"\", text)\n"
+    ]
+  ],
+  "r3:runner-C1-sequences": [
+    [
+      "    for secret in sorted(set(redactions), key=len, reverse=True):\n        if secret:\n            text = text.replace(secret, \"[redacted]\")\n    text = re.sub(r\"(?:\\x1b\\]|\\x9d)[\\s\\S]*?(?:\\x07|\\x1b\\\\|\\x9c|$)\", \"\", text)\n    text = re.sub(r\"(?:\\x1b[P^_]|[\\x90\\x98\\x9e\\x9f])[\\s\\S]*?(?:\\x1b\\\\|\\x9c|$)\", \"\", text)\n    text = re.sub(r\"(?:\\x1b\\[|\\x9b)[0-?]*[ -/]*[@-~]\", \"\", text)\n    text = re.sub(r\"\\x1b[ -/]*[@-~]\", \"\", text)\n    text = \"\".join(\n",
+      "    for secret in sorted(set(redactions), key=len, reverse=True):\n        if secret:\n            text = text.replace(secret, \"[redacted]\")\n    text = re.sub(r\"(?:\\x1b\\])[\\s\\S]*?(?:\\x07|\\x1b\\\\|\\x9c|$)\", \"\", text)\n    text = re.sub(r\"(?:\\x1b[P^_])[\\s\\S]*?(?:\\x1b\\\\|\\x9c|$)\", \"\", text)\n    text = re.sub(r\"(?:\\x1b\\[|\\x9b)[0-?]*[ -/]*[@-~]\", \"\", text)\n    text = re.sub(r\"\\x1b[ -/]*[@-~]\", \"\", text)\n    text = \"\".join(\n"
+    ]
+  ],
+  "r3:runner-isolated-env": [
+    [
+      "              -o \"$temporary/$file\" \\\n              \"https://raw.githubusercontent.com/reindertpelsma/kayfabe/$GITHUB_SHA/ci/vast-broker/$file\" 2>/dev/null\n          done\n          env -i PATH=/usr/bin:/bin HOME=\"$temporary\" \\\n            WORKER_URL=\"$WORKER_URL\" WORKER_PATH=\"${WORKER_PATH:-}\" \\\n            GITHUB_OUTPUT=\"$GITHUB_OUTPUT\" GITHUB_STEP_SUMMARY=\"$GITHUB_STEP_SUMMARY\" \\\n            GITHUB_EVENT_PATH=\"$GITHUB_EVENT_PATH\" GITHUB_SHA=\"$GITHUB_SHA\" \\\n",
+      "              -o \"$temporary/$file\" \\\n              \"https://raw.githubusercontent.com/reindertpelsma/kayfabe/$GITHUB_SHA/ci/vast-broker/$file\" 2>/dev/null\n          done\n          env PATH=/usr/bin:/bin HOME=\"$temporary\" \\\n            WORKER_URL=\"$WORKER_URL\" WORKER_PATH=\"${WORKER_PATH:-}\" \\\n            GITHUB_OUTPUT=\"$GITHUB_OUTPUT\" GITHUB_STEP_SUMMARY=\"$GITHUB_STEP_SUMMARY\" \\\n            GITHUB_EVENT_PATH=\"$GITHUB_EVENT_PATH\" GITHUB_SHA=\"$GITHUB_SHA\" \\\n"
+    ]
+  ],
+  "r3:runner-shell-tracing": [
+    [
+      "          WORKER_URL: ${{ secrets.VAST_BROKER_URL }}\n          WORKER_PATH: ${{ secrets.VAST_BROKER_PATH }}\n        run: |\n          set +x\n          set -euo pipefail\n          [[ \"$GITHUB_REF\" = refs/heads/master ]]\n          [[ \"$GITHUB_SHA\" =~ ^[0-9a-f]{40}$ ]]\n",
+      "          WORKER_URL: ${{ secrets.VAST_BROKER_URL }}\n          WORKER_PATH: ${{ secrets.VAST_BROKER_PATH }}\n        run: |\n          set -x\n          set -euo pipefail\n          [[ \"$GITHUB_REF\" = refs/heads/master ]]\n          [[ \"$GITHUB_SHA\" =~ ^[0-9a-f]{40}$ ]]\n"
+    ]
+  ],
+  "r3:base-trigger": [
+    [
+      "name: Vast GPU\non:\n  pull_request_target:\n    branches: [master]\n    types: [opened, synchronize, reopened, ready_for_review]\n  workflow_dispatch:\n",
+      "name: Vast GPU\non:\n  pull_request:\n    branches: [master]\n    types: [opened, synchronize, reopened, ready_for_review]\n  workflow_dispatch:\n"
+    ]
+  ],
+  "r3:OIDC-workflow-ref": [
+    [
+      "      !numericId(c.actor_id) ||\n      !numericId(c.run_id) ||\n      !numericId(c.run_attempt) ||\n      !['pull_request', 'pull_request_target', 'workflow_dispatch'].includes(c.event_name) ||\n      ![\n        cfg.repo + '/.github/workflows/gpu-vast.yml@refs/heads/master',\n        cfg.repo + '/.github/workflows/gpu-vast-sweep.yml@refs/heads/master',\n      ].includes(c.workflow_ref)\n    )\n      refuse('UNAUTHORIZED', 401);\n    return c;\n",
+      "      !numericId(c.actor_id) ||\n      !numericId(c.run_id) ||\n      !numericId(c.run_attempt) ||\n      !['pull_request', 'pull_request_target', 'workflow_dispatch'].includes(c.event_name)\n    )\n      refuse('UNAUTHORIZED', 401);\n    return c;\n"
+    ],
+    [
+      "        c.workflow_ref !== cfg.repo + '/.github/workflows/gpu-vast-sweep.yml@refs/heads/master')\n    )\n      refuse('UNAUTHORIZED', 401);\n    if (\n      profile === 'check' &&\n      c.workflow_ref !== cfg.repo + '/.github/workflows/gpu-vast.yml@refs/heads/master'\n    )\n      refuse('UNAUTHORIZED', 401);\n    cfg.profile = profile;\n    if (path === '/availability') {\n      const run = await github.run(c.run_id),\n",
+      "        c.workflow_ref !== cfg.repo + '/.github/workflows/gpu-vast-sweep.yml@refs/heads/master')\n    )\n      refuse('UNAUTHORIZED', 401);\n    /* mutant omits second workflow boundary */\n    cfg.profile = profile;\n    if (path === '/availability') {\n      const run = await github.run(c.run_id),\n"
+    ]
+  ],
+  "r3:release-same-SHA": [
+    [
+      "\ndef verify(sha, status, get_run):\n    try:\n        if not re.fullmatch(\"[0-9a-f]{40}\", sha) or status[\"sha\"] != sha:\n            return False\n        latest = next(s for s in status[\"statuses\"] if s[\"context\"] == \"gpu-vast\")\n        if (\n",
+      "\ndef verify(sha, status, get_run):\n    try:\n        if not re.fullmatch(\"[0-9a-f]{40}\", sha):\n            return False\n        latest = next(s for s in status[\"statuses\"] if s[\"context\"] == \"gpu-vast\")\n        if (\n"
+    ],
+    [
+      "            return False\n        # Releases build master. Require the manual BASE workflow to have tested\n        # that exact master SHA, rather than guessing PR/merge correspondence.\n        return (\n            run[\"event\"] == \"workflow_dispatch\"\n            and run[\"head_branch\"] == \"master\"\n            and run[\"head_sha\"] == sha\n        )\n    except (KeyError, TypeError, ValueError, StopIteration):\n        return False\n\n",
+      "            return False\n        # Releases build master. Require the manual BASE workflow to have tested\n        # that exact master SHA, rather than guessing PR/merge correspondence.\n        return run[\"event\"] == \"workflow_dispatch\" and run[\"head_branch\"] == \"master\"\n    except (KeyError, TypeError, ValueError, StopIteration):\n        return False\n\n"
+    ]
+  ],
+  "r3:release-origin": [
+    [
+      "        if not re.fullmatch(\"[0-9a-f]{40}\", sha) or status[\"sha\"] != sha:\n            return False\n        latest = next(s for s in status[\"statuses\"] if s[\"context\"] == \"gpu-vast\")\n        if (\n            latest[\"state\"] != \"success\"\n            or latest[\"creator\"][\"login\"] != \"github-actions[bot]\"\n            or latest[\"creator\"][\"id\"] != 41898282\n        ):\n            return False\n        match = re.fullmatch(\n            \"https://github.com/\" + REPO + r\"/actions/runs/([1-9][0-9]{0,19})\", latest[\"target_url\"]\n",
+      "        if not re.fullmatch(\"[0-9a-f]{40}\", sha) or status[\"sha\"] != sha:\n            return False\n        latest = next(s for s in status[\"statuses\"] if s[\"context\"] == \"gpu-vast\")\n        if latest[\"state\"] != \"success\":\n            return False\n        match = re.fullmatch(\n            \"https://github.com/\" + REPO + r\"/actions/runs/([1-9][0-9]{0,19})\", latest[\"target_url\"]\n"
+    ],
+    [
+      "        run = get_run(int(match[1]))\n        if (\n            run[\"id\"] != int(match[1])\n            or run[\"path\"] != \".github/workflows/gpu-vast.yml\"\n            or run[\"status\"] != \"completed\"\n            or run[\"conclusion\"] != \"success\"\n        ):\n            return False\n        if run[\"repository\"][\"full_name\"] != REPO or run[\"head_repository\"][\"full_name\"] != REPO:\n            return False\n        # Releases build master. Require the manual BASE workflow to have tested\n        # that exact master SHA, rather than guessing PR/merge correspondence.\n",
+      "        run = get_run(int(match[1]))\n        if (\n            run[\"id\"] != int(match[1])\n            or run[\"status\"] != \"completed\"\n            or run[\"conclusion\"] != \"success\"\n        ):\n            return False\n        if False:\n            return False\n        # Releases build master. Require the manual BASE workflow to have tested\n        # that exact master SHA, rather than guessing PR/merge correspondence.\n"
+    ]
+  ],
+  "r3:release-conclusion": [
+    [
+      "            return False\n        latest = next(s for s in status[\"statuses\"] if s[\"context\"] == \"gpu-vast\")\n        if (\n            latest[\"state\"] != \"success\"\n            or latest[\"creator\"][\"login\"] != \"github-actions[bot]\"\n            or latest[\"creator\"][\"id\"] != 41898282\n        ):\n",
+      "            return False\n        latest = next(s for s in status[\"statuses\"] if s[\"context\"] == \"gpu-vast\")\n        if (\n            False\n            or latest[\"creator\"][\"login\"] != \"github-actions[bot]\"\n            or latest[\"creator\"][\"id\"] != 41898282\n        ):\n"
+    ],
+    [
+      "            run[\"id\"] != int(match[1])\n            or run[\"path\"] != \".github/workflows/gpu-vast.yml\"\n            or run[\"status\"] != \"completed\"\n            or run[\"conclusion\"] != \"success\"\n        ):\n            return False\n        if run[\"repository\"][\"full_name\"] != REPO or run[\"head_repository\"][\"full_name\"] != REPO:\n",
+      "            run[\"id\"] != int(match[1])\n            or run[\"path\"] != \".github/workflows/gpu-vast.yml\"\n            or run[\"status\"] != \"completed\"\n        ):\n            return False\n        if run[\"repository\"][\"full_name\"] != REPO or run[\"head_repository\"][\"full_name\"] != REPO:\n"
+    ]
+  ],
+  "r3:bundle-manifest": [
+    [
+      "await writeFile(\n  new URL('dist/deployment.json', base),\n  JSON.stringify(\n    {\n      protocol_version: 4,\n      worker_version: 'v5',\n      bundle_sha256: createHash('sha256').update(output).digest('hex'),\n    },\n    null,\n    2,\n  ) + '\\n',\n",
+      "await writeFile(\n  new URL('dist/deployment.json', base),\n  JSON.stringify(\n    { protocol_version: 4, worker_version: 'v5', bundle_sha256: '0'.repeat(64) },\n    null,\n    2,\n  ) + '\\n',\n"
+    ]
+  ],
+  "r3:runner-cursor-race": [
+    [
+      "            for chunk in chunks:\n                if not isinstance(chunk, str) or not 0 < len(chunk.encode()) <= 16384:\n                    raise Invalid()\n            if data[\"log_increment_sanitised\"] != \"\".join(chunks):\n                raise Invalid()\n            for chunk in chunks:\n                self.hash = chain(self.hash, chunk)\n",
+      "            for chunk in chunks:\n                if not isinstance(chunk, str) or not 0 < len(chunk.encode()) <= 16384:\n                    raise Invalid()\n            if data[\"log_increment_sanitised\"] != \"\".join(chunks) or data[\"next_cursor\"] > target:\n                raise Invalid()\n            for chunk in chunks:\n                self.hash = chain(self.hash, chunk)\n"
+    ]
+  ],
+  "v5:default-price": [
+    [
+      "{\n  \"price\": 1,\n  \"daily\": 6,\n  \"rolling\": 30,\n  \"reserve\": 8,\n",
+      "{\n  \"price\": 0.5,\n  \"daily\": 6,\n  \"rolling\": 30,\n  \"reserve\": 8,\n"
+    ]
+  ],
+  "v5:default-daily": [
+    [
+      "{\n  \"price\": 1,\n  \"daily\": 6,\n  \"rolling\": 30,\n  \"reserve\": 8,\n  \"dailyCount\": 4,\n",
+      "{\n  \"price\": 1,\n  \"daily\": 3,\n  \"rolling\": 30,\n  \"reserve\": 8,\n  \"dailyCount\": 4,\n"
+    ]
+  ],
+  "v5:default-reserve": [
+    [
+      "  \"price\": 1,\n  \"daily\": 6,\n  \"rolling\": 30,\n  \"reserve\": 8,\n  \"dailyCount\": 4,\n  \"gapHours\": 24,\n  \"bootMinutes\": 40,\n",
+      "  \"price\": 1,\n  \"daily\": 6,\n  \"rolling\": 30,\n  \"reserve\": 5,\n  \"dailyCount\": 4,\n  \"gapHours\": 24,\n  \"bootMinutes\": 40,\n"
+    ]
+  ],
+  "v5:default-rolling": [
+    [
+      "{\n  \"price\": 1,\n  \"daily\": 6,\n  \"rolling\": 30,\n  \"reserve\": 8,\n  \"dailyCount\": 4,\n  \"gapHours\": 24,\n",
+      "{\n  \"price\": 1,\n  \"daily\": 6,\n  \"rolling\": 60,\n  \"reserve\": 8,\n  \"dailyCount\": 4,\n  \"gapHours\": 24,\n"
+    ]
+  ],
+  "v5:default-boot": [
+    [
+      "  \"reserve\": 8,\n  \"dailyCount\": 4,\n  \"gapHours\": 24,\n  \"bootMinutes\": 40,\n  \"hardMinutes\": 180,\n  \"softMarginMinutes\": 10,\n  \"heartbeatMinutes\": 10,\n",
+      "  \"reserve\": 8,\n  \"dailyCount\": 4,\n  \"gapHours\": 24,\n  \"bootMinutes\": 10,\n  \"hardMinutes\": 180,\n  \"softMarginMinutes\": 10,\n  \"heartbeatMinutes\": 10,\n"
+    ]
+  ],
+  "v5:default-hard": [
+    [
+      "  \"dailyCount\": 4,\n  \"gapHours\": 24,\n  \"bootMinutes\": 40,\n  \"hardMinutes\": 180,\n  \"softMarginMinutes\": 10,\n  \"heartbeatMinutes\": 10,\n  \"heartbeatTimeoutMinutes\": 15,\n",
+      "  \"dailyCount\": 4,\n  \"gapHours\": 24,\n  \"bootMinutes\": 40,\n  \"hardMinutes\": 20,\n  \"softMarginMinutes\": 10,\n  \"heartbeatMinutes\": 10,\n  \"heartbeatTimeoutMinutes\": 15,\n"
+    ]
+  ],
+  "v5:default-soft-margin": [
+    [
+      "  \"gapHours\": 24,\n  \"bootMinutes\": 40,\n  \"hardMinutes\": 180,\n  \"softMarginMinutes\": 10,\n  \"heartbeatMinutes\": 10,\n  \"heartbeatTimeoutMinutes\": 15,\n  \"passGraceMinutes\": 5,\n",
+      "  \"gapHours\": 24,\n  \"bootMinutes\": 40,\n  \"hardMinutes\": 180,\n  \"softMarginMinutes\": 1,\n  \"heartbeatMinutes\": 10,\n  \"heartbeatTimeoutMinutes\": 15,\n  \"passGraceMinutes\": 5,\n"
+    ]
+  ],
+  "v5:default-manual-ceiling": [
+    [
+      "  \"heartbeatTimeoutMinutes\": 15,\n  \"passGraceMinutes\": 5,\n  \"failGraceMinutes\": 10,\n  \"manualCeilingMinutes\": 480,\n  \"reportCount\": 2000,\n  \"reportBytes\": 4194304,\n  \"reportRate\": 20,\n",
+      "  \"heartbeatTimeoutMinutes\": 15,\n  \"passGraceMinutes\": 5,\n  \"failGraceMinutes\": 10,\n  \"manualCeilingMinutes\": 60,\n  \"reportCount\": 2000,\n  \"reportBytes\": 4194304,\n  \"reportRate\": 20,\n"
+    ]
+  ],
+  "v5:default-pass-grace": [
+    [
+      "  \"softMarginMinutes\": 10,\n  \"heartbeatMinutes\": 10,\n  \"heartbeatTimeoutMinutes\": 15,\n  \"passGraceMinutes\": 5,\n  \"failGraceMinutes\": 10,\n  \"manualCeilingMinutes\": 480,\n  \"reportCount\": 2000,\n",
+      "  \"softMarginMinutes\": 10,\n  \"heartbeatMinutes\": 10,\n  \"heartbeatTimeoutMinutes\": 15,\n  \"passGraceMinutes\": 10,\n  \"failGraceMinutes\": 10,\n  \"manualCeilingMinutes\": 480,\n  \"reportCount\": 2000,\n"
+    ]
+  ],
+  "v5:default-fail-grace": [
+    [
+      "  \"heartbeatMinutes\": 10,\n  \"heartbeatTimeoutMinutes\": 15,\n  \"passGraceMinutes\": 5,\n  \"failGraceMinutes\": 10,\n  \"manualCeilingMinutes\": 480,\n  \"reportCount\": 2000,\n  \"reportBytes\": 4194304,\n",
+      "  \"heartbeatMinutes\": 10,\n  \"heartbeatTimeoutMinutes\": 15,\n  \"passGraceMinutes\": 5,\n  \"failGraceMinutes\": 5,\n  \"manualCeilingMinutes\": 480,\n  \"reportCount\": 2000,\n  \"reportBytes\": 4194304,\n"
+    ]
+  ],
+  "v5:create-reservation-phase": [
+    [
+      "        nonce: n,\n        runnerNonce: rentRequest.runner_nonce,\n        logHash: '0'.repeat(64),\n        phase: 'CREATING',\n        bootDeadline: started + cfg.boot,\n        hardDeadline: started + cfg.hard,\n        softDeadline: started + cfg.hard - cfg.softMargin,\n",
+      "        nonce: n,\n        runnerNonce: rentRequest.runner_nonce,\n        logHash: '0'.repeat(64),\n        phase: 'BOOTING',\n        bootDeadline: started + cfg.boot,\n        hardDeadline: started + cfg.hard,\n        softDeadline: started + cfg.hard - cfg.softMargin,\n"
+    ]
+  ],
+  "v5:boot-phase": [
+    [
+      "    );\n    if (profile === 'sweep') await ledger.put('rotation:lastDie', r.die);\n    r.id = await vast.create(offer, r, script);\n    r.phase = 'BOOTING';\n    await ledger.save(r);\n    console.log(JSON.stringify({ event: 'rented' }));\n    return json(expose(r));\n",
+      "    );\n    if (profile === 'sweep') await ledger.put('rotation:lastDie', r.die);\n    r.id = await vast.create(offer, r, script);\n    r.phase = 'CREATING';\n    await ledger.save(r);\n    console.log(JSON.stringify({ event: 'rented' }));\n    return json(expose(r));\n"
+    ]
+  ],
+  "v5:immutable-clock": [
+    [
+      "  function clocks(r, cfg) {\n    r.phase = phase(r);\n    r.bootDeadline ??= r.started + (r.provision ?? cfg.boot);\n    if (r.hardDeadline === undefined) r.hardDeadline = r.started + (r.ttl ?? cfg.hard);\n    r.softDeadline ??= r.started + (r.ttl ?? cfg.hard) - cfg.softMargin;\n    r.manualDeadline ??= r.started + cfg.manualCeiling;\n    r.lastPostAt ??= r.firstReportAt ?? null;\n",
+      "  function clocks(r, cfg) {\n    r.phase = phase(r);\n    r.bootDeadline ??= r.started + (r.provision ?? cfg.boot);\n    r.hardDeadline = now() + (r.ttl ?? cfg.hard);\n    r.softDeadline ??= r.started + (r.ttl ?? cfg.hard) - cfg.softMargin;\n    r.manualDeadline ??= r.started + cfg.manualCeiling;\n    r.lastPostAt ??= r.firstReportAt ?? null;\n"
+    ]
+  ],
+  "v5:boot-timeout": [
+    [
+      "      now() >= record.resultDeadline\n    )\n      reason = 'RESULT';\n    else if (\n      record.phase !== 'MANUAL' &&\n      record.firstReportAt === undefined &&\n      now() >= record.bootDeadline\n    )\n      reason = 'BOOT_TIMEOUT';\n    else if (\n      record.phase !== 'MANUAL' &&\n      record.lastPostAt !== null &&\n",
+      "      now() >= record.resultDeadline\n    )\n      reason = 'RESULT';\n    else if (false) reason = 'BOOT_TIMEOUT';\n    else if (\n      record.phase !== 'MANUAL' &&\n      record.lastPostAt !== null &&\n"
+    ]
+  ],
+  "v5:heartbeat-timeout": [
+    [
+      "      now() >= record.bootDeadline\n    )\n      reason = 'BOOT_TIMEOUT';\n    else if (\n      record.phase !== 'MANUAL' &&\n      record.lastPostAt !== null &&\n      now() - record.lastPostAt >= record.heartbeatTimeout\n    )\n      reason = 'HEARTBEAT_TIMEOUT';\n    if (reason) {\n      if (\n        reason === 'BOOT_TIMEOUT' &&\n",
+      "      now() >= record.bootDeadline\n    )\n      reason = 'BOOT_TIMEOUT';\n    else if (false) reason = 'HEARTBEAT_TIMEOUT';\n    if (reason) {\n      if (\n        reason === 'BOOT_TIMEOUT' &&\n"
+    ]
+  ],
+  "v5:empty-heartbeat": [
+    [
+      "      r.lastSeq = payload.seq;\n      r.lastDigest = digest;\n      r.firstReportAt ??= now();\n      r.lastPostAt = now();\n      if (r.phase !== 'MANUAL' && r.phase !== 'GRACE') r.phase = 'TESTING';\n      if (payload.kind === 'result') {\n        r.result = {\n",
+      "      r.lastSeq = payload.seq;\n      r.lastDigest = digest;\n      r.firstReportAt ??= now();\n      r.lastPostAt ??= now();\n      if (r.phase !== 'MANUAL' && r.phase !== 'GRACE') r.phase = 'TESTING';\n      if (payload.kind === 'result') {\n        r.result = {\n"
+    ]
+  ],
+  "v5:hard-in-manual": [
+    [
+      "      return;\n    }\n    let reason;\n    if (record.hardDeadline !== null && now() >= record.hardDeadline) reason = 'HARD_TIMEOUT';\n    else if (record.phase === 'MANUAL' && now() >= record.manualDeadline) reason = 'MANUAL_TIMEOUT';\n    else if (\n      record.phase !== 'MANUAL' &&\n",
+      "      return;\n    }\n    let reason;\n    if (false) reason = 'HARD_TIMEOUT';\n    else if (record.phase === 'MANUAL' && now() >= record.manualDeadline) reason = 'MANUAL_TIMEOUT';\n    else if (\n      record.phase !== 'MANUAL' &&\n"
+    ]
+  ],
+  "v5:manual-ceiling": [
+    [
+      "    }\n    let reason;\n    if (record.hardDeadline !== null && now() >= record.hardDeadline) reason = 'HARD_TIMEOUT';\n    else if (record.phase === 'MANUAL' && now() >= record.manualDeadline) reason = 'MANUAL_TIMEOUT';\n    else if (\n      record.phase !== 'MANUAL' &&\n      record.resultAt !== undefined &&\n",
+      "    }\n    let reason;\n    if (record.hardDeadline !== null && now() >= record.hardDeadline) reason = 'HARD_TIMEOUT';\n    else if (false) reason = 'MANUAL_TIMEOUT';\n    else if (\n      record.phase !== 'MANUAL' &&\n      record.resultAt !== undefined &&\n"
+    ]
+  ],
+  "v5:hold-grace-and-heartbeat": [
+    [
+      "      refuse('UNAUTHORIZED', 401);\n    const instance = await vast.inspect(r);\n    if (!instance || instance.actual_status !== 'running') refuse('UNAUTHORIZED', 401);\n    r.phase = 'MANUAL';\n    r.manualAt ??= now();\n    r.resultDeadline = null;\n    await workerLine(r, 'MANUAL authenticated hold; grace and heartbeat suspended', cfg);\n    return json(expose(r));\n  }\n",
+      "      refuse('UNAUTHORIZED', 401);\n    const instance = await vast.inspect(r);\n    if (!instance || instance.actual_status !== 'running') refuse('UNAUTHORIZED', 401);\n    r.manualAt ??= now();\n    await workerLine(r, 'MANUAL authenticated hold; grace and heartbeat suspended', cfg);\n    return json(expose(r));\n  }\n"
+    ]
+  ],
+  "v5:hold-auth": [
+    [
+      "  }\n  async function hold(request, key, bearer, cfg, vast) {\n    const r = await ledger.get('record:' + key);\n    if (\n      !r ||\n      !(await tokens.verify(bearer, r)) ||\n      r.ended !== null ||\n      r.closed ||\n      now() >= r.reportExpiry * 1000\n    )\n      refuse('UNAUTHORIZED', 401);\n    clocks(r, cfg);\n    await rejectExpiredCallback(r, cfg, vast);\n",
+      "  }\n  async function hold(request, key, bearer, cfg, vast) {\n    const r = await ledger.get('record:' + key);\n    if (!r || r.ended !== null || r.closed || now() >= r.reportExpiry * 1000)\n      refuse('UNAUTHORIZED', 401);\n    clocks(r, cfg);\n    await rejectExpiredCallback(r, cfg, vast);\n"
+    ]
+  ],
+  "v5:owner-timer-auth": [
+    [
+      "    const owner =\n      validSecret(env.OWNER_STOP_TOKEN) && (await constantTimeEqual(env.OWNER_STOP_TOKEN, bearer));\n    if (match?.[1] === 'stop-timer') {\n      if (!owner) refuse('UNAUTHORIZED', 401);\n      return stopTimer(match[2], cfg, vast);\n    }\n    if (path === '/stop-all') {\n",
+      "    const owner =\n      validSecret(env.OWNER_STOP_TOKEN) && (await constantTimeEqual(env.OWNER_STOP_TOKEN, bearer));\n    if (match?.[1] === 'stop-timer') {\n      return stopTimer(match[2], cfg, vast);\n    }\n    if (path === '/stop-all') {\n"
+    ]
+  ],
+  "v5:timer-extension-liability": [
+    [
+      "          3600000 +\n        (r.bandwidthCost ?? 0),\n      credit = await vast.credit();\n    if (typeof credit !== 'number' || !Number.isFinite(credit) || credit < cfg.reserve + remaining)\n      refuse('UNAVAILABLE_BUDGET', 409);\n    await ledger.budgets(cfg, now(), total, r.key);\n    r.hardDeadline = null;\n    r.billingTtl = r.manualDeadline + cfg.cronPeriod - r.started;\n    await ledger.put('cost:' + r.key, {\n",
+      "          3600000 +\n        (r.bandwidthCost ?? 0),\n      credit = await vast.credit();\n    /* mutant omits credit */\n    /* mutant omits extended budget */\n    r.hardDeadline = null;\n    r.billingTtl = r.manualDeadline + cfg.cronPeriod - r.started;\n    await ledger.put('cost:' + r.key, {\n"
+    ]
+  ],
+  "v5:manual-cron-status": [
+    [
+      "    if (record.ended !== null) return;\n    clocks(record, cfg);\n    await ledger.save(record);\n    if (record.phase === 'MANUAL')\n      await workerLine(\n        record,\n        'MANUAL hard_timer=' +\n          (record.hardDeadline === null ? 'removed' : 'active') +\n          ' ceiling_at=' +\n          record.manualDeadline,\n        cfg,\n      );\n    await recover(record, vast);\n    if (record.closed) {\n      await cleanup(record, vast);\n",
+      "    if (record.ended !== null) return;\n    clocks(record, cfg);\n    await ledger.save(record);\n    /* mutant drops MANUAL cron line */\n    await recover(record, vast);\n    if (record.closed) {\n      await cleanup(record, vast);\n"
+    ]
+  ],
+  "v5:worker-tail-bounds": [
+    [
+      "    }\n    await ledger.appendLog(r, text);\n    r.fullBytes = (r.fullBytes ?? 0) + bytes;\n    appendWorkerText(r, text);\n    await ledger.save(r);\n  }\n  async function rejectExpiredCallback(r, cfg, vast) {\n",
+      "    }\n    await ledger.appendLog(r, text);\n    r.fullBytes = (r.fullBytes ?? 0) + bytes;\n    r.log = ((r.log ?? '') + text).slice(-8192);\n    await ledger.save(r);\n  }\n  async function rejectExpiredCallback(r, cfg, vast) {\n"
+    ]
+  ],
+  "v5:creation-based-soft-deadline": [
+    [
+      "        path: env.BROKER_PATH_PREFIX ?? '',\n        graceMinutes: Math.max(cfg.passGrace, cfg.failGrace) / 60000,\n        runnerNonce: r.runnerNonce,\n        softDeadline: r.softDeadline,\n      });\n    r.scriptHash = await sha256Hex(script);\n    await ledger.reserve(r);\n",
+      "        path: env.BROKER_PATH_PREFIX ?? '',\n        graceMinutes: Math.max(cfg.passGrace, cfg.failGrace) / 60000,\n        runnerNonce: r.runnerNonce,\n      });\n    r.scriptHash = await sha256Hex(script);\n    await ledger.reserve(r);\n"
+    ]
+  ],
+  "v5:hold-helper-scope": [
+    [
+      "#!/bin/sh\nset -eu\n# This run only; cannot remove its hard limit or access account credentials.\nexec curl --silent --show-error --fail --max-time 20 --proto '=https' --request POST --header 'Authorization: Bearer ${callback.token}' --data-binary '' '${origin}${prefix ? '/' + prefix : ''}/hold/${callback.run}'\nKF_HOLD\nchmod 700 /usr/local/bin/kf-box-hold\ncat > /etc/profile.d/kf-ci-hold.sh <<'KF_PROFILE'\n",
+      "#!/bin/sh\nset -eu\n# This run only; cannot remove its hard limit or access account credentials.\nexec curl --silent --show-error --fail --max-time 20 --proto '=https' --request POST --header 'Authorization: Bearer ${callback.token}' --data-binary '' '${origin}${prefix ? '/' + prefix : ''}/hold/999-1'\nKF_HOLD\nchmod 700 /usr/local/bin/kf-box-hold\ncat > /etc/profile.d/kf-ci-hold.sh <<'KF_PROFILE'\n"
+    ]
+  ],
+  "v5:ssh-login-hold": [
+    [
+      "chmod 700 /usr/local/bin/kf-box-hold\ncat > /etc/profile.d/kf-ci-hold.sh <<'KF_PROFILE'\n# An authenticated SSH login takes MANUAL; ordinary non-login workloads do not.\nif [ -n \"\\${SSH_CONNECTION:-}\" ]; then\n    /usr/local/bin/kf-box-hold >/dev/null 2>&1 || true\nfi\nKF_PROFILE\n",
+      "chmod 700 /usr/local/bin/kf-box-hold\ncat > /etc/profile.d/kf-ci-hold.sh <<'KF_PROFILE'\n# An authenticated SSH login takes MANUAL; ordinary non-login workloads do not.\nif false; then\n    /usr/local/bin/kf-box-hold >/dev/null 2>&1 || true\nfi\nKF_PROFILE\n"
+    ]
+  ],
+  "v5:heartbeat-after-cap": [
+    [
+      "    if result is not None: payload['result']=result\n    body=json.dumps(payload,separators=(',',':'),ensure_ascii=True).encode()\n    heartbeat_post=kind=='log' and text==''\n    if kind!='result' and not heartbeat_post and (attempted>=600 or sent+len(body)>900000):\n        omitted+=len((text or '').encode());return\n    seq+=1;sent+=len(body);attempted+=1\n    # curl retries reuse this exact payload/sequence; no redirect or arbitrary URL.\n",
+      "    if result is not None: payload['result']=result\n    body=json.dumps(payload,separators=(',',':'),ensure_ascii=True).encode()\n    heartbeat_post=kind=='log' and text==''\n    if kind!='result' and (attempted>=600 or sent+len(body)>900000):\n        omitted+=len((text or '').encode());return\n    seq+=1;sent+=len(body);attempted+=1\n    # curl retries reuse this exact payload/sequence; no redirect or arbitrary URL.\n"
+    ]
+  ],
+  "v5:heartbeat-busy-branch": [
+    [
+      "        current=time.monotonic()\n        if pending and (len(pending)>=8192 or current-last>=1):\n            post('log',pending.decode('utf-8',errors='replace'));pending=b'';last=current\n        if current-heartbeat>=${DEFAULTS.heartbeatMinutes * 60}:\n            post('log','');heartbeat=current\n    if pending: post('log',pending.decode('utf-8',errors='replace'))\nrc=child.wait()\n",
+      "        current=time.monotonic()\n        if pending and (len(pending)>=8192 or current-last>=1):\n            post('log',pending.decode('utf-8',errors='replace'));pending=b'';last=current\n        elif current-heartbeat>=${DEFAULTS.heartbeatMinutes * 60}:\n            post('log','');heartbeat=current\n    if pending: post('log',pending.decode('utf-8',errors='replace'))\nrc=child.wait()\n"
+    ]
+  ],
+  "v5:heartbeat-ten-minutes": [
+    [
+      "  \"bootMinutes\": 40,\n  \"hardMinutes\": 180,\n  \"softMarginMinutes\": 10,\n  \"heartbeatMinutes\": 10,\n  \"heartbeatTimeoutMinutes\": 15,\n  \"passGraceMinutes\": 5,\n  \"failGraceMinutes\": 10,\n",
+      "  \"bootMinutes\": 40,\n  \"hardMinutes\": 180,\n  \"softMarginMinutes\": 10,\n  \"heartbeatMinutes\": 20,\n  \"heartbeatTimeoutMinutes\": 15,\n  \"passGraceMinutes\": 5,\n  \"failGraceMinutes\": 10,\n"
+    ]
+  ],
+  "v5:soft-expired-no-work": [
+    [
+      "'''\nsoft_deadline=${callback.softDeadline ?? 'None'}\nremaining=math.floor(soft_deadline/1000-time.time()) if soft_deadline is not None else ${minutes * 60 - DEFAULTS.softMarginMinutes * 60}\nwork=work.replace('__KF_SOFT_SECONDS__',str(max(1,remaining))) if remaining>0 else 'exit 124\\\\n'\nwork=work.replace('__KF_SOFT_DEADLINE_MS__',str(soft_deadline if soft_deadline is not None else math.floor(time.time()*1000+remaining*1000)))\npost('progress','Suite starting')\nchild=subprocess.Popen(['bash','-s'],stdin=subprocess.PIPE,stdout=subprocess.PIPE,stderr=subprocess.STDOUT)\n",
+      "'''\nsoft_deadline=${callback.softDeadline ?? 'None'}\nremaining=math.floor(soft_deadline/1000-time.time()) if soft_deadline is not None else ${minutes * 60 - DEFAULTS.softMarginMinutes * 60}\nwork=work.replace('__KF_SOFT_SECONDS__',str(max(1,remaining))) if remaining>0 else 'exit 0\\\\n'\nwork=work.replace('__KF_SOFT_DEADLINE_MS__',str(soft_deadline if soft_deadline is not None else math.floor(time.time()*1000+remaining*1000)))\npost('progress','Suite starting')\nchild=subprocess.Popen(['bash','-s'],stdin=subprocess.PIPE,stdout=subprocess.PIPE,stderr=subprocess.STDOUT)\n"
+    ]
+  ],
+  "v5:shipped-numeric-overrides": [
+    [
+      "[vars]\n# Numeric owner policy defaults are defined once in defaults.json.\nRENTING_ENABLED = \"false\"\n# Owner assertion of the exact emitted module; see deployment.json and trace doc.\nDEPLOYED_BUNDLE_SHA256 = \"c139d8ee64d88de9032b602bff0a5e776c223aa23bb06a0d3c1748491a15e69f\"\nOWNER_GITHUB_ID = \"REPLACE_ME\"\n",
+      "[vars]\n# Numeric owner policy defaults are defined once in defaults.json.\nRENTING_ENABLED = \"false\"\nMAX_PRICE_USD_HOUR = \"0.5\"\nTTL_MINUTES = \"20\"\n# Owner assertion of the exact emitted module; see deployment.json and trace doc.\nDEPLOYED_BUNDLE_SHA256 = \"c139d8ee64d88de9032b602bff0a5e776c223aa23bb06a0d3c1748491a15e69f\"\nOWNER_GITHUB_ID = \"REPLACE_ME\"\n"
+    ]
+  ],
+  "v5:mandatory-verification": [
+    [
+      "    price = offerPrice(offer, cfg);\n  const enough = (key, floor) =>\n    typeof offer[key] === 'number' && Number.isFinite(offer[key]) && offer[key] >= floor;\n  if (\n    !(\n      offer.verified === true ||\n      (offer.verified === undefined && offer.verification === 'verified')\n    )\n  )\n    reasons.push('VERIFICATION');\n  if (\n    !Number.isSafeInteger(offer.id) ||\n    offer.id <= 0 ||\n",
+      "    price = offerPrice(offer, cfg);\n  const enough = (key, floor) =>\n    typeof offer[key] === 'number' && Number.isFinite(offer[key]) && offer[key] >= floor;\n  if (false) reasons.push('VERIFICATION');\n  if (\n    !Number.isSafeInteger(offer.id) ||\n    offer.id <= 0 ||\n"
+    ]
+  ],
+  "v5:host-capability": [
+    [
+      "    )\n  )\n    reasons.push('VERIFICATION');\n  if (\n    !Number.isSafeInteger(offer.id) ||\n    offer.id <= 0 ||\n    offer.vms_enabled !== true ||\n    offer.rentable !== true ||\n    offer.rented !== false ||\n    offer.num_gpus !== 1 ||\n    !enough('disk_space', DEFAULTS.diskGb)\n  )\n    reasons.push('CAPABILITY');\n  if (\n    !Number.isSafeInteger(offer.machine_id) ||\n    offer.machine_id <= 0 ||\n",
+      "    )\n  )\n    reasons.push('VERIFICATION');\n  if (false) reasons.push('CAPABILITY');\n  if (\n    !Number.isSafeInteger(offer.machine_id) ||\n    offer.machine_id <= 0 ||\n"
+    ]
+  ],
+  "v5:known-bad-machine": [
+    [
+      "  if (\n    !Number.isSafeInteger(offer.machine_id) ||\n    offer.machine_id <= 0 ||\n    cfg.badMachines.includes(offer.machine_id) ||\n    badMachines.includes(offer.machine_id)\n  )\n    reasons.push('MACHINE');\n",
+      "  if (\n    !Number.isSafeInteger(offer.machine_id) ||\n    offer.machine_id <= 0 ||\n    false ||\n    badMachines.includes(offer.machine_id)\n  )\n    reasons.push('MACHINE');\n"
+    ]
+  ],
+  "v5:quality-reliability": [
+    [
+      "    reasons.push('MACHINE');\n  if (!die || !(profile === 'check' ? cfg.checkDies : cfg.sweepDies).includes(die))\n    reasons.push('DIE');\n  if (!enough('reliability', q.reliability) || offer.reliability > 1) reasons.push('RELIABILITY');\n  if (\n    !enough('cpu_cores_effective', q.cores) ||\n    !enough('cpu_ghz', q.cpuGhz) ||\n",
+      "    reasons.push('MACHINE');\n  if (!die || !(profile === 'check' ? cfg.checkDies : cfg.sweepDies).includes(die))\n    reasons.push('DIE');\n  if (false) reasons.push('RELIABILITY');\n  if (\n    !enough('cpu_cores_effective', q.cores) ||\n    !enough('cpu_ghz', q.cpuGhz) ||\n"
+    ]
+  ],
+  "v5:quality-cpu-ram": [
+    [
+      "  if (!die || !(profile === 'check' ? cfg.checkDies : cfg.sweepDies).includes(die))\n    reasons.push('DIE');\n  if (!enough('reliability', q.reliability) || offer.reliability > 1) reasons.push('RELIABILITY');\n  if (\n    !enough('cpu_cores_effective', q.cores) ||\n    !enough('cpu_ghz', q.cpuGhz) ||\n    !enough('cpu_ram', q.ramMb)\n  )\n    reasons.push('CPU_RAM');\n  if (\n    !enough('dlperf', Number.MIN_VALUE) ||\n    typeof median !== 'number' ||\n",
+      "  if (!die || !(profile === 'check' ? cfg.checkDies : cfg.sweepDies).includes(die))\n    reasons.push('DIE');\n  if (!enough('reliability', q.reliability) || offer.reliability > 1) reasons.push('RELIABILITY');\n  if (false) reasons.push('CPU_RAM');\n  if (\n    !enough('dlperf', Number.MIN_VALUE) ||\n    typeof median !== 'number' ||\n"
+    ]
+  ],
+  "v5:quality-relative-performance": [
+    [
+      "    typeof median !== 'number' ||\n    !Number.isFinite(median) ||\n    median <= 0 ||\n    offer.dlperf < median * q.medianRatio\n  )\n    reasons.push('PERFORMANCE');\n  if (!enough('inet_down', q.downMbps) || !enough('inet_up', q.upMbps)) reasons.push('NETWORK');\n",
+      "    typeof median !== 'number' ||\n    !Number.isFinite(median) ||\n    median <= 0 ||\n    false\n  )\n    reasons.push('PERFORMANCE');\n  if (!enough('inet_down', q.downMbps) || !enough('inet_up', q.upMbps)) reasons.push('NETWORK');\n"
+    ]
+  ],
+  "v5:quality-network": [
+    [
+      "    offer.dlperf < median * q.medianRatio\n  )\n    reasons.push('PERFORMANCE');\n  if (!enough('inet_down', q.downMbps) || !enough('inet_up', q.upMbps)) reasons.push('NETWORK');\n  if (!enough('disk_bw', q.diskMbps)) reasons.push('DISK_BW');\n  if (!cfg.driverTags.includes(offer.driver_version)) reasons.push('DRIVER');\n  if (!price) reasons.push('PRICE_FIELDS');\n",
+      "    offer.dlperf < median * q.medianRatio\n  )\n    reasons.push('PERFORMANCE');\n  if (false) reasons.push('NETWORK');\n  if (!enough('disk_bw', q.diskMbps)) reasons.push('DISK_BW');\n  if (!cfg.driverTags.includes(offer.driver_version)) reasons.push('DRIVER');\n  if (!price) reasons.push('PRICE_FIELDS');\n"
+    ]
+  ],
+  "v5:quality-disk": [
+    [
+      "  )\n    reasons.push('PERFORMANCE');\n  if (!enough('inet_down', q.downMbps) || !enough('inet_up', q.upMbps)) reasons.push('NETWORK');\n  if (!enough('disk_bw', q.diskMbps)) reasons.push('DISK_BW');\n  if (!cfg.driverTags.includes(offer.driver_version)) reasons.push('DRIVER');\n  if (!price) reasons.push('PRICE_FIELDS');\n  else if (\n",
+      "  )\n    reasons.push('PERFORMANCE');\n  if (!enough('inet_down', q.downMbps) || !enough('inet_up', q.upMbps)) reasons.push('NETWORK');\n  if (false) reasons.push('DISK_BW');\n  if (!cfg.driverTags.includes(offer.driver_version)) reasons.push('DRIVER');\n  if (!price) reasons.push('PRICE_FIELDS');\n  else if (\n"
+    ]
+  ],
+  "v5:quality-driver": [
+    [
+      "    reasons.push('PERFORMANCE');\n  if (!enough('inet_down', q.downMbps) || !enough('inet_up', q.upMbps)) reasons.push('NETWORK');\n  if (!enough('disk_bw', q.diskMbps)) reasons.push('DISK_BW');\n  if (!cfg.driverTags.includes(offer.driver_version)) reasons.push('DRIVER');\n  if (!price) reasons.push('PRICE_FIELDS');\n  else if (\n    price.effective > (profile === 'check' ? cfg.price : cfg.sweepPrice) ||\n",
+      "    reasons.push('PERFORMANCE');\n  if (!enough('inet_down', q.downMbps) || !enough('inet_up', q.upMbps)) reasons.push('NETWORK');\n  if (!enough('disk_bw', q.diskMbps)) reasons.push('DISK_BW');\n  if (false) reasons.push('DRIVER');\n  if (!price) reasons.push('PRICE_FIELDS');\n  else if (\n    price.effective > (profile === 'check' ? cfg.price : cfg.sweepPrice) ||\n"
+    ]
+  ],
+  "v5:turing-class-floor": [
+    [
+      "  if (\n    offer.gpu_arch !== 'nvidia' ||\n    !Number.isSafeInteger(offer.compute_cap) ||\n    offer.compute_cap < 750 ||\n    offer.compute_cap > 2000 ||\n    offer.compute_cap % 10 !== 0 ||\n    typeof offer.gpu_name !== 'string' ||\n",
+      "  if (\n    offer.gpu_arch !== 'nvidia' ||\n    !Number.isSafeInteger(offer.compute_cap) ||\n    false ||\n    offer.compute_cap > 2000 ||\n    offer.compute_cap % 10 !== 0 ||\n    typeof offer.gpu_name !== 'string' ||\n"
+    ]
+  ],
+  "v5:gpu-deny-list": [
+    [
+      "    }\n    return pattern.endsWith('*') || at === name.length;\n  };\n  if (cfg.gpuDeny.some(match)) return null;\n  const rules = cfg.dieRules.filter((r) => r.cc === offer.compute_cap && r.names.some(match));\n  if (rules.length > 1) return null;\n  return rules[0]?.die ?? 'CC_' + offer.compute_cap / 10;\n",
+      "    }\n    return pattern.endsWith('*') || at === name.length;\n  };\n  /* mutant ignores GPU deny-list */\n  const rules = cfg.dieRules.filter((r) => r.cc === offer.compute_cap && r.names.some(match));\n  if (rules.length > 1) return null;\n  return rules[0]?.die ?? 'CC_' + offer.compute_cap / 10;\n"
+    ]
+  ],
+  "v5:effective-price-includes-network": [
+    [
+      "  if (Math.abs(offer.dph_total - computeStorage) > Math.max(1e-7, computeStorage * 1e-6))\n    return null;\n  const bandwidth = cfg.bandwidthDown * offer.inet_down_cost + cfg.bandwidthUp * offer.inet_up_cost;\n  const effective = computeStorage + bandwidth / (cfg.hard / 3600000);\n  return {\n    computeStorage,\n    bandwidth,\n",
+      "  if (Math.abs(offer.dph_total - computeStorage) > Math.max(1e-7, computeStorage * 1e-6))\n    return null;\n  const bandwidth = cfg.bandwidthDown * offer.inet_down_cost + cfg.bandwidthUp * offer.inet_up_cost;\n  const effective = computeStorage;\n  return {\n    computeStorage,\n    bandwidth,\n"
+    ],
+    [
+      "  if (!price) reasons.push('PRICE_FIELDS');\n  else if (\n    price.effective > (profile === 'check' ? cfg.price : cfg.sweepPrice) ||\n    price.total >\n      ((profile === 'check' ? cfg.price : cfg.sweepPrice) * (cfg.hard + cfg.cronPeriod)) / 3600000\n  )\n    reasons.push('PRICE');\n  return reasons;\n",
+      "  if (!price) reasons.push('PRICE_FIELDS');\n  else if (\n    price.effective > (profile === 'check' ? cfg.price : cfg.sweepPrice) ||\n    price.total > (profile === 'check' ? cfg.price : cfg.sweepPrice) * 1000\n  )\n    reasons.push('PRICE');\n  return reasons;\n"
+    ]
+  ],
+  "v5:storage-consistency": [
+    [
+      "  const storage = (offer.storage_cost * DEFAULTS.diskGb) / DEFAULTS.storageMonthHours,\n    computeStorage = offer.dph_base + storage;\n  // Recorded API allocated_storage=120: dph_total already includes this storage.\n  if (Math.abs(offer.dph_total - computeStorage) > Math.max(1e-7, computeStorage * 1e-6))\n    return null;\n  const bandwidth = cfg.bandwidthDown * offer.inet_down_cost + cfg.bandwidthUp * offer.inet_up_cost;\n  const effective = computeStorage + bandwidth / (cfg.hard / 3600000);\n  return {\n",
+      "  const storage = (offer.storage_cost * DEFAULTS.diskGb) / DEFAULTS.storageMonthHours,\n    computeStorage = offer.dph_base + storage;\n  // Recorded API allocated_storage=120: dph_total already includes this storage.\n  /* mutant trusts inconsistent allocated storage */\n  const bandwidth = cfg.bandwidthDown * offer.inet_down_cost + cfg.bandwidthUp * offer.inet_up_cost;\n  const effective = computeStorage + bandwidth / (cfg.hard / 3600000);\n  return {\n"
+    ]
+  ],
+  "v5:check-die-enforcement": [
+    [
+      "    badMachines.includes(offer.machine_id)\n  )\n    reasons.push('MACHINE');\n  if (!die || !(profile === 'check' ? cfg.checkDies : cfg.sweepDies).includes(die))\n    reasons.push('DIE');\n  if (!enough('reliability', q.reliability) || offer.reliability > 1) reasons.push('RELIABILITY');\n  if (\n    !enough('cpu_cores_effective', q.cores) ||\n",
+      "    badMachines.includes(offer.machine_id)\n  )\n    reasons.push('MACHINE');\n  if (!die) reasons.push('DIE');\n  if (!enough('reliability', q.reliability) || offer.reliability > 1) reasons.push('RELIABILITY');\n  if (\n    !enough('cpu_cores_effective', q.cores) ||\n"
+    ]
+  ],
+  "v5:sweep-owner-only": [
+    [
+      "    if (!['check', 'sweep'].includes(profile)) refuse('BAD_REQUEST', 400);\n    if (path === '/availability' && url.search !== '?profile=' + profile)\n      refuse('BAD_REQUEST', 400);\n    if (\n      profile === 'sweep' &&\n      (c.actor_id !== cfg.owner ||\n        c.event_name !== 'workflow_dispatch' ||\n        c.workflow_ref !== cfg.repo + '/.github/workflows/gpu-vast-sweep.yml@refs/heads/master')\n    )\n      refuse('UNAUTHORIZED', 401);\n    if (\n      profile === 'check' &&\n      c.workflow_ref !== cfg.repo + '/.github/workflows/gpu-vast.yml@refs/heads/master'\n",
+      "    if (!['check', 'sweep'].includes(profile)) refuse('BAD_REQUEST', 400);\n    if (path === '/availability' && url.search !== '?profile=' + profile)\n      refuse('BAD_REQUEST', 400);\n    /* mutant omits profile owner gate */\n    if (\n      profile === 'check' &&\n      c.workflow_ref !== cfg.repo + '/.github/workflows/gpu-vast.yml@refs/heads/master'\n"
+    ]
+  ],
+  "v5:preference-order-forced": [
+    [
+      "        order = filtered;\n      }\n    } else if (preferences !== undefined) {\n      order = preferences.filter((x) => set.includes(x));\n      ignored = preferences.length - order.length;\n      if (!order.length) refuse('UNAVAILABLE', 503, 'NO_ALLOWED_PREFERENCE');\n    } else order = set;\n",
+      "        order = filtered;\n      }\n    } else if (preferences !== undefined) {\n      order = set;\n      ignored = preferences.length - order.length;\n      if (!order.length) refuse('UNAVAILABLE', 503, 'NO_ALLOWED_PREFERENCE');\n    } else order = set;\n"
+    ]
+  ],
+  "v5:rotation-ledger": [
+    [
+      "    let ignored = 0,\n      order;\n    if (rotate) {\n      const previous = await ledger.get('rotation:lastDie'),\n        at = set.indexOf(previous);\n      order = [...set.slice(at + 1), ...set.slice(0, at + 1)];\n      if (cfg.skipPassedDays > 0) {\n",
+      "    let ignored = 0,\n      order;\n    if (rotate) {\n      const previous = undefined,\n        at = set.indexOf(previous);\n      order = [...set.slice(at + 1), ...set.slice(0, at + 1)];\n      if (cfg.skipPassedDays > 0) {\n"
+    ]
+  ],
+  "v5:rotation-skip-recent": [
+    [
+      "      const previous = await ledger.get('rotation:lastDie'),\n        at = set.indexOf(previous);\n      order = [...set.slice(at + 1), ...set.slice(0, at + 1)];\n      if (cfg.skipPassedDays > 0) {\n        const filtered = [];\n        for (const die of order) {\n          const passed = await ledger.get('passed:' + die);\n",
+      "      const previous = await ledger.get('rotation:lastDie'),\n        at = set.indexOf(previous);\n      order = [...set.slice(at + 1), ...set.slice(0, at + 1)];\n      if (false) {\n        const filtered = [];\n        for (const die of order) {\n          const passed = await ledger.get('passed:' + die);\n"
+    ]
+  ],
+  "v5:offers-sixty-second-cache": [
+    [
+      "    this.failed = false;\n  }\n  async evaluate(vast, cfg, ledger, profile) {\n    let hit = this.at !== null && this.now() - this.at < DEFAULTS.availabilityCacheMs;\n    if (!hit) {\n      this.at = this.now();\n      this.cached = null;\n",
+      "    this.failed = false;\n  }\n  async evaluate(vast, cfg, ledger, profile) {\n    let hit = false;\n    if (!hit) {\n      this.at = this.now();\n      this.cached = null;\n"
+    ]
+  ],
+  "v5:admission-rate-bound": [
+    [
+      "        admissionWindow = window;\n        admissionCount = 0;\n      }\n      if (++admissionCount > DEFAULTS.admissionPerMinute) refuse('RATE_LIMIT', 429);\n    }\n    const authorization = request.headers.get('Authorization');\n    if (!authorization?.startsWith('Bearer ')) refuse('UNAUTHORIZED', 401);\n",
+      "        admissionWindow = window;\n        admissionCount = 0;\n      }\n      if (false) refuse('RATE_LIMIT', 429);\n    }\n    const authorization = request.headers.get('Authorization');\n    if (!authorization?.startsWith('Bearer ')) refuse('UNAUTHORIZED', 401);\n"
+    ]
+  ],
+  "v5:separate-profile-daily": [
+    [
+      "      if (end < v.started) refuse();\n      const remaining =\n        v.ended === null ? (Math.max(0, v.started + v.ttl - now) * v.price) / 3600000 : 0;\n      if ((v.profile ?? 'check') === (cfg.profile ?? 'check'))\n        daily +=\n          (Math.max(0, end - Math.max(v.started, day)) * v.price) / 3600000 +\n          remaining +\n",
+      "      if (end < v.started) refuse();\n      const remaining =\n        v.ended === null ? (Math.max(0, v.started + v.ttl - now) * v.price) / 3600000 : 0;\n      if (true)\n        daily +=\n          (Math.max(0, end - Math.max(v.started, day)) * v.price) / 3600000 +\n          remaining +\n"
+    ]
+  ],
+  "v5:network-liability-not-amortised": [
+    [
+      "      profile: record.profile ?? 'check',\n      started: record.started,\n      ended: null,\n      price: record.computeStoragePrice ?? record.price,\n      bandwidthCost: record.bandwidthCost ?? 0,\n      ttl: record.billingTtl ?? record.ttl,\n    });\n  }\n",
+      "      profile: record.profile ?? 'check',\n      started: record.started,\n      ended: null,\n      price: record.price,\n      bandwidthCost: 0,\n      ttl: record.billingTtl ?? record.ttl,\n    });\n  }\n"
+    ],
+    [
+      "      profile: record.profile ?? 'check',\n      started: record.started,\n      ended: now,\n      price: record.computeStoragePrice ?? record.price,\n      bandwidthCost: record.bandwidthCost ?? 0,\n      ttl: record.billingTtl ?? record.ttl,\n    });\n    await this.storage.delete('open:' + record.key);\n",
+      "      profile: record.profile ?? 'check',\n      started: record.started,\n      ended: now,\n      price: record.price,\n      bandwidthCost: 0,\n      ttl: record.billingTtl ?? record.ttl,\n    });\n    await this.storage.delete('open:' + record.key);\n"
+    ]
+  ],
+  "v5:learn-frozen-kvm": [
+    [
+      "      if (\n        reason === 'BOOT_TIMEOUT' &&\n        record.providerState === 'created' &&\n        record.bootFailure?.confirmed &&\n        now() - record.bootFailure.last <= cfg.cronPeriod * 2 &&\n        Number.isSafeInteger(record.machineId)\n      ) {\n",
+      "      if (\n        reason === 'BOOT_TIMEOUT' &&\n        record.providerState === 'created' &&\n        false &&\n        now() - record.bootFailure.last <= cfg.cronPeriod * 2 &&\n        Number.isSafeInteger(record.machineId)\n      ) {\n"
+    ]
+  ],
+  "v5:force-choice-on-refusal": [
+    [
+      "        refuse('UNAVAILABLE_BUDGET', 409); // MUTANT credit\n      await ledger.budgets(cfg, now(), cost);\n    } catch (e) {\n      if (e instanceof BrokerError && e.state === 'UNAVAILABLE_BUDGET')\n        e.selection = { die: offer.die, ignored: chosen.ignored, reason: chosen.reason };\n      throw e;\n    }\n    const n = random\n",
+      "        refuse('UNAVAILABLE_BUDGET', 409); // MUTANT credit\n      await ledger.budgets(cfg, now(), cost);\n    } catch (e) {\n      if (e instanceof BrokerError && e.state === 'UNAVAILABLE_BUDGET') e.selection = undefined;\n      throw e;\n    }\n    const n = random\n"
+    ]
+  ],
+  "v5:structured-PASS-completeness": [
+    [
+      "  )\n    refuse('BAD_REPORT', 400);\n  if (result.verdict === 'PASS') {\n    if (\n      rows.some((r) => r.fail !== 0 || r.skip !== 0 || r.pass <= 0) ||\n      h.gpu_name === 'unknown' ||\n      h.driver_version === 'unknown' ||\n      h.compute_cap < 750\n    )\n      refuse('BAD_REPORT', 400);\n  } else if (!rows.some((r) => r.fail > 0)) refuse('BAD_REPORT', 400);\n  return result;\n}\n",
+      "  )\n    refuse('BAD_REPORT', 400);\n  if (result.verdict === 'PASS') {\n    if (false) refuse('BAD_REPORT', 400);\n  } else if (!rows.some((r) => r.fail > 0)) refuse('BAD_REPORT', 400);\n  return result;\n}\n"
+    ]
+  ],
+  "v5:structured-hardware": [
+    [
+      "    )\n      refuse('BAD_REPORT', 400);\n  const h = result.hardware;\n  if (\n    !object(h) ||\n    Object.keys(h).sort().join(',') !== 'compute_cap,driver_version,gpu_name' ||\n    typeof h.gpu_name !== 'string' ||\n    !/^[A-Za-z0-9_. -]{1,100}$/.test(h.gpu_name) ||\n    !Number.isSafeInteger(h.compute_cap) ||\n    h.compute_cap < 0 ||\n    h.compute_cap > 2000 ||\n    typeof h.driver_version !== 'string' ||\n    !/^(?:unknown|\\d{3}\\.\\d{1,3}(?:\\.\\d{1,2})?)$/.test(h.driver_version)\n  )\n    refuse('BAD_REPORT', 400);\n  if (result.verdict === 'PASS') {\n    if (\n      rows.some((r) => r.fail !== 0 || r.skip !== 0 || r.pass <= 0) ||\n",
+      "    )\n      refuse('BAD_REPORT', 400);\n  const h = result.hardware;\n  if (false) refuse('BAD_REPORT', 400);\n  if (result.verdict === 'PASS') {\n    if (\n      rows.some((r) => r.fail !== 0 || r.skip !== 0 || r.pass <= 0) ||\n"
+    ]
+  ],
+  "v5:duplicate-report-json": [
+    [
+      "          } catch {\n            refuse('BAD_REPORT', 400);\n          }\n          if (stack.at(-1).keys.has(key)) refuse('BAD_REPORT', 400);\n          stack.at(-1).keys.add(key);\n        }\n      }\n",
+      "          } catch {\n            refuse('BAD_REPORT', 400);\n          }\n          /* mutant accepts duplicate fields */\n          stack.at(-1).keys.add(key);\n        }\n      }\n"
+    ]
+  ],
+  "v5:runner-V5-suites": [
+    [
+      "    if data[\"state\"] == \"GRACE\" and data[\"result_at\"] is None:\n        raise Invalid()\n    if data[\"result_at\"] is not None and data[\"state\"] != \"NOT_NEEDED\":\n        validate_suites(data[\"suites\"], data[\"verdict\"])\n    elif data[\"suites\"] != []:\n        raise Invalid()\n    if (\n",
+      "    if data[\"state\"] == \"GRACE\" and data[\"result_at\"] is None:\n        raise Invalid()\n    if data[\"result_at\"] is not None and data[\"state\"] != \"NOT_NEEDED\":\n        None\n    elif data[\"suites\"] != []:\n        raise Invalid()\n    if (\n"
+    ]
+  ],
+  "v5:runner-V5-terminals": [
+    [
+      "                    result[\"state\"] = data[\"state\"]\n                    break\n                self.pages(data[\"log_cursor\"])\n                if (\n                    data[\"state\"] == \"NOT_NEEDED\"\n                    or data[\"state\"] in {\"GRACE\", \"MANUAL\", \"NONE\"}\n                    and data[\"result_at\"] is not None\n                ):\n                    if self.cursor != data[\"log_cursor\"] or self.hash != data[\"log_sha256\"]:\n                        raise Invalid()\n                    self.metadata = data\n",
+      "                    result[\"state\"] = data[\"state\"]\n                    break\n                self.pages(data[\"log_cursor\"])\n                if data[\"state\"] == \"NOT_NEEDED\":\n                    if self.cursor != data[\"log_cursor\"] or self.hash != data[\"log_sha256\"]:\n                        raise Invalid()\n                    self.metadata = data\n"
+    ]
+  ],
+  "v5:runner-availability-schema": [
+    [
+      "            if code != 200:\n                validate_status(availability, self.ctx, self.manifest, code)\n                raise Invalid()\n            validate_availability(availability, profile)\n            lines = [\n                \"Availability: \" + profile,\n                \"die gpu compute_cap count effective_hourly estimated_total kvm\",\n",
+      "            if code != 200:\n                validate_status(availability, self.ctx, self.manifest, code)\n                raise Invalid()\n            pass  # mutant trusts display input\n            lines = [\n                \"Availability: \" + profile,\n                \"die gpu compute_cap count effective_hourly estimated_total kvm\",\n"
+    ]
+  ],
+  "v5:sender-file-binding": [
+    [
+      "    with open('/workspace/kf-ci-result.json','rb') as source:raw=source.read(65537)\n    if len(raw)>65536:raise ValueError('size')\n    candidate=json.loads(raw.decode('utf-8',errors='strict'),object_pairs_hook=unique)\n    if type(candidate) is not dict or set(candidate)!={'nonce','sha','verdict','suites','hardware'} or candidate['nonce']!=nonce or candidate['sha']!='${sha}' or candidate['verdict'] not in {'PASS','FAIL','UNAVAILABLE'}:raise ValueError('binding')\n    rows=candidate['suites'];hardware=candidate['hardware']\n    if type(rows) is not list or not 1<=len(rows)<=19 or any(type(r) is not dict or set(r)!={'name','pass','fail','skip'} or not isinstance(r['name'],str) or not re.fullmatch(r'[a-z][a-z0-9_]{0,47}',r['name']) or any(type(r[k]) is not int or not 0<=r[k]<=10000000 for k in ['pass','fail','skip']) for r in rows) or len({r['name'] for r in rows})!=len(rows):raise ValueError('suites')\n    if type(hardware) is not dict or set(hardware)!={'gpu_name','compute_cap','driver_version'} or not isinstance(hardware['gpu_name'],str) or not re.fullmatch(r'[A-Za-z0-9_. -]{1,100}',hardware['gpu_name']) or type(hardware['compute_cap']) is not int or not 0<=hardware['compute_cap']<=2000 or not isinstance(hardware['driver_version'],str) or not re.fullmatch(r'unknown|[0-9]{3}\\\\.[0-9]{1,3}(?:\\\\.[0-9]{1,2})?',hardware['driver_version']):raise ValueError('hardware')\n",
+      "    with open('/workspace/kf-ci-result.json','rb') as source:raw=source.read(65537)\n    if len(raw)>65536:raise ValueError('size')\n    candidate=json.loads(raw.decode('utf-8',errors='strict'),object_pairs_hook=unique)\n    if type(candidate) is not dict or set(candidate)!={'nonce','sha','verdict','suites','hardware'} or False or candidate['verdict'] not in {'PASS','FAIL','UNAVAILABLE'}:raise ValueError('binding')\n    rows=candidate['suites'];hardware=candidate['hardware']\n    if type(rows) is not list or not 1<=len(rows)<=19 or any(type(r) is not dict or set(r)!={'name','pass','fail','skip'} or not isinstance(r['name'],str) or not re.fullmatch(r'[a-z][a-z0-9_]{0,47}',r['name']) or any(type(r[k]) is not int or not 0<=r[k]<=10000000 for k in ['pass','fail','skip']) for r in rows) or len({r['name'] for r in rows})!=len(rows):raise ValueError('suites')\n    if type(hardware) is not dict or set(hardware)!={'gpu_name','compute_cap','driver_version'} or not isinstance(hardware['gpu_name'],str) or not re.fullmatch(r'[A-Za-z0-9_. -]{1,100}',hardware['gpu_name']) or type(hardware['compute_cap']) is not int or not 0<=hardware['compute_cap']<=2000 or not isinstance(hardware['driver_version'],str) or not re.fullmatch(r'unknown|[0-9]{3}\\\\.[0-9]{1,3}(?:\\\\.[0-9]{1,2})?',hardware['driver_version']):raise ValueError('hardware')\n"
+    ]
+  ],
+  "v5:approved-payload-path": [
+    [
+      "git checkout --detach ${sha}\n[ \"$(git rev-parse HEAD)\" = '${sha}' ]\nexport KF_SOFT_DEADLINE_MS=__KF_SOFT_DEADLINE_MS__\nbash scripts/ci/vast_payload.sh '${sha}' '${nonce}'\nKF_TEST\n'''\nsoft_deadline=${callback.softDeadline ?? 'None'}\n",
+      "git checkout --detach ${sha}\n[ \"$(git rev-parse HEAD)\" = '${sha}' ]\nexport KF_SOFT_DEADLINE_MS=__KF_SOFT_DEADLINE_MS__\nbash scripts/ci/vast_box_main.sh '${sha}' '${nonce}'\nKF_TEST\n'''\nsoft_deadline=${callback.softDeadline ?? 'None'}\n"
+    ]
+  ],
+  "v5:owner-sweep-selected-commit": [
+    [
+      "      String(c.triggering_actor) !== String(r.triggering_actor.id)\n    )\n      refuse('UNAUTHORIZED', 401);\n    if (cfg.profile === 'sweep') {\n      if (\n        c.event_name !== 'workflow_dispatch' ||\n        c.actor_id !== cfg.owner ||\n",
+      "      String(c.triggering_actor) !== String(r.triggering_actor.id)\n    )\n      refuse('UNAUTHORIZED', 401);\n    if (false) {\n      if (\n        c.event_name !== 'workflow_dispatch' ||\n        c.actor_id !== cfg.owner ||\n"
+    ]
+  ],
+  "v5:sweep-workflow-trigger-guard": [
+    [
+      "  for (const [filename, text] of Object.entries(workflows)) {\n    if (filename === 'gpu-vast-sweep.yml') {\n      if (\n        !/^  workflow_dispatch:/m.test(text) ||\n        /^  (?:pull_request|pull_request_target|push|schedule):/m.test(text) ||\n        /statuses:|context:[ \"]*gpu-vast|actions\\/checkout|cache@|upload-artifact|download-artifact/.test(\n          text,\n        )\n",
+      "  for (const [filename, text] of Object.entries(workflows)) {\n    if (filename === 'gpu-vast-sweep.yml') {\n      if (\n        false ||\n        /statuses:|context:[ \"]*gpu-vast|actions\\/checkout|cache@|upload-artifact|download-artifact/.test(\n          text,\n        )\n"
+    ]
+  ],
+  "v5:sweep-workflow-token-guard": [
+    [
+      "          'Sweep must be a dispatch-only finding without merge status or source/artifact input',\n        );\n      const job = jobsIn(text);\n      if (\n        job.length !== 1 ||\n        job[0].id !== 'gpu' ||\n        JSON.stringify(Object.entries(job[0].grants)) !== JSON.stringify([['id-token', 'write']])\n      )\n        errors.push('Sweep must have one OIDC-only broker job');\n    }\n    const jobs = jobsIn(text),\n",
+      "          'Sweep must be a dispatch-only finding without merge status or source/artifact input',\n        );\n      const job = jobsIn(text);\n      if (job.length !== 1 || job[0].id !== 'gpu' || false)\n        errors.push('Sweep must have one OIDC-only broker job');\n    }\n    const jobs = jobsIn(text),\n"
+    ]
+  ],
+  "v5:workflow-three-hour-horizon": [
+    [
+      "    needs: pending\n    runs-on: ubuntu-latest\n    environment: gpu-vast\n    timeout-minutes: 210\n    permissions:\n      id-token: write\n    outputs:\n",
+      "    needs: pending\n    runs-on: ubuntu-latest\n    environment: gpu-vast\n    timeout-minutes: 25\n    permissions:\n      id-token: write\n    outputs:\n"
+    ],
+    [
+      "      - name: Fetch BASE controller and request bounded test\n        id: broker\n        shell: bash --noprofile --norc -eo pipefail {0}\n        timeout-minutes: 205\n        env:\n          WORKER_URL: ${{ secrets.VAST_BROKER_URL }}\n          WORKER_PATH: ${{ secrets.VAST_BROKER_PATH }}\n",
+      "      - name: Fetch BASE controller and request bounded test\n        id: broker\n        shell: bash --noprofile --norc -eo pipefail {0}\n        timeout-minutes: 22\n        env:\n          WORKER_URL: ${{ secrets.VAST_BROKER_URL }}\n          WORKER_PATH: ${{ secrets.VAST_BROKER_PATH }}\n"
+    ]
+  ],
+  "v5:callback-expiry-before-cron": [
+    [
+      "    await ledger.save(r);\n  }\n  async function rejectExpiredCallback(r, cfg, vast) {\n    if (now() >= nextDeadline(r)) {\n      await workerLine(r, 'destroy reason=DEADLINE callback', cfg);\n      try {\n        await close(r, vast, 'DEADLINE');\n",
+      "    await ledger.save(r);\n  }\n  async function rejectExpiredCallback(r, cfg, vast) {\n    if (false) {\n      await workerLine(r, 'destroy reason=DEADLINE callback', cfg);\n      try {\n        await close(r, vast, 'DEADLINE');\n"
+    ]
+  ],
+  "v5:repo-defined-worker-suites": [
+    [
+      "  )\n    refuse('BAD_REPORT', 400);\n  if (result.verdict === 'PASS') {\n    if (\n      rows.some((r) => r.fail !== 0 || r.skip !== 0 || r.pass <= 0) ||\n      h.gpu_name === 'unknown' ||\n",
+      "  )\n    refuse('BAD_REPORT', 400);\n  if (result.verdict === 'PASS') {\n    if (rows.length !== 9) refuse('BAD_REPORT', 400);\n    if (\n      rows.some((r) => r.fail !== 0 || r.skip !== 0 || r.pass <= 0) ||\n      h.gpu_name === 'unknown' ||\n"
+    ]
+  ],
+  "v5:repo-defined-runner-suites": [
+    [
+      "            raise Invalid()\n        seen.add(row[\"name\"])\n    if verdict == \"PASS\":\n        if any(r[\"fail\"] or r[\"skip\"] or not r[\"pass\"] for r in rows):\n            raise Invalid()\n    elif not any(r[\"fail\"] for r in rows):\n",
+      "            raise Invalid()\n        seen.add(row[\"name\"])\n    if verdict == \"PASS\":\n        if len(rows) != 9:\n            raise Invalid()\n        if any(r[\"fail\"] or r[\"skip\"] or not r[\"pass\"] for r in rows):\n            raise Invalid()\n    elif not any(r[\"fail\"] for r in rows):\n"
+    ]
+  ],
+  "v5:repo-defined-sender-suites": [
+    [
+      "    rows=candidate['suites'];hardware=candidate['hardware']\n    if type(rows) is not list or not 1<=len(rows)<=19 or any(type(r) is not dict or set(r)!={'name','pass','fail','skip'} or not isinstance(r['name'],str) or not re.fullmatch(r'[a-z][a-z0-9_]{0,47}',r['name']) or any(type(r[k]) is not int or not 0<=r[k]<=10000000 for k in ['pass','fail','skip']) for r in rows) or len({r['name'] for r in rows})!=len(rows):raise ValueError('suites')\n    if type(hardware) is not dict or set(hardware)!={'gpu_name','compute_cap','driver_version'} or not isinstance(hardware['gpu_name'],str) or not re.fullmatch(r'[A-Za-z0-9_. -]{1,100}',hardware['gpu_name']) or type(hardware['compute_cap']) is not int or not 0<=hardware['compute_cap']<=2000 or not isinstance(hardware['driver_version'],str) or not re.fullmatch(r'unknown|[0-9]{3}\\\\.[0-9]{1,3}(?:\\\\.[0-9]{1,2})?',hardware['driver_version']):raise ValueError('hardware')\n    complete=all(r['fail']==0 and r['skip']==0 and r['pass']>0 for r in rows)\n    if rc!=0 or candidate['verdict']!='PASS' or not complete or hardware['gpu_name']=='unknown' or hardware['driver_version']=='unknown' or hardware['compute_cap']<750:\n        candidate['verdict']='FAIL'\n        if not any(r['fail'] for r in rows):rows.append({'name':'timeout' if rc==124 else 'app_exit','pass':0,'fail':1,'skip':0})\n",
+      "    rows=candidate['suites'];hardware=candidate['hardware']\n    if type(rows) is not list or not 1<=len(rows)<=19 or any(type(r) is not dict or set(r)!={'name','pass','fail','skip'} or not isinstance(r['name'],str) or not re.fullmatch(r'[a-z][a-z0-9_]{0,47}',r['name']) or any(type(r[k]) is not int or not 0<=r[k]<=10000000 for k in ['pass','fail','skip']) for r in rows) or len({r['name'] for r in rows})!=len(rows):raise ValueError('suites')\n    if type(hardware) is not dict or set(hardware)!={'gpu_name','compute_cap','driver_version'} or not isinstance(hardware['gpu_name'],str) or not re.fullmatch(r'[A-Za-z0-9_. -]{1,100}',hardware['gpu_name']) or type(hardware['compute_cap']) is not int or not 0<=hardware['compute_cap']<=2000 or not isinstance(hardware['driver_version'],str) or not re.fullmatch(r'unknown|[0-9]{3}\\\\.[0-9]{1,3}(?:\\\\.[0-9]{1,2})?',hardware['driver_version']):raise ValueError('hardware')\n    complete=len(rows)==9 and all(r['fail']==0 and r['skip']==0 and r['pass']>0 for r in rows)\n    if rc!=0 or candidate['verdict']!='PASS' or not complete or hardware['gpu_name']=='unknown' or hardware['driver_version']=='unknown' or hardware['compute_cap']<750:\n        candidate['verdict']='FAIL'\n        if not any(r['fail'] for r in rows):rows.append({'name':'timeout' if rc==124 else 'app_exit','pass':0,'fail':1,'skip':0})\n"
+    ]
+  ],
+  "v5:exact-sha-shallow-fetch": [
+    [
+      "git init /workspace/kf-ci-src\ncd /workspace/kf-ci-src\ngit remote add origin https://github.com/${repo}.git\ngit fetch --depth=1 origin ${sha}\ngit checkout --detach ${sha}\n[ \"$(git rev-parse HEAD)\" = '${sha}' ]\nexport KF_SOFT_DEADLINE_MS=__KF_SOFT_DEADLINE_MS__\n",
+      "git init /workspace/kf-ci-src\ncd /workspace/kf-ci-src\ngit remote add origin https://github.com/${repo}.git\ngit fetch origin ${sha}\ngit checkout --detach ${sha}\n[ \"$(git rev-parse HEAD)\" = '${sha}' ]\nexport KF_SOFT_DEADLINE_MS=__KF_SOFT_DEADLINE_MS__\n"
+    ]
+  ]
+}

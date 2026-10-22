@@ -1,10 +1,96 @@
-import test from 'node:test';import assert from 'node:assert/strict';import {spawnSync} from 'node:child_process';
-const origin='https://quiet-tenant.workers.example',prefix='unit-path-only-'+'p'.repeat(32);
-function run(args={}){const p=spawnSync('python3',['-I',new URL('round3_main_fixture.py',import.meta.url).pathname,JSON.stringify(args)],{encoding:'utf8',timeout:5000});assert.equal(p.status,0,p.stderr);const r=JSON.parse(p.stdout);r.visible=r.stdout.split('\n').filter(x=>!x.startsWith('::add-mask::')).join('\n')+r.summary;return r;}
-for(const slash of ['', '/'])test('secret API base includes prefix and audience uses canonical origin '+JSON.stringify(slash),()=>{const r=run({url:origin+slash,pending:true});assert.equal(r.status,0);const api=r.calls.filter(x=>!x.url.startsWith('https://oidc.example/'));assert.deepEqual(api.map(x=>x.url),[origin+'/'+prefix+'/availability?profile=check',origin+'/'+prefix+'/rent',origin+'/'+prefix+'/status/123-1',origin+'/'+prefix+'/logs/123-1?cursor=0']);for(const x of r.calls.filter(x=>x.url.startsWith('https://oidc.example/')))assert.equal(new URL(x.url).searchParams.get('audience'),origin);});
-for(const path of ['',prefix])test('derived masks exist before first Worker request '+path.length,()=>{const r=run({path});assert.equal(r.status,0);const required=[origin,'quiet-tenant.workers.example','quiet-tenant','workers','example',encodeURIComponent(origin),'mock.jwt.value',...(path?[path]:[])];const first=r.calls.find(x=>!x.url.startsWith('https://oidc.example/'));for(const value of required)assert.ok(first.masks.includes(value),'missing mask '+value);});
-for(const failure of ['rent','status'])test('transport failures print no endpoint diagnostics '+failure,()=>{const r=run({failure,pending:failure==='status'});assert.notEqual(r.status,0);for(const value of [origin,'quiet-tenant.workers.example',prefix])assert.ok(!r.visible.includes(value),r.visible);assert.doesNotMatch(r.outputs,/https:|quiet-tenant|unit-path-only/);});
-for(const bad of ['bad/path','x'.repeat(129)])test('invalid endpoint path fails before network '+bad.length,()=>{const r=run({path:bad});assert.equal(r.status,1);assert.equal(r.calls.length,0);assert.ok(!r.visible.includes(bad));});
-for(const fork of [true,false])test('real runner entry point fork admission '+fork,()=>{const r=run({fork});assert.equal(r.status,fork?1:0);if(fork){assert.equal(r.calls.length,0);assert.match(r.outputs,/state=NOT_ELIGIBLE/);}else assert.match(r.nonce,/^[0-9a-f]{64}$/);});
-for(const ref of ['refs/heads/master','refs/heads/evil'])test('real runner manual event is master-only '+ref,()=>{const r=run({manual:true,ref});assert.equal(r.status,ref==='refs/heads/master'?0:1);if(ref!=='refs/heads/master')assert.equal(r.calls.length,0);});
-for(const path of ['',prefix])test('R3 fresh runner CSPRNG nonce for each invocation '+path.length,()=>{const a=run({path}),b=run({path});assert.equal(a.status,0);assert.equal(b.status,0);assert.match(a.nonce,/^[0-9a-f]{64}$/);assert.notEqual(a.nonce,b.nonce);});
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import { spawnSync } from 'node:child_process';
+const origin = 'https://quiet-tenant.workers.example',
+  prefix = 'unit-path-only-' + 'p'.repeat(32);
+function run(args = {}) {
+  const p = spawnSync(
+    'python3',
+    ['-I', new URL('round3_main_fixture.py', import.meta.url).pathname, JSON.stringify(args)],
+    { encoding: 'utf8', timeout: 5000 },
+  );
+  assert.equal(p.status, 0, p.stderr);
+  const r = JSON.parse(p.stdout);
+  r.visible =
+    r.stdout
+      .split('\n')
+      .filter((x) => !x.startsWith('::add-mask::'))
+      .join('\n') + r.summary;
+  return r;
+}
+for (const slash of ['', '/'])
+  test(
+    'secret API base includes prefix and audience uses canonical origin ' + JSON.stringify(slash),
+    () => {
+      const r = run({ url: origin + slash, pending: true });
+      assert.equal(r.status, 0);
+      const api = r.calls.filter((x) => !x.url.startsWith('https://oidc.example/'));
+      assert.deepEqual(
+        api.map((x) => x.url),
+        [
+          origin + '/' + prefix + '/availability?profile=check',
+          origin + '/' + prefix + '/rent',
+          origin + '/' + prefix + '/status/123-1',
+          origin + '/' + prefix + '/logs/123-1?cursor=0',
+        ],
+      );
+      for (const x of r.calls.filter((x) => x.url.startsWith('https://oidc.example/')))
+        assert.equal(new URL(x.url).searchParams.get('audience'), origin);
+    },
+  );
+for (const path of ['', prefix])
+  test('derived masks exist before first Worker request ' + path.length, () => {
+    const r = run({ path });
+    assert.equal(r.status, 0);
+    const required = [
+      origin,
+      'quiet-tenant.workers.example',
+      'quiet-tenant',
+      'workers',
+      'example',
+      encodeURIComponent(origin),
+      'mock.jwt.value',
+      ...(path ? [path] : []),
+    ];
+    const first = r.calls.find((x) => !x.url.startsWith('https://oidc.example/'));
+    for (const value of required) assert.ok(first.masks.includes(value), 'missing mask ' + value);
+  });
+for (const failure of ['rent', 'status'])
+  test('transport failures print no endpoint diagnostics ' + failure, () => {
+    const r = run({ failure, pending: failure === 'status' });
+    assert.notEqual(r.status, 0);
+    for (const value of [origin, 'quiet-tenant.workers.example', prefix])
+      assert.ok(!r.visible.includes(value), r.visible);
+    assert.doesNotMatch(r.outputs, /https:|quiet-tenant|unit-path-only/);
+  });
+for (const bad of ['bad/path', 'x'.repeat(129)])
+  test('invalid endpoint path fails before network ' + bad.length, () => {
+    const r = run({ path: bad });
+    assert.equal(r.status, 1);
+    assert.equal(r.calls.length, 0);
+    assert.ok(!r.visible.includes(bad));
+  });
+for (const fork of [true, false])
+  test('real runner entry point fork admission ' + fork, () => {
+    const r = run({ fork });
+    assert.equal(r.status, fork ? 1 : 0);
+    if (fork) {
+      assert.equal(r.calls.length, 0);
+      assert.match(r.outputs, /state=NOT_ELIGIBLE/);
+    } else assert.match(r.nonce, /^[0-9a-f]{64}$/);
+  });
+for (const ref of ['refs/heads/master', 'refs/heads/evil'])
+  test('real runner manual event is master-only ' + ref, () => {
+    const r = run({ manual: true, ref });
+    assert.equal(r.status, ref === 'refs/heads/master' ? 0 : 1);
+    if (ref !== 'refs/heads/master') assert.equal(r.calls.length, 0);
+  });
+for (const path of ['', prefix])
+  test('R3 fresh runner CSPRNG nonce for each invocation ' + path.length, () => {
+    const a = run({ path }),
+      b = run({ path });
+    assert.equal(a.status, 0);
+    assert.equal(b.status, 0);
+    assert.match(a.nonce, /^[0-9a-f]{64}$/);
+    assert.notEqual(a.nonce, b.nonce);
+  });
