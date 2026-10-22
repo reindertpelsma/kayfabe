@@ -126,15 +126,18 @@ reservation-only fallback, not a claim of provider-enforced transfer limits.
 
 ## Deploy with the owner's credentials (9 steps)
 
-1. Review this branch and its evidence. Choose the numeric GitHub user ID and keep default `owner_push_or_review`; confirm dedicated-key permissions with Vast. Set `RENTING_ENABLED=false` while configuring. Never put a Cloudflare token or Vast key in GitHub.
-2. Choose the upload route. **CLI:** from this directory run `npx wrangler login`, fill `wrangler.toml` public vars, then generate/review the deployment manifest and upload the exact module with `npx wrangler deploy dist/worker.js --no-bundle` (legacy SQLite migration included). **No CLI:** run the bundle via the provided Node script, upload the module and initial metadata with a graphical HTTP client using the Cloudflare script-upload API described below; thereafter paste `dist/worker.js` into the dashboard module editor for updates. Pure dashboard paste alone does not provision a new Durable Object namespace.
-3. Ensure a SQLite `BrokerLedger` namespace is bound as `LEDGER` to this same Worker, and schedule `* * * * *`. Preserve the namespace when updating; never clear it to bypass a blocked reservation.
-4. Set public variables matching `wrangler.toml`, replacing `OWNER_GITHUB_ID=REPLACE_ME`, `REPOSITORY`. Use the single numeric policy in defaults.json (V5 section above); profile and effective-price validation must also pass before renting is enabled. `RENT_DRAFTS=false` is recommended.
-5. Set secret bindings WORKER_URL (the exact HTTPS origin/OIDC audience), VAST_API_KEY, RUN_TOKEN_SECRET and OWNER_STOP_TOKEN through the dashboard or npx wrangler secret put NAME. Use independent random base64url strings of at least 32 characters for the two new bindings; keep OWNER_STOP_TOKEN with the owner only. No GitHub API token is supplied by the isolated broker job: only OIDC minting is permitted. The Worker and cron use fixed-host public GETs; shared egress rate limits can cause UNAVAILABLE, while TTL deletion precedes those reads. Optional legacy X-GH-Token support remains request-only for diagnostic callers and is not used by CI.
-6. In GitHub, create environment `gpu-vast` and set Actions secret `VAST_BROKER_URL` to that exact origin/audience (never a repository variable). Optionally set Worker secret `BROKER_PATH_PREFIX` to a random base64url segment of 32–128 characters and GitHub Actions secret `VAST_BROKER_PATH` to the identical segment, without slashes; leave both unset to retain ordinary routes. Keep the prefix out of the OIDC audience. Remove the old repository variable after migrating; configure only Actions secrets. Both GitHub secrets bind only to the broker execution step; box/run and status-writer jobs never receive them. Protect allowed branches and workflow/broker changes. Required environment reviewers add a manual delay; the owner's 2b ruling uses the authenticated owner push as approval, so avoid a redundant reviewer requirement if immediate starts are intended. Forks never rent.
-7. Authorize and measure one live smoke run separately, including the provider launch contract, Actions/OIDC PR-head contract, fixed callback sender, native Worker crypto/storage, CPU use and structured-result cleanup. Mocks cannot establish these live contracts. Confirm current Cloudflare Free/SQLite limits and Vast billing/overdraft/top-up rules first. V4 authorizes a bounded smoke; the provider startup contract remains a separate gate.
-8. Only after that validation set `RENTING_ENABLED=true`. Make commit-status context **gpu-vast** required on master. It posts on the exact PR head and fails on NEEDS_APPROVAL, NOT_ELIGIBLE, BUSY, UNAVAILABLE or UNAVAILABLE_BUDGET, and on skipped/cancelled dependencies. The master-only release build requires a successful manual master GPU status at the exact build SHA, then builds solely on GitHub and attests binary digests. No log, executable or artifact from the Worker/Vast becomes a release build input. Code approval precedes Vast execution: a forged Worker/box verdict cannot alter approved code or contaminate the final build. The GPU verdict remains unattested; provenance certifies only GitHub build origin. Record any administrator bypass reason.
-9. For the kill switch set `RENTING_ENABLED=false`; cron/status cleanup stays active. If the key is compromised, revoke it in Vast and reconcile/destroy the broker's known IDs manually (a revoked key cannot delete). Rotate by updating the Worker binding then revoking the old key, preserving the ledger.
+[CODE READ: 2026-10-22 wrangler.toml, defaults.json, deployment.json] This is the
+Worker code checkpoint. The owner deploys; this lane leaves renting disabled.
+
+1. From `ci/vast-broker`, run `npm test` and `npm run bundle`. Compare `sha256sum dist/worker.js` with `deployment.json`; upload those exact bytes.
+2. Set public vars: `OWNER_GITHUB_ID=229738317`, `REPOSITORY=reindertpelsma/kayfabe`, `APPROVAL_MODE=owner_push_or_review`, `RENT_DRAFTS=false`, `ALLOWED_BASE_BRANCHES=["master"]`, and initially `RENTING_ENABLED=false`. Retain `PATH_SKIP_PATTERNS` from wrangler.toml and set `DEPLOYED_BUNDLE_SHA256` to the emitted hash.
+3. Use the SQLite `BrokerLedger` Durable Object binding named `LEDGER`, initial migration `v1`, and cron `* * * * *` from wrangler.toml. Preserve this namespace across updates.
+4. Authenticate Cloudflare on the owner's machine, then upload with `npx wrangler deploy dist/worker.js --no-bundle`; alternatively use the module-upload/bootstrap recipe below. No Cloudflare credentials belong in GitHub.
+5. Set Worker secrets `WORKER_URL` (exact HTTPS origin, no path), `VAST_API_KEY`, `RUN_TOKEN_SECRET`, `OWNER_STOP_TOKEN`. The last two are independent random base64url strings, at least 32 characters. Keep account/signing/owner secrets out of CI and Vast boxes.
+6. Optionally set Worker secret `BROKER_PATH_PREFIX` to one random base64url segment, 32–128 characters. GitHub environment `gpu-vast` receives only secret `VAST_BROKER_URL` equal to WORKER_URL and optional secret `VAST_BROKER_PATH` equal to that segment. The prefix is excluded from the OIDC audience. App/PAT credentials are unnecessary until the blob route is added.
+7. Keep numeric defaults in defaults.json: check effective cap $1/hour, daily $6, rolling $30, reserve $8; boot 40 minutes, hard 180, soft margin 10, heartbeat 10/15, PASS/FAIL grace 5/10. Sweep is owner-only, $2.50/hour and separate daily $8 with shared rolling/reserve. The explicit reservation includes storage, transfer allowance and a cron minute.
+8. The owner may stage this code with renting disabled while the separately authorized local live acceptance runs. Enable `RENTING_ENABLED=true` only when ready to accept bills. Put the protected BASE workflow/controller/manifest on master before requiring `gpu-vast`; hosted OIDC and Cloudflare billed CPU remain unverified. Unauthenticated GitHub read limits can cause a fail-closed refusal; no App/PAT is needed for public repository reads.
+9. To stop new rentals set `RENTING_ENABLED=false`; cron and cleanup remain active. Owner-token POST `/stop-all` destroys only ledger-owned instances. Preserve the ledger during key rotation; verify API absence before considering a bill settled.
 
 ## No-CLI namespace bootstrap
 
@@ -213,13 +216,14 @@ Configure variables, secrets, the public route and cron in the dashboard after b
 
 [CODE READ: round3-mutants.py, mutants.js, v4-mutants.py] `python3 round3-mutants.py` runs the current hostile-runner/protocol/isolation/release campaign; `npm run mutants` runs legacy, V4 and Round 3 sequentially. Seven legacy inline-client/cache-grant probes and four V4 inline-shell probes were replaced explicitly; the migration map is in the [Round 3 evidence](../../traces/vast_broker_v4_round3_20261018/README.md). Old V4 excerpts and their renderer fixtures are historical and are not the production runner. Local smoke helpers have been migrated to the bound protocol; they were not rerun live for Round 3. Release workflow execution/build/attestation and artifact distribution remain unverified; no binary publication is configured.
 
-## V5 protocol checkpoint; production enablement still blocked
+## V5 protocol checkpoint and remaining live evidence
 
 [CODE READ: 2026-10-22 src/results.js, src/onstart.js, runner.py] Protocol 4 / v5
 requires a bounded payload result file with the exact approved SHA and run nonce,
 then adds the runner nonce in the fixed sender. Exit zero or log text alone is
-FAIL. PASS requires every configured correctness suite, with exact gate/raw/thin/
-CUDA counts and zero failures/skips. Both Worker and BASE runner validate the
+FAIL. PASS requires a nonempty table of uniquely named, bounded successful suites
+with zero failures/skips. The approved repo-side payload defines its required suites
+and counts; these are deliberately absent from the Worker transport. Both Worker and BASE runner validate the
 suite/hardware structures. The runner independently validates availability,
 prints its numeric thresholds/rejections, and uses only its own preference list.
 Its check job/step horizons now cover the explicit default three-hour lifecycle;
@@ -239,10 +243,9 @@ ingress and workflow mutation sites were moved to their equivalent V5 guards;
 no mutation threshold or debt baseline was relaxed.
 
 [CODE READ: 2026-10-22 src/github.js, src/index.js and [GitHub API limits](https://docs.github.com/en/rest/using-the-rest-api/rate-limits-for-the-rest-api)]
-Production CI currently supplies only OIDC, so the Worker uses unauthenticated
-GitHub reads for live PR/run checks. GitHub permits 60 such requests/hour per
-originating IP; the status/cron checks can exceed that during a long run. A
-Worker-only authenticated read path needs the owner's App credential location;
-it is not implemented at this checkpoint. CI/Vast must receive no App private key.
-Hosted OIDC, Cloudflare billed CPU, the real KVM/payload launch and SSH MANUAL
-acceptance remain unverified. This source is not an instruction to enable renting.
+CI supplies only OIDC. The Worker reads public GitHub metadata without an App/PAT;
+shared unauthenticated rate limits can refuse a long run. GitHub authentication
+for higher read limits can follow separately and is not a blob-route prerequisite.
+Hosted OIDC and Cloudflare billed CPU remain unverified. The owner has replaced the
+next acceptance with short non-VM dummy FAIL/PASS runs; the real KVM/full-suite
+payload and SSH MANUAL polish are deferred. No deployment is performed here.

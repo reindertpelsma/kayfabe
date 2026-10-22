@@ -62,7 +62,7 @@ CASES=[
  ('learn-frozen-kvm','src/index.js',[("record.bootFailure?.confirmed", "false")],['v5-machine.test.js']),
  ('force-choice-on-refusal','src/index.js',[("e.selection={die:offer.die,ignored:chosen.ignored,reason:chosen.reason}", "e.selection=undefined")],['v5-refusal-selection.test.js']),
 
- ('structured-PASS-completeness','src/results.js',[("if(rows.length!==Object.keys(SUITE_COUNTS).length||rows.some(r=>!Object.hasOwn(SUITE_COUNTS,r.name)||r.fail!==0||r.skip!==0||r.pass<=0||SUITE_COUNTS[r.name]!==null&&r.pass!==SUITE_COUNTS[r.name])||h.gpu_name==='unknown'||h.driver_version==='unknown'||h.compute_cap<750)","if(false)")],['v5-protocol.test.js']),
+ ('structured-PASS-completeness','src/results.js',[("if(rows.some(r=>r.fail!==0||r.skip!==0||r.pass<=0)||h.gpu_name==='unknown'||h.driver_version==='unknown'||h.compute_cap<750)","if(false)")],['v5-protocol.test.js']),
  ('structured-hardware','src/results.js',[("if(!object(h)||Object.keys(h).sort().join(',')!=='compute_cap,driver_version,gpu_name'||typeof h.gpu_name!=='string'||!/^[A-Za-z0-9_. -]{1,100}$/.test(h.gpu_name)||!Number.isSafeInteger(h.compute_cap)||h.compute_cap<0||h.compute_cap>2000||typeof h.driver_version!=='string'||!/^(?:unknown|\\d{3}\\.\\d{1,3}(?:\\.\\d{1,2})?)$/.test(h.driver_version))", "if(false)")],['v5-protocol.test.js']),
  ('duplicate-report-json','src/reports.js',[("if(stack.at(-1).keys.has(key))refuse('BAD_REPORT',400);", "/* mutant accepts duplicate fields */")],['v5-duplicate-report.test.js']),
  ('runner-V5-suites','runner.py',[("validate_suites(data['suites'],data['verdict'])", "None")],['v5-protocol.test.js']),
@@ -76,6 +76,11 @@ CASES=[
  ('workflow-three-hour-horizon','../../.github/workflows/gpu-vast.yml',[("timeout-minutes: 210", "timeout-minutes: 25"),("timeout-minutes: 205", "timeout-minutes: 22")],['v5-workflows.test.js']),
 
  ('callback-expiry-before-cron','src/index.js',[("if(now()>=nextDeadline(r)){", "if(false){")],['v5-late-callback.test.js','v5-late-owner-timer.test.js']),
+
+ ('repo-defined-worker-suites','src/results.js',[("if(result.verdict==='PASS'){","if(result.verdict==='PASS'){if(rows.length!==9)refuse('BAD_REPORT',400);")],['v5-deploy-checkpoint.test.js']),
+ ('repo-defined-runner-suites','runner.py',[("    if verdict=='PASS':","    if verdict=='PASS':\n        if len(rows)!=9:raise Invalid()")],['v5-deploy-checkpoint.test.js']),
+ ('repo-defined-sender-suites','src/onstart.js',[("complete=all(","complete=len(rows)==9 and all(")],['v5-structured-sender.test.js']),
+ ('exact-sha-shallow-fetch','src/onstart.js',[("git fetch --depth=1 origin ${sha}","git fetch origin ${sha}")],['v5-deploy-checkpoint.test.js']),
 
 ]
 def main():
