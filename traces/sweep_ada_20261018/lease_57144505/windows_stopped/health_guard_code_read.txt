@@ -1,0 +1,14 @@
+CODE READ: deployed guard SHA256 c26f4009f5165b56be22fb589b947c3c190708782fb6f9fe141da2255e5263ad
+1: $ErrorActionPreference='Stop'
+2: $boot=(Get-CimInstance Win32_OperatingSystem).LastBootUpTime
+3: $null=Get-WinEvent -LogName System -MaxEvents 1 -ErrorAction Stop
+4: try { $events=@(Get-WinEvent -FilterHashtable @{LogName='System';Id=4101,153,1001;StartTime=$boot} -ErrorAction Stop) }
+5: catch { if($_.FullyQualifiedErrorId -notlike 'NoMatchingEventsFound*'){throw}; $events=@() }
+6: $gpu=@(Get-CimInstance Win32_VideoController | Where-Object PNPDeviceID -like 'PCI\VEN_10DE*')
+7: $dwm=@(Get-Process dwm -ErrorAction SilentlyContinue)
+8: $explorer=@(Get-Process explorer -ErrorAction SilentlyContinue)
+9: $r=[ordered]@{utc=[DateTime]::UtcNow.ToString('o');boot=$boot.ToUniversalTime().ToString('o');system_log_readable=1;events4101=@($events|Where-Object Id -eq 4101).Count;events153=@($events|Where-Object Id -eq 153).Count;bugcheck1001=@($events|Where-Object Id -eq 1001).Count;driver=$gpu[0].DriverVersion;code=$gpu[0].ConfigManagerErrorCode;dwm=$dwm.Count;explorer=$explorer.Count}
+10: 'S2_HEALTH '+($r|ConvertTo-Json -Compress)
+11: $events|Select-Object TimeCreated,Id,ProviderName,Message|ConvertTo-Json -Compress
+12: if($gpu.Count -ne 1 -or $r.driver -ne '32.0.15.8088' -or $r.code -ne 0 -or !$r.dwm -or !$r.explorer -or $events.Count){throw 'S2 desktop/driver/zero-4101-153-bugcheck guard failed'}
+13: 'S2_HEALTH_PASS '+[DateTime]::UtcNow.ToString('o')

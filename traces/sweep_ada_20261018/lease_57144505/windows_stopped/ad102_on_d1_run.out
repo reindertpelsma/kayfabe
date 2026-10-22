@@ -1,0 +1,6 @@
+[2026-10-22T04:24:53Z] waiting for the GPU lock /tmp/kayfabe-fastguest.lock (GPU work is strictly serial)
+[2026-10-22T04:24:54Z] WINVM_RUN_START tag=ad102_on_d1 repo_rev=7f6f7e7a kf3=on qemu=/workspace/bench/kf3-bins/7f6f7e7a/qemu-system-x86_64 host_driver=595.91.07 overlay=ad102_on_d1 arm=B guest_driver=580.65.06 gop_efi=/workspace/sweep-win-57144505/secureboot/kf-gop.7f6f7e7a.signed.efi sha256(gop_efi)=364086f66a4622a7
+[2026-10-22T04:24:54Z] kf3 device: kf3-gpu,fb-mb=8192,bar1-size=134217728,bar2-size=33554432,display=on,gop=on,gop-efi=/workspace/sweep-win-57144505/secureboot/kf-gop.7f6f7e7a.signed.efi,id=kf0,guest-driver=580.65.06
+[2026-10-22T04:24:56Z] QEMU_START tag=ad102_on_d1 boot=1 pid=22219 log=logs/ad102_on_d1_b1_qemu.log
+[2026-10-22T04:29:36Z] WINVM_BOOT_END boot=1 rc=0 reason=guest-shutdown kf3_lines=12388 host_xid=0
+[2026-10-22T04:29:36Z] WINVM_RUN_END tag=ad102_on_d1 boots=1 reason=guest-shutdown

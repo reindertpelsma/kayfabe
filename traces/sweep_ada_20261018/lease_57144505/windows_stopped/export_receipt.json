@@ -1,0 +1,131 @@
+{
+  "kind": "MEASURED bounded text export",
+  "utc": "2026-10-22T04:42:25.798642+00:00",
+  "files": {
+    "native_xid_watch.log": {
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0,
+      "tail_only": false,
+      "exported_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "s2_windows_controller.log": {
+      "sha256": "af7893cf3254c2134d53e2ae9a8d5276d7c56ae5dd453b0cb0a840b28086a569",
+      "bytes": 341,
+      "tail_only": false,
+      "exported_sha256": "af7893cf3254c2134d53e2ae9a8d5276d7c56ae5dd453b0cb0a840b28086a569"
+    },
+    "sweep_windows_prereq_install.log": {
+      "sha256": "a21762a818a04bcecd4b0d4a3e0056152680ad02d8ad193ec8a1537aaef0604e",
+      "bytes": 7288,
+      "tail_only": false,
+      "exported_sha256": "a32c93831b5edd0b90fa6f0588b12e9fd28ac2a2eaa7c231795e95f43d3a8824"
+    },
+    "s2_windows_apt_refresh.log": {
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0,
+      "tail_only": false,
+      "exported_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "s2_windows_apt_candidates.log": {
+      "sha256": "cba6b4e2c128bb99e9c25df20e0fa5a020576e540ef4fd35086fc1b08c1f07fa",
+      "bytes": 1090,
+      "tail_only": false,
+      "exported_sha256": "cba6b4e2c128bb99e9c25df20e0fa5a020576e540ef4fd35086fc1b08c1f07fa"
+    },
+    "s2_frozen_xid_history.json": {
+      "sha256": "bde95c6d870fc2a18a6556377188ec1472619bba21052bc48dc005dcfea5a973",
+      "bytes": 2628,
+      "tail_only": false,
+      "exported_sha256": "392abcc1ca4e87f85d3c555da0001c7d1bc6bc6a32904d54a1a89ed1aaa73abe"
+    },
+    "sweep_qemu_sha256": {
+      "sha256": "23d62bb77cf34025c8dd548e0811f85d42c6375eeccc7ad283f6cb640111a249",
+      "bytes": 120,
+      "tail_only": false,
+      "exported_sha256": "23d62bb77cf34025c8dd548e0811f85d42c6375eeccc7ad283f6cb640111a249"
+    },
+    "sweep_product_source": {
+      "sha256": "721c4eea57ac10dde9aa3683a332559e7373f0e58d40dc8083fb4753cda583d4",
+      "bytes": 41,
+      "tail_only": false,
+      "exported_sha256": "721c4eea57ac10dde9aa3683a332559e7373f0e58d40dc8083fb4753cda583d4"
+    },
+    "bwr_binding.json": {
+      "sha256": "1fd834b9a414c1466fb09294fad12a29b9efaf28d81159a879e55a93a0d152a3",
+      "bytes": 204,
+      "tail_only": false,
+      "exported_sha256": "a87ef0ce84a783cf6094651ea508c9400566342d5d3d723acd06c1e7ce756be0"
+    },
+    "bwr_cold_ready.txt": {
+      "sha256": "d2c880a7888640e46af1b4edd92f3986d3f7ed749835704d63e0aad7d5a9ac39",
+      "bytes": 426,
+      "tail_only": false,
+      "exported_sha256": "9d8bf7733a3465ada4a53604dbcf6d8878cbb105240aacbbfcaeaa6c2946a937"
+    },
+    "bwr_crashdump.txt": {
+      "sha256": "1fc352e9f6c48bebce892b77925e4a19fbe6af658b591779c74fea1904027f92",
+      "bytes": 204,
+      "tail_only": false,
+      "exported_sha256": "6ace449d5a1b48017c93c1bb1ef81697736a736bfeedb47416dd41f1c9be407f"
+    },
+    "bwr_parent_sha256.txt": {
+      "sha256": "d124ea26c8927aa5d534fcfb3e08333cf54c5c8b5cf0f7440e6b32b6e4532250",
+      "bytes": 124,
+      "tail_only": false,
+      "exported_sha256": "d124ea26c8927aa5d534fcfb3e08333cf54c5c8b5cf0f7440e6b32b6e4532250"
+    },
+    "arm_ad102_on_d1_start_receipt.json": {
+      "sha256": "9b56c3eefbfb4054076a32d556dda60b33d6ee57d41a17cea826d650710ddc94",
+      "bytes": 585,
+      "tail_only": false,
+      "exported_sha256": "9b56c3eefbfb4054076a32d556dda60b33d6ee57d41a17cea826d650710ddc94"
+    },
+    "arm_ad102_on_d1_diag.txt": {
+      "sha256": "52c9f89b0c978c540cac6f2030f7ddb2efbfae5c35cb8cad17fc6c379357a320",
+      "bytes": 194,
+      "tail_only": false,
+      "exported_sha256": "e7b97e4e19c48f58baf8a9925171de494d4313ff63e2737b2315fd5c8e78e6e5"
+    },
+    "arm_ad102_on_d1_enable.txt": {
+      "sha256": "e9147c3da88e79ba96c40eaca4f007addab2d68317e6703aea9720bdc42aae36",
+      "bytes": 503,
+      "tail_only": false,
+      "exported_sha256": "18f4fa19343f0139439dc05f180805f25dd53431b941877f481f495e4b2087b0"
+    },
+    "arm_ad102_on_d1_pre_enable.txt": {
+      "sha256": "516bc701a01fd2bb19a606c486aed13d58c3a53c48b782dcd12e88ceed7cdb47",
+      "bytes": 426,
+      "tail_only": false,
+      "exported_sha256": "cdee624c5cc561d87591a5ed32e908ecd12a84513fc6f1d666915892bd2c6bab"
+    },
+    "arm_ad102_on_d1_health_before.txt": {
+      "sha256": "1ecb947f4ede350bad506378efce9556a2a1b70cb00c8bb58f01ca28564a5514",
+      "bytes": 1005,
+      "tail_only": false,
+      "exported_sha256": "351993a64a94100efe7f29fe6086b7f657fa5e6d3e4e67e5de3d8943e82c5832"
+    },
+    "arm_ad102_on_d1.log": {
+      "sha256": "64c44c17f477968b98dc74ae573eda2e48c825fb7392759ee7d160ecc2a23e74",
+      "bytes": 2056,
+      "tail_only": false,
+      "exported_sha256": "6cc5eab100c04135071f049496bcbcd765aadc1bc44a81be6802923e449adf1a"
+    },
+    "sweep_windows_install.log": {
+      "sha256": "cbef5e210436b124728133aaf32806158b2299eae0af0aeb55c032e68e59b184",
+      "bytes": 6364,
+      "tail_only": false,
+      "exported_sha256": "5a12c15b4cb7caf42e3e9910affe8601f8f16351b1a0bdf8c01355d1d2d08c7a"
+    },
+    "bwr_bind.log": {
+      "sha256": "8de276006d60844cf9bbc80e76fcd9c75c88a2fffd7b2c5005a5a0847fe9fd65",
+      "bytes": 3797,
+      "tail_only": false,
+      "exported_sha256": "1dc83f0bdd674f496e669c394fc619b1db17ecda1eed3aaee20d14a0b40bbce4"
+    },
+    "kernel_xids.log": {
+      "journal_lines": 1208,
+      "exported_sha256": "300fdefc1a7a4aec3bcdd20aa0e7c2ac8d2c2548280bf1fb252f27648d279565"
+    }
+  },
+  "normalization": "CRLF normalized; trailing whitespace and blank lines removed. Original byte counts and SHA256 remain separate."
+}

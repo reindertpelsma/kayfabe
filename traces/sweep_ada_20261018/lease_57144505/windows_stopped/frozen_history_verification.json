@@ -1,0 +1,7 @@
+{
+  "kind": "MEASURED offline verification of exported journal against unchanged frozen history",
+  "utc": "2026-10-22T04:43:57.182919+00:00",
+  "frozen_records": 10,
+  "observed_records": 10,
+  "result": "PASS exact ordered equality; no later Xid at export"
+}

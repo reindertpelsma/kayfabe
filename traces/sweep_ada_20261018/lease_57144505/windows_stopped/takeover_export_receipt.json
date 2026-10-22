@@ -1,0 +1,111 @@
+{
+  "kind": "MEASURED bounded existing text export; no binaries or RPC bodies",
+  "utc": "2026-10-22T04:43:42.512828+00:00",
+  "files": {
+    "abort_context.txt": {
+      "bytes": 15505,
+      "sha256": "2cf6b311cbafd2d17c0385166c59b07654a60d1d05240e4c4b9acc1c2b423c34",
+      "exported_sha256": "2cf6b311cbafd2d17c0385166c59b07654a60d1d05240e4c4b9acc1c2b423c34"
+    },
+    "api.tsv": {
+      "bytes": 125189,
+      "sha256": "4b74a35c6d2c5b6a7768b164c47e5969faa8f81410ecc2fea445836676696dc8",
+      "exported_sha256": "4b74a35c6d2c5b6a7768b164c47e5969faa8f81410ecc2fea445836676696dc8"
+    },
+    "channel_state.tsv": {
+      "bytes": 16087,
+      "sha256": "789ce6bdfd1c289a0b1ca05faa0d7d1cd474b78f3096cfa3b085d2df7163de21",
+      "exported_sha256": "789ce6bdfd1c289a0b1ca05faa0d7d1cd474b78f3096cfa3b085d2df7163de21"
+    },
+    "kf_line_census.txt": {
+      "bytes": 7659,
+      "sha256": "47a422ed21763fdaabcbb38240c6ef8a049999f1b2173483982cf5e2fb6236f9",
+      "exported_sha256": "1a11a1fb871f1f9272f8a4d27f60dd5a5f5deb62d69a1cc010ca2c0df86a807d"
+    },
+    "rpc_timing.receipt.json": {
+      "bytes": 396,
+      "sha256": "8432f3255461162733f29d28ae8505d58b2407792dfef2e43694bdf68e58929e",
+      "exported_sha256": "8432f3255461162733f29d28ae8505d58b2407792dfef2e43694bdf68e58929e"
+    },
+    "rpc_timing_controller.log": {
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "exported_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "state_receipt.json": {
+      "bytes": 422,
+      "sha256": "ffd4935f0faccd121d4d5902c07bcb61482f61471b01552eab8ba612a3aeb940",
+      "exported_sha256": "ffd4935f0faccd121d4d5902c07bcb61482f61471b01552eab8ba612a3aeb940"
+    },
+    "summary.json": {
+      "bytes": 21745,
+      "sha256": "7384c3cbaed0eb5f996805b280dcfc4ad9c3ea8191e95e29100c7c0c48822fea",
+      "exported_sha256": "7384c3cbaed0eb5f996805b280dcfc4ad9c3ea8191e95e29100c7c0c48822fea"
+    },
+    "arm_ad102_on_d1_process_receipt.json": {
+      "bytes": 1216,
+      "sha256": "6610a5b2d7d1bd7d1e3efb6beafd0c09767128e8ba6a46b1c48a6f454966b06e",
+      "exported_sha256": "6610a5b2d7d1bd7d1e3efb6beafd0c09767128e8ba6a46b1c48a6f454966b06e"
+    },
+    "bwr_bind_process_receipt.json": {
+      "bytes": 1183,
+      "sha256": "ced52450eda165940abbc98e232b5b887e9127f4b1aa094b3af10a13d022f754",
+      "exported_sha256": "ced52450eda165940abbc98e232b5b887e9127f4b1aa094b3af10a13d022f754"
+    },
+    "arm_ad102_on_d1_cleanup_started.txt": {
+      "bytes": 26,
+      "sha256": "33598b0f79d21c78052a36c076d9bcf2c685d9a988242b20e8f733f76922bacf",
+      "exported_sha256": "33598b0f79d21c78052a36c076d9bcf2c685d9a988242b20e8f733f76922bacf"
+    },
+    "ad102_on_d1_b1_cmdline.txt": {
+      "bytes": 2079,
+      "sha256": "3aa72b229c0f51385124679e0cb11dc27459f5eaf39f5bb17bdae471573302d0",
+      "exported_sha256": "a20a9dd399148e60e101658821911938071d6f9bc456f7fad86cbf24f1d8d79b"
+    },
+    "ad102_on_d1_b1_host_dmesg.txt": {
+      "bytes": 437,
+      "sha256": "9c4febccf8ab873404f9795f07095ceb70234ce62f113db4f419758ce51deedd",
+      "exported_sha256": "9c4febccf8ab873404f9795f07095ceb70234ce62f113db4f419758ce51deedd"
+    },
+    "ad102_on_d1_b1_host_smi_before.txt": {
+      "bytes": 14271,
+      "sha256": "ac0998127555c51f6d47ed37f9de78a468050fe4da89eea0edc8cfa56ca16222",
+      "exported_sha256": "8fc42825cb377a06499aa8814baa1f8766da93805a5fde335b009736c30c30d4"
+    },
+    "ad102_on_d1_b1_host_smi_after.txt": {
+      "bytes": 14270,
+      "sha256": "0a196e49b180598ff4fb484e66d10b363944652c664332fc157f18a369c66fe8",
+      "exported_sha256": "df451530b56d97af6b2519d68f5461602887158e286dab18423b944354cca173"
+    },
+    "ad102_on_d1_b1_qmp_events.jsonl": {
+      "bytes": 693,
+      "sha256": "b5b12821675d1b852be7b90c2d7935f788dbfc17207031f434ead2f622950b30",
+      "exported_sha256": "b5b12821675d1b852be7b90c2d7935f788dbfc17207031f434ead2f622950b30"
+    },
+    "ad102_on_d1_b1_serial.log": {
+      "bytes": 326,
+      "sha256": "087663e2cee55eb8620f07bfb57aa2d5e6903d184326f80e2dbb96e161ba59e2",
+      "exported_sha256": "0148278c6cb5280c8cf032873a5cc1effdaa521529f299fce2c161696cd7dcab"
+    },
+    "ad102_on_d1_run.log": {
+      "bytes": 924,
+      "sha256": "a72371c4ad518bd84c53d38ef74756c53ea6abb4cb29e797ca5cb4b85a113014",
+      "exported_sha256": "a72371c4ad518bd84c53d38ef74756c53ea6abb4cb29e797ca5cb4b85a113014"
+    },
+    "ad102_on_d1_run.out": {
+      "bytes": 924,
+      "sha256": "a72371c4ad518bd84c53d38ef74756c53ea6abb4cb29e797ca5cb4b85a113014",
+      "exported_sha256": "a72371c4ad518bd84c53d38ef74756c53ea6abb4cb29e797ca5cb4b85a113014"
+    },
+    "raw_qemu_log_receipt.json": {
+      "exported_sha256": "7d22bf0e510191dd34a98513857b35e420c568ec62c62def86c5b136d7fa3add"
+    },
+    "health_guard_code_read.txt": {
+      "exported_sha256": "4ab783d74d5f628ca389edfc493371fd7ef4b50325b0c56d0f5bd6268e0fc31d"
+    },
+    "pre_destroy_processes.txt": {
+      "exported_sha256": "1906878f4761af684098b10452c2f08ba063325dee6a855f1434884cb7fa76de"
+    }
+  },
+  "normalization": "CRLF normalized; trailing whitespace and blank lines removed. Original byte counts and SHA256 remain separate."
+}

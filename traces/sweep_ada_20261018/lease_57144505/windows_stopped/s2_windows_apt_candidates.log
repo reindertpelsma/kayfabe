@@ -1,0 +1,34 @@
+swtpm:
+  Installed: (none)
+  Candidate: 0.6.3-0ubuntu3.3
+  Version table:
+     0.6.3-0ubuntu3.3 500
+        500 http://archive.ubuntu.com/ubuntu jammy-updates/main amd64 Packages
+     0.6.3-0ubuntu3 500
+        500 http://archive.ubuntu.com/ubuntu jammy/main amd64 Packages
+swtpm-tools:
+  Installed: (none)
+  Candidate: 0.6.3-0ubuntu3.3
+  Version table:
+     0.6.3-0ubuntu3.3 500
+        500 http://archive.ubuntu.com/ubuntu jammy-updates/main amd64 Packages
+     0.6.3-0ubuntu3 500
+        500 http://archive.ubuntu.com/ubuntu jammy/main amd64 Packages
+python3-virt-firmware:
+  Installed: (none)
+  Candidate: 24.1.1-2~ubuntu22.04.1
+  Version table:
+     24.1.1-2~ubuntu22.04.1 500
+        500 http://archive.ubuntu.com/ubuntu jammy-updates/universe amd64 Packages
+xorriso:
+  Installed: (none)
+  Candidate: 1.5.4-2
+  Version table:
+     1.5.4-2 500
+        500 http://archive.ubuntu.com/ubuntu jammy/universe amd64 Packages
+netpbm:
+  Installed: (none)
+  Candidate: 2:10.0-15.4
+  Version table:
+     2:10.0-15.4 500
+        500 http://archive.ubuntu.com/ubuntu jammy/universe amd64 Packages

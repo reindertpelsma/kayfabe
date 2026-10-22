@@ -1,0 +1,4 @@
+S2_WINDOWS_START own_instance=57144505 2026-10-22T03:43:44+00:00
+SWEEP2_BIND_READY 2026-10-22T04:24:12+00:00
+H_AD102_ON BEFORE RUN: current frozen product supports AD102 Windows580.88 ON; falsifier Code43/crash/TDR/desktop/CUDA/DX failure. PASS needs600second zeroTDRhold and real app results.
+S2_WINDOWS_EXIT rc=1 2026-10-22T04:30:12+00:00
