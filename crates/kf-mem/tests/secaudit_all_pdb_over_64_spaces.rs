@@ -7,10 +7,10 @@
 //! locks held (the run-223 hang class). The expected behaviour is that the invalidate is split into walks of at
 //! most 64 spaces and cleared when the last one completes, or at least that the VA manager does not leave the
 //! trigger armed for ever.
-use kf_mem::ledger::{Desired, Mapped, MapTarget};
+use kf_mem::ledger::{Desired, MapTarget, Mapped};
 use kf_mem::vasmgr::{VaManager, VasKey, WalkDone, Walker};
-use kf_trap::mmuinval::{Invalidate, InvalidatePort, InvalidateRegs, PortWrite, TRIGGER_BIT};
 use kf_trap::PdbAperture;
+use kf_trap::mmuinval::{Invalidate, InvalidatePort, InvalidateRegs, PortWrite, TRIGGER_BIT};
 
 struct Nop;
 impl MapTarget for Nop {
@@ -32,7 +32,10 @@ struct Rec {
 }
 impl Walker for Rec {
     fn submit(&mut self, entries: &[kf_cuda::WalkEntry]) -> Result<(), String> {
-        assert!(entries.len() <= 64, "the manager must never exceed the kernel's capacity");
+        assert!(
+            entries.len() <= 64,
+            "the manager must never exceed the kernel's capacity"
+        );
         self.submitted.push(entries.len());
         Ok(())
     }
