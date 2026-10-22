@@ -1,0 +1,16 @@
+{
+  "classification": "MEASURED",
+  "candidate": "afe00b3cbc7e345e2953b1bc199d9cce1054cc38",
+  "packages": 22,
+  "passed": 3787,
+  "failed": 0,
+  "ignored": 20,
+  "summaries": 216,
+  "cargo_exit": 0,
+  "rustfmt_exit": 0,
+  "clippy_exit": 0,
+  "master_clippy_sites": 354,
+  "candidate_clippy_sites": 354,
+  "added": 0,
+  "removed": 0
+}

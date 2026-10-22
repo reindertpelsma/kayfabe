@@ -1,6 +1,6 @@
 # Q1 candidate-6 qualification
 
-STATUS: RESUMED 08:02 CEST on afe00b3c; bounded reader explicitly approved; native gates PASS and Linux running, 2026-10-22.
+STATUS: ACTIVE 08:32 CEST, 2026-10-22. Current product afe00b3cbc7e345e2953b1bc199d9cce1054cc38; local full suites/rustfmt/clippy, native gates and Linux 30/30 PASS. Full nine-workload Windows SPECviewperf is running on the K1 CoW arm. Historical stop and cleanup entries below describe earlier attempts, not the active session. No final merge verdict yet.
 
 MEASURED: candidate f7cf3ed81200077e55ee7769c635887661f3f990 fetched from origin. Q1 evidence branch: codex/qualify-cand6-20261022. Start 05:01 UTC; hard host-restoration deadline 10:00 UTC. No product behavior change was made by Q1.
 
@@ -61,3 +61,9 @@ CODE READ — 08:02 authority update: bounded Xid-only reader activation explici
 MEASURED: native gates at afe00b3c PASS 9/9 plus gate10 PASS, births 12 / USER 12 / refused 0; zero fresh Xids. The bounded dmesg epoch had 0 retained Xids, while the separate persistent journal epoch had 533 historical records and a recorded SHA-256. Old dmesg ring history is not assumed equal to the persistent journal. Linux uses the unchanged sweep exact-control validator, an approved prior native-five-fault policy reference, a separately recorded current history, and candidate product/sweep harness pins. It does not count the old native reference as a fresh Q1 native-control run.
 
 MEASURED: Linux completed 30/30 at afe00b3c, using the pinned approved sweep harness, rebuilt candidate raw client and freshly built host-mode 595.91.07 guest. Durable supervisor completions exist for all 30 arms; exact guest proofs accept 4 defer faults and 1 missing-page fault, no unmatched Xid. Windows K1 CoW session 4260 is starting only after these gates.
+
+MEASURED at 08:32 CEST: exact afe00b3c GPU-free rerun passes 3787 tests / 0 failures / 20 ignored across 22 packages; rustfmt exits 0; clippy source-bound sites remain 354 versus master 354, added 0 / removed 0. See afe-checks.json. Current candidate hosted CI run 39731497805 has stable in progress, aarch64 and firmware successful, slow job skipped; not yet a completed CI gate.
+
+MEASURED Windows setup: pinned K1 harness eb71a15b96fabdb3babfd6d0f9fcf91a3dc15fb0, afe00b3c QEMU SHA-256 9f7c26f69c6e94c37f8757b2928c4300cece10914c843db62dd6bf9f5662d34d, independent qcow2/UEFI copies, production flags, same 12 GiB RAM / 8 GiB virtual VRAM and existing production broker. HTTP diagnostic channel responds; QGA channel did not respond. The full nine-workload FullHD vendor suite uses one iteration. Guest clock is two hours behind host; guest event queries use the fixed initial guest boot timestamp, with unchanged-boot validation.
+
+MEASURED observability: bounded host Xid delta monitor retains all pre-arm history and tolerates zero new Windows Xids. Guest process-stop observer passed three isolated cmd.exe controls with actual exit codes 0, 7 and 9 before benchmark results are judged. Per-workload vendor completion/result.json composites, viewperf exit records, guest events 153/4101, boot identity and descriptor counters are collected. Existing production broker has no stats-line option; guest FPS is not presented as broker new-content FPS. Minecraft and Steel Nomad installed-file probes succeeded; their runs remain pending SPEC completion.

@@ -1,0 +1,10 @@
+{
+  "classification": "MEASURED",
+  "candidate": "afe00b3cbc7e345e2953b1bc199d9cce1054cc38",
+  "builder": "scripts/bench/build_kf3.sh",
+  "binary": "kf3-bins/afe00b3c/qemu-system-x86_64",
+  "sha256": "9f7c26f69c6e94c37f8757b2928c4300cece10914c843db62dd6bf9f5662d34d",
+  "native": "PASS 9/9 + gate10 PASS",
+  "linux": "30/30",
+  "windows": "Full nine-workload SPECviewperf active; no final result"
+}
