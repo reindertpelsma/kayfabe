@@ -165,6 +165,18 @@ class FreshnessTests(unittest.TestCase):
         )
         self.assertIn("stale-suspect", self.kinds())
 
+    def test_explicit_short_branch_name_is_checked(self):
+        self.write("docs/ok.md", self.document(day="2026-01-01", body="Branch `v3-retired`."))
+        self.assertIn("stale-suspect", self.kinds())
+
+    def test_explicit_arbitrary_branch_name_is_checked(self):
+        self.write("docs/ok.md", self.document(day="2026-01-01", body="branch `retired-topic`."))
+        self.assertIn("stale-suspect", self.kinds())
+
+    def test_origin_prefixed_branch_is_checked(self):
+        self.write("docs/ok.md", self.document(day="2026-01-01", body="`origin/codex/retired`"))
+        self.assertIn("stale-suspect", self.kinds())
+
     def test_age_alone_does_not_mean_stale(self):
         self.write("docs/ok.md", self.document(day="2026-01-01"))
         self.run_check()
