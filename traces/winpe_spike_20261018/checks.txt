@@ -1,0 +1,15 @@
+WP1-preflight-20261022; 2026-10-22; base baa2977527c4509145e8033143bd664f768175a6
+Vendor-document read via web tool: WinPE limitations and Validation OS overview.
+Executed shell reproduction from WP1.md:
+vendor-read recipe exit: 0
+vendor-read recipe: all three documented statements present
+recipe sha256: c6b678e97903f00223d6496834ed57c8fd4726d9d0fb4a308430c987052cf739
+own target directory present: False
+Initial claims gate: new=2 (missing recognizable attribution on two paragraphs).
+Added run date and explicit evidence/table attribution; no debt files changed.
+Subsequent claims gate: claims: existing-debt=3758 new=0 resolved=0
+Hardware/VM attempts: 0. S1-S5: NOT RUN. Runtime behavior changes: 0.
+No host SSH, host files, GPU operations, leases or locks were created by WP1.
+git diff --cached --check: PASS
+diff secret/path/IP scan: 7 categories, 0 hits; staged prose manually reviewed.
+Final claims gate before commit: existing-debt=3758 new=0 resolved=0
