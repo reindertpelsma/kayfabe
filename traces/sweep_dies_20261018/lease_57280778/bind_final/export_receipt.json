@@ -1,0 +1,57 @@
+{
+  "kind": "MEASURED",
+  "lease_id": 57280778,
+  "source": "905a8bd75e0fc53f5494e45b6d2a0fee474d7757",
+  "utc": "2026-10-22T23:49:33.024776+00:00",
+  "files": {
+    "s4_controller.log": {
+      "bytes": 2348,
+      "sha256": "e76ee96bce30109b0d1c57415685f91660bcea7c8e4e680b41fc7fba455ae7ac"
+    },
+    "bwr_bind.log": {
+      "bytes": 763,
+      "sha256": "ec0ace088d901562a748795ca5fa9879ce51fc8acb94ee2786b4d1fd57fd7496"
+    },
+    "s4_final_native_check.log": {
+      "bytes": 26,
+      "sha256": "3285e130fc0ed25e8717202a277b92aa65ba6fbfcd912d747c4b5830db7d7374"
+    },
+    "sweep_windows_install.log": {
+      "bytes": 6365,
+      "sha256": "0cb8a90a835ead1f528c2ef76f2610bd6d08edb04987097716413f34910b69a8"
+    },
+    "post_windows_kernel_snapshot.log": {
+      "bytes": 130484,
+      "sha256": "8d2451d2ad1289cd77e7d70ec1158be2b680fdf8ba112eb7e4671838ba91038d"
+    },
+    "native_xid_watch.log": {
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "arms/bw580_bind/channel_state.tsv": {
+      "bytes": 1,
+      "sha256": "01ba4719c80b6fe911b091a7c05124b64eeece964e09c058ef8f9805daca546b"
+    },
+    "arms/bw580_bind/abort_context.txt": {
+      "bytes": 1,
+      "sha256": "01ba4719c80b6fe911b091a7c05124b64eeece964e09c058ef8f9805daca546b"
+    },
+    "arms/bw580_bind/summary.json": {
+      "bytes": 314,
+      "sha256": "b522be4480979b6593dc1c82726697c90668045f6e825c3e1758fc5b9fc1e3a8"
+    },
+    "arms/bw580_bind/api.tsv": {
+      "bytes": 65,
+      "sha256": "cbd64c6becfa06d1af642f2b1d8c321ee389e29423d941aff5f717239c9f0fa7"
+    },
+    "arms/bw580_bind/kf_line_census.txt": {
+      "bytes": 5948,
+      "sha256": "1bf2accbc527e142f83fecbc5997651576857e78fa7edbdfb2c541f9163139f7"
+    },
+    "arms/bw580_bind/state_receipt.json": {
+      "bytes": 337,
+      "sha256": "0a2655400028fd8c0284beaef425d0586bb9f2e485ddd50fca59ef2b9f3da85a"
+    }
+  },
+  "bounds": "Text only; at most 128 KiB per file, first 80 and last 300 lines when larger. Supervisor tokens omitted. Raw large logs remain on rental until teardown."
+}

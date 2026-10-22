@@ -1,0 +1,21 @@
+{
+  "kind": "MEASURED",
+  "lease_id": 57280778,
+  "source": "905a8bd75e0fc53f5494e45b6d2a0fee474d7757",
+  "utc": "2026-10-22T23:51:32.339561+00:00",
+  "files": {
+    "s4_final_native_check.log": {
+      "bytes": 26,
+      "sha256": "f3859af725afe77e535930ea5aa5a438ce4a518009da5270c41cc76d2d6ac02c"
+    },
+    "s4_owned_vm_stop.json": {
+      "bytes": 374,
+      "sha256": "5f4d45ee7d7f812b5c895c5493987508c7314e7df21d0b68b53dbc886d34458b"
+    },
+    "post_windows_kernel_snapshot.log": {
+      "bytes": 130606,
+      "sha256": "caf2d436ef281ddf0b4b11e85944017d01426f524619c995760460829fcaedec"
+    }
+  },
+  "bounds": "Text only; at most 128 KiB per file, first 80 and last 300 lines when larger. Supervisor tokens omitted. Raw large logs remain on rental until teardown."
+}

@@ -1,0 +1,12 @@
+{
+  "lease_id": 57280778,
+  "pid": 102996,
+  "starttime": "435485",
+  "utc": "2026-10-22T23:50:15.362763+00:00",
+  "reason": "failed bind readiness before any driver RPC; bounded metadata exported first",
+  "action": "QMP quit on the owned bind VM",
+  "qmp_rc": 0,
+  "qmp_response": "{}\n",
+  "qemu_exited": true,
+  "exit_observed_utc": "2026-10-22T23:50:15.456125+00:00"
+}

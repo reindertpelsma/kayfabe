@@ -1,0 +1,30 @@
+{
+  "class": "MEASURED",
+  "utc_date": "2026-10-22",
+  "lease_id": 57280778,
+  "die": "GA102",
+  "sku": "RTX 3090",
+  "host_driver": "595.91.07 OPEN",
+  "windows_driver_target": "580.88",
+  "windows_driver_initialized": false,
+  "revision": "905a8bd75e0fc53f5494e45b6d2a0fee474d7757",
+  "flags_file": "harness_recipe/p19.flags",
+  "native": "PASS",
+  "windows_baseline": "PASS",
+  "bind": "FAIL_READINESS",
+  "gpu_enable": "NOTRUN",
+  "desktop": "NOTRUN",
+  "appmatrix": "NOTRUN",
+  "unigine": "NOTRUN",
+  "hold_600s": "NOTRUN",
+  "acceptance": "FAIL",
+  "first_failure": {
+    "utc": "2026-10-22T23:48:35Z",
+    "stage": "bind SSH readiness",
+    "error": "Connection timed out during banner exchange",
+    "rpc_count": 0,
+    "rpc_ordinal": null,
+    "windows_event_times": null
+  },
+  "evidence_path": "traces/sweep_dies_20261018/lease_57280778/bind_final/"
+}
