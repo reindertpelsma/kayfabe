@@ -28,3 +28,4 @@ import './v4-mutation-boundaries.test.js';
 import './v4-delimiters.test.js';
 import './ssh-launch.test.js';
 import './provider-pending.test.js';
+import './smoke-preflight.test.js';
