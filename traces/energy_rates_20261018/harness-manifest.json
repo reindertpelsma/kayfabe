@@ -1,0 +1,108 @@
+{
+  "classification": "CODE READ",
+  "source": "Q2 pinned K1 harness",
+  "files": [
+    {
+      "file": "energy-arm.py",
+      "source_sha256": "84b56d176ca26d84b2f56a96c5e9bb26f7ff40af40af7954cb888285469d9621",
+      "q3_sha256": "6fafc0c0cfd081ef4e8e2eb9919fa15706495381f561ace5a61c09b0243ce0d3",
+      "adaptations": "lane paths/state names; deadline parameter; D test-proof key only"
+    },
+    {
+      "file": "windows_session_bisect.py",
+      "source_sha256": "ee8755c014f462b92696a7d77e256ea3022b6904758a76c8c76750a5728b8a4f",
+      "q3_sha256": "d34eeac59a0b4d421c513b569be0ae49914262c58ea2dc7f696a0fb37ff73379",
+      "adaptations": "lane paths/state names; deadline parameter; D test-proof key only"
+    },
+    {
+      "file": "campaign.py",
+      "source_sha256": "cda3fef561ef1eeb6bf5fc96fe0f5cbb0fc07ec29acc2aa75cb1535203c78a46",
+      "q3_sha256": "a201cfa08dc549a28d381f8d0d7a332d4f723bfa76f9c75d8dbab0927fa7d096",
+      "adaptations": "lane paths/state names; deadline parameter; D test-proof key only"
+    },
+    {
+      "file": "controls.py",
+      "source_sha256": "da654dbcfa89b848d65957c86262da8d8fe127f38214c36c175cb86e9791314c",
+      "q3_sha256": "da654dbcfa89b848d65957c86262da8d8fe127f38214c36c175cb86e9791314c",
+      "adaptations": "lane paths/state names; deadline parameter; D test-proof key only"
+    },
+    {
+      "file": "epoch.py",
+      "source_sha256": "b451db98827c341079084e3b23257dcb56d64399a132ac654359d7c60a4cb723",
+      "q3_sha256": "b451db98827c341079084e3b23257dcb56d64399a132ac654359d7c60a4cb723",
+      "adaptations": "lane paths/state names; deadline parameter; D test-proof key only"
+    },
+    {
+      "file": "native_xid_guard.py",
+      "source_sha256": "10b05269aa054b92fce652400f97a8623a9e5caa641c54077856cc4bb7823f6e",
+      "q3_sha256": "10b05269aa054b92fce652400f97a8623a9e5caa641c54077856cc4bb7823f6e",
+      "adaptations": "lane paths/state names; deadline parameter; D test-proof key only"
+    },
+    {
+      "file": "kayfabe_arm.py",
+      "source_sha256": "5bb027b3a767dd67b8cf0197881c708bad093cd109dcabc765aa71a26b6333d0",
+      "q3_sha256": "38f51ffb7f2998f3b97b9b6a97e62f46c9a5458e65f236f848e9294fd5e8d5a5",
+      "adaptations": "lane paths/state names; deadline parameter; D test-proof key only"
+    },
+    {
+      "file": "bisect-agent.py",
+      "source_sha256": "56e08d204dd5d6b3cf76a2c4da6d3db815995056c2ce8ba280f209fd2522c18e",
+      "q3_sha256": "69f9f055f94d50d63e6c04c2d806f7fc07b8d2038b8b62873b6808fd0cd08cd8",
+      "adaptations": "lane paths/state names; deadline parameter; D test-proof key only"
+    },
+    {
+      "file": "bisect-boot.ps1",
+      "source_sha256": "a3fa3a5e08d5e813c632382367cc694a24b7d075ed6a1a937bc996ea1e4a6897",
+      "q3_sha256": "a3fa3a5e08d5e813c632382367cc694a24b7d075ed6a1a937bc996ea1e4a6897",
+      "adaptations": "lane paths/state names; deadline parameter; D test-proof key only"
+    },
+    {
+      "file": "bisect-export.ps1",
+      "source_sha256": "503fea7bbefaf7b0b5cb0eef577742b20a655890b23b51405c921cfa0e013d4a",
+      "q3_sha256": "503fea7bbefaf7b0b5cb0eef577742b20a655890b23b51405c921cfa0e013d4a",
+      "adaptations": "lane paths/state names; deadline parameter; D test-proof key only"
+    },
+    {
+      "file": "bisect-guest-suite.py",
+      "source_sha256": "e21b0e9e85ef52d1f11510dc1d0130b8f259592ebf7cd2286d139517c88cb8a7",
+      "q3_sha256": "e21b0e9e85ef52d1f11510dc1d0130b8f259592ebf7cd2286d139517c88cb8a7",
+      "adaptations": "lane paths/state names; deadline parameter; D test-proof key only"
+    },
+    {
+      "file": "bisect-observer-controls.ps1",
+      "source_sha256": "e22e2151e4d82853e86b40e79032e92d2990caf0e2cc819a1d21ce271f214572",
+      "q3_sha256": "42f06a67fde4b3ae95424bc11520be699a0156d14ca15b9b77feaa6cfca20bce",
+      "adaptations": "lane paths/state names; deadline parameter; D test-proof key only"
+    },
+    {
+      "file": "bisect-observer.ps1",
+      "source_sha256": "19dddc9d068a565ca79023811bb4b25d8d814d72e360cb9dfe05993f55004094",
+      "q3_sha256": "097a4f90f0dae3fca9a153b03889031c58aa234bb4e9cee168220d61f429c5e8",
+      "adaptations": "lane paths/state names; deadline parameter; D test-proof key only"
+    },
+    {
+      "file": "bisect-status-template.ps1",
+      "source_sha256": "26ce18017e7000b0a471589d296e55ef4ba3b27efc6e09257d40c8f7e5313695",
+      "q3_sha256": "bf5fac772fe702b7ede2b07697ecdc8950ff120b59269b8f35720dd5a0e5f09a",
+      "adaptations": "lane paths/state names; deadline parameter; D test-proof key only"
+    },
+    {
+      "file": "production-broker.sh",
+      "source_sha256": "38e8cd2c2a620c76d95a0bfc05f977a88e92d9a1554095070f72eb7c7cc0fb7b",
+      "q3_sha256": "5402d2b75ccfe484a4f2deece2fedb89907f03949d73c3dc69911ac9836d4a36",
+      "adaptations": "lane paths/state names; deadline parameter; D test-proof key only"
+    },
+    {
+      "file": "xidcount.py",
+      "source_sha256": "cf6777b516db045b6b84a8189cf89d015b23b21c75ae3c6a5ea6be336e4adcf6",
+      "q3_sha256": "cf6777b516db045b6b84a8189cf89d015b23b21c75ae3c6a5ea6be336e4adcf6",
+      "adaptations": "lane paths/state names; deadline parameter; D test-proof key only"
+    },
+    {
+      "file": "extract-public.py",
+      "source_sha256": "60b22afd071afb8f0735d934e8b7dd2a6bcce34bc2d92bd6bb05134972391a11",
+      "q3_sha256": "126d1ac63936be29dbdb535f89488d0cc2ae655ae257fc09dac48418f4c99835",
+      "adaptations": "lane paths/state names; deadline parameter; D test-proof key only"
+    }
+  ]
+}
