@@ -10,11 +10,16 @@ exec >"/root/prov/arm_${run}.log" 2>&1
 QLOG=$VM/logs/${run}_b1_qemu.log
 launched=0
 observer_pid=
+init_observer_pid=
 jpid=
 held_seconds=0
 owned_pid=
 cleanup(){
  rc=$?; trap - EXIT; set +e
+ if [ -n "$init_observer_pid" ]; then
+  kill -TERM "$init_observer_pid" 2>/dev/null || true
+  wait "$init_observer_pid" 2>/dev/null || true
+ fi
  echo "PRE_CLEANUP_START rc=$rc $(date -u -Is)"
  if [ "$launched" = 1 ] && [ -f "$QLOG" ]; then
    python3 -I /root/sweep2/export.py "$QLOG" "/root/prov/arms/$run"
@@ -108,10 +113,20 @@ for i in $(seq 1 90); do
 done
 timeout 20 bash "$W" ssh 'echo KF_SSH_UP' </dev/null | grep KF_SSH_UP
 python3 /root/sweep2/bind_receipt.py "arm_${run}" "$binary" "$profile"
-for f in verify_stage580.ps1 enable580_once.ps1 diag_min.ps1; do bash "$W" scp-to "/root/sweep2/probes/$f" "C:/kf/$f"; done
+for f in verify_stage580.ps1 enable580_once.ps1 diag_min.ps1 init_state.ps1; do bash "$W" scp-to "/root/sweep2/probes/$f" "C:/kf/$f"; done
 timeout 120 bash "$W" ssh 'powershell -NoProfile -ExecutionPolicy Bypass -File C:\kf\verify_stage580.ps1' </dev/null >"/root/prov/arm_${run}_pre_enable.txt" 2>&1
 grep '^STAGE580_READY=1 ' "/root/prov/arm_${run}_pre_enable.txt"
 if grep -aq 'kf-rm: rpc-trace' "$QLOG"; then echo PRECONDITION_REFUSED_GSP_WHILE_DISABLED; exit 7; fi
+init_ready="/root/prov/arms/$run/init_observer.ready.json"
+python3 -E -s /root/sweep2/guard/blackwell/init_observer.py /root/prov/phase.json "$run" "$init_ready" "/root/prov/arms/$run/early_code0.txt" -- timeout 10 bash "$W" ssh 'powershell -NoProfile -ExecutionPolicy Bypass -File C:\kf\init_state.ps1' </dev/null >"/root/prov/arms/$run/init_observer.log" 2>&1 &
+init_observer_pid=$!
+for i in $(seq 1 20); do
+ [ -f "$init_ready" ] && break
+ kill -0 "$init_observer_pid" || { echo INIT_OBSERVER_FAILED_BEFORE_ENABLE; exit 22; }
+ sleep 1
+done
+[ -f "$init_ready" ] || { echo INIT_OBSERVER_HANDSHAKE_TIMEOUT; exit 23; }
+echo "INIT_OBSERVER_READY $(date -u -Is)"
 timeout 600 bash "$W" ssh 'powershell -NoProfile -ExecutionPolicy Bypass -File C:\kf\enable580_once.ps1' </dev/null >"/root/prov/arm_${run}_enable.txt" 2>&1
 cat "/root/prov/arm_${run}_enable.txt"
 # Read actual PnP/CIM/System state now, before the known40second crash window.
@@ -119,7 +134,7 @@ cat "/root/prov/arm_${run}_enable.txt"
 timeout 120 bash "$W" ssh 'powershell -NoProfile -ExecutionPolicy Bypass -File C:\kf\diag_min.ps1' </dev/null >"/root/prov/arm_${run}_diag.txt" 2>&1
 cat "/root/prov/arm_${run}_diag.txt"
 # Future-run guard source must include the Code0 gate; old guards fail closed here.
-python3 -E -s /root/sweep2/guard/blackwell/phase_xid_guard.py record-init /root/prov/phase.json "/root/prov/arm_${run}_diag.txt" "$run"
+# Early observer records actual Code0 independently; a late diagnostic never replaces that proof.
 if grep -q '"code":0' "/root/prov/arm_${run}_diag.txt"; then
  start_seconds=$SECONDS
  while [ $((SECONDS-start_seconds)) -lt 600 ]; do

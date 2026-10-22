@@ -1,0 +1,60 @@
+[
+  {
+    "mutant": "no_record",
+    "killers": [
+      "test_code22_handshake_precedes_code0_record",
+      "test_delayed_code0_is_captured_without_waiting_for_enable_command_return"
+    ]
+  },
+  {
+    "mutant": "accept_any_code0",
+    "killers": [
+      "test_code22_handshake_precedes_code0_record",
+      "test_delayed_code0_is_captured_without_waiting_for_enable_command_return"
+    ]
+  },
+  {
+    "mutant": "ignore_identity",
+    "killers": [
+      "test_a_reused_pid_cannot_supply_the_observation",
+      "test_an_old_pid_cannot_supply_the_observation",
+      "test_other_arm_cannot_supply_the_observation",
+      "test_other_device_cannot_supply_the_observation"
+    ]
+  },
+  {
+    "mutant": "no_disabled_handshake",
+    "killers": [
+      "test_initial_code0_is_not_the_disabled_handshake",
+      "test_initial_code43_is_not_the_disabled_handshake"
+    ]
+  },
+  {
+    "mutant": "no_attempt_bound",
+    "killers": [
+      "test_unbounded_attempts_are_refused",
+      "test_zero_attempts_are_refused"
+    ]
+  },
+  {
+    "mutant": "no_byte_bound",
+    "killers": [
+      "test_valid_first_result_with_oversized_padding_is_refused",
+      "test_valid_later_result_with_oversized_padding_is_refused"
+    ]
+  },
+  {
+    "mutant": "no_native_validation",
+    "killers": [
+      "test_native_owner_refusal_after_query_stops",
+      "test_native_owner_refusal_before_query_stops"
+    ]
+  },
+  {
+    "mutant": "no_ready_handshake",
+    "killers": [
+      "test_code22_handshake_precedes_code0_record",
+      "test_delayed_code0_is_captured_without_waiting_for_enable_command_return"
+    ]
+  }
+]
