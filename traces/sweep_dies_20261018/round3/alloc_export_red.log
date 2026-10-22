@@ -1,0 +1,70 @@
+FFFFF
+======================================================================
+FAIL: test_mixed_replies_count_only_allocations (test_allocation_header_export_s4.AllocationProjection.test_mixed_replies_count_only_allocations)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/workspace/s4-wt/scripts/bench/tests/test_allocation_header_export_s4.py", line 56, in test_mixed_replies_count_only_allocations
+    rows, _, receipt = self.project(record(function=76) + record(status=7))
+                       ~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/workspace/s4-wt/scripts/bench/tests/test_allocation_header_export_s4.py", line 28, in project
+    self.assertEqual(proc.returncode, 0, proc.stderr)
+    ~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: 2 != 0 : /usr/bin/python3: can't open file '/workspace/s4-wt/scripts/bench/diesweep/desktop/alloc_headers.py': [Errno 2] No such file or directory
+
+
+======================================================================
+FAIL: test_nonallocation_reply_is_excluded (test_allocation_header_export_s4.AllocationProjection.test_nonallocation_reply_is_excluded)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/workspace/s4-wt/scripts/bench/tests/test_allocation_header_export_s4.py", line 52, in test_nonallocation_reply_is_excluded
+    rows, _, _ = self.project(record(function=76))
+                 ~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^
+  File "/workspace/s4-wt/scripts/bench/tests/test_allocation_header_export_s4.py", line 28, in project
+    self.assertEqual(proc.returncode, 0, proc.stderr)
+    ~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: 2 != 0 : /usr/bin/python3: can't open file '/workspace/s4-wt/scripts/bench/diesweep/desktop/alloc_headers.py': [Errno 2] No such file or directory
+
+
+======================================================================
+FAIL: test_nonzero_body_status_is_retained (test_allocation_header_export_s4.AllocationProjection.test_nonzero_body_status_is_retained)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/workspace/s4-wt/scripts/bench/tests/test_allocation_header_export_s4.py", line 33, in test_nonzero_body_status_is_retained
+    rows, text, receipt = self.project(record(status=0x56, params=24))
+                          ~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/workspace/s4-wt/scripts/bench/tests/test_allocation_header_export_s4.py", line 28, in project
+    self.assertEqual(proc.returncode, 0, proc.stderr)
+    ~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: 2 != 0 : /usr/bin/python3: can't open file '/workspace/s4-wt/scripts/bench/diesweep/desktop/alloc_headers.py': [Errno 2] No such file or directory
+
+
+======================================================================
+FAIL: test_other_class_and_status_are_decoded_independently (test_allocation_header_export_s4.AllocationProjection.test_other_class_and_status_are_decoded_independently)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/workspace/s4-wt/scripts/bench/tests/test_allocation_header_export_s4.py", line 43, in test_other_class_and_status_are_decoded_independently
+    rows, text, _ = self.project(record(cls=0xCA7A, status=0x1F, params=40))
+                    ~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/workspace/s4-wt/scripts/bench/tests/test_allocation_header_export_s4.py", line 28, in project
+    self.assertEqual(proc.returncode, 0, proc.stderr)
+    ~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: 2 != 0 : /usr/bin/python3: can't open file '/workspace/s4-wt/scripts/bench/diesweep/desktop/alloc_headers.py': [Errno 2] No such file or directory
+
+
+======================================================================
+FAIL: test_short_saved_header_remains_explicitly_truncated (test_allocation_header_export_s4.AllocationProjection.test_short_saved_header_remains_explicitly_truncated)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/workspace/s4-wt/scripts/bench/tests/test_allocation_header_export_s4.py", line 62, in test_short_saved_header_remains_explicitly_truncated
+    rows, _, _ = self.project(record(saved=16))
+                 ~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^
+  File "/workspace/s4-wt/scripts/bench/tests/test_allocation_header_export_s4.py", line 28, in project
+    self.assertEqual(proc.returncode, 0, proc.stderr)
+    ~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: 2 != 0 : /usr/bin/python3: can't open file '/workspace/s4-wt/scripts/bench/diesweep/desktop/alloc_headers.py': [Errno 2] No such file or directory
+
+
+----------------------------------------------------------------------
+Ran 5 tests in 0.072s
+
+FAILED (failures=5)
