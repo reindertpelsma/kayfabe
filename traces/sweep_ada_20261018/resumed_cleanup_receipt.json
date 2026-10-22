@@ -1,0 +1,12 @@
+{
+  "kind": "MEASURED",
+  "utc": "2026-10-22T00:59:50.763585+00:00",
+  "source_commit": "50206a1769e4258eee46918de6e5e0f67780888a",
+  "created_instance_ids": [],
+  "rental_spend_usd": 0,
+  "target_exists": false,
+  "cargo_builds_run": 0,
+  "cargo_or_host_locks_acquired": false,
+  "owned_live_workloads": [],
+  "required_owner_choice_pending": true
+}

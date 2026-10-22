@@ -1,3 +1,9 @@
+STATUS UPDATE: LIVE, 2026-10-22. Owner resumed S2; exact guest guard is implemented,
+verified and pushed. No eligible listed die is available, and an AD102 substitution
+question is pending. Created IDs [], rental spend 0 USD, no destroy timer started.
+Fresh observed shared credit 43.531724 USD, distinct from the briefing value.
+The 4 USD lane cap and 5 USD reserve remain binding. Historical initial stop below.
+
 STATUS: LIVE, 2026-10-22. Lane S2; stopped before rental.
 
 CODE READ: this lane's hard cap is 4 USD, with 5 USD account reserve untouched;
