@@ -1,3 +1,22 @@
+STATUS UPDATE: CLOSED PARTIAL, 2026-10-22 02:07 UTC. Newly authorized controller
+repair is DONE; requested hardware rerun is NOTRUN due the unchanged price guard.
+MEASURED: EXPECTED RED5280961c2 alone, six failures/zero errors, existing97green;
+fixf98ceae65 and controller template pushed, all103green (original23included).
+MEASURED: three manual plumbing mutants killed by2/3/4distinct tests,zero errors;
+restoredgreen. Prior22 exact-match guard mutants and hardware evidence unchanged.
+CODE READ: required --fastguest-dir and selected-file preflight prevent a silent
+fallback; actual unchanged shell launch receives both selected image paths.
+MEASURED: no verified eligible Ada KVM offer <=0.60USD/h; one candidate in final
+complete15-offer search costs0.8766666667USD/h. No create/deploy calls, no new
+lease/timer/spend. Prior0.21USD/4USD, shared reserve5USD untouched by this turn.
+MEASURED: old57138158 still API-absent; no own background process, target or lock.
+UNVERIFIED: real guest exception4+1, Windows580.88 desktop/apps/zeroTDR600s and
+observer600s holds. NativeAD102 n1 remainsPASS with spreadN/A.
+INFERRED recommendation/decision1: retain0.60USD/h cap; resume only with an
+eligible offer. Common rule requires STOP on refusal by a safety check; no guard
+was changed to provision. Prior closeout below is historical and its requested
+controller repair is now complete. Exact current origin head is in S2.md.
+
 STATUS: CLOSED PARTIAL, 2026-10-22. S2 complied with the failed-step STOP and retired its only lease.
 
 MEASURED DONE: guard implementation test-first,97green/23original retained;

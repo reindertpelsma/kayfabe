@@ -1,3 +1,13 @@
+STATUS UPDATE: CLOSED PARTIAL, 2026-10-22 02:07 UTC; supersedes the controller
+repair status below. CODE READ: explicit image directory required, preflighted
+and forwarded; controller template selects its built fastguest595 directory.
+MEASURED: test-only EXPECTED RED5280961c2 (6failures/0errors), fixedf98ceae65;
+103testsPASS,original23green; plumbing mutants2/3/4killers,0errors.
+MEASURED: newly authorized hardware rerun NOTRUN: no offer passed0.60USD/h;
+no new lease. Prior AD102 measurement rows below remain the only hardware data,
+n1/spreadN/A. Linux guest4+1 recovery and both Windows holds remain UNVERIFIED.
+Evidence: image_path/RESULT.md, kill_table.json, availability.json.
+
 STATUS: CLOSED PARTIAL, 2026-10-22. S2 one AD102 lease; native PASS, guest/Windows UNRUN.
 
 MEASURED: lease57138158, RTX4090 confirmed AD102 arch0x190/impl0x2 by UID65534,

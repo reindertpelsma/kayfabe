@@ -1,3 +1,15 @@
+STATUS UPDATE: CLOSED PARTIAL, 2026-10-22 02:07 UTC; supersedes previous
+closeout for the newly authorized rerun. MEASURED: controller fix f98ceae65 is
+pushed; new create calls0, new lease ids[], new spend0USD. Prior spend0.21USD
+(owner accounting) remains inside the4USD lane cap; no new timer was needed.
+MEASURED: complete verified/rentable/single-GPU KVM search returned15 offers,
+one Ada candidate (RTX4090,0.8766666667USD/h), exceeding0.60USD/h. A separate
+preceding Ada query returned two4090offers at0.8766666667and0.95USD/h, also
+ineligible. No verified AD106/AD104/AD103 offer was returned. No deploy failed;
+no deploy retry occurred. The price guard refused provisioning; common STOP
+honored. Current shared credit42.743520USD is not exclusive lane attribution.
+Evidence: image_path/availability.json. Prior owned57138158 remains API-absent.
+
 STATUS UPDATE: CLOSED PARTIAL, 2026-10-22. One approved AD102 lease57138158.
 MEASURED: created2026-10-22T01:15:51.043786+00:00; API-absent2026-10-22T01:41:10.658354+00:00; rate0.49USD/h,
 170-minute destroy timer armed FIRST and cancelled only after absence. Runtime

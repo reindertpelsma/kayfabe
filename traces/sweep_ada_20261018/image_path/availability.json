@@ -1,0 +1,26 @@
+{
+  "kind": "MEASURED",
+  "utc": "2026-10-22T02:07:30.193144+00:00",
+  "query": "verified=true rentable=true rented=false vms_enabled=true num_gpus=1",
+  "requested_storage_gb": 180,
+  "limit": 200,
+  "returned": 15,
+  "ada_candidates": [
+    {
+      "id": 55286116,
+      "machine_id": 48161,
+      "gpu_name": "RTX 4090",
+      "dph_total": 0.8766666666666667,
+      "cpu_ram": 128899,
+      "cpu_cores_effective": 32.0,
+      "disk_space": 1323.9500000000003
+    }
+  ],
+  "price_guard_usd_h": 0.6,
+  "created_ids": [],
+  "create_calls": 0,
+  "prior_lane_spent_usd": 0.21,
+  "new_lane_spend_usd": 0,
+  "credit_observed": 42.74351994566189,
+  "prior_owned_lease_57138158_api_absent": true
+}
