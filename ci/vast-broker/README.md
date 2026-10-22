@@ -1,6 +1,6 @@
 # Vast broker (stage 1)
 
-[CODE READ: 2026-10-21 provider documentation] **BLOCKED: keep renting disabled.** The strict no-SSH instruction conflicts with the documented VM/onstart launch modes. See the design's STOP section; the prototype is not ready for deployment.
+[CODE READ: 2026-10-22 V4 staging verdict] **Stage only with RENTING_ENABLED=false. Live launch remains blocked.** The no-SSH instruction still conflicts with the documented VM/onstart launch modes. Native protocol checks and read-only API checks are recorded under traces/vast_broker_v4_20261018; no Cloudflare deployment was performed. See the design's STOP section.
 
 [CODE READ] Plain ES-module JavaScript, zero npm dependencies, Node >=20. This is an **untrusted GPU tripwire**, never release provenance. The Worker alone holds the owner's dedicated Vast key. No deployment or rental is performed by tests. Binding defaults refuse spending until configured. The complete threat model, API contracts, billing risks and deferred merge queue are in [the design](../../docs/design/V3_CI_VAST_GPU_20261021.md).
 
@@ -86,3 +86,7 @@ Configure variables, secrets, the public route and cron in the dashboard after b
 [CODE READ: 2026-10-22 src/onstart.js and result acknowledgement] At completion the box prints `kf-box-kill [reason]` beside the remaining minutes supplied by the authenticated Worker acknowledgement, capped by both grace and hard TTL. If the acknowledgement is unavailable it prints unknown; it does not present the configured five minutes as actual remaining lifetime.
 
 [CODE READ: 2026-10-22 post-result kill regression] After the box calls kf-box-kill with a recorded result, status remains COMPLETE with that structured verdict even if CI's first poll arrives after destruction. A kill before any result remains FAIL/STOPPED. Owner stop remains an explicit STOPPED action.
+
+[CODE READ: 2026-10-22 mutation verification] `npm run mutants` executes the 96 legacy cases and the 32 V4 cases sequentially, with named failures required for every patch and restoration in finally. `npm run mutants:v4` runs the focused V4 cases using Python 3's standard library. Preflight anchors with `MUTANT_PREFLIGHT=1 node mutants.js` and `python3 v4-mutants.py --preflight`. The repaired workflow fixture has a positive control so unrelated guard failures cannot mask dependency checks; token and UTF-8 probes exercise boundaries the generic scrubber cannot hide.
+
+[CODE READ: 2026-10-22 log pagination] Log pages may advance past a status snapshot when a report arrives concurrently. The workflow accepts a strictly advancing bounded cursor and prints that page once, then resumes from the newer cursor. A structured result remains independent of the text. The cost estimate is elapsed-rate accounting at the poll, with final grace included only once settled; the ledger reserves the future allowance separately.

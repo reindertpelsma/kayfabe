@@ -24,3 +24,5 @@ import './v4-request-body.test.js';
 import './v4-ingress.test.js';
 import './v4-result-ack.test.js';
 import './v4-kill-result.test.js';
+import './v4-mutation-boundaries.test.js';
+import './v4-delimiters.test.js';

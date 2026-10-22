@@ -26,9 +26,9 @@ const mutations=[
  ['secret alias logging guard','workflow-guard.js',dropLine('// MUTANT secret-print')],
  ['secret job output guard','workflow-guard.js',dropLine('// MUTANT secret-output')],
  ['secret alias job isolation','workflow-guard.js',dropLine('// MUTANT secret-alias')],
- ['literal broker run syntax','workflow-guard.js',dropLine('// MUTANT secret-run-style')],
+ ['literal run and renderer enclosure','workflow-guard.js',s=>dropLine('// MUTANT secret-run-style')(s).replace("if(!approvedRenderer)fail('requires exact trusted public renderer');",'')],
  ['HMAC tag and commit binding','src/tokens.js',replace("return await crypto.subtle.verify('HMAC',await this.cryptoKey(),bytes,tokenEncoder.encode(this.message(r,Number(parts[3]))));",'return true;')],
- ['closed ledger rejects reports','src/index.js',replace('||r.ended!==null||r.closed)', '||r.ended!==null||false)')],
+ ['closed ledger rejects reports','src/index.js',replace('||r.ended!==null||r.closed||r.resultAt!==undefined)', '||r.ended!==null||false||r.resultAt!==undefined)')],
  ['actual Vast liveness','src/index.js',dropLine('// MUTANT report-live')],
  ['liveness cache expiration','src/index.js',replace('now()-r.liveCheckedAt>=3000','false')],
  ['report count cap','src/index.js',s=>s.replaceAll('r.reportCount>=cfg.reportCount','false')],
@@ -41,7 +41,7 @@ const mutations=[
  ['report sequence immutability','src/index.js',replace('if(payload.seq<=r.lastSeq)','if(false)')],
  ['structured result nonce','src/index.js',dropLine("if(payload.kind==='result'&&payload.result.nonce")],
  ['free text cannot decide verdict','src/index.js',replace('r.lastSeq=payload.seq;r.lastDigest=digest;',"r.lastSeq=payload.seq;r.lastDigest=digest;if(payload.text?.includes('PASS'))r.verdict='PASS';")],
- ['structured result owned cleanup','src/index.js',replace("if(payload.kind==='result')await close(r,vast,'RESULT',payload.result.verdict);", "if(payload.kind==='result'){r.closed='RESULT';r.verdict=payload.result.verdict;await ledger.settle(r,now());}")],
+ ['structured result owned cleanup','src/index.js',replace("if(payload.kind==='result'){r.resultAt=now();r.verdict=payload.result.verdict;r.liveCheckedAt=null;}", "if(payload.kind==='result'){r.closed='RESULT';r.verdict=payload.result.verdict;await ledger.settle(r,now());}")],
  ['native owner secret comparison','src/tokens.js',replace('export async function constantTimeEqual(expected,provided){','export async function constantTimeEqual(expected,provided){return true;')],
  ['owner-only stop-all','src/index.js',dropLine('// MUTANT stop-auth')],
  ['OIDC run-scoped status and stop','src/index.js',dropLine('// MUTANT stop-run')],
@@ -58,7 +58,7 @@ const mutations=[
  ['owner numeric identity','src/github.js',replace('const ownerPush=c.actor_id===cfg.owner&&String(r.triggering_actor.id)===cfg.owner;','const ownerPush=true;')],
  ['review head SHA','src/github.js',replace("latest?.state==='APPROVED'&&latest.commit_id===p.head.sha","latest?.state==='APPROVED'")],
  ['draft refusal','src/github.js',replace('if(p.draft===true&&!cfg.drafts)','if(false)')],
- ['OIDC claims','src/oidc.js',s=>s.replace(/if\(c\.iss!==ISSUER[\s\S]*?\)refuse\('UNAUTHORIZED',401\);/,"if(false)refuse('UNAUTHORIZED',401);")],
+ ['OIDC claims','src/oidc.js',s=>s.replace(/if\(c\.iss!==this\.issuer[\s\S]*?\)refuse\('UNAUTHORIZED',401\);/,"if(false)refuse('UNAUTHORIZED',401);")],
  ['credit reserve','src/index.js',dropLine('// MUTANT credit')],
  ['daily rental count','src/ledger.js',dropLine('// MUTANT daily-count')],
  ['daily spend','src/ledger.js',dropLine('if(daily+cost>cfg.daily)')],
@@ -87,7 +87,7 @@ const mutations=[
  ['unsupported job syntax','workflow-guard.js',dropLine('// MUTANT job-shape')],
  ['distinct client refusal','../../.github/workflows/gpu-vast.yml',replace('description="GPU broker $state"',"description='GPU broker unavailable'")],
  ['terminal client completion','../../.github/workflows/gpu-vast.yml',replace('            if [[ "$state" = COMPLETE || "$state" = STOPPED ]]; then exit 1; fi\n','')],
- ['public cron isolation','src/index.js',replace("if(path===null||!/^\\/(?:rent|stop-all|(?:report|status|stop)\\/[1-9][0-9]{0,19}-[1-9][0-9]{0,19})$/.test(path))return notFound();",'')],
+ ['public cron isolation','src/index.js',replace("if(path===null||!/^\\/(?:rent|stop-all|(?:report|kill|status|stop|logs)\\/[1-9][0-9]{0,19}-[1-9][0-9]{0,19})$/.test(path))return notFound();",'')],
  ['automatic base allowlist','src/github.js',s=>s.replaceAll('!cfg.bases.includes','false&&!cfg.bases.includes')],
  ['docs-only exclusion result','src/index.js',replace('if(target.notNeeded)','if(false)')],
  ['unknown file-list skip','src/github.js',s=>s.replaceAll('return false;','return true;')],
@@ -120,7 +120,7 @@ for(const [name,path,mutate] of mutations.filter(m=>!process.env.MUTANT_FILTER||
    const r=spawnSync(process.execPath,['--test',...(path.endsWith('.yml')?['ci/vast-broker/test']:workerTests)],{cwd:root,encoding:'utf8',maxBuffer:8*1024*1024,timeout:60000});
    const output=r.stdout+r.stderr,killed=[...output.matchAll(/^not ok \d+ - (.+)$/gm)].map(m=>m[1]);
    if(r.status===0||killed.length<2)throw Error(name+': FAILED mutation threshold ('+killed.length+' named killers)\n'+output.slice(-2000));
-   results.push({name,count:killed.length,examples:killed.slice(0,3)});console.log(name+': '+killed.length+' tests failed');
+   results.push({name,count:killed.length,examples:killed.slice(0,3)});if(process.env.MUTANT_RESULTS_FILE)await writeFile(process.env.MUTANT_RESULTS_FILE,JSON.stringify(results,null,2)+'\n');console.log(name+': '+killed.length+' tests failed');
  }finally{await writeFile(url,original);}
 }
 const rebuilt=spawnSync(process.execPath,['bundle.js'],{cwd:base,encoding:'utf8'});if(rebuilt.status!==0)throw Error(rebuilt.stderr);
@@ -128,3 +128,8 @@ if(process.env.MUTANT_RESULTS_FILE)await writeFile(process.env.MUTANT_RESULTS_FI
 if(process.env.MUTANT_FILTER){console.log('Filtered mutants passed; full table unchanged.');process.exit(0);}
 const text='# Recorded manual mutation checks\n\n[MEASURED: 2026-10-22 endpoint secrecy plus Amendment 3/3b mutation campaign] '+process.version+'; explicit patches in `../mutants.js`. Every source file restored in finally; syntax checked before tests. Worker mutations run all source-facing test files explicitly in parallel; workflow mutations also run shell-client fixtures. Those fixtures read YAML only and never import Worker source. No live APIs or GPU. Each mutant requires >=2 named failing tests.\n\n| Mutation | Tests killed | Example killers |\n| --- | ---: | --- |\n'+results.map(r=>'| '+r.name+' | '+r.count+' | '+r.examples.join('; ')+' |').join('\n')+'\n';
 await writeFile(new URL('test/mutants.md',base),text);console.log('All '+results.length+' mutants killed; source restored.');
+
+// Keep the owner's single command complete; both campaigns mutate files sequentially.
+const v4=spawnSync('python3',['v4-mutants.py',...(process.env.V4_MUTANT_RESULTS_FILE?['--results',process.env.V4_MUTANT_RESULTS_FILE]:[])],{cwd:base,stdio:'inherit'});
+if(v4.status!==0)throw Error('V4 mutation campaign failed');
+console.log('Full campaign passed: '+results.length+' legacy plus 32 V4 mutants.');
