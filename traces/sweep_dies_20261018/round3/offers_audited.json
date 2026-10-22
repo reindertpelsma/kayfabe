@@ -1,0 +1,247 @@
+{
+  "kind": "MEASURED",
+  "utc": "2026-10-22T19:52:47.225155+00:00",
+  "source": "Vast search offers API",
+  "query": "verified=true rentable=true rented=false vms_enabled=true num_gpus=1 dph_total<=1",
+  "requested_disk_gb": 180,
+  "native_eligibility": "verified=true in API query, not in inherited known-bad machine list, RAM >=8GB, effective cores >=2, KVM, 1GPU, <=1USD/h",
+  "total_api_offers": 12,
+  "models": [
+    {
+      "model": "Quadro P4000",
+      "count": 1,
+      "eligible_native_count": 1,
+      "cheapest_native": {
+        "id": 54523925,
+        "machine_id": 17786,
+        "gpu_name": "Quadro P4000",
+        "dph_total": 0.08666666666666667,
+        "cpu_ram": 64360,
+        "cpu_cores_effective": 12.0,
+        "inet_down": 1155.1,
+        "disk_space": 569.0
+      },
+      "cheapest_candidate": {
+        "id": 54523925,
+        "machine_id": 17786,
+        "gpu_name": "Quadro P4000",
+        "dph_total": 0.08666666666666667,
+        "cpu_ram": 64360,
+        "cpu_cores_effective": 12.0,
+        "inet_down": 1155.1,
+        "disk_space": 569.0
+      }
+    },
+    {
+      "model": "RTX 2060S",
+      "count": 1,
+      "eligible_native_count": 1,
+      "cheapest_native": {
+        "id": 57046638,
+        "machine_id": 20316,
+        "gpu_name": "RTX 2060S",
+        "dph_total": 0.16333333333333333,
+        "cpu_ram": 128928,
+        "cpu_cores_effective": 16.0,
+        "inet_down": 1381.2,
+        "disk_space": 543.0
+      },
+      "cheapest_candidate": {
+        "id": 57046638,
+        "machine_id": 20316,
+        "gpu_name": "RTX 2060S",
+        "dph_total": 0.16333333333333333,
+        "cpu_ram": 128928,
+        "cpu_cores_effective": 16.0,
+        "inet_down": 1381.2,
+        "disk_space": 543.0
+      }
+    },
+    {
+      "model": "RTX 4000Ada",
+      "count": 1,
+      "eligible_native_count": 1,
+      "cheapest_native": {
+        "id": 36173719,
+        "machine_id": 99239,
+        "gpu_name": "RTX 4000Ada",
+        "dph_total": 0.29000000000000004,
+        "cpu_ram": 32164,
+        "cpu_cores_effective": 6.0,
+        "inet_down": 852.0,
+        "disk_space": 354.25
+      },
+      "cheapest_candidate": {
+        "id": 36173719,
+        "machine_id": 99239,
+        "gpu_name": "RTX 4000Ada",
+        "dph_total": 0.29000000000000004,
+        "cpu_ram": 32164,
+        "cpu_cores_effective": 6.0,
+        "inet_down": 852.0,
+        "disk_space": 354.25
+      }
+    },
+    {
+      "model": "RTX 4060 Ti",
+      "count": 1,
+      "eligible_native_count": 1,
+      "cheapest_native": {
+        "id": 49744631,
+        "machine_id": 16592,
+        "gpu_name": "RTX 4060 Ti",
+        "dph_total": 0.4473333333333333,
+        "cpu_ram": 64449,
+        "cpu_cores_effective": 16.0,
+        "inet_down": 1951.8,
+        "disk_space": 204.07500000000007
+      },
+      "cheapest_candidate": {
+        "id": 49744631,
+        "machine_id": 16592,
+        "gpu_name": "RTX 4060 Ti",
+        "dph_total": 0.4473333333333333,
+        "cpu_ram": 64449,
+        "cpu_cores_effective": 16.0,
+        "inet_down": 1951.8,
+        "disk_space": 204.07500000000007
+      }
+    },
+    {
+      "model": "RTX 4090",
+      "count": 2,
+      "eligible_native_count": 2,
+      "cheapest_native": {
+        "id": 54902714,
+        "machine_id": 55267,
+        "gpu_name": "RTX 4090",
+        "dph_total": 0.75,
+        "cpu_ram": 64465,
+        "cpu_cores_effective": 32.0,
+        "inet_down": 733.0,
+        "disk_space": 939.0
+      },
+      "cheapest_candidate": {
+        "id": 54902714,
+        "machine_id": 55267,
+        "gpu_name": "RTX 4090",
+        "dph_total": 0.75,
+        "cpu_ram": 64465,
+        "cpu_cores_effective": 32.0,
+        "inet_down": 733.0,
+        "disk_space": 939.0
+      }
+    },
+    {
+      "model": "RTX 5060",
+      "count": 1,
+      "eligible_native_count": 1,
+      "cheapest_native": {
+        "id": 56180125,
+        "machine_id": 46454,
+        "gpu_name": "RTX 5060",
+        "dph_total": 0.175,
+        "cpu_ram": 64244,
+        "cpu_cores_effective": 6.0,
+        "inet_down": 3110.9,
+        "disk_space": 479.1500000000001
+      },
+      "cheapest_candidate": {
+        "id": 56180125,
+        "machine_id": 46454,
+        "gpu_name": "RTX 5060",
+        "dph_total": 0.175,
+        "cpu_ram": 64244,
+        "cpu_cores_effective": 6.0,
+        "inet_down": 3110.9,
+        "disk_space": 479.1500000000001
+      }
+    },
+    {
+      "model": "RTX 5070",
+      "count": 2,
+      "eligible_native_count": 2,
+      "cheapest_native": {
+        "id": 48947858,
+        "machine_id": 51428,
+        "gpu_name": "RTX 5070",
+        "dph_total": 0.24666666666666667,
+        "cpu_ram": 64243,
+        "cpu_cores_effective": 6.0,
+        "inet_down": 3080.7,
+        "disk_space": 569.5
+      },
+      "cheapest_candidate": {
+        "id": 48947858,
+        "machine_id": 51428,
+        "gpu_name": "RTX 5070",
+        "dph_total": 0.24666666666666667,
+        "cpu_ram": 64243,
+        "cpu_cores_effective": 6.0,
+        "inet_down": 3080.7,
+        "disk_space": 569.5
+      }
+    },
+    {
+      "model": "RTX 5070 Ti",
+      "count": 2,
+      "eligible_native_count": 2,
+      "cheapest_native": {
+        "id": 56331169,
+        "machine_id": 152577,
+        "gpu_name": "RTX 5070 Ti",
+        "dph_total": 0.5499999999999999,
+        "cpu_ram": 64133,
+        "cpu_cores_effective": 12.0,
+        "inet_down": 824.1,
+        "disk_space": 597.0
+      },
+      "cheapest_candidate": {
+        "id": 56331169,
+        "machine_id": 152577,
+        "gpu_name": "RTX 5070 Ti",
+        "dph_total": 0.5499999999999999,
+        "cpu_ram": 64133,
+        "cpu_cores_effective": 12.0,
+        "inet_down": 824.1,
+        "disk_space": 597.0
+      }
+    },
+    {
+      "model": "RTX 5090",
+      "count": 1,
+      "eligible_native_count": 1,
+      "cheapest_native": {
+        "id": 47357387,
+        "machine_id": 58852,
+        "gpu_name": "RTX 5090",
+        "dph_total": 0.9500000000000001,
+        "cpu_ram": 85964,
+        "cpu_cores_effective": 14.222222222222221,
+        "inet_down": 5859.7,
+        "disk_space": 544.0222222222221
+      },
+      "cheapest_candidate": {
+        "id": 47357387,
+        "machine_id": 58852,
+        "gpu_name": "RTX 5090",
+        "dph_total": 0.9500000000000001,
+        "cpu_ram": 85964,
+        "cpu_cores_effective": 14.222222222222221,
+        "inet_down": 5859.7,
+        "disk_space": 544.0222222222221
+      }
+    }
+  ],
+  "known_bad_machine_ids": [
+    11908,
+    18856,
+    24044,
+    42636,
+    44906,
+    55691,
+    56883,
+    91962
+  ],
+  "known_bad_provenance": "nvkvm-pv 368d2db41211ab560cd5b17e399335c794d56173 scripts/sweep-known-bad-machines.txt; IDs only; no endpoint comments copied"
+}

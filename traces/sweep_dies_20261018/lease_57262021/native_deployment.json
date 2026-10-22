@@ -1,0 +1,33 @@
+{
+  "kind": "CODE READ",
+  "source": "bc3a967e061aa0a267467b59393afaf10eb0ec70",
+  "native_binary_provenance": {
+    "kayfabe-rm-ladder": {
+      "sha256": "27859044dc9f79d8349e628515fc8c4b041f7b964bc125e893652f97996233cc",
+      "bytes": 5064928,
+      "native_crates_tree": "feda030ab2b0dd7a9aad43bcd163d9ea7afe0842",
+      "native_source_revision": "e28c3a4a11f5c293dac96375fea6b182491467b5",
+      "target": "static-musl"
+    },
+    "kf-ctl-probe": {
+      "sha256": "2858a0ede6624d173313c056ac378af5c2c85c166b5063ff753278d7e0e35cc2",
+      "bytes": 1354816,
+      "native_crates_tree": "feda030ab2b0dd7a9aad43bcd163d9ea7afe0842",
+      "native_source_revision": "e28c3a4a11f5c293dac96375fea6b182491467b5",
+      "target": "gnu; maxGLIBC2.34"
+    }
+  },
+  "files": {
+    "driver.sh": "083d9023649027656a52b4d4d7ceea174b2a6ac62c57fcaec155cd140b12b844",
+    "native_xid_guard.py": "10b05269aa054b92fce652400f97a8623a9e5caa641c54077856cc4bb7823f6e",
+    "diesweep/native_route_measurement.py": "4686f4b6ac831271356718bcb0ddebc3517e40a9735822847b54791d77ba2e7b",
+    "native_run.py": "1cdc5ac2b086c050973e6c6b9a7fb27d287745a25c161f0ab9eafad59f065171",
+    "kayfabe-rm-ladder": "27859044dc9f79d8349e628515fc8c4b041f7b964bc125e893652f97996233cc",
+    "kf-ctl-probe": "2858a0ede6624d173313c056ac378af5c2c85c166b5063ff753278d7e0e35cc2",
+    "tier2_probe_box.sh": "5b20251ffd91a101293e662782672a85637d33df92abac73a8e425f5c0eaa154",
+    "cudart_rows.tsv": "9bb81a9b51fada1dc46847804d5b13e57152547f13121054f32484c89f4c44a9",
+    "rows_595_shapes.tsv": "8d00fa013b59b9ecbdc5dc50bf4ab4669cacde61789fc91c2c2748254016230a"
+  },
+  "prepare_pid_receipt": "PREPARE_PID=1575",
+  "bundle_sha256": "2fd687e1f6e9cb99bdaf0ab39a0f001d80dc95a8bd789c1f1c10fba44824c168"
+}

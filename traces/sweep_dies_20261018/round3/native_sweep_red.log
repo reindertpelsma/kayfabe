@@ -1,0 +1,101 @@
+EEEEEEEE
+======================================================================
+ERROR: test_completed_route_measurement_still_refuses_guest (scripts.bench.tests.test_native_sweep_proof.NativeSweepProofTests.test_completed_route_measurement_still_refuses_guest)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/workspace/s4-wt/scripts/bench/tests/test_native_sweep_proof.py", line 14, in setUp
+    SPEC.loader.exec_module(self.mod)
+    ~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^
+  File "<frozen importlib._bootstrap_external>", line 755, in exec_module
+  File "<frozen importlib._bootstrap_external>", line 892, in get_code
+  File "<frozen importlib._bootstrap_external>", line 950, in get_data
+FileNotFoundError: [Errno 2] No such file or directory: '/workspace/s4-wt/scripts/bench/diesweep/native_sweep_proof.py'
+
+======================================================================
+ERROR: test_die_mismatch_stops_before_faults (scripts.bench.tests.test_native_sweep_proof.NativeSweepProofTests.test_die_mismatch_stops_before_faults)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/workspace/s4-wt/scripts/bench/tests/test_native_sweep_proof.py", line 14, in setUp
+    SPEC.loader.exec_module(self.mod)
+    ~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^
+  File "<frozen importlib._bootstrap_external>", line 755, in exec_module
+  File "<frozen importlib._bootstrap_external>", line 892, in get_code
+  File "<frozen importlib._bootstrap_external>", line 950, in get_data
+FileNotFoundError: [Errno 2] No such file or directory: '/workspace/s4-wt/scripts/bench/diesweep/native_sweep_proof.py'
+
+======================================================================
+ERROR: test_driver_mismatch_stops_before_faults (scripts.bench.tests.test_native_sweep_proof.NativeSweepProofTests.test_driver_mismatch_stops_before_faults)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/workspace/s4-wt/scripts/bench/tests/test_native_sweep_proof.py", line 14, in setUp
+    SPEC.loader.exec_module(self.mod)
+    ~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^
+  File "<frozen importlib._bootstrap_external>", line 755, in exec_module
+  File "<frozen importlib._bootstrap_external>", line 892, in get_code
+  File "<frozen importlib._bootstrap_external>", line 950, in get_data
+FileNotFoundError: [Errno 2] No such file or directory: '/workspace/s4-wt/scripts/bench/diesweep/native_sweep_proof.py'
+
+======================================================================
+ERROR: test_preexisting_xid_stops_before_faults (scripts.bench.tests.test_native_sweep_proof.NativeSweepProofTests.test_preexisting_xid_stops_before_faults)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/workspace/s4-wt/scripts/bench/tests/test_native_sweep_proof.py", line 14, in setUp
+    SPEC.loader.exec_module(self.mod)
+    ~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^
+  File "<frozen importlib._bootstrap_external>", line 755, in exec_module
+  File "<frozen importlib._bootstrap_external>", line 892, in get_code
+  File "<frozen importlib._bootstrap_external>", line 950, in get_data
+FileNotFoundError: [Errno 2] No such file or directory: '/workspace/s4-wt/scripts/bench/diesweep/native_sweep_proof.py'
+
+======================================================================
+ERROR: test_probe_only_asks_correct_size_table (scripts.bench.tests.test_native_sweep_proof.NativeSweepProofTests.test_probe_only_asks_correct_size_table)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/workspace/s4-wt/scripts/bench/tests/test_native_sweep_proof.py", line 14, in setUp
+    SPEC.loader.exec_module(self.mod)
+    ~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^
+  File "<frozen importlib._bootstrap_external>", line 755, in exec_module
+  File "<frozen importlib._bootstrap_external>", line 892, in get_code
+  File "<frozen importlib._bootstrap_external>", line 950, in get_data
+FileNotFoundError: [Errno 2] No such file or directory: '/workspace/s4-wt/scripts/bench/diesweep/native_sweep_proof.py'
+
+======================================================================
+ERROR: test_records_actual_owned_child_pids (scripts.bench.tests.test_native_sweep_proof.NativeSweepProofTests.test_records_actual_owned_child_pids)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/workspace/s4-wt/scripts/bench/tests/test_native_sweep_proof.py", line 14, in setUp
+    SPEC.loader.exec_module(self.mod)
+    ~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^
+  File "<frozen importlib._bootstrap_external>", line 755, in exec_module
+  File "<frozen importlib._bootstrap_external>", line 892, in get_code
+  File "<frozen importlib._bootstrap_external>", line 950, in get_data
+FileNotFoundError: [Errno 2] No such file or directory: '/workspace/s4-wt/scripts/bench/diesweep/native_sweep_proof.py'
+
+======================================================================
+ERROR: test_successful_observation_is_not_guest_admission (scripts.bench.tests.test_native_sweep_proof.NativeSweepProofTests.test_successful_observation_is_not_guest_admission)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/workspace/s4-wt/scripts/bench/tests/test_native_sweep_proof.py", line 14, in setUp
+    SPEC.loader.exec_module(self.mod)
+    ~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^
+  File "<frozen importlib._bootstrap_external>", line 755, in exec_module
+  File "<frozen importlib._bootstrap_external>", line 892, in get_code
+  File "<frozen importlib._bootstrap_external>", line 950, in get_data
+FileNotFoundError: [Errno 2] No such file or directory: '/workspace/s4-wt/scripts/bench/diesweep/native_sweep_proof.py'
+
+======================================================================
+ERROR: test_uses_both_privilege_levels (scripts.bench.tests.test_native_sweep_proof.NativeSweepProofTests.test_uses_both_privilege_levels)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/workspace/s4-wt/scripts/bench/tests/test_native_sweep_proof.py", line 14, in setUp
+    SPEC.loader.exec_module(self.mod)
+    ~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^
+  File "<frozen importlib._bootstrap_external>", line 755, in exec_module
+  File "<frozen importlib._bootstrap_external>", line 892, in get_code
+  File "<frozen importlib._bootstrap_external>", line 950, in get_data
+FileNotFoundError: [Errno 2] No such file or directory: '/workspace/s4-wt/scripts/bench/diesweep/native_sweep_proof.py'
+
+----------------------------------------------------------------------
+Ran 8 tests in 0.004s
+
+FAILED (errors=8)

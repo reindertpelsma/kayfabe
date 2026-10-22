@@ -1,0 +1,30 @@
+[
+  {
+    "mutant": "accept_current_failure",
+    "killers": [
+      "test_current_failure_refuses_guest",
+      "test_current_timeout_refuses_guest",
+      "test_old_success_cannot_hide_current_failure"
+    ],
+    "count": 3,
+    "rc": 1
+  },
+  {
+    "mutant": "reuse_cached_success",
+    "killers": [
+      "test_old_success_cannot_hide_current_failure",
+      "test_old_success_is_remeasured_on_this_host"
+    ],
+    "count": 2,
+    "rc": 1
+  },
+  {
+    "mutant": "ignore_resumed_failure",
+    "killers": [
+      "test_resumed_failure_stays_refused",
+      "test_resumed_timeout_stays_refused_without_reexecution"
+    ],
+    "count": 2,
+    "rc": 1
+  }
+]

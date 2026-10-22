@@ -1,0 +1,29 @@
+[
+  {
+    "mutant": "approve_native_observation",
+    "count": 2,
+    "killers": [
+      "test_completed_route_measurement_still_refuses_guest",
+      "test_successful_observation_is_not_guest_admission"
+    ],
+    "rc": 1
+  },
+  {
+    "mutant": "ignore_host_identity",
+    "count": 2,
+    "killers": [
+      "test_die_mismatch_stops_before_faults",
+      "test_driver_mismatch_stops_before_faults"
+    ],
+    "rc": 1
+  },
+  {
+    "mutant": "ignore_preexisting_xid",
+    "count": 2,
+    "killers": [
+      "test_preexisting_other_xid_stops_before_faults",
+      "test_preexisting_xid_stops_before_faults"
+    ],
+    "rc": 1
+  }
+]

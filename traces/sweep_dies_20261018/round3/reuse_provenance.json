@@ -1,0 +1,34 @@
+{
+  "kind": "CODE READ",
+  "repo": "https://github.com/reindertpelsma/nvkvm-pv",
+  "revision": "368d2db41211ab560cd5b17e399335c794d56173",
+  "files": {
+    "scripts/sweep_plan.py": "c10da8e726a3610dd732ce78369f6f8822b1a19e4a618c6e32589dc8b0ef3c4b",
+    "scripts/sweep_matrix.py": "1eaaac4958bf4ef2e0da88257a77b56145016e3744eaac81304b8028f40e14dd",
+    "scripts/sweep_matrix_md.py": "624136591108d93b5cc50fdf80561aa9dcd837d22bfa2beee497705b552272ef",
+    "scripts/sweep-driver-availability.tsv": "bb51b4c64716940d64839edc025cae137094f04d39f224633b40649e7e0de95f",
+    "scripts/sweep-known-bad-machines.txt": "1d6667336d37d56cb98271618e1e11038af4ca6e96a5514c518cb0c041c4fb5b",
+    "tests/sweep_matrix_offline_test.py": "14689e192a15e21207d40512dee4f0562e9193341f0ad720eb95faa2ca711779",
+    "tests/sweep_matrix_md_test.py": "e1d82e59bb8431578c5d35c7131509e68a4ed26796ef800dd5f58bb2f2461145",
+    "tests/sweep_offline_test.sh": "b0fedaf280faf40d850dcbb40deda66f5be2a91c00c8af7340ac3c9d1c0e4956",
+    "tests/sweep_untrusted_endpoint_test.sh": "1c1ba009dc4e1ff5ab00a6e83bc51e1547c4f0f9923f48a516b94dd8e58f9690"
+  },
+  "availability_status_counts": {
+    "AVAILABLE": 129,
+    "ABSENT": 87
+  },
+  "historical_inventory_only": "2026-08-30 data, not current download guarantee; current target host installer already obtained and installed on lease57262021",
+  "ported_code": [],
+  "adopted_planning_principles": [
+    "Up-front per-node list, one driver per ABI boundary, no duplicate known ABI boundary on a host",
+    "Subtract already measured die/driver/item cells before renting",
+    "Filter known KVM-bad machine ids and pre-Turing cards",
+    "Keep untested and incomplete rows explicit; use kayfabe matrix_table.py format"
+  ],
+  "not_ported": [
+    "Old nvkvm_abi.h boundary oracle and old validation/QEMU payload",
+    "Old leasing/protected instances/controller; S4 keeps exact owned ids and auto-destroy-first",
+    "Old JSONL renderer; v3 parses committed walk summary lines already"
+  ],
+  "compatibility": "Current S4 selection is one host595.91.07 x guest580.159.04, native-only stop before guest if runtime CLIENT proof unresolved. This is not the full C.5 matrix."
+}

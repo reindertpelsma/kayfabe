@@ -2,27 +2,37 @@
   "kind": "CODE READ",
   "date": "2026-10-22",
   "unit": "implementation die; no SKU duplicates",
-  "owner_reported_measured": 5,
-  "additional_archived_ad106": 1,
   "counts": {
     "target": 20,
-    "measured_any_native_or_control": 6,
+    "measured_any_existing_constant": 14,
     "inherited": 0,
-    "unmeasured": 14,
-    "unmeasured_fraction": 0.7,
-    "candidate_offer_classes_for_unmeasured_dies": 4
+    "unmeasured": 6,
+    "unmeasured_fraction": 0.3,
+    "rentable_unmeasured_snapshot": 0,
+    "unrentable_unmeasured_snapshot": 6,
+    "runtime_independent_client_derivation_covered": 0
   },
   "not_a_claim": "Native/control measurement coverage is not Windows acceptance or runtime CE-route derivation coverage. Offer model-to-die mappings are candidate hypotheses until a native implementation probe.",
   "rows": [
     {
       "die": "TU102",
-      "measurement": null,
+      "measurement": {
+        "provenance": "measured:TU102,595.91.07,2026-10-14,host-source:raw_53783014.txt",
+        "scope": "existing tier-2 ZBC/host-query evidence; not runtime CE route or complete Windows acceptance",
+        "branch": "claude/constants-measure-20261014b",
+        "revision": "e42b3f86dc7fbe6c6ae8d65c490e6d28c267a566",
+        "path": "traces/constants_measure_20261014b/tier2/raw_53783014.txt"
+      },
       "inherited_from": null,
-      "unmeasured": true,
+      "unmeasured": false,
       "candidate_sku_classes": "2080 Ti; Quadro RTX6000/8000",
       "candidate_offer": null,
       "route_inheritance_forbidden": true,
-      "workstation_variant_coverage": "not established: driver branch/vBIOS/ECC/floorsweeping may differ; runtime host topology mandatory"
+      "workstation_variant_coverage": "Measured die receipt covers only explicitly exercised constants. No workstation branch/vBIOS/ECC equivalence established; harvesting-dependent PCE/LCE masks, engine counts and CE routes must be queried from current host. No inheritance claimed.",
+      "sku_index": [],
+      "sku_index_scope": "CODE READ pci.ids candidate mapping only; exact native RM implementation probe required for each rented host; revisions/mobile SKUs can differ",
+      "workstation_skus": [],
+      "rentable_snapshot": "no eligible SKU class in offers_audited.json; price unavailable, not proof of permanent unavailability"
     },
     {
       "die": "TU104",
@@ -32,30 +42,60 @@
       "candidate_sku_classes": "2080/2070 Super; Quadro RTX4000/5000",
       "candidate_offer": null,
       "route_inheritance_forbidden": true,
-      "workstation_variant_coverage": "not established: driver branch/vBIOS/ECC/floorsweeping may differ; runtime host topology mandatory"
+      "workstation_variant_coverage": "Measured die receipt covers only explicitly exercised constants. No workstation branch/vBIOS/ECC equivalence established; harvesting-dependent PCE/LCE masks, engine counts and CE routes must be queried from current host. No inheritance claimed.",
+      "sku_index": [],
+      "sku_index_scope": "CODE READ pci.ids candidate mapping only; exact native RM implementation probe required for each rented host; revisions/mobile SKUs can differ",
+      "workstation_skus": [],
+      "rentable_snapshot": "no eligible SKU class in offers_audited.json; price unavailable, not proof of permanent unavailability"
     },
     {
       "die": "TU106",
-      "measurement": null,
+      "measurement": {
+        "provenance": "measured:TU106,595.84,2026-10-14,host-source:raw_49886923.txt",
+        "scope": "existing tier-2 ZBC/host-query evidence; not runtime CE route or complete Windows acceptance",
+        "branch": "claude/constants-measure-20261014b",
+        "revision": "e42b3f86dc7fbe6c6ae8d65c490e6d28c267a566",
+        "path": "traces/constants_measure_20261014b/tier2/raw_49886923.txt"
+      },
       "inherited_from": null,
-      "unmeasured": true,
+      "unmeasured": false,
       "candidate_sku_classes": "2060/Super",
       "candidate_offer": {
-        "model": "RTX 2060S",
-        "usd_per_hour": 0.11
+        "id": 57046638,
+        "machine_id": 20316,
+        "gpu_name": "RTX 2060S",
+        "dph_total": 0.16333333333333333,
+        "cpu_ram": 128928,
+        "cpu_cores_effective": 16.0,
+        "inet_down": 1381.2,
+        "disk_space": 543.0
       },
       "route_inheritance_forbidden": true,
-      "workstation_variant_coverage": "not established: driver branch/vBIOS/ECC/floorsweeping may differ; runtime host topology mandatory"
+      "workstation_variant_coverage": "Measured die receipt covers only explicitly exercised constants. No workstation branch/vBIOS/ECC equivalence established; harvesting-dependent PCE/LCE masks, engine counts and CE routes must be queried from current host. No inheritance claimed.",
+      "sku_index": [],
+      "sku_index_scope": "CODE READ pci.ids candidate mapping only; exact native RM implementation probe required for each rented host; revisions/mobile SKUs can differ",
+      "workstation_skus": [],
+      "rentable_snapshot": "candidate available; native implementation confirmation required"
     },
     {
       "die": "TU116",
-      "measurement": null,
+      "measurement": {
+        "provenance": "measured:TU116,580.178.04,2026-10-14,host-source:raw_55845469.txt",
+        "scope": "existing tier-2 ZBC/host-query evidence; not runtime CE route or complete Windows acceptance",
+        "branch": "claude/constants-measure-20261014b",
+        "revision": "e42b3f86dc7fbe6c6ae8d65c490e6d28c267a566",
+        "path": "traces/constants_measure_20261014b/tier2/raw_55845469.txt"
+      },
       "inherited_from": null,
-      "unmeasured": true,
+      "unmeasured": false,
       "candidate_sku_classes": "1660/Super/Ti",
       "candidate_offer": null,
       "route_inheritance_forbidden": true,
-      "workstation_variant_coverage": "not established: driver branch/vBIOS/ECC/floorsweeping may differ; runtime host topology mandatory"
+      "workstation_variant_coverage": "Measured die receipt covers only explicitly exercised constants. No workstation branch/vBIOS/ECC equivalence established; harvesting-dependent PCE/LCE masks, engine counts and CE routes must be queried from current host. No inheritance claimed.",
+      "sku_index": [],
+      "sku_index_scope": "CODE READ pci.ids candidate mapping only; exact native RM implementation probe required for each rented host; revisions/mobile SKUs can differ",
+      "workstation_skus": [],
+      "rentable_snapshot": "no eligible SKU class in offers_audited.json; price unavailable, not proof of permanent unavailability"
     },
     {
       "die": "TU117",
@@ -65,20 +105,31 @@
       "candidate_sku_classes": "1650; T1000/T600/T400",
       "candidate_offer": null,
       "route_inheritance_forbidden": true,
-      "workstation_variant_coverage": "not established: driver branch/vBIOS/ECC/floorsweeping may differ; runtime host topology mandatory"
+      "workstation_variant_coverage": "Measured die receipt covers only explicitly exercised constants. No workstation branch/vBIOS/ECC equivalence established; harvesting-dependent PCE/LCE masks, engine counts and CE routes must be queried from current host. No inheritance claimed.",
+      "sku_index": [],
+      "sku_index_scope": "CODE READ pci.ids candidate mapping only; exact native RM implementation probe required for each rented host; revisions/mobile SKUs can differ",
+      "workstation_skus": [],
+      "rentable_snapshot": "no eligible SKU class in offers_audited.json; price unavailable, not proof of permanent unavailability"
     },
     {
       "die": "GA102",
-      "measurement": "595.91.07,2026-10-22,lease57209908; native only; ../lease_57209908/AMPERE_RESULT.md",
+      "measurement": {
+        "provenance": "measured:GA102,570.86.15,2026-10-14,host-source:raw_18990232.txt",
+        "scope": "existing tier-2 ZBC/host-query evidence; not runtime CE route or complete Windows acceptance",
+        "branch": "claude/constants-measure-20261014b",
+        "revision": "e42b3f86dc7fbe6c6ae8d65c490e6d28c267a566",
+        "path": "traces/constants_measure_20261014b/tier2/raw_18990232.txt"
+      },
       "inherited_from": null,
       "unmeasured": false,
       "candidate_sku_classes": "3080/3090; RTX A6000/A5000/A4500/A5500",
-      "candidate_offer": {
-        "model": "RTX 3090",
-        "usd_per_hour": 0.6166666667
-      },
+      "candidate_offer": null,
       "route_inheritance_forbidden": true,
-      "workstation_variant_coverage": "not established: driver branch/vBIOS/ECC/floorsweeping may differ; runtime host topology mandatory"
+      "workstation_variant_coverage": "Measured die receipt covers only explicitly exercised constants. No workstation branch/vBIOS/ECC equivalence established; harvesting-dependent PCE/LCE masks, engine counts and CE routes must be queried from current host. No inheritance claimed.",
+      "sku_index": [],
+      "sku_index_scope": "CODE READ pci.ids candidate mapping only; exact native RM implementation probe required for each rented host; revisions/mobile SKUs can differ",
+      "workstation_skus": [],
+      "rentable_snapshot": "no eligible SKU class in offers_audited.json; price unavailable, not proof of permanent unavailability"
     },
     {
       "die": "GA103",
@@ -88,27 +139,51 @@
       "candidate_sku_classes": "GA103 variants: 3060 Ti / 3080 Ti laptop; probe exact implementation",
       "candidate_offer": null,
       "route_inheritance_forbidden": true,
-      "workstation_variant_coverage": "not established: driver branch/vBIOS/ECC/floorsweeping may differ; runtime host topology mandatory"
+      "workstation_variant_coverage": "Measured die receipt covers only explicitly exercised constants. No workstation branch/vBIOS/ECC equivalence established; harvesting-dependent PCE/LCE masks, engine counts and CE routes must be queried from current host. No inheritance claimed.",
+      "sku_index": [],
+      "sku_index_scope": "CODE READ pci.ids candidate mapping only; exact native RM implementation probe required for each rented host; revisions/mobile SKUs can differ",
+      "workstation_skus": [],
+      "rentable_snapshot": "no eligible SKU class in offers_audited.json; price unavailable, not proof of permanent unavailability"
     },
     {
       "die": "GA104",
-      "measurement": null,
+      "measurement": {
+        "provenance": "measured:GA104,580.173.02,2026-10-14,host-source:raw_46485962.txt",
+        "scope": "existing tier-2 ZBC/host-query evidence; not runtime CE route or complete Windows acceptance",
+        "branch": "claude/constants-measure-20261014b",
+        "revision": "e42b3f86dc7fbe6c6ae8d65c490e6d28c267a566",
+        "path": "traces/constants_measure_20261014b/tier2/raw_46485962.txt"
+      },
       "inherited_from": null,
-      "unmeasured": true,
+      "unmeasured": false,
       "candidate_sku_classes": "3070/3070 Ti; RTX A4000",
       "candidate_offer": null,
       "route_inheritance_forbidden": true,
-      "workstation_variant_coverage": "not established: driver branch/vBIOS/ECC/floorsweeping may differ; runtime host topology mandatory"
+      "workstation_variant_coverage": "Measured die receipt covers only explicitly exercised constants. No workstation branch/vBIOS/ECC equivalence established; harvesting-dependent PCE/LCE masks, engine counts and CE routes must be queried from current host. No inheritance claimed.",
+      "sku_index": [],
+      "sku_index_scope": "CODE READ pci.ids candidate mapping only; exact native RM implementation probe required for each rented host; revisions/mobile SKUs can differ",
+      "workstation_skus": [],
+      "rentable_snapshot": "no eligible SKU class in offers_audited.json; price unavailable, not proof of permanent unavailability"
     },
     {
       "die": "GA106",
-      "measurement": "580.159.04,2026-08-09,real3060 host; traces/real_ga106/rmladder_r24_pcemask_real_ga106.txt",
+      "measurement": {
+        "provenance": "measured:GA106,590.48.01,2026-10-14,host-source:raw_48529478.txt",
+        "scope": "existing tier-2 ZBC/host-query evidence; not runtime CE route or complete Windows acceptance",
+        "branch": "claude/constants-measure-20261014b",
+        "revision": "e42b3f86dc7fbe6c6ae8d65c490e6d28c267a566",
+        "path": "traces/constants_measure_20261014b/tier2/raw_48529478.txt"
+      },
       "inherited_from": null,
       "unmeasured": false,
       "candidate_sku_classes": "3060; RTX A2000",
       "candidate_offer": null,
       "route_inheritance_forbidden": true,
-      "workstation_variant_coverage": "not established: driver branch/vBIOS/ECC/floorsweeping may differ; runtime host topology mandatory"
+      "workstation_variant_coverage": "Measured die receipt covers only explicitly exercised constants. No workstation branch/vBIOS/ECC equivalence established; harvesting-dependent PCE/LCE masks, engine counts and CE routes must be queried from current host. No inheritance claimed.",
+      "sku_index": [],
+      "sku_index_scope": "CODE READ pci.ids candidate mapping only; exact native RM implementation probe required for each rented host; revisions/mobile SKUs can differ",
+      "workstation_skus": [],
+      "rentable_snapshot": "no eligible SKU class in offers_audited.json; price unavailable, not proof of permanent unavailability"
     },
     {
       "die": "GA107",
@@ -118,53 +193,118 @@
       "candidate_sku_classes": "3050; RTX A1000",
       "candidate_offer": null,
       "route_inheritance_forbidden": true,
-      "workstation_variant_coverage": "not established: driver branch/vBIOS/ECC/floorsweeping may differ; runtime host topology mandatory"
+      "workstation_variant_coverage": "Measured die receipt covers only explicitly exercised constants. No workstation branch/vBIOS/ECC equivalence established; harvesting-dependent PCE/LCE masks, engine counts and CE routes must be queried from current host. No inheritance claimed.",
+      "sku_index": [],
+      "sku_index_scope": "CODE READ pci.ids candidate mapping only; exact native RM implementation probe required for each rented host; revisions/mobile SKUs can differ",
+      "workstation_skus": [],
+      "rentable_snapshot": "no eligible SKU class in offers_audited.json; price unavailable, not proof of permanent unavailability"
     },
     {
       "die": "AD102",
-      "measurement": "595.91.07,2026-10-22,lease57193877; ../lease_57193877/ADA_RESULT.md",
+      "measurement": {
+        "provenance": "measured:AD102,595.84,2026-10-14,host-source:raw_36762817.txt",
+        "scope": "existing tier-2 ZBC/host-query evidence; not runtime CE route or complete Windows acceptance",
+        "branch": "claude/constants-measure-20261014b",
+        "revision": "e42b3f86dc7fbe6c6ae8d65c490e6d28c267a566",
+        "path": "traces/constants_measure_20261014b/tier2/raw_36762817.txt"
+      },
       "inherited_from": null,
       "unmeasured": false,
       "candidate_sku_classes": "4090; RTX6000 Ada/RTX5000 Ada",
       "candidate_offer": {
-        "model": "RTX 4090",
-        "usd_per_hour": 0.54
+        "id": 54902714,
+        "machine_id": 55267,
+        "gpu_name": "RTX 4090",
+        "dph_total": 0.75,
+        "cpu_ram": 64465,
+        "cpu_cores_effective": 32.0,
+        "inet_down": 733.0,
+        "disk_space": 939.0
       },
       "route_inheritance_forbidden": true,
-      "workstation_variant_coverage": "not established: driver branch/vBIOS/ECC/floorsweeping may differ; runtime host topology mandatory"
+      "workstation_variant_coverage": "Measured die receipt covers only explicitly exercised constants. No workstation branch/vBIOS/ECC equivalence established; harvesting-dependent PCE/LCE masks, engine counts and CE routes must be queried from current host. No inheritance claimed.",
+      "sku_index": [],
+      "sku_index_scope": "CODE READ pci.ids candidate mapping only; exact native RM implementation probe required for each rented host; revisions/mobile SKUs can differ",
+      "workstation_skus": [],
+      "rentable_snapshot": "candidate available; native implementation confirmation required"
     },
     {
       "die": "AD103",
-      "measurement": null,
+      "measurement": {
+        "provenance": "measured:AD103,595.91.07,2026-10-14,host-source:raw_55027878.txt",
+        "scope": "existing tier-2 ZBC/host-query evidence; not runtime CE route or complete Windows acceptance",
+        "branch": "claude/constants-measure-20261014b",
+        "revision": "e42b3f86dc7fbe6c6ae8d65c490e6d28c267a566",
+        "path": "traces/constants_measure_20261014b/tier2/raw_55027878.txt"
+      },
       "inherited_from": null,
-      "unmeasured": true,
+      "unmeasured": false,
       "candidate_sku_classes": "4080/Super; laptop/workstation variants require probe",
       "candidate_offer": null,
       "route_inheritance_forbidden": true,
-      "workstation_variant_coverage": "not established: driver branch/vBIOS/ECC/floorsweeping may differ; runtime host topology mandatory"
+      "workstation_variant_coverage": "Measured die receipt covers only explicitly exercised constants. No workstation branch/vBIOS/ECC equivalence established; harvesting-dependent PCE/LCE masks, engine counts and CE routes must be queried from current host. No inheritance claimed.",
+      "sku_index": [],
+      "sku_index_scope": "CODE READ pci.ids candidate mapping only; exact native RM implementation probe required for each rented host; revisions/mobile SKUs can differ",
+      "workstation_skus": [],
+      "rentable_snapshot": "no eligible SKU class in offers_audited.json; price unavailable, not proof of permanent unavailability"
     },
     {
       "die": "AD104",
-      "measurement": "580.159.04,2026-09-26,4070 host/lease52747429; traces/real_ad104/README.md",
+      "measurement": {
+        "provenance": "measured:AD104,615.71.09,2026-10-14,host-source:raw_54285092.txt",
+        "scope": "existing tier-2 ZBC/host-query evidence; not runtime CE route or complete Windows acceptance",
+        "branch": "claude/constants-measure-20261014b",
+        "revision": "e42b3f86dc7fbe6c6ae8d65c490e6d28c267a566",
+        "path": "traces/constants_measure_20261014b/tier2/raw_54285092.txt"
+      },
       "inherited_from": null,
       "unmeasured": false,
       "candidate_sku_classes": "4070/Ti; RTX4000 Ada/4500 Ada",
-      "candidate_offer": null,
+      "candidate_offer": {
+        "id": 36173719,
+        "machine_id": 99239,
+        "gpu_name": "RTX 4000Ada",
+        "dph_total": 0.29000000000000004,
+        "cpu_ram": 32164,
+        "cpu_cores_effective": 6.0,
+        "inet_down": 852.0,
+        "disk_space": 354.25
+      },
       "route_inheritance_forbidden": true,
-      "workstation_variant_coverage": "not established: driver branch/vBIOS/ECC/floorsweeping may differ; runtime host topology mandatory"
+      "workstation_variant_coverage": "Measured die receipt covers only explicitly exercised constants. No workstation branch/vBIOS/ECC equivalence established; harvesting-dependent PCE/LCE masks, engine counts and CE routes must be queried from current host. No inheritance claimed.",
+      "sku_index": [],
+      "sku_index_scope": "CODE READ pci.ids candidate mapping only; exact native RM implementation probe required for each rented host; revisions/mobile SKUs can differ",
+      "workstation_skus": [],
+      "rentable_snapshot": "candidate available; native implementation confirmation required"
     },
     {
       "die": "AD106",
-      "measurement": "595.91.07,2026-10-21,lease57064037; traces/sweep_windows_20261021/lease_57064037/native/sweep_host_die.log (additional archived measurement found this round)",
+      "measurement": {
+        "provenance": "measured:AD106,590.48.01,2026-10-14,host-source:raw_50710714.txt",
+        "scope": "existing tier-2 ZBC/host-query evidence; not runtime CE route or complete Windows acceptance",
+        "branch": "claude/constants-measure-20261014b",
+        "revision": "e42b3f86dc7fbe6c6ae8d65c490e6d28c267a566",
+        "path": "traces/constants_measure_20261014b/tier2/raw_50710714.txt"
+      },
       "inherited_from": null,
       "unmeasured": false,
       "candidate_sku_classes": "4060 Ti; mobile variants require probe",
       "candidate_offer": {
-        "model": "RTX 4060 Ti",
-        "usd_per_hour": 0.4473333333
+        "id": 49744631,
+        "machine_id": 16592,
+        "gpu_name": "RTX 4060 Ti",
+        "dph_total": 0.4473333333333333,
+        "cpu_ram": 64449,
+        "cpu_cores_effective": 16.0,
+        "inet_down": 1951.8,
+        "disk_space": 204.07500000000007
       },
       "route_inheritance_forbidden": true,
-      "workstation_variant_coverage": "not established: driver branch/vBIOS/ECC/floorsweeping may differ; runtime host topology mandatory"
+      "workstation_variant_coverage": "Measured die receipt covers only explicitly exercised constants. No workstation branch/vBIOS/ECC equivalence established; harvesting-dependent PCE/LCE masks, engine counts and CE routes must be queried from current host. No inheritance claimed.",
+      "sku_index": [],
+      "sku_index_scope": "CODE READ pci.ids candidate mapping only; exact native RM implementation probe required for each rented host; revisions/mobile SKUs can differ",
+      "workstation_skus": [],
+      "rentable_snapshot": "candidate available; native implementation confirmation required"
     },
     {
       "die": "AD107",
@@ -174,59 +314,127 @@
       "candidate_sku_classes": "4060; RTX2000 Ada",
       "candidate_offer": null,
       "route_inheritance_forbidden": true,
-      "workstation_variant_coverage": "not established: driver branch/vBIOS/ECC/floorsweeping may differ; runtime host topology mandatory"
+      "workstation_variant_coverage": "Measured die receipt covers only explicitly exercised constants. No workstation branch/vBIOS/ECC equivalence established; harvesting-dependent PCE/LCE masks, engine counts and CE routes must be queried from current host. No inheritance claimed.",
+      "sku_index": [],
+      "sku_index_scope": "CODE READ pci.ids candidate mapping only; exact native RM implementation probe required for each rented host; revisions/mobile SKUs can differ",
+      "workstation_skus": [],
+      "rentable_snapshot": "no eligible SKU class in offers_audited.json; price unavailable, not proof of permanent unavailability"
     },
     {
       "die": "GB202",
-      "measurement": "595.91.07,2026-10-21,lease57046541; traces/sweep_windows_20261021/lease_57046541/native/sweep_host_die.log",
+      "measurement": {
+        "provenance": "measured:GB202,610.43.02,2026-10-14,host-source:raw_48219165.txt",
+        "scope": "existing tier-2 ZBC/host-query evidence; not runtime CE route or complete Windows acceptance",
+        "branch": "claude/constants-measure-20261014b",
+        "revision": "e42b3f86dc7fbe6c6ae8d65c490e6d28c267a566",
+        "path": "traces/constants_measure_20261014b/tier2/raw_48219165.txt"
+      },
       "inherited_from": null,
       "unmeasured": false,
       "candidate_sku_classes": "5090; RTX PRO6000/5000 Blackwell",
       "candidate_offer": {
-        "model": "RTX 5090",
-        "usd_per_hour": 0.5833333333
+        "id": 47357387,
+        "machine_id": 58852,
+        "gpu_name": "RTX 5090",
+        "dph_total": 0.9500000000000001,
+        "cpu_ram": 85964,
+        "cpu_cores_effective": 14.222222222222221,
+        "inet_down": 5859.7,
+        "disk_space": 544.0222222222221
       },
       "route_inheritance_forbidden": true,
-      "workstation_variant_coverage": "not established: driver branch/vBIOS/ECC/floorsweeping may differ; runtime host topology mandatory"
+      "workstation_variant_coverage": "Measured die receipt covers only explicitly exercised constants. No workstation branch/vBIOS/ECC equivalence established; harvesting-dependent PCE/LCE masks, engine counts and CE routes must be queried from current host. No inheritance claimed.",
+      "sku_index": [],
+      "sku_index_scope": "CODE READ pci.ids candidate mapping only; exact native RM implementation probe required for each rented host; revisions/mobile SKUs can differ",
+      "workstation_skus": [],
+      "rentable_snapshot": "candidate available; native implementation confirmation required"
     },
     {
       "die": "GB203",
-      "measurement": null,
+      "measurement": {
+        "provenance": "measured:GB203,580.126.09,2026-10-14,host-source:raw_38751926.txt",
+        "scope": "existing tier-2 ZBC/host-query evidence; not runtime CE route or complete Windows acceptance",
+        "branch": "claude/constants-measure-20261014b",
+        "revision": "e42b3f86dc7fbe6c6ae8d65c490e6d28c267a566",
+        "path": "traces/constants_measure_20261014b/tier2/raw_38751926.txt"
+      },
       "inherited_from": null,
-      "unmeasured": true,
+      "unmeasured": false,
       "candidate_sku_classes": "5080/5070 Ti; RTX PRO4500/4000 Blackwell candidate",
       "candidate_offer": {
-        "model": "RTX 5070 Ti",
-        "usd_per_hour": 0.3366666667
+        "id": 56331169,
+        "machine_id": 152577,
+        "gpu_name": "RTX 5070 Ti",
+        "dph_total": 0.5499999999999999,
+        "cpu_ram": 64133,
+        "cpu_cores_effective": 12.0,
+        "inet_down": 824.1,
+        "disk_space": 597.0
       },
       "route_inheritance_forbidden": true,
-      "workstation_variant_coverage": "not established: driver branch/vBIOS/ECC/floorsweeping may differ; runtime host topology mandatory"
+      "workstation_variant_coverage": "Measured die receipt covers only explicitly exercised constants. No workstation branch/vBIOS/ECC equivalence established; harvesting-dependent PCE/LCE masks, engine counts and CE routes must be queried from current host. No inheritance claimed.",
+      "sku_index": [],
+      "sku_index_scope": "CODE READ pci.ids candidate mapping only; exact native RM implementation probe required for each rented host; revisions/mobile SKUs can differ",
+      "workstation_skus": [],
+      "rentable_snapshot": "candidate available; native implementation confirmation required"
     },
     {
       "die": "GB205",
-      "measurement": null,
+      "measurement": {
+        "provenance": "measured:GB205,595.91.07,2026-10-16,lease56246613",
+        "scope": "Linux caps scalar/root oracle plus native gates; Windows580.88 caps also captured on same lease; no generic T/Z scan",
+        "branch": "codex/sweep-blackwell-20261015",
+        "revision": "24b6a4256ebdd4d806854696d417b93eddf34df4",
+        "path": "traces/die_driver_sweep_20261015/blackwell_5070/linux595_20261016/bwbatch_native_caps.txt"
+      },
       "inherited_from": null,
-      "unmeasured": true,
+      "unmeasured": false,
       "candidate_sku_classes": "5070",
       "candidate_offer": {
-        "model": "RTX 5070",
-        "usd_per_hour": 0.2466666667
+        "id": 48947858,
+        "machine_id": 51428,
+        "gpu_name": "RTX 5070",
+        "dph_total": 0.24666666666666667,
+        "cpu_ram": 64243,
+        "cpu_cores_effective": 6.0,
+        "inet_down": 3080.7,
+        "disk_space": 569.5
       },
       "route_inheritance_forbidden": true,
-      "workstation_variant_coverage": "not established: driver branch/vBIOS/ECC/floorsweeping may differ; runtime host topology mandatory"
+      "workstation_variant_coverage": "Measured die receipt covers only explicitly exercised constants. No workstation branch/vBIOS/ECC equivalence established; harvesting-dependent PCE/LCE masks, engine counts and CE routes must be queried from current host. No inheritance claimed.",
+      "sku_index": [],
+      "sku_index_scope": "CODE READ pci.ids candidate mapping only; exact native RM implementation probe required for each rented host; revisions/mobile SKUs can differ",
+      "workstation_skus": [],
+      "rentable_snapshot": "candidate available; native implementation confirmation required"
     },
     {
       "die": "GB206",
-      "measurement": null,
+      "measurement": {
+        "provenance": "measured:GB206,580.105.08,2026-10-14,host-source:raw_51352327.txt",
+        "scope": "existing tier-2 ZBC/host-query evidence; not runtime CE route or complete Windows acceptance",
+        "branch": "claude/constants-measure-20261014b",
+        "revision": "e42b3f86dc7fbe6c6ae8d65c490e6d28c267a566",
+        "path": "traces/constants_measure_20261014b/tier2/raw_51352327.txt"
+      },
       "inherited_from": null,
-      "unmeasured": true,
+      "unmeasured": false,
       "candidate_sku_classes": "5060/Ti",
       "candidate_offer": {
-        "model": "RTX 5060",
-        "usd_per_hour": 0.175
+        "id": 56180125,
+        "machine_id": 46454,
+        "gpu_name": "RTX 5060",
+        "dph_total": 0.175,
+        "cpu_ram": 64244,
+        "cpu_cores_effective": 6.0,
+        "inet_down": 3110.9,
+        "disk_space": 479.1500000000001
       },
       "route_inheritance_forbidden": true,
-      "workstation_variant_coverage": "not established: driver branch/vBIOS/ECC/floorsweeping may differ; runtime host topology mandatory"
+      "workstation_variant_coverage": "Measured die receipt covers only explicitly exercised constants. No workstation branch/vBIOS/ECC equivalence established; harvesting-dependent PCE/LCE masks, engine counts and CE routes must be queried from current host. No inheritance claimed.",
+      "sku_index": [],
+      "sku_index_scope": "CODE READ pci.ids candidate mapping only; exact native RM implementation probe required for each rented host; revisions/mobile SKUs can differ",
+      "workstation_skus": [],
+      "rentable_snapshot": "candidate available; native implementation confirmation required"
     },
     {
       "die": "GB207",
@@ -236,7 +444,22 @@
       "candidate_sku_classes": "5050; workstation variants require probe",
       "candidate_offer": null,
       "route_inheritance_forbidden": true,
-      "workstation_variant_coverage": "not established: driver branch/vBIOS/ECC/floorsweeping may differ; runtime host topology mandatory"
+      "workstation_variant_coverage": "Measured die receipt covers only explicitly exercised constants. No workstation branch/vBIOS/ECC equivalence established; harvesting-dependent PCE/LCE masks, engine counts and CE routes must be queried from current host. No inheritance claimed.",
+      "sku_index": [],
+      "sku_index_scope": "CODE READ pci.ids candidate mapping only; exact native RM implementation probe required for each rented host; revisions/mobile SKUs can differ",
+      "workstation_skus": [],
+      "rentable_snapshot": "no eligible SKU class in offers_audited.json; price unavailable, not proof of permanent unavailability"
     }
-  ]
+  ],
+  "audit_pending": true,
+  "audit": {
+    "sha256": "11fab7adf1886994ea6bf9676f20afe7effaa63885358572ec2a74e1bc2a75e3",
+    "read_utc": "2026-10-22T19:38:00Z",
+    "effect": "Subtract existing14 dies and their measured item/driver cells; do not redo scans or Windows capture. CW1 owns landing existing tables."
+  },
+  "sku_index_provenance": {
+    "source": "pci.ids local PCI ID repository snapshot",
+    "sha256": "d57b3524531fcc31701042f09f6dba44f85c951c7cbec5ba74a8724f85b59fd3",
+    "status": "CODE READ; planning only; not authoritative silicon measurement"
+  }
 }

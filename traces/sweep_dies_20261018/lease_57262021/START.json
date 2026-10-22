@@ -1,0 +1,21 @@
+{
+  "id": 57262021,
+  "round": 3,
+  "die_expected": "TU106",
+  "created_utc": "2026-10-22T19:28:03.381421+00:00",
+  "auto_destroy_minutes": 170,
+  "quote_dph": 0.16333333333333333,
+  "budget_cap_usd": 12,
+  "round3_cap_usd": 8,
+  "reserve_usd": 5,
+  "price_guard_usd_h": 1,
+  "source": "bc3a967e061aa0a267467b59393afaf10eb0ec70",
+  "cost_upper_usd": 1.4627777777777777,
+  "auto_destroy_pid": 4135049,
+  "auto_destroy_verified": true,
+  "kind": "MEASURED",
+  "phase": "created; pinned-SSH readiness pending",
+  "offer_model": "RTX 2060S",
+  "scope": "Tier3 native calibration only; no admission baseline",
+  "audit_note": "Lease created before owner audit heads-up; no subsequent rent until audit is read; probes gated on audit_reviewed.json"
+}

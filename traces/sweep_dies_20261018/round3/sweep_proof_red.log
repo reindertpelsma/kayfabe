@@ -1,0 +1,148 @@
+FFFFFFFEFFEF
+======================================================================
+ERROR: test_real_dry_plan_orders_proof_before_canary (scripts.bench.tests.test_sweep_native_proof.NativeProofTests.test_real_dry_plan_orders_proof_before_canary)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/workspace/s4-wt/scripts/bench/tests/test_sweep_native_proof.py", line 91, in test_real_dry_plan_orders_proof_before_canary
+    self.assertLess(p.stdout.index('PLAN row=native_proof:'), p.stdout.index('PLAN row=canary:'))
+                    ~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^
+ValueError: substring not found
+
+======================================================================
+ERROR: test_runner_gates_before_any_guest_step (scripts.bench.tests.test_sweep_native_proof.NativeProofTests.test_runner_gates_before_any_guest_step)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/workspace/s4-wt/scripts/bench/tests/test_sweep_native_proof.py", line 77, in test_runner_gates_before_any_guest_step
+    source = text.index('source "$REPO/scripts/drivermatrix/native_proof.sh"')
+ValueError: substring not found
+
+======================================================================
+FAIL: test_current_failure_refuses_guest (scripts.bench.tests.test_sweep_native_proof.NativeProofTests.test_current_failure_refuses_guest)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/workspace/s4-wt/scripts/bench/tests/test_sweep_native_proof.py", line 37, in test_current_failure_refuses_guest
+    self.assertIn('GUEST_REFUSED', self.run_hook(result=2))
+                                   ~~~~~~~~~~~~~^^^^^^^^^^
+  File "/workspace/s4-wt/scripts/bench/tests/test_sweep_native_proof.py", line 33, in run_hook
+    self.assertEqual(p.returncode, 0, p.stderr)
+    ~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: 98 != 0 : bash: line 13: /workspace/s4-wt/scripts/drivermatrix/native_proof.sh: No such file or directory
+
+
+======================================================================
+FAIL: test_current_timeout_refuses_guest (scripts.bench.tests.test_sweep_native_proof.NativeProofTests.test_current_timeout_refuses_guest)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/workspace/s4-wt/scripts/bench/tests/test_sweep_native_proof.py", line 40, in test_current_timeout_refuses_guest
+    self.assertIn('GUEST_REFUSED', self.run_hook(result=124))
+                                   ~~~~~~~~~~~~~^^^^^^^^^^^^
+  File "/workspace/s4-wt/scripts/bench/tests/test_sweep_native_proof.py", line 33, in run_hook
+    self.assertEqual(p.returncode, 0, p.stderr)
+    ~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: 98 != 0 : bash: line 13: /workspace/s4-wt/scripts/drivermatrix/native_proof.sh: No such file or directory
+
+
+======================================================================
+FAIL: test_dry_run_never_executes (scripts.bench.tests.test_sweep_native_proof.NativeProofTests.test_dry_run_never_executes)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/workspace/s4-wt/scripts/bench/tests/test_sweep_native_proof.py", line 66, in test_dry_run_never_executes
+    out = self.run_hook(dry='1')
+  File "/workspace/s4-wt/scripts/bench/tests/test_sweep_native_proof.py", line 33, in run_hook
+    self.assertEqual(p.returncode, 0, p.stderr)
+    ~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: 98 != 0 : bash: line 13: /workspace/s4-wt/scripts/drivermatrix/native_proof.sh: No such file or directory
+
+
+======================================================================
+FAIL: test_dry_run_of_previous_failure_still_shows_plan (scripts.bench.tests.test_sweep_native_proof.NativeProofTests.test_dry_run_of_previous_failure_still_shows_plan)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/workspace/s4-wt/scripts/bench/tests/test_sweep_native_proof.py", line 71, in test_dry_run_of_previous_failure_still_shows_plan
+    out = self.run_hook(prior='2', dry='1')
+  File "/workspace/s4-wt/scripts/bench/tests/test_sweep_native_proof.py", line 33, in run_hook
+    self.assertEqual(p.returncode, 0, p.stderr)
+    ~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: 98 != 0 : bash: line 13: /workspace/s4-wt/scripts/drivermatrix/native_proof.sh: No such file or directory
+
+
+======================================================================
+FAIL: test_explicit_retry_measures_again (scripts.bench.tests.test_sweep_native_proof.NativeProofTests.test_explicit_retry_measures_again)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/workspace/s4-wt/scripts/bench/tests/test_sweep_native_proof.py", line 63, in test_explicit_retry_measures_again
+    self.assertIn('EXEC ', self.run_hook(prior='2', retry='1'))
+                           ~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^
+  File "/workspace/s4-wt/scripts/bench/tests/test_sweep_native_proof.py", line 33, in run_hook
+    self.assertEqual(p.returncode, 0, p.stderr)
+    ~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: 98 != 0 : bash: line 13: /workspace/s4-wt/scripts/drivermatrix/native_proof.sh: No such file or directory
+
+
+======================================================================
+FAIL: test_old_success_cannot_hide_current_failure (scripts.bench.tests.test_sweep_native_proof.NativeProofTests.test_old_success_cannot_hide_current_failure)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/workspace/s4-wt/scripts/bench/tests/test_sweep_native_proof.py", line 52, in test_old_success_cannot_hide_current_failure
+    self.assertIn('GUEST_REFUSED', self.run_hook(prior='0', result=2))
+                                   ~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^
+  File "/workspace/s4-wt/scripts/bench/tests/test_sweep_native_proof.py", line 33, in run_hook
+    self.assertEqual(p.returncode, 0, p.stderr)
+    ~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: 98 != 0 : bash: line 13: /workspace/s4-wt/scripts/drivermatrix/native_proof.sh: No such file or directory
+
+
+======================================================================
+FAIL: test_old_success_is_remeasured_on_this_host (scripts.bench.tests.test_sweep_native_proof.NativeProofTests.test_old_success_is_remeasured_on_this_host)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/workspace/s4-wt/scripts/bench/tests/test_sweep_native_proof.py", line 49, in test_old_success_is_remeasured_on_this_host
+    self.assertIn('EXEC ', self.run_hook(prior='0'))
+                           ~~~~~~~~~~~~~^^^^^^^^^^^
+  File "/workspace/s4-wt/scripts/bench/tests/test_sweep_native_proof.py", line 33, in run_hook
+    self.assertEqual(p.returncode, 0, p.stderr)
+    ~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: 98 != 0 : bash: line 13: /workspace/s4-wt/scripts/drivermatrix/native_proof.sh: No such file or directory
+
+
+======================================================================
+FAIL: test_resumed_failure_stays_refused (scripts.bench.tests.test_sweep_native_proof.NativeProofTests.test_resumed_failure_stays_refused)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/workspace/s4-wt/scripts/bench/tests/test_sweep_native_proof.py", line 55, in test_resumed_failure_stays_refused
+    self.assertIn('GUEST_REFUSED', self.run_hook(prior='2'))
+                                   ~~~~~~~~~~~~~^^^^^^^^^^^
+  File "/workspace/s4-wt/scripts/bench/tests/test_sweep_native_proof.py", line 33, in run_hook
+    self.assertEqual(p.returncode, 0, p.stderr)
+    ~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: 98 != 0 : bash: line 13: /workspace/s4-wt/scripts/drivermatrix/native_proof.sh: No such file or directory
+
+
+======================================================================
+FAIL: test_resumed_timeout_stays_refused_without_reexecution (scripts.bench.tests.test_sweep_native_proof.NativeProofTests.test_resumed_timeout_stays_refused_without_reexecution)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/workspace/s4-wt/scripts/bench/tests/test_sweep_native_proof.py", line 58, in test_resumed_timeout_stays_refused_without_reexecution
+    out = self.run_hook(prior='124')
+  File "/workspace/s4-wt/scripts/bench/tests/test_sweep_native_proof.py", line 33, in run_hook
+    self.assertEqual(p.returncode, 0, p.stderr)
+    ~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: 98 != 0 : bash: line 13: /workspace/s4-wt/scripts/drivermatrix/native_proof.sh: No such file or directory
+
+
+======================================================================
+FAIL: test_success_runs_pinned_hook_before_admission (scripts.bench.tests.test_sweep_native_proof.NativeProofTests.test_success_runs_pinned_hook_before_admission)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/workspace/s4-wt/scripts/bench/tests/test_sweep_native_proof.py", line 43, in test_success_runs_pinned_hook_before_admission
+    out = self.run_hook()
+  File "/workspace/s4-wt/scripts/bench/tests/test_sweep_native_proof.py", line 33, in run_hook
+    self.assertEqual(p.returncode, 0, p.stderr)
+    ~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: 98 != 0 : bash: line 13: /workspace/s4-wt/scripts/drivermatrix/native_proof.sh: No such file or directory
+
+
+----------------------------------------------------------------------
+Ran 12 tests in 0.109s
+
+FAILED (failures=10, errors=2)
