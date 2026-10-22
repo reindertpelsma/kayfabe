@@ -11,3 +11,4 @@ import './callback-wiring.test.js';
 import './secret-boundary.test.js';
 import './path-prefix.test.js';
 import './secret-client.test.js';
+import './secret-forwarding.test.js';
