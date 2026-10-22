@@ -21,7 +21,7 @@ use kf_chan::user_gate::Marks;
 use kf_chan::user_lifecycle::Lifecycle;
 use kf_chan::user_loop::{Need, Wait, wait_of};
 use kf_chan::user_scan::{Fetch, Scan};
-use kf_chan::user_stream::{Source, inspect_entry};
+use kf_chan::user_stream::{Source, inspect_format};
 use kf_chan::user_turn::{self as turn, Fail, GpSegment, Io, PubKind, Staged, Step, SwView, Turn};
 use std::ops::{Deref, DerefMut};
 
@@ -181,7 +181,7 @@ pub fn seg_va(id: u8) -> u64 {
 
 /// Which guest entry id an 8-byte GP entry names (`None` for a value that names none).
 pub fn entry_id(raw: u64) -> Option<u8> {
-    match inspect_entry(raw, 1 << 20).ok()? {
+    match inspect_format(raw).ok()? {
         Source::Nop => u8::try_from((raw & 0xffff_ffff) >> 2).ok(),
         Source::Segment(d) => u8::try_from((d.gpu_va / 0x1000).checked_sub(1)?).ok(),
     }
@@ -338,7 +338,7 @@ impl<E: Env> Io for EnvIo<'_, E> {
     fn src_entries(&mut self) -> u32 {
         self.env.src_entries()
     }
-    fn max_entry_bytes(&mut self) -> u64 {
+    fn max_scan_bytes(&mut self) -> u64 {
         kf_chan::user_storage::MAX_SOURCE_BYTES
     }
     fn gp_put(&mut self) -> Turn<Option<u32>> {
@@ -450,6 +450,7 @@ impl<E: Env> Io for EnvIo<'_, E> {
             turn::Ev::PutBound => self.env.event(Ev::PutBound),
             turn::Ev::EntryRefused => self.env.event(Ev::EntryRefused),
             turn::Ev::ScanRefused => self.env.event(Ev::ScanRefused),
+            turn::Ev::ScanBudget => {}
             turn::Ev::CarriedUngated { .. } => self.env.event(Ev::CarriedUngated),
             turn::Ev::Retry { .. } => self.env.event(Ev::Retry),
             turn::Ev::GatePublished | turn::Ev::GateProceeded | turn::Ev::CreditWait => {}
