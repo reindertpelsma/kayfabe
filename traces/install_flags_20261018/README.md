@@ -71,3 +71,34 @@ MEASURED: `cargo clippy --release -j2 -p kf-qemu --all-targets --message-format=
 before/after: **348 warning diagnostics -> 348, 0 added**, comparing package, lint code, primary
 file and message multiplicities while ignoring line shifts. Existing warning debt was not changed.
 Rustfmt checks pass for the changed Rust files. No hardware compatibility claim follows.
+
+## Patched QEMU and argument checks
+
+MEASURED: QEMU 10.2.4 official release source built through `scripts/bench/build_kf3.sh` with
+Cargo and ninja constrained to 2 jobs and nice 19. Product Rust/C source is unchanged after
+`33f7a1703`; the first binary was labelled `e76209d8-dirty` because only this guide/inventory
+were being refined. All 24 custom properties appear in [device help](qemu-device-help.txt)
+(39 including inherited PCI properties). A clean revision-stamped build is recorded below when complete.
+
+MEASURED: [16 argument cases](qemu-property-results.txt) include the production list, dropping
+each of its 12 properties/placement arguments individually, bare `kf3-gpu`, and the guide's
+Linux/Windows device strings. Each exits 1 at the expected `kf3: requires -accel kvm` guard
+under TCG with `-S`, before guest boot, GPU access or Rust realize. These are parser checks,
+not a substitute for configuration validation or a hardware omission test. The explicit
+`display-broker`/`display` dependency is still required by source checks.
+
+MEASURED: all four installation shell blocks pass `bash -n`, local Markdown targets exist,
+and all 157 base scoped KF3 tokens are accounted for (including explicitly excluded macros,
+record labels and fragments). The 99 live/test rows cite actual literal or constant-based
+lookup sites at the base revision. Source reads verify every custom QOM default; the two
+reduced guest commands and new default combinations remain **hardware-UNVERIFIED**.
+
+MEASURED: the guide's **two full QEMU command lines** were expanded by Bash and accepted by
+patched QEMU using test substitutions: TCG/`max` CPU instead of KVM/`host`, 64 MiB RAM,
+and temporary empty qcow2/OVMF variables fixtures. Both stopped at the same pre-GPU KVM guard
+with `-S`; [results](full-command-results.txt). No guest instructions ran. The original KVM
+commands, real installed guest disks and driver/display functionality remain hardware-UNVERIFIED.
+
+CODE READ: historical revisions selected by the launchers (`0452613b`, `0d7ba743`) also have
+no lifecycle count/period reader in their tracked product source. This closes the source-level
+cross-revision concern for dropping the hitch extras; private replacement binaries were not inspected.

@@ -19,6 +19,8 @@ CODE READ, UNVERIFIED (IOMMU-off hardware): kf3 uses the host NVIDIA driver as a
 
 ## Build the device and broker
 
+CODE READ, UNVERIFIED (fresh host): the QEMU user needs access to `/dev/kvm`, the selected `/dev/nvidiaN`, `/dev/nvidiactl` and the host CUDA runtime (`libcuda.so.1`, supplied with the driver). Check the host driver with `nvidia-smi` before building. The CUDA toolkit is not a build dependency; the repo embeds its PTX. D1 has not verified a complete rootless guest boot; historical coverage is in [STATUS_DETAIL](STATUS_DETAIL.md).
+
 CODE READ, UNVERIFIED (distribution provisioning): Debian/Ubuntu package names below follow the repo's provisioner and broker Makefile; use equivalent packages on other distributions. The commands pin the audited source change `33f7a1703` for reproducibility; the guide adds documentation after that code revision. The pinned Rust 1.99.0 toolchain in [`rust-toolchain.toml`](../rust-toolchain.toml), including `x86_64-unknown-uefi`, is needed (the GOP ROM embeds a Rust UEFI image). `qemu-img` comes from `qemu-utils`; the build script disables QEMU tools.
 
 ```bash

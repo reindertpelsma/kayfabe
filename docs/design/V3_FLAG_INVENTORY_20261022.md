@@ -31,7 +31,7 @@ KF3_DISPLAY_SDR_COLOR KF3_DISPLAY_CAPS_PROBE
 KF3_DISPLAY_LUT_MIRROR KF3_DISPLAY_ILUT_OFFSET_256
 ```
 
-CODE READ: the stock in-repo Windows launcher differs: it includes diagnostic tracing in its default `FLAGS`. It must not be advertised as the minimal user launcher.
+CODE READ (base master): the main in-repo Windows launcher enabled diagnostic tracing by default. D1 removes those four default assignments, but its older research behavior profile still differs from the production copy. It is not the minimal user launcher.
 
 ## Design before implementation
 
@@ -54,111 +54,112 @@ INFERRED: a completely flag-free Windows installation cannot be honestly claimed
 
 ## Full inventory
 
-CODE READ: the default column records **base master before D1**; candidate changes are named explicitly and the result section records what landed. Class describes semantics, independent of a misleading PROBE/DIAG name. No current-revision hardware ablation was performed: “historical gate” is INFERRED current necessity from [the dated inventory](V3_FLAG_INVENTORY.md) and [ablation evidence](../../traces/windows_flag_ablation_20261010/README.md), not a new REQUIRED-TO-BOOT measurement. No live flag is asserted REQUIRED-TO-BOOT on this revision. “yes 1” means the executable perf6 call chain sets it, not that it is safe to promote. “no” means no assignment after clearing inherited KF3 variables.
+CODE READ: unchanged rows use **base master** defaults; the three changed rows explicitly state the D1 defaults. The result section records the implementation. Class describes semantics, independent of a misleading PROBE/DIAG name. No current-revision hardware ablation was performed: “historical gate” is INFERRED current necessity from [the dated inventory](V3_FLAG_INVENTORY.md) and [ablation evidence](../../traces/windows_flag_ablation_20261010/README.md), not a new REQUIRED-TO-BOOT measurement. No live flag is asserted REQUIRED-TO-BOOT on this revision. “yes 1” means the executable perf6 call chain sets it, not that it is safe to promote. “no” means no assignment after clearing inherited KF3 variables.
 
-| Environment name | Base default / parsing | Class | Effect | Production sets | Production needs it? | Reader (base revision) |
+| Environment name | Default / parsing (base → D1 where changed) | Class | Effect | Production sets | Production needs it? | Reader (base revision) |
 |---|---|---|---|---|---|---|
-| `KF3_ASYNC_PREEMPT` | off; only 1 enables | PRODUCTION-BEHAVIOUR | Real async disable/preempt and host completion relay | yes 1 | unknown today; real-preempt path in production | `crates/kf-disp/src/model.rs:558`, `crates/kf-rm/src/chanlink.rs:262`, `crates/kf-rm/src/display.rs:751` |
+| `KF3_ASYNC_PREEMPT` | off; only 1 enables | PRODUCTION-BEHAVIOUR | Real async disable/preempt and host completion relay | yes 1 | unknown today; real-preempt path in production | `crates/kf-rm/src/chanlink.rs:262` |
 | `KF3_ASYNC_PREEMPT_REENABLE_NOACT` | off; only 1 enables | DEBUG | Answer re-enable OK without a host act (diagnostic control) | no | no; keep off | `crates/kf-qemu/src/chan.rs:1812` |
-| `KF3_BAR0_READ_TRACE` | off; 1/on enables | MEASUREMENT | Explicit BAR0 read-exit tracing exception; malformed enabled config refuses | no | no | `crates/kf-qemu/src/device.rs:338`, `crates/kf-qemu/src/ffi_unsafe.rs:614`, `crates/kf-qemu/src/readtrace.rs:1` |
-| `KF3_BAR0_TRACE` | off; only 1 enables | MEASUREMENT | Bounded BAR0 window read/write trace (read-trap exception) | no | no | `crates/kf-qemu/src/raw_unsafe.rs:176`, `crates/kf-qemu/src/device.rs:1431`, `crates/kf-qemu/src/ffi_unsafe.rs:48` |
-| `KF3_CARRY_ATOMIC_DISABLE` | off; only 1 enables | DEBUG | Carry guest ATOMIC_DISABLE bit into mappings for fault research | no | no; needs fault service | `crates/kf-mem/src/apply.rs:312`, `crates/kf-harness/src/bin/kf-gate9.rs:50`, `crates/kf-cuda/src/abi.rs:131` |
-| `KF3_COMPLETION_PROBE` | unset; set number ms, junk 1000 | MEASUREMENT | Own thread reads completion/release state after threshold | no | no | `crates/kf-chan/src/translated.rs:321`, `crates/kf-chan/src/host.rs:1075`, `crates/kf-chan/src/census.rs:12` |
+| `KF3_BAR0_READ_TRACE` | off; 1/on enables | MEASUREMENT | Explicit BAR0 read-exit tracing exception; malformed enabled config refuses | no | no | `crates/kf-qemu/src/readtrace.rs:205` |
+| `KF3_BAR0_TRACE` | off; only 1 enables | MEASUREMENT | Bounded BAR0 window read/write trace (read-trap exception) | no | no | `crates/kf-qemu/src/bar0trace.rs:51` |
+| `KF3_CARRY_ATOMIC_DISABLE` | off; only 1 enables | DEBUG | Carry guest ATOMIC_DISABLE bit into mappings for fault research | no | no; needs fault service | `crates/kf-qemu/src/device.rs:505` |
+| `KF3_COMPLETION_PROBE` | unset; set number ms, junk 1000 | MEASUREMENT | Own thread reads completion/release state after threshold | no | no | `crates/kf-qemu/src/chan.rs:1880` |
 | `KF3_DBFAST_PROBE` | unset; hex slot value | MEASUREMENT | Register fast doorbell probe only for an unused slot | no | no | `crates/kf-qemu/src/device.rs:2720` |
 | `KF3_DBFAST_SPIN_US` | 0; parsed microseconds | DEBUG | Existing post-delivery doorbell spin experiment | no | no; no timing change here | `crates/kf-qemu/src/device.rs:2545` |
-| `KF3_DEBUG` | off; only 1 enables | DEBUG | Required acknowledgement for force-migratable lab switch | no | no | `crates/kf-harness/src/bin/kf-syncwait-stress.rs:4`, `crates/kf-rm/src/chanlink.rs:322` |
-| `KF3_DEBUG_CURSOR` | unset; 1 logs or value is dump directory | MEASUREMENT | Distinct cursor images/text and optional image dumps | no | no | `crates/kf-disp/src/scanout.rs:1400`, `crates/kf-qemu/src/display.rs:4204` |
-| `KF3_DEBUG_FORCE_MIGRATABLE` | off; only 1 enables and DEBUG=1 required | DEBUG | Route USER channels to migratable relay for Linux validation | no | no | `crates/kf-harness/src/bin/kf-syncwait-stress.rs:5`, `crates/kf-rm/src/chanlink.rs:320`, `crates/kf-qemu/src/userrelay.rs:161` |
-| `KF3_DEFERRED_API` | off; only 1 enables | PRODUCTION-BEHAVIOUR | Authored deferred-API trigger methods on Translated rings | yes 1 | unknown today; historical Windows gate | `crates/kf-chan/src/tmode.rs:381`, `crates/kf-chan/src/tmode_gr_tests.rs:398`, `crates/kf-qemu/src/chan.rs:1778` |
+| `KF3_DEBUG` | off; only 1 enables | DEBUG | Required acknowledgement for force-migratable lab switch | no | no | `crates/kf-rm/src/chanlink.rs:349` |
+| `KF3_DEBUG_CURSOR` | unset; 1 logs or value is dump directory | MEASUREMENT | Distinct cursor images/text and optional image dumps | no | no | `crates/kf-qemu/src/display.rs:4204` |
+| `KF3_DEBUG_FORCE_MIGRATABLE` | off; only 1 enables and DEBUG=1 required | DEBUG | Route USER channels to migratable relay for Linux validation | no | no | `crates/kf-rm/src/chanlink.rs:348` |
+| `KF3_DEFERRED_API` | off; only 1 enables | PRODUCTION-BEHAVIOUR | Authored deferred-API trigger methods on Translated rings | yes 1 | unknown today; historical Windows gate | `crates/kf-qemu/src/chan.rs:1778` |
 | `KF3_DIAG_EVENT_RING` | off; only 1 enables | MEASUREMENT | Bounded lock-step relay event ring | no | no | `crates/kf-broker/src/ticks.rs:309` |
-| `KF3_DIAG_PROGRESS` | unset/0/junk off; positive ms | MEASUREMENT | Nonblocking progress-strand watcher and timestamps | no | no | `crates/kf-qemu/src/userstrand.rs:22`, `crates/kf-qemu/src/userrelay.rs:55`, `crates/kf-qemu/src/chan.rs:3137` |
+| `KF3_DIAG_PROGRESS` | unset/0/junk off; positive ms | MEASUREMENT | Nonblocking progress-strand watcher and timestamps | no | no | `crates/kf-qemu/src/userstrand.rs:22` |
 | `KF3_DIAG_STEP_METERS` | off; only 1 enables | MEASUREMENT | Display-worker step timings | no | no | `crates/kf-qemu/src/display.rs:2325` |
-| `KF3_DIAG_UNMAP_DELAY_MS` | unset/0/junk off; positive ms | DEBUG | Deliberately hold unmaps for stale-mapping A/B control | no | no | `crates/kf-mem/src/vasmgr.rs:1496`, `crates/kf-mem/src/maplog.rs:50` |
+| `KF3_DIAG_UNMAP_DELAY_MS` | unset/0/junk off; positive ms | DEBUG | Deliberately hold unmaps for stale-mapping A/B control | no | no | `crates/kf-mem/src/maplog.rs:50` |
 | `KF3_DISPLAY_ARMED_DEFAULTS` | off; only 1 enables | DEBUG | Seed ARMED MIN_FRAME_IDLE defaults at a new core life | no | unknown; not in production | `crates/kf-qemu/src/display.rs:112` |
 | `KF3_DISPLAY_BLANK_STATE` | off; only 1 enables | DEBUG | Seed BLANK readback on a new core life | no | unknown; not in production | `crates/kf-qemu/src/display.rs:98` |
 | `KF3_DISPLAY_CAPS_PROBE` | off; only 1 enables | PRODUCTION-BEHAVIOUR | Replace authored caps with measured AD104 page at matching class/base | yes 1 | historical gate as a group; NOT justified for promotion | `crates/kf-qemu/src/display.rs:157` |
-| `KF3_DISPLAY_CORE_AT_VBLANK` | off; only 1 enables | DEBUG | Latch/notify active-head core updates at vblank | no | unknown; not in production | `crates/kf-disp/src/engine.rs:588`, `crates/kf-qemu/src/display.rs:2814` |
-| `KF3_DISPLAY_CTRL_PROBE` | off; only 1 enables | PRODUCTION-BEHAVIOUR | Six display controls answer OK with echoed request | yes 1 | historical Windows boot gate; owner/derivation gap | `crates/kf-rm/examples/display_replay.rs:9`, `crates/kf-rm/src/display_ctrl_probe.rs:26` |
-| `KF3_DISPLAY_HDCP_STATE` | off; only 1 enables | DEBUG | Answer HDCP state OK with no HDCP flags | no | unknown; not in production | `crates/kf-disp/src/model.rs:73`, `crates/kf-rm/src/display.rs:406` |
-| `KF3_DISPLAY_HDMI_PROBE` | off; only 1 enables | DEBUG | Measured connector/HDMI topology replies | no | unknown; not in production | `crates/kf-rm/src/display_ctrl_probe.rs:215` |
+| `KF3_DISPLAY_CORE_AT_VBLANK` | off; only 1 enables | DEBUG | Latch/notify active-head core updates at vblank | no | unknown; not in production | `crates/kf-qemu/src/display.rs:2814` |
+| `KF3_DISPLAY_CTRL_PROBE` | off; only 1 enables | PRODUCTION-BEHAVIOUR | Six display controls answer OK with echoed request | yes 1 | historical Windows boot gate; owner/derivation gap | `crates/kf-rm/src/display_ctrl_probe.rs:41` |
+| `KF3_DISPLAY_HDCP_STATE` | off; only 1 enables | DEBUG | Answer HDCP state OK with no HDCP flags | no | unknown; not in production | `crates/kf-rm/src/display.rs:406` |
+| `KF3_DISPLAY_HDMI_PROBE` | off; only 1 enables | DEBUG | Measured connector/HDMI topology replies | no | unknown; not in production | `crates/kf-rm/src/display_ctrl_probe.rs:230` |
 | `KF3_DISPLAY_HEAD_TIMING_EN_BASE` | unset; parsed hexadecimal base | DEBUG | Override initial head-timing enable readback | no | no; per-die state is not derived | `crates/kf-qemu/src/display.rs:2252` |
-| `KF3_DISPLAY_HOTPLUG_EDID_SEEN` | off; only 1 enables | DEBUG | Defer hotplug until EDID has been read | no | unknown; not in production | `crates/kf-disp/src/model.rs:542`, `crates/kf-rm/src/display.rs:248` |
+| `KF3_DISPLAY_HOTPLUG_EDID_SEEN` | off; only 1 enables | DEBUG | Defer hotplug until EDID has been read | no | unknown; not in production | `crates/kf-rm/src/display.rs:414` |
 | `KF3_DISPLAY_ILUT_CONSTRUCTOR_PROBE` | off; only 1 enables | DEBUG | Advertise ILUT/TMO construction, refuse normal methods | no | no; constructor lab only | `crates/kf-qemu/src/display.rs:2150` |
-| `KF3_DISPLAY_ILUT_OFFSET_256` | off; only 1 enables (D1 candidate on, 0 opt-out) | PRODUCTION-BEHAVIOUR | Decode input LUT offset in 256-byte units (nouveau source) | yes 1 | historical Windows colour gate as a group | `crates/kf-disp/src/color.rs:69`, `crates/kf-qemu/src/display.rs:116` |
-| `KF3_DISPLAY_IMP_ENABLE` | off; only 1 enables | PRODUCTION-BEHAVIOUR | Answer IMP_ENABLE GET true when display model is present | yes 1 | historical Windows gate jointly with control probe | `crates/kf-disp/src/model.rs:532`, `crates/kf-rm/src/display.rs:397` |
+| `KF3_DISPLAY_ILUT_OFFSET_256` | base off; D1 on, exact 0 opt-out | PRODUCTION-BEHAVIOUR | Decode input LUT offset in 256-byte units (nouveau source) | yes 1 | historical Windows colour gate as a group | `crates/kf-qemu/src/display.rs:128` |
+| `KF3_DISPLAY_IMP_ENABLE` | off; only 1 enables | PRODUCTION-BEHAVIOUR | Answer IMP_ENABLE GET true when display model is present | yes 1 | historical Windows gate jointly with control probe | `crates/kf-rm/src/display.rs:397` |
 | `KF3_DISPLAY_LOADV` | off; only 1 enables | DEBUG | Add LOADV event bit and republish at frame edges | no | unknown; not in production | `crates/kf-qemu/src/display.rs:76` |
-| `KF3_DISPLAY_LUT_MIRROR` | off; only 1 enables (D1 candidate on, 0 opt-out) | PRODUCTION-BEHAVIOUR | Accept MIRROR only where negative inputs cannot reach LUT | yes 1 | historical Windows colour gate as a group | `crates/kf-disp/src/color.rs:59`, `crates/kf-qemu/src/display.rs:115` |
-| `KF3_DISPLAY_METHOD_TRACE` | off; only 1 enables | MEASUREMENT | Display method/engine diagnostic trace | no | no; in stock repo launcher, absent from production copy | `crates/kf-qemu/src/display.rs:2850` |
+| `KF3_DISPLAY_LUT_MIRROR` | base off; D1 on, exact 0 opt-out | PRODUCTION-BEHAVIOUR | Accept MIRROR only where negative inputs cannot reach LUT | yes 1 | historical Windows colour gate as a group | `crates/kf-qemu/src/display.rs:127` |
+| `KF3_DISPLAY_METHOD_TRACE` | off; only 1 enables | MEASUREMENT | Display method/engine diagnostic trace | no | no; in stock repo launcher, absent from production copy | `crates/kf-qemu/src/display.rs:2459`, `crates/kf-qemu/src/display.rs:2850` |
 | `KF3_DISPLAY_OLUT_CONSTRUCTOR_PROBE` | off; only 1 enables | DEBUG | Constructor-only OLUT plus TMO/ILUT probe chain | no | no | `crates/kf-qemu/src/display.rs:2146` |
-| `KF3_DISPLAY_PRIVATE_PROBE` | off; only 1 enables | DEBUG | Two measured commit-time private-control replies | no | unknown; not in production | `crates/kf-rm/examples/display_replay.rs:10`, `crates/kf-rm/src/display_ctrl_probe.rs:111` |
-| `KF3_DISPLAY_SDR_COLOR` | off; only 1 enables (D1 candidate on, 0 opt-out) | PRODUCTION-BEHAVIOUR | Advertise source-derived SDR caps and run existing GPU colour pipeline | yes 1 | not required for idle desktop in older ablation; real colour is production | `crates/kf-qemu/src/display.rs:2166` |
+| `KF3_DISPLAY_PRIVATE_PROBE` | off; only 1 enables | DEBUG | Two measured commit-time private-control replies | no | unknown; not in production | `crates/kf-rm/src/display_ctrl_probe.rs:122` |
+| `KF3_DISPLAY_SDR_COLOR` | base off; D1 on, exact 0 opt-out | PRODUCTION-BEHAVIOUR | Advertise source-derived SDR caps and run existing GPU colour pipeline | yes 1 | not required for idle desktop in older ablation; real colour is production | `crates/kf-qemu/src/display.rs:2166` |
 | `KF3_DISPLAY_TMO_CONSTRUCTOR_PROBE` | off; only 1 enables | DEBUG | TMO constructor caps, refuse all display methods | no | no | `crates/kf-qemu/src/display.rs:2154` |
 | `KF3_DISPLAY_TMO_SURFACE_CONSTRUCTOR_PROBE` | off; only 1 enables | DEBUG | TMO/ILUT surface-construction-only probe | no | no | `crates/kf-qemu/src/display.rs:2148` |
 | `KF3_DISPLAY_TRACE` | off; only 1 enables | MEASUREMENT | Scanout source/copy digest trace | no | no | `crates/kf-qemu/src/display.rs:2809` |
 | `KF3_DISPLAY_TRACE_CAP` | 4096 lines per kind | MEASUREMENT | Bound diagnostic trace output, parsed u32 | no | no | `crates/kf-qemu/src/display.rs:283` |
 | `KF3_DISPLAY_WRITE_TRACE` | off; only 1 enables | MEASUREMENT | Trace guest display-register writes | no | no | `crates/kf-qemu/src/display.rs:85` |
-| `KF3_DISPLAY_XBAR_PROBE` | off; only 1 enables | DEBUG | Measured crossbar caps/DFP_ASSIGN_SOR replies | no | unknown; not in production | `crates/kf-rm/src/display_ctrl_probe.rs:225` |
+| `KF3_DISPLAY_XBAR_PROBE` | off; only 1 enables | DEBUG | Measured crossbar caps/DFP_ASSIGN_SOR replies | no | unknown; not in production | `crates/kf-rm/src/display_ctrl_probe.rs:236` |
 | `KF3_DOORBELL_CPL` | off; first character 1 enables | MEASUREMENT | Log guest privilege level of doorbell MMIO writes | no | no | `qemu/hw/misc/kf3/kf3.c:294` |
 | `KF3_FAILCLOSED_CHILD` | unset; unit-test child mode | DEBUG | Subprocess panic-abort fixtures (cfg(test), no production read) | no | no | `crates/kf-qemu/src/failclosed.rs:104` |
-| `KF3_GFX_POOL_PROBE` | off; only 1 enables | PRODUCTION-BEHAVIOUR | Fabricated virtual GfxP pool sizing, not lifecycle | yes 1 | historical Windows boot gate; owner/derivation gap | `crates/kf-rm/src/gfxpool_probe.rs:6`, `crates/kf-rm/src/lib.rs:597` |
-| `KF3_GSS_NATIVE` | off; only 1 enables | DEBUG | Nonprivileged subdevice GSS-legacy experiment | no | unknown; not in production | `crates/kf-gsp/src/boot.rs:419`, `crates/kf-rm/src/gssnative.rs:40`, `crates/kf-rm/src/rmrpc/policy.rs:270` |
+| `KF3_GFX_POOL_PROBE` | off; only 1 enables | PRODUCTION-BEHAVIOUR | Fabricated virtual GfxP pool sizing, not lifecycle | yes 1 | historical Windows boot gate; owner/derivation gap | `crates/kf-rm/src/lib.rs:597` |
+| `KF3_GSS_NATIVE` | off; only 1 enables | DEBUG | Nonprivileged subdevice GSS-legacy experiment | no | unknown; not in production | `crates/kf-rm/src/gssnative.rs:59` |
 | `KF3_INJECT_FWSEC_FAIL` | 0; parsed initial failure count | DEBUG | Drop initial FWSEC-FRTS STARTCPU acts | no | no | `crates/kf-qemu/src/device.rs:4232` |
-| `KF3_INJECT_STALE_USERD` | unset; parsed u32 | DEBUG | Seed stale GP_PUT/GP_GET on Translated birth | no | no | `crates/kf-chan/src/host.rs:958`, `crates/kf-qemu/src/chan.rs:1895` |
+| `KF3_INJECT_STALE_USERD` | unset; parsed u32 | DEBUG | Seed stale GP_PUT/GP_GET on Translated birth | no | no | `crates/kf-qemu/src/chan.rs:1895` |
 | `KF3_INVALIDATE_CLEAR_OVER_ABSENT` | on; exact 0 disables | PRODUCTION-BEHAVIOUR | Complete invalidates over refused/absent host mappings | no | built-in on; research opt-out stays | `crates/kf-mem/src/vasmgr.rs:63` |
 | `KF3_KERNEL_GR_CE` | off; only 1 enables | PRODUCTION-BEHAVIOUR | Guest-kernel GR ring in private T-space with host GR context | yes 1 | historical Windows gate; Linux default scope unresolved | `crates/kf-qemu/src/chan.rs:1750` |
 | `KF3_KERNEL_GR_WORK` | off; only 1 enables | PRODUCTION-BEHAVIOUR | Re-author allowlisted guest-kernel GR methods | yes 1 | paired with KERNEL_GR_CE; default-off ruling until proven | `crates/kf-qemu/src/chan.rs:1760` |
-| `KF3_LAZY_OBSERVE` | on; trimmed 0 disables; interval 16, disabled 1 | PRODUCTION-BEHAVIOUR | Conservative private USERD observation in Pointer mode | no | already default on; not a diagnostic timestamp flag | `crates/kf-chan/src/user_lazy.rs:125`, `crates/kf-qemu/src/userpump.rs:215` |
-| `KF3_LIFECYCLE_MODE` | default; empty/unknown default (unknown warns) | PRODUCTION-BEHAVIOUR | Scan/Pointer/Window lifecycle; always_scan/no_pointer_markers/no_anchored_windows arms | no | already default; old all-scan arm remains selectable | `crates/kf-chan/src/user_lifecycle.rs:53`, `crates/kf-qemu/src/userpump.rs:171` |
-| `KF3_MAPLOG` | off; ANY presence enables, including 0 | MEASUREMENT | VA-plane timeline, including hot-path logging | no | no; unset to disable | `crates/kf-mem/src/vasmgr.rs:605`, `crates/kf-mem/src/maplog.rs:22`, `crates/kf-qemu/src/device.rs:2232` |
+| `KF3_LAZY_OBSERVE` | on; trimmed 0 disables; interval 16, disabled 1 | PRODUCTION-BEHAVIOUR | Conservative private USERD observation in Pointer mode | no | already default on; not a diagnostic timestamp flag | `crates/kf-qemu/src/userpump.rs:225` |
+| `KF3_LIFECYCLE_MODE` | default; empty/unknown default (unknown warns) | PRODUCTION-BEHAVIOUR | Scan/Pointer/Window lifecycle; always_scan/no_pointer_markers/no_anchored_windows arms | no | already default; old all-scan arm remains selectable | `crates/kf-qemu/src/userpump.rs:181` |
+| `KF3_MAPLOG` | off; ANY presence enables, including 0 | MEASUREMENT | VA-plane timeline, including hot-path logging | no | no; unset to disable | `crates/kf-mem/src/maplog.rs:22` |
 | `KF3_MEMORY_LIST_PROBE` | off; only 1 enables | PRODUCTION-BEHAVIOUR | Checked contiguous SYSRAM descriptor support | yes 1 | unknown today; in production | `crates/kf-rm/src/lib.rs:584` |
-| `KF3_NEGCTL_CARVE` | off; any value other than 0 enables | DEBUG | Positive control counts every leaf as carve-out, refuses none | no | no | `crates/kf-mem/src/apply.rs:83`, `crates/kf-qemu/src/device.rs:1088`, `crates/kf-qemu/src/tspace.rs:86` |
+| `KF3_NEGCTL_CARVE` | off; any value other than 0 enables | DEBUG | Positive control counts every leaf as carve-out, refuses none | no | no | `crates/kf-qemu/src/tspace.rs:86` |
 | `KF3_NEGCTL_HEAP` | off; any value other than 0 enables | DEBUG | Count every channel birth as heap-out, refuse none | no | no | `crates/kf-qemu/src/chan.rs:1829` |
 | `KF3_NEGCTL_NO_BAR1_DOORBELL` | off; ANY presence enables | DEBUG | Suppress Hopper+ BAR1 doorbell classification | no | no | `crates/kf-qemu/src/device.rs:1064` |
-| `KF3_NEGCTL_NO_MICRO_RESERVE` | off; only 1 enables | DEBUG | Disable small host VA reservations for negative control | no | no; real reservations built-in on | `crates/kf-mem/src/batch.rs:1081`, `crates/kf-mem/src/sim/tests.rs:265`, `crates/kf-qemu/src/mem.rs:1297` |
-| `KF3_NEGCTL_SKIP_CAP_BRACKET` | off; only 1 enables | DEBUG | Skip channel-alloc capability bracket for control | no | no | `crates/kf-host/src/channel.rs:497`, `crates/kf-host/src/birth.rs:62` |
-| `KF3_NEGCTL_STALE_BIND` | off; any value other than 0 enables | DEBUG | Perturb stale-bind counter positive control | no | no | `crates/kf-chan/src/tmode.rs:2018`, `crates/kf-chan/src/host.rs:1276`, `crates/kf-qemu/src/chan.rs:1821` |
+| `KF3_NEGCTL_NO_MICRO_RESERVE` | off; only 1 enables | DEBUG | Disable small host VA reservations for negative control | no | no; real reservations built-in on | `crates/kf-qemu/src/mem.rs:1297` |
+| `KF3_NEGCTL_SKIP_CAP_BRACKET` | off; only 1 enables | DEBUG | Skip channel-alloc capability bracket for control | no | no | `crates/kf-host/src/channel.rs:497` |
+| `KF3_NEGCTL_STALE_BIND` | off; any value other than 0 enables | DEBUG | Perturb stale-bind counter positive control | no | no | `crates/kf-qemu/src/chan.rs:1821` |
 | `KF3_NEGCTL_TSPACE_OVERSIZE` | off; any value other than 0 enables | DEBUG | Oversize translated ring region to test refusal | no | no | `crates/kf-qemu/src/tspace.rs:107` |
 | `KF3_NEGCTL_TWIN` | off; any value other than 0 enables | DEBUG | Make twin refusal counter move for control | no | no | `crates/kf-qemu/src/chan.rs:1838` |
 | `KF3_NEGCTL_TWIN_WINDOW` | off; any value other than 0 enables | DEBUG | Map store window in twin as forbidden-window positive control | no | no | `crates/kf-qemu/src/mem.rs:2932` |
-| `KF3_NO_BATCHED_MAP` | off; ANY presence disables batching | PRODUCTION-BEHAVIOUR | Select per-run mapping research arm | no | batching already built-in on | `crates/kf-mem/src/sim.rs:874`, `crates/kf-mem/src/batch.rs:1054`, `crates/kf-mem/src/sim/tests.rs:1368` |
-| `KF3_NO_GUEST_VA_RESERVE` | off; ANY presence disables reservation | DEBUG | Disable guest low-VA reservation for host experiment | no | no | `crates/kf-host/src/channel.rs:677`, `crates/kf-qemu/src/chan.rs:242` |
-| `KF3_PREEMPT_BIND_PROBE` | off; only 1 enables | PRODUCTION-BEHAVIOUR | Answer preemption bind OK without host bind | yes 1 | historical Windows boot gate; owner/native gap | `crates/kf-rm/src/preempt_bind_probe.rs:26` |
-| `KF3_PROF` | off; 1/on enables | MEASUREMENT | Trap/publish attribution timers and counters | no | no | `crates/kf-qemu/src/prof.rs:35`, `crates/kf-qemu/src/device.rs:305` |
-| `KF3_PT_NSI_MIN_INTERVAL_US` | 0; invalid/0 off; positive us capped at 1000000 | PRODUCTION-BEHAVIOUR | Optional existing loss-free interrupt pacing (§X) | no | no delay by default; do not tune here | `crates/kf-chan/src/ptnsi.rs:62`, `crates/kf-qemu/src/chan.rs:2747` |
-| `KF3_PT_NSI_RELAY` | on; trimmed 0 disables | PRODUCTION-BEHAVIOUR | Relay armed FIFO host events; 0 counts only | no | already built-in on | `crates/kf-chan/src/ptnsi.rs:334`, `crates/kf-qemu/src/chan.rs:2749` |
-| `KF3_PT_STALL_SNAPSHOT` | off; only 1 enables | MEASUREMENT | Bounded snapshots of Passthrough stall/free state | no | no | `crates/kf-qemu/src/device.rs:2568`, `crates/kf-qemu/src/chan.rs:956` |
+| `KF3_NO_BATCHED_MAP` | off; ANY presence disables batching | PRODUCTION-BEHAVIOUR | Select per-run mapping research arm | no | batching already built-in on | `crates/kf-qemu/src/mem.rs:1274` |
+| `KF3_NO_GUEST_VA_RESERVE` | off; ANY presence disables reservation | DEBUG | Disable guest low-VA reservation for host experiment | no | no | `crates/kf-host/src/channel.rs:677` |
+| `KF3_PREEMPT_BIND_PROBE` | off; only 1 enables | PRODUCTION-BEHAVIOUR | Answer preemption bind OK without host bind | yes 1 | historical Windows boot gate; owner/native gap | `crates/kf-rm/src/preempt_bind_probe.rs:31` |
+| `KF3_PROF` | off; 1/on enables | MEASUREMENT | Trap/publish attribution timers and counters | no | no | `crates/kf-qemu/src/prof.rs:35` |
+| `KF3_PT_NSI_MIN_INTERVAL_US` | 0; invalid/0 off; positive us capped at 1000000 | PRODUCTION-BEHAVIOUR | Optional existing loss-free interrupt pacing (§X) | no | no delay by default; do not tune here | `crates/kf-qemu/src/chan.rs:2747` |
+| `KF3_PT_NSI_RELAY` | on; trimmed 0 disables | PRODUCTION-BEHAVIOUR | Relay armed FIFO host events; 0 counts only | no | already built-in on | `crates/kf-qemu/src/chan.rs:2749` |
+| `KF3_PT_STALL_SNAPSHOT` | off; only 1 enables | MEASUREMENT | Bounded snapshots of Passthrough stall/free state | no | no | `crates/kf-qemu/src/chan.rs:956` |
 | `KF3_PT_STALL_SNAPSHOT_MS` | 1000; clamp 200..10000 | MEASUREMENT | Snapshot silence threshold when snapshot enabled | no | no | `crates/kf-qemu/src/chan.rs:959` |
-| `KF3_PUT_CACHE` | on; trimmed 0 disables | PRODUCTION-BEHAVIOUR | Cache published guest GP_PUT until exhausted, per generation | no | already built-in on | `crates/kf-chan/src/user_lazy.rs:122`, `crates/kf-qemu/src/userpump.rs:215` |
-| `KF3_READ_TRACE_MAX_BYTES` | 512 MiB; 1..16 GiB allowed | MEASUREMENT | BAR0 read-trace byte cap, parsed only if enabled | no | no | `crates/kf-qemu/src/readtrace.rs:16` |
-| `KF3_READ_TRACE_MAX_RECORDS` | 8000000; positive only | MEASUREMENT | BAR0 read-trace record cap | no | no | `crates/kf-qemu/src/readtrace.rs:15` |
-| `KF3_READ_TRACE_RANGES` | display range plus any supplied ranges | MEASUREMENT | Select read ranges; display range always included | no | no | `crates/kf-qemu/src/readtrace.rs:13` |
-| `KF3_RELAY_GET_REFRESH` | off; only 1 enables | PRODUCTION-BEHAVIOUR | Refresh relayed GP_GET from host event/park tick (never GP_PUT) | no | unknown; not in production | `crates/kf-chan/src/userd_relay.rs:24`, `crates/kf-chan/src/worker.rs:61`, `crates/kf-qemu/src/device.rs:3610` |
+| `KF3_PUT_CACHE` | on; trimmed 0 disables | PRODUCTION-BEHAVIOUR | Cache published guest GP_PUT until exhausted, per generation | no | already built-in on | `crates/kf-qemu/src/userpump.rs:224` |
+| `KF3_READ_TRACE_MAX_BYTES` | 512 MiB; 1..16 GiB allowed | MEASUREMENT | BAR0 read-trace byte cap, parsed only if enabled | no | no | `crates/kf-qemu/src/readtrace.rs:220` |
+| `KF3_READ_TRACE_MAX_RECORDS` | 8000000; positive only | MEASUREMENT | BAR0 read-trace record cap | no | no | `crates/kf-qemu/src/readtrace.rs:229` |
+| `KF3_READ_TRACE_RANGES` | display range plus any supplied ranges | MEASUREMENT | Select read ranges; display range always included | no | no | `crates/kf-qemu/src/readtrace.rs:210` |
+| `KF3_RELAY_GET_REFRESH` | off; only 1 enables | PRODUCTION-BEHAVIOUR | Refresh relayed GP_GET from host event/park tick (never GP_PUT) | no | unknown; not in production | `crates/kf-qemu/src/chan.rs:1797` |
 | `KF3_RELAY_PB_PEEK` | unset; 1 or after-fifo-update enables | MEASUREMENT | Bounded relayed pushbuffer/semaphore diagnostic peek | no | no | `crates/kf-qemu/src/chan.rs:860` |
-| `KF3_RPC_TRACE` | off; only 1 enables | MEASUREMENT | GSP/RM command census trace | no | no | `crates/kf-rm/examples/display_replay.rs:3`, `crates/kf-rm/src/census.rs:334` |
-| `KF3_STRESS_SECS` | 3 userstore, 2 lifecycle stress/props | DEBUG | GPU-free stress-test duration only (not product config) | no | no | `crates/kf-qemu/src/userstore.rs:863` |
+| `KF3_RPC_TRACE` | off; only 1 enables | MEASUREMENT | GSP/RM command census trace | no | no | `crates/kf-rm/src/census.rs:334` |
+| `KF3_STRESS_SECS` | 3 userstore, 2 lifecycle stress/props | DEBUG | GPU-free stress-test duration only (not product config) | no | no | `crates/kf-chan/tests/user_lifecycle_props.rs:1316`, `crates/kf-chan/tests/user_lifecycle_stress.rs:194`, `crates/kf-qemu/src/userstore.rs:863` |
 | `KF3_STRESS_SEED` | clock-derived userstore seed | DEBUG | GPU-free userstore test seed | no | no | `crates/kf-qemu/src/userstore.rs:867` |
 | `KF3_STRESS_THREADS` | 8 | DEBUG | GPU-free userstore test worker count | no | no | `crates/kf-qemu/src/userstore.rs:877` |
-| `KF3_SW_RUNLIST_HOST_OWNED` | off; only 1 enables | PRODUCTION-BEHAVIOUR | Ignore guest software-runlist submit and schedule kernel channels at birth | yes 1 | historical Windows gate; §W promotion STOPPED | `crates/kf-rm/src/sw_runlist_host.rs:36`, `crates/kf-qemu/src/chan.rs:1847` |
+| `KF3_SW_RUNLIST_HOST_OWNED` | off; only 1 enables | PRODUCTION-BEHAVIOUR | Ignore guest software-runlist submit and schedule kernel channels at birth | yes 1 | historical Windows gate; §W promotion STOPPED | `crates/kf-rm/src/sw_runlist_host.rs:41` |
 | `KF3_SW_RUNLIST_PROBE` | off; only 1 enables | PRODUCTION-BEHAVIOUR | Software-runlist allocation metadata experiment | yes 1 | unknown today; no real scheduling by itself | `crates/kf-rm/src/lib.rs:501` |
 | `KF3_SW_SUBCH_INERT` | off; only 1 enables | DEBUG | Accept unknown software-subchannel binds, refuse later methods | no | shadowed by DEFERRED_API in older production group | `crates/kf-qemu/src/chan.rs:1768` |
-| `KF3_TCENSUS` | off; any value other than 0 enables | MEASUREMENT | Translated channel address/binding census | no | no | `crates/kf-qemu/src/chan.rs:1841` |
-| `KF3_TRACE_NAME` | host BDF; validated name override | MEASUREMENT | Device name in BAR0 trace records | no | no | `crates/kf-qemu/src/ffi_unsafe.rs:641`, `crates/kf-qemu/src/readtrace.rs:182` |
-| `KF3_TRANSLATED_CE_RELAY` | off; only 1 enables | PRODUCTION-BEHAVIOUR | Relay real retired CE completions to guest engine vector | yes 1 | unknown current ablation; dependent channel group | `crates/kf-harness/src/bin/kf-gr-tier.rs:23`, `crates/kf-qemu/src/device.rs:4027`, `crates/kf-qemu/src/chan.rs:1788` |
-| `KF3_TSHADOW` | off; any value other than 0 enables | MEASUREMENT | Alias enabling census only (old shadow algorithm deleted) | no | no | `crates/kf-chan/src/tmode.rs:22`, `crates/kf-qemu/src/chan.rs:1842` |
+| `KF3_TCENSUS` | off; any value other than 0 enables | MEASUREMENT | Translated channel address/binding census | no | no | `crates/kf-qemu/src/chan.rs:1861`, `crates/kf-qemu/src/chan.rs:1863` |
+| `KF3_TRACE_NAME` | host BDF; validated name override | MEASUREMENT | Device name in BAR0 trace records | no | no | `crates/kf-qemu/src/readtrace.rs:236` |
+| `KF3_TRANSLATED_CE_RELAY` | off; only 1 enables | PRODUCTION-BEHAVIOUR | Relay real retired CE completions to guest engine vector | yes 1 | unknown current ablation; dependent channel group | `crates/kf-qemu/src/chan.rs:1788` |
+| `KF3_TSHADOW` | off; any value other than 0 enables | MEASUREMENT | Alias enabling census only (old shadow algorithm deleted) | no | no | `crates/kf-qemu/src/chan.rs:1861`, `crates/kf-qemu/src/chan.rs:1863` |
 | `KF3_USERD_RELAY_OFF` | off; only 1 enables | DEBUG | Old Windows USERD adoption route without relay | no | research arm only | `crates/kf-qemu/src/chan.rs:1804` |
-| `KF3_USER_RING_TRACE` | unset; nonempty/nonzero directory enables | MEASUREMENT | Bounded scan-refusal dumps and deferred rereads | no | no | `crates/kf-chan/src/user_storage.rs:675`, `crates/kf-qemu/src/device.rs:3985`, `crates/kf-qemu/src/chan.rs:2355` |
-| `KF3_VRAM_ATTRS` | s1-nvkms-offscreen; s0/s1/s2 overrides | DEBUG | Display-copy slot allocation attribute experiment | no | no; s1 already default | `crates/kf-qemu/src/gpucopy.rs:367` |
-| `KF3_WALK_REFUSAL_DUMP` | off; nonempty/nonzero enables | MEASUREMENT | Sample refused walker entries and levels | no | no | `crates/kf-mem/src/vasmgr.rs:407`, `crates/kf-mem/src/refusal_dump.rs:51` |
-| `KF3_WIN_REFUSE_PT_FIFO_UPDATE` | off; only 1 enables | DEBUG | Explicit refusal of Windows PT FIFO migration registration | no | no | `crates/kf-rm/src/defapi.rs:324`, `crates/kf-qemu/src/chan.rs:1173` |
-| `KF3_WIN_TWIN_DEFAPI_OBJECT` | off; only 1 enables | PRODUCTION-BEHAVIOUR | Author empty 5080 host object on Windows user-work twin | yes 1 | historical Windows gate; dependent channel group | `crates/kf-rm/src/chanlink.rs:1067`, `crates/kf-host/src/channel.rs:1636`, `crates/kf-qemu/src/chan.rs:1156` |
-| `KF3_WIN_USER_CHANNELS_PASSTHROUGH` | off; only 1 enables (two readers) | PRODUCTION-BEHAVIOUR | Classify Windows per-process USER work; also lower mirror VA start globally | yes 1 | historical Windows gate; Linux VA-floor scope unresolved | `crates/kf-harness/src/bin/kf-micro-reserve-probe.rs:15`, `crates/kf-rm/src/chanlink.rs:914`, `crates/kf-host/src/channel.rs:275` |
+| `KF3_USER_RING_TRACE` | unset; nonempty/nonzero directory enables | MEASUREMENT | Bounded scan-refusal dumps and deferred rereads | no | no | `crates/kf-qemu/src/userpump.rs:165` |
+| `KF3_VRAM_ATTRS` | s1-nvkms-offscreen; s0/s1/s2 overrides | DEBUG | Display-copy slot allocation attribute experiment | no | no; s1 already default | `crates/kf-qemu/src/gpucopy.rs:106`, `crates/kf-qemu/src/gpucopy.rs:367` |
+| `KF3_WALK_REFUSAL_DUMP` | off; nonempty/nonzero enables | MEASUREMENT | Sample refused walker entries and levels | no | no | `crates/kf-mem/src/refusal_dump.rs:51` |
+| `KF3_WIN_REFUSE_PT_FIFO_UPDATE` | off; only 1 enables | DEBUG | Explicit refusal of Windows PT FIFO migration registration | no | no | `crates/kf-qemu/src/chan.rs:1173` |
+| `KF3_WIN_TWIN_DEFAPI_OBJECT` | off; only 1 enables | PRODUCTION-BEHAVIOUR | Author empty 5080 host object on Windows user-work twin | yes 1 | historical Windows gate; dependent channel group | `crates/kf-qemu/src/chan.rs:1156` |
+| `KF3_WIN_USER_CHANNELS_PASSTHROUGH` | off; only 1 enables (two readers) | PRODUCTION-BEHAVIOUR | Classify Windows per-process USER work; also lower mirror VA start globally | yes 1 | historical Windows gate; Linux VA-floor scope unresolved | `crates/kf-rm/src/chanlink.rs:942`, `crates/kf-host/src/channel.rs:275` |
 | `KF3_WIN_USER_RING_RELAY` | on; exact 0 disables (shadow can force on) | PRODUCTION-BEHAVIOUR | Restricted Windows USER ring relay at birth | no | already built-in on; explicit old arm retained | `crates/kf-qemu/src/userrelay.rs:16` |
 | `KF3_WIN_USER_RING_SHADOW` | off; only 1 enables | DEBUG | Opaque original-GP shadow experiment, forces relay route | no | no | `crates/kf-qemu/src/userrelay.rs:26` |
 | `KF3_WORKER_PARK_INFINITE` | off; only 1 enables | MEASUREMENT | Disable existing worker park safety timeout for missing-wake proof | no | no | `crates/kf-chan/src/worker.rs:113` |
-| `KF3_WRITE_TRACE_RANGES` | all | MEASUREMENT | Select BAR0 read-trace companion write ranges | no | no | `crates/kf-qemu/src/readtrace.rs:13` |
-| `KF3_ZCULL_BIND_PROBE` | off; only 1 enables | PRODUCTION-BEHAVIOUR | Answer cross-client ZCULL bind OK without host bind | yes 1 | unknown current ablation; owner/native gap | `crates/kf-rm/src/preempt_bind_probe.rs:147` |
+| `KF3_WRITE_TRACE_RANGES` | all | MEASUREMENT | Select BAR0 read-trace companion write ranges | no | no | `crates/kf-qemu/src/readtrace.rs:216` |
+| `KF3_ZCULL_BIND_PROBE` | off; only 1 enables | PRODUCTION-BEHAVIOUR | Answer cross-client ZCULL bind OK without host bind | yes 1 | unknown current ablation; owner/native gap | `crates/kf-rm/src/preempt_bind_probe.rs:152` |
 
 CODE READ: measurement enable switches default off. Their numerical limits/thresholds are inert without the enable. Research opt-outs whose **production behavior** defaults on (lifecycle, put cache, lazy observation, interrupt relay) are class PRODUCTION-BEHAVIOUR, even where older comments called the switch “measurement class”. `KF3_MAPLOG=0`, `KF3_NO_BATCHED_MAP=0`, `KF3_NO_GUEST_VA_RESERVE=0` and `KF3_NEGCTL_NO_BAR1_DOORBELL=0` are **not** off switches; unset them. No parser normalization is made by D1.
+
 
 ### Dead names and launcher-only controls
 
@@ -249,3 +250,31 @@ CODE READ: the existing SDR pipeline, inert-MIRROR admission and 256-byte ILUT d
 CODE READ: the main `scripts/bench/windows/windows_broker.sh` no longer inserts RPC trace, BAR0 window trace, map logging or display-method trace into the default environment. Explicit `WIN_FLAGS=NAME=1` still enables each diagnostic. It also drops dead `KF3_TIMER_MAP`; the hitch launcher's extra list defaults empty instead of passing dead lifecycle counter/period names. Historical launchers and run records are retained. The read-only host launcher was not modified.
 
 MEASURED: test-only EXPECTED RED commits and mutation results are in [D1 evidence](../../traces/install_flags_20261018/README.md). These checks establish the selected configuration and GPU-free decode/launcher behavior; all new default combinations and reduced guest commands remain hardware-UNVERIFIED. No relay/VA/lock/timer/poll implementation changed. All parked dependent-channel and captured/fabricated-reply decisions above remain unresolved; this is not a flag-free Windows boot claim.
+
+### Remaining inherited properties visible in QEMU help
+
+MEASURED: the patched QEMU advertises 39 properties: 24 custom and 15 inherited. The full output is [saved here](../../traces/install_flags_20261018/qemu-device-help.txt). CODE READ: the table below completes the inherited set, including the ROM/placement inputs already discussed. Class defaults are QEMU 10.2.4's `hw/pci/pci.c::pci_props`; older machine compatibility types may override PCIe defaults (`hw/core/machine.c`). None is a new KF3 flag or a setting D1 changes.
+
+| Property | Class default | Class / effect; reader | Production sets / needs |
+|---|---|---|---|
+| `acpi-index` | 0 | PRODUCTION-BEHAVIOUR; ACPI slot naming/index, QEMU PCI realize | no / no |
+| `addr` | -1, automatic | PRODUCTION-BEHAVIOUR; PCI function/slot; QEMU PCI registration, kf3 derives devfn | 0x6 / no for automatic placement |
+| `busnr` | derived, read-only | DEBUG introspection; `prop_pci_busnr_get`, no setter | no / not a writable launch input |
+| `failover_pair_id` | unset | PRODUCTION-BEHAVIOUR; generic QEMU failover pairing, PCI realize | no / no |
+| `multifunction` | off | PRODUCTION-BEHAVIOUR; generic PCI multifunction admission, PCI registration | no / no for one device |
+| `rombar` | -1, automatic | PRODUCTION-BEHAVIOUR; ROM BAR policy; kf3 GOP conflict check, QEMU PCI ROM loader | no / embedded GOP uses default |
+| `romfile` | unset | PRODUCTION-BEHAVIOUR; replacement ROM path; kf3 GOP conflict check, QEMU PCI ROM loader | no / do not replace embedded GOP |
+| `romsize` | 4294967295, automatic | PRODUCTION-BEHAVIOUR; ROM allocation size; kf3 ROM builder, QEMU PCI ROM loader | no / default works by source contract |
+| `sriov-pf` | unset | PRODUCTION-BEHAVIOUR; generic SR-IOV association, QEMU PCI realization/SR-IOV code | no / no kf3 requirement |
+| `x-max-bounce-buffer-size` | 4096 | PRODUCTION-BEHAVIOUR; generic indirect-DMA bounce bound, QEMU PCI bus-master address space | no / no kf3 override |
+| `x-pcie-ari-nextfn-1` | off | PRODUCTION-BEHAVIOUR compatibility setting; PCIe ARI next-function encoding, QEMU PCI capability bits | no / no kf3 override |
+| `x-pcie-err-unc-mask` | on | PRODUCTION-BEHAVIOUR compatibility setting; PCIe uncorrectable-error mask behavior, QEMU PCI capability bits | no / no kf3 override |
+| `x-pcie-ext-tag` | on | PRODUCTION-BEHAVIOUR compatibility setting; PCIe extended tags, QEMU PCI capability bits | no / no kf3 override |
+| `x-pcie-extcap-init` | on | PRODUCTION-BEHAVIOUR compatibility setting; PCIe extended capability init, QEMU PCI capability bits | no / no kf3 override |
+| `x-pcie-lnksta-dllla` | on | PRODUCTION-BEHAVIOUR compatibility setting; PCIe link-status reporting, QEMU PCI capability bits | no / no kf3 override |
+
+CODE READ: `id` (unset) and `bus` (automatic) are additional generic device-graph arguments, rather than entries in this property list. Production supplies kf0/pci.0; they can be omitted for automatic single-device placement.
+
+MEASURED: 16 GPU-free argument cases include the production property list, omission of each of its 12 custom/placement entries, bare `kf3-gpu`, and the two guide device strings. Every case parsed and stopped with the expected `requires -accel kvm` guard under TCG with `-S`: no guest instructions or GPU work ran. This establishes **QOM parsing only**. The guard precedes Rust configuration validation, file/socket/GPU access and BAR setup, so it cannot establish that every omitted-property combination is usable. Source dependency checks (e.g. broker needs display) and the hardware-UNVERIFIED omissions in the table remain binding.
+
+CODE READ: H6 cross-revision check (falsifier stated before the source reads): removing the hitch counter extras would be unjustified if its selected historical binary still read them. Result: the tracked product trees at both `0452613b5c71cb175271230b3e14c8e3c3eef2db` and `0d7ba74389cd85ac65826417ad53f5c0bcd1ef2f` have no `KF3_LIFECYCLE_COUNT` or `KF3_LIFECYCLE_PERIOD_S` reader. The first abbreviated revision above is the hitch default; the production perf6 default is the second. This is source evidence, not inspection of arbitrary private replacement binaries or caller-selected overrides.
