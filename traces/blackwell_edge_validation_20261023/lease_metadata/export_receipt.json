@@ -1,7 +1,7 @@
 {
   "sweep_20261020_provision.log": {
-    "source_sha256": "d443305e17816aabe235325bf950bad01630327745591fe6f65b1e53fbca24eb",
-    "export_sha256": "d443305e17816aabe235325bf950bad01630327745591fe6f65b1e53fbca24eb"
+    "source_sha256": "56aef31cef178675c6d9427d58dc20fa407626758e3dc82932c9db42fe947399",
+    "export_sha256": "196957662024683c6903ce15bd2415374f76ac6f2cdfdf37b6c11e43817e29ae"
   },
   "sweep_host_die.log": {
     "source_sha256": "78ef5c4cfe22f50a762ce76185d97f63b2c8b753affd707ddb3a2551923a44e0",
@@ -15,9 +15,29 @@
     "source_sha256": "4c2d3dd9b560b94f0da3ee9e819d474770618acd6684086ef0762f67c4ae84a7",
     "export_sha256": "8e2d1c7e3dd473c2f1f7fa965ef0b994a9926de315fdd908f2327796c3dc3e31"
   },
+  "sweep_bare595.log": {
+    "source_sha256": "3cad800776d6a5007990f65ad4f5e43fd7b95c7dcda38014784ff1b7a9e667a1",
+    "export_sha256": "ced83cbbaf95b606dd994b16053016ec9265982bb0986f448fc8e6cdb90a9e34"
+  },
+  "sweep_cuda_host.log": {
+    "source_sha256": "9381336633e27d73ccf014f8e8602e63079f7194eb892b0051f94f8069cd2056",
+    "export_sha256": "9381336633e27d73ccf014f8e8602e63079f7194eb892b0051f94f8069cd2056"
+  },
+  "sweep_native_grtier.log": {
+    "source_sha256": "9b460037ca3ffd5d8c4336ac1ba6a799812be4fff8989389fba805d73d09dace",
+    "export_sha256": "9b460037ca3ffd5d8c4336ac1ba6a799812be4fff8989389fba805d73d09dace"
+  },
+  "sweep_qemu_sha256": {
+    "source_sha256": "284d2854b3238bb31e423a405b70df95992c919e89bcc936f179a603e3bd97e4",
+    "export_sha256": "284d2854b3238bb31e423a405b70df95992c919e89bcc936f179a603e3bd97e4"
+  },
   "sweep_product_source": {
     "source_sha256": "11dc747c78a5284d18016893041fe06aed3fd689083b2a162bdd444a6db8da13",
     "export_sha256": "11dc747c78a5284d18016893041fe06aed3fd689083b2a162bdd444a6db8da13"
+  },
+  "native_fixture_receipt.json": {
+    "source_sha256": "87c301c52f79d2a8aad691e163ca8867a5e75ce3263192f48c4bb26362cab420",
+    "export_sha256": "87c301c52f79d2a8aad691e163ca8867a5e75ce3263192f48c4bb26362cab420"
   },
   "precomp_runtime.txt": {
     "source_sha256": "3ad8a5089fadf80b4cee8ec101c07edfc10fabebc8b4e83124797a4d55fe1a01",
@@ -27,16 +47,72 @@
     "source_sha256": "217773b9da18fc7c706e6d5c2903aa72e6bd1453dfb76e4c990341f0cfbb19bc",
     "export_sha256": "217773b9da18fc7c706e6d5c2903aa72e6bd1453dfb76e4c990341f0cfbb19bc"
   },
+  "guard_watch.log": {
+    "source_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "export_sha256": "01ba4719c80b6fe911b091a7c05124b64eeece964e09c058ef8f9805daca546b"
+  },
+  "native_receipt.json": {
+    "source_sha256": "e1169878a0840abf150f69f36da57148f8cfe737a36246e54e4bcfe664590913",
+    "export_sha256": "e1169878a0840abf150f69f36da57148f8cfe737a36246e54e4bcfe664590913"
+  },
+  "native_receipt.json.accepted.json": {
+    "source_sha256": "8a0c5e655b13ec3367421a9cd6984b39157a013b3ffe08fa02216f329ed9144f",
+    "export_sha256": "8a0c5e655b13ec3367421a9cd6984b39157a013b3ffe08fa02216f329ed9144f"
+  },
+  "native_processes.jsonl": {
+    "source_sha256": "5010a412d41fc0532397e7edbae7678b91f7c8806054e4a13409c47f002b912b",
+    "export_sha256": "5010a412d41fc0532397e7edbae7678b91f7c8806054e4a13409c47f002b912b"
+  },
+  "source_defer-liveness.log": {
+    "source_sha256": "a17e1f5557b2f9169c4af3a30889124b5e7acfb23ca3e4809ae8804b2648b0e1",
+    "export_sha256": "2a7caaa1acfe56049eace4efa7ae2bc374ae3251ae59d3286c72f203a1cc64ba"
+  },
+  "source_missing-page-fault.log": {
+    "source_sha256": "0774a1b5e30fd235eedbf74bfc338dfdc8ccb01794dc057630708841d97e6dae",
+    "export_sha256": "0774a1b5e30fd235eedbf74bfc338dfdc8ccb01794dc057630708841d97e6dae"
+  },
   "sweep_windows_media.log": {
-    "source_sha256": "0d2e9d7a2bad7f505eedb6defe94973eab3fa81ffc5ee99cd499c8d40345ca1d",
-    "export_sha256": "81ad6c9db5d2c92248acac70e920cae4916cab2669e74618f641e3d5830dd84f"
+    "source_sha256": "70912e74193f135b21ab11635978aa8c655b50293559264cac95a26654eaf59c",
+    "export_sha256": "777208876ffd1abacc1969c55b8f228569ee50c0e28165074817a5098af4c822"
+  },
+  "optional_b1.json": {
+    "source_sha256": "fe0d5896c7e9041f1694b7892809cf9103b44ebd22ab4f72e5e75e7c6134747b",
+    "export_sha256": "fe0d5896c7e9041f1694b7892809cf9103b44ebd22ab4f72e5e75e7c6134747b"
+  },
+  "secondary_guard_receipt.json": {
+    "source_sha256": "0043b3e129f471af984d4a76386910525cd9013e02ce792860ba106e2680bfeb",
+    "export_sha256": "0043b3e129f471af984d4a76386910525cd9013e02ce792860ba106e2680bfeb"
+  },
+  "secondary_guard.log": {
+    "source_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "export_sha256": "01ba4719c80b6fe911b091a7c05124b64eeece964e09c058ef8f9805daca546b"
+  },
+  "secondary_receipt.json.accepted.json": {
+    "source_sha256": "8a0c5e655b13ec3367421a9cd6984b39157a013b3ffe08fa02216f329ed9144f",
+    "export_sha256": "8a0c5e655b13ec3367421a9cd6984b39157a013b3ffe08fa02216f329ed9144f"
+  },
+  "pidfd_runtime_smoke.json": {
+    "source_sha256": "3ea9e253a6ca26d87445e01f84e1e1f5baad53ddc2f858a396774373f0541544",
+    "export_sha256": "3ea9e253a6ca26d87445e01f84e1e1f5baad53ddc2f858a396774373f0541544"
+  },
+  "native_receipt.json.ready.json": {
+    "source_sha256": "f85953bc1b51e5f00cca3e900844367105de7f066062e9dba0aa2971fd165ddd",
+    "export_sha256": "f85953bc1b51e5f00cca3e900844367105de7f066062e9dba0aa2971fd165ddd"
+  },
+  "secondary_receipt.json.ready.json": {
+    "source_sha256": "b045323286cb12cb9bf2d0a627f28530db364e21637f0094267a8a16386d09d5",
+    "export_sha256": "b045323286cb12cb9bf2d0a627f28530db364e21637f0094267a8a16386d09d5"
+  },
+  "sweep_windows_install.log": {
+    "source_sha256": "eea16104fe47b7b54e5ac13e229eab6df59df1737e21ed04d3c445a92053d594",
+    "export_sha256": "eea16104fe47b7b54e5ac13e229eab6df59df1737e21ed04d3c445a92053d594"
   },
   "kernel_xids.json": {
-    "source_sha256": "573044330d1106e73f41e0a64d87c0d42dacaedc27d04371140196c642cd3088",
-    "export_sha256": "35886d67c866ab5cc3374e43927c33789507ac38a6e5304f4e8dee9fa5eaaa52"
+    "source_sha256": "4070737cd570d8729890920c5d626893ff8d0715655463bdcfae7f2f26a7debe",
+    "export_sha256": "6e981a28c65b6dc4739dff30d2e96e06db9cd3679116496e5965b81cbea8b3b6"
   },
   "precomp_kernel_permission.json": {
-    "source_sha256": "573044330d1106e73f41e0a64d87c0d42dacaedc27d04371140196c642cd3088",
-    "export_sha256": "fb81d00af58f3f03130c46316bfb6c8b0b9a814a1177239caff191d688f7e782"
+    "source_sha256": "4070737cd570d8729890920c5d626893ff8d0715655463bdcfae7f2f26a7debe",
+    "export_sha256": "5d9c48e1d29a1195816dc33b15304ee94bc918986770853c3fbdac60eaed664b"
   }
 }
