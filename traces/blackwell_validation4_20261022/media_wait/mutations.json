@@ -1,0 +1,35 @@
+{
+  "mutants": [
+    {
+      "mutant": "restore_fixed_ten_minute_limit",
+      "killers": [
+        "test_a_completed_fetch_after_ten_minutes_uses_its_verified_success_receipt",
+        "test_a_live_verified_fetch_after_ten_minutes_is_accepted_within_budget"
+      ]
+    },
+    {
+      "mutant": "extend_lease_budget",
+      "killers": [
+        "test_a_smaller_budget_is_not_extended_by_a_live_process",
+        "test_the_remaining_lease_budget_bounds_an_active_fetch"
+      ]
+    },
+    {
+      "mutant": "ignore_dead_download",
+      "killers": [
+        "test_a_dead_fetch_without_success_is_fatal",
+        "test_a_fetch_that_dies_while_waiting_is_fatal"
+      ]
+    },
+    {
+      "mutant": "trust_without_success_receipt",
+      "killers": [
+        "test_a_dead_fetch_without_success_is_fatal",
+        "test_a_fetch_that_dies_while_waiting_is_fatal",
+        "test_a_smaller_budget_is_not_extended_by_a_live_process",
+        "test_the_remaining_lease_budget_bounds_an_active_fetch"
+      ]
+    }
+  ],
+  "restored_sha256": "9a9e8732e704e53a163bc75f87e7a7374be795ac26e49e0de67b3c32b1094053"
+}

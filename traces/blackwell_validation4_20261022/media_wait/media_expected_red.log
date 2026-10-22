@@ -1,0 +1,51 @@
+E..EFF.
+======================================================================
+ERROR: test_a_completed_fetch_after_ten_minutes_uses_its_verified_success_receipt (test_media_wait.MediaWait.test_a_completed_fetch_after_ten_minutes_uses_its_verified_success_receipt)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "scripts/bench/blackwell/test_media_wait.py", line 9, in test_a_completed_fetch_after_ten_minutes_uses_its_verified_success_receipt
+    def test_a_completed_fetch_after_ten_minutes_uses_its_verified_success_receipt(self):self.assertTrue(self.run_case(lambda:self.now>=900,lambda:self.now<900))
+                                                                                                         ~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "scripts/bench/blackwell/test_media_wait.py", line 7, in run_case
+    def run_case(self,ready,alive=lambda:True,deadline=1200):return await_media(ready,alive,lambda:self.now,self.sleep,deadline)
+                                                                    ~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "scripts/bench/blackwell/media_wait.py", line 10, in await_media
+    raise MediaRefused('ten-minute preparation wait expired')
+media_wait.MediaRefused: ten-minute preparation wait expired
+
+======================================================================
+ERROR: test_a_live_verified_fetch_after_ten_minutes_is_accepted_within_budget (test_media_wait.MediaWait.test_a_live_verified_fetch_after_ten_minutes_is_accepted_within_budget)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "scripts/bench/blackwell/test_media_wait.py", line 8, in test_a_live_verified_fetch_after_ten_minutes_is_accepted_within_budget
+    def test_a_live_verified_fetch_after_ten_minutes_is_accepted_within_budget(self):self.assertTrue(self.run_case(lambda:self.now>=605))
+                                                                                                     ~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^
+  File "scripts/bench/blackwell/test_media_wait.py", line 7, in run_case
+    def run_case(self,ready,alive=lambda:True,deadline=1200):return await_media(ready,alive,lambda:self.now,self.sleep,deadline)
+                                                                    ~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "scripts/bench/blackwell/media_wait.py", line 10, in await_media
+    raise MediaRefused('ten-minute preparation wait expired')
+media_wait.MediaRefused: ten-minute preparation wait expired
+
+======================================================================
+FAIL: test_a_smaller_budget_is_not_extended_by_a_live_process (test_media_wait.MediaWait.test_a_smaller_budget_is_not_extended_by_a_live_process)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "scripts/bench/blackwell/test_media_wait.py", line 20, in test_a_smaller_budget_is_not_extended_by_a_live_process
+    self.assertEqual(self.now,5)
+    ~~~~~~~~~~~~~~~~^^^^^^^^^^^^
+AssertionError: 600 != 5
+
+======================================================================
+FAIL: test_the_remaining_lease_budget_bounds_an_active_fetch (test_media_wait.MediaWait.test_the_remaining_lease_budget_bounds_an_active_fetch)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "scripts/bench/blackwell/test_media_wait.py", line 17, in test_the_remaining_lease_budget_bounds_an_active_fetch
+    self.assertEqual(self.now,15)
+    ~~~~~~~~~~~~~~~~^^^^^^^^^^^^^
+AssertionError: 600 != 15
+
+----------------------------------------------------------------------
+Ran 7 tests in 0.002s
+
+FAILED (failures=2, errors=2)
