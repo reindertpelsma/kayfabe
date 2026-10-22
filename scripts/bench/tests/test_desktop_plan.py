@@ -123,3 +123,18 @@ class GuestIsoTests(unittest.TestCase):
 
     def test_missing_mount_receipt_cannot_start_the_matrix(self):
         with self.assertRaisesRegex(RuntimeError,'mount'):self.mount(marker='')
+
+class NvrtcBootstrapTests(unittest.TestCase):
+    def stage(self,rc=0,text='S4_NVRTC_STAGED {}'):
+        m=load();calls=[]
+        q=SimpleNamespace(powershell=lambda *args,**kw:(calls.append((args,kw)) or SimpleNamespace(exitcode=rc,text=lambda:text)))
+        result=m.stage_nvrtc(q,dict(sha256='a'*64,size=314608748))
+        return result,calls
+    def test_bootstrap_passes_manifest_pin_to_the_real_stager(self):
+        _,calls=self.stage();self.assertEqual(calls[0][0],(r'C:\kf\s4_stage_nvrtc.ps1',['-ExpectedSha256','a'*64,'-ExpectedSize','314608748']))
+    def test_bootstrap_retains_its_guest_receipt(self):
+        text,_=self.stage();self.assertIn('S4_NVRTC_STAGED',text)
+    def test_failed_bootstrap_cannot_dispatch_apps(self):
+        with self.assertRaisesRegex(RuntimeError,'NVRTC'):self.stage(rc=1)
+    def test_absent_bootstrap_receipt_cannot_dispatch_apps(self):
+        with self.assertRaisesRegex(RuntimeError,'NVRTC'):self.stage(text='')
