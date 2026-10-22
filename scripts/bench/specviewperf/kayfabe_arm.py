@@ -1,6 +1,35 @@
 #!/usr/bin/env python3
 """K1 production-launcher configuration and requested arm abort rules."""
 from pathlib import Path
+import ctypes
+import subprocess
+
+
+def cuda_status():
+    """Check the native CUDA driver before any arm is launched."""
+    return ctypes.CDLL('libcuda.so.1').cuInit(0)
+
+
+def reload_nvidia(run=subprocess.run):
+    """One owner-authorized module reload, with GDM restoration on failure."""
+    try:
+        run(['systemctl', 'stop', 'gdm'], check=True)
+        run(['rmmod', 'nvidia_uvm', 'nvidia_drm', 'nvidia_modeset', 'nvidia'], check=True)
+        run(['modprobe', '-a', 'nvidia', 'nvidia_uvm', 'nvidia_modeset', 'nvidia_drm'], check=True)
+    finally:
+        run(['systemctl', 'start', 'gdm'], check=True)
+
+
+def ensure_cuda(probe=cuda_status, reload=reload_nvidia):
+    """Require cuInit success; only error 999 permits one reload and recheck."""
+    before = probe()
+    after = before
+    if before == 999:
+        reload()
+        after = probe()
+    if after != 0:
+        raise RuntimeError(f'CUDA_HEALTH_REFUSED before={before} after={after}')
+    return {'before': before, 'after': after, 'reloaded': before == 999}
 
 
 def production_environment(owner, root, rev, maximum_seconds):

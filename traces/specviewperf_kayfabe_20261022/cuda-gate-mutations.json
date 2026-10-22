@@ -1,0 +1,18 @@
+[
+  {
+    "mutation": "omit_reload",
+    "killing_tests": 2
+  },
+  {
+    "mutation": "accept_failed_health",
+    "killing_tests": 4
+  },
+  {
+    "mutation": "omit_gdm_restore",
+    "killing_tests": 3
+  },
+  {
+    "mutation": "omit_unload",
+    "killing_tests": 3
+  }
+]
