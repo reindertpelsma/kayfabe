@@ -3,3 +3,7 @@ MEASURED: 2026-10-22, lease 57221842 runner printed CL1_R2_TARGET_REMOVED; a sep
 MEASURED: 2026-10-22, lease 57221842 timer and service both reported ActiveState=inactive after verified absence.
 MEASURED: 2026-10-22, lease 57221842 start-to-confirmed-absence interval was 282.102166 seconds; post-teardown account credit was 37.70116863646115 USD.
 INFERRED: quoted compute/storage exposure over that interval is approximately 0.0057814 USD, excluding transfer charges and billing adjustments; the 5 USD reserve remains intact.
+MEASURED: 2026-10-22, after CPU build at revision e636236cf, the own host Cargo target was absent and CL1_HOST_BUILD_JOB_GONE was reported; see host-build.log.
+MEASURED: 2026-10-22, before and after revision e636236cf's CPU build, owner QEMU PID 2123004 retained start time Thu Oct 22 14:14:49 2026; see host-build.log.
+MEASURED: 2026-10-22, round-2 dev-box inspection found no own Cargo target; rental timer and service were inactive after lease 57221842's verified absence.
+CODE READ: no fastguest lock was taken; the private compilation lock was released when the build exited. Only lane-owned source/build files and the documented per-revision binary destination were written on the trusted host.

@@ -1,0 +1,21 @@
+MEASURED: 2026-10-22, CL1 round-2 CPU build at revision e636236cf34621b0c9e53170638c54a55a22f979.
+Command: CARGO_BUILD_JOBS=2 CARGO_TARGET_DIR=<own-target> nice -n 19 bash scripts/bench/build_kf3.sh <qemu-source-10.2.4> <lane-build>/qemu-build; local ninja wrapper executes ninja -j2.
+CL1_HOST_BUILD_START=2026-10-22T14:08:24Z rev=e636236cf34621b0c9e53170638c54a55a22f979
+[1679/1682] Compiling C object libqemu-x86_64-softmmu.a.p/accel_qtest_qtest.c.o
+[1680/1682] Compiling C object qemu-system-x86_64.p/system_main.c.o
+[1681/1682] Compiling C object libqemu-x86_64-softmmu.a.p/accel_kvm_kvm-all.c.o
+[1682/1682] Linking target qemu-system-x86_64
+KF3_BUILT <lane-build>/kf3-bins/e636236c/qemu-system-x86_64 rev=e636236c mtime=2026-10-22 16:11:15.958976087 +0200 (shared build dir <lane-build>/qemu-build)
+10437793d52eb39a323159a016ac1971cfb23902b531c37415a66af86741d689  <lane-build>/kf3-bins/e636236c/qemu-system-x86_64
+10437793d52eb39a323159a016ac1971cfb23902b531c37415a66af86741d689  <launcher-root>/kf3-bins/e636236c/qemu-system-x86_64
+QEMU emulator version 10.2.4
+Copyright (c) 2003-2025 Fabrice Bellard and the QEMU Project developers
+CL1_HOST_BUILD_DONE=2026-10-22T14:11:16Z rev=e636236cf34621b0c9e53170638c54a55a22f979
+CL1_HOST_BUILD_EXIT=0 utc=2026-10-22T14:11:16Z
+CL1_HOST_CARGO_TARGET_ABSENT
+CL1_HOST_BUILD_JOB_GONE
+CL1_INSTALLED_BINARY_EXECUTABLE
+CL1_INSTALLED_PC_BIOS_PRESENT
+CL1_INSTALLED_QEMU_BUNDLE_PRESENT
+2123004 Thu Oct 22 14:14:49 2026 qemu-system-x86
+e636236cf34621b0c9e53170638c54a55a22f979
