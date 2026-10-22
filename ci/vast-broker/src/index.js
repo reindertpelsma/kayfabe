@@ -181,10 +181,11 @@ export function createService({env,storage,fetch:fetcher=fetch,now=Date.now,rand
     r.id=await vast.create(offer,r,script);await ledger.save(r);
     console.log(JSON.stringify({event:'rented'}));return json(expose(r));
   }
+  const releaseUpload=async request=>{if(request.body&&!request.body.locked)await request.body.cancel().catch(()=>{});};
   return {
     async fetch(request){
-      if(busy)return json({state:'BUSY',verdict:'UNAVAILABLE',log_tail_sanitised:'',bytes_dropped:0},409);
-      busy=true;try{return await perform(request);}catch(e){return json({state:e instanceof BrokerError?e.state:'UNAVAILABLE',verdict:'UNAVAILABLE',log_tail_sanitised:'',bytes_dropped:0},e instanceof BrokerError?e.status:503);}finally{busy=false;}
+      if(busy){await releaseUpload(request);return json({state:'BUSY',verdict:'UNAVAILABLE',log_tail_sanitised:'',bytes_dropped:0},409);}
+      busy=true;try{return await perform(request);}catch(e){return json({state:e instanceof BrokerError?e.state:'UNAVAILABLE',verdict:'UNAVAILABLE',log_tail_sanitised:'',bytes_dropped:0},e instanceof BrokerError?e.status:503);}finally{await releaseUpload(request);busy=false;}
     },
     async sweep(){
       if(busy)return;busy=true;

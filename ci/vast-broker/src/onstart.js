@@ -26,14 +26,16 @@ nonce='${nonce}'
 seq=0
 sent=0
 attempted=0
+omitted=0
 backup='/workspace/kf-ci-output.log'
 def post(kind,text=None,result=None):
-    global seq,sent,attempted
+    global seq,sent,attempted,omitted
     payload={'seq':seq+1,'kind':kind}
     if text is not None: payload['text']=text
     if result is not None: payload['result']=result
     body=json.dumps(payload,separators=(',',':'),ensure_ascii=True).encode()
-    if kind!='result' and (attempted>=600 or sent+len(body)>900000): return
+    if kind!='result' and (attempted>=600 or sent+len(body)>900000):
+        omitted+=len((text or '').encode());return
     seq+=1;sent+=len(body);attempted+=1
     # curl retries reuse this exact payload/sequence; no redirect or arbitrary URL.
     subprocess.run(['curl','--silent','--show-error','--fail','--max-time','10',
@@ -62,9 +64,9 @@ with open(backup,'wb') as local:
             data=os.read(child.stdout.fileno(),8192)
             if not data: break
             local.write(data);local.flush()
-            pending=(pending+data)[-8192:]
+            pending+=data
         current=time.monotonic()
-        if pending and current-last>=1:
+        if pending and (len(pending)>=8192 or current-last>=1):
             post('log',pending.decode('utf-8',errors='replace'));pending=b'';last=current
         elif current-heartbeat>=60:
             post('progress','Suite running');heartbeat=current
@@ -73,7 +75,7 @@ rc=child.wait()
 with open(backup,'rb') as local:
     local.seek(0,os.SEEK_END);local.seek(max(0,local.tell()-8192))
     tail=local.read(8192).decode('utf-8',errors='replace')
-post('result',tail,{'nonce':nonce,'verdict':'PASS' if rc==0 else 'FAIL'})
+post('result','Suite complete; sender omitted '+str(omitted)+' raw bytes beyond its bounded transport allowance.',{'nonce':nonce,'verdict':'PASS' if rc==0 else 'FAIL'})
 print('Use kf-box-kill [reason] to end this box early; up to ${grace} minutes grace remains (also capped by hard TTL).')
 raise SystemExit(rc)
 KF_REPORT
