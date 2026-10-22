@@ -21,7 +21,8 @@ export function createService({env,storage,fetch:fetcher=fetch,now=Date.now,rand
     verdict:r.ended!==null||r.resultAt!==undefined?r.verdict||'UNAVAILABLE':'UNAVAILABLE',
     cleanup_pending:r.ended===null,result_at:r.resultAt??null,ended_at:r.ended,started_at:r.started,
     deadline_at:r.resultAt===undefined?r.started+r.ttl:Math.min(r.started+r.ttl,r.resultAt+(r.grace??300000)),
-    gpu_model:r.gpu??'unknown',cost_estimate_usd:r.price*((r.ended??now())-r.started)/3600000,log_cursor:r.logChunks??0,log_tail_sanitised:r.log||'',bytes_dropped:r.fullBytesDropped??r.bytesDropped??0,tail_bytes_dropped:r.bytesDropped||0});
+    gpu_model:r.gpu??'unknown',cost_estimate_usd:r.price*((r.ended??now())-r.started)/3600000,log_cursor:r.logChunks??0,log_tail_sanitised:r.log||'',bytes_dropped:r.fullBytesDropped??r.bytesDropped??0,tail_bytes_dropped:r.bytesDropped||0,
+    runner_nonce:r.runnerNonce??'',log_sha256:r.logHash??'0'.repeat(64),protocol_version:3,worker_version:'v4-r3',bundle_sha256:env.DEPLOYED_BUNDLE_SHA256??'0'.repeat(64)});
   async function recover(record,vast){if(!record.id){record.id=await vast.reconcile(record);await ledger.save(record);}return record;}
   async function cleanup(record,vast){
     await recover(record,vast);await vast.destroy(record);await ledger.settle(record,now());
@@ -99,6 +100,7 @@ export function createService({env,storage,fetch:fetcher=fetch,now=Date.now,rand
       const digest=await sha256Hex(JSON.stringify(payload));
       if(payload.seq<=r.lastSeq){if(payload.seq===r.lastSeq&&digest===r.lastDigest)return json({state:'ACCEPTED'});refuse('REPORT_SEQUENCE',409);}
       if(payload.kind==='result'&&payload.result.nonce!==r.nonce)refuse('BAD_REPORT',400);
+      if(payload.kind==='result'&&(payload.result.runner_nonce!==r.runnerNonce||payload.result.sha!==r.sha))refuse('BAD_REPORT',400);
       if(payload.text!==undefined){
         const bytes=new TextEncoder().encode(payload.text),redactions=[...secrets,bearer,r.id,r.label,r.nonce];
         const safe=sanitizeBoxText(bytes,Math.max(0,cfg.reportBytes-(r.fullBytes??0)),redactions,{tail:false});
@@ -129,8 +131,8 @@ export function createService({env,storage,fetch:fetcher=fetch,now=Date.now,rand
     const bearer=authorization.slice(7),vast=new Vast(fetcher,cfg,env.VAST_API_KEY);
     if(match?.[1]==='report')return report(request,match[2],bearer,cfg,vast);
     if(match?.[1]==='kill')return kill(request,match[2],bearer,cfg,vast);
-    // workerd exposes even an empty HTTP POST as a stream; forbid bytes, not streams.
-    if(request.body!==null){try{await readBounded(request,0);}catch{refuse('BAD_REQUEST',400);}}
+    let rentRequest;
+    if(path!=='/rent'&&request.body!==null){try{await readBounded(request,0);}catch{refuse('BAD_REQUEST',400);}}
     const owner=validSecret(env.OWNER_STOP_TOKEN)&&await constantTimeEqual(env.OWNER_STOP_TOKEN,bearer);
     if(path==='/stop-all'){
       if(!owner)refuse('UNAUTHORIZED',401); // MUTANT stop-auth
@@ -144,6 +146,13 @@ export function createService({env,storage,fetch:fetcher=fetch,now=Date.now,rand
       await close(r,vast,'STOPPED');return json(expose(r,match[2]));
     }
     const c=await oidc(bearer,cfg),key=runKey(c);
+    if(path==='/rent'){
+      try{
+        const text=new TextDecoder('utf-8',{fatal:true}).decode(await readBounded(request,512));rentRequest=JSON.parse(text);
+        const keys=Object.keys(rentRequest),matches=[...text.matchAll(/"(runner_nonce|tested_sha|pr_number)"\s*:/g)];
+        if(keys.length!==3||!keys.every(k=>['runner_nonce','tested_sha','pr_number'].includes(k))||matches.length!==3||new Set(matches.map(x=>x[1])).size!==3||!/^([0-9a-f]{64})$/.test(rentRequest.runner_nonce)||!/^([0-9a-f]{40})$/.test(rentRequest.tested_sha)||rentRequest.pr_number!==null&&(!Number.isSafeInteger(rentRequest.pr_number)||rentRequest.pr_number<=0))throw Error();
+      }catch{refuse('BAD_REQUEST',400);}
+    }
     const token=request.headers.get('X-GH-Token');
     if(token&&(token.length>1024||!/^[\x21-\x7e]+$/.test(token)))refuse();
     const github=new Github(fetcher,cfg,token,{cache:githubCache,now});
@@ -160,25 +169,26 @@ export function createService({env,storage,fetch:fetcher=fetch,now=Date.now,rand
       return json(expose(r,key,admittedPr===undefined?r.pr:admittedPr));
     }
     const target=await github.authorize(c);
-    if(target.notNeeded)return json({state:'NOT_NEEDED',verdict:'PASS',run:key,sha:target.sha,pr:target.pr,log_tail_sanitised:'',bytes_dropped:0});
+    if(rentRequest.tested_sha!==target.sha||rentRequest.pr_number!==target.pr)refuse('BINDING_MISMATCH',409);
+    if(target.notNeeded)return json({...expose({...target,key,id:null,started:now(),ended:now(),ttl:0,grace:0,price:0,verdict:'PASS',resultAt:now(),runnerNonce:rentRequest.runner_nonce}),state:'NOT_NEEDED'});
     const prior=await ledger.granted(key);
-    if(prior){await recover(prior,vast);return json(expose(prior,key,target.pr));}
+    if(prior){if(prior.runnerNonce!==rentRequest.runner_nonce)refuse('BINDING_MISMATCH',409);await recover(prior,vast);return json(expose(prior,key,target.pr));}
     const active=await ledger.active();
     if(active&&active.ended===null){
       if((active.pr!==null&&active.pr===target.pr||active.pr===null&&target.pr===null&&active.branch===target.branch)&&active.sha!==target.sha){await close(active,vast,'SUPERSEDED');refuse('BUSY',409);}
       refuse('UNAVAILABLE_BUDGET',409);
     }
     const cached=await ledger.get('sha:'+target.sha),force=c.event_name==='workflow_dispatch'&&Number(c.run_attempt)>1;
-    if(cached&&!force){const r=await ledger.get('record:'+cached.key);if(r?.verdict&&r.ended!==null){await ledger.grant(key,r,target.pr);return json(expose(r,key,target.pr));}refuse();}
+    if(cached&&!force)refuse('UNAVAILABLE_BUDGET',409); // A fresh runner nonce may not inherit another run's result.
     if(cached&&now()-cached.started<cfg.gap)refuse('UNAVAILABLE_BUDGET',409); // MUTANT gap
     if(!validSecret(env.RUN_TOKEN_SECRET)||!validSecret(env.OWNER_STOP_TOKEN))refuse();
     const offer=await vast.offer(),cost=offer.dph_total*(cfg.ttl+cfg.cronPeriod)/3600000,credit=await vast.credit();
     if(typeof credit!=='number'||!Number.isFinite(credit)||credit<cfg.reserve+cost)refuse('UNAVAILABLE_BUDGET',409); // MUTANT credit
     await ledger.budgets(cfg,now(),cost);
     const n=random?random():Array.from(crypto.getRandomValues(new Uint8Array(16)),x=>x.toString(16).padStart(2,'0')).join('');
-    const started=now(),r={...target,key,label:'kf-ci-'+key,nonce:n,started,ended:null,ttl:cfg.ttl,billingTtl:cfg.ttl+cfg.cronPeriod,provision:cfg.provision,grace:cfg.grace,gpu:offer.gpu_name,reportExpiry:Math.floor((started+cfg.ttl+cfg.cronPeriod)/1000),
+    const started=now(),r={...target,key,label:'kf-ci-'+key,nonce:n,runnerNonce:rentRequest.runner_nonce,logHash:'0'.repeat(64),started,ended:null,ttl:cfg.ttl,billingTtl:cfg.ttl+cfg.cronPeriod,provision:cfg.provision,grace:cfg.grace,gpu:offer.gpu_name,reportExpiry:Math.floor((started+cfg.ttl+cfg.cronPeriod)/1000),
       price:offer.dph_total,id:null,closed:null,verdict:null,log:'',bytesDropped:0,reportCount:0,reportBytes:0,lastSeq:0,lastDigest:null,rateWindow:0,rateCount:0,liveCheckedAt:null};
-    const runToken=await tokens.issue(r),script=onstart(target.sha,n,cfg.ttl/60000,cfg.repo,{url:cfg.audience,run:key,token:runToken,path:env.BROKER_PATH_PREFIX??'',graceMinutes:cfg.grace/60000});
+    const runToken=await tokens.issue(r),script=onstart(target.sha,n,cfg.ttl/60000,cfg.repo,{url:cfg.audience,run:key,token:runToken,path:env.BROKER_PATH_PREFIX??'',graceMinutes:cfg.grace/60000,runnerNonce:r.runnerNonce});
     r.scriptHash=await sha256Hex(script);
     await ledger.reserve(r);
     r.id=await vast.create(offer,r,script);await ledger.save(r);
@@ -205,7 +215,7 @@ export class BrokerLedger {
 // unfinished network upload must never hold its busy flag or block cron.
 async function detachedUpload(request,path){
   if(!request.body)return request;
-  const limit=(/^\/report\//.test(path)?65536:/^\/kill\//.test(path)?256:0)+1;
+  const limit=(/^\/report\//.test(path)?65536:/^\/kill\//.test(path)?256:path==='/rent'?512:0)+1;
   const reader=request.body.getReader(),chunks=[];let length=0;
   try{while(length<limit){const {value,done}=await reader.read();if(done)break;const kept=value.slice(0,limit-length);chunks.push(kept);length+=kept.byteLength;}}
   finally{await reader.cancel().catch(()=>{});}

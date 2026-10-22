@@ -44,3 +44,8 @@ for(const text of ['ordinary log\n','é raw UTF8\n'])test('R3 final structured b
  let hash='0'.repeat(64);for(const chunk of page.chunks){const b=Buffer.from(chunk);const length=Buffer.alloc(4);length.writeUInt32BE(b.length);hash=createHash('sha256').update(Buffer.concat([Buffer.from(hash,'hex'),length,b])).digest('hex');}
  assert.equal(status.runner_nonce,request.runner_nonce);assert.equal(status.sha,sha);assert.equal(status.log_sha256,hash);assert.equal(page.log_sha256,hash);assert.equal(page.next_cursor,page.chunks.length);
 });
+for(const key of ['runner_nonce','sha'])test('R3 box result must echo '+key,async()=>{
+ const h=await setup();assert.equal((await h.call('/rent',{body:request})).status,200);
+ const response=await h.report({seq:1,kind:'result',result:{nonce,verdict:'PASS',runner_nonce:request.runner_nonce,sha,[key]:'0'.repeat(key==='sha'?40:64)}});
+ assert.equal(response.status,400);assert.equal((await h.storage.get('record:123-1')).verdict,null);
+});
