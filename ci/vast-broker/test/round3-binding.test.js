@@ -9,7 +9,7 @@ for(const size of [180,700])test('R3 public ingress preserves bounded nonce rent
  const bindings={...env,LEDGER:{idFromName:()=>1,get:()=>({fetch:async r=>{received=await r.text();return Response.json({});}})}};
  const body=JSON.stringify(request)+' '.repeat(size);
  await worker.fetch(new Request(env.WORKER_URL+'/rent',{method:'POST',body}),bindings);
- assert.equal(received,body.slice(0,513));
+ assert.equal(received,body.slice(0,2049));
 });
 // FALSIFIER: runner nonce is optional/replaced on replay, or final/page hashes
 // do not bind the exact UTF-8 chunks that the runner retrieves in cursor order.

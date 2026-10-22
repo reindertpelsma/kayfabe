@@ -7,8 +7,8 @@
 in `defaults.json`; JavaScript imports them through `src/defaults.js`, the bundle
 embeds that same file, and wrangler.toml has no numeric override. The owner-approved
 check cap is $1.00/hour, daily $6, rolling 30-day $30, prepaid reserve $8.
-Renting remains disabled in the committed configuration. Profiles, effective
-storage/network pricing, payload integration and live acceptance are still pending.
+Renting remains disabled in the committed configuration. Profiles and effective storage/network admission are implemented below. Payload
+integration, runner migration and live acceptance are still pending.
 
 [CODE READ: src/index.js, src/onstart.js] States are NONE, CREATING, BOOTING,
 TESTING, GRACE and MANUAL. Creation stores absolute boot (40 minutes), hard
@@ -30,6 +30,73 @@ plus the new liability. The cron margin is a healthy-scheduler estimate, not a
 provider billing bound during an outage.
 
 
+## V5 profiles, forced admission and availability
+
+[CODE READ: defaults.json, src/policy.js, src/offers.js] `check` is the PR profile:
+configured measured classes GA106 first, then AD104, GA102 and AD102, capped at
+$1 effective/hour and the shared $6 daily/$30 rolling/$8 reserve limits. No
+qualifying class returns UNAVAILABLE; the Worker never substitutes another die.
+AD107 is excluded until the owner adds it after three qualifying sweep passes.
+`sweep` is a separate owner-only workflow_dispatch profile, with a $2.50 effective
+hourly cap and its own $8 daily budget; rolling liability and prepaid reserve stay
+shared. Its workflow must not write the required gpu-vast status. Sweep rotation
+uses the configured order and the persisted last-rented class, with an optional
+recent-pass exclusion. A class/driver/date coverage tag is part of the planned
+structured runner result; hosted dispatch execution remains unverified.
+
+[CODE READ: 2026-10-22 owner verification rule, src/policy.js] Every profile requires an explicitly verified provider
+response: verified=true, or the documented verification="verified" when the boolean
+alias is absent. Missing/unknown/conflicting verification refuses; no configuration
+can disable this requirement. The default quality thresholds are reliability >=0.98,
+8 effective cores, 2 GHz, 34360 MB RAM (at least 32 GiB), 200 Mb/s down, 50 Mb/s up,
+100 MB/s disk bandwidth, and positive dlperf at least half its class's median in
+the current verified offer sample. Missing/odd fields refuse. Exact offer driver
+tags must be in the configured tested matrix. In VM mode this is an offer-quality
+filter; the actual kayfabe host driver is the separately provisioned VM driver,
+which must be checked again on the box. Performance scores never grade the code.
+
+[CODE READ: defaults.json, src/policy.js] GPU eligibility uses numeric compute_cap
+>=750 (7.5), NVIDIA gpu_arch, and the consumer/workstation RTX or GTX 16xx name
+class; datacenter names are excluded. Configured name/capability rules map known
+models to die classes. Unmapped workstation names use CC_<capability> classes in
+sweep; they cannot enter the check profile. Provider names are class hints, not
+hardware attestation; a wrong/ambiguous mapping refuses or remains a coverage
+finding. GPU patterns and known-bad machine IDs are configurable deny lists.
+The historical public nvkvm-pv machine list was reviewed for its KVM failure
+signature; only machine IDs were carried over, with no old endpoints or PSK flow.
+Boot expiry can learn an own machine only after created plus an exact own-instance
+libvirt domain-not-found log remains byte-identical across observations at least
+two minutes apart, with a recent confirming observation. Time alone never learns.
+
+[CODE READ: src/offers.js, src/index.js] GET /availability?profile=check|sweep
+requires GitHub OIDC and profile authorization. A shared <=60-second read-only
+market cache serves both profiles; a 30/minute admission limiter also covers rent
+refusals. Returned class/count/price/quality and rejection totals contain no offer,
+machine or network identifiers. Counts describe a bounded query sample. /rent
+accepts at most 16 ordered class tokens, intersects them with the Worker's forced
+set, reports how many were ignored, and refuses an empty intersection. A budget
+refusal can show the local chosen-class enum without creating a rental. The
+runner must independently schema-check and scrub every display field.
+
+[CODE READ: src/policy.js, src/ledger.js; [Vast offer fields](https://docs.vast.ai/api-reference/search/search-offers)]
+Storage is priced in USD/GB/month; the requested 120 GB is converted using 720
+hours/month and cross-checked against dph_total, which already includes it.
+inet_down_cost/inet_up_cost are USD/GB (not the console's per-TB display).
+Default transfer allowance is 15 GB down plus 2 GB up. Effective hourly price is
+compute plus storage plus the full transfer allowance amortised over the hard
+limit. Reservation uses the same compute/storage lifetime plus cron margin and
+full transfer allowance. Early settlement retains that unmeasured allowance;
+it does not release it merely because the box ran briefly.
+
+[MEASURED: run v5-readonly-20261022-availability-1, traces/vast_broker_v5_20261018/read_only.json]
+The instance API exposes inet_down_billed/inet_up_billed, but their units and
+refresh reliability are unverified. Consequently cron does not assert a bandwidth
+usage cutoff: only the conservative allowance reservation is implemented. A
+compromised box can exceed that allowance; neither it nor delayed cron/API
+accounting establishes a finite external bill. This is the owner's specified
+reservation-only fallback, not a claim of provider-enforced transfer limits.
+
+
 [CODE READ: owner correction 2026-10-22; runner.py, gpu-vast.yml and src/onstart.js] The exact code is approved before Vast starts. A forged GPU verdict from the Worker **or** the box cannot change approved code or contaminate the final build. `gpu-vast` is an unattested tripwire; the Worker is never part of an attested result. The one-page [trust and public trace path](../../docs/design/V3_CI_VAST_RUNNER_TRACE_20261022.md) defines these boundaries:
 
 | Who distrusts whom | Why and enforced boundary |
@@ -39,9 +106,9 @@ provider billing bound during an outage.
 | Worker → Vast box/operator | These are community/consumer hosts with observable guest root. The box never receives the Vast account key, App key, owner stop token or Worker signing secret; it gets only its limited run capability. |
 | Worker → CI content/secrets | The billed Vast key must **never be a GitHub secret**: LLM agents and future contributors may reach repository secrets. CI presents only OIDC identity; the Worker independently checks identity, approved content and spending policy. |
 | CI → Vast | Box output can inject logs/commands; a community box cannot supply an attested result. CI sees Vast only through the Worker, with no direct box connection and no executable/artifact input from Vast. |
-| Vast box → Worker, but not its network | The box trusts the Worker's fixed task/callback, uses **HTTPS only, no redirects**, and has a per-run token with no authority beyond report/kill/blob-URL access for that run. Live authority dies with the box/run. The host operator can already see the box and its token; network interception must not add authority. |
+| Vast box → Worker, but not its network | The box trusts the Worker's fixed task/callback, uses **HTTPS only, no redirects**, and has a per-run token with no authority beyond report/kill/hold/blob-URL access for that run. Live authority dies with the box/run. The host operator can already see the box and its token; network interception must not add authority. |
 
-[CODE READ: src/index.js, src/tokens.js, deployment.json] Current per-run authority is report/kill; no blob-URL route is implemented. Blob-URL scope above is a policy ceiling, not an added capability. Worker protocol/version and expected bundle hash are visible, but the deployed hash is an owner assertion, not remote deployment attestation.
+[CODE READ: src/index.js, src/tokens.js, deployment.json] Current per-run authority is report/kill/hold; no blob-URL route is implemented. Blob-URL scope above is a policy ceiling, not an added capability. Worker protocol/version and expected bundle hash are visible, but the deployed hash is an owner assertion, not remote deployment attestation.
 
 [CODE READ: 2026-10-22 Round 3, deployment.json] Build with `npm run bundle`; independently compare SHA256 of `dist/worker.js` with `dist/deployment.json`, committed `deployment.json` and public `DEPLOYED_BUNDLE_SHA256` before a separately authorized deployment. CLI deployment must upload those exact bundled bytes (use `npx wrangler deploy dist/worker.js --no-bundle`); dashboard/module upload uses the same file. The hash is a configuration assertion, avoiding a self-hash in the bundle. Any source update requires regenerating/reviewing the manifest and configuration together; mismatches refuse CI. This task performs no deployment and leaves renting disabled.
 

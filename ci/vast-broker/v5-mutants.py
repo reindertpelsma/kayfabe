@@ -37,6 +37,31 @@ CASES=[
  ('heartbeat-ten-minutes','defaults.json',[(r'"heartbeatMinutes": 10',r'"heartbeatMinutes": 20')],['v5-onstart.test.js','v5-lifecycle.test.js']),
  ('soft-expired-no-work','src/onstart.js',[("if remaining>0 else 'exit 124", "if remaining>0 else 'exit 0")],['v5-soft-deadline.test.js']),
  ('shipped-numeric-overrides','wrangler.toml',[(r'RENTING_ENABLED = "false"', 'RENTING_ENABLED = "false"\nMAX_PRICE_USD_HOUR = "0.5"\nTTL_MINUTES = "20"')],['v5-config.test.js']),
+ ('mandatory-verification','src/policy.js',[("if(!(offer.verified===true||offer.verified===undefined&&offer.verification==='verified'))", "if(false)")],['v5-offers.test.js']),
+ ('host-capability','src/policy.js',[("if(!Number.isSafeInteger(offer.id)||offer.id<=0||offer.vms_enabled!==true||offer.rentable!==true||offer.rented!==false||offer.num_gpus!==1||!enough('disk_space',DEFAULTS.diskGb))", "if(false)")],['v5-offers.test.js']),
+ ('known-bad-machine','src/policy.js',[("cfg.badMachines.includes(offer.machine_id)","false")],['v5-offers.test.js']),
+ ('quality-reliability','src/policy.js',[("if(!enough('reliability',q.reliability)||offer.reliability>1)","if(false)")],['v5-offers.test.js']),
+ ('quality-cpu-ram','src/policy.js',[("if(!enough('cpu_cores_effective',q.cores)||!enough('cpu_ghz',q.cpuGhz)||!enough('cpu_ram',q.ramMb))", "if(false)")],['v5-offers.test.js']),
+ ('quality-relative-performance','src/policy.js',[("offer.dlperf<median*q.medianRatio", "false")],['v5-offers.test.js']),
+ ('quality-network','src/policy.js',[("if(!enough('inet_down',q.downMbps)||!enough('inet_up',q.upMbps))", "if(false)")],['v5-offers.test.js']),
+ ('quality-disk','src/policy.js',[("if(!enough('disk_bw',q.diskMbps))", "if(false)")],['v5-offers.test.js']),
+ ('quality-driver','src/policy.js',[("if(!cfg.driverTags.includes(offer.driver_version))", "if(false)")],['v5-offers.test.js']),
+ ('turing-class-floor','src/policy.js',[("offer.compute_cap<750", "false")],['v5-offers.test.js']),
+ ('gpu-deny-list','src/policy.js',[("if(cfg.gpuDeny.some(match))return null;", "/* mutant ignores GPU deny-list */")],['v5-offers.test.js']),
+ ('effective-price-includes-network','src/policy.js',[("const effective=computeStorage+bandwidth/(cfg.hard/3600000);", "const effective=computeStorage;") ,("profile==='check'?cfg.price:cfg.sweepPrice)*(cfg.hard+cfg.cronPeriod)/3600000)", "profile==='check'?cfg.price:cfg.sweepPrice)*1000)")],['v5-offers.test.js']),
+ ('storage-consistency','src/policy.js',[("if(Math.abs(offer.dph_total-computeStorage)>Math.max(1e-7,computeStorage*1e-6))return null;", "/* mutant trusts inconsistent allocated storage */")],['v5-offers.test.js']),
+ ('check-die-enforcement','src/policy.js',[("if(!die||!(profile==='check'?cfg.checkDies:cfg.sweepDies).includes(die))", "if(!die)")],['v5-offers.test.js']),
+ ('sweep-owner-only','src/index.js',[("if(profile==='sweep'&&(c.actor_id!==cfg.owner||c.event_name!=='workflow_dispatch'||c.workflow_ref!==cfg.repo+'/.github/workflows/gpu-vast-sweep.yml@refs/heads/master'))refuse('UNAUTHORIZED',401);", "/* mutant omits profile owner gate */")],['v5-offers.test.js']),
+ ('preference-order-forced','src/offers.js',[("order=preferences.filter(x=>set.includes(x));", "order=set;")],['v5-offers.test.js']),
+ ('rotation-ledger','src/offers.js',[("previous=await ledger.get('rotation:lastDie')", "previous=undefined")],['v5-offers.test.js']),
+ ('rotation-skip-recent','src/offers.js',[("if(cfg.skipPassedDays>0)", "if(false)")],['v5-offers.test.js']),
+ ('offers-sixty-second-cache','src/offers.js',[("let hit=this.at!==null&&this.now()-this.at<DEFAULTS.availabilityCacheMs;", "let hit=false;")],['v5-offers.test.js']),
+ ('admission-rate-bound','src/index.js',[("if(++admissionCount>DEFAULTS.admissionPerMinute)", "if(false)")],['v5-offers.test.js']),
+ ('separate-profile-daily','src/ledger.js',[("(v.profile??'check')===(cfg.profile??'check')", "true")],['v5-offers.test.js']),
+ ('network-liability-not-amortised','src/ledger.js',[("price:record.computeStoragePrice??record.price,bandwidthCost:record.bandwidthCost??0", "price:record.price,bandwidthCost:0"), ("price:record.computeStoragePrice??record.price,bandwidthCost:record.bandwidthCost??0", "price:record.price,bandwidthCost:0")],['v5-network-liability.test.js']),
+ ('learn-frozen-kvm','src/index.js',[("record.bootFailure?.confirmed", "false")],['v5-machine.test.js']),
+ ('force-choice-on-refusal','src/index.js',[("e.selection={die:offer.die,ignored:chosen.ignored,reason:chosen.reason}", "e.selection=undefined")],['v5-refusal-selection.test.js']),
+
 ]
 def main():
     ap=argparse.ArgumentParser();ap.add_argument('--filter',default='');ap.add_argument('--results',type=Path);ap.add_argument('--preflight',action='store_true');args=ap.parse_args();results=[]
@@ -44,7 +69,7 @@ def main():
         if args.filter and args.filter not in name:continue
         path=BASE/file;original=path.read_text();changed=original
         for old,new in patches:
-            assert changed.count(old)==1,(name,old);changed=changed.replace(old,new)
+            assert old in changed,(name,old);changed=changed.replace(old,new,1)
         if args.preflight:continue
         try:
             path.write_text(changed)

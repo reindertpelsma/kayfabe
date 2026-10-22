@@ -39,7 +39,7 @@ export class MockCloud {
   prs=[{number:7,state:'open',draft:false,user:{id:42},head:{sha,ref:'owner-pr',repo:{full_name:repo}},base:{ref:'master',repo:{full_name:repo}},changed_files:1}];
   reviews=[]; reviewPages=null; files=[{filename:'crates/kf-core/src/lib.rs',status:'modified'}]; filePages=null; filesError=0;
   offer={id:5,verified:true,vms_enabled:true,rentable:true,rented:false,num_gpus:1,
-    gpu_name:'RTX_4070',reliability:.999,disk_space:200};
+    gpu_name:'RTX_4070',gpu_arch:'nvidia',compute_cap:890,machine_id:100001,driver_version:'580.95.05',dlperf:30,cpu_cores_effective:16,cpu_ghz:3,cpu_ram:65536,inet_down:1000,inet_up:100,disk_bw:500,storage_cost:.12,inet_down_cost:0,inet_up_cost:0,reliability:.999,disk_space:200};
   instances=new Map([['777',{id:777,label:'owner-dev'}],['888',{id:888,label:'kf-ci-unrecorded'}]]);
   fetch=async (input,init={})=>{
     const u=new URL(String(input));const method=init.method||'GET';const body=init.body?JSON.parse(init.body):undefined;
@@ -63,8 +63,8 @@ export class MockCloud {
     if(u.hostname!=='console.vast.ai')throw Error('Unapproved external host');
     if(this.vastError)return new Response('PRIVATE-UPSTREAM',{status:this.vastError});
     if(u.pathname==='/api/v0/users/current')return Response.json({credit:this.credit,balance:0});
-    if(u.pathname==='/api/v0/bundles'){if(body.type!=='ondemand')return new Response('invalid type',{status:400});return Response.json({offers:[{...this.offer,dph_total:this.price}]});}
-    if(u.pathname==='/api/v0/asks/5'){
+    if(u.pathname==='/api/v0/bundles'){if(body.type!=='ondemand')return new Response('invalid type',{status:400});return Response.json({offers:[{dph_base:typeof this.price==='number'?this.price-this.offer.storage_cost*120/720:this.price,...this.offer,dph_total:this.price}]});}
+    if(/^\/api\/v0\/asks\/[1-9][0-9]*$/.test(u.pathname)){
       this.creates++;
       this.instances.set('900',{id:900,label:body.label,onstart:body.onstart,image_uuid:body.image,actual_status:'running'});
       if(this.ambiguous)throw Error('PRIVATE-UPSTREAM');
