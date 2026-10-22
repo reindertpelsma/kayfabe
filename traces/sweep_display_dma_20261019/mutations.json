@@ -1,0 +1,83 @@
+[
+  {
+    "mutant": "blackwell_clipped_to_4k",
+    "runtime_killers": [
+      "kf-disp::a_blackwell_core_jump_cycle_remains_bounded",
+      "kf-disp::a_blackwell_window_jump_cycle_remains_bounded",
+      "kf-disp::blackwell_core_accepts_its_public_64k_ring",
+      "kf-disp::blackwell_core_jump_keeps_address_bit_15",
+      "kf-disp::blackwell_window_accepts_its_public_64k_ring",
+      "kf-disp::blackwell_window_immediate_accepts_its_public_64k_ring",
+      "kf-disp::blackwell_window_immediate_jump_keeps_address_bit_15",
+      "kf-disp::blackwell_window_jump_keeps_address_bit_14"
+    ],
+    "count": 8
+  },
+  {
+    "mutant": "legacy_jump_mask",
+    "runtime_killers": [
+      "kf-disp::blackwell_core_jump_keeps_address_bit_15",
+      "kf-disp::blackwell_window_immediate_jump_keeps_address_bit_15",
+      "kf-disp::blackwell_window_jump_keeps_address_bit_14"
+    ],
+    "count": 3
+  },
+  {
+    "mutant": "legacy_method_mask",
+    "runtime_killers": [
+      "kf-disp::blackwell_core_method_address_does_not_alias_a_legacy_update",
+      "kf-disp::blackwell_window_method_address_keeps_its_upper_bit"
+    ],
+    "count": 2
+  },
+  {
+    "mutant": "widen_every_legacy_class",
+    "runtime_killers": [
+      "kf-disp::ada_retains_its_4k_ring_bound",
+      "kf-disp::ampere_retains_its_4k_ring_bound"
+    ],
+    "count": 2
+  },
+  {
+    "mutant": "drop_extent_guard",
+    "runtime_killers": [
+      "kf-disp::unsupported_core_address_extent_is_refused",
+      "kf-disp::unsupported_window_jump_extent_is_refused"
+    ],
+    "count": 2
+  },
+  {
+    "mutant": "worker_4k_clip",
+    "runtime_killers": [
+      "kf-qemu::display::display_dma_bounds_tests::blackwell_core_worker_keeps_its_64k_ring",
+      "kf-qemu::display::display_dma_bounds_tests::blackwell_window_immediate_worker_keeps_its_64k_ring",
+      "kf-qemu::display::display_dma_bounds_tests::blackwell_window_worker_keeps_its_64k_ring",
+      "kf-qemu::display::display_dma_bounds_tests::declared_size_still_bounds_a_blackwell_window_read"
+    ],
+    "count": 4
+  },
+  {
+    "mutant": "worker_ignores_context_limit",
+    "runtime_killers": [
+      "kf-qemu::display::display_dma_bounds_tests::context_dma_limit_still_bounds_a_blackwell_core_read",
+      "kf-qemu::display::display_dma_bounds_tests::context_dma_limit_still_bounds_and_aligns_a_blackwell_window_read"
+    ],
+    "count": 2
+  },
+  {
+    "mutant": "worker_ignores_declared_size",
+    "runtime_killers": [
+      "kf-qemu::display::display_dma_bounds_tests::declared_size_still_bounds_a_blackwell_core_read",
+      "kf-qemu::display::display_dma_bounds_tests::declared_size_still_bounds_a_blackwell_window_read"
+    ],
+    "count": 2
+  },
+  {
+    "mutant": "cursor_inherits_blackwell_dma",
+    "runtime_killers": [
+      "kf-disp::blackwell_cursor_keeps_the_defensive_legacy_dma_bound",
+      "kf-qemu::display::display_dma_bounds_tests::cursor_pio_worker_keeps_the_old_read_bound"
+    ],
+    "count": 2
+  }
+]

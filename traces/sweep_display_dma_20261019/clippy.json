@@ -1,0 +1,12 @@
+{
+  "base_raw_diagnostics": {
+    "warning": 480
+  },
+  "candidate_raw_diagnostics": {
+    "warning": 480
+  },
+  "added_on_changed_lines": [],
+  "candidate_compile_errors": 0,
+  "configuration": "--release --all-targets -j2 --keep-going -- -D warnings; RUSTFLAGS=--cap-lints warn, identical base/candidate, all inherited warnings remain visible",
+  "cache": "candidate accepted only from fresh /workspace/sweep-dma-clippy-target; shared-target failed attempt rejected"
+}

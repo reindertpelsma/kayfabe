@@ -56,7 +56,7 @@ pub struct PbLoc {
     pub sysmem: bool,
     /// Guest physical address, or framebuffer offset.
     pub addr: u64,
-    /// Bytes (≤ 4 KiB, [`pushbuf::MAX_PUSHBUFFER`]).
+    /// Bytes, bounded by the selected class's [`Engine::pushbuffer_limit`].
     pub bytes: u32,
 }
 
@@ -345,6 +345,9 @@ enum WindowSemaphores {
 /// of reading as method 0 at run time.
 #[derive(Debug, Clone)]
 pub struct Vocab {
+    core_dma: pushbuf::DmaFormat,
+    window_dma: pushbuf::DmaFormat,
+    immediate_dma: pushbuf::DmaFormat,
     core_space: u32,
     other_space: u32,
     // core
@@ -446,6 +449,12 @@ impl Vocab {
             .ok_or_else(|| miss("NV_UDISP_FE_CHN_ASSY_BASEADR_WIN(i)"))?;
         let (core, win, imm, cur) = (c.core, c.window, c.window_imm, c.cursor);
         Ok(Vocab {
+            core_dma: pushbuf::DmaFormat::from_class(t, core)
+                .ok_or_else(|| miss(&format!("NV{core:04X} DMA address fields")))?,
+            window_dma: pushbuf::DmaFormat::from_class(t, win)
+                .ok_or_else(|| miss(&format!("NV{win:04X} DMA address fields")))?,
+            immediate_dma: pushbuf::DmaFormat::from_class(t, imm)
+                .ok_or_else(|| miss(&format!("NV{imm:04X} DMA address fields")))?,
             // the core's user area is ASSEMBLY then ARMED; every other channel's page is split in two
             // (`kdispGetDisplayChannelUserBaseAndSize_v03_00`: "all other channels are 4KB (2K for
             // Armed and 2k for Assembly)")
@@ -570,6 +579,17 @@ impl Vocab {
     fn iso_enabled(&self, word: u32) -> bool {
         self.w_iso_enable
             .map_or(word != 0, |field| fld(word, field) != 0)
+    }
+
+    fn dma_format(&self, kind: ChannelKind) -> pushbuf::DmaFormat {
+        match kind {
+            ChannelKind::Core => self.core_dma,
+            ChannelKind::Window => self.window_dma,
+            ChannelKind::WindowImm => self.immediate_dma,
+            // Cursor channels are PIO. Retain the old defensive bound if a
+            // caller nevertheless attempts a DMA step on one.
+            ChannelKind::Cursor => pushbuf::DmaFormat::LEGACY,
+        }
     }
 
     fn space(&self, kind: ChannelKind) -> u32 {
@@ -866,6 +886,12 @@ impl Engine {
         (instance < n).then(|| kind.channel_number(instance))
     }
 
+    /// The selected channel class's ring bound, used before reading guest bytes.
+    #[must_use]
+    pub fn pushbuffer_limit(&self, kind: ChannelKind) -> u32 {
+        self.vocab.dma_format(kind).max_bytes()
+    }
+
     /// ★ A channel came into being (the control link accepted its alloc): GET = PUT = `offset`, empty
     /// state. A previous life of the same number is discarded.
     pub fn alloc(
@@ -1101,7 +1127,8 @@ impl Engine {
         if c.halted || c.decoded == put {
             return;
         }
-        let (groups, end, err) = pushbuf::decode_groups(pb, c.decoded, put);
+        let (groups, end, err) =
+            pushbuf::decode_groups_with(self.vocab.dma_format(c.kind), pb, c.decoded, put);
         let over = c.queue.len() + groups.len() > MAX_QUEUE;
         if !over {
             c.queue.extend(groups);

@@ -1,0 +1,225 @@
+warning: missing documentation for a function
+    --> crates/kf-util/src/lock.rs:1150:5
+     |
+1150 |     pub fn note_wait(rank: LockRank, d: Duration) {
+     |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+     |
+     = note: requested on the command line with `-W missing-docs`
+
+warning: missing documentation for a function
+    --> crates/kf-util/src/lock.rs:1432:5
+     |
+1432 |     pub fn note_hold(rank: LockRank, d: Duration) {
+     |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: missing documentation for a function
+   --> crates/kf-util/src/lockwitness.rs:193:5
+    |
+193 |     pub fn is_vcpu() -> bool {
+    |     ^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: `kf-util` (lib) generated 3 warnings
+warning: missing documentation for a method
+   --> crates/kf-arch/src/gsp.rs:842:5
+    |
+842 | /     fn on_read(
+843 | |         &self,
+844 | |         _model: &dyn GspModel,
+845 | |         _bar: u8,
+...   |
+848 | |         _state: &ArchBootState,
+849 | |     ) -> Option<u64> {
+    | |____________________^
+    |
+    = note: requested on the command line with `-W missing-docs`
+
+warning: missing documentation for a method
+   --> crates/kf-arch/src/gsp.rs:971:5
+    |
+971 |     fn libos_region_layout(&self) -> LibosRegionLayout;
+    |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: `kf-arch` (lib) generated 2 warnings
+warning: missing documentation for a struct field
+  --> crates/kf-abi/src/chanbudget.rs:90:18
+   |
+90 |     NoChannels { engine: u32 },
+   |                  ^^^^^^^^^^^
+   |
+   = note: requested on the command line with `-W missing-docs`
+
+warning: missing documentation for a struct field
+  --> crates/kf-abi/src/chanbudget.rs:92:20
+   |
+92 |     BelowMinimum { asked: u32 },
+   |                    ^^^^^^^^^^
+
+warning: missing documentation for a struct field
+  --> crates/kf-abi/src/chanbudget.rs:94:18
+   |
+94 |     AboveLimit { asked: u32, limit: u32, engine: u32, total: u32, in_use: u32 },
+   |                  ^^^^^^^^^^
+
+warning: missing documentation for a struct field
+  --> crates/kf-abi/src/chanbudget.rs:94:30
+   |
+94 |     AboveLimit { asked: u32, limit: u32, engine: u32, total: u32, in_use: u32 },
+   |                              ^^^^^^^^^^
+
+warning: missing documentation for a struct field
+  --> crates/kf-abi/src/chanbudget.rs:94:42
+   |
+94 |     AboveLimit { asked: u32, limit: u32, engine: u32, total: u32, in_use: u32 },
+   |                                          ^^^^^^^^^^^
+
+warning: missing documentation for a struct field
+  --> crates/kf-abi/src/chanbudget.rs:94:55
+   |
+94 |     AboveLimit { asked: u32, limit: u32, engine: u32, total: u32, in_use: u32 },
+   |                                                       ^^^^^^^^^^
+
+warning: missing documentation for a struct field
+  --> crates/kf-abi/src/chanbudget.rs:94:67
+   |
+94 |     AboveLimit { asked: u32, limit: u32, engine: u32, total: u32, in_use: u32 },
+   |                                                                   ^^^^^^^^^^^
+
+warning: missing documentation for a struct field
+  --> crates/kf-abi/src/chanbudget.rs:96:19
+   |
+96 |     HostTooFull { derived: u32, engine: u32, total: u32, in_use: u32 },
+   |                   ^^^^^^^^^^^^
+
+warning: missing documentation for a struct field
+  --> crates/kf-abi/src/chanbudget.rs:96:33
+   |
+96 |     HostTooFull { derived: u32, engine: u32, total: u32, in_use: u32 },
+   |                                 ^^^^^^^^^^^
+
+warning: missing documentation for a struct field
+  --> crates/kf-abi/src/chanbudget.rs:96:46
+   |
+96 |     HostTooFull { derived: u32, engine: u32, total: u32, in_use: u32 },
+   |                                              ^^^^^^^^^^
+
+warning: missing documentation for a struct field
+  --> crates/kf-abi/src/chanbudget.rs:96:58
+   |
+96 |     HostTooFull { derived: u32, engine: u32, total: u32, in_use: u32 },
+   |                                                          ^^^^^^^^^^^
+
+warning: `kf-abi` (lib) generated 11 warnings
+warning: missing documentation for a method
+    --> crates/kf-gsp/src/boot.rs:2797:5
+     |
+2797 |     pub fn release_held(&mut self, ram: &mut dyn GuestRam) -> Result<usize, GspFault> {
+     |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+     |
+     = note: requested on the command line with `-W missing-docs`
+
+warning: missing documentation for a method
+    --> crates/kf-gsp/src/boot.rs:2915:5
+     |
+2915 | /     pub fn post_event(
+2916 | |         &mut self,
+2917 | |         ram: &mut dyn GuestRam,
+2918 | |         rpc: &OutgoingRpc,
+2919 | |     ) -> Result<(), GspFault> {
+     | |_____________________________^
+
+warning: `kf-gsp` (lib) generated 2 warnings
+warning: missing documentation for a method
+    --> crates/kf-linux-raw/src/mapping_unsafe.rs:1196:5
+     |
+1196 |     pub fn load_u32(&self, offset: HostOffset) -> Result<u32, RawError> {
+     |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+     |
+     = note: requested on the command line with `-W missing-docs`
+
+warning: `kf-linux-raw` (lib) generated 1 warning
+warning: unused import: `crate::tick::Handoff`
+   --> crates/kf-disp/src/pace.rs:943:9
+    |
+943 |     use crate::tick::Handoff;
+    |         ^^^^^^^^^^^^^^^^^^^^
+    |
+    = note: `#[warn(unused_imports)]` (part of `#[warn(unused)]`) on by default
+
+warning: function `head` is never used
+   --> crates/kf-disp/src/pace.rs:945:8
+    |
+945 |     fn head(h: u32, period_ns: u64) -> HeadMode {
+    |        ^^^^
+    |
+    = note: `#[warn(dead_code)]` (part of `#[warn(unused)]`) on by default
+
+warning: function `sent` is never used
+    --> crates/kf-disp/src/pace.rs:1477:8
+     |
+1477 |     fn sent(digest: u64) -> Sent {
+     |        ^^^^
+
+warning: `kf-disp` (lib) generated 3 warnings (run `cargo fix --lib -p kf-disp` to apply 1 suggestion)
+   Compiling kf-disp v0.1.0 (/workspace/sweep-dma-wt/crates/kf-disp)
+    Finished `release` profile [optimized] target(s) in 0.26s
+     Running tests/display_dma_format.rs (/workspace/sweep-target/release/deps/display_dma_format-113cd14c8c9e9cd4)
+
+running 8 tests
+test ada_retains_its_4k_ring_bound ... ok
+test ampere_retains_its_4k_ring_bound ... ok
+test blackwell_core_jump_keeps_address_bit_15 ... FAILED
+test blackwell_core_accepts_its_public_64k_ring ... FAILED
+test generated_blackwell_core_method_extent_matches_public_header ... FAILED
+test generated_blackwell_window_jump_extent_matches_public_header ... FAILED
+test blackwell_window_jump_keeps_address_bit_14 ... FAILED
+test blackwell_window_accepts_its_public_64k_ring ... FAILED
+
+failures:
+
+---- blackwell_core_jump_keeps_address_bit_15 stdout ----
+
+thread 'blackwell_core_jump_keeps_address_bit_15' (160208) panicked at crates/kf-disp/tests/display_dma_format.rs:62:5:
+a valid Blackwell core jump halted: (0, 0, 0, true, "running")
+
+---- blackwell_core_accepts_its_public_64k_ring stdout ----
+
+thread 'blackwell_core_accepts_its_public_64k_ring' (160207) panicked at crates/kf-disp/tests/display_dma_format.rs:48:5:
+a valid Blackwell core ring halted: (0, 0, 0, true, "running")
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+
+---- generated_blackwell_core_method_extent_matches_public_header stdout ----
+
+thread 'generated_blackwell_core_method_extent_matches_public_header' (160211) panicked at crates/kf-disp/tests/display_dma_format.rs:75:5:
+assertion `left == right` failed
+  left: None
+ right: Some((15, 2))
+
+---- generated_blackwell_window_jump_extent_matches_public_header stdout ----
+
+thread 'generated_blackwell_window_jump_extent_matches_public_header' (160212) panicked at crates/kf-disp/tests/display_dma_format.rs:85:5:
+assertion `left == right` failed
+  left: None
+ right: Some((15, 2))
+
+---- blackwell_window_jump_keeps_address_bit_14 stdout ----
+
+thread 'blackwell_window_jump_keeps_address_bit_14' (160210) panicked at crates/kf-disp/tests/display_dma_format.rs:69:5:
+a valid Blackwell window jump halted: (0, 0, 0, true, "running")
+
+---- blackwell_window_accepts_its_public_64k_ring stdout ----
+
+thread 'blackwell_window_accepts_its_public_64k_ring' (160209) panicked at crates/kf-disp/tests/display_dma_format.rs:55:5:
+a valid Blackwell window ring halted: (0, 0, 0, true, "running")
+
+
+failures:
+    blackwell_core_accepts_its_public_64k_ring
+    blackwell_core_jump_keeps_address_bit_15
+    blackwell_window_accepts_its_public_64k_ring
+    blackwell_window_jump_keeps_address_bit_14
+    generated_blackwell_core_method_extent_matches_public_header
+    generated_blackwell_window_jump_extent_matches_public_header
+
+test result: FAILED. 2 passed; 6 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+error: test failed, to rerun pass `-p kf-disp --test display_dma_format`
