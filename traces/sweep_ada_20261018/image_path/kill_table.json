@@ -1,0 +1,32 @@
+[
+  {
+    "mutant": "drop_image_environment",
+    "failures": [
+      "test_guarded_fast_suite.GuestImagePathTests.test_controller_image_directory_reaches_real_shell_launch",
+      "test_guarded_fast_suite.GuestImagePathTests.test_explicit_image_directory_with_spaces_overrides_inherited_path"
+    ],
+    "errors": [],
+    "tests": 9
+  },
+  {
+    "mutant": "skip_selected_image_preflight",
+    "failures": [
+      "test_guarded_fast_suite.GuestImagePathTests.test_missing_initrd_refused_before_arm",
+      "test_guarded_fast_suite.GuestImagePathTests.test_missing_kernel_refused_before_arm",
+      "test_guarded_fast_suite.GuestImagePathTests.test_real_cli_missing_images_reports_selected_path"
+    ],
+    "errors": [],
+    "tests": 9
+  },
+  {
+    "mutant": "ignore_explicit_directory",
+    "failures": [
+      "test_guarded_fast_suite.GuestImagePathTests.test_controller_image_directory_reaches_real_shell_launch",
+      "test_guarded_fast_suite.GuestImagePathTests.test_explicit_image_directory_with_spaces_overrides_inherited_path",
+      "test_guarded_fast_suite.GuestImagePathTests.test_missing_initrd_refused_before_arm",
+      "test_guarded_fast_suite.GuestImagePathTests.test_missing_kernel_refused_before_arm"
+    ],
+    "errors": [],
+    "tests": 9
+  }
+]

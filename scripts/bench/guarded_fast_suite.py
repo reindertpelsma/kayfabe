@@ -17,7 +17,12 @@ G = importlib.util.module_from_spec(SPEC); SPEC.loader.exec_module(G)
 def main():
     p = argparse.ArgumentParser(description=__doc__)
     p.add_argument('tag'); p.add_argument('receipt'); p.add_argument('revision'); p.add_argument('binary')
+    p.add_argument('--fastguest-dir', required=True, help='directory built for the selected guest driver')
     a = p.parse_args()
+    images = Path(a.fastguest_dir).resolve()
+    for name in ('vmlinuz', 'initrd.cpio.gz'):
+        if not (images / name).is_file():
+            raise G.GuardRefused('missing selected guest image: ' + str(images / name))
     G.pin_suite(ROOT, a.revision); G.verify_binary_revision(a.binary, a.revision)
     text = (ROOT / 'scripts/fastguest/fast_suite.sh').read_text()
     block = re.search(r'ARMS=\((--timer .*?)\)\nfi', text, re.S)
@@ -28,7 +33,7 @@ def main():
         raise G.GuardRefused('pinned suite must contain all 30 distinct arms')
     env = dict(os.environ, KF_GUARD_RECEIPT=str(Path(a.receipt).resolve()),
                KF_GUARD_REVISION=a.revision, KF_GUARD_QEMU=str(Path(a.binary).absolute()),
-               QEMU_BIN=str(ROOT / 'scripts/bench/guest_xid_qemu.sh'))
+               QEMU_BIN=str(ROOT / 'scripts/bench/guest_xid_qemu.sh'), KF_FASTGUEST_DIR=str(images))
     bench = Path(env.get('BENCH_DIR', '/workspace/bench'))
     completed = []
     for arm in arms:
