@@ -1,0 +1,22 @@
+{
+  "classification": "MEASURED",
+  "state": "PROPOSAL ONLY; hardware activation awaits explicit pending reader approval",
+  "red_tests": 20,
+  "red_errors": 7,
+  "green_tests": 20,
+  "restored_green": true,
+  "mutants": [
+    {
+      "mutation": "reader_discards_records",
+      "killing_tests": 2
+    },
+    {
+      "mutation": "reader_drops_byte_bound",
+      "killing_tests": 2
+    },
+    {
+      "mutation": "reader_accepts_failed_command",
+      "killing_tests": 2
+    }
+  ]
+}

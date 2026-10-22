@@ -1,0 +1,61 @@
+{
+  "classification": "MEASURED",
+  "time": "2026-10-22T07:48:53.305550+02:00",
+  "mutants": [
+    {
+      "mutation": "descriptor_old_storage_budget",
+      "before": {
+        "passed": 20,
+        "failed": 0,
+        "ignored": 0
+      },
+      "mutant": {
+        "passed": 17,
+        "failed": 3,
+        "ignored": 0
+      },
+      "restored": {
+        "passed": 20,
+        "failed": 0,
+        "ignored": 0
+      }
+    },
+    {
+      "mutation": "SA02_handle_authorizes_kernel",
+      "before": {
+        "passed": 6,
+        "failed": 0,
+        "ignored": 0
+      },
+      "mutant": {
+        "passed": 2,
+        "failed": 3,
+        "ignored": 0
+      },
+      "restored": {
+        "passed": 6,
+        "failed": 0,
+        "ignored": 0
+      }
+    },
+    {
+      "mutation": "VA_batch_restore_64_refusal",
+      "before": {
+        "passed": 13,
+        "failed": 0,
+        "ignored": 0
+      },
+      "mutant": {
+        "passed": 0,
+        "failed": 12,
+        "ignored": 0
+      },
+      "restored": {
+        "passed": 13,
+        "failed": 0,
+        "ignored": 0
+      }
+    }
+  ],
+  "all_source_restored": true
+}

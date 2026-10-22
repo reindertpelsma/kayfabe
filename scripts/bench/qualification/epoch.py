@@ -26,3 +26,31 @@ def pin_binary(binary, product_revision):
             or path.name != 'qemu-system-x86_64'):
         raise ValueError('CANDIDATE_BINARY_PIN_MISMATCH')
     return product_revision
+
+
+def _capture(argv):
+    """Bound allocation before waiting for the trusted journal process."""
+    import subprocess
+    from types import SimpleNamespace
+    proc = subprocess.Popen(argv, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL)
+    try:
+        data = proc.stdout.read(16 * 1024 * 1024 + 1)
+        if len(data) > 16 * 1024 * 1024:
+            raise ValueError('XID_JOURNAL_BYTE_BOUND')
+        return SimpleNamespace(stdout=data, returncode=proc.wait(timeout=10))
+    finally:
+        if proc.poll() is None:
+            proc.terminate()
+            proc.wait(timeout=10)
+
+
+def read_xids(run=_capture):
+    """Proposed bounded Xid-only observation; hardware use needs reader approval."""
+    result = run(['journalctl', '-k', '-b', '-o', 'short-iso-precise',
+                  '--no-pager', '--grep=NVRM: Xid'])
+    if len(result.stdout) > 16 * 1024 * 1024:
+        raise ValueError('XID_JOURNAL_BYTE_BOUND')
+    if result.returncode != 0:
+        raise ValueError('XID_JOURNAL_UNREADABLE')
+    text = result.stdout.decode('utf-8', 'strict')
+    return tuple(line for line in text.splitlines() if 'NVRM: Xid' in line)

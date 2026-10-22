@@ -1,0 +1,11 @@
+{
+  "classification": "MEASURED",
+  "source": "owner production run3439 qemu.log",
+  "bytes": 228633391,
+  "lines": 1401869,
+  "counts": {
+    "GP_FORMAT Budget": 0,
+    "USER_RING_SCAN_BUDGET": 0,
+    "USER_RING_REFUSED": 0
+  }
+}
