@@ -1,4 +1,11 @@
-**STATUS: RESEARCH, 2026-10-22 — reset implementation stopped at the public contract boundary.**
+**STATUS: RESEARCH, 2026-10-22 — reset refusal accepted; Linux negative control in progress.**
+
+CODE READ owner decision, 2026-10-22: preserve RESET_CHANNEL refusal until recovery
+proof exists. Option 1 below is accepted; option 2 is not selected. The reset
+question is parked and is not a prerequisite for implementing the error-delivery
+negative control. The control must check error delivery without claiming recovery.
+The historical blocked runbook below is superseded by
+`V3_TRANSLATED_RC_CONTROL_20261022.md` as that implementation progresses.
 
 CODE READ: follow-up to PR #71, based on commit
 `1c6452a276d7014bece3adf42d68cbd4edffbc18`; branch
