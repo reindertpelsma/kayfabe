@@ -1,0 +1,362 @@
+"""Freshness contracts extending C1's parser; temporary repositories, no GPU."""
+
+from datetime import date
+import importlib.util
+import json
+from pathlib import Path
+import subprocess
+import sys
+import tempfile
+import unittest
+
+CHECKER = Path(__file__).with_name("doc_freshness.py")
+TODAY = "2026-10-23"
+
+
+class FreshnessTests(unittest.TestCase):
+    def setUp(self):
+        self.temporary = tempfile.TemporaryDirectory()
+        self.addCleanup(self.temporary.cleanup)
+        self.root = Path(self.temporary.name)
+        self.git("init", "-q")
+        self.write("docs/ok.md", self.document())
+        self.write("crates/kf-example/Cargo.toml", '[package]\nname = "kf-example"\n')
+        self.write("crates/kf-example/src/lib.rs", "// KF3_ALIVE --alive-flag\n")
+        self.git("add", ".")
+
+    def git(self, *args):
+        return subprocess.run(
+            ["git", "-C", str(self.root), *args], check=True, capture_output=True, text=True
+        ).stdout
+
+    def write(self, name, text):
+        path = self.root / name
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(text, encoding="utf-8")
+
+    def document(self, state="LIVE", day=TODAY, extra="", body="Body."):
+        return f"# Example\n\n**STATUS: {state}, {day}.** {extra}\n\n{body}\n"
+
+    def run_check(self, expected=0, *args):
+        run = subprocess.run(
+            [
+                sys.executable,
+                str(CHECKER),
+                "--root",
+                str(self.root),
+                "--today",
+                TODAY,
+                "--format",
+                "json",
+                *args,
+            ],
+            capture_output=True,
+            text=True,
+        )
+        self.assertEqual(run.returncode, expected, run.stderr or run.stdout)
+        return json.loads(run.stdout)
+
+    def kinds(self, expected=1, *args):
+        return {item["kind"] for item in self.run_check(expected, *args)["violations"]}
+
+    def test_status_is_required_outside_design(self):
+        self.write("docs/guide.md", "# Guide\n\nAn undated guide.\n")
+        self.assertIn("missing-status", self.kinds())
+
+    def test_nested_markdown_requires_status(self):
+        self.write("docs/howto/guide.md", "# Guide\n")
+        self.assertIn("missing-status", self.kinds())
+
+    def test_architecture_requires_status(self):
+        self.write("ARCHITECTURE.md", "# Architecture\n")
+        self.assertIn("missing-status", self.kinds())
+
+    def test_readme_requires_status_without_editing_it(self):
+        self.write("README.md", "# Read me\n")
+        self.assertIn("missing-status", self.kinds())
+
+    def test_c1_metadata_forms_are_preserved(self):
+        self.write(
+            "docs/ok.md",
+            "---\ntitle: Guide\n---\n\n# Guide\n\n" "> ### STATUS — 2026-10-23 / **LIVE**\n",
+        )
+        self.run_check()
+
+    def test_status_buried_after_prose_fails(self):
+        self.write("docs/ok.md", "# Guide\n\nProse.\n\nSTATUS: LIVE, 2026-10-23.\n")
+        self.assertIn("misplaced-status", self.kinds())
+
+    def test_status_with_invalid_calendar_date_fails(self):
+        self.write("docs/ok.md", self.document(day="2026-02-30"))
+        self.assertIn("invalid-date", self.kinds())
+
+    def test_disallowed_status_fails(self):
+        self.write("docs/ok.md", self.document(state="BUILT"))
+        self.assertIn("invalid-status", self.kinds())
+
+    def test_superseded_requires_linked_successor(self):
+        self.write("docs/old.md", self.document(state="SUPERSEDED"))
+        self.assertIn("missing-successor", self.kinds())
+
+    def test_successor_must_exist(self):
+        self.write("docs/old.md", self.document("SUPERSEDED", extra="[Next](missing.md)"))
+        self.assertIn("broken-link", self.kinds())
+
+    def test_external_successor_is_not_a_repository_successor(self):
+        self.write("docs/old.md", self.document("SUPERSEDED", extra="[Next](https://example.org)"))
+        self.assertIn("missing-successor", self.kinds())
+
+    def test_self_successor_fails(self):
+        self.write("docs/old.md", self.document("SUPERSEDED", extra="[Next](old.md)"))
+        self.assertIn("missing-successor", self.kinds())
+
+    def test_directory_successor_fails(self):
+        self.write("docs/old.md", self.document("SUPERSEDED", extra="[Next](./)"))
+        self.assertIn("missing-successor", self.kinds())
+
+    def test_successor_in_status_is_reported(self):
+        self.write("docs/old.md", self.document("SUPERSEDED", extra="[Next](ok.md)"))
+        row = next(row for row in self.run_check()["documents"] if row["path"] == "docs/old.md")
+        self.assertEqual(row["successor"], "docs/ok.md")
+
+    def test_successor_may_point_into_read_only_archive(self):
+        self.write("archive/docs/old.md", "# Preserved historical text\n")
+        self.write(
+            "docs/old.md", self.document("SUPERSEDED", extra="[Archive](../archive/docs/old.md)")
+        )
+        self.run_check()
+
+    def test_old_live_with_dead_source_path_is_suspect(self):
+        self.write("docs/ok.md", self.document(day="2026-01-01", body="`crates/gone/src/lib.rs`"))
+        self.assertIn("stale-suspect", self.kinds())
+
+    def test_old_live_with_missing_environment_variable_is_suspect(self):
+        self.write("docs/ok.md", self.document(day="2026-01-01", body="`KF3_REMOVED_OPTION=1`"))
+        self.assertIn("stale-suspect", self.kinds())
+
+    def test_old_live_with_missing_flag_is_suspect(self):
+        self.write("docs/ok.md", self.document(day="2026-01-01", body="`--removed-option`"))
+        self.assertIn("stale-suspect", self.kinds())
+
+    def test_old_live_with_missing_crate_is_suspect(self):
+        self.write("docs/ok.md", self.document(day="2026-01-01", body="`kf-removed-crate`"))
+        self.assertIn("stale-suspect", self.kinds())
+
+    def test_old_live_with_missing_branch_is_suspect(self):
+        self.write(
+            "docs/ok.md", self.document(day="2026-01-01", body="branch `codex/removed-branch`")
+        )
+        self.assertIn("stale-suspect", self.kinds())
+
+    def test_age_alone_does_not_mean_stale(self):
+        self.write("docs/ok.md", self.document(day="2026-01-01"))
+        self.run_check()
+
+    def test_recent_dead_references_are_reported_but_not_stale(self):
+        self.write("docs/ok.md", self.document(body="`KF3_REMOVED_OPTION`"))
+        result = self.run_check()
+        self.assertIn("env:KF3_REMOVED_OPTION", result["documents"][0]["dead_references"])
+
+    def test_configurable_age_boundary_is_strict(self):
+        self.write("docs/ok.md", self.document(day="2026-08-24", body="`KF3_REMOVED_OPTION`"))
+        self.run_check()
+        self.assertIn("stale-suspect", self.kinds(1, "--max-age-days", "59"))
+
+    def test_research_with_old_dead_references_is_not_stale(self):
+        self.write(
+            "docs/ok.md", self.document("RESEARCH", "2026-01-01", body="`KF3_REMOVED_OPTION`")
+        )
+        self.run_check()
+
+    def test_live_references_are_searched_in_source(self):
+        self.write(
+            "docs/ok.md",
+            self.document(
+                day="2026-01-01",
+                body="`KF3_ALIVE` `--alive-flag` `kf-example` `crates/kf-example/src/lib.rs`",
+            ),
+        )
+        self.assertEqual(self.run_check()["documents"][0]["dead_references"], [])
+
+    def test_doc_text_cannot_validate_its_own_missing_option(self):
+        self.write("docs/ok.md", self.document(day="2026-01-01", body="`KF3_REMOVED_OPTION`"))
+        self.write("archive/retired.rs", "// KF3_REMOVED_OPTION\n")
+        self.write("traces/old.txt", "KF3_REMOVED_OPTION\n")
+        self.git("add", ".")
+        self.assertIn("stale-suspect", self.kinds())
+
+    def test_reference_in_fenced_command_is_checked(self):
+        self.write(
+            "docs/ok.md", self.document(day="2026-01-01", body="```sh\nKF3_REMOVED_OPTION=1\n```")
+        )
+        self.assertIn("stale-suspect", self.kinds())
+
+    def test_literal_relative_link_must_resolve(self):
+        self.write("docs/ok.md", self.document(body="[missing](missing.md)"))
+        self.assertIn("broken-link", self.kinds())
+
+    def test_reference_link_must_resolve(self):
+        self.write("docs/ok.md", self.document(body="[guide][next]\n\n[next]: missing.md"))
+        self.assertIn("broken-link", self.kinds())
+
+    def test_collapsed_reference_link_must_resolve(self):
+        self.write("docs/ok.md", self.document(body="[next][]\n\n[next]: missing.md"))
+        self.assertIn("broken-link", self.kinds())
+
+    def test_image_link_must_resolve(self):
+        self.write("docs/ok.md", self.document(body="![plot](missing.png)"))
+        self.assertIn("broken-link", self.kinds())
+
+    def test_html_relative_link_must_resolve(self):
+        self.write("docs/ok.md", self.document(body='<a href="missing.md">guide</a>'))
+        self.assertIn("broken-link", self.kinds())
+
+    def test_encoded_space_and_parentheses_resolve(self):
+        self.write("docs/a (b).md", self.document())
+        self.write("docs/ok.md", self.document(body="[guide](a%20(b).md)"))
+        self.run_check()
+
+    def test_root_relative_link_resolves(self):
+        self.write("docs/ok.md", self.document(body="[code](/crates/kf-example/src/lib.rs)"))
+        self.run_check()
+
+    def test_external_links_are_not_fetched(self):
+        self.write(
+            "docs/ok.md", self.document(body="[web](https://invalid.example/a) [mail](mailto:a@b)")
+        )
+        self.run_check()
+
+    def test_link_examples_and_comments_are_not_live_links(self):
+        self.write(
+            "docs/ok.md",
+            self.document(
+                body="```md\n[example](missing.md)\n```\n\n<!-- [hidden](missing.md) -->"
+            ),
+        )
+        self.run_check()
+
+    def test_link_cannot_escape_checkout(self):
+        self.write("docs/ok.md", self.document(body="[outside](../../outside.md)"))
+        self.assertIn("broken-link", self.kinds())
+
+    def test_readme_broken_link_is_checked(self):
+        self.write("README.md", self.document(body="[missing](docs/missing.md)"))
+        self.assertIn("broken-link", self.kinds())
+
+    def test_archived_markdown_is_read_only_and_excluded(self):
+        self.write("docs/archive/old.md", "# Old\n\n[missing](missing.md)\n")
+        row = next(row for row in self.run_check()["documents"] if row["path"].endswith("old.md"))
+        self.assertEqual(row["status"], "ARCHIVED")
+
+    def test_non_markdown_assets_are_inventoried_without_status_edits(self):
+        self.write("docs/reference/data.json", '{"historical": true}\n')
+        row = next(
+            row for row in self.run_check()["documents"] if row["path"].endswith("data.json")
+        )
+        self.assertEqual(row["status"], "ASSET")
+
+    def test_legacy_baseline_is_explicit_and_green(self):
+        self.write("docs/ok.md", "# Legacy\n")
+        self.run_check(0, "--record")
+        self.assertEqual(self.run_check()["new"], 0)
+
+    def test_changed_legacy_doc_loses_exemption(self):
+        self.write("docs/ok.md", "# Legacy\n")
+        self.run_check(0, "--record")
+        self.write("docs/ok.md", "# Legacy\n\nChanged prose.\n")
+        self.assertEqual(self.run_check(1)["new"], 1)
+
+    def test_changed_stale_doc_loses_exemption(self):
+        self.write("docs/ok.md", self.document(day="2026-01-01", body="`KF3_REMOVED_OPTION`"))
+        self.run_check(0, "--record")
+        self.write(
+            "docs/ok.md", self.document(day="2026-01-01", body="`KF3_REMOVED_OPTION` revised")
+        )
+        self.assertGreater(self.run_check(1)["new"], 0)
+
+    def test_removal_does_not_buy_new_debt(self):
+        self.write("docs/old.md", "# Legacy\n")
+        self.run_check(0, "--record")
+        (self.root / "docs/old.md").unlink()
+        self.write("docs/new.md", "# Legacy\n")
+        self.assertEqual(self.run_check(1)["new"], 1)
+
+    def test_newly_broken_target_fails_unchanged_document(self):
+        self.write("docs/ok.md", self.document(body="[code](../crates/kf-example/src/lib.rs)"))
+        self.run_check(0, "--record")
+        (self.root / "crates/kf-example/src/lib.rs").unlink()
+        self.assertIn("broken-link", self.kinds())
+
+    def test_missing_source_after_baseline_is_new_stale_debt(self):
+        self.write("docs/ok.md", self.document(day="2026-01-01", body="`KF3_ALIVE`"))
+        self.run_check(0, "--record")
+        self.write("crates/kf-example/src/lib.rs", "// option removed\n")
+        self.assertIn("stale-suspect", self.kinds())
+
+    def test_empty_document_scan_is_infrastructure_failure(self):
+        (self.root / "docs/ok.md").unlink()
+        run = subprocess.run(
+            [sys.executable, str(CHECKER), "--root", str(self.root)], capture_output=True, text=True
+        )
+        self.assertEqual(run.returncode, 2)
+
+    def test_markdown_report_has_per_doc_evidence_and_decisions(self):
+        run = subprocess.run(
+            [
+                sys.executable,
+                str(CHECKER),
+                "--root",
+                str(self.root),
+                "--today",
+                TODAY,
+                "--format",
+                "markdown",
+            ],
+            capture_output=True,
+            text=True,
+        )
+        self.assertEqual(run.returncode, 0, run.stderr)
+        for required in (
+            "STATUS:",
+            TODAY,
+            "docs/ok.md",
+            "Age",
+            "Dead references",
+            "Successor",
+            "INFERRED",
+            "CODE READ",
+        ):
+            self.assertIn(required, run.stdout)
+
+
+class WorkflowTests(unittest.TestCase):
+    def workflow(self):
+        return (CHECKER.parents[2] / ".github/workflows/doc-freshness.yml").read_text()
+
+    def test_workflow_runs_on_docs_pull_requests_and_weekly(self):
+        text = self.workflow()
+        for required in (
+            "pull_request:",
+            "docs/**",
+            "ARCHITECTURE.md",
+            "README*",
+            "schedule:",
+            "23 5 * * 1",
+            "workflow_dispatch:",
+        ):
+            self.assertIn(required, text)
+
+    def test_workflow_generates_report_even_on_failure(self):
+        text = self.workflow()
+        for required in (
+            "--format markdown",
+            "if: always()",
+            "actions/upload-artifact@v4",
+            "fetch-depth: 0",
+            "doc_freshness.py",
+        ):
+            self.assertIn(required, text)
+
+
+if __name__ == "__main__":
+    unittest.main()
