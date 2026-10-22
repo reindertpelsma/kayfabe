@@ -6,7 +6,7 @@
     "gpu_offer": "RTX 5090",
     "verification": "unverified",
     "created_utc": "2026-10-22T02:10:10.674023+00:00",
-    "quote_dph": 0.7166666666666667,
+    "quote_dph": null,
     "quote_note": "original search quote not retained after failed receipt write; actual_dph used conservatively",
     "observed_dph_total": 0.7166666666666667,
     "credit_before": null,

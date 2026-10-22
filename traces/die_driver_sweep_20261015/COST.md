@@ -1,3 +1,14 @@
+STATUS: LIVE,2026-10-22 verified replacement57148807 created2026-10-22T02:55:07.410087+00:00.
+Offer56684494/machine11051, providerverified/reliability0.998131, RTX5090/Japan.
+Required170min autoPID2913269 armedFIRST; daily06:50CEST clamp=>04:50UTC, independent budgetwatch2913272
+cuts off112min aftercreation=>04:47:07UTC. BothownPID/starttimesretained; APIabsencebeforecancellation.
+Quote1.000926USD/h, fresh APIcredit42.053593USD; priorlane runtime3.928363USD +reservation2.648654USD
+=guard6.577017USD<7/reserve5. Actualrate recorded afterreadiness. OneSW2box; S2Ada is separately
+owner-authorized inparallel, itslease untouched andsharedaccountdebitsnotchargedtoourbudget.
+Admission correction test-firsted890f68f->4c3f6cb4d: fullPython104/0,2newmutants3killers each;
+other runtimeguard topics97tests/22mutantsunchanged. No N0/Windows claim beforeactualreadiness.
+Receipt ../blackwell_validation4_20261022/owned_instances.json. Previousfailedprovidersareclosed.
+
 STATUS: LIVE,2026-10-22. Replacement57143789 closed/APIabsence2026-10-22T02:36:32.836171+00:00.
 Ubuntu/OpenSSH booted(consolekeysverified), but both advertised SSHroutes refused TCPconnections;
 no upload/preflight/N0/Windows arm. Runtimeestimate0.314967USD/lane
