@@ -2,6 +2,13 @@
 
 **STATUS: RESEARCH / DESIGN-ONLY, 2026-10-22. G1 stopped before implementation.**
 
+**SUPERSEDED, 2026-10-22:** CODE READ: the authoritative
+[descriptor decision](V3_USER_DESCRIPTOR_DECISION_20261022.md) resolves this stop.
+Pointer admission uses the hardware format and forwards the intact word; the
+917504-byte bound applies to copying/staging. The complete-mode-from-birth
+recommendation and proposed eight-part ceiling below were rejected. This note
+retains the earlier analysis as history; implementation follows the decision.
+
 CODE READ: this note describes T1 base `77ed23eff`, not an implemented fix.
 INFERRED: the current Pointer contract creates an unresolved design choice for
 the requested authored continuation. Per the lane's instruction to stop and

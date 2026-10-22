@@ -338,7 +338,7 @@ impl<E: Env> Io for EnvIo<'_, E> {
     fn src_entries(&mut self) -> u32 {
         self.env.src_entries()
     }
-    fn max_entry_bytes(&mut self) -> u64 {
+    fn max_scan_bytes(&mut self) -> u64 {
         kf_chan::user_storage::MAX_SOURCE_BYTES
     }
     fn gp_put(&mut self) -> Turn<Option<u32>> {
@@ -450,6 +450,7 @@ impl<E: Env> Io for EnvIo<'_, E> {
             turn::Ev::PutBound => self.env.event(Ev::PutBound),
             turn::Ev::EntryRefused => self.env.event(Ev::EntryRefused),
             turn::Ev::ScanRefused => self.env.event(Ev::ScanRefused),
+            turn::Ev::ScanBudget => {}
             turn::Ev::CarriedUngated { .. } => self.env.event(Ev::CarriedUngated),
             turn::Ev::Retry { .. } => self.env.event(Ev::Retry),
             turn::Ev::GatePublished | turn::Ev::GateProceeded | turn::Ev::CreditWait => {}

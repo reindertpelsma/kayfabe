@@ -18,9 +18,9 @@ use kf_linux_raw::{Backing, CachePolicy, CharDevice, HostOffset, HostPageSize, V
 pub const BYTES: u64 = 1 << 20;
 /// Pushbuffer region ends here; whole64KiB granules permit RO-only mapping.
 pub const GP_OFFSET: u64 = 0xe0000;
-/// Trusted source snapshot limit: any intercepted segment must fit completely
-/// in the existing private staging region. This is an allocation policy, not
-/// the hardware maximum GPFIFO length or a per-die compatibility constant.
+/// Trusted bound for each source snapshot and authored staging span. A Pointer
+/// descriptor copies no PB bytes and is bounded by the hardware format alone.
+/// This allocation policy is not a descriptor-length or per-die constant.
 pub const MAX_SOURCE_BYTES: u64 = GP_OFFSET;
 /// USERD starts here and has NO GPU VA mapping.
 pub const USERD_OFFSET: u64 = 0xf0000;
@@ -515,15 +515,16 @@ impl Storage<CpuView> {
     }
 
     /// Copy a direct USER descriptor unchanged into the private ring. This
-    /// validates format and the trusted scan budget ONLY: the worker must also
-    /// resolve the complete source in this channel's own restricted address
-    /// space and retain source/channel admission through PUT publication.
+    /// validates hardware format only. Pointer mode resolves no PB: native USER
+    /// privileges and the channel's own restricted VAS are its authority (§AI).
+    /// The worker retains GP/channel admission through PUT; a scanned entry also
+    /// retains its PB source guards. Copy/staging bounds are enforced separately.
     /// Never use this for privileged Translated work or bypass software triggers.
     pub fn write_user_gp(&self, slot: u32, entry: u64) -> Result<(), String> {
         if slot >= ENTRIES {
             return Err("USER_STORAGE_GP_BOUND".into());
         }
-        crate::user_stream::inspect_entry(entry, MAX_SOURCE_BYTES)
+        crate::user_stream::inspect_format(entry)
             .map_err(|why| format!("USER_STORAGE_USER_GP: {why:?}"))?;
         self.cpu()?
             .store_u64(HostOffset::new(GP_OFFSET + u64::from(slot) * 8), entry)
