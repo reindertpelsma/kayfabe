@@ -1,3 +1,15 @@
+STATUS: LIVE, 2026-10-22 provider-failure closeout. Lease57142142 never reached console/SSH;
+Vast explicitly reported GPU error/unable to start. No upload, hostpreflight, N0 or Windows arm ran.
+Destroyed exact ownID/APIabsence 2026-10-22T02:07:19.719143+00:00; both own timers cancelled AFTERabsence.
+Conservative runtimeestimate0.148704USD at0.760000USD/h; lane total
+3.613396USD; shared APIcredit42.743520USD, reserve5intact.
+Created/stopped startup may bill less; estimates are not settled exclusive invoices. The default-verified
+offer disappeared beforecreation; provider statusdeverified/ratequote.630370 was recorded openly.
+Per scripts/bench/box/README.md's explicit GPU-error destroy/re-rent procedure, replacing this failed
+provisioning attempt within the same one-active-box validation run and7USD cap; do not reuse machine145861.
+Evidence ../blackwell_validation2_20261022/provider_start_failure.json andowned_instances.json.
+Prior entries below are historical.
+
 STATUS: LIVE, 2026-10-22 01:55:35UTC. Follow-up owner authority: created ONE new RTX5090 lease57142142
 on offer50739116/machine145861. The CLI-default verified pool emptied; this VM-enabled offer
 has provider statusdeverified, reliability0.988640; full stock preflight/N0 unchanged.
@@ -7,7 +19,7 @@ Fresh API credit42.769098USD; prior lane runtime3.464692USD, reservation2.569383
 combined budget guard6.034075USD<7; reserve5 intact.
 Quote0.630370370USD/h; actual charged rate recorded at readiness. Earlier1.334722USD/h offer vanished
 before creation; zero instance created on that search. No further lease authorized after this one.
-Census tests-first fixe16402b7c and97-test/22mutant guard deployed; product8f3a9bb3a, optional B1merge2add71e8c.
+Census tests-first fixe16402b7c and97-test/22mutant guard pinned for deployment; product8f3a9bb3a, optional B1merge2add71e8c.
 Receipt ../blackwell_validation2_20261022/owned_instances.json. Earlier entries are historical.
 
 STATUS: LIVE, 2026-10-22 01:30UTC closeout. Own lease57132969 destroyed; API absence verified
