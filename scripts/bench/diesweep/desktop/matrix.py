@@ -28,20 +28,29 @@ def attach_media(vm, q, iso, guest_iso, expected):
     return vm.attach_disk(iso)
 
 
+class ObservationBudgetExhausted(RuntimeError):
+    """App dispatch must stop while its reserved stability/export budget remains."""
+
+
 def run_plan(session, apps, record, health, hold):
     health()
     failed = False
-    for app in apps:
-        result = session.run_app(app)
-        record(result)
+    partial = False
+    try:
+        for app in apps:
+            result = session.run_app(app)
+            record(result)
+            health()
+            if result['restart']:
+                raise RuntimeError(result['restart'])
+            failed |= result['verdict'] != 'PASS'
+    except ObservationBudgetExhausted:
+        partial = True
         health()
-        if result['restart']:
-            raise RuntimeError(result['restart'])
-        failed |= result['verdict'] != 'PASS'
     if hold() < 600:
         raise RuntimeError('incomplete stability hold')
     health()
-    return int(failed)
+    return 2 if partial else int(failed)
 
 
 class AttachedVm(w.BrokerVm):
@@ -147,7 +156,8 @@ def main():
     def rows():
         for row in ordered:
             if datetime.datetime.now(datetime.timezone.utc) + datetime.timedelta(seconds=row['timeout_s']+690) >= end:
-                raise RuntimeError('lease observation/export budget exhausted')
+                (out / 'budget_stop.json').write_text(json.dumps({'utc':datetime.datetime.now(datetime.timezone.utc).isoformat(),'before_app':row['id'],'reason':'lease observation/export budget exhausted'},indent=2)+'\n')
+                raise ObservationBudgetExhausted('lease observation/export budget exhausted')
             yield row
     rc = 7
     try:
