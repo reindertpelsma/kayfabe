@@ -41,13 +41,30 @@ class RunnerIdentityTests(unittest.TestCase):
             with self.assertRaises(G.GuardRefused):
                 G.verify_guest_identity({'pid': os.getpid(), 'starttime': 7, 'exe': '/different/qemu'})
 
+    def wrong_capture_binary(self, binary):
+        rev = subprocess.check_output(['git', 'rev-parse', 'HEAD'], cwd=ROOT, text=True).strip()
+        child = subprocess.Popen([sys.executable, '-c', 'import time; time.sleep(10)'])
+        try:
+            with self.assertRaises(G.GuardRefused): G.capture_guest(child.pid, binary, rev, '--defer-liveness', ROOT)
+        finally:
+            child.terminate(); child.wait(timeout=5)
+
+    def test_wrong_capture_executable_true_refused(self):
+        self.wrong_capture_binary('/usr/bin/true')
+
+    def test_wrong_capture_executable_false_refused(self):
+        self.wrong_capture_binary('/usr/bin/false')
+
     def test_parent_is_not_owned_qemu(self):
+        rev = subprocess.check_output(['git', 'rev-parse', 'HEAD'], cwd=ROOT, text=True).strip()
+        binary = Path('/proc', str(os.getppid()), 'exe').resolve()
         with self.assertRaises(G.GuardRefused):
-            G.capture_guest(os.getppid(), sys.executable, 'a' * 40, '--defer-liveness', ROOT)
+            G.capture_guest(os.getppid(), binary, rev, '--defer-liveness', ROOT)
 
     def test_unrelated_process_is_not_owned_qemu(self):
+        rev = subprocess.check_output(['git', 'rev-parse', 'HEAD'], cwd=ROOT, text=True).strip()
         with self.assertRaises(G.GuardRefused):
-            G.capture_guest(os.getpid(), sys.executable, 'a' * 40, '--defer-liveness', ROOT)
+            G.capture_guest(os.getpid(), sys.executable, rev, '--defer-liveness', ROOT)
 
     def test_single_negative_arm_is_parsed(self):
         self.assertEqual(G.guest_launch_arm(['-append', 'console=hvc0 KF_ARMS=--defer-liveness,--probe-launch-dma']), '--defer-liveness')

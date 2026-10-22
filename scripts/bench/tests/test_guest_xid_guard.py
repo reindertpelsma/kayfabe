@@ -157,6 +157,15 @@ FASTGUEST: DONE
     def test_trailing_unparsed_xid_payload_fatal(self):
         self.assert_refused(lines=self.lines[:8] + [self.lines[8] + ' unknown'])
 
+    def test_trailing_unparsed_missing_page_payload_fatal(self):
+        c = self.missing(); c['lines'][-1] += ' unknown'; self.assert_refused(**c)
+
+    def test_hidden_first_xid_record_fatal_defer(self):
+        self.assert_refused(lines=self.lines[:5] + ['NVRM: Xid unknown first record ' + self.lines[5]] + self.lines[6:])
+
+    def test_hidden_first_xid_record_fatal_missing(self):
+        c = self.missing(); c['lines'][-1] = 'NVRM: Xid unknown first record ' + c['lines'][-1]; self.assert_refused(**c)
+
     def test_incomplete_missing_page_correlation_is_never_approved(self):
         c = self.missing(); c['qlog'] = ''; self.assert_refused(**c)
 
@@ -186,6 +195,9 @@ FASTGUEST: DONE
     def test_final_requires_every_expected_fault(self):
         self.assert_refused(lines=self.lines[:8])
 
+    def test_final_requires_missing_page_fault_itself(self):
+        c = self.missing(); c['lines'] = self.base; self.assert_refused(**c)
+
     def assert_refused(self, **kwargs):
         with self.assertRaises(G.GuardRefused):
             self.approve(**kwargs)
@@ -201,9 +213,49 @@ class PinTests(unittest.TestCase):
         with self.assertRaises(G.GuardRefused):
             G.pin_suite(ROOT, '0' * 40)
 
+    def test_other_valid_format_revision_fatal(self):
+        with self.assertRaises(G.GuardRefused):
+            G.pin_suite(ROOT, 'f' * 40)
+
+    def changed_source(self, selected):
+        from unittest import mock
+        original = Path.read_bytes
+        rev = subprocess.check_output(['git', 'rev-parse', 'HEAD'], cwd=ROOT, text=True).strip()
+        def read(path):
+            data = original(path)
+            return data + b'\nchanged\n' if str(path).endswith(selected) else data
+        with mock.patch.object(Path, 'read_bytes', read):
+            with self.assertRaises(G.GuardRefused): G.pin_suite(ROOT, rev)
+
+    def test_changed_raw_source_refused(self):
+        self.changed_source('crates/kayfabe-rm-ladder/src/main.rs')
+
+    def test_changed_runner_source_refused(self):
+        self.changed_source('scripts/fastguest/run_fast_guest.sh')
+
     def test_missing_source_revision_fatal(self):
         with self.assertRaises(G.GuardRefused):
             G.pin_suite(ROOT, '')
+
+
+class NativeExactFiveTests(unittest.TestCase):
+    """FALSIFIER: a changed four-record native shape is accepted as baseline."""
+    def check_four(self, folder, prefix, journal):
+        defer = (folder / (prefix + '_defer-liveness.log')).read_text()
+        missing = (folder / (prefix + '_missing-page-fault.log')).read_text()
+        defer = defer.replace('DL test copy       = Dead', 'DL test copy       = Live')
+        lines = list(G.xid_lines(journal)); del lines[2]
+        with self.assertRaises(G.GuardRefused):
+            G.approve_native('\n'.join(lines), defer, missing)
+
+    def test_prior_lease_cannot_approve_four_native_faults(self):
+        folder = ROOT / 'traces/sweep_windows_20261021/lease_57064037/native'
+        self.check_four(folder, 'sweep1ce11cf4_ad106_native595', (folder / 'native_expected_xids.log').read_text())
+
+    def test_second_lease_cannot_approve_four_native_faults(self):
+        folder = FIX / 'native'
+        journal = '\n'.join(json.loads((folder / 'native_xid_baseline.json').read_text())['approved_native_xid_lines'])
+        self.check_four(folder, 'sweep74aa78ab_ad106_native595', journal)
 
 
 if __name__ == '__main__':
