@@ -272,6 +272,31 @@ mod tests {
     }
 
     #[test]
+    fn a_concurrent_retirement_cannot_enter_during_the_queue_post() {
+        use std::sync::Barrier;
+        let life = Life::new();
+        let entered = Barrier::new(2);
+        let leave = Barrier::new(2);
+        std::thread::scope(|scope| {
+            let poster = scope.spawn(|| {
+                life.post(|| {
+                    entered.wait();
+                    leave.wait();
+                    17
+                })
+            });
+            entered.wait();
+            let retirement_blocked = life.0.try_write().is_err();
+            leave.wait();
+            assert!(
+                retirement_blocked,
+                "retirement must serialize after the queue write"
+            );
+            assert!(matches!(poster.join().unwrap(), Post::Posted(17)));
+        });
+    }
+
+    #[test]
     fn a_busy_retirement_lock_keeps_the_event_for_retry_without_posting() {
         let life = Life::new();
         let lock = life.0.write().unwrap();
