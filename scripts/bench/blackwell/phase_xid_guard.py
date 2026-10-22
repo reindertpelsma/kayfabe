@@ -17,6 +17,7 @@ import re
 import sys
 import subprocess
 import signal
+import tempfile
 import time
 
 import xid_policy
@@ -181,8 +182,18 @@ def atomic_json(path, data):
 
 
 def record_fatal(path, data):
-    """Fatal receipt publication seam; observer stop policy is separate."""
-    atomic_json(path, data)
+    """Publish a complete first cause once; later watchers still stop their trees."""
+    p = Path(path)
+    with tempfile.NamedTemporaryFile(mode='w', dir=p.parent, prefix='.' + p.name + '.', delete=False) as temporary:
+        tmp = Path(temporary.name)
+        try:
+            temporary.write(json.dumps(data) + '\n')
+            temporary.flush()
+            os.link(tmp, p)  # Atomic creation, without replacing an earlier cause.
+        except FileExistsError:
+            pass  # Existing marker remains fatal, even if it cannot be parsed.
+        finally:
+            tmp.unlink()
 
 
 def verify_native_run(journal,defer,missing,receipts,pci):
