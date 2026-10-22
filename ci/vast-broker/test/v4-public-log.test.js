@@ -23,7 +23,7 @@ test('V4 full log retains earlier lines beyond tail and cursor emits once',async
  h.restart();let cursor=0,all='';
  for(let i=0;i<20;i++){const p=await(await logs(h,cursor)).json();assert.equal(p.cursor,cursor);assert.ok(Number.isSafeInteger(p.next_cursor));all+=p.log_increment_sanitised;if(p.next_cursor===cursor)break;cursor=p.next_cursor;}
  assert.match(all,/message 1 line 0/);assert.match(all,/message 4 line 299/);assert.equal(all.match(/message 1 line 0\n/g)?.length,1);
- const status=await(await h.call('/status/123-1')).json();assert.doesNotMatch(status.log_tail_sanitised,/message 1 line 0/);assert.equal(status.log_cursor,cursor);
+ const status=await(await h.call('/status/123-1')).json();assert.doesNotMatch(status.log_tail_sanitised,/message 1 line 0/);assert.ok(status.log_cursor>=cursor);if(status.log_cursor>cursor){const own=await(await logs(h,cursor)).json();assert.match(own.log_increment_sanitised,/\[Worker\]/);cursor=own.next_cursor;assert.equal(status.log_cursor,cursor);}
  assert.equal((await(await logs(h,cursor)).json()).log_increment_sanitised,'');assert.ok(Buffer.byteLength(all)<=4194304);
 });
 for(const cursor of ['-1','1.5','1&extra=x','99999999999'])test('V4 log cursor rejects '+cursor,async()=>{const h=await rent();assert.equal((await logs(h,cursor)).status,400);});

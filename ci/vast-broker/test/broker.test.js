@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import {setup,clock,sha,nonce,env} from './helpers.js';
 const state=async r=>(await r.json()).state;
 const rent=async h=>{const r=await h.call();assert.equal(r.status,200);return r.json();};
-const finish=async(h,verdict='PASS')=>{const response=await h.report({seq:1,kind:'result',result:{nonce,verdict}});assert.equal(response.status,200);h.time.value+=300000;await h.service.sweep();return h.call('/status/123-1');};
+const finish=async(h,verdict='PASS')=>{const response=await h.report({seq:1,kind:'result',result:{nonce,verdict}});assert.equal(response.status,200);h.time.value=(await h.storage.get('record:123-1')).resultDeadline;await h.service.sweep();return h.call('/status/123-1');};
 for(const v of ['false','FALSE','',undefined])test('kill switch refuses rental '+v,async()=>{
  const h=await setup({RENTING_ENABLED:v});assert.notEqual((await h.call()).status,200);assert.equal(h.cloud.calls.length,0);
 });

@@ -6,7 +6,7 @@ import {onstart} from '../src/onstart.js';
 import {setup,env,nonce,sha,callbackToken} from './helpers.js';
 // FALSIFIERS: early result deletion; cross-run kill; ACK-only settlement;
 // reserve excludes cron; pending boots destroyed before provisioning bound.
-const settings={TTL_MINUTES:'20'};
+const settings={HARD_RUNTIME_MINUTES:'20',BOOT_LIMIT_MINUTES:'10'};
 async function rent(extra={}){const h=await setup({...settings,...extra});assert.equal((await h.call()).status,200);return h;}
 const record=h=>h.storage.get('record:123-1');
 const result=(verdict)=>({seq:1,kind:'result',result:{nonce,verdict}});
@@ -14,7 +14,7 @@ async function kill(h,{run='123-1',token}={}){const r=await record(h);return h.c
 for(const verdict of ['PASS','FAIL','UNAVAILABLE'])test('V4 '+verdict+' result retains owned box until grace cron',async()=>{
  const h=await rent();assert.equal((await h.report(result(verdict))).status,200);assert.deepEqual(h.cloud.deletes,[]);
  let r=await record(h);assert.equal(r.resultAt,h.time.value);assert.equal(r.ended,null);
- h.cloud.run.status='completed';h.time.value+=299999;await h.service.sweep();assert.deepEqual(h.cloud.deletes,[]);
+ h.cloud.run.status='completed';h.time.value+=(verdict==='PASS'?300000:600000)-1;await h.service.sweep();assert.deepEqual(h.cloud.deletes,[]);
  h.time.value++;await h.service.sweep();assert.deepEqual(h.cloud.deletes,['900']);r=await record(h);assert.equal(r.verdict,verdict);assert.notEqual(r.ended,null);
 });
 for(const verdict of ['PASS','FAIL'])test('V4 own box kill bypasses '+verdict+' grace and verifies absence',async()=>{
@@ -54,8 +54,8 @@ test('V4 kill shares report rate limiter and cannot extend grace',async()=>{
  h.time.value+=10000;assert.equal((await kill(h)).status,200);
 });
 test('V4 default bounds and cron liability',()=>{
- const cfg=configuration({...env,TTL_MINUTES:undefined});assert.equal(cfg.ttl,20*60000);assert.equal(cfg.provision,10*60000);assert.equal(cfg.grace,5*60000);assert.equal(cfg.cronPeriod,60000);
- for(const patch of [{TTL_MINUTES:'61'},{POST_RESULT_GRACE_MINUTES:'16'},{PROVISION_MINUTES:'11'}])assert.throws(()=>configuration({...env,TTL_MINUTES:'20',...patch}));
+ const cfg=configuration({...env,HARD_RUNTIME_MINUTES:undefined,BOOT_LIMIT_MINUTES:undefined});assert.equal(cfg.ttl,180*60000);assert.equal(cfg.provision,40*60000);assert.equal(cfg.grace,5*60000);assert.equal(cfg.cronPeriod,60000);
+ for(const patch of [{HARD_RUNTIME_MINUTES:'10'},{PASS_GRACE_MINUTES:'1441'},{BOOT_LIMIT_MINUTES:'1441'}])assert.throws(()=>configuration({...env,HARD_RUNTIME_MINUTES:'20',...patch}));
 });
 test('V4 prepaid reserve includes hard TTL plus cron period',async()=>{
  const h=await setup(settings);h.cloud.price=.5;h.cloud.credit=8+.5*20.5/60;assert.equal((await h.call()).status,409);assert.equal(h.cloud.creates,0);
@@ -87,7 +87,7 @@ test('V4 no callback while provider running also expires provisioning',async()=>
 test('V4 low-priced reservation still includes cron period',async()=>{
  const h=await setup(settings);h.cloud.price=.2;h.cloud.credit=8+.2*20.5/60;assert.equal((await h.call()).status,409);assert.equal(h.cloud.creates,0);
 });
-for(const patch of [{TTL_MINUTES:'61'},{POST_RESULT_GRACE_MINUTES:'16'}])test('V4 invalid lifetime knob prevents rent '+Object.keys(patch)[0],async()=>{
+for(const patch of [{HARD_RUNTIME_MINUTES:'10'},{PASS_GRACE_MINUTES:'1441'}])test('V4 invalid lifetime knob prevents rent '+Object.keys(patch)[0],async()=>{
  const h=await setup({...settings,...patch});assert.equal((await h.call()).status,503);assert.equal(h.cloud.creates,0);
 });
 for(const reason of ['done','a reason with spaces'])test('V4 generated kill CLI sends limited capability '+reason,async()=>{

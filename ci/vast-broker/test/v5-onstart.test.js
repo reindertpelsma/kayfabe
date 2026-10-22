@@ -12,11 +12,11 @@ for(const prefix of ['', 'hold-prefix-'+'h'.repeat(32)])test('V5 generated hold 
   assert.equal(args.at(-1),env.WORKER_URL+(prefix?'/'+prefix:'')+'/hold/123-1');assert.ok(args.includes('Authorization: Bearer '+token));assert.ok(args.includes('=https'));assert.ok(!args.includes('-L'));assert.ok(!source.includes(env.VAST_API_KEY));assert.ok(!source.includes(env.OWNER_STOP_TOKEN));
  }finally{await rm(directory,{recursive:true});}
 });
-for(const ssh of [false,true])test('V5 profile hold hook runs only on SSH login '+ssh,async()=>{
+for(const ssh of [false,'ipv4','ipv6'])test('V5 profile hold hook runs only on SSH login '+ssh,async()=>{
  const source=script(''),hook=source.split("<<'KF_PROFILE'\n")[1]?.split('\nKF_PROFILE')[0];assert.ok(hook,'missing login profile hook');assert.ok(!hook.includes(token));
  const directory=await mkdtemp(join(tmpdir(),'v5-profile-test-'));try{
   await writeFile(join(directory,'hold'),'#!/bin/sh\nprintf called\n',{mode:0o700});
-  const r=spawnSync('bash',['--noprofile','--norc','-c',hook.replaceAll('/usr/local/bin/kf-box-hold',join(directory,'hold')).replaceAll('>/dev/null','')],{encoding:'utf8',env:{...process.env,SSH_CONNECTION:ssh?'synthetic connection':''}});assert.equal(r.status,0,r.stderr);assert.equal(r.stdout.includes('called'),ssh);
+  const r=spawnSync('bash',['--noprofile','--norc','-c',hook.replaceAll('/usr/local/bin/kf-box-hold',join(directory,'hold')).replaceAll('>/dev/null','')],{encoding:'utf8',env:{...process.env,SSH_CONNECTION:ssh==='ipv4'?'192.0.2.1 40000 192.0.2.2 22':ssh==='ipv6'?'2001:db8::1 40000 2001:db8::2 22':''}});assert.equal(r.status,0,r.stderr);assert.equal(r.stdout.includes('called'),Boolean(ssh));
  }finally{await rm(directory,{recursive:true});}
 });
 for(const exhausted of ['attempts','bytes'])test('V5 empty-log heartbeat survives sender cap '+exhausted,()=>{
