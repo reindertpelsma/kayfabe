@@ -1,0 +1,45 @@
+{
+  "kind": "MEASURED bounded text export",
+  "utc": "2026-10-22T03:02:48.646546+00:00",
+  "files": {
+    "s2_resume_controller.log": {
+      "sha256": "651585bcb8fc36d3f8264c79f95f0b39bb69c366ae18a39e9846464e81d6dff4",
+      "bytes": 2154,
+      "tail_only": false
+    },
+    "s2_resume_boot_id": {
+      "sha256": "1d596255f029280a9ad3b76d189778de7dbedc1a2706ac451657e5846d20a8c9",
+      "bytes": 37,
+      "tail_only": false
+    },
+    "sweep_linux_guest595.log": {
+      "sha256": "d7c8d69422762dcea826e8b5e3cc4b88b11c77bbb21a5d398b1b7123e5d794b1",
+      "bytes": 96,
+      "tail_only": false
+    },
+    "native_xid_baseline.json": {
+      "sha256": "06b33b2de6e677a6a3f74545725bf7fe7d0e95888bab17eda673dab885549b1f",
+      "bytes": 1428,
+      "tail_only": false
+    },
+    "s2_accepted_xid_history.json": {
+      "sha256": "06b33b2de6e677a6a3f74545725bf7fe7d0e95888bab17eda673dab885549b1f",
+      "bytes": 1428,
+      "tail_only": false
+    },
+    "sweep_product_source": {
+      "sha256": "ed74a9ad7bc0b14c9c44e7e4489af47cbf1fb63134d6df80ef84f4d2535507ca",
+      "bytes": 41,
+      "tail_only": false
+    },
+    "s2r2_guest595_timer_controller.log": {
+      "sha256": "b707e88c53cbe3aa05895ad3a6dee9cf7407cd3d734ea3c6471551081de73773",
+      "bytes": 324,
+      "tail_only": false
+    },
+    "kernel_xids.log": {
+      "journal_lines": 1161
+    }
+  },
+  "projection_note": "Only refusal/history/source files retained; build/native prerequisites are already preserved in resume_native_complete."
+}

@@ -1,0 +1,29 @@
+[
+  {
+    "mutant": "reject_legitimate_leader_exit",
+    "failures": [
+      "test_guest_thread_exit_guard.ThreadLeaderExitTests.test_defer_leader_exit_preserves_exact_live_worker",
+      "test_guest_thread_exit_guard.ThreadLeaderExitTests.test_missing_leader_exit_preserves_exact_live_worker"
+    ],
+    "errors": [],
+    "tests": 8
+  },
+  {
+    "mutant": "ignore_live_worker_image",
+    "failures": [
+      "test_guest_thread_exit_guard.ThreadLeaderExitTests.test_defer_wrong_worker_executable_still_fatal",
+      "test_guest_thread_exit_guard.ThreadLeaderExitTests.test_missing_wrong_worker_executable_still_fatal"
+    ],
+    "errors": [],
+    "tests": 8
+  },
+  {
+    "mutant": "accept_missing_exe_without_exit_state",
+    "failures": [
+      "test_guest_thread_exit_guard.ThreadLeaderExitTests.test_defer_live_missing_executable_still_fatal",
+      "test_guest_thread_exit_guard.ThreadLeaderExitTests.test_missing_live_missing_executable_still_fatal"
+    ],
+    "errors": [],
+    "tests": 8
+  }
+]

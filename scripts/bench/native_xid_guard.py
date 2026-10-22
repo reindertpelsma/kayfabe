@@ -141,9 +141,43 @@ def capture_guest(pid, binary, revision, arm, root):
 
 def verify_guest_identity(context):
     identity = process_identity(context['pid'])
-    if (identity is None or identity[1] != context['starttime'] or
-            str(Path('/proc', str(context['pid']), 'exe').resolve()) != context['exe']):
+    if identity is None or identity[1] != context['starttime']:
         raise GuardRefused('owned QEMU starttime/executable changed or disappeared')
+    process = Path('/proc', str(context['pid']))
+    try:
+        executable = str((process / 'exe').resolve(strict=True))
+    except FileNotFoundError:
+        # A thread-group leader can exit before QEMU's remaining threads. Its
+        # exe link then disappears although the owned Popen child is still live.
+        # Verify every retained thread image; only kernel-confirmed exiting
+        # tasks may lack one. PF_EXITING is Linux include/linux/sched.h's 0x4.
+        if not task_exiting(process):
+            raise GuardRefused('live owned QEMU executable disappeared')
+        for task in (process / 'task').iterdir():
+            try:
+                retained = str((task / 'exe').resolve(strict=True))
+            except FileNotFoundError:
+                if not task_exiting(task):
+                    raise GuardRefused('live owned worker executable disappeared')
+                continue
+            if retained != context['exe']:
+                raise GuardRefused('owned QEMU worker executable changed')
+        final_identity = process_identity(context['pid'])
+        if final_identity is None or final_identity[1] != context['starttime']:
+            raise GuardRefused('owned QEMU identity disappeared during thread verification')
+        return
+    if executable != context['exe']:
+        raise GuardRefused('owned QEMU starttime/executable changed or disappeared')
+
+
+def task_exiting(task):
+    try:
+        fields = bounded(task / 'stat').rpartition(')')[2].split()
+    except FileNotFoundError:
+        return True  # Reaped tasks cannot execute userspace again.
+    if len(fields) < 20:
+        raise GuardRefused('owned task status unreadable')
+    return bool(int(fields[6]) & 0x4)
 
 
 def verify_binary_revision(binary, revision):
