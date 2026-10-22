@@ -245,5 +245,11 @@
   "jwksCacheMs": 3600000,
   "boxHoldMinutes": 30,
   "onstartPath": "scripts/ci/vast_onstart.sh",
-  "boxProtocol": 5
+  "boxProtocol": 5,
+  "controlIpPerMinute": 60,
+  "controlGlobalPerMinute": 600,
+  "controlMaxIps": 4096,
+  "checkWorkflowPath": ".github/workflows/gpu-vast.yml",
+  "sweepWorkflowPath": ".github/workflows/gpu-vast-sweep.yml",
+  "oidcEnvironment": "gpu-vast"
 }

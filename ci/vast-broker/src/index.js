@@ -25,19 +25,23 @@ import {appendBoxText,appendWorkerText,sanitizeBoxText} from './sanitize.js';
 function checkedIdentity(c, cfg) {
   if (
     c.repository !== cfg.repo ||
+    c.repository_id !== cfg.repositoryId ||
+    c.repository_owner_id !== cfg.owner ||
+    c.sub !== cfg.oidcSubject ||
+    ![...cfg.checkWorkflows, cfg.sweepWorkflow].includes(c.job_workflow_ref) ||
+    c.job_workflow_ref !== c.workflow_ref ||
     !numericId(c.actor_id) ||
     !numericId(c.run_id) ||
     !numericId(c.run_attempt) ||
     !hexSha(c.sha) ||
     !['pull_request', 'pull_request_target', 'workflow_dispatch'].includes(c.event_name) ||
-    ![
-      cfg.repo + '/.github/workflows/gpu-vast.yml@refs/heads/master',
-      cfg.repo + '/.github/workflows/gpu-vast-sweep.yml@refs/heads/master',
-    ].includes(c.workflow_ref) ||
+    ![...cfg.checkWorkflows, cfg.sweepWorkflow].includes(c.workflow_ref) ||
     (c.repository_owner_id !== undefined && c.repository_owner_id !== cfg.owner) ||
     (c.event_name === 'pull_request' && !/^refs\/pull\/[1-9][0-9]*\/merge$/.test(c.ref ?? '')) ||
     (c.event_name === 'pull_request_target' &&
-      (c.ref !== 'refs/heads/master' || c.workflow_sha !== c.sha)) ||
+      (!cfg.bases.some((base) => c.ref === 'refs/heads/' + base) ||
+        c.workflow_sha !== c.sha ||
+        !c.workflow_ref.endsWith('@' + c.ref))) ||
     (c.event_name === 'workflow_dispatch' &&
       (typeof c.ref !== 'string' || !c.ref.startsWith('refs/heads/')))
   )
@@ -715,13 +719,10 @@ export function createService({
       profile === 'sweep' &&
       (c.actor_id !== cfg.owner ||
         c.event_name !== 'workflow_dispatch' ||
-        c.workflow_ref !== cfg.repo + '/.github/workflows/gpu-vast-sweep.yml@refs/heads/master')
+        c.workflow_ref !== cfg.sweepWorkflow)
     )
       refuse('UNAUTHORIZED', 401);
-    if (
-      profile === 'check' &&
-      c.workflow_ref !== cfg.repo + '/.github/workflows/gpu-vast.yml@refs/heads/master'
-    )
+    if (profile === 'check' && !cfg.checkWorkflows.includes(c.workflow_ref))
       refuse('UNAUTHORIZED', 401);
     cfg.profile = profile;
     if (path === '/availability') {
@@ -1091,6 +1092,36 @@ async function detachedUpload(request, path) {
 export function createGateway({ authorize, fetcher = fetch, now = Date.now } = {}) {
   const verifier = new OidcVerifier(fetcher, now),
     local = new Map();
+  let controlWindow = -1,
+    controlCount = 0;
+  const controlIps = new Map();
+  async function controlLimit(request, env, path) {
+    if (!/^\/(?:status|logs|stop)\//.test(path)) return;
+    const bearer = request.headers.get('Authorization')?.replace(/^Bearer /, '');
+    if (
+      path.startsWith('/stop/') &&
+      validSecret(env.OWNER_STOP_TOKEN) &&
+      (await constantTimeEqual(env.OWNER_STOP_TOKEN, bearer))
+    )
+      return;
+    const cfg = configuration(env),
+      window = Math.floor(now() / 60000);
+    if (window !== controlWindow) {
+      controlWindow = window;
+      controlCount = 0;
+      controlIps.clear();
+    }
+    const ip = request.headers.get('CF-Connecting-IP') ?? 'unknown';
+    const count = controlIps.get(ip) ?? 0;
+    if (
+      count >= cfg.controlIp ||
+      controlCount >= cfg.controlGlobal ||
+      (!controlIps.has(ip) && controlIps.size >= DEFAULTS.controlMaxIps)
+    )
+      refuse('RATE_LIMITED', 429);
+    controlIps.set(ip, count + 1);
+    controlCount++;
+  }
   async function frontAuthorize(request, env, path) {
     const cfg = configuration(env),
       bearer = request.headers.get('Authorization')?.replace(/^Bearer /, '');
@@ -1144,6 +1175,7 @@ export function createGateway({ authorize, fetcher = fetch, now = Date.now } = {
       let buffered;
       try {
         await (authorize ?? frontAuthorize)(request, env, path);
+        await controlLimit(request, env, path);
         buffered = await detachedUpload(request, path);
       } catch (error) {
         return Response.json(

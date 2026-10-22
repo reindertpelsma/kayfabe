@@ -7,6 +7,7 @@ export const repo = 'reindertpelsma/kayfabe';
 export const env = {
   RENTING_ENABLED: 'true',
   OWNER_GITHUB_ID: owner,
+  REPOSITORY_GITHUB_ID: '1234567',
   REPOSITORY: repo,
   WORKER_URL: 'https://broker.example',
   APPROVAL_MODE: 'owner_push_or_review',
@@ -45,6 +46,10 @@ export const baseClaims = {
   exp: clock / 1000 + 300,
   nbf: clock / 1000 - 1,
   repository: repo,
+  repository_id: env.REPOSITORY_GITHUB_ID,
+  repository_owner_id: owner,
+  sub: 'repo:' + repo + ':environment:gpu-vast',
+  job_workflow_ref: repo + '/.github/workflows/gpu-vast.yml@refs/heads/master',
   event_name: 'pull_request',
   actor_id: owner,
   sha: 'd'.repeat(40),
@@ -57,7 +62,15 @@ export const baseClaims = {
 export async function jwt(patch = {}, header = {}, key = pair.privateKey) {
   const enc = (v) => Buffer.from(JSON.stringify(v)).toString('base64url');
   const input =
-    enc({ alg: 'RS256', kid: 'test-key', ...header }) + '.' + enc({ ...baseClaims, ...patch });
+    enc({ alg: 'RS256', kid: 'test-key', ...header }) +
+    '.' +
+    enc({
+      ...baseClaims,
+      ...(patch.workflow_ref !== undefined && !Object.hasOwn(patch, 'job_workflow_ref')
+        ? { job_workflow_ref: patch.workflow_ref }
+        : {}),
+      ...patch,
+    });
   const sig = await webcrypto.subtle.sign(
     'RSASSA-PKCS1-v1_5',
     key,
