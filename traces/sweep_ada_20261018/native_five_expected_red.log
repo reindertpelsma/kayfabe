@@ -1,0 +1,29 @@
+...............................................FF......
+======================================================================
+FAIL: test_prior_lease_cannot_approve_four_native_faults (test_guest_xid_guard.NativeExactFiveTests.test_prior_lease_cannot_approve_four_native_faults)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/workspace/s2-wt/scripts/bench/tests/test_guest_xid_guard.py", line 253, in test_prior_lease_cannot_approve_four_native_faults
+    self.check_four(folder, 'sweep1ce11cf4_ad106_native595', (folder / 'native_expected_xids.log').read_text())
+    ~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/workspace/s2-wt/scripts/bench/tests/test_guest_xid_guard.py", line 248, in check_four
+    with self.assertRaises(G.GuardRefused):
+         ~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^
+AssertionError: GuardRefused not raised
+
+======================================================================
+FAIL: test_second_lease_cannot_approve_four_native_faults (test_guest_xid_guard.NativeExactFiveTests.test_second_lease_cannot_approve_four_native_faults)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/workspace/s2-wt/scripts/bench/tests/test_guest_xid_guard.py", line 258, in test_second_lease_cannot_approve_four_native_faults
+    self.check_four(folder, 'sweep74aa78ab_ad106_native595', journal)
+    ~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/workspace/s2-wt/scripts/bench/tests/test_guest_xid_guard.py", line 248, in check_four
+    with self.assertRaises(G.GuardRefused):
+         ~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^
+AssertionError: GuardRefused not raised
+
+----------------------------------------------------------------------
+Ran 55 tests in 0.152s
+
+FAILED (failures=2)

@@ -105,13 +105,24 @@ class RunnerIdentityTests(unittest.TestCase):
             script = 'import os,time,pathlib; pathlib.Path(' + repr(str(pidfile)) + ').write_text(str(os.getpid())); time.sleep(10)'
             snapshots = [base, base + data['approved_native_xid_lines'][0].replace(': 31,', ': 32,') + '\n']
             if cause == 'journal': snapshots[1] = G.GuardRefused('unreadable journal')
-            with mock.patch.object(G, 'kernel_snapshot', side_effect=snapshots):
-                with self.assertRaises(G.GuardRefused):
-                    G.supervise_guest(binary, ['-c', script, '-append', 'KF_ARMS=--timer,--probe-launch-dma'],
-                                      receipt, rev, ROOT, serial, qlog)
-            self.assertEqual(json.loads(receipt.read_text()), data, 'failure must not extend accepted history')
-            if pidfile.exists():
-                with self.assertRaises(ProcessLookupError): os.kill(int(pidfile.read_text()), 0)
+            original_popen = subprocess.Popen; children = []
+            def spawn(argv, *args, **kwargs):
+                child = original_popen(argv, *args, **kwargs)
+                if str(argv[0]) == str(binary): children.append(child)
+                return child
+            try:
+                with mock.patch.object(G, 'kernel_snapshot', side_effect=snapshots), \
+                     mock.patch.object(G.subprocess, 'Popen', side_effect=spawn):
+                    with self.assertRaises(G.GuardRefused):
+                        G.supervise_guest(binary, ['-c', script, '-append', 'KF_ARMS=--timer,--probe-launch-dma'],
+                                          receipt, rev, ROOT, serial, qlog)
+                self.assertEqual(json.loads(receipt.read_text()), data, 'failure must not extend accepted history')
+                self.assertTrue(children)
+                self.assertTrue(all(child.poll() is not None for child in children), 'owned child survived refusal')
+            finally:
+                for child in children:
+                    if child.poll() is None: child.terminate()
+                    child.wait(timeout=5)
 
     def test_unrelated_fault_stops_child_and_cannot_advance_receipt(self):
         self.supervise_failure('xid')

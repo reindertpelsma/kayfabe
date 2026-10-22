@@ -1,0 +1,9 @@
+{
+  "tests": 92,
+  "failures": [
+    "test_guest_xid_guard.GuestGuardTests.test_qemu_pid_is_exact_defer",
+    "test_guest_xid_guard.GuestGuardTests.test_qemu_pid_is_exact_missing"
+  ],
+  "errors": [],
+  "mutant": "ignore_actual_qemu_pid"
+}

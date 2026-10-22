@@ -1,0 +1,9 @@
+{
+  "tests": 92,
+  "failures": [
+    "test_guest_xid_guard.GuestGuardTests.test_trailing_unparsed_missing_page_payload_fatal",
+    "test_guest_xid_guard.GuestGuardTests.test_trailing_unparsed_xid_payload_fatal"
+  ],
+  "errors": [],
+  "mutant": "allow_trailing_payload"
+}

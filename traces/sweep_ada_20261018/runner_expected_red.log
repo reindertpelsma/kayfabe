@@ -1,0 +1,95 @@
+EEEEEEE.EEE.
+======================================================================
+ERROR: test_actual_child_identity_is_captured (test_guest_guard_runner.RunnerIdentityTests.test_actual_child_identity_is_captured)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/workspace/s2-wt/scripts/bench/tests/test_guest_guard_runner.py", line 28, in test_actual_child_identity_is_captured
+    G.verify_guest_identity(context)
+    ^^^^^^^^^^^^^^^^^^^^^^^
+AttributeError: module 'runner_guard' has no attribute 'verify_guest_identity'
+
+======================================================================
+ERROR: test_arbitrary_binary_directory_refused (test_guest_guard_runner.RunnerIdentityTests.test_arbitrary_binary_directory_refused)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/workspace/s2-wt/scripts/bench/tests/test_guest_guard_runner.py", line 70, in test_arbitrary_binary_directory_refused
+    G.verify_binary_revision('/bench/qemu-system-x86_64', 'b' * 40)
+    ^^^^^^^^^^^^^^^^^^^^^^^^
+AttributeError: module 'runner_guard' has no attribute 'verify_binary_revision'
+
+======================================================================
+ERROR: test_changed_executable_is_fatal (test_guest_guard_runner.RunnerIdentityTests.test_changed_executable_is_fatal)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/workspace/s2-wt/scripts/bench/tests/test_guest_guard_runner.py", line 40, in test_changed_executable_is_fatal
+    G.verify_guest_identity({'pid': os.getpid(), 'starttime': 7, 'exe': '/different/qemu'})
+    ^^^^^^^^^^^^^^^^^^^^^^^
+AttributeError: module 'runner_guard' has no attribute 'verify_guest_identity'
+
+======================================================================
+ERROR: test_changed_primitive_refused (test_guest_guard_runner.RunnerIdentityTests.test_changed_primitive_refused)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/workspace/s2-wt/scripts/bench/tests/test_guest_guard_runner.py", line 62, in test_changed_primitive_refused
+    G.guest_launch_arm(['-append', 'KF_ARMS=--missing-page-fault'])
+    ^^^^^^^^^^^^^^^^^^
+AttributeError: module 'runner_guard' has no attribute 'guest_launch_arm'
+
+======================================================================
+ERROR: test_changed_starttime_is_fatal (test_guest_guard_runner.RunnerIdentityTests.test_changed_starttime_is_fatal)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/workspace/s2-wt/scripts/bench/tests/test_guest_guard_runner.py", line 35, in test_changed_starttime_is_fatal
+    G.verify_guest_identity({'pid': os.getpid(), 'starttime': 7, 'exe': sys.executable})
+    ^^^^^^^^^^^^^^^^^^^^^^^
+AttributeError: module 'runner_guard' has no attribute 'verify_guest_identity'
+
+======================================================================
+ERROR: test_multiple_arms_in_one_boot_refused (test_guest_guard_runner.RunnerIdentityTests.test_multiple_arms_in_one_boot_refused)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/workspace/s2-wt/scripts/bench/tests/test_guest_guard_runner.py", line 58, in test_multiple_arms_in_one_boot_refused
+    G.guest_launch_arm(['-append', 'KF_ARMS=--defer-liveness,--timer,--probe-launch-dma'])
+    ^^^^^^^^^^^^^^^^^^
+AttributeError: module 'runner_guard' has no attribute 'guest_launch_arm'
+
+======================================================================
+ERROR: test_other_single_arm_is_guarded_without_exception (test_guest_guard_runner.RunnerIdentityTests.test_other_single_arm_is_guarded_without_exception)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/workspace/s2-wt/scripts/bench/tests/test_guest_guard_runner.py", line 54, in test_other_single_arm_is_guarded_without_exception
+    self.assertEqual(G.guest_launch_arm(['-append', 'KF_ARMS=--timer,--probe-launch-dma']), '--timer')
+                     ^^^^^^^^^^^^^^^^^^
+AttributeError: module 'runner_guard' has no attribute 'guest_launch_arm'
+
+======================================================================
+ERROR: test_selected_revision_directory_accepted (test_guest_guard_runner.RunnerIdentityTests.test_selected_revision_directory_accepted)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/workspace/s2-wt/scripts/bench/tests/test_guest_guard_runner.py", line 73, in test_selected_revision_directory_accepted
+    G.verify_binary_revision('/bench/kf3-bins/bbbbbbbb/qemu-system-x86_64', 'b' * 40)
+    ^^^^^^^^^^^^^^^^^^^^^^^^
+AttributeError: module 'runner_guard' has no attribute 'verify_binary_revision'
+
+======================================================================
+ERROR: test_single_negative_arm_is_parsed (test_guest_guard_runner.RunnerIdentityTests.test_single_negative_arm_is_parsed)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/workspace/s2-wt/scripts/bench/tests/test_guest_guard_runner.py", line 51, in test_single_negative_arm_is_parsed
+    self.assertEqual(G.guest_launch_arm(['-append', 'console=hvc0 KF_ARMS=--defer-liveness,--probe-launch-dma']), '--defer-liveness')
+                     ^^^^^^^^^^^^^^^^^^
+AttributeError: module 'runner_guard' has no attribute 'guest_launch_arm'
+
+======================================================================
+ERROR: test_stale_binary_revision_refused (test_guest_guard_runner.RunnerIdentityTests.test_stale_binary_revision_refused)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/workspace/s2-wt/scripts/bench/tests/test_guest_guard_runner.py", line 66, in test_stale_binary_revision_refused
+    G.verify_binary_revision('/bench/kf3-bins/aaaaaaaa/qemu-system-x86_64', 'b' * 40)
+    ^^^^^^^^^^^^^^^^^^^^^^^^
+AttributeError: module 'runner_guard' has no attribute 'verify_binary_revision'
+
+----------------------------------------------------------------------
+Ran 12 tests in 0.075s
+
+FAILED (errors=10)

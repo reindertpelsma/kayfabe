@@ -1,0 +1,9 @@
+{
+  "tests": 92,
+  "failures": [
+    "test_guest_xid_guard.GuestGuardTests.test_incomplete_missing_page_correlation_is_never_approved",
+    "test_guest_xid_guard.GuestGuardTests.test_missing_defer_correlation_is_never_approved"
+  ],
+  "errors": [],
+  "mutant": "ignore_final_twin_count"
+}

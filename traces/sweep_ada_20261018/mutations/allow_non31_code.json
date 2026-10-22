@@ -1,0 +1,10 @@
+{
+  "tests": 92,
+  "failures": [
+    "test_guest_xid_guard.GuestGuardTests.test_running_xid32_is_fatal",
+    "test_guest_xid_guard.GuestGuardTests.test_xid32_fatal_defer",
+    "test_guest_xid_guard.GuestGuardTests.test_xid32_fatal_missing"
+  ],
+  "errors": [],
+  "mutant": "allow_non31_code"
+}

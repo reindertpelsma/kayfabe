@@ -1,0 +1,11 @@
+{
+  "tests": 92,
+  "failures": [
+    "test_guest_xid_guard.GuestGuardTests.test_guest_channel_is_exact_defer",
+    "test_guest_xid_guard.GuestGuardTests.test_guest_channel_is_exact_missing",
+    "test_guest_xid_guard.GuestGuardTests.test_guest_host_twin_is_exact_defer",
+    "test_guest_xid_guard.GuestGuardTests.test_guest_host_twin_is_exact_missing"
+  ],
+  "errors": [],
+  "mutant": "ignore_host_guest_channel_pair"
+}

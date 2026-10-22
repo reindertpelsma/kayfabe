@@ -1,3 +1,5 @@
+STATUS UPDATE: SUPERSEDED, 2026-10-22. Owner explicitly resumed S2 to implement the approved guard and then rent. Guard is now verified; see GUARD_RESULT.md. The preflight stop below is historical, not the resumed outcome.
+
 STATUS: RESEARCH, 2026-10-22. S2 stopped at the required GPU-free prerequisite.
 
 1. Identity and request

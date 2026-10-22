@@ -1,0 +1,10 @@
+{
+  "tests": 92,
+  "failures": [
+    "test_guest_xid_guard.GuestGuardTests.test_hidden_first_xid_record_fatal_defer",
+    "test_guest_xid_guard.GuestGuardTests.test_hidden_first_xid_record_fatal_missing",
+    "test_guest_xid_guard.GuestGuardTests.test_multiple_markers_same_journal_record_fatal"
+  ],
+  "errors": [],
+  "mutant": "allow_hidden_first_xid"
+}

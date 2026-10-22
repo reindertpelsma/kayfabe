@@ -1,0 +1,10 @@
+{
+  "tests": 92,
+  "failures": [
+    "test_guest_xid_guard.GuestGuardTests.test_fault_address_is_exact_defer",
+    "test_guest_xid_guard.GuestGuardTests.test_fault_address_is_exact_missing",
+    "test_guest_xid_guard.GuestGuardTests.test_running_unknown_address_is_fatal"
+  ],
+  "errors": [],
+  "mutant": "ignore_fault_address"
+}

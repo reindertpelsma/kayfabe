@@ -1,0 +1,9 @@
+{
+  "tests": 92,
+  "failures": [
+    "test_guest_xid_guard.GuestGuardTests.test_unrelated_route_fatal_defer",
+    "test_guest_xid_guard.GuestGuardTests.test_unrelated_route_fatal_missing"
+  ],
+  "errors": [],
+  "mutant": "ignore_route"
+}

@@ -1,0 +1,668 @@
+EEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEE
+======================================================================
+ERROR: test_complete_measured_defer_proof_accepts_exact_four (test_guest_xid_guard.GuestGuardTests.test_complete_measured_defer_proof_accepts_exact_four)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/workspace/s2-wt/scripts/bench/tests/test_guest_xid_guard.py", line 58, in test_complete_measured_defer_proof_accepts_exact_four
+    self.assertEqual(self.approve(), tuple(self.lines))
+                     ~~~~~~~~~~~~^^
+  File "/workspace/s2-wt/scripts/bench/tests/test_guest_xid_guard.py", line 34, in approve
+    return G.approve_guest('\n'.join(self.lines if lines is None else lines) + '\n', self.base,
+           ^^^^^^^^^^^^^^^
+AttributeError: module 'guest_guard' has no attribute 'approve_guest'
+
+======================================================================
+ERROR: test_duplicate_fault_fatal_defer (test_guest_xid_guard.GuestGuardTests.test_duplicate_fault_fatal_defer)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/workspace/s2-wt/scripts/bench/tests/test_guest_xid_guard.py", line 113, in test_duplicate_fault_fatal_defer
+    self.assert_refused(lines=self.lines + [self.lines[-1]])
+    ~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/workspace/s2-wt/scripts/bench/tests/test_guest_xid_guard.py", line 191, in assert_refused
+    self.approve(**kwargs)
+    ~~~~~~~~~~~~^^^^^^^^^^
+  File "/workspace/s2-wt/scripts/bench/tests/test_guest_xid_guard.py", line 34, in approve
+    return G.approve_guest('\n'.join(self.lines if lines is None else lines) + '\n', self.base,
+           ^^^^^^^^^^^^^^^
+AttributeError: module 'guest_guard' has no attribute 'approve_guest'
+
+======================================================================
+ERROR: test_duplicate_fault_fatal_missing (test_guest_xid_guard.GuestGuardTests.test_duplicate_fault_fatal_missing)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/workspace/s2-wt/scripts/bench/tests/test_guest_xid_guard.py", line 116, in test_duplicate_fault_fatal_missing
+    c = self.missing(); c['lines'] += [c['lines'][-1]]; self.assert_refused(**c)
+                                                        ~~~~~~~~~~~~~~~~~~~^^^^^
+  File "/workspace/s2-wt/scripts/bench/tests/test_guest_xid_guard.py", line 191, in assert_refused
+    self.approve(**kwargs)
+    ~~~~~~~~~~~~^^^^^^^^^^
+  File "/workspace/s2-wt/scripts/bench/tests/test_guest_xid_guard.py", line 34, in approve
+    return G.approve_guest('\n'.join(self.lines if lines is None else lines) + '\n', self.base,
+           ^^^^^^^^^^^^^^^
+AttributeError: module 'guest_guard' has no attribute 'approve_guest'
+
+======================================================================
+ERROR: test_fault_address_is_exact_defer (test_guest_xid_guard.GuestGuardTests.test_fault_address_is_exact_defer)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/workspace/s2-wt/scripts/bench/tests/test_guest_xid_guard.py", line 83, in test_fault_address_is_exact_defer
+    self.assert_refused(lines=[l.replace('0x60_00010000', '0x60_00020000') if 'qemu-system' in l else l for l in self.lines])
+    ~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/workspace/s2-wt/scripts/bench/tests/test_guest_xid_guard.py", line 191, in assert_refused
+    self.approve(**kwargs)
+    ~~~~~~~~~~~~^^^^^^^^^^
+  File "/workspace/s2-wt/scripts/bench/tests/test_guest_xid_guard.py", line 34, in approve
+    return G.approve_guest('\n'.join(self.lines if lines is None else lines) + '\n', self.base,
+           ^^^^^^^^^^^^^^^
+AttributeError: module 'guest_guard' has no attribute 'approve_guest'
+
+======================================================================
+ERROR: test_fault_address_is_exact_missing (test_guest_xid_guard.GuestGuardTests.test_fault_address_is_exact_missing)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/workspace/s2-wt/scripts/bench/tests/test_guest_xid_guard.py", line 86, in test_fault_address_is_exact_missing
+    c = self.missing(); c['serial'] = c['serial'].replace('a11000000', 'a12000000'); self.assert_refused(**c)
+                                                                                     ~~~~~~~~~~~~~~~~~~~^^^^^
+  File "/workspace/s2-wt/scripts/bench/tests/test_guest_xid_guard.py", line 191, in assert_refused
+    self.approve(**kwargs)
+    ~~~~~~~~~~~~^^^^^^^^^^
+  File "/workspace/s2-wt/scripts/bench/tests/test_guest_xid_guard.py", line 34, in approve
+    return G.approve_guest('\n'.join(self.lines if lines is None else lines) + '\n', self.base,
+           ^^^^^^^^^^^^^^^
+AttributeError: module 'guest_guard' has no attribute 'approve_guest'
+
+======================================================================
+ERROR: test_fault_type_is_exact_defer (test_guest_xid_guard.GuestGuardTests.test_fault_type_is_exact_defer)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/workspace/s2-wt/scripts/bench/tests/test_guest_xid_guard.py", line 95, in test_fault_type_is_exact_defer
+    self.assert_refused(lines=self.lines[:5] + [l.replace('FAULT_PTE', 'FAULT_PDE') for l in self.lines[5:]])
+    ~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/workspace/s2-wt/scripts/bench/tests/test_guest_xid_guard.py", line 191, in assert_refused
+    self.approve(**kwargs)
+    ~~~~~~~~~~~~^^^^^^^^^^
+  File "/workspace/s2-wt/scripts/bench/tests/test_guest_xid_guard.py", line 34, in approve
+    return G.approve_guest('\n'.join(self.lines if lines is None else lines) + '\n', self.base,
+           ^^^^^^^^^^^^^^^
+AttributeError: module 'guest_guard' has no attribute 'approve_guest'
+
+======================================================================
+ERROR: test_fault_type_is_exact_missing (test_guest_xid_guard.GuestGuardTests.test_fault_type_is_exact_missing)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/workspace/s2-wt/scripts/bench/tests/test_guest_xid_guard.py", line 98, in test_fault_type_is_exact_missing
+    c = self.missing(); c['lines'][-1] = c['lines'][-1].replace('VIRT_WRITE', 'VIRT_READ'); self.assert_refused(**c)
+                                                                                            ~~~~~~~~~~~~~~~~~~~^^^^^
+  File "/workspace/s2-wt/scripts/bench/tests/test_guest_xid_guard.py", line 191, in assert_refused
+    self.approve(**kwargs)
+    ~~~~~~~~~~~~^^^^^^^^^^
+  File "/workspace/s2-wt/scripts/bench/tests/test_guest_xid_guard.py", line 34, in approve
+    return G.approve_guest('\n'.join(self.lines if lines is None else lines) + '\n', self.base,
+           ^^^^^^^^^^^^^^^
+AttributeError: module 'guest_guard' has no attribute 'approve_guest'
+
+======================================================================
+ERROR: test_final_requires_every_expected_fault (test_guest_xid_guard.GuestGuardTests.test_final_requires_every_expected_fault)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/workspace/s2-wt/scripts/bench/tests/test_guest_xid_guard.py", line 187, in test_final_requires_every_expected_fault
+    self.assert_refused(lines=self.lines[:8])
+    ~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^
+  File "/workspace/s2-wt/scripts/bench/tests/test_guest_xid_guard.py", line 191, in assert_refused
+    self.approve(**kwargs)
+    ~~~~~~~~~~~~^^^^^^^^^^
+  File "/workspace/s2-wt/scripts/bench/tests/test_guest_xid_guard.py", line 34, in approve
+    return G.approve_guest('\n'.join(self.lines if lines is None else lines) + '\n', self.base,
+           ^^^^^^^^^^^^^^^
+AttributeError: module 'guest_guard' has no attribute 'approve_guest'
+
+======================================================================
+ERROR: test_guest_channel_is_exact_defer (test_guest_xid_guard.GuestGuardTests.test_guest_channel_is_exact_defer)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/workspace/s2-wt/scripts/bench/tests/test_guest_xid_guard.py", line 77, in test_guest_channel_is_exact_defer
+    self.assert_refused(qlog=self.qlog.replace('guest chid 0x3', 'guest chid 0x7'))
+    ~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/workspace/s2-wt/scripts/bench/tests/test_guest_xid_guard.py", line 191, in assert_refused
+    self.approve(**kwargs)
+    ~~~~~~~~~~~~^^^^^^^^^^
+  File "/workspace/s2-wt/scripts/bench/tests/test_guest_xid_guard.py", line 34, in approve
+    return G.approve_guest('\n'.join(self.lines if lines is None else lines) + '\n', self.base,
+           ^^^^^^^^^^^^^^^
+AttributeError: module 'guest_guard' has no attribute 'approve_guest'
+
+======================================================================
+ERROR: test_guest_channel_is_exact_missing (test_guest_xid_guard.GuestGuardTests.test_guest_channel_is_exact_missing)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/workspace/s2-wt/scripts/bench/tests/test_guest_xid_guard.py", line 80, in test_guest_channel_is_exact_missing
+    c = self.missing(); c['qlog'] = c['qlog'].replace('guest chid 0x4', 'guest chid 0x7'); self.assert_refused(**c)
+                                                                                           ~~~~~~~~~~~~~~~~~~~^^^^^
+  File "/workspace/s2-wt/scripts/bench/tests/test_guest_xid_guard.py", line 191, in assert_refused
+    self.approve(**kwargs)
+    ~~~~~~~~~~~~^^^^^^^^^^
+  File "/workspace/s2-wt/scripts/bench/tests/test_guest_xid_guard.py", line 34, in approve
+    return G.approve_guest('\n'.join(self.lines if lines is None else lines) + '\n', self.base,
+           ^^^^^^^^^^^^^^^
+AttributeError: module 'guest_guard' has no attribute 'approve_guest'
+
+======================================================================
+ERROR: test_guest_host_twin_is_exact_defer (test_guest_xid_guard.GuestGuardTests.test_guest_host_twin_is_exact_defer)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/workspace/s2-wt/scripts/bench/tests/test_guest_xid_guard.py", line 71, in test_guest_host_twin_is_exact_defer
+    self.assert_refused(qlog=self.qlog.replace('twin 0x1b', 'twin 0x2b'))
+    ~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/workspace/s2-wt/scripts/bench/tests/test_guest_xid_guard.py", line 191, in assert_refused
+    self.approve(**kwargs)
+    ~~~~~~~~~~~~^^^^^^^^^^
+  File "/workspace/s2-wt/scripts/bench/tests/test_guest_xid_guard.py", line 34, in approve
+    return G.approve_guest('\n'.join(self.lines if lines is None else lines) + '\n', self.base,
+           ^^^^^^^^^^^^^^^
+AttributeError: module 'guest_guard' has no attribute 'approve_guest'
+
+======================================================================
+ERROR: test_guest_host_twin_is_exact_missing (test_guest_xid_guard.GuestGuardTests.test_guest_host_twin_is_exact_missing)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/workspace/s2-wt/scripts/bench/tests/test_guest_xid_guard.py", line 74, in test_guest_host_twin_is_exact_missing
+    c = self.missing(); c['qlog'] = c['qlog'].replace('twin 0x1c', 'twin 0x2c'); self.assert_refused(**c)
+                                                                                 ~~~~~~~~~~~~~~~~~~~^^^^^
+  File "/workspace/s2-wt/scripts/bench/tests/test_guest_xid_guard.py", line 191, in assert_refused
+    self.approve(**kwargs)
+    ~~~~~~~~~~~~^^^^^^^^^^
+  File "/workspace/s2-wt/scripts/bench/tests/test_guest_xid_guard.py", line 34, in approve
+    return G.approve_guest('\n'.join(self.lines if lines is None else lines) + '\n', self.base,
+           ^^^^^^^^^^^^^^^
+AttributeError: module 'guest_guard' has no attribute 'approve_guest'
+
+======================================================================
+ERROR: test_incomplete_missing_page_correlation_is_never_approved (test_guest_xid_guard.GuestGuardTests.test_incomplete_missing_page_correlation_is_never_approved)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/workspace/s2-wt/scripts/bench/tests/test_guest_xid_guard.py", line 161, in test_incomplete_missing_page_correlation_is_never_approved
+    c = self.missing(); c['qlog'] = ''; self.assert_refused(**c)
+                                        ~~~~~~~~~~~~~~~~~~~^^^^^
+  File "/workspace/s2-wt/scripts/bench/tests/test_guest_xid_guard.py", line 191, in assert_refused
+    self.approve(**kwargs)
+    ~~~~~~~~~~~~^^^^^^^^^^
+  File "/workspace/s2-wt/scripts/bench/tests/test_guest_xid_guard.py", line 34, in approve
+    return G.approve_guest('\n'.join(self.lines if lines is None else lines) + '\n', self.base,
+           ^^^^^^^^^^^^^^^
+AttributeError: module 'guest_guard' has no attribute 'approve_guest'
+
+======================================================================
+ERROR: test_missing_defer_correlation_is_never_approved (test_guest_xid_guard.GuestGuardTests.test_missing_defer_correlation_is_never_approved)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/workspace/s2-wt/scripts/bench/tests/test_guest_xid_guard.py", line 164, in test_missing_defer_correlation_is_never_approved
+    self.assert_refused(qlog='')
+    ~~~~~~~~~~~~~~~~~~~^^^^^^^^^
+  File "/workspace/s2-wt/scripts/bench/tests/test_guest_xid_guard.py", line 191, in assert_refused
+    self.approve(**kwargs)
+    ~~~~~~~~~~~~^^^^^^^^^^
+  File "/workspace/s2-wt/scripts/bench/tests/test_guest_xid_guard.py", line 34, in approve
+    return G.approve_guest('\n'.join(self.lines if lines is None else lines) + '\n', self.base,
+           ^^^^^^^^^^^^^^^
+AttributeError: module 'guest_guard' has no attribute 'approve_guest'
+
+======================================================================
+ERROR: test_missing_source_marker_fatal_defer (test_guest_xid_guard.GuestGuardTests.test_missing_source_marker_fatal_defer)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/workspace/s2-wt/scripts/bench/tests/test_guest_xid_guard.py", line 119, in test_missing_source_marker_fatal_defer
+    self.assert_refused(serial=self.serial.replace('FAULT_MARK=', 'NO_MARK='))
+    ~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/workspace/s2-wt/scripts/bench/tests/test_guest_xid_guard.py", line 191, in assert_refused
+    self.approve(**kwargs)
+    ~~~~~~~~~~~~^^^^^^^^^^
+  File "/workspace/s2-wt/scripts/bench/tests/test_guest_xid_guard.py", line 34, in approve
+    return G.approve_guest('\n'.join(self.lines if lines is None else lines) + '\n', self.base,
+           ^^^^^^^^^^^^^^^
+AttributeError: module 'guest_guard' has no attribute 'approve_guest'
+
+======================================================================
+ERROR: test_missing_source_marker_fatal_missing (test_guest_xid_guard.GuestGuardTests.test_missing_source_marker_fatal_missing)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/workspace/s2-wt/scripts/bench/tests/test_guest_xid_guard.py", line 122, in test_missing_source_marker_fatal_missing
+    c = self.missing(); c['serial'] = c['serial'].replace('FAULT_MARK=', 'NO_MARK='); self.assert_refused(**c)
+                                                                                      ~~~~~~~~~~~~~~~~~~~^^^^^
+  File "/workspace/s2-wt/scripts/bench/tests/test_guest_xid_guard.py", line 191, in assert_refused
+    self.approve(**kwargs)
+    ~~~~~~~~~~~~^^^^^^^^^^
+  File "/workspace/s2-wt/scripts/bench/tests/test_guest_xid_guard.py", line 34, in approve
+    return G.approve_guest('\n'.join(self.lines if lines is None else lines) + '\n', self.base,
+           ^^^^^^^^^^^^^^^
+AttributeError: module 'guest_guard' has no attribute 'approve_guest'
+
+======================================================================
+ERROR: test_multiple_markers_same_journal_record_fatal (test_guest_xid_guard.GuestGuardTests.test_multiple_markers_same_journal_record_fatal)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/workspace/s2-wt/scripts/bench/tests/test_guest_xid_guard.py", line 155, in test_multiple_markers_same_journal_record_fatal
+    self.assert_refused(lines=self.lines[:5] + [self.lines[5] + ' ' + self.lines[5]] + self.lines[6:])
+    ~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/workspace/s2-wt/scripts/bench/tests/test_guest_xid_guard.py", line 191, in assert_refused
+    self.approve(**kwargs)
+    ~~~~~~~~~~~~^^^^^^^^^^
+  File "/workspace/s2-wt/scripts/bench/tests/test_guest_xid_guard.py", line 34, in approve
+    return G.approve_guest('\n'.join(self.lines if lines is None else lines) + '\n', self.base,
+           ^^^^^^^^^^^^^^^
+AttributeError: module 'guest_guard' has no attribute 'approve_guest'
+
+======================================================================
+ERROR: test_native_history_immutable_defer (test_guest_xid_guard.GuestGuardTests.test_native_history_immutable_defer)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/workspace/s2-wt/scripts/bench/tests/test_guest_xid_guard.py", line 107, in test_native_history_immutable_defer
+    self.assert_refused(lines=[l.replace('pid=90242', 'pid=90243') for l in self.lines])
+    ~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/workspace/s2-wt/scripts/bench/tests/test_guest_xid_guard.py", line 191, in assert_refused
+    self.approve(**kwargs)
+    ~~~~~~~~~~~~^^^^^^^^^^
+  File "/workspace/s2-wt/scripts/bench/tests/test_guest_xid_guard.py", line 34, in approve
+    return G.approve_guest('\n'.join(self.lines if lines is None else lines) + '\n', self.base,
+           ^^^^^^^^^^^^^^^
+AttributeError: module 'guest_guard' has no attribute 'approve_guest'
+
+======================================================================
+ERROR: test_native_history_immutable_missing (test_guest_xid_guard.GuestGuardTests.test_native_history_immutable_missing)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/workspace/s2-wt/scripts/bench/tests/test_guest_xid_guard.py", line 110, in test_native_history_immutable_missing
+    c = self.missing(); c['lines'][0] += ' changed'; self.assert_refused(**c)
+                                                     ~~~~~~~~~~~~~~~~~~~^^^^^
+  File "/workspace/s2-wt/scripts/bench/tests/test_guest_xid_guard.py", line 191, in assert_refused
+    self.approve(**kwargs)
+    ~~~~~~~~~~~~^^^^^^^^^^
+  File "/workspace/s2-wt/scripts/bench/tests/test_guest_xid_guard.py", line 34, in approve
+    return G.approve_guest('\n'.join(self.lines if lines is None else lines) + '\n', self.base,
+           ^^^^^^^^^^^^^^^
+AttributeError: module 'guest_guard' has no attribute 'approve_guest'
+
+======================================================================
+ERROR: test_no_positive_verdict_no_approval_defer (test_guest_xid_guard.GuestGuardTests.test_no_positive_verdict_no_approval_defer)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/workspace/s2-wt/scripts/bench/tests/test_guest_xid_guard.py", line 167, in test_no_positive_verdict_no_approval_defer
+    self.assert_refused(serial=self.serial.replace('RUNG_defer_liveness=PASS', 'RUNG_defer_liveness=FAIL'))
+    ~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/workspace/s2-wt/scripts/bench/tests/test_guest_xid_guard.py", line 191, in assert_refused
+    self.approve(**kwargs)
+    ~~~~~~~~~~~~^^^^^^^^^^
+  File "/workspace/s2-wt/scripts/bench/tests/test_guest_xid_guard.py", line 34, in approve
+    return G.approve_guest('\n'.join(self.lines if lines is None else lines) + '\n', self.base,
+           ^^^^^^^^^^^^^^^
+AttributeError: module 'guest_guard' has no attribute 'approve_guest'
+
+======================================================================
+ERROR: test_no_positive_verdict_no_approval_missing (test_guest_xid_guard.GuestGuardTests.test_no_positive_verdict_no_approval_missing)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/workspace/s2-wt/scripts/bench/tests/test_guest_xid_guard.py", line 170, in test_no_positive_verdict_no_approval_missing
+    c = self.missing(); c['serial'] = c['serial'].replace('RUNG_missing_page=PASS', 'RUNG_missing_page=FAIL'); self.assert_refused(**c)
+                                                                                                               ~~~~~~~~~~~~~~~~~~~^^^^^
+  File "/workspace/s2-wt/scripts/bench/tests/test_guest_xid_guard.py", line 191, in assert_refused
+    self.approve(**kwargs)
+    ~~~~~~~~~~~~^^^^^^^^^^
+  File "/workspace/s2-wt/scripts/bench/tests/test_guest_xid_guard.py", line 34, in approve
+    return G.approve_guest('\n'.join(self.lines if lines is None else lines) + '\n', self.base,
+           ^^^^^^^^^^^^^^^
+AttributeError: module 'guest_guard' has no attribute 'approve_guest'
+
+======================================================================
+ERROR: test_pid_one_fatal (test_guest_xid_guard.GuestGuardTests.test_pid_one_fatal)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/workspace/s2-wt/scripts/bench/tests/test_guest_xid_guard.py", line 140, in test_pid_one_fatal
+    c = dict(self.context, pid=1); self.assert_refused(context=c)
+                                   ~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^
+  File "/workspace/s2-wt/scripts/bench/tests/test_guest_xid_guard.py", line 191, in assert_refused
+    self.approve(**kwargs)
+    ~~~~~~~~~~~~^^^^^^^^^^
+  File "/workspace/s2-wt/scripts/bench/tests/test_guest_xid_guard.py", line 34, in approve
+    return G.approve_guest('\n'.join(self.lines if lines is None else lines) + '\n', self.base,
+           ^^^^^^^^^^^^^^^
+AttributeError: module 'guest_guard' has no attribute 'approve_guest'
+
+======================================================================
+ERROR: test_pid_zero_fatal (test_guest_xid_guard.GuestGuardTests.test_pid_zero_fatal)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/workspace/s2-wt/scripts/bench/tests/test_guest_xid_guard.py", line 137, in test_pid_zero_fatal
+    c = dict(self.context, pid=0); self.assert_refused(context=c)
+                                   ~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^
+  File "/workspace/s2-wt/scripts/bench/tests/test_guest_xid_guard.py", line 191, in assert_refused
+    self.approve(**kwargs)
+    ~~~~~~~~~~~~^^^^^^^^^^
+  File "/workspace/s2-wt/scripts/bench/tests/test_guest_xid_guard.py", line 34, in approve
+    return G.approve_guest('\n'.join(self.lines if lines is None else lines) + '\n', self.base,
+           ^^^^^^^^^^^^^^^
+AttributeError: module 'guest_guard' has no attribute 'approve_guest'
+
+======================================================================
+ERROR: test_qemu_pid_is_exact_defer (test_guest_xid_guard.GuestGuardTests.test_qemu_pid_is_exact_defer)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/workspace/s2-wt/scripts/bench/tests/test_guest_xid_guard.py", line 65, in test_qemu_pid_is_exact_defer
+    self.assert_refused(lines=[l.replace('pid=91947', 'pid=91948') for l in self.lines])
+    ~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/workspace/s2-wt/scripts/bench/tests/test_guest_xid_guard.py", line 191, in assert_refused
+    self.approve(**kwargs)
+    ~~~~~~~~~~~~^^^^^^^^^^
+  File "/workspace/s2-wt/scripts/bench/tests/test_guest_xid_guard.py", line 34, in approve
+    return G.approve_guest('\n'.join(self.lines if lines is None else lines) + '\n', self.base,
+           ^^^^^^^^^^^^^^^
+AttributeError: module 'guest_guard' has no attribute 'approve_guest'
+
+======================================================================
+ERROR: test_qemu_pid_is_exact_missing (test_guest_xid_guard.GuestGuardTests.test_qemu_pid_is_exact_missing)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/workspace/s2-wt/scripts/bench/tests/test_guest_xid_guard.py", line 68, in test_qemu_pid_is_exact_missing
+    c = self.missing(); c['context']['pid'] += 1; self.assert_refused(**c)
+                                                  ~~~~~~~~~~~~~~~~~~~^^^^^
+  File "/workspace/s2-wt/scripts/bench/tests/test_guest_xid_guard.py", line 191, in assert_refused
+    self.approve(**kwargs)
+    ~~~~~~~~~~~~^^^^^^^^^^
+  File "/workspace/s2-wt/scripts/bench/tests/test_guest_xid_guard.py", line 34, in approve
+    return G.approve_guest('\n'.join(self.lines if lines is None else lines) + '\n', self.base,
+           ^^^^^^^^^^^^^^^
+AttributeError: module 'guest_guard' has no attribute 'approve_guest'
+
+======================================================================
+ERROR: test_recovery_required_defer (test_guest_xid_guard.GuestGuardTests.test_recovery_required_defer)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/workspace/s2-wt/scripts/bench/tests/test_guest_xid_guard.py", line 101, in test_recovery_required_defer
+    self.assert_refused(serial=self.serial.replace('DL rescue copy     = Live', 'DL rescue copy     = Dead'))
+    ~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/workspace/s2-wt/scripts/bench/tests/test_guest_xid_guard.py", line 191, in assert_refused
+    self.approve(**kwargs)
+    ~~~~~~~~~~~~^^^^^^^^^^
+  File "/workspace/s2-wt/scripts/bench/tests/test_guest_xid_guard.py", line 34, in approve
+    return G.approve_guest('\n'.join(self.lines if lines is None else lines) + '\n', self.base,
+           ^^^^^^^^^^^^^^^
+AttributeError: module 'guest_guard' has no attribute 'approve_guest'
+
+======================================================================
+ERROR: test_recovery_required_missing (test_guest_xid_guard.GuestGuardTests.test_recovery_required_missing)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/workspace/s2-wt/scripts/bench/tests/test_guest_xid_guard.py", line 104, in test_recovery_required_missing
+    c = self.missing(); c['serial'] = c['serial'].replace('bystander after  = Landed', 'bystander after  = Lost'); self.assert_refused(**c)
+                                                                                                                   ~~~~~~~~~~~~~~~~~~~^^^^^
+  File "/workspace/s2-wt/scripts/bench/tests/test_guest_xid_guard.py", line 191, in assert_refused
+    self.approve(**kwargs)
+    ~~~~~~~~~~~~^^^^^^^^^^
+  File "/workspace/s2-wt/scripts/bench/tests/test_guest_xid_guard.py", line 34, in approve
+    return G.approve_guest('\n'.join(self.lines if lines is None else lines) + '\n', self.base,
+           ^^^^^^^^^^^^^^^
+AttributeError: module 'guest_guard' has no attribute 'approve_guest'
+
+======================================================================
+ERROR: test_revision_required (test_guest_xid_guard.GuestGuardTests.test_revision_required)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/workspace/s2-wt/scripts/bench/tests/test_guest_xid_guard.py", line 149, in test_revision_required
+    self.assert_refused(context=dict(self.context, revision=''))
+    ~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/workspace/s2-wt/scripts/bench/tests/test_guest_xid_guard.py", line 191, in assert_refused
+    self.approve(**kwargs)
+    ~~~~~~~~~~~~^^^^^^^^^^
+  File "/workspace/s2-wt/scripts/bench/tests/test_guest_xid_guard.py", line 34, in approve
+    return G.approve_guest('\n'.join(self.lines if lines is None else lines) + '\n', self.base,
+           ^^^^^^^^^^^^^^^
+AttributeError: module 'guest_guard' has no attribute 'approve_guest'
+
+======================================================================
+ERROR: test_running_faults_are_pending_never_baseline (test_guest_xid_guard.GuestGuardTests.test_running_faults_are_pending_never_baseline)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/workspace/s2-wt/scripts/bench/tests/test_guest_xid_guard.py", line 177, in test_running_faults_are_pending_never_baseline
+    self.assertIsNone(self.approve(lines=self.lines[:6], serial=serial, qlog='', final=False))
+                      ~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/workspace/s2-wt/scripts/bench/tests/test_guest_xid_guard.py", line 34, in approve
+    return G.approve_guest('\n'.join(self.lines if lines is None else lines) + '\n', self.base,
+           ^^^^^^^^^^^^^^^
+AttributeError: module 'guest_guard' has no attribute 'approve_guest'
+
+======================================================================
+ERROR: test_running_unknown_address_is_fatal (test_guest_xid_guard.GuestGuardTests.test_running_unknown_address_is_fatal)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/workspace/s2-wt/scripts/bench/tests/test_guest_xid_guard.py", line 181, in test_running_unknown_address_is_fatal
+    self.assert_refused(lines=self.lines[:5] + [self.lines[5].replace('0x60_00010000', '0x60_00020000')], serial=serial, qlog='', final=False)
+    ~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/workspace/s2-wt/scripts/bench/tests/test_guest_xid_guard.py", line 191, in assert_refused
+    self.approve(**kwargs)
+    ~~~~~~~~~~~~^^^^^^^^^^
+  File "/workspace/s2-wt/scripts/bench/tests/test_guest_xid_guard.py", line 34, in approve
+    return G.approve_guest('\n'.join(self.lines if lines is None else lines) + '\n', self.base,
+           ^^^^^^^^^^^^^^^
+AttributeError: module 'guest_guard' has no attribute 'approve_guest'
+
+======================================================================
+ERROR: test_running_xid32_is_fatal (test_guest_xid_guard.GuestGuardTests.test_running_xid32_is_fatal)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/workspace/s2-wt/scripts/bench/tests/test_guest_xid_guard.py", line 184, in test_running_xid32_is_fatal
+    self.assert_refused(lines=self.lines[:5] + [self.lines[5].replace(': 31,', ': 32,')], final=False)
+    ~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/workspace/s2-wt/scripts/bench/tests/test_guest_xid_guard.py", line 191, in assert_refused
+    self.approve(**kwargs)
+    ~~~~~~~~~~~~^^^^^^^^^^
+  File "/workspace/s2-wt/scripts/bench/tests/test_guest_xid_guard.py", line 34, in approve
+    return G.approve_guest('\n'.join(self.lines if lines is None else lines) + '\n', self.base,
+           ^^^^^^^^^^^^^^^
+AttributeError: module 'guest_guard' has no attribute 'approve_guest'
+
+======================================================================
+ERROR: test_source_pin_required (test_guest_xid_guard.GuestGuardTests.test_source_pin_required)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/workspace/s2-wt/scripts/bench/tests/test_guest_xid_guard.py", line 146, in test_source_pin_required
+    self.assert_refused(context=dict(self.context, source_pin={}))
+    ~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/workspace/s2-wt/scripts/bench/tests/test_guest_xid_guard.py", line 191, in assert_refused
+    self.approve(**kwargs)
+    ~~~~~~~~~~~~^^^^^^^^^^
+  File "/workspace/s2-wt/scripts/bench/tests/test_guest_xid_guard.py", line 34, in approve
+    return G.approve_guest('\n'.join(self.lines if lines is None else lines) + '\n', self.base,
+           ^^^^^^^^^^^^^^^
+AttributeError: module 'guest_guard' has no attribute 'approve_guest'
+
+======================================================================
+ERROR: test_source_shaped_missing_page_fixture_accepts_exact_one (test_guest_xid_guard.GuestGuardTests.test_source_shaped_missing_page_fixture_accepts_exact_one)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/workspace/s2-wt/scripts/bench/tests/test_guest_xid_guard.py", line 62, in test_source_shaped_missing_page_fixture_accepts_exact_one
+    self.assertEqual(self.approve(**case), tuple(case['lines']))
+                     ~~~~~~~~~~~~^^^^^^^^
+  File "/workspace/s2-wt/scripts/bench/tests/test_guest_xid_guard.py", line 34, in approve
+    return G.approve_guest('\n'.join(self.lines if lines is None else lines) + '\n', self.base,
+           ^^^^^^^^^^^^^^^
+AttributeError: module 'guest_guard' has no attribute 'approve_guest'
+
+======================================================================
+ERROR: test_starttime_required (test_guest_xid_guard.GuestGuardTests.test_starttime_required)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/workspace/s2-wt/scripts/bench/tests/test_guest_xid_guard.py", line 143, in test_starttime_required
+    self.assert_refused(context=dict(self.context, starttime=0))
+    ~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/workspace/s2-wt/scripts/bench/tests/test_guest_xid_guard.py", line 191, in assert_refused
+    self.approve(**kwargs)
+    ~~~~~~~~~~~~^^^^^^^^^^
+  File "/workspace/s2-wt/scripts/bench/tests/test_guest_xid_guard.py", line 34, in approve
+    return G.approve_guest('\n'.join(self.lines if lines is None else lines) + '\n', self.base,
+           ^^^^^^^^^^^^^^^
+AttributeError: module 'guest_guard' has no attribute 'approve_guest'
+
+======================================================================
+ERROR: test_trailing_unparsed_xid_payload_fatal (test_guest_xid_guard.GuestGuardTests.test_trailing_unparsed_xid_payload_fatal)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/workspace/s2-wt/scripts/bench/tests/test_guest_xid_guard.py", line 158, in test_trailing_unparsed_xid_payload_fatal
+    self.assert_refused(lines=self.lines[:8] + [self.lines[8] + ' unknown'])
+    ~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/workspace/s2-wt/scripts/bench/tests/test_guest_xid_guard.py", line 191, in assert_refused
+    self.approve(**kwargs)
+    ~~~~~~~~~~~~^^^^^^^^^^
+  File "/workspace/s2-wt/scripts/bench/tests/test_guest_xid_guard.py", line 34, in approve
+    return G.approve_guest('\n'.join(self.lines if lines is None else lines) + '\n', self.base,
+           ^^^^^^^^^^^^^^^
+AttributeError: module 'guest_guard' has no attribute 'approve_guest'
+
+======================================================================
+ERROR: test_unknown_arm_refused (test_guest_xid_guard.GuestGuardTests.test_unknown_arm_refused)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/workspace/s2-wt/scripts/bench/tests/test_guest_xid_guard.py", line 152, in test_unknown_arm_refused
+    self.assert_refused(context=dict(self.context, arm='--timer'))
+    ~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/workspace/s2-wt/scripts/bench/tests/test_guest_xid_guard.py", line 191, in assert_refused
+    self.approve(**kwargs)
+    ~~~~~~~~~~~~^^^^^^^^^^
+  File "/workspace/s2-wt/scripts/bench/tests/test_guest_xid_guard.py", line 34, in approve
+    return G.approve_guest('\n'.join(self.lines if lines is None else lines) + '\n', self.base,
+           ^^^^^^^^^^^^^^^
+AttributeError: module 'guest_guard' has no attribute 'approve_guest'
+
+======================================================================
+ERROR: test_unrelated_pci_fatal_defer (test_guest_xid_guard.GuestGuardTests.test_unrelated_pci_fatal_defer)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/workspace/s2-wt/scripts/bench/tests/test_guest_xid_guard.py", line 125, in test_unrelated_pci_fatal_defer
+    self.assert_refused(lines=self.lines[:5] + [l.replace('00:07', '00:08') for l in self.lines[5:]])
+    ~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/workspace/s2-wt/scripts/bench/tests/test_guest_xid_guard.py", line 191, in assert_refused
+    self.approve(**kwargs)
+    ~~~~~~~~~~~~^^^^^^^^^^
+  File "/workspace/s2-wt/scripts/bench/tests/test_guest_xid_guard.py", line 34, in approve
+    return G.approve_guest('\n'.join(self.lines if lines is None else lines) + '\n', self.base,
+           ^^^^^^^^^^^^^^^
+AttributeError: module 'guest_guard' has no attribute 'approve_guest'
+
+======================================================================
+ERROR: test_unrelated_pci_fatal_missing (test_guest_xid_guard.GuestGuardTests.test_unrelated_pci_fatal_missing)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/workspace/s2-wt/scripts/bench/tests/test_guest_xid_guard.py", line 128, in test_unrelated_pci_fatal_missing
+    c = self.missing(); c['lines'][-1] = c['lines'][-1].replace('00:07', '00:08'); self.assert_refused(**c)
+                                                                                   ~~~~~~~~~~~~~~~~~~~^^^^^
+  File "/workspace/s2-wt/scripts/bench/tests/test_guest_xid_guard.py", line 191, in assert_refused
+    self.approve(**kwargs)
+    ~~~~~~~~~~~~^^^^^^^^^^
+  File "/workspace/s2-wt/scripts/bench/tests/test_guest_xid_guard.py", line 34, in approve
+    return G.approve_guest('\n'.join(self.lines if lines is None else lines) + '\n', self.base,
+           ^^^^^^^^^^^^^^^
+AttributeError: module 'guest_guard' has no attribute 'approve_guest'
+
+======================================================================
+ERROR: test_unrelated_route_fatal_defer (test_guest_xid_guard.GuestGuardTests.test_unrelated_route_fatal_defer)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/workspace/s2-wt/scripts/bench/tests/test_guest_xid_guard.py", line 131, in test_unrelated_route_fatal_defer
+    self.assert_refused(lines=self.lines[:5] + [l.replace('CE0', 'GR0_PBDMA0') for l in self.lines[5:]])
+    ~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/workspace/s2-wt/scripts/bench/tests/test_guest_xid_guard.py", line 191, in assert_refused
+    self.approve(**kwargs)
+    ~~~~~~~~~~~~^^^^^^^^^^
+  File "/workspace/s2-wt/scripts/bench/tests/test_guest_xid_guard.py", line 34, in approve
+    return G.approve_guest('\n'.join(self.lines if lines is None else lines) + '\n', self.base,
+           ^^^^^^^^^^^^^^^
+AttributeError: module 'guest_guard' has no attribute 'approve_guest'
+
+======================================================================
+ERROR: test_unrelated_route_fatal_missing (test_guest_xid_guard.GuestGuardTests.test_unrelated_route_fatal_missing)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/workspace/s2-wt/scripts/bench/tests/test_guest_xid_guard.py", line 134, in test_unrelated_route_fatal_missing
+    c = self.missing(); c['lines'][-1] = c['lines'][-1].replace('HUBCLIENT_CE1', 'HUBCLIENT_ESC'); self.assert_refused(**c)
+                                                                                                   ~~~~~~~~~~~~~~~~~~~^^^^^
+  File "/workspace/s2-wt/scripts/bench/tests/test_guest_xid_guard.py", line 191, in assert_refused
+    self.approve(**kwargs)
+    ~~~~~~~~~~~~^^^^^^^^^^
+  File "/workspace/s2-wt/scripts/bench/tests/test_guest_xid_guard.py", line 34, in approve
+    return G.approve_guest('\n'.join(self.lines if lines is None else lines) + '\n', self.base,
+           ^^^^^^^^^^^^^^^
+AttributeError: module 'guest_guard' has no attribute 'approve_guest'
+
+======================================================================
+ERROR: test_wrong_primitive_refused (test_guest_xid_guard.GuestGuardTests.test_wrong_primitive_refused)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/workspace/s2-wt/scripts/bench/tests/test_guest_xid_guard.py", line 173, in test_wrong_primitive_refused
+    c = self.missing(); c['serial'] = c['serial'].replace('--probe-launch-dma', '--probe-sem-release'); self.assert_refused(**c)
+                                                                                                        ~~~~~~~~~~~~~~~~~~~^^^^^
+  File "/workspace/s2-wt/scripts/bench/tests/test_guest_xid_guard.py", line 191, in assert_refused
+    self.approve(**kwargs)
+    ~~~~~~~~~~~~^^^^^^^^^^
+  File "/workspace/s2-wt/scripts/bench/tests/test_guest_xid_guard.py", line 34, in approve
+    return G.approve_guest('\n'.join(self.lines if lines is None else lines) + '\n', self.base,
+           ^^^^^^^^^^^^^^^
+AttributeError: module 'guest_guard' has no attribute 'approve_guest'
+
+======================================================================
+ERROR: test_xid32_fatal_defer (test_guest_xid_guard.GuestGuardTests.test_xid32_fatal_defer)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/workspace/s2-wt/scripts/bench/tests/test_guest_xid_guard.py", line 89, in test_xid32_fatal_defer
+    self.assert_refused(lines=self.lines[:5] + [l.replace(': 31,', ': 32,') for l in self.lines[5:]])
+    ~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/workspace/s2-wt/scripts/bench/tests/test_guest_xid_guard.py", line 191, in assert_refused
+    self.approve(**kwargs)
+    ~~~~~~~~~~~~^^^^^^^^^^
+  File "/workspace/s2-wt/scripts/bench/tests/test_guest_xid_guard.py", line 34, in approve
+    return G.approve_guest('\n'.join(self.lines if lines is None else lines) + '\n', self.base,
+           ^^^^^^^^^^^^^^^
+AttributeError: module 'guest_guard' has no attribute 'approve_guest'
+
+======================================================================
+ERROR: test_xid32_fatal_missing (test_guest_xid_guard.GuestGuardTests.test_xid32_fatal_missing)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/workspace/s2-wt/scripts/bench/tests/test_guest_xid_guard.py", line 92, in test_xid32_fatal_missing
+    c = self.missing(); c['lines'][-1] = c['lines'][-1].replace(': 31,', ': 32,'); self.assert_refused(**c)
+                                                                                   ~~~~~~~~~~~~~~~~~~~^^^^^
+  File "/workspace/s2-wt/scripts/bench/tests/test_guest_xid_guard.py", line 191, in assert_refused
+    self.approve(**kwargs)
+    ~~~~~~~~~~~~^^^^^^^^^^
+  File "/workspace/s2-wt/scripts/bench/tests/test_guest_xid_guard.py", line 34, in approve
+    return G.approve_guest('\n'.join(self.lines if lines is None else lines) + '\n', self.base,
+           ^^^^^^^^^^^^^^^
+AttributeError: module 'guest_guard' has no attribute 'approve_guest'
+
+======================================================================
+ERROR: test_current_suite_pin_is_recorded (test_guest_xid_guard.PinTests.test_current_suite_pin_is_recorded)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/workspace/s2-wt/scripts/bench/tests/test_guest_xid_guard.py", line 197, in test_current_suite_pin_is_recorded
+    pin = G.pin_suite(ROOT, rev)
+          ^^^^^^^^^^^
+AttributeError: module 'guest_guard' has no attribute 'pin_suite'
+
+======================================================================
+ERROR: test_missing_source_revision_fatal (test_guest_xid_guard.PinTests.test_missing_source_revision_fatal)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/workspace/s2-wt/scripts/bench/tests/test_guest_xid_guard.py", line 206, in test_missing_source_revision_fatal
+    G.pin_suite(ROOT, '')
+    ^^^^^^^^^^^
+AttributeError: module 'guest_guard' has no attribute 'pin_suite'
+
+======================================================================
+ERROR: test_stale_source_revision_fatal (test_guest_xid_guard.PinTests.test_stale_source_revision_fatal)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/workspace/s2-wt/scripts/bench/tests/test_guest_xid_guard.py", line 202, in test_stale_source_revision_fatal
+    G.pin_suite(ROOT, '0' * 40)
+    ^^^^^^^^^^^
+AttributeError: module 'guest_guard' has no attribute 'pin_suite'
+
+----------------------------------------------------------------------
+Ran 46 tests in 0.039s
+
+FAILED (errors=46)
