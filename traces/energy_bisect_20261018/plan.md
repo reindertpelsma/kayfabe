@@ -8,3 +8,5 @@ INFERRED H3: absent software CE binding state causes NoCeObject; FALSIFIER befor
 INFERRED H4: the same admitted allocation facts produce different actions on master versus SA-02; FALSIFIER before source replay: complete relevant action/classification outputs are identical. No claim of identical full guest RPC traffic without a captured replay.
 
 CODE READ: Q2 copies Q1 supervisors into its own host directory, changing lane paths and the session restoration deadline only (13:50 CEST; four-hour task began 10:00 CEST). No product change or timeout tuning. GPU lock bounded at 120 seconds; no held lock is broken.
+
+CODE READ: owner resumption instruction supersedes the initial inherited-claims stop. Check Q2-added/changed files only; evidence-only pushes use [skip ci]. Run4265 is an interrupted attempt, not a sample. Resumed A2=4266; B1=4264; C2=4267 adds the second Energy-only candidate sample. A failed B1 will receive one fresh repeat. Cargo-lock wait remains bounded at 3600 seconds and will not be canceled.

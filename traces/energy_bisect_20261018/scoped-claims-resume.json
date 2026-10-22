@@ -1,0 +1,25 @@
+{
+  "classification": "MEASURED",
+  "revision": "1cad66ff39d193b79a763801d94b6b861a2a9264",
+  "scope": "Q2-added/changed files relative to c80522d70; owner explicitly authorizes evidence-only scope",
+  "files": [
+    "traces/energy_bisect_20261018/4262/config.json",
+    "traces/energy_bisect_20261018/4262/excerpts.txt",
+    "traces/energy_bisect_20261018/4262/result.json",
+    "traces/energy_bisect_20261018/4263/config.json",
+    "traces/energy_bisect_20261018/4263/excerpts.txt",
+    "traces/energy_bisect_20261018/4263/result.json",
+    "traces/energy_bisect_20261018/4265/config.json",
+    "traces/energy_bisect_20261018/4265/excerpts.txt",
+    "traces/energy_bisect_20261018/4265/result.json",
+    "traces/energy_bisect_20261018/README.md",
+    "traces/energy_bisect_20261018/claims-gate.json",
+    "traces/energy_bisect_20261018/cleanup-final.json",
+    "traces/energy_bisect_20261018/lane-stop.json",
+    "traces/energy_bisect_20261018/local-cleanup.json",
+    "traces/energy_bisect_20261018/plan.md",
+    "traces/energy_bisect_20261018/tests-B.json"
+  ],
+  "new": 0,
+  "inherited_ignored": 74
+}
