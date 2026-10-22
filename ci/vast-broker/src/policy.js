@@ -17,9 +17,10 @@ export function configuration(env){
   if(!['true','false'].includes(env.RENT_DRAFTS??'false'))refuse();
   const list=(name,fallback)=>{let value;try{value=JSON.parse(env[name]??JSON.stringify(fallback));}catch{refuse();}if(!Array.isArray(value)||value.length>32||!value.every(x=>typeof x==='string'&&x.length>0&&x.length<=128&&/^[A-Za-z0-9_.*?/-]+$/.test(x)))refuse();return value;};
   const bases=list('ALLOWED_BASE_BRANCHES',['master']),patterns=list('PATH_SKIP_PATTERNS',['**/*.md','docs/**','traces/**','archive/**','LICENSE*','.github/ISSUE_TEMPLATE/**']);
-  const cfg={bases,patterns,repo:env.REPOSITORY,owner:env.OWNER_GITHUB_ID,audience:env.WORKER_URL,mode,drafts:env.RENT_DRAFTS==='true',
+  const cfg={reportCount:number('MAX_REPORTS',2000,2000),reportBytes:number('MAX_REPORT_BYTES',4194304,4194304),reportRate:number('REPORT_RATE_LIMIT',20,20),bases,patterns,repo:env.REPOSITORY,owner:env.OWNER_GITHUB_ID,audience:env.WORKER_URL,mode,drafts:env.RENT_DRAFTS==='true',
     reserve:number('CREDIT_RESERVE_USD',8),price:number('MAX_PRICE_USD_HOUR',.5,2),ttl:number('TTL_MINUTES',150,150)*60000,
     dailyCount:number('DAILY_RENTALS',4,20),daily:number('DAILY_SPEND_USD',3),rolling:number('ROLLING_SPEND_USD',30),gap:number('SHA_GAP_HOURS',24,720)*3600000};
+  if(![cfg.reportCount,cfg.reportBytes,cfg.reportRate].every(Number.isInteger))refuse();
   if(!Number.isInteger(cfg.dailyCount)||!Number.isInteger(cfg.ttl/60000))refuse();
   return cfg;
 }
