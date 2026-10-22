@@ -84,20 +84,20 @@ class DesktopPlanTests(unittest.TestCase):
 
 
 class AppDiskTests(unittest.TestCase):
-    def test_controller_is_created_before_attaching_cd(self):
+    def test_attach_does_not_hotplug_a_root_bus_controller(self):
         m = load()
         calls = []
         q = SimpleNamespace(cmd=lambda *args: calls.append(args),
                             attach_cdrom=lambda *args, **kw: calls.append(('cd', args, kw)))
         m.attach_app_disk(q, 'matrix.iso')
-        self.assertEqual(calls[0], ('device_add', {'driver':'qemu-xhci', 'id':'s4xhci'}))
-        self.assertEqual(calls[1][0], 'cd')
+        self.assertEqual(len(calls), 1)
+        self.assertEqual(calls[0][0], 'cd')
 
-    def test_app_disk_uses_the_new_controller(self):
+    def test_app_disk_uses_the_boot_controller(self):
         m = load()
         calls = []
         q = SimpleNamespace(cmd=lambda *args: calls.append(args),
                             attach_cdrom=lambda *args, **kw: calls.append(('cd', args, kw)))
         m.attach_app_disk(q, 'matrix.iso')
-        self.assertEqual(len(calls), 2)
-        self.assertEqual(calls[-1][2]['xhci_bus'], 's4xhci.0')
+        self.assertEqual(len(calls), 1)
+        self.assertEqual(calls[-1][2]['xhci_bus'], 'xhci.0')
