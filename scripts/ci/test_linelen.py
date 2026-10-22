@@ -105,6 +105,26 @@ class LineLengthTests(GitFixture):
         self.commit()
         self.check("--base", base, code=1)
 
+    def test_forced_color_cannot_hide_an_overlong_replacement(self):
+        self.write(SOURCE, LONG)
+        self.baseline({SOURCE: 1})
+        self.commit()
+        base = self.git("rev-parse", "HEAD").strip()
+        self.git("config", "color.diff", "always")
+        self.write(SOURCE, "y" * 101 + "\n")
+        self.commit()
+        self.check("--base", base, code=1)
+
+    def test_forced_color_cannot_hide_new_debt_when_count_decreases(self):
+        self.write(SOURCE, LONG * 2)
+        self.baseline({SOURCE: 2})
+        self.commit()
+        base = self.git("rev-parse", "HEAD").strip()
+        self.git("config", "color.diff", "always")
+        self.write(SOURCE, "z" * 101 + "\n")
+        self.commit()
+        self.check("--base", base, code=1)
+
     def test_changed_short_lines_do_not_reject_legacy_context(self):
         self.write(SOURCE, "old\n" + LONG)
         self.baseline({SOURCE: 1})
