@@ -441,3 +441,27 @@ mod gfx_kinds {
         );
     }
 }
+
+#[cfg(test)]
+mod nvdec_host_family_regression {
+    use super::*;
+    #[test]
+    fn ada_never_classifies_blackwell_nvdec_aliases_as_host_engine_classes() {
+        for c in [0xceb0, 0xcfb0, 0xd1b0] {
+            assert_eq!(classes_for(Family::Ada).kind_of(c), None);
+        }
+        assert_eq!(
+            classes_for(Family::Ada).kind_of(0xc9b0),
+            Some(Kind::VideoDecoder)
+        );
+    }
+    #[test]
+    fn blackwell_nvdec_aliases_keep_their_generated_engine_kind() {
+        for c in [0xceb0, 0xcfb0, 0xd1b0] {
+            assert_eq!(
+                classes_for(Family::Blackwell).kind_of(c),
+                Some(Kind::VideoDecoder)
+            );
+        }
+    }
+}
