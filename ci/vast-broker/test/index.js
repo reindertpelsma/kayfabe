@@ -60,3 +60,5 @@ import './v5-duplicate-report.test.js';
 import './v5-availability-runner.test.js';
 import './v5-late-callback.test.js';
 import './v5-late-owner-timer.test.js';
+
+import './v5-deploy-checkpoint.test.js';
