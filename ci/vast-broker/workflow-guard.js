@@ -1,3 +1,4 @@
+import {publicLogRenderer} from './public-log.js';
 // Security-focused reader for the repository's indentation-based workflow subset.
 // Unsupported dynamic permissions/dependencies fail closed; this is not a YAML evaluator.
 import {readdir,readFile} from 'node:fs/promises';
@@ -54,8 +55,11 @@ function endpointBoundary(filename,text,jobs){
       if(!['WORKER_URL','WORKER_PATH'].every(x=>found.has(x)))fail('requires two step-env secret bindings'); // MUTANT secret-binding
       if(/\b(?:WORKER_URL|WORKER_PATH|BROKER_BASE|broker_origin|broker_host|broker_base|audience)\b/.test(kept.join('\n').split(/^        run:/m)[0]))fail('aliases cannot enter step metadata'); // MUTANT secret-metadata
       const run=step.split(/^        run: \|\s*$/m)[1]||'';
+      const embedded=run.split("<<'KF_PUBLIC_RENDER'\n")[1]?.split('\n          KF_PUBLIC_RENDER')[0].split('\n').map(x=>x.slice(10)).join('\n');
+      const approvedRenderer=embedded===publicLogRenderer.trimEnd();
+      if(!approvedRenderer)fail('requires exact trusted public renderer');
       for(const line of run.split('\n')){
-        if(/GITHUB_STEP_SUMMARY|GITHUB_ENV/.test(line))fail('cannot enter summary or environment channels');
+        if(/GITHUB_ENV/.test(line)||/GITHUB_STEP_SUMMARY/.test(line)&&!(approvedRenderer&&line.trim()==="with open(os.environ['GITHUB_STEP_SUMMARY'],'a',encoding='utf-8') as summary:"))fail('cannot enter summary or environment channels');
         if(/GITHUB_OUTPUT/.test(line)&&line.trim()!==String.raw`printf 'state=%s\nverdict=%s\n' "$state" "$verdict" >> "$GITHUB_OUTPUT"`)fail('cannot enter step outputs');
         if(/^\s*(?:echo|printf|cat|tee)\b/.test(line)&&/\b(?:WORKER_URL|WORKER_PATH|broker_origin|broker_host|broker_base|host_parts|audience)\b/.test(line))fail('cannot be printed'); // MUTANT secret-print
       }

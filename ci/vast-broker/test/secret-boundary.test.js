@@ -29,3 +29,5 @@ for(const output of ['url','path'])test('broker job output cannot carry endpoint
 for(const name of ['WORKER_URL','BROKER_PATH_PREFIX'])test('Worker endpoint binding is a secret '+name,async()=>{const config=await readFile(new URL('../wrangler.toml',import.meta.url),'utf8');assert.doesNotMatch(config,new RegExp('^'+name+'\\s*=','m'));assert.match(config,new RegExp(name));});
 
 for(const style of ['inline','folded'])for(const alias of ['WORKER_URL','WORKER_PATH'])test('unsupported broker run style fails closed '+style+' '+alias,()=>{const a=safe.indexOf('        run: |',safe.indexOf('  gpu:\n')),b=safe.indexOf('  report:\n',a);const replacement=style==='inline'?'        run: echo "$'+alias+'"\n':'        run: >\n          echo "$'+alias+'"\n';rejected(safe.slice(0,a)+replacement+safe.slice(b));});
+
+for(const variable of ['box_text','raw_response'])test('V4 only trusted renderer may write box data summary '+variable,()=>rejected(injectBroker(safe,'          printf \"%s\" \"$'+variable+'\" >> \"$GITHUB_STEP_SUMMARY\"')));

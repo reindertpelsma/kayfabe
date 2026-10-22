@@ -38,7 +38,7 @@ jobs:
     needs: pending
     runs-on: ubuntu-latest
     environment: gpu-vast
-    timeout-minutes: 160
+    timeout-minutes: 70
     permissions:
       contents: read
       pull-requests: read
@@ -80,14 +80,77 @@ jobs:
           state=UNAVAILABLE
           verdict=UNAVAILABLE
           temporary=$(mktemp -d)
+          terminal_result=false
+          cursor=0
+          : > "$temporary/full-log.txt"
+          cat > "$temporary/render.py" <<'KF_PUBLIC_RENDER'
+          import html,json,math,os,re,sys
+          mode,data_path,log_path=sys.argv[1:]
+          with open(data_path,encoding='utf-8') as source: data=json.load(source)
+          def number(key,default=0):
+              value=data.get(key,default)
+              return value if isinstance(value,(int,float)) and not isinstance(value,bool) and math.isfinite(value) and value>=0 else default
+          def clean(text):
+              text=re.sub(r'\x1b\[[0-?]*[ -/]*[@-~]','',str(text))
+              text=re.sub(r'[\x00-\x08\x0b-\x1f\x7f-\x9f]','',text)
+              return re.sub(r':{2,}',lambda match:' '.join(match[0]),text).replace('##[','# #[')
+          state=data.get('state','UNAVAILABLE')
+          if state not in {'RUNNING','STOPPING','STOPPED','COMPLETE','NOT_NEEDED','NOT_ELIGIBLE','NEEDS_APPROVAL','RENTING_DISABLED','BUSY','UNAVAILABLE','UNAVAILABLE_BUDGET','UNAUTHORIZED','NOT_FOUND'}: state='UNAVAILABLE'
+          verdict=data.get('verdict','UNAVAILABLE')
+          if verdict not in {'PASS','FAIL','UNAVAILABLE'}: verdict='UNAVAILABLE'
+          if mode=='live':
+              print(clean(data.get('log_increment_sanitised','')),end='')
+          elif mode=='final':
+              print('::group::Full bounded log: UNTRUSTED output of the rented box')
+              with open(log_path,encoding='utf-8') as source: print(clean(source.read(4194304)),end='')
+              print('\nDropped bytes: '+str(int(number('bytes_dropped'))))
+              print('::endgroup::')
+          elif mode=='summary':
+              tail=clean(data.get('log_tail_sanitised',''))[:8192]
+              fence=chr(96)*max(3,1+max([len(x) for x in re.findall(chr(96)+r'+',tail)]+[0]))
+              gpu=data.get('gpu_model','unknown')
+              if gpu not in {'RTX 4070','RTX 4070 Super','RTX 4080','RTX 4090','RTX_4070','RTX_4070_Super','RTX_4080','RTX_4090'}: gpu='unknown'
+              sha=data.get('sha','unknown')
+              if not isinstance(sha,str) or not re.fullmatch('[a-f0-9]{40}',sha): sha='unknown'
+              duration=max(0,(number('result_at',number('ended_at',number('started_at')))-number('started_at'))/1000)
+              rows=[('State',state),('Verdict',verdict),('Summary','Box reported a structured result' if data.get('result_at') is not None else 'No box result: '+state),('Tested commit',sha),('GPU model',gpu),('Create to result seconds',format(duration,'.3f')),('Estimated cost USD',format(number('cost_estimate_usd'),'.6f')),('Dropped log bytes',str(int(number('bytes_dropped'))))]
+              with open(os.environ['GITHUB_STEP_SUMMARY'],'a',encoding='utf-8') as summary:
+                  summary.write('### UNTRUSTED output of the rented box\n\n| Field | Value |\n| --- | --- |\n')
+                  for key,value in rows: summary.write('| '+key+' | '+html.escape(value).replace('|','&#124;')+' |\n')
+                  summary.write('\nLog tail (UNTRUSTED output of the rented box):\n\n'+fence+'text\n'+tail+'\n'+fence+'\n')
+          else: raise SystemExit('unsupported render mode')
+          KF_PUBLIC_RENDER
+          fetch_new_logs() {
+            target=$(jq -er '.log_cursor // 0' "$temporary/response.json" 2>/dev/null)
+            [[ "$target" =~ ^[0-9]+$ && "$target" -le 10000 ]]
+            while [[ "$cursor" -lt "$target" ]]; do
+              log_code=$(curl --silent --max-time 20 -o "$temporary/log-page.json" \
+                -w '%{http_code}' -H "Authorization: Bearer $oidc" -H "X-GH-Token: $GH_TOKEN" \
+                -X GET "$broker_base/logs/$run?cursor=$cursor" 2>/dev/null)
+              [[ "$log_code" = 200 ]]
+              next=$(jq -er '.next_cursor' "$temporary/log-page.json" 2>/dev/null)
+              [[ "$next" =~ ^[0-9]+$ && "$next" -gt "$cursor" && "$next" -le 10000 ]]
+              token=$(od -An -N24 -tx1 /dev/urandom | tr -d ' \n')
+              printf '::stop-commands::%s\n' "$token"
+              python3 "$temporary/render.py" live "$temporary/log-page.json" "$temporary/full-log.txt" | tee -a "$temporary/full-log.txt"
+              printf '\n::%s::\n' "$token"
+              [[ "$(wc -c < "$temporary/full-log.txt")" -le 4194304 ]]
+              cursor=$next
+            done
+          }
           finish() {
             rc=$?
             trap - EXIT
-            if [[ "$rc" != 0 && -n "${run:-}" && -s "$temporary/oidc.json" ]]; then
+            if [[ "$rc" != 0 && "$terminal_result" != true && -n "${run:-}" && -s "$temporary/oidc.json" ]]; then
               cleanup_oidc=$(jq -er '.value' "$temporary/oidc.json" 2>/dev/null)
               curl --silent --fail --max-time 20 \
                 -H "Authorization: Bearer $cleanup_oidc" -H "X-GH-Token: $GH_TOKEN" \
                 -X POST "$broker_base/stop/$run" >/dev/null 2>&1 || true
+            fi
+            printf '::endgroup::\n'
+            if [[ -s "$temporary/response.json" ]]; then
+              python3 "$temporary/render.py" final "$temporary/response.json" "$temporary/full-log.txt"
+              python3 "$temporary/render.py" summary "$temporary/response.json" "$temporary/full-log.txt"
             fi
             # These are allowlisted Worker metadata, never box log bytes.
             printf 'state=%s\nverdict=%s\n' "$state" "$verdict" >> "$GITHUB_OUTPUT"
@@ -97,7 +160,8 @@ jobs:
           run=
           endpoint=/rent
           method=POST
-          for attempt in $(seq 1 450); do
+          printf '::group::Live log: UNTRUSTED output of the rented box\n'
+          for attempt in $(seq 1 190); do
             audience=$(jq -rn --arg value "$WORKER_URL" '$value|@uri' 2>/dev/null)
             mask_value "$audience"
             curl --silent --fail --max-time 20 \
@@ -108,11 +172,6 @@ jobs:
             code=$(curl --silent --max-time 20 -o "$temporary/response.json" \
               -w '%{http_code}' -H "Authorization: Bearer $oidc" -H "X-GH-Token: $GH_TOKEN" \
               -X "$method" "$broker_base$endpoint" 2>/dev/null)
-            jq -er '.log_tail_sanitised // ""' "$temporary/response.json" > "$temporary/log.txt" 2>/dev/null
-            token=$(od -An -N24 -tx1 /dev/urandom | tr -d ' \n')
-            printf '::stop-commands::%s\n' "$token"
-            cat "$temporary/log.txt"
-            printf '\n::%s::\n' "$token"
             candidate=$(jq -er '.state' "$temporary/response.json" 2>/dev/null)
             case "$candidate" in
               RUNNING|STOPPING|STOPPED|COMPLETE|NOT_NEEDED|NOT_ELIGIBLE|BUSY|UNAVAILABLE|UNAVAILABLE_BUDGET|NEEDS_APPROVAL|RENTING_DISABLED|UNAUTHORIZED|BAD_REQUEST|NOT_FOUND|OWNERSHIP_MISMATCH)
@@ -133,6 +192,8 @@ jobs:
               endpoint=/status/$run
               method=GET
             fi
+            fetch_new_logs
+            if [[ "$state" = COMPLETE ]]; then terminal_result=true; fi
             if [[ "$state" = COMPLETE && "$verdict" = PASS ]]; then exit 0; fi
             if [[ "$verdict" = FAIL ]]; then exit 1; fi
             if [[ "$state" = COMPLETE || "$state" = STOPPED ]]; then exit 1; fi
