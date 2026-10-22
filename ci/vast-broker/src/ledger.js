@@ -7,15 +7,20 @@ export class Ledger {
   async active(){const key=await this.get('active');return key?this.get('record:'+key):null;}
   async granted(run){const key=await this.get('run:'+run);return key?this.get('record:'+key):null;}
   async grant(run,record,pr=record.pr){await this.put('run:'+run,record.key);await this.put('run-pr:'+run,pr);}
-  async owned(id,run){
-    const record=await this.granted(run);
-    if(!record||record.id!==id)refuse('NOT_FOUND',404);
-    return record;
+  async openRecords(){
+    const entries=await this.storage.list({prefix:'open:',limit:1000});if(entries.size>=1000)refuse();
+    const records=[];
+    for(const [key] of entries){
+      const record=await this.get('record:'+key.slice(5));
+      if(!record){console.log(JSON.stringify({event:'incomplete_ledger_index'}));continue;}
+      if(record.ended!==null){await this.storage.delete(key);continue;}
+      records.push(record);
+    }
+    return records;
   }
-  async openRecords(){const entries=await this.storage.list({prefix:'open:',limit:1000});if(entries.size>=1000)refuse();const records=[];for(const [key] of entries){const record=await this.get('record:'+key.slice(5));if(!record)refuse();records.push(record);}return records;}
   async reserve(record){
-    await this.put('open:'+record.key,true);
-    await this.save(record);await this.put('active',record.key);await this.grant(record.key,record);
+    await this.save(record);
+    await this.put('open:'+record.key,true);await this.put('active',record.key);await this.grant(record.key,record);
     await this.put('sha:'+record.sha,{key:record.key,started:record.started});
     await this.put('cost:'+record.key,{started:record.started,ended:null,price:record.price,ttl:record.ttl});
   }

@@ -15,6 +15,7 @@ export function sanitizeBoxText(bytes,cap=8192,secrets=[]){
     .replace(/\p{Cf}/gu,'') // MUTANT unicode-format
     .replace(/\b(?:gh[pousr]_[A-Za-z0-9]{20,255}|github_pat_[A-Za-z0-9_]{20,255}|v1\.[0-9]+\.[0-9]+\.[0-9]+\.[A-Za-z0-9_-]{43})\b/g,'[redacted]'); // MUTANT token-shape
   for(const secret of secrets)if(secret)text=text.split(secret).join('[redacted]');
+  text=text.replaceAll('::',': :').replaceAll('##[','# #['); // MUTANT command-delimiters
   const lines=text.split('\n');if(lines.at(-1)==='')lines.pop();
   let retained=[],size=0,shown=0;
   for(const line of lines.slice(-200)){const safe=utf8Prefix(line,1018);const rendered='[box] '+safe+'\n'; // MUTANT all-prefix
