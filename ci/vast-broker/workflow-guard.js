@@ -30,7 +30,7 @@ function jobsIn(text){
 }
 function endpointBoundary(filename,text,jobs){
   const errors=[],fail=reason=>errors.push('Broker endpoint '+reason);
-  if(/^\s*secrets:\s*['"]?inherit\b/m.test(text))fail('secrets cannot be inherited by reusable jobs'); // MUTANT secret-inherit
+  if(/^[ \t]*['"]?secrets['"]?[ \t]*:[ \t]*[^#\s]/m.test(text))fail('secret forwarding requires explicit block mappings'); // MUTANT secret-inherit
   const primary=filename==='gpu-vast.yml'?jobs.find(x=>x.id==='gpu'):null;
   let remaining=text,outside=text;
   if(primary){

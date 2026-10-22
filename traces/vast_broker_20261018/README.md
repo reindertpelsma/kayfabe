@@ -33,6 +33,7 @@ scanning/DoS-noise defence, never authentication; the box/onstart reader knows i
 | Actual shell request/mask/error/trace behaviour | 1eb9df642 | 10 total, 0 pass, 10 fail |
 | Scalar/folded run guard bypass | 0de729c3f | 39 total, 35 pass, 4 fail |
 | Reusable inheritance and step-name aliases | a8042039a | 5 total, 1 pass, 4 fail |
+| Alternate scalar/quoted/anchored forwarding | 495591f9a | 11 total, 6 pass, 5 fail |
 
 [MEASURED: 2026-10-22, node --test ci/vast-broker/test at commit 833a1a865] The complete Node suite passes
 473 tests with zero failures/skips. Actual generated Python sender tests now use
@@ -42,6 +43,16 @@ unchanged logging mutation kills two tests (4d50d443a). Final inherited-secret a
 metadata probes add two guard checks. The expanded 96-case campaign retains the
 75 original policy cases; final counts
 and restored-source results are recorded in the mutation table.
+
+[MEASURED: 2026-10-22] Full 96-case campaign at commit 584124edb: every mutant
+killed by at least two named tests; source restored. A subsequent one-line guard
+hardening rejects all scalar forwarding spellings and keeps explicit block
+mappings. All eight secret-targeted mutants were rerun against that final guard;
+the inheritance mutant kills seven tests. Those eight counts/examples supersede
+their base rows in the current mutation table; unchanged Worker/workflow cases
+retain their measured full-campaign results. The final full Node command passes
+484 tests, zero failed/skipped. No debt baseline changed; claims attribution
+names the actual command/date/commit. No real endpoint or secret was used.
 
 ## Amendment 3/3b callback proof
 
