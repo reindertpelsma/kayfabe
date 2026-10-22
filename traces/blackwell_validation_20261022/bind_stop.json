@@ -14,6 +14,6 @@
   "later_read_only_audit": "zero qemu-system processes; five approved source-matched native31; no XID_STOP",
   "cause": "exit-window race is inferred, not measured at the failed census",
   "auto_destroy_expiry_utc": "2026-10-22T03:16:37Z",
-  "optional_merge": "staged in a separate own worktree; commit scanner requested review of an inherited claim-debt quote already present in frozen source; no commit or bypass",
+  "optional_merge": "2add71e8ca8ebb80c419ed2fdb0427dfcdc0ccd4 pushed on separate own branch; scanner review verified sole hit already present in both inputs; no new path disclosed",
   "pending": "explicit decision requested before resuming any Windows arm; teardown remains authorized"
 }

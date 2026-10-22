@@ -1,6 +1,25 @@
-**STATUS: RESEARCH, 2026-10-22.** SW2 GPU-free review; no hardware or rental authorized by
-this task. Recommendation: do not reuse the old unattended controller as a validation gate.
-The native Xid 32 stays fatal; no new exception is proposed.
+**STATUS: LIVE, 2026-10-22.** Owner GO supersedes the earlier documentation-only scope.
+The reviewed classifier defects below were repaired before this lease: product/guard `8f3a9bb3a`,
+allocated-class fixture `a3f39a633`, and independent detached-QEMU termination guard `a634bdc194a`.
+Native Xid 32 remains fatal. Clean N0 on lease 57132969 passed (n=1); Windows validation is held
+at the post-bind shutdown census, with every Windows arm UNRUN pending the requested decision.
+
+MEASURED correction to the historical parked-patch checkpoint below: fixture EXPECTED RED
+`524ea6c4d` precedes fix `a3f39a633`; release kf-harness 15 ->19 pass, zero fail/ignored,
+two mutants each killed by two tests, clippy 284 ->284 / added 0, rustfmt. Guard test-first
+`b22e1be62` and supplemental `59f07cff0` precede `8f3a9bb3a`: 65 executions /59 distinct
+cases, 12 mutants each with at least two distinct killers. Detached-QEMU test-first `b3d25ec19`
+precedes fix `5cc2ce0b8` and watcher-wiring proof `a634bdc194a`: 72 executions /66 distinct
+cases total, 14 mutants each with at least two killers. The deployed independent guard's actual
+pidfd smoke passed; it retains complete-boot history and revalidates PID/starttime/executable.
+Evidence: [this lease](../../traces/blackwell_validation_20261022/), including N0 verdict,
+source-bound native controls and guard/source receipts. No wildcard native exception was added.
+
+MEASURED: N0 gates 9/9 +10, raw 30/30, CUDA 4/4 and GR/CE PASS; only five exact intentional
+source/PID/device controls. The prior native Xid32 did not recur. INFERRED: this supports the
+fixture hypothesis, without establishing a physical-channel mapping or general causal proof.
+The old counterfactual/unfinished statements below are historical, superseded by this correction;
+the baseline-contamination diagnosis and classifier review findings remain applicable.
 
 The retained full-boot journal contains native `kf-gr-tier` PID 90663, Xid 32 at
 2026-10-21 22:20:19.302750 UTC, physical channel `0x0d00000a`, `intr1 00000010`,

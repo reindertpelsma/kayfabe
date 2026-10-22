@@ -8,5 +8,12 @@
   "full_tests": "3999/0/22, 22 crates",
   "mutants": "15 variants/16 runs, minimum2killers",
   "clippy_added": 0,
-  "scope": "separate revision arm includes master CI-repair parent; mandatory ON/OFF remain8f; not isolated RC causality"
+  "scope": "separate revision arm includes master CI-repair parent; mandatory ON/OFF remain8f; not isolated RC causality",
+  "optional_merged_source": "2add71e8ca8ebb80c419ed2fdb0427dfcdc0ccd4",
+  "optional_merge_parents": [
+    "8f3a9bb3a5d652b3f536ca015bf95735ec588924",
+    "1c6452a276d7014bece3adf42d68cbd4edffbc18"
+  ],
+  "merge_conflicts": [],
+  "primary_windows_arms_state": "UNRUN; pending post-bind census decision"
 }

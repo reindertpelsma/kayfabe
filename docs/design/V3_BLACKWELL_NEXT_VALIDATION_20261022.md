@@ -1,6 +1,15 @@
 **STATUS: LIVE, 2026-10-22.** Owner GO authorizes ONE RTX 5090 lease with the tested guard and N0 gate.
 The earlier documentation-only restriction below is superseded by that explicit GO. Native Xid32 stays fatal.
 
+Owner follow-up supersedes the old B1 readiness/no-merge paragraph below **only for an isolated
+optional arm**: tested B1 `1c6452a276d7014bece3adf42d68cbd4edffbc18` (runtime `d8c1e65ef`)
+may be merged with frozen primary `8f3a9bb3a` on a separate own branch/build; record both inputs,
+merge revision and binary hash. It stays after CAPC ON and OFF/TDR, within the unchanged timer.
+The B1 CI-repair parent is a comparison confounder; no RC-only causality claim. Hardware n=0.
+If preparation or the arm cannot fit, it is the first arm for a later authorized lease.
+The current lease's N0 passed; bind reached disabled Code22/580.88, then its immediate shutdown
+census failed. No Windows arm may run while the required decision remains pending.
+
 Original future-run plan, now authorized subject to its guard prerequisites: The latest owner
 task authorizes documentation/derivation only: **no hardware and no rental now**. The plan becomes
 executable only after later authorization and the prerequisites below; budget availability is not permission.
