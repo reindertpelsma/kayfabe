@@ -128,6 +128,40 @@ class FreshnessTests(unittest.TestCase):
         self.write("docs/ok.md", self.document(day="2026-01-01", body="`crates/gone/src/lib.rs`"))
         self.assertIn("stale-suspect", self.kinds())
 
+    def test_absolute_host_shell_path_is_not_a_repository_reference(self):
+        host_path = "/scratch/session/launcher.sh"
+        self.write("docs/ok.md", self.document(day="2026-01-01", body=f"`{host_path}`"))
+        self.assertEqual(self.run_check()["documents"][0]["dead_references"], [])
+
+    def test_absolute_host_python_path_is_omitted_from_report(self):
+        host_path = "/opt/session/collector.py"
+        self.write("docs/ok.md", self.document(day="2026-01-01", body=f"`{host_path}`"))
+        run = subprocess.run(
+            [
+                sys.executable,
+                str(CHECKER),
+                "--root",
+                str(self.root),
+                "--today",
+                TODAY,
+                "--format",
+                "markdown",
+            ],
+            capture_output=True,
+            text=True,
+        )
+        self.assertEqual(run.returncode, 0, run.stderr or run.stdout)
+        self.assertNotIn(host_path, run.stdout)
+
+    def test_absolute_source_filename_cannot_use_repository_suffix_alias(self):
+        host_path = "/scratch/session/lib.rs"
+        self.write("docs/ok.md", self.document(day="2026-01-01", body=f"`{host_path}`"))
+        self.assertEqual(self.run_check()["documents"][0]["dead_references"], [])
+
+    def test_broken_root_relative_markdown_link_still_fails(self):
+        self.write("docs/ok.md", self.document(body="[code](/crates/gone/src/lib.rs)"))
+        self.assertIn("broken-link", self.kinds())
+
     def test_old_live_with_missing_environment_variable_is_suspect(self):
         self.write("docs/ok.md", self.document(day="2026-01-01", body="`KF3_REMOVED_OPTION=1`"))
         self.assertIn("stale-suspect", self.kinds())
