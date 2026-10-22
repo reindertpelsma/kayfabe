@@ -147,6 +147,8 @@ contract regressions. A non-green baseline blocks mutation attribution.
 [CODE READ: 2026-10-22 wrangler.toml, defaults.json, deployment.json] This is the
 Worker code checkpoint. The owner deploys; this lane leaves renting disabled.
 
+[CODE READ: DEPLOY.md] Worker secrets are `WORKER_URL`, `VAST_API_KEY`, `RUN_TOKEN_SECRET`, `OWNER_STOP_TOKEN` and `BROKER_PATH_PREFIX` (required with renting enabled).
+
 Follow the [nine-step owner deployment guide](DEPLOY.md), including the exact configured OIDC identities, required path secret, private blob credential and bundle hash. The [box environment contract](docs/BOX_PROTOCOL.md) is the stable Worker/repository interface.
 
 ## No-CLI namespace bootstrap
