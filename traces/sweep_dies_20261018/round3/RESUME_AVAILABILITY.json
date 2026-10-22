@@ -1,0 +1,68 @@
+{
+  "kind": "MEASURED",
+  "utc": "2026-10-22T22:07:30.703820+00:00",
+  "query": "verified=true rentable=true rented=false vms_enabled=true num_gpus=1 dph_total<=1",
+  "disk_gb": 180,
+  "offers": [
+    {
+      "id": 49956220,
+      "machine_id": 54598,
+      "gpu_name": "RTX 5060 Ti",
+      "dph_total": 0.24166666666666664,
+      "disk_space": 293.5,
+      "cpu_ram": 64243,
+      "cpu_cores_effective": 8.0,
+      "inet_down": 1691.7
+    },
+    {
+      "id": 56550364,
+      "machine_id": 38619,
+      "gpu_name": "RTX 5060 Ti",
+      "dph_total": 0.42866666666666664,
+      "disk_space": 675.2000000000002,
+      "cpu_ram": 128805,
+      "cpu_cores_effective": 20.0,
+      "inet_down": 1957.4
+    },
+    {
+      "id": 49744624,
+      "machine_id": 16592,
+      "gpu_name": "RTX 4060 Ti",
+      "dph_total": 0.4473333333333333,
+      "disk_space": 226.57500000000007,
+      "cpu_ram": 64449,
+      "cpu_cores_effective": 16.0,
+      "inet_down": 1951.8
+    },
+    {
+      "id": 49645022,
+      "machine_id": 20126,
+      "gpu_name": "RTX 4060 Ti",
+      "dph_total": 0.4473333333333333,
+      "disk_space": 705.0,
+      "cpu_ram": 64398,
+      "cpu_cores_effective": 8.0,
+      "inet_down": 2640.0
+    },
+    {
+      "id": 54902716,
+      "machine_id": 55267,
+      "gpu_name": "RTX 4090",
+      "dph_total": 0.75,
+      "disk_space": 877.25,
+      "cpu_ram": 64465,
+      "cpu_cores_effective": 32.0,
+      "inet_down": 733.0
+    },
+    {
+      "id": 47357379,
+      "machine_id": 58852,
+      "gpu_name": "RTX 5090",
+      "dph_total": 0.9500000000000001,
+      "disk_space": 522.0222222222221,
+      "cpu_ram": 85964,
+      "cpu_cores_effective": 14.222222222222221,
+      "inet_down": 5859.7
+    }
+  ]
+}
