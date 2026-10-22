@@ -18,10 +18,11 @@ S = importlib.util.module_from_spec(SPEC); SPEC.loader.exec_module(S)
 
 
 class GuardedSuiteTests(unittest.TestCase):
-    def run_suite(self, failing_at):
+    def run_suite(self, failing_at, lose_completion_at=None):
         rev = subprocess.check_output(['git', 'rev-parse', 'HEAD'], cwd=ROOT, text=True).strip()
         baseline = json.loads((ROOT / 'traces/sweep_windows_20261021/lease_57081143/native/native_xid_baseline.json').read_text())
-        baseline['guest_proofs'] = [{'accepted_faults': 4}, {'accepted_faults': 1}]
+        baseline['guest_proofs'] = []
+        baseline['completed_arms'] = []
         calls = []
         original_run = subprocess.run
         with tempfile.TemporaryDirectory(prefix='s2-suite-driver-') as folder:
@@ -36,13 +37,19 @@ class GuardedSuiteTests(unittest.TestCase):
                     return original_run(argv, **kwargs)
                 calls.append(argv[-1])
                 fail = len(calls) == failing_at
+                if not fail and len(calls) != lose_completion_at:
+                    baseline['completed_arms'].append({'arm': argv[-1], 'revision': rev, 'pid': 1234, 'starttime': 1})
+                    if argv[-1] in ('--defer-liveness', '--missing-page-fault'):
+                        baseline['guest_proofs'].append({'arm': argv[-1], 'accepted_faults': 4 if argv[-1] == '--defer-liveness' else 1})
+                    receipt.write_text(json.dumps(baseline))
                 kwargs['stdout'].write('FAST_SUITE_PASS=1 FAST_SUITE_FAIL=0 FAST_SUITE_CRASH=0 NOTRUN=0 ARMS=1\n' if not fail else 'FAST_SUITE_FAIL=1\n')
                 return SimpleNamespace(returncode=int(fail))
             with mock.patch.object(S.argparse.ArgumentParser, 'parse_args', return_value=args), \
                  mock.patch.dict(S.os.environ, {'BENCH_DIR': folder}), \
                  mock.patch.object(S.subprocess, 'run', side_effect=run), \
                  mock.patch.object(S.G, 'kernel_snapshot', return_value='\n'.join(baseline['approved_native_xid_lines'])):
-                code = S.main()
+                try: code = S.main()
+                except S.G.GuardRefused: code = 7
         return code, calls
 
     def test_first_arm_failure_stops_before_second(self):
@@ -57,6 +64,15 @@ class GuardedSuiteTests(unittest.TestCase):
         code, calls = self.run_suite(0)
         self.assertEqual(code, 0); self.assertEqual(len(calls), 30); self.assertEqual(len(set(calls)), 30)
         self.assertIn('--defer-liveness', calls); self.assertIn('--missing-page-fault', calls)
+
+    def test_shell_pass_without_timer_supervisor_completion_stops_immediately(self):
+        code, calls = self.run_suite(0, lose_completion_at=1)
+        self.assertEqual(code, 7); self.assertEqual(calls, ['--timer'])
+
+    def test_shell_pass_without_defer_proof_cannot_start_successor(self):
+        code, calls = self.run_suite(0, lose_completion_at=7)
+        self.assertEqual(code, 7); self.assertEqual(len(calls), 7)
+        self.assertEqual(calls[-1], '--defer-liveness')
 
 
 class GuestImagePathTests(unittest.TestCase):

@@ -131,4 +131,64 @@ class RunnerIdentityTests(unittest.TestCase):
         self.supervise_failure('journal')
 
 
+class ExitRaceTests(unittest.TestCase):
+    def exercise(self, arm, live=False, exit_code=0):
+        from test_guest_xid_guard import GuestGuardTests
+        fixture = GuestGuardTests(); fixture.setUp()
+        if arm == '--missing-page-fault':
+            case = fixture.missing(); context = case['context']; lines = case['lines']; serial_text = case['serial']; qlog_text = case['qlog']
+        else:
+            context = fixture.context; lines = fixture.lines; serial_text = fixture.serial; qlog_text = fixture.qlog
+        base = {'approved_native_xid_lines': fixture.base}
+        child = mock.Mock()
+        child.pid = context['pid']; child.poll.side_effect = [None, None if live else exit_code, None if live else exit_code]
+        child.wait.return_value = exit_code
+        with tempfile.TemporaryDirectory(prefix='s2-exit-race-') as folder:
+            folder = Path(folder); receipt = folder / 'receipt.json'; receipt.write_text(json.dumps(base))
+            serial = folder / 'serial'; serial.write_text(serial_text)
+            qlog = folder / 'qlog'; qlog.write_text(qlog_text)
+            refusal = None; result = None
+            with mock.patch.object(G, 'pin_suite'), mock.patch.object(G, 'verify_binary_revision'), \
+                 mock.patch.object(G, 'capture_guest', return_value=context), \
+                 mock.patch.object(G, 'verify_guest_identity', side_effect=FileNotFoundError('/proc/owned/exe')), \
+                 mock.patch.object(G, 'kernel_snapshot', side_effect=['\n'.join(fixture.base), '\n'.join(lines)]), \
+                 mock.patch.object(G.subprocess, 'Popen', return_value=child):
+                try:
+                    result = G.supervise_guest('/unused/qemu', ['-append', 'KF_ARMS=' + arm + ',--probe-launch-dma'],
+                                               receipt, context['revision'], ROOT, serial, qlog)
+                except (G.GuardRefused, OSError) as error: refusal = error
+            state = json.loads(receipt.read_text())
+            return result, refusal, state, base, context
+
+    def assert_completed_exit(self, arm):
+        result, refusal, state, base, context = self.exercise(arm)
+        self.assertIsNone(refusal, 'owned child exited during proc read; final exact proof must still be checked')
+        self.assertEqual(result, 0)
+        self.assertEqual(state['approved_native_xid_lines'], base['approved_native_xid_lines'])
+        self.assertEqual(state['guest_proofs'][0]['pid'], context['pid'])
+        self.assertEqual(state['completed_arms'][-1]['arm'], arm)
+
+    def test_defer_child_exit_during_exe_read_saves_final_proof(self):
+        self.assert_completed_exit('--defer-liveness')
+
+    def test_missing_child_exit_during_exe_read_saves_final_proof(self):
+        self.assert_completed_exit('--missing-page-fault')
+
+    def test_live_defer_missing_exe_is_still_fatal(self):
+        result, refusal, state, base, context = self.exercise('--defer-liveness', live=True)
+        self.assertIsNotNone(refusal); self.assertIsNone(result); self.assertEqual(state, base)
+
+    def test_live_missing_page_missing_exe_is_still_fatal(self):
+        result, refusal, state, base, context = self.exercise('--missing-page-fault', live=True)
+        self.assertIsNotNone(refusal); self.assertIsNone(result); self.assertEqual(state, base)
+
+    def test_failed_defer_exit_cannot_save_completion(self):
+        result, refusal, state, base, context = self.exercise('--defer-liveness', exit_code=7)
+        self.assertIsNotNone(refusal); self.assertIsNone(result); self.assertEqual(state, base)
+
+    def test_failed_missing_exit_cannot_save_completion(self):
+        result, refusal, state, base, context = self.exercise('--missing-page-fault', exit_code=7)
+        self.assertIsNotNone(refusal); self.assertIsNone(result); self.assertEqual(state, base)
+
+
 if __name__ == '__main__': unittest.main()
