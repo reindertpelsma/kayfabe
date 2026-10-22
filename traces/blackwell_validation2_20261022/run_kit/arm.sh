@@ -59,6 +59,7 @@ cd /root/kayfabe
 [ ! -e "/root/prov/arm_${run}.started" ]
 grep -q '^BIND_STOPPED_READY ' /root/prov/bwr_bind.log
 sha256sum -c /root/prov/bwr_parent_sha256.txt
+python3 -E -s /root/sweep2/guard/blackwell/arm_history.py snapshot /root/prov/native_receipt.json /root/prov/native_receipt.json.accepted.json "/root/prov/arm_${run}_accepted_start.json"
 python3 - "$profile" "$run" "$source" "$binary" <<'PY'
 import pathlib,json,datetime,sys,hashlib
 p=pathlib.Path('/root/sweep2/lease.json');r=json.loads(p.read_text());now=datetime.datetime.now(datetime.timezone.utc);created=datetime.datetime.fromisoformat(r['created_utc']);end=created+datetime.timedelta(minutes=r['auto_destroy_minutes']-25);assert now<end,'latest-start guard: leave25min for observation/export/teardown'
@@ -134,13 +135,7 @@ if ! grep -q GUEST_PANICKED "$VM/logs/${run}_run.log" 2>/dev/null && pgrep -x qe
  bash "$W" shot "$run" || true
 fi
 if [ ! -e /root/prov/XID_STOP ] && [ "$profile" = on ] && [ "$held_seconds" -ge 600 ] && grep -q '"code":0' "/root/prov/arm_${run}_diag_after.txt" 2>/dev/null; then
- python3 - <<'ACCEPT_GATE'
-import json
-from pathlib import Path
-b=json.loads(Path('/root/prov/native_receipt.json').read_text())['approved_native_xid_lines']
-a=json.loads(Path('/root/prov/native_receipt.json.accepted.json').read_text())['approved_native_xid_lines']
-assert a==b,'No apps after any allowed fault; diagnostic FAIL'
-ACCEPT_GATE
+ if python3 -E -s /root/sweep2/guard/blackwell/arm_history.py check /root/prov/native_receipt.json "/root/prov/arm_${run}_accepted_start.json" /root/prov/native_receipt.json.accepted.json; then
  timeout 30 bash "$W" ssh 'powershell -NoProfile -Command "New-Item -ItemType Directory -Force C:\ProgramData\KayfabeSweep | Out-Null"' </dev/null
  for app in cup2 cup3 cup8 kf_dxprobe; do
   bash "$W" scp-to "/root/sweep2/apps/$app.exe" "C:/ProgramData/KayfabeSweep/$app.exe"
@@ -152,5 +147,10 @@ ACCEPT_GATE
  timeout 180 bash "$W" ssh 'powershell -NoProfile -ExecutionPolicy Bypass -File C:\kf\collect_crash.ps1' </dev/null >"/root/prov/arm_${run}_live_events.txt" 2>&1
  grep '^COLLECT_DONE' "/root/prov/arm_${run}_live_events.txt"
  bash "$W" shot "${run}_apps" || true
+ else
+  arm_gate_rc=$?
+  [ "$arm_gate_rc" = 1 ] || exit "$arm_gate_rc"
+  echo "ARM_DIAGNOSTIC_FAIL validation workloads skipped after this arms fault"
+ fi
 fi
 echo "ARM_OBSERVATION_DONE $(date -u -Is)"
