@@ -32,10 +32,10 @@
     "exit": 1
   },
   {
-    "mutant": "omit_usb_controller",
+    "mutant": "wrong_hotplug_bus",
     "killers": [
-      "test_app_disk_uses_the_new_controller ",
-      "test_controller_is_created_before_attaching_cd "
+      "test_app_disk_uses_the_boot_controller ",
+      "test_attach_does_not_hotplug_a_root_bus_controller "
     ],
     "exit": 1
   }

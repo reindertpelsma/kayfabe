@@ -1,0 +1,11 @@
+[
+  {
+    "mutant": "remove_boot_usb_controller",
+    "killers": [
+      "test_boot_defines_exactly_one_matrix_bus ",
+      "test_matrix_controller_is_part_of_the_real_boot_arguments ",
+      "test_qemu_accepts_the_read_only_cd_on_the_boot_bus "
+    ],
+    "exit": 1
+  }
+]

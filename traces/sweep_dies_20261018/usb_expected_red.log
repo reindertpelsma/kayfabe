@@ -1,0 +1,42 @@
+test_boot_defines_exactly_one_matrix_bus (test_desktop_usb.DesktopUsbTests.test_boot_defines_exactly_one_matrix_bus) ... FAIL
+test_matrix_controller_is_part_of_the_real_boot_arguments (test_desktop_usb.DesktopUsbTests.test_matrix_controller_is_part_of_the_real_boot_arguments) ... FAIL
+test_qemu_accepts_the_read_only_cd_on_the_boot_bus (test_desktop_usb.DesktopUsbTests.test_qemu_accepts_the_read_only_cd_on_the_boot_bus) ... FAIL
+
+======================================================================
+FAIL: test_boot_defines_exactly_one_matrix_bus (test_desktop_usb.DesktopUsbTests.test_boot_defines_exactly_one_matrix_bus)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "CHECKOUT/scripts/bench/tests/test_desktop_usb.py", line 30, in test_boot_defines_exactly_one_matrix_bus
+    self.assertEqual(usb_args(), ['qemu-xhci,id=xhci'])
+    ~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: Lists differ: [] != ['qemu-xhci,id=xhci']
+
+Second list contains 1 additional elements.
+First extra element 0:
+'qemu-xhci,id=xhci'
+
+- []
++ ['qemu-xhci,id=xhci']
+
+======================================================================
+FAIL: test_matrix_controller_is_part_of_the_real_boot_arguments (test_desktop_usb.DesktopUsbTests.test_matrix_controller_is_part_of_the_real_boot_arguments)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "CHECKOUT/scripts/bench/tests/test_desktop_usb.py", line 27, in test_matrix_controller_is_part_of_the_real_boot_arguments
+    self.assertIn('qemu-xhci,id=xhci', usb_args())
+    ~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: 'qemu-xhci,id=xhci' not found in []
+
+======================================================================
+FAIL: test_qemu_accepts_the_read_only_cd_on_the_boot_bus (test_desktop_usb.DesktopUsbTests.test_qemu_accepts_the_read_only_cd_on_the_boot_bus)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "CHECKOUT/scripts/bench/tests/test_desktop_usb.py", line 35, in test_qemu_accepts_the_read_only_cd_on_the_boot_bus
+    self.assertTrue(controllers, 'launcher must create the USB controller at boot')
+    ~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: [] is not true : launcher must create the USB controller at boot
+
+----------------------------------------------------------------------
+Ran 3 tests in 0.009s
+
+FAILED (failures=3)
