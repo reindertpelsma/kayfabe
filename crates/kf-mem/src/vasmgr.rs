@@ -1041,8 +1041,11 @@ impl<W: Walker, T: MapTarget> VaManager<W, T> {
             }
         }
         out.awaiting = core::mem::take(&mut self.awaiting).len();
-        out.split_tickets
-            .extend(core::mem::take(&mut self.splits_done).into_iter().map(|(t, _)| t));
+        out.split_tickets.extend(
+            core::mem::take(&mut self.splits_done)
+                .into_iter()
+                .map(|(t, _)| t),
+        );
         out
     }
 

@@ -13,7 +13,9 @@
 //! ```
 
 use kf_broker::wire::FOURCC_XR24;
-use kf_broker::{FrameGeom, FrameRing, Host, Input, Relay, RelayConfig, SlotFds, TickShare, UnixLink};
+use kf_broker::{
+    FrameGeom, FrameRing, Host, Input, Relay, RelayConfig, SlotFds, TickShare, UnixLink,
+};
 use kf_linux_raw::SharedRam;
 use std::io::{BufRead as _, BufReader, Write as _};
 use std::path::{Path, PathBuf};
@@ -38,7 +40,13 @@ impl Broker {
     fn spawn(sock: &Path) -> Broker {
         let _ = std::fs::remove_file(sock);
         let mut child = Command::new(bin())
-            .args(["--backend", "test", "--size", &format!("{W}x{H}"), "--socket"])
+            .args([
+                "--backend",
+                "test",
+                "--size",
+                &format!("{W}x{H}"),
+                "--socket",
+            ])
             .arg(sock)
             .stdin(Stdio::piped())
             .stdout(Stdio::null())
@@ -57,7 +65,10 @@ impl Broker {
         });
         let t0 = Instant::now();
         while !sock.exists() {
-            assert!(t0.elapsed() < Duration::from_secs(5), "the broker never bound");
+            assert!(
+                t0.elapsed() < Duration::from_secs(5),
+                "the broker never bound"
+            );
             std::thread::sleep(Duration::from_millis(10));
         }
         let stdin = child.stdin.take().unwrap();
@@ -99,7 +110,8 @@ impl Rig {
     fn new(sock: &Path) -> Rig {
         let ring = Arc::new(FrameRing::new(kf_broker::slots::BROKER_SLOTS, true));
         for j in 0..ring.slots() {
-            let mem = SharedRam::create_named(c"kayfabe-display-frame", u64::from(W * H * 4)).unwrap();
+            let mem =
+                SharedRam::create_named(c"kayfabe-display-frame", u64::from(W * H * 4)).unwrap();
             ring.install(j, SlotFds::new(mem, None).unwrap()).unwrap();
         }
         let share = Arc::new(TickShare::new());
@@ -175,7 +187,11 @@ fn the_relay_and_the_real_broker_agree_on_ticks_requests_and_silence() {
     r.pump(1500);
     assert!(r.relay.active(), "connected: {}", b.log());
     assert!(r.relay.ticks_negotiated(), "the relay opted in");
-    assert!(b.log().contains("ticks: ON"), "the broker saw the opt-in:\n{}", b.log());
+    assert!(
+        b.log().contains("ticks: ON"),
+        "the broker saw the opt-in:\n{}",
+        b.log()
+    );
     // the priming tick carries a request (WANT_FRAME) and arrives at once
     assert!(r.share.snapshot(0).is_some(), "the priming tick");
     // 60 ticks at 60 Hz on the broker's virtual clock, paced so each leaves before the next
@@ -195,21 +211,36 @@ fn the_relay_and_the_real_broker_agree_on_ticks_requests_and_silence() {
     r.pump(50);
     let c = r.relay.tick_counters();
     assert!(c.ticks >= 55, "ticks reached the relay: {c:?}");
-    assert_eq!((c.ticks_stale, c.ts_backwards, c.partial_timeouts), (0, 0, 0), "{c:?}");
+    assert_eq!(
+        (c.ticks_stale, c.ts_backwards, c.partial_timeouts),
+        (0, 0, 0),
+        "{c:?}"
+    );
     assert!(c.want_ticks >= 20, "the broker opens requests: {c:?}");
     assert!(
         c.frames_on_credit >= frames_wanted,
         "each published frame went on a request: {c:?}\n{}",
         b.log()
     );
-    assert!(c.no_change_sent >= 5, "idle requests are answered NO_CHANGE: {c:?}");
+    assert!(
+        c.no_change_sent >= 5,
+        "idle requests are answered NO_CHANGE: {c:?}"
+    );
     // the broker accounted every answer and saw no violation, no late or unsolicited reply
     b.say("S");
     r.pump(20);
     let log = b.log();
-    let stats = log.lines().rev().find(|l| l.contains("TEST tick stats")).expect("stats").to_string();
+    let stats = log
+        .lines()
+        .rev()
+        .find(|l| l.contains("TEST tick stats"))
+        .expect("stats")
+        .to_string();
     assert!(stats.contains("late=0 unsolicited=0"), "{stats}");
-    assert!(!log.contains("VIOLATION") && !log.contains("violation"), "{log}");
+    assert!(
+        !log.contains("VIOLATION") && !log.contains("violation"),
+        "{log}"
+    );
     assert!(r.relay.active());
     assert!(r.share.snapshot(0).unwrap().count >= 55);
     // silence: no ticks for 80 ms of REAL time -> the relay says silent, the clock takes over
@@ -226,6 +257,10 @@ fn the_relay_and_the_real_broker_agree_on_ticks_requests_and_silence() {
     b.say(&format!("t {ns} 16666667"));
     r.pump(30);
     assert!(r.relay.tick_live(), "the next tick resumes");
-    assert_eq!(r.relay.tick_counters().silence_fallbacks, fallbacks + 1, "no flap on resume");
+    assert_eq!(
+        r.relay.tick_counters().silence_fallbacks,
+        fallbacks + 1,
+        "no flap on resume"
+    );
     eprintln!("{}", r.relay.tick_status());
 }

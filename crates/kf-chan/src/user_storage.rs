@@ -597,13 +597,21 @@ impl Storage<CpuView> {
         if slot >= ENTRIES {
             return Err("USER_STORAGE_MARKER_BOUND".into());
         }
-        let off = GP_OFFSET + u64::from(ENTRIES) * 8 + MARKER_OFFSET + u64::from(slot) * MARKER_CELL;
-        let va = self.va.checked_add(off).ok_or("USER_STORAGE_MARKER_BOUND")?;
-        let set_ref = kf_abi::submit::method_header_inc(0, kf_abi::submit::fifo::SET_REFERENCE_C56F, 1)
-            .ok_or("USER_STORAGE_MARKER_FORMAT")?;
-        let nsi = kf_abi::submit::method_header_inc(0, kf_abi::submit::fifo::NON_STALL_INTERRUPT, 1)
-            .ok_or("USER_STORAGE_MARKER_FORMAT")?;
-        let entry = kf_abi::submit::gp_entry(va, MARKER_CELL).ok_or("USER_STORAGE_MARKER_FORMAT")? | (1 << 41);
+        let off =
+            GP_OFFSET + u64::from(ENTRIES) * 8 + MARKER_OFFSET + u64::from(slot) * MARKER_CELL;
+        let va = self
+            .va
+            .checked_add(off)
+            .ok_or("USER_STORAGE_MARKER_BOUND")?;
+        let set_ref =
+            kf_abi::submit::method_header_inc(0, kf_abi::submit::fifo::SET_REFERENCE_C56F, 1)
+                .ok_or("USER_STORAGE_MARKER_FORMAT")?;
+        let nsi =
+            kf_abi::submit::method_header_inc(0, kf_abi::submit::fifo::NON_STALL_INTERRUPT, 1)
+                .ok_or("USER_STORAGE_MARKER_FORMAT")?;
+        let entry = kf_abi::submit::gp_entry(va, MARKER_CELL)
+            .ok_or("USER_STORAGE_MARKER_FORMAT")?
+            | (1 << 41);
         let cpu = self.cpu()?;
         for (i, w) in [set_ref, value, nsi, 0].into_iter().enumerate() {
             cpu.store_u32(HostOffset::new(off + 4 * i as u64), w)

@@ -1395,16 +1395,22 @@ fn a_hostile_guest_past_its_channel_budget_is_refused_by_name_per_runlist() {
     let extra = p.allocate_channel(&mut caps, budget, Route::Passthrough, 9999, Owner::User);
     assert_eq!(
         extra,
-        Err(Refusal::OverDeclaredCap { twin: Twin::Channel, cap: budget, asked: budget + 1 }),
+        Err(Refusal::OverDeclaredCap {
+            twin: Twin::Channel,
+            cap: budget,
+            asked: budget + 1
+        }),
         "N+1 is refused with cap and asked"
     );
     assert_eq!(caps.refused(Twin::Channel), 1, "and counted");
     // another runlist is not affected by runlist 0 being full.
-    p.allocate_channel(&mut caps, rl1, Route::Passthrough, 7, Owner::User).unwrap();
+    p.allocate_channel(&mut caps, rl1, Route::Passthrough, 7, Owner::User)
+        .unwrap();
     assert_eq!(caps.live_on_runlist(1), 1);
     // a free gives the slot back.
     assert!(p.free_channel(&mut caps, 0));
-    p.allocate_channel(&mut caps, budget, Route::Passthrough, 9999, Owner::User).unwrap();
+    p.allocate_channel(&mut caps, budget, Route::Passthrough, 9999, Owner::User)
+        .unwrap();
     assert_eq!(caps.live_on_runlist(0), budget);
 }
 
@@ -1425,7 +1431,10 @@ fn a_reset_plane_routes_nothing_of_the_old_life_and_allocates_like_a_fresh_one()
         .expect("alloc");
     p.allocate_channel(&mut caps, 7, Route::Passthrough, 0xCCC, Owner::User)
         .expect("alloc");
-    assert!(p.free_channel(&mut caps, 7), "one already retired by the free path");
+    assert!(
+        p.free_channel(&mut caps, 7),
+        "one already retired by the free path"
+    );
     assert_eq!(
         p.trap_write(Class::Doorbell, 0, 0, 3, 4),
         Action::RingHostInline { host_token: 0xAAA },

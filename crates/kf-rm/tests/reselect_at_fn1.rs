@@ -164,14 +164,17 @@ fn a_reset_chain_is_a_fresh_provisional_build_and_the_next_life_reselects_again(
     w.reset_life();
     assert_eq!(w.current(), v(580, 159, 4));
     assert_eq!(
-        answered_as(&mut w, &RpcCommand {
-            function: RpcFunction::GspSetSystemInfo,
-            code: 72,
-            sequence: 1,
-            payload: Vec::new(),
-            elements: 1,
-            delivered: Vec::new(),
-        }),
+        answered_as(
+            &mut w,
+            &RpcCommand {
+                function: RpcFunction::GspSetSystemInfo,
+                code: 72,
+                sequence: 1,
+                payload: Vec::new(),
+                elements: 1,
+                delivered: Vec::new(),
+            }
+        ),
         "580.159.04",
         "the fresh provisional chain answers"
     );

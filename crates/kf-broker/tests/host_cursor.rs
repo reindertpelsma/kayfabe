@@ -6,14 +6,14 @@
 
 use kf_broker::console::DEFINE_MIN_MS;
 use kf_broker::wire::{
-    CAP_CURSOR, CAP_DMABUF, CAP_CURSOR_STREAM, CMD_ATTACH, CMD_COMMIT, CMD_CURSOR, CMD_SIZE, CURSOR_HIDE, CURSOR_SET,
-    CURSOR_F_ABS, CURSOR_F_XOR, CURSOR_MOVE, CURSOR_SHOW, EV_ABS, EV_FOCUS, EV_FRAME, EV_GRAB, EV_HELLO, EV_KEY, EV_REL, EV_RELEASE, F_GRABBED, FOURCC_AR24,
+    CAP_CURSOR, CAP_CURSOR_STREAM, CAP_DMABUF, CMD_ATTACH, CMD_COMMIT, CMD_CURSOR, CMD_SIZE,
+    CURSOR_F_ABS, CURSOR_F_XOR, CURSOR_HIDE, CURSOR_MOVE, CURSOR_SET, CURSOR_SHOW, EV_ABS,
+    EV_FOCUS, EV_FRAME, EV_GRAB, EV_HELLO, EV_KEY, EV_REL, EV_RELEASE, F_GRABBED, FOURCC_AR24,
     FOURCC_XR24, Pkt,
 };
 use kf_broker::{
     ConsoleCursor, CursorImage, CursorMode, CursorShare, CursorWant, FrameGeom, FrameRing, Host,
-    Link,
-    PointerAbs, Recv, Relay, RelayConfig, Sent, ShownFrame, SlotFds, guest_point,
+    Link, PointerAbs, Recv, Relay, RelayConfig, Sent, ShownFrame, SlotFds, guest_point,
 };
 use kf_linux_raw::{SharedRam, fd_inode};
 use std::cell::RefCell;
@@ -746,23 +746,43 @@ fn the_host_cursor_follows_the_frame_the_broker_shows_never_two_and_never_none()
     t.clear();
     assert!(t.share.post(CursorWant::Composed));
     t.tick();
-    assert_eq!(t.ops(), Vec::<u32>::new(), "the broker still shows the cursor-free frame");
+    assert_eq!(
+        t.ops(),
+        Vec::<u32>::new(),
+        "the broker still shows the cursor-free frame"
+    );
     t.publish(true);
     t.tick();
-    assert_eq!(t.ops(), Vec::<u32>::new(), "the frame with the I-beam waits for the credit");
+    assert_eq!(
+        t.ops(),
+        Vec::<u32>::new(),
+        "the frame with the I-beam waits for the credit"
+    );
     t.credit();
     assert_eq!(t.committed(), vec![true]);
-    assert_eq!(t.ops(), vec![CURSOR_HIDE], "hidden as the frame that carries it is committed");
+    assert_eq!(
+        t.ops(),
+        vec![CURSOR_HIDE],
+        "hidden as the frame that carries it is committed"
+    );
     // and back to an arrow: the post first again — the I-beam is still in the frame on screen
     t.clear();
     assert!(t.share.post(arrow.clone()));
     t.tick();
-    assert_eq!(t.ops(), Vec::<u32>::new(), "no host arrow beside the composed I-beam");
+    assert_eq!(
+        t.ops(),
+        Vec::<u32>::new(),
+        "no host arrow beside the composed I-beam"
+    );
     t.publish(false);
     t.tick();
     t.credit();
     assert_eq!(t.committed(), vec![false]);
-    assert_eq!(t.ops(), vec![CURSOR_SHOW], "the held arrow, once the frame is free of the I-beam");
+    assert_eq!(
+        t.ops(),
+        vec![CURSOR_SHOW],
+        "the held arrow, once the frame is free of the I-beam"
+    );
 }
 
 /// ★ A cursor the guest hides has nothing in any frame: the host's goes at once (no wait for a
@@ -777,7 +797,11 @@ fn a_hidden_cursor_is_hidden_at_once_while_a_composed_one_waits_for_its_frame() 
     t.clear();
     assert!(t.share.post(CursorWant::Hidden));
     t.tick();
-    assert_eq!(t.ops(), vec![CURSOR_HIDE], "nothing is composed: nothing to wait for");
+    assert_eq!(
+        t.ops(),
+        vec![CURSOR_HIDE],
+        "nothing is composed: nothing to wait for"
+    );
     t.clear();
     assert!(t.share.post(CursorWant::Composed));
     t.tick();
@@ -950,21 +974,13 @@ impl World {
         let (b_frame, b_img, c_frame, c_img) = match &self.guest {
             CursorWant::Hidden => (false, None, false, None),
             CursorWant::Composed => (true, None, true, None),
-            CursorWant::Image(i) => (
-                false,
-                Some(i.pixels()[0]),
-                false,
-                Some(i.width()),
-            ),
+            CursorWant::Image(i) => (false, Some(i.pixels()[0]), false, Some(i.width())),
         };
         let b = (
             self.broker_frame,
             self.broker_visible.then_some(self.broker_img).flatten(),
         );
-        let c = (
-            self.cons_frame == ShownFrame::CursorComposed,
-            self.cons_img,
-        );
+        let c = (self.cons_frame == ShownFrame::CursorComposed, self.cons_img);
         if b != (b_frame, b_img) {
             return Err(format!("broker shows {b:?}, guest {:?}", self.guest));
         }
@@ -1053,7 +1069,10 @@ fn a_viewer_never_shows_two_cursors() {
                 if lcg(&mut s) % 2 == 0 {
                     w.console();
                 }
-                worst = (worst.0.max(w.broker_count()), worst.1.max(w.console_count()));
+                worst = (
+                    worst.0.max(w.broker_count()),
+                    worst.1.max(w.console_count()),
+                );
                 if (w.broker_count() > 1 || w.console_count() > 1) && first.is_none() {
                     first = Some(format!(
                         "latency {latency} seed {seed}: broker {} (frame {}, host {}), console {} (frame {:?}, host {:?}), guest {:?}",
@@ -1080,7 +1099,9 @@ fn xor_mask(w: u32, h: u32, on: &[(u32, u32)], hot: (u32, u32)) -> CursorWant {
     for &(x, y) in on {
         px[((y * w + x) * 4) as usize..][..4].copy_from_slice(&[255, 255, 255, 255]);
     }
-    CursorWant::Image(Arc::new(CursorImage::new(w, h, hot, px).unwrap().into_xor()))
+    CursorWant::Image(Arc::new(
+        CursorImage::new(w, h, hot, px).unwrap().into_xor(),
+    ))
 }
 
 /// Every MOVE sent, in order: (the image's top-left, the absolute pointer pair if the flag is set).
@@ -1093,7 +1114,10 @@ fn moves(t: &T) -> Vec<((i32, i32), Option<(i32, i32)>)> {
             let c = r.cursor();
             // width/height are zero unless the flag says they are the pointer
             assert!(f == 0 || f == CURSOR_F_ABS, "flags {f}");
-            assert!(f == CURSOR_F_ABS || (c[0], c[1]) == (0, 0), "a pair without its flag");
+            assert!(
+                f == CURSOR_F_ABS || (c[0], c[1]) == (0, 0),
+                "a pair without its flag"
+            );
             (
                 (c[5] as i32, c[6] as i32),
                 (f == CURSOR_F_ABS).then_some((c[0] as i32, c[1] as i32)),
@@ -1173,19 +1197,37 @@ fn hover_streams_the_image_and_the_xor_mask() {
     let m = xor_mask(16, 16, &[(3, 3), (4, 3)], (1, 2));
     assert!(t.share.post(m.clone()));
     t.tick();
-    let recs: Vec<Rec> = t.cursors().into_iter().filter(|r| r.cursor()[7] != CURSOR_MOVE).collect();
+    let recs: Vec<Rec> = t
+        .cursors()
+        .into_iter()
+        .filter(|r| r.cursor()[7] != CURSOR_MOVE)
+        .collect();
     assert_eq!(recs.len(), 1);
     assert_eq!(recs[0].cursor()[7], CURSOR_SET);
-    assert_eq!(&recs[0].raw[2..4], &CURSOR_F_XOR.to_le_bytes(), "flags = F_XOR");
-    assert_eq!((recs[0].cursor()[5], recs[0].cursor()[6]), (1, 2), "the hot spot");
-    assert_eq!(recs[0].fd.as_ref().unwrap().2, pixels(&m), "the mask's bytes");
+    assert_eq!(
+        &recs[0].raw[2..4],
+        &CURSOR_F_XOR.to_le_bytes(),
+        "flags = F_XOR"
+    );
+    assert_eq!(
+        (recs[0].cursor()[5], recs[0].cursor()[6]),
+        (1, 2),
+        "the hot spot"
+    );
+    assert_eq!(
+        recs[0].fd.as_ref().unwrap().2,
+        pixels(&m),
+        "the mask's bytes"
+    );
     // a plain image after it: no flag
     t.clear();
     assert!(t.share.post(image(32, 32, (0, 0), 5)));
     t.tick();
     assert_eq!(&t.cursors()[0].raw[2..4], &[0, 0]);
     // the same pixels as a plain image are another cursor
-    let same = CursorWant::Image(Arc::new(CursorImage::new(16, 16, (1, 2), pixels(&m)).unwrap()));
+    let same = CursorWant::Image(Arc::new(
+        CursorImage::new(16, 16, (1, 2), pixels(&m)).unwrap(),
+    ));
     assert_ne!(same.key(), m.key(), "the digest covers the XOR bit");
 }
 
@@ -1205,7 +1247,11 @@ fn move_is_one_atomic_pair_sent_once_per_change_in_every_mode() {
     assert!(t.share.post(image(32, 32, (0, 0), 1)));
     t.share.note_point(Some((5, 6)));
     t.tick();
-    assert_eq!(moves(&t), vec![((5, 6), None)], "no absolute input yet: the flag is clear");
+    assert_eq!(
+        moves(&t),
+        vec![((5, 6), None)],
+        "no absolute input yet: the flag is clear"
+    );
     // absolute input (hover): the pair appears, mapped through QEMU's tablet scaling to guest pixels
     abs(&t, 50, 2, 200, 8);
     t.read();
@@ -1222,7 +1268,11 @@ fn move_is_one_atomic_pair_sent_once_per_change_in_every_mode() {
     }
     t.tick();
     assert_eq!(moves(&t).len(), n + 1);
-    assert_eq!(moves(&t).last(), Some(&((38, 9), Some(g))), "the newest of many notes");
+    assert_eq!(
+        moves(&t).last(),
+        Some(&((38, 9), Some(g))),
+        "the newest of many notes"
+    );
     abs(&t, 150, 6, 200, 8);
     t.read();
     let g2 = guest_point((150, 6), (200, 8), (100, 4)).unwrap();
@@ -1233,7 +1283,11 @@ fn move_is_one_atomic_pair_sent_once_per_change_in_every_mode() {
     t.read();
     t.share.note_point(Some((40, 10)));
     t.tick();
-    assert_eq!(moves(&t).last(), Some(&((40, 10), None)), "relative: flag clear, width/height zero");
+    assert_eq!(
+        moves(&t).last(),
+        Some(&((40, 10), None)),
+        "relative: flag clear, width/height zero"
+    );
     // ... and it stays clear through grab-time cursor moves
     t.share.note_point(Some((41, 11)));
     t.tick();
@@ -1243,7 +1297,11 @@ fn move_is_one_atomic_pair_sent_once_per_change_in_every_mode() {
     t.pkt(EV_GRAB, 0, 0);
     t.read();
     t.tick();
-    assert_eq!(moves(&t).last(), Some(&((41, 11), Some(g2))), "absolute again");
+    assert_eq!(
+        moves(&t).last(),
+        Some(&((41, 11), Some(g2))),
+        "absolute again"
+    );
     // far outside the frame: clamped to -256..=8192 (the pointer is clamped too)
     t.share.note_point(Some((i32::MIN, 100_000_000)));
     t.tick();
@@ -1274,11 +1332,21 @@ fn move_is_one_atomic_pair_sent_once_per_change_in_every_mode() {
 fn the_pointer_maps_to_guest_pixels_through_the_two_truncating_scalings() {
     assert_eq!(guest_point((0, 0), (1024, 768), (1920, 1080)), Some((0, 0)));
     // 48 of 1024 reaches the guest as 47 of 1024 (brkA4's measurement), on a 1024-wide head
-    assert_eq!(guest_point((48, 8), (1024, 695), (1024, 695)).map(|p| p.0), Some(47));
-    assert_eq!(guest_point((8, 8), (695, 695), (695, 695)).map(|p| p.0), Some(7));
+    assert_eq!(
+        guest_point((48, 8), (1024, 695), (1024, 695)).map(|p| p.0),
+        Some(47)
+    );
+    assert_eq!(
+        guest_point((8, 8), (695, 695), (695, 695)).map(|p| p.0),
+        Some(7)
+    );
     assert_eq!(guest_point((1, 1), (0, 5), (10, 10)), None, "empty range");
     assert_eq!(guest_point((1, 1), (5, 5), (0, 10)), None, "empty frame");
-    assert_eq!(guest_point((-5, -5), (100, 100), (100, 100)), Some((0, 0)), "negative pins to 0");
+    assert_eq!(
+        guest_point((-5, -5), (100, 100), (100, 100)),
+        Some((0, 0)),
+        "negative pins to 0"
+    );
     let far = guest_point((i32::MAX, i32::MAX), (1, 1), (8192, 8192));
     assert!(far.is_none() || far.unwrap().0 >= 0, "no overflow");
 }
@@ -1315,7 +1383,10 @@ fn the_console_defines_no_cursor_while_the_broker_streams() {
     assert!(t.share.post(image(8, 8, (0, 0), 1)));
     let mut c = ConsoleCursor::default();
     let u = c.poll(&t.share, Some((0, 0)), ShownFrame::CursorFree, t.now);
-    assert!(u.define.is_some(), "composing path, hover: the console shows the image");
+    assert!(
+        u.define.is_some(),
+        "composing path, hover: the console shows the image"
+    );
     c.done(true, true);
     // a streaming broker takes over
     let mut t2 = T::new(true);
@@ -1336,7 +1407,12 @@ fn the_console_defines_no_cursor_while_the_broker_streams() {
     let u = c3.poll(&t3.share, Some((0, 0)), ShownFrame::CursorFree, t3.now);
     c3.done(u.define.is_some(), true);
     t3.share.set_stream(true);
-    let u = c3.poll(&t3.share, Some((0, 0)), ShownFrame::CursorFree, t3.now + 100);
+    let u = c3.poll(
+        &t3.share,
+        Some((0, 0)),
+        ShownFrame::CursorFree,
+        t3.now + 100,
+    );
     assert_eq!(u.define, Some(None), "hidden");
 }
 
@@ -1355,7 +1431,10 @@ fn a_settled_pair_is_confirmed_once_after_two_worker_passes_so_the_broker_can_la
     t.publish(false);
     t.tick();
     assert!(t.share.post(image(32, 32, (0, 0), 1)));
-    assert!(t.share.note_point(Some((100, 200))), "a changed top-left wakes the relay");
+    assert!(
+        t.share.note_point(Some((100, 200))),
+        "a changed top-left wakes the relay"
+    );
     t.tick();
     // the pointer is injected; the guest has not moved its cursor yet: the lagging pair
     abs(&t, 50, 2, 200, 8);
@@ -1368,19 +1447,33 @@ fn a_settled_pair_is_confirmed_once_after_two_worker_passes_so_the_broker_can_la
     // latch the lag as the hot spot)
     t.tick();
     t.tick();
-    assert_eq!(moves(&t).len(), n, "no duplicate without two worker passes after the send");
+    assert_eq!(
+        moves(&t).len(),
+        n,
+        "no duplicate without two worker passes after the send"
+    );
     // the guest moves its cursor: a new top-left (wakes), sent; then it holds still
     assert!(t.share.note_point(Some((90, 192))));
     t.tick();
     let settled = ((90, 192), Some(g));
     assert_eq!(moves(&t).last(), Some(&settled));
     let n = moves(&t).len();
-    assert!(!t.share.note_point(Some((90, 192))), "one pass: no wake yet");
+    assert!(
+        !t.share.note_point(Some((90, 192))),
+        "one pass: no wake yet"
+    );
     t.tick();
     assert_eq!(moves(&t).len(), n, "one pass is not stationarity");
-    assert!(t.share.note_point(Some((90, 192))), "the second pass after the send: the armed confirmation wakes");
+    assert!(
+        t.share.note_point(Some((90, 192))),
+        "the second pass after the send: the armed confirmation wakes"
+    );
     t.tick();
-    assert_eq!(moves(&t)[n..], [settled], "ONE identical MOVE: the broker sees two equal pairs");
+    assert_eq!(
+        moves(&t)[n..],
+        [settled],
+        "ONE identical MOVE: the broker sees two equal pairs"
+    );
     // and no more, however long it holds still
     for _ in 0..5 {
         assert!(!t.share.note_point(Some((90, 192))));
@@ -1394,9 +1487,17 @@ fn a_settled_pair_is_confirmed_once_after_two_worker_passes_so_the_broker_can_la
     assert_eq!(moves(&t).last(), Some(&((90, 192), Some(g2))));
     let n = moves(&t).len();
     t.tick();
-    assert_eq!(moves(&t).len(), n, "the stale stationary count does not confirm a fresh pair");
+    assert_eq!(
+        moves(&t).len(),
+        n,
+        "the stale stationary count does not confirm a fresh pair"
+    );
     t.share.note_point(Some((90, 192)));
     assert!(t.share.note_point(Some((90, 192))));
     t.tick();
-    assert_eq!(moves(&t).len(), n + 1, "two passes after the new pair: confirmed again");
+    assert_eq!(
+        moves(&t).len(),
+        n + 1,
+        "two passes after the new pair: confirmed again"
+    );
 }

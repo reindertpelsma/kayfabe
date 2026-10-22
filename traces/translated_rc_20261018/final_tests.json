@@ -1,0 +1,31 @@
+{
+  "exit_code": 0,
+  "packages": [
+    "kf-mem",
+    "kf-trap",
+    "kf-rm",
+    "kf-core",
+    "kf-qemu",
+    "kf-trace",
+    "kf-crec",
+    "kf-util",
+    "kf-arch",
+    "kf-abi",
+    "kf-gsp",
+    "kf-linux-raw",
+    "kf-host",
+    "kf-chip",
+    "kf-harness",
+    "kf-chan",
+    "kf-cuda",
+    "kf-disp",
+    "kf-broker",
+    "kf-oprom",
+    "kf-census",
+    "kf-gop-image"
+  ],
+  "passed": 3999,
+  "failed": 0,
+  "ignored": 22,
+  "test_targets": 234
+}

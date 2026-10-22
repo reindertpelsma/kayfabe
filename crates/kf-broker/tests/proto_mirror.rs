@@ -120,7 +120,10 @@ fn every_protocol_value_matches_the_header_text_both_ways() {
         ("NVKVM_BROKER_DEVICE_F_RENDER", DEVICE_F_RENDER as u64),
         ("NVKVM_BROKER_CAP_CURSOR", u64::from(CAP_CURSOR)),
         ("NVKVM_BROKER_CAP_DEVICE", u64::from(CAP_DEVICE)),
-        ("NVKVM_BROKER_CAP_CURSOR_STREAM", u64::from(CAP_CURSOR_STREAM)),
+        (
+            "NVKVM_BROKER_CAP_CURSOR_STREAM",
+            u64::from(CAP_CURSOR_STREAM),
+        ),
         ("NVKVM_BROKER_CURSOR_MOVE", u64::from(CURSOR_MOVE)),
         ("NVKVM_BROKER_CURSOR_F_ABS", u64::from(CURSOR_F_ABS)),
         ("NVKVM_BROKER_CURSOR_MOVE_LIMIT", CURSOR_MOVE_LIMIT as u64),
@@ -130,7 +133,10 @@ fn every_protocol_value_matches_the_header_text_both_ways() {
         ("NVKVM_BROKER_CURSOR_SHOW", u64::from(CURSOR_SHOW)),
         ("NVKVM_BROKER_CURSOR_F_XOR", u64::from(CURSOR_F_XOR)),
         ("NVKVM_BROKER_CURSOR_MAX_DIM", u64::from(CURSOR_MAX_DIM)),
-        ("NVKVM_BROKER_CURSOR_MAX_STRIDE", u64::from(CURSOR_MAX_STRIDE)),
+        (
+            "NVKVM_BROKER_CURSOR_MAX_STRIDE",
+            u64::from(CURSOR_MAX_STRIDE),
+        ),
         ("NVKVM_BROKER_CLOSE_POWERDOWN", CLOSE_POWERDOWN as u64),
         ("NVKVM_BROKER_CLOSE_FORCE", CLOSE_FORCE as u64),
         ("NVKVM_BROKER_CAP_KEYBOARD", u64::from(CAP_KEYBOARD)),
@@ -164,12 +170,27 @@ fn every_protocol_value_matches_the_header_text_both_ways() {
         ("NVKVM_BROKER_CLIENT_TICK", u64::from(CLIENT_TICK)),
         ("NVKVM_BROKER_EV_TICK", u64::from(EV_TICK)),
         ("NVKVM_BROKER_CMD_NO_CHANGE", u64::from(CMD_NO_CHANGE)),
-        ("NVKVM_BROKER_TICK_REFRESH_MASK", u64::from(TICK_REFRESH_MASK)),
-        ("NVKVM_BROKER_TICK_REFRESH_MIN_NS", u64::from(TICK_REFRESH_MIN_NS)),
-        ("NVKVM_BROKER_TICK_F_WANT_FRAME", u64::from(TICK_F_WANT_FRAME)),
-        ("NVKVM_BROKER_TICK_F_CLOCK_ONLY", u64::from(TICK_F_CLOCK_ONLY)),
+        (
+            "NVKVM_BROKER_TICK_REFRESH_MASK",
+            u64::from(TICK_REFRESH_MASK),
+        ),
+        (
+            "NVKVM_BROKER_TICK_REFRESH_MIN_NS",
+            u64::from(TICK_REFRESH_MIN_NS),
+        ),
+        (
+            "NVKVM_BROKER_TICK_F_WANT_FRAME",
+            u64::from(TICK_F_WANT_FRAME),
+        ),
+        (
+            "NVKVM_BROKER_TICK_F_CLOCK_ONLY",
+            u64::from(TICK_F_CLOCK_ONLY),
+        ),
         ("NVKVM_BROKER_TICK_F_RESERVED", u64::from(TICK_F_RESERVED)),
-        ("NVKVM_BROKER_TICK_REQ_TIMEOUT_NS", u64::from(TICK_REQ_TIMEOUT_NS)),
+        (
+            "NVKVM_BROKER_TICK_REQ_TIMEOUT_NS",
+            u64::from(TICK_REQ_TIMEOUT_NS),
+        ),
         ("NVKVM_BROKER_GUEST_MAX_HZ", u64::from(GUEST_MAX_HZ)),
         ("NVKVM_BROKER_GUEST_MIN_HZ", u64::from(GUEST_MIN_HZ)),
     ]
@@ -209,7 +230,11 @@ fn every_protocol_value_matches_the_header_text_both_ways() {
 fn the_cursor_record_layout_matches_the_compiled_header() {
     let dir = std::env::temp_dir().join(format!("kfb-proto-cursor-{}", std::process::id()));
     std::fs::create_dir_all(&dir).unwrap();
-    std::fs::copy(header_dir().join("nvkvm_broker_proto.h"), dir.join("nvkvm_broker_proto.h")).unwrap();
+    std::fs::copy(
+        header_dir().join("nvkvm_broker_proto.h"),
+        dir.join("nvkvm_broker_proto.h"),
+    )
+    .unwrap();
     let fields = [
         "type",
         "flags",
@@ -448,8 +473,19 @@ fn the_record_layouts_match_the_compiled_header() {
 fn the_tick_event_layout_matches_the_compiled_header() {
     let dir = std::env::temp_dir().join(format!("kfb-proto-tick-{}", std::process::id()));
     std::fs::create_dir_all(&dir).unwrap();
-    std::fs::copy(header_dir().join("nvkvm_broker_proto.h"), dir.join("nvkvm_broker_proto.h")).unwrap();
-    let fields = ["type", "flags", "seq", "tick_seq", "refresh_word", "present_ns"];
+    std::fs::copy(
+        header_dir().join("nvkvm_broker_proto.h"),
+        dir.join("nvkvm_broker_proto.h"),
+    )
+    .unwrap();
+    let fields = [
+        "type",
+        "flags",
+        "seq",
+        "tick_seq",
+        "refresh_word",
+        "present_ns",
+    ];
     let mut prog = String::from(
         "#include <stdio.h>\n#include <stddef.h>\n#include \"nvkvm_broker_proto.h\"\nint main(void) {\n",
     );
@@ -469,7 +505,11 @@ fn the_tick_event_layout_matches_the_compiled_header() {
         .arg(&dir)
         .output()
         .unwrap();
-    assert!(out.status.success(), "{}", String::from_utf8_lossy(&out.stderr));
+    assert!(
+        out.status.success(),
+        "{}",
+        String::from_utf8_lossy(&out.stderr)
+    );
     let run = Command::new(dir.join("c")).output().unwrap();
     let got: BTreeMap<String, usize> = String::from_utf8(run.stdout)
         .unwrap()

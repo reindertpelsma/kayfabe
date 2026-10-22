@@ -1,5 +1,5 @@
 import unittest
-from dependencies import dependencies, violations
+from dependencies import checked_dependencies, dependencies, violations
 
 
 class DependencyTests(unittest.TestCase):
@@ -24,3 +24,20 @@ class DependencyTests(unittest.TestCase):
     def test_workspace_version_string_is_supported(self):
         self.assertEqual(list(dependencies({"dependencies": {"serde": {"workspace": True}}},
                                            {"serde": "1"})), ["serde"])
+
+    def test_named_dev_only_exceptions_are_exact(self):
+        loom = {"dev-dependencies": {"loom": "=0.7.2"}}
+        self.assertEqual(violations("kf-trap", checked_dependencies("kf-trap", loom, {})), [])
+        # the same crate as a shipped or build dependency is still refused
+        for key in ("dependencies", "build-dependencies"):
+            shipped = {key: {"loom": "=0.7.2"}}
+            self.assertEqual(violations("kf-trap", checked_dependencies("kf-trap", shipped, {})), ["loom"])
+        # another crate, or another dev-dependency of the same crate, is still refused
+        self.assertEqual(violations("kf-chan", checked_dependencies("kf-chan", loom, {})), [])
+        self.assertEqual(violations("kf-core", checked_dependencies("kf-core", loom, {})), ["loom"])
+        other = {"dev-dependencies": {"proptest": "1"}}
+        self.assertEqual(violations("kf-trap", checked_dependencies("kf-trap", other, {})), ["proptest"])
+        # a target-specific dev-dependency is covered the same way
+        target = {"target": {"cfg(unix)": {"dev-dependencies": {"kf-broker": {"workspace": True}}}}}
+        self.assertEqual(violations("kf-disp", checked_dependencies("kf-disp", target, {"kf-broker": {}})), [])
+        self.assertEqual(violations("kf-trap", checked_dependencies("kf-trap", target, {"kf-broker": {}})), ["kf-broker"])
