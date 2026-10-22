@@ -1,0 +1,5 @@
+MEASURED: 2026-10-22, lease 57221842 destruction request returned CLI exit 0; authenticated inventory verification at 2026-10-22T14:08:35.615777+00:00 found that numeric ID absent.
+MEASURED: 2026-10-22, lease 57221842 runner printed CL1_R2_TARGET_REMOVED; a separate post-run check printed CL1_R2_TARGET_ABSENT and CL1_R2_GPU_JOB_GONE before destruction.
+MEASURED: 2026-10-22, lease 57221842 timer and service both reported ActiveState=inactive after verified absence.
+MEASURED: 2026-10-22, lease 57221842 start-to-confirmed-absence interval was 282.102166 seconds; post-teardown account credit was 37.70116863646115 USD.
+INFERRED: quoted compute/storage exposure over that interval is approximately 0.0057814 USD, excluding transfer charges and billing adjustments; the 5 USD reserve remains intact.

@@ -1,0 +1,40 @@
+MEASURED: 2026-10-22, lease 57221842, revision e636236cf34621b0c9e53170638c54a55a22f979.
+Commands: nice -n 19 cargo build --locked --release -j2 -p kf-cuda --examples; <target>/release/examples/{color_mirror,color_sdr,color_tmo} 0000:03:00.0; nice -n 19 cargo test --locked --release -j2 -p kf-cuda
+CL1_R2_EXAMPLE_START=color_mirror bdf=0000:03:00.0
+COLOR_GPU mirror_negative_channel PASS rgb=[0, 160, 64]
+COLOR_GPU unmirrored_negative_channel PASS rgb=[64, 160, 64]
+COLOR_GPU mirror_digital_vibrance PASS rgb=[192, 0, 0]
+COLOR_GPU unmirrored_digital_vibrance PASS rgb=[192, 64, 64]
+CL1_R2_EXAMPLE_RC=0 example=color_mirror
+CL1_R2_EXAMPLE_START=color_sdr bdf=0000:03:00.0
+COLOR_GPU input_fp16_nonidentity PASS pixels=8 expected_rgb=128,255,0
+COLOR_GPU direct8_input PASS exact 2088-byte table, white selects index255
+COLOR_GPU direct8_output PASS compact ramp indexes 128,64,192
+COLOR_GPU output_unorm_nonidentity PASS pixels=8 expected_rgb=0,128,255
+COLOR_GPU immutable_snapshot PASS mutable source changed, armed snapshot retained
+COLOR_GPU rearmed_snapshot PASS new token consumes changed table
+COLOR_GPU fractional_olut_interpolation PASS rgb=127,255,0 at index 512.5
+COLOR_GPU invalid_fp16 PASS infinity,nan,negative,hdr refused by GPU validation
+CL1_R2_EXAMPLE_RC=0 example=color_sdr
+CL1_R2_EXAMPLE_START=color_tmo bdf=0000:03:00.0
+TMO_GPU intensity_only PASS Ct/I/Cp=0.5,0,0.5; not RGB gamma
+TMO_GPU pq_pipeline_zero PASS full OGKM CSC/PQ program rgb=0,0,0
+TMO_GPU immutable_snapshot PASS modified source retains armed zero curve
+TMO_GPU rearm_snapshot PASS fresh token consumes white curve
+TMO_GPU variable_segment_header PASS nonuniform first zone samples index2, not fixed index4
+TMO_GPU compact_table PASS 65 sample entries, exact 552-byte source extent
+TMO_GPU compact_bounds PASS hostile header refuses within authored extent
+TMO_GPU invalid_table PASS unsupported VSS and unequal intensity channels refuse
+CL1_R2_EXAMPLE_RC=0 example=color_tmo
+test result: ok. 47 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.13s
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+test result: ok. 9 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+test result: ok. 7 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.14s
+test result: ok. 11 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+CL1_R2_CRATE_TEST_RC=0
+CL1_R2_PRODUCT_STATUS=
+CL1_R2_TARGET_REMOVED
+CL1_R2_GPU_DONE=2026-10-22T14:07:37Z rev=e636236cf34621b0c9e53170638c54a55a22f979 failed_commands=0
+CL1_R2_GPU_EXIT=0 utc=2026-10-22T14:07:37Z

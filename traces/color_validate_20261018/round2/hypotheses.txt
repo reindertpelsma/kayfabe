@@ -1,0 +1,8 @@
+CODE READ: CL1 round 2 validates PR #92 head e636236cf34621b0c9e53170638c54a55a22f979, fetched and matched against origin on 2026-10-22.
+CODE READ: this head changes the color_mirror example to decode BGRA readback into logical RGB, runs all four cases, and adds a GPU-free packing pin; kernel and PTX bytes are unchanged from round 1.
+INFERRED: color_mirror will return logical RGB 0,160,64 / 64,160,64 / 192,0,0 / 192,64,64, with uniform opaque pixels in each case.
+FALSIFIER BEFORE RUN: any differing logical RGB value, nonuniform/empty/nonopaque readback, CUDA launch or ABI error, or nonzero example exit falsifies the mirror hypothesis.
+INFERRED: the existing color_sdr and color_tmo hardware examples and kf-cuda crate tests will pass their existing assertions.
+FALSIFIER BEFORE RUN: any failed assertion, test failure, CUDA error or nonzero exit falsifies the corresponding regression hypothesis.
+CODE READ: all three independent examples and the crate tests will record their exit status; any failure prevents the host build/install. The source under test will not be modified.
+CODE READ: these synthetic CUDA fixtures do not establish real display-engine MIRROR semantics or Windows console recovery.

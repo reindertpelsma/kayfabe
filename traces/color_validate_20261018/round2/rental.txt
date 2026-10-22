@@ -1,0 +1,7 @@
+MEASURED: on 2026-10-22, round-2 lease 57221842 was created from offer 30445808, the cheapest offer returned by the verified=true, rentable=true, rented=false, num_gpus=1, compute_cap>=750, disk_space>=60 search sorted by dph.
+MEASURED: on 2026-10-22, lease 57221842 provides GTX 1660 SUPER, compute capability 7.5, driver 610.43.02 and a 64 GiB root filesystem; instance start UTC epoch 1792677833.513611.
+MEASURED: on 2026-10-22, lease 57221842 quotes 0.07377777777777778 USD/hour with the requested 64 GB disk, and 0.0013020833333333333 USD/GB in each transfer direction.
+MEASURED: on 2026-10-22, credit before lease 57221842 was 37.707419871061234 USD, above the required 5 USD reserve plus the 0.50 USD lane cap.
+MEASURED: on 2026-10-22, lease 57221842's independent 50-minute systemd destroy timer was active before creation; its service runs the existing autodestroy_box.sh against only the numeric ID returned by this lane's create request.
+CODE READ: no guest, GPU VM, trusted-host GPU operation, SSH agent forwarding, account credential on the rental, or executable copied back is required by these public-source CUDA examples.
+INFERRED: maximum scheduled compute/storage exposure over 50 minutes is approximately 0.0615 USD; a conservative 10 GB in each transfer direction adds approximately 0.0261 USD.

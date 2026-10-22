@@ -1,0 +1,366 @@
+MEASURED: 2026-10-22, lease 57221842, revision e636236cf34621b0c9e53170638c54a55a22f979.
+Commands: nice -n 19 cargo build --locked --release -j2 -p kf-cuda --examples; <target>/release/examples/{color_mirror,color_sdr,color_tmo} 0000:03:00.0; nice -n 19 cargo test --locked --release -j2 -p kf-cuda
+HEAD is now at e636236c color_mirror example: compare logical RGB against the BGRA frame, report all four cases; pin the pack order
+Filesystem      Size  Used Avail Use% Mounted on
+overlay          64G  1.7G   63G   3% /
+info: syncing channel updates for 1.99.0-x86_64-unknown-linux-gnu
+info: latest update on 2026-10-01 for version 1.99.0 (b940084d7 2026-09-28)
+info: downloading 4 components
+    Updating crates.io index
+ Downloading crates ...
+  Downloaded libc v0.2.189
+   Compiling libc v0.2.189
+   Compiling kf-util v0.1.0 (<checkout>/crates/kf-util)
+warning: missing documentation for a function
+    --> crates/kf-util/src/lock.rs:1150:5
+     |
+1150 |     pub fn note_wait(rank: LockRank, d: Duration) {
+     |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+     |
+     = note: requested on the command line with `-W missing-docs`
+
+warning: missing documentation for a function
+    --> crates/kf-util/src/lock.rs:1432:5
+     |
+1432 |     pub fn note_hold(rank: LockRank, d: Duration) {
+     |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: missing documentation for a function
+   --> crates/kf-util/src/lockwitness.rs:193:5
+    |
+193 |     pub fn is_vcpu() -> bool {
+    |     ^^^^^^^^^^^^^^^^^^^^^^^^
+
+   Compiling kf-linux-raw v0.1.0 (<checkout>/crates/kf-linux-raw)
+warning: missing documentation for a method
+    --> crates/kf-linux-raw/src/mapping_unsafe.rs:1196:5
+     |
+1196 |     pub fn load_u32(&self, offset: HostOffset) -> Result<u32, RawError> {
+     |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+     |
+     = note: requested on the command line with `-W missing-docs`
+
+warning: `kf-linux-raw` (lib) generated 1 warning
+   Compiling kf-cuda v0.1.0 (<checkout>/crates/kf-cuda)
+warning: `kf-util` (lib) generated 3 warnings
+warning: use of deprecated method `std::sync::atomic::Atomic::<u32>::fetch_update`: renamed to `try_update` for consistency
+  --> crates/kf-cuda/src/refusal_samples.rs:68:14
+   |
+68 |             .fetch_update(Ordering::Relaxed, Ordering::Relaxed, |n| {
+   |              ^^^^^^^^^^^^
+   |
+   = note: `#[warn(deprecated)]` on by default
+help: replace the use of the deprecated method
+   |
+68 -             .fetch_update(Ordering::Relaxed, Ordering::Relaxed, |n| {
+68 +             .try_update(Ordering::Relaxed, Ordering::Relaxed, |n| {
+   |
+
+warning: value assigned to `prop` is never read
+    --> crates/kf-cuda/src/driver_unsafe.rs:1873:9
+     |
+1873 |         prop.alloc_flags_reserved = [0; 4];
+     |         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+     |
+     = help: maybe it is overwritten before being read?
+     = note: `#[warn(unused_assignments)]` (part of `#[warn(unused)]`) on by default
+
+warning: variable does not need to be mutable
+   --> crates/kf-cuda/src/walk.rs:871:13
+    |
+871 |         let mut h: KfDev = crate::driver_unsafe::zeroed();
+    |             ----^
+    |             |
+    |             help: remove this `mut`
+    |
+    = note: `#[warn(unused_mut)]` (part of `#[warn(unused)]`) on by default
+
+warning: fields `cuMemUnmap` and `cuMemAddressFree` are never read
+   --> crates/kf-cuda/src/driver_unsafe.rs:253:16
+    |
+120 | pub struct Cuda {
+    |            ---- fields in this struct
+...
+253 |     pub(crate) cuMemUnmap: Option<unsafe extern "C" fn(u64, usize) -> CUresult>,
+    |                ^^^^^^^^^^
+254 |     pub(crate) cuMemAddressFree: Option<unsafe extern "C" fn(u64, usize) -> CUresult>,
+    |                ^^^^^^^^^^^^^^^^
+    |
+    = note: `#[warn(dead_code)]` (part of `#[warn(unused)]`) on by default
+
+warning: missing documentation for a method
+    --> crates/kf-cuda/src/driver_unsafe.rs:1811:5
+     |
+1811 | /     pub fn export_device_allocation(
+1812 | |         &self,
+1813 | |         device: i32,
+1814 | |         bytes: usize,
+1815 | |     ) -> Result<ExportedAllocation, String> {
+     | |___________________________________________^
+     |
+     = note: requested on the command line with `-W missing-docs`
+
+warning: `kf-cuda` (lib) generated 5 warnings (run `cargo fix --lib -p kf-cuda` to apply 2 suggestions)
+    Finished `release` profile [optimized] target(s) in 11.98s
+CL1_R2_EXAMPLE_START=color_mirror bdf=0000:03:00.0
+kf-cuda: cuda thread posture thread=main cap_sys_admin=not-held (libcuda's channels from this thread, and from threads it starts, are created without CAP_SYS_ADMIN)
+COLOR_GPU mirror_negative_channel PASS rgb=[0, 160, 64]
+COLOR_GPU unmirrored_negative_channel PASS rgb=[64, 160, 64]
+COLOR_GPU mirror_digital_vibrance PASS rgb=[192, 0, 0]
+COLOR_GPU unmirrored_digital_vibrance PASS rgb=[192, 64, 64]
+CL1_R2_EXAMPLE_RC=0 example=color_mirror
+CL1_R2_EXAMPLE_START=color_sdr bdf=0000:03:00.0
+kf-cuda: cuda thread posture thread=main cap_sys_admin=not-held (libcuda's channels from this thread, and from threads it starts, are created without CAP_SYS_ADMIN)
+COLOR_GPU input_fp16_nonidentity PASS pixels=8 expected_rgb=128,255,0
+COLOR_GPU direct8_input PASS exact 2088-byte table, white selects index255
+COLOR_GPU direct8_output PASS compact ramp indexes 128,64,192
+COLOR_GPU output_unorm_nonidentity PASS pixels=8 expected_rgb=0,128,255
+COLOR_GPU immutable_snapshot PASS mutable source changed, armed snapshot retained
+COLOR_GPU rearmed_snapshot PASS new token consumes changed table
+COLOR_GPU fractional_olut_interpolation PASS rgb=127,255,0 at index 512.5
+COLOR_GPU invalid_fp16 PASS infinity,nan,negative,hdr refused by GPU validation
+CL1_R2_EXAMPLE_RC=0 example=color_sdr
+CL1_R2_EXAMPLE_START=color_tmo bdf=0000:03:00.0
+kf-cuda: cuda thread posture thread=main cap_sys_admin=not-held (libcuda's channels from this thread, and from threads it starts, are created without CAP_SYS_ADMIN)
+TMO_GPU intensity_only PASS Ct/I/Cp=0.5,0,0.5; not RGB gamma
+TMO_GPU pq_pipeline_zero PASS full OGKM CSC/PQ program rgb=0,0,0
+TMO_GPU immutable_snapshot PASS modified source retains armed zero curve
+TMO_GPU rearm_snapshot PASS fresh token consumes white curve
+TMO_GPU variable_segment_header PASS nonuniform first zone samples index2, not fixed index4
+TMO_GPU compact_table PASS 65 sample entries, exact 552-byte source extent
+TMO_GPU compact_bounds PASS hostile header refuses within authored extent
+TMO_GPU invalid_table PASS unsupported VSS and unequal intensity channels refuse
+CL1_R2_EXAMPLE_RC=0 example=color_tmo
+Filesystem      Size  Used Avail Use% Mounted on
+overlay          64G  2.1G   62G   4% /
+warning: missing documentation for a function
+    --> crates/kf-util/src/lock.rs:1150:5
+     |
+1150 |     pub fn note_wait(rank: LockRank, d: Duration) {
+     |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+     |
+     = note: requested on the command line with `-W missing-docs`
+
+warning: missing documentation for a function
+    --> crates/kf-util/src/lock.rs:1432:5
+     |
+1432 |     pub fn note_hold(rank: LockRank, d: Duration) {
+     |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: missing documentation for a function
+   --> crates/kf-util/src/lockwitness.rs:193:5
+    |
+193 |     pub fn is_vcpu() -> bool {
+    |     ^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: `kf-util` (lib) generated 3 warnings
+warning: missing documentation for a method
+    --> crates/kf-linux-raw/src/mapping_unsafe.rs:1196:5
+     |
+1196 |     pub fn load_u32(&self, offset: HostOffset) -> Result<u32, RawError> {
+     |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+     |
+     = note: requested on the command line with `-W missing-docs`
+
+warning: `kf-linux-raw` (lib) generated 1 warning
+warning: use of deprecated method `std::sync::atomic::Atomic::<u32>::fetch_update`: renamed to `try_update` for consistency
+  --> crates/kf-cuda/src/refusal_samples.rs:68:14
+   |
+68 |             .fetch_update(Ordering::Relaxed, Ordering::Relaxed, |n| {
+   |              ^^^^^^^^^^^^
+   |
+   = note: `#[warn(deprecated)]` on by default
+help: replace the use of the deprecated method
+   |
+68 -             .fetch_update(Ordering::Relaxed, Ordering::Relaxed, |n| {
+68 +             .try_update(Ordering::Relaxed, Ordering::Relaxed, |n| {
+   |
+
+warning: value assigned to `prop` is never read
+    --> crates/kf-cuda/src/driver_unsafe.rs:1873:9
+     |
+1873 |         prop.alloc_flags_reserved = [0; 4];
+     |         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+     |
+     = help: maybe it is overwritten before being read?
+     = note: `#[warn(unused_assignments)]` (part of `#[warn(unused)]`) on by default
+
+warning: variable does not need to be mutable
+   --> crates/kf-cuda/src/walk.rs:871:13
+    |
+871 |         let mut h: KfDev = crate::driver_unsafe::zeroed();
+    |             ----^
+    |             |
+    |             help: remove this `mut`
+    |
+    = note: `#[warn(unused_mut)]` (part of `#[warn(unused)]`) on by default
+
+warning: fields `cuMemUnmap` and `cuMemAddressFree` are never read
+   --> crates/kf-cuda/src/driver_unsafe.rs:253:16
+    |
+120 | pub struct Cuda {
+    |            ---- fields in this struct
+...
+253 |     pub(crate) cuMemUnmap: Option<unsafe extern "C" fn(u64, usize) -> CUresult>,
+    |                ^^^^^^^^^^
+254 |     pub(crate) cuMemAddressFree: Option<unsafe extern "C" fn(u64, usize) -> CUresult>,
+    |                ^^^^^^^^^^^^^^^^
+    |
+    = note: `#[warn(dead_code)]` (part of `#[warn(unused)]`) on by default
+
+warning: missing documentation for a method
+    --> crates/kf-cuda/src/driver_unsafe.rs:1811:5
+     |
+1811 | /     pub fn export_device_allocation(
+1812 | |         &self,
+1813 | |         device: i32,
+1814 | |         bytes: usize,
+1815 | |     ) -> Result<ExportedAllocation, String> {
+     | |___________________________________________^
+     |
+     = note: requested on the command line with `-W missing-docs`
+
+   Compiling kf-cuda v0.1.0 (<checkout>/crates/kf-cuda)
+warning: `kf-cuda` (lib) generated 5 warnings (run `cargo fix --lib -p kf-cuda` to apply 2 suggestions)
+warning: missing documentation for the crate
+  --> crates/kf-cuda/tests/synth_origin.rs:1:1
+   |
+ 1 | / use kf_cuda::synth::*;
+ 2 | |
+ 3 | | #[test]
+ 4 | | fn an_image_at_an_origin_names_absolute_addresses_and_rewrites_nothing() {
+...  |
+56 | |     );
+57 | | }
+   | |_^
+   |
+   = note: requested on the command line with `-W missing-docs`
+
+warning: `kf-cuda` (test "synth_origin") generated 1 warning
+warning: `kf-cuda` (lib test) generated 5 warnings (5 duplicates)
+    Finished `release` profile [optimized] target(s) in 6.69s
+     Running unittests src/lib.rs (<target>/release/deps/kf_cuda-e10463ea769b2871)
+
+running 47 tests
+test abi::tests::a_short_buffer_is_refused_loudly - should panic ... ok
+test abi::tests::the_flags_ranges_are_disjoint_and_each_accessor_reads_its_own ... ok
+test abi::tests::every_report_struct_round_trips_through_its_own_layout ... ok
+test abi::tests::the_report_structs_have_the_headers_documented_layout ... ok
+test capacity::tests::a_new_slot_gets_the_default_and_the_walk_region_covers_it ... ok
+test capacity::tests::a_space_past_the_old_uniform_cap_is_held_after_one_growth ... ok
+test capacity::tests::fragmented_pool_accepts_required_growth_without_optional_headroom ... ok
+test capacity::tests::release_returns_exactly_what_the_slot_owned_across_a_churn ... ok
+test capacity::tests::required_growth_that_does_not_fit_preserves_source_and_pool ... ok
+test capacity::tests::the_previous_layout_is_carried_for_the_commit ... ok
+test capacity::tests::the_ceilings_refuse_by_name ... ok
+test diffmodel::tests::a_diff_that_could_overflow_the_slot_withholds_its_maps ... ok
+test diffmodel::tests::a_failed_map_is_retried_and_a_successful_one_never_re_emitted ... ok
+test diffmodel::tests::a_first_walk_maps_every_run_and_then_is_quiet ... ok
+test diffmodel::tests::a_held_map_is_committed_held_and_retired_as_held ... ok
+test diffmodel::tests::a_partial_downgrade_splits_the_placement_by_permission ... ok
+test diffmodel::tests::a_partly_changed_placement_is_unmapped_whole_and_its_rest_remapped ... ok
+test diffmodel::tests::a_root_move_keeps_what_the_new_root_still_maps ... ok
+test diffmodel::tests::a_rw_to_ro_downgrade_over_the_same_backing_unmaps_and_remaps ... ok
+test diffmodel::tests::classes_are_diffed_separately ... ok
+test diffmodel::tests::growth_maps_only_the_new_page_and_keeps_the_old_placements ... ok
+test diffmodel::tests::the_key_is_the_hosts_policy ... ok
+test diffmodel::tests::the_named_ranges_compute_the_literal_formulas ... ok
+test display::tests::a_pack_launch_is_bounded_before_it_is_queued ... ok
+test display::tests::a_compose_launch_is_bounded_before_it_is_queued ... ok
+test display::tests::a_yuv_launch_is_bounded_before_it_is_queued ... ok
+test display::tests::the_compose_kernel_declares_the_parameters_the_launch_passes ... ok
+test display::tests::the_output_kernel_packs_bgra_bytes ... ok
+CAP-GATE: VACUOUS test display::tests::the_pack_kernel_declares_the_parameters_the_launch_passes ... kf-cuda live_cap_cuda_thread_clears_before_the_first_callok — CAP_SYS_ADMIN was not in this thread's effective set, so the clear never ran here; this pass is not coverage of it (run as root)
+
+CAP-GATE: VACUOUS kf-cuda live_cap_open_clears_before_dlopen — CAP_SYS_ADMIN was not in this thread's effective set, so the clear never ran here; this pass is not coverage of it (run as root)
+test display::tests::the_output_launch_passes_the_tables_mirror_flag_last ... ok
+test display::tests::the_pack_ptx_was_made_from_the_committed_source ... ok
+test display::tests::the_sum_kernel_declares_the_parameters_the_launch_passes ... ok
+test display::tests::color_ptx_matches_its_source_and_launch_abi ... ok
+test driver_unsafe::completion_fd_tests::the_host_function_signals_the_fd_and_drain_consumes_it ... ok
+test posture::tests::a_bit_that_cannot_be_cleared_refuses_the_cuda_call ... ok
+test posture::tests::a_root_thread_is_cleared_for_its_life ... ok
+test display::tests::the_yuv_ptx_was_made_from_the_committed_source_and_matches_its_launch ... ok
+test refusal_samples::tests::a_sample_is_one_line_with_every_field ... ok
+test refusal_samples::tests::a_count_past_the_array_is_clamped_not_trusted ... ok
+test refusal_samples::tests::no_samples_prints_nothing ... ok
+test refusal_samples::tests::an_entry_the_report_no_longer_names_prints_its_index ... ok
+test posture::tests::live_cap_open_clears_before_dlopen ... ok
+test refusal_samples::tests::the_process_cap_is_32_lines_across_walks ... ok
+test synth::tests::the_fixture_big_half_is_invalid_not_a_table_at_zero ... ok
+test posture::tests::live_cap_cuda_thread_clears_before_the_first_call ... ok
+test diffmodel::tests::random_sequences_hold_every_protocol_property ... ok
+test diffmodel::tests::thirteen_thousand_rows_one_added_per_step_is_one_map_each ... ok
+
+test result: ok. 47 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.13s
+
+     Running tests/cuda_thread_posture.rs (<target>/release/deps/cuda_thread_posture-ce9c672802523f5c)
+
+running 1 test
+test every_cuda_entry_clears_cap_sys_admin_before_its_foreign_call ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/report_containment.rs (<target>/release/deps/report_containment-8edc0f2315f3178c)
+
+running 9 tests
+test a_diff_report_is_accepted ... ok
+test a_report_without_the_diff_flag_is_refused ... ok
+test a_run_ending_exactly_at_the_span_is_the_last_legal_page ... ok
+test a_run_past_the_span_is_refused_by_name ... ok
+test a_run_straddling_the_end_is_refused ... ok
+test a_run_wholly_inside_the_span_is_accepted ... ok
+test a_sysmem_run_is_not_bounded_by_the_store_span ... ok
+test a_vidmem_or_peer_run_past_the_span_is_still_refused ... ok
+test an_unmap_is_exempt_because_it_names_no_memory ... ok
+
+test result: ok. 9 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/synth_origin.rs (<target>/release/deps/synth_origin-1c447fe44d8d9ff6)
+
+running 1 test
+test an_image_at_an_origin_names_absolute_addresses_and_rewrites_nothing ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/walk_abi_matches_the_cu.rs (<target>/release/deps/walk_abi_matches_the_cu-3b6ffa744b52c4c6)
+
+running 7 tests
+test the_committed_ptx_declares_the_same_kfargs_size ... ok
+test the_committed_ptx_is_turing_targeted ... ok
+test the_report_constants_match_the_header ... ok
+test every_report_field_decodes_to_what_the_c_compiler_reads ... ok
+test the_rust_mirror_matches_the_cu_byte_for_byte ... ok
+test the_rust_ver3_descriptor_matches_the_cu_byte_for_byte ... ok
+test the_rust_ver2_descriptor_matches_the_cu_byte_for_byte ... ok
+
+test result: ok. 7 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.14s
+
+     Running tests/walk_never_synchronizes.rs (<target>/release/deps/walk_never_synchronizes-cb9c9f043d44784c)
+
+running 11 tests
+test a_probe_cannot_mask_a_missing_store_completion ... ok
+test a_probe_sync_cannot_be_moved_to_submit ... ok
+test a_store_completion_cannot_be_smuggled_into_ack ... ok
+test a_store_completion_cannot_be_smuggled_into_submit ... ok
+test a_store_completion_cannot_mask_a_missing_probe ... ok
+test a_store_sync_cannot_be_moved_to_ack ... ok
+test the_ack_only_stages_a_per_run_verdict ... ok
+test the_known_positive_is_found ... ok
+test the_worker_store_completion_is_allowed_and_found ... ok
+test the_walk_verbs_do_not_synchronize ... ok
+test only_the_probe_and_store_completion_synchronize ... ok
+
+test result: ok. 11 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+   Doc-tests kf_cuda
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+CL1_R2_CRATE_TEST_RC=0
+CL1_R2_PRODUCT_STATUS=
+CL1_R2_TARGET_REMOVED
+CL1_R2_GPU_DONE=2026-10-22T14:07:37Z rev=e636236cf34621b0c9e53170638c54a55a22f979 failed_commands=0
+CL1_R2_GPU_EXIT=0 utc=2026-10-22T14:07:37Z
