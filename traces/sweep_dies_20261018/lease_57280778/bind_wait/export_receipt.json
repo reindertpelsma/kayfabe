@@ -1,0 +1,25 @@
+{
+  "kind": "MEASURED",
+  "lease_id": 57280778,
+  "source": "905a8bd75e0fc53f5494e45b6d2a0fee474d7757",
+  "utc": "2026-10-22T23:42:10.597682+00:00",
+  "files": {
+    "s4_controller.log": {
+      "bytes": 2309,
+      "sha256": "ca20160c4582c1f49da0a7863d9caaeec93f96bf99867aa4179195e855f68fd6"
+    },
+    "bwr_bind.log": {
+      "bytes": 677,
+      "sha256": "d22391eb2226173ba05fae1a4475b312a4ab2058f5105803090d0b1d9bf13773"
+    },
+    "sweep_windows_install.log": {
+      "bytes": 6365,
+      "sha256": "0cb8a90a835ead1f528c2ef76f2610bd6d08edb04987097716413f34910b69a8"
+    },
+    "native_xid_watch.log": {
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    }
+  },
+  "bounds": "Text only; at most 128 KiB per file, first 80 and last 300 lines when larger. Supervisor tokens omitted. Raw large logs remain on rental until teardown. Unchanged native logs are already committed under native_complete."
+}

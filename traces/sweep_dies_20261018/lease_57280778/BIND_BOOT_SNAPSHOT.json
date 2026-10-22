@@ -1,0 +1,492 @@
+{
+  "utc": "2026-10-22T23:36:09.267034+00:00",
+  "lease_id": 57280778,
+  "pid": 102996,
+  "operations": {
+    "runstate": {
+      "return": {
+        "status": "running",
+        "running": true
+      },
+      "id": "s4-readonly"
+    },
+    "cpus": {
+      "return": [
+        {
+          "thread-id": 103004,
+          "qom-type": "host-x86_64-cpu",
+          "props": {
+            "core-id": 0,
+            "thread-id": 0,
+            "socket-id": 0
+          },
+          "qom-path": "/machine/unattached/device[0]",
+          "cpu-index": 0,
+          "target": "x86_64"
+        },
+        {
+          "thread-id": 103005,
+          "qom-type": "host-x86_64-cpu",
+          "props": {
+            "core-id": 1,
+            "thread-id": 0,
+            "socket-id": 0
+          },
+          "qom-path": "/machine/unattached/device[2]",
+          "cpu-index": 1,
+          "target": "x86_64"
+        },
+        {
+          "thread-id": 103006,
+          "qom-type": "host-x86_64-cpu",
+          "props": {
+            "core-id": 2,
+            "thread-id": 0,
+            "socket-id": 0
+          },
+          "qom-path": "/machine/unattached/device[3]",
+          "cpu-index": 2,
+          "target": "x86_64"
+        },
+        {
+          "thread-id": 103007,
+          "qom-type": "host-x86_64-cpu",
+          "props": {
+            "core-id": 3,
+            "thread-id": 0,
+            "socket-id": 0
+          },
+          "qom-path": "/machine/unattached/device[4]",
+          "cpu-index": 3,
+          "target": "x86_64"
+        },
+        {
+          "thread-id": 103008,
+          "qom-type": "host-x86_64-cpu",
+          "props": {
+            "core-id": 4,
+            "thread-id": 0,
+            "socket-id": 0
+          },
+          "qom-path": "/machine/unattached/device[5]",
+          "cpu-index": 4,
+          "target": "x86_64"
+        },
+        {
+          "thread-id": 103009,
+          "qom-type": "host-x86_64-cpu",
+          "props": {
+            "core-id": 5,
+            "thread-id": 0,
+            "socket-id": 0
+          },
+          "qom-path": "/machine/unattached/device[6]",
+          "cpu-index": 5,
+          "target": "x86_64"
+        },
+        {
+          "thread-id": 103010,
+          "qom-type": "host-x86_64-cpu",
+          "props": {
+            "core-id": 6,
+            "thread-id": 0,
+            "socket-id": 0
+          },
+          "qom-path": "/machine/unattached/device[7]",
+          "cpu-index": 6,
+          "target": "x86_64"
+        },
+        {
+          "thread-id": 103011,
+          "qom-type": "host-x86_64-cpu",
+          "props": {
+            "core-id": 7,
+            "thread-id": 0,
+            "socket-id": 0
+          },
+          "qom-path": "/machine/unattached/device[8]",
+          "cpu-index": 7,
+          "target": "x86_64"
+        }
+      ],
+      "id": "s4-readonly"
+    },
+    "blocks": {
+      "return": [
+        {
+          "device": "pflash0",
+          "parent": {
+            "stats": {
+              "unmap_operations": 0,
+              "unmap_merged": 0,
+              "failed_zone_append_operations": 0,
+              "flush_total_time_ns": 0,
+              "wr_highest_offset": 0,
+              "wr_total_time_ns": 0,
+              "failed_wr_operations": 0,
+              "failed_rd_operations": 0,
+              "wr_merged": 0,
+              "wr_bytes": 0,
+              "timed_stats": [],
+              "failed_unmap_operations": 0,
+              "zone_append_merged": 0,
+              "failed_flush_operations": 0,
+              "account_invalid": false,
+              "rd_total_time_ns": 0,
+              "invalid_unmap_operations": 0,
+              "flush_operations": 0,
+              "wr_operations": 0,
+              "unmap_bytes": 0,
+              "rd_merged": 0,
+              "rd_bytes": 0,
+              "unmap_total_time_ns": 0,
+              "invalid_flush_operations": 0,
+              "account_failed": false,
+              "zone_append_total_time_ns": 0,
+              "zone_append_operations": 0,
+              "rd_operations": 0,
+              "zone_append_bytes": 0,
+              "invalid_zone_append_operations": 0,
+              "invalid_wr_operations": 0,
+              "invalid_rd_operations": 0
+            },
+            "node-name": "#block019",
+            "driver-specific": {
+              "discard-bytes-ok": 0,
+              "discard-nb-ok": 0,
+              "driver": "file",
+              "discard-nb-failed": 0
+            }
+          },
+          "stats": {
+            "unmap_operations": 0,
+            "unmap_merged": 0,
+            "failed_zone_append_operations": 0,
+            "flush_total_time_ns": 0,
+            "wr_highest_offset": 0,
+            "wr_total_time_ns": 0,
+            "failed_wr_operations": 0,
+            "failed_rd_operations": 0,
+            "wr_merged": 0,
+            "wr_bytes": 0,
+            "timed_stats": [],
+            "failed_unmap_operations": 0,
+            "zone_append_merged": 0,
+            "failed_flush_operations": 0,
+            "account_invalid": true,
+            "rd_total_time_ns": 0,
+            "invalid_unmap_operations": 0,
+            "flush_operations": 0,
+            "wr_operations": 0,
+            "unmap_bytes": 0,
+            "rd_merged": 0,
+            "rd_bytes": 0,
+            "unmap_total_time_ns": 0,
+            "invalid_flush_operations": 0,
+            "account_failed": true,
+            "zone_append_total_time_ns": 0,
+            "zone_append_operations": 0,
+            "rd_operations": 0,
+            "zone_append_bytes": 0,
+            "invalid_zone_append_operations": 0,
+            "invalid_wr_operations": 0,
+            "invalid_rd_operations": 0
+          },
+          "node-name": "#block131",
+          "qdev": "/machine/system.flash0"
+        },
+        {
+          "device": "pflash1",
+          "parent": {
+            "stats": {
+              "unmap_operations": 0,
+              "unmap_merged": 0,
+              "failed_zone_append_operations": 0,
+              "flush_total_time_ns": 0,
+              "wr_highest_offset": 83968,
+              "wr_total_time_ns": 0,
+              "failed_wr_operations": 0,
+              "failed_rd_operations": 0,
+              "wr_merged": 0,
+              "wr_bytes": 0,
+              "timed_stats": [],
+              "failed_unmap_operations": 0,
+              "zone_append_merged": 0,
+              "failed_flush_operations": 0,
+              "account_invalid": false,
+              "rd_total_time_ns": 0,
+              "invalid_unmap_operations": 0,
+              "flush_operations": 0,
+              "wr_operations": 0,
+              "unmap_bytes": 0,
+              "rd_merged": 0,
+              "rd_bytes": 0,
+              "unmap_total_time_ns": 0,
+              "invalid_flush_operations": 0,
+              "account_failed": false,
+              "zone_append_total_time_ns": 0,
+              "zone_append_operations": 0,
+              "rd_operations": 0,
+              "zone_append_bytes": 0,
+              "invalid_zone_append_operations": 0,
+              "invalid_wr_operations": 0,
+              "invalid_rd_operations": 0
+            },
+            "node-name": "#block263",
+            "driver-specific": {
+              "discard-bytes-ok": 0,
+              "discard-nb-ok": 0,
+              "driver": "file",
+              "discard-nb-failed": 0
+            }
+          },
+          "stats": {
+            "unmap_operations": 0,
+            "unmap_merged": 0,
+            "failed_zone_append_operations": 0,
+            "flush_total_time_ns": 0,
+            "wr_highest_offset": 83968,
+            "wr_total_time_ns": 0,
+            "failed_wr_operations": 0,
+            "failed_rd_operations": 0,
+            "wr_merged": 0,
+            "wr_bytes": 0,
+            "timed_stats": [],
+            "failed_unmap_operations": 0,
+            "zone_append_merged": 0,
+            "failed_flush_operations": 0,
+            "account_invalid": true,
+            "rd_total_time_ns": 0,
+            "invalid_unmap_operations": 0,
+            "flush_operations": 0,
+            "wr_operations": 0,
+            "unmap_bytes": 0,
+            "rd_merged": 0,
+            "rd_bytes": 0,
+            "unmap_total_time_ns": 0,
+            "invalid_flush_operations": 0,
+            "account_failed": true,
+            "zone_append_total_time_ns": 0,
+            "zone_append_operations": 0,
+            "rd_operations": 0,
+            "zone_append_bytes": 0,
+            "invalid_zone_append_operations": 0,
+            "invalid_wr_operations": 0,
+            "invalid_rd_operations": 0
+          },
+          "node-name": "#block373",
+          "qdev": "/machine/system.flash1"
+        },
+        {
+          "device": "sys",
+          "parent": {
+            "stats": {
+              "unmap_operations": 0,
+              "unmap_merged": 0,
+              "failed_zone_append_operations": 0,
+              "flush_total_time_ns": 0,
+              "wr_highest_offset": 524288,
+              "wr_total_time_ns": 0,
+              "failed_wr_operations": 0,
+              "failed_rd_operations": 0,
+              "wr_merged": 0,
+              "wr_bytes": 0,
+              "timed_stats": [],
+              "failed_unmap_operations": 0,
+              "zone_append_merged": 0,
+              "failed_flush_operations": 0,
+              "account_invalid": false,
+              "rd_total_time_ns": 0,
+              "invalid_unmap_operations": 0,
+              "flush_operations": 0,
+              "wr_operations": 0,
+              "unmap_bytes": 0,
+              "rd_merged": 0,
+              "rd_bytes": 0,
+              "unmap_total_time_ns": 0,
+              "invalid_flush_operations": 0,
+              "account_failed": false,
+              "zone_append_total_time_ns": 0,
+              "zone_append_operations": 0,
+              "rd_operations": 0,
+              "zone_append_bytes": 0,
+              "invalid_zone_append_operations": 0,
+              "invalid_wr_operations": 0,
+              "invalid_rd_operations": 0
+            },
+            "node-name": "#block420",
+            "driver-specific": {
+              "discard-bytes-ok": 0,
+              "discard-nb-ok": 0,
+              "driver": "file",
+              "discard-nb-failed": 0
+            }
+          },
+          "stats": {
+            "unmap_operations": 0,
+            "unmap_merged": 0,
+            "failed_zone_append_operations": 0,
+            "flush_total_time_ns": 68976512,
+            "wr_highest_offset": 11263217152,
+            "wr_total_time_ns": 195704127,
+            "failed_wr_operations": 0,
+            "failed_rd_operations": 0,
+            "wr_merged": 0,
+            "wr_bytes": 988672,
+            "timed_stats": [],
+            "failed_unmap_operations": 0,
+            "zone_append_merged": 0,
+            "failed_flush_operations": 0,
+            "account_invalid": true,
+            "rd_total_time_ns": 254009718,
+            "invalid_unmap_operations": 0,
+            "flush_operations": 241,
+            "wr_operations": 26,
+            "unmap_bytes": 0,
+            "rd_merged": 0,
+            "rd_bytes": 80593408,
+            "unmap_total_time_ns": 0,
+            "invalid_flush_operations": 0,
+            "account_failed": true,
+            "idle_time_ns": 334744249471,
+            "zone_append_total_time_ns": 0,
+            "zone_append_operations": 0,
+            "rd_operations": 542,
+            "zone_append_bytes": 0,
+            "invalid_zone_append_operations": 0,
+            "invalid_wr_operations": 0,
+            "invalid_rd_operations": 0
+          },
+          "backing": {
+            "parent": {
+              "stats": {
+                "unmap_operations": 0,
+                "unmap_merged": 0,
+                "failed_zone_append_operations": 0,
+                "flush_total_time_ns": 0,
+                "wr_highest_offset": 0,
+                "wr_total_time_ns": 0,
+                "failed_wr_operations": 0,
+                "failed_rd_operations": 0,
+                "wr_merged": 0,
+                "wr_bytes": 0,
+                "timed_stats": [],
+                "failed_unmap_operations": 0,
+                "zone_append_merged": 0,
+                "failed_flush_operations": 0,
+                "account_invalid": false,
+                "rd_total_time_ns": 0,
+                "invalid_unmap_operations": 0,
+                "flush_operations": 0,
+                "wr_operations": 0,
+                "unmap_bytes": 0,
+                "rd_merged": 0,
+                "rd_bytes": 0,
+                "unmap_total_time_ns": 0,
+                "invalid_flush_operations": 0,
+                "account_failed": false,
+                "zone_append_total_time_ns": 0,
+                "zone_append_operations": 0,
+                "rd_operations": 0,
+                "zone_append_bytes": 0,
+                "invalid_zone_append_operations": 0,
+                "invalid_wr_operations": 0,
+                "invalid_rd_operations": 0
+              },
+              "node-name": "#block683",
+              "driver-specific": {
+                "discard-bytes-ok": 0,
+                "discard-nb-ok": 0,
+                "driver": "file",
+                "discard-nb-failed": 0
+              }
+            },
+            "stats": {
+              "unmap_operations": 0,
+              "unmap_merged": 0,
+              "failed_zone_append_operations": 0,
+              "flush_total_time_ns": 0,
+              "wr_highest_offset": 0,
+              "wr_total_time_ns": 0,
+              "failed_wr_operations": 0,
+              "failed_rd_operations": 0,
+              "wr_merged": 0,
+              "wr_bytes": 0,
+              "timed_stats": [],
+              "failed_unmap_operations": 0,
+              "zone_append_merged": 0,
+              "failed_flush_operations": 0,
+              "account_invalid": false,
+              "rd_total_time_ns": 0,
+              "invalid_unmap_operations": 0,
+              "flush_operations": 0,
+              "wr_operations": 0,
+              "unmap_bytes": 0,
+              "rd_merged": 0,
+              "rd_bytes": 0,
+              "unmap_total_time_ns": 0,
+              "invalid_flush_operations": 0,
+              "account_failed": false,
+              "zone_append_total_time_ns": 0,
+              "zone_append_operations": 0,
+              "rd_operations": 0,
+              "zone_append_bytes": 0,
+              "invalid_zone_append_operations": 0,
+              "invalid_wr_operations": 0,
+              "invalid_rd_operations": 0
+            },
+            "node-name": "#block752"
+          },
+          "node-name": "#block577",
+          "qdev": "/machine/peripheral-anon/device[5]/virtio-backend"
+        },
+        {
+          "device": "ide2-cd0",
+          "stats": {
+            "unmap_operations": 0,
+            "unmap_merged": 0,
+            "failed_zone_append_operations": 0,
+            "flush_total_time_ns": 0,
+            "wr_highest_offset": 0,
+            "wr_total_time_ns": 0,
+            "failed_wr_operations": 0,
+            "failed_rd_operations": 0,
+            "wr_merged": 0,
+            "wr_bytes": 0,
+            "timed_stats": [],
+            "failed_unmap_operations": 0,
+            "zone_append_merged": 0,
+            "failed_flush_operations": 0,
+            "account_invalid": true,
+            "rd_total_time_ns": 0,
+            "invalid_unmap_operations": 0,
+            "flush_operations": 0,
+            "wr_operations": 0,
+            "unmap_bytes": 0,
+            "rd_merged": 0,
+            "rd_bytes": 0,
+            "unmap_total_time_ns": 0,
+            "invalid_flush_operations": 0,
+            "account_failed": true,
+            "zone_append_total_time_ns": 0,
+            "zone_append_operations": 0,
+            "rd_operations": 0,
+            "zone_append_bytes": 0,
+            "invalid_zone_append_operations": 0,
+            "invalid_wr_operations": 0,
+            "invalid_rd_operations": 0
+          },
+          "qdev": "/machine/unattached/device[23]"
+        }
+      ],
+      "id": "s4-readonly"
+    },
+    "registers": {
+      "return": "\r\nCPU#0\r\nRAX=0000000050415453 RBX=0000000000000000 RCX=000000007b4cf00c RDX=0000000000000003\r\nRSI=0000000050415453 RDI=00000000000c4687 RBP=00000000000c4687 RSP=00000000001a71a0\r\nR8 =00000000001a716c R9 =00000000001a7168 R10=00000000003556bc R11=0000000000000000\r\nR12=0000000000087301 R13=0000000000000000 R14=000000007b4d3b0f R15=000000007b4d0430\r\nRIP=000000007b4d7502 RFL=00000206 [-----P-] CPL=0 II=0 A20=1 SMM=0 HLT=0\r\nES =0030 0000000000000000 ffffffff 00c09300 DPL=0 DS   [-WA]\r\nCS =0038 0000000000000000 ffffffff 00a09b00 DPL=0 CS64 [-RA]\r\nSS =0030 0000000000000000 ffffffff 00c09300 DPL=0 DS   [-WA]\r\nDS =0030 0000000000000000 ffffffff 00c09300 DPL=0 DS   [-WA]\r\nFS =0030 0000000000000000 ffffffff 00c09300 DPL=0 DS   [-WA]\r\nGS =0030 0000000000000000 ffffffff 00c09300 DPL=0 DS   [-WA]\r\nLDT=0000 0000000000000000 0000ffff 00000000\r\nTR =0000 0000000000000000 0000ffff 00008b00 DPL=0 TSS64-busy\r\nGDT=     000000007b9e2000 00000047\r\nIDT=     000000007b4df018 00000fff\r\nCR0=80010033 CR2=0000000000000000 CR3=000000007bc01000 CR4=00040668\r\nDR0=0000000000000000 DR1=0000000000000000 DR2=0000000000000000 DR3=0000000000000000 \r\nDR6=00000000ffff0ff0 DR7=0000000000000400\r\nEFER=0000000000000d00\r\nFCW=037f FSW=0000 [ST=0] FTW=00 MXCSR=00001f80\r\nFPR0=0000000000000000 0000 FPR1=0000000000000000 0000\r\nFPR2=0000000000000000 0000 FPR3=0000000000000000 0000\r\nFPR4=0000000000000000 0000 FPR5=0000000000000000 0000\r\nFPR6=8000000000000000 4007 FPR7=8000000000000000 4007\r\nYMM00=0000000000000000 0000000000000000 0000000000000000 0000000000000000\r\nYMM01=0000000000000000 0000000000000000 00000000001a7f20 0000000000000000\r\nYMM02=0000000000000000 0000000000000000 1e535e959809a5bb 4baa4d7a15ca44ff\r\nYMM03=0000000000000000 0000000000000000 0000000000000001 000c020400000079\r\nYMM04=0000000000000000 0000000000000000 0000000000450004 100000c81e535e95\r\nYMM05=0000000000000000 0000000000000000 96d430ffdc860074 74eb6de5de6c5ba5\r\nYMM06=0000000000000000 0000000000000000 0000000000000000 0000000000000000\r\nYMM07=0000000000000000 0000000000000000 0000000000000000 0000000000000000\r\nYMM08=0000000000000000 0000000000000000 0000000000000000 0000000000000000\r\nYMM09=0000000000000000 0000000000000000 0000000000000000 0000000000000000\r\nYMM10=0000000000000000 0000000000000000 0000000000000000 0000000000000000\r\nYMM11=0000000000000000 0000000000000000 0000000000000000 0000000000000000\r\nYMM12=0000000000000000 0000000000000000 0000000000000000 0000000000000000\r\nYMM13=0000000000000000 0000000000000000 0000000000000000 0000000000000000\r\nYMM14=0000000000000000 0000000000000000 0000000000000000 0000000000000000\r\nYMM15=0000000000000000 0000000000000000 0000000000000000 0000000000000000\r\n",
+      "id": "s4-readonly"
+    }
+  },
+  "guest_ping": {
+    "error": "TimeoutError:timed out"
+  }
+}

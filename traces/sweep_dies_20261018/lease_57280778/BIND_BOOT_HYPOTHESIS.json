@@ -1,0 +1,8 @@
+{
+  "class": "INFERRED",
+  "utc": "2026-10-22T23:36:07.918241+00:00",
+  "hypothesis": "Bind boot has not reached a responsive Windows guest agent; no guest-driver RPC has begun.",
+  "falsifier": "A successful guest-ping response on this owned VM disproves an unavailable guest-agent endpoint; QMP run state alone cannot prove Windows progress.",
+  "lease_id": 57280778,
+  "source": "905a8bd75e0fc53f5494e45b6d2a0fee474d7757"
+}
