@@ -16,12 +16,14 @@ RC_NEGCTL_SUBMITTED run=linux-rc-1 host=0x19
 kf3: RC Translated host 0x19 guest chid 0x5 engine 0x9 Xid 32 — channel in error
 kf3: RC_TRIGGERED posted: guest chid 0x5 engine 0x9 except_type 0x20 (host 0x19)
 """
-    guest = """KF_RC_PROBE_BEGIN run=linux-rc-1 mode=on chid=0x5 engine=0x9 class=0xc56f
+    guest = """KF_RC_PROBE_BEGIN run=linux-rc-1 mode=on chid=0x5 engine=0x9 class=0xc56f owner=17
 KF_RC_BYSTANDER run=linux-rc-1 phase=before value=1
 KF_RC_EVENT chid=0x5 engine=0x9 xid=32 scope=0
 KF_RC_NOTIFIER run=linux-rc-1 chid=0x5 timestamp=0x1234 info32=32 info16=9 status=0xffff get=0
 KF_RC_BYSTANDER run=linux-rc-1 phase=after value=2
 KF_RC_PROBE_END run=linux-rc-1 result=PASS
+KF_RC_OWNER run=linux-rc-1 pid=17 errno=5 channel_error=1
+RC_CONTROL_HEALTH run=linux-rc-1 result=PASS
 """
     journal = json.dumps({"__REALTIME_TIMESTAMP": "2100000", "MESSAGE": "NVRM: Xid (PCI:0000:01:00): 32, pid=123, name=qemu-system-x86, channel 0x00000019 intr 00000010"})+"\n"
     return manifest, qemu, guest, journal
@@ -64,10 +66,16 @@ class GuardTests(unittest.TestCase):
     def test_bystander_missing_rejected(self): self.reject(g=fixture()[2].replace("phase=after", "phase=missing"))
     def test_bystander_did_not_progress_rejected(self): self.reject(g=fixture()[2].replace("phase=after value=2", "phase=after value=1"))
     def test_guest_failure_rejected(self): self.reject(g=fixture()[2].replace("result=PASS", "result=FAIL"))
+    def test_report_reaches_owning_process(self): self.reject(g=fixture()[2].replace("pid=17", "pid=18"))
+    def test_missing_owner_error_rejected(self): self.reject(g=fixture()[2].replace("KF_RC_OWNER", "NO_OWNER"))
+    def test_success_to_fault_owner_rejected(self): self.reject(g=fixture()[2].replace("errno=5", "errno=0"))
+    def test_guest_health_required(self): self.reject(g=fixture()[2].replace("RC_CONTROL_HEALTH", "NO_HEALTH"))
+    def test_guest_panic_rejected(self): self.reject(g=fixture()[2]+"Kernel panic - not syncing\n")
+    def test_guest_reset_failure_rejected(self): self.reject(g=fixture()[2]+"NVRM: RmInitAdapter failed!\n")
     def test_oversized_input_rejected(self): self.reject(q="x"*(2*1024*1024+1))
     def test_malformed_journal_rejected(self): self.reject(j="not json\n")
     def test_off_control_accepts(self):
-        m,q,g,j=fixture();m["mode"]="off";q=q.split("FAULT_MARK")[0];g=g.replace("mode=on","mode=off");g="\n".join(l for l in g.splitlines() if "KF_RC_EVENT" not in l and "KF_RC_NOTIFIER" not in l)+"\nKF_RC_CLEAN run=linux-rc-1 status=0x0\n";self.assertEqual(check(m,q,g,"")["verdict"],"PASS")
+        m,q,g,j=fixture();m["mode"]="off";q=q.split("FAULT_MARK")[0];g=g.replace("mode=on","mode=off").replace("errno=5 channel_error=1","errno=0 channel_error=0");g="\n".join(l for l in g.splitlines() if "KF_RC_EVENT" not in l and "KF_RC_NOTIFIER" not in l)+"\nKF_RC_CLEAN run=linux-rc-1 status=0x0\n";self.assertEqual(check(m,q,g,"")["verdict"],"PASS")
 
 
 if __name__ == "__main__": unittest.main()

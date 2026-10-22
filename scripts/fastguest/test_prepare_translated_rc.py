@@ -29,6 +29,12 @@ class GuestPatchTests(unittest.TestCase):
         self.assertIn('rpc_params->nv2080EngineType',p)
         self.assertIn('rpc_params->exceptType',p)
         self.assertIn('rpc_params->scope',p)
+    def test_guest_handshake_occurs_after_success(self):
+        p=patch_guest(SOURCE)
+        self.assertGreater(p.index('nvKfRcControlEvent('),p.index('if (status == NV_OK)'))
+    def test_guest_handshake_is_not_an_unconditional_entry_notification(self):
+        p=patch_guest(SOURCE)
+        self.assertGreater(p.index('nvKfRcControlEvent('),p.index('krcErrorSendEventNotifications_HAL('))
     def test_other_code_preserved(self):
         p=patch_guest(SOURCE)
         self.assertTrue(p.startswith('before\nstatic NV_STATUS'))
