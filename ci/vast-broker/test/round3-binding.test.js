@@ -30,6 +30,12 @@ test('R3 same run cannot replace runner nonce',async()=>{
  const h=await setup();assert.equal((await h.call('/rent',{body:request})).status,200);
  assert.equal((await h.call('/rent',{body:{...request,runner_nonce:'e'.repeat(64)}})).status,409);assert.equal(h.cloud.creates,1);
 });
+for(const restart of [false,true])test('R3 a new run nonce cannot inherit cached PASS '+restart,async()=>{
+ const h=await setup();assert.equal((await h.call('/rent',{body:request})).status,200);
+ assert.equal((await h.report({seq:1,kind:'result',result:{nonce,verdict:'PASS'}})).status,200);
+ h.time.value+=300000;await h.service.sweep();if(restart)h.restart();h.cloud.run.id=124;
+ assert.equal((await h.call('/rent',{claims:{run_id:'124'},body:{...request,runner_nonce:'e'.repeat(64)}})).status,409);assert.equal(h.cloud.creates,1);
+});
 for(const text of ['ordinary log\n','é raw UTF8\n'])test('R3 final structured binding hashes exact fetched chunks '+JSON.stringify(text),async()=>{
  const h=await setup();assert.equal((await h.call('/rent',{body:request})).status,200);
  assert.equal((await h.report({seq:1,kind:'log',text})).status,200);
