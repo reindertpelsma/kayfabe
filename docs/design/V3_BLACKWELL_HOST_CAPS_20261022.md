@@ -57,9 +57,13 @@ control. `NV5070_CTRL_CMD_SYSTEM_GET_CAPS_V2` is a one-byte semantic flags table
 CSC precision or FVLUT page payload. Neither is the implementation used here.
 
 There is a distinct candidate: `NV2080_CTRL_CMD_GPU_EXEC_REG_OPS` (0x20800122), on the host's
-own subdevice. The generated [595.91.07 control export](https://github.com/NVIDIA/open-gpu-kernel-modules/blob/9f087a6d4e86d85acc0ce1d354d6276fe5047b29/src/nvidia/generated/g_subdevice_nvoc.c#L223)
-carries flags0x10118 including `RMCTRL_FLAGS_NON_PRIVILEGED`. The [public register validator](https://github.com/NVIDIA/open-gpu-kernel-modules/blob/9f087a6d4e86d85acc0ce1d354d6276fe5047b29/src/nvidia/src/kernel/gpu/gpu_access.c#L1102)
+own subdevice. The generated [595.91.07 control export](https://github.com/NVIDIA/open-gpu-kernel-modules/blob/9f087a6d4e86d85acc0ce1d354d6276fe5047b29/src/nvidia/generated/g_subdevice_nvoc.c#L235)
+carries flags0x10118 including `RMCTRL_FLAGS_NON_PRIVILEGED`. The [public register validator](https://github.com/NVIDIA/open-gpu-kernel-modules/blob/9f087a6d4e86d85acc0ce1d354d6276fe5047b29/src/nvidia/src/kernel/gpu/gpu_access.c#L1177)
 still applies `gpuGetUserRegisterAccessPermissions` when `osIsAdministrator()` is false.
+The ordinary control calls validation with permission skipping false. Linux defines
+`NV_IS_SUSER()` as `capable(CAP_SYS_ADMIN)` in
+[nv-linux.h:502](https://github.com/NVIDIA/open-gpu-kernel-modules/blob/9f087a6d4e86d85acc0ce1d354d6276fe5047b29/kernel-open/common/inc/nv-linux.h#L502);
+clearing the effective capability therefore removes that administrator bypass even for UID0.
 The per-offset GSP permission result for PRECOMP is not established by this source. A callable
 unprivileged API is not proof that this range is readable. The GSP-plugin-only NOPTRS variant
 is not used. Earlier suggestions that no unprivileged route exists are superseded by this
