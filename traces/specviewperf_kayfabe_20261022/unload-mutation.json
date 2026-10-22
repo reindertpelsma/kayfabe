@@ -1,0 +1,4 @@
+{
+  "mutant": "count_only_optional_leftover_object_summary",
+  "killing_tests": 3
+}

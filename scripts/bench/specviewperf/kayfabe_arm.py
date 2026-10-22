@@ -56,3 +56,8 @@ def abort_reason(xid_count, reset_times, now, deadline):
     if now >= deadline:
         return 'RESTORE_DEADLINE'
     return None
+
+
+def unload_markers(chunk):
+    """The function-47 entry exists even when all guest objects were freed."""
+    return chunk.count('GSP fn 47 UNLOADING_GUEST_DRIVER')
