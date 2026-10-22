@@ -10,7 +10,8 @@ export class Vast {
     if(!Array.isArray(result.offers)||result.offers.length>20)refuse();
     const offered=result.offers.filter(x=>validOffer(x,this.cfg)).sort((a,b)=>a.dph_total-b.dph_total)[0];if(!offered)refuse();return offered;
   }
-  async balance(){const r=await this.api('/api/v0/users/current');return r.balance;}
+  // The live account API exposes prepaid funds as credit; balance is a distinct legacy field.
+  async credit(){const r=await this.api('/api/v0/users/current');return r.credit;}
   async create(offer,record,script){
     const r=await this.api('/api/v0/asks/'+offer.id,'PUT',{image:IMAGE,vm:true,disk:120,runtype:'args',args:['sleep','infinity'],
       onstart:script,label:record.label,target_state:'running',cancel_unavail:true});
