@@ -1082,9 +1082,7 @@ fn a4_every_single_bit_flip_of_a_valid_entry_is_refused_by_name_or_forwarded_val
             drive(&mut sim, &mut relay, 20);
             assert!(sim.out.max_steps_per_turn <= 16, "bounded work");
             assert_eq!(sim.out.pb_reads_in_pointer, 0, "bit {bit} of {base:#x}");
-            let valid_now =
-                kf_chan::user_stream::inspect_entry(raw, kf_chan::user_storage::MAX_SOURCE_BYTES)
-                    .is_ok();
+            let valid_now = kf_chan::user_stream::inspect_entry(raw, 8_388_604).is_ok();
             if valid_now {
                 forwarded += 1;
                 // forwarded exactly as flipped (after the SetObj entry), never a different value
@@ -1126,8 +1124,7 @@ fn a4_hostile_entries_never_panic_and_never_store_an_unvalidated_value() {
         drive(&mut sim, &mut relay, 50);
         for f in sim.out.forwarded.iter().skip(2) {
             assert!(
-                kf_chan::user_stream::inspect_entry(*f, kf_chan::user_storage::MAX_SOURCE_BYTES)
-                    .is_ok(),
+                kf_chan::user_stream::inspect_entry(*f, 8_388_604).is_ok(),
                 "round {round}: stored an entry inspect_entry refuses: {f:#x}"
             );
         }

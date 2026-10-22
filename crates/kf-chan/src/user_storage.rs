@@ -711,6 +711,9 @@ impl Storage<CpuView> {
 mod tests {
     use super::*;
     use std::cell::RefCell;
+    mod measured {
+        include!("../tests/fixtures/run3440.rs");
+    }
 
     // Exercise the production memory accessors on a real CPU mapping without
     // opening NVIDIA or making an RM call. No simulated GET is a GPU result.
@@ -740,6 +743,58 @@ mod tests {
         }
     }
 
+    #[test]
+    fn write_user_gp_stores_each_run3440_descriptor() {
+        let s = anonymous_live_storage();
+        for raw in measured::RUN3440 {
+            s.write_user_gp(0, raw).unwrap();
+            assert_eq!(
+                s.cpu()
+                    .unwrap()
+                    .load_u64(HostOffset::new(GP_OFFSET))
+                    .unwrap(),
+                raw
+            );
+            assert_eq!(s.gpu_get().unwrap(), 0);
+            assert_eq!(s.gpu_reference().unwrap(), 0);
+        }
+    }
+    #[test]
+    fn write_user_gp_stores_the_largest_representable_descriptor() {
+        let s = anonymous_live_storage();
+        let raw = kf_abi::submit::gp_entry(0x4000, 8_388_604).unwrap() | (1 << 63) | (1 << 41);
+        s.write_user_gp(0, raw).unwrap();
+        assert_eq!(
+            s.cpu()
+                .unwrap()
+                .load_u64(HostOffset::new(GP_OFFSET))
+                .unwrap(),
+            raw
+        );
+        assert_eq!(s.gpu_get().unwrap(), 0);
+    }
+    #[test]
+    fn write_user_gp_refuses_end_at_2_40() {
+        let s = anonymous_live_storage();
+        let raw = kf_abi::submit::gp_entry((1 << 40) - 4, 4).unwrap();
+        assert!(s.write_user_gp(0, raw).is_err());
+        assert_eq!(
+            s.cpu()
+                .unwrap()
+                .load_u64(HostOffset::new(GP_OFFSET))
+                .unwrap(),
+            0
+        );
+    }
+    #[test]
+    fn diagnostic_shadow_inspection_keeps_its_snapshot_budget() {
+        for raw in measured::RUN3440 {
+            assert_eq!(
+                crate::user_stream::inspect_entry(raw, MAX_SOURCE_BYTES),
+                Err(crate::user_stream::Refusal::Budget)
+            );
+        }
+    }
     #[test]
     fn private_ring_publication_keeps_user_addresses_and_never_forges_get_or_reference() {
         let s = anonymous_live_storage();
@@ -845,7 +900,7 @@ mod tests {
         for entry in [
             1 << 32,
             u64::MAX,
-            kf_abi::submit::gp_entry(0x420000, MAX_SOURCE_BYTES + 4).unwrap(),
+            kf_abi::submit::gp_entry((1 << 40) - 4, 4).unwrap(),
         ] {
             assert!(s.write_user_gp(0, entry).is_err());
             s.write_shadow_gp(ENTRIES - 1, entry).unwrap();
@@ -878,7 +933,7 @@ mod tests {
             1 << 32, // CONTROL/ILLEGAL, not an unused NOP operand.
             good | 1,
             good | (1 << 40),
-            kf_abi::submit::gp_entry(0x420000, MAX_SOURCE_BYTES + 4).unwrap(),
+            kf_abi::submit::gp_entry((1 << 40) - 4, 4).unwrap(),
         ] {
             assert!(s.write_user_gp(0, bad).is_err(), "entry={bad:#x}");
             assert_eq!(
