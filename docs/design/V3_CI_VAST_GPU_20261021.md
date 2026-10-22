@@ -85,6 +85,8 @@ STATUS: LIVE-DESIGN, 2026-10-22 — Amendment 3/3b and endpoint-secret/prefix im
 
 [INFERRED from source: H20 before metadata probes] FALSIFIER: a broker step name or other metadata references env.WORKER_URL/PATH while only inline secrets-context expressions are rejected. Step metadata must not contain endpoint aliases; only the exact two step-env bindings and the audited shell body may reference those names. Probe the committed guard before adding red tests.
 
+[INFERRED from source: H21 before forwarding-syntax probes] FALSIFIER: quotes, whitespace, anchors or folded scalar forms hide all-secret forwarding from the inheritance check. Permit only explicit block mappings on secrets properties, including unrelated secret names; reject every nonempty scalar/compact/aliased forwarding form before interpretation. Check alternate spellings in red tests, then recheck the affected guard mutations and the full baseline. This extends the same bounded YAML subset rather than claiming to evaluate arbitrary workflows.
+
 [CODE READ: primary basis] GitHub documents [secret contexts and environment bindings](https://docs.github.com/en/actions/how-tos/write-workflows/choose-what-workflows-do/use-secrets) and [registering masks before use](https://docs.github.com/en/actions/reference/workflows-and-actions/workflow-commands#masking-a-value-in-a-log). Exact-value masking does not cover transformations automatically; explicit masks and avoiding endpoint output are both required. No real endpoint/secret is used by tests.
 
 ## Amendment 3/3b: the box reports hostile data to the Worker
