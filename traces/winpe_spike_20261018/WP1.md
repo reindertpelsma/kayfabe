@@ -88,7 +88,7 @@ CODE READ (pre-run record, 2026-10-22; evidence round3-hypotheses.txt): S2's
 hypothesis included a successful data-backed FileRepository and Code0/SMI
 binding; failed alias readback/preparation was a stated falsifier. The driver,
 CUDA and graphics hypotheses remain unevaluated. The native apps were prepared
-with static MinGW CRT: CUDA would execute an own PTX kernel and check 42;
+with MinGW `-static -static-libgcc` flags: CUDA would execute an own PTX kernel and check 42;
 D3D11 would assert VendorId 0x10de, reject software adapters and read back a
 red center/blue corner. These prepared apps have no execution result.
 Microsoft DirectX files came from the vendor's LTSC2024 evaluation ISO,
