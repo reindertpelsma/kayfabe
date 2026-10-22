@@ -16,6 +16,7 @@ from pathlib import Path
 import re
 import sys
 import subprocess
+import signal
 import time
 
 import xid_policy
@@ -185,6 +186,11 @@ def validate_phase_owner(phase,proc_root='/proc'):
     except (OSError,KeyError,ValueError,IndexError) as error:
         raise N.GuardRefused('owned process proof missing/invalid') from error
     return True
+
+
+def abort_owned_qemu(phase):
+    """Detached-VM abort seam; never wired before the following failing tests."""
+    return False
 
 
 def main():
