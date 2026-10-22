@@ -1,0 +1,21 @@
+[
+  {
+    "id": 57132969,
+    "offer": 35126136,
+    "machine_id": 55678,
+    "gpu_offer": "RTX 5090",
+    "quote_dph": 0.6956481481481481,
+    "created_utc": "2026-10-22T00:26:37.648385+00:00",
+    "credit_before": 43.8485277679614,
+    "prior_lane_runtime_usd": 2.640451894638169,
+    "reservation_usd": 2.766653549382716,
+    "budget_stop": 7,
+    "credit_reserve": 5,
+    "auto_destroy_minutes": 170,
+    "product_head": "8f3a9bb3a5d652b3f536ca015bf95735ec588924",
+    "destroyed": false,
+    "auto_destroy_pid": 2707430,
+    "auto_destroy_verified": true,
+    "auto_destroy_armed_utc": "2026-10-22T00:26:37.725005+00:00"
+  }
+]

@@ -1,3 +1,11 @@
+STATUS: LIVE, 2026-10-22 00:26:37 UTC. Owner GO: created ONE RTX5090 lease57132969, offer35126136,
+machine55678. Auto-destroy170min PID2707430 verified FIRST, expiry03:16:37UTC. Credit via API43.848528USD;
+prior lane runtime2.640452USD, conservative new reservation2.766654USD (rate guard plus0.50 overhead),
+combined budget guard5.407105USD <7 hard stop; reserve5 untouched. Quote0.695648USD/h; actual rate will be
+recorded after readiness. Product/guard8f3a9bb3a; kit5a9d12982; native fixture19 release tests, guard65 tests,
+12 mutants each>=2killers. N0 is mandatory; any native32 stops before Windows. No other own lease active.
+Receipt: ../blackwell_validation_20261022/owned_instances.json. Prior entries below are history.
+
 STATUS: LIVE, 2026-10-22. Documentation-only follow-up: no new lease, hardware run or rental.
 Owner raised the Blackwell lane hard stop to **7 USD total**, preserving the **5 USD account credit
 reserve**, one lease at a time and auto-destroy first / <=3 h per box. This supersedes the earlier
