@@ -44,6 +44,7 @@ export class MockCloud {
   fetch=async (input,init={})=>{
     const u=new URL(String(input));const method=init.method||'GET';const body=init.body?JSON.parse(init.body):undefined;
     this.calls.push({url:u.href,method,body,headers:new Headers(init.headers)});
+    u.pathname=u.pathname.replace(/\/$/,''); // Mock routing tolerates canonical provider slash.
     if(u.hostname==='token.actions.githubusercontent.com')return Response.json({keys:[jwk]});
     if(u.hostname==='api.github.com'){
       if(this.githubError)return new Response('PRIVATE-UPSTREAM', {status:this.githubError});
