@@ -1,0 +1,6 @@
+STATUS: LIVE,2026-10-22. MEASURED: first8armsdurablycompleted atf8432eed2;
+defer4accepted atomically onlyafter wholeownedQEMU7150 exit0,finalsourceproof,
+physicalhosttwin/guestchannels andpositiverecovery. Native5immutable,9totalXid31,
+no32/unrelated31. Offlineapprove_guestrecheckofretainedkernel/serial/twins/context
+returns exact9. Statecontains actualcapturedPID/starttime/exe/revision/sourcehashes.
+Nextmissingpage andfull30remainpending. Oldrefusedattemptsremainunaccepted.

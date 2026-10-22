@@ -1,0 +1,114 @@
+{
+  "kind": "MEASURED bounded text export",
+  "utc": "2026-10-22T03:09:21.894149+00:00",
+  "files": {
+    "s2_thread_controller.log": {
+      "sha256": "d83f3370b93e7d6e9193f42c639d74add884915b4a794839328b9012e1919467",
+      "bytes": 748,
+      "tail_only": false
+    },
+    "s2_thread_host_tests.log": {
+      "sha256": "fe4a5e2486a2e44bc54b036e11fe57f71224a70c5ac80d83eaaa58cecad8bf61",
+      "bytes": 4900,
+      "tail_only": false
+    },
+    "s2_thread_host_preflight.log": {
+      "sha256": "8ef3b9dddccf07e2bee2690e83274f52128822e44312c517a028c320655642c1",
+      "bytes": 411,
+      "tail_only": false
+    },
+    "s2_thread_build.log": {
+      "sha256": "a4557550c9a5dc10c1fe32777ebe638ad1ad1f64b4a210c4f1784cbadcd7346f",
+      "bytes": 65480,
+      "tail_only": false
+    },
+    "sweep_linux_guest595.log": {
+      "sha256": "1aca252844b536a8b63d8b78386a0f79249f95b80ffa765ae8adf1fdfe900201",
+      "bytes": 629,
+      "tail_only": false
+    },
+    "native_xid_baseline.json": {
+      "sha256": "06b33b2de6e677a6a3f74545725bf7fe7d0e95888bab17eda673dab885549b1f",
+      "bytes": 1428,
+      "tail_only": false
+    },
+    "s2_accepted_xid_history.json": {
+      "sha256": "e7fa7e0d89e21c5bcb97b807cb20554f6e8ae2d36d5a291aecd2f232a9d7c214",
+      "bytes": 11226,
+      "tail_only": false
+    },
+    "sweep_qemu_sha256": {
+      "sha256": "c78ada376560d490663255bb083c9770f7d8b6674df64157a15defd600584567",
+      "bytes": 120,
+      "tail_only": false
+    },
+    "sweep_product_source": {
+      "sha256": "225ef19eacf4340b1114d76a915ce7bd6e521479cdeea7551fd6992ac604fad1",
+      "bytes": 41,
+      "tail_only": false
+    },
+    "s2r3_guest595_bus-info-sweep_controller.log": {
+      "sha256": "9f31e7bfe17898b5f9e38b61a58acae7299675978b1a73a97e7c003123ac4edf",
+      "bytes": 333,
+      "tail_only": false
+    },
+    "s2r3_guest595_doorbell-census_controller.log": {
+      "sha256": "846c9cc0bf15a5c925c1a39f7ee728b5dbec61219ac88db110b4870e60fdfb13",
+      "bytes": 334,
+      "tail_only": false
+    },
+    "s2r3_guest595_alias-two-vas_controller.log": {
+      "sha256": "bebc6ce8710c3c1613244079fce6047145cb87e624f0bc738f9f55762da1eb73",
+      "bytes": 332,
+      "tail_only": false
+    },
+    "s2r3_guest595_engines_controller.log": {
+      "sha256": "f9aa8b702a3358bfb0c3a740ecb0a92130bedbe903af774b266cc90f8f072148",
+      "bytes": 326,
+      "tail_only": false
+    },
+    "s2r3_guest595_alias-unmap-observe_controller.log": {
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0,
+      "tail_only": false
+    },
+    "s2r3_guest595_concurrency_controller.log": {
+      "sha256": "81b539191b9eed0933b7f6efb73a1566ee9da77a276277c6d95359bd8f3fdf80",
+      "bytes": 331,
+      "tail_only": false
+    },
+    "s2r3_guest595_blockage-coverage_controller.log": {
+      "sha256": "924eea6ca17ed2483d9e1005f265ec5074c39fcc1a604b91d55d95c51f851e70",
+      "bytes": 336,
+      "tail_only": false
+    },
+    "s2r3_guest595_gpu-info-sweep_controller.log": {
+      "sha256": "67c7cc411cdf4a96e23b081cfe728c3bca3fb99bd79ea613495e243202a1c54f",
+      "bytes": 333,
+      "tail_only": false
+    },
+    "s2r3_guest595_timer_controller.log": {
+      "sha256": "6100bd2afefd6742729c25b759f33a95438f959d3682fdb1405d500c9ce5f232",
+      "bytes": 324,
+      "tail_only": false
+    },
+    "s2r3_guest595_defer-liveness_controller.log": {
+      "sha256": "8937b53e9cf074345f3000618d32e664bb2ccb9011bae7c8b559879909c59a41",
+      "bytes": 334,
+      "tail_only": false
+    },
+    "fast_s2r3_guest595_defer-liveness_defer-liveness_serial.log": {
+      "sha256": "b8e6e8096161b5c5c9c11ac88520860f38807833e2445bd4b7d79eb2110694bd",
+      "bytes": 28128,
+      "tail_only": false
+    },
+    "fast_s2r3_guest595_defer-liveness_defer-liveness_qemu.log.projection.txt": {
+      "sha256": "89d2d77f8695fba924ae850693fdf413db6d728e4f6ab24d3f097a1694950456",
+      "bytes": 147972,
+      "projection": true
+    },
+    "kernel_xids.log": {
+      "journal_lines": 1222
+    }
+  }
+}
