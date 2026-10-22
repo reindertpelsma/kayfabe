@@ -1,0 +1,9 @@
+BIND_START source=6e3fd3fd6d809ae2c2a3504cd8be1ecd29b2b31b 2026-10-22T23:45:52+00:00 (bind only, no enable; not a measured init arm)
+KF_GOP_EXPORT target=x86_64-unknown-uefi bytes=9216 out=/workspace/bw-capc-validation/secureboot/kf-gop.6e3fd3fd.efi
+Signing Unsigned original image
+Signature verification OK
+[2026-10-22T23:45:52Z] KF_GOP_SIGNED /workspace/bw-capc-validation/secureboot/kf-gop.6e3fd3fd.signed.efi sha256=5f401168d7ce0ab2b9bb601570e997cee5cee1c14389115ff1521bbc7c977c55 unsigned_sha256=e2616ad8d4cb09da88399218144b6bdea9d2cb3148b701964f926604b7d6dff6
+[2026-10-22T23:45:52Z] detached: tag=bw580_bind, log logs/bw580_bind_run.log (stdout logs/bw580_bind_run.out)
+KF_SSH_UP
+{"pid": 112658, "exe": "/workspace/bench/kf3-bins/6e3fd3fd/qemu-system-x86_64", "sha256": "9aff3cc4688e7c417ea1100491da34d91f075e3f365cd48c1fd31efd63475424", "kf3_device": "kf3-gpu,fb-mb=8192,bar1-size=134217728,bar2-size=33554432,display=on,gop=on,gop-efi=/workspace/bw-capc-validation/secureboot/kf-gop.6e3fd3fd.signed.efi,id=kf0,guest-driver=580.65.06"}
+[2026-10-22T23:47:42Z] START nv-extract
