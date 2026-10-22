@@ -1,0 +1,2 @@
+INFERRED (2026-10-22, lease57193877) hypothesis: the fourth child may already have a signed-in console before the QMP helper runs. FALSIFIER BEFORE observation: Win32_ComputerSystem.UserName is empty and no Explorer process exists in the pre-enable snapshot. This read-only observation does not change console state.
+MEASURED (2026-10-22, lease57193877, fourth_pre_enable_session.txt): hypothesis falsified for the fourth boot; user=null, Explorer0, LogonUI1 before enable.
