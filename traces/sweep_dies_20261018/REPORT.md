@@ -1,3 +1,37 @@
+STATUS: PARTIAL — S4 final update, 2026-10-22 23:58 UTC.
+
+CODE READ (2026-10-22): branch `codex/sweep-dies-20261022`; this update supersedes earlier live/pending/stopped summaries below. The publication head is the containing commit, checked against origin after push; the external S4 report records its exact hash at closeout.
+
+1. MEASURED (2026-10-22, `round3/all_resume_green.log`): DONE owner-approved exact channel/VA/type plus CE-family admission; authentic AD102 exact5 and GA102 fourCE+GR admit; wrong channel/VA/type, extra and non-CE refuse.
+2. MEASURED (2026-10-22, `lease_57280778/native_complete/`): DONE new GA102/RTX3090 native gates9+10,USER12/12,raw30/30,CUDA4/4,GRtierPASS; host595.91.07 OPEN, runtime905a8bd75; n1,spreadN/A.
+3. MEASURED (2026-10-22, `lease_57280778/bind_final/sweep_windows_install.log`): DONE generic Windows baseline/verification fail0, sealed23:28:57Z.
+4. MEASURED (2026-10-22, `lease_57280778/bind_final/bwr_bind.log`, `lease_57280778/matrix_row.json`): FAIL GA102 bind readiness23:48:35Z, SSH banner timeout, zero driver RPC; GPU enable/desktop/apps/Unigine/600s hold NOTRUN.
+5. MEASURED (2026-10-22, `lease_57280778/cleanup_final/`): DONE owned bind PID exited through QMP; final journal still matches frozen five-record native baseline, no new/unmatched Xid.
+6. MEASURED (2026-10-22, `lease_57193877/ADA_RESULT.md`): earlier AD102580.88 Code0/1920x1080/Explorer/DWM and600s zero-TDR holdPASS; full Ada acceptance remains PARTIAL.
+7. MEASURED (2026-10-22, `lease_57193877/final_stopped/matrix_ad102_s4_r4/win.res`): Ada18/112 rows:13PASS,4strictUnigineGPU-proofFAIL,1NVRTCNOTRUN,94unrun; no retrospective pass from later harness fixes.
+8. MEASURED (2026-10-22, `round3/turing_availability/final_offer_census.json`): NOTRUN new Turing acceptance;0 eligible Turing KVM offers versus30 other KVM offers at23:57:27Z. No new Turing lease created.
+9. CODE READ (2026-10-22, `round3/coverage.json`): main consumer/workstation die set20; existing any-item constants14, inherited0, unmeasured6=30%; harvest-dependent data stays runtime-only; datacenter separate/last.
+10. MEASURED (2026-10-22, `round3/alloc_export_red.log`, `round3/alloc_export_green.log`, `round3/alloc_export_bundle_proof.json`): DONE missing run-kit metadata parser restored from our public e34886891 source, tests-first5RED→5GREEN and bundled SHA match; no decoder change or binary RE.
+11. CODE READ (2026-10-22): unchanged product Rust/QEMU trees from rev170054339; no audit-fix branch, guest patch, timeout change or relaxed app oracle; Rust changes0, added Rust lint sites0, fresh clippy NOTRUN.
+12. MEASURED (2026-10-22, `round3/final_cleanup.json`): DONE owned IDs57193877/57209908/57262021/57280778 API-absent; timers/helpers0; own target absent, large caches removed, no owned GPU/cargo lock held.
+13. INFERRED (2026-10-22, same cleanup receipt): conservative lane$6.722848<12, Round3$2.919230<8; reserve$5 untouched; final invoice unverified.
+14. INFERRED (2026-10-22): remaining work is GA102 pre-driver boot diagnosis and Turing hardware acceptance when a compliant offer appears; full app acceptance is not established on any requested family.
+15. CODE READ (2026-10-22): no additional owner approval requested. Existing authorization suffices for the next compliant Turing run; the six unmeasured constant dies remain explicitly visible for the owner's broader coverage decision.
+
+MEASURED (2026-10-22, named proof logs): prior combined guard/transport154/154 pass plus new export5/5 pass. These are separate executions; counts are not added to overlapping historical suites. Hardware counts are given above; no new FPS or percentile result is claimed.
+
+| Mutation group | Kill counts per mutant | Evidence |
+|---|---|---|
+| Approved CE-family guard |3,2,5,5,5,3|`round3/owner_family_mutants.json`|
+| Checked image transport |2,2,2,2,2|`round3/chunks_mutants.json`|
+| Allocation export |3,2,2|`round3/alloc_export_mutants.json`|
+
+INFERRED (2026-10-22): recommended next action1 is a bounded public-source investigation of GA102's pre-driver bind boot; next action2 is the already-authorized Turing acceptance run on an eligible KVM offer. Neither recommendation supplies an unverified product fix. Driver-bind cause, post-enable Windows behavior, complete app results, workstation branch/vBIOS/ECC equivalence, six missing die constants and billed cost remain unverified.
+
+CODE READ (2026-10-22): historical reports follow, with their original timestamps and limitations.
+
+---
+
 1. CODE READ (2026-10-22): Lane S4; branch `codex/sweep-dies-20261022`; publication head = containing commit (verified against origin after push). Asked: Ada, Ampere, then Turing Windows580.88 desktop, APP MATRIX, Unigine and600-second zero-TDR hold, with$12 budget. The lane stopped on exact native Xid admission, per the owner safety rule.
 
 2. Result (2026-10-22):
@@ -124,3 +158,21 @@ AMPERE RESUME RESULT — 2026-10-22
 15. CODE READ (2026-10-22): preserve this failed arm and evidence before exact-id teardown/API absence; Turing follows only after absence. No RE or secrets on the rental, no dev cargo target or shared-host GPU work.
 
 MEASURED (2026-10-22, lease57280778, `lease_57280778/TEARDOWN.json`): exact-id teardown verified API absence23:52:10Z; auto-destroy cancelled afterward. INFERRED: runtime estimate$0.498823, conservative$1.498823; conservative lane total$6.722848, Round3$2.919230; Turing budget remains.
+
+TURING RESUME AVAILABILITY — 2026-10-22
+
+1. CODE READ (2026-10-22): requested Turing after Ampere, targeting TU106/TU104 consumer and mapped Quadro RTX workstation variants, one owned lease at a time.
+2. MEASURED (2026-10-22, `turing_availability/no_offer_census.json`): no eligible offer at23:52:59Z; rental selector refused before creating a lease.
+3. MEASURED (2026-10-22, `turing_availability/expanded_offer_census.json`): verified and unverified provider queries,180GB storage, Super/Ti and Quadro RTX naming variants returned0 KVM candidates at23:53:26Z.
+4. MEASURED (2026-10-22, `turing_availability/availability_control_census.json`): diagnostic5GB-storage search returned28 Turing offers across consumer models; all28 advertised vms_enabled=false. These are not eligible180GB Windows quotes.
+5. MEASURED (2026-10-22, same control census): KVM/single-GPU/180GB/price<=1 control query returned31 offers for other GPU families; API was returning marketplace data.
+6. MEASURED (2026-10-22, `turing_availability/final_offer_census.json`): final23:57:27Z census returned30 KVM offers and0 Turing candidates; GTX16x names were included in this final check.
+7. INFERRED (2026-10-22): Turing is unavailable under this run's KVM/storage/price requirements in these snapshots; this does not establish permanent unavailability or permission to rent non-KVM offers.
+8. MEASURED (2026-10-22, `final_cleanup.json`): new Turing resume leases0, new Turing rental cost0; all earlier own lease IDs API-absent.
+9. MEASURED (2026-10-22, `../lease_57262021/TEARDOWN.json`): earlier TU106 preparation rental was already destroyed22:02:29Z; no new native/engine/Windows acceptance probe ran there.
+10. CODE READ (2026-10-22, `coverage.json`, constants audit): existing TU106 tables/captures are retained; unavailable acceptance testing is not a reason to repeat existing constant measurements.
+11. CODE READ (2026-10-22, `coverage.json`): main target20 consumer/workstation dies; any-item constant receipts14, inherited0, unmeasured6 (TU104,TU117,GA103,GA107,AD107,GB207),30% of equal-weight die set.
+12. CODE READ (2026-10-22, `TIER_PLAN.md`): workstation driver/vBIOS/ECC axes remain unverified; harvested masks/counts/routes are host runtime facts, never inherited die constants; datacenter remains separate/last.
+13. CODE READ (2026-10-22): new Turing Windows580.88 bind/ON/desktop/appmatrix/Unigine/600s hold NOTRUN; hardware n0,spread unavailable; no synthetic PASS or failing RPC/event time claimed.
+14. INFERRED (2026-10-22, `final_cleanup.json`): lane conservative total$6.722848<12 and Round3$2.919230<8; budget is not the blocker. Price guard$1/h and reserve$5 remain intact; invoice not verified.
+15. INFERRED (2026-10-22): next required hardware action is Turing acceptance when a compliant offer is available; no RE is needed for the owner-approved CE-family admission, and no RE was done in S4.

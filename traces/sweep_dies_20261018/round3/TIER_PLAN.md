@@ -1,5 +1,7 @@
 # S4 Round 3 constant tiers and coverage plan
 
+MEASURED (2026-10-22, `turing_availability/final_offer_census.json`): later23:57:27Z availability supersedes the earlier TU106 quote below for the current retry:0 Turing candidates among30 KVM/single-GPU/180GB/price<=1 offers. Existing constant coverage remains14/20; no new Turing lease or constant receipt. No permanent unavailability is inferred.
+
 CODE READ (owner ruling 2026-10-22,23:00): admission prerequisite below is SUPERSEDED by `docs/design/S4_XID_ADMISSION_20261022.md`, commit 597d60fe1. Exact source channel/VA/type plus CE-family membership now authorizes the deliberate copy-engine controls. Tier findings and coverage remain research; no per-die route table or RE is required for this approved guard policy.
 
 STATUS: RESEARCH / LIVE, 2026-10-22. CODE READ: owner ROUND3 and Addenda1/2 plus workstation scope update; follow `docs/design/V3_CONSTANT_STRATEGY.md` tiers in order. This is a GPU-free plan and evidence inventory, not a runtime constant/admission table.

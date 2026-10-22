@@ -1,0 +1,11 @@
+{
+  "class": "MEASURED",
+  "utc": "2026-10-22T23:53:26.416583+00:00",
+  "provider_verification": [
+    "true",
+    "false"
+  ],
+  "storage_gb": 180,
+  "models": "consumer Turing naming variants plus Quadro RTX workstation; excludes datacenter T4",
+  "offers": []
+}

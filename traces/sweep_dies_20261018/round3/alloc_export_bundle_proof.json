@@ -1,0 +1,11 @@
+{
+  "class": "MEASURED",
+  "utc": "2026-10-22T23:56:50.806196+00:00",
+  "source": "af6cf65f75953b67093ec57c9521086ae9c5ce35",
+  "mode": "offline packaging only; closed ledger input, no rental/API/deployment",
+  "bundle_prepared": true,
+  "allocation_parser_included": true,
+  "parser_sha256": "1e9219c6ef395c67ebbdfc705d15d68c06c05c5b5f98142db5e9a7671875b10b",
+  "canonical_parser_sha256": "1e9219c6ef395c67ebbdfc705d15d68c06c05c5b5f98142db5e9a7671875b10b",
+  "temporary_bundle_removed_after_check": true
+}

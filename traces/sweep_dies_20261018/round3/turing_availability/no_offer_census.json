@@ -1,0 +1,9 @@
+{
+  "class": "MEASURED",
+  "utc": "2026-10-22T23:52:59.445443+00:00",
+  "queries": [
+    "rentable=true rented=false vms_enabled=true num_gpus=1 gpu_name in [RTX_2060,RTX_2060S,RTX_2060_Super,RTX_2070,RTX_2070S,RTX_2080,RTX_2080S]",
+    "rentable=true rented=false vms_enabled=true num_gpus=1 gpu_name in [RTX_2060,RTX_2060S,RTX_2060_Super,RTX_2070,RTX_2070S,RTX_2080,RTX_2080S] cpu_ram>=16000"
+  ],
+  "offers": []
+}
