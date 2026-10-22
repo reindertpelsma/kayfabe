@@ -1,0 +1,31 @@
+{
+  "kind": "MEASURED retained-file inspection only; no rerun",
+  "paths": {
+    "/workspace/bench/fastguest/vmlinuz": {
+      "exists": false,
+      "bytes": null
+    },
+    "/workspace/bench/fastguest/initrd.cpio.gz": {
+      "exists": false,
+      "bytes": null
+    },
+    "/workspace/bench/fastguest595/vmlinuz": {
+      "exists": true,
+      "bytes": 14961032
+    },
+    "/workspace/bench/fastguest595/initrd.cpio.gz": {
+      "exists": true,
+      "bytes": 158248656
+    },
+    "/root/kayfabe/scripts/bench/guest_xid_qemu.sh": {
+      "exists": true,
+      "bytes": 309
+    }
+  },
+  "controller_fastguest_dir_lines": [],
+  "controller_guarded_launch_lines": [
+    "python3 -B scripts/bench/guarded_fast_suite.py s2_guest595 /root/prov/s2_accepted_xid_history.json 35ff2820e5573199072ab2d274f5f0b91a1826a8 /workspace/bench/kf3-bins/35ff2820/qemu-system-x86_64 >/root/prov/sweep_linux_guest595.log 2>&1"
+  ],
+  "qemu_log_exists": false,
+  "default_dir_exists": false
+}

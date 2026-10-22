@@ -1,0 +1,2 @@
+GUARDED_ARM_START --timer
+GUARDED_SUITE_STOP arm=--timer rc=2

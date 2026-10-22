@@ -1,0 +1,120 @@
+{
+  "kind": "MEASURED bounded text export",
+  "utc": "2026-10-22T01:38:54.429293+00:00",
+  "files": {
+    "s2_guard_host_tests.log": {
+      "sha256": "7e91a1bbbe8d456d118142a904a2fbe813e15ce2c3763296b0b966d600033a94",
+      "bytes": 11308,
+      "tail_only": false
+    },
+    "sweep_host_die.log": {
+      "sha256": "c6d090b41fd4dbd050a168799bdda7e318688a69a4aeab184d69d02e770c7902",
+      "bytes": 209,
+      "tail_only": false
+    },
+    "sweep_host_preflight.log": {
+      "sha256": "4fa69b9da9beb23dbdec019fb979e814b8fc662fc4c888da80c8934f6ba3a0bf",
+      "bytes": 524,
+      "tail_only": false
+    },
+    "sweep_gates.log": {
+      "sha256": "20a5bb768d76ac0e9f85c6b0e255ea112111fa0605c3ba01851afae61691d7fa",
+      "bytes": 25213,
+      "tail_only": false
+    },
+    "sweep_native_baseline.log": {
+      "sha256": "7c6d1a788cd85a3fe268bf76e7f6a12f4ea798746718fd4c91c85479ef8d7105",
+      "bytes": 351,
+      "tail_only": false
+    },
+    "sweep_bare595.log": {
+      "sha256": "d2deb83372ad90423429bca0c88f498ce997bdb67902724282d906c44185aa9d",
+      "bytes": 5841,
+      "tail_only": false
+    },
+    "sweep_cuda_host.log": {
+      "sha256": "d4f9cd4d73af3d27af5b011a2fda6eaba54a603d6083f378400224e6faa3f3a8",
+      "bytes": 2360,
+      "tail_only": false
+    },
+    "sweep_native_grtier.log": {
+      "sha256": "6c1c3c51263bcdf1f4b95c8b35562332f292f68906e0359fe0c7ce0bc420deda",
+      "bytes": 3056,
+      "tail_only": false
+    },
+    "sweep_linux_guest595.log": {
+      "sha256": "204851b6e3ad5eb2841e463deeb4d9e93044ae7af17393d3d5f460ebfe39641d",
+      "bytes": 62,
+      "tail_only": false
+    },
+    "native_xid_baseline.json": {
+      "sha256": "a3f30c8331629cd61e74dd61efa132ccb805c5b4d4c5fa4e77affa108f8c9e96",
+      "bytes": 1433,
+      "tail_only": false
+    },
+    "s2_accepted_xid_history.json": {
+      "sha256": "a3f30c8331629cd61e74dd61efa132ccb805c5b4d4c5fa4e77affa108f8c9e96",
+      "bytes": 1433,
+      "tail_only": false
+    },
+    "observer_source_check.log": {
+      "sha256": "fc20958b27cf58a6b124fbf55a417e3bb16cfd034b7ef36251ca8f06ddbc62be",
+      "bytes": 58,
+      "tail_only": false
+    },
+    "observer_source_apply.log": {
+      "sha256": "b04f837659f93ce3cd928cfed50e1d49a241d40f6607409eb4ce27075c3c2acd",
+      "bytes": 94,
+      "tail_only": false
+    },
+    "sweep_qemu_sha256": {
+      "sha256": "5a7418757e8cf0e805ba576e21a81328700d4cbda01d50b0b949259284a0a744",
+      "bytes": 120,
+      "tail_only": false
+    },
+    "sweep_product_source": {
+      "sha256": "6ccbcbe11b0e7154fa9574b4dac62a3a2e020ae8725c29a712f9e4f3a59b31b8",
+      "bytes": 41,
+      "tail_only": false
+    },
+    "sweep_20261020_provision.log": {
+      "sha256": "b775eb53580bd95039115d192ba55315982288bc294262fcc755ed00bba85e2d",
+      "bytes": 2296,
+      "tail_only": false
+    },
+    "box.log": {
+      "sha256": "5ce25d66e2be836561adef663b9d376101082ea0006450c3a5c89e838b82380c",
+      "bytes": 22789,
+      "tail_only": true
+    },
+    "driver.log": {
+      "sha256": "e1bca7aabe6c3a9fdab73b664ec430a6b79848770a63774284e30ea1f1aa89be",
+      "bytes": 4371,
+      "tail_only": false
+    },
+    "tree.log": {
+      "sha256": "a02a77c0e3889f66cb223adf88e8daea354d4000138a554913b1b0da67da0563",
+      "bytes": 7101,
+      "tail_only": false
+    },
+    "sweep35ff2820_ad102_native595_defer-liveness.log": {
+      "sha256": "62006c906929d2d308dc68e56ed9c055e11f1a15f3ed0c708aca5181f09957d7",
+      "bytes": 14220,
+      "tail_only": false
+    },
+    "sweep35ff2820_ad102_native595_missing-page-fault.log": {
+      "sha256": "f2fbe3d0662b520e3a5524bc895aa9f11014dcef2b95f248b77f912e4299e17b",
+      "bytes": 2461,
+      "tail_only": false
+    },
+    "s2_guest595_timer_controller.log": {
+      "sha256": "acc8d87a8fa012ff60eadcca6f8ae2ed33f0c81d88af1bad845efa64217a0d24",
+      "bytes": 472,
+      "tail_only": false
+    },
+    "kernel_xids.log": {
+      "journal_lines": 1003
+    }
+  },
+  "publication_format": "Whitespace-normalized text projection; per-source sha256/byte counts refer to original rental files."
+}

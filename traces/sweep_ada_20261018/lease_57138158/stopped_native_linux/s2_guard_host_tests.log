@@ -1,0 +1,181 @@
+test_all_thirty_distinct_pinned_arms_preserved (test_guarded_fast_suite.GuardedSuiteTests) ... S2_GUARD_HOST_PYTHON=3.10.12
+GUARDED_ARM_START --timer
+GUARDED_ARM_PASS --timer
+GUARDED_ARM_START --engines
+GUARDED_ARM_PASS --engines
+GUARDED_ARM_START --doorbell-census
+GUARDED_ARM_PASS --doorbell-census
+GUARDED_ARM_START --gpu-info-sweep
+GUARDED_ARM_PASS --gpu-info-sweep
+GUARDED_ARM_START --bus-info-sweep
+GUARDED_ARM_PASS --bus-info-sweep
+GUARDED_ARM_START --concurrency
+GUARDED_ARM_PASS --concurrency
+GUARDED_ARM_START --defer-liveness
+GUARDED_ARM_PASS --defer-liveness
+GUARDED_ARM_START --blockage-coverage
+GUARDED_ARM_PASS --blockage-coverage
+GUARDED_ARM_START --alias-two-vas
+GUARDED_ARM_PASS --alias-two-vas
+GUARDED_ARM_START --alias-unmap-observe
+GUARDED_ARM_PASS --alias-unmap-observe
+GUARDED_ARM_START --map-propagation
+GUARDED_ARM_PASS --map-propagation
+GUARDED_ARM_START --late-map-race
+GUARDED_ARM_PASS --late-map-race
+GUARDED_ARM_START --missing-page-fault
+GUARDED_ARM_PASS --missing-page-fault
+GUARDED_ARM_START --uvm-invalidate
+GUARDED_ARM_PASS --uvm-invalidate
+GUARDED_ARM_START --uvm-mean
+GUARDED_ARM_PASS --uvm-mean
+GUARDED_ARM_START --executor-vas
+GUARDED_ARM_PASS --executor-vas
+GUARDED_ARM_START --guest-ring-channel
+GUARDED_ARM_PASS --guest-ring-channel
+GUARDED_ARM_START --dictated-ring
+GUARDED_ARM_PASS --dictated-ring
+GUARDED_ARM_START --dictated-ring-negative
+GUARDED_ARM_PASS --dictated-ring-negative
+GUARDED_ARM_START --ce-client
+GUARDED_ARM_PASS --ce-client
+GUARDED_ARM_START --ce-client-guest-ram
+GUARDED_ARM_PASS --ce-client-guest-ram
+GUARDED_ARM_START --guest-ram-pin
+GUARDED_ARM_PASS --guest-ram-pin
+GUARDED_ARM_START --bar1-crossing
+GUARDED_ARM_PASS --bar1-crossing
+GUARDED_ARM_START --atomics-probe
+GUARDED_ARM_PASS --atomics-probe
+GUARDED_ARM_START --pce-mask-probe
+GUARDED_ARM_PASS --pce-mask-probe
+GUARDED_ARM_START --gpga-reserve-probe
+GUARDED_ARM_PASS --gpga-reserve-probe
+GUARDED_ARM_START --map-stress
+GUARDED_ARM_PASS --map-stress
+GUARDED_ARM_START --concurrent-fuzz
+GUARDED_ARM_PASS --concurrent-fuzz
+GUARDED_ARM_START --cross-client-leak
+GUARDED_ARM_PASS --cross-client-leak
+GUARDED_ARM_START --rpc-mixed-allocs
+GUARDED_ARM_PASS --rpc-mixed-allocs
+FAST_SUITE_PASS=30 FAST_SUITE_FAIL=0 FAST_SUITE_CRASH=0 NOTRUN=0 ARMS=30
+GUARDED_SUITE_RC=0
+ok
+test_first_arm_failure_stops_before_second (test_guarded_fast_suite.GuardedSuiteTests) ... GUARDED_ARM_START --timer
+GUARDED_SUITE_STOP arm=--timer rc=1
+ok
+test_seventh_arm_failure_stops_before_eighth (test_guarded_fast_suite.GuardedSuiteTests) ... GUARDED_ARM_START --timer
+GUARDED_ARM_PASS --timer
+GUARDED_ARM_START --engines
+GUARDED_ARM_PASS --engines
+GUARDED_ARM_START --doorbell-census
+GUARDED_ARM_PASS --doorbell-census
+GUARDED_ARM_START --gpu-info-sweep
+GUARDED_ARM_PASS --gpu-info-sweep
+GUARDED_ARM_START --bus-info-sweep
+GUARDED_ARM_PASS --bus-info-sweep
+GUARDED_ARM_START --concurrency
+GUARDED_ARM_PASS --concurrency
+GUARDED_ARM_START --defer-liveness
+GUARDED_SUITE_STOP arm=--defer-liveness rc=1
+ok
+test_actual_child_identity_is_captured (test_guest_guard_runner.RunnerIdentityTests) ... ok
+test_arbitrary_binary_directory_refused (test_guest_guard_runner.RunnerIdentityTests) ... ok
+test_changed_executable_is_fatal (test_guest_guard_runner.RunnerIdentityTests) ... ok
+test_changed_primitive_refused (test_guest_guard_runner.RunnerIdentityTests) ... ok
+test_changed_starttime_is_fatal (test_guest_guard_runner.RunnerIdentityTests) ... ok
+test_multiple_arms_in_one_boot_refused (test_guest_guard_runner.RunnerIdentityTests) ... ok
+test_other_single_arm_is_guarded_without_exception (test_guest_guard_runner.RunnerIdentityTests) ... ok
+test_parent_is_not_owned_qemu (test_guest_guard_runner.RunnerIdentityTests) ... ok
+test_selected_revision_directory_accepted (test_guest_guard_runner.RunnerIdentityTests) ... ok
+test_single_negative_arm_is_parsed (test_guest_guard_runner.RunnerIdentityTests) ... ok
+test_stale_binary_revision_refused (test_guest_guard_runner.RunnerIdentityTests) ... ok
+test_unreadable_journal_stops_child_and_cannot_advance_receipt (test_guest_guard_runner.RunnerIdentityTests) ... ok
+test_unrelated_fault_stops_child_and_cannot_advance_receipt (test_guest_guard_runner.RunnerIdentityTests) ... ok
+test_unrelated_process_is_not_owned_qemu (test_guest_guard_runner.RunnerIdentityTests) ... ok
+test_wrong_capture_executable_false_refused (test_guest_guard_runner.RunnerIdentityTests) ... ok
+test_wrong_capture_executable_true_refused (test_guest_guard_runner.RunnerIdentityTests) ... ok
+test_complete_measured_defer_proof_accepts_exact_four (test_guest_xid_guard.GuestGuardTests) ... ok
+test_duplicate_fault_fatal_defer (test_guest_xid_guard.GuestGuardTests) ... ok
+test_duplicate_fault_fatal_missing (test_guest_xid_guard.GuestGuardTests) ... ok
+test_fault_address_is_exact_defer (test_guest_xid_guard.GuestGuardTests) ... ok
+test_fault_address_is_exact_missing (test_guest_xid_guard.GuestGuardTests) ... ok
+test_fault_type_is_exact_defer (test_guest_xid_guard.GuestGuardTests) ... ok
+test_fault_type_is_exact_missing (test_guest_xid_guard.GuestGuardTests) ... ok
+test_final_requires_every_expected_fault (test_guest_xid_guard.GuestGuardTests) ... ok
+test_final_requires_missing_page_fault_itself (test_guest_xid_guard.GuestGuardTests) ... ok
+test_guest_channel_is_exact_defer (test_guest_xid_guard.GuestGuardTests) ... ok
+test_guest_channel_is_exact_missing (test_guest_xid_guard.GuestGuardTests) ... ok
+test_guest_host_twin_is_exact_defer (test_guest_xid_guard.GuestGuardTests) ... ok
+test_guest_host_twin_is_exact_missing (test_guest_xid_guard.GuestGuardTests) ... ok
+test_hidden_first_xid_record_fatal_defer (test_guest_xid_guard.GuestGuardTests) ... ok
+test_hidden_first_xid_record_fatal_missing (test_guest_xid_guard.GuestGuardTests) ... ok
+test_incomplete_missing_page_correlation_is_never_approved (test_guest_xid_guard.GuestGuardTests) ... ok
+test_missing_defer_correlation_is_never_approved (test_guest_xid_guard.GuestGuardTests) ... ok
+test_missing_source_marker_fatal_defer (test_guest_xid_guard.GuestGuardTests) ... ok
+test_missing_source_marker_fatal_missing (test_guest_xid_guard.GuestGuardTests) ... ok
+test_multiple_markers_same_journal_record_fatal (test_guest_xid_guard.GuestGuardTests) ... ok
+test_native_history_immutable_defer (test_guest_xid_guard.GuestGuardTests) ... ok
+test_native_history_immutable_missing (test_guest_xid_guard.GuestGuardTests) ... ok
+test_no_positive_verdict_no_approval_defer (test_guest_xid_guard.GuestGuardTests) ... ok
+test_no_positive_verdict_no_approval_missing (test_guest_xid_guard.GuestGuardTests) ... ok
+test_pid_one_fatal (test_guest_xid_guard.GuestGuardTests) ... ok
+test_pid_zero_fatal (test_guest_xid_guard.GuestGuardTests) ... ok
+test_qemu_pid_is_exact_defer (test_guest_xid_guard.GuestGuardTests) ... ok
+test_qemu_pid_is_exact_missing (test_guest_xid_guard.GuestGuardTests) ... ok
+test_recovery_required_defer (test_guest_xid_guard.GuestGuardTests) ... ok
+test_recovery_required_missing (test_guest_xid_guard.GuestGuardTests) ... ok
+test_revision_required (test_guest_xid_guard.GuestGuardTests) ... ok
+test_running_faults_are_pending_never_baseline (test_guest_xid_guard.GuestGuardTests) ... ok
+test_running_unknown_address_is_fatal (test_guest_xid_guard.GuestGuardTests) ... ok
+test_running_xid32_is_fatal (test_guest_xid_guard.GuestGuardTests) ... ok
+test_source_pin_required (test_guest_xid_guard.GuestGuardTests) ... ok
+test_source_shaped_missing_page_fixture_accepts_exact_one (test_guest_xid_guard.GuestGuardTests) ... ok
+test_starttime_required (test_guest_xid_guard.GuestGuardTests) ... ok
+test_trailing_unparsed_missing_page_payload_fatal (test_guest_xid_guard.GuestGuardTests) ... ok
+test_trailing_unparsed_xid_payload_fatal (test_guest_xid_guard.GuestGuardTests) ... ok
+test_unknown_arm_refused (test_guest_xid_guard.GuestGuardTests) ... ok
+test_unrelated_pci_fatal_defer (test_guest_xid_guard.GuestGuardTests) ... ok
+test_unrelated_pci_fatal_missing (test_guest_xid_guard.GuestGuardTests) ... ok
+test_unrelated_route_fatal_defer (test_guest_xid_guard.GuestGuardTests) ... ok
+test_unrelated_route_fatal_missing (test_guest_xid_guard.GuestGuardTests) ... ok
+test_wrong_primitive_refused (test_guest_xid_guard.GuestGuardTests) ... ok
+test_xid32_fatal_defer (test_guest_xid_guard.GuestGuardTests) ... ok
+test_xid32_fatal_missing (test_guest_xid_guard.GuestGuardTests) ... ok
+test_prior_lease_cannot_approve_four_native_faults (test_guest_xid_guard.NativeExactFiveTests) ... ok
+test_second_lease_cannot_approve_four_native_faults (test_guest_xid_guard.NativeExactFiveTests) ... ok
+test_changed_raw_source_refused (test_guest_xid_guard.PinTests) ... ok
+test_changed_runner_source_refused (test_guest_xid_guard.PinTests) ... ok
+test_current_suite_pin_is_recorded (test_guest_xid_guard.PinTests) ... ok
+test_missing_source_revision_fatal (test_guest_xid_guard.PinTests) ... ok
+test_other_valid_format_revision_fatal (test_guest_xid_guard.PinTests) ... ok
+test_stale_source_revision_fatal (test_guest_xid_guard.PinTests) ... ok
+test_changed_defer_address_is_fatal (test_native_xid_guard.NativeXidGuardTests) ... ok
+test_changed_defer_channel_is_fatal (test_native_xid_guard.NativeXidGuardTests) ... ok
+test_changed_fault_type_is_fatal (test_native_xid_guard.NativeXidGuardTests) ... ok
+test_changed_missing_page_address_is_fatal (test_native_xid_guard.NativeXidGuardTests) ... ok
+test_changed_missing_page_channel_is_fatal (test_native_xid_guard.NativeXidGuardTests) ... ok
+test_channels_are_derived_from_this_runs_doorbell_records (test_native_xid_guard.NativeXidGuardTests) ... ok
+test_duplicate_matching_native_fault_is_fatal (test_native_xid_guard.NativeXidGuardTests) ... ok
+test_identical_frozen_snapshot_is_accepted (test_native_xid_guard.NativeXidGuardTests) ... ok
+test_later_matching_native_fault_is_still_new_and_fatal (test_native_xid_guard.NativeXidGuardTests) ... ok
+test_missing_fault_marker_is_fatal (test_native_xid_guard.NativeXidGuardTests) ... ok
+test_missing_kernel_fault_records_cannot_look_clean (test_native_xid_guard.NativeXidGuardTests) ... ok
+test_missing_positive_recovery_is_fatal (test_native_xid_guard.NativeXidGuardTests) ... ok
+test_qemu_fault_cannot_use_native_exemption (test_native_xid_guard.NativeXidGuardTests) ... ok
+test_same_count_replacement_with_other_address_is_fatal (test_native_xid_guard.NativeXidGuardTests) ... ok
+test_same_count_replacement_with_xid32_is_fatal (test_native_xid_guard.NativeXidGuardTests) ... ok
+test_source_matched_five_faults_are_accepted (test_native_xid_guard.NativeXidGuardTests) ... ok
+test_unmatched_xid32_in_defer_still_stops (test_native_xid_guard.NativeXidGuardTests) ... ok
+test_unmatched_xid32_in_missing_page_still_stops (test_native_xid_guard.NativeXidGuardTests) ... ok
+test_reparented_owned_child_is_resumed_for_queued_term (test_xid_abort_tree.AbortIdentityTests) ... ok
+test_reparented_owned_child_still_receives_term (test_xid_abort_tree.AbortIdentityTests) ... ok
+test_reused_pid_does_not_inherit_abort_ownership (test_xid_abort_tree.AbortIdentityTests) ... ok
+test_new_xid_terminates_nested_timeout_group (test_xid_abort_tree.AbortTreeTests) ... ok
+test_new_xid_terminates_owned_setsid_descendant (test_xid_abort_tree.AbortTreeTests) ... ok
+
+----------------------------------------------------------------------
+Ran 97 tests in 1.236s
+
+OK
