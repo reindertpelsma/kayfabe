@@ -1,0 +1,63 @@
+WIN_BASE_INSTALL_START pinned-QEMU/std-VGA baseline preparation 2026-10-22T22:43:29+00:00
+[2026-10-22T22:43:57Z] WINVM_INSTALL_START name=kfwin repo=905a8bd7 qemu=/workspace/bench/kf3-bins/905a8bd7/qemu-system-x86_64 host_driver=595.91.07
+[2026-10-22T22:43:57Z] START prereqs
+[2026-10-22T22:43:58Z] EXIT prereqs rc=0
+[2026-10-22T22:43:58Z] START fetch
+[2026-10-22T22:44:37Z] MEDIUM_OK win11_ltsc_2024_eval_x64_en-us.iso sha256=67cec5865eaa037a72ddc633a717a10a2bed50778862267223ddb9c60ef5da68 bytes=5112850432
+[2026-10-22T22:44:44Z] MEDIUM_OK virtio-win-0.1.302.iso sha256=303f7ae40dad495d6ae474fdc571df58958a4dbc5c37a522d80f9a203867949d bytes=877373440
+[2026-10-22T22:44:44Z] MEDIUM_OK OpenSSH-Win64-v10.0.0.0.msi sha256=ddec9c53864280759cf9f74791cefd387100e3946aa849a1c138a4ed1b96b7d9 bytes=6586368
+[2026-10-22T22:44:51Z] MEDIUM_OK 580.88-desktop-win10-win11-64bit-international-dch-whql.exe sha256=90c49f925b41ee062e02cc8094a16b6d057abfde4e85235a76d63ffe267f63a9 bytes=890807536
+[2026-10-22T22:44:51Z] EXIT fetch rc=0
+[2026-10-22T22:44:51Z] START apparmor
+[2026-10-22T22:44:51Z] AppArmor: swtpm may use /workspace/sweep-win-57280778
+[2026-10-22T22:44:51Z] EXIT apparmor rc=0
+[2026-10-22T22:44:51Z] START secrets
+[2026-10-22T22:44:51Z] generated the Windows password (secrets/win_password, 0600)
+[2026-10-22T22:44:51Z] generated the harness ssh key (secrets/ssh_ed25519)
+[2026-10-22T22:44:51Z] EXIT secrets rc=0
+[2026-10-22T22:44:51Z] START secureboot-key
+[2026-10-22T22:44:52Z] generated this host's kayfabe Secure Boot db key (/workspace/sweep-win-57280778/secureboot/db.key, never leaves the host)
+[2026-10-22T22:44:52Z] SB_DB_CERT subject=CN = kayfabe GOP db key (ubuntu 2026-10-22) sha256 Fingerprint=0F:6F:50:44:1A:DB:C2:D7:C9:3A:7A:45:E4:AC:4C:D0:1E:15:03:67:19:DF:98:2A:1A:74:39:90:96:83:D0:BE
+[2026-10-22T22:44:52Z] EXIT secureboot-key rc=0
+[2026-10-22T22:44:52Z] START ovmf-vars
+INFO: reading raw edk2 varstore from /usr/share/OVMF/OVMF_VARS_4M.fd
+INFO: var store range: 0x64 -> 0x40000
+INFO: create variable PK
+INFO: clear PK sigdb
+INFO: add PK cert /tmp/tmpqj6x8aho
+INFO: create variable KEK
+INFO: clear KEK sigdb
+INFO: add KEK cert /tmp/tmpqj6x8aho
+INFO: add KEK cert /usr/lib/python3/dist-packages/virt/firmware/certs/MicrosoftCorporationKEKCA2011.pem
+INFO: add dummy dbx entry
+INFO: create variable dbx
+INFO: create variable db
+INFO: add db cert /usr/lib/python3/dist-packages/virt/firmware/certs/MicrosoftWindowsProductionPCA2011.pem
+INFO: add db cert /usr/lib/python3/dist-packages/virt/firmware/certs/MicrosoftCorporationUEFICA2011.pem
+INFO: add db cert /workspace/sweep-win-57280778/secureboot/db.crt
+INFO: create variable SecureBootEnable
+INFO: set variable SecureBootEnable: True
+INFO: create variable CustomMode
+INFO: set variable CustomMode: False
+INFO: writing raw edk2 varstore to /workspace/sweep-win-57280778/kfwin/firmware/OVMF_VARS.fd.tmp
+[2026-10-22T22:44:55Z] VARS_CREATED /workspace/sweep-win-57280778/kfwin/firmware/OVMF_VARS.fd
+[2026-10-22T22:44:56Z] VARS_DB CN=Microsoft Windows Production PCA 2011; CN=Microsoft Corporation UEFI CA 2011; CN=kayfabe GOP db key (ubuntu 2026-10-22);
+[2026-10-22T22:44:56Z] EXIT ovmf-vars rc=0
+[2026-10-22T22:44:56Z] START tpm-manufacture
+TPM is listening on Unix socket.
+[2026-10-22T22:44:59Z] TPM_MANUFACTURED /workspace/sweep-win-57280778/kfwin/tpm (5993 bytes of state)
+[2026-10-22T22:44:59Z] EXIT tpm-manufacture rc=0
+[2026-10-22T22:44:59Z] START disk
+[2026-10-22T22:44:59Z] DISK_CREATED base.qcow2 80G
+[2026-10-22T22:44:59Z] EXIT disk rc=0
+[2026-10-22T22:44:59Z] START unattend
+xorriso 1.5.4 : RockRidge filesystem manipulator, libburnia project.
+
+[2026-10-22T22:44:59Z] UNATTEND_ISO secrets/unattend.iso (6985728 bytes; 1 authorized key(s))
+[2026-10-22T22:44:59Z] EXIT unattend rc=0
+[2026-10-22T22:45:00Z] START install-boot
+[2026-10-22T22:45:00Z] QEMU_START tag=install boot=1 pid=92097 log=logs/install_b1_qemu.log
+[2026-10-22T23:24:04Z] INSTALL_BOOT_END rc=0 reason=guest-shutdown
+[2026-10-22T23:24:04Z] EXIT install-boot rc=0
+[2026-10-22T23:24:04Z] START check-boot
+[2026-10-22T23:24:04Z] QEMU_START tag=installcheck boot=1 pid=101367 log=logs/installcheck_b1_qemu.log

@@ -9,7 +9,7 @@
 9. CODE READ (2026-10-22, commit597d60fe1): owner-approved CE-family policy, exact other fields/counts; no exact-client derivation or per-die table.
 10. MEASURED (2026-10-22, `NATIVE_BINARY_IDENTITY.json`): actual QEMU/raw/guard SHA receipts and source905a8bd75; frozen product trees retained.
 11. MEASURED (2026-10-22, `appdisk_receipt.json`, `parallel_transfer.log`): full6.785GB ISO source/receiver hash verified, eight checked streams,732.410s; original serial sender canceled by own pidfd.
-12. MEASURED (2026-10-22, `windows_install_progress.png`): standard-VGA Windows11 baseline installation reached35%; GPU desktop not yet measured.
+12. MEASURED (2026-10-22, `windows_install_progress.png`): standard-VGA Windows11 first installation boot finished23:24:04Z/rc0; verification boot is running; GPU desktop not yet measured.
 13. CODE READ (2026-10-22): Windows580.88 bind/ON, Code0/Explorer, appmatrix/Unigine and600s hold are pending; no hardware failure yet.
 14. CODE READ (2026-10-22, `START.json`): observation budget ends00:38:58Z; auto-destroy00:58:58Z; export/push evidence before exact-id teardown.
 15. INFERRED (2026-10-22, `START.json`): conservative lane full exposure$7.045692<12 and Round3$3.242074<8; Turing follows API-absent Ampere teardown.
