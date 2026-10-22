@@ -25,7 +25,7 @@
 //!   (`IHUB_COMMON_CAPC.SUPPORT_SEMI_PLANAR`, Turing's `CAPA.SUPPORT_PLANAR`): the engine executes those
 //!   windows and the console composes them; a real AD104 claims it (the plane oracle, `page()` below).
 
-use crate::class::{ClassTable, put};
+use crate::class::{ClassTable, get, put};
 use crate::regs::Regs;
 
 /// Bytes in the capabilities page (`NV_PDISP_FE_SW` is `0x640000..=0x640FFF`).
@@ -78,28 +78,28 @@ impl CapsPage {
 /// Capabilities for the opt-in SDR path: one DIRECT10 table per stage,
 /// surface loading and one bounded linear TMO with no chroma correction.
 /// Sizes are implementation limits, not board facts.
-/// Physical-address families omit legacy OLUT capability fields; no other
-/// family's field is substituted for them.
+/// The public CA73 layout reports an OLUT sample count instead of legacy LOGSZ.
+/// Its capacity comes from the bounded color decoder, excluding the four-entry header.
 pub fn sdr_page(
     t: &ClassTable,
     r: &Regs,
     caps: u32,
-    core: u32,
+    _core: u32,
     heads: u32,
     windows: u32,
 ) -> Result<CapsPage, Missing> {
     let mut p = page(t, r, caps, heads, windows)?;
-    let physical_output = t.a(core, "HEAD_SET_SURFACE_ADDRESS_LO_OLUT", 0).is_some();
-    for (register, stage, count) in [
-        ("PRECOMP_WIN_PIPE_HDR_CAPB", "ILUT", windows),
-        ("POSTCOMP_HEAD_HDR_CAPB", "OLUT", heads),
+    let olut = if t.v(caps, "POSTCOMP_HDR_CAPB__SIZE_1").is_some() {
+        let samples = u32::try_from(crate::color::LUT_BYTES / 8 - 4)
+            .map_err(|_| Missing("output LUT sample capacity".into()))?;
+        ("POSTCOMP_HDR_CAPB", "SZ", samples)
+    } else {
+        ("POSTCOMP_HEAD_HDR_CAPB", "LOGSZ", 10)
+    };
+    for (register, stage, count, size_field, size) in [
+        ("PRECOMP_WIN_PIPE_HDR_CAPB", "ILUT", windows, "LOGSZ", 10),
+        (olut.0, "OLUT", heads, olut.1, olut.2),
     ] {
-        if physical_output
-            && stage == "OLUT"
-            && t.f(caps, "POSTCOMP_HEAD_HDR_CAPB_OLUT_LOGSZ").is_none()
-        {
-            continue;
-        }
         let max = t
             .v(caps, &format!("{register}__SIZE_1"))
             .filter(|n| count <= *n && *n as usize <= PAGE / 4)
@@ -110,7 +110,12 @@ pub fn sdr_page(
                 .filter(|n| *n % 4 == 0 && (*n as usize) < PAGE)
                 .ok_or_else(|| Missing(format!("NV{caps:04X}_{register}({i})")))?;
             let mut word = p.word(off);
-            for (suffix, value) in [("LOGSZ", 10), ("LOGNR", 0), ("DIRECT", 1), ("SFCLOAD", 1)] {
+            for (suffix, value) in [
+                (size_field, size),
+                ("LOGNR", 0),
+                ("DIRECT", 1),
+                ("SFCLOAD", 1),
+            ] {
                 let name = format!("{register}_{stage}_{suffix}");
                 let field = t
                     .f(caps, &name)
@@ -334,6 +339,133 @@ pub fn olut_constructor_probe_page(
     Ok(p)
 }
 
+/// The caps registers of every family, by the header's own names (class prefix dropped). Used to read a
+/// page back field by field (`diff_pages`); the authoring code names the ones it writes itself.
+const CAP_REGISTERS: [&str; 27] = [
+    "SYS_CAP",
+    "SYS_CAPB",
+    "SYS_CAPC",
+    "SYS_CAPD",
+    "SYS_CAPE",
+    "IHUB_COMMON_CAPA",
+    "IHUB_COMMON_CAPB",
+    "IHUB_COMMON_CAPC",
+    "IHUB_COMMON_CAPD",
+    "IHUB_COMMON_CAPE",
+    "IHUB_COMMON_CAPF",
+    "SOR_CAP",
+    "SOR_CLK_CAP",
+    "POSTCOMP_HEAD_HDR_CAPA",
+    "POSTCOMP_HEAD_HDR_CAPB",
+    "POSTCOMP_HEAD_HDR_CAPC",
+    "POSTCOMP_HEAD_HDR_CAPD",
+    "POSTCOMP_HEAD_HDR_CAPE",
+    "POSTCOMP_HEAD_HDR_CAPF",
+    "PRECOMP_WIN_PIPE_HDR_CAPA",
+    "PRECOMP_WIN_PIPE_HDR_CAPB",
+    "PRECOMP_WIN_PIPE_HDR_CAPC",
+    "PRECOMP_WIN_PIPE_HDR_CAPD",
+    "PRECOMP_WIN_PIPE_HDR_CAPE",
+    "PRECOMP_WIN_PIPE_HDR_CAPF",
+    "HEAD_CLK_CAP",
+    "WINDOW_CAP",
+];
+
+/// One field that differs between two pages.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct FieldDiff {
+    /// Byte offset of the word in the page.
+    pub offset: u32,
+    /// The register's header name (`PRECOMP_WIN_PIPE_HDR_CAPA`), or `?` for a word no class header names.
+    pub reg: String,
+    /// The register's array index, when it is an array.
+    pub index: Option<u32>,
+    /// The field's header name, `(undefined bits)` for bits no field covers, `word` for an unnamed word.
+    pub field: String,
+    /// The field's value in the first page.
+    pub a: u32,
+    /// The field's value in the second page.
+    pub b: u32,
+}
+
+/// Every named register word of the class: `(byte offset, register, index)`.
+fn register_words(t: &ClassTable, caps: u32) -> Vec<(u32, &'static str, Option<u32>)> {
+    let mut v = Vec::new();
+    for reg in CAP_REGISTERS {
+        let size = t.v(caps, &format!("{reg}__SIZE_1")).unwrap_or(1);
+        if let Some(off) = t.v(caps, reg) {
+            v.push((off, reg, None));
+        } else {
+            for i in 0..size {
+                if let Some(off) = t.a(caps, reg, i) {
+                    v.push((off, reg, Some(i)));
+                }
+            }
+        }
+    }
+    v
+}
+
+/// ★ Compare two pages of one caps class FIELD BY FIELD with the class header's own field names: every
+/// differing field of every named register, bits no field names, and words no header names.
+#[must_use]
+pub fn diff_pages(t: &ClassTable, caps: u32, a: &CapsPage, b: &CapsPage) -> Vec<FieldDiff> {
+    use crate::class::Row;
+    let named = register_words(t, caps);
+    let mut offs: std::collections::BTreeSet<u32> = a.words.iter().map(|(o, _)| *o).collect();
+    offs.extend(b.words.iter().map(|(o, _)| *o));
+    let mut out = Vec::new();
+    for off in offs {
+        let (wa, wb) = (a.word(off), b.word(off));
+        if wa == wb {
+            continue;
+        }
+        let Some((_, reg, index)) = named.iter().find(|(o, _, _)| *o == off) else {
+            out.push(FieldDiff {
+                offset: off,
+                reg: "?".into(),
+                index: None,
+                field: "word".into(),
+                a: wa,
+                b: wb,
+            });
+            continue;
+        };
+        let mut covered = 0_u32;
+        for (name, row) in t.rows_under(caps, &format!("{reg}_")) {
+            let Row::F(hi, lo) = row else { continue };
+            if hi > 31 || lo > hi {
+                continue;
+            }
+            let mask = (u32::MAX >> (31 - u32::from(hi))) & (u32::MAX << u32::from(lo));
+            covered |= mask;
+            let (fa, fb) = (get(wa, (hi, lo)), get(wb, (hi, lo)));
+            if fa != fb {
+                out.push(FieldDiff {
+                    offset: off,
+                    reg: (*reg).into(),
+                    index: *index,
+                    field: name[reg.len() + 1..].into(),
+                    a: fa,
+                    b: fb,
+                });
+            }
+        }
+        let rest = (wa ^ wb) & !covered;
+        if rest != 0 {
+            out.push(FieldDiff {
+                offset: off,
+                reg: (*reg).into(),
+                index: *index,
+                field: "(undefined bits)".into(),
+                a: wa & rest,
+                b: wb & rest,
+            });
+        }
+    }
+    out
+}
+
 /// Author the ordinary capabilities page from the family's generated layout.
 /// Returns [`Missing`] for an absent definition or an out-of-page register.
 pub fn page(
@@ -376,6 +508,45 @@ pub fn page(
     }
     for i in 0..windows {
         set(sys_capb, fa("SYS_CAPB_WINDOW_EXISTS", i)?, 1);
+    }
+    // NVDisplay's tiled output model (nvkms-evo4.c, EvoGetCapabilitiesCA /
+    // UsableHwTilesCount) requires contiguous usable tiles. Our virtual output
+    // has one independent, unscaled tile per head; no multi-tile output is
+    // advertised. This is virtual topology, not a physical die's fuse mask.
+    if t.fa(caps, "SYS_CAPC_TILE_EXISTS", 0).is_some() {
+        let off = v("SYS_CAPC")?;
+        let limit = v("SYS_CAPC_TILE_EXISTS__SIZE_1")?;
+        if heads > limit || off % 4 != 0 || off as usize > PAGE - 4 {
+            return Err(m("SYS_CAPC virtual tile topology outside layout".into()));
+        }
+        for h in 0..heads {
+            set(off, fa("SYS_CAPC_TILE_EXISTS", h)?, 1);
+        }
+    }
+    // ★ 2026-10-20 (bw-resume): the per-TILE post-composition pipe of a class that names it
+    // `POSTCOMP_HDR_CAPA(i)` (CA73; Turing..Ada name a per-head `POSTCOMP_HEAD_HDR_*` and are untouched).
+    // Public NVKMS reads it for every usable tile and asserts OCSC0/OCSC1/HCLPF/OSCAN/DTH/DSC present
+    // (ogkm 580.65.06 nvkms-evo4.c:1826-1831, EvoGetHwTileType) — a class invariant, so it is stated
+    // for each virtual tile; SCLR and VFILTER stay absent (tile type 1: the virtual tile is unscaled, as
+    // the SYS_CAPC block above says). [measured GB202 Windows 580.88] without these words the Windows
+    // driver abandons display init after its cursor channels (Code 43).
+    if let Some(size) = t.v(caps, "POSTCOMP_HDR_CAPA__SIZE_1") {
+        if heads > size {
+            return Err(m("POSTCOMP_HDR_CAPA tiles outside layout".into()));
+        }
+        for i in 0..heads {
+            let off = a("POSTCOMP_HDR_CAPA", i)?;
+            for fld in [
+                "POSTCOMP_HDR_CAPA_OCSC0_PRESENT",
+                "POSTCOMP_HDR_CAPA_OCSC1_PRESENT",
+                "POSTCOMP_HDR_CAPA_HCLPF_PRESENT",
+                "POSTCOMP_HDR_CAPA_OSCAN_PRESENT",
+                "POSTCOMP_HDR_CAPA_DTH_PRESENT",
+                "POSTCOMP_HDR_CAPA_DSC_PRESENT",
+            ] {
+                set(off, f(fld)?, v(&format!("{fld}_TRUE"))?);
+            }
+        }
     }
     // SORs
     let tmds_max = tmds_max_field(t)?;
@@ -476,6 +647,30 @@ pub fn page(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn blackwell_virtual_heads_have_contiguous_single_output_tiles() {
+        let t = crate::class::for_version("580.159.04").unwrap();
+        let row = &kf_chip::display::BLACKWELL_GB20X;
+        let r = Regs::for_ip("580.159.04", row.ip_version).unwrap();
+        let p = page(t, &r, row.classes.caps, row.heads, row.windows).unwrap();
+        let c = row.classes.caps;
+        let word = p.word(t.v(c, "SYS_CAPC").unwrap());
+        for i in 0..t.v(c, "SYS_CAPC_TILE_EXISTS__SIZE_1").unwrap() {
+            assert_eq!(
+                get(word, t.fa(c, "SYS_CAPC_TILE_EXISTS", i).unwrap()),
+                u32::from(i < row.heads),
+                "tile {i}"
+            );
+            assert_eq!(
+                get(
+                    word,
+                    t.fa(c, "SYS_CAPC_TILE_SUPPORT_MULTI_TILE", i).unwrap()
+                ),
+                0
+            );
+        }
+    }
 
     /// ★ 2026-10-14: every family's authored page claims semi-planar YUV windows in the field its NVKMS
     /// parser reads (C673+ CAPC.SUPPORT_SEMI_PLANAR; Turing CAPA.SUPPORT_PLANAR), and never claims

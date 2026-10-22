@@ -422,6 +422,9 @@ impl FalconGspModel {
                 QUEUE_HEAD0 + u64::from(i) * 8
             }
             GspReg::GspQueueHead(_) => return None,
+            // ★ 2026-10-14: the `RESET_STATUS` handshake exists on the FSP generations only
+            // (`kf_arch::gsp::GspReg::GspFalconEngine`); this regime's reset has no status field to wait on.
+            GspReg::GspFalconEngine => return None,
         };
         Some((0, off))
     }
@@ -565,6 +568,8 @@ impl GspModel for FalconGspModel {
             // latches its own value and never reads ours back as state.
             GspReg::Sec2FalconMailbox0 => 0,
             GspReg::GspQueueHead(_) => 0,
+            // not decoded on this regime (`reg_at` is `None`), so never asked
+            GspReg::GspFalconEngine => return None,
         })
     }
 

@@ -413,6 +413,33 @@ impl Drop for NeverBorn {
     }
 }
 
+/// Validate class and bounded ring geometry before resolving own-VM USERD storage.
+fn source_declaration(
+    family: kf_chip::Family,
+    class: u32,
+    entries: u32,
+    gpfifo_va: u64,
+) -> Result<(), &'static str> {
+    // Preserve the integration line's exact Ada admission set. The generated
+    // Ada list also names c36f/c46f; admitting them needs separate native proof.
+    let ada_allowed = family != kf_chip::Family::Ada
+        || class == kf_abi::generated::classes::AMPERE_CHANNEL_GPFIFO_A;
+    if !ada_allowed
+        || family.classes().kind_of(class) != Some(kf_chip::classes::Kind::ChannelGpfifo)
+        || entries < 2
+        || !entries.is_power_of_two()
+        || entries > (1 << 20)
+        || gpfifo_va & 7 != 0
+        || u64::from(entries)
+            .checked_mul(8)
+            .and_then(|n| gpfifo_va.checked_add(n))
+            .is_none()
+    {
+        return Err("USER_RING_SOURCE_DECLARATION");
+    }
+    Ok(())
+}
+
 struct Birth {
     a: ChannelAlloc,
     mirror: Mirror,
@@ -450,18 +477,8 @@ impl Birth {
         // The CPU-RM resolved descriptor supplies bounded own-VM RAM; runtime
         // CPU access additionally retains exact Pt allocation identity.
         let source = (|| {
-            if a.class != kf_abi::generated::classes::AMPERE_CHANNEL_GPFIFO_A
-                || a.entries < 2
-                || !a.entries.is_power_of_two()
-                || a.entries > (1 << 20)
-                || a.gpfifo_va & 7 != 0
-                || u64::from(a.entries)
-                    .checked_mul(8)
-                    .and_then(|n| a.gpfifo_va.checked_add(n))
-                    .is_none()
-            {
-                return Err("USER_RING_SOURCE_DECLARATION".to_string());
-            }
+            source_declaration(me.family, a.class, a.entries, a.gpfifo_va)
+                .map_err(str::to_string)?;
             let declared = a.subdevice_id.ok_or("USER_RING_SUBDEVICE_ID_UNMEASURED")?;
             let native_id = if shadow_enabled() && declared == 0 {
                 0 // Existing opaque diagnostic retains the host default.
@@ -1042,6 +1059,106 @@ mod tests {
     use kf_core::lifetime::Step;
     use kf_core::{HostOps, HostSlice, Owner, Plane, Translatable, VmCaps, Vmm};
     use kf_trap::token::Route;
+
+    #[test]
+    fn user_ring_source_accepts_generated_non_ada_channels() {
+        for family in kf_chip::Family::ALL {
+            if family == kf_chip::Family::Ada {
+                continue;
+            }
+            for &class in family.classes().channel_gpfifo {
+                assert_eq!(
+                    source_declaration(family, class, 1024, 0x300200000),
+                    Ok(()),
+                    "{family:?} {class:#x}"
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn user_ring_source_turing_accepts_both_ring_size_boundaries() {
+        for entries in [2, 1 << 20] {
+            assert_eq!(
+                source_declaration(kf_chip::Family::Turing, 0xc46f, entries, 0),
+                Ok(())
+            );
+        }
+    }
+
+    #[test]
+    fn user_ring_source_ad104_ada_accepts_exactly_the_previous_c56f_set() {
+        for class in (0..=u16::MAX as u32).chain([0x1c56f, u32::MAX]) {
+            assert_eq!(
+                source_declaration(kf_chip::Family::Ada, class, 1024, 0x1000).is_ok(),
+                class == 0xc56f,
+                "Ada class {class:#x}"
+            );
+        }
+    }
+
+    #[test]
+    fn user_ring_source_ada_generated_predecessors_remain_refused() {
+        let family = kf_chip::Family::Ada;
+        for class in [0xc36f, 0xc46f] {
+            assert!(family.classes().channel_gpfifo.contains(&class));
+            assert_eq!(
+                source_declaration(family, class, 2, 0),
+                Err("USER_RING_SOURCE_DECLARATION")
+            );
+        }
+    }
+
+    #[test]
+    fn user_ring_source_rejects_generated_non_channel_objects() {
+        for family in kf_chip::Family::ALL {
+            for kind in kf_chip::classes::Kind::ALL {
+                if kind == kf_chip::classes::Kind::ChannelGpfifo {
+                    continue;
+                }
+                for &class in family.classes().of_kind(kind) {
+                    assert!(
+                        source_declaration(family, class, 1024, 0x1000).is_err(),
+                        "{family:?} {kind:?} {class:#x}"
+                    );
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn user_ring_source_rejects_unknown_and_foreign_channel_ids() {
+        for (family, classes) in [
+            (kf_chip::Family::Turing, [0, 0xc56f, 0xca6f, u32::MAX]),
+            (kf_chip::Family::Ada, [0, 0xc86f, 0xca6f, u32::MAX]),
+        ] {
+            for class in classes {
+                assert!(source_declaration(family, class, 1024, 0x1000).is_err());
+            }
+        }
+    }
+
+    #[test]
+    fn user_ring_source_geometry_rejects_small_rings_alignment_and_overflow() {
+        let family = kf_chip::Family::Ada;
+        for entries in [0, 1, 3, (1 << 20) + 1, 1 << 21] {
+            assert!(source_declaration(family, 0xc56f, entries, 0x1000).is_err());
+        }
+        for va in [1, 7, u64::MAX - 7] {
+            assert!(source_declaration(family, 0xc56f, 2, va).is_err());
+        }
+    }
+
+    #[test]
+    fn user_ring_source_geometry_refuses_hostile_maximum_declarations() {
+        let family = kf_chip::Family::Ada;
+        for entries in [0, 1, 5, (1 << 20) + 2, u32::MAX] {
+            assert!(source_declaration(family, 0xc56f, entries, 0).is_err());
+        }
+        for va in [2, 6, u64::MAX - 15] {
+            assert!(source_declaration(family, 0xc56f, 1024, va).is_err());
+        }
+    }
 
     #[test]
     fn windows_relay_is_the_default_with_an_explicit_negative_control() {

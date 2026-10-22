@@ -1,0 +1,6 @@
+{
+  "package_sha256": "cb04aa1e2fbb977ee3911ab2cf51a42351f8126ba991bc9308ce6bf0ba96e83a",
+  "inf": "/workspace/sweep-win-media581/extracted/Display.Driver/nv_dispui.inf",
+  "ad102_2684_listed": true,
+  "reason_previous_readiness_exit": "over-specific nv_dispi.inf basename check; extraction itself succeeded"
+}

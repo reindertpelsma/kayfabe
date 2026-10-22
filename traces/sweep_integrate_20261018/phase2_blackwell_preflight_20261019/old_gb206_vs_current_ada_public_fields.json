@@ -1,0 +1,335 @@
+{
+  "status": "MEASURED field projections; occurrence matching inferred; different source/die; no cause established",
+  "old_source": "f8485f6db",
+  "new_source": "24906bf33",
+  "old_pointer_safety": "public projection redacts64bit/addresses/handles; raw input remains on evidence branch only",
+  "old_records": 44,
+  "old_projected": 42,
+  "comparison": [
+    {
+      "control": "0x730101",
+      "gb206_count": 2,
+      "ada_count": 2,
+      "public_field_differences": []
+    },
+    {
+      "control": "0x730102",
+      "gb206_count": 1,
+      "ada_count": 1,
+      "public_field_differences": []
+    },
+    {
+      "control": "0x730107",
+      "gb206_count": 1,
+      "ada_count": 1,
+      "public_field_differences": []
+    },
+    {
+      "control": "0x730108",
+      "gb206_count": 2,
+      "ada_count": 3,
+      "public_field_differences": []
+    },
+    {
+      "control": "0x73010a",
+      "gb206_count": 0,
+      "ada_count": 1,
+      "public_field_differences": []
+    },
+    {
+      "control": "0x73010b",
+      "gb206_count": 0,
+      "ada_count": 4,
+      "public_field_differences": []
+    },
+    {
+      "control": "0x73010c",
+      "gb206_count": 0,
+      "ada_count": 8,
+      "public_field_differences": []
+    },
+    {
+      "control": "0x730116",
+      "gb206_count": 1,
+      "ada_count": 1,
+      "public_field_differences": []
+    },
+    {
+      "control": "0x73012c",
+      "gb206_count": 1,
+      "ada_count": 3,
+      "public_field_differences": []
+    },
+    {
+      "control": "0x73013d",
+      "gb206_count": 1,
+      "ada_count": 1,
+      "public_field_differences": []
+    },
+    {
+      "control": "0x73014b",
+      "gb206_count": 1,
+      "ada_count": 1,
+      "public_field_differences": []
+    },
+    {
+      "control": "0x730151",
+      "gb206_count": 2,
+      "ada_count": 1,
+      "public_field_differences": []
+    },
+    {
+      "control": "0x730240",
+      "gb206_count": 1,
+      "ada_count": 1,
+      "public_field_differences": []
+    },
+    {
+      "control": "0x730245",
+      "gb206_count": 1,
+      "ada_count": 8,
+      "public_field_differences": []
+    },
+    {
+      "control": "0x730287",
+      "gb206_count": 1,
+      "ada_count": 1,
+      "public_field_differences": []
+    },
+    {
+      "control": "0x73028a",
+      "gb206_count": 1,
+      "ada_count": 1,
+      "public_field_differences": []
+    },
+    {
+      "control": "0x73028b",
+      "gb206_count": 3,
+      "ada_count": 4,
+      "public_field_differences": []
+    },
+    {
+      "control": "0x7302a4",
+      "gb206_count": 0,
+      "ada_count": 2,
+      "public_field_differences": []
+    },
+    {
+      "control": "0x730301",
+      "gb206_count": 0,
+      "ada_count": 2,
+      "public_field_differences": []
+    },
+    {
+      "control": "0x731140",
+      "gb206_count": 1,
+      "ada_count": 1,
+      "public_field_differences": []
+    },
+    {
+      "control": "0x731142",
+      "gb206_count": 0,
+      "ada_count": 1,
+      "public_field_differences": []
+    },
+    {
+      "control": "0x731152",
+      "gb206_count": 0,
+      "ada_count": 1,
+      "public_field_differences": []
+    },
+    {
+      "control": "0x731369",
+      "gb206_count": 1,
+      "ada_count": 1,
+      "public_field_differences": []
+    },
+    {
+      "control": "0x20800a58",
+      "gb206_count": 21,
+      "ada_count": 21,
+      "public_field_differences": [
+        {
+          "occurrence": 0,
+          "field": "hclass",
+          "gb206_historical": 51837,
+          "ada_current": 51069
+        },
+        {
+          "occurrence": 0,
+          "field": "channelPBSize",
+          "gb206_historical": 4,
+          "ada_current": 0
+        },
+        {
+          "occurrence": 1,
+          "field": "hclass",
+          "gb206_historical": 51838,
+          "ada_current": 50814
+        },
+        {
+          "occurrence": 1,
+          "field": "channelPBSize",
+          "gb206_historical": 4,
+          "ada_current": 0
+        },
+        {
+          "occurrence": 2,
+          "field": "hclass",
+          "gb206_historical": 51838,
+          "ada_current": 50814
+        },
+        {
+          "occurrence": 2,
+          "field": "channelPBSize",
+          "gb206_historical": 4,
+          "ada_current": 0
+        },
+        {
+          "occurrence": 3,
+          "field": "hclass",
+          "gb206_historical": 51838,
+          "ada_current": 50814
+        },
+        {
+          "occurrence": 3,
+          "field": "channelPBSize",
+          "gb206_historical": 4,
+          "ada_current": 0
+        },
+        {
+          "occurrence": 4,
+          "field": "hclass",
+          "gb206_historical": 51838,
+          "ada_current": 50814
+        },
+        {
+          "occurrence": 4,
+          "field": "channelPBSize",
+          "gb206_historical": 4,
+          "ada_current": 0
+        },
+        {
+          "occurrence": 5,
+          "field": "hclass",
+          "gb206_historical": 51838,
+          "ada_current": 50814
+        },
+        {
+          "occurrence": 5,
+          "field": "channelPBSize",
+          "gb206_historical": 4,
+          "ada_current": 0
+        },
+        {
+          "occurrence": 6,
+          "field": "hclass",
+          "gb206_historical": 51838,
+          "ada_current": 50814
+        },
+        {
+          "occurrence": 6,
+          "field": "channelPBSize",
+          "gb206_historical": 4,
+          "ada_current": 0
+        },
+        {
+          "occurrence": 7,
+          "field": "hclass",
+          "gb206_historical": 51838,
+          "ada_current": 50814
+        },
+        {
+          "occurrence": 7,
+          "field": "channelPBSize",
+          "gb206_historical": 4,
+          "ada_current": 0
+        },
+        {
+          "occurrence": 8,
+          "field": "hclass",
+          "gb206_historical": 51838,
+          "ada_current": 50814
+        },
+        {
+          "occurrence": 8,
+          "field": "channelPBSize",
+          "gb206_historical": 4,
+          "ada_current": 0
+        },
+        {
+          "occurrence": 9,
+          "field": "hclass",
+          "gb206_historical": 51835,
+          "ada_current": 50811
+        },
+        {
+          "occurrence": 10,
+          "field": "hclass",
+          "gb206_historical": 51835,
+          "ada_current": 50811
+        },
+        {
+          "occurrence": 11,
+          "field": "hclass",
+          "gb206_historical": 51835,
+          "ada_current": 50811
+        },
+        {
+          "occurrence": 12,
+          "field": "hclass",
+          "gb206_historical": 51835,
+          "ada_current": 50811
+        },
+        {
+          "occurrence": 13,
+          "field": "hclass",
+          "gb206_historical": 51835,
+          "ada_current": 50811
+        },
+        {
+          "occurrence": 14,
+          "field": "hclass",
+          "gb206_historical": 51835,
+          "ada_current": 50811
+        },
+        {
+          "occurrence": 15,
+          "field": "hclass",
+          "gb206_historical": 51835,
+          "ada_current": 50811
+        },
+        {
+          "occurrence": 16,
+          "field": "hclass",
+          "gb206_historical": 51835,
+          "ada_current": 50811
+        },
+        {
+          "occurrence": 17,
+          "field": "hclass",
+          "gb206_historical": 51834,
+          "ada_current": 50810
+        },
+        {
+          "occurrence": 18,
+          "field": "hclass",
+          "gb206_historical": 51834,
+          "ada_current": 50810
+        },
+        {
+          "occurrence": 19,
+          "field": "hclass",
+          "gb206_historical": 51834,
+          "ada_current": 50810
+        },
+        {
+          "occurrence": 20,
+          "field": "hclass",
+          "gb206_historical": 51834,
+          "ada_current": 50810
+        }
+      ]
+    }
+  ]
+}

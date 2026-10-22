@@ -19,6 +19,7 @@
 pub mod bar0;
 pub mod bar1mode;
 pub mod classes;
+pub mod die;
 pub mod display;
 pub mod falcon_gsp;
 pub mod fsp_gsp;
@@ -29,6 +30,7 @@ pub mod sked;
 pub mod usermode;
 
 pub use classes::{ClassSet, Kind, classes_for, is_any_dma_copy_class};
+pub use die::DieId;
 pub use host_classes::{DerivedHostClasses, HostLacksKind};
 pub use ptekind::{PTE_KIND_GENERIC, PTE_KIND_PITCH, uncompressed_pte_kind};
 
@@ -304,6 +306,32 @@ impl Family {
         implementation: u32,
         fb_size_mb: u64,
     ) -> Result<Box<dyn kf_arch::gsp::GspModel>, RowUnbuilt> {
+        self.gsp_model_for_die(None, implementation, fb_size_mb)
+    }
+
+    /// ★ F-3: [`Family::gsp_model`] for the host's architecture, so Blackwell DATACENTER (GB10x) gets its own
+    /// FSP boot-gate register ([`fsp_gsp::FspRow::BLACKWELL_GB10X`]) instead of GB20x's.
+    ///
+    /// # Errors
+    /// [`RowUnbuilt`], as [`Family::gsp_model`]; [`FamilyRefusal`] folded into it for an unknown architecture.
+    pub fn gsp_model_for_arch(
+        architecture: u32,
+        implementation: u32,
+        fb_size_mb: u64,
+    ) -> Result<Box<dyn kf_arch::gsp::GspModel>, RowUnbuilt> {
+        let family = Family::from_arch(architecture, implementation).map_err(|_| RowUnbuilt {
+            family: Family::Blackwell,
+            what: "the host's architecture is not a supported family (Family::from_arch refused it)",
+        })?;
+        family.gsp_model_for_die(Some(architecture), implementation, fb_size_mb)
+    }
+
+    fn gsp_model_for_die(
+        self,
+        architecture: Option<u32>,
+        implementation: u32,
+        fb_size_mb: u64,
+    ) -> Result<Box<dyn kf_arch::gsp::GspModel>, RowUnbuilt> {
         use falcon_gsp::{FalconGspModel, RiscvLayout};
         match self {
             // Ada's GSP boot HAL dispatches to the `_TU102`/`_GA102` bodies for the whole sequence;
@@ -330,7 +358,11 @@ impl Family {
                 fb_size_mb,
             ))),
             Family::Blackwell => Ok(Box::new(fsp_gsp::FspGspModel::new(
-                fsp_gsp::FspRow::BLACKWELL,
+                if architecture == Some(arch::GB100) {
+                    fsp_gsp::FspRow::BLACKWELL_GB10X
+                } else {
+                    fsp_gsp::FspRow::BLACKWELL
+                },
                 fb_size_mb,
             ))),
         }

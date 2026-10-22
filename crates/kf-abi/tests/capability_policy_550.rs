@@ -7,7 +7,8 @@ fn pre_535_extension_policies_change_only_by_the_audited_software_constructors()
     // Full IDs, names, provenance, denials and decision outputs; equal counts are insufficient.
     // See traces/capability_535_545_audit_20260928/README.md for baseline provenance.
     // Preserve the historical fixture. Later deltas are NV01_TIMER and the
-    // source-audited Deferred API software constructor at580+; no controls added.
+    // source-audited Deferred API software constructor at580+, plus the three
+    // public generated NVDEC aliases audited on2026-10-20; no other rows change.
     // NV01_TIMER is
     // audited from OGKM in traces/windows_pool_20261005/timer-source-audit.tsv.
     // Pin its complete row and compare every other decision byte-for-byte.
@@ -33,6 +34,21 @@ fn pre_535_extension_policies_change_only_by_the_audited_software_constructors()
     assert_eq!(current.matches(TIMER).count(), 8);
     assert_eq!(current.matches(DEFERRED).count(), 2);
     assert_eq!(current.matches(KCALLBACK).count(), 2);
+    // Keep the historical fixture immutable. Pin every added decoder row and its
+    // number of legal boundaries before removing only these audited additions.
+    for (id, name, count) in [
+        (0xcfb0, "NVCFB0_VIDEO_DECODER", 4),
+        (0xceb0, "NVCEB0_VIDEO_DECODER", 2),
+        (0xd1b0, "NVD1B0_VIDEO_DECODER", 2),
+        // 2026-10-20 (bw-resume): the measured next GB202 wall after CFB0, same boundaries.
+        (0xcffa, "NVCFFA_VIDEO_OFA", 4),
+    ] {
+        let row = format!(
+            "CLASS {id:08x} {name} Mode2Rpc => Listed {{ name: \"{name}\", origin: Mode2Rpc }}\n"
+        );
+        assert_eq!(current.matches(row.as_str()).count(), count, "{name}");
+        current = current.replace(row.as_str(), "");
+    }
     for c in &controls {
         assert_eq!(current.matches(c.as_str()).count(), 2, "{c}");
         current = current.replace(c.as_str(), "");

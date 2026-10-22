@@ -1,0 +1,1 @@
+/workspace/sweep-win-56766467/kfwin/logs/sweep581_diag_b1_qemu.log	rpcs=254	no teardown

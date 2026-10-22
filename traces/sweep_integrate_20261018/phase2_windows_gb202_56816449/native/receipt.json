@@ -1,0 +1,25 @@
+{
+  "utc": "2026-10-20T01:14:05.606387+00:00",
+  "source": "0c87acda802b18a610739e75f2b50049a9247067",
+  "files": [
+    {
+      "path": "/root/prov/sweep_host_preflight.log",
+      "source_sha256": "6b8087282697e287262b98fd87d52b02eaead7f143ee98c8efaf8ce8c0724d78",
+      "export": "host_health.txt",
+      "export_sha256": "6b8087282697e287262b98fd87d52b02eaead7f143ee98c8efaf8ce8c0724d78"
+    },
+    {
+      "path": "/root/prov/sweep_host_die.log",
+      "source_sha256": "9161ca854bf9ca581ccb082714b5318f457e05ed56fb3c63af89b6103005d6bd",
+      "export": "host_die.txt",
+      "export_sha256": "9161ca854bf9ca581ccb082714b5318f457e05ed56fb3c63af89b6103005d6bd"
+    },
+    {
+      "path": "/root/prov/sweep_gates.log",
+      "source_sha256": "c38f81426d62afd6d413359d9c845597c1cb5aceaca3c352aeb45d6b47e808c5",
+      "export": "gates.txt",
+      "export_sha256": "517fa2f82812db223d39d5bdebe250d088843d6c34830aae73fba96ebffbcdf5"
+    }
+  ],
+  "scope": "Strict healthy host and gates; native raw/CUDA and Windows not implied"
+}

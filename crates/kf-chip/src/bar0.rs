@@ -246,6 +246,24 @@ pub fn boot_regs(family: Family, f: &Bar0Facts) -> Vec<BootReg> {
             ),
         });
     }
+    // ★ 2026-10-14 (die sweep, GB206, Windows 580.88 — `docs/design/V3_DIE_SWEEP_20261014.md` §3.1): the Blackwell
+    // GSP reset waits for its PLM first. `kgspResetHw_GB100` polls `NV_PGSP_FALCON_RESET_PRIV_LEVEL_MASK` until
+    // `READ_PROTECTION_LEVEL0` and `WRITE_PROTECTION_LEVEL0` both read `_ENABLE` (`ogkm-580: kernel_gsp_gb100.c:
+    // 42-90`, "required to allow GSP to lower the PLM so RM has reset access"); the Windows RM resets the GSP
+    // between the FSP capability query and the boot commands, and read this word 10 000+ times as `0` before
+    // giving up. Hardware has FSP/GSP lower it by then; we are both, and there is no earlier instant, so it is a
+    // static boot register. Only the two fields the wait tests are set (a higher level's bits are nobody's
+    // question here). GB100's HAL for `kgspResetHw` is bound for GB10x and GB20x alike; GH100's has no such wait.
+    if matches!(family, Family::Blackwell) {
+        v.push(BootReg {
+            off: NV_PGSP_FALCON_RESET_PRIV_LEVEL_MASK,
+            value: RESET_PLM_LEVEL0_READ_WRITE_ENABLE,
+            name: "NV_PGSP_FALCON_RESET_PRIV_LEVEL_MASK",
+            from: Provenance::Ogkm(
+                "kgspResetHw_GB100 waits for READ/WRITE_PROTECTION_LEVEL0 _ENABLE before it resets the GSP",
+            ),
+        });
+    }
     // ★ 2026-09-26 (`V3_FAMILY_PORT_BLACKWELL.md` §4): in a VM RM takes the PASSTHROUGH branch of
     // `gpuReadBusConfigCycle_GM107` (`bIsPassthru`, `ogkm-580: gpu.c:4745-4769`; `kern_gpu_gm107.c:
     // 103-106`), and on GH100/GB20x `gpuReadPassThruConfigReg_GH100` reads the config space's BAR0
@@ -296,6 +314,12 @@ pub fn boot_regs(family: Family, f: &Bar0Facts) -> Vec<BootReg> {
     }
     v
 }
+
+/// `NV_PGSP_FALCON_RESET_PRIV_LEVEL_MASK` (`ogkm-580: blackwell/gb100/dev_gsp.h:60`).
+const NV_PGSP_FALCON_RESET_PRIV_LEVEL_MASK: u64 = 0x0011_03c4;
+/// `READ_PROTECTION_LEVEL0` (0:0) and `WRITE_PROTECTION_LEVEL0` (4:4), both `_ENABLE` = 1
+/// (`blackwell/gb100/dev_gsp.h:61-66`).
+const RESET_PLM_LEVEL0_READ_WRITE_ENABLE: u32 = (1 << 0) | (1 << 4);
 
 /// `DEVICE_BASE(NV_EP_PCFGM)` — the BAR0 mirror of PCI config space on GH100/GB20x
 /// (`ogkm-580: hopper/gh100/dev_xtl_ep_pri.h:26`, `0x92FFF:0x92000`).

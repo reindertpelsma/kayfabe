@@ -1,0 +1,156 @@
+{
+  "records": [
+    {
+      "source": "3970f78591e3a94f632d389046f2cb5d31bb15ea",
+      "subject": "test: require GPU-event proof and prompt observation before removing walk callbacks",
+      "new_commit": "eae9529bec933a3fac43860c42a9e6e9397c3564",
+      "paths": [
+        "crates/kf-cuda/src/completion.rs",
+        "crates/kf-cuda/src/lib.rs",
+        "crates/kf-cuda/src/walk.rs",
+        "crates/kf-qemu/src/device.rs"
+      ],
+      "disposition": "imported"
+    },
+    {
+      "source": "ffd72e3d496a2b5a85cf4ec62ce3f44d11773c92",
+      "subject": "cuda: observe each walk through a fresh GPU event without a replay callback",
+      "new_commit": "fc5c8337968f32e923e80551afab82cd1a738f81",
+      "paths": [
+        "crates/kf-cuda/src/completion.rs",
+        "crates/kf-cuda/src/walk.rs"
+      ],
+      "disposition": "imported"
+    },
+    {
+      "source": "2bf43d609ff5126d70a1e194c5cb79366a91960a",
+      "subject": "bench: observe pending GPU events in gate8 without callback wake dependency",
+      "new_commit": "19b480f9314e056e2423221a57f2d96b6bba098c",
+      "paths": [
+        "crates/kf-harness/src/bin/kf-gate8.rs"
+      ],
+      "disposition": "imported"
+    },
+    {
+      "source": "fc7e8b862e188d8c02a8932c3b5b4375f6966247",
+      "subject": "test: require early queue rediscovery without accepting retained old transport sequences",
+      "new_commit": "4a91b2ad1c32a698a5eab63c0e36cc032392b1cd",
+      "paths": [
+        "tools/windows-capture/lib/kfwc_engine.h",
+        "tools/windows-capture/tests/test_main.c"
+      ],
+      "disposition": "imported"
+    },
+    {
+      "source": "1d302de8237c4d1bbea4fac6b01b3809c5714a8c",
+      "subject": "fix: revalidate an internally retained queue table before the bulk RAM scan",
+      "new_commit": "acfa4db509eac26072b89d1127e28b6ce0ee2119",
+      "paths": [
+        "tools/windows-capture/driver/kfwc_drv.c",
+        "tools/windows-capture/lib/kfwc_discover.h",
+        "tools/windows-capture/lib/kfwc_engine.c",
+        "tools/windows-capture/lib/kfwc_engine.h",
+        "tools/windows-capture/tests/test_main.c"
+      ],
+      "disposition": "imported"
+    },
+    {
+      "source": "dd90f9c53f86f3a2fdd9e485fbe3d4844e3ca564",
+      "subject": "test: model an early GSP queue table that moved beyond the retained point",
+      "new_commit": "713e8b7b62afedcf11455798bd71a1f1c1a17fc7",
+      "paths": [
+        "tools/windows-capture/lib/kfwc_engine.h",
+        "tools/windows-capture/tests/test_main.c"
+      ],
+      "disposition": "imported"
+    },
+    {
+      "source": "1e34bd8ceeec51dcfd7405f93e76e25e6e692241",
+      "subject": "fix: search a bounded early RAM window when the validated queue table moves",
+      "new_commit": "d7d4af3ea716fe18dc2d55cd0aabc57d2f59c248",
+      "paths": [
+        "tools/windows-capture/driver/kfwc_drv.c",
+        "tools/windows-capture/lib/kfwc_discover.h",
+        "tools/windows-capture/lib/kfwc_engine.c",
+        "tools/windows-capture/lib/kfwc_engine.h",
+        "tools/windows-capture/tests/test_main.c"
+      ],
+      "disposition": "imported"
+    },
+    {
+      "source": "631f087e34e2e575f303835da9f11fedd3a97df6",
+      "subject": "test: use a mapped physical range for the near-scan RAM boundary",
+      "new_commit": "f36cc403831125fd3b66177864732ba409147a53",
+      "paths": [
+        "tools/windows-capture/tests/test_main.c"
+      ],
+      "disposition": "imported"
+    },
+    {
+      "source": "a84059a10ca80961d764eaa28e224a64660ec21d",
+      "subject": "measurement: compare every derived display-capabilities byte with a native test oracle",
+      "new_commit": "c2108187dfa89ca37b1e48b51f953ade943fc294",
+      "paths": [
+        "crates/kf-disp/examples/caps_oracle.rs"
+      ],
+      "disposition": "imported"
+    },
+    {
+      "source": "f14089a3d2f2532e90526cdc195329ace852e517",
+      "subject": "test: expose published Blackwell tiling fields missing from caps diagnostics",
+      "new_commit": "fa5b736df3d3be03f5f3055074e0cf4972a45ec0",
+      "paths": [
+        "crates/kf-disp/examples/caps_oracle.rs"
+      ],
+      "disposition": "imported"
+    },
+    {
+      "source": "886f885c5ffaa9cb49df6058b1b05af61c32371c",
+      "subject": "fix: name published Blackwell system-capability words in differential reports",
+      "new_commit": "70c59ae2ca3ae7e698127d5989eec8172a661552",
+      "paths": [
+        "crates/kf-disp/src/caps.rs"
+      ],
+      "disposition": "imported"
+    },
+    {
+      "source": "9251e45c45410e62935a01b6e82b0c11a92b58a6",
+      "subject": "measurement: export bounded GSP sequence metadata for native and observer comparison",
+      "new_commit": "99cdeeab9f502b8b1dae479e1dd5205524daf502",
+      "paths": [
+        "crates/kf-census/examples/sequence.rs",
+        "crates/kf-census/src/analyze.rs",
+        "crates/kf-census/src/lib.rs",
+        "crates/kf-census/src/sequence.rs",
+        "crates/kf-census/tests/sequence.rs"
+      ],
+      "disposition": "imported"
+    },
+    {
+      "source": "da63e54ebebbdd46b265f57ad24c41cc2788fc37",
+      "subject": "test(rm): reproduce Windows 581 software-runlist allocation refusal",
+      "new_commit": "de67e43f15fb2058cd28bb287d89ffdee30bead1",
+      "paths": [
+        "crates/kf-rm/src/sw_runlist_probe.rs"
+      ],
+      "disposition": "imported"
+    },
+    {
+      "source": "90364d9d86a634f6319352f42549cacaa77ed9e7",
+      "subject": "rm: add native-scoped Windows 581 allocation diagnostic",
+      "new_commit": "f6e58ef2035fb8d993d123d8bb803706b6553750",
+      "paths": [
+        "crates/kf-abi/src/sw_runlist.rs",
+        "crates/kf-abi/src/sw_runlist_native_generated.rs",
+        "crates/kf-rm/src/lib.rs",
+        "crates/kf-rm/src/sw_runlist_probe.rs",
+        "tools/windows-runlist-probe/README.md",
+        "tools/windows-runlist-probe/derive_native.py",
+        "tools/windows-runlist-probe/native-58151.json"
+      ],
+      "disposition": "imported"
+    }
+  ],
+  "conflicts": [],
+  "historical_red_commits_not_rerun_during_import": true
+}

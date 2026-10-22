@@ -1,0 +1,42 @@
+{
+  "die": "GB202",
+  "driver": "Windows580.88/32.0.15.8088",
+  "source": "af8bdcda4c700d8b40163ee3bf27feb7cfa6539c",
+  "run": "bw_on_m1",
+  "n": 1,
+  "display": "on",
+  "gop": "on with signedROM",
+  "p19": "../../p19.flags",
+  "extra_flags": {
+    "KF3_RPC_TRACE": "1",
+    "KF3_RPC_BODY_TRACE": "1",
+    "KF3_DIAG_PROGRESS": "1000"
+  },
+  "verdict": "FAIL guest0x50 PAGE_FAULT_IN_NONPAGED_AREA before CIM verdict; Code43/Code0 UNOBSERVED",
+  "bugcheck": {
+    "utc": "2026-10-21T12:47:33.658586+00:00",
+    "code": "0x50",
+    "parameters_hex": [
+      "0xffffdb047809fcc7",
+      "0x2",
+      "0xfffff80735efa1b0",
+      "0x2"
+    ]
+  },
+  "enable_utc": "2026-10-21T12:47:22.5920985Z",
+  "enable_to_panic_seconds": 11.0664875,
+  "rpcs": 276,
+  "last_ordinal": 275,
+  "last_selector": "0xca7a fourthcursor",
+  "actual_PROGRESS_STRAND_lines": 0,
+  "host_xid_count_reported_by_harness": 0,
+  "interpretation": "Not the old0x116 TDR. LastRPC observed25ms after QMP fault timestamp reflects observation/buffering latency, not RPC generation after crash. No cause assigned to OLUT or M without isolated evidence. Public-symbol dump analysis pending on rental; original crash child preserved. Canonical RPC order recovered from immutable source with twoOther(4) records; original observer receipt preserved.",
+  "legacy_parsed_rpc_records": 276,
+  "complete_stream_rpc_records": 278,
+  "legacy_last_ordinal": 275,
+  "complete_stream_last_ordinal": 277,
+  "missing_original_observation_times_for_complete_ordinals": [
+    213,
+    219
+  ]
+}

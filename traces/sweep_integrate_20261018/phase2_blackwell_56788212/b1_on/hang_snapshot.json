@@ -1,0 +1,37 @@
+{
+  "classification": "MEASURED diagnostic snapshot; no TDR or Code43 inferred",
+  "bytes": 632909,
+  "rpc_count": 99,
+  "unload_fn47_count": 0,
+  "host_xid_lines_in_log": 0,
+  "counters": {
+    "phase": "Running",
+    "trapped": "496",
+    "applied": "138",
+    "refused": "2",
+    "read_exits": "35",
+    "last_off": "0xb830b0",
+    "disp": "writes=0 puts=0 methods=0 updates=0 notifies=0 releases=0 vblanks=0 irqs=0 exceptions=0 refused=0 scanouts=94 scanout_refused=0 scanout_avg_us=35713 scanout_max_us=3238794",
+    "rc": "armed=0 unarmed=0 wakes=0 seen=0 posted=0",
+    "irq": "writes=44 raised=0 held=0 oor=0",
+    "reset": "req=1 (main=1 vcpu=0 wake=0) done=1 kept=0 pristine=1 waits_timed_out=0 stage=Idle dropped=0",
+    "gsp_refusals": "total=16 distinct=15 [fn76/0x20800a87=0x56x1 fn76/0x20800afe=0x56x1 fn76/0x20800aff=0x56x1 fn76/0x20800aaf=0x56x1 fn76/0x00800292=0x56x1 fn76/0x20800a80=0x56x2 fn76/0x20800a89=0x56x1 fn76/0x20802a0f=0x56x1 fn76/0x20800ab2=0x56x1 fn76/0x2080017e=0x56x1 fn76/0x20800a30=0x56x1 fn76/0x20800a2e=0x56x1 fn76/0x20800b03=0x56x1 fn76/0x20800b05=0x56x1 fn76/0x20800a3f=0x56x1"
+  },
+  "explicit_refusal_identifiers": [
+    "0x00800292",
+    "0x2080017e",
+    "0x20800a2e",
+    "0x20800a30",
+    "0x20800a3f",
+    "0x20800a80",
+    "0x20800a87",
+    "0x20800a89",
+    "0x20800aaf",
+    "0x20800ab2",
+    "0x20800afe",
+    "0x20800aff",
+    "0x20800b03",
+    "0x20800b05",
+    "0x20802a0f"
+  ]
+}

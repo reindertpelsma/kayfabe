@@ -76,9 +76,18 @@ impl Layouts {
 /// The layouts for a guest driver version, or `None` when this tree has not derived them.
 #[must_use]
 pub fn for_version(version: &str) -> Option<&'static Layouts> {
+    static V580_94_02: OnceLock<Layouts> = OnceLock::new();
+
     static V580_159_04: OnceLock<Layouts> = OnceLock::new();
     static V580_65_06: OnceLock<Layouts> = OnceLock::new();
+    static V590_48_01: OnceLock<Layouts> = OnceLock::new();
+    static V595_91_07: OnceLock<Layouts> = OnceLock::new();
     match version {
+        "580.94.02" => Some(
+            V580_94_02
+                .get_or_init(|| Layouts::parse(include_str!("../data/layouts-580.94.02.tsv"))),
+        ),
+
         "580.159.04" => Some(
             V580_159_04
                 .get_or_init(|| Layouts::parse(include_str!("../data/layouts-580.159.04.tsv"))),
@@ -89,6 +98,14 @@ pub fn for_version(version: &str) -> Option<&'static Layouts> {
         "580.65.06" => Some(
             V580_65_06
                 .get_or_init(|| Layouts::parse(include_str!("../data/layouts-580.65.06.tsv"))),
+        ),
+        "590.48.01" => Some(
+            V590_48_01
+                .get_or_init(|| Layouts::parse(include_str!("../data/layouts-590.48.01.tsv"))),
+        ),
+        "595.91.07" => Some(
+            V595_91_07
+                .get_or_init(|| Layouts::parse(include_str!("../data/layouts-595.91.07.tsv"))),
         ),
         _ => None,
     }
@@ -172,6 +189,36 @@ impl<'a> Params<'a> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn every_display_driver_has_exact_wire_layouts() {
+        for version in ["580.65.06", "580.159.04", "590.48.01", "595.91.07"] {
+            assert!(
+                for_version(version).is_some(),
+                "{version}: wire layouts absent"
+            );
+        }
+        assert!(for_version("590.48.02").is_none());
+        assert!(for_version("595.91.08").is_none());
+    }
+
+    #[test]
+    fn a_removed_control_is_not_claimed_by_the_new_driver() {
+        let old = for_version("590.48.01").unwrap();
+        let new = for_version("595.91.07").unwrap();
+        let name = "NVC370_CTRL_CMD_SET_SWAPRDY_GPIO_WAR";
+        let cmd = old.k32(name).expect("public590 control");
+        assert!(new.k32(name).is_none(), "public595 removed this control");
+        let model = |layouts| {
+            crate::model::DisplayModel::new(
+                &kf_chip::display::TURING,
+                vec![crate::edid::Monitor::default_1080p()],
+                layouts,
+            )
+        };
+        assert!(model(old).claims(cmd));
+        assert!(!model(new).claims(cmd));
+    }
 
     /// The bench's layouts parse, and a few sizes are what the headers say (`ctrl0073system.h`:
     /// three `NvU32`s; `ctrl2080internal.h`: GET_STATIC_INFO 36 bytes).

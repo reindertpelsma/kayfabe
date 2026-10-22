@@ -1,0 +1,92 @@
+.FF.FF.F.FFFF
+======================================================================
+FAIL: test_empty_driver_query_is_not_a_driver_identity (test_host_family.HostFamilyTests.test_empty_driver_query_is_not_a_driver_identity)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/workspace/sweep-wt/scripts/bench/tests/test_host_family.py", line 68, in test_empty_driver_query_is_not_a_driver_identity
+    self.assertIn('CHECK=1,0', self.check('NVIDIA GeForce RTX 5090', driver=''))
+    ~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: 'CHECK=1,0' not found in 'CHECK=0,0\n'
+
+======================================================================
+FAIL: test_error_text_is_not_a_driver_version_even_with_zero_exit_status (test_host_family.HostFamilyTests.test_error_text_is_not_a_driver_version_even_with_zero_exit_status)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/workspace/sweep-wt/scripts/bench/tests/test_host_family.py", line 71, in test_error_text_is_not_a_driver_version_even_with_zero_exit_status
+    self.assertIn('CHECK=1,0', self.check('NVIDIA GeForce RTX 5090',
+    ~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+                                      driver='No devices were found'))
+                                      ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: 'CHECK=1,0' not found in 'CHECK=0,0\n'
+
+======================================================================
+FAIL: test_failed_driver_query_cannot_report_a_cached_version_as_healthy (test_host_family.HostFamilyTests.test_failed_driver_query_cannot_report_a_cached_version_as_healthy)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/workspace/sweep-wt/scripts/bench/tests/test_host_family.py", line 62, in test_failed_driver_query_cannot_report_a_cached_version_as_healthy
+    self.assertIn('CHECK=1,0', self.check('NVIDIA GeForce RTX 5090', driver_rc=6))
+    ~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: 'CHECK=1,0' not found in 'CHECK=0,0\n'
+
+======================================================================
+FAIL: test_failed_name_query_cannot_report_a_cached_gpu_as_healthy (test_host_family.HostFamilyTests.test_failed_name_query_cannot_report_a_cached_gpu_as_healthy)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/workspace/sweep-wt/scripts/bench/tests/test_host_family.py", line 56, in test_failed_name_query_cannot_report_a_cached_gpu_as_healthy
+    self.assertIn('CHECK=1,0', self.check('NVIDIA GeForce RTX 5090', name_rc=6))
+    ~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: 'CHECK=1,0' not found in 'CHECK=0,0\n'
+
+======================================================================
+FAIL: test_malformed_numeric_driver_version_is_not_accepted (test_host_family.HostFamilyTests.test_malformed_numeric_driver_version_is_not_accepted)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/workspace/sweep-wt/scripts/bench/tests/test_host_family.py", line 75, in test_malformed_numeric_driver_version_is_not_accepted
+    self.assertIn('CHECK=1,0', self.check('NVIDIA GeForce RTX 5090', driver='595.bad'))
+    ~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: 'CHECK=1,0' not found in 'CHECK=0,0\n'
+
+======================================================================
+FAIL: test_no_devices_error_is_not_a_gpu_even_with_a_numeric_driver (test_host_family.HostFamilyTests.test_no_devices_error_is_not_a_gpu_even_with_a_numeric_driver)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/workspace/sweep-wt/scripts/bench/tests/test_host_family.py", line 48, in test_no_devices_error_is_not_a_gpu_even_with_a_numeric_driver
+    self.assertIn('CHECK=1,0', self.check('No devices were found'))
+    ~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: 'CHECK=1,0' not found in 'CHECK=0,0\n'
+
+======================================================================
+FAIL: test_no_devices_error_with_failed_queries_is_not_sound (test_host_family.HostFamilyTests.test_no_devices_error_with_failed_queries_is_not_sound)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/workspace/sweep-wt/scripts/bench/tests/test_host_family.py", line 51, in test_no_devices_error_with_failed_queries_is_not_sound
+    self.assertIn('CHECK=1,0', self.check('No devices were found',
+    ~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+                                      driver='No devices were found',
+                                      ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+                                      name_rc=6, driver_rc=6))
+                                      ^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: 'CHECK=1,0' not found in 'CHECK=0,0\n'
+
+======================================================================
+FAIL: test_transient_driver_query_failure_cannot_report_a_healthy_gpu (test_host_family.HostFamilyTests.test_transient_driver_query_failure_cannot_report_a_healthy_gpu)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/workspace/sweep-wt/scripts/bench/tests/test_host_family.py", line 65, in test_transient_driver_query_failure_cannot_report_a_healthy_gpu
+    self.assertIn('CHECK=1,0', self.check('NVIDIA H100 PCIe', driver_rc=1))
+    ~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: 'CHECK=1,0' not found in 'CHECK=0,0\n'
+
+======================================================================
+FAIL: test_transient_name_query_failure_cannot_report_a_healthy_gpu (test_host_family.HostFamilyTests.test_transient_name_query_failure_cannot_report_a_healthy_gpu)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/workspace/sweep-wt/scripts/bench/tests/test_host_family.py", line 59, in test_transient_name_query_failure_cannot_report_a_healthy_gpu
+    self.assertIn('CHECK=1,0', self.check('NVIDIA H100 PCIe', name_rc=1))
+    ~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: 'CHECK=1,0' not found in 'CHECK=0,0\n'
+
+----------------------------------------------------------------------
+Ran 13 tests in 0.162s
+
+FAILED (failures=9)

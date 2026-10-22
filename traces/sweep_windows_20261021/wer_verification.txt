@@ -1,0 +1,40 @@
+..
+----------------------------------------------------------------------
+Ran 2 tests in 0.000s
+
+OK
+
+MUTANT restore old capturing suffix:2killers
+FF
+======================================================================
+FAIL: test_event_time_preserves_the_entire_numeric_value (__main__.WerFields.test_event_time_preserves_the_entire_numeric_value)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/workspace/sweep-wt2/traces/sweep_windows_20261021/box_scripts/test_wer_fields.py", line 17, in test_event_time_preserves_the_entire_numeric_value
+    self.assertEqual(value('EventTime=134370000000000000'),'134370000000000000')
+    ~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: None != '134370000000000000'
+
+======================================================================
+FAIL: test_signature_value_preserves_code_instead_of_field_suffix (__main__.WerFields.test_signature_value_preserves_code_instead_of_field_suffix)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/workspace/sweep-wt2/traces/sweep_windows_20261021/box_scripts/test_wer_fields.py", line 20, in test_signature_value_preserves_code_instead_of_field_suffix
+    self.assertEqual(value('Sig[0].Value=141'),'141')
+    ~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: 'Value' != '141'
+- Value
++ 141
+
+
+----------------------------------------------------------------------
+Ran 2 tests in 0.001s
+
+FAILED (failures=2)
+
+RESTORED
+..
+----------------------------------------------------------------------
+Ran 2 tests in 0.000s
+
+OK

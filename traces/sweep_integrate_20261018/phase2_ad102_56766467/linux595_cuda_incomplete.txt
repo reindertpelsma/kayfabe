@@ -1,0 +1,2 @@
+CUDA_LADDER_STARTED=2026-10-19T20:37:41+00:00 mode=guest reps=1 rungs=cup2,cup3,cup8,cup8bench rev=24906bf3
+bench sizes=16,2048 iters=20 batch=10

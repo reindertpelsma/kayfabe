@@ -73,6 +73,16 @@ wait_for_dpkg() {
 }
 wait_for_dpkg || { echo "DRIVER_SWAP_DONE rc=5 (dpkg lock never cleared)"; exit 5; }
 
+# Fresh cloud images need not ship headers for their running kernel. Install them
+# before stopping/removing the current driver; a missing package is provisioning
+# failure, not evidence that the GPU or requested driver is unsupported.
+if [ ! -d "/lib/modules/$(uname -r)/build" ]; then
+  apt-get -o DPkg::Lock::Timeout=120 install -y "linux-headers-$(uname -r)" || {
+    echo "DRIVER_SWAP_DONE rc=5 (matching running-kernel headers unavailable)"
+    exit 5
+  }
+fi
+
 HELD=$(apt-mark showhold | tr '\n' ' ')
 echo "held packages: ${HELD:-<none>}"
 if [ -n "$HELD" ]; then apt-mark unhold $HELD; echo "unhold_rc=$?"; fi

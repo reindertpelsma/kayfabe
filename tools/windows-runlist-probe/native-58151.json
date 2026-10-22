@@ -1,0 +1,22 @@
+{
+  "source": "measured:AD102,Windows581.51,2026-10-17",
+  "architecture": 400,
+  "implementation": 2,
+  "wire_version": [580, 94, 2],
+  "windows_name": "581.51",
+  "class": 45719,
+  "declared_params_bytes": 12,
+  "public_commit": "a86526f4e235ae3d9e2842a11a3bb11db77450d8",
+  "evidence": "https://github.com/reindertpelsma/kayfabe/tree/8d2cb7cf9/traces/die_driver_sweep_20261015/ad102_second_builds_20261016/native_windows58151",
+  "captures": [
+    {
+      "file": "seed58151__sequence.tsv",
+      "sha256": "f2d2cab982964fcf367bad7ce5b8ac964664ba2717ceea6f05653c5b5857c0b3"
+    },
+    {
+      "file": "revisit58151__sequence.tsv",
+      "sha256": "ba81e37f8129a49ed2d9fa297bed800d3e192c984949c177afa577fe2540af30"
+    }
+  ],
+  "limits": "Class identity and declared size only. Parameter values, parent rules, native constructor effects and scheduling semantics are not established by these metadata exports. Allocation remains a bounded metadata-only diagnostic."
+}

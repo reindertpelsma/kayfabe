@@ -1,0 +1,36 @@
+{
+  "new_mutants": [
+    {
+      "mutant": "pgid_only",
+      "killing_tests": [
+        "test_new_xid_terminates_nested_timeout_group",
+        "test_new_xid_terminates_owned_setsid_descendant"
+      ]
+    },
+    {
+      "mutant": "leave_descendants_frozen",
+      "killing_tests": [
+        "test_reparented_owned_child_is_resumed_for_queued_term",
+        "test_reparented_owned_child_still_receives_term",
+        "test_new_xid_terminates_nested_timeout_group",
+        "test_new_xid_terminates_owned_setsid_descendant"
+      ]
+    },
+    {
+      "mutant": "compare_mutable_parent_identity",
+      "killing_tests": [
+        "test_reparented_owned_child_is_resumed_for_queued_term",
+        "test_reparented_owned_child_still_receives_term"
+      ]
+    }
+  ],
+  "retained_native_matching_mutants": 4,
+  "matching_functions_AST_identical_to_74aa78abe": [
+    "xid_lines",
+    "expected_faults",
+    "approve_native",
+    "check_unchanged"
+  ],
+  "restored_source_sha256": "250905586c30bff7e23d81dc08a9088025abf15e0b5fa621f80e52c0aac59b0c",
+  "green": "23/23"
+}

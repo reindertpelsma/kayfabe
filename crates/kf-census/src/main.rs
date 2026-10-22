@@ -2,8 +2,11 @@
 //!
 //! ```text
 //! kf-census [--ogkm-tag 580.82.07] [--tier1 docs/design/tier_checks/tier1_ogkm.tsv]...
-//!           [--out PREFIX] INPUT...
+//!           [--bodies] [--out PREFIX] INPUT...
 //! ```
+//!
+//! `--bodies` (scrubbed inputs only; refused otherwise) also writes `PREFIX.bodies.tsv`: every
+//! distinct control body the scrub kept, with its control id, direction, status and count.
 //!
 //! `INPUT` is an observer `gsp.jsonl`, a `KFGSPCAP` capture, or `-` (stdin; the format is
 //! sniffed from the first byte: `{` is the observer's JSON lines). Outputs
@@ -31,19 +34,22 @@ use std::process::ExitCode;
 
 fn usage() -> ExitCode {
     eprintln!(
-        "usage: kf-census [--ogkm-tag MAJOR.MINOR.PATCH] [--tier1 FILE.tsv]... [--out PREFIX] INPUT...\n       kf-census scrub [--ogkm-tag T] [--no-default-allow] [--allow-screened] [--allow-list FILE] [--allow ID]... --out SCRUBBED INPUT"
+        "usage: kf-census [--ogkm-tag MAJOR.MINOR.PATCH] [--tier1 FILE.tsv]... [--bodies] [--out PREFIX] INPUT...\n       kf-census scrub [--ogkm-tag T] [--no-default-allow] [--allow-screened] [--allow-list FILE] [--allow ID]... --out SCRUBBED INPUT"
     );
     ExitCode::from(2)
 }
 
 fn open_out(path: &str) -> std::io::Result<File> {
-    use std::os::unix::fs::OpenOptionsExt;
-    std::fs::OpenOptions::new()
-        .write(true)
-        .create(true)
-        .truncate(true)
-        .mode(0o600)
-        .open(path)
+    let mut options = std::fs::OpenOptions::new();
+    options.write(true).create(true).truncate(true);
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::OpenOptionsExt;
+        options.mode(0o600);
+    }
+    // Windows files inherit the destination directory's ACL. Native measurements use a
+    // private administrator/SYSTEM directory; raw and scrubbed captures stay on that machine.
+    options.open(path)
 }
 
 fn scrub_main(mut args: impl Iterator<Item = String>) -> ExitCode {
@@ -217,6 +223,7 @@ fn main_census(argv: impl Iterator<Item = String>) -> ExitCode {
     let mut tier1: Vec<String> = Vec::new();
     let mut out: Option<String> = None;
     let mut inputs: Vec<String> = Vec::new();
+    let mut bodies = false;
     let mut args = argv;
     while let Some(a) = args.next() {
         match a.as_str() {
@@ -229,6 +236,7 @@ fn main_census(argv: impl Iterator<Item = String>) -> ExitCode {
                 None => return usage(),
             },
             "--out" => out = args.next(),
+            "--bodies" => bodies = true,
             "-h" | "--help" => return usage(),
             _ => inputs.push(a),
         }
@@ -256,6 +264,13 @@ fn main_census(argv: impl Iterator<Item = String>) -> ExitCode {
             return ExitCode::from(2);
         }
     };
+    if bodies {
+        if out.is_none() {
+            eprintln!("kf-census: --bodies needs --out");
+            return ExitCode::from(2);
+        }
+        an.collect_bodies();
+    }
     for path in &inputs {
         let raw: Box<dyn Read> = if path == "-" {
             Box::new(std::io::stdin().lock())
@@ -287,7 +302,20 @@ fn main_census(argv: impl Iterator<Item = String>) -> ExitCode {
         }
     }
     let rep = an.finish();
+    if bodies && let Some(s) = rep.sources.iter().find(|s| !s.scrubbed) {
+        eprintln!(
+            "kf-census: --bodies refused: {} is not a scrubbed capture (run `kf-census scrub` first)",
+            s.label
+        );
+        return ExitCode::from(2);
+    }
     if let Some(prefix) = &out {
+        if let Some(text) = report::bodies_tsv(&rep)
+            && let Err(e) = std::fs::write(format!("{prefix}.bodies.tsv"), text)
+        {
+            eprintln!("kf-census: {prefix}.bodies.tsv: {e}");
+            return ExitCode::from(2);
+        }
         let files = [
             ("controls.tsv", report::controls_tsv(&rep)),
             ("functions.tsv", report::functions_tsv(&rep)),
