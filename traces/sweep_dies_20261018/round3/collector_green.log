@@ -1,0 +1,17 @@
+test_authentic_ga102_records_are_observations_only (test_native_route_measurement.NativeRouteMeasurement.test_authentic_ga102_records_are_observations_only) ... ok
+test_duplicate_record_is_refused (test_native_route_measurement.NativeRouteMeasurement.test_duplicate_record_is_refused) ... ok
+test_missing_record_is_refused (test_native_route_measurement.NativeRouteMeasurement.test_missing_record_is_refused) ... ok
+test_non_ce_client_is_refused (test_native_route_measurement.NativeRouteMeasurement.test_non_ce_client_is_refused) ... ok
+test_nonzero_interrupt_is_refused (test_native_route_measurement.NativeRouteMeasurement.test_nonzero_interrupt_is_refused) ... ok
+test_other_observed_client_is_recorded_without_selecting_a_die_row (test_native_route_measurement.NativeRouteMeasurement.test_other_observed_client_is_recorded_without_selecting_a_die_row) ... ok
+test_preexisting_fault_is_refused (test_native_route_measurement.NativeRouteMeasurement.test_preexisting_fault_is_refused) ... ok
+test_source_recovery_failure_is_refused (test_native_route_measurement.NativeRouteMeasurement.test_source_recovery_failure_is_refused) ... ok
+test_wrong_defer_process_is_refused (test_native_route_measurement.NativeRouteMeasurement.test_wrong_defer_process_is_refused) ... ok
+test_wrong_engine_is_refused (test_native_route_measurement.NativeRouteMeasurement.test_wrong_engine_is_refused) ... ok
+test_wrong_missing_page_process_is_refused (test_native_route_measurement.NativeRouteMeasurement.test_wrong_missing_page_process_is_refused) ... ok
+test_wrong_va_is_refused (test_native_route_measurement.NativeRouteMeasurement.test_wrong_va_is_refused) ... ok
+
+----------------------------------------------------------------------
+Ran 12 tests in 0.018s
+
+OK

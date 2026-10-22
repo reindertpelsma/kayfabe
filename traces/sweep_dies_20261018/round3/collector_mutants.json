@@ -1,0 +1,24 @@
+{
+  "ignore_owned_pid": {
+    "distinct_killers": 2,
+    "tests": [
+      "test_wrong_defer_process_is_refused (test_measurement.NativeRouteMeasurement.test_wrong_defer_process_is_refused)",
+      "test_wrong_missing_page_process_is_refused (test_measurement.NativeRouteMeasurement.test_wrong_missing_page_process_is_refused)"
+    ]
+  },
+  "ignore_exact_multiset": {
+    "distinct_killers": 3,
+    "tests": [
+      "test_duplicate_record_is_refused (test_measurement.NativeRouteMeasurement.test_duplicate_record_is_refused)",
+      "test_missing_record_is_refused (test_measurement.NativeRouteMeasurement.test_missing_record_is_refused)",
+      "test_wrong_va_is_refused (test_measurement.NativeRouteMeasurement.test_wrong_va_is_refused)"
+    ]
+  },
+  "approve_observation_for_guest": {
+    "distinct_killers": 2,
+    "tests": [
+      "test_authentic_ga102_records_are_observations_only (test_measurement.NativeRouteMeasurement.test_authentic_ga102_records_are_observations_only)",
+      "test_other_observed_client_is_recorded_without_selecting_a_die_row (test_measurement.NativeRouteMeasurement.test_other_observed_client_is_recorded_without_selecting_a_die_row)"
+    ]
+  }
+}

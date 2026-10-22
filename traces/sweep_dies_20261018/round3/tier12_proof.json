@@ -1,0 +1,41 @@
+{
+  "kind": "CODE READ",
+  "date": "2026-10-22",
+  "tier1": "ENGINE_ID and CLIENT are separate fields; proposed equality falsified by source, not a new per-die route rule",
+  "native_bound_engine": "COPY0: main.rs dl_arm_body engine_type_copy(0)",
+  "old_ce1_assumption": "commit74aa78abe native guard, AD106 lease57064037 fixture; no second-CE selection",
+  "tier2": "0x20801112 flags0x5c040 kernel privileged; channel0x906f0106 read-only/unprivileged but no client field; root/nobody measurement planned",
+  "tier3": "evidence-only observation; approved_for_guest is always false; no mutable route is copied into a die row",
+  "source_locations": {
+    "src/nvidia/src/kernel/gpu/mmu/arch/volta/kern_gmmu_gv100.c": [
+      549,
+      562,
+      563,
+      1838,
+      1839,
+      1881,
+      1892
+    ],
+    "src/nvidia/generated/g_subdevice_nvoc.c": [
+      5034,
+      5040
+    ],
+    "src/common/sdk/nvidia/inc/ctrl/ctrl2080/ctrl2080fifo.h": [
+      535,
+      560
+    ],
+    "src/common/sdk/nvidia/inc/ctrl/ctrl906f.h": [
+      191,
+      204,
+      214
+    ]
+  },
+  "source_tag": "595.84; other published versions researched in ../round2/",
+  "public_root": "https://github.com/NVIDIA/open-gpu-kernel-modules/tree/722ae84526a09ed672fbe75448e2909834ba4cce",
+  "source_sha256": {
+    "src/nvidia/src/kernel/gpu/mmu/arch/volta/kern_gmmu_gv100.c": "0be961fac24c0e3cdfee28e6b913df1434cdf0c6b7f88c3fdb357544149ff745",
+    "src/nvidia/generated/g_subdevice_nvoc.c": "7210ad97a0096d804d2f4a1a9d4f4b46b12d6e5376e1da774a7db5ae741f56b0",
+    "src/common/sdk/nvidia/inc/ctrl/ctrl2080/ctrl2080fifo.h": "11228344ef57ddb8e648b95b774eb3aaf6da3675c918f0d0dd1353fc12faf6da",
+    "src/common/sdk/nvidia/inc/ctrl/ctrl906f.h": "e91381729da17649af09ff357c0f2ca5e85d2f825a2e045debc1690746e7c90b"
+  }
+}
