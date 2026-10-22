@@ -18,7 +18,7 @@ S = importlib.util.module_from_spec(SPEC); SPEC.loader.exec_module(S)
 
 
 class GuardedSuiteTests(unittest.TestCase):
-    def run_suite(self, failing_at, lose_completion_at=None):
+    def run_suite(self, failing_at, lose_completion_at=None, lose_proof_at=None):
         rev = subprocess.check_output(['git', 'rev-parse', 'HEAD'], cwd=ROOT, text=True).strip()
         baseline = json.loads((ROOT / 'traces/sweep_windows_20261021/lease_57081143/native/native_xid_baseline.json').read_text())
         baseline['guest_proofs'] = []
@@ -39,7 +39,7 @@ class GuardedSuiteTests(unittest.TestCase):
                 fail = len(calls) == failing_at
                 if not fail and len(calls) != lose_completion_at:
                     baseline['completed_arms'].append({'arm': argv[-1], 'revision': rev, 'pid': 1234, 'starttime': 1})
-                    if argv[-1] in ('--defer-liveness', '--missing-page-fault'):
+                    if argv[-1] in ('--defer-liveness', '--missing-page-fault') and len(calls) != lose_proof_at:
                         baseline['guest_proofs'].append({'arm': argv[-1], 'accepted_faults': 4 if argv[-1] == '--defer-liveness' else 1})
                     receipt.write_text(json.dumps(baseline))
                 kwargs['stdout'].write('FAST_SUITE_PASS=1 FAST_SUITE_FAIL=0 FAST_SUITE_CRASH=0 NOTRUN=0 ARMS=1\n' if not fail else 'FAST_SUITE_FAIL=1\n')
@@ -69,10 +69,22 @@ class GuardedSuiteTests(unittest.TestCase):
         code, calls = self.run_suite(0, lose_completion_at=1)
         self.assertEqual(code, 7); self.assertEqual(calls, ['--timer'])
 
+    def test_shell_pass_without_engines_completion_stops_before_third(self):
+        code, calls = self.run_suite(0, lose_completion_at=2)
+        self.assertEqual(code, 7); self.assertEqual(calls, ['--timer', '--engines'])
+
     def test_shell_pass_without_defer_proof_cannot_start_successor(self):
         code, calls = self.run_suite(0, lose_completion_at=7)
         self.assertEqual(code, 7); self.assertEqual(len(calls), 7)
         self.assertEqual(calls[-1], '--defer-liveness')
+
+    def test_completion_without_defer_recovery_proof_stops_before_successor(self):
+        code, calls = self.run_suite(0, lose_proof_at=7)
+        self.assertEqual(code, 7); self.assertEqual(len(calls), 7)
+
+    def test_completion_without_missing_page_recovery_stops_before_successor(self):
+        code, calls = self.run_suite(0, lose_proof_at=13)
+        self.assertEqual(code, 7); self.assertEqual(len(calls), 13)
 
 
 class GuestImagePathTests(unittest.TestCase):

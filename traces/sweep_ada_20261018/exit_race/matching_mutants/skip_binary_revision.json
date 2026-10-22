@@ -1,0 +1,9 @@
+{
+  "tests": 109,
+  "failures": [
+    "test_guest_guard_runner.RunnerIdentityTests.test_arbitrary_binary_directory_refused",
+    "test_guest_guard_runner.RunnerIdentityTests.test_stale_binary_revision_refused"
+  ],
+  "errors": [],
+  "mutant": "skip_binary_revision"
+}

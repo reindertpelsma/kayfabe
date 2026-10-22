@@ -47,6 +47,16 @@ def main():
         if result.returncode or 'FAST_SUITE_PASS=1 FAST_SUITE_FAIL=0 FAST_SUITE_CRASH=0 NOTRUN=0 ARMS=1' not in cell:
             print('GUARDED_SUITE_STOP arm=' + arm + ' rc=' + str(result.returncode), flush=True)
             return 7
+        state = json.loads(G.bounded(a.receipt))
+        records = state.get('completed_arms', [])
+        if ([record['arm'] for record in records] != completed + [arm] or
+                any(record['revision'] != a.revision or record['pid'] <= 1 or record['starttime'] <= 0
+                    for record in records)):
+            raise G.GuardRefused('arm has no fresh successful supervisor completion')
+        if arm in ('--defer-liveness', '--missing-page-fault'):
+            expected = [4] if arm == '--defer-liveness' else [4, 1]
+            if [proof['accepted_faults'] for proof in state.get('guest_proofs', [])] != expected:
+                raise G.GuardRefused('guest control lacks durable exact recovery proof')
         completed.append(arm)
         print('GUARDED_ARM_PASS ' + arm, flush=True)
     state = json.loads(G.bounded(a.receipt))

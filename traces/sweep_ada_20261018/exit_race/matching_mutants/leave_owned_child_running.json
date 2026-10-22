@@ -1,0 +1,9 @@
+{
+  "tests": 109,
+  "failures": [
+    "test_guest_guard_runner.RunnerIdentityTests.test_unreadable_journal_stops_child_and_cannot_advance_receipt",
+    "test_guest_guard_runner.RunnerIdentityTests.test_unrelated_fault_stops_child_and_cannot_advance_receipt"
+  ],
+  "errors": [],
+  "mutant": "leave_owned_child_running"
+}

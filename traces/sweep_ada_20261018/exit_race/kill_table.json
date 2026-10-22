@@ -1,0 +1,56 @@
+[
+  {
+    "mutant": "uncaught_proc_exit",
+    "failures": [
+      "test_guest_guard_runner.ExitRaceTests.test_defer_child_exit_during_exe_read_saves_final_proof",
+      "test_guest_guard_runner.ExitRaceTests.test_missing_child_exit_during_exe_read_saves_final_proof"
+    ],
+    "errors": [],
+    "tests": 109
+  },
+  {
+    "mutant": "accept_missing_exe_while_live",
+    "failures": [
+      "test_guest_guard_runner.ExitRaceTests.test_live_defer_missing_exe_is_still_fatal",
+      "test_guest_guard_runner.ExitRaceTests.test_live_missing_page_missing_exe_is_still_fatal"
+    ],
+    "errors": [],
+    "tests": 109
+  },
+  {
+    "mutant": "ignore_child_exit_status",
+    "failures": [
+      "test_guest_guard_runner.ExitRaceTests.test_failed_defer_exit_cannot_save_completion",
+      "test_guest_guard_runner.ExitRaceTests.test_failed_missing_exit_cannot_save_completion"
+    ],
+    "errors": [],
+    "tests": 109
+  },
+  {
+    "mutant": "drop_success_completion",
+    "failures": [
+      "test_guest_guard_runner.ExitRaceTests.test_defer_child_exit_during_exe_read_saves_final_proof",
+      "test_guest_guard_runner.ExitRaceTests.test_missing_child_exit_during_exe_read_saves_final_proof"
+    ],
+    "errors": [],
+    "tests": 109
+  },
+  {
+    "mutant": "trust_shell_PASS_without_completion",
+    "failures": [
+      "test_guarded_fast_suite.GuardedSuiteTests.test_shell_pass_without_engines_completion_stops_before_third",
+      "test_guarded_fast_suite.GuardedSuiteTests.test_shell_pass_without_timer_supervisor_completion_stops_immediately"
+    ],
+    "errors": [],
+    "tests": 109
+  },
+  {
+    "mutant": "trust_completion_without_recovery",
+    "failures": [
+      "test_guarded_fast_suite.GuardedSuiteTests.test_completion_without_defer_recovery_proof_stops_before_successor",
+      "test_guarded_fast_suite.GuardedSuiteTests.test_completion_without_missing_page_recovery_stops_before_successor"
+    ],
+    "errors": [],
+    "tests": 109
+  }
+]

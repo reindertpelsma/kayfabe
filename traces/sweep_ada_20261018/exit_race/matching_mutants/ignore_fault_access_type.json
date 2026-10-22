@@ -1,0 +1,9 @@
+{
+  "tests": 109,
+  "failures": [
+    "test_guest_xid_guard.GuestGuardTests.test_fault_type_is_exact_defer",
+    "test_guest_xid_guard.GuestGuardTests.test_fault_type_is_exact_missing"
+  ],
+  "errors": [],
+  "mutant": "ignore_fault_access_type"
+}

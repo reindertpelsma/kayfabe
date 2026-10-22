@@ -1,0 +1,9 @@
+{
+  "tests": 109,
+  "failures": [
+    "test_guest_guard_runner.RunnerIdentityTests.test_wrong_capture_executable_false_refused",
+    "test_guest_guard_runner.RunnerIdentityTests.test_wrong_capture_executable_true_refused"
+  ],
+  "errors": [],
+  "mutant": "ignore_capture_executable"
+}

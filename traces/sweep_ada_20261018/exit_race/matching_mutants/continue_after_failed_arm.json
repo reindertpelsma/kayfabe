@@ -1,0 +1,9 @@
+{
+  "tests": 92,
+  "failures": [
+    "test_guarded_fast_suite.GuardedSuiteTests.test_first_arm_failure_stops_before_second",
+    "test_guarded_fast_suite.GuardedSuiteTests.test_seventh_arm_failure_stops_before_eighth"
+  ],
+  "errors": [],
+  "mutant": "continue_after_failed_arm"
+}

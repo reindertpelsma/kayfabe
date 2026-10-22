@@ -1,0 +1,9 @@
+{
+  "tests": 109,
+  "failures": [
+    "test_guest_guard_runner.RunnerIdentityTests.test_changed_executable_is_fatal",
+    "test_guest_guard_runner.RunnerIdentityTests.test_changed_starttime_is_fatal"
+  ],
+  "errors": [],
+  "mutant": "skip_live_identity_recheck"
+}

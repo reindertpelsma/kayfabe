@@ -1,0 +1,9 @@
+{
+  "tests": 109,
+  "failures": [
+    "test_guest_guard_runner.RunnerIdentityTests.test_changed_primitive_refused",
+    "test_guest_guard_runner.RunnerIdentityTests.test_multiple_arms_in_one_boot_refused"
+  ],
+  "errors": [],
+  "mutant": "skip_one_arm_primitive"
+}

@@ -166,6 +166,7 @@ class ExitRaceTests(unittest.TestCase):
         self.assertEqual(result, 0)
         self.assertEqual(state['approved_native_xid_lines'], base['approved_native_xid_lines'])
         self.assertEqual(state['guest_proofs'][0]['pid'], context['pid'])
+        self.assertIn('completed_arms', state)
         self.assertEqual(state['completed_arms'][-1]['arm'], arm)
 
     def test_defer_child_exit_during_exe_read_saves_final_proof(self):

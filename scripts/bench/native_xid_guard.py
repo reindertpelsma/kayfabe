@@ -321,7 +321,7 @@ def supervise_guest(binary, argv, receipt, revision, root, serial, qlog):
             if running:
                 try:
                     verify_guest_identity(context)
-                except GuardRefused:
+                except (GuardRefused, FileNotFoundError):
                     if child.poll() is None:
                         raise
                     running = False
@@ -350,9 +350,10 @@ def supervise_guest(binary, argv, receipt, revision, root, serial, qlog):
                 'qlog_sha256': hashlib.sha256(qlog_text.encode()).hexdigest(),
                 'accepted_faults': len(accepted) - len(baseline),
             })
-            temporary = Path(str(receipt) + '.next')
-            temporary.write_text(json.dumps(state, indent=2) + '\n')
-            temporary.replace(receipt)
+        state.setdefault('completed_arms', []).append(context)
+        temporary = Path(str(receipt) + '.next')
+        temporary.write_text(json.dumps(state, indent=2) + '\n')
+        temporary.replace(receipt)
         return 0
     finally:
         if child.poll() is None:
