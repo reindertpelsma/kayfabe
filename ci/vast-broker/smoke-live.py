@@ -13,6 +13,11 @@ from pathlib import Path
 from smoke import Client,Stop,configured_key,provider,request
 HERE=Path(__file__).resolve().parent
 
+def ready_tunnel(log):
+    if 'Your quick Tunnel has been created!' not in log or 'Registered tunnel connection' not in log:return None
+    match=re.search(r'https://[a-z0-9-]+\.trycloudflare\.com',log)
+    return match[0] if match and match[0]!='https://api.trycloudflare.com' else None
+
 def tiny_work(verdict):
     assert verdict in {'PASS','FAIL'}
     return """set -euo pipefail
@@ -103,7 +108,8 @@ def main():
         models=sorted({o['gpu_name'].replace(' ','_') for o in offers});overlay(root,models,args.docker_smoke)
         tunnel=spawn(root,'tunnel',['cloudflared','tunnel','--url','http://127.0.0.1:18791','--no-autoupdate']);children.append(tunnel)
         def tunnel_url():
-            m=re.search(r'https://[a-z0-9-]+\.trycloudflare\.com',(root/'tunnel.log').read_text());return m[0] if m else None
+            if tunnel.poll() is not None:raise Stop('TUNNEL_STARTUP')
+            return ready_tunnel((root/'tunnel.log').read_text())
         wait_for(tunnel_url,40);url=tunnel_url()
         import secrets
         env={'RENTING_ENABLED':'true','OWNER_GITHUB_ID':'42','REPOSITORY':'reindertpelsma/kayfabe','WORKER_URL':url,'VAST_API_KEY':configured_key(),'RUN_TOKEN_SECRET':secrets.token_urlsafe(40),'OWNER_STOP_TOKEN':secrets.token_urlsafe(40),'BROKER_PATH_PREFIX':secrets.token_urlsafe(32),'ALLOW_TEST_ISSUER':'true','TEST_ISSUER':'http://127.0.0.1:18788','MAX_PRICE_USD_HOUR':'0.8','TTL_MINUTES':'20','PROVISION_MINUTES':'10','POST_RESULT_GRACE_MINUTES':'5','DAILY_SPEND_USD':'1','ROLLING_SPEND_USD':'1','CREDIT_RESERVE_USD':'8'}
