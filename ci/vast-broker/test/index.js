@@ -15,3 +15,4 @@ import './path-prefix.test.js';
 import './secret-client.test.js';
 import './provider-absence.test.js';
 import './native-github.test.js';
+import './prepaid-credit.test.js';
