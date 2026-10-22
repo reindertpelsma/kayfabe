@@ -1,4 +1,58 @@
-**STATUS: RESEARCH, 2026-10-22.** B1 stopped before implementation.
+**STATUS: LIVE, 2026-10-22 — resumed implementation; GPU-free validation complete, hardware pending.**
+
+MEASURED: owner-authorized merge `82effe99f` incorporates master `e64b8e5f6`, including PR #63.
+The former 93 denied Clippy errors are cleared. Final changed-crate Clippy succeeds: 264 existing
+warning sites before/after, added 0, errors 0 (`clippy_compare.json`). No lint suppression or debt update.
+
+CODE READ: `1166dc3d4` adds the private host error context/event, one-shot observation, correct guest
+chid/engine mapping, bounded notifier publication, dead-slot gate, pending retries and posting permit.
+`9de8ea637` is a second tests-only EXPECTED RED (12 pass / 2 fail) for RAM byte-copy publication;
+`8f7049e84` makes those 14/14 green by splitting metadata/status. `d8c1e65ef` adds the barrier-controlled
+concurrent retirement check. Runtime code changes stay in RC handling and the narrow birth/serve/free hooks.
+
+MEASURED: core target 25/25; hook target 15/15. Full 22-crate suite: 3999 passed / 0 failed / 22 ignored / 234 targets
+(`final_tests.json`, `all_crate_results.json`, `ignored_tests.txt`).
+The post-master full changed-crate baseline was 1070 pass / 14 intentional RC fail / 4 ignored
+(`resumed_baselines.json`). No new ignored test was added.
+
+MEASURED: 15 distinct deliberate mutants, 16 runs, all killed by at least two tests. The RAM generation
+variant was rerun after the status split. `mutations.json` lists every killer and source revision;
+`mutation_restores.json` proves restoration after every run group.
+
+| Mutant variant | MEASURED killers |
+|---|---:|
+| `observer_noop` | 18 |
+| `partial_status_accepted` | 4 |
+| `one_shot_latch_ignored` | 4 |
+| `pending_error_lost_on_write_refusal` | 3 |
+| `host_engine_replaces_guest_engine` | 3 |
+| `host_token_replaces_guest_chid` | 3 |
+| `native_birth_notifier_unarmed` | 2 |
+| `status_published_first` | 2 |
+| `metadata_read_before_status` | 2 |
+| `retired_post_allowed` | 2 |
+| `firmware_heap_gate_removed` | 2 |
+| `ram_generation_refreshed_on_write` | 2 |
+| `ram_final_word_bulk_copy` | 2 |
+| `ram_status_before_engine` | 2 |
+| `posting_permit_dropped_before_queue_write` | 2 |
+
+CODE READ: source authority is the PRIVATE host record, not a guest notifier or fd edge. Sysmem writes
+use the existing generation-pinned, nonblocking RAM authority. FB destinations are checked against the
+usable heap, including crossing/overflow cases. The posting permit remains held through the queue write;
+contention retries and retirement prevents later reuse from receiving stale events.
+
+INFERRED native hypothesis/falsifier: the public unprivileged error-context/event path should expose a
+real RC on every ring. A real native RC with no private record falsifies it. Hardware n=0 here; no
+Blackwell ring attribution, faulting-method, reset recovery or Windows acceptance claim is made.
+
+CODE READ: no host/GPU/VM work, no new boot flag or timer changes. Every cargo build used the required
+bounded shared flock, B1 target, nice 19, release and j2. Disk stayed above the guard. The initial cargo
+lock wait was bounded and respected; no holder was disturbed. Cleanup is recorded in the final report.
+
+**The following original checkpoint is preserved as historical evidence; its stop is resolved.**
+
+**Historical first stop, 2026-10-22 (superseded by the resume above).**
 
 MEASURED: seed merge `3c7bf3e9d5e6c8999fcc982af787b66ed334df2e` contains the two required
 origin sources. `915c1b1de` adds a design and explicit no-op delivery declarations only.
@@ -39,3 +93,13 @@ record → guest notifier → RC_TRIGGERED path are in `docs/design/V3_TRANSLATE
 No missing public verb was found for observation. RESET_CHANNEL behavior, native delivery,
 ring identity, guest recovery, busy-slot retries and lifetime handling remain UNIMPLEMENTED
 or UNVERIFIED. The delivery declarations are stubs, not a working product feature.
+
+MEASURED final scope: all 22 `kf-*` packages in the workspace were tested with --release -j2
+and --no-fail-fast. Exact package/argument list is `final_test_command.json`. The final Clippy
+command matches the post-master baseline, --all-targets, and records zero added sites. Formatting
+checks pass for every changed Rust source. No behavior flag or new ignored test was introduced.
+
+MEASURED cleanup at closure: all cargo/mutation processes exited, their shared-lock invocations
+released, and the B1-only target directory was deleted using the owner's authorized find/rmdir
+method. No host/GPU lock was acquired and no external VM/GPU job was started. The worktree retains
+source/evidence only. Runtime source at validation is `d8c1e65ef`; subsequent changes are docs/evidence.

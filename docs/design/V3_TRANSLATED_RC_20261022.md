@@ -55,6 +55,9 @@ bits); the declared guest engine, not the host CE engine/token, routes the event
 mark only this slot dead and remove its completion interest. Do not retire entries, write GP_GET,
 release semaphores, or signal success. Write only the allocation-declared guest notifier's four
 words, metadata first and info16/status last, then queue the guest RC event with CHANNEL scope.
+FB uses the aligned atomic u32 port for its last word. RAM's checked authority promises byte
+copies, so it writes info16, fences, then writes the status halfword at the public ABI offset;
+it never assumes the final four-byte copy is atomic. Both paths fence before event publication.
 Write failure keeps one pending error for retry; no event precedes successful publication. If the
 guest waived a notifier, still report the channel event. Unsupported/invalid declared notifier
 locations refuse birth. A per-allocation posting permit (a read lock held through the actual queue write) serializes
@@ -89,3 +92,10 @@ replacement backing after guest-RAM topology revocation. Falsifier: a write/even
 on the replacement generation, or an old target refreshes its generation. The implementation
 uses the master's checked authority directly; hook tests cover revocation before and during
 publication, a busy guard and successful retry. GPU/DMA and Windows acceptance remain UNRUN.
+
+MEASURED final GPU-free validation: all 22 kf-* crates, 3999 passed / 0 failed / 22 existing
+ignored tests; 15 deliberate mutant variants (16 runs), every variant >=2 killers, source
+restored. Clippy 264 existing warning sites ->264, added 0, errors 0; formatting passes.
+`traces/translated_rc_20261018/` carries per-crate counts, exact commands, every mutation killer
+and tests-first evidence. No native event/private-record, guest IRQ or Windows recovery PASS
+is asserted. RESET_CHANNEL remains outside this implementation.
