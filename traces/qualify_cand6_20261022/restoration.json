@@ -1,0 +1,12 @@
+{
+  "classification": "MEASURED",
+  "time": "2026-10-22T07:06:00.436457+02:00",
+  "cuInit_before": 0,
+  "cuInit_after": 0,
+  "module_reload": false,
+  "gpu_driver": "nvidia",
+  "gdm": "active",
+  "nvidia_smi": "NVIDIA GeForce RTX 4070, 595.91.07",
+  "q1_vm_boots": 0,
+  "q1_gpu_workload_runs": 0
+}

@@ -1,0 +1,30 @@
+{
+  "status": "queued",
+  "conclusion": "",
+  "headSha": "f7cf3ed81200077e55ee7769c635887661f3f990",
+  "url": "https://github.com/reindertpelsma/kayfabe/actions/runs/39725599154",
+  "classification": "MEASURED",
+  "observed_utc": "2026-10-22T05:05:19Z",
+  "jobs": [
+    {
+      "name": "stable \u2014 build, test, clippy, fmt, boundary",
+      "status": "queued",
+      "conclusion": ""
+    },
+    {
+      "name": "firmware \u2014 kf-gop (x86_64-unknown-uefi), kf3's PE check, size, local stand-in",
+      "status": "queued",
+      "conclusion": ""
+    },
+    {
+      "name": "aarch64 \u2014 core cross-checks (no x86 assumptions)",
+      "status": "queued",
+      "conclusion": ""
+    },
+    {
+      "name": "slow \u2014 full suite with the soaks (KAYFABE_SLOW=1)",
+      "status": "completed",
+      "conclusion": "skipped"
+    }
+  ]
+}

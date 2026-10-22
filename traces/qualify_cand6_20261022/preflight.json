@@ -1,0 +1,19 @@
+{
+  "classification": "CODE READ",
+  "candidate": "f7cf3ed81200077e55ee7769c635887661f3f990",
+  "master_base": "e64b8e5f6d0f64c41c9c4d40775e74be08de7164",
+  "candidate_ancestry_verified": true,
+  "merge_commits": {
+    "descriptor": "f717a3422",
+    "SA-02": "7cbacd778",
+    "SA-03/VA-2": "f7cf3ed81"
+  },
+  "candidate_fast_launcher_blob": "a44ee95cda66497fc83a67146e2440e4a26129bd",
+  "approved_sweep_fast_launcher_blob": "b50abafa2002684b6729753f4c9e3bdac13677d2",
+  "approved_sweep_guard_blob": "e17d516e7bdd1c6ee6798668d8df7ab72459d7ca",
+  "host_historical_xid_count": 533,
+  "hardware_workloads_started": 0,
+  "guard_executed": false,
+  "product_changed": false,
+  "verdict": "FAIL_QUALIFICATION_INCOMPLETE_SAFETY_STOP"
+}
