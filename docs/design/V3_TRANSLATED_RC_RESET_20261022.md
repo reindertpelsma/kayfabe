@@ -5,13 +5,14 @@ proof exists. Option 1 below is accepted; option 2 is not selected. The reset
 question is parked and is not a prerequisite for implementing the error-delivery
 negative control. The control must check error delivery without claiming recovery.
 The historical blocked runbook below is superseded by
-`V3_TRANSLATED_RC_CONTROL_20261022.md` as that implementation progresses.
+`V3_TRANSLATED_RC_CONTROL_20261022.md` (executable arm and trusted-host procedure, 2026-10-23).
 
 CODE READ: follow-up to PR #71, based on commit
 `1c6452a276d7014bece3adf42d68cbd4edffbc18`; branch
 `codex/translated-rc-reset-20261022`. The error-observation implementation in
-`V3_TRANSLATED_RC_20261022.md` remains the first half. This follow-up changes no
-runtime behavior. Hardware runs in this follow-up: n=0.
+`V3_TRANSLATED_RC_20261022.md` remains the first half. This reset analysis changes no
+reset behavior. The successor implements the optional bench control. Hardware
+runs in this follow-up: n=0 (2026-10-23).
 
 INFERRED pre-inspection hypothesis: RESET_CHANNEL's permission flag may permit
 recovery of an owned host channel. Falsifier stated before inspection: the
@@ -78,8 +79,12 @@ SEC_OP_RESERVED6, allowing a candidate host-authored invalid word `0xc0000000` i
 a private **bench** ring. An Xid32 outcome for that word is a hypothesis, not a
 hardware result or an established interrupt signature.
 
-INFERRED proposed host runbook, **blocked before fault injection; no executable
-new arm has been implemented**:
+CODE READ correction, 2026-10-23: the following is historical, superseded by
+`V3_TRANSLATED_RC_CONTROL_20261022.md`. Reset refusal is accepted; it no longer
+blocks item (2). Its proposed reset-verdict prerequisite is not in the accepted
+control scope.
+
+INFERRED historical proposed host runbook (2026-10-22):
 1. On the trusted Linux host, use only the lane directory and the documented
    revision-specific binaries. Acquire `flock -w 600 -o
    /tmp/kayfabe-fastguest.lock` for the complete native/guest run; a timeout is a
