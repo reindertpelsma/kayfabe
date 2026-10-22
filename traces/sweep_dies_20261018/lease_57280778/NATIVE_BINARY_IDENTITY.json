@@ -1,0 +1,20 @@
+{
+  "kind": "MEASURED",
+  "lease_id": 57280778,
+  "utc": "2026-10-22T22:55:55.867560+00:00",
+  "source": "905a8bd75e0fc53f5494e45b6d2a0fee474d7757",
+  "binaries": {
+    "qemu": {
+      "bytes": 96140048,
+      "sha256": "52db5101cac76574e1c59e63362489327678abb1af3cc805ec7a9bba1cbc4744"
+    },
+    "raw": {
+      "bytes": 5016184,
+      "sha256": "d971aab3ee9fd810325b5db8f6c99170a2f9d2d4dd816c89fd693fe4559474f6"
+    },
+    "guard": {
+      "bytes": 27755,
+      "sha256": "2e7a0c25dd07442bfe0b20519c1493ecc760fb4a0dfdb39d07d72c4711fcd490"
+    }
+  }
+}
