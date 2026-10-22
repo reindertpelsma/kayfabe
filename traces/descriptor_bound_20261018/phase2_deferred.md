@@ -1,6 +1,10 @@
 # G1 Phase 2 — deferred prototype
 
-**STATUS: RESEARCH — RESUMED, 2026-10-22.**
+**STATUS: SUPERSEDED, 2026-10-22.**
+
+MEASURED (G1 validation, 2026-10-22): the resumed implementation is now GPU-free
+validated; [Phase 2 proof](phase2.md) supersedes the incomplete-checkpoint limits
+below. The historical defer/stop record remains here for branch provenance.
 
 CODE READ: subsequent owner guidance authorizes Phase 2 and adds worker fairness,
 wrap characterization and the corrected never-blocking inline boundary. The

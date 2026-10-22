@@ -1,6 +1,6 @@
 # USER-ring Phase 2: worker boundary and ring audit
 
-**STATUS: DESIGN-ONLY, 2026-10-22. Owner correction at 12:40 governs this implementation.**
+**STATUS: LIVE, 2026-10-22. GPU-free implementation validated; hardware pending. Owner correction at 12:40 governs this implementation.**
 
 CODE READ: the audit bases are master `e9c6d39e5` and accepted Phase 1 `468a35c9d`.
 The descriptor decision remains authoritative; this note records the scheduling
@@ -61,7 +61,7 @@ end is copied as tail slots then head slots; the PB VA/length is independent of
 the GP ring and is never wrapped or split. Ring birth admits powers of two up to
 2^20 entries, with 8-byte alignment; no individual GP word straddles that end.
 
-CODE READ: the producer reserves one slot. `put == cursor` means no unrelayed
+CODE READ: the current production contract reserves one slot. `put == cursor` means no unrelayed
 entry; `put == visible GP_GET` means producer-empty. Full is
 `(put + 1) mod N == visible GP_GET`, capacity N-1. Equality after an attempted
 N-slot producer lap is indistinguishable from empty: there is no wrap/phase bit
@@ -81,3 +81,11 @@ MEASURED: the six `wrap_characterization_*` tests in
 `tests/user_turn_unit.rs` pass on master `e9c6d39e5` and Phase 1 `468a35c9d`
 (6 passed, 0 failed on each, 2026-10-22). These cases found no defect, so this
 characterization commit is green. Phase 2 must retain the same assertions.
+
+MEASURED (G1 validation, 2026-10-22): Phase 2 retains all six wrap assertions.
+The actual Plane/Relay fairness tests pass with K=1, including reversed token
+order; removing the per-turn part bound fails both tests. All fourteen source
+mutations have at least two independent killers. Full suites pass 1087/0
+(four existing ignores), clippy adds zero emissions/sites/errors and the
+repository claims gate reports new=0. The complete commands, mutation table and
+hardware handoff are in [the Phase 2 proof](../../traces/descriptor_bound_20261018/phase2.md).
