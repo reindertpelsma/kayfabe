@@ -292,3 +292,7 @@ ActualGB206/595.91.07: PRECOMPdenied0x1f with kernelnon-adminpermissionfailure0x
 gates9/9+10,raw30/30,CUDA4/4 pass; nativeGRfixtureCEwake-FD assertion failed despite payload/GET.
 No unmatched Xid, no Xid32; only5source-matched intentional31 with recovery. Controllerstopped
 beforeWindows install/bind; fieldON/B1UNRUN. No newWindowsordinals or GB202result.
+
+### Additional corrected-native phase lease, 2026-10-22 (ACTIVE)
+
+MEASURED API receipt, 2026-10-22: own57280677, verifiedRTX5090 offer55630686/machine41833, created22:08:07UTC, auto-destroyFIRST170min deadline00:58:07UTC. Quote1.001388889USD/h, observedall-in1.05USD/h. Prior phase runtime estimate0.215403395USD; phase cap8/stop6/reserve5; creditbefore37.035032006USD. See traces/blackwell_edge_validation_20261023/owned_instances.json. Runtime not final until exact-id API absence.
