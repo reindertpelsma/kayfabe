@@ -1,0 +1,24 @@
+{
+  "offer": {
+    "status": 200,
+    "data": {
+      "id": 48798407,
+      "gpu_name": "RTX 4090",
+      "dph_total": 0.6000000000000001,
+      "verification": "verified",
+      "vms_enabled": true,
+      "reliability": 0.9920979,
+      "disk_space": 1585,
+      "public_ipaddr": "213.96.60.239",
+      "inet_down_cost": 0.0007812499999999999,
+      "inet_up_cost": 0.0007812499999999999
+    }
+  },
+  "credit": {
+    "status": 200,
+    "data": {
+      "credit_numeric": true,
+      "reserve_covered": true
+    }
+  }
+}

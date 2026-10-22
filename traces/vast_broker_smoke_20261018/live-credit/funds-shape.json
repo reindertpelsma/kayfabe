@@ -1,0 +1,8 @@
+{
+  "run": "v3-live-credit-20261022",
+  "date": "2026-10-22",
+  "credit_type": "float",
+  "credit_above_8_usd_reserve": true,
+  "balance": 0,
+  "credit_and_balance_are_distinct": true
+}

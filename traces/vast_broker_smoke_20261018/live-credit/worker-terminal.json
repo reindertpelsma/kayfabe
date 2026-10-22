@@ -1,0 +1,34 @@
+[
+  {
+    "method": "GET",
+    "route": "status",
+    "status": 200,
+    "bytes": 182,
+    "response": {
+      "run": "1792673075630-1",
+      "id": "57212118",
+      "sha": "e2e1b3c46053ff00af5a0be28702b8ba961bfcb4",
+      "pr": 7,
+      "state": "COMPLETE",
+      "verdict": "UNAVAILABLE",
+      "log_tail_sanitised": "",
+      "bytes_dropped": 0
+    }
+  },
+  {
+    "method": "POST",
+    "route": "stop",
+    "status": 200,
+    "bytes": 181,
+    "response": {
+      "run": "1792673075630-1",
+      "id": "57212118",
+      "sha": "e2e1b3c46053ff00af5a0be28702b8ba961bfcb4",
+      "pr": 7,
+      "state": "STOPPED",
+      "verdict": "UNAVAILABLE",
+      "log_tail_sanitised": "",
+      "bytes_dropped": 0
+    }
+  }
+]
