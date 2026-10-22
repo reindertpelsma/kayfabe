@@ -17,7 +17,7 @@ export class Github {
       }
       return response;
     };
-    const value=await fetchJson(publicFallback,`https://api.github.com/repos/${this.cfg.repo}/${path}`,{method:'GET',headers:this.headers},missing);
+    const value=await fetchJson(publicFallback,`${this.cfg.githubOrigin??'https://api.github.com'}/repos/${this.cfg.repo}/${path}`,{method:'GET',headers:this.headers},missing);
     if(immutable){if(this.cache.size>=32)this.cache.delete(this.cache.keys().next().value);this.cache.set(path,{at:this.now(),value:structuredClone(value)});}
     return value;
   }
