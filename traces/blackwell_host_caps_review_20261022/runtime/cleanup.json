@@ -1,0 +1,12 @@
+{
+  "own_targets_deleted": [
+    "bw-host-precomp-target",
+    "bw-host-precomp-base-clippy-target",
+    "bw-host-precomp-b1-target"
+  ],
+  "own_test_build_processes_finished": true,
+  "new_rentals": 0,
+  "new_gpu_jobs": 0,
+  "trusted_host_access": false,
+  "locks_taken": false
+}

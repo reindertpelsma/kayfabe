@@ -250,3 +250,12 @@ precision-only ON0x50; OFF abort on QEMU32 pair without prior CIMCode0proof; B1U
 No natural OFF0x116 or WindowsPASS claimed. Source8f3a9bb3a; early-pushed text evidence retained.
 Final API audit ../blackwell_validation4_20261022/FINAL_API_AUDIT.json. Runtime estimates are not
 settled invoices or exclusive shared-account credit deltas. No new rental; foreign Ada untouched.
+
+GPU-FREE2026-10-22 host-PRECOMP continuation: no new instance or rental charge. All eight owned
+continuation IDs remain closed per validation4 FINAL_API_AUDIT.json; no creation since that audit.
+Lane runtime estimate remains4.832256623USD of7hard stop (not settled invoices). Read-only planning
+API snapshot04:53:36UTC: shared account credit39.535856919USD,5USD reserve; shared debit is not
+exclusive SW2 spend. New offers/quotes are planning evidence only. Next proposal is one host-read
+ON then isolated B1 ON, bounded by actual-rate reservation and170min outer auto-destroy plus earlier
+cost/authorized deadline; no new execution window or rental grant inferred. See
+../blackwell_host_caps_review_20261022/market_plan_snapshot.json and the host-PRECOMP validation plan.

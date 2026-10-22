@@ -33,6 +33,7 @@ pub mod color;
 pub mod dispcaps;
 pub mod edid;
 pub mod engine;
+pub mod hostcaps;
 pub mod inst;
 pub mod layout;
 pub mod lockstep;

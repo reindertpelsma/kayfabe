@@ -101,6 +101,53 @@ pub fn host_facts(rm: &kf_host::HostRm, family: Family) -> Result<HostFacts, Str
     query_host_facts(&mut Session(rm, None), family).map_err(|e| e.to_string())
 }
 
+/// Optional startup-only display facts. The request is authored from the HOST's
+/// public class/register vocabulary on this same selected die. A complete refusal
+/// keeps the existing derived page; no privileged BAR mapping or captured file.
+pub fn display_precomp(
+    rm: &kf_host::HostRm,
+    row: &kf_chip::display::DisplayRow,
+    die: kf_disp::capsderive::Die,
+) -> kf_disp::capsderive::HostFacts {
+    let probe = || {
+        let version = rm.driver_version();
+        let table = kf_disp::class::for_version(version)
+            .ok_or_else(|| format!("no compiled host display classes for {version}"))?;
+        let regs = kf_disp::regs::Regs::for_ip(version, row.ip_version)
+            .ok_or_else(|| format!("no compiled host display registers for {version}"))?;
+        kf_disp::hostcaps::query(table, &regs, row, die, |addresses| {
+            rm.read_precomp_capabilities(addresses)
+        })
+    };
+    // This is the private realize thread, before any guest runs, with no vCPU
+    // lock. The bracket refuses before calling probe if capget/capset fails.
+    let result = kf_linux_raw::capability::with_effective_cap_cleared(
+        kf_linux_raw::capability::CAP_SYS_ADMIN,
+        probe,
+    );
+    match result {
+        Ok((Ok(snapshot), _)) => {
+            eprintln!(
+                "kf3: PRECOMP source=T2 own-die unprivileged regops; host={} class={:#x} windows={}",
+                rm.driver_version(),
+                row.classes.caps,
+                row.windows
+            );
+            kf_disp::capsderive::HostFacts {
+                precomp: Some(snapshot),
+            }
+        }
+        Ok((Err(error), _)) => {
+            eprintln!("kf3: PRECOMP source=T1 fallback: {error}");
+            kf_disp::capsderive::HostFacts::default()
+        }
+        Err(error) => {
+            eprintln!("kf3: PRECOMP source=T1 fallback: capability bracket refused: {error:?}");
+            kf_disp::capsderive::HostFacts::default()
+        }
+    }
+}
+
 /// ★ 2026-10-11 (`docs/design/V3_CHANNEL_BUDGET.md`): resolve the VM's channel budget — the count per
 /// runlist the guest is told AND the cap kayfabe enforces — from the host's own unprivileged
 /// `FIFO_GET_INFO` answers (one per served runlist) and the `channel-budget` property (`0` = derive).
@@ -135,7 +182,9 @@ pub fn channel_budget_with(
     let mut host = Vec::new();
     for engine in kf_rm::authored::one_engine_per_served_runlist(engines) {
         let mut p = cb::encode_request(engine);
-        ask(&mut p).map_err(|e| format!("channel budget: the host refused FIFO_GET_INFO for engine {engine:#x}: {e}"))?;
+        ask(&mut p).map_err(|e| {
+            format!("channel budget: the host refused FIFO_GET_INFO for engine {engine:#x}: {e}")
+        })?;
         host.push(cb::decode_reply(engine, &p).ok_or_else(|| {
             format!("channel budget: the host's FIFO_GET_INFO reply for engine {engine:#x} is not the two entries asked for")
         })?);
@@ -189,26 +238,43 @@ mod tests {
     fn the_property_overrides_and_the_guest_is_told_it() {
         let b = channel_budget_with(host(2048, 100), &engines(), 512).unwrap();
         assert_eq!(b.per_runlist, 512);
-        let row = kf_abi::fifochannels::FifoChannelsRow { channels_per_runlist: b.per_runlist };
+        let row = kf_abi::fifochannels::FifoChannelsRow {
+            channels_per_runlist: b.per_runlist,
+        };
         let reply = kf_abi::fifochannels::encode_fifo_num_channels(&row, 1).unwrap();
-        assert_eq!(u32::from_le_bytes(reply[4..8].try_into().unwrap()), 512, "numChannels follows the property");
+        assert_eq!(
+            u32::from_le_bytes(reply[4..8].try_into().unwrap()),
+            512,
+            "numChannels follows the property"
+        );
     }
 
     /// Over-limit and under-minimum are refused at realize, by name, never clamped; a host that refuses the query refuses realize.
     #[test]
     fn realize_refuses_what_the_host_cannot_give() {
         let e = channel_budget_with(host(2048, 100), &engines(), 2000).unwrap_err();
-        assert!(e.contains("channel-budget=2000") && e.contains("1948"), "{e}");
+        assert!(
+            e.contains("channel-budget=2000") && e.contains("1948"),
+            "{e}"
+        );
         let e = channel_budget_with(host(2048, 100), &engines(), 100).unwrap_err();
         assert!(e.contains("below the minimum"), "{e}");
-        let e = channel_budget_with(|_| Err("NV_ERR_INSUFFICIENT_PERMISSIONS".into()), &engines(), 0).unwrap_err();
+        let e = channel_budget_with(
+            |_| Err("NV_ERR_INSUFFICIENT_PERMISSIONS".into()),
+            &engines(),
+            0,
+        )
+        .unwrap_err();
         assert!(e.contains("host refused FIFO_GET_INFO"), "{e}");
     }
 
     /// The enforced cap's ceiling is the token field the guest's doorbell carries.
     #[test]
     fn the_budget_ceiling_is_the_token_tables_extent() {
-        assert_eq!(cb::MAX_CHANNEL_BUDGET, 1 << kf_trap::tokenindex::TokenIndex::CHID_BITS);
+        assert_eq!(
+            cb::MAX_CHANNEL_BUDGET,
+            1 << kf_trap::tokenindex::TokenIndex::CHID_BITS
+        );
     }
 
     use kf_host::RmError;
