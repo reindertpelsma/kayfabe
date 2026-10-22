@@ -1,5 +1,5 @@
 {
-  "utc": "2026-10-22T23:13:58.520716+00:00",
+  "utc": "2026-10-22T23:21:41.247598+00:00",
   "permission_lines": [
     "2026-10-22T23:13:01.536228+0000 ubuntu kernel: NVRM: GPU0 gpuValidateRegOffset_IMPL: User does not have permission to access register offset 0x640780"
   ]
