@@ -6,6 +6,7 @@ export function onstart(sha,nonce,minutes,repo='reindertpelsma/kayfabe',callback
   if(!/^[1-9][0-9]{0,19}-[1-9][0-9]{0,19}$/.test(callback.run)||!/^v1\.[1-9][0-9]{0,19}\.[1-9][0-9]{0,19}\.[1-9][0-9]{0,12}\.[A-Za-z0-9_-]{43}$/.test(callback.token)||callback.token.split('.').slice(1,3).join('-')!==callback.run)throw Error('Invalid callback capability');
   const prefix=callback.path??'';if(prefix!==''&&!validPathPrefix(prefix))throw Error('Invalid callback prefix');
   const grace=callback.graceMinutes??5;if(!Number.isInteger(grace)||grace<1||grace>15)throw Error('Invalid grace');
+  if(callback.runnerNonce!==undefined&&!/^[0-9a-f]{64}$/.test(callback.runnerNonce))throw Error('Invalid runner nonce');
   return `#!/bin/bash
 set -euo pipefail
 export DEBIAN_FRONTEND=noninteractive
@@ -23,6 +24,7 @@ import json,math,os,select,subprocess,time
 url='${origin}${prefix?'/'+prefix:''}/report/${callback.run}'
 token='${callback.token}'
 nonce='${nonce}'
+runner_nonce='${callback.runnerNonce??''}'
 seq=0
 sent=0
 attempted=0
@@ -78,7 +80,7 @@ rc=child.wait()
 with open(backup,'rb') as local:
     local.seek(0,os.SEEK_END);local.seek(max(0,local.tell()-8192))
     tail=local.read(8192).decode('utf-8',errors='replace')
-ack=post('result','Suite complete; sender omitted '+str(omitted)+' raw bytes beyond its bounded transport allowance.',{'nonce':nonce,'verdict':'PASS' if rc==0 else 'FAIL'})
+ack=post('result','Suite complete; sender omitted '+str(omitted)+' raw bytes beyond its bounded transport allowance.',{'nonce':nonce,'verdict':'PASS' if rc==0 else 'FAIL',**({'runner_nonce':runner_nonce,'sha':'${sha}'} if runner_nonce else {})})
 seconds=ack.get('grace_remaining_seconds') if isinstance(ack,dict) else None
 remaining=str(math.ceil(seconds/60)) if type(seconds) is int and 0<=seconds<=${grace*60} else 'unknown'
 print('Use kf-box-kill [reason] to end this box early; configured maximum ${grace} minutes; Worker reports '+remaining+' minutes remaining (hard TTL included).')

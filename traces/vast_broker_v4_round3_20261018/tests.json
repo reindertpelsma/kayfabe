@@ -1,0 +1,26 @@
+{
+  "classification": "MEASURED",
+  "implementation_rev": "3f0fb770b86c04fcd9d6dec88bdb50fac4edf48b",
+  "command": "node --test ci/vast-broker/test",
+  "passed": 724,
+  "failed": 0,
+  "skipped": 0,
+  "baseline_passed": 638,
+  "bundle_bytes": 53908,
+  "deployment": {
+    "protocol_version": 3,
+    "worker_version": "v4-r3",
+    "bundle_sha256": "289073877d815fc1cbe30b40f0233f03f535cfdfd0cf9043236a5affc69191d3"
+  },
+  "mutations": 38,
+  "minimum_named_killers": 2,
+  "legacy_v4_anchor_preflight": {
+    "legacy": 94,
+    "v4": 28
+  },
+  "legacy_v4_campaign_rerun": false,
+  "live_rentals": 0,
+  "cloudflare_deployments": 0,
+  "release_builds_executed": 0,
+  "renting_enabled": false
+}

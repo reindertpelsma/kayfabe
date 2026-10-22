@@ -1,5 +1,6 @@
 // A deliberately small, dependency-free linker for this fixed ES-module graph.
 import {readFile,mkdir,writeFile} from 'node:fs/promises';
+import {createHash} from 'node:crypto';
 import {fileURLToPath} from 'node:url';
 import {spawnSync} from 'node:child_process';
 const files=['policy','tokens','routes','reports','oidc','github','vast','ledger','onstart','sanitize','index'];
@@ -22,4 +23,5 @@ const destination=new URL('dist/worker.js',base);
 await writeFile(destination,output);
 const check=spawnSync(process.execPath,['--check',fileURLToPath(destination)],{encoding:'utf8'});
 if(check.status!==0)throw Error(check.stderr);
+await writeFile(new URL('dist/deployment.json',base),JSON.stringify({protocol_version:3,worker_version:'v4-r3',bundle_sha256:createHash('sha256').update(output).digest('hex')},null,2)+'\n');
 console.log('Built dist/worker.js ('+Buffer.byteLength(output)+' bytes)');

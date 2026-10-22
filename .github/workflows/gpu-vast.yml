@@ -1,15 +1,16 @@
 name: Vast GPU
 on:
-  pull_request:
+  pull_request_target:
     branches: [master]
     types: [opened, synchronize, reopened, ready_for_review]
   workflow_dispatch:
-    inputs:
-      pr_number:
-        description: Optional PR cross-check; dispatch from the branch to test
-        required: false
-        type: string
 permissions: {}
+defaults:
+  run:
+    shell: bash --noprofile --norc -eo pipefail {0}
+concurrency:
+  group: gpu-vast-${{ github.event.pull_request.number || github.ref }}-${{ github.event.pull_request.head.sha || github.sha }}
+  cancel-in-progress: true
 env:
   TARGET_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
 jobs:
@@ -20,7 +21,7 @@ jobs:
       statuses: write
     steps:
       - name: Post pending status without contacting the Worker
-        shell: bash
+        shell: bash --noprofile --norc -eo pipefail {0}
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
@@ -34,172 +35,48 @@ jobs:
             -X POST --data-binary "@$temporary" \
             "https://api.github.com/repos/$GITHUB_REPOSITORY/statuses/$TARGET_SHA" >/dev/null
   gpu:
-    name: Worker path filter and GPU tripwire
+    name: Isolated BASE runner validates untrusted Worker
     needs: pending
     runs-on: ubuntu-latest
     environment: gpu-vast
-    timeout-minutes: 70
+    timeout-minutes: 25
     permissions:
-      contents: read
-      pull-requests: read
       id-token: write
     outputs:
       state: ${{ steps.broker.outputs.state }}
       verdict: ${{ steps.broker.outputs.verdict }}
-    env:
-      PR_NUMBER: ${{ github.event.pull_request.number || inputs.pr_number }}
+      verified: ${{ steps.broker.outputs.verified }}
     steps:
-      - name: Evaluate trusted Worker exclusions and request bounded check
+      - name: Fetch BASE controller and request bounded test
         id: broker
-        shell: bash
+        shell: bash --noprofile --norc -eo pipefail {0}
+        timeout-minutes: 22
         env:
-          GH_TOKEN: ${{ github.token }}
           WORKER_URL: ${{ secrets.VAST_BROKER_URL }}
           WORKER_PATH: ${{ secrets.VAST_BROKER_PATH }}
         run: |
           set +x
           set -euo pipefail
-          [[ "$WORKER_URL" =~ ^https://[A-Za-z0-9.-]+/?$ ]]
-          [[ -z "${WORKER_PATH:-}" || "$WORKER_PATH" =~ ^[A-Za-z0-9_-]{32,128}$ ]]
-          mask_value() { [[ -z "$1" ]] || printf '::add-mask::%s\n' "$1"; }
-          broker_origin=${WORKER_URL%/}
-          broker_host=${broker_origin#https://}
-          broker_base=$broker_origin
-          mask_value "$WORKER_URL"
-          mask_value "$broker_origin"
-          mask_value "$broker_host"
-          IFS=. read -ra host_parts <<< "$broker_host"
-          for piece in "${host_parts[@]}"; do mask_value "$piece"; done
-          if [[ -n "${WORKER_PATH:-}" ]]; then
-            mask_value "$WORKER_PATH"
-            broker_base+="/$WORKER_PATH"
-          fi
-          mask_value "$broker_base"
-          [[ -z "$PR_NUMBER" || "$PR_NUMBER" =~ ^[1-9][0-9]*$ ]]
-          [[ "$TARGET_SHA" =~ ^[0-9a-f]{40}$ ]]
-          state=UNAVAILABLE
-          verdict=UNAVAILABLE
+          [[ "$GITHUB_REF" = refs/heads/master ]]
+          [[ "$GITHUB_SHA" =~ ^[0-9a-f]{40}$ ]]
+          [[ "$GITHUB_REPOSITORY" = reindertpelsma/kayfabe ]]
           temporary=$(mktemp -d)
-          terminal_result=false
-          cursor=0
-          : > "$temporary/full-log.txt"
-          cat > "$temporary/render.py" <<'KF_PUBLIC_RENDER'
-          import html,json,math,os,re,sys
-          mode,data_path,log_path=sys.argv[1:]
-          with open(data_path,encoding='utf-8') as source: data=json.load(source)
-          def number(key,default=0):
-              value=data.get(key,default)
-              return value if isinstance(value,(int,float)) and not isinstance(value,bool) and math.isfinite(value) and value>=0 else default
-          def clean(text):
-              text=re.sub(r'\x1b\[[0-?]*[ -/]*[@-~]','',str(text))
-              text=re.sub(r'[\x00-\x08\x0b-\x1f\x7f-\x9f]','',text)
-              return re.sub(r':{2,}',lambda match:' '.join(match[0]),text).replace('##[','# #[')
-          state=data.get('state','UNAVAILABLE')
-          if state not in {'RUNNING','STOPPING','STOPPED','COMPLETE','NOT_NEEDED','NOT_ELIGIBLE','NEEDS_APPROVAL','RENTING_DISABLED','BUSY','UNAVAILABLE','UNAVAILABLE_BUDGET','UNAUTHORIZED','NOT_FOUND'}: state='UNAVAILABLE'
-          verdict=data.get('verdict','UNAVAILABLE')
-          if verdict not in {'PASS','FAIL','UNAVAILABLE'}: verdict='UNAVAILABLE'
-          if mode=='live':
-              print(clean(data.get('log_increment_sanitised','')),end='')
-          elif mode=='final':
-              print('::group::Full bounded log: UNTRUSTED output of the rented box')
-              with open(log_path,encoding='utf-8') as source: print(clean(source.read(4194304)),end='')
-              print('\nDropped bytes: '+str(int(number('bytes_dropped'))))
-              print('::endgroup::')
-          elif mode=='summary':
-              tail=clean(data.get('log_tail_sanitised',''))[:8192]
-              fence=chr(96)*max(3,1+max([len(x) for x in re.findall(chr(96)+r'+',tail)]+[0]))
-              gpu=data.get('gpu_model','unknown')
-              if gpu not in {'RTX 4070','RTX 4070 Super','RTX 4080','RTX 4090','RTX_4070','RTX_4070_Super','RTX_4080','RTX_4090'}: gpu='unknown'
-              sha=data.get('sha','unknown')
-              if not isinstance(sha,str) or not re.fullmatch('[a-f0-9]{40}',sha): sha='unknown'
-              duration=max(0,(number('result_at',number('ended_at',number('started_at')))-number('started_at'))/1000)
-              rows=[('State',state),('Verdict',verdict),('Summary','Box reported a structured result' if data.get('result_at') is not None else 'No box result: '+state),('Tested commit',sha),('GPU model',gpu),('Create to result seconds',format(duration,'.3f')),('Estimated cost USD',format(number('cost_estimate_usd'),'.6f')),('Dropped log bytes',str(int(number('bytes_dropped'))))]
-              with open(os.environ['GITHUB_STEP_SUMMARY'],'a',encoding='utf-8') as summary:
-                  summary.write('### UNTRUSTED output of the rented box\n\n| Field | Value |\n| --- | --- |\n')
-                  for key,value in rows: summary.write('| '+key+' | '+html.escape(value).replace('|','&#124;')+' |\n')
-                  summary.write('\nLog tail (UNTRUSTED output of the rented box):\n\n'+fence+'text\n'+tail+'\n'+fence+'\n')
-          else: raise SystemExit('unsupported render mode')
-          KF_PUBLIC_RENDER
-          fetch_new_logs() {
-            target=$(jq -er '.log_cursor // 0' "$temporary/response.json" 2>/dev/null)
-            [[ "$target" =~ ^[0-9]+$ && "$target" -le 10000 ]]
-            while [[ "$cursor" -lt "$target" ]]; do
-              log_code=$(curl --silent --max-time 20 -o "$temporary/log-page.json" \
-                -w '%{http_code}' -H "Authorization: Bearer $oidc" -H "X-GH-Token: $GH_TOKEN" \
-                -X GET "$broker_base/logs/$run?cursor=$cursor" 2>/dev/null)
-              [[ "$log_code" = 200 ]]
-              next=$(jq -er '.next_cursor' "$temporary/log-page.json" 2>/dev/null)
-              [[ "$next" =~ ^[0-9]+$ && "$next" -gt "$cursor" && "$next" -le 10000 ]]
-              token=$(od -An -N24 -tx1 /dev/urandom | tr -d ' \n')
-              printf '::stop-commands::%s\n' "$token"
-              python3 "$temporary/render.py" live "$temporary/log-page.json" "$temporary/full-log.txt" | tee -a "$temporary/full-log.txt"
-              printf '\n::%s::\n' "$token"
-              [[ "$(wc -c < "$temporary/full-log.txt")" -le 4194304 ]]
-              cursor=$next
-            done
-          }
-          finish() {
-            rc=$?
-            trap - EXIT
-            if [[ "$rc" != 0 && "$terminal_result" != true && -n "${run:-}" && -s "$temporary/oidc.json" ]]; then
-              cleanup_oidc=$(jq -er '.value' "$temporary/oidc.json" 2>/dev/null)
-              curl --silent --fail --max-time 20 \
-                -H "Authorization: Bearer $cleanup_oidc" -H "X-GH-Token: $GH_TOKEN" \
-                -X POST "$broker_base/stop/$run" >/dev/null 2>&1 || true
-            fi
-            printf '::endgroup::\n'
-            if [[ -s "$temporary/response.json" ]]; then
-              python3 "$temporary/render.py" final "$temporary/response.json" "$temporary/full-log.txt"
-              python3 "$temporary/render.py" summary "$temporary/response.json" "$temporary/full-log.txt"
-            fi
-            # These are allowlisted Worker metadata, never box log bytes.
-            printf 'state=%s\nverdict=%s\n' "$state" "$verdict" >> "$GITHUB_OUTPUT"
-            exit "$rc"
-          }
-          trap finish EXIT
-          run=
-          endpoint=/rent
-          method=POST
-          printf '::group::Live log: UNTRUSTED output of the rented box\n'
-          for attempt in $(seq 1 190); do
-            audience=$(jq -rn --arg value "$WORKER_URL" '$value|@uri' 2>/dev/null)
-            mask_value "$audience"
-            curl --silent --fail --max-time 20 \
-              -H "Authorization: Bearer $ACTIONS_ID_TOKEN_REQUEST_TOKEN" \
-              "$ACTIONS_ID_TOKEN_REQUEST_URL&audience=$audience" > "$temporary/oidc.json" 2>/dev/null
-            oidc=$(jq -er '.value' "$temporary/oidc.json" 2>/dev/null)
-            printf '::add-mask::%s\n' "$oidc"
-            code=$(curl --silent --max-time 20 -o "$temporary/response.json" \
-              -w '%{http_code}' -H "Authorization: Bearer $oidc" -H "X-GH-Token: $GH_TOKEN" \
-              -X "$method" "$broker_base$endpoint" 2>/dev/null)
-            candidate=$(jq -er '.state' "$temporary/response.json" 2>/dev/null)
-            case "$candidate" in
-              RUNNING|STOPPING|STOPPED|COMPLETE|NOT_NEEDED|NOT_ELIGIBLE|BUSY|UNAVAILABLE|UNAVAILABLE_BUDGET|NEEDS_APPROVAL|RENTING_DISABLED|UNAUTHORIZED|BAD_REQUEST|NOT_FOUND|OWNERSHIP_MISMATCH)
-                state=$candidate ;;
-              *) exit 1 ;;
-            esac
-            candidate=$(jq -er '.verdict' "$temporary/response.json" 2>/dev/null)
-            case "$candidate" in PASS|FAIL|UNAVAILABLE) verdict=$candidate ;; *) exit 1 ;; esac
-            [[ "$code" = 200 ]] || exit 1
-            [[ "$(jq -er '.sha' "$temporary/response.json" 2>/dev/null)" = "$TARGET_SHA" ]]
-            if [[ -n "$PR_NUMBER" ]]; then
-              [[ "$(jq -er '.pr|tostring' "$temporary/response.json" 2>/dev/null)" = "$PR_NUMBER" ]]
-            fi
-            if [[ "$state" = NOT_NEEDED && "$verdict" = PASS ]]; then exit 0; fi
-            if [[ "$endpoint" = /rent ]]; then
-              run=$(jq -er '.run' "$temporary/response.json" 2>/dev/null)
-              [[ "$run" =~ ^[1-9][0-9]*-[1-9][0-9]*$ ]]
-              endpoint=/status/$run
-              method=GET
-            fi
-            fetch_new_logs
-            if [[ "$state" = COMPLETE ]]; then terminal_result=true; fi
-            if [[ "$state" = COMPLETE && "$verdict" = PASS ]]; then exit 0; fi
-            if [[ "$verdict" = FAIL ]]; then exit 1; fi
-            if [[ "$state" = COMPLETE || "$state" = STOPPED ]]; then exit 1; fi
-            sleep 20
+          trap 'find "$temporary" -depth -delete' EXIT
+          for file in runner.py deployment.json; do
+            curl --silent --fail --proto '=https' --max-time 20 --max-filesize 131072 \
+              -o "$temporary/$file" \
+              "https://raw.githubusercontent.com/reindertpelsma/kayfabe/$GITHUB_SHA/ci/vast-broker/$file" 2>/dev/null
           done
-          exit 1
+          env -i PATH=/usr/bin:/bin HOME="$temporary" \
+            WORKER_URL="$WORKER_URL" WORKER_PATH="${WORKER_PATH:-}" \
+            GITHUB_OUTPUT="$GITHUB_OUTPUT" GITHUB_STEP_SUMMARY="$GITHUB_STEP_SUMMARY" \
+            GITHUB_EVENT_PATH="$GITHUB_EVENT_PATH" GITHUB_SHA="$GITHUB_SHA" \
+            GITHUB_EVENT_NAME="$GITHUB_EVENT_NAME" GITHUB_REF="$GITHUB_REF" \
+            GITHUB_REPOSITORY="$GITHUB_REPOSITORY" GITHUB_RUN_ID="$GITHUB_RUN_ID" \
+            GITHUB_RUN_ATTEMPT="$GITHUB_RUN_ATTEMPT" \
+            ACTIONS_ID_TOKEN_REQUEST_TOKEN="$ACTIONS_ID_TOKEN_REQUEST_TOKEN" \
+            ACTIONS_ID_TOKEN_REQUEST_URL="$ACTIONS_ID_TOKEN_REQUEST_URL" \
+            python3 -I "$temporary/runner.py" "$temporary/deployment.json"
   report:
     name: gpu-vast
     if: ${{ always() }}
@@ -211,10 +88,11 @@ jobs:
       PENDING_RESULT: ${{ needs.pending.result }}
       GPU_RESULT: ${{ needs.gpu.result }}
       BROKER_STATE: ${{ needs.gpu.outputs.state }}
+      BROKER_VERIFIED: ${{ needs.gpu.outputs.verified }}
       BROKER_VERDICT: ${{ needs.gpu.outputs.verdict }}
     steps:
       - name: Post final status and fail every unsuccessful dependency
-        shell: bash
+        shell: bash --noprofile --norc -eo pipefail {0}
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
@@ -226,7 +104,7 @@ jobs:
               state=$BROKER_STATE ;;
           esac
           result=error
-          if [[ "$PENDING_RESULT" = success && "$GPU_RESULT" = success && "$BROKER_VERDICT" = PASS && ( "$state" = COMPLETE || "$state" = NOT_NEEDED ) ]]; then
+          if [[ "$PENDING_RESULT" = success && "$GPU_RESULT" = success && "$BROKER_VERDICT" = PASS && "$BROKER_VERIFIED" = 1 && ( "$state" = COMPLETE || "$state" = NOT_NEEDED ) ]]; then
             result=success
           elif [[ "$BROKER_VERDICT" = FAIL ]]; then
             result=failure

@@ -1,0 +1,26 @@
+SYNTHETIC no-network runner fixture; NOT a live provider or hosted GPU run.
+Trusted BASE dddddddddddddddddddddddddddddddddddddddd; runner nonce generated before rent; Worker v4-r3 expected bundle SHA256 bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb
+::stop-commands::28d33b801bb4d1bd52843c019cfd3cfd0c1955a3bb33fa40
+UNTRUSTED Worker/box output
+[untrusted] [box] : error: hostile
+[untrusted] [redacted] [redacted] [redacted]
+[67 bytes dropped by runner]
+::28d33b801bb4d1bd52843c019cfd3cfd0c1955a3bb33fa40::
+::stop-commands::76b35e173ecff7cbf7743c39d7b345e808ba521464cd71ca
+UNTRUSTED Worker/box output
+[untrusted] RTX 4070
+::76b35e173ecff7cbf7743c39d7b345e808ba521464cd71ca::
+::group::Final bounded log: UNTRUSTED Worker/box output
+::stop-commands::cba33f20fd6262c7815590887c59e396bcbafbf73d0875c3
+UNTRUSTED Worker/box output
+[untrusted] [box] : error: hostile
+[untrusted] [redacted] [redacted] [redacted]
+[67 bytes dropped by runner]
+::cba33f20fd6262c7815590887c59e396bcbafbf73d0875c3::
+[134 bytes dropped by runner display budget]
+::endgroup::
+
+Runner outputs (local enums/integer only):
+state=COMPLETE
+verdict=PASS
+verified=1
