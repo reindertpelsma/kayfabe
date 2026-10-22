@@ -1,0 +1,12 @@
+MEASURED: first iteration blender-01 completed all seven subtests, per vendor
+run-log (guest 2026-10-21 23:59:24; host clock is two hours ahead).
+Subtests 01..07 FPS: 12.79 / 34.50 / 80.20 / 207.64 / 31.36 / 39.20 / 266.42.
+MEASURED: CATIA began; its first subtest produced 71.92 FPS. It is still
+Incomplete in this snapshot. Neither this file nor its CSV is a full-suite score.
+MEASURED: guest-side PowerShell emitter produced six partial rows and all six
+FPS values matched the independent Python XML parser. Its Incomplete statuses
+were correct for its earlier capture; the later export has blender Completed.
+MEASURED: renderer FPS above 200 with a 59 Hz physical desktop proves that the
+VFIO render path is not uniformly capped at the physical refresh rate. NVIDIA
+profiles and workload definitions were not overridden. The kayfabe partial has
+several 60.06 FPS rows; do not treat display output Hz as rendering FPS.
