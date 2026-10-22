@@ -205,6 +205,7 @@ export KF3_RC_NEGCTL="$run"     # OFF still arms the host; the guest sends no tr
 export BENCH_DIR="$DIR" KF_FASTGUEST_DIR="$OUT/fastguest"
 export QEMU_BIN="$OUT/identity-exec.py" KF_LOCK="$OUT/fastguest-inner.lock"
 export KF_PROBE=sem-release KF_ARMS="$mode,$run"
+export KF_APPEND="loglevel=7 "  # include the probe's pr_info records on serial
 # Save CURSOR here. Existing fastguest failure gates remain enabled.
 bash "$REPO/scripts/fastguest/run_fast_guest.sh" "$run" 120 >"$DIR/runner.log" 2>&1
 # Save end_ns, unfiltered journal.jsonl, and manifest.json with frozen detail.
