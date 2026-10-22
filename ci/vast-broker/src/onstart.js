@@ -1,12 +1,14 @@
+import {DEFAULTS} from './defaults.js';
 import {hexSha} from './policy.js';
 import {validPathPrefix} from './routes.js';
 export function onstart(sha,nonce,minutes,repo='reindertpelsma/kayfabe',callback){
-  if(!hexSha(sha)||typeof nonce!=='string'||!/^[0-9a-f]{32}$/.test(nonce)||!Number.isInteger(minutes)||minutes<1||minutes>60||!/^[-\w.]+\/[-\w.]+$/.test(repo))throw Error('Invalid fixed onstart inputs');
+  if(!hexSha(sha)||typeof nonce!=='string'||!/^[0-9a-f]{32}$/.test(nonce)||!Number.isInteger(minutes)||minutes<1||minutes>DEFAULTS.maxMinutes||!/^[-\w.]+\/[-\w.]+$/.test(repo))throw Error('Invalid fixed onstart inputs');
   let origin;try{const u=new URL(callback.url);if(u.protocol!=='https:'||u.username||u.password||u.search||u.hash||u.pathname!=='/')throw Error();origin=u.origin;}catch{throw Error('Invalid callback origin');}
   if(!/^[1-9][0-9]{0,19}-[1-9][0-9]{0,19}$/.test(callback.run)||!/^v1\.[1-9][0-9]{0,19}\.[1-9][0-9]{0,19}\.[1-9][0-9]{0,12}\.[A-Za-z0-9_-]{43}$/.test(callback.token)||callback.token.split('.').slice(1,3).join('-')!==callback.run)throw Error('Invalid callback capability');
   const prefix=callback.path??'';if(prefix!==''&&!validPathPrefix(prefix))throw Error('Invalid callback prefix');
-  const grace=callback.graceMinutes??5;if(!Number.isInteger(grace)||grace<1||grace>15)throw Error('Invalid grace');
+  const grace=callback.graceMinutes??DEFAULTS.failGraceMinutes;if(!Number.isInteger(grace)||grace<1||grace>15)throw Error('Invalid grace');
   if(callback.runnerNonce!==undefined&&!/^[0-9a-f]{64}$/.test(callback.runnerNonce))throw Error('Invalid runner nonce');
+  if(callback.softDeadline!==undefined&&(!Number.isSafeInteger(callback.softDeadline)||callback.softDeadline<=0))throw Error('Invalid soft deadline');
   return `#!/bin/bash
 set -euo pipefail
 export DEBIAN_FRONTEND=noninteractive
@@ -19,6 +21,20 @@ set -eu
 exec curl --silent --show-error --fail --max-time 20 --proto '=https' --request POST --header 'Authorization: Bearer ${callback.token}' --data-binary "\${1:-box-request}" '${origin}${prefix?'/'+prefix:''}/kill/${callback.run}'
 KF_KILL
 chmod 700 /usr/local/bin/kf-box-kill
+cat > /usr/local/bin/kf-box-hold <<'KF_HOLD'
+#!/bin/sh
+set -eu
+# This run only; cannot remove its hard limit or access account credentials.
+exec curl --silent --show-error --fail --max-time 20 --proto '=https' --request POST --header 'Authorization: Bearer ${callback.token}' --data-binary '' '${origin}${prefix?'/'+prefix:''}/hold/${callback.run}'
+KF_HOLD
+chmod 700 /usr/local/bin/kf-box-hold
+cat > /etc/profile.d/kf-ci-hold.sh <<'KF_PROFILE'
+# An authenticated SSH login takes MANUAL; ordinary non-login workloads do not.
+if [ -n "\${SSH_CONNECTION:-}" ]; then
+    /usr/local/bin/kf-box-hold >/dev/null 2>&1 || true
+fi
+KF_PROFILE
+chmod 644 /etc/profile.d/kf-ci-hold.sh
 python3 - <<'KF_REPORT'
 import json,math,os,select,subprocess,time
 url='${origin}${prefix?'/'+prefix:''}/report/${callback.run}'
@@ -36,7 +52,8 @@ def post(kind,text=None,result=None):
     if text is not None: payload['text']=text
     if result is not None: payload['result']=result
     body=json.dumps(payload,separators=(',',':'),ensure_ascii=True).encode()
-    if kind!='result' and (attempted>=600 or sent+len(body)>900000):
+    heartbeat_post=kind=='log' and text==''
+    if kind!='result' and not heartbeat_post and (attempted>=600 or sent+len(body)>900000):
         omitted+=len((text or '').encode());return
     seq+=1;sent+=len(body);attempted+=1
     # curl retries reuse this exact payload/sequence; no redirect or arbitrary URL.
@@ -48,7 +65,7 @@ def post(kind,text=None,result=None):
     if kind=='result' and response.returncode==0:
         try: return json.loads(response.stdout)
         except (ValueError,TypeError): return None
-work=r'''exec timeout --signal=TERM --kill-after=30s ${Math.max(1,minutes*60-60)}s bash -s <<'KF_TEST'
+work=r'''exec timeout --signal=TERM --kill-after=30s __KF_SOFT_SECONDS__s bash -s <<'KF_TEST'
 set -euo pipefail
 git clone --no-checkout https://github.com/${repo}.git /workspace/kf-ci-src
 cd /workspace/kf-ci-src
@@ -58,6 +75,9 @@ git checkout --detach ${sha}
 bash scripts/ci/vast_box_main.sh '${sha}'
 KF_TEST
 '''
+soft_deadline=${callback.softDeadline??'None'}
+remaining=math.floor(soft_deadline/1000-time.time()) if soft_deadline is not None else ${minutes*60-DEFAULTS.softMarginMinutes*60}
+work=work.replace('__KF_SOFT_SECONDS__',str(max(1,remaining))) if remaining>0 else 'exit 124\\n'
 post('progress','Suite starting')
 child=subprocess.Popen(['bash','-s'],stdin=subprocess.PIPE,stdout=subprocess.PIPE,stderr=subprocess.STDOUT)
 child.stdin.write(work.encode());child.stdin.close()
@@ -73,8 +93,8 @@ with open(backup,'wb') as local:
         current=time.monotonic()
         if pending and (len(pending)>=8192 or current-last>=1):
             post('log',pending.decode('utf-8',errors='replace'));pending=b'';last=current
-        elif current-heartbeat>=60:
-            post('progress','Suite running');heartbeat=current
+        if current-heartbeat>=${DEFAULTS.heartbeatMinutes*60}:
+            post('log','');heartbeat=current
     if pending: post('log',pending.decode('utf-8',errors='replace'))
 rc=child.wait()
 with open(backup,'rb') as local:

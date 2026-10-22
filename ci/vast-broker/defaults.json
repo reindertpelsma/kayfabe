@@ -1,0 +1,21 @@
+{
+  "price": 1,
+  "daily": 6,
+  "rolling": 30,
+  "reserve": 8,
+  "dailyCount": 4,
+  "gapHours": 24,
+  "bootMinutes": 40,
+  "hardMinutes": 180,
+  "softMarginMinutes": 10,
+  "heartbeatMinutes": 10,
+  "heartbeatTimeoutMinutes": 15,
+  "passGraceMinutes": 5,
+  "failGraceMinutes": 10,
+  "manualCeilingMinutes": 480,
+  "reportCount": 2000,
+  "reportBytes": 4194304,
+  "reportRate": 20,
+  "cronPeriod": 60000,
+  "maxMinutes": 1440
+}

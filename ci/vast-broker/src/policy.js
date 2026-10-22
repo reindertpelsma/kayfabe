@@ -1,3 +1,4 @@
+import {DEFAULTS} from './defaults.js';
 // SPDX-License-Identifier: Apache-2.0 OR GPL-2.0-or-later
 export class BrokerError extends Error {
   constructor(state='UNAVAILABLE',status=503){super(state);this.state=state;this.status=status;}
@@ -17,12 +18,19 @@ export function configuration(env){
   if(!['true','false'].includes(env.RENT_DRAFTS??'false'))refuse();
   const list=(name,fallback)=>{let value;try{value=JSON.parse(env[name]??JSON.stringify(fallback));}catch{refuse();}if(!Array.isArray(value)||value.length>32||!value.every(x=>typeof x==='string'&&x.length>0&&x.length<=128&&/^[A-Za-z0-9_.*?/-]+$/.test(x)))refuse();return value;};
   const bases=list('ALLOWED_BASE_BRANCHES',['master']),patterns=list('PATH_SKIP_PATTERNS',['**/*.md','docs/**','traces/**','archive/**','LICENSE*','.github/ISSUE_TEMPLATE/**']);
-  const cfg={reportCount:number('MAX_REPORTS',2000,2000),reportBytes:number('MAX_REPORT_BYTES',4194304,4194304),reportRate:number('REPORT_RATE_LIMIT',20,20),bases,patterns,repo:env.REPOSITORY,owner:env.OWNER_GITHUB_ID,audience:env.WORKER_URL,mode,drafts:env.RENT_DRAFTS==='true',
-    reserve:number('CREDIT_RESERVE_USD',8),price:number('MAX_PRICE_USD_HOUR',.5,2),ttl:number('TTL_MINUTES',20,60)*60000,
-    provision:number('PROVISION_MINUTES',10,10)*60000,grace:number('POST_RESULT_GRACE_MINUTES',5,15)*60000,cronPeriod:60000,
-    dailyCount:number('DAILY_RENTALS',4,20),daily:number('DAILY_SPEND_USD',3),rolling:number('ROLLING_SPEND_USD',30),gap:number('SHA_GAP_HOURS',24,720)*3600000};
-  if(![cfg.reportCount,cfg.reportBytes,cfg.reportRate].every(Number.isInteger))refuse();
-  if(!Number.isInteger(cfg.dailyCount)||![cfg.ttl,cfg.provision,cfg.grace].every(x=>Number.isInteger(x/60000)))refuse();
+  const cfg={reportCount:number('MAX_REPORTS',DEFAULTS.reportCount,DEFAULTS.reportCount),reportBytes:number('MAX_REPORT_BYTES',DEFAULTS.reportBytes,DEFAULTS.reportBytes),reportRate:number('REPORT_RATE_LIMIT',DEFAULTS.reportRate,DEFAULTS.reportRate),bases,patterns,repo:env.REPOSITORY,owner:env.OWNER_GITHUB_ID,audience:env.WORKER_URL,mode,drafts:env.RENT_DRAFTS==='true',
+    reserve:number('CREDIT_RESERVE_USD',DEFAULTS.reserve),price:number('MAX_PRICE_USD_HOUR',DEFAULTS.price,2),
+    boot:number('BOOT_LIMIT_MINUTES',DEFAULTS.bootMinutes,DEFAULTS.maxMinutes)*60000,
+    hard:number('HARD_RUNTIME_MINUTES',DEFAULTS.hardMinutes,DEFAULTS.maxMinutes)*60000,
+    softMargin:DEFAULTS.softMarginMinutes*60000,heartbeat:DEFAULTS.heartbeatMinutes*60000,heartbeatTimeout:DEFAULTS.heartbeatTimeoutMinutes*60000,
+    passGrace:number('PASS_GRACE_MINUTES',DEFAULTS.passGraceMinutes,DEFAULTS.maxMinutes)*60000,failGrace:number('FAIL_GRACE_MINUTES',DEFAULTS.failGraceMinutes,DEFAULTS.maxMinutes)*60000,
+    manualCeiling:number('MANUAL_CEILING_MINUTES',DEFAULTS.manualCeilingMinutes,DEFAULTS.maxMinutes)*60000,cronPeriod:DEFAULTS.cronPeriod,
+    dailyCount:number('DAILY_RENTALS',DEFAULTS.dailyCount,20),daily:number('DAILY_SPEND_USD',DEFAULTS.daily),rolling:number('ROLLING_SPEND_USD',DEFAULTS.rolling),gap:number('SHA_GAP_HOURS',DEFAULTS.gapHours,720)*3600000};
+  if(![cfg.reportCount,cfg.reportBytes,cfg.reportRate,cfg.dailyCount].every(Number.isInteger))refuse();
+  if(![cfg.boot,cfg.hard,cfg.passGrace,cfg.failGrace,cfg.manualCeiling].every(x=>Number.isInteger(x/60000))||cfg.hard<=cfg.softMargin)refuse();
+  // Internal duration aliases keep persisted cost rows readable; all scheduling
+  // decisions use stored absolute deadlines, never elapsed poll counters.
+  cfg.ttl=cfg.hard;cfg.provision=cfg.boot;cfg.grace=cfg.passGrace;
   return cfg;
 }
 // Local smoke trust requires both explicit opt-in and a loopback HTTP caller.

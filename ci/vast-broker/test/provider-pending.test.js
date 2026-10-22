@@ -12,7 +12,7 @@ for(const shape of ['missing','null']){
  };
  test('new provider '+shape+' actual_status survives status and cron only to provision bound',async()=>{
   const h=await pending();
-  assert.equal((await (await h.call('/status/123-1')).json()).state,'RUNNING');
+  assert.equal((await (await h.call('/status/123-1')).json()).state,'BOOTING');
   await h.service.sweep();assert.deepEqual(h.cloud.deletes,[]);
   h.time.value+=600000;await h.service.sweep();assert.deepEqual(h.cloud.deletes,['900']);
  });

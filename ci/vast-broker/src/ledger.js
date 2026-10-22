@@ -42,10 +42,11 @@ export class Ledger {
     await this.storage.delete('open:'+record.key);
     if(await this.get('active')===record.key)await this.put('active',null);
   }
-  async budgets(cfg,now,cost){
+  async budgets(cfg,now,cost,excludeKey=null){
     const entries=await this.storage.list({prefix:'cost:',limit:1000});if(entries.size>=1000)refuse('UNAVAILABLE_BUDGET',409);
     const day=Math.floor(now/86400000)*86400000,rolling=now-30*86400000;let daily=0,monthly=0,count=0;
     for(const [key,v] of entries){
+      if(key==='cost:'+excludeKey)continue;
       if(!Number.isFinite(v.started)||!Number.isFinite(v.price)||v.price<0||v.started>now||v.ended!==null&&!Number.isFinite(v.ended))refuse();
       const end=v.ended??now;
       if(end<v.started)refuse();

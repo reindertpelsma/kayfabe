@@ -1,5 +1,35 @@
 # Vast broker (stage 1)
 
+
+## V5 lifecycle and shipped policy (2026-10-22; acceptance pending)
+
+[CODE READ: defaults.json, src/defaults.js, src/policy.js] Numeric defaults live
+in `defaults.json`; JavaScript imports them through `src/defaults.js`, the bundle
+embeds that same file, and wrangler.toml has no numeric override. The owner-approved
+check cap is $1.00/hour, daily $6, rolling 30-day $30, prepaid reserve $8.
+Renting remains disabled in the committed configuration. Profiles, effective
+storage/network pricing, payload integration and live acceptance are still pending.
+
+[CODE READ: src/index.js, src/onstart.js] States are NONE, CREATING, BOOTING,
+TESTING, GRACE and MANUAL. Creation stores absolute boot (40 minutes), hard
+(3 hours), soft (hard minus 10 minutes) and manual-ceiling (8 hours) deadlines.
+Empty logs count as heartbeats: the sender emits one within 10 minutes; 15 minutes
+without an authenticated post destroys the box. PASS retains 5 minutes of grace;
+FAIL retains 10. SSH login calls the per-run hold helper to enter MANUAL, suspending
+grace and heartbeat requirements while retaining the hard limit. Only the owner
+can remove that hard timer; admission checks the extended billing reservation.
+MANUAL still ends at the absolute ceiling, and cron writes a Worker-authored line.
+
+[INFERRED: defaults.json and src/ledger.js arithmetic] Two complete three-hour
+runs at $1.00/hour cost $6 in work time. The explicit budget check also reserves
+one cron minute: each reservation is $3.016667, so two worst-case reservations
+are $6.033334 and do **not** fit the unchanged $6 daily cap. Two such reservations
+fit at no more than $0.994475/hour; shorter settled runs can release enough room.
+Admission refuses excess daily/rolling liability or prepaid credit below reserve
+plus the new liability. The cron margin is a healthy-scheduler estimate, not a
+provider billing bound during an outage.
+
+
 [CODE READ: owner correction 2026-10-22; runner.py, gpu-vast.yml and src/onstart.js] The exact code is approved before Vast starts. A forged GPU verdict from the Worker **or** the box cannot change approved code or contaminate the final build. `gpu-vast` is an unattested tripwire; the Worker is never part of an attested result. The one-page [trust and public trace path](../../docs/design/V3_CI_VAST_RUNNER_TRACE_20261022.md) defines these boundaries:
 
 | Who distrusts whom | Why and enforced boundary |
@@ -15,7 +45,7 @@
 
 [CODE READ: 2026-10-22 Round 3, deployment.json] Build with `npm run bundle`; independently compare SHA256 of `dist/worker.js` with `dist/deployment.json`, committed `deployment.json` and public `DEPLOYED_BUNDLE_SHA256` before a separately authorized deployment. CLI deployment must upload those exact bundled bytes (use `npx wrangler deploy dist/worker.js --no-bundle`); dashboard/module upload uses the same file. The hash is a configuration assertion, avoiding a self-hash in the bundle. Any source update requires regenerating/reviewing the manifest and configuration together; mismatches refuse CI. This task performs no deployment and leaves renting disabled.
 
-[CODE READ: 2026-10-22 V4 round 2 owner instruction] **Stage only with RENTING_ENABLED=false.** The startup contract is SSH launch (`ssh_direct`) plus onstart; Vast injects keys already registered on the owner's account, and the Worker neither manages keys nor connects over SSH. Round 2 supersedes the earlier strict no-SSH STOP. The deployable source retains its KVM image/vm=true; the local tiny Docker/SSH flow is measured separately under [round 2 evidence](../../traces/vast_broker_v4_round2_20261018/README.md) and does not establish that KVM workload's validity. Shipped price/day caps stay $0.50/hour and $3/day; the local round permits $0.80/hour and any NVIDIA GPU. Proposed shipped $0.80/hour and $6/day remain owner questions.
+[CODE READ: 2026-10-22 V4 round 2 owner instruction] **Stage only with RENTING_ENABLED=false.** The startup contract is SSH launch (`ssh_direct`) plus onstart; Vast injects keys already registered on the owner's account, and the Worker neither manages keys nor connects over SSH. Round 2 supersedes the earlier strict no-SSH STOP. The deployable source retains its KVM image/vm=true; the local tiny Docker/SSH flow is measured separately under [round 2 evidence](../../traces/vast_broker_v4_round2_20261018/README.md) and does not establish that KVM workload's validity. Those historical V4 shipped limits are superseded by the owner-approved V5 policy above. The local V4 round allowed $0.80/hour and any NVIDIA GPU.
 
 [CODE READ] Plain ES-module JavaScript, zero npm dependencies, Node >=20. This is an **untrusted GPU tripwire**, never release provenance. The Worker alone holds the owner's dedicated Vast key. No deployment or rental is performed by tests. Binding defaults refuse spending until configured. The complete threat model, API contracts, billing risks and deferred merge queue are in [the design](../../docs/design/V3_CI_VAST_GPU_20261021.md).
 
@@ -32,7 +62,7 @@
 1. Review this branch and its evidence. Choose the numeric GitHub user ID and keep default `owner_push_or_review`; confirm dedicated-key permissions with Vast. Set `RENTING_ENABLED=false` while configuring. Never put a Cloudflare token or Vast key in GitHub.
 2. Choose the upload route. **CLI:** from this directory run `npx wrangler login`, fill `wrangler.toml` public vars, then generate/review the deployment manifest and upload the exact module with `npx wrangler deploy dist/worker.js --no-bundle` (legacy SQLite migration included). **No CLI:** run the bundle via the provided Node script, upload the module and initial metadata with a graphical HTTP client using the Cloudflare script-upload API described below; thereafter paste `dist/worker.js` into the dashboard module editor for updates. Pure dashboard paste alone does not provision a new Durable Object namespace.
 3. Ensure a SQLite `BrokerLedger` namespace is bound as `LEDGER` to this same Worker, and schedule `* * * * *`. Preserve the namespace when updating; never clear it to bypass a blocked reservation.
-4. Set public variables matching `wrangler.toml`, replacing `OWNER_GITHUB_ID=REPLACE_ME`, `REPOSITORY`. Keep budgets at 3 USD/day, 30 USD/rolling 30 days, 8 USD reserve, max 0.50 USD/hour, TTL 20 min (hard maximum 60), provisioning 10 min, post-result grace 5 min (maximum 15), max 4 rentals/day and 24h minimum same-SHA gap unless deliberately reviewed. `RENT_DRAFTS=false` is recommended.
+4. Set public variables matching `wrangler.toml`, replacing `OWNER_GITHUB_ID=REPLACE_ME`, `REPOSITORY`. Use the single numeric policy in defaults.json (V5 section above); profile and effective-price validation must also pass before renting is enabled. `RENT_DRAFTS=false` is recommended.
 5. Set secret bindings WORKER_URL (the exact HTTPS origin/OIDC audience), VAST_API_KEY, RUN_TOKEN_SECRET and OWNER_STOP_TOKEN through the dashboard or npx wrangler secret put NAME. Use independent random base64url strings of at least 32 characters for the two new bindings; keep OWNER_STOP_TOKEN with the owner only. No GitHub API token is supplied by the isolated broker job: only OIDC minting is permitted. The Worker and cron use fixed-host public GETs; shared egress rate limits can cause UNAVAILABLE, while TTL deletion precedes those reads. Optional legacy X-GH-Token support remains request-only for diagnostic callers and is not used by CI.
 6. In GitHub, create environment `gpu-vast` and set Actions secret `VAST_BROKER_URL` to that exact origin/audience (never a repository variable). Optionally set Worker secret `BROKER_PATH_PREFIX` to a random base64url segment of 32–128 characters and GitHub Actions secret `VAST_BROKER_PATH` to the identical segment, without slashes; leave both unset to retain ordinary routes. Keep the prefix out of the OIDC audience. Remove the old repository variable after migrating; configure only Actions secrets. Both GitHub secrets bind only to the broker execution step; box/run and status-writer jobs never receive them. Protect allowed branches and workflow/broker changes. Required environment reviewers add a manual delay; the owner's 2b ruling uses the authenticated owner push as approval, so avoid a redundant reviewer requirement if immediate starts are intended. Forks never rent.
 7. Authorize and measure one live smoke run separately, including the provider launch contract, Actions/OIDC PR-head contract, fixed callback sender, native Worker crypto/storage, CPU use and structured-result cleanup. Mocks cannot establish these live contracts. Confirm current Cloudflare Free/SQLite limits and Vast billing/overdraft/top-up rules first. V4 authorizes a bounded smoke; the provider startup contract remains a separate gate.
@@ -56,7 +86,7 @@ Use `PUT https://api.cloudflare.com/client/v4/accounts/{account_id}/workers/scri
 
 Configure variables, secrets, the public route and cron in the dashboard after bootstrap. Subsequent updates must preserve the namespace/bindings; do not replay the initial migration or replace all bindings accidentally. Export `BrokerLedger` as well as the default handlers when pasting the bundle. Do not substitute KV: eventual consistency cannot enforce the single-writer budget and idempotence rules.
 
-## Cost and operational limits
+## Historical V4 cost and operational limits (superseded by V5 above)
 
 [INFERRED from source: src/policy.js, arithmetic estimate] The 20-minute hard TTL plus one minute of cron reserves 0.175 USD at 0.50 USD/hour. The workload must fit this shorter allowance; the previous 150-minute default is superseded. Cron/API outages can leave a box billing 12 USD/day or 360 USD/30 days at that rate, plus other fees; there is no proven finite maximum with automatic account funding. Keep modest prepaid credit and disable automatic top-up only after confirming Vast debt rules. Stopped instances still bill storage; an on-box timeout bounds honest work, **not** the upstream bill. Grace/box-kill/stop/provisioning/TTL destroy and ledger accounting are the actual cleanup paths.
 
@@ -73,7 +103,7 @@ Configure variables, secrets, the public route and cron in the dashboard after b
 [INFERRED from source: prefix rotation] Configure matching endpoint secrets before enabling rentals. Rotating the prefix during a run rejects its old callback/status URLs, so drain active work first; preserve the ledger and private cron throughout. A URL/prefix mismatch fails closed with 404 and does not bypass authentication or budgets.
 
 
-## V4 owner lifecycle (2026-10-22; supersedes earlier immediate result cleanup)
+## Historical V4 lifecycle (superseded by V5 above)
 
 [CODE READ: 2026-10-22 V4 addendum 3, src/index.js] PASS, FAIL and UNAVAILABLE structured results retain the box for POST_RESULT_GRACE_MINUTES (default 5, maximum 15), capped by TTL_MINUTES (default 20, maximum 60). First accepted callback must arrive within PROVISION_MINUTES (default and maximum 10). Known pending provider states do not establish liveness: reports receive NOT_READY until actual_status=running; pending state alone does not destroy a boot before provisioning expiry. This is a bounded refusal policy, not evidence that cur_state proves VM readiness.
 
