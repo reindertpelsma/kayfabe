@@ -1,0 +1,14 @@
+{
+  "verdict": "NOTRUN",
+  "rc": "-",
+  "secs": 0,
+  "quiet": "-",
+  "note": "stage-failed:cuda_nvrtc:tar -xf cuda_nvrtc-windows-x86_64-12.9.86-archive.zip failed rc=1",
+  "proof": "-",
+  "tdr": 0,
+  "wer": 0,
+  "rebooted": false,
+  "gsp_cycles": 0,
+  "restart": "",
+  "guest": "desktop"
+}

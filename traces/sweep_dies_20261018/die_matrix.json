@@ -1,0 +1,18 @@
+[
+  {
+    "kind": "MEASURED",
+    "date": "2026-10-22",
+    "die": "AD102",
+    "gpu": "RTX4090",
+    "driver": "Windows580.88/32.0.15.8088",
+    "rev": "1700543393c34f93adc0611430e3d49ab38eca3a",
+    "flags": "lease_57193877/harness/p19.flags;fb8192MiB;8vCPU;8GiBRAM;display/GOPon;guest-driver-profile580.65.06;RPC/body/progress diagnostics",
+    "verdict": "FAIL",
+    "coverage": "18/112 rows:13PASS,4FAIL,1NOTRUN;94unrun",
+    "hold": "600s PASS zero NVIDIA153/Display4101/bugcheck",
+    "evidence": "lease_57193877/ADA_RESULT.md",
+    "lease_id": 57193877,
+    "n": 1,
+    "spread": "N/A"
+  }
+]

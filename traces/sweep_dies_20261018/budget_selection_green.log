@@ -1,0 +1,14 @@
+test_budget_stop_runs_reserved_hold_after_completed_row (test_desktop_budget.BudgetHoldTests.test_budget_stop_runs_reserved_hold_after_completed_row) ... ok
+test_healthy_partial_matrix_cannot_claim_complete_pass (test_desktop_budget.BudgetHoldTests.test_healthy_partial_matrix_cannot_claim_complete_pass) ... ok
+test_short_reserved_hold_still_refuses (test_desktop_budget.BudgetHoldTests.test_short_reserved_hold_still_refuses) ... ok
+test_all_affordable_apps_can_finish_without_partial (test_desktop_budget_selection.BudgetSelectionTests.test_all_affordable_apps_can_finish_without_partial) ... ok
+test_empty_requested_plan_is_not_budget_refusal (test_desktop_budget_selection.BudgetSelectionTests.test_empty_requested_plan_is_not_budget_refusal) ... ok
+test_multiple_later_affordable_apps_are_not_discarded (test_desktop_budget_selection.BudgetSelectionTests.test_multiple_later_affordable_apps_are_not_discarded) ... ok
+test_reserved_hold_time_cannot_be_spent_on_app_dispatch (test_desktop_budget_selection.BudgetSelectionTests.test_reserved_hold_time_cannot_be_spent_on_app_dispatch) ... ok
+test_short_app_after_unfit_long_app_is_retained (test_desktop_budget_selection.BudgetSelectionTests.test_short_app_after_unfit_long_app_is_retained) ... ok
+test_unfit_app_is_never_dispatched (test_desktop_budget_selection.BudgetSelectionTests.test_unfit_app_is_never_dispatched) ... ok
+
+----------------------------------------------------------------------
+Ran 9 tests in 0.041s
+
+OK

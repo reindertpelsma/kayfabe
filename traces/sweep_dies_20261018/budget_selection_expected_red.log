@@ -1,0 +1,83 @@
+test_all_affordable_apps_can_finish_without_partial (test_desktop_budget_selection.BudgetSelectionTests.test_all_affordable_apps_can_finish_without_partial) ... ERROR
+test_empty_requested_plan_is_not_budget_refusal (test_desktop_budget_selection.BudgetSelectionTests.test_empty_requested_plan_is_not_budget_refusal) ... ERROR
+test_multiple_later_affordable_apps_are_not_discarded (test_desktop_budget_selection.BudgetSelectionTests.test_multiple_later_affordable_apps_are_not_discarded) ... ERROR
+test_reserved_hold_time_cannot_be_spent_on_app_dispatch (test_desktop_budget_selection.BudgetSelectionTests.test_reserved_hold_time_cannot_be_spent_on_app_dispatch) ... ERROR
+test_short_app_after_unfit_long_app_is_retained (test_desktop_budget_selection.BudgetSelectionTests.test_short_app_after_unfit_long_app_is_retained) ... ERROR
+test_unfit_app_is_never_dispatched (test_desktop_budget_selection.BudgetSelectionTests.test_unfit_app_is_never_dispatched) ... ERROR
+
+======================================================================
+ERROR: test_all_affordable_apps_can_finish_without_partial (test_desktop_budget_selection.BudgetSelectionTests.test_all_affordable_apps_can_finish_without_partial)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/workspace/s4-wt/scripts/bench/tests/test_desktop_budget_selection.py", line 25, in test_all_affordable_apps_can_finish_without_partial
+    seen,skipped,partial=self.observe([dict(id='one',timeout_s=10),dict(id='two',timeout_s=20)])
+                         ~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/workspace/s4-wt/scripts/bench/tests/test_desktop_budget_selection.py", line 12, in observe
+    for row in m.budget_items(apps,now+datetime.timedelta(seconds=seconds),lambda x:skipped.append(x['id']),now=lambda:now):seen.append(row['id'])
+               ^^^^^^^^^^^^^^
+AttributeError: module 'budget_select_matrix' has no attribute 'budget_items'
+
+======================================================================
+ERROR: test_empty_requested_plan_is_not_budget_refusal (test_desktop_budget_selection.BudgetSelectionTests.test_empty_requested_plan_is_not_budget_refusal)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/workspace/s4-wt/scripts/bench/tests/test_desktop_budget_selection.py", line 31, in test_empty_requested_plan_is_not_budget_refusal
+    self.assertEqual(self.observe([]),([],[],False))
+                     ~~~~~~~~~~~~^^^^
+  File "/workspace/s4-wt/scripts/bench/tests/test_desktop_budget_selection.py", line 12, in observe
+    for row in m.budget_items(apps,now+datetime.timedelta(seconds=seconds),lambda x:skipped.append(x['id']),now=lambda:now):seen.append(row['id'])
+               ^^^^^^^^^^^^^^
+AttributeError: module 'budget_select_matrix' has no attribute 'budget_items'
+
+======================================================================
+ERROR: test_multiple_later_affordable_apps_are_not_discarded (test_desktop_budget_selection.BudgetSelectionTests.test_multiple_later_affordable_apps_are_not_discarded)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/workspace/s4-wt/scripts/bench/tests/test_desktop_budget_selection.py", line 19, in test_multiple_later_affordable_apps_are_not_discarded
+    seen,skipped,partial=self.observe([dict(id='long',timeout_s=1800),dict(id='one',timeout_s=10),dict(id='two',timeout_s=20)])
+                         ~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/workspace/s4-wt/scripts/bench/tests/test_desktop_budget_selection.py", line 12, in observe
+    for row in m.budget_items(apps,now+datetime.timedelta(seconds=seconds),lambda x:skipped.append(x['id']),now=lambda:now):seen.append(row['id'])
+               ^^^^^^^^^^^^^^
+AttributeError: module 'budget_select_matrix' has no attribute 'budget_items'
+
+======================================================================
+ERROR: test_reserved_hold_time_cannot_be_spent_on_app_dispatch (test_desktop_budget_selection.BudgetSelectionTests.test_reserved_hold_time_cannot_be_spent_on_app_dispatch)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/workspace/s4-wt/scripts/bench/tests/test_desktop_budget_selection.py", line 28, in test_reserved_hold_time_cannot_be_spent_on_app_dispatch
+    seen,skipped,partial=self.observe([dict(id='one',timeout_s=10)],seconds=699)
+                         ~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/workspace/s4-wt/scripts/bench/tests/test_desktop_budget_selection.py", line 12, in observe
+    for row in m.budget_items(apps,now+datetime.timedelta(seconds=seconds),lambda x:skipped.append(x['id']),now=lambda:now):seen.append(row['id'])
+               ^^^^^^^^^^^^^^
+AttributeError: module 'budget_select_matrix' has no attribute 'budget_items'
+
+======================================================================
+ERROR: test_short_app_after_unfit_long_app_is_retained (test_desktop_budget_selection.BudgetSelectionTests.test_short_app_after_unfit_long_app_is_retained)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/workspace/s4-wt/scripts/bench/tests/test_desktop_budget_selection.py", line 16, in test_short_app_after_unfit_long_app_is_retained
+    seen,skipped,partial=self.observe([dict(id='long',timeout_s=1800),dict(id='short',timeout_s=10)])
+                         ~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/workspace/s4-wt/scripts/bench/tests/test_desktop_budget_selection.py", line 12, in observe
+    for row in m.budget_items(apps,now+datetime.timedelta(seconds=seconds),lambda x:skipped.append(x['id']),now=lambda:now):seen.append(row['id'])
+               ^^^^^^^^^^^^^^
+AttributeError: module 'budget_select_matrix' has no attribute 'budget_items'
+
+======================================================================
+ERROR: test_unfit_app_is_never_dispatched (test_desktop_budget_selection.BudgetSelectionTests.test_unfit_app_is_never_dispatched)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/workspace/s4-wt/scripts/bench/tests/test_desktop_budget_selection.py", line 22, in test_unfit_app_is_never_dispatched
+    seen,skipped,partial=self.observe([dict(id='long',timeout_s=1800)])
+                         ~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/workspace/s4-wt/scripts/bench/tests/test_desktop_budget_selection.py", line 12, in observe
+    for row in m.budget_items(apps,now+datetime.timedelta(seconds=seconds),lambda x:skipped.append(x['id']),now=lambda:now):seen.append(row['id'])
+               ^^^^^^^^^^^^^^
+AttributeError: module 'budget_select_matrix' has no attribute 'budget_items'
+
+----------------------------------------------------------------------
+Ran 6 tests in 0.024s
+
+FAILED (errors=6)

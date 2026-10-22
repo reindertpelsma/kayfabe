@@ -1,0 +1,53 @@
+{
+  "quiet": 1,
+  "end_utc": "2026-10-22T12:05:50.1662440Z",
+  "start_utc": "2026-10-22T12:05:35.1674829Z",
+  "rc": 0,
+  "secs": 15,
+  "gpu_devices": [
+    "NVIDIA GeForce RTX 4090 status=OK code=0"
+  ],
+  "digests": [],
+  "session": 0,
+  "out_files": [],
+  "boot_utc_start": "2026-10-22T11:47:16.5000000Z",
+  "log_tail": [
+    "=== atomics_t start=2026-10-22T12:05:35.1674829+00:00 host=KFWIN session=0 boot=2026-10-22T11:47:16.5000000Z timeout=120",
+    "KFDEV NVIDIA GeForce RTX 4090",
+    "[eq] device NVIDIA GeForce RTX 4090 torch 2.8.0+cu126",
+    "CHECK atomic_add_collisions_exact ok",
+    "WINEQ_DONE atomics",
+    "=== end rc=0 secs=15 2026-10-22T12:05:50.1662440+00:00"
+  ],
+  "pdh": {
+    "pids": [
+      "4232",
+      "8112",
+      "4776"
+    ],
+    "nv": {},
+    "samples": 6,
+    "other": {},
+    "nvidia_luids": "0_ec73c"
+  },
+  "timed_out": false,
+  "boot_utc_end": "2026-10-22T11:47:16.5000000Z",
+  "events": {
+    "kernel_power_41": 0,
+    "bugcheck": 0,
+    "unexpected_shutdown_6008": 0,
+    "wer_1001": 0,
+    "display_4101": 0,
+    "nvlddmkm_153": 0,
+    "other_nvlddmkm": 0,
+    "lines": [],
+    "live_kernel": 0
+  },
+  "app": "atomics_t",
+  "smi": {
+    "samples": 0,
+    "mem_used_base_mb": null,
+    "util_max": 0,
+    "mem_used_max_mb": 0
+  }
+}

@@ -1,0 +1,14 @@
+2026-10-22T10:57:24Z [desktop] interactive session: KFWIN\kf
+2026-10-22T10:57:27Z [desktop] pushed 26 guest files
+2026-10-22T10:57:27Z APP_DISK usb-bot+scsi-cd
+2026-10-22T10:58:36Z [desktop] setup attempt 1 not ok: cd=None nvidia_adapters=1 notes=[]
+2026-10-22T11:00:06Z [desktop] setup attempt 2 not ok: cd=None nvidia_adapters=1 notes=[]
+2026-10-22T11:01:33Z [desktop] setup attempt 3 not ok: cd=None nvidia_adapters=1 notes=[]
+Traceback (most recent call last):
+  File "/root/kayfabe/scripts/bench/diesweep/desktop/matrix.py", line 151, in <module>
+    sys.exit(main())
+  File "/root/kayfabe/scripts/bench/diesweep/desktop/matrix.py", line 92, in main
+    g._setup()
+  File "/root/kayfabe/scripts/bench/windows/appmatrix/winapps.py", line 404, in _setup
+    raise GuestFailure("guest setup failed (app disk missing or no NVIDIA adapter)")
+winapps.GuestFailure: guest setup failed (app disk missing or no NVIDIA adapter)

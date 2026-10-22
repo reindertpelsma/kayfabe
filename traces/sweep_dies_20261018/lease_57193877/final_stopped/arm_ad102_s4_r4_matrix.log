@@ -1,0 +1,45 @@
+2026-10-22T11:52:45Z [desktop] interactive session: KFWIN\kf
+2026-10-22T11:52:48Z [desktop] pushed 26 guest files
+2026-10-22T11:54:09Z APP_DISK guest-mounted ISO
+2026-10-22T11:54:16Z [desktop] setup ok: cd=D: nvidia_adapters=1 NVIDIA GeForce RTX 4090, 580.88, 8192 MiB
+2026-10-22T11:54:24Z [desktop] override tool cup2.exe sha256=86039b888dc7d17b1bd92736c5a5589a4a67a897a5aa9859f7a7ed9d280d95b8
+2026-10-22T11:54:28Z [desktop] override tool cup3.exe sha256=41681173e42c40ba94cafd33be22c90f419b64436b9be88993ba6bd286a19460
+2026-10-22T11:54:33Z [desktop] override tool cup8.exe sha256=7401a67a58288e0789a8fa214be4696316715c5306b690781996847f5baffcf6
+2026-10-22T11:54:38Z [desktop] override tool kf_dxprobe.exe sha256=8f049e04196db99275d901119e9c860058d423e2250920acb717062ed8303f3a
+2026-10-22T11:54:46Z [desktop] staged vc_redist (installer, 5s)
+2026-10-22T11:54:55Z MATRIX_START apps=112 source=1700543393c34f93adc0611430e3d49ab38eca3a
+2026-10-22T11:55:28Z APPRES side=win app=driver_status verdict=PASS rc=0 secs=4 quiet=3 note=- boot=desktop guest_tdr=0 wer=0 gsp_cycles=0 proof=out tier=1 cat=probe
+2026-10-22T11:55:58Z APPRES side=win app=dxgi_adapters verdict=PASS rc=0 secs=5 quiet=1 note=- boot=desktop guest_tdr=0 wer=0 gsp_cycles=0 proof=out tier=1 cat=probe
+2026-10-22T11:56:29Z APPRES side=win app=nvidia_smi verdict=PASS rc=0 secs=5 quiet=1 note=- boot=desktop guest_tdr=0 wer=0 gsp_cycles=0 proof=out tier=1 cat=smi
+2026-10-22T11:57:00Z APPRES side=win app=cup2_ladder verdict=PASS rc=0 secs=5 quiet=1 note=- boot=desktop guest_tdr=0 wer=0 gsp_cycles=0 proof=out tier=1 cat=cuda-ladder
+2026-10-22T11:57:31Z APPRES side=win app=cup3_ladder verdict=PASS rc=0 secs=5 quiet=1 note=- boot=desktop guest_tdr=0 wer=0 gsp_cycles=0 proof=out tier=1 cat=cuda-ladder
+2026-10-22T11:58:02Z APPRES side=win app=cup8_ladder verdict=PASS rc=0 secs=5 quiet=1 note=- boot=desktop guest_tdr=0 wer=0 gsp_cycles=0 proof=cuda-cup8-readback tier=1 cat=cuda-ladder
+2026-10-22T11:58:33Z APPRES side=win app=dxprobe_d3d11 verdict=PASS rc=0 secs=5 quiet=1 note=- boot=desktop guest_tdr=0 wer=0 gsp_cycles=0 proof=out tier=1 cat=d3d
+2026-10-22T11:59:07Z APPRES side=win app=dxprobe_d3d12 verdict=PASS rc=0 secs=7 quiet=2 note=- boot=desktop guest_tdr=0 wer=0 gsp_cycles=0 proof=out tier=1 cat=d3d
+2026-10-22T11:59:17Z [desktop] staged heaven (installer, 4s)
+2026-10-22T12:00:30Z APPRES side=win app=heaven_d3d11 verdict=FAIL rc=0 secs=49 quiet=49 note=no-gpu-proof boot=desktop guest_tdr=0 wer=0 gsp_cycles=0 proof=none:pdh:Cuda|Compute|3D|Copy tier=2 cat=d3d
+2026-10-22T12:01:46Z APPRES side=win app=heaven_opengl verdict=FAIL rc=0 secs=49 quiet=48 note=no-gpu-proof boot=desktop guest_tdr=0 wer=0 gsp_cycles=0 proof=none:pdh:Cuda|Compute|3D|Copy tier=2 cat=opengl
+2026-10-22T12:02:07Z [desktop] staged valley (installer, 14s)
+2026-10-22T12:03:20Z APPRES side=win app=valley_d3d11 verdict=FAIL rc=0 secs=50 quiet=49 note=no-gpu-proof boot=desktop guest_tdr=0 wer=0 gsp_cycles=0 proof=none:pdh:Cuda|Compute|3D|Copy tier=2 cat=d3d
+2026-10-22T12:04:35Z APPRES side=win app=valley_opengl verdict=FAIL rc=0 secs=49 quiet=48 note=no-gpu-proof boot=desktop guest_tdr=0 wer=0 gsp_cycles=0 proof=none:pdh:Cuda|Compute|3D|Copy tier=2 cat=opengl
+2026-10-22T12:04:43Z [desktop] staged python_embed (python_embed, 1s)
+2026-10-22T12:05:27Z [desktop] staged pywheels (wheels, 42s)
+2026-10-22T12:06:19Z APPRES side=win app=atomics_t verdict=PASS rc=0 secs=15 quiet=1 note=- boot=desktop guest_tdr=0 wer=0 gsp_cycles=0 proof=out tier=1 cat=cuda-equiv
+2026-10-22T12:06:25Z [desktop] staged cuda_demo_suite (unzip, 0s)
+2026-10-22T12:06:52Z APPRES side=win app=bandwidthTest_demo verdict=PASS rc=0 secs=5 quiet=0 note=- boot=desktop guest_tdr=0 wer=0 gsp_cycles=0 proof=out tier=1 cat=cuda-demo
+2026-10-22T12:07:25Z APPRES side=win app=blackscholes_t verdict=PASS rc=0 secs=9 quiet=1 note=- boot=desktop guest_tdr=0 wer=0 gsp_cycles=0 proof=out tier=1 cat=cuda-equiv
+2026-10-22T12:07:39Z [desktop] staged blender (unzip, 7s)
+2026-10-22T12:08:32Z APPRES side=win app=blender_cycles verdict=PASS rc=0 secs=31 quiet=1 note=- boot=desktop guest_tdr=0 wer=0 gsp_cycles=0 proof=out tier=1 cat=render
+2026-10-22T12:08:39Z APPRES side=win app=cdp_quicksort verdict=NOTRUN rc=- secs=0 quiet=- note=stage-failed:cuda_nvrtc:tar -xf cuda_nvrtc-windows-x86_64-12.9.86-archive.zip failed rc:1 boot=desktop guest_tdr=0 wer=0 gsp_cycles=0 proof=- tier=1 cat=cuda-equiv
+2026-10-22T12:09:18Z APPRES side=win app=cg_t verdict=PASS rc=0 secs=13 quiet=1 note=- boot=desktop guest_tdr=0 wer=0 gsp_cycles=0 proof=out tier=1 cat=cuda-equiv
+2026-10-22T12:09:21Z MATRIX_EXIT rc=7
+Traceback (most recent call last):
+  File "/root/kayfabe/scripts/bench/diesweep/desktop/matrix.py", line 164, in <module>
+    sys.exit(main())
+  File "/root/kayfabe/scripts/bench/diesweep/desktop/matrix.py", line 155, in main
+    rc = run_plan(g, rows(), record, health, hold)
+  File "/root/kayfabe/scripts/bench/diesweep/desktop/matrix.py", line 34, in run_plan
+    for app in apps:
+  File "/root/kayfabe/scripts/bench/diesweep/desktop/matrix.py", line 150, in rows
+    raise RuntimeError('lease observation/export budget exhausted')
+RuntimeError: lease observation/export budget exhausted

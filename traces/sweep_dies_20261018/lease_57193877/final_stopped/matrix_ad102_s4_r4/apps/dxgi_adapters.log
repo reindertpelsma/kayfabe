@@ -1,0 +1,5 @@
+=== dxgi_adapters start=2026-10-22T11:55:38.8915363+00:00 host=KFWIN session=0 boot=2026-10-22T11:47:16.5000000Z timeout=60
+ADAPTER index=0 vendor=4318 name=NVIDIA GeForce RTX 4090 luid=00000000_000ec73c dedicated_mb=7853 software=False
+ADAPTER index=1 vendor=5140 name=Microsoft Basic Render Driver luid=00000000_00005c94 dedicated_mb=0 software=True
+DXGI_OK NVIDIA hardware adapter present
+=== end rc=0 secs=5 2026-10-22T11:55:43.5443101+00:00

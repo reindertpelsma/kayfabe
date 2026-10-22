@@ -1,0 +1,6 @@
+=== cg_t start=2026-10-22T12:08:49.6334477+00:00 host=KFWIN session=0 boot=2026-10-22T11:47:16.5000000Z timeout=120
+KFDEV NVIDIA GeForce RTX 4090
+[eq] device NVIDIA GeForce RTX 4090 torch 2.8.0+cu126
+CHECK cg_residual ok iters=28 relres=2.24e-12
+WINEQ_DONE cg
+=== end rc=0 secs=13 2026-10-22T12:09:02.6849999+00:00

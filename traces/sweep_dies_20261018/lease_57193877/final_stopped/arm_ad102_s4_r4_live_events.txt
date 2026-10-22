@@ -1,0 +1,15 @@
+[export normalization: WER P2/P3 version fields use component arrays; raw source SHA is in export_receipt.json]
+COLLECT now=2026-10-22T12:09:23.9353719Z boot=2026-10-22T11:47:16.5000000Z
+NODIR C:\Windows\Minidump
+NODIR C:\Windows\LiveKernelReports\WATCHDOG
+EVTQ_NONE log=System id=1001 prov=
+EVTQ_NONE log=System id=41 prov=
+EVTQ_NONE log=System id=6008 prov=
+EVTQ_NONE log=System id=4101 prov=
+EVTQ_NONE log=System id=4117 prov=
+EVTQ_NONE log=System id=4119 prov=
+EVTQ_NONE log=System id= prov=nvlddmkm
+EVTQ_NONE log=System id= prov=Display
+EVT log=Application t=2026-10-22T12:08:20.4498130Z prov=Windows Error Reporting id=1001 msg=Fault bucket , type 0 Event Name: RADAR_PRE_LEAK_64 Response: Not available Cab Id: 0 Problem signature: P1: blender.exe P2: version-components=[4,5,0,0] P3: version-components=[10,0,26100,2,0,0] P4: P5: P6: P7: P8: P9: P10: Attached files: \\?\C:\Users\kf\AppData\Local\Temp\RDR1D4F.tmp\empty.txt \\?\C:\ProgramData\Microsoft\Windows\WER\Temp\WER.039072a1-c14e-4f3d-9472-e5b89d673739.tmp.WERInternalMetadata.xml \\?\C:\ProgramData\Microsoft\
+EVTQ_NONE log=Application id=1000 prov=
+COLLECT_DONE

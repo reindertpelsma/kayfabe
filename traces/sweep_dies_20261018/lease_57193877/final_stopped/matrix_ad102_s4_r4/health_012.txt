@@ -1,0 +1,3 @@
+S2_HEALTH {"utc":"2026-10-22T12:03:22.7497432Z","boot":"2026-10-22T11:47:16.5000000Z","desktop_start":"2026-10-22T11:52:28.5184991Z","user":"KFWIN\\kf","system_log_readable":1,"events4101":0,"events153":0,"unclassified153":0,"boot153_pre_desktop":1,"boot153_post_desktop":0,"boot153_future_clock":1,"bugcheck1001":0,"driver":"32.0.15.8088","code":0,"dwm":1,"explorer":1}
+[{"TimeCreated":"\/Date(1792669637547)\/","Id":153,"ProviderName":"Microsoft-Windows-Kernel-Boot","Message":"Virtualization-based security (policies: 0) is disabled."},{"TimeCreated":"\/Date(1792690317799)\/","Id":153,"ProviderName":"Microsoft-Windows-Kernel-Boot","Message":"Virtualization-based security (policies: 0) is disabled."}]
+S2_HEALTH_PASS 2026-10-22T12:03:22.9376481Z

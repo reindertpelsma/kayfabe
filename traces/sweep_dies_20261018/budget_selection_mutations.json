@@ -1,0 +1,10 @@
+{
+  "kind": "MEASURED",
+  "date": "2026-10-22",
+  "mutant": "stop all later apps at first unfit reservation",
+  "killers": [
+    "test_multiple_later_affordable_apps_are_not_discarded ",
+    "test_short_app_after_unfit_long_app_is_retained "
+  ],
+  "exit": 1
+}
