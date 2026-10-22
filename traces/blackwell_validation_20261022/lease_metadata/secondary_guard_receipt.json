@@ -1,0 +1,12 @@
+{
+  "pid": 104388,
+  "root_pgid": 104388,
+  "guard_source": "a634bdc194a111ef1f76bb88fcb4f93f3d543298",
+  "state": "READY before Windows arms",
+  "purpose": "independent full-history guard kills verified detached QEMU via PID-fd; original guard still aborts controller",
+  "files": {
+    "bench/blackwell/phase_xid_guard.py": "eb256bb0a8953032fa59be07b9fa51dfe68ae8a236288d5b369771946b3381ab",
+    "bench/blackwell/xid_policy.py": "7563095ffc1d55292d4deaf6e60b5da677c3ff564b3e60c29ed4b5119aa4d1ac",
+    "bench/native_xid_guard.py": "250905586c30bff7e23d81dc08a9088025abf15e0b5fa621f80e52c0aac59b0c"
+  }
+}
