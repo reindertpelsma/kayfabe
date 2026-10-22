@@ -1,3 +1,16 @@
+STATUS UPDATE: LIVE,2026-10-22 03:57UTC; no closeout yet. Supersedes prior
+closed/refusedstatusesbelowunderlaterexplicitnightauthoritycontinuation.
+MEASURED:128PASSdev/rental,original23retained,36manualmutants>=2killers each
+atrecordedsourceversions. Linuxcurrent-freeze7f6f7e7a7COMPLETE:30/30,native30,
+CUDA4/GR/gates9+10/USER12;exactnative5+guest4+1physicallycorrelatedandfully
+recovered,30orderedcompletions,frozen10,noother31or32. Allpreviousrefused
+historiesarchived,neverretroaccepted. Evidence linux_complete/ and
+ guest_controls_accepted/ underlease_57144505/.
+MEASURED:WindowsstandardVGAinstallprogressing;productionbind/desktop/apps/
+zero-TDR600snormal+observer600sremainpending. Ownsame57144505at0.876667USD/h,
+170minoriginalauto-destroyactive,05:05:42UTCdeadline,prior0.21/cap4USD intact.
+Final12linereportmustincludeteardownAPIabsenceandnothingownedrunning.
+
 STATUS UPDATE: CLOSED PARTIAL, 2026-10-22 02:07 UTC. Newly authorized controller
 repair is DONE; requested hardware rerun is NOTRUN due the unchanged price guard.
 MEASURED: EXPECTED RED5280961c2 alone, six failures/zero errors, existing97green;

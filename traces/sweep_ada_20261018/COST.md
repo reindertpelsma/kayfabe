@@ -1,3 +1,12 @@
+STATUS UPDATE: LIVE,2026-10-22 03:57UTC. Sameowned57144505only;noextra lease.
+MEASURED: current7f6f7e7a7Linux30/30complete,nativeexact5+guest4+1proven;
+allharnessrefusalswerepreservedandfixedtest-first,withfullfreshbootbaselines
+whererecoverywasinterrupted. WindowsLTSCstandardVGAinstallactive;APTindexes
+refreshedusingstandardrecipeaftercloud-initresetmirror,packagesinstalled.
+MEASURED:rate0.876667USD/h,originaltimer170mindeadline05:05:42UTCunchanged.
+INFERREDelapsedrental+prior0.21about1.70USD,billingnotfinal;maxruntime2.483889
++prior0.21+buffer1=3.693889<4USD,reserve5unchanged. No die/offer switch.
+
 STATUS UPDATE: LIVE,2026-10-22 02:50UTC. Sameowned57144505 continues after a
 GPU-free tests-first harness repair; no new lease. Oldboot79e5280b/9Xids was
 archived in guest_stop before reboot; newbootd4ad1906,unchangedkernel6.8.0-59,

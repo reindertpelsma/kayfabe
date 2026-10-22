@@ -1,3 +1,17 @@
+STATUS UPDATE: LIVE,2026-10-22. CurrentAD102LinuxvalidationCOMPLETE;
+WindowsLTSCinstallactive,production580.88acceptancepending. This supersedes
+priorharness-stopstatusbelow;oldmeasurementsremainhistorical.
+MEASURED: sameown57144505,RTX4090/AD102,boot425c0e6f,stock595.91.07open,
+frozen7f6f7e7a7;128softwarePASS,gates9+10PASS,12/12USER,native30/30,CUDA4/4,
+GRPASS,guest30/30and30durableactualPIDcompletions. Exactnative5+defer4(PID5180)
++missing1(PID6626),completepositive recovery/physicaltwin correlations;frozen10,
+no32/unrelated31. Source/rawproofhashesverified,all128testsremain green.
+MEASURED: eachcurrent-freezehardwarearm n1,spreadN/A,noFPSclaim.
+MEASURED:Windowsmediahashpinned,standardVGAinstallbootPID13736active;
+latestinspectedsetup83percent. Bind/ON/desktop/CUDA/DX/normal600s+observer600s
+remainUNVERIFIED;frozen10watcheractive. Evidence linux_complete/,
+guest_controls_accepted/,windows_installing/ underlease_57144505/.
+
 STATUS UPDATE: CLOSED PARTIAL, 2026-10-22 02:07 UTC; supersedes the controller
 repair status below. CODE READ: explicit image directory required, preflighted
 and forwarded; controller template selects its built fastguest595 directory.
