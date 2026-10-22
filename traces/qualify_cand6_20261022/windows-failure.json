@@ -1,0 +1,65 @@
+{
+  "classification": "MEASURED",
+  "time": "2026-10-22T08:47:58.724439+02:00",
+  "samples": 61,
+  "completed": [
+    "blender-01",
+    "catia-07",
+    "creo-04"
+  ],
+  "failed": [],
+  "latest_subtest": [
+    "energy-04",
+    "05_F3NetherlandsAnimated"
+  ],
+  "guest_153_4101": 3,
+  "boot_unchanged": true,
+  "viewperf_nonzero_exits": [],
+  "budget_refusals": 0,
+  "counter_maxima": {
+    "pointer_large_entries": 43409,
+    "pointer_entry_max_bytes": 1043244,
+    "refused_scan_budget": 0,
+    "poisoned": 1
+  },
+  "task": 4,
+  "fatal": "GUEST_EVENT_OR_REBOOT_OR_BUDGET",
+  "candidate": "afe00b3cbc7e345e2953b1bc199d9cce1054cc38",
+  "verdict": "FAIL",
+  "guest_events": [
+    {
+      "record": 15058,
+      "time": "2026-10-22T06:47:43.7244186+02:00",
+      "provider": "nvlddmkm",
+      "id": 153,
+      "message": null
+    },
+    {
+      "record": 15057,
+      "time": "2026-10-22T06:47:43.7126398+02:00",
+      "provider": "nvlddmkm",
+      "id": 153,
+      "message": null
+    },
+    {
+      "record": 15056,
+      "time": "2026-10-22T06:47:43.0424251+02:00",
+      "provider": "nvlddmkm",
+      "id": 153,
+      "message": null
+    }
+  ],
+  "guest_153": 3,
+  "guest_4101": 0,
+  "source": "guard sample 61; immutable raw status retained outside git",
+  "new_host_xids": 0,
+  "timing_note": "guest clock is two hours behind host; event timestamps occur during Energy subtest04, detected during subtest05",
+  "kernel_channel_failure": {
+    "qemu_line": 50026,
+    "error": "NoCeObject { subch: 4, method: 576 }",
+    "poison_line": 50029,
+    "host_channel": "0x1002d",
+    "refused_and_poisoned": true
+  },
+  "remaining": "Energy incomplete; enscape/maya/medical/solidworks/unreal and Heaven/Minecraft/Steel Nomad not run after guard stop"
+}

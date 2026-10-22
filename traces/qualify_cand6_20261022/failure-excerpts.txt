@@ -1,0 +1,5 @@
+MEASURED: open-source QEMU runtime log; guest descriptor payload words omitted.
+50026: kf3: ring REFUSED segment gp 34 va 0x1205160d0 (6 words) NoCeObject { subch: 4, method: 576 }
+50027: kf3: chan token 0x806 (VasKey(13965662457344034928)) DEAD: ring: Rewrite { gp: 34, why: NoCeObject { subch: 4, method: 576 } }
+50028: kf3: chan token 0x806 death mirror: own space=0xcafe001a rows=55 log_epoch=55 last row commits (epoch, lo, hi, ms ago)=[(30, 120520000, 120527000, 1e127b), (31, 120527000, 120528000, 1e1277), (32, 120528000, 12052c000, 1e1275), (33, 12052c000, 12052f000, 1e1275), (34, 12052f000, 120530000, 1e1270), (35, 120530000, 120536000, 1e126e), (36, 120536000, 120537000, 1e126e), (37, 120537000, 120538000, 1e1269)]; plane's mirror for the key now (same rows, space, rows): Some(Some((true, 3405643802, 55)))
+50029: kf3: kernel channel host 0x1002d REFUSED-AND-POISONED (§7)

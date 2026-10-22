@@ -1,0 +1,44 @@
+{
+  "conclusion": "failure",
+  "jobs": [
+    {
+      "name": "stable \u2014 build, test, clippy, fmt, boundary",
+      "status": "completed",
+      "conclusion": "failure",
+      "failed_steps": [
+        "Claim-ledger gate (a measurement word names its run, not a source read)"
+      ],
+      "skipped_steps": [
+        "Section-number gate (no two design-doc sections share a number)",
+        "Unsafe-containment gates (A: forbid inheritance, B: the named crates, ratchet)",
+        "Post Run Swatinem/rust-cache@v2"
+      ]
+    },
+    {
+      "name": "aarch64 \u2014 core cross-checks (no x86 assumptions)",
+      "status": "completed",
+      "conclusion": "success",
+      "failed_steps": [],
+      "skipped_steps": []
+    },
+    {
+      "name": "firmware \u2014 kf-gop (x86_64-unknown-uefi), kf3's PE check, size, local stand-in",
+      "status": "completed",
+      "conclusion": "success",
+      "failed_steps": [],
+      "skipped_steps": []
+    },
+    {
+      "name": "slow \u2014 full suite with the soaks (KAYFABE_SLOW=1)",
+      "status": "completed",
+      "conclusion": "skipped",
+      "failed_steps": [],
+      "skipped_steps": []
+    }
+  ],
+  "status": "completed",
+  "url": "https://github.com/reindertpelsma/kayfabe/actions/runs/39731497805",
+  "classification": "MEASURED",
+  "candidate": "afe00b3cbc7e345e2953b1bc199d9cce1054cc38",
+  "failure_summary": "stable claim-ledger gate failed: existing-debt=3756 new=42 resolved=2; prior stable build/test/clippy/fmt/boundary gates passed; later steps skipped"
+}
