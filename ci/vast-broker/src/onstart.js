@@ -1,8 +1,10 @@
 import {hexSha} from './policy.js';
+import {validPathPrefix} from './routes.js';
 export function onstart(sha,nonce,minutes,repo='reindertpelsma/kayfabe',callback){
   if(!hexSha(sha)||typeof nonce!=='string'||!/^[0-9a-f]{32}$/.test(nonce)||!Number.isInteger(minutes)||minutes<1||minutes>150||!/^[-\w.]+\/[-\w.]+$/.test(repo))throw Error('Invalid fixed onstart inputs');
   let origin;try{const u=new URL(callback.url);if(u.protocol!=='https:'||u.username||u.password||u.search||u.hash||u.pathname!=='/')throw Error();origin=u.origin;}catch{throw Error('Invalid callback origin');}
   if(!/^[1-9][0-9]{0,19}-[1-9][0-9]{0,19}$/.test(callback.run)||!/^v1\.[1-9][0-9]{0,19}\.[1-9][0-9]{0,19}\.[1-9][0-9]{0,12}\.[A-Za-z0-9_-]{43}$/.test(callback.token)||callback.token.split('.').slice(1,3).join('-')!==callback.run)throw Error('Invalid callback capability');
+  const prefix=callback.path??'';if(prefix!==''&&!validPathPrefix(prefix))throw Error('Invalid callback prefix');
   return `#!/bin/bash
 set -euo pipefail
 exec timeout --signal=TERM --kill-after=30s ${minutes*60}s bash -s <<'KF_BOOT'
@@ -11,7 +13,7 @@ export DEBIAN_FRONTEND=noninteractive
 command -v curl >/dev/null && command -v python3 >/dev/null && command -v git >/dev/null || { apt-get update -qq; apt-get install -y -qq curl python3 git ca-certificates; }
 python3 - <<'KF_REPORT'
 import json,os,select,subprocess,time
-url='${origin}/report/${callback.run}'
+url='${origin}${prefix?'/'+prefix:''}/report/${callback.run}'
 token='${callback.token}'
 nonce='${nonce}'
 seq=0

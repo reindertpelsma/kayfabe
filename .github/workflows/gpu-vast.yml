@@ -47,7 +47,6 @@ jobs:
       state: ${{ steps.broker.outputs.state }}
       verdict: ${{ steps.broker.outputs.verdict }}
     env:
-      WORKER_URL: ${{ vars.VAST_BROKER_URL }}
       PR_NUMBER: ${{ github.event.pull_request.number || inputs.pr_number }}
     steps:
       - name: Evaluate trusted Worker exclusions and request bounded check
@@ -55,9 +54,27 @@ jobs:
         shell: bash
         env:
           GH_TOKEN: ${{ github.token }}
+          WORKER_URL: ${{ secrets.VAST_BROKER_URL }}
+          WORKER_PATH: ${{ secrets.VAST_BROKER_PATH }}
         run: |
+          set +x
           set -euo pipefail
           [[ "$WORKER_URL" =~ ^https://[A-Za-z0-9.-]+/?$ ]]
+          [[ -z "${WORKER_PATH:-}" || "$WORKER_PATH" =~ ^[A-Za-z0-9_-]{32,128}$ ]]
+          mask_value() { [[ -z "$1" ]] || printf '::add-mask::%s\n' "$1"; }
+          broker_origin=${WORKER_URL%/}
+          broker_host=${broker_origin#https://}
+          broker_base=$broker_origin
+          mask_value "$WORKER_URL"
+          mask_value "$broker_origin"
+          mask_value "$broker_host"
+          IFS=. read -ra host_parts <<< "$broker_host"
+          for piece in "${host_parts[@]}"; do mask_value "$piece"; done
+          if [[ -n "${WORKER_PATH:-}" ]]; then
+            mask_value "$WORKER_PATH"
+            broker_base+="/$WORKER_PATH"
+          fi
+          mask_value "$broker_base"
           [[ -z "$PR_NUMBER" || "$PR_NUMBER" =~ ^[1-9][0-9]*$ ]]
           [[ "$TARGET_SHA" =~ ^[0-9a-f]{40}$ ]]
           state=UNAVAILABLE
@@ -67,10 +84,10 @@ jobs:
             rc=$?
             trap - EXIT
             if [[ "$rc" != 0 && -n "${run:-}" && -s "$temporary/oidc.json" ]]; then
-              cleanup_oidc=$(jq -er '.value' "$temporary/oidc.json")
-              curl --silent --show-error --fail --max-time 20 \
+              cleanup_oidc=$(jq -er '.value' "$temporary/oidc.json" 2>/dev/null)
+              curl --silent --fail --max-time 20 \
                 -H "Authorization: Bearer $cleanup_oidc" -H "X-GH-Token: $GH_TOKEN" \
-                -X POST "$WORKER_URL/stop/$run" >/dev/null || true
+                -X POST "$broker_base/stop/$run" >/dev/null 2>&1 || true
             fi
             # These are allowlisted Worker metadata, never box log bytes.
             printf 'state=%s\nverdict=%s\n' "$state" "$verdict" >> "$GITHUB_OUTPUT"
@@ -81,36 +98,37 @@ jobs:
           endpoint=/rent
           method=POST
           for attempt in $(seq 1 450); do
-            audience=$(jq -rn --arg value "$WORKER_URL" '$value|@uri')
-            curl --silent --show-error --fail --max-time 20 \
+            audience=$(jq -rn --arg value "$WORKER_URL" '$value|@uri' 2>/dev/null)
+            mask_value "$audience"
+            curl --silent --fail --max-time 20 \
               -H "Authorization: Bearer $ACTIONS_ID_TOKEN_REQUEST_TOKEN" \
-              "$ACTIONS_ID_TOKEN_REQUEST_URL&audience=$audience" > "$temporary/oidc.json"
-            oidc=$(jq -er '.value' "$temporary/oidc.json")
+              "$ACTIONS_ID_TOKEN_REQUEST_URL&audience=$audience" > "$temporary/oidc.json" 2>/dev/null
+            oidc=$(jq -er '.value' "$temporary/oidc.json" 2>/dev/null)
             printf '::add-mask::%s\n' "$oidc"
-            code=$(curl --silent --show-error --max-time 20 -o "$temporary/response.json" \
+            code=$(curl --silent --max-time 20 -o "$temporary/response.json" \
               -w '%{http_code}' -H "Authorization: Bearer $oidc" -H "X-GH-Token: $GH_TOKEN" \
-              -X "$method" "$WORKER_URL$endpoint")
-            jq -er '.log_tail_sanitised // ""' "$temporary/response.json" > "$temporary/log.txt"
+              -X "$method" "$broker_base$endpoint" 2>/dev/null)
+            jq -er '.log_tail_sanitised // ""' "$temporary/response.json" > "$temporary/log.txt" 2>/dev/null
             token=$(od -An -N24 -tx1 /dev/urandom | tr -d ' \n')
             printf '::stop-commands::%s\n' "$token"
             cat "$temporary/log.txt"
             printf '\n::%s::\n' "$token"
-            candidate=$(jq -er '.state' "$temporary/response.json")
+            candidate=$(jq -er '.state' "$temporary/response.json" 2>/dev/null)
             case "$candidate" in
               RUNNING|STOPPING|STOPPED|COMPLETE|NOT_NEEDED|NOT_ELIGIBLE|BUSY|UNAVAILABLE|UNAVAILABLE_BUDGET|NEEDS_APPROVAL|RENTING_DISABLED|UNAUTHORIZED|BAD_REQUEST|NOT_FOUND|OWNERSHIP_MISMATCH)
                 state=$candidate ;;
               *) exit 1 ;;
             esac
-            candidate=$(jq -er '.verdict' "$temporary/response.json")
+            candidate=$(jq -er '.verdict' "$temporary/response.json" 2>/dev/null)
             case "$candidate" in PASS|FAIL|UNAVAILABLE) verdict=$candidate ;; *) exit 1 ;; esac
             [[ "$code" = 200 ]] || exit 1
-            [[ "$(jq -er '.sha' "$temporary/response.json")" = "$TARGET_SHA" ]]
+            [[ "$(jq -er '.sha' "$temporary/response.json" 2>/dev/null)" = "$TARGET_SHA" ]]
             if [[ -n "$PR_NUMBER" ]]; then
-              [[ "$(jq -er '.pr|tostring' "$temporary/response.json")" = "$PR_NUMBER" ]]
+              [[ "$(jq -er '.pr|tostring' "$temporary/response.json" 2>/dev/null)" = "$PR_NUMBER" ]]
             fi
             if [[ "$state" = NOT_NEEDED && "$verdict" = PASS ]]; then exit 0; fi
             if [[ "$endpoint" = /rent ]]; then
-              run=$(jq -er '.run' "$temporary/response.json")
+              run=$(jq -er '.run' "$temporary/response.json" 2>/dev/null)
               [[ "$run" =~ ^[1-9][0-9]*-[1-9][0-9]*$ ]]
               endpoint=/status/$run
               method=GET
