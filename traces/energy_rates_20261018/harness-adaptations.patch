@@ -1,0 +1,84 @@
+--- Q2/bisect-agent.py
++++ Q3/bisect-agent.py
+@@ -6 +6 @@
+-D = os.environ["Q2_AGENT_STATE"]; Q = D + "/q"; R = D + "/r"
++D = os.environ["Q3_AGENT_STATE"]; Q = D + "/q"; R = D + "/r"
+--- Q2/bisect-observer-controls.ps1
++++ Q3/bisect-observer-controls.ps1
+@@ -2 +2 @@
+-$root='C:\Users\Public\codex-Q2-observe'
++$root='C:\Users\Public\codex-Q3-observe'
+--- Q2/bisect-observer.ps1
++++ Q3/bisect-observer.ps1
+@@ -2 +2 @@
+-$root='C:\Users\Public\codex-Q2-observe'
++$root='C:\Users\Public\codex-Q3-observe'
+@@ -6 +6 @@
+-$root='C:\Users\Public\codex-Q2-observe'
++$root='C:\Users\Public\codex-Q3-observe'
+--- Q2/bisect-status-template.ps1
++++ Q3/bisect-status-template.ps1
+@@ -2 +2 @@
+-$root='C:\Users\Public\codex-Q2-candidate'
++$root='C:\Users\Public\codex-Q3-candidate'
+@@ -14 +14 @@
+-$exits=if(Test-Path 'C:\Users\Public\codex-Q2-observe\exits.jsonl'){Read-Shared 'C:\Users\Public\codex-Q2-observe\exits.jsonl'}else{''}
++$exits=if(Test-Path 'C:\Users\Public\codex-Q3-observe\exits.jsonl'){Read-Shared 'C:\Users\Public\codex-Q3-observe\exits.jsonl'}else{''}
+--- Q2/campaign.py
++++ Q3/campaign.py
+@@ -5 +5 @@
+-ROOT = pathlib.Path('/data/codex-Q2')
++ROOT = pathlib.Path('/data/codex-Q3')
+@@ -10 +10 @@
+-DEADLINE = dt.datetime.fromisoformat('2026-10-22T13:50:00+02:00').timestamp()
++DEADLINE = dt.datetime.fromisoformat('2026-10-22T15:50:00+02:00').timestamp()
+--- Q2/energy-arm.py
++++ Q3/energy-arm.py
+@@ -5,3 +5,3 @@
+-R=Path('/data/codex-Q2');N=int(sys.argv[1]);REV=sys.argv[2];LABEL=sys.argv[3];S=R/'energy-bisect'/str(N);S.mkdir(parents=True,exist_ok=True);A=R/'windows-20261022'/f'boundary-kayfabe-{N}'
+-ROOT=rf'C:\Users\Public\codex-Q2-energy-{N}';OBS=rf'C:\Users\Public\codex-Q2-observe-{N}'
+-env=dict(os.environ,Q2_AGENT_STATE=str(S/'agent-state'));server=None;control=None
++R=Path('/data/codex-Q3');N=int(sys.argv[1]);REV=sys.argv[2];LABEL=sys.argv[3];S=R/'energy-bisect'/str(N);S.mkdir(parents=True,exist_ok=True);A=R/'windows-20261022'/f'boundary-kayfabe-{N}'
++ROOT=rf'C:\Users\Public\codex-Q3-energy-{N}';OBS=rf'C:\Users\Public\codex-Q3-observe-{N}'
++env=dict(os.environ,Q3_AGENT_STATE=str(S/'agent-state'));server=None;control=None
+@@ -17 +17 @@
+- s=(R/'bisect-status-template.ps1').read_text();s=s.replace('C:\\Users\\Public\\codex-Q2-candidate',ROOT).replace('C:\\Users\\Public\\codex-Q2-observe',OBS).replace('2026-10-22T06:14:43.5000000+02:00',boot);return s
++ s=(R/'bisect-status-template.ps1').read_text();s=s.replace('C:\\Users\\Public\\codex-Q3-candidate',ROOT).replace('C:\\Users\\Public\\codex-Q3-observe',OBS).replace('2026-10-22T06:14:43.5000000+02:00',boot);return s
+@@ -20 +20 @@
+- proof=json.loads((R/'energy-bisect'/('tests-'+LABEL[0]+'.json' if LABEL[0] in 'AB' else 'tests-candidate.json')).read_text())
++ proof=json.loads((R/'energy-bisect'/('tests-'+LABEL[0]+'.json' if LABEL[0] in 'ABD' else 'tests-candidate.json')).read_text())
+@@ -44 +44 @@
+- observer=(R/'bisect-observer.ps1').read_text().replace('C:\\Users\\Public\\codex-Q2-observe',OBS)
++ observer=(R/'bisect-observer.ps1').read_text().replace('C:\\Users\\Public\\codex-Q3-observe',OBS)
+@@ -47 +47 @@
+- controls=(R/'bisect-observer-controls.ps1').read_text().replace('C:\\Users\\Public\\codex-Q2-observe',OBS)
++ controls=(R/'bisect-observer-controls.ps1').read_text().replace('C:\\Users\\Public\\codex-Q3-observe',OBS)
+--- Q2/extract-public.py
++++ Q3/extract-public.py
+@@ -3 +3 @@
+-R=Path('/data/codex-Q2');N=int(sys.argv[1]);source=Path(sys.argv[2]);S=R/'public'/str(N);S.mkdir(parents=True,exist_ok=True)
++R=Path('/data/codex-Q3');N=int(sys.argv[1]);source=Path(sys.argv[2]);S=R/'public'/str(N);S.mkdir(parents=True,exist_ok=True)
+--- Q2/kayfabe_arm.py
++++ Q3/kayfabe_arm.py
+@@ -37 +37 @@
+-    if not root.is_absolute() or not str(root).startswith('/data/codex-Q2/'):
++    if not root.is_absolute() or not str(root).startswith('/data/codex-Q3/'):
+--- Q2/production-broker.sh
++++ Q3/production-broker.sh
+@@ -133 +133 @@
+-xid_count() { python3 /data/codex-Q2/xidcount.py; }
++xid_count() { python3 /data/codex-Q3/xidcount.py; }
+@@ -309 +309 @@
+-setsid bash -c "while kill -0 $QPID 2>/dev/null; do sleep 5; done; echo \"WINDOWS_EXIT qemu-gone \$(date -Is) xid_after=\$(python3 /data/codex-Q2/xidcount.py)\" >> '$RUN/marker.txt'" > /dev/null 2>&1 < /dev/null &
++setsid bash -c "while kill -0 $QPID 2>/dev/null; do sleep 5; done; echo \"WINDOWS_EXIT qemu-gone \$(date -Is) xid_after=\$(python3 /data/codex-Q3/xidcount.py)\" >> '$RUN/marker.txt'" > /dev/null 2>&1 < /dev/null &
+--- Q2/windows_session_bisect.py
++++ Q3/windows_session_bisect.py
+@@ -11 +11 @@
+-    with (Path('/data/codex-Q2')/'bisect-nvidia-reload-used').open('x') as f:f.write('authorized reload\n')
++    with (Path('/data/codex-Q3')/'bisect-nvidia-reload-used').open('x') as f:f.write('authorized reload\n')
+@@ -16 +16 @@
+-R=Path('/data/codex-Q2');N=int(sys.argv[1]);REV=sys.argv[2];ROOT=C.arm(N)
++R=Path('/data/codex-Q3');N=int(sys.argv[1]);REV=sys.argv[2];ROOT=C.arm(N)
+@@ -37 +37 @@
+-        if (str(ROOT) in cmd or ('/data/codex-Q2/production-broker.sh' in cmd and f'stop {N}' in cmd)) and int(p.name)!=os.getpid():
++        if (str(ROOT) in cmd or ('/data/codex-Q3/production-broker.sh' in cmd and f'stop {N}' in cmd)) and int(p.name)!=os.getpid():

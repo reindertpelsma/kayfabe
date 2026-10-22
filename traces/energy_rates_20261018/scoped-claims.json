@@ -2,7 +2,7 @@
   "classification": "MEASURED",
   "evidence": "scoped-claims.json",
   "base": "b6f6d3010600e77d02e1e48b5e497d24fd4306d5",
-  "head": "3111d1cb2f16b50ba07b217ed6b679ff9ff5b126",
+  "head": "77a0fe2d0206e7c0217f498a184fb400de939b69",
   "scope": "Owner-approved Q3-added/changed files only; evidence-only [skip ci]; inherited debt untouched",
   "files": [
     "traces/energy_rates_20261018/4301/channel-excerpts.txt",
@@ -25,7 +25,16 @@
     "traces/energy_rates_20261018/4304/config.json",
     "traces/energy_rates_20261018/4304/excerpts.txt",
     "traces/energy_rates_20261018/4304/result.json",
+    "traces/energy_rates_20261018/4305/channel-excerpts.txt",
+    "traces/energy_rates_20261018/4305/channels.json",
+    "traces/energy_rates_20261018/4305/config.json",
+    "traces/energy_rates_20261018/4305/excerpts.txt",
+    "traces/energy_rates_20261018/4305/result.json",
     "traces/energy_rates_20261018/builds.json",
+    "traces/energy_rates_20261018/control/channel_summary.py",
+    "traces/energy_rates_20261018/control/preflight.py",
+    "traces/energy_rates_20261018/control/series.py",
+    "traces/energy_rates_20261018/harness-adaptations.patch",
     "traces/energy_rates_20261018/harness-manifest.json",
     "traces/energy_rates_20261018/plan.md",
     "traces/energy_rates_20261018/preflight.json",
@@ -39,5 +48,5 @@
   "new": 0,
   "sites": [],
   "inherited_ignored": 74,
-  "time": "2026-10-22T09:37:50.173203+00:00"
+  "time": "2026-10-22T09:43:31.691323+00:00"
 }
