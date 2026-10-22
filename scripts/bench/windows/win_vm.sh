@@ -365,6 +365,7 @@ qemu_common() {
     -device virtserialport,bus=vser0.0,chardev=qga0,name=org.qemu.guest_agent.0
     -object rng-random,id=rng0,filename=/dev/urandom -device virtio-rng-pci,rng=rng0
     -device pvpanic
+    -device qemu-xhci,id=xhci
     -display none -vnc "unix:$VM/run/vnc.sock"
     -qmp "unix:$VM/run/qmp.sock,server=on,wait=off" -qmp "unix:$VM/run/qmp-ev.sock,server=on,wait=off"
     -msg timestamp=on

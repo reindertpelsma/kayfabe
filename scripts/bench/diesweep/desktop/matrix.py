@@ -15,8 +15,7 @@ import winapps as w
 
 
 def attach_app_disk(qmp, iso):
-    qmp.cmd('device_add', {'driver':'qemu-xhci', 'id':'s4xhci'})
-    return qmp.attach_cdrom(iso, xhci_bus='s4xhci.0')
+    return qmp.attach_cdrom(iso, xhci_bus='xhci.0')
 
 
 def run_plan(session, apps, record, health, hold):
