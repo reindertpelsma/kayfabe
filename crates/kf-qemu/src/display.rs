@@ -138,10 +138,10 @@ fn color_experiments() -> kf_disp::color::Experiments {
     })
 }
 
-// CODE READ: keep the configured SDR arm separate from GPU bring-up so the shipped configuration
-// can be exercised by the GPU-free colour regression tests.
+// CODE READ: SDR is opt-in until the authored page and G05 are qualified. The production
+// SDR+CAPS_PROBE research arm does not establish an authored-page default (PR #72 review B2).
 fn sdr_color_on() -> bool {
-    std::env::var("KF3_DISPLAY_SDR_COLOR").map_or(true, |v| v != "0")
+    std::env::var("KF3_DISPLAY_SDR_COLOR").is_ok_and(|v| v == "1")
 }
 
 /// `nvkms-evo3.c:1437-1438`'s default `MIN_FRAME_IDLE` (H-armeddefault): leading, trailing lines.
