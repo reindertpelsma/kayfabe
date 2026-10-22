@@ -1,0 +1,52 @@
+{
+  "kind": "MEASURED",
+  "date": "2026-10-22",
+  "utc": "2026-10-22T13:07:01.897575+00:00",
+  "owned_leases": [
+    {
+      "id": 57193877,
+      "destroyed_utc": "2026-10-22T12:28:09.565023+00:00",
+      "api_absence_verified": true,
+      "auto_destroy_cancelled_after_absence": true,
+      "runtime_hours": 2.300879865,
+      "runtime_cost_estimate_usd": 1.4265455163,
+      "cost_upper_usd": 2.4265455163,
+      "pre_teardown_origin_head": "4eeddee98c6405b5200f4905ab53acb8b5a42798",
+      "kind": "MEASURED API absence and timer cancellation",
+      "date": "2026-10-22",
+      "cost_kind": "INFERRED arithmetic estimate, not billed cost"
+    },
+    {
+      "id": 57209908,
+      "destroyed_utc": "2026-10-22T13:05:14.586600+00:00",
+      "api_absence_verified": true,
+      "auto_destroy_cancelled_after_absence": true,
+      "runtime_hours": 0.5953777944444444,
+      "runtime_cost_estimate_usd": 0.3770726031481481,
+      "cost_upper_usd": 1.3770726031481482,
+      "pre_teardown_origin_head": "3977e3cf96bd1def238916e3dbf876c71a5a6d39",
+      "kind": "MEASURED API absence and timer cancellation",
+      "date": "2026-10-22",
+      "cost_kind": "INFERRED arithmetic estimate, not billed cost"
+    }
+  ],
+  "all_owned_leases_api_absent": true,
+  "owned_timers_running": false,
+  "owned_transfer_or_controller_jobs_running": false,
+  "dev_cargo_target_absent": true,
+  "dev_gpu_or_cargo_locks_taken": false,
+  "removed_own_caches": [
+    {
+      "name": "kfapps.iso",
+      "bytes": 6785255424
+    },
+    {
+      "name": "cuda_nvrtc.zip",
+      "bytes": 314608748
+    }
+  ],
+  "rental_time_cost_estimate_usd": 1.8036181194481482,
+  "conservative_lane_accounting_usd": 3.8036181194481484,
+  "cost_kind": "INFERRED rate-times-runtime plus transfer allowance; no claim of billed total",
+  "turing_created": false
+}

@@ -1,0 +1,13 @@
+{
+  "id": 57209908,
+  "destroyed_utc": "2026-10-22T13:05:14.586600+00:00",
+  "api_absence_verified": true,
+  "auto_destroy_cancelled_after_absence": true,
+  "runtime_hours": 0.5953777944444444,
+  "runtime_cost_estimate_usd": 0.3770726031481481,
+  "cost_upper_usd": 1.3770726031481482,
+  "pre_teardown_origin_head": "3977e3cf96bd1def238916e3dbf876c71a5a6d39",
+  "kind": "MEASURED API absence and timer cancellation",
+  "date": "2026-10-22",
+  "cost_kind": "INFERRED arithmetic estimate, not billed cost"
+}

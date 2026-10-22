@@ -9,5 +9,5 @@
   "pre_teardown_origin_head": "4eeddee98c6405b5200f4905ab53acb8b5a42798",
   "kind": "MEASURED API absence and timer cancellation",
   "date": "2026-10-22",
-  "cost_kind": "INFERRED rate-times-runtime estimate plus conservative transfer allowance; not billed cost"
+  "cost_kind": "INFERRED arithmetic estimate, not billed cost"
 }
