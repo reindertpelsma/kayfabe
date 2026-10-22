@@ -28,7 +28,7 @@ export class Vast {
   async inspect(record){
     const response=await this.api('/api/v0/instances/'+record.id,'GET',undefined,true);
     if(response===null)return null;
-    const i=response.instances;if(!i||String(i.id)!==record.id||!record.label.startsWith('kf-ci-')||i.label!==record.label)refuse('OWNERSHIP_MISMATCH',409);
+    const i=response.instances;if(i===null)return null;if(!i||String(i.id)!==record.id||!record.label.startsWith('kf-ci-')||i.label!==record.label)refuse('OWNERSHIP_MISMATCH',409);
     return i;
   }
   async destroy(record){
