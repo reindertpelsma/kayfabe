@@ -124,6 +124,11 @@ reservation-only fallback, not a claim of provider-enforced transfer limits.
 
 [MEASURED: 2026-10-22 local Node test/bundle commands] Run `npm test` (or `node --test ci/vast-broker/test` from the repo root), `npm run bundle`, and `npm run mutants` from this directory. No npm install is needed. The fixed-source linker writes ignored `dist/worker.js`, checks syntax and preserves the entrypoint exports. Tests use generated RSA keys, fake JWKS, mocked GitHub/Vast, an in-memory Durable Object adapter and a local HTTP server.
 
+[MEASURED: 2026-10-22 format bundle run, traces/vast_broker_v5_20261018/FORMAT.md]
+The formatted checkpoint bundle is 103026 bytes, SHA256
+`1a06b7c87dd069240c4404503353b458d32e4d3ae64a680f35a5ac8f33d83eb8`.
+Prettier 3.6.2 and Black 25.1.0 use width 100; CI enforces both pinned versions.
+
 ## Deploy with the owner's credentials (9 steps)
 
 [CODE READ: 2026-10-22 wrangler.toml, defaults.json, deployment.json] This is the

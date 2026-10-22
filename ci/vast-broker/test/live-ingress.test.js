@@ -1,10 +1,11 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {spawnSync} from 'node:child_process';
+import { spawnSync } from 'node:child_process';
 // FALSIFIER: either callback route performs an extra provider request. Those
 // probes caused real 429s during a fast log burst; timestamps must reuse samples.
-for(const route of ['report','kill'])test('live '+route+' ingress reuses timestamped provider sample without API probe',()=>{
- const script=String.raw`
+for (const route of ['report', 'kill'])
+  test('live ' + route + ' ingress reuses timestamped provider sample without API probe', () => {
+    const script = String.raw`
 import http from 'node:http';import fs from 'node:fs';import os from 'node:os';import path from 'node:path';
 const root=fs.mkdtempSync(path.join(os.tmpdir(),'kf-ingress-test-'));
 let probes=0;globalThis.fetch=async()=>{probes++;throw Error('duplicate provider probe');};
@@ -22,7 +23,22 @@ for(const server of servers)await new Promise(resolve=>server.close(resolve));
 fs.rmSync(root,{recursive:true});
 console.log(JSON.stringify({status,probes,sample:rows.find(r=>r.kind==='callback_arrival')}));
 `;
- const p=spawnSync(process.execPath,['--input-type=module','-e',script,new URL('../live/ingress.mjs',import.meta.url).href,'unused',route],{encoding:'utf8',timeout:10000});
- assert.equal(p.status,0,p.stderr);const row=JSON.parse(p.stdout.trim().split('\n').at(-1));
- assert.equal(row.status,200);assert.equal(row.probes,0);assert.equal(row.sample.actual_status,'running');assert.ok(row.sample.provider_sample_age_ms>=1000);
-});
+    const p = spawnSync(
+      process.execPath,
+      [
+        '--input-type=module',
+        '-e',
+        script,
+        new URL('../live/ingress.mjs', import.meta.url).href,
+        'unused',
+        route,
+      ],
+      { encoding: 'utf8', timeout: 10000 },
+    );
+    assert.equal(p.status, 0, p.stderr);
+    const row = JSON.parse(p.stdout.trim().split('\n').at(-1));
+    assert.equal(row.status, 200);
+    assert.equal(row.probes, 0);
+    assert.equal(row.sample.actual_status, 'running');
+    assert.ok(row.sample.provider_sample_age_ms >= 1000);
+  });

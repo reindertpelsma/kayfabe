@@ -1,10 +1,68 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {readFile} from 'node:fs/promises';
-import {checkWorkflows} from '../workflow-guard.js';
-const workflow=await readFile(new URL('../../../.github/workflows/gpu-vast.yml',import.meta.url),'utf8');
-for(const job of ['run','utility'])test('unapproved reusable job cannot inherit endpoint secrets '+job,()=>{const errors=checkWorkflows({'gpu-vast.yml':workflow,'other.yml':'jobs:\n  '+job+':\n    uses: ./.github/workflows/reusable.yml\n    secrets: inherit\n'});assert.ok(errors.some(x=>x.startsWith('Broker endpoint')),JSON.stringify(errors));});
-test('explicit unrelated reusable secret mapping remains allowed',()=>assert.deepEqual(checkWorkflows({'gpu-vast.yml':workflow,'other.yml':'jobs:\n  utility:\n    uses: ./.github/workflows/reusable.yml\n    secrets:\n      OTHER: ${{ secrets.OTHER }}\n'}),[]));
-for(const alias of ['WORKER_URL','WORKER_PATH'])test('broker step name cannot reference endpoint alias '+alias,()=>{const text=workflow.replace('- name: Fetch BASE controller and request bounded test','- name: ${{ env.'+alias+' }}');assert.notEqual(text,workflow);const errors=checkWorkflows({'gpu-vast.yml':text});assert.ok(errors.some(x=>x.startsWith('Broker endpoint')),JSON.stringify(errors));});
-for(const value of ['    secrets: &all inherit\n','    secrets : inherit\n','    secrets: >-\n      inherit\n',"    'secrets': inherit\n",'    "secrets": inherit\n'])test('unsupported scalar forwarding is rejected '+JSON.stringify(value.trim()),()=>{const errors=checkWorkflows({'gpu-vast.yml':workflow,'other.yml':'jobs:\n  utility:\n    uses: ./.github/workflows/reusable.yml\n'+value});assert.ok(errors.some(x=>x.startsWith('Broker endpoint')),JSON.stringify(errors));});
-test('commented explicit block secret mapping remains allowed',()=>assert.deepEqual(checkWorkflows({'gpu-vast.yml':workflow,'other.yml':'jobs:\n  utility:\n    uses: ./.github/workflows/reusable.yml\n    secrets: # explicit mapping\n      OTHER: ${{ secrets.OTHER }}\n'}),[]));
+import { readFile } from 'node:fs/promises';
+import { checkWorkflows } from '../workflow-guard.js';
+const workflow = await readFile(
+  new URL('../../../.github/workflows/gpu-vast.yml', import.meta.url),
+  'utf8',
+);
+for (const job of ['run', 'utility'])
+  test('unapproved reusable job cannot inherit endpoint secrets ' + job, () => {
+    const errors = checkWorkflows({
+      'gpu-vast.yml': workflow,
+      'other.yml':
+        'jobs:\n  ' + job + ':\n    uses: ./.github/workflows/reusable.yml\n    secrets: inherit\n',
+    });
+    assert.ok(
+      errors.some((x) => x.startsWith('Broker endpoint')),
+      JSON.stringify(errors),
+    );
+  });
+test('explicit unrelated reusable secret mapping remains allowed', () =>
+  assert.deepEqual(
+    checkWorkflows({
+      'gpu-vast.yml': workflow,
+      'other.yml':
+        'jobs:\n  utility:\n    uses: ./.github/workflows/reusable.yml\n    secrets:\n      OTHER: ${{ secrets.OTHER }}\n',
+    }),
+    [],
+  ));
+for (const alias of ['WORKER_URL', 'WORKER_PATH'])
+  test('broker step name cannot reference endpoint alias ' + alias, () => {
+    const text = workflow.replace(
+      '- name: Fetch BASE controller and request bounded test',
+      '- name: ${{ env.' + alias + ' }}',
+    );
+    assert.notEqual(text, workflow);
+    const errors = checkWorkflows({ 'gpu-vast.yml': text });
+    assert.ok(
+      errors.some((x) => x.startsWith('Broker endpoint')),
+      JSON.stringify(errors),
+    );
+  });
+for (const value of [
+  '    secrets: &all inherit\n',
+  '    secrets : inherit\n',
+  '    secrets: >-\n      inherit\n',
+  "    'secrets': inherit\n",
+  '    "secrets": inherit\n',
+])
+  test('unsupported scalar forwarding is rejected ' + JSON.stringify(value.trim()), () => {
+    const errors = checkWorkflows({
+      'gpu-vast.yml': workflow,
+      'other.yml': 'jobs:\n  utility:\n    uses: ./.github/workflows/reusable.yml\n' + value,
+    });
+    assert.ok(
+      errors.some((x) => x.startsWith('Broker endpoint')),
+      JSON.stringify(errors),
+    );
+  });
+test('commented explicit block secret mapping remains allowed', () =>
+  assert.deepEqual(
+    checkWorkflows({
+      'gpu-vast.yml': workflow,
+      'other.yml':
+        'jobs:\n  utility:\n    uses: ./.github/workflows/reusable.yml\n    secrets: # explicit mapping\n      OTHER: ${{ secrets.OTHER }}\n',
+    }),
+    [],
+  ));

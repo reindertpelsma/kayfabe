@@ -1,14 +1,55 @@
+// prettier-ignore
 import {DEFAULTS} from './defaults.js';
+// prettier-ignore
 import {hexSha} from './policy.js';
+// prettier-ignore
 import {validPathPrefix} from './routes.js';
-export function onstart(sha,nonce,minutes,repo='reindertpelsma/kayfabe',callback){
-  if(!hexSha(sha)||typeof nonce!=='string'||!/^[0-9a-f]{32}$/.test(nonce)||!Number.isInteger(minutes)||minutes<1||minutes>DEFAULTS.maxMinutes||!/^[-\w.]+\/[-\w.]+$/.test(repo))throw Error('Invalid fixed onstart inputs');
-  let origin;try{const u=new URL(callback.url);if(u.protocol!=='https:'||u.username||u.password||u.search||u.hash||u.pathname!=='/')throw Error();origin=u.origin;}catch{throw Error('Invalid callback origin');}
-  if(!/^[1-9][0-9]{0,19}-[1-9][0-9]{0,19}$/.test(callback.run)||!/^v1\.[1-9][0-9]{0,19}\.[1-9][0-9]{0,19}\.[1-9][0-9]{0,12}\.[A-Za-z0-9_-]{43}$/.test(callback.token)||callback.token.split('.').slice(1,3).join('-')!==callback.run)throw Error('Invalid callback capability');
-  const prefix=callback.path??'';if(prefix!==''&&!validPathPrefix(prefix))throw Error('Invalid callback prefix');
-  const grace=callback.graceMinutes??DEFAULTS.failGraceMinutes;if(!Number.isInteger(grace)||grace<1||grace>15)throw Error('Invalid grace');
-  if(callback.runnerNonce!==undefined&&!/^[0-9a-f]{64}$/.test(callback.runnerNonce))throw Error('Invalid runner nonce');
-  if(callback.softDeadline!==undefined&&(!Number.isSafeInteger(callback.softDeadline)||callback.softDeadline<=0))throw Error('Invalid soft deadline');
+export function onstart(sha, nonce, minutes, repo = 'reindertpelsma/kayfabe', callback) {
+  if (
+    !hexSha(sha) ||
+    typeof nonce !== 'string' ||
+    !/^[0-9a-f]{32}$/.test(nonce) ||
+    !Number.isInteger(minutes) ||
+    minutes < 1 ||
+    minutes > DEFAULTS.maxMinutes ||
+    !/^[-\w.]+\/[-\w.]+$/.test(repo)
+  )
+    throw Error('Invalid fixed onstart inputs');
+  let origin;
+  try {
+    const u = new URL(callback.url);
+    if (
+      u.protocol !== 'https:' ||
+      u.username ||
+      u.password ||
+      u.search ||
+      u.hash ||
+      u.pathname !== '/'
+    )
+      throw Error();
+    origin = u.origin;
+  } catch {
+    throw Error('Invalid callback origin');
+  }
+  if (
+    !/^[1-9][0-9]{0,19}-[1-9][0-9]{0,19}$/.test(callback.run) ||
+    !/^v1\.[1-9][0-9]{0,19}\.[1-9][0-9]{0,19}\.[1-9][0-9]{0,12}\.[A-Za-z0-9_-]{43}$/.test(
+      callback.token,
+    ) ||
+    callback.token.split('.').slice(1, 3).join('-') !== callback.run
+  )
+    throw Error('Invalid callback capability');
+  const prefix = callback.path ?? '';
+  if (prefix !== '' && !validPathPrefix(prefix)) throw Error('Invalid callback prefix');
+  const grace = callback.graceMinutes ?? DEFAULTS.failGraceMinutes;
+  if (!Number.isInteger(grace) || grace < 1 || grace > 15) throw Error('Invalid grace');
+  if (callback.runnerNonce !== undefined && !/^[0-9a-f]{64}$/.test(callback.runnerNonce))
+    throw Error('Invalid runner nonce');
+  if (
+    callback.softDeadline !== undefined &&
+    (!Number.isSafeInteger(callback.softDeadline) || callback.softDeadline <= 0)
+  )
+    throw Error('Invalid soft deadline');
   return `#!/bin/bash
 set -euo pipefail
 export DEBIAN_FRONTEND=noninteractive
@@ -18,14 +59,14 @@ cat > /usr/local/bin/kf-box-kill <<'KF_KILL'
 #!/bin/sh
 set -eu
 # Only this run's limited capability; neither account nor owner credentials.
-exec curl --silent --show-error --fail --max-time 20 --proto '=https' --request POST --header 'Authorization: Bearer ${callback.token}' --data-binary "\${1:-box-request}" '${origin}${prefix?'/'+prefix:''}/kill/${callback.run}'
+exec curl --silent --show-error --fail --max-time 20 --proto '=https' --request POST --header 'Authorization: Bearer ${callback.token}' --data-binary "\${1:-box-request}" '${origin}${prefix ? '/' + prefix : ''}/kill/${callback.run}'
 KF_KILL
 chmod 700 /usr/local/bin/kf-box-kill
 cat > /usr/local/bin/kf-box-hold <<'KF_HOLD'
 #!/bin/sh
 set -eu
 # This run only; cannot remove its hard limit or access account credentials.
-exec curl --silent --show-error --fail --max-time 20 --proto '=https' --request POST --header 'Authorization: Bearer ${callback.token}' --data-binary '' '${origin}${prefix?'/'+prefix:''}/hold/${callback.run}'
+exec curl --silent --show-error --fail --max-time 20 --proto '=https' --request POST --header 'Authorization: Bearer ${callback.token}' --data-binary '' '${origin}${prefix ? '/' + prefix : ''}/hold/${callback.run}'
 KF_HOLD
 chmod 700 /usr/local/bin/kf-box-hold
 cat > /etc/profile.d/kf-ci-hold.sh <<'KF_PROFILE'
@@ -37,10 +78,10 @@ KF_PROFILE
 chmod 644 /etc/profile.d/kf-ci-hold.sh
 python3 - <<'KF_REPORT'
 import json,math,os,re,select,subprocess,time
-url='${origin}${prefix?'/'+prefix:''}/report/${callback.run}'
+url='${origin}${prefix ? '/' + prefix : ''}/report/${callback.run}'
 token='${callback.token}'
 nonce='${nonce}'
-runner_nonce='${callback.runnerNonce??''}'
+runner_nonce='${callback.runnerNonce ?? ''}'
 seq=0
 sent=0
 attempted=0
@@ -78,8 +119,8 @@ export KF_SOFT_DEADLINE_MS=__KF_SOFT_DEADLINE_MS__
 bash scripts/ci/vast_payload.sh '${sha}' '${nonce}'
 KF_TEST
 '''
-soft_deadline=${callback.softDeadline??'None'}
-remaining=math.floor(soft_deadline/1000-time.time()) if soft_deadline is not None else ${minutes*60-DEFAULTS.softMarginMinutes*60}
+soft_deadline=${callback.softDeadline ?? 'None'}
+remaining=math.floor(soft_deadline/1000-time.time()) if soft_deadline is not None else ${minutes * 60 - DEFAULTS.softMarginMinutes * 60}
 work=work.replace('__KF_SOFT_SECONDS__',str(max(1,remaining))) if remaining>0 else 'exit 124\\n'
 work=work.replace('__KF_SOFT_DEADLINE_MS__',str(soft_deadline if soft_deadline is not None else math.floor(time.time()*1000+remaining*1000)))
 post('progress','Suite starting')
@@ -97,7 +138,7 @@ with open(backup,'wb') as local:
         current=time.monotonic()
         if pending and (len(pending)>=8192 or current-last>=1):
             post('log',pending.decode('utf-8',errors='replace'));pending=b'';last=current
-        if current-heartbeat>=${DEFAULTS.heartbeatMinutes*60}:
+        if current-heartbeat>=${DEFAULTS.heartbeatMinutes * 60}:
             post('log','');heartbeat=current
     if pending: post('log',pending.decode('utf-8',errors='replace'))
 rc=child.wait()
@@ -132,7 +173,7 @@ if rc==124 and not any(r['name']=='timeout' for r in result['suites']):result['s
 if runner_nonce:result['runner_nonce']=runner_nonce
 ack=post('result','Suite complete; sender omitted '+str(omitted)+' raw bytes beyond its bounded transport allowance.',result)
 seconds=ack.get('grace_remaining_seconds') if isinstance(ack,dict) else None
-remaining=str(math.ceil(seconds/60)) if type(seconds) is int and 0<=seconds<=${grace*60} else 'unknown'
+remaining=str(math.ceil(seconds/60)) if type(seconds) is int and 0<=seconds<=${grace * 60} else 'unknown'
 print('Use kf-box-kill [reason] to end this box early; configured maximum ${grace} minutes; Worker reports '+remaining+' minutes remaining (hard TTL included).')
 raise SystemExit(rc if rc else (0 if result['verdict']=='PASS' else 1))
 KF_REPORT
