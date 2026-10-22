@@ -1,0 +1,11 @@
+{
+  "own_id": 57144505,
+  "source": "7f6f7e7a76c141522a47dc79d024d9b3fd4d35e0",
+  "new_boot_id": "425c0e6f-5587-4b0e-a1f7-f446e46c1434",
+  "initial_kernel_faults_required": 0,
+  "required_native_faults": 5,
+  "required_guest_faults": [
+    4,
+    1
+  ]
+}

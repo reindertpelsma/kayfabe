@@ -1,0 +1,12 @@
+{
+  "own_id": 57144505,
+  "old_boot_id": "d4ad1906-3575-4763-a4fb-c1e4ec4205f2",
+  "pre_reboot": "2026-10-22T03:17:16+00:00\n595.91.07, 0 MiB\n",
+  "requested_utc": "2026-10-22T03:17:18.318077+00:00",
+  "reason": "test-first CRLF proof-framing repair; terminated missing control has no recovery, retain history and require new full native5/guest4+1",
+  "new_boot_id": "425c0e6f-5587-4b0e-a1f7-f446e46c1434",
+  "ready_utc": "2026-10-22T03:17:53.943647+00:00",
+  "kernel": "6.8.0-59-generic",
+  "post_reboot": "595.91.07, 0 MiB\nFilesystem      Size  Used Avail Use% Mounted on\n/dev/root       175G   31G  145G  18% /\n",
+  "pinned_host_keys_unchanged": true
+}
