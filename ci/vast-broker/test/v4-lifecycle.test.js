@@ -63,9 +63,44 @@ test('V4 prepaid reserve includes hard TTL plus cron period',async()=>{
 });
 test('V4 onstart ships plain curl own-run kill CLI and test-only timeout',()=>{
  const script=onstart(sha,nonce,20,env.REPOSITORY,{url:env.WORKER_URL,run:'123-1',token:'v1.123.1.1800009000.'+'A'.repeat(43),graceMinutes:5});
- assert.match(script,/kf-box-kill/);assert.match(script,/\/kill\/123-1/);assert.match(script,/5 minutes/);assert.doesNotMatch(script,/exec timeout/);
+ assert.match(script,/kf-box-kill/);assert.match(script,/\/kill\/123-1/);assert.match(script,/5 minutes/);assert.doesNotMatch(script.split("python3 - <<'KF_REPORT'")[0],/exec timeout/);
 });
 test('V4 free-plan cron is every minute and has no DO alarm',async()=>{
  assert.match(await readFile(new URL('../wrangler.toml',import.meta.url),'utf8'),/crons = \["\* \* \* \* \*"\]/);
  const source=await readFile(new URL('../src/index.js',import.meta.url),'utf8');assert.doesNotMatch(source,/setAlarm|deleteAlarm|async alarm/);
+});
+for(const verdict of ['PASS','FAIL'])test('V4 grace cannot extend hard TTL '+verdict,async()=>{
+ const h=await rent();await h.report({seq:1,kind:'progress',text:'started'});h.time.value+=19*60000;
+ await h.report({seq:2,kind:'result',result:{nonce,verdict}});h.time.value+=60000;await h.service.sweep();assert.deepEqual(h.cloud.deletes,['900']);
+});
+for(const bad of ['bad-capability',env.OWNER_STOP_TOKEN])test('V4 kill rejects non-box authority '+bad.slice(0,3),async()=>{
+ const h=await rent();assert.equal((await kill(h,{token:bad})).status,401);assert.deepEqual(h.cloud.deletes,[]);
+});
+for(const action of ['report','cron'])test('V4 pending callback cannot establish liveness '+action,async()=>{
+ const h=await rent();h.cloud.instances.get('900').actual_status='created';
+ if(action==='report')assert.equal((await h.report({seq:1,kind:'progress',text:'not proof'})).status,409);else await h.service.sweep();
+ assert.equal((await record(h)).firstReportAt,undefined);assert.deepEqual(h.cloud.deletes,[]);
+});
+test('V4 no callback while provider running also expires provisioning',async()=>{
+ const h=await rent();h.time.value+=600000;await h.service.sweep();assert.deepEqual(h.cloud.deletes,['900']);
+});
+test('V4 low-priced reservation still includes cron period',async()=>{
+ const h=await setup(settings);h.cloud.price=.2;h.cloud.credit=8+.2*20.5/60;assert.equal((await h.call()).status,409);assert.equal(h.cloud.creates,0);
+});
+for(const patch of [{TTL_MINUTES:'61'},{POST_RESULT_GRACE_MINUTES:'16'}])test('V4 invalid lifetime knob prevents rent '+Object.keys(patch)[0],async()=>{
+ const h=await setup({...settings,...patch});assert.equal((await h.call()).status,503);assert.equal(h.cloud.creates,0);
+});
+for(const reason of ['done','a reason with spaces'])test('V4 generated kill CLI sends limited capability '+reason,async()=>{
+ const {mkdtemp,writeFile,rm}=await import('node:fs/promises'),{tmpdir}=await import('node:os'),{spawnSync}=await import('node:child_process');
+ const dir=await mkdtemp(tmpdir()+'/v4-kill-test-');
+ try{
+  const token='v1.123.1.1800009000.'+'A'.repeat(43),script=onstart(sha,nonce,20,env.REPOSITORY,{url:env.WORKER_URL,run:'123-1',token});
+  const cli=script.split("<<'KF_KILL'\n")[1].split('\nKF_KILL')[0];
+  await writeFile(dir+'/curl','#!/usr/bin/env python3\nimport sys,json\nprint(json.dumps(sys.argv[1:]))\n',{mode:0o700});
+  const run=spawnSync('sh',['-s','--',reason],{input:cli,encoding:'utf8',env:{...process.env,PATH:dir+':'+process.env.PATH}});assert.equal(run.status,0,run.stderr);
+  const args=JSON.parse(run.stdout);assert.equal(args.at(-1),env.WORKER_URL+'/kill/123-1');assert.ok(args.includes('Authorization: Bearer '+token));assert.ok(args.includes(reason));assert.ok(!args.includes('-L'));
+ }finally{await rm(dir,{recursive:true});}
+});
+test('V4 hard TTL survives restart with accepted progress and no result',async()=>{
+ const h=await rent();await h.report({seq:1,kind:'progress',text:'started'});h.restart();h.time.value+=1200000;await h.service.sweep();assert.deepEqual(h.cloud.deletes,['900']);
 });

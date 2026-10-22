@@ -35,5 +35,7 @@ export class Vast {
   async destroy(record){
     const instance=await this.inspect(record);if(instance===null)return;
     const r=await this.api('/api/v0/instances/'+record.id,'DELETE');if(r.success!==true)refuse();
+    // Acknowledgement is not absence. Retain liability and retry via cron if still present.
+    if(await this.inspect(record)!==null)refuse();
   }
 }

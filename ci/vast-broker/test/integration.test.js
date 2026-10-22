@@ -21,7 +21,7 @@ test('local HTTP integration: owner rent to authenticated reports to automatic d
    let response=await service.fetch(new Request(env.WORKER_URL+'/status/123-1',{headers:{authorization}}));assert.equal((await response.json()).verdict,'UNAVAILABLE');
    assert.equal((await report({seq:2,kind:'result',result:{nonce,verdict:'PASS'}})).status,200);
    response=await service.fetch(new Request(env.WORKER_URL+'/status/123-1',{headers:{authorization}}));
-   const result=await response.json();assert.equal(result.verdict,'PASS');assert.match(result.log_tail_sanitised,/\[box\] : :error/);assert.deepEqual(cloud.deletes,['900']);assert.equal(cloud.calls.some(c=>c.url.includes('request_logs')),false);
+   const result=await response.json();assert.equal(result.verdict,'PASS');assert.match(result.log_tail_sanitised,/\[box\] : :error/);assert.deepEqual(cloud.deletes,[]);await service.fetch(new Request(env.WORKER_URL+'/stop/123-1',{method:'POST',headers:{authorization}}));assert.deepEqual(cloud.deletes,['900']);assert.equal(cloud.calls.some(c=>c.url.includes('request_logs')),false);
 
  }finally{server.closeAllConnections();await new Promise(resolve=>server.close(resolve));}
 });

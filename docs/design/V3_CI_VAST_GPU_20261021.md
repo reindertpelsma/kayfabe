@@ -29,7 +29,7 @@ STATUS: LIVE-DESIGN, 2026-10-22 — Amendment 3/3b and endpoint-secret/prefix im
 | GitHub issuer and API | Numeric identity, run/commit/PR/review facts | Compromise defeats the approval gate |
 | Owner, environment reviewers, branch protection | Deployment and approval | Can bypass the check; record a reason |
 | Worker code/deploy account and singleton ledger | Admission, ownership, budgets, sanitization | Compromise exposes the upstream key's full permissions |
-| Vast control plane | Offers, balance and current instance liveness | Incorrect billing/status or missed external termination |
+| Vast control plane | Offers, prepaid credit and current instance liveness | Incorrect billing/status or missed external termination |
 | Rented root/host and its output | UNTRUSTED | Fake PASS/FAIL, omit work, burn allowance, print hostile bytes |
 | Leaked per-run bearer | No identity/content authority | Post bounded sanitised data or fabricate one structured verdict only for its live run; cannot rent/read/stop or access account secrets |
 | GitHub-hosted rent/poll job | OIDC transport and commit status | No connection to box; executes no returned code; no release authority |
@@ -39,7 +39,7 @@ STATUS: LIVE-DESIGN, 2026-10-22 — Amendment 3/3b and endpoint-secret/prefix im
 
 ## Fixed capability and own-instance ledger
 
-[INFERRED: policy] POST /rent accepts no body/query capability. Image, offer filter, script, lifetime and label are Worker-authored. Offers require verified=true, vms_enabled=true, rentable=true, rented=false, one GPU in an explicit model allowlist, reliability>=0.99, at least 120 GB disk, <=0.50 USD/hour including selected disk. Use the KVM image `docker.io/vastai/kvm:ubuntu_cli_22.04-2025-05-16`, TTL 150 min and label `kf-ci-<run_id>-<attempt>`. Recheck every returned field and reject nonfinite/absent values. No SSH key or runner-to-box channel exists. The fixed onstart embeds the repo URL, validated SHA/nonce and a limited run callback bearer/Worker URL; it checks detached HEAD and invokes scripts/ci/vast_box_main.sh. Only a structured authenticated result can determine verdict, as specified below.
+[INFERRED: policy] POST /rent accepts no body/query capability. Image, offer filter, script, lifetime and label are Worker-authored. Offers require verified=true, vms_enabled=true, rentable=true, rented=false, one GPU in an explicit model allowlist, reliability>=0.99, at least 120 GB disk, <=0.50 USD/hour including selected disk. Use the KVM image `docker.io/vastai/kvm:ubuntu_cli_22.04-2025-05-16`, TTL 20 min (maximum 60) and label `kf-ci-<run_id>-<attempt>`. Recheck every returned field and reject nonfinite/absent values. No SSH key or runner-to-box channel exists. The fixed onstart embeds the repo URL, validated SHA/nonce and a limited run callback bearer/Worker URL; it checks detached HEAD and invokes scripts/ci/vast_box_main.sh. Only a structured authenticated result can determine verdict, as specified below.
 
 [INFERRED: state] Use one SQLite-backed Durable Object with a constant name, serializing whole operations; a process-local flag refuses concurrent requests while an operation is active. Persist a reservation before external create. KV eventual consistency is insufficient for single-live/counters/idempotence. Never persist any GitHub bearer. Keep run+attempt tombstones, immutable SHA, nonce, exact script digest/label, known instance ID, price, timestamps, accrued estimated cost, remaining reservation, sanitized final verdict and SHA cache. A repeat token returns its same rental, even after deletion. No blind second create after an uncertain response.
 
@@ -49,14 +49,14 @@ STATUS: LIVE-DESIGN, 2026-10-22 — Amendment 3/3b and endpoint-secret/prefix im
 
 ## Money, cache, kill switch and true worst case
 
-[INFERRED: accounting] Check RENTING_ENABLED first on every request (default false). Disabled renting preserves status and cleanup. Invalid `OWNER_GITHUB_ID="REPLACE_ME"` and invalid public configuration fail closed. Before creation reserve price×TTL; require credit>=8 USD plus this reservation, at most one live/unresolved rental, default max 4 rentals/day, daily spend<=3 USD and rolling 30-day spend<=30 USD. Sum lifetime costs overlapping each window plus remaining full reservations, including pending creation and unacknowledged destruction. Settle actual estimated elapsed cost only at acknowledged delete; refund only unused allowance. Midnight/rolling boundaries and process restarts cannot reset an active liability.
+[INFERRED: accounting] Check RENTING_ENABLED first on every request (default false). Disabled renting preserves status and cleanup. Invalid `OWNER_GITHUB_ID="REPLACE_ME"` and invalid public configuration fail closed. Before creation reserve price×(TTL + one-minute cron period); require credit>=8 USD plus this reservation, at most one live/unresolved rental, default max 4 rentals/day, daily spend<=3 USD and rolling 30-day spend<=30 USD. Sum lifetime costs overlapping each window plus remaining full reservations, including pending creation and unacknowledged destruction. Settle actual estimated elapsed cost only after API-verified absence; refund only unused allowance. Midnight/rolling boundaries and process restarts cannot reset an active liability.
 
 [INFERRED from source: repeat billing] Authorize the run/content before returning a SHA cache hit. A completed same-SHA run returns its cached verdict without a rental. An active same-SHA run can be observed through a recorded same-run grant without another rental. Minimum same-SHA rental gap defaults to 24h. A dispatch with run_attempt=1 uses cache; a rerun of the explicit owner's dispatch (run_attempt>1, verified against Actions API) is the documented force mechanism. It still needs current content approval and the minimum gap, caps and owner checks. A replay of one signed run/attempt can never create a second instance, including after a forced run. No client `force` input exists. Unknown/unavailable cache does not authorize spending. Budget refusal is UNAVAILABLE_BUDGET, other infrastructure failure UNAVAILABLE; neither is test FAIL or a successful skip.
 
 | Cost case | Basis | Compute estimate |
 | --- | --- | --- |
 | One cold execution | 60–120 min at 0.50 USD/hour | 0.50–1.00 USD |
-| Full reservation | 150 min at cap | 1.25 USD nominal |
+| Full reservation | 21 min at cap (TTL + cron) | 0.175 USD nominal |
 | Daily admission cap | Accrued+reserved estimate | 3 USD/day |
 | Rolling cap | Accrued+reserved estimate | 30 USD/30 days |
 | 5 new SHAs/week | ~21.4/month | 10.7–21.4 USD/30 days |
@@ -160,3 +160,14 @@ STATUS: LIVE-DESIGN, 2026-10-22 — Amendment 3/3b and endpoint-secret/prefix im
 [MEASURED: 2026-10-22 implementation checkpoint] EXPECTED RED cf31b9925: 64 report tests, 3 passed/61 failed; ed5c287b3: 14 wiring tests, 0 passed/14 failed; 95c148fbe: ledger fault tests 76 passed/3 failed and sanitizer tests 28 passed/3 failed. The implementation checkpoint 7f1305566 passes all 376 Node tests with zero failures/skips. Actual Python sender and workflow shell are exercised against fake subprocesses/curl; no rented hardware, keys or live APIs are used. The amended mutation table records the final restored-source campaign separately.
 
 [MEASURED: 2026-10-22 mutation discovery] The first free-text-verdict mutant survived because status intentionally hides an unacknowledged verdict while a run is live. [INFERRED from source: H13 before terminal regression assertions] FALSIFIER: a fake PASS log poisons a terminal verdict after stop/TTL cleanup. Extend the existing negative cases through owned stop and assert the terminal FAIL; rerun the same mutation unchanged, without weakening the two-killer threshold.
+
+
+## V4 lifecycle amendment, owner addendum 3 (2026-10-22)
+
+[CODE READ: 2026-10-22 V4 addendum 3, ci/vast-broker/README.md] This amendment supersedes immediate PASS deletion and any proposed DO alarm or box-side destruction bound. PASS/FAIL/UNAVAILABLE retain the owned box for default 5-minute grace (maximum 15), capped by hard TTL default 20 (maximum 60); no accepted callback expires at 10 minutes. Cron is every minute. Nominal healthy-cron limits are bound plus one minute and provider latency: 11-minute provision, 21-minute default TTL, 6-minute grace; outages remain unbounded external exposure. Reserve TTL plus cron and retain liability until verified absence, including after failed deletion.
+
+[CODE READ: 2026-10-22 src/index.js, src/onstart.js] The plain shell/curl kf-box-kill command calls /kill/<run> with the same per-run HMAC, shares report rate limits, cannot target another run, and immediately requests owned deletion with verified absence. Before a result it records FAIL/STOPPED; after a result it preserves that structured verdict. A replayed own completed-kill receipt has no live authority. No account/owner key reaches the box. Stop/stop-all stay immediate. The payload timeout bounds the test, while cron bounds unattended resource lifetime. See the scoped README for actual arithmetic and failure limits.
+
+[INFERRED: 2026-10-22 H-V4 before lifecycle tests] FALSIFIER: any result destroys during grace; a kill crosses run ownership; delete ACK settles before absence; provisioning never expires; hard TTL can be extended by result; or reserve omits cron. Standalone EXPECTED RED 6f9a498a1 recorded 17 failures and two passing negative ownership controls before implementation.
+
+[CODE READ: 2026-10-22 STOP update] V4 authorizes live testing and requires no SSH, but does not authorize silently replacing KVM isolation or enabling SSH launch mode. The documented VM/args/onstart conflict above is still unresolved. No supported keyless VM startup contract has been established; local protocol/lifecycle work can continue independently. The failed V3 launch is not proof of usable VM startup. Keep RENTING_ENABLED=false for deployment until that contract and live callback readiness are established.
