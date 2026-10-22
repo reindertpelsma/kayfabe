@@ -1,0 +1,28 @@
+{
+  "kind": "CODE READ",
+  "date": "2026-10-22",
+  "repositories": [
+    {
+      "tag": "580.126.09",
+      "commit": "455d4b8b75f56d7483489c255705d064fdedf3c6",
+      "archive_sha256": "15e73786a4468a82e180bbe5302cf2b7652e0ee12a8a43bee68577f03a965077",
+      "source_url": "https://github.com/NVIDIA/open-gpu-kernel-modules/tree/455d4b8b75f56d7483489c255705d064fdedf3c6",
+      "tag_object": "f394189a8606429ca06267f54e818fd207c38ff1"
+    },
+    {
+      "tag": "595.91.07",
+      "commit": "9f087a6d4e86d85acc0ce1d354d6276fe5047b29",
+      "archive_sha256": "e91353fb9d5e1b7b2890860ae4ffc2a41cf768d6b82fcc6122b4d3b870502640",
+      "source_url": "https://github.com/NVIDIA/open-gpu-kernel-modules/tree/9f087a6d4e86d85acc0ce1d354d6276fe5047b29",
+      "tag_object": "26d82922dc1e444f274294505f73f1c0b8ca682d"
+    },
+    {
+      "tag": "615.78.08",
+      "commit": "1a82fbfda8f321b056eb3568850f9316c5e465c5",
+      "archive_sha256": "584090689f3a1a154a5570066a0e50f0e25c9ab29bb10e4fe0115f2a4cc429e6",
+      "source_url": "https://github.com/NVIDIA/open-gpu-kernel-modules/tree/1a82fbfda8f321b056eb3568850f9316c5e465c5",
+      "tag_object": "4bfe30bb78e7364959e59c16cfefd88e8c14670e"
+    }
+  ],
+  "search_limit": "C and H files in three public release archives; zero regex matches are search results, not a proof of global absence"
+}

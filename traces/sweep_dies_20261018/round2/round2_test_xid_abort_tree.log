@@ -1,0 +1,11 @@
+CODE READ: repository prefix omitted from tracebacks; original log SHA256=f57e42ff9956b0e40fb73102d8734303a5bcb7a91f0119dd13399499a9806ac3
+test_reparented_owned_child_is_resumed_for_queued_term (test_xid_abort_tree.AbortIdentityTests.test_reparented_owned_child_is_resumed_for_queued_term) ... ok
+test_reparented_owned_child_still_receives_term (test_xid_abort_tree.AbortIdentityTests.test_reparented_owned_child_still_receives_term) ... ok
+test_reused_pid_does_not_inherit_abort_ownership (test_xid_abort_tree.AbortIdentityTests.test_reused_pid_does_not_inherit_abort_ownership) ... ok
+test_new_xid_terminates_nested_timeout_group (test_xid_abort_tree.AbortTreeTests.test_new_xid_terminates_nested_timeout_group) ... ok
+test_new_xid_terminates_owned_setsid_descendant (test_xid_abort_tree.AbortTreeTests.test_new_xid_terminates_owned_setsid_descendant) ... ok
+
+----------------------------------------------------------------------
+Ran 5 tests in 0.302s
+
+OK

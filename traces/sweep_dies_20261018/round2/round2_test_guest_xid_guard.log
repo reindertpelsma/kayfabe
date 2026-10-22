@@ -1,0 +1,67 @@
+CODE READ: repository prefix omitted from tracebacks; original log SHA256=6c296878d576c15250aaa6329fafba004468201d920a074b4eae892e44cc3dc2
+test_CRLF_missing_page_wrong_address_still_fatal (test_guest_xid_guard.GuestGuardTests.test_CRLF_missing_page_wrong_address_still_fatal) ... ok
+test_CRLF_missing_page_wrong_pid_still_fatal (test_guest_xid_guard.GuestGuardTests.test_CRLF_missing_page_wrong_pid_still_fatal) ... ok
+test_complete_CR_inside_address_is_not_line_framing (test_guest_xid_guard.GuestGuardTests.test_complete_CR_inside_address_is_not_line_framing) ... ok
+test_complete_measured_defer_proof_accepts_exact_four (test_guest_xid_guard.GuestGuardTests.test_complete_measured_defer_proof_accepts_exact_four) ... ok
+test_complete_missing_page_CRLF_proof_accepts_exact_one (test_guest_xid_guard.GuestGuardTests.test_complete_missing_page_CRLF_proof_accepts_exact_one) ... ok
+test_duplicate_fault_fatal_defer (test_guest_xid_guard.GuestGuardTests.test_duplicate_fault_fatal_defer) ... ok
+test_duplicate_fault_fatal_missing (test_guest_xid_guard.GuestGuardTests.test_duplicate_fault_fatal_missing) ... ok
+test_fault_address_is_exact_defer (test_guest_xid_guard.GuestGuardTests.test_fault_address_is_exact_defer) ... ok
+test_fault_address_is_exact_missing (test_guest_xid_guard.GuestGuardTests.test_fault_address_is_exact_missing) ... ok
+test_fault_type_is_exact_defer (test_guest_xid_guard.GuestGuardTests.test_fault_type_is_exact_defer) ... ok
+test_fault_type_is_exact_missing (test_guest_xid_guard.GuestGuardTests.test_fault_type_is_exact_missing) ... ok
+test_final_requires_every_expected_fault (test_guest_xid_guard.GuestGuardTests.test_final_requires_every_expected_fault) ... ok
+test_final_requires_missing_page_fault_itself (test_guest_xid_guard.GuestGuardTests.test_final_requires_missing_page_fault_itself) ... ok
+test_guest_channel_is_exact_defer (test_guest_xid_guard.GuestGuardTests.test_guest_channel_is_exact_defer) ... ok
+test_guest_channel_is_exact_missing (test_guest_xid_guard.GuestGuardTests.test_guest_channel_is_exact_missing) ... ok
+test_guest_host_twin_is_exact_defer (test_guest_xid_guard.GuestGuardTests.test_guest_host_twin_is_exact_defer) ... ok
+test_guest_host_twin_is_exact_missing (test_guest_xid_guard.GuestGuardTests.test_guest_host_twin_is_exact_missing) ... ok
+test_hidden_first_xid_record_fatal_defer (test_guest_xid_guard.GuestGuardTests.test_hidden_first_xid_record_fatal_defer) ... ok
+test_hidden_first_xid_record_fatal_missing (test_guest_xid_guard.GuestGuardTests.test_hidden_first_xid_record_fatal_missing) ... ok
+test_incomplete_missing_page_correlation_is_never_approved (test_guest_xid_guard.GuestGuardTests.test_incomplete_missing_page_correlation_is_never_approved) ... ok
+test_live_CR_inside_address_is_not_line_framing (test_guest_xid_guard.GuestGuardTests.test_live_CR_inside_address_is_not_line_framing) ... ok
+test_live_missing_page_CRLF_marker_matches_pending_source_operation (test_guest_xid_guard.GuestGuardTests.test_live_missing_page_CRLF_marker_matches_pending_source_operation) ... ok
+test_missing_defer_correlation_is_never_approved (test_guest_xid_guard.GuestGuardTests.test_missing_defer_correlation_is_never_approved) ... ok
+test_missing_source_marker_fatal_defer (test_guest_xid_guard.GuestGuardTests.test_missing_source_marker_fatal_defer) ... ok
+test_missing_source_marker_fatal_missing (test_guest_xid_guard.GuestGuardTests.test_missing_source_marker_fatal_missing) ... ok
+test_multiple_markers_same_journal_record_fatal (test_guest_xid_guard.GuestGuardTests.test_multiple_markers_same_journal_record_fatal) ... ok
+test_native_history_immutable_defer (test_guest_xid_guard.GuestGuardTests.test_native_history_immutable_defer) ... ok
+test_native_history_immutable_missing (test_guest_xid_guard.GuestGuardTests.test_native_history_immutable_missing) ... ok
+test_no_positive_verdict_no_approval_defer (test_guest_xid_guard.GuestGuardTests.test_no_positive_verdict_no_approval_defer) ... ok
+test_no_positive_verdict_no_approval_missing (test_guest_xid_guard.GuestGuardTests.test_no_positive_verdict_no_approval_missing) ... ok
+test_pid_one_fatal (test_guest_xid_guard.GuestGuardTests.test_pid_one_fatal) ... ok
+test_pid_zero_fatal (test_guest_xid_guard.GuestGuardTests.test_pid_zero_fatal) ... ok
+test_qemu_pid_is_exact_defer (test_guest_xid_guard.GuestGuardTests.test_qemu_pid_is_exact_defer) ... ok
+test_qemu_pid_is_exact_missing (test_guest_xid_guard.GuestGuardTests.test_qemu_pid_is_exact_missing) ... ok
+test_recovery_required_defer (test_guest_xid_guard.GuestGuardTests.test_recovery_required_defer) ... ok
+test_recovery_required_missing (test_guest_xid_guard.GuestGuardTests.test_recovery_required_missing) ... ok
+test_revision_required (test_guest_xid_guard.GuestGuardTests.test_revision_required) ... ok
+test_running_faults_are_pending_never_baseline (test_guest_xid_guard.GuestGuardTests.test_running_faults_are_pending_never_baseline) ... ok
+test_running_unknown_address_is_fatal (test_guest_xid_guard.GuestGuardTests.test_running_unknown_address_is_fatal) ... ok
+test_running_xid32_is_fatal (test_guest_xid_guard.GuestGuardTests.test_running_xid32_is_fatal) ... ok
+test_source_pin_required (test_guest_xid_guard.GuestGuardTests.test_source_pin_required) ... ok
+test_source_shaped_missing_page_fixture_accepts_exact_one (test_guest_xid_guard.GuestGuardTests.test_source_shaped_missing_page_fixture_accepts_exact_one) ... ok
+test_starttime_required (test_guest_xid_guard.GuestGuardTests.test_starttime_required) ... ok
+test_trailing_unparsed_missing_page_payload_fatal (test_guest_xid_guard.GuestGuardTests.test_trailing_unparsed_missing_page_payload_fatal) ... ok
+test_trailing_unparsed_xid_payload_fatal (test_guest_xid_guard.GuestGuardTests.test_trailing_unparsed_xid_payload_fatal) ... ok
+test_unknown_arm_refused (test_guest_xid_guard.GuestGuardTests.test_unknown_arm_refused) ... ok
+test_unrelated_pci_fatal_defer (test_guest_xid_guard.GuestGuardTests.test_unrelated_pci_fatal_defer) ... ok
+test_unrelated_pci_fatal_missing (test_guest_xid_guard.GuestGuardTests.test_unrelated_pci_fatal_missing) ... ok
+test_unrelated_route_fatal_defer (test_guest_xid_guard.GuestGuardTests.test_unrelated_route_fatal_defer) ... ok
+test_unrelated_route_fatal_missing (test_guest_xid_guard.GuestGuardTests.test_unrelated_route_fatal_missing) ... ok
+test_wrong_primitive_refused (test_guest_xid_guard.GuestGuardTests.test_wrong_primitive_refused) ... ok
+test_xid32_fatal_defer (test_guest_xid_guard.GuestGuardTests.test_xid32_fatal_defer) ... ok
+test_xid32_fatal_missing (test_guest_xid_guard.GuestGuardTests.test_xid32_fatal_missing) ... ok
+test_prior_lease_cannot_approve_four_native_faults (test_guest_xid_guard.NativeExactFiveTests.test_prior_lease_cannot_approve_four_native_faults) ... ok
+test_second_lease_cannot_approve_four_native_faults (test_guest_xid_guard.NativeExactFiveTests.test_second_lease_cannot_approve_four_native_faults) ... ok
+test_changed_raw_source_refused (test_guest_xid_guard.PinTests.test_changed_raw_source_refused) ... ok
+test_changed_runner_source_refused (test_guest_xid_guard.PinTests.test_changed_runner_source_refused) ... ok
+test_current_suite_pin_is_recorded (test_guest_xid_guard.PinTests.test_current_suite_pin_is_recorded) ... ok
+test_missing_source_revision_fatal (test_guest_xid_guard.PinTests.test_missing_source_revision_fatal) ... ok
+test_other_valid_format_revision_fatal (test_guest_xid_guard.PinTests.test_other_valid_format_revision_fatal) ... ok
+test_stale_source_revision_fatal (test_guest_xid_guard.PinTests.test_stale_source_revision_fatal) ... ok
+
+----------------------------------------------------------------------
+Ran 61 tests in 0.104s
+
+OK

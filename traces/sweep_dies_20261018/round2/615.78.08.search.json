@@ -1,0 +1,534 @@
+{
+  "kind": "CODE READ",
+  "source": {
+    "tag": "615.78.08",
+    "commit": "1a82fbfda8f321b056eb3568850f9316c5e465c5",
+    "archive_sha256": "584090689f3a1a154a5570066a0e50f0e25c9ab29bb10e4fe0115f2a4cc429e6",
+    "source_url": "https://github.com/NVIDIA/open-gpu-kernel-modules/tree/1a82fbfda8f321b056eb3568850f9316c5e465c5",
+    "tag_object": "4bfe30bb78e7364959e59c16cfefd88e8c14670e"
+  },
+  "files_searched": 3914,
+  "patterns": {
+    "(?:PCE|pce).{0,80}(?:CLIENT|client|faultId|fault_id)": [],
+    "(?:CLIENT|client|faultId|fault_id).{0,80}(?:PCE|pce)": [],
+    "PCE[0-9]": [
+      {
+        "path": "src/nvidia/generated/g_kernel_ce_nvoc.h",
+        "line": 79
+      },
+      {
+        "path": "src/nvidia/src/kernel/gpu/ce/kernel_ce.c",
+        "line": 758
+      },
+      {
+        "path": "src/nvidia/src/kernel/gpu/ce/arch/ampere/kernel_ce_ga102.c",
+        "line": 41
+      },
+      {
+        "path": "src/nvidia/src/kernel/gpu/ce/arch/ampere/kernel_ce_ga102.c",
+        "line": 47
+      },
+      {
+        "path": "src/nvidia/src/kernel/gpu/ce/arch/ampere/kernel_ce_ga102.c",
+        "line": 56
+      },
+      {
+        "path": "src/nvidia/src/kernel/gpu/ce/arch/ampere/kernel_ce_ga100.c",
+        "line": 65
+      },
+      {
+        "path": "src/nvidia/src/kernel/gpu/ce/arch/ampere/kernel_ce_ga100.c",
+        "line": 83
+      },
+      {
+        "path": "src/nvidia/src/kernel/gpu/ce/arch/ampere/kernel_ce_ga100.c",
+        "line": 89
+      },
+      {
+        "path": "src/nvidia/src/kernel/gpu/ce/arch/ampere/kernel_ce_ga100.c",
+        "line": 98
+      },
+      {
+        "path": "src/nvidia/src/kernel/gpu/ce/arch/ampere/kernel_ce_ga100.c",
+        "line": 779
+      },
+      {
+        "path": "src/nvidia/src/kernel/gpu/ce/arch/ampere/kernel_ce_ga100.c",
+        "line": 783
+      },
+      {
+        "path": "src/nvidia/src/kernel/gpu/ce/arch/ampere/kernel_ce_ga100.c",
+        "line": 1155
+      },
+      {
+        "path": "src/nvidia/src/kernel/gpu/ce/arch/rubin/kernel_ce_gr100.c",
+        "line": 34
+      },
+      {
+        "path": "src/nvidia/src/kernel/gpu/ce/arch/blackwell/kernel_ce_gb202.c",
+        "line": 277
+      },
+      {
+        "path": "src/nvidia/src/kernel/gpu/ce/arch/blackwell/kernel_ce_gb202.c",
+        "line": 282
+      },
+      {
+        "path": "src/nvidia/src/kernel/gpu/ce/arch/blackwell/kernel_ce_gb202.c",
+        "line": 291
+      },
+      {
+        "path": "src/nvidia/src/kernel/gpu/ce/arch/blackwell/kernel_ce_gb10b.c",
+        "line": 31
+      },
+      {
+        "path": "src/nvidia/src/kernel/gpu/ce/arch/blackwell/kernel_ce_gb10b.c",
+        "line": 37
+      },
+      {
+        "path": "src/nvidia/src/kernel/gpu/ce/arch/blackwell/kernel_ce_gb10b.c",
+        "line": 46
+      },
+      {
+        "path": "src/nvidia/src/kernel/gpu/ce/arch/blackwell/kernel_ce_gb20b.c",
+        "line": 48
+      },
+      {
+        "path": "src/nvidia/src/kernel/gpu/ce/arch/blackwell/kernel_ce_gb20b.c",
+        "line": 54
+      },
+      {
+        "path": "src/nvidia/src/kernel/gpu/ce/arch/blackwell/kernel_ce_gb20b.c",
+        "line": 63
+      },
+      {
+        "path": "src/nvidia/src/kernel/gpu/ce/arch/blackwell/kernel_ce_gb100.c",
+        "line": 50
+      },
+      {
+        "path": "src/nvidia/src/kernel/gpu/ce/arch/blackwell/kernel_ce_gb100.c",
+        "line": 56
+      },
+      {
+        "path": "src/nvidia/src/kernel/gpu/ce/arch/blackwell/kernel_ce_gb100.c",
+        "line": 65
+      },
+      {
+        "path": "src/nvidia/src/kernel/gpu/ce/arch/blackwell/kernel_ce_gb100.c",
+        "line": 803
+      },
+      {
+        "path": "src/nvidia/src/kernel/gpu/ce/arch/blackwell/kernel_ce_gb100.c",
+        "line": 807
+      },
+      {
+        "path": "src/nvidia/src/kernel/gpu/ce/arch/turing/kernel_ce_tu102.c",
+        "line": 36
+      },
+      {
+        "path": "src/nvidia/src/kernel/gpu/ce/arch/turing/kernel_ce_tu102.c",
+        "line": 159
+      },
+      {
+        "path": "src/nvidia/src/kernel/gpu/ce/arch/turing/kernel_ce_tu102.c",
+        "line": 232
+      },
+      {
+        "path": "src/nvidia/src/kernel/gpu/ce/arch/turing/kernel_ce_tu102.c",
+        "line": 238
+      },
+      {
+        "path": "src/nvidia/src/kernel/gpu/ce/arch/turing/kernel_ce_tu102.c",
+        "line": 243
+      },
+      {
+        "path": "src/nvidia/src/kernel/gpu/ce/arch/hopper/kernel_ce_gh100.c",
+        "line": 53
+      },
+      {
+        "path": "src/nvidia/src/kernel/gpu/ce/arch/hopper/kernel_ce_gh100.c",
+        "line": 151
+      },
+      {
+        "path": "src/nvidia/src/kernel/gpu/ce/arch/hopper/kernel_ce_gh100.c",
+        "line": 157
+      },
+      {
+        "path": "src/nvidia/src/kernel/gpu/ce/arch/hopper/kernel_ce_gh100.c",
+        "line": 166
+      },
+      {
+        "path": "src/nvidia/src/kernel/gpu/ce/arch/hopper/kernel_ce_gh100.c",
+        "line": 695
+      },
+      {
+        "path": "src/nvidia/src/kernel/gpu/ce/arch/hopper/kernel_ce_gh100.c",
+        "line": 699
+      },
+      {
+        "path": "src/common/sdk/nvidia/inc/ctrl/ctrl2080/ctrl2080ce.h",
+        "line": 122
+      },
+      {
+        "path": "src/common/sdk/nvidia/inc/ctrl/ctrl2080/ctrl2080ce.h",
+        "line": 183
+      },
+      {
+        "path": "src/common/inc/swref/published/hopper/gh100/dev_ce_base.h",
+        "line": 25
+      },
+      {
+        "path": "src/common/inc/swref/published/turing/tu102/dev_ce_base.h",
+        "line": 26
+      },
+      {
+        "path": "src/common/inc/swref/published/turing/tu102/dev_ce_base.h",
+        "line": 27
+      },
+      {
+        "path": "src/common/inc/swref/published/blackwell/gb202/dev_ce_base.h",
+        "line": 28
+      },
+      {
+        "path": "src/common/inc/swref/published/blackwell/gb100/dev_ce_base.h",
+        "line": 25
+      },
+      {
+        "path": "src/common/inc/swref/published/blackwell/gb20b/dev_ce_base.h",
+        "line": 27
+      },
+      {
+        "path": "src/common/inc/swref/published/blackwell/gb10b/dev_ce_base.h",
+        "line": 27
+      },
+      {
+        "path": "src/common/inc/swref/published/rubin/gr100/dev_ce_base.h",
+        "line": 26
+      },
+      {
+        "path": "src/common/inc/swref/published/ampere/ga102/dev_ce_base.h",
+        "line": 30
+      },
+      {
+        "path": "src/common/inc/swref/published/ampere/ga102/dev_ce_base.h",
+        "line": 31
+      },
+      {
+        "path": "src/common/inc/swref/published/ampere/ga100/dev_ce_base.h",
+        "line": 27
+      },
+      {
+        "path": "src/common/inc/swref/published/ampere/ga100/dev_ce_base.h",
+        "line": 28
+      }
+    ],
+    "NV_PFAULT_CLIENT_HUB_CE[012]": [
+      {
+        "path": "src/nvidia/src/kernel/gpu/fifo/arch/ampere/kernel_fifo_ga100.c",
+        "line": 635
+      },
+      {
+        "path": "src/nvidia/src/kernel/gpu/fifo/arch/ampere/kernel_fifo_ga100.c",
+        "line": 637
+      },
+      {
+        "path": "src/nvidia/src/kernel/gpu/fifo/arch/ampere/kernel_fifo_ga100.c",
+        "line": 679
+      },
+      {
+        "path": "src/nvidia/src/kernel/gpu/fifo/arch/rubin/kernel_fifo_gr100.c",
+        "line": 219
+      },
+      {
+        "path": "src/nvidia/src/kernel/gpu/fifo/arch/rubin/kernel_fifo_gr100.c",
+        "line": 221
+      },
+      {
+        "path": "src/nvidia/src/kernel/gpu/fifo/arch/rubin/kernel_fifo_gr100.c",
+        "line": 223
+      },
+      {
+        "path": "src/nvidia/src/kernel/gpu/fifo/arch/turing/kernel_fifo_tu102.c",
+        "line": 360
+      },
+      {
+        "path": "src/nvidia/src/kernel/gpu/fifo/arch/turing/kernel_fifo_tu102.c",
+        "line": 364
+      },
+      {
+        "path": "src/nvidia/src/kernel/gpu/fifo/arch/turing/kernel_fifo_tu102.c",
+        "line": 368
+      },
+      {
+        "path": "src/nvidia/src/kernel/gpu/fifo/arch/hopper/kernel_fifo_gh100.c",
+        "line": 351
+      },
+      {
+        "path": "src/nvidia/src/kernel/gpu/fifo/arch/hopper/kernel_fifo_gh100.c",
+        "line": 353
+      },
+      {
+        "path": "src/nvidia/src/kernel/gpu/fifo/arch/hopper/kernel_fifo_gh100.c",
+        "line": 355
+      },
+      {
+        "path": "src/common/inc/swref/published/hopper/gh100/dev_fault.h",
+        "line": 96
+      },
+      {
+        "path": "src/common/inc/swref/published/hopper/gh100/dev_fault.h",
+        "line": 97
+      },
+      {
+        "path": "src/common/inc/swref/published/hopper/gh100/dev_fault.h",
+        "line": 126
+      },
+      {
+        "path": "src/common/inc/swref/published/turing/tu102/dev_fault.h",
+        "line": 97
+      },
+      {
+        "path": "src/common/inc/swref/published/turing/tu102/dev_fault.h",
+        "line": 98
+      },
+      {
+        "path": "src/common/inc/swref/published/turing/tu102/dev_fault.h",
+        "line": 126
+      },
+      {
+        "path": "src/common/inc/swref/published/rubin/gr100/dev_fault.h",
+        "line": 121
+      },
+      {
+        "path": "src/common/inc/swref/published/rubin/gr100/dev_fault.h",
+        "line": 122
+      },
+      {
+        "path": "src/common/inc/swref/published/rubin/gr100/dev_fault.h",
+        "line": 156
+      },
+      {
+        "path": "src/common/inc/swref/published/ampere/ga100/dev_fault.h",
+        "line": 109
+      },
+      {
+        "path": "src/common/inc/swref/published/ampere/ga100/dev_fault.h",
+        "line": 110
+      },
+      {
+        "path": "src/common/inc/swref/published/ampere/ga100/dev_fault.h",
+        "line": 138
+      },
+      {
+        "path": "kernel-open/nvidia-uvm/uvm_turing_fault_buffer.c",
+        "line": 218
+      },
+      {
+        "path": "kernel-open/nvidia-uvm/uvm_turing_fault_buffer.c",
+        "line": 219
+      },
+      {
+        "path": "kernel-open/nvidia-uvm/uvm_turing_fault_buffer.c",
+        "line": 220
+      },
+      {
+        "path": "kernel-open/nvidia-uvm/uvm_blackwell_fault_buffer.c",
+        "line": 85
+      },
+      {
+        "path": "kernel-open/nvidia-uvm/uvm_blackwell_fault_buffer.c",
+        "line": 86
+      },
+      {
+        "path": "kernel-open/nvidia-uvm/uvm_blackwell_fault_buffer.c",
+        "line": 87
+      },
+      {
+        "path": "kernel-open/nvidia-uvm/uvm_ampere_fault_buffer.c",
+        "line": 39
+      },
+      {
+        "path": "kernel-open/nvidia-uvm/uvm_ampere_fault_buffer.c",
+        "line": 40
+      },
+      {
+        "path": "kernel-open/nvidia-uvm/uvm_ampere_fault_buffer.c",
+        "line": 41
+      },
+      {
+        "path": "kernel-open/nvidia-uvm/uvm_hopper_fault_buffer.c",
+        "line": 54
+      },
+      {
+        "path": "kernel-open/nvidia-uvm/uvm_hopper_fault_buffer.c",
+        "line": 55
+      },
+      {
+        "path": "kernel-open/nvidia-uvm/uvm_hopper_fault_buffer.c",
+        "line": 56
+      },
+      {
+        "path": "kernel-open/nvidia-uvm/hwref/hopper/gh100/dev_fault.h",
+        "line": 367
+      },
+      {
+        "path": "kernel-open/nvidia-uvm/hwref/hopper/gh100/dev_fault.h",
+        "line": 368
+      },
+      {
+        "path": "kernel-open/nvidia-uvm/hwref/hopper/gh100/dev_fault.h",
+        "line": 397
+      },
+      {
+        "path": "kernel-open/nvidia-uvm/hwref/turing/tu102/dev_fault.h",
+        "line": 315
+      },
+      {
+        "path": "kernel-open/nvidia-uvm/hwref/turing/tu102/dev_fault.h",
+        "line": 316
+      },
+      {
+        "path": "kernel-open/nvidia-uvm/hwref/turing/tu102/dev_fault.h",
+        "line": 344
+      },
+      {
+        "path": "kernel-open/nvidia-uvm/hwref/blackwell/gb100/dev_fault.h",
+        "line": 380
+      },
+      {
+        "path": "kernel-open/nvidia-uvm/hwref/blackwell/gb100/dev_fault.h",
+        "line": 381
+      },
+      {
+        "path": "kernel-open/nvidia-uvm/hwref/blackwell/gb100/dev_fault.h",
+        "line": 415
+      },
+      {
+        "path": "kernel-open/nvidia-uvm/hwref/rubin/gr100/dev_fault.h",
+        "line": 389
+      },
+      {
+        "path": "kernel-open/nvidia-uvm/hwref/rubin/gr100/dev_fault.h",
+        "line": 390
+      },
+      {
+        "path": "kernel-open/nvidia-uvm/hwref/rubin/gr100/dev_fault.h",
+        "line": 424
+      },
+      {
+        "path": "kernel-open/nvidia-uvm/hwref/ampere/ga100/dev_fault.h",
+        "line": 351
+      },
+      {
+        "path": "kernel-open/nvidia-uvm/hwref/ampere/ga100/dev_fault.h",
+        "line": 352
+      },
+      {
+        "path": "kernel-open/nvidia-uvm/hwref/ampere/ga100/dev_fault.h",
+        "line": 380
+      }
+    ],
+    "fbhubPceMask": [
+      {
+        "path": "src/nvidia/generated/g_gpu_mgr_nvoc.h",
+        "line": 189
+      },
+      {
+        "path": "src/nvidia/src/kernel/gpu/ce/kernel_ce.c",
+        "line": 908
+      },
+      {
+        "path": "src/nvidia/src/kernel/gpu/ce/arch/ampere/kernel_ce_ga100.c",
+        "line": 485
+      },
+      {
+        "path": "src/nvidia/src/kernel/gpu/ce/arch/ampere/kernel_ce_ga100.c",
+        "line": 511
+      },
+      {
+        "path": "src/nvidia/src/kernel/gpu/ce/arch/blackwell/kernel_ce_gb202.c",
+        "line": 224
+      },
+      {
+        "path": "src/nvidia/src/kernel/gpu/ce/arch/blackwell/kernel_ce_gb100.c",
+        "line": 2001
+      },
+      {
+        "path": "src/nvidia/src/kernel/gpu/ce/arch/hopper/kernel_ce_gh100.c",
+        "line": 1014
+      },
+      {
+        "path": "src/common/sdk/nvidia/inc/ctrl/ctrl2080/ctrl2080ce.h",
+        "line": 304
+      },
+      {
+        "path": "src/common/sdk/nvidia/inc/ctrl/ctrl2080/ctrl2080ce.h",
+        "line": 316
+      },
+      {
+        "path": "src/common/sdk/nvidia/inc/ctrl/ctrl2080/ctrl2080ce.h",
+        "line": 418
+      }
+    ],
+    "subdeviceCtrlCmdCeGetHubPceMask.*[({]": [
+      {
+        "path": "src/nvidia/generated/g_subdevice_nvoc.c",
+        "line": 3222
+      },
+      {
+        "path": "src/nvidia/generated/g_subdevice_nvoc.c",
+        "line": 3223
+      },
+      {
+        "path": "src/nvidia/generated/g_subdevice_nvoc.c",
+        "line": 3228
+      },
+      {
+        "path": "src/nvidia/generated/g_subdevice_nvoc.c",
+        "line": 3229
+      },
+      {
+        "path": "src/nvidia/generated/g_subdevice_nvoc.h",
+        "line": 4970
+      },
+      {
+        "path": "src/nvidia/generated/g_subdevice_nvoc.h",
+        "line": 4972
+      },
+      {
+        "path": "src/nvidia/generated/g_subdevice_nvoc.h",
+        "line": 4977
+      },
+      {
+        "path": "src/nvidia/generated/g_subdevice_nvoc.h",
+        "line": 4980
+      },
+      {
+        "path": "src/nvidia/generated/g_subdevice_nvoc.h",
+        "line": 4982
+      },
+      {
+        "path": "src/nvidia/generated/g_subdevice_nvoc.h",
+        "line": 4987
+      },
+      {
+        "path": "src/nvidia/generated/g_subdevice_nvoc.h",
+        "line": 7860
+      },
+      {
+        "path": "src/nvidia/generated/g_subdevice_nvoc.h",
+        "line": 7862
+      }
+    ]
+  },
+  "reviewed_files": {
+    "src/common/sdk/nvidia/inc/ctrl/ctrl2080/ctrl2080ce.h": "2f54642411ced03c5400f3ed75adde211885d21543682613e016a6b436c3e4a0",
+    "src/nvidia/src/kernel/gpu/ce/arch/ampere/kernel_ce_ga102.c": "02d0d45869ac20fcbb094b56b2413dbfef7b533e3fff72400ea7f06f2f5d7981",
+    "src/nvidia/src/kernel/gpu/ce/arch/ampere/kernel_ce_ga100.c": "2ac163108c6a6c26a5ef4c9256168de8559b4550805aabef78254513c72c64d1",
+    "src/nvidia/src/kernel/gpu/ce/kernel_ce.c": "5cadf6620f5f554589816f7115c51f8c100d567ed73b8cb80701ce50086366b1",
+    "src/nvidia/src/kernel/gpu/fifo/arch/ampere/kernel_fifo_ga100.c": "f9c4d30fe761de90475afd214885c1bc6f400a7336d95dd8f6cf39bafe9a08ad",
+    "src/nvidia/src/kernel/gpu/fifo/arch/ada/kernel_fifo_ad102.c": "774343daca47516f0750d3affe26b410fab5d333f805371468f26db38e94aaa1",
+    "kernel-open/nvidia-uvm/uvm_ampere_fault_buffer.c": "824203dc13dcc0eba943ad4d77c9541a76c5798713227d74a32cacf2c207b73a",
+    "src/nvidia/inc/kernel/rmapi/control.h": "97ad0672655e41a8599c5f7ca74dc90b6fbac7df809507239f0d180cc0684bfa",
+    "src/nvidia/generated/g_subdevice_nvoc.c": "81bc346087a35f5185158fdc32f88cc8b083f7a04660d54b54d442bcb14804f5"
+  }
+}

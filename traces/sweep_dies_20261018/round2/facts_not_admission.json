@@ -1,0 +1,52 @@
+{
+  "kind": "CODE READ",
+  "status": "NO ADMISSION TABLE: derivation incomplete",
+  "required_missing_fact": "Public per-generation mapping from the COPY0 backing PCE index to the MMU HUB fault-client identifier, independently of admitted Xids",
+  "rows": [
+    {
+      "die": "GA102",
+      "family": "Ampere",
+      "host_derived": {
+        "lease_id": 57209908,
+        "host_driver": "595.91.07",
+        "bound_engine": "COPY0 (LCE0, type 0x09), source dl_arm_body",
+        "pce_mask": "0x10",
+        "evidence": "../lease_57209908/native_controls/pce-mask-probe.log"
+      },
+      "measured_faults": {
+        "lease_id": 57209908,
+        "ce_records": 4,
+        "reported_client": "HUBCLIENT_CE0",
+        "evidence": "../lease_57209908/XID_SAFETY_STOP.json"
+      },
+      "ogkm_public_derived_client": null,
+      "admission_enabled": false
+    },
+    {
+      "die": "AD102",
+      "family": "Ada",
+      "measured_faults": {
+        "lease_id": 57144505,
+        "ce_records": 4,
+        "reported_client": "HUBCLIENT_CE1",
+        "evidence": "../../sweep_ada_20261018/lease_57144505/native_complete/kernel_xids.log"
+      },
+      "ogkm_public_derived_client": null,
+      "new_family_rule_enabled": false
+    },
+    {
+      "die": "AD104",
+      "family": "Ada",
+      "replay": "NOT DONE: no authenticated paired native controls/journal selected in this round",
+      "ogkm_public_derived_client": null,
+      "new_family_rule_enabled": false
+    },
+    {
+      "die": "TU104/TU106",
+      "family": "Turing",
+      "measurement": "NOT DONE",
+      "ogkm_public_derived_client": null,
+      "admission_enabled": false
+    }
+  ]
+}

@@ -1,0 +1,19 @@
+{
+  "kind": "MEASURED",
+  "date": "2026-10-22",
+  "expected_red_commit": "3de4e17b02095869175cb6ed979a02b86450b580",
+  "new_replay_tests": 8,
+  "new_replay_pass": 6,
+  "new_replay_expected_red": 2,
+  "existing_native_tests": 18,
+  "existing_guest_tests": 61,
+  "existing_abort_tests": 5,
+  "existing_tests_failures": 0,
+  "fix_applied": false,
+  "mutation_campaign": "NOT DONE: no behavior change; blocked public derivation",
+  "rust_changed_files": [],
+  "clippy": "NOT RUN: no Rust change",
+  "guard_sha256": "10b05269aa054b92fce652400f97a8623a9e5caa641c54077856cc4bb7823f6e",
+  "ad104_replay": "NOT DONE",
+  "ga102_admission": "STILL REFUSED; no new baseline"
+}

@@ -1,0 +1,34 @@
+CODE READ: repository prefix omitted from tracebacks; original log SHA256=1269dbb1ca8d74bf1ad31b7c5fe43c1e5a4e6a41e7fcb19b6a06cf3cc2b9c5dc
+test_ad102_historical_exact_five_still_admit (test_native_xid_route_round2.Round2NativeRouteReplay.test_ad102_historical_exact_five_still_admit) ... ok
+test_ad102_substituting_ce0_stays_fatal (test_native_xid_route_round2.Round2NativeRouteReplay.test_ad102_substituting_ce0_stays_fatal) ... ok
+test_ga102_exact_four_ce_and_one_gr_should_admit_after_derivation (test_native_xid_route_round2.Round2NativeRouteReplay.test_ga102_exact_four_ce_and_one_gr_should_admit_after_derivation) ... ERROR
+test_ga102_one_extra_known_record_stays_fatal (test_native_xid_route_round2.Round2NativeRouteReplay.test_ga102_one_extra_known_record_stays_fatal) ... ok
+test_ga102_substituting_ce1_must_not_admit (test_native_xid_route_round2.Round2NativeRouteReplay.test_ga102_substituting_ce1_must_not_admit) ... FAIL
+test_ga102_unrelated_xid_stays_fatal (test_native_xid_route_round2.Round2NativeRouteReplay.test_ga102_unrelated_xid_stays_fatal) ... ok
+test_ga102_wrong_channel_stays_fatal (test_native_xid_route_round2.Round2NativeRouteReplay.test_ga102_wrong_channel_stays_fatal) ... ok
+test_ga102_wrong_va_stays_fatal (test_native_xid_route_round2.Round2NativeRouteReplay.test_ga102_wrong_va_stays_fatal) ... ok
+
+======================================================================
+ERROR: test_ga102_exact_four_ce_and_one_gr_should_admit_after_derivation (test_native_xid_route_round2.Round2NativeRouteReplay.test_ga102_exact_four_ce_and_one_gr_should_admit_after_derivation)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "scripts/bench/tests/test_native_xid_route_round2.py", line 43, in test_ga102_exact_four_ce_and_one_gr_should_admit_after_derivation
+    self.assertEqual(G.approve_native(journal, defer, missing), G.xid_lines(journal))
+                     ~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "scripts/bench/native_xid_guard.py", line 95, in approve_native
+    raise GuardRefused("Xid type/channel/address/source multiset differs from fault controls")
+native_xid_guard.GuardRefused: Xid type/channel/address/source multiset differs from fault controls
+
+======================================================================
+FAIL: test_ga102_substituting_ce1_must_not_admit (test_native_xid_route_round2.Round2NativeRouteReplay.test_ga102_substituting_ce1_must_not_admit)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "scripts/bench/tests/test_native_xid_route_round2.py", line 47, in test_ga102_substituting_ce1_must_not_admit
+    with self.assertRaises(G.GuardRefused):
+         ~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^
+AssertionError: GuardRefused not raised
+
+----------------------------------------------------------------------
+Ran 8 tests in 0.006s
+
+FAILED (failures=1, errors=1)

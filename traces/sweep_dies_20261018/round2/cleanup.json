@@ -1,0 +1,14 @@
+{
+  "kind": "MEASURED",
+  "checked_utc": "2026-10-22T18:51:52.514858+00:00",
+  "own_ids_api_absent": [
+    57209908,
+    57193877
+  ],
+  "new_round2_lease_count": 0,
+  "round2_rental_cost_usd": 0,
+  "lane_conservative_usd": 3.8036181194481484,
+  "owned_helpers_running": [],
+  "cargo_target_absent": true,
+  "round2_cargo_or_gpu_lock_acquisitions": 0
+}
