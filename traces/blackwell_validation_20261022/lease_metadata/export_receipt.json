@@ -63,8 +63,16 @@
     "source_sha256": "c1bb6f1120170ee6224d1d331df175185f60dc0f98de3d01258f178228cc009d",
     "export_sha256": "f18fe4335e6cc315eaa70c36bda932c53eb7a72a7119d57a8d388ea3b5e7e319"
   },
+  "controller_b1_hook.json": {
+    "source_sha256": "63b736c716abebeac1eb86826aa3c831c765b22afcfaed0dcd5789c3585ec14c",
+    "export_sha256": "63b736c716abebeac1eb86826aa3c831c765b22afcfaed0dcd5789c3585ec14c"
+  },
+  "b1_prepared.json": {
+    "source_sha256": "156ff20fe0501868eb3e39db7a7e0976a54eac890683d0570e9926bbcba5c163",
+    "export_sha256": "156ff20fe0501868eb3e39db7a7e0976a54eac890683d0570e9926bbcba5c163"
+  },
   "kernel_xids.json": {
     "source_sha256": "286d19da4a0330652aa5464002d7fe76ed6e5073e7f6a040ac33eaa6ea306c36",
-    "export_sha256": "b0f31034821af296637f06f66b52658b02e1ba168bb34cf270781d5116c1bf91"
+    "export_sha256": "2cca9d5db6ba591687e8a06225daacb44a715b1344828645d35eac6d9c078709"
   }
 }
