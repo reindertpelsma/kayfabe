@@ -68,3 +68,95 @@ impl InlineLedger {
         (rung, reached)
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::sync::atomic::{AtomicBool, AtomicUsize};
+    use std::sync::{Arc, Mutex};
+
+    fn record_while_sink_is_unavailable(reached: bool) {
+        let blocked = Arc::new(AtomicBool::new(false));
+        let attempts = Arc::new(AtomicUsize::new(0));
+        let flags = Arc::new(AtomicUsize::new(0));
+        let clocks = Arc::new(AtomicUsize::new(0));
+        let emitted = Arc::new(Mutex::new(Vec::new()));
+        let trace = Trace {
+            enabled: Box::new({
+                let f = flags.clone();
+                move || {
+                    f.fetch_add(1, Ordering::Relaxed);
+                    true
+                }
+            }),
+            clock: Box::new({
+                let c = clocks.clone();
+                move || {
+                    c.fetch_add(1, Ordering::Relaxed);
+                    1.25
+                }
+            }),
+            emit: Box::new({
+                let (b, a, e) = (blocked.clone(), attempts.clone(), emitted.clone());
+                move |w| {
+                    // A fake slow holder: entering this capability would wait in
+                    // production. Count the forbidden step instead of sleeping.
+                    a.fetch_add(1, Ordering::Relaxed);
+                    if !b.load(Ordering::Relaxed) {
+                        e.lock().unwrap().push(w);
+                    }
+                }
+            }),
+        };
+        let ledger = InlineLedger::new(2, trace);
+        let flags_before = flags.load(Ordering::Relaxed);
+        blocked.store(true, Ordering::Relaxed);
+        ledger.note(1, reached);
+        assert_eq!(
+            attempts.load(Ordering::Relaxed),
+            0,
+            "trap entered the unavailable output sink"
+        );
+        assert_eq!(
+            flags.load(Ordering::Relaxed),
+            flags_before,
+            "configuration lookup on trap"
+        );
+        assert_eq!(
+            clocks.load(Ordering::Relaxed),
+            2,
+            "clock warmed at construction, one read on trap"
+        );
+        assert_eq!(ledger.rung_at_us[1].load(Ordering::Relaxed), 1_250_000);
+        blocked.store(false, Ordering::Relaxed);
+        assert_eq!(ledger.take(1), (1, u64::from(reached)));
+        assert_eq!(
+            attempts.load(Ordering::Relaxed),
+            1,
+            "off-trap take reports once"
+        );
+        let e = emitted.lock().unwrap();
+        assert_eq!(e.len(), 1);
+        assert_eq!(
+            (e[0].idx, e[0].n, e[0].reached, e[0].t),
+            (1, 1, reached, 1.25)
+        );
+        drop(e);
+        assert_eq!(ledger.take(1), (0, 0));
+        assert_eq!(
+            attempts.load(Ordering::Relaxed),
+            1,
+            "empty take cannot repeat output"
+        );
+    }
+
+    #[test]
+    fn worst_trap_successful_ring_never_enters_a_slow_diagnostic_sink() {
+        record_while_sink_is_unavailable(true);
+    }
+
+    #[test]
+    fn worst_trap_failed_ring_never_enters_a_slow_diagnostic_sink() {
+        record_while_sink_is_unavailable(false);
+    }
+}
