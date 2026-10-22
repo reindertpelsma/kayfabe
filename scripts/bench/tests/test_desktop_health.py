@@ -70,6 +70,7 @@ function Get-Process {
 
     def test_boot_153_is_retained_with_its_epoch(self):
         p, h = self.run_gate([self.event('Microsoft-Windows-Kernel-Boot')])
+        self.assertEqual(p.returncode, 0, p.stdout + p.stderr)
         self.assertEqual(h.get('boot153_pre_desktop'), 1, p.stdout + p.stderr)
         self.assertEqual(h.get('desktop_start'), DESKTOP.replace('Z', '.0000000Z'))
 
