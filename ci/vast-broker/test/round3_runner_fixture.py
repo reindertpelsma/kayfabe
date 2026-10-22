@@ -5,6 +5,13 @@ m=importlib.util.module_from_spec(spec);sys.modules['runner']=m;spec.loader.exec
 case=sys.argv[1]
 ctx={'sha':'a'*40,'run':'123-1','pr':7,'nonce':'f'*64}
 manifest={'protocol_version':3,'worker_version':'v4-r3','bundle_sha256':'b'*64}
+if case.startswith('framing-'):
+    printed=[];r=m.Runner(ctx,manifest,lambda *_:None,emit=printed.append)
+    for _ in range(1000):r.show('safe\n'*10)
+    output=''.join(printed)
+    if case=='framing-bytes':assert len(output.encode())<70000
+    else:assert sum(line.startswith('[untrusted]') for line in output.splitlines())<=200
+    raise SystemExit(0)
 text={'controls':'safe\x1b[31mRED\x1b[0m\x1b]0;hidden\x07\u202eEVIL\u200b\x00\r\x7f\u0085é\n',
       'commands':'::set-output name=x::oops\n::add-mask::secret\n::error::x\n##[group]\n',
       'caps':'L'*100000+'\n'+'line\n'*10000,
