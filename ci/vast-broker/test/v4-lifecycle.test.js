@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import { configuration } from '../src/policy.js';
-import { onstart } from '../src/onstart.js';
+import { onstart } from './repo-onstart.js';
 import { setup, env, nonce, sha, callbackToken } from './helpers.js';
 // FALSIFIERS: early result deletion; cross-run kill; ACK-only settlement;
 // reserve excludes cron; pending boots destroyed before provisioning bound.
@@ -158,8 +158,9 @@ test('V4 onstart ships plain curl own-run kill CLI and test-only timeout', () =>
     graceMinutes: 5,
   });
   assert.match(script, /kf-box-kill/);
-  assert.match(script, /\/kill\/123-1/);
-  assert.match(script, /5 minutes/);
+  assert.match(script, /\/kill\/\$KF_RUN_ID/);
+  assert.match(script, /configured maximum/);
+  assert.match(script, /KF_GRACE_FAIL/);
   assert.doesNotMatch(script.split("python3 - <<'KF_REPORT'")[0], /exec timeout/);
 });
 test('V4 free-plan cron is every minute and has no DO alarm', async () => {

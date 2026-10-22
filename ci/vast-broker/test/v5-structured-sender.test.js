@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { mkdtemp, writeFile, readFile, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { spawnSync } from 'node:child_process';
-import { onstart } from '../src/onstart.js';
+import { onstart } from './repo-onstart.js';
 import { sha, nonce, env } from './helpers.js';
 // FALSIFIER: exit zero or a wrong-bound result file grants PASS; the actual
 // sender must transport the table and fail closed without that bound file.

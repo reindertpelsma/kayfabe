@@ -84,7 +84,7 @@ const mutations = [
   ],
   [
     'fixed callback prefix',
-    'src/onstart.js',
+    '../../scripts/ci/vast_report.py',
     replace(
       "url='${origin}${prefix?'/'+prefix:''}/report/${callback.run}'",
       "url='${origin}/report/${callback.run}'",

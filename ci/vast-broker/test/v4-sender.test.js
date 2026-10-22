@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { mkdtemp, writeFile, readFile, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { spawnSync } from 'node:child_process';
-import { onstart } from '../src/onstart.js';
+import { onstart } from './repo-onstart.js';
 import { sha, nonce, env } from './helpers.js';
 // FALSIFIER: a fast bounded workload loses its first bytes before callback flush,
 // or its final-result tail repeats already-delivered log lines.

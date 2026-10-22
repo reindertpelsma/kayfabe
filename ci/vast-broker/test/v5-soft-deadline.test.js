@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
-import { onstart } from '../src/onstart.js';
+import { onstart } from './repo-onstart.js';
 import { sha, nonce, env, clock } from './helpers.js';
 // FALSIFIER: creation-time expiry executes work or fails with a shell syntax
 // error instead of the required timeout exit; startup delay must consume time.
@@ -16,7 +16,7 @@ for (const elapsed of [173, 181])
     });
     const python = source
       .split("python3 - <<'KF_REPORT'\n")[1]
-      .split("post('progress','Suite starting')")[0];
+      .split('post("progress", "Suite starting")')[0];
     const r = spawnSync(
       'python3',
       [

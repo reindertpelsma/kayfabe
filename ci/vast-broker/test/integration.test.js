@@ -40,7 +40,7 @@ test('local HTTP integration: owner rent to authenticated reports to automatic d
       });
     const storage = new MemoryStorage();
     const service = createService({
-      env,
+      env: { ...env, BROKER_PATH_PREFIX: 'i'.repeat(32) },
       storage,
       fetch: localFetch,
       now: () => clock,
@@ -48,7 +48,7 @@ test('local HTTP integration: owner rent to authenticated reports to automatic d
     });
     const authorization = 'Bearer ' + (await jwt());
     const r = await service.fetch(
-      new Request(env.WORKER_URL + '/rent', {
+      new Request(env.WORKER_URL + '/' + 'i'.repeat(32) + '/rent', {
         method: 'POST',
         headers: { authorization },
         body: JSON.stringify({ runner_nonce: 'f'.repeat(64), tested_sha: sha, pr_number: 7 }),
@@ -58,7 +58,7 @@ test('local HTTP integration: owner rent to authenticated reports to automatic d
     const token = callbackToken(await storage.get('record:123-1'));
     const report = (payload) =>
       service.fetch(
-        new Request(env.WORKER_URL + '/report/123-1', {
+        new Request(env.WORKER_URL + '/' + 'i'.repeat(32) + '/report/123-1', {
           method: 'POST',
           headers: { Authorization: 'Bearer ' + token, 'Content-Type': 'application/json' },
           body: JSON.stringify(payload),
@@ -66,7 +66,9 @@ test('local HTTP integration: owner rent to authenticated reports to automatic d
       );
     assert.equal((await report({ seq: 1, kind: 'log', text: '::error::fake' })).status, 200);
     let response = await service.fetch(
-      new Request(env.WORKER_URL + '/status/123-1', { headers: { authorization } }),
+      new Request(env.WORKER_URL + '/' + 'i'.repeat(32) + '/status/123-1', {
+        headers: { authorization },
+      }),
     );
     assert.equal((await response.json()).verdict, 'UNAVAILABLE');
     assert.equal(
@@ -80,14 +82,19 @@ test('local HTTP integration: owner rent to authenticated reports to automatic d
       200,
     );
     response = await service.fetch(
-      new Request(env.WORKER_URL + '/status/123-1', { headers: { authorization } }),
+      new Request(env.WORKER_URL + '/' + 'i'.repeat(32) + '/status/123-1', {
+        headers: { authorization },
+      }),
     );
     const result = await response.json();
     assert.equal(result.verdict, 'PASS');
     assert.match(result.log_tail_sanitised, /\[box\] : :error/);
     assert.deepEqual(cloud.deletes, []);
     await service.fetch(
-      new Request(env.WORKER_URL + '/stop/123-1', { method: 'POST', headers: { authorization } }),
+      new Request(env.WORKER_URL + '/' + 'i'.repeat(32) + '/stop/123-1', {
+        method: 'POST',
+        headers: { authorization },
+      }),
     );
     assert.deepEqual(cloud.deletes, ['900']);
     assert.equal(

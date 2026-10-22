@@ -35,7 +35,7 @@ MUTATIONS = [
     ),
     (
         "kill-wrong-route",
-        "src/onstart.js",
+        "../../scripts/ci/vast_onstart.sh",
         "/kill/${callback.run}",
         "/report/${callback.run}",
         ["v4-lifecycle.test.js", "reporting.test.js"],
@@ -172,7 +172,7 @@ MUTATIONS = [
     ),
     (
         "sender-discards-prefix",
-        "src/onstart.js",
+        "../../scripts/ci/vast_report.py",
         "pending+=data",
         "pending=(pending+data)[-8192:]",
         ["v4-sender.test.js"],
@@ -180,7 +180,7 @@ MUTATIONS = [
     ),
     (
         "sender-repeats-tail",
-        "src/onstart.js",
+        "../../scripts/ci/vast_report.py",
         "'Suite complete; sender omitted '+str(omitted)+' raw bytes beyond its bounded transport allowance.'",
         "tail",
         ["v4-sender.test.js"],
@@ -228,7 +228,7 @@ MUTATIONS = [
     ),
     (
         "sender-ignores-grace-ack",
-        "src/onstart.js",
+        "../../scripts/ci/vast_report.py",
         "seconds=ack.get('grace_remaining_seconds') if isinstance(ack,dict) else None",
         "seconds=None",
         ["v4-result-ack.test.js", "v4-sender.test.js"],
@@ -296,9 +296,12 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--preflight", action="store_true")
     parser.add_argument("--results", type=Path)
+    parser.add_argument("--filter", default="")
     args = parser.parse_args()
     rows = []
     for name, file, before, after, tests, kind in MUTATIONS:
+        if args.filter and args.filter not in name:
+            continue
         path = BASE / file
         original = path.read_text()
         mutated = apply_mutation("v4", name, original)
@@ -320,7 +323,22 @@ def main():
                 syntax = subprocess.run(["bash", "-n"], input=run, text=True, capture_output=True)
             else:
                 syntax = subprocess.run(
-                    ["node", "--check", str(path)], text=True, capture_output=True
+                    (
+                        [
+                            "python3",
+                            "-c",
+                            "import ast,sys;ast.parse(open(sys.argv[1]).read())",
+                            str(path),
+                        ]
+                        if path.suffix == ".py"
+                        else (
+                            ["bash", "-n", str(path)]
+                            if path.suffix == ".sh"
+                            else ["node", "--check", str(path)]
+                        )
+                    ),
+                    text=True,
+                    capture_output=True,
                 )
             assert syntax.returncode == 0, name + ": invalid mutant syntax"
             result = subprocess.run(

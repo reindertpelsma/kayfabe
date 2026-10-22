@@ -883,7 +883,23 @@ export function createService({
     );
     if (profile === 'sweep') await ledger.put('rotation:lastDie', r.die);
     try {
-      r.id = await vast.create(offer, r, script);
+      const environment = {
+        KF_PROTOCOL: DEFAULTS.boxProtocol,
+        KF_BROKER_URL: cfg.audience + '/' + env.BROKER_PATH_PREFIX,
+        KF_RUN_ID: key,
+        KF_RUN_TOKEN: runToken,
+        KF_NONCE: n,
+        KF_SHA: r.sha,
+        KF_REPO: cfg.repo,
+        KF_RUNNER_NONCE: r.runnerNonce,
+        KF_BOOT_DEADLINE: Math.floor(r.bootDeadline / 1000),
+        KF_HARD_DEADLINE: Math.floor(r.hardDeadline / 1000),
+        KF_SOFT_DEADLINE: Math.floor(r.softDeadline / 1000),
+        KF_HEARTBEAT_SECONDS: cfg.heartbeat / 1000,
+        KF_GRACE_PASS: cfg.passGrace / 1000,
+        KF_GRACE_FAIL: cfg.failGrace / 1000,
+      };
+      r.id = await vast.create(offer, r, script, environment);
     } catch (e) {
       if (e instanceof BrokerError && e.state === 'CREATE_REFUSED') {
         r.closed = 'GONE';
@@ -1109,7 +1125,15 @@ export function createGateway({ authorize, fetcher = fetch, now = Date.now } = {
   }
   return {
     async fetch(request, env) {
-      const path = await routePath(request, env);
+      let path;
+      try {
+        path = await routePath(request, env);
+      } catch (error) {
+        return Response.json(
+          { state: error.state ?? 'UNAVAILABLE' },
+          { status: error.status ?? 503 },
+        );
+      }
       if (
         path === null ||
         !/^\/(?:rent|availability|stop-all|(?:report|kill|hold|stop-timer|status|stop|logs)\/[1-9][0-9]{0,19}-[1-9][0-9]{0,19})$/.test(
