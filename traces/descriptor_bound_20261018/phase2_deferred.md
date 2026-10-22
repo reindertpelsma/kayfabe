@@ -8,12 +8,12 @@ current plan is `V3_USER_DESCRIPTOR_PHASE2_20261022.md`. The deferred checkpoint
 below records the earlier stop; its validation limits remain until replaced by
 new evidence.
 
-MEASURED: Phase 2 started after Phase 1 was pushed and green, before the owner's
+MEASURED (G1 validation record 2026-10-22): Phase 2 started after Phase 1 was pushed and green, before the owner's
 subsequent instruction to defer it pending hardware evidence. Work stopped on
 that instruction. This branch preserves unfinished code, not an accepted fix.
 Phase 1 draft PR #76 and its green branch are unchanged.
 
-MEASURED: tests-only RED `469251ded` compiled and failed all seventeen new
+MEASURED (G1 validation record 2026-10-22): tests-only RED `469251ded` compiled and failed all seventeen new
 production-Relay stream regressions on Phase 1 admission. With the prototype,
 those seventeen tests passed (zero failed, thirty-six filtered out).
 

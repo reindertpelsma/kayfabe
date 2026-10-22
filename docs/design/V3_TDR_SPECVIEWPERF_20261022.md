@@ -4,7 +4,7 @@
 
 ## Corrections to the handoff, before interpreting the failures
 
-MEASURED: VF1's preserved workload run logs contradict the supplied identification
+MEASURED (T1 record 2026-10-22, run 3440): VF1's preserved workload run logs contradict the supplied identification
 of the first failing subtest: **catia-07 03_ThreeLoftJetsDarkMirror** was running
 at the first event-153 group, not subtest 01. Catia 01 and 02 completed, as did
 04 and 05 after recovery. Creo 05, 10 and 11 also completed; all six energy
@@ -21,12 +21,12 @@ INFERRED: **STOP on a subtest-01-specific reproducer or a global poisoned-life
 conclusion.** Options: (1) reproduce the whole catia viewset, retaining the order;
 (2) isolate subtest 03 using the installed harness's supported selection;
 (3) retain the original subtest-01 arm as a negative control. Recommendation:
-(1), then (2) once its selection is verified. No substitute hardware experiment
+(1), then (2) after checking the currently unverified selection. No substitute hardware experiment
 or product design change was improvised in T1.
 
 ## Result
 
-MEASURED: snapshot2 contains eight `USER_RING_GP_FORMAT Budget` refusals and nine
+MEASURED (T1 record 2026-10-22, run 3440): snapshot2 contains eight `USER_RING_GP_FORMAT Budget` refusals and nine
 BAR1 unload markers; snapshot3 extends the same byte prefix to twelve refusals
 and thirteen unload markers. The first refusal precedes the first refused
 `RESET_CHANNEL` and teardown in log order. The extra, very short recovery cycle
@@ -39,7 +39,7 @@ INFERRED: a workload-dependent relay admission failure is the leading explanatio
 for the repeated application kills. Stable guest descriptor bytes and exclusive
 causality still need a controlled run. Changing a limit or timer is not a fix.
 
-MEASURED: all 5,058 snapshot2 status samples, and all 6,097 snapshot3 samples,
+MEASURED (T1 record 2026-10-22, run 3440): all 5,058 snapshot2 status samples, and all 6,097 snapshot3 samples,
 report `unreconciled=0` and `root_moves=0`. Every one of snapshot3's 197 logged
 T-space retirements says `released=true` and `stale_binds=0/...`. These lower the
 priority of an indefinitely armed trigger or observed stale T-space bind; they
@@ -59,7 +59,7 @@ Host access consisted only of file reads and bounded extraction. No VM, guest
 agent, GPU, broker or lock operation was performed. No agent/session was messaged.
 No closed-driver binary was inspected or reverse engineered.
 
-MEASURED: the committed [snapshot2 extraction](../../traces/tdr_specviewperf_20261018/snapshot2-summary.json)
+MEASURED (T1 record 2026-10-22, run 3440): the committed [snapshot2 extraction](../../traces/tdr_specviewperf_20261018/snapshot2-summary.json)
 records source basenames, SHA-256 hashes, original line numbers, compact counter
 samples and bounded excerpts. The snapshot3 supplement records its hash, verifies
 snapshot2 is a byte prefix, and includes the exported workload run logs. Full
@@ -81,7 +81,7 @@ window. The last display anchors surrounding the refusal are 9548.766 s and
 
 ## Three minutes before the first event group
 
-MEASURED for guest times from the exported run log/event text; INFERRED for
+MEASURED (T1 record 2026-10-22, run 3440) for guest times from the exported run log/event text; INFERRED for
 host conversion and approximate uptime in this table:
 
 | Guest-displayed time, Oct 21 | Host CEST, Oct 22 | Approximate uptime | Event |
@@ -95,7 +95,7 @@ host conversion and approximate uptime in this table:
 | 22:39:00 | 00:39:00 | 9763 s | OpenGL driver error 3/subcode 2, viewperf PID 17080 |
 | 22:39:04 | 00:39:04 | 9767 s | Catia 03 marked failed; 04 starts |
 
-MEASURED: the bounded device-clock bracket contains 105 status samples. The
+MEASURED (T1 record 2026-10-22, run 3440): the bounded device-clock bracket contains 105 status samples. The
 last ninety occupy lines 104843–113435. Their endpoint deltas are:
 
 | Counter | First | Last | Delta |
@@ -116,14 +116,14 @@ The 91 value therefore cannot establish audit VA-2's >64-live-space condition.
 no new refusal. `vat` averages are differences since the last status call;
 `vat.max_us` retains the cumulative maximum (`VaTiming::since`).
 
-MEASURED: across the nominal ninety samples, heartbeat walk averages range
+MEASURED (T1 record 2026-10-22, run 3440): across the nominal ninety samples, heartbeat walk averages range
 0–7295 us and apply averages 0–10984 us; nonzero arrival-to-clear averages reach
 511 us. The cumulative invalidate maximum is 95264 us, already present at the
 window's beginning. This cannot locate that slow invalidate inside the window.
 The final heartbeat has zero new walks and host calls while the counters remain
 settled; it does not show a permanently unfinished memory batch.
 
-MEASURED: the wider 212.444 s bracket contains 455 logged large applies, 0–103 ms,
+MEASURED (T1 record 2026-10-22, run 3440): the wider 212.444 s bracket contains 455 logged large applies, 0–103 ms,
 with 8461 ms summed logged duration; 130 exceed 12 ms and 77 exceed 50 ms. The
 largest is line 107410: 17184 maps, six batch verbs, 103 ms. Line 106960 maps
 16232 runs with 4025 map verbs in 96 ms. These are per-entry applies selected by
@@ -131,13 +131,13 @@ largest is line 107410: 17184 maps, six batch verbs, 103 ms. Line 106960 maps
 all applies or trigger-to-clear latency. INFERRED: they show substantial mapping
 cost and deserve measurement under §AD; they do not prove the first TDR cause.
 
-MEASURED: 56 capacity retry records in that bracket hold 24 slots throughout,
+MEASURED (T1 record 2026-10-22, run 3440): 56 capacity retry records in that bracket hold 24 slots throughout,
 with ceilings zero. The first has grows=93/retries=158; the last has 122/213,
 1889024 free slot-pool runs, largest slot/walk 423168. Slot 94 grows to 122624
 runs at line 113233. During subsequent teardown, slots held fall to 15 and
 retries reach 215. This is observed capacity recovery, not a ceiling failure.
 
-MEASURED: ten deferred context acts occur in the bracket: three InitializeCtx,
+MEASURED (T1 record 2026-10-22, run 3440): ten deferred context acts occur in the bracket: three InitializeCtx,
 three PromoteCtx, four EvictCtx. The failing channel's client/object pair is
 initialized at line 112652 (13 us) and promoted at 112653 (3 us), both satisfied
 by the host twin's context. Earlier clients using the same host handle 0x61 were
@@ -145,7 +145,7 @@ evicted and freed before reuse. No failed deferred-context act was observed in
 this bracket. Their raw request bodies were not interpreted beyond kayfabe's
 own decoded log labels.
 
-MEASURED: the logged HELD-minus-POSTED balance is zero at the bracket start,
+MEASURED (T1 record 2026-10-22, run 3440): the logged HELD-minus-POSTED balance is zero at the bracket start,
 Budget refusal, first display-loss marker, first unload, seed-9 unload and
 snapshot2 EOF; global logged maximum depth is one and EOF balance is zero.
 There is no persistently unmatched reply in this trace. Reply latency and
@@ -153,7 +153,7 @@ unlogged/capped cases cannot be reconstructed from this balance.
 
 ### First explicit fatal relay anomaly
 
-MEASURED, snapshot2 line 113366:
+MEASURED (T1 record 2026-10-22, run 3440), snapshot2 line 113366:
 
 ```text
 USER_RING_REFUSED 0xc1d00188:0xff040031 host 0x61:
@@ -177,7 +177,7 @@ wake, polling GP_PUT, or changing an observation interval cannot admit this
 same descriptor. A safe size-handling change requires a bounded continuation
 or a complete mode contract; no allocation/staging bound was raised here.
 
-MEASURED: line 113368 first reports `poisoned=1`; line 113470 logs the first
+MEASURED (T1 record 2026-10-22, run 3440): line 113368 first reports `poisoned=1`; line 113470 logs the first
 refused `RESET_CHANNEL` (`fn76/0x906f0102=0x56`). Display loses its window at
 9761.210 s (113512) and goes black at 9761.460 s. BAR1 returns physical at
 9761.968 s (115421), fn 47 unload follows, and fn 72 appears at 115454.
@@ -186,7 +186,7 @@ relay refusal appears in the snapshot2 prefix. Large applies are earlier
 performance anomalies, so "first explicit fatal relay anomaly" is narrower
 than "first abnormal event of any kind".
 
-MEASURED: at retirement the failing USER relay is Pointer mode, with 211919
+MEASURED (T1 record 2026-10-22, run 3440): at retirement the failing USER relay is Pointer mode, with 211919
 Pointer entries and 13 Scan entries; its lazy counters record 210942 cache hits
 and 9209 fresh PUT reads. Its host handle is 0x61 and token 0x33. The retire
 ledger says rung=0/forwarded=0 for that Passthrough-route bookkeeping; CODE READ:
@@ -195,7 +195,7 @@ They must not be reported as proof that no work reached this channel.
 
 ### Last observable Translated progress
 
-MEASURED: the last pre-loss status samples retain these endpoints. These are
+MEASURED (T1 record 2026-10-22, run 3440): the last pre-loss status samples retain these endpoints. These are
 last **observed cursor values**, not timestamps of the last doorbells:
 
 | Token(s) | Last PUT / reported GET | Forwarded entries / submissions |
@@ -207,7 +207,7 @@ last **observed cursor values**, not timestamps of the last doorbells:
 | 0x80c, busy kernel copy channel | 11100 / 11100 | 4074332 / 1089060 |
 | 0x804, 0x806, 0x80b, 0x1805, 0x2007, 0x2008, 0x200a, 0x2809 | 0 / unread | 0 / 0 |
 
-MEASURED: token 0x80c transiently has PUT 7660 / GET 7201 at line 113007, then
+MEASURED (T1 record 2026-10-22, run 3440): token 0x80c transiently has PUT 7660 / GET 7201 at line 113007, then
 4406 / 4406 at 113086 and 11100 / 11100 at 113368. A modulo cursor cannot be
 subtracted from a cumulative forwarded-entry count. There is no complete
 "forwarded minus executed" counter in these snapshots. Its retirement reports
@@ -222,7 +222,7 @@ remain explicitly unverified.
 
 ## Later cycles and state crossing an RM life
 
-MEASURED: snapshot2's marker sequence below uses seed labels only. The interval
+MEASURED (T1 record 2026-10-22, run 3440): snapshot2's marker sequence below uses seed labels only. The interval
 is from the preceding unload, not the new viewperf process's measured lifetime.
 Every row with a Budget refusal is followed by a viewperf OpenGL error in the
 preserved guest event text; reset-to-refusal timing itself is not timestamped.
@@ -246,7 +246,7 @@ line 207504; the subsequent energy run reports six completed subtests. The
 actual completed/failed subtests provide a stronger discriminator than the
 assumption of a permanently broken new RM life.
 
-MEASURED: comparison of the seed-3 and seed-9 teardown clusters:
+MEASURED (T1 record 2026-10-22, run 3440): comparison of the seed-3 and seed-9 teardown clusters:
 
 | Observation | Seed-3 cluster | Seed-9 cluster |
 |---|---|---|
@@ -271,13 +271,13 @@ was collected. `views.held` fluctuates (294 at the seed-3 pre-unload sample,
 CODE READ: `boot framebuffer scrub REFUSED: newer guest RM life ...` is the
 explicit generation-mismatch guard in `device.rs`, not an RM/CUDA allocation
 refusal. BAR1-mode restoration and fn-47 unload both request restoration; the
-fn-47 path updates `unload_life`. MEASURED: in the first cycle, the skip at
+fn-47 path updates `unload_life`. MEASURED (T1 record 2026-10-22, run 3440): in the first cycle, the skip at
 9761.968 s is followed by fn 47 and a `scrubbed first` line at 9762.028 s,
 before the next logged fn 72. INFERRED: that message alone cannot establish
 that a new RM already began or that old data corrupted recovery. Its wording
 is broader than the exact generation comparison that produced it.
 
-MEASURED: the supplied dmesg tail has two old `unknown NVRM ioctl command: 0xf0`
+MEASURED (T1 record 2026-10-22, run 3440): the supplied dmesg tail has two old `unknown NVRM ioctl command: 0xf0`
 lines and no Xid line. T1 did not query the live GPU or obtain a complete,
 time-bounded kernel journal. The lane's unchanged Xid count of 26 remains
 supplied evidence; absence from this short tail is not an independent recount.
@@ -344,7 +344,7 @@ present in the runtime lineage. The audit RC-01/RC-03 shapes do not follow from
 a Budget refusal or a silent watcher; separate reproductions are required.
 
 CODE READ: `KF3_PUT_CACHE` and `KF3_LAZY_OBSERVE` select USER Pointer observation
-behavior; they do not change `inspect_entry`'s admission limit. MEASURED: run
+behavior; they do not change `inspect_entry`'s admission limit. MEASURED (T1 record 2026-10-22, run 3440): run
 3440 logged cache=true/observe_interval=16. INFERRED: a same-binary both-off arm
 is a useful timing negative control after the main reproducer, not a cure or
 proof about the Translated path. Neither switch may replace doorbell correctness.
@@ -452,7 +452,7 @@ not measured results:
 
 ## Verification and limits
 
-MEASURED: thirty artifact-consistency assertions passed, covering JSON-derived
+MEASURED (T1 record 2026-10-22, run 3440): thirty artifact-consistency assertions passed, covering JSON-derived
 counts, source-prefix confirmation, descriptor-field arithmetic, reply balance,
 and local document links; source hashes, counter deltas and bounded excerpts
 were also inspected. These are artifact checks, not product tests.

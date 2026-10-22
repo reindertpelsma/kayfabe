@@ -45,7 +45,7 @@ CPU completion. Other zero-length encodings still require format validation.
 `user_batch::MAX_OPS` is a separate prototype plan budget; it is not this
 production `USER_RING_GP_FORMAT Budget` path.
 
-MEASURED in T1's preserved artifacts: the first refusal word
+MEASURED (T1 record 2026-10-22, run 3440) in T1's preserved artifacts: the first refusal word
 `0x0faa26023110102c` describes 1026596 bytes, 109092 above the staging limit;
 the twelve refusal lengths span 947340..1026596. CODE READ of T1's report:
 the failing relay was Pointer mode. INFERRED: the admission defect is a leading

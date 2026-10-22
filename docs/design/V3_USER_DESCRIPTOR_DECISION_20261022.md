@@ -98,7 +98,7 @@ resources is touched, so the first two checks bound nothing there. The only effe
 - **N8** No completion, receipt or `GP_GET` credit is created by admission, by a part, or by a refusal. Doorbells and the internal
   `Need::Again` ring are wakes only. Nothing depends on time.
 
-### 4.2 Phase 1: mode-scoped admission (fixes the measured case)
+### 4.2 Phase 1: mode-scoped admission (fixes the measured case) — evidence in §1
 
 1. `kf_chan::user_stream`: add `pub fn inspect_format(entry: u64) -> Result<Source, Refusal>`. It is today's `inspect_entry`
    without the budget comparison: control NOP, direct C56F framing, and `end < 2^40`. Keep `inspect_entry(entry, max)` as
@@ -112,7 +112,7 @@ resources is touched, so the first two checks bound nothing there. The only effe
    (this is a mechanical change to the four mocks).
 5. `Storage::write_user_gp`: call `inspect_format(entry)`. Fix its doc comment: Pointer forwarding resolves no PB, by §AI.
    `write_gp_level` and `write_authored` keep their `GP_OFFSET` bounds, which are the real staging ceiling.
-6. Measurement counters, which decide nothing: `pointer_large_entries` (forwarded with L > 917,504) and `pointer_entry_max_bytes` in
+6. Measurement counters (design specification, §4.2), which decide nothing: `pointer_large_entries` (forwarded with L > 917,504) and `pointer_entry_max_bytes` in
    the lifecycle counts and the `USER_RING_LIFECYCLE` line, plus `refused_scan_budget` and the mode at refusal in the refusal
    text.
 
