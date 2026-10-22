@@ -1,5 +1,5 @@
 # Vast box scripts (repo side of the CI broker)
-STATUS: LIVE as code, 2026-10-23; not yet run on a real Vast box (only the GPU-free tests).
+[CODE READ: PR #104 e63af44dd; scripts/ci/vast_onstart.sh] Repo-side implementation; real-box acceptance remains pending.
 The Worker's tiny onstart clones the repo, checks out `KF_SHA`, execs `scripts/ci/vast_onstart.sh`.
 Per-run data is `KF_*` environment variables. Files: `vast_onstart.sh` (tools, env check, root-only
 env file `/run/kf-ci/env`, helpers, reporter, payload under `timeout`); `vast_report.py` (stdlib:
@@ -33,8 +33,10 @@ stripped (Worker and runner sanitise). The token goes only to `KF_BROKER_URL`, H
 `kf-box-kill [reason]` POSTs `/kill/<run>`, `kf-box-hold` POSTs `/hold/<run>`: curl `--proto =https
 --max-redirs 0`, token on stdin, non-zero unless HTTP 200. The hook runs `kf-box-hold` detached once
 per interactive SSH login and ignores every failure.
-CODE READ (Worker, `origin/codex/vast-broker-smoke-20261022`: `src/index.js`, `src/results.js`,
-`docs/BOX_PROTOCOL.md`): endpoints, schema, caps, rate 20 per 10 s, hold needs a recorded result.
-MEASURED: `python3 -m unittest scripts/ci/test_vast_box.py`, `scripts/ci/vast_box_mutants.py`.
-INFERRED: apt, `/run`, profile.d, sshd on the real KVM image. The payload is code from the SHA under
+[CODE READ: ci/vast-broker/src/index.js, ci/vast-broker/src/results.js,
+ci/vast-broker/docs/BOX_PROTOCOL.md] endpoints, schema, caps, rate 20 per 10 s, hold needs a recorded result.
+[MEASURED: v5-pr104-20261022; traces/vast_broker_v5_20261018/pr104-alignment.json] Canonical
+Python suite: 72/72. Mutation evidence distinguishes the Worker campaign from PR #104
+'s own campaign; no real box has run these scripts yet.
+[INFERRED: scripts/ci/vast_onstart.sh] apt, `/run`, profile.d, sshd on the real KVM image. The payload is code from the SHA under
 test, runs as root and can read the env file.

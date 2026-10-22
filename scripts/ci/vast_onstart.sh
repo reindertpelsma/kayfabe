@@ -46,7 +46,22 @@ set +a
 mkdir -p "$bin_dir" "$profile_dir"
 install -m 700 "$here/kf-box-kill" "$bin_dir/kf-box-kill"
 install -m 700 "$here/kf-box-hold" "$bin_dir/kf-box-hold"
+install -m 700 "$here/kf-box-blob-url" "$bin_dir/kf-box-blob-url"
 install -m 644 "$here/kf-ci-hold.sh" "$profile_dir/kf-ci-hold.sh"
+
+# Disposable acceptance modes selected by this exact checked-out revision.
+mode=$(cat "$here/vast_dummy_mode")
+case "$mode" in
+    D) exec sleep 600 ;;
+    C)
+        printf 'header = "Authorization: Bearer %s"\n' "$KF_RUN_TOKEN" | \
+            curl --config - --silent --show-error --fail --max-time 20 \
+            --proto '=https' --max-redirs 0 --request POST \
+            --header 'Content-Type: application/json' \
+            --data-binary '{"seq":1,"kind":"progress","text":"DUMMY_C one report then silent"}' \
+            "$KF_BROKER_URL/report/$KF_RUN_ID" >/dev/null
+        exec sleep 600 ;;
+esac
 
 rm -f "$result" "$run_dir/done" "$run_dir/done.tmp"
 : >"$log"
@@ -99,5 +114,8 @@ wait "$reporter"
 reporter_rc=$?
 if [ "$rc" -ne 0 ]; then
     exit "$rc"
+fi
+if [ "$mode" = B ] && [ "$reporter_rc" -eq 0 ]; then
+    "$bin_dir/kf-box-kill" dummy-pass-complete
 fi
 exit "$reporter_rc"
