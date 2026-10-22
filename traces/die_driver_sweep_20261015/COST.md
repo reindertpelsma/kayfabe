@@ -1,3 +1,8 @@
+STATUS UPDATE, 2026-10-22 00:28 UTC: lease57132969 SSH ready with console-verified ED25519 pin;
+actual observed rate0.776666667USD/h (quote0.695648), timer170 verified/expiry03:16:37UTC.
+KVM and167GB free confirmed. ControllerPID1864 started; frozen product/guard8f3a9bb3a; N0/Windows UNRUN.
+Public-source probes and kit bundle hashes retained in ../blackwell_validation_20261022/lease_metadata/.
+
 STATUS: LIVE, 2026-10-22 00:26:37 UTC. Owner GO: created ONE RTX5090 lease57132969, offer35126136,
 machine55678. Auto-destroy170min PID2707430 verified FIRST, expiry03:16:37UTC. Credit via API43.848528USD;
 prior lane runtime2.640452USD, conservative new reservation2.766654USD (rate guard plus0.50 overhead),

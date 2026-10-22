@@ -16,6 +16,9 @@
     "destroyed": false,
     "auto_destroy_pid": 2707430,
     "auto_destroy_verified": true,
-    "auto_destroy_armed_utc": "2026-10-22T00:26:37.725005+00:00"
+    "auto_destroy_armed_utc": "2026-10-22T00:26:37.725005+00:00",
+    "ssh_ready_utc": "2026-10-22T00:28:16.348348+00:00",
+    "ssh_hostkey_fingerprint": "SHA256:st6IY0UCQPUQt58/10PHsaqIsgrk9pjOISnQv9QEvHg",
+    "observed_dph_total": 0.7766666666666667
   }
 ]
