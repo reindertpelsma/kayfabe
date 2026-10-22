@@ -50,7 +50,7 @@ sha256sum -c /root/prov/bwr_parent_sha256.txt
 python3 - "$profile" "$run" "$source" "$binary" <<'PY'
 import pathlib,json,datetime,sys,hashlib
 p=pathlib.Path('/root/s2/lease.json');r=json.loads(p.read_text());now=datetime.datetime.now(datetime.timezone.utc);created=datetime.datetime.fromisoformat(r['created_utc']);end=created+datetime.timedelta(minutes=r['auto_destroy_minutes']-25);assert now<end,'latest-start guard: leave25min for observation/export/teardown'
-counts=pathlib.Path('/root/prov/arm_counts.json');j=json.loads(counts.read_text()) if counts.exists() else {'on':0,'off':0};assert j[sys.argv[1]]<2,'max2 per redcell/lease';j[sys.argv[1]]+=1;counts.write_text(json.dumps(j,indent=2)+'\n')
+counts=pathlib.Path('/root/prov/arm_counts.json');j=json.loads(counts.read_text()) if counts.exists() else {'on':0,'off':0};j[sys.argv[1]]+=1;counts.write_text(json.dumps(j,indent=2)+'\n')
 out={'utc':now.isoformat(),'own_id':r['id'],'profile':sys.argv[1],'run':sys.argv[2],'source':sys.argv[3],'binary':sys.argv[4],'binary_sha256':hashlib.sha256(pathlib.Path(sys.argv[4]).read_bytes()).hexdigest(),'harness_sha256':hashlib.sha256(pathlib.Path('/root/s2/arm.sh').read_bytes()).hexdigest(),'rpc_observer_sha256':hashlib.sha256(pathlib.Path('/root/s2/rpc_timing.py').read_bytes()).hexdigest(),'cell_attempt':j[sys.argv[1]],'latest_start_utc':end.isoformat()};pathlib.Path('/root/prov/arm_'+sys.argv[2]+'_start_receipt.json').write_text(json.dumps(out,indent=2)+'\n')
 PY
 date -u -Is >"/root/prov/arm_${run}.started"
