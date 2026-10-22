@@ -10,7 +10,7 @@
 use kf_chan::dbfast::{DbFast, Delivered, Ioeventfd, Sink};
 use kf_linux_raw::Notifier;
 use std::io::Write;
-use std::os::fd::{AsRawFd, BorrowedFd};
+use std::os::fd::BorrowedFd;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
@@ -76,7 +76,6 @@ fn service_ready_returns_to_the_drainer_even_while_the_guest_keeps_64_or_more_to
     stop.store(true, Ordering::Relaxed);
     guest.join().unwrap();
     drainer.join().unwrap(); // returns once the guest stops signalling
-    let _ = fds.lock().unwrap().iter().map(|f| f.as_raw_fd()).count();
     assert!(
         returned.is_ok(),
         "PR-2: one service_ready call did not return in 3 s while 128 tokens were kept signalled: the drainer is held \

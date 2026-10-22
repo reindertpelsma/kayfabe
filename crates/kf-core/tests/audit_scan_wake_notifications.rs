@@ -10,6 +10,10 @@ struct Host {
     signals: AtomicUsize,
 }
 impl HostOps for Host {
+    fn wake_worker(&self) {
+        self.signals.fetch_add(1, Ordering::Relaxed);
+    }
+
     fn ring_host(&self, _: u32) {}
     fn run_translated(&self, _: u32, _: u64) -> bool {
         true

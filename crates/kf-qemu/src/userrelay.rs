@@ -1084,6 +1084,8 @@ mod tests {
         );
     }
     impl HostOps for Host {
+        fn wake_worker(&self) {}
+
         fn operands_translatable(&self, _: u32, _: u64) -> Translatable {
             if self.cell.alive(|_| true) {
                 Translatable::Yes

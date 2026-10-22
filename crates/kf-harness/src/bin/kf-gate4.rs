@@ -224,6 +224,7 @@ fn is_ce(c: u32) -> bool {
 }
 
 struct Channels<'a, 'b> {
+    worker_efd: &'a Notifier,
     s: &'a Shared<'b>,
     done: &'a Completions,
     win: &'a Windows,
@@ -248,6 +249,10 @@ impl Channels<'_, '_> {
 /// ★ The harness's `HostOps`: the plane decides (claim, submission, §8 completion rule); this only
 /// runs the Translated pump for the channel the plane names.
 impl HostOps for Channels<'_, '_> {
+    fn wake_worker(&self) {
+        let _ = self.worker_efd.signal();
+    }
+
     fn ring_host(&self, _host_token: u32) {}
     fn run_translated(&self, host_token: u32, _up_to_seq: u64) -> bool {
         self.serve(host_token);
@@ -521,6 +526,7 @@ fn run(l: &mut Checks) -> Result<(), String> {
         ));
     }
     let channels = Channels {
+        worker_efd: &efd,
         s: &shared,
         done: &done,
         win: &win,

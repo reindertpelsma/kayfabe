@@ -93,41 +93,70 @@ impl RungBitmap {
     /// Clearing after would open a window where the bit is set and no summary points at it.
     pub fn scan(&self, out: &mut Vec<u32>, limit: usize) -> usize {
         out.clear();
-        // ★ Begin where the last scan stopped, and wrap. Every summary word is still visited on
-        // every scan, so nothing is missed; what changes is WHICH tokens fill a bounded `out`.
-        // ⇒ A token cannot be starved indefinitely, because the start walks past it.
+        if limit == 0 {
+            return 0;
+        }
+        // Resume after the last TOKEN, including a partially consumed word.
+        // A word-only cursor can wrap back to a hot prefix in two words and
+        // starve the last word's unreturned bits even at the production limit.
         let base = self.next_start.load(Ordering::Relaxed);
-        for k in 0..N_SUMMARY {
-            let si = (base + k) % N_SUMMARY;
-            let mut s = self.summary[si].load(Ordering::Acquire);
-            while s != 0 {
-                let b = s.trailing_zeros() as usize;
-                s &= s - 1;
-                let w = si * 64 + b;
-                // ⊘ SUMMARY FIRST. See above — this order is the invariant.
-                self.summary[si].fetch_and(!(1u64 << b), Ordering::AcqRel);
-                let mut word = self.words[w].swap(0, Ordering::AcqRel);
-                while word != 0 {
-                    let t = word.trailing_zeros() as usize;
-                    word &= word - 1;
-                    out.push((w * 64 + t) as u32);
-                    if out.len() >= limit {
-                        // Put back what we did not take, in the same order publish uses.
-                        if word != 0 {
-                            self.words[w].fetch_or(word, Ordering::Release);
-                            self.summary[si].fetch_or(1u64 << b, Ordering::Release);
+        for (lo, hi) in [(base, N_TOKENS), (0, base)] {
+            if lo == hi {
+                continue;
+            }
+            let first_word = lo / 64;
+            let last_word = (hi - 1) / 64;
+            for si in first_word / 64..=last_word / 64 {
+                let mut s = self.summary[si].load(Ordering::Acquire);
+                if si == first_word / 64 {
+                    s &= u64::MAX << (first_word % 64);
+                }
+                if si == last_word / 64 {
+                    s &= u64::MAX >> (63 - last_word % 64);
+                }
+                while s != 0 {
+                    let b = s.trailing_zeros() as usize;
+                    s &= s - 1;
+                    let w = si * 64 + b;
+                    // Clear summary BEFORE taking the word. A racing publisher
+                    // is observed here or leaves its summary for a later scan.
+                    self.summary[si].fetch_and(!(1u64 << b), Ordering::AcqRel);
+                    let mut word = self.words[w].swap(0, Ordering::AcqRel);
+                    let mut mask = u64::MAX;
+                    if w == first_word {
+                        mask &= u64::MAX << (lo % 64);
+                    }
+                    if w == last_word {
+                        mask &= u64::MAX >> (63 - (hi - 1) % 64);
+                    }
+                    let excluded = word & !mask;
+                    word &= mask;
+                    // Bits outside this wrap range are still owed. Re-publish
+                    // word BEFORE summary, exactly as publish does.
+                    if excluded != 0 {
+                        self.words[w].fetch_or(excluded, Ordering::Release);
+                        self.summary[si].fetch_or(1u64 << b, Ordering::Release);
+                    }
+                    while word != 0 {
+                        let t = word.trailing_zeros() as usize;
+                        word &= word - 1;
+                        let token = w * 64 + t;
+                        out.push(token as u32);
+                        if out.len() >= limit {
+                            if word != 0 {
+                                self.words[w].fetch_or(word, Ordering::Release);
+                                self.summary[si].fetch_or(1u64 << b, Ordering::Release);
+                            }
+                            self.next_start
+                                .store((token + 1) % N_TOKENS, Ordering::Relaxed);
+                            return out.len();
                         }
-                        // ⊘ Resume at the NEXT summary word, not this one: resuming here would
-                        // re-take the same attacker's group first and rebuild the starve.
-                        self.next_start
-                            .store((si + 1) % N_SUMMARY, Ordering::Relaxed);
-                        return out.len();
                     }
                 }
             }
         }
         self.next_start
-            .store((base + 1) % N_SUMMARY, Ordering::Relaxed);
+            .store((base + 1) % N_TOKENS, Ordering::Relaxed);
         out.len()
     }
 

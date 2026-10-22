@@ -19,6 +19,8 @@ use kf_trap::trap::Class;
 #[derive(Default)]
 struct Null;
 impl HostOps for Null {
+    fn wake_worker(&self) {}
+
     fn ring_host(&self, _t: u32) {}
     fn run_translated(&self, _t: u32, _s: u64) -> bool {
         true

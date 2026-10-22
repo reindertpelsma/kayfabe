@@ -6,7 +6,7 @@
 //! `device.rs`: `TokenIndex::RunlistVector`, token = `runlist << 11 | chid`), so ONE summary word holds
 //! two whole runlists (e.g. every GR channel of the guest, chid 0..2047). The scan then takes the lowest
 //! `limit` set bits of the first non-empty bitmap word, then the next word, ... A process that keeps
-//! >= `limit` low tokens rung (64 channels, all in bitmap word 0) starves a higher token in the same
+//! At least `limit` low tokens rung (64 channels, all in bitmap word 0) starves a higher token in the same
 //! summary word for ever; the rotation of the summary start cannot help. The existing regression
 //! (`an_unprivileged_process_cannot_starve_the_kernels_channels`, kernel token 9_000) puts the victim in
 //! a DIFFERENT summary word, so it cannot see this.

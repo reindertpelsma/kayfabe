@@ -112,6 +112,10 @@ use kf_trap::wake::WakeWord;
 /// guest value forwarded. *"We author every host call; our host-verb signatures do not accept a
 /// guest flag word."*
 pub trait HostOps: Send + Sync {
+    /// Signal the existing worker notifier once, without blocking. Called after
+    /// publishing work and bumping the wake word returned SignalOne.
+    fn wake_worker(&self);
+
     /// Ring a real host doorbell for an already-born host channel.
     fn ring_host(&self, host_token: u32);
     /// Run one unit of a translated channel's work. Returns whether anything reached the GPU —
@@ -557,6 +561,15 @@ impl<'v> Plane<'v> {
     /// also needs a worker.
     pub fn worker_pass(&self, host: &dyn HostOps, scratch: &mut Vec<u32>, limit: usize) -> usize {
         self.bits.scan(scratch, limit);
+        // A full scan may leave bits behind even when all returned hints are
+        // stale. Bump to preserve the active worker's rescan; signal any peer
+        // whose registered park requires the existing notifier.
+        if limit != 0
+            && scratch.len() == limit
+            && self.vmm.worker_wake.bump() == kf_trap::wake::Wake::SignalOne
+        {
+            host.wake_worker();
+        }
         let mut served = 0;
         for &tok in scratch.iter() {
             let Some(w) = self.tokens.get(tok as usize) else {

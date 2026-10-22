@@ -127,6 +127,8 @@ struct BenchHost {
     applied: AtomicU64,
 }
 impl HostOps for BenchHost {
+    fn wake_worker(&self) {}
+
     fn ring_host(&self, _: u32) {}
     fn run_translated(&self, _: u32, _: u64) -> bool {
         false
