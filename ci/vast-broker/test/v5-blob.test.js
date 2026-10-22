@@ -198,7 +198,7 @@ for (const host of ['release-assets.githubusercontent.com', 'objects.githubuserc
       [
         '-I',
         '-c',
-        "import importlib.util,sys;s=importlib.util.spec_from_file_location('runner',sys.argv[1]);m=importlib.util.module_from_spec(s);sys.modules['runner']=m;s.loader.exec_module(m);assert 'private-short' not in m.scrub(sys.argv[2])",
+        "import importlib.util,sys;s=importlib.util.spec_from_file_location('runner',sys.argv[1]);m=importlib.util.module_from_spec(s);sys.modules['runner']=m;s.loader.exec_module(m);assert 'private-short' not in m.scrub(sys.argv[2])[0]",
         new URL('../runner.py', import.meta.url).pathname,
         url,
       ],
