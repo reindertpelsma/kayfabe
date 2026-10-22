@@ -33,11 +33,17 @@ Generate a read-only table export for an existing/partial run:
 python3 scripts/bench/specviewperf/guest_suite.py --report-only --output emit-table.ps1
 ```
 
+CODE READ: `export-text.ps1` produces the text-only JSON export from an existing
+run, with per-file read errors recorded and workload composites selected from
+vendor `result.json`. It preserves file-sharing restrictions and omits raw
+system-info objects. Run its source through the guest agent as a file; its
+default root matches the runner.
+
 CODE READ: `result_table.py` also emits CSV from a text-only guest export JSON
 object with `root` and `files: [{path, text}]`. It does not export raw system info:
 
 ```sh
-python3 scripts/bench/specviewperf/result_table.py export.json --arm vfio --output fps.csv
+python3 scripts/bench/specviewperf/result_table.py export.json --arm vfio --output fps.csv --scores-output scores.csv
 python3 -m unittest discover -s scripts/bench/specviewperf -p 'test_*.py'
 ```
 

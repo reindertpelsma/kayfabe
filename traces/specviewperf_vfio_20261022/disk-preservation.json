@@ -1,0 +1,28 @@
+{
+  "evidence": "MEASURED",
+  "captured_utc": "2026-10-22T00:21:58.408810+00:00",
+  "rows": [
+    {
+      "disk": "owner",
+      "mtime_utc": "2026-10-21T23:22:47.682478+00:00",
+      "fds": [
+        {
+          "fd": 16,
+          "writable": false,
+          "flags_octal": "0o2140000"
+        }
+      ]
+    },
+    {
+      "disk": "overlay",
+      "mtime_utc": "2026-10-22T00:21:57.988510+00:00",
+      "fds": [
+        {
+          "fd": 17,
+          "writable": true,
+          "flags_octal": "0o2140002"
+        }
+      ]
+    }
+  ]
+}

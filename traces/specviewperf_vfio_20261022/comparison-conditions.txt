@@ -6,3 +6,6 @@ MEASURED: native desktopWMI3840x2160/59Hz; SPECFullHD; native renderer>200FPS.
 CODE READ(lane handoff): kayfabe broker output59.996Hz; some guest subtests60.06FPS.
 MEASURED: no profile/vsync override. An uncapped matched-capacity kayfabe arm was not run.
 INFERRED: ratios in the render/display-capped rows are reference comparisons, not an isolated measurement of submission overhead. Capacity is also a comparison condition, not a proven cause of the original failures.
+MEASURED: Enscape SanMiguel UltraHQ completed after about8min elapsed, reporting120frames/123.98s=0.97FPS; the elapsed interval includes setup/calibration outside that timed window.
+MEASURED: a read-only foreground observer saw EnscapeClientBench active in10/10samples, and a GPU sample showedP2/2865MHzgraphicsclock/100%utilization. No timeout or profile setting was changed.
+MEASURED: one memory sample during that heavy scene showed5590MiB GPUusage and4758844KiB free physical RAM. These are point observations, not peaks or whole-run averages.
