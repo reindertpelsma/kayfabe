@@ -1,0 +1,4 @@
+MEASURED: three fatal baseline refusal lines; guest descriptor words, not binary reverse engineering.
+kf3: USER_RING_REFUSED 0xc1d00105:0xff04002c host 0x58: USER_RING_GP_FORMAT Budget entry=0x0f84a6027320202c source_va=0x40ffb78 cursor=0x376f put=0x3808 entries=32768; no completion/reuse credit
+kf3: USER_RING_REFUSED 0xc1d00162:0xff04001e host 0x4a: USER_RING_GP_FORMAT Budget entry=0x0ef7d2001ca3002c source_va=0x40f68e8 cursor=0x251d put=0x251e entries=32768; no completion/reuse credit
+kf3: USER_RING_REFUSED 0xc1d001ae:0xff040027 host 0x53: USER_RING_GP_FORMAT Budget entry=0x0efa82001191002c source_va=0x40e7cc0 cursor=0x798 put=0x799 entries=32768; no completion/reuse credit

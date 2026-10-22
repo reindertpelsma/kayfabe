@@ -1,0 +1,14 @@
+{
+  "classification": "MEASURED",
+  "run": 3453,
+  "budget_refusals": 3,
+  "device_system_reboots_after_creation": 1,
+  "guest_153_observed_lower_bound": 6,
+  "guest_4101_observed": 0,
+  "guest_count_limitation": "Final since-boot sample reset after spontaneous Windows reboot; earlier six records preserved.",
+  "host_xids": 0,
+  "rm_unloads_total_log": 7,
+  "rm_cycles_at_abort": 4,
+  "cycles_15min_at_abort": 4,
+  "total_unload_scope": "Includes subsequent recovery/reboot and clean shutdown; not all seven are distinct TDRs."
+}

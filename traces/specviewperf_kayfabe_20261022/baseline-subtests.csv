@@ -6,3 +6,7 @@ baseline,result_2026-10-22-03-47-06,blender-01,4,59.89,1594,26.61,Completed
 baseline,result_2026-10-22-03-47-06,blender-01,5,27.87,441,15.82,Completed
 baseline,result_2026-10-22-03-47-06,blender-01,6,35.93,594,16.53,Completed
 baseline,result_2026-10-22-03-47-06,blender-01,7,60.08,994,16.54,Completed
+baseline,result_2026-10-22-03-47-06,catia-07,1,40.93,708,17.3,Failed
+baseline,result_2026-10-22-03-47-06,catia-07,2,72.28,1170,16.19,Failed
+baseline,result_2026-10-22-03-47-06,catia-07,4,90.0,1464,16.27,Failed
+baseline,result_2026-10-22-03-47-06,catia-07,5,45.71,1020,22.31,Failed
