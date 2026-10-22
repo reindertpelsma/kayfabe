@@ -1,0 +1,37 @@
+{
+  "classification": "MEASURED",
+  "evidence": "builds.json",
+  "builds": [
+    {
+      "arm": "D",
+      "revision": "468a35c9d845afc1938683540acc251bdef90e5a",
+      "sha256": "ea10ba9b1e12a1d43509fce0f527e3377ceb5806cd0b76b147ec2ba221f07845",
+      "bytes": 95584552,
+      "installed_source": "/data/codex-K1/kf3-bins/468a35c9"
+    },
+    {
+      "arm": "A",
+      "revision": "40583bc297264fb57a20d84cc795d05d493197b5",
+      "sha256": "084d100bc3bf343d3fc2c311f2601694ab3924313d9999651673b14a4c7e335a",
+      "bytes": 95565816,
+      "installed_source": "/data/codex-Q1/kf3-bins/40583bc2"
+    },
+    {
+      "arm": "B",
+      "revision": "a83394e66e960d8017caa0ef19fa579f1724806b",
+      "sha256": "ab9850e1c58580ed20dbf315f73522d22ee9ed12c158c94eee8a94530956c801",
+      "bytes": 95560992,
+      "installed_source": "/data/codex-Q1/kf3-bins/a83394e6"
+    },
+    {
+      "arm": "candidate",
+      "revision": "afe00b3cbc7e345e2953b1bc199d9cce1054cc38",
+      "sha256": "9f7c26f69c6e94c37f8757b2928c4300cece10914c843db62dd6bf9f5662d34d",
+      "bytes": 95561232,
+      "installed_source": "/data/codex-Q1/kf3-bins/afe00b3c"
+    }
+  ],
+  "new_builds": 0,
+  "guest_suite_sha256": "e21b0e9e85ef52d1f11510dc1d0130b8f259592ebf7cd2286d139517c88cb8a7",
+  "k1_guest_suite_sha256": "e21b0e9e85ef52d1f11510dc1d0130b8f259592ebf7cd2286d139517c88cb8a7"
+}

@@ -1,0 +1,15 @@
+[
+  {
+    "classification": "MEASURED",
+    "order": 1,
+    "run": 4301,
+    "arm": "D1",
+    "rev": "468a35c9d845afc1938683540acc251bdef90e5a",
+    "started": "2026-10-22T11:17:51.934717+02:00",
+    "ended": "2026-10-22T11:22:49.870912+02:00",
+    "exit": 0,
+    "verdict": "PASS",
+    "reason": "VENDOR_COMPLETED_NO_GUARD_FAILURE",
+    "restored": true
+  }
+]
