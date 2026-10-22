@@ -1,0 +1,81 @@
+{
+  "classification": "MEASURED",
+  "run": 4308,
+  "revision": "468a35c9d845afc1938683540acc251bdef90e5a",
+  "arm": "D3",
+  "verdict": "PASS",
+  "first153_guest": null,
+  "first153_detected_host": null,
+  "guest_captured_final": "2026-10-22T09:56:45.5971030+02:00",
+  "host_ended": "2026-10-22T11:56:50.809244+02:00",
+  "boot": {
+    "video": [
+      {
+        "Name": "NVIDIA GeForce RTX 4070",
+        "DriverVersion": "32.0.15.8088",
+        "Status": "OK",
+        "ConfigManagerErrorCode": 0,
+        "CurrentHorizontalResolution": 1920,
+        "CurrentVerticalResolution": 1080
+      }
+    ],
+    "captured": "2026-10-22T09:52:35.3788360+02:00",
+    "boot": "2026-10-22T09:52:12.5000000+02:00",
+    "gpu_ok": true
+  },
+  "guest153": 0,
+  "guest4101": 0,
+  "new_host_xids": 0,
+  "restored": true,
+  "maxima": {
+    "pointer_large_entries": 0,
+    "pointer_entry_max_bytes": 59352,
+    "refused_scan_budget": 0,
+    "poisoned": 0
+  },
+  "channels": [
+    {
+      "token": "0x806",
+      "host": "0x1002d",
+      "forwarded": 0,
+      "submissions": 0,
+      "gp": null,
+      "NoCeObject": false,
+      "retired": {
+        "line": 21692,
+        "text": "kf3: chan token 0x806 (host 0x1002d) RETIRED, forwarded=0 submissions=0 splits=0/0 serves=1 last_put=Some(0) gp_get=None store_views=0 privilege=Some(ChannelPrivilege { level: 2, uvm_owned: false }) dead=None inca=[refused_methods=0 subdevice_masks=0 control_entries=0 ext_base_unapplied=0] gr_tier=false gr[methods=0 inert_binds=0 objects=[]] gp_get_by_engine=(false, 0)"
+      },
+      "birth": {
+        "line": 1667,
+        "text": "kf3: act birth translated: chan 0xc1d00019:0xff040004 BORN Translated: token 0x806 -> host 0x1002d in VasKey(13965662457344034928) gpfifo=0x120512000x2048 userd=Some(Sysmem { base: 13775742976, size: 512 }) engine=0xb tsg=Some(ff0e0000) kernel_by=PRIVILEGE=KERNEL ring_va=0xff00500000 userd_at_birth(GP_PUT,GP_GET)=(Some(0), Some(0)) zeroed=512B gr_tier=false gp_get_by_engine=false sw_subch_inert=false scheduled_at_birth=true fast=off (2203 us, off the GSP lock)"
+      },
+      "alloc_facts": {
+        "line": 1663,
+        "text": "kf-rm: chanlink: CHAN-FACTS 0xc1d00019:0xff040004 parent=0xff0e0000 class=0xc56f engine=Some(b) flags=0x200620 hVASpace=0x0 ctxShare=0x0 vas=0xc1d00002:Some(ff000870) tsg=Some(ff0e0000) device=0xff020000 kernel=true privilege=Some(ChannelPrivilege { level: 2, uvm_owned: false }) internalFlags=Some(16) ProcessID=Some(310) SubProcessID=Some(0) kernel_pid_decl=false hObjectError=Some(0) hObjectBuffer=Some(0) gpFifoOffset=0x120512000 gpFifoEntries=2048 hUserdMemory0=Some(ff00a004) userd=Some(Sysmem { base: 335192800, size: 200 }) hPhysChannelGroup=Some(0) subDeviceId=Some(0)"
+      },
+      "rpc_context": [
+        {
+          "line": 1659,
+          "text": "kf3: GSP rpc RmAlloc seq=0"
+        },
+        {
+          "line": 1664,
+          "text": "kayfabe: HELD-REPLY fn=RmAlloc depth=1 \u2014 this map reply WAITS for its rows"
+        },
+        {
+          "line": 1665,
+          "text": "kf3: GSP rpc RmAlloc seq=0"
+        },
+        {
+          "line": 1669,
+          "text": "kf3: chan 0xc1d00019:0xff040004: NV50_DEFERRED_API 0xff1fe010 ADMITTED on Translated host 0x1002d, software classID Some(1) (OWNER_RULINGS \u00a7U.1)"
+        },
+        {
+          "line": 1670,
+          "text": "kf3: GSP rpc RmAlloc seq=0"
+        }
+      ]
+    }
+  ],
+  "rpc_limit": "Production trace logs RmAlloc seq=0 context and CHAN-FACTS/birth linkage, not a unique full RPC transaction replay."
+}
