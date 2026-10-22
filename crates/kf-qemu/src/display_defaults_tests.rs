@@ -19,6 +19,11 @@ fn isolated(name: &str, values: &[(&str, &str)], check: impl FnOnce()) {
         "KF3_DISPLAY_SDR_COLOR",
         "KF3_DISPLAY_LUT_MIRROR",
         "KF3_DISPLAY_ILUT_OFFSET_256",
+        "KF3_DISPLAY_CAPS_PROBE",
+        "KF3_DISPLAY_TMO_CONSTRUCTOR_PROBE",
+        "KF3_DISPLAY_ILUT_CONSTRUCTOR_PROBE",
+        "KF3_DISPLAY_TMO_SURFACE_CONSTRUCTOR_PROBE",
+        "KF3_DISPLAY_OLUT_CONSTRUCTOR_PROBE",
     ] {
         child.env_remove(key);
     }
@@ -74,24 +79,24 @@ fn input(t: &ClassTable, win: u32, mirror: bool, offset: u32, x: Experiments) ->
 }
 
 #[test]
-fn default_sdr_pipeline_is_selected() {
-    isolated("default_sdr_pipeline_is_selected", &[], || {
+fn default_sdr_pipeline_requires_opt_in() {
+    isolated("default_sdr_pipeline_requires_opt_in", &[], || {
         assert!(
-            sdr_color_on(),
-            "the production colour pipeline must not require an environment flag"
+            !sdr_color_on(),
+            "the authored SDR page is unqualified as a default (review B2, G05)"
         );
     });
 }
 
 #[test]
-fn empty_sdr_override_keeps_production_default() {
+fn empty_sdr_override_stays_off() {
     isolated(
-        "empty_sdr_override_keeps_production_default",
+        "empty_sdr_override_stays_off",
         &[("KF3_DISPLAY_SDR_COLOR", "")],
         || {
             assert!(
-                sdr_color_on(),
-                "only an explicit 0 selects the old no-colour arm"
+                !sdr_color_on(),
+                "only exact 1 enables the research colour path"
             );
         },
     );
@@ -236,6 +241,253 @@ fn explicit_one_keeps_existing_production_profile() {
                     handle: 0x123,
                     offset: 0x2100
                 }
+            );
+        },
+    );
+}
+
+// CODE READ: exercise the exact pre-GPU configuration used by DisplayPlane::build,
+// including its selection call-site, rather than just testing the environment helper.
+fn config_for(row: &kf_chip::display::DisplayRow, version: &str) -> DisplayColorConfig {
+    let t = kf_disp::class::for_version(version).unwrap();
+    let regs = Regs::for_ip(version, row.ip_version).unwrap();
+    display_color_config(row, t, &regs).unwrap()
+}
+
+#[test]
+fn default_build_caps_are_plain_on_every_derived_family() {
+    isolated(
+        "default_build_caps_are_plain_on_every_derived_family",
+        &[],
+        || {
+            for version in ["580.65.06", "580.159.04"] {
+                let t = kf_disp::class::for_version(version).unwrap();
+                for row in kf_chip::display::ALL {
+                    let regs = Regs::for_ip(version, row.ip_version).unwrap();
+                    let c = config_for(row, version);
+                    assert!(!c.sdr_color);
+                    assert!(!c.constructor_probe);
+                    assert_eq!(
+                        c.caps,
+                        kf_disp::caps::page(t, &regs, row.classes.caps, row.heads, row.windows)
+                            .unwrap()
+                    );
+                }
+            }
+        },
+    );
+}
+
+#[test]
+fn non_one_sdr_value_does_not_enable_processing() {
+    isolated(
+        "non_one_sdr_value_does_not_enable_processing",
+        &[("KF3_DISPLAY_SDR_COLOR", "on")],
+        || {
+            assert!(!config_for(&kf_chip::display::ADA, "580.65.06").sdr_color);
+        },
+    );
+}
+
+#[test]
+fn explicit_sdr_build_uses_the_authored_page_without_caps_probe() {
+    isolated(
+        "explicit_sdr_build_uses_the_authored_page_without_caps_probe",
+        &[("KF3_DISPLAY_SDR_COLOR", "1")],
+        || {
+            let row = &kf_chip::display::ADA;
+            let t = kf_disp::class::for_version("580.65.06").unwrap();
+            let regs = Regs::for_ip("580.65.06", row.ip_version).unwrap();
+            let c = config_for(row, "580.65.06");
+            assert!(c.sdr_color);
+            assert!(!c.constructor_probe);
+            let authored = kf_disp::caps::sdr_page(
+                t,
+                &regs,
+                row.classes.caps,
+                row.classes.core,
+                row.heads,
+                row.windows,
+            )
+            .unwrap();
+            assert_eq!(c.caps, authored);
+            assert_ne!(
+                c.caps,
+                kf_disp::caps::page(t, &regs, row.classes.caps, row.heads, row.windows).unwrap()
+            );
+        },
+    );
+}
+
+macro_rules! constructor_tests {
+    ($name:ident, $reject:ident, $flag:literal, $author:ident, $ilut:expr, $surface:expr, $olut:expr) => {
+        #[test]
+        fn $name() {
+            isolated(stringify!($name), &[($flag, "1")], || {
+                for version in ["580.65.06", "580.159.04"] {
+                    let t = kf_disp::class::for_version(version).unwrap();
+                    for row in kf_chip::display::ALL {
+                        let regs = Regs::for_ip(version, row.ip_version).unwrap();
+                        let c = config_for(row, version);
+                        assert!(!c.sdr_color, "standalone probes need no SDR_COLOR=0");
+                        assert!(c.constructor_probe, "build must choose the refusing engine");
+                        assert_eq!(
+                            (
+                                c.ilut_constructor_probe,
+                                c.tmo_surface_constructor_probe,
+                                c.olut_constructor_probe
+                            ),
+                            ($ilut, $surface, $olut)
+                        );
+                        assert_eq!(
+                            c.caps,
+                            kf_disp::caps::$author(
+                                t,
+                                &regs,
+                                row.classes.caps,
+                                row.heads,
+                                row.windows
+                            )
+                            .unwrap()
+                        );
+                    }
+                }
+            });
+        }
+        #[test]
+        fn $reject() {
+            isolated(
+                stringify!($reject),
+                &[($flag, "1"), ("KF3_DISPLAY_SDR_COLOR", "1")],
+                || {
+                    let row = &kf_chip::display::ADA;
+                    let t = kf_disp::class::for_version("580.65.06").unwrap();
+                    let regs = Regs::for_ip("580.65.06", row.ip_version).unwrap();
+                    let err = display_color_config(row, t, &regs)
+                        .err()
+                        .expect("incompatible modes must refuse before GPU bring-up");
+                    assert!(
+                        err.contains(
+                            "SDR processing cannot be combined with constructor-only probes"
+                        ),
+                        "{err}"
+                    );
+                },
+            );
+        }
+    };
+}
+
+constructor_tests!(
+    tmo_probe_with_default_sdr,
+    tmo_probe_refuses_explicit_sdr,
+    "KF3_DISPLAY_TMO_CONSTRUCTOR_PROBE",
+    constructor_probe_page,
+    false,
+    false,
+    false
+);
+constructor_tests!(
+    ilut_probe_with_default_sdr,
+    ilut_probe_refuses_explicit_sdr,
+    "KF3_DISPLAY_ILUT_CONSTRUCTOR_PROBE",
+    ilut_constructor_probe_page,
+    true,
+    false,
+    false
+);
+constructor_tests!(
+    tmo_surface_probe_with_default_sdr,
+    tmo_surface_probe_refuses_explicit_sdr,
+    "KF3_DISPLAY_TMO_SURFACE_CONSTRUCTOR_PROBE",
+    tmo_surface_constructor_probe_page,
+    true,
+    true,
+    false
+);
+constructor_tests!(
+    olut_probe_with_default_sdr,
+    olut_probe_refuses_explicit_sdr,
+    "KF3_DISPLAY_OLUT_CONSTRUCTOR_PROBE",
+    olut_constructor_probe_page,
+    true,
+    true,
+    true
+);
+
+#[test]
+fn caps_probe_with_default_sdr_replaces_plain_page_without_processing() {
+    isolated(
+        "caps_probe_with_default_sdr_replaces_plain_page_without_processing",
+        &[("KF3_DISPLAY_CAPS_PROBE", "1")],
+        || {
+            let c = config_for(&kf_chip::display::ADA, "580.65.06");
+            assert!(!c.sdr_color);
+            assert!(!c.constructor_probe);
+            assert_eq!(
+                Some(c.caps),
+                caps_probe_page(CAPS_PROBE_AT.1, CAPS_PROBE_AT.0)
+            );
+        },
+    );
+}
+
+#[test]
+fn caps_probe_with_explicit_sdr_discards_authored_page_but_keeps_processing() {
+    isolated(
+        "caps_probe_with_explicit_sdr_discards_authored_page_but_keeps_processing",
+        &[
+            ("KF3_DISPLAY_CAPS_PROBE", "1"),
+            ("KF3_DISPLAY_SDR_COLOR", "1"),
+        ],
+        || {
+            let c = config_for(&kf_chip::display::ADA, "580.65.06");
+            assert!(
+                c.sdr_color,
+                "the existing production arm still processes colour"
+            );
+            assert_eq!(
+                Some(c.caps),
+                caps_probe_page(CAPS_PROBE_AT.1, CAPS_PROBE_AT.0)
+            );
+        },
+    );
+}
+
+#[test]
+fn caps_probe_with_constructor_keeps_blanket_refusal() {
+    isolated(
+        "caps_probe_with_constructor_keeps_blanket_refusal",
+        &[
+            ("KF3_DISPLAY_CAPS_PROBE", "1"),
+            ("KF3_DISPLAY_TMO_CONSTRUCTOR_PROBE", "1"),
+        ],
+        || {
+            let c = config_for(&kf_chip::display::ADA, "580.65.06");
+            assert!(!c.sdr_color);
+            assert!(c.constructor_probe);
+            assert_eq!(
+                Some(c.caps),
+                caps_probe_page(CAPS_PROBE_AT.1, CAPS_PROBE_AT.0)
+            );
+        },
+    );
+}
+
+#[test]
+fn caps_probe_on_another_class_keeps_its_authored_page() {
+    isolated(
+        "caps_probe_on_another_class_keeps_its_authored_page",
+        &[("KF3_DISPLAY_CAPS_PROBE", "1")],
+        || {
+            let row = &kf_chip::display::TURING;
+            let t = kf_disp::class::for_version("580.65.06").unwrap();
+            let regs = Regs::for_ip("580.65.06", row.ip_version).unwrap();
+            let c = config_for(row, "580.65.06");
+            assert!(!c.sdr_color);
+            assert_eq!(
+                c.caps,
+                kf_disp::caps::page(t, &regs, row.classes.caps, row.heads, row.windows).unwrap()
             );
         },
     );
