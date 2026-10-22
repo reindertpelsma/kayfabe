@@ -5229,8 +5229,7 @@ impl ScanState {
 mod tests {
     use super::*;
 
-    /// ★ 2026-10-14 (die sweep): every piece of the GPU-free realize path resolves for every display row except
-    /// the one known gap (Turing's semaphore model, `kf_disp` `every_family_row_resolves_its_vocabulary`). The GB206
+    /// ★ 2026-10-14 (die sweep): every piece of the GPU-free realize path resolves for every display row. The GB206
     /// run found `display=on` refused at realize because no test resolved the vocabulary for GB20x; the register map
     /// and layout are checked here for all four rows so the next refusal is a test failure, not a rented box.
     #[test]
@@ -5248,12 +5247,7 @@ mod tests {
                 );
                 let classes = kf_disp::model::Classes::of(row);
                 let vocab = Vocab::resolve(t, &classes, &regs);
-                assert_eq!(
-                    vocab.is_ok(),
-                    !row.chips.starts_with("TU"),
-                    "{version} {}",
-                    row.chips
-                );
+                vocab.unwrap_or_else(|e| panic!("{version} {}: {}", row.chips, e.0));
                 assert!(
                     t.notifier_field("__0_STATUS").is_some()
                         && t.notifier_value("__0_STATUS_FINISHED").is_some()
