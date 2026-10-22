@@ -1,15 +1,17 @@
 # Status and handoff — where kayfabe v3 stands, and how to resume
 
-## UPDATE 2026-10-21 — Vast broker stage 1, mock validation only
+## UPDATE 2026-10-22 — Vast broker callbacks, mock validation only
 
 [CODE READ: 2026-10-21 provider docs] BLOCKED: the documented Vast VM/onstart
 launch modes conflict with strict no SSH; see the design STOP section.
 [CODE READ: codex/vast-broker-20261021] The proposed Worker and GitHub workflow use
 owner numeric OIDC identity, exact-head approval, a master-base exclusion filter,
-request-only read GitHub tokens and a singleton paid-account ledger. Plain JS has
+request-only read GitHub tokens and a singleton paid-account ledger. Run HMAC
+reports have strict caps/liveness checks; structured results and stop revoke
+before owned deletion. Sanitised logs neutralise embedded command delimiters. Plain JS has
 no npm dependencies; the runner never connects to the rented box. Merge queues
 are deferred for the personal repository. The binding defaults disable renting.
-[MEASURED: 2026-10-21 Node tests] Tests-first evidence and mutation results are in
+[MEASURED: 2026-10-22 Node tests] Tests-first evidence and mutation results are in
 [traces/vast_broker_20261018](../traces/vast_broker_20261018/README.md); deployment,
 Vast GPU runs and the live API/onstart/Free-plan contracts remain untested.
 Owner setup and billing limits: [design](design/V3_CI_VAST_GPU_20261021.md),
