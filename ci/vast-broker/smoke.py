@@ -2,8 +2,8 @@
 """V4 controller-side CI protocol driver. Never runs on the rented box.
 
 Default: read-only real provider preflight. --native-mock drives local workerd
-with the accompanying native-smoke.mjs adapter. Live creation remains blocked
-by the documented no-SSH VM startup conflict, even when a cheap offer exists.
+with the accompanying native-smoke.mjs adapter. Owner-authorized real creation
+uses smoke-live.py with the supported SSH/onstart contract.
 All endpoint/capability/instance values stay in memory or owner-only files.
 """
 import argparse,hashlib,json,math,os,re,socket,subprocess,sys,tempfile,time,urllib.error,urllib.parse,urllib.request
@@ -44,7 +44,7 @@ def preflight():
     eligible=[o for o in offers if isinstance(o.get('id'),int) and o['id']>0 and (o.get('verified') is True or 'verified' not in o and o.get('verification')=='verified') and o.get('vms_enabled') is True and o.get('rentable') is True and o.get('rented') is False and o.get('num_gpus')==1 and str(o.get('gpu_name','')).replace('_',' ').upper() in ['RTX 4070','RTX 4070 SUPER','RTX 4080','RTX 4090'] and isinstance(o.get('reliability'),(int,float)) and o['reliability']>=.99 and isinstance(o.get('disk_space'),(int,float)) and o['disk_space']>=120 and isinstance(o.get('dph_total'),(int,float)) and not isinstance(o['dph_total'],bool) and math.isfinite(o['dph_total']) and 0<=o['dph_total']<=.5]
     credit=provider('/api/v0/users/current/').get('credit')
     price=min((o['dph_total'] for o in eligible),default=None)
-    return {'mode':'REAL_READ_ONLY','offers_returned':len(offers),'eligible_offers':len(eligible),'hourly_cap_usd':.5,'cheapest_eligible_usd_hour':price,'prepaid_credit_field_present':isinstance(credit,(int,float)) and not isinstance(credit,bool) and math.isfinite(credit),'reserve_plus_one_21min_run_met':isinstance(credit,(int,float)) and not isinstance(credit,bool) and math.isfinite(credit) and credit>=5+(price or .5)*21/60,'rentals_created':0,'estimated_new_spend_usd':0,'state':'UNAVAILABLE' if not eligible else 'BLOCKED_LAUNCH_CONTRACT'}
+    return {'mode':'REAL_READ_ONLY','offers_returned':len(offers),'eligible_offers':len(eligible),'hourly_cap_usd':.5,'cheapest_eligible_usd_hour':price,'prepaid_credit_field_present':isinstance(credit,(int,float)) and not isinstance(credit,bool) and math.isfinite(credit),'reserve_plus_one_21min_run_met':isinstance(credit,(int,float)) and not isinstance(credit,bool) and math.isfinite(credit) and credit>=5+(price or .5)*21/60,'rentals_created':0,'estimated_new_spend_usd':0,'state':'UNAVAILABLE' if not eligible else 'ELIGIBLE_OFFER_FOUND'}
 
 class Client:
     def __init__(self,bindings,base,identity,evidence):
