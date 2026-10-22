@@ -8,7 +8,7 @@ kernel channels already carry CPU-RM's privilege stamp. FALSIFIER: a required
 internal channel in the committed CHAN-FACTS records has a missing or non-KERNEL
 stamp. This is a source/fixture check, not a new boot or exploit experiment.
 
-MEASURED: a search of committed text/log CHAN-FACTS records whose client starts
+MEASURED (2026-10-22 committed-trace census, base e64b8e5f6): a search of committed text/log CHAN-FACTS records whose client starts
 with c1e found 281 records; every parsed privilege is level 2, uvm_owned false.
 These are repeated historical records, not 281 independent boots. Examples:
 `traces/windows_code43_walls_20261007/run65-chan-facts.txt`, and the Linux
@@ -32,7 +32,10 @@ the same restored source passed all six focused regressions (0 failed, 0 ignored
 on 2026-10-22 under the prescribed global lock. This closes the post-restoration
 execution gap; the 756-test whole-crate run still predates the hand mutations.
 
-| Hand mutation | MEASURED killed tests |
+MEASURED mutation campaign at commit aa43568e7, using
+`tests/audit_kernel_channel_stamp.rs` and `tests/secaudit_internal_client_range.rs`:
+
+| Hand mutation | Killed tests |
 |---|---:|
 | Restore handle OR privilege authorization | 3 |
 | Restore the broad internal-client mask | 2 |
@@ -41,6 +44,8 @@ MEASURED: Clippy --all-targets on the unchanged product base plus the new tests,
 and on the fix, reported the same 57 warning fingerprints: added 0, removed 0.
 The comparison uses scripts/ci/debt.py's source-bound diagnostic identity. No
 lint baseline or deny set changed.
+Clippy attribution: baseline base e64b8e5f6 plus the new tests, then fix commit
+aa43568e7; `cargo clippy --release --locked -j2 -p kf-rm --all-targets --message-format=json`.
 
 CODE READ: the old unit expectation granting privilege to internal-handle + None
 was corrected to refuse None and retain a positive stamped-scrubber assertion.
