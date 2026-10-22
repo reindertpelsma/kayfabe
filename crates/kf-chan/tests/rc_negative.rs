@@ -1,3 +1,4 @@
+//! GPU-free checks of optional fault arming, submission and owner isolation.
 #![cfg(feature = "rc-negative-control")]
 use kf_chan::rc_negative::{Arm, BAD_WORD, Candidate, FaultPort, TRIGGER_PUT, inject};
 
