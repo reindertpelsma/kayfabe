@@ -1,0 +1,8 @@
+MEASURED: lease 57217748 was created on 2026-10-22 at 13:31:41 UTC from offer 25469585, the lowest dph offer in the verified, rentable, single-GPU, compute_cap>=750, disk_space>=60 query sorted by dph.
+MEASURED: lease 57217748 provides NVIDIA GeForce GTX 1660 SUPER, compute capability 7.5, driver 610.43.02, and a 64 GiB root filesystem.
+MEASURED: lease 57217748 quoted dph_total=0.07377777777777778 USD/hour including the requested 64 GB disk; inbound and outbound transfer each quote 0.0013020833333333333 USD/GB.
+MEASURED: lease 57217748 pre-rental credit was 37.719872290561284 USD, exceeding the required 5 USD reserve plus the lane's 0.50 USD spending limit.
+MEASURED: lease 57217748's independent systemd destroy timer was active before creation, armed at 13:31:22 UTC to fire after 50 minutes, using the existing scripts/bench/autodestroy_box.sh against the one numeric ID recorded from this lane's create response.
+CODE READ: scripts/bench/autodestroy_box.sh destroys by ID unconditionally with -y, then checks the inventory; the systemd timer outlives this agent's shell/session.
+INFERRED: the 50-minute compute/storage exposure is approximately 0.0615 USD; a conservative 10 GB in each transfer direction adds approximately 0.0261 USD, below the 0.50 USD cap.
+CODE READ: no VM, KVM, display settings, account secrets, SSH agent forwarding, or executable copied back is required for these public-source CUDA fixtures.

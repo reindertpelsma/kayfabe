@@ -1,0 +1,7 @@
+CODE READ: CL1 validation source is PR #92 head 81626530eb1aadd42976a699bb4a881497f74794.
+INFERRED: color_mirror will return RGB 0,160,64 / 64,160,64 / 192,0,0 / 192,64,64, with alpha 255 for all eight pixels in each case.
+FALSIFIER BEFORE RUN: any other pixel, assertion failure, CUDA launch error or ABI error falsifies that hypothesis.
+INFERRED: the existing hardware-gated color_sdr and color_tmo fixtures will satisfy their assertions; the kf-cuda crate tests will pass.
+FALSIFIER BEFORE RUN: any assertion failure, error or nonzero exit falsifies the corresponding regression hypothesis.
+CODE READ: these CUDA fixtures test the implementation against its CPU-oracle interpretation; they do not establish the display engine's MIRROR semantics or Windows console recovery.
+CODE READ: validation adds no product behavior; the branch under test remains read-only and no new mutation requirement is introduced by this evidence-only lane.
