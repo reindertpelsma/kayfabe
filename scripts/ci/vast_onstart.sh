@@ -38,6 +38,18 @@ set -eu
 exec curl --silent --show-error --fail --max-time 20 --proto '=https' --request POST --header "Authorization: Bearer $KF_RUN_TOKEN" --data-binary '' "$KF_BROKER_URL/hold/$KF_RUN_ID"
 KF_HOLD
 chmod 700 /usr/local/bin/kf-box-hold
+cat > /usr/local/bin/kf-box-blob-url <<'KF_BLOB'
+#!/bin/sh
+set -eu
+. /run/kf-ci/env
+[ "$#" -eq 2 ] || exit 2
+for value in "$1" "$2"; do
+  case "$value" in ''|.|..|*[!A-Za-z0-9._-]*) exit 2;; esac
+done
+[ "${#1}" -le 64 ] && [ "${#2}" -le 100 ] || exit 2
+exec curl --silent --show-error --fail --max-time 20 --proto '=https' --header "Authorization: Bearer $KF_RUN_TOKEN" "$KF_BROKER_URL/blob-url/$KF_RUN_ID/$1/$2"
+KF_BLOB
+chmod 700 /usr/local/bin/kf-box-blob-url
 cat > /etc/profile.d/kf-ci-hold.sh <<'KF_PROFILE'
 # An authenticated SSH login takes MANUAL; ordinary non-login workloads do not.
 if [ -n "${SSH_CONNECTION:-}" ]; then

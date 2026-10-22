@@ -251,5 +251,7 @@
   "controlMaxIps": 4096,
   "checkWorkflowPath": ".github/workflows/gpu-vast.yml",
   "sweepWorkflowPath": ".github/workflows/gpu-vast-sweep.yml",
-  "oidcEnvironment": "gpu-vast"
+  "oidcEnvironment": "gpu-vast",
+  "blobRunMints": 8,
+  "blobDailyMints": 64
 }

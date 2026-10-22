@@ -119,6 +119,7 @@ def scrub(raw, max_bytes=65536, max_lines=200, max_line=1000, redactions=()):
     text = re.sub(
         r":{2,}", lambda x: (": " * (len(x[0]) // 2) + (":" if len(x[0]) % 2 else "")), text
     ).replace("##[", "# [")
+    text = re.sub(r"""https?://[^\s<>"']+""", "[url redacted]", text, flags=re.I)  # signed-url
     rows = []
     size = 0
     kept = 0
