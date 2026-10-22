@@ -1,0 +1,25 @@
+{
+  "kind": "MEASURED",
+  "utc": "2026-10-22T00:58:07.366819+00:00",
+  "eligible_verified_kvm_offer_count": 0,
+  "search_scope": [
+    "AD106 RTX 4060 Ti",
+    "AD104 RTX 4070 variants",
+    "AD103 RTX 4080 variants"
+  ],
+  "all_verified_single_gpu_kvm_offers_seen": 17,
+  "external_verified_offers_checked": true,
+  "alternative_not_authorized_yet": {
+    "offer_id": 54367439,
+    "gpu": "RTX 4090 / AD102",
+    "quote_usd_per_hour_with_180gb": 0.49,
+    "maximum_170min_runtime_usd": 1.3883333333333332,
+    "delayed_billing_guard_usd": 1.0
+  },
+  "fresh_shared_credit_usd": 43.53172423676165,
+  "lane_cap_usd": 4,
+  "reserve_usd": 5,
+  "created_instance_ids": [],
+  "rental_spend_usd": 0,
+  "question": "Owner choice pending: allow AD102, wait for a listed die, or finish hardware UNRUN."
+}
