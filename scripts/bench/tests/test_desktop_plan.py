@@ -101,3 +101,25 @@ class AppDiskTests(unittest.TestCase):
         m.attach_app_disk(q, 'matrix.iso')
         self.assertEqual(len(calls), 1)
         self.assertEqual(calls[-1][2]['xhci_bus'], 'xhci.0')
+
+
+class GuestIsoTests(unittest.TestCase):
+    def mount(self, rc=0, marker='S4_APPDISK_MOUNTED'):
+        m=load();calls=[]
+        vm=SimpleNamespace(attach_disk=lambda *_: self.fail('guest ISO mode must not hotplug a USB CD'))
+        q=SimpleNamespace(powershell=lambda *args,**kw: (calls.append((args,kw)) or SimpleNamespace(exitcode=rc,text=lambda:marker)))
+        result=m.attach_media(vm,q,'source.iso',True,dict(sha256='a'*64,size=16))
+        return result,calls
+
+    def test_guest_iso_uses_the_existing_windows_mount_path(self):
+        result,calls=self.mount();self.assertEqual(result,'guest-mounted ISO')
+        self.assertEqual(calls[0][0][0],r'C:\kf\s4_mount_apps.ps1')
+
+    def test_guest_mount_receives_the_pinned_hash_and_size(self):
+        _,calls=self.mount();self.assertEqual(calls[0][0][1],['-ExpectedSha256','a'*64,'-ExpectedSize','16'])
+
+    def test_failed_mount_cannot_start_the_matrix(self):
+        with self.assertRaisesRegex(RuntimeError,'mount'):self.mount(rc=1)
+
+    def test_missing_mount_receipt_cannot_start_the_matrix(self):
+        with self.assertRaisesRegex(RuntimeError,'mount'):self.mount(marker='')
