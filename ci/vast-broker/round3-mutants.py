@@ -21,6 +21,7 @@ CASES=[
 ]
 
 CASES += [
+ ('runner-drop-count','runner.py',[("kept+=len(safe.encode())+int(had_lf)","kept+=len(safe.encode())+1")],'round3-drop-count.test.js'),
  ('runner-API-prefix','runner.py',[("origin+('/'+prefix if prefix else '')+route","origin+route")],'secret-client.test.js'),
  ('runner-hostname-masks','runner.py',[(",*urllib.parse.urlsplit(origin).hostname.split('.')]:","]:")],'secret-client.test.js'),
  ('runner-audience-mask','runner.py',[(";print('::add-mask::'+audience,flush=True)","")],'secret-client.test.js'),
