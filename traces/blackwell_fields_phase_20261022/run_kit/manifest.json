@@ -8,7 +8,7 @@
     "collect_bw.sh": "9c52dbf93b3a3f2cc81ffedd2efd26784c5b2714907a7081f63382711944a5c4",
     "events.ps1": "46af7f0f18188f30383a72993779b81d2ecc39fe6b98ff37bebd65cce59f3790",
     "accept580.ps1": "5253c987350965962f3c6d3642078b4aaa2ef6bc264f9667d4caa1ca4ab0c96f",
-    "controller.sh": "904ebb0477a66ee456f91d57db9a0d50badd02a738adedcf28addca695b305c4",
+    "controller.sh": "ee6c6ba534b78eb1a9242131a173a9c001ebb845e7a67112d242bde959bd7ead",
     "native_wrap.py": "2a752502722bc7ff7ae3111eb12a9a742b3a3e5741e8f483282926a4fab80ad5",
     "diag_min.ps1": "58f5ca0a9be045fe603fa69f872b28162e625a35c410e196311595b4d57c4c7f",
     "collect_crash.ps1": "a7df0bb2c8af4c8ff659f45c682d36b95c649653ea66c061c433b35674c63bd1",
@@ -34,5 +34,6 @@
     "common.sh": "4746cdfe77e7a8dc56cdda2d90da9060ee59c66c02d1d9588f1d37dc15304122",
     "phase_begin.py": "72ce5ac2ddd9221a97caee0f0f140bd6658fd8f861d3be13ee9e30f81c6ebe67",
     "alloc_headers.py": "f5bbd0371dd179bf7d4348646904984072eead9661005672152ce31da26d97ff"
-  }
+  },
+  "candidate_die": "GB206"
 }

@@ -53,6 +53,8 @@ EXPECTED_DIE
 grep -Eq "PROBE_DIE .*die=${expected_die}([[:space:]]|$)" /root/prov/sweep_host_die.log
 # Only the previously unmeasured own-die PRECOMP permission/reply is new here.
 # AUDIT_SUBTRACT GB202 ZBC/8162/GSS sizes already measured (2026-10-22 owner audit).
+# GB206 also has existing tier2 identity/ZBC/host shapes and native Windows caps/census.
+# This selectedGB206 run subtracts those existing groups as well; no native caps recapture.
 # The container wrapper would rent a second box and repeat those groups: not invoked.
 [ -f scripts/bench/constants/run_container_probe.sh ] && echo S4_KIT_PRESENT_AUDIT_SUBTRACTED
 cargo build --release -p kf-qemu --example precomp_host_read >/root/prov/precomp_build.log 2>&1
