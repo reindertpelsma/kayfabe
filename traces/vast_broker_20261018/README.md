@@ -1,4 +1,4 @@
-# V1 Vast broker evidence — 2026-10-21
+# V1 Vast broker evidence — 2026-10-22
 
 [CODE READ: 2026-10-21] STOP: the provider VM/onstart launch contract conflicts
 with strict no SSH. This is local prototype evidence, not a completed/deployable
@@ -16,6 +16,30 @@ local RSA keys. Hardware n=0; no rentals, deployment, SSH or GPU work.
 primary API documentation, falsifiers, deployment and residual billing risk.
 The scoped [README](../../ci/vast-broker/README.md) has nine owner setup steps.
 Root README.md is unchanged. Merge-group support is deferred by owner ruling.
+
+## Amendment 3/3b callback proof
+
+[CODE READ: 2026-10-22] Amendment 3 replaces log retrieval/marker parsing with a
+per-run HMAC callback. Amendment 3b treats that bearer as hostile input authority
+only: strict stream/schema/depth/sequence/count/byte/rate gates, live ledger plus
+current Vast status, immediate revocation on result/stop/TTL and fail-closed
+provider errors. Status returns a sanitised tail. Owner-only stop-all and same-run
+OIDC stop delete only recorded owned labels. No Vast log API request is needed.
+
+| Proof | EXPECTED RED commit | Before |
+| --- | --- | --- |
+| Reports, token binding, liveness, caps, stop | cf31b9925 | 64 tests: 3 pass, 61 fail |
+| Fixed callback sender, step token binding, outbound model names | ed5c287b3 | 14 tests: 0 pass, 14 fail |
+| Partial ledger cleanup and embedded command delimiters | 95c148fbe | Reporting: 76 pass, 3 fail; sanitizer: 28 pass, 3 fail |
+
+[MEASURED: 2026-10-22 checkpoint] Implementation 48e988538 passes 367 tests.
+Cleanup/delimiter fix 7f1305566 passes 376 tests, zero failed/skipped. Tests run
+the actual generated Python sender with mocked workload/curl and execute the
+actual workflow shell with fake curl/sleep. Full raw output stays only in the
+mocked local backup; structured verdict follows exit status. Tokens are not
+returned to the runner or retained in ledger scripts. Every rendered box line
+has a visible prefix; neither command delimiter survives anywhere, including
+legacy markers embedded inside a line. The final mutation results follow below.
 
 ## Tests first
 
@@ -48,10 +72,10 @@ incorrectly; fe57dbffe fixes that fixture and supplies the meaningful assertion
 red proof. Its corrected result supersedes the overstated earlier commit-message
 count. No fixture error is counted as a sanitizer/client defect proof here.
 
-## Final commands and mutation table
+## Historical pre-callback commands and mutation table
 
 [MEASURED: 2026-10-22 fresh backup run] node --test ci/vast-broker/test: 291 passed, 0 failed,
-0 skipped after the final mutation campaign and source restoration. All 51 mutants were killed, each by at least two named tests. node --test uses Node built-ins,
+0 skipped after the final mutation campaign and source restoration. The historical pre-callback campaign killed all 51 mutants, each by at least two named tests; the new table supersedes that source baseline. node --test uses Node built-ins,
 generated JWKS, mocked storage/GitHub/Vast and a local HTTP integration server.
 Actual workflow bash runs against fake curl/sleep: PASS/FAIL/refusal/pending,
 NOT_NEEDED, cancelled/skipped dependencies and hostile output are exercised.
@@ -86,7 +110,7 @@ attestation/release dependency exists. Workflow changes remain review-sensitive.
 
 [INFERRED from source: untested live contracts] A lying box can fabricate PASS.
 Cold-build duration/download volume, KVM keyless onstart, live OIDC/run/head
-metadata, asynchronous log URL/completeness, actual Cloudflare CPU/limits and
+metadata, callback delivery/onstart, actual Cloudflare CPU/limits and
 provider billing/debt/key restrictions need an owner-authorized smoke run.
 Nominal compute allowance is 1.25 USD per 150-minute rental, with 3 USD daily and
 30 USD rolling admission estimates; failed cleanup can continue billing beyond
