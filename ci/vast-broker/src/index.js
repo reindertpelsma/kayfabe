@@ -13,6 +13,9 @@ export function createService({env,storage,fetch:fetcher=fetch,now=Date.now,rand
   const runKey=c=>c.run_id+'-'+c.run_attempt;
   const json=(data,status=200)=>Response.json(data,{status,headers:{'Cache-Control':'no-store','X-Content-Type-Options':'nosniff'}});
   const secrets=[env.VAST_API_KEY,env.RUN_TOKEN_SECRET,env.OWNER_STOP_TOKEN,...endpointSecrets(env)].filter(Boolean);
+  // Newly created real provider rows can omit/null actual_status. This grants
+  // only the existing provisioning window, never callback/liveness authority.
+  const pendingInstance=i=>i.actual_status==null||['created','loading','starting'].includes(i.actual_status);
   const expose=(r,key=r.key,pr=r.pr)=>({run:key,id:r.id,sha:r.sha,pr,
     state:r.boxKilled&&r.resultAt!==undefined?'COMPLETE':r.closed==='STOPPED'?'STOPPED':r.ended!==null||r.resultAt!==undefined?'COMPLETE':r.closed?'STOPPING':'RUNNING',
     verdict:r.ended!==null||r.resultAt!==undefined?r.verdict||'UNAVAILABLE':'UNAVAILABLE',
@@ -43,7 +46,7 @@ export function createService({env,storage,fetch:fetcher=fetch,now=Date.now,rand
     if(instance===null){record.closed='GONE';record.verdict='UNAVAILABLE';await ledger.settle(record,now());return;}
     if(instance.actual_status!=='running'){
       // Pending is not proof of liveness; keep only to the bounded provisioning deadline.
-      if(record.firstReportAt===undefined&&['created','loading','starting'].includes(instance.actual_status))return;
+      if(record.firstReportAt===undefined&&pendingInstance(instance))return;
       await close(record,vast,'ENDED');return;
     }
     record.liveCheckedAt=now();await ledger.save(record);
@@ -83,7 +86,7 @@ export function createService({env,storage,fetch:fetcher=fetch,now=Date.now,rand
       if(r.liveCheckedAt===null||r.liveCheckedAt===undefined||now()-r.liveCheckedAt>=3000){
         try{
           await recover(r,vast);const instance=await vast.inspect(r);
-          if(instance&&r.firstReportAt===undefined&&['created','loading','starting'].includes(instance.actual_status))refuse('NOT_READY',409);
+          if(instance&&r.firstReportAt===undefined&&pendingInstance(instance))refuse('NOT_READY',409);
           if(instance===null||instance.actual_status!=='running')throw Error('NOT_LIVE'); // MUTANT report-live
           r.liveCheckedAt=now();
         }catch(error){

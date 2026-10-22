@@ -6,6 +6,8 @@ const root=new URL('../../',import.meta.url),base=new URL('./',import.meta.url);
 const replace=(old,value)=>s=>{if(!s.includes(old))throw Error('Mutation anchor missing: '+old);return s.replace(old,value);};
 const dropLine=fragment=>s=>{const lines=s.split('\n');if(lines.filter(x=>x.includes(fragment)).length!==1)throw Error('Ambiguous mutation anchor '+fragment);return lines.filter(x=>!x.includes(fragment)).join('\n');};
 const mutations=[
+ ['SSH onstart launch','src/vast.js',replace("runtype:'ssh_direct'","runtype:'args'")],
+ ['pending provider status','src/index.js',replace("i.actual_status==null||['created'","['created'")],
  ['inherited endpoint secrets','workflow-guard.js',dropLine('// MUTANT secret-inherit')],
  ['endpoint aliases in step metadata','workflow-guard.js',dropLine('// MUTANT secret-metadata')],
  ['optional prefix admission','src/routes.js',dropLine('// MUTANT prefix-match')],
