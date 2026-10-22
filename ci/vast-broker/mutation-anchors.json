@@ -283,8 +283,8 @@
   ],
   "legacy:embedded command delimiters": [
     [
-      "    )\n    .replace(/[A-Za-z0-9_-]+/g, (value) => (value.length >= 32 ? '[redacted]' : value));\n  for (const secret of secrets) if (secret) text = text.split(secret).join('[redacted]');\n  text = text.replace(/:{2,}/g, (value) => value.split('').join(' ')).replaceAll('##[', '# #['); // MUTANT command-delimiters\n  const lines = text.split('\\n');\n  if (lines.at(-1) === '') lines.pop();\n  let retained = [],\n",
-      "    )\n    .replace(/[A-Za-z0-9_-]+/g, (value) => (value.length >= 32 ? '[redacted]' : value));\n  for (const secret of secrets) if (secret) text = text.split(secret).join('[redacted]');\n  const lines = text.split('\\n');\n  if (lines.at(-1) === '') lines.pop();\n  let retained = [],\n"
+      "  text = text.replace(/:{2,}/g, (value) => value.split('').join(' ')).replaceAll('##[', '# #['); // MUTANT command-delimiters\n  const lines = text.split('\\n');",
+      "  const lines = text.split('\\n');"
     ]
   ],
   "legacy:per-line UTF8 byte cap": [
@@ -505,7 +505,7 @@
   ],
   "legacy:public cron isolation": [
     [
-      "      if (\n        path === null ||\n        !/^\\/(?:rent|availability|stop-all|(?:report|kill|hold|stop-timer|status|stop|logs)\\/[1-9][0-9]{0,19}-[1-9][0-9]{0,19})$/.test(\n          path,\n        )\n      )\n        return notFound();",
+      "      if (\n        path === null ||\n        !/^\\/(?:rent|availability|stop-all|blob-url\\/[1-9][0-9]{0,19}-[1-9][0-9]{0,19}\\/[A-Za-z0-9._-]{1,64}\\/[A-Za-z0-9._-]{1,100}|(?:report|kill|hold|stop-timer|status|stop|logs)\\/[1-9][0-9]{0,19}-[1-9][0-9]{0,19})$/.test(\n          path,\n        )\n      )\n        return notFound();",
       "      if (false) return notFound();"
     ]
   ],
@@ -647,14 +647,14 @@
   ],
   "v4:address-scrub": [
     [
-      "    ); // MUTANT token-shape\n  text = text\n    .replace(/\\bBearer\\s+[^\\s]+/gi, 'Bearer [redacted]')\n    .replace(/\\b(?:[0-9]{1,3}\\.){3}[0-9]{1,3}\\b/g, '[address]')\n    .replace(\n      /(?<![A-Za-z0-9_:-])(?:[0-9a-f]{0,4}:){2,7}[0-9a-f]{0,4}(?:%[A-Za-z0-9]{1,32})?(?![A-Za-z0-9_:-])/gi,\n      '[address]',\n    )\n    .replace(/[A-Za-z0-9_-]+/g, (value) => (value.length >= 32 ? '[redacted]' : value));\n  for (const secret of secrets) if (secret) text = text.split(secret).join('[redacted]');\n  text = text.replace(/:{2,}/g, (value) => value.split('').join(' ')).replaceAll('##[', '# #['); // MUTANT command-delimiters\n",
-      "    ); // MUTANT token-shape\n  text = text\n    .replace(/\\bBearer\\s+[^\\s]+/gi, 'Bearer [redacted]')\n    .replace(/[A-Za-z0-9_-]+/g, (value) => (value.length >= 32 ? '[redacted]' : value));\n  for (const secret of secrets) if (secret) text = text.split(secret).join('[redacted]');\n  text = text.replace(/:{2,}/g, (value) => value.split('').join(' ')).replaceAll('##[', '# #['); // MUTANT command-delimiters\n"
+      "    .replace(/\\b(?:[0-9]{1,3}\\.){3}[0-9]{1,3}\\b/g, '[address]')\n    .replace(\n      /(?<![A-Za-z0-9_:-])(?:[0-9a-f]{0,4}:){2,7}[0-9a-f]{0,4}(?:%[A-Za-z0-9]{1,32})?(?![A-Za-z0-9_:-])/gi,\n      '[address]',\n    )\n    .replace(/[A-Za-z0-9_-]+/g, (value) => (value.length >= 32 ? '[redacted]' : value));",
+      "    .replace(/[A-Za-z0-9_-]+/g, (value) => (value.length >= 32 ? '[redacted]' : value));"
     ]
   ],
   "v4:opaque-token-scrub": [
     [
-      "      /(?<![A-Za-z0-9_:-])(?:[0-9a-f]{0,4}:){2,7}[0-9a-f]{0,4}(?:%[A-Za-z0-9]{1,32})?(?![A-Za-z0-9_:-])/gi,\n      '[address]',\n    )\n    .replace(/[A-Za-z0-9_-]+/g, (value) => (value.length >= 32 ? '[redacted]' : value));\n  for (const secret of secrets) if (secret) text = text.split(secret).join('[redacted]');\n  text = text.replace(/:{2,}/g, (value) => value.split('').join(' ')).replaceAll('##[', '# #['); // MUTANT command-delimiters\n  const lines = text.split('\\n');\n",
-      "      /(?<![A-Za-z0-9_:-])(?:[0-9a-f]{0,4}:){2,7}[0-9a-f]{0,4}(?:%[A-Za-z0-9]{1,32})?(?![A-Za-z0-9_:-])/gi,\n      '[address]',\n    )\n    .replace(/[A-Za-z0-9_-]+/g, (value) => value);\n  for (const secret of secrets) if (secret) text = text.split(secret).join('[redacted]');\n  text = text.replace(/:{2,}/g, (value) => value.split('').join(' ')).replaceAll('##[', '# #['); // MUTANT command-delimiters\n  const lines = text.split('\\n');\n"
+      "    .replace(/[A-Za-z0-9_-]+/g, (value) => (value.length >= 32 ? '[redacted]' : value));",
+      "    .replace(/[A-Za-z0-9_-]+/g, (value) => value);"
     ]
   ],
   "v4:instance-scrub": [
@@ -753,8 +753,8 @@
   ],
   "v4:overlapping-worker-delimiters": [
     [
-      "    )\n    .replace(/[A-Za-z0-9_-]+/g, (value) => (value.length >= 32 ? '[redacted]' : value));\n  for (const secret of secrets) if (secret) text = text.split(secret).join('[redacted]');\n  text = text.replace(/:{2,}/g, (value) => value.split('').join(' ')).replaceAll('##[', '# #['); // MUTANT command-delimiters\n  const lines = text.split('\\n');\n  if (lines.at(-1) === '') lines.pop();\n  let retained = [],\n",
-      "    )\n    .replace(/[A-Za-z0-9_-]+/g, (value) => (value.length >= 32 ? '[redacted]' : value));\n  for (const secret of secrets) if (secret) text = text.split(secret).join('[redacted]');\n  text = text.replaceAll('::', ': :').replaceAll('##[', '# #['); // MUTANT command-delimiters\n  const lines = text.split('\\n');\n  if (lines.at(-1) === '') lines.pop();\n  let retained = [],\n"
+      "  text = text.replace(/:{2,}/g, (value) => value.split('').join(' ')).replaceAll('##[', '# #['); // MUTANT command-delimiters",
+      "  text = text.replaceAll('::', ': :').replaceAll('##[', '# #['); // MUTANT command-delimiters"
     ]
   ],
   "v4:overlapping-renderer-delimiters": [
@@ -915,8 +915,12 @@
   ],
   "r3:diagnostic-BASE-claims": [
     [
-      "        actor_id: String(owner),\n        sha: 'd'.repeat(40),\n        ref: 'refs/heads/master',\n        workflow_ref: repo + '/.github/workflows/gpu-vast.yml@refs/heads/master',\n        workflow_sha: 'd'.repeat(40),\n        run_id: selected.run,\n        run_attempt: '1',\n      };\n",
-      "        actor_id: String(owner),\n        sha: 'd'.repeat(40),\n        ref: 'refs/heads/master',\n        obsolete_ref: repo + '/.github/workflows/gpu-vast.yml@refs/heads/master',\n        obsolete_sha: 'd'.repeat(40),\n        run_id: selected.run,\n        run_attempt: '1',\n      };\n"
+      "        workflow_ref: repo + '/.github/workflows/gpu-vast.yml@refs/heads/master',",
+      "        obsolete_ref: repo + '/.github/workflows/gpu-vast.yml@refs/heads/master',"
+    ],
+    [
+      "        workflow_sha: 'd'.repeat(40),",
+      "        obsolete_sha: 'd'.repeat(40),"
     ]
   ],
   "r3:runner-summary-fields": [
@@ -969,12 +973,16 @@
   ],
   "r3:OIDC-workflow-ref": [
     [
-      "      !numericId(c.actor_id) ||\n      !numericId(c.run_id) ||\n      !numericId(c.run_attempt) ||\n      !['pull_request', 'pull_request_target', 'workflow_dispatch'].includes(c.event_name) ||\n      ![\n        cfg.repo + '/.github/workflows/gpu-vast.yml@refs/heads/master',\n        cfg.repo + '/.github/workflows/gpu-vast-sweep.yml@refs/heads/master',\n      ].includes(c.workflow_ref)\n    )\n      refuse('UNAUTHORIZED', 401);\n    return c;\n",
-      "      !numericId(c.actor_id) ||\n      !numericId(c.run_id) ||\n      !numericId(c.run_attempt) ||\n      !['pull_request', 'pull_request_target', 'workflow_dispatch'].includes(c.event_name)\n    )\n      refuse('UNAUTHORIZED', 401);\n    return c;\n"
+      "    ![...cfg.checkWorkflows, cfg.sweepWorkflow].includes(c.job_workflow_ref) ||\n",
+      ""
     ],
     [
-      "        c.workflow_ref !== cfg.repo + '/.github/workflows/gpu-vast-sweep.yml@refs/heads/master')\n    )\n      refuse('UNAUTHORIZED', 401);\n    if (\n      profile === 'check' &&\n      c.workflow_ref !== cfg.repo + '/.github/workflows/gpu-vast.yml@refs/heads/master'\n    )\n      refuse('UNAUTHORIZED', 401);\n    cfg.profile = profile;\n    if (path === '/availability') {\n      const run = await github.run(c.run_id),\n",
-      "        c.workflow_ref !== cfg.repo + '/.github/workflows/gpu-vast-sweep.yml@refs/heads/master')\n    )\n      refuse('UNAUTHORIZED', 401);\n    /* mutant omits second workflow boundary */\n    cfg.profile = profile;\n    if (path === '/availability') {\n      const run = await github.run(c.run_id),\n"
+      "    ![...cfg.checkWorkflows, cfg.sweepWorkflow].includes(c.workflow_ref) ||\n",
+      ""
+    ],
+    [
+      "    if (profile === 'check' && !cfg.checkWorkflows.includes(c.workflow_ref))\n      refuse('UNAUTHORIZED', 401);",
+      "    /* mutant omits profile workflow boundary */"
     ]
   ],
   "r3:release-same-SHA": [
@@ -1301,8 +1309,8 @@
   ],
   "v5:sweep-owner-only": [
     [
-      "    if (!['check', 'sweep'].includes(profile)) refuse('BAD_REQUEST', 400);\n    if (path === '/availability' && url.search !== '?profile=' + profile)\n      refuse('BAD_REQUEST', 400);\n    if (\n      profile === 'sweep' &&\n      (c.actor_id !== cfg.owner ||\n        c.event_name !== 'workflow_dispatch' ||\n        c.workflow_ref !== cfg.repo + '/.github/workflows/gpu-vast-sweep.yml@refs/heads/master')\n    )\n      refuse('UNAUTHORIZED', 401);\n    if (\n      profile === 'check' &&\n      c.workflow_ref !== cfg.repo + '/.github/workflows/gpu-vast.yml@refs/heads/master'\n",
-      "    if (!['check', 'sweep'].includes(profile)) refuse('BAD_REQUEST', 400);\n    if (path === '/availability' && url.search !== '?profile=' + profile)\n      refuse('BAD_REQUEST', 400);\n    /* mutant omits profile owner gate */\n    if (\n      profile === 'check' &&\n      c.workflow_ref !== cfg.repo + '/.github/workflows/gpu-vast.yml@refs/heads/master'\n"
+      "    if (\n      profile === 'sweep' &&\n      (c.actor_id !== cfg.owner ||\n        c.event_name !== 'workflow_dispatch' ||\n        c.workflow_ref !== cfg.sweepWorkflow)\n    )\n      refuse('UNAUTHORIZED', 401);\n",
+      "    /* mutant omits profile owner gate */\n"
     ]
   ],
   "v5:preference-order-forced": [

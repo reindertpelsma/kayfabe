@@ -13,6 +13,8 @@ import {OidcVerifier} from './oidc.js';
 // prettier-ignore
 import {Github} from './github.js';
 // prettier-ignore
+import {mintBlob} from './blobs.js';
+// prettier-ignore
 import {Vast} from './vast.js';
 // prettier-ignore
 import {OfferBook} from './offers.js';
@@ -71,6 +73,7 @@ export function createService({
       headers: { 'Cache-Control': 'no-store', 'X-Content-Type-Options': 'nosniff' },
     });
   const secrets = [
+    env.BLOB_GITHUB_TOKEN,
     env.VAST_API_KEY,
     env.RUN_TOKEN_SECRET,
     env.OWNER_STOP_TOKEN,
@@ -595,11 +598,16 @@ export function createService({
     if (cfg.testIdentity) cfg.githubOrigin = cfg.testIdentity.githubOrigin;
     if (url.search && !/^\/logs\//.test(path) && path !== '/availability')
       refuse('BAD_REQUEST', 400);
+    const blob =
+      /^\/blob-url\/([1-9][0-9]{0,19}-[1-9][0-9]{0,19})\/([A-Za-z0-9._-]{1,64})\/([A-Za-z0-9._-]{1,100})$/.exec(
+        path,
+      );
     const match =
       /^\/(report|kill|hold|stop-timer|status|stop|logs)\/([1-9][0-9]{0,19}-[1-9][0-9]{0,19})$/.exec(
         path,
       );
     if (
+      !(blob && request.method === 'GET') &&
       !(path === '/availability' && request.method === 'GET') &&
       !(path === '/rent' && request.method === 'POST') &&
       !(path === '/stop-all' && request.method === 'POST') &&
@@ -610,6 +618,25 @@ export function createService({
     if (!authorization?.startsWith('Bearer ')) refuse('UNAUTHORIZED', 401);
     const bearer = authorization.slice(7),
       vast = new Vast(fetcher, cfg, env.VAST_API_KEY);
+    if (blob) {
+      const r = await ledger.get('record:' + blob[1]);
+      if (
+        !r ||
+        r.key !== blob[1] ||
+        !(await tokens.verify(bearer, r)) ||
+        r.ended !== null ||
+        r.closed ||
+        now() >= r.reportExpiry * 1000
+      )
+        refuse('UNAUTHORIZED', 401);
+      clocks(r, cfg);
+      await rejectExpiredCallback(r, cfg, vast);
+      await readBounded(request, 0);
+      await rate(r, cfg);
+      const instance = await vast.inspect(r);
+      if (!instance || instance.actual_status !== 'running') refuse('UNAUTHORIZED', 401);
+      return json(await mintBlob(fetcher, env, ledger, r, blob[2], blob[3], now()));
+    }
     if (match?.[1] === 'report') return report(request, match[2], bearer, cfg, vast);
     if (match?.[1] === 'kill') return kill(request, match[2], bearer, cfg, vast);
     if (match?.[1] === 'hold') return hold(request, match[2], bearer, cfg, vast);
@@ -963,7 +990,11 @@ export function createService({
       )
         return;
     }
-    const box = /^\/(report|kill|hold)\/([1-9][0-9]{0,19}-[1-9][0-9]{0,19})$/.exec(path);
+    const box =
+      /^\/(report|kill|hold)\/([1-9][0-9]{0,19}-[1-9][0-9]{0,19})$/.exec(path) ??
+      /^\/(blob-url)\/([1-9][0-9]{0,19}-[1-9][0-9]{0,19})\/[A-Za-z0-9._-]{1,64}\/[A-Za-z0-9._-]{1,100}$/.exec(
+        path,
+      );
     if (box) {
       const record = await ledger.get('record:' + box[2]);
       if (!record || !(await tokens.verify(bearer, record))) refuse('UNAUTHORIZED', 401);
@@ -1133,7 +1164,7 @@ export function createGateway({ authorize, fetcher = fetch, now = Date.now } = {
       (await constantTimeEqual(env.OWNER_STOP_TOKEN, bearer))
     )
       return;
-    if (/^\/(?:report|kill|hold)\//.test(path)) {
+    if (/^\/(?:report|kill|hold|blob-url)\//.test(path)) {
       if (
         !/^v1\.[1-9][0-9]{0,19}\.[1-9][0-9]{0,19}\.[1-9][0-9]{0,12}\.[A-Za-z0-9_-]{43}$/.test(
           bearer,
@@ -1167,7 +1198,7 @@ export function createGateway({ authorize, fetcher = fetch, now = Date.now } = {
       }
       if (
         path === null ||
-        !/^\/(?:rent|availability|stop-all|(?:report|kill|hold|stop-timer|status|stop|logs)\/[1-9][0-9]{0,19}-[1-9][0-9]{0,19})$/.test(
+        !/^\/(?:rent|availability|stop-all|blob-url\/[1-9][0-9]{0,19}-[1-9][0-9]{0,19}\/[A-Za-z0-9._-]{1,64}\/[A-Za-z0-9._-]{1,100}|(?:report|kill|hold|stop-timer|status|stop|logs)\/[1-9][0-9]{0,19}-[1-9][0-9]{0,19})$/.test(
           path,
         )
       )
