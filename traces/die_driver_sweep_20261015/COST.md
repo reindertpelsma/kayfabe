@@ -259,3 +259,15 @@ exclusive SW2 spend. New offers/quotes are planning evidence only. Next proposal
 ON then isolated B1 ON, bounded by actual-rate reservation and170min outer auto-destroy plus earlier
 cost/authorized deadline; no new execution window or rental grant inferred. See
 ../blackwell_host_caps_review_20261022/market_plan_snapshot.json and the host-PRECOMP validation plan.
+
+BLACKWELL FIELD PHASE2026-10-22 (new owner grant cap8USD/stop6/reserve5; prior stretch separate):
+CPU field-policy/observer/controller/B1 prerequisites green and pushed before rental preflight.
+MEASURED API2026-10-22 20:24:55UTC: no verified RTX5090 offer within the frozen KVM/disk/CPU/
+network/reliability requirements; four matches are deverified or unverified (one startup-blacklisted).
+Preflight exit75 NO_SUITABLE_REPLACEMENT_OFFERS, before any create API call. No instance id,
+no timer required, no provisioning, no new hardware result. Phase spend0USD; no second offer/rental
+attempt or eligibility weakening. Read-only broader offer query confirms zero verified matches.
+Historical stretch runtime estimate remains4.832256623USD, separate from new phase allowance.
+Own eight historical ids APIabsent; current credit and no-creation receipt:
+../blackwell_fields_phase_20261022/FINAL_API_AUDIT.json. Foreign instances untouched.
+Other GB203/205/206/207 plan is read-only, with audit-covered measurements subtracted; no rentals.

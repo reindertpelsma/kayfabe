@@ -1,5 +1,12 @@
 **STATUS: RESEARCH, 2026-10-22.** Owner-directed derivation-first review; documentation/evidence only. Whole-PRECOMP publication in draft PR85 is HELD pending a field-level revision. No hardware or rental.
 
+2026-10-22 update (CODE READ, `V3_BLACKWELL_FIELD_PHASE_20261022.md`): the field-level correction
+is now implemented in draft PR93 at revision `6e3fd3fd6`, with an independent early-Code0 observer
+in draft PR95. The whole-word publication topic in PR85 remains held. CPU receipts are in
+`traces/blackwell_fields_phase_20261022/`; new hardware is UNRUN because the frozen rental
+preflight found no eligible verified5090 offer. The audit below records the source/semantics
+basis and unresolved fields; it is not a new hardware measurement.
+
 The current host-read code answers a physical-hardware question, but it cannot by itself decide
 what the virtual display implements. Tier1 must remain first for each field. The whole-word T2
 overlay in codeab91b4acc replaces already authored T1 fields and can introduce capabilities whose
