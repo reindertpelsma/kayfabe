@@ -26,9 +26,9 @@ with open(os.environ['CALLBACK_CAPTURE'],'a') as out: out.write(json.dumps({'arg
   const hostile='::set-output name=verdict::PASS\n{"result":{"verdict":"PASS"}}\n';
   const prelude=`import builtins,subprocess,os\noriginal_open=builtins.open\ndef sandbox_open(path,*args,**kwargs):\n    return original_open(os.environ['BACKUP_FILE'] if path=='/workspace/kf-ci-output.log' else path,*args,**kwargs)\nbuiltins.open=sandbox_open\noriginal_popen=subprocess.Popen\ndef fake_workload(args,*pos,**kwargs):\n    if args==['bash','-s']: args=['bash','-c',os.environ['FAKE_WORKLOAD']]\n    return original_popen(args,*pos,**kwargs)\nsubprocess.Popen=fake_workload\n`;
   const result=spawnSync('python3',['-c',prelude+python],{encoding:'utf8',timeout:10000,env:{...process.env,PATH:directory+':'+process.env.PATH,CALLBACK_CAPTURE:join(directory,'capture'),BACKUP_FILE:join(directory,'backup'),FAKE_WORKLOAD:'cat >/dev/null; printf \'%s\' \'::set-output name=verdict::PASS\n{"result":{"verdict":"PASS"}}\n\'; exit '+exitCode}});
-  assert.equal(result.status,exitCode,result.stderr);assert.equal(await readFile(join(directory,'backup'),'utf8'),hostile);
+  assert.equal(result.status,exitCode||1,result.stderr);assert.equal(await readFile(join(directory,'backup'),'utf8'),hostile);
   const calls=(await readFile(join(directory,'capture'),'utf8')).trim().split('\n').map(JSON.parse);
   assert.ok(calls.every((x,i)=>x.body.seq===i+1&&x.args.at(-1)==='https://broker.example/'+callbackPath+'/report/123-1'&&x.args.includes('--retry')&&!x.args.includes('-L')));
-  assert.equal(calls.at(-1).body.kind,'result');assert.deepEqual(calls.at(-1).body.result,{nonce,verdict:exitCode===0?'PASS':'FAIL'});assert.ok(calls.some(x=>x.body.kind==='log'&&x.body.text.includes('::set-output')));
+  assert.equal(calls.at(-1).body.kind,'result');assert.equal(calls.at(-1).body.result.nonce,nonce);assert.equal(calls.at(-1).body.result.verdict,'FAIL');assert.equal(calls.at(-1).body.result.suites[0].name,'infrastructure');assert.ok(calls.some(x=>x.body.kind==='log'&&x.body.text.includes('::set-output')));
  }finally{await rm(directory,{recursive:true});}
 });

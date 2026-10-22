@@ -1,4 +1,4 @@
-import {runnerBootstrap} from './workflow-bootstrap.js';
+import {runnerBootstrap,sweepBootstrap} from './workflow-bootstrap.js';
 // Security-focused reader for the repository's indentation-based workflow subset.
 // Unsupported dynamic permissions/dependencies fail closed; this is not a YAML evaluator.
 import {readdir,readFile} from 'node:fs/promises';
@@ -32,7 +32,7 @@ function jobsIn(text){
 function endpointBoundary(filename,text,jobs){
   const errors=[],fail=reason=>errors.push('Broker endpoint '+reason);
   if(/^[ \t]*['"]?secrets['"]?[ \t]*:[ \t]*[^#\s]/m.test(text))fail('secret forwarding requires explicit block mappings'); // MUTANT secret-inherit
-  const primary=filename==='gpu-vast.yml'?jobs.find(x=>x.id==='gpu'):null;
+  const primary=['gpu-vast.yml','gpu-vast-sweep.yml'].includes(filename)?jobs.find(x=>x.id==='gpu'):null;
   let remaining=text,outside=text;
   if(primary){
     const parts=primary.body.split(/(?=^      - )/m),steps=parts.slice(1);
@@ -55,7 +55,7 @@ function endpointBoundary(filename,text,jobs){
       if(!['WORKER_URL','WORKER_PATH'].every(x=>found.has(x)))fail('requires two step-env secret bindings'); // MUTANT secret-binding
       if(/\b(?:WORKER_URL|WORKER_PATH|BROKER_BASE|broker_origin|broker_host|broker_base|audience)\b/.test(kept.join('\n').split(/^        run:/m)[0]))fail('aliases cannot enter step metadata'); // MUTANT secret-metadata
       const run=step.split(/^        run: \|\s*$/m)[1]||'';
-      const approvedRenderer=run.split('\n').map(x=>x.startsWith('          ')?x.slice(10):x).join('\n').trim()===runnerBootstrap.trim();
+      const approvedRenderer=run.split('\n').map(x=>x.startsWith('          ')?x.slice(10):x).join('\n').trim()===(filename==='gpu-vast-sweep.yml'?sweepBootstrap:runnerBootstrap).trim();
       if(!approvedRenderer)fail('requires exact trusted BASE controller bootstrap');
       for(const line of run.split('\n')){
         if(/GITHUB_ENV/.test(line))fail('cannot enter environment channels');
@@ -87,6 +87,10 @@ export function checkWorkflows(workflows){
     if(JSON.stringify(Object.entries(job.grants))!==JSON.stringify([['statuses','write']])||/X-GH-Token|WORKER_URL|id-token:/.test(job.body))errors.push('Status writer must not send its token to Worker');
   }
   for(const [filename,text] of Object.entries(workflows)){
+    if(filename==='gpu-vast-sweep.yml'){
+      if(!/^  workflow_dispatch:/m.test(text)||/^  (?:pull_request|pull_request_target|push|schedule):/m.test(text)||/statuses:|context:[ "]*gpu-vast|actions\/checkout|cache@|upload-artifact|download-artifact/.test(text))errors.push('Sweep must be a dispatch-only finding without merge status or source/artifact input');
+      const job=jobsIn(text);if(job.length!==1||job[0].id!=='gpu'||JSON.stringify(Object.entries(job[0].grants))!==JSON.stringify([['id-token','write']]))errors.push('Sweep must have one OIDC-only broker job');
+    }
     const jobs=jobsIn(text),map=new Map(jobs.map(j=>[j.id,j]));
     errors.push(...endpointBoundary(filename,text,jobs));
     const reaches=(job,seen=new Set())=>{if(seen.has(job.id))return false;seen.add(job.id);return job.needs.some(n=>gpu.some(g=>g.id===n)||map.has(n)&&reaches(map.get(n),seen));};

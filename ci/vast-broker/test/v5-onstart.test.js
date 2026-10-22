@@ -28,3 +28,5 @@ for(const exhausted of ['attempts','bytes'])test('V5 sender busy output cannot s
  const s=script(''),python=s.split("python3 - <<'KF_REPORT'\n")[1].split('\nKF_REPORT')[0];
  const r=spawnSync('python3',['-I',new URL('v5_sender_fixture.py',import.meta.url).pathname,python,exhausted],{encoding:'utf8',timeout:5000});assert.equal(r.status,0,r.stderr);
 });
+
+for(const prefix of ['', 'payload-prefix-'+'x'.repeat(32)])test('V5 onstart invokes exact approved payload '+prefix.length,()=>{const source=script(prefix);assert.ok(source.includes("bash scripts/ci/vast_payload.sh '"+sha+"' '"+nonce+"'"));assert.ok(source.includes('export KF_SOFT_DEADLINE_MS='));assert.ok(!source.includes('vast_box_main.sh'));});

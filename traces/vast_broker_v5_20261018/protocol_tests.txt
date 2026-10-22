@@ -1,0 +1,7 @@
+Run: v5-protocol-checkpoint-20261022
+Node baseline: tests=964 pass=964 fail=0 cancelled=0 skipped=0
+Focused V5 mutations: 69 cases, minimum 2 independently named killers
+Migrated V4 mutations: 28 cases, minimum 2 independently named killers
+Migrated runner mutations: 38 cases, minimum 2 independently named killers
+Legacy mutation anchors: 94 preflight valid; full legacy rerun pending.
+No provider creation or GPU use.

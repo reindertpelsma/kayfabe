@@ -54,3 +54,9 @@ POST /stop-timer/<run>. GET /blob-url remains planned and outside this lane.
 availability describe the bounded current query sample, not the entire market;
 a single offer can have multiple rejection reasons. Numeric quality thresholds
 are infrastructure admission filters, never tested-code verdict thresholds.
+
+[MEASURED: 2026-10-22 protocol_tests.txt, v5_mutants.json, v4_migrated_mutants.json,
+runner_migrated_mutants.json] The later protocol checkpoint passes 964/964 Node
+tests, 69 focused V5 mutations, 28 migrated V4 cases and 38 migrated runner cases;
+every case has at least two named killers. The 94 legacy anchors pass preflight;
+full legacy execution remains pending. No V5 rental/deployment has occurred.

@@ -16,7 +16,7 @@ CASES=[
  ('rent-head-binding','src/index.js',[("if(rentRequest.tested_sha!==target.sha||rentRequest.pr_number!==target.pr)","if(false)")],'round3-binding.test.js'),
  ('box-result-binding','src/index.js',[("if(payload.kind==='result'&&(payload.result.runner_nonce!==r.runnerNonce||payload.result.sha!==r.sha))","if(false)")],'round3-binding.test.js'),
  ('log-chain','src/ledger.js',[("record.logHash=await logChain(record.logHash??'0'.repeat(64),chunk)","record.logHash='0'.repeat(64)")],'round3-binding.test.js'),
- ('nonce-ingress','src/index.js',[("path==='/rent'?512:0","0")],'round3-binding.test.js'),
+ ('nonce-ingress','src/index.js',[("path==='/rent'?2048:0","0")],'round3-binding.test.js'),
  ('nonce-cache','src/index.js',[("if(cached&&!force)refuse('UNAVAILABLE_BUDGET',409);","if(cached&&!force){const r=await ledger.get('record:'+cached.key);if(r?.verdict&&r.ended!==null){await ledger.grant(key,r,target.pr);return json(expose(r,key,target.pr));}refuse();}")],'round3-binding.test.js'),
 ]
 
@@ -40,7 +40,7 @@ CASES += [
  ('runner-isolated-env','../../.github/workflows/gpu-vast.yml',[("env -i PATH=/usr/bin:/bin","env PATH=/usr/bin:/bin")],'round3-bootstrap.test.js'),
  ('runner-shell-tracing','../../.github/workflows/gpu-vast.yml',[("          set +x","          set -x")],'round3-bootstrap.test.js'),
  ('base-trigger','../../.github/workflows/gpu-vast.yml',[("  pull_request_target:","  pull_request:")],'workflow.test.js'),
- ('OIDC-workflow-ref','src/index.js',[("||c.workflow_ref!==cfg.repo+'/.github/workflows/gpu-vast.yml@refs/heads/master'","")],'round3-isolation.test.js'),
+ ('OIDC-workflow-ref','src/index.js',[("||![cfg.repo+'/.github/workflows/gpu-vast.yml@refs/heads/master',cfg.repo+'/.github/workflows/gpu-vast-sweep.yml@refs/heads/master'].includes(c.workflow_ref)",""),("if(profile==='check'&&c.workflow_ref!==cfg.repo+'/.github/workflows/gpu-vast.yml@refs/heads/master')refuse('UNAUTHORIZED',401);","/* mutant omits second workflow boundary */")],'round3-isolation.test.js'),
  ('release-same-SHA','release_gate.py',[("or status['sha']!=sha",''),("and run['head_sha']==sha",'')],'round3-release.test.js'),
  ('release-origin','release_gate.py',[("if latest['state']!='success' or latest['creator']['login']!='github-actions[bot]' or latest['creator']['id']!=41898282:return False","if latest['state']!='success':return False"),("if run['id']!=int(match[1]) or run['path']!='.github/workflows/gpu-vast.yml' or run['status']!='completed' or run['conclusion']!='success':return False","if run['id']!=int(match[1]) or run['status']!='completed' or run['conclusion']!='success':return False"),("if run['repository']['full_name']!=REPO or run['head_repository']['full_name']!=REPO:return False","if False:return False")],'round3-release.test.js'),
  ('release-conclusion','release_gate.py',[("if latest['state']!='success' or",'if False or'),("or run['conclusion']!='success'",'')],'round3-release.test.js'),

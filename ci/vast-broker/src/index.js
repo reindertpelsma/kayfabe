@@ -38,13 +38,20 @@ export function createService({env,storage,fetch:fetcher=fetch,now=Date.now,rand
     state:phase(r),verdict:r.ended!==null||r.resultAt!==undefined?r.verdict||'UNAVAILABLE':'UNAVAILABLE',
     cleanup_pending:r.ended===null,result_at:r.resultAt??null,ended_at:r.ended,started_at:r.started,
     deadline_at:Number.isFinite(nextDeadline(r))?nextDeadline(r):r.started,
-    gpu_model:r.gpu??'unknown',cost_estimate_usd:(r.computeStoragePrice??r.price)*((r.ended??now())-r.started)/3600000+(r.bandwidthCost??0),log_cursor:r.logChunks??0,log_tail_sanitised:r.log||'',bytes_dropped:r.fullBytesDropped??r.bytesDropped??0,tail_bytes_dropped:r.bytesDropped||0,
-    runner_nonce:r.runnerNonce??'',log_sha256:r.logHash??'0'.repeat(64),protocol_version:3,worker_version:'v4-r3',bundle_sha256:env.DEPLOYED_BUNDLE_SHA256??'0'.repeat(64)});
+    gpu_model:r.hardware?.gpu_name??r.gpu??'unknown',cost_estimate_usd:(r.computeStoragePrice??r.price)*((r.ended??now())-r.started)/3600000+(r.bandwidthCost??0),log_cursor:r.logChunks??0,log_tail_sanitised:r.log||'',bytes_dropped:r.fullBytesDropped??r.bytesDropped??0,tail_bytes_dropped:r.bytesDropped||0,
+    runner_nonce:r.runnerNonce??'',log_sha256:r.logHash??'0'.repeat(64),profile:r.profile??'check',die:r.die??'unknown',compute_cap:r.hardware?.compute_cap??r.computeCap??0,driver_version:r.hardware?.driver_version??r.driver??'unknown',selection_reason:r.selectionReason??'NONE',preferences_ignored:r.preferencesIgnored??0,suites:r.result?.suites??[],boot_deadline_at:r.bootDeadline??null,hard_deadline_at:r.hardDeadline??null,soft_deadline_at:r.softDeadline??null,manual_deadline_at:r.manualDeadline??null,last_post_at:r.lastPostAt??null,result_deadline_at:r.resultDeadline??null,protocol_version:4,worker_version:'v5',bundle_sha256:env.DEPLOYED_BUNDLE_SHA256??'0'.repeat(64)});
   async function workerLine(r,message,cfg){
     const text='[Worker] '+message+'\n',bytes=new TextEncoder().encode(text).length;
     if((r.fullBytes??0)+bytes>cfg.reportBytes){r.fullBytesDropped=(r.fullBytesDropped??0)+bytes;return;}
     await ledger.appendLog(r,text);r.fullBytes=(r.fullBytes??0)+bytes;
     appendWorkerText(r,text);await ledger.save(r);
+  }
+  async function rejectExpiredCallback(r,cfg,vast){
+    if(now()>=nextDeadline(r)){
+      await workerLine(r,'destroy reason=DEADLINE callback',cfg);
+      try{await close(r,vast,'DEADLINE');}catch{}
+      refuse('UNAUTHORIZED',401);
+    }
   }
   async function recover(record,vast){if(!record.id){record.id=await vast.reconcile(record);await ledger.save(record);}return record;}
   async function cleanup(record,vast){
@@ -99,7 +106,7 @@ export function createService({env,storage,fetch:fetcher=fetch,now=Date.now,rand
   async function hold(request,key,bearer,cfg,vast){
     const r=await ledger.get('record:'+key);
     if(!r||!await tokens.verify(bearer,r)||r.ended!==null||r.closed||now()>=r.reportExpiry*1000)refuse('UNAUTHORIZED',401);
-    clocks(r,cfg);await readBounded(request,0);await rate(r,cfg);
+    clocks(r,cfg);await rejectExpiredCallback(r,cfg,vast);await readBounded(request,0);await rate(r,cfg);
     if(r.hardDeadline!==null&&now()>=r.hardDeadline||now()>=r.manualDeadline)refuse('UNAUTHORIZED',401);
     const instance=await vast.inspect(r);if(!instance||instance.actual_status!=='running')refuse('UNAUTHORIZED',401);
     r.phase='MANUAL';r.manualAt??=now();r.resultDeadline=null;
@@ -107,7 +114,7 @@ export function createService({env,storage,fetch:fetcher=fetch,now=Date.now,rand
   }
   async function stopTimer(key,cfg,vast){
     const r=await ledger.get('record:'+key);if(!r||r.ended!==null||r.closed)refuse('NOT_FOUND',404);
-    cfg.profile=r.profile??'check';clocks(r,cfg);if(r.phase!=='MANUAL')refuse('BAD_REQUEST',400);
+    cfg.profile=r.profile??'check';clocks(r,cfg);if(r.phase!=='MANUAL')refuse('BAD_REQUEST',400);await rejectExpiredCallback(r,cfg,vast);
     const total=(r.computeStoragePrice??r.price)*(r.manualDeadline+cfg.cronPeriod-r.started)/3600000+(r.bandwidthCost??0);
     const remaining=(r.computeStoragePrice??r.price)*Math.max(0,r.manualDeadline+cfg.cronPeriod-now())/3600000+(r.bandwidthCost??0),credit=await vast.credit();
     if(typeof credit!=='number'||!Number.isFinite(credit)||credit<cfg.reserve+remaining)refuse('UNAVAILABLE_BUDGET',409);
@@ -140,7 +147,7 @@ export function createService({env,storage,fetch:fetcher=fetch,now=Date.now,rand
   async function report(request,key,bearer,cfg,vast){
     const r=await ledger.get('record:'+key);
     if(!await tokens.verify(bearer,r)||!r||r.key!==key||r.ended!==null||r.closed||r.resultAt!==undefined)refuse('UNAUTHORIZED',401); // MUTANT report-ledger
-    clocks(r,cfg);
+    clocks(r,cfg);await rejectExpiredCallback(r,cfg,vast);
     if(now()>=r.reportExpiry*1000||r.hardDeadline!==null&&now()>=r.hardDeadline||r.phase==='MANUAL'&&now()>=r.manualDeadline){try{await close(r,vast,'TTL');}catch{}refuse('UNAUTHORIZED',401);}
     if(r.reportCount>=cfg.reportCount||r.reportBytes>=cfg.reportBytes){try{await close(r,vast,'LIMIT');}catch{}refuse('UNAUTHORIZED',401);} // MUTANT report-caps
     await rate(r,cfg);r.reportCount++;
@@ -171,7 +178,7 @@ export function createService({env,storage,fetch:fetcher=fetch,now=Date.now,rand
       }
       r.lastSeq=payload.seq;r.lastDigest=digest;r.firstReportAt??=now();r.lastPostAt=now();
       if(r.phase!=='MANUAL'&&r.phase!=='GRACE')r.phase='TESTING';
-      if(payload.kind==='result'){r.resultAt=now();r.verdict=payload.result.verdict;r.grace=r.verdict==='PASS'?cfg.passGrace:cfg.failGrace;r.resultDeadline=r.phase==='MANUAL'?null:r.resultAt+r.grace;if(r.phase!=='MANUAL')r.phase='GRACE';r.liveCheckedAt=null;} // MUTANT structured-verdict
+      if(payload.kind==='result'){r.result={...payload.result,die:r.die,profile:r.profile,selection_reason:r.selectionReason,preferences_ignored:r.preferencesIgnored};r.hardware=payload.result.hardware;if(r.profile==='sweep'&&payload.result.verdict==='PASS')await ledger.put('passed:'+r.die,now());r.resultAt=now();r.verdict=payload.result.verdict;r.grace=r.verdict==='PASS'?cfg.passGrace:cfg.failGrace;r.resultDeadline=r.phase==='MANUAL'?null:r.resultAt+r.grace;if(r.phase!=='MANUAL')r.phase='GRACE';r.liveCheckedAt=null;} // MUTANT structured-verdict
       else if(r.reportCount>=cfg.reportCount||r.reportBytes>=cfg.reportBytes)await close(r,vast,'LIMIT');
       return json({state:'ACCEPTED',...(payload.kind==='result'?{grace_remaining_seconds:Math.max(0,Math.floor((nextDeadline(r)-now())/1000))}:{})});
     }catch(error){

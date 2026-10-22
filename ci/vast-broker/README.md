@@ -7,8 +7,8 @@
 in `defaults.json`; JavaScript imports them through `src/defaults.js`, the bundle
 embeds that same file, and wrangler.toml has no numeric override. The owner-approved
 check cap is $1.00/hour, daily $6, rolling 30-day $30, prepaid reserve $8.
-Renting remains disabled in the committed configuration. Profiles and effective storage/network admission are implemented below. Payload
-integration, runner migration and live acceptance are still pending.
+Renting remains disabled in the committed configuration. Profiles and effective storage/network admission are implemented below. The V5 runner protocol is implemented; payload integration and live acceptance
+are still pending.
 
 [CODE READ: src/index.js, src/onstart.js] States are NONE, CREATING, BOOTING,
 TESTING, GRACE and MANUAL. Creation stores absolute boot (40 minutes), hard
@@ -41,8 +41,8 @@ AD107 is excluded until the owner adds it after three qualifying sweep passes.
 hourly cap and its own $8 daily budget; rolling liability and prepaid reserve stay
 shared. Its workflow must not write the required gpu-vast status. Sweep rotation
 uses the configured order and the persisted last-rented class, with an optional
-recent-pass exclusion. A class/driver/date coverage tag is part of the planned
-structured runner result; hosted dispatch execution remains unverified.
+recent-pass exclusion. The runner prints class/driver/date coverage tags from accepted structured results;
+hosted dispatch execution remains unverified.
 
 [CODE READ: 2026-10-22 owner verification rule, src/policy.js] Every profile requires an explicitly verified provider
 response: verified=true, or the documented verification="verified" when the boolean
@@ -114,7 +114,7 @@ reservation-only fallback, not a claim of provider-enforced transfer limits.
 
 [CODE READ: 2026-10-22 V4 round 2 owner instruction] **Stage only with RENTING_ENABLED=false.** The startup contract is SSH launch (`ssh_direct`) plus onstart; Vast injects keys already registered on the owner's account, and the Worker neither manages keys nor connects over SSH. Round 2 supersedes the earlier strict no-SSH STOP. The deployable source retains its KVM image/vm=true; the local tiny Docker/SSH flow is measured separately under [round 2 evidence](../../traces/vast_broker_v4_round2_20261018/README.md) and does not establish that KVM workload's validity. Those historical V4 shipped limits are superseded by the owner-approved V5 policy above. The local V4 round allowed $0.80/hour and any NVIDIA GPU.
 
-[CODE READ] Plain ES-module JavaScript, zero npm dependencies, Node >=20. This is an **untrusted GPU tripwire**, never release provenance. The Worker alone holds the owner's dedicated Vast key. No deployment or rental is performed by tests. Binding defaults refuse spending until configured. The complete threat model, API contracts, billing risks and deferred merge queue are in [the design](../../docs/design/V3_CI_VAST_GPU_20261021.md).
+[CODE READ] Plain ES-module JavaScript, zero npm dependencies, Node >=22. This is an **untrusted GPU tripwire**, never release provenance. The Worker alone holds the owner's dedicated Vast key. No deployment or rental is performed by tests. Binding defaults refuse spending until configured. The complete threat model, API contracts, billing risks and deferred merge queue are in [the design](../../docs/design/V3_CI_VAST_GPU_20261021.md).
 
 [CODE READ: 2026-10-22 smoke-live.py, live/] Round 2's real controller is `python3 smoke-live.py --runtime <private-new-directory> --wrangler <temporary-install>/node_modules/.bin/wrangler`. It uses real Vast API calls and local fake GitHub/JWKS identity, a private any-NVIDIA model overlay, and a tiny deterministic workload under the production reporting sender. It starts an independent exact-label reaper before every create, drives rent/status/cursor logs, and invokes the real local scheduled handler once per minute without a fake clock. PASS runs the shipped kill CLI inside the box after 30 seconds; FAIL waits for result grace. `--docker-smoke` additionally selects a local Ubuntu Docker image with vm=false, as authorized for round 2; that result cannot establish the shipped KVM image/workload's validity. No overlay is deployed. The callback tunnel accepts only report/kill from the provider's exact public_ipaddr. On exit, exact-ID and exact-label absence precede reaper cancellation; all controller children stop. Runtime files contain credentials and must remain private and be deleted after sanitized evidence is retained.
 
@@ -212,3 +212,37 @@ Configure variables, secrets, the public route and cron in the dashboard after b
 [CODE READ: runner.py, release-build.yml] `pull_request_target` selects the master-base workflow; fork heads refuse before any Worker request. The controller and deployment manifest are fetched at that trusted base SHA, with no PR checkout/cache/artifact input, and Python runs with `-I` in a scrubbed environment. Structured schemas reject extra/duplicate keys, invalid UTF-8, out-of-range values and incorrect bindings. Each log chunk is hashed before local filtering; all displayed text uses the runner's allow-list, caps, redactions and fresh stop-commands frame. Only local enums and verified=0/1 enter outputs; status writers are independent. Hosted target-event claims/run membership remain an unverified fail-closed contract until this base workflow is present on master and separately exercised.
 
 [CODE READ: round3-mutants.py, mutants.js, v4-mutants.py] `python3 round3-mutants.py` runs the current hostile-runner/protocol/isolation/release campaign; `npm run mutants` runs legacy, V4 and Round 3 sequentially. Seven legacy inline-client/cache-grant probes and four V4 inline-shell probes were replaced explicitly; the migration map is in the [Round 3 evidence](../../traces/vast_broker_v4_round3_20261018/README.md). Old V4 excerpts and their renderer fixtures are historical and are not the production runner. Local smoke helpers have been migrated to the bound protocol; they were not rerun live for Round 3. Release workflow execution/build/attestation and artifact distribution remain unverified; no binary publication is configured.
+
+## V5 protocol checkpoint; production enablement still blocked
+
+[CODE READ: 2026-10-22 src/results.js, src/onstart.js, runner.py] Protocol 4 / v5
+requires a bounded payload result file with the exact approved SHA and run nonce,
+then adds the runner nonce in the fixed sender. Exit zero or log text alone is
+FAIL. PASS requires every configured correctness suite, with exact gate/raw/thin/
+CUDA counts and zero failures/skips. Both Worker and BASE runner validate the
+suite/hardware structures. The runner independently validates availability,
+prints its numeric thresholds/rejections, and uses only its own preference list.
+Its check job/step horizons now cover the explicit default three-hour lifecycle;
+the separate sweep workflow is dispatch-only/OIDC-only and writes no merge status.
+
+[CODE READ: 2026-10-22 src/index.js] Callback, hold and owner timer-removal paths
+compare stored absolute deadlines before accepting a late request, so overdue
+cron cannot let a post revive an expired boot, heartbeat, grace or manual ceiling.
+MANUAL after a result remains terminal for CI and retains the box for the owner.
+
+[MEASURED: 2026-10-22 protocol_tests.txt and v5_mutants.json in traces/vast_broker_v5_20261018]
+The local baseline passes 964 tests; 69 focused V5 mutation cases each have at
+least two named killers. Migrated V4 and runner campaigns pass 28 and 38 cases,
+respectively. The legacy campaign's 94 anchors pass preflight; its full rerun is
+still pending at this checkpoint. Historical model-query, depth, lifecycle,
+ingress and workflow mutation sites were moved to their equivalent V5 guards;
+no mutation threshold or debt baseline was relaxed.
+
+[CODE READ: 2026-10-22 src/github.js, src/index.js and [GitHub API limits](https://docs.github.com/en/rest/using-the-rest-api/rate-limits-for-the-rest-api)]
+Production CI currently supplies only OIDC, so the Worker uses unauthenticated
+GitHub reads for live PR/run checks. GitHub permits 60 such requests/hour per
+originating IP; the status/cron checks can exceed that during a long run. A
+Worker-only authenticated read path needs the owner's App credential location;
+it is not implemented at this checkpoint. CI/Vast must receive no App private key.
+Hosted OIDC, Cloudflare billed CPU, the real KVM/payload launch and SSH MANUAL
+acceptance remain unverified. This source is not an instruction to enable renting.

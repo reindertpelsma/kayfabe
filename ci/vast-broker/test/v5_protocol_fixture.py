@@ -9,3 +9,10 @@ for patch in [{'suites':[]},{'preferences_ignored':999},{'driver_version':'::err
  try:m.validate_status({**data,**patch},ctx,manifest,200)
  except m.Invalid:pass
  else:raise AssertionError('untrusted field accepted: '+str(patch))
+
+import json
+scope={};exec(Path(__file__).with_name('v5_fixture_data.py').read_text(),scope);calls=[];m.time.sleep=lambda _:None
+def client(route,method='GET',body=None):
+ calls.append(route);value=scope['availability']() if route.startswith('/availability') else data
+ return m.Reply(200,{'content-type':'application/json'},json.dumps(value).encode())
+r=m.Runner(ctx,manifest,client,emit=lambda _:None).execute();assert r['verified']==1 and r['verdict']=='PASS';assert not any(route.startswith('/stop/') for route in calls)

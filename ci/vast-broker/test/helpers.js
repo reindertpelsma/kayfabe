@@ -94,6 +94,7 @@ export async function setup(overrides={}) {
     restart(){service=createService({env:bindings,storage,fetch:cloud.fetch,now:()=>time.value,random:()=>nonce});},
     async report(payload,{run='123-1',token,raw,headers={}}={}){
       const record=await storage.get('record:'+run);
+      if(payload?.kind==='result'&&record?.runnerNonce&&payload.result?.suites===undefined&&payload.result?.hardware===undefined)payload={...payload,result:{...payload.result,suites:Object.entries({provision:1,kf_tests:100,gates:9,kf3_build:1,raw_suite:30,thin_suite:30,birth_census:1,cuda_host:4,cuda_fat:4}).map(([name,pass])=>({name,pass:payload.result?.verdict==='PASS'?pass:0,fail:payload.result?.verdict==='PASS'?0:1,skip:0})),hardware:{gpu_name:'RTX_4070',compute_cap:890,driver_version:'580.159.04'}}};
       if(payload?.kind==='result'&&record?.runnerNonce)payload={...payload,result:{runner_nonce:record.runnerNonce,sha:record.sha,...payload.result}};
       const bearer=token??callbackToken(record,bindings.RUN_TOKEN_SECRET);
       return service.fetch(new Request(bindings.WORKER_URL+'/report/'+run,{method:'POST',headers:{Authorization:'Bearer '+bearer,'Content-Type':'application/json',...headers},body:raw??JSON.stringify(payload)}));
@@ -106,3 +107,5 @@ export async function setup(overrides={}) {
   return harness;
 }
 export const finalLine=(verdict='PASS',n=nonce)=>`KF_RESULT ${n} ${verdict} ${'c'.repeat(64)}\n`;
+
+export const sampleResult=()=>({suites:Object.entries({provision:1,kf_tests:100,gates:9,kf3_build:1,raw_suite:30,thin_suite:30,birth_census:1,cuda_host:4,cuda_fat:4}).map(([name,pass])=>({name,pass,fail:0,skip:0})),hardware:{gpu_name:'RTX_4070',compute_cap:890,driver_version:'580.159.04'}});
