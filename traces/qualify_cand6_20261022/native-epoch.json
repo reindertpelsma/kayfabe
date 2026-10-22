@@ -1,0 +1,8 @@
+{
+  "classification": "MEASURED",
+  "time": "2026-10-22T08:05:40.376882+02:00",
+  "dmesg_xid_count": 0,
+  "dmesg_xid_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+  "journal_xid_count": 533,
+  "journal_xid_sha256": "e6e29c801d53c873c703498fe63a644b06c3a8b287517302f9f4d5c2a879cc4f"
+}

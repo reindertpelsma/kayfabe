@@ -1,6 +1,6 @@
 # Q1 candidate-6 qualification
 
-STATUS: RESUMED 07:40 CEST; STOPPED at native reader bound; bounded-reader approval pending, 2026-10-22. Original process/history stops remain resolved.
+STATUS: RESUMED 08:02 CEST on afe00b3c; bounded reader explicitly approved; native gates PASS and Linux running, 2026-10-22.
 
 MEASURED: candidate f7cf3ed81200077e55ee7769c635887661f3f990 fetched from origin. Q1 evidence branch: codex/qualify-cand6-20261022. Start 05:01 UTC; hard host-restoration deadline 10:00 UTC. No product behavior change was made by Q1.
 
@@ -55,3 +55,7 @@ CODE READ: the bounded reader proposal is scripts/bench/qualification/epoch.py::
 MEASURED resumed final state at 07:55 CEST: all independent CPU checks complete; no candidate GPU workload or VM boot occurred. Local and host cargo targets deleted, master source archive deleted, own processes exited, both locks released and acquirable. Final host cuInit 0, nvidia bound, GDM active. Candidate binary and staged K1 scripts/installer remain available; no CoW or Windows arm was launched. See build.json, resume-cleanup.json and resume-final-restoration.json.
 
 INFERRED current verdict: FAIL merge qualification. Confirmed blocker: rustfmt failure in three merged Rust files. Hardware remains unqualified after the byte-bound preflight stop, with a concrete tested Xid-only reader proposal awaiting the explicit question's answer. The earlier process/history authorization is accepted; Q1 has not requested it again.
+
+CODE READ — 08:02 authority update: bounded Xid-only reader activation explicitly approved; no unbounded dmesg parse. Candidate moved to afe00b3cbc7e345e2953b1bc199d9cce1054cc38, a three-file formatting commit. MEASURED: git ls-remote verified that head; candidate rebuilt (SHA-256 9f7c26f69c6e94c37f8757b2928c4300cece10914c843db62dd6bf9f5662d34d). The earlier formatting and reader stops are resolved.
+
+MEASURED: native gates at afe00b3c PASS 9/9 plus gate10 PASS, births 12 / USER 12 / refused 0; zero fresh Xids. The bounded dmesg epoch had 0 retained Xids, while the separate persistent journal epoch had 533 historical records and a recorded SHA-256. Old dmesg ring history is not assumed equal to the persistent journal. Linux uses the unchanged sweep exact-control validator, an approved prior native-five-fault policy reference, a separately recorded current history, and candidate product/sweep harness pins. It does not count the old native reference as a fresh Q1 native-control run.
