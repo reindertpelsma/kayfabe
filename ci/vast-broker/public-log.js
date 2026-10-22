@@ -1,5 +1,5 @@
 // Trusted literal renderer, embedded verbatim in the workflow; never fetched from a PR.
-export const publicLogRenderer=String.raw`import html,json,math,os,re,sys
+export const publicLogRenderer = String.raw`import html,json,math,os,re,sys
 mode,data_path,log_path=sys.argv[1:]
 with open(data_path,encoding='utf-8') as source: data=json.load(source)
 def number(key,default=0):

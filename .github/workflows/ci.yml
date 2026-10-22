@@ -49,7 +49,11 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - name: Vast broker mocks and workflow boundary
-        run: node --test ci/vast-broker/test
+        run: |
+          npx --yes prettier@3.6.2 --check 'ci/vast-broker/**/*.js' 'ci/vast-broker/**/*.mjs'
+          python3 -m pip install black==25.1.0
+          python3 -m black --check --config ci/vast-broker/pyproject.toml ci/vast-broker
+          node --test ci/vast-broker/test
       - uses: dtolnay/rust-toolchain@master
         with:
           toolchain: 1.99.0   # pinned with rust-toolchain.toml; bump both together
