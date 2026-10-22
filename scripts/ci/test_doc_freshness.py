@@ -195,6 +195,13 @@ class FreshnessTests(unittest.TestCase):
         self.write("docs/ok.md", self.document(day="2026-01-01", body="`REMOVED_SETTING=1`"))
         self.assertIn("stale-suspect", self.kinds())
 
+    def test_named_environment_variable_is_checked(self):
+        self.write(
+            "docs/ok.md",
+            self.document(day="2026-01-01", body="environment variable `REMOVED_SETTING`"),
+        )
+        self.assertIn("stale-suspect", self.kinds())
+
     def test_root_source_path_cannot_resolve_inside_archive(self):
         self.write("archive/crates/gone/src/lib.rs", "// old implementation\n")
         self.git("add", ".")
@@ -337,6 +344,34 @@ class FreshnessTests(unittest.TestCase):
         self.write("docs/ok.md", self.document(day="2026-01-01", body="`KF3_ALIVE`"))
         self.run_check(0, "--record")
         self.write("crates/kf-example/src/lib.rs", "// option removed\n")
+        self.assertIn("stale-suspect", self.kinds())
+
+    def test_removed_flag_after_baseline_is_new_stale_debt(self):
+        self.write("docs/ok.md", self.document(day="2026-01-01", body="`--alive-flag`"))
+        self.run_check(0, "--record")
+        self.write("crates/kf-example/src/lib.rs", "// flag removed\n")
+        self.assertIn("stale-suspect", self.kinds())
+
+    def test_removed_crate_after_baseline_is_new_stale_debt(self):
+        self.write("docs/ok.md", self.document(day="2026-01-01", body="`kf-example`"))
+        self.run_check(0, "--record")
+        (self.root / "crates/kf-example/Cargo.toml").unlink()
+        self.assertIn("stale-suspect", self.kinds())
+
+    def test_removed_branch_after_baseline_is_new_stale_debt(self):
+        self.git(
+            "-c",
+            "user.name=Fixture",
+            "-c",
+            "user.email=fixture@example.org",
+            "commit",
+            "-qm",
+            "fixture",
+        )
+        self.git("update-ref", "refs/remotes/origin/codex/present", "HEAD")
+        self.write("docs/ok.md", self.document(day="2026-01-01", body="branch `codex/present`"))
+        self.run_check(0, "--record")
+        self.git("update-ref", "-d", "refs/remotes/origin/codex/present")
         self.assertIn("stale-suspect", self.kinds())
 
     def test_empty_document_scan_is_infrastructure_failure(self):
