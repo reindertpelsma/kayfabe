@@ -1,0 +1,272 @@
+{
+  "kind": "MEASURED",
+  "date": "2026-10-22",
+  "lease_id": 57193877,
+  "run": "ad102_s4_r4",
+  "source": "1700543393c34f93adc0611430e3d49ab38eca3a",
+  "first_failed_app": "heaven_d3d11",
+  "verdict": {
+    "verdict": "FAIL",
+    "rc": 0,
+    "secs": 49,
+    "quiet": 49,
+    "note": "no-gpu-proof",
+    "proof": "none:pdh:Cuda|Compute|3D|Copy",
+    "tdr": 0,
+    "wer": 0,
+    "rebooted": false,
+    "gsp_cycles": 0,
+    "restart": "",
+    "guest": "desktop"
+  },
+  "rpc_rows_at_export": 8942,
+  "events": [
+    {
+      "name": "app_start",
+      "utc": "2026-10-22T11:59:24.8192192Z",
+      "nearest_observed_rpc_before": {
+        "ordinal": 7566,
+        "observed_utc": "2026-10-22T11:59:22.924120+00:00",
+        "observer_monotonic_ns": 6511209697444,
+        "function": 76,
+        "kind": "RmControl",
+        "sequence": 0,
+        "selector": "0x20801111",
+        "trace_result": "0x0",
+        "file_offset_after": 3926415
+      },
+      "nearest_observed_rpc_after": {
+        "ordinal": 7567,
+        "observed_utc": "2026-10-22T11:59:26.059942+00:00",
+        "observer_monotonic_ns": 6514345535443,
+        "function": 76,
+        "kind": "RmControl",
+        "sequence": 0,
+        "selector": "0x20809064",
+        "trace_result": "0x56",
+        "file_offset_after": 3933695
+      }
+    },
+    {
+      "name": "app_end",
+      "utc": "2026-10-22T12:00:14.0270493Z",
+      "nearest_observed_rpc_before": {
+        "ordinal": 8058,
+        "observed_utc": "2026-10-22T12:00:13.927731+00:00",
+        "observer_monotonic_ns": 6562213308179,
+        "function": 76,
+        "kind": "RmControl",
+        "sequence": 0,
+        "selector": "0x2080110b",
+        "trace_result": "0x0",
+        "file_offset_after": 4190701
+      },
+      "nearest_observed_rpc_after": {
+        "ordinal": 8059,
+        "observed_utc": "2026-10-22T12:00:15.235458+00:00",
+        "observer_monotonic_ns": 6563521050095,
+        "function": 76,
+        "kind": "RmControl",
+        "sequence": 0,
+        "selector": "0x20809064",
+        "trace_result": "0x56",
+        "file_offset_after": 4191862
+      }
+    },
+    {
+      "name": "verdict_record",
+      "utc": "2026-10-22T12:00:30+00:00",
+      "nearest_observed_rpc_before": {
+        "ordinal": 8155,
+        "observed_utc": "2026-10-22T12:00:28.986710+00:00",
+        "observer_monotonic_ns": 6577272286683,
+        "function": 10,
+        "kind": "Free",
+        "sequence": 0,
+        "selector": "-",
+        "trace_result": "0x0",
+        "file_offset_after": 4257794
+      },
+      "nearest_observed_rpc_after": {
+        "ordinal": 8156,
+        "observed_utc": "2026-10-22T12:00:33.703769+00:00",
+        "observer_monotonic_ns": 6581989363833,
+        "function": 76,
+        "kind": "RmControl",
+        "sequence": 0,
+        "selector": "0x20809064",
+        "trace_result": "0x56",
+        "file_offset_after": 4277587
+      }
+    }
+  ],
+  "causal_rpc": "NOT ESTABLISHED: failure is a proof-predicate refusal, not an identified RPC failure",
+  "pdh": {
+    "pids": [
+      "3524",
+      "4804",
+      "8180"
+    ],
+    "nv": {
+      "legacyoverlay": 0,
+      "3d": 0,
+      "vr": 0,
+      "videodecode": 0,
+      "copy": 0.16660954141352946,
+      "ofa_0": 0,
+      "videoencode": 0
+    },
+    "samples": 23,
+    "other": {},
+    "nvidia_luids": "0_ec73c"
+  },
+  "guest_events": {
+    "kernel_power_41": 0,
+    "bugcheck": 0,
+    "unexpected_shutdown_6008": 0,
+    "wer_1001": 0,
+    "display_4101": 0,
+    "nvlddmkm_153": 0,
+    "other_nvlddmkm": 0,
+    "lines": [],
+    "live_kernel": 0
+  },
+  "unigine_intervals": {
+    "heaven_d3d11": {
+      "start_utc": "2026-10-22T11:59:24.8192192Z",
+      "end_utc": "2026-10-22T12:00:14.0270493Z",
+      "pdh": {
+        "pids": [
+          "3524",
+          "4804",
+          "8180"
+        ],
+        "nv": {
+          "legacyoverlay": 0,
+          "3d": 0,
+          "vr": 0,
+          "videodecode": 0,
+          "copy": 0.16660954141352946,
+          "ofa_0": 0,
+          "videoencode": 0
+        },
+        "samples": 23,
+        "other": {},
+        "nvidia_luids": "0_ec73c"
+      },
+      "events": {
+        "kernel_power_41": 0,
+        "bugcheck": 0,
+        "unexpected_shutdown_6008": 0,
+        "wer_1001": 0,
+        "display_4101": 0,
+        "nvlddmkm_153": 0,
+        "other_nvlddmkm": 0,
+        "lines": [],
+        "live_kernel": 0
+      }
+    },
+    "heaven_opengl": {
+      "start_utc": "2026-10-22T12:00:41.2396074Z",
+      "end_utc": "2026-10-22T12:01:30.0938189Z",
+      "pdh": {
+        "pids": [
+          "6184",
+          "5396",
+          "3204"
+        ],
+        "nv": {
+          "legacyoverlay": 0,
+          "3d": 0,
+          "vr": 0,
+          "videodecode": 0,
+          "copy": 0,
+          "ofa_0": 0,
+          "videoencode": 0
+        },
+        "samples": 23,
+        "other": {},
+        "nvidia_luids": "0_ec73c"
+      },
+      "events": {
+        "kernel_power_41": 0,
+        "bugcheck": 0,
+        "unexpected_shutdown_6008": 0,
+        "wer_1001": 0,
+        "display_4101": 0,
+        "nvlddmkm_153": 0,
+        "other_nvlddmkm": 0,
+        "lines": [],
+        "live_kernel": 0
+      }
+    },
+    "valley_d3d11": {
+      "start_utc": "2026-10-22T12:02:14.2120446Z",
+      "end_utc": "2026-10-22T12:03:03.9828145Z",
+      "pdh": {
+        "pids": [
+          "4320",
+          "1688",
+          "3176"
+        ],
+        "nv": {
+          "legacyoverlay": 0,
+          "3d": 0,
+          "vr": 0,
+          "videodecode": 0,
+          "copy": 0.46629078387478057,
+          "ofa_0": 0,
+          "videoencode": 0
+        },
+        "samples": 23,
+        "other": {},
+        "nvidia_luids": "0_ec73c"
+      },
+      "events": {
+        "kernel_power_41": 0,
+        "bugcheck": 0,
+        "unexpected_shutdown_6008": 0,
+        "wer_1001": 0,
+        "display_4101": 0,
+        "nvlddmkm_153": 0,
+        "other_nvlddmkm": 0,
+        "lines": [],
+        "live_kernel": 0
+      }
+    },
+    "valley_opengl": {
+      "start_utc": "2026-10-22T12:03:30.3558153Z",
+      "end_utc": "2026-10-22T12:04:19.1145407Z",
+      "pdh": {
+        "pids": [
+          "1548",
+          "1504",
+          "3148"
+        ],
+        "nv": {
+          "legacyoverlay": 0,
+          "3d": 0,
+          "vr": 0,
+          "videodecode": 0,
+          "copy": 0,
+          "ofa_0": 0,
+          "videoencode": 0
+        },
+        "samples": 23,
+        "other": {},
+        "nvidia_luids": "0_ec73c"
+      },
+      "events": {
+        "kernel_power_41": 0,
+        "bugcheck": 0,
+        "unexpected_shutdown_6008": 0,
+        "wer_1001": 0,
+        "display_4101": 0,
+        "nvlddmkm_153": 0,
+        "other_nvlddmkm": 0,
+        "lines": [],
+        "live_kernel": 0
+      }
+    }
+  }
+}

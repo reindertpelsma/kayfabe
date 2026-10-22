@@ -1,0 +1,10 @@
+2026-10-22T12:03:19+00:00
+timestamp, name, uuid, utilization.gpu [%], utilization.memory [%], power.draw [W], memory.used [MiB]
+2026/10/22 12:03:19.660, NVIDIA GeForce RTX 4090, GPU-98a31000-fa9f-471e-c7a1-d154e65fede4, 0 %, 0 %, 54.30 W, 9430 MiB
+# gpu         pid   type     sm    mem    enc    dec    jpg    ofa    command 
+# Idx           #    C/G      %      %      %      %      %      %    name 
+    0     105939   C+G      0      0      -      -      -      -    qemu-system-x86
+2026-10-22T11:59:17Z [desktop] staged heaven (installer, 4s)
+2026-10-22T12:00:30Z APPRES side=win app=heaven_d3d11 verdict=FAIL rc=0 secs=49 quiet=49 note=no-gpu-proof boot=desktop guest_tdr=0 wer=0 gsp_cycles=0 proof=none:pdh:Cuda|Compute|3D|Copy tier=2 cat=d3d
+2026-10-22T12:01:46Z APPRES side=win app=heaven_opengl verdict=FAIL rc=0 secs=49 quiet=48 note=no-gpu-proof boot=desktop guest_tdr=0 wer=0 gsp_cycles=0 proof=none:pdh:Cuda|Compute|3D|Copy tier=2 cat=opengl
+2026-10-22T12:02:07Z [desktop] staged valley (installer, 14s)

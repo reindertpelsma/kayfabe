@@ -1,0 +1,11 @@
+{
+  "kind": "MEASURED",
+  "date": "2026-10-22",
+  "mutant": "budget stop skips reserved hold",
+  "killers": [
+    "test_budget_stop_runs_reserved_hold_after_completed_row ",
+    "test_healthy_partial_matrix_cannot_claim_complete_pass ",
+    "test_short_reserved_hold_still_refuses "
+  ],
+  "exit": 1
+}

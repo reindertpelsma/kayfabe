@@ -1,0 +1,55 @@
+test_budget_stop_runs_reserved_hold_after_completed_row (test_desktop_budget.BudgetHoldTests.test_budget_stop_runs_reserved_hold_after_completed_row) ... ERROR
+test_healthy_partial_matrix_cannot_claim_complete_pass (test_desktop_budget.BudgetHoldTests.test_healthy_partial_matrix_cannot_claim_complete_pass) ... ERROR
+test_short_reserved_hold_still_refuses (test_desktop_budget.BudgetHoldTests.test_short_reserved_hold_still_refuses) ... FAIL
+
+======================================================================
+ERROR: test_budget_stop_runs_reserved_hold_after_completed_row (test_desktop_budget.BudgetHoldTests.test_budget_stop_runs_reserved_hold_after_completed_row)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/workspace/s4-wt/scripts/bench/tests/test_desktop_budget.py", line 21, in test_budget_stop_runs_reserved_hold_after_completed_row
+    rc,calls=self.observe();self.assertIn('hold',calls);self.assertLess(calls.index('driver_status'),calls.index('hold'))
+             ~~~~~~~~~~~~^^
+  File "/workspace/s4-wt/scripts/bench/tests/test_desktop_budget.py", line 19, in observe
+    return m.run_plan(SimpleNamespace(run_app=app),rows(),lambda r:None,health,hold),calls
+           ~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/workspace/s4-wt/scripts/bench/diesweep/desktop/matrix.py", line 34, in run_plan
+    for app in apps:
+               ^^^^
+  File "/workspace/s4-wt/scripts/bench/tests/test_desktop_budget.py", line 14, in rows
+    raise exhausted('lease observation/export budget exhausted')
+test_desktop_budget.ObservationBudgetExhausted: lease observation/export budget exhausted
+
+======================================================================
+ERROR: test_healthy_partial_matrix_cannot_claim_complete_pass (test_desktop_budget.BudgetHoldTests.test_healthy_partial_matrix_cannot_claim_complete_pass)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/workspace/s4-wt/scripts/bench/tests/test_desktop_budget.py", line 23, in test_healthy_partial_matrix_cannot_claim_complete_pass
+    rc,calls=self.observe();self.assertEqual(rc,2);self.assertEqual(calls[-1],'health')
+             ~~~~~~~~~~~~^^
+  File "/workspace/s4-wt/scripts/bench/tests/test_desktop_budget.py", line 19, in observe
+    return m.run_plan(SimpleNamespace(run_app=app),rows(),lambda r:None,health,hold),calls
+           ~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/workspace/s4-wt/scripts/bench/diesweep/desktop/matrix.py", line 34, in run_plan
+    for app in apps:
+               ^^^^
+  File "/workspace/s4-wt/scripts/bench/tests/test_desktop_budget.py", line 14, in rows
+    raise exhausted('lease observation/export budget exhausted')
+test_desktop_budget.ObservationBudgetExhausted: lease observation/export budget exhausted
+
+======================================================================
+FAIL: test_short_reserved_hold_still_refuses (test_desktop_budget.BudgetHoldTests.test_short_reserved_hold_still_refuses)
+----------------------------------------------------------------------
+test_desktop_budget.ObservationBudgetExhausted: lease observation/export budget exhausted
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "/workspace/s4-wt/scripts/bench/tests/test_desktop_budget.py", line 25, in test_short_reserved_hold_still_refuses
+    with self.assertRaisesRegex(RuntimeError,'incomplete stability hold'):self.observe(seconds=599)
+         ~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: "incomplete stability hold" does not match "lease observation/export budget exhausted"
+
+----------------------------------------------------------------------
+Ran 3 tests in 0.012s
+
+FAILED (failures=1, errors=2)

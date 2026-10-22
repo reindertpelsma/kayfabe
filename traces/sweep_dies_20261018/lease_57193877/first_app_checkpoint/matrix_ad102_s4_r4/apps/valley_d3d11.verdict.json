@@ -1,0 +1,14 @@
+{
+  "verdict": "FAIL",
+  "rc": 0,
+  "secs": 50,
+  "quiet": 49,
+  "note": "no-gpu-proof",
+  "proof": "none:pdh:Cuda|Compute|3D|Copy",
+  "tdr": 0,
+  "wer": 0,
+  "rebooted": false,
+  "gsp_cycles": 0,
+  "restart": "",
+  "guest": "desktop"
+}

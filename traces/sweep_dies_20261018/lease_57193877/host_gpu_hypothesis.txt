@@ -1,0 +1,1 @@
+INFERRED (2026-10-22, lease57193877): rendered Unigine frames may use the host GPU while guest WDDM accounting remains flat. FALSIFIER BEFORE observation: host per-process accounting has no active owned QEMU GPU process during a known active Unigine interval. A host utilization sample alone cannot identify which guest client ran and does not change the matrix verdict.

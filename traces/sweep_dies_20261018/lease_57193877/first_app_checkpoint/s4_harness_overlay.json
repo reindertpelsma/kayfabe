@@ -1,0 +1,17 @@
+{
+  "kind": "MEASURED",
+  "run_date": "2026-10-22",
+  "harness_revision": "8cbb7731c9bb33d38ec90c60aa4b03a5cc8fb60d",
+  "production_revision": "1700543393c34f93adc0611430e3d49ab38eca3a",
+  "reason": "CPU-only QEMU 10.2.1 rejects controller hotplug on pcie.0 and CD hotplug on ide.2; boot xHCI then USB CD succeeds.",
+  "files": {
+    "scripts/bench/windows/win_vm.sh": "0e23968d2b633b6c17a7eace0c56b481cba61da2a68000ab8ece801e4141716d",
+    "scripts/bench/diesweep/desktop/matrix.py": "54e0d0093488185c4e4b8b8f996b1cf27d34c15f0d31b78f55469210391abcf4"
+  },
+  "overlay_for_ada": "Only these two harness files overlay the pinned checkout; crates, qemu, cuda and fastguest sources unchanged.",
+  "applied_utc": "2026-10-22T10:25:39.120460+00:00",
+  "actual_changed_files": [
+    "scripts/bench/diesweep/desktop/matrix.py",
+    "scripts/bench/windows/win_vm.sh"
+  ]
+}

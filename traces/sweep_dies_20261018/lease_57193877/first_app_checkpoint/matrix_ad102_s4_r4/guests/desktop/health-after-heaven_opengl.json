@@ -1,0 +1,27 @@
+{
+  "lingering": [],
+  "utc": "2026-10-22T12:01:40.5216516Z",
+  "boot_utc": "2026-10-22T11:47:16.5000000Z",
+  "events": {
+    "kernel_power_41": 0,
+    "bugcheck": 0,
+    "unexpected_shutdown_6008": 0,
+    "wer_1001": 0,
+    "display_4101": 0,
+    "nvlddmkm_153": 0,
+    "other_nvlddmkm": 0,
+    "live_kernel": 0
+  },
+  "display": [
+    {
+      "status": "OK",
+      "name": "NVIDIA GeForce RTX 4090",
+      "problem": "CM_PROB_NONE"
+    }
+  ],
+  "explorer": true,
+  "smi": "NVIDIA GeForce RTX 4090, [N/A], 655 MiB",
+  "user": "KFWIN\\kf",
+  "uptime_s": 865,
+  "smi_ok": true
+}

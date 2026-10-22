@@ -1,0 +1,21 @@
+
+/workspace/sweep-win-57193877/kfwin/disk/bw580_bind.qcow2: OK
+ARM_START run=ad102_s4_r4 source=1700543393c34f93adc0611430e3d49ab38eca3a profile=on 2026-10-22T11:47:06+00:00
+[2026-10-22T11:47:06Z] detached: tag=ad102_s4_r4, log logs/ad102_s4_r4_run.log (stdout logs/ad102_s4_r4_run.out)
+KF_SSH_UP
+{"pid": 105939, "exe": "/workspace/bench/kf3-bins/17005433/qemu-system-x86_64", "sha256": "52db5101cac76574e1c59e63362489327678abb1af3cc805ec7a9bba1cbc4744", "kf3_device": "kf3-gpu,fb-mb=8192,bar1-size=134217728,bar2-size=33554432,display=on,gop=on,gop-efi=/workspace/sweep-win-57193877/secureboot/kf-gop.17005433-dirty.signed.efi,id=kf0,guest-driver=580.65.06"}
+APPDISK_GUEST_COPY_DONE 2026-10-22T11:51:28+00:00
+STAGE580_READY=1 actual=32.0.15.8088 device_disabled=1 GSP_flags=1; fresh QEMU580.65.06 then one enable
+ENABLE580_START actual=32.0.15.8088 UTC=2026-10-22T11:51:47.8777915Z
+Microsoft PnP Utility
+
+Enabling device:          PCI\VEN_10DE&DEV_2684&SUBSYS_13DA196E&REV_A1\3&11583659&0&30
+Device enabled successfully.
+
+ENABLE580_PNPUTIL_RC=0
+{"Name":"NVIDIA GeForce RTX 4090","DriverVersion":"32.0.15.8088","ConfigManagerErrorCode":0}
+{"FriendlyName":"NVIDIA GeForce RTX 4090","Status":"OK","Problem":0}
+ENABLE580_OBSERVED UTC=2026-10-22T11:52:09.9499173Z; device status is verdict, not this command rc
+BW580_RESULT {"utc":"2026-10-22T11:52:15.8188907Z","boot":"2026-10-22T11:47:16.5000000Z","driver":"32.0.15.8088","inf":"oem7.inf","code":0,"status":"OK","tdr4101":0,"width":1920,"height":1080}
+SIGNIN_VERIFIED interactive user is present
+/workspace/sweep-win-57193877/kfwin/logs/shots/ad102_s4_r4_signed_in.png

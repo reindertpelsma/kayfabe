@@ -1,0 +1,58 @@
+{
+  "quiet": 49,
+  "end_utc": "2026-10-22T12:03:03.9828145Z",
+  "start_utc": "2026-10-22T12:02:14.2120446Z",
+  "rc": 0,
+  "secs": 50,
+  "gpu_devices": [
+    "NVIDIA GeForce RTX 4090 status=OK code=0"
+  ],
+  "digests": [],
+  "session": 1,
+  "out_files": [],
+  "boot_utc_start": "2026-10-22T11:47:16.5000000Z",
+  "log_tail": [
+    "=== valley_d3d11 start=2026-10-22T12:02:14.2120446+00:00 host=KFWIN session=1 boot=2026-10-22T11:47:16.5000000Z timeout=150",
+    "KFSURVIVE valley_d3d11 ALIVE_AT 45 s",
+    "=== end rc=0 secs=50 2026-10-22T12:03:03.9828145+00:00"
+  ],
+  "pdh": {
+    "pids": [
+      "4320",
+      "1688",
+      "3176"
+    ],
+    "nv": {
+      "legacyoverlay": 0,
+      "3d": 0,
+      "vr": 0,
+      "videodecode": 0,
+      "copy": 0.46629078387478057,
+      "ofa_0": 0,
+      "videoencode": 0
+    },
+    "samples": 23,
+    "other": {},
+    "nvidia_luids": "0_ec73c"
+  },
+  "timed_out": false,
+  "boot_utc_end": "2026-10-22T11:47:16.5000000Z",
+  "events": {
+    "kernel_power_41": 0,
+    "bugcheck": 0,
+    "unexpected_shutdown_6008": 0,
+    "wer_1001": 0,
+    "display_4101": 0,
+    "nvlddmkm_153": 0,
+    "other_nvlddmkm": 0,
+    "lines": [],
+    "live_kernel": 0
+  },
+  "app": "valley_d3d11",
+  "smi": {
+    "samples": 0,
+    "mem_used_base_mb": null,
+    "util_max": 0,
+    "mem_used_max_mb": 0
+  }
+}
