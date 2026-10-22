@@ -4,7 +4,7 @@
   "headSha": "f7cf3ed81200077e55ee7769c635887661f3f990",
   "url": "https://github.com/reindertpelsma/kayfabe/actions/runs/39725599154",
   "classification": "MEASURED",
-  "observed_utc": "2026-10-22T05:05:19Z",
+  "observed_utc": "2026-10-22T05:24:11.677183+00:00",
   "jobs": [
     {
       "name": "stable \u2014 build, test, clippy, fmt, boundary",

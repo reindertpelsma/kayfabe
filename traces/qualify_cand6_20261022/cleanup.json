@@ -1,0 +1,15 @@
+{
+  "classification": "MEASURED",
+  "time": "2026-10-22T07:23:46.642488+02:00",
+  "live_target_executables": [],
+  "local_target_deleted": true,
+  "host_target_created": false,
+  "q1_vm_boots": 0,
+  "q1_gpu_workload_runs": 0,
+  "cargo_command_completed": true,
+  "gpu_lock_reacquisition_verified": true,
+  "host_restoration_record": "restoration.json",
+  "cargo_lock_reacquisition_verified": true,
+  "host_processes_remaining": 0,
+  "local_processes_remaining": 0
+}

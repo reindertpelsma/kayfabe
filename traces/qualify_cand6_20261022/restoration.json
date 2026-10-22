@@ -8,5 +8,10 @@
   "gdm": "active",
   "nvidia_smi": "NVIDIA GeForce RTX 4070, 595.91.07",
   "q1_vm_boots": 0,
-  "q1_gpu_workload_runs": 0
+  "q1_gpu_workload_runs": 0,
+  "final_time": "2026-10-22T07:23:47.217100+02:00",
+  "final_cuInit": 0,
+  "final_gpu_driver": "nvidia",
+  "final_gdm": "active",
+  "final_nvidia_smi": "NVIDIA GeForce RTX 4070, 595.91.07"
 }

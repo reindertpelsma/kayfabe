@@ -1,5 +1,5 @@
 {
-  "classification": "CODE READ",
+  "classification": "MEASURED git/journal/state; CODE READ harness semantics; INFERRED verdict",
   "candidate": "f7cf3ed81200077e55ee7769c635887661f3f990",
   "master_base": "e64b8e5f6d0f64c41c9c4d40775e74be08de7164",
   "candidate_ancestry_verified": true,

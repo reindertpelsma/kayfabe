@@ -1,0 +1,22 @@
+{
+  "classification": "MEASURED",
+  "candidate": "f7cf3ed81200077e55ee7769c635887661f3f990",
+  "product_tree_diff_from_candidate": 0,
+  "command": "KAYFABE_NO_KVM=1 cargo test --release --locked -j2 -p 'kf-*' --no-fail-fast",
+  "execution": "global cargo flock, nice 19, CARGO_TARGET_DIR=/workspace/q1-target, CARGO_BUILD_JOBS=2",
+  "start": "2026-10-22T07:02:52+02:00",
+  "finish": "2026-10-22T07:22:29+02:00",
+  "exit_code": 0,
+  "packages": 22,
+  "passed": 3787,
+  "failed": 0,
+  "ignored": 20,
+  "summaries": 216,
+  "before_master_run": null,
+  "raw_log_sha256": "30b8448569b6dace623ef14cf9afb5eeac6956e4b57a9223205e24c5d833df69",
+  "raw_log_bytes": 410420,
+  "clippy": "UNRUN",
+  "rustfmt": "UNRUN",
+  "hand_mutation_spot_check": "UNRUN",
+  "hardware_samples": 0
+}
