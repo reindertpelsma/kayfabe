@@ -1,0 +1,52 @@
+W1-trap-regressions-20261022 (2026-10-22)
+Source: preparatory extraction a606c4d82; tests-only EXPECTED RED 05960af7d.
+MEASURED: W1-trap-seams-20261022 kf-qemu --lib baseline 370 passed/0 failed.
+MEASURED: W1-trap-regressions-20261022 tests-first run 0 passed/4 failed,
+370 filtered, exit 101. Successful/failed native-ring notes each attempted
+one unavailable sink call against required zero. One/all-head snapshots
+failed the bounded plain-value (no heap-owning destructor) contract.
+MEASURED: W1-trap-regressions-20261022 fixed dedicated run 4 passed/0 failed,
+370 filtered, exit 0. Tests use explicit sink availability/call counters and
+value/ownership checks; no sleep or scheduling deadline supplies the result.
+
+MEASURED: W1-trap-regressions-20261022 hand mutation table:
+mutant                       ring-success ring-failure snapshot-one snapshot-all
+inline-output               KILLED       KILLED       -            -
+late-config                 KILLED       KILLED       -            -
+cold-clock                  KILLED       KILLED       -            -
+heap-snapshot               -            -            KILLED       KILLED
+lost-enable-word            -            -            KILLED       KILLED
+lost-off-trap-report        KILLED       KILLED       -            -
+Each mutant: two passed/two failed assertions, exit 101; no compile failure
+counts as a kill. Fixed source restored and checked against its saved copy.
+
+CODE READ: output is now an off-V aggregate on the existing act-owned ledger
+take, not a new guest completion/event queue. KF3_MAPLOG remains optional and
+is captured at realize; its clock is warmed there. No timer or timeout changed.
+A snapshot is now a fixed 19-word array; the source samples atomic Ports values
+only. Ownership tests guard the structural resource contract, not an elapsed
+hardware maximum or all allocation sites in DisplayPlane::trap_write.
+
+MEASURED: W1-trap-regressions-20261022 final full GPU-free product suite:
+3755 passed, 0 failed, 20 ignored; 212 completed test/doc-test targets; exit 0.
+Command (after df guard, under the mandated cargo flock):
+CARGO_TARGET_DIR=<lane-target> KAYFABE_NO_KVM=1 nice -n 19 cargo test
+  -p 'kf-*' --release -j2 --no-fail-fast
+The original failed gate and independent scheduling-probe failure are retained
+in results.txt and gate_followup.txt; no test threshold or timer was changed.
+
+MEASURED: W1-trap-regressions-20261022 final kf-qemu --lib release/j2 run:
+374 passed, 0 failed, 0 ignored, exit 0, after the lint-only replacement of
+chunks_exact_mut(2) with as_chunks_mut::<2>().0.iter_mut(). The full product
+suite preceded that equivalent iterator refinement; it was not repeated.
+Targeted rustfmt check passes on both new modules.
+
+MEASURED: W1-trap-regressions-20261022 product all-target Clippy, exit 0,
+build-finished success=true; existing-debt=354 new=0 resolved=178.
+Command (same df guard, cargo flock, target, nice and absent-KVM environment):
+cargo clippy -p 'kf-*' --all-targets --release -j2 --locked --message-format=json
+The first debt check found one chunks_exact_to_as_chunks warning; it was fixed
+in source. No lint allowance or baseline entry was added. The resolved count
+contains existing baseline entries outside this selected product scope; it
+is not a claim that W1 cleaned those warnings.
+MEASURED: W1-trap-regressions-20261022 claims gate existing-debt=3758 new=0.

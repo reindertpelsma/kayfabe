@@ -1,0 +1,80 @@
+W1-dbfast-20261022 — GPU-free structural evidence
+Source base: e9c6d39e5
+EXPECTED RED test-only commit: 6113dbcca
+No VM, GPU or remote host used.
+
+Hypothesis BEFORE test: continuously ready registered doorbell eventfds can
+extend a service_ready call past a constant readiness batch.
+FALSIFIER: the call returns after one batch and retains unread/new counts.
+
+The tests use FakeKvm, real nonblocking eventfds and explicit delivery steps.
+No sleep, wall-clock assertion, or concurrent guest scheduling assumption.
+
+Commands below used the W1 target, nice19, release, j2 and the mandated cargo
+flock. Machine-local raw build logs are retained outside this public trace.
+
+MEASURED: W1-dbfast-20261022 baseline at e9c6d39e5:
+  cargo test -p kf-chan --lib --release -j2
+  result: 200 passed, 0 failed, 0 ignored.
+
+MEASURED: W1-dbfast-20261022 expected-red run, tests at 6113dbcca:
+  cargo test -p kf-chan --lib --release -j2 worst_trap_
+  worst_trap_backlog_yields_after_one_batch_without_losing_the_suffix: FAIL
+    one turn only: actual 128, required 64.
+  worst_trap_continuous_guest_rings_yield_and_remain_level_ready: FAIL
+    guest cannot extend a turn: actual 128, required 64.
+  result: 0 passed, 2 failed, 200 filtered out; exit 101.
+
+MEASURED: W1-dbfast-20261022 first fixed run:
+  cargo test -p kf-chan --lib --release -j2
+  result: 202 passed, 0 failed, 0 ignored.
+
+MEASURED: W1-dbfast-20261022 hand mutation checks (both mutants compiled):
+  mutant                            backlog test   continuous-rings test
+  restore drain-until-empty loop     KILLED         KILLED
+  allow a second readiness batch    KILLED         KILLED
+  each run: 0 passed, 2 failed, 200 filtered out; exit 101.
+  failure in all four cases: actual 128, required 64 deliveries in first turn.
+  The first mutation staging attempt had an unresolved batch constant after
+  import relocation. That compile failure was corrected and was NOT counted
+  as a mutation kill. The table counts only subsequent assertion failures.
+
+CODE READ: the fix bounds readiness polling only: one epoll_wait(0), at most 64
+ready tags. DbFast::sync, production Sink::deliver and transitive locks retain
+independent open bounds. These two tests do not certify the entire drainer.
+
+MEASURED: W1-dbfast-20261022 full product GPU-free run:
+  KAYFABE_NO_KVM=1 cargo test -p 'kf-*' --release -j2 --no-fail-fast
+  result: 3750 passed, 1 failed, 20 ignored; exit 101.
+  Failed target: kf-mem --lib (180 passed, 1 failed, 3 ignored).
+  Failed test: batch::tests::the_act_thread_waits_for_a_chunk_not_for_the_operation
+  Source assertion: crates/kf-mem/src/batch.rs:3818, wait_us < ACT_WAIT_BOUND_US.
+  ACT_WAIT_BOUND_US at this base is 60000; actual wait_us was 169729.
+  Test diagnostic: 4590 hand-overs in 3816 ms; VA operations [601, 1886, 1327] ms;
+    longest whole hand-over 169737 us; longest hold 179676 us (2048 entries);
+    VA yielded 45 times, longest yield 125324 us.
+  No threshold, timer, test-thread setting or test selection was changed to
+  make this result pass. No isolated rerun was used to replace this failure.
+
+CODE READ: W1 changes no kf-mem source; kf-mem depends on kf-host, kf-trap,
+kf-cuda and kf-chip, not the changed kf-chan crate. This is not a causal proof
+of why its wait exceeded the bound, and the broad suite is NOT green.
+
+MEASURED: W1-dbfast-20261022 final Clippy build (2026-10-22):
+  KAYFABE_NO_KVM=1 cargo clippy -p 'kf-*' --all-targets --release -j2
+    --locked --message-format=json
+  build exit 0; debt gate: clippy: existing-debt=354 new=0 resolved=178.
+  The 178 baseline sites absent from this selected product scope are not
+  claimed as warning cleanup; neither debt baseline was edited.
+  This command waited for the shared cargo lock using the mandated 3600s
+  bound before starting; the other holder was never interrupted or bypassed.
+
+MEASURED: W1-dbfast-20261022 final claims gate (2026-10-22):
+  python3 scripts/ci/debt.py claims
+  claims: existing-debt=3758 new=0 resolved=0.
+  rustfmt --edition 2024 --check crates/kf-chan/src/dbfast.rs: exit 0.
+  Staged secret/path pattern scan and git diff --cached --check: PASS.
+
+CODE READ: all product builds were release/j2 under the mandated shared flock,
+W1 target directory and nice19. KVM was forced absent for broad tests/Clippy.
+The full GPU-free run remains failed; Clippy success does not replace it.

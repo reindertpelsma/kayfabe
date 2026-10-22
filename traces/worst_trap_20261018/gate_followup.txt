@@ -1,0 +1,69 @@
+W1-gate-followup-20261022 (2026-10-22)
+MEASURED: isolated exact test, release/j2, nice19, KVM forced absent,
+mandated cargo flock; no other test in the harness. External host load was
+not excluded. Runs 2-5 W1 and all master runs sampled own task schedstat
+at approximately 5 ms intervals; run 1 W1 was uninstrumented.
+Source master e9c6d39e5; W1 69e48ae6e plus docs-only 6c7eca3bb.
+CODE READ: kf-mem, kf-host, kf-trap, kf-cuda, kf-chip, Cargo.toml and
+Cargo.lock have zero master/W1 diff.
+MEASURED: compiled kf-mem test executable SHA256 on both revisions:
+fc75eeef0922cd03a6382bd81db9496c24ffd18a7f8801722e29180ade062df0
+Hypothesis before runs: scheduling inflated the original 169729 us failure.
+FALSIFIER: isolated runs retain long CPU work, or relevant source/dependencies
+differ between master and W1. Retain every result, including failures.
+MEASURED: W1-gate-followup-20261022 exact test
+batch::tests::the_act_thread_waits_for_a_chunk_not_for_the_operation
+
+revision run wait_us whole_handover_us hold_us result
+w1       1    7051              7059    7148 PASS
+w1       2    6548              6557    6796 PASS
+w1       3    6628              6636    6784 PASS
+w1       4    6392              6395    6478 PASS
+w1       5    5938              6070    5906 PASS
+w1 wait min/median/max us: 5938/6548/7051; n=5.
+master   1    6585              6719    6562 PASS
+master   2    5800              5989    5776 PASS
+master   3    6828              6835    6912 PASS
+master   4    6244              6351    6224 PASS
+master   5    6674              6727    6640 PASS
+master wait min/median/max us: 5800/6585/6828; n=5.
+MEASURED: W1-gate-followup-20261022 W1 run 2's command took 849.794 s,
+including the common cargo-lock queue; subsequent isolated commands took
+under one second. Every acquisition used flock -w 3600; no held lock was broken.
+
+MEASURED: W1-gate-followup-20261022 independent scheduling probe, not part
+of the five isolated runs: parent/test pinned to one allowed CPU; loaded
+arm additionally used 32 own nice19 CPU workers on that CPU, started only
+after cargo acquired the common lock. All workers were terminated and joined.
+No test bound, timer or source was changed. Probe n=1 per arm.
+
+arm wait_us hold_us busiest_task_cpu_s busiest_task_runqueue_s result
+stress-control 6010 6092 0.747492 0.101140 PASS
+stress-load 279171 281990 0.731708 40.728859 FAIL
+
+CODE READ: the test has NullHost (no GPU/RM ioctl). The act thread executes
+hand_to_host -> hand_to_host_inner -> lock_for/hold/hold2; the VA thread
+maps/unmaps a 2^20-page row through chunked ledger operations (<=2048 entries
+per hold). lock_for and hold use Instant wall time, including descheduling.
+The measured maxima are not thread CPU clocks. A touched-entry cap does not
+bound elapsed mutex wait under holder preemption.
+
+CODE READ: production reaches this ledger through GpuMirror map/unmap/own_view
+on the VA owner and EngineObj::run -> hand_to_host_within on the act owner.
+EngineObj drops its pt/rows guards before ledger handover. No V/Q call to
+BatchedVas was found in these named paths. A guest mapping request can delay
+an asynchronous VA/act result; this sample is not a timed vCPU trap.
+
+INFERRED: source/binary identity excludes a W1-introduced ledger code path.
+The paired probe demonstrates that scheduling alone can exceed 60000 us with
+roughly unchanged CPU work. The original 169729 us event is consistent with
+load/preemption but its historical per-thread scheduling trace is unavailable;
+no claim of exact retrospective attribution or universal trap bound follows.
+The original full-suite failure is retained, not replaced by these ten passes.
+The real blocking VA/act ledger remains a design concern (Q7), not a reason
+to raise ACT_WAIT_BOUND_US or change yield/timeout constants.
+
+MEASURED: W1-trap-seams-20261022 (2026-10-22), mechanical production
+extraction before behavior fixes: kf-qemu --lib release/j2 =370 passed,
+0 failed. Inline output and Vec snapshots are deliberately still present
+in this preparatory source; the subsequent regression commit must be RED.
