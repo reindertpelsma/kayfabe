@@ -1,0 +1,21 @@
+[
+  {
+    "mutant": "sender-file-binding",
+    "count": 3,
+    "killers": [
+      "V5 sender requires bound structured payload wrong-nonce",
+      "V5 sender requires bound structured payload wrong-sha",
+      "V5 sender requires bound structured payload wrong-runner"
+    ]
+  },
+  {
+    "mutant": "repo-defined-sender-suites",
+    "count": 4,
+    "killers": [
+      "V5 sender requires bound structured payload valid",
+      "V5 sender requires bound structured payload payload-only",
+      "V5 sender requires bound structured payload self_test",
+      "V5 sender requires bound structured payload gpu_probe"
+    ]
+  }
+]

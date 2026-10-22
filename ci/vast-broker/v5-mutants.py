@@ -194,13 +194,13 @@ CASES = [
     ),
     (
         "hold-helper-scope",
-        "../../scripts/ci/vast_onstart.sh",
+        "../../scripts/ci/kf-box-hold",
         [("/hold/${callback.run}'", "/hold/999-1'")],
         ["v5-onstart.test.js"],
     ),
     (
         "ssh-login-hold",
-        "../../scripts/ci/vast_onstart.sh",
+        "../../scripts/ci/kf-ci-hold.sh",
         [(r'if [ -n "\${SSH_CONNECTION:-}" ]; then', r"if false; then")],
         ["v5-onstart.test.js"],
     ),
@@ -224,7 +224,7 @@ CASES = [
     ),
     (
         "soft-expired-no-work",
-        "../../scripts/ci/vast_report.py",
+        "../../scripts/ci/vast_onstart.sh",
         [("if remaining>0 else 'exit 124", "if remaining>0 else 'exit 0")],
         ["v5-soft-deadline.test.js"],
     ),
@@ -505,7 +505,7 @@ CASES = [
     ),
     (
         "approved-payload-path",
-        "../../scripts/ci/vast_report.py",
+        "../../scripts/ci/vast_onstart.sh",
         [
             (
                 "bash scripts/ci/vast_payload.sh '${sha}' '${nonce}'",
@@ -636,7 +636,7 @@ def main():
                 syntax = subprocess.run(
                     (
                         ["bash", "-n", str(path)]
-                        if path.suffix == ".sh"
+                        if (path.suffix == ".sh" or path.name.startswith("kf-"))
                         else ["node", "--check", str(path)]
                     ),
                     capture_output=True,

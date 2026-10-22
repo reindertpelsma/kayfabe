@@ -1,35 +1,28 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
-import { onstart } from './repo-onstart.js';
-import { sha, nonce, env, clock } from './helpers.js';
-// FALSIFIER: creation-time expiry executes work or fails with a shell syntax
-// error instead of the required timeout exit; startup delay must consume time.
+import { mkdtemp, writeFile, readFile, rm } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { repoSource } from './repo-onstart.js';
+import { clock } from './helpers.js';
 for (const elapsed of [173, 181])
-  test('V5 expired creation soft deadline exits timeout ' + elapsed, () => {
-    const source = onstart(sha, nonce, 180, env.REPOSITORY, {
-      url: env.WORKER_URL,
-      run: '123-1',
-      token: 'v1.123.1.1800030000.' + 'A'.repeat(43),
-      runnerNonce: 'f'.repeat(64),
-      softDeadline: clock + 170 * 60000,
-    });
-    const python = source
-      .split("python3 - <<'KF_REPORT'\n")[1]
-      .split('post("progress", "Suite starting")')[0];
-    const r = spawnSync(
-      'python3',
-      [
-        '-I',
-        '-c',
-        "import sys,time;time.time=lambda:float(sys.argv[2]);scope={};exec(sys.argv[1],scope);print(scope['work'],end='')",
-        python,
-        String(clock / 1000 + elapsed * 60),
-      ],
-      { encoding: 'utf8' },
-    );
-    assert.equal(r.status, 0, r.stderr);
-    const shell = spawnSync('bash', ['-s'], { input: r.stdout, encoding: 'utf8' });
-    assert.equal(shell.status, 124, shell.stderr);
-    assert.equal(shell.stdout, '');
+  test('V5 expired creation soft deadline exits timeout ' + elapsed, async () => {
+    const dir = await mkdtemp(tmpdir() + '/v5-soft-');
+    try {
+      await writeFile(dir + '/payload', 'touch ' + dir + '/executed\n');
+      const source = repoSource('vast_onstart.sh');
+      const a = source.indexOf('now=$(date +%s)');
+      const z = source.indexOf("\n\n{\n    printf 'rc=%d", a);
+      assert.ok(a >= 0 && z > a);
+      const prefix = `repo='${dir}'\npayload=payload\nlog='${dir}/log'\nrc=0\ntimed_out=0\nreason=\nKF_SOFT_DEADLINE=${clock / 1000 + 170 * 60}\ndate(){ printf '%s\\n' ${clock / 1000 + elapsed * 60}; }\n`;
+      const r = spawnSync('bash', ['-s'], {
+        input: prefix + source.slice(a, z) + '\nprintf \'%s %s\' "$rc" "$timed_out"\n',
+        encoding: 'utf8',
+      });
+      assert.equal(r.status, 0, r.stderr);
+      assert.equal(r.stdout, '124 1');
+      await assert.rejects(readFile(dir + '/executed'));
+    } finally {
+      await rm(dir, { recursive: true });
+    }
   });

@@ -1,0 +1,28 @@
+#!/bin/sh
+# kf-box-kill [reason]: end this Vast CI box early. Installed by vast_onstart.sh.
+# Authority: only this run's capability (report/kill/hold); never account or owner credentials.
+# HTTPS only, no redirects, no proxy. The token reaches curl on stdin, not on its command line.
+set -eu
+env_file=${KF_CI_ENV_FILE:-/run/kf-ci/env}
+if [ ! -r "$env_file" ]; then
+    echo "kf-box-kill: cannot read $env_file" >&2
+    exit 1
+fi
+# shellcheck disable=SC1090
+. "$env_file"
+case ${KF_RUN_TOKEN:-} in
+'' | *[!A-Za-z0-9._-]*)
+    echo "kf-box-kill: no usable run token" >&2
+    exit 1
+    ;;
+esac
+reason=$(printf '%.200s' "${1:-box-request}" | tr -cd 'A-Za-z0-9 ._:,-')
+[ -n "$reason" ] || reason=box-request
+code=$(printf 'header = "Authorization: Bearer %s"\n' "$KF_RUN_TOKEN" |
+    curl --config - --silent --show-error --max-time 20 --max-redirs 0 --proto '=https' \
+        --noproxy '*' --request POST --data-binary "$reason" --output /dev/null \
+        --write-out '%{http_code}' "${KF_BROKER_URL:?}/kill/${KF_RUN_ID:?}") || exit 1
+if [ "$code" != 200 ]; then
+    echo "kf-box-kill: broker answered HTTP $code" >&2
+    exit 1
+fi

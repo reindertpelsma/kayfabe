@@ -35,7 +35,7 @@ MUTATIONS = [
     ),
     (
         "kill-wrong-route",
-        "../../scripts/ci/vast_onstart.sh",
+        "../../scripts/ci/kf-box-kill",
         "/kill/${callback.run}",
         "/report/${callback.run}",
         ["v4-lifecycle.test.js", "reporting.test.js"],
@@ -333,7 +333,7 @@ def main():
                         if path.suffix == ".py"
                         else (
                             ["bash", "-n", str(path)]
-                            if path.suffix == ".sh"
+                            if (path.suffix == ".sh" or path.name.startswith("kf-"))
                             else ["node", "--check", str(path)]
                         )
                     ),

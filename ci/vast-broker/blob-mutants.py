@@ -40,8 +40,8 @@ cases = [
     ("runner-url-redaction", "runner.py", []),
     (
         "scoped-helper",
-        "../../scripts/ci/vast_onstart.sh",
-        [("/blob-url/$KF_RUN_ID/", "/blob-url/999-1/")],
+        "../../scripts/ci/kf-box-blob-url",
+        [("/blob-url/${KF_RUN_ID:?}/", "/blob-url/999-1/")],
     ),
 ]
 rows = []
@@ -71,8 +71,8 @@ for name, file, patches in cases:
             assert (
                 subprocess.run(
                     [
-                        "bash" if p.suffix == ".sh" else "node",
-                        "-n" if p.suffix == ".sh" else "--check",
+                        "bash" if (p.suffix == ".sh" or p.name.startswith("kf-")) else "node",
+                        "-n" if (p.suffix == ".sh" or p.name.startswith("kf-")) else "--check",
                         str(p),
                     ],
                     capture_output=True,

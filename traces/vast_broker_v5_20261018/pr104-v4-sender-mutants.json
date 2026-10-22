@@ -1,0 +1,26 @@
+[
+  {
+    "mutant": "sender-discards-prefix",
+    "killers": 2,
+    "tests": [
+      "V4 sender preserves fast full bounded output once 0",
+      "V4 sender preserves fast full bounded output once 7"
+    ]
+  },
+  {
+    "mutant": "sender-repeats-tail",
+    "killers": 2,
+    "tests": [
+      "V4 sender preserves fast full bounded output once 0",
+      "V4 sender preserves fast full bounded output once 7"
+    ]
+  },
+  {
+    "mutant": "sender-ignores-grace-ack",
+    "killers": 2,
+    "tests": [
+      "V4 sender preserves fast full bounded output once 0",
+      "V4 sender preserves fast full bounded output once 7"
+    ]
+  }
+]

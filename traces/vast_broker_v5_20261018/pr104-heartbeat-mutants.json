@@ -1,0 +1,63 @@
+[
+  {
+    "mutant": "heartbeat-timeout",
+    "count": 2,
+    "killers": [
+      "V5 missing heartbeat destroys at fifteen minutes false",
+      "V5 missing heartbeat destroys at fifteen minutes true"
+    ]
+  },
+  {
+    "mutant": "empty-heartbeat",
+    "count": 2,
+    "killers": [
+      "V5 empty log heartbeat advances last-post timestamp false",
+      "V5 empty log heartbeat advances last-post timestamp true"
+    ]
+  },
+  {
+    "mutant": "hold-grace-and-heartbeat",
+    "count": 10,
+    "killers": [
+      "V5 authenticated hold stops grace and heartbeat PASS",
+      "V5 authenticated hold stops grace and heartbeat FAIL",
+      "V5 repeated hold cannot extend hard or manual ceiling false",
+      "V5 repeated hold cannot extend hard or manual ceiling true",
+      "V5 owner stop-timer leaves absolute MANUAL ceiling false",
+      "V5 owner stop-timer leaves absolute MANUAL ceiling true",
+      "V5 MANUAL cron always writes Worker-authored status false",
+      "V5 MANUAL cron always writes Worker-authored status true",
+      "V5 stop-timer checks extended billing liability daily",
+      "V5 stop-timer checks extended billing liability credit"
+    ]
+  },
+  {
+    "mutant": "heartbeat-after-cap",
+    "count": 4,
+    "killers": [
+      "V5 empty-log heartbeat survives sender cap attempts",
+      "V5 empty-log heartbeat survives sender cap bytes",
+      "V5 sender busy output cannot starve heartbeat attempts",
+      "V5 sender busy output cannot starve heartbeat bytes"
+    ]
+  },
+  {
+    "mutant": "heartbeat-busy-branch",
+    "count": 4,
+    "killers": [
+      "V5 empty-log heartbeat survives sender cap attempts",
+      "V5 empty-log heartbeat survives sender cap bytes",
+      "V5 sender busy output cannot starve heartbeat attempts",
+      "V5 sender busy output cannot starve heartbeat bytes"
+    ]
+  },
+  {
+    "mutant": "heartbeat-ten-minutes",
+    "count": 3,
+    "killers": [
+      "V5 one-place owner defaults clock",
+      "V5 sender busy output cannot starve heartbeat attempts",
+      "V5 sender busy output cannot starve heartbeat bytes"
+    ]
+  }
+]

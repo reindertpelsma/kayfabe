@@ -73,8 +73,8 @@
   ],
   "legacy:fixed callback prefix": [
     [
-      "url = os.environ[\"KF_BROKER_URL\"] + \"/report/\" + os.environ[\"KF_RUN_ID\"]",
-      "url = 'https://broker.example/report/' + os.environ[\"KF_RUN_ID\"]"
+      "self.url = \"%s/report/%s\" % (base, run)",
+      "self.url = \"https://broker.example/report/%s\" % run"
     ]
   ],
   "legacy:endpoint text redaction": [
@@ -611,8 +611,8 @@
   ],
   "v4:kill-wrong-route": [
     [
-      "/kill/$KF_RUN_ID",
-      "/report/$KF_RUN_ID"
+      "/kill/${KF_RUN_ID:?}",
+      "/report/${KF_RUN_ID:?}"
     ]
   ],
   "v4:no-absence-verification": [
@@ -695,18 +695,18 @@
   ],
   "v4:sender-discards-prefix": [
     [
-      "pending += data",
-      "pending = (pending + data)[-8192:]"
-    ],
-    [
-      "len(pending) >= 8192 or current - last >= 1",
-      "current - last >= 1"
+      "            self.text += text",
+      "            self.text = (self.text + text)[-8192:]"
     ]
   ],
   "v4:sender-repeats-tail": [
     [
-      "\"Suite complete; sender omitted \"\n    + str(omitted)\n    + \" raw bytes beyond its bounded transport allowance.\"",
-      "tail"
+      "text = self.decoder.decode(self.capper.feed(data))",
+      "text = self.decoder.decode(self.capper.feed(data))\n        self.last_chunk = text"
+    ],
+    [
+      "                text = note",
+      "                text = note + getattr(self, \"last_chunk\", \"\")"
     ]
   ],
   "v4:unreleased-upload": [
@@ -741,8 +741,8 @@
   ],
   "v4:sender-ignores-grace-ack": [
     [
-      "seconds = ack.get(\"grace_remaining_seconds\") if isinstance(ack, dict) else None",
-      "seconds = None"
+      "    seconds = ack.get(\"grace_remaining_seconds\")",
+      "    seconds = None # mutant ignores ack"
     ]
   ],
   "v4:lose-result-after-box-kill": [
@@ -1179,26 +1179,26 @@
   ],
   "v5:hold-helper-scope": [
     [
-      "/hold/$KF_RUN_ID",
+      "/hold/${KF_RUN_ID:?}",
       "/hold/999-1"
     ]
   ],
   "v5:ssh-login-hold": [
     [
-      "if [ -n \"${SSH_CONNECTION:-}\" ]; then",
-      "if false; then"
+      "if [ -n \"${SSH_CONNECTION:-}\" ]",
+      "if false"
     ]
   ],
   "v5:heartbeat-after-cap": [
     [
-      " and not heartbeat_post and ",
-      " and "
+      "if self.pending is None and self.clock() - self.last_ok >= self.heartbeat:",
+      "if False:"
     ]
   ],
   "v5:heartbeat-busy-branch": [
     [
-      "        if current - heartbeat >=",
-      "        elif current - heartbeat >="
+      "        if self.pending is None and self.clock() - self.last_ok >= self.heartbeat:",
+      "        elif self.pending is None and self.clock() - self.last_ok >= self.heartbeat:"
     ]
   ],
   "v5:heartbeat-ten-minutes": [
@@ -1209,8 +1209,8 @@
   ],
   "v5:soft-expired-no-work": [
     [
-      "else \"exit 124\\n\"",
-      "else \"exit 0\\n\""
+      "elif [ \"$remaining\" -le 0 ]; then",
+      "elif false; then"
     ]
   ],
   "v5:shipped-numeric-overrides": [
@@ -1409,14 +1409,14 @@
   ],
   "v5:sender-file-binding": [
     [
-      "        or candidate[\"nonce\"] != nonce\n        or candidate[\"sha\"] != sha\n",
-      ""
+      "if any(key in doc and doc[key] != value for key, value in bound.items()):",
+      "if False:"
     ]
   ],
   "v5:approved-payload-path": [
     [
-      "bash scripts/ci/vast_payload.sh \"$KF_SHA\" \"$KF_NONCE\"",
-      "bash scripts/ci/vast_box_main.sh \"$KF_SHA\" \"$KF_NONCE\""
+      "payload=scripts/ci/vast_payload.sh",
+      "payload=scripts/ci/vast_box_main.sh"
     ]
   ],
   "v5:owner-sweep-selected-commit": [
@@ -1467,7 +1467,7 @@
   ],
   "v5:repo-defined-sender-suites": [
     [
-      "complete = all(",
+      "complete = bool(rows) and all(",
       "complete = len(rows) == 9 and all("
     ]
   ],
