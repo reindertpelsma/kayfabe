@@ -1,0 +1,99 @@
+{
+  "classification": "MEASURED",
+  "date": "2026-10-22",
+  "base": "60655d661bc38fbec193753f557f7de8d339fd83",
+  "fix": "6f823a88a8816c563aa4f80f78ddfd50b2bdaa76",
+  "tests_first": [
+    {
+      "commit": "5d2bc402b",
+      "target": "copy_ring_birth_seed",
+      "passed": 6,
+      "failed_by_assertion": 9
+    },
+    {
+      "commit": "e8a20c774",
+      "target": "copy_birth_policy",
+      "passed": 3,
+      "failed_by_assertion": 2
+    }
+  ],
+  "focused_green": {
+    "passed": 20,
+    "failed": 0
+  },
+  "restored_full": {
+    "packages": [
+      "kf-chan",
+      "kf-qemu",
+      "kf-rm"
+    ],
+    "passed": 1822,
+    "failed": 0,
+    "ignored": 4,
+    "cargo_result_summaries": 97,
+    "log_sha256": "3f9f596eb3b04febc7ae5f93180ec9bc5463f6baa5cfd9ffc453b5092b1e6add",
+    "existing_ignores": [
+      {
+        "name": "a6_open_a_rebind_in_pointer_mode_is_not_known_to_the_window",
+        "reason": "OPEN: a rebind of the software subchannel while in Pointer mode is invisible; a later trigger on the new subchannel is missed (Open question 5)"
+      },
+      {
+        "name": "b_open_continued_indices_need_the_new_gp_put_preset_before_the_switch",
+        "reason": "OPEN: if the indices continue across the growth, the new USERD's GP_PUT must already hold the continued value when the relay switches (Open question 4)"
+      },
+      {
+        "name": "i6_open_pointer_mode_credit_waits_need_no_look",
+        "reason": "OPEN: Pointer mode cannot announce private-ring credit without a marker (Open question 1)"
+      },
+      {
+        "name": "p10_publish_reads_back_before_the_native_doorbell",
+        "reason": "OPEN (EXPECTED RED since the previous commit): owner decision on a read-back before the private doorbell; docs/design/V3_USER_RING_EVENT_LOOP_20261014.md section 9.2"
+      }
+    ]
+  },
+  "execution": {
+    "global_flock": true,
+    "lock_wait_seconds": 3600,
+    "cargo_jobs": 2,
+    "nice": 19,
+    "release": true,
+    "locked_dependencies": true,
+    "KAYFABE_NO_KVM": "1"
+  },
+  "clippy": {
+    "date": "2026-10-22",
+    "packages": [
+      "kf-chan",
+      "kf-qemu",
+      "kf-rm"
+    ],
+    "master": "e9c6d39e5b465d7a20f3dcca8e7e15a4374958b5",
+    "candidate": "60655d661bc38fbec193753f557f7de8d339fd83",
+    "fix": "6f823a88a8816c563aa4f80f78ddfd50b2bdaa76",
+    "master_fingerprints": 273,
+    "candidate_fingerprints": 273,
+    "fixed_fingerprints": 273,
+    "added_vs_master": 0,
+    "added_vs_candidate": 0,
+    "debt_unchanged": true
+  },
+  "assertions_loosened": 0,
+  "new_ignores": 0,
+  "debt_ledgers_changed": false,
+  "hardware": {
+    "new_runs": 0,
+    "acceptance": "PENDING"
+  },
+  "claims_gate": {
+    "existing_debt": 3756,
+    "new": 0,
+    "resolved": 2,
+    "debt_ledger_changed": false
+  },
+  "cleanup": {
+    "own_build_test_processes": 0,
+    "own_target_deleted": true,
+    "temporary_cargo_config_removed": true,
+    "own_cargo_lock_scopes_completed": true
+  }
+}

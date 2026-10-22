@@ -68,3 +68,45 @@ CODE READ test boundary: the guest-object cases send real ChannelPolicy RPCs
 and replay a real ring with an independent host-class input. They do not create
 a physical HostRing or execute ChanPlane's host allocation path. The host-source
 wiring above is source analysis; hardware acceptance is pending.
+
+MEASURED mutation campaign at commit 6f823a88a, 2026-10-22:
+[mutants.json](mutants.json) lists every distinct assertion killer and the
+restored source hashes. Every variant compiled and ran; no missing target or
+setup error counts as a kill. All mutations were restored byte-for-byte, and
+the complete changed-crate/security suites run on that restored source.
+
+| Source mutation | Distinct assertion killers |
+|---|---:|
+| M1 remove birth seed | 6 |
+| M2 seed graphics | 2 |
+| M3 substitute guest C8B5 for the host-class input | 2 |
+| M4 accept foreign CE binds | 3 |
+| M5 seed despite a video class | 2 |
+| M6 restore handle OR stamp authorization | 2 |
+
+CODE READ scope of M3: the injected C8B5 value stands in for a guest-declared
+class at the pure selector. The RPC/ring tests kill that wrong-source value;
+this does not exercise physical host allocation or a live ChanPlane.
+
+MEASURED Clippy --all-targets, 2026-10-22: master at e9c6d39e5, candidate
+at 60655d661, and fix at 6f823a88a each have 273 identical source-bound warning
+fingerprints across kf-chan/kf-qemu/kf-rm and their dependencies. Added 0 versus
+both bases. QEMU deny lints and both debt ledgers are unchanged.
+
+MEASURED final restored suites at commit 6f823a88a, 2026-10-22:
+`cargo test --release --locked -j2 -p kf-chan -p kf-qemu -p kf-rm`,
+with KAYFABE_NO_KVM=1, nice19, own target and the global flock, completed
+97 Cargo result summaries: 1822 passed, 0 failed, 4 ignored.
+[validation.json](validation.json) records counts, existing ignores, and the
+log hash. Unit, integration, and doc-test summaries are included. Every
+ignored case already exists at candidate 6; none was added or loosened.
+Existing audit_kernel_channel_stamp and secaudit_internal_client_range
+regressions are included, alongside both new Windows denial cases.
+
+CODE READ limits: no test assertion was loosened. The new-API fixture adapters
+now call the production pure choice, the existing graphics full-field config
+adds ce=0, and the output helper uses as_chunks to satisfy Clippy. No unsafe
+perimeter, launcher, timer, privilege predicate, or debt ledger was changed.
+
+MEASURED final claims gate, 2026-10-22: `python3 scripts/ci/debt.py claims`
+reports existing-debt=3756, new=0, resolved=2. No new debt was recorded.
