@@ -1,0 +1,11 @@
+{
+  "class": "INFERRED",
+  "date": "2026-10-22",
+  "prior_leases_api_absent": true,
+  "conservative_lane_usd": 6.722848189335185,
+  "conservative_round3_usd": 2.919230069887037,
+  "method": "rate times owned lifetime plus1USD allowance per lease; not an invoice",
+  "lane_cap_usd": 12,
+  "round3_cap_usd": 8,
+  "reserve_usd": 5
+}

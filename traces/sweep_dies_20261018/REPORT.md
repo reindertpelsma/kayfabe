@@ -122,3 +122,5 @@ AMPERE RESUME RESULT — 2026-10-22
 13. MEASURED (2026-10-22, `../round3/all_resume_green.log`, `../round3/owner_family_mutants.json`, `../round3/chunks_mutants.json`):154/154 offline tests; six guard mutants killed3/2/5/5/5/3, five transport mutants each2; added Rust lint sites0, clippy not rerun.
 14. INFERRED (2026-10-22): combined acceptance FAIL at pre-driver bind readiness, not evidence of an NVIDIA initialization defect; recommend a separate public-source boot/display investigation. Optional alloc-header exporter was absent; zero-RPC and channel-state metadata were exported without claiming allocation-body coverage.
 15. CODE READ (2026-10-22): preserve this failed arm and evidence before exact-id teardown/API absence; Turing follows only after absence. No RE or secrets on the rental, no dev cargo target or shared-host GPU work.
+
+MEASURED (2026-10-22, lease57280778, `lease_57280778/TEARDOWN.json`): exact-id teardown verified API absence23:52:10Z; auto-destroy cancelled afterward. INFERRED: runtime estimate$0.498823, conservative$1.498823; conservative lane total$6.722848, Round3$2.919230; Turing budget remains.
