@@ -282,3 +282,13 @@ verified before selecting next eligible offer. GB205 no eligible live offer in f
 GB206 is highest available verified rentable match. Own-ID ledger is fields_phase/owned_instances.json.
 Subtract existingGB206 tier2/ZBC/hostshapes/nativecaps/census; new own-die PRECOMP permission/reply.
 A GB206 result does not establish a GB202 pass or resolve GB202's historical fourth-cursor0x50.
+
+CLOSED MEASURED API 2026-10-22: own57273215 destroyed by exactid; absenceverified21:34:29.366086UTC.
+Elapsed0.502496256h × observedall-in0.428666667USD/h = runtimeestimate0.215403395USD
+(newphase total0.215403395<6stop; priorstretch4.832256623 separate; not a settled invoice).
+Observedsharedcredit37.138982102USD>5reserve; accountdebit is not exclusive SW2 attribution.
+Both own timers111957/111960 cancelled only AFTER APIabsence; own9historical/currentIDs absent.
+ActualGB206/595.91.07: PRECOMPdenied0x1f with kernelnon-adminpermissionfailure0x640780;
+gates9/9+10,raw30/30,CUDA4/4 pass; nativeGRfixtureCEwake-FD assertion failed despite payload/GET.
+No unmatched Xid, no Xid32; only5source-matched intentional31 with recovery. Controllerstopped
+beforeWindows install/bind; fieldON/B1UNRUN. No newWindowsordinals or GB202result.

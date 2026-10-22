@@ -21,7 +21,7 @@
     "budget_cutoff_minutes": 170,
     "guard_rate": 0.48005555555555557,
     "product_head": "6e3fd3fd6d809ae2c2a3504cd8be1ecd29b2b31b",
-    "destroyed": false,
+    "destroyed": true,
     "authority": "owner22:50 update: ONE verified RTX50-series lease, prefer GB202>203>205>206>207; actual die established by own host probe; phase cap8 stop6 reserve5",
     "auto_destroy_requested_minutes": 170,
     "auto_destroy_pid": 111957,
@@ -33,6 +33,13 @@
     "budget_watch_pid_starttime": 236864812,
     "ssh_ready_utc": "2026-10-22T21:11:06.213117+00:00",
     "ssh_hostkey_fingerprint": "SHA256:wS+QN5rGbi64x35ezg9cr+SdIpgGOUNMUK6AqAPBbyE",
-    "observed_dph_total": 0.42866666666666664
+    "observed_dph_total": 0.42866666666666664,
+    "absence_verified_utc": "2026-10-22T21:34:29.366086+00:00",
+    "elapsed_hours_until_absence": 0.502496256388889,
+    "runtime_cost_estimate_usd": 0.21540339523870372,
+    "lane_runtime_total_usd": 0.21540339523870372,
+    "credit_after_observed": 37.13898210206105,
+    "auto_destroy_cancelled_after_absence": true,
+    "budget_watch_cancelled_after_absence": true
   }
 ]

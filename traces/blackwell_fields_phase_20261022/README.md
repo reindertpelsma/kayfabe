@@ -1,4 +1,6 @@
-**STATUS: LIVE, 2026-10-22.** ACTIVE owner-authorized lease57273215, candidateGB206/RTX5060Ti; actual host identity and hardware arms pending. Auto-destroy armed first; deadline23:54:20UTC.
+**STATUS: LIVE, 2026-10-22.** Lease57273215 CLOSED, APIabsence verified. GB206 H0 permission denied; raw30/30 andCUDA4/4 passed, native CE wake-FD fixture failed. Windows/B1 UNRUN. Phase runtime estimate0.215403395USD.
+
+The final result and source-specific matrix are in matrix.json and FINAL_API_AUDIT.json. No new Windows Code0/43/TDR or ordinals; no GB202 pass inferred. The active/preflight text below is dated campaign history.
 
 2026-10-22 21:04UTC amendment: the owner22:50 expanded eligibility to all verified RTX50 cards. Highest actually rentable verified match is GB206 offer56550364 at0.380056USD/h; advertisedGB202 ask was unavailable with no contract. CPU source stays6e3fd3fd6, independent guard1ac2b51d5 and optional B1c130aa98a. The earlier no-create market result below is historical; subsequent lease creation is in owned_instances.json. GB206 measurement does not establish a GB202 pass.
 
