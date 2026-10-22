@@ -2,3 +2,4 @@ arm,run,workload,composite,reported_composite,workload_status,source,version
 fix,result_2026-10-22-04-07-03,blender-01,35.95,35.95,Completed,result.json,1.0.1
 fix,result_2026-10-22-04-07-03,catia-07,50.83,50.83,Completed,result.json,1.0.6
 fix,result_2026-10-22-04-07-03,creo-04,70.42,70.42,Completed,result.json,1.0.1
+fix,result_2026-10-22-04-07-03,energy-04,46.46,46.46,Completed,result.json,1.0.2
