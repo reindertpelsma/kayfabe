@@ -151,8 +151,16 @@ fn gr_segment(classes: &[u32]) -> Result<Vec<u32>, String> {
 }
 
 // Native CE fixture seam, separate from placement and execution.
-fn ce_segment(_host_ce_class: u32) -> Result<Vec<u32>, String> {
-    Ok(RUN31_CE.to_vec())
+fn ce_segment(host_ce_class: u32) -> Result<Vec<u32>, String> {
+    if !kf_chip::is_any_dma_copy_class(host_ce_class) {
+        return Err("native CE fixture requires an allocated copy-engine class".into());
+    }
+    let mut words = RUN31_CE.to_vec();
+    // Native execution must bind the class allocated on THIS host channel.
+    // The historical guest fixture used Ampere's class; the CE host path does
+    // not have the graphics-runlist compatibility rewriter.
+    words[4] = host_ce_class;
+    Ok(words)
 }
 
 fn main() {
@@ -835,9 +843,9 @@ mod fixture_tests {
         let words = ce_segment(class).unwrap();
         assert_ne!(class, RUN31_CE[4]);
         assert_eq!(words[4], class);
-        for i in 0..RUN31_CE.len() {
+        for (i, original) in RUN31_CE.iter().enumerate() {
             if i != 4 {
-                assert_eq!(words[i], RUN31_CE[i], "operand{i}");
+                assert_eq!(words[i], *original, "operand{i}");
             }
         }
     }
