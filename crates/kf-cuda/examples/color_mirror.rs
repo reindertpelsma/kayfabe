@@ -6,6 +6,8 @@
 //!
 //! `cargo run -p kf-cuda --example color_mirror -- <host PCI BDF>`
 //!
+//! Prints actual vs expected for all four cases (logical RGB; the frame is BGRA in memory).
+//!
 //! This checks the KERNEL against the reading "MIRROR = odd extension". It cannot tell whether that
 //! reading is what the display engine does; that needs the real engine (a VFIO or bare-metal run
 //! with a signed OCSC0 and a mirrored OLUT, scanout captured), see the PR's validation plan.
@@ -33,6 +35,16 @@ fn saturation(s: f64) -> [i32; 12] {
         }
     }
     m
+}
+
+/// One hardware case: the FP16 input table value, OCSC0, the table's flags, the expected logical RGB.
+struct Case<'a> {
+    name: &'a str,
+    input: [u16; 3],
+    matrix: &'a [i32; 12],
+    mirror: bool,
+    interpolate: bool,
+    want: [u8; 3],
 }
 
 fn main() -> Result<(), String> {
@@ -82,32 +94,96 @@ fn main() -> Result<(), String> {
         };
         gpu.selftest_color(&fixture).map_err(|e| e.to_string())
     };
-    let all = |pixels: &[u8], rgb: [u8; 3]| {
-        pixels
-            .as_chunks::<4>()
-            .0
-            .iter()
-            .all(|p| p[..3] == rgb && p[3] == 255)
+    // The console frame is B8G8R8A8 in memory: `kf_color_output` packs `q << (16 - 8 * c)` into a
+    // little-endian word, so the bytes are B, G, R, A. Expected values below are logical RGB;
+    // the readback is swizzled before comparing (run on a GTX 1660 SUPER, 2026-10-22, read the
+    // memory bytes 64,160,0 for the first case as if they were RGB: that was this example's error,
+    // not the kernel's).
+    let rgb_of = |px: &[u8]| -> Result<[u8; 3], String> {
+        let (chunks, rest) = px.as_chunks::<4>();
+        let first = chunks.first().ok_or("empty readback")?;
+        if !rest.is_empty() || chunks.iter().any(|p| p != first) || first[3] != 255 {
+            return Err(format!("pixels differ or are not opaque: {px:?}"));
+        }
+        Ok([first[2], first[1], first[0]])
     };
 
-    // src (0.25, 0.75, 0) -> R' = R - G / 2 = -0.125, G' = 0.75, B' = 0
-    let mut m = [65536, 0, 0, 0, 0, 65536, 0, 0, 0, 0, 65536, 0];
-    m[1] = -32768;
+    // case 1/2: src (0.25, 0.75, 0) -> R' = R - G / 2 = -0.125, G' = 0.75, B' = 0
+    let mut neg = [65536, 0, 0, 0, 0, 65536, 0, 0, 0, 0, 65536, 0];
+    neg[1] = -32768;
     let (quarter, three_quarters) = (0x3400, 0x3a00); // FP16
-    let px = run(&mut gpu, [quarter, three_quarters, 0], &m, true, false)?;
-    assert!(all(&px, [0, 160, 64]), "mirrored: {px:?}");
-    println!("COLOR_GPU mirror_negative_channel PASS rgb=0,160,64 (odd extension, clamped)");
-    let px = run(&mut gpu, [quarter, three_quarters, 0], &m, false, false)?;
-    assert!(all(&px, [64, 160, 64]), "unmirrored: {px:?}");
-    println!("COLOR_GPU unmirrored_negative_channel PASS rgb=64,160,64 (first sample)");
-
-    // pure red at saturation 1.5: R' = 1.3937 (clamps to the last sample), G' = B' = -0.1063
-    let m = saturation(1.5);
-    let px = run(&mut gpu, [0x3c00, 0, 0], &m, true, true)?;
-    assert!(all(&px, [192, 0, 0]), "vibrance mirrored: {px:?}");
-    println!("COLOR_GPU mirror_digital_vibrance PASS rgb=192,0,0");
-    let px = run(&mut gpu, [0x3c00, 0, 0], &m, false, true)?;
-    assert!(all(&px, [192, 64, 64]), "vibrance unmirrored: {px:?}");
-    println!("COLOR_GPU unmirrored_digital_vibrance PASS rgb=192,64,64");
+    let vib = saturation(1.5);
+    // case 3/4: pure red at saturation 1.5: R' = 1.3937 (clamps to the last sample), G' = B' = -0.1063
+    let case = |name, input, matrix, mirror, interpolate, want| Case {
+        name,
+        input,
+        matrix,
+        mirror,
+        interpolate,
+        want,
+    };
+    let cases = [
+        case(
+            "mirror_negative_channel",
+            [quarter, three_quarters, 0],
+            &neg,
+            true,
+            false,
+            [0, 160, 64],
+        ),
+        case(
+            "unmirrored_negative_channel",
+            [quarter, three_quarters, 0],
+            &neg,
+            false,
+            false,
+            [64, 160, 64],
+        ),
+        case(
+            "mirror_digital_vibrance",
+            [0x3c00, 0, 0],
+            &vib,
+            true,
+            true,
+            [192, 0, 0],
+        ),
+        case(
+            "unmirrored_digital_vibrance",
+            [0x3c00, 0, 0],
+            &vib,
+            false,
+            true,
+            [192, 64, 64],
+        ),
+    ];
+    // every case runs and reports; the exit status is the conjunction
+    let mut failed = 0;
+    for Case {
+        name,
+        input,
+        matrix,
+        mirror,
+        interpolate,
+        want,
+    } in cases
+    {
+        let got = run(&mut gpu, input, matrix, mirror, interpolate).and_then(|px| rgb_of(&px));
+        match got {
+            Ok(rgb) if rgb == want => {
+                println!("COLOR_GPU {name} PASS rgb={rgb:?}");
+            }
+            Ok(rgb) => {
+                failed += 1;
+                println!("COLOR_GPU {name} FAIL actual_rgb={rgb:?} expected_rgb={want:?}");
+            }
+            Err(e) => {
+                failed += 1;
+                println!("COLOR_GPU {name} FAIL error={e} expected_rgb={want:?}");
+            }
+        }
+    }
+    if failed > 0 {
+        return Err(format!("{failed} of 4 cases failed"));
+    }
     Ok(())
 }

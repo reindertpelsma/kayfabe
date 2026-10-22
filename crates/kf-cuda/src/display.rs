@@ -1932,6 +1932,31 @@ mod tests {
         );
     }
 
+    /// The output kernel's frame is B8G8R8A8 in memory (red in bits 16..24 of a little-endian word:
+    /// bytes B, G, R, A). Hardware run 2026-10-22 read the first `color_mirror` case as RGB and
+    /// reported a swap that was the example's, not the kernel's; every hardware comparison
+    /// swizzles with this layout. The CPU oracle (`kf_disp::color::model`) returns logical R, G, B.
+    #[test]
+    fn the_output_kernel_packs_bgra_bytes() {
+        let src: String = include_str!("../../../cuda/display/kf_color.cu")
+            .chars()
+            .filter(|c| !c.is_whitespace())
+            .collect();
+        assert!(
+            src.contains(
+                "U packed = 0xff000000u;"
+                    .chars()
+                    .filter(|c| !c.is_whitespace())
+                    .collect::<String>()
+                    .as_str()
+            )
+        );
+        assert!(src.contains("packed|=q<<(16-8*c);"));
+        // component c = 0 is red -> bits 16..24 -> byte 2; blue (c = 2) -> byte 0
+        let bytes = (0xff00_0000_u32 | (10 << 16) | (20 << 8) | 30).to_le_bytes();
+        assert_eq!(bytes, [30, 20, 10, 255]);
+    }
+
     /// The output kernel's last parameter is the mirror flag, and the launch fills it from the
     /// table the worker resolved (a GPU-free pin of the launch text, as `snapshot_key` pins the
     /// snapshot key: the kernel itself runs only on a GPU, `examples/color_mirror.rs`).
