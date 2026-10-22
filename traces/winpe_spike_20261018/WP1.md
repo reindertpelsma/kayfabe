@@ -1,7 +1,56 @@
-# WP1 WinPE spike: stopped before image preparation
+# WP1 WinPE spike: private test authorized, shared lock unavailable
 
 STATUS: RESEARCH, 2026-10-22. Evidence-only lane; base revision
 `baa2977527c4509145e8033143bd664f768175a6`.
+
+CODE READ: owner instruction on 2026-10-22 explicitly authorizes this private,
+local technical spike using vendor downloads without redistributing or
+committing the media or driver. It resolves the earlier preparation question
+for this spike only. Adopting a public release CI tier remains a separate open
+licensing question; this lane makes no adoption or licensing decision.
+
+MEASURED (run WP1-host-preflight-20261022, 2026-10-22; evidence host-preflight.txt):
+the trusted host's owner run 4500 uses the prescribed QEMU/kf3 rev baa29775 and
+production CPU/device arguments. Its launcher holds the mandatory exclusive
+fastguest lock. A bounded `flock -w 30 -o /tmp/kayfabe-fastguest.lock true`
+returned exit 1 after 30.001 seconds at 14:41:12 UTC. No lock was acquired or
+broken, and no VM/GPU attempt followed. This is a resource stop before S1,
+not a technical red result for WinPE or NVIDIA.
+
+CODE READ: WP1 permits a concurrent second VM but also preserves the common
+requirement to take the shared lock for every VM/GPU test and never break a
+held lock. The owner's follow-up explicitly preserves every other rule.
+Consequently the private-test authorization does not grant a lock exception.
+
+INFERRED: the owner must arrange lock availability or explicitly amend WP1's
+locking rule for a concurrent test. Neither action was assumed. No further
+VM/GPU work may proceed under the current held-lock condition.
+
+MEASURED (run WP1-host-preflight-20261022, 2026-10-22; evidence host-preflight.txt):
+owner PID and kernel start ticks match before and after the preflight.
+The lane downloaded no media or drivers, installed no packages, launched no
+persistent process, and created no target directory. Its temporary empty
+download/build/tools directories were removed; only private host evidence
+remains. Host Xid delta was not queried; no QEMU test log exists.
+
+CODE READ: the exact lock-check command is below. Set `WP1_HOST` to the trusted
+host already authorized by the lane; it does not contact any other machine.
+
+```sh
+ssh -o BatchMode=yes -o ConnectTimeout=10 "$WP1_HOST" \
+  'flock -w 30 -o /tmp/kayfabe-fastguest.lock true'
+```
+
+MEASURED (run WP1-host-preflight-20261022, 2026-10-22; evidence host-preflight.txt):
+S1–S5 all remain NOT RUN, zero attempts; no VM reproduction recipe was executed.
+The hypotheses/falsifiers below remain the future technical plan.
+
+CODE READ: the following preparation notes describe the earlier session
+`WP1-preflight-20261022`. Its permission-related stop and CI recommendation
+are superseded by the owner's limited authorization above. Its zero-host-access
+description applies only to that earlier session, not this resumed preflight.
+
+## Historical preparation notes, superseded as stated above
 
 CODE READ: the WP1 assignment requests a locally built WinPE image, an NVIDIA
 580.88 driver-load check, CUDA, D3D11 pixel readback, and a ten-minute hold,
@@ -26,10 +75,9 @@ during device manufacturing, with Win32 application support. Its applicable
 terms and NVIDIA/WDDM compatibility have not been verified here. It was not
 substituted for WinPE.
 
-INFERRED: owner options are (1) provide applicable permission and its scope for
-the proposed WinPE use, (2) revise the lane to evaluate Validation OS after
-checking its terms, or (3) close this spike at the preparation gate. Recommendation:
-do not adopt WinPE as a release CI tier until this question is resolved.
+INFERRED (historical, superseded): the initial preparation stop proposed
+permission clarification or a revised lane. The owner's later instruction
+resolves the private-spike question; the public CI decision remains open.
 
 MEASURED (run WP1-preflight-20261022, 2026-10-22; evidence WP1.md): no SSH connection,
 media/driver download, host write, VM launch, GPU query, lock acquisition, build,

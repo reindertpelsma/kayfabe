@@ -13,3 +13,10 @@ No host SSH, host files, GPU operations, leases or locks were created by WP1.
 git diff --cached --check: PASS
 diff secret/path/IP scan: 7 categories, 0 hits; staged prose manually reviewed.
 Final claims gate before commit: existing-debt=3758 new=0 resolved=0
+
+WP1-host-preflight-20261022; 2026-10-22; base baa2977527c4509145e8033143bd664f768175a6
+Owner's private-spike authorization recorded; public CI licensing remains open.
+flock -w 30 -o /tmp/kayfabe-fastguest.lock true: exit 1 after 30.001 seconds.
+Owner PID/start ticks unchanged; host run directory contains evidence only.
+No media downloads, package installations, VM/GPU attempts or acquired locks.
+Resumed claims gate: existing-debt=3758 new=0 resolved=0

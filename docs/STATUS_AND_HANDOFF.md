@@ -1,14 +1,16 @@
 # Status and handoff — where kayfabe v3 stands, and how to resume
 
-## UPDATE 2026-10-22 — WP1 WinPE preparation stop
+## UPDATE 2026-10-22 — WP1 private spike authorized; shared-lock stop before S1
 
-CODE READ: Microsoft's WinPE documentation limits use to deployment/recovery
-and advises against hardware validation. WP1 stopped under its doubt/stop rule
-pending applicable permission or a revised lane; no image or host run followed.
-MEASURED (run WP1-preflight-20261022, 2026-10-22): S1–S5 all NOT RUN, zero hardware attempts;
-the lane never connected to the host. Evidence, future falsifiers, options and
-the vendor-read reproduction are in [WP1](../traces/winpe_spike_20261018/WP1.md),
-branch `codex/winpe-spike-20261022`, based on rev baa29775. No runtime edits.
+CODE READ: the owner explicitly authorized this private local WinPE spike on
+2026-10-22, superseding WP1's earlier permitted-use stop for this spike only.
+Public release CI licensing remains a separate open question, without a decision.
+MEASURED (run WP1-host-preflight-20261022, 2026-10-22): the owner launcher holds
+the mandatory exclusive fastguest lock; the bounded acquisition returned 1
+after 30.001 seconds. Owner VM PID/start ticks were unchanged; S1–S5 all NOT RUN.
+WP1 stopped under the held-lock rule; no media download, VM or GPU work followed.
+Evidence and reproduction: [WP1](../traces/winpe_spike_20261018/WP1.md), branch
+`codex/winpe-spike-20261022`, base rev baa29775. No runtime edits.
 
 ## UPDATE 2026-10-22 — G1 Phase 1 descriptor admission GPU-free green
 
