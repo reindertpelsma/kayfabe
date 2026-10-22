@@ -5,6 +5,7 @@ import {fileURLToPath} from 'node:url';
 const root=new URL('../../',import.meta.url),base=new URL('./',import.meta.url);
 const replace=(old,value)=>s=>{if(!s.includes(old))throw Error('Mutation anchor missing: '+old);return s.replace(old,value);};
 const dropLine=fragment=>s=>{const lines=s.split('\n');if(lines.filter(x=>x.includes(fragment)).length!==1)throw Error('Ambiguous mutation anchor '+fragment);return lines.filter(x=>!x.includes(fragment)).join('\n');};
+// R3 replaced seven inline-client/cache cases; see traces/vast_broker_v4_round3_20261018/mutation-migration.json.
 const mutations=[
  ['SSH onstart launch','src/vast.js',replace("runtype:'ssh_direct'","runtype:'args'")],
  ['pending provider status','src/index.js',replace("i.actual_status==null||['created'","['created'")],
@@ -21,9 +22,6 @@ const mutations=[
  ['fixed callback prefix','src/onstart.js',replace("url='${origin}${prefix?'/'+prefix:''}/report/${callback.run}'","url='${origin}/report/${callback.run}'")],
  ['endpoint text redaction','src/routes.js',replace('export function endpointSecrets(env){','export function endpointSecrets(env){return [];')],
  ['Actions secret instead of variable','../../.github/workflows/gpu-vast.yml',s=>s.replaceAll('secrets.VAST_BROKER_','vars.VAST_BROKER_')],
- ['workflow API prefix','../../.github/workflows/gpu-vast.yml',dropLine('broker_base+="/$WORKER_PATH"')],
- ['derived hostname masks','../../.github/workflows/gpu-vast.yml',dropLine('for piece in "${host_parts[@]}"')],
- ['encoded audience mask','../../.github/workflows/gpu-vast.yml',dropLine('mask_value "$audience"')],
  ['shell tracing disabled','../../.github/workflows/gpu-vast.yml',dropLine('          set +x')],
  ['transport diagnostic suppression','../../.github/workflows/gpu-vast.yml',s=>s.replaceAll('2>/dev/null','').replaceAll('2>&1','')],
  ['secret context placement guard','workflow-guard.js',dropLine('// MUTANT secret-reference')],
@@ -31,7 +29,7 @@ const mutations=[
  ['secret alias logging guard','workflow-guard.js',dropLine('// MUTANT secret-print')],
  ['secret job output guard','workflow-guard.js',dropLine('// MUTANT secret-output')],
  ['secret alias job isolation','workflow-guard.js',dropLine('// MUTANT secret-alias')],
- ['literal run and renderer enclosure','workflow-guard.js',s=>dropLine('// MUTANT secret-run-style')(s).replace("if(!approvedRenderer)fail('requires exact trusted public renderer');",'')],
+ ['literal run and renderer enclosure','workflow-guard.js',s=>dropLine('// MUTANT secret-run-style')(s).replace("if(!approvedRenderer)fail('requires exact trusted BASE controller bootstrap');",'')],
  ['HMAC tag and commit binding','src/tokens.js',replace("return await crypto.subtle.verify('HMAC',await this.cryptoKey(),bytes,tokenEncoder.encode(this.message(r,Number(parts[3]))));",'return true;')],
  ['closed ledger rejects reports','src/index.js',replace('||r.ended!==null||r.closed||r.resultAt!==undefined)', '||r.ended!==null||false||r.resultAt!==undefined)')],
  ['actual Vast liveness','src/index.js',dropLine('// MUTANT report-live')],
@@ -70,8 +68,6 @@ const mutations=[
  ['rolling 30-day spend','src/ledger.js',dropLine('// MUTANT rolling')],
  ['one live instance','src/index.js',replace('if(active&&active.ended===null){','if(false){')],
  ['superseding push','src/index.js',replace('if((active.pr!==null&&active.pr===target.pr||active.pr===null&&target.pr===null&&active.branch===target.branch)&&active.sha!==target.sha){','if(false){')],
- ['run idempotence','src/index.js',replace('if(prior){await recover(prior,vast);return json(expose(prior,key,target.pr));}','if(false){await recover(prior,vast);return json(expose(prior,key,target.pr));}')],
- ['SHA verdict cache','src/index.js',replace('if(cached&&!force){','if(false){')],
  ['same SHA minimum gap','src/index.js',dropLine('// MUTANT gap')],
  ['live label ownership','src/vast.js',replace('i.label!==record.label','false')],
  ['ambiguous-create binding','src/vast.js',dropLine("if(typeof candidate.onstart!==")],
@@ -91,14 +87,12 @@ const mutations=[
  ['Unicode format sanitizer','src/sanitize.js',dropLine('// MUTANT unicode-format')],
  ['unsupported job syntax','workflow-guard.js',dropLine('// MUTANT job-shape')],
  ['distinct client refusal','../../.github/workflows/gpu-vast.yml',replace('description="GPU broker $state"',"description='GPU broker unavailable'")],
- ['terminal client completion','../../.github/workflows/gpu-vast.yml',replace('            if [[ "$state" = COMPLETE || "$state" = STOPPED ]]; then exit 1; fi\n','')],
  ['public cron isolation','src/index.js',replace("if(path===null||!/^\\/(?:rent|stop-all|(?:report|kill|status|stop|logs)\\/[1-9][0-9]{0,19}-[1-9][0-9]{0,19})$/.test(path))return notFound();",'')],
  ['automatic base allowlist','src/github.js',s=>s.replaceAll('!cfg.bases.includes','false&&!cfg.bases.includes')],
  ['docs-only exclusion result','src/index.js',replace('if(target.notNeeded)','if(false)')],
  ['unknown file-list skip','src/github.js',s=>s.replaceAll('return false;','return true;')],
  ['canonical path validation','src/policy.js',dropLine("path.startsWith('ci/vast-broker/')")],
  ['renamed previous path','src/policy.js',replace('(x.previous_filename===undefined||skippedPath(x.previous_filename,patterns))','true')],
- ['cached PR display grant','src/index.js',replace('await ledger.grant(key,r,target.pr);return json(expose(r,key,target.pr));','await ledger.grant(key,r);return json(expose(r,key));')],
  ['request bearer transport','src/index.js',replace("const token=request.headers.get('X-GH-Token');",'const token=null;')],
  ['request bearer retention','src/index.js',replace('await ledger.reserve(r);','r.githubToken=token;await ledger.reserve(r);')],
  ['public GitHub fallback','src/github.js',replace('if(this.headers.Authorization&&[401,403].includes(response.status))','if(false)')],
@@ -109,7 +103,7 @@ const mutations=[
  ['isolated writer permissions','workflow-guard.js',dropLine('Status writer must not send its token')],
 ];
 if(process.env.MUTANT_PREFLIGHT){for(const [name,path,mutate] of mutations){try{const source=await readFile(new URL(path,base),'utf8');if(mutate(source)===source)throw Error('did not change');}catch(e){console.log(name+': '+e.message);process.exitCode=1;}}if(!process.exitCode)console.log('All '+mutations.length+' anchors valid');process.exit(process.exitCode||0);}
-// Client shell fixtures read only workflow YAML, never Worker source.
+// Legacy source campaign; R3 tests exercise the controller separately below.
 const workerTests=(await readdir(new URL('test/',base))).filter(x=>x.endsWith('.test.js')&&!x.endsWith('client.test.js')).map(x=>'ci/vast-broker/test/'+x);
 const results=[];
 for(const [name,path,mutate] of mutations.filter(m=>!process.env.MUTANT_FILTER||m[0].includes(process.env.MUTANT_FILTER))){
@@ -134,7 +128,10 @@ if(process.env.MUTANT_FILTER){console.log('Filtered mutants passed; full table u
 const text='# Recorded manual mutation checks\n\n[MEASURED: 2026-10-22 endpoint secrecy plus Amendment 3/3b mutation campaign] '+process.version+'; explicit patches in `../mutants.js`. Every source file restored in finally; syntax checked before tests. Worker mutations run all source-facing test files explicitly in parallel; workflow mutations also run shell-client fixtures. Those fixtures read YAML only and never import Worker source. No live APIs or GPU. Each mutant requires >=2 named failing tests.\n\n| Mutation | Tests killed | Example killers |\n| --- | ---: | --- |\n'+results.map(r=>'| '+r.name+' | '+r.count+' | '+r.examples.join('; ')+' |').join('\n')+'\n';
 await writeFile(new URL('test/mutants.md',base),text);console.log('All '+results.length+' mutants killed; source restored.');
 
-// Keep the owner's single command complete; both campaigns mutate files sequentially.
+// All campaigns mutate files sequentially; never run them alongside baseline tests.
 const v4=spawnSync('python3',['v4-mutants.py',...(process.env.V4_MUTANT_RESULTS_FILE?['--results',process.env.V4_MUTANT_RESULTS_FILE]:[])],{cwd:base,stdio:'inherit'});
 if(v4.status!==0)throw Error('V4 mutation campaign failed');
 console.log('Full campaign passed: '+results.length+' legacy plus 32 V4 mutants.');
+
+const round3=spawnSync('python3',['round3-mutants.py',...(process.env.ROUND3_MUTANT_RESULTS_FILE?['--results',process.env.ROUND3_MUTANT_RESULTS_FILE]:[])],{cwd:base,stdio:'inherit'});
+if(round3.status!==0)throw Error('Round 3 mutants failed');

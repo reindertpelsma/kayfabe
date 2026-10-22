@@ -15,7 +15,7 @@ const pair = await webcrypto.subtle.generateKey({name:'RSASSA-PKCS1-v1_5',modulu
 export const jwk = {...await webcrypto.subtle.exportKey('jwk',pair.publicKey),kid:'test-key',alg:'RS256',use:'sig'};
 export const baseClaims = {iss:'https://token.actions.githubusercontent.com',aud:env.WORKER_URL,
   exp:clock/1000+300,nbf:clock/1000-1,repository:repo,event_name:'pull_request',actor_id:owner,
-  sha:'d'.repeat(40),ref:'refs/pull/7/merge',run_id:'123',run_attempt:'1'};
+  sha:'d'.repeat(40),ref:'refs/pull/7/merge',run_id:'123',run_attempt:'1',workflow_ref:'reindertpelsma/kayfabe/.github/workflows/gpu-vast.yml@refs/heads/master',workflow_sha:'d'.repeat(40)};
 export async function jwt(patch={},header={},key=pair.privateKey) {
   const enc = v=>Buffer.from(JSON.stringify(v)).toString('base64url');
   const input=enc({alg:'RS256',kid:'test-key',...header})+'.'+enc({...baseClaims,...patch});

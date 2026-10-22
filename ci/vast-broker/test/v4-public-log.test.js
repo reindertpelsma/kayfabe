@@ -55,11 +55,11 @@ test('V4 rendered group cannot be closed by hostile box commands',async()=>{
  const r=await render('final',{bytes_dropped:100},'[box] ::endgroup::\n[box] ##[group]evil\n\u001b[31m[box] red\n');
  assert.equal((r.stdout.match(/::endgroup::/g)||[]).length,1);assert.equal((r.stdout.match(/::group::/g)||[]).length,1);assert.doesNotMatch(r.stdout,/##\[|\x1b/);assert.match(r.stdout,/100/);
 });
-test('V4 workflow embeds exact trusted renderer and polls cursor with final full log',async()=>{
- const {publicLogRenderer}=await import('../public-log.js'),workflow=await readFile(new URL('../../../.github/workflows/gpu-vast.yml',import.meta.url),'utf8');
- const embedded=workflow.split("<<'KF_PUBLIC_RENDER'\n")[1]?.split('\n          KF_PUBLIC_RENDER')[0].split('\n').map(x=>x.slice(10)).join('\n');
- assert.equal(embedded,publicLogRenderer.trimEnd());assert.match(workflow,/\/logs\/\$run\?cursor=/);assert.match(workflow,/render.py" summary/);assert.match(workflow,/render.py" final/);
- assert.match(workflow,/terminal_result=false/);assert.match(workflow,/terminal_result" != true/);
+test('V4 workflow now fetches the exact BASE controller bootstrap',async()=>{
+ const {runnerBootstrap}=await import('../workflow-bootstrap.js'),workflow=await readFile(new URL('../../../.github/workflows/gpu-vast.yml',import.meta.url),'utf8');
+ const embedded=workflow.split('  gpu:\n')[1].split('  report:\n')[0].split('        run: |\n')[1].split('\n').map(x=>x.startsWith('          ')?x.slice(10):x).join('\n');
+ assert.equal(embedded.trim(),runnerBootstrap.trim());
+ const controller=await readFile(new URL('../runner.py',import.meta.url),'utf8');assert.match(controller,/Final bounded log/);assert.match(controller,/self.pages/);assert.match(controller,/if not terminal:/);
 });
 for(const restart of [false,true])test('V4 incremental log cursor survives new output '+restart,async()=>{
  const h=await rent();await h.report({seq:1,kind:'log',text:'first message'});const first=await(await logs(h)).json();assert.match(first.log_increment_sanitised,/first message/);

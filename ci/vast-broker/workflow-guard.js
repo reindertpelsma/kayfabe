@@ -1,4 +1,4 @@
-import {publicLogRenderer} from './public-log.js';
+import {runnerBootstrap} from './workflow-bootstrap.js';
 // Security-focused reader for the repository's indentation-based workflow subset.
 // Unsupported dynamic permissions/dependencies fail closed; this is not a YAML evaluator.
 import {readdir,readFile} from 'node:fs/promises';
@@ -40,7 +40,7 @@ function endpointBoundary(filename,text,jobs){
     const header=parts[0];
     if(/\b(?:WORKER_URL|WORKER_PATH|BROKER_BASE)\b/.test(header))fail('secrets cannot enter job env or outputs');
     const output=header.split('    outputs:\n')[1]?.split(/^    \S/m)[0];
-    if(output&&output.trim()!=="state: ${{ steps.broker.outputs.state }}\n      verdict: ${{ steps.broker.outputs.verdict }}")fail('job outputs must be fixed state and verdict'); // MUTANT secret-output
+    if(output&&output.trim()!=="state: ${{ steps.broker.outputs.state }}\n      verdict: ${{ steps.broker.outputs.verdict }}\n      verified: ${{ steps.broker.outputs.verified }}")fail('job outputs must be fixed state and verdict'); // MUTANT secret-output
     let sanitised=header;
     for(const step of steps){
       if(!/^        run: \|[ \t]*$/m.test(step))fail('requires literal broker run syntax'); // MUTANT secret-run-style
@@ -55,12 +55,11 @@ function endpointBoundary(filename,text,jobs){
       if(!['WORKER_URL','WORKER_PATH'].every(x=>found.has(x)))fail('requires two step-env secret bindings'); // MUTANT secret-binding
       if(/\b(?:WORKER_URL|WORKER_PATH|BROKER_BASE|broker_origin|broker_host|broker_base|audience)\b/.test(kept.join('\n').split(/^        run:/m)[0]))fail('aliases cannot enter step metadata'); // MUTANT secret-metadata
       const run=step.split(/^        run: \|\s*$/m)[1]||'';
-      const embedded=run.split("<<'KF_PUBLIC_RENDER'\n")[1]?.split('\n          KF_PUBLIC_RENDER')[0].split('\n').map(x=>x.slice(10)).join('\n');
-      const approvedRenderer=embedded===publicLogRenderer.trimEnd();
-      if(!approvedRenderer)fail('requires exact trusted public renderer');
+      const approvedRenderer=run.split('\n').map(x=>x.startsWith('          ')?x.slice(10):x).join('\n').trim()===runnerBootstrap.trim();
+      if(!approvedRenderer)fail('requires exact trusted BASE controller bootstrap');
       for(const line of run.split('\n')){
-        if(/GITHUB_ENV/.test(line)||/GITHUB_STEP_SUMMARY/.test(line)&&!(approvedRenderer&&line.trim()==="with open(os.environ['GITHUB_STEP_SUMMARY'],'a',encoding='utf-8') as summary:"))fail('cannot enter summary or environment channels');
-        if(/GITHUB_OUTPUT/.test(line)&&line.trim()!==String.raw`printf 'state=%s\nverdict=%s\n' "$state" "$verdict" >> "$GITHUB_OUTPUT"`)fail('cannot enter step outputs');
+        if(/GITHUB_ENV/.test(line))fail('cannot enter environment channels');
+        if(/GITHUB_STEP_SUMMARY|GITHUB_OUTPUT/.test(line)&&!(approvedRenderer&&line.trim()==='GITHUB_OUTPUT="$GITHUB_OUTPUT" GITHUB_STEP_SUMMARY="$GITHUB_STEP_SUMMARY" \\'))fail('only BASE controller may write summaries/enum outputs');
         if(/^\s*(?:echo|printf|cat|tee)\b/.test(line)&&/\b(?:WORKER_URL|WORKER_PATH|broker_origin|broker_host|broker_base|host_parts|audience)\b/.test(line))fail('cannot be printed'); // MUTANT secret-print
       }
       sanitised+=kept.join('\n');
@@ -76,11 +75,14 @@ export function checkWorkflows(workflows){
   const errors=[];const gpuName='gpu-vast.yml';
   if(!workflows[gpuName])return ['GPU workflow missing'];
   const gpu=jobsIn(workflows[gpuName]);
+  if(!/^  pull_request_target:/m.test(workflows[gpuName])||/^  pull_request:/m.test(workflows[gpuName])||!workflows[gpuName].includes('bash --noprofile --norc -eo pipefail {0}')||!workflows[gpuName].includes('concurrency:'))errors.push('GPU runner must use trusted base trigger, fixed shell and head concurrency');
+  if(/actions\/checkout|cache@|upload-artifact|download-artifact/.test(workflows[gpuName]))errors.push('GPU runner cannot consume source/artifact/cache actions');
+
   if(!gpu.some(x=>x.id==='pending')||!gpu.some(x=>x.id==='report'))errors.push('GPU status writers missing'); // MUTANT writers
   const report=gpu.find(x=>x.id==='report');
   if(report&&(!report.body.includes('    if: ${{ always() }}')||!['pending','gpu'].every(id=>report.needs.includes(id))))errors.push('Final status must always evaluate both dependencies');
   const primary=gpu.find(x=>x.id==='gpu');if(!primary)errors.push('GPU poll job missing');
-  if(primary&&JSON.stringify(Object.entries(primary.grants).sort())!==JSON.stringify(Object.entries({contents:'read','pull-requests':'read','id-token':'write'}).sort()))errors.push('GPU permissions must be exactly contents/read, pull-requests/read, id-token/write');
+  if(primary&&JSON.stringify(Object.entries(primary.grants).sort())!==JSON.stringify(Object.entries({'id-token':'write'}).sort()))errors.push('GPU permissions must be exactly id-token/write');
   for(const job of gpu.filter(x=>['pending','report'].includes(x.id))){
     if(JSON.stringify(Object.entries(job.grants))!==JSON.stringify([['statuses','write']])||/X-GH-Token|WORKER_URL|id-token:/.test(job.body))errors.push('Status writer must not send its token to Worker');
   }

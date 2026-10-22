@@ -19,6 +19,24 @@ CASES=[
  ('nonce-ingress','src/index.js',[("path==='/rent'?512:0","0")],'round3-binding.test.js'),
  ('nonce-cache','src/index.js',[("if(cached&&!force)refuse('UNAVAILABLE_BUDGET',409);","if(cached&&!force){const r=await ledger.get('record:'+cached.key);if(r?.verdict&&r.ended!==null){await ledger.grant(key,r,target.pr);return json(expose(r,key,target.pr));}refuse();}")],'round3-binding.test.js'),
 ]
+
+CASES += [
+ ('runner-summary-fields','runner.py',[("if self.metadata is not None:","if False:")],'round3-summary.test.js'),
+ ('target-base-binding','src/github.js',[("c.sha!==r.head_sha||c.workflow_sha!==r.head_sha||",'')],'round3-isolation.test.js'),
+ ('target-PR-membership','src/github.js',[("if(member?.length!==1)refuse('UNAUTHORIZED',401);\n      p=await this.pr(hint.pr_number)","if(false)refuse('UNAUTHORIZED',401);\n      p=await this.pr(hint.pr_number)")],'round3-isolation.test.js'),
+ ('runner-local-redaction','runner.py',[("if secret:text=text.replace(secret,'[redacted]')","if False:text=text.replace(secret,'[redacted]')")],'round3-display.test.js'),
+ ('runner-C1-sequences','runner.py',[(r"(?:\x1b\]|\x9d)",r"(?:\x1b\])"),(r"(?:\x1b[P^_]|[\x90\x98\x9e\x9f])",r"(?:\x1b[P^_])")],'round3-display.test.js'),
+ ('runner-isolated-env','../../.github/workflows/gpu-vast.yml',[("env -i PATH=/usr/bin:/bin","env PATH=/usr/bin:/bin")],'round3-bootstrap.test.js'),
+ ('runner-shell-tracing','../../.github/workflows/gpu-vast.yml',[("          set +x","          set -x")],'round3-bootstrap.test.js'),
+ ('base-trigger','../../.github/workflows/gpu-vast.yml',[("  pull_request_target:","  pull_request:")],'workflow.test.js'),
+ ('OIDC-workflow-ref','src/index.js',[("||c.workflow_ref!==cfg.repo+'/.github/workflows/gpu-vast.yml@refs/heads/master'","")],'round3-isolation.test.js'),
+ ('release-same-SHA','release_gate.py',[("or status['sha']!=sha",''),("and run['head_sha']==sha",'')],'round3-release.test.js'),
+ ('release-origin','release_gate.py',[("if latest['state']!='success' or latest['creator']['login']!='github-actions[bot]' or latest['creator']['id']!=41898282:return False","if latest['state']!='success':return False"),("if run['id']!=int(match[1]) or run['path']!='.github/workflows/gpu-vast.yml' or run['status']!='completed' or run['conclusion']!='success':return False","if run['id']!=int(match[1]) or run['status']!='completed' or run['conclusion']!='success':return False"),("if run['repository']['full_name']!=REPO or run['head_repository']['full_name']!=REPO:return False","if False:return False")],'round3-release.test.js'),
+ ('release-conclusion','release_gate.py',[("if latest['state']!='success' or",'if False or'),("or run['conclusion']!='success'",'')],'round3-release.test.js'),
+ ('bundle-manifest','bundle.js',[("createHash('sha256').update(output).digest('hex')","'0'.repeat(64)")],'round3-release.test.js'),
+ ('runner-cursor-race','runner.py',[("if data['log_increment_sanitised']!=''.join(chunks):raise Invalid()","if data['log_increment_sanitised']!=''.join(chunks) or data['next_cursor']>target:raise Invalid()")],'round3-runner.test.js'),
+]
+
 def main():
     ap=argparse.ArgumentParser();ap.add_argument('--results',type=Path);ap.add_argument('--filter',default='');args=ap.parse_args();rows=[]
     for name,file,patches,test in CASES:
@@ -29,7 +47,7 @@ def main():
         try:
             p.write_text(changed)
             syntax=subprocess.run(['node','--check',str(p)] if p.suffix in {'.js','.mjs'} else ['python3','-c','import ast,sys;ast.parse(open(sys.argv[1]).read())',str(p)],capture_output=True)
-            assert syntax.returncode==0,name+': syntax'
+            if p.suffix not in {'.yml','.yaml'}:assert syntax.returncode==0,name+': syntax'
             r=subprocess.run(['node','--test',str(BASE/'test'/test)],capture_output=True,text=True,timeout=60)
             killers=re.findall(r'^not ok \d+ - (.*)',r.stdout,re.M)
             assert r.returncode and len(killers)>=2,(name,killers,r.stdout[-1500:])

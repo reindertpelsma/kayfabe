@@ -43,7 +43,7 @@ def strict_json(raw):
     if not isinstance(value,dict):raise Invalid()
     return value
 
-def scrub(raw,max_bytes=65536,max_lines=200,max_line=1000):
+def scrub(raw,max_bytes=65536,max_lines=200,max_line=1000,redactions=()):
     """Allow TAB/LF, printable ASCII and precomposed Latin letters U+00C0..FF
     excluding multiplication/division signs. No other Unicode is displayed.
     Remove complete terminal control sequences before the character allow-list.
@@ -51,15 +51,17 @@ def scrub(raw,max_bytes=65536,max_lines=200,max_line=1000):
     """
     if isinstance(raw,str):raw=raw.encode('utf-8',errors='replace')
     original=len(raw);text=raw.decode('utf-8',errors='replace')
-    text=re.sub(r'\x1b\][\s\S]*?(?:\x07|\x1b\\|$)','',text)
-    text=re.sub(r'\x1b[P^_][\s\S]*?(?:\x1b\\|$)','',text)
+    for secret in sorted(set(redactions),key=len,reverse=True):
+        if secret:text=text.replace(secret,'[redacted]')
+    text=re.sub(r'(?:\x1b\]|\x9d)[\s\S]*?(?:\x07|\x1b\\|\x9c|$)','',text)
+    text=re.sub(r'(?:\x1b[P^_]|[\x90\x98\x9e\x9f])[\s\S]*?(?:\x1b\\|\x9c|$)','',text)
     text=re.sub(r'(?:\x1b\[|\x9b)[0-?]*[ -/]*[@-~]','',text)
     text=re.sub(r'\x1b[ -/]*[@-~]','',text)
     text=''.join(c for c in text if c in '\t\n' or 32<=ord(c)<=126 or 192<=ord(c)<=255 and ord(c) not in {215,247})
     text=re.sub(r'\bBearer\s+[^\s]+','Bearer [redacted]',text,flags=re.I)
     text=re.sub(r'\b(?:gh[pousr]_[A-Za-z0-9]{20,255}|github_pat_[A-Za-z0-9_]{20,255})\b','[redacted]',text)
     text=re.sub(r'[A-Za-z0-9_-]{32,}','[redacted]',text)
-    text=re.sub(r':{2,}',lambda x:' '.join(x[0]),text).replace('##[','# #[')
+    text=re.sub(r':{2,}',lambda x:(': '*(len(x[0])//2)+(':' if len(x[0])%2 else '')),text).replace('##[','# [')
     rows=[];size=0;kept=0
     for line in text.splitlines():
         if len(rows)>=max_lines:break
@@ -106,7 +108,7 @@ def validate_status(data,ctx,manifest,http_status):
 class Runner:
     def __init__(self,ctx,manifest,client,emit=print,summary=None):
         self.ctx=ctx;self.manifest=manifest;self.client=client;self.emit=emit;self.summary=summary
-        self.cursor=0;self.hash=ZERO;self.raw=[];self.raw_size=0;self.displayed=0;self.display_lines=0;self.display_dropped=0
+        self.metadata=None;self.cursor=0;self.hash=ZERO;self.raw=[];self.raw_size=0;self.displayed=0;self.display_lines=0;self.display_dropped=0
     def read(self,route,method='GET',body=None):
         reply=self.client(route,method,body)
         if reply.status in {301,302,303,307,308} or reply.headers.get('content-type','').split(';')[0].strip()!='application/json':raise Invalid()
@@ -114,7 +116,7 @@ class Runner:
     def show(self,text):
         if self.displayed>=65000 or self.display_lines>=200:
             self.display_dropped+=len(text.encode());return
-        safe,dropped=scrub(text,max_bytes=max(0,65000-self.displayed-256),max_lines=max(0,199-self.display_lines))
+        safe,dropped=scrub(text,max_bytes=max(0,65000-self.displayed-256),max_lines=max(0,199-self.display_lines),redactions=self.ctx.get('redactions',()))
         self.display_dropped+=dropped;self.display_lines+=len(safe.splitlines())
         # Tokens originate here; they never come from Worker/box strings.
         token=secrets.token_hex(24)
@@ -147,6 +149,7 @@ class Runner:
                 self.pages(data['log_cursor'])
                 if data['state'] in {'COMPLETE','NOT_NEEDED'}:
                     if self.cursor!=data['log_cursor'] or self.hash!=data['log_sha256']:raise Invalid()
+                    self.metadata=data
                     terminal=True;result={'state':data['state'],'verdict':data['verdict'],'verified':1}
                     self.show(data['gpu_model'])
                     break
@@ -158,7 +161,7 @@ class Runner:
             if not terminal:
                 try:self.read('/stop/'+self.ctx['run'],'POST')
                 except Exception:pass
-        safe,dropped=scrub(''.join(self.raw),max_bytes=65536)
+        safe,dropped=scrub(''.join(self.raw),max_bytes=65536,redactions=self.ctx.get('redactions',()))
         self.emit('::group::Final bounded log: UNTRUSTED Worker/box output\n')
         self.show(''.join(self.raw));self.emit('['+str(self.display_dropped)+' bytes dropped by runner display budget]\n::endgroup::\n')
         if self.summary is not None:
@@ -166,6 +169,12 @@ class Runner:
             # decision fields below are locally validated enums/expected values.
             self.summary.write('### UNTRUSTED Worker/box output\n\n| Field | Value |\n| --- | --- |\n')
             for key,value in [('State',result['state']),('Verdict',result['verdict']),('Tested SHA',self.ctx['sha']),('Worker version',self.manifest['worker_version']),('Expected bundle SHA256',self.manifest['bundle_sha256']),('Received log hash',self.hash),('Displayed log SHA256',hashlib.sha256(safe.encode()).hexdigest()),('Runner dropped bytes',str(dropped))]:self.summary.write('| '+key+' | '+value+' |\n')
+            if self.metadata is not None:
+                d=self.metadata
+                gpu,_=scrub(d['gpu_model'],max_bytes=512,max_lines=1,redactions=self.ctx.get('redactions',()))
+                gpu=gpu.strip().replace('&','&amp;').replace('<','&lt;').replace('>','&gt;').replace('|','&#124;').replace('`','&#96;').replace('\n',' ')
+                elapsed=((d['result_at'] or d['ended_at'] or d['started_at'])-d['started_at'])/1000
+                for key,value in [('GPU (untrusted)',gpu),('Elapsed seconds',format(elapsed,'.3f')),('Estimated USD',format(d['cost_estimate_usd'],'.6f'))]:self.summary.write('| '+key+' | '+value+' |\n')
             fence='`'*max(3,1+max([len(x) for x in re.findall('`+',safe)]+[0]))
             self.summary.write('\n'+fence+'text\n'+safe+fence+'\n')
         return result
@@ -213,13 +222,13 @@ def main():
         for value in [origin,urllib.parse.urlsplit(origin).hostname,prefix,*urllib.parse.urlsplit(origin).hostname.split('.')]:
             if value:print('::add-mask::'+value,flush=True)
         print('Trusted BASE '+base+'; runner nonce generated before rent; Worker '+manifest['worker_version']+' expected bundle SHA256 '+manifest['bundle_sha256'],flush=True)
-        ctx={'sha':sha,'run':run,'pr':pr,'nonce':secrets.token_hex(32)}
+        ctx={'sha':sha,'run':run,'pr':pr,'nonce':secrets.token_hex(32),'redactions':[origin,urllib.parse.urlsplit(origin).hostname,prefix,urllib.parse.quote(origin,safe=''),*urllib.parse.urlsplit(origin).hostname.split('.')]}
         def client(route,method='GET',body=None):
             audience=urllib.parse.quote(origin,safe='');print('::add-mask::'+audience,flush=True)
             token_reply=https_request(os.environ['ACTIONS_ID_TOKEN_REQUEST_URL']+'&audience='+audience,headers={'Authorization':'Bearer '+os.environ['ACTIONS_ID_TOKEN_REQUEST_TOKEN']})
             token_data=strict_json(token_reply.body)
             if token_reply.status!=200 or set(token_data)!={'value'} or not isinstance(token_data['value'],str) or not re.fullmatch('[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+',token_data['value']) or len(token_data['value'])>8192:raise Invalid()
-            token=token_data['value'];print('::add-mask::'+token,flush=True)
+            token=token_data['value'];ctx['redactions'].append(token);print('::add-mask::'+token,flush=True)
             return https_request(origin+('/'+prefix if prefix else '')+route,method,{'Authorization':'Bearer '+token,'Content-Type':'application/json'},None if body is None else json.dumps(body,separators=(',',':')).encode())
         with open(summary_path,'a',encoding='utf-8') as summary:result=Runner(ctx,manifest,client,emit=lambda s:print(s,end='',flush=True),summary=summary).execute()
     except Exception:pass # Raw exceptions may contain endpoint/Worker input.
