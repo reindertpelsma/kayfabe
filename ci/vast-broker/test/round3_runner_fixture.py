@@ -5,6 +5,25 @@ m=importlib.util.module_from_spec(spec);sys.modules['runner']=m;spec.loader.exec
 case=sys.argv[1]
 ctx={'sha':'a'*40,'run':'123-1','pr':7,'nonce':'f'*64}
 manifest={'protocol_version':3,'worker_version':'v4-r3','bundle_sha256':'b'*64}
+if case.startswith('transport-'):
+    import time
+    class Fake:
+        status=200
+        def __init__(self,*_,**__):pass
+        def request(self,*_,**__):pass
+        def getresponse(self):
+            if case=='transport-header-timeout':time.sleep(.1)
+            return self
+        def getheader(self,*_):return '2'
+        def getheaders(self):return [('content-type','application/json')]
+        def read(self,*_):
+            if case=='transport-body-timeout':time.sleep(.1)
+            return b'{}'
+        def close(self):pass
+    m.http.client.HTTPSConnection=Fake;original=m.deadline;m.deadline=lambda _:original(.02)
+    try:m.https_request('https://broker.example');raise AssertionError('absolute transport deadline missing')
+    except TimeoutError:pass
+    raise SystemExit(0)
 if case.startswith('framing-'):
     printed=[];r=m.Runner(ctx,manifest,lambda *_:None,emit=printed.append)
     for _ in range(1000):r.show('safe\n'*10)
@@ -20,6 +39,7 @@ encoded=text.encode();h=hashlib.sha256(bytes(32)+len(encoded).to_bytes(4,'big')+
 verdict='FAIL' if case=='display-only' else 'PASS'
 status={'state':'COMPLETE','verdict':verdict,'run':ctx['run'],'id':'900','sha':ctx['sha'],'pr':7,'cleanup_pending':True,'result_at':2000,'ended_at':None,'started_at':1000,'deadline_at':302000,'gpu_model':'RTX 4070','cost_estimate_usd':.01,'log_cursor':1,'log_tail_sanitised':text[:100],'bytes_dropped':0,'tail_bytes_dropped':0,'runner_nonce':ctx['nonce'],'log_sha256':h,**manifest}
 if case=='extra':status['evil']='unexpected'
+if case=='extra-object':status['unexpected']={'command':'no'}
 if case=='wrong-sha':status['sha']='c'*40
 if case=='wrong-nonce':status['runner_nonce']='0'*64
 if case=='wrong-run':status['run']='124-1'
@@ -27,6 +47,7 @@ if case=='bad-state':status['state']='::error::'
 if case=='bad-verdict':status['verdict']='PAss'
 if case=='wrong-hash':status['log_sha256']='0'*64
 if case=='wrong-version':status['bundle_sha256']='0'*64
+if case=='wrong-worker-version':status['worker_version']='v4-other'
 calls=[];printed=[];summary=io.StringIO()
 def client(route,method='GET',body=None):
     calls.append((route,method,body))
@@ -35,14 +56,15 @@ def client(route,method='GET',body=None):
         if case=='timeout':raise TimeoutError()
         raw=json.dumps(status,ensure_ascii=False).encode()
         if case=='duplicate':raw=raw[:-1]+b',"verdict":"PASS"}'
+        if case=='duplicate-sha':raw=raw[:-1]+b',"sha":"'+ctx['sha'].encode()+b'"}'
         if case=='invalid-utf8':raw=b'{"state":"\xff"}'
         if case=='huge':raw=b'X'*10000000
         if case=='html':raw=b'<html>200</html>'
-        return m.Reply(302 if case=='redirect' else 200,{'content-type':'text/html' if case=='html' else 'application/json'},raw)
+        return m.Reply(302 if case=='redirect' else 307 if case=='redirect-307' else 200,{'content-type':'text/html' if case=='html' else 'application/json'},raw)
     if route.startswith('/logs/'):
         chunks=[text[i:i+4000] for i in range(0,len(text),4000)] if case=='caps' else [text]
         # The caps probe is intentionally one overlarge page: bounded fail-closed.
-        data={'cursor':0,'next_cursor':len(chunks),'chunks':chunks,'log_increment_sanitised':text,'log_sha256':h,'bytes_dropped':0}
+        data={'cursor':0,'next_cursor':len(chunks),'chunks':chunks,'log_increment_sanitised':text,'log_sha256':'0'*64 if case=='wrong-page-hash' else h,'bytes_dropped':0}
         return m.Reply(200,{'content-type':'application/json'},json.dumps(data,ensure_ascii=False).encode())
     return m.Reply(200,{'content-type':'application/json'},b'{}')
 result=m.Runner(ctx,manifest,client,emit=printed.append,summary=summary).execute()
