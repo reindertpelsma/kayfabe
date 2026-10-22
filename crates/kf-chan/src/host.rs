@@ -1330,6 +1330,14 @@ impl Probe {
 }
 
 impl TranslatedChannel {
+    /// Bench-only host-authored invalid opcode on this private USER ring.
+    ///
+    /// # Errors
+    /// Native admission/storage/submission refusal; no completion is manufactured.
+    #[cfg(feature = "rc-negative-control")]
+    pub fn inject_invalid_pb_for_bench(&mut self, rm: &kf_host::HostRm) -> Result<(), String> {
+        crate::rc_negative::inject(&mut crate::rc_negative::NativePort::new(&mut self.host, rm))
+    }
     /// A Translated channel over the guest ring `ring`, executing on `host`, known to the doorbell
     /// plane as `token`.
     #[must_use]

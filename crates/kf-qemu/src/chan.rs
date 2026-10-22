@@ -1754,6 +1754,10 @@ struct Slot {
     rc_view: crate::chanrc::GuestNotifier,
     rc_life: crate::chanrc::Life,
     rc_write_failed: bool,
+    #[cfg(feature = "rc-negative-control")]
+    bench_class: u32,
+    #[cfg(feature = "rc-negative-control")]
+    bench_pending: bool,
     /// ★ OWNER_RULINGS §U: the software method the channel is stopped at.
     sw: SwSlot,
 }
@@ -7300,6 +7304,10 @@ impl ChanPlane {
                     rc_view,
                     rc_life: crate::chanrc::Life::new(),
                     rc_write_failed: false,
+                    #[cfg(feature = "rc-negative-control")]
+                    bench_class: a.class,
+                    #[cfg(feature = "rc-negative-control")]
+                    bench_pending: false,
                     sw: SwSlot::default(),
                 };
                 // ★ §U: a fresh software numbering (a host token may be reused).
@@ -7843,6 +7851,66 @@ impl ChanPlane {
         );
     }
 
+    #[cfg(feature = "rc-negative-control")]
+    fn bench_rc_error(&self, slot: &mut Slot) -> Option<bool> {
+        use kf_chan::rc_negative::{Arm, Candidate};
+        static ARM: std::sync::OnceLock<Option<Arm>> = std::sync::OnceLock::new();
+        let arm = ARM.get_or_init(|| {
+            let source = option_env!("KF_RC_SOURCE_REV")?;
+            if source.len() != 40 || !source.bytes().all(|v| v.is_ascii_hexdigit()) {
+                return None;
+            }
+            let run = std::env::var("KF3_RC_NEGCTL").ok()?;
+            let arm = Arm::configured(Some(&run))?;
+            eprintln!("RC_NEGCTL_CONFIG run={} source={source}", arm.run());
+            Some(arm)
+        });
+        let arm = arm.as_ref()?;
+        if slot.bench_pending {
+            return Some(false);
+        }
+        let host = slot.chan.host().channel();
+        if !arm.claim(Candidate {
+            put: slot.last_put,
+            engine: slot.guest_engine,
+            class: slot.bench_class,
+            translated: true,
+            host_user: host.assert_user().is_ok(),
+        }) {
+            return None;
+        }
+        // Stop normal guest pumping for this probe; only a real host record can RC it.
+        slot.bench_pending = true;
+        let unix_ns = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .map_or(0, |v| v.as_nanos());
+        eprintln!(
+            "FAULT_MARK=translated_rc_invalid_pb run={} pid={} host={:#x} channel={:#x} guest={:#x} engine={:#x} word={:#x} unix_ns={unix_ns}",
+            arm.run(),
+            std::process::id(),
+            host.token,
+            host.token & 0xfff,
+            self.plane.token_index.chid_of(slot.guest_idx),
+            slot.guest_engine,
+            kf_chan::rc_negative::BAD_WORD
+        );
+        match slot.chan.inject_invalid_pb_for_bench(self.rm) {
+            Ok(()) => {
+                eprintln!(
+                    "RC_NEGCTL_SUBMITTED run={} host={:#x}",
+                    arm.run(),
+                    host.token
+                );
+                Some(true)
+            }
+            Err(error) => {
+                eprintln!("RC_NEGCTL_FAILED run={} error={error}", arm.run());
+                slot.dead = Some("bench injection refused".into());
+                Some(false)
+            }
+        }
+    }
+
     /// ★ A WORKER's entry (`HostOps::run_translated`): pump the channel behind `ht`. Never waits.
     /// Returns whether anything reached the GPU.
     pub fn serve(&self, ht: u32) -> bool {
@@ -7874,6 +7942,10 @@ impl ChanPlane {
             return false;
         }
         g.last_put = g.userd.load(kf_abi::submit::USERD_GP_PUT).ok();
+        #[cfg(feature = "rc-negative-control")]
+        if let Some(submitted) = self.bench_rc_error(g) {
+            return submitted;
+        }
         // Diagnostic (first 3 serves that find nothing to do): which words of the USERD page are
         // non-zero — a GP_PUT that landed elsewhere in the page shows up here. Worker thread only.
         if g.last_put == Some(0) && g.serves <= 3 {

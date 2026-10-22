@@ -197,3 +197,111 @@ fn failed_ring_is_not_reported_as_injection_success() {
     assert!(inject(&mut p).is_err());
     assert_eq!(p.calls, ["push", "ring"]);
 }
+
+fn owner_control(victim_chid: u32, other_chid: u32, guest_engine: u32) {
+    use kf_chan::rc::{RcDelivery, RcRoute};
+    let a = arm();
+    let mut selected = candidate();
+    selected.engine = guest_engine;
+    assert!(a.claim(selected));
+    let mut native = Port {
+        user: true,
+        ..Port::default()
+    };
+    inject(&mut native).unwrap();
+    assert_eq!(native.words, [0xc000_0000]);
+    assert!(
+        !a.claim(candidate()),
+        "another channel cannot consume a second injection"
+    );
+    let mut victim = RcDelivery::armed(
+        RcRoute {
+            chid: victim_chid,
+            engine: guest_engine,
+            host_token: 0x19,
+        },
+        [0; 4],
+    );
+    let mut other = RcDelivery::armed(
+        RcRoute {
+            chid: other_chid,
+            engine: 9,
+            host_token: 0x23,
+        },
+        [0; 4],
+    );
+    let mut note = [0; 4];
+    let mut untouched = [0; 4];
+    let record = [0x1234, 0, 32, 0xffff_0009];
+    let event = victim
+        .poll(record, |off, word| {
+            note[off as usize / 4] = word;
+            Ok::<_, ()>(())
+        })
+        .unwrap()
+        .unwrap();
+    assert!(
+        other
+            .poll([0; 4], |off, word| {
+                untouched[off as usize / 4] = word;
+                Ok::<_, ()>(())
+            })
+            .unwrap()
+            .is_none()
+    );
+    let owners = [(victim_chid, 1001), (other_chid, 2002)];
+    let recipient = owners
+        .iter()
+        .find(|(chid, _)| *chid == event.route.chid)
+        .unwrap()
+        .1;
+    assert_eq!(
+        (recipient, event.except_type, event.route.engine),
+        (1001, 32, guest_engine)
+    );
+    assert_eq!(note[2], 32);
+    assert_eq!(note[3], 0xffff_0000 | guest_engine);
+    assert_eq!(untouched, [0; 4]);
+    assert!(victim.failed());
+    assert!(!other.failed());
+    assert!(
+        victim
+            .poll(record, |_, _| Ok::<_, ()>(()))
+            .unwrap()
+            .is_none()
+    );
+}
+
+#[test]
+fn error_reaches_only_the_faulting_channels_process() {
+    owner_control(5, 7, 9);
+}
+
+#[test]
+fn chid_and_engine_mapping_preserve_the_other_owner() {
+    owner_control(23, 5, 11);
+}
+
+#[test]
+fn privilege_failure_cannot_write_even_to_an_unavailable_ring() {
+    let mut p = Port {
+        user: false,
+        fail_push: true,
+        ..Port::default()
+    };
+    assert!(inject(&mut p).is_err());
+    assert!(p.words.is_empty());
+    assert!(p.calls.is_empty());
+}
+
+#[test]
+fn failed_push_cannot_try_a_failing_doorbell() {
+    let mut p = Port {
+        user: true,
+        fail_push: true,
+        fail_ring: true,
+        ..Port::default()
+    };
+    assert!(inject(&mut p).is_err());
+    assert_eq!(p.calls, ["push"]);
+}
