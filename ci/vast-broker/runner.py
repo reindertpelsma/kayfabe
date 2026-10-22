@@ -63,12 +63,13 @@ def scrub(raw,max_bytes=65536,max_lines=200,max_line=1000,redactions=()):
     text=re.sub(r'[A-Za-z0-9_-]{32,}','[redacted]',text)
     text=re.sub(r':{2,}',lambda x:(': '*(len(x[0])//2)+(':' if len(x[0])%2 else '')),text).replace('##[','# [')
     rows=[];size=0;kept=0
-    for line in text.splitlines():
+    for line in text.splitlines(keepends=True):
+        had_lf=line.endswith('\n');line=line[:-1] if had_lf else line
         if len(rows)>=max_lines:break
         safe=line.encode()[:max_line].decode('utf-8',errors='ignore')
         rendered='[untrusted] '+safe+'\n';length=len(rendered.encode())
         if size+length>max_bytes:break
-        rows.append(rendered);size+=length;kept+=len(safe.encode())+1
+        rows.append(rendered);size+=length;kept+=len(safe.encode())+int(had_lf)
     dropped=max(0,original-kept)
     return ''.join(rows)+('['+str(dropped)+' bytes dropped by runner]\n' if dropped else ''),dropped
 
