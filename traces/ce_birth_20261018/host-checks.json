@@ -1,0 +1,1520 @@
+{
+  "classification": "MEASURED",
+  "date": "2026-10-22",
+  "read_only": true,
+  "payload": "WITHHELD",
+  "D1": [
+    {
+      "run": 4262,
+      "coverage": "raw log absent; exported census has GP34 NoCeObject but no segment words"
+    },
+    {
+      "run": 4263,
+      "coverage": "raw log absent; exported census has GP34 NoCeObject but no segment words"
+    },
+    {
+      "run": 4266,
+      "coverage": "raw log absent; exported census has GP34 NoCeObject but no segment words"
+    },
+    {
+      "run": 4304,
+      "source": "windows-20261022/boundary-kayfabe-4304/qemu.log",
+      "sha256": "22771a257988dba5436f8503c7c7e3c761f039277377b0c89fdec1001d0bd517",
+      "line": 18794,
+      "gp": 34,
+      "word_count": 6,
+      "headers": [
+        {
+          "word_index": 0,
+          "header": "0x20038090",
+          "opcode": 1,
+          "subchannel": 4,
+          "method": "0x240",
+          "count": 3
+        },
+        {
+          "word_index": 4,
+          "header": "0x200180c0",
+          "opcode": 1,
+          "subchannel": 4,
+          "method": "0x300",
+          "count": 1
+        }
+      ],
+      "set_object_sub4_present": false,
+      "earlier_gp_payloads": "not retained by refusal dump"
+    },
+    {
+      "run": 4310,
+      "source": "windows-20261022/boundary-kayfabe-4310/qemu.log",
+      "sha256": "dd48d311c9605ed939f99bbfd77232add8a04c3d99293313ac15d1ac45b9b38d",
+      "line": 17080,
+      "gp": 34,
+      "word_count": 6,
+      "headers": [
+        {
+          "word_index": 0,
+          "header": "0x20038090",
+          "opcode": 1,
+          "subchannel": 4,
+          "method": "0x240",
+          "count": 3
+        },
+        {
+          "word_index": 4,
+          "header": "0x200180c0",
+          "opcode": 1,
+          "subchannel": 4,
+          "method": "0x300",
+          "count": 1
+        }
+      ],
+      "set_object_sub4_present": false,
+      "earlier_gp_payloads": "not retained by refusal dump"
+    }
+  ],
+  "D2": [
+    {
+      "run": 4262,
+      "source": "prior-public/4262/channels.json",
+      "coverage": "partial exported channel census; no raw log",
+      "channels": [
+        {
+          "token": "0x806",
+          "forwarded": 35,
+          "submissions": 1,
+          "birth_line": 1666,
+          "retire_line": 19007,
+          "kernel": "true",
+          "privilege": "2"
+        },
+        {
+          "token": "0x806",
+          "forwarded": 0,
+          "submissions": 0,
+          "birth_line": 20994,
+          "retire_line": 25429,
+          "kernel": "true",
+          "privilege": "2"
+        }
+      ]
+    },
+    {
+      "run": 4263,
+      "source": "prior-public/4263/channels.json",
+      "coverage": "partial exported channel census; no raw log",
+      "channels": [
+        {
+          "token": "0x806",
+          "forwarded": 35,
+          "submissions": 1,
+          "birth_line": 1664,
+          "retire_line": 19453,
+          "kernel": "true",
+          "privilege": "2"
+        },
+        {
+          "token": "0x806",
+          "forwarded": 0,
+          "submissions": 0,
+          "birth_line": 21438,
+          "retire_line": 26474,
+          "kernel": "true",
+          "privilege": "2"
+        }
+      ]
+    },
+    {
+      "run": 4264,
+      "coverage": "absent under Q3"
+    },
+    {
+      "run": 4266,
+      "source": "prior-public/4266/channels.json",
+      "coverage": "partial exported channel census; no raw log",
+      "channels": [
+        {
+          "token": "0x806",
+          "forwarded": 35,
+          "submissions": 1,
+          "birth_line": 1666,
+          "retire_line": 19605,
+          "kernel": "true",
+          "privilege": "2"
+        },
+        {
+          "token": "0x806",
+          "forwarded": 0,
+          "submissions": 0,
+          "birth_line": 21597,
+          "retire_line": 25553,
+          "kernel": "true",
+          "privilege": "2"
+        }
+      ]
+    },
+    {
+      "run": 4267,
+      "coverage": "absent under Q3"
+    },
+    {
+      "run": 4301,
+      "source": "windows-20261022/boundary-kayfabe-4301/qemu.log",
+      "channels": [
+        {
+          "client": "0xc1e00008",
+          "object": "0x2",
+          "kernel": "true",
+          "privilege": 2,
+          "facts_line": 956,
+          "token": "0x801",
+          "route": "Translated",
+          "birth_line": 960,
+          "forwarded": 2,
+          "retire_line": 22211,
+          "submissions": 2
+        },
+        {
+          "client": "0xc1d00013",
+          "object": "0xff040000",
+          "kernel": "true",
+          "privilege": 2,
+          "facts_line": 1427,
+          "token": "0x802",
+          "route": "Translated",
+          "birth_line": 1432,
+          "forwarded": 1,
+          "retire_line": 22236,
+          "submissions": 1
+        },
+        {
+          "client": "0xc1d00016",
+          "object": "0xff040002",
+          "kernel": "true",
+          "privilege": 2,
+          "facts_line": 1595,
+          "token": "0x804",
+          "route": "Translated",
+          "birth_line": 1599,
+          "forwarded": 0,
+          "retire_line": 22244,
+          "submissions": 0
+        },
+        {
+          "client": "0xc1d00019",
+          "object": "0xff040004",
+          "kernel": "true",
+          "privilege": 2,
+          "facts_line": 1663,
+          "token": "0x806",
+          "route": "Translated",
+          "birth_line": 1667,
+          "forwarded": 0,
+          "retire_line": 22252,
+          "submissions": 0
+        },
+        {
+          "client": "0xc1d00020",
+          "object": "0xff040009",
+          "kernel": "true",
+          "privilege": 2,
+          "facts_line": 1981,
+          "token": "0x80b",
+          "route": "Translated",
+          "birth_line": 1986,
+          "forwarded": 0,
+          "retire_line": 22272,
+          "submissions": 0
+        },
+        {
+          "client": "0xc1d00023",
+          "object": "0xff04000a",
+          "kernel": "true",
+          "privilege": 2,
+          "facts_line": 2041,
+          "token": "0x80c",
+          "route": "Translated",
+          "birth_line": 2046,
+          "forwarded": 649450,
+          "retire_line": 22276,
+          "submissions": 121089
+        }
+      ],
+      "first_refused_segment_line": null,
+      "preceding_events": [],
+      "first_gp0_submission_line": "not logged; GP34 refusal is the first retained segment observation"
+    },
+    {
+      "run": 4302,
+      "source": "windows-20261022/boundary-kayfabe-4302/qemu.log",
+      "channels": [
+        {
+          "client": "0xc1e00008",
+          "object": "0x2",
+          "kernel": "true",
+          "privilege": 2,
+          "facts_line": 955,
+          "token": "0x801",
+          "route": "Translated",
+          "birth_line": 959,
+          "forwarded": 2,
+          "retire_line": 20648,
+          "submissions": 2
+        },
+        {
+          "client": "0xc1d00013",
+          "object": "0xff040000",
+          "kernel": "true",
+          "privilege": 2,
+          "facts_line": 1426,
+          "token": "0x802",
+          "route": "Translated",
+          "birth_line": 1431,
+          "forwarded": 1,
+          "retire_line": 20672,
+          "submissions": 1
+        },
+        {
+          "client": "0xc1d00016",
+          "object": "0xff040002",
+          "kernel": "true",
+          "privilege": 2,
+          "facts_line": 1595,
+          "token": "0x804",
+          "route": "Translated",
+          "birth_line": 1599,
+          "forwarded": 0,
+          "retire_line": 20680,
+          "submissions": 0
+        },
+        {
+          "client": "0xc1d00019",
+          "object": "0xff040004",
+          "kernel": "true",
+          "privilege": 2,
+          "facts_line": 1663,
+          "token": "0x806",
+          "route": "Translated",
+          "birth_line": 1667,
+          "forwarded": 0,
+          "retire_line": 20688,
+          "submissions": 0
+        },
+        {
+          "client": "0xc1d00020",
+          "object": "0xff040009",
+          "kernel": "true",
+          "privilege": 2,
+          "facts_line": 1981,
+          "token": "0x80b",
+          "route": "Translated",
+          "birth_line": 1986,
+          "forwarded": 0,
+          "retire_line": 20708,
+          "submissions": 0
+        },
+        {
+          "client": "0xc1d00023",
+          "object": "0xff04000a",
+          "kernel": "true",
+          "privilege": 2,
+          "facts_line": 2041,
+          "token": "0x80c",
+          "route": "Translated",
+          "birth_line": 2046,
+          "forwarded": 630992,
+          "retire_line": 20712,
+          "submissions": 118503
+        }
+      ],
+      "first_refused_segment_line": null,
+      "preceding_events": [],
+      "first_gp0_submission_line": "not logged; GP34 refusal is the first retained segment observation"
+    },
+    {
+      "run": 4303,
+      "source": "windows-20261022/boundary-kayfabe-4303/qemu.log",
+      "channels": [
+        {
+          "client": "0xc1e00008",
+          "object": "0x2",
+          "kernel": "true",
+          "privilege": 2,
+          "facts_line": 955,
+          "token": "0x801",
+          "route": "Translated",
+          "birth_line": 959,
+          "forwarded": 2,
+          "retire_line": 21830,
+          "submissions": 2
+        },
+        {
+          "client": "0xc1d00013",
+          "object": "0xff040000",
+          "kernel": "true",
+          "privilege": 2,
+          "facts_line": 1426,
+          "token": "0x802",
+          "route": "Translated",
+          "birth_line": 1431,
+          "forwarded": 1,
+          "retire_line": 21854,
+          "submissions": 1
+        },
+        {
+          "client": "0xc1d00016",
+          "object": "0xff040002",
+          "kernel": "true",
+          "privilege": 2,
+          "facts_line": 1594,
+          "token": "0x804",
+          "route": "Translated",
+          "birth_line": 1598,
+          "forwarded": 0,
+          "retire_line": 21862,
+          "submissions": 0
+        },
+        {
+          "client": "0xc1d00019",
+          "object": "0xff040004",
+          "kernel": "true",
+          "privilege": 2,
+          "facts_line": 1661,
+          "token": "0x806",
+          "route": "Translated",
+          "birth_line": 1665,
+          "forwarded": 0,
+          "retire_line": 21870,
+          "submissions": 0
+        },
+        {
+          "client": "0xc1d00020",
+          "object": "0xff040009",
+          "kernel": "true",
+          "privilege": 2,
+          "facts_line": 1979,
+          "token": "0x80b",
+          "route": "Translated",
+          "birth_line": 1984,
+          "forwarded": 0,
+          "retire_line": 21890,
+          "submissions": 0
+        },
+        {
+          "client": "0xc1d00023",
+          "object": "0xff04000a",
+          "kernel": "true",
+          "privilege": 2,
+          "facts_line": 2039,
+          "token": "0x80c",
+          "route": "Translated",
+          "birth_line": 2044,
+          "forwarded": 667205,
+          "retire_line": 21894,
+          "submissions": 124282
+        }
+      ],
+      "first_refused_segment_line": null,
+      "preceding_events": [],
+      "first_gp0_submission_line": "not logged; GP34 refusal is the first retained segment observation"
+    },
+    {
+      "run": 4304,
+      "source": "windows-20261022/boundary-kayfabe-4304/qemu.log",
+      "channels": [
+        {
+          "client": "0xc1e00008",
+          "object": "0x2",
+          "kernel": "true",
+          "privilege": 2,
+          "facts_line": 956,
+          "token": "0x801",
+          "route": "Translated",
+          "birth_line": 960,
+          "forwarded": 2,
+          "retire_line": 20489,
+          "submissions": 2
+        },
+        {
+          "client": "0xc1d00013",
+          "object": "0xff040000",
+          "kernel": "true",
+          "privilege": 2,
+          "facts_line": 1427,
+          "token": "0x802",
+          "route": "Translated",
+          "birth_line": 1432,
+          "forwarded": 1,
+          "retire_line": 20104,
+          "submissions": 1
+        },
+        {
+          "client": "0xc1d00016",
+          "object": "0xff040002",
+          "kernel": "true",
+          "privilege": 2,
+          "facts_line": 1596,
+          "token": "0x804",
+          "route": "Translated",
+          "birth_line": 1600,
+          "forwarded": 0,
+          "retire_line": 19256,
+          "submissions": 0
+        },
+        {
+          "client": "0xc1d00019",
+          "object": "0xff040004",
+          "kernel": "true",
+          "privilege": 2,
+          "facts_line": 1664,
+          "token": "0x806",
+          "route": "Translated",
+          "birth_line": 1668,
+          "forwarded": 35,
+          "retire_line": 19185,
+          "submissions": 1
+        },
+        {
+          "client": "0xc1d00020",
+          "object": "0xff040009",
+          "kernel": "true",
+          "privilege": 2,
+          "facts_line": 1982,
+          "token": "0x80b",
+          "route": "Translated",
+          "birth_line": 1987,
+          "forwarded": 0,
+          "retire_line": 18897,
+          "submissions": 0
+        },
+        {
+          "client": "0xc1d00023",
+          "object": "0xff04000a",
+          "kernel": "true",
+          "privilege": 2,
+          "facts_line": 2042,
+          "token": "0x80c",
+          "route": "Translated",
+          "birth_line": 2047,
+          "forwarded": 458988,
+          "retire_line": 19270,
+          "submissions": 86358
+        },
+        {
+          "client": "0xc1e000e7",
+          "object": "0x2",
+          "kernel": "true",
+          "privilege": 2,
+          "facts_line": 20710,
+          "token": "0x801",
+          "route": "Translated",
+          "birth_line": 20714,
+          "forwarded": 2,
+          "retire_line": 25503,
+          "submissions": 2
+        },
+        {
+          "client": "0xc1d000f0",
+          "object": "0xff040000",
+          "kernel": "true",
+          "privilege": 2,
+          "facts_line": 20943,
+          "token": "0x802",
+          "route": "Translated",
+          "birth_line": 20948,
+          "forwarded": 1,
+          "retire_line": 25527,
+          "submissions": 1
+        },
+        {
+          "client": "0xc1d000f3",
+          "object": "0xff040002",
+          "kernel": "true",
+          "privilege": 2,
+          "facts_line": 21054,
+          "token": "0x804",
+          "route": "Translated",
+          "birth_line": 21058,
+          "forwarded": 0,
+          "retire_line": 25535,
+          "submissions": 0
+        },
+        {
+          "client": "0xc1d000f6",
+          "object": "0xff040004",
+          "kernel": "true",
+          "privilege": 2,
+          "facts_line": 21114,
+          "token": "0x806",
+          "route": "Translated",
+          "birth_line": 21118,
+          "forwarded": 0,
+          "retire_line": 25543,
+          "submissions": 0
+        },
+        {
+          "client": "0xc1d000fb",
+          "object": "0xff040009",
+          "kernel": "true",
+          "privilege": 2,
+          "facts_line": 21326,
+          "token": "0x80b",
+          "route": "Translated",
+          "birth_line": 21331,
+          "forwarded": 230490,
+          "retire_line": 25563,
+          "submissions": 42182
+        },
+        {
+          "client": "0xc1d00100",
+          "object": "0xff04000b",
+          "kernel": "true",
+          "privilege": 2,
+          "facts_line": 21803,
+          "token": "0x80d",
+          "route": "Translated",
+          "birth_line": 21808,
+          "forwarded": 0,
+          "retire_line": 25571,
+          "submissions": 0
+        }
+      ],
+      "first_refused_segment_line": 18794,
+      "preceding_events": [
+        {
+          "line": 17770,
+          "kind": "channel_facts"
+        },
+        {
+          "line": 17776,
+          "kind": "birth"
+        },
+        {
+          "line": 17855,
+          "kind": "channel_facts"
+        },
+        {
+          "line": 17861,
+          "kind": "birth"
+        },
+        {
+          "line": 17891,
+          "kind": "channel_facts"
+        },
+        {
+          "line": 17897,
+          "kind": "birth"
+        }
+      ],
+      "first_gp0_submission_line": "not logged; GP34 refusal is the first retained segment observation"
+    },
+    {
+      "run": 4305,
+      "source": "windows-20261022/boundary-kayfabe-4305/qemu.log",
+      "channels": [
+        {
+          "client": "0xc1e00008",
+          "object": "0x2",
+          "kernel": "true",
+          "privilege": 2,
+          "facts_line": 955,
+          "token": "0x801",
+          "route": "Translated",
+          "birth_line": 959,
+          "forwarded": 2,
+          "retire_line": 20085,
+          "submissions": 2
+        },
+        {
+          "client": "0xc1d00013",
+          "object": "0xff040000",
+          "kernel": "true",
+          "privilege": 2,
+          "facts_line": 1427,
+          "token": "0x802",
+          "route": "Translated",
+          "birth_line": 1432,
+          "forwarded": 1,
+          "retire_line": 20109,
+          "submissions": 1
+        },
+        {
+          "client": "0xc1d00016",
+          "object": "0xff040002",
+          "kernel": "true",
+          "privilege": 2,
+          "facts_line": 1595,
+          "token": "0x804",
+          "route": "Translated",
+          "birth_line": 1599,
+          "forwarded": 0,
+          "retire_line": 20117,
+          "submissions": 0
+        },
+        {
+          "client": "0xc1d00019",
+          "object": "0xff040004",
+          "kernel": "true",
+          "privilege": 2,
+          "facts_line": 1663,
+          "token": "0x806",
+          "route": "Translated",
+          "birth_line": 1667,
+          "forwarded": 0,
+          "retire_line": 20125,
+          "submissions": 0
+        },
+        {
+          "client": "0xc1d00020",
+          "object": "0xff040009",
+          "kernel": "true",
+          "privilege": 2,
+          "facts_line": 1980,
+          "token": "0x80b",
+          "route": "Translated",
+          "birth_line": 1985,
+          "forwarded": 0,
+          "retire_line": 20145,
+          "submissions": 0
+        },
+        {
+          "client": "0xc1d00023",
+          "object": "0xff04000a",
+          "kernel": "true",
+          "privilege": 2,
+          "facts_line": 2040,
+          "token": "0x80c",
+          "route": "Translated",
+          "birth_line": 2045,
+          "forwarded": 636435,
+          "retire_line": 20149,
+          "submissions": 118928
+        }
+      ],
+      "first_refused_segment_line": null,
+      "preceding_events": [],
+      "first_gp0_submission_line": "not logged; GP34 refusal is the first retained segment observation"
+    },
+    {
+      "run": 4306,
+      "source": "windows-20261022/boundary-kayfabe-4306/qemu.log",
+      "channels": [
+        {
+          "client": "0xc1e00008",
+          "object": "0x2",
+          "kernel": "true",
+          "privilege": 2,
+          "facts_line": 956,
+          "token": "0x801",
+          "route": "Translated",
+          "birth_line": 960,
+          "forwarded": 2,
+          "retire_line": 20753,
+          "submissions": 2
+        },
+        {
+          "client": "0xc1d00013",
+          "object": "0xff040000",
+          "kernel": "true",
+          "privilege": 2,
+          "facts_line": 1427,
+          "token": "0x802",
+          "route": "Translated",
+          "birth_line": 1432,
+          "forwarded": 1,
+          "retire_line": 20777,
+          "submissions": 1
+        },
+        {
+          "client": "0xc1d00016",
+          "object": "0xff040002",
+          "kernel": "true",
+          "privilege": 2,
+          "facts_line": 1596,
+          "token": "0x804",
+          "route": "Translated",
+          "birth_line": 1600,
+          "forwarded": 0,
+          "retire_line": 20785,
+          "submissions": 0
+        },
+        {
+          "client": "0xc1d00019",
+          "object": "0xff040004",
+          "kernel": "true",
+          "privilege": 2,
+          "facts_line": 1663,
+          "token": "0x806",
+          "route": "Translated",
+          "birth_line": 1667,
+          "forwarded": 0,
+          "retire_line": 20793,
+          "submissions": 0
+        },
+        {
+          "client": "0xc1d00020",
+          "object": "0xff040009",
+          "kernel": "true",
+          "privilege": 2,
+          "facts_line": 1980,
+          "token": "0x80b",
+          "route": "Translated",
+          "birth_line": 1985,
+          "forwarded": 0,
+          "retire_line": 20813,
+          "submissions": 0
+        },
+        {
+          "client": "0xc1d00023",
+          "object": "0xff04000a",
+          "kernel": "true",
+          "privilege": 2,
+          "facts_line": 2040,
+          "token": "0x80c",
+          "route": "Translated",
+          "birth_line": 2045,
+          "forwarded": 639582,
+          "retire_line": 20817,
+          "submissions": 119984
+        }
+      ],
+      "first_refused_segment_line": null,
+      "preceding_events": [],
+      "first_gp0_submission_line": "not logged; GP34 refusal is the first retained segment observation"
+    },
+    {
+      "run": 4307,
+      "source": "windows-20261022/boundary-kayfabe-4307/qemu.log",
+      "channels": [
+        {
+          "client": "0xc1e00008",
+          "object": "0x2",
+          "kernel": "true",
+          "privilege": 2,
+          "facts_line": 956,
+          "token": "0x801",
+          "route": "Translated",
+          "birth_line": 960,
+          "forwarded": 2,
+          "retire_line": 21905,
+          "submissions": 2
+        },
+        {
+          "client": "0xc1d00013",
+          "object": "0xff040000",
+          "kernel": "true",
+          "privilege": 2,
+          "facts_line": 1428,
+          "token": "0x802",
+          "route": "Translated",
+          "birth_line": 1433,
+          "forwarded": 1,
+          "retire_line": 21929,
+          "submissions": 1
+        },
+        {
+          "client": "0xc1d00016",
+          "object": "0xff040002",
+          "kernel": "true",
+          "privilege": 2,
+          "facts_line": 1596,
+          "token": "0x804",
+          "route": "Translated",
+          "birth_line": 1600,
+          "forwarded": 0,
+          "retire_line": 21937,
+          "submissions": 0
+        },
+        {
+          "client": "0xc1d00019",
+          "object": "0xff040004",
+          "kernel": "true",
+          "privilege": 2,
+          "facts_line": 1664,
+          "token": "0x806",
+          "route": "Translated",
+          "birth_line": 1668,
+          "forwarded": 0,
+          "retire_line": 21945,
+          "submissions": 0
+        },
+        {
+          "client": "0xc1d00020",
+          "object": "0xff040009",
+          "kernel": "true",
+          "privilege": 2,
+          "facts_line": 1982,
+          "token": "0x80b",
+          "route": "Translated",
+          "birth_line": 1987,
+          "forwarded": 0,
+          "retire_line": 21965,
+          "submissions": 0
+        },
+        {
+          "client": "0xc1d00023",
+          "object": "0xff04000a",
+          "kernel": "true",
+          "privilege": 2,
+          "facts_line": 2042,
+          "token": "0x80c",
+          "route": "Translated",
+          "birth_line": 2047,
+          "forwarded": 638321,
+          "retire_line": 21969,
+          "submissions": 119717
+        }
+      ],
+      "first_refused_segment_line": null,
+      "preceding_events": [],
+      "first_gp0_submission_line": "not logged; GP34 refusal is the first retained segment observation"
+    },
+    {
+      "run": 4308,
+      "source": "windows-20261022/boundary-kayfabe-4308/qemu.log",
+      "channels": [
+        {
+          "client": "0xc1e00008",
+          "object": "0x2",
+          "kernel": "true",
+          "privilege": 2,
+          "facts_line": 956,
+          "token": "0x801",
+          "route": "Translated",
+          "birth_line": 960,
+          "forwarded": 2,
+          "retire_line": 21652,
+          "submissions": 2
+        },
+        {
+          "client": "0xc1d00013",
+          "object": "0xff040000",
+          "kernel": "true",
+          "privilege": 2,
+          "facts_line": 1427,
+          "token": "0x802",
+          "route": "Translated",
+          "birth_line": 1432,
+          "forwarded": 1,
+          "retire_line": 21676,
+          "submissions": 1
+        },
+        {
+          "client": "0xc1d00016",
+          "object": "0xff040002",
+          "kernel": "true",
+          "privilege": 2,
+          "facts_line": 1595,
+          "token": "0x804",
+          "route": "Translated",
+          "birth_line": 1599,
+          "forwarded": 0,
+          "retire_line": 21684,
+          "submissions": 0
+        },
+        {
+          "client": "0xc1d00019",
+          "object": "0xff040004",
+          "kernel": "true",
+          "privilege": 2,
+          "facts_line": 1663,
+          "token": "0x806",
+          "route": "Translated",
+          "birth_line": 1667,
+          "forwarded": 0,
+          "retire_line": 21692,
+          "submissions": 0
+        },
+        {
+          "client": "0xc1d00020",
+          "object": "0xff040009",
+          "kernel": "true",
+          "privilege": 2,
+          "facts_line": 1980,
+          "token": "0x80b",
+          "route": "Translated",
+          "birth_line": 1985,
+          "forwarded": 0,
+          "retire_line": 21712,
+          "submissions": 0
+        },
+        {
+          "client": "0xc1d00023",
+          "object": "0xff04000a",
+          "kernel": "true",
+          "privilege": 2,
+          "facts_line": 2040,
+          "token": "0x80c",
+          "route": "Translated",
+          "birth_line": 2045,
+          "forwarded": 655839,
+          "retire_line": 21716,
+          "submissions": 122165
+        }
+      ],
+      "first_refused_segment_line": null,
+      "preceding_events": [],
+      "first_gp0_submission_line": "not logged; GP34 refusal is the first retained segment observation"
+    },
+    {
+      "run": 4309,
+      "source": "windows-20261022/boundary-kayfabe-4309/qemu.log",
+      "channels": [
+        {
+          "client": "0xc1e00008",
+          "object": "0x2",
+          "kernel": "true",
+          "privilege": 2,
+          "facts_line": 956,
+          "token": "0x801",
+          "route": "Translated",
+          "birth_line": 960,
+          "forwarded": 2,
+          "retire_line": 20906,
+          "submissions": 2
+        },
+        {
+          "client": "0xc1d00013",
+          "object": "0xff040000",
+          "kernel": "true",
+          "privilege": 2,
+          "facts_line": 1427,
+          "token": "0x802",
+          "route": "Translated",
+          "birth_line": 1432,
+          "forwarded": 1,
+          "retire_line": 20930,
+          "submissions": 1
+        },
+        {
+          "client": "0xc1d00016",
+          "object": "0xff040002",
+          "kernel": "true",
+          "privilege": 2,
+          "facts_line": 1595,
+          "token": "0x804",
+          "route": "Translated",
+          "birth_line": 1599,
+          "forwarded": 0,
+          "retire_line": 20938,
+          "submissions": 0
+        },
+        {
+          "client": "0xc1d00019",
+          "object": "0xff040004",
+          "kernel": "true",
+          "privilege": 2,
+          "facts_line": 1663,
+          "token": "0x806",
+          "route": "Translated",
+          "birth_line": 1667,
+          "forwarded": 0,
+          "retire_line": 20946,
+          "submissions": 0
+        },
+        {
+          "client": "0xc1d00020",
+          "object": "0xff040009",
+          "kernel": "true",
+          "privilege": 2,
+          "facts_line": 1982,
+          "token": "0x80b",
+          "route": "Translated",
+          "birth_line": 1987,
+          "forwarded": 0,
+          "retire_line": 20966,
+          "submissions": 0
+        },
+        {
+          "client": "0xc1d00023",
+          "object": "0xff04000a",
+          "kernel": "true",
+          "privilege": 2,
+          "facts_line": 2042,
+          "token": "0x80c",
+          "route": "Translated",
+          "birth_line": 2047,
+          "forwarded": 652396,
+          "retire_line": 20970,
+          "submissions": 121450
+        }
+      ],
+      "first_refused_segment_line": null,
+      "preceding_events": [],
+      "first_gp0_submission_line": "not logged; GP34 refusal is the first retained segment observation"
+    },
+    {
+      "run": 4310,
+      "source": "windows-20261022/boundary-kayfabe-4310/qemu.log",
+      "channels": [
+        {
+          "client": "0xc1e00008",
+          "object": "0x2",
+          "kernel": "true",
+          "privilege": 2,
+          "facts_line": 956,
+          "token": "0x801",
+          "route": "Translated",
+          "birth_line": 960,
+          "forwarded": 2,
+          "retire_line": 18787,
+          "submissions": 2
+        },
+        {
+          "client": "0xc1d00013",
+          "object": "0xff040000",
+          "kernel": "true",
+          "privilege": 2,
+          "facts_line": 1428,
+          "token": "0x802",
+          "route": "Translated",
+          "birth_line": 1433,
+          "forwarded": 1,
+          "retire_line": 18398,
+          "submissions": 1
+        },
+        {
+          "client": "0xc1d00016",
+          "object": "0xff040002",
+          "kernel": "true",
+          "privilege": 2,
+          "facts_line": 1596,
+          "token": "0x804",
+          "route": "Translated",
+          "birth_line": 1600,
+          "forwarded": 0,
+          "retire_line": 17552,
+          "submissions": 0
+        },
+        {
+          "client": "0xc1d00019",
+          "object": "0xff040004",
+          "kernel": "true",
+          "privilege": 2,
+          "facts_line": 1664,
+          "token": "0x806",
+          "route": "Translated",
+          "birth_line": 1668,
+          "forwarded": 35,
+          "retire_line": 17481,
+          "submissions": 1
+        },
+        {
+          "client": "0xc1d00020",
+          "object": "0xff040009",
+          "kernel": "true",
+          "privilege": 2,
+          "facts_line": 1982,
+          "token": "0x80b",
+          "route": "Translated",
+          "birth_line": 1987,
+          "forwarded": 0,
+          "retire_line": 17192,
+          "submissions": 0
+        },
+        {
+          "client": "0xc1d00023",
+          "object": "0xff04000a",
+          "kernel": "true",
+          "privilege": 2,
+          "facts_line": 2042,
+          "token": "0x80c",
+          "route": "Translated",
+          "birth_line": 2047,
+          "forwarded": 410332,
+          "retire_line": 17566,
+          "submissions": 75484
+        },
+        {
+          "client": "0xc1e000dd",
+          "object": "0x2",
+          "kernel": "true",
+          "privilege": 2,
+          "facts_line": 19008,
+          "token": "0x801",
+          "route": "Translated",
+          "birth_line": 19012,
+          "forwarded": 2,
+          "retire_line": 24552,
+          "submissions": 2
+        },
+        {
+          "client": "0xc1d000e6",
+          "object": "0xff040000",
+          "kernel": "true",
+          "privilege": 2,
+          "facts_line": 19241,
+          "token": "0x802",
+          "route": "Translated",
+          "birth_line": 19246,
+          "forwarded": 1,
+          "retire_line": 24576,
+          "submissions": 1
+        },
+        {
+          "client": "0xc1d000e9",
+          "object": "0xff040002",
+          "kernel": "true",
+          "privilege": 2,
+          "facts_line": 19353,
+          "token": "0x804",
+          "route": "Translated",
+          "birth_line": 19357,
+          "forwarded": 0,
+          "retire_line": 24584,
+          "submissions": 0
+        },
+        {
+          "client": "0xc1d000ec",
+          "object": "0xff040004",
+          "kernel": "true",
+          "privilege": 2,
+          "facts_line": 19413,
+          "token": "0x806",
+          "route": "Translated",
+          "birth_line": 19417,
+          "forwarded": 0,
+          "retire_line": 24592,
+          "submissions": 0
+        },
+        {
+          "client": "0xc1d000f1",
+          "object": "0xff040009",
+          "kernel": "true",
+          "privilege": 2,
+          "facts_line": 19625,
+          "token": "0x80b",
+          "route": "Translated",
+          "birth_line": 19630,
+          "forwarded": 188322,
+          "retire_line": 24612,
+          "submissions": 30905
+        },
+        {
+          "client": "0xc1d000f6",
+          "object": "0xff04000b",
+          "kernel": "true",
+          "privilege": 2,
+          "facts_line": 20102,
+          "token": "0x80d",
+          "route": "Translated",
+          "birth_line": 20107,
+          "forwarded": 0,
+          "retire_line": 24620,
+          "submissions": 0
+        }
+      ],
+      "first_refused_segment_line": 17080,
+      "preceding_events": [
+        {
+          "line": 16618,
+          "kind": "channel_facts"
+        },
+        {
+          "line": 16626,
+          "kind": "birth"
+        },
+        {
+          "line": 16688,
+          "kind": "channel_facts"
+        },
+        {
+          "line": 16695,
+          "kind": "birth"
+        },
+        {
+          "line": 16726,
+          "kind": "channel_facts"
+        },
+        {
+          "line": 16735,
+          "kind": "birth"
+        }
+      ],
+      "first_gp0_submission_line": "not logged; GP34 refusal is the first retained segment observation"
+    },
+    {
+      "run": 4311,
+      "source": "windows-20261022/boundary-kayfabe-4311/qemu.log",
+      "channels": [
+        {
+          "client": "0xc1e00008",
+          "object": "0x2",
+          "kernel": "true",
+          "privilege": 2,
+          "facts_line": 955,
+          "token": "0x801",
+          "route": "Translated",
+          "birth_line": 959,
+          "forwarded": 2,
+          "retire_line": 21404,
+          "submissions": 2
+        },
+        {
+          "client": "0xc1d00013",
+          "object": "0xff040000",
+          "kernel": "true",
+          "privilege": 2,
+          "facts_line": 1427,
+          "token": "0x802",
+          "route": "Translated",
+          "birth_line": 1432,
+          "forwarded": 1,
+          "retire_line": 21428,
+          "submissions": 1
+        },
+        {
+          "client": "0xc1d00016",
+          "object": "0xff040002",
+          "kernel": "true",
+          "privilege": 2,
+          "facts_line": 1595,
+          "token": "0x804",
+          "route": "Translated",
+          "birth_line": 1599,
+          "forwarded": 0,
+          "retire_line": 21436,
+          "submissions": 0
+        },
+        {
+          "client": "0xc1d00019",
+          "object": "0xff040004",
+          "kernel": "true",
+          "privilege": 2,
+          "facts_line": 1663,
+          "token": "0x806",
+          "route": "Translated",
+          "birth_line": 1667,
+          "forwarded": 0,
+          "retire_line": 21444,
+          "submissions": 0
+        },
+        {
+          "client": "0xc1d00020",
+          "object": "0xff040009",
+          "kernel": "true",
+          "privilege": 2,
+          "facts_line": 1980,
+          "token": "0x80b",
+          "route": "Translated",
+          "birth_line": 1985,
+          "forwarded": 0,
+          "retire_line": 21464,
+          "submissions": 0
+        },
+        {
+          "client": "0xc1d00023",
+          "object": "0xff04000a",
+          "kernel": "true",
+          "privilege": 2,
+          "facts_line": 2040,
+          "token": "0x80c",
+          "route": "Translated",
+          "birth_line": 2045,
+          "forwarded": 654978,
+          "retire_line": 21468,
+          "submissions": 122085
+        }
+      ],
+      "first_refused_segment_line": null,
+      "preceding_events": [],
+      "first_gp0_submission_line": "not logged; GP34 refusal is the first retained segment observation"
+    }
+  ],
+  "D3": [
+    {
+      "run": 4262,
+      "coverage": "raw root/VasKey census unavailable"
+    },
+    {
+      "run": 4263,
+      "coverage": "raw root/VasKey census unavailable"
+    },
+    {
+      "run": 4264,
+      "coverage": "raw root/VasKey census unavailable"
+    },
+    {
+      "run": 4266,
+      "coverage": "raw root/VasKey census unavailable"
+    },
+    {
+      "run": 4267,
+      "coverage": "raw root/VasKey census unavailable"
+    },
+    {
+      "run": 4301,
+      "source": "windows-20261022/boundary-kayfabe-4301/qemu.log",
+      "root_prefix_counts": {
+        "0xc1d": 230,
+        "0xc1e": 6
+      },
+      "vaskey_client_prefix_counts": {
+        "0xc1e": 21,
+        "0xc1d": 874
+      },
+      "c1e_privilege_counts": {
+        "2": 2
+      }
+    },
+    {
+      "run": 4302,
+      "source": "windows-20261022/boundary-kayfabe-4302/qemu.log",
+      "root_prefix_counts": {
+        "0xc1d": 222,
+        "0xc1e": 6
+      },
+      "vaskey_client_prefix_counts": {
+        "0xc1e": 21,
+        "0xc1d": 786
+      },
+      "c1e_privilege_counts": {
+        "2": 2
+      }
+    },
+    {
+      "run": 4303,
+      "source": "windows-20261022/boundary-kayfabe-4303/qemu.log",
+      "root_prefix_counts": {
+        "0xc1d": 234,
+        "0xc1e": 6
+      },
+      "vaskey_client_prefix_counts": {
+        "0xc1e": 21,
+        "0xc1d": 841
+      },
+      "c1e_privilege_counts": {
+        "2": 2
+      }
+    },
+    {
+      "run": 4304,
+      "source": "windows-20261022/boundary-kayfabe-4304/qemu.log",
+      "root_prefix_counts": {
+        "0xc1d": 308,
+        "0xc1e": 12
+      },
+      "vaskey_client_prefix_counts": {
+        "0xc1e": 36,
+        "0xc1d": 1005
+      },
+      "c1e_privilege_counts": {
+        "2": 4
+      }
+    },
+    {
+      "run": 4305,
+      "source": "windows-20261022/boundary-kayfabe-4305/qemu.log",
+      "root_prefix_counts": {
+        "0xc1d": 224,
+        "0xc1e": 6
+      },
+      "vaskey_client_prefix_counts": {
+        "0xc1e": 21,
+        "0xc1d": 804
+      },
+      "c1e_privilege_counts": {
+        "2": 2
+      }
+    },
+    {
+      "run": 4306,
+      "source": "windows-20261022/boundary-kayfabe-4306/qemu.log",
+      "root_prefix_counts": {
+        "0xc1d": 224,
+        "0xc1e": 6
+      },
+      "vaskey_client_prefix_counts": {
+        "0xc1e": 21,
+        "0xc1d": 756
+      },
+      "c1e_privilege_counts": {
+        "2": 2
+      }
+    },
+    {
+      "run": 4307,
+      "source": "windows-20261022/boundary-kayfabe-4307/qemu.log",
+      "root_prefix_counts": {
+        "0xc1d": 230,
+        "0xc1e": 6
+      },
+      "vaskey_client_prefix_counts": {
+        "0xc1e": 21,
+        "0xc1d": 1082
+      },
+      "c1e_privilege_counts": {
+        "2": 2
+      }
+    },
+    {
+      "run": 4308,
+      "source": "windows-20261022/boundary-kayfabe-4308/qemu.log",
+      "root_prefix_counts": {
+        "0xc1d": 228,
+        "0xc1e": 6
+      },
+      "vaskey_client_prefix_counts": {
+        "0xc1e": 21,
+        "0xc1d": 793
+      },
+      "c1e_privilege_counts": {
+        "2": 2
+      }
+    },
+    {
+      "run": 4309,
+      "source": "windows-20261022/boundary-kayfabe-4309/qemu.log",
+      "root_prefix_counts": {
+        "0xc1d": 228,
+        "0xc1e": 6
+      },
+      "vaskey_client_prefix_counts": {
+        "0xc1e": 21,
+        "0xc1d": 820
+      },
+      "c1e_privilege_counts": {
+        "2": 2
+      }
+    },
+    {
+      "run": 4310,
+      "source": "windows-20261022/boundary-kayfabe-4310/qemu.log",
+      "root_prefix_counts": {
+        "0xc1d": 311,
+        "0xc1e": 12
+      },
+      "vaskey_client_prefix_counts": {
+        "0xc1e": 36,
+        "0xc1d": 670
+      },
+      "c1e_privilege_counts": {
+        "2": 4
+      }
+    },
+    {
+      "run": 4311,
+      "source": "windows-20261022/boundary-kayfabe-4311/qemu.log",
+      "root_prefix_counts": {
+        "0xc1d": 230,
+        "0xc1e": 6
+      },
+      "vaskey_client_prefix_counts": {
+        "0xc1e": 21,
+        "0xc1d": 702
+      },
+      "c1e_privilege_counts": {
+        "2": 2
+      }
+    }
+  ],
+  "coverage": {
+    "requested_runs": 16,
+    "raw_logs": 11,
+    "exported_only": 3,
+    "missing_runs": [
+      4264,
+      4267
+    ]
+  }
+}

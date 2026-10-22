@@ -1,0 +1,66 @@
+{
+  "classification": "MEASURED",
+  "date": "2026-10-22",
+  "fix_commit": "6f823a88a8816c563aa4f80f78ddfd50b2bdaa76",
+  "M3_scope": "Inject guest C8B5 as a wrong-source stand-in at the pure selector; physical HostRing/ChanPlane wiring remains CODE READ, not GPU-executed.",
+  "source_restored_sha256": {
+    "crates/kf-chan/src/ring.rs": "fe22e0202380dad35547b94dbd16755000a7b4aeebc695a480eb99df194b1c32",
+    "crates/kf-chan/src/tmode.rs": "99b1c89da4815b9499b12add445ef6e97bdcee92e9dc632a27fb38ca9c44069c",
+    "crates/kf-rm/src/chanlink.rs": "582bea73e6a041135290550cc4d222b18dd71b53148104f095420e87b5f5a8a5"
+  },
+  "mutants": [
+    {
+      "mutant": "M1-remove-birth-seed",
+      "distinct_assertion_killers": 6,
+      "tests": [
+        "a_copy_runlist_kernel_ring_admits_the_engine_semaphore_without_set_object",
+        "a_seeded_semaphore_is_bound_to_authored_window_words",
+        "a_seeded_semaphore_outside_the_vm_rows_is_refused",
+        "another_host_ce_tier_is_seeded_at_the_first_entry",
+        "another_physical_destination_still_translates",
+        "physical_operands_still_translate_into_the_window"
+      ]
+    },
+    {
+      "mutant": "M2-seed-graphics",
+      "distinct_assertion_killers": 2,
+      "tests": [
+        "graphics_with_gr_tier_stays_unseeded",
+        "graphics_without_gr_tier_stays_unseeded"
+      ]
+    },
+    {
+      "mutant": "M3-substitute-guest-C8B5-source",
+      "distinct_assertion_killers": 2,
+      "tests": [
+        "a_guest_c8b5_object_does_not_select_the_birth_tier",
+        "a_guest_c9b5_object_does_not_select_the_birth_tier"
+      ]
+    },
+    {
+      "mutant": "M4-accept-foreign-CE",
+      "distinct_assertion_killers": 3,
+      "tests": [
+        "a_guest_cannot_rebind_another_hardware_subchannel",
+        "a_guest_cannot_rebind_ce_on_a_software_subchannel",
+        "a_guest_cannot_rebind_to_a_wider_ce_class"
+      ]
+    },
+    {
+      "mutant": "M5-seed-video",
+      "distinct_assertion_killers": 2,
+      "tests": [
+        "nvdec_birth_wins_over_the_host_ce_hint",
+        "nvenc_birth_wins_over_the_host_ce_hint"
+      ]
+    },
+    {
+      "mutant": "M6-restore-handle-OR",
+      "distinct_assertion_killers": 2,
+      "tests": [
+        "windows_c1e_admin_stamp_still_denies_kernel_authority",
+        "windows_c1e_user_stamp_still_denies_kernel_authority"
+      ]
+    }
+  ]
+}
