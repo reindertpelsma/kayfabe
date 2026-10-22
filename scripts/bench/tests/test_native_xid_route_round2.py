@@ -1,9 +1,8 @@
 #!/usr/bin/env python3
-"""EXPECTED RED: Round 2 route replay, pending an independent public derivation.
+"""Round2 fixtures, updated for OWNER-APPROVED 2026-10-22 CE-family admission.
 
-These expectations describe the requested endpoint. They do not license deriving
-a HUB client from the journal being admitted. A future implementation must also
-test the independently sourced topology proof before enabling GA102 admission.
+Exact channel/VA/type and copy-engine family replace the earlier demand for a
+specific CE instance. Historical expected-red results remain in round2 traces.
 """
 import importlib.util
 from pathlib import Path
@@ -36,21 +35,21 @@ class Round2NativeRouteReplay(unittest.TestCase):
         self.assertEqual(len(G.xid_lines(journal)), 5)
         self.assertEqual(G.approve_native(journal, defer, missing), G.xid_lines(journal))
 
-    def test_ga102_exact_four_ce_and_one_gr_should_admit_after_derivation(self):
+    def test_ga102_exact_four_ce_and_one_gr_admit_owner_rule(self):
         journal, defer, missing = fixtures("GA102")
         self.assertEqual(len(G.xid_lines(journal)), 5)
         self.assertEqual(journal.count("HUBCLIENT_CE0"), 4)
         self.assertEqual(G.approve_native(journal, defer, missing), G.xid_lines(journal))
 
-    def test_ga102_substituting_ce1_must_not_admit(self):
+    def test_ga102_ce1_with_wrong_channel_must_not_admit(self):
         journal, defer, missing = fixtures("GA102")
         with self.assertRaises(G.GuardRefused):
-            G.approve_native(journal.replace("HUBCLIENT_CE0", "HUBCLIENT_CE1"), defer, missing)
+            G.approve_native(journal.replace("HUBCLIENT_CE0", "HUBCLIENT_CE1").replace("channel 0x00000004", "channel 0x00000024", 1), defer, missing)
 
-    def test_ad102_substituting_ce0_stays_fatal(self):
+    def test_ad102_ce0_with_wrong_va_stays_fatal(self):
         journal, defer, missing = fixtures("AD102")
         with self.assertRaises(G.GuardRefused):
-            G.approve_native(journal.replace("HUBCLIENT_CE1", "HUBCLIENT_CE0"), defer, missing)
+            G.approve_native(journal.replace("HUBCLIENT_CE1", "HUBCLIENT_CE0").replace("0x60_00010000", "0x60_00020000", 1), defer, missing)
 
     def test_ga102_one_extra_known_record_stays_fatal(self):
         journal, defer, missing = fixtures("GA102")
