@@ -1,0 +1,80 @@
+make: Entering directory '/workspace/sweep-tracer-wt/tools/windows-capture/tests'
+mkdir -p /workspace/codex/sweep-tracer-fmc-red
+mkdir -p /workspace/codex/sweep-tracer-fmc-red
+cc -std=c99 -O1 -g -Wall -Wextra -Werror -Wshadow -Wno-unused-function -I../lib -fsanitize=address,undefined -fno-sanitize-recover=undefined test_main.c ../lib/kfwc_record.c ../lib/kfwc_elem.c ../lib/kfwc_discover.c ../lib/kfwc_engine.c -o /workspace/codex/sweep-tracer-fmc-red/test_main
+cc -std=c99 -O1 -g -Wall -Wextra -Werror -Wshadow -Wno-unused-function -I../lib -fsanitize=address,undefined -fno-sanitize-recover=undefined test_display_caps.c -o /workspace/codex/sweep-tracer-fmc-red/test_display_caps
+/workspace/codex/sweep-tracer-fmc-red/test_main
+  FAIL test_main.c:240 [fmc_coherent] kfwc_discover_mailbox(&h.plat, b, &d) == 0 && d.status == KFWC_MB_OK
+  FAIL test_main.c:241 [fmc_coherent] b->method == KFWC_METHOD_MAILBOX && b->libos_args_pa == 0x6f0000
+  FAIL test_main.c:242 [fmc_coherent] d.mailbox_pa == 0x6e0000 && b->table_pa == h.s.table_pa
+  FAIL test_main.c:243 [fmc_coherent] b->q[0].valid && b->q[1].valid && h.m.refused == 0 && h.m.ram_reads < 12
+  FAIL test_main.c:240 [fmc_noncoherent] kfwc_discover_mailbox(&h.plat, b, &d) == 0 && d.status == KFWC_MB_OK
+  FAIL test_main.c:241 [fmc_noncoherent] b->method == KFWC_METHOD_MAILBOX && b->libos_args_pa == 0x6f0000
+  FAIL test_main.c:242 [fmc_noncoherent] d.mailbox_pa == 0x6e0000 && b->table_pa == h.s.table_pa
+  FAIL test_main.c:243 [fmc_noncoherent] b->q[0].valid && b->q[1].valid && h.m.refused == 0 && h.m.ram_reads < 12
+  FAIL test_main.c:215 [fmc_unaligned_byte] rc != 0 && d.status == status
+    got status 5 want 4
+  FAIL test_main.c:215 [fmc_unaligned_entry] rc != 0 && d.status == status
+    got status 5 want 4
+  FAIL test_main.c:215 [fmc_ram_hole_refused] rc != 0 && d.status == status
+    got status 5 want 4
+  FAIL test_main.c:215 [fmc_wrapped_address_refused] rc != 0 && d.status == status
+    got status 5 want 4
+  FAIL test_main.c:215 [fmc_bad_region_refused] rc != 0 && d.status == status
+    got status 5 want 7
+  FAIL test_main.c:215 [fmc_bad_queue_refused] rc != 0 && d.status == status
+    got status 5 want 8
+  FAIL test_main.c:306 [fmc_no_coherent_chain] h.m.refused == 0 && h.m.ram_reads == 2
+  FAIL test_main.c:306 [fmc_no_noncoherent_chain] h.m.refused == 0 && h.m.ram_reads == 2
+ok   record_format
+ok   file_header
+ok   elements
+ok   mailbox_ok
+ok   mailbox_failures
+FAIL fmc_coherent
+FAIL fmc_noncoherent
+ok   fmc_local_fb_refused
+ok   fmc_unknown_aperture_refused
+FAIL fmc_unaligned_byte
+FAIL fmc_unaligned_entry
+FAIL fmc_ram_hole_refused
+FAIL fmc_wrapped_address_refused
+FAIL fmc_bad_region_refused
+FAIL fmc_bad_queue_refused
+FAIL fmc_no_coherent_chain
+FAIL fmc_no_noncoherent_chain
+ok   fmc_direct_libos_precedes_fallback
+ok   scan_signature_false_positives
+ok   walker_basic_pre610
+ok   walker_basic_610
+ok   walker_late_attach_prefix
+ok   walker_wrapped_ring
+ok   walker_lost_messages_lapped
+ok   walker_seq_gap_and_wraparound
+ok   walker_empty_then_history
+ok   walker_unpublished_and_budget
+ok   walker_status_header_pending
+ok   scan_discovery_rate_limited
+ok   recent_empty_epoch
+ok   recent_moved_table_early
+ok   recent_window_expires
+ok   recent_window_ram_edges
+ok   recent_sequence_zero_prefix
+ok   recent_stale_and_partial_epochs
+ok   recent_requires_scan_and_ram_validation
+ok   recent_seed_requires_wrapped_queues
+ok   recent_corrupt_prefix_is_refused
+ok   scan_gated_by_mailbox
+ok   events_and_mailbox_cross_check
+ok   detach_and_reattach
+ok   corrupt_and_torn
+ok   unsupported_cc_copied_raw
+ok   sink_full_is_announced
+ok   read_only_surface
+ok   ram_range_discipline
+ok   layout_autodetect_and_pin
+ok   scan_backoff
+ok   end_record
+test_main: 39/49 tests passed, 420 checks, 16 failed
+make: *** [Makefile:12: test] Error 1
+make: Leaving directory '/workspace/sweep-tracer-wt/tools/windows-capture/tests'

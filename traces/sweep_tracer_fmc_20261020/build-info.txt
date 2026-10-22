@@ -1,0 +1,4 @@
+source revision: 8f9bd4e519fdd085c5b90e39542e0a3454145d75
+kit: Microsoft.Windows.WDK.x64 + SDK.CPP 10.0.28000.2526
+clang-cl: Ubuntu clang version 21.1.8 (6ubuntu1)
+lld-link: Ubuntu LLD 19.1.7

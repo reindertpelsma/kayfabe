@@ -1,0 +1,7 @@
+STATUS: LIVE,2026-10-20. Separate Windows tracer topic; product trees unchanged.
+
+CODE READ: direct LibOS discovery omitted the GH100/GB20x FMC indirection, despite compiler-derived public support in the shared QEMU observer. EXPECTED RED838f919b8:39/49 tests pass,16checks fail. Fix retains direct LibOS priority and follows exactly one system-memory FMC pointer only when no RMARGS exists. Original RAM/alignment/args/table/queue checks remain; no new MMIO reads, scan, GPU writes, recursive pointers or timing changes. All families keep their direct route.
+
+MEASURED GPU-free:36/36+display bounds before;49/49+display bounds after,420checks0failures,ASan+UBSan. Thirteen added cases, no original test removed. Seven mutants killed by10/2/6/2/2/2/2 named runtime tests (targeted thirteen FMC cases). Public offsets40/48 and apertures1/2 recompiled from pinned OGKM580.65.06/307159f2623d3bf45feb9177bd2da52ffbc5ddf9; original shared-observer compiler profile also matches. Read-only guard+self-test pass. Windows driver build/load and native Blackwell trace remain UNRUN here.
+
+H_FMC: a live pre-start module can attach via Blackwell FMC and capture sequence-zero prefixes. FALSIFIER: module loads, GSP is confirmed active, and no FMC attachment occurs during the one bounded native activation, or the strict census rejects prefix/loss integrity. Build success never establishes load or capture completeness. No captured constants are shipped.

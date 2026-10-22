@@ -3,6 +3,11 @@
  * Queue discovery. Independent routes to the same object (a "binding": the shared
  * region's page list and the two queue geometries). Read-only.
  *
+ *  2026-10-20 correction: the public GH100/GB20x FMC route is also supported,
+ *  with exactly one system-memory indirection and the same complete validator.
+ *  Synthetic tests pass; native Blackwell coverage remains UNVERIFIED.
+ *  This supersedes the Turing..Ada-only statement below.
+ *
  *  (a) kfwc_discover_mailbox: BAR0 NV_PGSP_FALCON_MAILBOX0/1 -> LibOS init-args array ->
  *      "RMARGS" entry -> MESSAGE_QUEUE_INIT_ARGUMENTS -> page table -> two queues.
  *      This is exactly the chain kayfabe's own GspFsm::publish follows

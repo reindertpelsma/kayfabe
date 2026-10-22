@@ -1,0 +1,5 @@
+kf-census: ogkm 580.65.06, 1 sources, 3804 cmd + 3863 status messages, 215 controls
+oracle: PASS (no gap, no parse failure, no trailing bytes, no unknown function)
+pairing: 0 controls with unanswered requests or orphan replies; rpc.sequence non-zero on 0 messages
+SEQUENCE_ORACLE_OK=true anomalies=0 unbalanced_controls=0 messages=[3804, 3863]
+records 7694 (bind 2, elements 7691, loss 0/0/0), end yes, file check ok
