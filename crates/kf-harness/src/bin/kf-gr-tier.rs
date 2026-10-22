@@ -320,14 +320,31 @@ fn put(walk: &WalkKernel, off: u64, v: u32) -> Result<(), String> {
         .map_err(|e| e.to_string())
 }
 
-/// Poll `fd` once for `ms`: did it become ready?
-fn ready_within(fd: std::os::fd::BorrowedFd<'_>, ms: u32) -> Result<bool, String> {
-    let p = Poller::create().map_err(|e| format!("epoll: {e:?}"))?;
-    p.watch(fd, 1).map_err(|e| format!("watch: {e:?}"))?;
-    let mut r = ReadyTokens::new();
-    Ok(p.wait(&mut r, PollTimeout::Millis(ms))
-        .map_err(|e| format!("wait: {e:?}"))?
-        > 0)
+#[path = "kf-gr-tier/edge_probe.rs"]
+mod edge_probe;
+
+struct EventSource<'fd> {
+    fd: std::os::fd::BorrowedFd<'fd>,
+    poller: Option<Poller>,
+}
+impl edge_probe::Source for EventSource<'_> {
+    fn register(&mut self) -> Result<(), String> {
+        let p = Poller::create().map_err(|e| format!("epoll: {e:?}"))?;
+        p.watch(self.fd, 1).map_err(|e| format!("watch: {e:?}"))?;
+        self.poller = Some(p);
+        Ok(())
+    }
+    fn wait(&mut self, ms: u32) -> Result<bool, String> {
+        let p = self.poller.as_ref().ok_or("unregistered event source")?;
+        let mut r = ReadyTokens::new();
+        Ok(p.wait(&mut r, PollTimeout::Millis(ms))
+            .map_err(|e| format!("wait: {e:?}"))?
+            > 0)
+    }
+}
+
+fn event_source(fd: std::os::fd::BorrowedFd<'_>) -> EventSource<'_> {
+    EventSource { fd, poller: None }
 }
 
 #[allow(clippy::too_many_lines)]
@@ -470,8 +487,10 @@ fn run(l: &mut Checks) -> Result<(), String> {
         .map_err(|e| format!("gr0 event: {e:?}"))?;
     rm.arm_repeat(GR0_NOTIFIER)
         .map_err(|e| format!("gr0 arm: {e:?}"))?;
-    let idle35 = ready_within(done.event_fd(), 200)?;
-    let idle_gr0 = ready_within(gr0.as_fd(), 200)?;
+    let mut fifo_probe = edge_probe::Probe::prepare(event_source(done.event_fd()))?;
+    let mut gr_probe = edge_probe::Probe::prepare(event_source(gr0.as_fd()))?;
+    let idle35 = fifo_probe.ready_within(200)?;
+    let idle_gr0 = gr_probe.ready_within(200)?;
 
     put(&walk, CHAN, 2)?;
     let t0 = std::time::Instant::now();
@@ -487,8 +506,8 @@ fn run(l: &mut Checks) -> Result<(), String> {
         )
     };
     let mut state = pump(&mut chan, &g).map_err(|e| format!("pump: {e:?}"))?;
-    let woke35 = ready_within(done.event_fd(), 1000)?;
-    let woke_gr0 = ready_within(gr0.as_fd(), 300)?;
+    let woke35 = fifo_probe.ready_within(1000)?;
+    let woke_gr0 = gr_probe.ready_within(300)?;
     l.measure(
         "completion_edges",
         format!(
@@ -499,7 +518,7 @@ fn run(l: &mut Checks) -> Result<(), String> {
     while !(state == Pumped::Caught && chan.last_gp_get() == Some(2))
         && std::time::Instant::now() < deadline
     {
-        let _ = ready_within(gr0.as_fd(), 100)?;
+        let _ = gr_probe.ready_within(100)?;
         state = pump(&mut chan, &g).map_err(|e| format!("pump: {e:?}"))?;
     }
     let (fetched, submissions, _) = chan.counts();
@@ -623,13 +642,14 @@ fn run(l: &mut Checks) -> Result<(), String> {
     .map_err(|e| format!("ce event: {e:?}"))?;
     rm.arm_repeat(kf_host::event::notifier_ce(lce))
         .map_err(|e| format!("ce arm: {e:?}"))?;
-    let idle35_ce = ready_within(done.event_fd(), 200)?;
-    let idle_ce = ready_within(ce_fd.as_fd(), 200)?;
+    let mut ce_probe = edge_probe::Probe::prepare(event_source(ce_fd.as_fd()))?;
+    let idle35_ce = fifo_probe.ready_within(200)?;
+    let idle_ce = ce_probe.ready_within(200)?;
     put(&walk, CHAN2, 1)?;
     let t1 = std::time::Instant::now();
     let mut st2 = pump(&mut chan2, &g2).map_err(|e| format!("ce pump: {e:?}"))?;
-    let woke35_ce = ready_within(done.event_fd(), 1000)?;
-    let woke_ce = ready_within(ce_fd.as_fd(), 300)?;
+    let woke35_ce = fifo_probe.ready_within(1000)?;
+    let woke_ce = ce_probe.ready_within(300)?;
     l.measure(
         "ce_completion_edges",
         format!(
@@ -639,7 +659,7 @@ fn run(l: &mut Checks) -> Result<(), String> {
     while !(st2 == Pumped::Caught && chan2.last_gp_get() == Some(1))
         && t1.elapsed() < std::time::Duration::from_secs(3)
     {
-        let _ = ready_within(done.event_fd(), 100)?;
+        let _ = fifo_probe.ready_within(100)?;
         st2 = pump(&mut chan2, &g2).map_err(|e| format!("ce pump: {e:?}"))?;
     }
     let sem2 = word(&walk, CHAN2 + SEM_CE)?;
