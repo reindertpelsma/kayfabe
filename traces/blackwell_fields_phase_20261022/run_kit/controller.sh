@@ -12,14 +12,14 @@ cleanup_controller(){
 }
 trap cleanup_controller EXIT
 echo "SWEEP_PROVISION_START own_instance=FROM_LEASE_RECEIPT $(date -u -Is)"
-export KAYFABE_BRANCH=codex/bw-resume-cont-20261022 CARGO_BUILD_JOBS=8
+export KAYFABE_BRANCH=codex/bw-precomp-fields-20261022 CARGO_BUILD_JOBS=8
 export HOST_DRIVER=595.91.07 KF_HOST_DRIVER=595.91.07
 bash /root/provision_box.sh >/root/prov/box.log 2>&1
 export PATH=/root/.cargo/bin:$PATH
 cd /root/kayfabe
-git fetch --depth 1 origin 8f3a9bb3a5d652b3f536ca015bf95735ec588924
-git checkout --detach 8f3a9bb3a5d652b3f536ca015bf95735ec588924
-[ "$(git rev-parse HEAD)" = 8f3a9bb3a5d652b3f536ca015bf95735ec588924 ]
+git fetch --depth 1 origin 6e3fd3fd6d809ae2c2a3504cd8be1ecd29b2b31b
+git checkout --detach 6e3fd3fd6d809ae2c2a3504cd8be1ecd29b2b31b
+[ "$(git rev-parse HEAD)" = 6e3fd3fd6d809ae2c2a3504cd8be1ecd29b2b31b ]
 [ -z "$(git status --porcelain --untracked-files=no)" ]
 git rev-parse HEAD >/root/prov/sweep_product_source
 nohup bash /root/sweep_windows_media.sh </dev/null >/root/prov/sweep_windows_media_controller.log 2>&1 &
@@ -43,6 +43,23 @@ install -m755 target/release/kf-ctl-probe /tmp/sweep-ctl-probe
 runuser -u nobody -- env KF_PROBE_I_KNOW=1 KF_PROBE_EXTRA_ONLY=1 /tmp/sweep-ctl-probe >/root/prov/sweep_host_die.log 2>&1
 cat /root/prov/sweep_host_die.log
 grep -Eq 'PROBE_DIE .*die=GB202' /root/prov/sweep_host_die.log
+# Only the previously unmeasured own-die PRECOMP permission/reply is new here.
+# AUDIT_SUBTRACT GB202 ZBC/8162/GSS sizes already measured (2026-10-22 owner audit).
+# The container wrapper would rent a second box and repeat those groups: not invoked.
+[ -f scripts/bench/constants/run_container_probe.sh ] && echo S4_KIT_PRESENT_AUDIT_SUBTRACTED
+cargo build --release -p kf-qemu --example precomp_host_read >/root/prov/precomp_build.log 2>&1
+echo "PRECOMP_RUNTIME_BEGIN CAP_SYS_ADMIN=cleared_by_helper $(date -u -Is)"
+precomp_rc=0
+target/release/examples/precomp_host_read 0 >/root/prov/precomp_runtime.txt 2>&1 || precomp_rc=$?
+echo "PRECOMP_RUNTIME_EXIT rc=$precomp_rc $(date -u -Is)" | tee /root/prov/precomp_exit.txt
+[ "$precomp_rc" = 0 ] || [ "$precomp_rc" = 2 ]
+# An ordinary RM read refusal is recorded; T1 virtual derivation has no T2 dependency.
+# Any new host Xid remains fatal before native negative controls.
+python3 - <<'POST_PRECOMP'
+import sys
+sys.path.insert(0,'/root/sweep2/guard/blackwell');import phase_xid_guard as G
+assert not G.N.xid_lines(G.N.kernel_snapshot()),'native Xid during PRECOMP read is fatal'
+POST_PRECOMP
 # Falsifier: a native gate or stock workload fails; do not attribute that to kayfabe.
 bash scripts/bench/v3_gates.sh /root/prov/sweep_gates.log >/root/prov/sweep_gates.run 2>&1
 grep -E '^V3_GATES_SUMMARY pass=9 fail=0 gate10=(PASS|FALLBACK)$' /root/prov/sweep_gates.log
@@ -53,8 +70,8 @@ export KF_DEVICE=kf3
 KF_FROM_HOST=1 bash scripts/fastguest/build_fast_guest.sh /workspace/bench/guest.qcow2 /workspace/bench/fastguest595 >/root/prov/sweep_fast595_build.log 2>&1
 [ "$(sed -n 's/^version=//p' /workspace/bench/fastguest595/driver.STAGED)" = 595.91.07 ]
 # Pin every later workload to this per-revision binary; never pull during a timed run.
-[ -x /workspace/bench/kf3-bins/8f3a9bb3/qemu-system-x86_64 ]
-sha256sum /workspace/bench/kf3-bins/8f3a9bb3/qemu-system-x86_64 >/root/prov/sweep_qemu_sha256
+[ -x /workspace/bench/kf3-bins/6e3fd3fd/qemu-system-x86_64 ]
+sha256sum /workspace/bench/kf3-bins/6e3fd3fd/qemu-system-x86_64 >/root/prov/sweep_qemu_sha256
 echo "SWEEP_BUILD_READY source=$(git rev-parse HEAD) $(date -u -Is)"
 # No unexpected kernel fault may precede the intentionally marked native controls.
 python3 - <<'PRE_NATIVE'
@@ -99,47 +116,57 @@ for i in $(seq 1 60); do [ -f /root/prov/N0_EXPORT_ACK ] && break; [ ! -e /root/
 [ -f /root/prov/N0_EXPORT_ACK ]
 . /root/sweep2/common.sh
 BIN=/workspace/bench/kf3-bins/${BASE:0:8}/qemu-system-x86_64
-for cell in 'on on_precision' 'off off_c'; do
- set -- $cell
+# The new phase authorizes one T1 field-derived ON, then B1 only on observed Code0.
+run_cell(){
+ local run=$1 binary=$2 source=$3 arm_rc=0
  [ ! -e /root/prov/XID_STOP ]; kill -0 "$guard_pid"
- if ! python3 /root/sweep2/budget_start.py "$2"; then echo "CELL_UNRUN_BUDGET $2"; continue; fi
- echo "VALIDATION_ARM_BEGIN $2 $(date -u -Is)"
- bash /root/sweep2/arm.sh "$1" "$2" "$BIN" "$BASE"
+ python3 /root/sweep2/budget_start.py "$run" || { echo "CELL_UNRUN_BUDGET $run"; return 30; }
+ echo "VALIDATION_ARM_BEGIN $run $(date -u -Is)"
+ bash /root/sweep2/arm.sh on "$run" "$binary" "$source" || arm_rc=$?
+ echo "VALIDATION_ARM_RESULT run=$run rc=$arm_rc $(date -u -Is)"
  [ ! -e /root/prov/XID_STOP ]; kill -0 "$guard_pid"
- bash /root/sweep2/collect_bw.sh "$2"
- echo "VALIDATION_ARM_END $2 $(date -u -Is)"
- # Pause for export/push before another arm, bounded by 5 min.
- for i in $(seq 1 300); do [ -f /root/prov/EXPORT_ACK_$2 ] && break; sleep 1; done
- [ -f /root/prov/EXPORT_ACK_$2 ]
-done
-echo "VALIDATION_DONE $(date -u -Is)"
-
-# Optional B1 is sealed before ARM_GO and uses a separately pinned tested binary.
-# VALIDATION_DONE above means the mandatory pair; FINAL_DONE closes the lane.
-if [ -f /root/prov/optional_b1.json ]; then
+ [ -z "$(pgrep -x qemu-system-x86 || true)" ]
+ if [ "$arm_rc" != 0 ]; then
+  case "$arm_rc" in
+   124|255) grep -q GUEST_PANICKED "$VM/logs/${run}_run.log" ;;
+   *) echo "ARM_HARNESS_REFUSAL_STOP run=$run rc=$arm_rc"; exit "$arm_rc" ;;
+  esac
+ fi
+ # Expected guest failure is collected via standard VGA, never another product boot.
+ bash /root/sweep2/collect_bw.sh "$run"
+ echo "VALIDATION_ARM_END $run $(date -u -Is)"
+}
+actual_code0(){
+ python3 -E -s - "$1" <<'ACTUAL_CODE0'
+from pathlib import Path
+import sys
+sys.path.insert(0,'/root/sweep2/guard/blackwell')
+from init_observer import clean,result
+p=Path('/root/prov/arms')/sys.argv[1]
+diag=p/'early_code0.txt'
+assert clean(result(diag.read_text()),0)
+assert 'WINDOWS_INIT_OBSERVER_END code0=1' in (p/'init_observer.log').read_text()
+ACTUAL_CODE0
+}
+run_cell on_precision "$BIN" "$BASE"
+if actual_code0 on_precision; then
+ [ -f /root/prov/optional_b1.json ]
  mapfile -t b1 < <(python3 - <<'B1_META'
-import json,re
+import json,re,hashlib
 from pathlib import Path
 j=json.loads(Path('/root/prov/optional_b1.json').read_text())
-if j.get('enabled'):
- assert j.get('tests_verified_before_arms') is True
- assert re.fullmatch('[0-9a-f]{40}',j['source'])
- assert re.fullmatch('/workspace/bench/kf3-bins/[a-zA-Z0-9_-]+/qemu-system-x86_64',j['binary'])
- import hashlib
- assert hashlib.sha256(Path(j['binary']).read_bytes()).hexdigest()==j['binary_sha256']
- print(j['binary']);print(j['source'])
+assert j.get('enabled') and j.get('tests_verified_before_arms') is True
+assert re.fullmatch('[0-9a-f]{40}',j['source'])
+assert re.fullmatch('/workspace/bench/kf3-bins/[a-zA-Z0-9_-]+/qemu-system-x86_64',j['binary'])
+assert hashlib.sha256(Path(j['binary']).read_bytes()).hexdigest()==j['binary_sha256']
+print(j['binary']);print(j['source'])
 B1_META
  )
- if [ "${#b1[@]}" = 2 ]; then
-  [ ! -e /root/prov/XID_STOP ]; kill -0 "$guard_pid"
-  if ! python3 /root/sweep2/budget_start.py on_b1; then echo OPTIONAL_B1_FIRST_NEXT_LEASE; echo VALIDATION_FINAL_DONE; exit 0; fi
-  bash /root/sweep2/arm.sh on on_b1 "${b1[0]}" "${b1[1]}"
-  [ ! -e /root/prov/XID_STOP ]; kill -0 "$guard_pid"
-  bash /root/sweep2/collect_bw.sh on_b1
-  for i in $(seq 1 300); do [ -f /root/prov/EXPORT_ACK_on_b1 ] && break; sleep 1; done
-  [ -f /root/prov/EXPORT_ACK_on_b1 ]
- else
-  echo OPTIONAL_B1_NOT_READY
- fi
+ [ "${#b1[@]}" = 2 ]
+ if python3 /root/sweep2/budget_start.py on_b1; then
+  run_cell on_b1 "${b1[0]}" "${b1[1]}"
+ else echo OPTIONAL_B1_UNRUN_BUDGET; fi
+else
+ echo OPTIONAL_B1_UNRUN_NO_ACTUAL_CODE0
 fi
 echo "VALIDATION_FINAL_DONE $(date -u -Is)"

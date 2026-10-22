@@ -15,7 +15,7 @@ for _ in range(30):
  if Path(str(p)+'.ready.json').exists():break
  assert child.poll() is None;time.sleep(.1)
 assert Path(str(p)+'.ready.json').exists() and child.poll() is None
-G.atomic_json('/root/prov/secondary_guard_receipt.json',{'pid':child.pid,'source':'e16402b7ca0eae98159ac4a049fd0701b6582a40','sha256':hashlib.sha256(Path(G.__file__).read_bytes()).hexdigest(),'state':'READY before bind and all arms'})
+G.atomic_json('/root/prov/secondary_guard_receipt.json',{'pid':child.pid,'source':'1ac2b51d56ca5fc20bcc08b30c496e20d920635b','sha256':hashlib.sha256(Path(G.__file__).read_bytes()).hexdigest(),'state':'READY before bind and all arms'})
 probe=subprocess.Popen(['sleep','30'])
 try:
  proc=Path('/proc')/str(probe.pid)

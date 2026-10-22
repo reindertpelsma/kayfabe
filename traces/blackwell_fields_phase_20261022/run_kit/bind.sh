@@ -5,7 +5,7 @@ cd /root/kayfabe
 exec >/root/prov/bwr_bind.log 2>&1
 trap 'rc=$?; echo "BIND_EXIT rc=$rc $(date -u -Is)"' EXIT
 [ "$(git rev-parse HEAD)" = $BASE ]
-export WINVM_QEMU=/workspace/bench/kf3-bins/8f3a9bb3/qemu-system-x86_64 CARGO_BUILD_JOBS=16
+export WINVM_QEMU=/workspace/bench/kf3-bins/6e3fd3fd/qemu-system-x86_64 CARGO_BUILD_JOBS=16
 [ -f "$VM/installed" ]
 [ -z "$(pgrep -x qemu-system-x86 || true)" ]
 while IFS= read -r key; do unset "$key"; done < <(compgen -A variable KF3_)
