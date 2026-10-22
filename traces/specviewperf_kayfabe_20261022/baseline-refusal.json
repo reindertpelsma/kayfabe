@@ -1,0 +1,18 @@
+{
+  "classification": "MEASURED",
+  "time": "2026-10-22T05:24:12.352645+02:00",
+  "baseline_revision": "89fc8a222",
+  "phase1_revision": "468a35c9d845afc1938683540acc251bdef90e5a",
+  "baseline_launches": 1,
+  "fix_launches": 0,
+  "failure": "kf3: realize refused: GPU walker bring-up on 0000:01:00.0: cuInit refused: 999 (CUDA_ERROR_UNKNOWN)",
+  "benchmark_subtests": 0,
+  "new_host_xids_since_lock_acquired": 0,
+  "progress_strand_diagnostic_enabled": false,
+  "progress_strand_records": 0,
+  "gp_format_budget_refusals": 0,
+  "scan_budget_refusals": 0,
+  "large_pointer_counter": "UNAVAILABLE: device not realized",
+  "guest_events": "UNAVAILABLE: guest did not boot",
+  "qemu_log_bytes": 3421
+}

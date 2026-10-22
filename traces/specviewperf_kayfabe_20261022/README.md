@@ -1,40 +1,66 @@
-# K1 SPECviewperf 15 campaign, 2026-10-22
+# K1 SPECviewperf 15 — stopped at baseline device realization
 
-STATUS: IN PROGRESS. This checkpoint records the plan before hardware runs.
+STATUS: STOP / PARTIAL, 2026-10-22. No new SPEC workload ran.
 
-CODE READ: requested baseline is the installed 89fc8a222 binary; Phase 1 is
-468a35c9d845afc1938683540acc251bdef90e5a. The evidence branch starts at
-origin/master e64b8e5f6. No production code change is planned.
+MEASURED: baseline 89fc8a222 was launched once at 05:21:39 CEST through the
+production launcher on its own CoW. QEMU exited before boot with:
 
-MEASURED: bounded 120-second flock acquisition succeeded at 05:04:50 CEST.
-Under the lock, the GPU was bound to NVIDIA, nvidia-smi reported RTX 4070 /
-595.91.07 / 0 MiB used, GDM was active, and no QEMU was listed. The published
-VF1 report records both full native iterations and independent restoration.
-G1's published report records 1046 passing GPU-free tests, four existing ignores,
-and thirteen mutants each killed by at least two tests. K1 is rebuilding that
-exact source in its own host directory, with fresh GPU-free tests first.
+```text
+kf3: realize refused: GPU walker bring-up on 0000:01:00.0: cuInit refused: 999 (CUDA_ERROR_UNKNOWN)
+```
 
-INFERRED hypothesis, stated before running either arm: mode-scoped descriptor
-admission prevents CATIA's observed budget failures. FALSIFIER: CATIA subtest
-03 fails after oversized Pointer entries are forwarded, with zero budget
-refusals. A Scan/Window budget refusal instead falsifies the assumption that
-Phase 1 covers the encountered descriptors. Zero oversized Pointer entries
-means that the target case was not exercised; it is not a successful fix proof.
+CODE READ: the lane requires STOP after a safety refusal. No retry, CUDA repair,
+replacement binary, flag change or second arm was attempted. The descriptor
+arm was built successfully but not launched. This is a host CUDA initialization
+failure observed during the baseline launch; its underlying cause is unverified.
+NVIDIA being bound and nvidia-smi succeeding do not establish CUDA initialization.
 
-CODE READ: each arm uses a separate CoW of the same owner disk and copied UEFI
-variables, production run-3440 flags excluding KF3_PROF, with
-KF3_DIAG_PROGRESS=1000. The unchanged VF1 supported CLI runner requests all nine
-workloads in the same order, FullHD, one iteration. No vsync override is applied.
-The runner has a known null ExitCode defect; workload completion and vendor
-composites will be reported independently, without assuming a zero CLI exit.
+MEASURED: exact Phase 1 source 468a35c9d845afc1938683540acc251bdef90e5a passed
+fresh GPU-free release suites: 1046 passed, zero failed, four existing ignores,
+36 groups. build_kf3.sh installed kf3-bins/468a35c9 at 05:20:49 CEST. Baseline
+used installed kf3-bins/89fc8a222. SHA-256 values are in binary-hashes.txt.
+Full logs remain in the authorized host K1 directory: phase1-tests-20261022.log,
+phase1-build-20261022.log and campaign-20261022/boundary-kayfabe-3451/qemu.log.
 
-CODE READ: stop on a new host Xid, more than three TDR cycles in any fifteen
-minutes, or the restoration deadline. Do not extend the deadline or restart a
-failed arm. Restore NVIDIA/GDM by 06:45 CEST. Both native iterations took about
-84 minutes; the remaining deadline may prevent complete coverage of both arms.
-Incomplete/failed results will not be turned into workload composites.
+MEASURED: production flags were read from run 3440, KF3_PROF excluded and
+KF3_DIAG_PROGRESS=1000 set. Generated command.json was asserted equal to that
+flag map. Both arms had fresh CoW disks and copied UEFI variables prepared;
+owner backing size and mtime were unchanged after cleanup. The unchanged VF1
+CLI runner was prepared for FullHD, all nine workloads, one iteration and no
+vsync override; it was never invoked because the guest did not boot.
 
-MEASURED: the six unchanged VF1 runner/export/parser and test files imported
-into this evidence branch pass 26 GPU-free Python tests. No new harness or
-product behavior is claimed by that import. Native reference values and n=2
-spread are retained in vfio-composites.csv; no overall suite score is inferred.
+MEASURED: comparison.csv retains all nine native workload composites from both
+VF1 iterations. Baseline/fix scores and ratios are blank, not zero; every new
+workload is NOT_RUN. No failing SPEC workload or descriptor-fix outcome can be
+identified from a preboot refusal. The native scores are attributed VF1 evidence,
+not new K1 results. No overall suite composite is calculated.
+
+INFERRED hypothesis stated before the attempted run: Phase 1 prevents the
+Pointer-descriptor budget failure. FALSIFIER: CATIA subtest 03 fails after large
+Pointer entries are forwarded with zero budget refusals. MEASURED: not tested;
+there are zero executed workload subtests and no large-entry observation.
+
+MEASURED: new host Xids = 0 in the kernel journal from lock acquisition at
+05:16:11 through cleanup. The log has zero budget/progress event records because
+device initialization refused; these zeros are not an exercised pass. Guest
+153/4101 events, viewperf kills, TDR cycles, pointer_large_entries, presented FPS
+and frame-gap metrics are unavailable. No guest or performance claim follows.
+
+MEASURED: the lane reused 26 runner/parser tests; the added arm guard contract
+started with one missing-module loader error in EXPECTED RED 0d28fd5b4. Final
+Python suites: 41 passed, zero failed. Four hand-applied mutations each fail two
+independent tests; arm-mutations.json records them. No product Rust/C/CUDA change
+was made. The configuration helper retains explicit zero production flags and
+implements new-Xid, >3 cycles/15 minutes and restoration-deadline abort rules;
+those pure tests do not establish end-to-end watcher operation in a booted VM.
+
+MEASURED: both bounded 120-second lock acquisitions succeeded without breaking
+a lock. At 05:24 CEST NVIDIA remained bound, nvidia-smi reported RTX 4070 /
+595.91.07 / 45 MiB, GDM was active and Ubuntu Wayland was Active=yes. Own QEMU,
+broker and deadline helper had exited. Own cargo target, both overlays and copied
+variables were removed; the lock was released. See restoration.json/cleanup.json.
+The installed per-revision binary and its supporting QEMU build remain available.
+
+CODE READ recommendation: restore/verify host CUDA health independently, then
+explicitly resume both original arms; keep the pinned revisions and settings.
+No CUDA reset, driver reload or timer workaround was attempted after the refusal.

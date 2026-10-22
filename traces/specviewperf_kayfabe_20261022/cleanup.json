@@ -1,0 +1,23 @@
+{
+  "classification": "MEASURED",
+  "time": "2026-10-22T05:23:32.044595+02:00",
+  "baseline_launches": 1,
+  "baseline_realize_refused": "cuInit 999 CUDA_ERROR_UNKNOWN",
+  "fix_launches": 0,
+  "backing_checks": [
+    {
+      "classification": "MEASURED",
+      "arm": 3451,
+      "owner_backing_size_unchanged": true,
+      "owner_backing_mtime_unchanged": true
+    },
+    {
+      "classification": "MEASURED",
+      "arm": 3452,
+      "owner_backing_size_unchanged": true,
+      "owner_backing_mtime_unchanged": true
+    }
+  ],
+  "own_cargo_target_deleted": true,
+  "overlays_and_vars_removed": true
+}

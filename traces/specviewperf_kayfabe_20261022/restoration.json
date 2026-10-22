@@ -1,0 +1,11 @@
+{
+  "classification": "MEASURED",
+  "time": "2026-10-22T05:24:12.352823+02:00",
+  "gpu_driver": "nvidia",
+  "gdm": "active",
+  "nvidia_smi": "NVIDIA GeForce RTX 4070, 595.91.07, 45 MiB",
+  "own_qemu_absent": true,
+  "own_broker_absent": true,
+  "own_deadline_helper_absent": true,
+  "own_cargo_target_deleted": true
+}
