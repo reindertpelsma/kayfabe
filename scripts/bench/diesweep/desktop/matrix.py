@@ -40,6 +40,18 @@ class ObservationBudgetExhausted(RuntimeError):
     """App dispatch must stop while its reserved stability/export budget remains."""
 
 
+def budget_items(apps, end, skipped, now=lambda:datetime.datetime.now(datetime.timezone.utc)):
+    partial = False
+    for row in apps:
+        if now() + datetime.timedelta(seconds=row['timeout_s']+690) >= end:
+            partial = True
+            skipped(row)
+            continue
+        yield row
+    if partial:
+        raise ObservationBudgetExhausted('lease observation/export budget exhausted')
+
+
 def run_plan(session, apps, record, health, hold):
     health()
     failed = False
@@ -164,12 +176,16 @@ def main():
              'cup8_ladder', 'dxprobe_d3d11', 'dxprobe_d3d12', 'heaven_d3d11',
              'heaven_opengl', 'valley_d3d11', 'valley_opengl']
     ordered = sorted(doc['apps'], key=lambda x: first.index(x['id']) if x['id'] in first else len(first))
+    budget_skips=[]
+    def skipped(row):
+        facts={'notrun':'lease observation/export budget exhausted',
+               'utc':datetime.datetime.now(datetime.timezone.utc).isoformat()}
+        (out/'apps').mkdir(exist_ok=True)
+        record(g._finish(row,w.V.decide(row,facts,''),'',facts,None,need_restart=''))
+        budget_skips.append(row['id'])
+        (out/'budget_stop.json').write_text(json.dumps({'utc':facts['utc'],'skipped_apps':budget_skips},indent=2)+'\n')
     def rows():
-        for row in ordered:
-            if datetime.datetime.now(datetime.timezone.utc) + datetime.timedelta(seconds=row['timeout_s']+690) >= end:
-                (out / 'budget_stop.json').write_text(json.dumps({'utc':datetime.datetime.now(datetime.timezone.utc).isoformat(),'before_app':row['id'],'reason':'lease observation/export budget exhausted'},indent=2)+'\n')
-                raise ObservationBudgetExhausted('lease observation/export budget exhausted')
-            yield row
+        yield from budget_items(ordered,end,skipped)
     rc = 7
     try:
         log(f'MATRIX_START apps={len(ordered)} source={os.environ.get("S4_SOURCE", "unknown")}')
