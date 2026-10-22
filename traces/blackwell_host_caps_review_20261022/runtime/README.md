@@ -1,5 +1,11 @@
 STATUS: LIVE, 2026-10-22. GPU-free host PRECOMP candidate verification; hardware n=0.
 
+2026-10-22 OWNER-GUIDANCE CORRECTION: these checks prove the current whole-word overlay contract.
+They do not prove derivation-first field policy or truthful CA FVLUT support. PR85 is HELD/draft
+pending the field-level revision described in V3_BLACKWELL_PRECOMP_TIER_AUDIT_20261022.md. Source
+and historic test counts are unchanged; no code or constants changed in this documentation review.
+
+
 Topic base4460f3433; inactive seams/public C evidenceaae3457f4; EXPECTED RED1e07966d0 committed
 alone; implementation4110024dc; identity/provenance strengthening5d96a832a; native H0 probeab91b4acc.
 The failing test commit compiles and fails behaviorally (disp11failed; host10failed/8passed).

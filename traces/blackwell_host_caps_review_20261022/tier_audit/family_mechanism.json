@@ -1,0 +1,217 @@
+{
+  "580.65.06": {
+    "commit": "307159f2623d3bf45feb9177bd2da52ffbc5ddf9",
+    "generation_mechanism": {
+      "GB202": {
+        "display_ip": "DISPv0502",
+        "caps_class": "CA73",
+        "window_class": "CA7E"
+      },
+      "GB203": {
+        "display_ip": "DISPv0502",
+        "caps_class": "CA73",
+        "window_class": "CA7E"
+      },
+      "GB205": {
+        "display_ip": "DISPv0502",
+        "caps_class": "CA73",
+        "window_class": "CA7E"
+      },
+      "GB206": {
+        "display_ip": "DISPv0502",
+        "caps_class": "CA73",
+        "window_class": "CA7E"
+      },
+      "GB207": {
+        "display_ip": "DISPv0502",
+        "caps_class": "CA73",
+        "window_class": "CA7E"
+      }
+    },
+    "sources_sha256": {
+      "src/nvidia/generated/g_chips2halspec_nvoc.h": "917d80d63d44b9d9b90b2f1c6b62e1a2fd511c59427563ecb1a5be774773d9fc",
+      "src/nvidia/generated/g_gpu_class_list.c": "e6c77933352e15cb2c571d8a560949d45120d0e7469228eac2aa6be254c229c3"
+    },
+    "FVLUT_named_in_checkout_files": [
+      "src/common/sdk/nvidia/inc/class/clcb73.h",
+      "src/common/sdk/nvidia/inc/class/clca7d.h",
+      "src/common/sdk/nvidia/inc/class/clcc7d.h",
+      "src/common/sdk/nvidia/inc/class/clcb7d.h",
+      "src/common/sdk/nvidia/inc/class/clca73.h",
+      "src/common/sdk/nvidia/inc/class/clcc73.h"
+    ],
+    "scan_limit": "Literal FVLUT search in available checked-out C/H files; some reference checkouts are sparse. Not an exhaustive semantic-equivalence or absence proof; no public native TRUE rule established."
+  },
+  "580.94.02": {
+    "commit": "a86526f4e235ae3d9e2842a11a3bb11db77450d8",
+    "generation_mechanism": {
+      "GB202": {
+        "display_ip": "DISPv0502",
+        "caps_class": "CA73",
+        "window_class": "CA7E"
+      },
+      "GB203": {
+        "display_ip": "DISPv0502",
+        "caps_class": "CA73",
+        "window_class": "CA7E"
+      },
+      "GB205": {
+        "display_ip": "DISPv0502",
+        "caps_class": "CA73",
+        "window_class": "CA7E"
+      },
+      "GB206": {
+        "display_ip": "DISPv0502",
+        "caps_class": "CA73",
+        "window_class": "CA7E"
+      },
+      "GB207": {
+        "display_ip": "DISPv0502",
+        "caps_class": "CA73",
+        "window_class": "CA7E"
+      }
+    },
+    "sources_sha256": {
+      "src/nvidia/generated/g_chips2halspec_nvoc.h": "917d80d63d44b9d9b90b2f1c6b62e1a2fd511c59427563ecb1a5be774773d9fc",
+      "src/nvidia/generated/g_gpu_class_list.c": "e6c77933352e15cb2c571d8a560949d45120d0e7469228eac2aa6be254c229c3"
+    },
+    "FVLUT_named_in_checkout_files": [
+      "src/common/sdk/nvidia/inc/class/clcb73.h",
+      "src/common/sdk/nvidia/inc/class/clcc7d.h",
+      "src/common/sdk/nvidia/inc/class/clca7d.h",
+      "src/common/sdk/nvidia/inc/class/clca73.h",
+      "src/common/sdk/nvidia/inc/class/clcc73.h",
+      "src/common/sdk/nvidia/inc/class/clcb7d.h"
+    ],
+    "scan_limit": "Literal FVLUT search in available checked-out C/H files; some reference checkouts are sparse. Not an exhaustive semantic-equivalence or absence proof; no public native TRUE rule established."
+  },
+  "580.159.04": {
+    "commit": "b81d58ee0224d1d290bef1c080592b619e184042",
+    "generation_mechanism": {
+      "GB202": {
+        "display_ip": "DISPv0502",
+        "caps_class": "CA73",
+        "window_class": "CA7E"
+      },
+      "GB203": {
+        "display_ip": "DISPv0502",
+        "caps_class": "CA73",
+        "window_class": "CA7E"
+      },
+      "GB205": {
+        "display_ip": "DISPv0502",
+        "caps_class": "CA73",
+        "window_class": "CA7E"
+      },
+      "GB206": {
+        "display_ip": "DISPv0502",
+        "caps_class": "CA73",
+        "window_class": "CA7E"
+      },
+      "GB207": {
+        "display_ip": "DISPv0502",
+        "caps_class": "CA73",
+        "window_class": "CA7E"
+      }
+    },
+    "sources_sha256": {
+      "src/nvidia/generated/g_chips2halspec_nvoc.h": "917d80d63d44b9d9b90b2f1c6b62e1a2fd511c59427563ecb1a5be774773d9fc",
+      "src/nvidia/generated/g_gpu_class_list.c": "1052af1f127ec20ffd9f9ab275269887b196210f9337d2195a7cf78a1036bad3"
+    },
+    "FVLUT_named_in_checkout_files": [
+      "src/common/sdk/nvidia/inc/class/clca7d.h",
+      "src/common/sdk/nvidia/inc/class/clcb7d.h",
+      "src/common/sdk/nvidia/inc/class/clcc73.h",
+      "src/common/sdk/nvidia/inc/class/clcc7d.h",
+      "src/common/sdk/nvidia/inc/class/clcb73.h",
+      "src/common/sdk/nvidia/inc/class/clca73.h"
+    ],
+    "scan_limit": "Literal FVLUT search in available checked-out C/H files; some reference checkouts are sparse. Not an exhaustive semantic-equivalence or absence proof; no public native TRUE rule established."
+  },
+  "590.48.01": {
+    "commit": "2ccbad25e1af6a6ee6f38cf569f89f8b65d658ab",
+    "generation_mechanism": {
+      "GB202": {
+        "display_ip": "DISPv0502",
+        "caps_class": "CA73",
+        "window_class": "CA7E"
+      },
+      "GB203": {
+        "display_ip": "DISPv0502",
+        "caps_class": "CA73",
+        "window_class": "CA7E"
+      },
+      "GB205": {
+        "display_ip": "DISPv0502",
+        "caps_class": "CA73",
+        "window_class": "CA7E"
+      },
+      "GB206": {
+        "display_ip": "DISPv0502",
+        "caps_class": "CA73",
+        "window_class": "CA7E"
+      },
+      "GB207": {
+        "display_ip": "DISPv0502",
+        "caps_class": "CA73",
+        "window_class": "CA7E"
+      }
+    },
+    "sources_sha256": {
+      "src/nvidia/generated/g_chips2halspec_nvoc.h": "917d80d63d44b9d9b90b2f1c6b62e1a2fd511c59427563ecb1a5be774773d9fc",
+      "src/nvidia/generated/g_gpu_class_list.c": "9955eb7d341b7fac815472c52f9e9358f8ef6d86a32f965c036f6d85a0f41a8c"
+    },
+    "FVLUT_named_in_checkout_files": [
+      "src/common/sdk/nvidia/inc/class/clca7d.h",
+      "src/common/sdk/nvidia/inc/class/clcb7d.h",
+      "src/common/sdk/nvidia/inc/class/clcc73.h",
+      "src/common/sdk/nvidia/inc/class/clcb73.h",
+      "src/common/sdk/nvidia/inc/class/clca73.h",
+      "src/common/sdk/nvidia/inc/class/clcc7d.h"
+    ],
+    "scan_limit": "Literal FVLUT search in available checked-out C/H files; some reference checkouts are sparse. Not an exhaustive semantic-equivalence or absence proof; no public native TRUE rule established."
+  },
+  "595.91.07": {
+    "commit": "9f087a6d4e86d85acc0ce1d354d6276fe5047b29",
+    "generation_mechanism": {
+      "GB202": {
+        "display_ip": "DISPv0502",
+        "caps_class": "CA73",
+        "window_class": "CA7E"
+      },
+      "GB203": {
+        "display_ip": "DISPv0502",
+        "caps_class": "CA73",
+        "window_class": "CA7E"
+      },
+      "GB205": {
+        "display_ip": "DISPv0502",
+        "caps_class": "CA73",
+        "window_class": "CA7E"
+      },
+      "GB206": {
+        "display_ip": "DISPv0502",
+        "caps_class": "CA73",
+        "window_class": "CA7E"
+      },
+      "GB207": {
+        "display_ip": "DISPv0502",
+        "caps_class": "CA73",
+        "window_class": "CA7E"
+      }
+    },
+    "sources_sha256": {
+      "src/nvidia/generated/g_chips2halspec_nvoc.h": "917d80d63d44b9d9b90b2f1c6b62e1a2fd511c59427563ecb1a5be774773d9fc",
+      "src/nvidia/generated/g_gpu_class_list.c": "a4e4fca0b727f3380f5c77cc96b823096ca8538f7a04bb0e9364c80d651a2a3f"
+    },
+    "FVLUT_named_in_checkout_files": [
+      "src/common/sdk/nvidia/inc/class/clca7d.h",
+      "src/common/sdk/nvidia/inc/class/clcb7d.h",
+      "src/common/sdk/nvidia/inc/class/clcc73.h",
+      "src/common/sdk/nvidia/inc/class/clca73.h",
+      "src/common/sdk/nvidia/inc/class/clcb73.h",
+      "src/common/sdk/nvidia/inc/class/clcc7d.h"
+    ],
+    "scan_limit": "Literal FVLUT search in available checked-out C/H files; some reference checkouts are sparse. Not an exhaustive semantic-equivalence or absence proof; no public native TRUE rule established."
+  }
+}

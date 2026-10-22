@@ -1,4 +1,14 @@
-**STATUS: LIVE, 2026-10-22.** GPU-free comparison, public access audit and implemented runtime candidate; register permission and Windows behavior remain hardware-unverified. No rental authorized by this document.
+**STATUS: RESEARCH, 2026-10-22.** Public access candidate; whole-PRECOMP guest overlay HELD after owner-directed tier audit. Hardware n=0; no rental.
+
+2026-10-22 owner-guidance correction: derive each field from public/generated sources and the
+virtual implementation before considering host facts. The whole-word T2 override described below
+is the current code, not the approved final design: it can overwrite existing T1 rules and advertise
+unimplemented CA features. PR85 remains draft/HELD pending a field-level revision. Precision14 is
+an inferred virtual candidate, not a proven physical-generation constant. Complete41-field inventory,
+GB202/203/205/206/207 layout mechanism, per-field tiers and falsifiers:
+[V3_BLACKWELL_PRECOMP_TIER_AUDIT_20261022.md](V3_BLACKWELL_PRECOMP_TIER_AUDIT_20261022.md).
+No captured page is imported or replayed in this review. The earlier access audit remains valid.
+
 
 The clean precision-only ON failure leaves one named CAPC difference: CSC0LUT_FVLUT.
 The earlier native read was privileged BAR0 mapping, not an unprivileged RM control. The

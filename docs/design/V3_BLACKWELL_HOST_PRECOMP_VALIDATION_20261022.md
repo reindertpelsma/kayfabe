@@ -1,5 +1,14 @@
 **STATUS: DESIGN-ONLY, 2026-10-22.** One future lease plan; no rental or new execution window is authorized by this document.
 
+2026-10-22 OWNER-GUIDANCE HOLD supersedes the executable interpretation of the proposed arms below:
+first finish the field-level derivation/virtual-support contract in
+[V3_BLACKWELL_PRECOMP_TIER_AUDIT_20261022.md](V3_BLACKWELL_PRECOMP_TIER_AUDIT_20261022.md), test-first.
+The current whole-PRECOMP T2 overlay is not ready for this validation lease. Its green overlay tests
+do not prove tier priority or complete CA FVLUT behavior. Keep the arms/cost calculations as historical
+planning inputs; no rental follows from them. The independent Code0 observer/deadline prerequisites
+also remain. Captures validate a derivation; no GB202 words are replayed or shipped.
+
+
 The previous precision-only ON arm reproduced0x50. The next question is whether a lawful,
 complete same-die host PRECOMP snapshot gets Windows580.88 past that allocation, and then
 whether the isolated translated-RC topic changes the resulting fault/recovery path. Public
