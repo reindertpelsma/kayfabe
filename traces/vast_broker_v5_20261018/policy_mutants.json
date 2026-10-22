@@ -1,0 +1,505 @@
+[
+  {
+    "mutant": "default-price",
+    "count": 7,
+    "killers": [
+      "V5 one-place owner defaults money",
+      "V5 default price admits approved sub-cap production offer",
+      "V5 owner one dollar hourly cap configuration",
+      "V5 owner one dollar hourly cap admission",
+      "V5 default hourly boundary 1",
+      "V5 daily liability includes cron margin 1",
+      "V5 daily liability includes cron margin 0.99"
+    ]
+  },
+  {
+    "mutant": "default-daily",
+    "count": 2,
+    "killers": [
+      "V5 one-place owner defaults money",
+      "V5 default daily allowance admits existing five-dollar liability"
+    ]
+  },
+  {
+    "mutant": "default-reserve",
+    "count": 2,
+    "killers": [
+      "V5 one-place owner defaults money",
+      "V5 default reserve refuses insufficient prepaid credit"
+    ]
+  },
+  {
+    "mutant": "default-rolling",
+    "count": 2,
+    "killers": [
+      "V5 one-place owner defaults money",
+      "V5 default rolling cap accounts for earlier-day cost"
+    ]
+  },
+  {
+    "mutant": "default-boot",
+    "count": 2,
+    "killers": [
+      "V5 one-place owner defaults clock",
+      "V5 default reservation binds owner clock plan into the lease"
+    ]
+  },
+  {
+    "mutant": "default-hard",
+    "count": 4,
+    "killers": [
+      "V5 one-place owner defaults clock",
+      "V5 default reserve refuses insufficient prepaid credit",
+      "V5 default rolling cap accounts for earlier-day cost",
+      "V5 default reservation binds owner clock plan into the lease"
+    ]
+  },
+  {
+    "mutant": "default-soft-margin",
+    "count": 6,
+    "killers": [
+      "V5 one-place owner defaults clock",
+      "V5 BOOTING persists absolute creation clocks false",
+      "V5 BOOTING persists absolute creation clocks true",
+      "V5 CREATING reservation precedes provider side effect 0",
+      "V5 CREATING reservation precedes provider side effect 300000",
+      "V5 default reservation binds owner clock plan into the lease"
+    ]
+  },
+  {
+    "mutant": "default-manual-ceiling",
+    "count": 2,
+    "killers": [
+      "V5 one-place owner defaults clock",
+      "V5 default reservation binds owner clock plan into the lease"
+    ]
+  },
+  {
+    "mutant": "default-pass-grace",
+    "count": 2,
+    "killers": [
+      "V5 one-place owner defaults clock",
+      "V5 unbound default grace reaches the stored deadline PASS"
+    ]
+  },
+  {
+    "mutant": "default-fail-grace",
+    "count": 2,
+    "killers": [
+      "V5 one-place owner defaults clock",
+      "V5 unbound default grace reaches the stored deadline FAIL"
+    ]
+  },
+  {
+    "mutant": "create-reservation-phase",
+    "count": 2,
+    "killers": [
+      "V5 CREATING reservation precedes provider side effect 0",
+      "V5 CREATING reservation precedes provider side effect 300000"
+    ]
+  },
+  {
+    "mutant": "boot-phase",
+    "count": 4,
+    "killers": [
+      "V5 BOOTING persists absolute creation clocks false",
+      "V5 BOOTING persists absolute creation clocks true",
+      "V5 CREATING reservation precedes provider side effect 0",
+      "V5 CREATING reservation precedes provider side effect 300000"
+    ]
+  },
+  {
+    "mutant": "immutable-clock",
+    "count": 6,
+    "killers": [
+      "V5 BOOTING persists absolute creation clocks false",
+      "V5 BOOTING persists absolute creation clocks true",
+      "V5 authenticated hold stops grace and heartbeat PASS",
+      "V5 authenticated hold stops grace and heartbeat FAIL",
+      "V5 repeated hold cannot extend hard or manual ceiling false",
+      "V5 repeated hold cannot extend hard or manual ceiling true"
+    ]
+  },
+  {
+    "mutant": "boot-timeout",
+    "count": 2,
+    "killers": [
+      "V5 boot gets forty minutes before first callback false",
+      "V5 boot gets forty minutes before first callback true"
+    ]
+  },
+  {
+    "mutant": "heartbeat-timeout",
+    "count": 2,
+    "killers": [
+      "V5 missing heartbeat destroys at fifteen minutes false",
+      "V5 missing heartbeat destroys at fifteen minutes true"
+    ]
+  },
+  {
+    "mutant": "empty-heartbeat",
+    "count": 2,
+    "killers": [
+      "V5 empty log heartbeat advances last-post timestamp false",
+      "V5 empty log heartbeat advances last-post timestamp true"
+    ]
+  },
+  {
+    "mutant": "hard-in-manual",
+    "count": 2,
+    "killers": [
+      "V5 repeated hold cannot extend hard or manual ceiling false",
+      "V5 repeated hold cannot extend hard or manual ceiling true"
+    ]
+  },
+  {
+    "mutant": "manual-ceiling",
+    "count": 2,
+    "killers": [
+      "V5 owner stop-timer leaves absolute MANUAL ceiling false",
+      "V5 owner stop-timer leaves absolute MANUAL ceiling true"
+    ]
+  },
+  {
+    "mutant": "hold-grace-and-heartbeat",
+    "count": 8,
+    "killers": [
+      "V5 authenticated hold stops grace and heartbeat PASS",
+      "V5 authenticated hold stops grace and heartbeat FAIL",
+      "V5 owner stop-timer leaves absolute MANUAL ceiling false",
+      "V5 owner stop-timer leaves absolute MANUAL ceiling true",
+      "V5 MANUAL cron always writes Worker-authored status false",
+      "V5 MANUAL cron always writes Worker-authored status true",
+      "V5 stop-timer checks extended billing liability daily",
+      "V5 stop-timer checks extended billing liability credit"
+    ]
+  },
+  {
+    "mutant": "hold-auth",
+    "count": 2,
+    "killers": [
+      "V5 hold refuses non-box capability bad",
+      "V5 hold refuses non-box capability moc"
+    ]
+  },
+  {
+    "mutant": "owner-timer-auth",
+    "count": 2,
+    "killers": [
+      "V5 only owner may remove hard limit box",
+      "V5 only owner may remove hard limit oidc"
+    ]
+  },
+  {
+    "mutant": "timer-extension-liability",
+    "count": 2,
+    "killers": [
+      "V5 stop-timer checks extended billing liability daily",
+      "V5 stop-timer checks extended billing liability credit"
+    ]
+  },
+  {
+    "mutant": "manual-cron-status",
+    "count": 4,
+    "killers": [
+      "V5 MANUAL cron always writes Worker-authored status false",
+      "V5 MANUAL cron always writes Worker-authored status true",
+      "V5 MANUAL cron line survives provider errors false",
+      "V5 MANUAL cron line survives provider errors true"
+    ]
+  },
+  {
+    "mutant": "worker-tail-bounds",
+    "count": 2,
+    "killers": [
+      "V5 Worker-authored tail shares bounds lines",
+      "V5 Worker-authored tail shares bounds bytes"
+    ]
+  },
+  {
+    "mutant": "creation-based-soft-deadline",
+    "count": 2,
+    "killers": [
+      "V5 CREATING reservation precedes provider side effect 0",
+      "V5 CREATING reservation precedes provider side effect 300000"
+    ]
+  },
+  {
+    "mutant": "hold-helper-scope",
+    "count": 2,
+    "killers": [
+      "V5 generated hold helper is scoped HTTPS 0",
+      "V5 generated hold helper is scoped HTTPS 44"
+    ]
+  },
+  {
+    "mutant": "ssh-login-hold",
+    "count": 2,
+    "killers": [
+      "V5 profile hold hook runs only on SSH login ipv4",
+      "V5 profile hold hook runs only on SSH login ipv6"
+    ]
+  },
+  {
+    "mutant": "heartbeat-after-cap",
+    "count": 4,
+    "killers": [
+      "V5 empty-log heartbeat survives sender cap attempts",
+      "V5 empty-log heartbeat survives sender cap bytes",
+      "V5 sender busy output cannot starve heartbeat attempts",
+      "V5 sender busy output cannot starve heartbeat bytes"
+    ]
+  },
+  {
+    "mutant": "heartbeat-busy-branch",
+    "count": 2,
+    "killers": [
+      "V5 sender busy output cannot starve heartbeat attempts",
+      "V5 sender busy output cannot starve heartbeat bytes"
+    ]
+  },
+  {
+    "mutant": "heartbeat-ten-minutes",
+    "count": 3,
+    "killers": [
+      "V5 one-place owner defaults clock",
+      "V5 sender busy output cannot starve heartbeat attempts",
+      "V5 sender busy output cannot starve heartbeat bytes"
+    ]
+  },
+  {
+    "mutant": "soft-expired-no-work",
+    "count": 2,
+    "killers": [
+      "V5 expired creation soft deadline exits timeout 173",
+      "V5 expired creation soft deadline exits timeout 181"
+    ]
+  },
+  {
+    "mutant": "shipped-numeric-overrides",
+    "count": 2,
+    "killers": [
+      "V5 shipped money derives from one policy file",
+      "V5 shipped clocks derives from one policy file"
+    ]
+  },
+  {
+    "mutant": "mandatory-verification",
+    "count": 6,
+    "killers": [
+      "V5 rejects odd/missing forced field verification undefined RTX 4070",
+      "V5 rejects odd/missing forced field verification unverified RTX 4070",
+      "V5 rejects odd/missing forced field verified false RTX 4070",
+      "V5 rejects odd/missing forced field verification undefined RTX 4090",
+      "V5 rejects odd/missing forced field verification unverified RTX 4090",
+      "V5 rejects odd/missing forced field verified false RTX 4090"
+    ]
+  },
+  {
+    "mutant": "host-capability",
+    "count": 6,
+    "killers": [
+      "V5 rejects odd/missing forced field vms_enabled false RTX 4070",
+      "V5 rejects odd/missing forced field rented true RTX 4070",
+      "V5 rejects odd/missing forced field num_gpus 2 RTX 4070",
+      "V5 rejects odd/missing forced field vms_enabled false RTX 4090",
+      "V5 rejects odd/missing forced field rented true RTX 4090",
+      "V5 rejects odd/missing forced field num_gpus 2 RTX 4090"
+    ]
+  },
+  {
+    "mutant": "known-bad-machine",
+    "count": 2,
+    "killers": [
+      "V5 rejects odd/missing forced field machine_id 42636 RTX 4070",
+      "V5 rejects odd/missing forced field machine_id 42636 RTX 4090"
+    ]
+  },
+  {
+    "mutant": "quality-reliability",
+    "count": 4,
+    "killers": [
+      "V5 rejects odd/missing forced field reliability 0.97 RTX 4070",
+      "V5 rejects odd/missing forced field reliability undefined RTX 4070",
+      "V5 rejects odd/missing forced field reliability 0.97 RTX 4090",
+      "V5 rejects odd/missing forced field reliability undefined RTX 4090"
+    ]
+  },
+  {
+    "mutant": "quality-cpu-ram",
+    "count": 8,
+    "killers": [
+      "V5 rejects odd/missing forced field cpu_ram 16000 RTX 4070",
+      "V5 rejects odd/missing forced field cpu_ram undefined RTX 4070",
+      "V5 rejects odd/missing forced field cpu_cores_effective 4 RTX 4070",
+      "V5 rejects odd/missing forced field cpu_ghz 1 RTX 4070",
+      "V5 rejects odd/missing forced field cpu_ram 16000 RTX 4090",
+      "V5 rejects odd/missing forced field cpu_ram undefined RTX 4090",
+      "V5 rejects odd/missing forced field cpu_cores_effective 4 RTX 4090",
+      "V5 rejects odd/missing forced field cpu_ghz 1 RTX 4090"
+    ]
+  },
+  {
+    "mutant": "quality-relative-performance",
+    "count": 2,
+    "killers": [
+      "V5 relative performance floor within class GA106",
+      "V5 relative performance floor within class AD104"
+    ]
+  },
+  {
+    "mutant": "quality-network",
+    "count": 4,
+    "killers": [
+      "V5 rejects odd/missing forced field inet_down 10 RTX 4070",
+      "V5 rejects odd/missing forced field inet_up 1 RTX 4070",
+      "V5 rejects odd/missing forced field inet_down 10 RTX 4090",
+      "V5 rejects odd/missing forced field inet_up 1 RTX 4090"
+    ]
+  },
+  {
+    "mutant": "quality-disk",
+    "count": 2,
+    "killers": [
+      "V5 rejects odd/missing forced field disk_bw 10 RTX 4070",
+      "V5 rejects odd/missing forced field disk_bw 10 RTX 4090"
+    ]
+  },
+  {
+    "mutant": "quality-driver",
+    "count": 4,
+    "killers": [
+      "V5 rejects odd/missing forced field driver_version 999.1 RTX 4070",
+      "V5 rejects odd/missing forced field driver_version undefined RTX 4070",
+      "V5 rejects odd/missing forced field driver_version 999.1 RTX 4090",
+      "V5 rejects odd/missing forced field driver_version undefined RTX 4090"
+    ]
+  },
+  {
+    "mutant": "turing-class-floor",
+    "count": 2,
+    "killers": [
+      "V5 rejects pre-Turing capability classification RTX 4070",
+      "V5 rejects pre-Turing capability classification RTX 4090"
+    ]
+  },
+  {
+    "mutant": "gpu-deny-list",
+    "count": 2,
+    "killers": [
+      "V5 denies configured GPU class RTX 4070",
+      "V5 denies configured GPU class RTX 4090"
+    ]
+  },
+  {
+    "mutant": "effective-price-includes-network",
+    "count": 2,
+    "killers": [
+      "V5 effective cap includes inet_up_cost",
+      "V5 effective cap includes inet_down_cost"
+    ]
+  },
+  {
+    "mutant": "storage-consistency",
+    "count": 2,
+    "killers": [
+      "V5 rejects odd/missing forced field dph_total 0.01 RTX 4070",
+      "V5 rejects odd/missing forced field dph_total 0.01 RTX 4090"
+    ]
+  },
+  {
+    "mutant": "check-die-enforcement",
+    "count": 3,
+    "killers": [
+      "V5 availability exposes only policy fields check",
+      "V5 check refuses non-listed class RTX 4060",
+      "V5 check refuses non-listed class RTX A6000"
+    ]
+  },
+  {
+    "mutant": "sweep-owner-only",
+    "count": 2,
+    "killers": [
+      "V5 valid PR identity cannot use sweep false",
+      "V5 valid PR identity cannot use sweep true"
+    ]
+  },
+  {
+    "mutant": "preference-order-forced",
+    "count": 4,
+    "killers": [
+      "V5 preference intersection is forced AD107,GA106",
+      "V5 preference intersection is forced UNKNOWN,GA106",
+      "V5 empty allowed preference intersection refuses 1",
+      "V5 empty allowed preference intersection refuses 0"
+    ]
+  },
+  {
+    "mutant": "rotation-ledger",
+    "count": 2,
+    "killers": [
+      "V5 sweep deterministic rotation persists false",
+      "V5 sweep deterministic rotation persists true"
+    ]
+  },
+  {
+    "mutant": "rotation-skip-recent",
+    "count": 2,
+    "killers": [
+      "V5 sweep skips recently passed class GA106",
+      "V5 sweep skips recently passed class AD104"
+    ]
+  },
+  {
+    "mutant": "offers-sixty-second-cache",
+    "count": 6,
+    "killers": [
+      "V5 availability caches provider reads check",
+      "V5 availability caches provider reads sweep",
+      "V5 admission rate limits and bounds provider calls 31",
+      "V5 admission rate limits and bounds provider calls 40",
+      "V5 failed offer reads are cached 2",
+      "V5 failed offer reads are cached 4"
+    ]
+  },
+  {
+    "mutant": "admission-rate-bound",
+    "count": 2,
+    "killers": [
+      "V5 admission rate limits and bounds provider calls 31",
+      "V5 admission rate limits and bounds provider calls 40"
+    ]
+  },
+  {
+    "mutant": "separate-profile-daily",
+    "count": 2,
+    "killers": [
+      "V5 profile daily budgets stay separate check",
+      "V5 opposite profile liability does not spend check daily sweep"
+    ]
+  },
+  {
+    "mutant": "network-liability-not-amortised",
+    "count": 2,
+    "killers": [
+      "V5 full network allowance remains reserved false",
+      "V5 full network allowance remains reserved true"
+    ]
+  },
+  {
+    "mutant": "learn-frozen-kvm",
+    "count": 2,
+    "killers": [
+      "V5 learns frozen KVM failure only at boot expiry false",
+      "V5 learns frozen KVM failure only at boot expiry true"
+    ]
+  },
+  {
+    "mutant": "force-choice-on-refusal",
+    "count": 2,
+    "killers": [
+      "V5 budget refusal reports forced preference UNKNOWN",
+      "V5 budget refusal reports forced preference AD107"
+    ]
+  }
+]

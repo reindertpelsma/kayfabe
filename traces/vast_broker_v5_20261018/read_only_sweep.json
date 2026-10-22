@@ -1,0 +1,149 @@
+{
+  "run": "v5-readonly-20261022-availability-1-sweep",
+  "status": 200,
+  "data": {
+    "profile": "sweep",
+    "offers": [
+      {
+        "die": "AD103",
+        "gpu_name": "RTX_4080S",
+        "compute_cap": 890,
+        "count": 1,
+        "effective_hourly": 1.1110243055555555,
+        "estimated_total": 3.3512210648148146,
+        "kvm": true
+      },
+      {
+        "die": "CC_120",
+        "gpu_name": "RTX_PRO_5000",
+        "compute_cap": 1200,
+        "count": 1,
+        "effective_hourly": 0.9870729166666666,
+        "estimated_total": 2.9765631944444446,
+        "kvm": true
+      },
+      {
+        "die": "CC_89",
+        "gpu_name": "RTX_4070S_TI",
+        "compute_cap": 890,
+        "count": 1,
+        "effective_hourly": 0.51734375,
+        "estimated_total": 1.5588090277777777,
+        "kvm": true
+      },
+      {
+        "die": "GB203",
+        "gpu_name": "RTX_5070_TI",
+        "compute_cap": 1200,
+        "count": 2,
+        "effective_hourly": 0.3384027777777778,
+        "estimated_total": 1.0203564814814814,
+        "kvm": true
+      },
+      {
+        "die": "TU106",
+        "gpu_name": "RTX_2060S",
+        "compute_cap": 750,
+        "count": 1,
+        "effective_hourly": 0.16880208333333332,
+        "estimated_total": 0.5088506944444444,
+        "kvm": true
+      }
+    ],
+    "thresholds": {
+      "reliability": 0.98,
+      "cores": 8,
+      "cpuGhz": 2,
+      "ramMb": 34360,
+      "downMbps": 200,
+      "upMbps": 50,
+      "diskMbps": 100,
+      "medianRatio": 0.5,
+      "price": 2.5,
+      "bandwidth_down_gb": 15,
+      "bandwidth_up_gb": 2,
+      "verified": 1
+    },
+    "rejected": {
+      "CPU_RAM": 15,
+      "DRIVER": 18,
+      "VERIFICATION": 16,
+      "NETWORK": 3,
+      "RELIABILITY": 14,
+      "PERFORMANCE": 4,
+      "DISK_BW": 3,
+      "DIE": 2
+    },
+    "verified_counts": [
+      {
+        "die": "AD102",
+        "total": 10,
+        "verified": 5
+      },
+      {
+        "die": "AD103",
+        "total": 2,
+        "verified": 1
+      },
+      {
+        "die": "AD106",
+        "total": 2,
+        "verified": 2
+      },
+      {
+        "die": "CC_120",
+        "total": 2,
+        "verified": 2
+      },
+      {
+        "die": "CC_86",
+        "total": 1,
+        "verified": 0
+      },
+      {
+        "die": "CC_89",
+        "total": 3,
+        "verified": 3
+      },
+      {
+        "die": "GA102",
+        "total": 6,
+        "verified": 2
+      },
+      {
+        "die": "GA106",
+        "total": 2,
+        "verified": 1
+      },
+      {
+        "die": "GB202",
+        "total": 5,
+        "verified": 3
+      },
+      {
+        "die": "GB203",
+        "total": 2,
+        "verified": 2
+      },
+      {
+        "die": "GB205",
+        "total": 2,
+        "verified": 2
+      },
+      {
+        "die": "TU106",
+        "total": 2,
+        "verified": 2
+      },
+      {
+        "die": "TU116",
+        "total": 1,
+        "verified": 1
+      }
+    ],
+    "cache": {
+      "hit": false,
+      "age_ms": 787
+    }
+  }
+}

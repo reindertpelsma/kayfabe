@@ -1,12 +1,13 @@
+import {DEFAULTS} from './defaults.js';
 // SPDX-License-Identifier: Apache-2.0 OR GPL-2.0-or-later
 export class BrokerError extends Error {
-  constructor(state='UNAVAILABLE',status=503){super(state);this.state=state;this.status=status;}
+  constructor(state='UNAVAILABLE',status=503,reason){super(state);this.state=state;this.status=status;this.reason=reason;}
 }
-export function refuse(state='UNAVAILABLE',status=503){throw new BrokerError(state,status);}
+export function refuse(state='UNAVAILABLE',status=503,reason){throw new BrokerError(state,status,reason);}
 export const numericId=v=>typeof v==='string'&&/^[1-9][0-9]{0,19}$/.test(v);
 export const hexSha=v=>typeof v==='string'&&/^[0-9a-f]{40}$/.test(v);
 export const IMAGE='docker.io/vastai/kvm:ubuntu_cli_22.04-2025-05-16';
-export const MODELS=['RTX_4070','RTX_4070_Super','RTX_4080','RTX_4090'];
+export const MODELS=[]; // Historical local-smoke import only; production has no SKU query whitelist.
 export function configuration(env){
   const number=(name,fallback,max=1000)=>{const raw=env[name]??String(fallback);if(typeof raw!=='string'||!/^\d+(\.\d+)?$/.test(raw))refuse();const n=Number(raw);if(!Number.isFinite(n)||n<=0||n>max)refuse();return n;};
   if(!numericId(env.OWNER_GITHUB_ID)||!/^[-\w.]+\/[-\w.]+$/.test(env.REPOSITORY||''))refuse();
@@ -17,12 +18,30 @@ export function configuration(env){
   if(!['true','false'].includes(env.RENT_DRAFTS??'false'))refuse();
   const list=(name,fallback)=>{let value;try{value=JSON.parse(env[name]??JSON.stringify(fallback));}catch{refuse();}if(!Array.isArray(value)||value.length>32||!value.every(x=>typeof x==='string'&&x.length>0&&x.length<=128&&/^[A-Za-z0-9_.*?/-]+$/.test(x)))refuse();return value;};
   const bases=list('ALLOWED_BASE_BRANCHES',['master']),patterns=list('PATH_SKIP_PATTERNS',['**/*.md','docs/**','traces/**','archive/**','LICENSE*','.github/ISSUE_TEMPLATE/**']);
-  const cfg={reportCount:number('MAX_REPORTS',2000,2000),reportBytes:number('MAX_REPORT_BYTES',4194304,4194304),reportRate:number('REPORT_RATE_LIMIT',20,20),bases,patterns,repo:env.REPOSITORY,owner:env.OWNER_GITHUB_ID,audience:env.WORKER_URL,mode,drafts:env.RENT_DRAFTS==='true',
-    reserve:number('CREDIT_RESERVE_USD',8),price:number('MAX_PRICE_USD_HOUR',.5,2),ttl:number('TTL_MINUTES',20,60)*60000,
-    provision:number('PROVISION_MINUTES',10,10)*60000,grace:number('POST_RESULT_GRACE_MINUTES',5,15)*60000,cronPeriod:60000,
-    dailyCount:number('DAILY_RENTALS',4,20),daily:number('DAILY_SPEND_USD',3),rolling:number('ROLLING_SPEND_USD',30),gap:number('SHA_GAP_HOURS',24,720)*3600000};
-  if(![cfg.reportCount,cfg.reportBytes,cfg.reportRate].every(Number.isInteger))refuse();
-  if(!Number.isInteger(cfg.dailyCount)||![cfg.ttl,cfg.provision,cfg.grace].every(x=>Number.isInteger(x/60000)))refuse();
+  const cfg={reportCount:number('MAX_REPORTS',DEFAULTS.reportCount,DEFAULTS.reportCount),reportBytes:number('MAX_REPORT_BYTES',DEFAULTS.reportBytes,DEFAULTS.reportBytes),reportRate:number('REPORT_RATE_LIMIT',DEFAULTS.reportRate,DEFAULTS.reportRate),bases,patterns,repo:env.REPOSITORY,owner:env.OWNER_GITHUB_ID,audience:env.WORKER_URL,mode,drafts:env.RENT_DRAFTS==='true',
+    reserve:number('CREDIT_RESERVE_USD',DEFAULTS.reserve),price:number('MAX_PRICE_USD_HOUR',DEFAULTS.price,2),
+    boot:number('BOOT_LIMIT_MINUTES',DEFAULTS.bootMinutes,DEFAULTS.maxMinutes)*60000,
+    hard:number('HARD_RUNTIME_MINUTES',DEFAULTS.hardMinutes,DEFAULTS.maxMinutes)*60000,
+    softMargin:DEFAULTS.softMarginMinutes*60000,heartbeat:DEFAULTS.heartbeatMinutes*60000,heartbeatTimeout:DEFAULTS.heartbeatTimeoutMinutes*60000,
+    passGrace:number('PASS_GRACE_MINUTES',DEFAULTS.passGraceMinutes,DEFAULTS.maxMinutes)*60000,failGrace:number('FAIL_GRACE_MINUTES',DEFAULTS.failGraceMinutes,DEFAULTS.maxMinutes)*60000,
+    manualCeiling:number('MANUAL_CEILING_MINUTES',DEFAULTS.manualCeilingMinutes,DEFAULTS.maxMinutes)*60000,cronPeriod:DEFAULTS.cronPeriod,
+    dailyCount:number('DAILY_RENTALS',DEFAULTS.dailyCount,20),daily:number('DAILY_SPEND_USD',DEFAULTS.daily),rolling:number('ROLLING_SPEND_USD',DEFAULTS.rolling),gap:number('SHA_GAP_HOURS',DEFAULTS.gapHours,720)*3600000};
+  if(![cfg.reportCount,cfg.reportBytes,cfg.reportRate,cfg.dailyCount].every(Number.isInteger))refuse();
+  if(![cfg.boot,cfg.hard,cfg.passGrace,cfg.failGrace,cfg.manualCeiling].every(x=>Number.isInteger(x/60000))||cfg.hard<=cfg.softMargin)refuse();
+  // Internal duration aliases keep persisted cost rows readable; all scheduling
+  // decisions use stored absolute deadlines, never elapsed poll counters.
+  cfg.ttl=cfg.hard;cfg.provision=cfg.boot;cfg.grace=cfg.passGrace;
+  cfg.sweepPrice=number('SWEEP_MAX_PRICE_USD_HOUR',DEFAULTS.sweepPrice,10);cfg.sweepDaily=number('SWEEP_DAILY_USD',DEFAULTS.sweepDaily);
+  cfg.bandwidthDown=number('BANDWIDTH_DOWN_GB',DEFAULTS.bandwidthDownGb,1000);cfg.bandwidthUp=number('BANDWIDTH_UP_GB',DEFAULTS.bandwidthUpGb,1000);
+  const data=(name,fallback)=>{try{return JSON.parse(env[name]??JSON.stringify(fallback));}catch{refuse();}};
+  const dies=(name,fallback)=>{const x=data(name,fallback);if(!Array.isArray(x)||!x.length||x.length>32||new Set(x).size!==x.length||!x.every(v=>typeof v==='string'&&/^[A-Z][A-Z0-9_]{1,23}$/.test(v)))refuse();return x;};
+  cfg.checkDies=dies('CHECK_DIES',DEFAULTS.checkDies);cfg.sweepDies=dies('SWEEP_DIES',DEFAULTS.sweepDies);
+  cfg.badMachines=data('BAD_MACHINE_IDS',DEFAULTS.badMachines);if(!Array.isArray(cfg.badMachines)||cfg.badMachines.length>256||!cfg.badMachines.every(x=>Number.isSafeInteger(x)&&x>0))refuse();
+  cfg.gpuDeny=list('GPU_DENY_PATTERNS',DEFAULTS.gpuDeny);cfg.dieRules=data('GPU_DIE_RULES',DEFAULTS.dieRules);
+  if(!Array.isArray(cfg.dieRules)||cfg.dieRules.length>64||!cfg.dieRules.every(r=>r&&Object.keys(r).sort().join(',')==='cc,die,names'&&/^[A-Z][A-Z0-9_]{1,23}$/.test(r.die)&&Number.isSafeInteger(r.cc)&&r.cc>=750&&r.cc<=2000&&Array.isArray(r.names)&&r.names.length>0&&r.names.length<=16&&r.names.every(n=>typeof n==='string'&&/^[A-Z0-9_*]{1,80}$/.test(n))))refuse();
+  cfg.quality={};for(const profile of ['check','sweep']){const q=data(profile.toUpperCase()+'_HOST_QUALITY',DEFAULTS.quality);if(!q||Object.keys(q).sort().join(',')!==Object.keys(DEFAULTS.quality).sort().join(',')||!Object.values(q).every(n=>typeof n==='number'&&Number.isFinite(n)&&n>0)||q.reliability>1||q.medianRatio>1)refuse();cfg.quality[profile]=q;}
+  cfg.driverTags=data('OFFER_DRIVER_TAGS',DEFAULTS.driverTags);if(!Array.isArray(cfg.driverTags)||!cfg.driverTags.length||cfg.driverTags.length>128||!cfg.driverTags.every(t=>typeof t==='string'&&/^\d{3}\.\d{1,3}(?:\.\d{1,2})?$/.test(t)))refuse();
+  cfg.skipPassedDays=number('SWEEP_SKIP_PASSED_DAYS',DEFAULTS.sweepSkipPassedDays||.000001,365);if(env.SWEEP_SKIP_PASSED_DAYS===undefined)cfg.skipPassedDays=DEFAULTS.sweepSkipPassedDays;
   return cfg;
 }
 // Local smoke trust requires both explicit opt-in and a loopback HTTP caller.
@@ -52,12 +71,41 @@ export async function fetchJson(fetcher,url,init={},allow404=false){
   const bytes=await fetchBounded(fetcher,url,init,262144,allow404);if(bytes===null)return null;
   try{return JSON.parse(new TextDecoder('utf-8',{fatal:true}).decode(bytes));}catch{refuse();}
 }
-export function validOffer(offer,cfg){
-  return Number.isSafeInteger(offer.id)&&offer.id>0&&(offer.verified===true||offer.verified===undefined&&offer.verification==='verified')&&offer.vms_enabled===true&&
-    offer.rentable===true&&offer.rented===false&&offer.num_gpus===1&&typeof offer.gpu_name==='string'&&MODELS.map(x=>x.toUpperCase()).includes(offer.gpu_name.replaceAll(' ','_').toUpperCase())&&
-    typeof offer.reliability==='number'&&offer.reliability>=.99&&typeof offer.disk_space==='number'&&offer.disk_space>=120&&
-    typeof offer.dph_total==='number'&&Number.isFinite(offer.dph_total)&&offer.dph_total>=0&&offer.dph_total<=cfg.price;
+export function gpuClass(offer,cfg){
+  if(offer.gpu_arch!=='nvidia'||!Number.isSafeInteger(offer.compute_cap)||offer.compute_cap<750||offer.compute_cap>2000||offer.compute_cap%10!==0||typeof offer.gpu_name!=='string'||offer.gpu_name.length>80)return null;
+  const name=offer.gpu_name.toUpperCase().replace(/ /g,'_').replace(/^NVIDIA_/,'').replace(/^GEFORCE_/,'').replace(/^QUADRO_/,'');
+  if(!/^(?:RTX_[A-Z0-9_]+|GTX_16[A-Z0-9_]*)$/.test(name))return null;
+  const match=(pattern)=>{let at=0;for(const part of pattern.split('*')){const i=name.indexOf(part,at);if(i<0||at===0&&!pattern.startsWith('*')&&i!==0)return false;at=i+part.length;}return pattern.endsWith('*')||at===name.length;};
+  if(cfg.gpuDeny.some(match))return null;
+  const rules=cfg.dieRules.filter(r=>r.cc===offer.compute_cap&&r.names.some(match));if(rules.length>1)return null;
+  return rules[0]?.die??'CC_'+offer.compute_cap/10;
 }
+export function offerPrice(offer,cfg){
+  for(const key of ['dph_base','dph_total','storage_cost','inet_down_cost','inet_up_cost'])if(typeof offer[key]!=='number'||!Number.isFinite(offer[key])||offer[key]<0||offer[key]>1000)return null;
+  const storage=offer.storage_cost*DEFAULTS.diskGb/DEFAULTS.storageMonthHours,computeStorage=offer.dph_base+storage;
+  // Recorded API allocated_storage=120: dph_total already includes this storage.
+  if(Math.abs(offer.dph_total-computeStorage)>Math.max(1e-7,computeStorage*1e-6))return null;
+  const bandwidth=cfg.bandwidthDown*offer.inet_down_cost+cfg.bandwidthUp*offer.inet_up_cost;
+  const effective=computeStorage+bandwidth/(cfg.hard/3600000);
+  return {computeStorage,bandwidth,effective,total:computeStorage*(cfg.hard+cfg.cronPeriod)/3600000+bandwidth};
+}
+export function offerRejections(offer,cfg,{profile='check',median=offer.dlperf,badMachines=[]}={}){
+  const q=cfg.quality[profile],reasons=[],die=gpuClass(offer,cfg),price=offerPrice(offer,cfg);
+  const enough=(key,floor)=>typeof offer[key]==='number'&&Number.isFinite(offer[key])&&offer[key]>=floor;
+  if(!(offer.verified===true||offer.verified===undefined&&offer.verification==='verified'))reasons.push('VERIFICATION');
+  if(!Number.isSafeInteger(offer.id)||offer.id<=0||offer.vms_enabled!==true||offer.rentable!==true||offer.rented!==false||offer.num_gpus!==1||!enough('disk_space',DEFAULTS.diskGb))reasons.push('CAPABILITY');
+  if(!Number.isSafeInteger(offer.machine_id)||offer.machine_id<=0||cfg.badMachines.includes(offer.machine_id)||badMachines.includes(offer.machine_id))reasons.push('MACHINE');
+  if(!die||!(profile==='check'?cfg.checkDies:cfg.sweepDies).includes(die))reasons.push('DIE');
+  if(!enough('reliability',q.reliability)||offer.reliability>1)reasons.push('RELIABILITY');
+  if(!enough('cpu_cores_effective',q.cores)||!enough('cpu_ghz',q.cpuGhz)||!enough('cpu_ram',q.ramMb))reasons.push('CPU_RAM');
+  if(!enough('dlperf',Number.MIN_VALUE)||typeof median!=='number'||!Number.isFinite(median)||median<=0||offer.dlperf<median*q.medianRatio)reasons.push('PERFORMANCE');
+  if(!enough('inet_down',q.downMbps)||!enough('inet_up',q.upMbps))reasons.push('NETWORK');
+  if(!enough('disk_bw',q.diskMbps))reasons.push('DISK_BW');
+  if(!cfg.driverTags.includes(offer.driver_version))reasons.push('DRIVER');
+  if(!price)reasons.push('PRICE_FIELDS');else if(price.effective>(profile==='check'?cfg.price:cfg.sweepPrice)||price.total>(profile==='check'?cfg.price:cfg.sweepPrice)*(cfg.hard+cfg.cronPeriod)/3600000)reasons.push('PRICE');
+  return reasons;
+}
+export function validOffer(offer,cfg,context){return offerRejections(offer,cfg,context).length===0;}
 
 // Exclusions apply only to canonical API paths. Unknown names are always relevant.
 export function skippedPath(path,patterns){

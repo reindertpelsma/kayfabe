@@ -1,5 +1,102 @@
 # Vast broker (stage 1)
 
+
+## V5 lifecycle and shipped policy (2026-10-22; acceptance pending)
+
+[CODE READ: defaults.json, src/defaults.js, src/policy.js] Numeric defaults live
+in `defaults.json`; JavaScript imports them through `src/defaults.js`, the bundle
+embeds that same file, and wrangler.toml has no numeric override. The owner-approved
+check cap is $1.00/hour, daily $6, rolling 30-day $30, prepaid reserve $8.
+Renting remains disabled in the committed configuration. Profiles and effective storage/network admission are implemented below. The V5 runner protocol is implemented; payload integration and live acceptance
+are still pending.
+
+[CODE READ: src/index.js, src/onstart.js] States are NONE, CREATING, BOOTING,
+TESTING, GRACE and MANUAL. Creation stores absolute boot (40 minutes), hard
+(3 hours), soft (hard minus 10 minutes) and manual-ceiling (8 hours) deadlines.
+Empty logs count as heartbeats: the sender emits one within 10 minutes; 15 minutes
+without an authenticated post destroys the box. PASS retains 5 minutes of grace;
+FAIL retains 10. SSH login calls the per-run hold helper to enter MANUAL, suspending
+grace and heartbeat requirements while retaining the hard limit. Only the owner
+can remove that hard timer; admission checks the extended billing reservation.
+MANUAL still ends at the absolute ceiling, and cron writes a Worker-authored line.
+
+[INFERRED: defaults.json and src/ledger.js arithmetic] Two complete three-hour
+runs at $1.00/hour cost $6 in work time. The explicit budget check also reserves
+one cron minute: each reservation is $3.016667, so two worst-case reservations
+are $6.033334 and do **not** fit the unchanged $6 daily cap. Two such reservations
+fit at no more than $0.994475/hour; shorter settled runs can release enough room.
+Admission refuses excess daily/rolling liability or prepaid credit below reserve
+plus the new liability. The cron margin is a healthy-scheduler estimate, not a
+provider billing bound during an outage.
+
+
+## V5 profiles, forced admission and availability
+
+[CODE READ: defaults.json, src/policy.js, src/offers.js] `check` is the PR profile:
+configured measured classes GA106 first, then AD104, GA102 and AD102, capped at
+$1 effective/hour and the shared $6 daily/$30 rolling/$8 reserve limits. No
+qualifying class returns UNAVAILABLE; the Worker never substitutes another die.
+AD107 is excluded until the owner adds it after three qualifying sweep passes.
+`sweep` is a separate owner-only workflow_dispatch profile, with a $2.50 effective
+hourly cap and its own $8 daily budget; rolling liability and prepaid reserve stay
+shared. Its workflow must not write the required gpu-vast status. Sweep rotation
+uses the configured order and the persisted last-rented class, with an optional
+recent-pass exclusion. The runner prints class/driver/date coverage tags from accepted structured results;
+hosted dispatch execution remains unverified.
+
+[CODE READ: 2026-10-22 owner verification rule, src/policy.js] Every profile requires an explicitly verified provider
+response: verified=true, or the documented verification="verified" when the boolean
+alias is absent. Missing/unknown/conflicting verification refuses; no configuration
+can disable this requirement. The default quality thresholds are reliability >=0.98,
+8 effective cores, 2 GHz, 34360 MB RAM (at least 32 GiB), 200 Mb/s down, 50 Mb/s up,
+100 MB/s disk bandwidth, and positive dlperf at least half its class's median in
+the current verified offer sample. Missing/odd fields refuse. Exact offer driver
+tags must be in the configured tested matrix. In VM mode this is an offer-quality
+filter; the actual kayfabe host driver is the separately provisioned VM driver,
+which must be checked again on the box. Performance scores never grade the code.
+
+[CODE READ: defaults.json, src/policy.js] GPU eligibility uses numeric compute_cap
+>=750 (7.5), NVIDIA gpu_arch, and the consumer/workstation RTX or GTX 16xx name
+class; datacenter names are excluded. Configured name/capability rules map known
+models to die classes. Unmapped workstation names use CC_<capability> classes in
+sweep; they cannot enter the check profile. Provider names are class hints, not
+hardware attestation; a wrong/ambiguous mapping refuses or remains a coverage
+finding. GPU patterns and known-bad machine IDs are configurable deny lists.
+The historical public nvkvm-pv machine list was reviewed for its KVM failure
+signature; only machine IDs were carried over, with no old endpoints or PSK flow.
+Boot expiry can learn an own machine only after created plus an exact own-instance
+libvirt domain-not-found log remains byte-identical across observations at least
+two minutes apart, with a recent confirming observation. Time alone never learns.
+
+[CODE READ: src/offers.js, src/index.js] GET /availability?profile=check|sweep
+requires GitHub OIDC and profile authorization. A shared <=60-second read-only
+market cache serves both profiles; a 30/minute admission limiter also covers rent
+refusals. Returned class/count/price/quality and rejection totals contain no offer,
+machine or network identifiers. Counts describe a bounded query sample. /rent
+accepts at most 16 ordered class tokens, intersects them with the Worker's forced
+set, reports how many were ignored, and refuses an empty intersection. A budget
+refusal can show the local chosen-class enum without creating a rental. The
+runner must independently schema-check and scrub every display field.
+
+[CODE READ: src/policy.js, src/ledger.js; [Vast offer fields](https://docs.vast.ai/api-reference/search/search-offers)]
+Storage is priced in USD/GB/month; the requested 120 GB is converted using 720
+hours/month and cross-checked against dph_total, which already includes it.
+inet_down_cost/inet_up_cost are USD/GB (not the console's per-TB display).
+Default transfer allowance is 15 GB down plus 2 GB up. Effective hourly price is
+compute plus storage plus the full transfer allowance amortised over the hard
+limit. Reservation uses the same compute/storage lifetime plus cron margin and
+full transfer allowance. Early settlement retains that unmeasured allowance;
+it does not release it merely because the box ran briefly.
+
+[MEASURED: run v5-readonly-20261022-availability-1, traces/vast_broker_v5_20261018/read_only.json]
+The instance API exposes inet_down_billed/inet_up_billed, but their units and
+refresh reliability are unverified. Consequently cron does not assert a bandwidth
+usage cutoff: only the conservative allowance reservation is implemented. A
+compromised box can exceed that allowance; neither it nor delayed cron/API
+accounting establishes a finite external bill. This is the owner's specified
+reservation-only fallback, not a claim of provider-enforced transfer limits.
+
+
 [CODE READ: owner correction 2026-10-22; runner.py, gpu-vast.yml and src/onstart.js] The exact code is approved before Vast starts. A forged GPU verdict from the Worker **or** the box cannot change approved code or contaminate the final build. `gpu-vast` is an unattested tripwire; the Worker is never part of an attested result. The one-page [trust and public trace path](../../docs/design/V3_CI_VAST_RUNNER_TRACE_20261022.md) defines these boundaries:
 
 | Who distrusts whom | Why and enforced boundary |
@@ -9,15 +106,15 @@
 | Worker → Vast box/operator | These are community/consumer hosts with observable guest root. The box never receives the Vast account key, App key, owner stop token or Worker signing secret; it gets only its limited run capability. |
 | Worker → CI content/secrets | The billed Vast key must **never be a GitHub secret**: LLM agents and future contributors may reach repository secrets. CI presents only OIDC identity; the Worker independently checks identity, approved content and spending policy. |
 | CI → Vast | Box output can inject logs/commands; a community box cannot supply an attested result. CI sees Vast only through the Worker, with no direct box connection and no executable/artifact input from Vast. |
-| Vast box → Worker, but not its network | The box trusts the Worker's fixed task/callback, uses **HTTPS only, no redirects**, and has a per-run token with no authority beyond report/kill/blob-URL access for that run. Live authority dies with the box/run. The host operator can already see the box and its token; network interception must not add authority. |
+| Vast box → Worker, but not its network | The box trusts the Worker's fixed task/callback, uses **HTTPS only, no redirects**, and has a per-run token with no authority beyond report/kill/hold/blob-URL access for that run. Live authority dies with the box/run. The host operator can already see the box and its token; network interception must not add authority. |
 
-[CODE READ: src/index.js, src/tokens.js, deployment.json] Current per-run authority is report/kill; no blob-URL route is implemented. Blob-URL scope above is a policy ceiling, not an added capability. Worker protocol/version and expected bundle hash are visible, but the deployed hash is an owner assertion, not remote deployment attestation.
+[CODE READ: src/index.js, src/tokens.js, deployment.json] Current per-run authority is report/kill/hold; no blob-URL route is implemented. Blob-URL scope above is a policy ceiling, not an added capability. Worker protocol/version and expected bundle hash are visible, but the deployed hash is an owner assertion, not remote deployment attestation.
 
 [CODE READ: 2026-10-22 Round 3, deployment.json] Build with `npm run bundle`; independently compare SHA256 of `dist/worker.js` with `dist/deployment.json`, committed `deployment.json` and public `DEPLOYED_BUNDLE_SHA256` before a separately authorized deployment. CLI deployment must upload those exact bundled bytes (use `npx wrangler deploy dist/worker.js --no-bundle`); dashboard/module upload uses the same file. The hash is a configuration assertion, avoiding a self-hash in the bundle. Any source update requires regenerating/reviewing the manifest and configuration together; mismatches refuse CI. This task performs no deployment and leaves renting disabled.
 
-[CODE READ: 2026-10-22 V4 round 2 owner instruction] **Stage only with RENTING_ENABLED=false.** The startup contract is SSH launch (`ssh_direct`) plus onstart; Vast injects keys already registered on the owner's account, and the Worker neither manages keys nor connects over SSH. Round 2 supersedes the earlier strict no-SSH STOP. The deployable source retains its KVM image/vm=true; the local tiny Docker/SSH flow is measured separately under [round 2 evidence](../../traces/vast_broker_v4_round2_20261018/README.md) and does not establish that KVM workload's validity. Shipped price/day caps stay $0.50/hour and $3/day; the local round permits $0.80/hour and any NVIDIA GPU. Proposed shipped $0.80/hour and $6/day remain owner questions.
+[CODE READ: 2026-10-22 V4 round 2 owner instruction] **Stage only with RENTING_ENABLED=false.** The startup contract is SSH launch (`ssh_direct`) plus onstart; Vast injects keys already registered on the owner's account, and the Worker neither manages keys nor connects over SSH. Round 2 supersedes the earlier strict no-SSH STOP. The deployable source retains its KVM image/vm=true; the local tiny Docker/SSH flow is measured separately under [round 2 evidence](../../traces/vast_broker_v4_round2_20261018/README.md) and does not establish that KVM workload's validity. Those historical V4 shipped limits are superseded by the owner-approved V5 policy above. The local V4 round allowed $0.80/hour and any NVIDIA GPU.
 
-[CODE READ] Plain ES-module JavaScript, zero npm dependencies, Node >=20. This is an **untrusted GPU tripwire**, never release provenance. The Worker alone holds the owner's dedicated Vast key. No deployment or rental is performed by tests. Binding defaults refuse spending until configured. The complete threat model, API contracts, billing risks and deferred merge queue are in [the design](../../docs/design/V3_CI_VAST_GPU_20261021.md).
+[CODE READ] Plain ES-module JavaScript, zero npm dependencies, Node >=22. This is an **untrusted GPU tripwire**, never release provenance. The Worker alone holds the owner's dedicated Vast key. No deployment or rental is performed by tests. Binding defaults refuse spending until configured. The complete threat model, API contracts, billing risks and deferred merge queue are in [the design](../../docs/design/V3_CI_VAST_GPU_20261021.md).
 
 [CODE READ: 2026-10-22 smoke-live.py, live/] Round 2's real controller is `python3 smoke-live.py --runtime <private-new-directory> --wrangler <temporary-install>/node_modules/.bin/wrangler`. It uses real Vast API calls and local fake GitHub/JWKS identity, a private any-NVIDIA model overlay, and a tiny deterministic workload under the production reporting sender. It starts an independent exact-label reaper before every create, drives rent/status/cursor logs, and invokes the real local scheduled handler once per minute without a fake clock. PASS runs the shipped kill CLI inside the box after 30 seconds; FAIL waits for result grace. `--docker-smoke` additionally selects a local Ubuntu Docker image with vm=false, as authorized for round 2; that result cannot establish the shipped KVM image/workload's validity. No overlay is deployed. The callback tunnel accepts only report/kill from the provider's exact public_ipaddr. On exit, exact-ID and exact-label absence precede reaper cancellation; all controller children stop. Runtime files contain credentials and must remain private and be deleted after sanitized evidence is retained.
 
@@ -29,15 +126,18 @@
 
 ## Deploy with the owner's credentials (9 steps)
 
-1. Review this branch and its evidence. Choose the numeric GitHub user ID and keep default `owner_push_or_review`; confirm dedicated-key permissions with Vast. Set `RENTING_ENABLED=false` while configuring. Never put a Cloudflare token or Vast key in GitHub.
-2. Choose the upload route. **CLI:** from this directory run `npx wrangler login`, fill `wrangler.toml` public vars, then generate/review the deployment manifest and upload the exact module with `npx wrangler deploy dist/worker.js --no-bundle` (legacy SQLite migration included). **No CLI:** run the bundle via the provided Node script, upload the module and initial metadata with a graphical HTTP client using the Cloudflare script-upload API described below; thereafter paste `dist/worker.js` into the dashboard module editor for updates. Pure dashboard paste alone does not provision a new Durable Object namespace.
-3. Ensure a SQLite `BrokerLedger` namespace is bound as `LEDGER` to this same Worker, and schedule `* * * * *`. Preserve the namespace when updating; never clear it to bypass a blocked reservation.
-4. Set public variables matching `wrangler.toml`, replacing `OWNER_GITHUB_ID=REPLACE_ME`, `REPOSITORY`. Keep budgets at 3 USD/day, 30 USD/rolling 30 days, 8 USD reserve, max 0.50 USD/hour, TTL 20 min (hard maximum 60), provisioning 10 min, post-result grace 5 min (maximum 15), max 4 rentals/day and 24h minimum same-SHA gap unless deliberately reviewed. `RENT_DRAFTS=false` is recommended.
-5. Set secret bindings WORKER_URL (the exact HTTPS origin/OIDC audience), VAST_API_KEY, RUN_TOKEN_SECRET and OWNER_STOP_TOKEN through the dashboard or npx wrangler secret put NAME. Use independent random base64url strings of at least 32 characters for the two new bindings; keep OWNER_STOP_TOKEN with the owner only. No GitHub API token is supplied by the isolated broker job: only OIDC minting is permitted. The Worker and cron use fixed-host public GETs; shared egress rate limits can cause UNAVAILABLE, while TTL deletion precedes those reads. Optional legacy X-GH-Token support remains request-only for diagnostic callers and is not used by CI.
-6. In GitHub, create environment `gpu-vast` and set Actions secret `VAST_BROKER_URL` to that exact origin/audience (never a repository variable). Optionally set Worker secret `BROKER_PATH_PREFIX` to a random base64url segment of 32–128 characters and GitHub Actions secret `VAST_BROKER_PATH` to the identical segment, without slashes; leave both unset to retain ordinary routes. Keep the prefix out of the OIDC audience. Remove the old repository variable after migrating; configure only Actions secrets. Both GitHub secrets bind only to the broker execution step; box/run and status-writer jobs never receive them. Protect allowed branches and workflow/broker changes. Required environment reviewers add a manual delay; the owner's 2b ruling uses the authenticated owner push as approval, so avoid a redundant reviewer requirement if immediate starts are intended. Forks never rent.
-7. Authorize and measure one live smoke run separately, including the provider launch contract, Actions/OIDC PR-head contract, fixed callback sender, native Worker crypto/storage, CPU use and structured-result cleanup. Mocks cannot establish these live contracts. Confirm current Cloudflare Free/SQLite limits and Vast billing/overdraft/top-up rules first. V4 authorizes a bounded smoke; the provider startup contract remains a separate gate.
-8. Only after that validation set `RENTING_ENABLED=true`. Make commit-status context **gpu-vast** required on master. It posts on the exact PR head and fails on NEEDS_APPROVAL, NOT_ELIGIBLE, BUSY, UNAVAILABLE or UNAVAILABLE_BUDGET, and on skipped/cancelled dependencies. The master-only release build requires a successful manual master GPU status at the exact build SHA, then builds solely on GitHub and attests binary digests. No log, executable or artifact from the Worker/Vast becomes a release build input. Code approval precedes Vast execution: a forged Worker/box verdict cannot alter approved code or contaminate the final build. The GPU verdict remains unattested; provenance certifies only GitHub build origin. Record any administrator bypass reason.
-9. For the kill switch set `RENTING_ENABLED=false`; cron/status cleanup stays active. If the key is compromised, revoke it in Vast and reconcile/destroy the broker's known IDs manually (a revoked key cannot delete). Rotate by updating the Worker binding then revoking the old key, preserving the ledger.
+[CODE READ: 2026-10-22 wrangler.toml, defaults.json, deployment.json] This is the
+Worker code checkpoint. The owner deploys; this lane leaves renting disabled.
+
+1. From `ci/vast-broker`, run `npm test` and `npm run bundle`. Compare `sha256sum dist/worker.js` with `deployment.json`; upload those exact bytes.
+2. Set public vars: `OWNER_GITHUB_ID=229738317`, `REPOSITORY=reindertpelsma/kayfabe`, `APPROVAL_MODE=owner_push_or_review`, `RENT_DRAFTS=false`, `ALLOWED_BASE_BRANCHES=["master"]`, and initially `RENTING_ENABLED=false`. Retain `PATH_SKIP_PATTERNS` from wrangler.toml and set `DEPLOYED_BUNDLE_SHA256` to the emitted hash.
+3. Use the SQLite `BrokerLedger` Durable Object binding named `LEDGER`, initial migration `v1`, and cron `* * * * *` from wrangler.toml. Preserve this namespace across updates.
+4. Authenticate Cloudflare on the owner's machine, then upload with `npx wrangler deploy dist/worker.js --no-bundle`; alternatively use the module-upload/bootstrap recipe below. No Cloudflare credentials belong in GitHub.
+5. Set Worker secrets `WORKER_URL` (exact HTTPS origin, no path), `VAST_API_KEY`, `RUN_TOKEN_SECRET`, `OWNER_STOP_TOKEN`. The last two are independent random base64url strings, at least 32 characters. Keep account/signing/owner secrets out of CI and Vast boxes.
+6. Optionally set Worker secret `BROKER_PATH_PREFIX` to one random base64url segment, 32–128 characters. GitHub environment `gpu-vast` receives only secret `VAST_BROKER_URL` equal to WORKER_URL and optional secret `VAST_BROKER_PATH` equal to that segment. The prefix is excluded from the OIDC audience. App/PAT credentials are unnecessary until the blob route is added.
+7. Keep numeric defaults in defaults.json: check effective cap $1/hour, daily $6, rolling $30, reserve $8; boot 40 minutes, hard 180, soft margin 10, heartbeat 10/15, PASS/FAIL grace 5/10. Sweep is owner-only, $2.50/hour and separate daily $8 with shared rolling/reserve. The explicit reservation includes storage, transfer allowance and a cron minute.
+8. The owner may stage this code with renting disabled while the separately authorized local live acceptance runs. Enable `RENTING_ENABLED=true` only when ready to accept bills. Put the protected BASE workflow/controller/manifest on master before requiring `gpu-vast`; hosted OIDC and Cloudflare billed CPU remain unverified. Unauthenticated GitHub read limits can cause a fail-closed refusal; no App/PAT is needed for public repository reads.
+9. To stop new rentals set `RENTING_ENABLED=false`; cron and cleanup remain active. Owner-token POST `/stop-all` destroys only ledger-owned instances. Preserve the ledger during key rotation; verify API absence before considering a bill settled.
 
 ## No-CLI namespace bootstrap
 
@@ -56,7 +156,7 @@ Use `PUT https://api.cloudflare.com/client/v4/accounts/{account_id}/workers/scri
 
 Configure variables, secrets, the public route and cron in the dashboard after bootstrap. Subsequent updates must preserve the namespace/bindings; do not replay the initial migration or replace all bindings accidentally. Export `BrokerLedger` as well as the default handlers when pasting the bundle. Do not substitute KV: eventual consistency cannot enforce the single-writer budget and idempotence rules.
 
-## Cost and operational limits
+## Historical V4 cost and operational limits (superseded by V5 above)
 
 [INFERRED from source: src/policy.js, arithmetic estimate] The 20-minute hard TTL plus one minute of cron reserves 0.175 USD at 0.50 USD/hour. The workload must fit this shorter allowance; the previous 150-minute default is superseded. Cron/API outages can leave a box billing 12 USD/day or 360 USD/30 days at that rate, plus other fees; there is no proven finite maximum with automatic account funding. Keep modest prepaid credit and disable automatic top-up only after confirming Vast debt rules. Stopped instances still bill storage; an on-box timeout bounds honest work, **not** the upstream bill. Grace/box-kill/stop/provisioning/TTL destroy and ledger accounting are the actual cleanup paths.
 
@@ -73,7 +173,7 @@ Configure variables, secrets, the public route and cron in the dashboard after b
 [INFERRED from source: prefix rotation] Configure matching endpoint secrets before enabling rentals. Rotating the prefix during a run rejects its old callback/status URLs, so drain active work first; preserve the ledger and private cron throughout. A URL/prefix mismatch fails closed with 404 and does not bypass authentication or budgets.
 
 
-## V4 owner lifecycle (2026-10-22; supersedes earlier immediate result cleanup)
+## Historical V4 lifecycle (superseded by V5 above)
 
 [CODE READ: 2026-10-22 V4 addendum 3, src/index.js] PASS, FAIL and UNAVAILABLE structured results retain the box for POST_RESULT_GRACE_MINUTES (default 5, maximum 15), capped by TTL_MINUTES (default 20, maximum 60). First accepted callback must arrive within PROVISION_MINUTES (default and maximum 10). Known pending provider states do not establish liveness: reports receive NOT_READY until actual_status=running; pending state alone does not destroy a boot before provisioning expiry. This is a bounded refusal policy, not evidence that cur_state proves VM readiness.
 
@@ -115,3 +215,37 @@ Configure variables, secrets, the public route and cron in the dashboard after b
 [CODE READ: runner.py, release-build.yml] `pull_request_target` selects the master-base workflow; fork heads refuse before any Worker request. The controller and deployment manifest are fetched at that trusted base SHA, with no PR checkout/cache/artifact input, and Python runs with `-I` in a scrubbed environment. Structured schemas reject extra/duplicate keys, invalid UTF-8, out-of-range values and incorrect bindings. Each log chunk is hashed before local filtering; all displayed text uses the runner's allow-list, caps, redactions and fresh stop-commands frame. Only local enums and verified=0/1 enter outputs; status writers are independent. Hosted target-event claims/run membership remain an unverified fail-closed contract until this base workflow is present on master and separately exercised.
 
 [CODE READ: round3-mutants.py, mutants.js, v4-mutants.py] `python3 round3-mutants.py` runs the current hostile-runner/protocol/isolation/release campaign; `npm run mutants` runs legacy, V4 and Round 3 sequentially. Seven legacy inline-client/cache-grant probes and four V4 inline-shell probes were replaced explicitly; the migration map is in the [Round 3 evidence](../../traces/vast_broker_v4_round3_20261018/README.md). Old V4 excerpts and their renderer fixtures are historical and are not the production runner. Local smoke helpers have been migrated to the bound protocol; they were not rerun live for Round 3. Release workflow execution/build/attestation and artifact distribution remain unverified; no binary publication is configured.
+
+## V5 protocol checkpoint and remaining live evidence
+
+[CODE READ: 2026-10-22 src/results.js, src/onstart.js, runner.py] Protocol 4 / v5
+requires a bounded payload result file with the exact approved SHA and run nonce,
+then adds the runner nonce in the fixed sender. Exit zero or log text alone is
+FAIL. PASS requires a nonempty table of uniquely named, bounded successful suites
+with zero failures/skips. The approved repo-side payload defines its required suites
+and counts; these are deliberately absent from the Worker transport. Both Worker and BASE runner validate the
+suite/hardware structures. The runner independently validates availability,
+prints its numeric thresholds/rejections, and uses only its own preference list.
+Its check job/step horizons now cover the explicit default three-hour lifecycle;
+the separate sweep workflow is dispatch-only/OIDC-only and writes no merge status.
+
+[CODE READ: 2026-10-22 src/index.js] Callback, hold and owner timer-removal paths
+compare stored absolute deadlines before accepting a late request, so overdue
+cron cannot let a post revive an expired boot, heartbeat, grace or manual ceiling.
+MANUAL after a result remains terminal for CI and retains the box for the owner.
+
+[MEASURED: 2026-10-22 protocol_tests.txt and v5_mutants.json in traces/vast_broker_v5_20261018]
+The local baseline passes 964 tests; 69 focused V5 mutation cases each have at
+least two named killers. Migrated V4 and runner campaigns pass 28 and 38 cases,
+respectively. The legacy campaign's 94 anchors pass preflight; its full rerun is
+still pending at this checkpoint. Historical model-query, depth, lifecycle,
+ingress and workflow mutation sites were moved to their equivalent V5 guards;
+no mutation threshold or debt baseline was relaxed.
+
+[CODE READ: 2026-10-22 src/github.js, src/index.js and [GitHub API limits](https://docs.github.com/en/rest/using-the-rest-api/rate-limits-for-the-rest-api)]
+CI supplies only OIDC. The Worker reads public GitHub metadata without an App/PAT;
+shared unauthenticated rate limits can refuse a long run. GitHub authentication
+for higher read limits can follow separately and is not a blob-route prerequisite.
+Hosted OIDC and Cloudflare billed CPU remain unverified. The owner has replaced the
+next acceptance with short non-VM dummy FAIL/PASS runs; the real KVM/full-suite
+payload and SSH MANUAL polish are deferred. No deployment is performed here.

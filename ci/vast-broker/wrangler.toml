@@ -15,27 +15,16 @@ new_sqlite_classes = ["BrokerLedger"]
 crons = ["* * * * *"]
 
 [vars]
+# Numeric owner policy defaults are defined once in defaults.json.
 RENTING_ENABLED = "false"
 # Owner assertion of the exact emitted module; see deployment.json and trace doc.
-DEPLOYED_BUNDLE_SHA256 = "289073877d815fc1cbe30b40f0233f03f535cfdfd0cf9043236a5affc69191d3"
+DEPLOYED_BUNDLE_SHA256 = "c139d8ee64d88de9032b602bff0a5e776c223aa23bb06a0d3c1748491a15e69f"
 OWNER_GITHUB_ID = "REPLACE_ME"
 REPOSITORY = "reindertpelsma/kayfabe"
 APPROVAL_MODE = "owner_push_or_review"
 RENT_DRAFTS = "false"
 ALLOWED_BASE_BRANCHES = '["master"]'
 PATH_SKIP_PATTERNS = '["**/*.md","docs/**","traces/**","archive/**","LICENSE*",".github/ISSUE_TEMPLATE/**"]'
-CREDIT_RESERVE_USD = "8"
-MAX_PRICE_USD_HOUR = "0.5"
-TTL_MINUTES = "20"
-PROVISION_MINUTES = "10"
-POST_RESULT_GRACE_MINUTES = "5"
-DAILY_RENTALS = "4"
-DAILY_SPEND_USD = "3"
-ROLLING_SPEND_USD = "30"
-SHA_GAP_HOURS = "24"
-MAX_REPORTS = "2000"
-MAX_REPORT_BYTES = "4194304"
-REPORT_RATE_LIMIT = "20"
 
 # Secret bindings: WORKER_URL, VAST_API_KEY, RUN_TOKEN_SECRET, OWNER_STOP_TOKEN.
 # Optional secret BROKER_PATH_PREFIX: one random base64url segment, 32-128 chars.

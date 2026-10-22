@@ -2,7 +2,8 @@
 import contextlib,hashlib,importlib.util,io,json,os,sys,tempfile,urllib.parse
 from pathlib import Path
 spec=importlib.util.spec_from_file_location('runner_main',Path(__file__).resolve().parents[1]/'runner.py');m=importlib.util.module_from_spec(spec);sys.modules['runner_main']=m;spec.loader.exec_module(m)
-args=json.loads(sys.argv[1]);origin='https://quiet-tenant.workers.example';prefix=args.get('path','unit-path-only-'+'p'*32);manifest={'protocol_version':3,'worker_version':'v4-r3','bundle_sha256':'b'*64}
+scope={};exec(Path(__file__).with_name('v5_fixture_data.py').read_text(),scope);extra_status=scope['extra_status'];availability=scope['availability']
+args=json.loads(sys.argv[1]);origin='https://quiet-tenant.workers.example';prefix=args.get('path','unit-path-only-'+'p'*32);manifest={'protocol_version':4,'worker_version':'v5','bundle_sha256':'b'*64}
 sha='a'*40;base='d'*40;calls=[];stdout=io.StringIO();summary='';outputs='';nonce=None
 with tempfile.TemporaryDirectory(prefix='v3-r3-main-') as directory:
     d=Path(directory);(d/'manifest').write_text(json.dumps(manifest));(d/'output').write_text('')
@@ -19,16 +20,18 @@ with tempfile.TemporaryDirectory(prefix='v3-r3-main-') as directory:
         if url.startswith('https://oidc.example/'):
             return m.Reply(200,{'content-type':'application/json'},b'{"value":"mock.jwt.value"}')
         route=urllib.parse.urlsplit(url).path
+        if route.endswith('/availability'):return m.Reply(200,{'content-type':'application/json'},json.dumps(availability()).encode())
         if route.endswith('/rent'):nonce=json.loads(body)['runner_nonce']
         if '/stop/' in route:return m.Reply(200,{'content-type':'application/json'},b'{}')
         if '/logs/' in route:return m.Reply(200,{'content-type':'application/json'},json.dumps({'cursor':0,'next_cursor':1,'chunks':[text],'log_increment_sanitised':text,'log_sha256':h,'bytes_dropped':0}).encode())
         count+=1
         if args.get('failure')=='rent' and count==1 or args.get('failure')=='status' and count>1:raise OSError(url+' '+prefix)
-        state=args.get('state','COMPLETE');verdict=args.get('verdict','PASS');pending=args.get('pending') and count==1
-        if pending:state='RUNNING';verdict='UNAVAILABLE'
+        state=args.get('state','GRACE');verdict=args.get('verdict','PASS');pending=args.get('pending') and count==1
+        if pending:state='TESTING';verdict='UNAVAILABLE'
         code=args.get('code',200)
         data={'state':state,'verdict':verdict,'log_tail_sanitised':text,'bytes_dropped':0}
         if code==200:data.update(run='123-1',id=None if state=='NOT_NEEDED' else '900',sha=sha,pr=None if args.get('manual') else 7,cleanup_pending=True,result_at=None if pending else 2000,ended_at=None,started_at=1000,deadline_at=302000,gpu_model='RTX 4070',cost_estimate_usd=.01,log_cursor=0 if pending else 1,tail_bytes_dropped=0,runner_nonce=nonce,log_sha256='0'*64 if pending else h,**manifest)
+        if code==200:data.update(extra_status(verdict,pending,state=='NOT_NEEDED'))
         return m.Reply(code,{'content-type':'application/json'},json.dumps(data).encode())
     m.https_request=request;m.time.sleep=lambda _:None;sys.argv=['runner.py',str(d/'manifest')]
     with contextlib.redirect_stdout(stdout):status=m.main()

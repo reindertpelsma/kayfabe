@@ -9,14 +9,14 @@ for(const size of [180,700])test('R3 public ingress preserves bounded nonce rent
  const bindings={...env,LEDGER:{idFromName:()=>1,get:()=>({fetch:async r=>{received=await r.text();return Response.json({});}})}};
  const body=JSON.stringify(request)+' '.repeat(size);
  await worker.fetch(new Request(env.WORKER_URL+'/rent',{method:'POST',body}),bindings);
- assert.equal(received,body.slice(0,513));
+ assert.equal(received,body.slice(0,2049));
 });
 // FALSIFIER: runner nonce is optional/replaced on replay, or final/page hashes
 // do not bind the exact UTF-8 chunks that the runner retrieves in cursor order.
 for(const restart of [false,true])test('R3 rent binds caller nonce through status '+restart,async()=>{
  const h=await setup();const response=await h.call('/rent',{body:request});assert.equal(response.status,200);
  if(restart)h.restart();const status=await (await h.call('/status/123-1')).json();
- assert.equal(status.runner_nonce,request.runner_nonce);assert.equal(status.sha,sha);assert.equal(status.protocol_version,3);assert.equal(status.log_sha256,'0'.repeat(64));
+ assert.equal(status.runner_nonce,request.runner_nonce);assert.equal(status.sha,sha);assert.equal(status.protocol_version,4);const page=await(await h.call('/logs/123-1?cursor=0',{method:'GET'})).json();let expected='0'.repeat(64);for(const text of page.chunks){const bytes=Buffer.from(text),len=Buffer.alloc(4);len.writeUInt32BE(bytes.length);expected=createHash('sha256').update(Buffer.concat([Buffer.from(expected,'hex'),len,bytes])).digest('hex');}assert.equal(status.log_sha256,expected);
 });
 test('R3 missing rent nonce refuses before create',async()=>{
  const h=await setup();const response=await h.service.fetch(new Request(env.WORKER_URL+'/rent',{method:'POST',headers:{Authorization:'Bearer '+await jwt(),'X-GH-Token':'mock-job-token'}}));

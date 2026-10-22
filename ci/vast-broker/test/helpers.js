@@ -6,7 +6,7 @@ export const owner = '42';
 export const repo = 'reindertpelsma/kayfabe';
 export const env = {RENTING_ENABLED:'true',OWNER_GITHUB_ID:owner,REPOSITORY:repo,
   WORKER_URL:'https://broker.example',APPROVAL_MODE:'owner_push_or_review',RENT_DRAFTS:'false',
-  CREDIT_RESERVE_USD:'8',MAX_PRICE_USD_HOUR:'0.5',TTL_MINUTES:'20',DAILY_RENTALS:'4',
+  CREDIT_RESERVE_USD:'8',MAX_PRICE_USD_HOUR:'0.5',HARD_RUNTIME_MINUTES:'20',BOOT_LIMIT_MINUTES:'10',DAILY_RENTALS:'4',
   DAILY_SPEND_USD:'3',ROLLING_SPEND_USD:'30',SHA_GAP_HOURS:'24',
   RUN_TOKEN_SECRET:'mock-run-token-binding-only-for-unit-tests',OWNER_STOP_TOKEN:'mock-owner-stop-binding-only-for-unit-tests',
   VAST_API_KEY:'mock-vast-binding'};
@@ -39,7 +39,7 @@ export class MockCloud {
   prs=[{number:7,state:'open',draft:false,user:{id:42},head:{sha,ref:'owner-pr',repo:{full_name:repo}},base:{ref:'master',repo:{full_name:repo}},changed_files:1}];
   reviews=[]; reviewPages=null; files=[{filename:'crates/kf-core/src/lib.rs',status:'modified'}]; filePages=null; filesError=0;
   offer={id:5,verified:true,vms_enabled:true,rentable:true,rented:false,num_gpus:1,
-    gpu_name:'RTX_4070',reliability:.999,disk_space:200};
+    gpu_name:'RTX_4070',gpu_arch:'nvidia',compute_cap:890,machine_id:100001,driver_version:'580.95.05',dlperf:30,cpu_cores_effective:16,cpu_ghz:3,cpu_ram:65536,inet_down:1000,inet_up:100,disk_bw:500,storage_cost:.12,inet_down_cost:0,inet_up_cost:0,reliability:.999,disk_space:200};
   instances=new Map([['777',{id:777,label:'owner-dev'}],['888',{id:888,label:'kf-ci-unrecorded'}]]);
   fetch=async (input,init={})=>{
     const u=new URL(String(input));const method=init.method||'GET';const body=init.body?JSON.parse(init.body):undefined;
@@ -63,8 +63,8 @@ export class MockCloud {
     if(u.hostname!=='console.vast.ai')throw Error('Unapproved external host');
     if(this.vastError)return new Response('PRIVATE-UPSTREAM',{status:this.vastError});
     if(u.pathname==='/api/v0/users/current')return Response.json({credit:this.credit,balance:0});
-    if(u.pathname==='/api/v0/bundles'){if(body.type!=='ondemand')return new Response('invalid type',{status:400});return Response.json({offers:[{...this.offer,dph_total:this.price}]});}
-    if(u.pathname==='/api/v0/asks/5'){
+    if(u.pathname==='/api/v0/bundles'){if(body.type!=='ondemand')return new Response('invalid type',{status:400});return Response.json({offers:[{dph_base:typeof this.price==='number'?this.price-this.offer.storage_cost*120/720:this.price,...this.offer,dph_total:this.price}]});}
+    if(/^\/api\/v0\/asks\/[1-9][0-9]*$/.test(u.pathname)){
       this.creates++;
       this.instances.set('900',{id:900,label:body.label,onstart:body.onstart,image_uuid:body.image,actual_status:'running'});
       if(this.ambiguous)throw Error('PRIVATE-UPSTREAM');
@@ -94,6 +94,7 @@ export async function setup(overrides={}) {
     restart(){service=createService({env:bindings,storage,fetch:cloud.fetch,now:()=>time.value,random:()=>nonce});},
     async report(payload,{run='123-1',token,raw,headers={}}={}){
       const record=await storage.get('record:'+run);
+      if(payload?.kind==='result'&&record?.runnerNonce&&payload.result?.suites===undefined&&payload.result?.hardware===undefined)payload={...payload,result:{...payload.result,suites:Object.entries({provision:1,kf_tests:100,gates:9,kf3_build:1,raw_suite:30,thin_suite:30,birth_census:1,cuda_host:4,cuda_fat:4}).map(([name,pass])=>({name,pass:payload.result?.verdict==='PASS'?pass:0,fail:payload.result?.verdict==='PASS'?0:1,skip:0})),hardware:{gpu_name:'RTX_4070',compute_cap:890,driver_version:'580.159.04'}}};
       if(payload?.kind==='result'&&record?.runnerNonce)payload={...payload,result:{runner_nonce:record.runnerNonce,sha:record.sha,...payload.result}};
       const bearer=token??callbackToken(record,bindings.RUN_TOKEN_SECRET);
       return service.fetch(new Request(bindings.WORKER_URL+'/report/'+run,{method:'POST',headers:{Authorization:'Bearer '+bearer,'Content-Type':'application/json',...headers},body:raw??JSON.stringify(payload)}));
@@ -106,3 +107,5 @@ export async function setup(overrides={}) {
   return harness;
 }
 export const finalLine=(verdict='PASS',n=nonce)=>`KF_RESULT ${n} ${verdict} ${'c'.repeat(64)}\n`;
+
+export const sampleResult=()=>({suites:Object.entries({provision:1,kf_tests:100,gates:9,kf3_build:1,raw_suite:30,thin_suite:30,birth_census:1,cuda_host:4,cuda_fat:4}).map(([name,pass])=>({name,pass,fail:0,skip:0})),hardware:{gpu_name:'RTX_4070',compute_cap:890,driver_version:'580.159.04'}});

@@ -6,7 +6,7 @@ import contextlib,dataclasses,hashlib,http.client,io,json,math,os,re,secrets,sig
 from pathlib import Path
 MAX_RESPONSE=262144
 MAX_LOG=4194304
-STATES={'RUNNING','STOPPING','STOPPED','COMPLETE','NOT_NEEDED','NOT_ELIGIBLE','NEEDS_APPROVAL','RENTING_DISABLED','BUSY','UNAVAILABLE','UNAVAILABLE_BUDGET','UNAUTHORIZED','BAD_REQUEST','NOT_FOUND','OWNERSHIP_MISMATCH'}
+STATES={'NONE','CREATING','BOOTING','TESTING','GRACE','MANUAL','NOT_NEEDED','NOT_ELIGIBLE','NEEDS_APPROVAL','RENTING_DISABLED','BUSY','UNAVAILABLE','UNAVAILABLE_BUDGET','UNAUTHORIZED','BAD_REQUEST','NOT_FOUND','OWNERSHIP_MISMATCH','RATE_LIMIT'}
 VERDICTS={'PASS','FAIL','UNAVAILABLE'}
 ZERO='0'*64
 class Invalid(Exception):pass
@@ -79,7 +79,40 @@ def chain(previous,chunk):
     raw=chunk.encode('utf-8',errors='strict')
     return hashlib.sha256(bytes.fromhex(previous)+len(raw).to_bytes(4,'big')+raw).hexdigest()
 
-STATUS_KEYS={'state','verdict','run','id','sha','pr','cleanup_pending','result_at','ended_at','started_at','deadline_at','gpu_model','cost_estimate_usd','log_cursor','log_tail_sanitised','bytes_dropped','tail_bytes_dropped','runner_nonce','log_sha256','protocol_version','worker_version','bundle_sha256'}
+def validate_suites(rows,verdict):
+    if not isinstance(rows,list) or not 1<=len(rows)<=20:raise Invalid()
+    seen=set()
+    for row in rows:
+        if not isinstance(row,dict) or set(row)!={'name','pass','fail','skip'} or not isinstance(row['name'],str) or re.fullmatch('[a-z][a-z0-9_]{0,47}',row['name']) is None or row['name'] in seen or not all(integer(row[k],0,10000000) for k in ['pass','fail','skip']):raise Invalid()
+        seen.add(row['name'])
+    if verdict=='PASS':
+        if any(r['fail'] or r['skip'] or not r['pass'] for r in rows):raise Invalid()
+    elif not any(r['fail'] for r in rows):raise Invalid()
+
+def class_token(value):return isinstance(value,str) and re.fullmatch('[A-Z][A-Z0-9_]{1,23}',value) is not None
+SELECTION_REASONS={'DEFAULT_ORDER','PREFERENCE','ROTATE','NONE'}
+def validate_selection(value):
+    if not isinstance(value,dict) or set(value)!={'die','ignored','reason'} or not class_token(value['die']) or not integer(value['ignored'],0,16) or value['reason'] not in SELECTION_REASONS:raise Invalid()
+
+def validate_availability(data,profile):
+    if set(data)!={'profile','offers','thresholds','rejected','verified_counts','cache'} or data['profile']!=profile:raise Invalid()
+    if not isinstance(data['offers'],list) or len(data['offers'])>100 or not isinstance(data['verified_counts'],list) or len(data['verified_counts'])>100:raise Invalid()
+    seen=set()
+    for row in data['offers']:
+        if not isinstance(row,dict) or set(row)!={'die','gpu_name','compute_cap','count','effective_hourly','estimated_total','kvm'} or not class_token(row['die']) or row['die'] in seen or not isinstance(row['gpu_name'],str) or not re.fullmatch('[A-Z0-9_]{1,100}',row['gpu_name']) or not integer(row['compute_cap'],750,2000) or not integer(row['count'],1,100) or row['kvm'] is not True:raise Invalid()
+        seen.add(row['die'])
+        for k in ['effective_hourly','estimated_total']:
+            if type(row[k]) not in {int,float} or not math.isfinite(row[k]) or not 0<=row[k]<=1000:raise Invalid()
+    for row in data['verified_counts']:
+        if not isinstance(row,dict) or set(row)!={'die','total','verified'} or not class_token(row['die']) or not integer(row['total'],0,100) or not integer(row['verified'],0,row['total']):raise Invalid()
+    keys={'reliability','cores','cpuGhz','ramMb','downMbps','upMbps','diskMbps','medianRatio','price','bandwidth_down_gb','bandwidth_up_gb','verified'}
+    if not isinstance(data['thresholds'],dict) or set(data['thresholds'])!=keys:raise Invalid()
+    if any(type(v) not in {int,float} or not math.isfinite(v) or not 0<v<=1000000 for v in data['thresholds'].values()) or data['thresholds']['verified']!=1:raise Invalid()
+    if not isinstance(data['rejected'],dict) or not set(data['rejected'])<={'VERIFICATION','CAPABILITY','MACHINE','DIE','RELIABILITY','CPU_RAM','PERFORMANCE','NETWORK','DISK_BW','DRIVER','PRICE_FIELDS','PRICE'} or not all(integer(v,0,100) for v in data['rejected'].values()):raise Invalid()
+    if not isinstance(data['cache'],dict) or set(data['cache'])!={'hit','age_ms'} or type(data['cache']['hit']) is not bool or not integer(data['cache']['age_ms'],0,60000):raise Invalid()
+    return data
+
+STATUS_KEYS={'state','verdict','run','id','sha','pr','cleanup_pending','result_at','ended_at','started_at','deadline_at','gpu_model','cost_estimate_usd','log_cursor','log_tail_sanitised','bytes_dropped','tail_bytes_dropped','runner_nonce','log_sha256','protocol_version','worker_version','bundle_sha256','profile','die','compute_cap','driver_version','selection_reason','preferences_ignored','suites','boot_deadline_at','hard_deadline_at','soft_deadline_at','manual_deadline_at','last_post_at','result_deadline_at'}
 ERROR_KEYS={'state','verdict','log_tail_sanitised','bytes_dropped'}
 def validate_status(data,ctx,manifest,http_status):
     if not set(data)<=STATUS_KEYS or data.get('state') not in STATES or data.get('verdict') not in VERDICTS:raise Invalid()
@@ -88,7 +121,9 @@ def validate_status(data,ctx,manifest,http_status):
     for key in ['bytes_dropped','tail_bytes_dropped']:
         if key in data and not integer(data[key],0,MAX_LOG*16):raise Invalid()
     if http_status!=200:
-        if set(data)!=ERROR_KEYS or data['verdict']!='UNAVAILABLE':raise Invalid()
+        if not ERROR_KEYS<=set(data)<=ERROR_KEYS|{'reason','selection'} or data['verdict']!='UNAVAILABLE':raise Invalid()
+        if 'reason' in data and data['reason'] not in {'NO_ALLOWED_PREFERENCE','NO_ALLOWED_OFFERS'}:raise Invalid()
+        if 'selection' in data:validate_selection(data['selection'])
         return data
     if set(data)!=STATUS_KEYS:raise Invalid()
     if data['run']!=ctx['run'] or data['sha']!=ctx['sha'] or data['pr']!=ctx['pr'] or type(data['pr']) not in {int,type(None)}:raise Invalid()
@@ -102,8 +137,18 @@ def validate_status(data,ctx,manifest,http_status):
     if data['started_at'] is None or data['deadline_at'] is None or data['deadline_at']<data['started_at']:raise Invalid()
     if data['result_at'] is not None and data['result_at']<data['started_at']:raise Invalid()
     if type(data['cost_estimate_usd']) not in {int,float} or not math.isfinite(data['cost_estimate_usd']) or not 0<=data['cost_estimate_usd']<=100:raise Invalid()
-    if data['verdict']=='PASS' and data['state'] not in {'COMPLETE','NOT_NEEDED'}:raise Invalid()
-    if data['state']=='COMPLETE' and data['result_at'] is None:raise Invalid()
+    if data['profile']!=ctx.get('profile','check') or data['selection_reason'] not in SELECTION_REASONS or not integer(data['preferences_ignored'],0,16):raise Invalid()
+    if data['die']!='unknown' and not class_token(data['die']):raise Invalid()
+    if not integer(data['compute_cap'],0,2000) or not isinstance(data['driver_version'],str) or not re.fullmatch(r'unknown|\d{3}\.\d{1,3}(?:\.\d{1,2})?',data['driver_version']):raise Invalid()
+    for key in ['boot_deadline_at','hard_deadline_at','soft_deadline_at','manual_deadline_at','last_post_at','result_deadline_at']:
+        if data[key] is not None and (not integer(data[key],data['started_at'],4102444800000)):raise Invalid()
+    if data['state']!='NOT_NEEDED' and (data['soft_deadline_at'] is None or data['boot_deadline_at'] is None or data['manual_deadline_at'] is None):raise Invalid()
+    if data['hard_deadline_at'] is not None and data['soft_deadline_at'] is not None and data['soft_deadline_at']>=data['hard_deadline_at']:raise Invalid()
+    if data['verdict']=='PASS' and data['state'] not in {'GRACE','MANUAL','NONE','NOT_NEEDED'}:raise Invalid()
+    if data['state']=='GRACE' and data['result_at'] is None:raise Invalid()
+    if data['result_at'] is not None and data['state']!='NOT_NEEDED':validate_suites(data['suites'],data['verdict'])
+    elif data['suites']!=[]:raise Invalid()
+    if data['verdict']=='PASS' and data['state']!='NOT_NEEDED' and (data['result_at'] is None or data['driver_version']=='unknown' or data['compute_cap']<750):raise Invalid()
     return data
 
 class Runner:
@@ -142,19 +187,31 @@ class Runner:
     def execute(self):
         result={'state':'UNAVAILABLE','verdict':'UNAVAILABLE','verified':0};terminal=False
         try:
-            code,data=self.read('/rent','POST',{'runner_nonce':self.ctx['nonce'],'tested_sha':self.ctx['sha'],'pr_number':self.ctx['pr']})
-            for attempt in range(190):
+            profile=self.ctx.get('profile','check')
+            code,availability=self.read('/availability?profile='+profile)
+            if code!=200:validate_status(availability,self.ctx,self.manifest,code);raise Invalid()
+            validate_availability(availability,profile)
+            lines=['Availability: '+profile,'die gpu compute_cap count effective_hourly estimated_total kvm']
+            for row in availability['offers']:lines.append(' '.join([row['die'],row['gpu_name'],str(row['compute_cap']),str(row['count']),format(row['effective_hourly'],'.6f'),format(row['estimated_total'],'.6f'),'1']))
+            lines.append('Thresholds: '+' '.join(k+'='+str(v) for k,v in sorted(availability['thresholds'].items())))
+            lines.append('Rejected counts: '+' '.join(k+'='+str(v) for k,v in sorted(availability['rejected'].items())))
+            lines.append('Verified counts: '+' '.join(r['die']+'='+str(r['verified'])+'/'+str(r['total']) for r in availability['verified_counts']))
+            self.show('\n'.join(lines))
+            request={'runner_nonce':self.ctx['nonce'],'tested_sha':self.ctx['sha'],'pr_number':self.ctx['pr'],'profile':profile}
+            if 'preferences' in self.ctx:request['preferences']=self.ctx['preferences']
+            code,data=self.read('/rent','POST',request)
+            for attempt in range(600):
                 data=validate_status(data,self.ctx,self.manifest,code)
                 if code!=200:
                     self.show(data['log_tail_sanitised']);result['state']=data['state'];break
                 self.pages(data['log_cursor'])
-                if data['state'] in {'COMPLETE','NOT_NEEDED'}:
+                if data['state']=='NOT_NEEDED' or data['state'] in {'GRACE','MANUAL','NONE'} and data['result_at'] is not None:
                     if self.cursor!=data['log_cursor'] or self.hash!=data['log_sha256']:raise Invalid()
                     self.metadata=data
                     terminal=True;result={'state':data['state'],'verdict':data['verdict'],'verified':1}
                     self.show(data['gpu_model'])
                     break
-                if data['state'] not in {'RUNNING','STOPPING'}:break
+                if data['state'] not in {'CREATING','BOOTING','TESTING','MANUAL'}:break
                 time.sleep(20)
                 code,data=self.read('/status/'+self.ctx['run'])
         except (Invalid,ValueError,KeyError,TypeError,UnicodeError,OSError,TimeoutError):result={'state':'UNAVAILABLE','verdict':'UNAVAILABLE','verified':0}
@@ -175,7 +232,9 @@ class Runner:
                 gpu,_=scrub(d['gpu_model'],max_bytes=512,max_lines=1,redactions=self.ctx.get('redactions',()))
                 gpu=gpu.strip().replace('&','&amp;').replace('<','&lt;').replace('>','&gt;').replace('|','&#124;').replace('`','&#96;').replace('\n',' ')
                 elapsed=((d['result_at'] or d['ended_at'] or d['started_at'])-d['started_at'])/1000
-                for key,value in [('GPU (untrusted)',gpu),('Elapsed seconds',format(elapsed,'.3f')),('Estimated USD',format(d['cost_estimate_usd'],'.6f'))]:self.summary.write('| '+key+' | '+value+' |\n')
+                for key,value in [('Profile',d['profile']),('Die class',d['die']),('Driver (untrusted)',d['driver_version']),('Selection reason',d['selection_reason']),('Preferences ignored',str(d['preferences_ignored'])),('GPU (untrusted)',gpu),('Elapsed seconds',format(elapsed,'.3f')),('Estimated USD',format(d['cost_estimate_usd'],'.6f'))]:self.summary.write('| '+key+' | '+value+' |\n')
+                for row in d['suites']:self.summary.write('| Suite '+row['name']+' | pass='+str(row['pass'])+' fail='+str(row['fail'])+' skip='+str(row['skip'])+' |\n')
+                if d['profile']=='sweep':self.summary.write('| Coverage | sweep:'+d['die']+','+d['driver_version']+','+time.strftime('%Y-%m-%d',time.gmtime())+' |\n')
             fence='`'*max(3,1+max([len(x) for x in re.findall('`+',safe)]+[0]))
             self.summary.write('\n'+fence+'text\n'+safe+fence+'\n')
         return result
@@ -207,7 +266,7 @@ def main():
     result={'state':'UNAVAILABLE','verdict':'UNAVAILABLE','verified':0}
     try:
         manifest=strict_json(Path(sys.argv[1]).read_bytes())
-        if set(manifest)!={'protocol_version','worker_version','bundle_sha256'} or type(manifest['protocol_version']) is not int or manifest['protocol_version']!=3 or not re.fullmatch('v[0-9A-Za-z.-]{1,31}',manifest['worker_version']) or not hex_value(manifest['bundle_sha256'],64):raise Invalid()
+        if set(manifest)!={'protocol_version','worker_version','bundle_sha256'} or type(manifest['protocol_version']) is not int or manifest['protocol_version']!=4 or not re.fullmatch('v[0-9A-Za-z.-]{1,31}',manifest['worker_version']) or not hex_value(manifest['bundle_sha256'],64):raise Invalid()
         event=strict_json(Path(os.environ['GITHUB_EVENT_PATH']).read_bytes())
         repo=os.environ['GITHUB_REPOSITORY'];base=os.environ['GITHUB_SHA'];event_name=os.environ['GITHUB_EVENT_NAME']
         sha=event.get('pull_request',{}).get('head',{}).get('sha') if event_name=='pull_request_target' else base
@@ -216,6 +275,11 @@ def main():
         if event_name=='pull_request_target' and (event['pull_request']['head']['repo']['full_name']!=repo or event['pull_request']['base']['ref']!='master'):
             result['state']='NOT_ELIGIBLE';raise Invalid()
         if event_name=='workflow_dispatch' and os.environ['GITHUB_REF']!='refs/heads/master':raise Invalid()
+        if sys.argv[2:]==['--profile','sweep']:
+            selected=event.get('inputs',{}).get('tested_sha','')
+            if selected:
+                if not hex_value(selected,40):raise Invalid()
+                sha=selected
         run=os.environ['GITHUB_RUN_ID']+'-'+os.environ['GITHUB_RUN_ATTEMPT']
         if not re.fullmatch('[1-9][0-9]{0,19}-[1-9][0-9]{0,19}',run) or pr is not None and not integer(pr,1,2147483647):raise Invalid()
         origin=os.environ['WORKER_URL'].rstrip('/');prefix=os.environ.get('WORKER_PATH','')
@@ -223,12 +287,18 @@ def main():
         for value in [origin,urllib.parse.urlsplit(origin).hostname,prefix,*urllib.parse.urlsplit(origin).hostname.split('.')]:
             if value:print('::add-mask::'+value,flush=True)
         print('Trusted BASE '+base+'; runner nonce generated before rent; Worker '+manifest['worker_version']+' expected bundle SHA256 '+manifest['bundle_sha256'],flush=True)
-        ctx={'sha':sha,'run':run,'pr':pr,'nonce':secrets.token_hex(32),'redactions':[origin,urllib.parse.urlsplit(origin).hostname,prefix,urllib.parse.quote(origin,safe=''),*urllib.parse.urlsplit(origin).hostname.split('.')]}
+        profile='sweep' if sys.argv[2:]==['--profile','sweep'] else 'check'
+        if sys.argv[2:] and profile!='sweep':raise Invalid()
+        preferences=event.get('inputs',{}).get('preferences','rotate' if profile=='sweep' else '')
+        if not isinstance(preferences,str) or len(preferences)>400:raise Invalid()
+        preferences=preferences.split(',') if preferences else None
+        if preferences is not None and (len(preferences)>16 or not all(class_token(v) or profile=='sweep' and v=='rotate' for v in preferences)):raise Invalid()
+        ctx={'profile':profile,**({'preferences':preferences} if preferences is not None else {}),'sha':sha,'run':run,'pr':pr,'nonce':secrets.token_hex(32),'redactions':[origin,urllib.parse.urlsplit(origin).hostname,prefix,urllib.parse.quote(origin,safe=''),*urllib.parse.urlsplit(origin).hostname.split('.')]}
         def client(route,method='GET',body=None):
             audience=urllib.parse.quote(origin,safe='');print('::add-mask::'+audience,flush=True)
             token_reply=https_request(os.environ['ACTIONS_ID_TOKEN_REQUEST_URL']+'&audience='+audience,headers={'Authorization':'Bearer '+os.environ['ACTIONS_ID_TOKEN_REQUEST_TOKEN']})
             token_data=strict_json(token_reply.body)
-            if token_reply.status!=200 or set(token_data)!={'value'} or not isinstance(token_data['value'],str) or not re.fullmatch('[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+',token_data['value']) or len(token_data['value'])>8192:raise Invalid()
+            if token_reply.status!=200 or set(token_data)!={'value'} or not isinstance(token_data['value'],str) or not re.fullmatch(r'[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+',token_data['value']) or len(token_data['value'])>8192:raise Invalid()
             token=token_data['value'];ctx['redactions'].append(token);print('::add-mask::'+token,flush=True)
             return https_request(origin+('/'+prefix if prefix else '')+route,method,{'Authorization':'Bearer '+token,'Content-Type':'application/json'},None if body is None else json.dumps(body,separators=(',',':')).encode())
         with open(summary_path,'a',encoding='utf-8') as summary:result=Runner(ctx,manifest,client,emit=lambda s:print(s,end='',flush=True),summary=summary).execute()

@@ -32,7 +32,10 @@ export function sanitizeBoxText(bytes,cap=8192,secrets=[],{tail=true}={}){
 export function appendBoxText(record,bytes,secrets=[]){
   const next=sanitizeBoxText(bytes,8192,secrets);
   record.bytesDropped=(record.bytesDropped||0)+next.bytesDropped;
-  const lines=((record.log||'')+next.text).split('\n');if(lines.at(-1)==='')lines.pop();
+  appendWorkerText(record,next.text);
+}
+export function appendWorkerText(record,text){
+  const lines=((record.log||'')+text).split('\n');if(lines.at(-1)==='')lines.pop();
   let size=new TextEncoder().encode(lines.join('\n')+(lines.length?'\n':'')).length;
   while(size>8192||lines.length>200){const old=lines.shift();const length=new TextEncoder().encode(old+'\n').length;size-=length;record.bytesDropped+=Math.max(0,length-6);}
   record.log=lines.length?lines.join('\n')+'\n':'';
