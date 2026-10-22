@@ -221,6 +221,14 @@ class FreshnessTests(unittest.TestCase):
         self.write("docs/ok.md", self.document(day="2026-01-01", body="branch `codex/present`"))
         self.assertEqual(self.run_check()["documents"][0]["dead_references"], [])
 
+    def test_source_directory_named_integration_is_not_a_branch(self):
+        self.write("scripts/integration/study.c", "// study\n")
+        self.git("add", ".")
+        self.write(
+            "docs/ok.md", self.document(day="2026-01-01", body="`scripts/integration/study.c`")
+        )
+        self.assertEqual(self.run_check()["documents"][0]["dead_references"], [])
+
     def test_literal_relative_link_must_resolve(self):
         self.write("docs/ok.md", self.document(body="[missing](missing.md)"))
         self.assertIn("broken-link", self.kinds())
@@ -263,6 +271,14 @@ class FreshnessTests(unittest.TestCase):
                 body="```md\n[example](missing.md)\n```\n\n<!-- [hidden](missing.md) -->"
             ),
         )
+        self.run_check()
+
+    def test_inline_code_link_example_is_not_a_live_link(self):
+        self.write("docs/ok.md", self.document(body="Example: `[missing](missing.md)`."))
+        self.run_check()
+
+    def test_double_backtick_link_example_is_not_a_live_link(self):
+        self.write("docs/ok.md", self.document(body="Example: ``[missing](missing.md)``."))
         self.run_check()
 
     def test_link_cannot_escape_checkout(self):
