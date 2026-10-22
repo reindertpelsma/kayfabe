@@ -12,7 +12,7 @@ MEASURED: test-only EXPECTED RED commit `5d0f53ad4` adds 8 GPU-free launcher tes
 `python3 scripts/bench/windows/test_launcher_defaults.py` (5 tests, 3 expected failures).
 After removing only the default diagnostic/dead-name assignments: 8/8 pass; `bash -n` passes for both changed launchers.
 
-MEASURED: restore each removed executable assignment separately, run the relevant suite,
+MEASURED (2026-10-22): restore each removed executable assignment separately, run the relevant suite,
 require >=2 failed tests, restore the fixed file in `finally`. Before each Windows mutant's tests,
 the shell-exported flag dictionary was checked to contain that mutant's `=1` value.
 
@@ -25,7 +25,7 @@ the shell-exported flag dictionary was checked to contain that mutant's `=1` val
 | Restore dead `KF3_TIMER_MAP` | 2 | KILLED |
 | Restore hitch's dead lifecycle extras | 2 | KILLED |
 
-MEASURED instrumentation error: the first mutator matched the `WIN_FLAGS=` example in a comment,
+MEASURED (2026-10-22) instrumentation error: the first mutator matched the `WIN_FLAGS=` example in a comment,
 so it had not restored an executable BAR0 default and the tests stayed green. That run stopped and
 restored the file; it is not counted as a killed mutant. CODE READ: anchoring injection to the actual
 `^FLAGS=` assignment and asserting the shell-exported value produced the six real mutants above.
@@ -39,19 +39,23 @@ MEASURED: before default flips, `cargo test --release -j2 -p kf-qemu -p kf-chan 
 The first clippy attempt's 60-second shared Cargo lock wait expired while that baseline held the lock;
 clippy did not start. It was attempted again only after the baseline process exited and released the lock.
 
-MEASURED: `nice -n 19 make -C broker -j2 check` completed successfully with the compiled Wayland/X11
+MEASURED (2026-10-22): `nice -n 19 make -C broker -j2 check` completed successfully with the compiled Wayland/X11
 capabilities reported by make. Its built-in checks include 80,752 XOR and 566,237 tick assertions;
 **29 XOR and 28 tick mutants** were each killed by >=2 distinct checks. This is local protocol/unit
 coverage, not compositor import/presentation or hardware validation.
 
-## Colour-default proof
+## Colour-default proof (initial submission; SDR default superseded by review)
+
+CODE READ: the initial SDR default-on selection below is withdrawn by PR #72 review B2.
+Only MIRROR and ILUT_OFFSET_256 remain default-on; SDR returns to opt-in. The following
+is a dated record of the initial tests, not evidence for shipping the authored SDR page.
 
 MEASURED: a behavior-preserving helper extraction passed all 370 `kf-qemu` library tests.
 Test-only EXPECTED RED commit `ff4cbeec6` then added 8 isolated-process checks: **2 passed,
 6 failed** on the prior defaults. The explicit `=0` legacy arm and explicit `=1` production
 profile already passed. With the three production defaults selected: **8/8 pass**.
 
-MEASURED: each mutant reverts one selection independently, leaving the other two fixed.
+MEASURED (2026-10-22): each mutant reverts one selection independently, leaving the other two fixed.
 Injection requires one exact occurrence in production code; the outer suite must reach exactly
 8 tests, return the test-failure exit code, and fail at least 2. The fixed file is restored in
 `finally`, followed by a restored-default 8/8 run.
@@ -62,19 +66,19 @@ Injection requires one exact occurrence in production code; the outer suite must
 | Restore opt-in MIRROR | source-derived input LUT decode; separate output LUT decode | 2, KILLED |
 | Restore opt-in ILUT units | Turing DMA binding/bounds; Ada DMA binding/bounds | 2, KILLED |
 
-MEASURED instrumentation note: the first SDR accounting attempt read an individual child's
+MEASURED (2026-10-22) instrumentation note: the first SDR accounting attempt read an individual child's
 one-failure summary; the outer suite was already 6 passed / 2 failed. The runner was corrected
 to require the final outer summary and 8 reached tests; all three mutants were then run with
 that accounting. The gate remains >=2 distinct failed tests, without counting duplicate child output.
 
-MEASURED: `cargo clippy --release -j2 -p kf-qemu --all-targets --message-format=json` completed
+MEASURED (2026-10-22): `cargo clippy --release -j2 -p kf-qemu --all-targets --message-format=json` completed
 before/after: **348 warning diagnostics -> 348, 0 added**, comparing package, lint code, primary
 file and message multiplicities while ignoring line shifts. Existing warning debt was not changed.
 Rustfmt checks pass for the changed Rust files. No hardware compatibility claim follows.
 
 ## Patched QEMU and argument checks
 
-MEASURED: QEMU 10.2.4 official release source built through `scripts/bench/build_kf3.sh` with
+MEASURED (2026-10-22): QEMU 10.2.4 official release source built through `scripts/bench/build_kf3.sh` with
 Cargo and ninja constrained to 2 jobs and nice 19. Product Rust/C source is unchanged after
 `33f7a1703`; the first binary was labelled `e76209d8-dirty` because only this guide/inventory
 were being refined. All 24 custom properties appear in [device help](qemu-device-help.txt)
@@ -82,7 +86,7 @@ were being refined. All 24 custom properties appear in [device help](qemu-device
 60-second Cargo-lock wait expired while another job held the shared lock. That step stopped;
 the held lock was left intact. It is not counted as a successful clean-stamped build.
 
-MEASURED: [16 argument cases](qemu-property-results.txt) include the production list, dropping
+MEASURED (2026-10-22): [16 argument cases](qemu-property-results.txt) include the production list, dropping
 each of its 12 properties/placement arguments individually, bare `kf3-gpu`, and the guide's
 Linux/Windows device strings. Each exits 1 at the expected `kf3: requires -accel kvm` guard
 under TCG with `-S`, before guest boot, GPU access or Rust realize. These are parser checks,
@@ -130,7 +134,7 @@ A clean-stamped rebuild remains unverified because the bounded shared-lock wait 
 no lock was bypassed, broken, or replaced. Public source/commands, parser results and all
 GPU-free suite outcomes are preserved; no GPU was used, no guest was booted, hardware n=0.
 
-MEASURED: every commit diff and the final branch diff were scanned for credential patterns,
+MEASURED (2026-10-22): every commit diff and the final branch diff were scanned for credential patterns,
 private machine paths and public IP literals before publication. No sensitive launcher identity
 files were read; no credentials, closed-binary-derived material or private per-die data were added.
 

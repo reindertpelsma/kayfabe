@@ -4,6 +4,31 @@
 CODE READ unless a paragraph says MEASURED or INFERRED. Hardware validation is outside this lane.
 This dated inventory supplements the historical [inventory](V3_FLAG_INVENTORY.md); its older default/reader claims must be checked against this revision.
 
+## Review correction and implementation plan, 2026-10-22
+
+CODE READ: independent review of PR #72 (review branch `claude/review-pr72-20261022`,
+`docs/audits/2026-10-22-pr72-review.md`) falsifies H4 for the SDR default: runs 3439/3440
+set SDR together with CAPS_PROBE, which replaces the authored page. That is not evidence
+for publishing the authored SDR page by default. G05 in [the feature gaps](V3_FEATURE_GAPS.md)
+remains open. The initial three-default result below is superseded: **restore SDR_COLOR
+opt-in; retain MIRROR and ILUT_OFFSET_256 default-on with their exact `=0` research arms**.
+Constructor-only probes must work with SDR unset, without a new required `SDR_COLOR=0`.
+Explicit SDR plus a constructor probe must still refuse; CAPS_PROBE stays independently opt-in.
+
+CODE READ: plan before implementation: extract the existing pre-GPU colour/caps selection
+from `DisplayPlane::build` into one function used by the build path; exercise its real caps
+and engine selection with default, each constructor probe and CAPS_PROBE, and guard that
+call-site wiring with a mutation check. Add EXPECTED RED tests before restoring SDR opt-in.
+The diagnostic `winpass_cycle.sh` must explicitly request RPC_TRACE, because `wait_stall`
+consumes that trace. No timeout, relay, VA or lock policy changes are authorized.
+
+INFERRED hypotheses and falsifiers before tests: (R1) absent/empty SDR must select plain caps;
+falsifier: new regression tests pass on the current default-on code. (R2) all four standalone
+constructor probes must select their probe pages and refusing engines; falsifier: current
+code passes these realize-selection tests. (R3) winpass must request its trace explicitly;
+falsifier: its default exported WIN_FLAGS already contains RPC_TRACE. Each changed selection
+must have at least two distinct tests fail when reverted, including build-call-site wiring.
+
 ## Evidence and falsifiers (recorded before changes)
 
 - Hypothesis H1: production needs launcher overrides that master does not default on. FALSIFIER: the reader defaults to the launcher value, or the launcher does not set the name. Result: mixed; lifecycle/Pointer, lazy observe 16 and put cache already default on; the SDR colour trio defaults off.
@@ -158,7 +183,7 @@ CODE READ: unchanged rows use **base master** defaults; the three changed rows e
 | `KF3_WRITE_TRACE_RANGES` | all | MEASUREMENT | Select BAR0 read-trace companion write ranges | no | no | `crates/kf-qemu/src/readtrace.rs:216` |
 | `KF3_ZCULL_BIND_PROBE` | off; only 1 enables | PRODUCTION-BEHAVIOUR | Answer cross-client ZCULL bind OK without host bind | yes 1 | unknown current ablation; owner/native gap | `crates/kf-rm/src/preempt_bind_probe.rs:152` |
 
-CODE READ: measurement enable switches default off. Their numerical limits/thresholds are inert without the enable. Research opt-outs whose **production behavior** defaults on (lifecycle, put cache, lazy observation, interrupt relay) are class PRODUCTION-BEHAVIOUR, even where older comments called the switch “measurement class”. `KF3_MAPLOG=0`, `KF3_NO_BATCHED_MAP=0`, `KF3_NO_GUEST_VA_RESERVE=0` and `KF3_NEGCTL_NO_BAR1_DOORBELL=0` are **not** off switches; unset them. No parser normalization is made by D1.
+CODE READ [src]: the readers cited in the inventory table above (including `crates/kf-qemu/src/prof.rs::init` and `crates/kf-mem/src/maplog.rs`) leave measurement enable switches default off. Their numerical limits/thresholds are inert without the enable. Research opt-outs whose **production behavior** defaults on (lifecycle, put cache, lazy observation, interrupt relay) are class PRODUCTION-BEHAVIOUR, even where older comments called the switch “measurement class”. `KF3_MAPLOG=0`, `KF3_NO_BATCHED_MAP=0`, `KF3_NO_GUEST_VA_RESERVE=0` and `KF3_NEGCTL_NO_BAR1_DOORBELL=0` are **not** off switches; unset them. No parser normalization is made by D1.
 
 
 ### Dead names and launcher-only controls
@@ -241,7 +266,7 @@ CODE READ: resource inputs (`fb-mb`, BAR apertures, host minor) cannot be replac
 
 ### Inherited QEMU inputs
 
-CODE READ (QEMU 10.2.4 `hw/pci/pci.c`, official release source used for the build): `romfile` defaults unset, `rombar` to -1 (automatic) and `romsize` to UINT32_MAX (automatic). They are PRODUCTION-BEHAVIOUR inputs read by kf3's GOP conflict/ROM builder, omitted by production, and not needed with the embedded GOP. `addr` defaults -1 (automatic), `id` unset, and `bus` to QEMU's available default bus; production explicitly names slot 6, id kf0 and pci.0. These optional placement identifiers are read by QEMU and by kf3 for logging/auto-GPU-UUID slot identity, not measurement flags. Omitting them has not been hardware-tested by D1.
+CODE READ [src] (QEMU 10.2.4 `hw/pci/pci.c::pci_props`, official release source used for the build): `romfile` defaults unset, `rombar` to -1 (automatic) and `romsize` to UINT32_MAX (automatic). They are PRODUCTION-BEHAVIOUR inputs read by kf3's GOP conflict/ROM builder, omitted by production, and not needed with the embedded GOP. `addr` defaults -1 (automatic), `id` unset, and `bus` to QEMU's available default bus; production explicitly names slot 6, id kf0 and pci.0. These optional placement identifiers are read by QEMU and by kf3 for logging/auto-GPU-UUID slot identity, not measurement flags. Omitting them has not been hardware-tested by D1.
 
 ## D1 implementation result (GPU-free)
 
@@ -253,7 +278,7 @@ MEASURED: test-only EXPECTED RED commits and mutation results are in [D1 evidenc
 
 ### Remaining inherited properties visible in QEMU help
 
-MEASURED: the patched QEMU advertises 39 properties: 24 custom and 15 inherited. The full output is [saved here](../../traces/install_flags_20261018/qemu-device-help.txt). CODE READ: the table below completes the inherited set, including the ROM/placement inputs already discussed. Class defaults are QEMU 10.2.4's `hw/pci/pci.c::pci_props`; older machine compatibility types may override PCIe defaults (`hw/core/machine.c`). None is a new KF3 flag or a setting D1 changes.
+MEASURED (2026-10-22, `qemu-system-x86_64 -device kf3-gpu,help`, result in `traces/install_flags_20261018/qemu-device-help.txt`): the patched QEMU advertises 39 properties: 24 custom and 15 inherited. The full output is [saved here](../../traces/install_flags_20261018/qemu-device-help.txt). CODE READ: the table below completes the inherited set, including the ROM/placement inputs already discussed. Class defaults are QEMU 10.2.4's `hw/pci/pci.c::pci_props`; older machine compatibility types may override PCIe defaults (`hw/core/machine.c`). None is a new KF3 flag or a setting D1 changes.
 
 | Property | Class default | Class / effect; reader | Production sets / needs |
 |---|---|---|---|
