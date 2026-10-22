@@ -2115,6 +2115,98 @@ fn vram_worker(
     Ok((w, bytes))
 }
 
+// CODE READ: this is the build path's GPU-free colour/caps selection. It keeps the
+// processing arm and constructor-only method refusal tied to the page they advertise.
+struct DisplayColorConfig {
+    caps: kf_disp::caps::CapsPage,
+    sdr_color: bool,
+    constructor_probe: bool,
+    ilut_constructor_probe: bool,
+    tmo_surface_constructor_probe: bool,
+    olut_constructor_probe: bool,
+}
+
+fn display_color_config(
+    row: &kf_chip::display::DisplayRow,
+    t: &kf_disp::class::ClassTable,
+    regs: &Regs,
+) -> Result<DisplayColorConfig, String> {
+    let classes = kf_disp::model::Classes::of(row);
+    let olut_constructor_probe =
+        std::env::var("KF3_DISPLAY_OLUT_CONSTRUCTOR_PROBE").is_ok_and(|v| v == "1");
+    let tmo_surface_constructor_probe = olut_constructor_probe
+        || std::env::var("KF3_DISPLAY_TMO_SURFACE_CONSTRUCTOR_PROBE").is_ok_and(|v| v == "1");
+    let ilut_constructor_probe = tmo_surface_constructor_probe
+        || std::env::var("KF3_DISPLAY_ILUT_CONSTRUCTOR_PROBE").is_ok_and(|v| v == "1");
+    // ILUT always includes TMO construction and the blanket method refusal;
+    // setting ILUT alone must never publish these caps with a normal engine.
+    let constructor_probe = ilut_constructor_probe
+        || std::env::var("KF3_DISPLAY_TMO_CONSTRUCTOR_PROBE").is_ok_and(|v| v == "1");
+    let caps_author = if olut_constructor_probe {
+        kf_disp::caps::olut_constructor_probe_page
+    } else if tmo_surface_constructor_probe {
+        kf_disp::caps::tmo_surface_constructor_probe_page
+    } else if ilut_constructor_probe {
+        kf_disp::caps::ilut_constructor_probe_page
+    } else if constructor_probe {
+        kf_disp::caps::constructor_probe_page
+    } else {
+        kf_disp::caps::page
+    };
+    let sdr_color = sdr_color_on();
+    if sdr_color {
+        // read (and confirm in the log) the decoder experiments at birth, not at first use
+        let _ = color_experiments();
+    }
+    if sdr_color && constructor_probe {
+        return Err(
+            "display=on: SDR processing cannot be combined with constructor-only probes".into(),
+        );
+    }
+    let caps = if sdr_color {
+        kf_disp::caps::sdr_page(
+            t,
+            regs,
+            row.classes.caps,
+            classes.core,
+            row.heads,
+            row.windows,
+        )
+    } else {
+        caps_author(t, regs, row.classes.caps, row.heads, row.windows)
+    }
+    .map_err(|e| format!("display=on: caps page: {}", e.0))?;
+    // ⚠⚠ PROBE (default off, H-caps): the real GPU's caps page instead of the authored one
+    let caps = if caps_probe_on() {
+        match caps_probe_page(caps.base, row.classes.caps) {
+            Some(p) => {
+                eprintln!(
+                    "kf3: display: PROBE KF3_DISPLAY_CAPS_PROBE=1 — the caps page is the real GPU's measured page ({} words; H-caps probe, not a shipped behaviour)",
+                    p.words.len()
+                );
+                p
+            }
+            None => {
+                eprintln!(
+                    "kf3: display: PROBE KF3_DISPLAY_CAPS_PROBE=1 REFUSED — caps class {:#x} / page {:#x} is not the measured one; the authored page stays",
+                    row.classes.caps, caps.base
+                );
+                caps
+            }
+        }
+    } else {
+        caps
+    };
+    Ok(DisplayColorConfig {
+        caps,
+        sdr_color,
+        constructor_probe,
+        ilut_constructor_probe,
+        tmo_surface_constructor_probe,
+        olut_constructor_probe,
+    })
+}
+
 impl DisplayPlane {
     /// ★ Build the plane for a chip's display row and the guest driver `table`: the derived
     /// vocabulary, the caps page, the shared model, and the plane's GPU context with the store
@@ -2145,71 +2237,14 @@ impl DisplayPlane {
         let classes = kf_disp::model::Classes::of(row);
         let vocab = Vocab::resolve(t, &classes, &regs)
             .map_err(|e| format!("display=on: method vocabulary: {} is not derived", e.0))?;
-        let olut_constructor_probe =
-            std::env::var("KF3_DISPLAY_OLUT_CONSTRUCTOR_PROBE").is_ok_and(|v| v == "1");
-        let tmo_surface_constructor_probe = olut_constructor_probe
-            || std::env::var("KF3_DISPLAY_TMO_SURFACE_CONSTRUCTOR_PROBE").is_ok_and(|v| v == "1");
-        let ilut_constructor_probe = tmo_surface_constructor_probe
-            || std::env::var("KF3_DISPLAY_ILUT_CONSTRUCTOR_PROBE").is_ok_and(|v| v == "1");
-        // ILUT always includes TMO construction and the blanket method refusal;
-        // setting ILUT alone must never publish these caps with a normal engine.
-        let constructor_probe = ilut_constructor_probe
-            || std::env::var("KF3_DISPLAY_TMO_CONSTRUCTOR_PROBE").is_ok_and(|v| v == "1");
-        let caps_author = if olut_constructor_probe {
-            kf_disp::caps::olut_constructor_probe_page
-        } else if tmo_surface_constructor_probe {
-            kf_disp::caps::tmo_surface_constructor_probe_page
-        } else if ilut_constructor_probe {
-            kf_disp::caps::ilut_constructor_probe_page
-        } else if constructor_probe {
-            kf_disp::caps::constructor_probe_page
-        } else {
-            kf_disp::caps::page
-        };
-        let sdr_color = sdr_color_on();
-        if sdr_color {
-            // read (and confirm in the log) the decoder experiments at birth, not at first use
-            let _ = color_experiments();
-        }
-        if sdr_color && constructor_probe {
-            return Err(
-                "display=on: SDR processing cannot be combined with constructor-only probes".into(),
-            );
-        }
-        let caps = if sdr_color {
-            kf_disp::caps::sdr_page(
-                t,
-                &regs,
-                row.classes.caps,
-                classes.core,
-                row.heads,
-                row.windows,
-            )
-        } else {
-            caps_author(t, &regs, row.classes.caps, row.heads, row.windows)
-        }
-        .map_err(|e| format!("display=on: caps page: {}", e.0))?;
-        // ⚠⚠ PROBE (default off, H-caps): the real GPU's caps page instead of the authored one
-        let caps = if caps_probe_on() {
-            match caps_probe_page(caps.base, row.classes.caps) {
-                Some(p) => {
-                    eprintln!(
-                        "kf3: display: PROBE KF3_DISPLAY_CAPS_PROBE=1 — the caps page is the real GPU's measured page ({} words; H-caps probe, not a shipped behaviour)",
-                        p.words.len()
-                    );
-                    p
-                }
-                None => {
-                    eprintln!(
-                        "kf3: display: PROBE KF3_DISPLAY_CAPS_PROBE=1 REFUSED — caps class {:#x} / page {:#x} is not the measured one; the authored page stays",
-                        row.classes.caps, caps.base
-                    );
-                    caps
-                }
-            }
-        } else {
-            caps
-        };
+        let DisplayColorConfig {
+            caps,
+            sdr_color,
+            constructor_probe,
+            ilut_constructor_probe,
+            tmo_surface_constructor_probe,
+            olut_constructor_probe,
+        } = display_color_config(row, t, &regs)?;
         let layout = Layout::from_regs(&regs)
             .ok_or("display=on: the instance-memory layout is not derived")?;
         let map = RegMap::resolve(&regs, t, row)?;
