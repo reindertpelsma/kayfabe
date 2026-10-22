@@ -20,3 +20,4 @@ import './secret-forwarding.test.js';
 import './v4-lifecycle.test.js';
 import './v4-public-log.test.js';
 import './v4-sender.test.js';
+import './v4-request-body.test.js';
