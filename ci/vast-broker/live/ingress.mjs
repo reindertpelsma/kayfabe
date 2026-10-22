@@ -13,6 +13,7 @@ http.createServer(async(req,res)=>{
  try{const chunks=[];for await(const c of req)chunks.push(c);const d=JSON.parse(Buffer.concat(chunks));
   if(d.kind==='intent'){if(d.label!==read('run.json').label)throw Error();write('intent.json',d);}
   if(d.kind==='created'){if(d.label!==read('run.json').label||!Number.isSafeInteger(d.id))throw Error();write('owned.json',d);}
+  if(d.kind==='provider'&&d.method==='GET'&&d.status===200)write('last-provider.json',{at:Date.now(),actual_status:d.actual_status,cur_state:d.cur_state,intended_status:d.intended_status});
   event(d);res.end('ok');
  }catch{res.writeHead(400);res.end();}
 }).listen(18792,'127.0.0.1');
@@ -21,10 +22,10 @@ http.createServer(async(req,res)=>{
  const run=read('run.json'),routes=['report','kill'].map(r=>'/'+env.BROKER_PATH_PREFIX+'/'+r+'/'+run.key);
  if(!allowed||req.headers['cf-connecting-ip']!==allowed||req.method!=='POST'||!routes.includes(req.url)){event({kind:'ingress_rejected',source_matches:req.headers['cf-connecting-ip']===allowed});res.writeHead(403);res.end();return;}
  const kind=req.url.includes('/kill/')?'kill':'report';
- // Snapshot the provider independently at callback arrival, before forwarding.
- try{const response=await fetch('https://console.vast.ai/api/v0/instances/'+owned.id+'/',{headers:{Authorization:'Bearer '+env.VAST_API_KEY}}),i=(await response.json()).instances;
-  event({kind:'callback_arrival',route:kind,actual_status:i?.actual_status??null,cur_state:i?.cur_state??null,intended_status:i?.intended_status??null});
- }catch{event({kind:'callback_snapshot_unavailable',route:kind});}
+ // Correlate an existing Worker sample. Extra GETs for every log chunk caused
+ // real provider throttling. State is explicitly aged, never claimed fresh.
+ let sample;try{sample=read('last-provider.json');}catch{}
+ event({kind:'callback_arrival',route:kind,actual_status:sample?.actual_status??null,cur_state:sample?.cur_state??null,intended_status:sample?.intended_status??null,provider_sample_at:sample?.at??null,provider_sample_age_ms:sample?Date.now()-sample.at:null});
  const headers={...req.headers,host:new URL(env.WORKER_URL).host};delete headers['cf-connecting-ip'];
  const target=http.request({hostname:'127.0.0.1',port:18787,path:req.url,method:'POST',headers},response=>{
   event({kind:'callback_response',route:kind,status:response.statusCode});res.writeHead(response.statusCode,response.headers);response.pipe(res);
