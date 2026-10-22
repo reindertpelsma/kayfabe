@@ -1994,9 +1994,10 @@ impl DisplayPlane {
     /// # Errors
     /// By name — `display=on` never starts on a guessed display.
     pub fn build(
-        (row, die): (
+        (row, die, host_caps): (
             &'static kf_chip::display::DisplayRow,
             kf_disp::capsderive::Die,
+            kf_disp::capsderive::HostFacts,
         ),
         table: &kf_abi::versions::DriverAbiTable,
         bdf: &str,
@@ -2068,7 +2069,7 @@ impl DisplayPlane {
                 kf_disp::capsderive::shipped_rows(),
                 kf_disp::capsderive::shipped_measured(),
                 &branch,
-                &kf_disp::capsderive::HostFacts::default(),
+                &host_caps,
             )
             .map_err(|e| format!("display=on: caps page: {}", e.0))?;
             for (off, why) in &d.unmeasured {
@@ -2080,9 +2081,10 @@ impl DisplayPlane {
             let tiers =
                 |x: kf_disp::capsderive::Tier| d.provenance.iter().filter(|p| p.tier == x).count();
             eprintln!(
-                "kf3: display: caps page derived — {} words: {} T1 rule, {} T3 measured ({} unmeasured)",
+                "kf3: display: caps page derived — {} words: {} T1 rule, {} T2 host, {} T3 measured ({} unmeasured)",
                 d.page.words.len(),
                 tiers(kf_disp::capsderive::Tier::Rule),
+                tiers(kf_disp::capsderive::Tier::Host),
                 tiers(kf_disp::capsderive::Tier::Measured),
                 d.unmeasured.len()
             );

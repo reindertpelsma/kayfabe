@@ -11,11 +11,12 @@
 //!   `window / layers_per_head` (NVKMS: windows `2N`/`2N+1` belong to head `N`, ogkm
 //!   `nvkms-rm.c ProbeHeadCountAndWindowAssignment`); layer 0 is the main layer, the others are overlay
 //!   layers, and the two have different pipelines.
-//! - **T2, the host's own unprivileged control reply**: none exists for this page. The page is only
-//!   exposed through the display object, which the open RM allocates for a privileged client only
-//!   (`RS_FLAGS_ALLOC_PRIVILEGED`, ogkm `resource_list.h`), and `NV2080_CTRL_GPU_INFO_INDEX_DISPLAY_ENABLED`
-//!   is the one display fact an unprivileged subdevice control carries. The hook is
-//!   [`HostFacts`]; it is empty today.
+//! - **T2, a same-die startup snapshot** from host-authored READ32 regops. The
+//!   display-capabilities object is privileged; the generic regops endpoint is
+//!   NON_PRIVILEGED but each address still requires the host's GSP allowlist.
+//!   [`crate::hostcaps`] binds the immutable snapshot to the die, class, active
+//!   windows and exact public field layout. Refusal leaves the complete T1 page.
+//!   No physical-page access permission is assumed from the endpoint's flags.
 //! - **T3, a privileged per-die measurement** (`data/caps_measured.tsv`, `tools/read_display_caps_page.py`):
 //!   only for words no class header names and the Windows display driver needs (bisected on hardware).
 //!   A die with no row gets the clean authored page and [`Derived::unmeasured`] says so — never a
@@ -331,7 +332,13 @@ pub fn derive(
     {
         for &(offset, value) in host_words {
             words.insert(offset, value);
-            why.insert(offset, (Tier::Host, "same-die unprivileged PRECOMP read at realize".into()));
+            why.insert(
+                offset,
+                (
+                    Tier::Host,
+                    "same-die unprivileged PRECOMP read at realize".into(),
+                ),
+            );
         }
     }
     // T3: this die's measured words

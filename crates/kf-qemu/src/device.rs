@@ -927,14 +927,13 @@ impl Device {
                 // Keep display CUDA calls on their own unprivileged thread.
                 let fd = export.fd_number();
                 let plane = on_cuda_thread("kf3-cuda-disp", || {
+                    let die = kf_disp::capsderive::Die {
+                        architecture,
+                        implementation,
+                    };
+                    let host_caps = crate::rmfacts::display_precomp(&rm, row, die);
                     crate::display::DisplayPlane::build(
-                        (
-                            row,
-                            kf_disp::capsderive::Die {
-                                architecture,
-                                implementation,
-                            },
-                        ),
+                        (row, die, host_caps),
                         table,
                         &bdf,
                         fd,
