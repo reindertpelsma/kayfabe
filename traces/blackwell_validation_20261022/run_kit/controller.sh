@@ -108,3 +108,32 @@ for cell in 'on on_precision' 'off off_c'; do
  [ -f /root/prov/EXPORT_ACK_$2 ]
 done
 echo "VALIDATION_DONE $(date -u -Is)"
+
+# Optional B1 is sealed before ARM_GO and uses a separately pinned tested binary.
+# VALIDATION_DONE above means the mandatory pair; FINAL_DONE closes the lane.
+if [ -f /root/prov/optional_b1.json ]; then
+ mapfile -t b1 < <(python3 - <<'B1_META'
+import json,re
+from pathlib import Path
+j=json.loads(Path('/root/prov/optional_b1.json').read_text())
+if j.get('enabled'):
+ assert j.get('tests_verified_before_arms') is True
+ assert re.fullmatch('[0-9a-f]{40}',j['source'])
+ assert re.fullmatch('/workspace/bench/kf3-bins/[a-zA-Z0-9_-]+/qemu-system-x86_64',j['binary'])
+ import hashlib
+ assert hashlib.sha256(Path(j['binary']).read_bytes()).hexdigest()==j['binary_sha256']
+ print(j['binary']);print(j['source'])
+B1_META
+ )
+ if [ "${#b1[@]}" = 2 ]; then
+  [ ! -e /root/prov/XID_STOP ]; kill -0 "$guard_pid"
+  bash /root/sweep2/arm.sh on on_b1 "${b1[0]}" "${b1[1]}"
+  [ ! -e /root/prov/XID_STOP ]; kill -0 "$guard_pid"
+  bash /root/sweep2/collect_bw.sh on_b1
+  for i in $(seq 1 300); do [ -f /root/prov/EXPORT_ACK_on_b1 ] && break; sleep 1; done
+  [ -f /root/prov/EXPORT_ACK_on_b1 ]
+ else
+  echo OPTIONAL_B1_NOT_READY
+ fi
+fi
+echo "VALIDATION_FINAL_DONE $(date -u -Is)"
