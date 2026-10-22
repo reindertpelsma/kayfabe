@@ -18,6 +18,16 @@ def attach_app_disk(qmp, iso):
     return qmp.attach_cdrom(iso, xhci_bus='xhci.0')
 
 
+def attach_media(vm, q, iso, guest_iso, expected):
+    if guest_iso:
+        r=q.powershell(r'C:\kf\s4_mount_apps.ps1',
+                       ['-ExpectedSha256',expected['sha256'],'-ExpectedSize',str(expected['size'])],timeout=180)
+        if r.exitcode != 0 or 'S4_APPDISK_MOUNTED' not in r.text():
+            raise RuntimeError('guest app-disk mount failed: '+r.text()[-400:])
+        return 'guest-mounted ISO'
+    return vm.attach_disk(iso)
+
+
 def run_plan(session, apps, record, health, hold):
     health()
     failed = False
@@ -75,6 +85,8 @@ def main():
     p.add_argument('--iso', required=True)
     p.add_argument('--manifest', required=True)
     p.add_argument('--lease', required=True)
+    p.add_argument('--guest-iso', action='store_true')
+    p.add_argument('--override-dir', default='')
     a = p.parse_args()
     out = Path(a.out); out.mkdir(parents=True, exist_ok=False)
     log = w.Log(str(out / 'session.log'))
@@ -83,12 +95,13 @@ def main():
     lease = json.loads(Path(a.lease).read_text())
     end = datetime.datetime.fromisoformat(lease['created_utc']) + datetime.timedelta(minutes=lease['auto_destroy_minutes']-20)
     vm = AttachedVm(a.vm_root, a.qlog)
-    cfg = w.Cfg(iso=a.iso, image_identity=man['image']['identity'], max_tdr=1, user='kf')
+    cfg = w.Cfg(iso=a.iso, image_identity=man['image']['identity'], max_tdr=1, user='kf', override_dir=a.override_dir)
     g = w.GuestSession(cfg, vm, doc, man, str(out), log, 'desktop')
     g.q = w.qgamod.Qga(vm.qga_path())
     g._wait_session()
     g._push()
-    log('APP_DISK', vm.attach_disk(a.iso))
+    g.q.file_write(r'C:\kf\s4_mount_apps.ps1', Path(__file__).with_name('mount_app_disk.ps1').read_bytes())
+    log('APP_DISK', attach_media(vm,g.q,a.iso,a.guest_iso,man['image']))
     g._setup()
     if json.loads((Path(g.dir) / 'setup.json').read_text())['image_identity'] != man['image']['identity']:
         raise RuntimeError('app disk identity mismatch')
