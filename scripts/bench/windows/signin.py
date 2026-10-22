@@ -102,6 +102,6 @@ def main():
 if __name__ == "__main__":
     try:
         main()
-    except (ValueError, RuntimeError, OSError, subprocess.TimeoutExpired):
-        print("SIGNIN_FAILED: check account, session, and keyboard configuration", file=sys.stderr)
+    except (ValueError, RuntimeError, OSError, subprocess.TimeoutExpired) as exc:
+        print("SIGNIN_FAILED error_type=" + type(exc).__name__ + ": check account, session, and keyboard configuration", file=sys.stderr)
         sys.exit(1)
