@@ -54,6 +54,13 @@ class EpochTests(unittest.TestCase):
     def test_filtered_reader_refuses_failed_command(self):
         run=lambda *a,**k:type('Result',(),{'returncode':1,'stdout':b'','stderr':b'permission denied'})()
         with self.assertRaises(ValueError): E.read_xids(run)
+    def test_filtered_reader_refuses_oversized_xid_data(self):
+        data=(NEW+'\n').encode()*400000
+        run=lambda *a,**k:type('Result',(),{'returncode':0,'stdout':data,'stderr':b''})()
+        with self.assertRaises(ValueError): E.read_xids(run)
+    def test_failed_reader_cannot_supply_plausible_xids(self):
+        run=lambda *a,**k:type('Result',(),{'returncode':1,'stdout':NEW.encode(),'stderr':b'failed'})()
+        with self.assertRaises(ValueError): E.read_xids(run)
     def test_filtered_reader_refuses_truncated_utf8(self):
         run=lambda *a,**k:type('Result',(),{'returncode':0,'stdout':b'\xff','stderr':b''})()
         with self.assertRaises(ValueError): E.read_xids(run)
