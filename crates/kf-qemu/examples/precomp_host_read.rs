@@ -44,3 +44,7 @@ fn main() {
         std::process::exit(2);
     }
 }
+
+fn reply_text(_addresses: &[u32], _values: &[u32]) -> Result<String,String> {
+    Ok(String::new())
+}
