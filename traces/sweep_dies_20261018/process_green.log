@@ -1,0 +1,11 @@
+test_direct_guard_names_the_conflicting_live_pid (test_desktop_processes.ProcessTests.test_direct_guard_names_the_conflicting_live_pid) ... ok
+test_direct_shell_guard_blocks_a_live_vm (test_desktop_processes.ProcessTests.test_direct_shell_guard_blocks_a_live_vm) ... ok
+test_exited_qemu_is_not_a_live_vm (test_desktop_processes.ProcessTests.test_exited_qemu_is_not_a_live_vm) ... ok
+test_live_qemu_still_blocks_the_next_phase (test_desktop_processes.ProcessTests.test_live_qemu_still_blocks_the_next_phase) ... ok
+test_shell_census_does_not_refuse_the_exited_child (test_desktop_processes.ProcessTests.test_shell_census_does_not_refuse_the_exited_child) ... ok
+test_shell_census_preserves_a_live_vm (test_desktop_processes.ProcessTests.test_shell_census_preserves_a_live_vm) ... ok
+
+----------------------------------------------------------------------
+Ran 6 tests in 0.376s
+
+OK

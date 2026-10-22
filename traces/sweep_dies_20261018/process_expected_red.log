@@ -1,0 +1,27 @@
+test_exited_qemu_is_not_a_live_vm (test_desktop_processes.ProcessTests.test_exited_qemu_is_not_a_live_vm) ... FAIL
+test_live_qemu_still_blocks_the_next_phase (test_desktop_processes.ProcessTests.test_live_qemu_still_blocks_the_next_phase) ... ok
+test_shell_census_does_not_refuse_the_exited_child (test_desktop_processes.ProcessTests.test_shell_census_does_not_refuse_the_exited_child) ... FAIL
+test_shell_census_preserves_a_live_vm (test_desktop_processes.ProcessTests.test_shell_census_preserves_a_live_vm) ... ok
+
+======================================================================
+FAIL: test_exited_qemu_is_not_a_live_vm (test_desktop_processes.ProcessTests.test_exited_qemu_is_not_a_live_vm)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "CHECKOUT/scripts/bench/tests/test_desktop_processes.py", line 28, in test_exited_qemu_is_not_a_live_vm
+    try:self.assertNotIn(child.pid,m.live_qemu())
+        ~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: 3389250 unexpectedly found in [3389250]
+
+======================================================================
+FAIL: test_shell_census_does_not_refuse_the_exited_child (test_desktop_processes.ProcessTests.test_shell_census_does_not_refuse_the_exited_child)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "CHECKOUT/scripts/bench/tests/test_desktop_processes.py", line 35, in test_shell_census_does_not_refuse_the_exited_child
+    self.assertNotIn(str(child.pid),p.stdout.split())
+    ~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: '3389258' unexpectedly found in ['3389258']
+
+----------------------------------------------------------------------
+Ran 4 tests in 0.217s
+
+FAILED (failures=2)
