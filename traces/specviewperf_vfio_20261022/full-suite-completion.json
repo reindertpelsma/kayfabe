@@ -1,0 +1,50 @@
+{
+  "classification": "MEASURED",
+  "exitMetadata": {
+    "ended": "2026-10-22T02:39:02.3027200+02:00",
+    "exitCode": null,
+    "workloads": [
+      "blender-01",
+      "catia-07",
+      "creo-04",
+      "energy-04",
+      "enscape-01",
+      "maya-07",
+      "medical-04",
+      "solidworks-08",
+      "unreal_engine-01"
+    ],
+    "resolution": "FullHD",
+    "iterations": 2
+  },
+  "exitStatusKnown": false,
+  "taskStateAfterRun": "Ready",
+  "remainingBenchmarkProcessesAfterRun": [],
+  "allWorkloadStatuses": "18 Completed",
+  "subtestRows": 150,
+  "exportReadErrors": [],
+  "officialCsvAndSelectedJsonCompositesAgree": true,
+  "files": [
+    {
+      "name": "cli-status.log",
+      "bytes": 96,
+      "sha256": "c27c56ab9ac06e1f7399bad113a5bb0771e33a2bcaec6d1077aa091915dd96ef"
+    },
+    {
+      "name": "cli-stdout.log",
+      "bytes": 33698,
+      "sha256": "b9840f9904f02c004663cc7f4061f684d211d7b71b31726017b16c174ff46afe"
+    },
+    {
+      "name": "cli-stderr.log",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "name": "cli-exit.json",
+      "bytes": 509,
+      "sha256": "149e932b3c2d90e5d5f78a0a80fe032fde817b84ec3715642fc0ffa2280a0596"
+    }
+  ],
+  "note": "PowerShell recorded a null process exit code. No zero exit code is inferred from completed workload statuses. Full stdout/stderr archive remains on the trusted host."
+}

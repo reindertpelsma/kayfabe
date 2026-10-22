@@ -1,0 +1,37 @@
+{
+  "time": "2026-10-22T04:55:15.319989+02:00",
+  "drivers": {
+    "0000:01:00.0": "nvidia",
+    "0000:01:00.1": "snd_hda_intel"
+  },
+  "smi": {
+    "rc": 0,
+    "stdout": "NVIDIA GeForce RTX 4070, 595.91.07\n",
+    "stderr": ""
+  },
+  "gdm": {
+    "rc": 0,
+    "stdout": "active\n",
+    "stderr": ""
+  },
+  "persistenced": {
+    "rc": 3,
+    "stdout": "inactive\n",
+    "stderr": ""
+  },
+  "sessions": {
+    "rc": 0,
+    "stdout": "190114 1000 ubuntu seat0 1547069 user          tty2 no -\n190115 1000 ubuntu -     1547129 manager       -    no -\n190118    0 root   -     1552483 user          -    no -\n190119    0 root   -     1552540 manager-early -    no -\n",
+    "stderr": ""
+  },
+  "qemu": {
+    "rc": 1,
+    "stdout": "    PID COMMAND\n",
+    "stderr": ""
+  },
+  "lock": {
+    "rc": 0,
+    "stdout": "",
+    "stderr": ""
+  }
+}

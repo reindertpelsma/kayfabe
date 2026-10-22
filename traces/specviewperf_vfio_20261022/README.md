@@ -1,156 +1,116 @@
-# VF1 SPECviewperf 15 physical-GPU reference — 2026-10-22
+# VF1 physical-GPU SPECviewperf15 reference — 2026-10-22
 
-STATUS: RESUMED 2026-10-22 at 01:41 CEST after a new explicit owner override.
-CODE READ (owner instruction): terminate ubuntu sessions and listed desktop/
-monitoring GPU users by name; protect other lanes' QEMU/CUDA users; recheck no
-holders before detach. Stop/clean logind's documented fdstore if it retains DRM
-handles; restore its service afterwards. GDM greeter is sufficient tonight.
-Any new host Xid still aborts. The renewed five-hour budget extends beyond the
-hard 06:30 CEST restoration deadline, so the supervisor starts restoration by
-06:10 CEST. The previous attempt's disposition below is historical evidence.
+MEASURED: **PARTIAL overall.** Both full native iterations completed all nine
+workloads:150subtest rows,18Completed statuses. The selected follow-up and Steel
+Nomad were not run after the command channel failed and the unchanged15-minute
+watchdog stopped QEMU. NVIDIA/audio and an active Ubuntu Wayland desktop were
+independently verified restored by04:55CEST, before the06:30deadline.
 
+MEASURED: first iteration01:51:37–03:15:28CEST; second03:15:28–04:39:02CEST.
+Both use one native boot. Run-directory timestamps are from a guest clock two
+hours behind host local time; neither clock nor benchmark timer was changed.
+These are vendor composites, not a fabricated overall suite score. Spread below
+is(max-min)/mean with n=2. Official CSV values agree with selected result.json.
 
-MEASURED: lane started 2026-10-21 23:19 UTC (01:19 CEST); five-hour stop is
-06:19 CEST, before the 06:30 desktop restoration deadline. Host initial Xid count
-26. Branch starts at origin/master e64b8e5f6. GPU PCI ID 10de:2786 (RTX 4070),
-audio 10de:22bc; guest NVIDIA driver 580.88. No product change is planned.
+| Workload | VFIO1 | VFIO2 | Range/mean |
+|---|---:|---:|---:|
+| blender-01 | 61.61 | 60.61 | 1.64% |
+| catia-07 | 63.10 | 63.13 | 0.05% |
+| creo-04 | 104.94 | 103.97 | 0.93% |
+| energy-04 | 54.57 | 54.67 | 0.18% |
+| enscape-01 | 37.26 | 37.39 | 0.35% |
+| maya-07 | 162.14 | 160.37 | 1.10% |
+| medical-04 | 50.54 | 50.58 | 0.08% |
+| solidworks-08 | 29.51 | 29.19 | 1.09% |
+| unreal_engine-01 | 63.58 | 63.70 | 0.19% |
 
-CODE READ: the owner launcher links run 3440 to the specified persistent disk;
-MEASURED: the two disk names resolve to the same inode. The VFIO disk must be a
-new overlay, with copied UEFI variables, after the owner VM exits.
+MEASURED: the preserved kayfabe run marked Blender,CATIA,Creo Failed; Energy
+Completed(45.60); Enscape remained incomplete; the remaining workloads had no
+output. This corrects the handoff's broader failure description.27partial numeric
+subtests are preserved separately from run status. The same interval contains
+39nvlddmkm153records; this is not asserted to be39TDRs or proof of their cause.
 
-MEASURED: third snapshots preserved before shutdown: QEMU log, active broker log,
-and guest System/Application events. The manifest lists their hashes and sizes.
-Full logs stay on the trusted test host in the owner-designated evidence folder;
-the lane folder holds 21 exported SPEC text files (run logs, XML and stdout).
-The first export met a Windows sharing violation on an active workload log;
-ordinary shared-read file access completed the export without changing the files.
+MEASURED: paired-subtests.csv contains all27baseline rows and both native samples.
+Largest native-mean/baseline ratios: BlenderClassroomEevee07=4.383x;
+EnscapeBistroInteriorUltraHQ04=4.157x; BlenderColorXray04=3.417x.
+Enscape04's native values11.64/13.05FPS have11.42%range/mean. Completed Energy
+composite mean54.62 versus45.60 is+19.8%. Four Energy subtests remain within
+about1% of baseline. Ratios involving failed/incomplete baseline workloads are
+subtest comparisons, not successful workload composites.
 
-INFERRED hypothesis before inventory: the current guest contains SPEC and its
-requested result directory. Falsifier: either is absent. MEASURED: both present,
-with nine installed workloads. 3DMark Demo is installed as well.
+MEASURED/CODE READ comparison conditions: same owner disk through a new CoW,
+copied UEFI variables, same QEMU binary/source89fc8a222, CPU flags,12GiB RAM,
+8vCPUs,cache=none/aio=threads/iothread,UUID/SMBIOS/MAC retained. Physical GPU
+and audio replace kf3-gpu. Executed argv is vfio-command.json. Backing disk was
+open O_RDONLY, overlay O_RDWR. Native physical memory.total=12282MiB; kayfabe's
+configured framebuffer store=8192MiB. Capacity is a confound, not a proven cause.
 
-MEASURED: preserved run log reports blender, catia and creo failed; energy marked
-completed; enscape still active. Remaining workloads had no output at snapshot.
-This is later evidence than the lane handoff. No complete kayfabe suite score is
-claimed; the partial XML is not a full workload result.
+MEASURED: primary desktop3840x2160 at nominal60Hz. Native render FPS exceeds60
+(up to666.80), so there is no uniform60FPS render cap. CODE READ(owner handoff):
+kayfabe broker output is59.996Hz; this is different from vendor render FPS.
+No profile/vsync override was applied; no matched uncapped kayfabe rerun was made.
+MEASURED: saved Window definitions match between four shared baseline/native
+workloads; native Blender client1920x1080 and SolidWorks1920x998 were observed.
+SolidWorks' smaller dimensions match its vendor FullHD definition. Original
+runtime rectangles and exact fractional display refresh remain unverified.
 
-CODE READ: SPEC documents a supported CLI, selected-workload and FullHD switches,
-and result CSV output in its [user guide](https://gwpg.spec.org/wp-content/uploads/2025/12/SPECviewperf15-User-Guide.pdf).
-The installed CLI's help and installed workload inventory will govern execution.
-SPEC documents at least 15 GB available RAM; this lane explicitly requires the
-owner's 12 GiB VM configuration. Treat these as diagnostic reference runs, not
-submission-compliant SPEC scores, and keep resolution/settings attached to rows.
+CODE READ: SPEC documents15GBavailable RAM; the required12GiB VM is below that
+requirement. Treat these as diagnostic references, not submission-compliant
+scores. [SPEC user guide](https://gwpg.spec.org/wp-content/uploads/2025/12/SPECviewperf15-User-Guide.pdf).
 
-## Resumed native first iteration (03:15 CEST)
+MEASURED: System/Application samples through about04:38CEST show unchanged boot
+record14976,zero new Display/nvlddmkm events and zero ApplicationError1000 events.
+The post-suite WER audit found83logged records:81saved EventTimes before native
+boot,zero verified after boot,and two CitySample RADAR_PRE_LEAK_64 records with
+unavailable original fault time. Old records are not counted as new native TDRs.
+Guest event logs after command-channel loss were not collected.
 
-MEASURED: the native CoW guest booted at 01:50:13 CEST under the GPU lock.
-The first full iteration completed all nine workloads and 75 subtests at
-03:15 CEST. Official vendor results.csv is preserved in vfio-run1-vendor-results.csv;
-its nine composites agree with the selected result.json values. The second full
-iteration started immediately with unchanged settings. At04:03CEST, its first
-five workloads completed: blender60.61, catia63.13, creo103.97, energy54.67,
-enscape37.39. Their two-sample ranges divided by mean are1.64%,0.05%,0.93%,
-0.18%,0.35%.
-Native composites: blender61.61, catia63.10, creo104.94, energy54.57,
-enscape37.26, maya162.14, medical50.54, solidworks29.51, unreal63.58.
-The final four workloads still have only one complete sample; the second full
-iteration is not yet complete. These are diagnostic reference results.
+MEASURED: full CLI output was archived before any follow-up. Its task was Ready
+and no benchmark process remained. Its exitCode field is **null**, so no zero CLI
+exit code is claimed. This is a real automation defect despite18Completed
+workload statuses. A benign process-exit probe then returned no result; agent
+requests timed out. INFERRED: its exit1terminated the shared PowerShell command
+host. A virtual-keyboard attempt to restart the existing agent task had no
+verified recovery before the unchanged watchdog fired. No follow-up benchmark
+was started, no safety gate was bypassed, and no timer was extended.
 
-MEASURED at04:18CEST: second-iteration Maya160.37 and Medical50.58 completed;
-seven workloads now have two complete samples. SolidWorks and Unreal remain
-in progress/pending. The later WER batch is old fault reporting:81loggedrecords
-verify pre-native EventTime, zero verify post-native, and one CitySample RADAR
-record has unknown underlying fault time. SystemDisplay/nvlddmkm and
-ApplicationError1000 counts since native boot remain zero.
+CODE READ: PowerShell documents this process-handle/ExitCode failure pattern.
+A retained handle or direct Process API needs isolated Windows tests for exit0
+and exit7 before this wrapper can be trusted for CLI status. That fix and its
+runtime validation were **not completed**; an unverified fix was not committed.
+[PowerShell issue20400](https://github.com/PowerShell/PowerShell/issues/20400).
+The table emitter was syntax-checked and exercised on partial live output; the
+selected-run end-to-end check was not run. Recommend the supported vendor CLI
+as the automation entry point, with these wrapper gaps fixed first.
 
-INFERRED hypothesis before baseline score read: completed Energy has a saved
-vendor composite. FALSIFIER: no result.json or original run-log lacks Completed.
-MEASURED: original Energy result.json reports45.60; run-log confirms Completed.
-The file was read from the specified original directory through the native CoW.
-It does not establish any other baseline workload as completed.
+MEASURED: watchdog reasonNO_PROGRESS_15_MIN; QMPquit ended the owned QEMU with
+exit0 at04:54:41CEST. Clean Windows shutdown was not verified. The command
+channel was unavailable after a probe performed after the full benchmark;
+a physical guest/GPU hang is not proven. New host Xids=0 by anchored journal.
 
-MEASURED: physical desktop3840x2160/60Hz; CLI/stdout request/report1920x1080.
-A captured SolidWorks client was1920x998, matching its saved vendor FullHD
-Window definition. The four shared baseline/native workload Window definitions
-and workloadOptions are identical; original runtime rectangles remain unmeasured.
-Native Blender rendering reaches266.42FPS, so vendor rendering FPS is not
-uniformly capped at display refresh. No vsync/profile override was applied to
-either arm. Kayfabe broker59.996Hz output pacing is a different metric.
-Native VRAM12,282MiB versus owner's kayfabe store8,192MiB is a confound.
-No new host Xid has been reported by the journal watcher. Backing image is
-open read-only; see disk-preservation.json.
+MEASURED: automatic restoration recorded restored:false after a transient
+nvidia module-load error. This record is preserved unchanged. Independent
+verification found GPU=nvidia,audio=snd_hda_intel,nvidia-smi successful(driver
+595.91.07),GDMactive,UbuntuWaylandActive=yes,GNOMEShell present,noQEMU,and lock
+acquirable. nvidia-persistenced stayed inactive, matching its initial state.
+The independent verification establishes the restored desktop; the automated
+restorer's error is not hidden or treated as a successful command.
 
-MEASURED: paired-subtests.csv preserves all27baseline numeric rows against both
-native samples. Largest native-mean/baseline ratios: Blender07=4.383x,
-Enscape04=4.157x, Blender04=3.417x. Enscape04 has11.42%range/mean across its
-two native FPS values. The completed Energy composite averages54.62 versus
-baseline45.60 (+19.8%). Capacity, caps and partial baseline status limit causal
-interpretation. No overall suite composite is fabricated.
+MEASURED tests:63Python pass;6Windows export checks pass; installer and embedded
+runner parsed with zero errors.22distinct recorded mutants each fail at least
+2tests(2–7). Before fixes: initial1loadererror; latest behavior regression62tests/
+2failures in EXPECTED RED a6ada19eb; standalone-switch EXPECTED RED4898f89d9.
+The exit-code defect is a gap in that coverage. No product Rust/C/CUDA changed;
+no cargo build/target was created. validation-summary.json holds the kill table.
 
-## Previous attempt — safety stop (superseded by the owner override above)
+CODE READ: scripts/bench/specviewperf/ contains the interactive-user CLI runner,
+text exporter, table parser and host supervisor. Full native output text remains
+on the trusted host under the authorized lane directory; no vendor binaries or
+raw system-info objects are published. Earlier safety-refusal and restoration
+files are historical, superseded by the explicit owner desktop override and
+this measurement. The host supervisor also had an earlier SSH-scope launch
+failure; the measured two full iterations used a dedicated system service.
 
-MEASURED: **desktop restoration is PARTIAL**. NVIDIA remains bound to the GPU,
-`snd_hda_intel` remains bound to audio, GDM is active, `nvidia-smi` reports RTX 4070
-and host driver 595.91.07, and SSH works. At 01:27:56 CEST, loginctl shows a GDM
-greeter on seat0 and no ubuntu desktop session. The original desktop session did
-not survive the authorized display-manager stop. No authentication or persistent
-login-policy change was attempted.
-
-MEASURED: the owner VM cleanly exited at 01:22:56 CEST. A new 500 GiB virtual
-copy-on-write overlay and copied UEFI variables were prepared under the lane
-folder. The supervisor acquired the GPU lock, stopped the display manager, then
-its open-device safety gate refused: existing PIDs still held NVIDIA/DRM nodes.
-See `safety-refusal.txt`. No GPU unbind, VFIO bind, or native QEMU launch occurred.
-The rule requiring STOP after a safety refusal was followed; there was no retry.
-
-CODE READ: the supervisor's `restored: true` in `session-result.json` means its
-restoration commands and driver checks succeeded. It does not prove a user desktop;
-the separate loginctl check above is authoritative for that missing outcome.
-
-MEASURED: Xids remained 26 (delta zero). The unused overlay was removed at
-01:27:56 CEST; supervisor/flock PIDs had exited, no lane QEMU had been started,
-and a fresh nonblocking flock succeeded after cleanup. No cargo build or lane
-target directory was created. All lock acquisitions used bounded waits (120 s);
-no lock was broken and no wait timeout occurred.
-
-MEASURED: new safety tooling tests first failed because its module was absent
-(EXPECTED RED commit 8136cd342). The standalone-QEMU-switch regression then ran
-16 tests with one error (EXPECTED RED commit 4898f89d9); final 16/16 pass. Mutation
-checks killed five mutants with 2, 2, 2, 2 and 7 failing tests respectively (see
-`mutations.json`). Successful hardware detach/boot and a full desktop restoration
-were not verified. No production Rust/C/CUDA code changed.
-
-MEASURED: preserved kayfabe stdout contains 27 numeric subtest rows; they are in
-`kayfabe-partial-fps.csv`. Numeric rows do not establish a passed workload, as the
-run-level status below shows. Composite scores were not recovered or fabricated.
-
-| Workload | Kayfabe snapshot3 status | VFIO runs / FPS / composite |
-|---|---|---|
-| blender-01 | Failed; tests 02–07: 27.36 / 51.20 / 60.06 / 27.83 / 36.28 / 60.06 FPS | 0 / unavailable / unavailable |
-| catia-07 | Failed; four numeric subtests recovered | 0 / unavailable / unavailable |
-| creo-04 | Failed; three numeric subtests recovered | 0 / unavailable / unavailable |
-| energy-04 | Completed in run log; six numeric subtests recovered | 0 / unavailable / unavailable |
-| enscape-01 | Still active; eight numeric subtests recovered | 0 / unavailable / unavailable |
-| maya-07 | No output at snapshot | 0 / unavailable / unavailable |
-| medical-04 | No output at snapshot | 0 / unavailable / unavailable |
-| solidworks-08 | No output at snapshot | 0 / unavailable / unavailable |
-| unreal_engine-01 | No output at snapshot | 0 / unavailable / unavailable |
-
-INFERRED: no largest VFIO-versus-kayfabe gap or repeatability spread can be ranked:
-there are zero native samples. The physical-GPU hypothesis is untested because
-execution stopped before attachment, not falsified by a workload failure.
-
-CODE READ (lane handoff): broker output refresh is 59.996 Hz. MEASURED: several
-preserved guest rendering results exceed 60 FPS (up to 205.42); therefore broker
-output pacing and benchmark rendering FPS must be kept distinct. No VFIO refresh
-or cap was measured, no vsync override was applied, and no matched uncapped
-comparison was performed.
-
-CODE READ: the supported CLI is the appropriate automation entry point; use
-`--list`, then the nine installed workloads at `--resolution FullHD`, in an
-interactive-logon kfadmin scheduled task with files under the public profile.
-Collect official CSV scores plus workload statuses, and preserve each iteration
-separately. This is a recommendation, not a delivered/tested suite runner. Full
-suite x2, selected repeats and Steel Nomad were NOT RUN; the delivered code is the
-VFIO launch/restoration supervisor and its GPU-free tests only.
+MEASURED: final overlay deletion and own-helper cleanup are pending the final
+results push. The owner VM remains stopped. Final cleanup evidence will replace
+this paragraph before handoff.

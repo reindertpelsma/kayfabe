@@ -1,0 +1,78 @@
+{
+  "classification": "MEASURED",
+  "sameBoot": true,
+  "rows": [
+    {
+      "workload": "blender-01",
+      "run1": 61.61,
+      "run2": 60.61,
+      "n": 2,
+      "mean": 61.11,
+      "range_percent_of_mean": 1.6363933889707087
+    },
+    {
+      "workload": "catia-07",
+      "run1": 63.1,
+      "run2": 63.13,
+      "n": 2,
+      "mean": 63.115,
+      "range_percent_of_mean": 0.04753228234175891
+    },
+    {
+      "workload": "creo-04",
+      "run1": 104.94,
+      "run2": 103.97,
+      "n": 2,
+      "mean": 104.455,
+      "range_percent_of_mean": 0.9286295533961982
+    },
+    {
+      "workload": "energy-04",
+      "run1": 54.57,
+      "run2": 54.67,
+      "n": 2,
+      "mean": 54.620000000000005,
+      "range_percent_of_mean": 0.1830831197363629
+    },
+    {
+      "workload": "enscape-01",
+      "run1": 37.26,
+      "run2": 37.39,
+      "n": 2,
+      "mean": 37.325,
+      "range_percent_of_mean": 0.34829202947087085
+    },
+    {
+      "workload": "maya-07",
+      "run1": 162.14,
+      "run2": 160.37,
+      "n": 2,
+      "mean": 161.255,
+      "range_percent_of_mean": 1.0976403832439192
+    },
+    {
+      "workload": "medical-04",
+      "run1": 50.54,
+      "run2": 50.58,
+      "n": 2,
+      "mean": 50.56,
+      "range_percent_of_mean": 0.07911392405063122
+    },
+    {
+      "workload": "solidworks-08",
+      "run1": 29.51,
+      "run2": 29.19,
+      "n": 2,
+      "mean": 29.35,
+      "range_percent_of_mean": 1.0902896081771731
+    },
+    {
+      "workload": "unreal_engine-01",
+      "run1": 63.58,
+      "run2": 63.7,
+      "n": 2,
+      "mean": 63.64,
+      "range_percent_of_mean": 0.1885606536769399
+    }
+  ]
+}

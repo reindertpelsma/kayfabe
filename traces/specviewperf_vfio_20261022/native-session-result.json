@@ -1,0 +1,9 @@
+{
+  "reason": "NO_PROGRESS_15_MIN",
+  "restored": false,
+  "xid_before": 0,
+  "xid_after": 0,
+  "xid_monitor": "kernel journal after start cursor",
+  "qemu_exit": 0,
+  "ended_utc": "2026-10-22T02:54:41.432675+00:00"
+}
