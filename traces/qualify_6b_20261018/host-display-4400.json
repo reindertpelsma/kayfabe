@@ -1,0 +1,18 @@
+{
+  "classification": "MEASURED",
+  "evidence": "host-display-4400.json",
+  "run": 4400,
+  "time": "2026-10-22T11:24:23.387150+00:00",
+  "active_session": "ubuntu Wayland; active; unlocked",
+  "mutter_monitor_count": 0,
+  "connected_nvidia_outputs": [
+    "DP-3",
+    "HDMI-A-1"
+  ],
+  "pointer_wake": "one relative count through Q4-owned uinput helper; no presentation resumed",
+  "stats_samples": 425,
+  "feedbacks": 0,
+  "new_content_presents": 0,
+  "discarded": 3304,
+  "qualifier": "Host desktop visibility is blocked. Guest benchmark workload progress is separate evidence. Approval pending for one GDM restart under the lane own-PIDs rule."
+}

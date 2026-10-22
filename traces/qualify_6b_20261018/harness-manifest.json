@@ -70,6 +70,36 @@
       "source_sha256": "126d1ac63936be29dbdb535f89488d0cc2ae655ae257fc09dac48418f4c99835",
       "q4_sha256": "e2bf45d4b3f67fae12c4e6d8a1da64f74015c56618efceb3140d5864216e2ac3",
       "adaptations": "Q4 lane paths/state; candidate proof file"
+    },
+    {
+      "file": "full-arm.py",
+      "q4_sha256": "a2e594a7b4386bddd07b82663e3e54ecf8229d1be4cb186f76d96a4c398e23c8",
+      "adaptations": "candidate source proof; Q4 paths; full arm selects nine workloads x2 and exact completion multiplicity; smoke arm invokes regression module"
+    },
+    {
+      "file": "energy-arm.py",
+      "q4_sha256": "627ef8516c760bcac8368dbaf6349d0c45f26069caf8db57ae0589cfcf2e7e27",
+      "adaptations": "candidate source proof; Q4 paths; full arm selects nine workloads x2 and exact completion multiplicity; smoke arm invokes regression module"
+    },
+    {
+      "file": "smoke-arm.py",
+      "q4_sha256": "6e5f91c62cc0544b5b6c7cb5ae2c3c207d43be754d67ae062f2508d9830eb836",
+      "adaptations": "candidate source proof; Q4 paths; full arm selects nine workloads x2 and exact completion multiplicity; smoke arm invokes regression module"
+    },
+    {
+      "file": "series.py",
+      "q4_sha256": "625a3fb6e255141e5c8b35e97017d35b62ba25b193b75ec530e405c056a93118",
+      "adaptations": "Q4-only campaign sequencing / requested regression duration / streamed evidence export; no product changes"
+    },
+    {
+      "file": "regressions.py",
+      "q4_sha256": "813ea77556bc0f5d9d545427b42aa3e329620f8c057f370732f53101563c716c",
+      "adaptations": "Q4-only campaign sequencing / requested regression duration / streamed evidence export; no product changes"
+    },
+    {
+      "file": "export-safe.py",
+      "q4_sha256": "51eec9326f76d8420d30aab8c584088bf05c7f2b22ecd237817661aa5e78488b",
+      "adaptations": "Q4-only campaign sequencing / requested regression duration / streamed evidence export; no product changes"
     }
   ]
 }

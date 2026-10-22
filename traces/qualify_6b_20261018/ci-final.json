@@ -1,0 +1,57 @@
+{
+  "conclusion": "failure",
+  "jobs": [
+    {
+      "name": "firmware \u2014 kf-gop (x86_64-unknown-uefi), kf3's PE check, size, local stand-in",
+      "status": "completed",
+      "conclusion": "success",
+      "url": "https://github.com/reindertpelsma/kayfabe/actions/runs/39764911164/job/119777843515",
+      "failed_steps": []
+    },
+    {
+      "name": "aarch64 \u2014 core cross-checks (no x86 assumptions)",
+      "status": "completed",
+      "conclusion": "success",
+      "url": "https://github.com/reindertpelsma/kayfabe/actions/runs/39764911164/job/119777843835",
+      "failed_steps": []
+    },
+    {
+      "name": "stable \u2014 build, test, clippy, fmt, boundary",
+      "status": "completed",
+      "conclusion": "failure",
+      "url": "https://github.com/reindertpelsma/kayfabe/actions/runs/39764911164/job/119777843860",
+      "failed_steps": [
+        "Format check"
+      ]
+    },
+    {
+      "name": "broker \u2014 build and its GPU-free test suite (broker/)",
+      "status": "completed",
+      "conclusion": "success",
+      "url": "https://github.com/reindertpelsma/kayfabe/actions/runs/39764911164/job/119777843941",
+      "failed_steps": []
+    },
+    {
+      "name": "slow \u2014 full suite with the soaks (KAYFABE_SLOW=1)",
+      "status": "completed",
+      "conclusion": "skipped",
+      "url": "https://github.com/reindertpelsma/kayfabe/actions/runs/39764911164/job/119777845779",
+      "failed_steps": []
+    }
+  ],
+  "status": "completed",
+  "url": "https://github.com/reindertpelsma/kayfabe/actions/runs/39764911164",
+  "classification": "MEASURED",
+  "evidence": "ci-final.json",
+  "candidate": "baa2977527c4509145e8033143bd664f768175a6",
+  "time": "2026-10-22T11:37:05.212373+00:00",
+  "reported_test_totals": {
+    "summaries": 353,
+    "passed": 5714,
+    "failed": 0,
+    "ignored": 21,
+    "qualifier": "sum of all test-result lines in the completed stable job, including auxiliary root capability runs"
+  },
+  "stable_log_bytes": 2611224,
+  "stable_log_sha256": "b7c75c9ea4a5d0b6500bb7cf306d1791fc2ad5f419b6800b50475d963fb0632c"
+}

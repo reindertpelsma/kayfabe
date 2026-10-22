@@ -1,0 +1,20 @@
+{
+  "classification": "MEASURED",
+  "evidence": "app-inventory.json",
+  "run": 4400,
+  "time": "2026-10-22T11:28:06.366378+00:00",
+  "minecraft_saved_harness_present": true,
+  "three_dmark": "3DMark Demo installed",
+  "steel_nomad_x64_installed": true,
+  "three_dmark_command_line_executable_present": false,
+  "steel_definition_files": 0,
+  "app_matrix_powershell_matches": [],
+  "known_matrix_paths": {
+    "C:\\kf\\kf_run_app.ps1": false,
+    "C:\\kf\\apps.json": false,
+    "C:\\kf\\kf_launch.ps1": false,
+    "C:\\kf\\ogl\\runi.ps1": true,
+    "C:\\kf\\kf_health.ps1": false
+  },
+  "private_command_strings_exported": false
+}

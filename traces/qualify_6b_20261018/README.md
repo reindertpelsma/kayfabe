@@ -6,6 +6,10 @@ MEASURED on 2026-10-22: traces/qualify_6b_20261018/candidate-tests.json records 
 
 MEASURED on 2026-10-22: traces/qualify_6b_20261018/broker-check.json records the complete local broker check passing, including 29/29 XOR and 28/28 tick mutants, each killed by at least two distinct checks.
 
+MEASURED on 2026-10-22: traces/qualify_6b_20261018/ci-final.json records GitHub run 39764911164 failed at the Format check, with the same all-PDB security-test diff as the local run. The stable job's tests and Clippy passed; later boundary/claims steps did not run. Formatting remains a merge blocker.
+
+MEASURED on 2026-10-22: traces/qualify_6b_20261018/host-display-4400.json records an active, unlocked host GNOME session with zero logical monitors despite two connected NVIDIA outputs. All broker frames were discarded in this initial interval. A pointer wake did not restore presentation. The owner was asked for the own-PIDs exception needed for one GDM restart; benchmark work continues independently. These guest scores cannot establish visible broker usability.
+
 MEASURED on 2026-10-22: traces/qualify_6b_20261018/native.json records candidate gates 9/9, gate 10 PASS, 12/12 USER births, zero refusals and zero new Xids. The QEMU SHA-256 and master broker revision/hash are preserved there.
 
 MEASURED on 2026-10-22: traces/qualify_6b_20261018/linux.json records 30/30 fast-suite arms with exactly the approved four defer-control and one missing-page-control Xids, and zero unmatched new Xids. The initial packaging failure did not start QEMU; correcting the copied wrapper's executable mode allowed the complete retry.

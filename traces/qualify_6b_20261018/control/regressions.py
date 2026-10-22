@@ -23,19 +23,29 @@ def run(agent,R,S,A,boot):
  mc_exists=all(inventory['minecraft_paths'].get(p,False) for p in [r'C:\kf\ogl\mc.ps1',r'C:\kf\ogl\mc_cmd.txt'])
  if mc_exists:
   agent("& C:\\kf\\ogl\\runi.ps1 -Name Q4-minecraft-"+runid+" -Cmd 'powershell -NoProfile -ExecutionPolicy Bypass -File "+root+"\\minecraft-wrapper.ps1'",'minecraft-start.txt')
-  states=[];t0=time.monotonic()
-  for n in range(41):
+  states=[];t0=time.monotonic();live_since=None;live_seconds=0
+  for n in range(50):
    ps="$r='"+root+"';$j=@{processes=@(Get-CimInstance Win32_Process -Filter \"Name='javaw.exe'\" | Select-Object ProcessId,ParentProcessId,CreationDate)};foreach($f in @('mc-owned.json','mc-exit.json')){if(Test-Path \"$r\\$f\"){$j[$f]=Get-Content \"$r\\$f\" -Raw}};$j|ConvertTo-Json -Depth 5 -Compress"
    state=query(ps,f'minecraft-status-{n:03}.json');states.append(state);h=health(f'minecraft-health-{n:03}.json')
    if 'mc-exit.json' in state or h['events']:break
-   if time.monotonic()-t0>=600:break
+   if 'mc-owned.json' in state and state['processes']:
+    if live_since is None:live_since=time.monotonic()
+    live_seconds=time.monotonic()-live_since
+   if live_seconds>=600:break
    time.sleep(15)
   agent("'' | Set-Content '"+root+"\\mc-stop.flag'",'minecraft-stop-request.txt')
   time.sleep(15);final=query(ps,'minecraft-final.json')
-  alive_seconds=time.monotonic()-t0;rows['minecraft']={'status':'PASS' if alive_seconds>=600 and not h['events'] and 'mc-owned.json' in states[-1] and 'mc-exit.json' not in states[-1] else 'FAIL','elapsed_seconds':alive_seconds,'samples':len(states),'final':final,'health':h,'scope':'Process/guest health smoke; world/render observation recorded separately'}
+  alive_seconds=live_seconds;rows['minecraft']={'status':'PASS' if alive_seconds>=600 and not h['events'] and 'mc-owned.json' in states[-1] and 'mc-exit.json' not in states[-1] else 'FAIL','elapsed_seconds':alive_seconds,'samples':len(states),'final':final,'health':h,'scope':'Process/guest health smoke; world/render observation recorded separately'}
  else:rows['minecraft']={'status':'NOT_INSTALLED_OR_NO_HARNESS'}
- rows['steel_nomad']={'status':'PENDING_DISCOVERY','installed_dirs':inventory.get('three_dmark_dirs',[]),'executables':inventory.get('three_dmark_executables',[])}
- rows['app_matrix']={'status':'PENDING_DISCOVERY'}
+ rows['steel_nomad']={'status':'AWAITING_UI_RUN' if inventory.get('three_dmark_dirs') else 'NOT_INSTALLED','installed_dirs':inventory.get('three_dmark_dirs',[])}
+ rows['app_matrix']={'status':'NOT_PRESENT' if not inventory.get('matrix_scripts') else 'AWAITING_INSTALLED_HARNESS','scripts':inventory.get('matrix_scripts',[])}
+ (S/'smokes-ready-for-manual.json').write_text(json.dumps(rows,indent=2)+'\n')
+ if inventory.get('three_dmark_dirs'):
+  deadline=min(time.monotonic()+1800,time.monotonic()+max(0,dt.datetime.fromisoformat('2026-10-22T17:10:00+00:00').timestamp()-time.time()))
+  while not (S/'manual-smokes-complete.json').exists() and time.monotonic()<deadline:
+   health('manual-smokes-health.json');time.sleep(15)
+  if (S/'manual-smokes-complete.json').exists():rows.update(json.loads((S/'manual-smokes-complete.json').read_text()))
+  else:rows['steel_nomad']['status']='UNVERIFIED_UI_RUN_NOT_COMPLETED'
  rows['health_final']=health('regression-health-final.json')
  rows['verdict']='FAIL' if any(isinstance(v,dict) and v.get('status')=='FAIL' for v in rows.values()) or rows['health_final']['events'] else 'PARTIAL'
  (S/'regressions.json').write_text(json.dumps(rows,indent=2)+'\n');return rows
