@@ -1,0 +1,9 @@
+{
+  "classification": "MEASURED",
+  "evidence": "owner-yield-hold.json",
+  "time": "2026-10-22T11:56:34.239775+00:00",
+  "series_pid": 2111365,
+  "series_starttime": 110029550,
+  "state": "SUPERVISOR_HELD_TO_PREVENT_NEXT_ARM",
+  "instruction": "Finish E3/E4; yield before smoke/long SPEC; no GPU/VM work after yield until owner return"
+}

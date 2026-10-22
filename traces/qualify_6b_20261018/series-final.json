@@ -1,0 +1,72 @@
+{
+  "classification": "MEASURED",
+  "evidence": "series-final.json",
+  "completed": [
+    {
+      "classification": "MEASURED",
+      "run": 4400,
+      "label": "FULL2",
+      "verdict": "FAIL",
+      "reason": "GUEST_EVENT",
+      "restored": true,
+      "host_stop": {
+        "classification": "MEASURED",
+        "time": "2026-10-22T13:43:12.072274+02:00",
+        "new_host_xids": 0,
+        "rm_unloads_15min": 1,
+        "reason": "COMPLETE_REQUESTED",
+        "qemu_pid": 2111419
+      }
+    },
+    {
+      "classification": "MEASURED",
+      "run": 4401,
+      "label": "E1",
+      "verdict": "FAIL",
+      "reason": "GUEST_EVENT",
+      "restored": true,
+      "host_stop": {
+        "classification": "MEASURED",
+        "time": "2026-10-22T13:47:27.797164+02:00",
+        "new_host_xids": 0,
+        "rm_unloads_15min": 1,
+        "reason": "COMPLETE_REQUESTED",
+        "qemu_pid": 2115405
+      }
+    },
+    {
+      "classification": "MEASURED",
+      "run": 4402,
+      "label": "E2",
+      "verdict": "PASS",
+      "reason": "VENDOR_COMPLETED_NO_GUARD_FAILURE",
+      "restored": true,
+      "host_stop": {
+        "classification": "MEASURED",
+        "time": "2026-10-22T13:52:28.983635+02:00",
+        "new_host_xids": 0,
+        "rm_unloads_15min": 0,
+        "reason": "COMPLETE_REQUESTED",
+        "qemu_pid": 2116173
+      }
+    },
+    {
+      "classification": "MEASURED",
+      "run": 4403,
+      "label": "E3",
+      "verdict": "PASS",
+      "reason": "VENDOR_COMPLETED_NO_GUARD_FAILURE",
+      "restored": true,
+      "host_stop": {
+        "classification": "MEASURED",
+        "time": "2026-10-22T13:57:26.626885+02:00",
+        "new_host_xids": 0,
+        "rm_unloads_15min": 0,
+        "reason": "COMPLETE_REQUESTED",
+        "qemu_pid": 2117131
+      }
+    }
+  ],
+  "stop": "OWNER_YIELD_REQUEST_E4_MANUAL_NO_SMOKE",
+  "ended": "2026-10-22T11:59:42.012325+00:00"
+}

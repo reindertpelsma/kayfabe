@@ -1,0 +1,7 @@
+HOST YIELDED 2026-10-22T12:05:09.970777+00:00
+Q4 guest is shut down; no Q4 GPU/VM workloads remain; fastguest lock released.
+NVIDIA bound; fresh-process cuInit 0; GDM active; automatic login configured.
+E1-E4 fresh Energy series finished. Candidate has a stability failure and formatting/CI blocker.
+Pending: separate eight other SPECviewperf workloads twice; Heaven windowed; Minecraft Java ten minutes; Steel Nomad GUI; app matrix if present; broker hover/grab cursor and input; final qualification report/comparison refresh.
+Known display limitation: earlier GNOME state reported zero monitors and broker frames were discarded. The GDM restart own-PIDs exception remains unanswered; no display-only restart performed.
+WAITING FOR CLAUDE TO EXPLICITLY RETURN THE HOST. NO Q4 GPU OR VM WORK UNTIL THEN.

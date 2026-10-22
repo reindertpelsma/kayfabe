@@ -1,0 +1,29 @@
+{
+  "classification": "MEASURED",
+  "evidence": "final-health.json",
+  "time": "2026-10-22T14:05:09.620320+02:00",
+  "nvidia_smi_before": {
+    "exit": 0,
+    "stdout": "NVIDIA GeForce RTX 4070, 595.91.07, 36, 45 MiB",
+    "stderr": ""
+  },
+  "cuda_before": 0,
+  "cuda_after": 0,
+  "nvidia_smi_after": {
+    "exit": 0,
+    "stdout": "NVIDIA GeForce RTX 4070, 595.91.07, 36, 45 MiB",
+    "stderr": ""
+  },
+  "gdm": {
+    "exit": 0,
+    "stdout": "active",
+    "stderr": ""
+  },
+  "nvidia_bound": true,
+  "automatic_login": {
+    "configured": true,
+    "enabled": true,
+    "user_present": true
+  },
+  "known_display_limitation": "Earlier host-display-4400 evidence has zero GNOME monitors; GDM restart own-PIDs exception remains pending. No restart performed solely for this symptom."
+}

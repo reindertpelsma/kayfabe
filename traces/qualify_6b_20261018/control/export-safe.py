@@ -2,7 +2,7 @@ import datetime as dt,hashlib,json,re,sys
 from pathlib import Path
 R=Path('/data/codex-Q4');N=int(sys.argv[1]);S=R/'energy-bisect'/str(N);A=R/'windows-20261022'/f'boundary-kayfabe-{N}';P=R/'public'/str(N);P.mkdir(parents=True,exist_ok=True)
 full=S/'result.json';result=json.loads(full.read_text()) if full.exists() else None
-counters=['pointer_large_entries','pointer_entry_max_bytes','refused_scan_budget','poisoned'];maxima={k:None for k in counters};sums={k:0 for k in counters};budget=[];strands=[];refused=0;retired=0
+counters=['pointer_large_entries','pointer_entry_max_bytes','refused_scan_budget','poisoned'];maxima={k:None for k in counters};sums={k:0 for k in counters};budget=[];strands=[];refused=0;retired=0;ring_refused=0;no_ce_mentions=0;no_ce_refusals=[];budget_total=0;strand_total=0;strand_end_total=0
 q=A/'qemu.log';h=hashlib.sha256()
 with q.open('rb') as f:
  for block in iter(lambda:f.read(1024*1024),b''):h.update(block)
@@ -15,9 +15,15 @@ with q.open(errors='replace') as f:
     maxima[key]=max(maxima[key] or 0,max(map(int,values)))
     if 'USER_RING_LIFECYCLE ' in line:sums[key]+=int(values[-1])
   if 'USER_RING_REFUSED' in line:refused+=1
+  if 'ring REFUSED segment' in line:
+   ring_refused+=1
+   if 'NoCeObject' in line:no_ce_refusals.append({'line':number,'diagnostic':line.split('; first words:',1)[0].strip()[:1000]})
+  no_ce_mentions+=int('NoCeObject' in line)
   if 'USER_RING' in line and ('Budget' in line or '_BUDGET' in line):
+   budget_total+=1
    if len(budget)<30:budget.append({'line':number,'diagnostic':line.split('; first words:',1)[0].strip()[:1000]})
   if 'PROGRESS_STRAND for_ms=' in line or 'PROGRESS_STRAND_END' in line:
+   strand_total+=int('PROGRESS_STRAND for_ms=' in line);strand_end_total+=int('PROGRESS_STRAND_END' in line)
    if len(strands)<100:strands.append({'line':number,'diagnostic':line.strip()[:1000]})
 stats=[];errors=[]
 for log in A.glob('broker-*.log'):
@@ -28,7 +34,15 @@ for log in A.glob('broker-*.log'):
 seconds=(stats[-1]['t']-stats[0]['t'])/1000+1 if len(stats)>1 else None
 broker={'stats_windows':len(stats),'duration_seconds_approx':seconds,'feedbacks':sum(x['feedbacks'] for x in stats),'new_content_presents':sum(x['new'] for x in stats),'repeat_presents':sum(x['repeat'] for x in stats),'discarded':sum(x['discarded'] for x in stats),'errors':errors,'new_content_fps_approx':sum(x['new'] for x in stats)/seconds if seconds else None,'repeat_per_second_approx':sum(x['repeat'] for x in stats)/seconds if seconds else None,'max_new_content_gap_us':max((x['cgap_max_us'] for x in stats),default=None),'gaps_per_minute_approx':{key:sum(x[key] for x in stats)*60/seconds if seconds else None for key in ['cg33','cg50','cg100']},'one_percent_low':None,'point_one_percent_low':None,'quantile_limitation':'Stock master broker stats provide threshold counts and window maxima, not a raw new-content gap series. No percentile values inferred.','scope':'whole VM session; no-present intervals are not rendering performance scores'}
 config=json.loads((A/'command.json').read_text());after=A/'backing-after.json'
-metadata={'classification':'MEASURED','evidence':f'{N}/result.json','run':N,'candidate':'baa2977527c4509145e8033143bd664f768175a6','captured':dt.datetime.now(dt.timezone.utc).isoformat(),'complete':result is not None,'result':result,'qemu_bytes':q.stat().st_size,'qemu_sha256':h.hexdigest(),'retirement_lines':retired,'counter_maxima':maxima,'observed_retirement_counter_sums':sums,'budget_diagnostics_first30':budget,'progress_strands_first100':strands,'user_ring_refusal_lines':refused,'broker':broker,'backing':json.loads(after.read_text()) if after.exists() else None,'flags':config['flags'],'process_controls':json.loads((S/'observer-controls-proof.json').read_text()) if (S/'observer-controls-proof.json').exists() else None}
+metadata={'classification':'MEASURED','evidence':f'{N}/result.json','run':N,'candidate':'baa2977527c4509145e8033143bd664f768175a6','captured':dt.datetime.now(dt.timezone.utc).isoformat(),'complete':result is not None,'result':result,'qemu_bytes':q.stat().st_size,'qemu_sha256':h.hexdigest(),'retirement_lines':retired,'counter_maxima':maxima,'observed_retirement_counter_sums':sums,'budget_diagnostics_first30':budget,'progress_strands_first100':strands,'user_ring_refusal_lines':refused,'ring_refused_segments':ring_refused,'no_ce_object_refusal_events':len(no_ce_refusals),'no_ce_object_mentions':no_ce_mentions,'no_ce_object_refusals_first10':no_ce_refusals[:10],'budget_diagnostic_count':budget_total,'progress_strand_count':strand_total,'progress_strand_end_count':strand_end_total,'broker':broker,'backing':json.loads(after.read_text()) if after.exists() else None,'flags':config['flags'],'process_controls':json.loads((S/'observer-controls-proof.json').read_text()) if (S/'observer-controls-proof.json').exists() else None}
 if (S/'export.json').exists():
  e=json.loads((S/'export.json').read_text(encoding='utf-8-sig'));metadata['vendor_scores']=e.get('scores',[]);metadata['export_errors']=e.get('errors',[])
+status=S/'status-final.json'
+if status.exists():
+ final=json.loads(status.read_text(encoding='utf-8-sig'))
+ exits=[json.loads(line) for line in final.get('process_exit_log','').splitlines() if line.strip()]
+ view=[row for row in exits if row.get('name','').lower()=='viewperf.exe']
+ histogram={}
+ for row in view:histogram[str(row['exit'])]=histogram.get(str(row['exit']),0)+1
+ metadata['process_exit_census']={'viewperf_exe_exits_observed':len(view),'viewperf_exit_code_histogram':histogram,'viewperf_nonzero_exits':[row for row in view if row['exit']!=0],'viewperf_live_at_final_guest_snapshot':sum(row.get('ProcessName','').lower()=='viewperf' for row in final.get('processes',[])),'forced_kill_count':None,'limitation':'WMI records exits, not the identity of the killer. No forced-kill count is inferred. On failed arms the event guard ends the guest session before workload completion. CLI ExitCode capture may be null; vendor completion plus independent observer data are retained.'}
 (P/'result.json').write_text(json.dumps(metadata,indent=2)+'\n');print(json.dumps({'run':N,'complete':metadata['complete'],'counter_maxima':maxima,'broker_feedbacks':broker['feedbacks'],'budget':len(budget),'strands':len(strands)}))

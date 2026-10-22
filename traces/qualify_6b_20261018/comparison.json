@@ -1,0 +1,213 @@
+{
+  "classification": "MEASURED",
+  "evidence": "comparison.json",
+  "candidate": "baa2977527c4509145e8033143bd664f768175a6",
+  "master": "89fc8a222",
+  "master_source": "origin/codex/kayfabe-specviewperf-20261022 traces/specviewperf_kayfabe_20261022/baseline-scores.csv",
+  "vfio_source": "benchmark-summary.json via K1 composite extraction",
+  "scope": "Partial full-suite run 4400 plus completed fresh Energy trials; survivor scores do not establish stability or full-suite repeatability. References are historical, not interleaved.",
+  "energy_trials": [
+    {
+      "run": 4401,
+      "verdict": "FAIL",
+      "events153": 3,
+      "events4101": 0,
+      "xid_delta": 0,
+      "restored": true
+    },
+    {
+      "run": 4402,
+      "verdict": "PASS",
+      "events153": 0,
+      "events4101": 0,
+      "xid_delta": 0,
+      "restored": true
+    },
+    {
+      "run": 4403,
+      "verdict": "PASS",
+      "events153": 0,
+      "events4101": 0,
+      "xid_delta": 0,
+      "restored": true
+    },
+    {
+      "run": 4404,
+      "verdict": "PASS",
+      "events153": 0,
+      "events4101": 0,
+      "xid_delta": 0,
+      "restored": true
+    }
+  ],
+  "rows": [
+    {
+      "workload": "blender-01",
+      "candidate_completed_scores": [
+        {
+          "run": 4400,
+          "composite": 40.92
+        }
+      ],
+      "candidate_n": 1,
+      "candidate_mean": 40.92,
+      "candidate_range": [
+        40.92,
+        40.92
+      ],
+      "master_completed_scores": [
+        35.85
+      ],
+      "vfio_completed_scores": [
+        61.61,
+        60.61
+      ],
+      "candidate_over_master": 1.1414225941422593,
+      "candidate_over_vfio": 0.669612174766814
+    },
+    {
+      "workload": "catia-07",
+      "candidate_completed_scores": [
+        {
+          "run": 4400,
+          "composite": 50.38
+        }
+      ],
+      "candidate_n": 1,
+      "candidate_mean": 50.38,
+      "candidate_range": [
+        50.38,
+        50.38
+      ],
+      "master_completed_scores": [],
+      "vfio_completed_scores": [
+        63.1,
+        63.13
+      ],
+      "candidate_over_master": null,
+      "candidate_over_vfio": 0.7982254614592411
+    },
+    {
+      "workload": "creo-04",
+      "candidate_completed_scores": [
+        {
+          "run": 4400,
+          "composite": 72.71
+        }
+      ],
+      "candidate_n": 1,
+      "candidate_mean": 72.71,
+      "candidate_range": [
+        72.71,
+        72.71
+      ],
+      "master_completed_scores": [],
+      "vfio_completed_scores": [
+        104.94,
+        103.97
+      ],
+      "candidate_over_master": null,
+      "candidate_over_vfio": 0.6960892250251304
+    },
+    {
+      "workload": "energy-04",
+      "candidate_completed_scores": [
+        {
+          "run": 4402,
+          "composite": 42.39
+        },
+        {
+          "run": 4403,
+          "composite": 43.37
+        },
+        {
+          "run": 4404,
+          "composite": 41.48
+        }
+      ],
+      "candidate_n": 3,
+      "candidate_mean": 42.413333333333334,
+      "candidate_range": [
+        41.48,
+        43.37
+      ],
+      "master_completed_scores": [],
+      "vfio_completed_scores": [
+        54.57,
+        54.67
+      ],
+      "candidate_over_master": null,
+      "candidate_over_vfio": 0.7765165385084828
+    },
+    {
+      "workload": "enscape-01",
+      "candidate_completed_scores": [],
+      "candidate_n": 0,
+      "candidate_mean": null,
+      "candidate_range": null,
+      "master_completed_scores": [],
+      "vfio_completed_scores": [
+        37.26,
+        37.39
+      ],
+      "candidate_over_master": null,
+      "candidate_over_vfio": null
+    },
+    {
+      "workload": "maya-07",
+      "candidate_completed_scores": [],
+      "candidate_n": 0,
+      "candidate_mean": null,
+      "candidate_range": null,
+      "master_completed_scores": [],
+      "vfio_completed_scores": [
+        162.14,
+        160.37
+      ],
+      "candidate_over_master": null,
+      "candidate_over_vfio": null
+    },
+    {
+      "workload": "medical-04",
+      "candidate_completed_scores": [],
+      "candidate_n": 0,
+      "candidate_mean": null,
+      "candidate_range": null,
+      "master_completed_scores": [],
+      "vfio_completed_scores": [
+        50.54,
+        50.58
+      ],
+      "candidate_over_master": null,
+      "candidate_over_vfio": null
+    },
+    {
+      "workload": "solidworks-08",
+      "candidate_completed_scores": [],
+      "candidate_n": 0,
+      "candidate_mean": null,
+      "candidate_range": null,
+      "master_completed_scores": [],
+      "vfio_completed_scores": [
+        29.51,
+        29.19
+      ],
+      "candidate_over_master": null,
+      "candidate_over_vfio": null
+    },
+    {
+      "workload": "unreal_engine-01",
+      "candidate_completed_scores": [],
+      "candidate_n": 0,
+      "candidate_mean": null,
+      "candidate_range": null,
+      "master_completed_scores": [],
+      "vfio_completed_scores": [
+        63.58,
+        63.7
+      ],
+      "candidate_over_master": null,
+      "candidate_over_vfio": null
+    }
+  ]
+}

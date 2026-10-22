@@ -1,0 +1,11 @@
+{
+  "classification": "MEASURED",
+  "evidence": "yield-audit.json",
+  "time": "2026-10-22T12:05:09.970777+00:00",
+  "own_active_workloads": [],
+  "own_host_target_absent": true,
+  "lock_acquired_and_released": true,
+  "latest_arm": 4404,
+  "latest_arm_restored": true,
+  "health": "final-health.json"
+}

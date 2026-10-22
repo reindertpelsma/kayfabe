@@ -3,7 +3,7 @@
   "evidence": "4400/result.json",
   "run": 4400,
   "candidate": "baa2977527c4509145e8033143bd664f768175a6",
-  "captured": "2026-10-22T11:45:43.914260+00:00",
+  "captured": "2026-10-22T12:06:32.055384+00:00",
   "complete": true,
   "result": {
     "classification": "MEASURED",
@@ -123,6 +123,18 @@
   "budget_diagnostics_first30": [],
   "progress_strands_first100": [],
   "user_ring_refusal_lines": 0,
+  "ring_refused_segments": 1,
+  "no_ce_object_refusal_events": 1,
+  "no_ce_object_mentions": 3,
+  "no_ce_object_refusals_first10": [
+    {
+      "line": 41428,
+      "diagnostic": "kf3: ring REFUSED segment gp 34 va 0x1205160d0 (6 words) NoCeObject { subch: 4, method: 576 }"
+    }
+  ],
+  "budget_diagnostic_count": 0,
+  "progress_strand_count": 0,
+  "progress_strand_end_count": 0,
   "broker": {
     "stats_windows": 1516,
     "duration_seconds_approx": 1580.25,
@@ -247,14 +259,14 @@
     }
   ],
   "export_errors": [],
-  "no_ce_object_failure_events": 1,
-  "no_ce_object_mentions": 3,
-  "failure_channel": {
-    "host": "0x1002d",
-    "guest_token": "0x806",
-    "gp": 34,
-    "forwarded": 35,
-    "subchannel": 4,
-    "method": 576
+  "process_exit_census": {
+    "viewperf_exe_exits_observed": 31,
+    "viewperf_exit_code_histogram": {
+      "0": 31
+    },
+    "viewperf_nonzero_exits": [],
+    "viewperf_live_at_final_guest_snapshot": 1,
+    "forced_kill_count": null,
+    "limitation": "WMI records exits, not the identity of the killer. No forced-kill count is inferred. On failed arms the event guard ends the guest session before workload completion. CLI ExitCode capture may be null; vendor completion plus independent observer data are retained."
   }
 }
