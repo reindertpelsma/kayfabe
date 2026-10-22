@@ -1,0 +1,9 @@
+[
+  {
+    "mutant": "observer_moved_after_enable",
+    "killers": [
+      "test_disabled_ready_receipt_is_required_before_enable",
+      "test_observer_starts_before_enabling_the_driver"
+    ]
+  }
+]
