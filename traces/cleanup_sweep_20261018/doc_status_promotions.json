@@ -1,0 +1,145 @@
+[
+  {
+    "path": "docs/design/OVERNIGHT_NOTES_w825.md",
+    "state": "LIVE",
+    "date": "2026-09-24",
+    "source_line_before": 1,
+    "last_change": "4980d073a 2026-09-24 w825: morning summary \u2014 CUDA ladder + LLM pass on v3; thin guest 25-26/30; three owner questions",
+    "action": "promote existing status/date above prose; retain historical text"
+  },
+  {
+    "path": "docs/design/THE_CONSTRAINTS.md",
+    "state": "LIVE",
+    "date": "2026-09-13",
+    "source_line_before": 13,
+    "last_change": "60608bcb2 2026-10-13 docs: V3_DEVICE_RESET.md \u2014 the device reset's design, state inventory, order, failure modes, tests, hardware plan, owner decisions",
+    "action": "promote existing status/date above prose; retain historical text"
+  },
+  {
+    "path": "docs/design/THE_MACHINE.md",
+    "state": "SUPERSEDED",
+    "date": "2026-09-26",
+    "source_line_before": 3,
+    "last_change": "9b2ecaeb8 2026-09-26 docs: README and first-read docs describe v3 as it is at 74dc3113",
+    "action": "promote existing status/date above prose; retain historical text"
+  },
+  {
+    "path": "docs/design/THE_SURFACE_v2.md",
+    "state": "LIVE",
+    "date": "2026-09-20",
+    "source_line_before": 7,
+    "last_change": "9b2ecaeb8 2026-09-26 docs: README and first-read docs describe v3 as it is at 74dc3113",
+    "action": "promote existing status/date above prose; retain historical text"
+  },
+  {
+    "path": "docs/design/THE_V3_PLAN.md",
+    "state": "LIVE",
+    "date": "2026-09-20",
+    "source_line_before": 27,
+    "last_change": "fa75b0efd 2026-09-26 docs: doorbells are most of the LLM gap, not all of it; soften the rootless line",
+    "action": "promote existing status/date above prose; retain historical text"
+  },
+  {
+    "path": "docs/design/V3_APP_MATRIX.md",
+    "state": "LIVE",
+    "date": "2026-09-30",
+    "source_line_before": 3,
+    "last_change": "38c07a83d 2026-09-30 docs: V3_APP_MATRIX \u00a7R4 (partial: OFF 60/65 + 6/6 at kf3 738c90e5 on RTX 3070, = R3), V3_GFX_TESTSET \u00a70 (bare metal 38/38 only), handoff \u00a70/\u00a71 \u2014 PM, 100-process, fast-path-ON, guest gfx and \u00a74.9 not run (owner pause)",
+    "action": "promote existing status/date above prose; retain historical text"
+  },
+  {
+    "path": "docs/design/V3_BATCHED_MAP.md",
+    "state": "LIVE",
+    "date": "2026-09-26",
+    "source_line_before": 93,
+    "last_change": "3aea0a79c 2026-10-10 kf-mem: clear 13 arithmetic_side_effects in batch.rs (checked/saturating, same results); V3_BATCHED_MAP: held_ours wording, HELD gate, unmeasured 2 MiB rounding/sim coverage",
+    "action": "promote existing status/date above prose; retain historical text"
+  },
+  {
+    "path": "docs/design/V3_DISPLAY_PACING_20261017.md",
+    "state": "LIVE",
+    "date": "2026-10-17",
+    "source_line_before": 13,
+    "last_change": "b233037d9 2026-10-18 docs, traces: fold the colour-path correction above the stale text; evidence summary with the honest n (review items 4, 5)",
+    "action": "promote existing status/date above prose; retain historical text"
+  },
+  {
+    "path": "docs/design/V3_DOORBELL_BASELINE.md",
+    "state": "RESEARCH",
+    "date": "2026-09-28",
+    "source_line_before": 27,
+    "last_change": "663e9848c 2026-10-02 docs gate: the section-number check ran nowhere and could not fail",
+    "action": "promote existing status/date above prose; retain historical text"
+  },
+  {
+    "path": "docs/design/V3_DRIVER_MATRIX.md",
+    "state": "LIVE",
+    "date": "2026-09-27",
+    "source_line_before": 98,
+    "last_change": "0e64a9608 2026-10-08 Record the 595.91.07 raw-client runs and supersede the 580-only grader ruling",
+    "action": "promote existing status/date above prose; retain historical text"
+  },
+  {
+    "path": "docs/design/V3_FAMILY_PORT_ADA.md",
+    "state": "ANSWERED",
+    "date": "2026-09-26",
+    "source_line_before": 7,
+    "last_change": "1e37217d8 2026-09-26 kf-rm: Hopper's MMU fault ids are stated in the tree \u2014 serve them (GH100 only)",
+    "action": "promote existing status/date above prose; retain historical text"
+  },
+  {
+    "path": "docs/design/V3_FLAG_INVENTORY.md",
+    "state": "RESEARCH",
+    "date": "2026-10-09",
+    "source_line_before": 22,
+    "last_change": "560f9bce1 2026-10-18 fix: make hitch diagnostic work opt-in",
+    "action": "promote existing status/date above prose; retain historical text"
+  },
+  {
+    "path": "docs/design/V3_GFX_TESTSET.md",
+    "state": "LIVE",
+    "date": "2026-09-30",
+    "source_line_before": 3,
+    "last_change": "38c07a83d 2026-09-30 docs: V3_APP_MATRIX \u00a7R4 (partial: OFF 60/65 + 6/6 at kf3 738c90e5 on RTX 3070, = R3), V3_GFX_TESTSET \u00a70 (bare metal 38/38 only), handoff \u00a70/\u00a71 \u2014 PM, 100-process, fast-path-ON, guest gfx and \u00a74.9 not run (owner pause)",
+    "action": "promote existing status/date above prose; retain historical text"
+  },
+  {
+    "path": "docs/design/V3_USER_RING_EVENT_LOOP_20261014.md",
+    "state": "LIVE",
+    "date": "2026-10-14",
+    "source_line_before": 8,
+    "last_change": "89fc8a222 2026-10-20 qemu: PROGRESS_STRAND watcher (KF3_DIAG_PROGRESS=<ms>, default off) for the hardware endpoint of the handoff design",
+    "action": "promote existing status/date above prose; retain historical text"
+  },
+  {
+    "path": "docs/design/V3_VIOMMU.md",
+    "state": "DESIGN-ONLY",
+    "date": "2026-10-08",
+    "source_line_before": 5,
+    "last_change": "aacc3c866 2026-10-13 docs: vIOMMU need research lands on integration; V3_VIOMMU.md corrected (WDDM 3.0 IOMMU remapping, risk of adding one, owner security view)",
+    "action": "promote existing status/date above prose; retain historical text"
+  },
+  {
+    "path": "docs/design/V3_WINDOWS_USER_RING_REFUSALS_20261012.md",
+    "state": "RESEARCH",
+    "date": "2026-10-12",
+    "source_line_before": 8,
+    "last_change": "c77c93586 2026-10-14 docs + evidence: V3_USER_RING_SCAN_RACE (two root causes: reads behind an unreached SYNC_WAIT, no GP_PUT read without a doorbell), G16 answered, G17 analysed, oracle/refusal-doc corrections; traces/user_ring_scan_20261014; Linux validation of 50068268 (2991/0, gates 9/9+gate10, fast 30/30)",
+    "action": "promote existing status/date above prose; retain historical text"
+  },
+  {
+    "path": "docs/design/the_uvm_map_external_allocation_wall.md",
+    "state": "LIVE",
+    "date": "2026-09-13",
+    "source_line_before": 29,
+    "last_change": "f7d53e58e 2026-09-14 w708: SOLVED \u2014 CUP3_VAL=43, first compute on this bench",
+    "action": "promote existing status/date above prose; retain historical text"
+  },
+  {
+    "path": "docs/archive/THE_ARCHITECTURE_v2.md",
+    "state": "partial-supersession notice",
+    "date": "2026-10-22",
+    "source": "docs/design/THE_ARCHITECTURE_v3.md:3",
+    "action": "record explicit successor in superseded document; retain history"
+  }
+]

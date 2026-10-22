@@ -1,5 +1,7 @@
 # V3 — batched guest-RAM maps: N scattered runs, O(1) host calls
 
+**STATUS: LIVE, 2026-09-26.**
+
 **★ CORRECTION (2026-10-10, branch `claude/held-hole-20261010`) — the HELD-hole of the D1-D3 code
 (Windows run 289: 14 leaves `HELD BY HOST`, 4 host Xid 31 `FAULT_PTE`) is a reservation-geometry defect;
 read this before §8.8.1/§8.8.3.** Host RM does not hold the range a micro reservation asks for: it

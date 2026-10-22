@@ -1,5 +1,7 @@
 # V3 FAMILY PORT — Ada (AD106, RTX 4060 Ti): the first non-GA106 boot
 
+**STATUS: ANSWERED, 2026-09-26.**
+
 > **UPDATED 2026-09-26 (branch `v3-families`, off `v3-bar1db`):** §2's second table, §3 and §5 are
 > corrected in place — six of the GA10x-only items are now derived (host control / sysfs / ogkm HAL),
 > Turing has a GSP model, and GA100 is refused by name. Source-only, **hardware-unverified** (no box).

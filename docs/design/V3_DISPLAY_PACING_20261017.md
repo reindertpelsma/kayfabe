@@ -1,5 +1,7 @@
 # V3 display pacing — the guest's flips are never parked; copies are bounded; who ticks
 
+**STATUS: LIVE, 2026-10-17.**
+
 **STATUS (2026-10-18, hitch-20261017): CORRECTION to everything below that says the colour experiment keeps the old rule.** §6.2's colour
 bullet and mutation row W9 describe a rule that production ran until `claude/hitch-20261017`: with `KF3_DISPLAY_SDR_COLOR=1` (a production flag)
 every window flip waited for its OWN scanout copy (`barrier = started + 1`, `want = true`), so the §6 rule (a flip completes behind the copy in

@@ -1,5 +1,7 @@
 # V3 app matrix — which real CUDA apps work in a kayfabe v3 fat guest
 
+**STATUS: LIVE, 2026-09-30.**
+
 ★ *2026-09-30 (§R4, partial): the same matrix at kf3 `738c90e5` (= `3f67ed95`, pre-CDP-fix) on an RTX 3070 —
 guest OFF 60/65 + 6/6, identical to R3; PM, 100-process and fast-path-ON runs not run.*
 **STATUS: LIVE, 2026-09-28 — current result is §R3 (kf3 `4c48ca0c` = master `8ab92bf4`'s code,

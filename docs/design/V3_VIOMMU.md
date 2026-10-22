@@ -1,5 +1,7 @@
 # V3 vIOMMU — a guest IOMMU in front of the kf3 device (design only)
 
+**STATUS: DESIGN-ONLY, 2026-10-08.**
+
 **Correction 2026-10-13 (research, `V3_VIOMMU_NEED_RESEARCH_20261013.md`):** "discrete NVIDIA GPUs use the GpuMmu model" is true but incomplete. WDDM 3.0 also requires discrete GPU drivers to support IOMMU DMA remapping, and a guest with a DMAR table can make Windows enable Dxgkrnl IOMMU GPU isolation when a secure VM starts; that is where Windows would consume IOVAs. Adding a vIOMMU is therefore not free of risk (one Proxmox report: VBS failed to start with a guest vIOMMU), and a missing one is a minor blocker (hardened-enterprise VBS level 3 and the Kernel DMA Protection line); nested virtualization is the larger one. Owner view recorded: a vIOMMU is not needed for kayfabe's security (kayfabe already sees guest memory; the kernel driver is trusted; kayfabe maps no guest RAM into a GPU VA).
 
 **STATUS: DESIGN-ONLY, 2026-10-08.** Nothing is built. Prompted by the owner's question whether Windows

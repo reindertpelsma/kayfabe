@@ -1,5 +1,7 @@
 # The machine, as it is — and what I propose to change
 
+**STATUS: SUPERSEDED, 2026-09-26.**
+
 > ⊘ **SUPERSEDED 2026-09-26 — this describes the PRE-v3 machine** (the isolate plane, the scratchpad
 > process, the `nvkvm-gpu` device), surveyed on 2026-09-20 to argue for the rewrite. v3 has since
 > been built (`THE_ARCHITECTURE_v3.md`, `V3_BUILD.md`, the root `ARCHITECTURE.md`). Read this file

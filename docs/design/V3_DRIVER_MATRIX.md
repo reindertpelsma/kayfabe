@@ -1,5 +1,7 @@
 # V3 DRIVER MATRIX — both driver axes, measured per ogkm tag
 
+**STATUS: LIVE, 2026-09-27.**
+
 > **2026-09-30 check — can more driver versions still be added after the display, CDP and UVM work?
 > Yes; everything version-specific is keyed on the exact tag and fails closed.** Adding a tag:
 > `tools/drivermatrix/tags.txt` + `regen.sh` (≈2 min per tag; 29 measured, 535.309.01 … 615.71.09).

@@ -1,5 +1,7 @@
 # Doorbell baseline and ioeventfd prerequisites
 
+**STATUS: RESEARCH, 2026-09-28.**
+
 > ★ **UPDATED 2026-09-30 — the production fast path is BUILT on `v3-ioeventfd`:
 > `docs/design/V3_DOORBELL_IOEVENTFD.md`.** Read that document for the design, its tests and the
 > nested measurements; this one stays the mechanism probe and the acceptance criteria it was built

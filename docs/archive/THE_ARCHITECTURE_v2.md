@@ -1,3 +1,6 @@
+> CODE READ (2026-10-22): architecture SUPERSEDED by `THE_ARCHITECTURE_v3.md`
+> (dated 2026-09-20). The original archive notice and proposal below are preserved.
+
 > ⊘⊘⊘ **ARCHIVED — THIS DESCRIBES A SUPERSEDED ARCHITECTURE. IT IS REFERENCE, NOT CURRENT.**
 > The live design is `docs/design/THE_DESIGN.md`. This file is kept because its *measurements*,
 > its *ogkm findings* and its *reasoning* remain useful — its **architecture does not**. Do not
