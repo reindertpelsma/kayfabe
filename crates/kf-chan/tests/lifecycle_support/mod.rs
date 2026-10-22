@@ -427,7 +427,7 @@ impl<E: Env> Io for EnvIo<'_, E> {
         self.env.publish(Pub::Guest {
             tested: *self.validated,
             stored: entry,
-            scanned: kind == PubKind::Control,
+            scanned: kind != PubKind::Pointer,
         });
         Ok(())
     }
@@ -450,7 +450,7 @@ impl<E: Env> Io for EnvIo<'_, E> {
             turn::Ev::PutBound => self.env.event(Ev::PutBound),
             turn::Ev::EntryRefused => self.env.event(Ev::EntryRefused),
             turn::Ev::ScanRefused => self.env.event(Ev::ScanRefused),
-            turn::Ev::ScanBudget => {}
+            turn::Ev::ScanBudget | turn::Ev::StagedSpanBudget => {}
             turn::Ev::CarriedUngated { .. } => self.env.event(Ev::CarriedUngated),
             turn::Ev::Retry { .. } => self.env.event(Ev::Retry),
             turn::Ev::GatePublished | turn::Ev::GateProceeded | turn::Ev::CreditWait => {}

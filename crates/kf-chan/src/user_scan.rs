@@ -78,6 +78,28 @@ pub struct Located {
     pub carried: Option<(MethodHeader, usize)>,
 }
 
+/// Position within ONE descriptor, retained across bounded snapshot cuts.
+/// A new GP descriptor starts with a fresh cursor, even when Scan carries a packet.
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+pub struct PartCursor {
+    base: usize,
+    packet_start: Option<usize>,
+}
+
+/// Result of inspecting one bounded part; positions are descriptor-relative.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum PartOutcome {
+    /// Every supplied word was consumed; a packet may remain open.
+    Exhausted,
+    /// END discards the rest of this descriptor, including subsequent parts.
+    Ended {
+        /// Absolute word position of END in this descriptor.
+        at: usize,
+    },
+    /// A complete software packet; still requires independent registry validation.
+    Trigger(Trigger),
+}
+
 /// Named parser refusal; failed calls leave all metadata unchanged.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Refusal {
@@ -190,13 +212,40 @@ impl Scan {
         software: &impl Fn(u32) -> bool,
         probe: &mut Probe,
     ) -> Result<Option<Trigger>, Refusal> {
+        match self.part_probed(words, &mut PartCursor::default(), software, probe)? {
+            PartOutcome::Trigger(t) => Ok(Some(t)),
+            PartOutcome::Exhausted | PartOutcome::Ended { .. } => Ok(None),
+        }
+    }
+
+    /// Continue parsing bounded snapshots of ONE descriptor. Unlike a new GP
+    /// segment, a part cut retains the open packet's original header position.
+    /// Both metadata and cursor commit transactionally on success only.
+    pub fn part(
+        &mut self,
+        words: &[u32],
+        cursor: &mut PartCursor,
+        software: impl Fn(u32) -> bool,
+    ) -> Result<PartOutcome, Refusal> {
+        self.part_probed(words, cursor, &software, &mut Probe::default())
+    }
+
+    fn part_probed(
+        &mut self,
+        words: &[u32],
+        cursor: &mut PartCursor,
+        software: &impl Fn(u32) -> bool,
+        probe: &mut Probe,
+    ) -> Result<PartOutcome, Refusal> {
         let mut next = self.clone();
-        let mut i = 0;
-        let mut packet_start = None;
+        let mut position = cursor.clone();
+        let base = position.base;
+        let mut i = 0usize;
+        let mut outcome = PartOutcome::Exhausted;
         while i < words.len() {
             probe.at = i;
             if next.pending.is_none() {
-                let raw = words[i];
+                let raw = *words.get(i).ok_or(Refusal::Header)?;
                 let h = method_header_decode(raw).ok_or(Refusal::Header)?;
                 probe.last_header = Some((i, raw));
                 if raw & (1 << 12) != 0
@@ -210,21 +259,18 @@ impl Scan {
                 {
                     return Err(Refusal::Header);
                 }
-                packet_start = Some(i);
-                i += 1;
+                let absolute = base.checked_add(i).ok_or(Refusal::Header)?;
+                position.packet_start = Some(absolute);
+                i = i.checked_add(1).ok_or(Refusal::Header)?;
                 if h.form == MethodForm::EndPbSegment {
+                    position.packet_start = None;
+                    outcome = PartOutcome::Ended { at: absolute };
                     break;
                 }
-                // The shared decoder intentionally collapses old INC/NON_INC
-                // into sized-only Legacy. Never invent method/binding semantics.
-                // Canonical zero DMA_NOP still has no arguments and is accepted.
                 if h.form == MethodForm::Legacy && h.arg_words != 0 {
                     return Err(Refusal::Legacy);
                 }
                 if h.form == MethodForm::SubDeviceMask {
-                    // Public595.84 clc56f.h DMA_TERT_OP/DMA_SUBDEVICE_MASK;
-                    // open-gpu-doc9fdf5c4 dev_ram.ref SSDM/STORE/USE. These are
-                    // header-only controls and still execute while inactive.
                     let mask = next.subdevice.as_mut().ok_or(Refusal::SubDeviceMask(raw))?;
                     if raw & 0xf != 0 {
                         return Err(Refusal::SubDeviceMask(raw));
@@ -239,21 +285,23 @@ impl Scan {
                         }
                         _ => return Err(Refusal::SubDeviceMask(raw)),
                     }
+                    position.packet_start = None;
                     continue;
                 }
                 if h.form == MethodForm::Immediate {
+                    position.packet_start = None;
                     if let Some(call) = next.datum(h, 0, h.immd, software)? {
-                        let t = Trigger {
-                            start: i - 1,
-                            end: i,
+                        outcome = PartOutcome::Trigger(Trigger {
+                            start: absolute,
+                            end: base.checked_add(i).ok_or(Refusal::Header)?,
                             call,
-                        };
-                        *self = next;
-                        return Ok(Some(t));
+                        });
+                        break;
                     }
                     continue;
                 }
                 if h.arg_words == 0 {
+                    position.packet_start = None;
                     continue;
                 }
                 next.pending = Some((h, 0));
@@ -263,26 +311,31 @@ impl Scan {
             }
             let (h, n) = next.pending.ok_or(Refusal::Header)?;
             probe.at = i;
-            let call = next.datum(h, n, words[i], software)?;
-            i += 1;
-            next.pending = (n + 1 < h.arg_words).then_some((h, n + 1));
+            let call = next.datum(h, n, *words.get(i).ok_or(Refusal::Header)?, software)?;
+            i = i.checked_add(1).ok_or(Refusal::Header)?;
+            let consumed = n.checked_add(1).ok_or(Refusal::Header)?;
+            next.pending = (consumed < h.arg_words).then_some((h, consumed));
             if let Some(call) = call {
-                // Public FIFO software methods cannot straddle GP segments.
                 if h.arg_words != 1 || n != 0 {
                     return Err(Refusal::SoftwarePacket);
                 }
-                let start = packet_start.ok_or(Refusal::SoftwarePacket)?;
-                let t = Trigger {
+                let start = position.packet_start.ok_or(Refusal::SoftwarePacket)?;
+                position.packet_start = None;
+                outcome = PartOutcome::Trigger(Trigger {
                     start,
-                    end: i,
+                    end: base.checked_add(i).ok_or(Refusal::Header)?,
                     call,
-                };
-                *self = next;
-                return Ok(Some(t));
+                });
+                break;
+            }
+            if next.pending.is_none() {
+                position.packet_start = None;
             }
         }
+        position.base = base.checked_add(i).ok_or(Refusal::Header)?;
         *self = next;
-        Ok(None)
+        *cursor = position;
+        Ok(outcome)
     }
 
     fn datum(
