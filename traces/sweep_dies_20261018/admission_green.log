@@ -1,0 +1,9 @@
+test_expired_lease_cannot_create_receipt (test_s4_arm_admission.ArmAdmissionTests.test_expired_lease_cannot_create_receipt) ... ok
+test_fourth_attempt_retains_all_failed_attempt_counts (test_s4_arm_admission.ArmAdmissionTests.test_fourth_attempt_retains_all_failed_attempt_counts) ... ok
+test_latest_start_guard_still_refuses (test_s4_arm_admission.ArmAdmissionTests.test_latest_start_guard_still_refuses) ... ok
+test_third_owned_harness_attempt_admitted_within_budget (test_s4_arm_admission.ArmAdmissionTests.test_third_owned_harness_attempt_admitted_within_budget) ... ok
+
+----------------------------------------------------------------------
+Ran 4 tests in 0.368s
+
+OK

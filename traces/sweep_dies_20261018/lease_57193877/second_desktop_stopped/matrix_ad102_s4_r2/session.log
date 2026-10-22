@@ -1,0 +1,11 @@
+2026-10-22T11:19:56Z [desktop] interactive session: KFWIN\kf
+2026-10-22T11:20:11Z [desktop] pushed 26 guest files
+2026-10-22T11:22:06Z APP_DISK guest-mounted ISO
+2026-10-22T11:22:15Z [desktop] setup ok: cd=D: nvidia_adapters=1 NVIDIA GeForce RTX 4090, 580.88, 8192 MiB
+2026-10-22T11:22:23Z [desktop] override tool cup2.exe sha256=86039b888dc7d17b1bd92736c5a5589a4a67a897a5aa9859f7a7ed9d280d95b8
+2026-10-22T11:22:28Z [desktop] override tool cup3.exe sha256=41681173e42c40ba94cafd33be22c90f419b64436b9be88993ba6bd286a19460
+2026-10-22T11:22:32Z [desktop] override tool cup8.exe sha256=7401a67a58288e0789a8fa214be4696316715c5306b690781996847f5baffcf6
+2026-10-22T11:22:37Z [desktop] override tool kf_dxprobe.exe sha256=8f049e04196db99275d901119e9c860058d423e2250920acb717062ed8303f3a
+2026-10-22T11:23:09Z [desktop] staged vc_redist (installer, 20s)
+2026-10-22T11:23:17Z MATRIX_START apps=112 source=1700543393c34f93adc0611430e3d49ab38eca3a
+2026-10-22T11:23:20Z MATRIX_EXIT rc=7

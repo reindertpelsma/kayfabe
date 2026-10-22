@@ -1,0 +1,10 @@
+{
+  "kind": "MEASURED",
+  "date": "2026-10-22",
+  "mutant": "reintroduce timestamp-dependent provider identity",
+  "killers": [
+    "test_boot_provider_after_desktop_is_metadata ",
+    "test_future_boot_clock_record_is_retained_without_tdr "
+  ],
+  "exit": 1
+}

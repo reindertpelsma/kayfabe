@@ -1,0 +1,50 @@
+test_boot_153_before_desktop_does_not_refuse (test_desktop_health.DesktopHealthTests.test_boot_153_before_desktop_does_not_refuse) ... ok
+test_boot_153_is_retained_with_its_epoch (test_desktop_health.DesktopHealthTests.test_boot_153_is_retained_with_its_epoch) ... ok
+test_boot_provider_after_desktop_is_metadata (test_desktop_health.DesktopHealthTests.test_boot_provider_after_desktop_is_metadata) ... FAIL
+test_clean_desktop_passes (test_desktop_health.DesktopHealthTests.test_clean_desktop_passes) ... ok
+test_display_4101_and_bugcheck_refuse (test_desktop_health.DesktopHealthTests.test_display_4101_and_bugcheck_refuse) ... ok
+test_future_boot_clock_record_is_retained_without_tdr (test_desktop_health.DesktopHealthTests.test_future_boot_clock_record_is_retained_without_tdr) ... FAIL
+test_future_boot_metadata_cannot_mask_nvidia_fault (test_desktop_health.DesktopHealthTests.test_future_boot_metadata_cannot_mask_nvidia_fault) ... ok
+test_late_boot_event_never_claims_health_pass (test_desktop_health.DesktopHealthTests.test_late_boot_event_never_claims_health_pass) ... ok
+test_missing_explorer_refuses_even_with_dwm (test_desktop_health.DesktopHealthTests.test_missing_explorer_refuses_even_with_dwm) ... ok
+test_no_interactive_user_refuses (test_desktop_health.DesktopHealthTests.test_no_interactive_user_refuses) ... ok
+test_null_interactive_user_refuses (test_desktop_health.DesktopHealthTests.test_null_interactive_user_refuses) ... ok
+test_nvidia_153_before_and_after_desktop_refuses (test_desktop_health.DesktopHealthTests.test_nvidia_153_before_and_after_desktop_refuses) ... ok
+test_unreadable_log_refuses (test_desktop_health.DesktopHealthTests.test_unreadable_log_refuses) ... ok
+
+======================================================================
+FAIL: test_boot_provider_after_desktop_is_metadata (test_desktop_health.DesktopHealthTests.test_boot_provider_after_desktop_is_metadata)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/workspace/s4-wt/scripts/bench/tests/test_desktop_health.py", line 86, in test_boot_provider_after_desktop_is_metadata
+    self.assertEqual(p.returncode, 0, p.stdout+p.stderr)
+    ~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: 1 != 0 : S2_HEALTH {"utc":"2026-10-22T11:32:43.0799140Z","boot":"2026-10-22T04:25:15.0000000Z","desktop_start":"2026-10-22T04:26:00.0000000Z","user":"FIXTURE\\kf","system_log_readable":1,"events4101":0,"events153":0,"unclassified153":1,"boot153_pre_desktop":0,"bugcheck1001":0,"driver":"32.0.15.8088","code":0,"dwm":1,"explorer":1}
+{"TimeCreated":"2026-10-22T04:27:20Z","Id":153,"ProviderName":"Microsoft-Windows-Kernel-Boot","Message":"fixture"}
+Exception: /workspace/s4-wt/scripts/bench/diesweep/desktop/health.ps1:17
+Line |
+  17 |  … ults.Count){throw 'S2 desktop/driver/zero-4101-153-bugcheck guard fai …
+     |                ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+     | S2 desktop/driver/zero-4101-153-bugcheck guard failed
+
+
+======================================================================
+FAIL: test_future_boot_clock_record_is_retained_without_tdr (test_desktop_health.DesktopHealthTests.test_future_boot_clock_record_is_retained_without_tdr)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/workspace/s4-wt/scripts/bench/tests/test_desktop_health.py", line 93, in test_future_boot_clock_record_is_retained_without_tdr
+    self.assertEqual(p.returncode,0,p.stdout+p.stderr)
+    ~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: 1 != 0 : S2_HEALTH {"utc":"2026-10-22T11:32:46.3718166Z","boot":"2026-10-22T04:25:15.0000000Z","desktop_start":"2026-10-22T04:26:00.0000000Z","user":"FIXTURE\\kf","system_log_readable":1,"events4101":0,"events153":0,"unclassified153":1,"boot153_pre_desktop":0,"bugcheck1001":0,"driver":"32.0.15.8088","code":0,"dwm":1,"explorer":1}
+{"TimeCreated":"2026-10-22T14:32:45.767745+02:00","Id":153,"ProviderName":"Microsoft-Windows-Kernel-Boot","Message":"fixture"}
+Exception: /workspace/s4-wt/scripts/bench/diesweep/desktop/health.ps1:17
+Line |
+  17 |  … ults.Count){throw 'S2 desktop/driver/zero-4101-153-bugcheck guard fai …
+     |                ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+     | S2 desktop/driver/zero-4101-153-bugcheck guard failed
+
+
+----------------------------------------------------------------------
+Ran 13 tests in 11.761s
+
+FAILED (failures=2)

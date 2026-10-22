@@ -1,0 +1,10 @@
+{
+  "kind": "MEASURED",
+  "date": "2026-10-22",
+  "mutant": "restore inherited redcell attempt cap",
+  "killers": [
+    "test_fourth_attempt_retains_all_failed_attempt_counts ",
+    "test_third_owned_harness_attempt_admitted_within_budget "
+  ],
+  "exit": 1
+}

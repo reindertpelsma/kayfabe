@@ -1,0 +1,33 @@
+test_expired_lease_cannot_create_receipt (test_s4_arm_admission.ArmAdmissionTests.test_expired_lease_cannot_create_receipt) ... ok
+test_fourth_attempt_retains_all_failed_attempt_counts (test_s4_arm_admission.ArmAdmissionTests.test_fourth_attempt_retains_all_failed_attempt_counts) ... FAIL
+test_latest_start_guard_still_refuses (test_s4_arm_admission.ArmAdmissionTests.test_latest_start_guard_still_refuses) ... ok
+test_third_owned_harness_attempt_admitted_within_budget (test_s4_arm_admission.ArmAdmissionTests.test_third_owned_harness_attempt_admitted_within_budget) ... FAIL
+
+======================================================================
+FAIL: test_fourth_attempt_retains_all_failed_attempt_counts (test_s4_arm_admission.ArmAdmissionTests.test_fourth_attempt_retains_all_failed_attempt_counts)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/workspace/s4-wt/scripts/bench/tests/test_s4_arm_admission.py", line 25, in test_fourth_attempt_retains_all_failed_attempt_counts
+    x,r,c=self.run_guard(attempts=3);self.assertEqual(x.returncode,0,x.stderr);self.assertEqual(c['on'],4)
+                                     ~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: 1 != 0 : Traceback (most recent call last):
+  File "<stdin>", line 3, in <module>
+AssertionError: max2 per redcell/lease
+
+
+======================================================================
+FAIL: test_third_owned_harness_attempt_admitted_within_budget (test_s4_arm_admission.ArmAdmissionTests.test_third_owned_harness_attempt_admitted_within_budget)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/workspace/s4-wt/scripts/bench/tests/test_s4_arm_admission.py", line 23, in test_third_owned_harness_attempt_admitted_within_budget
+    x,r,c=self.run_guard();self.assertEqual(x.returncode,0,x.stderr);self.assertEqual(r['cell_attempt'],3)
+                           ~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: 1 != 0 : Traceback (most recent call last):
+  File "<stdin>", line 3, in <module>
+AssertionError: max2 per redcell/lease
+
+
+----------------------------------------------------------------------
+Ran 4 tests in 0.528s
+
+FAILED (failures=2)
