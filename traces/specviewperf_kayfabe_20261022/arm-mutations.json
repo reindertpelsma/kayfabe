@@ -1,0 +1,18 @@
+[
+  {
+    "mutation": "ignore_xid",
+    "failing_tests": 2
+  },
+  {
+    "mutation": "ignore_tdr",
+    "failing_tests": 2
+  },
+  {
+    "mutation": "ignore_deadline",
+    "failing_tests": 2
+  },
+  {
+    "mutation": "erase_flags",
+    "failing_tests": 2
+  }
+]
