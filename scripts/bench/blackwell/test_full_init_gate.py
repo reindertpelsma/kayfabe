@@ -22,7 +22,7 @@ class FullInitWatch(unittest.TestCase):
             receipt=json.dumps({'approved_native_xid_lines':[],'pci':'0000:00:08'})
             def bounded(path):return phase.read_text() if str(path)==str(phase) else receipt
             argv=['guard','watch',str(root/'receipt'),'100',str(phase),str(root/'fatal')]
-            with patch.object(sys,'argv',argv),patch.object(G.os,'getpgid',return_value=100),patch.object(G.os,'getpgrp',return_value=100),patch.object(G.N,'bounded',side_effect=bounded),patch.object(G,'validate_phase_owner',return_value=True),patch.object(G.N,'kernel_snapshot',side_effect=[XID,G.N.GuardRefused('test end')]),patch.object(G,'abort_owned_qemu'),patch.object(G.N,'terminate_owned_tree'),patch.object(G.time,'sleep'):
+            with patch.object(sys,'argv',argv),patch.object(G.os,'getpgid',return_value=100),patch.object(G.os,'getpgrp',return_value=100),patch.object(G.N,'bounded',side_effect=bounded),patch.object(G,'validate_phase_owner',return_value=True),patch.object(G.N,'kernel_snapshot',side_effect=[XID,G.N.GuardRefused('test end')]),patch.object(G,'abort_owned_qemu',return_value=True),patch.object(G.N,'terminate_owned_tree'),patch.object(G.time,'sleep'):
                 self.assertEqual(G.main(),7)
             accepted=root/'receipt.accepted.json'
             self.assertFalse(accepted.exists(),'fault was accepted before actual Code0 evidence')
