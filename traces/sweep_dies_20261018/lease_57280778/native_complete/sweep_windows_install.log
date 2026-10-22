@@ -1,0 +1,5 @@
+WIN_BASE_INSTALL_START pinned-QEMU/std-VGA baseline preparation 2026-10-22T22:43:29+00:00
+[2026-10-22T22:43:57Z] WINVM_INSTALL_START name=kfwin repo=905a8bd7 qemu=/workspace/bench/kf3-bins/905a8bd7/qemu-system-x86_64 host_driver=595.91.07
+[2026-10-22T22:43:57Z] START prereqs
+[2026-10-22T22:43:58Z] EXIT prereqs rc=0
+[2026-10-22T22:43:58Z] START fetch

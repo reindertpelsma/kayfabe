@@ -1,0 +1,22 @@
+{
+  "kind": "MEASURED",
+  "lease_id": 57280778,
+  "source": "905a8bd75e0fc53f5494e45b6d2a0fee474d7757",
+  "files": [
+    {
+      "path": "defer-liveness.log",
+      "bytes": 14220,
+      "sha256": "c4c86fa2bd59d0a10a41e80cde5a960b22a4e65fabf457e5df7f3a980f5caa7a"
+    },
+    {
+      "path": "missing-page-fault.log",
+      "bytes": 2461,
+      "sha256": "cff148872a96f2989821fa5d4def02a7c21653b1b9f7846341969cfe2ffb1040"
+    },
+    {
+      "path": "pce-mask-probe.log",
+      "bytes": 912,
+      "sha256": "908d58079154f4b9aaa73479ac33a353af569668b6e6236d1b80a7ee893e8ef0"
+    }
+  ]
+}

@@ -1,0 +1,81 @@
+{
+  "kind": "MEASURED",
+  "lease_id": 57280778,
+  "source": "905a8bd75e0fc53f5494e45b6d2a0fee474d7757",
+  "utc": "2026-10-22T22:44:26.607684+00:00",
+  "files": {
+    "s4_controller.log": {
+      "bytes": 2309,
+      "sha256": "ca20160c4582c1f49da0a7863d9caaeec93f96bf99867aa4179195e855f68fd6"
+    },
+    "sweep_host_die.log": {
+      "bytes": 209,
+      "sha256": "f89921a50b22c2a17fc4e231288414e32beb50f88bb7befbd84d0812f1489e79"
+    },
+    "sweep_windows_media_controller.log": {
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "sweep_native_grtier.log": {
+      "bytes": 3056,
+      "sha256": "ac82e68252d5115ed6ec4a7862d5bfbcfbd86827e4729e1540024f7b59102638"
+    },
+    "sweep_host_preflight.log": {
+      "bytes": 410,
+      "sha256": "a8fb1af69546ed484a2300e009532bc3f37323e7fdbc6593a72a21d2d21daa18"
+    },
+    "sweep_grtier_build.log": {
+      "bytes": 31462,
+      "sha256": "8af930b868a99a5be3657330d2258a276ad86b1ef6b0c6df3e47815087cf2bc1"
+    },
+    "sweep_native_baseline.log": {
+      "bytes": 352,
+      "sha256": "9e7e7142824eb5dbe52b8ea1e76c073416e6eb9f1f73b634dbeeffe0be2428c9"
+    },
+    "sweep_windows_install.log": {
+      "bytes": 352,
+      "sha256": "8f4821ff92416e7b8b784fc367e7307ca0f78b673d802a1069fea2600c3ca95c"
+    },
+    "native_xid_baseline.json": {
+      "bytes": 1433,
+      "sha256": "f5d89556cf8207c51b7acfa57d731958e93d0ca45e5d9fd15822025135961ac9"
+    },
+    "sweep_raw_build.log": {
+      "bytes": 29936,
+      "sha256": "48ae49c21ed653ead25f2c52294489c28fc420d641ba934fa5a528c0ff75c4d2"
+    },
+    "sweep_cuda_host.log": {
+      "bytes": 2364,
+      "sha256": "183f01c76dda21508fb5a77069e057b98c611bc2a10cb8aa95523460536d0b2e"
+    },
+    "sweep_gates.log": {
+      "bytes": 25228,
+      "sha256": "17c44ea9e6e761d9f654f4f3ebd00deaebbfb61f2942821c9691d4f9398938f2"
+    },
+    "sweep_windows_media.log": {
+      "bytes": 41324,
+      "sha256": "fd3b53e40e1e16b6053158ac98d2403b20b9e0e8036f9e72c8e3ac7126358502"
+    },
+    "sweep_bare595.log": {
+      "bytes": 5841,
+      "sha256": "19e416c4db8f214d13308ba40eaddf5add9a631e7be12f304cd9c082abe7af2c"
+    },
+    "native_kernel_snapshot.log": {
+      "bytes": 129824,
+      "sha256": "c4979d6e43bf0b410f80f4c3a7371e9cddd6a67ac772c0db16f9ffd931c31271"
+    },
+    "native_xid_watch.log": {
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "sweep_probe_build.log": {
+      "bytes": 32267,
+      "sha256": "de50a1be8ec4e327f8bb7b16ab68e16002f9b0fb9971bbf6a6f9ecb13ad39a66"
+    },
+    "sweep_windows_prereq_install.log": {
+      "bytes": 8142,
+      "sha256": "4f5b9c7ce9c06863052a4735b4feed8ca020fec703a296f4d397aec587990d45"
+    }
+  },
+  "bounds": "Text only; at most 128 KiB per file, first 80 and last 300 lines when larger. Supervisor tokens omitted. Raw large logs remain on rental until teardown."
+}
