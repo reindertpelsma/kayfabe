@@ -30,6 +30,9 @@
     "budget_watch_pid": 111960,
     "budget_watch_verified": true,
     "auto_destroy_pid_starttime": 236864807,
-    "budget_watch_pid_starttime": 236864812
+    "budget_watch_pid_starttime": 236864812,
+    "ssh_ready_utc": "2026-10-22T21:11:06.213117+00:00",
+    "ssh_hostkey_fingerprint": "SHA256:wS+QN5rGbi64x35ezg9cr+SdIpgGOUNMUK6AqAPBbyE",
+    "observed_dph_total": 0.42866666666666664
   }
 ]
