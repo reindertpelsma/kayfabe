@@ -1,0 +1,16 @@
+{
+  "classification": "MEASURED",
+  "time": "2026-10-22T05:46:53.283812+02:00",
+  "run": 3453,
+  "revision": "89fc8a222",
+  "flags_match_run3440_minus_prof_plus_progress1000": true,
+  "cuda_gate": {
+    "before": 0,
+    "after": 0,
+    "reloaded": false
+  },
+  "vram_mib": 8192,
+  "ram_mib": 12288,
+  "cow": true,
+  "vsync_override": false
+}

@@ -1,3 +1,15 @@
+# RESUMED 2026-10-22, after owner-authorized host CUDA repair
+
+MEASURED: new baseline run 3453 launched at 05:44:27 CEST, cuInit=0, no reload
+required by K1. SPEC started at 05:46:54 CEST through the working documented
+owner command channel. QGA did not answer. All nine workloads, FullHD, one
+iteration, original flags and no vsync override; results pending.
+CODE READ: owner explicitly authorized one NVIDIA module reload and recheck if
+cuInit returns 999 again. New pre-arm gate tests: EXPECTED RED 12 errors;
+final Python suites 53 passed. Four new mutants killed by 2/4/3/3 tests.
+MEASURED: the pinned Phase 1 binary remains the previously green built revision.
+The earlier refusal below is historical; it does not describe this resumed run.
+
 # K1 SPECviewperf 15 — stopped at baseline device realization
 
 STATUS: STOP / PARTIAL, 2026-10-22. No new SPEC workload ran.
