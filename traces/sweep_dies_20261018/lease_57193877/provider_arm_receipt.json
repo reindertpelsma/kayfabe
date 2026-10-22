@@ -1,0 +1,12 @@
+{
+  "kind": "MEASURED",
+  "date": "2026-10-22",
+  "lease_id": 57193877,
+  "harness_revision": "6733c3bfbecf30503f33ec9745ff502fe6c0ee44",
+  "receipt": "\n/workspace/sweep-win-57193877/kfwin/disk/bw580_bind.qcow2: OK\nS4_PROVIDER_RESUME_PID=102891\n",
+  "files": {
+    "/root/s2/arm.sh": "71a70d47e1707b1258efe1de5b666cfcc360dc78437aaac47371ddfb8bea44f0",
+    "/root/s4/desktop.sh": "fa998ea791b927ee7bfcb428a9c8013d572508663ac13c06d03d922bb9694973",
+    "/root/kayfabe/scripts/bench/diesweep/desktop/health.ps1": "2d56c9b5234e5e0ecf66e08a3c28ddac01cf4c18844aae7c99b5235bd5b9c710"
+  }
+}
