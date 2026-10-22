@@ -62,6 +62,24 @@ class DocStatusTests(unittest.TestCase):
         self.write("a.md", "# Title\n\nClaim.\n\nSTATUS: LIVE, 2026-10-22.\n")
         self.assertIn("misplaced-status", self.kinds())
 
+    def test_section_heading_before_status_is_reported(self):
+        self.write("a.md", "# Title\n\n## Implementation\n\nSTATUS: LIVE, 2026-10-22.\n")
+        self.assertIn("misplaced-status", self.kinds())
+
+    def test_prose_before_status_in_same_paragraph_is_reported(self):
+        self.write("a.md", "# Title\n\nCorrection first.\nSTATUS: LIVE, 2026-10-22.\n")
+        self.assertIn("misplaced-status", self.kinds())
+
+    def test_yaml_front_matter_before_status_is_accepted(self):
+        self.write("a.md", "---\ntitle: Example\n---\n\nSTATUS: LIVE, 2026-10-22.\n")
+        self.run_check(0)
+
+    def test_yaml_front_matter_then_title_preserves_status_line_number(self):
+        self.write("a.md", "---\ntitle: Example\n---\n\n# Title\n\nSTATUS: LIVE.\n")
+        result = self.run_check(1)
+        self.assertEqual([v["kind"] for v in result["violations"]], ["missing-date"])
+        self.assertEqual(result["violations"][0]["line"], 7)
+
     def test_status_in_fenced_code_is_not_metadata(self):
         self.write("a.md", "# Title\n\n```\nSTATUS: LIVE, 2026-10-22.\n```\n")
         self.assertIn("missing-status", self.kinds())
