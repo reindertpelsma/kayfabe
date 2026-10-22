@@ -1,0 +1,8 @@
+MEASURED: Native NVIDIA memory.total=12282 MiB, driver580.88, RTX4070.
+CODE READ: kayfabe argv fb-mb=8192, bar1-size=8589934592; guest store8GiB.
+MEASURED: both VM arms use the same owner image; native CoW preserves the base.
+CODE READ: RAM12GiB/vCPUs8/CPUflags/diskcache/identity are retained.
+MEASURED: native desktopWMI3840x2160/59Hz; SPECFullHD; native renderer>200FPS.
+CODE READ(lane handoff): kayfabe broker output59.996Hz; some guest subtests60.06FPS.
+MEASURED: no profile/vsync override. An uncapped matched-capacity kayfabe arm was not run.
+INFERRED: ratios in the render/display-capped rows are reference comparisons, not an isolated measurement of submission overhead. Capacity is also a comparison condition, not a proven cause of the original failures.

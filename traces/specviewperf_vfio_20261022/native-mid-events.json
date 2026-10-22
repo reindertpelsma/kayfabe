@@ -1,0 +1,12 @@
+{
+  "evidence": "MEASURED",
+  "native_boot_guest_utc": "2026-10-21T21:50:20.6361586Z",
+  "wer_reports_logged_after_boot": 54,
+  "wer_original_events_before_boot": 54,
+  "wer_original_events_after_boot": 0,
+  "wer_unknown_origin": 0,
+  "application_error_1000_since_boot": 0,
+  "nvlddmkm_display_events_since_boot": 0,
+  "original_event_utc_min": "2026-10-20T01:58:33.1280450Z",
+  "original_event_utc_max": "2026-10-21T20:49:33.2195095Z"
+}
