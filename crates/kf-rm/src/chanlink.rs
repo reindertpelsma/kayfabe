@@ -3517,7 +3517,10 @@ mod tests {
             "undefined level"
         );
         assert!(!kernel_channel(user, None), "undecodable is never kernel");
-        assert!(!kernel_channel(0xc1e0_0006, None), "a handle is not privilege");
+        assert!(
+            !kernel_channel(0xc1e0_0006, None),
+            "a handle is not privilege"
+        );
         assert!(
             kernel_channel(0xc1e0_0006, Some(P::from_internal_flags(0x16))),
             "the internal scrubber's recorded KERNEL stamp"

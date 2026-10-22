@@ -21,11 +21,20 @@ use kf_rm::chanlink::is_rm_internal_client;
 
 #[test]
 fn only_the_documented_internal_handle_range_is_internal() {
-    assert!(is_rm_internal_client(0xC1E0_0006), "the PMA scrubber's client");
-    assert!(!is_rm_internal_client(0xC1D0_0001), "an ordinary user client");
+    assert!(
+        is_rm_internal_client(0xC1E0_0006),
+        "the PMA scrubber's client"
+    );
+    assert!(
+        !is_rm_internal_client(0xC1D0_0001),
+        "an ordinary user client"
+    );
     assert!(
         !is_rm_internal_client(0xC1F0_0000),
         "0xC1F00000 is past RS_CLIENT_HANDLE_MAX (0x100000) above the internal base"
     );
-    assert!(!is_rm_internal_client(0xFFFF_FFFF), "all ones is not a client the guest RM minted");
+    assert!(
+        !is_rm_internal_client(0xFFFF_FFFF),
+        "all ones is not a client the guest RM minted"
+    );
 }
