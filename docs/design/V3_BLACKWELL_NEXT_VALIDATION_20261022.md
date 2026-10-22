@@ -1,5 +1,11 @@
 **STATUS: ANSWERED, 2026-10-22.** The authorized validation run is closed; native passed, Windows incomplete/failed.
 
+2026-10-22 GPU-free continuation: the FUTURE-RUN instructions below are superseded by
+[V3_BLACKWELL_HOST_PRECOMP_VALIDATION_20261022.md](V3_BLACKWELL_HOST_PRECOMP_VALIDATION_20261022.md).
+The precision-only hypothesis is falsified; next proposed arms use a lawful host-read candidate,
+then a separate B1 ON binary. The measured history below is retained. No current rental grant.
+
+
 FINAL2026-10-22: current57148807 destroyed/APIabsent03:47:36UTC, lane runtime4.832257USD<7.
 NativeN0PASS; precision-only ON0x50 falsifies sufficiency. OFF reached3303canonicalRPCs then
 exact-shaped QEMU32pair before host-observedCIMCode0 proof; guard aborted, no natural0x116

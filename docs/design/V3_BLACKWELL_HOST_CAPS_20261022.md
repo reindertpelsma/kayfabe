@@ -1,8 +1,8 @@
-**STATUS: RESEARCH, 2026-10-22.** GPU-free CAPC comparison and host-read access audit; no hardware/rental authorized by this document.
+**STATUS: LIVE, 2026-10-22.** GPU-free comparison, public access audit and implemented runtime candidate; register permission and Windows behavior remain hardware-unverified. No rental authorized by this document.
 
 The clean precision-only ON failure leaves one named CAPC difference: CSC0LUT_FVLUT.
 The earlier native read was privileged BAR0 mapping, not an unprivileged RM control. The
-unprivileged alternative remains under review; do not treat the old tool as a runtime T2 source.
+public unprivileged alternative is implemented below, subject to the driver's register allowlist; do not treat the old tool as a runtime T2 source.
 This is a field-level comparison, not a pasted page or a production captured-word table.
 
 MEASURED retained input: own GB202 native measurement text SHA256
@@ -42,3 +42,65 @@ The clean precision-only ON reproduces0x50. INFERRED candidate: FVLUT is the rem
 CAPC variable. FALSIFIER for any later lawful host-sourced arm:0x50 persists with same-die CAPC
 successfully obtained, while the source/binary/flags and fresh sibling remain fixed. No captured
 fallback or blanket FVLUT declaration follows from the current comparison.
+
+
+Public access audit (CODE READ)
+
+The original `read_display_caps_page.py` opens sysfs BAR0 `resource0` and maps it read-only.
+That is a privileged measurement route (tier3), even though it performs no writes. It is not
+an RM control kayfabe may silently substitute for an unprivileged runtime query.
+
+The dedicated capability object does not solve this: `NVCA73_DISP_CAPABILITIES` is declared
+`RS_FLAGS_ALLOC_PRIVILEGED` in [resource_list.h:1381](https://github.com/NVIDIA/open-gpu-kernel-modules/blob/b81d58ee0224d1d290bef1c080592b619e184042/src/nvidia/src/kernel/rmapi/resource_list.h#L1381).
+Its public implementation supplies an aperture base/size, not a lawful unprivileged page-read
+control. `NV5070_CTRL_CMD_SYSTEM_GET_CAPS_V2` is a one-byte semantic flags table; it has no
+CSC precision or FVLUT page payload. Neither is the implementation used here.
+
+There is a distinct candidate: `NV2080_CTRL_CMD_GPU_EXEC_REG_OPS` (0x20800122), on the host's
+own subdevice. The generated [595.91.07 control export](https://github.com/NVIDIA/open-gpu-kernel-modules/blob/9f087a6d4e86d85acc0ce1d354d6276fe5047b29/src/nvidia/generated/g_subdevice_nvoc.c#L223)
+carries flags0x10118 including `RMCTRL_FLAGS_NON_PRIVILEGED`. The [public register validator](https://github.com/NVIDIA/open-gpu-kernel-modules/blob/9f087a6d4e86d85acc0ce1d354d6276fe5047b29/src/nvidia/src/kernel/gpu/gpu_access.c#L1102)
+still applies `gpuGetUserRegisterAccessPermissions` when `osIsAdministrator()` is false.
+The per-offset GSP permission result for PRECOMP is not established by this source. A callable
+unprivileged API is not proof that this range is readable. The GSP-plugin-only NOPTRS variant
+is not used. Earlier suggestions that no unprivileged route exists are superseded by this
+qualified candidate; the original root reader remains privileged.
+
+Implementation and limits (CODE READ; hardware n=0)
+
+`kf-host::precomp` authors READ32/GLOBAL requests, never guest bytes. Exact compound ABI layouts
+were compiled from the five public SDKs listed in the adjacent `abi/sources.json`:580.65.06,
+580.94.02,580.159.04,590.48.01,595.91.07. Each C measurement gives params48bytes, rows32bytes;
+count offset20, pointer24, row operation0/type1/status2/register12/value20. The generator
+reproduces the committed Rust layout. Unknown versions fail before an ioctl; there is no
+nearest-version or scalar bench-ABI bypass. This supports only those measured host SDKs,
+independently of the Windows guest's actual580.88 package.
+
+At realize, the private display thread clears effective CAP_SYS_ADMIN for the synchronous
+query and checks that posture again in HostRm. The host's generated class/register layout
+forms six named PRECOMP words per active window, at most32windows/192words, in batches of32.
+No public raw-offset CLI, privileged BAR mapping or file-backed page is added. Initial row
+status is NOACCESS. Any unsupported ABI, absent control, denied row, changed request metadata,
+short/long reply or all-zero/all-ones snapshot abandons the complete snapshot. There is no
+partial host/derived PRECOMP blend. An unavailable query keeps the existing complete T1
+PRECOMP rule. Other capability-page regions retain their existing derivation and precedence.
+
+A successful immutable snapshot is tied to die architecture/implementation, caps class, active
+window count and the full public PRECOMP layout. A guest vocabulary change cannot reinterpret
+it. T2 replaces the corresponding T1 words, including host zeros, and records Host provenance;
+it does not OR derived bits into the measured values. No captured word, per-die table or forced
+FVLUT rule is in this topic. No new call runs on a vCPU, heartbeat drainer or lock a vCPU takes.
+Protected channel/relay/lifecycle files are unchanged in the primary topic.
+
+`cargo build --release -j2 -p kf-qemu --example precomp_host_read` builds a small native H0
+probe. It drops CAP_SYS_ADMIN before opening its own RM client and calls the identical bounded
+query. Its only argument selects the GPU; it prints identity/source/count, not register words.
+A refusal exits2. H0 must run after clean N0 and before expensive Windows installation. Both
+H0 success and the actual QEMU T2-consumption receipt are required for a host-read validation
+claim. A fallback boot is permitted product behavior but is not a measured host-read arm.
+
+This reads physical capabilities; it does not prove that the virtual pipeline implements all
+advertised FVLUT behavior. Public headers define the field and distinguish DIRECT but do not
+settle FVLUT's expansion, supported curve correspondence or complete arithmetic. Those semantics
+and Windows acceptance remain open. The next run's falsifiers, proof capture and budget are in
+[V3_BLACKWELL_HOST_PRECOMP_VALIDATION_20261022.md](V3_BLACKWELL_HOST_PRECOMP_VALIDATION_20261022.md).
+Test-first commits, counts, mutation killers and lint comparison are in the adjacent runtime receipt.

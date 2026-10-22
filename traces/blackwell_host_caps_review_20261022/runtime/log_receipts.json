@@ -1,0 +1,77 @@
+{
+  "source": "ab91b4acc9ab80d0755fe3542299858406dcfd30",
+  "large_logs_retained_locally_not_committed": {
+    "base_tests": {
+      "jsonl": {
+        "sha256": "7756da814e2d8ae4cd3a4db968cfd54f0e62e4902c18b49d37a32ef2a25e5a63",
+        "bytes": 430942
+      },
+      "stderr": {
+        "sha256": "8c01ac3e8408002efdffa2217e574f6e4cd04c317e73b42e7b433d301acd727f",
+        "bytes": 5613
+      }
+    },
+    "base_host_tests": {
+      "jsonl": {
+        "sha256": "ab048c238fe98f5a1ddd786743cb9924a647805dbc411bfca2f1704bdab60df2",
+        "bytes": 36064
+      },
+      "stderr": {
+        "sha256": "ac8622cca61fcb780bbaf2a67003bae31cf72866b065eef4c50aede7031e17ce",
+        "bytes": 518
+      }
+    },
+    "final_tests": {
+      "jsonl": {
+        "sha256": "9c1ad34136da05efd6790e8494ee594cc277332d2dd5099858f70a47d753c0d9",
+        "bytes": 392764
+      },
+      "stderr": {
+        "sha256": "c4f9aadd6a1096dc111ee4823ee4368940560e5b71beaf362480a433e54745ef",
+        "bytes": 3765
+      }
+    },
+    "base_clippy_canonical": {
+      "jsonl": {
+        "sha256": "bf98d234be2f00b486f23168b31281356b2a60c2c8d27b611b1b61cdfdd727af",
+        "bytes": 934483
+      },
+      "stderr": {
+        "sha256": "9932774711a0dae28c7a0536a5d542cd8064445ea620e660583cabdb554fd7f2",
+        "bytes": 1560
+      }
+    },
+    "base_lockstep_clippy": {
+      "jsonl": {
+        "sha256": "6f4653ec4aff4df0ee599c0ff8e9d44b71977a453f5b024dc033ac96e0aadd63",
+        "bytes": 111869
+      },
+      "stderr": {
+        "sha256": "6f0613708dd33cabd35aeec1061491de1b52c9c6cfb8c00086732d5ceab25ce9",
+        "bytes": 129
+      }
+    },
+    "final_with_example_clippy": {
+      "jsonl": {
+        "sha256": "68c9eef276d484b5275cc2de49155e4d3bd6aa982d324dbdeb62479d6206e5fc",
+        "bytes": 951018
+      },
+      "stderr": {
+        "sha256": "8feea1604f0e1c182a650f220af1f9c11d310ca19d8af5fbd4cbc8eea7f1a7b5",
+        "bytes": 686
+      }
+    },
+    "expected_red.log": {
+      "sha256": "9fa248b232f7b57409b8a5f6a9398886676c3f8f74cfbc872971ea9e385ce991",
+      "bytes": 11896
+    },
+    "host_expected_red.log": {
+      "sha256": "fdc58d5aae0cce6febca9c9e6e00a3aedccadebdcecd446f67b9eb98f80467c4",
+      "bytes": 9654
+    },
+    "example_build.log": {
+      "sha256": "9aa4f05d2b351b7fb44e76a3a7879e0cf6bf5be86b5b9c1c50222075199db7f1",
+      "bytes": 38886
+    }
+  }
+}
