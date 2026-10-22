@@ -147,7 +147,7 @@ crons = ["* * * * *"]
             reaper=spawn(root,'reaper-'+verdict,[sys.executable,'reaper.py',str(root)])
             wait_for(lambda:(root/'reaper-armed.json').exists())
             started=time.time();active=True
-            code,data=client.call('/rent','POST')
+            code,data=client.rent(sha)
             dump(root/('rent-'+verdict+'.json'),{'status':code,'response':data})
             if code!=200:raise Stop('RENT_REFUSED_'+str(code))
             wait_for(lambda:(root/'owned.json').exists(),10)
