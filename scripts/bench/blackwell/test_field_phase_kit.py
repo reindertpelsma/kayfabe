@@ -1,6 +1,7 @@
 """Frozen phase wiring: no new product or fault-admission policy."""
 from pathlib import Path
 import unittest
+import hashlib
 
 ROOT=Path(__file__).resolve().parents[3]
 KIT=ROOT/'traces/blackwell_fields_phase_20261022/run_kit'
@@ -31,6 +32,6 @@ class FieldPhaseKit(unittest.TestCase):
         self.assertLess(self.controller.index('arm_rc=$?'),self.controller.index('collect_bw.sh'))
         self.assertIn('[ ! -e /root/prov/XID_STOP ]',self.controller)
     def test_early_observer_is_the_frozen_tested_source(self):
-        self.assertEqual((KIT/'arm.sh').read_bytes(),(ROOT.parent/'bw-init-observer-wt/scripts/bench/blackwell/arm_fields.sh').read_bytes())
+        self.assertEqual(hashlib.sha256((KIT/'arm.sh').read_bytes()).hexdigest(),'332ccfb41ab9362854df1e8d7169ed2a51fa840dea76655270fa9bbc433826ce')
 
 if __name__=='__main__':unittest.main()
