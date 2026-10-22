@@ -20,6 +20,13 @@ class PlanTests(unittest.TestCase):
         owner = self.owner + ['-no-shutdown']
         self.assertEqual(make_argv(owner, self.root)[-1], '-no-shutdown')
 
+    def test_standalone_switch_keeps_following_options_aligned(self):
+        owner = self.owner[:1] + ['-nodefaults'] + self.owner[1:]
+        native = make_argv(owner, self.root)
+        self.assertIn('-nodefaults', native)
+        self.assertEqual(native[native.index('-m') + 1], '12288')
+        self.assertIn('file=/data/codex-VF1/vfio-overlay.qcow2,if=none,id=disk0,cache=none,aio=threads', native)
+
     def test_no_kayfabe_device_in_native_reference(self):
         self.assertFalse(any('kf3-gpu' in a for a in self.argv))
 

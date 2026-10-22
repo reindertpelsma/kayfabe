@@ -1,0 +1,66 @@
+{
+  "foreground": {
+    "window": {
+      "Left": 0,
+      "Top": 0,
+      "Right": 1920,
+      "Bottom": 1080
+    },
+    "pid": 1424,
+    "name": "viewperf",
+    "dpi": 144,
+    "client": {
+      "Left": 0,
+      "Top": 0,
+      "Right": 1920,
+      "Bottom": 1080
+    }
+  },
+  "physicalCaps": {
+    "width": 3840,
+    "height": 2160,
+    "refresh": 60
+  },
+  "screens": [
+    {
+      "work": "{X=0,Y=0,Width=3840,Height=2088}",
+      "primary": true,
+      "bounds": "{X=0,Y=0,Width=3840,Height=2160}",
+      "device": "\\\\.\\DISPLAY1"
+    },
+    {
+      "work": "{X=5760,Y=0,Width=2880,Height=1548}",
+      "primary": false,
+      "bounds": "{X=5760,Y=0,Width=2880,Height=1620}",
+      "device": "\\\\.\\DISPLAY2"
+    }
+  ],
+  "windows": [
+    {
+      "name": "viewperf",
+      "pid": 1424,
+      "client": {
+        "Left": 0,
+        "Top": 0,
+        "Right": 1920,
+        "Bottom": 1080
+      },
+      "dpi": 144,
+      "window": {
+        "Left": 0,
+        "Top": 0,
+        "Right": 1920,
+        "Bottom": 1080
+      },
+      "title": "blender"
+    }
+  ],
+  "time": "2026-10-22T01:17:06.9245535+02:00",
+  "desktopRegistry": {
+    "LogPixels": null,
+    "Win8DpiScaling": 0
+  },
+  "classification": "MEASURED",
+  "hostObservedTime": "2026-10-22T03:17:06+02:00",
+  "guestClockNote": "Guest wall clock is two hours behind host local time; clocks were not changed."
+}

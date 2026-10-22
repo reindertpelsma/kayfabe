@@ -1,0 +1,7 @@
+{
+  "mutant": "remove-standalone-QEMU-switch-support",
+  "failing_tests": 2,
+  "rc": 1,
+  "behavior_fix_expected_red_commit": "4898f89d9",
+  "additional_test_reason": "Exercise a flag before valued options, independently of a terminal flag."
+}
