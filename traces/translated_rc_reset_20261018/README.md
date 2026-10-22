@@ -1,4 +1,16 @@
-**STATUS: RESEARCH, 2026-10-23 — Linux control implemented; hardware n=0.**
+**STATUS: RESEARCH, 2026-10-23 — control implemented; final cargo validation blocked; hardware n=0.**
+
+MEASURED stop, 2026-10-23: the first Rust mutant attempt waited 600 seconds for
+`/tmp/claude-0/kf-local-cargo.lock`, then flock exited 1 without starting cargo
+(0-byte output). This is an unexecuted mutant, not a surviving mutant or failed
+Rust test. The mutation runner restored `rc_negative.rs`; the worktree was clean.
+Under the lane's “If a step is blocked ... STOP and report” rule, no further
+Rust mutations, full suite or final Clippy were attempted. The native-bystander
+edits in `6c65d4e21` therefore remain uncompiled/unvalidated here. See
+`control-checkpoint.json` for the exact blocked invocation and validation scope.
+All owned build targets and guest object/binary artifacts were deleted with
+find-delete semantics; no owned cargo/GPU/VM process or resource lock remains.
+
 
 CODE READ, 2026-10-23: the current optional arm and trusted-host runbook are in
 [`V3_TRANSLATED_RC_CONTROL_20261022.md`](../../docs/design/V3_TRANSLATED_RC_CONTROL_20261022.md).
