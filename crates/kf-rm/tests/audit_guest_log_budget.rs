@@ -76,6 +76,7 @@ fn bounded(name: &str, kind: &str) {
     let lines = child.stderr.iter().filter(|&&b| b == b'\n').count() as u64;
     // At most 32 payloads and 32 summaries per second, including edge buckets.
     let bound = 64 * (start.elapsed().as_secs() + 2);
+    eprintln!("SA07_FLOOD kind={kind} lines={lines} bound={bound}");
     assert!(
         lines <= bound,
         "{kind}: {lines} lines for 100000 guest calls, bound {bound}"
