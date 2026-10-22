@@ -61,5 +61,32 @@ class CheckedChunksTests(unittest.TestCase):
         self.assertEqual(self.m.dispatch([(0, 3), (3, 3), (6, 2)], send, publish), 'published')
 
 
+    def publication(self, content, size, digest, old=b''):
+        import subprocess
+        with tempfile.TemporaryDirectory() as tmp:
+            root=Path(tmp);parts=[]
+            for n, data in enumerate([content[:2], content[2:]]):
+                path=root/str(n);path.write_bytes(data);parts.append(str(path))
+            target=root/'image.iso'
+            if old:target.write_bytes(old)
+            code=self.m.publish_command(str(target), parts, size, digest)
+            result=subprocess.run(['bash','-c',code],capture_output=True)
+            return result.returncode, target.read_bytes() if target.exists() else None
+
+    def test_wrong_whole_hash_never_replaces_existing_image(self):
+        rc, actual=self.publication(b'123456', 6, '0'*64, b'original')
+        self.assertNotEqual(rc, 0);self.assertEqual(actual,b'original')
+
+    def test_wrong_whole_size_never_publishes(self):
+        import hashlib
+        rc, actual=self.publication(b'123456', 7, hashlib.sha256(b'123456').hexdigest())
+        self.assertNotEqual(rc, 0);self.assertIsNone(actual)
+
+    def test_ordered_complete_content_publishes(self):
+        import hashlib
+        rc, actual=self.publication(b'abcdefg',7,hashlib.sha256(b'abcdefg').hexdigest())
+        self.assertEqual(rc,0);self.assertEqual(actual,b'abcdefg')
+
+
 if __name__ == '__main__':
     unittest.main()
