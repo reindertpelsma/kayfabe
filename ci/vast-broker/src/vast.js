@@ -1,5 +1,5 @@
 // prettier-ignore
-import {fetchJson,fetchBounded,refuse,IMAGE} from './policy.js';
+import {fetchJson,fetchBounded,readBounded,refuse,IMAGE} from './policy.js';
 // prettier-ignore
 import {sha256Hex} from './tokens.js';
 export class Vast {
@@ -50,7 +50,7 @@ export class Vast {
     return r.credit;
   }
   async create(offer, record, script) {
-    const r = await this.api('/api/v0/asks/' + offer.id, 'PUT', {
+    const body = {
       image: IMAGE,
       vm: true,
       disk: 120,
@@ -59,7 +59,29 @@ export class Vast {
       label: record.label,
       target_state: 'running',
       cancel_unavail: true,
+    };
+    const response = await this.fetcher('https://console.vast.ai/api/v0/asks/' + offer.id + '/', {
+      method: 'PUT',
+      headers: this.headers,
+      body: JSON.stringify(body),
+      redirect: 'manual',
+      signal: AbortSignal.timeout(8000),
     });
+    let r;
+    try {
+      r = JSON.parse(
+        new TextDecoder('utf-8', { fatal: true }).decode(await readBounded(response, 262144)),
+      );
+    } catch {
+      refuse();
+    }
+    if (
+      !response.redirected &&
+      [200, 400, 404, 410].includes(response.status) &&
+      r.success === false &&
+      r.new_contract === undefined
+    )
+      refuse('CREATE_REFUSED', 503);
     if (r.success !== true || !Number.isSafeInteger(r.new_contract) || r.new_contract <= 0)
       refuse();
     return String(r.new_contract);
@@ -72,6 +94,7 @@ export class Vast {
     const r = await this.api('/api/v1/instances?' + query);
     if (r.success !== true || !Array.isArray(r.instances) || r.next_token) refuse();
     const matches = r.instances.filter((x) => x.label === record.label);
+    if (matches.length === 0) return null;
     if (matches.length !== 1) refuse();
     const candidate = matches[0];
     if (

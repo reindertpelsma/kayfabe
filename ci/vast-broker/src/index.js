@@ -1,7 +1,7 @@
 // prettier-ignore
 import {DEFAULTS} from './defaults.js';
 // prettier-ignore
-import {BrokerError,refuse,configuration,numericId,localIdentity,readBounded} from './policy.js';
+import {BrokerError,refuse,configuration,numericId,hexSha,localIdentity,readBounded} from './policy.js';
 // prettier-ignore
 import {RunTokens,constantTimeEqual,validSecret,sha256Hex} from './tokens.js';
 // prettier-ignore
@@ -22,6 +22,28 @@ import {Ledger} from './ledger.js';
 import {onstart} from './onstart.js';
 // prettier-ignore
 import {appendBoxText,appendWorkerText,sanitizeBoxText} from './sanitize.js';
+function checkedIdentity(c, cfg) {
+  if (
+    c.repository !== cfg.repo ||
+    !numericId(c.actor_id) ||
+    !numericId(c.run_id) ||
+    !numericId(c.run_attempt) ||
+    !hexSha(c.sha) ||
+    !['pull_request', 'pull_request_target', 'workflow_dispatch'].includes(c.event_name) ||
+    ![
+      cfg.repo + '/.github/workflows/gpu-vast.yml@refs/heads/master',
+      cfg.repo + '/.github/workflows/gpu-vast-sweep.yml@refs/heads/master',
+    ].includes(c.workflow_ref) ||
+    (c.repository_owner_id !== undefined && c.repository_owner_id !== cfg.owner) ||
+    (c.event_name === 'pull_request' && !/^refs\/pull\/[1-9][0-9]*\/merge$/.test(c.ref ?? '')) ||
+    (c.event_name === 'pull_request_target' &&
+      (c.ref !== 'refs/heads/master' || c.workflow_sha !== c.sha)) ||
+    (c.event_name === 'workflow_dispatch' &&
+      (typeof c.ref !== 'string' || !c.ref.startsWith('refs/heads/')))
+  )
+    refuse('UNAUTHORIZED', 401);
+  return c;
+}
 export function createService({
   env,
   storage,
@@ -145,15 +167,41 @@ export function createService({
       refuse('UNAUTHORIZED', 401);
     }
   }
+  async function clearFailedSha(record) {
+    const cached = await ledger.get('sha:' + record.sha);
+    if (cached?.key === record.key) await ledger.storage.delete('sha:' + record.sha);
+  }
   async function recover(record, vast) {
-    if (!record.id) {
+    if (!record.id && record.ended === null) {
       record.id = await vast.reconcile(record);
+      if (record.id === null) {
+        const previous = record.noContractAt;
+        record.noContractAt ??= now();
+        const deadline =
+          record.bootDeadline ??
+          record.started + (record.provision ?? DEFAULTS.bootMinutes * 60000);
+        if (
+          previous !== undefined &&
+          now() >= deadline &&
+          now() - previous >= DEFAULTS.cronPeriod
+        ) {
+          record.closed = 'GONE';
+          record.verdict ||= 'UNAVAILABLE';
+          record.computeStoragePrice = 0;
+          record.price = 0;
+          record.bandwidthCost = 0;
+          await ledger.settle(record, now());
+          await clearFailedSha(record);
+          return record;
+        }
+      } else delete record.noContractAt;
       await ledger.save(record);
     }
     return record;
   }
   async function cleanup(record, vast) {
     await recover(record, vast);
+    if (record.ended !== null || !record.id) return;
     await vast.destroy(record);
     await ledger.settle(record, now());
     console.log(JSON.stringify({ event: 'destroyed' }));
@@ -180,6 +228,7 @@ export function createService({
         cfg,
       );
     await recover(record, vast);
+    if (record.ended !== null || !record.id) return;
     if (record.closed) {
       await cleanup(record, vast);
       return;
@@ -291,7 +340,8 @@ export function createService({
     record.liveCheckedAt = now();
     await ledger.save(record);
     // Manual ownership and post-result inspection outlive the workflow job.
-    if (record.phase === 'MANUAL' || record.resultAt !== undefined) return;
+    if (record.phase === 'MANUAL' && record.manualOwnerConfirmed) return;
+    if (record.phase !== 'MANUAL' && record.resultAt !== undefined) return;
     const current = record.pr === null ? null : await github.pr(record.pr);
     if (current && (current.head?.sha !== record.sha || current.state !== 'open')) {
       await close(record, vast, 'SUPERSEDED');
@@ -312,12 +362,19 @@ export function createService({
       refuse('UNAUTHORIZED', 401);
     clocks(r, cfg);
     await rejectExpiredCallback(r, cfg, vast);
+    if (r.resultAt === undefined) refuse('UNAUTHORIZED', 401);
     await readBounded(request, 0);
     await rate(r, cfg);
     if ((r.hardDeadline !== null && now() >= r.hardDeadline) || now() >= r.manualDeadline)
       refuse('UNAUTHORIZED', 401);
     const instance = await vast.inspect(r);
     if (!instance || instance.actual_status !== 'running') refuse('UNAUTHORIZED', 401);
+    r.manualCeilingDeadline ??= r.manualDeadline;
+    r.manualDeadline = Math.min(
+      r.manualDeadline,
+      now() + DEFAULTS.boxHoldMinutes * 60000,
+      r.hardDeadline ?? Infinity,
+    );
     r.phase = 'MANUAL';
     r.manualAt ??= now();
     r.resultDeadline = null;
@@ -331,21 +388,23 @@ export function createService({
     clocks(r, cfg);
     if (r.phase !== 'MANUAL') refuse('BAD_REQUEST', 400);
     await rejectExpiredCallback(r, cfg, vast);
+    const ownerDeadline = r.manualCeilingDeadline ?? r.started + cfg.manualCeiling;
     const total =
-      ((r.computeStoragePrice ?? r.price) * (r.manualDeadline + cfg.cronPeriod - r.started)) /
+      ((r.computeStoragePrice ?? r.price) * (ownerDeadline + cfg.cronPeriod - r.started)) /
         3600000 +
       (r.bandwidthCost ?? 0);
     const remaining =
-        ((r.computeStoragePrice ?? r.price) *
-          Math.max(0, r.manualDeadline + cfg.cronPeriod - now())) /
+        ((r.computeStoragePrice ?? r.price) * Math.max(0, ownerDeadline + cfg.cronPeriod - now())) /
           3600000 +
         (r.bandwidthCost ?? 0),
       credit = await vast.credit();
     if (typeof credit !== 'number' || !Number.isFinite(credit) || credit < cfg.reserve + remaining)
       refuse('UNAVAILABLE_BUDGET', 409);
     await ledger.budgets(cfg, now(), total, r.key);
+    r.manualOwnerConfirmed = true;
+    r.manualDeadline = ownerDeadline;
     r.hardDeadline = null;
-    r.billingTtl = r.manualDeadline + cfg.cronPeriod - r.started;
+    r.billingTtl = ownerDeadline + cfg.cronPeriod - r.started;
     await ledger.put('cost:' + r.key, {
       profile: r.profile ?? 'check',
       started: r.started,
@@ -362,18 +421,7 @@ export function createService({
       ? (localVerifier ??= new OidcVerifier(fetcher, now, cfg.testIdentity))
       : verifier;
     const c = await selected.verify(bearer, cfg.audience);
-    if (
-      c.repository !== cfg.repo ||
-      !numericId(c.actor_id) ||
-      !numericId(c.run_id) ||
-      !numericId(c.run_attempt) ||
-      !['pull_request', 'pull_request_target', 'workflow_dispatch'].includes(c.event_name) ||
-      ![
-        cfg.repo + '/.github/workflows/gpu-vast.yml@refs/heads/master',
-        cfg.repo + '/.github/workflows/gpu-vast-sweep.yml@refs/heads/master',
-      ].includes(c.workflow_ref)
-    )
-      refuse('UNAUTHORIZED', 401);
+    checkedIdentity(c, cfg);
     return c;
   }
   async function rate(r, cfg) {
@@ -554,14 +602,6 @@ export function createService({
       !(match && request.method === (['status', 'logs'].includes(match[1]) ? 'GET' : 'POST'))
     )
       return notFound();
-    if (path === '/availability' || path === '/rent') {
-      const window = Math.floor(now() / 60000);
-      if (admissionWindow !== window) {
-        admissionWindow = window;
-        admissionCount = 0;
-      }
-      if (++admissionCount > DEFAULTS.admissionPerMinute) refuse('RATE_LIMIT', 429);
-    }
     const authorization = request.headers.get('Authorization');
     if (!authorization?.startsWith('Bearer ')) refuse('UNAUTHORIZED', 401);
     const bearer = authorization.slice(7),
@@ -611,6 +651,15 @@ export function createService({
     }
     const c = await oidc(bearer, cfg),
       key = runKey(c);
+    if (path === '/availability' || path === '/rent') {
+      const window = Math.floor(now() / 60000);
+      if (admissionWindow !== window) {
+        admissionWindow = window;
+        admissionCount = 0;
+      }
+      if (++admissionCount > DEFAULTS.admissionPerMinute) refuse('RATE_LIMIT', 429);
+    }
+
     if (path === '/rent') {
       try {
         const text = new TextDecoder('utf-8', { fatal: true }).decode(
@@ -833,7 +882,20 @@ export function createService({
       cfg,
     );
     if (profile === 'sweep') await ledger.put('rotation:lastDie', r.die);
-    r.id = await vast.create(offer, r, script);
+    try {
+      r.id = await vast.create(offer, r, script);
+    } catch (e) {
+      if (e instanceof BrokerError && e.state === 'CREATE_REFUSED') {
+        r.closed = 'GONE';
+        r.verdict = 'UNAVAILABLE';
+        r.computeStoragePrice = 0;
+        r.price = 0;
+        r.bandwidthCost = 0;
+        await ledger.settle(r, now());
+        await clearFailedSha(r);
+      }
+      refuse();
+    }
     r.phase = 'BOOTING';
     await ledger.save(r);
     console.log(JSON.stringify({ event: 'rented' }));
@@ -842,18 +904,82 @@ export function createService({
   const releaseUpload = async (request) => {
     if (request.body && !request.body.locked) await request.body.cancel().catch(() => {});
   };
+  // Authentication may wait on JWKS, but never owns the ledger queue.
+  let executing = false;
+  const queue = [];
+  async function serial(priority, action) {
+    if (queue.length >= 32 && priority > 0) refuse('BUSY', 409);
+    return new Promise((resolve, reject) => {
+      queue.push({ priority, action, resolve, reject });
+      queue.sort((a, b) => a.priority - b.priority);
+      drain();
+    });
+  }
+  async function drain() {
+    if (executing) return;
+    executing = true;
+    try {
+      while (queue.length) {
+        const task = queue.shift();
+        try {
+          task.resolve(await task.action());
+        } catch (e) {
+          task.reject(e);
+        }
+      }
+    } finally {
+      executing = false;
+    }
+  }
+  async function preauthenticate(request) {
+    const path = await routePath(request, env);
+    if (path === null) return;
+    const cfg = configuration(env);
+    cfg.testIdentity = localIdentity(env, request.url);
+    if (path === '/rent' && env.RENTING_ENABLED !== 'true') return;
+    const bearer = request.headers.get('Authorization')?.replace(/^Bearer /, '');
+    if (!bearer) refuse('UNAUTHORIZED', 401);
+    if (['/stop-all'].includes(path) || /^\/(?:stop|stop-timer)\//.test(path)) {
+      if (
+        validSecret(env.OWNER_STOP_TOKEN) &&
+        (await constantTimeEqual(env.OWNER_STOP_TOKEN, bearer))
+      )
+        return;
+    }
+    const box = /^\/(report|kill|hold)\/([1-9][0-9]{0,19}-[1-9][0-9]{0,19})$/.exec(path);
+    if (box) {
+      const record = await ledger.get('record:' + box[2]);
+      if (!record || !(await tokens.verify(bearer, record))) refuse('UNAUTHORIZED', 401);
+      return;
+    }
+    if (path === '/rent' && env.RENTING_ENABLED !== 'true') return;
+    if (
+      !/^\/(?:rent|availability|stop-all|(?:status|logs|stop|stop-timer)\/[1-9][0-9]{0,19}-[1-9][0-9]{0,19})$/.test(
+        path,
+      )
+    )
+      return;
+    await oidc(bearer, cfg);
+  }
   return {
     async fetch(request) {
-      if (busy) {
-        await releaseUpload(request);
-        return json(
-          { state: 'BUSY', verdict: 'UNAVAILABLE', log_tail_sanitised: '', bytes_dropped: 0 },
-          409,
-        );
-      }
-      busy = true;
       try {
-        return await perform(request);
+        await preauthenticate(request);
+        const path = await routePath(request, env);
+        const renting = path === '/rent';
+        if (renting && busy) refuse('BUSY', 409);
+        if (renting) busy = true;
+        try {
+          const priority =
+            path === '/stop-all' || /^\/(?:stop|kill|stop-timer)\//.test(path)
+              ? 0
+              : /^\/(?:report|hold)\//.test(path)
+                ? 1
+                : 2;
+          return await serial(priority, () => perform(request));
+        } finally {
+          if (renting) busy = false;
+        }
       } catch (e) {
         return json(
           {
@@ -868,32 +994,29 @@ export function createService({
         );
       } finally {
         await releaseUpload(request);
-        busy = false;
       }
     },
     async sweep() {
-      if (busy) return;
-      busy = true;
-      try {
-        const cfg = configuration(env),
-          records = await ledger.openRecords();
-        for (const r of records) {
-          try {
-            await update(
-              r,
-              new Vast(fetcher, cfg, env.VAST_API_KEY),
-              new Github(fetcher, cfg, null, { cache: githubCache, now }),
-              cfg,
-            );
-          } catch {
-            console.log(JSON.stringify({ event: 'cleanup_unavailable' }));
+      return serial(0, async () => {
+        try {
+          const cfg = configuration(env),
+            records = await ledger.openRecords();
+          for (const r of records) {
+            try {
+              await update(
+                r,
+                new Vast(fetcher, cfg, env.VAST_API_KEY),
+                new Github(fetcher, cfg, null, { cache: githubCache, now }),
+                cfg,
+              );
+            } catch {
+              console.log(JSON.stringify({ event: 'cleanup_unavailable' }));
+            }
           }
+        } catch {
+          console.log(JSON.stringify({ event: 'cleanup_unavailable' }));
         }
-      } catch {
-        console.log(JSON.stringify({ event: 'cleanup_unavailable' }));
-      } finally {
-        busy = false;
-      }
+      });
     },
   };
 }
@@ -949,35 +1072,78 @@ async function detachedUpload(request, path) {
   headers.set('Content-Length', String(length));
   return new Request(request.url, { method: request.method, headers, body: bytes });
 }
-export default {
-  async fetch(request, env) {
-    const path = await routePath(request, env);
+export function createGateway({ authorize, fetcher = fetch, now = Date.now } = {}) {
+  const verifier = new OidcVerifier(fetcher, now),
+    local = new Map();
+  async function frontAuthorize(request, env, path) {
+    const cfg = configuration(env),
+      bearer = request.headers.get('Authorization')?.replace(/^Bearer /, '');
+    if (path === '/rent' && env.RENTING_ENABLED !== 'true') return;
+    if (!bearer) refuse('UNAUTHORIZED', 401);
     if (
-      path === null ||
-      !/^\/(?:rent|availability|stop-all|(?:report|kill|hold|stop-timer|status|stop|logs)\/[1-9][0-9]{0,19}-[1-9][0-9]{0,19})$/.test(
-        path,
-      )
+      (path === '/stop-all' || /^\/(?:stop|stop-timer)\//.test(path)) &&
+      validSecret(env.OWNER_STOP_TOKEN) &&
+      (await constantTimeEqual(env.OWNER_STOP_TOKEN, bearer))
     )
-      return notFound();
-    let buffered;
-    try {
-      buffered = await detachedUpload(request, path);
-    } catch {
-      return Response.json(
-        { state: 'UNAVAILABLE', verdict: 'UNAVAILABLE', log_tail_sanitised: '', bytes_dropped: 0 },
-        {
-          status: 503,
-          headers: { 'Cache-Control': 'no-store', 'X-Content-Type-Options': 'nosniff' },
-        },
-      );
+      return;
+    if (/^\/(?:report|kill|hold)\//.test(path)) {
+      if (
+        !/^v1\.[1-9][0-9]{0,19}\.[1-9][0-9]{0,19}\.[1-9][0-9]{0,12}\.[A-Za-z0-9_-]{43}$/.test(
+          bearer,
+        )
+      )
+        refuse('UNAUTHORIZED', 401);
+      return; // Record-bound MAC is checked before the ledger queue is entered.
     }
-    return env.LEDGER.get(env.LEDGER.idFromName('owner-shared-vast-account')).fetch(buffered);
-  },
-  scheduled(_event, env, ctx) {
-    ctx.waitUntil(
-      env.LEDGER.get(env.LEDGER.idFromName('owner-shared-vast-account')).fetch(
-        new Request('https://internal.invalid/cron', { method: 'POST' }),
-      ),
-    );
-  },
-};
+    const identity = localIdentity(env, request.url);
+    let selected = verifier;
+    if (identity) {
+      selected = local.get(identity.issuer);
+      if (!selected) {
+        if (local.size >= 4) local.clear();
+        selected = new OidcVerifier(fetcher, now, identity);
+        local.set(identity.issuer, selected);
+      }
+    }
+    checkedIdentity(await selected.verify(bearer, cfg.audience), cfg);
+  }
+  return {
+    async fetch(request, env) {
+      const path = await routePath(request, env);
+      if (
+        path === null ||
+        !/^\/(?:rent|availability|stop-all|(?:report|kill|hold|stop-timer|status|stop|logs)\/[1-9][0-9]{0,19}-[1-9][0-9]{0,19})$/.test(
+          path,
+        )
+      )
+        return notFound();
+      let buffered;
+      try {
+        await (authorize ?? frontAuthorize)(request, env, path);
+        buffered = await detachedUpload(request, path);
+      } catch (error) {
+        return Response.json(
+          {
+            state: error instanceof BrokerError ? error.state : 'UNAVAILABLE',
+            verdict: 'UNAVAILABLE',
+            log_tail_sanitised: '',
+            bytes_dropped: 0,
+          },
+          {
+            status: error instanceof BrokerError ? error.status : 503,
+            headers: { 'Cache-Control': 'no-store', 'X-Content-Type-Options': 'nosniff' },
+          },
+        );
+      }
+      return env.LEDGER.get(env.LEDGER.idFromName('owner-shared-vast-account')).fetch(buffered);
+    },
+    scheduled(_event, env, ctx) {
+      ctx.waitUntil(
+        env.LEDGER.get(env.LEDGER.idFromName('owner-shared-vast-account')).fetch(
+          new Request('https://internal.invalid/cron', { method: 'POST' }),
+        ),
+      );
+    },
+  };
+}
+export default createGateway();

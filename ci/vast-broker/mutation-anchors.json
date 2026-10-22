@@ -55,8 +55,8 @@
   ],
   "legacy:public prefix gate": [
     [
-      "}\nexport default {\n  async fetch(request, env) {\n    const path = await routePath(request, env);\n    if (\n      path === null ||\n      !/^\\/(?:rent|availability|stop-all|(?:report|kill|hold|stop-timer|status|stop|logs)\\/[1-9][0-9]{0,19}-[1-9][0-9]{0,19})$/.test(\n",
-      "}\nexport default {\n  async fetch(request, env) {\n    const path = new URL(request.url).pathname;\n    if (\n      path === null ||\n      !/^\\/(?:rent|availability|stop-all|(?:report|kill|hold|stop-timer|status|stop|logs)\\/[1-9][0-9]{0,19}-[1-9][0-9]{0,19})$/.test(\n"
+      "    const path = await routePath(request, env);\n    if (",
+      "    const path = new URL(request.url).pathname;\n    if ("
     ]
   ],
   "legacy:ledger service prefix gate": [
@@ -349,8 +349,8 @@
   ],
   "legacy:OIDC claims": [
     [
-      "      if (!(await verify())) refuse('UNAUTHORIZED', 401);\n    }\n    const seconds = this.now() / 1000;\n    if (\n      c.iss !== this.issuer ||\n      c.aud !== audience ||\n      typeof c.exp !== 'number' ||\n      !Number.isFinite(c.exp) ||\n      c.exp <= seconds ||\n      typeof c.nbf !== 'number' ||\n      !Number.isFinite(c.nbf) ||\n      c.nbf > seconds\n    )\n      refuse('UNAUTHORIZED', 401);\n    return c;\n  }\n}\n",
-      "      if (!(await verify())) refuse('UNAUTHORIZED', 401);\n    }\n    const seconds = this.now() / 1000;\n    if (false) refuse('UNAUTHORIZED', 401);\n    return c;\n  }\n}\n"
+      "    if (\n      c.iss !== this.issuer ||\n      c.aud !== audience ||\n      typeof c.exp !== 'number' ||\n      !Number.isFinite(c.exp) ||\n      c.exp <= seconds ||\n      typeof c.nbf !== 'number' ||\n      !Number.isFinite(c.nbf) ||\n      c.nbf > seconds\n    )\n      refuse('UNAUTHORIZED', 401);",
+      "    if (false) refuse('UNAUTHORIZED', 401);"
     ]
   ],
   "legacy:credit reserve": [
@@ -403,8 +403,8 @@
   ],
   "legacy:ambiguous-create binding": [
     [
-      "    const matches = r.instances.filter((x) => x.label === record.label);\n    if (matches.length !== 1) refuse();\n    const candidate = matches[0];\n    if (\n      typeof candidate.onstart !== 'string' ||\n      (await sha256Hex(candidate.onstart)) !== record.scriptHash ||\n      candidate.image_uuid !== IMAGE ||\n      !Number.isSafeInteger(candidate.id) ||\n      candidate.id <= 0\n    )\n      refuse();\n    return String(candidate.id);\n  }\n  async inspect(record) {\n",
-      "    const matches = r.instances.filter((x) => x.label === record.label);\n    if (matches.length !== 1) refuse();\n    const candidate = matches[0];\n    return String(candidate.id);\n  }\n  async inspect(record) {\n"
+      "    if (\n      typeof candidate.onstart !== 'string' ||\n      (await sha256Hex(candidate.onstart)) !== record.scriptHash ||\n      candidate.image_uuid !== IMAGE ||\n      !Number.isSafeInteger(candidate.id) ||\n      candidate.id <= 0\n    )\n      refuse();\n    return String(candidate.id);",
+      "    return String(candidate.id);"
     ]
   ],
   "legacy:TTL destruction": [
@@ -505,8 +505,8 @@
   ],
   "legacy:public cron isolation": [
     [
-      "export default {\n  async fetch(request, env) {\n    const path = await routePath(request, env);\n    if (\n      path === null ||\n      !/^\\/(?:rent|availability|stop-all|(?:report|kill|hold|stop-timer|status|stop|logs)\\/[1-9][0-9]{0,19}-[1-9][0-9]{0,19})$/.test(\n        path,\n      )\n    )\n      return notFound();\n    let buffered;\n    try {\n      buffered = await detachedUpload(request, path);\n",
-      "export default {\n  async fetch(request, env) {\n    const path = await routePath(request, env);\n    if (false) return notFound();\n    let buffered;\n    try {\n      buffered = await detachedUpload(request, path);\n"
+      "      if (\n        path === null ||\n        !/^\\/(?:rent|availability|stop-all|(?:report|kill|hold|stop-timer|status|stop|logs)\\/[1-9][0-9]{0,19}-[1-9][0-9]{0,19})$/.test(\n          path,\n        )\n      )\n        return notFound();",
+      "      if (false) return notFound();"
     ]
   ],
   "legacy:automatic base allowlist": [
@@ -707,14 +707,14 @@
   ],
   "v4:unreleased-upload": [
     [
-      "          e instanceof BrokerError ? e.status : 503,\n        );\n      } finally {\n        await releaseUpload(request);\n        busy = false;\n      }\n    },\n",
-      "          e instanceof BrokerError ? e.status : 503,\n        );\n      } finally {\n        busy = false;\n      }\n    },\n"
+      "        await releaseUpload(request);",
+      "        /* mutant keeps rejected upload open */"
     ]
   ],
   "v4:direct-network-body": [
     [
-      "      return notFound();\n    let buffered;\n    try {\n      buffered = await detachedUpload(request, path);\n    } catch {\n      return Response.json(\n        { state: 'UNAVAILABLE', verdict: 'UNAVAILABLE', log_tail_sanitised: '', bytes_dropped: 0 },\n",
-      "      return notFound();\n    let buffered;\n    try {\n      buffered = request;\n    } catch {\n      return Response.json(\n        { state: 'UNAVAILABLE', verdict: 'UNAVAILABLE', log_tail_sanitised: '', bytes_dropped: 0 },\n"
+      "      buffered = await detachedUpload(request, path);",
+      "      buffered = request;"
     ]
   ],
   "v4:unbounded-forward-body": [
@@ -1083,8 +1083,8 @@
   ],
   "v5:boot-phase": [
     [
-      "    );\n    if (profile === 'sweep') await ledger.put('rotation:lastDie', r.die);\n    r.id = await vast.create(offer, r, script);\n    r.phase = 'BOOTING';\n    await ledger.save(r);\n    console.log(JSON.stringify({ event: 'rented' }));\n    return json(expose(r));\n",
-      "    );\n    if (profile === 'sweep') await ledger.put('rotation:lastDie', r.die);\n    r.id = await vast.create(offer, r, script);\n    r.phase = 'CREATING';\n    await ledger.save(r);\n    console.log(JSON.stringify({ event: 'rented' }));\n    return json(expose(r));\n"
+      "    r.phase = 'BOOTING';",
+      "    r.phase = 'CREATING';"
     ]
   ],
   "v5:immutable-clock": [
@@ -1125,8 +1125,8 @@
   ],
   "v5:hold-grace-and-heartbeat": [
     [
-      "      refuse('UNAUTHORIZED', 401);\n    const instance = await vast.inspect(r);\n    if (!instance || instance.actual_status !== 'running') refuse('UNAUTHORIZED', 401);\n    r.phase = 'MANUAL';\n    r.manualAt ??= now();\n    r.resultDeadline = null;\n    await workerLine(r, 'MANUAL authenticated hold; grace and heartbeat suspended', cfg);\n    return json(expose(r));\n  }\n",
-      "      refuse('UNAUTHORIZED', 401);\n    const instance = await vast.inspect(r);\n    if (!instance || instance.actual_status !== 'running') refuse('UNAUTHORIZED', 401);\n    r.manualAt ??= now();\n    await workerLine(r, 'MANUAL authenticated hold; grace and heartbeat suspended', cfg);\n    return json(expose(r));\n  }\n"
+      "    r.phase = 'MANUAL';\n    r.manualAt ??= now();\n    r.resultDeadline = null;",
+      "    r.manualAt ??= now();"
     ]
   ],
   "v5:hold-auth": [
@@ -1143,14 +1143,14 @@
   ],
   "v5:timer-extension-liability": [
     [
-      "          3600000 +\n        (r.bandwidthCost ?? 0),\n      credit = await vast.credit();\n    if (typeof credit !== 'number' || !Number.isFinite(credit) || credit < cfg.reserve + remaining)\n      refuse('UNAVAILABLE_BUDGET', 409);\n    await ledger.budgets(cfg, now(), total, r.key);\n    r.hardDeadline = null;\n    r.billingTtl = r.manualDeadline + cfg.cronPeriod - r.started;\n    await ledger.put('cost:' + r.key, {\n",
-      "          3600000 +\n        (r.bandwidthCost ?? 0),\n      credit = await vast.credit();\n    /* mutant omits credit */\n    /* mutant omits extended budget */\n    r.hardDeadline = null;\n    r.billingTtl = r.manualDeadline + cfg.cronPeriod - r.started;\n    await ledger.put('cost:' + r.key, {\n"
+      "    if (typeof credit !== 'number' || !Number.isFinite(credit) || credit < cfg.reserve + remaining)\n      refuse('UNAVAILABLE_BUDGET', 409);\n    await ledger.budgets(cfg, now(), total, r.key);",
+      "    /* mutant omits credit */\n    /* mutant omits extended budget */"
     ]
   ],
   "v5:manual-cron-status": [
     [
-      "    if (record.ended !== null) return;\n    clocks(record, cfg);\n    await ledger.save(record);\n    if (record.phase === 'MANUAL')\n      await workerLine(\n        record,\n        'MANUAL hard_timer=' +\n          (record.hardDeadline === null ? 'removed' : 'active') +\n          ' ceiling_at=' +\n          record.manualDeadline,\n        cfg,\n      );\n    await recover(record, vast);\n    if (record.closed) {\n      await cleanup(record, vast);\n",
-      "    if (record.ended !== null) return;\n    clocks(record, cfg);\n    await ledger.save(record);\n    /* mutant drops MANUAL cron line */\n    await recover(record, vast);\n    if (record.closed) {\n      await cleanup(record, vast);\n"
+      "    if (record.phase === 'MANUAL')\n      await workerLine(\n        record,\n        'MANUAL hard_timer=' +\n          (record.hardDeadline === null ? 'removed' : 'active') +\n          ' ceiling_at=' +\n          record.manualDeadline,\n        cfg,\n      );",
+      "    /* mutant drops MANUAL cron line */"
     ]
   ],
   "v5:worker-tail-bounds": [
@@ -1203,8 +1203,8 @@
   ],
   "v5:shipped-numeric-overrides": [
     [
-      "[vars]\n# Numeric owner policy defaults are defined once in defaults.json.\nRENTING_ENABLED = \"false\"\n# Owner assertion of the exact emitted module; see deployment.json and trace doc.\nDEPLOYED_BUNDLE_SHA256 = \"c139d8ee64d88de9032b602bff0a5e776c223aa23bb06a0d3c1748491a15e69f\"\nOWNER_GITHUB_ID = \"REPLACE_ME\"\n",
-      "[vars]\n# Numeric owner policy defaults are defined once in defaults.json.\nRENTING_ENABLED = \"false\"\nMAX_PRICE_USD_HOUR = \"0.5\"\nTTL_MINUTES = \"20\"\n# Owner assertion of the exact emitted module; see deployment.json and trace doc.\nDEPLOYED_BUNDLE_SHA256 = \"c139d8ee64d88de9032b602bff0a5e776c223aa23bb06a0d3c1748491a15e69f\"\nOWNER_GITHUB_ID = \"REPLACE_ME\"\n"
+      "# Owner assertion of the exact emitted module; see deployment.json and trace doc.",
+      "MAX_PRICE_USD_HOUR = \"0.5\"\nTTL_MINUTES = \"20\"\n# Owner assertion of the exact emitted module; see deployment.json and trace doc."
     ]
   ],
   "v5:mandatory-verification": [
@@ -1327,8 +1327,8 @@
   ],
   "v5:admission-rate-bound": [
     [
-      "        admissionWindow = window;\n        admissionCount = 0;\n      }\n      if (++admissionCount > DEFAULTS.admissionPerMinute) refuse('RATE_LIMIT', 429);\n    }\n    const authorization = request.headers.get('Authorization');\n    if (!authorization?.startsWith('Bearer ')) refuse('UNAUTHORIZED', 401);\n",
-      "        admissionWindow = window;\n        admissionCount = 0;\n      }\n      if (false) refuse('RATE_LIMIT', 429);\n    }\n    const authorization = request.headers.get('Authorization');\n    if (!authorization?.startsWith('Bearer ')) refuse('UNAUTHORIZED', 401);\n"
+      "      if (++admissionCount > DEFAULTS.admissionPerMinute) refuse('RATE_LIMIT', 429);",
+      "      if (false) refuse('RATE_LIMIT', 429);"
     ]
   ],
   "v5:separate-profile-daily": [

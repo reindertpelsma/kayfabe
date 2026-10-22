@@ -443,6 +443,13 @@ if (process.env.MUTANT_PREFLIGHT) {
 const workerTests = (await readdir(new URL('test/', base)))
   .filter((x) => x.endsWith('.test.js') && !x.endsWith('client.test.js'))
   .map((x) => 'ci/vast-broker/test/' + x);
+const baseline = spawnSync(process.execPath, ['--test', ...workerTests], {
+  cwd: root,
+  encoding: 'utf8',
+  maxBuffer: 8 * 1024 * 1024,
+  timeout: 60000,
+});
+if (baseline.status !== 0) throw Error('Baseline is not green; refusing mutation attribution.');
 const results = [];
 for (const [name, path, mutate] of mutations.filter(
   (m) => !process.env.MUTANT_FILTER || m[0].includes(process.env.MUTANT_FILTER),
@@ -561,3 +568,15 @@ const v5 = spawnSync(
   { cwd: base, stdio: 'inherit' },
 );
 if (v5.status !== 0) throw Error('V5 mutation campaign failed');
+
+const security = spawnSync(
+  'python3',
+  [
+    'security-mutants.py',
+    ...(process.env.SECURITY_MUTANT_RESULTS_FILE
+      ? ['--results', process.env.SECURITY_MUTANT_RESULTS_FILE]
+      : []),
+  ],
+  { cwd: base, stdio: 'inherit' },
+);
+if (security.status !== 0) throw Error('Security mutation campaign failed');

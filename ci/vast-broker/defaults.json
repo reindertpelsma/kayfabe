@@ -240,5 +240,8 @@
       ]
     }
   ],
-  "bootFailureFreezeMs": 120000
+  "bootFailureFreezeMs": 120000,
+  "jwksCooldownMs": 60000,
+  "jwksCacheMs": 3600000,
+  "boxHoldMinutes": 30
 }

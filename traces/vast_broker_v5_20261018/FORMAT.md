@@ -11,7 +11,14 @@ preserved as explicit before/after formatted replacements: 94 legacy, 28 V4,
 38 runner, 73 V5. Each replacement was obtained by formatting the original
 baseline and original mutant separately, then diffing them. No mutant or killer
 threshold was removed. Exact unique-anchor checks remain mandatory. Full
-campaign execution is in progress in a separate frozen source copy.
+campaign execution completed in a separate frozen source copy: 94 legacy, 28 V4,
+38 runner and 73 V5 cases, every case with at least two named killers. The source
+modules were compared byte-for-byte with commit 198797147. The final formatted
+bundler manifest case was additionally rerun after the output-formatter change.
+Two existing alias-print assertions were strengthened to require the intended
+diagnostic; the first attempt had exposed a surviving redundant-guard mutant.
+The hash-dependent configuration anchor was narrowed to its exact policy field;
+no mutation, threshold or test was dropped.
 
 [CODE READ: 2026-10-22 src imports, bundle.js, .github/workflows/ci.yml]
 Prettier-ignore applies only to JavaScript module imports, preserving the

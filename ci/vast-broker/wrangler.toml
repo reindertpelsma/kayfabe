@@ -1,5 +1,6 @@
 name = "kayfabe-vast-broker"
-main = "src/index.js"
+main = "dist/worker.js"
+no_bundle = true
 compatibility_date = "2026-10-21"
 workers_dev = true
 
@@ -18,7 +19,7 @@ crons = ["* * * * *"]
 # Numeric owner policy defaults are defined once in defaults.json.
 RENTING_ENABLED = "false"
 # Owner assertion of the exact emitted module; see deployment.json and trace doc.
-DEPLOYED_BUNDLE_SHA256 = "1a06b7c87dd069240c4404503353b458d32e4d3ae64a680f35a5ac8f33d83eb8"
+DEPLOYED_BUNDLE_SHA256 = "2ab3856a7430129334fa430070419f83d1e2f920d55a3190aff7718f04aaf897"
 OWNER_GITHUB_ID = "REPLACE_ME"
 REPOSITORY = "reindertpelsma/kayfabe"
 APPROVAL_MODE = "owner_push_or_review"

@@ -24,6 +24,7 @@ async function progress(h) {
   assert.equal((await h.report({ seq: 1, kind: 'log', text: '' })).status, 200);
 }
 async function hold(h, token) {
+  if (token === undefined && (await record(h)).resultAt === undefined) await finish(h, 'PASS');
   const r = await record(h);
   return h.call('/hold/123-1', {
     token: token ?? callbackToken(r, h.bindings.RUN_TOKEN_SECRET),
@@ -158,17 +159,17 @@ for (const verdict of ['PASS', 'FAIL'])
   });
 for (const restart of [false, true])
   test('V5 repeated hold cannot extend hard or manual ceiling ' + restart, async () => {
-    const h = await v5();
+    const h = await v5({ HARD_RUNTIME_MINUTES: '20' });
     await rent(h);
     await progress(h);
     assert.equal((await hold(h)).status, 200);
     if (restart) h.restart();
-    h.time.value += 60 * minute;
+    h.time.value += 10 * minute;
     assert.equal((await hold(h)).status, 200);
     const r = await record(h);
-    assert.equal(r.manualDeadline, clock + 480 * minute);
-    assert.equal(r.hardDeadline, clock + 180 * minute);
-    h.time.value = clock + 180 * minute;
+    assert.equal(r.manualDeadline, clock + 20 * minute);
+    assert.equal(r.hardDeadline, clock + 20 * minute);
+    h.time.value = clock + 20 * minute;
     await h.service.sweep();
     assert.equal((await record(h)).closed, 'HARD_TIMEOUT');
   });

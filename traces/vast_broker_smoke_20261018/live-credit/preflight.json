@@ -9,7 +9,7 @@
       "vms_enabled": true,
       "reliability": 0.9920979,
       "disk_space": 1585,
-      "public_ipaddr": "213.96.60.239",
+      "public_ipaddr": "[redacted-host-ip]",
       "inet_down_cost": 0.0007812499999999999,
       "inet_up_cost": 0.0007812499999999999
     }

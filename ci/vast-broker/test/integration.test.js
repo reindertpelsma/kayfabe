@@ -121,9 +121,9 @@ test('scheduled binding reaches Durable Object cleanup', async () => {
 test('public request cannot invoke the internal cron route', async () => {
   const source = await import('../src/index.js');
   let forwarded = 0;
-  const response = await source.default.fetch(
-    new Request('https://broker.example/cron', { method: 'POST' }),
-    {
+  const response = await source
+    .createGateway({ authorize: async () => {} })
+    .fetch(new Request('https://broker.example/cron', { method: 'POST' }), {
       LEDGER: {
         idFromName: (n) => n,
         get: () => ({
@@ -133,8 +133,7 @@ test('public request cannot invoke the internal cron route', async () => {
           },
         }),
       },
-    },
-  );
+    });
   assert.equal(response.status, 404);
   assert.equal(forwarded, 0);
 });
@@ -165,9 +164,9 @@ test('bundled scheduled binding reaches Durable Object cleanup', async () => {
 test('bundled public request cannot invoke internal cron route', async () => {
   const source = await import('../dist/worker.js');
   let forwarded = 0;
-  const response = await source.default.fetch(
-    new Request('https://broker.example/cron', { method: 'POST' }),
-    {
+  const response = await source
+    .createGateway({ authorize: async () => {} })
+    .fetch(new Request('https://broker.example/cron', { method: 'POST' }), {
       LEDGER: {
         idFromName: (n) => n,
         get: () => ({
@@ -177,8 +176,7 @@ test('bundled public request cannot invoke internal cron route', async () => {
           },
         }),
       },
-    },
-  );
+    });
   assert.equal(response.status, 404);
   assert.equal(forwarded, 0);
 });
