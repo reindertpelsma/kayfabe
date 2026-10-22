@@ -51,3 +51,18 @@ class ProcessTests(unittest.TestCase):
             p=subprocess.run(['python3',str(MODULE)],capture_output=True,text=True,check=True)
             self.assertIn(str(child.pid),p.stdout.split())
         finally:child.terminate();child.communicate(timeout=5)
+
+    def test_direct_shell_guard_blocks_a_live_vm(self):
+        child=self.live()
+        try:
+            p=subprocess.run(['python3',str(MODULE),'--assert-none'],capture_output=True,text=True)
+            self.assertNotEqual(p.returncode,0)
+        finally:child.terminate();child.communicate(timeout=5)
+
+    def test_direct_guard_names_the_conflicting_live_pid(self):
+        child=self.live()
+        try:
+            p=subprocess.run(['python3',str(MODULE),'--assert-none'],capture_output=True,text=True)
+            self.assertIn('live QEMU',p.stderr)
+            self.assertIn(str(child.pid),p.stderr)
+        finally:child.terminate();child.communicate(timeout=5)
