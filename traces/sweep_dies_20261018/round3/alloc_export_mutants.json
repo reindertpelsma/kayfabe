@@ -1,0 +1,33 @@
+{
+  "class": "MEASURED",
+  "utc": "2026-10-22T23:56:06.345754+00:00",
+  "source": "public e34886891 exporter unchanged except provenance comment",
+  "mutants": [
+    {
+      "mutant": "wrong_header_offset",
+      "kill_count": 3,
+      "killers": [
+        "alloc_test.AllocationProjection.test_mixed_replies_count_only_allocations",
+        "alloc_test.AllocationProjection.test_nonzero_body_status_is_retained",
+        "alloc_test.AllocationProjection.test_other_class_and_status_are_decoded_independently"
+      ]
+    },
+    {
+      "mutant": "drop_function_filter",
+      "kill_count": 2,
+      "killers": [
+        "alloc_test.AllocationProjection.test_mixed_replies_count_only_allocations",
+        "alloc_test.AllocationProjection.test_nonallocation_reply_is_excluded"
+      ]
+    },
+    {
+      "mutant": "export_raw_body",
+      "kill_count": 2,
+      "killers": [
+        "alloc_test.AllocationProjection.test_nonzero_body_status_is_retained",
+        "alloc_test.AllocationProjection.test_other_class_and_status_are_decoded_independently"
+      ]
+    }
+  ],
+  "production_source_restored": true
+}

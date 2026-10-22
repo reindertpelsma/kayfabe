@@ -36,6 +36,8 @@ class AllocationProjection(unittest.TestCase):
         self.assertEqual(rows[0]['class_from_header'], '0xcfb0')
         self.assertNotIn('PRIVATE-HANDLE', text)
         self.assertNotIn('body=', text)
+        self.assertNotIn(b'PRIVATE-HAND'.hex(), text)
+        self.assertNotIn('body', rows[0])
         self.assertFalse(rows[0]['private_body_exported'])
         self.assertEqual(receipt['posted_allocation_records'], 1)
 
@@ -46,6 +48,8 @@ class AllocationProjection(unittest.TestCase):
         self.assertEqual(rows[0]['class_from_header'], '0xca7a')
         self.assertNotIn('PRIVATE-HANDLE', text)
         self.assertNotIn('body=', text)
+        self.assertNotIn(b'PRIVATE-HAND'.hex(), text)
+        self.assertNotIn('body', rows[0])
         self.assertFalse(rows[0]['private_body_exported'])
 
     def test_nonallocation_reply_is_excluded(self):
