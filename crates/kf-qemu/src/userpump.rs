@@ -896,10 +896,12 @@ impl kf_chan::user_turn::Io for PumpIo<'_> {
         words
             .try_reserve_exact(pb.bytes.len() / 4)
             .map_err(|_| "USER_RING_SCAN_ALLOC")?;
-        for word in pb.bytes.chunks_exact(4) {
-            words.push(u32::from_le_bytes(
-                word.try_into().map_err(|_| "USER_RING_WORD")?,
-            ));
+        let (chunks, tail) = pb.bytes.as_chunks::<4>();
+        if !tail.is_empty() {
+            return Err("USER_RING_WORD".into());
+        }
+        for word in chunks {
+            words.push(u32::from_le_bytes(*word));
         }
         self.aux.receipts.push(pb.into_receipt());
         Ok((words, vram))
