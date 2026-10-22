@@ -1,5 +1,6 @@
 //! Before Windows media/setup, prove or refuse this host's unprivileged PRECOMP permission.
-//! No guest, CUDA context, submitted GPU work, arbitrary-offset argument or word dump.
+//! No guest, CUDA context, submitted GPU work or arbitrary-offset argument.
+//! Bounded actual host reply words are evidence only, never a product constant input.
 use kf_arch::ids::GpuId;
 use kf_linux_raw::{DevDir, capability};
 
@@ -26,7 +27,9 @@ fn run() -> Result<(), String> {
     let regs = kf_disp::regs::Regs::for_ip(rm.driver_version(), row.ip_version)
         .ok_or("host driver has no compiled display register vocabulary")?;
     let _snapshot = kf_disp::hostcaps::query(table, &regs, row, die, |addresses| {
-        rm.read_precomp_capabilities(addresses)
+        let values = rm.read_precomp_capabilities(addresses)?;
+        print!("{}", reply_text(addresses, &values)?);
+        Ok(values)
     })?;
     println!(
         "PRECOMP_HOST_READ=OK pci={} arch={architecture:#x} impl={implementation:#x} host={} class={:#x} windows={} named_words={} CAP_SYS_ADMIN=clear",
@@ -42,5 +45,59 @@ fn main() {
     if let Err(error) = run() {
         eprintln!("PRECOMP_HOST_READ=REFUSED derived fallback; {error}");
         std::process::exit(2);
+    }
+}
+
+fn reply_text(addresses: &[u32], values: &[u32]) -> Result<String, String> {
+    use std::fmt::Write;
+    if addresses.is_empty()
+        || addresses.len() > kf_host::precomp::MAX_WORDS
+        || addresses.len() != values.len()
+    {
+        return Err("PRECOMP reply evidence count mismatch/bound".into());
+    }
+    let mut text = String::new();
+    for (address, value) in addresses.iter().zip(values) {
+        writeln!(
+            &mut text,
+            "PRECOMP_HOST_REPLY address={address:#010x} value={value:#010x}"
+        )
+        .map_err(|e| e.to_string())?;
+    }
+    Ok(text)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::reply_text;
+    #[test]
+    fn first_reply_retains_its_actual_address_and_value() {
+        let s = reply_text(&[0x640788], &[0x12345678]).unwrap();
+        assert!(s.contains("address=0x00640788 value=0x12345678"));
+        assert_eq!(s.lines().count(), 1);
+    }
+    #[test]
+    fn last_bounded_reply_is_recorded_without_truncation() {
+        let a: Vec<_> = (0..192).map(|i| 0x640780 + i * 4).collect();
+        let v: Vec<_> = (0..192).map(|i| 0x12340000 + i).collect();
+        let s = reply_text(&a, &v).unwrap();
+        assert_eq!(s.lines().count(), 192);
+        assert!(s.lines().last().unwrap().contains("value=0x123400bf"));
+    }
+    #[test]
+    fn short_reply_cannot_be_labelled_complete() {
+        assert!(reply_text(&[4, 8], &[1]).is_err());
+    }
+    #[test]
+    fn long_reply_cannot_be_labelled_complete() {
+        assert!(reply_text(&[4], &[1, 2]).is_err());
+    }
+    #[test]
+    fn an_empty_plan_does_not_emit_a_fake_success() {
+        assert!(reply_text(&[], &[]).is_err());
+    }
+    #[test]
+    fn an_oversized_plan_cannot_emit_unbounded_evidence() {
+        assert!(reply_text(&vec![4; 193], &vec![1; 193]).is_err());
     }
 }

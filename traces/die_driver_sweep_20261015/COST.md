@@ -259,3 +259,36 @@ exclusive SW2 spend. New offers/quotes are planning evidence only. Next proposal
 ON then isolated B1 ON, bounded by actual-rate reservation and170min outer auto-destroy plus earlier
 cost/authorized deadline; no new execution window or rental grant inferred. See
 ../blackwell_host_caps_review_20261022/market_plan_snapshot.json and the host-PRECOMP validation plan.
+
+BLACKWELL FIELD PHASE2026-10-22 (new owner grant cap8USD/stop6/reserve5; prior stretch separate):
+CPU field-policy/observer/controller/B1 prerequisites green and pushed before rental preflight.
+MEASURED API2026-10-22 20:24:55UTC: no verified RTX5090 offer within the frozen KVM/disk/CPU/
+network/reliability requirements; four matches are deverified or unverified (one startup-blacklisted).
+Preflight exit75 NO_SUITABLE_REPLACEMENT_OFFERS, before any create API call. No instance id,
+no timer required, no provisioning, no new hardware result. Phase spend0USD; no second offer/rental
+attempt or eligibility weakening. Read-only broader offer query confirms zero verified matches.
+Historical stretch runtime estimate remains4.832256623USD, separate from new phase allowance.
+Own eight historical ids APIabsent; current credit and no-creation receipt:
+../blackwell_fields_phase_20261022/FINAL_API_AUDIT.json. Foreign instances untouched.
+Other GB203/205/206/207 plan is read-only, with audit-covered measurements subtracted; no rentals.
+
+ACTIVE owner22:50 RTX50 expansion,2026-10-22T21:04:20UTC: own57273215,
+MEASURED API 2026-10-22: verified RTX5060Ti offer56550364/machine38619, candidateGB206 (actual own-host probe pending),
+quote0.380055556USD/h, credit37.397926288USD. Auto-destroy armedFIRST111957 at21:04:20.450UTC,
+170min outer deadline23:54:20UTC; independent budgetwatch111960, rate guard0.480055556USD/h,
+reservation1.860157407USD including0.50uncertainty<6stop; cap8/reserve5 unchanged.
+GB202 advertised ask55276777 was API400/notavailable; no contract created, own-label absence
+verified before selecting next eligible offer. GB205 no eligible live offer in final preflight;
+GB206 is highest available verified rentable match. Own-ID ledger is fields_phase/owned_instances.json.
+Subtract existingGB206 tier2/ZBC/hostshapes/nativecaps/census; new own-die PRECOMP permission/reply.
+A GB206 result does not establish a GB202 pass or resolve GB202's historical fourth-cursor0x50.
+
+CLOSED MEASURED API 2026-10-22: own57273215 destroyed by exactid; absenceverified21:34:29.366086UTC.
+Elapsed0.502496256h × observedall-in0.428666667USD/h = runtimeestimate0.215403395USD
+(newphase total0.215403395<6stop; priorstretch4.832256623 separate; not a settled invoice).
+Observedsharedcredit37.138982102USD>5reserve; accountdebit is not exclusive SW2 attribution.
+Both own timers111957/111960 cancelled only AFTER APIabsence; own9historical/currentIDs absent.
+ActualGB206/595.91.07: PRECOMPdenied0x1f with kernelnon-adminpermissionfailure0x640780;
+gates9/9+10,raw30/30,CUDA4/4 pass; nativeGRfixtureCEwake-FD assertion failed despite payload/GET.
+No unmatched Xid, no Xid32; only5source-matched intentional31 with recovery. Controllerstopped
+beforeWindows install/bind; fieldON/B1UNRUN. No newWindowsordinals or GB202result.

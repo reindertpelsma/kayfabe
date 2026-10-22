@@ -13,8 +13,14 @@ fn page(t: &ClassTable, row: &kf_chip::display::DisplayRow) -> kf_disp::capsderi
         &r,
         row,
         Die {
-            architecture: 0,
-            implementation: 0,
+            architecture: match row.classes.caps {
+                0xc573 => 0x160,
+                0xc673 => 0x170,
+                0xc773 => 0x190,
+                0xca73 => 0x1b0,
+                _ => panic!("unknown fixture family"),
+            },
+            implementation: 2,
         },
         true,
         shipped_rows(),

@@ -27,6 +27,7 @@ pub fn query(
     die: Die,
     mut read: impl FnMut(&[u32]) -> Result<Vec<u32>, String>,
 ) -> Result<HostPrecomp, String> {
+    crate::precomp_fields::membership(row, die).map_err(|e| e.0)?;
     if row.windows == 0 || row.windows > 32 {
         return Err("PRECOMP host window count outside public bound".into());
     }
@@ -76,6 +77,18 @@ pub fn query(
 }
 
 impl HostPrecomp {
+    /// Bounded physical observations for the exact die/class/topology/layout.
+    /// These facts are evidence, not permission to advertise a virtual feature.
+    #[must_use]
+    pub fn observations_for(
+        &self,
+        table: &ClassTable,
+        row: &kf_chip::display::DisplayRow,
+        die: Die,
+    ) -> Option<&[(u32, u32)]> {
+        self.words_for(table, row, die)
+    }
+
     pub(crate) fn words_for(
         &self,
         table: &ClassTable,

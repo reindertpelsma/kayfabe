@@ -45,3 +45,5 @@ pub mod regs;
 pub mod scanout;
 pub mod tick;
 pub mod vramslot;
+
+mod precomp_fields;
