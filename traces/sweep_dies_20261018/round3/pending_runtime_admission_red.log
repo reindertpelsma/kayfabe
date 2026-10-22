@@ -1,0 +1,25 @@
+..E.F...
+======================================================================
+ERROR: test_ga102_exact_four_ce_and_one_gr_should_admit_after_derivation (scripts.bench.tests.test_native_xid_route_round2.Round2NativeRouteReplay.test_ga102_exact_four_ce_and_one_gr_should_admit_after_derivation)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/workspace/s4-wt/scripts/bench/tests/test_native_xid_route_round2.py", line 43, in test_ga102_exact_four_ce_and_one_gr_should_admit_after_derivation
+    self.assertEqual(G.approve_native(journal, defer, missing), G.xid_lines(journal))
+                     ~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/workspace/s4-wt/scripts/bench/native_xid_guard.py", line 95, in approve_native
+    raise GuardRefused("Xid type/channel/address/source multiset differs from fault controls")
+native_xid_guard.GuardRefused: Xid type/channel/address/source multiset differs from fault controls
+
+======================================================================
+FAIL: test_ga102_substituting_ce1_must_not_admit (scripts.bench.tests.test_native_xid_route_round2.Round2NativeRouteReplay.test_ga102_substituting_ce1_must_not_admit)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/workspace/s4-wt/scripts/bench/tests/test_native_xid_route_round2.py", line 47, in test_ga102_substituting_ce1_must_not_admit
+    with self.assertRaises(G.GuardRefused):
+         ~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^
+AssertionError: GuardRefused not raised
+
+----------------------------------------------------------------------
+Ran 8 tests in 0.005s
+
+FAILED (failures=1, errors=1)

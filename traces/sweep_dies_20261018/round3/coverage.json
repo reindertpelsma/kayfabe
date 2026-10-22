@@ -1812,5 +1812,19 @@
     "RTX 6000 Ada": "AD102",
     "RTX 4000 Ada": "AD104",
     "Quadro RTX 8000": "TU102"
+  },
+  "route_specific_inventory": {
+    "unit": "source-correlated canonical native negative-control journals; observations only",
+    "independent_runtime_derivation_count": 0,
+    "known_observation_dies": [
+      "AD102",
+      "GA102",
+      "AD106"
+    ],
+    "observation_count_before_current_lease": 3,
+    "unobserved_canonical_protocol_count": 17,
+    "fraction_unobserved": 0.85,
+    "TU106": "pending on lease57262021; existing595.91.07 native30/30 reused, missing Xid-source correlation measured once",
+    "not_an_inheritance": "observed CE client can depend on host harvesting and is not a reusable per-die route constant"
   }
 }

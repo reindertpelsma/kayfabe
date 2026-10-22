@@ -1,0 +1,18 @@
+PLAN worktree /workspace/bench/sweep/s4r3_tu106/src at 8f39482e0d1d004d5606c541f20645205cd426ae (fetched from origin; created on the first real run); planned from this checkout
+  would log: SWEEP_START 2026-10-22T22:01:32+02:00 rev=8f39482e tag=s4r3_tu106 arch=TU106
+  would log: SWEEP_ARCH arch=TU106 src=dry-run (no nvidia-smi here)
+  would log: SWEEP_PLAN hosts=595.91.07 ref_host=595.91.07 guests=580.159.04 mixed=none default_guest=580.159.04 thin_re=^580\. budget=180 ladder_reps=1 ladder_rungs=cup2,cup3,cup8,cup8bench bare=cup2
+PLAN build: cargo build --release --target x86_64-unknown-linux-musl -p kayfabe-rm-ladder; build_kf3.sh /workspace/bench/qemu-10.2.4 /workspace/bench/qemu-build-kf3
+PLAN host=595.91.07: 5 rows (5 pending); guests: 580.159.04; thin: 580.159.04
+  would log: SWEEP_HOST_START 2026-10-22T22:01:32+02:00 rev=8f39482e host=595.91.07 arch=TU106
+PLAN swap: unless 595.91.07 is loaded — HOST_DRIVER=595.91.07 provision_host_driver.sh (XFree86/ then tesla/; CC = the kernel's compiler)
+PLAN row=bare:595.91.07:cup2: cuda_ladder.sh host (bare metal, cup2)
+PLAN row=gates:595.91.07: v3_gates.sh (9 gates, no guest)
+PLAN row=native_proof:595.91.07: scripts/bench/diesweep/native_sweep_proof.sh (current host; before any guest)
+PLAN row=canary:595.91.07: guest_walk.sh 580.159.04 (--timer only)
+PLAN row=thin:595.91.07:580.159.04: guest_walk.sh 580.159.04 (30 arms, 180s each; after stage_guest_driver.sh 580.159.04 if unstaged)
+PLAN row=ladder:595.91.07:580.159.04: cuda_ladder.sh guest 580.159.04 x1 (the bench image)
+  would log: SWEEP_HOST_EXIT 2026-10-22T22:01:32+02:00 host=595.91.07
+  would log: SWEEP_RESTORE host=595.91.07
+PLAN swap: unless 595.91.07 is loaded — HOST_DRIVER=595.91.07 provision_host_driver.sh (XFree86/ then tesla/; CC = the kernel's compiler)
+  would log: SWEEP_EXIT 2026-10-22T22:01:32+02:00 rc=0 rows_run=0

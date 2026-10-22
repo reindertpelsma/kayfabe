@@ -1,0 +1,10 @@
+SELFTEST no_row_without_an_arch: PASS — archs=['GA102']
+SELFTEST the_walk_boxes_are_ga102: PASS — GA102 boxes=['kfd', 'kfh']
+SELFTEST doc_grid_found: PASS — 19 lines in V3_DRIVER_MATRIX.md §6.0
+SELFTEST committed_logs_reproduce_the_doc_grid: PASS
+SELFTEST sweep_arch_is_its_own_grid: PASS — archs=['GA102', 'ZZ999']
+SELFTEST ga102_grid_untouched_by_another_arch: PASS
+SELFTEST sweep_rows_parsed: PASS
+SELFTEST sweep_box_recorded: PASS — {'_selftest_zz999'}
+SELFTEST arch_without_a_value_is_usage: PASS — rc=2
+SELFTEST PASS
