@@ -6,3 +6,8 @@ TREE_RC=0
 [2026-10-22T20:08:42+00:00] BENCH_TREE_DONE
 603 |         ABI_DECODE_FAILED, ABI_ENCODE_FAILED, CharDevice, IMPOSSIBLE_CONVERSION,
 LADDER_RC=0
+FG_RC=0
+KF3_RC=0
+KF3_BUILT /workspace/bench/kf3-bins/bc3a967e/qemu-system-x86_64 rev=bc3a967e mtime=2026-10-22 20:10:25.795210102 +0000 (shared build dir /workspace/bench/qemu-build-kf3)
+READY driver=595.91.07
+EXIT 2026-10-22T20:10:25+00:00

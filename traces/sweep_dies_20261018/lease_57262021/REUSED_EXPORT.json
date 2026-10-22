@@ -1,13 +1,13 @@
 {
   "kind": "MEASURED",
   "lease_id": 57262021,
-  "utc": "2026-10-22T20:09:58.256557+00:00",
+  "utc": "2026-10-22T22:00:30.952247+00:00",
   "tag": "s4r3_tu106",
   "files": {
     "traces/sweep_dies_20261018/lease_57262021/provision/prov.log": {
-      "source_bytes": 28036,
-      "source_lines": 806,
-      "source_sha256": "1bf891d6ccadc1c46e970f92ed4a8f0e0ae0b6da799ad7b153c411c5c33bd789",
+      "source_bytes": 28372,
+      "source_lines": 813,
+      "source_sha256": "dd4a0a9f0932a3a07b7ecd806848cb65fe4dd8396c2e3c6ddf52963586495232",
       "selection": "provisioning verdict/diagnostics"
     },
     "traces/sweep_dies_20261018/lease_57262021/provision/box.log": {
@@ -29,9 +29,15 @@
       "selection": "provisioning verdict/diagnostics"
     },
     "traces/sweep_dies_20261018/lease_57262021/provision/fg.log": {
-      "source_bytes": 234,
-      "source_lines": 10,
-      "source_sha256": "38e9290ea5d446f976613ec931bdb89180a9c89369322c38df47c3f348c41cee",
+      "source_bytes": 482,
+      "source_lines": 14,
+      "source_sha256": "2561ceb2138b48c2efa080a58628fb242df3da479ed2d6e0b0d7c6387cf19506",
+      "selection": "provisioning verdict/diagnostics"
+    },
+    "traces/sweep_dies_20261018/lease_57262021/provision/kf3.log": {
+      "source_bytes": 65480,
+      "source_lines": 1799,
+      "source_sha256": "dd5458566284bd02b705da278e20346f7166e8d91fad87eb171993b29d5a2201",
       "selection": "provisioning verdict/diagnostics"
     },
     "traces/sweep_dies_20261018/lease_57262021/provision/provision_first.log": {
