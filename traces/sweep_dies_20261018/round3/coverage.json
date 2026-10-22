@@ -1,0 +1,242 @@
+{
+  "kind": "CODE READ",
+  "date": "2026-10-22",
+  "unit": "implementation die; no SKU duplicates",
+  "owner_reported_measured": 5,
+  "additional_archived_ad106": 1,
+  "counts": {
+    "target": 20,
+    "measured_any_native_or_control": 6,
+    "inherited": 0,
+    "unmeasured": 14,
+    "unmeasured_fraction": 0.7,
+    "candidate_offer_classes_for_unmeasured_dies": 4
+  },
+  "not_a_claim": "Native/control measurement coverage is not Windows acceptance or runtime CE-route derivation coverage. Offer model-to-die mappings are candidate hypotheses until a native implementation probe.",
+  "rows": [
+    {
+      "die": "TU102",
+      "measurement": null,
+      "inherited_from": null,
+      "unmeasured": true,
+      "candidate_sku_classes": "2080 Ti; Quadro RTX6000/8000",
+      "candidate_offer": null,
+      "route_inheritance_forbidden": true,
+      "workstation_variant_coverage": "not established: driver branch/vBIOS/ECC/floorsweeping may differ; runtime host topology mandatory"
+    },
+    {
+      "die": "TU104",
+      "measurement": null,
+      "inherited_from": null,
+      "unmeasured": true,
+      "candidate_sku_classes": "2080/2070 Super; Quadro RTX4000/5000",
+      "candidate_offer": null,
+      "route_inheritance_forbidden": true,
+      "workstation_variant_coverage": "not established: driver branch/vBIOS/ECC/floorsweeping may differ; runtime host topology mandatory"
+    },
+    {
+      "die": "TU106",
+      "measurement": null,
+      "inherited_from": null,
+      "unmeasured": true,
+      "candidate_sku_classes": "2060/Super",
+      "candidate_offer": {
+        "model": "RTX 2060S",
+        "usd_per_hour": 0.11
+      },
+      "route_inheritance_forbidden": true,
+      "workstation_variant_coverage": "not established: driver branch/vBIOS/ECC/floorsweeping may differ; runtime host topology mandatory"
+    },
+    {
+      "die": "TU116",
+      "measurement": null,
+      "inherited_from": null,
+      "unmeasured": true,
+      "candidate_sku_classes": "1660/Super/Ti",
+      "candidate_offer": null,
+      "route_inheritance_forbidden": true,
+      "workstation_variant_coverage": "not established: driver branch/vBIOS/ECC/floorsweeping may differ; runtime host topology mandatory"
+    },
+    {
+      "die": "TU117",
+      "measurement": null,
+      "inherited_from": null,
+      "unmeasured": true,
+      "candidate_sku_classes": "1650; T1000/T600/T400",
+      "candidate_offer": null,
+      "route_inheritance_forbidden": true,
+      "workstation_variant_coverage": "not established: driver branch/vBIOS/ECC/floorsweeping may differ; runtime host topology mandatory"
+    },
+    {
+      "die": "GA102",
+      "measurement": "595.91.07,2026-10-22,lease57209908; native only; ../lease_57209908/AMPERE_RESULT.md",
+      "inherited_from": null,
+      "unmeasured": false,
+      "candidate_sku_classes": "3080/3090; RTX A6000/A5000/A4500/A5500",
+      "candidate_offer": {
+        "model": "RTX 3090",
+        "usd_per_hour": 0.6166666667
+      },
+      "route_inheritance_forbidden": true,
+      "workstation_variant_coverage": "not established: driver branch/vBIOS/ECC/floorsweeping may differ; runtime host topology mandatory"
+    },
+    {
+      "die": "GA103",
+      "measurement": null,
+      "inherited_from": null,
+      "unmeasured": true,
+      "candidate_sku_classes": "GA103 variants: 3060 Ti / 3080 Ti laptop; probe exact implementation",
+      "candidate_offer": null,
+      "route_inheritance_forbidden": true,
+      "workstation_variant_coverage": "not established: driver branch/vBIOS/ECC/floorsweeping may differ; runtime host topology mandatory"
+    },
+    {
+      "die": "GA104",
+      "measurement": null,
+      "inherited_from": null,
+      "unmeasured": true,
+      "candidate_sku_classes": "3070/3070 Ti; RTX A4000",
+      "candidate_offer": null,
+      "route_inheritance_forbidden": true,
+      "workstation_variant_coverage": "not established: driver branch/vBIOS/ECC/floorsweeping may differ; runtime host topology mandatory"
+    },
+    {
+      "die": "GA106",
+      "measurement": "580.159.04,2026-08-09,real3060 host; traces/real_ga106/rmladder_r24_pcemask_real_ga106.txt",
+      "inherited_from": null,
+      "unmeasured": false,
+      "candidate_sku_classes": "3060; RTX A2000",
+      "candidate_offer": null,
+      "route_inheritance_forbidden": true,
+      "workstation_variant_coverage": "not established: driver branch/vBIOS/ECC/floorsweeping may differ; runtime host topology mandatory"
+    },
+    {
+      "die": "GA107",
+      "measurement": null,
+      "inherited_from": null,
+      "unmeasured": true,
+      "candidate_sku_classes": "3050; RTX A1000",
+      "candidate_offer": null,
+      "route_inheritance_forbidden": true,
+      "workstation_variant_coverage": "not established: driver branch/vBIOS/ECC/floorsweeping may differ; runtime host topology mandatory"
+    },
+    {
+      "die": "AD102",
+      "measurement": "595.91.07,2026-10-22,lease57193877; ../lease_57193877/ADA_RESULT.md",
+      "inherited_from": null,
+      "unmeasured": false,
+      "candidate_sku_classes": "4090; RTX6000 Ada/RTX5000 Ada",
+      "candidate_offer": {
+        "model": "RTX 4090",
+        "usd_per_hour": 0.54
+      },
+      "route_inheritance_forbidden": true,
+      "workstation_variant_coverage": "not established: driver branch/vBIOS/ECC/floorsweeping may differ; runtime host topology mandatory"
+    },
+    {
+      "die": "AD103",
+      "measurement": null,
+      "inherited_from": null,
+      "unmeasured": true,
+      "candidate_sku_classes": "4080/Super; laptop/workstation variants require probe",
+      "candidate_offer": null,
+      "route_inheritance_forbidden": true,
+      "workstation_variant_coverage": "not established: driver branch/vBIOS/ECC/floorsweeping may differ; runtime host topology mandatory"
+    },
+    {
+      "die": "AD104",
+      "measurement": "580.159.04,2026-09-26,4070 host/lease52747429; traces/real_ad104/README.md",
+      "inherited_from": null,
+      "unmeasured": false,
+      "candidate_sku_classes": "4070/Ti; RTX4000 Ada/4500 Ada",
+      "candidate_offer": null,
+      "route_inheritance_forbidden": true,
+      "workstation_variant_coverage": "not established: driver branch/vBIOS/ECC/floorsweeping may differ; runtime host topology mandatory"
+    },
+    {
+      "die": "AD106",
+      "measurement": "595.91.07,2026-10-21,lease57064037; traces/sweep_windows_20261021/lease_57064037/native/sweep_host_die.log (additional archived measurement found this round)",
+      "inherited_from": null,
+      "unmeasured": false,
+      "candidate_sku_classes": "4060 Ti; mobile variants require probe",
+      "candidate_offer": {
+        "model": "RTX 4060 Ti",
+        "usd_per_hour": 0.4473333333
+      },
+      "route_inheritance_forbidden": true,
+      "workstation_variant_coverage": "not established: driver branch/vBIOS/ECC/floorsweeping may differ; runtime host topology mandatory"
+    },
+    {
+      "die": "AD107",
+      "measurement": null,
+      "inherited_from": null,
+      "unmeasured": true,
+      "candidate_sku_classes": "4060; RTX2000 Ada",
+      "candidate_offer": null,
+      "route_inheritance_forbidden": true,
+      "workstation_variant_coverage": "not established: driver branch/vBIOS/ECC/floorsweeping may differ; runtime host topology mandatory"
+    },
+    {
+      "die": "GB202",
+      "measurement": "595.91.07,2026-10-21,lease57046541; traces/sweep_windows_20261021/lease_57046541/native/sweep_host_die.log",
+      "inherited_from": null,
+      "unmeasured": false,
+      "candidate_sku_classes": "5090; RTX PRO6000/5000 Blackwell",
+      "candidate_offer": {
+        "model": "RTX 5090",
+        "usd_per_hour": 0.5833333333
+      },
+      "route_inheritance_forbidden": true,
+      "workstation_variant_coverage": "not established: driver branch/vBIOS/ECC/floorsweeping may differ; runtime host topology mandatory"
+    },
+    {
+      "die": "GB203",
+      "measurement": null,
+      "inherited_from": null,
+      "unmeasured": true,
+      "candidate_sku_classes": "5080/5070 Ti; RTX PRO4500/4000 Blackwell candidate",
+      "candidate_offer": {
+        "model": "RTX 5070 Ti",
+        "usd_per_hour": 0.3366666667
+      },
+      "route_inheritance_forbidden": true,
+      "workstation_variant_coverage": "not established: driver branch/vBIOS/ECC/floorsweeping may differ; runtime host topology mandatory"
+    },
+    {
+      "die": "GB205",
+      "measurement": null,
+      "inherited_from": null,
+      "unmeasured": true,
+      "candidate_sku_classes": "5070",
+      "candidate_offer": {
+        "model": "RTX 5070",
+        "usd_per_hour": 0.2466666667
+      },
+      "route_inheritance_forbidden": true,
+      "workstation_variant_coverage": "not established: driver branch/vBIOS/ECC/floorsweeping may differ; runtime host topology mandatory"
+    },
+    {
+      "die": "GB206",
+      "measurement": null,
+      "inherited_from": null,
+      "unmeasured": true,
+      "candidate_sku_classes": "5060/Ti",
+      "candidate_offer": {
+        "model": "RTX 5060",
+        "usd_per_hour": 0.175
+      },
+      "route_inheritance_forbidden": true,
+      "workstation_variant_coverage": "not established: driver branch/vBIOS/ECC/floorsweeping may differ; runtime host topology mandatory"
+    },
+    {
+      "die": "GB207",
+      "measurement": null,
+      "inherited_from": null,
+      "unmeasured": true,
+      "candidate_sku_classes": "5050; workstation variants require probe",
+      "candidate_offer": null,
+      "route_inheritance_forbidden": true,
+      "workstation_variant_coverage": "not established: driver branch/vBIOS/ECC/floorsweeping may differ; runtime host topology mandatory"
+    }
+  ]
+}
