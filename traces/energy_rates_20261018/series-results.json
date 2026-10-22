@@ -76,5 +76,18 @@
     "verdict": "PASS",
     "reason": "VENDOR_COMPLETED_NO_GUARD_FAILURE",
     "restored": true
+  },
+  {
+    "classification": "MEASURED",
+    "order": 7,
+    "run": 4307,
+    "arm": "A4",
+    "rev": "40583bc297264fb57a20d84cc795d05d493197b5",
+    "started": "2026-10-22T11:47:01.629782+02:00",
+    "ended": "2026-10-22T11:52:03.662861+02:00",
+    "exit": 0,
+    "verdict": "PASS",
+    "reason": "VENDOR_COMPLETED_NO_GUARD_FAILURE",
+    "restored": true
   }
 ]

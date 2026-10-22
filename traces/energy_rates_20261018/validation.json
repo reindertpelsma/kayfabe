@@ -1,8 +1,8 @@
 {
   "classification": "MEASURED",
   "evidence": "validation.json",
-  "runs_checked": 6,
-  "passed": 6,
+  "runs_checked": 7,
+  "passed": 7,
   "failed": 0,
   "proofs": [
     {
@@ -58,6 +58,16 @@
     {
       "run": 4306,
       "revision": "a83394e66e960d8017caa0ef19fa579f1724806b",
+      "verdict": "PASS",
+      "flags_match": true,
+      "observer_controls_passed": true,
+      "independent_cow_backing_unchanged": true,
+      "guest1920x1080": true,
+      "restored": true
+    },
+    {
+      "run": 4307,
+      "revision": "40583bc297264fb57a20d84cc795d05d493197b5",
       "verdict": "PASS",
       "flags_match": true,
       "observer_controls_passed": true,
