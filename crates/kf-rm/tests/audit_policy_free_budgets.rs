@@ -144,3 +144,93 @@ fn orphan_aliases_1600() {
 fn orphan_aliases_2400() {
     bounded("orphan_aliases_2400", "aliases", 2400);
 }
+
+fn page_policy() -> (PageDirPolicy, Arc<std::sync::Mutex<Vec<(u32, u32)>>>) {
+    let seen = Arc::new(std::sync::Mutex::new(Vec::new()));
+    let copy = Arc::clone(&seen);
+    let abi = *kf_abi::versions::table_for(kf_abi::versions::BENCH_DRIVER).unwrap();
+    let policy = PageDirPolicy::new(
+        abi,
+        kf_abi::GuestOs::Linux,
+        Arc::new(move |st| {
+            if let MemStatement::Retire { client, vaspace } = st {
+                copy.lock().unwrap().push((client, vaspace));
+            }
+        }),
+    );
+    (policy, seen)
+}
+fn declare(p: &mut PageDirPolicy, key: (u32, u32), parent: u32) {
+    assert!(
+        p.respond(&rpc(
+            RpcFunction::RmAlloc,
+            &[key.0, parent, key.1, nv::FERMI_VASPACE_A, 0, 8, 0, 0, 0, 0]
+        ))
+        .is_none()
+    );
+}
+fn alias(p: &mut PageDirPolicy, dst: (u32, u32), src: (u32, u32)) {
+    assert!(
+        p.respond(&rpc(
+            RpcFunction::DupObject,
+            &[dst.0, 10, dst.1, src.0, src.1, 0, 0]
+        ))
+        .is_none()
+    );
+}
+fn free(p: &mut PageDirPolicy, key: (u32, u32)) {
+    assert!(
+        p.respond(&rpc(RpcFunction::Free, &[key.0, 0, key.1, 0]))
+            .is_none()
+    );
+}
+#[test]
+fn a_device_free_retires_both_children_in_handle_order() {
+    let (mut p, seen) = page_policy();
+    declare(&mut p, (100, 3), 10);
+    declare(&mut p, (100, 2), 10);
+    free(&mut p, (100, 10));
+    assert_eq!(*seen.lock().unwrap(), vec![(100, 2), (100, 3)]);
+}
+#[test]
+fn a_device_free_preserves_the_child_held_by_a_foreign_alias() {
+    let (mut p, seen) = page_policy();
+    declare(&mut p, (100, 2), 10);
+    declare(&mut p, (100, 3), 10);
+    alias(&mut p, (200, 20), (100, 2));
+    free(&mut p, (100, 10));
+    assert_eq!(*seen.lock().unwrap(), vec![(100, 3)]);
+    free(&mut p, (200, 20));
+    assert_eq!(*seen.lock().unwrap(), vec![(100, 3), (100, 2)]);
+}
+#[test]
+fn overwriting_the_last_alias_retires_its_old_orphan_on_the_next_free() {
+    let (mut p, seen) = page_policy();
+    declare(&mut p, (100, 2), 10);
+    declare(&mut p, (100, 3), 10);
+    alias(&mut p, (200, 20), (100, 2));
+    free(&mut p, (100, 2));
+    alias(&mut p, (200, 20), (100, 3));
+    assert!(
+        seen.lock().unwrap().is_empty(),
+        "dup itself does not retire"
+    );
+    free(&mut p, (100, 99));
+    assert_eq!(*seen.lock().unwrap(), vec![(100, 2)]);
+    assert_eq!(p.canonical(200, 20), (100, 3));
+}
+#[test]
+fn overwritten_orphans_retire_in_original_key_order() {
+    let (mut p, seen) = page_policy();
+    for handle in [2, 3, 4] {
+        declare(&mut p, (100, handle), 10);
+    }
+    alias(&mut p, (200, 20), (100, 2));
+    alias(&mut p, (200, 24), (100, 4));
+    free(&mut p, (100, 2));
+    free(&mut p, (100, 4));
+    alias(&mut p, (200, 24), (100, 3));
+    alias(&mut p, (200, 20), (100, 3));
+    free(&mut p, (100, 99));
+    assert_eq!(*seen.lock().unwrap(), vec![(100, 2), (100, 4)]);
+}
