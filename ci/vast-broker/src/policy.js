@@ -24,6 +24,15 @@ export function configuration(env){
   if(!Number.isInteger(cfg.dailyCount)||!Number.isInteger(cfg.ttl/60000))refuse();
   return cfg;
 }
+// Local smoke trust requires both explicit opt-in and a loopback HTTP caller.
+// Cloudflare's public Worker URL cannot satisfy this gate. Never derive trust from JWT URLs.
+export function localIdentity(env,requestUrl){
+  const caller=new URL(requestUrl),loopback=u=>u.protocol==='http:'&&['127.0.0.1','localhost','[::1]'].includes(u.hostname);
+  if(env.ALLOW_TEST_ISSUER!=='true'||!loopback(caller))return undefined;
+  let issuer;try{issuer=new URL(env.TEST_ISSUER);}catch{refuse();}
+  if(!loopback(issuer)||issuer.username||issuer.password||issuer.search||issuer.hash||issuer.pathname!=='/')refuse();
+  return {issuer:issuer.origin,jwks:issuer.origin+'/.well-known/jwks',githubOrigin:issuer.origin};
+}
 export async function readBounded(response,limit=262144){
   if(Number(response.headers.get('content-length')||0)>limit)refuse();
   const reader=response.body?.getReader();if(!reader)return new Uint8Array();

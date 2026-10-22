@@ -1,4 +1,4 @@
-import {BrokerError,refuse,configuration,numericId} from './policy.js';
+import {BrokerError,refuse,configuration,numericId,localIdentity,readBounded} from './policy.js';
 import {RunTokens,constantTimeEqual,validSecret,sha256Hex} from './tokens.js';
 import {readReportBody,parseReport} from './reports.js';
 import {OidcVerifier} from './oidc.js';
@@ -8,7 +8,7 @@ import {Ledger} from './ledger.js';
 import {onstart} from './onstart.js';
 import {appendBoxText} from './sanitize.js';
 export function createService({env,storage,fetch:fetcher=fetch,now=Date.now,random}={}){
-  const ledger=new Ledger(storage),verifier=new OidcVerifier(fetcher,now),tokens=new RunTokens(env.RUN_TOKEN_SECRET),githubCache=new Map();let busy=false;
+  const ledger=new Ledger(storage),verifier=new OidcVerifier(fetcher,now),tokens=new RunTokens(env.RUN_TOKEN_SECRET),githubCache=new Map();let busy=false,localVerifier;
   const runKey=c=>c.run_id+'-'+c.run_attempt;
   const json=(data,status=200)=>Response.json(data,{status,headers:{'Cache-Control':'no-store','X-Content-Type-Options':'nosniff'}});
   const secrets=[env.VAST_API_KEY,env.RUN_TOKEN_SECRET,env.OWNER_STOP_TOKEN].filter(Boolean);
@@ -40,7 +40,8 @@ export function createService({env,storage,fetch:fetcher=fetch,now=Date.now,rand
     if(run===null||run.status==='completed')await close(record,vast,'RUN_GONE');
   }
   async function oidc(bearer,cfg){
-    const c=await verifier.verify(bearer,cfg.audience);
+    const selected=cfg.testIdentity?(localVerifier??=new OidcVerifier(fetcher,now,cfg.testIdentity)):verifier;
+    const c=await selected.verify(bearer,cfg.audience);
     if(c.repository!==cfg.repo||!numericId(c.actor_id)||!numericId(c.run_id)||!numericId(c.run_attempt)||!['pull_request','workflow_dispatch'].includes(c.event_name))refuse('UNAUTHORIZED',401);
     return c;
   }
@@ -82,13 +83,16 @@ export function createService({env,storage,fetch:fetcher=fetch,now=Date.now,rand
     const url=new URL(request.url);
     if(url.pathname==='/rent'&&env.RENTING_ENABLED!=='true')return json({state:'RENTING_DISABLED',verdict:'UNAVAILABLE',log_tail_sanitised:'',bytes_dropped:0},503);
     const cfg=configuration(env);
+    cfg.testIdentity=localIdentity(env,request.url);
+    if(cfg.testIdentity)cfg.githubOrigin=cfg.testIdentity.githubOrigin;
     if(url.search)refuse('BAD_REQUEST',400);
     const match=/^\/(report|status|stop)\/([1-9][0-9]{0,19}-[1-9][0-9]{0,19})$/.exec(url.pathname);
     if(!(url.pathname==='/rent'&&request.method==='POST')&&!(url.pathname==='/stop-all'&&request.method==='POST')&&!(match&&request.method===(match[1]==='status'?'GET':'POST')))refuse('NOT_FOUND',404);
     const authorization=request.headers.get('Authorization');if(!authorization?.startsWith('Bearer '))refuse('UNAUTHORIZED',401);
     const bearer=authorization.slice(7),vast=new Vast(fetcher,cfg,env.VAST_API_KEY);
     if(match?.[1]==='report')return report(request,match[2],bearer,cfg,vast);
-    if(request.body!==null)refuse('BAD_REQUEST',400);
+    // workerd exposes even an empty HTTP POST as a stream; forbid bytes, not streams.
+    if(request.body!==null){try{await readBounded(request,0);}catch{refuse('BAD_REQUEST',400);}}
     const owner=validSecret(env.OWNER_STOP_TOKEN)&&await constantTimeEqual(env.OWNER_STOP_TOKEN,bearer);
     if(url.pathname==='/stop-all'){
       if(!owner)refuse('UNAUTHORIZED',401); // MUTANT stop-auth

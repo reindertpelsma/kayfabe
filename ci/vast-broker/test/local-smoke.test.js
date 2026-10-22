@@ -48,7 +48,7 @@ for(const origin of ['https://broker.example','https://worker.workers.dev'])test
   const {r,localReads}=await localCall({origin});assert.notEqual(r.status,200);assert.equal(localReads,0);
 });
 for(const testIssuer of ['https://evil.example','http://127.0.0.1.evil.example:18788','http://user:password@127.0.0.1:18788','http://127.0.0.1:18788/path'])test('test issuer must be strict loopback origin '+testIssuer,async()=>{
-  const {r,localReads}=await localCall({testIssuer});assert.notEqual(r.status,200);assert.equal(localReads,0);
+  const {r,h,localReads}=await localCall({testIssuer});assert.notEqual(r.status,200);assert.equal(localReads,0);assert.equal(h.cloud.calls.length,0);
 });
 for(const claimsIssuer of ['https://evil.example','https://token.actions.githubusercontent.com'])test('local trust requires exact local issuer '+claimsIssuer,async()=>{
   const {r}=await localCall({claimsIssuer});assert.notEqual(r.status,200);
