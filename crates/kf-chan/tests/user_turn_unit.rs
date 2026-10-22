@@ -153,10 +153,13 @@ impl Io for Mock {
     fn sw_matches(&self, value: u32) -> bool {
         sw(value)
     }
-    fn read_pb(&mut self, entry: u64, seg: &GpSegment) -> Turn<(Vec<u32>, bool)> {
+    fn begin_stream(&mut self) -> Turn<()> {
         if self.fail_stream_allocation {
             return Err("USER_RING_STREAM_ALLOC".into());
         }
+        Ok(())
+    }
+    fn read_pb(&mut self, entry: u64, seg: &GpSegment) -> Turn<(Vec<u32>, bool)> {
         self.calls.push(Call::ReadPb(entry));
         if let Some((base, words)) = &self.wide
             && seg.gpu_va >= *base
@@ -1562,7 +1565,11 @@ fn wrap_relay(entries: u32, cursor: u32, pointer: bool) -> (Relay, Mock) {
     if pointer {
         scan.segment(&ge(0, Kind::SetObj).words(), sw).unwrap();
     }
-    let life = if pointer { Lifecycle::new() } else { Lifecycle::always_scan() };
+    let life = if pointer {
+        Lifecycle::new()
+    } else {
+        Lifecycle::always_scan()
+    };
     let mut r = Relay::new(16, life, scan).unwrap();
     r.cursor = cursor;
     r.written_get = cursor;
@@ -1575,7 +1582,11 @@ fn wrap_relay(entries: u32, cursor: u32, pointer: bool) -> (Relay, Mock) {
 
 fn wrap_drain(entries: u32, start: u32, put: u32, pointer: bool, cached: bool) {
     let (mut r, mut io) = wrap_relay(entries, start, pointer);
-    r = r.with_lazy(if cached { kf_chan::user_lazy::LazyConfig::ON } else { kf_chan::user_lazy::LazyConfig::OFF });
+    r = r.with_lazy(if cached {
+        kf_chan::user_lazy::LazyConfig::ON
+    } else {
+        kf_chan::user_lazy::LazyConfig::OFF
+    });
     io.put = put;
     let mut expected = Vec::new();
     let mut slot = start;
@@ -1587,12 +1598,23 @@ fn wrap_drain(entries: u32, start: u32, put: u32, pointer: bool, cached: bool) {
         turn(&mut r, &mut io).unwrap();
         io.hw_get = (r.fetch.issued() & 15) as u32;
     }
-    let copied: Vec<u64> = io.calls.iter().filter_map(|c| match c {
-        Call::Entry(_, raw) => Some(*raw), _ => None,
-    }).collect();
-    assert_eq!(copied, expected, "n={entries} start={start} put={put} pointer={pointer} cache={cached}");
+    let copied: Vec<u64> = io
+        .calls
+        .iter()
+        .filter_map(|c| match c {
+            Call::Entry(_, raw) => Some(*raw),
+            _ => None,
+        })
+        .collect();
+    assert_eq!(
+        copied, expected,
+        "n={entries} start={start} put={put} pointer={pointer} cache={cached}"
+    );
     assert_eq!(r.cursor, put);
-    assert_eq!(r.written_get, put, "write-back wraps with the native fetch receipts");
+    assert_eq!(
+        r.written_get, put,
+        "write-back wraps with the native fetch receipts"
+    );
     assert_eq!(r.relayed, u64::from(start) + expected.len() as u64);
     assert!(!r.dead);
 }
@@ -1612,7 +1634,12 @@ fn wrap_characterization_every_small_ring_range_copies_modulo_in_order() {
 #[test]
 fn wrap_characterization_ring_end_ranges_and_maximum_admitted_ring() {
     for entries in [32, 32768, 1 << 20] {
-        for (start, put) in [(entries - 2, 2), (entries - 1, 0), (0, 1), (entries - 1, entries - 1)] {
+        for (start, put) in [
+            (entries - 2, 2),
+            (entries - 1, 0),
+            (0, 1),
+            (entries - 1, entries - 1),
+        ] {
             wrap_drain(entries, start, put, true, false);
             wrap_drain(entries, start, put, true, true);
         }
@@ -1642,7 +1669,11 @@ fn wrap_characterization_equal_indices_are_empty_even_after_a_complete_lap() {
         turn(&mut r, &mut io).unwrap();
         assert_eq!(r.cursor, start);
         assert!(!r.put_full);
-        assert!(!io.calls.iter().any(|c| matches!(c, Call::Load(..) | Call::Entry(..) | Call::ReadPb(..))));
+        assert!(
+            !io.calls
+                .iter()
+                .any(|c| matches!(c, Call::Load(..) | Call::Entry(..) | Call::ReadPb(..)))
+        );
     }
 }
 
@@ -1651,9 +1682,16 @@ fn wrap_characterization_u32_put_edges_refuse_before_a_slot_load() {
     for put in [16, 17, 1 << 31, u32::MAX - 1, u32::MAX] {
         let (mut r, mut io) = wrap_relay(16, 15, true);
         io.put = put;
-        assert_eq!(turn(&mut r, &mut io), Err(Fail::Refused("USER_RING_PUT_BOUND".into())));
+        assert_eq!(
+            turn(&mut r, &mut io),
+            Err(Fail::Refused("USER_RING_PUT_BOUND".into()))
+        );
         assert!(r.dead);
-        assert!(!io.calls.iter().any(|c| matches!(c, Call::Load(..) | Call::Entry(..) | Call::ReadPb(..))));
+        assert!(
+            !io.calls
+                .iter()
+                .any(|c| matches!(c, Call::Load(..) | Call::Entry(..) | Call::ReadPb(..)))
+        );
     }
 }
 
@@ -1682,4 +1720,294 @@ fn wrap_characterization_native_get_wrap_and_unissued_get_edges_preserve_receipt
         assert_eq!(f.observe((get + 1) % 16), Err("USER_FETCH_UNISSUED_GET"));
         assert_eq!(f.fetched(), old);
     }
+}
+
+// The actual Plane's token scheduler drives the actual production Relay.
+// No wall clock or timeout participates in this fairness bound.
+struct StreamFairHost<'p, 'v> {
+    plane: &'p kf_core::Plane<'v>,
+    pairs: std::sync::Mutex<Vec<(Relay, Mock)>>,
+    visits: std::sync::Mutex<Vec<u32>>,
+}
+impl kf_core::HostOps for StreamFairHost<'_, '_> {
+    fn operands_translatable(&self, _: u32, _: u64) -> kf_core::Translatable {
+        kf_core::Translatable::Yes
+    }
+    fn run_translated(&self, token: u32, _: u64) -> bool {
+        self.visits.lock().unwrap().push(token);
+        let mut pairs = self.pairs.lock().unwrap();
+        let (r, io) = &mut pairs[token as usize];
+        // A producer continues to publish entries while the huge descriptor
+        // is being copied, stopping only at the legally reserved slot.
+        let new_put = (io.put + 1) % io.entries;
+        if new_put != r.written_get {
+            io.put = new_put;
+        }
+        let reads = io.part_reads.len();
+        turn(r, io).unwrap();
+        assert!(
+            io.part_reads.len() - reads <= 1,
+            "one Pump turn copied multiple parts"
+        );
+        io.hw_get = (r.fetch.issued() & 15) as u32;
+        io.hw_reference = r.marks.issued() as u32;
+        // Match user_ring_arm: Again/progress is durable, and a doorbell can
+        // arrive during every serve, including while the token is BUSY.
+        self.plane.ring_internal(token);
+        true
+    }
+    fn ring_host(&self, _: u32) {
+        panic!("no inline USER relay");
+    }
+    fn run_emulated(&self, _: u32, _: u64) {
+        panic!("no CPU work");
+    }
+    fn apply_register(&self, _: u8, _: u32, _: u64, _: u8) {}
+    fn forge_completion(&self, _: u32) {
+        panic!("no forged completion");
+    }
+    fn refuse_and_poison(&self, _: u32) {
+        panic!("no poison");
+    }
+    fn fault_channel(&self, _: u32) {
+        panic!("no fault");
+    }
+    fn map_guest_slice(&self, _: kf_core::leaf::HostSlice) {}
+    fn teardown_step(&self, _: kf_core::lifetime::Step) {}
+}
+
+fn stream_fair_schedule(hot_token: usize, passes: usize) {
+    let vmm = kf_core::Vmm::default();
+    let plane = kf_core::Plane::new(&vmm, 4, 3);
+    let mut caps = kf_core::VmCaps::from_declared(4, 8, 8, 8);
+    for token in 0..2 {
+        plane
+            .allocate_channel(
+                &mut caps,
+                token,
+                kf_trap::Route::Translated,
+                token,
+                kf_core::Owner::User,
+            )
+            .unwrap();
+    }
+    let mut hot_io = Mock::new(32);
+    let mut hot = Relay::new(
+        16,
+        Lifecycle::always_scan(),
+        Scan::for_subdevice(1).unwrap(),
+    )
+    .unwrap();
+    hot_io.ring.fill(0);
+    let bytes = 8_388_604;
+    install_wide(&mut hot_io, &hot, vec![0; bytes / 4], false);
+    hot_io.put = 1;
+    hot.claim(); // begins at Obs, just as Pump::turn_body
+    let (cold, mut cold_io) = wrap_relay(32, 0, true);
+    cold_io.put = 1;
+    let pairs = if hot_token == 0 {
+        vec![(hot, hot_io), (cold, cold_io)]
+    } else {
+        vec![(cold, cold_io), (hot, hot_io)]
+    };
+    let host = StreamFairHost {
+        plane: &plane,
+        pairs: std::sync::Mutex::new(pairs),
+        visits: std::sync::Mutex::new(Vec::new()),
+    };
+    plane.ring_internal(0);
+    plane.ring_internal(1);
+    let mut scratch = Vec::new();
+    let mut cold_before = 0;
+    for pass in 0..passes {
+        let before = host.pairs.lock().unwrap()[hot_token].1.part_reads.len();
+        host.visits.lock().unwrap().clear();
+        plane.worker_pass(&host, &mut scratch, 64);
+        let visits = host.visits.lock().unwrap().clone();
+        for token in 0..2u32 {
+            assert!(
+                visits.contains(&token),
+                "ready token {token} missed pass {pass}"
+            );
+            assert!(
+                visits.iter().filter(|t| **t == token).count()
+                    <= (kf_trap::REACT_ROUNDS + 1) as usize
+            );
+        }
+        let pairs = host.pairs.lock().unwrap();
+        let cold_progress = pairs[1 - hot_token].0.relayed;
+        assert!(
+            cold_progress > cold_before,
+            "second relay made no progress within K=1 worker passes"
+        );
+        cold_before = cold_progress;
+        let copied = pairs[hot_token].1.part_reads.len() - before;
+        assert!(
+            copied <= (kf_trap::REACT_ROUNDS + 1) as usize,
+            "a pass ran away on parts"
+        );
+        assert!(
+            pairs[hot_token]
+                .1
+                .part_reads
+                .iter()
+                .all(|(_, len)| *len <= kf_chan::user_storage::MAX_SOURCE_BYTES)
+        );
+        if pass == 0 {
+            assert_eq!(
+                copied, 9,
+                "a ten-part descriptor must yield before the first pass finishes"
+            );
+            assert_eq!(pairs[hot_token].0.relayed, 0, "no early publication");
+        }
+    }
+    let pairs = host.pairs.lock().unwrap();
+    if passes > 1 {
+        assert!(
+            pairs[hot_token].0.relayed > 0,
+            "the huge descriptor must eventually publish"
+        );
+        assert!(
+            pairs[hot_token].1.part_reads.len() >= 10,
+            "at least one complete attempt, including legal later ring laps"
+        );
+    }
+}
+
+#[test]
+fn stream_fairness_second_relay_progresses_in_one_pass_while_put_advances() {
+    stream_fair_schedule(0, 1);
+}
+
+#[test]
+fn stream_fairness_hot_and_cold_progress_across_parts_wrap_and_reversed_token_order() {
+    stream_fair_schedule(1, 16);
+}
+
+#[test]
+fn stream_end_in_second_part_never_reads_a_third_part_after_more_doorbells() {
+    let mut io = Mock::new(16);
+    let mut r = stream_window(&mut io);
+    let cut = COPY_BOUND as usize / 4;
+    let mut words = vec![0; cut * 3];
+    words[cut + 2] = 7 << 29;
+    words[cut * 2] = kf_abi::submit::method_header_inc(6, 0x200, 1).unwrap();
+    words[cut * 2 + 1] = 27;
+    let raw = install_wide(&mut io, &r, words, false);
+    turn(&mut r, &mut io).unwrap();
+    io.put = 6; // independent later entries cannot lengthen this descriptor
+    turn(&mut r, &mut io).unwrap();
+    assert_eq!(io.part_reads.len(), 2);
+    assert_eq!(native_words(&io), [raw]);
+    assert_eq!(r.cursor, 3);
+    assert!(!r.dead);
+}
+
+#[test]
+fn stream_small_entries_keep_the_same_parser_and_io_transcript() {
+    let mut io = Mock::new(16);
+    let mut r = stream_window(&mut io);
+    let g = ge(44, Kind::Plain);
+    io.put_entry(r.cursor, &g);
+    io.put = r.cursor + 1;
+    turn(&mut r, &mut io).unwrap();
+    assert!(io.part_reads.is_empty());
+    assert_eq!(
+        io.calls
+            .iter()
+            .filter(|c| matches!(c, Call::ReadPb(..)))
+            .count(),
+        1
+    );
+    assert_eq!(io.count(&Call::Stage), 1);
+    assert_eq!(r.cursor, 3);
+}
+
+#[test]
+fn stream_constructor_and_feed_refuse_hostile_geometry_without_advancing_state() {
+    use kf_chan::user_chunk::{Refusal as R, Stream};
+    let bytes = 8_388_604;
+    let raw = kf_abi::submit::gp_entry(STREAM_VA, bytes).unwrap();
+    let kf_chan::user_stream::Source::Segment(desc) =
+        kf_chan::user_stream::inspect_format(raw).unwrap()
+    else {
+        panic!()
+    };
+    for maximum in [0, 1, 3, 4, COPY_BOUND + 4, u64::MAX] {
+        assert!(matches!(
+            Stream::begin(desc, raw, &Scan::default(), maximum),
+            Err(R::Bounds)
+        ));
+    }
+    let mut stream = Stream::begin(desc, raw, &Scan::default(), COPY_BOUND).unwrap();
+    let first = stream.next_read();
+    assert_eq!(stream.feed(&[], sw), Err(R::Bounds));
+    assert_eq!(stream.next_read(), first);
+    assert_eq!(stream.parts(), 0);
+    assert!(!stream.done());
+    let mut wrong_desc = desc;
+    wrong_desc.len_bytes += 4;
+    assert!(matches!(
+        Stream::begin(wrong_desc, raw, &Scan::default(), COPY_BOUND),
+        Err(R::Bounds)
+    ));
+    assert!(matches!(
+        Stream::begin(desc, raw | 1, &Scan::default(), COPY_BOUND),
+        Err(R::Bounds)
+    ));
+}
+
+fn stream_wrap_completion(private_prefix: u32) {
+    let mut io = Mock::new(16);
+    let mut r = stream_window(&mut io);
+    r.cursor = 15;
+    r.written_get = 15;
+    r.relayed = 15;
+    r.fetch = Fetch::new(16).unwrap();
+    for _ in 0..private_prefix {
+        let (_, put) = r.fetch.publish(None).unwrap();
+        r.fetch.observe(put).unwrap();
+    }
+    io.hw_get = private_prefix;
+    let raw = install_wide(&mut io, &r, wide_words(1_026_596), false);
+    assert_eq!(io.put, 0);
+    turn(&mut r, &mut io).unwrap();
+    assert_eq!(r.cursor, 15);
+    assert_eq!(r.written_get, 15);
+    assert_eq!(r.fetch.issued(), u64::from(private_prefix));
+    // More entries arrive while the captured last GP slot is in progress.
+    // The source range is [15,0,1], while the descriptor's PB remains contiguous.
+    io.ring[0] = 4;
+    io.ring[1] = 8;
+    io.put = 2;
+    turn(&mut r, &mut io).unwrap();
+    assert_eq!(r.cursor, 0);
+    assert_eq!(
+        r.written_get, 15,
+        "publication itself grants no guest GET credit"
+    );
+    for _ in 0..6 {
+        io.hw_get = (r.fetch.issued() & 15) as u32;
+        io.hw_reference = r.marks.issued() as u32;
+        turn(&mut r, &mut io).unwrap();
+    }
+    assert_eq!(native_words(&io), [raw, 4, 8]);
+    assert_eq!(io.part_reads.len(), 2);
+    assert_eq!(r.cursor, 2);
+    assert_eq!(r.written_get, 2);
+    assert!(
+        io.calls.contains(&Call::WriteGuestGet(0)),
+        "wrapped source GET is written back"
+    );
+    assert!(r.marks.issued() > 0);
+    assert_eq!(r.marks.processed(), r.marks.issued());
+    assert!(!r.dead);
+}
+#[test]
+fn stream_source_range_wraps_and_completes_through_marker_and_get_writeback() {
+    stream_wrap_completion(0);
+}
+#[test]
+fn stream_private_get_and_source_get_can_both_wrap_during_completion() {
+    stream_wrap_completion(15);
 }

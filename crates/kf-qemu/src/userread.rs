@@ -906,4 +906,198 @@ mod tests {
             Some(Refusal::Bounds)
         );
     }
+    fn stream_receipts<'a>(
+        ram: &'a RamMap,
+        rows: &PlacedRows,
+        log: &RowsLog,
+        generation: u64,
+    ) -> Vec<Receipt<'a>> {
+        rows.write().unwrap().clear();
+        for i in 0..3u64 {
+            rows.write().unwrap().insert(
+                0x10000 + i * 0x1000,
+                (0x1000, i * 0x1000, true, MapPerm::READ_WRITE),
+            );
+        }
+        (0..3u64)
+            .map(|i| {
+                snapshot(
+                    rows,
+                    log,
+                    ram,
+                    generation,
+                    0x10000 + i * 0x1000,
+                    8,
+                    &mut NoStore,
+                )
+                .unwrap()
+                .into_receipt()
+            })
+            .collect()
+    }
+
+    #[test]
+    fn stream_receipts_first_replaced_part_cannot_reserve_credit() {
+        let (ram, _, rows, log, generation) = fixture();
+        let receipts = stream_receipts(&ram, &rows, &log, generation);
+        let mut fetch = kf_chan::user_scan::Fetch::new(8).unwrap();
+        rows.write().unwrap().get_mut(&0x10000).unwrap().1 = 8;
+        assert_eq!(
+            admit_all(&receipts, || fetch.publish(Some((1, 1))).unwrap()),
+            Err(Refusal::Changed)
+        );
+        assert_eq!(fetch.issued(), 0);
+    }
+    #[test]
+    fn stream_receipts_middle_revoked_part_cannot_reserve_credit() {
+        let (ram, _, rows, log, generation) = fixture();
+        let receipts = stream_receipts(&ram, &rows, &log, generation);
+        let mut writes = 0;
+        rows.write().unwrap().remove(&0x11000);
+        assert_eq!(admit_all(&receipts, || writes += 1), Err(Refusal::Changed));
+        assert_eq!(writes, 0);
+    }
+    #[test]
+    fn stream_receipts_publication_holds_all_rows_and_ram_until_put() {
+        let (ram, _, rows, log, generation) = fixture();
+        let receipts = stream_receipts(&ram, &rows, &log, generation);
+        assert!(
+            receipts
+                .iter()
+                .all(|r| r.0.bytes.is_empty() && r.0.bytes.capacity() == 0)
+        );
+        let mut fetch = kf_chan::user_scan::Fetch::new(8).unwrap();
+        admit_all(&receipts, || {
+            assert!(matches!(rows.try_write(), Err(TryLockError::WouldBlock)));
+            assert!(matches!(
+                ram.blocks.try_write(),
+                Err(TryLockError::WouldBlock)
+            ));
+            fetch.publish(Some((1, 0))).unwrap(); // wrapped guest GET is an ordinary receipt
+        })
+        .unwrap();
+        assert_eq!(fetch.observe(1).unwrap(), [(1, 0)]);
+    }
+    #[test]
+    fn stream_receipts_guard_lifetimes_cover_callback_and_release_after_it() {
+        let (ram, _, rows, log, generation) = fixture();
+        let receipts = stream_receipts(&ram, &rows, &log, generation);
+        admit_all(&receipts, || {
+            assert!(rows.try_write().is_err());
+            assert!(ram.blocks.try_write().is_err());
+        })
+        .unwrap();
+        assert!(rows.try_write().is_ok());
+        assert!(ram.blocks.try_write().is_ok());
+        let _held = rows.write().unwrap();
+        assert_eq!(
+            admit_all(&receipts, || panic!("no blocking admission")),
+            Err(Refusal::Busy)
+        );
+    }
+    #[test]
+    fn stream_receipts_ram_contention_returns_without_publication() {
+        let (ram, _, rows, log, generation) = fixture();
+        let receipts = stream_receipts(&ram, &rows, &log, generation);
+        let _held = ram.blocks.write().unwrap();
+        assert_eq!(
+            admit_all(&receipts, || panic!("RAM guard busy")),
+            Err(Refusal::Busy)
+        );
+    }
+    #[test]
+    fn stream_receipts_topology_revocation_between_parts_forbids_publication() {
+        let (ram, block, rows, log, generation) = fixture();
+        let receipts = stream_receipts(&ram, &rows, &log, generation);
+        ram.del(block.gpa);
+        ram.add(block);
+        assert_eq!(
+            admit_all(&receipts, || panic!("revoked topology")),
+            Err(Refusal::Changed)
+        );
+    }
+    #[test]
+    fn stream_receipts_generation_change_after_last_copy_forbids_publication() {
+        let (ram, _, rows, log, generation) = fixture();
+        let receipts = stream_receipts(&ram, &rows, &log, generation);
+        ram.generation.fetch_add(1, Ordering::Release);
+        assert_eq!(
+            admit_all(&receipts, || panic!("late revoke")),
+            Err(Refusal::Changed)
+        );
+    }
+    #[test]
+    fn stream_receipts_mixed_row_owners_are_never_a_joint_authority() {
+        let (ram, _, rows, log, generation) = fixture();
+        let mut receipts = stream_receipts(&ram, &rows, &log, generation);
+        let unrelated = PlacedRows::default();
+        *unrelated.write().unwrap() = rows.read().unwrap().clone();
+        receipts[1].0.rows = Arc::downgrade(&unrelated);
+        assert_eq!(
+            admit_all(&receipts, || panic!("different rows")),
+            Err(Refusal::Changed)
+        );
+    }
+    #[test]
+    fn stream_receipts_mixed_ram_owners_are_never_a_joint_authority() {
+        let (ram, _, rows, log, generation) = fixture();
+        let (other_ram, _, _, _, _) = fixture();
+        let mut receipts = stream_receipts(&ram, &rows, &log, generation);
+        receipts[1].0.ram = &other_ram;
+        assert_eq!(
+            admit_all(&receipts, || panic!("different RAM")),
+            Err(Refusal::Changed)
+        );
+    }
+    #[test]
+    fn stream_receipts_mixed_birth_generations_forbid_publication() {
+        let (ram, _, rows, log, generation) = fixture();
+        let mut receipts = stream_receipts(&ram, &rows, &log, generation);
+        receipts[1].0.generation += 1;
+        assert_eq!(
+            admit_all(&receipts, || panic!("different generation")),
+            Err(Refusal::Changed)
+        );
+    }
+    #[test]
+    fn stream_receipts_zero_generation_part_forbids_publication() {
+        let (ram, _, rows, log, generation) = fixture();
+        let mut receipts = stream_receipts(&ram, &rows, &log, generation);
+        receipts[1].0.generation = 0;
+        assert_eq!(
+            admit_all(&receipts, || panic!("zero generation")),
+            Err(Refusal::Changed)
+        );
+    }
+    #[test]
+    fn stream_receipts_empty_or_eleventh_part_refuses_before_callback() {
+        let (ram, _, rows, log, generation) = fixture();
+        assert_eq!(admit_all(&[], || panic!("empty")), Err(Refusal::Bounds));
+        let receipts: Vec<_> = (0..11)
+            .map(|_| {
+                snapshot(&rows, &log, &ram, generation, 0x10000, 4, &mut NoStore)
+                    .unwrap()
+                    .into_receipt()
+            })
+            .collect();
+        assert_eq!(
+            admit_all(&receipts, || panic!("eleventh part")),
+            Err(Refusal::Bounds)
+        );
+    }
+    #[test]
+    fn stream_receipts_twenty_part_attempt_is_not_an_unbounded_admission_walk() {
+        let (ram, _, rows, log, generation) = fixture();
+        let receipts: Vec<_> = (0..20)
+            .map(|_| {
+                snapshot(&rows, &log, &ram, generation, 0x10000, 4, &mut NoStore)
+                    .unwrap()
+                    .into_receipt()
+            })
+            .collect();
+        assert_eq!(
+            admit_all(&receipts, || panic!("unbounded parts")),
+            Err(Refusal::Bounds)
+        );
+    }
 }
