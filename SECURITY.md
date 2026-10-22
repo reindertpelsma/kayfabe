@@ -8,8 +8,8 @@ Please report security problems privately, through GitHub's private vulnerabilit
 
 <https://github.com/reindertpelsma/kayfabe/security/advisories/new>
 
-Please do not open a public issue for a vulnerability. Include the revision (`KAYFABE_REV.txt` or the
-git hash), what you did, and what you saw. Reports are read by the maintainer.
+Please do not open a public issue for a vulnerability. Include the revision (`KAYFABE_REV.txt` or
+the git hash), what you did, and what you saw. Reports are read by the maintainer.
 
 ## What counts
 

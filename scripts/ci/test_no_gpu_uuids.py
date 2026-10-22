@@ -72,6 +72,13 @@ class ScanTests(unittest.TestCase):
         self.assertEqual(gate.scan(b"GPU-a1a1a1a1-a1a1-a1a1"), Counter())
         self.assertEqual(gate.scan(f"GPU-{A}f".encode()), Counter())
 
+    def test_a_uuid_followed_by_more_hex_is_not_a_hit_but_other_delimiters_are(self):
+        self.assertEqual(gate.scan(f"GPU-{A}0".encode()), Counter())
+        self.assertEqual(gate.scan(f"GPU-{A}ABC".encode()), Counter())
+        for tail in (")", ",", " ", "\n", '"', "g"):
+            with self.subTest(tail=tail):
+                self.assertEqual(sum(gate.scan(f"GPU-{A}{tail}".encode()).values()), 1)
+
     def test_counts_every_occurrence_per_uuid(self):
         found = gate.scan(f"GPU-{A} GPU-{A}\ngpu-uuid={A}\nGPU-{B}".encode())
         self.assertEqual(sorted(found.values()), [1, 3])
@@ -140,6 +147,28 @@ class ScopeTests(unittest.TestCase):
         t.write("README.md", f"GPU-{C}")
         self.assertEqual(sorted(gate.tracked(t.root)), ["docs/design/b.md", "traces/a.log"])
 
+    def test_scan_tree_leaves_out_files_without_a_hit(self):
+        t = Tree()
+        t.write("traces/a.log", f"GPU-{A}")
+        t.write("traces/b.log", "nothing")
+        self.assertEqual(
+            list(gate.scan_tree(t.root, ["traces/a.log", "traces/b.log"])), ["traces/a.log"]
+        )
+
+    def test_scan_tree_skips_what_is_not_a_regular_file(self):
+        t = Tree()
+        t.write("traces/a.log", f"GPU-{A}")
+        (t.root / "traces" / "dangling").symlink_to(t.root / "traces" / "nowhere")
+        (t.root / "traces" / "subdir").mkdir()
+        rels = ["traces/a.log", "traces/dangling", "traces/subdir"]
+        self.assertEqual(list(gate.scan_tree(t.root, rels)), ["traces/a.log"])
+
+    def test_scan_tree_skips_a_dangling_link_without_failing(self):
+        t = Tree()
+        (t.root / "docs").mkdir()
+        (t.root / "docs" / "dangling").symlink_to(t.root / "docs" / "nowhere")
+        self.assertEqual(gate.scan_tree(t.root, ["docs/dangling"]), {})
+
     def test_scan_tree_keys_files_by_relative_path(self):
         t = Tree()
         t.write("traces/run/a.log", f"x GPU-{A} y")
@@ -187,6 +216,27 @@ class EndToEndTests(unittest.TestCase):
         t.write("traces/old.log", f"new line\nGPU-{A}\nmore\nGPU-{A}\n")
         self.assertEqual(t.run()[0], 0)
 
+    def test_files_outside_traces_and_docs_are_not_the_gates_business(self):
+        t = self.seeded()
+        t.write("crates/kf-x/tests/c.rs", f"GPU-{C}\n")
+        t.write("scripts/s.sh", f"gpu-uuid={C}\n")
+        self.assertEqual(t.run()[0], 0)
+
+    def test_a_known_uuid_in_other_letter_case_is_still_the_known_one(self):
+        t = self.seeded()
+        t.write("traces/old.log", f"GPU-{A.upper()}\ngpu-{A}\n")
+        self.assertEqual(t.run()[0], 0)
+
+    def test_an_overlong_hex_run_is_no_uuid_so_it_cannot_fail_the_gate(self):
+        t = self.seeded()
+        t.write("traces/new.log", f"GPU-{C}0\n")
+        self.assertEqual(t.run()[0], 0)
+
+    def test_a_new_uuid_in_a_baselined_file_fails(self):
+        t = self.seeded()
+        t.write("traces/old.log", f"GPU-{A}\nGPU-{A}\nGPU-{C}\n")
+        self.assertEqual(t.run()[0], 1)
+
     def test_a_new_file_without_a_uuid_passes(self):
         t = self.seeded()
         t.write("traces/new.log", "no board identifiers\n")
@@ -214,6 +264,25 @@ class EndToEndTests(unittest.TestCase):
         self.assertEqual(list(files), ["traces/old.log"])
         self.assertEqual(list(files["traces/old.log"].values()), [1])
 
+    def test_shrink_never_admits_a_new_uuid_into_a_baselined_file(self):
+        t = self.seeded()
+        t.write("traces/old.log", f"GPU-{A}\nGPU-{C}\n")
+        self.assertEqual(t.run("--shrink")[0], 1)
+        self.assertEqual(list(t.baseline()["files"]["traces/old.log"].values()), [1])
+        self.assertEqual(t.run()[0], 1)
+
+    def test_shrink_never_raises_a_count(self):
+        t = self.seeded()
+        t.write("traces/old.log", f"GPU-{A}\nGPU-{A}\nGPU-{A}\n")
+        t.run("--shrink")
+        self.assertEqual(list(t.baseline()["files"]["traces/old.log"].values()), [2])
+
+    def test_init_twice_is_refused_and_says_so(self):
+        t = self.seeded()
+        code, text = t.run("--init")
+        self.assertEqual(code, 2)
+        self.assertIn("exists", text)
+
     def test_shrink_never_admits_a_new_hit(self):
         t = self.seeded()
         t.write("traces/new.log", f"GPU-{C}\n")
@@ -224,13 +293,23 @@ class EndToEndTests(unittest.TestCase):
     def test_init_refuses_to_overwrite_a_baseline(self):
         t = self.seeded()
         t.write("traces/new.log", f"GPU-{C}\n")
+        before = (t.root / "baseline.json").read_bytes()
         self.assertEqual(t.run("--init")[0], 2)
+        self.assertEqual((t.root / "baseline.json").read_bytes(), before)
         self.assertNotIn("traces/new.log", t.baseline()["files"])
 
     def test_a_missing_baseline_is_an_error_not_a_pass(self):
         t = Tree()
         t.write("traces/new.log", f"GPU-{C}\n")
+        code, text = t.run()
+        self.assertEqual(code, 2)
+        self.assertIn("no baseline", text)
+
+    def test_a_missing_baseline_is_an_error_even_with_nothing_to_find(self):
+        t = Tree()
+        t.write("traces/new.log", "clean\n")
         self.assertEqual(t.run()[0], 2)
+        self.assertEqual(t.run("--shrink")[0], 2)
 
     def test_the_baseline_holds_fingerprints_only(self):
         t = self.seeded()

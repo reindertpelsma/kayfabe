@@ -24,5 +24,6 @@ particular:
   including its limits on datacenter deployment and on hosting.
 - Windows must be licensed for the way you use it.
 
-kayfabe's own licence (see `LICENSE`) does not grant any rights to third-party software. The licences
-of the open-source components we use are in [`THIRD_PARTY_NOTICES.md`](../THIRD_PARTY_NOTICES.md).
+kayfabe's own licence (see `LICENSE`) does not grant any rights to third-party software. The
+licences of the open-source components we use are in
+[`THIRD_PARTY_NOTICES.md`](../THIRD_PARTY_NOTICES.md).
