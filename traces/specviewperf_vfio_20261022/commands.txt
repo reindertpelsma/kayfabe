@@ -1,3 +1,44 @@
+MEASURED / resumed execution record (owner override, 01:41 CEST onward).
+No credentials, raw system-info objects, or vendor binaries are published.
+Exact executed native QEMU argv: vfio-command.json (source revision89fc8a222).
+
+Desktop takeover and GPU handoff were performed by vfio_session.py:
+  systemctl stop gdm  # also checked gdm3 alias
+  loginctl terminate-user ubuntu
+  systemctl stop nvidia-persistenced
+  fuser -v /dev/nvidia* /dev/dri/*
+  # Listed authorized desktop/monitoring names only; protected unknown compute.
+  # Released remaining logind DRM fdstore references through its service.
+  # Rechecked no holders, unbound GPU/audio, bound both to vfio-pci.
+
+Stable session launched in a dedicated system service, not an SSH session scope:
+  systemd-run --unit=codex-vf1-supervisor --collect --property=StandardOutput=append:/data/codex-VF1/supervisor.log --property=StandardError=append:/data/codex-VF1/supervisor.log /usr/bin/flock -o -w 120 /tmp/kayfabe-fastguest.lock /usr/bin/python3 -u /data/codex-VF1/vfio_session.py --root /data/codex-VF1 --owner-command /var/lib/kf-windows-20261005/boundary-kayfabe-3440/command.json --desktop-takeover --restore-at 2026-10-22T04:10:00+00:00
+
+Guest suite generation and launch (interactive standard-user task):
+  python3 scripts/bench/specviewperf/guest_suite.py --workloads blender-01,catia-07,creo-04,energy-04,enscape-01,maya-07,medical-04,solidworks-08,unreal_engine-01 --iterations 2 --output install-suite.ps1
+  # Copy installer to /data/codex-VF1/install-suite.ps1 on the trusted host.
+  python3 /data/kfagent_server.py run "$(cat /data/codex-VF1/install-suite.ps1)" 90
+  # The generated task invokes the supported vendor CLI with these arguments:
+  # --workload blender-01,catia-07,creo-04,energy-04,enscape-01,maya-07,medical-04,solidworks-08,unreal_engine-01 --iterations 2 --resolution FullHD --resultDirectory "C:\Users\Public\codex-VF1\results"
+  # The first active task preceded the automatic table-emitter update;
+  # read-only --report-only emits the same table from its existing results.
+
+Text collection and table extraction:
+  python3 /data/kfagent_server.py run "$(cat /data/codex-VF1/export-latest.ps1)" 90
+  python3 scripts/bench/specviewperf/result_table.py export.json --arm vfio --output fps.csv --scores-output scores.csv
+  # Official per-iteration results.csv retained separately; selected result.json
+  # composites agree with the first complete vendor CSV. No composite is inferred.
+
+Safety: anchored kernel-journal cursor for NEW host Xids; unchanged900s no-log-
+progress rule; restoration deadline06:10CEST; lock held through restore. Prior26
+Xids rolled out of dmesg during module-probe warnings, so raw dmesg counts are
+not subtracted across that rollover. Neither workload timeouts nor timers changed.
+
+Current hardware progress (03:40 CEST): first full9/75 complete; second4/9 complete.
+Restoration, selected repeats, and Steel Nomad have not yet run in this session.
+
+HISTORICAL INITIAL ATTEMPT BELOW — superseded by the resumed execution record.
+
 CODE READ / execution record: commands issued on the trusted host (paths below
 are the explicit lane/owner benchmark paths; no credentials or raw system info).
 

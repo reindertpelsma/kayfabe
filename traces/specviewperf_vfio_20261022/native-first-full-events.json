@@ -1,0 +1,21 @@
+{
+  "classification": "MEASURED",
+  "stage": "After first full iteration",
+  "bootRecord": 14976,
+  "guestBootTime": "2026-10-21T23:50:20.6361586+02:00",
+  "guestCaptured": "2026-10-22T01:22:49.7460215+02:00",
+  "newDisplayOrNvlddmkmEvents": 0,
+  "applicationError1000": 0,
+  "wer1001": 55,
+  "werFaultTimeBeforeNativeBoot": 54,
+  "werFaultTimeAfterNativeBoot": 0,
+  "werFaultTimeUnknown": 1,
+  "unknownReport": {
+    "record": 25402,
+    "eventName": "RADAR_PRE_LEAK_64",
+    "process": "CitySample.exe",
+    "guestRecordedTime": "2026-10-22T01:10:33.2450763+02:00",
+    "savedReportPath": null
+  },
+  "note": "54 report files verify pre-native fault EventTime. One new record has no saved report, so its original fault time is unknown. Its event name is not itself proof of an application leak or TDR. Guest clock is two hours behind host; clocks were not changed."
+}

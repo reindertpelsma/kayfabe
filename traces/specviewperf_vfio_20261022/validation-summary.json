@@ -1,0 +1,186 @@
+{
+  "classification": "MEASURED",
+  "python_tests": {
+    "command": "python3 -m unittest discover -s scripts/bench/specviewperf -p 'test_*.py'",
+    "passed": 63,
+    "failed": 0,
+    "latest_source_head": "dcaf02adc"
+  },
+  "windows_export_checks": {
+    "passed": 6,
+    "failed": 0,
+    "evidence": "export-windows-checks.json"
+  },
+  "before": {
+    "initial_module_absent": "1 loader error; EXPECTED RED 8136cd342",
+    "latest_behavior_fix": "62 tests, 2 failures; EXPECTED RED a6ada19eb",
+    "standalone_argv_defect": "EXPECTED RED 4898f89d9"
+  },
+  "mutation_distinct_count": 22,
+  "all_mutants_killed_by_at_least_two_tests": true,
+  "mutants": [
+    {
+      "mutant": "qualify-failed-or-unfinished-composites",
+      "failing_tests": 2,
+      "evidence": [
+        "composite-mutation.json"
+      ]
+    },
+    {
+      "mutant": "omit-automatic-table-emission",
+      "failing_tests": 2,
+      "evidence": [
+        "guest-table-mutation.json"
+      ]
+    },
+    {
+      "mutant": "reject-empty-journal-interval",
+      "failing_tests": 2,
+      "evidence": [
+        "journal-empty-mutation.json"
+      ]
+    },
+    {
+      "mutant": "stop-logind-without-DRM-holders",
+      "failing_tests": 2,
+      "evidence": [
+        "logind-scope-mutation.json"
+      ]
+    },
+    {
+      "mutant": "ignore-new-Xid",
+      "failing_tests": 2,
+      "evidence": [
+        "mutations.json",
+        "resume-mutations.json"
+      ]
+    },
+    {
+      "mutant": "ignore-restore-deadline",
+      "failing_tests": 2,
+      "evidence": [
+        "mutations.json",
+        "resume-mutations.json"
+      ]
+    },
+    {
+      "mutant": "ignore-fifteen-minute-hang",
+      "failing_tests": 2,
+      "evidence": [
+        "mutations.json",
+        "resume-mutations.json"
+      ]
+    },
+    {
+      "mutant": "write-owner-files",
+      "failing_tests": 2,
+      "evidence": [
+        "mutations.json",
+        "resume-mutations.json"
+      ]
+    },
+    {
+      "mutant": "omit-audio-function",
+      "failing_tests": 7,
+      "evidence": [
+        "mutations.json",
+        "resume-mutations.json"
+      ]
+    },
+    {
+      "mutant": "restore-before-unbind",
+      "failing_tests": 2,
+      "evidence": [
+        "restore-suite-mutations.json"
+      ]
+    },
+    {
+      "mutant": "ignore-journal-xids",
+      "failing_tests": 2,
+      "evidence": [
+        "restore-suite-mutations.json"
+      ]
+    },
+    {
+      "mutant": "discard-complete-cli-selection",
+      "failing_tests": 3,
+      "evidence": [
+        "restore-suite-mutations.json"
+      ]
+    },
+    {
+      "mutant": "accept-invalid-workloads",
+      "failing_tests": 3,
+      "evidence": [
+        "restore-suite-mutations.json"
+      ]
+    },
+    {
+      "mutant": "drop-interactive-user-principal",
+      "failing_tests": 2,
+      "evidence": [
+        "restore-suite-mutations.json"
+      ]
+    },
+    {
+      "mutant": "discard-parsed-fps",
+      "failing_tests": 5,
+      "evidence": [
+        "result-table-mutations.json"
+      ]
+    },
+    {
+      "mutant": "accept-invalid-fps",
+      "failing_tests": 2,
+      "evidence": [
+        "result-table-mutations.json"
+      ]
+    },
+    {
+      "mutant": "erase-workload-failure",
+      "failing_tests": 2,
+      "evidence": [
+        "result-table-mutations.json"
+      ]
+    },
+    {
+      "mutant": "allow-unknown-compute-kills",
+      "failing_tests": 4,
+      "evidence": [
+        "resume-mutations.json"
+      ]
+    },
+    {
+      "mutant": "kill-service-and-pid-one",
+      "failing_tests": 2,
+      "evidence": [
+        "resume-mutations.json"
+      ]
+    },
+    {
+      "mutant": "reject-authorized-desktop",
+      "failing_tests": 3,
+      "evidence": [
+        "resume-mutations.json"
+      ]
+    },
+    {
+      "mutant": "remove-standalone-QEMU-switch-support",
+      "failing_tests": 2,
+      "evidence": [
+        "standalone-argv-mutation.json"
+      ]
+    },
+    {
+      "mutant": "suppress-locked-file-error-records",
+      "failing_tests": 2,
+      "evidence": [
+        "export-windows-checks.json"
+      ]
+    }
+  ],
+  "notes": [
+    "No product Rust/C/CUDA changes, cargo build, or target directory.",
+    "Mutation results are the recorded executions from their evidence files, not a claim of exhaustive mutation coverage."
+  ]
+}

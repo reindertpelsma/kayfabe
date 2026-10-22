@@ -48,7 +48,9 @@ MEASURED: the native CoW guest booted at 01:50:13 CEST under the GPU lock.
 The first full iteration completed all nine workloads and 75 subtests at
 03:15 CEST. Official vendor results.csv is preserved in vfio-run1-vendor-results.csv;
 its nine composites agree with the selected result.json values. The second full
-iteration started immediately with unchanged settings and is still running.
+iteration started immediately with unchanged settings. At03:40CEST, its first
+four workloads completed: blender60.61, catia63.13, creo103.97, energy54.67.
+Their two-sample ranges divided by mean are1.64%,0.05%,0.93%,0.18%.
 Native composites: blender61.61, catia63.10, creo104.94, energy54.57,
 enscape37.26, maya162.14, medical50.54, solidworks29.51, unreal63.58.
 These remain one-sample diagnostic results, not repeatability claims.
