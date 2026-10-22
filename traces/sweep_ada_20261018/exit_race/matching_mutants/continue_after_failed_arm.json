@@ -1,8 +1,10 @@
 {
-  "tests": 92,
+  "tests": 109,
   "failures": [
     "test_guarded_fast_suite.GuardedSuiteTests.test_first_arm_failure_stops_before_second",
-    "test_guarded_fast_suite.GuardedSuiteTests.test_seventh_arm_failure_stops_before_eighth"
+    "test_guarded_fast_suite.GuardedSuiteTests.test_seventh_arm_failure_stops_before_eighth",
+    "test_guarded_fast_suite.GuestImagePathTests.test_controller_image_directory_reaches_real_shell_launch",
+    "test_guarded_fast_suite.GuestImagePathTests.test_explicit_image_directory_with_spaces_overrides_inherited_path"
   ],
   "errors": [],
   "mutant": "continue_after_failed_arm"

@@ -1,0 +1,8 @@
+FAST_SUITE_STARTED=2026-10-22T02:37:21+00:00 arms=1 budget=180s
+rev=f98ceae65
+ARM                          VERDICT   secs  why
+--blockage-coverage          CRASH     0s    the serial log is EMPTY — QEMU wrote nothing at all
+FAST_CELL_ARM arm=blockage-coverage verdict=CRASH secs=0 client_ms=?
+
+FAST_SUITE_PASS=0 FAST_SUITE_FAIL=0 FAST_SUITE_CRASH=1 NOTRUN=0 ARMS=1
+FAST_SUITE_RC=1

@@ -109,6 +109,7 @@ class GuestImagePathTests(unittest.TestCase):
             commands = root / 'commands'; commands.mkdir()
             for name, body in [('pgrep', 'exit 1'), ('nvidia-smi', 'echo 0')]:
                 command = commands / name; command.write_text('#!/bin/sh\n' + body + '\n'); command.chmod(0o755)
+            (root / 'receipt.json').write_text(json.dumps({'approved_native_xid_lines': []}))
             args = SimpleNamespace(tag='path', receipt=str(root / 'receipt.json'), revision='a' * 40,
                                    binary='/unused/qemu', fastguest_dir=str(images))
             env = dict(BENCH_DIR=str(root), KF_LOCK=str(root / 'own.lock'), KF3_FB_MB='4096',
@@ -117,6 +118,7 @@ class GuestImagePathTests(unittest.TestCase):
             with mock.patch.object(S, 'ROOT', root), \
                  mock.patch.object(S.argparse.ArgumentParser, 'parse_args', return_value=args), \
                  mock.patch.object(S.G, 'pin_suite'), mock.patch.object(S.G, 'verify_binary_revision'), \
+                 mock.patch.object(S.G, 'kernel_snapshot', return_value=''), \
                  mock.patch.dict(S.os.environ, env):
                 try: code = S.main()
                 except S.G.GuardRefused as error: code = 7; refused = str(error)

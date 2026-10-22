@@ -1,0 +1,8 @@
+FAST_SUITE_STARTED=2026-10-22T02:34:38+00:00 arms=1 budget=180s
+rev=f98ceae65
+ARM                          VERDICT   secs  why
+--engines                    PASS      20s   20s
+FAST_CELL_ARM arm=engines verdict=PASS secs=20 client_ms=2289
+
+FAST_SUITE_PASS=1 FAST_SUITE_FAIL=0 FAST_SUITE_CRASH=0 NOTRUN=0 ARMS=1
+FAST_SUITE_RC=0

@@ -1,6 +1,6 @@
 [
   {
-    "tests": 92,
+    "tests": 109,
     "failures": [
       "test_guest_xid_guard.GuestGuardTests.test_qemu_pid_is_exact_defer",
       "test_guest_xid_guard.GuestGuardTests.test_qemu_pid_is_exact_missing"
@@ -9,7 +9,7 @@
     "mutant": "ignore_actual_qemu_pid"
   },
   {
-    "tests": 92,
+    "tests": 109,
     "failures": [
       "test_guest_xid_guard.GuestGuardTests.test_guest_channel_is_exact_defer",
       "test_guest_xid_guard.GuestGuardTests.test_guest_channel_is_exact_missing",
@@ -20,7 +20,7 @@
     "mutant": "ignore_host_guest_channel_pair"
   },
   {
-    "tests": 92,
+    "tests": 109,
     "failures": [
       "test_guest_xid_guard.GuestGuardTests.test_fault_address_is_exact_defer",
       "test_guest_xid_guard.GuestGuardTests.test_fault_address_is_exact_missing",
@@ -30,7 +30,7 @@
     "mutant": "ignore_fault_address"
   },
   {
-    "tests": 92,
+    "tests": 109,
     "failures": [
       "test_guest_xid_guard.GuestGuardTests.test_running_xid32_is_fatal",
       "test_guest_xid_guard.GuestGuardTests.test_xid32_fatal_defer",
@@ -40,7 +40,7 @@
     "mutant": "allow_non31_code"
   },
   {
-    "tests": 92,
+    "tests": 109,
     "failures": [
       "test_guest_xid_guard.GuestGuardTests.test_fault_type_is_exact_defer",
       "test_guest_xid_guard.GuestGuardTests.test_fault_type_is_exact_missing"
@@ -49,7 +49,7 @@
     "mutant": "ignore_fault_access_type"
   },
   {
-    "tests": 92,
+    "tests": 109,
     "failures": [
       "test_guest_xid_guard.GuestGuardTests.test_no_positive_verdict_no_approval_defer",
       "test_guest_xid_guard.GuestGuardTests.test_no_positive_verdict_no_approval_missing",
@@ -61,7 +61,7 @@
     "mutant": "skip_completed_recovery_proof"
   },
   {
-    "tests": 92,
+    "tests": 109,
     "failures": [
       "test_guest_xid_guard.GuestGuardTests.test_native_history_immutable_defer",
       "test_guest_xid_guard.GuestGuardTests.test_native_history_immutable_missing"
@@ -70,7 +70,7 @@
     "mutant": "allow_native_history_replacement"
   },
   {
-    "tests": 92,
+    "tests": 109,
     "failures": [
       "test_guest_xid_guard.GuestGuardTests.test_trailing_unparsed_missing_page_payload_fatal",
       "test_guest_xid_guard.GuestGuardTests.test_trailing_unparsed_xid_payload_fatal"
@@ -79,7 +79,7 @@
     "mutant": "allow_trailing_payload"
   },
   {
-    "tests": 92,
+    "tests": 109,
     "failures": [
       "test_guest_xid_guard.GuestGuardTests.test_hidden_first_xid_record_fatal_defer",
       "test_guest_xid_guard.GuestGuardTests.test_hidden_first_xid_record_fatal_missing",
@@ -89,7 +89,7 @@
     "mutant": "allow_hidden_first_xid"
   },
   {
-    "tests": 92,
+    "tests": 109,
     "failures": [
       "test_guest_xid_guard.GuestGuardTests.test_revision_required",
       "test_guest_xid_guard.GuestGuardTests.test_source_pin_required",
@@ -99,7 +99,7 @@
     "mutant": "skip_context_provenance"
   },
   {
-    "tests": 92,
+    "tests": 109,
     "failures": [
       "test_guest_xid_guard.PinTests.test_changed_raw_source_refused",
       "test_guest_xid_guard.PinTests.test_changed_runner_source_refused"
@@ -108,7 +108,7 @@
     "mutant": "ignore_local_source_changes"
   },
   {
-    "tests": 92,
+    "tests": 109,
     "failures": [
       "test_guest_guard_runner.RunnerIdentityTests.test_changed_executable_is_fatal",
       "test_guest_guard_runner.RunnerIdentityTests.test_changed_starttime_is_fatal"
@@ -117,7 +117,7 @@
     "mutant": "skip_live_identity_recheck"
   },
   {
-    "tests": 92,
+    "tests": 109,
     "failures": [
       "test_guest_guard_runner.RunnerIdentityTests.test_parent_is_not_owned_qemu",
       "test_guest_guard_runner.RunnerIdentityTests.test_unrelated_process_is_not_owned_qemu"
@@ -126,7 +126,7 @@
     "mutant": "allow_unowned_process_capture"
   },
   {
-    "tests": 92,
+    "tests": 109,
     "failures": [
       "test_guest_xid_guard.GuestGuardTests.test_unrelated_route_fatal_defer",
       "test_guest_xid_guard.GuestGuardTests.test_unrelated_route_fatal_missing"
@@ -135,7 +135,7 @@
     "mutant": "ignore_route"
   },
   {
-    "tests": 92,
+    "tests": 109,
     "failures": [
       "test_guest_xid_guard.GuestGuardTests.test_unrelated_pci_fatal_defer",
       "test_guest_xid_guard.GuestGuardTests.test_unrelated_pci_fatal_missing"
@@ -144,7 +144,7 @@
     "mutant": "ignore_pci"
   },
   {
-    "tests": 92,
+    "tests": 109,
     "failures": [
       "test_guest_xid_guard.NativeExactFiveTests.test_prior_lease_cannot_approve_four_native_faults",
       "test_guest_xid_guard.NativeExactFiveTests.test_second_lease_cannot_approve_four_native_faults"
@@ -153,7 +153,7 @@
     "mutant": "allow_reduced_native_baseline"
   },
   {
-    "tests": 92,
+    "tests": 109,
     "failures": [
       "test_guest_xid_guard.GuestGuardTests.test_incomplete_missing_page_correlation_is_never_approved",
       "test_guest_xid_guard.GuestGuardTests.test_missing_defer_correlation_is_never_approved"
@@ -162,7 +162,7 @@
     "mutant": "ignore_final_twin_count"
   },
   {
-    "tests": 92,
+    "tests": 109,
     "failures": [
       "test_guest_guard_runner.RunnerIdentityTests.test_wrong_capture_executable_false_refused",
       "test_guest_guard_runner.RunnerIdentityTests.test_wrong_capture_executable_true_refused"
@@ -171,7 +171,7 @@
     "mutant": "ignore_capture_executable"
   },
   {
-    "tests": 92,
+    "tests": 109,
     "failures": [
       "test_guest_guard_runner.RunnerIdentityTests.test_arbitrary_binary_directory_refused",
       "test_guest_guard_runner.RunnerIdentityTests.test_stale_binary_revision_refused"
@@ -180,7 +180,7 @@
     "mutant": "skip_binary_revision"
   },
   {
-    "tests": 92,
+    "tests": 109,
     "failures": [
       "test_guest_guard_runner.RunnerIdentityTests.test_changed_primitive_refused",
       "test_guest_guard_runner.RunnerIdentityTests.test_multiple_arms_in_one_boot_refused"
@@ -189,7 +189,7 @@
     "mutant": "skip_one_arm_primitive"
   },
   {
-    "tests": 92,
+    "tests": 109,
     "failures": [
       "test_guest_guard_runner.RunnerIdentityTests.test_unreadable_journal_stops_child_and_cannot_advance_receipt",
       "test_guest_guard_runner.RunnerIdentityTests.test_unrelated_fault_stops_child_and_cannot_advance_receipt"
@@ -198,10 +198,12 @@
     "mutant": "leave_owned_child_running"
   },
   {
-    "tests": 92,
+    "tests": 109,
     "failures": [
       "test_guarded_fast_suite.GuardedSuiteTests.test_first_arm_failure_stops_before_second",
-      "test_guarded_fast_suite.GuardedSuiteTests.test_seventh_arm_failure_stops_before_eighth"
+      "test_guarded_fast_suite.GuardedSuiteTests.test_seventh_arm_failure_stops_before_eighth",
+      "test_guarded_fast_suite.GuestImagePathTests.test_controller_image_directory_reaches_real_shell_launch",
+      "test_guarded_fast_suite.GuestImagePathTests.test_explicit_image_directory_with_spaces_overrides_inherited_path"
     ],
     "errors": [],
     "mutant": "continue_after_failed_arm"
