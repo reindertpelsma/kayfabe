@@ -241,3 +241,12 @@ auto armedFIRST2913269 (clamped04:50UTC), independent budgetwatch2913272 cutoff0
 Reservation2.648654USD +prior3.928363=6.577017USD is a guard, NOT measured spend; no timer extension.
 NativeN0PASS, disabled580.88bind22, precision-only ON0x50; remaining approved arms within same lease.
 Another owner-authorized Ada lane has its own budget; shared account debit is not exclusive attribution.
+
+CLOSED SW2 own57148807, APIabsence2026-10-22T03:47:36.458262+00:00; elapsed0.874735615h,
+actual1.033333333USD/h, runtime0.903893469USD,
+lane runtime total4.832256623USD<7hardstop, credit40.452860543USD>5reserve.
+All own prior IDs APIabsent; timers2913269/2913272 cancelled ONLY after absence. NativeN0PASS;
+precision-only ON0x50; OFF abort on QEMU32 pair without prior CIMCode0proof; B1UNRUN.
+No natural OFF0x116 or WindowsPASS claimed. Source8f3a9bb3a; early-pushed text evidence retained.
+Final API audit ../blackwell_validation4_20261022/FINAL_API_AUDIT.json. Runtime estimates are not
+settled invoices or exclusive shared-account credit deltas. No new rental; foreign Ada untouched.

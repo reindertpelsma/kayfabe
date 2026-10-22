@@ -18,7 +18,7 @@
     "budget_cutoff_minutes": 112,
     "guard_rate": 1.1510648148148148,
     "product_head": "8f3a9bb3a5d652b3f536ca015bf95735ec588924",
-    "destroyed": false,
+    "destroyed": true,
     "authority": "documented provider provisioning replacement after57142142/57143789 APIabsence; same one-active-box validation run",
     "auto_destroy_requested_minutes": 170,
     "auto_destroy_pid": 2913269,
@@ -30,6 +30,13 @@
     "budget_watch_pid_starttime": 230329510,
     "ssh_ready_utc": "2026-10-22T02:59:13.989701+00:00",
     "ssh_hostkey_fingerprint": "SHA256:+VbR6MbZKFRPpOIJyXL05AEcBmmPcMPyiwsYwMuBq2g",
-    "observed_dph_total": 1.0333333333333332
+    "observed_dph_total": 1.0333333333333332,
+    "absence_verified_utc": "2026-10-22T03:47:36.458262+00:00",
+    "elapsed_hours_until_absence": 0.8747356147222223,
+    "runtime_cost_estimate_usd": 0.9038934685462963,
+    "lane_runtime_total_usd": 4.832256622648354,
+    "credit_after_observed": 40.452860542661256,
+    "auto_destroy_cancelled_after_absence": true,
+    "budget_watch_cancelled_after_absence": true
   }
 ]

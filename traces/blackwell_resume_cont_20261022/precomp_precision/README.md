@@ -1,3 +1,5 @@
+STATUS UPDATE: RESEARCH, 2026-10-22. Clean-native GB202/Windows580.88 precision-only ON reproduced0x50; sufficiency FALSIFIED. PR69 remains draft at6e7cb6ff1 with the public-layout/numeric boundary unchanged. FVLUT necessity and instruction-level crash cause remain unresolved. Earlier UNRUN/native32-STOP text below describes the pre-validation state.
+
 STATUS UPDATE: RESEARCH, 2026-10-22. See ../../../docs/design/V3_PRECOMP_CSC_PRECISION_20261022.md for the exact source boundary: the header supplies layout and can encode14, but does not prescribe14. The numeric basis is public NVKMS S5.14 documentation; FVLUT semantics and sufficiency remain unresolved. This topic was extracted with -x from the continuation lineage; hardware remains UNRUN.
 
 STATUS: LIVE-RESEARCH, 2026-10-22 CEST. Partial T1 candidate, hardware UNRUN.

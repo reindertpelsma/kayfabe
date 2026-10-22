@@ -1,4 +1,18 @@
 **STATUS: LIVE, 2026-10-22.** Owner GO supersedes the earlier documentation-only scope.
+
+2026-10-22 closure correction supersedes the earlier held/UNRUN state below: second clean N0
+on own57148807 also passed, native32 absent. Windows580.88 disabled bind22 passed; precision-only
+ON reproduced0x50. OFF emitted the known exact-shaped QEMU32pair before actual CIMCode0 proof
+was recorded, so the strict guard aborted and B1 stayed UNRUN. This is not a Code43 verdict or a
+natural0x116 measurement. The enable helper's20s observation sleep precedes the diagnostic call,
+creating a proof-capture gap; a future independent actual-state observer must preserve the same
+pre-fault init gate. No permissive exception/threshold change is proposed.
+Two watchers also overwrote the first fatal reason. GPU-free test-first d1e2da41c/9f1af1513 ->
+a22567a3d now atomically preserves the first whole receipt while both owned controllers still stop.
+Full bench119->125pass/0fail; three new mutants5/2/2killers (34retained total). This fix was after
+teardown, not part of the measured run. The first original guard reason remains unverified.
+Ownlease APIabsent03:47:36UTC, lane runtime4.832257USD<7, accountcredit40.452861/reserve5 intact.
+Detailed evidence: traces/blackwell_validation4_20261022/RESULT.md; no next rental grant implied.
 The reviewed classifier defects below were repaired before this lease: product/guard `8f3a9bb3a`,
 allocated-class fixture `a3f39a633`, and independent detached-QEMU termination guard `a634bdc194a`.
 Native Xid 32 remains fatal. Post-closeout CPU review found one further gap: a1000-RPC prefix

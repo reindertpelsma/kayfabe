@@ -1,4 +1,11 @@
-**STATUS: LIVE, 2026-10-22.** Owner GO authorizes ONE RTX 5090 lease with the tested guard and N0 gate.
+**STATUS: ANSWERED, 2026-10-22.** The authorized validation run is closed; native passed, Windows incomplete/failed.
+
+FINAL2026-10-22: current57148807 destroyed/APIabsent03:47:36UTC, lane runtime4.832257USD<7.
+NativeN0PASS; precision-only ON0x50 falsifies sufficiency. OFF reached3303canonicalRPCs then
+exact-shaped QEMU32pair before host-observedCIMCode0 proof; guard aborted, no natural0x116
+measured. Optional mergedB1ON UNRUN after fatal marker. Current GO is closed, not permission
+for another lease. See traces/blackwell_validation4_20261022/RESULT.md and CLOSEOUT.md for the
+proof-capture blind spot, GPU-free first-fatal-receipt fix and future prerequisites.
 
 2026-10-22 03:45 UTC amendment supersedes the earlier one-lease exhaustion/census STOP narrative below:
 owner classified the immediate post-shutdown census as a harness race and authorized the tested
