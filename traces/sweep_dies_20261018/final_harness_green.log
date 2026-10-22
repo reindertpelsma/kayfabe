@@ -2,6 +2,9 @@ test_changed_payload_is_rejected (test_desktop_asset_guard.AssetGuardTests.test_
 test_python310_guard_emits_its_verified_marker (test_desktop_asset_guard.AssetGuardTests.test_python310_guard_emits_its_verified_marker) ... ok
 test_valid_disk_passes_with_python310_hashlib (test_desktop_asset_guard.AssetGuardTests.test_valid_disk_passes_with_python310_hashlib) ... ok
 test_wrong_size_is_rejected (test_desktop_asset_guard.AssetGuardTests.test_wrong_size_is_rejected) ... ok
+test_budget_stop_runs_reserved_hold_after_completed_row (test_desktop_budget.BudgetHoldTests.test_budget_stop_runs_reserved_hold_after_completed_row) ... ok
+test_healthy_partial_matrix_cannot_claim_complete_pass (test_desktop_budget.BudgetHoldTests.test_healthy_partial_matrix_cannot_claim_complete_pass) ... ok
+test_short_reserved_hold_still_refuses (test_desktop_budget.BudgetHoldTests.test_short_reserved_hold_still_refuses) ... ok
 test_bind_failure_prevents_gpu_app_work (test_desktop_controller.ControllerTests.test_bind_failure_prevents_gpu_app_work) ... ok
 test_bind_failure_propagates (test_desktop_controller.ControllerTests.test_bind_failure_propagates) ... ok
 test_desktop_failure_does_not_claim_completion (test_desktop_controller.ControllerTests.test_desktop_failure_does_not_claim_completion) ... ok
@@ -25,6 +28,11 @@ test_mount_receipt_carries_the_verified_digest (test_desktop_mount.MountTests.te
 test_verified_media_mounts_read_only (test_desktop_mount.MountTests.test_verified_media_mounts_read_only) ... ok
 test_wrong_digest_cannot_be_mounted (test_desktop_mount.MountTests.test_wrong_digest_cannot_be_mounted) ... ok
 test_wrong_length_cannot_be_mounted (test_desktop_mount.MountTests.test_wrong_length_cannot_be_mounted) ... ok
+test_extractor_failure_has_no_success_marker (test_desktop_nvrtc.NvrtcStageTests.test_extractor_failure_has_no_success_marker) ... ok
+test_missing_runtime_dlls_have_no_success_marker (test_desktop_nvrtc.NvrtcStageTests.test_missing_runtime_dlls_have_no_success_marker) ... ok
+test_pinned_missing_media_supplement_is_staged (test_desktop_nvrtc.NvrtcStageTests.test_pinned_missing_media_supplement_is_staged) ... ok
+test_staged_marker_retains_the_verified_archive_hash (test_desktop_nvrtc.NvrtcStageTests.test_staged_marker_retains_the_verified_archive_hash) ... ok
+test_wrong_hash_never_reaches_extractor (test_desktop_nvrtc.NvrtcStageTests.test_wrong_hash_never_reaches_extractor) ... ok
 test_app_disk_uses_the_boot_controller (test_desktop_plan.AppDiskTests.test_app_disk_uses_the_boot_controller) ... ok
 test_attach_does_not_hotplug_a_root_bus_controller (test_desktop_plan.AppDiskTests.test_attach_does_not_hotplug_a_root_bus_controller) ... ok
 test_failure_verdict_is_not_a_pass (test_desktop_plan.DesktopPlanTests.test_failure_verdict_is_not_a_pass) ... ok
@@ -41,6 +49,10 @@ test_failed_mount_cannot_start_the_matrix (test_desktop_plan.GuestIsoTests.test_
 test_guest_iso_uses_the_existing_windows_mount_path (test_desktop_plan.GuestIsoTests.test_guest_iso_uses_the_existing_windows_mount_path) ... ok
 test_guest_mount_receives_the_pinned_hash_and_size (test_desktop_plan.GuestIsoTests.test_guest_mount_receives_the_pinned_hash_and_size) ... ok
 test_missing_mount_receipt_cannot_start_the_matrix (test_desktop_plan.GuestIsoTests.test_missing_mount_receipt_cannot_start_the_matrix) ... ok
+test_absent_bootstrap_receipt_cannot_dispatch_apps (test_desktop_plan.NvrtcBootstrapTests.test_absent_bootstrap_receipt_cannot_dispatch_apps) ... ok
+test_bootstrap_passes_manifest_pin_to_the_real_stager (test_desktop_plan.NvrtcBootstrapTests.test_bootstrap_passes_manifest_pin_to_the_real_stager) ... ok
+test_bootstrap_retains_its_guest_receipt (test_desktop_plan.NvrtcBootstrapTests.test_bootstrap_retains_its_guest_receipt) ... ok
+test_failed_bootstrap_cannot_dispatch_apps (test_desktop_plan.NvrtcBootstrapTests.test_failed_bootstrap_cannot_dispatch_apps) ... ok
 test_direct_guard_names_the_conflicting_live_pid (test_desktop_processes.ProcessTests.test_direct_guard_names_the_conflicting_live_pid) ... ok
 test_direct_shell_guard_blocks_a_live_vm (test_desktop_processes.ProcessTests.test_direct_shell_guard_blocks_a_live_vm) ... ok
 test_exited_qemu_is_not_a_live_vm (test_desktop_processes.ProcessTests.test_exited_qemu_is_not_a_live_vm) ... ok
@@ -54,12 +66,14 @@ test_expired_lease_cannot_create_receipt (test_s4_arm_admission.ArmAdmissionTest
 test_fourth_attempt_retains_all_failed_attempt_counts (test_s4_arm_admission.ArmAdmissionTests.test_fourth_attempt_retains_all_failed_attempt_counts) ... ok
 test_latest_start_guard_still_refuses (test_s4_arm_admission.ArmAdmissionTests.test_latest_start_guard_still_refuses) ... ok
 test_third_owned_harness_attempt_admitted_within_budget (test_s4_arm_admission.ArmAdmissionTests.test_third_owned_harness_attempt_admitted_within_budget) ... ok
+test_guest_query_timeout_class_is_retained (test_signin_diagnostics.SigninDiagnosticsTests.test_guest_query_timeout_class_is_retained) ... ok
+test_socket_error_class_is_retained (test_signin_diagnostics.SigninDiagnosticsTests.test_socket_error_class_is_retained) ... ok
 test_configured_account_match_is_case_insensitive (test_signin_user.SigninUserTests.test_configured_account_match_is_case_insensitive) ... ok
 test_different_account_is_never_accepted (test_signin_user.SigninUserTests.test_different_account_is_never_accepted) ... ok
 test_existing_vast_caller_still_works (test_signin_user.SigninUserTests.test_existing_vast_caller_still_works) ... ok
 test_kf_session_is_verified_without_typing (test_signin_user.SigninUserTests.test_kf_session_is_verified_without_typing) ... ok
 
 ----------------------------------------------------------------------
-Ran 60 tests in 15.656s
+Ran 74 tests in 19.884s
 
 OK

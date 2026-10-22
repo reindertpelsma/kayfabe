@@ -1,0 +1,27 @@
+=== nvidia_smi start=2026-10-22T11:56:09.6296681+00:00 host=KFWIN session=0 boot=2026-10-22T11:47:16.5000000Z timeout=60
+Thu Oct 22 11:56:12 2026
++-----------------------------------------------------------------------------------------+
+| NVIDIA-SMI 580.88                 Driver Version: 580.88         CUDA Version: 13.0     |
++-----------------------------------------+------------------------+----------------------+
+| GPU  Name                  Driver-Model | Bus-Id          Disp.A | Volatile Uncorr. ECC |
+| Fan  Temp   Perf          Pwr:Usage/Cap |           Memory-Usage | GPU-Util  Compute M. |
+|                                         |                        |               MIG M. |
+|=========================================+========================+======================|
+|   0  NVIDIA GeForce RTX 4090      WDDM  |   00000000:00:06.0  On |                  N/A |
+| N/A    0C  N/A             N/A  /  N/A  |     625MiB /   8192MiB |     N/A      Default |
+|                                         |                        |                  N/A |
++-----------------------------------------+------------------------+----------------------+
+
++-----------------------------------------------------------------------------------------+
+| Processes:                                                                              |
+|  GPU   GI   CI              PID   Type   Process name                        GPU Memory |
+|        ID   ID                                                               Usage      |
+|=========================================================================================|
+|    0   N/A  N/A             524    C+G   ...y\StartMenuExperienceHost.exe      N/A      |
+|    0   N/A  N/A            1296    C+G   C:\Windows\System32\dwm.exe           N/A      |
+|    0   N/A  N/A            1636    C+G   ...indows\System32\ShellHost.exe      N/A      |
+|    0   N/A  N/A            4012    C+G   ...xyewy\ShellExperienceHost.exe      N/A      |
+|    0   N/A  N/A            4792    C+G   ..._cw5n1h2txyewy\SearchHost.exe      N/A      |
+|    0   N/A  N/A            5124    C+G   C:\Windows\explorer.exe               N/A      |
++-----------------------------------------------------------------------------------------+
+=== end rc=0 secs=5 2026-10-22T11:56:14.2863680+00:00

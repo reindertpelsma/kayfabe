@@ -1,0 +1,25 @@
+test_app_disk_uses_the_boot_controller (test_desktop_plan.AppDiskTests.test_app_disk_uses_the_boot_controller) ... ok
+test_attach_does_not_hotplug_a_root_bus_controller (test_desktop_plan.AppDiskTests.test_attach_does_not_hotplug_a_root_bus_controller) ... ok
+test_failure_verdict_is_not_a_pass (test_desktop_plan.DesktopPlanTests.test_failure_verdict_is_not_a_pass) ... ok
+test_health_failure_after_app_is_fatal (test_desktop_plan.DesktopPlanTests.test_health_failure_after_app_is_fatal) ... ok
+test_health_failure_after_unigine_prevents_hold (test_desktop_plan.DesktopPlanTests.test_health_failure_after_unigine_prevents_hold) ... ok
+test_health_failure_before_apps_is_fatal (test_desktop_plan.DesktopPlanTests.test_health_failure_before_apps_is_fatal) ... ok
+test_missing_hold_is_not_accepted (test_desktop_plan.DesktopPlanTests.test_missing_hold_is_not_accepted) ... ok
+test_notrun_is_not_a_pass (test_desktop_plan.DesktopPlanTests.test_notrun_is_not_a_pass) ... ok
+test_restart_reason_refuses_a_passed_row (test_desktop_plan.DesktopPlanTests.test_restart_reason_refuses_a_passed_row) ... ok
+test_short_hold_is_not_accepted (test_desktop_plan.DesktopPlanTests.test_short_hold_is_not_accepted) ... ok
+test_timeout_does_not_start_more_gpu_work (test_desktop_plan.DesktopPlanTests.test_timeout_does_not_start_more_gpu_work) ... ok
+test_unigine_rows_run_before_hold (test_desktop_plan.DesktopPlanTests.test_unigine_rows_run_before_hold) ... ok
+test_failed_mount_cannot_start_the_matrix (test_desktop_plan.GuestIsoTests.test_failed_mount_cannot_start_the_matrix) ... ok
+test_guest_iso_uses_the_existing_windows_mount_path (test_desktop_plan.GuestIsoTests.test_guest_iso_uses_the_existing_windows_mount_path) ... ok
+test_guest_mount_receives_the_pinned_hash_and_size (test_desktop_plan.GuestIsoTests.test_guest_mount_receives_the_pinned_hash_and_size) ... ok
+test_missing_mount_receipt_cannot_start_the_matrix (test_desktop_plan.GuestIsoTests.test_missing_mount_receipt_cannot_start_the_matrix) ... ok
+test_absent_bootstrap_receipt_cannot_dispatch_apps (test_desktop_plan.NvrtcBootstrapTests.test_absent_bootstrap_receipt_cannot_dispatch_apps) ... ok
+test_bootstrap_passes_manifest_pin_to_the_real_stager (test_desktop_plan.NvrtcBootstrapTests.test_bootstrap_passes_manifest_pin_to_the_real_stager) ... ok
+test_bootstrap_retains_its_guest_receipt (test_desktop_plan.NvrtcBootstrapTests.test_bootstrap_retains_its_guest_receipt) ... ok
+test_failed_bootstrap_cannot_dispatch_apps (test_desktop_plan.NvrtcBootstrapTests.test_failed_bootstrap_cannot_dispatch_apps) ... ok
+
+----------------------------------------------------------------------
+Ran 20 tests in 0.065s
+
+OK

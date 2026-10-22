@@ -1,0 +1,10 @@
+test_extractor_failure_has_no_success_marker (test_desktop_nvrtc.NvrtcStageTests.test_extractor_failure_has_no_success_marker) ... ok
+test_missing_runtime_dlls_have_no_success_marker (test_desktop_nvrtc.NvrtcStageTests.test_missing_runtime_dlls_have_no_success_marker) ... ok
+test_pinned_missing_media_supplement_is_staged (test_desktop_nvrtc.NvrtcStageTests.test_pinned_missing_media_supplement_is_staged) ... ok
+test_staged_marker_retains_the_verified_archive_hash (test_desktop_nvrtc.NvrtcStageTests.test_staged_marker_retains_the_verified_archive_hash) ... ok
+test_wrong_hash_never_reaches_extractor (test_desktop_nvrtc.NvrtcStageTests.test_wrong_hash_never_reaches_extractor) ... ok
+
+----------------------------------------------------------------------
+Ran 5 tests in 3.790s
+
+OK

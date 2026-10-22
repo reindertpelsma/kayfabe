@@ -1,0 +1,13 @@
+{
+  "kind": "MEASURED",
+  "date": "2026-10-22",
+  "lease_id": 57193877,
+  "harness_revision": "4008a62f4b1107b06a8ceef780ecc369db7dcdb6",
+  "scope": "Fresh child; unchanged single enable/sign-in; reuse original S2 hold loop and tested provider-aware health; no app-media copy or app rerun; require >=600s plus before/after health.",
+  "receipt": "\n/workspace/sweep-win-57193877/kfwin/disk/bw580_bind.qcow2: OK\nS4_HOLD_RESUME_PID=111390\n",
+  "files": {
+    "/root/s2/arm.sh": "82da7537bd58dacbaeab81aab739b3ba38308eab88a9b35fb263e6f12afd25cd",
+    "/root/s4/desktop.sh": "44be58a13992e1816430f2fd4edb7991ac69904b4c330a0775a737ea1ae881a1",
+    "/root/s2/health.ps1": "2d56c9b5234e5e0ecf66e08a3c28ddac01cf4c18844aae7c99b5235bd5b9c710"
+  }
+}

@@ -1,0 +1,22 @@
+{
+  "kind": "MEASURED",
+  "date": "2026-10-22",
+  "rows": [
+    {
+      "mutant": "assume_missing_ISO_package",
+      "killers": [
+        "test_pinned_missing_media_supplement_is_staged ",
+        "test_staged_marker_retains_the_verified_archive_hash "
+      ],
+      "exit": 1
+    },
+    {
+      "mutant": "accept_missing_supplement_receipt",
+      "killers": [
+        "test_absent_bootstrap_receipt_cannot_dispatch_apps ",
+        "test_failed_bootstrap_cannot_dispatch_apps "
+      ],
+      "exit": 1
+    }
+  ]
+}

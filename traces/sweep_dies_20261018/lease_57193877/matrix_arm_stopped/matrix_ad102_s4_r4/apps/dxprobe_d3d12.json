@@ -1,0 +1,77 @@
+{
+  "quiet": 2,
+  "end_utc": "2026-10-22T11:58:50.8649151Z",
+  "start_utc": "2026-10-22T11:58:43.9515276Z",
+  "rc": 0,
+  "secs": 7,
+  "gpu_devices": [
+    "NVIDIA GeForce RTX 4090 status=OK code=0"
+  ],
+  "digests": [],
+  "session": 0,
+  "out_files": [],
+  "boot_utc_start": "2026-10-22T11:47:16.5000000Z",
+  "log_tail": [
+    "=== dxprobe_d3d12 start=2026-10-22T11:58:43.9515276+00:00 host=KFWIN session=0 boot=2026-10-22T11:47:16.5000000Z timeout=120",
+    "KFDX start api=d3d12 iters=200 any_vendor=0",
+    "KFDX ok CreateDXGIFactory1",
+    "KFDX adapter index=0 vendor=0x10de device=0x2684 luid=0x00000000_0x000ec73c dedicated_mb=7853 software=0 name=\"NVIDIA GeForce RTX 4090\"",
+    "KFDX adapter index=1 vendor=0x1414 device=0x008c luid=0x00000000_0x00005c94 dedicated_mb=0 software=1 name=\"Microsoft Basic Render Driver\"",
+    "KFDX selected \"NVIDIA GeForce RTX 4090\"",
+    "KFDX ok D3D12CreateDevice(chosen adapter)",
+    "KFDX feature_level 0xc200",
+    "KFDX vidmem budget_mb=7085 usage_mb=7",
+    "KFDX ok DIRECT",
+    "KFDX ok DIRECT queue fence Signal/Wait x3",
+    "KFDX ok COPY",
+    "KFDX ok COPY queue fence Signal/Wait x3",
+    "KFDX ok compile cs_5_0",
+    "KFDX ok serialize root signature",
+    "KFDX ok CreateRootSignature",
+    "KFDX ok CreateComputePipelineState",
+    "KFDX compute iters=200 bad=0 fence_wait_ok=1 ms=375",
+    "KFDX ok compute queue fence completed",
+    "KFDX ok compute shader result matches (UAV copy-back)",
+    "KFDX RESULT OK api=d3d12 adapter=\"NVIDIA GeForce RTX 4090\"",
+    "=== end rc=0 secs=7 2026-10-22T11:58:50.8649151+00:00"
+  ],
+  "pdh": {
+    "pids": [
+      "7644",
+      "5612",
+      "6896"
+    ],
+    "nv": {
+      "legacyoverlay": 0,
+      "3d": 0,
+      "vr": 0,
+      "videodecode": 0,
+      "copy": 0,
+      "ofa_0": 0,
+      "videoencode": 0
+    },
+    "samples": 3,
+    "other": {},
+    "nvidia_luids": "0_ec73c"
+  },
+  "timed_out": false,
+  "boot_utc_end": "2026-10-22T11:47:16.5000000Z",
+  "events": {
+    "kernel_power_41": 0,
+    "bugcheck": 0,
+    "unexpected_shutdown_6008": 0,
+    "wer_1001": 0,
+    "display_4101": 0,
+    "nvlddmkm_153": 0,
+    "other_nvlddmkm": 0,
+    "lines": [],
+    "live_kernel": 0
+  },
+  "app": "dxprobe_d3d12",
+  "smi": {
+    "samples": 0,
+    "mem_used_base_mb": null,
+    "util_max": 0,
+    "mem_used_max_mb": 0
+  }
+}

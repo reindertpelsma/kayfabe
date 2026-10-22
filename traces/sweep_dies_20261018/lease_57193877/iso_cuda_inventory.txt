@@ -1,0 +1,7 @@
+/pkg/cuda_cccl
+/pkg/cuda_cudart
+/pkg/cuda_demo_suite
+/guest/py/cupy_nvrtc.py
+/pkg/cuda_cccl/cuda_cccl-windows-x86_64-12.9.27-archive.zip
+/pkg/cuda_cudart/cuda_cudart-windows-x86_64-12.9.79-archive.zip
+/pkg/cuda_demo_suite/cuda_demo_suite-windows-x86_64-12.9.79-archive.zip

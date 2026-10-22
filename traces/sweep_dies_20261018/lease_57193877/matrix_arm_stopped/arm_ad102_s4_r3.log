@@ -1,0 +1,26 @@
+
+/workspace/sweep-win-57193877/kfwin/disk/bw580_bind.qcow2: OK
+ARM_START run=ad102_s4_r3 source=1700543393c34f93adc0611430e3d49ab38eca3a profile=on 2026-10-22T11:36:14+00:00
+[2026-10-22T11:36:14Z] detached: tag=ad102_s4_r3, log logs/ad102_s4_r3_run.log (stdout logs/ad102_s4_r3_run.out)
+KF_SSH_UP
+{"pid": 103103, "exe": "/workspace/bench/kf3-bins/17005433/qemu-system-x86_64", "sha256": "52db5101cac76574e1c59e63362489327678abb1af3cc805ec7a9bba1cbc4744", "kf3_device": "kf3-gpu,fb-mb=8192,bar1-size=134217728,bar2-size=33554432,display=on,gop=on,gop-efi=/workspace/sweep-win-57193877/secureboot/kf-gop.17005433-dirty.signed.efi,id=kf0,guest-driver=580.65.06"}
+APPDISK_GUEST_COPY_DONE 2026-10-22T11:42:05+00:00
+STAGE580_READY=1 actual=32.0.15.8088 device_disabled=1 GSP_flags=1; fresh QEMU580.65.06 then one enable
+ENABLE580_START actual=32.0.15.8088 UTC=2026-10-22T11:42:27.4640590Z
+Microsoft PnP Utility
+
+Enabling device:          PCI\VEN_10DE&DEV_2684&SUBSYS_13DA196E&REV_A1\3&11583659&0&30
+Device enabled successfully.
+
+ENABLE580_PNPUTIL_RC=0
+{"Name":"NVIDIA GeForce RTX 4090","DriverVersion":"32.0.15.8088","ConfigManagerErrorCode":0}
+{"FriendlyName":"NVIDIA GeForce RTX 4090","Status":"OK","Problem":0}
+ENABLE580_OBSERVED UTC=2026-10-22T11:42:53.2641172Z; device status is verdict, not this command rc
+BW580_RESULT {"utc":"2026-10-22T11:43:08.4529931Z","boot":"2026-10-22T11:36:55.5000000Z","driver":"32.0.15.8088","inf":"oem7.inf","code":0,"status":"OK","tdr4101":0,"width":1920,"height":1080}
+PRE_CLEANUP_START rc=1 2026-10-22T11:43:44+00:00
+python3: can't open file '/root/s2/alloc_headers.py': [Errno 2] No such file or directory
+{"rpcs": 5154, "unload_ordinals": [], "teardown_start_ordinal": 4548, "last_nonfree_before_teardown": [[4531, "76", "RmControl", "0", "0x20801211", "0x0"], [4532, "76", "RmControl", "0", "0x50800101", "0x0"], [4547, "76", "RmControl", "0", "0x20801111", "0x0"]]}
+[2026-10-22T11:44:09Z] stopping kfwin (pid 103103)
+[2026-10-22T11:44:30Z] stopped
+/workspace/sweep-win-57193877/kfwin/disk/bw580_bind.qcow2: OK
+ARM_EXIT run=ad102_s4_r3 rc=1 2026-10-22T11:44:49+00:00

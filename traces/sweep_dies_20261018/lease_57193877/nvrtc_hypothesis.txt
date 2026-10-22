@@ -1,0 +1,1 @@
+INFERRED (2026-10-22, lease57193877): NVRTC staging may fail because the pinned app ISO predates the NVRTC package declaration. FALSIFIER BEFORE observation: the ISO contains the declared NVRTC archive with the pinned size/hash, in which case extraction diagnostics are required.

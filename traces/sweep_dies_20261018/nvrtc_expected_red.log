@@ -1,0 +1,55 @@
+test_extractor_failure_has_no_success_marker (test_desktop_nvrtc.NvrtcStageTests.test_extractor_failure_has_no_success_marker) ... FAIL
+test_missing_runtime_dlls_have_no_success_marker (test_desktop_nvrtc.NvrtcStageTests.test_missing_runtime_dlls_have_no_success_marker) ... FAIL
+test_pinned_missing_media_supplement_is_staged (test_desktop_nvrtc.NvrtcStageTests.test_pinned_missing_media_supplement_is_staged) ... ERROR
+test_staged_marker_retains_the_verified_archive_hash (test_desktop_nvrtc.NvrtcStageTests.test_staged_marker_retains_the_verified_archive_hash) ... ERROR
+test_wrong_hash_never_reaches_extractor (test_desktop_nvrtc.NvrtcStageTests.test_wrong_hash_never_reaches_extractor) ... FAIL
+
+======================================================================
+ERROR: test_pinned_missing_media_supplement_is_staged (test_desktop_nvrtc.NvrtcStageTests.test_pinned_missing_media_supplement_is_staged)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/workspace/s4-wt/scripts/bench/tests/test_desktop_nvrtc.py", line 35, in test_pinned_missing_media_supplement_is_staged
+    x,j,c=self.stage();self.assertEqual(x.returncode,0,x.stdout+x.stderr);self.assertTrue(j['ok'])
+                                                                                          ~^^^^^^
+TypeError: 'NoneType' object is not subscriptable
+
+======================================================================
+ERROR: test_staged_marker_retains_the_verified_archive_hash (test_desktop_nvrtc.NvrtcStageTests.test_staged_marker_retains_the_verified_archive_hash)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/workspace/s4-wt/scripts/bench/tests/test_desktop_nvrtc.py", line 37, in test_staged_marker_retains_the_verified_archive_hash
+    x,j,c=self.stage();self.assertEqual(x.returncode,0,x.stderr);self.assertEqual(j['sha256'],hashlib.sha256(b'pinned fixture archive').hexdigest())
+                                                                                  ~^^^^^^^^^^
+TypeError: 'NoneType' object is not subscriptable
+
+======================================================================
+FAIL: test_extractor_failure_has_no_success_marker (test_desktop_nvrtc.NvrtcStageTests.test_extractor_failure_has_no_success_marker)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/workspace/s4-wt/scripts/bench/tests/test_desktop_nvrtc.py", line 41, in test_extractor_failure_has_no_success_marker
+    x,j,c=self.stage(tar_rc=1);self.assertNotEqual(x.returncode,0);self.assertIsNone(j)
+                               ~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^
+AssertionError: 0 == 0
+
+======================================================================
+FAIL: test_missing_runtime_dlls_have_no_success_marker (test_desktop_nvrtc.NvrtcStageTests.test_missing_runtime_dlls_have_no_success_marker)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/workspace/s4-wt/scripts/bench/tests/test_desktop_nvrtc.py", line 43, in test_missing_runtime_dlls_have_no_success_marker
+    x,j,c=self.stage(dlls=False);self.assertNotEqual(x.returncode,0);self.assertIsNone(j)
+                                 ~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^
+AssertionError: 0 == 0
+
+======================================================================
+FAIL: test_wrong_hash_never_reaches_extractor (test_desktop_nvrtc.NvrtcStageTests.test_wrong_hash_never_reaches_extractor)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/workspace/s4-wt/scripts/bench/tests/test_desktop_nvrtc.py", line 39, in test_wrong_hash_never_reaches_extractor
+    x,j,c=self.stage(bad_hash=True);self.assertNotEqual(x.returncode,0);self.assertIsNone(j);self.assertEqual(c,'')
+                                    ~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^
+AssertionError: 0 == 0
+
+----------------------------------------------------------------------
+Ran 5 tests in 3.524s
+
+FAILED (failures=3, errors=2)

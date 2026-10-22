@@ -1,0 +1,600 @@
+12908: kf-rm: rpc-trace fn=10 Free seq=0  result=0x0
+12910: kf3: GSP rpc Free seq=0
+12911: kf3: act free: 0xc1d00147:0xff1fe032: engine object host 0xcafe010f freed (415 us, off the GSP lock)
+12913: kf-rm: rpc-trace fn=10 Free seq=0  result=0x0
+12915: kf3: GSP rpc Free seq=0
+12916: kf3: act free: 0xc1d00147:0xff1fe026: engine object host 0xcafe010e freed (346 us, off the GSP lock)
+12918: kf-rm: rpc-trace fn=10 Free seq=0  result=0x0
+12920: kf3: GSP rpc Free seq=0
+12921: kf3: act free: 0xc1d00147:0xff1fe034: engine object host 0xcafe010b freed (285 us, off the GSP lock)
+12923: kf-rm: rpc-trace fn=10 Free seq=0  result=0x0
+12925: kf3: GSP rpc Free seq=0
+12926: kf3: act free: 0xc1d00147:0xff1fe01a: engine object host 0xcafe010c freed (324 us, off the GSP lock)
+12928: kf-rm: rpc-trace fn=10 Free seq=0  result=0x0
+12930: kf3: GSP rpc Free seq=0
+12931: kf3: act free: 0xc1d00147:0xff1fe02c: engine object host 0xcafe010d freed (363 us, off the GSP lock)
+12933: kf-rm: rpc-trace fn=10 Free seq=0  result=0x0
+12934: kf3: GSP rpc Free seq=0
+12935: kf-rm: rpc-trace fn=10 Free seq=0  result=0x0
+12937: kf3: GSP rpc Free seq=0
+12938: kf3: USER_RING_LAZY_OBSERVE (c1d00147, ff040012) turns=3 put_cache_hits=0 put_fresh_reads=2 obs_skipped=0 obs_unconditional=3 obs_forced_wait=0 obs_forced_low_credit=0 obs_forced_open_segment=0 obs_forced_ring_full=0 obs_forced_interval=0 inval_mode_change=0 inval_migration=0 inval_reset=0 inval_retire=0
+12939: kf3: DOORBELL-LEDGER tok=0x00000014 route=passthrough rung=0 emulated=0 forwarded=0 host=0x3b trap=0 fast=0
+12940: kf3: act free: 0xc1d00147:0xff040012: passthrough 0xc1d00147:0xff040012 token 0x14 host 0x3b objects=0 ctx=CtxBind { initialized: 4, va_bound: 0, bound: false, promotes: 4, evicts: 1 } freed (1420 us, off the GSP lock)
+12942: kf-rm: rpc-trace fn=10 Free seq=0  result=0x0
+12943: kf3: GSP rpc Free seq=0
+12944: kf-rm: rpc-trace fn=10 Free seq=0  result=0x0
+12945: kf3: GSP rpc Free seq=0
+12946: kf-rm: rpc-trace fn=10 Free seq=0  result=0x0
+12947: kf3: GSP rpc Free seq=0
+12948: kf-rm: rpc-trace fn=10 Free seq=0  result=0x0
+12949: kf3: GSP rpc Free seq=0
+12950: kf-rm: rpc-trace fn=10 Free seq=0  result=0x0
+12951: kf3: GSP rpc Free seq=0
+12952: kf-rm: rpc-trace fn=10 Free seq=0  result=0x0
+12953: kf3: GSP rpc Free seq=0
+12954: kf-rm: rpc-trace fn=10 Free seq=0  result=0x0
+12955: kf3: GSP rpc Free seq=0
+12956: kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x20801111 client=H object=H result=0x0
+12957: kf3: GSP rpc RmControl seq=0
+12958: kf-rm: rpc-trace fn=10 Free seq=0  result=0x0
+12960: kf3: GSP rpc Free seq=0
+12961: kf3: act free: 0xc1d0014b:0xff1fe034: engine object host 0xcafe01a4 freed (340 us, off the GSP lock)
+12963: kf-rm: rpc-trace fn=10 Free seq=0  result=0x0
+12964: kf3: GSP rpc Free seq=0
+12965: kf-rm: rpc-trace fn=10 Free seq=0  result=0x0
+12967: kf3: GSP rpc Free seq=0
+12969: kf3: USER_RING_LAZY_OBSERVE (c1d0014b, ff040016) turns=20 put_cache_hits=0 put_fresh_reads=20 obs_skipped=1 obs_unconditional=18 obs_forced_wait=1 obs_forced_low_credit=0 obs_forced_open_segment=0 obs_forced_ring_full=0 obs_forced_interval=0 inval_mode_change=0 inval_migration=0 inval_reset=0 inval_retire=1
+12970: kf3: DOORBELL-LEDGER tok=0x00001018 route=passthrough rung=0 emulated=0 forwarded=0 host=0x2003f trap=0 fast=0
+12971: kf3: act free: 0xc1d0014b:0xff040016: passthrough 0xc1d0014b:0xff040016 token 0x1018 host 0x2003f objects=0 ctx=CtxBind { initialized: 0, va_bound: 0, bound: false, promotes: 0, evicts: 0 } freed (1652 us, off the GSP lock)
+12973: kf-rm: rpc-trace fn=10 Free seq=0  result=0x0
+12974: kf3: GSP rpc Free seq=0
+12975: kf-rm: rpc-trace fn=10 Free seq=0  result=0x0
+12976: kf3: GSP rpc Free seq=0
+12977: kf-rm: rpc-trace fn=10 Free seq=0  result=0x0
+12978: kf3: GSP rpc Free seq=0
+12979: kf-rm: rpc-trace fn=10 Free seq=0  result=0x0
+12980: kf3: GSP rpc Free seq=0
+12981: kf-rm: rpc-trace fn=10 Free seq=0  result=0x0
+12982: kf3: GSP rpc Free seq=0
+12983: kf-rm: rpc-trace fn=10 Free seq=0  result=0x0
+12984: kf3: GSP rpc Free seq=0
+12986: kf-rm: rpc-trace fn=10 Free seq=0  result=0x0
+12987: kf3: GSP rpc Free seq=0
+12988: kf-rm: rpc-trace fn=10 Free seq=0  result=0x0
+12989: kf3: GSP rpc Free seq=0
+12990: kf-rm: rpc-trace fn=10 Free seq=0  result=0x0
+12991: kf3: GSP rpc Free seq=0
+12992: kf-rm: rpc-trace fn=10 Free seq=0  result=0x0
+12993: kf3: GSP rpc Free seq=0
+12994: kf-rm: rpc-trace fn=10 Free seq=0  result=0x0
+12995: kf3: GSP rpc Free seq=0
+12996: kf-rm: rpc-trace fn=10 Free seq=0  result=0x0
+12997: kf3: GSP rpc Free seq=0
+12998: kf-rm: rpc-trace fn=10 Free seq=0  result=0x0
+12999: kf3: GSP rpc Free seq=0
+13000: kf-rm: rpc-trace fn=10 Free seq=0  result=0x0
+13001: kf3: GSP rpc Free seq=0
+13002: kf-rm: rpc-trace fn=10 Free seq=0  result=0x0
+13003: kf3: GSP rpc Free seq=0
+13004: kf-rm: rpc-trace fn=10 Free seq=0  result=0x0
+13005: kf3: GSP rpc Free seq=0
+13006: kf-rm: rpc-trace fn=10 Free seq=0  result=0x0
+13007: kf3: GSP rpc Free seq=0
+13008: kf3: display fps[cap=75(unset) h0[armed=60.000 tick=59.99 clamped=0 late_max_us=2501 kms=3.9 tear=0.0 core_imm=1 vblirq=0.0 src=free ho=0/0] copies=1.9 skipped=0 checks=0.0 same=979 ondemand=9 over=0]
+13010: kf3: display fps[cap=75(unset) h0[armed=60.000 tick=59.99 clamped=0 late_max_us=2501 kms=0.0 tear=0.0 core_imm=1 vblirq=0.0 src=free ho=0/0] copies=0.0 skipped=0 checks=0.0 same=979 ondemand=9 over=0]
+13012: kf3: display: 16 updates completed, 9523 methods
+13013: kf3: display: 17 updates completed, 9524 methods
+13015: kf3: display fps[cap=75(unset) h0[armed=60.000 tick=59.97 clamped=0 late_max_us=2501 kms=0.9 tear=0.0 core_imm=1 vblirq=0.0 src=free ho=0/0] copies=1.9 skipped=0 checks=58.9 same=1036 ondemand=10 over=0]
+13017: kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x20809064 client=H object=H result=0x56
+13018: kf3: GSP rpc RmControl seq=0
+13020: kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x2080b201 client=H object=H result=none
+13021: kf3: GSP rpc RmControl seq=0
+13022: kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 0 }
+13024: kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x20809064 client=H object=H result=0x56
+13025: kf3: GSP rpc RmControl seq=0
+13027: kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x2080852e client=H object=H result=none
+13028: kf3: GSP rpc RmControl seq=0
+13029: kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 0 }
+13031: kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x2080852f client=H object=H result=none
+13032: kf3: GSP rpc RmControl seq=0
+13033: kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 0 }
+13035: kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x2080a618 client=H object=H result=none
+13036: kf3: GSP rpc RmControl seq=0
+13037: kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 0 }
+13039: kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x2080a619 client=H object=H result=none
+13040: kf-gsp: large RPC fn 76 seq 0 joined from 3 fragment(s), 172120 bytes, answered in 3 replies (rpc_result 0x56)
+13041: kf3: GSP rpc RmControl seq=0
+13042: kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 0 }
+13044: kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x2080853a client=H object=H result=none
+13045: kf3: GSP rpc RmControl seq=0
+13046: kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 0 }
+13048: kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x2080853b client=H object=H result=none
+13049: kf3: GSP rpc RmControl seq=0
+13050: kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 0 }
+13052: kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x20809064 client=H object=H result=0x56
+13053: kf3: GSP rpc RmControl seq=0
+13055: kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x2080b201 client=H object=H result=none
+13056: kf3: GSP rpc RmControl seq=0
+13057: kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 0 }
+13059: kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x20809064 client=H object=H result=0x56
+13060: kf3: GSP rpc RmControl seq=0
+13062: kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x2080b201 client=H object=H result=none
+13063: kf3: GSP rpc RmControl seq=0
+13064: kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 0 }
+13066: kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x20809064 client=H object=H result=0x56
+13067: kf3: GSP rpc RmControl seq=0
+13069: kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x2080b201 client=H object=H result=none
+13070: kf3: GSP rpc RmControl seq=0
+13071: kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 0 }
+13072: kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0xc3720101 client=H object=H result=0x0
+13073: kf3: GSP rpc RmControl seq=0
+13074: kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0xc3720101 client=H object=H result=0x0
+13075: kf3: GSP rpc RmControl seq=0
+13076: kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0xc3720101 client=H object=H result=0x0
+13077: kf3: GSP rpc RmControl seq=0
+13078: kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0xc3720101 client=H object=H result=0x0
+13079: kf3: GSP rpc RmControl seq=0
+13080: kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0xc3720101 client=H object=H result=0x0
+13081: kf3: GSP rpc RmControl seq=0
+13082: kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0xc3720101 client=H object=H result=0x0
+13083: kf3: GSP rpc RmControl seq=0
+13084: kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0xc3720101 client=H object=H result=0x0
+13085: kf3: GSP rpc RmControl seq=0
+13086: kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0xc3720101 client=H object=H result=0x0
+13087: kf3: GSP rpc RmControl seq=0
+13088: kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0xc3720101 client=H object=H result=0x0
+13089: kf3: GSP rpc RmControl seq=0
+13090: kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0xc3720101 client=H object=H result=0x0
+13091: kf3: GSP rpc RmControl seq=0
+13092: kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0xc3720101 client=H object=H result=0x0
+13093: kf3: GSP rpc RmControl seq=0
+13094: kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0xc3720101 client=H object=H result=0x0
+13095: kf3: GSP rpc RmControl seq=0
+13096: kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0xc3720101 client=H object=H result=0x0
+13097: kf3: GSP rpc RmControl seq=0
+13098: kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0xc3720101 client=H object=H result=0x0
+13099: kf3: GSP rpc RmControl seq=0
+13100: kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0xc3720101 client=H object=H result=0x0
+13101: kf3: GSP rpc RmControl seq=0
+13102: kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0xc3720101 client=H object=H result=0x0
+13103: kf3: GSP rpc RmControl seq=0
+13104: kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0xc3720101 client=H object=H result=0x0
+13105: kf3: GSP rpc RmControl seq=0
+13106: kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0xc3720101 client=H object=H result=0x0
+13107: kf3: GSP rpc RmControl seq=0
+13108: kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0xc3720101 client=H object=H result=0x0
+13109: kf3: GSP rpc RmControl seq=0
+13110: kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0xc3720101 client=H object=H result=0x0
+13111: kf3: GSP rpc RmControl seq=0
+13112: kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0xc3720101 client=H object=H result=0x0
+13113: kf3: GSP rpc RmControl seq=0
+13114: kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0xc3720101 client=H object=H result=0x0
+13115: kf3: GSP rpc RmControl seq=0
+13117: kf3: display fps[cap=75(unset) h0[armed=60.000 tick=59.07 clamped=0 late_max_us=3936 kms=0.0 tear=0.0 core_imm=1 vblirq=0.0 src=free ho=0/0] copies=0.0 skipped=0 checks=0.9 same=1098 ondemand=10 over=0]
+13119: kf3: display fps[cap=75(unset) h0[armed=60.000 tick=59.99 clamped=0 late_max_us=3936 kms=0.0 tear=0.0 core_imm=1 vblirq=0.0 src=free ho=0/0] copies=0.0 skipped=0 checks=0.0 same=1098 ondemand=10 over=0]
+13122: kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x20809064 client=H object=H result=0x56
+13123: kf3: GSP rpc RmControl seq=0
+13125: kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x2080b201 client=H object=H result=none
+13126: kf3: GSP rpc RmControl seq=0
+13127: kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 0 }
+13129: kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x20809064 client=H object=H result=0x56
+13130: kf3: GSP rpc RmControl seq=0
+13132: kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x2080852e client=H object=H result=none
+13133: kf3: GSP rpc RmControl seq=0
+13134: kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 0 }
+13136: kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x2080852f client=H object=H result=none
+13137: kf3: GSP rpc RmControl seq=0
+13138: kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 0 }
+13140: kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x2080a618 client=H object=H result=none
+13141: kf3: GSP rpc RmControl seq=0
+13142: kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 0 }
+13144: kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x2080a619 client=H object=H result=none
+13145: kf-gsp: large RPC fn 76 seq 0 joined from 3 fragment(s), 172120 bytes, answered in 3 replies (rpc_result 0x56)
+13146: kf3: GSP rpc RmControl seq=0
+13147: kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 0 }
+13149: kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x2080853a client=H object=H result=none
+13150: kf3: GSP rpc RmControl seq=0
+13151: kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 0 }
+13153: kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x2080853b client=H object=H result=none
+13154: kf3: GSP rpc RmControl seq=0
+13155: kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 0 }
+13157: kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x20809064 client=H object=H result=0x56
+13158: kf3: GSP rpc RmControl seq=0
+13160: kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x2080b201 client=H object=H result=none
+13161: kf3: GSP rpc RmControl seq=0
+13162: kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 0 }
+13164: kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x20809064 client=H object=H result=0x56
+13165: kf3: GSP rpc RmControl seq=0
+13167: kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x2080b201 client=H object=H result=none
+13168: kf3: GSP rpc RmControl seq=0
+13169: kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 0 }
+13171: kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x20809064 client=H object=H result=0x56
+13172: kf3: GSP rpc RmControl seq=0
+13174: kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x2080b201 client=H object=H result=none
+13175: kf3: GSP rpc RmControl seq=0
+13176: kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 0 }
+13177: kf3: display fps[cap=75(unset) h0[armed=60.000 tick=59.06 clamped=0 late_max_us=3936 kms=0.0 tear=0.0 core_imm=1 vblirq=0.0 src=free ho=0/0] copies=0.0 skipped=0 checks=0.0 same=1098 ondemand=10 over=0]
+13179: kf3: display fps[cap=75(unset) h0[armed=60.000 tick=59.98 clamped=0 late_max_us=3936 kms=0.0 tear=0.0 core_imm=1 vblirq=0.0 src=free ho=0/0] copies=0.0 skipped=0 checks=0.0 same=1098 ondemand=10 over=0]
+13181: kf3: display fps[cap=75(unset) h0[armed=60.000 tick=59.05 clamped=0 late_max_us=3936 kms=0.0 tear=0.0 core_imm=1 vblirq=0.0 src=free ho=0/0] copies=0.0 skipped=0 checks=0.0 same=1098 ondemand=10 over=0]
+13182: kf3: PT-NSI host GR0 notifier wake #64: Raise(0) (vector Some(0), live twins 5)
+13183: kf3: display: 18 updates completed, 9534 methods
+13184: kf3: display: 19 updates completed, 9538 methods
+13185: kf3: display: 20 updates completed, 9548 methods
+13186: kf3: display: 21 updates completed, 9552 methods
+13187: kf3: display: 22 updates completed, 9562 methods
+13188: kf3: display: 23 updates completed, 9566 methods
+13189: kf3: display: 24 updates completed, 9576 methods
+13190: kf3: display: 25 updates completed, 9580 methods
+13191: kf3: display: 26 updates completed, 9593 methods
+13192: kf3: display: 27 updates completed, 9594 methods
+13193: kf3: display: 28 updates completed, 9604 methods
+13194: kf3: display: 29 updates completed, 9608 methods
+13195: kf3: display: 30 updates completed, 9618 methods
+13196: kf3: display: 31 updates completed, 9622 methods
+13197: kf3: mem large apply VasKey(13965663797373831248): 0 maps + 3138 unmaps in 6 ms — 0 map verb(s) (0 batch(es) carrying 0 runs), 2 unmap verb(s) (2 range(s) carrying 3138 runs), 0 fallback(s)
+13198: kf3: display: 32 updates completed, 9632 methods
+13199: kf3: display: 33 updates completed, 9636 methods
+13201: kf3: display: 34 updates completed, 9646 methods
+13202: kf3: display: 35 updates completed, 9650 methods
+13203: kf3: display: 36 updates completed, 9660 methods
+13204: kf3: display: 37 updates completed, 9664 methods
+13205: kf3: display: 38 updates completed, 9678 methods
+13206: kf3: display: 39 updates completed, 9683 methods
+13207: kf3: display: 40 updates completed, 9697 methods
+13208: kf3: display: 41 updates completed, 9701 methods
+13209: kf3: display: 42 updates completed, 9715 methods
+13210: kf3: display: 43 updates completed, 9719 methods
+13211: kf3: display: 44 updates completed, 9733 methods
+13212: kf3: display: 45 updates completed, 9737 methods
+13213: kf3: display: 46 updates completed, 9751 methods
+13214: kf3: display: 47 updates completed, 9755 methods
+13215: kf3: display: 48 updates completed, 9769 methods
+13216: kf3: display: 49 updates completed, 9773 methods
+13217: kf3: display: 50 updates completed, 9787 methods
+13218: kf3: display: 51 updates completed, 9791 methods
+13219: kf3: display: 52 updates completed, 9805 methods
+13220: kf3: display: 53 updates completed, 9809 methods
+13221: kf3: PT-NSI host GR0 notifier wake #128: Raise(0) (vector Some(0), live twins 5)
+13222: kf3: display: 54 updates completed, 9823 methods
+13223: kf3: display: 55 updates completed, 9827 methods
+13224: kf3: display: 56 updates completed, 9841 methods
+13225: kf3: display: 57 updates completed, 9845 methods
+13226: kf3: display: 58 updates completed, 9859 methods
+13227: kf3: display: 59 updates completed, 9863 methods
+13228: kf3: display: 60 updates completed, 9877 methods
+13229: kf3: display: 61 updates completed, 9881 methods
+13230: kf3: display: 62 updates completed, 9895 methods
+13231: kf3: display: 63 updates completed, 9899 methods
+13232: kf3: display fps[cap=75(unset) h0[armed=60.000 tick=59.94 clamped=0 late_max_us=3936 kms=22.9 tear=0.0 core_imm=1 vblirq=0.0 src=free ho=0/0] copies=21.9 skipped=0 checks=0.0 same=1098 ondemand=10 over=0]
+13233: kf3: display: 64 updates completed, 9913 methods
+13235: kf3: display fps[cap=75(unset) h0[armed=60.000 tick=59.97 clamped=0 late_max_us=3936 kms=5.9 tear=0.0 core_imm=1 vblirq=0.0 src=free ho=0/0] copies=5.9 skipped=0 checks=0.0 same=1098 ondemand=10 over=0]
+13236: kf3: PT-NSI host FIFO_EVENT_MTHD edge #4096: Raise(1) (guest armed=true, vector Some(1))
+13237: kf3: PT-NSI host GR0 notifier wake #256: Raise(0) (vector Some(0), live twins 5)
+13239: kf3: display fps[cap=75(unset) h0[armed=60.000 tick=59.07 clamped=0 late_max_us=3936 kms=5.9 tear=0.0 core_imm=1 vblirq=0.0 src=free ho=0/0] copies=5.9 skipped=0 checks=0.0 same=1098 ondemand=10 over=0]
+13241: kf3: display fps[cap=75(unset) h0[armed=60.000 tick=59.95 clamped=0 late_max_us=3936 kms=14.9 tear=0.0 core_imm=1 vblirq=0.0 src=free ho=0/0] copies=14.9 skipped=0 checks=0.0 same=1098 ondemand=10 over=0]
+13242: kf3: PT-NSI host GR0 notifier wake #512: Raise(0) (vector Some(0), live twins 5)
+13245: kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x20809064 client=H object=H result=0x56
+13246: kf3: GSP rpc RmControl seq=0
+13248: kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x2080b201 client=H object=H result=none
+13249: kf3: GSP rpc RmControl seq=0
+13250: kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 0 }
+13252: kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x20809064 client=H object=H result=0x56
+13253: kf3: GSP rpc RmControl seq=0
+13255: kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x2080852e client=H object=H result=none
+13256: kf3: GSP rpc RmControl seq=0
+13257: kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 0 }
+13259: kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x2080852f client=H object=H result=none
+13260: kf3: GSP rpc RmControl seq=0
+13261: kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 0 }
+13263: kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x2080a618 client=H object=H result=none
+13264: kf3: GSP rpc RmControl seq=0
+13265: kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 0 }
+13267: kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x2080a619 client=H object=H result=none
+13268: kf-gsp: large RPC fn 76 seq 0 joined from 3 fragment(s), 172120 bytes, answered in 3 replies (rpc_result 0x56)
+13269: kf3: GSP rpc RmControl seq=0
+13270: kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 0 }
+13272: kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x2080853a client=H object=H result=none
+13273: kf3: GSP rpc RmControl seq=0
+13274: kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 0 }
+13276: kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x2080853b client=H object=H result=none
+13277: kf3: GSP rpc RmControl seq=0
+13278: kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 0 }
+13280: kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x20809064 client=H object=H result=0x56
+13281: kf3: GSP rpc RmControl seq=0
+13283: kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x2080b201 client=H object=H result=none
+13284: kf3: GSP rpc RmControl seq=0
+13285: kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 0 }
+13286: kf3: display fps[cap=75(unset) h0[armed=60.000 tick=59.97 clamped=0 late_max_us=3936 kms=58.9 tear=0.0 core_imm=1 vblirq=0.0 src=free ho=0/0] copies=58.9 skipped=0 checks=0.0 same=1098 ondemand=10 over=0]
+13288: kf3: PT-NSI host GR0 notifier wake #1024: Raise(0) (vector Some(0), live twins 5)
+13289: kf-rm: server-context-only PDE copy client=H vaspace=0xff000850 page_size=0x1000 levels=[shift29 phys=0x1ead1b000 size=0x1000 ap=1] (inert)
+13290: kf-rm: server-context-only PDE copy client=H vaspace=0xff000850 page_size=0x1000 levels=[shift29 phys=0x1ead1b000 size=0x1000 ap=1] (inert)
+13291: kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x90f10106 client=H object=H result=0x0
+13292: kf3: GSP rpc RmControl seq=0
+13293: kf3: display fps[cap=75(unset) h0[armed=60.000 tick=59.36 clamped=0 late_max_us=3936 kms=57.3 tear=0.0 core_imm=1 vblirq=0.0 src=free ho=0/0] copies=57.3 skipped=0 checks=0.0 same=1098 ondemand=10 over=0]
+13295: kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x20809064 client=H object=H result=0x56
+13296: kf3: GSP rpc RmControl seq=0
+13298: kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x2080b201 client=H object=H result=none
+13299: kf3: GSP rpc RmControl seq=0
+13300: kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 0 }
+13302: kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x20809064 client=H object=H result=0x56
+13303: kf3: GSP rpc RmControl seq=0
+13305: kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x2080852e client=H object=H result=none
+13306: kf3: GSP rpc RmControl seq=0
+13307: kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 0 }
+13309: kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x2080852f client=H object=H result=none
+13310: kf3: GSP rpc RmControl seq=0
+13311: kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 0 }
+13313: kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x2080a618 client=H object=H result=none
+13314: kf3: GSP rpc RmControl seq=0
+13315: kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 0 }
+13317: kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x2080a619 client=H object=H result=none
+13318: kf-gsp: large RPC fn 76 seq 0 joined from 3 fragment(s), 172120 bytes, answered in 3 replies (rpc_result 0x56)
+13319: kf3: GSP rpc RmControl seq=0
+13320: kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 0 }
+13322: kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x2080853a client=H object=H result=none
+13323: kf3: GSP rpc RmControl seq=0
+13324: kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 0 }
+13326: kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x2080853b client=H object=H result=none
+13327: kf3: GSP rpc RmControl seq=0
+13328: kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 0 }
+13330: kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x20809064 client=H object=H result=0x56
+13331: kf3: GSP rpc RmControl seq=0
+13333: kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x2080b201 client=H object=H result=none
+13334: kf3: GSP rpc RmControl seq=0
+13335: kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 0 }
+13337: kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x20809064 client=H object=H result=0x56
+13338: kf3: GSP rpc RmControl seq=0
+13339: kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x007302a5 client=H object=H result=none
+13340: kf3: GSP rpc RmControl seq=0
+13341: kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 0 }
+13342: kf-rm: chanlink: client 0xc1d00150 root: kernel=false internal=false
+13343: kf-rm: rpc-trace fn=103 RmAlloc seq=0 class=0x0000 client=H parent=H handle=H result=0x0
+13344: kf3: GSP rpc RmAlloc seq=0
+13345: kf-rm: rpc-trace fn=103 RmAlloc seq=0 class=0x0080 client=H parent=H handle=H device_facts=DeviceAllocFacts { device_id: 0, h_client_share: c1d00150, h_target_client: c1d00002, h_target_device: ff010000, flags: 131e, va_space_size: 120000000, va_mode: 0 } result=0x0
+13346: kf3: GSP rpc RmAlloc seq=0
+13347: kf-rm: rpc-trace fn=103 RmAlloc seq=0 class=0x2080 client=H parent=H handle=H result=0x0
+13348: kf3: GSP rpc RmAlloc seq=0
+13349: kf-rm: chanlink: client 0xc1d00151 root: kernel=false internal=false
+13350: kf-rm: rpc-trace fn=103 RmAlloc seq=0 class=0x0000 client=H parent=H handle=H result=0x0
+13351: kf3: GSP rpc RmAlloc seq=0
+13352: kf-rm: rpc-trace fn=103 RmAlloc seq=0 class=0x0080 client=H parent=H handle=H device_facts=DeviceAllocFacts { device_id: 0, h_client_share: c1d00151, h_target_client: c1d00151, h_target_device: ff020000, flags: 1036, va_space_size: 0, va_mode: 0 } result=0x0
+13353: kf3: GSP rpc RmAlloc seq=0
+13354: kf-rm: rpc-trace fn=103 RmAlloc seq=0 class=0x2080 client=H parent=H handle=H result=0x0
+13355: kf3: GSP rpc RmAlloc seq=0
+13356: kf-rm: rpc-trace fn=103 RmAlloc seq=0 class=0x0073 client=H parent=H handle=H result=0x0
+13357: kf3: GSP rpc RmAlloc seq=0
+13358: kf-rm: chanlink: FERMI_VASPACE_A 0xc1d00150:0xff000850 under 0xff020000 (device default for it: 0xff000850) VAS-FACTS index=Some(0) flags=Some(5) bigPageSize=Some(10000) vaBase(lo32)=Some(0) vaSize(lo32)=Some(20000000)
+13359: kf-rm: chanlink: VAS-DECL 0xc1d00150:0xff000850 vaBase=0x100000000 vaSize=0x120000000 end=Some(220000000) shared_management=true
+13360: kf-rm: rpc-trace fn=103 RmAlloc seq=0 class=0x90f1 client=H parent=H handle=H result=0x0
+13361: kf3: GSP rpc RmAlloc seq=0
+13362: kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x90f10106 client=H object=H result=0x0
+13364: kf3: GSP rpc RmControl seq=0
+13365: kf3: VasKey(13965663891863111760) mirror space=0xcafe00f3: windows=none rings=none (recycled)
+13367: kf-rm: chanlink: Device 0xc1d00150:0xff020000 default VA space set to 0xff000850 (SET_DEFAULT_VASPACE)
+13368: kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x00801812 client=H object=H result=0x0
+13370: kf3: GSP rpc RmControl seq=0
+13372: kf-rm: rpc-trace fn=103 RmAlloc seq=0 class=0x0070 client=H parent=H handle=H result=0x0
+13373: kf3: GSP rpc RmAlloc seq=0
+13374: kf-rm: rpc-trace fn=103 RmAlloc seq=0 class=0x0070 client=H parent=H handle=H result=0x0
+13375: kf3: GSP rpc RmAlloc seq=0
+13376: kf-rm: rpc-trace fn=103 RmAlloc seq=0 class=0x9096 client=H parent=H handle=H result=0x0
+13377: kf3: GSP rpc RmAlloc seq=0
+13379: kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x00809908 client=H object=H result=none
+13380: kf3: GSP rpc RmControl seq=0
+13381: kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 0 }
+13382: kf-rm: chanlink: client 0xc1d00152 root: kernel=false internal=false
+13383: kf-rm: rpc-trace fn=103 RmAlloc seq=0 class=0x0000 client=H parent=H handle=H result=0x0
+13384: kf3: GSP rpc RmAlloc seq=0
+13385: kf-rm: rpc-trace fn=103 RmAlloc seq=0 class=0x0080 client=H parent=H handle=H device_facts=DeviceAllocFacts { device_id: 0, h_client_share: c1d00150, h_target_client: c1d00002, h_target_device: ff010000, flags: 38, va_space_size: 10000000000, va_mode: 0 } result=0x0
+13386: kf3: GSP rpc RmAlloc seq=0
+13387: kf-rm: rpc-trace fn=103 RmAlloc seq=0 class=0x2080 client=H parent=H handle=H result=0x0
+13388: kf3: GSP rpc RmAlloc seq=0
+13389: kf-rm: rpc-trace fn=103 RmAlloc seq=0 class=0x0070 client=H parent=H handle=H result=0x0
+13390: kf3: GSP rpc RmAlloc seq=0
+13391: kf-rm: rpc-trace fn=103 RmAlloc seq=0 class=0x0070 client=H parent=H handle=H result=0x0
+13392: kf3: GSP rpc RmAlloc seq=0
+13393: kf3: FIFO_GET_LATENCY_BUFFER_SIZE engine 0x1: gp=0x240 pb=0x2880 (the host's answer)
+13394: kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x0080170e client=H object=H result=0x0
+13395: kf3: GSP rpc RmControl seq=0
+13396: kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x20802a08 client=H object=H result=0x0
+13397: kf3: GSP rpc RmControl seq=0
+13398: kf-rm: rpc-trace fn=103 RmAlloc seq=0 class=0xa06c client=H parent=H handle=H tsg_facts=TsgAllocFacts { h_vaspace: 0, engine_type: 1 } result=0x0
+13399: kf3: GSP rpc RmAlloc seq=0
+13400: kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0xa06c010a client=H object=H result=0x0
+13401: kf3: GSP rpc RmControl seq=0
+13402: kf-rm: rpc-trace fn=103 RmAlloc seq=0 class=0x9067 client=H parent=H handle=H result=0x0
+13403: kf3: GSP rpc RmAlloc seq=0
+13404: kf-rm: chanlink: CLASSIFY 0xc1d00152:0xff040012 USER WORK -> Passthrough (subcontext and a process other than the kernel driver's)
+13406: kf-rm: rpc-trace fn=103 RmAlloc seq=0 class=0xc56f client=H parent=H handle=H result=0x0
+13408: kf3: GSP rpc RmAlloc seq=0
+13409: kf3: USER_RING_PREPARE elapsed_us=95 ok=true
+13410: kf3: USER_RING_INIT phase=2 elapsed_us=48
+13411: kf-host: channel birth h=0xcafe0273 engine=0x1 reply_flags=0x00000080 PRIVILEGED_CHANNEL=0 privilege=USER cap_sys_admin=cleared-for-call
+13412: kf3: act Windows USER ring birth: Windows USER ring chan 0xc1d00152:0xff040012 BORN USER private-read-only-ring token 0x14 host 0x3b; OWN VAS; worker-only; source=0x4000000x8192 declared_subdevice=Some(0) native_scan_subdevice=0x1 (1960 us, off the GSP lock)
+13414: kf-rm: rpc-trace fn=103 RmAlloc seq=0 class=0x5080 client=H parent=H handle=H result=0x0
+13416: kf3: GSP rpc RmAlloc seq=0
+13417: kf3: act USER ring software object: USER_RING_5080 admitted own 0xc1d00152:0xff1fe010, classID1 host 0xcafe0274; no host registrations (242 us, off the GSP lock)
+13419: kf-rm: rpc-trace fn=103 RmAlloc seq=0 class=0xc7b5 client=H parent=H handle=H result=0x0
+13421: kf3: GSP rpc RmAlloc seq=0
+13422: kf3: act engine object: 0xc1d00152:0xff1fe034 class 0xc7b5 (DmaCopy) on twin host 0x3b -> host object 0xcafe0275 (218 us, off the GSP lock)
+13424: kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x20800a38 client=H object=H result=0x0
+13425: kf3: GSP rpc RmControl seq=0
+13426: kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x20800a3a client=H object=H result=none
+13427: kf3: GSP rpc RmControl seq=0
+13428: kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 0 }
+13429: kf-rm: chanlink: GPU_PROMOTE_CTX on 0xc1d00152:0xff030000 params=560 rpc_flags=0x0
+13430: kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x2080012b client=H object=H result=0x0
+13432: kf3: act promote ctx: chan 0xc1d00152:0xff040012 GPU_PROMOTE_CTX SATISFIED BY TWIN host 0x3b (host GR object(s) [] — none yet: the engine object this promote precedes births the host context): entries=3 init_ids=0x4 va_ids=0xa04 bound=true — not forwarded, no guest byte touched (4 us, off the GSP lock)
+13433: kf3: GSP rpc RmControl seq=0
+13435: kf-rm: rpc-trace fn=103 RmAlloc seq=0 class=0xa140 client=H parent=H handle=H result=0x0
+13437: kf3: GSP rpc RmAlloc seq=0
+13438: kf3: act engine object: 0xc1d00152:0xff1fe01a class 0xa140 (InlineToMemory) on twin host 0x3b -> host object 0xcafe0276 (1285 us, off the GSP lock)
+13440: kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x20800a38 client=H object=H result=0x0
+13441: kf3: GSP rpc RmControl seq=0
+13442: kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x20800a3a client=H object=H result=none
+13443: kf3: GSP rpc RmControl seq=0
+13444: kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 0 }
+13445: kf-rm: chanlink: GPU_PROMOTE_CTX on 0xc1d00152:0xff030000 params=560 rpc_flags=0x0
+13446: kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x2080012b client=H object=H result=0x0
+13448: kf3: GSP rpc RmControl seq=0
+13449: kf3: act promote ctx: chan 0xc1d00152:0xff040012 GPU_PROMOTE_CTX SATISFIED BY TWIN host 0x3b (host GR object(s) [] — none yet: the engine object this promote precedes births the host context): entries=4 init_ids=0x0 va_ids=0x78 bound=true — not forwarded, no guest byte touched (5 us, off the GSP lock)
+13451: kf-rm: rpc-trace fn=103 RmAlloc seq=0 class=0x902d client=H parent=H handle=H result=0x0
+13453: kf3: GSP rpc RmAlloc seq=0
+13454: kf3: act engine object: 0xc1d00152:0xff1fe02c class 0x902d (TwoD) on twin host 0x3b -> host object 0xcafe0277 (987 us, off the GSP lock)
+13457: kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x20809064 client=H object=H result=0x56
+13458: kf3: GSP rpc RmControl seq=0
+13459: kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x20800a38 client=H object=H result=0x0
+13460: kf3: GSP rpc RmControl seq=0
+13461: kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x20800a3a client=H object=H result=none
+13462: kf3: GSP rpc RmControl seq=0
+13463: kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 0 }
+13464: kf-rm: rpc-trace fn=103 RmAlloc seq=0 class=0xc997 client=H parent=H handle=H result=0x0
+13466: kf3: GSP rpc RmAlloc seq=0
+13467: kf3: act engine object: 0xc1d00152:0xff1fe026 class 0xc997 (ThreeD) on twin host 0x3b -> host object 0xcafe0278 (604 us, off the GSP lock)
+13469: kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x007302a5 client=H object=H result=none
+13470: kf3: GSP rpc RmControl seq=0
+13471: kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 0 }
+13472: kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x20800a38 client=H object=H result=0x0
+13473: kf3: GSP rpc RmControl seq=0
+13474: kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x20800a3a client=H object=H result=none
+13475: kf3: GSP rpc RmControl seq=0
+13476: kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 0 }
+13477: kf-rm: rpc-trace fn=103 RmAlloc seq=0 class=0xc9c0 client=H parent=H handle=H result=0x0
+13479: kf3: GSP rpc RmAlloc seq=0
+13480: kf3: act engine object: 0xc1d00152:0xff1fe032 class 0xc9c0 (Compute) on twin host 0x3b -> host object 0xcafe0279 (518 us, off the GSP lock)
+13482: kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0xa06c0103 client=H object=H result=0x0
+13484: kf3: GSP rpc RmControl seq=0
+13485: kf3: act timeslice: 0xc1d00152:0xff0e0000 SET_TIMESLICE 400 us on 1 twin group(s) (269 us, off the GSP lock)
+13487: kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0xa06c0101 client=H object=H result=0x0
+13489: kf3: GSP rpc RmControl seq=0
+13490: kf3: act schedule: 0xc1d00152:0xff0e0000 GPFIFO_SCHEDULE enable=true on 1 twin(s) (0 restarted after STOP) (336 us, off the GSP lock)
+13492: kf-rm: chanlink: client 0xc1d00153 root: kernel=false internal=false
+13493: kf-rm: rpc-trace fn=103 RmAlloc seq=0 class=0x0000 client=H parent=H handle=H result=0x0
+13494: kf3: GSP rpc RmAlloc seq=0
+13495: kf-rm: rpc-trace fn=103 RmAlloc seq=0 class=0x0080 client=H parent=H handle=H device_facts=DeviceAllocFacts { device_id: 0, h_client_share: c1d00153, h_target_client: c1d00002, h_target_device: ff010000, flags: 131e, va_space_size: 120000000, va_mode: 0 } result=0x0
+13496: kf3: GSP rpc RmAlloc seq=0
+13497: kf-rm: rpc-trace fn=103 RmAlloc seq=0 class=0x2080 client=H parent=H handle=H result=0x0
+13498: kf3: GSP rpc RmAlloc seq=0
+13499: kf-rm: chanlink: client 0xc1d00154 root: kernel=false internal=false
+13500: kf-rm: rpc-trace fn=103 RmAlloc seq=0 class=0x0000 client=H parent=H handle=H result=0x0
+13501: kf3: GSP rpc RmAlloc seq=0
+13502: kf-rm: rpc-trace fn=103 RmAlloc seq=0 class=0x0080 client=H parent=H handle=H device_facts=DeviceAllocFacts { device_id: 0, h_client_share: c1d00154, h_target_client: c1d00154, h_target_device: ff020000, flags: 1036, va_space_size: 0, va_mode: 0 } result=0x0
+13503: kf3: GSP rpc RmAlloc seq=0
+13504: kf-mem: SKED-REFLECTED leaf 0x120000000+0x1000 (ap=0 at=0x10000) placed as a message-kind host mapping — device-side launches through it reach the host scheduler
+13505: kf-rm: rpc-trace fn=103 RmAlloc seq=0 class=0x2080 client=H parent=H handle=H result=0x0
+13506: kf3: GSP rpc RmAlloc seq=0
+13507: kf-rm: rpc-trace fn=103 RmAlloc seq=0 class=0x0073 client=H parent=H handle=H result=0x0
+13508: kf3: GSP rpc RmAlloc seq=0
+13509: kf-rm: chanlink: FERMI_VASPACE_A 0xc1d00153:0xff000850 under 0xff020000 (device default for it: 0xff000850) VAS-FACTS index=Some(0) flags=Some(5) bigPageSize=Some(10000) vaBase(lo32)=Some(0) vaSize(lo32)=Some(20000000)
+13510: kf-rm: chanlink: VAS-DECL 0xc1d00153:0xff000850 vaBase=0x100000000 vaSize=0x120000000 end=Some(220000000) shared_management=true
+13511: kf-rm: rpc-trace fn=103 RmAlloc seq=0 class=0x90f1 client=H parent=H handle=H result=0x0
+13512: kf3: GSP rpc RmAlloc seq=0
+13513: kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x90f10106 client=H object=H result=0x0
+13515: kf3: GSP rpc RmControl seq=0
+13516: kf3: VasKey(13965663904748013648) mirror space=0xcafe027a: windows=none rings=none (1500 us: vaspace 1497 ram_obj 0)
+13518: kf-rm: chanlink: Device 0xc1d00153:0xff020000 default VA space set to 0xff000850 (SET_DEFAULT_VASPACE)
+13519: kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x00801812 client=H object=H result=0x0
+13521: kf3: GSP rpc RmControl seq=0
+13523: kf-rm: rpc-trace fn=103 RmAlloc seq=0 class=0x0070 client=H parent=H handle=H result=0x0
+13524: kf3: GSP rpc RmAlloc seq=0
+13525: kf-rm: rpc-trace fn=103 RmAlloc seq=0 class=0x0070 client=H parent=H handle=H result=0x0
+13526: kf3: GSP rpc RmAlloc seq=0
+13527: kf-rm: rpc-trace fn=103 RmAlloc seq=0 class=0x9096 client=H parent=H handle=H result=0x0
+13528: kf3: GSP rpc RmAlloc seq=0
+13529: kf-rm: DEFERRED-API 0x50800101 on 0xc1d00015:0xff1fe010 hApiHandle=0x40000010 cmd=0x2080012d psz=584 -> 0x0
+13530: kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x50800101 client=H object=H result=0x0
+13531: kf3: GSP rpc RmControl seq=0
+13532: kf-rm: DEFERRED-API 0x50800101 on 0xc1d00015:0xff1fe010 hApiHandle=0x40000011 cmd=0x2080012b psz=584 -> 0x0
+13533: kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x50800101 client=H object=H result=0x0
+13534: kf3: GSP rpc RmControl seq=0
+13535: kf3: DEFERRED-API trigger #15 token 0x3 subch 5 value 0x1 method 0x200 hApiHandle 0x40000010 on 0xc1d00015:0xff1fe010 cmd 0x2080012d: InitializeCtx { engine_type: 1, h_client: 3251634512, chid: 20, chan_client: 3251634514, object: 4279107584, virt_memory: 0, phys_address: 7960035328, phys_attr: 0, dma_handle: 0, index: 20, size: 2060288 }
+13538: kf3: DEFERRED-API trigger #16 token 0x3 subch 5 value 0x1 method 0x200 hApiHandle 0x40000011 on 0xc1d00015:0xff1fe010 cmd 0x2080012b: PromoteCtx { engine_type: 1, h_client: 3251634512, chid: 20, chan_client: 3251634514, object: 4279107584, virt_memory: 0, virt_address: 69632, size: 2060288, entry_count: 0 }
+13539: kf3: act deferred API context: PromoteCtx { engine_type: 1, h_client: 3251634512, chid: 20, chan_client: 3251634514, object: 4279107584, virt_memory: 0, virt_address: 69632, size: 2060288, entry_count: 0 } on 0xc1d00152:0xff0e0000 -> Windows user-work Passthrough twin(s) [3b]: satisfied by each twin's own host context (owner ruling B / §U / §V) (7 us, off the GSP lock)
+13540: kf3: DEFERRED-API token 0x3 hApiHandle 0x40000011 DONE #16: PromoteCtx { engine_type: 1, h_client: 3251634512, chid: 20, chan_client: 3251634514, object: 4279107584, virt_memory: 0, virt_address: 69632, size: 2060288, entry_count: 0 } on 0xc1d00152:0xff0e0000 -> Windows user-work Passthrough twin(s) [3b]: satisfied by each twin's own host context (owner ruling B / §U / §V)
+13541: kf3: NSI RELAY host non-stall (FIFO_EVENT_MTHD) -> guest GR0 vector 0: a Translated GR-tier ring retired engine-written work (rings=2, relay #13)
+13542: kf-rm: PROBE KF3_PREEMPT_BIND_PROBE 0x20801211 client=H object=H flags=0x2 hClient=0xc1d00152 hChannel=0xff0e0000 gfxp=1 cilp=0: NV_OK, request echoed, NOTHING bound on the host — a probe, not a shipped behaviour #15
+13543: kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x20801211 client=H object=H result=0x0
+13544: kf3: GSP rpc RmControl seq=0
+13545: kf-rm: chanlink: client 0xc1d00155 root: kernel=false internal=false
+13546: kf-rm: rpc-trace fn=103 RmAlloc seq=0 class=0x0000 client=H parent=H handle=H result=0x0
+13547: kf3: GSP rpc RmAlloc seq=0
+13548: kf-rm: rpc-trace fn=103 RmAlloc seq=0 class=0x0080 client=H parent=H handle=H device_facts=DeviceAllocFacts { device_id: 0, h_client_share: c1d00153, h_target_client: c1d00002, h_target_device: ff010000, flags: 38, va_space_size: 10000000000, va_mode: 0 } result=0x0
+13549: kf3: GSP rpc RmAlloc seq=0
+13550: kf-rm: rpc-trace fn=103 RmAlloc seq=0 class=0x2080 client=H parent=H handle=H result=0x0
+13551: kf3: GSP rpc RmAlloc seq=0
+13552: kf-rm: rpc-trace fn=103 RmAlloc seq=0 class=0x0070 client=H parent=H handle=H result=0x0
+13553: kf3: GSP rpc RmAlloc seq=0
+13554: kf-rm: rpc-trace fn=103 RmAlloc seq=0 class=0x0070 client=H parent=H handle=H result=0x0
+13555: kf3: GSP rpc RmAlloc seq=0
+13556: kf3: FIFO_GET_LATENCY_BUFFER_SIZE engine 0x1: gp=0x240 pb=0x2880 (the host's answer)
+13557: kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x0080170e client=H object=H result=0x0
+13558: kf3: GSP rpc RmControl seq=0
+13559: kf-rm: PROBE KF3_ZCULL_BIND_PROBE 0x20801208 from client=H names hClient=0xc1d00152 hChannel=0xff040012 va=0x2b94000 mode=2: NV_OK, request echoed, NOTHING bound on the host — a probe #9
+13560: kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x20801208 client=H object=H result=0x0
+13561: kf3: GSP rpc RmControl seq=0
+13562: kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x20802a08 client=H object=H result=0x0
+13563: kf3: GSP rpc RmControl seq=0
+13564: kf-rm: rpc-trace fn=103 RmAlloc seq=0 class=0xa06c client=H parent=H handle=H tsg_facts=TsgAllocFacts { h_vaspace: 0, engine_type: 1 } result=0x0
+13565: kf3: GSP rpc RmAlloc seq=0
+13566: kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0xa06c010a client=H object=H result=0x0
+13567: kf3: GSP rpc RmControl seq=0
+13568: kf-rm: PROBE KF3_PREEMPT_BIND_PROBE 0x20801211 client=H object=H flags=0x1 hClient=0xc1d00152 hChannel=0xff0e0000 gfxp=0 cilp=1: NV_OK, request echoed, NOTHING bound on the host — a probe, not a shipped behaviour #16
+13569: kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x20801211 client=H object=H result=0x0
+13570: kf3: GSP rpc RmControl seq=0
+13571: kf-rm: rpc-trace fn=103 RmAlloc seq=0 class=0x9067 client=H parent=H handle=H result=0x0
+13572: kf3: GSP rpc RmAlloc seq=0
+13573: kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x20801111 client=H object=H result=0x0
+13574: kf3: GSP rpc RmControl seq=0
+13575: kf-rm: chanlink: CLASSIFY 0xc1d00155:0xff040016 USER WORK -> Passthrough (subcontext and a process other than the kernel driver's)
+13577: kf-rm: rpc-trace fn=103 RmAlloc seq=0 class=0xc56f client=H parent=H handle=H result=0x0
+13579: kf3: GSP rpc RmAlloc seq=0
+13580: kf3: USER_RING_PREPARE elapsed_us=95 ok=true
+13581: kf3: USER_RING_INIT phase=2 elapsed_us=54
+13582: kf-host: channel birth h=0xcafe0283 engine=0x1 reply_flags=0x00000080 PRIVILEGED_CHANNEL=0 privilege=USER cap_sys_admin=cleared-for-call
+13583: kf3: act Windows USER ring birth: Windows USER ring chan 0xc1d00155:0xff040016 BORN USER private-read-only-ring token 0x18 host 0x3f; OWN VAS; worker-only; source=0x4000000x8192 declared_subdevice=Some(0) native_scan_subdevice=0x1 (1985 us, off the GSP lock)
+13585: kf-rm: rpc-trace fn=103 RmAlloc seq=0 class=0x5080 client=H parent=H handle=H result=0x0
+13587: kf3: GSP rpc RmAlloc seq=0
+13588: kf3: act USER ring software object: USER_RING_5080 admitted own 0xc1d00155:0xff1fe010, classID1 host 0xcafe0284; no host registrations (255 us, off the GSP lock)
+13590: kf-rm: rpc-trace fn=103 RmAlloc seq=0 class=0xc7b5 client=H parent=H handle=H result=0x0
+13592: kf3: GSP rpc RmAlloc seq=0
+13593: kf3: act engine object: 0xc1d00155:0xff1fe034 class 0xc7b5 (DmaCopy) on twin host 0x3f -> host object 0xcafe0285 (223 us, off the GSP lock)
+13595: kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x20800a38 client=H object=H result=0x0
+13596: kf3: GSP rpc RmControl seq=0
+13597: kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x20800a3a client=H object=H result=none
+13598: kf3: GSP rpc RmControl seq=0
+13599: kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 0 }
+13600: kf-rm: chanlink: GPU_PROMOTE_CTX on 0xc1d00155:0xff030000 params=560 rpc_flags=0x0
+13601: kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x2080012b client=H object=H result=0x0
+13603: kf3: GSP rpc RmControl seq=0
+13604: kf3: act promote ctx: chan 0xc1d00155:0xff040016 GPU_PROMOTE_CTX SATISFIED BY TWIN host 0x3f (host GR object(s) [] — none yet: the engine object this promote precedes births the host context): entries=3 init_ids=0x4 va_ids=0xa04 bound=true — not forwarded, no guest byte touched (3 us, off the GSP lock)
+13606: kf-rm: rpc-trace fn=103 RmAlloc seq=0 class=0xa140 client=H parent=H handle=H result=0x0
+13608: kf3: GSP rpc RmAlloc seq=0
+13609: kf3: act engine object: 0xc1d00155:0xff1fe01a class 0xa140 (InlineToMemory) on twin host 0x3f -> host object 0xcafe0286 (1324 us, off the GSP lock)
+13611: kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x20800a38 client=H object=H result=0x0
+13612: kf3: GSP rpc RmControl seq=0
+13613: kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x20800a3a client=H object=H result=none
+13614: kf3: GSP rpc RmControl seq=0
+13615: kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 0 }
+13616: kf-rm: chanlink: GPU_PROMOTE_CTX on 0xc1d00155:0xff030000 params=560 rpc_flags=0x0
+13617: kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x2080012b client=H object=H result=0x0
+13619: kf3: GSP rpc RmControl seq=0
+13620: kf3: act promote ctx: chan 0xc1d00155:0xff040016 GPU_PROMOTE_CTX SATISFIED BY TWIN host 0x3f (host GR object(s) [] — none yet: the engine object this promote precedes births the host context): entries=4 init_ids=0x0 va_ids=0x78 bound=true — not forwarded, no guest byte touched (4 us, off the GSP lock)
+13622: kf-rm: rpc-trace fn=103 RmAlloc seq=0 class=0x902d client=H parent=H handle=H result=0x0
+13624: kf3: GSP rpc RmAlloc seq=0
+13625: kf3: act engine object: 0xc1d00155:0xff1fe02c class 0x902d (TwoD) on twin host 0x3f -> host object 0xcafe0287 (1180 us, off the GSP lock)
+13627: kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x20800a38 client=H object=H result=0x0
+13628: kf3: GSP rpc RmControl seq=0
+13629: kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x20800a3a client=H object=H result=none
+13630: kf3: GSP rpc RmControl seq=0
+13631: kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 0 }
+13632: kf-rm: rpc-trace fn=103 RmAlloc seq=0 class=0xc997 client=H parent=H handle=H result=0x0
+13634: kf3: GSP rpc RmAlloc seq=0
+13635: kf3: act engine object: 0xc1d00155:0xff1fe026 class 0xc997 (ThreeD) on twin host 0x3f -> host object 0xcafe0288 (678 us, off the GSP lock)
+13637: kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x20800a38 client=H object=H result=0x0
+13638: kf3: GSP rpc RmControl seq=0
+13639: kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x20800a3a client=H object=H result=none
+13640: kf3: GSP rpc RmControl seq=0
+13641: kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 0 }
+13642: kf-rm: rpc-trace fn=103 RmAlloc seq=0 class=0xc9c0 client=H parent=H handle=H result=0x0
+13644: kf3: GSP rpc RmAlloc seq=0
+13645: kf3: act engine object: 0xc1d00155:0xff1fe032 class 0xc9c0 (Compute) on twin host 0x3f -> host object 0xcafe0289 (665 us, off the GSP lock)
