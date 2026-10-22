@@ -412,7 +412,10 @@ impl Registry {
     /// changing entries when the original allocation is gone.
     pub fn executed_entry(&self, key: ObjKey, entry: &Entry, tlb_flushed: bool) -> bool {
         let mut st = self.st();
-        let current = st.objects.get(&key).and_then(|t| t.entries.get(&entry.handle));
+        let current = st
+            .objects
+            .get(&key)
+            .and_then(|t| t.entries.get(&entry.handle));
         if !current.is_some_and(|e| Arc::ptr_eq(&e.allocation, &entry.allocation)) {
             st.stats.stale_completions += 1;
             return false;
@@ -581,7 +584,10 @@ mod tests {
         assert_eq!(r.stats().0, 0);
         assert_eq!(r.lookup(OBJ, 0x4000_0002), fresh.lookup(OBJ, 0x4000_0002));
         assert_eq!(r.entries(OBJ), fresh.entries(OBJ));
-        assert_eq!(reg(&r, 0x4000_0002, 0x2080_012d, 0), reg(&fresh, 0x4000_0002, 0x2080_012d, 0));
+        assert_eq!(
+            reg(&r, 0x4000_0002, 0x2080_012d, 0),
+            reg(&fresh, 0x4000_0002, 0x2080_012d, 0)
+        );
         assert_eq!(r.entries(OBJ), fresh.entries(OBJ));
         assert_eq!(r.clear_life(), 1);
         assert_eq!(r.clear_life(), 0);
@@ -593,24 +599,43 @@ mod tests {
         let r = Registry::new(Bounds::default());
         let abi = abi();
         let update = abi.cmds.update_channel_info;
-        let call = |handle, cmd, scope| serve_with_fifo_refusal(
-            &r, &abi, OBJ, Control::Register(Form::V1),
-            &params(handle, cmd, 0), |_| false, scope,
-        );
+        let call = |handle, cmd, scope| {
+            serve_with_fifo_refusal(
+                &r,
+                &abi,
+                OBJ,
+                Control::Register(Form::V1),
+                &params(handle, cmd, 0),
+                |_| false,
+                scope,
+            )
+        };
         assert_eq!(call(0, update, true), NV_ERR_INVALID_OBJECT_HANDLE);
-        assert_eq!(call(0x4000_0002, update, true), kf_abi::defapi::NV_ERR_NOT_SUPPORTED);
+        assert_eq!(
+            call(0x4000_0002, update, true),
+            kf_abi::defapi::NV_ERR_NOT_SUPPORTED
+        );
         assert_eq!(r.lookup(OBJ, 0x4000_0002), Err(NV_ERR_INVALID_DATA));
         assert_eq!(r.stats().0, 0);
         assert_eq!(r.stats().1.fifo_update_refused, 1);
         // Other deferred APIs and channels outside the experiment remain unchanged.
         assert_eq!(call(0x4000_0003, abi.cmds.invalidate_tlb, true), NV_OK);
         assert_eq!(call(0x4000_0002, update, false), NV_OK);
-        assert_eq!(call(0x4000_0002, update, true), NV_ERR_INVALID_OBJECT_HANDLE);
+        assert_eq!(
+            call(0x4000_0002, update, true),
+            NV_ERR_INVALID_OBJECT_HANDLE
+        );
         assert_eq!(r.stats().1.fifo_update_refused, 1);
         assert_eq!(r.remove(OBJ, 0x4000_0002), NV_OK);
-        assert_eq!(call(0x4000_0002, update, true), kf_abi::defapi::NV_ERR_NOT_SUPPORTED);
+        assert_eq!(
+            call(0x4000_0002, update, true),
+            kf_abi::defapi::NV_ERR_NOT_SUPPORTED
+        );
         assert_eq!(r.stats().1.fifo_update_refused, 2);
-        assert_eq!(r.lookup(OBJ, 0x4000_0003).unwrap().cmd, abi.cmds.invalidate_tlb);
+        assert_eq!(
+            r.lookup(OBJ, 0x4000_0003).unwrap().cmd,
+            abi.cmds.invalidate_tlb
+        );
     }
 
     /// ★ The VFIO sequence: register, look up, execute → implicitly deleted; the same handle may
@@ -843,7 +868,10 @@ mod tests {
         assert_eq!(r.live_count(OBJ), 1);
         // a duplicate is refused
         let e1 = r.epoch();
-        assert_eq!(reg(&r, 0x4000_0002, 0x2080_012d, 0), NV_ERR_INVALID_OBJECT_HANDLE);
+        assert_eq!(
+            reg(&r, 0x4000_0002, 0x2080_012d, 0),
+            NV_ERR_INVALID_OBJECT_HANDLE
+        );
         assert_eq!(r.epoch(), e1);
         // lookups, stats and entries() do not move it
         let _ = r.lookup(OBJ, 0x4000_0002);
@@ -859,7 +887,11 @@ mod tests {
         let e2 = r.epoch();
         r.executed(OBJ, 7, false);
         assert_eq!(r.epoch(), e2);
-        assert_eq!(r.live_count(OBJ), 1, "an executed explicit entry is still live");
+        assert_eq!(
+            r.live_count(OBJ),
+            1,
+            "an executed explicit entry is still live"
+        );
         // REMOVE_API of an absent handle is a refusal and changes nothing
         assert_eq!(r.remove(OBJ, 99), NV_ERR_GENERIC);
         assert_eq!(r.epoch(), e2);
@@ -897,14 +929,25 @@ mod tests {
             object: 0xff1f_e011,
         };
         let abi = abi();
-        for (i, cmd) in [abi.cmds.update_channel_info, abi.cmds.invalidate_tlb, 0xdead_beef]
-            .into_iter()
-            .enumerate()
+        for (i, cmd) in [
+            abi.cmds.update_channel_info,
+            abi.cmds.invalidate_tlb,
+            0xdead_beef,
+        ]
+        .into_iter()
+        .enumerate()
         {
             assert_eq!(reg(&r, 0x4000_0002 + i as u32, cmd, 0), NV_OK);
         }
         assert_eq!(
-            serve(&r, &abi, other, Control::Register(Form::V1), &params(5, 0, 0), |_| false),
+            serve(
+                &r,
+                &abi,
+                other,
+                Control::Register(Form::V1),
+                &params(5, 0, 0),
+                |_| false
+            ),
             NV_OK
         );
         assert_eq!((r.live_count(OBJ), r.live_count(other)), (3, 1));
@@ -931,9 +974,15 @@ mod tests {
         while !writer.is_finished() {
             let e = r.epoch();
             let c = r.live_count(OBJ);
-            assert!(u64::from(c) >= e, "epoch {e} announced more entries than the {c} visible");
+            assert!(
+                u64::from(c) >= e,
+                "epoch {e} announced more entries than the {c} visible"
+            );
         }
         writer.join().unwrap();
-        assert!(r.epoch() >= u64::from(n), "every registration moved the epoch");
+        assert!(
+            r.epoch() >= u64::from(n),
+            "every registration moved the epoch"
+        );
     }
 }

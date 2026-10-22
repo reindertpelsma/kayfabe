@@ -1,0 +1,134 @@
+{
+  "kf-abi": {
+    "passed": 608,
+    "failed": 0,
+    "ignored": 0,
+    "targets": 14
+  },
+  "kf-arch": {
+    "passed": 4,
+    "failed": 0,
+    "ignored": 0,
+    "targets": 3
+  },
+  "kf-broker": {
+    "passed": 162,
+    "failed": 0,
+    "ignored": 9,
+    "targets": 8
+  },
+  "kf-census": {
+    "passed": 57,
+    "failed": 0,
+    "ignored": 1,
+    "targets": 7
+  },
+  "kf-chan": {
+    "passed": 672,
+    "failed": 0,
+    "ignored": 4,
+    "targets": 27
+  },
+  "kf-chip": {
+    "passed": 86,
+    "failed": 0,
+    "ignored": 0,
+    "targets": 16
+  },
+  "kf-core": {
+    "passed": 50,
+    "failed": 0,
+    "ignored": 0,
+    "targets": 2
+  },
+  "kf-crec": {
+    "passed": 20,
+    "failed": 0,
+    "ignored": 0,
+    "targets": 4
+  },
+  "kf-cuda": {
+    "passed": 80,
+    "failed": 0,
+    "ignored": 0,
+    "targets": 7
+  },
+  "kf-disp": {
+    "passed": 296,
+    "failed": 0,
+    "ignored": 5,
+    "targets": 13
+  },
+  "kf-gop-image": {
+    "passed": 8,
+    "failed": 0,
+    "ignored": 0,
+    "targets": 4
+  },
+  "kf-gsp": {
+    "passed": 61,
+    "failed": 0,
+    "ignored": 0,
+    "targets": 2
+  },
+  "kf-harness": {
+    "passed": 15,
+    "failed": 0,
+    "ignored": 0,
+    "targets": 23
+  },
+  "kf-host": {
+    "passed": 66,
+    "failed": 0,
+    "ignored": 0,
+    "targets": 3
+  },
+  "kf-linux-raw": {
+    "passed": 174,
+    "failed": 0,
+    "ignored": 0,
+    "targets": 6
+  },
+  "kf-mem": {
+    "passed": 186,
+    "failed": 0,
+    "ignored": 3,
+    "targets": 4
+  },
+  "kf-oprom": {
+    "passed": 36,
+    "failed": 0,
+    "ignored": 0,
+    "targets": 4
+  },
+  "kf-qemu": {
+    "passed": 436,
+    "failed": 0,
+    "ignored": 0,
+    "targets": 10
+  },
+  "kf-rm": {
+    "passed": 812,
+    "failed": 0,
+    "ignored": 0,
+    "targets": 67
+  },
+  "kf-trace": {
+    "passed": 0,
+    "failed": 0,
+    "ignored": 0,
+    "targets": 2
+  },
+  "kf-trap": {
+    "passed": 111,
+    "failed": 0,
+    "ignored": 0,
+    "targets": 5
+  },
+  "kf-util": {
+    "passed": 59,
+    "failed": 0,
+    "ignored": 0,
+    "targets": 3
+  }
+}

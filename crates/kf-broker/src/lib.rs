@@ -61,7 +61,7 @@ pub use input::{
     AbsRange, Button, InputCounters, InputPolicy, InputSink, PointerDevice, PowerRequest,
 };
 pub use link::{MAX_BROKER_UID, UnixLink, broker_uid_property, broker_uids, effective_uid};
-pub use ticks::{TickCounters, TickShare, TickSnap};
 pub use slots::{
     FrameGeom, FrameRing, InstallRefusal, Kind, SlotFds, Take, VramFds, VramGeom, frame_bytes,
 };
+pub use ticks::{TickCounters, TickShare, TickSnap};
