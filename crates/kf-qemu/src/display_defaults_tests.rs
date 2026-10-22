@@ -328,7 +328,17 @@ macro_rules! constructor_tests {
                     let t = kf_disp::class::for_version(version).unwrap();
                     for row in kf_chip::display::ALL {
                         let regs = Regs::for_ip(version, row.ip_version).unwrap();
-                        let c = config_for(row, version);
+                        let selected = display_color_config(row, t, &regs);
+                        if $olut && row.classes.caps == 0xCA73 {
+                            // CODE READ: caps.rs::olut_probe_changes_only_its_surface_load_bit_in_every_display_cell
+                            // already requires this exact refusal: GB20x has no legacy OLUT SFCLOAD field.
+                            assert_eq!(
+                                selected.err().as_deref(),
+                                Some("display=on: caps page: NVCA73_POSTCOMP_HEAD_HDR_CAPB_OLUT_SFCLOAD")
+                            );
+                            continue;
+                        }
+                        let c = selected.unwrap();
                         assert!(!c.sdr_color, "standalone probes need no SDR_COLOR=0");
                         assert!(c.constructor_probe, "build must choose the refusing engine");
                         assert_eq!(
