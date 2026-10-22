@@ -9,6 +9,8 @@ words, and the nominal last ninety status heartbeats before first display loss.
 twelve refusal words, thirteen unload markers, T-space retirement comparison,
 and four already-exported workload run logs. Original large logs remain on the
 trusted host; private paths are in the local T1 report, not committed here.
+Run 3440 extraction at commit e826ddb4d: [snapshot2](snapshot2-summary.json)
+and [snapshot3/workloads](snapshot3-and-workloads.json).
 
 MEASURED: collection used Python text extraction through SSH stdin, with no
 remote file writes. Line numbers count original log lines from one. Status lines
@@ -16,6 +18,9 @@ were recognized by `kf3: family=`; fields were extracted by their named brackets
 Refusal length uses the public C56F entry1 LENGTH field, bits 30:10 in dwords.
 The HELD reply balance adds each logged HELD and subtracts POSTED n; this is a
 log-coverage check, not a latency measurement or a complete queue invariant.
+Collection attribution: T1 run 3440, 2026-10-21/2026-10-22 read-only extraction,
+recorded at commit 77ed23eff; input hashes and output fields are in
+[snapshot2](snapshot2-summary.json) and [snapshot3/workloads](snapshot3-and-workloads.json).
 
 CODE READ: status heartbeats are emitted after at least two seconds and can be
 late. The "ninety heartbeat" sample must not be assigned exact three-minute

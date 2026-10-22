@@ -25,14 +25,22 @@ original test is copied unchanged; the added public-API walker/target tests cove
 70 and 128 objects, async settlement in the first chunk, a newer invalidate,
 hard invalidate refusal in either chunk, reset before/after the first report,
 split tickets, and root moves in earlier chunks.
+Test attribution: commits 50206fb3f and 64489a633;
+`tests/audit_all_pdb_chunks.rs` and `tests/secaudit_all_pdb_over_64_spaces.rs`.
 
 MEASURED: release/locked kf-mem tests after the fix: 199 passed / 0 failed /
 3 existing ignored debug-replay tests, across six summaries including doc tests.
 After all mutations were restored: 13 focused tests passed / 0 failed / 0 ignored.
 All Cargo commands used the owner's shared lock, own target directory, nice 19,
 and two jobs; disk guards preceded each command.
+Test attribution: fix commit a59936a84;
+`cargo test --release --locked -j2 -p kf-mem`, followed by the restored-source
+`tests/audit_all_pdb_chunks.rs` and `tests/secaudit_all_pdb_over_64_spaces.rs` run.
 
-| Hand mutation | MEASURED killed tests |
+MEASURED mutation campaign at commit a59936a84, using
+`tests/audit_all_pdb_chunks.rs` and `tests/secaudit_all_pdb_over_64_spaces.rs`:
+
+| Hand mutation | Killed tests |
 |---|---:|
 | Restore master's >64 refusal | 13 |
 | Finalize after the first chunk | 11 |
@@ -45,6 +53,8 @@ no warning fingerprints. No existing passing test was loosened. Before the last
 EXPECTED RED commit, an uncommitted assertion requiring the separate VA-4
 unreconciled outcome was removed: the root tests require no early clear and a
 follow-up walk, without prescribing VA-4's defective final disposition.
+Clippy attribution: baseline base e64b8e5f6 plus tests, then fix commit
+a59936a84; `cargo clippy --release --locked -j2 -p kf-mem --all-targets --message-format=json`.
 
 CODE READ limitation: VA-1 remains DEFERRED. kf_walk.cu's report assembly sets
 run_count=0 on aggregate output overflow. WalkKernel::capacity_retry explicitly

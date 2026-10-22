@@ -1408,8 +1408,9 @@ impl ChannelPolicy {
             ),
             userd: self.abi.decode_channel_userd_mem(params).ok().flatten(),
             userd_source: self.abi.decode_channel_userd(params).ok().flatten(),
-            // ⊘⊘ P5b: the pid sentinel is reachable from guest userspace (`[measured p5bd]` the
-            // raw client's sandboxed-isolate client `0xc1d0000c` declared `KERNEL_PID`), so it is
+            // CODE READ: docs/design/V3_P5_PORT_MAP.md, Q7's p5bd account, reports that
+            // the raw client's sandboxed-isolate client `0xc1d0000c` declared `KERNEL_PID`.
+            // The pid sentinel is therefore reachable from guest userspace, so it is
             // recorded (`declared_kernel_pid`), never trusted. ★ P6 (Q7, PROPOSED): the route's
             // kernel test is `kernel_channel` — RM's own `internalFlags.PRIVILEGE = KERNEL` stamp.
             // The client handle is caller-chosen and supplies no privilege. A user channel classed
