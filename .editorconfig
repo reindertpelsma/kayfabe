@@ -1,0 +1,19 @@
+root = true
+
+[*]
+charset = utf-8
+insert_final_newline = true
+
+[*.{rs,c,h,cc,cpp,cxx,hh,hpp,cu,cuh,sh,bash,zsh,py,js,jsx,mjs,cjs,ts,tsx,toml,yml,yaml}]
+max_line_length = 100
+
+[*.{rs,c,h,cc,cpp,cxx,hh,hpp,cu,cuh,py}]
+indent_style = space
+indent_size = 4
+
+[*.{js,jsx,mjs,cjs,ts,tsx,toml,yml,yaml}]
+indent_style = space
+indent_size = 2
+
+[*.md]
+max_line_length = off

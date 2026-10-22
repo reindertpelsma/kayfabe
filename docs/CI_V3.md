@@ -3,6 +3,42 @@
 **STATUS: LIVE, 2026-09-29.** This describes the CI repair, not an expansion of the
 hardware support matrix or a claim of complete unsafe-code soundness.
 
+## In-use source line-length ratchet (2026-10-23, LL1)
+
+CODE READ: `scripts/ci/linelen.py` enforces 100 columns on Git-tracked in-use source and tests. `scripts/ci/linelen-baseline.json` records existing overlong counts per file. A file's count may never increase; a new file has no allowance. The PR check also rejects every added overlong line in `git diff base...head`, even when the file's total decreases. Baseline edits are compared with the merge base and may only lower counts. Initial enrollment is possible only when that baseline does not yet exist at the merge base; new source lines still face the diff check.
+
+CODE READ: the explicit in-use set is `crates/kf-*/` including tests, `qemu/hw/misc/kf3/`, `cuda/`, `broker/`, `ci/`, `tools/`, `tests/`, `scripts/{ci,fastguest,drivermatrix,apps}/`, `scripts/bench/box/`, and `scripts/bench/cuda_min/`. CI workflows, root formatter/build TOML files, `.editorconfig`, `.clang-format`, and `scripts/ci_gates.sh` are included too. `ci/` is absent at the enrollment revision; its future files are covered, including `ci/vast-broker/`. The root Black config applies unless that future tree introduces an overriding config, which must retain line length 100.
+
+CODE READ: the explicit top-level bench entries and their build/boot/ladder helpers are `v3_gates.sh`, `build_kf3.sh`, `cuda_ladder.sh`, `boot_capture.sh`, `boot_nvkvm.sh`, `assert_boot_evidence.sh`, `qemu_identity.sh`, `qemu_identity_selftest.sh`, `provision_box.sh`, `provision_bench_tree.sh`, `provision_host_driver.sh`, `cup2_hook_deadline.sh`, `cup3_hook.sh`, `cup8_hook.sh`, `cup8bench_hook.sh`, `cup3.c`, `cup8.c`, `cup8bench.c`, `uvmparams_shim.c`, and the extensionless `gssh_nv`. Other bench runners need an explicit scope edit before they become gate inputs. Tests colocated anywhere within an included tree are covered automatically.
+
+CODE READ: supported extensions are Rust; C/C++ and headers; CUDA; shell (`sh`, `bash`, `zsh`); Python; JavaScript/TypeScript; TOML; and YAML. Width counts Unicode characters after expanding tabs to eight-column stops, excluding CR/LF. Markdown prose, JSON, TSV, PTX, binaries and unrecognized extensions are outside this source checker. There is no Markdown code-fence checker in this change; keep code/log examples readable in review. Symlinks are never followed and submodules are never recursed into.
+
+### Exemptions
+
+CODE READ: `archive/`, `archives/`, `archive-*` and `archive_*` directory components anywhere in a path are excluded entirely, as are `third_party/`, `vendor/`, `vendored/`, `node_modules/`, and `traces/`. All `crates/kayfabe-*` are exempt because the pre-v3 tree is frozen. `scripts/bench/windows/host_tools/`, dated Windows/bench runners and other paths outside the explicit set have no baseline entries. The outside-set report group also includes separately gated firmware and root CI helper scripts. No files in these excluded trees are reformatted.
+
+CODE READ: generated directories, `*_generated` files, header comments with `@generated` or “Generated … do not edit”, and lockfiles are exempt. A line consisting solely of a URL or hexadecimal hash, optionally inside a comment, is exempt. A trailing comment `long-line-ok: <reason>` exempts that line; an empty reason fails. Use it for indivisible data or protocol fixtures, with a reviewable reason. It is a line exception, never a file allowance. The in-use `tools/host_patches/h5_userd_dma/include/` headers, including NVIDIA MIT headers, stay in the baseline and are untouched; no special vendor exemption is added for that tree.
+
+### Commands and formatter policy
+
+CODE READ: both hosted CI and `scripts/ci_gates.sh` run the same source gate. Hosted checkout fetches full history. PRs use the event's base SHA, pushes use the event's previous SHA, and a new-branch push or local run uses `origin/master`. Supply a specific base explicitly for other local comparisons:
+
+```sh
+python3 scripts/ci/linelen.py --base origin/master
+python3 scripts/ci/changed_format.py --base origin/master
+python3 scripts/ci/linelen.py --report
+python3 scripts/ci/linelen.py --base origin/master --update
+python3 -m unittest discover -s scripts/ci -p 'test_*.py'
+```
+
+CODE READ: `--update` only lowers an existing inventory after all checks pass; it refuses missing/invalid baselines and never records new debt. Without `--base`, the normal check scans tracked working-tree content against counts, while `--update` also rejects increases against HEAD's baseline. With `--base`, added-line checks use committed head content and plain, uncolored Git diffs, so local edits or forced ANSI colors cannot hide a committed violation. Source lines use Git's physical LF boundaries rather than Unicode line separators. Exit 1 means a regression; exit 2 means an input/tool failure. `--report` reads the exempt source inventory for comparison without enforcing or recording it; routine checks do not read exempt trees.
+
+CODE READ: Rust keeps the existing `cargo fmt --all --check` and firmware rustfmt checks, with an explicit `rustfmt.toml` setting `max_width = 100`. Existing Rust code and comments are not reflowed, and no Rust cleanup PR is proposed. Root Black and Prettier configs set line length/print width 100; `.editorconfig` declares that width for supported languages. These config files do not imply a whole-tree Black or Prettier check.
+
+CODE READ: clang-format major 18 is installed explicitly in CI. `changed_format.py` invokes `git clang-format-18 --diff` between the merge base and head, limited to changed C/H/CUDA files in `broker/`, `cuda/` and `qemu/hw/misc/kf3/`, with the source exemptions above. Any formatter diff fails; tool errors fail separately. The command never applies its output. Clang-format may include surrounding syntactic context in a changed-line patch; that limited context must be reviewed. The four-space/Linux-brace style preserves include order and does not reflow comments.
+
+MEASURED: the dry run at base revision `e9c6d39e5`, scope inventory, top 30 files and mutation evidence are in `traces/linelen_20261018/report.md`. The kf3 style delta is small enough to use the changed-line check; no whole-file formatter requirement or upstream QEMU 80-column policy is imposed. INFERRED: optional small Python/script/C follow-ups are more useful than a whole-tree format sweep; the evidence report lists counts and recommendations.
+
 ## CI repair of 2026-10-21 (branch `claude/ci-green-20261021`)
 
 The Clippy step had been red on master since 2026-10-15, so every step after it had stopped running and

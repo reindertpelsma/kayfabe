@@ -1,0 +1,97 @@
+STATUS: LIVE, 2026-10-23. LL1 final isolated mutation run.
+MEASURED: run LL1-mutants-20261023, base rev e9c6d39e5 plus LL1 checker.
+Each mutation is applied alone in an isolated module copy.
+All eleven mutants exit 1 with at least two independently named failing tests.
+
+allow-colored-diff: exit=1 independent-killers=2
+  test_forced_color_cannot_hide_an_overlong_replacement
+  test_forced_color_cannot_hide_new_debt_when_count_decreases
+
+unicode-splitlines: exit=1 independent-killers=2
+  test_diff_uses_git_line_numbers_with_unicode_separators
+  test_unicode_separator_does_not_split_a_git_source_line
+
+width-120: exit=1 independent-killers=20
+  test_101_columns_fail_in_a_new_file
+  test_added_line_fails_even_when_file_count_decreases
+  test_added_line_fails_even_when_file_count_stays_the_same
+  test_an_existing_file_cannot_increase_its_count
+  test_diff_reads_head_content_despite_uncommitted_exemption
+  test_diff_uses_git_line_numbers_with_unicode_separators
+  test_forced_color_cannot_hide_an_overlong_replacement
+  test_forced_color_cannot_hide_new_debt_when_count_decreases
+  test_generator_source_is_not_mistaken_for_its_output
+  test_in_use_extensions_and_tests_are_enforced
+  test_long_line_ok_requires_a_reason
+  test_removing_debt_elsewhere_cannot_buy_a_new_file
+  test_rename_to_a_new_path_does_not_inherit_debt
+  test_report_is_read_only_and_separates_exempt_code
+  test_tabs_use_eight_column_stops
+  test_unicode_is_counted_as_characters_not_utf8_bytes
+  test_update_checks_added_lines_before_writing
+  test_update_lowers_and_removes_resolved_entries
+  test_update_refuses_to_add_new_debt
+  test_update_refuses_to_raise_and_does_not_write
+
+ignore-count-increases: exit=1 independent-killers=15
+  test_101_columns_fail_in_a_new_file
+  test_an_existing_file_cannot_increase_its_count
+  test_code_containing_a_url_is_not_exempt
+  test_generator_source_is_not_mistaken_for_its_output
+  test_in_use_extensions_and_tests_are_enforced
+  test_long_line_ok_requires_a_reason
+  test_pr_cannot_add_a_baseline_entry
+  test_pr_cannot_raise_committed_baseline
+  test_removing_debt_elsewhere_cannot_buy_a_new_file
+  test_tabs_use_eight_column_stops
+  test_unicode_is_counted_as_characters_not_utf8_bytes
+  test_unicode_separator_does_not_split_a_git_source_line
+  test_update_cannot_accept_a_locally_inflated_baseline
+  test_update_refuses_to_add_new_debt
+  test_update_refuses_to_raise_and_does_not_write
+
+ignore-added-lines: exit=1 independent-killers=7
+  test_added_line_fails_even_when_file_count_decreases
+  test_added_line_fails_even_when_file_count_stays_the_same
+  test_diff_reads_head_content_despite_uncommitted_exemption
+  test_diff_uses_git_line_numbers_with_unicode_separators
+  test_forced_color_cannot_hide_an_overlong_replacement
+  test_forced_color_cannot_hide_new_debt_when_count_decreases
+  test_update_checks_added_lines_before_writing
+
+allow-baseline-inflation: exit=1 independent-killers=3
+  test_pr_cannot_add_a_baseline_entry
+  test_pr_cannot_raise_committed_baseline
+  test_update_cannot_accept_a_locally_inflated_baseline
+
+write-before-validation: exit=1 independent-killers=3
+  test_update_checks_added_lines_before_writing
+  test_update_refuses_to_add_new_debt
+  test_update_refuses_to_raise_and_does_not_write
+
+ignore-line-exemptions: exit=1 independent-killers=3
+  test_diff_exemptions_apply_to_head_and_added_lines
+  test_long_line_ok_requires_a_reason
+  test_url_and_hash_only_lines_are_exempt
+
+ignore-path-exemptions: exit=1 independent-killers=4
+  test_archive_vendor_frozen_and_oneoff_trees_are_exempt
+  test_diff_exemptions_apply_to_head_and_added_lines
+  test_generated_header_and_path_exemptions
+  test_report_is_read_only_and_separates_exempt_code
+
+accept-format-diffs: exit=1 independent-killers=6
+  test_check_never_modifies_source_files
+  test_forced_color_cannot_hide_bad_broker_code
+  test_forced_color_cannot_hide_bad_cuda_code
+  test_new_bad_broker_code_fails
+  test_new_bad_cuda_code_fails
+  test_new_bad_kf3_code_fails
+
+format-whole-changed-file: exit=1 independent-killers=2
+  test_changed_broker_file_retains_unedited_legacy_functions
+  test_changed_cuda_file_retains_unedited_legacy_functions
+
+Final checked source SHA-256:
+linelen.py 9a27f9aac3b496f17e5aa1ae69f3c16142be0d6da732efc8890f30ea825c393e
+changed_format.py 54a53394d84b8c542d9777e1a28ca01ea44ec185277fdcf7cc62f2f2768cefb4

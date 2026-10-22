@@ -1,0 +1,48 @@
+STATUS: LIVE, 2026-10-23. LL1 local stable-job validation.
+MEASURED: run LL1-ci-20261023, base rev e9c6d39e5 plus the LL1 diff.
+Command: bash scripts/ci_gates.sh --all
+Top-level cargo: --release -j2, nice 19, private target, shared cargo flock.
+ALL GATES CLEAN (24 steps, floor 21 for --all mode)
+Workspace test summaries: 5676 passed, 0 failed, 21 ignored (348 summaries).
+KVM-gate: ran=0 skipped=34 total=34 (forced OS-free run; floor 30).
+SANDBOX-gate: ran=10 skipped=0 total=10 (floor 10).
+CAP-gate, root: ran=6 vacuous=0 (floor 6).
+UDMABUF-gate: ran=4 skipped=0 total=4 (floor 2).
+Python CI guard tests: 93 passed, 0 failed; 54 are LL1 checker/formatter tests.
+clippy: existing-debt=532 new=0 resolved=0
+claims: existing-debt=3758 new=0 resolved=0
+linelen: files=912 debt=6973 new=0 resolved=0
+Workspace rustfmt: PASS. Firmware rustfmt: 11 files, exit 0.
+Black check: the four new checker/test modules pass.
+Mutation suite: 11/11 killed; minimum 2 independent tests per mutant.
+No GPU/VM acceptance run; no aarch64 job or complete firmware job run locally.
+
+Completed stable-job steps:
+PASS Build
+PASS Allow user namespaces for this CI checkout's test executables
+PASS Test (OS-free configuration — KVM forced absent)
+PASS Remove the CI-only namespace profile
+PASS KVM-gate reached-count (floor, not an exact match)
+PASS SANDBOX-gate reached-count (floor, not an exact match)
+PASS CAP-gate — the live capability tests, reached unprivileged and run as root
+PASS UDMABUF-gate reached-count (floor, not an exact match)
+PASS Install clang-format 18 for changed C/H/CUDA lines
+PASS Clippy (errors and new warning sites fail)
+PASS Format check
+PASS v3 dependency isolation and CI guard self-tests
+PASS Hexagonal boundary gate (no OS vocabulary in the pure logic crates)
+PASS VMM-vocabulary gate (no hypervisor API vocabulary in the core or the shell)
+PASS Generation-name gate (no concrete chip or driver version in the logic crates)
+PASS ABI-quarantine gate (Axis A — a C layout is quarantined, or provably own-wire)
+PASS Unsafe-surface gate (every unsafe file is named *_unsafe.rs, so `ls` enumerates it)
+PASS Host-pointer gate (no *mut/*const/NonNull/transmute outside *_unsafe.rs)
+PASS Bridge-exclusivity gate (one crate names both RpcCommand and RmEvent)
+PASS ogkm-version-tag gate (every NVIDIA citation names its tree)
+PASS Claim-ledger gate (a measurement word names its run, not a source read)
+PASS In-use line-length ratchet and changed C/H/CUDA format
+PASS Section-number gate (no two design-doc sections share a number)
+PASS Unsafe-containment gates (A: forbid inheritance, B: the named crates, ratchet)
+
+Checked checker source SHA-256:
+linelen.py 9a27f9aac3b496f17e5aa1ae69f3c16142be0d6da732efc8890f30ea825c393e
+changed_format.py 54a53394d84b8c542d9777e1a28ca01ea44ec185277fdcf7cc62f2f2768cefb4

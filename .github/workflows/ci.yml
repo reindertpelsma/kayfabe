@@ -48,6 +48,8 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0 # PR merge bases and push-before revisions are gate inputs.
       - uses: dtolnay/rust-toolchain@master
         with:
           toolchain: 1.99.0   # pinned with rust-toolchain.toml; bump both together
@@ -267,6 +269,12 @@ jobs:
           if [ "$skipped" -gt 0 ]; then
             echo "::warning::$skipped udmabuf-gated test(s) SKIPPED here (no /dev/udmabuf):" \
                  "they asserted nothing; the dma-buf rung is graded on a box or a dev host."
+          fi
+      - name: Install clang-format 18 for changed C/H/CUDA lines
+        run: |
+          if ! command -v clang-format-18 >/dev/null; then
+            sudo apt-get update -q
+            sudo apt-get install -y -q clang-format-18
           fi
       - name: Clippy (errors and new warning sites fail)
         run: bash scripts/ci/clippy.sh
@@ -1026,6 +1034,14 @@ jobs:
       # (383, a census of pre-existing prose across a tree several agents write at once).
       - name: "Claim-ledger gate (a measurement word names its run, not a source read)"
         run: python3 scripts/ci/debt.py claims
+      - name: In-use line-length ratchet and changed C/H/CUDA format
+        env:
+          KF_CI_BASE: ${{ github.event.pull_request.base.sha || github.event.before }}
+        run: |
+          base="${KF_CI_BASE:-origin/master}"
+          if [[ "$base" =~ ^0+$ ]]; then base=origin/master; fi
+          python3 scripts/ci/linelen.py --base "$base"
+          python3 scripts/ci/changed_format.py --base "$base"
       # docs/design/check_sections.sh existed but ran nowhere, so a duplicate section number
       # (V3_DOORBELL_IOEVENTFD.md, `## 7.` and `### 7.x`) reached master on 2026-09-30.
       - name: "Section-number gate (no two design-doc sections share a number)"

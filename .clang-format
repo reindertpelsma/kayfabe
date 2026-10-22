@@ -1,0 +1,19 @@
+# clang-format 18; four spaces, Linux function braces, attached control braces.
+BasedOnStyle: LLVM
+ColumnLimit: 100
+IndentWidth: 4
+ContinuationIndentWidth: 4
+TabWidth: 8
+UseTab: Never
+BreakBeforeBraces: Linux
+IndentCaseLabels: false
+AlignAfterOpenBracket: Align
+AlignEscapedNewlines: DontAlign
+PointerAlignment: Right
+SortIncludes: Never
+IncludeBlocks: Preserve
+ReflowComments: false
+AllowShortFunctionsOnASingleLine: Empty
+AllowShortIfStatementsOnASingleLine: WithoutElse
+AllowShortCaseLabelsOnASingleLine: true
+AllowShortLoopsOnASingleLine: false

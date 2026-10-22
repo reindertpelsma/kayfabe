@@ -1,0 +1,43 @@
+STATUS: LIVE, 2026-10-22. LL1 clang-format dry-run per-file counts.
+MEASURED: run LL1-clang18-20261022; source rev e9c6d39e5; clang-format 18.1.8.
+No source file was changed. Add/delete counts compare formatter stdout to source.
+added removed path
+  101      95 broker/common/nvkvm_broker_proto.h
+    9      12 broker/common/nvkvm_uidmap.h
+   27      17 broker/dmabuf_relay.c
+  110      95 broker/dmabuf_source.c
+   21      28 broker/nb_common.c
+  116     102 broker/nb_cursor.c
+   24      32 broker/nb_frame.c
+   13       9 broker/nb_geom.c
+  354      74 broker/nb_placeholder.c
+   79      90 broker/nb_session_test.c
+  780     754 broker/nb_session_wl.c
+  305     360 broker/nb_session_x11.c
+   51      58 broker/nb_tick.c
+   90      65 broker/nb_xor.c
+  505     501 broker/nvkvm_broker.c
+  268     280 broker/nvkvm_broker.h
+  264     217 broker/test/test_cursor.c
+   10      10 broker/test/test_geom.c
+  178     108 broker/test/test_tick.c
+   29      24 broker/test/test_utf8.c
+  428     218 broker/test/test_xor.c
+   56      33 broker/test/wl_tick_probe.c
+  146     115 broker/testclient.c
+   41      48 cuda/display/kf_bl_pack.cu
+  117      80 cuda/display/kf_color.cu
+  139     146 cuda/display/kf_yuv.cu
+  113      58 cuda/walk-v2-frozen/kf_report_emit.c
+  888     404 cuda/walk-v2-frozen/kf_walk.cu
+   56      57 cuda/walk-v2-frozen/kf_walk.h
+  113      53 cuda/walk/kf_bench.cu
+  113      58 cuda/walk/kf_report_emit.c
+  109      41 cuda/walk/kf_tables.h
+  616     375 cuda/walk/kf_tests.cu
+  871     440 cuda/walk/kf_walk.cu
+   71      70 cuda/walk/kf_walk.h
+  138     106 qemu/hw/misc/kf3/kf3.c
+   12      11 qemu/hw/misc/kf3/kf3.h
+    0       0 qemu/hw/misc/kf3/kf3_gop.h
+    0       0 qemu/hw/misc/kf3/kf3_guest_ram.h
