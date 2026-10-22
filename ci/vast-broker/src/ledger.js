@@ -4,6 +4,17 @@ export class Ledger {
   get(key){return this.storage.get(key);}
   put(key,value){return this.storage.put(key,value);}
   async save(record){await this.put('record:'+record.key,record);if(record.id)await this.put('id:'+record.id,record.key);}
+  async appendLog(record,text){
+    let chunk='';const encoder=new TextEncoder();record.logChunks??=0;
+    const flush=async()=>{if(chunk){await this.put('log:'+record.key+':'+record.logChunks,chunk);record.logChunks++;chunk='';}};
+    for(const line of text.split(/(?<=\n)/)){if(encoder.encode(chunk+line).length>16384)await flush();chunk+=line;}
+    await flush();
+  }
+  async logPage(record,cursor){
+    const end=Math.min(record.logChunks??0,cursor+4);let text='';
+    for(let i=cursor;i<end;i++){const chunk=await this.get('log:'+record.key+':'+i);if(typeof chunk!=='string')refuse();text+=chunk;}
+    return {cursor,next_cursor:end,log_increment_sanitised:text,bytes_dropped:record.fullBytesDropped??record.bytesDropped??0};
+  }
   async active(){const key=await this.get('active');return key?this.get('record:'+key):null;}
   async granted(run){const key=await this.get('run:'+run);return key?this.get('record:'+key):null;}
   async grant(run,record,pr=record.pr){await this.put('run:'+run,record.key);await this.put('run-pr:'+run,pr);}

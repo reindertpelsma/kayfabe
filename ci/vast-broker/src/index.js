@@ -7,7 +7,7 @@ import {Github} from './github.js';
 import {Vast} from './vast.js';
 import {Ledger} from './ledger.js';
 import {onstart} from './onstart.js';
-import {appendBoxText} from './sanitize.js';
+import {appendBoxText,sanitizeBoxText} from './sanitize.js';
 export function createService({env,storage,fetch:fetcher=fetch,now=Date.now,random}={}){
   const ledger=new Ledger(storage),verifier=new OidcVerifier(fetcher,now),tokens=new RunTokens(env.RUN_TOKEN_SECRET),githubCache=new Map();let busy=false,localVerifier;
   const runKey=c=>c.run_id+'-'+c.run_attempt;
@@ -18,7 +18,7 @@ export function createService({env,storage,fetch:fetcher=fetch,now=Date.now,rand
     verdict:r.ended!==null||r.resultAt!==undefined?r.verdict||'UNAVAILABLE':'UNAVAILABLE',
     cleanup_pending:r.ended===null,result_at:r.resultAt??null,ended_at:r.ended,started_at:r.started,
     deadline_at:r.resultAt===undefined?r.started+r.ttl:Math.min(r.started+r.ttl,r.resultAt+(r.grace??300000)),
-    gpu_model:r.gpu??'unknown',cost_estimate_usd:r.price*((r.ended??now())-r.started)/3600000,log_tail_sanitised:r.log||'',bytes_dropped:r.bytesDropped||0});
+    gpu_model:r.gpu??'unknown',cost_estimate_usd:r.price*((r.ended??now())-r.started)/3600000,log_cursor:r.logChunks??0,log_tail_sanitised:r.log||'',bytes_dropped:r.fullBytesDropped??r.bytesDropped??0,tail_bytes_dropped:r.bytesDropped||0});
   async function recover(record,vast){if(!record.id){record.id=await vast.reconcile(record);await ledger.save(record);}return record;}
   async function cleanup(record,vast){
     await recover(record,vast);await vast.destroy(record);await ledger.settle(record,now());
@@ -96,7 +96,13 @@ export function createService({env,storage,fetch:fetcher=fetch,now=Date.now,rand
       const digest=await sha256Hex(JSON.stringify(payload));
       if(payload.seq<=r.lastSeq){if(payload.seq===r.lastSeq&&digest===r.lastDigest)return json({state:'ACCEPTED'});refuse('REPORT_SEQUENCE',409);}
       if(payload.kind==='result'&&payload.result.nonce!==r.nonce)refuse('BAD_REPORT',400);
-      if(payload.text!==undefined)appendBoxText(r,new TextEncoder().encode(payload.text),[...secrets,bearer]);
+      if(payload.text!==undefined){
+        const bytes=new TextEncoder().encode(payload.text),redactions=[...secrets,bearer,r.id,r.label,r.nonce];
+        const safe=sanitizeBoxText(bytes,Math.max(0,cfg.reportBytes-(r.fullBytes??0)),redactions,{tail:false});
+        await ledger.appendLog(r,safe.text);r.fullBytes=(r.fullBytes??0)+new TextEncoder().encode(safe.text).length;
+        r.fullBytesDropped=(r.fullBytesDropped??0)+safe.bytesDropped;
+        appendBoxText(r,bytes,redactions);
+      }
       r.lastSeq=payload.seq;r.lastDigest=digest;r.firstReportAt??=now();
       if(payload.kind==='result'){r.resultAt=now();r.verdict=payload.result.verdict;r.liveCheckedAt=null;} // MUTANT structured-verdict
       else if(r.reportCount>=cfg.reportCount||r.reportBytes>=cfg.reportBytes)await close(r,vast,'LIMIT');
@@ -113,9 +119,9 @@ export function createService({env,storage,fetch:fetcher=fetch,now=Date.now,rand
     const cfg=configuration(env);
     cfg.testIdentity=localIdentity(env,request.url);
     if(cfg.testIdentity)cfg.githubOrigin=cfg.testIdentity.githubOrigin;
-    if(url.search)refuse('BAD_REQUEST',400);
-    const match=/^\/(report|kill|status|stop)\/([1-9][0-9]{0,19}-[1-9][0-9]{0,19})$/.exec(path);
-    if(!(path==='/rent'&&request.method==='POST')&&!(path==='/stop-all'&&request.method==='POST')&&!(match&&request.method===(match[1]==='status'?'GET':'POST')))return notFound();
+    if(url.search&&!/^\/logs\//.test(path))refuse('BAD_REQUEST',400);
+    const match=/^\/(report|kill|status|stop|logs)\/([1-9][0-9]{0,19}-[1-9][0-9]{0,19})$/.exec(path);
+    if(!(path==='/rent'&&request.method==='POST')&&!(path==='/stop-all'&&request.method==='POST')&&!(match&&request.method===(['status','logs'].includes(match[1])?'GET':'POST')))return notFound();
     const authorization=request.headers.get('Authorization');if(!authorization?.startsWith('Bearer '))refuse('UNAUTHORIZED',401);
     const bearer=authorization.slice(7),vast=new Vast(fetcher,cfg,env.VAST_API_KEY);
     if(match?.[1]==='report')return report(request,match[2],bearer,cfg,vast);
@@ -141,6 +147,11 @@ export function createService({env,storage,fetch:fetcher=fetch,now=Date.now,rand
     if(match){
       if(match[2]!==key)refuse('UNAUTHORIZED',401); // MUTANT stop-run
       const r=await ledger.granted(key);if(!r)refuse('NOT_FOUND',404);
+      if(match[1]==='logs'){
+        if(!/^\?cursor=(0|[1-9][0-9]{0,6})$/.test(url.search))refuse('BAD_REQUEST',400);
+        const cursor=Number(url.searchParams.get('cursor'));if(cursor>(r.logChunks??0))refuse('BAD_REQUEST',400);
+        return json(await ledger.logPage(r,cursor));
+      }
       if(match[1]==='stop')await close(r,vast,'STOPPED');else await update(r,vast,github);
       const admittedPr=await ledger.get('run-pr:'+key);
       return json(expose(r,key,admittedPr===undefined?r.pr:admittedPr));
@@ -187,6 +198,6 @@ export class BrokerLedger {
   async fetch(request){if(new URL(request.url).origin==='https://internal.invalid'&&new URL(request.url).pathname==='/cron'){await this.service.sweep();return new Response('ok');}return this.service.fetch(request);}
 }
 export default {
-  async fetch(request,env){const path=await routePath(request,env);if(path===null||!/^\/(?:rent|stop-all|(?:report|kill|status|stop)\/[1-9][0-9]{0,19}-[1-9][0-9]{0,19})$/.test(path))return notFound();return env.LEDGER.get(env.LEDGER.idFromName('owner-shared-vast-account')).fetch(request);},
+  async fetch(request,env){const path=await routePath(request,env);if(path===null||!/^\/(?:rent|stop-all|(?:report|kill|status|stop|logs)\/[1-9][0-9]{0,19}-[1-9][0-9]{0,19})$/.test(path))return notFound();return env.LEDGER.get(env.LEDGER.idFromName('owner-shared-vast-account')).fetch(request);},
   scheduled(_event,env,ctx){ctx.waitUntil(env.LEDGER.get(env.LEDGER.idFromName('owner-shared-vast-account')).fetch(new Request('https://internal.invalid/cron',{method:'POST'})));}
 };

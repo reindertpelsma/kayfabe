@@ -9,12 +9,12 @@ import {setup,nonce,sha} from './helpers.js';
 async function rent(extra={}){const h=await setup(extra);assert.equal((await h.call()).status,200);return h;}
 const logs=(h,cursor=0,options={})=>h.call('/logs/123-1?cursor='+cursor,{method:'GET',...options});
 for(const [name,text] of [
- ['IPv4',['203','0','113','18'].join('.')],['IPv6','2001'+':db8::19'],['IPv6 compressed',':' + ':1'],
+ ['IPv4',['203','0','113','18'].join('.')],['second IPv4',['198','51','100','2'].join('.')],['IPv6','2001'+':db8::19'],['IPv6 compressed',':' + ':1'],
  ['instance ID','900'],['instance label','kf-ci-123-1'],['bearer','Bearer '+Array(40).fill('Q').join('')],
  ['JWT',['eyJhbGciOiJSUzI1NiJ9','eyJzdWIiOiJwbGFudGVkIn0','S'.repeat(80)].join('.')],['opaque','secret'.repeat(8)]
 ])test('V4 public log redacts planted '+name,async()=>{
  const h=await rent();assert.equal((await h.report({seq:1,kind:'log',text:'value '+text})).status,200);
- const status=await(await h.call('/status/123-1')).json();assert.ok(!status.log_tail_sanitised.includes(text),status.log_tail_sanitised);
+ const status=await(await h.call('/status/123-1')).json();assert.ok(!status.log_tail_sanitised.includes(text),status.log_tail_sanitised);if(name.includes('IPv'))assert.match(status.log_tail_sanitised,/\[address\]/);
  const response=await logs(h);assert.equal(response.status,200);const page=await response.json();assert.ok(!page.log_increment_sanitised.includes(text));
 });
 test('V4 full log retains earlier lines beyond tail and cursor emits once',async()=>{
@@ -32,7 +32,7 @@ test('V4 full log denied to another run and to box capability',async()=>{
  const {callbackToken}=await import('./helpers.js');assert.equal((await logs(h,0,{token:callbackToken(await h.storage.get('record:123-1'))})).status,401);
 });
 test('V4 bounded log cap counts dropped rendered bytes',async()=>{
- const h=await rent({MAX_REPORT_BYTES:'1200'});await h.report({seq:1,kind:'log',text:'short\n'.repeat(170)});
+ const h=await rent({MAX_REPORT_BYTES:'1200'});await h.report({seq:1,kind:'log',text:'short\n'.repeat(140)});
  const p=await(await logs(h)).json();assert.ok(Buffer.byteLength(p.log_increment_sanitised)<=1200);assert.ok(p.bytes_dropped>0);
 });
 async function render(mode,data,log=''){
@@ -60,4 +60,16 @@ test('V4 workflow embeds exact trusted renderer and polls cursor with final full
  const embedded=workflow.split("<<'KF_PUBLIC_RENDER'\n")[1]?.split('\n          KF_PUBLIC_RENDER')[0].split('\n').map(x=>x.slice(10)).join('\n');
  assert.equal(embedded,publicLogRenderer.trimEnd());assert.match(workflow,/\/logs\/\$run\?cursor=/);assert.match(workflow,/render.py" summary/);assert.match(workflow,/render.py" final/);
  assert.match(workflow,/terminal_result=false/);assert.match(workflow,/terminal_result" != true/);
+});
+for(const restart of [false,true])test('V4 incremental log cursor survives new output '+restart,async()=>{
+ const h=await rent();await h.report({seq:1,kind:'log',text:'first message'});const first=await(await logs(h)).json();assert.match(first.log_increment_sanitised,/first message/);
+ if(restart)h.restart();await h.report({seq:2,kind:'log',text:'second message'});const next=await(await logs(h,first.next_cursor)).json();assert.match(next.log_increment_sanitised,/second message/);assert.doesNotMatch(next.log_increment_sanitised,/first message/);
+});
+test('V4 summary rejects log-implied PASS and fence escape',async()=>{
+ const r=await render('summary',{state:'COMPLETE',verdict:'FAIL',log_tail_sanitised:'[box] PASS\n'+String.fromCharCode(96).repeat(13)+'\n::error::x\n##[group]x'});
+ assert.match(r.summary,/\| Verdict \| FAIL \|/);assert.doesNotMatch(r.summary,/::|##\[/);assert.ok(r.summary.match(/(`+)text\n/)[1].length>13);assert.ok(r.summary.trimEnd().split('\n').at(-1).length>13);
+});
+test('V4 smaller full log cap bounds prefix expansion',async()=>{
+ const h=await rent({MAX_REPORT_BYTES:'600'});await h.report({seq:1,kind:'log',text:'short\n'.repeat(65)});
+ const page=await(await logs(h)).json();assert.ok(Buffer.byteLength(page.log_increment_sanitised)<=600);assert.ok(page.bytes_dropped>0);
 });
