@@ -39,7 +39,7 @@ actual workflow shell with fake curl/sleep. Full raw output stays only in the
 mocked local backup; structured verdict follows exit status. Tokens are not
 returned to the runner or retained in ledger scripts. Every rendered box line
 has a visible prefix; neither command delimiter survives anywhere, including
-legacy markers embedded inside a line. The final mutation results follow below.
+legacy markers embedded inside a line. The final mutation results follow below. The initially surviving free-text-verdict mutation is killed by three terminal-state assertions after strengthening those same negative tests; the mutation was not weakened.
 
 ## Tests first
 
@@ -71,6 +71,23 @@ not counted as validation of this JavaScript deliverable.
 incorrectly; fe57dbffe fixes that fixture and supplies the meaningful assertion
 red proof. Its corrected result supersedes the overstated earlier commit-message
 count. No fixture error is counted as a sanitizer/client defect proof here.
+
+## Final Amendment 3/3b verification
+
+[MEASURED: 2026-10-22] The amended campaign kills all 75 hand-authored mutants,
+with at least two independently named test failures each. The current
+[complete table](../../ci/vast-broker/test/mutants.md) records counts and example
+killers; mutants.js contains every exact patch. Source restoration was checked
+against the implementation commit before the final full run. Worker mutations
+run all eight source-facing test files in parallel; workflow mutations also run
+the shell-client fixtures, which read only YAML and never import Worker source.
+The final full command remains node --test ci/vast-broker/test (376 tests).
+
+[MEASURED: 2026-10-22] Python CI tests: 39 passed; dependency isolation: 22 crates,
+0 violations; frozen prototype: 37 files, 0 changed; claims ratchet: new=0.
+Secret/hygiene scans cover each staged diff plus the complete branch diff and
+commit history. Root README is unchanged; existing ci.yml adds only lines 51–52.
+No live API, provider, deployment, rental, GPU or host validation is claimed.
 
 ## Historical pre-callback commands and mutation table
 
