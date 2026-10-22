@@ -1,0 +1,15 @@
+SWEEP_PROVISION_START own_instance=FROM_LEASE_RECEIPT 2026-10-22T22:12:18+00:00
+From https://github.com/reindertpelsma/kayfabe
+ * branch                6e3fd3fd6d809ae2c2a3504cd8be1ecd29b2b31b -> FETCH_HEAD
+HEAD is now at 6e3fd3fd6 feat(bench): record bounded actual PRECOMP host reply for the next lease
+NVIDIA GeForce RTX 5090, 595.91.07, 32607 MiB
+VERDICT=SOUND
+PROBE_START pid=75826 uid=Uid: 65534 65534 65534 65534 CapEff=0x0 cap_sys_admin=false
+kf-host: host tier: stock
+PROBE_SESSION driver=595.91.07
+PROBE_DIE arch=0x1b0 impl=0x2 die=GB202
+PROBE_END admin_run=false
+S4_KIT_PRESENT_AUDIT_SUBTRACTED
+PRECOMP_RUNTIME_BEGIN CAP_SYS_ADMIN=cleared_by_helper 2026-10-22T22:15:01+00:00
+PRECOMP_RUNTIME_EXIT rc=2 2026-10-22T22:15:01+00:00
+V3_GATES_SUMMARY pass=9 fail=0 gate10=PASS
