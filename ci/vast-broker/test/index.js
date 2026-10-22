@@ -8,3 +8,4 @@ import './client.test.js';
 import './eligibility.test.js';
 import './reporting.test.js';
 import './callback-wiring.test.js';
+import './local-smoke.test.js';
