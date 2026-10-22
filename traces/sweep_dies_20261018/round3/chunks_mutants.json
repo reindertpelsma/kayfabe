@@ -1,0 +1,47 @@
+[
+  {
+    "mutant": "overlap_ranges",
+    "count": 2,
+    "killers": [
+      "test_small_file_has_no_empty_ranges",
+      "test_uneven_plan_covers_every_byte_once"
+    ],
+    "rc": 1
+  },
+  {
+    "mutant": "ignore_eof",
+    "count": 2,
+    "killers": [
+      "test_missing_source_suffix_refuses",
+      "test_truncated_source_refuses"
+    ],
+    "rc": 1
+  },
+  {
+    "mutant": "ignore_failed_ack",
+    "count": 2,
+    "killers": [
+      "test_failed_first_chunk_does_not_publish",
+      "test_failed_last_chunk_does_not_publish"
+    ],
+    "rc": 1
+  },
+  {
+    "mutant": "ignore_hash",
+    "count": 2,
+    "killers": [
+      "test_wrong_whole_hash_does_not_create_image",
+      "test_wrong_whole_hash_never_replaces_existing_image"
+    ],
+    "rc": 1
+  },
+  {
+    "mutant": "ignore_size",
+    "count": 2,
+    "killers": [
+      "test_wrong_whole_size_never_publishes",
+      "test_wrong_whole_size_preserves_existing_image"
+    ],
+    "rc": 1
+  }
+]

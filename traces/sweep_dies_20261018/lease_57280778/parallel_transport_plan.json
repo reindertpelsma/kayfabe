@@ -1,0 +1,9 @@
+{
+  "kind": "MEASURED",
+  "utc": "2026-10-22T22:32:32.270411+00:00",
+  "owned_sender_parent": 431017,
+  "owned_ssh_child": 431020,
+  "reason": "replace slow serial asset transport; known child identity and pidfd used",
+  "hypothesis": "eight independent checked streams improve aggregate throughput within unchanged transfer bounds",
+  "falsifier": "aggregate throughput no better than serial, any chunk failure, or final size/SHA refusal"
+}

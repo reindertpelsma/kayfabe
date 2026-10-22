@@ -1,0 +1,161 @@
+EEEEEEEEEEEEE
+======================================================================
+ERROR: test_every_ack_precedes_publish (scripts.bench.tests.test_checked_chunks.CheckedChunksTests.test_every_ack_precedes_publish)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/workspace/s4-wt/scripts/bench/tests/test_checked_chunks.py", line 14, in setUp
+    SPEC.loader.exec_module(self.m)
+    ~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^
+  File "<frozen importlib._bootstrap_external>", line 755, in exec_module
+  File "<frozen importlib._bootstrap_external>", line 892, in get_code
+  File "<frozen importlib._bootstrap_external>", line 950, in get_data
+FileNotFoundError: [Errno 2] No such file or directory: '/workspace/s4-wt/scripts/bench/diesweep/checked_chunks.py'
+
+======================================================================
+ERROR: test_failed_first_chunk_does_not_publish (scripts.bench.tests.test_checked_chunks.CheckedChunksTests.test_failed_first_chunk_does_not_publish)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/workspace/s4-wt/scripts/bench/tests/test_checked_chunks.py", line 14, in setUp
+    SPEC.loader.exec_module(self.m)
+    ~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^
+  File "<frozen importlib._bootstrap_external>", line 755, in exec_module
+  File "<frozen importlib._bootstrap_external>", line 892, in get_code
+  File "<frozen importlib._bootstrap_external>", line 950, in get_data
+FileNotFoundError: [Errno 2] No such file or directory: '/workspace/s4-wt/scripts/bench/diesweep/checked_chunks.py'
+
+======================================================================
+ERROR: test_failed_last_chunk_does_not_publish (scripts.bench.tests.test_checked_chunks.CheckedChunksTests.test_failed_last_chunk_does_not_publish)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/workspace/s4-wt/scripts/bench/tests/test_checked_chunks.py", line 14, in setUp
+    SPEC.loader.exec_module(self.m)
+    ~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^
+  File "<frozen importlib._bootstrap_external>", line 755, in exec_module
+  File "<frozen importlib._bootstrap_external>", line 892, in get_code
+  File "<frozen importlib._bootstrap_external>", line 950, in get_data
+FileNotFoundError: [Errno 2] No such file or directory: '/workspace/s4-wt/scripts/bench/diesweep/checked_chunks.py'
+
+======================================================================
+ERROR: test_missing_source_suffix_refuses (scripts.bench.tests.test_checked_chunks.CheckedChunksTests.test_missing_source_suffix_refuses)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/workspace/s4-wt/scripts/bench/tests/test_checked_chunks.py", line 14, in setUp
+    SPEC.loader.exec_module(self.m)
+    ~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^
+  File "<frozen importlib._bootstrap_external>", line 755, in exec_module
+  File "<frozen importlib._bootstrap_external>", line 892, in get_code
+  File "<frozen importlib._bootstrap_external>", line 950, in get_data
+FileNotFoundError: [Errno 2] No such file or directory: '/workspace/s4-wt/scripts/bench/diesweep/checked_chunks.py'
+
+======================================================================
+ERROR: test_ordered_complete_content_publishes (scripts.bench.tests.test_checked_chunks.CheckedChunksTests.test_ordered_complete_content_publishes)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/workspace/s4-wt/scripts/bench/tests/test_checked_chunks.py", line 14, in setUp
+    SPEC.loader.exec_module(self.m)
+    ~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^
+  File "<frozen importlib._bootstrap_external>", line 755, in exec_module
+  File "<frozen importlib._bootstrap_external>", line 892, in get_code
+  File "<frozen importlib._bootstrap_external>", line 950, in get_data
+FileNotFoundError: [Errno 2] No such file or directory: '/workspace/s4-wt/scripts/bench/diesweep/checked_chunks.py'
+
+======================================================================
+ERROR: test_small_file_has_no_empty_ranges (scripts.bench.tests.test_checked_chunks.CheckedChunksTests.test_small_file_has_no_empty_ranges)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/workspace/s4-wt/scripts/bench/tests/test_checked_chunks.py", line 14, in setUp
+    SPEC.loader.exec_module(self.m)
+    ~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^
+  File "<frozen importlib._bootstrap_external>", line 755, in exec_module
+  File "<frozen importlib._bootstrap_external>", line 892, in get_code
+  File "<frozen importlib._bootstrap_external>", line 950, in get_data
+FileNotFoundError: [Errno 2] No such file or directory: '/workspace/s4-wt/scripts/bench/diesweep/checked_chunks.py'
+
+======================================================================
+ERROR: test_stream_stops_at_exact_range_boundary (scripts.bench.tests.test_checked_chunks.CheckedChunksTests.test_stream_stops_at_exact_range_boundary)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/workspace/s4-wt/scripts/bench/tests/test_checked_chunks.py", line 14, in setUp
+    SPEC.loader.exec_module(self.m)
+    ~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^
+  File "<frozen importlib._bootstrap_external>", line 755, in exec_module
+  File "<frozen importlib._bootstrap_external>", line 892, in get_code
+  File "<frozen importlib._bootstrap_external>", line 950, in get_data
+FileNotFoundError: [Errno 2] No such file or directory: '/workspace/s4-wt/scripts/bench/diesweep/checked_chunks.py'
+
+======================================================================
+ERROR: test_truncated_source_refuses (scripts.bench.tests.test_checked_chunks.CheckedChunksTests.test_truncated_source_refuses)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/workspace/s4-wt/scripts/bench/tests/test_checked_chunks.py", line 14, in setUp
+    SPEC.loader.exec_module(self.m)
+    ~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^
+  File "<frozen importlib._bootstrap_external>", line 755, in exec_module
+  File "<frozen importlib._bootstrap_external>", line 892, in get_code
+  File "<frozen importlib._bootstrap_external>", line 950, in get_data
+FileNotFoundError: [Errno 2] No such file or directory: '/workspace/s4-wt/scripts/bench/diesweep/checked_chunks.py'
+
+======================================================================
+ERROR: test_unbounded_parallelism_is_refused (scripts.bench.tests.test_checked_chunks.CheckedChunksTests.test_unbounded_parallelism_is_refused)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/workspace/s4-wt/scripts/bench/tests/test_checked_chunks.py", line 14, in setUp
+    SPEC.loader.exec_module(self.m)
+    ~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^
+  File "<frozen importlib._bootstrap_external>", line 755, in exec_module
+  File "<frozen importlib._bootstrap_external>", line 892, in get_code
+  File "<frozen importlib._bootstrap_external>", line 950, in get_data
+FileNotFoundError: [Errno 2] No such file or directory: '/workspace/s4-wt/scripts/bench/diesweep/checked_chunks.py'
+
+======================================================================
+ERROR: test_uneven_plan_covers_every_byte_once (scripts.bench.tests.test_checked_chunks.CheckedChunksTests.test_uneven_plan_covers_every_byte_once)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/workspace/s4-wt/scripts/bench/tests/test_checked_chunks.py", line 14, in setUp
+    SPEC.loader.exec_module(self.m)
+    ~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^
+  File "<frozen importlib._bootstrap_external>", line 755, in exec_module
+  File "<frozen importlib._bootstrap_external>", line 892, in get_code
+  File "<frozen importlib._bootstrap_external>", line 950, in get_data
+FileNotFoundError: [Errno 2] No such file or directory: '/workspace/s4-wt/scripts/bench/diesweep/checked_chunks.py'
+
+======================================================================
+ERROR: test_wrong_whole_hash_never_replaces_existing_image (scripts.bench.tests.test_checked_chunks.CheckedChunksTests.test_wrong_whole_hash_never_replaces_existing_image)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/workspace/s4-wt/scripts/bench/tests/test_checked_chunks.py", line 14, in setUp
+    SPEC.loader.exec_module(self.m)
+    ~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^
+  File "<frozen importlib._bootstrap_external>", line 755, in exec_module
+  File "<frozen importlib._bootstrap_external>", line 892, in get_code
+  File "<frozen importlib._bootstrap_external>", line 950, in get_data
+FileNotFoundError: [Errno 2] No such file or directory: '/workspace/s4-wt/scripts/bench/diesweep/checked_chunks.py'
+
+======================================================================
+ERROR: test_wrong_whole_size_never_publishes (scripts.bench.tests.test_checked_chunks.CheckedChunksTests.test_wrong_whole_size_never_publishes)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/workspace/s4-wt/scripts/bench/tests/test_checked_chunks.py", line 14, in setUp
+    SPEC.loader.exec_module(self.m)
+    ~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^
+  File "<frozen importlib._bootstrap_external>", line 755, in exec_module
+  File "<frozen importlib._bootstrap_external>", line 892, in get_code
+  File "<frozen importlib._bootstrap_external>", line 950, in get_data
+FileNotFoundError: [Errno 2] No such file or directory: '/workspace/s4-wt/scripts/bench/diesweep/checked_chunks.py'
+
+======================================================================
+ERROR: test_zero_file_is_refused (scripts.bench.tests.test_checked_chunks.CheckedChunksTests.test_zero_file_is_refused)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/workspace/s4-wt/scripts/bench/tests/test_checked_chunks.py", line 14, in setUp
+    SPEC.loader.exec_module(self.m)
+    ~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^
+  File "<frozen importlib._bootstrap_external>", line 755, in exec_module
+  File "<frozen importlib._bootstrap_external>", line 892, in get_code
+  File "<frozen importlib._bootstrap_external>", line 950, in get_data
+FileNotFoundError: [Errno 2] No such file or directory: '/workspace/s4-wt/scripts/bench/diesweep/checked_chunks.py'
+
+----------------------------------------------------------------------
+Ran 13 tests in 0.004s
+
+FAILED (errors=13)
