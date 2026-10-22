@@ -1,0 +1,19 @@
+{
+  "classification": "MEASURED",
+  "time": "2026-10-22T08:53:48.242787+02:00",
+  "own_process_matches": [],
+  "recorded_pids_absent": true,
+  "cargo_target_deleted": true,
+  "vm_session_exit": {
+    "classification": "MEASURED",
+    "time": "2026-10-22T08:48:14.095248+02:00",
+    "run": 4260,
+    "session_exit": true
+  },
+  "backing": {
+    "classification": "MEASURED",
+    "size_unchanged": true,
+    "mtime_unchanged": true
+  },
+  "gpu_lock_acquired_and_released": true
+}

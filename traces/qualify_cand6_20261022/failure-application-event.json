@@ -1,0 +1,15 @@
+{
+  "classification": "MEASURED",
+  "records": [
+    {
+      "record": 25442,
+      "guest_time": "2026-10-22T06:47:46.4296714+02:00",
+      "provider": "Windows Error Reporting",
+      "id": 1001,
+      "event_name": "LiveKernelEvent",
+      "P1": "141",
+      "attached_watchdog_date": "20261022-0647"
+    }
+  ],
+  "limit": "Other WER reports include historical dumps; they are not counted as fresh candidate faults."
+}

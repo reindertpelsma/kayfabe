@@ -1,0 +1,85 @@
+{
+  "classification": "MEASURED",
+  "time": "2026-10-22T08:57:50.666212+02:00",
+  "candidate": "afe00b3cbc7e345e2953b1bc199d9cce1054cc38",
+  "source_dirty": false,
+  "host_artifact_root": "/data/codex-Q1",
+  "files": [
+    {
+      "relative_file": "windows-20261022/boundary-kayfabe-4260/qemu.log",
+      "bytes": 13227349,
+      "sha256": "7cd1355bc410fb1e6ef10b8c9e57aa69e7c4868c71e9c1c117ef1ea32f4fe319"
+    },
+    {
+      "relative_file": "windows-20261022/boundary-kayfabe-4260/command.json",
+      "bytes": 3908,
+      "sha256": "7135131beb3b67c420fec5dbd1b042bd4197416a4decafec9e2d160ad64e8819"
+    },
+    {
+      "relative_file": "windows-20261022/boundary-kayfabe-4260/xid-epoch.json",
+      "bytes": 126788,
+      "sha256": "1060dc4691e0873e35de2a26421d7d14df3f2938516b1ff328a5b38953d67b15"
+    },
+    {
+      "relative_file": "windows-20261022/boundary-kayfabe-4260/arm-stop.json",
+      "bytes": 185,
+      "sha256": "40db20be01eafd32426d730ef68418bb3dd8f8cec7dbcfb3dcb6a2fd8f3ff859"
+    },
+    {
+      "relative_file": "windows-20261022/boundary-kayfabe-4260/backing-after.json",
+      "bytes": 80,
+      "sha256": "fcbfb8b43abbf0a26394ed602385b849a2ad39c2d10126537ad2c04d4b77f399"
+    },
+    {
+      "relative_file": "status-current.json",
+      "bytes": 129892,
+      "sha256": "c237de8d13051b409240a42f98937efb5edb9c8ab7c9cb8c817f520736308d50"
+    },
+    {
+      "relative_file": "spec-sampler-fatal.json",
+      "bytes": 574,
+      "sha256": "db04dae7c95c3cf4fe46352414a52ec2d173ee8caf5666a13a5e936a61857708"
+    },
+    {
+      "relative_file": "spec-export-progress.json",
+      "bytes": 44992,
+      "sha256": "419c74a8966f09221b11674e2c7bcc4eaa12480de20b061b640248c3b451be0f"
+    },
+    {
+      "relative_file": "windows-session-exit.json",
+      "bytes": 120,
+      "sha256": "21ef30634023b35fb099d75cff88a36d29288ee330cb465c8b4f4500fd560f64"
+    },
+    {
+      "relative_file": "epoch.py",
+      "bytes": 2171,
+      "sha256": "b451db98827c341079084e3b23257dcb56d64399a132ac654359d7c60a4cb723"
+    },
+    {
+      "relative_file": "guard_entry.py",
+      "bytes": 1090,
+      "sha256": "6cd0f6b07c2a65c7367a491be18a620ff998517150fa5c5d3b6214163947b1c9"
+    },
+    {
+      "relative_file": "native_xid_guard.py",
+      "bytes": 27168,
+      "sha256": "10b05269aa054b92fce652400f97a8623a9e5caa641c54077856cc4bb7823f6e"
+    },
+    {
+      "relative_file": "windows_session.py",
+      "bytes": 3552,
+      "sha256": "53818bc78156be15d0d8980542466f0d545ea94f465d7c6fa30374c43d6b0e06"
+    },
+    {
+      "relative_file": "spec-sampler.py",
+      "bytes": 3100,
+      "sha256": "f1ced38933ce9056adc8eee9403da4af17dbdb9ed72e195175d9f334b5eabe67"
+    },
+    {
+      "relative_file": "windows-20261022/boundary-kayfabe-4260/windows.qcow2",
+      "bytes": 1849884672,
+      "sha256": "c12b267a61e4ed8848c64119c07955e6293ec85a5966e9b10717d9f3a043d595",
+      "guest_writes_after_stop": false
+    }
+  ]
+}

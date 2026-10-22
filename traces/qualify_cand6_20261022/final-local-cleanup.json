@@ -1,0 +1,9 @@
+{
+  "classification": "MEASURED",
+  "time": "2026-10-22T08:55:54.091626+02:00",
+  "q1_target_deleted": true,
+  "q1_afe_archive_deleted": true,
+  "scope": "Final local CPU artifacts; Windows session exit and host cleanup independently recorded in final-host-cleanup.json",
+  "cargo_lock_acquired_and_released": true,
+  "local_target_deleted": true
+}

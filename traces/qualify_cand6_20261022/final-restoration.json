@@ -1,0 +1,14 @@
+{
+  "classification": "MEASURED",
+  "time": "2026-10-22T08:50:38.532768+02:00",
+  "cuda": {
+    "before": 0,
+    "after": 0,
+    "reloaded": false
+  },
+  "gdm": "active",
+  "nvidia_bound": true,
+  "smi_exit": 0,
+  "gpu": "NVIDIA GeForce RTX 4070, 595.91.07",
+  "new_windows_xids": 0
+}

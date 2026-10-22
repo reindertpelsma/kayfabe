@@ -61,5 +61,10 @@
     "host_channel": "0x1002d",
     "refused_and_poisoned": true
   },
-  "remaining": "Energy incomplete; enscape/maya/medical/solidworks/unreal and Heaven/Minecraft/Steel Nomad not run after guard stop"
+  "remaining": "Energy incomplete; enscape/maya/medical/solidworks/unreal and Heaven/Minecraft/Steel Nomad not run after guard stop",
+  "viewperf_observed_exits": 30,
+  "viewperf_observed_nonzero_exits": 0,
+  "viewperf_observation_limit": "Exit status does not identify a killing process. Final observer export after shutdown unavailable; no exact external-kill census claimed.",
+  "completed_subtests": 30,
+  "partial_subtests": 1
 }

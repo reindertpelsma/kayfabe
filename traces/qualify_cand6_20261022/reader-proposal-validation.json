@@ -1,6 +1,5 @@
 {
   "classification": "MEASURED",
-  "state": "PROPOSAL ONLY; hardware activation awaits explicit pending reader approval",
   "red_tests": 20,
   "red_errors": 7,
   "green_tests": 20,
@@ -18,5 +17,7 @@
       "mutation": "reader_accepts_failed_command",
       "killing_tests": 2
     }
-  ]
+  ],
+  "state_at_validation": "PROPOSAL ONLY; hardware activation awaits explicit pending reader approval",
+  "subsequent_activation": "Explicit night-authority approval; activated08:02 CEST on candidate afe00b3c, with tested reader code unchanged"
 }
