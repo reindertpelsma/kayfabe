@@ -33,6 +33,7 @@ class DesktopPlanTests(unittest.TestCase):
             calls.append('hold')
             return seconds
         records = []
+        self.calls = calls
         session = SimpleNamespace(run_app=app)
         return m.run_plan(session, [{'id':'heaven_d3d11'}, {'id':'valley_opengl'}],
                           records.append, health, hold), calls, records
@@ -65,6 +66,13 @@ class DesktopPlanTests(unittest.TestCase):
     def test_health_failure_after_app_is_fatal(self):
         with self.assertRaisesRegex(RuntimeError, 'display fault'):
             self.run_plan(fail_health_at=2)
+        self.assertNotIn('valley_opengl', self.calls)
+        self.assertNotIn('hold', self.calls)
+
+    def test_health_failure_after_unigine_prevents_hold(self):
+        with self.assertRaisesRegex(RuntimeError, 'display fault'):
+            self.run_plan(fail_health_at=3)
+        self.assertNotIn('hold', self.calls)
 
     def test_short_hold_is_not_accepted(self):
         with self.assertRaisesRegex(RuntimeError, 'hold'):
