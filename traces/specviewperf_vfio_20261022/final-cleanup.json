@@ -1,0 +1,68 @@
+{
+  "classification": "MEASURED",
+  "time": "2026-10-22T05:14:03.979329+02:00",
+  "ownedQemuPid": 1135352,
+  "ownedQemuPidAbsent": true,
+  "cleanupLockWaitSeconds": 120,
+  "cleanupLockAcquired": true,
+  "overlayRetained": false,
+  "copiedUefiVariablesRetained": false,
+  "removedOwnFiles": [
+    "vfio-overlay.qcow2",
+    "OVMF_VARS.fd"
+  ],
+  "nativeTextFiles": 76,
+  "codex-vf1-agent.service": {
+    "rc": 0,
+    "stdout": "ActiveState=inactive\nMainPID=0\n",
+    "stderr": ""
+  },
+  "codex-vf1-supervisor.service": {
+    "rc": 0,
+    "stdout": "ActiveState=inactive\nMainPID=0\n",
+    "stderr": ""
+  },
+  "gdm": {
+    "rc": 0,
+    "stdout": "ActiveState=active\nMainPID=1546817\n",
+    "stderr": ""
+  },
+  "ownerDiskMtimeUtc": "2026-10-21T23:22:47.682478+00:00",
+  "ownerDiskMtimeMatchesPreNative": true,
+  "currentQemuProcessListing": "    PID COMMAND\n",
+  "note": "No VF1 QEMU/helper service remains. The first bounded lock wait expired without touching its holder. After observed external release, a new bounded cleanup acquired the lock and removed both owned disk files. That flock process exited0, releasing its lock. A later nonblocking probe at05:17found the shared lock busy again; no holder was stopped and no further lock attempt was made. Owner VM was not restarted by VF1. Temporary agent server stopped; restart the broker when needed.",
+  "secondBoundedLockAttemptAcquired": true,
+  "secondAttemptOnlyAfterObservedExternalLockRelease": true,
+  "firstBoundedLockAttempt": {
+    "maxWaitSeconds": 120,
+    "outcome": "timed_out",
+    "observedHolderPid": 1621716,
+    "holderNotStopped": true
+  },
+  "secondBoundedLockAttempt": {
+    "maxWaitSeconds": 120,
+    "outcome": "acquired_after_observed_external_release"
+  },
+  "ownGpuLockReleasedAfterCleanup": true,
+  "cargoTargetDirectoriesCreated": false,
+  "devTargetDirectoriesAbsent": [
+    "/workspace/vf1-target",
+    "/workspace/VF1-target",
+    "/workspace/vf1-wt/target"
+  ],
+  "finalSharedLockProbe": {
+    "hostTime": "2026-10-22T05:17:10+02:00",
+    "nonblockingAcquireRc": 1,
+    "result": "busy_after_completed_lane_cleanup"
+  },
+  "removedFileStatsBeforeDeletion": {
+    "vfio-overlay.qcow2": {
+      "allocatedBytes": 4531318784,
+      "fileBytes": 4534829056
+    },
+    "OVMF_VARS.fd": {
+      "allocatedBytes": 540672,
+      "fileBytes": 540672
+    }
+  }
+}

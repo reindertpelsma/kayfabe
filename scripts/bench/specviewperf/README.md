@@ -4,6 +4,16 @@ CODE READ: this wrapper uses SPEC's supported CLI; it does not modify vendor
 binaries or workload definitions. The CLI must already be installed with the
 requested workloads. The guest must have an active kfadmin desktop session.
 
+MEASURED limitation from VF1: the Windows PowerShell launch returned a null
+Process.ExitCode after both full iterations, although all 18 workload statuses
+were Completed. Do not treat the wrapper's process exit as authoritative until
+handle retention/direct Process launch is verified with isolated exit 0/exit 7
+children. The original suite's exit code cannot be recovered retroactively.
+Do not run a test containing exit directly inside the shared command broker;
+use an isolated child process and read its result file. The selected follow-up
+needed for final runner validation was not executed after the safety stop.
+[PowerShell issue20400](https://github.com/PowerShell/PowerShell/issues/20400).
+
 Generate the guest-agent installer on Linux:
 
 ```sh
@@ -63,12 +73,3 @@ and vsync settings with comparisons. Vendor references:
 [SPEC user guide](https://gwpg.spec.org/wp-content/uploads/2025/12/SPECviewperf15-User-Guide.pdf),
 [systemd descriptor store](https://systemd.io/FILE_DESCRIPTOR_STORE/).
 
-MEASURED limitation from VF1: the Windows PowerShell launch returned a null
-Process.ExitCode after both full iterations, although all18workload statuses
-were Completed. Do not treat the wrapper's process exit as authoritative until
-handle retention/direct Process launch is verified with isolated exit0/exit7
-children. The original suite's exit code cannot be recovered retroactively.
-Do not run a test containing exit directly inside the shared command broker;
-use an isolated child process and read its result file. The selected follow-up
-needed for final runner validation was not executed after the safety stop.
-[PowerShell issue20400](https://github.com/PowerShell/PowerShell/issues/20400).

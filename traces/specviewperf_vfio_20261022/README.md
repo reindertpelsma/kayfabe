@@ -61,7 +61,7 @@ scores. [SPEC user guide](https://gwpg.spec.org/wp-content/uploads/2025/12/SPECv
 MEASURED: System/Application samples through about04:38CEST show unchanged boot
 record14976,zero new Display/nvlddmkm events and zero ApplicationError1000 events.
 The post-suite WER audit found83logged records:81saved EventTimes before native
-boot,zero verified after boot,and two CitySample RADAR_PRE_LEAK_64 records with
+boot,zero verified after boot,and CitySample/AncientGame RADAR_PRE_LEAK_64 records with
 unavailable original fault time. Old records are not counted as new native TDRs.
 Guest event logs after command-channel loss were not collected.
 
@@ -111,6 +111,13 @@ files are historical, superseded by the explicit owner desktop override and
 this measurement. The host supervisor also had an earlier SSH-scope launch
 failure; the measured two full iterations used a dedicated system service.
 
-MEASURED: final overlay deletion and own-helper cleanup are pending the final
-results push. The owner VM remains stopped. Final cleanup evidence will replace
-this paragraph before handoff.
+MEASURED at05:14CEST: overlay and copied UEFI variables removed after the full
+results push was verified. No VF1 QEMU/helper service remains; no target directory
+was created. The first cleanup lock wait expired after120s under an unknown
+holder, which was left untouched. After read-only observation showed its release,
+one new bounded cleanup acquired/released the lock. A later05:17nonblocking
+probe found the shared lock busy again; its holder was left untouched. Owner disk mtime still matches pre-native23:22:47.682478UTC.76native
+text files and21baseline text files remain on the trusted host.11unconsumed own
+agent requests were cancelled. The temporary host agent server is stopped; start
+the existing broker again when guest-agent use is needed. VF1 did not restart
+the owner VM. See final-cleanup.json and queue-cleanup.json.

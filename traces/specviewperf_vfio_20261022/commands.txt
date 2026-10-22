@@ -34,8 +34,23 @@ progress rule; restoration deadline06:10CEST; lock held through restore. Prior26
 Xids rolled out of dmesg during module-probe warnings, so raw dmesg counts are
 not subtracted across that rollover. Neither workload timeouts nor timers changed.
 
-Current hardware progress (03:40 CEST): first full9/75 complete; second4/9 complete.
-Restoration, selected repeats, and Steel Nomad have not yet run in this session.
+Final measured disposition:
+  # Both full iterations completed:150subtests/18Completed statuses.
+  # CLI exitCode was null; task Ready/no remaining benchmark process.
+  # A benign exit-code probe lost the shared command channel; follow-ups paused.
+  # One virtual-keyboard request attempted to restart existing KF/Kayfabe agent
+  # scheduled tasks. No verified recovery; no credentials were entered.
+  # Unchanged900s watchdog then issued QMP quit, qemu_exit=0,04:54:41CEST.
+  # Automatic module probe reported an error; independent04:55verification found
+  # NVIDIA/audio correctly bound, nvidia-smi successful, GDMactive/UbuntuWayland.
+  # Selected repeat and Steel Nomad NOT RUN. No matched uncapped rerun.
+  systemctl stop codex-vf1-agent.service
+  # Removed only11unconsumed own broker requests identified by lane source.
+  # Cleanup first waited120s for the shared lock and timed out; holder untouched.
+  # After observed external release, a new bounded lock protected Path.unlink of:
+  # /data/codex-VF1/vfio-overlay.qcow2 and /data/codex-VF1/OVMF_VARS.fd
+  # The cleanup flock exited0/released its lock; a later05:17flock -n was busy.
+  # No holder was stopped. No VF1 service/QEMU or cargo target remains.
 
 HISTORICAL INITIAL ATTEMPT BELOW — superseded by the resumed execution record.
 

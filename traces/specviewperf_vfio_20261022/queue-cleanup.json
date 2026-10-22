@@ -1,0 +1,50 @@
+{
+  "time": "2026-10-22T05:04:16.032266+02:00",
+  "cancelledOwnUnconsumedGuestRequests": [
+    {
+      "id": "1792637467074-ec1b78",
+      "sha256": "3908c72cd7ccd10d97d689ca0a1e04d63949d0ac4ed67f3d0894e471c28f65ad"
+    },
+    {
+      "id": "1792637378470-497b3c",
+      "sha256": "fa4c16d7781c80906d4a2e03e77c9a27a043890d5e4e506a5e079e86006362ba"
+    },
+    {
+      "id": "1792637200322-464a57",
+      "sha256": "61c194c7478916534210944b5b7d3917aafb686410cca93a0da1df5b725d1639"
+    },
+    {
+      "id": "1792637245054-df79ed",
+      "sha256": "fc19785751abcd0e868ab6f94835060d3b52f56a8e5adee6eb85022166a57397"
+    },
+    {
+      "id": "1792637289252-f38aea",
+      "sha256": "dfe16f73cebf3da4dd439c6735399436007e997d0a9b11f74e206ab9904fd406"
+    },
+    {
+      "id": "1792637511529-df3086",
+      "sha256": "50f612519f6c8e881b05f0ac5cae5d3ac8ac721cb8ba83bccbca30e19b5f70b7"
+    },
+    {
+      "id": "1792637600778-36e5a0",
+      "sha256": "f4ea274751c14fb017a1621ec89abc8b1db137b7162bf22acc526c506a0876c8"
+    },
+    {
+      "id": "1792637645396-262542",
+      "sha256": "ae94297177e651eec150d45f7d439cca9eb39c41c136185ec60f992be03c418d"
+    },
+    {
+      "id": "1792637556121-92993d",
+      "sha256": "f7edbdf37cd9e8e871202d22f4684a7cc1c56cc65c1775fea0d9a2b26d3f641c"
+    },
+    {
+      "id": "1792637422680-afdaf3",
+      "sha256": "32c01317fc7792f84cc0c83cd977f297fe82a7844a7b91d0cc084a0a1bfc1c6f"
+    },
+    {
+      "id": "1792637333853-6a80e1",
+      "sha256": "5921dda3f6ad232191f8d3a72083b950f39ac54df1fa2b91fe1edbb0bd6dcc8d"
+    }
+  ],
+  "temporaryAgentServiceStopped": true
+}
