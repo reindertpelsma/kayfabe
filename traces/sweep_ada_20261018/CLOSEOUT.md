@@ -1,3 +1,20 @@
+STATUS UPDATE: CLOSED PARTIAL, 2026-10-22 04:45 UTC. S3 completed the S2
+lease takeover, evidence export/push and exact-owned-ID teardown. This replaces
+all LIVE/PENDING statuses below; older evidence remains historical.
+MEASURED: lease 57144505 API-absent 04:45:07 UTC; timer cancelled afterward,
+independent absence rechecked, no owned local process/target/lock remaining.
+MEASURED: Linux guest 30/30 remains accepted. Windows 580.88 ON reached Code 0,
+1920x1080 and DWM, but pre-hold health refused (Explorer absent; two event-153
+records from Kernel-Boot). Controller exited rc=1 at 04:30:12 UTC. Neither
+600-second hold nor Windows CUDA/DX acceptance ran. No restart or second lease.
+CODE READ: saved software 128 PASS; 36 mutants each >=2 killers. No code change.
+INFERRED: estimated runtime plus prior spend 2.393014 USD; current own invoice
+rows total 2.140 USD, not final billing. Within 4 USD cap, including 1 USD buffer.
+INFERRED decision 1: retain Windows PARTIAL; separately authorize tests-first
+review of health evidence/session and missing export-helper deployment before
+any rerental. Full evidence: lease_57144505/windows_stopped/RESULT.md; teardown
+and observed invoices are adjacent in lease_57144505/.
+
 STATUS UPDATE: LIVE,2026-10-22 03:57UTC; no closeout yet. Supersedes prior
 closed/refusedstatusesbelowunderlaterexplicitnightauthoritycontinuation.
 MEASURED:128PASSdev/rental,original23retained,36manualmutants>=2killers each

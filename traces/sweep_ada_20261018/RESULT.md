@@ -1,3 +1,14 @@
+STATUS UPDATE: CLOSED PARTIAL, 2026-10-22 04:45 UTC. S3 takeover complete;
+this supersedes all initial UNRUN/no-hardware-result statuses below.
+MEASURED: current-freeze Linux guest 30/30 with exact approved fault history;
+Windows 580.88 ON Code 0/display dimensions observed, full desktop/hold/app
+acceptance refused before the hold. No observer arm or new workload started.
+MEASURED: bounded failure evidence pushed before own lease 57144505 teardown;
+API absence verified before timer cancellation. Full result, limitations and
+owner recommendation: lease_57144505/windows_stopped/RESULT.md. Final cleanup
+and cost receipts are in lease_57144505/; estimated total including prior is
+2.393014 USD (INFERRED; not a final invoice), within 4 USD cap.
+
 STATUS UPDATE: SUPERSEDED BY CLOSED PARTIAL, 2026-10-22. Owner approved AD102; one lease ran native PASS then stopped at the omitted guest-image path. Lease destroyed/API-absent. Current outcome: MATRIX.md and lease_57138158/LINUX_NOTRUN_STOP.md. Historical text below.
 
 STATUS UPDATE: SUPERSEDED, 2026-10-22. Owner explicitly resumed S2 to implement the approved guard and then rent. Guard is now verified; see GUARD_RESULT.md. The preflight stop below is historical, not the resumed outcome.

@@ -1,3 +1,11 @@
+STATUS UPDATE: CLOSED, 2026-10-22 04:45 UTC. S3 completed the authorized S2
+takeover. MEASURED: own 57144505 destroyed by ID; API absence verified before
+original timer cancellation and independently rechecked. No replacement
+lease, controller restart or new workload. Linux 30/30 accepted; Windows
+580.88 display/Code 0 PARTIAL, both holds/apps UNRUN after health refusal.
+Final evidence and cleanup: lease_57144505/windows_stopped/RESULT.md and
+lease_57144505/final_cleanup_receipt.json. All LIVE statuses below are historical.
+
 STATUS UPDATE: SUPERSEDED BY CLOSED PARTIAL, 2026-10-22. Owner approved AD102; one lease ran native PASS then stopped at the omitted guest-image path. Lease destroyed/API-absent. Current outcome: MATRIX.md and lease_57138158/LINUX_NOTRUN_STOP.md. Historical text below.
 
 STATUS: LIVE, 2026-10-22. Guard verified and pushed; rental not started.

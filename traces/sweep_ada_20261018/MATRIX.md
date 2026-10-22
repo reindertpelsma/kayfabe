@@ -1,3 +1,16 @@
+STATUS UPDATE: CLOSED PARTIAL, 2026-10-22 04:45 UTC. S3 takeover finished;
+this supersedes the LIVE status below. Runtime source 7f6f7e7a7, RTX4090/AD102,
+host 595.91.07 open, unchanged current-freeze Linux acceptance (each n=1;
+spread N/A): native 30/30, CUDA 4/4, GR, gates 9+10, 12 USER births, guest
+30/30 with 30 ordered actual-PID completions. Exact approved 5+4+1 host Xids
+remain the whole journal through the final export; no later host Xid.
+MEASURED: Windows installed driver 32.0.15.8088 (580.88), ON: Code 0, 1920x1080,
+DWM=1, Explorer=0; zero 4101/1001 at the health check. Its two event-153 records
+were Kernel-Boot, not evidence of NVIDIA TDR. Pre-hold health refused; normal
+600-second hold, Windows CUDA/DX and observer arm UNRUN. No Windows PASS.
+MEASURED: exact lease 57144505 absent before original timer cancellation.
+Evidence: lease_57144505/windows_stopped/ and final_cleanup_receipt.json.
+
 STATUS UPDATE: LIVE,2026-10-22. CurrentAD102LinuxvalidationCOMPLETE;
 WindowsLTSCinstallactive,production580.88acceptancepending. This supersedes
 priorharness-stopstatusbelow;oldmeasurementsremainhistorical.

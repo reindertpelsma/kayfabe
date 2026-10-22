@@ -3,7 +3,11 @@ STATUS: STOPPED PARTIAL, 2026-10-22. S3 takeover of the existing S2 lease.
 MEASURED: pinned SSH and the API identified the owned running RTX 4090 lease
 57144505. The inherited controller had already exited rc=1 at 04:30:12 UTC;
 no restart or new workload was launched during takeover. Its original destroy
-timer remained armed for 05:05:42 UTC. Teardown receipt follows after export/push.
+timer remained armed for 05:05:42 UTC. Evidence commit b9f1abd03 was pushed
+and origin-verified before teardown. MEASURED: the supplied helper destroyed
+only ID 57144505; API absence was verified 04:45:07 UTC before timer
+cancellation, then independently rechecked 04:45:54 UTC. No owned local
+process, build target or local lock remains. See ../final_cleanup_receipt.json.
 
 CODE READ: the controller stated its Windows hypothesis and falsifier before
 the arm: Code 43, crash, TDR, desktop, CUDA or DX failure falsifies acceptance;

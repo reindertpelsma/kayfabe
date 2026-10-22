@@ -1,3 +1,16 @@
+STATUS UPDATE: CLOSED, 2026-10-22 04:45 UTC. S3 retired the existing S2 lease;
+no new lease or workload was started. This supersedes LIVE statuses below.
+MEASURED: own 57144505 created 02:15:42.589 UTC, absent 04:45:07.056 UTC;
+actual rate 0.876666667 USD/h, elapsed to verified absence 2.490129806 h.
+INFERRED: runtime estimate 2.183013796 USD plus prior 0.21 = 2.393013796 USD;
+with the unchanged 1 USD delayed-billing guard, 3.393013796 < 4 USD lane cap.
+MEASURED: own invoice rows observed 04:45:28 UTC total 2.140 USD; not a final
+settlement. Shared credit movement is not exclusive lane-spend attribution.
+MEASURED: original 05:05:42 UTC timer was not reset or cancelled early; supplied
+destroy helper proved own-ID absence before cancellation. Independent absence
+recheck passed 04:45:54 UTC. No owned target/process/local lock remains.
+Evidence: lease_57144505/final_cleanup_receipt.json and invoices_observed.json.
+
 STATUS UPDATE: LIVE,2026-10-22 03:57UTC. Sameowned57144505only;noextra lease.
 MEASURED: current7f6f7e7a7Linux30/30complete,nativeexact5+guest4+1proven;
 allharnessrefusalswerepreservedandfixedtest-first,withfullfreshbootbaselines

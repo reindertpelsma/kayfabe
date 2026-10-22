@@ -1,0 +1,24 @@
+{
+  "id": 57144505,
+  "created_utc": "2026-10-22T02:15:42.589188+00:00",
+  "absence_verified_utc": "2026-10-22T04:45:07.056489+00:00",
+  "actual_dph": 0.8766666666666667,
+  "elapsed_hours_to_absence": 2.4901298058333334,
+  "runtime_cost_estimate_usd": 2.1830137964472223,
+  "auto_destroy_pid": 2854636,
+  "auto_destroy_cancelled_after_absence": true,
+  "kind": "MEASURED exact-owned-ID teardown and independent API absence check",
+  "absence_rechecked_utc": "2026-10-22T04:45:54.846071+00:00",
+  "lease_present": false,
+  "timer_active": false,
+  "owned_local_processes": [],
+  "target_directories_present": {
+    "s2": false,
+    "s3": false
+  },
+  "local_locks_taken": 0,
+  "prior_spent_usd": 0.21,
+  "budget_cap_usd": 4,
+  "runtime_plus_prior_estimate_usd": 2.3930137964472222,
+  "cost_note": "Runtime estimate, not settled invoice; billing buffer remains 1 USD."
+}
