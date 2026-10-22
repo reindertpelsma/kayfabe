@@ -1,0 +1,11 @@
+{
+  "wrangler": "4.151.3",
+  "worker_source_commit": "d0c3e8480",
+  "mode": "NATIVE_WORKER_MOCK_PROVIDER",
+  "stream_errors_before_ingress_fix": 6,
+  "stream_errors_final_run": 0,
+  "uncaught_errors_final_run": 0,
+  "real_rentals_created": 0,
+  "ingress_exposure": "none; loopback only",
+  "cron_invocations_through_wrangler_test_scheduled": 5
+}

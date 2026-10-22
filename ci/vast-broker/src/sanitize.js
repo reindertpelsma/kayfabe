@@ -19,7 +19,7 @@ export function sanitizeBoxText(bytes,cap=8192,secrets=[],{tail=true}={}){
     .replace(/(?<![A-Za-z0-9_:-])(?:[0-9a-f]{0,4}:){2,7}[0-9a-f]{0,4}(?:%[A-Za-z0-9]{1,32})?(?![A-Za-z0-9_:-])/gi,'[address]')
     .replace(/[A-Za-z0-9_-]+/g,value=>value.length>=32?'[redacted]':value);
   for(const secret of secrets)if(secret)text=text.split(secret).join('[redacted]');
-  text=text.replaceAll('::',': :').replaceAll('##[','# #['); // MUTANT command-delimiters
+  text=text.replace(/:{2,}/g,value=>value.split('').join(' ')).replaceAll('##[','# #['); // MUTANT command-delimiters
   const lines=text.split('\n');if(lines.at(-1)==='')lines.pop();
   let retained=[],size=0,shown=0;
   for(const line of (tail?lines.slice(-200):lines)){const safe=utf8Prefix(line,1018);const rendered='[box] '+safe+'\n'; // MUTANT all-prefix

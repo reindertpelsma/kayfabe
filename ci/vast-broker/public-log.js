@@ -8,7 +8,7 @@ def number(key,default=0):
 def clean(text):
     text=re.sub(r'\x1b\[[0-?]*[ -/]*[@-~]','',str(text))
     text=re.sub(r'[\x00-\x08\x0b-\x1f\x7f-\x9f]','',text)
-    return text.replace('::',': :').replace('##[','# #[')
+    return re.sub(r':{2,}',lambda match:' '.join(match[0]),text).replace('##[','# #[')
 state=data.get('state','UNAVAILABLE')
 if state not in {'RUNNING','STOPPING','STOPPED','COMPLETE','NOT_NEEDED','NOT_ELIGIBLE','NEEDS_APPROVAL','RENTING_DISABLED','BUSY','UNAVAILABLE','UNAVAILABLE_BUDGET','UNAUTHORIZED','NOT_FOUND'}: state='UNAVAILABLE'
 verdict=data.get('verdict','UNAVAILABLE')

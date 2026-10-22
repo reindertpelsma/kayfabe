@@ -62,6 +62,11 @@ class Client:
         code,data=request(self.base+'/__v4/control','POST',self.env['OWNER_STOP_TOKEN'],body)
         if code!=200: raise Stop('MOCK_CONTROL_FAILED')
         return data
+    def scheduled(self):
+        start=time.monotonic()
+        with urllib.request.urlopen(self.base+'/cdn-cgi/local/scheduled',timeout=25) as response:
+            size=len(response.read(64));assert response.status==200
+        self.rows.append({'route':'scheduled','method':'GET','status':200,'response_bytes':size,'wall_ms':round((time.monotonic()-start)*1000,3)})
     def drain(self,run,cursor):
         result=''
         for _ in range(10000):
@@ -89,7 +94,7 @@ class Client:
                     connection.sendall(wire);connection.settimeout(1)
                     try: connection.recv(1,socket.MSG_PEEK);raise Stop('EARLY_UPLOAD_RESPONSE')
                     except socket.timeout: pass
-                    self.control({'action':'cron'})
+                    self.scheduled()
                     assert self.control({'action':'capability','run':run})['rate_count']==0
                 finally: connection.close()
             code,_=self.call('/report/'+run,'POST',cap['token'],{'seq':1,'kind':'progress','text':'before running'},oidc=False);assert code==409
@@ -110,9 +115,9 @@ class Client:
                 code,_=self.call('/kill/'+run,'POST',cap['token'],{},oidc=False);assert code==200
                 assert not self.control({'action':'capability','run':run})['present']
             else:
-                self.control({'action':'advance','offset':299000});self.control({'action':'cron'})
+                self.control({'action':'advance','offset':299000});self.scheduled()
                 assert self.control({'action':'capability','run':run})['present']
-                self.control({'action':'advance','offset':301000});self.control({'action':'cron'})
+                self.control({'action':'advance','offset':301000});self.scheduled()
                 assert not self.control({'action':'capability','run':run})['present']
             settled=self.control({'action':'capability','run':run});assert settled['settled']
             results.append({'scenario':scenario,'verdict':verdict,'grace_kept_before_cleanup':True,'mock_provider_absent':True,'ledger_settled':True,'clock':'SYNTHETIC','live_box':False,'slow_upload_check':'PASS' if index==0 else 'NOT_RUN'})

@@ -1,0 +1,16 @@
+{
+  "run": "v4-native-20261022",
+  "own_processes_remaining": 0,
+  "real_instances_created": 0,
+  "public_tunnels_started": 0,
+  "firewall_rules_added": 0,
+  "independent_live_reaper_armed": false,
+  "reason_no_reaper": "No real creation attempted; blocked preflight.",
+  "runtime_secrets_and_native_storage_removed": true,
+  "temporary_wrangler_install_removed": true,
+  "cargo_target_created": false,
+  "host_or_gpu_lock_taken": false,
+  "verification_processes_remaining": 0,
+  "mutation_sources_restored": true,
+  "generated_bundle_and_python_cache_removed": true
+}
