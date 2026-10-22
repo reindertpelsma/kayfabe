@@ -13,10 +13,15 @@ The production Relay tests passed 38/38 after the fix. The real Storage tests
 cover all twelve T1 words, maximum format length, malformed encodings and real
 credit fields. The 1026596-byte relay test reaches marker observation and guest
 GP_GET write-back; these are simulated native observations, not GPU execution.
+Test attribution: commits 149bc39e0 and eb9e513e0 (RED), then fix commit
+cf79374e3; `cargo test -p kf-chan --test user_turn_unit` and the
+`user_storage.rs::tests` module exercise these production paths.
 
 MEASURED: all 13 source mutations below have at least two independent killing
 tests. Every mutation was restored. Full logs stay outside git; this table is
 the small evidence record.
+Mutation campaign at commit 4d49f9437: `tests/user_turn_unit.rs`,
+`user_storage.rs::tests` and the named killers in the table below.
 
 | Mutation | Killing tests | Two independent killers |
 |---|---:|---|
@@ -37,6 +42,8 @@ the small evidence record.
 MEASURED: identical baseline/final clippy commands emit 379 warnings each,
 261 distinct sites each, zero added sites and zero errors. The kf-qemu non-test
 deny set remains active. No warning suppression was added.
+Clippy attribution: Phase 1 baseline/final comparison recorded at commit 468a35c9d
+for `cargo clippy --release --locked -j2 -p kf-chan -p kf-qemu --all-targets --message-format=json`.
 
 MEASURED: the small-entry action transcripts agree before/after in default and
 always-scan modes. The original long randomized I/O golden remains unchanged
@@ -45,11 +52,16 @@ observation fields, which have independent counter tests. The bit-flip coverage
 is now exact: 4 direct bases x 3 unsupported bits + 2 NOP bases x 9 illegal high
 bits = 30 invalid / 354 valid encodings, each still checked word-by-word. The
 fixture ID decoder no longer confuses a legal large length with a torn word.
+Test attribution: oracle maintenance commit 4d49f9437;
+`tests/user_turn_unit.rs` and `tests/user_lifecycle_props.rs`.
 
 MEASURED: the first full run exposed those oracle maintenance issues; the two
 corrected targets then passed 63 model tests (3 existing ignores) and 38 property
 tests. A fresh full `kf-chan` + `kf-qemu` run then exited 0: 1046 passed,
 0 failed, 4 existing ignores across 36 test binaries/doc-test groups.
+Test attribution: oracle maintenance commit 4d49f9437;
+`cargo test --release --locked -j2 -p kf-chan -p kf-qemu`
+(including `tests/user_lifecycle_model.rs` and `tests/user_lifecycle_props.rs`).
 
 CODE READ: H-A and its falsifier are in the decision before these runs. MEASURED:
 all twelve words are forwarded unchanged in the production relay fixture, the

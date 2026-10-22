@@ -12,6 +12,7 @@ subtests subsequently completed. Thus "every new viewperf.exe dies" is too broad
 The supplied snapshot2 SPEC run-log file is a PowerShell argument error, not a
 workload-progress record. The replacement evidence is the already-exported text,
 read without invoking the guest agent. See [snapshot3 and workload evidence](../../traces/tdr_specviewperf_20261018/snapshot3-and-workloads.json).
+Run 3440 evidence: [snapshot3/workload evidence](../../traces/tdr_specviewperf_20261018/snapshot3-and-workloads.json) (`workload_run_logs`) and [snapshot2 evidence](../../traces/tdr_specviewperf_20261018/snapshot2-summary.json) (`guest_events`); extraction commit e826ddb4d.
 
 CODE READ: `seed life N` numbers BAR1 seed placements (`CpuWindow::reseed`), not
 `BootClean`'s fn-72 RM generations. Below, "seed-3/seed-9 teardown" identifies the
@@ -21,7 +22,7 @@ INFERRED: **STOP on a subtest-01-specific reproducer or a global poisoned-life
 conclusion.** Options: (1) reproduce the whole catia viewset, retaining the order;
 (2) isolate subtest 03 using the installed harness's supported selection;
 (3) retain the original subtest-01 arm as a negative control. Recommendation:
-(1), then (2) once its selection is verified. No substitute hardware experiment
+(1), then (2) after checking its supported selection. No substitute hardware experiment
 or product design change was improvised in T1.
 
 ## Result
@@ -31,6 +32,7 @@ BAR1 unload markers; snapshot3 extends the same byte prefix to twelve refusals
 and thirteen unload markers. The first refusal precedes the first refused
 `RESET_CHANNEL` and teardown in log order. The extra, very short recovery cycle
 has no new Budget refusal: this finding does **not** explain every reset.
+Run 3440 evidence: [snapshot2 evidence](../../traces/tdr_specviewperf_20261018/snapshot2-summary.json) (`refusals`, `unload_markers`) and [snapshot3/workload evidence](../../traces/tdr_specviewperf_20261018/snapshot3-and-workloads.json) (`refusals`, `unloads`); extraction commit e826ddb4d.
 
 CODE READ: the refused descriptors exceed the existing 917,504-byte source
 staging policy. `inspect_entry` checks that limit before Pointer/Scan selection;
@@ -44,6 +46,7 @@ report `unreconciled=0` and `root_moves=0`. Every one of snapshot3's 197 logged
 T-space retirements says `released=true` and `stale_binds=0/...`. These lower the
 priority of an indefinitely armed trigger or observed stale T-space bind; they
 are not a complete channel/VA lifetime proof.
+Run 3440 evidence: [snapshot2 evidence](../../traces/tdr_specviewperf_20261018/snapshot2-summary.json) (`status_lines`, nonzero counters) and [snapshot3/workload evidence](../../traces/tdr_specviewperf_20261018/snapshot3-and-workloads.json) (`status_samples`, `all_translated_retire`); extraction commit e826ddb4d.
 
 ## Scope, evidence and clock contract
 
@@ -65,6 +68,7 @@ samples and bounded excerpts. The snapshot3 supplement records its hash, verifie
 snapshot2 is a byte prefix, and includes the exported workload run logs. Full
 logs remain on the trusted host; their private paths belong only in T1's local
 report. No raw guest profiles, host paths or machine identifiers were copied.
+Run 3440 evidence: [snapshot2 evidence](../../traces/tdr_specviewperf_20261018/snapshot2-summary.json) (`sources`) and [snapshot3/workload evidence](../../traces/tdr_specviewperf_20261018/snapshot3-and-workloads.json) (`source`, `workload_run_logs`); extraction commit e826ddb4d.
 
 INFERRED: clock conversion uses the lane's guest-displayed time + 2 h = host
 CEST, and the lane's VM start 21:56:17 CEST as an approximate origin for device
@@ -83,6 +87,7 @@ window. The last display anchors surrounding the refusal are 9548.766 s and
 
 MEASURED for guest times from the exported run log/event text; INFERRED for
 host conversion and approximate uptime in this table:
+Run 3440 evidence: [snapshot3/workload evidence](../../traces/tdr_specviewperf_20261018/snapshot3-and-workloads.json) (`workload_run_logs`) and [snapshot2 evidence](../../traces/tdr_specviewperf_20261018/snapshot2-summary.json) (`guest_events`); extraction commit e826ddb4d.
 
 | Guest-displayed time, Oct 21 | Host CEST, Oct 22 | Approximate uptime | Event |
 |---|---|---:|---|
@@ -97,6 +102,7 @@ host conversion and approximate uptime in this table:
 
 MEASURED: the bounded device-clock bracket contains 105 status samples. The
 last ninety occupy lines 104843–113435. Their endpoint deltas are:
+Run 3440 evidence: [snapshot2 evidence](../../traces/tdr_specviewperf_20261018/snapshot2-summary.json) (`pre_first_tdr.status_count`, `nominal_last_90_heartbeats`); extraction commit bcc007267.
 
 | Counter | First | Last | Delta |
 |---|---:|---:|---:|
@@ -122,6 +128,7 @@ MEASURED: across the nominal ninety samples, heartbeat walk averages range
 window's beginning. This cannot locate that slow invalidate inside the window.
 The final heartbeat has zero new walks and host calls while the counters remain
 settled; it does not show a permanently unfinished memory batch.
+Run 3440 evidence: [snapshot2 evidence](../../traces/tdr_specviewperf_20261018/snapshot2-summary.json) (`pre_first_tdr.nominal_last_90_heartbeats`); extraction commit bcc007267.
 
 MEASURED: the wider 212.444 s bracket contains 455 logged large applies, 0–103 ms,
 with 8461 ms summed logged duration; 130 exceed 12 ms and 77 exceed 50 ms. The
@@ -130,12 +137,14 @@ largest is line 107410: 17184 maps, six batch verbs, 103 ms. Line 106960 maps
 >=1000 changed runs, with integer-millisecond truncation, not a distribution of
 all applies or trigger-to-clear latency. INFERRED: they show substantial mapping
 cost and deserve measurement under §AD; they do not prove the first TDR cause.
+Run 3440 evidence: [snapshot2 evidence](../../traces/tdr_specviewperf_20261018/snapshot2-summary.json) (`pre_first_tdr.large_apply_*`); extraction commit bcc007267.
 
 MEASURED: 56 capacity retry records in that bracket hold 24 slots throughout,
 with ceilings zero. The first has grows=93/retries=158; the last has 122/213,
 1889024 free slot-pool runs, largest slot/walk 423168. Slot 94 grows to 122624
 runs at line 113233. During subsequent teardown, slots held fall to 15 and
 retries reach 215. This is observed capacity recovery, not a ceiling failure.
+Run 3440 evidence: [snapshot2 evidence](../../traces/tdr_specviewperf_20261018/snapshot2-summary.json) (`pre_first_tdr.capacity_first_last`, `decisive_lines`); extraction commit bcc007267.
 
 MEASURED: ten deferred context acts occur in the bracket: three InitializeCtx,
 three PromoteCtx, four EvictCtx. The failing channel's client/object pair is
@@ -144,16 +153,19 @@ by the host twin's context. Earlier clients using the same host handle 0x61 were
 evicted and freed before reuse. No failed deferred-context act was observed in
 this bracket. Their raw request bodies were not interpreted beyond kayfabe's
 own decoded log labels.
+Run 3440 evidence: [snapshot3/workload evidence](../../traces/tdr_specviewperf_20261018/snapshot3-and-workloads.json) (`pre_first_tdr_deferred_contexts`); extraction commit e826ddb4d.
 
 MEASURED: the logged HELD-minus-POSTED balance is zero at the bracket start,
 Budget refusal, first display-loss marker, first unload, seed-9 unload and
 snapshot2 EOF; global logged maximum depth is one and EOF balance is zero.
 There is no persistently unmatched reply in this trace. Reply latency and
 unlogged/capped cases cannot be reconstructed from this balance.
+Run 3440 evidence: [snapshot2 evidence](../../traces/tdr_specviewperf_20261018/snapshot2-summary.json) (`held_balance_checkpoints`); extraction commit bcc007267.
 
 ### First explicit fatal relay anomaly
 
 MEASURED, snapshot2 line 113366:
+Run 3440 evidence: [snapshot2 evidence](../../traces/tdr_specviewperf_20261018/snapshot2-summary.json) (`refusals`, original line 113366); extraction commit bcc007267.
 
 ```text
 USER_RING_REFUSED 0xc1d00188:0xff040031 host 0x61:
@@ -185,6 +197,7 @@ This is log order, not a measured refusal-to-TDR latency. No preceding fatal
 relay refusal appears in the snapshot2 prefix. Large applies are earlier
 performance anomalies, so "first explicit fatal relay anomaly" is narrower
 than "first abnormal event of any kind".
+Run 3440 evidence: [snapshot2 evidence](../../traces/tdr_specviewperf_20261018/snapshot2-summary.json) (`pre_first_tdr.decisive_lines`, `unload_markers`, `guest_events`); extraction commit bcc007267.
 
 MEASURED: at retirement the failing USER relay is Pointer mode, with 211919
 Pointer entries and 13 Scan entries; its lazy counters record 210942 cache hits
@@ -192,11 +205,13 @@ and 9209 fresh PUT reads. Its host handle is 0x61 and token 0x33. The retire
 ledger says rung=0/forwarded=0 for that Passthrough-route bookkeeping; CODE READ:
 those inline-doorbell counters do not measure relayed USER-ring publications.
 They must not be reported as proof that no work reached this channel.
+Run 3440 evidence: [snapshot2 evidence](../../traces/tdr_specviewperf_20261018/snapshot2-summary.json) (`pre_first_tdr.decisive_lines`, `life9_teardown`); extraction commit bcc007267.
 
 ### Last observable Translated progress
 
 MEASURED: the last pre-loss status samples retain these endpoints. These are
 last **observed cursor values**, not timestamps of the last doorbells:
+Run 3440 evidence: [snapshot2 evidence](../../traces/tdr_specviewperf_20261018/snapshot2-summary.json) (`pre_first_tdr.nominal_last_90_heartbeats`); extraction commit bcc007267.
 
 | Token(s) | Last PUT / reported GET | Forwarded entries / submissions |
 |---|---|---|
@@ -213,6 +228,7 @@ subtracted from a cumulative forwarded-entry count. There is no complete
 "forwarded minus executed" counter in these snapshots. Its retirement reports
 124334/124334 splits and `dead=None`; all thirteen Translated channels in the
 first teardown report `released=true` and zero unresolved-wait counters.
+Run 3440 evidence: [snapshot2 evidence](../../traces/tdr_specviewperf_20261018/snapshot2-summary.json) (`pre_first_tdr.decisive_lines`, `life9_teardown`); extraction commit bcc007267.
 
 CODE READ: GP_GET may precede execution; neither cursor equality nor the silent
 USER-only `PROGRESS_STRAND` watcher proves all semaphore releases/interrupts
@@ -226,6 +242,7 @@ MEASURED: snapshot2's marker sequence below uses seed labels only. The interval
 is from the preceding unload, not the new viewperf process's measured lifetime.
 Every row with a Budget refusal is followed by a viewperf OpenGL error in the
 preserved guest event text; reset-to-refusal timing itself is not timestamped.
+Run 3440 evidence: [snapshot2 evidence](../../traces/tdr_specviewperf_20261018/snapshot2-summary.json) (`unload_markers`, `guest_events`); extraction commit bcc007267.
 
 | Seed label at unload | Uptime seconds | Previous-unload interval | Budget refusal line / bytes |
 |---:|---:|---:|---|
@@ -247,6 +264,7 @@ actual completed/failed subtests provide a stronger discriminator than the
 assumption of a permanently broken new RM life.
 
 MEASURED: comparison of the seed-3 and seed-9 teardown clusters:
+Run 3440 evidence: [snapshot2 evidence](../../traces/tdr_specviewperf_20261018/snapshot2-summary.json) (`pre_first_tdr.decisive_lines`, `life9_teardown`) and [snapshot3/workload evidence](../../traces/tdr_specviewperf_20261018/snapshot3-and-workloads.json) (`translated_retire_comparison`); extraction commit e826ddb4d.
 
 | Observation | Seed-3 cluster | Seed-9 cluster |
 |---|---|---|
@@ -276,11 +294,13 @@ fn-47 path updates `unload_life`. MEASURED: in the first cycle, the skip at
 before the next logged fn 72. INFERRED: that message alone cannot establish
 that a new RM already began or that old data corrupted recovery. Its wording
 is broader than the exact generation comparison that produced it.
+Run 3440 evidence: [snapshot2 evidence](../../traces/tdr_specviewperf_20261018/snapshot2-summary.json) (`pre_first_tdr.decisive_lines`); extraction commit bcc007267.
 
 MEASURED: the supplied dmesg tail has two old `unknown NVRM ioctl command: 0xf0`
 lines and no Xid line. T1 did not query the live GPU or obtain a complete,
 time-bounded kernel journal. The lane's unchanged Xid count of 26 remains
 supplied evidence; absence from this short tail is not an independent recount.
+Run 3440 evidence: [snapshot2 evidence](../../traces/tdr_specviewperf_20261018/snapshot2-summary.json) (`host_dmesg_nvrm_lines`); extraction commit bcc007267.
 
 ## Ranked hypotheses, falsifiers and decisive experiments
 
@@ -348,6 +368,8 @@ behavior; they do not change `inspect_entry`'s admission limit. MEASURED: run
 3440 logged cache=true/observe_interval=16. INFERRED: a same-binary both-off arm
 is a useful timing negative control after the main reproducer, not a cure or
 proof about the Translated path. Neither switch may replace doorbell correctness.
+Configuration attribution: run 3440 `qemu.log.snapshot2` (source hash in
+[snapshot2 evidence](../../traces/tdr_specviewperf_20261018/snapshot2-summary.json)); T1 configuration report at commit 77ed23eff.
 
 CODE READ: the earlier [Windows bring-up findings](V3_WINDOWS_BRING_UP_20261009.md)
 include both an uncleared invalidate and paging-node completion loss from a
@@ -452,7 +474,7 @@ not measured results:
 
 ## Verification and limits
 
-MEASURED: thirty artifact-consistency assertions passed, covering JSON-derived
+MEASURED (T1 artifact-check handoff at commit 77ed23eff): thirty artifact-consistency assertions passed, covering JSON-derived
 counts, source-prefix confirmation, descriptor-field arithmetic, reply balance,
 and local document links; source hashes, counter deltas and bounded excerpts
 were also inspected. These are artifact checks, not product tests.
@@ -460,6 +482,8 @@ No code was changed; before/after Rust test counts are 0/0,
 mutation kills and clippy comparison are not applicable. The design table above
 is unimplemented and is not a test pass. No draft PR is opened for this
 research-only branch.
+Inputs: [snapshot2 evidence](../../traces/tdr_specviewperf_20261018/snapshot2-summary.json) and [snapshot3/workload evidence](../../traces/tdr_specviewperf_20261018/snapshot3-and-workloads.json).
+The assertion count is T1's recorded offline result; its assertion transcript is not committed here.
 
 INFERRED: the most useful next owner decision is a test-first bounded handling
 design for oversized legal direct descriptors, validated against the matched

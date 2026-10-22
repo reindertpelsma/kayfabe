@@ -1,4 +1,6 @@
-// MEASURED: T1 snapshot3, twelve public C56F words; no guest pushbuffer bytes.
+// CODE READ: twelve public C56F words copied from T1 run 3440,
+// traces/tdr_specviewperf_20261018/snapshot3-and-workloads.json, refusals[].
+// This fixture contains no guest pushbuffer bytes.
 pub const RUN3440: [u64; 12] = [
     0x0faa26023110102c,
     0x0ef7d2001dd1002c,
