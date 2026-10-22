@@ -8,6 +8,7 @@ const dropLine=fragment=>s=>{const lines=s.split('\n');if(lines.filter(x=>x.incl
 const mutations=[
  ['SSH onstart launch','src/vast.js',replace("runtype:'ssh_direct'","runtype:'args'")],
  ['pending provider status','src/index.js',replace("i.actual_status==null||['created'","['created'")],
+ ['resolved launch preflight','smoke.py',replace("else 'ELIGIBLE_OFFER_FOUND'","else 'BLOCKED_LAUNCH_CONTRACT'")],
  ['inherited endpoint secrets','workflow-guard.js',dropLine('// MUTANT secret-inherit')],
  ['endpoint aliases in step metadata','workflow-guard.js',dropLine('// MUTANT secret-metadata')],
  ['optional prefix admission','src/routes.js',dropLine('// MUTANT prefix-match')],
@@ -117,7 +118,7 @@ for(const [name,path,mutate] of mutations.filter(m=>!process.env.MUTANT_FILTER||
    const syntaxChecks=path.endsWith('.yml')?changed.split('        run: |\n').slice(1).map(part=>{
      const lines=[];for(const line of part.split('\n')){if(line.trim()&&!line.startsWith('          '))break;lines.push(line.slice(10));}
      return spawnSync('bash',['-n'],{input:lines.join('\n'),encoding:'utf8'});
-   }):[spawnSync(path.endsWith('.sh')?'bash':process.execPath,[path.endsWith('.sh')?'-n':'--check',fileURLToPath(url)],{encoding:'utf8'})];
+   }):[path.endsWith('.py')?spawnSync('python3',['-c','import ast,sys;ast.parse(open(sys.argv[1]).read())',fileURLToPath(url)],{encoding:'utf8'}):spawnSync(path.endsWith('.sh')?'bash':process.execPath,[path.endsWith('.sh')?'-n':'--check',fileURLToPath(url)],{encoding:'utf8'})];
    if(syntaxChecks.some(x=>x.status!==0))throw Error('Invalid mutant syntax: '+name+' '+syntaxChecks.map(x=>x.stderr).join(''));
    const r=spawnSync(process.execPath,['--test',...(path.endsWith('.yml')?['ci/vast-broker/test']:workerTests)],{cwd:root,encoding:'utf8',maxBuffer:8*1024*1024,timeout:60000});
    const output=r.stdout+r.stderr,killed=[...output.matchAll(/^not ok \d+ - (.+)$/gm)].map(m=>m[1]);
