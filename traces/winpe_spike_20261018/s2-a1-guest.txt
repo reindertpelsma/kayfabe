@@ -1,0 +1,27 @@
+
+Microsoft Windows [Version 10.0.26100.1]
+WP1_S2_ENTER
+GSP_REG path=SYSTEM\CurrentControlSet\Services\nvlddmkm rc=0
+NVIDIA_NODE instance=PCI\VEN_10DE&DEV_2786[instance-redacted] driver= service= cm=0 status=0x1806400 problem=28
+GSP_CLASS_KEY_ABSENT
+NVIDIA_COUNT=1 helper_result=12
+DRVLOAD_BEGIN
+DrvLoad: Unable to load X:\Drivers\NVIDIA\nv_dispi.inf (Error 0x80070070).
+
+GSP_REG path=SYSTEM\CurrentControlSet\Services\nvlddmkm rc=0
+NVIDIA_NODE instance=PCI\VEN_10DE&DEV_2786[instance-redacted] driver= service= cm=0 status=0x1806400 problem=28
+GSP_CLASS_KEY_ABSENT
+NVIDIA_COUNT=1 helper_result=12
+NVIDIA_NODE instance=PCI\VEN_10DE&DEV_2786[instance-redacted] driver= service= cm=0 status=0x1806400 problem=28
+RESTART_OK
+NVIDIA_COUNT=1 helper_result=0
+'sc' is not recognized as an internal or external command,
+operable program or batch file.
+Microsoft PnP Utility
+
+No devices were found on the system.
+NVIDIA_NODE instance=PCI\VEN_10DE&DEV_2786[instance-redacted] driver= service= cm=0 status=0x1806400 problem=28
+NVIDIA_COUNT=1 helper_result=14
+NVIDIA-SMI has failed because it couldn't communicate with the NVIDIA driver. Make sure that the latest NVIDIA driver is installed and running. This can also be happening if non-NVIDIA GPU is running as primary display, and NVIDIA GPU is in WDDM mode.
+
+WP1_S2_FAIL

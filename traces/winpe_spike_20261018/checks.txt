@@ -20,3 +20,18 @@ flock -w 30 -o /tmp/kayfabe-fastguest.lock true: exit 1 after 30.001 seconds.
 Owner PID/start ticks unchanged; host run directory contains evidence only.
 No media downloads, package installations, VM/GPU attempts or acquired locks.
 Resumed claims gate: existing-debt=3758 new=0 resolved=0
+
+WP1-final-20261022; 2026-10-22; runtime revision baa29775
+Owner's WP1-only lock ruling applied: kayfabe-wp1.lock for every VM/GPU query.
+S1 control assessments: 2 GREEN, including 1 automated FAT marker capture.
+S2 driver attempt: 1 RED (drvload 0x80070070, problem code 28, SMI failure).
+S3-S5: NOT RUN under the first-red-stage stop rule.
+New host Xids: 0 across 3 attempts; every own QEMU child exited 0 after quit.
+Owner PID/start ticks unchanged; own VM PIDs absent; WP1 lock released.
+Host media/driver/tool/build directories removed; only evidence remains.
+No product source edits, product build target, product tests or mutant campaign.
+Final evidence claims gate: existing-debt=3758 new=0 resolved=0
+No debt baselines changed; the final inference names its stage-table evidence.
+Evidence consistency check: PASS (outcomes, captured markers, owner identity,
+Xid counts, attempt budgets, framebuffer cap and cleanup agree across files).
+Final staged diff secret/path/IP scan: 7 categories, 0 hits; text-only exports.

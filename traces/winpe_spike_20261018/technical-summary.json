@@ -1,0 +1,50 @@
+{
+  "run": "WP1-final-20261022",
+  "utc": "2026-10-22T15:31:53.799978+00:00",
+  "owner_pid": 2123004,
+  "owner_start_ticks": "110376932",
+  "owner_unchanged": true,
+  "attempts": [
+    {
+      "run": "WP1-s1-a1-20261022",
+      "harness_verdict": "STOP_REQUEST",
+      "wall_seconds": 359.714,
+      "new_host_xid_count": 0,
+      "owner_unchanged": true,
+      "own_qemu_exit": 0,
+      "own_qemu_still_exists": false,
+      "fb_mb": 1536,
+      "last_qemu_phase": "Cold",
+      "stage_verdict": "GREEN"
+    },
+    {
+      "run": "WP1-s1-a2-20261022",
+      "harness_verdict": "GREEN",
+      "wall_seconds": 72.725,
+      "new_host_xid_count": 0,
+      "owner_unchanged": true,
+      "own_qemu_exit": 0,
+      "own_qemu_still_exists": false,
+      "fb_mb": 1536,
+      "last_qemu_phase": "Cold",
+      "stage_verdict": "GREEN"
+    },
+    {
+      "run": "WP1-s2-a1-20261022",
+      "harness_verdict": "RED",
+      "wall_seconds": 195.925,
+      "new_host_xid_count": 0,
+      "owner_unchanged": true,
+      "own_qemu_exit": 0,
+      "own_qemu_still_exists": false,
+      "fb_mb": 1536,
+      "last_qemu_phase": "Cold",
+      "stage_verdict": "RED"
+    }
+  ],
+  "S3": "NOT_RUN",
+  "S4": "NOT_RUN",
+  "S5": "NOT_RUN",
+  "reason_stopped": "S2 drvload 0x80070070; device problem 28; SMI communication failure",
+  "ci_licensing": "OPEN; no decision"
+}

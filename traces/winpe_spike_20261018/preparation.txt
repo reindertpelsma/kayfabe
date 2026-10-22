@@ -1,0 +1,27 @@
+run=WP1-prepare-20261022
+date=2026-10-22
+device_revision=baa2977527c4509145e8033143bd664f768175a6
+qemu_version=10.2.4
+wimtools_version=1.14.5-1
+7zip_version=26.00+dfsg-1
+cabextract_version=1.11-2build1
+hivex_version=1.3.24-2.1build2
+msitools_version=0.106+repack-2
+mtools_version=4.0.49-1
+host_initial_vram_free_mib=2389
+qemu_store_mib=1536
+qemu_walker_pools_mib=236
+pe_wim_arch=x86_64
+pe_wim_edition=WindowsPE
+pe_wim_version=10.0.26100.1
+source_wim_bytes=340134390
+driver_wim_final_bytes=1496453038
+nvidia_package_bytes=890807536
+nvidia_package_sha256=90c49f925b41ee062e02cc8094a16b6d057abfde4e85235a76d63ffe267f63a9
+offline_service_EnableGpuFirmware=dword:00000001
+runtime_adapter_class_gsp=GSP_CLASS_KEY_ABSENT
+diagnostic_build=x86_64-w64-mingw32-gcc -O2 -std=c11 -Wall -Wextra -Werror -static -static-libgcc -s wp1diag.c -o wp1diag.exe -lsetupapi -lcfgmgr32 -ladvapi32
+diagnostic_build_exit=0
+vendor_binaries_modified=false
+vendor_files_committed=false
+system_wide_package_installations=0

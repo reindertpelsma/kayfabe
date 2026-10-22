@@ -1,16 +1,19 @@
 # Status and handoff — where kayfabe v3 stands, and how to resume
 
-## UPDATE 2026-10-22 — WP1 private spike authorized; shared-lock stop before S1
+## UPDATE 2026-10-22 — WP1 PE boot passes; driver staging is the first red stage
 
-CODE READ: the owner explicitly authorized this private local WinPE spike on
-2026-10-22, superseding WP1's earlier permitted-use stop for this spike only.
-Public release CI licensing remains a separate open question, without a decision.
-MEASURED (run WP1-host-preflight-20261022, 2026-10-22): the owner launcher holds
-the mandatory exclusive fastguest lock; the bounded acquisition returned 1
-after 30.001 seconds. Owner VM PID/start ticks were unchanged; S1–S5 all NOT RUN.
-WP1 stopped under the held-lock rule; no media download, VM or GPU work followed.
-Evidence and reproduction: [WP1](../traces/winpe_spike_20261018/WP1.md), branch
-`codex/winpe-spike-20261022`, base rev baa29775. No runtime edits.
+CODE READ: owner authorization resolved the private-spike permission question;
+the later WP1-only ruling selects a separate lane lock while preserving the
+interactive owner VM. Public CI licensing/adoption remains open, without a decision.
+MEASURED (run WP1-s1-a2-20261022, rev baa29775): PE 26100.1 booted and returned
+its FAT result in 72.725 seconds. MEASURED (run WP1-s2-a1-20261022): driver
+staging returned 0x80070070, the device stayed at Code 28, and SMI could not
+communicate with the driver; S2 RED, S3–S5 NOT RUN under the first-red rule.
+INFERRED: DriverStore registration remains incomplete; WDDM compatibility is
+unresolved. MEASURED (run WP1-final-20261022, 2026-10-22): all own VMs exited,
+zero new host Xids across three attempts, owner identity unchanged, own lock
+released and media/build/tools removed. [Evidence](../traces/winpe_spike_20261018/WP1.md),
+branch `codex/winpe-spike-20261022`, base rev baa29775. No product source edits.
 
 ## UPDATE 2026-10-22 — G1 Phase 1 descriptor admission GPU-free green
 
