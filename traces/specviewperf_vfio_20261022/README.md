@@ -42,22 +42,31 @@ SPEC documents at least 15 GB available RAM; this lane explicitly requires the
 owner's 12 GiB VM configuration. Treat these as diagnostic reference runs, not
 submission-compliant SPEC scores, and keep resolution/settings attached to rows.
 
-## Resumed native measurement progress (03:07 CEST)
+## Resumed native first iteration (03:15 CEST)
 
-MEASURED: the native CoW guest booted at 01:50:13 CEST under the lane's GPU
-lock. Its backing image is open read-only; see disk-preservation.json. The first
-iteration has completed eight workloads and reached Unreal Engine. Native
-composites so far: blender 61.61, catia 63.10, creo 104.94, energy 54.57,
-enscape 37.26, maya 162.14, medical 50.54, solidworks 29.51. These are
-one-sample diagnostic results, not repeatability claims. The two requested full
-iterations are still running; progress CSV files preserve completed subtests.
+MEASURED: the native CoW guest booted at 01:50:13 CEST under the GPU lock.
+The first full iteration completed all nine workloads and 75 subtests at
+03:15 CEST. Official vendor results.csv is preserved in vfio-run1-vendor-results.csv;
+its nine composites agree with the selected result.json values. The second full
+iteration started immediately with unchanged settings and is still running.
+Native composites: blender61.61, catia63.10, creo104.94, energy54.57,
+enscape37.26, maya162.14, medical50.54, solidworks29.51, unreal63.58.
+These remain one-sample diagnostic results, not repeatability claims.
 
-MEASURED: native desktop 3840x2160 at WMI's integer 59 Hz; SPEC FullHD.
-Native Blender rendering reaches 266.42 FPS, so vendor rendering FPS is not
+INFERRED hypothesis before baseline score read: completed Energy has a saved
+vendor composite. FALSIFIER: no result.json or original run-log lacks Completed.
+MEASURED: original Energy result.json reports45.60; run-log confirms Completed.
+The file was read from the specified original directory through the native CoW.
+It does not establish any other baseline workload as completed.
+
+MEASURED: physical desktop3840x2160/60Hz; CLI/stdout request/report1920x1080.
+A captured SolidWorks client was1920x998; exact framebuffer size is not verified.
+Native Blender rendering reaches266.42FPS, so vendor rendering FPS is not
 uniformly capped at display refresh. No vsync/profile override was applied to
-either arm. The kayfabe broker's 59.996 Hz output cap is a different metric.
-Native physical VRAM is 12,282 MiB versus the owner's 8,192 MiB kayfabe store:
-capacity is a confound. Host Xid journal watch has reported no new Xid.
+either arm. Kayfabe broker59.996Hz output pacing is a different metric.
+Native VRAM12,282MiB versus owner's kayfabe store8,192MiB is a confound.
+No new host Xid has been reported by the journal watcher. Backing image is
+open read-only; see disk-preservation.json.
 
 ## Previous attempt — safety stop (superseded by the owner override above)
 

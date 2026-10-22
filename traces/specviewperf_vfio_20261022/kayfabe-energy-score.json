@@ -1,0 +1,10 @@
+{
+  "run": "result_2026-10-21-22-27-14",
+  "version": "1.0.2",
+  "source": "result.json",
+  "composite": 45.6,
+  "renderer": "GeForce RTX 4070",
+  "workload": "energy-04",
+  "workload_status": "Completed",
+  "qualification": "MEASURED: original saved result.json, qualified by original run-log; read through native CoW without changing owner image."
+}
