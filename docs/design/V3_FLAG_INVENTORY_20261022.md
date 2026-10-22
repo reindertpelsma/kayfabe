@@ -33,7 +33,7 @@ must have at least two distinct tests fail when reverted, including build-call-s
 
 - Hypothesis H1: production needs launcher overrides that master does not default on. FALSIFIER: the reader defaults to the launcher value, or the launcher does not set the name. Result: mixed; lifecycle/Pointer, lazy observe 16 and put cache already default on; the SDR colour trio defaults off.
 - Hypothesis H2: the lifecycle counter knobs still control master. FALSIFIER: no environment reader exists anywhere in the product. Result: falsified; `KF3_LIFECYCLE_COUNT` and `KF3_LIFECYCLE_PERIOD_S` occur only in a launcher.
-- Hypothesis H3: the production mirror-off setting can be promoted. FALSIFIER: master has no reader, or executable launcher assignments differ from the comment. Result: falsified on both: master has no TSG mirror switch and the launcher comment is not an executed setting. No mirror code will be added.
+- Hypothesis H3: the production mirror-off setting can be promoted. FALSIFIER: master has no reader, or executable launcher assignments differ from the comment. Result: falsified on both: master has no TSG mirror switch. The launcher header is not its default assignment; the independent review reports caller-provided `KF3_TSG_MIRROR=0` in runs 3439/3440. It remains dead at master. No mirror code will be added.
 - Hypothesis H4: the source-derived colour settings can use the production defaults without rewriting the display algorithm. FALSIFIER: enabling them requires a new algorithm, a captured page, a new driver/family assumption, or a missing dependency. Check the existing decoder and its GPU-free oracles before changing defaults; hardware compatibility of new default combinations remains unverified.
 
 MEASURED (read-only file retrieval, not a VM run): the owner's perf6 launcher and the script it invokes were read on 2026-10-22. SHA-256, respectively:
@@ -43,7 +43,7 @@ Private filenames and machine paths are omitted from public evidence. D1's priva
 
 CODE READ: perf6 clears inherited `KF3_*`, selects revision `0d7ba743`, and calls a production copy of `windows_broker.sh`.
 Its extra flags default to `KF3_LIFECYCLE_COUNT=1 KF3_LIFECYCLE_PERIOD_S=5`; it drops `KF3_TIMER_MAP`.
-The executable settings do **not** include the `KF3_TSG_MIRROR=0` mentioned in its header.
+The launcher-file defaults do **not** include the `KF3_TSG_MIRROR=0` mentioned in its header. CODE READ (independent review, `docs/audits/2026-10-22-pr72-review.md` on the review branch): actual runs 3439/3440 supplied that dead name and `KF3_DIAG_PROGRESS=1000` through caller overrides; 3439 also enabled `KF3_PROF=1`. The table describes retrieved launcher defaults, not a reconstruction of the live run environment.
 The invoked script sets these names to 1:
 
 ```
@@ -66,7 +66,7 @@ Only existing values proven by the executable production launcher are candidates
 | Decision | Rationale and validation gate |
 |---|---|
 | Keep lifecycle, Pointer transition, lazy observe 16 and put cache as implemented | Already built-in; retain `KF3_LIFECYCLE_MODE=always_scan`, `KF3_PUT_CACHE=0`, `KF3_LAZY_OBSERVE=0` research arms. Counter-period knobs have no reader; do not invent one. |
-| Candidate: default `KF3_DISPLAY_SDR_COLOR`, `KF3_DISPLAY_LUT_MIRROR`, `KF3_DISPLAY_ILUT_OFFSET_256` on | Executable production values; existing source-derived colour decoder only. Preserve each `=0` arm. Test real colour plans with absent environment; two independent mutation killers per change. Constructor-only probes must explicitly select `KF3_DISPLAY_SDR_COLOR=0`. |
+| Revised after review B2: keep SDR_COLOR opt-in; default LUT_MIRROR and ILUT_OFFSET_256 on | Production enabled SDR together with CAPS_PROBE, discarding the authored page. G05 is open; no authored-SDR default promotion. Preserve both decoder `=0` arms. Standalone constructor probes work with SDR unset. Explicit SDR plus any constructor probe still refuses. |
 | Stop promotion of `KF3_DISPLAY_CAPS_PROBE`, `KF3_GFX_POOL_PROBE`, reply/bind probes | Captured page, fabricated sizing or status-only replies are not justified by a default flip; derivation/owner decisions belong to another lane. These remain opt-in. |
 | Stop promotion of `KF3_SW_RUNLIST_HOST_OWNED` | §W explicitly says off and undecided; executable launcher is not a replacement owner ruling. |
 | Park kernel GR pair, Windows USER routing/VA floor, deferred-API object/trigger, completion relay and async-preempt defaults | These are a dependent channel configuration (§42), with unresolved runlist/probe dependencies and Linux scope. Partial promotion cannot establish a bootable default. Retain existing overrides, list the exact gap. |
@@ -79,7 +79,7 @@ INFERRED: a completely flag-free Windows installation cannot be honestly claimed
 
 ## Full inventory
 
-CODE READ: unchanged rows use **base master** defaults; the three changed rows explicitly state the D1 defaults. The result section records the implementation. Class describes semantics, independent of a misleading PROBE/DIAG name. No current-revision hardware ablation was performed: “historical gate” is INFERRED current necessity from [the dated inventory](V3_FLAG_INVENTORY.md) and [ablation evidence](../../traces/windows_flag_ablation_20261010/README.md), not a new REQUIRED-TO-BOOT measurement. No live flag is asserted REQUIRED-TO-BOOT on this revision. “yes 1” means the executable perf6 call chain sets it, not that it is safe to promote. “no” means no assignment after clearing inherited KF3 variables.
+CODE READ: unchanged rows use **base master** defaults; the two changed decoder rows explicitly state the D1 defaults; SDR remains opt-in. The result section records the implementation. Class describes semantics, independent of a misleading PROBE/DIAG name. No current-revision hardware ablation was performed: “historical gate” is INFERRED current necessity from [the dated inventory](V3_FLAG_INVENTORY.md) and [ablation evidence](../../traces/windows_flag_ablation_20261010/README.md), not a new REQUIRED-TO-BOOT measurement. No live flag is asserted REQUIRED-TO-BOOT on this revision. “yes 1” means the executable perf6 call chain sets it, not that it is safe to promote. “no” means no assignment after clearing inherited KF3 variables.
 
 | Environment name | Default / parsing (base → D1 where changed) | Class | Effect | Production sets | Production needs it? | Reader (base revision) |
 |---|---|---|---|---|---|---|
@@ -116,7 +116,7 @@ CODE READ: unchanged rows use **base master** defaults; the three changed rows e
 | `KF3_DISPLAY_METHOD_TRACE` | off; only 1 enables | MEASUREMENT | Display method/engine diagnostic trace | no | no; in stock repo launcher, absent from production copy | `crates/kf-qemu/src/display.rs:2459`, `crates/kf-qemu/src/display.rs:2850` |
 | `KF3_DISPLAY_OLUT_CONSTRUCTOR_PROBE` | off; only 1 enables | DEBUG | Constructor-only OLUT plus TMO/ILUT probe chain | no | no | `crates/kf-qemu/src/display.rs:2146` |
 | `KF3_DISPLAY_PRIVATE_PROBE` | off; only 1 enables | DEBUG | Two measured commit-time private-control replies | no | unknown; not in production | `crates/kf-rm/src/display_ctrl_probe.rs:122` |
-| `KF3_DISPLAY_SDR_COLOR` | base off; D1 on, exact 0 opt-out | PRODUCTION-BEHAVIOUR | Advertise source-derived SDR caps and run existing GPU colour pipeline | yes 1 | not required for idle desktop in older ablation; real colour is production | `crates/kf-qemu/src/display.rs:2166` |
+| `KF3_DISPLAY_SDR_COLOR` | off; only exact 1 enables; 0 also stays off | PRODUCTION-BEHAVIOUR | Opt-in source-derived SDR caps and GPU colour pipeline; CAPS_PROBE replaces its page | yes 1, together with CAPS_PROBE | authored-page default not qualified; G05 open, review B2 | `crates/kf-qemu/src/display.rs:2166` |
 | `KF3_DISPLAY_TMO_CONSTRUCTOR_PROBE` | off; only 1 enables | DEBUG | TMO constructor caps, refuse all display methods | no | no | `crates/kf-qemu/src/display.rs:2154` |
 | `KF3_DISPLAY_TMO_SURFACE_CONSTRUCTOR_PROBE` | off; only 1 enables | DEBUG | TMO/ILUT surface-construction-only probe | no | no | `crates/kf-qemu/src/display.rs:2148` |
 | `KF3_DISPLAY_TRACE` | off; only 1 enables | MEASUREMENT | Scanout source/copy digest trace | no | no | `crates/kf-qemu/src/display.rs:2809` |
@@ -270,9 +270,9 @@ CODE READ [src] (QEMU 10.2.4 `hw/pci/pci.c::pci_props`, official release source 
 
 ## D1 implementation result (GPU-free)
 
-CODE READ: the existing SDR pipeline, inert-MIRROR admission and 256-byte ILUT decoding are now selected by default. Only an exact `=0` selects each prior arm. The decoder, colour kernels, capability derivation and captured-page probe are unchanged. Constructor-only probes remain opt-in and need `KF3_DISPLAY_SDR_COLOR=0` to select their old no-processing arm.
+CODE READ: **SDR processing remains opt-in with exact `KF3_DISPLAY_SDR_COLOR=1`** after review B2; absent, empty and `=0` all select plain caps/no processing. Inert-MIRROR admission and 256-byte ILUT decoding default on when the SDR decoder runs; exact `=0` selects each old decoder arm. The decoder, colour kernels, capability derivation and captured-page probe are unchanged. All four constructor-only probes work with SDR unset and still refuse every display method. Explicit SDR plus a constructor probe remains an error; no new off-switch is required by the probe scripts.
 
-CODE READ: the main `scripts/bench/windows/windows_broker.sh` no longer inserts RPC trace, BAR0 window trace, map logging or display-method trace into the default environment. Explicit `WIN_FLAGS=NAME=1` still enables each diagnostic. It also drops dead `KF3_TIMER_MAP`; the hitch launcher's extra list defaults empty instead of passing dead lifecycle counter/period names. Historical launchers and run records are retained. The read-only host launcher was not modified.
+CODE READ: the main `scripts/bench/windows/windows_broker.sh` no longer inserts RPC trace, BAR0 window trace, map logging or display-method trace into the default environment. Explicit `WIN_FLAGS=NAME=1` still enables each diagnostic. It also drops dead `KF3_TIMER_MAP`; the hitch launcher's extra list defaults empty instead of passing dead lifecycle counter/period names. The diagnostic `winpass_cycle.sh` and `host_tools/runners/wr-run.sh` explicitly request RPC_TRACE for their stall markers; a custom winpass `WIN_FLAGS` must also include `KF3_RPC_TRACE=1` when using `wait_stall`. wr-run counts both historical and current decoder-selection logs. Analysis tools `abort_point.py` and `rpc_diff.py` need logs collected with `WIN_FLAGS=KF3_RPC_TRACE=1`; analysis alone cannot reconstruct absent RPC traces. Historical run records are retained. The read-only host launcher was not modified.
 
 MEASURED: test-only EXPECTED RED commits and mutation results are in [D1 evidence](../../traces/install_flags_20261018/README.md). These checks establish the selected configuration and GPU-free decode/launcher behavior; all new default combinations and reduced guest commands remain hardware-UNVERIFIED. No relay/VA/lock/timer/poll implementation changed. All parked dependent-channel and captured/fabricated-reply decisions above remain unresolved; this is not a flag-free Windows boot claim.
 

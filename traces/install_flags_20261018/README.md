@@ -5,6 +5,13 @@ CODE READ: [design and pre-change falsifiers](../../docs/design/V3_FLAG_INVENTOR
 MEASURED: production launcher files retrieved read-only; hashes and a sanitized effective configuration are in the inventory. No VM or GPU work is authorized in D1.
 Verification results will be recorded here as they complete. No hardware result is implied by the GPU-free checks.
 
+## Review supersession, 2026-10-22
+
+CODE READ: [PR #72 review corrections](review-fixes.md) supersede the initial SDR default-on
+selection below: SDR is opt-in, only MIRROR/ILUT_OFFSET_256 remain default-on. The original
+suite/build/parser results below belong to the initial submission. They are not a hardware
+or patched-QEMU rebuild claim for the review-fix head or revised installation commands.
+
 ## Launcher proof
 
 MEASURED: test-only EXPECTED RED commit `5d0f53ad4` adds 8 GPU-free launcher tests:

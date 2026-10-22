@@ -1,6 +1,6 @@
 # Trying kayfabe from source
 
-**STATUS: RESEARCH, 2026-10-22**, based on master `e64b8e5f6` plus D1's documented colour defaults. Interfaces are still experimental. CODE READ describes source checks; MEASURED names existing hardware evidence; **UNVERIFIED** means this lane did not validate the statement on hardware. Every CODE READ statement below is **UNVERIFIED on hardware** for this reduced configuration unless it explicitly cites an existing hardware run. Build/command checks are recorded in [D1 evidence](../traces/install_flags_20261018/README.md).
+**STATUS: RESEARCH, 2026-10-22**, based on master `e64b8e5f6` plus D1's documented LUT-decoder defaults (SDR remains opt-in). Interfaces are still experimental. CODE READ describes source checks; MEASURED names existing hardware evidence; **UNVERIFIED** means this lane did not validate the statement on hardware. Every CODE READ statement below is **UNVERIFIED on hardware** for this reduced configuration unless it explicitly cites an existing hardware run. Build/command checks are recorded in [D1 evidence](../traces/install_flags_20261018/README.md).
 
 ## Host and guest compatibility
 
@@ -21,17 +21,24 @@ CODE READ, UNVERIFIED (IOMMU-off hardware): kf3 uses the host NVIDIA driver as a
 
 CODE READ, UNVERIFIED (fresh host): the QEMU user needs access to `/dev/kvm`, the selected `/dev/nvidiaN`, `/dev/nvidiactl` and the host CUDA runtime (`libcuda.so.1`, supplied with the driver). Check the host driver with `nvidia-smi` before building. The CUDA toolkit is not a build dependency; the repo embeds its PTX. D1 has not verified a complete rootless guest boot; historical coverage is in [STATUS_DETAIL](STATUS_DETAIL.md).
 
-CODE READ, UNVERIFIED (distribution provisioning): Debian/Ubuntu package names below follow the repo's provisioner and broker Makefile; use equivalent packages on other distributions. The commands pin the audited source change `33f7a1703` for reproducibility; the guide adds documentation after that code revision. The pinned Rust 1.99.0 toolchain in [`rust-toolchain.toml`](../rust-toolchain.toml), including `x86_64-unknown-uefi`, is needed (the GOP ROM embeds a Rust UEFI image). `qemu-img` comes from `qemu-utils`; the build script disables QEMU tools.
+CODE READ, UNVERIFIED (distribution provisioning): Debian/Ubuntu package names below follow the repo's provisioner and broker Makefile; use equivalent packages on other distributions. The commands select this PR's review candidate branch; record `git rev-parse HEAD` with your results. A release tag should replace this experimental branch before general publication. The earlier `33f7a1703` pin is superseded because it enabled the unqualified authored SDR page by default. The pinned Rust 1.99.0 toolchain in [`rust-toolchain.toml`](../rust-toolchain.toml), including `x86_64-unknown-uefi`, is needed (the GOP ROM embeds a Rust UEFI image). `qemu-img` comes from `qemu-utils`; the build script disables QEMU tools.
 
 ```bash
 sudo apt-get install build-essential git curl xz-utils python3 python3-venv \
+  meson flex bison python3-pip python3-tomli \
   ninja-build pkg-config libglib2.0-dev libpixman-1-dev libslirp-dev \
   zlib1g-dev ovmf qemu-utils libwayland-dev wayland-protocols \
   libxcb1-dev libxcb-dri3-dev libxcb-present-dev libxcb-render0-dev libxcb-xinput-dev
 git clone https://github.com/reindertpelsma/kayfabe.git
 cd kayfabe
-git checkout 33f7a1703
-rustup target add x86_64-unknown-uefi
+git switch codex/install-flags-20261022
+git rev-parse HEAD
+# If rustup is not installed, install its minimal profile first:
+curl --proto '=https' --tlsv1.2 -fsSL https://sh.rustup.rs -o rustup-init.sh
+sh rustup-init.sh -y --profile minimal --default-toolchain none
+. "$HOME/.cargo/env"
+rustup toolchain install 1.99.0 --profile minimal
+rustup target add --toolchain 1.99.0 x86_64-unknown-uefi
 curl -fLO https://download.qemu.org/qemu-10.2.4.tar.xz
 tar -xf qemu-10.2.4.tar.xz
 export CARGO_BUILD_JOBS=2
@@ -57,7 +64,7 @@ CODE READ, UNVERIFIED (live host display): keep that broker running. In a second
 
 ## Linux guest: one kf3 device
 
-CODE READ, UNVERIFIED (new minimal launch): start with a prepared **x86-64 Linux qcow2 disk** whose NVIDIA driver matches the host version. To install the OS first, add your installer ISO with `-cdrom /path/to/linux.iso -boot d`; no NVIDIA driver is needed for the UEFI framebuffer. Save one OVMF variables file and UUID per VM. `4096` below is an example 4 GiB VRAM allocation; choose a budget your card can provide.
+CODE READ, UNVERIFIED (new minimal launch): **`display=on` accepts only guest driver 580.65.06 or 580.159.04**, the two derived class tables in [`kf_disp::class::for_version`](../crates/kf-disp/src/class.rs). A guest driver 595.91.07 is refused at realize, even on a matching host. The guest driver package must match the declared `guest-driver` version. Other driver-matrix versions have headless CUDA evidence only, not support for this display command. Start with a prepared **x86-64 Linux qcow2 disk** running stock open 580.159.04 for this example; the host may use another supported driver-matrix cell. To install the OS first, add your installer ISO with `-cdrom /path/to/linux.iso -boot d`; no NVIDIA driver is needed for the UEFI framebuffer. Save one OVMF variables file and UUID per VM. `4096` below is an example 4 GiB VRAM allocation; choose a budget your card can provide.
 
 ```bash
 mkdir -p vm-linux
@@ -65,7 +72,7 @@ cp -n /usr/share/OVMF/OVMF_VARS_4M.fd vm-linux/OVMF_VARS.fd
 # Set these to your own persistent VM UUID and prepared disk.
 export VM_UUID=11111111-2222-4333-8444-555555555555
 export LINUX_DISK="$PWD/vm-linux/linux.qcow2"
-"$QEMU" -nodefaults -no-user-config -machine pc,accel=kvm,memory-backend=ram0 \
+"$QEMU" -nodefaults -no-user-config -machine q35,accel=kvm,memory-backend=ram0 \
   -object memory-backend-memfd,id=ram0,size=8G,share=on -m 8G -smp 4 -cpu host \
   -uuid "$VM_UUID" \
   -drive if=pflash,format=raw,readonly=on,file=/usr/share/OVMF/OVMF_CODE_4M.fd \
@@ -74,14 +81,16 @@ export LINUX_DISK="$PWD/vm-linux/linux.qcow2"
   -netdev user,id=net0 -device virtio-net-pci,netdev=net0 \
   -device qemu-xhci,id=xhci -device usb-tablet,bus=xhci.0 -device usb-kbd,bus=xhci.0 \
   -display none -serial stdio \
-  -device "kf3-gpu,fb-mb=4096,display=on,gop=on,x11-dispsw=on,display-broker=$KF_SOCKET"
+  -device "kf3-gpu,guest-driver=580.159.04,fb-mb=4096,display=on,gop=on,x11-dispsw=on,display-broker=$KF_SOCKET"
 ```
 
-CODE READ, UNVERIFIED (fresh install): install your distribution's **stock NVIDIA open driver** package, or NVIDIA's stock `.run` installer with matching kernel headers, then reboot and check guest `nvidia-smi`. Use the same version as the host to omit `guest-driver`. For a different measured Linux version add `guest-driver=<exact-version>`; an ABI mismatch is refused. Historical CUDA ladders passed guests 575.57.08, 580.105.08, 580.159.04, 590.48.01, 595.84 and 610.57.04 in the [driver matrix](design/V3_DRIVER_MATRIX.md); these do not establish every desktop/display cell. No guest helper or patched kernel is required by this path.
+CODE READ, UNVERIFIED (fresh install): install the exact **stock NVIDIA open 580.159.04** guest driver with matching kernel headers for this example, then reboot and check guest `nvidia-smi`. To use 580.65.06, change both the package and `guest-driver`; omitting that property is valid for display only if the host version is one of those two and the guest matches it. Other historical guest versions in the [driver matrix](design/V3_DRIVER_MATRIX.md) qualify CUDA paths, not this desktop.
+
+MEASURED (historical Linux proof-p2, 2026-10-08, [`interactive.sh` provisioning](../scripts/bench/display/interactive.sh)): the stock desktop needed kernel arguments **`nvidia-drm.modeset=1 nvidia-drm.fbdev=1`**, `nvidia_drm` loaded at boot, and an `/etc/X11/xorg.conf` Device section with `Driver "nvidia"` and the kf3 device's guest `BusID`. Without that X configuration the display manager looped on the modesetting driver. Determine the actual BusID with guest `lspci`; do not copy proof-p2's `PCI:0:2:0` blindly. These are required setup for reproducing that desktop, not evidence for every compositor. UNVERIFIED: the reduced command uses the measured lanes' **q35**, but automatic placement, USB input, user networking, 4 GiB store and default 256 MiB BAR1 differ from `interactive.sh` (tap/virtio input, default 8 GiB store, 128 MiB BAR1); their complete combination still needs a hardware run.
 
 ## Windows 11 guest: current research configuration
 
-CODE READ, UNVERIFIED (fresh hardware): **the flag-free Windows default is not complete on this branch**. The production launch still selects runlist/probe behavior, some awaiting an owner ruling or source derivation. [The inventory](design/V3_FLAG_INVENTORY_20261022.md) gives the blocking names and reasons. Promoting those to defaults without that work would hide the gap. The template below preserves those executable production selections, minus the three colour options that D1 promotes and dead lifecycle/timer names. UNVERIFIED: it has not been booted on hardware as a reduced command.
+CODE READ, UNVERIFIED (fresh hardware): **the flag-free Windows default is not complete on this branch**. The production launch still selects runlist/probe behavior, some awaiting an owner ruling or source derivation. [The inventory](design/V3_FLAG_INVENTORY_20261022.md) gives the blocking names and reasons. Promoting those to defaults without that work would hide the gap. The template below preserves those executable production selections, with explicit `KF3_DISPLAY_SDR_COLOR=1 KF3_DISPLAY_CAPS_PROBE=1` as in the production research arm. Only the two LUT decoder switches become defaults; dead lifecycle/timer names and diagnostics are omitted. UNVERIFIED: it has not been booted on hardware as a reduced command.
 
 CODE READ, UNVERIFIED (fresh install): use a per-VM disk/UUID/MAC and regular, non-Secure-Boot OVMF for the unsigned embedded GOP. For a new Windows 11 install, also provide a TPM 2.0 emulator (`swtpm`) and Windows/virtio installer media as described in [`scripts/bench/windows/README.md`](../scripts/bench/windows/README.md). The following template is for an **already installed** Windows 11 disk with virtio storage/network drivers and the registry setup below; it is not a complete Windows installer command. Windows Secure Boot requires the signed, matching `gop-efi` path documented by that README; do not use an arbitrary firmware image.
 
@@ -94,7 +103,8 @@ env KF3_WIN_USER_CHANNELS_PASSTHROUGH=1 KF3_WIN_TWIN_DEFAPI_OBJECT=1 \
   KF3_KERNEL_GR_CE=1 KF3_KERNEL_GR_WORK=1 KF3_TRANSLATED_CE_RELAY=1 KF3_DEFERRED_API=1 \
   KF3_PREEMPT_BIND_PROBE=1 KF3_DISPLAY_IMP_ENABLE=1 KF3_DISPLAY_CTRL_PROBE=1 \
   KF3_ZCULL_BIND_PROBE=1 KF3_SW_RUNLIST_HOST_OWNED=1 KF3_ASYNC_PREEMPT=1 \
-  KF3_GFX_POOL_PROBE=1 KF3_SW_RUNLIST_PROBE=1 KF3_MEMORY_LIST_PROBE=1 KF3_DISPLAY_CAPS_PROBE=1 \
+  KF3_GFX_POOL_PROBE=1 KF3_SW_RUNLIST_PROBE=1 KF3_MEMORY_LIST_PROBE=1 \
+  KF3_DISPLAY_SDR_COLOR=1 KF3_DISPLAY_CAPS_PROBE=1 \
   "$QEMU" -nodefaults -no-user-config -machine pc,accel=kvm,smm=on,memory-backend=ram0 \
   -object memory-backend-memfd,id=ram0,size=12G,share=on -m 12G -smp 8 -cpu host,-vmx \
   -uuid "$VM_UUID" \
@@ -109,11 +119,27 @@ env KF3_WIN_USER_CHANNELS_PASSTHROUGH=1 KF3_WIN_TWIN_DEFAPI_OBJECT=1 \
 
 CODE READ, UNVERIFIED (omissions): `fb-mb=8192` and `bar2-size=33554432` are exact device defaults. `gpu-uuid=auto` derives a stable guest GPU UUID from the persistent `-uuid`, host GPU and slot; an explicit guest GPU UUID is optional by source contract. A same-user broker needs no `display-broker-uid`; set it to the broker user's numeric uid across users. `bus`, `addr` and `id` are unnecessary for automatic PCI placement of one device. Windows keeps the production 8 GiB `bar1-size`: replacing it with the 256 MiB default needs hardware validation. Linux uses that default in this template. The [inventory](design/V3_FLAG_INVENTORY_20261022.md) covers every property individually.
 
+CODE READ, **UNVERIFIED production-command differences**: the source reference is the sanitized perf6/callee configuration in [the inventory](design/V3_FLAG_INVENTORY_20261022.md), corroborated by review of runs 3439/3440 (`docs/audits/2026-10-22-pr72-review.md` on `claude/review-pr72-20261022`). This is an experimental reduction, not the production command. The following lists every option/value difference against that launcher profile; none is established unnecessary by a parser-only test.
+
+| Production reference | Template difference; hardware status |
+|---|---|
+| `-cpu host,-vmx,migratable=off,+invtsc,hv_relaxed,hv_vapic,hv_spinlocks=0x1fff,hv_vpindex,hv_runtime,hv_time,hv_synic,hv_stimer,hv_tlbflush,hv_ipi,hv_frequencies` | Only `host,-vmx`; migration/TSC and every listed Hyper-V enlightenment omitted, **UNVERIFIED**. |
+| `-rtc base=utc,driftfix=slew`, `-global kvm-pit.lost_tick_policy=discard`, `-action reboot=reset,panic=none` | All omitted; clock/reboot/panic behavior differs, **UNVERIFIED**. |
+| Explicit `-object iothread,id=iod0`, disk `if=none,id=disk0,discard=unmap,detect-zeroes=off,l2-cache-size=33554432`, `virtio-blk-pci,drive=disk0,addr=0x4,disable-modern=on,bootindex=1,iothread=iod0` | Shorthand `-drive if=virtio` retains qcow2/cache=none/aio=threads but omits the iothread, discard/zero/cache-size settings, explicit disk ID, bootindex, legacy-virtio restriction and fixed address; **UNVERIFIED**. |
+| Network `id=n0`, explicit `restrict=off,net=10.0.2.0/24,host=10.0.2.2,dns=10.0.2.3,dhcpstart=10.0.2.15`, persistent per-VM MAC, `addr=0xa,disable-modern=on` | `id=net0`, QEMU user-network defaults, example MAC, automatic placement and modern virtio allowed; **UNVERIFIED**. |
+| `virtio-serial-pci,id=serial0,addr=0x3,disable-modern=on`, socket chardev and QGA virtserialport | Guest-agent transport omitted; **UNVERIFIED**, QGA-based diagnostic scripts will not connect. |
+| `qemu-xhci,addr=0x7`; keyboard `id=kfkbd`; GPU `bus=pci.0,addr=0x6,id=kf0` | Automatic PCI placement; explicit keyboard/GPU IDs omitted. Slot-derived UUID/BusID and QMP device addressing can change; **UNVERIFIED**. |
+| Explicit persistent `gpu-uuid`, `fb-mb=8192`, `bar2-size=33554432`, broker UID | Auto guest GPU UUID, default store/BAR2, same-user broker authentication; **UNVERIFIED** omissions. `bar1-size=8589934592` and `guest-driver=580.65.06` are retained. |
+| Persistent VM UUID, disk/OVMF variables, MAC/GPU identity and `-smbios type=1,manufacturer=KayfabeLab,product=KF-Guest,serial=...` | User-selected example identities and prepared disk/vars paths; SMBIOS record omitted; **UNVERIFIED** identity behavior. |
+| Pflash `unit=0/1`, two tools/virtio read-only IDE CDs | Units auto-assigned; installation media absent for an already installed guest; **UNVERIFIED** boot reduction. |
+| `-name`, QMP Unix socket, serial log file, `-monitor none` | Name/QMP/monitor setting omitted; serial uses stdio, **UNVERIFIED** management differences. |
+| MIRROR=1, ILUT_OFFSET_256=1, dead lifecycle/period/TSG/TIMER names; DIAG_PROGRESS=1000 and PROF=1 in run 3439 only | Two LUT settings use the equivalent built-in defaults; dead names and optional diagnostics omitted. SDR=1 plus CAPS_PROBE=1 and the 15 dependent behavior/probe flags are retained explicitly. **UNVERIFIED** reduced hardware configuration. |
+
 MEASURED (580.88 on AD104, historical runs): install NVIDIA's **stock Windows 580.88 driver**, enable GSP at both the adapter and service registry keys, and apply the documented DWM overlay setting. Follow [`WINDOWS_GUEST_SETUP.md`](WINDOWS_GUEST_SETUP.md) and [`gsp_on.ps1`](../scripts/bench/windows/gsp_on.ps1); discover the adapter key rather than assuming `0000`. A driver installed without GSP enablement can report Code 43. UNVERIFIED: other Windows driver branches are not an install-support claim.
 
 ## Limits and troubleshooting
 
-- MEASURED (historical): [Windows sleep/wake](design/V3_S3_RESUME.md) does not survive; four Linux app-matrix failures need UVM demand paging. README records long playback resets and narrower Windows die coverage. The [security audit](OWNER_RULINGS.md#p-a-security-audit-before-the-first-public-binary-2026-10-03) remains a release gate; no audited isolation claim follows from these launch examples.
+- MEASURED (historical): [Windows sleep/wake](design/V3_S3_RESUME.md) does not survive; four Linux app-matrix failures need UVM demand paging. README records long playback resets and narrower Windows die coverage. The [security audit](OWNER_RULINGS.md#p-a-security-audit-before-the-first-public-binary-2026-10-03) remains a release gate; no independently qualified isolation claim follows from these launch examples.
 - CODE READ, UNVERIFIED (your host): if realize reports VRAM/host BAR1 budget refusal, reduce `fb-mb`/`bar1-size` or close allocations belonging to you. The device intentionally refuses an unbacked advertised resource. Check host `nvidia-smi` and the exact QEMU error; do not change timers.
 - CODE READ, UNVERIFIED (your host): collect QEMU/broker logs, host `journalctl -k` lines containing `NVRM`/`Xid`, host/guest driver versions, GPU die and source revision. A host Xid is evidence of a GPU/driver fault, not proof of its cause. Do not declare containment from one successful guest.
 - CODE READ, UNVERIFIED (your guest): for a TDR/Code 43, first check the GSP registry keys and `guest-driver` ABI, then the first `USER_RING_REFUSED`/display refusal and Windows System log events 153/4101. Increasing TDR/timeouts hides a symptom; this install path does not prescribe it. Keep the original workload and logs for a report.
