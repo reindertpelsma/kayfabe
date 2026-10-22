@@ -1,4 +1,6 @@
 // prettier-ignore
+import {DEFAULTS} from './defaults.js';
+// prettier-ignore
 import {fetchJson,refuse} from './policy.js';
 const JWKS = 'https://token.actions.githubusercontent.com/.well-known/jwks';
 const ISSUER = 'https://token.actions.githubusercontent.com';
@@ -9,9 +11,26 @@ export class OidcVerifier {
     this.issuer = issuer;
     this.jwks = jwks;
     this.keys = new Map();
-    this.loaded = 0;
+    this.loaded = null;
+    this.refreshing = null;
+    this.lastRefreshAttempt = null;
   }
   async refresh() {
+    if (this.refreshing) return this.refreshing;
+    if (
+      this.lastRefreshAttempt !== null &&
+      this.now() - this.lastRefreshAttempt < DEFAULTS.jwksCooldownMs
+    )
+      return;
+    this.lastRefreshAttempt = this.now();
+    this.refreshing = this.loadKeys();
+    try {
+      await this.refreshing;
+    } finally {
+      this.refreshing = null;
+    }
+  }
+  async loadKeys() {
     const data = await fetchJson(this.fetcher, this.jwks);
     if (!Array.isArray(data.keys) || data.keys.length > 16) refuse('UNAUTHORIZED', 401);
     const keys = new Map();
@@ -53,17 +72,28 @@ export class OidcVerifier {
     } catch {
       refuse('UNAUTHORIZED', 401);
     }
+    if (
+      !h ||
+      typeof h !== 'object' ||
+      Array.isArray(h) ||
+      !c ||
+      typeof c !== 'object' ||
+      Array.isArray(c)
+    )
+      refuse('UNAUTHORIZED', 401);
     if (h.alg !== 'RS256' || typeof h.kid !== 'string' || h.jku || h.jwk || h.x5u || h.crit)
       refuse('UNAUTHORIZED', 401);
     const input = new TextEncoder().encode(parts[0] + '.' + parts[1]);
-    if (this.now() - this.loaded > 3600000 || !this.keys.has(h.kid)) await this.refresh();
+    if (
+      this.loaded === null ||
+      this.now() - this.loaded > DEFAULTS.jwksCacheMs ||
+      !this.keys.has(h.kid)
+    )
+      await this.refresh();
     const verify = async () =>
       this.keys.has(h.kid) &&
       (await crypto.subtle.verify('RSASSA-PKCS1-v1_5', this.keys.get(h.kid), sig, input));
-    if (!(await verify())) {
-      await this.refresh();
-      if (!(await verify())) refuse('UNAUTHORIZED', 401);
-    }
+    if (!(await verify())) refuse('UNAUTHORIZED', 401);
     const seconds = this.now() / 1000;
     if (
       c.iss !== this.issuer ||

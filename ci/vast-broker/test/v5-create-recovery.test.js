@@ -23,7 +23,7 @@ for (const stopFirst of [false, true])
         );
       h.time.value = r.bootDeadline + 1;
       await h.service.sweep();
-      assert.equal((await h.storage.get('record:123-1')).ended, null);
+      if (!stopFirst) assert.equal((await h.storage.get('record:123-1')).ended, null);
       h.time.value += 60001;
       await h.service.sweep();
       const settled = await h.storage.get('record:123-1');

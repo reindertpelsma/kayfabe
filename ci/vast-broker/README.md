@@ -110,7 +110,7 @@ reservation-only fallback, not a claim of provider-enforced transfer limits.
 
 [CODE READ: src/index.js, src/tokens.js, deployment.json] Current per-run authority is report/kill/hold; no blob-URL route is implemented. Blob-URL scope above is a policy ceiling, not an added capability. Worker protocol/version and expected bundle hash are visible, but the deployed hash is an owner assertion, not remote deployment attestation.
 
-[CODE READ: 2026-10-22 Round 3, deployment.json] Build with `npm run bundle`; independently compare SHA256 of `dist/worker.js` with `dist/deployment.json`, committed `deployment.json` and public `DEPLOYED_BUNDLE_SHA256` before a separately authorized deployment. CLI deployment must upload those exact bundled bytes (use `npx wrangler deploy dist/worker.js --no-bundle`); dashboard/module upload uses the same file. The hash is a configuration assertion, avoiding a self-hash in the bundle. Any source update requires regenerating/reviewing the manifest and configuration together; mismatches refuse CI. This task performs no deployment and leaves renting disabled.
+[CODE READ: 2026-10-22 Round 3, deployment.json] Build with `npm run bundle`; independently compare SHA256 of `dist/worker.js` with `dist/deployment.json`, committed `deployment.json` and public `DEPLOYED_BUNDLE_SHA256` before a separately authorized deployment. CLI deployment must upload those exact bundled bytes (use `npx --yes wrangler@4.152.0 deploy dist/worker.js --no-bundle`); dashboard/module upload uses the same file. The hash is a configuration assertion, avoiding a self-hash in the bundle. Any source update requires regenerating/reviewing the manifest and configuration together; mismatches refuse CI. This task performs no deployment and leaves renting disabled.
 
 [CODE READ: 2026-10-22 V4 round 2 owner instruction] **Stage only with RENTING_ENABLED=false.** The startup contract is SSH launch (`ssh_direct`) plus onstart; Vast injects keys already registered on the owner's account, and the Worker neither manages keys nor connects over SSH. Round 2 supersedes the earlier strict no-SSH STOP. The deployable source retains its KVM image/vm=true; the local tiny Docker/SSH flow is measured separately under [round 2 evidence](../../traces/vast_broker_v4_round2_20261018/README.md) and does not establish that KVM workload's validity. Those historical V4 shipped limits are superseded by the owner-approved V5 policy above. The local V4 round allowed $0.80/hour and any NVIDIA GPU.
 
@@ -129,6 +129,19 @@ The formatted checkpoint bundle is 103026 bytes, SHA256
 `1a06b7c87dd069240c4404503353b458d32e4d3ae64a680f35a5ac8f33d83eb8`.
 Prettier 3.6.2 and Black 25.1.0 use width 100; CI enforces both pinned versions.
 
+[CODE READ: 2026-10-23 owner V5_SECURITY and V5_ONSTART_AUTH instructions]
+**Security transition incomplete; keep renting disabled.** The working security
+checkpoint fixes cleanup starvation, failed-create recovery and bounded holds,
+but the mandatory prefix and tiny bootstrap/env transition remain red. Further
+claim/nonce/redaction/rate-limit hardening, blob route and live acceptance are
+pending; this is not a replacement renting-ready verdict.
+
+[MEASURED: 2026-10-23 security transition run, traces/vast_broker_v5_20261018/SECURITY_PROGRESS.md]
+The emitted security-work bundle is 110672 bytes, SHA256
+`2ab3856a7430129334fa430070419f83d1e2f920d55a3190aff7718f04aaf897`.
+The portable test entry now discovers every test, including unfinished owner
+contract regressions. A non-green baseline blocks mutation attribution.
+
 ## Deploy with the owner's credentials (9 steps)
 
 [CODE READ: 2026-10-22 wrangler.toml, defaults.json, deployment.json] This is the
@@ -137,7 +150,7 @@ Worker code checkpoint. The owner deploys; this lane leaves renting disabled.
 1. From `ci/vast-broker`, run `npm test` and `npm run bundle`. Compare `sha256sum dist/worker.js` with `deployment.json`; upload those exact bytes.
 2. Set public vars: `OWNER_GITHUB_ID=229738317`, `REPOSITORY=reindertpelsma/kayfabe`, `APPROVAL_MODE=owner_push_or_review`, `RENT_DRAFTS=false`, `ALLOWED_BASE_BRANCHES=["master"]`, and initially `RENTING_ENABLED=false`. Retain `PATH_SKIP_PATTERNS` from wrangler.toml and set `DEPLOYED_BUNDLE_SHA256` to the emitted hash.
 3. Use the SQLite `BrokerLedger` Durable Object binding named `LEDGER`, initial migration `v1`, and cron `* * * * *` from wrangler.toml. Preserve this namespace across updates.
-4. Authenticate Cloudflare on the owner's machine, then upload with `npx wrangler deploy dist/worker.js --no-bundle`; alternatively use the module-upload/bootstrap recipe below. No Cloudflare credentials belong in GitHub.
+4. Authenticate Cloudflare on the owner's machine, then upload with `npx --yes wrangler@4.152.0 deploy dist/worker.js --no-bundle`; alternatively use the module-upload/bootstrap recipe below. No Cloudflare credentials belong in GitHub.
 5. Set Worker secrets `WORKER_URL` (exact HTTPS origin, no path), `VAST_API_KEY`, `RUN_TOKEN_SECRET`, `OWNER_STOP_TOKEN`. The last two are independent random base64url strings, at least 32 characters. Keep account/signing/owner secrets out of CI and Vast boxes.
 6. Optionally set Worker secret `BROKER_PATH_PREFIX` to one random base64url segment, 32–128 characters. GitHub environment `gpu-vast` receives only secret `VAST_BROKER_URL` equal to WORKER_URL and optional secret `VAST_BROKER_PATH` equal to that segment. The prefix is excluded from the OIDC audience. App/PAT credentials are unnecessary until the blob route is added.
 7. Keep numeric defaults in defaults.json: check effective cap $1/hour, daily $6, rolling $30, reserve $8; boot 40 minutes, hard 180, soft margin 10, heartbeat 10/15, PASS/FAIL grace 5/10. Sweep is owner-only, $2.50/hour and separate daily $8 with shared rolling/reserve. The explicit reservation includes storage, transfer allowance and a cron minute.

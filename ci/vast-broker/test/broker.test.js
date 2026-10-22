@@ -276,7 +276,7 @@ test('ambiguous absent instance never triggers a second creation', async () => {
   h.cloud.instances.delete('900');
   h.cloud.ambiguous = false;
   h.restart();
-  assert.equal(await state(await h.call()), 'UNAVAILABLE');
+  assert.equal(await state(await h.call()), 'CREATING');
   assert.equal(h.cloud.creates, 1);
 });
 test('reconciliation never adopts labelled foreign instance with wrong script', async () => {

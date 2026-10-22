@@ -1,7 +1,9 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { setup, env, jwt, callbackToken, sha, nonce, sampleResult } from './helpers.js';
-import worker, { BrokerLedger } from '../src/index.js';
+import { createGateway, BrokerLedger } from '../src/index.js';
+// Component tests inject auth; v5-front-auth tests the real gateway.
+const worker = createGateway({ authorize: async () => {} });
 import { onstart } from '../src/onstart.js';
 const prefix = 'unit-path-only-' + 'p'.repeat(32);
 const request = async (
