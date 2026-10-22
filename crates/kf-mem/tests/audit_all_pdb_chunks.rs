@@ -1,0 +1,273 @@
+//! SA-03/VA-2. FALSIFIER: an object is omitted, a walk exceeds the ABI bound,
+//! or an invalidate clears before every chunk and asynchronous target is live.
+use kf_cuda::{WalkEntry, abi::KfMapRun};
+use kf_mem::apply::PermPolicy;
+use kf_mem::ledger::{Desired, MapTarget, Mapped, Settle};
+use kf_mem::vasmgr::{EntryDiff, VaManager, VasKey, WalkDone, Walker};
+use kf_trap::{
+    ClearOutcome, Invalidate, InvalidatePort, InvalidateRegs, InvalidateRequest, PdbAperture,
+    PortWrite,
+};
+use std::cell::{Cell, RefCell};
+use std::rc::Rc;
+
+#[derive(Default)]
+struct RecordingWalker {
+    pending: Option<Vec<WalkEntry>>,
+    submitted: Vec<Vec<u32>>,
+    generation: u64,
+}
+impl Walker for RecordingWalker {
+    fn submit(&mut self, entries: &[WalkEntry]) -> Result<(), String> {
+        assert!(self.pending.is_none());
+        assert!(!entries.is_empty() && entries.len() <= 64);
+        self.submitted
+            .push(entries.iter().map(|e| e.slot).collect());
+        self.pending = Some(entries.to_vec());
+        Ok(())
+    }
+    fn poll(&mut self) -> Result<Option<WalkDone>, String> {
+        let Some(entries) = self.pending.take() else {
+            return Ok(None);
+        };
+        self.generation += 1;
+        let done = WalkDone {
+            generation: self.generation,
+            nrun: entries.len(),
+            gpu_us: 0,
+            entries: entries
+                .into_iter()
+                .enumerate()
+                .map(|(i, e)| EntryDiff {
+                    pdb: e.pdb,
+                    slot: e.slot,
+                    first: i,
+                    runs: vec![PermPolicy::default().diff_run(&KfMapRun {
+                        va: 0x1000_0000,
+                        gpga: u64::from(e.slot) * 0x1000,
+                        len: 0x1000,
+                        flags: 0,
+                        op: 1,
+                        pdb_index: 0,
+                    })],
+                    ..Default::default()
+                })
+                .collect(),
+        };
+        Ok(Some(done))
+    }
+    fn ack(&mut self, generation: u64, codes: Vec<u8>) -> Result<(), String> {
+        assert_eq!(generation, self.generation);
+        assert!(codes.iter().all(|&c| c <= kf_cuda::abi::KFWR_ACK_APPLIED));
+        Ok(())
+    }
+    fn reset(&mut self, _: u32) -> Result<(), String> {
+        Ok(())
+    }
+    fn slots(&self) -> u32 {
+        128
+    }
+}
+struct Target {
+    key: u64,
+    maps: Rc<RefCell<Vec<(u64, bool)>>>,
+    port: Rc<InvalidatePort>,
+    live: Rc<Cell<bool>>,
+    fail_invalidate: Rc<Cell<Option<u64>>>,
+}
+impl MapTarget for Target {
+    fn map(&self, _: &Desired, _: bool) -> Result<Mapped, String> {
+        self.maps
+            .borrow_mut()
+            .push((self.key, self.port.trigger().read() != 0));
+        Ok(Mapped::Placed)
+    }
+    fn unmap(&self, _: u64, _: bool) -> Result<(), String> {
+        Ok(())
+    }
+    fn invalidate(&self) -> Result<(), String> {
+        if self.fail_invalidate.get() == Some(self.key) {
+            Err("injected invalidate refusal".into())
+        } else {
+            Ok(())
+        }
+    }
+    fn settle(&self) -> Settle {
+        if self.key == 0 && !self.live.get() {
+            Settle::Pending
+        } else {
+            Settle::Live
+        }
+    }
+}
+struct Rig {
+    va: VaManager<RecordingWalker, Target>,
+    port: Rc<InvalidatePort>,
+    maps: Rc<RefCell<Vec<(u64, bool)>>>,
+    live: Rc<Cell<bool>>,
+    fail_invalidate: Rc<Cell<Option<u64>>>,
+}
+fn rig(n: u64) -> Rig {
+    let port = Rc::new(InvalidatePort::new(
+        InvalidateRegs::from_usermode_base(0xbb_0000).unwrap(),
+    ));
+    let maps = Rc::new(RefCell::new(Vec::new()));
+    let live = Rc::new(Cell::new(true));
+    let fail_invalidate = Rc::new(Cell::new(None));
+    let mut va = VaManager::new(
+        RecordingWalker::default(),
+        1 << 32,
+        Box::new(|gpa, _| Some(gpa)),
+    );
+    for k in 0..n {
+        va.table.insert(
+            VasKey(k),
+            Target {
+                key: k,
+                maps: maps.clone(),
+                port: port.clone(),
+                live: live.clone(),
+                fail_invalidate: fail_invalidate.clone(),
+            },
+        );
+        va.table
+            .set_root(VasKey(k), (k + 1) * 0x10_0000, PdbAperture::Vidmem)
+            .unwrap();
+    }
+    Rig {
+        va,
+        port,
+        maps,
+        live,
+        fail_invalidate,
+    }
+}
+fn arm(r: &Rig) -> InvalidateRequest {
+    let regs = r.port.regs();
+    let (lo, hi) = Invalidate::encode_pdb(0, PdbAperture::Vidmem);
+    r.port.write(regs.pdb, lo);
+    r.port.write(regs.upper_pdb, hi);
+    let PortWrite::Publish(req) = r.port.write(regs.trigger, (1 << 31) | 3) else {
+        panic!("arm")
+    };
+    req
+}
+fn check_chunks(n: u64) {
+    let mut r = rig(n);
+    let req = arm(&r);
+    r.va.on_invalidate(req, r.port.trigger());
+    assert!(
+        r.va.in_flight(),
+        "the first ABI-bounded chunk must be submitted"
+    );
+    let first = r.va.on_walk_ready(r.port.trigger());
+    assert!(first.completed.is_empty() && first.unreconciled.is_empty());
+    assert_ne!(
+        r.port.trigger().read(),
+        0,
+        "the remaining objects are not mapped yet"
+    );
+    assert_eq!(r.maps.borrow().len(), 64);
+    assert!(r.va.in_flight(), "the next chunk must have an event source");
+    let done = r.va.on_walk_ready(r.port.trigger());
+    assert_eq!(done.completed, vec![(req.seq, ClearOutcome::Cleared)]);
+    assert_eq!(r.port.trigger().read(), 0);
+    let mut keys: Vec<_> = r
+        .maps
+        .borrow()
+        .iter()
+        .map(|&(k, busy)| {
+            assert!(busy);
+            k
+        })
+        .collect();
+    keys.sort_unstable();
+    assert_eq!(keys, (0..n).collect::<Vec<_>>());
+    assert!(
+        r.va.walker()
+            .submitted
+            .iter()
+            .all(|chunk| chunk.len() <= 64)
+    );
+    assert_eq!(r.va.stats.unreconciled, 0);
+}
+#[test]
+fn all_pdb_seventy_spaces_clear_after_both_chunks() {
+    check_chunks(70);
+}
+#[test]
+fn all_pdb_one_hundred_twenty_eight_spaces_clear_after_both_chunks() {
+    check_chunks(128);
+}
+#[test]
+fn a_pending_target_from_the_first_chunk_holds_the_final_clear() {
+    let mut r = rig(70);
+    r.live.set(false);
+    let req = arm(&r);
+    r.va.on_invalidate(req, r.port.trigger());
+    let _ = r.va.on_walk_ready(r.port.trigger());
+    let done = r.va.on_walk_ready(r.port.trigger());
+    assert!(done.completed.is_empty());
+    assert_eq!(r.maps.borrow().len(), 70);
+    assert_eq!(r.va.awaiting(), 1);
+    assert_ne!(r.port.trigger().read(), 0);
+    r.live.set(true);
+    assert_eq!(
+        r.va.on_targets(r.port.trigger()).completed,
+        vec![(req.seq, ClearOutcome::Cleared)]
+    );
+}
+#[test]
+fn a_new_invalidate_between_chunks_waits_for_its_own_round() {
+    let mut r = rig(70);
+    let old = arm(&r);
+    r.va.on_invalidate(old, r.port.trigger());
+    let new = arm(&r);
+    r.va.on_invalidate(new, r.port.trigger());
+    assert!(r.va.on_walk_ready(r.port.trigger()).completed.is_empty());
+    assert_eq!(
+        r.va.on_walk_ready(r.port.trigger()).completed,
+        vec![(old.seq, ClearOutcome::Superseded)]
+    );
+    assert_ne!(r.port.trigger().read(), 0);
+    assert!(r.va.on_walk_ready(r.port.trigger()).completed.is_empty());
+    assert_eq!(
+        r.va.on_walk_ready(r.port.trigger()).completed,
+        vec![(new.seq, ClearOutcome::Cleared)]
+    );
+    assert_eq!(r.maps.borrow().len(), 140);
+}
+
+#[test]
+fn an_invalidate_refusal_in_the_first_chunk_is_never_forgotten() {
+    hard_failure(0);
+}
+#[test]
+fn an_invalidate_refusal_in_the_last_chunk_still_holds_the_clear() {
+    hard_failure(69);
+}
+fn hard_failure(key: u64) {
+    let mut r = rig(70);
+    r.fail_invalidate.set(Some(key));
+    let req = arm(&r);
+    r.va.on_invalidate(req, r.port.trigger());
+    assert!(r.va.on_walk_ready(r.port.trigger()).completed.is_empty());
+    let out = r.va.on_walk_ready(r.port.trigger());
+    assert_eq!(r.maps.borrow().len(), 70);
+    assert!(out.completed.is_empty());
+    assert_eq!(out.unreconciled, vec![req.seq]);
+    assert_ne!(r.port.trigger().read(), 0);
+}
+#[test]
+fn reset_discards_unsubmitted_chunks_of_the_old_life() {
+    let mut r = rig(70);
+    let req = arm(&r);
+    r.va.on_invalidate(req, r.port.trigger());
+    assert!(r.va.abandon_life().in_flight);
+    assert!(r.port.reset());
+    let out = r.va.on_walk_ready(r.port.trigger());
+    assert!(out.completed.is_empty());
+    assert!(!r.va.in_flight());
+    assert_eq!(r.va.walker().submitted.len(), 1);
+    assert_eq!(r.maps.borrow().len(), 64);
+}
