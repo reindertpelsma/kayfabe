@@ -21,6 +21,7 @@ CASES=[
 ]
 
 CASES += [
+ ('runner-fresh-nonce','runner.py',[("'nonce':secrets.token_hex(32)","'nonce':'0'*64")],'secret-client.test.js'),
  ('diagnostic-binding','smoke.py',[("data.get('runner_nonce')!=self.runner_nonce or data.get('sha')!=tested_sha","False")],'round3-smoke-protocol.test.js'),
  ('diagnostic-reserve','smoke.py',[("credit>=8+(price or .5)*21/60","credit>=5+(price or .5)*21/60")],'round3-smoke-protocol.test.js'),
  ('diagnostic-BASE-claims','native-identity.mjs',[("workflow_ref:repo","obsolete_ref:repo"),("workflow_sha:'d'","obsolete_sha:'d'")],'round3-smoke-protocol.test.js'),
