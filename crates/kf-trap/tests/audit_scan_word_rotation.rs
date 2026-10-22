@@ -53,3 +53,47 @@ fn every_republished_bit_survives_cursor_wrap_without_duplication() {
         assert!(!bits.bit(token));
     }
 }
+
+fn dispersed_crowd(victim: u32) {
+    let bits = RungBitmap::new();
+    let mut out = Vec::new();
+    bits.publish(victim);
+    for _ in 0..256 {
+        for hot in (0..10).chain(64..118) {
+            bits.publish(hot);
+        }
+        bits.scan(&mut out, 64);
+        assert!(out.len() <= 64);
+        if out.contains(&victim) {
+            return;
+        }
+    }
+    panic!("a dispersed hot crowd starved victim {victim} in its partial last word");
+}
+#[test]
+fn a_dispersed_crowd_cannot_starve_the_next_bit_in_the_last_word() {
+    dispersed_crowd(118);
+}
+#[test]
+fn a_dispersed_crowd_cannot_starve_the_high_bit_in_the_last_word() {
+    dispersed_crowd(127);
+}
+fn no_budget(token: u32) {
+    let bits = RungBitmap::new();
+    bits.publish(token);
+    let mut out = vec![99];
+    assert_eq!(bits.scan(&mut out, 0), 0);
+    assert!(out.is_empty());
+    assert!(
+        bits.bit(token),
+        "an unbudgeted bit must be left for a later scan"
+    );
+}
+#[test]
+fn zero_budget_keeps_a_low_bit_pending() {
+    no_budget(0);
+}
+#[test]
+fn zero_budget_keeps_the_last_bit_pending() {
+    no_budget((kf_trap::bitmap::N_TOKENS - 1) as u32);
+}
