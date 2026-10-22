@@ -17,6 +17,32 @@ primary API documentation, falsifiers, deployment and residual billing risk.
 The scoped [README](../../ci/vast-broker/README.md) has nine owner setup steps.
 Root README.md is unchanged. Merge-group support is deferred by owner ruling.
 
+## Endpoint secret and prefix proof (owner request, 2026-10-22)
+
+[CODE READ] VAST_BROKER_URL is an Actions secret; optional VAST_BROKER_PATH matches
+Worker secret BROKER_PATH_PREFIX. Only the broker execution step receives them.
+The origin remains the OIDC audience; the API/callback URL adds the optional path.
+A generic 404 gate with native constant-time verification precedes ledger/auth.
+Known endpoint parts are redacted from box text; shell tracing and raw transport
+errors are suppressed and derived values masked before requests. URL secrecy is
+scanning/DoS-noise defence, never authentication; the box/onstart reader knows it.
+
+| Proof | EXPECTED RED commit | Before |
+| --- | --- | --- |
+| Secret scope/guard and prefix routing | a64b34ce7 | 83 total, 5 pass, 78 fail |
+| Actual shell request/mask/error/trace behaviour | 1eb9df642 | 10 total, 0 pass, 10 fail |
+| Scalar/folded run guard bypass | 0de729c3f | 39 total, 35 pass, 4 fail |
+| Reusable inheritance and step-name aliases | a8042039a | 5 total, 1 pass, 4 fail |
+
+[MEASURED: implementation checkpoint 833a1a865] The complete Node suite passes
+473 tests with zero failures/skips. Actual generated Python sender tests now use
+a prefixed callback for both success and failure exit statuses. Root README and
+the existing CI two-line insertion are unchanged. The first 94-case campaign passed after correcting broker sink fixtures; the
+unchanged logging mutation kills two tests (4d50d443a). Final inherited-secret and
+metadata probes add two guard checks. The expanded 96-case campaign retains the
+75 original policy cases; final counts
+and restored-source results are recorded in the mutation table.
+
 ## Amendment 3/3b callback proof
 
 [CODE READ: 2026-10-22] Amendment 3 replaces log retrieval/marker parsing with a
