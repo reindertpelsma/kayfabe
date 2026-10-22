@@ -77,7 +77,8 @@ test('fixed create request never returns upstream credentials', async () => {
   assert.equal(c.disk, 120);
   assert.equal(c.runtype, 'ssh_direct');
   assert.equal(c.label, 'kf-ci-123-1');
-  assert.match(c.onstart, /timeout/);
+  assert.match(c.onstart, /exec bash scripts\/ci\/vast_onstart.sh/);
+  assert.match(c.env, /-e KF_SOFT_DEADLINE=[0-9]+/);
   assert.doesNotMatch(JSON.stringify(r), /PRIVATE|key/);
 });
 test('returns immediately without waiting for logs or boot', async () => {

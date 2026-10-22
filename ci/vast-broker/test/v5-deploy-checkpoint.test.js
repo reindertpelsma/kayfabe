@@ -42,8 +42,10 @@ for (const path of ['', 'x'.repeat(32)])
       token: 'v1.123.1.1800030000.' + 'A'.repeat(43),
       path,
     });
-    assert.ok(s.includes('git init /workspace/kf-ci-src'));
+    assert.ok(
+      s.includes('git clone --filter=blob:none --no-checkout https://github.com/' + env.REPOSITORY),
+    );
     assert.ok(s.includes('git fetch --depth=1 origin ' + sha));
-    assert.ok(!s.includes('git clone'));
+    assert.ok(!s.includes('git init'));
     assert.ok(s.includes('git checkout --detach ' + sha));
   });

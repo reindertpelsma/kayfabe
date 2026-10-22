@@ -1,8 +1,8 @@
 {
   "legacy:SSH onstart launch": [
     [
-      "      image: IMAGE,\n      vm: true,\n      disk: 120,\n      runtype: 'ssh_direct',\n      onstart: script,\n      label: record.label,\n      target_state: 'running',\n",
-      "      image: IMAGE,\n      vm: true,\n      disk: 120,\n      runtype: 'args',\n      onstart: script,\n      label: record.label,\n      target_state: 'running',\n"
+      "      runtype: 'ssh_direct',",
+      "      runtype: 'args',"
     ]
   ],
   "legacy:pending provider status": [
@@ -43,14 +43,14 @@
   ],
   "legacy:optional prefix admission": [
     [
-      "  if (prefix === undefined || prefix === '') return path;\n  if (!validPathPrefix(prefix)) return null;\n  const parts = path.split('/');\n  if (!(await constantTimeEqual(prefix, parts[1] || ''))) return null; // MUTANT prefix-match\n  return '/' + parts.slice(2).join('/');\n}\nexport function endpointSecrets(env) {\n",
-      "  if (prefix === undefined || prefix === '') return path;\n  if (!validPathPrefix(prefix)) return null;\n  const parts = path.split('/');\n  return '/' + parts.slice(2).join('/');\n}\nexport function endpointSecrets(env) {\n"
+      "  if (!(await constantTimeEqual(prefix, parts[1] || ''))) return null; // MUTANT prefix-match\n  return '/' + parts.slice(2).join('/');",
+      "  return '/' + parts.slice(2).join('/');"
     ]
   ],
   "legacy:native constant-time prefix comparison": [
     [
-      "  if (prefix === undefined || prefix === '') return path;\n  if (!validPathPrefix(prefix)) return null;\n  const parts = path.split('/');\n  if (!(await constantTimeEqual(prefix, parts[1] || ''))) return null; // MUTANT prefix-match\n  return '/' + parts.slice(2).join('/');\n}\nexport function endpointSecrets(env) {\n",
-      "  if (prefix === undefined || prefix === '') return path;\n  if (!validPathPrefix(prefix)) return null;\n  const parts = path.split('/');\n  if (prefix !== (parts[1] || '')) return null; // MUTANT prefix-match\n  return '/' + parts.slice(2).join('/');\n}\nexport function endpointSecrets(env) {\n"
+      "  if (!(await constantTimeEqual(prefix, parts[1] || ''))) return null; // MUTANT prefix-match",
+      "  if (prefix !== (parts[1] || '')) return null; // MUTANT prefix-match"
     ]
   ],
   "legacy:public prefix gate": [
@@ -67,14 +67,14 @@
   ],
   "legacy:prefix charset and bounds": [
     [
-      "// prettier-ignore\nimport {constantTimeEqual} from './tokens.js';\nexport const validPathPrefix = (value) =>\n  typeof value === 'string' && /^[A-Za-z0-9_-]{32,128}$/.test(value);\nexport const notFound = () =>\n  new Response('Not found', {\n    status: 404,\n",
-      "// prettier-ignore\nimport {constantTimeEqual} from './tokens.js';\nexport const validPathPrefix = (value) =>\n  true || (typeof value === 'string' && /^[A-Za-z0-9_-]{32,128}$/.test(value));\nexport const notFound = () =>\n  new Response('Not found', {\n    status: 404,\n"
+      "  typeof value === 'string' && /^[A-Za-z0-9_-]{32,128}$/.test(value);",
+      "  true || (typeof value === 'string' && /^[A-Za-z0-9_-]{32,128}$/.test(value));"
     ]
   ],
   "legacy:fixed callback prefix": [
     [
-      "chmod 644 /etc/profile.d/kf-ci-hold.sh\npython3 - <<'KF_REPORT'\nimport json,math,os,re,select,subprocess,time\nurl='${origin}${prefix ? '/' + prefix : ''}/report/${callback.run}'\ntoken='${callback.token}'\nnonce='${nonce}'\nrunner_nonce='${callback.runnerNonce ?? ''}'\n",
-      "chmod 644 /etc/profile.d/kf-ci-hold.sh\npython3 - <<'KF_REPORT'\nimport json,math,os,re,select,subprocess,time\nurl='${origin}/report/${callback.run}'\ntoken='${callback.token}'\nnonce='${nonce}'\nrunner_nonce='${callback.runnerNonce ?? ''}'\n"
+      "url = os.environ[\"KF_BROKER_URL\"] + \"/report/\" + os.environ[\"KF_RUN_ID\"]",
+      "url = 'https://broker.example/report/' + os.environ[\"KF_RUN_ID\"]"
     ]
   ],
   "legacy:endpoint text redaction": [
@@ -611,8 +611,8 @@
   ],
   "v4:kill-wrong-route": [
     [
-      "#!/bin/sh\nset -eu\n# Only this run's limited capability; neither account nor owner credentials.\nexec curl --silent --show-error --fail --max-time 20 --proto '=https' --request POST --header 'Authorization: Bearer ${callback.token}' --data-binary \"\\${1:-box-request}\" '${origin}${prefix ? '/' + prefix : ''}/kill/${callback.run}'\nKF_KILL\nchmod 700 /usr/local/bin/kf-box-kill\ncat > /usr/local/bin/kf-box-hold <<'KF_HOLD'\n",
-      "#!/bin/sh\nset -eu\n# Only this run's limited capability; neither account nor owner credentials.\nexec curl --silent --show-error --fail --max-time 20 --proto '=https' --request POST --header 'Authorization: Bearer ${callback.token}' --data-binary \"\\${1:-box-request}\" '${origin}${prefix ? '/' + prefix : ''}/report/${callback.run}'\nKF_KILL\nchmod 700 /usr/local/bin/kf-box-kill\ncat > /usr/local/bin/kf-box-hold <<'KF_HOLD'\n"
+      "/kill/$KF_RUN_ID",
+      "/report/$KF_RUN_ID"
     ]
   ],
   "v4:no-absence-verification": [
@@ -695,14 +695,18 @@
   ],
   "v4:sender-discards-prefix": [
     [
-      "            data=os.read(child.stdout.fileno(),8192)\n            if not data: break\n            local.write(data);local.flush()\n            pending+=data\n        current=time.monotonic()\n        if pending and (len(pending)>=8192 or current-last>=1):\n            post('log',pending.decode('utf-8',errors='replace'));pending=b'';last=current\n        if current-heartbeat>=${DEFAULTS.heartbeatMinutes * 60}:\n            post('log','');heartbeat=current\n",
-      "            data=os.read(child.stdout.fileno(),8192)\n            if not data: break\n            local.write(data);local.flush()\n            pending=(pending+data)[-8192:]\n        current=time.monotonic()\n        if pending and current-last>=1:\n            post('log',pending.decode('utf-8',errors='replace'));pending=b'';last=current\n        if current-heartbeat>=${DEFAULTS.heartbeatMinutes * 60}:\n            post('log','');heartbeat=current\n"
+      "pending += data",
+      "pending = (pending + data)[-8192:]"
+    ],
+    [
+      "len(pending) >= 8192 or current - last >= 1",
+      "current - last >= 1"
     ]
   ],
   "v4:sender-repeats-tail": [
     [
-      "except (ValueError,TypeError,KeyError,OSError,UnicodeError):pass\nif rc==124 and not any(r['name']=='timeout' for r in result['suites']):result['suites'].append({'name':'timeout','pass':0,'fail':1,'skip':0})\nif runner_nonce:result['runner_nonce']=runner_nonce\nack=post('result','Suite complete; sender omitted '+str(omitted)+' raw bytes beyond its bounded transport allowance.',result)\nseconds=ack.get('grace_remaining_seconds') if isinstance(ack,dict) else None\nremaining=str(math.ceil(seconds/60)) if type(seconds) is int and 0<=seconds<=${grace * 60} else 'unknown'\nprint('Use kf-box-kill [reason] to end this box early; configured maximum ${grace} minutes; Worker reports '+remaining+' minutes remaining (hard TTL included).')\n",
-      "except (ValueError,TypeError,KeyError,OSError,UnicodeError):pass\nif rc==124 and not any(r['name']=='timeout' for r in result['suites']):result['suites'].append({'name':'timeout','pass':0,'fail':1,'skip':0})\nif runner_nonce:result['runner_nonce']=runner_nonce\nack=post('result',tail,result)\nseconds=ack.get('grace_remaining_seconds') if isinstance(ack,dict) else None\nremaining=str(math.ceil(seconds/60)) if type(seconds) is int and 0<=seconds<=${grace * 60} else 'unknown'\nprint('Use kf-box-kill [reason] to end this box early; configured maximum ${grace} minutes; Worker reports '+remaining+' minutes remaining (hard TTL included).')\n"
+      "\"Suite complete; sender omitted \"\n    + str(omitted)\n    + \" raw bytes beyond its bounded transport allowance.\"",
+      "tail"
     ]
   ],
   "v4:unreleased-upload": [
@@ -737,8 +741,8 @@
   ],
   "v4:sender-ignores-grace-ack": [
     [
-      "if rc==124 and not any(r['name']=='timeout' for r in result['suites']):result['suites'].append({'name':'timeout','pass':0,'fail':1,'skip':0})\nif runner_nonce:result['runner_nonce']=runner_nonce\nack=post('result','Suite complete; sender omitted '+str(omitted)+' raw bytes beyond its bounded transport allowance.',result)\nseconds=ack.get('grace_remaining_seconds') if isinstance(ack,dict) else None\nremaining=str(math.ceil(seconds/60)) if type(seconds) is int and 0<=seconds<=${grace * 60} else 'unknown'\nprint('Use kf-box-kill [reason] to end this box early; configured maximum ${grace} minutes; Worker reports '+remaining+' minutes remaining (hard TTL included).')\nraise SystemExit(rc if rc else (0 if result['verdict']=='PASS' else 1))\n",
-      "if rc==124 and not any(r['name']=='timeout' for r in result['suites']):result['suites'].append({'name':'timeout','pass':0,'fail':1,'skip':0})\nif runner_nonce:result['runner_nonce']=runner_nonce\nack=post('result','Suite complete; sender omitted '+str(omitted)+' raw bytes beyond its bounded transport allowance.',result)\nseconds=None\nremaining=str(math.ceil(seconds/60)) if type(seconds) is int and 0<=seconds<=${grace * 60} else 'unknown'\nprint('Use kf-box-kill [reason] to end this box early; configured maximum ${grace} minutes; Worker reports '+remaining+' minutes remaining (hard TTL included).')\nraise SystemExit(rc if rc else (0 if result['verdict']=='PASS' else 1))\n"
+      "seconds = ack.get(\"grace_remaining_seconds\") if isinstance(ack, dict) else None",
+      "seconds = None"
     ]
   ],
   "v4:lose-result-after-box-kill": [
@@ -1161,32 +1165,32 @@
   ],
   "v5:creation-based-soft-deadline": [
     [
-      "        path: env.BROKER_PATH_PREFIX ?? '',\n        graceMinutes: Math.max(cfg.passGrace, cfg.failGrace) / 60000,\n        runnerNonce: r.runnerNonce,\n        softDeadline: r.softDeadline,\n      });\n    r.scriptHash = await sha256Hex(script);\n    await ledger.reserve(r);\n",
-      "        path: env.BROKER_PATH_PREFIX ?? '',\n        graceMinutes: Math.max(cfg.passGrace, cfg.failGrace) / 60000,\n        runnerNonce: r.runnerNonce,\n      });\n    r.scriptHash = await sha256Hex(script);\n    await ledger.reserve(r);\n"
+      "KF_SOFT_DEADLINE: Math.floor(r.softDeadline / 1000)",
+      "KF_SOFT_DEADLINE: Math.floor((now() + cfg.hard) / 1000)"
     ]
   ],
   "v5:hold-helper-scope": [
     [
-      "#!/bin/sh\nset -eu\n# This run only; cannot remove its hard limit or access account credentials.\nexec curl --silent --show-error --fail --max-time 20 --proto '=https' --request POST --header 'Authorization: Bearer ${callback.token}' --data-binary '' '${origin}${prefix ? '/' + prefix : ''}/hold/${callback.run}'\nKF_HOLD\nchmod 700 /usr/local/bin/kf-box-hold\ncat > /etc/profile.d/kf-ci-hold.sh <<'KF_PROFILE'\n",
-      "#!/bin/sh\nset -eu\n# This run only; cannot remove its hard limit or access account credentials.\nexec curl --silent --show-error --fail --max-time 20 --proto '=https' --request POST --header 'Authorization: Bearer ${callback.token}' --data-binary '' '${origin}${prefix ? '/' + prefix : ''}/hold/999-1'\nKF_HOLD\nchmod 700 /usr/local/bin/kf-box-hold\ncat > /etc/profile.d/kf-ci-hold.sh <<'KF_PROFILE'\n"
+      "/hold/$KF_RUN_ID",
+      "/hold/999-1"
     ]
   ],
   "v5:ssh-login-hold": [
     [
-      "chmod 700 /usr/local/bin/kf-box-hold\ncat > /etc/profile.d/kf-ci-hold.sh <<'KF_PROFILE'\n# An authenticated SSH login takes MANUAL; ordinary non-login workloads do not.\nif [ -n \"\\${SSH_CONNECTION:-}\" ]; then\n    /usr/local/bin/kf-box-hold >/dev/null 2>&1 || true\nfi\nKF_PROFILE\n",
-      "chmod 700 /usr/local/bin/kf-box-hold\ncat > /etc/profile.d/kf-ci-hold.sh <<'KF_PROFILE'\n# An authenticated SSH login takes MANUAL; ordinary non-login workloads do not.\nif false; then\n    /usr/local/bin/kf-box-hold >/dev/null 2>&1 || true\nfi\nKF_PROFILE\n"
+      "if [ -n \"${SSH_CONNECTION:-}\" ]; then",
+      "if false; then"
     ]
   ],
   "v5:heartbeat-after-cap": [
     [
-      "    if result is not None: payload['result']=result\n    body=json.dumps(payload,separators=(',',':'),ensure_ascii=True).encode()\n    heartbeat_post=kind=='log' and text==''\n    if kind!='result' and not heartbeat_post and (attempted>=600 or sent+len(body)>900000):\n        omitted+=len((text or '').encode());return\n    seq+=1;sent+=len(body);attempted+=1\n    # curl retries reuse this exact payload/sequence; no redirect or arbitrary URL.\n",
-      "    if result is not None: payload['result']=result\n    body=json.dumps(payload,separators=(',',':'),ensure_ascii=True).encode()\n    heartbeat_post=kind=='log' and text==''\n    if kind!='result' and (attempted>=600 or sent+len(body)>900000):\n        omitted+=len((text or '').encode());return\n    seq+=1;sent+=len(body);attempted+=1\n    # curl retries reuse this exact payload/sequence; no redirect or arbitrary URL.\n"
+      " and not heartbeat_post and ",
+      " and "
     ]
   ],
   "v5:heartbeat-busy-branch": [
     [
-      "        current=time.monotonic()\n        if pending and (len(pending)>=8192 or current-last>=1):\n            post('log',pending.decode('utf-8',errors='replace'));pending=b'';last=current\n        if current-heartbeat>=${DEFAULTS.heartbeatMinutes * 60}:\n            post('log','');heartbeat=current\n    if pending: post('log',pending.decode('utf-8',errors='replace'))\nrc=child.wait()\n",
-      "        current=time.monotonic()\n        if pending and (len(pending)>=8192 or current-last>=1):\n            post('log',pending.decode('utf-8',errors='replace'));pending=b'';last=current\n        elif current-heartbeat>=${DEFAULTS.heartbeatMinutes * 60}:\n            post('log','');heartbeat=current\n    if pending: post('log',pending.decode('utf-8',errors='replace'))\nrc=child.wait()\n"
+      "        if current - heartbeat >=",
+      "        elif current - heartbeat >="
     ]
   ],
   "v5:heartbeat-ten-minutes": [
@@ -1197,8 +1201,8 @@
   ],
   "v5:soft-expired-no-work": [
     [
-      "'''\nsoft_deadline=${callback.softDeadline ?? 'None'}\nremaining=math.floor(soft_deadline/1000-time.time()) if soft_deadline is not None else ${minutes * 60 - DEFAULTS.softMarginMinutes * 60}\nwork=work.replace('__KF_SOFT_SECONDS__',str(max(1,remaining))) if remaining>0 else 'exit 124\\\\n'\nwork=work.replace('__KF_SOFT_DEADLINE_MS__',str(soft_deadline if soft_deadline is not None else math.floor(time.time()*1000+remaining*1000)))\npost('progress','Suite starting')\nchild=subprocess.Popen(['bash','-s'],stdin=subprocess.PIPE,stdout=subprocess.PIPE,stderr=subprocess.STDOUT)\n",
-      "'''\nsoft_deadline=${callback.softDeadline ?? 'None'}\nremaining=math.floor(soft_deadline/1000-time.time()) if soft_deadline is not None else ${minutes * 60 - DEFAULTS.softMarginMinutes * 60}\nwork=work.replace('__KF_SOFT_SECONDS__',str(max(1,remaining))) if remaining>0 else 'exit 0\\\\n'\nwork=work.replace('__KF_SOFT_DEADLINE_MS__',str(soft_deadline if soft_deadline is not None else math.floor(time.time()*1000+remaining*1000)))\npost('progress','Suite starting')\nchild=subprocess.Popen(['bash','-s'],stdin=subprocess.PIPE,stdout=subprocess.PIPE,stderr=subprocess.STDOUT)\n"
+      "else \"exit 124\\n\"",
+      "else \"exit 0\\n\""
     ]
   ],
   "v5:shipped-numeric-overrides": [
@@ -1397,14 +1401,14 @@
   ],
   "v5:sender-file-binding": [
     [
-      "    with open('/workspace/kf-ci-result.json','rb') as source:raw=source.read(65537)\n    if len(raw)>65536:raise ValueError('size')\n    candidate=json.loads(raw.decode('utf-8',errors='strict'),object_pairs_hook=unique)\n    if type(candidate) is not dict or set(candidate)!={'nonce','sha','verdict','suites','hardware'} or candidate['nonce']!=nonce or candidate['sha']!='${sha}' or candidate['verdict'] not in {'PASS','FAIL','UNAVAILABLE'}:raise ValueError('binding')\n    rows=candidate['suites'];hardware=candidate['hardware']\n    if type(rows) is not list or not 1<=len(rows)<=19 or any(type(r) is not dict or set(r)!={'name','pass','fail','skip'} or not isinstance(r['name'],str) or not re.fullmatch(r'[a-z][a-z0-9_]{0,47}',r['name']) or any(type(r[k]) is not int or not 0<=r[k]<=10000000 for k in ['pass','fail','skip']) for r in rows) or len({r['name'] for r in rows})!=len(rows):raise ValueError('suites')\n    if type(hardware) is not dict or set(hardware)!={'gpu_name','compute_cap','driver_version'} or not isinstance(hardware['gpu_name'],str) or not re.fullmatch(r'[A-Za-z0-9_. -]{1,100}',hardware['gpu_name']) or type(hardware['compute_cap']) is not int or not 0<=hardware['compute_cap']<=2000 or not isinstance(hardware['driver_version'],str) or not re.fullmatch(r'unknown|[0-9]{3}\\\\.[0-9]{1,3}(?:\\\\.[0-9]{1,2})?',hardware['driver_version']):raise ValueError('hardware')\n",
-      "    with open('/workspace/kf-ci-result.json','rb') as source:raw=source.read(65537)\n    if len(raw)>65536:raise ValueError('size')\n    candidate=json.loads(raw.decode('utf-8',errors='strict'),object_pairs_hook=unique)\n    if type(candidate) is not dict or set(candidate)!={'nonce','sha','verdict','suites','hardware'} or False or candidate['verdict'] not in {'PASS','FAIL','UNAVAILABLE'}:raise ValueError('binding')\n    rows=candidate['suites'];hardware=candidate['hardware']\n    if type(rows) is not list or not 1<=len(rows)<=19 or any(type(r) is not dict or set(r)!={'name','pass','fail','skip'} or not isinstance(r['name'],str) or not re.fullmatch(r'[a-z][a-z0-9_]{0,47}',r['name']) or any(type(r[k]) is not int or not 0<=r[k]<=10000000 for k in ['pass','fail','skip']) for r in rows) or len({r['name'] for r in rows})!=len(rows):raise ValueError('suites')\n    if type(hardware) is not dict or set(hardware)!={'gpu_name','compute_cap','driver_version'} or not isinstance(hardware['gpu_name'],str) or not re.fullmatch(r'[A-Za-z0-9_. -]{1,100}',hardware['gpu_name']) or type(hardware['compute_cap']) is not int or not 0<=hardware['compute_cap']<=2000 or not isinstance(hardware['driver_version'],str) or not re.fullmatch(r'unknown|[0-9]{3}\\\\.[0-9]{1,3}(?:\\\\.[0-9]{1,2})?',hardware['driver_version']):raise ValueError('hardware')\n"
+      "        or candidate[\"nonce\"] != nonce\n        or candidate[\"sha\"] != sha\n",
+      ""
     ]
   ],
   "v5:approved-payload-path": [
     [
-      "git checkout --detach ${sha}\n[ \"$(git rev-parse HEAD)\" = '${sha}' ]\nexport KF_SOFT_DEADLINE_MS=__KF_SOFT_DEADLINE_MS__\nbash scripts/ci/vast_payload.sh '${sha}' '${nonce}'\nKF_TEST\n'''\nsoft_deadline=${callback.softDeadline ?? 'None'}\n",
-      "git checkout --detach ${sha}\n[ \"$(git rev-parse HEAD)\" = '${sha}' ]\nexport KF_SOFT_DEADLINE_MS=__KF_SOFT_DEADLINE_MS__\nbash scripts/ci/vast_box_main.sh '${sha}' '${nonce}'\nKF_TEST\n'''\nsoft_deadline=${callback.softDeadline ?? 'None'}\n"
+      "bash scripts/ci/vast_payload.sh \"$KF_SHA\" \"$KF_NONCE\"",
+      "bash scripts/ci/vast_box_main.sh \"$KF_SHA\" \"$KF_NONCE\""
     ]
   ],
   "v5:owner-sweep-selected-commit": [
@@ -1455,14 +1459,14 @@
   ],
   "v5:repo-defined-sender-suites": [
     [
-      "    rows=candidate['suites'];hardware=candidate['hardware']\n    if type(rows) is not list or not 1<=len(rows)<=19 or any(type(r) is not dict or set(r)!={'name','pass','fail','skip'} or not isinstance(r['name'],str) or not re.fullmatch(r'[a-z][a-z0-9_]{0,47}',r['name']) or any(type(r[k]) is not int or not 0<=r[k]<=10000000 for k in ['pass','fail','skip']) for r in rows) or len({r['name'] for r in rows})!=len(rows):raise ValueError('suites')\n    if type(hardware) is not dict or set(hardware)!={'gpu_name','compute_cap','driver_version'} or not isinstance(hardware['gpu_name'],str) or not re.fullmatch(r'[A-Za-z0-9_. -]{1,100}',hardware['gpu_name']) or type(hardware['compute_cap']) is not int or not 0<=hardware['compute_cap']<=2000 or not isinstance(hardware['driver_version'],str) or not re.fullmatch(r'unknown|[0-9]{3}\\\\.[0-9]{1,3}(?:\\\\.[0-9]{1,2})?',hardware['driver_version']):raise ValueError('hardware')\n    complete=all(r['fail']==0 and r['skip']==0 and r['pass']>0 for r in rows)\n    if rc!=0 or candidate['verdict']!='PASS' or not complete or hardware['gpu_name']=='unknown' or hardware['driver_version']=='unknown' or hardware['compute_cap']<750:\n        candidate['verdict']='FAIL'\n        if not any(r['fail'] for r in rows):rows.append({'name':'timeout' if rc==124 else 'app_exit','pass':0,'fail':1,'skip':0})\n",
-      "    rows=candidate['suites'];hardware=candidate['hardware']\n    if type(rows) is not list or not 1<=len(rows)<=19 or any(type(r) is not dict or set(r)!={'name','pass','fail','skip'} or not isinstance(r['name'],str) or not re.fullmatch(r'[a-z][a-z0-9_]{0,47}',r['name']) or any(type(r[k]) is not int or not 0<=r[k]<=10000000 for k in ['pass','fail','skip']) for r in rows) or len({r['name'] for r in rows})!=len(rows):raise ValueError('suites')\n    if type(hardware) is not dict or set(hardware)!={'gpu_name','compute_cap','driver_version'} or not isinstance(hardware['gpu_name'],str) or not re.fullmatch(r'[A-Za-z0-9_. -]{1,100}',hardware['gpu_name']) or type(hardware['compute_cap']) is not int or not 0<=hardware['compute_cap']<=2000 or not isinstance(hardware['driver_version'],str) or not re.fullmatch(r'unknown|[0-9]{3}\\\\.[0-9]{1,3}(?:\\\\.[0-9]{1,2})?',hardware['driver_version']):raise ValueError('hardware')\n    complete=len(rows)==9 and all(r['fail']==0 and r['skip']==0 and r['pass']>0 for r in rows)\n    if rc!=0 or candidate['verdict']!='PASS' or not complete or hardware['gpu_name']=='unknown' or hardware['driver_version']=='unknown' or hardware['compute_cap']<750:\n        candidate['verdict']='FAIL'\n        if not any(r['fail'] for r in rows):rows.append({'name':'timeout' if rc==124 else 'app_exit','pass':0,'fail':1,'skip':0})\n"
+      "complete = all(",
+      "complete = len(rows) == 9 and all("
     ]
   ],
   "v5:exact-sha-shallow-fetch": [
     [
-      "git init /workspace/kf-ci-src\ncd /workspace/kf-ci-src\ngit remote add origin https://github.com/${repo}.git\ngit fetch --depth=1 origin ${sha}\ngit checkout --detach ${sha}\n[ \"$(git rev-parse HEAD)\" = '${sha}' ]\nexport KF_SOFT_DEADLINE_MS=__KF_SOFT_DEADLINE_MS__\n",
-      "git init /workspace/kf-ci-src\ncd /workspace/kf-ci-src\ngit remote add origin https://github.com/${repo}.git\ngit fetch origin ${sha}\ngit checkout --detach ${sha}\n[ \"$(git rev-parse HEAD)\" = '${sha}' ]\nexport KF_SOFT_DEADLINE_MS=__KF_SOFT_DEADLINE_MS__\n"
+      "git fetch --depth=1 origin ${sha}",
+      "git fetch origin ${sha}"
     ]
   ]
 }

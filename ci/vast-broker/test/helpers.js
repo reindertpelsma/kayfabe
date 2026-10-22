@@ -267,7 +267,8 @@ export async function setup(overrides = {}) {
   const cloud = new MockCloud();
   const storage = new MemoryStorage();
   const time = { value: clock };
-  const bindings = { ...env, ...overrides };
+  const implicitPrefix = !Object.hasOwn(overrides, 'BROKER_PATH_PREFIX');
+  const bindings = { ...env, BROKER_PATH_PREFIX: 'unit-fixture-' + 'p'.repeat(32), ...overrides };
   let service = createService({
     env: bindings,
     storage,
@@ -275,13 +276,24 @@ export async function setup(overrides = {}) {
     now: () => time.value,
     random: () => nonce,
   });
+  const transport = {
+    fetch(request) {
+      const url = new URL(request.url);
+      if (implicitPrefix) {
+        url.pathname = '/' + bindings.BROKER_PATH_PREFIX + url.pathname;
+        request = new Request(url, request);
+      }
+      return service.fetch(request);
+    },
+    sweep: (...args) => service.sweep(...args),
+  };
   const harness = {
     cloud,
     storage,
     time,
     bindings,
     get service() {
-      return service;
+      return transport;
     },
     restart() {
       service = createService({
@@ -329,7 +341,7 @@ export async function setup(overrides = {}) {
           result: { runner_nonce: record.runnerNonce, sha: record.sha, ...payload.result },
         };
       const bearer = token ?? callbackToken(record, bindings.RUN_TOKEN_SECRET);
-      return service.fetch(
+      return transport.fetch(
         new Request(bindings.WORKER_URL + '/report/' + run, {
           method: 'POST',
           headers: {
@@ -364,7 +376,7 @@ export async function setup(overrides = {}) {
       const authorization =
         token ??
         (await jwt({ exp: time.value / 1000 + 300, nbf: time.value / 1000 - 1, ...claims }));
-      return service.fetch(
+      return transport.fetch(
         new Request(bindings.WORKER_URL + path, {
           method,
           headers: {

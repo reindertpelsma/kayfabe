@@ -1,5 +1,7 @@
 // prettier-ignore
 import {constantTimeEqual} from './tokens.js';
+// prettier-ignore
+import {refuse} from './policy.js';
 export const validPathPrefix = (value) =>
   typeof value === 'string' && /^[A-Za-z0-9_-]{32,128}$/.test(value);
 export const notFound = () =>
@@ -10,7 +12,10 @@ export const notFound = () =>
 export async function routePath(request, env) {
   const path = new URL(request.url).pathname,
     prefix = env.BROKER_PATH_PREFIX;
-  if (prefix === undefined || prefix === '') return path;
+  if (prefix === undefined || prefix === '') {
+    if (env.RENTING_ENABLED === 'true') refuse('PREFIX_REQUIRED', 503);
+    return path;
+  }
   if (!validPathPrefix(prefix)) return null;
   const parts = path.split('/');
   if (!(await constantTimeEqual(prefix, parts[1] || ''))) return null; // MUTANT prefix-match

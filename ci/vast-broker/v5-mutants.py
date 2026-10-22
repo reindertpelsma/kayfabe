@@ -194,25 +194,25 @@ CASES = [
     ),
     (
         "hold-helper-scope",
-        "src/onstart.js",
+        "../../scripts/ci/vast_onstart.sh",
         [("/hold/${callback.run}'", "/hold/999-1'")],
         ["v5-onstart.test.js"],
     ),
     (
         "ssh-login-hold",
-        "src/onstart.js",
+        "../../scripts/ci/vast_onstart.sh",
         [(r'if [ -n "\${SSH_CONNECTION:-}" ]; then', r"if false; then")],
         ["v5-onstart.test.js"],
     ),
     (
         "heartbeat-after-cap",
-        "src/onstart.js",
+        "../../scripts/ci/vast_report.py",
         [("if kind!='result' and not heartbeat_post and", "if kind!='result' and")],
         ["v5-onstart.test.js"],
     ),
     (
         "heartbeat-busy-branch",
-        "src/onstart.js",
+        "../../scripts/ci/vast_report.py",
         [("        if current-heartbeat>=", "        elif current-heartbeat>=")],
         ["v5-onstart.test.js"],
     ),
@@ -224,7 +224,7 @@ CASES = [
     ),
     (
         "soft-expired-no-work",
-        "src/onstart.js",
+        "../../scripts/ci/vast_report.py",
         [("if remaining>0 else 'exit 124", "if remaining>0 else 'exit 0")],
         ["v5-soft-deadline.test.js"],
     ),
@@ -499,13 +499,13 @@ CASES = [
     ),
     (
         "sender-file-binding",
-        "src/onstart.js",
+        "../../scripts/ci/vast_report.py",
         [("candidate['nonce']!=nonce or candidate['sha']!='${sha}'", "False")],
         ["v5-structured-sender.test.js"],
     ),
     (
         "approved-payload-path",
-        "src/onstart.js",
+        "../../scripts/ci/vast_report.py",
         [
             (
                 "bash scripts/ci/vast_payload.sh '${sha}' '${nonce}'",
@@ -581,7 +581,7 @@ CASES = [
     ),
     (
         "repo-defined-sender-suites",
-        "src/onstart.js",
+        "../../scripts/ci/vast_report.py",
         [("complete=all(", "complete=len(rows)==9 and all(")],
         ["v5-structured-sender.test.js"],
     ),
@@ -634,7 +634,13 @@ def main():
                     assert syntax.returncode == 0, (name, syntax.stderr)
             else:
                 syntax = subprocess.run(
-                    ["node", "--check", str(path)], capture_output=True, text=True
+                    (
+                        ["bash", "-n", str(path)]
+                        if path.suffix == ".sh"
+                        else ["node", "--check", str(path)]
+                    ),
+                    capture_output=True,
+                    text=True,
                 )
                 assert syntax.returncode == 0, (name, syntax.stderr)
             run = subprocess.run(

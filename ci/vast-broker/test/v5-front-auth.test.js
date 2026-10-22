@@ -33,6 +33,7 @@ for (const kind of ['garbage', 'forged'])
     }
     const bindings = {
       ...env,
+      BROKER_PATH_PREFIX: 'g'.repeat(32),
       LEDGER: {
         idFromName: () => 1,
         get: () => ({
@@ -44,7 +45,7 @@ for (const kind of ['garbage', 'forged'])
       },
     };
     const r = await gateway.fetch(
-      new Request(env.WORKER_URL + '/status/123-1', {
+      new Request(env.WORKER_URL + '/' + 'g'.repeat(32) + '/status/123-1', {
         headers: { Authorization: 'Bearer ' + token },
       }),
       bindings,
@@ -66,6 +67,7 @@ for (const kind of ['repository', 'ref'])
     );
     const bindings = {
       ...env,
+      BROKER_PATH_PREFIX: 'g'.repeat(32),
       LEDGER: {
         idFromName: () => 1,
         get: () => ({
@@ -79,7 +81,7 @@ for (const kind of ['repository', 'ref'])
     assert.equal(
       (
         await gateway.fetch(
-          new Request(env.WORKER_URL + '/status/123-1', {
+          new Request(env.WORKER_URL + '/' + 'g'.repeat(32) + '/status/123-1', {
             headers: { Authorization: 'Bearer ' + token },
           }),
           bindings,

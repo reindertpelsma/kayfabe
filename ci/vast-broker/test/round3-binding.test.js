@@ -11,6 +11,7 @@ for (const size of [180, 700])
     let received;
     const bindings = {
       ...env,
+      BROKER_PATH_PREFIX: 'g'.repeat(32),
       LEDGER: {
         idFromName: () => 1,
         get: () => ({
@@ -22,7 +23,10 @@ for (const size of [180, 700])
       },
     };
     const body = JSON.stringify(request) + ' '.repeat(size);
-    await worker.fetch(new Request(env.WORKER_URL + '/rent', { method: 'POST', body }), bindings);
+    await worker.fetch(
+      new Request(env.WORKER_URL + '/' + 'g'.repeat(32) + '/rent', { method: 'POST', body }),
+      bindings,
+    );
     assert.equal(received, body.slice(0, 2049));
   });
 // FALSIFIER: runner nonce is optional/replaced on replay, or final/page hashes

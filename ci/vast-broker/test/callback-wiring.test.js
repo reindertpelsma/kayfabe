@@ -19,7 +19,7 @@ for (const field of ['url', 'run', 'token'])
     );
   });
 test('fixed onstart posts bounded JSON to Worker only and backs up output', async () => {
-  const { onstart } = await import('../src/onstart.js');
+  const { onstart } = await import('./repo-onstart.js');
   const s = onstart(sha, nonce, 20, env.REPOSITORY, onstartArgs);
   assert.match(s, /https:\/\/broker.example/);
   assert.match(s, /\/report\//);
@@ -67,7 +67,7 @@ for (const exitCode of [0, 7])
   test(
     'actual fixed Python sender backs up hostile output and reports exit status ' + exitCode,
     async () => {
-      const { onstart } = await import('../src/onstart.js');
+      const { onstart } = await import('./repo-onstart.js');
       const callbackPath = 'sender-prefix-' + 's'.repeat(32);
       const script = onstart(sha, nonce, 20, env.REPOSITORY, {
         ...onstartArgs,

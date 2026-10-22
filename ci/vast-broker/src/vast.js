@@ -49,13 +49,19 @@ export class Vast {
     const r = await this.api('/api/v0/users/current');
     return r.credit;
   }
-  async create(offer, record, script) {
+  async create(offer, record, script, environment = {}) {
     const body = {
       image: IMAGE,
       vm: true,
       disk: 120,
       runtype: 'ssh_direct',
       onstart: script,
+      env: Object.entries(environment)
+        .map(([key, value]) => {
+          if (!/^KF_[A-Z_]+$/.test(key) || !/^[A-Za-z0-9_.:/-]+$/.test(String(value))) refuse();
+          return '-e ' + key + '=' + value;
+        })
+        .join(' '),
       label: record.label,
       target_state: 'running',
       cancel_unavail: true,
