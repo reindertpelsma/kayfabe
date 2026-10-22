@@ -1,0 +1,134 @@
+{
+  "kind": "MEASURED bounded text export",
+  "utc": "2026-10-22T02:35:32.306178+00:00",
+  "files": {
+    "s2_guard_host_tests.log": {
+      "sha256": "4f418200451c8adf6222c2139bff8b009b054bb22300bc8523475b835046c001",
+      "bytes": 3104,
+      "tail_only": false
+    },
+    "sweep_host_die.log": {
+      "sha256": "d759d6b56d6540eda40624385137129013eb3ffd27edc9739cd8844a8a7e8264",
+      "bytes": 209,
+      "tail_only": false
+    },
+    "sweep_host_preflight.log": {
+      "sha256": "46c5dcbc962ce2b18b0c37188a13b66dbd512584f59c781a06571a195b7b7c26",
+      "bytes": 411,
+      "tail_only": false
+    },
+    "sweep_gates.log": {
+      "sha256": "89159dcd2f22443a8e4b5ad330607c6c21ec434e09fdf581acc0b23ab9acbf51",
+      "bytes": 25206,
+      "tail_only": false
+    },
+    "sweep_native_baseline.log": {
+      "sha256": "fe74ab8a7ee41ad4d57f71d48dc8e0af76b919cbd39b4b9dfaf953cddfb83107",
+      "bytes": 351,
+      "tail_only": false
+    },
+    "sweep_bare595.log": {
+      "sha256": "3fe238771f3907569c74482feed9d6e84249503ed821926f96963f00f61ebea3",
+      "bytes": 5841,
+      "tail_only": false
+    },
+    "sweep_cuda_host.log": {
+      "sha256": "0fe08a35e31760da8dd0f22b6feb52ddd231caf3f9da8dd31cfff97987224124",
+      "bytes": 2360,
+      "tail_only": false
+    },
+    "sweep_native_grtier.log": {
+      "sha256": "b2c53fbec4a591b281776df5c0f24d3cb2b201ecd10bb6474fe00788c907e532",
+      "bytes": 3056,
+      "tail_only": false
+    },
+    "sweep_linux_guest595.log": {
+      "sha256": "64d7160473e7f8750a1c7f958450bf8c1969304343d4d04f9700d05971321f48",
+      "bytes": 212,
+      "tail_only": false
+    },
+    "native_xid_baseline.json": {
+      "sha256": "d11a72cb28289e53a4c2a70ee49b36afa864cbe05d28522f8c2ff4862efdc73d",
+      "bytes": 1433,
+      "tail_only": false
+    },
+    "s2_accepted_xid_history.json": {
+      "sha256": "d11a72cb28289e53a4c2a70ee49b36afa864cbe05d28522f8c2ff4862efdc73d",
+      "bytes": 1433,
+      "tail_only": false
+    },
+    "observer_source_check.log": {
+      "sha256": "fc20958b27cf58a6b124fbf55a417e3bb16cfd034b7ef36251ca8f06ddbc62be",
+      "bytes": 58,
+      "tail_only": false
+    },
+    "observer_source_apply.log": {
+      "sha256": "b04f837659f93ce3cd928cfed50e1d49a241d40f6607409eb4ce27075c3c2acd",
+      "bytes": 94,
+      "tail_only": false
+    },
+    "sweep_qemu_sha256": {
+      "sha256": "03a7376f68cc2170baa244f3b8613a8e3cff11b0f2add3c235252bef088dc74a",
+      "bytes": 120,
+      "tail_only": false
+    },
+    "sweep_product_source": {
+      "sha256": "13afbbee8f59e1d1d2fcc6041bc73349798907477bd5f2e4162b5f837af0efd1",
+      "bytes": 41,
+      "tail_only": false
+    },
+    "sweep_20261020_provision.log": {
+      "sha256": "f1eac48bcf6a3be764bd4ef16d1aa8d6176a1fb6234f7ce6823335dce45ec54a",
+      "bytes": 2244,
+      "tail_only": false
+    },
+    "box.log": {
+      "sha256": "0f749165f42fee2e09b3e06fc1075af5a3b964b4a2779c706819275ed818501c",
+      "bytes": 22789,
+      "tail_only": true
+    },
+    "driver.log": {
+      "sha256": "f047d80c5d42f73d512b424c37f3afb6a6a81586d0903858b3b039a8b369b0de",
+      "bytes": 4371,
+      "tail_only": false
+    },
+    "tree.log": {
+      "sha256": "df0c25770df07b46ef6dded3b3fb91056421d91e1ecc776844f1033224771399",
+      "bytes": 5916,
+      "tail_only": false
+    },
+    "sweepf98ceae6_ad102_native595_defer-liveness.log": {
+      "sha256": "62006c906929d2d308dc68e56ed9c055e11f1a15f3ed0c708aca5181f09957d7",
+      "bytes": 14220,
+      "tail_only": false
+    },
+    "sweepf98ceae6_ad102_native595_missing-page-fault.log": {
+      "sha256": "ba88f8170231f15ad82e24234107a9cb07f75fd8e207318111af496cd04662c9",
+      "bytes": 2461,
+      "tail_only": false
+    },
+    "s2_guest595_timer_controller.log": {
+      "sha256": "c923cb0121eae5c73a6c1ba3eb5db1bb6c570e42452fd7c7585fe305e8fe20ef",
+      "bytes": 324,
+      "tail_only": false
+    },
+    "s2_guest595_gpu-info-sweep_controller.log": {
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0,
+      "tail_only": false
+    },
+    "s2_guest595_doorbell-census_controller.log": {
+      "sha256": "67a7e4c90192ff6ce26a0980fb83735c9ad120d7a80ce56ac98380da57f980fd",
+      "bytes": 334,
+      "tail_only": false
+    },
+    "s2_guest595_engines_controller.log": {
+      "sha256": "a108801ecd91e2915588dad5370afb2d57aacd0cbd69fe1f63aa11f559816ee8",
+      "bytes": 326,
+      "tail_only": false
+    },
+    "kernel_xids.log": {
+      "journal_lines": 1064
+    }
+  }
+}

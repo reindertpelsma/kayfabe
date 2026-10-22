@@ -1,0 +1,16 @@
+SWEEP_PROVISION_START own_instance=57144505 2026-10-22T02:18:42+00:00
+From https://github.com/reindertpelsma/kayfabe
+ * branch                f98ceae6566420a48eca64ed6af6e33ff4100616 -> FETCH_HEAD
+HEAD is now at f98ceae65 fix(s2): propagate explicit guest image directory before guarded launch
+NVIDIA GeForce RTX 4090, 595.91.07, 24564 MiB
+VERDICT=SOUND
+PROBE_START pid=76505 uid=Uid: 65534 65534 65534 65534 CapEff=0x0 cap_sys_admin=false
+kf-host: host tier: stock
+PROBE_SESSION driver=595.91.07
+PROBE_DIE arch=0x190 impl=0x2 die=AD102
+PROBE_END admin_run=false
+V3_GATES_SUMMARY pass=9 fail=0 gate10=PASS
+SWEEP_BUILD_READY source=f98ceae6566420a48eca64ed6af6e33ff4100616 2026-10-22T02:33:17+00:00
+GR_TIER_VERDICT=PASS
+LINUX_GUEST_START source=f98ceae6566420a48eca64ed6af6e33ff4100616 2026-10-22T02:34:18+00:00
+{"approved_native_xid_lines": ["2026-10-22T02:33:25.311158+0000 ubuntu kernel: NVRM: Xid (PCI:0000:00:07): 31, pid=90735, name=kayfabe-rm-ladd, channel 0x00000004, intr 00000000. MMU Fault: ENGINE CE0 HUBCLIENT_CE1 faulted @ 0x60_00010000. Fault is of type FAULT_PTE ACCESS_TYPE_VIRT_READ", "2026-10-22T02:33:28.353943+0000 ubuntu kernel: NVRM: Xid (PCI:0000:00:07): 31, pid=90735, name=kayfabe-rm-ladd, channel 0x00000004, intr 00000000. MMU Fault: ENGINE CE0 HUBCLIENT_CE1 faulted @ 0x62_00010000. Fault is of type FAULT_PTE ACCESS_TYPE_VIRT_READ", "2026-10-22T02:33:31.360938+0000 ubuntu kernel: NVRM: Xid (PCI:0000:00:07): 31, pid=90735, name=kayfabe-rm-ladd, channel 0x00000005, intr 00000000. MMU Fault: ENGINE CE0 HUBCLIENT_CE1 faulted @ 0x62_00010000. Fault is of type FAULT_PTE ACCESS_TYPE_VIRT_READ", "2026-10-22T02:33:34.412965+0000 ubuntu kernel: NVRM: Xid (PCI:0000:00:07): 31, pid=90735, name=kayfabe-rm-ladd, channel 0x00000004, intr 00000000. MMU Fault: ENGINE CE0 HUBCLIENT_CE1 faulted @ 0x64_00010000. Fault is of type FAULT_PTE ACCESS_TYPE_VIRT_READ", "2026-10-22T02:33:38.454938+0000 ubuntu kernel: NVRM: Xid (PCI:0000:00:07): 31, pid=90771, name=kayfabe-rm-ladd, channel 0x00000005, intr 00000000. MMU Fault: ENGINE GR0_PBDMA0 HUBCLIENT_ESC faulted @ 0xa_11000000. Fault is of type FAULT_PDE ACCESS_TYPE_VIRT_WRITE"], "count": 5, "rule": "owner decision1: source-matched controls only; all later changes fatal"}
