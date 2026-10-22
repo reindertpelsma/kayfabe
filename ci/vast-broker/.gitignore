@@ -1,2 +1,5 @@
 dist/
 .wrangler/
+
+.dev.vars
+.dev.vars.*
