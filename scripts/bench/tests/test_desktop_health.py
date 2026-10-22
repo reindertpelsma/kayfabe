@@ -2,6 +2,7 @@
 # SPDX-License-Identifier: Apache-2.0 OR GPL-2.0-or-later
 """Execute the real PowerShell health gate with deterministic Windows observations."""
 import json
+import datetime
 import os
 from pathlib import Path
 import shutil
@@ -80,10 +81,24 @@ function Get-Process {
             self.assertNotEqual(p.returncode, 0, p.stdout)
             self.assertEqual(h['events153'], 1)
 
-    def test_boot_provider_after_desktop_refuses(self):
+    def test_boot_provider_after_desktop_is_metadata(self):
         p, h = self.run_gate([self.event('Microsoft-Windows-Kernel-Boot', when='2026-10-22T04:27:20Z')])
-        self.assertNotEqual(p.returncode, 0, p.stdout)
-        self.assertEqual(h.get('unclassified153'), 1)
+        self.assertEqual(p.returncode, 0, p.stdout+p.stderr)
+        self.assertEqual(h.get('boot153_post_desktop'), 1)
+        self.assertEqual(h.get('unclassified153'), 0)
+
+    def test_future_boot_clock_record_is_retained_without_tdr(self):
+        future=(datetime.datetime.now(datetime.timezone.utc)+datetime.timedelta(hours=1)).isoformat()
+        p,h=self.run_gate([self.event('Microsoft-Windows-Kernel-Boot',when=future)])
+        self.assertEqual(p.returncode,0,p.stdout+p.stderr)
+        self.assertEqual(h.get('boot153_future_clock'),1)
+        self.assertEqual(h['events153'],0)
+
+    def test_future_boot_metadata_cannot_mask_nvidia_fault(self):
+        future=(datetime.datetime.now(datetime.timezone.utc)+datetime.timedelta(hours=1)).isoformat()
+        p,h=self.run_gate([self.event('Microsoft-Windows-Kernel-Boot',when=future),self.event('nvlddmkm')])
+        self.assertNotEqual(p.returncode,0,p.stdout)
+        self.assertEqual(h['events153'],1)
 
     def test_display_4101_and_bugcheck_refuse(self):
         for provider, event_id in (('Display', 4101), ('Microsoft-Windows-WER-SystemErrorReporting', 1001)):
@@ -103,7 +118,7 @@ function Get-Process {
         self.assertNotEqual(p.returncode, 0, p.stdout)
 
     def test_late_boot_event_never_claims_health_pass(self):
-        p, _ = self.run_gate([self.event('Microsoft-Windows-Kernel-Boot', when='2026-10-22T04:28:00Z')])
+        p, _ = self.run_gate([self.event('Disk', when='2026-10-22T04:28:00Z')])
         self.assertNotIn('S2_HEALTH_PASS ', p.stdout)
         self.assertNotEqual(p.returncode, 0)
 
