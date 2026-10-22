@@ -45,6 +45,41 @@ fn main() {
     }
 }
 
-fn reply_text(_addresses: &[u32], _values: &[u32]) -> Result<String,String> {
+fn reply_text(_addresses: &[u32], _values: &[u32]) -> Result<String, String> {
     Ok(String::new())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::reply_text;
+    #[test]
+    fn first_reply_retains_its_actual_address_and_value() {
+        let s = reply_text(&[0x640788], &[0x12345678]).unwrap();
+        assert!(s.contains("address=0x00640788 value=0x12345678"));
+        assert_eq!(s.lines().count(), 1);
+    }
+    #[test]
+    fn last_bounded_reply_is_recorded_without_truncation() {
+        let a: Vec<_> = (0..192).map(|i| 0x640780 + i * 4).collect();
+        let v: Vec<_> = (0..192).map(|i| 0x12340000 + i).collect();
+        let s = reply_text(&a, &v).unwrap();
+        assert_eq!(s.lines().count(), 192);
+        assert!(s.lines().last().unwrap().contains("value=0x123400bf"));
+    }
+    #[test]
+    fn short_reply_cannot_be_labelled_complete() {
+        assert!(reply_text(&[4, 8], &[1]).is_err());
+    }
+    #[test]
+    fn long_reply_cannot_be_labelled_complete() {
+        assert!(reply_text(&[4], &[1, 2]).is_err());
+    }
+    #[test]
+    fn an_empty_plan_does_not_emit_a_fake_success() {
+        assert!(reply_text(&[], &[]).is_err());
+    }
+    #[test]
+    fn an_oversized_plan_cannot_emit_unbounded_evidence() {
+        assert!(reply_text(&vec![4; 193], &vec![1; 193]).is_err());
+    }
 }
