@@ -1,6 +1,5 @@
 #!/usr/bin/env python3
 """Synthetic captures test the evidence gate; these are not hardware evidence."""
-import copy
 import json
 import unittest
 from translated_rc_guard import Refused, check
@@ -20,7 +19,7 @@ kf3: RC_TRIGGERED posted: guest chid 0x5 engine 0x9 except_type 0x20 (host 0x19)
     guest = """KF_RC_PROBE_BEGIN run=linux-rc-1 mode=on chid=0x5 engine=0x9 class=0xc56f
 KF_RC_BYSTANDER run=linux-rc-1 phase=before value=1
 KF_RC_EVENT chid=0x5 engine=0x9 xid=32 scope=0
-KF_RC_NOTIFIER run=linux-rc-1 chid=0x5 timestamp=0x1234 info32=32 info16=9 status=0xffff
+KF_RC_NOTIFIER run=linux-rc-1 chid=0x5 timestamp=0x1234 info32=32 info16=9 status=0xffff get=0
 KF_RC_BYSTANDER run=linux-rc-1 phase=after value=2
 KF_RC_PROBE_END run=linux-rc-1 result=PASS
 """
@@ -42,6 +41,8 @@ class GuardTests(unittest.TestCase):
     def test_duplicate_guest_events_rejected(self): self.reject(g=fixture()[2]+"KF_RC_EVENT chid=0x5 engine=0x9 xid=32 scope=0\n")
     def test_wrong_guest_chid_rejected(self): self.reject(g=fixture()[2].replace("KF_RC_EVENT chid=0x5", "KF_RC_EVENT chid=0x6"))
     def test_wrong_engine_rejected(self): self.reject(g=fixture()[2].replace("info16=9", "info16=10"))
+    def test_failed_work_did_not_retire(self): self.reject(g=fixture()[2].replace("get=0", "get=1"))
+    def test_missing_get_evidence_rejected(self): self.reject(g=fixture()[2].replace(" get=0", ""))
     def test_incomplete_notifier_rejected(self): self.reject(g=fixture()[2].replace("status=0xffff", "status=0x0"))
     def test_wrong_xid_in_notifier_rejected(self): self.reject(g=fixture()[2].replace("info32=32", "info32=45"))
     def test_passthrough_does_not_qualify(self): self.reject(q=fixture()[1].replace("BORN Translated", "BORN Passthrough"))

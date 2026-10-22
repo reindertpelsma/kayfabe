@@ -72,12 +72,20 @@ fn gr_engine_cannot_claim() {
     assert!(a.claim(candidate()));
 }
 #[test]
-fn another_copy_engine_cannot_claim() {
+fn unknown_engine_cannot_claim() {
     let a = arm();
     let mut c = candidate();
-    c.engine = 10;
+    c.engine = 0xdead;
     assert!(!a.claim(c));
     assert!(a.claim(candidate()));
+}
+#[test]
+fn supported_copy_engine_can_claim_its_own_slot() {
+    let a = arm();
+    let mut c = candidate();
+    c.engine = 11;
+    assert!(a.claim(c));
+    assert!(!a.claim(candidate()));
 }
 #[test]
 fn unproven_host_privilege_cannot_claim() {
