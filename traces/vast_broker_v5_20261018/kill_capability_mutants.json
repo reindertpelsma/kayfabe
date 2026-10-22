@@ -1,0 +1,12 @@
+[
+  {
+    "mutant": "kill-no-capability",
+    "killers": 4,
+    "tests": [
+      "V4 capability cannot kill foreign run 124-1",
+      "V4 capability cannot kill foreign run 999-1",
+      "V4 kill rejects non-box authority bad",
+      "V4 kill rejects non-box authority moc"
+    ]
+  }
+]

@@ -607,6 +607,10 @@
     [
       "  }\n  async function kill(request, key, bearer, cfg, vast) {\n    const r = await ledger.get('record:' + key);\n    if (!r || r.key !== key || !(await tokens.verify(bearer, r)) || now() >= r.reportExpiry * 1000)\n      refuse('UNAUTHORIZED', 401);\n    // An ended kill receipt is idempotent but grants no live authority or provider calls.\n    if (r.ended !== null) {\n      if (r.boxKilled) return json({ state: 'NONE' });\n",
       "  }\n  async function kill(request, key, bearer, cfg, vast) {\n    const r = await ledger.get('record:' + key);\n    if (!r || r.key !== key || false || now() >= r.reportExpiry * 1000) refuse('UNAUTHORIZED', 401);\n    // An ended kill receipt is idempotent but grants no live authority or provider calls.\n    if (r.ended !== null) {\n      if (r.boxKilled) return json({ state: 'NONE' });\n"
+    ],
+    [
+      "      if (!record || !(await tokens.verify(bearer, record))) refuse('UNAUTHORIZED', 401);",
+      "      if (!record || (box[1] !== 'kill' && !(await tokens.verify(bearer, record)))) refuse('UNAUTHORIZED', 401);"
     ]
   ],
   "v4:kill-wrong-route": [
