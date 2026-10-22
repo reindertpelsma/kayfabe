@@ -131,7 +131,7 @@ await writeFile(new URL('test/mutants.md',base),text);console.log('All '+results
 // All campaigns mutate files sequentially; never run them alongside baseline tests.
 const v4=spawnSync('python3',['v4-mutants.py',...(process.env.V4_MUTANT_RESULTS_FILE?['--results',process.env.V4_MUTANT_RESULTS_FILE]:[])],{cwd:base,stdio:'inherit'});
 if(v4.status!==0)throw Error('V4 mutation campaign failed');
-console.log('Full campaign passed: '+results.length+' legacy plus 32 V4 mutants.');
+console.log('Full campaign passed: '+results.length+' legacy plus 28 V4 mutants.');
 
 const round3=spawnSync('python3',['round3-mutants.py',...(process.env.ROUND3_MUTANT_RESULTS_FILE?['--results',process.env.ROUND3_MUTANT_RESULTS_FILE]:[])],{cwd:base,stdio:'inherit'});
 if(round3.status!==0)throw Error('Round 3 mutants failed');
