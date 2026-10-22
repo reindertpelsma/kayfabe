@@ -1,0 +1,41 @@
+{
+  "conclusion": "",
+  "jobs": [
+    {
+      "name": "firmware \u2014 kf-gop (x86_64-unknown-uefi), kf3's PE check, size, local stand-in",
+      "status": "completed",
+      "conclusion": "success",
+      "url": "https://github.com/reindertpelsma/kayfabe/actions/runs/39764911164/job/119777843515"
+    },
+    {
+      "name": "aarch64 \u2014 core cross-checks (no x86 assumptions)",
+      "status": "completed",
+      "conclusion": "success",
+      "url": "https://github.com/reindertpelsma/kayfabe/actions/runs/39764911164/job/119777843835"
+    },
+    {
+      "name": "stable \u2014 build, test, clippy, fmt, boundary",
+      "status": "in_progress",
+      "conclusion": "",
+      "url": "https://github.com/reindertpelsma/kayfabe/actions/runs/39764911164/job/119777843860"
+    },
+    {
+      "name": "broker \u2014 build and its GPU-free test suite (broker/)",
+      "status": "completed",
+      "conclusion": "success",
+      "url": "https://github.com/reindertpelsma/kayfabe/actions/runs/39764911164/job/119777843941"
+    },
+    {
+      "name": "slow \u2014 full suite with the soaks (KAYFABE_SLOW=1)",
+      "status": "completed",
+      "conclusion": "skipped",
+      "url": "https://github.com/reindertpelsma/kayfabe/actions/runs/39764911164/job/119777845779"
+    }
+  ],
+  "status": "in_progress",
+  "url": "https://github.com/reindertpelsma/kayfabe/actions/runs/39764911164",
+  "classification": "MEASURED",
+  "evidence": "ci-snapshot.json",
+  "candidate": "baa2977527c4509145e8033143bd664f768175a6",
+  "time": "2026-10-22T10:46:20.281115+00:00"
+}

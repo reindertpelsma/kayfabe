@@ -1,0 +1,19 @@
+{
+  "classification": "MEASURED",
+  "evidence": "cleanup.json",
+  "time": "2026-10-22T10:46:20.281702+00:00",
+  "q4_started_long_running_processes": 0,
+  "q4_vm_count": 0,
+  "q4_gpu_locks_acquired": 0,
+  "q4_cargo_locks_acquired": 0,
+  "target_directory_exists": false,
+  "local_checks_script_exists": false,
+  "source_archive_remains": true,
+  "source_archive_cleanup": "Not retried after the safety refusal",
+  "host_nvidia_bound": "read-only sysfs observation: 0000:01:00.0 bound to nvidia",
+  "host_gdm": "read-only systemctl observation: active",
+  "host_gpu_lock": "read-only lslocks observation: no fastguest lock holder",
+  "host_qemu": "read-only process observation: no QEMU process",
+  "host_cuInit": "NOT VERIFIED; no CUDA/GPU operation was started after the stop",
+  "host_files": "empty Q4/control directory created; no VM/media modified"
+}

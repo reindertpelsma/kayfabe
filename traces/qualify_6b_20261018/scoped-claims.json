@@ -2,14 +2,19 @@
   "classification": "MEASURED",
   "evidence": "scoped-claims.json",
   "base": "6e0ac33871eee5acb3bef709bdf64cea9ec4ded1",
-  "head": "6e0ac33871eee5acb3bef709bdf64cea9ec4ded1",
+  "head": "5ebb3a34d02190a3beb913fd7db14a7ae06d5c02",
   "scope": "Owner-approved Q4-added/changed files only; evidence-only [skip ci]; inherited debt untouched",
   "files": [
+    "traces/qualify_6b_20261018/README.md",
+    "traces/qualify_6b_20261018/ci-snapshot.json",
+    "traces/qualify_6b_20261018/cleanup.json",
     "traces/qualify_6b_20261018/control/scoped_claims.py",
-    "traces/qualify_6b_20261018/plan.md"
+    "traces/qualify_6b_20261018/plan.md",
+    "traces/qualify_6b_20261018/scoped-claims.json",
+    "traces/qualify_6b_20261018/stop.json"
   ],
   "new": 0,
   "sites": [],
   "inherited_ignored": 74,
-  "time": "2026-10-22T10:44:07.043744+00:00"
+  "time": "2026-10-22T10:47:05.419003+00:00"
 }
