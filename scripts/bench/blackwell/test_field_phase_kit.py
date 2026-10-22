@@ -31,6 +31,12 @@ class FieldPhaseKit(unittest.TestCase):
         self.assertIn('arm_rc=$?',self.controller)
         self.assertLess(self.controller.index('arm_rc=$?'),self.controller.index('collect_bw.sh'))
         self.assertIn('[ ! -e /root/prov/XID_STOP ]',self.controller)
+    def test_selected_die_is_read_from_the_owned_lease(self):
+        self.assertIn("j['candidate_die']",self.controller)
+        self.assertIn('expected_die=$(python3',self.controller)
+    def test_actual_probe_must_match_the_selected_die(self):
+        self.assertIn('die=${expected_die}([[:space:]]|$)',self.controller)
+        self.assertNotIn("grep -Eq 'PROBE_DIE .*die=GB202'",self.controller)
     def test_early_observer_is_the_frozen_tested_source(self):
         self.assertEqual(hashlib.sha256((KIT/'arm.sh').read_bytes()).hexdigest(),'332ccfb41ab9362854df1e8d7169ed2a51fa840dea76655270fa9bbc433826ce')
 
