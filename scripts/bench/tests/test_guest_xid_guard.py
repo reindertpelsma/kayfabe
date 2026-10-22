@@ -185,6 +185,38 @@ FASTGUEST: DONE
         serial = self.serial.split('info  DL prime copy', 1)[0]
         self.assertIsNone(self.approve(lines=self.lines[:6], serial=serial, qlog='', final=False))
 
+    def missing_crlf(self, final=True):
+        case = self.missing(); case['serial'] = case['serial'].replace('\n', '\r\n')
+        if not final: case['serial'] = case['serial'].split('info  R3 victim',1)[0]
+        return case
+
+    def test_live_missing_page_CRLF_marker_matches_pending_source_operation(self):
+        case = self.missing_crlf(False)
+        refusal = None; result = 'not-run'
+        try: result = self.approve(**case, final=False)
+        except G.GuardRefused as error: refusal = error
+        self.assertIsNone(refusal); self.assertIsNone(result)
+
+    def test_complete_missing_page_CRLF_proof_accepts_exact_one(self):
+        case = self.missing_crlf(); refusal = None; result = None
+        try: result = self.approve(**case)
+        except G.GuardRefused as error: refusal = error
+        self.assertIsNone(refusal); self.assertEqual(result,tuple(case['lines']))
+
+    def test_live_CR_inside_address_is_not_line_framing(self):
+        case = self.missing_crlf(False); case['serial'] = case['serial'].replace('a11000000','a1100\r0000')
+        self.assert_refused(**case, final=False)
+
+    def test_complete_CR_inside_address_is_not_line_framing(self):
+        case = self.missing_crlf(); case['serial'] = case['serial'].replace('a11000000','a1100\r0000')
+        self.assert_refused(**case)
+
+    def test_CRLF_missing_page_wrong_address_still_fatal(self):
+        case = self.missing_crlf(); case['serial'] = case['serial'].replace('a11000000','a12000000'); self.assert_refused(**case)
+
+    def test_CRLF_missing_page_wrong_pid_still_fatal(self):
+        case = self.missing_crlf(); case['context']['pid'] += 1; self.assert_refused(**case)
+
     def test_running_unknown_address_is_fatal(self):
         serial = self.serial.split('info  DL prime copy', 1)[0]
         self.assert_refused(lines=self.lines[:5] + [self.lines[5].replace('0x60_00010000', '0x60_00020000')], serial=serial, qlog='', final=False)
