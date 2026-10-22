@@ -1,9 +1,9 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {setup,clock,sha,nonce,finalLine} from './helpers.js';
+import {setup,clock,sha,nonce,env} from './helpers.js';
 const state=async r=>(await r.json()).state;
 const rent=async h=>{const r=await h.call();assert.equal(r.status,200);return r.json();};
-const finish=async(h,verdict='PASS')=>{h.cloud.logText=finalLine(verdict);return h.call('/status/900');};
+const finish=async(h,verdict='PASS')=>{const response=await h.report({seq:1,kind:'result',result:{nonce,verdict}});assert.equal(response.status,200);return h.call('/status/123-1');};
 for(const v of ['false','FALSE','',undefined])test('kill switch refuses rental '+v,async()=>{
  const h=await setup({RENTING_ENABLED:v});assert.notEqual((await h.call()).status,200);assert.equal(h.cloud.calls.length,0);
 });
@@ -23,7 +23,7 @@ test('run attempt idempotence before destroy',async()=>{const h=await setup();aw
 test('run attempt idempotence after restart',async()=>{const h=await setup();await rent(h);h.restart();await rent(h);assert.equal(h.cloud.creates,1);});
 test('run attempt idempotence after destroy',async()=>{const h=await setup();await rent(h);await finish(h);await rent(h);assert.equal(h.cloud.creates,1);});
 test('same SHA cache grants another run without rebilling',async()=>{const h=await setup();await rent(h);await finish(h);h.cloud.run.id=124;const r=await h.call('/rent',{claims:{run_id:'124'}});assert.equal(r.status,200);assert.equal(h.cloud.creates,1);assert.equal((await r.json()).verdict,'PASS');
- assert.equal((await (await h.call('/status/900',{claims:{run_id:'124'}})).json()).verdict,'PASS');
+ assert.equal((await (await h.call('/status/124-1',{claims:{run_id:'124'}})).json()).verdict,'PASS');
 });
 test('same SHA cache survives process restart',async()=>{const h=await setup();await rent(h);await finish(h);h.restart();h.cloud.run.id=124;await h.call('/rent',{claims:{run_id:'124'}});assert.equal(h.cloud.creates,1);});
 test('cached verdict never bypasses content approval',async()=>{const h=await setup();await rent(h);await finish(h);h.cloud.run.id=124;h.cloud.reviews=[{id:2,user:{id:42},state:'DISMISSED',commit_id:sha}];assert.equal(await state(await h.call('/rent',{claims:{run_id:'124'}})),'NEEDS_APPROVAL');});
@@ -41,18 +41,18 @@ test('ambiguous creation reconciles exact prior intent without second create',as
 });
 test('ambiguous absent instance never triggers a second creation',async()=>{const h=await setup();h.cloud.ambiguous=true;await h.call();h.cloud.instances.delete('900');h.cloud.ambiguous=false;h.restart();assert.equal(await state(await h.call()),'UNAVAILABLE');assert.equal(h.cloud.creates,1);});
 test('reconciliation never adopts labelled foreign instance with wrong script',async()=>{const h=await setup();h.cloud.ambiguous=true;await h.call();h.cloud.instances.get('900').onstart='foreign';h.cloud.ambiguous=false;assert.equal(await state(await h.call()),'UNAVAILABLE');assert.deepEqual(h.cloud.inspected,[]);assert.deepEqual(h.cloud.deletes,[]);});
-for(const id of ['777','888'])test('never inspect/delete unrecorded id '+id,async()=>{const h=await setup();assert.equal((await h.call('/destroy/'+id)).status,404);assert.equal((await h.call('/status/'+id)).status,404);assert.deepEqual(h.cloud.deletes,[]);assert.deepEqual(h.cloud.inspected,[]);});
-test('foreign run cannot read ledger instance',async()=>{const h=await setup();await rent(h);assert.equal((await h.call('/status/900',{claims:{run_id:'124'}})).status,404);assert.deepEqual(h.cloud.inspected,[]);});
-test('foreign run cannot destroy ledger instance',async()=>{const h=await setup();await rent(h);assert.equal((await h.call('/destroy/900',{claims:{run_id:'124'}})).status,404);assert.deepEqual(h.cloud.deletes,[]);});
-test('changed label prevents deletion',async()=>{const h=await setup();await rent(h);h.cloud.instances.get('900').label='owner-dev';await h.call('/destroy/900');assert.deepEqual(h.cloud.deletes,[]);});
-test('changed label prevents status log access',async()=>{const h=await setup();await rent(h);h.cloud.instances.get('900').label='kf-ci-other';assert.notEqual((await h.call('/status/900')).status,200);assert.equal(h.cloud.calls.some(c=>c.url.includes('request_logs')),false);});
+for(const id of ['777','888'])test('never inspect/delete unrecorded id '+id,async()=>{const h=await setup();assert.equal((await h.call('/stop/'+id+'-1',{token:env.OWNER_STOP_TOKEN})).status,404);assert.equal((await h.call('/status/123-1')).status,404);assert.deepEqual(h.cloud.deletes,[]);assert.deepEqual(h.cloud.inspected,[]);});
+test('foreign run cannot read ledger instance',async()=>{const h=await setup();await rent(h);assert.equal((await h.call('/status/123-1',{claims:{run_id:'124'}})).status,401);assert.deepEqual(h.cloud.inspected,[]);});
+test('foreign run cannot destroy ledger instance',async()=>{const h=await setup();await rent(h);assert.equal((await h.call('/stop/123-1',{claims:{run_id:'124'}})).status,401);assert.deepEqual(h.cloud.deletes,[]);});
+test('changed label prevents deletion',async()=>{const h=await setup();await rent(h);h.cloud.instances.get('900').label='owner-dev';await h.call('/stop/123-1');assert.deepEqual(h.cloud.deletes,[]);});
+test('changed label prevents status log access',async()=>{const h=await setup();await rent(h);h.cloud.instances.get('900').label='kf-ci-other';assert.notEqual((await h.call('/status/123-1')).status,200);assert.equal(h.cloud.calls.some(c=>c.url.includes('request_logs')),false);});
 test('TTL cron destroys owned live instance',async()=>{const h=await setup();await rent(h);h.time.value+=151*60000;await h.service.sweep();assert.deepEqual(h.cloud.deletes,['900']);assert.ok(h.cloud.instances.has('777'));assert.ok(h.cloud.instances.has('888'));});
 test('TTL cleanup survives restart and disabled renting',async()=>{const h=await setup();await rent(h);h.time.value+=151*60000;h.bindings.RENTING_ENABLED='false';h.restart();await h.service.sweep();assert.deepEqual(h.cloud.deletes,['900']);});
-test('final PASS marker destroys immediately',async()=>{const h=await setup();await rent(h);const r=await finish(h);assert.equal((await r.json()).verdict,'PASS');assert.deepEqual(h.cloud.deletes,['900']);});
-test('final FAIL marker destroys immediately',async()=>{const h=await setup();await rent(h);const r=await finish(h,'FAIL');assert.equal((await r.json()).verdict,'FAIL');assert.deepEqual(h.cloud.deletes,['900']);});
-test('cron reads marker and destroys without polling runner',async()=>{const h=await setup();await rent(h);h.cloud.logText=finalLine();await h.service.sweep();assert.deepEqual(h.cloud.deletes,['900']);});
-test('failed delete retains liability for retry',async()=>{const h=await setup();await rent(h);h.cloud.vastError=500;await h.call('/destroy/900');h.cloud.vastError=0;await h.call('/destroy/900');assert.deepEqual(h.cloud.deletes,['900']);});
-test('explicit destroy is idempotent',async()=>{const h=await setup();await rent(h);await h.call('/destroy/900');await h.call('/destroy/900');assert.deepEqual(h.cloud.deletes,['900']);});
+test('structured PASS result destroys immediately',async()=>{const h=await setup();await rent(h);const r=await finish(h);assert.equal((await r.json()).verdict,'PASS');assert.deepEqual(h.cloud.deletes,['900']);});
+test('structured FAIL result destroys immediately',async()=>{const h=await setup();await rent(h);const r=await finish(h,'FAIL');assert.equal((await r.json()).verdict,'FAIL');assert.deepEqual(h.cloud.deletes,['900']);});
+test('cron checks terminated instance without provider logs',async()=>{const h=await setup();await rent(h);h.cloud.instances.get('900').actual_status='exited';await h.service.sweep();assert.deepEqual(h.cloud.deletes,['900']);assert.equal(h.cloud.calls.some(c=>c.url.includes('request_logs')),false);});
+test('failed delete retains liability for retry',async()=>{const h=await setup();await rent(h);h.cloud.vastError=500;await h.call('/stop/123-1');h.cloud.vastError=0;await h.call('/stop/123-1');assert.deepEqual(h.cloud.deletes,['900']);});
+test('explicit destroy is idempotent',async()=>{const h=await setup();await rent(h);await h.call('/stop/123-1');await h.call('/stop/123-1');assert.deepEqual(h.cloud.deletes,['900']);});
 test('completed run without marker is cleaned',async()=>{const h=await setup();await rent(h);h.cloud.run.status='completed';await h.service.sweep();assert.deepEqual(h.cloud.deletes,['900']);});
 test('draft owner push does not rent',async()=>{const h=await setup();h.cloud.prs[0].draft=true;assert.equal(await state(await h.call()),'NEEDS_APPROVAL');assert.equal(h.cloud.creates,0);});
 test('draft review does not override default refusal',async()=>{const h=await setup();h.cloud.prs[0].draft=true;h.cloud.reviews=[{id:1,user:{id:42},state:'APPROVED',commit_id:sha}];assert.equal(await state(await h.call()),'NEEDS_APPROVAL');assert.equal(h.cloud.creates,0);});
@@ -76,4 +76,4 @@ for(const restart of [false,true])test('another PR cannot create a second live r
 });
 test('reconciliation cannot adopt a changed image',async()=>{const h=await setup();h.cloud.ambiguous=true;await h.call();h.cloud.instances.get('900').image_uuid='foreign';h.cloud.ambiguous=false;assert.equal(await state(await h.call()),'UNAVAILABLE');assert.deepEqual(h.cloud.inspected,[]);assert.deepEqual(h.cloud.deletes,[]);});
 
-for(const endpoint of ['rent','status'])test('same SHA cache names the requesting PR in '+endpoint,async()=>{const h=await setup();await rent(h);await finish(h);h.cloud.run.id=124;h.cloud.run.head_branch='second-pr';h.cloud.run.pull_requests=[{number:8,head:{sha}}];const p=structuredClone(h.cloud.prs[0]);p.number=8;p.head.ref='second-pr';h.cloud.prs.push(p);const options={claims:{run_id:'124',ref:'refs/pull/8/merge'}};const cached=await h.call('/rent',options);assert.equal(cached.status,200);if(endpoint==='status')h.restart();const data=await (endpoint==='rent'?cached:await h.call('/status/900',options)).json();assert.equal(data.pr,8);assert.equal(data.sha,sha);assert.equal(data.verdict,'PASS');assert.equal(h.cloud.creates,1);assert.equal((await h.storage.get('record:123-1')).pr,7);});
+for(const endpoint of ['rent','status'])test('same SHA cache names the requesting PR in '+endpoint,async()=>{const h=await setup();await rent(h);await finish(h);h.cloud.run.id=124;h.cloud.run.head_branch='second-pr';h.cloud.run.pull_requests=[{number:8,head:{sha}}];const p=structuredClone(h.cloud.prs[0]);p.number=8;p.head.ref='second-pr';h.cloud.prs.push(p);const options={claims:{run_id:'124',ref:'refs/pull/8/merge'}};const cached=await h.call('/rent',options);assert.equal(cached.status,200);if(endpoint==='status')h.restart();const data=await (endpoint==='rent'?cached:await h.call('/status/124-1',options)).json();assert.equal(data.pr,8);assert.equal(data.sha,sha);assert.equal(data.verdict,'PASS');assert.equal(h.cloud.creates,1);assert.equal((await h.storage.get('record:123-1')).pr,7);});

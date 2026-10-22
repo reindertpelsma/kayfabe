@@ -30,6 +30,11 @@ DAILY_RENTALS = "4"
 DAILY_SPEND_USD = "3"
 ROLLING_SPEND_USD = "30"
 SHA_GAP_HOURS = "24"
+MAX_REPORTS = "2000"
+MAX_REPORT_BYTES = "4194304"
+REPORT_RATE_LIMIT = "20"
 
-# Secret binding, supplied by the owner: VAST_API_KEY. GitHub bearer is request-only.
+# Secret bindings: VAST_API_KEY, RUN_TOKEN_SECRET, OWNER_STOP_TOKEN.
+# RUN_TOKEN_SECRET and OWNER_STOP_TOKEN: independent random base64url strings, >=32 chars.
+# GitHub bearer remains request-only, never a binding.
 # No Cloudflare or Vast secret belongs in GitHub Actions.

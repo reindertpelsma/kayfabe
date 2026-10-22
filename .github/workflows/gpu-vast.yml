@@ -12,7 +12,6 @@ on:
 permissions: {}
 env:
   TARGET_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
-  GH_TOKEN: ${{ github.token }}
 jobs:
   pending:
     name: Mark GPU tripwire pending
@@ -22,6 +21,8 @@ jobs:
     steps:
       - name: Post pending status without contacting the Worker
         shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
           [[ "$TARGET_SHA" =~ ^[0-9a-f]{40}$ ]]
@@ -52,6 +53,8 @@ jobs:
       - name: Evaluate trusted Worker exclusions and request bounded check
         id: broker
         shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
           [[ "$WORKER_URL" =~ ^https://[A-Za-z0-9.-]+/?$ ]]
@@ -63,11 +66,18 @@ jobs:
           finish() {
             rc=$?
             trap - EXIT
+            if [[ "$rc" != 0 && -n "${run:-}" && -s "$temporary/oidc.json" ]]; then
+              cleanup_oidc=$(jq -er '.value' "$temporary/oidc.json")
+              curl --silent --show-error --fail --max-time 20 \
+                -H "Authorization: Bearer $cleanup_oidc" -H "X-GH-Token: $GH_TOKEN" \
+                -X POST "$WORKER_URL/stop/$run" >/dev/null || true
+            fi
             # These are allowlisted Worker metadata, never box log bytes.
             printf 'state=%s\nverdict=%s\n' "$state" "$verdict" >> "$GITHUB_OUTPUT"
             exit "$rc"
           }
           trap finish EXIT
+          run=
           endpoint=/rent
           method=POST
           for attempt in $(seq 1 450); do
@@ -80,14 +90,14 @@ jobs:
             code=$(curl --silent --show-error --max-time 20 -o "$temporary/response.json" \
               -w '%{http_code}' -H "Authorization: Bearer $oidc" -H "X-GH-Token: $GH_TOKEN" \
               -X "$method" "$WORKER_URL$endpoint")
-            jq -er '.log // ""' "$temporary/response.json" > "$temporary/log.txt"
+            jq -er '.log_tail_sanitised // ""' "$temporary/response.json" > "$temporary/log.txt"
             token=$(od -An -N24 -tx1 /dev/urandom | tr -d ' \n')
             printf '::stop-commands::%s\n' "$token"
             cat "$temporary/log.txt"
             printf '\n::%s::\n' "$token"
             candidate=$(jq -er '.state' "$temporary/response.json")
             case "$candidate" in
-              RUNNING|COMPLETE|NOT_NEEDED|NOT_ELIGIBLE|BUSY|UNAVAILABLE|UNAVAILABLE_BUDGET|NEEDS_APPROVAL|RENTING_DISABLED|UNAUTHORIZED|BAD_REQUEST|NOT_FOUND|OWNERSHIP_MISMATCH)
+              RUNNING|STOPPING|STOPPED|COMPLETE|NOT_NEEDED|NOT_ELIGIBLE|BUSY|UNAVAILABLE|UNAVAILABLE_BUDGET|NEEDS_APPROVAL|RENTING_DISABLED|UNAUTHORIZED|BAD_REQUEST|NOT_FOUND|OWNERSHIP_MISMATCH)
                 state=$candidate ;;
               *) exit 1 ;;
             esac
@@ -100,14 +110,14 @@ jobs:
             fi
             if [[ "$state" = NOT_NEEDED && "$verdict" = PASS ]]; then exit 0; fi
             if [[ "$endpoint" = /rent ]]; then
-              id=$(jq -er '.id' "$temporary/response.json")
-              [[ "$id" =~ ^[1-9][0-9]*$ ]]
-              endpoint=/status/$id
+              run=$(jq -er '.run' "$temporary/response.json")
+              [[ "$run" =~ ^[1-9][0-9]*-[1-9][0-9]*$ ]]
+              endpoint=/status/$run
               method=GET
             fi
             if [[ "$state" = COMPLETE && "$verdict" = PASS ]]; then exit 0; fi
             if [[ "$verdict" = FAIL ]]; then exit 1; fi
-            if [[ "$state" = COMPLETE ]]; then exit 1; fi
+            if [[ "$state" = COMPLETE || "$state" = STOPPED ]]; then exit 1; fi
             sleep 20
           done
           exit 1
@@ -126,12 +136,14 @@ jobs:
     steps:
       - name: Post final status and fail every unsuccessful dependency
         shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
           [[ "$TARGET_SHA" =~ ^[0-9a-f]{40}$ ]]
           state=UNAVAILABLE
           case "$BROKER_STATE" in
-            RUNNING|COMPLETE|NOT_NEEDED|NOT_ELIGIBLE|BUSY|UNAVAILABLE|UNAVAILABLE_BUDGET|NEEDS_APPROVAL|RENTING_DISABLED|UNAUTHORIZED|BAD_REQUEST|NOT_FOUND|OWNERSHIP_MISMATCH)
+            RUNNING|STOPPING|STOPPED|COMPLETE|NOT_NEEDED|NOT_ELIGIBLE|BUSY|UNAVAILABLE|UNAVAILABLE_BUDGET|NEEDS_APPROVAL|RENTING_DISABLED|UNAUTHORIZED|BAD_REQUEST|NOT_FOUND|OWNERSHIP_MISMATCH)
               state=$BROKER_STATE ;;
           esac
           result=error

@@ -1,18 +1,19 @@
-import {fetchJson,fetchBounded,refuse,IMAGE,MODELS,validOffer} from './policy.js';
+import {fetchJson,refuse,IMAGE,MODELS,validOffer} from './policy.js';
+import {sha256Hex} from './tokens.js';
 export class Vast {
   constructor(fetcher,cfg,key){this.fetcher=fetcher;this.cfg=cfg;this.headers={Authorization:'Bearer '+key,'Content-Type':'application/json'};if(!key)refuse();}
   async api(path,method='GET',body,missing=false){return fetchJson(this.fetcher,'https://console.vast.ai'+path,{method,headers:this.headers,...(body===undefined?{}:{body:JSON.stringify(body)})},missing);}
   async offer(){
     const q={limit:20,type:'ondemand',verified:{eq:true},vms_enabled:{eq:true},rentable:{eq:true},rented:{eq:false},
-      num_gpus:{eq:1},gpu_name:{in:MODELS},reliability:{gte:.99},disk_space:{gte:120},dph_total:{lte:this.cfg.price},allocated_storage:120,order:[['dph_total','asc']]};
+      num_gpus:{eq:1},gpu_name:{in:MODELS.map(x=>x.replaceAll('_',' '))},reliability:{gte:.99},disk_space:{gte:120},dph_total:{lte:this.cfg.price},allocated_storage:120,order:[['dph_total','asc']]};
     const result=await this.api('/api/v0/bundles','POST',q);
     if(!Array.isArray(result.offers)||result.offers.length>20)refuse();
     const offered=result.offers.filter(x=>validOffer(x,this.cfg)).sort((a,b)=>a.dph_total-b.dph_total)[0];if(!offered)refuse();return offered;
   }
   async balance(){const r=await this.api('/api/v0/users/current');return r.balance;}
-  async create(offer,record){
+  async create(offer,record,script){
     const r=await this.api('/api/v0/asks/'+offer.id,'PUT',{image:IMAGE,vm:true,disk:120,runtype:'args',args:['sleep','infinity'],
-      onstart:record.script,label:record.label,target_state:'running',cancel_unavail:true});
+      onstart:script,label:record.label,target_state:'running',cancel_unavail:true});
     if(r.success!==true||!Number.isSafeInteger(r.new_contract)||r.new_contract<=0)refuse();return String(r.new_contract);
   }
   async reconcile(record){
@@ -21,7 +22,7 @@ export class Vast {
     if(r.success!==true||!Array.isArray(r.instances)||r.next_token)refuse();
     const matches=r.instances.filter(x=>x.label===record.label);
     if(matches.length!==1)refuse();const candidate=matches[0];
-    if(candidate.onstart!==record.script||candidate.image_uuid!==IMAGE||!Number.isSafeInteger(candidate.id)||candidate.id<=0)refuse();
+    if(typeof candidate.onstart!=='string'||await sha256Hex(candidate.onstart)!==record.scriptHash||candidate.image_uuid!==IMAGE||!Number.isSafeInteger(candidate.id)||candidate.id<=0)refuse();
     return String(candidate.id);
   }
   async inspect(record){
@@ -33,15 +34,5 @@ export class Vast {
   async destroy(record){
     const instance=await this.inspect(record);if(instance===null)return;
     const r=await this.api('/api/v0/instances/'+record.id,'DELETE');if(r.success!==true)refuse();
-  }
-  async logs(record){
-    if(!record.logUrl){
-      const r=await this.api('/api/v0/instances/request_logs/'+record.id,'PUT',{tail:'1000',daemon_logs:'false'});
-      if(r.success!==true||typeof r.result_url!=='string'||!/^https:\/\/s3\.amazonaws\.com\/vast\.ai\/instance_logs\/[A-Za-z0-9_-]+\.log$/.test(r.result_url))refuse();
-      record.logUrl=r.result_url;
-    }
-    const bytes=await fetchBounded(this.fetcher,record.logUrl,{},1048576,true);
-    if(bytes!==null)record.logUrl=null;
-    return bytes;
   }
 }

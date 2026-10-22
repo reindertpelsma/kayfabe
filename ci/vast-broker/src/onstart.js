@@ -1,22 +1,70 @@
-import {hexSha,IMAGE} from './policy.js';
-export function onstart(sha,nonce,minutes,repo='reindertpelsma/kayfabe'){
+import {hexSha} from './policy.js';
+export function onstart(sha,nonce,minutes,repo='reindertpelsma/kayfabe',callback){
   if(!hexSha(sha)||typeof nonce!=='string'||!/^[0-9a-f]{32}$/.test(nonce)||!Number.isInteger(minutes)||minutes<1||minutes>150||!/^[-\w.]+\/[-\w.]+$/.test(repo))throw Error('Invalid fixed onstart inputs');
+  let origin;try{const u=new URL(callback.url);if(u.protocol!=='https:'||u.username||u.password||u.search||u.hash||u.pathname!=='/')throw Error();origin=u.origin;}catch{throw Error('Invalid callback origin');}
+  if(!/^[1-9][0-9]{0,19}-[1-9][0-9]{0,19}$/.test(callback.run)||!/^v1\.[1-9][0-9]{0,19}\.[1-9][0-9]{0,19}\.[1-9][0-9]{0,12}\.[A-Za-z0-9_-]{43}$/.test(callback.token)||callback.token.split('.').slice(1,3).join('-')!==callback.run)throw Error('Invalid callback capability');
   return `#!/bin/bash
-set -uo pipefail
-summary=$(mktemp)
-if timeout --signal=TERM --kill-after=30s ${minutes*60}s bash -s <<'KF_CI_WORK' 2>&1 | tee "$summary"
+set -euo pipefail
+exec timeout --signal=TERM --kill-after=30s ${minutes*60}s bash -s <<'KF_BOOT'
 set -euo pipefail
 export DEBIAN_FRONTEND=noninteractive
-command -v git >/dev/null || { apt-get update -qq; apt-get install -y -qq git ca-certificates; }
+command -v curl >/dev/null && command -v python3 >/dev/null && command -v git >/dev/null || { apt-get update -qq; apt-get install -y -qq curl python3 git ca-certificates; }
+python3 - <<'KF_REPORT'
+import json,os,select,subprocess,time
+url='${origin}/report/${callback.run}'
+token='${callback.token}'
+nonce='${nonce}'
+seq=0
+sent=0
+attempted=0
+backup='/workspace/kf-ci-output.log'
+def post(kind,text=None,result=None):
+    global seq,sent,attempted
+    payload={'seq':seq+1,'kind':kind}
+    if text is not None: payload['text']=text
+    if result is not None: payload['result']=result
+    body=json.dumps(payload,separators=(',',':'),ensure_ascii=True).encode()
+    if kind!='result' and (attempted>=600 or sent+len(body)>900000): return
+    seq+=1;sent+=len(body);attempted+=1
+    # curl retries reuse this exact payload/sequence; no redirect or arbitrary URL.
+    subprocess.run(['curl','--silent','--show-error','--fail','--max-time','10',
+        '--retry','2','--retry-delay','1','--retry-all-errors','--proto','=https',
+        '--request','POST','--header','Content-Type: application/json',
+        '--header','Authorization: Bearer '+token,'--data-binary','@-',url],
+        input=body,stdout=subprocess.DEVNULL,stderr=subprocess.DEVNULL,check=False)
+work=r'''set -euo pipefail
 git clone --no-checkout https://github.com/${repo}.git /workspace/kf-ci-src
 cd /workspace/kf-ci-src
 git fetch origin ${sha}
 git checkout --detach ${sha}
 [ "$(git rev-parse HEAD)" = '${sha}' ]
 bash scripts/ci/vast_box_main.sh '${sha}'
-KF_CI_WORK
-then result=PASS; else result=FAIL; fi
-digest=$(sha256sum "$summary"); digest=\${digest%% *}
-printf 'KF_RESULT ${nonce} %s %s\\n' "$result" "$digest"
+'''
+post('progress','Suite starting')
+child=subprocess.Popen(['bash','-s'],stdin=subprocess.PIPE,stdout=subprocess.PIPE,stderr=subprocess.STDOUT)
+child.stdin.write(work.encode());child.stdin.close()
+pending=b'';last=time.monotonic();heartbeat=last
+with open(backup,'wb') as local:
+    while True:
+        ready,_,_=select.select([child.stdout],[],[],1)
+        if ready:
+            data=os.read(child.stdout.fileno(),8192)
+            if not data: break
+            local.write(data);local.flush()
+            pending=(pending+data)[-8192:]
+        current=time.monotonic()
+        if pending and current-last>=1:
+            post('log',pending.decode('utf-8',errors='replace'));pending=b'';last=current
+        elif current-heartbeat>=60:
+            post('progress','Suite running');heartbeat=current
+    if pending: post('log',pending.decode('utf-8',errors='replace'))
+rc=child.wait()
+with open(backup,'rb') as local:
+    local.seek(0,os.SEEK_END);local.seek(max(0,local.tell()-8192))
+    tail=local.read(8192).decode('utf-8',errors='replace')
+post('result',tail,{'nonce':nonce,'verdict':'PASS' if rc==0 else 'FAIL'})
+raise SystemExit(rc)
+KF_REPORT
+KF_BOOT
 `;
 }

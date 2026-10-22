@@ -1,8 +1,8 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {createServer} from 'node:http';
-import {env,clock,nonce,jwt,MemoryStorage,MockCloud,finalLine} from './helpers.js';
-test('local HTTP integration: owner rent to async logs to automatic destroy',async()=>{
+import {env,clock,nonce,jwt,MemoryStorage,MockCloud,callbackToken} from './helpers.js';
+test('local HTTP integration: owner rent to authenticated reports to automatic destroy',async()=>{
  const {createService}=await import('../src/index.js');const cloud=new MockCloud();
  const server=createServer(async(req,res)=>{try{
    const chunks=[];for await(const c of req)chunks.push(c);
@@ -12,12 +12,17 @@ test('local HTTP integration: owner rent to async logs to automatic destroy',asy
  await new Promise(resolve=>server.listen(0,'localhost',resolve));
  try{
    const localFetch=(url,init={})=>fetch('http://localhost:'+server.address().port,{...init,headers:{...init.headers,'x-mock-target':String(url)}});
-   const service=createService({env,storage:new MemoryStorage(),fetch:localFetch,now:()=>clock,random:()=>nonce});
+   const storage=new MemoryStorage();const service=createService({env,storage,fetch:localFetch,now:()=>clock,random:()=>nonce});
    const authorization='Bearer '+await jwt();
    const r=await service.fetch(new Request(env.WORKER_URL+'/rent',{method:'POST',headers:{authorization}}));assert.equal(r.status,200);
-   cloud.logReady=false;let response=await service.fetch(new Request(env.WORKER_URL+'/status/900',{headers:{authorization}}));assert.equal((await response.json()).verdict,'UNAVAILABLE');
-   cloud.logReady=true;cloud.logText='::error::fake\n'+finalLine();response=await service.fetch(new Request(env.WORKER_URL+'/status/900',{headers:{authorization}}));
-   const result=await response.json();assert.equal(result.verdict,'PASS');assert.match(result.log,/\[box\] ::error/);assert.deepEqual(cloud.deletes,['900']);
+   const token=callbackToken(await storage.get('record:123-1'));
+   const report=payload=>service.fetch(new Request(env.WORKER_URL+'/report/123-1',{method:'POST',headers:{Authorization:'Bearer '+token,'Content-Type':'application/json'},body:JSON.stringify(payload)}));
+   assert.equal((await report({seq:1,kind:'log',text:'::error::fake'})).status,200);
+   let response=await service.fetch(new Request(env.WORKER_URL+'/status/123-1',{headers:{authorization}}));assert.equal((await response.json()).verdict,'UNAVAILABLE');
+   assert.equal((await report({seq:2,kind:'result',result:{nonce,verdict:'PASS'}})).status,200);
+   response=await service.fetch(new Request(env.WORKER_URL+'/status/123-1',{headers:{authorization}}));
+   const result=await response.json();assert.equal(result.verdict,'PASS');assert.match(result.log_tail_sanitised,/\[box\] ::error/);assert.deepEqual(cloud.deletes,['900']);assert.equal(cloud.calls.some(c=>c.url.includes('request_logs')),false);
+
  }finally{server.closeAllConnections();await new Promise(resolve=>server.close(resolve));}
 });
 test('scheduled binding reaches Durable Object cleanup',async()=>{

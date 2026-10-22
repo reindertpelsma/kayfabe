@@ -9,10 +9,11 @@ async function client(state,verdict='UNAVAILABLE',code=200,pending=false,forcedR
  try{
   const yaml=await readFile(new URL('../../../.github/workflows/gpu-vast.yml',import.meta.url),'utf8');
   const script=id=>{const block=yaml.split('  '+id+':\n')[1]?.split(/\n  [\w-]+:\n/)[0];assert.ok(block,'missing workflow job '+id);return block.split('        run: |\n')[1].split('\n').map(x=>x.startsWith('          ')?x.slice(10):x).join('\n');};
-  const payload={state,verdict,log:'::error::hostile\n',id:'900',sha:'a'.repeat(40),pr:7};
+  const payload={state,verdict,log_tail_sanitised:'[box] ::error::hostile\n',run:'123-1',sha:'a'.repeat(40),pr:7};
   await writeFile(join(directory,'curl'),`#!/usr/bin/env node
 const fs=require('node:fs');const args=process.argv.slice(2);const url=args.at(-1);
 if(url.includes('/statuses/')){if(args.some(x=>/X-GH-Token/i.test(x)))process.exit(79);const body=args[args.indexOf('--data-binary')+1].slice(1);fs.appendFileSync(process.env.STATUS_LOG,JSON.stringify(JSON.parse(fs.readFileSync(body,'utf8')))+'\\n');process.stdout.write('{}');}
+else if(url.includes('/stop/')){process.stdout.write('{}');}
 else if(url.includes('oidc.example'))process.stdout.write(JSON.stringify({value:'mock.jwt.value'}));
 else{if(!args.includes('X-GH-Token: mock-job-token'))process.exit(78);const previous=fs.existsSync(process.env.CALL_LOG)?fs.readFileSync(process.env.CALL_LOG,'utf8').trim().split('\\n').length:0;fs.appendFileSync(process.env.CALL_LOG,'worker\\n');if(previous>=2)process.exit(77);let response=JSON.parse(process.env.MOCK_RESPONSE);if(process.env.FIRST_PENDING==='1'&&previous===0){response.state='RUNNING';response.verdict='UNAVAILABLE';}fs.writeFileSync(args[args.indexOf('-o')+1],JSON.stringify(response));process.stdout.write(process.env.MOCK_CODE);}
 `);await chmod(join(directory,'curl'),0o700);
@@ -31,7 +32,7 @@ else{if(!args.includes('X-GH-Token: mock-job-token'))process.exit(78);const prev
   return {...response,status:final.status,statuses,calls};
  }finally{await rm(directory,{recursive:true});}
 }
-test('workflow client posts success on the tested head and wraps hostile log',async()=>{const r=await client('COMPLETE','PASS');assert.equal(r.status,0,r.stderr);assert.deepEqual(r.statuses.map(x=>x.state),['pending','success']);assert.match(r.stdout,/::stop-commands::[0-9a-f]+\n::error::hostile/);assert.equal(r.calls,1);});
+test('workflow client posts success on the tested head and wraps hostile log',async()=>{const r=await client('COMPLETE','PASS');assert.equal(r.status,0,r.stderr);assert.deepEqual(r.statuses.map(x=>x.state),['pending','success']);assert.match(r.stdout,/::stop-commands::[0-9a-f]+\n\[box\] ::error::hostile/);assert.equal(r.calls,1);});
 test('workflow client posts failure when box verdict fails',async()=>{const r=await client('COMPLETE','FAIL');assert.equal(r.status,1);assert.equal(r.statuses.at(-1).state,'failure');});
 test('workflow client exposes budget refusal as a distinct failing state',async()=>{const r=await client('UNAVAILABLE_BUDGET','UNAVAILABLE',409);assert.equal(r.status,1);assert.match(r.statuses.at(-1).description,/UNAVAILABLE_BUDGET/);});
 test('workflow client exposes missing approval as a distinct failing state',async()=>{const r=await client('NEEDS_APPROVAL','UNAVAILABLE',403);assert.equal(r.status,1);assert.match(r.statuses.at(-1).description,/NEEDS_APPROVAL/);});

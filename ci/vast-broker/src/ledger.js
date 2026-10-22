@@ -12,13 +12,16 @@ export class Ledger {
     if(!record||record.id!==id)refuse('NOT_FOUND',404);
     return record;
   }
+  async openRecords(){const entries=await this.storage.list({prefix:'open:',limit:1000});if(entries.size>=1000)refuse();const records=[];for(const [key] of entries){const record=await this.get('record:'+key.slice(5));if(!record)refuse();records.push(record);}return records;}
   async reserve(record){
+    await this.put('open:'+record.key,true);
     await this.save(record);await this.put('active',record.key);await this.grant(record.key,record);
     await this.put('sha:'+record.sha,{key:record.key,started:record.started});
     await this.put('cost:'+record.key,{started:record.started,ended:null,price:record.price,ttl:record.ttl});
   }
   async settle(record,now){
     record.ended=now;await this.save(record);await this.put('cost:'+record.key,{started:record.started,ended:now,price:record.price,ttl:record.ttl});
+    await this.storage.delete('open:'+record.key);
     if(await this.get('active')===record.key)await this.put('active',null);
   }
   async budgets(cfg,now,cost){
