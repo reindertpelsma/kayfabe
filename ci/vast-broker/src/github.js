@@ -1,7 +1,7 @@
 import {fetchJson,refuse,numericId,hexSha,skippedFiles} from './policy.js';
 export class Github {
   constructor(fetcher,cfg,token,{cache=new Map(),now=Date.now}={}){
-    this.fetcher=fetcher;this.cfg=cfg;this.cache=cache;this.now=now;
+    this.fetcher=(...args)=>fetcher(...args);this.cfg=cfg;this.cache=cache;this.now=now;
     this.headers={Accept:'application/vnd.github+json','User-Agent':'kayfabe-vast-broker','X-GitHub-Api-Version':'2022-11-28',...(token?{Authorization:'Bearer '+token}:{})};
   }
   async get(path,missing=false){
