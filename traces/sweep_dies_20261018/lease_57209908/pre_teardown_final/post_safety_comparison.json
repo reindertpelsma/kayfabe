@@ -1,0 +1,10 @@
+{
+  "kind": "MEASURED",
+  "date": "2026-10-22",
+  "lease_id": 57209908,
+  "native_snapshot_xids": 5,
+  "post_stop_xids": 5,
+  "unchanged_since_refusal": true,
+  "baseline_accepted": false,
+  "note": "Read-only closeout comparison; does not admit or enlarge the refused baseline"
+}
