@@ -9,6 +9,8 @@ const mutations=[
  ['SSH onstart launch','src/vast.js',replace("runtype:'ssh_direct'","runtype:'args'")],
  ['pending provider status','src/index.js',replace("i.actual_status==null||['created'","['created'")],
  ['resolved launch preflight','smoke.py',replace("else 'ELIGIBLE_OFFER_FOUND'","else 'BLOCKED_LAUNCH_CONTRACT'")],
+ ['live tunnel readiness','smoke-live.py',s=>replace(" if match and match[0]!='https://api.trycloudflare.com' else None"," if match else None")(replace("if 'Your quick Tunnel has been created!' not in log or 'Registered tunnel connection' not in log:return None","if False:return None")(s))],
+ ['live ingress duplicate probes','live/ingress.mjs',replace("const kind=req.url.includes('/kill/')?'kill':'report';","const kind=req.url.includes('/kill/')?'kill':'report';try{await fetch('https://console.vast.ai/api/v0/instances/'+owned.id+'/');}catch{}")],
  ['inherited endpoint secrets','workflow-guard.js',dropLine('// MUTANT secret-inherit')],
  ['endpoint aliases in step metadata','workflow-guard.js',dropLine('// MUTANT secret-metadata')],
  ['optional prefix admission','src/routes.js',dropLine('// MUTANT prefix-match')],
