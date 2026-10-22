@@ -13,12 +13,18 @@
     "credit_reserve": 5,
     "auto_destroy_minutes": 170,
     "product_head": "8f3a9bb3a5d652b3f536ca015bf95735ec588924",
-    "destroyed": false,
+    "destroyed": true,
     "auto_destroy_pid": 2707430,
     "auto_destroy_verified": true,
     "auto_destroy_armed_utc": "2026-10-22T00:26:37.725005+00:00",
     "ssh_ready_utc": "2026-10-22T00:28:16.348348+00:00",
     "ssh_hostkey_fingerprint": "SHA256:st6IY0UCQPUQt58/10PHsaqIsgrk9pjOISnQv9QEvHg",
-    "observed_dph_total": 0.7766666666666667
+    "observed_dph_total": 0.7766666666666667,
+    "absence_verified_utc": "2026-10-22T01:30:18.160966+00:00",
+    "elapsed_hours_until_absence": 1.061253505,
+    "runtime_cost_estimate_usd": 0.8242402222166668,
+    "lane_runtime_total_usd": 3.464692116854836,
+    "credit_after_observed": 42.95639075576196,
+    "auto_destroy_cancelled_after_absence": true
   }
 ]

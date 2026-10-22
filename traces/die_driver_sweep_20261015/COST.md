@@ -1,3 +1,14 @@
+STATUS: LIVE, 2026-10-22 01:30UTC closeout. Own lease57132969 destroyed; API absence verified
+2026-10-22T01:30:18.160966+00:00; original auto170 PID2707430 cancelled ONLY after absence.
+Runtime1.061254h at observed0.776666667USD/h = estimate0.824240USD;
+prior lane2.640452USD, new lane runtime total3.464692USD (<7 hard stop).
+Shared API credit43.848528 ->42.956391USD; reserve5 untouched. Runtime estimates and
+shared credit deltas are not settled exclusive invoices. No second lease. N0 PASS at8f3a9bb3a;
+Windows580.88 disabled bind Code22, then post-shutdown census STOP; all Windows validation arms UNRUN.
+No required resume decision arrived before bounded01:30UTC idle cutoff. Evidence pushed before teardown;
+optional merged B1 build2add71e8 prepared/pushed, hardware n0. See ../blackwell_validation_20261022/.
+Prior entries below are historical.
+
 STATUS UPDATE, 2026-10-22 00:28 UTC: lease57132969 SSH ready with console-verified ED25519 pin;
 actual observed rate0.776666667USD/h (quote0.695648), timer170 verified/expiry03:16:37UTC.
 KVM and167GB free confirmed. ControllerPID1864 started; frozen product/guard8f3a9bb3a; N0/Windows UNRUN.

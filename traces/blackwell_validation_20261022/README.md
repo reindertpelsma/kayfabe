@@ -1,6 +1,8 @@
 **STATUS: LIVE, 2026-10-22.** One owner-authorized GB202/RTX5090 lease57132969.
-N0 PASS, Windows arms UNRUN at a mandatory post-bind safety stop. Explicit resume decision
-requested; no guard relaxation, rebind, first enable or validation arm performed while pending.
+N0 PASS, Windows arms UNRUN at a mandatory post-bind safety stop. Lease destroyed and API-absent
+at01:30:18UTC after no required decision arrived before the stated idle cutoff. No guard relaxation,
+rebind, first enable or validation arm performed while pending. The old resume request can no longer
+apply to this destroyed lease; a later rental would require new explicit authority.
 
 | Cell | Frozen source | Measured outcome |
 |---|---|---|
@@ -38,5 +40,9 @@ unless the owner changes that order. Its question is whether the exact native32 
 is unchanged. Record private host ring identity and guest channel separately; do not infer them
 from debug words. Code0 alone never means PASS; the hold/apps/desktop acceptance gate remains.
 
-Teardown/cost closeout will be recorded in `owned_instances.json` and the shared COST.md.
+Teardown API absence is recorded in `owned_instances.json` and the shared COST.md.
+New runtime estimate0.824240USD, lane total3.464692USD;
+shared credit42.956391USD, reserve5 intact. Timer cancelled only after absence.
+All remote QEMU/CPU/guard processes ended with the destroyed lease. Local merged release tests
+are still running at this documentation checkpoint; their final counts/cleanup will be appended.
 The trusted host, GPU, VMs, locks and /data were untouched.
