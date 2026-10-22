@@ -1,0 +1,8 @@
+FAST_SUITE_STARTED=2026-10-22T03:33:16+00:00 arms=1 budget=180s
+rev=7f6f7e7a7
+ARM                          VERDICT   secs  why
+--ce-client-guest-ram        PASS      113s  113s
+FAST_CELL_ARM arm=ce-client-guest-ram verdict=PASS secs=113 client_ms=91330
+
+FAST_SUITE_PASS=1 FAST_SUITE_FAIL=0 FAST_SUITE_CRASH=0 NOTRUN=0 ARMS=1
+FAST_SUITE_RC=0
