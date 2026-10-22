@@ -265,6 +265,34 @@ class FreshnessTests(unittest.TestCase):
         self.write("docs/ok.md", self.document(body="[code](/crates/kf-example/src/lib.rs)"))
         self.run_check()
 
+    def test_missing_heading_fragment_is_a_broken_link(self):
+        self.write("docs/ok.md", self.document(body="[guide](ok.md#missing-section)"))
+        self.assertIn("broken-link", self.kinds())
+
+    def test_missing_same_doc_fragment_is_a_broken_link(self):
+        self.write("docs/ok.md", self.document(body="[guide](#missing-section)"))
+        self.assertIn("broken-link", self.kinds())
+
+    def test_heading_fragment_and_duplicate_suffix_resolve(self):
+        self.write(
+            "docs/ok.md",
+            self.document(
+                body="## A `code` heading\n\n## A `code` heading\n\n"
+                "[first](#a-code-heading) [second](#a-code-heading-1)"
+            ),
+        )
+        self.run_check()
+
+    def test_explicit_html_anchor_resolves(self):
+        self.write(
+            "docs/ok.md", self.document(body='<a id="stable-anchor"></a> [go](#stable-anchor)')
+        )
+        self.run_check()
+
+    def test_setext_heading_fragment_resolves(self):
+        self.write("docs/ok.md", self.document(body="Section\n-------\n\n[go](#section)"))
+        self.run_check()
+
     def test_external_links_are_not_fetched(self):
         self.write(
             "docs/ok.md", self.document(body="[web](https://invalid.example/a) [mail](mailto:a@b)")
