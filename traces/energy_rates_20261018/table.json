@@ -2,7 +2,7 @@
   "classification": "MEASURED",
   "evidence": "table.json",
   "scope": "Q3 fresh standalone Energy trials plus explicitly separated prior standalone observations; K1 mixed3454 and candidate mixed4260 excluded from rate denominators",
-  "completed": 8,
+  "completed": 9,
   "counts": {
     "D": {
       "q3_pass": 3,
@@ -47,25 +47,26 @@
       "score_mean": 40.239999999999995
     },
     "B": {
-      "q3_pass": 2,
+      "q3_pass": 3,
       "q3_fail": 0,
-      "q3_n": 2,
+      "q3_n": 3,
       "q3_failure_rate": 0.0,
       "prior_energy_only_pass": 1,
       "prior_energy_only_fail": 0,
       "prior_energy_only_runs": [
         4264
       ],
-      "pooled_pass": 3,
+      "pooled_pass": 4,
       "pooled_fail": 0,
-      "pooled_n": 3,
+      "pooled_n": 4,
       "scores": [
         45.35,
-        38.9
+        38.9,
+        41.21
       ],
       "score_min": 38.9,
       "score_max": 45.35,
-      "score_mean": 42.125
+      "score_mean": 41.82
     },
     "C": {
       "q3_pass": 0,
@@ -267,6 +268,29 @@
       "ended": "2026-10-22T11:57:02.354719+02:00",
       "verdict": "PASS",
       "score": 35.51,
+      "first153_guest": null,
+      "first153_detected_host": null,
+      "guest153": 0,
+      "guest4101": 0,
+      "host_xids": 0,
+      "poisoned": 0,
+      "restored": true,
+      "failing_channels": [],
+      "matching_forwarded": [
+        0
+      ],
+      "rpc_limit": "Production trace logs RmAlloc seq=0 context and CHAN-FACTS/birth linkage, not a unique full RPC transaction replay."
+    },
+    {
+      "order": 9,
+      "run": 4309,
+      "arm": "B4",
+      "build": "B",
+      "revision": "a83394e66e960d8017caa0ef19fa579f1724806b",
+      "started": "2026-10-22T11:57:02.513484+02:00",
+      "ended": "2026-10-22T12:02:22.644026+02:00",
+      "verdict": "PASS",
+      "score": 41.21,
       "first153_guest": null,
       "first153_detected_host": null,
       "guest153": 0,
