@@ -335,13 +335,12 @@ impl PageDirPolicy {
             return;
         };
         let src = self.canonical(d.src_client, d.src_handle);
-        if self.vas.contains_key(&src) {
-            if let Some(old) = self.aliases.insert((d.dst_client, d.dst_handle), src)
-                && self.orphans.contains(&old)
-            {
-                // The old implementation swept these on the next free, not dup.
-                self.orphan_candidates.insert(old);
-            }
+        if self.vas.contains_key(&src)
+            && let Some(old) = self.aliases.insert((d.dst_client, d.dst_handle), src)
+            && self.orphans.contains(&old)
+        {
+            // The old implementation swept these on the next free, not dup.
+            self.orphan_candidates.insert(old);
         }
     }
 

@@ -145,7 +145,8 @@ fn orphan_aliases_2400() {
     bounded("orphan_aliases_2400", "aliases", 2400);
 }
 
-fn page_policy() -> (PageDirPolicy, Arc<std::sync::Mutex<Vec<(u32, u32)>>>) {
+type Retirements = Arc<std::sync::Mutex<Vec<(u32, u32)>>>;
+fn page_policy() -> (PageDirPolicy, Retirements) {
     let seen = Arc::new(std::sync::Mutex::new(Vec::new()));
     let copy = Arc::clone(&seen);
     let abi = *kf_abi::versions::table_for(kf_abi::versions::BENCH_DRIVER).unwrap();
