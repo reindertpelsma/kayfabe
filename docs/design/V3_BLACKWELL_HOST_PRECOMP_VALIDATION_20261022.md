@@ -19,6 +19,8 @@ branch `codex/bw-host-precomp-b1-arm-20261022`. Parents are primaryab91b4acc and
 prepared B1 merge `2add71e8ca8ebb80c419ed2fdb0427dfcdc0ccd4` (B1 source1c6452a27,
 runtime d8c1e65ef / PR71). Build separately and record both parents and binary hashes. It includes
 the B1 CI-repair parent and published artifacts, so this is not an RC-only causal comparison.
+The four-crate interaction rerun passed: host84, disp311, chan672, qemu436; zero failures,
+no count decreases versus the prior B1 parent. Evidence is in the runtime b1_release_counts receipt.
 The only manual merge edit redacts one inherited private path in CI metadata; product Rust was
 automatically merged. RESET_CHANNEL stays unchanged. No CE2 combination or fix-to-fix iteration.
 

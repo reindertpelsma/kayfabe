@@ -48,3 +48,13 @@ are in docs/design/V3_BLACKWELL_HOST_CAPS_20261022.md and V3_BLACKWELL_HOST_PREC
 There is no permission or Windows success claim. A lawful API can still refuse this GSP register
 range; the product then keeps its whole derived PRECOMP rule. Physical capability facts alone
 do not establish complete virtual FVLUT semantics. No rental, captured fallback or trusted-host use.
+
+Optional B1 interaction verification (MEASURED after primary evidence publication): actual isolated
+merge178862f82 passed full release for kf-host84/0ignored, kf-disp311/5ignored,
+kf-chan672/4ignored and kf-qemu436/0ignored, zero failures. Prior B1 parent2add71e8c counts
+are recorded alongside; no decrease. This is a four-crate rerun, not a repeat of the earlier
+22-crate3999-pass suite. The primary PR excludes this merge. Host-read source files have identical
+hashes across the primary and optional source (`b1_source.json`). One inherited private path in CI
+metadata was redacted before publishing the optional merge; no product Rust was manually changed.
+All own test/build processes have exited; all three own target directories were deleted afterward.
+No hardware run, rental, lock or foreign tree mutation occurred in this task.
