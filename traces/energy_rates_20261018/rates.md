@@ -1,12 +1,12 @@
 # Q3 Energy rate table
 
-MEASURED at rev 468a35c9 (run4301) and the per-run revisions in table.json: runs4301–4305, exact revisions and first-event/channel facts in table.json and per-run channels.json; 5/11 trials complete.
+MEASURED at rev 468a35c9 (run4301) and the per-run revisions in table.json: runs4301–4306, exact revisions and first-event/channel facts in table.json and per-run channels.json; 6/11 trials complete.
 
 | Build | Q3 pass/fail | Prior standalone pass/fail | Combined fail/n | Q3 exported guest scores |
 |---|---:|---:|---:|---|
 | D | 2/0 | 0/0 | 0/2 | 36.4, 39.87 |
 | A | 1/0 | 0/2 | 2/3 | 41.19 |
-| B | 1/0 | 1/0 | 0/2 | 45.35 |
+| B | 2/0 | 1/0 | 0/3 | 45.35, 38.9 |
 | C | 0/1 | 1/1 | 2/3 |  |
 
 CODE READ: D = descriptor-only468a35c9; A = descriptor+SA-02 40583bc2; B = descriptor+batched-walk a83394e6; C = candidate afe00b3c. Prior standalone runs are A4263/4266, B4264, C4262/4267. K1 mixed3454 and candidate mixed4260 are reference observations only.
@@ -18,6 +18,7 @@ CODE READ: D = descriptor-only468a35c9; A = descriptor+SA-02 40583bc2; B = descr
 | 3/run4303 | B2 | 11:27:45 | PASS | none | none | none |
 | 4/run4304 | C3 | 11:32:40 | FAIL | 2026-10-22T09:36:16.5823597+02:00 | 2026-10-22T11:36:30.596441+02:00 | 35/34 |
 | 5/run4305 | D2 | 11:37:01 | PASS | none | none | none |
+| 6/run4306 | B3 | 11:42:02 | PASS | none | none | none |
 
 MEASURED at rev 468a35c9, run4301 (4301/channels.json): run-order.csv and per-run channels.json retain the guest clock and host clock separately; run4301 guest captured09:18 while host captured11:18 CEST, approximately two hours apart. Times are not silently converted.
 

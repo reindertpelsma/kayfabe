@@ -2,7 +2,7 @@
   "classification": "MEASURED",
   "evidence": "scoped-claims.json",
   "base": "b6f6d3010600e77d02e1e48b5e497d24fd4306d5",
-  "head": "77a0fe2d0206e7c0217f498a184fb400de939b69",
+  "head": "b8f7b489a8312cd6ef58724220065a36321167c4",
   "scope": "Owner-approved Q3-added/changed files only; evidence-only [skip ci]; inherited debt untouched",
   "files": [
     "traces/energy_rates_20261018/4301/channel-excerpts.txt",
@@ -30,6 +30,11 @@
     "traces/energy_rates_20261018/4305/config.json",
     "traces/energy_rates_20261018/4305/excerpts.txt",
     "traces/energy_rates_20261018/4305/result.json",
+    "traces/energy_rates_20261018/4306/channel-excerpts.txt",
+    "traces/energy_rates_20261018/4306/channels.json",
+    "traces/energy_rates_20261018/4306/config.json",
+    "traces/energy_rates_20261018/4306/excerpts.txt",
+    "traces/energy_rates_20261018/4306/result.json",
     "traces/energy_rates_20261018/builds.json",
     "traces/energy_rates_20261018/control/channel_summary.py",
     "traces/energy_rates_20261018/control/preflight.py",
@@ -48,5 +53,5 @@
   "new": 0,
   "sites": [],
   "inherited_ignored": 74,
-  "time": "2026-10-22T09:43:31.691323+00:00"
+  "time": "2026-10-22T09:47:39.231578+00:00"
 }

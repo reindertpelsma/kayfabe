@@ -1,0 +1,88 @@
+{
+  "classification": "MEASURED",
+  "run": 4306,
+  "arm": "B3",
+  "revision": "a83394e66e960d8017caa0ef19fa579f1724806b",
+  "result": {
+    "classification": "MEASURED",
+    "arm": "B3",
+    "run": 4306,
+    "rev": "a83394e66e960d8017caa0ef19fa579f1724806b",
+    "workloads": [
+      "energy-04"
+    ],
+    "iterations": 1,
+    "resolution": "FullHD",
+    "verdict": "PASS",
+    "reason": "VENDOR_COMPLETED_NO_GUARD_FAILURE",
+    "sample": {
+      "classification": "MEASURED",
+      "time": "2026-10-22T11:46:39.075945+02:00",
+      "arm": "B3",
+      "run": 4306,
+      "sample": 11,
+      "completed": true,
+      "failed": false,
+      "subtest": "06_OpunakeAnimated",
+      "guest153": 0,
+      "guest4101": 0,
+      "boot_unchanged": true,
+      "budget_refusals": 0,
+      "counters": {
+        "pointer_large_entries": 0,
+        "pointer_entry_max_bytes": 59352,
+        "refused_scan_budget": 0,
+        "poisoned": 0
+      },
+      "task": 3,
+      "qemu_before": 2769727,
+      "qemu_after": 2777405
+    },
+    "events": [],
+    "ended": "2026-10-22T11:46:50.203518+02:00",
+    "controller_exit": 0,
+    "host_stop": {
+      "classification": "MEASURED",
+      "time": "2026-10-22T11:46:51.047445+02:00",
+      "new_host_xids": 0,
+      "rm_unloads_15min": 0,
+      "reason": "COMPLETE_REQUESTED",
+      "qemu_pid": 2081686
+    },
+    "agent_exit": -15,
+    "restoration": {
+      "classification": "MEASURED",
+      "time": "2026-10-22T11:47:01.344683+02:00",
+      "cuda": {
+        "before": 0,
+        "after": 0,
+        "reloaded": false
+      },
+      "gdm": "active",
+      "nvidia_bound": true,
+      "smi_exit": 0
+    },
+    "restored": true
+  },
+  "qemu_bytes": 2973125,
+  "qemu_sha256": "6ab719b642d3e4a514b72c9ebfd5e6aa5872e34b7a30712a930dad8d254ffc22",
+  "NoCeObject_first_line": null,
+  "NoCeObject_refusal_count": 0,
+  "backing": {
+    "classification": "MEASURED",
+    "size_unchanged": true,
+    "mtime_unchanged": true
+  },
+  "process_observer_controls_passed": true,
+  "export_errors": [],
+  "vendor_scores": [
+    {
+      "run": "result_2026-10-22-09-43-05",
+      "version": "1.0.2",
+      "source": "result.json",
+      "composite": 38.9,
+      "renderer": "GeForce RTX 4070",
+      "workload": "energy-04"
+    }
+  ]
+}
