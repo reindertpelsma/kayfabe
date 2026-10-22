@@ -25,7 +25,7 @@ One number, `channel_budget` (channels **per runlist**):
 The host's own unprivileged answer, `NV2080_CTRL_CMD_FIFO_GET_INFO` (`RMCTRL_FLAGS_NON_PRIVILEGED`), once per served
 runlist (one host-driven engine per runlist of the served FIFO table): index 8 `MAX_CHANNEL_GROUPS_PER_ENGINE` (channels of
 that runlist) and index 9 `CHANNEL_GROUPS_IN_USE_PER_ENGINE` (held by the host and all other clients)
-(`ogkm kernel_fifo_ctrl.c:317-334`). `kf_abi::chanbudget::resolve`:
+(`ogkm-580: kernel_fifo_ctrl.c:289-306`, read at 580.159.04; ⊘ CORRECTED 2026-10-21: this cited an untagged `:317-334`, which is not where those two cases are in that tree). `kf_abi::chanbudget::resolve`:
 - **limit** = the smallest `total - in_use`, at most 2048 (the guest's token carries 11 chid bits);
 - **default** = the smallest `total - in_use - total/8`: the host keeps one eighth of each runlist for its desktop and other clients;
 - **minimum** = 256 (4x the ~64 an idle Windows desktop holds).

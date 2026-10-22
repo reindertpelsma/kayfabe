@@ -104,7 +104,10 @@ impl VmCaps {
     /// Live channel twins on `runlist`.
     #[must_use]
     pub fn live_on_runlist(&self, runlist: u32) -> u32 {
-        self.chan_live_rl.get(runlist as usize).copied().unwrap_or(0)
+        self.chan_live_rl
+            .get(runlist as usize)
+            .copied()
+            .unwrap_or(0)
     }
 
     pub fn acquire(&mut self, t: Twin) -> Result<(), Refusal> {

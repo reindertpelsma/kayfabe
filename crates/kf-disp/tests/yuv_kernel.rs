@@ -8,8 +8,8 @@
 //! against NVKMS's own FMT tables (`ogkm-595.84: nvidia-modeset/src/nvkms-evo3.c` FMTMatrix).
 
 use kf_disp::scanout::{
-    BT709_LIMITED, YUV_PACKED_UYVY, YUV_PACKED_YUYV, YUV_SEMI_PLANAR_8, YUV_SEMI_PLANAR_16, YuvPlan,
-    yuv_convert, yuv_reference, yuv_to_xrgb,
+    BT709_LIMITED, YUV_PACKED_UYVY, YUV_PACKED_YUYV, YUV_SEMI_PLANAR_8, YUV_SEMI_PLANAR_16,
+    YuvPlan, yuv_convert, yuv_reference, yuv_to_xrgb,
 };
 use std::path::{Path, PathBuf};
 use std::process::Command;
@@ -258,13 +258,22 @@ fn the_kernel_body_is_the_reference_for_every_layout_and_scale() {
     // destination the frame edge cuts
     for filter in [0, 1] {
         let mut up = plan(false, 128, 128, 0);
-        (up.sx0, up.sy0, up.sw, up.sh, up.ox, up.oy, up.dw, up.dh) = (6, 4, 31, 23, 20, 10, 101, 85);
+        (up.sx0, up.sy0, up.sw, up.sh, up.ox, up.oy, up.dw, up.dh) =
+            (6, 4, 31, 23, 20, 10, 101, 85);
         up.filter = filter;
         case(&exe, &exe_f, &dir, &format!("upscale{filter}"), &up, fw, fh);
         let mut down = plan(false, 128, 128, 0);
         (down.dw, down.dh, down.ox, down.oy) = (17, 11, 3, 5);
         down.filter = filter;
-        case(&exe, &exe_f, &dir, &format!("downscale{filter}"), &down, fw, fh);
+        case(
+            &exe,
+            &exe_f,
+            &dir,
+            &format!("downscale{filter}"),
+            &down,
+            fw,
+            fh,
+        );
         // an odd origin with 4:2:0 chroma (the chroma clamp at both ends)
         let mut odd = plan(false, 128, 128, 0);
         (odd.sx0, odd.sy0, odd.sw, odd.sh, odd.dw, odd.dh) = (7, 5, 33, 27, 70, 61);
@@ -376,5 +385,8 @@ fn yuv_known_values() {
         yuv_convert(&n709, 940 << 6, 512 << 6, 512 << 6) & 0xff_ffff,
         0xff_ffff
     );
-    assert_eq!(yuv_convert(&n709, 64 << 6, 512 << 6, 512 << 6) & 0xff_ffff, 0);
+    assert_eq!(
+        yuv_convert(&n709, 64 << 6, 512 << 6, 512 << 6) & 0xff_ffff,
+        0
+    );
 }

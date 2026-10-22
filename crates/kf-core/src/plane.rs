@@ -52,8 +52,15 @@ mod retirement_interleaving {
         let vmm = Vmm::default();
         let plane = Arc::new(Plane::new(&vmm, 4, 3));
         let caps = Arc::new(Mutex::new(VmCaps::from_declared(2, 8, 8, 8)));
-        plane.allocate_channel(&mut caps.lock().unwrap(), 0,
-            Route::Translated, 11, Owner::User).unwrap();
+        plane
+            .allocate_channel(
+                &mut caps.lock().unwrap(),
+                0,
+                Route::Translated,
+                11,
+                Owner::User,
+            )
+            .unwrap();
         let (at_gap, gap) = mpsc::channel();
         let (resume, continue_retirement) = mpsc::channel();
         std::thread::scope(|scope| {
@@ -73,8 +80,14 @@ mod retirement_interleaving {
             let p = plane.clone();
             let c = caps.clone();
             let new = scope.spawn(move || {
-                p.allocate_channel(&mut c.lock().unwrap(), 0,
-                    Route::Translated, 22, Owner::Kernel).unwrap();
+                p.allocate_channel(
+                    &mut c.lock().unwrap(),
+                    0,
+                    Route::Translated,
+                    22,
+                    Owner::Kernel,
+                )
+                .unwrap();
             });
             resume.send(()).unwrap();
             old.join().unwrap();

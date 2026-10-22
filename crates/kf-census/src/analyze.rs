@@ -17,7 +17,7 @@
 //! (a cap may truncate what is printed, never what is computed).
 
 use crate::capture::Dir;
-use crate::ogkm::{OgkmIndex, OgkmStatus};
+use crate::oracle::{OgkmIndex, OgkmStatus};
 use kf_abi::DriverVersion;
 use kf_gsp::element::peek_seq_num;
 use kf_gsp::large::{Assembler, Step};
@@ -284,7 +284,7 @@ pub struct ControlRow {
     /// `distinct_replies`; every count, size and status is unaffected.
     pub scrubbed: u64,
     /// ogkm answer.
-    pub ogkm: OgkmStatus,
+    pub ogkm_answer: OgkmStatus,
 }
 
 /// The finished analysis.
@@ -346,7 +346,7 @@ impl Report {
 pub struct Analyzer {
     abi: GspAbi,
     tag: DriverVersion,
-    ogkm: OgkmIndex,
+    oracle: OgkmIndex,
     sources: Vec<SourceInfo>,
     seq: HashMap<StreamKey, SeqState>,
     declared_loss: HashSet<StreamKey>,
@@ -397,11 +397,11 @@ impl std::fmt::Debug for Analyzer {
 impl Analyzer {
     /// New analyzer for one decode tag. `abi` must be the bundle for that tag.
     #[must_use]
-    pub fn new(abi: GspAbi, tag: DriverVersion, ogkm: OgkmIndex) -> Analyzer {
+    pub fn new(abi: GspAbi, tag: DriverVersion, oracle: OgkmIndex) -> Analyzer {
         Analyzer {
             abi,
             tag,
-            ogkm,
+            oracle,
             sources: Vec::new(),
             seq: HashMap::new(),
             declared_loss: HashSet::new(),
@@ -746,7 +746,7 @@ impl Analyzer {
             self.rpc_sequence_nonzero += 1;
         }
 
-        let name = self.ogkm.rpc_name(env.function).map(str::to_string);
+        let name = self.oracle.rpc_name(env.function).map(str::to_string);
         if name.is_none() {
             self.anomaly(
                 AnomalyKind::UnknownFunction,
@@ -912,7 +912,7 @@ impl Analyzer {
             .into_iter()
             .map(|(cmd, a)| ControlRow {
                 cmd,
-                name: self.ogkm.controls_at_tag.get(&cmd).cloned(),
+                name: self.oracle.controls_at_tag.get(&cmd).cloned(),
                 requests: a.requests,
                 replies: a.replies,
                 paired: a.paired,
@@ -926,7 +926,7 @@ impl Analyzer {
                 rpc_results: a.rpc_results,
                 distinct_replies: a.reply_hashes.len() as u64,
                 scrubbed: a.scrubbed,
-                ogkm: self.ogkm.control(cmd),
+                ogkm_answer: self.oracle.control(cmd),
             })
             .collect();
         Report {

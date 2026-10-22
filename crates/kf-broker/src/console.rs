@@ -269,26 +269,24 @@ impl ConsoleCursor {
         // ★ the broker draws the guest's cursor itself (`CAP_CURSOR_STREAM`) and the frames carry
         // none: the console shows no cursor of ours then (a documented limitation: a VNC viewer
         // sees none, and an XOR mask is not an image the console could define)
-        let (goal, image) = if share.stream()
-            || frame == ShownFrame::CursorComposed
-            || mode == CursorMode::Off
-        {
-            (none, None)
-        } else {
-            match &self.want {
-                Some(CursorWant::Image(i)) if mode == CursorMode::Hover => {
-                    (Told::Image(i.digest()), Some(i.clone()))
+        let (goal, image) =
+            if share.stream() || frame == ShownFrame::CursorComposed || mode == CursorMode::Off {
+                (none, None)
+            } else {
+                match &self.want {
+                    Some(CursorWant::Image(i)) if mode == CursorMode::Hover => {
+                        (Told::Image(i.digest()), Some(i.clone()))
+                    }
+                    // grab, or a cursor only the frame can show: the worker composes it; the console
+                    // keeps the image it holds until the frame it shows carries the cursor
+                    Some(CursorWant::Image(_) | CursorWant::Composed)
+                        if matches!(self.told, Told::Image(_)) =>
+                    {
+                        (self.told, self.latched.clone())
+                    }
+                    _ => (none, None),
                 }
-                // grab, or a cursor only the frame can show: the worker composes it; the console
-                // keeps the image it holds until the frame it shows carries the cursor
-                Some(CursorWant::Image(_) | CursorWant::Composed)
-                    if matches!(self.told, Told::Image(_)) =>
-                {
-                    (self.told, self.latched.clone())
-                }
-                _ => (none, None),
-            }
-        };
+            };
         let before = (self.told, self.latched.clone(), self.mouse);
         let mut u = ConsoleCursorUpdate::default();
         if goal != self.told {

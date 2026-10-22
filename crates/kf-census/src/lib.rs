@@ -9,7 +9,7 @@
 //! | [`observer`] | the VFIO observer's `gsp.jsonl` |
 //! | [`stream`] | KFGSPCAP records to messages (ring-entry reassembly, loss handling) |
 //! | [`analyze`] | decode with `kf-gsp`/`kf-abi`, the oracle, request/reply pairing, per-control census |
-//! | [`ogkm`] | "is this control defined in an ogkm tag" from the matrix and the tier1 search |
+//! | [`oracle`] | "is this control defined in an ogkm tag" from the matrix and the tier1 search |
 //! | [`report`] | TSV and JSON output (counts and sizes only, never message bytes) |
 //! | [`scrub`] | default-deny rewrite of a capture: keeps headers, replaces message bodies unless the control id is allow-listed |
 //!
@@ -19,7 +19,7 @@
 pub mod analyze;
 pub mod capture;
 pub mod observer;
-pub mod ogkm;
+pub mod oracle;
 pub mod report;
 pub mod scrub;
 pub mod sequence;
@@ -27,7 +27,7 @@ pub mod stream;
 
 use analyze::Analyzer;
 use kf_abi::DriverVersion;
-use ogkm::OgkmIndex;
+use oracle::OgkmIndex;
 
 /// Build an analyzer for `tag` (a tag in `kf_abi::generated::matrix::MEASURED`; anything else
 /// is refused by name, never mapped to a neighbour).

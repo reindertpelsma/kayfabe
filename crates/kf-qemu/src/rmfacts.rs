@@ -135,7 +135,9 @@ pub fn channel_budget_with(
     let mut host = Vec::new();
     for engine in kf_rm::authored::one_engine_per_served_runlist(engines) {
         let mut p = cb::encode_request(engine);
-        ask(&mut p).map_err(|e| format!("channel budget: the host refused FIFO_GET_INFO for engine {engine:#x}: {e}"))?;
+        ask(&mut p).map_err(|e| {
+            format!("channel budget: the host refused FIFO_GET_INFO for engine {engine:#x}: {e}")
+        })?;
         host.push(cb::decode_reply(engine, &p).ok_or_else(|| {
             format!("channel budget: the host's FIFO_GET_INFO reply for engine {engine:#x} is not the two entries asked for")
         })?);
@@ -189,26 +191,43 @@ mod tests {
     fn the_property_overrides_and_the_guest_is_told_it() {
         let b = channel_budget_with(host(2048, 100), &engines(), 512).unwrap();
         assert_eq!(b.per_runlist, 512);
-        let row = kf_abi::fifochannels::FifoChannelsRow { channels_per_runlist: b.per_runlist };
+        let row = kf_abi::fifochannels::FifoChannelsRow {
+            channels_per_runlist: b.per_runlist,
+        };
         let reply = kf_abi::fifochannels::encode_fifo_num_channels(&row, 1).unwrap();
-        assert_eq!(u32::from_le_bytes(reply[4..8].try_into().unwrap()), 512, "numChannels follows the property");
+        assert_eq!(
+            u32::from_le_bytes(reply[4..8].try_into().unwrap()),
+            512,
+            "numChannels follows the property"
+        );
     }
 
     /// Over-limit and under-minimum are refused at realize, by name, never clamped; a host that refuses the query refuses realize.
     #[test]
     fn realize_refuses_what_the_host_cannot_give() {
         let e = channel_budget_with(host(2048, 100), &engines(), 2000).unwrap_err();
-        assert!(e.contains("channel-budget=2000") && e.contains("1948"), "{e}");
+        assert!(
+            e.contains("channel-budget=2000") && e.contains("1948"),
+            "{e}"
+        );
         let e = channel_budget_with(host(2048, 100), &engines(), 100).unwrap_err();
         assert!(e.contains("below the minimum"), "{e}");
-        let e = channel_budget_with(|_| Err("NV_ERR_INSUFFICIENT_PERMISSIONS".into()), &engines(), 0).unwrap_err();
+        let e = channel_budget_with(
+            |_| Err("NV_ERR_INSUFFICIENT_PERMISSIONS".into()),
+            &engines(),
+            0,
+        )
+        .unwrap_err();
         assert!(e.contains("host refused FIFO_GET_INFO"), "{e}");
     }
 
     /// The enforced cap's ceiling is the token field the guest's doorbell carries.
     #[test]
     fn the_budget_ceiling_is_the_token_tables_extent() {
-        assert_eq!(cb::MAX_CHANNEL_BUDGET, 1 << kf_trap::tokenindex::TokenIndex::CHID_BITS);
+        assert_eq!(
+            cb::MAX_CHANNEL_BUDGET,
+            1 << kf_trap::tokenindex::TokenIndex::CHID_BITS
+        );
     }
 
     use kf_host::RmError;

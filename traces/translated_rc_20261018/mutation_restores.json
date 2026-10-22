@@ -1,0 +1,17 @@
+{
+  "mutation_restore.json": {
+    "crates/kf-chan/src/rc.rs": true,
+    "crates/kf-chan/src/host.rs": true,
+    "crates/kf-qemu/src/chanrc.rs": true
+  },
+  "mutation_restore-status.json": {
+    "crates/kf-chan/src/rc.rs": true,
+    "crates/kf-chan/src/host.rs": true,
+    "crates/kf-qemu/src/chanrc.rs": true
+  },
+  "mutation_restore-permit.json": {
+    "crates/kf-chan/src/rc.rs": true,
+    "crates/kf-chan/src/host.rs": true,
+    "crates/kf-qemu/src/chanrc.rs": true
+  }
+}

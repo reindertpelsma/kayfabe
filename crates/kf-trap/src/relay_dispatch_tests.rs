@@ -126,7 +126,7 @@ fn check(program: impl Fn() + Sync + Send + 'static) {
 #[test]
 fn loom_cutover_cannot_admit_worker_over_an_inline_publication() {
     check(|| {
-        use loom::sync::{atomic::AtomicU32, Arc};
+        use loom::sync::{Arc, atomic::AtomicU32};
         let row = Arc::new(modeled::DispatchWord::new());
         let put = Arc::new(AtomicU32::new(0));
         let g = row.install(Mode::CopyRing, 0x8000_ffff).unwrap();
@@ -173,7 +173,7 @@ fn loom_cutover_cannot_admit_worker_over_an_inline_publication() {
 #[test]
 fn loom_two_publishers_never_own_one_row_together() {
     check(|| {
-        use loom::sync::{atomic::AtomicU32, Arc};
+        use loom::sync::{Arc, atomic::AtomicU32};
         let row = Arc::new(modeled::DispatchWord::new());
         let owners = Arc::new(AtomicU32::new(0));
         let g = row.install(Mode::CopyRing, 77).unwrap();
@@ -203,7 +203,7 @@ fn loom_two_publishers_never_own_one_row_together() {
 #[test]
 fn loom_free_and_reuse_cannot_change_an_active_ticket_metadata() {
     check(|| {
-        use loom::sync::{atomic::AtomicU32, Arc};
+        use loom::sync::{Arc, atomic::AtomicU32};
         let row = Arc::new(modeled::DispatchWord::new());
         let metadata = Arc::new(AtomicU32::new(1));
         let g = row.install(Mode::CopyRing, 77).unwrap();
@@ -315,7 +315,7 @@ fn loom_direct_last_ring_has_a_drain_without_inspection_conversion() {
 #[test]
 fn loom_delayed_callback_claims_replacement_metadata_only_after_admission() {
     check(|| {
-        use loom::sync::{atomic::AtomicU32, mpsc, Arc};
+        use loom::sync::{Arc, atomic::AtomicU32, mpsc};
         let row = Arc::new(modeled::DispatchWord::new());
         let metadata = Arc::new(AtomicU32::new(1));
         let g = row.install(Mode::CopyRing, 77).unwrap();
@@ -350,7 +350,7 @@ fn loom_delayed_callback_claims_replacement_metadata_only_after_admission() {
 #[test]
 fn loom_later_put_is_observed_or_leaves_durable_work() {
     check(|| {
-        use loom::sync::{atomic::AtomicU32, Arc};
+        use loom::sync::{Arc, atomic::AtomicU32};
         let row = Arc::new(modeled::DispatchWord::new());
         let put = Arc::new(AtomicU32::new(1));
         let handled = Arc::new(AtomicU32::new(0));
@@ -397,7 +397,8 @@ fn ring_of(values: &[u64], entries: u32) -> Vec<u64> {
 }
 
 #[test]
-fn inline_plan_copies_exactly_the_delta_for_every_delta_up_to_the_budget_and_loads_each_slot_once() {
+fn inline_plan_copies_exactly_the_delta_for_every_delta_up_to_the_budget_and_loads_each_slot_once()
+{
     let k = MAX_INLINE_GP;
     for delta in 0..=k {
         let ring: Vec<u64> = (0..32u64).map(|i| 0x100 + i).collect();
@@ -407,10 +408,22 @@ fn inline_plan_copies_exactly_the_delta_for_every_delta_up_to_the_budget_and_loa
             ring[s as usize]
         })
         .unwrap();
-        assert_eq!((plan.copy, plan.stop), (delta, InlineStop::None), "delta {delta}");
-        assert_eq!(loads, (5..5 + delta).collect::<Vec<_>>(), "each slot once, in order");
+        assert_eq!(
+            (plan.copy, plan.stop),
+            (delta, InlineStop::None),
+            "delta {delta}"
+        );
+        assert_eq!(
+            loads,
+            (5..5 + delta).collect::<Vec<_>>(),
+            "each slot once, in order"
+        );
         for i in 0..delta as usize {
-            assert_eq!(plan.entries[i], ring[5 + i], "the stored value is the loaded value");
+            assert_eq!(
+                plan.entries[i],
+                ring[5 + i],
+                "the stored value is the loaded value"
+            );
         }
     }
 }
@@ -425,11 +438,21 @@ fn inline_plan_hands_everything_above_the_budget_to_the_worker_and_loads_nothing
             0
         })
         .unwrap();
-        assert_eq!((plan.copy, plan.stop), (0, InlineStop::Budget), "delta {delta}");
-        assert_eq!(loaded, 0, "work per call is bounded by K, not by the guest's delta");
+        assert_eq!(
+            (plan.copy, plan.stop),
+            (0, InlineStop::Budget),
+            "delta {delta}"
+        );
+        assert_eq!(
+            loaded, 0,
+            "work per call is bounded by K, not by the guest's delta"
+        );
     }
     // the whole ring minus one slot
-    assert_eq!(inline_plan(7, 6, 32, 32, |_| 0).unwrap().stop, InlineStop::Budget);
+    assert_eq!(
+        inline_plan(7, 6, 32, 32, |_| 0).unwrap().stop,
+        InlineStop::Budget
+    );
 }
 
 #[test]
@@ -437,7 +460,10 @@ fn inline_plan_wraps_and_counts_credits() {
     let ring = ring_of(&[], 32);
     let plan = inline_plan(30, 2, 32, 4, |s| 0x200 + u64::from(s)).unwrap();
     assert_eq!((plan.copy, plan.stop), (4, InlineStop::None));
-    assert_eq!(&plan.entries[..4], &[0x200 + 30, 0x200 + 31, 0x200, 0x200 + 1]);
+    assert_eq!(
+        &plan.entries[..4],
+        &[0x200 + 30, 0x200 + 31, 0x200, 0x200 + 1]
+    );
     let mut loaded = 0;
     let plan = inline_plan(30, 2, 32, 3, |_| {
         loaded += 1;
@@ -455,14 +481,32 @@ fn inline_plan_refuses_a_hostile_cursor_by_name_and_loads_nothing() {
         loaded += 1;
         0u64
     };
-    assert_eq!(inline_plan(0, 32, 32, 32, &mut f), Err(InlineRefusal::PutBound));
-    assert_eq!(inline_plan(0, u32::MAX, 32, 32, &mut f), Err(InlineRefusal::PutBound));
-    assert_eq!(inline_plan(32, 0, 32, 32, &mut f), Err(InlineRefusal::GetBound));
-    assert_eq!(inline_plan(0, 1, 31, 32, &mut f), Err(InlineRefusal::Geometry));
-    assert_eq!(inline_plan(0, 0, 0, 32, &mut f), Err(InlineRefusal::Geometry));
+    assert_eq!(
+        inline_plan(0, 32, 32, 32, &mut f),
+        Err(InlineRefusal::PutBound)
+    );
+    assert_eq!(
+        inline_plan(0, u32::MAX, 32, 32, &mut f),
+        Err(InlineRefusal::PutBound)
+    );
+    assert_eq!(
+        inline_plan(32, 0, 32, 32, &mut f),
+        Err(InlineRefusal::GetBound)
+    );
+    assert_eq!(
+        inline_plan(0, 1, 31, 32, &mut f),
+        Err(InlineRefusal::Geometry)
+    );
+    assert_eq!(
+        inline_plan(0, 0, 0, 32, &mut f),
+        Err(InlineRefusal::Geometry)
+    );
     assert_eq!(loaded, 0);
     // GP_PUT "moving backwards" is indistinguishable from a huge delta by one load: the worker takes it
-    assert_eq!(inline_plan(10, 9, 32, 32, |_| 0).unwrap().stop, InlineStop::Budget);
+    assert_eq!(
+        inline_plan(10, 9, 32, 32, |_| 0).unwrap().stop,
+        InlineStop::Budget
+    );
 }
 
 #[test]
@@ -479,12 +523,20 @@ fn inline_plan_stops_before_a_sync_wait_entry_wherever_it_is_in_the_delta() {
                 ring[s as usize]
             })
             .unwrap();
-            assert_eq!(plan.stop, InlineStop::SyncWait { at }, "delta {delta} at {at}");
+            assert_eq!(
+                plan.stop,
+                InlineStop::SyncWait { at },
+                "delta {delta} at {at}"
+            );
             assert_eq!(plan.copy, at, "the copy stops BEFORE the SYNC_WAIT entry");
             for i in 0..at as usize {
                 assert_eq!(plan.entries[i], ring[3 + i]);
             }
-            assert_eq!(loads.len(), (at + 1) as usize, "the SYNC_WAIT entry is peeked, never forwarded");
+            assert_eq!(
+                loads.len(),
+                (at + 1) as usize,
+                "the SYNC_WAIT entry is peeked, never forwarded"
+            );
         }
     }
 }
@@ -494,19 +546,38 @@ fn the_inline_copy_takes_no_lock_makes_no_os_call_and_reads_no_pushbuffer() {
     // A static pin: the production source of the dispatch word and the inline planner names none of these.
     let text = include_str!("relay_dispatch.rs");
     let prod = text.split("#[cfg(test)]").next().unwrap();
-    for banned in ["Mutex", ".lock(", "RwLock", "mmap", "ioctl", "syscall", "Vec<", "Box<", "thread::sleep", "read_pb"] {
-        assert!(!prod.contains(banned), "the inline path must not use {banned}");
+    for banned in [
+        "Mutex",
+        ".lock(",
+        "RwLock",
+        "mmap",
+        "ioctl",
+        "syscall",
+        "Vec<",
+        "Box<",
+        "thread::sleep",
+        "read_pb",
+    ] {
+        assert!(
+            !prod.contains(banned),
+            "the inline path must not use {banned}"
+        );
     }
     let imp = include_str!("relay_dispatch_impl.rs");
-    for banned in ["Mutex", ".lock(", "mmap", "ioctl", "syscall", "Vec<", "Box<"] {
-        assert!(!imp.contains(banned), "the dispatch word must not use {banned}");
+    for banned in [
+        "Mutex", ".lock(", "mmap", "ioctl", "syscall", "Vec<", "Box<",
+    ] {
+        assert!(
+            !imp.contains(banned),
+            "the dispatch word must not use {banned}"
+        );
     }
 }
 
 #[test]
 fn loom_a_sync_wait_stop_hands_the_rest_to_the_worker_without_losing_or_repeating_an_entry() {
     check(|| {
-        use loom::sync::{atomic::AtomicU32, Arc, Mutex};
+        use loom::sync::{Arc, Mutex, atomic::AtomicU32};
         let row = Arc::new(modeled::DispatchWord::new());
         let g = row.install(Mode::CopyRing, 77).unwrap();
         // guest ring: entries 0, 1, 2 (SYNC_WAIT), 3; GP_PUT = 4; the private ring is the `out` log
@@ -514,7 +585,13 @@ fn loom_a_sync_wait_stop_hands_the_rest_to_the_worker_without_losing_or_repeatin
         let cursor = Arc::new(AtomicU32::new(0));
         let out = Arc::new(Mutex::new(Vec::<u64>::new()));
         let wake = Arc::new(AtomicU32::new(0));
-        let (r, ring2, cursor2, out2, wake2) = (row.clone(), ring.clone(), cursor.clone(), out.clone(), wake.clone());
+        let (r, ring2, cursor2, out2, wake2) = (
+            row.clone(),
+            ring.clone(),
+            cursor.clone(),
+            out.clone(),
+            wake.clone(),
+        );
         let vcpu = loom::thread::spawn(move || match r.begin_inline() {
             modeled::Begin::Inline(t) => {
                 let get = cursor2.load(Ordering::Acquire);
@@ -551,7 +628,9 @@ fn loom_a_sync_wait_stop_hands_the_rest_to_the_worker_without_losing_or_repeatin
         }
         vcpu.join().unwrap();
         if !drained && (wake.load(Ordering::Acquire) == 1 || row.pending()) {
-            let t = row.begin_worker(g).expect("the worker drains after the claimant left");
+            let t = row
+                .begin_worker(g)
+                .expect("the worker drains after the claimant left");
             let get = cursor.load(Ordering::Acquire);
             let mut o = out.lock().unwrap();
             for i in get..4 {
@@ -561,7 +640,11 @@ fn loom_a_sync_wait_stop_hands_the_rest_to_the_worker_without_losing_or_repeatin
             drop(o);
             t.finish();
         }
-        assert_eq!(*out.lock().unwrap(), vec![10, 11, 12, 13], "every entry exactly once, in order");
+        assert_eq!(
+            *out.lock().unwrap(),
+            vec![10, 11, 12, 13],
+            "every entry exactly once, in order"
+        );
         assert_eq!(cursor.load(Ordering::Acquire), 4);
     });
 }
