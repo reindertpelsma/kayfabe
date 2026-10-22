@@ -94,8 +94,23 @@ impl<A: GuestRamAuthority> RamTarget<A> {
         if !matches!(offset, 0 | 4 | 8 | 12) {
             return Err("RC store outside its 16-byte record".into());
         }
+        let bytes = value.to_le_bytes();
+        let status_off = kf_abi::notifier::NOTIFICATION_STATUS_OFF;
+        if offset == ((status_off / 4) * 4) as u64 {
+            // The RAM authority promises a byte copy, not atomic u32 publication.
+            // Publish info16 first, then the status halfword, as NvNotification does.
+            let (metadata, status) = bytes.split_at(status_off % 4);
+            self.write(offset, metadata)?;
+            kf_linux_raw::release_fence();
+            self.write(status_off as u64, status)
+        } else {
+            self.write(offset, &bytes)
+        }
+    }
+
+    fn write(&self, offset: u64, bytes: &[u8]) -> Result<(), String> {
         self.authority
-            .try_write(self.span, self.generation, offset, &value.to_le_bytes())
+            .try_write(self.span, self.generation, offset, bytes)
             .map_err(|e| format!("RC RAM authority: {e:?}"))
     }
 }
