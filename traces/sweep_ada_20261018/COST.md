@@ -1,3 +1,14 @@
+STATUS UPDATE: LIVE,2026-10-22 02:50UTC. Sameowned57144505 continues after a
+GPU-free tests-first harness repair; no new lease. Oldboot79e5280b/9Xids was
+archived in guest_stop before reboot; newbootd4ad1906,unchangedkernel6.8.0-59,
+pinnedSSH unchanged. Nouveau had claimedGPU; unloaded it,loaded installed595
+modules,zeroVRAM. FALSIFIER: health/newjournalbad. MEASUREDnewpreflightSOUND,
+zero-faultinitialjournal,test114PASS;gates/native5/guest4+1 restartingserially.
+Runtime31b56f52a2f1adec4ef72c7a05ec2964dd857739;Rust/QEMU/device/raw sources
+unchanged from originalf98ceae65. Guard exit/ordered durable-completion repair
+has6mutants>=2killers;22matchingmutants refreshed>=2/0errors. Timer retains
+original170minute deadline,never reset; cap4/prior0.21/rate0.876667 unchanged.
+
 STATUS UPDATE: LIVE, 2026-10-22. Owner raised price guard to1USD/h and authorized
 ONE new lease. MEASURED: own57144505/offer55286116/machine48161,RTX4090 quote
 0.8766666667USD/h including180GB; KVM image; timer170min armed FIRST.

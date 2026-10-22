@@ -1,0 +1,12 @@
+{
+  "own_id": 57144505,
+  "old_boot_id": "79e5280b-4473-4f80-81be-e5230224460e",
+  "resume_source": "31b56f52a2f1adec4ef72c7a05ec2964dd857739",
+  "pre_reboot": "2026-10-22T02:47:31+00:00\n595.91.07, 1 MiB\n",
+  "requested_utc": "2026-10-22T02:47:31.774506+00:00",
+  "reason": "authorized test-first harness repair; preserve failed history, start a new full boot/native5/guest4+1 baseline",
+  "new_boot_id": "d4ad1906-3575-4763-a4fb-c1e4ec4205f2",
+  "ready_utc": "2026-10-22T02:49:23.534551+00:00",
+  "post_reboot": "d4ad1906-3575-4763-a4fb-c1e4ec4205f2\n6.8.0-59-generic\n595.91.07\nFilesystem      Size  Used Avail Use% Mounted on\n/dev/root       175G   31G  145G  18% /\n",
+  "host_keys_unchanged": true
+}

@@ -1,0 +1,8 @@
+{
+  "id": 57144505,
+  "bundle_sha256": "65febda03e16d042b3f011afd24020fd20e94a5d6324865e679fafa599f8f21f",
+  "bytes": 536303,
+  "files": 28,
+  "controller_receipt": "CONTROLLER_PID=2259",
+  "ssh_host_keys_pinned": true
+}
