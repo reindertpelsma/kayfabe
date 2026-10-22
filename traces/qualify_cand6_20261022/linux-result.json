@@ -1,0 +1,62 @@
+{
+  "classification": "MEASURED",
+  "product_revision": "afe00b3cbc7e345e2953b1bc199d9cce1054cc38",
+  "suite_revision": "737306ee8d5055fad7441874fc2b7afab3e2bbb4",
+  "completed_arms": 30,
+  "arms": [
+    "--timer",
+    "--engines",
+    "--doorbell-census",
+    "--gpu-info-sweep",
+    "--bus-info-sweep",
+    "--concurrency",
+    "--defer-liveness",
+    "--blockage-coverage",
+    "--alias-two-vas",
+    "--alias-unmap-observe",
+    "--map-propagation",
+    "--late-map-race",
+    "--missing-page-fault",
+    "--uvm-invalidate",
+    "--uvm-mean",
+    "--executor-vas",
+    "--guest-ring-channel",
+    "--dictated-ring",
+    "--dictated-ring-negative",
+    "--ce-client",
+    "--ce-client-guest-ram",
+    "--guest-ram-pin",
+    "--bar1-crossing",
+    "--atomics-probe",
+    "--pce-mask-probe",
+    "--gpga-reserve-probe",
+    "--map-stress",
+    "--concurrent-fuzz",
+    "--cross-client-leak",
+    "--rpc-mixed-allocs"
+  ],
+  "fault_proofs": [
+    {
+      "arm": "--defer-liveness",
+      "pid": 2052731,
+      "starttime": 108188996,
+      "accepted_faults": 4,
+      "serial_sha256": "ca5d4ca1e27f02c506e1f6cda67377e593d51c470ce133cb4a34a25f1ec36cd0",
+      "qlog_sha256": "f389969da7d0f190d322dde19eb66bb65086270d767e8e5164f0472d7d71fa59"
+    },
+    {
+      "arm": "--missing-page-fault",
+      "pid": 2053745,
+      "starttime": 108193696,
+      "accepted_faults": 1,
+      "serial_sha256": "3dd74f33f1cc6f7cc5f3e904e2bec89863f0c67b4212e218eab295794ee5a364",
+      "qlog_sha256": "46972e3463b04d274707240a505cdccf825c0e32ea56e863d4551b21ec0c96fe"
+    }
+  ],
+  "journal_history_count": 533,
+  "journal_history_sha256": "e6e29c801d53c873c703498fe63a644b06c3a8b287517302f9f4d5c2a879cc4f",
+  "dmesg_start_count": 0,
+  "dmesg_start_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+  "new_accepted_control_faults": 5,
+  "native_reference_scope": "CODE READ approved sweep lease57081143; not a new Q1 fault-control run"
+}
