@@ -1,0 +1,11 @@
+{
+  "mutant": "skip-opening-order",
+  "edit": "replace opening-order guard with if False",
+  "tests_run": 23,
+  "failing_tests": 1,
+  "passing_tests": 22,
+  "required_failing_tests": 2,
+  "failure": "test_later_status_cannot_cover_opening_prose",
+  "result": "REFUSED: below required mutation kill count; implementation restored",
+  "other_mutants": "No exact counts preserved; no mutation-suite PASS claimed"
+}

@@ -1,0 +1,185 @@
+{
+  "checked": 128,
+  "violations": [
+    {
+      "path": "docs/design/OVERNIGHT_NOTES_w825.md",
+      "line": 3,
+      "kind": "missing-date",
+      "message": "date the STATUS paragraph with YYYY-MM-DD"
+    },
+    {
+      "path": "docs/design/THE_ARCHITECTURE_v3.md",
+      "line": 3,
+      "kind": "missing-supersession-notice",
+      "message": "record SUPERSEDED and THE_ARCHITECTURE_v3.md in the same paragraph of docs/archive/THE_ARCHITECTURE_v2.md"
+    },
+    {
+      "path": "docs/design/THE_CONSTRAINTS.md",
+      "line": 13,
+      "kind": "misplaced-status",
+      "message": "move current STATUS before opening prose/corrections"
+    },
+    {
+      "path": "docs/design/THE_MACHINE.md",
+      "line": 8,
+      "kind": "misplaced-status",
+      "message": "move current STATUS before opening prose/corrections"
+    },
+    {
+      "path": "docs/design/THE_OVERNIGHT_DIRECTIVE.md",
+      "line": 10,
+      "kind": "misplaced-status",
+      "message": "move current STATUS before opening prose/corrections"
+    },
+    {
+      "path": "docs/design/THE_PDF_FRONT_FINAL.md",
+      "line": 7,
+      "kind": "misplaced-status",
+      "message": "move current STATUS before opening prose/corrections"
+    },
+    {
+      "path": "docs/design/THE_SURFACE_v2.md",
+      "line": 7,
+      "kind": "misplaced-status",
+      "message": "move current STATUS before opening prose/corrections"
+    },
+    {
+      "path": "docs/design/THE_V3_PLAN.md",
+      "line": 27,
+      "kind": "misplaced-status",
+      "message": "move current STATUS before opening prose/corrections"
+    },
+    {
+      "path": "docs/design/V3_APP_MATRIX.md",
+      "line": 5,
+      "kind": "misplaced-status",
+      "message": "move current STATUS before opening prose/corrections"
+    },
+    {
+      "path": "docs/design/V3_BAR1_DOORBELL.md",
+      "line": 10,
+      "kind": "invalid-status",
+      "message": "use one of LIVE, SUPERSEDED, ANSWERED, DESIGN-ONLY, RESEARCH"
+    },
+    {
+      "path": "docs/design/V3_BAR1_DOORBELL.md",
+      "line": 10,
+      "kind": "misplaced-status",
+      "message": "move current STATUS before opening prose/corrections"
+    },
+    {
+      "path": "docs/design/V3_BATCHED_MAP.md",
+      "line": 93,
+      "kind": "misplaced-status",
+      "message": "move current STATUS before opening prose/corrections"
+    },
+    {
+      "path": "docs/design/V3_DISPLAY_PACING_20261017.md",
+      "line": 3,
+      "kind": "invalid-status",
+      "message": "use one of LIVE, SUPERSEDED, ANSWERED, DESIGN-ONLY, RESEARCH"
+    },
+    {
+      "path": "docs/design/V3_DOORBELL_BASELINE.md",
+      "line": 27,
+      "kind": "misplaced-status",
+      "message": "move current STATUS before opening prose/corrections"
+    },
+    {
+      "path": "docs/design/V3_DOORBELL_IOEVENTFD.md",
+      "line": 3,
+      "kind": "invalid-status",
+      "message": "use one of LIVE, SUPERSEDED, ANSWERED, DESIGN-ONLY, RESEARCH"
+    },
+    {
+      "path": "docs/design/V3_DRIVER_MATRIX.md",
+      "line": 98,
+      "kind": "misplaced-status",
+      "message": "move current STATUS before opening prose/corrections"
+    },
+    {
+      "path": "docs/design/V3_FAMILY_PORT_ADA.md",
+      "line": 7,
+      "kind": "misplaced-status",
+      "message": "move current STATUS before opening prose/corrections"
+    },
+    {
+      "path": "docs/design/V3_FLAG_INVENTORY.md",
+      "line": 22,
+      "kind": "misplaced-status",
+      "message": "move current STATUS before opening prose/corrections"
+    },
+    {
+      "path": "docs/design/V3_GFX_TESTSET.md",
+      "line": 4,
+      "kind": "misplaced-status",
+      "message": "move current STATUS before opening prose/corrections"
+    },
+    {
+      "path": "docs/design/V3_HEADLESS_GRAPHICS.md",
+      "line": 3,
+      "kind": "invalid-status",
+      "message": "use one of LIVE, SUPERSEDED, ANSWERED, DESIGN-ONLY, RESEARCH"
+    },
+    {
+      "path": "docs/design/V3_P4_PORT_MAP.md",
+      "line": 3,
+      "kind": "invalid-status",
+      "message": "use one of LIVE, SUPERSEDED, ANSWERED, DESIGN-ONLY, RESEARCH"
+    },
+    {
+      "path": "docs/design/V3_P5_PORT_MAP.md",
+      "line": 3,
+      "kind": "invalid-status",
+      "message": "use one of LIVE, SUPERSEDED, ANSWERED, DESIGN-ONLY, RESEARCH"
+    },
+    {
+      "path": "docs/design/V3_SECURITY_AUDIT_PLAN.md",
+      "line": 3,
+      "kind": "invalid-status",
+      "message": "use one of LIVE, SUPERSEDED, ANSWERED, DESIGN-ONLY, RESEARCH"
+    },
+    {
+      "path": "docs/design/V3_SWEEP_AND_INSTALL.md",
+      "line": 3,
+      "kind": "invalid-status",
+      "message": "use one of LIVE, SUPERSEDED, ANSWERED, DESIGN-ONLY, RESEARCH"
+    },
+    {
+      "path": "docs/design/V3_USER_RING_EVENT_LOOP_20261014.md",
+      "line": 8,
+      "kind": "misplaced-status",
+      "message": "move current STATUS before opening prose/corrections"
+    },
+    {
+      "path": "docs/design/V3_USER_RING_LIFECYCLE_REVIEW1_20261016.md",
+      "line": 1,
+      "kind": "missing-status",
+      "message": "open with a dated STATUS using an allowed state"
+    },
+    {
+      "path": "docs/design/V3_UVM_B3_IMPLEMENTATION.md",
+      "line": 3,
+      "kind": "invalid-status",
+      "message": "use one of LIVE, SUPERSEDED, ANSWERED, DESIGN-ONLY, RESEARCH"
+    },
+    {
+      "path": "docs/design/V3_VIOMMU.md",
+      "line": 5,
+      "kind": "misplaced-status",
+      "message": "move current STATUS before opening prose/corrections"
+    },
+    {
+      "path": "docs/design/V3_WINDOWS_USER_RING_REFUSALS_20261012.md",
+      "line": 8,
+      "kind": "misplaced-status",
+      "message": "move current STATUS before opening prose/corrections"
+    },
+    {
+      "path": "docs/design/the_uvm_map_external_allocation_wall.md",
+      "line": 29,
+      "kind": "misplaced-status",
+      "message": "move current STATUS before opening prose/corrections"
+    }
+  ]
+}
