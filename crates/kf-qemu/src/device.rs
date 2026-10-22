@@ -931,7 +931,7 @@ impl Device {
                         architecture,
                         implementation,
                     };
-                    let host_caps = crate::rmfacts::display_precomp(&rm, row, die);
+                    let host_caps = crate::rmfacts::display_precomp(rm, row, die);
                     crate::display::DisplayPlane::build(
                         (row, die, host_caps),
                         table,

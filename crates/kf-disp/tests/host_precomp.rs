@@ -1,3 +1,4 @@
+//! Synthetic host facts exercise same-die ownership and the exact derived fallback.
 use kf_disp::{
     capsderive::{self, Die, HostFacts, Tier},
     class::{self, get},
@@ -86,6 +87,16 @@ fn every_family_uses_its_generated_address_and_keeps_inactive_windows_derived() 
         let t = table();
         let h = snapshot(t, row, DIE);
         let d = derive(t, row, DIE, &h);
+        assert_eq!(
+            d.provenance.iter().filter(|p| p.tier == Tier::Host).count(),
+            usize::try_from(row.windows).unwrap() * 6
+        );
+        for i in 0..row.windows {
+            let off = t
+                .a(row.classes.caps, "PRECOMP_WIN_PIPE_HDR_CAPC", i)
+                .unwrap();
+            assert_eq!(d.page.word(off), (0x640000 + off) ^ 0x1234_0000);
+        }
         for i in row.windows..32 {
             assert_eq!(
                 d.page.word(
@@ -249,4 +260,57 @@ fn host_caps_are_facts_and_do_not_force_a_fvlut_bit() {
             get((0x640000 + off) ^ 0x1234_0000, f)
         );
     }
+}
+
+#[test]
+fn a_changed_guest_register_address_uses_the_entire_derived_fallback() {
+    let t = table();
+    let row = &kf_chip::display::BLACKWELL_GB20X;
+    let h = snapshot(t, row, DIE);
+    let altered = class::ClassTable::parse(&format!(
+        "{}\nA\tNVCA73_PRECOMP_WIN_PIPE_HDR_CAPC\t2944\t32\n",
+        include_str!("../data/classes-580.65.06.tsv")
+    ));
+    assert_eq!(
+        derive(&altered, row, DIE, &h).page.words,
+        derive(&altered, row, DIE, &HostFacts::default()).page.words
+    );
+}
+
+#[test]
+fn a_snapshot_from_a_different_architecture_is_not_reused() {
+    let t = table();
+    let row = &kf_chip::display::BLACKWELL_GB20X;
+    let h = snapshot(
+        t,
+        row,
+        Die {
+            architecture: 0x190,
+            ..DIE
+        },
+    );
+    assert_eq!(
+        derive(t, row, DIE, &h).page.words,
+        derive(t, row, DIE, &HostFacts::default()).page.words
+    );
+}
+
+fn changed_window_count(windows: u32) {
+    let t = table();
+    let row = &kf_chip::display::BLACKWELL_GB20X;
+    let h = snapshot(t, row, DIE);
+    let changed = kf_chip::display::DisplayRow { windows, ..*row };
+    assert_eq!(
+        derive(t, &changed, DIE, &h).page.words,
+        derive(t, &changed, DIE, &HostFacts::default()).page.words
+    );
+}
+
+#[test]
+fn fewer_virtual_windows_do_not_import_hidden_host_windows() {
+    changed_window_count(4);
+}
+#[test]
+fn more_virtual_windows_do_not_make_a_partly_host_page() {
+    changed_window_count(12);
 }
