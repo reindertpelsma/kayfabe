@@ -88,5 +88,20 @@ class CheckedChunksTests(unittest.TestCase):
         self.assertEqual(rc,0);self.assertEqual(actual,b'abcdefg')
 
 
+    def test_wrong_whole_hash_does_not_create_image(self):
+        rc, actual=self.publication(b'123456', 6, '0'*64)
+        self.assertNotEqual(rc, 0);self.assertIsNone(actual)
+
+    def test_wrong_whole_size_preserves_existing_image(self):
+        import hashlib
+        rc, actual=self.publication(b'123456', 7, hashlib.sha256(b'123456').hexdigest(), b'old')
+        self.assertNotEqual(rc, 0);self.assertEqual(actual,b'old')
+
+    def test_first_range_does_not_include_next_chunk(self):
+        import io
+        dst=io.BytesIO();self.m.stream(io.BytesIO(b'abcdefgh'),dst,0,3)
+        self.assertEqual(dst.getvalue(),b'abc')
+
+
 if __name__ == '__main__':
     unittest.main()
