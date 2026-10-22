@@ -21,6 +21,12 @@ CASES=[
 ]
 
 CASES += [
+ ('runner-API-prefix','runner.py',[("origin+('/'+prefix if prefix else '')+route","origin+route")],'secret-client.test.js'),
+ ('runner-hostname-masks','runner.py',[(",*urllib.parse.urlsplit(origin).hostname.split('.')]:","]:")],'secret-client.test.js'),
+ ('runner-audience-mask','runner.py',[(";print('::add-mask::'+audience,flush=True)","")],'secret-client.test.js'),
+ ('run-idempotence','src/index.js',[("if(prior){if(prior.runnerNonce","if(false){if(prior.runnerNonce")],'broker.test.js'),
+ ('runner-terminal-grace','runner.py',[("terminal=True;result=","terminal=False;result=")],'client.test.js'),
+
  ('runner-fresh-nonce','runner.py',[("'nonce':secrets.token_hex(32)","'nonce':'0'*64")],'secret-client.test.js'),
  ('diagnostic-binding','smoke.py',[("data.get('runner_nonce')!=self.runner_nonce or data.get('sha')!=tested_sha","False")],'round3-smoke-protocol.test.js'),
  ('diagnostic-reserve','smoke.py',[("credit>=8+(price or .5)*21/60","credit>=5+(price or .5)*21/60")],'round3-smoke-protocol.test.js'),
