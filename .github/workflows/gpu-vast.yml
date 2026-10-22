@@ -39,7 +39,7 @@ jobs:
     needs: pending
     runs-on: ubuntu-latest
     environment: gpu-vast
-    timeout-minutes: 25
+    timeout-minutes: 210
     permissions:
       id-token: write
     outputs:
@@ -50,7 +50,7 @@ jobs:
       - name: Fetch BASE controller and request bounded test
         id: broker
         shell: bash --noprofile --norc -eo pipefail {0}
-        timeout-minutes: 22
+        timeout-minutes: 205
         env:
           WORKER_URL: ${{ secrets.VAST_BROKER_URL }}
           WORKER_PATH: ${{ secrets.VAST_BROKER_PATH }}
@@ -100,11 +100,11 @@ jobs:
           [[ "$TARGET_SHA" =~ ^[0-9a-f]{40}$ ]]
           state=UNAVAILABLE
           case "$BROKER_STATE" in
-            RUNNING|STOPPING|STOPPED|COMPLETE|NOT_NEEDED|NOT_ELIGIBLE|BUSY|UNAVAILABLE|UNAVAILABLE_BUDGET|NEEDS_APPROVAL|RENTING_DISABLED|UNAUTHORIZED|BAD_REQUEST|NOT_FOUND|OWNERSHIP_MISMATCH)
+            NONE|CREATING|BOOTING|TESTING|GRACE|MANUAL|NOT_NEEDED|NOT_ELIGIBLE|BUSY|UNAVAILABLE|UNAVAILABLE_BUDGET|NEEDS_APPROVAL|RENTING_DISABLED|UNAUTHORIZED|BAD_REQUEST|NOT_FOUND|OWNERSHIP_MISMATCH|RATE_LIMIT)
               state=$BROKER_STATE ;;
           esac
           result=error
-          if [[ "$PENDING_RESULT" = success && "$GPU_RESULT" = success && "$BROKER_VERDICT" = PASS && "$BROKER_VERIFIED" = 1 && ( "$state" = COMPLETE || "$state" = NOT_NEEDED ) ]]; then
+          if [[ "$PENDING_RESULT" = success && "$GPU_RESULT" = success && "$BROKER_VERDICT" = PASS && "$BROKER_VERIFIED" = 1 && ( "$state" = GRACE || "$state" = MANUAL || "$state" = NONE || "$state" = NOT_NEEDED ) ]]; then
             result=success
           elif [[ "$BROKER_VERDICT" = FAIL ]]; then
             result=failure

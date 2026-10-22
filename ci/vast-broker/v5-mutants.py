@@ -62,6 +62,21 @@ CASES=[
  ('learn-frozen-kvm','src/index.js',[("record.bootFailure?.confirmed", "false")],['v5-machine.test.js']),
  ('force-choice-on-refusal','src/index.js',[("e.selection={die:offer.die,ignored:chosen.ignored,reason:chosen.reason}", "e.selection=undefined")],['v5-refusal-selection.test.js']),
 
+ ('structured-PASS-completeness','src/results.js',[("if(rows.length!==Object.keys(SUITE_COUNTS).length||rows.some(r=>!Object.hasOwn(SUITE_COUNTS,r.name)||r.fail!==0||r.skip!==0||r.pass<=0||SUITE_COUNTS[r.name]!==null&&r.pass!==SUITE_COUNTS[r.name])||h.gpu_name==='unknown'||h.driver_version==='unknown'||h.compute_cap<750)","if(false)")],['v5-protocol.test.js']),
+ ('structured-hardware','src/results.js',[("if(!object(h)||Object.keys(h).sort().join(',')!=='compute_cap,driver_version,gpu_name'||typeof h.gpu_name!=='string'||!/^[A-Za-z0-9_. -]{1,100}$/.test(h.gpu_name)||!Number.isSafeInteger(h.compute_cap)||h.compute_cap<0||h.compute_cap>2000||typeof h.driver_version!=='string'||!/^(?:unknown|\\d{3}\\.\\d{1,3}(?:\\.\\d{1,2})?)$/.test(h.driver_version))", "if(false)")],['v5-protocol.test.js']),
+ ('duplicate-report-json','src/reports.js',[("if(stack.at(-1).keys.has(key))refuse('BAD_REPORT',400);", "/* mutant accepts duplicate fields */")],['v5-duplicate-report.test.js']),
+ ('runner-V5-suites','runner.py',[("validate_suites(data['suites'],data['verdict'])", "None")],['v5-protocol.test.js']),
+ ('runner-V5-terminals','runner.py',[("if data['state']=='NOT_NEEDED' or data['state'] in {'GRACE','MANUAL','NONE'} and data['result_at'] is not None:", "if data['state']=='NOT_NEEDED':")],['v5-protocol.test.js']),
+ ('runner-availability-schema','runner.py',[("            validate_availability(availability,profile)", "            pass # mutant trusts display input")],['v5-availability-runner.test.js']),
+ ('sender-file-binding','src/onstart.js',[("candidate['nonce']!=nonce or candidate['sha']!='${sha}'", "False")],['v5-structured-sender.test.js']),
+ ('approved-payload-path','src/onstart.js',[("bash scripts/ci/vast_payload.sh '${sha}' '${nonce}'", "bash scripts/ci/vast_box_main.sh '${sha}' '${nonce}'")],['v5-onstart.test.js']),
+ ('owner-sweep-selected-commit','src/github.js',[("if(cfg.profile==='sweep'){", "if(false){")],['v5-sweep-commit.test.js']),
+ ('sweep-workflow-trigger-guard','workflow-guard.js',[("!/^  workflow_dispatch:/m.test(text)||/^  (?:pull_request|pull_request_target|push|schedule):/m.test(text)||", "false||")],['v5-workflows.test.js']),
+ ('sweep-workflow-token-guard','workflow-guard.js',[("JSON.stringify(Object.entries(job[0].grants))!==JSON.stringify([['id-token','write']])", "false")],['v5-workflows.test.js']),
+ ('workflow-three-hour-horizon','../../.github/workflows/gpu-vast.yml',[("timeout-minutes: 210", "timeout-minutes: 25"),("timeout-minutes: 205", "timeout-minutes: 22")],['v5-workflows.test.js']),
+
+ ('callback-expiry-before-cron','src/index.js',[("if(now()>=nextDeadline(r)){", "if(false){")],['v5-late-callback.test.js','v5-late-owner-timer.test.js']),
+
 ]
 def main():
     ap=argparse.ArgumentParser();ap.add_argument('--filter',default='');ap.add_argument('--results',type=Path);ap.add_argument('--preflight',action='store_true');args=ap.parse_args();results=[]
@@ -78,6 +93,12 @@ def main():
             elif path.suffix=='.toml':
                 import tomllib
                 tomllib.loads(changed)
+            elif path.suffix in {'.yml','.yaml'}:
+                blocks=re.findall(r'(?m)^        run: \|\n((?:          .*\n|\n)*)',changed)
+                assert blocks,(name,'missing literal workflow script')
+                for block in blocks:
+                    script='\n'.join(line[10:] if line.startswith('          ') else line for line in block.splitlines())
+                    syntax=subprocess.run(['bash','-n'],input=script,capture_output=True,text=True);assert syntax.returncode==0,(name,syntax.stderr)
             else:
                 syntax=subprocess.run(['node','--check',str(path)],capture_output=True,text=True);assert syntax.returncode==0,(name,syntax.stderr)
             run=subprocess.run(['node','--test',*[str(BASE/'test'/t) for t in tests]],capture_output=True,text=True,timeout=90)

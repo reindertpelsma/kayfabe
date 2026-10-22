@@ -18,7 +18,7 @@ crons = ["* * * * *"]
 # Numeric owner policy defaults are defined once in defaults.json.
 RENTING_ENABLED = "false"
 # Owner assertion of the exact emitted module; see deployment.json and trace doc.
-DEPLOYED_BUNDLE_SHA256 = "2f046e91643a21f920b6ba91485a404fc9d5b6e54f47b77d6f651b033c01c7e6"
+DEPLOYED_BUNDLE_SHA256 = "e0c8b63034de9a0df3f6cdc226aca0be84d81a7aaf990fd16c50a9c9bd2abfcc"
 OWNER_GITHUB_ID = "REPLACE_ME"
 REPOSITORY = "reindertpelsma/kayfabe"
 APPROVAL_MODE = "owner_push_or_review"

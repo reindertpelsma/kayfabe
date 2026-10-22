@@ -36,7 +36,7 @@ fi
 KF_PROFILE
 chmod 644 /etc/profile.d/kf-ci-hold.sh
 python3 - <<'KF_REPORT'
-import json,math,os,select,subprocess,time
+import json,math,os,re,select,subprocess,time
 url='${origin}${prefix?'/'+prefix:''}/report/${callback.run}'
 token='${callback.token}'
 nonce='${nonce}'
@@ -67,17 +67,20 @@ def post(kind,text=None,result=None):
         except (ValueError,TypeError): return None
 work=r'''exec timeout --signal=TERM --kill-after=30s __KF_SOFT_SECONDS__s bash -s <<'KF_TEST'
 set -euo pipefail
+find /workspace -maxdepth 1 -name kf-ci-result.json -delete
 git clone --no-checkout https://github.com/${repo}.git /workspace/kf-ci-src
 cd /workspace/kf-ci-src
 git fetch origin ${sha}
 git checkout --detach ${sha}
 [ "$(git rev-parse HEAD)" = '${sha}' ]
-bash scripts/ci/vast_box_main.sh '${sha}'
+export KF_SOFT_DEADLINE_MS=__KF_SOFT_DEADLINE_MS__
+bash scripts/ci/vast_payload.sh '${sha}' '${nonce}'
 KF_TEST
 '''
 soft_deadline=${callback.softDeadline??'None'}
 remaining=math.floor(soft_deadline/1000-time.time()) if soft_deadline is not None else ${minutes*60-DEFAULTS.softMarginMinutes*60}
 work=work.replace('__KF_SOFT_SECONDS__',str(max(1,remaining))) if remaining>0 else 'exit 124\\n'
+work=work.replace('__KF_SOFT_DEADLINE_MS__',str(soft_deadline if soft_deadline is not None else math.floor(time.time()*1000+remaining*1000)))
 post('progress','Suite starting')
 child=subprocess.Popen(['bash','-s'],stdin=subprocess.PIPE,stdout=subprocess.PIPE,stderr=subprocess.STDOUT)
 child.stdin.write(work.encode());child.stdin.close()
@@ -100,11 +103,39 @@ rc=child.wait()
 with open(backup,'rb') as local:
     local.seek(0,os.SEEK_END);local.seek(max(0,local.tell()-8192))
     tail=local.read(8192).decode('utf-8',errors='replace')
-ack=post('result','Suite complete; sender omitted '+str(omitted)+' raw bytes beyond its bounded transport allowance.',{'nonce':nonce,'verdict':'PASS' if rc==0 else 'FAIL',**({'runner_nonce':runner_nonce,'sha':'${sha}'} if runner_nonce else {})})
+# A process exit or log text cannot supply a GPU verdict. Consume only the
+# bounded structured file written by the approved payload, binding SHA + nonce.
+expected={'provision':1,'kf_tests':None,'gates':9,'kf3_build':1,'raw_suite':30,'thin_suite':30,'birth_census':1,'cuda_host':4,'cuda_fat':4}
+errors={'preflight','timeout','infrastructure','merge_bar','app_exit','xid'}
+unknown={'gpu_name':'unknown','compute_cap':0,'driver_version':'unknown'}
+result={'nonce':nonce,'sha':'${sha}','verdict':'FAIL','suites':[{'name':'infrastructure','pass':0,'fail':1,'skip':0}],'hardware':unknown}
+def unique(items):
+    out={}
+    for k,v in items:
+        if k in out:raise ValueError('duplicate field')
+        out[k]=v
+    return out
+try:
+    with open('/workspace/kf-ci-result.json','rb') as source:raw=source.read(65537)
+    if len(raw)>65536:raise ValueError('size')
+    candidate=json.loads(raw.decode('utf-8',errors='strict'),object_pairs_hook=unique)
+    if type(candidate) is not dict or set(candidate)!={'nonce','sha','verdict','suites','hardware'} or candidate['nonce']!=nonce or candidate['sha']!='${sha}' or candidate['verdict'] not in {'PASS','FAIL','UNAVAILABLE'}:raise ValueError('binding')
+    rows=candidate['suites'];hardware=candidate['hardware']
+    if type(rows) is not list or len(rows)>19 or any(type(r) is not dict or set(r)!={'name','pass','fail','skip'} or r['name'] not in set(expected)|errors or any(type(r[k]) is not int or not 0<=r[k]<=10000000 for k in ['pass','fail','skip']) for r in rows) or len({r['name'] for r in rows})!=len(rows):raise ValueError('suites')
+    if type(hardware) is not dict or set(hardware)!={'gpu_name','compute_cap','driver_version'} or not isinstance(hardware['gpu_name'],str) or not re.fullmatch(r'[A-Za-z0-9_. -]{1,100}',hardware['gpu_name']) or type(hardware['compute_cap']) is not int or not 0<=hardware['compute_cap']<=2000 or not isinstance(hardware['driver_version'],str) or not re.fullmatch(r'unknown|[0-9]{3}\\.[0-9]{1,3}(?:\\.[0-9]{1,2})?',hardware['driver_version']):raise ValueError('hardware')
+    complete=len(rows)==len(expected) and {r['name'] for r in rows}==set(expected) and all(r['fail']==0 and r['skip']==0 and r['pass']>0 and (expected[r['name']] is None or r['pass']==expected[r['name']]) for r in rows)
+    if rc!=0 or candidate['verdict']!='PASS' or not complete or hardware['gpu_name']=='unknown' or hardware['driver_version']=='unknown' or hardware['compute_cap']<750:
+        candidate['verdict']='FAIL'
+        if not any(r['fail'] for r in rows):rows.append({'name':'timeout' if rc==124 else 'app_exit','pass':0,'fail':1,'skip':0})
+    result=candidate
+except (ValueError,TypeError,KeyError,OSError,UnicodeError):pass
+if rc==124 and not any(r['name']=='timeout' for r in result['suites']):result['suites'].append({'name':'timeout','pass':0,'fail':1,'skip':0})
+if runner_nonce:result['runner_nonce']=runner_nonce
+ack=post('result','Suite complete; sender omitted '+str(omitted)+' raw bytes beyond its bounded transport allowance.',result)
 seconds=ack.get('grace_remaining_seconds') if isinstance(ack,dict) else None
 remaining=str(math.ceil(seconds/60)) if type(seconds) is int and 0<=seconds<=${grace*60} else 'unknown'
 print('Use kf-box-kill [reason] to end this box early; configured maximum ${grace} minutes; Worker reports '+remaining+' minutes remaining (hard TTL included).')
-raise SystemExit(rc)
+raise SystemExit(rc if rc else (0 if result['verdict']=='PASS' else 1))
 KF_REPORT
 `;
 }
