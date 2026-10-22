@@ -7,7 +7,7 @@
   "b1_release_totals": "1127/0/4; 3 crates",
   "native32": "FATAL",
   "auto_destroy_minutes": 170,
-  "budget_cutoff_minutes": 112,
+  "budget_cutoff_minutes": 170,
   "capc": "public precision14 only",
   "sequence": [
     "N0",
@@ -15,5 +15,6 @@
     "on_precision",
     "off_c",
     "on_b1"
-  ]
+  ],
+  "cost_rule": "cheaper returned offer fits170min; higher-priced quote disappeared before creation"
 }

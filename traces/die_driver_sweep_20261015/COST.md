@@ -1,3 +1,15 @@
+STATUS: LIVE, 2026-10-22 01:55:35UTC. Follow-up owner authority: created ONE new RTX5090 lease57142142
+on offer50739116/machine145861. The CLI-default verified pool emptied; this VM-enabled offer
+has provider statusdeverified, reliability0.988640; full stock preflight/N0 unchanged.
+Required170min auto-destroy PID2814588 armed FIRST; independent budget timer PID2814590
+currently170min too because the cheaper rate fits. Expiry04:45:35UTC; ownIDs only, APIabsence before cancellation.
+Fresh API credit42.769098USD; prior lane runtime3.464692USD, reservation2.569383USD,
+combined budget guard6.034075USD<7; reserve5 intact.
+Quote0.630370370USD/h; actual charged rate recorded at readiness. Earlier1.334722USD/h offer vanished
+before creation; zero instance created on that search. No further lease authorized after this one.
+Census tests-first fixe16402b7c and97-test/22mutant guard deployed; product8f3a9bb3a, optional B1merge2add71e8c.
+Receipt ../blackwell_validation2_20261022/owned_instances.json. Earlier entries are historical.
+
 STATUS: LIVE, 2026-10-22 01:30UTC closeout. Own lease57132969 destroyed; API absence verified
 2026-10-22T01:30:18.160966+00:00; original auto170 PID2707430 cancelled ONLY after absence.
 Runtime1.061254h at observed0.776666667USD/h = estimate0.824240USD;
