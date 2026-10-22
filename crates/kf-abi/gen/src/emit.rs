@@ -478,3 +478,63 @@ pub fn mod_rs(version: &str, entries: &[(&str, &str)]) -> String {
     ));
     modrs
 }
+
+#[cfg(test)]
+mod tests {
+    use super::{mod_rs, module};
+
+    /// The canonical NVIDIA notice, the one `THIRD_PARTY_NOTICES.md` quotes.
+    const NOTICE: &str = include_str!("../../../../tools/legal/nvidia_ogkm_mit.txt");
+
+    /// `NOTICE` as `//` comment lines, the way a generated file must carry it.
+    fn commented() -> String {
+        let mut s = String::new();
+        for l in NOTICE.lines() {
+            if l.is_empty() {
+                s.push_str("//\n");
+            } else {
+                s.push_str(&format!("// {l}\n"));
+            }
+        }
+        s
+    }
+
+    fn head(text: &str, n: usize) -> String {
+        text.lines().take(n).map(|l| format!("{l}\n")).collect()
+    }
+
+    #[test]
+    fn module_header_carries_the_nvidia_notice_in_full() {
+        let text = module("doc", "580.159.04", &[], &[]);
+        let h = head(&text, 60);
+        assert!(h.contains(&commented()), "notice block missing:\n{h}");
+    }
+
+    #[test]
+    fn module_header_names_the_source_version() {
+        let text = module("doc", "580.159.04", &[], &[]);
+        assert!(head(&text, 60).contains("open-gpu-kernel-modules 580.159.04"));
+    }
+
+    #[test]
+    fn mod_rs_header_carries_the_nvidia_notice_in_full() {
+        let text = mod_rs("580.159.04", &[("ctrl", "Controls.")]);
+        let h = head(&text, 60);
+        assert!(h.contains(&commented()), "notice block missing:\n{h}");
+    }
+
+    #[test]
+    fn mod_rs_header_names_the_source_version() {
+        let text = mod_rs("580.159.04", &[]);
+        assert!(head(&text, 60).contains("open-gpu-kernel-modules 580.159.04"));
+    }
+
+    #[test]
+    fn mod_rs_registers_every_hand_kept_module() {
+        // `windows_twins.rs` is written by tools/drivermatrix/windows_twins.py, like `matrix.rs`;
+        // a regeneration of the single-tag modules must keep both registered.
+        let text = mod_rs("580.159.04", &[]);
+        assert!(text.contains("pub mod matrix;"));
+        assert!(text.contains("pub mod windows_twins;"));
+    }
+}
