@@ -1,0 +1,5 @@
+{
+  "mutant": "omit-automatic-table-emission",
+  "failing_tests": 2,
+  "rc": 1
+}
