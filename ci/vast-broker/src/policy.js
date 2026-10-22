@@ -42,7 +42,7 @@ export async function readBounded(response,limit=262144){
   const result=new Uint8Array(length);let at=0;for(const chunk of chunks){result.set(chunk,at);at+=chunk.byteLength;}return result;
 }
 export async function fetchBounded(fetcher,url,init={},limit=262144,allow404=false){
-  const response=await fetcher(url,{...init,redirect:'error',signal:AbortSignal.timeout(8000)});
+  const response=await fetcher(url,{...init,redirect:'manual',signal:AbortSignal.timeout(8000)});
   if(allow404&&response.status===404)return null;
   if(!response.ok||response.redirected)refuse();
   return readBounded(response,limit);
