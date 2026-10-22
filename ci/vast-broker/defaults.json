@@ -1,0 +1,244 @@
+{
+  "price": 1,
+  "daily": 6,
+  "rolling": 30,
+  "reserve": 8,
+  "dailyCount": 4,
+  "gapHours": 24,
+  "bootMinutes": 40,
+  "hardMinutes": 180,
+  "softMarginMinutes": 10,
+  "heartbeatMinutes": 10,
+  "heartbeatTimeoutMinutes": 15,
+  "passGraceMinutes": 5,
+  "failGraceMinutes": 10,
+  "manualCeilingMinutes": 480,
+  "reportCount": 2000,
+  "reportBytes": 4194304,
+  "reportRate": 20,
+  "cronPeriod": 60000,
+  "maxMinutes": 1440,
+  "diskGb": 120,
+  "bandwidthDownGb": 15,
+  "bandwidthUpGb": 2,
+  "storageMonthHours": 720,
+  "availabilityCacheMs": 60000,
+  "availabilityLimit": 100,
+  "admissionPerMinute": 30,
+  "sweepPrice": 2.5,
+  "sweepDaily": 8,
+  "sweepSkipPassedDays": 0,
+  "badMachines": [
+    42636,
+    44906,
+    11908,
+    24044,
+    18856,
+    91962,
+    56883,
+    55691
+  ],
+  "gpuDeny": [],
+  "checkDies": [
+    "GA106",
+    "AD104",
+    "GA102",
+    "AD102"
+  ],
+  "sweepDies": [
+    "TU116",
+    "TU106",
+    "TU104",
+    "TU102",
+    "GA106",
+    "GA104",
+    "GA102",
+    "AD107",
+    "AD106",
+    "AD104",
+    "AD103",
+    "AD102",
+    "GB207",
+    "GB206",
+    "GB205",
+    "GB203",
+    "GB202",
+    "CC_75",
+    "CC_86",
+    "CC_89",
+    "CC_120"
+  ],
+  "quality": {
+    "reliability": 0.98,
+    "cores": 8,
+    "cpuGhz": 2,
+    "ramMb": 34360,
+    "downMbps": 200,
+    "upMbps": 50,
+    "diskMbps": 100,
+    "medianRatio": 0.5
+  },
+  "driverTags": [
+    "535.309.01",
+    "545.23.08",
+    "550.40.07",
+    "550.54.14",
+    "550.90.07",
+    "555.42.02",
+    "560.28.03",
+    "565.57.01",
+    "570.86.15",
+    "570.124.06",
+    "570.148.08",
+    "575.51.02",
+    "575.51.03",
+    "575.57.08",
+    "575.64.05",
+    "580.65.06",
+    "580.82.07",
+    "580.94.02",
+    "580.95.05",
+    "580.105.08",
+    "580.126.09",
+    "580.159.04",
+    "580.173.02",
+    "580.178.04",
+    "590.48.01",
+    "595.84",
+    "610.43.02",
+    "610.57.04",
+    "615.71.09",
+    "595.91.07"
+  ],
+  "dieRules": [
+    {
+      "die": "TU116",
+      "cc": 750,
+      "names": [
+        "GTX_16*"
+      ]
+    },
+    {
+      "die": "TU106",
+      "cc": 750,
+      "names": [
+        "RTX_2060*"
+      ]
+    },
+    {
+      "die": "TU104",
+      "cc": 750,
+      "names": [
+        "RTX_2070*",
+        "RTX_2080",
+        "RTX_2080_SUPER"
+      ]
+    },
+    {
+      "die": "TU102",
+      "cc": 750,
+      "names": [
+        "RTX_2080_TI"
+      ]
+    },
+    {
+      "die": "GA106",
+      "cc": 860,
+      "names": [
+        "RTX_3060"
+      ]
+    },
+    {
+      "die": "GA104",
+      "cc": 860,
+      "names": [
+        "RTX_3060_TI",
+        "RTX_3070*"
+      ]
+    },
+    {
+      "die": "GA102",
+      "cc": 860,
+      "names": [
+        "RTX_3080*",
+        "RTX_3090*"
+      ]
+    },
+    {
+      "die": "AD107",
+      "cc": 890,
+      "names": [
+        "RTX_4060"
+      ]
+    },
+    {
+      "die": "AD106",
+      "cc": 890,
+      "names": [
+        "RTX_4060_TI"
+      ]
+    },
+    {
+      "die": "AD104",
+      "cc": 890,
+      "names": [
+        "RTX_4070",
+        "RTX_4070_SUPER",
+        "RTX_4070_S",
+        "RTX_4070_TI"
+      ]
+    },
+    {
+      "die": "AD103",
+      "cc": 890,
+      "names": [
+        "RTX_4070_TI_SUPER",
+        "RTX_4080*"
+      ]
+    },
+    {
+      "die": "AD102",
+      "cc": 890,
+      "names": [
+        "RTX_4090*"
+      ]
+    },
+    {
+      "die": "GB207",
+      "cc": 1200,
+      "names": [
+        "RTX_5050*"
+      ]
+    },
+    {
+      "die": "GB206",
+      "cc": 1200,
+      "names": [
+        "RTX_5060*"
+      ]
+    },
+    {
+      "die": "GB205",
+      "cc": 1200,
+      "names": [
+        "RTX_5070"
+      ]
+    },
+    {
+      "die": "GB203",
+      "cc": 1200,
+      "names": [
+        "RTX_5070_TI",
+        "RTX_5080*"
+      ]
+    },
+    {
+      "die": "GB202",
+      "cc": 1200,
+      "names": [
+        "RTX_5090*"
+      ]
+    }
+  ],
+  "bootFailureFreezeMs": 120000
+}

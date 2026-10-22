@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import {setup,clock,sha,nonce,env} from './helpers.js';
 const state=async r=>(await r.json()).state;
 const rent=async h=>{const r=await h.call();assert.equal(r.status,200);return r.json();};
-const finish=async(h,verdict='PASS')=>{const response=await h.report({seq:1,kind:'result',result:{nonce,verdict}});assert.equal(response.status,200);h.time.value+=300000;await h.service.sweep();return h.call('/status/123-1');};
+const finish=async(h,verdict='PASS')=>{const response=await h.report({seq:1,kind:'result',result:{nonce,verdict}});assert.equal(response.status,200);h.time.value=(await h.storage.get('record:123-1')).resultDeadline;await h.service.sweep();return h.call('/status/123-1');};
 for(const v of ['false','FALSE','',undefined])test('kill switch refuses rental '+v,async()=>{
  const h=await setup({RENTING_ENABLED:v});assert.notEqual((await h.call()).status,200);assert.equal(h.cloud.calls.length,0);
 });
@@ -11,7 +11,7 @@ for(const v of ['REPLACE_ME','owner','0'])test('owner config must be numeric '+v
 for(const body of [{},{ssh_public_key:'ssh-ed25519 bad'},{sha:'d'.repeat(40)},{force:true},{ttl:1}])test('rent has no client capability '+JSON.stringify(body),async()=>{const h=await setup();assert.equal((await h.call('/rent',{body})).status,400);assert.equal(h.cloud.creates,0);});
 for(const credit of [0,7.99,8.01,null,'20',-1])test('credit guard reserves headroom '+credit,async()=>{const h=await setup();h.cloud.credit=credit;assert.equal(await state(await h.call()),'UNAVAILABLE_BUDGET');assert.equal(h.cloud.creates,0);});
 for(const price of [.51,-1,null,'0.2'])test('invalid/expensive offer '+price,async()=>{const h=await setup();h.cloud.price=price;assert.equal(await state(await h.call()),'UNAVAILABLE');assert.equal(h.cloud.creates,0);});
-for(const patch of [{verified:false},{vms_enabled:false},{num_gpus:2},{gpu_name:'other'},{reliability:.98},{disk_space:10}])test('offer recheck '+JSON.stringify(patch),async()=>{const h=await setup();Object.assign(h.cloud.offer,patch);assert.notEqual((await h.call()).status,200);assert.equal(h.cloud.creates,0);});
+for(const patch of [{verified:false},{vms_enabled:false},{num_gpus:2},{gpu_name:'other'},{reliability:.97},{disk_space:10}])test('offer recheck '+JSON.stringify(patch),async()=>{const h=await setup();Object.assign(h.cloud.offer,patch);assert.notEqual((await h.call()).status,200);assert.equal(h.cloud.creates,0);});
 test('fixed create request never returns upstream credentials',async()=>{const h=await setup();const r=await rent(h);assert.equal(r.id,'900');assert.equal(r.sha,sha);assert.equal(r.pr,7);
  const c=h.cloud.calls.find(c=>c.url.endsWith('/asks/5/')).body;assert.equal(c.vm,true);assert.equal(c.disk,120);assert.equal(c.runtype,'ssh_direct');assert.equal(c.label,'kf-ci-123-1');assert.match(c.onstart,/timeout/);assert.doesNotMatch(JSON.stringify(r),/PRIVATE|key/);
 });

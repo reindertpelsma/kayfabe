@@ -42,6 +42,12 @@ export class Github {
       String(r.actor?.id)!==c.actor_id||r.repository?.full_name!==cfg.repo||!hexSha(r.head_sha)||typeof r.head_branch!=='string'||
       !numericId(String(r.triggering_actor?.id)))refuse('UNAUTHORIZED',401);
     if(c.triggering_actor!==undefined&&String(c.triggering_actor)!==String(r.triggering_actor.id))refuse('UNAUTHORIZED',401);
+    if(cfg.profile==='sweep'){
+      if(c.event_name!=='workflow_dispatch'||c.actor_id!==cfg.owner||String(r.triggering_actor.id)!==cfg.owner||c.sha!==r.head_sha||c.ref!=='refs/heads/'+r.head_branch)refuse('UNAUTHORIZED',401);
+      const selected=hint?.tested_sha??c.sha;if(!hexSha(selected))refuse('BAD_REQUEST',400);
+      const commit=await this.get('commits/'+selected);if(commit.sha!==selected)refuse();
+      return {sha:selected,pr:null,branch:r.head_branch,run:c.run_id,attempt:c.run_attempt};
+    }
     let p;
     const automatic=['pull_request','pull_request_target'].includes(c.event_name);
     if(c.event_name==='pull_request_target'){

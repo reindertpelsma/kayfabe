@@ -12,7 +12,7 @@ test('R3 final binaries built on GitHub without artifact inputs',async()=>{
 });
 test('R3 bundle manifest pins exact emitted Worker bytes',async()=>{
  const p=spawnSync(process.execPath,['bundle.js'],{cwd:new URL('../',import.meta.url),encoding:'utf8'});assert.equal(p.status,0,p.stderr);
- const {createHash}=await import('node:crypto');const raw=await readFile(new URL('../dist/worker.js',import.meta.url));const manifest=JSON.parse(await readFile(new URL('../dist/deployment.json',import.meta.url),'utf8'));assert.deepEqual(manifest,{protocol_version:3,worker_version:'v4-r3',bundle_sha256:createHash('sha256').update(raw).digest('hex')});
+ const {createHash}=await import('node:crypto');const raw=await readFile(new URL('../dist/worker.js',import.meta.url));const manifest=JSON.parse(await readFile(new URL('../dist/deployment.json',import.meta.url),'utf8'));assert.deepEqual(manifest,{protocol_version:4,worker_version:'v5',bundle_sha256:createHash('sha256').update(raw).digest('hex')});
 });
 
 test('R3 generated manifest can be independently checked with sha256sum',async()=>{

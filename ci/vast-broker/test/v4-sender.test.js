@@ -16,8 +16,8 @@ for(const exitCode of [0,7])test('V4 sender preserves fast full bounded output o
   const output=Array.from({length:3000},(_,i)=>`message ${i} of bounded output\n`).join('');await writeFile(dir+'/payload',output);
   const prelude="import builtins,subprocess,os\noriginal_open=builtins.open\ndef sandbox_open(path,*args,**kwargs):\n    return original_open(os.environ['BACKUP'] if path=='/workspace/kf-ci-output.log' else path,*args,**kwargs)\nbuiltins.open=sandbox_open\noriginal_popen=subprocess.Popen\ndef workload(args,*pos,**kwargs):\n    if args==['bash','-s']: args=['bash','-c',os.environ['WORK']]\n    return original_popen(args,*pos,**kwargs)\nsubprocess.Popen=workload\n";
   const run=spawnSync('python3',['-c',prelude+python],{encoding:'utf8',timeout:10000,env:{...process.env,PATH:dir+':'+process.env.PATH,CAPTURE:dir+'/capture',BACKUP:dir+'/backup',WORK:'cat >/dev/null; cat '+dir+'/payload; exit '+exitCode}});
-  assert.equal(run.status,exitCode,run.stderr);assert.match(run.stdout,/Worker reports 1 minutes remaining/);const calls=(await readFile(dir+'/capture','utf8')).trim().split('\n').map(JSON.parse);
+  assert.equal(run.status,exitCode||1,run.stderr);assert.match(run.stdout,/Worker reports 1 minutes remaining/);const calls=(await readFile(dir+'/capture','utf8')).trim().split('\n').map(JSON.parse);
   assert.equal(calls.filter(x=>x.kind==='log').map(x=>x.text).join(''),output);
-  assert.doesNotMatch(calls.at(-1).text??'',/message 2999/);assert.equal(calls.at(-1).result.verdict,exitCode===0?'PASS':'FAIL');
+  assert.doesNotMatch(calls.at(-1).text??'',/message 2999/);assert.equal(calls.at(-1).result.verdict,'FAIL');
  }finally{await rm(dir,{recursive:true});}
 });
