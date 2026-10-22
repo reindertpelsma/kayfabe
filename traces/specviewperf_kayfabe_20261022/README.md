@@ -1,3 +1,8 @@
+MEASURED: Phase 1 Blender completed with official composite 35.95 (n=1),
+versus baseline 35.85 (n=1): +0.28% in these samples. VFIO mean 61.11 (n=2).
+CATIA is next; Phase 1 has zero observed recovery cycles/TDR records/Xids.
+This is a workload checkpoint, not full-suite or performance-regression proof.
+
 MEASURED: baseline Blender completed all seven subtests, official vendor composite
 35.85 (n=1), versus VFIO 61.61/60.61 (n=2; mean 61.11), baseline/native-mean
 0.5866. CATIA began next; no guest TDR or host Xid observed at this checkpoint.
