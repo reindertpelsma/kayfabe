@@ -552,12 +552,21 @@ fn hostile(priv_entries: u32, lazy: kf_chan::user_lazy::LazyConfig) {
             let all_lo: HashSet<u32> = lo.iter().flatten().copied().collect();
             let all_hi: HashSet<u32> = hi.iter().flatten().copied().collect();
             for p in &log {
-                if let Pub::Guest { tested, stored, .. } = p {
+                if let Pub::Guest {
+                    tested,
+                    stored,
+                    scanned,
+                } = p
+                {
                     assert_eq!(tested, stored, "I7");
                     assert!(
                         kf_chan::user_stream::inspect_entry(
                             *stored,
-                            kf_chan::user_storage::MAX_SOURCE_BYTES
+                            if *scanned {
+                                kf_chan::user_storage::MAX_SOURCE_BYTES
+                            } else {
+                                8_388_604
+                            }
                         )
                         .is_ok(),
                         "stored an entry the validation refuses: {stored:#x}"
