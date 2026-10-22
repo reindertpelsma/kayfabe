@@ -1,12 +1,12 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {setup,jwt,env,jwk} from './helpers.js';
+import {setup,jwt,env,jwk,sha} from './helpers.js';
 
 // H1 FALSIFIER: workerd's empty streaming POST cannot rent/stop, or a nonempty body rents.
-for(const path of ['/rent','/stop-all'])test('native empty streaming POST accepts '+path,async()=>{
+for(const path of ['/rent','/stop-all'])test('native bounded streaming POST accepts '+path,async()=>{
   const h=await setup();
   const token=path==='/rent'?await jwt():env.OWNER_STOP_TOKEN;
-  const body=new ReadableStream({start(c){c.close();}});
+  const body=new ReadableStream({start(c){if(path==='/rent')c.enqueue(new TextEncoder().encode(JSON.stringify({runner_nonce:'f'.repeat(64),tested_sha:sha,pr_number:7})));c.close();}});
   const r=await h.service.fetch(new Request(env.WORKER_URL+path,{method:'POST',headers:{Authorization:'Bearer '+token},body,duplex:'half'}));
   assert.equal(r.status,200);
 });
@@ -35,7 +35,7 @@ async function localCall({flag='true',origin='http://127.0.0.1:18787',testIssuer
   };
   const {createService}=await import('../src/index.js');
   const service=createService({env:h.bindings,storage:h.storage,fetch:h.cloud.fetch,now:()=>1800000000000});
-  const r=await service.fetch(new Request(origin+'/rent',{method:'POST',headers:{Authorization:'Bearer '+await jwt({iss:claimsIssuer})}}));
+  const r=await service.fetch(new Request(origin+'/rent',{method:'POST',headers:{Authorization:'Bearer '+await jwt({iss:claimsIssuer})},body:JSON.stringify({runner_nonce:'f'.repeat(64),tested_sha:sha,pr_number:7})}));
   return {r,h,localReads};
 }
 for(const skip of [true,false])test('loopback signed identity routes JWKS and GitHub '+skip,async()=>{
