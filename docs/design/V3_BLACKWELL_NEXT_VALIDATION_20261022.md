@@ -41,7 +41,8 @@ can end the run sooner. No fresh diagnostic caps-page arm or new native trace ca
 
 A Code 0 observation alone is not a Windows PASS. For any arm surviving initialization, require a
 600 s zero-TDR hold, usable desktop where display is ON, CUDA and DX11/DX12 checks, and healthy host
-journal after each workload. If an allowed Xid pair occurs, stop workloads, retain the bounded recovery
+journal after each workload. Both the observed RPC prefix and actual host-recorded CIM Code0/580.88 for this same arm/PID/starttime
+must already predate each exception event. If an allowed Xid pair occurs, stop workloads, retain the bounded recovery
 sequence/dump-header/event metadata and mark FAIL; the exception permits diagnosis, not acceptance.
 Capture zero-loss canonical RPC ordinals (including Other(4)), reply status/size, System events, CIM
 state, QMP panic data and timestamped probe records. Preserve both host/guest clocks without applying

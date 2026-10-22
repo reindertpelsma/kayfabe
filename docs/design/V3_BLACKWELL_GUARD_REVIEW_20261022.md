@@ -66,7 +66,7 @@ Review of classifier `cc593e3be`:
 | The explicit exception is appropriately narrow | Own QEMU PID, Xid 32, `intr 00200000`, at most one plain chid below 0x100 and one `0x0e0000xx`, no repeated chid, maximum two, approved ON/OFF phase | Keep every bound; EXPECTED remains a product failure, never a clean baseline |
 | Parsing is too permissive | Unanchored regex accepts trailing payloads and can skip an unexplained first Xid marker on the same line | Exactly one Xid record per journal record; complete anchored shape; unknown shape fatal |
 | Ownership is caller-dependent | PID 0/1 can be accepted when supplied as the claimed owned PID; process name and PCI device are not bound | Valid PID >1 plus live process starttime/executable and selected PCI device receipts; never trust an old PID file |
-| Initialization is retrospective | In inherited `arm.sh`, eventual total RPC count >=1000 sets the boolean at cleanup | Timestamped consecutive init prefix must already exist before each fault; missing or partial timing proof fatal |
+| Initialization is retrospective | In inherited `arm.sh`, eventual total RPC count >=1000 sets the boolean at cleanup | Consecutive RPC prefix plus actual host-observed Code0/580.88 for this VM life must both predate each fault; missing or partial proof fatal |
 | Native-to-arm gap is uncovered | Per-arm journal followers started after native Xid 32 at 22:20:19 | Full-boot source-verified baseline frozen before GR/CE fixture, continuously guarded through bind and every arm |
 | Per-call limits can be reset | Calling the stateless classifier separately for each new journal slice grants a fresh limit | Track cumulative per-arm records and immutable accepted history; lost/replaced history or third/duplicate event fatal |
 

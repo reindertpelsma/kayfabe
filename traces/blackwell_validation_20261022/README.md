@@ -46,3 +46,10 @@ shared credit42.956391USD, reserve5 intact. Timer cancelled only after absence.
 All remote QEMU/CPU/guard processes ended with the destroyed lease. Local merged release tests
 are still running at this documentation checkpoint; their final counts/cleanup will be appended.
 The trusted host, GPU, VMs, locks and /data were untouched.
+
+Post-closeout guard review: a RPC-count threshold alone was still too permissive as a full-init
+proof. Test-first dc9d307db followed by39fd83ebd adds actual host-observed CIM Code0/580.88,
+VM-life correlation and temporal proof of both observations. Python86executions/0fail; four new
+mutants each>=2killers; details `guard_code0/`. This fix is GPU-free only, after the closed lease;
+it is mandatory together with the updated recorder before another authorized Windows run.
+No Windows result from this lease used the earlier weaker progress-only rule: all arms were UNRUN.
