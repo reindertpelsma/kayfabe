@@ -142,6 +142,23 @@ class FreshnessTests(unittest.TestCase):
         self.write("docs/ok.md", self.document(day="2026-01-01", body="`kf-removed-crate`"))
         self.assertIn("stale-suspect", self.kinds())
 
+    def test_worktree_directory_is_not_a_crate_reference(self):
+        self.write(
+            "docs/ok.md",
+            self.document(day="2026-01-01", body="Checkout: `/scratch/kf-old-worktree/`."),
+        )
+        self.assertEqual(self.run_check()["documents"][0]["dead_references"], [])
+
+    def test_hyphenated_prose_is_not_a_crate_reference(self):
+        self.write("docs/ok.md", self.document(day="2026-01-01", body="kayfabe-owned resources."))
+        self.assertEqual(self.run_check()["documents"][0]["dead_references"], [])
+
+    def test_existing_command_filename_is_not_a_crate(self):
+        self.write("scripts/kf-tool.py", "# command, not a package\n")
+        self.git("add", ".")
+        self.write("docs/ok.md", self.document(day="2026-01-01", body="`scripts/kf-tool.py`"))
+        self.assertEqual(self.run_check()["documents"][0]["dead_references"], [])
+
     def test_old_live_with_missing_branch_is_suspect(self):
         self.write(
             "docs/ok.md", self.document(day="2026-01-01", body="branch `codex/removed-branch`")
