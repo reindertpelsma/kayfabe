@@ -1,0 +1,11 @@
+{
+  "kind": "MEASURED",
+  "id": 57262021,
+  "destroyed_utc": "2026-10-22T22:02:29.500664+00:00",
+  "api_absence_verified": true,
+  "auto_destroy_cancelled_after_absence": true,
+  "runtime_hours": 2.573922011944444,
+  "runtime_cost_estimate_usd": 0.42040726195092587,
+  "cost_upper_usd": 1.4204072619509258,
+  "pre_teardown_origin_head": "587d7b3e7da992f0171c53edaef322a63c562a69"
+}

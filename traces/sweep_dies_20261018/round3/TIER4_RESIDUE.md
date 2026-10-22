@@ -1,5 +1,7 @@
 # Runtime CLIENT residue and owner decision evidence
 
+CODE READ (owner ruling 2026-10-22,23:00): admission prerequisite below is SUPERSEDED by `docs/design/S4_XID_ADMISSION_20261022.md`, commit 597d60fe1. Exact source channel/VA/type plus CE-family membership now authorizes the deliberate copy-engine controls. Tier findings and coverage remain research; no per-die route table or RE is required for this approved guard policy.
+
 CODE READ (`tier12_proof.json`, `../round2/sources.json`): the missing item is an **independent runtime relation between the authored COPY0 negative-control channel and the MMU HUB CLIENT which its backing hardware uses**. PCE/LCE masks, engine counts and routes can change with floorsweeping; owner instructions require current-host facts and forbid die-row inheritance for them. This document requests no public route table and contains no RE result.
 
 CODE READ (tier1, `tier12_proof.json`): the device-info table's MMU engine fault ID is a separate identifier from fault-packet CLIENT. OGKM reads and decodes ENGINE_ID/CLIENT independently; native controls bind COPY0, and the AD102/GA102 journals both name ENGINE CE0 but different CLIENT names. Thus engine identity alone cannot substitute for CLIENT. The earlier CE1 literal came from the AD106 control fixture, not a demonstrated universal engine order. The searched public OGKM tags580.126.09/595.91.07/615.78.08 and595.84 plus nouveau/nova sources establish these distinctions; absence of a located bridge is not proof that no public source can ever supply one.

@@ -1,0 +1,67 @@
+[
+  {
+    "mutant": "native_requires_ce1_again",
+    "count": 3,
+    "killers": [
+      "test_ad102_ce0_parser_fixture_admits_exact_shapes",
+      "test_authentic_ga102_four_ce_plus_gr_admit",
+      "test_ga102_exact_four_ce_and_one_gr_admit_owner_rule"
+    ],
+    "rc": 1
+  },
+  {
+    "mutant": "guest_requires_ce1_again",
+    "count": 2,
+    "killers": [
+      "test_guest_defer_ce0_with_exact_source_admits",
+      "test_guest_missing_ce0_with_exact_source_admits"
+    ],
+    "rc": 1
+  },
+  {
+    "mutant": "accept_non_ce_clients",
+    "count": 5,
+    "killers": [
+      "test_guest_non_ce_refuses_defer",
+      "test_guest_non_ce_refuses_missing",
+      "test_native_ce_suffix_garbage_refuses",
+      "test_native_non_ce_refuses",
+      "test_unrelated_route_fatal_missing"
+    ],
+    "rc": 1
+  },
+  {
+    "mutant": "ignore_native_channel",
+    "count": 5,
+    "killers": [
+      "test_native_ce1_wrong_channel_refuses",
+      "test_ga102_ce1_with_wrong_channel_must_not_admit",
+      "test_ga102_wrong_channel_stays_fatal",
+      "test_changed_defer_channel_is_fatal",
+      "test_changed_missing_page_channel_is_fatal"
+    ],
+    "rc": 1
+  },
+  {
+    "mutant": "ignore_native_va",
+    "count": 5,
+    "killers": [
+      "test_native_ce1_wrong_va_refuses",
+      "test_ad102_ce0_with_wrong_va_stays_fatal",
+      "test_ga102_wrong_va_stays_fatal",
+      "test_changed_defer_address_is_fatal",
+      "test_changed_missing_page_address_is_fatal"
+    ],
+    "rc": 1
+  },
+  {
+    "mutant": "ignore_extra_duplicate",
+    "count": 3,
+    "killers": [
+      "test_native_extra_record_refuses",
+      "test_ga102_one_extra_known_record_stays_fatal",
+      "test_duplicate_matching_native_fault_is_fatal"
+    ],
+    "rc": 1
+  }
+]

@@ -1,5 +1,7 @@
 # S4 Round 3 constant tiers and coverage plan
 
+CODE READ (owner ruling 2026-10-22,23:00): admission prerequisite below is SUPERSEDED by `docs/design/S4_XID_ADMISSION_20261022.md`, commit 597d60fe1. Exact source channel/VA/type plus CE-family membership now authorizes the deliberate copy-engine controls. Tier findings and coverage remain research; no per-die route table or RE is required for this approved guard policy.
+
 STATUS: RESEARCH / LIVE, 2026-10-22. CODE READ: owner ROUND3 and Addenda1/2 plus workstation scope update; follow `docs/design/V3_CONSTANT_STRATEGY.md` tiers in order. This is a GPU-free plan and evidence inventory, not a runtime constant/admission table.
 
 CODE READ (2026-10-22 owner scope): target20 implementation dies below, Turing and newer consumer AND workstation SKUs. Pascal/older are out of scope. Driver branch, vBIOS policy and ECC can differ across workstation/consumer SKUs; no board-specific data is collected. Same silicon permits inheritance only for constants with a written floorsweeping-independent mechanism. **PCE/LCE masks, engine counts and CE routes always come from the current host at runtime; none may be inherited from a die row.** No CE-route table will be shipped.

@@ -1,0 +1,84 @@
+E.EEE...........E....
+======================================================================
+ERROR: test_ad102_ce0_parser_fixture_admits_exact_shapes (scripts.bench.tests.test_owner_copy_family_rule.OwnerCopyFamilyRule.test_ad102_ce0_parser_fixture_admits_exact_shapes)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/workspace/s4-wt/scripts/bench/tests/test_owner_copy_family_rule.py", line 36, in test_ad102_ce0_parser_fixture_admits_exact_shapes
+    self.assertEqual(*self.native('AD102', lambda x: x.replace('HUBCLIENT_CE1', 'HUBCLIENT_CE0')))
+                      ~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/workspace/s4-wt/scripts/bench/tests/test_owner_copy_family_rule.py", line 23, in native
+    return G.approve_native(changed, defer, missing), G.xid_lines(changed)
+           ~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/workspace/s4-wt/scripts/bench/native_xid_guard.py", line 95, in approve_native
+    raise GuardRefused("Xid type/channel/address/source multiset differs from fault controls")
+native_xid_guard.GuardRefused: Xid type/channel/address/source multiset differs from fault controls
+
+======================================================================
+ERROR: test_authentic_ga102_four_ce_plus_gr_admit (scripts.bench.tests.test_owner_copy_family_rule.OwnerCopyFamilyRule.test_authentic_ga102_four_ce_plus_gr_admit)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/workspace/s4-wt/scripts/bench/tests/test_owner_copy_family_rule.py", line 31, in test_authentic_ga102_four_ce_plus_gr_admit
+    actual, expected = self.native('GA102')
+                       ~~~~~~~~~~~^^^^^^^^^
+  File "/workspace/s4-wt/scripts/bench/tests/test_owner_copy_family_rule.py", line 23, in native
+    return G.approve_native(changed, defer, missing), G.xid_lines(changed)
+           ~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/workspace/s4-wt/scripts/bench/native_xid_guard.py", line 95, in approve_native
+    raise GuardRefused("Xid type/channel/address/source multiset differs from fault controls")
+native_xid_guard.GuardRefused: Xid type/channel/address/source multiset differs from fault controls
+
+======================================================================
+ERROR: test_guest_defer_ce0_with_exact_source_admits (scripts.bench.tests.test_owner_copy_family_rule.OwnerCopyFamilyRule.test_guest_defer_ce0_with_exact_source_admits)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/workspace/s4-wt/scripts/bench/tests/test_owner_copy_family_rule.py", line 70, in test_guest_defer_ce0_with_exact_source_admits
+    self.assertEqual(case.approve(lines=lines), tuple(lines))
+                     ~~~~~~~~~~~~^^^^^^^^^^^^^
+  File "/workspace/s4-wt/scripts/bench/tests/test_guest_xid_guard.py", line 34, in approve
+    return G.approve_guest('\n'.join(self.lines if lines is None else lines) + '\n', self.base,
+           ~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+                           self.serial if serial is None else serial,
+                           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+                           self.qlog if qlog is None else qlog,
+                           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+                           self.context if context is None else context, final=final)
+                           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/workspace/s4-wt/scripts/bench/native_xid_guard.py", line 329, in approve_guest
+    raise GuardRefused('guest Xid source/PID/address/type/route differs')
+guest_guard.GuardRefused: guest Xid source/PID/address/type/route differs
+
+======================================================================
+ERROR: test_guest_missing_ce0_with_exact_source_admits (scripts.bench.tests.test_owner_copy_family_rule.OwnerCopyFamilyRule.test_guest_missing_ce0_with_exact_source_admits)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/workspace/s4-wt/scripts/bench/tests/test_owner_copy_family_rule.py", line 75, in test_guest_missing_ce0_with_exact_source_admits
+    self.assertEqual(case.approve(**values), tuple(values['lines']))
+                     ~~~~~~~~~~~~^^^^^^^^^^
+  File "/workspace/s4-wt/scripts/bench/tests/test_guest_xid_guard.py", line 34, in approve
+    return G.approve_guest('\n'.join(self.lines if lines is None else lines) + '\n', self.base,
+           ~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+                           self.serial if serial is None else serial,
+                           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+                           self.qlog if qlog is None else qlog,
+                           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+                           self.context if context is None else context, final=final)
+                           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/workspace/s4-wt/scripts/bench/native_xid_guard.py", line 329, in approve_guest
+    raise GuardRefused('guest Xid source/PID/address/type/route differs')
+guest_guard.GuardRefused: guest Xid source/PID/address/type/route differs
+
+======================================================================
+ERROR: test_ga102_exact_four_ce_and_one_gr_admit_owner_rule (scripts.bench.tests.test_native_xid_route_round2.Round2NativeRouteReplay.test_ga102_exact_four_ce_and_one_gr_admit_owner_rule)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/workspace/s4-wt/scripts/bench/tests/test_native_xid_route_round2.py", line 42, in test_ga102_exact_four_ce_and_one_gr_admit_owner_rule
+    self.assertEqual(G.approve_native(journal, defer, missing), G.xid_lines(journal))
+                     ~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/workspace/s4-wt/scripts/bench/native_xid_guard.py", line 95, in approve_native
+    raise GuardRefused("Xid type/channel/address/source multiset differs from fault controls")
+native_xid_guard.GuardRefused: Xid type/channel/address/source multiset differs from fault controls
+
+----------------------------------------------------------------------
+Ran 21 tests in 0.023s
+
+FAILED (errors=5)
