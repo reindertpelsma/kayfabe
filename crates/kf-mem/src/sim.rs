@@ -184,7 +184,11 @@ pub struct SimRm {
 /// The size a reservation of `len` bytes is aligned to by host RM (see [`SimRm::reserve_rounds`]).
 #[must_use]
 pub fn reserve_align(len: u64) -> u64 {
-    if len >= 0x20_0000 { 0x20_0000 } else { 0x1_0000 }
+    if len >= 0x20_0000 {
+        0x20_0000
+    } else {
+        0x1_0000
+    }
 }
 
 /// ★ D1/D3 (2026-10-10): runtime refusals of the micro-reservation machinery, injected. Every

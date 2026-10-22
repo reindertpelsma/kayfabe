@@ -1,0 +1,560 @@
+[
+  {
+    "file": "crates/kf-qemu/src/userpump.rs",
+    "line": 338,
+    "code": "clippy::arithmetic_side_effects",
+    "message": "arithmetic operation that can potentially result in unexpected side-effects"
+  },
+  {
+    "file": "crates/kf-qemu/src/userpump.rs",
+    "line": 340,
+    "code": "clippy::arithmetic_side_effects",
+    "message": "arithmetic operation that can potentially result in unexpected side-effects"
+  },
+  {
+    "file": "crates/kf-qemu/src/userpump.rs",
+    "line": 403,
+    "code": "clippy::arithmetic_side_effects",
+    "message": "arithmetic operation that can potentially result in unexpected side-effects"
+  },
+  {
+    "file": "crates/kf-qemu/src/userpump.rs",
+    "line": 931,
+    "code": "clippy::arithmetic_side_effects",
+    "message": "arithmetic operation that can potentially result in unexpected side-effects"
+  },
+  {
+    "file": "crates/kf-qemu/src/userpump.rs",
+    "line": 949,
+    "code": "clippy::arithmetic_side_effects",
+    "message": "arithmetic operation that can potentially result in unexpected side-effects"
+  },
+  {
+    "file": "crates/kf-qemu/src/userpump.rs",
+    "line": 1175,
+    "code": "clippy::arithmetic_side_effects",
+    "message": "arithmetic operation that can potentially result in unexpected side-effects"
+  },
+  {
+    "file": "crates/kf-qemu/src/userpump.rs",
+    "line": 1176,
+    "code": "clippy::indexing_slicing",
+    "message": "slicing may panic"
+  },
+  {
+    "file": "crates/kf-qemu/src/userpump.rs",
+    "line": 1180,
+    "code": "clippy::arithmetic_side_effects",
+    "message": "arithmetic operation that can potentially result in unexpected side-effects"
+  },
+  {
+    "file": "crates/kf-qemu/src/userpump.rs",
+    "line": 1184,
+    "code": "clippy::arithmetic_side_effects",
+    "message": "arithmetic operation that can potentially result in unexpected side-effects"
+  },
+  {
+    "file": "crates/kf-qemu/src/userpump.rs",
+    "line": 1223,
+    "code": "clippy::arithmetic_side_effects",
+    "message": "arithmetic operation that can potentially result in unexpected side-effects"
+  },
+  {
+    "file": "crates/kf-qemu/src/userpump.rs",
+    "line": 1228,
+    "code": "clippy::arithmetic_side_effects",
+    "message": "arithmetic operation that can potentially result in unexpected side-effects"
+  },
+  {
+    "file": "crates/kf-qemu/src/userpump.rs",
+    "line": 1243,
+    "code": "clippy::arithmetic_side_effects",
+    "message": "arithmetic operation that can potentially result in unexpected side-effects"
+  },
+  {
+    "file": "crates/kf-qemu/src/userpump.rs",
+    "line": 1246,
+    "code": "clippy::arithmetic_side_effects",
+    "message": "arithmetic operation that can potentially result in unexpected side-effects"
+  },
+  {
+    "file": "crates/kf-qemu/src/userpump.rs",
+    "line": 1249,
+    "code": "clippy::arithmetic_side_effects",
+    "message": "arithmetic operation that can potentially result in unexpected side-effects"
+  },
+  {
+    "file": "crates/kf-qemu/src/userpump.rs",
+    "line": 1279,
+    "code": "clippy::arithmetic_side_effects",
+    "message": "arithmetic operation that can potentially result in unexpected side-effects"
+  },
+  {
+    "file": "crates/kf-qemu/src/userpump.rs",
+    "line": 1368,
+    "code": "clippy::arithmetic_side_effects",
+    "message": "arithmetic operation that can potentially result in unexpected side-effects"
+  },
+  {
+    "file": "crates/kf-qemu/src/userpump.rs",
+    "line": 1368,
+    "code": "clippy::arithmetic_side_effects",
+    "message": "arithmetic operation that can potentially result in unexpected side-effects"
+  },
+  {
+    "file": "crates/kf-qemu/src/userpump.rs",
+    "line": 1383,
+    "code": "clippy::arithmetic_side_effects",
+    "message": "arithmetic operation that can potentially result in unexpected side-effects"
+  },
+  {
+    "file": "crates/kf-qemu/src/userpump.rs",
+    "line": 1384,
+    "code": "clippy::arithmetic_side_effects",
+    "message": "arithmetic operation that can potentially result in unexpected side-effects"
+  },
+  {
+    "file": "crates/kf-qemu/src/userpump.rs",
+    "line": 1389,
+    "code": "clippy::arithmetic_side_effects",
+    "message": "arithmetic operation that can potentially result in unexpected side-effects"
+  },
+  {
+    "file": "crates/kf-qemu/src/userpump.rs",
+    "line": 1477,
+    "code": "clippy::indexing_slicing",
+    "message": "indexing may panic"
+  },
+  {
+    "file": "crates/kf-qemu/src/userpump.rs",
+    "line": 1477,
+    "code": "clippy::indexing_slicing",
+    "message": "indexing may panic"
+  },
+  {
+    "file": "crates/kf-qemu/src/userpump.rs",
+    "line": 1477,
+    "code": "clippy::indexing_slicing",
+    "message": "indexing may panic"
+  },
+  {
+    "file": "crates/kf-qemu/src/userpump.rs",
+    "line": 1477,
+    "code": "clippy::indexing_slicing",
+    "message": "indexing may panic"
+  },
+  {
+    "file": "crates/kf-qemu/src/userpump.rs",
+    "line": 1493,
+    "code": "clippy::indexing_slicing",
+    "message": "indexing may panic"
+  },
+  {
+    "file": "crates/kf-qemu/src/userpump.rs",
+    "line": 1493,
+    "code": "clippy::indexing_slicing",
+    "message": "indexing may panic"
+  },
+  {
+    "file": "crates/kf-qemu/src/userpump.rs",
+    "line": 1503,
+    "code": "clippy::arithmetic_side_effects",
+    "message": "arithmetic operation that can potentially result in unexpected side-effects"
+  },
+  {
+    "file": "crates/kf-qemu/src/userpump.rs",
+    "line": 1510,
+    "code": "clippy::arithmetic_side_effects",
+    "message": "arithmetic operation that can potentially result in unexpected side-effects"
+  },
+  {
+    "file": "crates/kf-qemu/src/userpump.rs",
+    "line": 1512,
+    "code": "clippy::arithmetic_side_effects",
+    "message": "arithmetic operation that can potentially result in unexpected side-effects"
+  },
+  {
+    "file": "crates/kf-qemu/src/userpump.rs",
+    "line": 1515,
+    "code": "clippy::arithmetic_side_effects",
+    "message": "arithmetic operation that can potentially result in unexpected side-effects"
+  },
+  {
+    "file": "crates/kf-qemu/src/userpump.rs",
+    "line": 1576,
+    "code": "clippy::arithmetic_side_effects",
+    "message": "arithmetic operation that can potentially result in unexpected side-effects"
+  },
+  {
+    "file": "crates/kf-qemu/src/userpump.rs",
+    "line": 1577,
+    "code": "clippy::arithmetic_side_effects",
+    "message": "arithmetic operation that can potentially result in unexpected side-effects"
+  },
+  {
+    "file": "crates/kf-qemu/src/userpump.rs",
+    "line": 1613,
+    "code": "clippy::indexing_slicing",
+    "message": "slicing may panic"
+  },
+  {
+    "file": "crates/kf-qemu/src/userpump.rs",
+    "line": 1717,
+    "code": "clippy::arithmetic_side_effects",
+    "message": "arithmetic operation that can potentially result in unexpected side-effects"
+  },
+  {
+    "file": "crates/kf-qemu/src/userpump.rs",
+    "line": 1718,
+    "code": "clippy::arithmetic_side_effects",
+    "message": "arithmetic operation that can potentially result in unexpected side-effects"
+  },
+  {
+    "file": "crates/kf-qemu/src/userpump.rs",
+    "line": 1764,
+    "code": "clippy::indexing_slicing",
+    "message": "indexing may panic"
+  },
+  {
+    "file": "crates/kf-qemu/src/userpump.rs",
+    "line": 1764,
+    "code": "clippy::indexing_slicing",
+    "message": "indexing may panic"
+  },
+  {
+    "file": "crates/kf-qemu/src/userpump.rs",
+    "line": 1764,
+    "code": "clippy::indexing_slicing",
+    "message": "indexing may panic"
+  },
+  {
+    "file": "crates/kf-qemu/src/userpump.rs",
+    "line": 1764,
+    "code": "clippy::indexing_slicing",
+    "message": "indexing may panic"
+  },
+  {
+    "file": "crates/kf-qemu/src/userpump.rs",
+    "line": 1769,
+    "code": "clippy::indexing_slicing",
+    "message": "indexing may panic"
+  },
+  {
+    "file": "crates/kf-qemu/src/userpump.rs",
+    "line": 1769,
+    "code": "clippy::indexing_slicing",
+    "message": "indexing may panic"
+  },
+  {
+    "file": "crates/kf-qemu/src/userpump.rs",
+    "line": 1788,
+    "code": "clippy::indexing_slicing",
+    "message": "slicing may panic"
+  },
+  {
+    "file": "crates/kf-qemu/src/userpump.rs",
+    "line": 1799,
+    "code": "clippy::indexing_slicing",
+    "message": "slicing may panic"
+  },
+  {
+    "file": "crates/kf-qemu/src/userpump.rs",
+    "line": 2025,
+    "code": "clippy::arithmetic_side_effects",
+    "message": "arithmetic operation that can potentially result in unexpected side-effects"
+  },
+  {
+    "file": "crates/kf-qemu/src/userpump.rs",
+    "line": 2054,
+    "code": "clippy::arithmetic_side_effects",
+    "message": "arithmetic operation that can potentially result in unexpected side-effects"
+  },
+  {
+    "file": "crates/kf-qemu/src/userpump.rs",
+    "line": 2145,
+    "code": "clippy::arithmetic_side_effects",
+    "message": "arithmetic operation that can potentially result in unexpected side-effects"
+  },
+  {
+    "file": "crates/kf-qemu/src/userpump.rs",
+    "line": 2145,
+    "code": "clippy::arithmetic_side_effects",
+    "message": "arithmetic operation that can potentially result in unexpected side-effects"
+  },
+  {
+    "file": "crates/kf-qemu/src/userpump.rs",
+    "line": 2548,
+    "code": "clippy::arithmetic_side_effects",
+    "message": "arithmetic operation that can potentially result in unexpected side-effects"
+  },
+  {
+    "file": "crates/kf-qemu/src/userpump.rs",
+    "line": 2550,
+    "code": "clippy::arithmetic_side_effects",
+    "message": "arithmetic operation that can potentially result in unexpected side-effects"
+  },
+  {
+    "file": "crates/kf-qemu/src/userpump.rs",
+    "line": 2646,
+    "code": "clippy::arithmetic_side_effects",
+    "message": "arithmetic operation that can potentially result in unexpected side-effects"
+  },
+  {
+    "file": "crates/kf-qemu/src/userpump.rs",
+    "line": 3018,
+    "code": "clippy::arithmetic_side_effects",
+    "message": "arithmetic operation that can potentially result in unexpected side-effects"
+  },
+  {
+    "file": "crates/kf-qemu/src/userrelay.rs",
+    "line": 213,
+    "code": "clippy::arithmetic_side_effects",
+    "message": "arithmetic operation that can potentially result in unexpected side-effects"
+  },
+  {
+    "file": "crates/kf-qemu/src/userrelay.rs",
+    "line": 225,
+    "code": "clippy::arithmetic_side_effects",
+    "message": "arithmetic operation that can potentially result in unexpected side-effects"
+  },
+  {
+    "file": "crates/kf-qemu/src/userrelay.rs",
+    "line": 905,
+    "code": "clippy::arithmetic_side_effects",
+    "message": "arithmetic operation that can potentially result in unexpected side-effects"
+  },
+  {
+    "file": "crates/kf-qemu/src/userstrand.rs",
+    "line": 93,
+    "code": "clippy::arithmetic_side_effects",
+    "message": "arithmetic operation that can potentially result in unexpected side-effects"
+  },
+  {
+    "file": "crates/kf-qemu/src/userstrand.rs",
+    "line": 115,
+    "code": "clippy::arithmetic_side_effects",
+    "message": "arithmetic operation that can potentially result in unexpected side-effects"
+  },
+  {
+    "file": "crates/kf-qemu/src/userstrand.rs",
+    "line": 123,
+    "code": "clippy::arithmetic_side_effects",
+    "message": "arithmetic operation that can potentially result in unexpected side-effects"
+  },
+  {
+    "file": "crates/kf-qemu/src/userstrand.rs",
+    "line": 132,
+    "code": "clippy::arithmetic_side_effects",
+    "message": "arithmetic operation that can potentially result in unexpected side-effects"
+  },
+  {
+    "file": "crates/kf-qemu/src/usershadow.rs",
+    "line": 62,
+    "code": "clippy::indexing_slicing",
+    "message": "indexing may panic"
+  },
+  {
+    "file": "crates/kf-qemu/src/usershadow.rs",
+    "line": 62,
+    "code": "clippy::indexing_slicing",
+    "message": "indexing may panic"
+  },
+  {
+    "file": "crates/kf-qemu/src/usershadow.rs",
+    "line": 62,
+    "code": "clippy::indexing_slicing",
+    "message": "indexing may panic"
+  },
+  {
+    "file": "crates/kf-qemu/src/usershadow.rs",
+    "line": 62,
+    "code": "clippy::indexing_slicing",
+    "message": "indexing may panic"
+  },
+  {
+    "file": "crates/kf-qemu/src/usershadow.rs",
+    "line": 76,
+    "code": "clippy::indexing_slicing",
+    "message": "indexing may panic"
+  },
+  {
+    "file": "crates/kf-qemu/src/usershadow.rs",
+    "line": 86,
+    "code": "clippy::indexing_slicing",
+    "message": "indexing may panic"
+  },
+  {
+    "file": "crates/kf-qemu/src/usershadow.rs",
+    "line": 96,
+    "code": "clippy::arithmetic_side_effects",
+    "message": "arithmetic operation that can potentially result in unexpected side-effects"
+  },
+  {
+    "file": "crates/kf-qemu/src/usershadow.rs",
+    "line": 129,
+    "code": "clippy::indexing_slicing",
+    "message": "slicing may panic"
+  },
+  {
+    "file": "crates/kf-qemu/src/usershadow.rs",
+    "line": 137,
+    "code": "clippy::arithmetic_side_effects",
+    "message": "arithmetic operation that can potentially result in unexpected side-effects"
+  },
+  {
+    "file": "crates/kf-qemu/src/chan.rs",
+    "line": 914,
+    "code": "clippy::arithmetic_side_effects",
+    "message": "arithmetic operation that can potentially result in unexpected side-effects"
+  },
+  {
+    "file": "crates/kf-qemu/src/chan.rs",
+    "line": 919,
+    "code": "clippy::arithmetic_side_effects",
+    "message": "arithmetic operation that can potentially result in unexpected side-effects"
+  },
+  {
+    "file": "crates/kf-qemu/src/chan.rs",
+    "line": 923,
+    "code": "clippy::arithmetic_side_effects",
+    "message": "arithmetic operation that can potentially result in unexpected side-effects"
+  },
+  {
+    "file": "crates/kf-qemu/src/chan.rs",
+    "line": 933,
+    "code": "clippy::arithmetic_side_effects",
+    "message": "arithmetic operation that can potentially result in unexpected side-effects"
+  },
+  {
+    "file": "crates/kf-qemu/src/chan.rs",
+    "line": 1575,
+    "code": "clippy::arithmetic_side_effects",
+    "message": "arithmetic operation that can potentially result in unexpected side-effects"
+  },
+  {
+    "file": "crates/kf-qemu/src/chan.rs",
+    "line": 1644,
+    "code": "clippy::arithmetic_side_effects",
+    "message": "arithmetic operation that can potentially result in unexpected side-effects"
+  },
+  {
+    "file": "crates/kf-qemu/src/chan.rs",
+    "line": 3349,
+    "code": "clippy::indexing_slicing",
+    "message": "indexing may panic"
+  },
+  {
+    "file": "crates/kf-qemu/src/chan.rs",
+    "line": 3353,
+    "code": "clippy::indexing_slicing",
+    "message": "indexing may panic"
+  },
+  {
+    "file": "crates/kf-qemu/src/chan.rs",
+    "line": 6210,
+    "code": "clippy::indexing_slicing",
+    "message": "slicing may panic"
+  },
+  {
+    "file": "crates/kf-qemu/src/chan.rs",
+    "line": 6935,
+    "code": "clippy::arithmetic_side_effects",
+    "message": "arithmetic operation that can potentially result in unexpected side-effects"
+  },
+  {
+    "file": "crates/kf-qemu/src/userread.rs",
+    "line": 68,
+    "code": "clippy::arithmetic_side_effects",
+    "message": "arithmetic operation that can potentially result in unexpected side-effects"
+  },
+  {
+    "file": "crates/kf-qemu/src/userread.rs",
+    "line": 143,
+    "code": "clippy::arithmetic_side_effects",
+    "message": "arithmetic operation that can potentially result in unexpected side-effects"
+  },
+  {
+    "file": "crates/kf-qemu/src/userread.rs",
+    "line": 215,
+    "code": "clippy::arithmetic_side_effects",
+    "message": "arithmetic operation that can potentially result in unexpected side-effects"
+  },
+  {
+    "file": "crates/kf-qemu/src/userread.rs",
+    "line": 215,
+    "code": "clippy::arithmetic_side_effects",
+    "message": "arithmetic operation that can potentially result in unexpected side-effects"
+  },
+  {
+    "file": "crates/kf-qemu/src/userread.rs",
+    "line": 217,
+    "code": "clippy::arithmetic_side_effects",
+    "message": "arithmetic operation that can potentially result in unexpected side-effects"
+  },
+  {
+    "file": "crates/kf-qemu/src/userread.rs",
+    "line": 226,
+    "code": "clippy::arithmetic_side_effects",
+    "message": "arithmetic operation that can potentially result in unexpected side-effects"
+  },
+  {
+    "file": "crates/kf-qemu/src/userread.rs",
+    "line": 246,
+    "code": "clippy::arithmetic_side_effects",
+    "message": "arithmetic operation that can potentially result in unexpected side-effects"
+  },
+  {
+    "file": "crates/kf-qemu/src/userread.rs",
+    "line": 279,
+    "code": "clippy::arithmetic_side_effects",
+    "message": "arithmetic operation that can potentially result in unexpected side-effects"
+  },
+  {
+    "file": "crates/kf-qemu/src/userread.rs",
+    "line": 289,
+    "code": "clippy::arithmetic_side_effects",
+    "message": "arithmetic operation that can potentially result in unexpected side-effects"
+  },
+  {
+    "file": "crates/kf-qemu/src/userread.rs",
+    "line": 302,
+    "code": "clippy::arithmetic_side_effects",
+    "message": "arithmetic operation that can potentially result in unexpected side-effects"
+  },
+  {
+    "file": "crates/kf-qemu/src/userread.rs",
+    "line": 303,
+    "code": "clippy::arithmetic_side_effects",
+    "message": "arithmetic operation that can potentially result in unexpected side-effects"
+  },
+  {
+    "file": "crates/kf-qemu/src/userread.rs",
+    "line": 303,
+    "code": "clippy::arithmetic_side_effects",
+    "message": "arithmetic operation that can potentially result in unexpected side-effects"
+  },
+  {
+    "file": "crates/kf-qemu/src/userread.rs",
+    "line": 316,
+    "code": "clippy::indexing_slicing",
+    "message": "slicing may panic"
+  },
+  {
+    "file": "crates/kf-qemu/src/userread.rs",
+    "line": 316,
+    "code": "clippy::arithmetic_side_effects",
+    "message": "arithmetic operation that can potentially result in unexpected side-effects"
+  },
+  {
+    "file": "crates/kf-qemu/src/userread.rs",
+    "line": 319,
+    "code": "clippy::arithmetic_side_effects",
+    "message": "arithmetic operation that can potentially result in unexpected side-effects"
+  },
+  {
+    "file": "crates/kf-qemu/src/userread.rs",
+    "line": 322,
+    "code": "clippy::arithmetic_side_effects",
+    "message": "arithmetic operation that can potentially result in unexpected side-effects"
+  }
+]

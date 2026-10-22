@@ -142,7 +142,17 @@ impl TickSource {
     #[allow(clippy::type_complexity)]
     pub(crate) fn probe_state(
         &self,
-    ) -> (bool, u64, Option<u64>, Option<u64>, u64, u32, u32, Option<u64>, Option<u64>) {
+    ) -> (
+        bool,
+        u64,
+        Option<u64>,
+        Option<u64>,
+        u64,
+        u32,
+        u32,
+        Option<u64>,
+        Option<u64>,
+    ) {
         (
             self.source == Source::Broker,
             self.at_ns,

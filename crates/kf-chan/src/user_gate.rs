@@ -483,7 +483,10 @@ mod tests {
                     || m.1 == kf_abi::submit::fifo::NON_STALL_INTERRUPT)
         };
         assert_eq!(got.iter().filter(|m| own(m)).count(), 2);
-        assert_eq!(got.into_iter().filter(|m| !own(m)).collect::<Vec<_>>(), expected);
+        assert_eq!(
+            got.into_iter().filter(|m| !own(m)).collect::<Vec<_>>(),
+            expected
+        );
     }
 
     /// The marker words are a tagged reference: only tagged values count, extended against `seen`.

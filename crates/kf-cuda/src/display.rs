@@ -489,7 +489,11 @@ impl YuvLayer {
         if l.sw == 0 || l.sh == 0 || l.dw == 0 || l.dh == 0 || l.dw > 16384 || l.dh > 16384 {
             return Err(format!("{l:?} is not a composable rectangle"));
         }
-        if l.sw > 16384 || l.sh > 16384 || l.sub_x_log2 > 1 || l.sub_y_log2 > 1 || l.layout > 3
+        if l.sw > 16384
+            || l.sh > 16384
+            || l.sub_x_log2 > 1
+            || l.sub_y_log2 > 1
+            || l.layout > 3
             || l.filter > 1
         {
             return Err(format!("{l:?}: source geometry outside the kernel's range"));
@@ -501,7 +505,10 @@ impl YuvLayer {
         }
         // packed: the chroma is in plane 0, in the luma rows
         if l.layout >= 2
-            && (l.sub_x_log2 != 1 || l.sub_y_log2 != 0 || l.c_src != l.y_src || l.c_pitch != l.y_pitch)
+            && (l.sub_x_log2 != 1
+                || l.sub_y_log2 != 0
+                || l.c_src != l.y_src
+                || l.c_pitch != l.y_pitch)
         {
             return Err(format!("{l:?}: a packed layout reads one plane"));
         }
@@ -2146,7 +2153,12 @@ mod tests {
         };
         assert_eq!(packed.check(120, 90), Ok(()));
         assert!(
-            YuvLayer { c_pitch: 64, ..packed }.check(120, 90).is_err(),
+            YuvLayer {
+                c_pitch: 64,
+                ..packed
+            }
+            .check(120, 90)
+            .is_err(),
             "a packed layout reads one plane"
         );
         assert!(

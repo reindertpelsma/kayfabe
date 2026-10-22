@@ -210,7 +210,7 @@ impl StoreUserd {
             cookie,
             region: Some(region),
             _node: node,
-            at: base - page,
+            at: base & 0xFFF, // == base - page, without arithmetic: `page` is `base` with the low 12 bits cleared
         })
     }
     fn word(
@@ -222,7 +222,9 @@ impl StoreUserd {
         if len != 4 || offset & 3 != 0 || offset.checked_add(4).is_none_or(|e| e > 0x200) {
             return Err(AccessError::Bounds);
         }
-        Ok(kf_linux_raw::HostOffset::new(self.at + offset))
+        Ok(kf_linux_raw::HostOffset::new(
+            self.at.checked_add(offset).ok_or(AccessError::Bounds)?,
+        ))
     }
     fn read(&self, offset: u64, bytes: &mut [u8]) -> Result<(), kf_rm::memory_list::AccessError> {
         use kf_rm::memory_list::AccessError;
@@ -902,7 +904,10 @@ impl ChanPlane {
             // ★ 2026-10-14: the event loop's counters whenever the last relay goes (bounded: the first
             // 16 times, then each power of two) -- the device may never see `stop` (a guest power-off).
             if last {
-                let n = self.relay_reports.fetch_add(1, Ordering::Relaxed) + 1;
+                let n = self
+                    .relay_reports
+                    .fetch_add(1, Ordering::Relaxed)
+                    .saturating_add(1);
                 if n <= 16 || n.is_power_of_two() {
                     eprintln!(
                         "kf3: USER_RING_LOOP SUMMARY (all relays gone, #{n}) {}",
