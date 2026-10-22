@@ -1,0 +1,34 @@
+{
+  "kind": "MEASURED bounded text export",
+  "utc": "2026-10-22T02:23:06.214601+00:00",
+  "files": {
+    "s2_guard_host_tests.log": {
+      "sha256": "4f418200451c8adf6222c2139bff8b009b054bb22300bc8523475b835046c001",
+      "bytes": 3104,
+      "tail_only": false
+    },
+    "sweep_product_source": {
+      "sha256": "13afbbee8f59e1d1d2fcc6041bc73349798907477bd5f2e4162b5f837af0efd1",
+      "bytes": 41,
+      "tail_only": false
+    },
+    "sweep_20261020_provision.log": {
+      "sha256": "99166cad1bf3b9773ce954f1e42aa3bea797f05f06f7b9689df3db6e23b3d283",
+      "bytes": 294,
+      "tail_only": false
+    },
+    "box.log": {
+      "sha256": "0f749165f42fee2e09b3e06fc1075af5a3b964b4a2779c706819275ed818501c",
+      "bytes": 22789,
+      "tail_only": true
+    },
+    "driver.log": {
+      "sha256": "27060fae0df24bd925d769da948b6245f9be9e35a779354faa3f433c7747f379",
+      "bytes": 1514,
+      "tail_only": false
+    },
+    "kernel_xids.log": {
+      "journal_lines": 702
+    }
+  }
+}

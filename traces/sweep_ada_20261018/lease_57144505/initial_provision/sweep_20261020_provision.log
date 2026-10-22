@@ -1,0 +1,4 @@
+SWEEP_PROVISION_START own_instance=57144505 2026-10-22T02:18:42+00:00
+From https://github.com/reindertpelsma/kayfabe
+ * branch                f98ceae6566420a48eca64ed6af6e33ff4100616 -> FETCH_HEAD
+HEAD is now at f98ceae65 fix(s2): propagate explicit guest image directory before guarded launch

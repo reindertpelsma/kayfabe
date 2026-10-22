@@ -1,0 +1,19 @@
+DRIVER_SWAP_START 2026-10-22T02:21:45+00:00
+before: NVRM version: NVIDIA UNIX x86_64 Kernel Module  575.51.03  Wed Apr 16 14:22:51 UTC 2025
+downloading https://us.download.nvidia.com/XFree86/Linux-x86_64/595.91.07/NVIDIA-Linux-x86_64-595.91.07.run
+-rw-r--r-- 1 root root 423651201 Oct 22 02:22 /root/NVIDIA-Linux-x86_64-595.91.07.run
+dpkg lock free after 0s
+held packages: libnvidia-cfg1-575 libnvidia-common-575 libnvidia-compute-575 libnvidia-decode-575 libnvidia-encode-575 libnvidia-extra-575 libnvidia-fbc1-575 libnvidia-gl-575 nvidia-driver-575
+Canceled hold on libnvidia-cfg1-575.
+Canceled hold on libnvidia-common-575.
+Canceled hold on libnvidia-compute-575.
+Canceled hold on libnvidia-decode-575.
+Canceled hold on libnvidia-encode-575.
+Canceled hold on libnvidia-extra-575.
+Canceled hold on libnvidia-fbc1-575.
+Canceled hold on libnvidia-gl-575.
+Canceled hold on nvidia-driver-575.
+unhold_rc=0
+holds remaining after unhold: 0  ⇒ MUST be 0
+modules still loaded: 0
+driver packages to purge: libnvidia-cfg1-575:amd64 libnvidia-common-575:all libnvidia-compute-575:amd64 libnvidia-decode-575:amd64 libnvidia-encode-575:amd64 libnvidia-extra-575:amd64 libnvidia-fbc1-575:amd64 libnvidia-gl-575:amd64 libnvidia-gpucomp-575:amd64 nvidia-compute-utils-575:amd64 nvidia-dkms-575:amd64 nvidia-driver-575:amd64 nvidia-firmware-575-575.51.03:amd64 nvidia-kernel-common-575:amd64 nvidia-kernel-source-575:amd64 nvidia-modprobe:amd64 nvidia-settings:amd64 nvidia-utils-575:amd64 xserver-xorg-video-nvidia-575:amd64
