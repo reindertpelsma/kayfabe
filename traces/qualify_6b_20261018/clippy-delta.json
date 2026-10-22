@@ -1,0 +1,11 @@
+{
+  "classification": "MEASURED",
+  "evidence": "clippy-delta.json",
+  "candidate": "baa2977527c4509145e8033143bd664f768175a6",
+  "master": "e9c6d39e5b465d7a20f3dcca8e7e15a4374958b5",
+  "candidate_sites": 532,
+  "master_sites": 532,
+  "added": 0,
+  "removed": 0,
+  "new_sites": {}
+}

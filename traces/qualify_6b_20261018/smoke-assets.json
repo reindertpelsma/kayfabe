@@ -1,0 +1,19 @@
+{
+  "classification": "CODE READ",
+  "heaven_settings": {
+    "api": "direct3d11",
+    "windowed": true,
+    "width": 1920,
+    "height": 1080,
+    "quality": "ULTRA",
+    "tessellation": "NORMAL",
+    "aa": 0,
+    "automatic_benchmark": "PHORONIX"
+  },
+  "sources": "Q1 installed smoke assets; changed Heaven window size/quality to requested comparison settings and retained process handle; Q4 paths",
+  "sha256": {
+    "heaven.ps1": "7508a51c335b7509b36bbbff5af91b8df3b098f194858e336292d641004f5c2b",
+    "mc.ps1": "18477e6f79afa7022f7eff8b21e2f84f7b23aedc762b079aa9d0410ceaa8e5d9",
+    "minecraft-wrapper.ps1": "56a25c68e82c8b58d3f520513f1dffcff4dd655690b4c392af2d1a192e2e713f"
+  }
+}

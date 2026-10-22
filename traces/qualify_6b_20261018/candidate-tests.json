@@ -1,0 +1,16 @@
+{
+  "classification": "MEASURED",
+  "evidence": "candidate-tests.json",
+  "candidate": "baa2977527c4509145e8033143bd664f768175a6",
+  "command": "KAYFABE_NO_KVM=1 cargo test --release --locked -j2 -p 'kf-*' --no-fail-fast",
+  "summaries": 214,
+  "passed": 3781,
+  "failed": 0,
+  "ignored": 20,
+  "log_sha256": "ede4c35cf79f7484c5178e2f1b0af49acb58e2f81dfe5246bbcd84251babcb16",
+  "log_bytes": 409260,
+  "test_failures": [],
+  "exit": 0,
+  "start": "2026-10-22T11:01:26.281475+00:00",
+  "end": "2026-10-22T11:16:29.149949+00:00"
+}

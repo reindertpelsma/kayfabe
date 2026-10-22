@@ -1,0 +1,60 @@
+{
+  "classification": "MEASURED",
+  "evidence": "linux.json",
+  "candidate": "baa2977527c4509145e8033143bd664f768175a6",
+  "suite_revision": "737306ee8d5055fad7441874fc2b7afab3e2bbb4",
+  "time": "2026-10-22T11:11:57.431376+00:00",
+  "passed": 30,
+  "failed": 0,
+  "arms": [
+    "--timer",
+    "--engines",
+    "--doorbell-census",
+    "--gpu-info-sweep",
+    "--bus-info-sweep",
+    "--concurrency",
+    "--defer-liveness",
+    "--blockage-coverage",
+    "--alias-two-vas",
+    "--alias-unmap-observe",
+    "--map-propagation",
+    "--late-map-race",
+    "--missing-page-fault",
+    "--uvm-invalidate",
+    "--uvm-mean",
+    "--executor-vas",
+    "--guest-ring-channel",
+    "--dictated-ring",
+    "--dictated-ring-negative",
+    "--ce-client",
+    "--ce-client-guest-ram",
+    "--guest-ram-pin",
+    "--bar1-crossing",
+    "--atomics-probe",
+    "--pce-mask-probe",
+    "--gpga-reserve-probe",
+    "--map-stress",
+    "--concurrent-fuzz",
+    "--cross-client-leak",
+    "--rpc-mixed-allocs"
+  ],
+  "intentional_controls": [
+    {
+      "arm": "--defer-liveness",
+      "accepted_faults": 4,
+      "serial_sha256": "ba8bee66590678eb7f43082206489884612e19e6c971251085ba818eb2c9d0f8",
+      "qlog_sha256": "9ce129eaf1204cefd643bbe82dd66465ff418790430c3e92d22163ae754bf452"
+    },
+    {
+      "arm": "--missing-page-fault",
+      "accepted_faults": 1,
+      "serial_sha256": "6b994112fb2ca27a473fd63b42bcbf129c8297096485e1cea642e6ae3c7b6cd6",
+      "qlog_sha256": "3aa703b3b9be1940a31cc745224af5aae6812844c647605473e0127b68a090e6"
+    }
+  ],
+  "epoch_xids": 538,
+  "final_xids": 543,
+  "unmatched_new_xids": 0,
+  "first_attempt": "HARNESS_PACKAGING_FAILURE: copied wrapper lacked executable permission; no QEMU started; preserved packaging-failed-timer.log",
+  "retry": "chmod restored executable mode; complete 30-arm retry"
+}

@@ -1,0 +1,75 @@
+{
+  "classification": "CODE READ",
+  "files": [
+    {
+      "file": "energy-arm.py",
+      "source": "Q3 proven harness",
+      "source_sha256": "6fafc0c0cfd081ef4e8e2eb9919fa15706495381f561ace5a61c09b0243ce0d3",
+      "q4_sha256": "627ef8516c760bcac8368dbaf6349d0c45f26069caf8db57ae0589cfcf2e7e27",
+      "adaptations": "Q4 lane paths/state; candidate proof file"
+    },
+    {
+      "file": "windows_session_bisect.py",
+      "source": "Q3 proven harness",
+      "source_sha256": "d34eeac59a0b4d421c513b569be0ae49914262c58ea2dc7f696a0fb37ff73379",
+      "q4_sha256": "7c5e478b28eba3c61a8b71684834b7294390405364c048e43ed64e4ccfd7ec4e",
+      "adaptations": "Q4 lane paths/state; candidate proof file"
+    },
+    {
+      "file": "bisect-agent.py",
+      "source": "Q3 proven harness",
+      "source_sha256": "69f9f055f94d50d63e6c04c2d806f7fc07b8d2038b8b62873b6808fd0cd08cd8",
+      "q4_sha256": "fd15170b8e63a92e2492b1c1c92e7589b366d1c06616bd9d458bd96b9221288a",
+      "adaptations": "Q4 lane paths/state; candidate proof file"
+    },
+    {
+      "file": "bisect-boot.ps1",
+      "source": "Q3 proven harness",
+      "source_sha256": "a3fa3a5e08d5e813c632382367cc694a24b7d075ed6a1a937bc996ea1e4a6897",
+      "q4_sha256": "a3fa3a5e08d5e813c632382367cc694a24b7d075ed6a1a937bc996ea1e4a6897",
+      "adaptations": "Q4 lane paths/state; candidate proof file"
+    },
+    {
+      "file": "bisect-observer.ps1",
+      "source": "Q3 proven harness",
+      "source_sha256": "097a4f90f0dae3fca9a153b03889031c58aa234bb4e9cee168220d61f429c5e8",
+      "q4_sha256": "526f812c7fb9fffd9106d5b88406a8e4108b3af881aaf8b7354a5f4cdc8bacbf",
+      "adaptations": "Q4 lane paths/state; candidate proof file"
+    },
+    {
+      "file": "bisect-observer-controls.ps1",
+      "source": "Q3 proven harness",
+      "source_sha256": "42f06a67fde4b3ae95424bc11520be699a0156d14ca15b9b77feaa6cfca20bce",
+      "q4_sha256": "04ce245c3c2fad1b07abbd0298ec00c81042685753da9a2ed5dfc6ffef0b6084",
+      "adaptations": "Q4 lane paths/state; candidate proof file"
+    },
+    {
+      "file": "bisect-status-template.ps1",
+      "source": "Q3 proven harness",
+      "source_sha256": "bf5fac772fe702b7ede2b07697ecdc8950ff120b59269b8f35720dd5a0e5f09a",
+      "q4_sha256": "16e5406809ed27cebccd1a6cfe4e42143a2215ee6b8badeaa027b1e4e19e43d2",
+      "adaptations": "Q4 lane paths/state; candidate proof file"
+    },
+    {
+      "file": "bisect-guest-suite.py",
+      "source": "Q3 proven harness",
+      "source_sha256": "e21b0e9e85ef52d1f11510dc1d0130b8f259592ebf7cd2286d139517c88cb8a7",
+      "q4_sha256": "e21b0e9e85ef52d1f11510dc1d0130b8f259592ebf7cd2286d139517c88cb8a7",
+      "adaptations": "Q4 lane paths/state; candidate proof file"
+    },
+    {
+      "file": "bisect-export.ps1",
+      "source": "Q3 proven harness",
+      "source_sha256": "503fea7bbefaf7b0b5cb0eef577742b20a655890b23b51405c921cfa0e013d4a",
+      "q4_sha256": "503fea7bbefaf7b0b5cb0eef577742b20a655890b23b51405c921cfa0e013d4a",
+      "adaptations": "Q4 lane paths/state; candidate proof file"
+    },
+    {
+      "file": "extract-public.py",
+      "source": "Q3 proven harness",
+      "source_sha256": "126d1ac63936be29dbdb535f89488d0cc2ae655ae257fc09dac48418f4c99835",
+      "q4_sha256": "e2bf45d4b3f67fae12c4e6d8a1da64f74015c56618efceb3140d5864216e2ac3",
+      "adaptations": "Q4 lane paths/state; candidate proof file"
+    }
+  ]
+}

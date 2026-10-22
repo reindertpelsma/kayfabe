@@ -1,0 +1,30 @@
+{
+  "classification": "MEASURED",
+  "evidence": "native.json",
+  "candidate": "baa2977527c4509145e8033143bd664f768175a6",
+  "time": "2026-10-22T11:09:21.058704+00:00",
+  "summaries": [
+    "HEAD=baa29775 dirty=0",
+    "GPU=NVIDIA GeForce RTX 4070, 595.91.07",
+    "GATE10_VERDICT=PASS",
+    "V3_GATES_SUMMARY pass=9 fail=0 gate10=PASS",
+    "V3_GATES_BIRTHS births=12 user=12 refused=0 ok=1",
+    "V3_GATES_EXIT pass=9 fail=0 births_ok=1 gate10=PASS 2026-10-22T13:05:53+02:00"
+  ],
+  "gate_verdicts": [
+    "GATE1_VERDICT=PASS",
+    "GATE2_VERDICT=PASS",
+    "GATE3_VERDICT=PASS",
+    "GATE4_VERDICT=PASS",
+    "GATE5_VERDICT=PASS",
+    "GATE6_VERDICT=PASS",
+    "GATE7_VERDICT=PASS",
+    "GATE8_VERDICT=PASS",
+    "GATE9_VERDICT=PASS",
+    "GATE10_VERDICT=PASS"
+  ],
+  "new_xids": 0,
+  "qemu_sha256": "2de5ba789c76efbdfbd5271ab3f32a25888976444efe5fce4494fbf9577da733",
+  "broker_revision": "e9c6d39e5b465d7a20f3dcca8e7e15a4374958b5",
+  "broker_sha256": "22d726280a9ffb42fd8998de8a02ea8069ad35f64686c27cd47a943bcbaab868"
+}
