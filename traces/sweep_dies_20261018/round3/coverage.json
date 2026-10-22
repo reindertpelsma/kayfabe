@@ -29,9 +29,65 @@
       "candidate_offer": null,
       "route_inheritance_forbidden": true,
       "workstation_variant_coverage": "Measured die receipt covers only explicitly exercised constants. No workstation branch/vBIOS/ECC equivalence established; harvesting-dependent PCE/LCE masks, engine counts and CE routes must be queried from current host. No inheritance claimed.",
-      "sku_index": [],
+      "sku_index": [
+        {
+          "pci_device": "1e02",
+          "sku": "TITAN RTX"
+        },
+        {
+          "pci_device": "1e03",
+          "sku": "GeForce RTX 2080 Ti 12GB"
+        },
+        {
+          "pci_device": "1e04",
+          "sku": "GeForce RTX 2080 Ti"
+        },
+        {
+          "pci_device": "1e07",
+          "sku": "GeForce RTX 2080 Ti Rev. A"
+        },
+        {
+          "pci_device": "1e09",
+          "sku": "CMP 50HX"
+        },
+        {
+          "pci_device": "1e2d",
+          "sku": "GeForce RTX 2080 Ti Engineering Sample"
+        },
+        {
+          "pci_device": "1e2e",
+          "sku": "GeForce RTX 2080 Ti 12GB Engineering Sample"
+        },
+        {
+          "pci_device": "1e30",
+          "sku": "Quadro RTX 6000/8000"
+        },
+        {
+          "pci_device": "1e35",
+          "sku": "Tesla T10"
+        },
+        {
+          "pci_device": "1e36",
+          "sku": "Quadro RTX 6000"
+        },
+        {
+          "pci_device": "1e37",
+          "sku": "Tesla T10 16GB / GRID RTX T10-2/T10-4/T10-8"
+        },
+        {
+          "pci_device": "1e38",
+          "sku": "Tesla T40 24GB"
+        },
+        {
+          "pci_device": "1e78",
+          "sku": "Quadro RTX 6000/8000"
+        }
+      ],
       "sku_index_scope": "CODE READ pci.ids candidate mapping only; exact native RM implementation probe required for each rented host; revisions/mobile SKUs can differ",
-      "workstation_skus": [],
+      "workstation_skus": [
+        "Quadro RTX 6000",
+        "Quadro RTX 6000/8000"
+      ],
       "rentable_snapshot": "no eligible SKU class in offers_audited.json; price unavailable, not proof of permanent unavailability"
     },
     {
@@ -43,9 +99,104 @@
       "candidate_offer": null,
       "route_inheritance_forbidden": true,
       "workstation_variant_coverage": "Measured die receipt covers only explicitly exercised constants. No workstation branch/vBIOS/ECC equivalence established; harvesting-dependent PCE/LCE masks, engine counts and CE routes must be queried from current host. No inheritance claimed.",
-      "sku_index": [],
+      "sku_index": [
+        {
+          "pci_device": "1e81",
+          "sku": "GeForce RTX 2080 SUPER"
+        },
+        {
+          "pci_device": "1e82",
+          "sku": "GeForce RTX 2080"
+        },
+        {
+          "pci_device": "1e84",
+          "sku": "GeForce RTX 2070 SUPER"
+        },
+        {
+          "pci_device": "1e87",
+          "sku": "GeForce RTX 2080 Rev. A"
+        },
+        {
+          "pci_device": "1e89",
+          "sku": "GeForce RTX 2060"
+        },
+        {
+          "pci_device": "1e90",
+          "sku": "GeForce RTX 2080 Mobile"
+        },
+        {
+          "pci_device": "1e91",
+          "sku": "GeForce RTX 2070 SUPER Mobile / Max-Q"
+        },
+        {
+          "pci_device": "1e93",
+          "sku": "GeForce RTX 2080 SUPER Mobile / Max-Q"
+        },
+        {
+          "pci_device": "1eae",
+          "sku": "GeForce GTX 2080 Engineering Sample"
+        },
+        {
+          "pci_device": "1eb0",
+          "sku": "Quadro RTX 5000"
+        },
+        {
+          "pci_device": "1eb1",
+          "sku": "Quadro RTX 4000"
+        },
+        {
+          "pci_device": "1eb4",
+          "sku": "T4G"
+        },
+        {
+          "pci_device": "1eb5",
+          "sku": "Quadro RTX 5000 Mobile / Max-Q"
+        },
+        {
+          "pci_device": "1eb6",
+          "sku": "Quadro RTX 4000 Mobile / Max-Q"
+        },
+        {
+          "pci_device": "1eb8",
+          "sku": "Tesla T4"
+        },
+        {
+          "pci_device": "1eba",
+          "sku": "PG189 SKU600"
+        },
+        {
+          "pci_device": "1ec2",
+          "sku": "GeForce RTX 2070 SUPER"
+        },
+        {
+          "pci_device": "1ec7",
+          "sku": "GeForce RTX 2070 SUPER"
+        },
+        {
+          "pci_device": "1ed0",
+          "sku": "GeForce RTX 2080 Mobile"
+        },
+        {
+          "pci_device": "1ed1",
+          "sku": "GeForce RTX 2070 SUPER Mobile / Max-Q"
+        },
+        {
+          "pci_device": "1ed3",
+          "sku": "GeForce RTX 2080 SUPER Mobile / Max-Q"
+        },
+        {
+          "pci_device": "1ef5",
+          "sku": "Quadro RTX 5000 Mobile Refresh"
+        }
+      ],
       "sku_index_scope": "CODE READ pci.ids candidate mapping only; exact native RM implementation probe required for each rented host; revisions/mobile SKUs can differ",
-      "workstation_skus": [],
+      "workstation_skus": [
+        "Quadro RTX 4000",
+        "Quadro RTX 4000 Mobile / Max-Q",
+        "Quadro RTX 5000",
+        "Quadro RTX 5000 Mobile / Max-Q",
+        "Quadro RTX 5000 Mobile Refresh"
+      ],
       "rentable_snapshot": "no eligible SKU class in offers_audited.json; price unavailable, not proof of permanent unavailability"
     },
     {
@@ -72,9 +223,97 @@
       },
       "route_inheritance_forbidden": true,
       "workstation_variant_coverage": "Measured die receipt covers only explicitly exercised constants. No workstation branch/vBIOS/ECC equivalence established; harvesting-dependent PCE/LCE masks, engine counts and CE routes must be queried from current host. No inheritance claimed.",
-      "sku_index": [],
+      "sku_index": [
+        {
+          "pci_device": "1f02",
+          "sku": "GeForce RTX 2070"
+        },
+        {
+          "pci_device": "1f03",
+          "sku": "GeForce RTX 2060 12GB"
+        },
+        {
+          "pci_device": "1f06",
+          "sku": "GeForce RTX 2060 SUPER"
+        },
+        {
+          "pci_device": "1f07",
+          "sku": "GeForce RTX 2070 Rev. A"
+        },
+        {
+          "pci_device": "1f08",
+          "sku": "GeForce RTX 2060 Rev. A"
+        },
+        {
+          "pci_device": "1f09",
+          "sku": "GeForce GTX 1660 SUPER"
+        },
+        {
+          "pci_device": "1f0a",
+          "sku": "GeForce GTX 1650"
+        },
+        {
+          "pci_device": "1f0b",
+          "sku": "CMP 40HX"
+        },
+        {
+          "pci_device": "1f10",
+          "sku": "GeForce RTX 2070 Mobile"
+        },
+        {
+          "pci_device": "1f11",
+          "sku": "GeForce RTX 2060 Mobile"
+        },
+        {
+          "pci_device": "1f12",
+          "sku": "GeForce RTX 2060 Max-Q"
+        },
+        {
+          "pci_device": "1f14",
+          "sku": "GeForce RTX 2070 Mobile / Max-Q Refresh"
+        },
+        {
+          "pci_device": "1f15",
+          "sku": "GeForce RTX 2060 Mobile"
+        },
+        {
+          "pci_device": "1f36",
+          "sku": "Quadro RTX 3000 Mobile / Max-Q"
+        },
+        {
+          "pci_device": "1f42",
+          "sku": "GeForce RTX 2060 SUPER"
+        },
+        {
+          "pci_device": "1f47",
+          "sku": "GeForce RTX 2060 SUPER"
+        },
+        {
+          "pci_device": "1f50",
+          "sku": "GeForce RTX 2070 Mobile / Max-Q"
+        },
+        {
+          "pci_device": "1f51",
+          "sku": "GeForce RTX 2060 Mobile"
+        },
+        {
+          "pci_device": "1f54",
+          "sku": "GeForce RTX 2070 Mobile"
+        },
+        {
+          "pci_device": "1f55",
+          "sku": "GeForce RTX 2060 Mobile"
+        },
+        {
+          "pci_device": "1f76",
+          "sku": "Quadro RTX 3000 Mobile Refresh"
+        }
+      ],
       "sku_index_scope": "CODE READ pci.ids candidate mapping only; exact native RM implementation probe required for each rented host; revisions/mobile SKUs can differ",
-      "workstation_skus": [],
+      "workstation_skus": [
+        "Quadro RTX 3000 Mobile / Max-Q",
+        "Quadro RTX 3000 Mobile Refresh"
+      ],
       "rentable_snapshot": "candidate available; native implementation confirmation required"
     },
     {
@@ -92,7 +331,48 @@
       "candidate_offer": null,
       "route_inheritance_forbidden": true,
       "workstation_variant_coverage": "Measured die receipt covers only explicitly exercised constants. No workstation branch/vBIOS/ECC equivalence established; harvesting-dependent PCE/LCE masks, engine counts and CE routes must be queried from current host. No inheritance claimed.",
-      "sku_index": [],
+      "sku_index": [
+        {
+          "pci_device": "2182",
+          "sku": "GeForce GTX 1660 Ti"
+        },
+        {
+          "pci_device": "2184",
+          "sku": "GeForce GTX 1660"
+        },
+        {
+          "pci_device": "2186",
+          "sku": "PG160 SKU18"
+        },
+        {
+          "pci_device": "2187",
+          "sku": "GeForce GTX 1650 SUPER"
+        },
+        {
+          "pci_device": "2188",
+          "sku": "GeForce GTX 1650"
+        },
+        {
+          "pci_device": "2189",
+          "sku": "CMP 30HX"
+        },
+        {
+          "pci_device": "2191",
+          "sku": "GeForce GTX 1660 Ti Mobile"
+        },
+        {
+          "pci_device": "2192",
+          "sku": "GeForce GTX 1650 Ti Mobile"
+        },
+        {
+          "pci_device": "21c4",
+          "sku": "GeForce GTX 1660 SUPER"
+        },
+        {
+          "pci_device": "21d1",
+          "sku": "GeForce GTX 1660 Ti Mobile"
+        }
+      ],
       "sku_index_scope": "CODE READ pci.ids candidate mapping only; exact native RM implementation probe required for each rented host; revisions/mobile SKUs can differ",
       "workstation_skus": [],
       "rentable_snapshot": "no eligible SKU class in offers_audited.json; price unavailable, not proof of permanent unavailability"
@@ -106,9 +386,136 @@
       "candidate_offer": null,
       "route_inheritance_forbidden": true,
       "workstation_variant_coverage": "Measured die receipt covers only explicitly exercised constants. No workstation branch/vBIOS/ECC equivalence established; harvesting-dependent PCE/LCE masks, engine counts and CE routes must be queried from current host. No inheritance claimed.",
-      "sku_index": [],
+      "sku_index": [
+        {
+          "pci_device": "1f82",
+          "sku": "GeForce GTX 1650"
+        },
+        {
+          "pci_device": "1f83",
+          "sku": "GeForce GTX 1630"
+        },
+        {
+          "pci_device": "1f91",
+          "sku": "GeForce GTX 1650 Mobile / Max-Q"
+        },
+        {
+          "pci_device": "1f92",
+          "sku": "GeForce GTX 1650 Mobile"
+        },
+        {
+          "pci_device": "1f94",
+          "sku": "GeForce GTX 1650 Mobile"
+        },
+        {
+          "pci_device": "1f95",
+          "sku": "GeForce GTX 1650 Ti Mobile"
+        },
+        {
+          "pci_device": "1f96",
+          "sku": "GeForce GTX 1650 Mobile / Max-Q"
+        },
+        {
+          "pci_device": "1f97",
+          "sku": "GeForce MX450"
+        },
+        {
+          "pci_device": "1f98",
+          "sku": "GeForce MX450"
+        },
+        {
+          "pci_device": "1f99",
+          "sku": "GeForce GTX 1650 Mobile / Max-Q"
+        },
+        {
+          "pci_device": "1f9c",
+          "sku": "GeForce MX450"
+        },
+        {
+          "pci_device": "1f9d",
+          "sku": "GeForce GTX 1650 Mobile / Max-Q"
+        },
+        {
+          "pci_device": "1f9f",
+          "sku": "GeForce MX550"
+        },
+        {
+          "pci_device": "1fa0",
+          "sku": "GeForce MX550"
+        },
+        {
+          "pci_device": "1fb0",
+          "sku": "Quadro T1000 Mobile"
+        },
+        {
+          "pci_device": "1fb1",
+          "sku": "T600"
+        },
+        {
+          "pci_device": "1fb2",
+          "sku": "Quadro T400 Mobile"
+        },
+        {
+          "pci_device": "1fb6",
+          "sku": "T600 Laptop GPU"
+        },
+        {
+          "pci_device": "1fb7",
+          "sku": "T550 Laptop GPU"
+        },
+        {
+          "pci_device": "1fb8",
+          "sku": "Quadro T2000 Mobile / Max-Q"
+        },
+        {
+          "pci_device": "1fb9",
+          "sku": "Quadro T1000 Mobile"
+        },
+        {
+          "pci_device": "1fba",
+          "sku": "T600 Mobile"
+        },
+        {
+          "pci_device": "1fbb",
+          "sku": "Quadro T500 Mobile"
+        },
+        {
+          "pci_device": "1fbc",
+          "sku": "T1200 Laptop GPU"
+        },
+        {
+          "pci_device": "1fd9",
+          "sku": "GeForce GTX 1650 Mobile Refresh"
+        },
+        {
+          "pci_device": "1fdd",
+          "sku": "GeForce GTX 1650 Mobile Refresh"
+        },
+        {
+          "pci_device": "1ff0",
+          "sku": "T1000 8GB"
+        },
+        {
+          "pci_device": "1ff2",
+          "sku": "T400 4GB / T400E"
+        },
+        {
+          "pci_device": "1ff9",
+          "sku": "Quadro T1000 Mobile"
+        }
+      ],
       "sku_index_scope": "CODE READ pci.ids candidate mapping only; exact native RM implementation probe required for each rented host; revisions/mobile SKUs can differ",
-      "workstation_skus": [],
+      "workstation_skus": [
+        "Quadro T1000 Mobile",
+        "Quadro T2000 Mobile / Max-Q",
+        "Quadro T400 Mobile",
+        "Quadro T500 Mobile",
+        "T1000 8GB",
+        "T400 4GB / T400E",
+        "T600",
+        "T600 Laptop GPU",
+        "T600 Mobile"
+      ],
       "rentable_snapshot": "no eligible SKU class in offers_audited.json; price unavailable, not proof of permanent unavailability"
     },
     {
@@ -126,9 +533,91 @@
       "candidate_offer": null,
       "route_inheritance_forbidden": true,
       "workstation_variant_coverage": "Measured die receipt covers only explicitly exercised constants. No workstation branch/vBIOS/ECC equivalence established; harvesting-dependent PCE/LCE masks, engine counts and CE routes must be queried from current host. No inheritance claimed.",
-      "sku_index": [],
+      "sku_index": [
+        {
+          "pci_device": "2203",
+          "sku": "GeForce RTX 3090 Ti"
+        },
+        {
+          "pci_device": "2204",
+          "sku": "GeForce RTX 3090"
+        },
+        {
+          "pci_device": "2205",
+          "sku": "GeForce RTX 3080 Ti 20GB"
+        },
+        {
+          "pci_device": "2206",
+          "sku": "GeForce RTX 3080"
+        },
+        {
+          "pci_device": "2207",
+          "sku": "GeForce RTX 3070 Ti"
+        },
+        {
+          "pci_device": "2208",
+          "sku": "GeForce RTX 3080 Ti"
+        },
+        {
+          "pci_device": "220a",
+          "sku": "GeForce RTX 3080 12GB"
+        },
+        {
+          "pci_device": "220d",
+          "sku": "CMP 90HX"
+        },
+        {
+          "pci_device": "2216",
+          "sku": "GeForce RTX 3080 Lite Hash Rate"
+        },
+        {
+          "pci_device": "222b",
+          "sku": "GeForce RTX 3090 Engineering Sample"
+        },
+        {
+          "pci_device": "222f",
+          "sku": "GeForce RTX 3080 11GB / 12GB Engineering Sample"
+        },
+        {
+          "pci_device": "2230",
+          "sku": "RTX A6000"
+        },
+        {
+          "pci_device": "2231",
+          "sku": "RTX A5000"
+        },
+        {
+          "pci_device": "2232",
+          "sku": "RTX A4500"
+        },
+        {
+          "pci_device": "2233",
+          "sku": "RTX A5500"
+        },
+        {
+          "pci_device": "2235",
+          "sku": "A40"
+        },
+        {
+          "pci_device": "2236",
+          "sku": "A10"
+        },
+        {
+          "pci_device": "2237",
+          "sku": "A10G"
+        },
+        {
+          "pci_device": "2238",
+          "sku": "A10M"
+        }
+      ],
       "sku_index_scope": "CODE READ pci.ids candidate mapping only; exact native RM implementation probe required for each rented host; revisions/mobile SKUs can differ",
-      "workstation_skus": [],
+      "workstation_skus": [
+        "RTX A4500",
+        "RTX A5000",
+        "RTX A5500",
+        "RTX A6000"
+      ],
       "rentable_snapshot": "no eligible SKU class in offers_audited.json; price unavailable, not proof of permanent unavailability"
     },
     {
@@ -140,9 +629,28 @@
       "candidate_offer": null,
       "route_inheritance_forbidden": true,
       "workstation_variant_coverage": "Measured die receipt covers only explicitly exercised constants. No workstation branch/vBIOS/ECC equivalence established; harvesting-dependent PCE/LCE masks, engine counts and CE routes must be queried from current host. No inheritance claimed.",
-      "sku_index": [],
+      "sku_index": [
+        {
+          "pci_device": "2414",
+          "sku": "GeForce RTX 3060 Ti"
+        },
+        {
+          "pci_device": "2420",
+          "sku": "GeForce RTX 3080 Ti Mobile"
+        },
+        {
+          "pci_device": "2438",
+          "sku": "RTX A5500 Laptop GPU"
+        },
+        {
+          "pci_device": "2460",
+          "sku": "GeForce RTX 3080 Ti Laptop GPU"
+        }
+      ],
       "sku_index_scope": "CODE READ pci.ids candidate mapping only; exact native RM implementation probe required for each rented host; revisions/mobile SKUs can differ",
-      "workstation_skus": [],
+      "workstation_skus": [
+        "RTX A5500 Laptop GPU"
+      ],
       "rentable_snapshot": "no eligible SKU class in offers_audited.json; price unavailable, not proof of permanent unavailability"
     },
     {
@@ -160,9 +668,156 @@
       "candidate_offer": null,
       "route_inheritance_forbidden": true,
       "workstation_variant_coverage": "Measured die receipt covers only explicitly exercised constants. No workstation branch/vBIOS/ECC equivalence established; harvesting-dependent PCE/LCE masks, engine counts and CE routes must be queried from current host. No inheritance claimed.",
-      "sku_index": [],
+      "sku_index": [
+        {
+          "pci_device": "2480",
+          "sku": "Reserved Dev ID A"
+        },
+        {
+          "pci_device": "2482",
+          "sku": "GeForce RTX 3070 Ti"
+        },
+        {
+          "pci_device": "2484",
+          "sku": "GeForce RTX 3070"
+        },
+        {
+          "pci_device": "2486",
+          "sku": "GeForce RTX 3060 Ti"
+        },
+        {
+          "pci_device": "2487",
+          "sku": "GeForce RTX 3060"
+        },
+        {
+          "pci_device": "2488",
+          "sku": "GeForce RTX 3070 Lite Hash Rate"
+        },
+        {
+          "pci_device": "2489",
+          "sku": "GeForce RTX 3060 Ti Lite Hash Rate"
+        },
+        {
+          "pci_device": "248a",
+          "sku": "CMP 70HX"
+        },
+        {
+          "pci_device": "248c",
+          "sku": "GeForce RTX 3070 Ti"
+        },
+        {
+          "pci_device": "248d",
+          "sku": "GeForce RTX 3070"
+        },
+        {
+          "pci_device": "248e",
+          "sku": "GeForce RTX 3060 Ti"
+        },
+        {
+          "pci_device": "249c",
+          "sku": "GeForce RTX 3080 Mobile / Max-Q 8GB/16GB"
+        },
+        {
+          "pci_device": "249d",
+          "sku": "GeForce RTX 3070 Mobile / Max-Q"
+        },
+        {
+          "pci_device": "24a0",
+          "sku": "Geforce RTX 3070 Ti Laptop GPU"
+        },
+        {
+          "pci_device": "24ac",
+          "sku": "GeForce RTX 30x0 Engineering Sample"
+        },
+        {
+          "pci_device": "24ad",
+          "sku": "GeForce RTX 3060 Engineering Sample"
+        },
+        {
+          "pci_device": "24af",
+          "sku": "GeForce RTX 3070 Engineering Sample"
+        },
+        {
+          "pci_device": "24b0",
+          "sku": "RTX A4000"
+        },
+        {
+          "pci_device": "24b1",
+          "sku": "RTX A4000H"
+        },
+        {
+          "pci_device": "24b6",
+          "sku": "RTX A5000 Mobile"
+        },
+        {
+          "pci_device": "24b7",
+          "sku": "RTX A4000 Mobile"
+        },
+        {
+          "pci_device": "24b8",
+          "sku": "RTX A3000 Mobile"
+        },
+        {
+          "pci_device": "24b9",
+          "sku": "RTX A3000 12GB Laptop GPU"
+        },
+        {
+          "pci_device": "24ba",
+          "sku": "RTX A4500 Laptop GPU"
+        },
+        {
+          "pci_device": "24bb",
+          "sku": "RTX A3000 Laptop GPU"
+        },
+        {
+          "pci_device": "24bf",
+          "sku": "GeForce RTX 3070 Engineering Sample"
+        },
+        {
+          "pci_device": "24c0",
+          "sku": "Initial Dev ID B"
+        },
+        {
+          "pci_device": "24c7",
+          "sku": "GeForce RTX 3060 8GB"
+        },
+        {
+          "pci_device": "24c8",
+          "sku": "GeForce RTX 3070 GDDR6X"
+        },
+        {
+          "pci_device": "24c9",
+          "sku": "GeForce RTX 3060 Ti GDDR6X"
+        },
+        {
+          "pci_device": "24dc",
+          "sku": "GeForce RTX 3080 Mobile / Max-Q 8GB/16GB"
+        },
+        {
+          "pci_device": "24dd",
+          "sku": "GeForce RTX 3070 Mobile / Max-Q"
+        },
+        {
+          "pci_device": "24e0",
+          "sku": "Geforce RTX 3070 Ti Laptop GPU"
+        },
+        {
+          "pci_device": "24fa",
+          "sku": "RTX A4500 Embedded GPU "
+        }
+      ],
       "sku_index_scope": "CODE READ pci.ids candidate mapping only; exact native RM implementation probe required for each rented host; revisions/mobile SKUs can differ",
-      "workstation_skus": [],
+      "workstation_skus": [
+        "RTX A3000 12GB Laptop GPU",
+        "RTX A3000 Laptop GPU",
+        "RTX A3000 Mobile",
+        "RTX A4000",
+        "RTX A4000 Mobile",
+        "RTX A4000H",
+        "RTX A4500 Embedded GPU ",
+        "RTX A4500 Laptop GPU",
+        "RTX A5000 Mobile"
+      ],
       "rentable_snapshot": "no eligible SKU class in offers_audited.json; price unavailable, not proof of permanent unavailability"
     },
     {
@@ -180,9 +835,77 @@
       "candidate_offer": null,
       "route_inheritance_forbidden": true,
       "workstation_variant_coverage": "Measured die receipt covers only explicitly exercised constants. No workstation branch/vBIOS/ECC equivalence established; harvesting-dependent PCE/LCE masks, engine counts and CE routes must be queried from current host. No inheritance claimed.",
-      "sku_index": [],
+      "sku_index": [
+        {
+          "pci_device": "2501",
+          "sku": "GeForce RTX 3060"
+        },
+        {
+          "pci_device": "2503",
+          "sku": "GeForce RTX 3060"
+        },
+        {
+          "pci_device": "2504",
+          "sku": "GeForce RTX 3060 Lite Hash Rate"
+        },
+        {
+          "pci_device": "2507",
+          "sku": "Geforce RTX 3050"
+        },
+        {
+          "pci_device": "2508",
+          "sku": "GeForce RTX 3050 OEM"
+        },
+        {
+          "pci_device": "2509",
+          "sku": "GeForce RTX 3060 12GB Rev. 2"
+        },
+        {
+          "pci_device": "2520",
+          "sku": "GeForce RTX 3060 Mobile / Max-Q"
+        },
+        {
+          "pci_device": "2521",
+          "sku": "GeForce RTX 3060 Laptop GPU"
+        },
+        {
+          "pci_device": "2523",
+          "sku": "GeForce RTX 3050 Ti Mobile / Max-Q"
+        },
+        {
+          "pci_device": "252f",
+          "sku": "GeForce RTX 3060 Engineering Sample"
+        },
+        {
+          "pci_device": "2531",
+          "sku": "RTX A2000"
+        },
+        {
+          "pci_device": "2544",
+          "sku": "GeForce RTX 3060"
+        },
+        {
+          "pci_device": "2560",
+          "sku": "GeForce RTX 3060 Mobile / Max-Q"
+        },
+        {
+          "pci_device": "2561",
+          "sku": "GeForce RTX 3060 Laptop GPU"
+        },
+        {
+          "pci_device": "2563",
+          "sku": "GeForce RTX 3050 Ti Mobile / Max-Q"
+        },
+        {
+          "pci_device": "2571",
+          "sku": "RTX A2000 12GB"
+        }
+      ],
       "sku_index_scope": "CODE READ pci.ids candidate mapping only; exact native RM implementation probe required for each rented host; revisions/mobile SKUs can differ",
-      "workstation_skus": [],
+      "workstation_skus": [
+        "RTX A2000",
+        "RTX A2000 12GB"
+      ],
       "rentable_snapshot": "no eligible SKU class in offers_audited.json; price unavailable, not proof of permanent unavailability"
     },
     {
@@ -194,9 +917,150 @@
       "candidate_offer": null,
       "route_inheritance_forbidden": true,
       "workstation_variant_coverage": "Measured die receipt covers only explicitly exercised constants. No workstation branch/vBIOS/ECC equivalence established; harvesting-dependent PCE/LCE masks, engine counts and CE routes must be queried from current host. No inheritance claimed.",
-      "sku_index": [],
+      "sku_index": [
+        {
+          "pci_device": "2582",
+          "sku": "GeForce RTX 3050 8GB"
+        },
+        {
+          "pci_device": "2583",
+          "sku": "GeForce RTX 3050 4GB"
+        },
+        {
+          "pci_device": "2584",
+          "sku": "GeForce RTX 3050 6GB"
+        },
+        {
+          "pci_device": "25a0",
+          "sku": "GeForce RTX 3050 Ti Mobile"
+        },
+        {
+          "pci_device": "25a2",
+          "sku": "GeForce RTX 3050 Mobile"
+        },
+        {
+          "pci_device": "25a5",
+          "sku": "GeForce RTX 3050 Mobile"
+        },
+        {
+          "pci_device": "25a6",
+          "sku": "GeForce MX570"
+        },
+        {
+          "pci_device": "25a7",
+          "sku": "GeForce MX570"
+        },
+        {
+          "pci_device": "25a9",
+          "sku": "GeForce RTX 2050"
+        },
+        {
+          "pci_device": "25aa",
+          "sku": "GeForce MX570 A"
+        },
+        {
+          "pci_device": "25ab",
+          "sku": "GeForce RTX 3050 4GB Laptop GPU"
+        },
+        {
+          "pci_device": "25ac",
+          "sku": "GeForce RTX 3050 6GB Laptop GPU"
+        },
+        {
+          "pci_device": "25ad",
+          "sku": "GeForce RTX 2050"
+        },
+        {
+          "pci_device": "25af",
+          "sku": "GeForce RTX 3050 Engineering Sample"
+        },
+        {
+          "pci_device": "25b0",
+          "sku": "RTX A1000"
+        },
+        {
+          "pci_device": "25b2",
+          "sku": "RTX A400"
+        },
+        {
+          "pci_device": "25b5",
+          "sku": "RTX A4 Mobile"
+        },
+        {
+          "pci_device": "25b6",
+          "sku": "A2 / A16"
+        },
+        {
+          "pci_device": "25b8",
+          "sku": "RTX A2000 Mobile"
+        },
+        {
+          "pci_device": "25b9",
+          "sku": "RTX A1000 Laptop GPU"
+        },
+        {
+          "pci_device": "25ba",
+          "sku": "RTX A2000 8GB Laptop GPU"
+        },
+        {
+          "pci_device": "25bb",
+          "sku": "RTX A500 Laptop GPU"
+        },
+        {
+          "pci_device": "25bc",
+          "sku": "RTX A1000 6GB Laptop GPU"
+        },
+        {
+          "pci_device": "25bd",
+          "sku": "RTX A500 Laptop GPU"
+        },
+        {
+          "pci_device": "25e0",
+          "sku": "GeForce RTX 3050 Ti Mobile"
+        },
+        {
+          "pci_device": "25e2",
+          "sku": "GeForce RTX 3050 Mobile"
+        },
+        {
+          "pci_device": "25e5",
+          "sku": "GeForce RTX 3050 Mobile"
+        },
+        {
+          "pci_device": "25ec",
+          "sku": "GeForce RTX 3050 6GB Laptop GPU"
+        },
+        {
+          "pci_device": "25ed",
+          "sku": "GeForce RTX 2050"
+        },
+        {
+          "pci_device": "25f9",
+          "sku": "RTX A1000 Embedded GPU "
+        },
+        {
+          "pci_device": "25fa",
+          "sku": "RTX A2000 Embedded GPU"
+        },
+        {
+          "pci_device": "25fb",
+          "sku": "RTX A500 Embedded GPU"
+        }
+      ],
       "sku_index_scope": "CODE READ pci.ids candidate mapping only; exact native RM implementation probe required for each rented host; revisions/mobile SKUs can differ",
-      "workstation_skus": [],
+      "workstation_skus": [
+        "RTX A1000",
+        "RTX A1000 6GB Laptop GPU",
+        "RTX A1000 Embedded GPU ",
+        "RTX A1000 Laptop GPU",
+        "RTX A2000 8GB Laptop GPU",
+        "RTX A2000 Embedded GPU",
+        "RTX A2000 Mobile",
+        "RTX A4 Mobile",
+        "RTX A400",
+        "RTX A500 Embedded GPU",
+        "RTX A500 Laptop GPU"
+      ],
       "rentable_snapshot": "no eligible SKU class in offers_audited.json; price unavailable, not proof of permanent unavailability"
     },
     {
@@ -223,9 +1087,74 @@
       },
       "route_inheritance_forbidden": true,
       "workstation_variant_coverage": "Measured die receipt covers only explicitly exercised constants. No workstation branch/vBIOS/ECC equivalence established; harvesting-dependent PCE/LCE masks, engine counts and CE routes must be queried from current host. No inheritance claimed.",
-      "sku_index": [],
+      "sku_index": [
+        {
+          "pci_device": "2681",
+          "sku": "RTX TITAN Ada"
+        },
+        {
+          "pci_device": "2684",
+          "sku": "GeForce RTX 4090"
+        },
+        {
+          "pci_device": "2685",
+          "sku": "GeForce RTX 4090 D"
+        },
+        {
+          "pci_device": "2689",
+          "sku": "GeForce RTX 4070 Ti SUPER"
+        },
+        {
+          "pci_device": "26af",
+          "sku": "PG137"
+        },
+        {
+          "pci_device": "26b1",
+          "sku": "RTX 6000 Ada Generation"
+        },
+        {
+          "pci_device": "26b2",
+          "sku": "RTX 5000 Ada Generation"
+        },
+        {
+          "pci_device": "26b3",
+          "sku": "RTX 5880 Ada Generation"
+        },
+        {
+          "pci_device": "26b5",
+          "sku": "L40"
+        },
+        {
+          "pci_device": "26b7",
+          "sku": "L20"
+        },
+        {
+          "pci_device": "26b8",
+          "sku": "L40G"
+        },
+        {
+          "pci_device": "26b9",
+          "sku": "L40S"
+        },
+        {
+          "pci_device": "26ba",
+          "sku": "L20"
+        },
+        {
+          "pci_device": "26bb",
+          "sku": "L30"
+        },
+        {
+          "pci_device": "26f5",
+          "sku": "L40 CNX"
+        }
+      ],
       "sku_index_scope": "CODE READ pci.ids candidate mapping only; exact native RM implementation probe required for each rented host; revisions/mobile SKUs can differ",
-      "workstation_skus": [],
+      "workstation_skus": [
+        "RTX 5000 Ada Generation",
+        "RTX 5880 Ada Generation",
+        "RTX 6000 Ada Generation"
+      ],
       "rentable_snapshot": "candidate available; native implementation confirmation required"
     },
     {
@@ -243,9 +1172,49 @@
       "candidate_offer": null,
       "route_inheritance_forbidden": true,
       "workstation_variant_coverage": "Measured die receipt covers only explicitly exercised constants. No workstation branch/vBIOS/ECC equivalence established; harvesting-dependent PCE/LCE masks, engine counts and CE routes must be queried from current host. No inheritance claimed.",
-      "sku_index": [],
+      "sku_index": [
+        {
+          "pci_device": "2702",
+          "sku": "GeForce RTX 4080 SUPER"
+        },
+        {
+          "pci_device": "2703",
+          "sku": "GeForce RTX 4080 SUPER"
+        },
+        {
+          "pci_device": "2704",
+          "sku": "GeForce RTX 4080"
+        },
+        {
+          "pci_device": "2705",
+          "sku": "GeForce RTX 4070 Ti SUPER"
+        },
+        {
+          "pci_device": "2709",
+          "sku": "GeForce RTX 4070"
+        },
+        {
+          "pci_device": "2717",
+          "sku": "GeForce RTX 4090 Laptop GPU"
+        },
+        {
+          "pci_device": "2730",
+          "sku": "RTX 5000 Ada Generation Laptop GPU"
+        },
+        {
+          "pci_device": "2757",
+          "sku": "GeForce RTX 4090 Laptop GPU"
+        },
+        {
+          "pci_device": "2770",
+          "sku": "RTX 5000 Ada Generation Embedded GPU"
+        }
+      ],
       "sku_index_scope": "CODE READ pci.ids candidate mapping only; exact native RM implementation probe required for each rented host; revisions/mobile SKUs can differ",
-      "workstation_skus": [],
+      "workstation_skus": [
+        "RTX 5000 Ada Generation Embedded GPU",
+        "RTX 5000 Ada Generation Laptop GPU"
+      ],
       "rentable_snapshot": "no eligible SKU class in offers_audited.json; price unavailable, not proof of permanent unavailability"
     },
     {
@@ -272,9 +1241,86 @@
       },
       "route_inheritance_forbidden": true,
       "workstation_variant_coverage": "Measured die receipt covers only explicitly exercised constants. No workstation branch/vBIOS/ECC equivalence established; harvesting-dependent PCE/LCE masks, engine counts and CE routes must be queried from current host. No inheritance claimed.",
-      "sku_index": [],
+      "sku_index": [
+        {
+          "pci_device": "2782",
+          "sku": "GeForce RTX 4070 Ti"
+        },
+        {
+          "pci_device": "2783",
+          "sku": "GeForce RTX 4070 SUPER"
+        },
+        {
+          "pci_device": "2785",
+          "sku": "AC AD104 20GB"
+        },
+        {
+          "pci_device": "2786",
+          "sku": "GeForce RTX 4070"
+        },
+        {
+          "pci_device": "2788",
+          "sku": "GeForce RTX 4060 Ti"
+        },
+        {
+          "pci_device": "27a0",
+          "sku": "GeForce RTX 4080 Max-Q / Mobile"
+        },
+        {
+          "pci_device": "27b0",
+          "sku": "RTX 4000 SFF Ada Generation"
+        },
+        {
+          "pci_device": "27b1",
+          "sku": "RTX 4500 Ada Generation"
+        },
+        {
+          "pci_device": "27b2",
+          "sku": "RTX 4000 Ada Generation"
+        },
+        {
+          "pci_device": "27b6",
+          "sku": "L2"
+        },
+        {
+          "pci_device": "27b7",
+          "sku": "L16"
+        },
+        {
+          "pci_device": "27b8",
+          "sku": "L4"
+        },
+        {
+          "pci_device": "27ba",
+          "sku": "RTX 4000 Ada Generation Laptop GPU"
+        },
+        {
+          "pci_device": "27bb",
+          "sku": "RTX 3500 Ada Generation Laptop GPU"
+        },
+        {
+          "pci_device": "27e0",
+          "sku": "GeForce RTX 4080 Max-Q / Mobile"
+        },
+        {
+          "pci_device": "27fa",
+          "sku": "RTX 4000 Ada Generation Embedded GPU"
+        },
+        {
+          "pci_device": "27fb",
+          "sku": "RTX 3500 Ada Generation Embedded GPU"
+        }
+      ],
       "sku_index_scope": "CODE READ pci.ids candidate mapping only; exact native RM implementation probe required for each rented host; revisions/mobile SKUs can differ",
-      "workstation_skus": [],
+      "workstation_skus": [
+        "RTX 3500 Ada Generation Embedded GPU",
+        "RTX 3500 Ada Generation Laptop GPU",
+        "RTX 4000 Ada Generation",
+        "RTX 4000 Ada Generation Embedded GPU",
+        "RTX 4000 Ada Generation Laptop GPU",
+        "RTX 4000 SFF Ada Generation",
+        "RTX 4500 Ada Generation"
+      ],
       "rentable_snapshot": "candidate available; native implementation confirmation required"
     },
     {
@@ -301,9 +1347,45 @@
       },
       "route_inheritance_forbidden": true,
       "workstation_variant_coverage": "Measured die receipt covers only explicitly exercised constants. No workstation branch/vBIOS/ECC equivalence established; harvesting-dependent PCE/LCE masks, engine counts and CE routes must be queried from current host. No inheritance claimed.",
-      "sku_index": [],
+      "sku_index": [
+        {
+          "pci_device": "2803",
+          "sku": "GeForce RTX 4060 Ti"
+        },
+        {
+          "pci_device": "2805",
+          "sku": "GeForce RTX 4060 Ti 16GB"
+        },
+        {
+          "pci_device": "2808",
+          "sku": "GeForce RTX 4060"
+        },
+        {
+          "pci_device": "2820",
+          "sku": "GeForce RTX 4070 Max-Q / Mobile"
+        },
+        {
+          "pci_device": "2822",
+          "sku": "GeForce RTX 3050 A Laptop GPU"
+        },
+        {
+          "pci_device": "2838",
+          "sku": "RTX 3000 Ada Generation Laptop GPU"
+        },
+        {
+          "pci_device": "2860",
+          "sku": "GeForce RTX 4070 Max-Q / Mobile"
+        },
+        {
+          "pci_device": "2878",
+          "sku": "RTX 3000 Ada Generation Embedded GPU"
+        }
+      ],
       "sku_index_scope": "CODE READ pci.ids candidate mapping only; exact native RM implementation probe required for each rented host; revisions/mobile SKUs can differ",
-      "workstation_skus": [],
+      "workstation_skus": [
+        "RTX 3000 Ada Generation Embedded GPU",
+        "RTX 3000 Ada Generation Laptop GPU"
+      ],
       "rentable_snapshot": "candidate available; native implementation confirmation required"
     },
     {
@@ -315,9 +1397,68 @@
       "candidate_offer": null,
       "route_inheritance_forbidden": true,
       "workstation_variant_coverage": "Measured die receipt covers only explicitly exercised constants. No workstation branch/vBIOS/ECC equivalence established; harvesting-dependent PCE/LCE masks, engine counts and CE routes must be queried from current host. No inheritance claimed.",
-      "sku_index": [],
+      "sku_index": [
+        {
+          "pci_device": "2882",
+          "sku": "GeForce RTX 4060"
+        },
+        {
+          "pci_device": "28a0",
+          "sku": "GeForce RTX 4060 Max-Q / Mobile"
+        },
+        {
+          "pci_device": "28a1",
+          "sku": "GeForce RTX 4050 Max-Q / Mobile"
+        },
+        {
+          "pci_device": "28a3",
+          "sku": "GeForce RTX 3050 A Laptop GPU"
+        },
+        {
+          "pci_device": "28b0",
+          "sku": "RTX 2000 / 2000E Ada Generation"
+        },
+        {
+          "pci_device": "28b8",
+          "sku": "RTX 2000 Ada Generation Laptop GPU"
+        },
+        {
+          "pci_device": "28b9",
+          "sku": "RTX 1000 Ada Generation Laptop GPU"
+        },
+        {
+          "pci_device": "28ba",
+          "sku": "RTX 500 Ada Generation Laptop GPU"
+        },
+        {
+          "pci_device": "28bb",
+          "sku": "RTX 500 Ada Generation Laptop GPU"
+        },
+        {
+          "pci_device": "28e0",
+          "sku": "GeForce RTX 4060 Max-Q / Mobile"
+        },
+        {
+          "pci_device": "28e1",
+          "sku": "GeForce RTX 4050 Max-Q / Mobile"
+        },
+        {
+          "pci_device": "28e3",
+          "sku": "GeForce RTX 3050 A Laptop GPU"
+        },
+        {
+          "pci_device": "28f8",
+          "sku": "RTX 2000 Ada Generation Embedded GPU"
+        }
+      ],
       "sku_index_scope": "CODE READ pci.ids candidate mapping only; exact native RM implementation probe required for each rented host; revisions/mobile SKUs can differ",
-      "workstation_skus": [],
+      "workstation_skus": [
+        "RTX 1000 Ada Generation Laptop GPU",
+        "RTX 2000 / 2000E Ada Generation",
+        "RTX 2000 Ada Generation Embedded GPU",
+        "RTX 2000 Ada Generation Laptop GPU",
+        "RTX 500 Ada Generation Laptop GPU"
+      ],
       "rentable_snapshot": "no eligible SKU class in offers_audited.json; price unavailable, not proof of permanent unavailability"
     },
     {
@@ -344,9 +1485,57 @@
       },
       "route_inheritance_forbidden": true,
       "workstation_variant_coverage": "Measured die receipt covers only explicitly exercised constants. No workstation branch/vBIOS/ECC equivalence established; harvesting-dependent PCE/LCE masks, engine counts and CE routes must be queried from current host. No inheritance claimed.",
-      "sku_index": [],
+      "sku_index": [
+        {
+          "pci_device": "2b85",
+          "sku": "GeForce RTX 5090"
+        },
+        {
+          "pci_device": "2b87",
+          "sku": "GeForce RTX 5090 D"
+        },
+        {
+          "pci_device": "2b8c",
+          "sku": "GeForce RTX 5090 D V2"
+        },
+        {
+          "pci_device": "2bb1",
+          "sku": "RTX PRO 6000 Blackwell Workstation Edition"
+        },
+        {
+          "pci_device": "2bb2",
+          "sku": "RTX PRO 6000D Blackwell Workstation Edition"
+        },
+        {
+          "pci_device": "2bb3",
+          "sku": "RTX PRO 5000 Blackwell / RTX PRO 5000 72GB Blackwell"
+        },
+        {
+          "pci_device": "2bb4",
+          "sku": "RTX PRO 6000 Blackwell Max-Q Workstation Edition"
+        },
+        {
+          "pci_device": "2bb5",
+          "sku": "RTX PRO 6000 Blackwell Server Edition"
+        },
+        {
+          "pci_device": "2bb9",
+          "sku": "RTX 6000D"
+        },
+        {
+          "pci_device": "2bbc",
+          "sku": "RTX PRO 6000D Blackwell Max-Q Workstation Edition"
+        }
+      ],
       "sku_index_scope": "CODE READ pci.ids candidate mapping only; exact native RM implementation probe required for each rented host; revisions/mobile SKUs can differ",
-      "workstation_skus": [],
+      "workstation_skus": [
+        "RTX PRO 5000 Blackwell / RTX PRO 5000 72GB Blackwell",
+        "RTX PRO 6000 Blackwell Max-Q Workstation Edition",
+        "RTX PRO 6000 Blackwell Server Edition",
+        "RTX PRO 6000 Blackwell Workstation Edition",
+        "RTX PRO 6000D Blackwell Max-Q Workstation Edition",
+        "RTX PRO 6000D Blackwell Workstation Edition"
+      ],
       "rentable_snapshot": "candidate available; native implementation confirmation required"
     },
     {
@@ -373,9 +1562,74 @@
       },
       "route_inheritance_forbidden": true,
       "workstation_variant_coverage": "Measured die receipt covers only explicitly exercised constants. No workstation branch/vBIOS/ECC equivalence established; harvesting-dependent PCE/LCE masks, engine counts and CE routes must be queried from current host. No inheritance claimed.",
-      "sku_index": [],
+      "sku_index": [
+        {
+          "pci_device": "2c02",
+          "sku": "GeForce RTX 5080"
+        },
+        {
+          "pci_device": "2c05",
+          "sku": "GeForce RTX 5070 Ti"
+        },
+        {
+          "pci_device": "2c18",
+          "sku": "GeForce RTX 5090 Max-Q / Mobile"
+        },
+        {
+          "pci_device": "2c19",
+          "sku": "GeForce RTX 5080 Max-Q / Mobile"
+        },
+        {
+          "pci_device": "2c31",
+          "sku": "RTX PRO 4500 Blackwell"
+        },
+        {
+          "pci_device": "2c33",
+          "sku": "RTX PRO 4000 Blackwell SFF Edition"
+        },
+        {
+          "pci_device": "2c34",
+          "sku": "RTX PRO 4000 Blackwell"
+        },
+        {
+          "pci_device": "2c38",
+          "sku": "RTX PRO 5000 Blackwell Generation Laptop GPU"
+        },
+        {
+          "pci_device": "2c39",
+          "sku": "RTX PRO 4000 Blackwell Generation Laptop GPU"
+        },
+        {
+          "pci_device": "2c3a",
+          "sku": "RTX PRO 4500 Blackwell"
+        },
+        {
+          "pci_device": "2c58",
+          "sku": "GeForce RTX 5090 Max-Q / Mobile"
+        },
+        {
+          "pci_device": "2c59",
+          "sku": "GeForce RTX 5080 Max-Q / Mobile"
+        },
+        {
+          "pci_device": "2c77",
+          "sku": "RTX PRO 5000 Blackwell Embedded GPU"
+        },
+        {
+          "pci_device": "2c79",
+          "sku": "RTX PRO 4000 Blackwell Embedded GPU"
+        }
+      ],
       "sku_index_scope": "CODE READ pci.ids candidate mapping only; exact native RM implementation probe required for each rented host; revisions/mobile SKUs can differ",
-      "workstation_skus": [],
+      "workstation_skus": [
+        "RTX PRO 4000 Blackwell",
+        "RTX PRO 4000 Blackwell Embedded GPU",
+        "RTX PRO 4000 Blackwell Generation Laptop GPU",
+        "RTX PRO 4000 Blackwell SFF Edition",
+        "RTX PRO 4500 Blackwell",
+        "RTX PRO 5000 Blackwell Embedded GPU",
+        "RTX PRO 5000 Blackwell Generation Laptop GPU"
+      ],
       "rentable_snapshot": "candidate available; native implementation confirmation required"
     },
     {
@@ -402,9 +1656,28 @@
       },
       "route_inheritance_forbidden": true,
       "workstation_variant_coverage": "Measured die receipt covers only explicitly exercised constants. No workstation branch/vBIOS/ECC equivalence established; harvesting-dependent PCE/LCE masks, engine counts and CE routes must be queried from current host. No inheritance claimed.",
-      "sku_index": [],
+      "sku_index": [
+        {
+          "pci_device": "2f04",
+          "sku": "GeForce RTX 5070"
+        },
+        {
+          "pci_device": "2f18",
+          "sku": "GeForce RTX 5070 Ti Mobile"
+        },
+        {
+          "pci_device": "2f38",
+          "sku": "RTX PRO 3000 Blackwell Generation Laptop GPU"
+        },
+        {
+          "pci_device": "2f58",
+          "sku": "GeForce RTX 5070 Ti Mobile"
+        }
+      ],
       "sku_index_scope": "CODE READ pci.ids candidate mapping only; exact native RM implementation probe required for each rented host; revisions/mobile SKUs can differ",
-      "workstation_skus": [],
+      "workstation_skus": [
+        "RTX PRO 3000 Blackwell Generation Laptop GPU"
+      ],
       "rentable_snapshot": "candidate available; native implementation confirmation required"
     },
     {
@@ -431,9 +1704,50 @@
       },
       "route_inheritance_forbidden": true,
       "workstation_variant_coverage": "Measured die receipt covers only explicitly exercised constants. No workstation branch/vBIOS/ECC equivalence established; harvesting-dependent PCE/LCE masks, engine counts and CE routes must be queried from current host. No inheritance claimed.",
-      "sku_index": [],
+      "sku_index": [
+        {
+          "pci_device": "2d04",
+          "sku": "GeForce RTX 5060 Ti"
+        },
+        {
+          "pci_device": "2d05",
+          "sku": "GeForce RTX 5060"
+        },
+        {
+          "pci_device": "2d18",
+          "sku": "GeForce RTX 5070 Max-Q / Mobile"
+        },
+        {
+          "pci_device": "2d19",
+          "sku": "GeForce RTX 5060 Max-Q / Mobile"
+        },
+        {
+          "pci_device": "2d30",
+          "sku": "RTX PRO 2000 Blackwell"
+        },
+        {
+          "pci_device": "2d39",
+          "sku": "RTX PRO 2000 Blackwell Generation Laptop GPU"
+        },
+        {
+          "pci_device": "2d58",
+          "sku": "GeForce RTX 5070 Max-Q / Mobile"
+        },
+        {
+          "pci_device": "2d59",
+          "sku": "GeForce RTX 5060 Max-Q / Mobile"
+        },
+        {
+          "pci_device": "2d79",
+          "sku": "RTX PRO 2000 Blackwell Embedded GPU"
+        }
+      ],
       "sku_index_scope": "CODE READ pci.ids candidate mapping only; exact native RM implementation probe required for each rented host; revisions/mobile SKUs can differ",
-      "workstation_skus": [],
+      "workstation_skus": [
+        "RTX PRO 2000 Blackwell",
+        "RTX PRO 2000 Blackwell Embedded GPU",
+        "RTX PRO 2000 Blackwell Generation Laptop GPU"
+      ],
       "rentable_snapshot": "candidate available; native implementation confirmation required"
     },
     {
@@ -445,9 +1759,38 @@
       "candidate_offer": null,
       "route_inheritance_forbidden": true,
       "workstation_variant_coverage": "Measured die receipt covers only explicitly exercised constants. No workstation branch/vBIOS/ECC equivalence established; harvesting-dependent PCE/LCE masks, engine counts and CE routes must be queried from current host. No inheritance claimed.",
-      "sku_index": [],
+      "sku_index": [
+        {
+          "pci_device": "2d83",
+          "sku": "GeForce RTX 5050"
+        },
+        {
+          "pci_device": "2d98",
+          "sku": "GeForce RTX 5050 Max-Q / Mobile"
+        },
+        {
+          "pci_device": "2db8",
+          "sku": "RTX PRO 1000 Blackwell Generation Laptop GPU"
+        },
+        {
+          "pci_device": "2db9",
+          "sku": "RTX PRO 500 Blackwell Generation Laptop GPU"
+        },
+        {
+          "pci_device": "2dd8",
+          "sku": "GeForce RTX 5050 Max-Q / Mobile"
+        },
+        {
+          "pci_device": "2df9",
+          "sku": "RTX PRO 500 Blackwell Embedded GPU"
+        }
+      ],
       "sku_index_scope": "CODE READ pci.ids candidate mapping only; exact native RM implementation probe required for each rented host; revisions/mobile SKUs can differ",
-      "workstation_skus": [],
+      "workstation_skus": [
+        "RTX PRO 1000 Blackwell Generation Laptop GPU",
+        "RTX PRO 500 Blackwell Embedded GPU",
+        "RTX PRO 500 Blackwell Generation Laptop GPU"
+      ],
       "rentable_snapshot": "no eligible SKU class in offers_audited.json; price unavailable, not proof of permanent unavailability"
     }
   ],
@@ -461,5 +1804,13 @@
     "source": "pci.ids local PCI ID repository snapshot",
     "sha256": "d57b3524531fcc31701042f09f6dba44f85c951c7cbec5ba74a8724f85b59fd3",
     "status": "CODE READ; planning only; not authoritative silicon measurement"
+  },
+  "owner_confirmed_sku_maps": {
+    "RTX A6000": "GA102",
+    "RTX A5000": "GA102",
+    "RTX A4000": "GA104",
+    "RTX 6000 Ada": "AD102",
+    "RTX 4000 Ada": "AD104",
+    "Quadro RTX 8000": "TU102"
   }
 }
