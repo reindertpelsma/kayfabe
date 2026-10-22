@@ -13,3 +13,4 @@ import './native-fetch.test.js';
 import './secret-boundary.test.js';
 import './path-prefix.test.js';
 import './secret-client.test.js';
+import './provider-absence.test.js';
