@@ -8,7 +8,7 @@ import sys
 
 MAX_BYTES = 2 * 1024 * 1024
 RUN = r"[A-Za-z0-9_-]{1,32}"
-HEX = r"0x[0-9a-f]+"
+DETAIL = r"intr1? [0-9a-f]{8}(?: HCE_DBG0 [0-9a-f]{8} HCE_DBG1 [0-9a-f]{8})?"
 
 
 class Refused(ValueError):
@@ -26,13 +26,14 @@ def check(manifest, qemu, guest, journal):
         run, mode, source = manifest["run"], manifest["mode"], manifest["source"]
         pid, pci = manifest["pid"], manifest["pci"]
         start, end, detail = manifest["start_ns"], manifest["end_ns"], manifest["detail"]
-        valid = (re.fullmatch(RUN, run) and mode in ("on", "off")
+        valid = (re.fullmatch(RUN, run) and mode in ("on", "off", "native")
                  and re.fullmatch(r"[0-9a-f]{40}", source)
                  and type(pid) is int and 1 < pid < 2**31
                  and re.fullmatch(r"[0-9a-f]{4}:[0-9a-f]{2}:[0-9a-f]{2}", pci)
                  and type(start) is int and type(end) is int
                  and 0 < start < end and end-start <= 180_000_000_000
-                 and re.fullmatch(r"intr1? [0-9a-f]{8}(?: HCE_DBG0 [0-9a-f]{8} HCE_DBG1 [0-9a-f]{8})?", detail))
+                 and ((mode == "native" and detail is None)
+                      or (mode != "native" and re.fullmatch(DETAIL, detail))))
     except (KeyError, TypeError):
         valid = False
     if not valid:
@@ -74,6 +75,40 @@ def check(manifest, qemu, guest, journal):
         except (KeyError, ValueError):
             raise Refused(f"invalid numeric field {key}") from None
 
+    xids = []
+    try:
+        for line in journal.splitlines():
+            row = json.loads(line)
+            message = row["MESSAGE"]
+            timestamp = int(row["__REALTIME_TIMESTAMP"])*1000
+            if not isinstance(message, str):
+                raise ValueError()
+            if "NVRM: Xid" in message:
+                if not start <= timestamp <= end:
+                    raise Refused("Xid outside capture interval")
+                xids.append((timestamp, message))
+    except (ValueError, KeyError, TypeError):
+        raise Refused("malformed kernel journal") from None
+    if mode == "native":
+        if guest:
+            raise Refused("native characterization cannot contain guest evidence")
+        mark = one(records(qemu, "FAULT_MARK=translated_rc_native "), "native fault marker")
+        require(mark,run=run,pid=pid,source=source,word="0xc0000000")
+        host, channel, marked = number(mark,"host"),number(mark,"channel"),number(mark,"unix_ns")
+        if channel != host & 0xfff or not start <= marked <= end:
+            raise Refused("native channel/marker interval mismatch")
+        result = one(records(qemu,"NATIVE_RC_RESULT "),"native channel result")
+        require(result,run=run,code=32,status="0xffff",event=1,bystander=1,result="PASS")
+        timestamp,message = one(xids,"native host Xid")
+        prefix = f"NVRM: Xid (PCI:{pci}): 32, pid={pid}, name=kf-rc-native, channel 0x{channel:08x} "
+        if not message.startswith(prefix) or timestamp < marked:
+            raise Refused("native Xid identity mismatch")
+        frozen = message[len(prefix):]
+        if re.fullmatch(DETAIL,frozen) is None:
+            raise Refused("unqualified native Xid detail")
+        return {"verdict":"NATIVE_ONLY","mode":mode,"run":run,"source":source,
+                "detail":frozen,"host_chid":channel,"xid_count":1}
+
     cfg = one(records(qemu, "RC_NEGCTL_CONFIG "), "host bench configuration")
     require(cfg, run=run, source=source)
     begin = one(records(guest, "KF_RC_PROBE_BEGIN "), "guest probe birth")
@@ -99,20 +134,6 @@ def check(manifest, qemu, guest, journal):
     markers = records(qemu, "FAULT_MARK=translated_rc_invalid_pb ")
     events = records(guest, "KF_RC_EVENT ")
     notifiers = records(guest, "KF_RC_NOTIFIER ")
-    xids = []
-    try:
-        for line in journal.splitlines():
-            row = json.loads(line)
-            message = row["MESSAGE"]
-            timestamp = int(row["__REALTIME_TIMESTAMP"])*1000
-            if not isinstance(message, str):
-                raise ValueError()
-            if "NVRM: Xid" in message:
-                if not start <= timestamp <= end:
-                    raise Refused("Xid outside capture interval")
-                xids.append((timestamp, message))
-    except (ValueError, KeyError, TypeError):
-        raise Refused("malformed kernel journal") from None
     if mode == "off":
         if markers or events or notifiers or xids or "RC_NEGCTL_SUBMITTED " in qemu:
             raise Refused("clean arm contains fault evidence")

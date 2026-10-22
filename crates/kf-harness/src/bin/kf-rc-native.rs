@@ -5,6 +5,21 @@ use kf_host::HostRm;
 use kf_linux_raw::{DevDir, PollTimeout, Poller, ReadyTokens};
 use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
+fn positive_fence(ring: &mut HostRing, rm: &HostRm) -> Result<(), String> {
+    let sequence = ring.fence(rm)?.map_err(|_| "positive fence busy")?;
+    let start = Instant::now();
+    while ring.completed()? < sequence {
+        if start.elapsed() > Duration::from_secs(5) {
+            return Err("positive fence deadline".into());
+        }
+        std::thread::sleep(Duration::from_millis(1));
+    }
+    if ring.rc_words().is_some() {
+        return Err("positive channel has RC error".into());
+    }
+    Ok(())
+}
+
 fn run() -> Result<(), String> {
     let run = std::env::args().nth(1).ok_or("explicit run id required")?;
     let arm = Arm::configured(Some(&run)).ok_or("invalid run id")?;
@@ -22,6 +37,7 @@ fn run() -> Result<(), String> {
         .alloc_vaspace_bare()
         .map_err(|e| format!("space: {e:?}"))?;
     let mut ring = HostRing::on_engine(&rm, space, engine)?;
+    let mut bystander = HostRing::on_engine(&rm, space, engine)?;
     let result = (|| {
         let event = rm.open_event_fd().map_err(|e| format!("event: {e:?}"))?;
         ring.arm_rc_event(&rm, &event)?;
@@ -30,14 +46,8 @@ fn run() -> Result<(), String> {
             .watch(event.as_fd(), 1)
             .map_err(|e| format!("watch: {e:?}"))?;
         let mut ready = ReadyTokens::default();
-        let sequence = ring.fence(&rm)?.map_err(|_| "positive fence busy")?;
-        let start = Instant::now();
-        while ring.completed()? < sequence {
-            if start.elapsed() > Duration::from_secs(5) {
-                return Err("positive fence deadline".into());
-            }
-            std::thread::sleep(Duration::from_millis(1));
-        }
+        positive_fence(&mut ring, &rm)?;
+        positive_fence(&mut bystander, &rm)?;
         if ring.rc_words().is_some()
             || poller
                 .wait(&mut ready, PollTimeout::Immediate)
@@ -73,11 +83,9 @@ fn run() -> Result<(), String> {
                     ));
                 }
                 if hinted {
-                    println!(
-                        "NATIVE_RC_RESULT run={} code=32 status={:#x} event=1 result=PASS",
-                        arm.run(),
-                        words[3] >> 16
-                    );
+                    if words[3] >> 16 != 0xffff {
+                        return Err("native RC record is not published".into());
+                    }
                     break;
                 }
             }
@@ -86,19 +94,32 @@ fn run() -> Result<(), String> {
             }
             std::thread::sleep(Duration::from_millis(1));
         }
+        positive_fence(&mut bystander, &rm)?;
         poller
             .unwatch(event.as_fd())
             .map_err(|e| format!("unwatch: {e:?}"))?;
         Ok(())
     })();
-    rm.free_channel(ring.channel())
-        .map_err(|e| format!("channel free: {e:?}"))?;
-    let cleanup = ring.release(&rm).ok_or("no private ring cleanup")?;
-    if cleanup.contains("REFUSED") {
-        return Err(cleanup);
+    let mut cleanup_error = None;
+    for owned in [&mut ring, &mut bystander] {
+        if let Err(error) = rm.free_channel(owned.channel()) {
+            cleanup_error = Some(format!("channel free: {error:?}"));
+        }
+        match owned.release(&rm) {
+            Some(message) if !message.contains("REFUSED") => {}
+            message => cleanup_error = Some(format!("private ring cleanup: {message:?}")),
+        }
     }
     rm.free_vaspace(space);
-    result
+    result?;
+    if let Some(error) = cleanup_error {
+        return Err(error);
+    }
+    println!(
+        "NATIVE_RC_RESULT run={} code=32 status=0xffff event=1 bystander=1 result=PASS",
+        arm.run()
+    );
+    Ok(())
 }
 
 fn main() {
