@@ -14,7 +14,7 @@ export function createService({env,storage,fetch:fetcher=fetch,now=Date.now,rand
   const json=(data,status=200)=>Response.json(data,{status,headers:{'Cache-Control':'no-store','X-Content-Type-Options':'nosniff'}});
   const secrets=[env.VAST_API_KEY,env.RUN_TOKEN_SECRET,env.OWNER_STOP_TOKEN,...endpointSecrets(env)].filter(Boolean);
   const expose=(r,key=r.key,pr=r.pr)=>({run:key,id:r.id,sha:r.sha,pr,
-    state:r.closed==='STOPPED'?'STOPPED':r.ended!==null||r.resultAt!==undefined?'COMPLETE':r.closed?'STOPPING':'RUNNING',
+    state:r.boxKilled&&r.resultAt!==undefined?'COMPLETE':r.closed==='STOPPED'?'STOPPED':r.ended!==null||r.resultAt!==undefined?'COMPLETE':r.closed?'STOPPING':'RUNNING',
     verdict:r.ended!==null||r.resultAt!==undefined?r.verdict||'UNAVAILABLE':'UNAVAILABLE',
     cleanup_pending:r.ended===null,result_at:r.resultAt??null,ended_at:r.ended,started_at:r.started,
     deadline_at:r.resultAt===undefined?r.started+r.ttl:Math.min(r.started+r.ttl,r.resultAt+(r.grace??300000)),

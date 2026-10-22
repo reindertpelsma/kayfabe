@@ -23,3 +23,4 @@ import './v4-sender.test.js';
 import './v4-request-body.test.js';
 import './v4-ingress.test.js';
 import './v4-result-ack.test.js';
+import './v4-kill-result.test.js';
