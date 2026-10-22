@@ -515,6 +515,7 @@ struct Aux {
     pb: Option<Snapshot<'static>>,
     software: Option<Software>,
     patched: Vec<u32>,
+    receipts: Vec<userread::Receipt<'static>>,
     doorbells: u64,
     /// Measurement only: when the outstanding SYNC_WAIT gate was authored.
     gate_at: Option<std::time::Instant>,
@@ -570,6 +571,7 @@ fn publish_guarded(
     ring: Option<&Mapping<'static>>,
     gp: Option<&Snapshot<'static>>,
     pb: Option<&Snapshot<'static>>,
+    pbs: &[userread::Receipt<'static>],
     write: impl FnOnce(
         &kf_chan::user_storage::Storage<kf_chan::user_storage::CpuView>,
     ) -> Result<(), String>,
@@ -614,19 +616,27 @@ fn publish_guarded(
                     })
                     .map_err(|e| source_error(e, "USER_RING_PUBLICATION_TOPOLOGY"))?
             };
+            let publish_parts = || {
+                if pbs.is_empty() {
+                    publish()
+                } else {
+                    userread::admit_all(pbs, publish)
+                        .map_err(|e| source_error(e, "USER_RING_PART_ADMISSION"))?
+                }
+            };
             let sources = || {
                 if let Some(gp) = gp {
                     gp.admit(|| {
                         if let Some(pb) = pb {
-                            pb.admit(publish)
+                            pb.admit(publish_parts)
                                 .map_err(|e| source_error(e, "USER_RING_PB_ADMISSION"))?
                         } else {
-                            publish()
+                            publish_parts()
                         }
                     })
                     .map_err(|e| source_error(e, "USER_RING_GP_ADMISSION"))?
                 } else {
-                    publish()
+                    publish_parts()
                 }
             };
             if let Some(ring) = ring {
@@ -849,6 +859,85 @@ impl kf_chan::user_turn::Io for PumpIo<'_> {
         self.aux.pb = Some(pb);
         Ok((words, vram))
     }
+    fn begin_stream(&mut self) -> Turn<()> {
+        self.aux.receipts.clear();
+        self.aux
+            .receipts
+            .try_reserve_exact(usize::from(kf_chan::user_chunk::MAX_PARTS))
+            .map_err(|_| "USER_RING_STREAM_ALLOC")?;
+        // Matches the channel-owned software identity used by this plan's parser.
+        // Any free/reuse before publication fails publish_guarded's identity check.
+        self.aux.software = self.sw.clone();
+        Ok(())
+    }
+    fn read_part(
+        &mut self,
+        _entry: u64,
+        seg: &kf_chan::user_turn::GpSegment,
+        part: u8,
+    ) -> Turn<(Vec<u32>, bool)> {
+        let limit = usize::from(kf_chan::user_chunk::MAX_PARTS);
+        if self.aux.receipts.len() != usize::from(part)
+            || self.aux.receipts.len() >= limit
+            || self.aux.receipts.capacity() < limit
+        {
+            return Err("USER_RING_STREAM_RECEIPTS".into());
+        }
+        let pb = snapshot_with(
+            self.cache,
+            self.ram_generation,
+            self.me,
+            self.r,
+            seg.gpu_va,
+            usize::try_from(seg.len_bytes).map_err(|_| "USER_RING_PB_SIZE")?,
+        )?;
+        let vram = pb.describe().contains("vram");
+        let mut words = Vec::new();
+        words
+            .try_reserve_exact(pb.bytes.len() / 4)
+            .map_err(|_| "USER_RING_SCAN_ALLOC")?;
+        for word in pb.bytes.chunks_exact(4) {
+            words.push(u32::from_le_bytes(
+                word.try_into().map_err(|_| "USER_RING_WORD")?,
+            ));
+        }
+        self.aux.receipts.push(pb.into_receipt());
+        Ok((words, vram))
+    }
+    fn publish_streamed(
+        &mut self,
+        fetch: &mut Fetch,
+        generation: u64,
+        guest_get: u32,
+        entry: u64,
+        parts: u8,
+    ) -> Turn<()> {
+        if self.aux.receipts.len() != usize::from(parts) || parts == 0 {
+            return Err("USER_RING_STREAM_RECEIPTS".into());
+        }
+        publish_guarded(
+            self.me,
+            self.r,
+            self.ram_generation,
+            Some(&self.aux.software),
+            self.aux.ring.as_ref(),
+            self.aux.source.as_ref(),
+            None,
+            &self.aux.receipts,
+            |storage| {
+                let (slot, put) = fetch
+                    .publish(Some((generation, guest_get)))
+                    .map_err(str::to_owned)?;
+                storage.write_user_gp(slot, entry)?;
+                storage.publish_put(put)
+            },
+        )?;
+        *self.source_admitted = true;
+        Ok(())
+    }
+    fn drop_receipts(&mut self) {
+        self.aux.receipts.clear();
+    }
     fn stage(&mut self, scan: &Scan, words: &[u32]) -> Turn<kf_chan::user_turn::Staged> {
         let software = software_snapshot(self.me, self.r)?;
         let planned = stage_plan(scan, &software, words);
@@ -873,6 +962,7 @@ impl kf_chan::user_turn::Io for PumpIo<'_> {
             self.aux.ring.as_ref(),
             self.aux.source.as_ref(),
             None,
+            &[],
             |storage| {
                 let (slot, put) = fetch
                     .publish(Some((generation, guest_get)))
@@ -899,6 +989,7 @@ impl kf_chan::user_turn::Io for PumpIo<'_> {
             self.aux.ring.as_ref(),
             self.aux.source.as_ref(),
             None,
+            &[],
             |storage| {
                 let (barrier, _) = fetch.publish(None).map_err(str::to_owned)?;
                 storage.write_host_barrier(barrier)?;
@@ -926,6 +1017,7 @@ impl kf_chan::user_turn::Io for PumpIo<'_> {
             None,
             None,
             None,
+            &[],
             |storage| {
                 let (slot, put) = fetch.publish(None).map_err(str::to_owned)?;
                 let (_, value) = marks.issue().map_err(str::to_owned)?;
@@ -987,7 +1079,11 @@ impl kf_chan::user_turn::Io for PumpIo<'_> {
                 }
             }
             Ev::CreditWait => Stats::bump(&me.relay_stats.credit_waits),
-            Ev::PutBound | Ev::EntryRefused | Ev::ScanRefused | Ev::ScanBudget => {}
+            Ev::PutBound
+            | Ev::EntryRefused
+            | Ev::ScanRefused
+            | Ev::ScanBudget
+            | Ev::StagedSpanBudget => {}
         }
     }
 }
@@ -1044,6 +1140,7 @@ impl Pump {
             }
         }
         self.core.retire();
+        self.aux.receipts.clear();
         // ★ lazy observe: the remaining counters join the VM-wide ones; ONE line per relay, at retire
         let lazy = self.core.lazy.take_delta();
         stats.lazy.add(&lazy);
@@ -1887,6 +1984,7 @@ impl Pump {
         }
         match &out {
             Ok(_) if self.core.again => self.core.need = Need::Again,
+            Err(Failure::Retry) if self.core.again => self.core.need = Need::Again,
             Err(Failure::Retry) => self.core.need = Need::Contended,
             _ => {}
         }
@@ -2204,9 +2302,17 @@ impl Pump {
         ) -> Result<(), String>,
     ) -> Turn<()> {
         let ram_generation = self.ram_generation;
-        publish_guarded(me, r, ram_generation, software, ring, gp, pb, |storage| {
-            write(self, storage)
-        })
+        publish_guarded(
+            me,
+            r,
+            ram_generation,
+            software,
+            ring,
+            gp,
+            pb,
+            &[],
+            |storage| write(self, storage),
+        )
     }
 
     fn segment_turn(
@@ -2616,6 +2722,7 @@ impl Pump {
                     // generation, cursor 0, grace, pending write-back, the guest's GET and the lifecycle's post-switch
                     // scan: ONE production call (`kf_chan::user_turn::Relay::switch_source`, GPU-free tests)
                     self.core.switch_source(generation);
+                    self.aux.receipts.clear();
                 })
                 .map_err(|e| source_error(e, "USER_RING_MIGRATION_ADMISSION"))
             })
@@ -2850,6 +2957,8 @@ impl ChanPlane {
             }
             Err(Failure::Retry) => {
                 if let Some(p) = &mut r.pump {
+                    p.core.cancel_stream();
+                    p.aux.receipts.clear();
                     // A changed/contended prepublication snapshot has no native
                     // credit. Re-read it rather than retrying a permanently stale
                     // view. Staged native work and its receipt state stay owned.

@@ -136,6 +136,8 @@ pub struct Counts {
     pub pointer_entry_max_bytes: u64,
     /// Scan/Window refusals at the per-copy budget; observation only.
     pub refused_scan_budget: u64,
+    /// Triggered descriptor whose whole patched span exceeds staging.
+    pub refused_staged_span_budget: u64,
     /// See above.
     pub entries_window: u64,
     /// Scan -> Pointer.
@@ -239,6 +241,7 @@ impl Counts {
             entries_pointer,
             pointer_large_entries,
             refused_scan_budget,
+            refused_staged_span_budget,
             entries_window,
             to_pointer,
             to_window_exact,
@@ -344,6 +347,7 @@ lifecycle_stats!(
     entries_pointer,
     pointer_large_entries,
     refused_scan_budget,
+    refused_staged_span_budget,
     entries_window,
     to_pointer,
     to_window_exact,
@@ -1011,6 +1015,12 @@ impl Lifecycle {
     /// Record a pre-read Scan/Window size refusal; it grants no progress.
     pub fn scan_budget_refused(&mut self) {
         self.counts.refused_scan_budget = self.counts.refused_scan_budget.saturating_add(1);
+    }
+
+    /// Count a triggered stream refused before publication or software action.
+    pub fn staged_span_budget_refused(&mut self) {
+        self.counts.refused_staged_span_budget =
+            self.counts.refused_staged_span_budget.saturating_add(1);
     }
 
     /// A pushbuffer was read (via a [`ScanPermit`]).

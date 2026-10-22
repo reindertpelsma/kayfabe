@@ -88,6 +88,62 @@ impl Snapshot<'_> {
     }
 }
 
+/// Receipt for a copied part, retaining identity/topology but no copied bytes.
+#[derive(Debug)]
+pub(crate) struct Receipt<'a>(Snapshot<'a>);
+
+impl<'a> Snapshot<'a> {
+    /// Release the immutable bytes after classification; retain only admission metadata.
+    pub(crate) fn into_receipt(mut self) -> Receipt<'a> {
+        self.bytes = Vec::new();
+        Receipt(self)
+    }
+}
+
+/// Re-admit every part under one row guard and one RAM guard. The callback is
+/// bounded CPU publication only, just like Snapshot::admit; no RM call or wait.
+pub(crate) fn admit_all<T>(
+    receipts: &[Receipt<'_>],
+    publish: impl FnOnce() -> T,
+) -> Result<T, Refusal> {
+    if receipts.is_empty() || receipts.len() > usize::from(kf_chan::user_chunk::MAX_PARTS) {
+        return Err(Refusal::Bounds);
+    }
+    let first = &receipts.first().ok_or(Refusal::Bounds)?.0;
+    for receipt in receipts {
+        let r = &receipt.0;
+        if !Weak::ptr_eq(&r.rows, &first.rows)
+            || !std::ptr::eq(r.ram, first.ram)
+            || r.generation != first.generation
+        {
+            return Err(Refusal::Changed);
+        }
+        if r.spans.len() > PIECES
+            || r.pieces > PIECES
+            || r.end
+                .checked_sub(r.va)
+                .is_none_or(|n| n == 0 || n > MAX_BYTES as u64)
+        {
+            return Err(Refusal::Bounds);
+        }
+    }
+    let rows = first.rows.upgrade().ok_or(Refusal::Changed)?;
+    let guard = try_read(&rows)?;
+    for receipt in receipts {
+        let r = &receipt.0;
+        match resolve(&guard, r.va, r.end, r.pieces) {
+            Ok(spans) if spans == r.spans => {}
+            Ok(_) | Err(Refusal::Missing(_) | Refusal::Bounds) => return Err(Refusal::Changed),
+            Err(e) => return Err(e),
+        }
+    }
+    let _blocks = try_read(&first.ram.blocks)?;
+    if first.generation == 0 || first.ram.generation.load(Ordering::Relaxed) != first.generation {
+        return Err(Refusal::Changed);
+    }
+    Ok(publish())
+}
+
 /// Whole-ring mapping admission without reading a guest-sized ring. The trusted
 /// ring cap and row/RAM-piece caps bound all work; no CPU store view is armed.
 pub(crate) struct Mapping<'a>(Snapshot<'a>);
