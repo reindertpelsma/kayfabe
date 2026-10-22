@@ -1124,6 +1124,40 @@ mod tests {
         assert!(pipeline(t, c, |m| b.get(&m).copied().unwrap_or(0), &tables).is_err());
     }
 
+    #[test]
+    fn the_negative_side_is_reachable_only_for_a_mirrored_olut_behind_a_signed_matrix() {
+        let lut = |mirror| {
+            Some(Lut {
+                entries: 1025,
+                binding: Binding::Vidmem(0),
+                interpolate: false,
+                mirror,
+            })
+        };
+        let out = |mirror: bool, matrix: [i32; 12]| Output {
+            lut: lut(mirror),
+            matrix,
+        };
+        let mut signed = IDENTITY;
+        signed[1] = -1;
+        let reach = |window: &[[i32; 12]], o: &Output| negative_side_reachable(window.iter(), o);
+        // the head's own matrix, and the window pipelines'
+        assert!(reach(&[], &out(true, signed)));
+        assert!(reach(&[signed], &out(true, IDENTITY)));
+        assert!(!reach(&[IDENTITY], &out(true, IDENTITY)), "nonnegative");
+        assert!(!reach(&[], &out(false, signed)), "unmirrored");
+        assert!(
+            !reach(
+                &[signed],
+                &Output {
+                    lut: None,
+                    matrix: signed
+                }
+            ),
+            "no table"
+        );
+    }
+
     /// Run 4500 (rev baa29775, 2026-10-22): the NVIDIA app's Hue and Digital Vibrance sliders
     /// re-arm OCSC0 with SIGNED coefficients while Windows' mirrored OLUT stays armed; the console
     /// refused the program ("mirrored OLUT behind a signed matrix") on every frame and froze at 0

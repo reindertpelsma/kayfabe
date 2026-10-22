@@ -5975,6 +5975,59 @@ mod tests {
         assert_eq!((again.token, again.mirror), (mirrored.token, true));
     }
 
+    /// The other direction, and the input table: dropping MIRROR is a new binding that is not
+    /// mirrored (a stale cached "mirrored" would sample a plain table's negative side).
+    #[test]
+    fn a_table_that_stops_being_mirrored_stops_reaching_the_kernel_as_mirrored() {
+        use kf_disp::color::{Binding, LUT_BYTES, Lut};
+        let mut cache = ColorDmas::default();
+        let dma = CtxDma {
+            target: Target::Vidmem,
+            base: 0,
+            limit: LUT_BYTES - 1,
+            block_linear: false,
+            writable: false,
+        };
+        let lut = |mirror| {
+            Some(Lut {
+                entries: 1025,
+                binding: Binding::Dma {
+                    handle: 9,
+                    offset: 0,
+                },
+                interpolate: false,
+                mirror,
+            })
+        };
+        let on = cache
+            .resolve(0, 7, 1, 1, lut(true), |_| Ok(dma))
+            .unwrap()
+            .unwrap();
+        let off = cache
+            .resolve(0, 7, 1, 1, lut(false), |_| Ok(dma))
+            .unwrap()
+            .unwrap();
+        assert!(on.mirror && !off.mirror && off.token > on.token);
+    }
+
+    /// Every refusal is counted; only a new reason is logged. The state a frozen console leaves
+    /// behind: the counter says how many frames, the set says which reasons.
+    #[test]
+    fn a_repeated_refusal_is_counted_every_time_and_remembered_once() {
+        let counters = DispCounters::default();
+        let mut scan = ScanState::default();
+        for _ in 0..1000 {
+            scan.note_refusal(&counters, "SDR colour program: active OCSC1");
+        }
+        assert_eq!(counters.scanout_refused.load(Ordering::Relaxed), 1000);
+        assert_eq!(scan.refusal_log.seen.len(), 1);
+        for i in 0..200 {
+            scan.note_refusal(&counters, &format!("reason {i}"));
+        }
+        assert_eq!(counters.scanout_refused.load(Ordering::Relaxed), 1200);
+        assert_eq!(scan.refusal_log.seen.len(), ReasonLog::MAX);
+    }
+
     /// A refusal is logged once per distinct reason, however often it repeats (run 4500 repeated
     /// one reason for thousands of frames; a different reason after sixteen earlier ones was never
     /// logged at all), and the set is bounded against a guest that varies the text.

@@ -1932,6 +1932,27 @@ mod tests {
         );
     }
 
+    /// The output kernel's last parameter is the mirror flag, and the launch fills it from the
+    /// table the worker resolved (a GPU-free pin of the launch text, as `snapshot_key` pins the
+    /// snapshot key: the kernel itself runs only on a GPU, `examples/color_mirror.rs`).
+    #[test]
+    fn the_output_launch_passes_the_tables_mirror_flag_last() {
+        let source: String = include_str!("display.rs")
+            .split("pub fn color_output(")
+            .nth(1)
+            .unwrap()
+            .split("pub fn color_verdict(")
+            .next()
+            .unwrap()
+            .chars()
+            .filter(|c| !c.is_whitespace())
+            .collect();
+        assert!(source.contains(
+            "lut.map_or(0,|v|v.entries).to_le_bytes().to_vec(),\
+             u32::from(lut.is_some_and(|v|v.mirror)).to_le_bytes().to_vec(),];"
+        ));
+    }
+
     /// ⊘ The compose launch passes EIGHTEEN by-value parameters (two u64, twelve u32, four s32) in
     /// this order; the PTX entry must declare exactly those — a drift is a wild pointer on the GPU.
     #[test]

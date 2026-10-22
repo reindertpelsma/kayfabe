@@ -299,6 +299,23 @@ mod tests {
         );
     }
 
+    /// The boundary: exactly zero is not negative (first sample, 64); the smallest negative the
+    /// encoding holds (one unit of the 16-bit fraction) is, and goes black.
+    #[test]
+    fn zero_is_not_negative_but_the_smallest_negative_is() {
+        let entries = lifted_black();
+        let t = Table {
+            entries: &entries,
+            interpolate: true,
+            mirror: true,
+        };
+        let mut m = [65536, 0, 0, 0, 0, 65536, 0, 0, 0, 0, 65536, 0];
+        assert_eq!(output_rgb([0.0; 3], &m, Some(&t)), [64, 64, 64]);
+        m[3] = -1;
+        m[7] = 1;
+        assert_eq!(output_rgb([0.0; 3], &m, Some(&t)), [0, 64, 64]);
+    }
+
     /// Where no channel is negative the mirror flag changes nothing (the case the shipped gate
     /// admits).
     #[test]
