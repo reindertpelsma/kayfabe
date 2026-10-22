@@ -18,7 +18,7 @@ class EarlyInit(unittest.TestCase):
                 other=dict(state);other.update(change);phase.write_text(json.dumps(other))
             return text
         def ready():events.append('ready')
-        def record(text):events.append(('record',json.loads(text.split('BW580_RESULT ')[1])))
+        def record(text):events.append(('record',json.loads(text.split('BW580_RESULT ')[1].splitlines()[0])))
         result=O.observe(phase,'on_precision',fetch,ready,record,validator or (lambda p:True),lambda:alive,attempts=attempts)
         return result,events
     def row(self,code=0,driver='32.0.15.8088',tdr=0):
