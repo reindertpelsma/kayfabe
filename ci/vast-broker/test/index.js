@@ -40,3 +40,4 @@ import './round3-bootstrap.test.js';
 import './round3-summary.test.js';
 import './round3-smoke-protocol.test.js';
 import './round3-drop-count.test.js';
+import './v5-lifecycle.test.js';
