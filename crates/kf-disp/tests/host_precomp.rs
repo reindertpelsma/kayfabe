@@ -423,7 +423,9 @@ fn all_fields(window: u32) {
             let name = format!("{reg}_{}", f[1]);
             let off = t.a(row.classes.caps, &reg, window).unwrap();
             let bits = t.f(row.classes.caps, &name).unwrap();
-            let expected: u32 = f[if window % 2 == 0 { 3 } else { 4 }].parse().unwrap();
+            let expected: u32 = f[if window.is_multiple_of(2) { 3 } else { 4 }]
+                .parse()
+                .unwrap();
             assert_eq!(
                 get(d.page.word(off), bits),
                 expected,
@@ -455,7 +457,7 @@ fn unsupported_rows(window: u32, policy: &str) {
             continue;
         }
         rows.push(capsderive::LayerRow {
-            overlay: window % 2 != 0,
+            overlay: !window.is_multiple_of(2),
             register: format!("PRECOMP_WIN_PIPE_HDR_{}", f[0]),
             field: f[1].into(),
             value: "1".into(),
@@ -612,7 +614,7 @@ fn every_virtual_head_keeps_distinct_main_and_overlay_scaler_roles() {
             .unwrap();
         assert_eq!(
             get(d.page.word(offset), field),
-            u32::from(window % 2 == 0),
+            u32::from(window.is_multiple_of(2)),
             "window {window}"
         );
     }

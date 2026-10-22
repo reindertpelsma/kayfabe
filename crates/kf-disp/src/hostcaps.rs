@@ -27,6 +27,7 @@ pub fn query(
     die: Die,
     mut read: impl FnMut(&[u32]) -> Result<Vec<u32>, String>,
 ) -> Result<HostPrecomp, String> {
+    crate::precomp_fields::membership(row, die).map_err(|e| e.0)?;
     if row.windows == 0 || row.windows > 32 {
         return Err("PRECOMP host window count outside public bound".into());
     }

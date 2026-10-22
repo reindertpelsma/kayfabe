@@ -14,8 +14,9 @@
 //! - **T2, a same-die startup snapshot** from host-authored READ32 regops. The
 //!   display-capabilities object is privileged; the generic regops endpoint is
 //!   NON_PRIVILEGED but each address still requires the host's GSP allowlist.
-//!   [`crate::hostcaps`] binds the immutable snapshot to the die, class, active
-//!   windows and exact public field layout. Refusal leaves the complete T1 page.
+//!   [`crate::hostcaps`] binds physical observations to die/class/windows/layout.
+//!   Field-level virtual support has priority: no residual host-backed guest field
+//!   is approved today. Refusal keeps the same derived virtual page.
 //!   No physical-page access permission is assumed from the endpoint's flags.
 //! - **T3, a privileged per-die measurement** (`data/caps_measured.tsv`, `tools/read_display_caps_page.py`):
 //!   only for words no class header names and the Windows display driver needs (bisected on hardware).
@@ -270,7 +271,7 @@ pub fn derive(
     rows: &[LayerRow],
     measured: &[MeasuredWord],
     branch: &str,
-    host: &HostFacts,
+    _host: &HostFacts,
 ) -> Result<Derived, Missing> {
     let c = &row.classes;
     let base = if sdr {
@@ -327,20 +328,9 @@ pub fn derive(
             );
         }
     }
-    if let Some(snapshot) = &host.precomp
-        && let Some(host_words) = snapshot.words_for(t, row, die)
-    {
-        for &(offset, value) in host_words {
-            words.insert(offset, value);
-            why.insert(
-                offset,
-                (
-                    Tier::Host,
-                    "same-die unprivileged PRECOMP read at realize".into(),
-                ),
-            );
-        }
-    }
+    // Tier1 derives each supported named field. Host facts remain physical
+    // observations: no residual field is eligible to alter this virtual page.
+    crate::precomp_fields::apply(t, row, die, &mut words)?;
     // T3: this die's measured words
     let mut unmeasured: Vec<(u32, &'static str)> = Vec::new();
     for (off, because) in REQUIRED_UNNAMED {
