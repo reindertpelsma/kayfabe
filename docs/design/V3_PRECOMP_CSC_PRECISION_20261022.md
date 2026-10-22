@@ -1,4 +1,16 @@
-**STATUS: RESEARCH, 2026-10-22.** Public-source precision candidate; hardware validation UNRUN.
+**STATUS: RESEARCH, 2026-10-22.** Public-source precision candidate; precision-only Windows sufficiency FALSIFIED.
+
+MEASURED correction above the original hypothesis: clean-native RTX5090/GB202 lease57148807,
+product8f3a9bb3a, passed gates9/9+10, raw30/30, CUDA4/4 and corrected GR/CE with only five
+source-matched intentional31 controls. Windows580.88 was sealed disabled(Code22); a fresh
+precision-only display/GOP ON sibling then reproduced bugcheck0x50 after the fourth successful
+CA7A allocation. Canonical trace278rows/zero unparsed/reachedEOF; WER and minidump-header
+metadata confirm0x50. Actual Code0 was not observed. The same0x50 triggers the stated falsifier:
+precision14 alone is insufficient. FVLUT necessity and the crash's instruction-level cause remain
+UNRESOLVED. No captured word is justified. This does not establish AD104 behavior.
+[Retained arm evidence](https://github.com/reindertpelsma/kayfabe/tree/fceac118b45707ed69e1aa49508bc2abbf9a1bf8/traces/blackwell_validation4_20261022/arms/on_precision)
+and [recovered0x50 header](https://github.com/reindertpelsma/kayfabe/blob/dc1e6070b/traces/blackwell_validation4_20261022/arms/on_precision/dump_headers.jsonl).
+Keep this PR draft; no further product change is included.
 Draft [PR #69](https://github.com/reindertpelsma/kayfabe/pull/69) is isolated on
 `codex/bw-resume-cont-20261022-capc`, based on the read-only Claude product lineage.
 
