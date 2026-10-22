@@ -1,0 +1,11 @@
+{
+  "classification": "MEASURED",
+  "verified_at_host": "2026-10-22T06:36:52+02:00",
+  "qemu_broker_agent_monitor_deadline_helpers_absent": true,
+  "cargo_target_deleted": true,
+  "lock_released_and_acquirable": true,
+  "lock_wait_bound_seconds": 120,
+  "coW_images_retained_under_authorized_lane_directory_for_diagnostics": true,
+  "no_owner_backing_size_or_mtime_change": true,
+  "old_untracked_broker_profiler_artifacts_untouched": true
+}

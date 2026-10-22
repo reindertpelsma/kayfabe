@@ -1,0 +1,49 @@
+{
+  "classification": "MEASURED",
+  "captured_host": "2026-10-22T06:34:53.169297+02:00",
+  "run": 3453,
+  "label": "baseline",
+  "cuda_gate": {
+    "before": 0,
+    "after": 0,
+    "reloaded": false
+  },
+  "new_host_xids": 0,
+  "rm_unload_markers_total_log": 7,
+  "reboots_after_creation": 1,
+  "counter_maxima_observed": {
+    "pointer_large_entries": null,
+    "pointer_entry_max_bytes": null,
+    "refused_scan_budget": null,
+    "poisoned": 3
+  },
+  "budget_refusal_records": 3,
+  "progress_strand_records": 0,
+  "guest_153_records_observed": 6,
+  "guest_4101_records_observed": 0,
+  "application_1000_records_observed": 0,
+  "boot_values_observed": [
+    "2026-10-22T03:44:36.5000000+02:00",
+    "2026-10-22T04:03:16.5000000+02:00"
+  ],
+  "failed_subtests": [
+    [
+      "catia-07",
+      "03_ThreeLoftJetsDarkMirror"
+    ],
+    [
+      "catia-07",
+      "06_LoftJets"
+    ],
+    [
+      "creo-04",
+      "01_ScorpionShadedReflections"
+    ]
+  ],
+  "viewperf_kill_count": "UNVERIFIED; failed subtests are not an exact process-kill census",
+  "guest_event_count_scope": "baseline lower bound across saved samples; fix uses a fixed initial-boot cutoff",
+  "export_read_errors": [],
+  "unread_status_samples": [
+    "status-3453-before.json"
+  ]
+}

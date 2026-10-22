@@ -1,0 +1,7 @@
+{
+  "time": "2026-10-22T06:03:01.371222+02:00",
+  "rm_unload_cycles": 4,
+  "cycles_15min": 4,
+  "new_host_xids": 0,
+  "reason": "TDR_CYCLE_BUDGET"
+}

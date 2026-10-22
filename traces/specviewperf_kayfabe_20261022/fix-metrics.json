@@ -1,6 +1,6 @@
 {
   "classification": "MEASURED",
-  "captured_host": "2026-10-22T06:21:58.373857+02:00",
+  "captured_host": "2026-10-22T06:34:53.283299+02:00",
   "run": 3454,
   "label": "fix",
   "cuda_gate": {
@@ -9,11 +9,11 @@
     "reloaded": false
   },
   "new_host_xids": 0,
-  "rm_unload_markers_total_log": 0,
+  "rm_unload_markers_total_log": 1,
   "reboots_after_creation": 0,
   "counter_maxima_observed": {
     "pointer_large_entries": 8005,
-    "pointer_entry_max_bytes": 1042740,
+    "pointer_entry_max_bytes": 1043244,
     "refused_scan_budget": 0,
     "poisoned": 0
   },

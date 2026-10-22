@@ -1,0 +1,23 @@
+{
+  "captured": "2026-10-22T04:34:20.6086868+02:00",
+  "before": [
+    {
+      "ProcessName": "SPECviewperf-CLI",
+      "Id": 3724
+    },
+    {
+      "ProcessName": "SPECviewperf-test-harness",
+      "Id": 2120
+    },
+    {
+      "ProcessName": "viewperf",
+      "Id": 6800
+    }
+  ],
+  "reason": "ARM_ABORT_BUDGET_OR_DEADLINE",
+  "forcedPids": [
+    3724,
+    2120,
+    6800
+  ]
+}

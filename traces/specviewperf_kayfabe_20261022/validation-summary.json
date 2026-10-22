@@ -1,0 +1,58 @@
+{
+  "classification": "MEASURED",
+  "rust": {
+    "passed": 1046,
+    "failed": 0,
+    "ignored": 4,
+    "groups": 36,
+    "source": "468a35c9d845afc1938683540acc251bdef90e5a"
+  },
+  "python": {
+    "passed": 57,
+    "failed": 0,
+    "red": {
+      "arm_bootstrap_loader_errors": 1,
+      "cuda_gate_errors": 12,
+      "unload_marker_errors": 4
+    }
+  },
+  "mutants": [
+    {
+      "mutation": "ignore_xid",
+      "killing_tests": 2
+    },
+    {
+      "mutation": "ignore_tdr",
+      "killing_tests": 2
+    },
+    {
+      "mutation": "ignore_deadline",
+      "killing_tests": 2
+    },
+    {
+      "mutation": "erase_flags",
+      "killing_tests": 2
+    },
+    {
+      "mutation": "omit_reload",
+      "killing_tests": 2
+    },
+    {
+      "mutation": "accept_failed_health",
+      "killing_tests": 4
+    },
+    {
+      "mutation": "omit_gdm_restore",
+      "killing_tests": 3
+    },
+    {
+      "mutation": "omit_unload",
+      "killing_tests": 3
+    },
+    {
+      "mutant": "count_only_optional_leftover_object_summary",
+      "killing_tests": 3
+    }
+  ],
+  "production_rust_c_cuda_changed": false
+}

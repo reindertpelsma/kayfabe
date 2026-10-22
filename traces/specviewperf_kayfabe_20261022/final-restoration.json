@@ -1,0 +1,31 @@
+{
+  "classification": "MEASURED",
+  "time": "2026-10-22T06:35:42.647649+02:00",
+  "cuda_health": {
+    "before": 0,
+    "after": 0,
+    "reloaded": false
+  },
+  "gpu_driver": "nvidia",
+  "audio_driver": "snd_hda_intel",
+  "gdm": "active",
+  "desktop": "Name=ubuntu\nType=wayland\nActive=yes",
+  "nvidia_smi": "NVIDIA GeForce RTX 4070, 595.91.07, 45 MiB",
+  "qemu_pids_absent": true,
+  "own_cargo_target_deleted": true,
+  "backing_checks": [
+    {
+      "run": 3453,
+      "owner_backing_size_unchanged": true,
+      "owner_backing_mtime_unchanged": true,
+      "overlay_retained_for_diagnostics": true
+    },
+    {
+      "run": 3454,
+      "owner_backing_size_unchanged": true,
+      "owner_backing_mtime_unchanged": true,
+      "overlay_retained_for_diagnostics": true
+    }
+  ],
+  "logs_and_cow_images_retained_under": "/data/codex-K1/campaign-20261022/"
+}
