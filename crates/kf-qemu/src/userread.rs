@@ -65,7 +65,7 @@ impl Snapshot<'_> {
             ));
         }
         if self.spans.len() > 8 {
-            out.push_str(&format!("(+{} more)", self.spans.len() - 8));
+            out.push_str(&format!("(+{} more)", self.spans.len().saturating_sub(8)));
         }
         out
     }
@@ -140,7 +140,7 @@ pub(crate) fn mapped<'a>(
             if pieces == RING_PIECES {
                 return Err(Refusal::Bounds);
             }
-            pieces += 1;
+            pieces = pieces.saturating_add(1); // bounded by the `== RING_PIECES` refusal just above
             let mut covers = blocks.iter().enumerate().filter(|(_, b)| {
                 b.fd == Some(fd)
                     && at >= b.fd_off
@@ -212,9 +212,14 @@ fn resolve(
             .checked_add(len)
             .filter(|e| *e > at)
             .ok_or(Refusal::Missing(at))?;
-        let len = (row_end - at).min(end - at);
+        // `base <= at` (the range is `..=at`), `at < row_end` (the filter) and `at < end` (the loop condition): never short.
+        let len = row_end
+            .checked_sub(at)
+            .zip(end.checked_sub(at))
+            .map(|(row, rest)| row.min(rest))
+            .ok_or(Refusal::Missing(at))?;
         let off = off
-            .checked_add(at - base)
+            .checked_add(at.checked_sub(base).ok_or(Refusal::Missing(at))?)
             .filter(|o| o.checked_add(len).is_some())
             .ok_or(Refusal::Bounds)?;
         spans.push(Span {
@@ -223,7 +228,7 @@ fn resolve(
             len,
             perm,
         });
-        at += len;
+        at = at.checked_add(len).ok_or(Refusal::Bounds)?;
     }
     Ok(spans)
 }
@@ -240,10 +245,10 @@ pub(crate) fn snapshot<'a>(
     bytes: usize,
     store: &mut impl Store,
 ) -> Result<Snapshot<'a>, Refusal> {
-    if bytes == 0 || bytes > MAX_BYTES || va.checked_add(bytes as u64).is_none() {
+    if bytes == 0 || bytes > MAX_BYTES {
         return Err(Refusal::Bounds);
     }
-    let end = va + bytes as u64;
+    let end = va.checked_add(bytes as u64).ok_or(Refusal::Bounds)?;
     let first = try_read(rows)?;
     let epoch = log.epoch();
     let spans = resolve(&first, va, end, PIECES)?;
@@ -276,7 +281,9 @@ pub(crate) fn snapshot<'a>(
     let mut ram_pieces = 0usize;
     for span in &spans {
         let len = usize::try_from(span.len).map_err(|_| Refusal::Bounds)?;
-        let dest = out.get_mut(done..done + len).ok_or(Refusal::Bounds)?;
+        let dest = out
+            .get_mut(done..done.checked_add(len).ok_or(Refusal::Bounds)?)
+            .ok_or(Refusal::Bounds)?;
         if !span.ram {
             store.copy(span.off, dest)?;
         } else {
@@ -286,7 +293,7 @@ pub(crate) fn snapshot<'a>(
                 if ram_pieces == PIECES {
                     return Err(Refusal::Bounds);
                 }
-                ram_pieces += 1;
+                ram_pieces = ram_pieces.saturating_add(1); // bounded by the `== PIECES` refusal just above
                 let off = span.off.checked_add(copied as u64).ok_or(Refusal::Bounds)?;
                 let mut covers = blocks.iter().enumerate().filter(|(_, b)| {
                     b.fd == Some(fd)
@@ -299,8 +306,18 @@ pub(crate) fn snapshot<'a>(
                 if covers.next().is_some() {
                     return Err(Refusal::Topology);
                 }
-                let pos = usize::try_from(off - b.fd_off).map_err(|_| Refusal::Bounds)?;
-                let n = (b.mem.len() - pos).min(len - copied);
+                // `covers` admits only `fd_off <= off < fd_off + mem.len`, and `copied < len`: neither difference is short.
+                let pos = off
+                    .checked_sub(b.fd_off)
+                    .and_then(|d| usize::try_from(d).ok())
+                    .ok_or(Refusal::Bounds)?;
+                let n = b
+                    .mem
+                    .len()
+                    .checked_sub(pos)
+                    .zip(len.checked_sub(copied))
+                    .map(|(block, rest)| block.min(rest))
+                    .ok_or(Refusal::Bounds)?;
                 let end = off.checked_add(n as u64).ok_or(Refusal::Bounds)?;
                 if blocks.iter().enumerate().any(|(i, other)| {
                     i != index
@@ -313,13 +330,17 @@ pub(crate) fn snapshot<'a>(
                 }) {
                     return Err(Refusal::Topology);
                 }
-                if !b.mem.read_into(pos, &mut dest[copied..copied + n]) {
+                let window = copied
+                    .checked_add(n)
+                    .and_then(|stop| dest.get_mut(copied..stop))
+                    .ok_or(Refusal::Bounds)?;
+                if !b.mem.read_into(pos, window) {
                     return Err(Refusal::Topology);
                 }
-                copied += n;
+                copied = copied.checked_add(n).ok_or(Refusal::Bounds)?;
             }
         }
-        done += len;
+        done = done.checked_add(len).ok_or(Refusal::Bounds)?;
     }
     Ok(Snapshot {
         bytes: out,
@@ -385,6 +406,41 @@ mod tests {
             Err(Refusal::Missing(0x100000 + bytes as u64))
         );
         assert!(snapshot(&rows, &log, &ram, generation, 0x100004, bytes, &mut NoStore).is_err());
+    }
+
+    /// A row whose backing offset cannot hold the requested span (offset + length would wrap) is refused,
+    /// as is a request that starts past the last row; neither reads, panics or loops.
+    #[test]
+    fn rows_with_unrepresentable_backing_offsets_refuse() {
+        let (ram, _, rows, log, generation) = fixture();
+        rows.write().unwrap().clear();
+        rows.write().unwrap().insert(
+            0x10000,
+            (0x2000, u64::MAX - 0x10, true, MapPerm::READ_WRITE),
+        );
+        assert_eq!(
+            snapshot(&rows, &log, &ram, generation, 0x10000, 0x100, &mut NoStore).err(),
+            Some(Refusal::Bounds)
+        );
+        // Starting at the second page of the row: the offset still wraps.
+        assert_eq!(
+            snapshot(&rows, &log, &ram, generation, 0x11000, 0x100, &mut NoStore).err(),
+            Some(Refusal::Bounds)
+        );
+        // Past the end of the only row: missing, by address.
+        assert_eq!(
+            snapshot(&rows, &log, &ram, generation, 0x12000, 0x100, &mut NoStore).err(),
+            Some(Refusal::Missing(0x12000))
+        );
+        // A span that runs off the end of the row: the hole is named.
+        rows.write().unwrap().clear();
+        rows.write()
+            .unwrap()
+            .insert(0x10000, (0x1000, 0, true, MapPerm::READ_WRITE));
+        assert_eq!(
+            snapshot(&rows, &log, &ram, generation, 0x10f00, 0x200, &mut NoStore).err(),
+            Some(Refusal::Missing(0x11000))
+        );
     }
 
     #[test]

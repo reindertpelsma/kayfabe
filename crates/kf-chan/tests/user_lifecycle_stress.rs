@@ -434,6 +434,12 @@ fn hostile(priv_entries: u32, lazy: kf_chan::user_lazy::LazyConfig) {
     let sh = Shared::new();
     let secs = stress_secs();
     let deadline = std::time::Instant::now() + std::time::Duration::from_secs_f64(secs);
+    // The run is bounded by TURNS as well as by time: on a loaded runner the time budget alone can end the
+    // loop just under `MIN_TURNS` (CI saw 976), which is a statement about the machine, not about the relay.
+    // The run therefore continues past the deadline until it has done `MIN_TURNS`; `hard_deadline` still
+    // fails a relay that truly stops making progress.
+    const MIN_TURNS: u64 = 1000;
+    let hard_deadline = deadline + std::time::Duration::from_secs(60);
     let deaths = Arc::new(AtomicU64::new(0));
     let total_turns = std::thread::scope(|s| {
         let _stop = StopOnDrop(sh.clone());
@@ -501,7 +507,9 @@ fn hostile(priv_entries: u32, lazy: kf_chan::user_lazy::LazyConfig) {
         };
         let mut turns = 0u64;
         let mut max_steps = 0;
-        while std::time::Instant::now() < deadline {
+        while std::time::Instant::now() < hard_deadline
+            && (std::time::Instant::now() < deadline || turns < MIN_TURNS)
+        {
             // a fresh channel after every refusal (a hostile entry kills only its own channel)
             let mut relay = Relay::new(
                 priv_entries,
@@ -519,7 +527,11 @@ fn hostile(priv_entries: u32, lazy: kf_chan::user_lazy::LazyConfig) {
             sh.log.lock().unwrap().clear();
             sh.markers.store(0, Ordering::Release);
             let mut guard = 0u64;
-            while !relay.dead && std::time::Instant::now() < deadline && guard < 200_000 {
+            while !relay.dead
+                && std::time::Instant::now() < hard_deadline
+                && (std::time::Instant::now() < deadline || turns < MIN_TURNS)
+                && guard < 200_000
+            {
                 guard += 1;
                 relay.claim();
                 let mut steps = 0;
@@ -577,5 +589,8 @@ fn hostile(priv_entries: u32, lazy: kf_chan::user_lazy::LazyConfig) {
         "stress(hostile, {lazy:?}): {total_turns} turns, {} channels killed by their own hostile entries",
         deaths.load(Ordering::Relaxed)
     );
-    assert!(total_turns > 1000);
+    assert!(
+        total_turns >= MIN_TURNS,
+        "only {total_turns} turns before the hard deadline: the relay stopped making progress"
+    );
 }

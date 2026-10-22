@@ -3,6 +3,35 @@
 **STATUS: LIVE, 2026-09-29.** This describes the CI repair, not an expansion of the
 hardware support matrix or a claim of complete unsafe-code soundness.
 
+## CI repair of 2026-10-21 (branch `claude/ci-green-20261021`)
+
+The Clippy step had been red on master since 2026-10-15, so every step after it had stopped running and
+drift accumulated behind it. What changed, step by step:
+
+- **Clippy errors (93 on the first local run, one more revealed once those were fixed).** `kf-qemu` denies `clippy::arithmetic_side_effects` and
+  `clippy::indexing_slicing` for the guest-facing plane (`chan.rs` and the `user*.rs` modules it includes).
+  Every flagged site now uses a checked or saturating form or `.get(..)` and fails closed; no `#[allow]` was added.
+- **Format check.** 50 files were reformatted (`cargo fmt --all`); no token changed.
+- **Clippy debt gate (`clippy-debt.json`).** 119 warning sites that predate this repair (new code since the last
+  record) were recorded as reviewed migration debt: kf-disp 29, kf-qemu 26, kf-chan 24, kf-core 17, kf-abi 8,
+  kf-broker 7, kf-harness 3, kf-host 2, kf-cuda 1, kf-mem 1, kf-trap 1. Largest classes: `items_after_test_module` 17,
+  `dead_code` 17, `manual_is_multiple_of` 13, `collapsible_if` 13, `missing_docs` 11, `type_complexity` 7. Nine
+  recorded sites no longer fire. No repair-introduced warning is among them.
+- **Claim ledger (`claims-debt.json`).** 616 sites were recorded (607 `unattributed`, 7 `bare-hardware`,
+  2 `conflated`): docs 327, traces 154, kf-qemu 51, kf-chan 40, kf-disp 11, kf-broker 8, kf-rm 7, kf-mem 5, kf-abi 4,
+  and 9 elsewhere. They are prose written since the last record; none was rewritten.
+- **Dependency isolation.** `kf-trap -> loom` and `kf-disp -> kf-broker, kf-linux-raw` are dev-dependencies of pure
+  crates that the rule forbids. They are named, exactly and as dev-dependencies only, in `DEV_ONLY_EXCEPTIONS` of
+  `scripts/ci/dependencies.py`. **Owner decision pending:** keep the exceptions, or move those tests to `kf-harness`.
+- **ABI-quarantine gate.** It aborted on `SIGPIPE` under `pipefail` once a file's remainder outgrew the 64 KiB pipe
+  buffer; the type lookup now tolerates an early-exiting `grep`.
+- **Untagged ogkm citations.** `kf-abi/chanbudget.rs` is tagged `ogkm-580:` with corrected lines (the old
+  `:317-334` was not where those cases are at 580.159.04); `kf-census` no longer spells the notation in identifiers
+  (module `oracle`, field `ogkm_answer`); the 52 bare citations of `V3_VGPU_COMPAT_RESEARCH_20261013.md` are tagged
+  `ogkm-595:`, the one tree that document names, without being re-read. The docs ratchet stays at 172.
+- **Section numbers.** `V3_COMPLETION_AUDIT.md` finding headings are `F1..F12`.
+- **Unsafe-surface gate.** A test message in `kf-mem/src/sim/tests.rs` contained the keyword; reworded.
+
 ## CI host prerequisites (2026-09-29)
 
 The local unprivileged reproduction of GitHub's `execve/EACCES` failure produced
