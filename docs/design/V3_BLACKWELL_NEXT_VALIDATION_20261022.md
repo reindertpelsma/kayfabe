@@ -45,10 +45,12 @@ The compatibility profile label `guest-driver=580.65.06` in QOM is not proof of 
 driver: verify staged driver files and CIM report 580.88 before enabling, using a fresh sibling overlay.
 The approved display-off arm omits the GOP ROM property; retain that guard.
 
-B1 readiness is checked before any future lease. The last fetched
-`origin/codex/translated-rc-20261022` at `3c7bf3e9d5e6c8999fcc982af787b66ed334df2e`
-was a seed, not evidence of a completed fix. Do not claim a current remote revision without fetching
-again. Do not merge its branch; if ready, pin and build a separate binary before timing any guest.
+B1 readiness is checked before any future lease. A fresh read-only remote check during this review
+found `codex/translated-rc-20261022` at `82effe99f18c27c55a3326e6e95fd375e43098c7`.
+It contains design/seam and EXPECTED RED tests, followed by a merge of the master CI-repair baseline;
+there is no completed RC implementation/verification receipt at that revision. It is not yet an arm.
+Re-check readiness later; do not merge its branch. If ready, pin and build a separate binary before
+timing any guest, and keep unrelated baseline changes out of the paired comparison.
 The older optional CE2 ring branch `claude/ce2-kernel-ring-20261019` / `95e23df77` also remains unmerged;
 select at most one optional cause/fix arm after review, never combine fixes in the same comparison.
 
