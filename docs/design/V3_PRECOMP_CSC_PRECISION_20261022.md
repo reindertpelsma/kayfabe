@@ -1,34 +1,45 @@
-**STATUS: RESEARCH, 2026-10-22.** Isolated draft of SW2's CAPC precision topic. Original test-first
-commit7b8cdc550 and fixe80903277 from codex/bw-resume-cont-20261022 are preserved by cherry-pick -x.
-No diagnostic page, captured word or native fault exception is part of this topic.
+**STATUS: RESEARCH, 2026-10-22.** Public-source precision candidate; hardware validation UNRUN.
+Draft [PR #69](https://github.com/reindertpelsma/kayfabe/pull/69) is isolated on
+`codex/bw-resume-cont-20261022-capc`, based on the read-only Claude product lineage.
 
-The existing virtual CSC00/01 stages are declared present but their precision fields are zero.
-The candidate declares14 for those matrices in main and overlay windows through the existing T1 row
-mechanism. All addresses/field positions remain generated for each class/version; inactive windows are
-zero. This is a source-backed virtual-engine rule, not a claim that every physical die has equal caps.
+The virtual CSC00/01 stages are already declared present but report zero precision. Four T1
+layer rows declare precision 14 for those existing main/overlay stages. Each class/version's
+generated layout still supplies addresses and masks; inactive windows remain zero. This is a
+candidate rule for the virtual engine, not a declaration of equal physical capabilities on every die.
 
-Exactly what the public sources establish:
-- NVIDIA ogkm580.159.04 @b81d58ee0224d1d290bef1c080592b619e184042, MIT,
-  src/common/sdk/nvidia/inc/class/clca73.h defines CAPC at0x788+i*32 with32entries;
-  CSC00_PRECISION occupies4:0 and CSC01_PRECISION20:16. Each can encode14.
-  The header DOES NOT define a named precision14 constant, require14 or state a reset14 value.
-  Older generated classes even expose PRECISION_INIT=0. A layout alone is not a derivation of14.
-- The same public revision, src/nvidia-modeset/src/nvkms-evo3.c:374-432, documents its existing CSC
-  matrices as S5.14 coefficients in S5.16 software encoding. This is the independent basis for choosing14
-  for the already implemented virtual stages. The mapping from that documented numeric precision to the
-  named capability fields is the candidate rule; Windows sufficiency still requires hardware validation.
-- FVLUT is a SEPARATE CAPC bit13; DIRECT is bit15, clamp bits5/21. The header defines boolean encodings,
-  not their complete behavioral contract. CA7E's CURVE control vocabulary exists, but its exact relation
-  to the FVLUT capability and required implementation remains UNRESOLVED. No FVLUT/DIRECT/clamp support
-  is claimed by this patch, and no captured whole CAPC word is used to fill that gap.
+CODE READ — the public layout and the numeric basis establish different facts:
 
-Earlier hardware isolated CAPC as a whole, including both precision fields and FVLUT. That does not
-isolate which bit prevents0x50. Expectation for the next derived-only ON run: no0x50. Falsifier: the
-same0x50 signature recurs; then precision alone is insufficient and the remaining fields stay open.
-The prior native baseline had an unmatched Xid32, so its arm comparisons are exploratory, not acceptance.
+- NVIDIA ogkm 580.159.04, commit `b81d58ee0224d1d290bef1c080592b619e184042` (MIT),
+  [clca73.h:846–861](https://github.com/NVIDIA/open-gpu-kernel-modules/blob/b81d58ee0224d1d290bef1c080592b619e184042/src/common/sdk/nvidia/inc/class/clca73.h#L846)
+  defines `PRECOMP_WIN_PIPE_HDR_CAPC(i)` at `0x788 + i*32`, with 32 layout entries.
+  `CSC00_PRECISION` occupies bits 4:0; `CSC01_PRECISION` occupies bits 20:16.
+  Both fields can encode 14. The header supplies no named precision-14 constant, requirement to
+  choose 14, or reset value of 14. Older generated classes expose `PRECISION_INIT=0`.
+- The same revision's
+  [nvkms-evo3.c:374–432](https://github.com/NVIDIA/open-gpu-kernel-modules/blob/b81d58ee0224d1d290bef1c080592b619e184042/src/nvidia-modeset/src/nvkms-evo3.c#L374)
+  describes CSC coefficients with 14 fractional bits, represented through its 16-fractional-bit
+  software format. That is the independent numeric basis for this virtual-stage candidate.
+  Mapping that precision to the capability fields is an INFERRED rule. The header alone does
+  not prove that mapping, Windows sufficiency, or the virtual pipeline's complete numeric fidelity.
+- FVLUT is a separate CAPC bit, 13; DIRECT is bit 15; unity-clamp bits are 5 and 21.
+  Boolean encodings do not specify their complete behavior. Public CA7E exposes CURVE controls,
+  but the FVLUT-to-CURVE relationship, required LUT implementation and driver expectations remain
+  UNRESOLVED. This patch advertises none of FVLUT, DIRECT or unity clamping.
 
-Verification retained in traces/blackwell_resume_cont_20261022/precomp_precision/:
-release293/0/5 ->296/0/5; three mutants each2killers; clippy77->77/added0; rustfmt. Only32 new generated
-CAPC words (four classes x8windows). No T3 changes. The AD104 historical f5 test checks both new fields
-exactly and retains full equality for every other word after projecting ONLY those fields. None dropped
-or newly ignored. Candidate hardware validation UNRUN; draft only, no merge.
+MEASURED earlier: the bisect isolated CAPC **as a whole** on GB202. Those words changed precision
+and FVLUT together; precision alone was not isolated. The baseline also contained an unmatched
+native Xid 32, so these comparisons remain exploratory. Hypothesis for a future clean-baseline
+derived-only ON arm: precision 14 avoids the previous 0x50. Falsifier: the same 0x50 recurs.
+Then precision alone is insufficient; this does not justify importing captured words or claiming FVLUT.
+
+Test-first history is preserved with `cherry-pick -x`: original EXPECTED RED `7b8cdc550` becomes
+`b1da436f5`, followed by fix `e80903277` as `d8657cb98`. The public-source clarification is documentation.
+Retained [verification](../../traces/blackwell_resume_cont_20261022/precomp_precision/validation.json):
+`kf-disp` release tests 293 passed / 0 failed / 5 ignored → 296 / 0 / 5; three mutants each
+killed by two tests; clippy 77 → 77, added 0; rustfmt passed. Five generated driver tables and all
+display-family rows are covered. The generated fixture adds 32 CAPC words across four class layouts
+and eight active windows per layout; no T3 row or captured word is added.
+
+The historical AD104 f5 comparator explicitly checks both new precision fields, then retains full
+equality for every other field after projecting only those two changes. No test is dropped or newly
+ignored. Changed AD104 behavior and Windows precision sufficiency remain hardware UNRUN. Keep draft.
