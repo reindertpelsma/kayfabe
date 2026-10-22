@@ -2,7 +2,15 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {createHash} from 'node:crypto';
 import {setup,sha,nonce,env,jwt} from './helpers.js';
+import worker from '../src/index.js';
 const request={runner_nonce:'f'.repeat(64),tested_sha:sha,pr_number:7};
+for(const size of [180,700])test('R3 public ingress preserves bounded nonce rent body '+size,async()=>{
+ let received;
+ const bindings={...env,LEDGER:{idFromName:()=>1,get:()=>({fetch:async r=>{received=await r.text();return Response.json({});}})}};
+ const body=JSON.stringify(request)+' '.repeat(size);
+ await worker.fetch(new Request(env.WORKER_URL+'/rent',{method:'POST',body}),bindings);
+ assert.equal(received,body.slice(0,513));
+});
 // FALSIFIER: runner nonce is optional/replaced on replay, or final/page hashes
 // do not bind the exact UTF-8 chunks that the runner retrieves in cursor order.
 for(const restart of [false,true])test('R3 rent binds caller nonce through status '+restart,async()=>{
