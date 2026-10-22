@@ -1,5 +1,8 @@
 # ★★★★★ MILESTONE — the raw client passes UNDER THE CONSTRAINTS
 
+**STATUS: ANSWERED, 2026-09-11.** CODE READ: historical pre-v3 milestone; the existing
+2026-09-26 scope note below governs this record.
+
 > ⊘ **HISTORICAL — 2026-09-26.** This milestone was reached on the **pre-v3 tree** (the scratchpad
 > isolate and the old `nvkvm-gpu` device), which v3 replaced. It stays true as a record of what
 > that tree did on 2026-09-11. The v3 counterparts are the 30-arm thin guest (30/30 on GA106 and
