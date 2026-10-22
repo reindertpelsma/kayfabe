@@ -1,5 +1,20 @@
 # Status and handoff — where kayfabe v3 stands, and how to resume
 
+## UPDATE 2026-10-22 — WP1 PAUSED: host OOM killed the owner VM
+
+MEASURED (run WP1-s2-r2a1-20261022, 2026-10-22): the kernel OOM killer killed
+owner PID 2123004 at 18:30:44 CEST. The concurrent WP1 test used 9216 MiB shared
+memfd RAM; this admission decision was unsafe. S2 ABORTED, S3–S5 NOT RUN.
+CODE READ (owner ruling, 2026-10-22): WP1 is paused; no VM starts. Budget the
+host as 29 GiB with about 25 GiB held by the owner including shmem; no second
+VM above about 3 GiB TOTAL is safe. Resume requires the owner's decision.
+MEASURED (run WP1-emergency-stop-20261022, 2026-10-22): all own VM PIDs absent,
+no own manager remains, own lock free; no owner files modified or restart tried.
+Private images/tools retained pending owner decision. Round 2 did complete real
+DISM offline registration, but obtained no driver-compatibility verdict.
+[Incident, memory configurations and evidence](../traces/winpe_spike_20261018/WP1.md).
+The prior WP1 report below is historical; public CI adoption/licensing stays open.
+
 ## UPDATE 2026-10-22 — WP1 PE boot passes; driver staging is the first red stage
 
 CODE READ: owner authorization resolved the private-spike permission question;

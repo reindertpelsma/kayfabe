@@ -1,0 +1,17 @@
+{
+  "utc": "2026-10-22T16:31:52.024738+00:00",
+  "own_remaining": [],
+  "own_lock_free": true,
+  "owner_pid_present": false,
+  "instruction": "STOP; no more VM starts",
+  "known_qemu_pids_absent": [
+    2140181,
+    2140932,
+    2141826,
+    2145724,
+    2147224,
+    2147322,
+    2150189
+  ],
+  "artifacts": "Downloads, local tools and images retained pending owner decision; no VM restarted."
+}

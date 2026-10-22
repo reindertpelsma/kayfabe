@@ -1,0 +1,105 @@
+{
+  "evidence_run": "WP1-s2-r2a1-20261022",
+  "date": "2026-10-22",
+  "configurations": [
+    {
+      "run": "S1 a1",
+      "pids": [
+        2140181
+      ],
+      "m_mib": 4096,
+      "backend": "memory-backend-memfd",
+      "backend_size": "4096M",
+      "share_on": true,
+      "explicit_hugetlb": false,
+      "explicit_mem_path": false,
+      "explicit_mem_prealloc": false
+    },
+    {
+      "run": "S1 a2",
+      "pids": [
+        2140932
+      ],
+      "m_mib": 4096,
+      "backend": "memory-backend-memfd",
+      "backend_size": "4096M",
+      "share_on": true,
+      "explicit_hugetlb": false,
+      "explicit_mem_path": false,
+      "explicit_mem_prealloc": false
+    },
+    {
+      "run": "S2 round1 a1",
+      "pids": [
+        2141826
+      ],
+      "m_mib": 6144,
+      "backend": "memory-backend-memfd",
+      "backend_size": "6144M",
+      "share_on": true,
+      "explicit_hugetlb": false,
+      "explicit_mem_path": false,
+      "explicit_mem_prealloc": false
+    },
+    {
+      "run": "round2 builder initial",
+      "pids": [
+        2145724
+      ],
+      "m_mib": 4096,
+      "backend": "QEMU default anonymous RAM",
+      "backend_size": null,
+      "share_on": "not explicitly configured",
+      "explicit_hugetlb": false,
+      "explicit_mem_path": false,
+      "explicit_mem_prealloc": false
+    },
+    {
+      "run": "round2 builder immediate stale-stop exit",
+      "pids": [
+        2147224
+      ],
+      "m_mib": 4096,
+      "backend": "QEMU default anonymous RAM",
+      "backend_size": null,
+      "share_on": "not explicitly configured",
+      "explicit_hugetlb": false,
+      "explicit_mem_path": false,
+      "explicit_mem_prealloc": false
+    },
+    {
+      "run": "round2 builder serviced image",
+      "pids": [
+        2147322
+      ],
+      "m_mib": 4096,
+      "backend": "QEMU default anonymous RAM",
+      "backend_size": null,
+      "share_on": "not explicitly configured",
+      "explicit_hugetlb": false,
+      "explicit_mem_path": false,
+      "explicit_mem_prealloc": false
+    },
+    {
+      "run": "S2 round2 a1",
+      "pids": [
+        2150189
+      ],
+      "m_mib": 9216,
+      "backend": "memory-backend-memfd",
+      "backend_size": "9216M",
+      "share_on": true,
+      "explicit_hugetlb": false,
+      "explicit_mem_path": false,
+      "explicit_mem_prealloc": false
+    }
+  ],
+  "per_vm_actual_thp": "not recorded",
+  "oom_global_shmem_thp_kb": 0,
+  "owner_rss_pages": 6382860,
+  "owner_shmem_pages": 6295451,
+  "test_rss_pages": 2474331,
+  "test_shmem_pages": 2418637,
+  "kernel_task_page_bytes": 4096,
+  "owner_ruling": "Treat host as 29 GiB RAM; owner holds about 25 GiB including shmem. No second VM above about 3 GiB TOTAL is safe. WP1 paused; no VM start authorized."
+}

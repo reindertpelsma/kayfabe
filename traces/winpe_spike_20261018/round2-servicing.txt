@@ -1,0 +1,17 @@
+MEASURED (run WP1-R2-builder-20261022, 2026-10-22): extracted servicing transcript fields.
+DISM mount EXIT=0
+DISM add-driver EXIT=0
+DISM get-drivers EXIT=0
+DISM driver-info EXIT=0
+DISM scratch EXIT=0
+OFFLINE_REPO_FILES=202 BYTES=2631764223
+    EnableGpuFirmware    REG_DWORD    0x1
+OFFLINE_CLASS_INSTANCE_COUNT=0
+MOUNT_LOGICAL_BYTES=4649630467
+DISM commit EXIT=0
+DISM export EXIT=0
+serviced.wim 1485948573
+CODE READ: initial class enumeration stopped on the protected Properties key; the resume used numeric instance names only, without changing its ACL.
+MEASURED (run WP1-R2-builder-20261022, 2026-10-22): DISM Get-DriverInfo reports oem0.inf, Display, NVIDIA, 32.0.15.8088, image 10.0.26100.1; scratch 512 MB.
+MEASURED (run WP1-R2-builder-20261022, 2026-10-22): 202 files / 2631764223 bytes retained from INF SourceDisksFiles plus INF/catalog; 62 unrelated files excluded. Then 53 unmodified Section071 DIRID10/11/12 files / 529774141 bytes were placed offline at declared destinations; DIRID13 remained DISM-serviced.
+MEASURED (run WP1-s2-r2a1-20261022, 2026-10-22): final WIM 1487412075 bytes; configured guest RAM 9216 MiB. This allocation was unsafe on the shared host.

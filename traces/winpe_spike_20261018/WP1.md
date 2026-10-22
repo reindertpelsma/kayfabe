@@ -1,130 +1,96 @@
-# WP1: PE boots; NVIDIA driver staging is red
+# WP1: paused after host OOM killed the owner VM
 
-STATUS: RESEARCH, 2026-10-22. Branch `codex/winpe-spike-20261022`;
-device/QEMU base rev `baa2977527c4509145e8033143bd664f768175a6`.
+STATUS: PAUSED, 2026-10-22. Branch `codex/winpe-spike-20261022`;
+QEMU/kf3 base revision `baa2977527c4509145e8033143bd664f768175a6`.
 
-CODE READ: the owner authorized this local private spike using vendor downloads,
-with no media/driver redistribution. A later WP1-only ruling replaced the shared
-fastguest lock with `flock -o /tmp/kayfabe-wp1.lock`. The owner VM was to remain
-running. Earlier preparation stops are superseded for this spike; their records
-remain in branch history and `host-preflight.txt`. Public release CI adoption
-and licensing remain separate open questions; this lane decides neither.
+MEASURED (run WP1-s2-r2a1-20261022, 2026-10-22; evidence round2-oom.txt):
+the host kernel OOM killer selected owner QEMU PID 2123004 at 18:30:44 CEST.
+The test had been configured with `-m 9216` and
+`memory-backend-memfd,id=ram0,size=9216M,share=on`.
+The kernel task table records the owner at 6,382,860 resident pages and
+the test at 2,474,331 resident pages, with 4 KiB task-table pages;
+shmem accounts for 6,295,451 and 2,418,637 pages respectively.
+Swap was zero. This incident interrupted the owner's interactive session.
 
-MEASURED (run WP1-s1-a2-20261022, 2026-10-22; evidence s1-a2-guest.txt): S1 GREEN.
-Microsoft's amd64 WinPE 26100.1 reached its startup script and returned
-`WP1_S1_PASS` on the partitioned FAT results disk in 72.725 seconds including
-VM start/teardown.
+CODE READ (owner stop/pause ruling, 2026-10-22): WP1 is paused until further
+notice; no VM may be started. Treat the host as 29 GiB RAM, with approximately
+25 GiB held by the owner VM including shmem. No second VM above approximately
+3 GiB **total host memory** is safe; this is not permission to allocate
+3 GiB of guest RAM, which excludes QEMU, CUDA and other overhead.
+The owner must decide whether/how to resume. Public release CI licensing
+and adoption remain open, separate decisions.
 
-MEASURED (run WP1-s2-a1-20261022, 2026-10-22; evidence s2-a1-guest.txt): S2 RED.
-`drvload` returned `0x80070070`; the NVIDIA PCI device remained at problem code
-28 with no assigned driver/service. NVML/SMI could not communicate with the
-driver. The lane stopped at this first red stage. S3, S4, D3D12 and S5 were NOT RUN.
+INFERRED from round2-memory.json and round2-oom.txt: choosing 9 GiB from the
+reported MemAvailable value was an inadequate admission check. It failed to
+account for the owner's resident shmem and the full concurrent host footprint.
+Earlier 4/6 GiB configurations also exceeded the owner's subsequent ceiling.
+No timeout, constant or product code was changed in response.
 
-CODE READ: Win32 error `0x70` is `ERROR_DISK_FULL` (112), per
-[Microsoft's error reference](https://learn.microsoft.com/en-us/windows/win32/debug/system-error-codes--0-499-).
-INFERRED: the driver-staging writable space is the leading preparation limit;
-the failing volume's exact free-space/scratch accounting was not collected.
+MEASURED (run WP1-emergency-stop-20261022, 2026-10-22; evidence round2-stop.json):
+all seven known own QEMU PIDs are absent, no own QEMU/manager remains, and the
+WP1 lock is free. Owner PID 2123004 is absent. No owner file was modified,
+no owner recovery/restart was attempted, and no VM was launched after STOP.
+Downloaded media, tools and images remain private pending the owner decision;
+no product target directory was created. No media or vendor binary is committed.
 
-MEASURED (run WP1-s2-a1-20261022, 2026-10-22; evidence s2-a1-guest.txt): the full
-unmodified INF source package was injected into the WIM, with nvlddmkm.sys, NVML
-and SMI also placed at their diagnostic/system paths. The offline service GSP
-DWORD was 1. Runtime class-key setup returned `GSP_CLASS_KEY_ABSENT` both before
-and after the failed staging attempt. Completed offline DriverStore registration
-and the adapter class GSP key were NOT achieved. The prepared source package
-plus runtime `drvload` did not fulfill that part of the requested offline integration.
+CODE READ (recorded launch arguments, 2026-10-22; evidence round2-memory.json):
+these are configured guest allocations, not bounds on total host memory.
 
-INFERRED: this result establishes a staging failure in the attempted recipe.
-NVIDIA WDDM, CUDA and D3D compatibility in PE remain unverified. A follow-up
-would need proper offline DriverStore servicing before testing driver binding;
-no such follow-up was run after S2 went red.
+| VM/run | Own QEMU PID | `-m` MiB | RAM backend / sharing | Explicit hugepages |
+| --- | ---: | ---: | --- | --- |
+| S1 a1 | 2140181 | 4096 | memfd, size=4096M, share=on | none |
+| S1 a2 | 2140932 | 4096 | memfd, size=4096M, share=on | none |
+| S2 round 1 | 2141826 | 6144 | memfd, size=6144M, share=on | none |
+| Round 2 builder, initial | 2145724 | 4096 | default anonymous RAM; no explicit shared backend | none |
+| Round 2 builder, stale-stop immediate exit | 2147224 | 4096 | default anonymous RAM; no explicit shared backend | none |
+| Round 2 builder, servicing | 2147322 | 4096 | default anonymous RAM; no explicit shared backend | none |
+| S2 round 2 | 2150189 | 9216 | memfd, size=9216M, share=on | none |
 
-CODE READ: the hypotheses and falsifiers below were recorded before the runs.
+CODE READ (recorded launch arguments, 2026-10-22; evidence round2-memory.json):
+no launch requested hugetlb, a hugepage memory path, or memory preallocation.
+Per-VM transparent hugepage residency was not recorded. The OOM snapshot
+reports global shmem_thp=0 kB. PE scratch was 512 MiB inside guest RAM;
+`fb-mb=1536` is the separate GPU framebuffer store request. The builders had
+no kayfabe GPU device and no NIC, and exited before the S2 GPU VM launched.
 
-| Stage | Hypothesis | Falsifier | Result |
-| --- | --- | --- | --- |
-| S1 | Driver-free PE boots on the kayfabe model. | No PE boot within the attempt budget. | GREEN, 2 control boots |
-| S2 | NVIDIA binds with problem code 0 and SMI lists the GPU. | Nonzero device problem or missing/failed SMI enumeration. | RED, 1 attempt; code 28 and SMI failure |
-| S3 | A simple CUDA sample completes correctly. | CUDA initialization, execution or result error. | NOT RUN |
-| S4 | Hardware D3D11 draws correct offscreen pixels. | Device creation, software adapter or pixel failure. | NOT RUN |
-| S5 | The S4 loop holds for ten minutes without GPU errors. | Attributable host Xid, guest 153 or TDR. | NOT RUN |
+MEASURED (run WP1-R2-builder-20261022, 2026-10-22; evidence round2-servicing.txt):
+inbox DISM completed mount, Add-Driver, Get-Drivers, Get-DriverInfo,
+Set-ScratchSpace, commit and export with exit0. It registered NVIDIA 580.88
+as oem0.inf / Display / 32.0.15.8088. The service GSP DWORD was set to 1;
+no numbered adapter class instance existed offline. The startup script would
+set the actual class instance after enumeration, then restart the device.
+An initial protected Properties-key enumeration error was resolved by querying
+only numeric instance names; no registry ACL was changed.
 
-MEASURED (runs WP1-s1-a1-20261022, WP1-s1-a2-20261022, WP1-s2-a1-20261022,
-2026-10-22; evidence technical-summary.json): all attempts used `fb-mb=1536`,
-the owner's QEMU/kf3 binary and production CPU/behavior flags, a unique VM/GPU
-identity, and no display broker/window or VNC. Guest RAM was 4096 MiB for S1
-and 6144 MiB for S2, with four vCPUs. Storage used separate IDE boot/results images.
+MEASURED (run WP1-R2-builder-20261022, 2026-10-22; evidence round2-servicing.txt):
+selection retained 202 INF/catalog/SourceDisksFiles entries, excluded 62 unrelated
+files, and prepopulated 53 unchanged files at the matching INF's non-DriverStore
+destinations. No NVIDIA binary or INF was modified. The final WIM was
+1,487,412,075 bytes. These preparation results do not prove driver operation.
 
-CODE READ (rev baa29775, crates/kf-chip/src/bar0.rs): the firmware carve-out is
-`0x10420000` bytes; 1536 MiB exceeds that layout minimum. This is not a bound
-on the Windows driver's eventual memory demand.
+CODE READ (pre-run hypothesis record, 2026-10-22; evidence round2-s2.txt):
+the hypothesis was Code0 binding and successful SMI enumeration after real
+offline registration and GSP setup. Its falsifier was a nonzero problem code,
+BasicDisplay binding, or failed/missing SMI with registration complete and no
+disk-full error. The memory incident prevented evaluation of that falsifier.
 
-MEASURED (run WP1-prepare-20261022, 2026-10-22): the host reported 2389 MiB free
-VRAM before the control attempt. The S2 WIM was 1,496,453,038 bytes. No store
-above 1536 MiB was requested. MEASURED (run WP1-final-20261022, 2026-10-22;
-evidence technical-summary.json): every attempt has zero new host Xids and owner
-PID/start-tick continuity.
+MEASURED (run WP1-s2-r2a1-20261022, 2026-10-22; evidence round2-s2.txt):
+S2 is **ABORTED/INCOMPLETE**, with no guest verdict. The harness recorded
+107.349 seconds and exited its own QEMU after a result-reader exception.
+Its PID/start-tick check cannot establish owner health; the kernel records
+the owner's OOM kill. S3 CUDA, S4 D3D11/D3D12 and S5 hold were NOT RUN.
+There was one S2 attempt in round 2; no retry followed the incident.
 
-MEASURED (run WP1-s2-a1-20261022, 2026-10-22; evidence s2-a1-qemu.txt): QEMU
-reports a 1536 MiB store and 236 MiB of walker pools. The pools are additional
-GPU memory beyond the store; total context overhead was not separately sampled.
+MEASURED (runs WP1-s1-a1/a2-20261022 and WP1-s2-a1-20261022, 2026-10-22;
+evidence technical-summary.json, s1-a2-guest.txt, s2-a1-guest.txt): historical
+round 1 produced two PE boot passes and one staging failure, drvload
+0x80070070 / Code28 / failed SMI. Its earlier cleanup and owner continuity
+claims apply only to round 1, before this incident. Round 2 supersedes the
+previous statement that no offline-servicing follow-up had been run.
 
-| Run on 2026-10-22 | Stage assessment | Harness/transport | Total wall seconds | New host Xids |
-| --- | --- | --- | ---: | ---: |
-| WP1-s1-a1 | GREEN: PE shell/version observed | COM1 unavailable; initial unpartitioned results disk; explicitly stopped after headless screenshot | 359.714 | 0 |
-| WP1-s1-a2 | GREEN | Partitioned FAT result contains version and success marker | 72.725 | 0 |
-| WP1-s2-a1 | RED | FAT captures drvload/ConfigManager/SMI failure | 195.925 | 0 |
-
-MEASURED (run WP1-final-20261022, 2026-10-22; evidence technical-summary.json):
-technical attempt counts before/after are 0/3: two control boots and one driver
-attempt. These wall times include different workflows and are not comparable
-boot-time samples; no performance spread is claimed. Product tests/mutants are
-N/A: there is no product behavior change or proposed product fix.
-
-MEASURED (run WP1-s2-a1-20261022, 2026-10-22; evidence s2-a1-qemu.txt): filtered
-QEMU output shows the boot framebuffer and guest-RAM mapping. The last device
-phase was Cold, as it was on both controls. No guest-driver GPU workload was
-established. The guest lacked `sc.exe`; ConfigManager and the service property
-supplied the binding check. Numeric command exit-code echoes were not captured
-reliably; the HRESULT, problem code, helper result and stage marker are retained.
-
-CODE READ: the Microsoft download entry is
-[the ADK/WinPE page](https://learn.microsoft.com/en-us/windows-hardware/get-started/adk-install).
-The bootstrap URL was `https://go.microsoft.com/fwlink/?linkid=2289981`.
-Payloads were fetched from its Microsoft download directory and checked against
-the bootstrap's declared hashes. The amd64 WIM cabinet was
-`a6296c5a6eec9ca02b431ed0461b952d.cab`; WIM image 1 identifies WindowsPE 26100.1.
-
-MEASURED (run WP1-prepare-20261022, 2026-10-22): the NVIDIA runtime download was
-`https://us.download.nvidia.com/Windows/580.88/580.88-desktop-win10-win11-64bit-international-dch-whql.exe`,
-SHA256 `90c49f925b41ee062e02cc8094a16b6d057abfde4e85235a76d63ffe267f63a9`.
-No Microsoft or NVIDIA files are committed. Only small text evidence is exported.
-
-CODE READ: the private retained `repro/` directory contains the exact preparation,
-image-build, guest diagnostic source and run-manager scripts. The owner's local
-report records its trusted-host location and full regeneration commands.
-The launch commands were:
-
-```sh
-flock -w 5 -o /tmp/kayfabe-wp1.lock python3 "$WP1_ROOT/run_stage.py" s1 a1
-flock -w 5 -o /tmp/kayfabe-wp1.lock python3 "$WP1_ROOT/run_stage.py" s1 a2
-flock -w 5 -o /tmp/kayfabe-wp1.lock python3 "$WP1_ROOT/run_stage.py" s2 a1
-```
-
-CODE READ: the final control script uses `wpeinit`, locates the `WP1.TAG` FAT
-volume, writes the OS version and `WP1_S1_PASS`, then idles. The driver script
-adds the dynamic class/service GSP setup, `drvload`, a device restart, binding
-queries and SMI. Each manager owns its QEMU child, checks the owner identity,
-stops on a new host Xid, and caps the attempt at 1190 seconds plus teardown.
-S1 used a new-message dmesg reader; S2 used an independent `/dev/kmsg` read
-cursor established before launch. No shared kernel log was cleared.
-
-MEASURED (run WP1-final-20261022, 2026-10-22; evidence cleanup.json): all three
-own QEMU PIDs are absent; the owner PID 2123004/start ticks 110376932 are unchanged.
-The WP1 lock was released. Media, extracted vendor files, tools and build images
-were deleted; only private evidence/reproduction text and diagnostic PNGs remain
-on the host. No product target directory was created. Owner frame pacing was
-not independently sampled; no claim about its FPS is made.
-
-INFERRED from the stage table in WP1.md: demonstrated coverage is PE boot on this device/configuration.
-Driver binding, compute, D3D rendering and a ten-minute accelerated hold remain
-outside demonstrated coverage. Public CI licensing/adoption is still open.
+CODE READ (lane scope, 2026-10-22): product tests/mutants are N/A because no
+product behavior changed. Hardware performance n/spread is N/A. S2 attempts
+before/after round 2 are 1/2 total: one staging RED and one host-incident
+ABORTED. The private report and reproduction record retain full commands and
+trusted-host artifact locations; these historical commands must not be run
+while WP1 is paused. No release-CI viability conclusion follows from this run.

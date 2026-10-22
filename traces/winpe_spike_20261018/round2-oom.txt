@@ -1,0 +1,20 @@
+MEASURED (run WP1-s2-r2a1-20261022, 2026-10-22): host kernel OOM excerpt; task memory values are pages unless kB is shown.
+2026-10-22T18:30:44,960256+02:00 cuda-EvtHandlr invoked oom-killer: gfp_mask=0xcc0(GFP_KERNEL), order=0, oom_score_adj=0
+2026-10-22T18:30:44,960408+02:00 Mem-Info:
+2026-10-22T18:30:44,960419+02:00 active_anon:2132903 inactive_anon:4283465 isolated_anon:0
+                                  unevictable:0 dirty:0 writeback:0
+                                  mapped:5612754 shmem:6149702 pagetables:24153
+                                  free:860777 free_pcp:429 free_cma:797167
+2026-10-22T18:30:44,960423+02:00 Node 0 active_anon:8531612kB inactive_anon:17133860kB active_file:2540kB inactive_file:2976kB unevictable:0kB isolated(anon):0kB isolated(file):0kB mapped:22451016kB dirty:0kB writeback:0kB shmem:24598808kB shmem_thp:0kB shmem_pmdmapped:0kB anon_thp:4096kB kernel_stack:16608kB pagetables:96612kB sec_pagetables:95164kB all_unreclaimable? yes Balloon:0kB
+2026-10-22T18:30:44,960428+02:00 Node 0 DMA free:11264kB boost:0kB min:36kB low:48kB high:60kB reserved_highatomic:0KB free_highatomic:0KB active_anon:0kB inactive_anon:0kB active_file:0kB inactive_file:0kB unevictable:0kB writepending:0kB zspages:0kB present:15996kB managed:15360kB mlocked:0kB bounce:0kB free_pcp:0kB local_pcp:0kB free_cma:0kB
+2026-10-22T18:30:44,960441+02:00 Node 0 DMA32 free:1536832kB boost:0kB min:1892kB low:2652kB high:3412kB reserved_highatomic:0KB free_highatomic:0KB active_anon:25312kB inactive_anon:384372kB active_file:4kB inactive_file:4kB unevictable:0kB writepending:0kB zspages:0kB present:2900952kB managed:2310556kB mlocked:0kB bounce:0kB free_pcp:0kB local_pcp:0kB free_cma:1421224kB
+2026-10-22T18:30:44,960451+02:00 Node 0 Normal free:1895012kB boost:63488kB min:129140kB low:155588kB high:182036kB reserved_highatomic:0KB free_highatomic:0KB active_anon:8506316kB inactive_anon:16749472kB active_file:2540kB inactive_file:2968kB unevictable:0kB writepending:0kB zspages:0kB present:29753344kB managed:29131108kB mlocked:0kB bounce:0kB free_pcp:1728kB local_pcp:0kB free_cma:1767444kB
+2026-10-22T18:30:44,960531+02:00 Free swap  = 0kB
+2026-10-22T18:30:44,960532+02:00 Total swap = 0kB
+2026-10-22T18:30:44,960533+02:00 8167573 pages RAM
+2026-10-22T18:30:44,960541+02:00 Tasks state (memory values in pages):
+2026-10-22T18:30:44,960543+02:00 [  pid  ]   uid  tgid total_vm      rss rss_anon rss_file rss_shmem pgtables_bytes swapents oom_score_adj name
+2026-10-22T18:30:44,960976+02:00 [2123004]     0 2123004 15618948  6382860    55313    32096   6295451 52768768        0             0 qemu-system-x86
+2026-10-22T18:30:44,960998+02:00 [2150189]     0 2150189  9429839  2474331    23622    32072   2418637 20955136        0             0 qemu-system-x86
+2026-10-22T18:30:44,961016+02:00 oom-kill:constraint=CONSTRAINT_NONE,nodemask=(null),cpuset=user.slice,mems_allowed=0,global_oom,task_memcg=[redacted],task=qemu-system-x86,pid=2123004,uid=0
+2026-10-22T18:30:44,961099+02:00 Out of memory: Killed process 2123004 (qemu-system-x86) total-vm:62475792kB, anon-rss:221252kB, file-rss:128384kB, shmem-rss:25181804kB, UID:0 pgtables:51532kB oom_score_adj:0
