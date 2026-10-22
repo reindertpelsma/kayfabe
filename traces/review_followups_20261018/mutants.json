@@ -1,0 +1,74 @@
+[
+  {
+    "mutant": "M1-handle-authority",
+    "kill_count": 2,
+    "killers": [
+      "an_rm_looking_client_starts_without_privileged_mirror_leaves",
+      "an_rm_looking_userspace_birth_cannot_promote_the_mirror"
+    ]
+  },
+  {
+    "mutant": "M2-fail-moved-invalidate",
+    "kill_count": 2,
+    "killers": [
+      "a_root_move_in_the_first_completed_object_prevents_a_stale_clear",
+      "a_root_move_in_the_last_object_of_the_first_chunk_prevents_a_stale_clear"
+    ]
+  },
+  {
+    "mutant": "M3-stale-continuation-objects",
+    "kill_count": 6,
+    "killers": [
+      "a_moved_first_root_of_the_next_chunk_is_refreshed_before_submit",
+      "a_moved_last_root_of_the_next_chunk_is_refreshed_before_submit",
+      "a_retired_first_object_of_the_next_chunk_is_not_submitted",
+      "a_retired_last_object_of_the_next_chunk_is_not_submitted",
+      "a_reused_next_chunk_slot_never_reads_the_retired_root",
+      "retiring_every_remaining_object_finishes_without_an_empty_submit"
+    ]
+  },
+  {
+    "mutant": "M4-stale-continuation-root",
+    "kill_count": 2,
+    "killers": [
+      "a_moved_first_root_of_the_next_chunk_is_refreshed_before_submit",
+      "a_moved_last_root_of_the_next_chunk_is_refreshed_before_submit"
+    ]
+  },
+  {
+    "mutant": "M5-no-failure-pump",
+    "kill_count": 2,
+    "killers": [
+      "a_failed_continuation_immediately_pumps_a_new_invalidate",
+      "a_failed_continuation_immediately_pumps_a_queued_root_walk"
+    ]
+  },
+  {
+    "mutant": "M6-no-guest-get-write",
+    "kill_count": 3,
+    "killers": [
+      "a_1026596_byte_pointer_descriptor_completes_through_marker_and_get_writeback",
+      "small_descriptor_action_transcript",
+      "the_guest_ring_is_full_when_gp_put_leaves_one_slot_before_the_gp_get_the_guest_sees"
+    ]
+  },
+  {
+    "mutant": "M7-no-final-invalidate-completion",
+    "kill_count": 13,
+    "killers": [
+      "a_failed_continuation_immediately_pumps_a_new_invalidate",
+      "a_moved_first_root_of_the_next_chunk_is_refreshed_before_submit",
+      "a_moved_last_root_of_the_next_chunk_is_refreshed_before_submit",
+      "a_new_invalidate_between_chunks_waits_for_its_own_round",
+      "a_retired_first_object_of_the_next_chunk_is_not_submitted",
+      "a_retired_last_object_of_the_next_chunk_is_not_submitted",
+      "a_reused_next_chunk_slot_never_reads_the_retired_root",
+      "a_root_move_in_the_first_completed_object_prevents_a_stale_clear",
+      "a_root_move_in_the_last_object_of_the_first_chunk_prevents_a_stale_clear",
+      "all_pdb_one_hundred_twenty_eight_spaces_clear_after_both_chunks",
+      "all_pdb_seventy_spaces_clear_after_both_chunks",
+      "an_all_pdb_invalidate_over_more_than_64_rooted_spaces_is_not_left_armed_for_ever",
+      "retiring_every_remaining_object_finishes_without_an_empty_submit"
+    ]
+  }
+]
