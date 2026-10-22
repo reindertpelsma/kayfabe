@@ -7,10 +7,10 @@
 //! locks held (the run-223 hang class). The expected behaviour is that the invalidate is split into walks of at
 //! most 64 spaces and cleared when the last one completes, or at least that the VA manager does not leave the
 //! trigger armed for ever.
-use kf_mem::ledger::{Desired, Mapped, MapTarget};
+use kf_mem::ledger::{Desired, MapTarget, Mapped};
 use kf_mem::vasmgr::{VaManager, VasKey, WalkDone, Walker};
-use kf_trap::mmuinval::{Invalidate, InvalidatePort, InvalidateRegs, PortWrite, TRIGGER_BIT};
 use kf_trap::PdbAperture;
+use kf_trap::mmuinval::{Invalidate, InvalidatePort, InvalidateRegs, PortWrite, TRIGGER_BIT};
 
 struct Nop;
 impl MapTarget for Nop {
@@ -29,15 +29,37 @@ impl MapTarget for Nop {
 #[derive(Default)]
 struct Rec {
     submitted: Vec<usize>,
+    pending: Option<Vec<kf_cuda::WalkEntry>>,
+    generation: u64,
 }
 impl Walker for Rec {
     fn submit(&mut self, entries: &[kf_cuda::WalkEntry]) -> Result<(), String> {
-        assert!(entries.len() <= 64, "the manager must never exceed the kernel's capacity");
+        assert!(
+            entries.len() <= 64,
+            "the manager must never exceed the kernel's capacity"
+        );
+        assert!(self.pending.is_none());
         self.submitted.push(entries.len());
+        self.pending = Some(entries.to_vec());
         Ok(())
     }
     fn poll(&mut self) -> Result<Option<WalkDone>, String> {
-        Ok(None)
+        let Some(entries) = self.pending.take() else {
+            return Ok(None);
+        };
+        self.generation += 1;
+        Ok(Some(WalkDone {
+            generation: self.generation,
+            entries: entries
+                .into_iter()
+                .map(|e| kf_mem::vasmgr::EntryDiff {
+                    pdb: e.pdb,
+                    slot: e.slot,
+                    ..Default::default()
+                })
+                .collect(),
+            ..Default::default()
+        }))
     }
     fn ack(&mut self, _: u64, _: Vec<u8>) -> Result<(), String> {
         Ok(())
@@ -69,14 +91,23 @@ fn an_all_pdb_invalidate_over_more_than_64_rooted_spaces_is_not_left_armed_for_e
         panic!("the trigger did not publish");
     };
     va.on_invalidate(req, port.trigger());
-    // Either the manager submitted walks that cover all 70 spaces (in chunks of at most 64) ...
-    let covered: usize = va.walker().submitted.iter().sum();
-    // ... or it has to have cleared the trigger. What it must not do is refuse and stay armed.
-    assert!(
-        covered >= 70 || va.stats.unreconciled == 0,
-        "ALL_PDB over 70 rooted spaces: submitted {:?}, unreconciled={}, refusals={:?}",
-        va.walker().submitted,
-        va.stats.unreconciled,
-        va.stats.refusals
+    assert_eq!(va.walker().submitted, vec![64]);
+    assert_ne!(port.trigger().read(), 0);
+    let first = va.on_walk_ready(port.trigger());
+    assert!(first.completed.is_empty() && first.unreconciled.is_empty());
+    assert_eq!(va.walker().submitted, vec![64, 6]);
+    assert_eq!(va.stats.spaces_reconciled, 64);
+    assert_ne!(port.trigger().read(), 0, "six spaces are still owed");
+    let last = va.on_walk_ready(port.trigger());
+    assert_eq!(
+        last.completed,
+        vec![(req.seq, kf_trap::ClearOutcome::Cleared)]
     );
+    assert!(last.unreconciled.is_empty());
+    assert_eq!(va.walker().submitted.iter().sum::<usize>(), 70);
+    assert_eq!(va.stats.spaces_reconciled, 70);
+    assert_eq!(va.stats.cleared, 1);
+    assert_eq!(va.stats.unreconciled, 0);
+    assert_eq!(port.trigger().read(), 0);
+    assert!(!va.in_flight());
 }

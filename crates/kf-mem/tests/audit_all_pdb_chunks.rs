@@ -16,10 +16,17 @@ struct RecordingWalker {
     pending: Option<Vec<WalkEntry>>,
     submitted: Vec<Vec<u32>>,
     generation: u64,
+    attempts: Vec<Vec<(u32, u64)>>,
+    refuse_attempt: Option<usize>,
 }
 impl Walker for RecordingWalker {
     fn submit(&mut self, entries: &[WalkEntry]) -> Result<(), String> {
         assert!(self.pending.is_none());
+        self.attempts
+            .push(entries.iter().map(|e| (e.slot, e.pdb)).collect());
+        if self.refuse_attempt == Some(self.attempts.len()) {
+            return Err("injected continuation submit failure".into());
+        }
         assert!(!entries.is_empty() && entries.len() <= 64);
         self.submitted
             .push(entries.iter().map(|e| e.slot).collect());
@@ -334,5 +341,193 @@ fn moved_after_first(key: u64) {
         "the earlier object's new root was never walked"
     );
     assert_ne!(r.port.trigger().read(), 0);
-    assert!(r.va.in_flight(), "retain master's root-follow-up behavior");
+    assert!(
+        out.unreconciled.is_empty(),
+        "a moved root is retried, not failed"
+    );
+    assert!(
+        r.va.in_flight(),
+        "the original invalidate must have a retry event source"
+    );
+    assert!(r.va.on_walk_ready(r.port.trigger()).completed.is_empty());
+    assert_ne!(
+        r.port.trigger().read(),
+        0,
+        "the retry still owes its second chunk"
+    );
+    assert_eq!(
+        r.va.on_walk_ready(r.port.trigger()).completed,
+        vec![(req.seq, ClearOutcome::Cleared)]
+    );
+    assert_eq!(r.port.trigger().read(), 0);
+    assert_eq!(r.va.stats.unreconciled, 0);
+    assert!(!r.va.in_flight());
+}
+
+// Candidate-6 review F3. FALSIFIER: a later chunk names an object already retired,
+// a reused slot's old root, or a root superseded before that chunk was submitted.
+#[test]
+fn a_retired_first_object_of_the_next_chunk_is_not_submitted() {
+    retired_before_next(64);
+}
+#[test]
+fn a_retired_last_object_of_the_next_chunk_is_not_submitted() {
+    retired_before_next(69);
+}
+fn retired_before_next(key: u64) {
+    let mut r = rig(70);
+    let req = arm(&r);
+    r.va.on_invalidate(req, r.port.trigger());
+    r.va.remove(VasKey(key)).unwrap();
+    assert!(r.va.on_walk_ready(r.port.trigger()).completed.is_empty());
+    assert!(
+        r.va.walker().attempts[1]
+            .iter()
+            .all(|&(slot, _)| u64::from(slot) != key)
+    );
+    assert_eq!(r.va.walker().attempts[1].len(), 5);
+    assert_eq!(
+        r.va.on_walk_ready(r.port.trigger()).completed,
+        vec![(req.seq, ClearOutcome::Cleared)]
+    );
+    assert_eq!(r.maps.borrow().len(), 69);
+}
+#[test]
+fn a_reused_next_chunk_slot_never_reads_the_retired_root() {
+    let mut r = rig(128);
+    let req = arm(&r);
+    r.va.on_invalidate(req, r.port.trigger());
+    let mut target = r.va.remove(VasKey(64)).unwrap();
+    target.key = 700;
+    r.va.table.insert(VasKey(700), target);
+    r.va.table
+        .set_root(VasKey(700), 0x2000_0000, PdbAperture::Vidmem)
+        .unwrap();
+    assert_eq!(
+        r.va.table.slot(VasKey(700)),
+        Some(64),
+        "exercise actual slot reuse"
+    );
+    assert!(r.va.on_walk_ready(r.port.trigger()).completed.is_empty());
+    assert!(
+        r.va.walker().attempts[1]
+            .iter()
+            .all(|&(slot, _)| slot != 64)
+    );
+    assert_eq!(
+        r.va.on_walk_ready(r.port.trigger()).completed,
+        vec![(req.seq, ClearOutcome::Cleared)]
+    );
+    assert_eq!(r.maps.borrow().len(), 127);
+}
+#[test]
+fn a_moved_first_root_of_the_next_chunk_is_refreshed_before_submit() {
+    moved_before_next(64);
+}
+#[test]
+fn a_moved_last_root_of_the_next_chunk_is_refreshed_before_submit() {
+    moved_before_next(69);
+}
+fn moved_before_next(key: u64) {
+    let mut r = rig(70);
+    let req = arm(&r);
+    r.va.on_invalidate(req, r.port.trigger());
+    r.va.table
+        .set_root(VasKey(key), 0x2000_0000, PdbAperture::Vidmem)
+        .unwrap();
+    assert!(r.va.on_walk_ready(r.port.trigger()).completed.is_empty());
+    assert!(r.va.walker().attempts[1].contains(&(key as u32, 0x2000_0000)));
+    assert_eq!(
+        r.va.on_walk_ready(r.port.trigger()).completed,
+        vec![(req.seq, ClearOutcome::Cleared)]
+    );
+    assert!(!r.va.in_flight(), "no stale-root walk should need a retry");
+    assert_eq!(r.maps.borrow().len(), 70);
+}
+#[test]
+fn retiring_every_remaining_object_finishes_without_an_empty_submit() {
+    let mut r = rig(70);
+    let req = arm(&r);
+    r.va.on_invalidate(req, r.port.trigger());
+    for k in 64..70 {
+        r.va.remove(VasKey(k)).unwrap();
+    }
+    assert_eq!(
+        r.va.on_walk_ready(r.port.trigger()).completed,
+        vec![(req.seq, ClearOutcome::Cleared)]
+    );
+    assert_eq!(r.va.walker().attempts.len(), 1);
+    assert_eq!(r.port.trigger().read(), 0);
+}
+// F4. FALSIFIER: pending independent work needs an unrelated future event after
+// the continuation submission failed and no walk remains in flight.
+#[test]
+fn a_failed_continuation_immediately_pumps_a_queued_root_walk() {
+    let mut r = rig(70);
+    r.va.walker_mut().refuse_attempt = Some(2);
+    let req = arm(&r);
+    r.va.on_invalidate(req, r.port.trigger());
+    r.va.schedule_walk(VasKey(0), r.port.trigger());
+    r.va.on_walk_ready(r.port.trigger());
+    assert!(
+        r.va.in_flight(),
+        "the queued root needs a completion event source now"
+    );
+    assert_eq!(r.va.pending(), 0);
+    assert_eq!(r.va.walker().attempts.len(), 3);
+    assert_eq!(r.va.walker().attempts[2].len(), 1);
+    r.va.on_walk_ready(r.port.trigger());
+    assert!(!r.va.in_flight());
+    assert_eq!(
+        r.va.stats.unreconciled, 1,
+        "the failed original is still named"
+    );
+    assert_ne!(r.port.trigger().read(), 0);
+}
+#[test]
+fn a_failed_continuation_immediately_pumps_a_new_invalidate() {
+    let mut r = rig(70);
+    r.va.walker_mut().refuse_attempt = Some(2);
+    let old = arm(&r);
+    r.va.on_invalidate(old, r.port.trigger());
+    let new = arm(&r);
+    r.va.on_invalidate(new, r.port.trigger());
+    r.va.on_walk_ready(r.port.trigger());
+    assert!(r.va.in_flight(), "the new invalidate must not be stranded");
+    assert_eq!(r.va.pending(), 0);
+    assert_eq!(r.va.walker().attempts.len(), 3);
+    assert!(r.va.on_walk_ready(r.port.trigger()).completed.is_empty());
+    assert_ne!(r.port.trigger().read(), 0);
+    assert_eq!(
+        r.va.on_walk_ready(r.port.trigger()).completed,
+        vec![(new.seq, ClearOutcome::Cleared)]
+    );
+    assert_eq!(r.va.stats.unreconciled, 1);
+}
+#[test]
+fn a_withdrawn_completed_root_is_not_cleared_by_a_vacuous_retry() {
+    let mut r = rig(70);
+    let req = arm(&r);
+    r.va.on_invalidate(req, r.port.trigger());
+    r.va.on_walk_ready(r.port.trigger());
+    r.va.table.clear_root(VasKey(0));
+    let out = r.va.on_walk_ready(r.port.trigger());
+    assert!(out.completed.is_empty());
+    assert_eq!(out.unreconciled, vec![req.seq]);
+    assert_ne!(r.port.trigger().read(), 0);
+}
+#[test]
+fn a_root_move_does_not_hide_an_unrelated_hard_failure() {
+    let mut r = rig(70);
+    r.fail_invalidate.set(Some(69));
+    let req = arm(&r);
+    r.va.on_invalidate(req, r.port.trigger());
+    r.va.on_walk_ready(r.port.trigger());
+    r.va.table
+        .set_root(VasKey(0), 0x2000_0000, PdbAperture::Vidmem)
+        .unwrap();
+    let out = r.va.on_walk_ready(r.port.trigger());
+    assert!(out.completed.is_empty());
+    assert_eq!(out.unreconciled, vec![req.seq]);
+    assert_ne!(r.port.trigger().read(), 0);
 }
