@@ -314,6 +314,7 @@ mod ram_tests {
     struct Authority {
         generation: AtomicU64,
         busy: AtomicBool,
+        bad_publication: AtomicBool,
         bytes: Mutex<[u8; 16]>,
     }
     #[derive(Debug, Clone)]
@@ -353,8 +354,18 @@ mod ram_tests {
                 .checked_add(bytes.len())
                 .ok_or(AccessError::Bounds)?;
             dst.get_mut(offset as usize..end)
-                .ok_or(AccessError::Bounds)?
-                .copy_from_slice(bytes);
+                .ok_or(AccessError::Bounds)?;
+            // The authority promises a bounded byte copy, not an atomic word store.
+            // Reverse byte order is a valid implementation and exposes status-first bugs.
+            for (i, byte) in bytes.iter().enumerate().rev() {
+                dst[offset as usize + i] = *byte;
+                let status = u16::from_le_bytes([dst[14], dst[15]]);
+                let engine = u16::from_le_bytes([dst[12], dst[13]]);
+                let reason = u32::from_le_bytes(dst[8..12].try_into().unwrap());
+                if status != 0 && (engine != 1 || reason != 32) {
+                    self.0.bad_publication.store(true, Ordering::Release);
+                }
+            }
             Ok(())
         }
     }
@@ -431,6 +442,34 @@ mod ram_tests {
         assert_eq!(&bytes[8..12], &32u32.to_le_bytes());
         assert_eq!(&bytes[12..], &0xffff_0001u32.to_le_bytes());
     }
+    #[test]
+    fn ram_pollers_observe_guest_engine_before_error_status() {
+        let (authority, target) = target();
+        let mut delivery = delivery();
+        assert!(
+            delivery
+                .poll([1, 2, 32, 0xffff_0000], |off, value| target
+                    .store(off, value))
+                .unwrap()
+                .is_some()
+        );
+        assert!(
+            !authority.bad_publication.load(Ordering::Acquire),
+            "every intermediate nonzero status must have the complete guest engine/reason"
+        );
+    }
+
+    #[test]
+    fn ram_final_status_word_does_not_rely_on_an_atomic_byte_copy() {
+        let (authority, target) = target();
+        target.store(8, 32).unwrap();
+        target.store(12, 0xffff_0001).unwrap();
+        assert!(
+            !authority.bad_publication.load(Ordering::Acquire),
+            "a byte-copy backend may publish either status byte before the engine bytes"
+        );
+    }
+
     #[test]
     fn ram_target_rejects_offsets_outside_the_notifier_before_the_authority_is_called() {
         let (authority, target) = target();
