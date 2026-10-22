@@ -1,0 +1,11 @@
+{
+  "classification": "MEASURED",
+  "master": "e64b8e5f6",
+  "candidate": "f7cf3ed81",
+  "master_sites": 354,
+  "candidate_sites": 354,
+  "added": 0,
+  "removed": 0,
+  "added_diagnostics": [],
+  "rustfmt": "FAIL; candidate source not changed by --check"
+}

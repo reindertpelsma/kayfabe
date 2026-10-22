@@ -1,0 +1,8 @@
+{
+  "classification": "MEASURED",
+  "time": "2026-10-22T07:46:33.686336+02:00",
+  "reason": "legacy full-kernel reader refused byte bound; no GPU workload started",
+  "cuInit": 0,
+  "gdm": "active",
+  "gpu_driver": "nvidia"
+}

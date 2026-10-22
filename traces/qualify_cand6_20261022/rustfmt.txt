@@ -1,0 +1,62 @@
+Diff in crates/kf-mem/tests/secaudit_all_pdb_over_64_spaces.rs:7:
+ //! locks held (the run-223 hang class). The expected behaviour is that the invalidate is split into walks of at
+ //! most 64 spaces and cleared when the last one completes, or at least that the VA manager does not leave the
+ //! trigger armed for ever.
+-use kf_mem::ledger::{Desired, Mapped, MapTarget};
++use kf_mem::ledger::{Desired, MapTarget, Mapped};
+ use kf_mem::vasmgr::{VaManager, VasKey, WalkDone, Walker};
+-use kf_trap::mmuinval::{Invalidate, InvalidatePort, InvalidateRegs, PortWrite, TRIGGER_BIT};
+ use kf_trap::PdbAperture;
++use kf_trap::mmuinval::{Invalidate, InvalidatePort, InvalidateRegs, PortWrite, TRIGGER_BIT};
+
+ struct Nop;
+ impl MapTarget for Nop {
+Diff in crates/kf-mem/tests/secaudit_all_pdb_over_64_spaces.rs:32:
+ }
+ impl Walker for Rec {
+     fn submit(&mut self, entries: &[kf_cuda::WalkEntry]) -> Result<(), String> {
+-        assert!(entries.len() <= 64, "the manager must never exceed the kernel's capacity");
++        assert!(
++            entries.len() <= 64,
++            "the manager must never exceed the kernel's capacity"
++        );
+         self.submitted.push(entries.len());
+         Ok(())
+     }
+Diff in crates/kf-rm/src/chanlink.rs:3517:
+             "undefined level"
+         );
+         assert!(!kernel_channel(user, None), "undecodable is never kernel");
+-        assert!(!kernel_channel(0xc1e0_0006, None), "a handle is not privilege");
++        assert!(
++            !kernel_channel(0xc1e0_0006, None),
++            "a handle is not privilege"
++        );
+         assert!(
+             kernel_channel(0xc1e0_0006, Some(P::from_internal_flags(0x16))),
+             "the internal scrubber's recorded KERNEL stamp"
+Diff in crates/kf-rm/tests/secaudit_internal_client_range.rs:21:
+
+ #[test]
+ fn only_the_documented_internal_handle_range_is_internal() {
+-    assert!(is_rm_internal_client(0xC1E0_0006), "the PMA scrubber's client");
+-    assert!(!is_rm_internal_client(0xC1D0_0001), "an ordinary user client");
+     assert!(
++        is_rm_internal_client(0xC1E0_0006),
++        "the PMA scrubber's client"
++    );
++    assert!(
++        !is_rm_internal_client(0xC1D0_0001),
++        "an ordinary user client"
++    );
++    assert!(
+         !is_rm_internal_client(0xC1F0_0000),
+         "0xC1F00000 is past RS_CLIENT_HANDLE_MAX (0x100000) above the internal base"
+     );
+Diff in crates/kf-rm/tests/secaudit_internal_client_range.rs:30:
+-    assert!(!is_rm_internal_client(0xFFFF_FFFF), "all ones is not a client the guest RM minted");
++    assert!(
++        !is_rm_internal_client(0xFFFF_FFFF),
++        "all ones is not a client the guest RM minted"
++    );
+ }
