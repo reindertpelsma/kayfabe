@@ -73,3 +73,23 @@ class DesktopPlanTests(unittest.TestCase):
     def test_missing_hold_is_not_accepted(self):
         with self.assertRaisesRegex(RuntimeError, 'hold'):
             self.run_plan(seconds=0)
+
+
+class AppDiskTests(unittest.TestCase):
+    def test_controller_is_created_before_attaching_cd(self):
+        m = load()
+        calls = []
+        q = SimpleNamespace(cmd=lambda *args: calls.append(args),
+                            attach_cdrom=lambda *args, **kw: calls.append(('cd', args, kw)))
+        m.attach_app_disk(q, 'matrix.iso')
+        self.assertEqual(calls[0], ('device_add', {'driver':'qemu-xhci', 'id':'s4xhci'}))
+        self.assertEqual(calls[1][0], 'cd')
+
+    def test_app_disk_uses_the_new_controller(self):
+        m = load()
+        calls = []
+        q = SimpleNamespace(cmd=lambda *args: calls.append(args),
+                            attach_cdrom=lambda *args, **kw: calls.append(('cd', args, kw)))
+        m.attach_app_disk(q, 'matrix.iso')
+        self.assertEqual(len(calls), 2)
+        self.assertEqual(calls[-1][2]['xhci_bus'], 's4xhci.0')
