@@ -131,8 +131,8 @@ export function createService({env,storage,fetch:fetcher=fetch,now=Date.now,rand
     if(cached&&!force){const r=await ledger.get('record:'+cached.key);if(r?.verdict&&r.ended!==null){await ledger.grant(key,r,target.pr);return json(expose(r,key,target.pr));}refuse();}
     if(cached&&now()-cached.started<cfg.gap)refuse('UNAVAILABLE_BUDGET',409); // MUTANT gap
     if(!validSecret(env.RUN_TOKEN_SECRET)||!validSecret(env.OWNER_STOP_TOKEN))refuse();
-    const offer=await vast.offer(),cost=offer.dph_total*cfg.ttl/3600000,balance=await vast.balance();
-    if(typeof balance!=='number'||!Number.isFinite(balance)||balance<cfg.reserve+cost)refuse('UNAVAILABLE_BUDGET',409); // MUTANT credit
+    const offer=await vast.offer(),cost=offer.dph_total*cfg.ttl/3600000,credit=await vast.credit();
+    if(typeof credit!=='number'||!Number.isFinite(credit)||credit<cfg.reserve+cost)refuse('UNAVAILABLE_BUDGET',409); // MUTANT credit
     await ledger.budgets(cfg,now(),cost);
     const n=random?random():Array.from(crypto.getRandomValues(new Uint8Array(16)),x=>x.toString(16).padStart(2,'0')).join('');
     const started=now(),r={...target,key,label:'kf-ci-'+key,nonce:n,started,ended:null,ttl:cfg.ttl,reportExpiry:Math.floor((started+cfg.ttl)/1000),
