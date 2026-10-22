@@ -28,6 +28,14 @@ def attach_media(vm, q, iso, guest_iso, expected):
     return vm.attach_disk(iso)
 
 
+def stage_nvrtc(q, expected):
+    r=q.powershell(r'C:\kf\s4_stage_nvrtc.ps1',
+                   ['-ExpectedSha256',expected['sha256'],'-ExpectedSize',str(expected['size'])],timeout=180)
+    if r.exitcode != 0 or 'S4_NVRTC_STAGED ' not in r.text():
+        raise RuntimeError('NVRTC pinned supplement refused: '+r.text()[-400:])
+    return r.text()
+
+
 class ObservationBudgetExhausted(RuntimeError):
     """App dispatch must stop while its reserved stability/export budget remains."""
 
@@ -114,6 +122,9 @@ def main():
     g._setup()
     if json.loads((Path(g.dir) / 'setup.json').read_text())['image_identity'] != man['image']['identity']:
         raise RuntimeError('app disk identity mismatch')
+    g.q.file_write(r'C:\kf\s4_stage_nvrtc.ps1', Path(__file__).with_name('stage_nvrtc.ps1').read_bytes())
+    nvrtc=next(x for x in man['packages'] if x['id']=='cuda_nvrtc')['files'][0]
+    log(stage_nvrtc(g.q,nvrtc).strip())
     initial = g.health()
     g.boot_utc, g.start_utc = initial['boot_utc'], initial['utc']
     g.q.file_write(r'C:\kf\s4_health.ps1', Path(__file__).with_name('health.ps1').read_bytes())

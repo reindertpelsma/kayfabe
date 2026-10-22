@@ -90,6 +90,7 @@ timeout 20 bash "$W" ssh 'echo KF_SSH_UP' </dev/null | grep KF_SSH_UP
 python3 /root/s2/bind_receipt.py "arm_${run}" "$binary" "$profile"
 timeout 30 bash "$W" ssh 'New-Item -ItemType Directory -Force C:\kfmedia | Out-Null' </dev/null
 bash "$W" scp-to /workspace/bench/kfapps.iso C:/kfmedia/kfapps.iso
+bash "$W" scp-to /workspace/bench/cuda_nvrtc.zip C:/kfmedia/cuda_nvrtc.zip
 echo "APPDISK_GUEST_COPY_DONE $(date -u -Is)"
 for f in verify_stage580.ps1 enable580_once.ps1 diag_min.ps1 collect_crash.ps1; do bash "$W" scp-to "/root/s2/probes/$f" "C:/kf/$f"; done
 timeout 120 bash "$W" ssh 'powershell -NoProfile -ExecutionPolicy Bypass -File C:\kf\verify_stage580.ps1' </dev/null >"/root/prov/arm_${run}_pre_enable.txt" 2>&1
