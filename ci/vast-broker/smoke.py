@@ -6,7 +6,7 @@ with the accompanying native-smoke.mjs adapter. Owner-authorized real creation
 uses smoke-live.py with the supported SSH/onstart contract.
 All endpoint/capability/instance values stay in memory or owner-only files.
 """
-import argparse,hashlib,json,math,os,re,socket,subprocess,sys,tempfile,time,urllib.error,urllib.parse,urllib.request
+import argparse,hashlib,json,math,os,re,secrets,socket,subprocess,sys,tempfile,time,urllib.error,urllib.parse,urllib.request
 from pathlib import Path
 
 class Stop(Exception):
@@ -44,7 +44,7 @@ def preflight():
     eligible=[o for o in offers if isinstance(o.get('id'),int) and o['id']>0 and (o.get('verified') is True or 'verified' not in o and o.get('verification')=='verified') and o.get('vms_enabled') is True and o.get('rentable') is True and o.get('rented') is False and o.get('num_gpus')==1 and str(o.get('gpu_name','')).replace('_',' ').upper() in ['RTX 4070','RTX 4070 SUPER','RTX 4080','RTX 4090'] and isinstance(o.get('reliability'),(int,float)) and o['reliability']>=.99 and isinstance(o.get('disk_space'),(int,float)) and o['disk_space']>=120 and isinstance(o.get('dph_total'),(int,float)) and not isinstance(o['dph_total'],bool) and math.isfinite(o['dph_total']) and 0<=o['dph_total']<=.5]
     credit=provider('/api/v0/users/current/').get('credit')
     price=min((o['dph_total'] for o in eligible),default=None)
-    return {'mode':'REAL_READ_ONLY','offers_returned':len(offers),'eligible_offers':len(eligible),'hourly_cap_usd':.5,'cheapest_eligible_usd_hour':price,'prepaid_credit_field_present':isinstance(credit,(int,float)) and not isinstance(credit,bool) and math.isfinite(credit),'reserve_plus_one_21min_run_met':isinstance(credit,(int,float)) and not isinstance(credit,bool) and math.isfinite(credit) and credit>=5+(price or .5)*21/60,'rentals_created':0,'estimated_new_spend_usd':0,'state':'UNAVAILABLE' if not eligible else 'ELIGIBLE_OFFER_FOUND'}
+    return {'mode':'REAL_READ_ONLY','offers_returned':len(offers),'eligible_offers':len(eligible),'hourly_cap_usd':.5,'cheapest_eligible_usd_hour':price,'prepaid_credit_field_present':isinstance(credit,(int,float)) and not isinstance(credit,bool) and math.isfinite(credit),'reserve_plus_one_21min_run_met':isinstance(credit,(int,float)) and not isinstance(credit,bool) and math.isfinite(credit) and credit>=8+(price or .5)*21/60,'rentals_created':0,'estimated_new_spend_usd':0,'state':'UNAVAILABLE' if not eligible else 'ELIGIBLE_OFFER_FOUND'}
 
 class Client:
     def __init__(self,bindings,base,identity,evidence):
@@ -57,6 +57,11 @@ class Client:
         before=time.monotonic()
         code,data=request(self.base+self.prefix+path,method,token,body,'local-read-only-job-token' if oidc else None)
         self.rows.append({'route':path.split('?')[0].split('/')[1],'method':method,'status':code,'response_bytes':len(json.dumps(data).encode()),'wall_ms':round((time.monotonic()-before)*1000,3)})
+        return code,data
+    def rent(self,tested_sha,pr=7):
+        self.runner_nonce=secrets.token_hex(32)
+        code,data=self.call('/rent','POST',body={'runner_nonce':self.runner_nonce,'tested_sha':tested_sha,'pr_number':pr})
+        if code==200 and (data.get('runner_nonce')!=self.runner_nonce or data.get('sha')!=tested_sha):raise Stop('RENT_BINDING')
         return code,data
     def control(self,body):
         code,data=request(self.base+'/__v4/control','POST',self.env['OWNER_STOP_TOKEN'],body)
@@ -82,7 +87,7 @@ class Client:
             run=str(run_base+index)+'-1';tested_sha=hashlib.sha256(('synthetic-'+run).encode()).hexdigest()[:40]
             request(self.identity+'/select','POST',body={'run':run.split('-')[0],'sha':tested_sha})
             self.control({'action':'reset','offset':0})
-            code,data=self.call('/rent','POST');assert code==200 and data['state']=='RUNNING'
+            code,data=self.rent(tested_sha);assert code==200 and data['state']=='RUNNING'
             cap=self.control({'action':'capability','run':run})
             if index==0:
                 target=urllib.parse.urlsplit(self.base)
@@ -107,7 +112,7 @@ class Client:
             cursor,live_log=self.drain(run,0)
             code,empty=self.call('/logs/'+run+'?cursor='+str(cursor));assert code==200 and not empty['log_increment_sanitised']
             assert '::' not in live_log and '##[' not in live_log and '\x1b' not in live_log and ('FAKE'*12) not in live_log and 'Z'*100000 not in live_log and 'J'*80 not in live_log
-            code,_=self.call('/report/'+run,'POST',cap['token'],{'seq':len(chunks)+1,'kind':'result','result':{'nonce':cap['nonce'],'verdict':verdict}},oidc=False);assert code==200
+            code,_=self.call('/report/'+run,'POST',cap['token'],{'seq':len(chunks)+1,'kind':'result','result':{'nonce':cap['nonce'],'verdict':verdict,'runner_nonce':self.runner_nonce,'sha':tested_sha}},oidc=False);assert code==200
             code,data=self.call('/status/'+run);assert code==200 and data['state']=='COMPLETE' and data['verdict']==verdict and data['cleanup_pending']
             assert self.control({'action':'capability','run':run})['present']
             if scenario=='pass-kill':

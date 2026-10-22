@@ -16,6 +16,8 @@ crons = ["* * * * *"]
 
 [vars]
 RENTING_ENABLED = "false"
+# Owner assertion of the exact emitted module; see deployment.json and trace doc.
+DEPLOYED_BUNDLE_SHA256 = "289073877d815fc1cbe30b40f0233f03f535cfdfd0cf9043236a5affc69191d3"
 OWNER_GITHUB_ID = "REPLACE_ME"
 REPOSITORY = "reindertpelsma/kayfabe"
 APPROVAL_MODE = "owner_push_or_review"

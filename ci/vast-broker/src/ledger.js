@@ -1,4 +1,5 @@
 import {refuse} from './policy.js';
+import {logChain} from './tokens.js';
 export class Ledger {
   constructor(storage){this.storage=storage;}
   get(key){return this.storage.get(key);}
@@ -6,14 +7,15 @@ export class Ledger {
   async save(record){await this.put('record:'+record.key,record);if(record.id)await this.put('id:'+record.id,record.key);}
   async appendLog(record,text){
     let chunk='';const encoder=new TextEncoder();record.logChunks??=0;
-    const flush=async()=>{if(chunk){await this.put('log:'+record.key+':'+record.logChunks,chunk);record.logChunks++;chunk='';}};
+    const flush=async()=>{if(chunk){record.logHash=await logChain(record.logHash??'0'.repeat(64),chunk);await this.put('log:'+record.key+':'+record.logChunks,chunk);await this.put('log-hash:'+record.key+':'+record.logChunks,record.logHash);record.logChunks++;chunk='';}};
     for(const line of text.split(/(?<=\n)/)){if(encoder.encode(chunk+line).length>16384)await flush();chunk+=line;}
     await flush();
   }
   async logPage(record,cursor){
-    const end=Math.min(record.logChunks??0,cursor+4);let text='';
-    for(let i=cursor;i<end;i++){const chunk=await this.get('log:'+record.key+':'+i);if(typeof chunk!=='string')refuse();text+=chunk;}
-    return {cursor,next_cursor:end,log_increment_sanitised:text,bytes_dropped:record.fullBytesDropped??record.bytesDropped??0};
+    const end=Math.min(record.logChunks??0,cursor+4);let text='';const chunks=[];
+    for(let i=cursor;i<end;i++){const chunk=await this.get('log:'+record.key+':'+i);if(typeof chunk!=='string')refuse();text+=chunk;chunks.push(chunk);}
+    const hash=end?await this.get('log-hash:'+record.key+':'+(end-1)):'0'.repeat(64);if(typeof hash!=='string')refuse();
+    return {cursor,next_cursor:end,chunks,log_increment_sanitised:text,log_sha256:hash,bytes_dropped:record.fullBytesDropped??record.bytesDropped??0};
   }
   async active(){const key=await this.get('active');return key?this.get('record:'+key):null;}
   async granted(run){const key=await this.get('run:'+run);return key?this.get('record:'+key):null;}

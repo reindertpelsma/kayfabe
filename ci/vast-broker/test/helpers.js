@@ -15,7 +15,7 @@ const pair = await webcrypto.subtle.generateKey({name:'RSASSA-PKCS1-v1_5',modulu
 export const jwk = {...await webcrypto.subtle.exportKey('jwk',pair.publicKey),kid:'test-key',alg:'RS256',use:'sig'};
 export const baseClaims = {iss:'https://token.actions.githubusercontent.com',aud:env.WORKER_URL,
   exp:clock/1000+300,nbf:clock/1000-1,repository:repo,event_name:'pull_request',actor_id:owner,
-  sha:'d'.repeat(40),ref:'refs/pull/7/merge',run_id:'123',run_attempt:'1'};
+  sha:'d'.repeat(40),ref:'refs/pull/7/merge',run_id:'123',run_attempt:'1',workflow_ref:'reindertpelsma/kayfabe/.github/workflows/gpu-vast.yml@refs/heads/master',workflow_sha:'d'.repeat(40)};
 export async function jwt(patch={},header={},key=pair.privateKey) {
   const enc = v=>Buffer.from(JSON.stringify(v)).toString('base64url');
   const input=enc({alg:'RS256',kid:'test-key',...header})+'.'+enc({...baseClaims,...patch});
@@ -94,10 +94,12 @@ export async function setup(overrides={}) {
     restart(){service=createService({env:bindings,storage,fetch:cloud.fetch,now:()=>time.value,random:()=>nonce});},
     async report(payload,{run='123-1',token,raw,headers={}}={}){
       const record=await storage.get('record:'+run);
+      if(payload?.kind==='result'&&record?.runnerNonce)payload={...payload,result:{runner_nonce:record.runnerNonce,sha:record.sha,...payload.result}};
       const bearer=token??callbackToken(record,bindings.RUN_TOKEN_SECRET);
       return service.fetch(new Request(bindings.WORKER_URL+'/report/'+run,{method:'POST',headers:{Authorization:'Bearer '+bearer,'Content-Type':'application/json',...headers},body:raw??JSON.stringify(payload)}));
     },
     async call(path='/rent',{claims={},body,method=path.startsWith('/status')?'GET':'POST',token,ghToken='mock-job-token'}={}){
+      if(path==='/rent'&&body===undefined)body={runner_nonce:'f'.repeat(64),tested_sha:cloud.run.head_sha,pr_number:cloud.run.event==='workflow_dispatch'?(cloud.prs.find(p=>p.state==='open'&&p.head?.sha===cloud.run.head_sha)?.number??null):(cloud.run.pull_requests?.[0]?.number??null)};
       const authorization=token??await jwt({exp:time.value/1000+300,nbf:time.value/1000-1,...claims});
       return service.fetch(new Request(bindings.WORKER_URL+path,{method,headers:{Authorization:'Bearer '+authorization,...(ghToken?{'X-GH-Token':ghToken}:{})},...(body===undefined?{}:{body:JSON.stringify(body)})}));
     }};

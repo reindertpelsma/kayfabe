@@ -4,6 +4,11 @@ const tag64=bytes=>btoa(String.fromCharCode(...bytes)).replaceAll('+','-').repla
 const hmacKey=secret=>crypto.subtle.importKey('raw',tokenEncoder.encode(secret),{name:'HMAC',hash:'SHA-256'},false,['sign','verify']);
 export const validSecret=value=>typeof value==='string'&&/^[A-Za-z0-9_-]{32,256}$/.test(value);
 export async function sha256Hex(value){return Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256',typeof value==='string'?tokenEncoder.encode(value):value)),x=>x.toString(16).padStart(2,'0')).join('');}
+export async function logChain(previous,text){
+  const bytes=tokenEncoder.encode(text),wire=new Uint8Array(36+bytes.length);
+  wire.set(Uint8Array.from(previous.match(/../g),x=>parseInt(x,16)));new DataView(wire.buffer).setUint32(32,bytes.length);wire.set(bytes,36);
+  return sha256Hex(wire);
+}
 export async function constantTimeEqual(expected,provided){
   if(typeof expected!=='string'||typeof provided!=='string'||provided.length>256)return false;
   // Native HMAC verification compares fixed-size tags inside the crypto implementation.
