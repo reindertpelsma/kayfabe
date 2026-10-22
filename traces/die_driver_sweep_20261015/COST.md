@@ -273,7 +273,7 @@ Own eight historical ids APIabsent; current credit and no-creation receipt:
 Other GB203/205/206/207 plan is read-only, with audit-covered measurements subtracted; no rentals.
 
 ACTIVE owner22:50 RTX50 expansion,2026-10-22T21:04:20UTC: own57273215,
-verified RTX5060Ti offer56550364/machine38619, candidateGB206 (actual own-host probe pending),
+MEASURED API 2026-10-22: verified RTX5060Ti offer56550364/machine38619, candidateGB206 (actual own-host probe pending),
 quote0.380055556USD/h, credit37.397926288USD. Auto-destroy armedFIRST111957 at21:04:20.450UTC,
 170min outer deadline23:54:20UTC; independent budgetwatch111960, rate guard0.480055556USD/h,
 reservation1.860157407USD including0.50uncertainty<6stop; cap8/reserve5 unchanged.
