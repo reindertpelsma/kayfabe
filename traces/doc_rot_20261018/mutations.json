@@ -1,0 +1,231 @@
+[
+  {
+    "mutant": "metadata",
+    "tests": 108,
+    "failed": 9,
+    "errors": 0,
+    "killed_by": [
+      "test_architecture_requires_status (test_doc_freshness.FreshnessTests.test_architecture_requires_status)",
+      "test_changed_legacy_doc_loses_exemption (test_doc_freshness.FreshnessTests.test_changed_legacy_doc_loses_exemption)",
+      "test_disallowed_status_fails (test_doc_freshness.FreshnessTests.test_disallowed_status_fails)",
+      "test_nested_markdown_requires_status (test_doc_freshness.FreshnessTests.test_nested_markdown_requires_status)",
+      "test_readme_requires_status_without_editing_it (test_doc_freshness.FreshnessTests.test_readme_requires_status_without_editing_it)",
+      "test_removal_does_not_buy_new_debt (test_doc_freshness.FreshnessTests.test_removal_does_not_buy_new_debt)",
+      "test_status_buried_after_prose_fails (test_doc_freshness.FreshnessTests.test_status_buried_after_prose_fails)",
+      "test_status_is_required_outside_design (test_doc_freshness.FreshnessTests.test_status_is_required_outside_design)",
+      "test_status_with_invalid_calendar_date_fails (test_doc_freshness.FreshnessTests.test_status_with_invalid_calendar_date_fails)"
+    ],
+    "returncode": 1
+  },
+  {
+    "mutant": "successor",
+    "tests": 108,
+    "failed": 5,
+    "errors": 0,
+    "killed_by": [
+      "test_directory_successor_fails (test_doc_freshness.FreshnessTests.test_directory_successor_fails)",
+      "test_external_successor_is_not_a_repository_successor (test_doc_freshness.FreshnessTests.test_external_successor_is_not_a_repository_successor)",
+      "test_self_successor_fails (test_doc_freshness.FreshnessTests.test_self_successor_fails)",
+      "test_successor_in_status_is_reported (test_doc_freshness.FreshnessTests.test_successor_in_status_is_reported)",
+      "test_superseded_requires_linked_successor (test_doc_freshness.FreshnessTests.test_superseded_requires_linked_successor)"
+    ],
+    "returncode": 1
+  },
+  {
+    "mutant": "file-links",
+    "tests": 108,
+    "failed": 12,
+    "errors": 0,
+    "killed_by": [
+      "test_broken_root_relative_markdown_link_still_fails (test_doc_freshness.FreshnessTests.test_broken_root_relative_markdown_link_still_fails)",
+      "test_collapsed_reference_link_must_resolve (test_doc_freshness.FreshnessTests.test_collapsed_reference_link_must_resolve)",
+      "test_html_relative_link_must_resolve (test_doc_freshness.FreshnessTests.test_html_relative_link_must_resolve)",
+      "test_image_link_must_resolve (test_doc_freshness.FreshnessTests.test_image_link_must_resolve)",
+      "test_link_cannot_escape_checkout (test_doc_freshness.FreshnessTests.test_link_cannot_escape_checkout)",
+      "test_literal_relative_link_must_resolve (test_doc_freshness.FreshnessTests.test_literal_relative_link_must_resolve)",
+      "test_missing_heading_fragment_is_a_broken_link (test_doc_freshness.FreshnessTests.test_missing_heading_fragment_is_a_broken_link)",
+      "test_missing_same_doc_fragment_is_a_broken_link (test_doc_freshness.FreshnessTests.test_missing_same_doc_fragment_is_a_broken_link)",
+      "test_newly_broken_target_fails_unchanged_document (test_doc_freshness.FreshnessTests.test_newly_broken_target_fails_unchanged_document)",
+      "test_readme_broken_link_is_checked (test_doc_freshness.FreshnessTests.test_readme_broken_link_is_checked)",
+      "test_reference_link_must_resolve (test_doc_freshness.FreshnessTests.test_reference_link_must_resolve)",
+      "test_successor_must_exist (test_doc_freshness.FreshnessTests.test_successor_must_exist)"
+    ],
+    "returncode": 1
+  },
+  {
+    "mutant": "age-and-references",
+    "tests": 108,
+    "failed": 21,
+    "errors": 0,
+    "killed_by": [
+      "test_changed_stale_doc_loses_exemption (test_doc_freshness.FreshnessTests.test_changed_stale_doc_loses_exemption)",
+      "test_configurable_age_boundary_is_strict (test_doc_freshness.FreshnessTests.test_configurable_age_boundary_is_strict)",
+      "test_doc_text_cannot_validate_its_own_missing_option (test_doc_freshness.FreshnessTests.test_doc_text_cannot_validate_its_own_missing_option)",
+      "test_existing_stale_doc_fails_on_an_additional_dead_reference (test_doc_freshness.FreshnessTests.test_existing_stale_doc_fails_on_an_additional_dead_reference)",
+      "test_explicit_arbitrary_branch_name_is_checked (test_doc_freshness.FreshnessTests.test_explicit_arbitrary_branch_name_is_checked)",
+      "test_explicit_short_branch_name_is_checked (test_doc_freshness.FreshnessTests.test_explicit_short_branch_name_is_checked)",
+      "test_generic_environment_assignment_is_checked (test_doc_freshness.FreshnessTests.test_generic_environment_assignment_is_checked)",
+      "test_missing_source_after_baseline_is_new_stale_debt (test_doc_freshness.FreshnessTests.test_missing_source_after_baseline_is_new_stale_debt)",
+      "test_named_environment_variable_is_checked (test_doc_freshness.FreshnessTests.test_named_environment_variable_is_checked)",
+      "test_old_live_with_dead_source_path_is_suspect (test_doc_freshness.FreshnessTests.test_old_live_with_dead_source_path_is_suspect)",
+      "test_old_live_with_missing_branch_is_suspect (test_doc_freshness.FreshnessTests.test_old_live_with_missing_branch_is_suspect)",
+      "test_old_live_with_missing_crate_is_suspect (test_doc_freshness.FreshnessTests.test_old_live_with_missing_crate_is_suspect)",
+      "test_old_live_with_missing_environment_variable_is_suspect (test_doc_freshness.FreshnessTests.test_old_live_with_missing_environment_variable_is_suspect)",
+      "test_old_live_with_missing_flag_is_suspect (test_doc_freshness.FreshnessTests.test_old_live_with_missing_flag_is_suspect)",
+      "test_origin_prefixed_branch_is_checked (test_doc_freshness.FreshnessTests.test_origin_prefixed_branch_is_checked)",
+      "test_reference_in_fenced_command_is_checked (test_doc_freshness.FreshnessTests.test_reference_in_fenced_command_is_checked)",
+      "test_removed_branch_after_baseline_is_new_stale_debt (test_doc_freshness.FreshnessTests.test_removed_branch_after_baseline_is_new_stale_debt)",
+      "test_removed_crate_after_baseline_is_new_stale_debt (test_doc_freshness.FreshnessTests.test_removed_crate_after_baseline_is_new_stale_debt)",
+      "test_removed_flag_after_baseline_is_new_stale_debt (test_doc_freshness.FreshnessTests.test_removed_flag_after_baseline_is_new_stale_debt)",
+      "test_root_source_path_cannot_resolve_inside_archive (test_doc_freshness.FreshnessTests.test_root_source_path_cannot_resolve_inside_archive)",
+      "test_root_source_path_cannot_resolve_to_unrelated_nested_path (test_doc_freshness.FreshnessTests.test_root_source_path_cannot_resolve_to_unrelated_nested_path)"
+    ],
+    "returncode": 1
+  },
+  {
+    "mutant": "changed-document-hash",
+    "tests": 108,
+    "failed": 2,
+    "errors": 0,
+    "killed_by": [
+      "test_changed_legacy_doc_loses_exemption (test_doc_freshness.FreshnessTests.test_changed_legacy_doc_loses_exemption)",
+      "test_changed_stale_doc_loses_exemption (test_doc_freshness.FreshnessTests.test_changed_stale_doc_loses_exemption)"
+    ],
+    "returncode": 1
+  },
+  {
+    "mutant": "env-references",
+    "tests": 108,
+    "failed": 10,
+    "errors": 0,
+    "killed_by": [
+      "test_changed_stale_doc_loses_exemption (test_doc_freshness.FreshnessTests.test_changed_stale_doc_loses_exemption)",
+      "test_configurable_age_boundary_is_strict (test_doc_freshness.FreshnessTests.test_configurable_age_boundary_is_strict)",
+      "test_doc_text_cannot_validate_its_own_missing_option (test_doc_freshness.FreshnessTests.test_doc_text_cannot_validate_its_own_missing_option)",
+      "test_existing_stale_doc_fails_on_an_additional_dead_reference (test_doc_freshness.FreshnessTests.test_existing_stale_doc_fails_on_an_additional_dead_reference)",
+      "test_generic_environment_assignment_is_checked (test_doc_freshness.FreshnessTests.test_generic_environment_assignment_is_checked)",
+      "test_missing_source_after_baseline_is_new_stale_debt (test_doc_freshness.FreshnessTests.test_missing_source_after_baseline_is_new_stale_debt)",
+      "test_named_environment_variable_is_checked (test_doc_freshness.FreshnessTests.test_named_environment_variable_is_checked)",
+      "test_old_live_with_missing_environment_variable_is_suspect (test_doc_freshness.FreshnessTests.test_old_live_with_missing_environment_variable_is_suspect)",
+      "test_recent_dead_references_are_reported_but_not_stale (test_doc_freshness.FreshnessTests.test_recent_dead_references_are_reported_but_not_stale)",
+      "test_reference_in_fenced_command_is_checked (test_doc_freshness.FreshnessTests.test_reference_in_fenced_command_is_checked)"
+    ],
+    "returncode": 1
+  },
+  {
+    "mutant": "flag-references",
+    "tests": 108,
+    "failed": 2,
+    "errors": 0,
+    "killed_by": [
+      "test_old_live_with_missing_flag_is_suspect (test_doc_freshness.FreshnessTests.test_old_live_with_missing_flag_is_suspect)",
+      "test_removed_flag_after_baseline_is_new_stale_debt (test_doc_freshness.FreshnessTests.test_removed_flag_after_baseline_is_new_stale_debt)"
+    ],
+    "returncode": 1
+  },
+  {
+    "mutant": "crate-references",
+    "tests": 108,
+    "failed": 2,
+    "errors": 0,
+    "killed_by": [
+      "test_old_live_with_missing_crate_is_suspect (test_doc_freshness.FreshnessTests.test_old_live_with_missing_crate_is_suspect)",
+      "test_removed_crate_after_baseline_is_new_stale_debt (test_doc_freshness.FreshnessTests.test_removed_crate_after_baseline_is_new_stale_debt)"
+    ],
+    "returncode": 1
+  },
+  {
+    "mutant": "branch-references",
+    "tests": 108,
+    "failed": 5,
+    "errors": 0,
+    "killed_by": [
+      "test_explicit_arbitrary_branch_name_is_checked (test_doc_freshness.FreshnessTests.test_explicit_arbitrary_branch_name_is_checked)",
+      "test_explicit_short_branch_name_is_checked (test_doc_freshness.FreshnessTests.test_explicit_short_branch_name_is_checked)",
+      "test_old_live_with_missing_branch_is_suspect (test_doc_freshness.FreshnessTests.test_old_live_with_missing_branch_is_suspect)",
+      "test_origin_prefixed_branch_is_checked (test_doc_freshness.FreshnessTests.test_origin_prefixed_branch_is_checked)",
+      "test_removed_branch_after_baseline_is_new_stale_debt (test_doc_freshness.FreshnessTests.test_removed_branch_after_baseline_is_new_stale_debt)"
+    ],
+    "returncode": 1
+  },
+  {
+    "mutant": "path-references",
+    "tests": 108,
+    "failed": 3,
+    "errors": 0,
+    "killed_by": [
+      "test_old_live_with_dead_source_path_is_suspect (test_doc_freshness.FreshnessTests.test_old_live_with_dead_source_path_is_suspect)",
+      "test_root_source_path_cannot_resolve_inside_archive (test_doc_freshness.FreshnessTests.test_root_source_path_cannot_resolve_inside_archive)",
+      "test_root_source_path_cannot_resolve_to_unrelated_nested_path (test_doc_freshness.FreshnessTests.test_root_source_path_cannot_resolve_to_unrelated_nested_path)"
+    ],
+    "returncode": 1
+  },
+  {
+    "mutant": "heading-fragments",
+    "tests": 108,
+    "failed": 2,
+    "errors": 0,
+    "killed_by": [
+      "test_missing_heading_fragment_is_a_broken_link (test_doc_freshness.FreshnessTests.test_missing_heading_fragment_is_a_broken_link)",
+      "test_missing_same_doc_fragment_is_a_broken_link (test_doc_freshness.FreshnessTests.test_missing_same_doc_fragment_is_a_broken_link)"
+    ],
+    "returncode": 1
+  },
+  {
+    "mutant": "archive-exclusion",
+    "tests": 108,
+    "failed": 2,
+    "errors": 0,
+    "killed_by": [
+      "test_archived_markdown_is_read_only_and_excluded (test_doc_freshness.FreshnessTests.test_archived_markdown_is_read_only_and_excluded)",
+      "test_nested_design_archive_is_excluded (test_doc_freshness.FreshnessTests.test_nested_design_archive_is_excluded)"
+    ],
+    "returncode": 1
+  },
+  {
+    "mutant": "stale-reference-identities",
+    "tests": 108,
+    "failed": 2,
+    "errors": 0,
+    "killed_by": [
+      "test_fixing_one_legacy_environment_reference_does_not_create_new_debt (test_doc_freshness.FreshnessTests.test_fixing_one_legacy_environment_reference_does_not_create_new_debt)",
+      "test_fixing_one_legacy_flag_reference_does_not_create_new_debt (test_doc_freshness.FreshnessTests.test_fixing_one_legacy_flag_reference_does_not_create_new_debt)"
+    ],
+    "returncode": 1
+  },
+  {
+    "mutant": "crate-reference-context",
+    "tests": 108,
+    "failed": 3,
+    "errors": 0,
+    "killed_by": [
+      "test_existing_command_filename_is_not_a_crate (test_doc_freshness.FreshnessTests.test_existing_command_filename_is_not_a_crate)",
+      "test_hyphenated_prose_is_not_a_crate_reference (test_doc_freshness.FreshnessTests.test_hyphenated_prose_is_not_a_crate_reference)",
+      "test_worktree_directory_is_not_a_crate_reference (test_doc_freshness.FreshnessTests.test_worktree_directory_is_not_a_crate_reference)"
+    ],
+    "returncode": 1
+  },
+  {
+    "mutant": "absolute-host-paths",
+    "tests": 108,
+    "failed": 3,
+    "errors": 0,
+    "killed_by": [
+      "test_absolute_host_python_path_is_omitted_from_report (test_doc_freshness.FreshnessTests.test_absolute_host_python_path_is_omitted_from_report)",
+      "test_absolute_host_shell_path_is_not_a_repository_reference (test_doc_freshness.FreshnessTests.test_absolute_host_shell_path_is_not_a_repository_reference)",
+      "test_absolute_source_filename_cannot_use_repository_suffix_alias (test_doc_freshness.FreshnessTests.test_absolute_source_filename_cannot_use_repository_suffix_alias)"
+    ],
+    "returncode": 1
+  },
+  {
+    "mutant": "asset-classification",
+    "tests": 108,
+    "failed": 2,
+    "errors": 0,
+    "killed_by": [
+      "test_evidence_log_status_word_is_not_document_metadata (test_doc_freshness.FreshnessTests.test_evidence_log_status_word_is_not_document_metadata)",
+      "test_non_markdown_assets_are_inventoried_without_status_edits (test_doc_freshness.FreshnessTests.test_non_markdown_assets_are_inventoried_without_status_edits)"
+    ],
+    "returncode": 1
+  }
+]

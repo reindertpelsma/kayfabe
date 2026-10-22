@@ -77,9 +77,22 @@ def status_value(paragraph: str, match: re.Match) -> str:
     return re.sub(r"^[—–-]\s*\d{4}-\d{2}-\d{2}\s*/\s*", "", tail).lstrip(" *")
 
 
-def check(root: Path) -> dict:
+def opening_status(text: str) -> tuple | None:
+    """Share C1's opening-metadata interpretation with the freshness inventory."""
+    parts = paragraphs(visible(text))
+    body = parts[1:] if parts and parts[0][1].startswith("# ") else parts
+    for line, para in body:
+        match = STATUS.search(para)
+        if match:
+            misplaced = para != body[0][1] or match.start() != 0
+            return line + para.count("\n", 0, match.start()), para, match, misplaced
+    return None
+
+
+def check(root: Path, paths: list[Path] | None = None) -> dict:
     design = root / "docs/design"
-    paths = sorted(design.rglob("*.md")) if design.is_dir() else []
+    if paths is None:
+        paths = sorted(design.rglob("*.md")) if design.is_dir() else []
     if not paths:
         raise ValueError("no design documents found under docs/design")
     violations = []
@@ -96,18 +109,12 @@ def check(root: Path) -> dict:
 
     texts = {path: visible(path.read_text(encoding="utf-8")) for path in paths}
     for path, text in texts.items():
-        parts = paragraphs(text)
-        # A leading H1 title is optional. STATUS may also precede that title.
-        body = parts[1:] if parts and parts[0][1].startswith("# ") else parts
-        status_parts = [
-            (line, para, STATUS.search(para)) for line, para in body if STATUS.search(para)
-        ]
-        if not status_parts:
+        opening = opening_status(path.read_text(encoding="utf-8"))
+        if opening is None:
             add(path, 1, "missing-status", "open with a dated STATUS using an allowed state")
         else:
-            line, para, match = status_parts[0]
-            line += para.count("\n", 0, match.start())
-            if not body or para != body[0][1] or match.start() != 0:
+            line, para, match, misplaced = opening
+            if misplaced:
                 add(
                     path,
                     line,
@@ -161,7 +168,8 @@ def check(root: Path) -> dict:
                     path,
                     line,
                     "missing-supersession-notice",
-                    f"record SUPERSEDED and {path.name} in the same paragraph of {target.relative_to(root)}",
+                    f"record SUPERSEDED and {path.name} in the same paragraph of "
+                    f"{target.relative_to(root)}",
                 )
     return {
         "checked": len(paths),

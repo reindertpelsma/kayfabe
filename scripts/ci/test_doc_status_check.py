@@ -121,7 +121,8 @@ class DocStatusTests(unittest.TestCase):
     def test_reciprocal_partial_supersession_is_accepted(self):
         self.write(
             "old.md",
-            "# Old\n\nSTATUS: LIVE, 2026-10-01.\n\nData SUPERSEDED by `new.md`; policy remains live.\n",
+            "# Old\n\nSTATUS: LIVE, 2026-10-01.\n\n"
+            "Data SUPERSEDED by `new.md`; policy remains live.\n",
         )
         self.write("new.md", "# New\n\nSTATUS: LIVE, 2026-10-22. Supersedes `old.md`.\n")
         self.run_check(0)
