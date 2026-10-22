@@ -94,4 +94,26 @@ revised INSTALL Bash blocks and changed launchers pass `bash -n`; changed Rust f
 rustfmt, and the edited local documentation links resolve. Provisioning/install commands
 were not executed. Hardware n=0; no new patched-QEMU/guest-display result is claimed.
 
-Full Rust/clippy/cleanup results follow after completion.
+MEASURED (2026-10-22, `KAYFABE_NO_KVM=1 cargo test --release -j2` over the same 22
+kf-* packages as the initial submission): **3772 passed / 0 failed / 20 ignored**, 212
+result groups, explicit final exit 0. Initial submission: 3757/0/20; the 15 added Rust
+tests account for the difference. Library scope: kf-qemu 378 -> 393 passing tests.
+No ignored test was removed, enabled or relabelled. All builds used nice 19, two Cargo
+jobs, a lane-owned target and the shared build lock; the disk guard passed before each build.
+
+MEASURED (2026-10-22, `cargo clippy --release -j2 -p kf-qemu --all-targets --message-format=json`):
+**348 -> 348 warnings, 0 added**, normalized by package/lint/primary file/message, excluding
+line-number shifts. `python3 scripts/ci/debt.py clippy --log <that-json-log>` reports
+`existing-debt=247 new=0`; the partial crate scope does not establish removal of workspace debt.
+`python3 scripts/ci/debt.py claims` reports `existing-debt=3758 new=0`. No baseline file changed.
+CODE READ: product/test/script/tool source is unchanged after commit `b49b245c0`; subsequent
+commits contain documentation/evidence only and use `[skip ci]`. The code fix was pushed
+separately with normal CI. The PR remains draft; hosted CI completion is not claimed here.
+
+MEASURED (2026-10-22, process executable and build-holder audit): all lane build/test jobs
+have ended and their shared Cargo-lock holders exited. No GPU/VM lock was taken, no GPU
+was used, and no guest was booted. Cleanup is **NOT DONE**: automatic approval review rejected
+the forced-removal command; under the lane's stop-on-refusal rule that step stopped without
+substituting another deletion command. The lane-owned Cargo target (648 MiB) remains for
+owner cleanup. The earlier QEMU source/build directories remain absent. Private text logs
+and the report identify the retained target for the owner; no binaries are committed.
