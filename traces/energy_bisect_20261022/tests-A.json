@@ -1,0 +1,12 @@
+{
+  "classification": "MEASURED",
+  "arm": "A",
+  "rev": "40583bc297264fb57a20d84cc795d05d493197b5",
+  "time": "2026-10-22T09:34:06.436400+02:00",
+  "passed": 3774,
+  "failed": 0,
+  "ignored": 20,
+  "summaries": 214,
+  "exit": 0,
+  "sha256": "896dd1b7ca9a1b8a057df62e219f0b78d41a1fe762e3273ac67ac4842f90a632"
+}

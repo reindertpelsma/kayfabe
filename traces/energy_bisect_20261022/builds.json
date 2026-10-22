@@ -1,0 +1,13 @@
+{
+  "classification": "MEASURED",
+  "A": {
+    "rev": "40583bc297264fb57a20d84cc795d05d493197b5",
+    "sha256": "084d100bc3bf343d3fc2c311f2601694ab3924313d9999651673b14a4c7e335a"
+  },
+  "B": {
+    "rev": "a83394e66e960d8017caa0ef19fa579f1724806b",
+    "sha256": "ab9850e1c58580ed20dbf315f73522d22ee9ed12c158c94eee8a94530956c801"
+  },
+  "builder": "scripts/bench/build_kf3.sh",
+  "production_changes_by_Q1": false
+}

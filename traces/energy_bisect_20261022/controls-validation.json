@@ -1,0 +1,21 @@
+{
+  "classification": "MEASURED",
+  "red": "tests-only missing-module failure before implementation",
+  "controls_green": 13,
+  "all_qualification_tests": 33,
+  "mutants": [
+    {
+      "mutation": "ignore_pid",
+      "killed_tests": 2
+    },
+    {
+      "mutation": "ignore_exit",
+      "killed_tests": 2
+    },
+    {
+      "mutation": "accept_all_records",
+      "killed_tests": 11
+    }
+  ],
+  "restored": true
+}

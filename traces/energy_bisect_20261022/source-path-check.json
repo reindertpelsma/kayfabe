@@ -1,0 +1,53 @@
+{
+  "classification": "CODE READ",
+  "recorded_birth": {
+    "client": "0xc1d00019",
+    "channel": "0xff040004",
+    "engine": "0xb (COPY2)",
+    "kernel_by": "PRIVILEGE=KERNEL",
+    "token": "0x806",
+    "host_token": "0x1002d",
+    "privilege_level": 2,
+    "uvm_owned": false,
+    "birth_qemu_line": 1668,
+    "retirement_qemu_line": 50438,
+    "classification": "MEASURED"
+  },
+  "old_handle_internal": false,
+  "new_handle_internal": false,
+  "old_kernel_result": true,
+  "new_kernel_result": true,
+  "source_identity": [
+    {
+      "file": "crates/kf-qemu/src/chan.rs",
+      "phase1_blob": "2747ebe8ba372c8e5d462d675fb1993510858db3",
+      "candidate_blob": "2747ebe8ba372c8e5d462d675fb1993510858db3",
+      "identical": true
+    },
+    {
+      "file": "crates/kf-qemu/src/device.rs",
+      "phase1_blob": "435c0bcd65237a4215e876389ca969d457663901",
+      "candidate_blob": "435c0bcd65237a4215e876389ca969d457663901",
+      "identical": true
+    },
+    {
+      "file": "crates/kf-chan/src/tmode.rs",
+      "phase1_blob": "1b05d02b75c70c158e7bec676a69bc7d152f1262",
+      "candidate_blob": "1b05d02b75c70c158e7bec676a69bc7d152f1262",
+      "identical": true
+    },
+    {
+      "file": "crates/kf-chan/src/ring.rs",
+      "phase1_blob": "90ba1ba5fc3a9839fb0633f4af153533c4f42534",
+      "candidate_blob": "90ba1ba5fc3a9839fb0633f4af153533c4f42534",
+      "identical": true
+    },
+    {
+      "file": "crates/kf-chan/src/host.rs",
+      "phase1_blob": "8bb54a04f58e9411379a0033c868bcee0fb9bdcd",
+      "candidate_blob": "8bb54a04f58e9411379a0033c868bcee0fb9bdcd",
+      "identical": true
+    }
+  ],
+  "conclusion": "The recorded birth remains kernel under both predicates; direct reclassification by SA-02 is excluded for these facts. Indirect effects and full same-RPC-sequence equivalence are unproved."
+}

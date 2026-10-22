@@ -1,0 +1,11 @@
+{
+  "classification": "MEASURED",
+  "master": "e64b8e5f6d0f64c41c9c4d40775e74be08de7164",
+  "descriptor": "468a35c9d845afc1938683540acc251bdef90e5a",
+  "SA02": "4f6cf6e1968c7e563010cc9e178d01950d64afd0",
+  "VA_batch": "e6a0d2b8185dd14e137dd2a06e74d387ee636912",
+  "base": "078510a96735203df21a7b8e8a4daf4864cfd834",
+  "A": "40583bc297264fb57a20d84cc795d05d493197b5",
+  "B": "a83394e66e960d8017caa0ef19fa579f1724806b",
+  "candidate": "afe00b3cbc7e345e2953b1bc199d9cce1054cc38"
+}
