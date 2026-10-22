@@ -6,7 +6,7 @@ with the accompanying native-smoke.mjs adapter. Live creation remains blocked
 by the documented no-SSH VM startup conflict, even when a cheap offer exists.
 All endpoint/capability/instance values stay in memory or owner-only files.
 """
-import argparse,hashlib,json,math,os,re,subprocess,sys,tempfile,time,urllib.error,urllib.parse,urllib.request
+import argparse,hashlib,json,math,os,re,socket,subprocess,sys,tempfile,time,urllib.error,urllib.parse,urllib.request
 from pathlib import Path
 
 class Stop(Exception):
@@ -79,6 +79,19 @@ class Client:
             self.control({'action':'reset','offset':0})
             code,data=self.call('/rent','POST');assert code==200 and data['state']=='RUNNING'
             cap=self.control({'action':'capability','run':run})
+            if index==0:
+                target=urllib.parse.urlsplit(self.base)
+                assert target.hostname in {'127.0.0.1','localhost'}
+                connection=socket.create_connection((target.hostname,target.port or 80),timeout=3)
+                upload_path=self.prefix+'/report/'+run
+                wire=('POST '+upload_path+' HTTP/1.1\r\nHost: '+target.netloc+'\r\nAuthorization: Bearer '+cap['token']+'\r\nContent-Type: application/json\r\nContent-Length: 1000\r\n\r\n{').encode()
+                try:
+                    connection.sendall(wire);connection.settimeout(1)
+                    try: connection.recv(1,socket.MSG_PEEK);raise Stop('EARLY_UPLOAD_RESPONSE')
+                    except socket.timeout: pass
+                    self.control({'action':'cron'})
+                    assert self.control({'action':'capability','run':run})['rate_count']==0
+                finally: connection.close()
             code,_=self.call('/report/'+run,'POST',cap['token'],{'seq':1,'kind':'progress','text':'before running'},oidc=False);assert code==409
             self.control({'action':'running'})
             code,_=self.call('/report/'+run,'POST','bad',{'seq':1,'kind':'result','result':{'nonce':cap['nonce'],'verdict':'PASS'}},oidc=False);assert code==401
@@ -102,7 +115,7 @@ class Client:
                 self.control({'action':'advance','offset':301000});self.control({'action':'cron'})
                 assert not self.control({'action':'capability','run':run})['present']
             settled=self.control({'action':'capability','run':run});assert settled['settled']
-            results.append({'scenario':scenario,'verdict':verdict,'grace_kept_before_cleanup':True,'mock_provider_absent':True,'ledger_settled':True,'clock':'SYNTHETIC','live_box':False})
+            results.append({'scenario':scenario,'verdict':verdict,'grace_kept_before_cleanup':True,'mock_provider_absent':True,'ledger_settled':True,'clock':'SYNTHETIC','live_box':False,'slow_upload_check':'PASS' if index==0 else 'NOT_RUN'})
             if index==0:
                 self.evidence.mkdir(parents=True,exist_ok=True)
                 (self.evidence/'render-input.json').write_text(json.dumps(data,indent=2)+'\n')

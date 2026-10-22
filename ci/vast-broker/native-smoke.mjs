@@ -41,7 +41,7 @@ export class BrokerLedger {
    else if(p.action==='cron')await this.service.sweep();
    else if(p.action==='capability'){
     const r=await this.storage.get('record:'+p.run),i=await this.storage.get('mock-instance');
-    result={token:i?.onstart.match(/^token='([^']+)'/m)?.[1],nonce:r?.nonce,present:!!i,settled:r?.ended!==null};
+    result={token:i?.onstart.match(/^token='([^']+)'/m)?.[1],nonce:r?.nonce,present:!!i,settled:r?.ended!==null,report_count:r?.reportCount,rate_count:r?.rateCount};
    }else return new Response('no',{status:404});
    return Response.json(result);
   }

@@ -106,7 +106,7 @@ export function createService({env,storage,fetch:fetcher=fetch,now=Date.now,rand
       r.lastSeq=payload.seq;r.lastDigest=digest;r.firstReportAt??=now();
       if(payload.kind==='result'){r.resultAt=now();r.verdict=payload.result.verdict;r.liveCheckedAt=null;} // MUTANT structured-verdict
       else if(r.reportCount>=cfg.reportCount||r.reportBytes>=cfg.reportBytes)await close(r,vast,'LIMIT');
-      return json({state:'ACCEPTED'});
+      return json({state:'ACCEPTED',...(payload.kind==='result'?{grace_remaining_seconds:Math.max(0,Math.floor((Math.min(r.started+r.ttl,r.resultAt+r.grace)-now())/1000))}:{})});
     }catch(error){
       if(r.reportBytes>=cfg.reportBytes&&!r.closed){try{await close(r,vast,'LIMIT');}catch{}}
       throw error;

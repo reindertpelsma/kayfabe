@@ -19,7 +19,7 @@ exec curl --silent --show-error --fail --max-time 20 --proto '=https' --request 
 KF_KILL
 chmod 700 /usr/local/bin/kf-box-kill
 python3 - <<'KF_REPORT'
-import json,os,select,subprocess,time
+import json,math,os,select,subprocess,time
 url='${origin}${prefix?'/'+prefix:''}/report/${callback.run}'
 token='${callback.token}'
 nonce='${nonce}'
@@ -38,11 +38,14 @@ def post(kind,text=None,result=None):
         omitted+=len((text or '').encode());return
     seq+=1;sent+=len(body);attempted+=1
     # curl retries reuse this exact payload/sequence; no redirect or arbitrary URL.
-    subprocess.run(['curl','--silent','--show-error','--fail','--max-time','10',
+    response=subprocess.run(['curl','--silent','--show-error','--fail','--max-time','10',
         '--retry','2','--retry-delay','1','--retry-all-errors','--proto','=https',
         '--request','POST','--header','Content-Type: application/json',
         '--header','Authorization: Bearer '+token,'--data-binary','@-',url],
-        input=body,stdout=subprocess.DEVNULL,stderr=subprocess.DEVNULL,check=False)
+        input=body,stdout=subprocess.PIPE,stderr=subprocess.DEVNULL,check=False)
+    if kind=='result' and response.returncode==0:
+        try: return json.loads(response.stdout)
+        except (ValueError,TypeError): return None
 work=r'''exec timeout --signal=TERM --kill-after=30s ${Math.max(1,minutes*60-60)}s bash -s <<'KF_TEST'
 set -euo pipefail
 git clone --no-checkout https://github.com/${repo}.git /workspace/kf-ci-src
@@ -75,8 +78,10 @@ rc=child.wait()
 with open(backup,'rb') as local:
     local.seek(0,os.SEEK_END);local.seek(max(0,local.tell()-8192))
     tail=local.read(8192).decode('utf-8',errors='replace')
-post('result','Suite complete; sender omitted '+str(omitted)+' raw bytes beyond its bounded transport allowance.',{'nonce':nonce,'verdict':'PASS' if rc==0 else 'FAIL'})
-print('Use kf-box-kill [reason] to end this box early; up to ${grace} minutes grace remains (also capped by hard TTL).')
+ack=post('result','Suite complete; sender omitted '+str(omitted)+' raw bytes beyond its bounded transport allowance.',{'nonce':nonce,'verdict':'PASS' if rc==0 else 'FAIL'})
+seconds=ack.get('grace_remaining_seconds') if isinstance(ack,dict) else None
+remaining=str(math.ceil(seconds/60)) if type(seconds) is int and 0<=seconds<=${grace*60} else 'unknown'
+print('Use kf-box-kill [reason] to end this box early; configured maximum ${grace} minutes; Worker reports '+remaining+' minutes remaining (hard TTL included).')
 raise SystemExit(rc)
 KF_REPORT
 `;
