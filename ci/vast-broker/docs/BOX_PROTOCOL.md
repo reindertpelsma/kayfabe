@@ -15,7 +15,7 @@ CODE READ: box protocol 5; repo scripts accept 4 and 5. Runner response protocol
 | KF_GRACE_FAIL | Required grace ceiling in seconds |
 | KF_GRACE_PASS | Optional grace ceiling in seconds |
 
-CODE READ: Vast create `env` is a Docker `-e KEY=value` string; values use a restricted shell-safe alphabet. Repo scripts write the environment to root-only `/run/kf-ci/env`. No Vast key, owner stop token, signing secret or private-repository token reaches a box. Its operator can inspect its own scoped capability.
+CODE READ: Vast create `env` is a JSON object mapping variable names to string values; values use a restricted shell-safe alphabet. Repo scripts write the environment to root-only `/run/kf-ci/env`. No Vast key, owner stop token, signing secret or private-repository token reaches a box. Its operator can inspect its own scoped capability.
 
 CODE READ: `POST /report/<run>` uses Bearer auth and JSON `{seq,kind,text?,result?}`; kind is progress/log/result, sequences increase by one. A result binds nonce, SHA, runner_nonce, verdict, suite counts and hardware. `POST /kill/<run>` takes a short reason. `POST /hold/<run>` requires a recorded result and retains the hard ceiling. Retries reuse the same payload/sequence. The backup is `/workspace/kf-ci-output.log`. Missing/invalid payload output fails closed. HTTPS only; no redirects. Capabilities expire with their own run. GPU results remain unattested tripwires; approved code precedes rental.
 

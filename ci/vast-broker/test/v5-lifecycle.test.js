@@ -258,10 +258,9 @@ for (const delay of [0, 5 * minute])
     assert.equal(seen.id, null);
     assert.equal((await record(h)).phase, 'BOOTING');
     assert.equal((await record(h)).hardDeadline, clock + 180 * minute);
-    assert.ok(
-      h.cloud.calls
-        .find((c) => c.url.includes('/asks/'))
-        .body.env.includes('-e KF_SOFT_DEADLINE=' + String((clock + 170 * minute) / 1000)),
+    assert.equal(
+      h.cloud.calls.find((c) => c.url.includes('/asks/')).body.env.KF_SOFT_DEADLINE,
+      String((clock + 170 * minute) / 1000),
     );
   });
 async function unbound() {

@@ -197,7 +197,7 @@ test('fixed callback URL includes the exact optional prefix', async () => {
   const h = await rent();
   const body = h.cloud.calls.find((x) => x.url.endsWith('/asks/5/')).body;
   const script = body.onstart;
-  assert.ok(body.env.includes('-e KF_BROKER_URL=' + env.WORKER_URL + '/' + prefix));
+  assert.equal(body.env.KF_BROKER_URL, env.WORKER_URL + '/' + prefix);
   assert.doesNotMatch(script, /BROKER_PATH_PREFIX|OWNER_STOP_TOKEN|RUN_TOKEN_SECRET/);
 });
 for (const text of [

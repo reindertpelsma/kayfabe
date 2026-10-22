@@ -10,7 +10,7 @@ cases = [
         "if (env.RENTING_ENABLED === 'true') refuse('PREFIX_REQUIRED', 503);",
         "/* mutant permits missing prefix */",
     ),
-    ("create-env", "src/vast.js", "env: Object.entries(environment)", "env: Object.entries({})"),
+    ("create-env", "src/vast.js", "Object.entries(environment).map", "Object.entries({}).map"),
     ("tiny-bootstrap", "src/onstart.js", "exec bash ${DEFAULTS.onstartPath}", "echo skipped"),
 ]
 for name, path, before, after in cases:

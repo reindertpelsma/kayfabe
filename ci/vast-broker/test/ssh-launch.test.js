@@ -29,7 +29,7 @@ test('admitted rent uses SSH onstart without Worker-managed SSH credentials', as
   const body = h.cloud.calls.find((c) => c.url.endsWith('/asks/5/')).body;
   assert.equal(body.runtype, 'ssh_direct');
   assert.match(body.onstart, /exec bash scripts\/ci\/vast_onstart.sh/);
-  assert.match(body.env, /-e KF_RUN_TOKEN=v1\./);
+  assert.match(body.env.KF_RUN_TOKEN, /^v1\./);
   assert.equal(body.image, IMAGE);
   assert.equal('args' in body, false);
   assert.doesNotMatch(JSON.stringify(body), /ssh_public_key|ssh_private_key|authorized_keys/);
