@@ -1,0 +1,157 @@
+{
+  "classification": "MEASURED",
+  "evidence": "table.json",
+  "scope": "Q3 fresh standalone Energy trials plus explicitly separated prior standalone observations; K1 mixed3454 and candidate mixed4260 excluded from rate denominators",
+  "completed": 3,
+  "counts": {
+    "D": {
+      "q3_pass": 1,
+      "q3_fail": 0,
+      "q3_n": 1,
+      "q3_failure_rate": 0.0,
+      "prior_energy_only_pass": 0,
+      "prior_energy_only_fail": 0,
+      "prior_energy_only_runs": [],
+      "pooled_pass": 1,
+      "pooled_fail": 0,
+      "pooled_n": 1,
+      "scores": [
+        36.4
+      ],
+      "score_min": 36.4,
+      "score_max": 36.4,
+      "score_mean": 36.4
+    },
+    "A": {
+      "q3_pass": 1,
+      "q3_fail": 0,
+      "q3_n": 1,
+      "q3_failure_rate": 0.0,
+      "prior_energy_only_pass": 0,
+      "prior_energy_only_fail": 2,
+      "prior_energy_only_runs": [
+        4263,
+        4266
+      ],
+      "pooled_pass": 1,
+      "pooled_fail": 2,
+      "pooled_n": 3,
+      "scores": [
+        41.19
+      ],
+      "score_min": 41.19,
+      "score_max": 41.19,
+      "score_mean": 41.19
+    },
+    "B": {
+      "q3_pass": 1,
+      "q3_fail": 0,
+      "q3_n": 1,
+      "q3_failure_rate": 0.0,
+      "prior_energy_only_pass": 1,
+      "prior_energy_only_fail": 0,
+      "prior_energy_only_runs": [
+        4264
+      ],
+      "pooled_pass": 2,
+      "pooled_fail": 0,
+      "pooled_n": 2,
+      "scores": [
+        45.35
+      ],
+      "score_min": 45.35,
+      "score_max": 45.35,
+      "score_mean": 45.35
+    },
+    "C": {
+      "q3_pass": 0,
+      "q3_fail": 0,
+      "q3_n": 0,
+      "q3_failure_rate": null,
+      "prior_energy_only_pass": 1,
+      "prior_energy_only_fail": 1,
+      "prior_energy_only_runs": [
+        4262,
+        4267
+      ],
+      "pooled_pass": 1,
+      "pooled_fail": 1,
+      "pooled_n": 2,
+      "scores": [],
+      "score_min": null,
+      "score_max": null,
+      "score_mean": null
+    }
+  },
+  "run_order": [
+    {
+      "order": 1,
+      "run": 4301,
+      "arm": "D1",
+      "build": "D",
+      "revision": "468a35c9d845afc1938683540acc251bdef90e5a",
+      "started": "2026-10-22T11:17:51.934717+02:00",
+      "ended": "2026-10-22T11:22:49.870912+02:00",
+      "verdict": "PASS",
+      "score": 36.4,
+      "first153_guest": null,
+      "first153_detected_host": null,
+      "guest153": 0,
+      "guest4101": 0,
+      "host_xids": 0,
+      "poisoned": 0,
+      "restored": true,
+      "failing_channels": [],
+      "matching_forwarded": [
+        0
+      ],
+      "rpc_limit": "Production trace logs RmAlloc seq=0 context and CHAN-FACTS/birth linkage, not a unique full RPC transaction replay."
+    },
+    {
+      "order": 2,
+      "run": 4302,
+      "arm": "A3",
+      "build": "A",
+      "revision": "40583bc297264fb57a20d84cc795d05d493197b5",
+      "started": "2026-10-22T11:22:49.991694+02:00",
+      "ended": "2026-10-22T11:27:45.621834+02:00",
+      "verdict": "PASS",
+      "score": 41.19,
+      "first153_guest": null,
+      "first153_detected_host": null,
+      "guest153": 0,
+      "guest4101": 0,
+      "host_xids": 0,
+      "poisoned": 0,
+      "restored": true,
+      "failing_channels": [],
+      "matching_forwarded": [
+        0
+      ],
+      "rpc_limit": "Production trace logs RmAlloc seq=0 context and CHAN-FACTS/birth linkage, not a unique full RPC transaction replay."
+    },
+    {
+      "order": 3,
+      "run": 4303,
+      "arm": "B2",
+      "build": "B",
+      "revision": "a83394e66e960d8017caa0ef19fa579f1724806b",
+      "started": "2026-10-22T11:27:45.858160+02:00",
+      "ended": "2026-10-22T11:32:40.583922+02:00",
+      "verdict": "PASS",
+      "score": 45.35,
+      "first153_guest": null,
+      "first153_detected_host": null,
+      "guest153": 0,
+      "guest4101": 0,
+      "host_xids": 0,
+      "poisoned": 0,
+      "restored": true,
+      "failing_channels": [],
+      "matching_forwarded": [
+        0
+      ],
+      "rpc_limit": "Production trace logs RmAlloc seq=0 context and CHAN-FACTS/birth linkage, not a unique full RPC transaction replay."
+    }
+  ]
+}

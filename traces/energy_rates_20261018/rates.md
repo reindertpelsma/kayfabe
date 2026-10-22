@@ -1,0 +1,22 @@
+# Q3 Energy rate table
+
+MEASURED at rev 468a35c9 (run4301) and the per-run revisions in table.json: runs4301–4303, exact revisions and first-event/channel facts in table.json and per-run channels.json; 3/11 trials complete.
+
+| Build | Q3 pass/fail | Prior standalone pass/fail | Combined fail/n | Q3 exported guest scores |
+|---|---:|---:|---:|---|
+| D | 1/0 | 0/0 | 0/1 | 36.4 |
+| A | 1/0 | 0/2 | 2/3 | 41.19 |
+| B | 1/0 | 1/0 | 0/2 | 45.35 |
+| C | 0/0 | 1/1 | 1/2 |  |
+
+CODE READ: D = descriptor-only468a35c9; A = descriptor+SA-02 40583bc2; B = descriptor+batched-walk a83394e6; C = candidate afe00b3c. Prior standalone runs are A4263/4266, B4264, C4262/4267. K1 mixed3454 and candidate mixed4260 are reference observations only.
+
+| Order/run | Build | Host start CEST | Result | First153 guest | Host detection CEST | Failing forwarded/GP |
+|---|---|---|---|---|---|---|
+| 1/run4301 | D1 | 11:17:51 | PASS | none | none | none |
+| 2/run4302 | A3 | 11:22:49 | PASS | none | none | none |
+| 3/run4303 | B2 | 11:27:45 | PASS | none | none | none |
+
+MEASURED at rev 468a35c9, run4301 (4301/channels.json): run-order.csv and per-run channels.json retain the guest clock and host clock separately; run4301 guest captured09:18 while host captured11:18 CEST, approximately two hours apart. Times are not silently converted.
+
+CODE READ: production logs expose RmAlloc seq=0 context, CHAN-FACTS and token/host birth linkage; they do not identify a unique complete RPC transaction replay. Full logs and CoWs stay under /data/codex-Q3/windows-20261022/ and /data/codex-Q3/energy-bisect/.
