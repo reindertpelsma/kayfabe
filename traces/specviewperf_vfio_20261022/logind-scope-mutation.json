@@ -1,0 +1,5 @@
+{
+  "mutant": "stop-logind-without-DRM-holders",
+  "failing_tests": 2,
+  "rc": 1
+}

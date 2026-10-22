@@ -90,9 +90,12 @@ def close_desktop_users():
             os.close(fd)
     # logind and PID 1 may retain DRM fdstore references after the desktop exits.
     # systemctl documents stopping the unit and cleaning only its fdstore.
-    run('systemctl', 'stop', 'systemd-logind')
-    run('systemctl', 'clean', '--what=fdstore', 'systemd-logind')
     remaining = open_holders(nodes)
+    if any(name == 'systemd-logind' or (pid == 1 and name == 'systemd')
+           for pid, name in remaining.items()):
+        run('systemctl', 'stop', 'systemd-logind')
+        run('systemctl', 'clean', '--what=fdstore', 'systemd-logind')
+        remaining = open_holders(nodes)
     if remaining:
         raise RuntimeError('SAFETY_REFUSED: GPU nodes remain open after authorized cleanup')
 

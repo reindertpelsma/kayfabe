@@ -7,7 +7,12 @@ import vfio_session
 class LogindScopeTests(unittest.TestCase):
     def exercise(self, snapshots):
         calls=[]
-        with patch.object(vfio_session,'run',side_effect=lambda *a,**k:calls.append(a)),patch.object(vfio_session,'gpu_nodes',return_value=[]),patch.object(vfio_session,'open_holders',side_effect=snapshots),patch.object(vfio_session.os,'pidfd_open',side_effect=ProcessLookupError):
+        index=[0]
+        def next_snapshot(nodes):
+            value=snapshots[min(index[0],len(snapshots)-1)]
+            index[0]+=1
+            return value
+        with patch.object(vfio_session,'run',side_effect=lambda *a,**k:calls.append(a)),patch.object(vfio_session,'gpu_nodes',return_value=[]),patch.object(vfio_session,'open_holders',side_effect=next_snapshot),patch.object(vfio_session.os,'pidfd_open',side_effect=ProcessLookupError):
             vfio_session.close_desktop_users()
         return calls
 
