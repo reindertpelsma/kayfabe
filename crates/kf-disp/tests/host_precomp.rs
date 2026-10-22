@@ -67,9 +67,21 @@ fn host_first_and_last_precomp_words_replace_only_their_t1_words() {
         })
         .collect();
     for off in &offsets {
-        assert_eq!(d.page.word(*off), (base + off) ^ 0x1234_0000);
+        assert_eq!(d.page.word(*off), fallback.page.word(*off));
+        assert_eq!(
+            h.precomp
+                .as_ref()
+                .unwrap()
+                .observations_for(t, row, DIE)
+                .unwrap()
+                .iter()
+                .find(|(o, _)| o == off)
+                .unwrap()
+                .1,
+            (base + off) ^ 0x1234_0000
+        );
         assert!(
-            d.provenance
+            !d.provenance
                 .iter()
                 .any(|x| x.offset == *off && x.tier == Tier::Host)
         );
@@ -85,17 +97,19 @@ fn host_first_and_last_precomp_words_replace_only_their_t1_words() {
 fn every_family_uses_its_generated_address_and_keeps_inactive_windows_derived() {
     for row in kf_chip::display::ALL {
         let t = table();
-        let h = snapshot(t, row, DIE);
-        let d = derive(t, row, DIE, &h);
+        let die = representative(row);
+        let h = snapshot(t, row, die);
+        let d = derive(t, row, die, &h);
+        let fallback = derive(t, row, die, &HostFacts::default());
         assert_eq!(
             d.provenance.iter().filter(|p| p.tier == Tier::Host).count(),
-            usize::try_from(row.windows).unwrap() * 6
+            0
         );
         for i in 0..row.windows {
             let off = t
                 .a(row.classes.caps, "PRECOMP_WIN_PIPE_HDR_CAPC", i)
                 .unwrap();
-            assert_eq!(d.page.word(off), (0x640000 + off) ^ 0x1234_0000);
+            assert_eq!(d.page.word(off), fallback.page.word(off));
         }
         for i in row.windows..32 {
             assert_eq!(
@@ -133,7 +147,10 @@ fn host_reply_can_remove_a_derived_feature_without_a_hybrid_page() {
         let off = t
             .a(row.classes.caps, "PRECOMP_WIN_PIPE_HDR_CAPC", i)
             .unwrap();
-        assert_eq!(d.page.word(off), 0);
+        assert_eq!(
+            d.page.word(off),
+            derive(t, row, DIE, &HostFacts::default()).page.word(off)
+        );
     }
 }
 #[test]
@@ -148,6 +165,13 @@ fn a_snapshot_from_another_die_cannot_override_this_die() {
             ..DIE
         },
     );
+    assert!(
+        h.precomp
+            .as_ref()
+            .unwrap()
+            .observations_for(t, row, DIE)
+            .is_none()
+    );
     assert_eq!(
         derive(t, row, DIE, &h).page.words,
         derive(t, row, DIE, &HostFacts::default()).page.words
@@ -157,7 +181,18 @@ fn a_snapshot_from_another_die_cannot_override_this_die() {
 fn a_snapshot_from_another_class_cannot_override_this_family() {
     let t = table();
     let row = &kf_chip::display::BLACKWELL_GB20X;
-    let h = snapshot(t, &kf_chip::display::ADA, DIE);
+    let h = snapshot(
+        t,
+        &kf_chip::display::ADA,
+        representative(&kf_chip::display::ADA),
+    );
+    assert!(
+        h.precomp
+            .as_ref()
+            .unwrap()
+            .observations_for(t, row, DIE)
+            .is_none()
+    );
     assert_eq!(
         derive(t, row, DIE, &h).page.words,
         derive(t, row, DIE, &HostFacts::default()).page.words
@@ -172,6 +207,13 @@ fn a_changed_guest_layout_keeps_the_entire_derived_fallback() {
         "{}\nF\tNVCA73_PRECOMP_WIN_PIPE_HDR_CAPC_CSC00_PRECISION\t9\t5\n",
         include_str!("../data/classes-580.65.06.tsv")
     ));
+    assert!(
+        h.precomp
+            .as_ref()
+            .unwrap()
+            .observations_for(&altered, row, DIE)
+            .is_none()
+    );
     assert_eq!(
         derive(&altered, row, DIE, &h).page.words,
         derive(&altered, row, DIE, &HostFacts::default()).page.words
@@ -255,10 +297,7 @@ fn host_caps_are_facts_and_do_not_force_a_fvlut_bit() {
         let off = t
             .a(row.classes.caps, "PRECOMP_WIN_PIPE_HDR_CAPC", i)
             .unwrap();
-        assert_eq!(
-            get(d.page.word(off), f),
-            get((0x640000 + off) ^ 0x1234_0000, f)
-        );
+        assert_eq!(get(d.page.word(off), f), 0);
     }
 }
 
@@ -271,6 +310,13 @@ fn a_changed_guest_register_address_uses_the_entire_derived_fallback() {
         "{}\nA\tNVCA73_PRECOMP_WIN_PIPE_HDR_CAPC\t2944\t32\n",
         include_str!("../data/classes-580.65.06.tsv")
     ));
+    assert!(
+        h.precomp
+            .as_ref()
+            .unwrap()
+            .observations_for(&altered, row, DIE)
+            .is_none()
+    );
     assert_eq!(
         derive(&altered, row, DIE, &h).page.words,
         derive(&altered, row, DIE, &HostFacts::default()).page.words
@@ -289,6 +335,13 @@ fn a_snapshot_from_a_different_architecture_is_not_reused() {
             ..DIE
         },
     );
+    assert!(
+        h.precomp
+            .as_ref()
+            .unwrap()
+            .observations_for(t, row, DIE)
+            .is_none()
+    );
     assert_eq!(
         derive(t, row, DIE, &h).page.words,
         derive(t, row, DIE, &HostFacts::default()).page.words
@@ -300,6 +353,13 @@ fn changed_window_count(windows: u32) {
     let row = &kf_chip::display::BLACKWELL_GB20X;
     let h = snapshot(t, row, DIE);
     let changed = kf_chip::display::DisplayRow { windows, ..*row };
+    assert!(
+        h.precomp
+            .as_ref()
+            .unwrap()
+            .observations_for(t, &changed, DIE)
+            .is_none()
+    );
     assert_eq!(
         derive(t, &changed, DIE, &h).page.words,
         derive(t, &changed, DIE, &HostFacts::default()).page.words
@@ -313,4 +373,227 @@ fn fewer_virtual_windows_do_not_import_hidden_host_windows() {
 #[test]
 fn more_virtual_windows_do_not_make_a_partly_host_page() {
     changed_window_count(12);
+}
+
+fn representative(row: &kf_chip::display::DisplayRow) -> Die {
+    Die {
+        architecture: match row.classes.caps {
+            0xc573 => 0x160,
+            0xc673 => 0x170,
+            0xc773 => 0x190,
+            0xca73 => 0x1b0,
+            _ => panic!("unknown test row"),
+        },
+        implementation: 2,
+    }
+}
+fn extreme(die: Die) -> HostFacts {
+    let t = table();
+    let row = &kf_chip::display::BLACKWELL_GB20X;
+    HostFacts {
+        precomp: Some(
+            hostcaps::query(
+                t,
+                &Regs::for_ip(&t.version, row.ip_version).unwrap(),
+                row,
+                die,
+                |a| Ok(vec![0xffff_fffe; a.len()]),
+            )
+            .unwrap(),
+        ),
+    }
+}
+fn all_fields(window: u32) {
+    let t = table();
+    let row = &kf_chip::display::BLACKWELL_GB20X;
+    for implementation in [2, 3, 5, 6, 7] {
+        let die = Die {
+            implementation,
+            ..DIE
+        };
+        let d = derive(t, row, die, &extreme(die));
+        for line in include_str!(
+            "../../../traces/blackwell_host_caps_review_20261022/tier_audit/precomp_fields.tsv"
+        )
+        .lines()
+        .skip(1)
+        {
+            let f: Vec<_> = line.split('\t').collect();
+            let reg = format!("PRECOMP_WIN_PIPE_HDR_{}", f[0]);
+            let name = format!("{reg}_{}", f[1]);
+            let off = t.a(row.classes.caps, &reg, window).unwrap();
+            let bits = t.f(row.classes.caps, &name).unwrap();
+            let expected: u32 = f[if window % 2 == 0 { 3 } else { 4 }].parse().unwrap();
+            assert_eq!(
+                get(d.page.word(off), bits),
+                expected,
+                "GB20{implementation} {name}"
+            );
+        }
+    }
+}
+#[test]
+fn main_layer_fields_reject_every_host_override() {
+    all_fields(0);
+}
+#[test]
+fn overlay_layer_fields_reject_every_host_override() {
+    all_fields(7);
+}
+fn unsupported_rows(window: u32, policy: &str) {
+    let t = table();
+    let row = &kf_chip::display::BLACKWELL_GB20X;
+    let mut rows = capsderive::shipped_rows().to_vec();
+    for line in include_str!(
+        "../../../traces/blackwell_host_caps_review_20261022/tier_audit/precomp_fields.tsv"
+    )
+    .lines()
+    .skip(1)
+    {
+        let f: Vec<_> = line.split('\t').collect();
+        if f[5] != policy {
+            continue;
+        }
+        rows.push(capsderive::LayerRow {
+            overlay: window % 2 != 0,
+            register: format!("PRECOMP_WIN_PIPE_HDR_{}", f[0]),
+            field: f[1].into(),
+            value: "1".into(),
+            optional: false,
+            basis: "synthetic unsupported claim".into(),
+        });
+    }
+    let d = capsderive::derive(
+        t,
+        &Regs::for_ip(&t.version, row.ip_version).unwrap(),
+        row,
+        DIE,
+        true,
+        &rows,
+        &[],
+        "580",
+        &HostFacts::default(),
+    )
+    .unwrap();
+    for r in rows
+        .iter()
+        .filter(|r| r.basis == "synthetic unsupported claim")
+    {
+        let off = t.a(row.classes.caps, &r.register, window).unwrap();
+        let f = t
+            .f(row.classes.caps, &format!("{}_{}", r.register, r.field))
+            .unwrap();
+        assert_eq!(get(d.page.word(off), f), 0, "{}", r.field);
+    }
+}
+#[test]
+fn unresolved_main_fields_are_unclaimed_even_if_a_row_attempts_to_enable_them() {
+    unsupported_rows(0, "unresolved");
+}
+#[test]
+fn unresolved_overlay_fields_are_unclaimed_even_if_a_row_attempts_to_enable_them() {
+    unsupported_rows(7, "unresolved");
+}
+#[test]
+fn unsupported_main_features_stay_unclaimed() {
+    unsupported_rows(0, "T1-unclaimed");
+}
+#[test]
+fn unsupported_overlay_features_stay_unclaimed() {
+    unsupported_rows(7, "T1-unclaimed");
+}
+fn inferred(stage: &str) {
+    let t = table();
+    let row = &kf_chip::display::BLACKWELL_GB20X;
+    let d = derive(t, row, DIE, &extreme(DIE));
+    let off = t
+        .a(row.classes.caps, "PRECOMP_WIN_PIPE_HDR_CAPC", 0)
+        .unwrap();
+    assert_eq!(
+        get(
+            d.page.word(off),
+            t.f(
+                row.classes.caps,
+                &format!("PRECOMP_WIN_PIPE_HDR_CAPC_{stage}_PRECISION")
+            )
+            .unwrap()
+        ),
+        14
+    );
+    assert!(
+        d.provenance
+            .iter()
+            .find(|p| p.offset == off)
+            .unwrap()
+            .why
+            .contains("inferred")
+    );
+}
+#[test]
+fn csc00_precision_retains_its_inferred_label() {
+    inferred("CSC00");
+}
+#[test]
+fn csc01_precision_retains_its_inferred_label() {
+    inferred("CSC01");
+}
+fn unknown(implementation: u32) {
+    let t = table();
+    let row = &kf_chip::display::BLACKWELL_GB20X;
+    let calls = Cell::new(0);
+    assert!(
+        hostcaps::query(
+            t,
+            &Regs::for_ip(&t.version, row.ip_version).unwrap(),
+            row,
+            Die {
+                implementation,
+                ..DIE
+            },
+            |a| {
+                calls.set(calls.get() + 1);
+                Ok(vec![1; a.len()])
+            }
+        )
+        .is_err()
+    );
+    assert_eq!(calls.get(), 0);
+}
+#[test]
+fn an_unknown_future_die_cannot_borrow_the_blackwell_row() {
+    unknown(8);
+}
+#[test]
+fn a_second_unknown_die_is_also_refused_before_io() {
+    unknown(9);
+}
+
+fn unknown_derive(implementation: u32) {
+    let t = table();
+    let row = &kf_chip::display::BLACKWELL_GB20X;
+    assert!(
+        capsderive::derive(
+            t,
+            &Regs::for_ip(&t.version, row.ip_version).unwrap(),
+            row,
+            Die {
+                implementation,
+                ..DIE
+            },
+            true,
+            capsderive::shipped_rows(),
+            &[],
+            "580",
+            &HostFacts::default()
+        )
+        .is_err()
+    );
+}
+#[test]
+fn an_unknown_die_cannot_derive_a_named_family_page() {
+    unknown_derive(8);
+}
+#[test]
+fn a_second_unknown_die_cannot_derive_a_named_family_page() {
+    unknown_derive(9);
 }
