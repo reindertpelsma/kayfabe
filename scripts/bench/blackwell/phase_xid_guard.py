@@ -180,6 +180,11 @@ def atomic_json(path, data):
     tmp.replace(p)
 
 
+def record_fatal(path, data):
+    """Fatal receipt publication seam; observer stop policy is separate."""
+    atomic_json(path, data)
+
+
 def verify_native_run(journal,defer,missing,receipts,pci):
     lines=native_baseline(journal,defer,missing)
     pids={}
@@ -297,7 +302,7 @@ def main():
             except Exception as error:  # Any observer failure is fatal, including subprocess timeouts.
                 try:
                     stopped = abort_owned_qemu(owned_phase)
-                    atomic_json(a.fatal, {'STOP': str(error), 'phase': phase_key, 'owned_pgid': root, 'detached_qemu_stopped':stopped})
+                    record_fatal(a.fatal, {'STOP': str(error), 'phase': phase_key, 'owned_pgid': root, 'detached_qemu_stopped':stopped})
                 finally:
                     N.terminate_owned_tree(root)
                 raise
