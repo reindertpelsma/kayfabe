@@ -1,6 +1,6 @@
 # Q1 candidate-6 qualification
 
-STATUS: SAFETY STOP; QUALIFICATION INCOMPLETE, 2026-10-22.
+STATUS: RESUMED 07:40 CEST, 2026-10-22; earlier safety stop resolved by explicit night-authority instruction.
 
 MEASURED: candidate f7cf3ed81200077e55ee7769c635887661f3f990 fetched from origin. Q1 evidence branch: codex/qualify-cand6-20261022. Start 05:01 UTC; hard host-restoration deadline 10:00 UTC. No product behavior change was made by Q1.
 
@@ -34,4 +34,8 @@ MEASURED — final GPU-free result: 22 kf-* packages, 3787 passed / 0 failed / 2
 
 MEASURED — cleanup: all Q1 target executables exited; local target deleted; no host cargo target was created. Both locks released and reacquired successfully. No Q1 host process/VM/broker/monitor remains. Final health at 07:23:47 CEST: cuInit 0, NVIDIA bound, GDM active, nvidia-smi successful; no reload. Hosted candidate CI remains queued at 07:24:11 CEST (three required jobs queued; scheduled slow job skipped). See cleanup.json, restoration.json and ci-status.json.
 
-INFERRED final verdict: **FAIL merge qualification — incomplete after mandatory harness safety stop.** Keep candidate off master pending the reviewed harness option and a complete resumed qualification. The GPU-free test result supplies no hardware/application qualification. The nine-row comparison and all unavailable candidate ratios are explicit in comparison.md.
+INFERRED historical pre-resume verdict: **FAIL merge qualification — incomplete after mandatory harness safety stop.** Keep candidate off master pending the reviewed harness option and a complete resumed qualification. The GPU-free test result supplies no hardware/application qualification. The nine-row comparison and all unavailable candidate ratios are explicit in comparison.md.
+
+CODE READ — explicit resume authorization, 07:40 CEST: use pinned K1 Windows/SPECviewperf/Heaven arms with candidate-built QEMU. Freeze pre-arm Xid history (dmesg count + hash); judge only fresh deltas, zero tolerated on Windows, Linux intentional faults only with exact source/PID/channel/address/type and recovery proof from the approved sweep guard. Six-hour resumed time box begins now. Preserve the original 12:00 CEST host restoration deadline. The earlier stop is historical, not a current blocker.
+
+INFERRED H6, before resumed hardware: candidate native/Linux and all nine Windows workloads plus available production smokes pass under that approved epoch contract. FALSIFIER: missing/failed gate or arm verdict, non-USER birth, mismatched intentional fault or recovery proof, any fresh Windows Xid, new guest 153/4101, benchmark kill/reboot, or Budget/Scan-budget refusal. Existing H3 mutation falsifiers remain in effect.
