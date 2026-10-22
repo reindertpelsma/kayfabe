@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import {setup,clock,sha,nonce,env} from './helpers.js';
 const state=async r=>(await r.json()).state;
 const rent=async h=>{const r=await h.call();assert.equal(r.status,200);return r.json();};
-const finish=async(h,verdict='PASS')=>{const response=await h.report({seq:1,kind:'result',result:{nonce,verdict}});assert.equal(response.status,200);return h.call('/status/123-1');};
+const finish=async(h,verdict='PASS')=>{const response=await h.report({seq:1,kind:'result',result:{nonce,verdict}});assert.equal(response.status,200);h.time.value+=300000;await h.service.sweep();return h.call('/status/123-1');};
 for(const v of ['false','FALSE','',undefined])test('kill switch refuses rental '+v,async()=>{
  const h=await setup({RENTING_ENABLED:v});assert.notEqual((await h.call()).status,200);assert.equal(h.cloud.calls.length,0);
 });
@@ -48,8 +48,8 @@ test('changed label prevents deletion',async()=>{const h=await setup();await ren
 test('changed label prevents status log access',async()=>{const h=await setup();await rent(h);h.cloud.instances.get('900').label='kf-ci-other';assert.notEqual((await h.call('/status/123-1')).status,200);assert.equal(h.cloud.calls.some(c=>c.url.includes('request_logs')),false);});
 test('TTL cron destroys owned live instance',async()=>{const h=await setup();await rent(h);h.time.value+=151*60000;await h.service.sweep();assert.deepEqual(h.cloud.deletes,['900']);assert.ok(h.cloud.instances.has('777'));assert.ok(h.cloud.instances.has('888'));});
 test('TTL cleanup survives restart and disabled renting',async()=>{const h=await setup();await rent(h);h.time.value+=151*60000;h.bindings.RENTING_ENABLED='false';h.restart();await h.service.sweep();assert.deepEqual(h.cloud.deletes,['900']);});
-test('structured PASS result destroys immediately',async()=>{const h=await setup();await rent(h);const r=await finish(h);assert.equal((await r.json()).verdict,'PASS');assert.deepEqual(h.cloud.deletes,['900']);});
-test('structured FAIL result destroys immediately',async()=>{const h=await setup();await rent(h);const r=await finish(h,'FAIL');assert.equal((await r.json()).verdict,'FAIL');assert.deepEqual(h.cloud.deletes,['900']);});
+test('structured PASS result destroys at grace expiry',async()=>{const h=await setup();await rent(h);const r=await finish(h);assert.equal((await r.json()).verdict,'PASS');assert.deepEqual(h.cloud.deletes,['900']);});
+test('structured FAIL result destroys at grace expiry',async()=>{const h=await setup();await rent(h);const r=await finish(h,'FAIL');assert.equal((await r.json()).verdict,'FAIL');assert.deepEqual(h.cloud.deletes,['900']);});
 test('cron checks terminated instance without provider logs',async()=>{const h=await setup();await rent(h);h.cloud.instances.get('900').actual_status='exited';await h.service.sweep();assert.deepEqual(h.cloud.deletes,['900']);assert.equal(h.cloud.calls.some(c=>c.url.includes('request_logs')),false);});
 test('failed delete retains liability for retry',async()=>{const h=await setup();await rent(h);h.cloud.vastError=500;await h.call('/stop/123-1');h.cloud.vastError=0;await h.call('/stop/123-1');assert.deepEqual(h.cloud.deletes,['900']);});
 test('explicit destroy is idempotent',async()=>{const h=await setup();await rent(h);await h.call('/stop/123-1');await h.call('/stop/123-1');assert.deepEqual(h.cloud.deletes,['900']);});

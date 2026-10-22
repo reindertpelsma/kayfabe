@@ -6,7 +6,7 @@ export const owner = '42';
 export const repo = 'reindertpelsma/kayfabe';
 export const env = {RENTING_ENABLED:'true',OWNER_GITHUB_ID:owner,REPOSITORY:repo,
   WORKER_URL:'https://broker.example',APPROVAL_MODE:'owner_push_or_review',RENT_DRAFTS:'false',
-  CREDIT_RESERVE_USD:'8',MAX_PRICE_USD_HOUR:'0.5',TTL_MINUTES:'150',DAILY_RENTALS:'4',
+  CREDIT_RESERVE_USD:'8',MAX_PRICE_USD_HOUR:'0.5',TTL_MINUTES:'20',DAILY_RENTALS:'4',
   DAILY_SPEND_USD:'3',ROLLING_SPEND_USD:'30',SHA_GAP_HOURS:'24',
   RUN_TOKEN_SECRET:'mock-run-token-binding-only-for-unit-tests',OWNER_STOP_TOKEN:'mock-owner-stop-binding-only-for-unit-tests',
   VAST_API_KEY:'mock-vast-binding'};
@@ -98,7 +98,7 @@ export async function setup(overrides={}) {
       return service.fetch(new Request(bindings.WORKER_URL+'/report/'+run,{method:'POST',headers:{Authorization:'Bearer '+bearer,'Content-Type':'application/json',...headers},body:raw??JSON.stringify(payload)}));
     },
     async call(path='/rent',{claims={},body,method=path.startsWith('/status')?'GET':'POST',token,ghToken='mock-job-token'}={}){
-      const authorization=token??await jwt(claims);
+      const authorization=token??await jwt({exp:time.value/1000+300,nbf:time.value/1000-1,...claims});
       return service.fetch(new Request(bindings.WORKER_URL+path,{method,headers:{Authorization:'Bearer '+authorization,...(ghToken?{'X-GH-Token':ghToken}:{})},...(body===undefined?{}:{body:JSON.stringify(body)})}));
     }};
   return harness;

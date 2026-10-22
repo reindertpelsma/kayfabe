@@ -22,10 +22,10 @@ export class Ledger {
     await this.save(record);
     await this.put('open:'+record.key,true);await this.put('active',record.key);await this.grant(record.key,record);
     await this.put('sha:'+record.sha,{key:record.key,started:record.started});
-    await this.put('cost:'+record.key,{started:record.started,ended:null,price:record.price,ttl:record.ttl});
+    await this.put('cost:'+record.key,{started:record.started,ended:null,price:record.price,ttl:record.billingTtl??record.ttl});
   }
   async settle(record,now){
-    record.ended=now;await this.save(record);await this.put('cost:'+record.key,{started:record.started,ended:now,price:record.price,ttl:record.ttl});
+    record.ended=now;await this.save(record);await this.put('cost:'+record.key,{started:record.started,ended:now,price:record.price,ttl:record.billingTtl??record.ttl});
     await this.storage.delete('open:'+record.key);
     if(await this.get('active')===record.key)await this.put('active',null);
   }

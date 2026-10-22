@@ -19,7 +19,7 @@ export function parseReport(text){
   if(!object(p)||!keys(p,['seq','kind','text','result'])||!Number.isSafeInteger(p.seq)||p.seq<1||p.seq>2147483647||!['progress','log','result'].includes(p.kind))refuse('BAD_REPORT',400);
   if(p.text!==undefined&&(typeof p.text!=='string'||new TextEncoder().encode(p.text).length>60000))refuse('BAD_REPORT',400);
   if(p.kind==='result'){
-    if(!object(p.result)||!keys(p.result,['nonce','verdict'])||typeof p.result.nonce!=='string'||!/^[0-9a-f]{32}$/.test(p.result.nonce)||!['PASS','FAIL'].includes(p.result.verdict))refuse('BAD_REPORT',400);
+    if(!object(p.result)||!keys(p.result,['nonce','verdict'])||typeof p.result.nonce!=='string'||!/^[0-9a-f]{32}$/.test(p.result.nonce)||!['PASS','FAIL','UNAVAILABLE'].includes(p.result.verdict))refuse('BAD_REPORT',400);
   }else if(typeof p.text!=='string'||p.result!==undefined)refuse('BAD_REPORT',400);
   return {seq:p.seq,kind:p.kind,...(p.text===undefined?{}:{text:p.text}),...(p.result===undefined?{}:{result:{nonce:p.result.nonce,verdict:p.result.verdict}})};
 }

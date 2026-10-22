@@ -14,12 +14,15 @@ export function createService({env,storage,fetch:fetcher=fetch,now=Date.now,rand
   const json=(data,status=200)=>Response.json(data,{status,headers:{'Cache-Control':'no-store','X-Content-Type-Options':'nosniff'}});
   const secrets=[env.VAST_API_KEY,env.RUN_TOKEN_SECRET,env.OWNER_STOP_TOKEN,...endpointSecrets(env)].filter(Boolean);
   const expose=(r,key=r.key,pr=r.pr)=>({run:key,id:r.id,sha:r.sha,pr,
-    state:r.closed==='STOPPED'?'STOPPED':r.ended!==null?'COMPLETE':r.closed?'STOPPING':'RUNNING',
-    verdict:r.ended!==null?r.verdict||'UNAVAILABLE':'UNAVAILABLE',log_tail_sanitised:r.log||'',bytes_dropped:r.bytesDropped||0});
+    state:r.closed==='STOPPED'?'STOPPED':r.ended!==null||r.resultAt!==undefined?'COMPLETE':r.closed?'STOPPING':'RUNNING',
+    verdict:r.ended!==null||r.resultAt!==undefined?r.verdict||'UNAVAILABLE':'UNAVAILABLE',
+    cleanup_pending:r.ended===null,result_at:r.resultAt??null,ended_at:r.ended,started_at:r.started,
+    deadline_at:r.resultAt===undefined?r.started+r.ttl:Math.min(r.started+r.ttl,r.resultAt+(r.grace??300000)),
+    gpu_model:r.gpu??'unknown',cost_estimate_usd:r.price*((r.ended??now())-r.started)/3600000,log_tail_sanitised:r.log||'',bytes_dropped:r.bytesDropped||0});
   async function recover(record,vast){if(!record.id){record.id=await vast.reconcile(record);await ledger.save(record);}return record;}
   async function cleanup(record,vast){
     await recover(record,vast);await vast.destroy(record);await ledger.settle(record,now());
-    console.log(JSON.stringify({event:'destroyed',id:record.id}));
+    console.log(JSON.stringify({event:'destroyed'}));
   }
   async function close(record,vast,reason,verdict='FAIL'){
     record.closed=reason;record.verdict||=verdict;record.liveCheckedAt=null;
@@ -30,10 +33,19 @@ export function createService({env,storage,fetch:fetcher=fetch,now=Date.now,rand
     await recover(record,vast);
     if(now()-record.started>=record.ttl){await close(record,vast,'TTL');return;} // MUTANT ttl
     if(record.closed){await cleanup(record,vast);return;}
+    if(record.resultAt!==undefined){
+      if(now()>=Math.min(record.started+record.ttl,record.resultAt+record.grace))await close(record,vast,'RESULT');
+      return; // GitHub completion must not cancel the owner's inspection grace.
+    }
+    if(record.firstReportAt===undefined&&now()-record.started>=(record.provision??600000)){await close(record,vast,'PROVISION','UNAVAILABLE');return;}
     let instance;
     try{instance=await vast.inspect(record);}catch{record.closed='UNAVAILABLE';record.verdict='UNAVAILABLE';await ledger.save(record);throw Error('UNAVAILABLE');}
     if(instance===null){record.closed='GONE';record.verdict='UNAVAILABLE';await ledger.settle(record,now());return;}
-    if(instance.actual_status!=='running'){await close(record,vast,'ENDED');return;}
+    if(instance.actual_status!=='running'){
+      // Pending is not proof of liveness; keep only to the bounded provisioning deadline.
+      if(record.firstReportAt===undefined&&['created','loading','starting'].includes(instance.actual_status))return;
+      await close(record,vast,'ENDED');return;
+    }
     record.liveCheckedAt=now();await ledger.save(record);
     const current=record.pr===null?null:await github.pr(record.pr);
     if(current&&(current.head?.sha!==record.sha||current.state!=='open')){await close(record,vast,'SUPERSEDED');return;}
@@ -46,22 +58,36 @@ export function createService({env,storage,fetch:fetcher=fetch,now=Date.now,rand
     if(c.repository!==cfg.repo||!numericId(c.actor_id)||!numericId(c.run_id)||!numericId(c.run_attempt)||!['pull_request','workflow_dispatch'].includes(c.event_name))refuse('UNAUTHORIZED',401);
     return c;
   }
-  async function report(request,key,bearer,cfg,vast){
-    const r=await ledger.get('record:'+key);
-    if(!await tokens.verify(bearer,r)||!r||r.key!==key||r.ended!==null||r.closed)refuse('UNAUTHORIZED',401); // MUTANT report-ledger
-    if(now()>=r.reportExpiry*1000||now()-r.started>=r.ttl){try{await close(r,vast,'TTL');}catch{}refuse('UNAUTHORIZED',401);}
-    if(r.reportCount>=cfg.reportCount||r.reportBytes>=cfg.reportBytes){try{await close(r,vast,'LIMIT');}catch{}refuse('UNAUTHORIZED',401);} // MUTANT report-caps
+  async function rate(r,cfg){
     const window=Math.floor(now()/10000);
     if(r.rateWindow!==window){r.rateWindow=window;r.rateCount=0;}
     if(r.rateCount>=cfg.reportRate)refuse('RATE_LIMITED',429); // MUTANT report-rate
-    r.rateCount++;r.reportCount++;
+    r.rateCount++;await ledger.save(r);
+  }
+  async function kill(request,key,bearer,cfg,vast){
+    const r=await ledger.get('record:'+key);
+    if(!r||r.key!==key||!await tokens.verify(bearer,r)||now()>=r.reportExpiry*1000)refuse('UNAUTHORIZED',401);
+    // An ended kill receipt is idempotent but grants no live authority or provider calls.
+    if(r.ended!==null){if(r.boxKilled)return json({state:'STOPPED'});refuse('UNAUTHORIZED',401);}
+    if(r.closed&&!r.boxKilled)refuse('UNAUTHORIZED',401);
+    await rate(r,cfg);await readBounded(request,256);
+    r.boxKilled=true;await close(r,vast,'STOPPED');return json({state:'STOPPED'});
+  }
+  async function report(request,key,bearer,cfg,vast){
+    const r=await ledger.get('record:'+key);
+    if(!await tokens.verify(bearer,r)||!r||r.key!==key||r.ended!==null||r.closed||r.resultAt!==undefined)refuse('UNAUTHORIZED',401); // MUTANT report-ledger
+    if(now()>=r.reportExpiry*1000||now()-r.started>=r.ttl){try{await close(r,vast,'TTL');}catch{}refuse('UNAUTHORIZED',401);}
+    if(r.reportCount>=cfg.reportCount||r.reportBytes>=cfg.reportBytes){try{await close(r,vast,'LIMIT');}catch{}refuse('UNAUTHORIZED',401);} // MUTANT report-caps
+    await rate(r,cfg);r.reportCount++;
     try{
       if(r.liveCheckedAt===null||r.liveCheckedAt===undefined||now()-r.liveCheckedAt>=3000){
         try{
           await recover(r,vast);const instance=await vast.inspect(r);
+          if(instance&&r.firstReportAt===undefined&&['created','loading','starting'].includes(instance.actual_status))refuse('NOT_READY',409);
           if(instance===null||instance.actual_status!=='running')throw Error('NOT_LIVE'); // MUTANT report-live
           r.liveCheckedAt=now();
-        }catch{
+        }catch(error){
+          if(error instanceof BrokerError&&error.state==='NOT_READY')throw error;
           try{await close(r,vast,'UNAVAILABLE','UNAVAILABLE');}catch{}
           refuse('UNAUTHORIZED',401);
         }
@@ -71,8 +97,8 @@ export function createService({env,storage,fetch:fetcher=fetch,now=Date.now,rand
       if(payload.seq<=r.lastSeq){if(payload.seq===r.lastSeq&&digest===r.lastDigest)return json({state:'ACCEPTED'});refuse('REPORT_SEQUENCE',409);}
       if(payload.kind==='result'&&payload.result.nonce!==r.nonce)refuse('BAD_REPORT',400);
       if(payload.text!==undefined)appendBoxText(r,new TextEncoder().encode(payload.text),[...secrets,bearer]);
-      r.lastSeq=payload.seq;r.lastDigest=digest;
-      if(payload.kind==='result')await close(r,vast,'RESULT',payload.result.verdict); // MUTANT structured-verdict
+      r.lastSeq=payload.seq;r.lastDigest=digest;r.firstReportAt??=now();
+      if(payload.kind==='result'){r.resultAt=now();r.verdict=payload.result.verdict;r.liveCheckedAt=null;} // MUTANT structured-verdict
       else if(r.reportCount>=cfg.reportCount||r.reportBytes>=cfg.reportBytes)await close(r,vast,'LIMIT');
       return json({state:'ACCEPTED'});
     }catch(error){
@@ -88,11 +114,12 @@ export function createService({env,storage,fetch:fetcher=fetch,now=Date.now,rand
     cfg.testIdentity=localIdentity(env,request.url);
     if(cfg.testIdentity)cfg.githubOrigin=cfg.testIdentity.githubOrigin;
     if(url.search)refuse('BAD_REQUEST',400);
-    const match=/^\/(report|status|stop)\/([1-9][0-9]{0,19}-[1-9][0-9]{0,19})$/.exec(path);
+    const match=/^\/(report|kill|status|stop)\/([1-9][0-9]{0,19}-[1-9][0-9]{0,19})$/.exec(path);
     if(!(path==='/rent'&&request.method==='POST')&&!(path==='/stop-all'&&request.method==='POST')&&!(match&&request.method===(match[1]==='status'?'GET':'POST')))return notFound();
     const authorization=request.headers.get('Authorization');if(!authorization?.startsWith('Bearer '))refuse('UNAUTHORIZED',401);
     const bearer=authorization.slice(7),vast=new Vast(fetcher,cfg,env.VAST_API_KEY);
     if(match?.[1]==='report')return report(request,match[2],bearer,cfg,vast);
+    if(match?.[1]==='kill')return kill(request,match[2],bearer,cfg,vast);
     // workerd exposes even an empty HTTP POST as a stream; forbid bytes, not streams.
     if(request.body!==null){try{await readBounded(request,0);}catch{refuse('BAD_REQUEST',400);}}
     const owner=validSecret(env.OWNER_STOP_TOKEN)&&await constantTimeEqual(env.OWNER_STOP_TOKEN,bearer);
@@ -131,17 +158,17 @@ export function createService({env,storage,fetch:fetcher=fetch,now=Date.now,rand
     if(cached&&!force){const r=await ledger.get('record:'+cached.key);if(r?.verdict&&r.ended!==null){await ledger.grant(key,r,target.pr);return json(expose(r,key,target.pr));}refuse();}
     if(cached&&now()-cached.started<cfg.gap)refuse('UNAVAILABLE_BUDGET',409); // MUTANT gap
     if(!validSecret(env.RUN_TOKEN_SECRET)||!validSecret(env.OWNER_STOP_TOKEN))refuse();
-    const offer=await vast.offer(),cost=offer.dph_total*cfg.ttl/3600000,credit=await vast.credit();
+    const offer=await vast.offer(),cost=offer.dph_total*(cfg.ttl+cfg.cronPeriod)/3600000,credit=await vast.credit();
     if(typeof credit!=='number'||!Number.isFinite(credit)||credit<cfg.reserve+cost)refuse('UNAVAILABLE_BUDGET',409); // MUTANT credit
     await ledger.budgets(cfg,now(),cost);
     const n=random?random():Array.from(crypto.getRandomValues(new Uint8Array(16)),x=>x.toString(16).padStart(2,'0')).join('');
-    const started=now(),r={...target,key,label:'kf-ci-'+key,nonce:n,started,ended:null,ttl:cfg.ttl,reportExpiry:Math.floor((started+cfg.ttl)/1000),
+    const started=now(),r={...target,key,label:'kf-ci-'+key,nonce:n,started,ended:null,ttl:cfg.ttl,billingTtl:cfg.ttl+cfg.cronPeriod,provision:cfg.provision,grace:cfg.grace,gpu:offer.gpu_name,reportExpiry:Math.floor((started+cfg.ttl+cfg.cronPeriod)/1000),
       price:offer.dph_total,id:null,closed:null,verdict:null,log:'',bytesDropped:0,reportCount:0,reportBytes:0,lastSeq:0,lastDigest:null,rateWindow:0,rateCount:0,liveCheckedAt:null};
-    const runToken=await tokens.issue(r),script=onstart(target.sha,n,cfg.ttl/60000,cfg.repo,{url:cfg.audience,run:key,token:runToken,path:env.BROKER_PATH_PREFIX??''});
+    const runToken=await tokens.issue(r),script=onstart(target.sha,n,cfg.ttl/60000,cfg.repo,{url:cfg.audience,run:key,token:runToken,path:env.BROKER_PATH_PREFIX??'',graceMinutes:cfg.grace/60000});
     r.scriptHash=await sha256Hex(script);
     await ledger.reserve(r);
     r.id=await vast.create(offer,r,script);await ledger.save(r);
-    console.log(JSON.stringify({event:'rented',id:r.id}));return json(expose(r));
+    console.log(JSON.stringify({event:'rented'}));return json(expose(r));
   }
   return {
     async fetch(request){
@@ -160,6 +187,6 @@ export class BrokerLedger {
   async fetch(request){if(new URL(request.url).origin==='https://internal.invalid'&&new URL(request.url).pathname==='/cron'){await this.service.sweep();return new Response('ok');}return this.service.fetch(request);}
 }
 export default {
-  async fetch(request,env){const path=await routePath(request,env);if(path===null||!/^\/(?:rent|stop-all|(?:report|status|stop)\/[1-9][0-9]{0,19}-[1-9][0-9]{0,19})$/.test(path))return notFound();return env.LEDGER.get(env.LEDGER.idFromName('owner-shared-vast-account')).fetch(request);},
+  async fetch(request,env){const path=await routePath(request,env);if(path===null||!/^\/(?:rent|stop-all|(?:report|kill|status|stop)\/[1-9][0-9]{0,19}-[1-9][0-9]{0,19})$/.test(path))return notFound();return env.LEDGER.get(env.LEDGER.idFromName('owner-shared-vast-account')).fetch(request);},
   scheduled(_event,env,ctx){ctx.waitUntil(env.LEDGER.get(env.LEDGER.idFromName('owner-shared-vast-account')).fetch(new Request('https://internal.invalid/cron',{method:'POST'})));}
 };
