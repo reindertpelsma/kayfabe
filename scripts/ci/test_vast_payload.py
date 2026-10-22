@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """GPU-free falsifiers for the thin Vast payload wrapper and evidence parsers."""
-import importlib.util,subprocess,tempfile,unittest
+import importlib.util,subprocess,tempfile,unittest,time,sys
 from pathlib import Path
 SHA='a'*40
 PROVISION='\n'.join([k+'_RC=0' for k in ['BOX','DRIVER','TREE','LADDER','FG','KF3']])+"\nREADY driver=580.159.04\nEXIT 2026-10-22T20:00:00Z\n"
@@ -54,6 +54,18 @@ class PayloadTests(unittest.TestCase):
  def test_xid_clean_readable_control(self):self.assertTrue(self.m.xid_ok(watch(),0,'--timer',''))
  def test_wrapper_delegates_existing_flows(self):
   source=Path(self.m.__file__).read_text();self.assertIn('provision_full.sh',source);self.assertIn('merge_check.sh',source);self.assertIn('cuda_ladder.sh',source);self.assertNotIn('git clone',source);self.assertNotIn('execd',source)
+ def test_runtime_stops_first_red_child(self):
+  with tempfile.TemporaryDirectory() as d:
+   later=Path(d)/'later';code="import pathlib,time;print('BOX_RC=1',flush=True);time.sleep(2);pathlib.Path("+repr(str(later))+").touch()"
+   rc=self.m.run_bounded([sys.executable,'-c',code],int(time.time()*1000)+5000,Path(d)/'stage.log',[])
+   self.assertNotEqual(rc,0);self.assertFalse(later.exists())
+ def test_runtime_soft_deadline_kills_own_work(self):
+  with tempfile.TemporaryDirectory() as d:
+   self.assertEqual(self.m.run_bounded([sys.executable,'-c','import time;time.sleep(30)'],int(time.time()*1000)+50,Path(d)/'stage.log',[]),124)
+ def test_runtime_expired_deadline_never_starts(self):
+  with tempfile.TemporaryDirectory() as d:
+   marker=Path(d)/'started';code='from pathlib import Path;Path('+repr(str(marker))+').touch()'
+   self.assertEqual(self.m.run_bounded([sys.executable,'-c',code],int(time.time()*1000)-1,Path(d)/'stage.log',[]),124);self.assertFalse(marker.exists())
  def test_payload_shell_has_no_reimplemented_build(self):
   source=Path(__file__).with_name('vast_payload.sh').read_text();self.assertIn('vast_payload.py',source);self.assertNotIn('cargo build',source)
 if __name__=='__main__':unittest.main()
