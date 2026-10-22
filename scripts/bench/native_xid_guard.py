@@ -2,7 +2,11 @@
 # SPDX-License-Identifier: Apache-2.0 OR GPL-2.0-or-later
 """Owner-approved native negative-control proof and frozen later-Xid guard.
 
-Bench only. No product policy or global Xid31 exemption. Marker addresses and
+OWNER-APPROVED 2026-10-22: deliberately provoked copy-engine faults require
+EXACT source channel + EXACT VA + EXACT fault/access type and HUBCLIENT_CE[0-9]+.
+CE instance equality is not required. Extra/non-source/non-CE records still refuse.
+The separate native GR control retains its exact ESC shape; later history is frozen.
+No per-die client table. Bench only; no global Xid31 exemption. Marker addresses and
 channels come from this run's positive-control logs, never a per-die table.
 """
 import argparse
@@ -18,6 +22,11 @@ import sys
 import time
 
 MAX_BYTES = 16 * 1024 * 1024
+COPY_ENGINE_CLIENT = "HUBCLIENT_CE*"
+
+
+def copy_engine_client(name):
+    return re.fullmatch(r"HUBCLIENT_CE[0-9]+", name) is not None
 
 
 class GuardRefused(ValueError):
@@ -63,11 +72,11 @@ def expected_faults(defer_log, missing_log):
         va = int(marker[2], 16)
         # Exact approved native fault shapes: prime/test CE reads and the GR
         # missing-page release below. These are test operations, not die facts.
-        result.append((31, channel_before(tail, prime.start()), va, "FAULT_PTE", "ACCESS_TYPE_VIRT_READ", "CE0", "HUBCLIENT_CE1", "kayfabe-rm-ladd"))
+        result.append((31, channel_before(tail, prime.start()), va, "FAULT_PTE", "ACCESS_TYPE_VIRT_READ", "CE0", COPY_ENGINE_CLIENT, "kayfabe-rm-ladd"))
         if test[1] == "Dead":
             if marker[1] != "DEFER(the-question)" or "DL rescue copy     = Live" not in tail:
                 raise GuardRefused("unrecovered/unexpected test-channel fault")
-            result.append((31, channel_before(tail, test.start()), va, "FAULT_PTE", "ACCESS_TYPE_VIRT_READ", "CE0", "HUBCLIENT_CE1", "kayfabe-rm-ladd"))
+            result.append((31, channel_before(tail, test.start()), va, "FAULT_PTE", "ACCESS_TYPE_VIRT_READ", "CE0", COPY_ENGINE_CLIENT, "kayfabe-rm-ladd"))
     markers = list(re.finditer(r"^FAULT_MARK=victim_release va=(0x[0-9a-f]+)", missing_log, re.M))
     if len(markers) != 1 or "bystander before = Landed" not in missing_log or "bystander after  = Landed" not in missing_log:
         raise GuardRefused("missing-page marker/bystander proof absent")
@@ -90,7 +99,8 @@ def approve_native(journal, defer_log, missing_log):
         m = pattern.search(line)
         if m is None:
             raise GuardRefused("unmatched Xid record")
-        actual.append((int(m['code']), int(m['channel'], 16), int(m['va'].replace('_', ''), 16), m['fault'], m['access'], m['engine'], m['client'], m['name']))
+        client = COPY_ENGINE_CLIENT if m['engine'] == 'CE0' and copy_engine_client(m['client']) else m['client']
+        actual.append((int(m['code']), int(m['channel'], 16), int(m['va'].replace('_', ''), 16), m['fault'], m['access'], m['engine'], client, m['name']))
     if Counter(actual) != Counter(expected):
         raise GuardRefused("Xid type/channel/address/source multiset differs from fault controls")
     return lines
@@ -324,7 +334,7 @@ def approve_guest(journal, baseline, serial, qlog, context, *, final=True):
         guest_chid, va, fault, access = operations[i]
         if (int(record['code']) != 31 or int(record['pid']) != context['pid'] or
                 record['name'] != 'qemu-system-x86' or record['pci'] != pci[1] or
-                record['intr'] != '00000000' or record['engine'] != 'CE0' or record['client'] != 'HUBCLIENT_CE1' or
+                record['intr'] != '00000000' or record['engine'] != 'CE0' or not copy_engine_client(record['client']) or
                 int(record['va'].replace('_', ''), 16) != va or record['fault'] != fault or record['access'] != access):
             raise GuardRefused('guest Xid source/PID/address/type/route differs')
         if i < len(twins) and twins[i] != (int(record['channel'], 16), guest_chid):
