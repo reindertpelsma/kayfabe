@@ -6,7 +6,9 @@
 launch modes conflict with strict no SSH; see the design STOP section.
 [CODE READ: codex/vast-broker-20261021] The proposed Worker and GitHub workflow use
 owner numeric OIDC identity, exact-head approval, a master-base exclusion filter,
-request-only read GitHub tokens and a singleton paid-account ledger. Run HMAC
+request-only read GitHub tokens and a singleton paid-account ledger. Actions
+URL/path secrets bind only to the broker step; optional constant-time prefix
+routing reduces scanning noise without replacing OIDC/HMAC. Run HMAC
 reports have strict caps/liveness checks; structured results and stop revoke
 before owned deletion. Sanitised logs neutralise embedded command delimiters. Plain JS has
 no npm dependencies; the runner never connects to the rented box. Merge queues
