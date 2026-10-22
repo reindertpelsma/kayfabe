@@ -1,0 +1,15 @@
+{
+  "kind": "MEASURED",
+  "utc": "2026-10-22T00:19:38.712342+00:00",
+  "source_commit": "79925a345fddb7b1ca70239e8a29efd32f3f426a",
+  "active_s2_workloads": [],
+  "created_instance_ids": [],
+  "target_exists": false,
+  "cargo_or_host_lock_acquired": false,
+  "guard_source_unchanged": true,
+  "guard_file_sha256": {
+    "scripts/bench/native_xid_guard.py": "250905586c30bff7e23d81dc08a9088025abf15e0b5fa621f80e52c0aac59b0c",
+    "scripts/bench/tests/test_native_xid_guard.py": "ef74a07e06f407fea7487fb26e94762ef375ed3294cd6db50247236793acaa33",
+    "scripts/bench/tests/test_xid_abort_tree.py": "2a33072e110d32c5b00a1d0a97f87b5322cff516b445ed298633be6dfe52228f"
+  }
+}

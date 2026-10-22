@@ -1,0 +1,27 @@
+{
+  "kind": "MEASURED GPU-free historical-text replay; no hardware verdict",
+  "native_fault_count": 5,
+  "guest_defer_fault_count": 4,
+  "guest_missing_page_included": false,
+  "native_approval": {
+    "exit_code": 0,
+    "stdout": "{\"approved_native_xid_lines\": [\"2026-10-21T16:33:01.298757+0000 ubuntu kernel: NVRM: Xid (PCI:0000:00:07): 31, pid=90242, name=kayfabe-rm-ladd, channel 0x00000005, intr 00000000. MMU Fault: ENGINE CE0 HUBCLIENT_CE1 faulted @ 0x60_00010000. Fault is of type FAULT_PTE ACCESS_TYPE_VIRT_READ\", \"2026-10-21T16:33:04.328590+0000 ubuntu kernel: NVRM: Xid (PCI:0000:00:07): 31, pid=90242, name=kayfabe-rm-ladd, channel 0x00000005, intr 00000000. MMU Fault: ENGINE CE0 HUBCLIENT_CE1 faulted @ 0x62_00010000. Fault is of type FAULT_PTE ACCESS_TYPE_VIRT_READ\", \"2026-10-21T16:33:07.334635+0000 ubuntu kernel: NVRM: Xid (PCI:0000:00:07): 31, pid=90242, name=kayfabe-rm-ladd, channel 0x00000006, intr 00000000. MMU Fault: ENGINE CE0 HUBCLIENT_CE1 faulted @ 0x62_00010000. Fault is of type FAULT_PTE ACCESS_TYPE_VIRT_READ\", \"2026-10-21T16:33:10.362587+0000 ubuntu kernel: NVRM: Xid (PCI:0000:00:07): 31, pid=90242, name=kayfabe-rm-ladd, channel 0x00000005, intr 00000000. MMU Fault: ENGINE CE0 HUBCLIENT_CE1 faulted @ 0x64_00010000. Fault is of type FAULT_PTE ACCESS_TYPE_VIRT_READ\", \"2026-10-21T16:33:14.321604+0000 ubuntu kernel: NVRM: Xid (PCI:0000:00:07): 31, pid=90282, name=kayfabe-rm-ladd, channel 0x00000006, intr 00000000. MMU Fault: ENGINE GR0_PBDMA0 HUBCLIENT_ESC faulted @ 0xa_11000000. Fault is of type FAULT_PDE ACCESS_TYPE_VIRT_WRITE\"], \"count\": 5, \"rule\": \"owner decision1: source-matched controls only; all later changes fatal\"}\n",
+    "stderr": ""
+  },
+  "unchanged_snapshot": {
+    "exit_code": 0,
+    "stdout": "",
+    "stderr": ""
+  },
+  "after_guest_defer": {
+    "exit_code": 7,
+    "stdout": "",
+    "stderr": "NATIVE_XID_GUARD_STOP: new/replaced/lost Xid after frozen native proof\n"
+  },
+  "supported_cli": {
+    "exit_code": 0,
+    "stdout": "usage: native_xid_guard.py [-h] {native,check,watch} ...\n\nOwner-approved native negative-control proof and frozen later-Xid guard. Bench\nonly. No product policy or global Xid31 exemption. Marker addresses and\nchannels come from this run's positive-control logs, never a per-die table.\n\npositional arguments:\n  {native,check,watch}\n\noptions:\n  -h, --help            show this help message and exit\n",
+    "stderr": ""
+  },
+  "STOP": "Required guest exception is absent; no rental or workaround"
+}
