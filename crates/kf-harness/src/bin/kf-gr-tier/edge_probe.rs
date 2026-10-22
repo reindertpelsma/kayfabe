@@ -7,11 +7,11 @@ pub(super) struct Probe<S> {
     source: S,
 }
 impl<S: Source> Probe<S> {
-    pub(super) fn prepare(source: S) -> Result<Self, String> {
+    pub(super) fn prepare(mut source: S) -> Result<Self, String> {
+        source.register()?;
         Ok(Self { source })
     }
     pub(super) fn ready_within(&mut self, ms: u32) -> Result<bool, String> {
-        self.source.register()?;
         self.source.wait(ms)
     }
 }

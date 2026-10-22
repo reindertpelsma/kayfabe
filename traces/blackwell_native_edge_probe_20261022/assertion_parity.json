@@ -1,0 +1,18 @@
+{
+  "base": "e4cec12b1",
+  "every_native_check_expression_and_message_unchanged": true,
+  "check_sites": 16,
+  "wait_bounds_ms_unchanged": [
+    200,
+    200,
+    1000,
+    300,
+    100,
+    200,
+    200,
+    1000,
+    300,
+    100
+  ],
+  "protected_product_files_changed": []
+}
