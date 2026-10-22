@@ -43,3 +43,4 @@ import './round3-drop-count.test.js';
 import './v5-lifecycle.test.js';
 import './v5-manual-errors.test.js';
 import './v5-worker-tail.test.js';
+import './v5-onstart.test.js';
