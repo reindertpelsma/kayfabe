@@ -38,3 +38,4 @@ import './round3-release.test.js';
 import './round3-display.test.js';
 import './round3-bootstrap.test.js';
 import './round3-summary.test.js';
+import './round3-smoke-protocol.test.js';
