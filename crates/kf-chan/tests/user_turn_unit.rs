@@ -1554,3 +1554,132 @@ fn stream_random_packet_forms_masks_triggers_and_end_match_whole_descriptor_scan
         assert!(done, "seed {seed}");
     }
 }
+
+// Ring characterization: these assertions run unchanged against master, Phase 1 and Phase 2.
+fn wrap_relay(entries: u32, cursor: u32, pointer: bool) -> (Relay, Mock) {
+    let mut io = Mock::new(entries);
+    let mut scan = Scan::for_subdevice(1).unwrap();
+    if pointer {
+        scan.segment(&ge(0, Kind::SetObj).words(), sw).unwrap();
+    }
+    let life = if pointer { Lifecycle::new() } else { Lifecycle::always_scan() };
+    let mut r = Relay::new(16, life, scan).unwrap();
+    r.cursor = cursor;
+    r.written_get = cursor;
+    r.relayed = u64::from(cursor);
+    for slot in 0..entries {
+        io.ring[slot as usize] = u64::from(slot) << 2; // format-legal, distinct control words
+    }
+    (r, io)
+}
+
+fn wrap_drain(entries: u32, start: u32, put: u32, pointer: bool, cached: bool) {
+    let (mut r, mut io) = wrap_relay(entries, start, pointer);
+    r = r.with_lazy(if cached { kf_chan::user_lazy::LazyConfig::ON } else { kf_chan::user_lazy::LazyConfig::OFF });
+    io.put = put;
+    let mut expected = Vec::new();
+    let mut slot = start;
+    while slot != put {
+        expected.push(u64::from(slot) << 2);
+        slot = if slot + 1 == entries { 0 } else { slot + 1 };
+    }
+    for _ in 0..expected.len() + 3 {
+        turn(&mut r, &mut io).unwrap();
+        io.hw_get = (r.fetch.issued() & 15) as u32;
+    }
+    let copied: Vec<u64> = io.calls.iter().filter_map(|c| match c {
+        Call::Entry(_, raw) => Some(*raw), _ => None,
+    }).collect();
+    assert_eq!(copied, expected, "n={entries} start={start} put={put} pointer={pointer} cache={cached}");
+    assert_eq!(r.cursor, put);
+    assert_eq!(r.written_get, put, "write-back wraps with the native fetch receipts");
+    assert_eq!(r.relayed, u64::from(start) + expected.len() as u64);
+    assert!(!r.dead);
+}
+
+#[test]
+fn wrap_characterization_every_small_ring_range_copies_modulo_in_order() {
+    for entries in [4, 8, 16] {
+        for start in 0..entries {
+            for put in 0..entries {
+                wrap_drain(entries, start, put, false, false);
+                wrap_drain(entries, start, put, true, true);
+            }
+        }
+    }
+}
+
+#[test]
+fn wrap_characterization_ring_end_ranges_and_maximum_admitted_ring() {
+    for entries in [32, 32768, 1 << 20] {
+        for (start, put) in [(entries - 2, 2), (entries - 1, 0), (0, 1), (entries - 1, entries - 1)] {
+            wrap_drain(entries, start, put, true, false);
+            wrap_drain(entries, start, put, true, true);
+        }
+    }
+}
+
+#[test]
+fn wrap_characterization_full_means_one_reserved_slot_even_when_put_is_below_get() {
+    for start in 0..16 {
+        let (mut r, mut io) = wrap_relay(16, start, true);
+        io.put = if start == 0 { 15 } else { start - 1 };
+        turn(&mut r, &mut io).unwrap();
+        assert!(r.put_full);
+        assert_eq!(r.cursor, (start + 1) % 16);
+        wrap_drain(16, start, io.put, true, true);
+    }
+}
+
+#[test]
+fn wrap_characterization_equal_indices_are_empty_even_after_a_complete_lap() {
+    for start in [0, 1, 15] {
+        let (mut r, mut io) = wrap_relay(16, start, true);
+        io.put = start;
+        // GP_PUT has no wrap/phase bit. A producer writing all sixteen slots
+        // would present this same value; it is not a second legal full encoding.
+        r.relayed += 16;
+        turn(&mut r, &mut io).unwrap();
+        assert_eq!(r.cursor, start);
+        assert!(!r.put_full);
+        assert!(!io.calls.iter().any(|c| matches!(c, Call::Load(..) | Call::Entry(..) | Call::ReadPb(..))));
+    }
+}
+
+#[test]
+fn wrap_characterization_u32_put_edges_refuse_before_a_slot_load() {
+    for put in [16, 17, 1 << 31, u32::MAX - 1, u32::MAX] {
+        let (mut r, mut io) = wrap_relay(16, 15, true);
+        io.put = put;
+        assert_eq!(turn(&mut r, &mut io), Err(Fail::Refused("USER_RING_PUT_BOUND".into())));
+        assert!(r.dead);
+        assert!(!io.calls.iter().any(|c| matches!(c, Call::Load(..) | Call::Entry(..) | Call::ReadPb(..))));
+    }
+}
+
+#[test]
+fn wrap_characterization_native_get_wrap_and_unissued_get_edges_preserve_receipts() {
+    let mut f = Fetch::new(16).unwrap();
+    for round in 0..20u32 {
+        let mut expected = Vec::new();
+        for at in 0..15u32 {
+            let receipt = (1, round * 15 + at);
+            f.publish(Some(receipt)).unwrap();
+            expected.push(receipt);
+        }
+        assert_eq!(f.available(), 0);
+        assert!(f.publish(Some((1, 999))).is_err());
+        let get = (f.issued() & 15) as u32;
+        assert_eq!(f.observe(get).unwrap(), expected);
+        assert_eq!(f.available(), 15);
+        assert!(f.observe(get).unwrap().is_empty());
+        let old = f.fetched();
+        for invalid in [16, 1 << 31, u32::MAX] {
+            assert_eq!(f.peek(invalid), Err("USER_FETCH_GET"));
+            assert_eq!(f.observe(invalid), Err("USER_FETCH_GET"));
+            assert_eq!(f.fetched(), old);
+        }
+        assert_eq!(f.observe((get + 1) % 16), Err("USER_FETCH_UNISSUED_GET"));
+        assert_eq!(f.fetched(), old);
+    }
+}
