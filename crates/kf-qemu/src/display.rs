@@ -2491,18 +2491,7 @@ impl DisplayPlane {
         let m = &self.map;
         let p = &self.ports;
         let heads = m.heads as usize;
-        let snap = || -> Vec<u32> {
-            let mut s = vec![
-                p.event(EventReg::AwakenWin),
-                p.event(EventReg::AwakenOther),
-                p.event(EventReg::SemWin),
-            ];
-            for h in 0..heads {
-                s.push(p.event(EventReg::HeadTiming(h)));
-                s.push(p.event(EventReg::HeadTimingEn(h)));
-            }
-            s
-        };
+        let snap = || crate::display_events::snapshot(p, heads);
         for _ in 0..8 {
             let before = snap();
             store(m.evt_awaken_win, before[0]);

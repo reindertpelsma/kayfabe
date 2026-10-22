@@ -135,6 +135,24 @@ or relay/worker algorithm change is introduced. Command sync and callback
 work still have independent open bounds. The production Sink still inherits
 T09, so the whole drainer call is not certified by these tests.
 
+MEASURED: W1-gate-followup-20261022 (2026-10-22),
+`traces/worst_trap_20261018/gate_followup.txt`: five isolated tests passed on
+W1 (wait min/median/max 5938/6548/7051 us) and five on master
+(5800/6585/6828 us). The test executable SHA256 is identical on both.
+A separate same-binary, single-CPU scheduling probe produced 279171 us wait
+under 32 own nice19 workers versus 6010 us unloaded. The busiest task used
+0.732 s CPU loaded versus 0.747 s unloaded, with sampled run-queue delay
+40.729 s versus 0.101 s. All probe workers exited. No bound was changed.
+
+CODE READ: `batch.rs::lock_for`, `hold` and `hold2` time mutex acquisition
+and bounded ledger chunks using wall time; the test uses NullHost and no RM
+ioctl. Production callers identified here are VA-owned GpuMirror operations
+and act-owned EngineObj handover, whose pt/rows guards are released first.
+This is not a measured vCPU trap. INFERRED: unchanged source and executable
+exclude a W1 code regression; scheduling can reproduce the failure. Exact
+historical scheduling attribution of the original event remains unavailable.
+The earlier full-suite failure below remains part of the evidence.
+
 MEASURED: W1-dbfast-20261022 (2026-10-22, source base `e9c6d39e5`)
 full GPU-free product run finished with 3,750
 passes, 1 failure, 20 ignored tests; see
