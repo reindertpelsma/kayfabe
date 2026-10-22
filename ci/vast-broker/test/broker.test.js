@@ -1,79 +1,529 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {setup,clock,sha,nonce,env} from './helpers.js';
-const state=async r=>(await r.json()).state;
-const rent=async h=>{const r=await h.call();assert.equal(r.status,200);return r.json();};
-const finish=async(h,verdict='PASS')=>{const response=await h.report({seq:1,kind:'result',result:{nonce,verdict}});assert.equal(response.status,200);h.time.value=(await h.storage.get('record:123-1')).resultDeadline;await h.service.sweep();return h.call('/status/123-1');};
-for(const v of ['false','FALSE','',undefined])test('kill switch refuses rental '+v,async()=>{
- const h=await setup({RENTING_ENABLED:v});assert.notEqual((await h.call()).status,200);assert.equal(h.cloud.calls.length,0);
+import { setup, clock, sha, nonce, env } from './helpers.js';
+const state = async (r) => (await r.json()).state;
+const rent = async (h) => {
+  const r = await h.call();
+  assert.equal(r.status, 200);
+  return r.json();
+};
+const finish = async (h, verdict = 'PASS') => {
+  const response = await h.report({ seq: 1, kind: 'result', result: { nonce, verdict } });
+  assert.equal(response.status, 200);
+  h.time.value = (await h.storage.get('record:123-1')).resultDeadline;
+  await h.service.sweep();
+  return h.call('/status/123-1');
+};
+for (const v of ['false', 'FALSE', '', undefined])
+  test('kill switch refuses rental ' + v, async () => {
+    const h = await setup({ RENTING_ENABLED: v });
+    assert.notEqual((await h.call()).status, 200);
+    assert.equal(h.cloud.calls.length, 0);
+  });
+for (const v of ['REPLACE_ME', 'owner', '0'])
+  test('owner config must be numeric ' + v, async () => {
+    const h = await setup({ OWNER_GITHUB_ID: v });
+    assert.notEqual((await h.call()).status, 200);
+    assert.equal(h.cloud.creates, 0);
+  });
+for (const body of [
+  {},
+  { ssh_public_key: 'ssh-ed25519 bad' },
+  { sha: 'd'.repeat(40) },
+  { force: true },
+  { ttl: 1 },
+])
+  test('rent has no client capability ' + JSON.stringify(body), async () => {
+    const h = await setup();
+    assert.equal((await h.call('/rent', { body })).status, 400);
+    assert.equal(h.cloud.creates, 0);
+  });
+for (const credit of [0, 7.99, 8.01, null, '20', -1])
+  test('credit guard reserves headroom ' + credit, async () => {
+    const h = await setup();
+    h.cloud.credit = credit;
+    assert.equal(await state(await h.call()), 'UNAVAILABLE_BUDGET');
+    assert.equal(h.cloud.creates, 0);
+  });
+for (const price of [0.51, -1, null, '0.2'])
+  test('invalid/expensive offer ' + price, async () => {
+    const h = await setup();
+    h.cloud.price = price;
+    assert.equal(await state(await h.call()), 'UNAVAILABLE');
+    assert.equal(h.cloud.creates, 0);
+  });
+for (const patch of [
+  { verified: false },
+  { vms_enabled: false },
+  { num_gpus: 2 },
+  { gpu_name: 'other' },
+  { reliability: 0.97 },
+  { disk_space: 10 },
+])
+  test('offer recheck ' + JSON.stringify(patch), async () => {
+    const h = await setup();
+    Object.assign(h.cloud.offer, patch);
+    assert.notEqual((await h.call()).status, 200);
+    assert.equal(h.cloud.creates, 0);
+  });
+test('fixed create request never returns upstream credentials', async () => {
+  const h = await setup();
+  const r = await rent(h);
+  assert.equal(r.id, '900');
+  assert.equal(r.sha, sha);
+  assert.equal(r.pr, 7);
+  const c = h.cloud.calls.find((c) => c.url.endsWith('/asks/5/')).body;
+  assert.equal(c.vm, true);
+  assert.equal(c.disk, 120);
+  assert.equal(c.runtype, 'ssh_direct');
+  assert.equal(c.label, 'kf-ci-123-1');
+  assert.match(c.onstart, /timeout/);
+  assert.doesNotMatch(JSON.stringify(r), /PRIVATE|key/);
 });
-for(const v of ['REPLACE_ME','owner','0'])test('owner config must be numeric '+v,async()=>{const h=await setup({OWNER_GITHUB_ID:v});assert.notEqual((await h.call()).status,200);assert.equal(h.cloud.creates,0);});
-for(const body of [{},{ssh_public_key:'ssh-ed25519 bad'},{sha:'d'.repeat(40)},{force:true},{ttl:1}])test('rent has no client capability '+JSON.stringify(body),async()=>{const h=await setup();assert.equal((await h.call('/rent',{body})).status,400);assert.equal(h.cloud.creates,0);});
-for(const credit of [0,7.99,8.01,null,'20',-1])test('credit guard reserves headroom '+credit,async()=>{const h=await setup();h.cloud.credit=credit;assert.equal(await state(await h.call()),'UNAVAILABLE_BUDGET');assert.equal(h.cloud.creates,0);});
-for(const price of [.51,-1,null,'0.2'])test('invalid/expensive offer '+price,async()=>{const h=await setup();h.cloud.price=price;assert.equal(await state(await h.call()),'UNAVAILABLE');assert.equal(h.cloud.creates,0);});
-for(const patch of [{verified:false},{vms_enabled:false},{num_gpus:2},{gpu_name:'other'},{reliability:.97},{disk_space:10}])test('offer recheck '+JSON.stringify(patch),async()=>{const h=await setup();Object.assign(h.cloud.offer,patch);assert.notEqual((await h.call()).status,200);assert.equal(h.cloud.creates,0);});
-test('fixed create request never returns upstream credentials',async()=>{const h=await setup();const r=await rent(h);assert.equal(r.id,'900');assert.equal(r.sha,sha);assert.equal(r.pr,7);
- const c=h.cloud.calls.find(c=>c.url.endsWith('/asks/5/')).body;assert.equal(c.vm,true);assert.equal(c.disk,120);assert.equal(c.runtype,'ssh_direct');assert.equal(c.label,'kf-ci-123-1');assert.match(c.onstart,/timeout/);assert.doesNotMatch(JSON.stringify(r),/PRIVATE|key/);
+test('returns immediately without waiting for logs or boot', async () => {
+  const h = await setup();
+  h.cloud.logReady = false;
+  await rent(h);
+  assert.equal(h.cloud.inspected.length, 0);
+  assert.equal(
+    h.cloud.calls.some((c) => c.url.includes('request_logs')),
+    false,
+  );
 });
-test('returns immediately without waiting for logs or boot',async()=>{const h=await setup();h.cloud.logReady=false;await rent(h);assert.equal(h.cloud.inspected.length,0);assert.equal(h.cloud.calls.some(c=>c.url.includes('request_logs')),false);});
-test('one-live blocks another run',async()=>{const h=await setup();await rent(h);h.cloud.run.id=124;assert.equal(await state(await h.call('/rent',{claims:{run_id:'124'}})),'UNAVAILABLE_BUDGET');assert.equal(h.cloud.creates,1);});
-test('one-live survives restart',async()=>{const h=await setup();await rent(h);h.restart();h.cloud.run.id=124;assert.equal(await state(await h.call('/rent',{claims:{run_id:'124'}})),'UNAVAILABLE_BUDGET');assert.equal(h.cloud.creates,1);});
-test('concurrent rent has one winner',async()=>{const h=await setup();const rs=await Promise.all([h.call(),h.call()]);assert.equal(h.cloud.creates,1);assert.ok(rs.some(r=>r.status===200));});
-test('run attempt idempotence before destroy',async()=>{const h=await setup();await rent(h);await rent(h);assert.equal(h.cloud.creates,1);});
-test('run attempt idempotence after restart',async()=>{const h=await setup();await rent(h);h.restart();await rent(h);assert.equal(h.cloud.creates,1);});
-test('run attempt idempotence after destroy',async()=>{const h=await setup();await rent(h);await finish(h);await rent(h);assert.equal(h.cloud.creates,1);});
-test('same SHA cache grants another run without rebilling',async()=>{const h=await setup();await rent(h);await finish(h);h.cloud.run.id=124;const r=await h.call('/rent',{claims:{run_id:'124'}});assert.equal(r.status,409);assert.equal(h.cloud.creates,1);assert.equal((await r.json()).verdict,'UNAVAILABLE');
- assert.equal((await h.call('/status/124-1',{claims:{run_id:'124'}})).status,404);
+test('one-live blocks another run', async () => {
+  const h = await setup();
+  await rent(h);
+  h.cloud.run.id = 124;
+  assert.equal(
+    await state(await h.call('/rent', { claims: { run_id: '124' } })),
+    'UNAVAILABLE_BUDGET',
+  );
+  assert.equal(h.cloud.creates, 1);
 });
-test('same SHA cache survives process restart',async()=>{const h=await setup();await rent(h);await finish(h);h.restart();h.cloud.run.id=124;await h.call('/rent',{claims:{run_id:'124'}});assert.equal(h.cloud.creates,1);});
-test('cached verdict never bypasses content approval',async()=>{const h=await setup();await rent(h);await finish(h);h.cloud.run.id=124;h.cloud.reviews=[{id:2,user:{id:42},state:'DISMISSED',commit_id:sha}];assert.equal(await state(await h.call('/rent',{claims:{run_id:'124'}})),'NEEDS_APPROVAL');});
-test('force rerun still requires minimum SHA gap',async()=>{const h=await setup();await rent(h);await finish(h);h.cloud.run.run_attempt=2;h.cloud.run.event='workflow_dispatch';assert.equal(await state(await h.call('/rent',{claims:{run_attempt:'2',event_name:'workflow_dispatch',sha,ref:'refs/heads/owner-pr'}})),'UNAVAILABLE_BUDGET');assert.equal(h.cloud.creates,1);});
-test('force gap survives restart',async()=>{const h=await setup();await rent(h);await finish(h);h.restart();h.cloud.run.run_attempt=2;h.cloud.run.event='workflow_dispatch';assert.equal(await state(await h.call('/rent',{claims:{run_attempt:'2',event_name:'workflow_dispatch',sha,ref:'refs/heads/owner-pr'}})),'UNAVAILABLE_BUDGET');});
-for(const kind of ['daily','rolling','rentals'])test('budget prevents admission '+kind,async()=>{const h=await setup();await h.storage.put('cost:old',{started:clock-1000,ended:clock,price:kind==='rentals'?0:20000});
- if(kind==='daily')h.bindings.DAILY_SPEND_USD='1';if(kind==='rolling'){h.bindings.ROLLING_SPEND_USD='1';h.bindings.DAILY_SPEND_USD='1000';}if(kind==='rentals')h.bindings.DAILY_RENTALS='1';h.restart();assert.equal(await state(await h.call()),'UNAVAILABLE_BUDGET');assert.equal(h.cloud.creates,0);
+test('one-live survives restart', async () => {
+  const h = await setup();
+  await rent(h);
+  h.restart();
+  h.cloud.run.id = 124;
+  assert.equal(
+    await state(await h.call('/rent', { claims: { run_id: '124' } })),
+    'UNAVAILABLE_BUDGET',
+  );
+  assert.equal(h.cloud.creates, 1);
 });
-for(const kind of ['daily','rolling'])test('budget survives restart '+kind,async()=>{const h=await setup(kind==='rolling'?{DAILY_SPEND_USD:'1000',ROLLING_SPEND_USD:'1'}:{});await h.storage.put('cost:old',{started:clock-100000,ended:clock,price:1000});h.restart();assert.equal(await state(await h.call()),'UNAVAILABLE_BUDGET');assert.equal(h.cloud.creates,0);});
-test('daily count remains across restart',async()=>{const h=await setup({DAILY_RENTALS:'1'});await h.storage.put('cost:old',{started:clock-1000,ended:clock,price:0});h.restart();assert.equal(await state(await h.call()),'UNAVAILABLE_BUDGET');});
-test('rolling cap counts a previous UTC day',async()=>{const h=await setup();await h.storage.put('cost:old',{started:clock-86400000,ended:clock-86300000,price:2000});assert.equal(await state(await h.call()),'UNAVAILABLE_BUDGET');});
-test('account API failure never creates',async()=>{const h=await setup();h.cloud.vastError=500;assert.equal(await state(await h.call()),'UNAVAILABLE');assert.equal(h.cloud.creates,0);});
-test('ambiguous creation reconciles exact prior intent without second create',async()=>{const h=await setup();h.cloud.ambiguous=true;assert.equal(await state(await h.call()),'UNAVAILABLE');h.cloud.ambiguous=false;h.restart();assert.equal((await h.call()).status,200);assert.equal(h.cloud.creates,1);
- const listed=h.cloud.calls.find(c=>c.url.includes('/api/v1/instances'));assert.ok(listed);assert.match(decodeURIComponent(listed.url),/kf-ci-123-1/);assert.deepEqual(h.cloud.deletes,[]);
+test('concurrent rent has one winner', async () => {
+  const h = await setup();
+  const rs = await Promise.all([h.call(), h.call()]);
+  assert.equal(h.cloud.creates, 1);
+  assert.ok(rs.some((r) => r.status === 200));
 });
-test('ambiguous absent instance never triggers a second creation',async()=>{const h=await setup();h.cloud.ambiguous=true;await h.call();h.cloud.instances.delete('900');h.cloud.ambiguous=false;h.restart();assert.equal(await state(await h.call()),'UNAVAILABLE');assert.equal(h.cloud.creates,1);});
-test('reconciliation never adopts labelled foreign instance with wrong script',async()=>{const h=await setup();h.cloud.ambiguous=true;await h.call();h.cloud.instances.get('900').onstart='foreign';h.cloud.ambiguous=false;assert.equal(await state(await h.call()),'UNAVAILABLE');assert.deepEqual(h.cloud.inspected,[]);assert.deepEqual(h.cloud.deletes,[]);});
-for(const id of ['777','888'])test('never inspect/delete unrecorded id '+id,async()=>{const h=await setup();assert.equal((await h.call('/stop/'+id+'-1',{token:env.OWNER_STOP_TOKEN})).status,404);assert.equal((await h.call('/status/123-1')).status,404);assert.deepEqual(h.cloud.deletes,[]);assert.deepEqual(h.cloud.inspected,[]);});
-test('foreign run cannot read ledger instance',async()=>{const h=await setup();await rent(h);assert.equal((await h.call('/status/123-1',{claims:{run_id:'124'}})).status,401);assert.deepEqual(h.cloud.inspected,[]);});
-test('foreign run cannot destroy ledger instance',async()=>{const h=await setup();await rent(h);assert.equal((await h.call('/stop/123-1',{claims:{run_id:'124'}})).status,401);assert.deepEqual(h.cloud.deletes,[]);});
-test('changed label prevents deletion',async()=>{const h=await setup();await rent(h);h.cloud.instances.get('900').label='owner-dev';await h.call('/stop/123-1');assert.deepEqual(h.cloud.deletes,[]);});
-test('changed label prevents status log access',async()=>{const h=await setup();await rent(h);h.cloud.instances.get('900').label='kf-ci-other';assert.notEqual((await h.call('/status/123-1')).status,200);assert.equal(h.cloud.calls.some(c=>c.url.includes('request_logs')),false);});
-test('TTL cron destroys owned live instance',async()=>{const h=await setup();await rent(h);h.time.value+=151*60000;await h.service.sweep();assert.deepEqual(h.cloud.deletes,['900']);assert.ok(h.cloud.instances.has('777'));assert.ok(h.cloud.instances.has('888'));});
-test('TTL cleanup survives restart and disabled renting',async()=>{const h=await setup();await rent(h);h.time.value+=151*60000;h.bindings.RENTING_ENABLED='false';h.restart();await h.service.sweep();assert.deepEqual(h.cloud.deletes,['900']);});
-test('structured PASS result destroys at grace expiry',async()=>{const h=await setup();await rent(h);const r=await finish(h);assert.equal((await r.json()).verdict,'PASS');assert.deepEqual(h.cloud.deletes,['900']);});
-test('structured FAIL result destroys at grace expiry',async()=>{const h=await setup();await rent(h);const r=await finish(h,'FAIL');assert.equal((await r.json()).verdict,'FAIL');assert.deepEqual(h.cloud.deletes,['900']);});
-test('cron checks terminated instance without provider logs',async()=>{const h=await setup();await rent(h);h.cloud.instances.get('900').actual_status='exited';await h.service.sweep();assert.deepEqual(h.cloud.deletes,['900']);assert.equal(h.cloud.calls.some(c=>c.url.includes('request_logs')),false);});
-test('failed delete retains liability for retry',async()=>{const h=await setup();await rent(h);h.cloud.vastError=500;await h.call('/stop/123-1');h.cloud.vastError=0;await h.call('/stop/123-1');assert.deepEqual(h.cloud.deletes,['900']);});
-test('explicit destroy is idempotent',async()=>{const h=await setup();await rent(h);await h.call('/stop/123-1');await h.call('/stop/123-1');assert.deepEqual(h.cloud.deletes,['900']);});
-test('completed run without marker is cleaned',async()=>{const h=await setup();await rent(h);h.cloud.run.status='completed';await h.service.sweep();assert.deepEqual(h.cloud.deletes,['900']);});
-test('draft owner push does not rent',async()=>{const h=await setup();h.cloud.prs[0].draft=true;assert.equal(await state(await h.call()),'NEEDS_APPROVAL');assert.equal(h.cloud.creates,0);});
-test('draft review does not override default refusal',async()=>{const h=await setup();h.cloud.prs[0].draft=true;h.cloud.reviews=[{id:1,user:{id:42},state:'APPROVED',commit_id:sha}];assert.equal(await state(await h.call()),'NEEDS_APPROVAL');assert.equal(h.cloud.creates,0);});
-test('draft rental is explicitly configurable',async()=>{const h=await setup({RENT_DRAFTS:'true'});h.cloud.prs[0].draft=true;assert.equal((await h.call()).status,200);});
-for(const restart of [false,true])test('superseding push destroys old instance and returns BUSY '+restart,async()=>{const h=await setup();await rent(h);if(restart)h.restart();const newSha='e'.repeat(40);h.cloud.run.id=124;h.cloud.run.head_sha=newSha;h.cloud.run.pull_requests[0].head.sha=newSha;h.cloud.prs[0].head.sha=newSha;
- assert.equal(await state(await h.call('/rent',{claims:{run_id:'124',sha:'f'.repeat(40)}})),'BUSY');assert.equal(h.cloud.creates,1);assert.deepEqual(h.cloud.deletes,['900']);
+test('run attempt idempotence before destroy', async () => {
+  const h = await setup();
+  await rent(h);
+  await rent(h);
+  assert.equal(h.cloud.creates, 1);
 });
-test('cron destroys superseded PR without incoming run',async()=>{const h=await setup();await rent(h);h.cloud.prs[0].head.sha='e'.repeat(40);await h.service.sweep();assert.deepEqual(h.cloud.deletes,['900']);});
-test('documented Vast verification string is accepted without boolean alias',async()=>{const h=await setup();delete h.cloud.offer.verified;h.cloud.offer.verification='verified';assert.equal((await h.call()).status,200);});
-test('documented display GPU names map to the fixed model allowlist',async()=>{const h=await setup();h.cloud.offer.gpu_name='RTX 4070';assert.equal((await h.call()).status,200);});
-test('offer request uses documented ondemand enum and selected disk',async()=>{const h=await setup();await h.call();const q=h.cloud.calls.find(c=>c.url.endsWith('/bundles/')).body;assert.equal(q.type,'ondemand');assert.equal(q.allocated_storage,120);});
-test('complete documented display offer remains within fixed capability',async()=>{const h=await setup();delete h.cloud.offer.verified;h.cloud.offer.verification='verified';h.cloud.offer.gpu_name='RTX 4070';assert.equal((await h.call()).status,200);});
-for(const restart of [false,true])test('SHA cache does not rebill after gap expires '+restart,async()=>{const h=await setup();await rent(h);await finish(h);h.time.value+=25*3600000;h.cloud.run.id=124;if(restart)h.restart();
- const r=await h.call('/rent',{claims:{run_id:'124',exp:h.time.value/1000+300,nbf:h.time.value/1000-1}});assert.equal(r.status,409);assert.equal((await r.json()).verdict,'UNAVAILABLE');assert.equal(h.cloud.creates,1);
+test('run attempt idempotence after restart', async () => {
+  const h = await setup();
+  await rent(h);
+  h.restart();
+  await rent(h);
+  assert.equal(h.cloud.creates, 1);
 });
-for(const restart of [false,true])test('another PR cannot create a second live rental '+restart,async()=>{const h=await setup();await rent(h);if(restart)h.restart();h.cloud.run.id=124;h.cloud.run.head_sha='e'.repeat(40);h.cloud.run.head_branch='other-pr';h.cloud.run.pull_requests=[{number:8,head:{sha:'e'.repeat(40)}}];
- h.cloud.prs.push({number:8,state:'open',draft:false,user:{id:42},head:{sha:'e'.repeat(40),ref:'other-pr',repo:{full_name:'reindertpelsma/kayfabe'}},base:{ref:'master',repo:{full_name:'reindertpelsma/kayfabe'}},changed_files:1});
- // This run needs its own reviews endpoint in the mock.
- const original=h.cloud.fetch;h.cloud.fetch=async(u,i)=>String(u).includes('/pulls/8/reviews')?Response.json([]):original(u,i);h.restart();
- assert.equal(await state(await h.call('/rent',{claims:{run_id:'124',ref:'refs/pull/8/merge'}})),'UNAVAILABLE_BUDGET');assert.equal(h.cloud.creates,1);
+test('run attempt idempotence after destroy', async () => {
+  const h = await setup();
+  await rent(h);
+  await finish(h);
+  await rent(h);
+  assert.equal(h.cloud.creates, 1);
 });
-test('reconciliation cannot adopt a changed image',async()=>{const h=await setup();h.cloud.ambiguous=true;await h.call();h.cloud.instances.get('900').image_uuid='foreign';h.cloud.ambiguous=false;assert.equal(await state(await h.call()),'UNAVAILABLE');assert.deepEqual(h.cloud.inspected,[]);assert.deepEqual(h.cloud.deletes,[]);});
+test('same SHA cache grants another run without rebilling', async () => {
+  const h = await setup();
+  await rent(h);
+  await finish(h);
+  h.cloud.run.id = 124;
+  const r = await h.call('/rent', { claims: { run_id: '124' } });
+  assert.equal(r.status, 409);
+  assert.equal(h.cloud.creates, 1);
+  assert.equal((await r.json()).verdict, 'UNAVAILABLE');
+  assert.equal((await h.call('/status/124-1', { claims: { run_id: '124' } })).status, 404);
+});
+test('same SHA cache survives process restart', async () => {
+  const h = await setup();
+  await rent(h);
+  await finish(h);
+  h.restart();
+  h.cloud.run.id = 124;
+  await h.call('/rent', { claims: { run_id: '124' } });
+  assert.equal(h.cloud.creates, 1);
+});
+test('cached verdict never bypasses content approval', async () => {
+  const h = await setup();
+  await rent(h);
+  await finish(h);
+  h.cloud.run.id = 124;
+  h.cloud.reviews = [{ id: 2, user: { id: 42 }, state: 'DISMISSED', commit_id: sha }];
+  assert.equal(await state(await h.call('/rent', { claims: { run_id: '124' } })), 'NEEDS_APPROVAL');
+});
+test('force rerun still requires minimum SHA gap', async () => {
+  const h = await setup();
+  await rent(h);
+  await finish(h);
+  h.cloud.run.run_attempt = 2;
+  h.cloud.run.event = 'workflow_dispatch';
+  assert.equal(
+    await state(
+      await h.call('/rent', {
+        claims: {
+          run_attempt: '2',
+          event_name: 'workflow_dispatch',
+          sha,
+          ref: 'refs/heads/owner-pr',
+        },
+      }),
+    ),
+    'UNAVAILABLE_BUDGET',
+  );
+  assert.equal(h.cloud.creates, 1);
+});
+test('force gap survives restart', async () => {
+  const h = await setup();
+  await rent(h);
+  await finish(h);
+  h.restart();
+  h.cloud.run.run_attempt = 2;
+  h.cloud.run.event = 'workflow_dispatch';
+  assert.equal(
+    await state(
+      await h.call('/rent', {
+        claims: {
+          run_attempt: '2',
+          event_name: 'workflow_dispatch',
+          sha,
+          ref: 'refs/heads/owner-pr',
+        },
+      }),
+    ),
+    'UNAVAILABLE_BUDGET',
+  );
+});
+for (const kind of ['daily', 'rolling', 'rentals'])
+  test('budget prevents admission ' + kind, async () => {
+    const h = await setup();
+    await h.storage.put('cost:old', {
+      started: clock - 1000,
+      ended: clock,
+      price: kind === 'rentals' ? 0 : 20000,
+    });
+    if (kind === 'daily') h.bindings.DAILY_SPEND_USD = '1';
+    if (kind === 'rolling') {
+      h.bindings.ROLLING_SPEND_USD = '1';
+      h.bindings.DAILY_SPEND_USD = '1000';
+    }
+    if (kind === 'rentals') h.bindings.DAILY_RENTALS = '1';
+    h.restart();
+    assert.equal(await state(await h.call()), 'UNAVAILABLE_BUDGET');
+    assert.equal(h.cloud.creates, 0);
+  });
+for (const kind of ['daily', 'rolling'])
+  test('budget survives restart ' + kind, async () => {
+    const h = await setup(
+      kind === 'rolling' ? { DAILY_SPEND_USD: '1000', ROLLING_SPEND_USD: '1' } : {},
+    );
+    await h.storage.put('cost:old', { started: clock - 100000, ended: clock, price: 1000 });
+    h.restart();
+    assert.equal(await state(await h.call()), 'UNAVAILABLE_BUDGET');
+    assert.equal(h.cloud.creates, 0);
+  });
+test('daily count remains across restart', async () => {
+  const h = await setup({ DAILY_RENTALS: '1' });
+  await h.storage.put('cost:old', { started: clock - 1000, ended: clock, price: 0 });
+  h.restart();
+  assert.equal(await state(await h.call()), 'UNAVAILABLE_BUDGET');
+});
+test('rolling cap counts a previous UTC day', async () => {
+  const h = await setup();
+  await h.storage.put('cost:old', {
+    started: clock - 86400000,
+    ended: clock - 86300000,
+    price: 2000,
+  });
+  assert.equal(await state(await h.call()), 'UNAVAILABLE_BUDGET');
+});
+test('account API failure never creates', async () => {
+  const h = await setup();
+  h.cloud.vastError = 500;
+  assert.equal(await state(await h.call()), 'UNAVAILABLE');
+  assert.equal(h.cloud.creates, 0);
+});
+test('ambiguous creation reconciles exact prior intent without second create', async () => {
+  const h = await setup();
+  h.cloud.ambiguous = true;
+  assert.equal(await state(await h.call()), 'UNAVAILABLE');
+  h.cloud.ambiguous = false;
+  h.restart();
+  assert.equal((await h.call()).status, 200);
+  assert.equal(h.cloud.creates, 1);
+  const listed = h.cloud.calls.find((c) => c.url.includes('/api/v1/instances'));
+  assert.ok(listed);
+  assert.match(decodeURIComponent(listed.url), /kf-ci-123-1/);
+  assert.deepEqual(h.cloud.deletes, []);
+});
+test('ambiguous absent instance never triggers a second creation', async () => {
+  const h = await setup();
+  h.cloud.ambiguous = true;
+  await h.call();
+  h.cloud.instances.delete('900');
+  h.cloud.ambiguous = false;
+  h.restart();
+  assert.equal(await state(await h.call()), 'UNAVAILABLE');
+  assert.equal(h.cloud.creates, 1);
+});
+test('reconciliation never adopts labelled foreign instance with wrong script', async () => {
+  const h = await setup();
+  h.cloud.ambiguous = true;
+  await h.call();
+  h.cloud.instances.get('900').onstart = 'foreign';
+  h.cloud.ambiguous = false;
+  assert.equal(await state(await h.call()), 'UNAVAILABLE');
+  assert.deepEqual(h.cloud.inspected, []);
+  assert.deepEqual(h.cloud.deletes, []);
+});
+for (const id of ['777', '888'])
+  test('never inspect/delete unrecorded id ' + id, async () => {
+    const h = await setup();
+    assert.equal((await h.call('/stop/' + id + '-1', { token: env.OWNER_STOP_TOKEN })).status, 404);
+    assert.equal((await h.call('/status/123-1')).status, 404);
+    assert.deepEqual(h.cloud.deletes, []);
+    assert.deepEqual(h.cloud.inspected, []);
+  });
+test('foreign run cannot read ledger instance', async () => {
+  const h = await setup();
+  await rent(h);
+  assert.equal((await h.call('/status/123-1', { claims: { run_id: '124' } })).status, 401);
+  assert.deepEqual(h.cloud.inspected, []);
+});
+test('foreign run cannot destroy ledger instance', async () => {
+  const h = await setup();
+  await rent(h);
+  assert.equal((await h.call('/stop/123-1', { claims: { run_id: '124' } })).status, 401);
+  assert.deepEqual(h.cloud.deletes, []);
+});
+test('changed label prevents deletion', async () => {
+  const h = await setup();
+  await rent(h);
+  h.cloud.instances.get('900').label = 'owner-dev';
+  await h.call('/stop/123-1');
+  assert.deepEqual(h.cloud.deletes, []);
+});
+test('changed label prevents status log access', async () => {
+  const h = await setup();
+  await rent(h);
+  h.cloud.instances.get('900').label = 'kf-ci-other';
+  assert.notEqual((await h.call('/status/123-1')).status, 200);
+  assert.equal(
+    h.cloud.calls.some((c) => c.url.includes('request_logs')),
+    false,
+  );
+});
+test('TTL cron destroys owned live instance', async () => {
+  const h = await setup();
+  await rent(h);
+  h.time.value += 151 * 60000;
+  await h.service.sweep();
+  assert.deepEqual(h.cloud.deletes, ['900']);
+  assert.ok(h.cloud.instances.has('777'));
+  assert.ok(h.cloud.instances.has('888'));
+});
+test('TTL cleanup survives restart and disabled renting', async () => {
+  const h = await setup();
+  await rent(h);
+  h.time.value += 151 * 60000;
+  h.bindings.RENTING_ENABLED = 'false';
+  h.restart();
+  await h.service.sweep();
+  assert.deepEqual(h.cloud.deletes, ['900']);
+});
+test('structured PASS result destroys at grace expiry', async () => {
+  const h = await setup();
+  await rent(h);
+  const r = await finish(h);
+  assert.equal((await r.json()).verdict, 'PASS');
+  assert.deepEqual(h.cloud.deletes, ['900']);
+});
+test('structured FAIL result destroys at grace expiry', async () => {
+  const h = await setup();
+  await rent(h);
+  const r = await finish(h, 'FAIL');
+  assert.equal((await r.json()).verdict, 'FAIL');
+  assert.deepEqual(h.cloud.deletes, ['900']);
+});
+test('cron checks terminated instance without provider logs', async () => {
+  const h = await setup();
+  await rent(h);
+  h.cloud.instances.get('900').actual_status = 'exited';
+  await h.service.sweep();
+  assert.deepEqual(h.cloud.deletes, ['900']);
+  assert.equal(
+    h.cloud.calls.some((c) => c.url.includes('request_logs')),
+    false,
+  );
+});
+test('failed delete retains liability for retry', async () => {
+  const h = await setup();
+  await rent(h);
+  h.cloud.vastError = 500;
+  await h.call('/stop/123-1');
+  h.cloud.vastError = 0;
+  await h.call('/stop/123-1');
+  assert.deepEqual(h.cloud.deletes, ['900']);
+});
+test('explicit destroy is idempotent', async () => {
+  const h = await setup();
+  await rent(h);
+  await h.call('/stop/123-1');
+  await h.call('/stop/123-1');
+  assert.deepEqual(h.cloud.deletes, ['900']);
+});
+test('completed run without marker is cleaned', async () => {
+  const h = await setup();
+  await rent(h);
+  h.cloud.run.status = 'completed';
+  await h.service.sweep();
+  assert.deepEqual(h.cloud.deletes, ['900']);
+});
+test('draft owner push does not rent', async () => {
+  const h = await setup();
+  h.cloud.prs[0].draft = true;
+  assert.equal(await state(await h.call()), 'NEEDS_APPROVAL');
+  assert.equal(h.cloud.creates, 0);
+});
+test('draft review does not override default refusal', async () => {
+  const h = await setup();
+  h.cloud.prs[0].draft = true;
+  h.cloud.reviews = [{ id: 1, user: { id: 42 }, state: 'APPROVED', commit_id: sha }];
+  assert.equal(await state(await h.call()), 'NEEDS_APPROVAL');
+  assert.equal(h.cloud.creates, 0);
+});
+test('draft rental is explicitly configurable', async () => {
+  const h = await setup({ RENT_DRAFTS: 'true' });
+  h.cloud.prs[0].draft = true;
+  assert.equal((await h.call()).status, 200);
+});
+for (const restart of [false, true])
+  test('superseding push destroys old instance and returns BUSY ' + restart, async () => {
+    const h = await setup();
+    await rent(h);
+    if (restart) h.restart();
+    const newSha = 'e'.repeat(40);
+    h.cloud.run.id = 124;
+    h.cloud.run.head_sha = newSha;
+    h.cloud.run.pull_requests[0].head.sha = newSha;
+    h.cloud.prs[0].head.sha = newSha;
+    assert.equal(
+      await state(await h.call('/rent', { claims: { run_id: '124', sha: 'f'.repeat(40) } })),
+      'BUSY',
+    );
+    assert.equal(h.cloud.creates, 1);
+    assert.deepEqual(h.cloud.deletes, ['900']);
+  });
+test('cron destroys superseded PR without incoming run', async () => {
+  const h = await setup();
+  await rent(h);
+  h.cloud.prs[0].head.sha = 'e'.repeat(40);
+  await h.service.sweep();
+  assert.deepEqual(h.cloud.deletes, ['900']);
+});
+test('documented Vast verification string is accepted without boolean alias', async () => {
+  const h = await setup();
+  delete h.cloud.offer.verified;
+  h.cloud.offer.verification = 'verified';
+  assert.equal((await h.call()).status, 200);
+});
+test('documented display GPU names map to the fixed model allowlist', async () => {
+  const h = await setup();
+  h.cloud.offer.gpu_name = 'RTX 4070';
+  assert.equal((await h.call()).status, 200);
+});
+test('offer request uses documented ondemand enum and selected disk', async () => {
+  const h = await setup();
+  await h.call();
+  const q = h.cloud.calls.find((c) => c.url.endsWith('/bundles/')).body;
+  assert.equal(q.type, 'ondemand');
+  assert.equal(q.allocated_storage, 120);
+});
+test('complete documented display offer remains within fixed capability', async () => {
+  const h = await setup();
+  delete h.cloud.offer.verified;
+  h.cloud.offer.verification = 'verified';
+  h.cloud.offer.gpu_name = 'RTX 4070';
+  assert.equal((await h.call()).status, 200);
+});
+for (const restart of [false, true])
+  test('SHA cache does not rebill after gap expires ' + restart, async () => {
+    const h = await setup();
+    await rent(h);
+    await finish(h);
+    h.time.value += 25 * 3600000;
+    h.cloud.run.id = 124;
+    if (restart) h.restart();
+    const r = await h.call('/rent', {
+      claims: { run_id: '124', exp: h.time.value / 1000 + 300, nbf: h.time.value / 1000 - 1 },
+    });
+    assert.equal(r.status, 409);
+    assert.equal((await r.json()).verdict, 'UNAVAILABLE');
+    assert.equal(h.cloud.creates, 1);
+  });
+for (const restart of [false, true])
+  test('another PR cannot create a second live rental ' + restart, async () => {
+    const h = await setup();
+    await rent(h);
+    if (restart) h.restart();
+    h.cloud.run.id = 124;
+    h.cloud.run.head_sha = 'e'.repeat(40);
+    h.cloud.run.head_branch = 'other-pr';
+    h.cloud.run.pull_requests = [{ number: 8, head: { sha: 'e'.repeat(40) } }];
+    h.cloud.prs.push({
+      number: 8,
+      state: 'open',
+      draft: false,
+      user: { id: 42 },
+      head: { sha: 'e'.repeat(40), ref: 'other-pr', repo: { full_name: 'reindertpelsma/kayfabe' } },
+      base: { ref: 'master', repo: { full_name: 'reindertpelsma/kayfabe' } },
+      changed_files: 1,
+    });
+    // This run needs its own reviews endpoint in the mock.
+    const original = h.cloud.fetch;
+    h.cloud.fetch = async (u, i) =>
+      String(u).includes('/pulls/8/reviews') ? Response.json([]) : original(u, i);
+    h.restart();
+    assert.equal(
+      await state(await h.call('/rent', { claims: { run_id: '124', ref: 'refs/pull/8/merge' } })),
+      'UNAVAILABLE_BUDGET',
+    );
+    assert.equal(h.cloud.creates, 1);
+  });
+test('reconciliation cannot adopt a changed image', async () => {
+  const h = await setup();
+  h.cloud.ambiguous = true;
+  await h.call();
+  h.cloud.instances.get('900').image_uuid = 'foreign';
+  h.cloud.ambiguous = false;
+  assert.equal(await state(await h.call()), 'UNAVAILABLE');
+  assert.deepEqual(h.cloud.inspected, []);
+  assert.deepEqual(h.cloud.deletes, []);
+});
 
-for(const endpoint of ['rent','status'])test('R3 cached SHA cannot grant another run in '+endpoint,async()=>{const h=await setup();await rent(h);await finish(h);h.cloud.run.id=124;const options={claims:{run_id:'124'}};const cached=await h.call('/rent',options);assert.equal(cached.status,409);if(endpoint==='status')h.restart();assert.equal((await h.call('/status/124-1',options)).status,404);assert.equal(h.cloud.creates,1);});
+for (const endpoint of ['rent', 'status'])
+  test('R3 cached SHA cannot grant another run in ' + endpoint, async () => {
+    const h = await setup();
+    await rent(h);
+    await finish(h);
+    h.cloud.run.id = 124;
+    const options = { claims: { run_id: '124' } };
+    const cached = await h.call('/rent', options);
+    assert.equal(cached.status, 409);
+    if (endpoint === 'status') h.restart();
+    assert.equal((await h.call('/status/124-1', options)).status, 404);
+    assert.equal(h.cloud.creates, 1);
+  });
