@@ -1224,14 +1224,14 @@ mod tests {
                 let mut hit = 0;
                 for src in [[1.0, 0.0, 0.0], [0.0, 1.0, 0.0], [0.0, 0.0, 1.0], [0.5; 3]] {
                     let px = model::output_rgb(src, &o.matrix, Some(&table));
-                    for c in 0..3 {
+                    for (c, &got) in px.iter().enumerate() {
                         let k = |i: usize| f64::from(o.matrix[c * 4 + i]) / 65536.0;
                         let pre = (0..3).map(|i| f64::from(src[i]) * k(i)).sum::<f64>() + k(3);
                         if pre < -0.01 {
                             hit += 1;
-                            assert_eq!(px[c], 0, "{what} {src:?} channel {c} ({pre})");
+                            assert_eq!(got, 0, "{what} {src:?} channel {c} ({pre})");
                         } else if pre > 0.01 {
-                            assert!(px[c] >= 64, "{what} {src:?} channel {c} ({pre})");
+                            assert!(got >= 64, "{what} {src:?} channel {c} ({pre})");
                         }
                     }
                 }
