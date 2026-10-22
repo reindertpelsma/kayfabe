@@ -27,6 +27,9 @@ import subprocess
 import sys
 import tempfile
 
+sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "legal"))
+import notice  # noqa: E402  (the NVIDIA MIT notice the output must carry)
+
 # Only names (the files' and the macros'), never C text, are matched by these patterns.
 HEADER_NAME = re.compile(r"^cl([0-9a-f]{2})(b0|b7|d1|fa)\.h$")
 # Methods whose fields (and field values) the tier needs; every method's offset is emitted.
@@ -131,7 +134,8 @@ def header(rev, headers):
         "// (ogkm carries only these classes' ids). Regenerate with:",
         "//   tools/derive_video_methods.py <open-gpu-doc>/classes/video \\",
         "//       <ogkm>/src/common/sdk/nvidia/inc <rev> > crates/kf-chan/src/video_generated.rs",
-    ]
+        "//",
+    ] + notice.comment_block("open-gpu-doc", "//")
 
 
 def main():
