@@ -37,5 +37,20 @@
     "src/nvidia/generated/g_subdevice_nvoc.c": "7210ad97a0096d804d2f4a1a9d4f4b46b12d6e5376e1da774a7db5ae741f56b0",
     "src/common/sdk/nvidia/inc/ctrl/ctrl2080/ctrl2080fifo.h": "11228344ef57ddb8e648b95b774eb3aaf6da3675c918f0d0dd1353fc12faf6da",
     "src/common/sdk/nvidia/inc/ctrl/ctrl906f.h": "e91381729da17649af09ff357c0f2ca5e85d2f825a2e045debc1690746e7c90b"
+  },
+  "userspace_root_is_not_kernel_client": {
+    "kind": "CODE READ",
+    "tag": "595.84",
+    "files": {
+      "src/nvidia/src/kernel/rmapi/control.c": {
+        "sha256": "0c686e045845dda879194024c09f33434563b586bfddf9a435db36d5a4f38ff1",
+        "lines": "698-708"
+      },
+      "src/nvidia/src/kernel/rmapi/entry_points.c": {
+        "sha256": "4486e089fc7188ae89a37c5cde182cf839d0475f04383cb4a6e157c7842064d8",
+        "lines": "172-194"
+      }
+    },
+    "conclusion": "User-mode ioctl security is USER or USER_ROOT, not KERNEL; default kernel-only controls reject either. Root refusal does not imply a zero-valued engine table."
   }
 }
