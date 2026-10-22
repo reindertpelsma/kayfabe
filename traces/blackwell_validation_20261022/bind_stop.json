@@ -1,0 +1,19 @@
+{
+  "utc": "2026-10-22T01:20:29.877988+00:00",
+  "lease_id": 57132969,
+  "state": "STOP_PENDING_OWNER_DECISION",
+  "failed_step": "immediate zero-qemu census following bind shutdown",
+  "bind_driver": "32.0.15.8088",
+  "bind_code": 22,
+  "native_verdict": "PASS",
+  "windows_arms": {
+    "on_precision": "UNRUN",
+    "off_c": "UNRUN",
+    "on_b1": "UNRUN"
+  },
+  "later_read_only_audit": "zero qemu-system processes; five approved source-matched native31; no XID_STOP",
+  "cause": "exit-window race is inferred, not measured at the failed census",
+  "auto_destroy_expiry_utc": "2026-10-22T03:16:37Z",
+  "optional_merge": "staged in a separate own worktree; commit scanner requested review of an inherited claim-debt quote already present in frozen source; no commit or bypass",
+  "pending": "explicit decision requested before resuming any Windows arm; teardown remains authorized"
+}
