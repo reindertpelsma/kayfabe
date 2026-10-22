@@ -90,10 +90,13 @@ class Broker:
             def log_message(self, *args):
                 pass
 
+            def do_GET(self):
+                self.do_POST()
+
             def do_POST(self):
                 length = int(self.headers.get("Content-Length") or 0)
                 body = self.rfile.read(length)
-                status, doc, headers = broker.handle(self.path, self.headers, body)
+                status, doc, headers = broker.handle(self.path, self.headers, body, self.command)
                 raw = json.dumps(doc).encode()
                 try:
                     self.send_response(status)
@@ -118,9 +121,9 @@ class Broker:
         self.server.shutdown()
         self.server.server_close()
 
-    def handle(self, path, headers, body):
+    def handle(self, path, headers, body, method="POST"):
         auth = headers.get("Authorization")
-        record = {"path": path, "auth": auth, "body": body, "method": "POST", "t": time.time()}
+        record = {"path": path, "auth": auth, "body": body, "method": method, "t": time.time()}
         with self.lock:
             self.requests.append(record)
         parts = path.split("/")
@@ -429,10 +432,21 @@ class Reporter(Daemon):
         doc = {"verdict": "PASS", "suites": ROWS, "hardware": HARDWARE, "nonce": "f" * 32}
         doc.update(sha="e" * 40, runner_nonce="d" * 64)
         self.result.write_text(json.dumps(doc))
-        self.assertEqual(self.finish()[0], 0)
+        self.assertEqual(self.finish()[0], 1)
         result = b.results()[0]
+        self.assertEqual(result["verdict"], "FAIL")
+        self.assertEqual(result["suites"][0]["name"], "result_invalid")
         self.assertEqual((result["nonce"], result["sha"]), (NONCE, SHA))
         self.assertEqual(result["runner_nonce"], RNONCE)
+
+    def test_payload_may_echo_the_correct_binding_fields(self):
+        b = self.broker()
+        self.start(b)
+        doc = {"verdict": "PASS", "suites": ROWS, "hardware": HARDWARE, "nonce": NONCE}
+        doc.update(sha=SHA, runner_nonce=RNONCE)
+        self.result.write_text(json.dumps(doc))
+        self.assertEqual(self.finish()[0], 0)
+        self.assertEqual(b.results()[0]["verdict"], "PASS")
 
     def test_lost_response_retry_reuses_payload_and_sequence(self):
         b = self.broker()
@@ -700,7 +714,10 @@ class FinalResult(Tmp):
         cases = {
             "not json": b"{nope",
             "not object": b"[1]",
-            "dup key": b'{"verdict":"PASS","verdict":"FAIL","suites":[]}',
+            "dup key": b'{"verdict":"FAIL","verdict":"PASS",'
+            b'"suites":[{"name":"a","pass":1,"fail":0,"skip":0}],'
+            b'"hardware":{"gpu_name":"NVIDIA GeForce RTX 3060","compute_cap":860,'
+            b'"driver_version":"580.159.04"}}',
             "extra key": json.dumps(dict(self.good(), extra=1)).encode(),
             "bad verdict": json.dumps(self.good(verdict="pass")).encode(),
             "no suites": json.dumps(self.good(suites=[])).encode(),
@@ -724,6 +741,9 @@ class FinalResult(Tmp):
             ).encode(),
             "oversize": b" " * 70000 + json.dumps(self.good()).encode(),
             "bad utf8": b'{"verdict":"\xff"}',
+            "wrong nonce": json.dumps(self.good(nonce="f" * 32)).encode(),
+            "wrong sha": json.dumps(self.good(sha="e" * 40)).encode(),
+            "wrong runner nonce": json.dumps(self.good(runner_nonce="d" * 64)).encode(),
             "bad hardware": json.dumps(
                 self.good(
                     hardware={"gpu_name": "x;rm", "compute_cap": 860, "driver_version": "580.1"}
@@ -854,6 +874,15 @@ class KillAndHold(Tmp):
         request = b.requests[0]
         self.assertEqual((request["method"], request["path"]), ("POST", PREFIX + "/hold/" + RUN))
         self.assertEqual((request["auth"], request["body"]), ("Bearer " + TOKEN, b""))
+
+    def test_hold_does_not_follow_redirects(self):
+        b, evil = self.broker(), self.broker()
+        b.redirect_to = evil.url
+        b.faults["hold"] = ["redirect"]
+        proc = self.run_tool("kf-box-hold", b.url)
+        self.assertNotEqual(proc.returncode, 0)
+        self.assertEqual(evil.requests, [])
+        self.assertEqual(len(b.requests), 1)
 
     def test_hold_does_not_follow_redirects_or_http(self):
         listener = socket.socket()
@@ -1027,15 +1056,27 @@ class Onstart(Tmp):
         self.assertEqual(result["verdict"], "FAIL")
         self.assertIn("app_exit", [r["name"] for r in result["suites"]])
 
-    def test_payload_never_sees_the_run_capability(self):
+    def payload_env(self):
         b = self.broker()
         root = self.tree(self.OK_PAYLOAD)
         self.assertEqual(self.onstart(root, b).returncode, 0)
-        dump = (self.tmp / "dump").read_text()
-        for name in ("KF_RUN_TOKEN", "KF_BROKER_URL", "KF_RUN_ID", "KF_RUNNER_NONCE"):
-            self.assertNotIn(name + "=", dump)
+        return (self.tmp / "dump").read_text()
+
+    def test_payload_never_sees_the_run_token(self):
+        dump = self.payload_env()
+        self.assertNotIn("KF_RUN_TOKEN=", dump)
         self.assertNotIn(TOKEN, dump)
+
+    def test_payload_never_sees_the_broker_endpoint_or_run_id(self):
+        dump = self.payload_env()
+        for name in ("KF_BROKER_URL", "KF_RUN_ID", "KF_RUNNER_NONCE"):
+            self.assertNotIn(name + "=", dump)
+        self.assertNotIn(PREFIX, dump)
+
+    def test_payload_still_gets_its_own_inputs(self):
+        dump = self.payload_env()
         self.assertIn("KF_SHA=" + SHA, dump)
+        self.assertIn("KF_NONCE=" + NONCE, dump)
         self.assertRegex(dump, r"KF_SOFT_DEADLINE_MS=[0-9]{13}")
 
     def test_env_file_is_root_only_and_helpers_are_installed(self):
