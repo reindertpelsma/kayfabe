@@ -1,3 +1,11 @@
+STATUS: LIVE,2026-10-22. Replacement57143789 closed/APIabsence2026-10-22T02:36:32.836171+00:00.
+Ubuntu/OpenSSH booted(consolekeysverified), but both advertised SSHroutes refused TCPconnections;
+no upload/preflight/N0/Windows arm. Runtimeestimate0.314967USD/lane
+3.928363USD; sharedcredit42.321398USD; both timerscancelledonlyafterabsence.
+Providerunverified machine152912 excluded. Nextreplacement uses a currentlyavailable verified offer,
+oneactivebox, samefixedvalidationrun,7USD/reserve5. No product failure or Windows result inferred.
+Prior entries are historical.
+
 STATUS: LIVE,2026-10-22 replacement57143789 created02:10:10UTC after failed-start57142142 APIabsence.
 Actualrate0.716667USD/h, machine152912/providerunverified. Requested170min timerPID2844897 +independent
 budgetwatch2845865 verified BEFORE SSH/GPU work; helper's06:50CEST clamp gives deadline04:50UTC.
