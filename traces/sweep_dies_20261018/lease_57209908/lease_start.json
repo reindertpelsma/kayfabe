@@ -1,0 +1,30 @@
+{
+  "id": 57209908,
+  "family": "ampere",
+  "created_utc": "2026-10-22T12:29:31.226540+00:00",
+  "auto_destroy_minutes": 170,
+  "quote_dph": 0.6333333333333333,
+  "offer": {
+    "id": 56013699,
+    "machine_id": 97012,
+    "gpu_name": "RTX 3090",
+    "gpu_ram": 24576,
+    "cpu_cores_effective": 10.0,
+    "cpu_ram": 64409,
+    "disk_space": 505.254852656631,
+    "dph_total": 0.6333333333333333,
+    "inet_down": 2087.3,
+    "inet_down_cost": 0.0390625,
+    "inet_up_cost": 0.0390625,
+    "geolocation": "Quebec, CA"
+  },
+  "source": "e27444a6f775143c0edcda55445215d0f0eaf00b",
+  "cost_upper_usd": 2.7944444444444443,
+  "budget_cap_usd": 12,
+  "reserve_usd": 5,
+  "price_guard_usd_h": 1,
+  "auto_destroy_pid": 3588117,
+  "auto_destroy_verified": true,
+  "kind": "MEASURED rental and timer receipt",
+  "cost_kind": "INFERRED maximum duration times quote plus conservative transfer allowance"
+}
