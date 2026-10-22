@@ -1,0 +1,11 @@
+# Corrected candidate restart, 2026-10-22 23:00:52 UTC
+
+CODE READ: controller explicitly replaces the old candidate pin with 01a171e63a82198eef54c54935c5f9db5ed8e81b and requests restarting ROUND_6D from stage 1. Prior 70da04ffa failure evidence is retained as superseded history. Keep the conservative original deadline 2026-10-23 04:29:08 UTC, including cleanup.
+
+INFERRED H1: this exact pin passes required hosted stable and aarch64 jobs and the local GPU-free suite, rustfmt and zero-added clippy delta. FALSIFIER BEFORE execution: any red CI job, failed local test/build, formatting mismatch or added warning site. Wait for hosted stable+aarch64 before any hardware arm; red means report and stop.
+
+CODE READ: hardware, Windows/colour/CE-birth, SPEC/broker and non-blocking K2 hypotheses/falsifiers remain those in the initial plan, at this corrected pin. No product change is authorized here; all source builds use this exact commit. Host was cleanly restored and owner VM stopped in the previous attempt. SSH failures receive bounded retries for the stated home outage.
+
+CODE READ: the fresh Windows correctness session first holds the desktop for at least 600 seconds with the established guest-event/boot/counter observer. The matrix subset is fixed before execution: driver_status, dxgi_adapters, opencl_icd, cuda_callback, cuda_occupancy and d3d12_signal_probe, using the candidate's existing public scripts and unchanged verdict predicates. Missing binaries are NOTRUN, never PASS. Heaven uses the previous canonical 1920x1080 windowed D3D11 Ultra F9 recipe; Minecraft uses the existing saved launcher without exporting its command/token; Steel Nomad uses the installed GUI. Colour controls and broker images require observation, not process-only survival.
+
+CODE READ: the four fresh Energy arms form the requested rate batch; guest failures are recorded and restored within that batch, while any real host Xid/credential/restoration safety event stops immediately. A failing batch is a red correctness stage; no later stage is silently treated as passed. Linux hostile-root chosen-client negative coverage needs an existing supported public probe; stock successful births or unit tests do not substitute for that hardware negative arm.

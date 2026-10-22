@@ -1,0 +1,15 @@
+{
+  "classification": "MEASURED",
+  "evidence": "candidate-tests-ci.json",
+  "candidate": "01a171e63a82198eef54c54935c5f9db5ed8e81b",
+  "run": 39868887869,
+  "job": 120138004088,
+  "passed": 5760,
+  "failed": 0,
+  "ignored": 21,
+  "summaries": 358,
+  "exit": 0,
+  "scope": "All test-result lines in the hosted stable job, including auxiliary reached-count/capability executions; this sum is not a unique-test count.",
+  "log_sha256": "baf674fbfaf1a000b6b9c040e7e72d0106b06d14cfaf008d8582e569e51bae83",
+  "log_bytes": 1457814
+}

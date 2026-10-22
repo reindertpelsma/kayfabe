@@ -1,0 +1,19 @@
+{
+  "classification": "MEASURED",
+  "evidence": "ci-wait-context.json",
+  "baseline_run": 39764911164,
+  "baseline_candidate": "baa2977527c4509145e8033143bd664f768175a6",
+  "test_step_first_result": "2026-10-22T10:43:11.9537766Z",
+  "test_step_last_result": "2026-10-22T11:20:08.6025395Z",
+  "long_running_test_notices": [
+    "stable \u2014 build, test, clippy, fmt, boundary\tTest (OS-free configuration \u2014 KVM forced absent)\t2026-10-22T10:46:33.8921607Z test p11_three_workers_one_hot_relay_a_carried_wait_is_attended_within_k_passes has been running for over 60 seconds",
+    "stable \u2014 build, test, clippy, fmt, boundary\tTest (OS-free configuration \u2014 KVM forced absent)\t2026-10-22T10:49:44.4383138Z test a1_a_full_ring_lap_in_pointer_mode_does_not_revive_a_stale_gate_proof has been running for over 60 seconds",
+    "stable \u2014 build, test, clippy, fmt, boundary\tTest (OS-free configuration \u2014 KVM forced absent)\t2026-10-22T10:49:49.4990004Z test a3_the_flip_boundary_is_the_cursor_at_the_entry_not_a_reread_of_gp_put has been running for over 60 seconds",
+    "stable \u2014 build, test, clippy, fmt, boundary\tTest (OS-free configuration \u2014 KVM forced absent)\t2026-10-22T10:50:11.3642848Z test a_second_window_of_the_same_channel_starts_at_its_own_anchor_never_inside_a_submission has been running for over 60 seconds",
+    "stable \u2014 build, test, clippy, fmt, boundary\tTest (OS-free configuration \u2014 KVM forced absent)\t2026-10-22T10:52:18.6652663Z test d3_pointer_mode_batch_ends_announce_pops_by_an_event_with_no_look has been running for over 60 seconds",
+    "stable \u2014 build, test, clippy, fmt, boundary\tTest (OS-free configuration \u2014 KVM forced absent)\t2026-10-22T10:52:31.5190274Z test d3_the_same_run_deadlocks_if_the_worker_ignores_events has been running for over 60 seconds",
+    "stable \u2014 build, test, clippy, fmt, boundary\tTest (OS-free configuration \u2014 KVM forced absent)\t2026-10-22T10:53:31.6052944Z test i1_pointer_mode_forwards_the_guests_entries_bit_exact_and_scans_none_of_them has been running for over 60 seconds",
+    " build, test, clippy, fmt, boundary\tTest (OS-free configuration \u2014 KVM forced absent)\t2026-10-22T10:54:26.7532831Z test i8_gp_put_advancing_mid_turn_backwards_and_beyond_the_ring_never_reads_beyond_the_value_loaded has been running for over 60 seconds"
+  ],
+  "scope": "Historical CI timing context, not a deadline change or permission to bypass the required current result."
+}

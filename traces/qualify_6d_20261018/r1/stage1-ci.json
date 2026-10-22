@@ -1,0 +1,116 @@
+{
+  "classification": "MEASURED",
+  "evidence": "r1/stage1-ci.json",
+  "candidate": "01a171e63a82198eef54c54935c5f9db5ed8e81b",
+  "captured": "2026-10-22T23:29:16.844535+00:00",
+  "runs": [
+    {
+      "id": 39868883595,
+      "headSha": "01a171e63a82198eef54c54935c5f9db5ed8e81b",
+      "status": "in_progress",
+      "conclusion": "",
+      "url": "https://github.com/reindertpelsma/kayfabe/actions/runs/39868883595",
+      "jobs": [
+        {
+          "name": "firmware \u2014 kf-gop (x86_64-unknown-uefi), kf3's PE check, size, local stand-in",
+          "conclusion": "success",
+          "status": "completed",
+          "databaseId": 120137990139,
+          "url": "https://github.com/reindertpelsma/kayfabe/actions/runs/39868883595/job/120137990139",
+          "startedAt": "2026-10-22T23:00:21Z",
+          "completedAt": "2026-10-22T23:02:09Z"
+        },
+        {
+          "name": "stable \u2014 build, test, clippy, fmt, boundary",
+          "conclusion": "",
+          "status": "in_progress",
+          "databaseId": 120137990221,
+          "url": "https://github.com/reindertpelsma/kayfabe/actions/runs/39868883595/job/120137990221",
+          "startedAt": "2026-10-22T23:00:22Z",
+          "completedAt": "0001-01-01T00:00:00Z"
+        },
+        {
+          "name": "aarch64 \u2014 core cross-checks (no x86 assumptions)",
+          "conclusion": "success",
+          "status": "completed",
+          "databaseId": 120137990407,
+          "url": "https://github.com/reindertpelsma/kayfabe/actions/runs/39868883595/job/120137990407",
+          "startedAt": "2026-10-22T23:00:21Z",
+          "completedAt": "2026-10-22T23:01:07Z"
+        },
+        {
+          "name": "broker \u2014 build and its GPU-free test suite (broker/)",
+          "conclusion": "success",
+          "status": "completed",
+          "databaseId": 120137990557,
+          "url": "https://github.com/reindertpelsma/kayfabe/actions/runs/39868883595/job/120137990557",
+          "startedAt": "2026-10-22T23:00:22Z",
+          "completedAt": "2026-10-22T23:04:53Z"
+        },
+        {
+          "name": "slow \u2014 full suite with the soaks (KAYFABE_SLOW=1)",
+          "conclusion": "skipped",
+          "status": "completed",
+          "databaseId": 120137991560,
+          "url": "https://github.com/reindertpelsma/kayfabe/actions/runs/39868883595/job/120137991560",
+          "startedAt": "2026-10-22T23:00:20Z",
+          "completedAt": "2026-10-22T23:00:19Z"
+        }
+      ]
+    },
+    {
+      "id": 39868887869,
+      "headSha": "01a171e63a82198eef54c54935c5f9db5ed8e81b",
+      "status": "completed",
+      "conclusion": "success",
+      "url": "https://github.com/reindertpelsma/kayfabe/actions/runs/39868887869",
+      "jobs": [
+        {
+          "name": "stable \u2014 build, test, clippy, fmt, boundary",
+          "conclusion": "success",
+          "status": "completed",
+          "databaseId": 120138004088,
+          "url": "https://github.com/reindertpelsma/kayfabe/actions/runs/39868887869/job/120138004088",
+          "startedAt": "2026-10-22T23:00:23Z",
+          "completedAt": "2026-10-22T23:23:40Z"
+        },
+        {
+          "name": "aarch64 \u2014 core cross-checks (no x86 assumptions)",
+          "conclusion": "success",
+          "status": "completed",
+          "databaseId": 120138004330,
+          "url": "https://github.com/reindertpelsma/kayfabe/actions/runs/39868887869/job/120138004330",
+          "startedAt": "2026-10-22T23:00:23Z",
+          "completedAt": "2026-10-22T23:01:08Z"
+        },
+        {
+          "name": "broker \u2014 build and its GPU-free test suite (broker/)",
+          "conclusion": "success",
+          "status": "completed",
+          "databaseId": 120138004346,
+          "url": "https://github.com/reindertpelsma/kayfabe/actions/runs/39868887869/job/120138004346",
+          "startedAt": "2026-10-22T23:01:09Z",
+          "completedAt": "2026-10-22T23:04:37Z"
+        },
+        {
+          "name": "firmware \u2014 kf-gop (x86_64-unknown-uefi), kf3's PE check, size, local stand-in",
+          "conclusion": "success",
+          "status": "completed",
+          "databaseId": 120138005173,
+          "url": "https://github.com/reindertpelsma/kayfabe/actions/runs/39868887869/job/120138005173",
+          "startedAt": "2026-10-22T23:01:10Z",
+          "completedAt": "2026-10-22T23:03:02Z"
+        },
+        {
+          "name": "slow \u2014 full suite with the soaks (KAYFABE_SLOW=1)",
+          "conclusion": "skipped",
+          "status": "completed",
+          "databaseId": 120138006229,
+          "url": "https://github.com/reindertpelsma/kayfabe/actions/runs/39868887869/job/120138006229",
+          "startedAt": "2026-10-22T23:00:22Z",
+          "completedAt": "2026-10-22T23:00:21Z"
+        }
+      ]
+    }
+  ]
+}

@@ -1,0 +1,10 @@
+{
+  "classification": "MEASURED",
+  "evidence": "local-not-started.json",
+  "candidate": "01a171e63a82198eef54c54935c5f9db5ed8e81b",
+  "cargo_started": false,
+  "reason": "EXACT_HEAD_PR99_REQUIRED_CI_GREEN_AFTER_SHARED_CARGO_LOCK_WAIT",
+  "observed_wait_seconds": 1572.697898864746,
+  "time": "2026-10-22T23:28:39.490598+00:00",
+  "only_own_waiter_cancelled": true
+}

@@ -1,3 +1,9 @@
+# Corrected candidate restart in progress
+
+CODE READ: the controller replaced the old pin with revision 01a171e63a82198eef54c54935c5f9db5ed8e81b and requested restarting ROUND_6D at stage 1. Current evidence is under r1/. The 70da04ffa failure below is a superseded checkpoint, retained as history. The evidence branch carries documentation; actual hardware source is the separately pinned clean host checkout.
+
+MEASURED on 2026-10-22: r1/stage1-ci.json records all required PR-run jobs green; the duplicate push run remains in the stable test step. r1/candidate-tests-ci.json sums 5,760 passed / 0 failed / 21 ignored across 358 stable-job summaries, including auxiliary capability runs; this is not a unique-test count. The local fallback waited 1,573 seconds for the shared Cargo lock without starting, then only Q4's waiting process was cancelled after exact-head hosted CI passed (r1/local-not-started.json). Hardware remains gated on the other run having no red result.
+
 # Round 6D: stage 1 FAIL; hardware qualification not started
 
 CODE READ: the requested candidate is revision 70da04ffaebdee3b51e5eca6aa1eb3919e92e80d. ROUND_6D.md requires stopping at the first red stage. This lane changes no product code and makes no push to the candidate branch.
