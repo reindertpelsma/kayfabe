@@ -388,6 +388,31 @@ pub struct GrConfig {
     /// Subchannels 0-4 then reach that engine: its methods are decoded against the class's
     /// derived table instead of the copy engine's.
     pub video: u32,
+    /// The host-allocated CE object's class on a dedicated copy-engine ring (0 = none).
+    /// This is a host fact, never the class of a guest EngineObject or SET_OBJECT.
+    pub ce: u32,
+}
+
+/// Decoder configuration for a Translated birth, from its runlist and host objects.
+/// Graphics needs an explicit CE bind; video uses its own tier. The caller supplies
+/// the CE class of the object it already allocated on the host channel.
+#[must_use]
+pub fn birth_decoder_config(
+    engine: u32,
+    video_class: u32,
+    host_ce_class: u32,
+    gr_tier: bool,
+) -> GrConfig {
+    GrConfig {
+        tier: gr_tier,
+        video: video_class,
+        ce: if kf_abi::submit::copy_index_of_engine_type(engine).is_some() && video_class == 0 {
+            host_ce_class
+        } else {
+            0
+        },
+        ..GrConfig::default()
+    }
 }
 
 #[cfg(test)]
@@ -806,6 +831,13 @@ fn host(
                     word: v,
                     what: "SET_OBJECT beyond NVCLASS (15:0)",
                 });
+            }
+            if st.gr.ce != 0 && st.gr.video == 0 && class != st.gr.ce && (sub <= 4 || is_ce(class))
+            {
+                // The host object fixes this dedicated ring's tier. In particular,
+                // a CE bind on a software subchannel must not widen the global tier.
+                // Existing software-object binds on 5-7 keep their separate path.
+                return Err(Refusal::ForeignClass { subch: sub, class });
             }
             if st.gr.tier && crate::grtables::GrClass::of_class(class).is_some() {
                 // ★ GR tier: a graphics object on a GR hardware subchannel. Subchannel 4 is the

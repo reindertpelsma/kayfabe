@@ -225,6 +225,9 @@ impl TranslatedRing {
     pub fn set_gr(&mut self, gr: crate::tmode::GrConfig) {
         if let Some((st, _)) = self.tmode.as_deref_mut() {
             st.gr = gr;
+            if gr.ce != 0 && gr.video == 0 {
+                st.tier = crate::ttables::Tier::of_ce_class(gr.ce);
+            }
         }
     }
 

@@ -589,6 +589,13 @@ impl HostRing {
         self.chan
     }
 
+    /// Host RM's class used to allocate this ring's CE object. Video rings use
+    /// their video object instead; the birth decoder configuration excludes them.
+    #[must_use]
+    pub fn ce_class(&self) -> u32 {
+        self.ce_class
+    }
+
     /// ★ OWNER_RULINGS §U.2: this ring's gate (a handle the VA-manager thread may hold).
     #[must_use]
     pub fn gate(&self) -> Gate {

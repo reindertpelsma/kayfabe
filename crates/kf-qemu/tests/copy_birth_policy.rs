@@ -143,8 +143,7 @@ fn guest_object(class: u32) {
         ChanStatement::EngineObject { parent, class: c, copy_engine: Some(0xb), .. }
             if *parent == a.handle && *c == class)));
     // This is the host-fact input, separate from the guest EngineObject statement.
-    // The EXPECTED RED adapter is updated to the production birth choice by the fix.
-    let config = kf_chan::tmode::GrConfig::default();
+    let config = kf_chan::tmode::birth_decoder_config(a.engine_type.unwrap(), 0, 0xc7b5, false);
     let mut ring = kf_chan::ring::TranslatedRing::new_tmode(0x1000, 64, 0);
     ring.set_gr(config);
     struct Mem;

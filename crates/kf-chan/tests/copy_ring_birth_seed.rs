@@ -16,16 +16,8 @@ const SEMA: u64 = 0x1_2050_f060;
 const HOST_CE: u32 = 0xc7b5;
 const FB: u64 = 0x10_0000_0000;
 
-// EXPECTED RED fixture: these are the current QEMU birth inputs, before the CE
-// config API exists. The fix switches this adapter to the production pure choice;
-// assertions and the real ring/memory/decoder/binder stay unchanged.
 fn birth_config(engine: u32, video: u32, host_ce: u32, tier: bool) -> GrConfig {
-    let _ = (engine, host_ce);
-    GrConfig {
-        tier,
-        video,
-        ..Default::default()
-    }
+    kf_chan::tmode::birth_decoder_config(engine, video, host_ce, tier)
 }
 
 fn packet(method: u32, values: &[u32]) -> Vec<u32> {
@@ -240,7 +232,9 @@ fn windows() -> TWindows {
 }
 fn output_writes(words: &[u32]) -> Vec<(u32, u32)> {
     words
-        .chunks_exact(2)
+        .as_chunks::<2>()
+        .0
+        .iter()
         .map(|p| (method_header_decode(p[0]).unwrap().method, p[1]))
         .collect()
 }
