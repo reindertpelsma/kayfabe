@@ -1,0 +1,32 @@
+{
+  "classification": "CODE READ",
+  "candidate": "70da04ffaebdee3b51e5eca6aa1eb3919e92e80d",
+  "diagnosis": "The required ce field was added to GrConfig, but two full struct literals in kf-gr-tier were not updated. Both hosted stable and aarch64 builds report E0063 before test execution.",
+  "definition": {
+    "file": "crates/kf-chan/src/tmode.rs",
+    "line": 393,
+    "field": "pub ce: u32",
+    "meaning": "Host-allocated CE object class on a dedicated copy-engine ring; 0 means none. Host fact, not guest EngineObject or SET_OBJECT."
+  },
+  "missing_initializers": [
+    {
+      "file": "crates/kf-harness/src/bin/kf-gr-tier.rs",
+      "line": 421,
+      "ring": "graphics-tier"
+    },
+    {
+      "file": "crates/kf-harness/src/bin/kf-gr-tier.rs",
+      "line": 568,
+      "ring": "dedicated CE"
+    }
+  ],
+  "source_sha256": {
+    "configuration": "99b1c89da4815b9499b12add445ef6e97bdcee92e9dc632a27fb38ca9c44069c",
+    "native_harness": "62a39d60c4b28607ad507a3a3c0fdeba9cb3eed22b5ca1b9a44ad2e53162cea8"
+  },
+  "next_step_options": [
+    "Publish a reviewed candidate update that configures both native harness rings consistently with their actual host objects, then rerun the full bar at that new pin.",
+    "Retain the failed candidate and stop qualification with hardware/perf unverified."
+  ],
+  "warning": "A guessed constant solely to make the struct compile would not establish the CE-birth semantics. No fix was applied."
+}

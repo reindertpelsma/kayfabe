@@ -1,0 +1,9 @@
+{
+  "classification": "MEASURED",
+  "evidence": "local-cleanup.json",
+  "time": "2026-10-22T22:41:05.388374+00:00",
+  "target_absent": true,
+  "active_target_users": [],
+  "stage1_runner_finished": true,
+  "cargo_lock_released_after_this_command": true
+}

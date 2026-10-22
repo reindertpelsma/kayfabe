@@ -1,0 +1,37 @@
+{
+  "classification": "MEASURED",
+  "evidence": "clippy-delta.json",
+  "candidate": "70da04ffaebdee3b51e5eca6aa1eb3919e92e80d",
+  "candidate_exit": 101,
+  "compile_errors": [
+    {
+      "code": "E0063",
+      "message": "missing field `ce` in initializer of `kf_chan::tmode::GrConfig`",
+      "primary_spans": [
+        {
+          "file": "crates/kf-harness/src/bin/kf-gr-tier.rs",
+          "line": 421
+        }
+      ]
+    },
+    {
+      "code": "E0063",
+      "message": "missing field `ce` in initializer of `kf_chan::tmode::GrConfig`",
+      "primary_spans": [
+        {
+          "file": "crates/kf-harness/src/bin/kf-gr-tier.rs",
+          "line": 568
+        }
+      ]
+    }
+  ],
+  "complete_delta_established": false,
+  "added": null,
+  "removed": null,
+  "normalization": "scripts/ci/debt.py clippy rejects compiler errors with ValueError; no filtering or bypass applied",
+  "master_reference": "e9c6d39e5b465d7a20f3dcca8e7e15a4374958b5",
+  "master_reference_warning_sites": 532,
+  "master_reference_provenance": "Q4 round-6b complete local master run 2026-10-22; evidence commit 7b047d7f6 traces/qualify_6b_20261018/clippy-delta.json",
+  "limitation": "Candidate Clippy failed compilation. No complete warning delta or zero-added claim is possible. Rerun after the missing ce fields are corrected.",
+  "candidate_log_sha256": "c9f69a7922baa24ba32bde10b9157c0b74001a9c33266075dc7eae7e08caffd2"
+}

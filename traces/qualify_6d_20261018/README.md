@@ -1,0 +1,21 @@
+# Round 6D: stage 1 FAIL; hardware qualification not started
+
+CODE READ: the requested candidate is revision 70da04ffaebdee3b51e5eca6aa1eb3919e92e80d. ROUND_6D.md requires stopping at the first red stage. This lane changes no product code and makes no push to the candidate branch.
+
+MEASURED on 2026-10-22: [CI run 39865250045](ci-checks.json) and [PR 99 checks](pr99-checks.json) record stable and aarch64 FAIL, broker and firmware PASS, and slow SKIPPED. Both push and pull-request runs have the same required build failures. The stable job stops at Build before tests, Clippy, formatting and boundary checks.
+
+MEASURED on 2026-10-22: [stable-compile-excerpt.txt](stable-compile-excerpt.txt) and [aarch64-compile-excerpt.txt](aarch64-compile-excerpt.txt) preserve E0063 at crates/kf-harness/src/bin/kf-gr-tier.rs lines 421 and 568: missing field ce in GrConfig. The unchanged local release-suite command independently reproduced the same two errors; [candidate-tests.json](candidate-tests.json) records exit 101 and zero executed test summaries. [local-compile-excerpt.txt](local-compile-excerpt.txt) retains the independent diagnostic. [rustfmt.json](rustfmt.json) records the full formatting check passing.
+
+CODE READ: [compile-diagnosis.json](compile-diagnosis.json) ties those initializers to the new required host-derived CE class field in crates/kf-chan/src/tmode.rs. The first initializer configures the graphics tier; the second configures a dedicated CE ring. A guessed value solely to satisfy compilation would not establish the intended birth semantics. Publish a reviewed candidate update, then repeat qualification at that new revision. No patch was applied here.
+
+MEASURED on 2026-10-22: [clippy-delta.json](clippy-delta.json) records candidate Clippy exit 101 with the same two missing-field errors. The normalizer rejects compilation errors, so no complete warning delta versus master is available. No failed command is labeled a passing Clippy gate.
+
+INFERRED: this head is not fit to merge because required CI cannot build it. This is a build-gate failure, not an observed Energy, colour or performance failure. Native/Linux/Windows/broker hardware hypotheses remain untested. K2 is not eligible: unrun correctness stages are not green or red with diagnosed runtime causes.
+
+MEASURED on 2026-10-22: [owner-stop.json](owner-stop.json) records the approved stop of run 4501 with OWNER_SESSION_EXIT=0. [process-audit.json](process-audit.json) records no QEMU processes; no Q4 round-6D VM, host build or hardware arm was started. The restoration lock was released.
+
+MEASURED on 2026-10-22: [final-health.json](final-health.json) records NVIDIA bound, fresh-process cuInit 0 without a module reload, GDM active, automatic login configured, ubuntu logged in, and two logical monitors. No GDM restart was needed. The round explicitly permits restarting GDM if necessary; the old round-6b permission question no longer applies.
+
+CODE READ: [plan.md](plan.md) records the remaining hypotheses and their falsifiers before any corresponding arm. Unexecuted coverage: native 9/9 plus gate 10, broker-backed Linux 30/30, Windows 580.88 desktop hold and installed apps/games, Hue/Digital Vibrance console updates, fresh Energy x4 plus SA-02 arms, CATIA/Creo x2, broker interaction, and the separate matched-VRAM/profile K2 report. The original deadline is 2026-10-23 04:29:08 UTC.
+
+MEASURED on 2026-10-22: [local-cleanup.json](local-cleanup.json) records the local diagnostic batch finished, zero target users and the Q4 target directory removed. No round-6D host target was created. process-audit.json and the completed restoration command establish no Q4 VM or held fastguest lock.

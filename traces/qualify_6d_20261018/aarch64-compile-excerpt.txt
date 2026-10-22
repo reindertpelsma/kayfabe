@@ -1,0 +1,14 @@
+2026-10-22T22:29:17.3881487Z error[E0063]: missing field `ce` in initializer of `GrConfig`
+2026-10-22T22:29:17.3904624Z    --> crates/kf-harness/src/bin/kf-gr-tier.rs:421:17
+2026-10-22T22:29:17.3954377Z     |
+2026-10-22T22:29:17.3984505Z 421 |     ring.set_gr(GrConfig {
+2026-10-22T22:29:17.3985085Z     |                 ^^^^^^^^ missing `ce`
+2026-10-22T22:29:17.4014103Z
+2026-10-22T22:29:17.4020327Z error[E0063]: missing field `ce` in initializer of `GrConfig`
+2026-10-22T22:29:17.4020980Z    --> crates/kf-harness/src/bin/kf-gr-tier.rs:568:18
+2026-10-22T22:29:17.4021428Z     |
+2026-10-22T22:29:17.4021833Z 568 |     ring2.set_gr(GrConfig {
+2026-10-22T22:29:17.4022354Z     |                  ^^^^^^^^ missing `ce`
+2026-10-22T22:29:17.4022690Z
+2026-10-22T22:29:17.4050580Z warning: `kayfabe-rm-ladder` (bin "kayfabe-rm-ladder") generated 7 warnings (run `cargo fix --bin "kayfabe-rm-ladder" -p kayfabe-rm-ladder` to apply 2 suggestions)
+2026-10-22T22:29:17.4115396Z For more information about this error, try `rustc --explain E0063`.

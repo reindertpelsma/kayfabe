@@ -1,0 +1,14 @@
+2026-10-22T22:29:48.8840578Z error[E0063]: missing field `ce` in initializer of `GrConfig`
+2026-10-22T22:29:48.8870084Z    --> crates/kf-harness/src/bin/kf-gr-tier.rs:421:17
+2026-10-22T22:29:48.8930097Z     |
+2026-10-22T22:29:48.8990321Z 421 |     ring.set_gr(GrConfig {
+2026-10-22T22:29:48.8991321Z     |                 ^^^^^^^^ missing `ce`
+2026-10-22T22:29:48.8991802Z
+2026-10-22T22:29:48.8992468Z error[E0063]: missing field `ce` in initializer of `GrConfig`
+2026-10-22T22:29:48.9031009Z    --> crates/kf-harness/src/bin/kf-gr-tier.rs:568:18
+2026-10-22T22:29:48.9050045Z     |
+2026-10-22T22:29:48.9079938Z 568 |     ring2.set_gr(GrConfig {
+2026-10-22T22:29:48.9080844Z     |                  ^^^^^^^^ missing `ce`
+2026-10-22T22:29:48.9081356Z
+2026-10-22T22:29:48.9233907Z For more information about this error, try `rustc --explain E0063`.
+2026-10-22T22:29:48.9273755Z error: could not compile `kf-harness` (bin "kf-gr-tier") due to 2 previous errors

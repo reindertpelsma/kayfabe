@@ -1,0 +1,57 @@
+{
+  "classification": "MEASURED",
+  "evidence": "ci-checks.json",
+  "candidate": "70da04ffaebdee3b51e5eca6aa1eb3919e92e80d",
+  "captured": "2026-10-22T22:32:51.537551+00:00",
+  "run_id": 39865250045,
+  "url": "https://github.com/reindertpelsma/kayfabe/actions/runs/39865250045",
+  "status": "completed",
+  "conclusion": "failure",
+  "checks": [
+    {
+      "name": "broker \u2014 build and its GPU-free test suite (broker/)",
+      "status": "completed",
+      "conclusion": "success",
+      "databaseId": 120125704621,
+      "url": "https://github.com/reindertpelsma/kayfabe/actions/runs/39865250045/job/120125704621",
+      "startedAt": "2026-10-22T22:28:46Z",
+      "completedAt": "2026-10-22T22:32:34Z"
+    },
+    {
+      "name": "aarch64 \u2014 core cross-checks (no x86 assumptions)",
+      "status": "completed",
+      "conclusion": "failure",
+      "databaseId": 120125704940,
+      "url": "https://github.com/reindertpelsma/kayfabe/actions/runs/39865250045/job/120125704940",
+      "startedAt": "2026-10-22T22:28:47Z",
+      "completedAt": "2026-10-22T22:29:28Z"
+    },
+    {
+      "name": "stable \u2014 build, test, clippy, fmt, boundary",
+      "status": "completed",
+      "conclusion": "failure",
+      "databaseId": 120125704956,
+      "url": "https://github.com/reindertpelsma/kayfabe/actions/runs/39865250045/job/120125704956",
+      "startedAt": "2026-10-22T22:28:46Z",
+      "completedAt": "2026-10-22T22:29:56Z"
+    },
+    {
+      "name": "firmware \u2014 kf-gop (x86_64-unknown-uefi), kf3's PE check, size, local stand-in",
+      "status": "completed",
+      "conclusion": "success",
+      "databaseId": 120125704993,
+      "url": "https://github.com/reindertpelsma/kayfabe/actions/runs/39865250045/job/120125704993",
+      "startedAt": "2026-10-22T22:28:46Z",
+      "completedAt": "2026-10-22T22:30:43Z"
+    },
+    {
+      "name": "slow \u2014 full suite with the soaks (KAYFABE_SLOW=1)",
+      "status": "completed",
+      "conclusion": "skipped",
+      "databaseId": 120125706229,
+      "url": "https://github.com/reindertpelsma/kayfabe/actions/runs/39865250045/job/120125706229",
+      "startedAt": "2026-10-22T22:28:45Z",
+      "completedAt": "2026-10-22T22:28:44Z"
+    }
+  ]
+}

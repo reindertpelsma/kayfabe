@@ -1,0 +1,9 @@
+{
+  "classification": "MEASURED",
+  "evidence": "owner-stop.json",
+  "time": "2026-10-22T22:30:07.676510+00:00",
+  "run": 4501,
+  "exit_lines": [
+    "OWNER_SESSION_EXIT=0 at=2026-10-23T00:30:07+02:00"
+  ]
+}

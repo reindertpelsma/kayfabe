@@ -1,0 +1,57 @@
+{
+  "classification": "MEASURED",
+  "evidence": "local-checks.json",
+  "candidate": "70da04ffaebdee3b51e5eca6aa1eb3919e92e80d",
+  "checks": [
+    {
+      "name": "candidate-tests",
+      "revision": "70da04ffaebdee3b51e5eca6aa1eb3919e92e80d",
+      "start": "2026-10-22T22:31:28.619681+00:00",
+      "free_bytes": 25759793152,
+      "command": [
+        "cargo",
+        "test",
+        "--release",
+        "--locked",
+        "-j2",
+        "-p",
+        "kf-*",
+        "--no-fail-fast"
+      ],
+      "exit": 101,
+      "end": "2026-10-22T22:37:32.066742+00:00"
+    },
+    {
+      "name": "candidate-fmt",
+      "revision": "70da04ffaebdee3b51e5eca6aa1eb3919e92e80d",
+      "start": "2026-10-22T22:37:32.067109+00:00",
+      "free_bytes": 25395277824,
+      "command": [
+        "cargo",
+        "fmt",
+        "--all",
+        "--check"
+      ],
+      "exit": 0,
+      "end": "2026-10-22T22:37:42.149969+00:00"
+    },
+    {
+      "name": "candidate-clippy",
+      "revision": "70da04ffaebdee3b51e5eca6aa1eb3919e92e80d",
+      "start": "2026-10-22T22:37:42.150320+00:00",
+      "free_bytes": 25395228672,
+      "command": [
+        "cargo",
+        "clippy",
+        "--release",
+        "--workspace",
+        "--all-targets",
+        "--locked",
+        "-j2",
+        "--message-format=json"
+      ],
+      "exit": 101,
+      "end": "2026-10-22T22:39:42.379281+00:00"
+    }
+  ]
+}

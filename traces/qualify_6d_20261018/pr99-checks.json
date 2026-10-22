@@ -1,0 +1,80 @@
+{
+  "classification": "MEASURED",
+  "evidence": "pr99-checks.json",
+  "candidate": "70da04ffaebdee3b51e5eca6aa1eb3919e92e80d",
+  "pr": 99,
+  "captured": "2026-10-22T22:37:22.415087+00:00",
+  "gh_exit": 0,
+  "checks": [
+    {
+      "bucket": "fail",
+      "link": "https://github.com/reindertpelsma/kayfabe/actions/runs/39865250045/job/120125704940",
+      "name": "aarch64 \u2014 core cross-checks (no x86 assumptions)",
+      "state": "FAILURE",
+      "workflow": "CI"
+    },
+    {
+      "bucket": "fail",
+      "link": "https://github.com/reindertpelsma/kayfabe/actions/runs/39865250045/job/120125704956",
+      "name": "stable \u2014 build, test, clippy, fmt, boundary",
+      "state": "FAILURE",
+      "workflow": "CI"
+    },
+    {
+      "bucket": "pass",
+      "link": "https://github.com/reindertpelsma/kayfabe/actions/runs/39865250045/job/120125704993",
+      "name": "firmware \u2014 kf-gop (x86_64-unknown-uefi), kf3's PE check, size, local stand-in",
+      "state": "SUCCESS",
+      "workflow": "CI"
+    },
+    {
+      "bucket": "pass",
+      "link": "https://github.com/reindertpelsma/kayfabe/actions/runs/39865250045/job/120125704621",
+      "name": "broker \u2014 build and its GPU-free test suite (broker/)",
+      "state": "SUCCESS",
+      "workflow": "CI"
+    },
+    {
+      "bucket": "skipping",
+      "link": "https://github.com/reindertpelsma/kayfabe/actions/runs/39865250045/job/120125706229",
+      "name": "slow \u2014 full suite with the soaks (KAYFABE_SLOW=1)",
+      "state": "SKIPPED",
+      "workflow": "CI"
+    },
+    {
+      "bucket": "fail",
+      "link": "https://github.com/reindertpelsma/kayfabe/actions/runs/39865242733/job/120125680975",
+      "name": "stable \u2014 build, test, clippy, fmt, boundary",
+      "state": "FAILURE",
+      "workflow": "CI"
+    },
+    {
+      "bucket": "fail",
+      "link": "https://github.com/reindertpelsma/kayfabe/actions/runs/39865242733/job/120125681058",
+      "name": "aarch64 \u2014 core cross-checks (no x86 assumptions)",
+      "state": "FAILURE",
+      "workflow": "CI"
+    },
+    {
+      "bucket": "pass",
+      "link": "https://github.com/reindertpelsma/kayfabe/actions/runs/39865242733/job/120125680673",
+      "name": "firmware \u2014 kf-gop (x86_64-unknown-uefi), kf3's PE check, size, local stand-in",
+      "state": "SUCCESS",
+      "workflow": "CI"
+    },
+    {
+      "bucket": "pass",
+      "link": "https://github.com/reindertpelsma/kayfabe/actions/runs/39865242733/job/120125681031",
+      "name": "broker \u2014 build and its GPU-free test suite (broker/)",
+      "state": "SUCCESS",
+      "workflow": "CI"
+    },
+    {
+      "bucket": "skipping",
+      "link": "https://github.com/reindertpelsma/kayfabe/actions/runs/39865242733/job/120125682925",
+      "name": "slow \u2014 full suite with the soaks (KAYFABE_SLOW=1)",
+      "state": "SKIPPED",
+      "workflow": "CI"
+    }
+  ]
+}

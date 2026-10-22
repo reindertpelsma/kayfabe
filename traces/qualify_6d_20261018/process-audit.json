@@ -1,0 +1,10 @@
+{
+  "classification": "MEASURED",
+  "evidence": "process-audit.json",
+  "time": "2026-10-22T22:34:02.828393+00:00",
+  "qemu_processes": [],
+  "q4_6d_vm_ever_started": false,
+  "host_cargo_target_created": false,
+  "restoration_lock_released": true,
+  "no_round6d_build_or_hardware_arm_started": true
+}

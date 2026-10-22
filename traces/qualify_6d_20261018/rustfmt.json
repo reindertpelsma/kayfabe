@@ -1,0 +1,9 @@
+{
+  "classification": "MEASURED",
+  "evidence": "rustfmt.json",
+  "candidate": "70da04ffaebdee3b51e5eca6aa1eb3919e92e80d",
+  "command": "cargo fmt --all --check",
+  "exit": 0,
+  "log_bytes": 0,
+  "log_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+}
