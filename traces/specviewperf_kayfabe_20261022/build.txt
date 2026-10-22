@@ -1,0 +1,5 @@
+MEASURED: Phase 1 source 468a35c9d845afc1938683540acc251bdef90e5a.
+MEASURED: fresh GPU-free suites 1046 passed, zero failed, four ignored; 36 groups.
+MEASURED: build_kf3.sh succeeded at 05:20:49 CEST, installing kf3-bins/468a35c9.
+MEASURED: baseline uses the existing kf3-bins/89fc8a222.
+MEASURED: full logs retained in the authorized K1 host directory.

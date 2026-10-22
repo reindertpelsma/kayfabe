@@ -1,0 +1,9 @@
+{
+  "classification": "MEASURED",
+  "revision": "468a35c9d845afc1938683540acc251bdef90e5a",
+  "passed": 1046,
+  "failed": 0,
+  "ignored": 4,
+  "groups": 36,
+  "command": "nice -n 19 cargo test -j2 --release -p kf-chan -p kf-qemu"
+}
