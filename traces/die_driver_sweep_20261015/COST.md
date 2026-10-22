@@ -1,3 +1,13 @@
+STATUS: LIVE,2026-10-22 replacement57143789 created02:10:10UTC after failed-start57142142 APIabsence.
+Actualrate0.716667USD/h, machine152912/providerunverified. Requested170min timerPID2844897 +independent
+budgetwatch2845865 verified BEFORE SSH/GPU work; helper's06:50CEST clamp gives deadline04:50UTC.
+Initial local receipt write failed (missing parent directory); exact ownid/timer recovered before remote use.
+Original quote/before-create balance not retained, explicitly unknown; fresh recoverycredit42.739799USD.
+Priorlane runtime3.613396USD; conservative reservation2.408986USD, totalguard
+6.022382USD<7/reserve5. Timer timestamps/ownership evidence in
+../blackwell_validation3_20261022/owned_instances.json; readiness/N0/Windows pending.
+Previous box entries are historical. No parallel box, trusted host untouched.
+
 STATUS: LIVE, 2026-10-22 provider-failure closeout. Lease57142142 never reached console/SSH;
 Vast explicitly reported GPU error/unable to start. No upload, hostpreflight, N0 or Windows arm ran.
 Destroyed exact ownID/APIabsence 2026-10-22T02:07:19.719143+00:00; both own timers cancelled AFTERabsence.
