@@ -35,6 +35,8 @@ class GuardTests(unittest.TestCase):
     def test_exact_control_accepts(self): self.assertEqual(check(*fixture())["verdict"],"PASS")
     def test_capture_with_noise_accepts(self):
         m,q,g,j=fixture();self.assertEqual(check(m,"boot\n"+q,g+"poweroff\n",j)["verdict"],"PASS")
+    def test_supported_ce2_capture_accepts(self):
+        m,q,g,j=fixture();q=q.replace("engine=0x9","engine=0xb").replace("engine 0x9","engine 0xb");g=g.replace("engine=0x9","engine=0xb").replace("info16=9","info16=11");self.assertEqual(check(m,q,g,j)["verdict"],"PASS")
     def test_no_notifier_rejected(self): self.reject(g=fixture()[2].replace("KF_RC_NOTIFIER", "NO_NOTIFIER"))
     def test_no_guest_event_rejected(self): self.reject(g=fixture()[2].replace("KF_RC_EVENT", "NO_EVENT"))
     def test_host_post_alone_cannot_prove_guest_receipt(self): self.reject(g=fixture()[2].replace("KF_RC_EVENT", "NO_EVENT").replace("KF_RC_NOTIFIER", "NO_NOTIFIER"))
