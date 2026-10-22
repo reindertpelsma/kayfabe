@@ -181,15 +181,17 @@ impl CommandPolicy for GuestSystemInfoPolicy {
                 // ★ 2026-10-04 (v3-windows, runbook C3): what the guest says it is, every field, for
                 // the log only — a Windows guest's strings and changelist are unmeasured.
                 match guestsysinfo::GuestIdentity::decode(&cmd.payload) {
-                    Ok(id) => eprintln!(
+                    Ok(id) => kf_gsp::guest_log!(
                         "kf-rm: fn 1 SET_GUEST_SYSTEM_INFO: the guest says {id}; this device answers \
                          as driver {}",
                         self.driver.driver_version()
                     ),
-                    Err(e) => eprintln!("kf-rm: fn 1 SET_GUEST_SYSTEM_INFO: undecodable: {e}"),
+                    Err(e) => {
+                        kf_gsp::guest_log!("kf-rm: fn 1 SET_GUEST_SYSTEM_INFO: undecodable: {e}")
+                    }
                 }
                 if let Err(why) = self.check_driver_version(&cmd.payload) {
-                    eprintln!("kf-rm: SET_GUEST_SYSTEM_INFO refused: {why}");
+                    kf_gsp::guest_log!("kf-rm: SET_GUEST_SYSTEM_INFO refused: {why}");
                     return refuse();
                 }
                 match self.agreed_version(&cmd.payload) {
@@ -203,7 +205,7 @@ impl CommandPolicy for GuestSystemInfoPolicy {
                     // anything), a private status, and OUR pair in the body. The guest follows it once
                     // or fails by name; it never lands on its own pair.
                     Err(GuestSystemInfoError::VersionMismatch { guest, ours }) => {
-                        eprintln!(
+                        kf_gsp::guest_log!(
                             "kf-rm: SET_GUEST_SYSTEM_INFO: the guest speaks vGPU RPC {:#x}.{:#x}, driver {} \
                              speaks {:#x}.{:#x}: answering with the host's pair (down-negotiation)",
                             guest.major,
@@ -224,7 +226,7 @@ impl CommandPolicy for GuestSystemInfoPolicy {
                         }
                     }
                     Err(e) => {
-                        eprintln!(
+                        kf_gsp::guest_log!(
                             "kf-rm: SET_GUEST_SYSTEM_INFO refused: the vGPU handshake does not agree for driver {} ({e})",
                             self.driver.driver_version()
                         );
