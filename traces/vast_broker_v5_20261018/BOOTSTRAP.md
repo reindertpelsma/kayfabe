@@ -1,6 +1,6 @@
 # Tiny bootstrap migration
 
-CODE READ: owner V5_ONSTART_AUTH contract replaces embedded transport with exact-SHA clone/checkout/exec; create env is a Docker flag string. The Worker embeds no run capability in its bootstrap. Renting without the path prefix refuses before OIDC or provider traffic.
+CODE READ: owner V5_ONSTART_AUTH contract replaces embedded transport with exact-SHA clone/checkout/exec; create env is a JSON object (the CLI converts Docker flags before its REST call). The Worker embeds no run capability in its bootstrap. Renting without the path prefix refuses before OIDC or provider traffic.
 
 [MEASURED: 2026-10-22 run v5-bootstrap-20261022] (`step1-green`, source derived from d9dbab1c8), 1007/1007 portable tests; the six previously red contract tests pass. Mutation results: `bootstrap_mutants.json`, each listed case has at least two named killers. No provider creation in this run.
 

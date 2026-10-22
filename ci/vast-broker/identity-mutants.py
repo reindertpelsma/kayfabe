@@ -29,10 +29,30 @@ cases = [
     ),
     ("control-per-IP", [("count >= cfg.controlIp ||", "false ||")]),
     ("control-global", [("controlCount >= cfg.controlGlobal ||", "false ||")]),
+    (
+        "configured-base",
+        [
+            (
+                "!cfg.bases.some((base) => c.ref === 'refs/heads/' + base)",
+                "c.ref !== 'refs/heads/master'",
+            )
+        ],
+    ),
+    (
+        "configured-workflow",
+        [
+            (
+                "!cfg.checkWorkflows.includes(c.workflow_ref)",
+                "c.workflow_ref !== cfg.repo + '/.github/workflows/gpu-vast.yml@refs/heads/master'",
+            )
+        ],
+    ),
 ]
 rows = []
-p = B / "src/index.js"
 for name, patches in cases:
+    configured = name.startswith("configured-")
+    p = B / ("src/github.js" if configured else "src/index.js")
+    test = "v5-configured-base.test.js" if configured else "v5-identity-limits.test.js"
     source = p.read_text()
     changed = source
     for before, after in patches:
@@ -41,7 +61,7 @@ for name, patches in cases:
     try:
         p.write_text(changed)
         run = subprocess.run(
-            ["node", "--test", str(B / "test/v5-identity-limits.test.js")],
+            ["node", "--test", str(B / "test" / test)],
             capture_output=True,
             text=True,
         )

@@ -1,0 +1,27 @@
+{
+  "estimated_upper_usd": 0.07349215555058586,
+  "attempts": [
+    {
+      "run": "v5-dummy-pr104-A-boot-refused",
+      "broker_run": "1792711026877-1",
+      "created_at": 1792711030.956,
+      "delete_at": 1792711212.987,
+      "absent_at": 1792711213.165,
+      "seconds": 182.20899987220764,
+      "compute_storage_usd_h": 0.14,
+      "full_transfer_reserve_usd": 0.06640625,
+      "estimated_upper_usd": 0.07349215555058586,
+      "exact_id_and_label_absent": true,
+      "reports": 0,
+      "cron_period_s": 60,
+      "boot_deadline": 1792711210,
+      "deadline_to_delete_s": 2.986999988555908,
+      "deadline_to_worker_absence_s": 3.1649999618530273,
+      "actual_cron_invocations": [
+        1792711091.255,
+        1792711151.474,
+        1792711212.085
+      ]
+    }
+  ]
+}

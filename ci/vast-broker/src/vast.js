@@ -56,12 +56,12 @@ export class Vast {
       disk: 120,
       runtype: 'ssh_direct',
       onstart: script,
-      env: Object.entries(environment)
-        .map(([key, value]) => {
+      env: Object.fromEntries(
+        Object.entries(environment).map(([key, value]) => {
           if (!/^KF_[A-Z_]+$/.test(key) || !/^[A-Za-z0-9_.:/-]+$/.test(String(value))) refuse();
-          return '-e ' + key + '=' + value;
-        })
-        .join(' '),
+          return [key, String(value)];
+        }),
+      ),
       label: record.label,
       target_state: 'running',
       cancel_unavail: true,

@@ -31,11 +31,11 @@ for (const field of ['KF_RUN_TOKEN', 'KF_SHA'])
     const h = await setup();
     await h.call();
     const b = h.cloud.calls.find((c) => c.url.endsWith('/asks/5/')).body;
-    assert.equal(typeof b.env, 'string');
-    assert.ok(b.env.includes('-e ' + field + '='));
+    assert.equal(typeof b.env, 'object');
+    assert.ok(typeof b.env[field] === 'string' && b.env[field].length > 0);
     assert.ok(!b.onstart.includes('v1.'));
-    assert.ok(!b.env.includes(h.bindings.VAST_API_KEY));
-    assert.ok(!b.env.includes(h.bindings.OWNER_STOP_TOKEN));
+    assert.ok(!JSON.stringify(b.env).includes(h.bindings.VAST_API_KEY));
+    assert.ok(!JSON.stringify(b.env).includes(h.bindings.OWNER_STOP_TOKEN));
   });
 for (const kind of ['kid', 'signature'])
   test('JWKS cooldown bounds 1000 unauthorized tokens ' + kind, async () => {

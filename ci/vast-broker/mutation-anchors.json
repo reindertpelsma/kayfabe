@@ -931,8 +931,8 @@
   ],
   "r3:target-base-binding": [
     [
-      "    if (c.event_name === 'pull_request_target') {\n      if (\n        c.ref !== 'refs/heads/master' ||\n        c.sha !== r.head_sha ||\n        c.workflow_sha !== r.head_sha ||\n        c.workflow_ref !== cfg.repo + '/.github/workflows/gpu-vast.yml@refs/heads/master' ||\n        !Number.isSafeInteger(hint?.pr_number)\n      )\n",
-      "    if (c.event_name === 'pull_request_target') {\n      if (\n        c.ref !== 'refs/heads/master' ||\n        c.workflow_ref !== cfg.repo + '/.github/workflows/gpu-vast.yml@refs/heads/master' ||\n        !Number.isSafeInteger(hint?.pr_number)\n      )\n"
+      "    if (c.event_name === 'pull_request_target') {\n      if (\n        !cfg.bases.some((base) => c.ref === 'refs/heads/' + base) ||\n        c.sha !== r.head_sha ||\n        c.workflow_sha !== r.head_sha ||\n        !cfg.checkWorkflows.includes(c.workflow_ref) ||\n        !Number.isSafeInteger(hint?.pr_number)\n      )\n",
+      "    if (c.event_name === 'pull_request_target') {\n      if (\n        !cfg.bases.some((base) => c.ref === 'refs/heads/' + base) ||\n        !cfg.checkWorkflows.includes(c.workflow_ref) ||\n        !Number.isSafeInteger(hint?.pr_number)\n      )\n"
     ]
   ],
   "r3:target-PR-membership": [

@@ -581,7 +581,12 @@ const security = spawnSync(
 );
 if (security.status !== 0) throw Error('Security mutation campaign failed');
 
-for (const campaign of ['bootstrap-mutants.py', 'identity-mutants.py', 'blob-mutants.py']) {
+for (const campaign of [
+  'bootstrap-mutants.py',
+  'identity-mutants.py',
+  'blob-mutants.py',
+  'rest-env-mutants.py',
+]) {
   const result = spawnSync('python3', [campaign], { cwd: base, stdio: 'inherit' });
   if (result.status !== 0) throw Error(campaign + ' failed');
 }
