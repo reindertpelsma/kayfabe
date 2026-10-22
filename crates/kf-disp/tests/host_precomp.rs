@@ -329,7 +329,7 @@ fn a_snapshot_from_a_different_architecture_is_not_reused() {
     let row = &kf_chip::display::BLACKWELL_GB20X;
     let h = snapshot(
         t,
-        row,
+        &kf_chip::display::ADA,
         Die {
             architecture: 0x190,
             ..DIE
@@ -596,4 +596,24 @@ fn an_unknown_die_cannot_derive_a_named_family_page() {
 #[test]
 fn a_second_unknown_die_cannot_derive_a_named_family_page() {
     unknown_derive(9);
+}
+
+#[test]
+fn every_virtual_head_keeps_distinct_main_and_overlay_scaler_roles() {
+    let t = table();
+    let row = &kf_chip::display::BLACKWELL_GB20X;
+    let d = derive(t, row, DIE, &extreme(DIE));
+    let field = t
+        .f(row.classes.caps, "PRECOMP_WIN_PIPE_HDR_CAPA_SCLR_PRESENT")
+        .unwrap();
+    for window in 0..row.windows {
+        let offset = t
+            .a(row.classes.caps, "PRECOMP_WIN_PIPE_HDR_CAPA", window)
+            .unwrap();
+        assert_eq!(
+            get(d.page.word(offset), field),
+            u32::from(window % 2 == 0),
+            "window {window}"
+        );
+    }
 }
