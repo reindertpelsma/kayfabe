@@ -1,5 +1,6 @@
 //! Before Windows media/setup, prove or refuse this host's unprivileged PRECOMP permission.
-//! No guest, CUDA context, submitted GPU work, arbitrary-offset argument or word dump.
+//! No guest, CUDA context, submitted GPU work or arbitrary-offset argument.
+//! Bounded actual host reply words are evidence only, never a product constant input.
 use kf_arch::ids::GpuId;
 use kf_linux_raw::{DevDir, capability};
 
@@ -26,7 +27,9 @@ fn run() -> Result<(), String> {
     let regs = kf_disp::regs::Regs::for_ip(rm.driver_version(), row.ip_version)
         .ok_or("host driver has no compiled display register vocabulary")?;
     let _snapshot = kf_disp::hostcaps::query(table, &regs, row, die, |addresses| {
-        rm.read_precomp_capabilities(addresses)
+        let values = rm.read_precomp_capabilities(addresses)?;
+        print!("{}", reply_text(addresses, &values)?);
+        Ok(values)
     })?;
     println!(
         "PRECOMP_HOST_READ=OK pci={} arch={architecture:#x} impl={implementation:#x} host={} class={:#x} windows={} named_words={} CAP_SYS_ADMIN=clear",
@@ -45,8 +48,23 @@ fn main() {
     }
 }
 
-fn reply_text(_addresses: &[u32], _values: &[u32]) -> Result<String, String> {
-    Ok(String::new())
+fn reply_text(addresses: &[u32], values: &[u32]) -> Result<String, String> {
+    use std::fmt::Write;
+    if addresses.is_empty()
+        || addresses.len() > kf_host::precomp::MAX_WORDS
+        || addresses.len() != values.len()
+    {
+        return Err("PRECOMP reply evidence count mismatch/bound".into());
+    }
+    let mut text = String::new();
+    for (address, value) in addresses.iter().zip(values) {
+        writeln!(
+            &mut text,
+            "PRECOMP_HOST_REPLY address={address:#010x} value={value:#010x}"
+        )
+        .map_err(|e| e.to_string())?;
+    }
+    Ok(text)
 }
 
 #[cfg(test)]
