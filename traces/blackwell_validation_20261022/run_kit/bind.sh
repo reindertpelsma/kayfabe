@@ -29,7 +29,7 @@ timeout 120 bash "$W" ssh 'powershell -NoProfile -ExecutionPolicy Bypass -File C
 cat /root/prov/bwr_crashdump.txt
 grep -q 'CRASHDUMP_READY=1' /root/prov/bwr_crashdump.txt
 timeout 300 bash "$W" stop
-[ -z "$(pgrep -x qemu-system-x86 || true)" ]
+python3 -E -s /root/sweep2/guard/blackwell/shutdown_census.py /root/prov/bwr_bind_process_receipt.json /root/prov/native_receipt.json.accepted.json /root/prov/bwr_shutdown_census.json
 chmod 0400 "$VM/disk/bw580_bind.qcow2"
 sha256sum "$VM/disk/bw580_bind.qcow2" > /root/prov/bwr_parent_sha256.txt
 echo "BIND_STOPPED_READY $(date -u -Is)"

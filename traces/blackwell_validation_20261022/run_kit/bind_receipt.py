@@ -17,5 +17,5 @@ if prof in ('on','off'):
     for key,value in ((b'KF3_RPC_TRACE',b'1'),(b'KF3_RPC_BODY_TRACE',b'1'),(b'KF3_DIAG_PROGRESS',b'1000')):
         assert env.get(key)==value,(key,env.get(key))
 assert opts['guest-driver']=='580.65.06',opts
-rec=dict(pid=pid,exe=exe,sha256=hashlib.sha256(Path(exe).read_bytes()).hexdigest(),kf3_device=dev,flags={k.decode():x.decode() for k,x in env.items() if k.startswith(b'KF3_')},p19_count=len(flags),harness_checkout=subprocess.check_output(['git','rev-parse','HEAD'],cwd='/root/kayfabe',text=True).strip())
+rec=dict(pid=pid,starttime=int(p.joinpath('stat').read_text().rpartition(')')[2].split()[19]),exe=exe,sha256=hashlib.sha256(Path(exe).read_bytes()).hexdigest(),kf3_device=dev,flags={k.decode():x.decode() for k,x in env.items() if k.startswith(b'KF3_')},p19_count=len(flags),harness_checkout=subprocess.check_output(['git','rev-parse','HEAD'],cwd='/root/kayfabe',text=True).strip())
 Path('/root/prov/'+sys.argv[1]+'_process_receipt.json').write_text(json.dumps(rec,indent=2)+'\n'); print(json.dumps({k:rec[k] for k in ('pid','exe','sha256','kf3_device')}))
