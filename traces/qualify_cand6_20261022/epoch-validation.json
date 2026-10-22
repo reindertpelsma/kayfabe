@@ -1,0 +1,24 @@
+{
+  "classification": "MEASURED",
+  "red": "one missing-module error, tests-only EXPECTED RED commit",
+  "green_tests": 13,
+  "restored_green": true,
+  "mutants": [
+    {
+      "mutation": "discard_new_xids",
+      "killing_tests": 4
+    },
+    {
+      "mutation": "accept_changed_history",
+      "killing_tests": 2
+    },
+    {
+      "mutation": "accept_windows_faults",
+      "killing_tests": 2
+    },
+    {
+      "mutation": "omit_binary_pin",
+      "killing_tests": 3
+    }
+  ]
+}
