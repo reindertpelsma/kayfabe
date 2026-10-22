@@ -1,0 +1,9 @@
+test_mount_receipt_carries_the_verified_digest (test_desktop_mount.MountTests.test_mount_receipt_carries_the_verified_digest) ... ok
+test_verified_media_mounts_read_only (test_desktop_mount.MountTests.test_verified_media_mounts_read_only) ... ok
+test_wrong_digest_cannot_be_mounted (test_desktop_mount.MountTests.test_wrong_digest_cannot_be_mounted) ... ok
+test_wrong_length_cannot_be_mounted (test_desktop_mount.MountTests.test_wrong_length_cannot_be_mounted) ... ok
+
+----------------------------------------------------------------------
+Ran 4 tests in 3.387s
+
+OK

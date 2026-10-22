@@ -1,0 +1,26 @@
+[
+  {
+    "mutant": "ignore_mount_failure",
+    "killers": [
+      "test_failed_mount_cannot_start_the_matrix ",
+      "test_missing_mount_receipt_cannot_start_the_matrix "
+    ],
+    "exit": 1
+  },
+  {
+    "mutant": "omit_read_only_mount",
+    "killers": [
+      "test_mount_receipt_carries_the_verified_digest ",
+      "test_verified_media_mounts_read_only "
+    ],
+    "exit": 1
+  },
+  {
+    "mutant": "ignore_asset_integrity",
+    "killers": [
+      "test_wrong_digest_cannot_be_mounted ",
+      "test_wrong_length_cannot_be_mounted "
+    ],
+    "exit": 1
+  }
+]

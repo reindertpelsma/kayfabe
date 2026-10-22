@@ -1,0 +1,69 @@
+test_app_disk_uses_the_boot_controller (test_desktop_plan.AppDiskTests.test_app_disk_uses_the_boot_controller) ... ok
+test_attach_does_not_hotplug_a_root_bus_controller (test_desktop_plan.AppDiskTests.test_attach_does_not_hotplug_a_root_bus_controller) ... ok
+test_failure_verdict_is_not_a_pass (test_desktop_plan.DesktopPlanTests.test_failure_verdict_is_not_a_pass) ... ok
+test_health_failure_after_app_is_fatal (test_desktop_plan.DesktopPlanTests.test_health_failure_after_app_is_fatal) ... ok
+test_health_failure_after_unigine_prevents_hold (test_desktop_plan.DesktopPlanTests.test_health_failure_after_unigine_prevents_hold) ... ok
+test_health_failure_before_apps_is_fatal (test_desktop_plan.DesktopPlanTests.test_health_failure_before_apps_is_fatal) ... ok
+test_missing_hold_is_not_accepted (test_desktop_plan.DesktopPlanTests.test_missing_hold_is_not_accepted) ... ok
+test_notrun_is_not_a_pass (test_desktop_plan.DesktopPlanTests.test_notrun_is_not_a_pass) ... ok
+test_restart_reason_refuses_a_passed_row (test_desktop_plan.DesktopPlanTests.test_restart_reason_refuses_a_passed_row) ... ok
+test_short_hold_is_not_accepted (test_desktop_plan.DesktopPlanTests.test_short_hold_is_not_accepted) ... ok
+test_timeout_does_not_start_more_gpu_work (test_desktop_plan.DesktopPlanTests.test_timeout_does_not_start_more_gpu_work) ... ok
+test_unigine_rows_run_before_hold (test_desktop_plan.DesktopPlanTests.test_unigine_rows_run_before_hold) ... ok
+test_failed_mount_cannot_start_the_matrix (test_desktop_plan.GuestIsoTests.test_failed_mount_cannot_start_the_matrix) ... ERROR
+test_guest_iso_uses_the_existing_windows_mount_path (test_desktop_plan.GuestIsoTests.test_guest_iso_uses_the_existing_windows_mount_path) ... ERROR
+test_guest_mount_receives_the_pinned_hash_and_size (test_desktop_plan.GuestIsoTests.test_guest_mount_receives_the_pinned_hash_and_size) ... ERROR
+test_missing_mount_receipt_cannot_start_the_matrix (test_desktop_plan.GuestIsoTests.test_missing_mount_receipt_cannot_start_the_matrix) ... ERROR
+
+======================================================================
+ERROR: test_failed_mount_cannot_start_the_matrix (test_desktop_plan.GuestIsoTests.test_failed_mount_cannot_start_the_matrix)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "CHECKOUT/scripts/bench/tests/test_desktop_plan.py", line 122, in test_failed_mount_cannot_start_the_matrix
+    with self.assertRaisesRegex(RuntimeError,'mount'):self.mount(rc=1)
+                                                      ~~~~~~~~~~^^^^^^
+  File "CHECKOUT/scripts/bench/tests/test_desktop_plan.py", line 111, in mount
+    result=m.attach_media(vm,q,'source.iso',True,dict(sha256='a'*64,size=16))
+           ^^^^^^^^^^^^^^
+AttributeError: module 'desktop_matrix' has no attribute 'attach_media'
+
+======================================================================
+ERROR: test_guest_iso_uses_the_existing_windows_mount_path (test_desktop_plan.GuestIsoTests.test_guest_iso_uses_the_existing_windows_mount_path)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "CHECKOUT/scripts/bench/tests/test_desktop_plan.py", line 115, in test_guest_iso_uses_the_existing_windows_mount_path
+    result,calls=self.mount();self.assertEqual(result,'guest-mounted ISO')
+                 ~~~~~~~~~~^^
+  File "CHECKOUT/scripts/bench/tests/test_desktop_plan.py", line 111, in mount
+    result=m.attach_media(vm,q,'source.iso',True,dict(sha256='a'*64,size=16))
+           ^^^^^^^^^^^^^^
+AttributeError: module 'desktop_matrix' has no attribute 'attach_media'
+
+======================================================================
+ERROR: test_guest_mount_receives_the_pinned_hash_and_size (test_desktop_plan.GuestIsoTests.test_guest_mount_receives_the_pinned_hash_and_size)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "CHECKOUT/scripts/bench/tests/test_desktop_plan.py", line 119, in test_guest_mount_receives_the_pinned_hash_and_size
+    _,calls=self.mount();self.assertEqual(calls[0][0][1],['-ExpectedSha256','a'*64,'-ExpectedSize','16'])
+            ~~~~~~~~~~^^
+  File "CHECKOUT/scripts/bench/tests/test_desktop_plan.py", line 111, in mount
+    result=m.attach_media(vm,q,'source.iso',True,dict(sha256='a'*64,size=16))
+           ^^^^^^^^^^^^^^
+AttributeError: module 'desktop_matrix' has no attribute 'attach_media'
+
+======================================================================
+ERROR: test_missing_mount_receipt_cannot_start_the_matrix (test_desktop_plan.GuestIsoTests.test_missing_mount_receipt_cannot_start_the_matrix)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "CHECKOUT/scripts/bench/tests/test_desktop_plan.py", line 125, in test_missing_mount_receipt_cannot_start_the_matrix
+    with self.assertRaisesRegex(RuntimeError,'mount'):self.mount(marker='')
+                                                      ~~~~~~~~~~^^^^^^^^^^^
+  File "CHECKOUT/scripts/bench/tests/test_desktop_plan.py", line 111, in mount
+    result=m.attach_media(vm,q,'source.iso',True,dict(sha256='a'*64,size=16))
+           ^^^^^^^^^^^^^^
+AttributeError: module 'desktop_matrix' has no attribute 'attach_media'
+
+----------------------------------------------------------------------
+Ran 16 tests in 0.063s
+
+FAILED (errors=4)
