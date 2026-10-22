@@ -1,0 +1,194 @@
+{
+  "run": "v5-readonly-20261022-availability-1",
+  "wrangler": "4.152.0",
+  "rentals_created": 0,
+  "tests": [
+    {
+      "test": "disallowed preference",
+      "status": 503,
+      "reason": "NO_ALLOWED_PREFERENCE"
+    },
+    {
+      "test": "disallowed preference",
+      "status": 503,
+      "reason": "NO_ALLOWED_PREFERENCE"
+    },
+    {
+      "test": "allowed preference forced with one ignored; budget refuses",
+      "status": 409,
+      "selection": {
+        "die": "AD102",
+        "ignored": 1,
+        "reason": "PREFERENCE"
+      }
+    },
+    {
+      "test": "allowed preference forced with one ignored; budget refuses",
+      "status": 409,
+      "selection": {
+        "die": "AD102",
+        "ignored": 1,
+        "reason": "PREFERENCE"
+      }
+    }
+  ],
+  "availability": {
+    "status": 200,
+    "data": {
+      "profile": "check",
+      "offers": [
+        {
+          "die": "AD102",
+          "gpu_name": "RTX_4090",
+          "compute_cap": 890,
+          "count": 3,
+          "effective_hourly": 0.6665364583333333,
+          "estimated_total": 2.010164930555556,
+          "kvm": true
+        }
+      ],
+      "thresholds": {
+        "reliability": 0.98,
+        "cores": 8,
+        "cpuGhz": 2,
+        "ramMb": 34360,
+        "downMbps": 200,
+        "upMbps": 50,
+        "diskMbps": 100,
+        "medianRatio": 0.5,
+        "price": 1,
+        "bandwidth_down_gb": 15,
+        "bandwidth_up_gb": 2,
+        "verified": 1
+      },
+      "rejected": {
+        "DRIVER": 14,
+        "DIE": 22,
+        "VERIFICATION": 16,
+        "CPU_RAM": 15,
+        "NETWORK": 3,
+        "RELIABILITY": 14,
+        "PERFORMANCE": 4,
+        "DISK_BW": 3,
+        "PRICE": 7
+      },
+      "verified_counts": [
+        {
+          "die": "AD102",
+          "total": 12,
+          "verified": 7
+        },
+        {
+          "die": "AD103",
+          "total": 2,
+          "verified": 1
+        },
+        {
+          "die": "AD106",
+          "total": 1,
+          "verified": 1
+        },
+        {
+          "die": "CC_120",
+          "total": 1,
+          "verified": 1
+        },
+        {
+          "die": "CC_86",
+          "total": 1,
+          "verified": 0
+        },
+        {
+          "die": "CC_89",
+          "total": 3,
+          "verified": 3
+        },
+        {
+          "die": "GA102",
+          "total": 5,
+          "verified": 1
+        },
+        {
+          "die": "GA106",
+          "total": 2,
+          "verified": 1
+        },
+        {
+          "die": "GB202",
+          "total": 5,
+          "verified": 3
+        },
+        {
+          "die": "GB203",
+          "total": 2,
+          "verified": 2
+        },
+        {
+          "die": "GB205",
+          "total": 2,
+          "verified": 2
+        },
+        {
+          "die": "GB206",
+          "total": 1,
+          "verified": 1
+        },
+        {
+          "die": "TU106",
+          "total": 2,
+          "verified": 2
+        }
+      ],
+      "cache": {
+        "hit": false,
+        "age_ms": 864
+      }
+    },
+    "wall_ms": 921.2080268189311,
+    "bytes": 1072
+  },
+  "load": {
+    "clients": 12,
+    "requests": 95,
+    "statuses": {
+      "200": 25,
+      "409": 58,
+      "429": 12
+    },
+    "cache_hits": 25,
+    "cache_eligible_responses": 25,
+    "provider_counts_before": {
+      "offers": 1,
+      "instances": 1,
+      "credit": 2,
+      "blocked_mutations": 0
+    },
+    "provider_counts_after": {
+      "offers": 1,
+      "instances": 2,
+      "credit": 2,
+      "blocked_mutations": 0
+    },
+    "wall_ms_p50": 40.14637181535363,
+    "wall_ms_max": 323.024099227041,
+    "response_bytes_max": 1072
+  },
+  "instances_read": {
+    "counts": {
+      "offers": 1,
+      "instances": 2,
+      "credit": 2,
+      "blocked_mutations": 0
+    },
+    "instance_count": 1,
+    "network_fields": [
+      "inet_down",
+      "inet_down_billed",
+      "inet_down_cost",
+      "inet_up",
+      "inet_up_billed",
+      "inet_up_cost"
+    ]
+  },
+  "ok": true
+}

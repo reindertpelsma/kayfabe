@@ -48,3 +48,7 @@ import './v5-config.test.js';
 
 import './v5-price.test.js';
 import './v5-soft-deadline.test.js';
+import './v5-offers.test.js';
+import './v5-network-liability.test.js';
+import './v5-machine.test.js';
+import './v5-refusal-selection.test.js';
