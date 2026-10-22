@@ -1,0 +1,7 @@
+{
+  "kind": "MEASURED",
+  "lease_id": 57193877,
+  "bytes": 6785255424,
+  "sha256": "183c13aa6b2c3c20475f7e1c5eed9979ca973056886d2b519c013386ba4da652",
+  "receipt": "APPDISK_REMOTE_HASH_OK"
+}
