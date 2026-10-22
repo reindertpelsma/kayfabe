@@ -1,3 +1,8 @@
+MEASURED: baseline Blender completed all seven subtests, official vendor composite
+35.85 (n=1), versus VFIO 61.61/60.61 (n=2; mean 61.11), baseline/native-mean
+0.5866. CATIA began next; no guest TDR or host Xid observed at this checkpoint.
+See baseline-scores.csv and baseline-subtests.csv. Remaining measurements pending.
+
 # RESUMED 2026-10-22, after owner-authorized host CUDA repair
 
 MEASURED: new baseline run 3453 launched at 05:44:27 CEST, cuInit=0, no reload
