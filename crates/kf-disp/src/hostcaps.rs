@@ -76,6 +76,18 @@ pub fn query(
 }
 
 impl HostPrecomp {
+    /// Bounded physical observations for the exact die/class/topology/layout.
+    /// These facts are evidence, not permission to advertise a virtual feature.
+    #[must_use]
+    pub fn observations_for(
+        &self,
+        table: &ClassTable,
+        row: &kf_chip::display::DisplayRow,
+        die: Die,
+    ) -> Option<&[(u32, u32)]> {
+        self.words_for(table, row, die)
+    }
+
     pub(crate) fn words_for(
         &self,
         table: &ClassTable,
