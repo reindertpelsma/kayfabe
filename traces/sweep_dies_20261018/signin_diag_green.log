@@ -1,0 +1,7 @@
+test_guest_query_timeout_class_is_retained (test_signin_diagnostics.SigninDiagnosticsTests.test_guest_query_timeout_class_is_retained) ... ok
+test_socket_error_class_is_retained (test_signin_diagnostics.SigninDiagnosticsTests.test_socket_error_class_is_retained) ... ok
+
+----------------------------------------------------------------------
+Ran 2 tests in 0.006s
+
+OK

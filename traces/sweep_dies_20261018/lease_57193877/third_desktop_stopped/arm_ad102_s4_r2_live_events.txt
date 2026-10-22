@@ -1,0 +1,14 @@
+COLLECT now=2026-10-22T11:23:25.0625703Z boot=2026-10-22T11:13:39.5000000Z
+NODIR C:\Windows\Minidump
+NODIR C:\Windows\LiveKernelReports\WATCHDOG
+EVTQ_NONE log=System id=1001 prov=
+EVTQ_NONE log=System id=41 prov=
+EVTQ_NONE log=System id=6008 prov=
+EVTQ_NONE log=System id=4101 prov=
+EVTQ_NONE log=System id=4117 prov=
+EVTQ_NONE log=System id=4119 prov=
+EVTQ_NONE log=System id= prov=nvlddmkm
+EVTQ_NONE log=System id= prov=Display
+EVTQ_NONE log=Application id=1001 prov=
+EVTQ_NONE log=Application id=1000 prov=
+COLLECT_DONE

@@ -1,0 +1,25 @@
+test_guest_query_timeout_class_is_retained (test_signin_diagnostics.SigninDiagnosticsTests.test_guest_query_timeout_class_is_retained) ... FAIL
+test_socket_error_class_is_retained (test_signin_diagnostics.SigninDiagnosticsTests.test_socket_error_class_is_retained) ... FAIL
+
+======================================================================
+FAIL: test_guest_query_timeout_class_is_retained (test_signin_diagnostics.SigninDiagnosticsTests.test_guest_query_timeout_class_is_retained)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/workspace/s4-wt/scripts/bench/tests/test_signin_diagnostics.py", line 18, in test_guest_query_timeout_class_is_retained
+    self.assertIn('error_type=TimeoutExpired',self.run_cli(subprocess.TimeoutExpired(['sensitive-fixture'],20)))
+    ~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: 'error_type=TimeoutExpired' not found in 'SIGNIN_FAILED: check account, session, and keyboard configuration\n'
+
+======================================================================
+FAIL: test_socket_error_class_is_retained (test_signin_diagnostics.SigninDiagnosticsTests.test_socket_error_class_is_retained)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/workspace/s4-wt/scripts/bench/tests/test_signin_diagnostics.py", line 20, in test_socket_error_class_is_retained
+    self.assertIn('error_type=OSError',self.run_cli(OSError('sensitive-fixture')))
+    ~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: 'error_type=OSError' not found in 'SIGNIN_FAILED: check account, session, and keyboard configuration\n'
+
+----------------------------------------------------------------------
+Ran 2 tests in 0.005s
+
+FAILED (failures=2)

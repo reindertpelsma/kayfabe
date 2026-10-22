@@ -1,0 +1,10 @@
+{
+  "kind": "MEASURED",
+  "date": "2026-10-22",
+  "mutant": "discard safe failure class",
+  "killers": [
+    "test_guest_query_timeout_class_is_retained ",
+    "test_socket_error_class_is_retained "
+  ],
+  "exit": 1
+}

@@ -1,0 +1,36 @@
+{
+  "cd": null,
+  "adapters": [
+    {
+      "device": 9860,
+      "index": 0,
+      "luid_high": "00000000",
+      "name": "NVIDIA GeForce RTX 4090",
+      "luid_low": "0005c555",
+      "flags": 0,
+      "vendor": 4318,
+      "dedicated_mb": 7853
+    },
+    {
+      "device": 140,
+      "index": 1,
+      "luid_high": "00000000",
+      "name": "Microsoft Basic Render Driver",
+      "luid_low": "00005c5d",
+      "flags": 2,
+      "vendor": 5140,
+      "dedicated_mb": 0
+    }
+  ],
+  "nvidia_adapters": 1,
+  "smi": "NVIDIA GeForce RTX 4090, 580.88, 8192 MiB",
+  "boot_utc": "2026-10-22T10:54:51.5000000Z",
+  "notes": [],
+  "os": "Microsoft Windows 11 Enterprise LTSC Evaluation build 26100",
+  "explorer": true,
+  "ok": false,
+  "video": [
+    "NVIDIA GeForce RTX 4090 | 32.0.15.8088 | OK | code 0"
+  ],
+  "user": "KFWIN\\kf"
+}

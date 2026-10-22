@@ -1,0 +1,10 @@
+ENABLE580_START actual=32.0.15.8088 UTC=2026-10-22T11:18:24.7573383Z
+Microsoft PnP Utility
+
+Enabling device:          PCI\VEN_10DE&DEV_2684&SUBSYS_13DA196E&REV_A1\3&11583659&0&30
+Device enabled successfully.
+
+ENABLE580_PNPUTIL_RC=0
+{"Name":"NVIDIA GeForce RTX 4090","DriverVersion":"32.0.15.8088","ConfigManagerErrorCode":0}
+{"FriendlyName":"NVIDIA GeForce RTX 4090","Status":"OK","Problem":0}
+ENABLE580_OBSERVED UTC=2026-10-22T11:18:51.9314240Z; device status is verdict, not this command rc
