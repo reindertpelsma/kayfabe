@@ -2,13 +2,13 @@
   "classification": "MEASURED",
   "evidence": "r1/stage1-ci.json",
   "candidate": "01a171e63a82198eef54c54935c5f9db5ed8e81b",
-  "captured": "2026-10-22T23:29:16.844535+00:00",
+  "captured": "2026-10-22T23:32:22.437177+00:00",
   "runs": [
     {
       "id": 39868883595,
       "headSha": "01a171e63a82198eef54c54935c5f9db5ed8e81b",
-      "status": "in_progress",
-      "conclusion": "",
+      "status": "completed",
+      "conclusion": "success",
       "url": "https://github.com/reindertpelsma/kayfabe/actions/runs/39868883595",
       "jobs": [
         {
@@ -22,12 +22,12 @@
         },
         {
           "name": "stable \u2014 build, test, clippy, fmt, boundary",
-          "conclusion": "",
-          "status": "in_progress",
+          "conclusion": "success",
+          "status": "completed",
           "databaseId": 120137990221,
           "url": "https://github.com/reindertpelsma/kayfabe/actions/runs/39868883595/job/120137990221",
           "startedAt": "2026-10-22T23:00:22Z",
-          "completedAt": "0001-01-01T00:00:00Z"
+          "completedAt": "2026-10-22T23:32:16Z"
         },
         {
           "name": "aarch64 \u2014 core cross-checks (no x86 assumptions)",

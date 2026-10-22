@@ -2,7 +2,7 @@
 
 CODE READ: the controller replaced the old pin with revision 01a171e63a82198eef54c54935c5f9db5ed8e81b and requested restarting ROUND_6D at stage 1. Current evidence is under r1/. The 70da04ffa failure below is a superseded checkpoint, retained as history. The evidence branch carries documentation; actual hardware source is the separately pinned clean host checkout.
 
-MEASURED on 2026-10-22: r1/stage1-ci.json records all required PR-run jobs green; the duplicate push run remains in the stable test step. r1/candidate-tests-ci.json sums 5,760 passed / 0 failed / 21 ignored across 358 stable-job summaries, including auxiliary capability runs; this is not a unique-test count. The local fallback waited 1,573 seconds for the shared Cargo lock without starting, then only Q4's waiting process was cancelled after exact-head hosted CI passed (r1/local-not-started.json). Hardware remains gated on the other run having no red result.
+MEASURED on 2026-10-22: r1/stage1-ci.json records stable, aarch64, broker and firmware green in both runs; slow is skipped. r1/candidate-tests-ci.json sums 5,760 passed / 0 failed / 21 ignored across 358 stable-job summaries, including auxiliary capability runs; this is not a unique-test count. The local fallback waited 1,573 seconds for the shared Cargo lock without starting, then only Q4's waiting process was cancelled after exact-head hosted CI passed (r1/local-not-started.json). Stage 2 has started at the exact clean host source pin.
 
 # Round 6D: stage 1 FAIL; hardware qualification not started
 
