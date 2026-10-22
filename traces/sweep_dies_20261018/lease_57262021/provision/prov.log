@@ -1,0 +1,8 @@
+[export: provisioning result/diagnostic lines only; full-source hash and line count in manifest]
+START 2026-10-22T19:49:04+00:00
+BOX_RC=0
+DRIVER_RC=0
+TREE_RC=0
+[2026-10-22T20:08:42+00:00] BENCH_TREE_DONE
+603 |         ABI_DECODE_FAILED, ABI_ENCODE_FAILED, CharDevice, IMPOSSIBLE_CONVERSION,
+LADDER_RC=0

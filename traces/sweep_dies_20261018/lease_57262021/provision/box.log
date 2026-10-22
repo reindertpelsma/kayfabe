@@ -1,0 +1,32 @@
+[export: provisioning result/diagnostic lines only; full-source hash and line count in manifest]
+PROVISION_START 2026-10-22T19:49:04+00:00
+NEEDRESTART-VER: 3.5
+NEEDRESTART-KCUR: 6.8.0-59-generic
+NEEDRESTART-KEXP: 6.8.0-59-generic
+NEEDRESTART-KSTA: 1
+NEEDRESTART-SVC: containerd.service
+NEEDRESTART-SVC: cron.service
+NEEDRESTART-SVC: dbus.service
+NEEDRESTART-SVC: docker.service
+NEEDRESTART-SVC: getty@tty1.service
+NEEDRESTART-SVC: irqbalance.service
+NEEDRESTART-SVC: multipathd.service
+NEEDRESTART-SVC: networkd-dispatcher.service
+NEEDRESTART-SVC: packagekit.service
+NEEDRESTART-SVC: polkit.service
+NEEDRESTART-SVC: qemu-guest-agent.service
+NEEDRESTART-SVC: rsyslog.service
+NEEDRESTART-SVC: serial-getty@ttyS0.service
+NEEDRESTART-SVC: ssh.service
+NEEDRESTART-SVC: switcheroo-control.service
+NEEDRESTART-SVC: systemd-journald.service
+NEEDRESTART-SVC: systemd-logind.service
+NEEDRESTART-SVC: systemd-manager
+NEEDRESTART-SVC: systemd-networkd.service
+NEEDRESTART-SVC: systemd-resolved.service
+NEEDRESTART-SVC: systemd-timesyncd.service
+NEEDRESTART-SVC: systemd-udevd.service
+NEEDRESTART-SVC: user@0.service
+PROVISION_REPO=/root/kayfabe branch=codex/sweep-dies-20261022 rev=bc3a967e0
+CARGO_RC=0
+PROVISION_DONE rc=0 2026-10-22T19:56:23+00:00

@@ -1,0 +1,52 @@
+{
+  "kind": "MEASURED",
+  "lease_id": 57262021,
+  "utc": "2026-10-22T20:09:58.256557+00:00",
+  "tag": "s4r3_tu106",
+  "files": {
+    "traces/sweep_dies_20261018/lease_57262021/provision/prov.log": {
+      "source_bytes": 28036,
+      "source_lines": 806,
+      "source_sha256": "1bf891d6ccadc1c46e970f92ed4a8f0e0ae0b6da799ad7b153c411c5c33bd789",
+      "selection": "provisioning verdict/diagnostics"
+    },
+    "traces/sweep_dies_20261018/lease_57262021/provision/box.log": {
+      "source_bytes": 22794,
+      "source_lines": 730,
+      "source_sha256": "59ab142935019e0cab40ca73cb15fa6f6bc91f4b9c84a68c9a3c32e66b350124",
+      "selection": "provisioning verdict/diagnostics"
+    },
+    "traces/sweep_dies_20261018/lease_57262021/provision/driver.log": {
+      "source_bytes": 2861,
+      "source_lines": 28,
+      "source_sha256": "9ed3aed790b5d01e26effeffd85faab33e0fd06a9ecbf6c599e4a3520452dec0",
+      "selection": "provisioning verdict/diagnostics"
+    },
+    "traces/sweep_dies_20261018/lease_57262021/provision/tree.log": {
+      "source_bytes": 10832,
+      "source_lines": 146,
+      "source_sha256": "94c617f94fd559609730b95c1296aae9502fd88bae5add538886b3f30e097d48",
+      "selection": "provisioning verdict/diagnostics"
+    },
+    "traces/sweep_dies_20261018/lease_57262021/provision/fg.log": {
+      "source_bytes": 234,
+      "source_lines": 10,
+      "source_sha256": "38e9290ea5d446f976613ec931bdb89180a9c89369322c38df47c3f348c41cee",
+      "selection": "provisioning verdict/diagnostics"
+    },
+    "traces/sweep_dies_20261018/lease_57262021/provision/provision_first.log": {
+      "source_bytes": 166,
+      "source_lines": 5,
+      "source_sha256": "14cf339cc94d613683498e4c07ffaaaecef2bf18d2dc266134c8f2d078a4593d",
+      "selection": "provisioning verdict/diagnostics"
+    },
+    "traces/sweep_dies_20261018/lease_57262021/provision/box_first.log": {
+      "source_bytes": 1015,
+      "source_lines": 16,
+      "source_sha256": "0b6c01445a94d8a8c03e1af7117f70823dae6d3d42100a88cfef520366d48fb7",
+      "selection": "provisioning verdict/diagnostics"
+    }
+  },
+  "source": "pinned SSH to own rented host; public v3 provision_full -> driver sweep",
+  "privacy": "No keys, credentials, firmware or binaries collected. APT endpoint addresses omitted from the documented IP field; source hashes retained. Kernel exports retain all NVRM lines with source hashes; provisioning exports retain result/diagnostic lines."
+}

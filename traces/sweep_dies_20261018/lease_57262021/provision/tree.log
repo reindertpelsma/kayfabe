@@ -1,0 +1,7 @@
+[export: provisioning result/diagnostic lines only; full-source hash and line count in manifest]
+[2026-10-22T19:59:37+00:00] BENCH_TREE_START
+A_RC=0
+[2026-10-22T20:05:52+00:00] A: KF3_BUILT /workspace/bench/kf3-bins/bc3a967e/qemu-system-x86_64 rev=bc3a967e mtime=2026-10-22 20:05:52.599039556 +0000 (shared build dir /workspace/bench/qemu-build-kf3)
+KF3_BUILT /workspace/bench/kf3-bins/bc3a967e/qemu-system-x86_64 rev=bc3a967e mtime=2026-10-22 20:05:52.599039556 +0000 (shared build dir /workspace/bench/qemu-build-kf3)
+NVRUN_RC=0
+[2026-10-22T20:08:42+00:00] BENCH_TREE_DONE

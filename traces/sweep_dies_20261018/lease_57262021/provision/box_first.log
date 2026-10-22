@@ -1,0 +1,4 @@
+[export: provisioning result/diagnostic lines only; full-source hash and line count in manifest]
+PROVISION_START 2026-10-22T19:47:34+00:00
+E: Failed to fetch https://developer.download.nvidia.com/compute/cuda/repos/ubuntu2204/x86_64/Packages.gz  File has unexpected size (3134436 != 3136656). Mirror sync in progress? [APT repository endpoint address omitted]
+   Release file created at: Thu, 22 Oct 2026 19:03:28 +0000

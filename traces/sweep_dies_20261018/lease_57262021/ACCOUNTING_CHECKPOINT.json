@@ -1,0 +1,27 @@
+{
+  "kind": "MEASURED",
+  "utc": "2026-10-22T20:05:38.116013+00:00",
+  "own_leases": [
+    {
+      "id": 57209908,
+      "ledger_destroyed": true,
+      "api_present": false,
+      "actual_status": null
+    },
+    {
+      "id": 57193877,
+      "ledger_destroyed": true,
+      "api_present": false,
+      "actual_status": null
+    },
+    {
+      "id": 57262021,
+      "ledger_destroyed": false,
+      "api_present": true,
+      "actual_status": "running"
+    }
+  ],
+  "active_owned_id": 57262021,
+  "auto_destroy_utc": "2026-10-22T22:18:03Z",
+  "timer_pid": 4135049
+}

@@ -1,0 +1,21 @@
+{
+  "crates": {
+    "frozen": "feda030ab2b0dd7a9aad43bcd163d9ea7afe0842",
+    "current": "feda030ab2b0dd7a9aad43bcd163d9ea7afe0842",
+    "identical": true
+  },
+  "qemu": {
+    "frozen": "fa8938d9c1a4b2caeaeb6f15a7daf96ed1e2f190",
+    "current": "fa8938d9c1a4b2caeaeb6f15a7daf96ed1e2f190",
+    "identical": true
+  },
+  "kind": "CODE READ",
+  "added_rust_lint_sites": 0,
+  "fresh_clippy": "not run; no Rust/product diff in this round",
+  "frozen_revision": "1700543393c34f93adc0611430e3d49ab38eca3a",
+  "tools": {
+    "frozen": "c0816c949cf95c0692691fad8cda5998f260248f",
+    "current": "c0816c949cf95c0692691fad8cda5998f260248f",
+    "identical": true
+  }
+}
