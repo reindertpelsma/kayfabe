@@ -1,4 +1,7 @@
-**STATUS: DESIGN-ONLY, 2026-10-22.** Future SW2 GB202 Windows validation plan. The latest owner
+**STATUS: LIVE, 2026-10-22.** Owner GO authorizes ONE RTX 5090 lease with the tested guard and N0 gate.
+The earlier documentation-only restriction below is superseded by that explicit GO. Native Xid32 stays fatal.
+
+Original future-run plan, now authorized subject to its guard prerequisites: The latest owner
 task authorizes documentation/derivation only: **no hardware and no rental now**. The plan becomes
 executable only after later authorization and the prerequisites below; budget availability is not permission.
 
