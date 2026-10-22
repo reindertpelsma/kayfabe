@@ -1,3 +1,8 @@
+MEASURED: Phase 1 CATIA 03_ThreeLoftJetsDarkMirror completed at 06:19:42
+CEST. Counter checkpoint: pointer_large_entries=30, maximum descriptor 1025068
+bytes, zero budget refusals/poisoned/guest153/4101/hostXid. The large case was
+exercised and survived in this n=1 run; full CATIA composite is pending.
+
 MEASURED: Phase 1 Blender completed with official composite 35.95 (n=1),
 versus baseline 35.85 (n=1): +0.28% in these samples. VFIO mean 61.11 (n=2).
 CATIA is next; Phase 1 has zero observed recovery cycles/TDR records/Xids.

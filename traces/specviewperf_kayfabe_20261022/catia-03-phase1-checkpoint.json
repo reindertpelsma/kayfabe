@@ -1,0 +1,10 @@
+{
+  "pointer_large_entries": 30,
+  "pointer_entry_max_bytes": 1025068,
+  "refused_scan_budget": 0,
+  "poisoned": 0,
+  "classification": "MEASURED",
+  "time": "2026-10-22T06:20:06.066026+02:00",
+  "budget_refusals": 0,
+  "catia_03_completed": true
+}
