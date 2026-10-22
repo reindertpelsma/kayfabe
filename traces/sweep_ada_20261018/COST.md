@@ -1,3 +1,13 @@
+STATUS UPDATE: LIVE, 2026-10-22. Owner raised price guard to1USD/h and authorized
+ONE new lease. MEASURED: own57144505/offer55286116/machine48161,RTX4090 quote
+0.8766666667USD/h including180GB; KVM image; timer170min armed FIRST.
+MEASURED: prior0.21USD + timed maximum2.483889USD + billing buffer1USD =3.693889USD
+within4USD cap. Fresh shared credit42.737963USD;5USD reserve untouched.
+Runtime sourcef98ceae6566420a48eca64ed6af6e33ff4100616 contains tested image fix.
+Prior price-refusal closeouts below are superseded by this explicit authorization.
+Live local ledger and pinned SSH config stay outside git; sanitized receipt in
+lease_57144505/. Teardown must prove this own id absent before cancelling timer.
+
 STATUS UPDATE: CLOSED PARTIAL, 2026-10-22 02:07 UTC; supersedes previous
 closeout for the newly authorized rerun. MEASURED: controller fix f98ceae65 is
 pushed; new create calls0, new lease ids[], new spend0USD. Prior spend0.21USD

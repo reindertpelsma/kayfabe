@@ -1,0 +1,32 @@
+{
+  "id": 57144505,
+  "created_utc": "2026-10-22T02:15:42.589188+00:00",
+  "auto_destroy_minutes": 170,
+  "quote_dph": 0.8766666666666667,
+  "offer": {
+    "id": 55286116,
+    "machine_id": 48161,
+    "gpu_name": "RTX 4090",
+    "gpu_ram": 24564,
+    "cpu_cores_effective": 32.0,
+    "cpu_ram": 128899,
+    "disk_space": 1326.1750000000002,
+    "dph_total": 0.8766666666666667,
+    "inet_down": 2074.9,
+    "inet_down_cost": 0.00390625,
+    "inet_up_cost": 0.00390625,
+    "geolocation": "Arizona, US"
+  },
+  "credit_before": 42.73796319756184,
+  "budget_cap_usd": 4,
+  "reserve_usd": 5,
+  "price_guard_usd_h": 1.0,
+  "source": "f98ceae6566420a48eca64ed6af6e33ff4100616",
+  "prior_spent_usd": 0.21,
+  "owner_authorized_AD102": true,
+  "owner_raised_price_guard": true,
+  "destroyed": false,
+  "auto_destroy_pid": 2854636,
+  "auto_destroy_starttime": 230093026,
+  "auto_destroy_verified": true
+}
