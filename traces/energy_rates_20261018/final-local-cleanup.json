@@ -1,0 +1,13 @@
+{
+  "classification": "MEASURED",
+  "evidence": "final-local-cleanup.json",
+  "time": "2026-10-22T10:15:08.125348+00:00",
+  "q3_target_dirs": {
+    "/workspace/q3-target": false,
+    "/data/codex-Q3-target": false
+  },
+  "cargo_runs": 0,
+  "background_jobs_started_locally": 0,
+  "remote_launch_ssh_session_completed": true,
+  "cleanup": "No Q3 target directory was created; no build cleanup necessary."
+}

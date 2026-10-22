@@ -1,0 +1,33 @@
+{
+  "classification": "MEASURED",
+  "evidence": "timer-cleanup.json",
+  "time": "2026-10-22T12:11:55.770471+02:00",
+  "ownership": "stored session helper process group + exact Q3 WIN_DIR + sleep argv + unchanged starttime + completed/restored trial",
+  "terminated": [
+    {
+      "run": 4308,
+      "pid": 2083711,
+      "pgid": 2083708,
+      "starttime": 109520521
+    },
+    {
+      "run": 4309,
+      "pid": 2084771,
+      "pgid": 2084768,
+      "starttime": 109550390
+    },
+    {
+      "run": 4310,
+      "pid": 2086973,
+      "pgid": 2086970,
+      "starttime": 109582421
+    },
+    {
+      "run": 4311,
+      "pid": 2087748,
+      "pgid": 2087745,
+      "starttime": 109603681
+    }
+  ],
+  "remaining_active": 0
+}

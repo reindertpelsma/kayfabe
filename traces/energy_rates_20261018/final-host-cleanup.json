@@ -1,0 +1,13 @@
+{
+  "classification": "MEASURED",
+  "evidence": "final-host-cleanup.json",
+  "time": "2026-10-22T12:11:56.100169+02:00",
+  "own_active": [],
+  "gpu_lock_reacquired": true,
+  "all_11_completed": true,
+  "completed_restorations": 11,
+  "timer_children_terminated": 11,
+  "remaining_active_timer_children": 0,
+  "q3_cargo_target_created": false,
+  "large_artifacts_retained": "lane-owned CoWs/logs under /data/codex-Q3/windows-20261022/ and /data/codex-Q3/energy-bisect/"
+}

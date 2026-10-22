@@ -1,0 +1,148 @@
+{
+  "classification": "INFERRED",
+  "evidence": "analysis.md and table.json",
+  "q3_SA02": {
+    "fail": 2,
+    "n": 4
+  },
+  "q3_controls": {
+    "fail": 0,
+    "n": 7
+  },
+  "combined_SA02": {
+    "fail": 5,
+    "n": 8
+  },
+  "combined_controls": {
+    "fail": 0,
+    "n": 8
+  },
+  "H1_observed_rate_increase_not_falsified": true,
+  "H2_descriptor_immunity_falsified": false,
+  "H3_monotonic_deterioration_falsified": true,
+  "H3_failure_then_pass_pairs": [
+    [
+      4304,
+      4305
+    ],
+    [
+      4304,
+      4306
+    ],
+    [
+      4304,
+      4307
+    ],
+    [
+      4304,
+      4308
+    ],
+    [
+      4304,
+      4309
+    ],
+    [
+      4304,
+      4311
+    ],
+    [
+      4310,
+      4311
+    ]
+  ],
+  "causal_assignment": "not established",
+  "failing_channel_details": [
+    {
+      "run": 4304,
+      "arm": "C3",
+      "first153_guest": "2026-10-22T09:36:16.5823597+02:00",
+      "first153_detected_host": "2026-10-22T11:36:30.596441+02:00",
+      "token": "0x806",
+      "host": "0x1002d",
+      "forwarded": 35,
+      "submissions": 1,
+      "gp": 34,
+      "NoCeObject": true,
+      "retired": {
+        "line": 19185,
+        "text": "kf3: chan token 0x806 (host 0x1002d) RETIRED, forwarded=35 submissions=1 splits=0/0 serves=2 last_put=Some(35) gp_get=None store_views=1 privilege=Some(ChannelPrivilege { level: 2, uvm_owned: false }) dead=Some(\"ring: Rewrite { gp: 34, why: NoCeObject { subch: 4, method: 576 } }\") inca=[refused_methods=0 subdevice_masks=0 control_entries=0 ext_base_unapplied=0] gr_tier=false gr[methods=0 inert_binds=0 objects=[]] gp_get_by_engine=(false, 0)"
+      },
+      "birth": {
+        "line": 1668,
+        "text": "kf3: act birth translated: chan 0xc1d00019:0xff040004 BORN Translated: token 0x806 -> host 0x1002d in VasKey(13965662457344034928) gpfifo=0x120512000x2048 userd=Some(Sysmem { base: 13794777088, size: 512 }) engine=0xb tsg=Some(ff0e0000) kernel_by=PRIVILEGE=KERNEL ring_va=0xff00500000 userd_at_birth(GP_PUT,GP_GET)=(Some(0), Some(0)) zeroed=512B gr_tier=false gp_get_by_engine=false sw_subch_inert=false scheduled_at_birth=true fast=off (2140 us, off the GSP lock)"
+      },
+      "alloc_facts": {
+        "line": 1664,
+        "text": "kf-rm: chanlink: CHAN-FACTS 0xc1d00019:0xff040004 parent=0xff0e0000 class=0xc56f engine=Some(b) flags=0x200620 hVASpace=0x0 ctxShare=0x0 vas=0xc1d00002:Some(ff000870) tsg=Some(ff0e0000) device=0xff020000 kernel=true privilege=Some(ChannelPrivilege { level: 2, uvm_owned: false }) internalFlags=Some(16) ProcessID=Some(310) SubProcessID=Some(0) kernel_pid_decl=false hObjectError=Some(0) hObjectBuffer=Some(0) gpFifoOffset=0x120512000 gpFifoEntries=2048 hUserdMemory0=Some(ff00a004) userd=Some(Sysmem { base: 3363b9800, size: 200 }) hPhysChannelGroup=Some(0) subDeviceId=Some(0)"
+      },
+      "rpc_context": [
+        {
+          "line": 1660,
+          "text": "kf3: GSP rpc RmAlloc seq=0"
+        },
+        {
+          "line": 1665,
+          "text": "kayfabe: HELD-REPLY fn=RmAlloc depth=1 \u2014 this map reply WAITS for its rows"
+        },
+        {
+          "line": 1666,
+          "text": "kf3: GSP rpc RmAlloc seq=0"
+        },
+        {
+          "line": 1670,
+          "text": "kf3: chan 0xc1d00019:0xff040004: NV50_DEFERRED_API 0xff1fe010 ADMITTED on Translated host 0x1002d, software classID Some(1) (OWNER_RULINGS \u00a7U.1)"
+        },
+        {
+          "line": 1671,
+          "text": "kf3: GSP rpc RmAlloc seq=0"
+        }
+      ]
+    },
+    {
+      "run": 4310,
+      "arm": "C4",
+      "first153_guest": "2026-10-22T10:05:16.4176729+02:00",
+      "first153_detected_host": "2026-10-22T12:05:28.546489+02:00",
+      "token": "0x806",
+      "host": "0x1002d",
+      "forwarded": 35,
+      "submissions": 1,
+      "gp": 34,
+      "NoCeObject": true,
+      "retired": {
+        "line": 17481,
+        "text": "kf3: chan token 0x806 (host 0x1002d) RETIRED, forwarded=35 submissions=1 splits=0/0 serves=2 last_put=Some(35) gp_get=None store_views=1 privilege=Some(ChannelPrivilege { level: 2, uvm_owned: false }) dead=Some(\"ring: Rewrite { gp: 34, why: NoCeObject { subch: 4, method: 576 } }\") inca=[refused_methods=0 subdevice_masks=0 control_entries=0 ext_base_unapplied=0] gr_tier=false gr[methods=0 inert_binds=0 objects=[]] gp_get_by_engine=(false, 0)"
+      },
+      "birth": {
+        "line": 1668,
+        "text": "kf3: act birth translated: chan 0xc1d00019:0xff040004 BORN Translated: token 0x806 -> host 0x1002d in VasKey(13965662457344034928) gpfifo=0x120512000x2048 userd=Some(Sysmem { base: 13788628992, size: 512 }) engine=0xb tsg=Some(ff0e0000) kernel_by=PRIVILEGE=KERNEL ring_va=0xff00500000 userd_at_birth(GP_PUT,GP_GET)=(Some(0), Some(0)) zeroed=512B gr_tier=false gp_get_by_engine=false sw_subch_inert=false scheduled_at_birth=true fast=off (2116 us, off the GSP lock)"
+      },
+      "alloc_facts": {
+        "line": 1664,
+        "text": "kf-rm: chanlink: CHAN-FACTS 0xc1d00019:0xff040004 parent=0xff0e0000 class=0xc56f engine=Some(b) flags=0x200620 hVASpace=0x0 ctxShare=0x0 vas=0xc1d00002:Some(ff000870) tsg=Some(ff0e0000) device=0xff020000 kernel=true privilege=Some(ChannelPrivilege { level: 2, uvm_owned: false }) internalFlags=Some(16) ProcessID=Some(310) SubProcessID=Some(0) kernel_pid_decl=false hObjectError=Some(0) hObjectBuffer=Some(0) gpFifoOffset=0x120512000 gpFifoEntries=2048 hUserdMemory0=Some(ff00a004) userd=Some(Sysmem { base: 335ddc800, size: 200 }) hPhysChannelGroup=Some(0) subDeviceId=Some(0)"
+      },
+      "rpc_context": [
+        {
+          "line": 1660,
+          "text": "kf3: GSP rpc RmAlloc seq=0"
+        },
+        {
+          "line": 1665,
+          "text": "kayfabe: HELD-REPLY fn=RmAlloc depth=1 \u2014 this map reply WAITS for its rows"
+        },
+        {
+          "line": 1666,
+          "text": "kf3: GSP rpc RmAlloc seq=0"
+        },
+        {
+          "line": 1670,
+          "text": "kf3: chan 0xc1d00019:0xff040004: NV50_DEFERRED_API 0xff1fe010 ADMITTED on Translated host 0x1002d, software classID Some(1) (OWNER_RULINGS \u00a7U.1)"
+        },
+        {
+          "line": 1671,
+          "text": "kf3: GSP rpc RmAlloc seq=0"
+        }
+      ]
+    }
+  ]
+}

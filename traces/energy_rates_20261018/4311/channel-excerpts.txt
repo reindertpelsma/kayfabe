@@ -1,0 +1,9 @@
+MEASURED: run4311, rev 468a35c9d845afc1938683540acc251bdef90e5a; bounded runtime birth/RPC/retirement excerpts, guest payload omitted.
+1663: kf-rm: chanlink: CHAN-FACTS 0xc1d00019:0xff040004 parent=0xff0e0000 class=0xc56f engine=Some(b) flags=0x200620 hVASpace=0x0 ctxShare=0x0 vas=0xc1d00002:Some(ff000870) tsg=Some(ff0e0000) device=0xff020000 kernel=true privilege=Some(ChannelPrivilege { level: 2, uvm_owned: false }) internalFlags=Some(16) ProcessID=Some(310) SubProcessID=Some(0) kernel_pid_decl=false hObjectError=Some(0) hObjectBuffer=Some(0) gpFifoOffset=0x120512000 gpFifoEntries=2048 hUserdMemory0=Some(ff00a004) userd=Some(Sysmem { base: 335be2800, size: 200 }) hPhysChannelGroup=Some(0) subDeviceId=Some(0)
+1667: kf3: act birth translated: chan 0xc1d00019:0xff040004 BORN Translated: token 0x806 -> host 0x1002d in VasKey(13965662457344034928) gpfifo=0x120512000x2048 userd=Some(Sysmem { base: 13786556416, size: 512 }) engine=0xb tsg=Some(ff0e0000) kernel_by=PRIVILEGE=KERNEL ring_va=0xff00500000 userd_at_birth(GP_PUT,GP_GET)=(Some(0), Some(0)) zeroed=512B gr_tier=false gp_get_by_engine=false sw_subch_inert=false scheduled_at_birth=true fast=off (2168 us, off the GSP lock)
+1659: kf3: GSP rpc RmAlloc seq=0
+1664: kayfabe: HELD-REPLY fn=RmAlloc depth=1 — this map reply WAITS for its rows
+1665: kf3: GSP rpc RmAlloc seq=0
+1669: kf3: chan 0xc1d00019:0xff040004: NV50_DEFERRED_API 0xff1fe010 ADMITTED on Translated host 0x1002d, software classID Some(1) (OWNER_RULINGS §U.1)
+1670: kf3: GSP rpc RmAlloc seq=0
+21444: kf3: chan token 0x806 (host 0x1002d) RETIRED, forwarded=0 submissions=0 splits=0/0 serves=1 last_put=Some(0) gp_get=None store_views=0 privilege=Some(ChannelPrivilege { level: 2, uvm_owned: false }) dead=None inca=[refused_methods=0 subdevice_masks=0 control_entries=0 ext_base_unapplied=0] gr_tier=false gr[methods=0 inert_binds=0 objects=[]] gp_get_by_engine=(false, 0)

@@ -1,0 +1,11 @@
+{
+  "classification": "MEASURED",
+  "evidence": "final-xids.json",
+  "time": "2026-10-22T12:12:56.478999+02:00",
+  "epoch_run": 4301,
+  "historical_count": 538,
+  "current_count": 538,
+  "new_host_xids": 0,
+  "new_records": [],
+  "history_prefix_preserved": true
+}

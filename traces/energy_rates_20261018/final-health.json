@@ -1,0 +1,23 @@
+{
+  "classification": "MEASURED",
+  "evidence": "final-health.json",
+  "time": "2026-10-22T12:11:55.789815+02:00",
+  "nvidia_smi_before": {
+    "exit": 0,
+    "stdout": "NVIDIA GeForce RTX 4070, 595.91.07, 37, 45 MiB",
+    "stderr": ""
+  },
+  "cuda_before": 0,
+  "cuda_after": 0,
+  "nvidia_smi_after": {
+    "exit": 0,
+    "stdout": "NVIDIA GeForce RTX 4070, 595.91.07, 37, 45 MiB",
+    "stderr": ""
+  },
+  "gdm": {
+    "exit": 0,
+    "stdout": "active",
+    "stderr": ""
+  },
+  "nvidia_bound": true
+}
