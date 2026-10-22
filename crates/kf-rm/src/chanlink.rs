@@ -855,6 +855,7 @@ pub struct ChannelPolicy {
     kernel_clients: std::collections::BTreeSet<u32>,
     /// Bounded Device declarations and validated same-GPU client-share edges.
     devices: std::collections::BTreeMap<(u32, u32), DeviceVaDeclaration>,
+    device_shares: crate::alias_index::AliasIndex,
     /// `(hClient, parent)` → the first `FERMI_VASPACE_A` allocated under it.
     vas_under: std::collections::BTreeMap<(u32, u32), u32>,
     /// `hClient` → every VA-space object a page-directory statement named in it. ★ The fallback for
@@ -873,7 +874,7 @@ pub struct ChannelPolicy {
     /// ★ v3-gfx: `DUP_OBJECT` aliases of a VA-space object, `(dst client, dst handle)` → the
     /// ORIGINAL — the same relation `barpde::PageDirPolicy` keeps, needed here because a channel
     /// (via its context share) may name the alias while the root was stated for the original.
-    vas_aliases: std::collections::BTreeMap<(u32, u32), (u32, u32)>,
+    vas_aliases: crate::alias_index::AliasIndex,
     /// ★ 2026-10-07: `(hClient, hVASpace)` → the `hParent` it was allocated under — the check
     /// `serverutilGetResourceRefWithParent(client, device, hVASpace, VaSpaceApi)` makes
     /// (`device_share.c:376-386`).
@@ -925,6 +926,7 @@ impl ChannelPolicy {
             sink,
             kernel_clients: Default::default(),
             devices: Default::default(),
+            device_shares: Default::default(),
             vas_under: Default::default(),
             vas_stated: Default::default(),
             tsgs: Default::default(),
@@ -1177,6 +1179,9 @@ impl ChannelPolicy {
                 } else {
                     None
                 };
+                if let Some(target) = share {
+                    self.device_shares.insert(key, target);
+                }
                 self.devices.insert(
                     key,
                     DeviceVaDeclaration {
@@ -2264,37 +2269,41 @@ impl ChannelPolicy {
         let f = self.abi.decode_free(&cmd.payload).ok()?;
         let (client, object) = (f.client, f.handle);
         // Device share bindings cannot silently attach to a replacement target with reused handles.
-        let removed: std::collections::BTreeSet<_> = self
-            .devices
-            .keys()
-            .copied()
-            .filter(|(c, d)| *c == client && (object == client || *d == object))
-            .collect();
-        self.devices.retain(|key, _| !removed.contains(key));
-        self.device_vas_bound.retain(|key| !removed.contains(key));
-        self.vas_parents
-            .retain(|&(c, h), _| !(c == client && (object == client || h == object)));
-        for d in self.devices.values_mut() {
-            if d.share.is_some_and(|target| removed.contains(&target)) {
-                d.revoked = true;
+        let removed = crate::alias_index::free_keys(&self.devices, client, object);
+        for key in removed {
+            // Only devices sharing this target can be revoked by its removal.
+            for user in self.device_shares.users(&key) {
+                if let Some(d) = self.devices.get_mut(&user) {
+                    d.revoked = true;
+                }
             }
+            self.device_shares.remove(key);
+            self.devices.remove(&key);
+            self.device_vas_bound.remove(&key);
         }
+        crate::alias_index::remove_for_free(&mut self.vas_parents, client, object);
         // ★ v3-gfx: an alias's (or its client's) free drops the NAME. The original's own free
         // keeps its aliases: RM refcounts the object, and the dup still holds it.
-        self.vas_aliases
-            .retain(|&(c, h), _| !(c == client && (object == client || h == object)));
+        self.vas_aliases.remove_for_free(client, object);
         if client == object {
-            self.vas_objects
-                .retain(|k| k.0 != client || self.vas_aliases.values().any(|o| o == k));
-        } else if !self.vas_aliases.values().any(|o| *o == (client, object)) {
+            let gone: Vec<_> = self
+                .vas_objects
+                .range((client, 0)..=(client, u32::MAX))
+                .filter(|key| !self.vas_aliases.has_refs(key))
+                .copied()
+                .collect();
+            for key in gone {
+                self.vas_objects.remove(&key);
+            }
+        } else if !self.vas_aliases.has_refs(&(client, object)) {
             self.vas_objects.remove(&(client, object));
         }
         if client == object {
             self.kernel_clients.remove(&client);
-            self.vas_under.retain(|k, _| k.0 != client);
+            crate::alias_index::remove_for_free(&mut self.vas_under, client, object);
             self.vas_stated.remove(&client);
-            self.tsgs.retain(|k, _| k.0 != client);
-            self.ctxshares.retain(|k, _| k.0 != client);
+            crate::alias_index::remove_for_free(&mut self.tsgs, client, object);
+            crate::alias_index::remove_for_free(&mut self.ctxshares, client, object);
         } else {
             self.tsgs.remove(&(client, object));
             self.ctxshares.remove(&(client, object));
@@ -2303,8 +2312,7 @@ impl ChannelPolicy {
             // `nvos.h:3187`): RM allocs it, publishes the PDEs, and FREES it — `[measured p5c]`
             // forgetting it there left the scrubber's channel with no VA space. The graph files it
             // the same way (`RmGraph::device_default_vas`, outliving the handle's own free).
-            self.vas_under
-                .retain(|k, _| !(k.0 == client && k.1 == object));
+            self.vas_under.remove(&(client, object));
         }
         // ★ P5b: a twin's free is a host act too — its reply waits for it (the guest's next step
         // may unmap what the twin fetches from).

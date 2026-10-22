@@ -239,6 +239,8 @@ pub struct PageDirPolicy {
     /// ★ P5c: every VA-space object allocated, `(hClient, hVaSpace)` → `(parent device, a
     /// GPU_DEVICE reference)` — what a later free retires.
     vas: std::collections::BTreeMap<(u32, u32), (u32, bool)>,
+    children: std::collections::BTreeMap<(u32, u32), std::collections::BTreeSet<u32>>,
+    orphan_candidates: std::collections::BTreeSet<(u32, u32)>,
     /// ★ P6b: `DUP_OBJECT` aliases of a VA-space object, `(dst client, dst handle)` → the
     /// ORIGINAL `(client, handle)`. `DUP_OBJECT` aliases, it does not copy
     /// (`vaspaceapiCopyConstruct` is `vaspaceIncRefCnt` + the same `pVASpace`, `vaspace_api.c:440`;
@@ -247,7 +249,7 @@ pub struct PageDirPolicy {
     /// (`uvm_va_space.c:1394`), while the user's channels name the ORIGINAL — `[measured p6b3]`
     /// the root landed on `0xc1d00001:0xcaf00036` and the user's channel in `0xc1d0000b:0xcafe0010`
     /// was refused *"has no mirror"*. So a statement through an alias is carried for the original.
-    aliases: std::collections::BTreeMap<(u32, u32), (u32, u32)>,
+    aliases: crate::alias_index::AliasIndex,
     /// ★ v3-gfx: originals whose own name was freed while a dup still referenced them — RM keeps
     /// the object (refcounted), so the mirror stays until the LAST alias goes. `[measured vgfx
     /// 2026-09-26]` the Vulkan UMD frees its probe client (the original) and keeps rendering in the
@@ -273,6 +275,8 @@ impl PageDirPolicy {
             sink,
             held_last: false,
             vas: Default::default(),
+            children: Default::default(),
+            orphan_candidates: Default::default(),
             aliases: Default::default(),
             orphans: Default::default(),
             carried: 0,
@@ -295,8 +299,25 @@ impl PageDirPolicy {
         let device_ref = crate::rmrpc::alloc_params_window(&self.abi, body)
             .and_then(|p| self.abi.decode_vaspace_index(p))
             .is_some_and(|i| i == kf_abi::bringup::NV_VASPACE_ALLOCATION_INDEX_GPU_DEVICE);
+        self.remove_vas((h.client, h.handle));
         self.vas
             .insert((h.client, h.handle), (h.parent, device_ref));
+        self.children
+            .entry((h.client, h.parent))
+            .or_default()
+            .insert(h.handle);
+    }
+
+    fn remove_vas(&mut self, key: (u32, u32)) {
+        if let Some((parent, _)) = self.vas.remove(&key) {
+            let parent = (key.0, parent);
+            if let Some(children) = self.children.get_mut(&parent) {
+                children.remove(&key.1);
+                if children.is_empty() {
+                    self.children.remove(&parent);
+                }
+            }
+        }
     }
 
     /// ★ P6b: the VA-space object `(client, handle)` names — itself, or the original a dup aliases.
@@ -315,7 +336,12 @@ impl PageDirPolicy {
         };
         let src = self.canonical(d.src_client, d.src_handle);
         if self.vas.contains_key(&src) {
-            self.aliases.insert((d.dst_client, d.dst_handle), src);
+            if let Some(old) = self.aliases.insert((d.dst_client, d.dst_handle), src)
+                && self.orphans.contains(&old)
+            {
+                // The old implementation swept these on the next free, not dup.
+                self.orphan_candidates.insert(old);
+            }
         }
     }
 
@@ -329,21 +355,33 @@ impl PageDirPolicy {
         // under its original handle, and only the original's free retires it. ⊘ A dup's parent
         // device is not tracked, so a device free that takes a dup with it leaves a stale name
         // until the client goes — a name that can only ever resolve to a live original.
-        self.aliases
-            .retain(|&(c, h), _| !(c == client && (object == client || h == object)));
-        let dying: Vec<(u32, u32)> = self
-            .vas
-            .iter()
-            .filter(|((c, v), (dev, device_ref))| {
-                *c == client
-                    && (object == client || *dev == object || (*v == object && !*device_ref))
-            })
-            .map(|(k, _)| *k)
-            .collect();
+        for original in self.aliases.remove_for_free(client, object) {
+            if self.orphans.contains(&original) {
+                self.orphan_candidates.insert(original);
+            }
+        }
+        let mut dying = std::collections::BTreeSet::new();
+        if client == object {
+            dying.extend(
+                self.vas
+                    .range((client, 0)..=(client, u32::MAX))
+                    .map(|(key, _)| *key),
+            );
+        } else {
+            if let Some(children) = self.children.get(&(client, object)) {
+                dying.extend(children.iter().map(|v| (client, *v)));
+            }
+            if self
+                .vas
+                .get(&(client, object))
+                .is_some_and(|(_, device_ref)| !device_ref)
+            {
+                dying.insert((client, object));
+            }
+        }
         for (c, v) in dying {
-            self.vas.remove(&(c, v));
-            // ★ v3-gfx: still referenced by a dup ⇒ the object lives on; retire it with its last alias.
-            if self.aliases.values().any(|orig| *orig == (c, v)) {
+            self.remove_vas((c, v));
+            if self.aliases.has_refs(&(c, v)) {
                 self.orphans.insert((c, v));
                 continue;
             }
@@ -353,19 +391,16 @@ impl PageDirPolicy {
             });
             self.retired += 1;
         }
-        let gone: Vec<(u32, u32)> = self
-            .orphans
-            .iter()
-            .filter(|o| !self.aliases.values().any(|a| a == *o))
-            .copied()
-            .collect();
-        for (c, v) in gone {
-            self.orphans.remove(&(c, v));
-            (self.sink)(MemStatement::Retire {
-                client: c,
-                vaspace: v,
-            });
-            self.retired += 1;
+        let candidates = std::mem::take(&mut self.orphan_candidates);
+        for (c, v) in candidates {
+            if self.orphans.contains(&(c, v)) && !self.aliases.has_refs(&(c, v)) {
+                self.orphans.remove(&(c, v));
+                (self.sink)(MemStatement::Retire {
+                    client: c,
+                    vaspace: v,
+                });
+                self.retired += 1;
+            }
         }
     }
 }
