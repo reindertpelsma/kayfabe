@@ -30,6 +30,7 @@ function jobsIn(text){
 }
 function endpointBoundary(filename,text,jobs){
   const errors=[],fail=reason=>errors.push('Broker endpoint '+reason);
+  if(/^\s*secrets:\s*['"]?inherit\b/m.test(text))fail('secrets cannot be inherited by reusable jobs'); // MUTANT secret-inherit
   const primary=filename==='gpu-vast.yml'?jobs.find(x=>x.id==='gpu'):null;
   let remaining=text,outside=text;
   if(primary){
@@ -51,6 +52,7 @@ function endpointBoundary(filename,text,jobs){
         kept.push(line);
       }
       if(!['WORKER_URL','WORKER_PATH'].every(x=>found.has(x)))fail('requires two step-env secret bindings'); // MUTANT secret-binding
+      if(/\b(?:WORKER_URL|WORKER_PATH|BROKER_BASE|broker_origin|broker_host|broker_base|audience)\b/.test(kept.join('\n').split(/^        run:/m)[0]))fail('aliases cannot enter step metadata'); // MUTANT secret-metadata
       const run=step.split(/^        run: \|\s*$/m)[1]||'';
       for(const line of run.split('\n')){
         if(/GITHUB_STEP_SUMMARY|GITHUB_ENV/.test(line))fail('cannot enter summary or environment channels');
