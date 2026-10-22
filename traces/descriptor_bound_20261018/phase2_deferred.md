@@ -32,4 +32,4 @@ INFERRED: resume only if the owner authorizes it after hardware shows
 Scan/Window descriptors above 917504 bytes. Phase 1 exposes that case as
 `USER_RING_SCAN_BUDGET`. Catia-07 subtest 03 on the run-3440 configuration and
 `pointer_large_entries > 0` remain hardware handoff requirements for Phase 1.
-No GPU/VM was used by G1.
+G1 performed no GPU workload or trusted-host VM operation.

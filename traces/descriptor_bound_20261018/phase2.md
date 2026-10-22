@@ -69,7 +69,8 @@ were not changed by those documentation edits. Phase 1 branch `468a35c9d` and
 master `e9c6d39e5` remain unchanged. All builds used the repository cargo flock,
 nice 19, release, two jobs and the lane-owned target. One full-suite lock wait
 expired at 600 seconds; the bounded retry acquired the lock. No holder was
-interrupted and no GPU/VM was used.
+interrupted. G1 performed no GPU workload or trusted-host VM operation.
+CODE READ: the GPU-free Rust suite includes local KVM integration fixtures.
 
 INFERRED: only hardware can confirm whole catia-07 and isolated
 `03_ThreeLoftJetsDarkMirror` three times on the run-3440 configuration, real

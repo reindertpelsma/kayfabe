@@ -75,6 +75,7 @@ rg -n 'USER_RING_LIFECYCLE|poisoned=' "$candidate_log"
 
 INFERRED: no budget matches are required (rg exits 1 for no matches); zero large
 Pointer count means the catia case was not exercised. G1 did not query production
-logs or use a GPU/VM. Local builds used the repository cargo lock, two jobs,
+logs or run a GPU workload/trusted-host VM. CODE READ: the GPU-free Rust suite
+includes local KVM integration fixtures. Local builds used the repository cargo lock, two jobs,
 release, nice 19 and the lane-owned target. One initial 600-second lock wait
 expired; the next acquired it without disturbing the holder. Phase 2 begins only after this green Phase 1 handoff is pushed, on a separate branch/PR.
